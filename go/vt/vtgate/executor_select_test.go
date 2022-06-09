@@ -464,11 +464,7 @@ func TestCreateTableValidTimestamp(t *testing.T) {
 func TestGen4SelectDBA(t *testing.T) {
 	executor, sbc1, _, _ := createExecutorEnv()
 	executor.normalize = true
-	*plannerVersion = "gen4"
-	defer func() {
-		// change it back to v3
-		*plannerVersion = "v3"
-	}()
+	executor.pv = querypb.ExecuteOptions_Gen4
 
 	query := "select * from INFORMATION_SCHEMA.foo"
 	_, err := executor.Execute(context.Background(), "TestSelectDBA",
@@ -1106,7 +1102,7 @@ func TestSelectBindvars(t *testing.T) {
 	})
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "select id from `user` where `name` in ::__vals",
+		Sql: "select id from `user` where 1 != 1",
 		BindVariables: map[string]*querypb.BindVariable{
 			"name1": sqltypes.BytesBindVariable([]byte("foo1")),
 			"name2": sqltypes.BytesBindVariable([]byte("foo2")),
@@ -1137,7 +1133,7 @@ func TestSelectBindvars(t *testing.T) {
 
 	// When there are no matching rows in the vindex, vtgate still needs the field info
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "select id from `user` where `name` = :name",
+		Sql: "select id from `user` where 1 != 1",
 		BindVariables: map[string]*querypb.BindVariable{
 			"name": sqltypes.StringBindVariable("nonexistent"),
 		},
@@ -1487,7 +1483,7 @@ func TestStreamSelectIN(t *testing.T) {
 }
 
 func createExecutor(serv *sandboxTopo, cell string, resolver *Resolver) *Executor {
-	return NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig, nil, false)
+	return NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig, nil, false, querypb.ExecuteOptions_V3)
 }
 
 func TestSelectScatter(t *testing.T) {
@@ -2917,8 +2913,9 @@ func TestSelectLock(t *testing.T) {
 			TabletAlias: sbc1.Tablet().Alias,
 			ReservedId:  1,
 		},
-		FoundRows: 1,
-		RowCount:  -1,
+		AdvisoryLock: map[string]int64{"lock name": 1},
+		FoundRows:    1,
+		RowCount:     -1,
 	}
 
 	_, err := exec(executor, session, "select get_lock('lock name', 10) from dual")
@@ -2931,7 +2928,12 @@ func TestSelectLock(t *testing.T) {
 		Sql:           "select release_lock('lock name') from dual",
 		BindVariables: map[string]*querypb.BindVariable{},
 	})
-	exec(executor, session, "select release_lock('lock name') from dual")
+	wantSession.AdvisoryLock = nil
+	wantSession.LockSession = nil
+
+	_, err = exec(executor, session, "select release_lock('lock name') from dual")
+	require.NoError(t, err)
+	wantSession.LastLockHeartbeat = session.Session.LastLockHeartbeat // copying as this is current timestamp value.
 	utils.MustMatch(t, wantQueries, sbc1.Queries, "")
 	utils.MustMatch(t, wantSession, session.Session, "")
 }
@@ -2979,7 +2981,7 @@ func TestStreamOrderByLimitWithMultipleResults(t *testing.T) {
 		count++
 	}
 
-	executor := NewExecutor(context.Background(), serv, cell, resolver, true, false, testBufferSize, cache.DefaultConfig, nil, false)
+	executor := NewExecutor(context.Background(), serv, cell, resolver, true, false, testBufferSize, cache.DefaultConfig, nil, false, querypb.ExecuteOptions_V3)
 	before := runtime.NumGoroutine()
 
 	query := "select id, col from user order by id limit 2"
@@ -3042,12 +3044,7 @@ func TestSelectScatterFails(t *testing.T) {
 func TestGen4SelectStraightJoin(t *testing.T) {
 	executor, sbc1, _, _ := createExecutorEnv()
 	executor.normalize = true
-	*plannerVersion = "gen4"
-	defer func() {
-		// change it back to v3
-		*plannerVersion = "v3"
-	}()
-
+	executor.pv = querypb.ExecuteOptions_Gen4
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
 	query := "select u.id from user u straight_join user2 u2 on u.id = u2.id"
 	_, err := executor.Execute(context.Background(),
@@ -3075,11 +3072,7 @@ func TestGen4SelectStraightJoin(t *testing.T) {
 func TestGen4MultiColumnVindexEqual(t *testing.T) {
 	executor, sbc1, sbc2, _ := createExecutorEnv()
 	executor.normalize = true
-	*plannerVersion = "gen4"
-	defer func() {
-		// change it back to v3
-		*plannerVersion = "v3"
-	}()
+	executor.pv = querypb.ExecuteOptions_Gen4
 
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
 	query := "select * from user_region where cola = 1 and colb = 2"
@@ -3126,11 +3119,7 @@ func TestGen4MultiColumnVindexEqual(t *testing.T) {
 func TestGen4MultiColumnVindexIn(t *testing.T) {
 	executor, sbc1, sbc2, _ := createExecutorEnv()
 	executor.normalize = true
-	*plannerVersion = "gen4"
-	defer func() {
-		// change it back to v3
-		*plannerVersion = "v3"
-	}()
+	executor.pv = querypb.ExecuteOptions_Gen4
 
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
 	query := "select * from user_region where cola IN (1,17984) and colb IN (2,3,4)"
@@ -3173,11 +3162,7 @@ func TestGen4MultiColumnVindexIn(t *testing.T) {
 func TestGen4MultiColMixedColComparision(t *testing.T) {
 	executor, sbc1, sbc2, _ := createExecutorEnv()
 	executor.normalize = true
-	*plannerVersion = "gen4"
-	defer func() {
-		// change it back to v3
-		*plannerVersion = "v3"
-	}()
+	executor.pv = querypb.ExecuteOptions_Gen4
 
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
 	query := "select * from user_region where colb = 2 and cola IN (1,17984)"
@@ -3218,11 +3203,7 @@ func TestGen4MultiColMixedColComparision(t *testing.T) {
 func TestGen4MultiColBestVindexSel(t *testing.T) {
 	executor, sbc1, sbc2, _ := createExecutorEnv()
 	executor.normalize = true
-	*plannerVersion = "gen4"
-	defer func() {
-		// change it back to v3
-		*plannerVersion = "v3"
-	}()
+	executor.pv = querypb.ExecuteOptions_Gen4
 
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
 	query := "select * from user_region where colb = 2 and cola IN (1,17984) and cola = 1"
@@ -3276,11 +3257,7 @@ func TestGen4MultiColBestVindexSel(t *testing.T) {
 func TestGen4MultiColMultiEqual(t *testing.T) {
 	executor, sbc1, sbc2, _ := createExecutorEnv()
 	executor.normalize = true
-	*plannerVersion = "gen4"
-	defer func() {
-		// change it back to v3
-		*plannerVersion = "v3"
-	}()
+	executor.pv = querypb.ExecuteOptions_Gen4
 
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
 	query := "select * from user_region where (cola,colb) in ((17984,2),(17984,3))"
@@ -3307,10 +3284,6 @@ func TestGen4MultiColMultiEqual(t *testing.T) {
 func TestRegionRange(t *testing.T) {
 	// Special setup: Don't use createExecutorEnv.
 
-	*plannerVersion = "gen4"
-	defer func() {
-		*plannerVersion = "v3"
-	}()
 	cell := "regioncell"
 	ks := "TestExecutor"
 	hc := discovery.NewFakeHealthCheck(nil)
@@ -3326,6 +3299,7 @@ func TestRegionRange(t *testing.T) {
 		conns = append(conns, sbc)
 	}
 	executor := createExecutor(serv, cell, resolver)
+	executor.pv = querypb.ExecuteOptions_Gen4
 
 	tcases := []struct {
 		regionID          int
@@ -3362,8 +3336,6 @@ func TestRegionRange(t *testing.T) {
 
 func TestMultiCol(t *testing.T) {
 	// Special setup: Don't use createLegacyExecutorEnv.
-
-	*plannerVersion = "gen4"
 	cell := "multicol"
 	ks := "TestMultiCol"
 	hc := discovery.NewFakeHealthCheck(nil)
@@ -3379,6 +3351,7 @@ func TestMultiCol(t *testing.T) {
 		conns = append(conns, sbc)
 	}
 	executor := createExecutor(serv, cell, resolver)
+	executor.pv = querypb.ExecuteOptions_Gen4
 
 	tcases := []struct {
 		cola, colb, colc int
@@ -3442,7 +3415,6 @@ var multiColVschema = `
 
 func TestMultiColPartial(t *testing.T) {
 	// Special setup: Don't use createLegacyExecutorEnv.
-	*plannerVersion = "gen4"
 	cell := "multicol"
 	ks := "TestMultiCol"
 	hc := discovery.NewFakeHealthCheck(nil)
@@ -3458,6 +3430,7 @@ func TestMultiColPartial(t *testing.T) {
 		conns = append(conns, sbc)
 	}
 	executor := createExecutor(serv, cell, resolver)
+	executor.pv = querypb.ExecuteOptions_Gen4
 
 	tcases := []struct {
 		where  string
@@ -3504,7 +3477,6 @@ func TestMultiColPartial(t *testing.T) {
 
 func TestSelectAggregationNoData(t *testing.T) {
 	// Special setup: Don't use createExecutorEnv.
-	*plannerVersion = "gen4"
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
 	createSandbox(KsTestSharded).VSchema = executorVSchema
@@ -3518,6 +3490,7 @@ func TestSelectAggregationNoData(t *testing.T) {
 		conns = append(conns, sbc)
 	}
 	executor := createExecutor(serv, cell, resolver)
+	executor.pv = querypb.ExecuteOptions_Gen4
 
 	tcases := []struct {
 		sql         string
@@ -3588,7 +3561,6 @@ func TestSelectAggregationNoData(t *testing.T) {
 
 func TestSelectAggregationData(t *testing.T) {
 	// Special setup: Don't use createExecutorEnv.
-	*plannerVersion = "gen4"
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
 	createSandbox(KsTestSharded).VSchema = executorVSchema
@@ -3602,6 +3574,7 @@ func TestSelectAggregationData(t *testing.T) {
 		conns = append(conns, sbc)
 	}
 	executor := createExecutor(serv, cell, resolver)
+	executor.pv = querypb.ExecuteOptions_Gen4
 
 	tcases := []struct {
 		sql         string

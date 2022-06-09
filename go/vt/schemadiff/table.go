@@ -29,7 +29,6 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
-//
 type AlterTableEntityDiff struct {
 	from       *CreateTableEntity
 	to         *CreateTableEntity
@@ -43,7 +42,7 @@ func (d *AlterTableEntityDiff) IsEmpty() bool {
 	return d.Statement() == nil
 }
 
-// IsEmpty implements EntityDiff
+// Entities implements EntityDiff
 func (d *AlterTableEntityDiff) Entities() (from Entity, to Entity) {
 	return d.from, d.to
 }
@@ -429,7 +428,7 @@ func (c *CreateTableEntity) normalizeKeys() {
 	keyNameExists := map[string]bool{}
 	// first, we iterate and take note for all keys that do already have names
 	for _, key := range c.CreateTable.TableSpec.Indexes {
-		if name := key.Info.Name.String(); name != "" {
+		if name := key.Info.Name.Lowered(); name != "" {
 			keyNameExists[name] = true
 		}
 	}
@@ -459,12 +458,12 @@ func (c *CreateTableEntity) normalizeKeys() {
 			}
 			suggestedKeyName := colName
 			// now let's see if that name is taken; if it is, enumerate new news until we find a free name
-			for enumerate := 2; keyNameExists[suggestedKeyName]; enumerate++ {
+			for enumerate := 2; keyNameExists[strings.ToLower(suggestedKeyName)]; enumerate++ {
 				suggestedKeyName = fmt.Sprintf("%s_%d", colName, enumerate)
 			}
 			// OK we found a free slot!
 			key.Info.Name = sqlparser.NewColIdent(suggestedKeyName)
-			keyNameExists[suggestedKeyName] = true
+			keyNameExists[strings.ToLower(suggestedKeyName)] = true
 		}
 
 		// Drop options that are the same as the default.
@@ -489,7 +488,7 @@ func (c *CreateTableEntity) normalizeUnnamedConstraints() {
 	constraintNameExists := map[string]bool{}
 	// first, we iterate and take note for all keys that do already have names
 	for _, constraint := range c.CreateTable.TableSpec.Constraints {
-		if name := constraint.Name.String(); name != "" {
+		if name := constraint.Name.Lowered(); name != "" {
 			constraintNameExists[name] = true
 		}
 	}
@@ -503,12 +502,12 @@ func (c *CreateTableEntity) normalizeUnnamedConstraints() {
 			}
 			suggestedCheckName := fmt.Sprintf(nameFormat, c.CreateTable.Table.Name.String(), 1)
 			// now let's see if that name is taken; if it is, enumerate new news until we find a free name
-			for enumerate := 2; constraintNameExists[suggestedCheckName]; enumerate++ {
+			for enumerate := 2; constraintNameExists[strings.ToLower(suggestedCheckName)]; enumerate++ {
 				suggestedCheckName = fmt.Sprintf(nameFormat, c.CreateTable.Table.Name.String(), enumerate)
 			}
 			// OK we found a free slot!
 			constraint.Name = sqlparser.NewColIdent(suggestedCheckName)
-			constraintNameExists[suggestedCheckName] = true
+			constraintNameExists[strings.ToLower(suggestedCheckName)] = true
 		}
 	}
 }
@@ -636,7 +635,7 @@ func (c *CreateTableEntity) diffTableCharset(
 ) string {
 	getcharset := func(options sqlparser.TableOptions) string {
 		for _, option := range options {
-			if strings.ToUpper(option.Name) == "CHARSET" {
+			if strings.EqualFold(option.Name, "CHARSET") {
 				return option.String
 			}
 		}
@@ -1057,7 +1056,7 @@ func (c *CreateTableEntity) diffKeys(alterTable *sqlparser.AlterTable,
 
 	dropKeyStatement := func(name sqlparser.ColIdent) *sqlparser.DropKey {
 		dropKey := &sqlparser.DropKey{}
-		if dropKey.Name.String() == "PRIMARY" {
+		if strings.EqualFold(dropKey.Name.String(), "PRIMARY") {
 			dropKey.Type = sqlparser.PrimaryKeyType
 		} else {
 			dropKey.Type = sqlparser.NormalKeyType
@@ -1153,11 +1152,11 @@ func evaluateColumnReordering(t1SharedColumns, t2SharedColumns []*sqlparser.Colu
 
 	t1SharedColNames := []interface{}{}
 	for _, col := range t1SharedColumns {
-		t1SharedColNames = append(t1SharedColNames, col.Name.String())
+		t1SharedColNames = append(t1SharedColNames, col.Name.Lowered())
 	}
 	t2SharedColNames := []interface{}{}
 	for _, col := range t2SharedColumns {
-		t2SharedColNames = append(t2SharedColNames, col.Name.String())
+		t2SharedColNames = append(t2SharedColNames, col.Name.Lowered())
 	}
 
 	lcs := golcs.New(t1SharedColNames, t2SharedColNames)
@@ -1166,8 +1165,8 @@ func evaluateColumnReordering(t1SharedColumns, t2SharedColumns []*sqlparser.Colu
 		lcsNames[v.(string)] = true
 	}
 	for i, t2Col := range t2SharedColumns {
-		t2ColName := t2Col.Name.String()
-		// see if this column is in longest common subsequence. If so, no need to reorder it. If not, it must be reordered.
+		t2ColName := t2Col.Name.Lowered()
+		// see if this column is in the longest common subsequence. If so, no need to reorder it. If not, it must be reordered.
 		if _, ok := lcsNames[t2ColName]; !ok {
 			minimalColumnReordering[t2ColName] = i
 		}
@@ -1218,8 +1217,7 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 	// shared columns, by order of appearance in t2
 	t2SharedColumns := []*sqlparser.ColumnDefinition{}
 	for _, t2Col := range t2Columns {
-		t2ColName := t2Col.Name.Lowered()
-		if _, ok := t1ColumnsMap[t2ColName]; ok {
+		if _, ok := t1ColumnsMap[t2Col.Name.Lowered()]; ok {
 			// column exists in both tables
 			t2SharedColumns = append(t2SharedColumns, t2Col)
 		}
@@ -1272,8 +1270,7 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 	// end of existing columns list.
 	expectAppendIndex := len(t2SharedColumns)
 	for t2ColIndex, t2Col := range t2Columns {
-		t2ColName := t2Col.Name.Lowered()
-		if _, ok := t1ColumnsMap[t2ColName]; !ok {
+		if _, ok := t1ColumnsMap[t2Col.Name.Lowered()]; !ok {
 			// column exists in t2 but not in t1, hence it is added
 			addColumn := &sqlparser.AddColumns{
 				Columns: []*sqlparser.ColumnDefinition{t2Col},
@@ -1345,13 +1342,12 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 		case spec.Action == sqlparser.DropAction && len(spec.Names) > 0:
 			for _, dropPartitionName := range spec.Names {
 				// Drop partitions
-				partitionName := dropPartitionName.Lowered()
 				if c.TableSpec.PartitionOption == nil {
-					return &ApplyPartitionNotFoundError{Table: c.Name(), Partition: partitionName}
+					return &ApplyPartitionNotFoundError{Table: c.Name(), Partition: dropPartitionName.String()}
 				}
 				partitionFound := false
 				for i, p := range c.TableSpec.PartitionOption.Definitions {
-					if p.Name.Lowered() == partitionName {
+					if strings.EqualFold(p.Name.String(), dropPartitionName.String()) {
 						c.TableSpec.PartitionOption.Definitions = append(
 							c.TableSpec.PartitionOption.Definitions[0:i],
 							c.TableSpec.PartitionOption.Definitions[i+1:]...,
@@ -1361,12 +1357,11 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 					}
 				}
 				if !partitionFound {
-					return &ApplyPartitionNotFoundError{Table: c.Name(), Partition: partitionName}
+					return &ApplyPartitionNotFoundError{Table: c.Name(), Partition: dropPartitionName.String()}
 				}
 			}
 		case spec.Action == sqlparser.AddAction && len(spec.Definitions) == 1:
 			// Add one partition
-			partitionName := spec.Definitions[0].Name.Lowered()
 			if c.TableSpec.PartitionOption == nil {
 				return &ApplyNoPartitionsError{Table: c.Name()}
 			}
@@ -1374,8 +1369,8 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 				return &ApplyNoPartitionsError{Table: c.Name()}
 			}
 			for _, p := range c.TableSpec.PartitionOption.Definitions {
-				if p.Name.Lowered() == partitionName {
-					return &ApplyDuplicatePartitionError{Table: c.Name(), Partition: partitionName}
+				if strings.EqualFold(p.Name.String(), spec.Definitions[0].Name.String()) {
+					return &ApplyDuplicatePartitionError{Table: c.Name(), Partition: spec.Definitions[0].Name.String()}
 				}
 			}
 			c.TableSpec.PartitionOption.Definitions = append(
@@ -1404,7 +1399,7 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 			afterColFound := false
 			// look for the AFTER column; it has to exist!
 			for a, afterCol := range c.TableSpec.Columns {
-				if afterCol.Name.Lowered() == after.Name.Lowered() {
+				if strings.EqualFold(afterCol.Name.String(), after.Name.String()) {
 					if colIndex < a {
 						// moving column i to the right
 						newCols = append(newCols, c.TableSpec.Columns[0:colIndex]...)
@@ -1450,7 +1445,7 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 			switch opt.Type {
 			case sqlparser.NormalKeyType, sqlparser.PrimaryKeyType:
 				for i, index := range c.TableSpec.Indexes {
-					if index.Info.Name.Lowered() == opt.Name.Lowered() {
+					if strings.EqualFold(index.Info.Name.String(), opt.Name.String()) {
 						found = true
 						c.TableSpec.Indexes = append(c.TableSpec.Indexes[0:i], c.TableSpec.Indexes[i+1:]...)
 						break
@@ -1458,7 +1453,7 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 				}
 			case sqlparser.ForeignKeyType, sqlparser.CheckKeyType:
 				for i, constraint := range c.TableSpec.Constraints {
-					if constraint.Name.Lowered() == opt.Name.Lowered() {
+					if strings.EqualFold(constraint.Name.String(), opt.Name.String()) {
 						found = true
 						c.TableSpec.Constraints = append(c.TableSpec.Constraints[0:i], c.TableSpec.Constraints[i+1:]...)
 						break
@@ -1472,9 +1467,9 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 			}
 		case *sqlparser.AddIndexDefinition:
 			// validate no existing key by same name
-			keyName := opt.IndexDefinition.Info.Name.Lowered()
+			keyName := opt.IndexDefinition.Info.Name.String()
 			for _, index := range c.TableSpec.Indexes {
-				if index.Info.Name.Lowered() == keyName {
+				if strings.EqualFold(index.Info.Name.String(), keyName) {
 					return &ApplyDuplicateKeyError{Table: c.Name(), Key: keyName}
 				}
 			}
@@ -1487,7 +1482,7 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 		case *sqlparser.AddConstraintDefinition:
 			// validate no existing constraint by same name
 			for _, cs := range c.TableSpec.Constraints {
-				if cs.Name.Lowered() == opt.ConstraintDefinition.Name.Lowered() {
+				if strings.EqualFold(cs.Name.String(), opt.ConstraintDefinition.Name.String()) {
 					return &ApplyDuplicateConstraintError{Table: c.Name(), Constraint: cs.Name.String()}
 				}
 			}
@@ -1495,10 +1490,9 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 		case *sqlparser.AlterCheck:
 			// we expect the constraint to exist
 			found := false
-			constraintName := opt.Name.Lowered()
 			for _, constraint := range c.TableSpec.Constraints {
 				checkDetails, ok := constraint.Details.(*sqlparser.CheckConstraintDefinition)
-				if ok && constraint.Name.Lowered() == constraintName {
+				if ok && strings.EqualFold(constraint.Name.String(), opt.Name.String()) {
 					found = true
 					checkDetails.Enforced = opt.Enforced
 					break
@@ -1510,18 +1504,17 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 		case *sqlparser.DropColumn:
 			// we expect the column to exist
 			found := false
-			colName := opt.Name.Name.Lowered()
 			for i, col := range c.TableSpec.Columns {
-				if col.Name.Lowered() == colName {
+				if strings.EqualFold(col.Name.String(), opt.Name.Name.String()) {
 					found = true
 					c.TableSpec.Columns = append(c.TableSpec.Columns[0:i], c.TableSpec.Columns[i+1:]...)
+					delete(columnExists, col.Name.Lowered())
 					break
 				}
 			}
 			if !found {
 				return &ApplyColumnNotFoundError{Table: c.Name(), Column: opt.Name.Name.String()}
 			}
-			delete(columnExists, colName)
 		case *sqlparser.AddColumns:
 			if len(opt.Columns) != 1 {
 				// our Diff only ever generates a single column per AlterOption
@@ -1529,9 +1522,8 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 			}
 			// validate no column by same name
 			addedCol := opt.Columns[0]
-			colName := addedCol.Name.Lowered()
 			for _, col := range c.TableSpec.Columns {
-				if col.Name.Lowered() == colName {
+				if strings.EqualFold(col.Name.String(), addedCol.Name.String()) {
 					return &ApplyDuplicateColumnError{Table: c.Name(), Column: addedCol.Name.String()}
 				}
 			}
@@ -1540,12 +1532,12 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 			if err := reorderColumn(len(c.TableSpec.Columns)-1, opt.First, opt.After); err != nil {
 				return err
 			}
-			columnExists[colName] = true
+			columnExists[addedCol.Name.Lowered()] = true
 		case *sqlparser.ModifyColumn:
 			// we expect the column to exist
 			found := false
 			for i, col := range c.TableSpec.Columns {
-				if col.Name.Lowered() == opt.NewColDefinition.Name.Lowered() {
+				if strings.EqualFold(col.Name.String(), opt.NewColDefinition.Name.String()) {
 					found = true
 					// redefine. see if we need to position it anywhere other than end of table
 					c.TableSpec.Columns[i] = opt.NewColDefinition
@@ -1562,7 +1554,7 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 			// we expect the column to exist
 			found := false
 			for _, col := range c.TableSpec.Columns {
-				if col.Name.Lowered() == opt.Column.Name.Lowered() {
+				if strings.EqualFold(col.Name.String(), opt.Column.Name.String()) {
 					found = true
 					if opt.DropDefault {
 						col.Type.Options.Default = nil
@@ -1580,7 +1572,7 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 			// we expect the index to exist
 			found := false
 			for _, idx := range c.TableSpec.Indexes {
-				if idx.Info.Name.Lowered() == opt.Name.Lowered() {
+				if strings.EqualFold(idx.Info.Name.String(), opt.Name.String()) {
 					found = true
 					if opt.Invisible {
 						idx.Options = append(idx.Options, &sqlparser.IndexOption{Name: "INVISIBLE"})
@@ -1601,11 +1593,11 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 				return &ApplyKeyNotFoundError{Table: c.Name(), Key: opt.Name.String()}
 			}
 		case sqlparser.TableOptions:
-			// Apply table options. Options that have their DEFAULT value are actually remvoed.
+			// Apply table options. Options that have their DEFAULT value are actually removed.
 			for _, option := range opt {
 				func() {
 					for i, existingOption := range c.TableSpec.Options {
-						if option.Name == existingOption.Name {
+						if strings.EqualFold(option.Name, existingOption.Name) {
 							if isDefaultTableOptionValue(option) {
 								// remove the option
 								c.TableSpec.Options = append(c.TableSpec.Options[0:i], c.TableSpec.Options[i+1:]...)
@@ -1739,7 +1731,7 @@ func (c *CreateTableEntity) postApplyNormalize() error {
 		}
 
 		referencedColumn := referencedColumns[0]
-		if columnExists[referencedColumn] {
+		if columnExists[strings.ToLower(referencedColumn)] {
 			keptConstraints = append(keptConstraints, constraint)
 		}
 	}
@@ -1782,7 +1774,7 @@ func (c *CreateTableEntity) validate() error {
 	for _, col := range c.CreateTable.TableSpec.Columns {
 		colName := col.Name.Lowered()
 		if columnExists[colName] {
-			return &ApplyDuplicateColumnError{Table: c.Name(), Column: colName}
+			return &ApplyDuplicateColumnError{Table: c.Name(), Column: col.Name.String()}
 		}
 		columnExists[colName] = true
 	}
@@ -1801,7 +1793,7 @@ func (c *CreateTableEntity) validate() error {
 			err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 				switch node := node.(type) {
 				case *sqlparser.ColName:
-					referencedColumns = append(referencedColumns, node.Name.Lowered())
+					referencedColumns = append(referencedColumns, node.Name.String())
 				}
 				return true, nil
 			}, col.Type.Options.As)
@@ -1809,7 +1801,7 @@ func (c *CreateTableEntity) validate() error {
 				return err
 			}
 			for _, referencedColName := range referencedColumns {
-				if !columnExists[referencedColName] {
+				if !columnExists[strings.ToLower(referencedColName)] {
 					return &InvalidColumnInGeneratedColumnError{Table: c.Name(), Column: referencedColName, GeneratedColumn: col.Name.String()}
 				}
 			}
@@ -1830,7 +1822,7 @@ func (c *CreateTableEntity) validate() error {
 				return err
 			}
 			for _, referencedColName := range referencedColumns {
-				if !columnExists[referencedColName] {
+				if !columnExists[strings.ToLower(referencedColName)] {
 					return &InvalidColumnInKeyError{Table: c.Name(), Column: referencedColName, Key: idx.Info.Name.String()}
 				}
 			}
@@ -1866,7 +1858,7 @@ func (c *CreateTableEntity) validate() error {
 			return err
 		}
 		for _, referencedColName := range referencedColumns {
-			if !columnExists[referencedColName] {
+			if !columnExists[strings.ToLower(referencedColName)] {
 				return &InvalidColumnInCheckConstraintError{Table: c.Name(), Constraint: cs.Name.String(), Column: referencedColName}
 			}
 		}
@@ -1876,11 +1868,10 @@ func (c *CreateTableEntity) validate() error {
 		// validate no two partitions have same name
 		partitionExists := map[string]bool{}
 		for _, p := range partition.Definitions {
-			partitionName := p.Name.Lowered()
-			if partitionExists[partitionName] {
-				return &ApplyDuplicatePartitionError{Table: c.Name(), Partition: partitionName}
+			if partitionExists[p.Name.Lowered()] {
+				return &ApplyDuplicatePartitionError{Table: c.Name(), Partition: p.Name.String()}
 			}
-			partitionExists[partitionName] = true
+			partitionExists[p.Name.Lowered()] = true
 		}
 		// validate columns referenced by partitions do in fact exist
 		// also, validate that all unique keys include partitioned columns
@@ -1888,7 +1879,7 @@ func (c *CreateTableEntity) validate() error {
 		err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 			switch node := node.(type) {
 			case *sqlparser.ColName:
-				partitionColNames = append(partitionColNames, node.Name.Lowered())
+				partitionColNames = append(partitionColNames, node.Name.String())
 			}
 			return true, nil
 		}, partition.Expr)
@@ -1898,7 +1889,7 @@ func (c *CreateTableEntity) validate() error {
 
 		for _, partitionColName := range partitionColNames {
 			// Validate columns exists in table:
-			if !columnExists[partitionColName] {
+			if !columnExists[strings.ToLower(partitionColName)] {
 				return &InvalidColumnInPartitionError{Table: c.Name(), Column: partitionColName}
 			}
 
@@ -1909,8 +1900,7 @@ func (c *CreateTableEntity) validate() error {
 				}
 				colFound := false
 				for _, col := range key.Columns {
-					colName := col.Column.Lowered()
-					if colName == partitionColName {
+					if strings.EqualFold(col.Column.String(), partitionColName) {
 						colFound = true
 						break
 					}

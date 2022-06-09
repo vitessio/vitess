@@ -1087,6 +1087,24 @@ func (cached *ExtractFuncExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *ExtractValueExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(32)
+	}
+	// field Fragment vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Fragment.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field XPathExpr vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.XPathExpr.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
 func (cached *ExtractedSubquery) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2119,6 +2137,24 @@ func (cached *LockTables) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *LockingFunc) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field Name vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Name.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Timeout vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Timeout.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
 func (cached *MatchExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2732,6 +2768,20 @@ func (cached *Release) CachedSize(alloc bool) int64 {
 	}
 	// field Name vitess.io/vitess/go/vt/sqlparser.ColIdent
 	size += cached.Name.CachedSize(false)
+	return size
+}
+func (cached *RenameColumn) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(16)
+	}
+	// field OldName *vitess.io/vitess/go/vt/sqlparser.ColName
+	size += cached.OldName.CachedSize(true)
+	// field NewName *vitess.io/vitess/go/vt/sqlparser.ColName
+	size += cached.NewName.CachedSize(true)
 	return size
 }
 func (cached *RenameIndex) CachedSize(alloc bool) int64 {
@@ -3479,6 +3529,28 @@ func (cached *UpdateExpr) CachedSize(alloc bool) int64 {
 	size += cached.Name.CachedSize(true)
 	// field Expr vitess.io/vitess/go/vt/sqlparser.Expr
 	if cc, ok := cached.Expr.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
+func (cached *UpdateXMLExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field Target vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Target.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field XPathExpr vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.XPathExpr.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field NewXML vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.NewXML.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
 	return size

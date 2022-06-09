@@ -1628,6 +1628,16 @@ func (node *LagLeadExpr) Format(buf *TrackedBuffer) {
 	}
 }
 
+// Format formats the node
+func (node *ExtractValueExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "extractvalue(%v, %v)", node.Fragment, node.XPathExpr)
+}
+
+// Format formats the node
+func (node *UpdateXMLExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "updatexml(%v, %v, %v)", node.Target, node.XPathExpr, node.NewXML)
+}
+
 // Format formats the node.
 func (node *SubstrExpr) Format(buf *TrackedBuffer) {
 	if node.To == nil {
@@ -2184,6 +2194,11 @@ func (node *ModifyColumn) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node
+func (node *RenameColumn) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "rename column %v to %v", node.OldName, node.NewName)
+}
+
+// Format formats the node
 func (node *AlterCharset) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "convert to character set %#s", node.CharacterSet)
 	if node.Collate != "" {
@@ -2559,5 +2574,17 @@ func (node *JSONRemoveExpr) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node *JSONUnquoteExpr) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "json_unquote(%v", node.JSONValue)
+	buf.WriteString(")")
+}
+
+// Format formats the node.
+func (node *LockingFunc) Format(buf *TrackedBuffer) {
+	buf.WriteString(node.Type.ToString() + "(")
+	if node.Type != ReleaseAllLocks {
+		buf.astPrintf(node, "%v", node.Name)
+	}
+	if node.Type == GetLock {
+		buf.astPrintf(node, ", %v", node.Timeout)
+	}
 	buf.WriteString(")")
 }

@@ -38,6 +38,21 @@ var (
 	ErrNoPrimaryStatus = errors.New("no master status")
 )
 
+type FlavorCapability int
+
+const (
+	NoneFlavorCapability          FlavorCapability = iota // default placeholder
+	FastDropTableFlavorCapability                         // supported in MySQL 8.0.23 and above: https://dev.mysql.com/doc/relnotes/mysql/8.0/en/news-8-0-23.html
+	TransactionalGtidExecutedFlavorCapability
+	InstantDDLFlavorCapability
+	InstantAddLastColumnFlavorCapability
+	InstantAddDropVirtualColumnFlavorCapability
+	InstantAddDropColumnFlavorCapability
+	InstantChangeColumnDefaultFlavorCapability
+	MySQLJSONFlavorCapability
+	MySQLUpgradeInServerFlavorCapability
+)
+
 const (
 	// mariaDBReplicationHackPrefix is the prefix of a version for MariaDB 10.0
 	// versions, to work around replication bugs.
@@ -128,20 +143,19 @@ type flavor interface {
 
 	baseShowTablesWithSizes() string
 
-	// SupportsFastDropTable checks if the database server supports fast DROP TABLE operations that do not
-	// lock the buffer pool and other queries.
-	// Specifically, this is supported in MySQL 8.0.23 and above: https://dev.mysql.com/doc/relnotes/mysql/8.0/en/news-8-0-23.html
-	supportsFastDropTable(c *Conn) (bool, error)
+	supportsCapability(serverVersion string, capability FlavorCapability) (bool, error)
 }
+
+type CapableOf func(capability FlavorCapability) (bool, error)
 
 // flavors maps flavor names to their implementation.
 // Flavors need to register only if they support being specified in the
 // connection parameters.
 var flavors = make(map[string]func() flavor)
 
-// serverVersionAtLeast returns true if current server is at least given value.
+// ServerVersionAtLeast returns true if current server is at least given value.
 // Example: if input is []int{8, 0, 23}... the function returns 'true' if we're on MySQL 8.0.23, 8.0.24, ...
-func serverVersionAtLeast(serverVersion string, parts ...int) (bool, error) {
+func ServerVersionAtLeast(serverVersion string, parts ...int) (bool, error) {
 	versionPrefix := strings.Split(serverVersion, "-")[0]
 	versionTokens := strings.Split(versionPrefix, ".")
 	for i, part := range parts {
@@ -162,6 +176,46 @@ func serverVersionAtLeast(serverVersion string, parts ...int) (bool, error) {
 	return true, nil
 }
 
+// GetFlavor fills in c.Flavor. If the params specify the flavor,
+// that is used. Otherwise, we auto-detect.
+//
+// This is the same logic as the ConnectorJ java client. We try to recognize
+// MariaDB as much as we can, but default to MySQL.
+//
+// MariaDB note: the server version returned here might look like:
+// 5.5.5-10.0.21-MariaDB-...
+// If that is the case, we are removing the 5.5.5- prefix.
+// Note on such servers, 'select version()' would return 10.0.21-MariaDB-...
+// as well (not matching what c.ServerVersion is, but matching after we remove
+// the prefix).
+func GetFlavor(serverVersion string, flavorFunc func() flavor) (f flavor, capableOf CapableOf, canonicalVersion string) {
+	canonicalVersion = serverVersion
+	switch {
+	case flavorFunc != nil:
+		f = flavorFunc()
+	case strings.HasPrefix(serverVersion, mariaDBReplicationHackPrefix):
+		canonicalVersion = serverVersion[len(mariaDBReplicationHackPrefix):]
+		f = mariadbFlavor101{}
+	case strings.Contains(serverVersion, mariaDBVersionString):
+		mariadbVersion, err := strconv.ParseFloat(serverVersion[:4], 64)
+		if err != nil || mariadbVersion < 10.2 {
+			f = mariadbFlavor101{}
+		} else {
+			f = mariadbFlavor102{}
+		}
+	case strings.HasPrefix(serverVersion, mysql57VersionPrefix):
+		f = mysqlFlavor57{}
+	case strings.HasPrefix(serverVersion, mysql80VersionPrefix):
+		f = mysqlFlavor80{}
+	default:
+		f = mysqlFlavor56{}
+	}
+	return f,
+		func(capability FlavorCapability) (bool, error) {
+			return f.supportsCapability(serverVersion, capability)
+		}, canonicalVersion
+}
+
 // fillFlavor fills in c.Flavor. If the params specify the flavor,
 // that is used. Otherwise, we auto-detect.
 //
@@ -176,32 +230,13 @@ func serverVersionAtLeast(serverVersion string, parts ...int) (bool, error) {
 // the prefix).
 func (c *Conn) fillFlavor(params *ConnParams) {
 	flavorFunc := flavors[params.Flavor]
-
-	switch {
-	case flavorFunc != nil:
-		c.flavor = flavorFunc()
-	case strings.HasPrefix(c.ServerVersion, mariaDBReplicationHackPrefix):
-		c.ServerVersion = c.ServerVersion[len(mariaDBReplicationHackPrefix):]
-		c.flavor = mariadbFlavor101{}
-	case strings.Contains(c.ServerVersion, mariaDBVersionString):
-		mariadbVersion, err := strconv.ParseFloat(c.ServerVersion[:4], 64)
-		if err != nil || mariadbVersion < 10.2 {
-			c.flavor = mariadbFlavor101{}
-		}
-		c.flavor = mariadbFlavor102{}
-	case strings.HasPrefix(c.ServerVersion, mysql57VersionPrefix):
-		c.flavor = mysqlFlavor57{}
-	case strings.HasPrefix(c.ServerVersion, mysql80VersionPrefix):
-		c.flavor = mysqlFlavor80{}
-	default:
-		c.flavor = mysqlFlavor56{}
-	}
+	c.flavor, _, c.ServerVersion = GetFlavor(c.ServerVersion, flavorFunc)
 }
 
 // ServerVersionAtLeast returns 'true' if server version is equal or greater than given parts. e.g.
 // "8.0.14-log" is at least [8, 0, 13] and [8, 0, 14], but not [8, 0, 15]
 func (c *Conn) ServerVersionAtLeast(parts ...int) (bool, error) {
-	return serverVersionAtLeast(c.ServerVersion, parts...)
+	return ServerVersionAtLeast(c.ServerVersion, parts...)
 }
 
 //
@@ -481,9 +516,7 @@ func (c *Conn) BaseShowTables() string {
 	return c.flavor.baseShowTablesWithSizes()
 }
 
-// SupportsFastDropTable checks if the database server supports fast DROP TABLE operations that do not
-// lock the buffer pool and other queries.
-// Specifically, this is supported in MySQL 8.0.23 and above: https://dev.mysql.com/doc/relnotes/mysql/8.0/en/news-8-0-23.html
-func (c *Conn) SupportsFastDropTable() (bool, error) {
-	return c.flavor.supportsFastDropTable(c)
+// SupportsCapability checks if the database server supports the given capability
+func (c *Conn) SupportsCapability(capability FlavorCapability) (bool, error) {
+	return c.flavor.supportsCapability(c.ServerVersion, capability)
 }

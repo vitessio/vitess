@@ -1370,11 +1370,15 @@ func executeCheckAndRecoverFunction(analysisEntry inst.ReplicationAnalysis, cand
 	// changes, we should be checking that this failure is indeed needed to be fixed. We do this after locking the shard to be sure
 	// that the data that we use now is up-to-date.
 	if isActionableRecovery {
+		err := RefreshKeyspace(analysisEntry.AnalyzedKeyspace)
+		if err != nil {
+			return false, nil, err
+		}
 		// TODO (@GuptaManan100): Refresh only the shard tablet information instead of all the tablets
 		RefreshTablets(true /* forceRefresh */)
 		alreadyFixed, err := checkIfAlreadyFixed(analysisEntry)
 		if err != nil {
-			log.Errorf("CheckAndRecover: Analysis: %+v, InstanceKey: %+v, candidateInstanceKey: %+v, "+"skipProcesses: %v: error while trying to find if the problem is already fixed: %v",
+			log.Errorf("executeCheckAndRecoverFunction: Analysis: %+v, InstanceKey: %+v, candidateInstanceKey: %+v, "+"skipProcesses: %v: error while trying to find if the problem is already fixed: %v",
 				analysisEntry.Analysis, analysisEntry.AnalyzedInstanceKey, candidateInstanceKey, skipProcesses, err)
 			return false, nil, err
 		}
@@ -1794,9 +1798,13 @@ func fixPrimary(ctx context.Context, analysisEntry inst.ReplicationAnalysis, can
 	defer func() {
 		resolveRecovery(topologyRecovery, nil)
 	}()
-
+	durability, err := inst.GetDurabilityPolicy(analysisEntry.AnalyzedInstanceKey)
+	if err != nil {
+		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("can't read durability policy - %v.", err))
+		return false, topologyRecovery, err
+	}
 	// TODO(sougou): this code pattern has reached DRY limits. Reuse.
-	count := inst.SemiSyncAckers(analysisEntry.AnalyzedInstanceKey)
+	count := inst.SemiSyncAckers(durability, analysisEntry.AnalyzedInstanceKey)
 	err = inst.SetSemiSyncPrimary(&analysisEntry.AnalyzedInstanceKey, count > 0)
 	//AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("- fixPrimary: applying semi-sync %v: success=%t", count > 0, (err == nil)))
 	if err != nil {

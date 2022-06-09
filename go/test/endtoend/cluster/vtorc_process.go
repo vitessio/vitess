@@ -54,7 +54,6 @@ type VtorcConfiguration struct {
 	InstancePollSeconds                   int
 	PreventCrossDataCenterPrimaryFailover bool   `json:",omitempty"`
 	LockShardTimeoutSeconds               int    `json:",omitempty"`
-	Durability                            string `json:",omitempty"`
 	ReplicationLagQuery                   string `json:",omitempty"`
 	FailPrimaryPromotionOnLagMinutes      int    `json:",omitempty"`
 }

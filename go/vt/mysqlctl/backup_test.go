@@ -25,11 +25,7 @@ import (
 )
 
 func TestFindFilesToBackup(t *testing.T) {
-	root, err := os.MkdirTemp("", "backuptest")
-	if err != nil {
-		t.Fatalf("os.TempDir failed: %v", err)
-	}
-	defer os.RemoveAll(root)
+	root := t.TempDir()
 
 	// Initialize the fake mysql root directories
 	innodbDataDir := path.Join(root, "innodb_data")

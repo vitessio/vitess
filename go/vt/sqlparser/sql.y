@@ -341,6 +341,8 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> JSON_DEPTH JSON_TYPE JSON_LENGTH JSON_VALID
 %token <str> JSON_ARRAY_APPEND JSON_ARRAY_INSERT JSON_INSERT JSON_MERGE JSON_MERGE_PATCH JSON_MERGE_PRESERVE JSON_REMOVE JSON_REPLACE JSON_SET JSON_UNQUOTE
 %token <str> REGEXP_INSTR REGEXP_LIKE REGEXP_REPLACE REGEXP_SUBSTR
+%token <str> ExtractValue UpdateXML
+%token <str> GET_LOCK RELEASE_LOCK RELEASE_ALL_LOCKS IS_FREE_LOCK IS_USED_LOCK
 
 // Match
 %token <str> MATCH AGAINST BOOLEAN LANGUAGE WITH QUERY EXPANSION WITHOUT VALIDATION
@@ -438,7 +440,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <str> select_option algorithm_view security_view security_view_opt
 %type <str> generated_always_opt user_username address_opt
 %type <definer> definer_opt user
-%type <expr> expression frame_expression signed_literal signed_literal_or_null null_as_literal now_or_signed_literal signed_literal bit_expr regular_expressions
+%type <expr> expression frame_expression signed_literal signed_literal_or_null null_as_literal now_or_signed_literal signed_literal bit_expr regular_expressions xml_expressions
 %type <expr> interval_value simple_expr literal NUM_literal text_literal text_literal_or_arg bool_pri literal_or_null now predicate tuple_expression null_int_variable_arg
 %type <tableExprs> from_opt table_references from_clause
 %type <tableExpr> table_reference table_factor join_table json_table_function
@@ -2891,6 +2893,10 @@ alter_option:
 | MODIFY column_opt column_definition first_opt after_opt
   {
     $$ = &ModifyColumn{NewColDefinition:$3, First:$4, After:$5}
+  }
+| RENAME COLUMN column_name TO column_name
+  {
+    $$ = &RenameColumn{OldName: $3, NewName: $5}
   }
 | CONVERT TO charset_or_character_set charset collate_opt
   {
@@ -5667,6 +5673,26 @@ UTC_DATE func_paren_opt
   {
     $$ = &TrimFuncExpr{TrimArg:$3, StringArg: $5}
   }
+| GET_LOCK openb expression ',' expression closeb
+  {
+    $$ = &LockingFunc{Type: GetLock, Name:$3, Timeout:$5}
+  }
+| IS_FREE_LOCK openb expression closeb
+  {
+    $$ = &LockingFunc{Type: IsFreeLock, Name:$3}
+  }
+| IS_USED_LOCK openb expression closeb
+  {
+    $$ = &LockingFunc{Type: IsUsedLock, Name:$3}
+  }
+| RELEASE_ALL_LOCKS openb closeb
+  {
+    $$ = &LockingFunc{Type: ReleaseAllLocks}
+  }
+| RELEASE_LOCK openb expression closeb
+  {
+    $$ = &LockingFunc{Type: ReleaseLock, Name:$3}
+  }
 | JSON_SCHEMA_VALID openb expression ',' expression closeb
   {
     $$ = &JSONSchemaValidFuncExpr{ Schema: $3, Document: $5}
@@ -5816,6 +5842,7 @@ UTC_DATE func_paren_opt
     $$ =  &LagLeadExpr{ Type:$1 , Expr: $3, N: $5, Default: $6, NullTreatmentClause:$8, OverClause: $9}
   }
 | regular_expressions
+| xml_expressions
 
 null_int_variable_arg:
   null_as_literal
@@ -5910,6 +5937,16 @@ regular_expressions:
   {
     // Match type is kept expression as TRIM( ' m  ') is accepted
     $$ = &RegexpSubstrExpr{Expr:$3, Pattern:$5, Position: $7, Occurrence: $9, MatchType: $11}
+  }
+
+xml_expressions:
+  ExtractValue openb expression ',' expression closeb
+  {
+    $$ = &ExtractValueExpr{Fragment:$3, XPathExpr:$5}
+  }
+| UpdateXML openb expression ',' expression ',' expression closeb
+  {
+    $$ = &UpdateXMLExpr{ Target:$3, XPathExpr:$5, NewXML:$7 }
   }
 
 returning_type_opt:
@@ -7231,6 +7268,7 @@ non_reserved_keyword:
 | EXPIRE
 | EXPORT
 | EXTENDED
+| ExtractValue %prec FUNCTION_CALL_NON_KEYWORD
 | FLOAT_TYPE
 | FIELDS
 | FIRST
@@ -7244,6 +7282,7 @@ non_reserved_keyword:
 | GEOMCOLLECTION
 | GEOMETRY
 | GEOMETRYCOLLECTION
+| GET_LOCK %prec FUNCTION_CALL_NON_KEYWORD
 | GET_MASTER_PUBLIC_KEY
 | GLOBAL
 | GTID_EXECUTED
@@ -7262,6 +7301,8 @@ non_reserved_keyword:
 | INVISIBLE
 | INVOKER
 | INDEXES
+| IS_FREE_LOCK %prec FUNCTION_CALL_NON_KEYWORD
+| IS_USED_LOCK %prec FUNCTION_CALL_NON_KEYWORD
 | ISOLATION
 | JSON
 | JSON_ARRAY %prec FUNCTION_CALL_NON_KEYWORD
@@ -7383,6 +7424,8 @@ non_reserved_keyword:
 | REGEXP_REPLACE %prec FUNCTION_CALL_NON_KEYWORD
 | REGEXP_SUBSTR %prec FUNCTION_CALL_NON_KEYWORD
 | RELAY
+| RELEASE_ALL_LOCKS %prec FUNCTION_CALL_NON_KEYWORD
+| RELEASE_LOCK %prec FUNCTION_CALL_NON_KEYWORD
 | REMOVE
 | REORGANIZE
 | REPAIR
@@ -7457,6 +7500,7 @@ non_reserved_keyword:
 | UNSIGNED
 | UNTHROTTLE
 | UNUSED
+| UpdateXML %prec FUNCTION_CALL_NON_KEYWORD
 | UPGRADE
 | USER
 | USER_RESOURCES

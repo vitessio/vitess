@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"os"
 
+	"vitess.io/vitess/go/vt/env"
+
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	"vitess.io/vitess/go/exit"
@@ -51,6 +53,7 @@ var (
 	outputMode         = flag.String("output-mode", "text", "Output in human-friendly text or json")
 	dbName             = flag.String("dbname", "", "Optional database target to override normal routing")
 	plannerVersionStr  = flag.String("planner-version", "gen4", "Sets the query planner version to use when generating the explain output. Valid values are V3 and Gen4")
+	badPlannerVersion  = flag.String("planner_version", "", "Deprecated flag. Use planner-version instead")
 
 	// vtexplainFlags lists all the flags that should show in usage
 	vtexplainFlags = []string{
@@ -146,7 +149,12 @@ func parseAndRun() error {
 		return err
 	}
 
-	plannerVersion, _ := plancontext.PlannerNameToVersion(*plannerVersionStr)
+	verStr, err := env.CheckPlannerVersionFlag(plannerVersionStr, badPlannerVersion)
+	if err != nil {
+		return err
+	}
+
+	plannerVersion, _ := plancontext.PlannerNameToVersion(verStr)
 	if plannerVersion != querypb.ExecuteOptions_V3 && plannerVersion != querypb.ExecuteOptions_Gen4 {
 		return fmt.Errorf("invalid value specified for planner-version of '%s' -- valid values are V3 and Gen4", *plannerVersionStr)
 	}

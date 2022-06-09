@@ -40,7 +40,7 @@ func TestPrimaryElection(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	utils.SetupVttabletsAndVtorc(t, clusterInfo, 2, 1, nil, cluster.VtorcConfiguration{
 		PreventCrossDataCenterPrimaryFailover: true,
-	}, 2)
+	}, 2, "")
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 
@@ -67,7 +67,7 @@ func TestSingleKeyspace(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	utils.SetupVttabletsAndVtorc(t, clusterInfo, 1, 1, []string{"--clusters_to_watch", "ks"}, cluster.VtorcConfiguration{
 		PreventCrossDataCenterPrimaryFailover: true,
-	}, 1)
+	}, 1, "")
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 
@@ -83,7 +83,7 @@ func TestKeyspaceShard(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	utils.SetupVttabletsAndVtorc(t, clusterInfo, 1, 1, []string{"--clusters_to_watch", "ks/0"}, cluster.VtorcConfiguration{
 		PreventCrossDataCenterPrimaryFailover: true,
-	}, 1)
+	}, 1, "")
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 
@@ -96,7 +96,7 @@ func TestPrimaryReadOnly(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	utils.SetupVttabletsAndVtorc(t, clusterInfo, 2, 0, nil, cluster.VtorcConfiguration{
 		PreventCrossDataCenterPrimaryFailover: true,
-	}, 1)
+	}, 1, "")
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 
@@ -118,7 +118,7 @@ func TestReplicaReadWrite(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	utils.SetupVttabletsAndVtorc(t, clusterInfo, 2, 0, nil, cluster.VtorcConfiguration{
 		PreventCrossDataCenterPrimaryFailover: true,
-	}, 1)
+	}, 1, "")
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 
@@ -148,7 +148,7 @@ func TestStopReplication(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	utils.SetupVttabletsAndVtorc(t, clusterInfo, 2, 0, nil, cluster.VtorcConfiguration{
 		PreventCrossDataCenterPrimaryFailover: true,
-	}, 1)
+	}, 1, "")
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 
@@ -182,7 +182,7 @@ func TestReplicationFromOtherReplica(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	utils.SetupVttabletsAndVtorc(t, clusterInfo, 3, 0, nil, cluster.VtorcConfiguration{
 		PreventCrossDataCenterPrimaryFailover: true,
-	}, 1)
+	}, 1, "")
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 
@@ -230,7 +230,7 @@ func TestRepairAfterTER(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	utils.SetupVttabletsAndVtorc(t, clusterInfo, 2, 0, nil, cluster.VtorcConfiguration{
 		PreventCrossDataCenterPrimaryFailover: true,
-	}, 1)
+	}, 1, "")
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 
@@ -263,7 +263,7 @@ func TestCircularReplication(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	utils.SetupVttabletsAndVtorc(t, clusterInfo, 2, 0, nil, cluster.VtorcConfiguration{
 		PreventCrossDataCenterPrimaryFailover: true,
-	}, 1)
+	}, 1, "")
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 
@@ -307,7 +307,6 @@ func TestSemiSync(t *testing.T) {
 	newCluster := utils.SetupNewClusterSemiSync(t)
 	utils.StartVtorcs(t, newCluster, nil, cluster.VtorcConfiguration{
 		PreventCrossDataCenterPrimaryFailover: true,
-		Durability:                            "semi_sync",
 	}, 1)
 	defer func() {
 		utils.StopVtorcs(t, newCluster)
@@ -373,7 +372,7 @@ func TestVtorcWithPrs(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	utils.SetupVttabletsAndVtorc(t, clusterInfo, 4, 0, nil, cluster.VtorcConfiguration{
 		PreventCrossDataCenterPrimaryFailover: true,
-	}, 1)
+	}, 1, "")
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 
@@ -406,4 +405,24 @@ func TestVtorcWithPrs(t *testing.T) {
 	// check that the replica gets promoted
 	utils.CheckPrimaryTablet(t, clusterInfo, replica, true)
 	utils.VerifyWritesSucceed(t, clusterInfo, replica, shard0.Vttablets, 10*time.Second)
+}
+
+// TestMultipleDurabilities tests that VTOrc works with 2 keyspaces having 2 different durability policies
+func TestMultipleDurabilities(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	// Setup a normal cluster and start vtorc
+	utils.SetupVttabletsAndVtorc(t, clusterInfo, 1, 1, nil, cluster.VtorcConfiguration{}, 1, "")
+	// Setup a semi-sync cluster
+	utils.AddSemiSyncKeyspace(t, clusterInfo)
+
+	keyspaceNone := &clusterInfo.ClusterInstance.Keyspaces[0]
+	shardNone := &keyspaceNone.Shards[0]
+	utils.CheckPrimaryTablet(t, clusterInfo, shardNone.Vttablets[0], true)
+	utils.CheckReplication(t, clusterInfo, shardNone.Vttablets[0], shardNone.Vttablets[1:], 10*time.Second)
+
+	keyspaceSemiSync := &clusterInfo.ClusterInstance.Keyspaces[1]
+	shardSemiSync := &keyspaceSemiSync.Shards[0]
+	// find primary from topo
+	primary := utils.ShardPrimaryTablet(t, clusterInfo, keyspaceSemiSync, shardSemiSync)
+	assert.NotNil(t, primary, "should have elected a primary")
 }

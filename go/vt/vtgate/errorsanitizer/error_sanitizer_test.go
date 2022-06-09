@@ -32,14 +32,26 @@ func TestErrorNormalization(t *testing.T) {
 			"nothing to normalize here",
 		},
 		{
-			"truncates after 'code ='",
+			"no truncation after 'code ='",
 			`target: mars.-.primary: vttablet: rpc error: code = InvalidArgument desc = Unknown system variable 'query_response_time_stats' (errno 1193) (sqlstate HY000) (CallerID: planetscale-admin): Sql: \"select @@query_response_time_stats from dual\", BindVars: {}: 2760`,
-			`target: mars.-.primary: vttablet: rpc error: code = InvalidArgument`,
+			`target: mars.-.primary: vttablet: rpc error: code = InvalidArgument desc = Unknown system variable 'query_response_time_stats' (errno 1193) (sqlstate HY000) (CallerID: planetscale-admin)`,
 		},
 		{
-			"truncates after 'Duplicate entry'",
+			"replace after 'Duplicate entry'",
 			`target: keep3rv1.-.primary: vttablet: Duplicate entry '0' for key 'stats.id' (errno 1062) (sqlstate 23000) (CallerID: planetscale-admin): Sql: \"insert into stats(jobs, work_done, keepers, rewarded_kp3r, bonded_kp3r) values (:v1, :v2, :v3, :v4, :v5)\", BindVars: {v1: \"type:VARBINARY value:\\\"0\\\"\"v2: \"type:VARBINARY value:\\\"1\\\"\"v3: \"type:VARBINARY value:\\\"0\\\"\"v4: \"type:VARBINARY value:\\\"0\\\"\"v5: \"type:VARBINARY value:\\\"0\\\"\"}`,
-			`target: keep3rv1.-.primary: vttablet: Duplicate entry`,
+			`target: keep3rv1.-.primary: vttablet: Duplicate entry '<val>' for key 'stats.id' (errno 1062) (sqlstate 23000) (CallerID: planetscale-admin)`,
+		},
+		{
+			"malicious 'Duplicate entry'", // the entry value `this ' for key` tries to trick the regexp
+			`target: keep3rv1.-.primary: vttablet: Duplicate entry 'this ' for key' for key 'stats.id' (errno 1062) (sqlstate 23000) (CallerID: planetscale-admin): Sql: \"insert into stats(jobs, work_done, keepers, rewarded_kp3r, bonded_kp3r) values (:v1, :v2, :v3, :v4, :v5)\", BindVars: {v1: \"type:VARBINARY value:\\\"0\\\"\"v2: \"type:VARBINARY value:\\\"1\\\"\"v3: \"type:VARBINARY value:\\\"0\\\"\"v4: \"type:VARBINARY value:\\\"0\\\"\"v5: \"type:VARBINARY value:\\\"0\\\"\"}`,
+			`target: keep3rv1.-.primary: vttablet: Duplicate entry '<val>' for key 'stats.id' (errno 1062) (sqlstate 23000) (CallerID: planetscale-admin)`,
+		},
+		{
+			"malicious key name", // the key name `column ' for key` actually does trick the regexp
+			`target: keep3rv1.-.primary: vttablet: Duplicate entry 'this' for key 'column ' for key' (errno 1062) (sqlstate 23000) (CallerID: planetscale-admin): Sql: \"insert into stats(jobs, work_done, keepers, rewarded_kp3r, bonded_kp3r) values (:v1, :v2, :v3, :v4, :v5)\", BindVars: {v1: \"type:VARBINARY value:\\\"0\\\"\"v2: \"type:VARBINARY value:\\\"1\\\"\"v3: \"type:VARBINARY value:\\\"0\\\"\"v4: \"type:VARBINARY value:\\\"0\\\"\"v5: \"type:VARBINARY value:\\\"0\\\"\"}`,
+			`target: keep3rv1.-.primary: vttablet: Duplicate entry '<val>' for key' (errno 1062) (sqlstate 23000) (CallerID: planetscale-admin)`,
+			// should be:
+			// `target: keep3rv1.-.primary: vttablet: Duplicate entry '<val>' for key 'column ' for key' (errno 1062) (sqlstate 23000) (CallerID: planetscale-admin)`,
 		},
 		{
 			"truncates after 'syntax error'",

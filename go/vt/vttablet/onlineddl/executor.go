@@ -2541,11 +2541,32 @@ func (e *Executor) executeAlterViewOnline(ctx context.Context, onlineDDL *schema
 	return nil
 }
 
+// addInstantAlgorithm adds or modifies the AlterTable's ALGORITHM to INSTANT
+func (e *Executor) addInstantAlgorithm(alterTable *sqlparser.AlterTable) {
+	instantOpt := sqlparser.AlgorithmValue("INSTANT")
+	for i, opt := range alterTable.AlterOptions {
+		if _, ok := opt.(sqlparser.AlgorithmValue); ok {
+			// replace an existing algorithm
+			alterTable.AlterOptions[i] = instantOpt
+			return
+		}
+	}
+	// append an algorithm
+	alterTable.AlterOptions = append(alterTable.AlterOptions, instantOpt)
+}
+
 // executeSpecialAlterDDLActionMigrationIfApplicable sees if the given migration can be executed via special execution path, that isn't a full blown online schema change process.
 func (e *Executor) executeSpecialAlterDDLActionMigrationIfApplicable(ctx context.Context, onlineDDL *schema.OnlineDDL) (specialMigrationExecuted bool, err error) {
 	// Before we jump on to strategies... Some ALTERs can be optimized without having to run through
 	// a full online schema change process. Let's find out if this is the case!
-	specialPlan, err := e.analyzeSpecialAlterPlan(ctx, onlineDDL)
+	conn, err := dbconnpool.NewDBConnection(ctx, e.env.Config().DB.DbaWithDB())
+	if err != nil {
+		return false, err
+	}
+	defer conn.Close()
+	_, capableOf, _ := mysql.GetFlavor(conn.ServerVersion, nil)
+
+	specialPlan, err := e.analyzeSpecialAlterPlan(ctx, onlineDDL, capableOf)
 	if err != nil {
 		return false, err
 	}
@@ -2553,6 +2574,12 @@ func (e *Executor) executeSpecialAlterDDLActionMigrationIfApplicable(ctx context
 		return false, nil
 	}
 	switch specialPlan.operation {
+	case instantDDLSpecialOperation:
+		e.addInstantAlgorithm(specialPlan.alterTable)
+		onlineDDL.SQL = sqlparser.CanonicalString(specialPlan.alterTable)
+		if _, err := e.executeDirectly(ctx, onlineDDL); err != nil {
+			return false, err
+		}
 	case dropRangePartitionSpecialOperation:
 		dropPartition := func() error {
 			artifactTableName, err := schema.GenerateGCTableName(schema.HoldTableGCState, newGCTableRetainTime())
@@ -2562,11 +2589,6 @@ func (e *Executor) executeSpecialAlterDDLActionMigrationIfApplicable(ctx context
 			if err := e.updateArtifacts(ctx, onlineDDL.UUID, artifactTableName); err != nil {
 				return err
 			}
-			conn, err := dbconnpool.NewDBConnection(ctx, e.env.Config().DB.DbaWithDB())
-			if err != nil {
-				return err
-			}
-			defer conn.Close()
 
 			// Apply CREATE TABLE for artifact table
 			if _, err := e.createTableLike(ctx, artifactTableName, onlineDDL, conn); err != nil {
