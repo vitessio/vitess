@@ -400,6 +400,77 @@ func TestDeleteTablet(t *testing.T) {
 	})
 }
 
+func TestEmergencyFailoverShard(t *testing.T) {
+	t.Parallel()
+
+	opts := vtadmin.Options{
+		RBAC: &rbac.Config{
+			Rules: []*struct {
+				Resource string
+				Actions  []string
+				Subjects []string
+				Clusters []string
+			}{
+				{
+					Resource: "Shard",
+					Actions:  []string{"emergency_failover_shard"},
+					Subjects: []string{"user:allowed"},
+					Clusters: []string{"*"},
+				},
+			},
+		},
+	}
+	err := opts.RBAC.Reify()
+	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
+
+	api := vtadmin.NewAPI(testClusters(t), opts)
+	t.Cleanup(func() {
+		if err := api.Close(); err != nil {
+			t.Logf("api did not close cleanly: %s", err.Error())
+		}
+	})
+
+	t.Run("unauthorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "other"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.EmergencyFailoverShard(ctx, &vtadminpb.EmergencyFailoverShardRequest{
+			ClusterId: "test",
+			Options: &vtctldatapb.EmergencyReparentShardRequest{
+				Keyspace: "test",
+				Shard:    "-",
+			},
+		})
+		require.NoError(t, err)
+		assert.Nil(t, resp, "actor %+v should not be permitted to EmergencyFailoverShard", actor)
+	})
+
+	t.Run("authorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "allowed"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.EmergencyFailoverShard(ctx, &vtadminpb.EmergencyFailoverShardRequest{
+			ClusterId: "test",
+			Options: &vtctldatapb.EmergencyReparentShardRequest{
+				Keyspace: "test",
+				Shard:    "-",
+			},
+		})
+		require.NoError(t, err)
+		assert.NotNil(t, resp, "actor %+v should be permitted to EmergencyFailoverShard", actor)
+	})
+}
+
 func TestGetBackups(t *testing.T) {
 	t.Parallel()
 
@@ -1814,6 +1885,77 @@ func TestPingTablet(t *testing.T) {
 	})
 }
 
+func TestPlannedFailoverShard(t *testing.T) {
+	t.Parallel()
+
+	opts := vtadmin.Options{
+		RBAC: &rbac.Config{
+			Rules: []*struct {
+				Resource string
+				Actions  []string
+				Subjects []string
+				Clusters []string
+			}{
+				{
+					Resource: "Shard",
+					Actions:  []string{"planned_failover_shard"},
+					Subjects: []string{"user:allowed"},
+					Clusters: []string{"*"},
+				},
+			},
+		},
+	}
+	err := opts.RBAC.Reify()
+	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
+
+	api := vtadmin.NewAPI(testClusters(t), opts)
+	t.Cleanup(func() {
+		if err := api.Close(); err != nil {
+			t.Logf("api did not close cleanly: %s", err.Error())
+		}
+	})
+
+	t.Run("unauthorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "other"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.PlannedFailoverShard(ctx, &vtadminpb.PlannedFailoverShardRequest{
+			ClusterId: "test",
+			Options: &vtctldatapb.PlannedReparentShardRequest{
+				Keyspace: "test",
+				Shard:    "-",
+			},
+		})
+		require.NoError(t, err)
+		assert.Nil(t, resp, "actor %+v should not be permitted to PlannedFailoverShard", actor)
+	})
+
+	t.Run("authorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "allowed"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.PlannedFailoverShard(ctx, &vtadminpb.PlannedFailoverShardRequest{
+			ClusterId: "test",
+			Options: &vtctldatapb.PlannedReparentShardRequest{
+				Keyspace: "test",
+				Shard:    "-",
+			},
+		})
+		require.NoError(t, err)
+		assert.NotNil(t, resp, "actor %+v should be permitted to PlannedFailoverShard", actor)
+	})
+}
+
 func TestRefreshState(t *testing.T) {
 	t.Parallel()
 
@@ -2366,6 +2508,201 @@ func TestTabletExternallyPromoted(t *testing.T) {
 	})
 }
 
+func TestValidateKeyspace(t *testing.T) {
+	t.Parallel()
+
+	opts := vtadmin.Options{
+		RBAC: &rbac.Config{
+			Rules: []*struct {
+				Resource string
+				Actions  []string
+				Subjects []string
+				Clusters []string
+			}{
+				{
+					Resource: "Keyspace",
+					Actions:  []string{"put"},
+					Subjects: []string{"user:allowed"},
+					Clusters: []string{"*"},
+				},
+			},
+		},
+	}
+	err := opts.RBAC.Reify()
+	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
+
+	api := vtadmin.NewAPI(testClusters(t), opts)
+	t.Cleanup(func() {
+		if err := api.Close(); err != nil {
+			t.Logf("api did not close cleanly: %s", err.Error())
+		}
+	})
+
+	t.Run("unauthorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "other"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.ValidateKeyspace(ctx, &vtadminpb.ValidateKeyspaceRequest{
+			ClusterId: "test",
+			Keyspace:  "test",
+		})
+		require.NoError(t, err)
+		assert.Nil(t, resp, "actor %+v should not be permitted to ValidateKeyspace", actor)
+	})
+
+	t.Run("authorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "allowed"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.ValidateKeyspace(ctx, &vtadminpb.ValidateKeyspaceRequest{
+			ClusterId: "test",
+			Keyspace:  "test",
+		})
+		require.NoError(t, err)
+		assert.NotNil(t, resp, "actor %+v should be permitted to ValidateKeyspace", actor)
+	})
+}
+
+func TestValidateSchemaKeyspace(t *testing.T) {
+	t.Parallel()
+
+	opts := vtadmin.Options{
+		RBAC: &rbac.Config{
+			Rules: []*struct {
+				Resource string
+				Actions  []string
+				Subjects []string
+				Clusters []string
+			}{
+				{
+					Resource: "Keyspace",
+					Actions:  []string{"put"},
+					Subjects: []string{"user:allowed"},
+					Clusters: []string{"*"},
+				},
+			},
+		},
+	}
+	err := opts.RBAC.Reify()
+	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
+
+	api := vtadmin.NewAPI(testClusters(t), opts)
+	t.Cleanup(func() {
+		if err := api.Close(); err != nil {
+			t.Logf("api did not close cleanly: %s", err.Error())
+		}
+	})
+
+	t.Run("unauthorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "other"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.ValidateSchemaKeyspace(ctx, &vtadminpb.ValidateSchemaKeyspaceRequest{
+			ClusterId: "test",
+			Keyspace:  "test",
+		})
+		require.NoError(t, err)
+		assert.Nil(t, resp, "actor %+v should not be permitted to ValidateSchemaKeyspace", actor)
+	})
+
+	t.Run("authorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "allowed"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.ValidateSchemaKeyspace(ctx, &vtadminpb.ValidateSchemaKeyspaceRequest{
+			ClusterId: "test",
+			Keyspace:  "test",
+		})
+		require.NoError(t, err)
+		assert.NotNil(t, resp, "actor %+v should be permitted to ValidateSchemaKeyspace", actor)
+	})
+}
+
+func TestValidateVersionKeyspace(t *testing.T) {
+	t.Parallel()
+
+	opts := vtadmin.Options{
+		RBAC: &rbac.Config{
+			Rules: []*struct {
+				Resource string
+				Actions  []string
+				Subjects []string
+				Clusters []string
+			}{
+				{
+					Resource: "Keyspace",
+					Actions:  []string{"put"},
+					Subjects: []string{"user:allowed"},
+					Clusters: []string{"*"},
+				},
+			},
+		},
+	}
+	err := opts.RBAC.Reify()
+	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
+
+	api := vtadmin.NewAPI(testClusters(t), opts)
+	t.Cleanup(func() {
+		if err := api.Close(); err != nil {
+			t.Logf("api did not close cleanly: %s", err.Error())
+		}
+	})
+
+	t.Run("unauthorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "other"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.ValidateVersionKeyspace(ctx, &vtadminpb.ValidateVersionKeyspaceRequest{
+			ClusterId: "test",
+			Keyspace:  "test",
+		})
+		require.NoError(t, err)
+		assert.Nil(t, resp, "actor %+v should not be permitted to ValidateVersionKeyspace", actor)
+	})
+
+	t.Run("authorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "allowed"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.ValidateVersionKeyspace(ctx, &vtadminpb.ValidateVersionKeyspaceRequest{
+			ClusterId: "test",
+			Keyspace:  "test",
+		})
+		require.NoError(t, err)
+		assert.NotNil(t, resp, "actor %+v should be permitted to ValidateVersionKeyspace", actor)
+	})
+}
+
 func testClusters(t testing.TB) []*cluster.Cluster {
 	configs := []testutil.TestClusterConfig{
 		{
@@ -2379,6 +2716,14 @@ func testClusters(t testing.TB) []*cluster.Cluster {
 				},
 				DeleteTabletsResults: map[string]error{
 					"zone1-0000000100": nil,
+				},
+				EmergencyReparentShardResults: map[string]struct {
+					Response *vtctldatapb.EmergencyReparentShardResponse
+					Error    error
+				}{
+					"test/-": {
+						Response: &vtctldatapb.EmergencyReparentShardResponse{},
+					},
 				},
 				FindAllShardsInKeyspaceResults: map[string]struct {
 					Response *vtctldatapb.FindAllShardsInKeyspaceResponse
@@ -2461,14 +2806,6 @@ func testClusters(t testing.TB) []*cluster.Cluster {
 						},
 					},
 				},
-				ShardReplicationPositionsResults: map[string]struct {
-					Response *vtctldatapb.ShardReplicationPositionsResponse
-					Error    error
-				}{
-					"test/-": {
-						Response: &vtctldatapb.ShardReplicationPositionsResponse{},
-					},
-				},
 				GetVSchemaResults: map[string]struct {
 					Response *vtctldatapb.GetVSchemaResponse
 					Error    error
@@ -2495,6 +2832,14 @@ func testClusters(t testing.TB) []*cluster.Cluster {
 				PingTabletResults: map[string]error{
 					"zone1-0000000100": nil,
 				},
+				PlannedReparentShardResults: map[string]struct {
+					Response *vtctldatapb.PlannedReparentShardResponse
+					Error    error
+				}{
+					"test/-": {
+						Response: &vtctldatapb.PlannedReparentShardResponse{},
+					},
+				},
 				RefreshStateResults: map[string]error{
 					"zone1-0000000100": nil,
 				},
@@ -2512,6 +2857,14 @@ func testClusters(t testing.TB) []*cluster.Cluster {
 				SetWritableResults: map[string]error{
 					"zone1-0000000100": nil,
 				},
+				ShardReplicationPositionsResults: map[string]struct {
+					Response *vtctldatapb.ShardReplicationPositionsResponse
+					Error    error
+				}{
+					"test/-": {
+						Response: &vtctldatapb.ShardReplicationPositionsResponse{},
+					},
+				},
 				StartReplicationResults: map[string]error{
 					"zone1-0000000100": nil,
 				},
@@ -2524,6 +2877,30 @@ func testClusters(t testing.TB) []*cluster.Cluster {
 				}{
 					"zone1-0000000100": {
 						Response: &vtctldatapb.TabletExternallyReparentedResponse{},
+					},
+				},
+				ValidateKeyspaceResults: map[string]struct {
+					Response *vtctldatapb.ValidateKeyspaceResponse
+					Error    error
+				}{
+					"test": {
+						Response: &vtctldatapb.ValidateKeyspaceResponse{},
+					},
+				},
+				ValidateSchemaKeyspaceResults: map[string]struct {
+					Response *vtctldatapb.ValidateSchemaKeyspaceResponse
+					Error    error
+				}{
+					"test": {
+						Response: &vtctldatapb.ValidateSchemaKeyspaceResponse{},
+					},
+				},
+				ValidateVersionKeyspaceResults: map[string]struct {
+					Response *vtctldatapb.ValidateVersionKeyspaceResponse
+					Error    error
+				}{
+					"test": {
+						Response: &vtctldatapb.ValidateVersionKeyspaceResponse{},
 					},
 				},
 			},
@@ -2618,14 +2995,6 @@ func testClusters(t testing.TB) []*cluster.Cluster {
 						},
 					},
 				},
-				ShardReplicationPositionsResults: map[string]struct {
-					Response *vtctldatapb.ShardReplicationPositionsResponse
-					Error    error
-				}{
-					"otherks/-": {
-						Response: &vtctldatapb.ShardReplicationPositionsResponse{},
-					},
-				},
 				GetVSchemaResults: map[string]struct {
 					Response *vtctldatapb.GetVSchemaResponse
 					Error    error
@@ -2648,6 +3017,14 @@ func testClusters(t testing.TB) []*cluster.Cluster {
 								},
 							},
 						}},
+				},
+				ShardReplicationPositionsResults: map[string]struct {
+					Response *vtctldatapb.ShardReplicationPositionsResponse
+					Error    error
+				}{
+					"otherks/-": {
+						Response: &vtctldatapb.ShardReplicationPositionsResponse{},
+					},
 				},
 			},
 			Tablets: []*vtadminpb.Tablet{
