@@ -87,6 +87,11 @@
                     "value": "\"zone1-0000000100\": nil,"
                 },
                 {
+                    "field": "ReloadSchemaKeyspaceResults",
+                    "type": "map[string]struct{\nResponse *vtctldatapb.ReloadSchemaKeyspaceResponse\nError error\n}",
+                    "value": "\"test\": {\nResponse: &vtctldatapb.ReloadSchemaKeyspaceResponse{\nEvents: []*logutilpb.Event{{}, {}, {}}},\n},"
+                },
+                {
                     "field": "ReparentTabletResults",
                     "type": "map[string]struct{\nResponse *vtctldatapb.ReparentTabletResponse\nError error\n}",
                     "value": "\"zone1-0000000100\": {\nResponse: &vtctldatapb.ReparentTabletResponse{},\n},"
@@ -201,6 +206,11 @@
                     "field": "ShardReplicationPositionsResults",
                     "type": "map[string]struct{\nResponse *vtctldatapb.ShardReplicationPositionsResponse\nError error}",
                     "value": "\"otherks/-\": {\nResponse: &vtctldatapb.ShardReplicationPositionsResponse{},\n},"
+                },
+                {
+                    "field": "ReloadSchemaKeyspaceResults",
+                    "type": "map[string]struct{\nResponse *vtctldatapb.ReloadSchemaKeyspaceResponse\nError error\n}",
+                    "value": "\"otherks\": {\nResponse: &vtctldatapb.ReloadSchemaKeyspaceResponse{\nEvents: []*logutilpb.Event{{}}},\n},"
                 }
             ],
             "db_tablet_list": [
@@ -1465,6 +1475,51 @@
                     "assertions": [
                         "require.NoError(t, err)",
                         "assert.NotNil(t, resp, $$)"
+                    ]
+                }
+            ]
+        },
+        {
+            "method": "ReloadSchemas",
+            "rules": [
+                {
+                    "resource": "Schema",
+                    "actions": ["reload"],
+                    "subjects": ["user:allowed-all"],
+                    "clusters": ["*"]
+                },
+                {
+                    "resource": "Schema",
+                    "actions": ["reload"],
+                    "subjects": ["user:allowed-other"],
+                    "clusters": ["other"]
+                }
+            ],
+            "request": "&vtadminpb.ReloadSchemasRequest{\nKeyspaces: []string{\n\"test\",\n\"otherks\",\n},\n}",
+            "cases": [
+                {
+                    "name": "unauthorized actor",
+                    "actor": {"name": "unauthorized"},
+                    "include_error_var": true,
+                    "assertions": [
+                        "require.NoError(t, err)",
+                        "assert.Empty(t, resp.KeyspaceResults, $$)"
+                    ]
+                },
+                {
+                    "name": "partial access",
+                    "actor": {"name": "allowed-other"},
+                    "is_permitted": true,
+                    "assertions": [
+                        "assert.NotEmpty(t, resp.KeyspaceResults, $$)"
+                    ]
+                },
+                {
+                    "name": "full access",
+                    "actor": {"name": "allowed-all"},
+                    "is_permitted": true,
+                    "assertions": [
+                        "assert.NotEmpty(t, resp.KeyspaceResults, $$)"
                     ]
                 }
             ]
