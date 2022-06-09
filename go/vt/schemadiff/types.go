@@ -76,6 +76,11 @@ const (
 	ColumnRenameHeuristicStatement
 )
 
+const (
+	TableRenameAssumeDifferent = iota
+	TableRenameHeuristicStatement
+)
+
 // DiffHints is an assortment of rules for diffing entities
 type DiffHints struct {
 	StrictIndexOrdering     bool
@@ -83,4 +88,5 @@ type DiffHints struct {
 	RangeRotationStrategy   int
 	ConstraintNamesStrategy int
 	ColumnRenameStrategy    int
+	TableRenameStrategy     int
 }
