@@ -1350,7 +1350,7 @@ func (m *FullStatus) UnmarshalVT(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.ServerId |= int32(b&0x7F) << shift
+				m.ServerId |= uint32(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}

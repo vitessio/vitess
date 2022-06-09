@@ -190,7 +190,7 @@ func (mysqld *Mysqld) GetMysqlPort() (int32, error) {
 }
 
 // GetServerID returns mysql server id
-func (mysqld *Mysqld) GetServerID(ctx context.Context) (int32, error) {
+func (mysqld *Mysqld) GetServerID(ctx context.Context) (uint32, error) {
 	qr, err := mysqld.FetchSuperQuery(ctx, "select @@global.server_id")
 	if err != nil {
 		return 0, err
@@ -202,7 +202,7 @@ func (mysqld *Mysqld) GetServerID(ctx context.Context) (int32, error) {
 	if err != nil {
 		return 0, err
 	}
-	return int32(utemp), nil
+	return uint32(utemp), nil
 }
 
 // GetServerUUID returns mysql server uuid

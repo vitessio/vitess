@@ -254,7 +254,7 @@ func (fmd *FakeMysqlDaemon) GetMysqlPort() (int32, error) {
 }
 
 // GetServerID is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) GetServerID(ctx context.Context) (int32, error) {
+func (fmd *FakeMysqlDaemon) GetServerID(ctx context.Context) (uint32, error) {
 	return 1, nil
 }
 

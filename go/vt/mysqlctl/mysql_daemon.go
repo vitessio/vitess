@@ -41,7 +41,7 @@ type MysqlDaemon interface {
 	GetMysqlPort() (int32, error)
 
 	// GetServerID returns the servers ID.
-	GetServerID(ctx context.Context) (int32, error)
+	GetServerID(ctx context.Context) (uint32, error)
 
 	// GetServerUUID returns the servers UUID
 	GetServerUUID(ctx context.Context) (string, error)

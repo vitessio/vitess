@@ -67,7 +67,7 @@ message PrimaryStatus {
 
 // FullStatus contains the full status of MySQL including the replication information, semi-sync information, GTID information among others
 message FullStatus {
-  int32 server_id = 1;
+  uint32 server_id = 1;
   string server_uuid = 2;
   replicationdata.Status replication_status = 3;
   replicationdata.PrimaryStatus primary_status = 4;
