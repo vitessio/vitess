@@ -110,6 +110,7 @@ func (d *AlterTableEntityDiff) addSubsequentDiff(diff *AlterTableEntityDiff) {
 
 //
 type CreateTableEntityDiff struct {
+	to          *CreateTableEntity
 	createTable *sqlparser.CreateTable
 }
 
@@ -219,6 +220,64 @@ func (d *DropTableEntityDiff) SubsequentDiff() EntityDiff {
 
 // SetSubsequentDiff implements EntityDiff
 func (d *DropTableEntityDiff) SetSubsequentDiff(EntityDiff) {
+}
+
+//
+type RenameTableEntityDiff struct {
+	from        *CreateTableEntity
+	to          *CreateTableEntity
+	renameTable *sqlparser.RenameTable
+}
+
+// IsEmpty implements EntityDiff
+func (d *RenameTableEntityDiff) IsEmpty() bool {
+	return d.Statement() == nil
+}
+
+// Entities implements EntityDiff
+func (d *RenameTableEntityDiff) Entities() (from Entity, to Entity) {
+	return d.from, d.to
+}
+
+// Statement implements EntityDiff
+func (d *RenameTableEntityDiff) Statement() sqlparser.Statement {
+	if d == nil {
+		return nil
+	}
+	return d.renameTable
+}
+
+// CreateTable returns the underlying sqlparser.CreateTable that was generated for the diff.
+func (d *RenameTableEntityDiff) RenameTable() *sqlparser.RenameTable {
+	if d == nil {
+		return nil
+	}
+	return d.renameTable
+}
+
+// StatementString implements EntityDiff
+func (d *RenameTableEntityDiff) StatementString() (s string) {
+	if stmt := d.Statement(); stmt != nil {
+		s = sqlparser.String(stmt)
+	}
+	return s
+}
+
+// CanonicalStatementString implements EntityDiff
+func (d *RenameTableEntityDiff) CanonicalStatementString() (s string) {
+	if stmt := d.Statement(); stmt != nil {
+		s = sqlparser.CanonicalString(stmt)
+	}
+	return s
+}
+
+// SubsequentDiff implements EntityDiff
+func (d *RenameTableEntityDiff) SubsequentDiff() EntityDiff {
+	return nil
+}
+
+// SetSubsequentDiff implements EntityDiff
+func (d *RenameTableEntityDiff) SetSubsequentDiff(EntityDiff) {
 }
 
 // CreateTableEntity stands for a TABLE construct. It contains the table's CREATE statement.
@@ -1337,11 +1396,11 @@ func heuristicallyDetectColumnRenames(
 		// At any case, once we heuristically decide that we found a RENAME, we cancel the DROP,
 		// cancel the ADD, and inject a RENAME in place of both.
 
-		// findRenamedColumn cross referenced dropped and added columns to find a single renamed column. If such is found:
+		// findRenamedColumn cross references dropped and added columns to find a single renamed column. If such is found:
 		// we remove the entry from DROPped columns, remove the entry from ADDed columns, add an entry for RENAMEd columns,
 		// and return 'true'.
 		// Successive calls to this function will then find the next heuristic RENAMEs.
-		// the function returns 'false' if it is unabl eto heuristically find a RENAME.
+		// the function returns 'false' if it is unable to heuristically find a RENAME.
 		for iDrop, dropCol1 := range dropColumns {
 			for iAdd, addCol2 := range addColumns {
 				col1Details := t1ColumnsMap[dropCol1.Name.Name.Lowered()]
@@ -1378,7 +1437,7 @@ func heuristicallyDetectColumnRenames(
 
 // Create implements Entity interface
 func (c *CreateTableEntity) Create() EntityDiff {
-	return &CreateTableEntityDiff{createTable: &c.CreateTable}
+	return &CreateTableEntityDiff{to: c, createTable: &c.CreateTable}
 }
 
 // Drop implements Entity interface
@@ -2013,4 +2072,20 @@ func (c *CreateTableEntity) validate() error {
 		}
 	}
 	return nil
+}
+
+// identicalOtherThanName reutrns true when this CREATE TABLE and the given one, are identical
+// other than in table's name. We assume both have been normalized.
+func (c *CreateTableEntity) identicalOtherThanName(other *CreateTableEntity) bool {
+	if other == nil {
+		return false
+	}
+	return tableWithMaskedName(&c.CreateTable) == tableWithMaskedName(&other.CreateTable)
+}
+
+// tableWithMaskedName returns the CREATE TABLE statement but with table's name replaced with a constant arbitrary name
+func tableWithMaskedName(createTable *sqlparser.CreateTable) string {
+	createTable = sqlparser.CloneRefOfCreateTable(createTable)
+	createTable.Table.Name = sqlparser.NewTableIdent("mask")
+	return sqlparser.CanonicalString(createTable)
 }
