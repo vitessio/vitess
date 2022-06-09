@@ -131,6 +131,10 @@ type VtctldClient struct {
 		Response *vtctldatapb.ValidateKeyspaceResponse
 		Error    error
 	}
+	ValidateSchemaKeyspaceResults map[string]struct {
+		Response *vtctldatapb.ValidateSchemaKeyspaceResponse
+		Error    error
+	}
 }
 
 // Compile-time type assertion to make sure we haven't overriden a method
@@ -632,6 +636,20 @@ func (fake *VtctldClient) ValidateKeyspace(ctx context.Context, req *vtctldatapb
 
 	key := req.Keyspace
 	if result, ok := fake.ValidateKeyspaceResults[key]; ok {
+		return result.Response, result.Error
+	}
+
+	return nil, fmt.Errorf("%w: no result set for %s", assert.AnError, key)
+}
+
+// ValidateSchemaKeyspace is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) ValidateSchemaKeyspace(ctx context.Context, req *vtctldatapb.ValidateSchemaKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.ValidateSchemaKeyspaceResponse, error) {
+	if fake.ValidateSchemaKeyspaceResults == nil {
+		return nil, fmt.Errorf("%w: ValidateSchemaKeyspaceResults not set on fake vtctldclient", assert.AnError)
+	}
+
+	key := req.Keyspace
+	if result, ok := fake.ValidateSchemaKeyspaceResults[key]; ok {
 		return result.Response, result.Error
 	}
 
