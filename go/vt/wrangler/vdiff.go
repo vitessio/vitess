@@ -562,8 +562,8 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 			targetSelect.SelectExprs = append(targetSelect.SelectExprs, &sqlparser.AliasedExpr{Expr: targetCol})
 
 			// Check if it's an aggregate expression
-			if expr, ok := selExpr.Expr.(*sqlparser.FuncExpr); ok {
-				switch fname := expr.Name.Lowered(); fname {
+			if expr, ok := selExpr.Expr.(sqlparser.AggrFunc); ok {
+				switch fname := strings.ToLower(expr.AggrName()); fname {
 				case "count", "sum":
 					// this will only work as long as aggregates can be pushed down to tablets
 					// this won't work: "select count(*) from (select id from t limit 1)"

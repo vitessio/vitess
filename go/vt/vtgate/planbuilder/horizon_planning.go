@@ -1048,38 +1048,6 @@ func selectHasUniqueVindex(semTable *semantics.SemTable, sel []abstract.SelectEx
 	return false
 }
 
-// needDistinctHandling returns true if oa needs to handle the distinct clause.
-// If true, it will also return the aliased expression that needs to be pushed
-// down into the underlying route.
-func (hp *horizonPlanning) needDistinctHandling(
-	ctx *plancontext.PlanningContext,
-	funcExpr *sqlparser.FuncExpr,
-	opcode engine.AggregateOpcode,
-	input logicalPlan,
-) (bool, *sqlparser.AliasedExpr, error) {
-	if !funcExpr.Distinct {
-		return false, nil, nil
-	}
-	if opcode != engine.AggregateCount && opcode != engine.AggregateSum && opcode != engine.AggregateCountStar {
-		return false, nil, nil
-	}
-	innerAliased, ok := funcExpr.Exprs[0].(*sqlparser.AliasedExpr)
-	if !ok {
-		return false, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "syntax error: %s", sqlparser.String(funcExpr))
-	}
-	_, ok = input.(*routeGen4)
-	if !ok {
-		// Unreachable
-		return true, innerAliased, nil
-	}
-	if exprHasUniqueVindex(ctx.SemTable, innerAliased.Expr) {
-		// if we can see a unique vindex on this table/column,
-		// we know the results will be unique, and we don't need to DISTINCTify them
-		return false, nil, nil
-	}
-	return true, innerAliased, nil
-}
-
 func (hp *horizonPlanning) planHaving(ctx *plancontext.PlanningContext, plan logicalPlan) (logicalPlan, error) {
 	if hp.sel.Having == nil {
 		return plan, nil
