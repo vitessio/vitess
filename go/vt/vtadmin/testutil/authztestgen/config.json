@@ -23,7 +23,7 @@
                 {
                     "field": "FindAllShardsInKeyspaceResults",
                     "type": "map[string]struct{\nResponse *vtctldatapb.FindAllShardsInKeyspaceResponse\nError error}",
-                    "value": "\"test\": {\nResponse: &vtctldatapb.FindAllShardsInKeyspaceResponse{\nShards: map[string]*vtctldatapb.Shard{\n\"-\": {\nKeyspace: \"test\",\nName: \"-\",\nShard: &topodatapb.Shard{},\n},\n},\n},\n},"
+                    "value": "\"test\": {\nResponse: &vtctldatapb.FindAllShardsInKeyspaceResponse{\nShards: map[string]*vtctldatapb.Shard{\n\"-\": {\nKeyspace: \"test\",\nName: \"-\",\nShard: &topodatapb.Shard{\nKeyRange: &topodatapb.KeyRange{},\n},\n},\n},\n},\n},"
                 },
                 {
                     "field": "GetBackupsResults",
@@ -51,9 +51,15 @@
                     "value": "Keyspaces: []*vtctldatapb.Keyspace{\n{\nName: \"test\",\nKeyspace: &topodatapb.Keyspace{},\n},\n},"
                 },
                 {
+                    "field": "GetSchemaResults",
+                    "type": "map[string]struct{\nResponse *vtctldatapb.GetSchemaResponse\nError error}",
+                    "value": "\"zone1-0000000100\": {\nResponse: &vtctldatapb.GetSchemaResponse{\nSchema: &tabletmanagerdatapb.SchemaDefinition{\nTableDefinitions: []*tabletmanagerdatapb.TableDefinition{\n{Name: \"t1\", Schema: \"create table t1 (id int(11) not null primary key);\",},\n{Name: \"t2\"},\n},\n},\n},\n},"
+                },
+                {
                     "field": "GetSrvVSchemaResults",
                     "type": "map[string]struct{\nResponse *vtctldatapb.GetSrvVSchemaResponse\nError error}",
-                    "value": "\"zone1\": {\nResponse: &vtctldatapb.GetSrvVSchemaResponse{\nSrvVSchema: &vschemapb.SrvVSchema{},\n},\n},"
+                    "value": "\"zone1\": {\nResponse: &vtctldatapb.GetSrvVSchemaResponse{\nSrvVSchema: &vschemapb.SrvVSchema{\nKeyspaces: map[string]*vschemapb.Keyspace{\n\"test\": {\nSharded: true,\nVindexes: map[string]*vschemapb.Vindex{\n\"id\": {\nType: \"hash\",\n},\n},\nTables: map[string]*vschemapb.Table{\n\"t1\": {\nColumnVindexes: []*vschemapb.ColumnVindex{\n{\nName: \"id\",\nColumn: \"id\",\n},\n},\n},\n},\n},\n},\n},\n},\n},",
+                    "comment": "this structure exists primarily to support the VTExplain test cases; for GetSrvVSchema(s) itself, an empty but non-nil map is sufficient"
                 },
                 {
                     "field": "GetVSchemaResults",
@@ -170,6 +176,11 @@
                     "field": "GetKeyspacesResults",
                     "type": "&struct{\nKeyspaces []*vtctldatapb.Keyspace\nError error}",
                     "value": "Keyspaces: []*vtctldatapb.Keyspace{\n{\nName: \"otherks\",\nKeyspace: &topodatapb.Keyspace{},\n},\n},"
+                },
+                {
+                    "field": "GetSchemaResults",
+                    "type": "map[string]struct{\nResponse *vtctldatapb.GetSchemaResponse\nError error}",
+                    "value": "\"other1-0000000100\": {\nResponse: &vtctldatapb.GetSchemaResponse{\nSchema: &tabletmanagerdatapb.SchemaDefinition{\nTableDefinitions: []*tabletmanagerdatapb.TableDefinition{\n{Name: \"t1\"},\n},\n},\n},\n},"
                 },
                 {
                     "field": "GetSrvVSchemaResults",
@@ -1498,6 +1509,39 @@
                     "include_error_var": true,
                     "assertions": [
                         "assert.Error(t, err, $$)",
+                        "assert.Nil(t, resp, $$)"
+                    ]
+                },
+                {
+                    "name": "authorized actor",
+                    "actor": {"name": "allowed"},
+                    "include_error_var": true,
+                    "is_permitted": true,
+                    "assertions": [
+                        "require.NoError(t, err)",
+                        "assert.NotNil(t, resp, $$)"
+                    ]
+                }
+            ]
+        },
+        {
+            "method": "VTExplain",
+            "rules": [
+                {
+                    "resource": "VTExplain",
+                    "actions": ["get"],
+                    "subjects": ["user:allowed"],
+                    "clusters": ["*"]
+                }
+            ],
+            "request": "&vtadminpb.VTExplainRequest{\nCluster: \"test\",\nKeyspace: \"test\",\nSql: \"select id from t1;\",}",
+            "cases": [
+                {
+                    "name": "unauthorized actor",
+                    "actor": {"name": "other"},
+                    "include_error_var": true,
+                    "assertions": [
+                        "require.NoError(t, err)",
                         "assert.Nil(t, resp, $$)"
                     ]
                 },

@@ -53,6 +53,7 @@ import (
 	"vitess.io/vitess/go/vt/vtadmin/vtctldclient/fakevtctldclient"
 
 	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"

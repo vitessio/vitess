@@ -35,6 +35,7 @@ import (
 	"vitess.io/vitess/go/vt/vtadmin/vtctldclient/fakevtctldclient"
 
 	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
@@ -2508,6 +2509,71 @@ func TestTabletExternallyPromoted(t *testing.T) {
 	})
 }
 
+func TestVTExplain(t *testing.T) {
+	t.Parallel()
+
+	opts := vtadmin.Options{
+		RBAC: &rbac.Config{
+			Rules: []*struct {
+				Resource string
+				Actions  []string
+				Subjects []string
+				Clusters []string
+			}{
+				{
+					Resource: "VTExplain",
+					Actions:  []string{"get"},
+					Subjects: []string{"user:allowed"},
+					Clusters: []string{"*"},
+				},
+			},
+		},
+	}
+	err := opts.RBAC.Reify()
+	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
+
+	api := vtadmin.NewAPI(testClusters(t), opts)
+	t.Cleanup(func() {
+		if err := api.Close(); err != nil {
+			t.Logf("api did not close cleanly: %s", err.Error())
+		}
+	})
+
+	t.Run("unauthorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "other"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.VTExplain(ctx, &vtadminpb.VTExplainRequest{
+			Cluster:  "test",
+			Keyspace: "test",
+			Sql:      "select id from t1;"})
+		require.NoError(t, err)
+		assert.Nil(t, resp, "actor %+v should not be permitted to VTExplain", actor)
+	})
+
+	t.Run("authorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "allowed"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.VTExplain(ctx, &vtadminpb.VTExplainRequest{
+			Cluster:  "test",
+			Keyspace: "test",
+			Sql:      "select id from t1;"})
+		require.NoError(t, err)
+		assert.NotNil(t, resp, "actor %+v should be permitted to VTExplain", actor)
+	})
+}
+
 func TestValidateKeyspace(t *testing.T) {
 	t.Parallel()
 
@@ -2735,7 +2801,9 @@ func testClusters(t testing.TB) []*cluster.Cluster {
 								"-": {
 									Keyspace: "test",
 									Name:     "-",
-									Shard:    &topodatapb.Shard{},
+									Shard: &topodatapb.Shard{
+										KeyRange: &topodatapb.KeyRange{},
+									},
 								},
 							},
 						},
@@ -2796,13 +2864,49 @@ func testClusters(t testing.TB) []*cluster.Cluster {
 						},
 					},
 				},
+				GetSchemaResults: map[string]struct {
+					Response *vtctldatapb.GetSchemaResponse
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Response: &vtctldatapb.GetSchemaResponse{
+							Schema: &tabletmanagerdatapb.SchemaDefinition{
+								TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+									{Name: "t1", Schema: "create table t1 (id int(11) not null primary key);"},
+									{Name: "t2"},
+								},
+							},
+						},
+					},
+				},
 				GetSrvVSchemaResults: map[string]struct {
 					Response *vtctldatapb.GetSrvVSchemaResponse
 					Error    error
 				}{
 					"zone1": {
 						Response: &vtctldatapb.GetSrvVSchemaResponse{
-							SrvVSchema: &vschemapb.SrvVSchema{},
+							SrvVSchema: &vschemapb.SrvVSchema{
+								Keyspaces: map[string]*vschemapb.Keyspace{
+									"test": {
+										Sharded: true,
+										Vindexes: map[string]*vschemapb.Vindex{
+											"id": {
+												Type: "hash",
+											},
+										},
+										Tables: map[string]*vschemapb.Table{
+											"t1": {
+												ColumnVindexes: []*vschemapb.ColumnVindex{
+													{
+														Name:   "id",
+														Column: "id",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
 						},
 					},
 				},
@@ -2985,6 +3089,20 @@ func testClusters(t testing.TB) []*cluster.Cluster {
 						{
 							Name:     "otherks",
 							Keyspace: &topodatapb.Keyspace{},
+						},
+					},
+				},
+				GetSchemaResults: map[string]struct {
+					Response *vtctldatapb.GetSchemaResponse
+					Error    error
+				}{
+					"other1-0000000100": {
+						Response: &vtctldatapb.GetSchemaResponse{
+							Schema: &tabletmanagerdatapb.SchemaDefinition{
+								TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+									{Name: "t1"},
+								},
+							},
 						},
 					},
 				},
