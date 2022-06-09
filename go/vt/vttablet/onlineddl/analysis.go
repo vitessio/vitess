@@ -175,33 +175,65 @@ func analyzeAddRangePartition(alterTable *sqlparser.AlterTable, createTable *sql
 	return op
 }
 
-func alterOptionAvailableViaInstantDDL(alterOption sqlparser.AlterOption, createTable *sqlparser.CreateTable, serverVersion string) (bool, error) {
-	isVirtualColumn := func(colName string) bool {
+func alterOptionAvailableViaInstantDDL(alterOption sqlparser.AlterOption, createTable *sqlparser.CreateTable, capableOf mysql.CapableOf) (bool, error) {
+	findColumn := func(colName string) *sqlparser.ColumnDefinition {
 		if createTable == nil {
-			return false
+			return nil
 		}
 		for _, col := range createTable.TableSpec.Columns {
 			if strings.EqualFold(colName, col.Name.String()) {
-				return col.Type.Options.As != nil
+				return col
 			}
 		}
-		return false
+		return nil
+	}
+	isVirtualColumn := func(colName string) bool {
+		col := findColumn(colName)
+		if col == nil {
+			return false
+		}
+		if col.Type.Options == nil {
+			return false
+		}
+		if col.Type.Options.As == nil {
+			return false
+		}
+		return col.Type.Options.Storage == sqlparser.VirtualStorage
+	}
+	colStringWithoutDefault := func(col *sqlparser.ColumnDefinition) string {
+		colWithoutDefault := sqlparser.CloneRefOfColumnDefinition(col)
+		colWithoutDefault.Type.Options.Default = nil
+		return sqlparser.CanonicalString(colWithoutDefault)
 	}
 	// Up to 8.0.26 we could only ADD COLUMN as last column
 	switch opt := alterOption.(type) {
 	case *sqlparser.AddColumns:
 		if opt.First || opt.After != nil {
 			// not a "last" column. Only supported as of 8.0.29
-			return mysql.ServerVersionAtLeast(serverVersion, 8, 0, 29)
+			return capableOf(mysql.InstantAddDropColumnFlavorCapability)
 		}
 		// Adding a *last* column is supported in 8.0
-		return true, nil
+		return capableOf(mysql.InstantAddLastColumnFlavorCapability)
 	case *sqlparser.DropColumn:
 		if isVirtualColumn(opt.Name.Name.String()) {
 			// supported by all 8.0 versions
-			return true, nil
+			return capableOf(mysql.InstantAddDropVirtualColumnFlavorCapability)
 		}
-		return mysql.ServerVersionAtLeast(serverVersion, 8, 0, 29)
+		return capableOf(mysql.InstantAddDropColumnFlavorCapability)
+	case *sqlparser.ModifyColumn:
+		if col := findColumn(opt.NewColDefinition.Name.String()); col != nil {
+			// Check if only diff is change of default
+			// we temporarily remove the DEFAULT expression (if any) from both
+			// table and ALTER statement, and compare the columns: if they're otherwise equal,
+			// then the only change can be an addition/change/removal of DEFAULT, which
+			// is instant-table.
+			tableColDefinition := colStringWithoutDefault(col)
+			newColDefinition := colStringWithoutDefault(opt.NewColDefinition)
+			if tableColDefinition == newColDefinition {
+				return capableOf(mysql.InstantChangeColumnDefaultFlavorCapability)
+			}
+		}
+		return false, nil
 	default:
 		return false, nil
 	}
@@ -210,9 +242,12 @@ func alterOptionAvailableViaInstantDDL(alterOption sqlparser.AlterOption, create
 // AnalyzeInstantDDL takes declarative CreateTable and AlterTable, as well as a server version, and checks whether it is possible to run the ALTER
 // using ALGORITM=INSTANT for that version.
 // This function is INTENTIONALLY public, even though we do not guarantee that it will remain so.
-func AnalyzeInstantDDL(alterTable *sqlparser.AlterTable, createTable *sqlparser.CreateTable, serverVersion string) (*SpecialAlterPlan, error) {
-	_, family, _ := mysql.GetFlavor(serverVersion, nil)
-	if family != mysql.MySQL80FlavorFamily {
+func AnalyzeInstantDDL(alterTable *sqlparser.AlterTable, createTable *sqlparser.CreateTable, capableOf mysql.CapableOf) (*SpecialAlterPlan, error) {
+	capable, err := capableOf(mysql.InstantDDLFlavorCapability)
+	if err != nil {
+		return nil, err
+	}
+	if !capable {
 		return nil, nil
 	}
 	if alterTable.PartitionOption != nil {
@@ -224,7 +259,7 @@ func AnalyzeInstantDDL(alterTable *sqlparser.AlterTable, createTable *sqlparser.
 		return nil, nil
 	}
 	for _, alterOption := range alterTable.AlterOptions {
-		instantOK, err := alterOptionAvailableViaInstantDDL(alterOption, createTable, serverVersion)
+		instantOK, err := alterOptionAvailableViaInstantDDL(alterOption, createTable, capableOf)
 		if err != nil {
 			return nil, err
 		}
@@ -238,7 +273,7 @@ func AnalyzeInstantDDL(alterTable *sqlparser.AlterTable, createTable *sqlparser.
 
 // analyzeSpecialAlterPlan checks if the given ALTER onlineDDL, and for the current state of affected table,
 // can be executed in a special way. If so, it returns with a "special plan"
-func (e *Executor) analyzeSpecialAlterPlan(ctx context.Context, onlineDDL *schema.OnlineDDL, serverVersion string) (*SpecialAlterPlan, error) {
+func (e *Executor) analyzeSpecialAlterPlan(ctx context.Context, onlineDDL *schema.OnlineDDL, capableOf mysql.CapableOf) (*SpecialAlterPlan, error) {
 	ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.SQL)
 	if err != nil {
 		return nil, err
@@ -269,7 +304,7 @@ func (e *Executor) analyzeSpecialAlterPlan(ctx context.Context, onlineDDL *schem
 		}
 	}
 	if onlineDDL.StrategySetting().IsFastOverRevertibleFlag() {
-		op, err := AnalyzeInstantDDL(alterTable, createTable, serverVersion)
+		op, err := AnalyzeInstantDDL(alterTable, createTable, capableOf)
 		if err != nil {
 			return nil, err
 		}

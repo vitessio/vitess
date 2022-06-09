@@ -80,8 +80,8 @@ type Cluster struct {
 	topoReadPool     *pools.RPCPool
 	workflowReadPool *pools.RPCPool
 
-	emergencyReparentPool *pools.RPCPool // ERS-only
-	reparentPool          *pools.RPCPool // PRS-only
+	emergencyFailoverPool *pools.RPCPool // ERS-only
+	failoverPool          *pools.RPCPool // PRS-only
 
 	// schemaCache caches schema(s) for different GetSchema(s) requests.
 	//
@@ -161,8 +161,8 @@ func New(ctx context.Context, cfg Config) (*Cluster, error) {
 	cluster.topoReadPool = cfg.TopoReadPoolConfig.NewReadPool()
 	cluster.workflowReadPool = cfg.WorkflowReadPoolConfig.NewReadPool()
 
-	cluster.emergencyReparentPool = cfg.EmergencyReparentPoolConfig.NewRWPool()
-	cluster.reparentPool = cfg.ReparentPoolConfig.NewRWPool()
+	cluster.emergencyFailoverPool = cfg.EmergencyFailoverPoolConfig.NewRWPool()
+	cluster.failoverPool = cfg.FailoverPoolConfig.NewRWPool()
 
 	if cluster.cfg.SchemaCacheConfig == nil {
 		cluster.cfg.SchemaCacheConfig = &cache.Config{}
@@ -495,10 +495,10 @@ func (c *Cluster) DeleteTablets(ctx context.Context, req *vtctldatapb.DeleteTabl
 	return c.Vtctld.DeleteTablets(ctx, req)
 }
 
-// EmergencyReparentShard reparents the shard to the new primary. Use this only
-// if the old primary is dead or otherwise unresponsive.
-func (c *Cluster) EmergencyReparentShard(ctx context.Context, req *vtctldatapb.EmergencyReparentShardRequest) (*vtadminpb.EmergencyReparentShardResponse, error) {
-	span, ctx := trace.NewSpan(ctx, "Cluster.EmergencyReparentShard")
+// EmergencyFailoverShard fails over a shard to a new primary. It assumes the
+// old primary is dead or otherwise not responding.
+func (c *Cluster) EmergencyFailoverShard(ctx context.Context, req *vtctldatapb.EmergencyReparentShardRequest) (*vtadminpb.EmergencyFailoverShardResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "Cluster.EmergencyFailoverShard")
 	defer span.Finish()
 
 	AnnotateSpan(c, span)
@@ -512,17 +512,17 @@ func (c *Cluster) EmergencyReparentShard(ctx context.Context, req *vtctldatapb.E
 		span.Annotate("wait_replicas_timeout", d.String())
 	}
 
-	if err := c.emergencyReparentPool.Acquire(ctx); err != nil {
-		return nil, fmt.Errorf("EmergencyReparentShard(%s/%s) failed to acquire emergencyReparentPool: %w", req.Keyspace, req.Shard, err)
+	if err := c.emergencyFailoverPool.Acquire(ctx); err != nil {
+		return nil, fmt.Errorf("EmergencyFailoverShard(%s/%s) failed to acquire emergencyFailoverPool: %w", req.Keyspace, req.Shard, err)
 	}
-	defer c.emergencyReparentPool.Release()
+	defer c.emergencyFailoverPool.Release()
 
 	resp, err := c.Vtctld.EmergencyReparentShard(ctx, req)
 	if err != nil {
 		return nil, err
 	}
 
-	return &vtadminpb.EmergencyReparentShardResponse{
+	return &vtadminpb.EmergencyFailoverShardResponse{
 		Cluster:         c.ToProto(),
 		Keyspace:        resp.Keyspace,
 		Shard:           resp.Shard,
@@ -1913,11 +1913,11 @@ func (c *Cluster) GetWorkflows(ctx context.Context, keyspaces []string, opts Get
 	})
 }
 
-// PlannedReparentShard reparents the shard either to a new primary or away
+// PlannedFailoverShard fails over the shard either to a new primary or away
 // from an old primary. Both the current and candidate primaries must be
 // reachable and running.
-func (c *Cluster) PlannedReparentShard(ctx context.Context, req *vtctldatapb.PlannedReparentShardRequest) (*vtadminpb.PlannedReparentShardResponse, error) {
-	span, ctx := trace.NewSpan(ctx, "Cluster.PlannedReparentShard")
+func (c *Cluster) PlannedFailoverShard(ctx context.Context, req *vtctldatapb.PlannedReparentShardRequest) (*vtadminpb.PlannedFailoverShardResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "Cluster.PlannedFailoverShard")
 	defer span.Finish()
 
 	AnnotateSpan(c, span)
@@ -1930,17 +1930,17 @@ func (c *Cluster) PlannedReparentShard(ctx context.Context, req *vtctldatapb.Pla
 		span.Annotate("wait_replicas_timeout", d.String())
 	}
 
-	if err := c.reparentPool.Acquire(ctx); err != nil {
-		return nil, fmt.Errorf("PlannedReparentShard(%s/%s): failed to acquire reparentPool: %w", req.Keyspace, req.Shard, err)
+	if err := c.failoverPool.Acquire(ctx); err != nil {
+		return nil, fmt.Errorf("PlannedFailoverShard(%s/%s): failed to acquire failoverPool: %w", req.Keyspace, req.Shard, err)
 	}
-	defer c.reparentPool.Release()
+	defer c.failoverPool.Release()
 
 	resp, err := c.Vtctld.PlannedReparentShard(ctx, req)
 	if err != nil {
 		return nil, err
 	}
 
-	return &vtadminpb.PlannedReparentShardResponse{
+	return &vtadminpb.PlannedFailoverShardResponse{
 		Cluster:         c.ToProto(),
 		Keyspace:        resp.Keyspace,
 		Shard:           resp.Shard,
@@ -1966,6 +1966,33 @@ func (c *Cluster) RefreshState(ctx context.Context, tablet *vtadminpb.Tablet) er
 		TabletAlias: tablet.Tablet.Alias,
 	})
 	return err
+}
+
+// RefreshTabletReplicationSource performs a `CHANGE REPLICATION SOURCE TO` on
+// a tablet to replicate from the current primary in the shard.
+func (c *Cluster) RefreshTabletReplicationSource(ctx context.Context, tablet *vtadminpb.Tablet) (*vtadminpb.RefreshTabletReplicationSourceResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "Cluster.RefreshTabletReplicationSource")
+	defer span.Finish()
+
+	AnnotateSpan(c, span)
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(tablet.Tablet.Alias))
+
+	if err := c.topoRWPool.Acquire(ctx); err != nil {
+		return nil, fmt.Errorf("RefreshTabletReplicationSource(%v) failed to acquire topoRWPool: %w", topoproto.TabletAliasString(tablet.Tablet.Alias), err)
+	}
+	defer c.topoRWPool.Release()
+
+	resp, err := c.Vtctld.ReparentTablet(ctx, &vtctldatapb.ReparentTabletRequest{Tablet: tablet.Tablet.Alias})
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtadminpb.RefreshTabletReplicationSourceResponse{
+		Keyspace: resp.Keyspace,
+		Shard:    resp.Shard,
+		Primary:  resp.Primary,
+		Cluster:  c.ToProto(),
+	}, nil
 }
 
 // ReloadSchemas reloads schemas in one or more keyspaces, shards, or tablets
@@ -2227,34 +2254,6 @@ func (c *Cluster) reloadTabletSchemas(ctx context.Context, req *vtadminpb.Reload
 	return results, nil
 }
 
-// ReparentTablet reparents the specified tablet to its shard's current primary.
-// The tablet's current replica position must match the last-known reparent
-// action.
-func (c *Cluster) ReparentTablet(ctx context.Context, tablet *vtadminpb.Tablet) (*vtadminpb.ReparentTabletResponse, error) {
-	span, ctx := trace.NewSpan(ctx, "Cluster.ReparentTablet")
-	defer span.Finish()
-
-	AnnotateSpan(c, span)
-	span.Annotate("tablet_alias", topoproto.TabletAliasString(tablet.Tablet.Alias))
-
-	if err := c.topoRWPool.Acquire(ctx); err != nil {
-		return nil, fmt.Errorf("ReparentTablet(%v) failed to acquire topoRWPool: %w", topoproto.TabletAliasString(tablet.Tablet.Alias), err)
-	}
-	defer c.topoRWPool.Release()
-
-	resp, err := c.Vtctld.ReparentTablet(ctx, &vtctldatapb.ReparentTabletRequest{Tablet: tablet.Tablet.Alias})
-	if err != nil {
-		return nil, err
-	}
-
-	return &vtadminpb.ReparentTabletResponse{
-		Keyspace: resp.Keyspace,
-		Shard:    resp.Shard,
-		Primary:  resp.Primary,
-		Cluster:  c.ToProto(),
-	}, nil
-}
-
 // SetWritable toggles the writability of a tablet, setting it to either
 // read-write or read-only.
 func (c *Cluster) SetWritable(ctx context.Context, req *vtctldatapb.SetWritableRequest) error {
@@ -2269,17 +2268,17 @@ func (c *Cluster) SetWritable(ctx context.Context, req *vtctldatapb.SetWritableR
 	return err
 }
 
-// TabletExternallyReparented updates the topo record for a shard to reflect a
+// TabletExternallyPromoted updates the topo record for a shard to reflect a
 // tablet that was promoted to primary external to Vitess (e.g. orchestrator).
-func (c *Cluster) TabletExternallyReparented(ctx context.Context, tablet *vtadminpb.Tablet) (*vtadminpb.TabletExternallyReparentedResponse, error) {
-	span, ctx := trace.NewSpan(ctx, "API.TabletExternallyReparented")
+func (c *Cluster) TabletExternallyPromoted(ctx context.Context, tablet *vtadminpb.Tablet) (*vtadminpb.TabletExternallyPromotedResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.TabletExternallyPromoted")
 	defer span.Finish()
 
 	AnnotateSpan(c, span)
 	span.Annotate("tablet_alias", topoproto.TabletAliasString(tablet.Tablet.Alias))
 
 	if err := c.topoRWPool.Acquire(ctx); err != nil {
-		return nil, fmt.Errorf("TabletExternallyReparented(%s): failed to acquire topoRWPool: %w", topoproto.TabletAliasString(tablet.Tablet.Alias), err)
+		return nil, fmt.Errorf("TabletExternallyPromoted(%s): failed to acquire topoRWPool: %w", topoproto.TabletAliasString(tablet.Tablet.Alias), err)
 	}
 	defer c.topoRWPool.Release()
 
@@ -2290,7 +2289,7 @@ func (c *Cluster) TabletExternallyReparented(ctx context.Context, tablet *vtadmi
 		return nil, err
 	}
 
-	return &vtadminpb.TabletExternallyReparentedResponse{
+	return &vtadminpb.TabletExternallyPromotedResponse{
 		Cluster:    c.ToProto(),
 		Keyspace:   resp.Keyspace,
 		Shard:      resp.Shard,
@@ -2334,8 +2333,8 @@ func (c *Cluster) Debug() map[string]any {
 			"topo_read_pool":          json.RawMessage(c.topoReadPool.StatsJSON()),
 			"topo_rw_pool":            json.RawMessage(c.topoRWPool.StatsJSON()),
 			"workflow_read_pool":      json.RawMessage(c.workflowReadPool.StatsJSON()),
-			"emergency_reparent_pool": json.RawMessage(c.emergencyReparentPool.StatsJSON()),
-			"reparent_pool":           json.RawMessage(c.reparentPool.StatsJSON()),
+			"emergency_failover_pool": json.RawMessage(c.emergencyFailoverPool.StatsJSON()),
+			"failover_pool":           json.RawMessage(c.failoverPool.StatsJSON()),
 		},
 		"caches": map[string]any{
 			"schemas": c.schemaCache.Debug(),

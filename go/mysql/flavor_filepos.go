@@ -292,7 +292,10 @@ func (*filePosFlavor) baseShowTablesWithSizes() string {
 	return TablesWithSize56
 }
 
-// supportsFastDropTable is part of the Flavor interface.
-func (*filePosFlavor) supportsFastDropTable(c *Conn) (bool, error) {
-	return false, nil
+// supportsCapability is part of the Flavor interface.
+func (*filePosFlavor) supportsCapability(serverVersion string, capability FlavorCapability) (bool, error) {
+	switch capability {
+	default:
+		return false, nil
+	}
 }

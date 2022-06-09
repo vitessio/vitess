@@ -34,7 +34,7 @@ func TestDownPrimary(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	utils.SetupVttabletsAndVtorc(t, clusterInfo, 2, 1, nil, cluster.VtorcConfiguration{
 		PreventCrossDataCenterPrimaryFailover: true,
-	}, 1)
+	}, 1, "")
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	// find primary from topo
@@ -78,7 +78,7 @@ func TestCrossDataCenterFailure(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	utils.SetupVttabletsAndVtorc(t, clusterInfo, 2, 1, nil, cluster.VtorcConfiguration{
 		PreventCrossDataCenterPrimaryFailover: true,
-	}, 1)
+	}, 1, "")
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	// find primary from topo
@@ -123,7 +123,7 @@ func TestCrossDataCenterFailureError(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	utils.SetupVttabletsAndVtorc(t, clusterInfo, 1, 1, nil, cluster.VtorcConfiguration{
 		PreventCrossDataCenterPrimaryFailover: true,
-	}, 1)
+	}, 1, "")
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	// find primary from topo
@@ -169,7 +169,7 @@ func TestLostRdonlyOnPrimaryFailure(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	utils.SetupVttabletsAndVtorc(t, clusterInfo, 2, 2, nil, cluster.VtorcConfiguration{
 		PreventCrossDataCenterPrimaryFailover: true,
-	}, 1)
+	}, 1, "")
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	// find primary from topo
@@ -251,7 +251,7 @@ func TestPromotionLagSuccess(t *testing.T) {
 	utils.SetupVttabletsAndVtorc(t, clusterInfo, 2, 1, nil, cluster.VtorcConfiguration{
 		ReplicationLagQuery:              "select 59",
 		FailPrimaryPromotionOnLagMinutes: 1,
-	}, 1)
+	}, 1, "")
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	// find primary from topo
@@ -300,7 +300,7 @@ func TestPromotionLagFailure(t *testing.T) {
 	utils.SetupVttabletsAndVtorc(t, clusterInfo, 3, 1, nil, cluster.VtorcConfiguration{
 		ReplicationLagQuery:              "select 61",
 		FailPrimaryPromotionOnLagMinutes: 1,
-	}, 1)
+	}, 1, "")
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	// find primary from topo
@@ -351,8 +351,7 @@ func TestDownPrimaryPromotionRule(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	utils.SetupVttabletsAndVtorc(t, clusterInfo, 2, 1, nil, cluster.VtorcConfiguration{
 		LockShardTimeoutSeconds: 5,
-		Durability:              "test",
-	}, 1)
+	}, 1, "test")
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	// find primary from topo
@@ -399,8 +398,7 @@ func TestDownPrimaryPromotionRuleWithLag(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	utils.SetupVttabletsAndVtorc(t, clusterInfo, 2, 1, nil, cluster.VtorcConfiguration{
 		LockShardTimeoutSeconds: 5,
-		Durability:              "test",
-	}, 1)
+	}, 1, "test")
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	// find primary from topo
@@ -479,9 +477,8 @@ func TestDownPrimaryPromotionRuleWithLagCrossCenter(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	utils.SetupVttabletsAndVtorc(t, clusterInfo, 2, 1, nil, cluster.VtorcConfiguration{
 		LockShardTimeoutSeconds:               5,
-		Durability:                            "test",
 		PreventCrossDataCenterPrimaryFailover: true,
-	}, 1)
+	}, 1, "test")
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	// find primary from topo

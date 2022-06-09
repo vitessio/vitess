@@ -131,7 +131,7 @@ func TestUpdateEqual(t *testing.T) {
 
 func TestUpdateFromSubQuery(t *testing.T) {
 	executor, sbc1, sbc2, _ := createExecutorEnv()
-
+	executor.pv = querypb.ExecuteOptions_Gen4
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
 

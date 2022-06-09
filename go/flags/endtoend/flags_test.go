@@ -279,8 +279,10 @@ var (
 	URI of opentsdb /api/put method
   --pid_file string
 	If set, the process will write its pid to the named file, and delete it on graceful shutdown.
-  --planner_version string
+  --planner-version string
 	Sets the default planner to use when the session has not changed it. Valid values are: V3, Gen4, Gen4Greedy and Gen4Fallback. Gen4Fallback tries the gen4 planner and falls back to the V3 planner if the gen4 fails. (default gen4)
+  --planner_version string
+	Deprecated flag. Use planner-version instead
   --port int
 	port for the server
   --pprof string
@@ -1388,7 +1390,7 @@ max_rate_approach_threshold: 0.9
   --unhealthy_threshold duration
 	replication lag after which a replica is considered unhealthy (default 2h0m0s)
   --use_super_read_only
-	Set super_read_only flag when performing planned failover. (default true)
+	Set super_read_only flag when performing planned failover.
   --v value
 	log level for V logs
   --version

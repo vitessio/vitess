@@ -313,7 +313,6 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 	lastpk := make([]sqltypes.Value, len(rs.pkColumns))
 	byteCount := 0
 	for {
-		//log.Infof("StreamResponse for loop iteration starts")
 		if rs.ctx.Err() != nil {
 			log.Infof("Stream ended because of ctx.Done")
 			return fmt.Errorf("stream ended: %v", rs.ctx.Err())
@@ -358,11 +357,9 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 
 			rs.vse.rowStreamerNumRows.Add(int64(len(response.Rows)))
 			rs.vse.rowStreamerNumPackets.Add(int64(1))
-
 			startSend := time.Now()
 			err = send(&response)
 			if err != nil {
-				log.Infof("Rowstreamer send returned error %v", err)
 				return err
 			}
 			rs.pktsize.Record(byteCount, time.Since(startSend))
