@@ -206,8 +206,10 @@
             "db_tablet_list": [
                 {
                     "tablet": {
-                        "alias": {"cell": "other1", "uid": 100}
-                    }
+                        "alias": {"cell": "other1", "uid": 100},
+                        "keyspace": "otherks"
+                    },
+                    "state": 1
                 }
             ]
         }
@@ -764,6 +766,64 @@
                     "assertions": [
                         "require.NoError(t, err)",
                         "assert.NotNil(t, resp, $$)"
+                    ]
+                }
+            ]
+        },
+        {
+            "method": "GetSchemas",
+            "rules": [
+                {
+                    "resource": "Schema",
+                    "actions": ["get"],
+                    "subjects": ["user:allowed-all"],
+                    "clusters": ["*"]
+                },
+                {
+                    "resource": "Schema",
+                    "actions": ["get"],
+                    "subjects": ["user:allowed-other"],
+                    "clusters": ["other"]
+                }
+            ],
+            "request": "&vtadminpb.GetSchemasRequest{}",
+            "cases": [
+                {
+                    "name": "unauthorized actor",
+                    "actor": {"name": "unauthorized"},
+                    "is_permitted": false,
+                    "include_error_var": true,
+                    "assertions": [
+                        "assert.NoError(t, err)",
+                        "assert.Empty(t, resp.Schemas, $$)"
+                    ]
+                },
+                {
+                    "name": "partial access",
+                    "actor": {"name": "allowed-other"},
+                    "is_permitted": true,
+                    "assertions": [
+                        "assert.NotEmpty(t, resp.Schemas, $$)",
+                        "schemaMap := map[string][]string{}",
+                        "for _, schema := range resp.Schemas {",
+                        "if _, ok := schemaMap[schema.Cluster.Id]; !ok {\n schemaMap[schema.Cluster.Id] = []string{}\n}",
+                        "schemaMap[schema.Cluster.Id] = append(schemaMap[schema.Cluster.Id], schema.Keyspace)",
+                        "}",
+                        "assert.Equal(t, schemaMap, map[string][]string{\"other\": {\"otherks\"}}, $$)"
+                    ]
+                },
+                {
+                    "name": "full access",
+                    "actor": {"name": "allowed-all"},
+                    "is_permitted": true,
+                    "assertions": [
+                        "assert.NotEmpty(t, resp.Schemas, $$)",
+                        "schemaMap := map[string][]string{}",
+                        "for _, schema := range resp.Schemas {",
+                        "if _, ok := schemaMap[schema.Cluster.Id]; !ok {\n schemaMap[schema.Cluster.Id] = []string{}\n}",
+                        "schemaMap[schema.Cluster.Id] = append(schemaMap[schema.Cluster.Id], schema.Keyspace)",
+                        "}",
+                        "assert.Equal(t, schemaMap, map[string][]string{\"test\": {\"test\"}, \"other\": {\"otherks\"}}, $$)"
                     ]
                 }
             ]

@@ -1089,6 +1089,99 @@ func TestGetSchema(t *testing.T) {
 	})
 }
 
+func TestGetSchemas(t *testing.T) {
+	t.Parallel()
+
+	opts := vtadmin.Options{
+		RBAC: &rbac.Config{
+			Rules: []*struct {
+				Resource string
+				Actions  []string
+				Subjects []string
+				Clusters []string
+			}{
+				{
+					Resource: "Schema",
+					Actions:  []string{"get"},
+					Subjects: []string{"user:allowed-all"},
+					Clusters: []string{"*"},
+				},
+				{
+					Resource: "Schema",
+					Actions:  []string{"get"},
+					Subjects: []string{"user:allowed-other"},
+					Clusters: []string{"other"},
+				},
+			},
+		},
+	}
+	err := opts.RBAC.Reify()
+	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
+
+	api := vtadmin.NewAPI(testClusters(t), opts)
+	t.Cleanup(func() {
+		if err := api.Close(); err != nil {
+			t.Logf("api did not close cleanly: %s", err.Error())
+		}
+	})
+
+	t.Run("unauthorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "unauthorized"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.GetSchemas(ctx, &vtadminpb.GetSchemasRequest{})
+		assert.NoError(t, err)
+		assert.Empty(t, resp.Schemas, "actor %+v should not be permitted to GetSchemas", actor)
+	})
+
+	t.Run("partial access", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "allowed-other"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, _ := api.GetSchemas(ctx, &vtadminpb.GetSchemasRequest{})
+		assert.NotEmpty(t, resp.Schemas, "actor %+v should be permitted to GetSchemas", actor)
+		schemaMap := map[string][]string{}
+		for _, schema := range resp.Schemas {
+			if _, ok := schemaMap[schema.Cluster.Id]; !ok {
+				schemaMap[schema.Cluster.Id] = []string{}
+			}
+			schemaMap[schema.Cluster.Id] = append(schemaMap[schema.Cluster.Id], schema.Keyspace)
+		}
+		assert.Equal(t, schemaMap, map[string][]string{"other": {"otherks"}}, "actor %+v should be permitted to GetSchemas", actor)
+	})
+
+	t.Run("full access", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "allowed-all"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, _ := api.GetSchemas(ctx, &vtadminpb.GetSchemasRequest{})
+		assert.NotEmpty(t, resp.Schemas, "actor %+v should be permitted to GetSchemas", actor)
+		schemaMap := map[string][]string{}
+		for _, schema := range resp.Schemas {
+			if _, ok := schemaMap[schema.Cluster.Id]; !ok {
+				schemaMap[schema.Cluster.Id] = []string{}
+			}
+			schemaMap[schema.Cluster.Id] = append(schemaMap[schema.Cluster.Id], schema.Keyspace)
+		}
+		assert.Equal(t, schemaMap, map[string][]string{"test": {"test"}, "other": {"otherks"}}, "actor %+v should be permitted to GetSchemas", actor)
+	})
+}
+
 func TestGetShardReplicationPositions(t *testing.T) {
 	t.Parallel()
 
@@ -3223,10 +3316,10 @@ func testClusters(t testing.TB) []*cluster.Cluster {
 							Cell: "other1",
 							Uid:  100,
 						},
-						Keyspace: "",
+						Keyspace: "otherks",
 						Type:     topodatapb.TabletType_UNKNOWN,
 					},
-					State: vtadminpb.Tablet_UNKNOWN,
+					State: vtadminpb.Tablet_SERVING,
 				},
 			},
 			Config: &cluster.Config{
