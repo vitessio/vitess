@@ -52,7 +52,6 @@ func (p *Plan) MarshalJSON() ([]byte, error) {
 		PlanID:      p.PlanID,
 		TableName:   p.TableName(),
 		Permissions: p.Permissions,
-		FieldQuery:  p.FieldQuery,
 		FullQuery:   p.FullQuery,
 		WhereClause: p.WhereClause,
 	}

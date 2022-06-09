@@ -130,17 +130,8 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		return nil, err
 	}
 
-	switch qre.plan.PlanID {
-	case p.PlanNextval:
+	if qre.plan.PlanID == p.PlanNextval {
 		return qre.execNextval()
-	case p.PlanSelectImpossible:
-		// If the fields did not get cached, we have send the query
-		// to mysql, which you can see below.
-		if qre.plan.Fields != nil {
-			return &sqltypes.Result{
-				Fields: qre.plan.Fields,
-			}, nil
-		}
 	}
 
 	if qre.connID != 0 {
@@ -623,27 +614,44 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 // execSelect sends a query to mysql only if another identical query is not running. Otherwise, it waits and
 // reuses the result. If the plan is missing field info, it sends the query to mysql requesting full info.
 func (qre *QueryExecutor) execSelect() (*sqltypes.Result, error) {
-	if qre.tsv.qe.enableQueryPlanFieldCaching && qre.plan.Fields != nil {
-		result, err := qre.qFetch(qre.logStats, qre.plan.FullQuery, qre.bindVars)
-		if err != nil {
-			return nil, err
+	sql, sqlWithoutComments, err := qre.generateFinalSQL(qre.plan.FullQuery, qre.bindVars)
+	if err != nil {
+		return nil, err
+	}
+	// Check tablet type.
+	if qre.shouldConsolidate() {
+		q, original := qre.tsv.qe.consolidator.Create(sqlWithoutComments)
+		if original {
+			defer q.Broadcast()
+			conn, err := qre.getConn()
+
+			if err != nil {
+				q.Err = err
+			} else {
+				defer conn.Recycle()
+				q.Result, q.Err = qre.execDBConn(conn, sql, true)
+			}
+		} else {
+			qre.logStats.QuerySources |= tabletenv.QuerySourceConsolidator
+			startTime := time.Now()
+			q.Wait()
+			qre.tsv.stats.WaitTimings.Record("Consolidations", startTime)
 		}
-		// result is read-only. So, let's copy it before modifying.
-		newResult := *result
-		newResult.Fields = qre.plan.Fields
-		return &newResult, nil
+		if q.Err != nil {
+			return nil, q.Err
+		}
+		return q.Result.(*sqltypes.Result), nil
 	}
 	conn, err := qre.getConn()
 	if err != nil {
 		return nil, err
 	}
 	defer conn.Recycle()
-
-	sql, _, err := qre.generateFinalSQL(qre.plan.FullQuery, qre.bindVars)
+	res, err := qre.execDBConn(conn, sql, true)
 	if err != nil {
 		return nil, err
 	}
-	return qre.execDBConn(conn, sql, true)
+	return res, nil
 }
 
 func (qre *QueryExecutor) execDMLLimit(conn *StatefulConnection) (*sqltypes.Result, error) {
@@ -715,47 +723,6 @@ func (qre *QueryExecutor) getStreamConn() (*connpool.DBConn, error) {
 		return nil, err
 	}
 	return nil, err
-}
-
-func (qre *QueryExecutor) qFetch(logStats *tabletenv.LogStats, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	sql, sqlWithoutComments, err := qre.generateFinalSQL(parsedQuery, bindVars)
-	if err != nil {
-		return nil, err
-	}
-	// Check tablet type.
-	if qre.shouldConsolidate() {
-		q, original := qre.tsv.qe.consolidator.Create(sqlWithoutComments)
-		if original {
-			defer q.Broadcast()
-			conn, err := qre.getConn()
-
-			if err != nil {
-				q.Err = err
-			} else {
-				defer conn.Recycle()
-				q.Result, q.Err = qre.execDBConn(conn, sql, false)
-			}
-		} else {
-			logStats.QuerySources |= tabletenv.QuerySourceConsolidator
-			startTime := time.Now()
-			q.Wait()
-			qre.tsv.stats.WaitTimings.Record("Consolidations", startTime)
-		}
-		if q.Err != nil {
-			return nil, q.Err
-		}
-		return q.Result.(*sqltypes.Result), nil
-	}
-	conn, err := qre.getConn()
-	if err != nil {
-		return nil, err
-	}
-	defer conn.Recycle()
-	res, err := qre.execDBConn(conn, sql, false)
-	if err != nil {
-		return nil, err
-	}
-	return res, nil
 }
 
 // txFetch fetches from a TxConnection.
