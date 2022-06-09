@@ -31,7 +31,6 @@ func TestGetReplicationAnalysis(t *testing.T) {
 	tests := []struct {
 		name       string
 		info       []*test.InfoForRecoveryAnalysis
-		durability string
 		codeWanted AnalysisCode
 		wantErr    string
 	}{
@@ -47,7 +46,8 @@ func TestGetReplicationAnalysis(t *testing.T) {
 					MysqlHostname: "localhost",
 					MysqlPort:     6709,
 				},
-				LastCheckValid: 1,
+				DurabilityPolicy: "none",
+				LastCheckValid:   1,
 			}},
 			codeWanted: ClusterHasNoPrimary,
 		}, {
@@ -62,6 +62,7 @@ func TestGetReplicationAnalysis(t *testing.T) {
 					MysqlHostname: "localhost",
 					MysqlPort:     6709,
 				},
+				DurabilityPolicy:              "none",
 				LastCheckValid:                0,
 				CountReplicas:                 4,
 				CountValidReplicas:            4,
@@ -81,9 +82,10 @@ func TestGetReplicationAnalysis(t *testing.T) {
 					MysqlHostname: "localhost",
 					MysqlPort:     6709,
 				},
-				LastCheckValid: 0,
-				CountReplicas:  0,
-				IsPrimary:      1,
+				DurabilityPolicy: "none",
+				LastCheckValid:   0,
+				CountReplicas:    0,
+				IsPrimary:        1,
 			}},
 			codeWanted: DeadPrimaryWithoutReplicas,
 		}, {
@@ -98,9 +100,10 @@ func TestGetReplicationAnalysis(t *testing.T) {
 					MysqlHostname: "localhost",
 					MysqlPort:     6709,
 				},
-				LastCheckValid: 0,
-				CountReplicas:  3,
-				IsPrimary:      1,
+				DurabilityPolicy: "none",
+				LastCheckValid:   0,
+				CountReplicas:    3,
+				IsPrimary:        1,
 			}},
 			codeWanted: DeadPrimaryAndReplicas,
 		}, {
@@ -115,6 +118,7 @@ func TestGetReplicationAnalysis(t *testing.T) {
 					MysqlHostname: "localhost",
 					MysqlPort:     6709,
 				},
+				DurabilityPolicy:              "none",
 				LastCheckValid:                0,
 				CountReplicas:                 4,
 				CountValidReplicas:            2,
@@ -134,6 +138,7 @@ func TestGetReplicationAnalysis(t *testing.T) {
 					MysqlHostname: "localhost",
 					MysqlPort:     6709,
 				},
+				DurabilityPolicy:   "none",
 				LastCheckValid:     1,
 				CountReplicas:      4,
 				CountValidReplicas: 4,
@@ -152,6 +157,7 @@ func TestGetReplicationAnalysis(t *testing.T) {
 					MysqlHostname: "localhost",
 					MysqlPort:     6709,
 				},
+				DurabilityPolicy:   "none",
 				LastCheckValid:     1,
 				CountReplicas:      4,
 				CountValidReplicas: 4,
@@ -171,6 +177,7 @@ func TestGetReplicationAnalysis(t *testing.T) {
 					MysqlHostname: "localhost",
 					MysqlPort:     6709,
 				},
+				DurabilityPolicy:       "none",
 				LastCheckValid:         1,
 				CountReplicas:          4,
 				CountValidReplicas:     4,
@@ -190,13 +197,13 @@ func TestGetReplicationAnalysis(t *testing.T) {
 					MysqlHostname: "localhost",
 					MysqlPort:     6709,
 				},
+				DurabilityPolicy:       "semi_sync",
 				LastCheckValid:         1,
 				CountReplicas:          4,
 				CountValidReplicas:     4,
 				IsPrimary:              1,
 				SemiSyncPrimaryEnabled: 0,
 			}},
-			durability: "semi_sync",
 			codeWanted: PrimarySemiSyncMustBeSet,
 		}, {
 			name: "NotConnectedToPrimary",
@@ -210,6 +217,7 @@ func TestGetReplicationAnalysis(t *testing.T) {
 					MysqlHostname: "localhost",
 					MysqlPort:     6708,
 				},
+				DurabilityPolicy:              "none",
 				LastCheckValid:                1,
 				CountReplicas:                 4,
 				CountValidReplicas:            4,
@@ -244,6 +252,7 @@ func TestGetReplicationAnalysis(t *testing.T) {
 					MysqlHostname: "localhost",
 					MysqlPort:     6708,
 				},
+				DurabilityPolicy:              "none",
 				LastCheckValid:                1,
 				CountReplicas:                 4,
 				CountValidReplicas:            4,
@@ -261,10 +270,11 @@ func TestGetReplicationAnalysis(t *testing.T) {
 					MysqlHostname: "localhost",
 					MysqlPort:     6709,
 				},
-				SourceHost:     "localhost",
-				SourcePort:     6708,
-				LastCheckValid: 1,
-				ReadOnly:       0,
+				DurabilityPolicy: "none",
+				SourceHost:       "localhost",
+				SourcePort:       6708,
+				LastCheckValid:   1,
+				ReadOnly:         0,
 			}},
 			codeWanted: ReplicaIsWritable,
 		}, {
@@ -279,6 +289,7 @@ func TestGetReplicationAnalysis(t *testing.T) {
 					MysqlHostname: "localhost",
 					MysqlPort:     6708,
 				},
+				DurabilityPolicy:              "none",
 				LastCheckValid:                1,
 				CountReplicas:                 4,
 				CountValidReplicas:            4,
@@ -296,10 +307,11 @@ func TestGetReplicationAnalysis(t *testing.T) {
 					MysqlHostname: "localhost",
 					MysqlPort:     6709,
 				},
-				SourceHost:     "localhost",
-				SourcePort:     6706,
-				LastCheckValid: 1,
-				ReadOnly:       1,
+				DurabilityPolicy: "none",
+				SourceHost:       "localhost",
+				SourcePort:       6706,
+				LastCheckValid:   1,
+				ReadOnly:         1,
 			}},
 			codeWanted: ConnectedToWrongPrimary,
 		}, {
@@ -314,6 +326,7 @@ func TestGetReplicationAnalysis(t *testing.T) {
 					MysqlHostname: "localhost",
 					MysqlPort:     6708,
 				},
+				DurabilityPolicy:              "none",
 				LastCheckValid:                1,
 				CountReplicas:                 4,
 				CountValidReplicas:            4,
@@ -331,6 +344,7 @@ func TestGetReplicationAnalysis(t *testing.T) {
 					MysqlHostname: "localhost",
 					MysqlPort:     6709,
 				},
+				DurabilityPolicy:   "none",
 				SourceHost:         "localhost",
 				SourcePort:         6708,
 				LastCheckValid:     1,
@@ -340,8 +354,7 @@ func TestGetReplicationAnalysis(t *testing.T) {
 			codeWanted: ReplicationStopped,
 		},
 		{
-			name:       "ReplicaSemiSyncMustBeSet",
-			durability: "semi_sync",
+			name: "ReplicaSemiSyncMustBeSet",
 			info: []*test.InfoForRecoveryAnalysis{{
 				TabletInfo: &topodatapb.Tablet{
 					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 101},
@@ -352,6 +365,7 @@ func TestGetReplicationAnalysis(t *testing.T) {
 					MysqlHostname: "localhost",
 					MysqlPort:     6708,
 				},
+				DurabilityPolicy:              "semi_sync",
 				LastCheckValid:                1,
 				CountReplicas:                 4,
 				CountValidReplicas:            4,
@@ -379,6 +393,7 @@ func TestGetReplicationAnalysis(t *testing.T) {
 					MysqlHostname: "localhost",
 					MysqlPort:     6708,
 				},
+				DurabilityPolicy:       "semi_sync",
 				SourceHost:             "localhost",
 				SourcePort:             6708,
 				LastCheckValid:         1,
@@ -398,6 +413,7 @@ func TestGetReplicationAnalysis(t *testing.T) {
 					MysqlHostname: "localhost",
 					MysqlPort:     6708,
 				},
+				DurabilityPolicy:              "none",
 				LastCheckValid:                1,
 				CountReplicas:                 4,
 				CountValidReplicas:            4,
@@ -424,6 +440,7 @@ func TestGetReplicationAnalysis(t *testing.T) {
 					MysqlHostname: "localhost",
 					MysqlPort:     6708,
 				},
+				DurabilityPolicy:       "none",
 				SourceHost:             "localhost",
 				SourcePort:             6708,
 				LastCheckValid:         1,
@@ -431,15 +448,44 @@ func TestGetReplicationAnalysis(t *testing.T) {
 				SemiSyncReplicaEnabled: 1,
 			}},
 			codeWanted: ReplicaSemiSyncMustNotBeSet,
+		}, {
+			name: "SnapshotKeyspace",
+			info: []*test.InfoForRecoveryAnalysis{{
+				TabletInfo: &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
+					Hostname:      "localhost",
+					Keyspace:      "ks",
+					Shard:         "0",
+					Type:          topodatapb.TabletType_REPLICA,
+					MysqlHostname: "localhost",
+					MysqlPort:     6709,
+				},
+				// Snapshot Keyspace
+				KeyspaceType:     1,
+				DurabilityPolicy: "none",
+				LastCheckValid:   1,
+			}},
+			codeWanted: NoProblem,
+		}, {
+			name: "EmptyDurabilityPolicy",
+			info: []*test.InfoForRecoveryAnalysis{{
+				TabletInfo: &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
+					Hostname:      "localhost",
+					Keyspace:      "ks",
+					Shard:         "0",
+					Type:          topodatapb.TabletType_REPLICA,
+					MysqlHostname: "localhost",
+					MysqlPort:     6709,
+				},
+				LastCheckValid: 1,
+			}},
+			// We will ignore these keyspaces too until the durability policy is set in the topo server
+			codeWanted: NoProblem,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if tt.durability == "" {
-				tt.durability = "none"
-			}
-			SetDurabilityPolicy(tt.durability)
-
 			var rowMaps []sqlutils.RowMap
 			for _, analysis := range tt.info {
 				analysis.SetValuesFromTabletInfo()
@@ -453,6 +499,10 @@ func TestGetReplicationAnalysis(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
+			if tt.codeWanted == NoProblem {
+				require.Len(t, got, 0)
+				return
+			}
 			require.Len(t, got, 1)
 			require.Equal(t, tt.codeWanted, got[0].Analysis)
 		})

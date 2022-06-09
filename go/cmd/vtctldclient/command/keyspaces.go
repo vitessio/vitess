@@ -163,6 +163,10 @@ func commandCreateKeyspace(cmd *cobra.Command, args []string) error {
 
 	var snapshotTime *vttime.Time
 	if topodatapb.KeyspaceType(createKeyspaceOptions.KeyspaceType) == topodatapb.KeyspaceType_SNAPSHOT {
+		if createKeyspaceOptions.DurabilityPolicy != "none" {
+			return errors.New("--durability-policy cannot be specified while creating a snapshot keyspace")
+		}
+
 		if createKeyspaceOptions.BaseKeyspace == "" {
 			return errors.New("--base-keyspace is required for a snapshot keyspace")
 		}

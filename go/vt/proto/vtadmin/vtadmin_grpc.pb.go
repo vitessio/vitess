@@ -33,9 +33,9 @@ type VTAdminClient interface {
 	DeleteShards(ctx context.Context, in *DeleteShardsRequest, opts ...grpc.CallOption) (*vtctldata.DeleteShardsResponse, error)
 	// DeleteTablet deletes a tablet from the topology
 	DeleteTablet(ctx context.Context, in *DeleteTabletRequest, opts ...grpc.CallOption) (*DeleteTabletResponse, error)
-	// EmergencyReparentShard reparents the shard to the new primary. It assumes
+	// EmergencyFailoverShard fails over a shard to a new primary. It assumes
 	// the old primary is dead or otherwise not responding.
-	EmergencyReparentShard(ctx context.Context, in *EmergencyReparentShardRequest, opts ...grpc.CallOption) (*EmergencyReparentShardResponse, error)
+	EmergencyFailoverShard(ctx context.Context, in *EmergencyFailoverShardRequest, opts ...grpc.CallOption) (*EmergencyFailoverShardResponse, error)
 	// FindSchema returns a single Schema that matches the provided table name
 	// across all specified clusters IDs. Not specifying a set of cluster IDs
 	// causes the search to span all configured clusters.
@@ -70,7 +70,8 @@ type VTAdminClient interface {
 	GetShardReplicationPositions(ctx context.Context, in *GetShardReplicationPositionsRequest, opts ...grpc.CallOption) (*GetShardReplicationPositionsResponse, error)
 	// GetSrvVSchema returns the SrvVSchema for the given cluster and cell.
 	GetSrvVSchema(ctx context.Context, in *GetSrvVSchemaRequest, opts ...grpc.CallOption) (*SrvVSchema, error)
-	// GetSrvVSchemas returns all SrvVSchemas across all (or specified) clusters and cells.
+	// GetSrvVSchemas returns all SrvVSchemas across all (or specified) clusters
+	// and cells.
 	GetSrvVSchemas(ctx context.Context, in *GetSrvVSchemasRequest, opts ...grpc.CallOption) (*GetSrvVSchemasResponse, error)
 	// GetTablet looks up a tablet by hostname across all clusters and returns
 	// the result.
@@ -89,22 +90,22 @@ type VTAdminClient interface {
 	GetWorkflow(ctx context.Context, in *GetWorkflowRequest, opts ...grpc.CallOption) (*Workflow, error)
 	// GetWorkflows returns the Workflows for all specified clusters.
 	GetWorkflows(ctx context.Context, in *GetWorkflowsRequest, opts ...grpc.CallOption) (*GetWorkflowsResponse, error)
-	// PingTablet checks that the specified tablet is awake and responding to RPCs. This command can be blocked by other in-flight operations.
+	// PingTablet checks that the specified tablet is awake and responding to
+	// RPCs. This command can be blocked by other in-flight operations.
 	PingTablet(ctx context.Context, in *PingTabletRequest, opts ...grpc.CallOption) (*PingTabletResponse, error)
-	// PlannedReparentShard reparents the shard to a new primary, or away from
+	// PlannedFailoverShard fails over the shard to a new primary, or away from
 	// an old primary. Both the old and new primaries must be reachable and
 	// running.
 	//
-	// NOTE: PRS will not consider replicas outside the current shard primary's
-	// cell as promotion candidates unless NewPrimary is explicitly provided in
-	// the request.
-	PlannedReparentShard(ctx context.Context, in *PlannedReparentShardRequest, opts ...grpc.CallOption) (*PlannedReparentShardResponse, error)
+	// NOTE: A planned failover will not consider replicas outside the current
+	// shard primary's cell as promotion candidates unless NewPrimary is
+	// explicitly provided in the request.
+	PlannedFailoverShard(ctx context.Context, in *PlannedFailoverShardRequest, opts ...grpc.CallOption) (*PlannedFailoverShardResponse, error)
 	// RefreshState reloads the tablet record on the specified tablet.
 	RefreshState(ctx context.Context, in *RefreshStateRequest, opts ...grpc.CallOption) (*RefreshStateResponse, error)
-	// ReparentTablet reparents a tablet to the current primary in the shard.
-	// This only works if the current replica position matches the last known
-	// reparent action.
-	ReparentTablet(ctx context.Context, in *ReparentTabletRequest, opts ...grpc.CallOption) (*ReparentTabletResponse, error)
+	// RefreshTabletReplicationSource performs a `CHANGE REPLICATION SOURCE TO`
+	// on a tablet to replicate from the current primary in the shard.
+	RefreshTabletReplicationSource(ctx context.Context, in *RefreshTabletReplicationSourceRequest, opts ...grpc.CallOption) (*RefreshTabletReplicationSourceResponse, error)
 	// ReloadSchemas reloads the schema definition across keyspaces, shards, or
 	// tablets in one or more clusters, depending on the request fields (see
 	// ReloadSchemasRequest for details).
@@ -121,7 +122,7 @@ type VTAdminClient interface {
 	// StopReplication runs the underlying database command to stop replication
 	// on a tablet
 	StopReplication(ctx context.Context, in *StopReplicationRequest, opts ...grpc.CallOption) (*StopReplicationResponse, error)
-	// TabletExternallyReparented updates the metadata in a cluster's topology
+	// TabletExternallyPromoted updates the metadata in a cluster's topology
 	// to acknowledge a shard primary change performed by an external tool
 	// (e.g. orchestrator*).
 	//
@@ -130,14 +131,19 @@ type VTAdminClient interface {
 	//
 	// * "orchestrator" here refers to external orchestrator, not the newer,
 	// Vitess-aware orchestrator, VTOrc.
-	TabletExternallyReparented(ctx context.Context, in *TabletExternallyReparentedRequest, opts ...grpc.CallOption) (*TabletExternallyReparentedResponse, error)
-	// ValidateKeyspace validates that all nodes reachable from the specified keyspace are consistent.
+	TabletExternallyPromoted(ctx context.Context, in *TabletExternallyPromotedRequest, opts ...grpc.CallOption) (*TabletExternallyPromotedResponse, error)
+	// ValidateKeyspace validates that all nodes reachable from the specified
+	// keyspace are consistent.
 	ValidateKeyspace(ctx context.Context, in *ValidateKeyspaceRequest, opts ...grpc.CallOption) (*vtctldata.ValidateKeyspaceResponse, error)
-	// ValidateSchemaKeyspace validates that the schema on the primary tablet for shard 0 matches the schema on all of the other tablets in the keyspace.
+	// ValidateSchemaKeyspace validates that the schema on the primary tablet
+	// for shard 0 matches the schema on all of the other tablets in the
+	// keyspace.
 	ValidateSchemaKeyspace(ctx context.Context, in *ValidateSchemaKeyspaceRequest, opts ...grpc.CallOption) (*vtctldata.ValidateSchemaKeyspaceResponse, error)
-	// ValidateVersionKeyspace validates that the version on the primary of shard 0 matches all of the other tablets in the keyspace.
+	// ValidateVersionKeyspace validates that the version on the primary of
+	// shard 0 matches all of the other tablets in the keyspace.
 	ValidateVersionKeyspace(ctx context.Context, in *ValidateVersionKeyspaceRequest, opts ...grpc.CallOption) (*vtctldata.ValidateVersionKeyspaceResponse, error)
-	// VTExplain provides information on how Vitess plans to execute a particular query.
+	// VTExplain provides information on how Vitess plans to execute a
+	// particular query.
 	VTExplain(ctx context.Context, in *VTExplainRequest, opts ...grpc.CallOption) (*VTExplainResponse, error)
 }
 
@@ -194,9 +200,9 @@ func (c *vTAdminClient) DeleteTablet(ctx context.Context, in *DeleteTabletReques
 	return out, nil
 }
 
-func (c *vTAdminClient) EmergencyReparentShard(ctx context.Context, in *EmergencyReparentShardRequest, opts ...grpc.CallOption) (*EmergencyReparentShardResponse, error) {
-	out := new(EmergencyReparentShardResponse)
-	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/EmergencyReparentShard", in, out, opts...)
+func (c *vTAdminClient) EmergencyFailoverShard(ctx context.Context, in *EmergencyFailoverShardRequest, opts ...grpc.CallOption) (*EmergencyFailoverShardResponse, error) {
+	out := new(EmergencyFailoverShardResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/EmergencyFailoverShard", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -392,9 +398,9 @@ func (c *vTAdminClient) PingTablet(ctx context.Context, in *PingTabletRequest, o
 	return out, nil
 }
 
-func (c *vTAdminClient) PlannedReparentShard(ctx context.Context, in *PlannedReparentShardRequest, opts ...grpc.CallOption) (*PlannedReparentShardResponse, error) {
-	out := new(PlannedReparentShardResponse)
-	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/PlannedReparentShard", in, out, opts...)
+func (c *vTAdminClient) PlannedFailoverShard(ctx context.Context, in *PlannedFailoverShardRequest, opts ...grpc.CallOption) (*PlannedFailoverShardResponse, error) {
+	out := new(PlannedFailoverShardResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/PlannedFailoverShard", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -410,9 +416,9 @@ func (c *vTAdminClient) RefreshState(ctx context.Context, in *RefreshStateReques
 	return out, nil
 }
 
-func (c *vTAdminClient) ReparentTablet(ctx context.Context, in *ReparentTabletRequest, opts ...grpc.CallOption) (*ReparentTabletResponse, error) {
-	out := new(ReparentTabletResponse)
-	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/ReparentTablet", in, out, opts...)
+func (c *vTAdminClient) RefreshTabletReplicationSource(ctx context.Context, in *RefreshTabletReplicationSourceRequest, opts ...grpc.CallOption) (*RefreshTabletReplicationSourceResponse, error) {
+	out := new(RefreshTabletReplicationSourceResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/RefreshTabletReplicationSource", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -473,9 +479,9 @@ func (c *vTAdminClient) StopReplication(ctx context.Context, in *StopReplication
 	return out, nil
 }
 
-func (c *vTAdminClient) TabletExternallyReparented(ctx context.Context, in *TabletExternallyReparentedRequest, opts ...grpc.CallOption) (*TabletExternallyReparentedResponse, error) {
-	out := new(TabletExternallyReparentedResponse)
-	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/TabletExternallyReparented", in, out, opts...)
+func (c *vTAdminClient) TabletExternallyPromoted(ctx context.Context, in *TabletExternallyPromotedRequest, opts ...grpc.CallOption) (*TabletExternallyPromotedResponse, error) {
+	out := new(TabletExternallyPromotedResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/TabletExternallyPromoted", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -532,9 +538,9 @@ type VTAdminServer interface {
 	DeleteShards(context.Context, *DeleteShardsRequest) (*vtctldata.DeleteShardsResponse, error)
 	// DeleteTablet deletes a tablet from the topology
 	DeleteTablet(context.Context, *DeleteTabletRequest) (*DeleteTabletResponse, error)
-	// EmergencyReparentShard reparents the shard to the new primary. It assumes
+	// EmergencyFailoverShard fails over a shard to a new primary. It assumes
 	// the old primary is dead or otherwise not responding.
-	EmergencyReparentShard(context.Context, *EmergencyReparentShardRequest) (*EmergencyReparentShardResponse, error)
+	EmergencyFailoverShard(context.Context, *EmergencyFailoverShardRequest) (*EmergencyFailoverShardResponse, error)
 	// FindSchema returns a single Schema that matches the provided table name
 	// across all specified clusters IDs. Not specifying a set of cluster IDs
 	// causes the search to span all configured clusters.
@@ -569,7 +575,8 @@ type VTAdminServer interface {
 	GetShardReplicationPositions(context.Context, *GetShardReplicationPositionsRequest) (*GetShardReplicationPositionsResponse, error)
 	// GetSrvVSchema returns the SrvVSchema for the given cluster and cell.
 	GetSrvVSchema(context.Context, *GetSrvVSchemaRequest) (*SrvVSchema, error)
-	// GetSrvVSchemas returns all SrvVSchemas across all (or specified) clusters and cells.
+	// GetSrvVSchemas returns all SrvVSchemas across all (or specified) clusters
+	// and cells.
 	GetSrvVSchemas(context.Context, *GetSrvVSchemasRequest) (*GetSrvVSchemasResponse, error)
 	// GetTablet looks up a tablet by hostname across all clusters and returns
 	// the result.
@@ -588,22 +595,22 @@ type VTAdminServer interface {
 	GetWorkflow(context.Context, *GetWorkflowRequest) (*Workflow, error)
 	// GetWorkflows returns the Workflows for all specified clusters.
 	GetWorkflows(context.Context, *GetWorkflowsRequest) (*GetWorkflowsResponse, error)
-	// PingTablet checks that the specified tablet is awake and responding to RPCs. This command can be blocked by other in-flight operations.
+	// PingTablet checks that the specified tablet is awake and responding to
+	// RPCs. This command can be blocked by other in-flight operations.
 	PingTablet(context.Context, *PingTabletRequest) (*PingTabletResponse, error)
-	// PlannedReparentShard reparents the shard to a new primary, or away from
+	// PlannedFailoverShard fails over the shard to a new primary, or away from
 	// an old primary. Both the old and new primaries must be reachable and
 	// running.
 	//
-	// NOTE: PRS will not consider replicas outside the current shard primary's
-	// cell as promotion candidates unless NewPrimary is explicitly provided in
-	// the request.
-	PlannedReparentShard(context.Context, *PlannedReparentShardRequest) (*PlannedReparentShardResponse, error)
+	// NOTE: A planned failover will not consider replicas outside the current
+	// shard primary's cell as promotion candidates unless NewPrimary is
+	// explicitly provided in the request.
+	PlannedFailoverShard(context.Context, *PlannedFailoverShardRequest) (*PlannedFailoverShardResponse, error)
 	// RefreshState reloads the tablet record on the specified tablet.
 	RefreshState(context.Context, *RefreshStateRequest) (*RefreshStateResponse, error)
-	// ReparentTablet reparents a tablet to the current primary in the shard.
-	// This only works if the current replica position matches the last known
-	// reparent action.
-	ReparentTablet(context.Context, *ReparentTabletRequest) (*ReparentTabletResponse, error)
+	// RefreshTabletReplicationSource performs a `CHANGE REPLICATION SOURCE TO`
+	// on a tablet to replicate from the current primary in the shard.
+	RefreshTabletReplicationSource(context.Context, *RefreshTabletReplicationSourceRequest) (*RefreshTabletReplicationSourceResponse, error)
 	// ReloadSchemas reloads the schema definition across keyspaces, shards, or
 	// tablets in one or more clusters, depending on the request fields (see
 	// ReloadSchemasRequest for details).
@@ -620,7 +627,7 @@ type VTAdminServer interface {
 	// StopReplication runs the underlying database command to stop replication
 	// on a tablet
 	StopReplication(context.Context, *StopReplicationRequest) (*StopReplicationResponse, error)
-	// TabletExternallyReparented updates the metadata in a cluster's topology
+	// TabletExternallyPromoted updates the metadata in a cluster's topology
 	// to acknowledge a shard primary change performed by an external tool
 	// (e.g. orchestrator*).
 	//
@@ -629,14 +636,19 @@ type VTAdminServer interface {
 	//
 	// * "orchestrator" here refers to external orchestrator, not the newer,
 	// Vitess-aware orchestrator, VTOrc.
-	TabletExternallyReparented(context.Context, *TabletExternallyReparentedRequest) (*TabletExternallyReparentedResponse, error)
-	// ValidateKeyspace validates that all nodes reachable from the specified keyspace are consistent.
+	TabletExternallyPromoted(context.Context, *TabletExternallyPromotedRequest) (*TabletExternallyPromotedResponse, error)
+	// ValidateKeyspace validates that all nodes reachable from the specified
+	// keyspace are consistent.
 	ValidateKeyspace(context.Context, *ValidateKeyspaceRequest) (*vtctldata.ValidateKeyspaceResponse, error)
-	// ValidateSchemaKeyspace validates that the schema on the primary tablet for shard 0 matches the schema on all of the other tablets in the keyspace.
+	// ValidateSchemaKeyspace validates that the schema on the primary tablet
+	// for shard 0 matches the schema on all of the other tablets in the
+	// keyspace.
 	ValidateSchemaKeyspace(context.Context, *ValidateSchemaKeyspaceRequest) (*vtctldata.ValidateSchemaKeyspaceResponse, error)
-	// ValidateVersionKeyspace validates that the version on the primary of shard 0 matches all of the other tablets in the keyspace.
+	// ValidateVersionKeyspace validates that the version on the primary of
+	// shard 0 matches all of the other tablets in the keyspace.
 	ValidateVersionKeyspace(context.Context, *ValidateVersionKeyspaceRequest) (*vtctldata.ValidateVersionKeyspaceResponse, error)
-	// VTExplain provides information on how Vitess plans to execute a particular query.
+	// VTExplain provides information on how Vitess plans to execute a
+	// particular query.
 	VTExplain(context.Context, *VTExplainRequest) (*VTExplainResponse, error)
 	mustEmbedUnimplementedVTAdminServer()
 }
@@ -660,8 +672,8 @@ func (UnimplementedVTAdminServer) DeleteShards(context.Context, *DeleteShardsReq
 func (UnimplementedVTAdminServer) DeleteTablet(context.Context, *DeleteTabletRequest) (*DeleteTabletResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeleteTablet not implemented")
 }
-func (UnimplementedVTAdminServer) EmergencyReparentShard(context.Context, *EmergencyReparentShardRequest) (*EmergencyReparentShardResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method EmergencyReparentShard not implemented")
+func (UnimplementedVTAdminServer) EmergencyFailoverShard(context.Context, *EmergencyFailoverShardRequest) (*EmergencyFailoverShardResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method EmergencyFailoverShard not implemented")
 }
 func (UnimplementedVTAdminServer) FindSchema(context.Context, *FindSchemaRequest) (*Schema, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method FindSchema not implemented")
@@ -726,14 +738,14 @@ func (UnimplementedVTAdminServer) GetWorkflows(context.Context, *GetWorkflowsReq
 func (UnimplementedVTAdminServer) PingTablet(context.Context, *PingTabletRequest) (*PingTabletResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PingTablet not implemented")
 }
-func (UnimplementedVTAdminServer) PlannedReparentShard(context.Context, *PlannedReparentShardRequest) (*PlannedReparentShardResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method PlannedReparentShard not implemented")
+func (UnimplementedVTAdminServer) PlannedFailoverShard(context.Context, *PlannedFailoverShardRequest) (*PlannedFailoverShardResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PlannedFailoverShard not implemented")
 }
 func (UnimplementedVTAdminServer) RefreshState(context.Context, *RefreshStateRequest) (*RefreshStateResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RefreshState not implemented")
 }
-func (UnimplementedVTAdminServer) ReparentTablet(context.Context, *ReparentTabletRequest) (*ReparentTabletResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ReparentTablet not implemented")
+func (UnimplementedVTAdminServer) RefreshTabletReplicationSource(context.Context, *RefreshTabletReplicationSourceRequest) (*RefreshTabletReplicationSourceResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RefreshTabletReplicationSource not implemented")
 }
 func (UnimplementedVTAdminServer) ReloadSchemas(context.Context, *ReloadSchemasRequest) (*ReloadSchemasResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ReloadSchemas not implemented")
@@ -753,8 +765,8 @@ func (UnimplementedVTAdminServer) StartReplication(context.Context, *StartReplic
 func (UnimplementedVTAdminServer) StopReplication(context.Context, *StopReplicationRequest) (*StopReplicationResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method StopReplication not implemented")
 }
-func (UnimplementedVTAdminServer) TabletExternallyReparented(context.Context, *TabletExternallyReparentedRequest) (*TabletExternallyReparentedResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method TabletExternallyReparented not implemented")
+func (UnimplementedVTAdminServer) TabletExternallyPromoted(context.Context, *TabletExternallyPromotedRequest) (*TabletExternallyPromotedResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method TabletExternallyPromoted not implemented")
 }
 func (UnimplementedVTAdminServer) ValidateKeyspace(context.Context, *ValidateKeyspaceRequest) (*vtctldata.ValidateKeyspaceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ValidateKeyspace not implemented")
@@ -871,20 +883,20 @@ func _VTAdmin_DeleteTablet_Handler(srv interface{}, ctx context.Context, dec fun
 	return interceptor(ctx, in, info, handler)
 }
 
-func _VTAdmin_EmergencyReparentShard_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(EmergencyReparentShardRequest)
+func _VTAdmin_EmergencyFailoverShard_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(EmergencyFailoverShardRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(VTAdminServer).EmergencyReparentShard(ctx, in)
+		return srv.(VTAdminServer).EmergencyFailoverShard(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/vtadmin.VTAdmin/EmergencyReparentShard",
+		FullMethod: "/vtadmin.VTAdmin/EmergencyFailoverShard",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(VTAdminServer).EmergencyReparentShard(ctx, req.(*EmergencyReparentShardRequest))
+		return srv.(VTAdminServer).EmergencyFailoverShard(ctx, req.(*EmergencyFailoverShardRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1267,20 +1279,20 @@ func _VTAdmin_PingTablet_Handler(srv interface{}, ctx context.Context, dec func(
 	return interceptor(ctx, in, info, handler)
 }
 
-func _VTAdmin_PlannedReparentShard_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(PlannedReparentShardRequest)
+func _VTAdmin_PlannedFailoverShard_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PlannedFailoverShardRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(VTAdminServer).PlannedReparentShard(ctx, in)
+		return srv.(VTAdminServer).PlannedFailoverShard(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/vtadmin.VTAdmin/PlannedReparentShard",
+		FullMethod: "/vtadmin.VTAdmin/PlannedFailoverShard",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(VTAdminServer).PlannedReparentShard(ctx, req.(*PlannedReparentShardRequest))
+		return srv.(VTAdminServer).PlannedFailoverShard(ctx, req.(*PlannedFailoverShardRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1303,20 +1315,20 @@ func _VTAdmin_RefreshState_Handler(srv interface{}, ctx context.Context, dec fun
 	return interceptor(ctx, in, info, handler)
 }
 
-func _VTAdmin_ReparentTablet_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ReparentTabletRequest)
+func _VTAdmin_RefreshTabletReplicationSource_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RefreshTabletReplicationSourceRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(VTAdminServer).ReparentTablet(ctx, in)
+		return srv.(VTAdminServer).RefreshTabletReplicationSource(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/vtadmin.VTAdmin/ReparentTablet",
+		FullMethod: "/vtadmin.VTAdmin/RefreshTabletReplicationSource",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(VTAdminServer).ReparentTablet(ctx, req.(*ReparentTabletRequest))
+		return srv.(VTAdminServer).RefreshTabletReplicationSource(ctx, req.(*RefreshTabletReplicationSourceRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1429,20 +1441,20 @@ func _VTAdmin_StopReplication_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
-func _VTAdmin_TabletExternallyReparented_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(TabletExternallyReparentedRequest)
+func _VTAdmin_TabletExternallyPromoted_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TabletExternallyPromotedRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(VTAdminServer).TabletExternallyReparented(ctx, in)
+		return srv.(VTAdminServer).TabletExternallyPromoted(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/vtadmin.VTAdmin/TabletExternallyReparented",
+		FullMethod: "/vtadmin.VTAdmin/TabletExternallyPromoted",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(VTAdminServer).TabletExternallyReparented(ctx, req.(*TabletExternallyReparentedRequest))
+		return srv.(VTAdminServer).TabletExternallyPromoted(ctx, req.(*TabletExternallyPromotedRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1547,8 +1559,8 @@ var VTAdmin_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _VTAdmin_DeleteTablet_Handler,
 		},
 		{
-			MethodName: "EmergencyReparentShard",
-			Handler:    _VTAdmin_EmergencyReparentShard_Handler,
+			MethodName: "EmergencyFailoverShard",
+			Handler:    _VTAdmin_EmergencyFailoverShard_Handler,
 		},
 		{
 			MethodName: "FindSchema",
@@ -1635,16 +1647,16 @@ var VTAdmin_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _VTAdmin_PingTablet_Handler,
 		},
 		{
-			MethodName: "PlannedReparentShard",
-			Handler:    _VTAdmin_PlannedReparentShard_Handler,
+			MethodName: "PlannedFailoverShard",
+			Handler:    _VTAdmin_PlannedFailoverShard_Handler,
 		},
 		{
 			MethodName: "RefreshState",
 			Handler:    _VTAdmin_RefreshState_Handler,
 		},
 		{
-			MethodName: "ReparentTablet",
-			Handler:    _VTAdmin_ReparentTablet_Handler,
+			MethodName: "RefreshTabletReplicationSource",
+			Handler:    _VTAdmin_RefreshTabletReplicationSource_Handler,
 		},
 		{
 			MethodName: "ReloadSchemas",
@@ -1671,8 +1683,8 @@ var VTAdmin_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _VTAdmin_StopReplication_Handler,
 		},
 		{
-			MethodName: "TabletExternallyReparented",
-			Handler:    _VTAdmin_TabletExternallyReparented_Handler,
+			MethodName: "TabletExternallyPromoted",
+			Handler:    _VTAdmin_TabletExternallyPromoted_Handler,
 		},
 		{
 			MethodName: "ValidateKeyspace",

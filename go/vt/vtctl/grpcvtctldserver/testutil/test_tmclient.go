@@ -249,6 +249,8 @@ type TabletManagerClient struct {
 	SetReplicationSourceDelays map[string]time.Duration
 	// keyed by tablet alias.
 	SetReplicationSourceResults map[string]error
+	// keyed by tablet alias.
+	SetReplicationSourceSemiSync map[string]bool
 	// keyed by tablet alias
 	SetReadOnlyDelays map[string]time.Duration
 	// keyed by tablet alias
@@ -949,6 +951,14 @@ func (fake *TabletManagerClient) SetReplicationSource(ctx context.Context, table
 				return ctx.Err()
 			case <-time.After(delay):
 				// proceed to results
+			}
+		}
+	}
+
+	if fake.SetReplicationSourceSemiSync != nil {
+		if semiSyncRequirement, ok := fake.SetReplicationSourceSemiSync[key]; ok {
+			if semiSyncRequirement != semiSync {
+				return fmt.Errorf("semi-sync settings incorrect")
 			}
 		}
 	}

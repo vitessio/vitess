@@ -303,6 +303,10 @@ func tabletDemotePrimary(instanceKey inst.InstanceKey, forward bool) error {
 	if err != nil {
 		return err
 	}
+	durability, err := inst.GetDurabilityPolicy(tablet)
+	if err != nil {
+		return err
+	}
 	tmc := tmclient.NewTabletManagerClient()
 	// TODO(sougou): this should be controllable because we may want
 	// to give a longer timeout for a graceful takeover.
@@ -311,7 +315,7 @@ func tabletDemotePrimary(instanceKey inst.InstanceKey, forward bool) error {
 	if forward {
 		_, err = tmc.DemotePrimary(ctx, tablet)
 	} else {
-		err = tmc.UndoDemotePrimary(ctx, tablet, inst.SemiSyncAckers(instanceKey) > 0)
+		err = tmc.UndoDemotePrimary(ctx, tablet, inst.SemiSyncAckers(durability, instanceKey) > 0)
 	}
 	return err
 }

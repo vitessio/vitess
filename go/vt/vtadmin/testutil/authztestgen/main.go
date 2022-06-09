@@ -30,17 +30,24 @@ import (
 )
 
 type Config struct {
-	Package                 string                    `json:"package"`
-	Tests                   []*Test                   `json:"tests"`
+	Package  string           `json:"package"`
+	Clusters []*ClusterConfig `json:"clusters"`
+	Tests    []*Test          `json:"tests"`
+}
+
+type ClusterConfig struct {
+	ID                      string                    `json:"id"`
+	Name                    string                    `json:"name"`
 	FakeVtctldClientResults []*FakeVtctldClientResult `json:"vtctldclient_mock_data"`
 	DBTablets               []*vtadminpb.Tablet       `json:"db_tablet_list"`
 }
 
 type Test struct {
-	Method  string        `json:"method"`
-	Rules   []*AuthzRules `json:"rules"`
-	Request string        `json:"request"`
-	Cases   []*TestCase   `json:"cases"`
+	Method         string        `json:"method"`
+	Rules          []*AuthzRules `json:"rules"`
+	Request        string        `json:"request"`
+	SerializeCases bool          `json:"serialize_cases"`
+	Cases          []*TestCase   `json:"cases"`
 }
 
 type TestCase struct {

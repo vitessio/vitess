@@ -71,10 +71,22 @@ const (
 	ConstraintNamesStrict
 )
 
+const (
+	ColumnRenameAssumeDifferent = iota
+	ColumnRenameHeuristicStatement
+)
+
+const (
+	TableRenameAssumeDifferent = iota
+	TableRenameHeuristicStatement
+)
+
 // DiffHints is an assortment of rules for diffing entities
 type DiffHints struct {
 	StrictIndexOrdering     bool
 	AutoIncrementStrategy   int
 	RangeRotationStrategy   int
 	ConstraintNamesStrategy int
+	ColumnRenameStrategy    int
+	TableRenameStrategy     int
 }
