@@ -16,6 +16,11 @@
                     "value": "\"zone1-0000000100\": nil,"
                 },
                 {
+                    "field": "EmergencyReparentShardResults",
+                    "type": "map[string]struct{\nResponse *vtctldatapb.EmergencyReparentShardResponse\nError error}",
+                    "value": "\"test/-\": {\nResponse: &vtctldatapb.EmergencyReparentShardResponse{},\n},"
+                },
+                {
                     "field": "FindAllShardsInKeyspaceResults",
                     "type": "map[string]struct{\nResponse *vtctldatapb.FindAllShardsInKeyspaceResponse\nError error}",
                     "value": "\"test\": {\nResponse: &vtctldatapb.FindAllShardsInKeyspaceResponse{\nShards: map[string]*vtctldatapb.Shard{\n\"-\": {\nKeyspace: \"test\",\nName: \"-\",\nShard: &topodatapb.Shard{},\n},\n},\n},\n},"
@@ -51,11 +56,6 @@
                     "value": "\"zone1\": {\nResponse: &vtctldatapb.GetSrvVSchemaResponse{\nSrvVSchema: &vschemapb.SrvVSchema{},\n},\n},"
                 },
                 {
-                    "field": "ShardReplicationPositionsResults",
-                    "type": "map[string]struct{\nResponse *vtctldatapb.ShardReplicationPositionsResponse\nError error}",
-                    "value": "\"test/-\": {\nResponse: &vtctldatapb.ShardReplicationPositionsResponse{},\n},"
-                },
-                {
                     "field": "GetVSchemaResults",
                     "type": "map[string]struct{\nResponse *vtctldatapb.GetVSchemaResponse\nError error}",
                     "value": "\"test\": {\nResponse: &vtctldatapb.GetVSchemaResponse{\nVSchema: &vschemapb.Keyspace{},\n},\n},"
@@ -69,6 +69,11 @@
                     "field": "PingTabletResults",
                     "type": "map[string]error",
                     "value": "\"zone1-0000000100\": nil,"
+                },
+                {
+                    "field": "PlannedReparentShardResults",
+                    "type": "map[string]struct{\nResponse *vtctldatapb.PlannedReparentShardResponse\nError error}",
+                    "value": "\"test/-\": {\nResponse: &vtctldatapb.PlannedReparentShardResponse{},\n},"
                 },
                 {
                     "field": "RefreshStateResults",
@@ -91,6 +96,11 @@
                     "value": "\"zone1-0000000100\": nil,"
                 },
                 {
+                    "field": "ShardReplicationPositionsResults",
+                    "type": "map[string]struct{\nResponse *vtctldatapb.ShardReplicationPositionsResponse\nError error}",
+                    "value": "\"test/-\": {\nResponse: &vtctldatapb.ShardReplicationPositionsResponse{},\n},"
+                },
+                {
                     "field": "StartReplicationResults",
                     "type": "map[string]error",
                     "value": "\"zone1-0000000100\": nil,"
@@ -104,6 +114,21 @@
                     "field": "TabletExternallyReparentedResults",
                     "type": "map[string]struct{\nResponse *vtctldatapb.TabletExternallyReparentedResponse\nError error\n}",
                     "value": "\"zone1-0000000100\": {\nResponse: &vtctldatapb.TabletExternallyReparentedResponse{},\n},"
+                },
+                {
+                    "field": "ValidateKeyspaceResults",
+                    "type": "map[string]struct{\nResponse *vtctldatapb.ValidateKeyspaceResponse\nError error\n}",
+                    "value": "\"test\": {\nResponse: &vtctldatapb.ValidateKeyspaceResponse{},\n},"
+                },
+                {
+                    "field": "ValidateSchemaKeyspaceResults",
+                    "type": "map[string]struct{\nResponse *vtctldatapb.ValidateSchemaKeyspaceResponse\nError error\n}",
+                    "value": "\"test\": {\nResponse: &vtctldatapb.ValidateSchemaKeyspaceResponse{},\n},"
+                },
+                {
+                    "field": "ValidateVersionKeyspaceResults",
+                    "type": "map[string]struct{\nResponse *vtctldatapb.ValidateVersionKeyspaceResponse\nError error\n}",
+                    "value": "\"test\": {\nResponse: &vtctldatapb.ValidateVersionKeyspaceResponse{},\n},"
                 }
             ],
             "db_tablet_list": [
@@ -149,11 +174,6 @@
                     "value": "\"other1\": {\nResponse: &vtctldatapb.GetSrvVSchemaResponse{\nSrvVSchema: &vschemapb.SrvVSchema{},\n},\n},"
                 },
                 {
-                    "field": "ShardReplicationPositionsResults",
-                    "type": "map[string]struct{\nResponse *vtctldatapb.ShardReplicationPositionsResponse\nError error}",
-                    "value": "\"otherks/-\": {\nResponse: &vtctldatapb.ShardReplicationPositionsResponse{},\n},"
-                },
-                {
                     "field": "GetVSchemaResults",
                     "type": "map[string]struct{\nResponse *vtctldatapb.GetVSchemaResponse\nError error}",
                     "value": "\"otherks\": {\nResponse: &vtctldatapb.GetVSchemaResponse{\nVSchema: &vschemapb.Keyspace{},\n},\n},"
@@ -162,6 +182,11 @@
                     "field": "GetWorkflowsResults",
                     "type": "map[string]struct{\nResponse *vtctldatapb.GetWorkflowsResponse\nError error}",
                     "value": "\"otherks\": {\nResponse: &vtctldatapb.GetWorkflowsResponse{\nWorkflows: []*vtctldatapb.Workflow{\n{\nName: \"otherks_workflow\",\n},\n},\n}},"
+                },
+                {
+                    "field": "ShardReplicationPositionsResults",
+                    "type": "map[string]struct{\nResponse *vtctldatapb.ShardReplicationPositionsResponse\nError error}",
+                    "value": "\"otherks/-\": {\nResponse: &vtctldatapb.ShardReplicationPositionsResponse{},\n},"
                 }
             ],
             "db_tablet_list": [
@@ -324,6 +349,39 @@
                     "include_error_var": true,
                     "assertions": [
                         "assert.Error(t, err, $$)",
+                        "assert.Nil(t, resp, $$)"
+                    ]
+                },
+                {
+                    "name": "authorized actor",
+                    "actor": {"name": "allowed"},
+                    "include_error_var": true,
+                    "is_permitted": true,
+                    "assertions": [
+                        "require.NoError(t, err)",
+                        "assert.NotNil(t, resp, $$)"
+                    ]
+                }
+            ]
+        },
+        {
+            "method": "EmergencyFailoverShard",
+            "rules": [
+                {
+                    "resource": "Shard",
+                    "actions": ["emergency_failover_shard"],
+                    "subjects": ["user:allowed"],
+                    "clusters": ["*"]
+                }
+            ],
+            "request": "&vtadminpb.EmergencyFailoverShardRequest{\nClusterId: \"test\",\nOptions: &vtctldatapb.EmergencyReparentShardRequest{\nKeyspace: \"test\",\nShard: \"-\",\n},\n}",
+            "cases": [
+                {
+                    "name": "unauthorized actor",
+                    "actor": {"name": "other"},
+                    "include_error_var": true,
+                    "assertions": [
+                        "require.NoError(t, err)",
                         "assert.Nil(t, resp, $$)"
                     ]
                 },
@@ -1156,6 +1214,39 @@
             ]
         },
         {
+            "method": "PlannedFailoverShard",
+            "rules": [
+                {
+                    "resource": "Shard",
+                    "actions": ["planned_failover_shard"],
+                    "subjects": ["user:allowed"],
+                    "clusters": ["*"]
+                }
+            ],
+            "request": "&vtadminpb.PlannedFailoverShardRequest{\nClusterId: \"test\",\nOptions: &vtctldatapb.PlannedReparentShardRequest{\nKeyspace: \"test\",\nShard: \"-\",\n},\n}",
+            "cases": [
+                {
+                    "name": "unauthorized actor",
+                    "actor": {"name": "other"},
+                    "include_error_var": true,
+                    "assertions": [
+                        "require.NoError(t, err)",
+                        "assert.Nil(t, resp, $$)"
+                    ]
+                },
+                {
+                    "name": "authorized actor",
+                    "actor": {"name": "allowed"},
+                    "include_error_var": true,
+                    "is_permitted": true,
+                    "assertions": [
+                        "require.NoError(t, err)",
+                        "assert.NotNil(t, resp, $$)"
+                    ]
+                }
+            ]
+        },
+        {
             "method": "RefreshState",
             "rules": [
                 {
@@ -1404,6 +1495,105 @@
                     "include_error_var": true,
                     "assertions": [
                         "assert.Error(t, err, $$)",
+                        "assert.Nil(t, resp, $$)"
+                    ]
+                },
+                {
+                    "name": "authorized actor",
+                    "actor": {"name": "allowed"},
+                    "include_error_var": true,
+                    "is_permitted": true,
+                    "assertions": [
+                        "require.NoError(t, err)",
+                        "assert.NotNil(t, resp, $$)"
+                    ]
+                }
+            ]
+        },
+        {
+            "method": "ValidateKeyspace",
+            "rules": [
+                {
+                    "resource": "Keyspace",
+                    "actions": ["put"],
+                    "subjects": ["user:allowed"],
+                    "clusters": ["*"]
+                }
+            ],
+            "request": "&vtadminpb.ValidateKeyspaceRequest{\nClusterId: \"test\",\nKeyspace: \"test\",\n}",
+            "cases": [
+                {
+                    "name": "unauthorized actor",
+                    "actor": {"name": "other"},
+                    "include_error_var": true,
+                    "assertions": [
+                        "require.NoError(t, err)",
+                        "assert.Nil(t, resp, $$)"
+                    ]
+                },
+                {
+                    "name": "authorized actor",
+                    "actor": {"name": "allowed"},
+                    "include_error_var": true,
+                    "is_permitted": true,
+                    "assertions": [
+                        "require.NoError(t, err)",
+                        "assert.NotNil(t, resp, $$)"
+                    ]
+                }
+            ]
+        },
+        {
+            "method": "ValidateSchemaKeyspace",
+            "rules": [
+                {
+                    "resource": "Keyspace",
+                    "actions": ["put"],
+                    "subjects": ["user:allowed"],
+                    "clusters": ["*"]
+                }
+            ],
+            "request": "&vtadminpb.ValidateSchemaKeyspaceRequest{\nClusterId: \"test\",\nKeyspace: \"test\",\n}",
+            "cases": [
+                {
+                    "name": "unauthorized actor",
+                    "actor": {"name": "other"},
+                    "include_error_var": true,
+                    "assertions": [
+                        "require.NoError(t, err)",
+                        "assert.Nil(t, resp, $$)"
+                    ]
+                },
+                {
+                    "name": "authorized actor",
+                    "actor": {"name": "allowed"},
+                    "include_error_var": true,
+                    "is_permitted": true,
+                    "assertions": [
+                        "require.NoError(t, err)",
+                        "assert.NotNil(t, resp, $$)"
+                    ]
+                }
+            ]
+        },
+        {
+            "method": "ValidateVersionKeyspace",
+            "rules": [
+                {
+                    "resource": "Keyspace",
+                    "actions": ["put"],
+                    "subjects": ["user:allowed"],
+                    "clusters": ["*"]
+                }
+            ],
+            "request": "&vtadminpb.ValidateVersionKeyspaceRequest{\nClusterId: \"test\",\nKeyspace: \"test\",\n}",
+            "cases": [
+                {
+                    "name": "unauthorized actor",
+                    "actor": {"name": "other"},
+                    "include_error_var": true,
+                    "assertions": [
+                        "require.NoError(t, err)",
                         "assert.Nil(t, resp, $$)"
                     ]
                 },
