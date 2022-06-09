@@ -293,14 +293,17 @@ func (s *Schema) ViewNames() []string {
 // like the other. It returns a list of diffs.
 func (s *Schema) Diff(other *Schema, hints *DiffHints) (diffs []EntityDiff, err error) {
 	// dropped entities
+	var dropDiffs []EntityDiff
 	for _, e := range s.Entities() {
 		if _, ok := other.named[e.Name()]; !ok {
 			// other schema does not have the entity
-			diffs = append(diffs, e.Drop())
+			dropDiffs = append(dropDiffs, e.Drop())
 		}
 	}
 	// We iterate by order of "other" schema because we need to construct queries that will be valid
 	// for that schema (we need to maintain view dependencies according to target, not according to source)
+	var alterDiffs []EntityDiff
+	var createDiffs []EntityDiff
 	for _, e := range other.Entities() {
 		if fromEntity, ok := s.named[e.Name()]; ok {
 			// entities exist by same name in both schemas. Let's diff them.
@@ -313,8 +316,8 @@ func (s *Schema) Diff(other *Schema, hints *DiffHints) (diffs []EntityDiff, err 
 				// hence the error.
 				// But in our schema context, we know better. We know we should DROP the one, CREATE the other.
 				// We proceed to do that, and implicitly ignore the error
-				diffs = append(diffs, fromEntity.Drop())
-				diffs = append(diffs, e.Create())
+				dropDiffs = append(dropDiffs, fromEntity.Drop())
+				createDiffs = append(createDiffs, e.Create())
 				// And we're good. We can move on to comparing next entity.
 			case err != nil:
 				// Any other kind of error
@@ -322,16 +325,93 @@ func (s *Schema) Diff(other *Schema, hints *DiffHints) (diffs []EntityDiff, err 
 			default:
 				// No error, let's check the diff:
 				if diff != nil && !diff.IsEmpty() {
-					diffs = append(diffs, diff)
+					alterDiffs = append(alterDiffs, diff)
 				}
 			}
 		} else { // !ok
 			// Added entity
 			// this schema does not have the entity
-			diffs = append(diffs, e.Create())
+			createDiffs = append(createDiffs, e.Create())
 		}
 	}
+	dropDiffs, createDiffs, renameDiffs := s.heuristicallyDetectTableRenames(dropDiffs, createDiffs, hints)
+	diffs = append(diffs, dropDiffs...)
+	diffs = append(diffs, alterDiffs...)
+	diffs = append(diffs, createDiffs...)
+	diffs = append(diffs, renameDiffs...)
+
 	return diffs, err
+}
+
+func (s *Schema) heuristicallyDetectTableRenames(
+	dropDiffs []EntityDiff,
+	createDiffs []EntityDiff,
+	hints *DiffHints,
+) (
+	updatedDropDiffs []EntityDiff,
+	updatedCreateDiffs []EntityDiff,
+	renameDiffs []EntityDiff,
+) {
+	renameDiffs = []EntityDiff{}
+
+	findRenamedTable := func() bool {
+		// What we're doing next is to try and identify a table RENAME.
+		// We do so by cross referencing dropped and created tables.
+		// The check is heuristic, and looks like this:
+		// We consider a table renamed iff:
+		// - the DROP and CREATE table definitions are identical other than the table name
+		// In the case where multiple dropped tables have identical schema, and likewise multiple created tables
+		// have identical schemas, schemadiff makes an arbitrary match.
+		// Once we heuristically decide that we found a RENAME, we cancel the DROP,
+		// cancel the CREATE, and inject a RENAME in place of both.
+
+		// findRenamedTable cross references dropped and created tables to find a single renamed table. If such is found:
+		// we remove the entry from DROPped tables, remove the entry from CREATEd tables, add an entry for RENAMEd tables,
+		// and return 'true'.
+		// Successive calls to this function will then find the next heuristic RENAMEs.
+		// the function returns 'false' if it is unable to heuristically find a RENAME.
+		for iDrop, drop1 := range dropDiffs {
+			for iCreate, create2 := range createDiffs {
+				dropTableDiff, ok := drop1.(*DropTableEntityDiff)
+				if !ok {
+					continue
+				}
+				createTableDiff, ok := create2.(*CreateTableEntityDiff)
+				if !ok {
+					continue
+				}
+				if !dropTableDiff.from.identicalOtherThanName(createTableDiff.to) {
+					continue
+				}
+				// Yes, it looks like those tables have the exact same spec, just with different names.
+				dropDiffs = append(dropDiffs[0:iDrop], dropDiffs[iDrop+1:]...)
+				createDiffs = append(createDiffs[0:iCreate], createDiffs[iCreate+1:]...)
+				renameTable := &sqlparser.RenameTable{
+					TablePairs: []*sqlparser.RenameTablePair{
+						{FromTable: dropTableDiff.from.Table, ToTable: createTableDiff.to.Table},
+					},
+				}
+				renameTableEntityDiff := &RenameTableEntityDiff{
+					from:        dropTableDiff.from,
+					to:          createTableDiff.to,
+					renameTable: renameTable,
+				}
+				renameDiffs = append(renameDiffs, renameTableEntityDiff)
+				return true
+			}
+		}
+		return false
+	}
+	switch hints.TableRenameStrategy {
+	case TableRenameAssumeDifferent:
+		// do nothing
+	case TableRenameHeuristicStatement:
+		for findRenamedTable() {
+			// Iteratively detect all RENAMEs
+		}
+	}
+
+	return dropDiffs, createDiffs, renameDiffs
 }
 
 // Entity returns an entity by name, or nil if nonexistent
@@ -475,6 +555,21 @@ func (s *Schema) apply(diffs []EntityDiff) error {
 			}
 			if !found {
 				return &ApplyViewNotFoundError{View: diff.from.ViewName.Name.String()}
+			}
+		case *RenameTableEntityDiff:
+			// We expect the table to exist
+			found := false
+			for i, t := range s.tables {
+				if name := t.Table.Name.String(); name == diff.from.Table.Name.String() {
+					s.tables[i] = diff.to
+					delete(s.named, name)
+					s.named[diff.to.Table.Name.String()] = diff.to
+					found = true
+					break
+				}
+			}
+			if !found {
+				return &ApplyTableNotFoundError{Table: diff.from.Table.Name.String()}
 			}
 		default:
 			return &UnsupportedApplyOperationError{Statement: diff.CanonicalStatementString()}
