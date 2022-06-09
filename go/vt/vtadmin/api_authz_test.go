@@ -2912,7 +2912,10 @@ func testClusters(t testing.TB) []*cluster.Cluster {
 							Cell: "zone1",
 							Uid:  100,
 						},
+						Keyspace: "test",
+						Type:     topodatapb.TabletType_REPLICA,
 					},
+					State: vtadminpb.Tablet_SERVING,
 				},
 			},
 			Config: &cluster.Config{
@@ -3035,7 +3038,10 @@ func testClusters(t testing.TB) []*cluster.Cluster {
 							Cell: "other1",
 							Uid:  100,
 						},
+						Keyspace: "",
+						Type:     topodatapb.TabletType_UNKNOWN,
 					},
+					State: vtadminpb.Tablet_UNKNOWN,
 				},
 			},
 			Config: &cluster.Config{

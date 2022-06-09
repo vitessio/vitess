@@ -143,7 +143,10 @@ func testClusters(t testing.TB) []*cluster.Cluster {
 							Cell: "{{ .Tablet.Alias.Cell }}",
 							Uid: {{ .Tablet.Alias.Uid }},
 						},
+						Keyspace: "{{ .Tablet.Keyspace }}",
+						Type: topodatapb.TabletType_{{ .Tablet.Type }},
 					},
+					State: vtadminpb.Tablet_{{ .State }},
 				},
 				{{- end }}
 			},

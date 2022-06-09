@@ -134,8 +134,11 @@
             "db_tablet_list": [
                 {
                     "tablet": {
-                        "alias": {"cell": "zone1", "uid": 100}
-                    }
+                        "alias": {"cell": "zone1", "uid": 100},
+                        "type": 2,
+                        "keyspace": "test"
+                    },
+                    "state": 1
                 }
             ]
         },
