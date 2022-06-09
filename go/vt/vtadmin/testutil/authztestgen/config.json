@@ -414,6 +414,56 @@
             ]
         },
         {
+            "method": "FindSchema",
+            "rules": [
+                {
+                    "resource": "Schema",
+                    "actions": ["get"],
+                    "subjects": ["user:allowed-all"],
+                    "clusters": ["*"]
+                },
+                {
+                    "resource": "Schema",
+                    "actions": ["get"],
+                    "subjects": ["user:allowed-other"],
+                    "clusters": ["other"]
+                }
+            ],
+            "request": "&vtadminpb.FindSchemaRequest{\nTable: \"t1\",\n}",
+            "cases": [
+                {
+                    "name": "unauthorized actor",
+                    "actor": {"name": "unauthorized"},
+                    "is_permitted": false,
+                    "include_error_var": true,
+                    "assertions": [
+                        "assert.Error(t, err)",
+                        "assert.Nil(t, resp, $$)"
+                    ]
+                },
+                {
+                    "name": "partial access",
+                    "actor": {"name": "allowed-other"},
+                    "is_permitted": true,
+                    "assertions": [
+                        "assert.NotEmpty(t, resp, $$)"
+                    ]
+                },
+                {
+                    "name": "full access",
+                    "comment": "because t1 exists in two clusters, and 'allowed-all' has access to both, FindSchema is ambiguous",
+                    "actor": {"name": "allowed-all"},
+                    "is_permitted": true,
+                    "include_error_var": true,
+                    "assertions": [
+                        "assert.Error(t, err)",
+                        "assert.Contains(t, err.Error(), \"multiple schemas found\")",
+                        "assert.Nil(t, resp)"
+                    ]         
+                }
+            ]
+        },
+        {
             "method": "GetBackups",
             "rules": [
                 {
