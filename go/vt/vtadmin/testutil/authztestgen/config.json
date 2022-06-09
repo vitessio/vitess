@@ -23,7 +23,7 @@
                 {
                     "field": "FindAllShardsInKeyspaceResults",
                     "type": "map[string]struct{\nResponse *vtctldatapb.FindAllShardsInKeyspaceResponse\nError error}",
-                    "value": "\"test\": {\nResponse: &vtctldatapb.FindAllShardsInKeyspaceResponse{\nShards: map[string]*vtctldatapb.Shard{\n\"-\": {\nKeyspace: \"test\",\nName: \"-\",\nShard: &topodatapb.Shard{},\n},\n},\n},\n},"
+                    "value": "\"test\": {\nResponse: &vtctldatapb.FindAllShardsInKeyspaceResponse{\nShards: map[string]*vtctldatapb.Shard{\n\"-\": {\nKeyspace: \"test\",\nName: \"-\",\nShard: &topodatapb.Shard{\nKeyRange: &topodatapb.KeyRange{},\n},\n},\n},\n},\n},"
                 },
                 {
                     "field": "GetBackupsResults",
@@ -51,9 +51,15 @@
                     "value": "Keyspaces: []*vtctldatapb.Keyspace{\n{\nName: \"test\",\nKeyspace: &topodatapb.Keyspace{},\n},\n},"
                 },
                 {
+                    "field": "GetSchemaResults",
+                    "type": "map[string]struct{\nResponse *vtctldatapb.GetSchemaResponse\nError error}",
+                    "value": "\"zone1-0000000100\": {\nResponse: &vtctldatapb.GetSchemaResponse{\nSchema: &tabletmanagerdatapb.SchemaDefinition{\nTableDefinitions: []*tabletmanagerdatapb.TableDefinition{\n{Name: \"t1\", Schema: \"create table t1 (id int(11) not null primary key);\",},\n{Name: \"t2\"},\n},\n},\n},\n},"
+                },
+                {
                     "field": "GetSrvVSchemaResults",
                     "type": "map[string]struct{\nResponse *vtctldatapb.GetSrvVSchemaResponse\nError error}",
-                    "value": "\"zone1\": {\nResponse: &vtctldatapb.GetSrvVSchemaResponse{\nSrvVSchema: &vschemapb.SrvVSchema{},\n},\n},"
+                    "value": "\"zone1\": {\nResponse: &vtctldatapb.GetSrvVSchemaResponse{\nSrvVSchema: &vschemapb.SrvVSchema{\nKeyspaces: map[string]*vschemapb.Keyspace{\n\"test\": {\nSharded: true,\nVindexes: map[string]*vschemapb.Vindex{\n\"id\": {\nType: \"hash\",\n},\n},\nTables: map[string]*vschemapb.Table{\n\"t1\": {\nColumnVindexes: []*vschemapb.ColumnVindex{\n{\nName: \"id\",\nColumn: \"id\",\n},\n},\n},\n},\n},\n},\n},\n},\n},",
+                    "comment": "this structure exists primarily to support the VTExplain test cases; for GetSrvVSchema(s) itself, an empty but non-nil map is sufficient"
                 },
                 {
                     "field": "GetVSchemaResults",
@@ -79,6 +85,11 @@
                     "field": "RefreshStateResults",
                     "type": "map[string]error",
                     "value": "\"zone1-0000000100\": nil,"
+                },
+                {
+                    "field": "ReloadSchemaKeyspaceResults",
+                    "type": "map[string]struct{\nResponse *vtctldatapb.ReloadSchemaKeyspaceResponse\nError error\n}",
+                    "value": "\"test\": {\nResponse: &vtctldatapb.ReloadSchemaKeyspaceResponse{\nEvents: []*logutilpb.Event{{}, {}, {}}},\n},"
                 },
                 {
                     "field": "ReparentTabletResults",
@@ -134,8 +145,11 @@
             "db_tablet_list": [
                 {
                     "tablet": {
-                        "alias": {"cell": "zone1", "uid": 100}
-                    }
+                        "alias": {"cell": "zone1", "uid": 100},
+                        "type": 2,
+                        "keyspace": "test"
+                    },
+                    "state": 1
                 }
             ]
         },
@@ -169,6 +183,11 @@
                     "value": "Keyspaces: []*vtctldatapb.Keyspace{\n{\nName: \"otherks\",\nKeyspace: &topodatapb.Keyspace{},\n},\n},"
                 },
                 {
+                    "field": "GetSchemaResults",
+                    "type": "map[string]struct{\nResponse *vtctldatapb.GetSchemaResponse\nError error}",
+                    "value": "\"other1-0000000100\": {\nResponse: &vtctldatapb.GetSchemaResponse{\nSchema: &tabletmanagerdatapb.SchemaDefinition{\nTableDefinitions: []*tabletmanagerdatapb.TableDefinition{\n{Name: \"t1\"},\n},\n},\n},\n},"
+                },
+                {
                     "field": "GetSrvVSchemaResults",
                     "type": "map[string]struct{\nResponse *vtctldatapb.GetSrvVSchemaResponse\nError error}",
                     "value": "\"other1\": {\nResponse: &vtctldatapb.GetSrvVSchemaResponse{\nSrvVSchema: &vschemapb.SrvVSchema{},\n},\n},"
@@ -187,13 +206,20 @@
                     "field": "ShardReplicationPositionsResults",
                     "type": "map[string]struct{\nResponse *vtctldatapb.ShardReplicationPositionsResponse\nError error}",
                     "value": "\"otherks/-\": {\nResponse: &vtctldatapb.ShardReplicationPositionsResponse{},\n},"
+                },
+                {
+                    "field": "ReloadSchemaKeyspaceResults",
+                    "type": "map[string]struct{\nResponse *vtctldatapb.ReloadSchemaKeyspaceResponse\nError error\n}",
+                    "value": "\"otherks\": {\nResponse: &vtctldatapb.ReloadSchemaKeyspaceResponse{\nEvents: []*logutilpb.Event{{}}},\n},"
                 }
             ],
             "db_tablet_list": [
                 {
                     "tablet": {
-                        "alias": {"cell": "other1", "uid": 100}
-                    }
+                        "alias": {"cell": "other1", "uid": 100},
+                        "keyspace": "otherks"
+                    },
+                    "state": 1
                 }
             ]
         }
@@ -394,6 +420,56 @@
                         "require.NoError(t, err)",
                         "assert.NotNil(t, resp, $$)"
                     ]
+                }
+            ]
+        },
+        {
+            "method": "FindSchema",
+            "rules": [
+                {
+                    "resource": "Schema",
+                    "actions": ["get"],
+                    "subjects": ["user:allowed-all"],
+                    "clusters": ["*"]
+                },
+                {
+                    "resource": "Schema",
+                    "actions": ["get"],
+                    "subjects": ["user:allowed-other"],
+                    "clusters": ["other"]
+                }
+            ],
+            "request": "&vtadminpb.FindSchemaRequest{\nTable: \"t1\",\n}",
+            "cases": [
+                {
+                    "name": "unauthorized actor",
+                    "actor": {"name": "unauthorized"},
+                    "is_permitted": false,
+                    "include_error_var": true,
+                    "assertions": [
+                        "assert.Error(t, err)",
+                        "assert.Nil(t, resp, $$)"
+                    ]
+                },
+                {
+                    "name": "partial access",
+                    "actor": {"name": "allowed-other"},
+                    "is_permitted": true,
+                    "assertions": [
+                        "assert.NotEmpty(t, resp, $$)"
+                    ]
+                },
+                {
+                    "name": "full access",
+                    "comment": "because t1 exists in two clusters, and 'allowed-all' has access to both, FindSchema is ambiguous",
+                    "actor": {"name": "allowed-all"},
+                    "is_permitted": true,
+                    "include_error_var": true,
+                    "assertions": [
+                        "assert.Error(t, err)",
+                        "assert.Contains(t, err.Error(), \"multiple schemas found\")",
+                        "assert.Nil(t, resp)"
+                    ]         
                 }
             ]
         },
@@ -717,6 +793,97 @@
                         "ksMap[ks.Cluster.Id] = append(ksMap[ks.Cluster.Id], ks.Keyspace.Name)",
                         "}",
                         "assert.Equal(t, ksMap, map[string][]string{\"test\": {\"test\"}, \"other\": {\"otherks\"}}, $$)"
+                    ]
+                }
+            ]
+        },
+        {
+            "method": "GetSchema",
+            "rules": [
+                {
+                    "resource": "Schema",
+                    "actions": ["get"],
+                    "subjects": ["user:allowed"],
+                    "clusters": ["*"]
+                }
+            ],
+            "request": "&vtadminpb.GetSchemaRequest{\nClusterId: \"test\",\nKeyspace: \"test\",\nTable: \"t1\",\n}",
+            "cases": [
+                {
+                    "name": "unauthorized actor",
+                    "actor": {"name": "other"},
+                    "include_error_var": true,
+                    "assertions": [
+                        "require.NoError(t, err)",
+                        "assert.Nil(t, resp, $$)"
+                    ]
+                },
+                {
+                    "name": "authorized actor",
+                    "actor": {"name": "allowed"},
+                    "include_error_var": true,
+                    "is_permitted": true,
+                    "assertions": [
+                        "require.NoError(t, err)",
+                        "assert.NotNil(t, resp, $$)"
+                    ]
+                }
+            ]
+        },
+        {
+            "method": "GetSchemas",
+            "rules": [
+                {
+                    "resource": "Schema",
+                    "actions": ["get"],
+                    "subjects": ["user:allowed-all"],
+                    "clusters": ["*"]
+                },
+                {
+                    "resource": "Schema",
+                    "actions": ["get"],
+                    "subjects": ["user:allowed-other"],
+                    "clusters": ["other"]
+                }
+            ],
+            "request": "&vtadminpb.GetSchemasRequest{}",
+            "cases": [
+                {
+                    "name": "unauthorized actor",
+                    "actor": {"name": "unauthorized"},
+                    "is_permitted": false,
+                    "include_error_var": true,
+                    "assertions": [
+                        "assert.NoError(t, err)",
+                        "assert.Empty(t, resp.Schemas, $$)"
+                    ]
+                },
+                {
+                    "name": "partial access",
+                    "actor": {"name": "allowed-other"},
+                    "is_permitted": true,
+                    "assertions": [
+                        "assert.NotEmpty(t, resp.Schemas, $$)",
+                        "schemaMap := map[string][]string{}",
+                        "for _, schema := range resp.Schemas {",
+                        "if _, ok := schemaMap[schema.Cluster.Id]; !ok {\n schemaMap[schema.Cluster.Id] = []string{}\n}",
+                        "schemaMap[schema.Cluster.Id] = append(schemaMap[schema.Cluster.Id], schema.Keyspace)",
+                        "}",
+                        "assert.Equal(t, schemaMap, map[string][]string{\"other\": {\"otherks\"}}, $$)"
+                    ]
+                },
+                {
+                    "name": "full access",
+                    "actor": {"name": "allowed-all"},
+                    "is_permitted": true,
+                    "assertions": [
+                        "assert.NotEmpty(t, resp.Schemas, $$)",
+                        "schemaMap := map[string][]string{}",
+                        "for _, schema := range resp.Schemas {",
+                        "if _, ok := schemaMap[schema.Cluster.Id]; !ok {\n schemaMap[schema.Cluster.Id] = []string{}\n}",
+                        "schemaMap[schema.Cluster.Id] = append(schemaMap[schema.Cluster.Id], schema.Keyspace)",
+                        "}",
+                        "assert.Equal(t, schemaMap, map[string][]string{\"test\": {\"test\"}, \"other\": {\"otherks\"}}, $$)"
                     ]
                 }
             ]
@@ -1313,6 +1480,51 @@
             ]
         },
         {
+            "method": "ReloadSchemas",
+            "rules": [
+                {
+                    "resource": "Schema",
+                    "actions": ["reload"],
+                    "subjects": ["user:allowed-all"],
+                    "clusters": ["*"]
+                },
+                {
+                    "resource": "Schema",
+                    "actions": ["reload"],
+                    "subjects": ["user:allowed-other"],
+                    "clusters": ["other"]
+                }
+            ],
+            "request": "&vtadminpb.ReloadSchemasRequest{\nKeyspaces: []string{\n\"test\",\n\"otherks\",\n},\n}",
+            "cases": [
+                {
+                    "name": "unauthorized actor",
+                    "actor": {"name": "unauthorized"},
+                    "include_error_var": true,
+                    "assertions": [
+                        "require.NoError(t, err)",
+                        "assert.Empty(t, resp.KeyspaceResults, $$)"
+                    ]
+                },
+                {
+                    "name": "partial access",
+                    "actor": {"name": "allowed-other"},
+                    "is_permitted": true,
+                    "assertions": [
+                        "assert.NotEmpty(t, resp.KeyspaceResults, $$)"
+                    ]
+                },
+                {
+                    "name": "full access",
+                    "actor": {"name": "allowed-all"},
+                    "is_permitted": true,
+                    "assertions": [
+                        "assert.NotEmpty(t, resp.KeyspaceResults, $$)"
+                    ]
+                }
+            ]
+        },
+        {
             "method": "RunHealthCheck",
             "rules": [
                 {
@@ -1495,6 +1707,39 @@
                     "include_error_var": true,
                     "assertions": [
                         "assert.Error(t, err, $$)",
+                        "assert.Nil(t, resp, $$)"
+                    ]
+                },
+                {
+                    "name": "authorized actor",
+                    "actor": {"name": "allowed"},
+                    "include_error_var": true,
+                    "is_permitted": true,
+                    "assertions": [
+                        "require.NoError(t, err)",
+                        "assert.NotNil(t, resp, $$)"
+                    ]
+                }
+            ]
+        },
+        {
+            "method": "VTExplain",
+            "rules": [
+                {
+                    "resource": "VTExplain",
+                    "actions": ["get"],
+                    "subjects": ["user:allowed"],
+                    "clusters": ["*"]
+                }
+            ],
+            "request": "&vtadminpb.VTExplainRequest{\nCluster: \"test\",\nKeyspace: \"test\",\nSql: \"select id from t1;\",}",
+            "cases": [
+                {
+                    "name": "unauthorized actor",
+                    "actor": {"name": "other"},
+                    "include_error_var": true,
+                    "assertions": [
+                        "require.NoError(t, err)",
                         "assert.Nil(t, resp, $$)"
                     ]
                 },
