@@ -2806,14 +2806,6 @@ func testClusters(t testing.TB) []*cluster.Cluster {
 						},
 					},
 				},
-				ShardReplicationPositionsResults: map[string]struct {
-					Response *vtctldatapb.ShardReplicationPositionsResponse
-					Error    error
-				}{
-					"test/-": {
-						Response: &vtctldatapb.ShardReplicationPositionsResponse{},
-					},
-				},
 				GetVSchemaResults: map[string]struct {
 					Response *vtctldatapb.GetVSchemaResponse
 					Error    error
@@ -2864,6 +2856,14 @@ func testClusters(t testing.TB) []*cluster.Cluster {
 				},
 				SetWritableResults: map[string]error{
 					"zone1-0000000100": nil,
+				},
+				ShardReplicationPositionsResults: map[string]struct {
+					Response *vtctldatapb.ShardReplicationPositionsResponse
+					Error    error
+				}{
+					"test/-": {
+						Response: &vtctldatapb.ShardReplicationPositionsResponse{},
+					},
 				},
 				StartReplicationResults: map[string]error{
 					"zone1-0000000100": nil,
@@ -2995,14 +2995,6 @@ func testClusters(t testing.TB) []*cluster.Cluster {
 						},
 					},
 				},
-				ShardReplicationPositionsResults: map[string]struct {
-					Response *vtctldatapb.ShardReplicationPositionsResponse
-					Error    error
-				}{
-					"otherks/-": {
-						Response: &vtctldatapb.ShardReplicationPositionsResponse{},
-					},
-				},
 				GetVSchemaResults: map[string]struct {
 					Response *vtctldatapb.GetVSchemaResponse
 					Error    error
@@ -3025,6 +3017,14 @@ func testClusters(t testing.TB) []*cluster.Cluster {
 								},
 							},
 						}},
+				},
+				ShardReplicationPositionsResults: map[string]struct {
+					Response *vtctldatapb.ShardReplicationPositionsResponse
+					Error    error
+				}{
+					"otherks/-": {
+						Response: &vtctldatapb.ShardReplicationPositionsResponse{},
+					},
 				},
 			},
 			Tablets: []*vtadminpb.Tablet{

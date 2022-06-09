@@ -56,11 +56,6 @@
                     "value": "\"zone1\": {\nResponse: &vtctldatapb.GetSrvVSchemaResponse{\nSrvVSchema: &vschemapb.SrvVSchema{},\n},\n},"
                 },
                 {
-                    "field": "ShardReplicationPositionsResults",
-                    "type": "map[string]struct{\nResponse *vtctldatapb.ShardReplicationPositionsResponse\nError error}",
-                    "value": "\"test/-\": {\nResponse: &vtctldatapb.ShardReplicationPositionsResponse{},\n},"
-                },
-                {
                     "field": "GetVSchemaResults",
                     "type": "map[string]struct{\nResponse *vtctldatapb.GetVSchemaResponse\nError error}",
                     "value": "\"test\": {\nResponse: &vtctldatapb.GetVSchemaResponse{\nVSchema: &vschemapb.Keyspace{},\n},\n},"
@@ -99,6 +94,11 @@
                     "field": "SetWritableResults",
                     "type": "map[string]error",
                     "value": "\"zone1-0000000100\": nil,"
+                },
+                {
+                    "field": "ShardReplicationPositionsResults",
+                    "type": "map[string]struct{\nResponse *vtctldatapb.ShardReplicationPositionsResponse\nError error}",
+                    "value": "\"test/-\": {\nResponse: &vtctldatapb.ShardReplicationPositionsResponse{},\n},"
                 },
                 {
                     "field": "StartReplicationResults",
@@ -174,11 +174,6 @@
                     "value": "\"other1\": {\nResponse: &vtctldatapb.GetSrvVSchemaResponse{\nSrvVSchema: &vschemapb.SrvVSchema{},\n},\n},"
                 },
                 {
-                    "field": "ShardReplicationPositionsResults",
-                    "type": "map[string]struct{\nResponse *vtctldatapb.ShardReplicationPositionsResponse\nError error}",
-                    "value": "\"otherks/-\": {\nResponse: &vtctldatapb.ShardReplicationPositionsResponse{},\n},"
-                },
-                {
                     "field": "GetVSchemaResults",
                     "type": "map[string]struct{\nResponse *vtctldatapb.GetVSchemaResponse\nError error}",
                     "value": "\"otherks\": {\nResponse: &vtctldatapb.GetVSchemaResponse{\nVSchema: &vschemapb.Keyspace{},\n},\n},"
@@ -187,6 +182,11 @@
                     "field": "GetWorkflowsResults",
                     "type": "map[string]struct{\nResponse *vtctldatapb.GetWorkflowsResponse\nError error}",
                     "value": "\"otherks\": {\nResponse: &vtctldatapb.GetWorkflowsResponse{\nWorkflows: []*vtctldatapb.Workflow{\n{\nName: \"otherks_workflow\",\n},\n},\n}},"
+                },
+                {
+                    "field": "ShardReplicationPositionsResults",
+                    "type": "map[string]struct{\nResponse *vtctldatapb.ShardReplicationPositionsResponse\nError error}",
+                    "value": "\"otherks/-\": {\nResponse: &vtctldatapb.ShardReplicationPositionsResponse{},\n},"
                 }
             ],
             "db_tablet_list": [
