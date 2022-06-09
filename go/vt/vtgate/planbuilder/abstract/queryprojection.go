@@ -303,7 +303,8 @@ func (qp *QueryProjection) GetGrouping() []GroupBy {
 func checkForInvalidAggregations(exp *sqlparser.AliasedExpr) error {
 	return sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		if aggrFunc, isAggregate := node.(sqlparser.AggrFunc); isAggregate {
-			if len(aggrFunc.GetArgs()) != 1 {
+			if aggrFunc.GetArgs() != nil &&
+				len(aggrFunc.GetArgs()) != 1 {
 				return false, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.SyntaxError, "aggregate functions take a single argument '%s'", sqlparser.String(node))
 			}
 			return true, nil
