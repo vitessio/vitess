@@ -124,6 +124,11 @@
                     "field": "ValidateSchemaKeyspaceResults",
                     "type": "map[string]struct{\nResponse *vtctldatapb.ValidateSchemaKeyspaceResponse\nError error\n}",
                     "value": "\"test\": {\nResponse: &vtctldatapb.ValidateSchemaKeyspaceResponse{},\n},"
+                },
+                {
+                    "field": "ValidateVersionKeyspaceResults",
+                    "type": "map[string]struct{\nResponse *vtctldatapb.ValidateVersionKeyspaceResponse\nError error\n}",
+                    "value": "\"test\": {\nResponse: &vtctldatapb.ValidateVersionKeyspaceResponse{},\n},"
                 }
             ],
             "db_tablet_list": [
@@ -1549,6 +1554,39 @@
                 }
             ],
             "request": "&vtadminpb.ValidateSchemaKeyspaceRequest{\nClusterId: \"test\",\nKeyspace: \"test\",\n}",
+            "cases": [
+                {
+                    "name": "unauthorized actor",
+                    "actor": {"name": "other"},
+                    "include_error_var": true,
+                    "assertions": [
+                        "require.NoError(t, err)",
+                        "assert.Nil(t, resp, $$)"
+                    ]
+                },
+                {
+                    "name": "authorized actor",
+                    "actor": {"name": "allowed"},
+                    "include_error_var": true,
+                    "is_permitted": true,
+                    "assertions": [
+                        "require.NoError(t, err)",
+                        "assert.NotNil(t, resp, $$)"
+                    ]
+                }
+            ]
+        },
+        {
+            "method": "ValidateVersionKeyspace",
+            "rules": [
+                {
+                    "resource": "Keyspace",
+                    "actions": ["put"],
+                    "subjects": ["user:allowed"],
+                    "clusters": ["*"]
+                }
+            ],
+            "request": "&vtadminpb.ValidateVersionKeyspaceRequest{\nClusterId: \"test\",\nKeyspace: \"test\",\n}",
             "cases": [
                 {
                     "name": "unauthorized actor",
