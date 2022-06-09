@@ -267,8 +267,7 @@ func (oa *orderedAggregate) pushAggr(pb *primitiveBuilder, expr *sqlparser.Alias
 	aggrFunc, _ := expr.Expr.(sqlparser.AggrFunc)
 	opcode := engine.SupportedAggregates[strings.ToLower(aggrFunc.AggrName())]
 
-	if aggrFunc.GetArgs() != nil &&
-		len(aggrFunc.GetArgs()) != 1 {
+	if len(aggrFunc.GetArgs()) != 1 {
 		return nil, 0, fmt.Errorf("unsupported: only one expression allowed inside aggregates: %s", sqlparser.String(expr))
 	}
 

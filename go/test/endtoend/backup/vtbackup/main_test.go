@@ -121,7 +121,6 @@ func TestMain(m *testing.M) {
 			if err != nil {
 				return 1, err
 			}
-			// ignore golint warning, we need the else block to use proc
 			mysqlProcs = append(mysqlProcs, proc)
 		}
 		for _, proc := range mysqlProcs {

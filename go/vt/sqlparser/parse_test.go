@@ -3371,6 +3371,9 @@ func TestInvalid(t *testing.T) {
 	}, {
 		input: "SELECT VARIANCE(DISTINCT a) FROM products",
 		err:   "syntax error at position 25 near 'DISTINCT'",
+	}, {
+		input: "SELECT COUNT(DISTINCT *) FROM user",
+		err:   "syntax error at position 24 near 'DISTINCT'",
 	},
 	}
 
