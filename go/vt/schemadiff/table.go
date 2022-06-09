@@ -1185,20 +1185,31 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 	hints *DiffHints,
 	tableCharsetChanged bool,
 ) {
+	getColumnsMap := func(cols []*sqlparser.ColumnDefinition) map[string]*columnDetails {
+		var prevCol *columnDetails
+		m := map[string]*columnDetails{}
+		for _, col := range cols {
+			colDetails := &columnDetails{
+				col:     col,
+				prevCol: prevCol,
+			}
+			if prevCol != nil {
+				prevCol.nextCol = colDetails
+			}
+			prevCol = colDetails
+			m[col.Name.Lowered()] = colDetails
+		}
+		return m
+	}
 	// map columns by names for easy access
-	t1ColumnsMap := map[string]*sqlparser.ColumnDefinition{}
-	t2ColumnsMap := map[string]*sqlparser.ColumnDefinition{}
-	for _, col := range t1Columns {
-		t1ColumnsMap[col.Name.Lowered()] = col
-	}
-	for _, col := range t2Columns {
-		t2ColumnsMap[col.Name.Lowered()] = col
-	}
+	t1ColumnsMap := getColumnsMap(t1Columns)
+	t2ColumnsMap := getColumnsMap(t2Columns)
 
 	// For purpose of column reordering detection, we maintain a list of
 	// shared columns, by order of appearance in t1
 	t1SharedColumns := []*sqlparser.ColumnDefinition{}
 
+	dropColumns := []*sqlparser.DropColumn{}
 	// evaluate dropped columns
 	//
 	for _, t1Col := range t1Columns {
@@ -1209,7 +1220,7 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 			dropColumn := &sqlparser.DropColumn{
 				Name: getColName(&t1Col.Name),
 			}
-			alterTable.AlterOptions = append(alterTable.AlterOptions, dropColumn)
+			dropColumns = append(dropColumns, dropColumn)
 		}
 	}
 
@@ -1225,12 +1236,13 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 
 	// evaluate modified columns
 	//
+	modifyColumns := []*sqlparser.ModifyColumn{}
 	columnReordering := evaluateColumnReordering(t1SharedColumns, t2SharedColumns)
 	for _, t2Col := range t2SharedColumns {
 		t2ColName := t2Col.Name.Lowered()
 		// we know that column exists in both tables
 		t1Col := t1ColumnsMap[t2ColName]
-		t1ColEntity := NewColumnDefinitionEntity(t1Col)
+		t1ColEntity := NewColumnDefinitionEntity(t1Col.col)
 		t2ColEntity := NewColumnDefinitionEntity(t2Col)
 
 		// check diff between before/after columns:
@@ -1260,7 +1272,7 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 		}
 		if modifyColumnDiff != nil {
 			// column definition or ordering has changed
-			alterTable.AlterOptions = append(alterTable.AlterOptions, modifyColumnDiff.modifyColumn)
+			modifyColumns = append(modifyColumns, modifyColumnDiff.modifyColumn)
 		}
 	}
 	// Evaluate added columns
@@ -1268,6 +1280,7 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 	// Every added column is obviously a diff. But on top of that, we are also interested to know
 	// if the column is added somewhere in between existing columns rather than appended to the
 	// end of existing columns list.
+	addColumns := []*sqlparser.AddColumns{}
 	expectAppendIndex := len(t2SharedColumns)
 	for t2ColIndex, t2Col := range t2Columns {
 		if _, ok := t1ColumnsMap[t2Col.Name.Lowered()]; !ok {
@@ -1284,9 +1297,83 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 				}
 			}
 			expectAppendIndex++
-			alterTable.AlterOptions = append(alterTable.AlterOptions, addColumn)
+			addColumns = append(addColumns, addColumn)
 		}
 	}
+	dropColumns, addColumns, renameColumns := heuristicallyDetectColumnRenames(dropColumns, addColumns, t1ColumnsMap, t2ColumnsMap, hints)
+	for _, c := range dropColumns {
+		alterTable.AlterOptions = append(alterTable.AlterOptions, c)
+	}
+	for _, c := range modifyColumns {
+		alterTable.AlterOptions = append(alterTable.AlterOptions, c)
+	}
+	for _, c := range renameColumns {
+		alterTable.AlterOptions = append(alterTable.AlterOptions, c)
+	}
+	for _, c := range addColumns {
+		alterTable.AlterOptions = append(alterTable.AlterOptions, c)
+	}
+}
+
+func heuristicallyDetectColumnRenames(
+	dropColumns []*sqlparser.DropColumn,
+	addColumns []*sqlparser.AddColumns,
+	t1ColumnsMap map[string]*columnDetails,
+	t2ColumnsMap map[string]*columnDetails,
+	hints *DiffHints,
+) ([]*sqlparser.DropColumn, []*sqlparser.AddColumns, []*sqlparser.RenameColumn) {
+	renameColumns := []*sqlparser.RenameColumn{}
+	findRenamedColumn := func() bool {
+		// What we're doing next is to try and identify a column RENAME.
+		// We do so by cross referencing dropped and added columns.
+		// The check is heuristic, and looks like this:
+		// We consider a column renamed iff:
+		// - the DROP and ADD column definitions are identical other than the column name, and
+		// - the DROPped and ADDded column are both FIRST, or they come AFTER the same column, and
+		// - the DROPped and ADDded column are both last, or they come before the same column
+		// This v1 chcek therefore cannot handle a case where two successive columns are renamed.
+		// the problem is complex, and with successive renamed, or drops and adds, it can be
+		// impossible to tell apart different scenarios.
+		// At any case, once we heuristically decide that we found a RENAME, we cancel the DROP,
+		// cancel the ADD, and inject a RENAME in place of both.
+
+		// findRenamedColumn cross referenced dropped and added columns to find a single renamed column. If such is found:
+		// we remove the entry from DROPped columns, remove the entry from ADDed columns, add an entry for RENAMEd columns,
+		// and return 'true'.
+		// Successive calls to this function will then find the next heuristic RENAMEs.
+		// the function returns 'false' if it is unabl eto heuristically find a RENAME.
+		for iDrop, dropCol1 := range dropColumns {
+			for iAdd, addCol2 := range addColumns {
+				col1Details := t1ColumnsMap[dropCol1.Name.Name.Lowered()]
+				if !col1Details.identicalOtherThanName(addCol2.Columns[0]) {
+					continue
+				}
+				// columns look alike, other than their names, which we know are different.
+				// are these two columns otherwise appear to be in same position?
+				col2Details := t2ColumnsMap[addCol2.Columns[0].Name.Lowered()]
+				if col1Details.prevColName() == col2Details.prevColName() && col1Details.nextColName() == col2Details.nextColName() {
+					dropColumns = append(dropColumns[0:iDrop], dropColumns[iDrop+1:]...)
+					addColumns = append(addColumns[0:iAdd], addColumns[iAdd+1:]...)
+					renameColumn := &sqlparser.RenameColumn{
+						OldName: dropCol1.Name,
+						NewName: getColName(&addCol2.Columns[0].Name),
+					}
+					renameColumns = append(renameColumns, renameColumn)
+					return true
+				}
+			}
+		}
+		return false
+	}
+	switch hints.ColumnRenameStrategy {
+	case ColumnRenameAssumeDifferent:
+		// do nothing
+	case ColumnRenameHeuristicStatement:
+		for findRenamedColumn() {
+			// Iteratively detect all RENAMEs
+		}
+	}
+	return dropColumns, addColumns, renameColumns
 }
 
 // Create implements Entity interface
@@ -1549,6 +1636,20 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 			}
 			if !found {
 				return &ApplyColumnNotFoundError{Table: c.Name(), Column: opt.NewColDefinition.Name.String()}
+			}
+		case *sqlparser.RenameColumn:
+			// we expect the column to exist
+			found := false
+			for i, col := range c.TableSpec.Columns {
+				if strings.EqualFold(col.Name.String(), opt.OldName.Name.String()) {
+					found = true
+					// redefine. see if we need to position it anywhere other than end of table
+					c.TableSpec.Columns[i].Name = opt.NewName.Name
+					break
+				}
+			}
+			if !found {
+				return &ApplyColumnNotFoundError{Table: c.Name(), Column: opt.OldName.Name.String()}
 			}
 		case *sqlparser.AlterColumn:
 			// we expect the column to exist
