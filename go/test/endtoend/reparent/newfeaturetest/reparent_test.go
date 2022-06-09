@@ -134,6 +134,8 @@ func TestFullStatus(t *testing.T) {
 	// Check that full status gives the correct result for a primary tablet
 	status, err := utils.TmcFullStatus(context.Background(), tablets[0])
 	require.NoError(t, err)
+	assert.NotEmpty(t, status.ServerUuid)
+	assert.NotEmpty(t, status.ServerId)
 	// For a primary tablet there is no replication status
 	assert.Empty(t, status.ReplicationStatus.Position)
 	assert.Contains(t, status.PrimaryStatus.String(), "vt-0000000101-bin")
@@ -152,6 +154,8 @@ func TestFullStatus(t *testing.T) {
 	// Check that full status gives the correct result for a replica tablet
 	status, err = utils.TmcFullStatus(context.Background(), tablets[1])
 	require.NoError(t, err)
+	assert.NotEmpty(t, status.ServerUuid)
+	assert.NotEmpty(t, status.ServerId)
 	assert.Contains(t, status.ReplicationStatus.Position, "MySQL56/"+status.ReplicationStatus.SourceUuid)
 	assert.EqualValues(t, mysql.ReplicationStateRunning, status.ReplicationStatus.IoState)
 	assert.EqualValues(t, mysql.ReplicationStateRunning, status.ReplicationStatus.SqlState)

@@ -253,6 +253,16 @@ func (fmd *FakeMysqlDaemon) GetMysqlPort() (int32, error) {
 	return fmd.MysqlPort.Get(), nil
 }
 
+// GetServerID is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) GetServerID(ctx context.Context) (int32, error) {
+	return 1, nil
+}
+
+// GetServerUUID is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) GetServerUUID(ctx context.Context) (string, error) {
+	return "000000", nil
+}
+
 // CurrentPrimaryPositionLocked is thread-safe
 func (fmd *FakeMysqlDaemon) CurrentPrimaryPositionLocked(pos mysql.Position) {
 	fmd.mu.Lock()

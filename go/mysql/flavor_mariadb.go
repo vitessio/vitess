@@ -58,6 +58,11 @@ func (mariadbFlavor) purgedGTIDSet(c *Conn) (GTIDSet, error) {
 	return nil, nil
 }
 
+// serverUUID is part of the Flavor interface.
+func (mariadbFlavor) serverUUID(c *Conn) (string, error) {
+	return "", nil
+}
+
 func (mariadbFlavor) startReplicationUntilAfter(pos Position) string {
 	return fmt.Sprintf("START SLAVE UNTIL master_gtid_pos = \"%s\"", pos)
 }

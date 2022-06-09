@@ -69,6 +69,19 @@ func (mysqlFlavor) purgedGTIDSet(c *Conn) (GTIDSet, error) {
 	return parseMysql56GTIDSet(qr.Rows[0][0].ToString())
 }
 
+// serverUUID is part of the Flavor interface.
+func (mysqlFlavor) serverUUID(c *Conn) (string, error) {
+	// keep @@global as lowercase, as some servers like the Ripple binlog server only honors a lowercase `global` value
+	qr, err := c.ExecuteFetch("SELECT @@global.server_uuid", 1, false)
+	if err != nil {
+		return "", err
+	}
+	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
+		return "", vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected result format for server_uuid: %#v", qr)
+	}
+	return qr.Rows[0][0].ToString(), nil
+}
+
 func (mysqlFlavor) startReplicationCommand() string {
 	return "START SLAVE"
 }

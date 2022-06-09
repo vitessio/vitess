@@ -67,17 +67,19 @@ message PrimaryStatus {
 
 // FullStatus contains the full status of MySQL including the replication information, semi-sync information, GTID information among others
 message FullStatus {
-  replicationdata.Status replication_status = 1;
-  replicationdata.PrimaryStatus primary_status = 2;
-  string gtid_purged = 3;
-  string version = 4;
-  bool read_only = 5;
-  string binlog_format = 6;
-  bool log_bin_enabled = 7;
-  bool log_replica_updates = 8;
-  bool semi_sync_primary_enabled = 9;
-  bool semi_sync_replica_enabled = 10;
-  bool semi_sync_primary_status = 11;
-  bool semi_sync_replica_status = 12;
-  int32 semi_sync_primary_clients = 13;
+  int32 server_id = 1;
+  string server_uuid = 2;
+  replicationdata.Status replication_status = 3;
+  replicationdata.PrimaryStatus primary_status = 4;
+  string gtid_purged = 5;
+  string version = 6;
+  bool read_only = 7;
+  string binlog_format = 8;
+  bool log_bin_enabled = 9;
+  bool log_replica_updates = 10;
+  bool semi_sync_primary_enabled = 11;
+  bool semi_sync_replica_enabled = 12;
+  bool semi_sync_primary_status = 13;
+  bool semi_sync_replica_status = 14;
+  int32 semi_sync_primary_clients = 15;
 }

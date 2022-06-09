@@ -40,6 +40,12 @@ type MysqlDaemon interface {
 	// GetMysqlPort returns the current port mysql is listening on.
 	GetMysqlPort() (int32, error)
 
+	// GetServerID returns the servers ID.
+	GetServerID(ctx context.Context) (int32, error)
+
+	// GetServerUUID returns the servers UUID
+	GetServerUUID(ctx context.Context) (string, error)
+
 	// replication related methods
 	StartReplication(hookExtraEnv map[string]string) error
 	RestartReplication(hookExtraEnv map[string]string) error

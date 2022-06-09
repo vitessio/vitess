@@ -54,6 +54,18 @@ func (tm *TabletManager) ReplicationStatus(ctx context.Context) (*replicationdat
 
 // FullStatus returns the full status of MySQL including the replication information, semi-sync information, GTID information among others
 func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.FullStatus, error) {
+	// Server ID - "select @@global.server_id"
+	serverID, err := tm.MysqlDaemon.GetServerID(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Server UUID - "select @@global.server_uuid"
+	serverUUID, err := tm.MysqlDaemon.GetServerUUID(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	// Replication status - "SHOW REPLICA STATUS"
 	replicationStatus, err := tm.MysqlDaemon.ReplicationStatus()
 	if err != nil && err != mysql.ErrNotReplica {
@@ -97,6 +109,8 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 	semiSyncClients := tm.MysqlDaemon.SemiSyncClients()
 
 	return &replicationdatapb.FullStatus{
+		ServerId:               serverID,
+		ServerUuid:             serverUUID,
 		ReplicationStatus:      mysql.ReplicationStatusToProto(replicationStatus),
 		PrimaryStatus:          mysql.PrimaryStatusToProto(primaryStatus),
 		GtidPurged:             mysql.EncodePosition(purgedGTIDs),

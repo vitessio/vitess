@@ -78,6 +78,9 @@ type flavor interface {
 	// purgedGTIDSet returns the purged GTIDSet of a server.
 	purgedGTIDSet(c *Conn) (GTIDSet, error)
 
+	// serverUUID returns the UUID of a server.
+	serverUUID(c *Conn) (string, error)
+
 	// startReplicationCommand returns the command to start the replication.
 	startReplicationCommand() string
 
@@ -282,6 +285,11 @@ func (c *Conn) GetGTIDPurged() (Position, error) {
 	return Position{
 		GTIDSet: gtidSet,
 	}, nil
+}
+
+// GetServerUUID returns the server's UUID.
+func (c *Conn) GetServerUUID() (string, error) {
+	return c.flavor.serverUUID(c)
 }
 
 // PrimaryFilePosition returns the current primary's file based replication position.

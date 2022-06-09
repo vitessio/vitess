@@ -189,6 +189,33 @@ func (mysqld *Mysqld) GetMysqlPort() (int32, error) {
 	return int32(utemp), nil
 }
 
+// GetServerID returns mysql server id
+func (mysqld *Mysqld) GetServerID(ctx context.Context) (int32, error) {
+	qr, err := mysqld.FetchSuperQuery(ctx, "select @@global.server_id")
+	if err != nil {
+		return 0, err
+	}
+	if len(qr.Rows) != 1 {
+		return 0, errors.New("no server_id in mysql")
+	}
+	utemp, err := evalengine.ToUint64(qr.Rows[0][0])
+	if err != nil {
+		return 0, err
+	}
+	return int32(utemp), nil
+}
+
+// GetServerUUID returns mysql server uuid
+func (mysqld *Mysqld) GetServerUUID(ctx context.Context) (string, error) {
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
+	if err != nil {
+		return "", err
+	}
+	defer conn.Recycle()
+
+	return conn.GetServerUUID()
+}
+
 // IsReadOnly return true if the instance is read only
 func (mysqld *Mysqld) IsReadOnly() (bool, error) {
 	qr, err := mysqld.FetchSuperQuery(context.TODO(), "SHOW VARIABLES LIKE 'read_only'")

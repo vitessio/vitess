@@ -30352,6 +30352,12 @@ export namespace replicationdata {
     /** Properties of a FullStatus. */
     interface IFullStatus {
 
+        /** FullStatus server_id */
+        server_id?: (number|null);
+
+        /** FullStatus server_uuid */
+        server_uuid?: (string|null);
+
         /** FullStatus replication_status */
         replication_status?: (replicationdata.IStatus|null);
 
@@ -30400,6 +30406,12 @@ export namespace replicationdata {
          * @param [properties] Properties to set
          */
         constructor(properties?: replicationdata.IFullStatus);
+
+        /** FullStatus server_id. */
+        public server_id: number;
+
+        /** FullStatus server_uuid. */
+        public server_uuid: string;
 
         /** FullStatus replication_status. */
         public replication_status?: (replicationdata.IStatus|null);
