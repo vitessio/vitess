@@ -64,6 +64,46 @@
                     "field": "GetWorkflowsResults",
                     "type": "map[string]struct{\nResponse *vtctldatapb.GetWorkflowsResponse\nError error}",
                     "value": "\"test\": {\nResponse: &vtctldatapb.GetWorkflowsResponse{\nWorkflows: []*vtctldatapb.Workflow{\n{\nName: \"testworkflow\",\n},\n},\n}},"
+                },
+                {
+                    "field": "PingTabletResults",
+                    "type": "map[string]error",
+                    "value": "\"zone1-0000000100\": nil,"
+                },
+                {
+                    "field": "RefreshStateResults",
+                    "type": "map[string]error",
+                    "value": "\"zone1-0000000100\": nil,"
+                },
+                {
+                    "field": "ReparentTabletResults",
+                    "type": "map[string]struct{\nResponse *vtctldatapb.ReparentTabletResponse\nError error\n}",
+                    "value": "\"zone1-0000000100\": {\nResponse: &vtctldatapb.ReparentTabletResponse{},\n},"
+                },
+                {
+                    "field": "RunHealthCheckResults",
+                    "type": "map[string]error",
+                    "value": "\"zone1-0000000100\": nil,"
+                },
+                {
+                    "field": "SetWritableResults",
+                    "type": "map[string]error",
+                    "value": "\"zone1-0000000100\": nil,"
+                },
+                {
+                    "field": "StartReplicationResults",
+                    "type": "map[string]error",
+                    "value": "\"zone1-0000000100\": nil,"
+                },
+                {
+                    "field": "StopReplicationResults",
+                    "type": "map[string]error",
+                    "value": "\"zone1-0000000100\": nil,"
+                },
+                {
+                    "field": "TabletExternallyReparentedResults",
+                    "type": "map[string]struct{\nResponse *vtctldatapb.TabletExternallyReparentedResponse\nError error\n}",
+                    "value": "\"zone1-0000000100\": {\nResponse: &vtctldatapb.TabletExternallyReparentedResponse{},\n},"
                 }
             ],
             "db_tablet_list": [
@@ -1078,6 +1118,303 @@
                     "assertions": [
                         "assert.NotEmpty(t, resp.WorkflowsByCluster, $$)",
                         "assert.Equal(t, resp.WorkflowsByCluster, map[string]*vtadminpb.ClusterWorkflows{\"test\": {Workflows: []*vtadminpb.Workflow{{Cluster: &vtadminpb.Cluster{Id: \"test\", Name: \"test\"}, Keyspace: \"test\", Workflow: &vtctldatapb.Workflow{Name: \"testworkflow\"}}}}, \"other\": {Workflows: []*vtadminpb.Workflow{{Cluster: &vtadminpb.Cluster{Id: \"other\", Name: \"other\"}, Keyspace: \"otherks\", Workflow: &vtctldatapb.Workflow{Name: \"otherks_workflow\"}}}}}, $$)"
+                    ]
+                }
+            ]
+        },
+        {
+            "method": "PingTablet",
+            "rules": [
+                {
+                    "resource": "Tablet",
+                    "actions": ["ping"],
+                    "subjects": ["user:allowed"],
+                    "clusters": ["*"]
+                }
+            ],
+            "request": "&vtadminpb.PingTabletRequest{\nAlias: &topodatapb.TabletAlias{\nCell: \"zone1\",\nUid: 100,\n},\n}",
+            "cases": [
+                {
+                    "name": "unauthorized actor",
+                    "actor": {"name": "other"},
+                    "include_error_var": true,
+                    "assertions": [
+                        "assert.Error(t, err, $$)",
+                        "assert.Nil(t, resp, $$)"
+                    ]
+                },
+                {
+                    "name": "authorized actor",
+                    "actor": {"name": "allowed"},
+                    "include_error_var": true,
+                    "is_permitted": true,
+                    "assertions": [
+                        "require.NoError(t, err)",
+                        "assert.NotNil(t, resp, $$)"
+                    ]
+                }
+            ]
+        },
+        {
+            "method": "RefreshState",
+            "rules": [
+                {
+                    "resource": "Tablet",
+                    "actions": ["put"],
+                    "subjects": ["user:allowed"],
+                    "clusters": ["*"]
+                }
+            ],
+            "request": "&vtadminpb.RefreshStateRequest{\nAlias: &topodatapb.TabletAlias{\nCell: \"zone1\",\nUid: 100,\n},\n}",
+            "cases": [
+                {
+                    "name": "unauthorized actor",
+                    "actor": {"name": "other"},
+                    "include_error_var": true,
+                    "assertions": [
+                        "assert.Error(t, err, $$)",
+                        "assert.Nil(t, resp, $$)"
+                    ]
+                },
+                {
+                    "name": "authorized actor",
+                    "actor": {"name": "allowed"},
+                    "include_error_var": true,
+                    "is_permitted": true,
+                    "assertions": [
+                        "require.NoError(t, err)",
+                        "assert.NotNil(t, resp, $$)"
+                    ]
+                }
+            ]
+        },
+        {
+            "method": "RefreshTabletReplicationSource",
+            "rules": [
+                {
+                    "resource": "Tablet",
+                    "actions": ["refresh_tablet_replication_source"],
+                    "subjects": ["user:allowed"],
+                    "clusters": ["*"]
+                }
+            ],
+            "request": "&vtadminpb.RefreshTabletReplicationSourceRequest{\nAlias: &topodatapb.TabletAlias{\nCell: \"zone1\",\nUid: 100,\n},\n}",
+            "cases": [
+                {
+                    "name": "unauthorized actor",
+                    "actor": {"name": "other"},
+                    "include_error_var": true,
+                    "assertions": [
+                        "assert.Error(t, err, $$)",
+                        "assert.Nil(t, resp, $$)"
+                    ]
+                },
+                {
+                    "name": "authorized actor",
+                    "actor": {"name": "allowed"},
+                    "include_error_var": true,
+                    "is_permitted": true,
+                    "assertions": [
+                        "require.NoError(t, err)",
+                        "assert.NotNil(t, resp, $$)"
+                    ]
+                }
+            ]
+        },
+        {
+            "method": "RunHealthCheck",
+            "rules": [
+                {
+                    "resource": "Tablet",
+                    "actions": ["get"],
+                    "subjects": ["user:allowed"],
+                    "clusters": ["*"]
+                }
+            ],
+            "request": "&vtadminpb.RunHealthCheckRequest{\nAlias: &topodatapb.TabletAlias{\nCell: \"zone1\",\nUid: 100,\n},\n}",
+            "cases": [
+                {
+                    "name": "unauthorized actor",
+                    "actor": {"name": "other"},
+                    "include_error_var": true,
+                    "assertions": [
+                        "assert.Error(t, err, $$)",
+                        "assert.Nil(t, resp, $$)"
+                    ]
+                },
+                {
+                    "name": "authorized actor",
+                    "actor": {"name": "allowed"},
+                    "include_error_var": true,
+                    "is_permitted": true,
+                    "assertions": [
+                        "require.NoError(t, err)",
+                        "assert.NotNil(t, resp, $$)"
+                    ]
+                }
+            ]
+        },
+        {
+            "method": "SetReadOnly",
+            "rules": [
+                {
+                    "resource": "Tablet",
+                    "actions": ["manage_tablet_writability"],
+                    "subjects": ["user:allowed"],
+                    "clusters": ["*"]
+                }
+            ],
+            "request": "&vtadminpb.SetReadOnlyRequest{\nAlias: &topodatapb.TabletAlias{\nCell: \"zone1\",\nUid: 100,\n},\n}",
+            "cases": [
+                {
+                    "name": "unauthorized actor",
+                    "actor": {"name": "other"},
+                    "include_error_var": true,
+                    "assertions": [
+                        "assert.Error(t, err, $$)",
+                        "assert.Nil(t, resp, $$)"
+                    ]
+                },
+                {
+                    "name": "authorized actor",
+                    "actor": {"name": "allowed"},
+                    "include_error_var": true,
+                    "is_permitted": true,
+                    "assertions": [
+                        "require.NoError(t, err)",
+                        "assert.NotNil(t, resp, $$)"
+                    ]
+                }
+            ]
+        },
+        {
+            "method": "SetReadWrite",
+            "rules": [
+                {
+                    "resource": "Tablet",
+                    "actions": ["manage_tablet_writability"],
+                    "subjects": ["user:allowed"],
+                    "clusters": ["*"]
+                }
+            ],
+            "request": "&vtadminpb.SetReadWriteRequest{\nAlias: &topodatapb.TabletAlias{\nCell: \"zone1\",\nUid: 100,\n},\n}",
+            "cases": [
+                {
+                    "name": "unauthorized actor",
+                    "actor": {"name": "other"},
+                    "include_error_var": true,
+                    "assertions": [
+                        "assert.Error(t, err, $$)",
+                        "assert.Nil(t, resp, $$)"
+                    ]
+                },
+                {
+                    "name": "authorized actor",
+                    "actor": {"name": "allowed"},
+                    "include_error_var": true,
+                    "is_permitted": true,
+                    "assertions": [
+                        "require.NoError(t, err)",
+                        "assert.NotNil(t, resp, $$)"
+                    ]
+                }
+            ]
+        },
+        {
+            "method": "StartReplication",
+            "rules": [
+                {
+                    "resource": "Tablet",
+                    "actions": ["manage_tablet_replication"],
+                    "subjects": ["user:allowed"],
+                    "clusters": ["*"]
+                }
+            ],
+            "request": "&vtadminpb.StartReplicationRequest{\nAlias: &topodatapb.TabletAlias{\nCell: \"zone1\",\nUid: 100,\n},\n}",
+            "cases": [
+                {
+                    "name": "unauthorized actor",
+                    "actor": {"name": "other"},
+                    "include_error_var": true,
+                    "assertions": [
+                        "assert.Error(t, err, $$)",
+                        "assert.Nil(t, resp, $$)"
+                    ]
+                },
+                {
+                    "name": "authorized actor",
+                    "actor": {"name": "allowed"},
+                    "include_error_var": true,
+                    "is_permitted": true,
+                    "assertions": [
+                        "require.NoError(t, err)",
+                        "assert.NotNil(t, resp, $$)"
+                    ]
+                }
+            ]
+        },
+        {
+            "method": "StopReplication",
+            "rules": [
+                {
+                    "resource": "Tablet",
+                    "actions": ["manage_tablet_replication"],
+                    "subjects": ["user:allowed"],
+                    "clusters": ["*"]
+                }
+            ],
+            "request": "&vtadminpb.StopReplicationRequest{\nAlias: &topodatapb.TabletAlias{\nCell: \"zone1\",\nUid: 100,\n},\n}",
+            "cases": [
+                {
+                    "name": "unauthorized actor",
+                    "actor": {"name": "other"},
+                    "include_error_var": true,
+                    "assertions": [
+                        "assert.Error(t, err, $$)",
+                        "assert.Nil(t, resp, $$)"
+                    ]
+                },
+                {
+                    "name": "authorized actor",
+                    "actor": {"name": "allowed"},
+                    "include_error_var": true,
+                    "is_permitted": true,
+                    "assertions": [
+                        "require.NoError(t, err)",
+                        "assert.NotNil(t, resp, $$)"
+                    ]
+                }
+            ]
+        },
+        {
+            "method": "TabletExternallyPromoted",
+            "rules": [
+                {
+                    "resource": "Shard",
+                    "actions": ["tablet_externally_promoted"],
+                    "subjects": ["user:allowed"],
+                    "clusters": ["*"]
+                }
+            ],
+            "request": "&vtadminpb.TabletExternallyPromotedRequest{\nAlias: &topodatapb.TabletAlias{\nCell: \"zone1\",\nUid: 100,\n},\n}",
+            "cases": [
+                {
+                    "name": "unauthorized actor",
+                    "actor": {"name": "other"},
+                    "include_error_var": true,
+                    "assertions": [
+                        "assert.Error(t, err, $$)",
+                        "assert.Nil(t, resp, $$)"
+                    ]
+                },
+                {
+                    "name": "authorized actor",
+                    "actor": {"name": "allowed"},
+                    "include_error_var": true,
+                    "is_permitted": true,
+                    "assertions": [
+                        "require.NoError(t, err)",
+                        "assert.NotNil(t, resp, $$)"
                     ]
                 }
             ]
