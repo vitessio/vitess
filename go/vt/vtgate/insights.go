@@ -326,6 +326,47 @@ func (ii *Insights) logToKafka(logger *streamlog.StreamLogger) error {
 	return nil
 }
 
+// Regex to pull off the first chunk, which is either a token in matched backticks, or a token with no backticks.
+// A token may be just part of a table name.  E.g., information_schema.`engines` is two tokens:
+// "information_schema." and "`engines`".
+var reSplitTables = regexp.MustCompile("^(?:`[^`]+`|[^,`]+)")
+
+// splitTables splits a string of table names like "a, b, c" into an array like {"a", "b", "c"}.
+// Table names with commas in them are wrapped in backticks, so we need to handle that.
+// e.g., "a, `b,2,3`, c" -> {"a", "b,2,3", "c"}
+// If the table string is empty, the returned array is nil.
+// If there is an unmatched backtick, from that point to the end of the string is treated as a single token.
+func splitTables(tableList string) []string {
+	var ret []string
+	curTable := ""
+	for tableList != "" {
+		if idx := reSplitTables.FindStringSubmatchIndex(tableList); len(idx) >= 2 {
+			curTable += strings.Trim(tableList[:idx[1]], "`")
+			tableList = tableList[idx[1]:]
+		} else if tableList[0] == '`' {
+			// Unterminated backtick, as might happen if tableList got truncated before it got here.
+			// The remainder of the string is treated as a single token.
+			curTable += tableList[1:]
+			break
+		} else if tableList[0] == ',' {
+			// Bare comma (not in backticks) means end of this table name.
+			if curTable != "" {
+				ret = append(ret, curTable)
+				curTable = ""
+			}
+			tableList = strings.TrimSpace(tableList[1:])
+		} else {
+			// The /[^,`]+/ part of the regex matches anything that doesn't start with '`' or ',', so
+			// we can never get to this else block.
+			panic("unreachable")
+		}
+	}
+	if curTable != "" {
+		ret = append(ret, curTable)
+	}
+	return ret
+}
+
 func (ii *Insights) handleMessage(record interface{}) {
 	ls, ok := record.(*LogStats)
 	if !ok {
@@ -350,7 +391,9 @@ func (ii *Insights) handleMessage(record interface{}) {
 		ls.StmtType = "ERROR"
 	}
 
-	ii.addToAggregates(ls, sql)
+	tables := splitTables(ls.Table)
+
+	ii.addToAggregates(ls, sql, tables)
 
 	if !ii.shouldSendToInsights(ls) {
 		return
@@ -360,7 +403,7 @@ func (ii *Insights) handleMessage(record interface{}) {
 		return
 	}
 
-	buf, err := ii.makeQueryMessage(ls, sql, parseCommentTags(comments))
+	buf, err := ii.makeQueryMessage(ls, sql, tables, parseCommentTags(comments))
 	if err != nil {
 		log.Warningf("Could not serialize %s message: %v", queryTopic, err)
 	} else {
@@ -416,7 +459,7 @@ func maxDuration(a time.Duration, b time.Duration) time.Duration {
 	return b
 }
 
-func (ii *Insights) addToAggregates(ls *LogStats, sql string) bool {
+func (ii *Insights) addToAggregates(ls *LogStats, sql string, tables []string) bool {
 	// no locks needed if all callers are on the same thread
 
 	var pa *QueryPatternAggregation
@@ -442,7 +485,7 @@ func (ii *Insights) addToAggregates(ls *LogStats, sql string) bool {
 		// ls.StmtType and ls.Table depend only on the contents of sql, so we don't separately make them
 		// part of the key, and we don't track them as separate values in the QueryPatternAggregation values.
 		// In other words, we assume they don't change, so we only need to track a single value for each.
-		pa = newPatternAggregation(ls.StmtType, []string{ls.Table})
+		pa = newPatternAggregation(ls.StmtType, tables)
 		ii.Aggregations[key] = pa
 	}
 
@@ -511,7 +554,7 @@ func hostnameOrEmpty() string {
 	return hostname
 }
 
-func (ii *Insights) makeQueryMessage(ls *LogStats, sql string, tags []*pbvtgate.Query_Tag) ([]byte, error) {
+func (ii *Insights) makeQueryMessage(ls *LogStats, sql string, tables []string, tags []*pbvtgate.Query_Tag) ([]byte, error) {
 	addr, user := ls.RemoteAddrUsername()
 	var port *wrapperspb.UInt32Value
 	if strings.Contains(addr, ":") {
@@ -523,11 +566,6 @@ func (ii *Insights) makeQueryMessage(ls *LogStats, sql string, tags []*pbvtgate.
 		}
 	}
 
-	var tables []string
-	if ls.Table != "" {
-		tables = append(tables, ls.Table)
-	}
-
 	obj := pbvtgate.Query{
 		StartTime:              timestamppb.New(ls.StartTime),
 		DatabaseBranchPublicId: ii.DatabaseBranchPublicID,
@@ -537,7 +575,7 @@ func (ii *Insights) makeQueryMessage(ls *LogStats, sql string, tags []*pbvtgate.
 		VtgateName:             hostnameOrEmpty(),
 		NormalizedSql:          stringOrNil(sql),
 		StatementType:          stringOrNil(ls.StmtType),
-		Tables:                 tables, // FIXME: ls.Table captures only one table, and only for simple queries
+		Tables:                 tables,
 		Keyspace:               stringOrNil(ls.Keyspace),
 		TabletType:             stringOrNil(ls.TabletType),
 		ShardQueries:           uint32(ls.ShardQueries),
