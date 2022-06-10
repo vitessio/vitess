@@ -254,5 +254,8 @@ the topo server. This allows VTOrc to monitor and repair multiple keyspaces whic
 the command `SetKeyspaceDurabilityPolicy` specified above, to ensure VTOrc continues to work as desired. The recommended upgrade 
 path is to upgrade vtctld, run `SetKeyspaceDurabilityPolicy` and then upgrade VTOrc.**
 
-### Advisory locking optimisations
-Work has gone into making the advisory locks (`get_lock()`, `release_lock()`, et al) release reserved connections faster and in more situations than before.
+### Advisory locking optimizations
+Work has gone into making the advisory locks (`get_lock()`, `release_lock()`, etc.) release reserved connections faster and in more situations than before.
+
+### Pre-Legacy Resharding is now deprecated
+A long time ago, the sharding column and type were specified at the keyspace level. This syntax is now deprecated and will be removed in v15.

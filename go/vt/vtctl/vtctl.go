@@ -1919,8 +1919,8 @@ func commandDeleteShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 }
 
 func commandCreateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	shardingColumnName := subFlags.String("sharding_column_name", "", "Specifies the column to use for sharding operations")
-	shardingColumnType := subFlags.String("sharding_column_type", "", "Specifies the type of the column to use for sharding operations")
+	shardingColumnName := subFlags.String("sharding_column_name", "", "(DEPRECATED) Specifies the column to use for sharding operations")
+	shardingColumnType := subFlags.String("sharding_column_type", "", "(DEPRECATED) Specifies the type of the column to use for sharding operations")
 	force := subFlags.Bool("force", false, "Proceeds even if the keyspace already exists")
 	allowEmptyVSchema := subFlags.Bool("allow_empty_vschema", false, "If set this will allow a new keyspace to have no vschema")
 
