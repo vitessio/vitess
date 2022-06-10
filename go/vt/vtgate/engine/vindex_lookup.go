@@ -42,7 +42,7 @@ type VindexLookup struct {
 	Lookup Primitive
 
 	// This is the side that needs to be routed
-	SendTo Primitive
+	SendTo *Route
 }
 
 // RouteType implements the Primitive interface
@@ -61,7 +61,7 @@ func (vr *VindexLookup) GetTableName() string {
 }
 
 // GetFields implements the Primitive interface
-func (vr *VindexLookup) GetFields(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (vr *VindexLookup) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	panic("implement me")
 }
 
@@ -71,7 +71,7 @@ func (vr *VindexLookup) NeedsTransaction() bool {
 }
 
 // TryExecute implements the Primitive interface
-func (vr *VindexLookup) TryExecute(vcursor VCursor, inRoute *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (vr *VindexLookup) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	if inRoute != nil {
 		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "does not accept routing")
 	}
@@ -118,7 +118,7 @@ func (vr *VindexLookup) TryExecute(vcursor VCursor, inRoute *RouteDestination, b
 }
 
 // TryStreamExecute implements the Primitive interface
-func (vr *VindexLookup) TryStreamExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (vr *VindexLookup) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	//TODO implement me
 	panic("implement me")
 }

@@ -91,7 +91,7 @@ func newProbeTableV3() *probeTableV3 {
 }
 
 // TryExecute implements the Primitive interface
-func (d *DistinctV3) TryExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (d *DistinctV3) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	input, err := vcursor.ExecutePrimitive(d.Source, routing, bindVars, wantfields)
 	if err != nil {
 		return nil, err
@@ -118,7 +118,7 @@ func (d *DistinctV3) TryExecute(vcursor VCursor, routing *RouteDestination, bind
 }
 
 // TryStreamExecute implements the Primitive interface
-func (d *DistinctV3) TryStreamExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (d *DistinctV3) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	pt := newProbeTableV3()
 
 	err := vcursor.StreamExecutePrimitive(d.Source, routing, bindVars, wantfields, func(input *sqltypes.Result) error {
@@ -157,8 +157,8 @@ func (d *DistinctV3) GetTableName() string {
 }
 
 // GetFields implements the Primitive interface
-func (d *DistinctV3) GetFields(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return d.Source.GetFields(vcursor, routing, bindVars)
+func (d *DistinctV3) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	return d.Source.GetFields(vcursor, bindVars)
 }
 
 // NeedsTransaction implements the Primitive interface

@@ -64,7 +64,7 @@ func (v *AlterVSchema) GetTableName() string {
 }
 
 // TryExecute implements the Primitive interface
-func (v *AlterVSchema) TryExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*query.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (v *AlterVSchema) TryExecute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	err := vcursor.ExecuteVSchema(v.Keyspace.Name, v.AlterVschemaDDL)
 	if err != nil {
 		return nil, err
@@ -73,8 +73,8 @@ func (v *AlterVSchema) TryExecute(vcursor VCursor, routing *RouteDestination, bi
 }
 
 // TryStreamExecute implements the Primitive interface
-func (v *AlterVSchema) TryStreamExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*query.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	res, err := v.TryExecute(vcursor, routing, bindVars, wantfields)
+func (v *AlterVSchema) TryStreamExecute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	res, err := v.TryExecute(vcursor, bindVars, wantfields)
 	if err != nil {
 		return err
 	}
@@ -82,6 +82,6 @@ func (v *AlterVSchema) TryStreamExecute(vcursor VCursor, routing *RouteDestinati
 }
 
 // GetFields implements the Primitive interface
-func (v *AlterVSchema) GetFields(vcursor VCursor, routing *RouteDestination, bindVars map[string]*query.BindVariable) (*sqltypes.Result, error) {
+func (v *AlterVSchema) GetFields(vcursor VCursor, bindVars map[string]*query.BindVariable) (*sqltypes.Result, error) {
 	return nil, vterrors.NewErrorf(vtrpcpb.Code_UNIMPLEMENTED, vterrors.UnsupportedPS, "This command is not supported in the prepared statement protocol yet")
 }

@@ -140,7 +140,7 @@ func TestSendTable(t *testing.T) {
 				MultishardAutocommit: tc.multiShardAutocommit,
 			}
 			vc := &loggingVCursor{shards: tc.shards}
-			_, err := send.TryExecute(vc, nil, map[string]*querypb.BindVariable{}, false)
+			_, err := send.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 			if tc.expectedError != "" {
 				require.EqualError(t, err, tc.expectedError)
 			} else {
@@ -150,12 +150,12 @@ func TestSendTable(t *testing.T) {
 
 			// Failure cases
 			vc = &loggingVCursor{shardErr: errors.New("shard_error")}
-			_, err = send.TryExecute(vc, nil, map[string]*querypb.BindVariable{}, false)
+			_, err = send.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 			require.EqualError(t, err, "shard_error")
 
 			if !tc.sharded {
 				vc = &loggingVCursor{}
-				_, err = send.TryExecute(vc, nil, map[string]*querypb.BindVariable{}, false)
+				_, err = send.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 				require.EqualError(t, err, "Keyspace does not have exactly one shard: []")
 			}
 		})
@@ -295,7 +295,7 @@ func TestSendGetFields(t *testing.T) {
 		SingleShardOnly:   false,
 	}
 	vc := &loggingVCursor{shards: []string{"-20", "20-"}, results: results}
-	qr, err := send.GetFields(vc, nil, map[string]*querypb.BindVariable{})
+	qr, err := send.GetFields(vc, map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
@@ -328,7 +328,7 @@ func TestGetDestinationFromTheOutside(t *testing.T) {
 	vars := map[string]*querypb.BindVariable{
 		"apa": sqltypes.Int64BindVariable(12),
 	}
-	_, err := send.TryExecute(vc, routing, vars, false)
+	_, err := send.TryExecute(vc, vars, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ExecuteMultiShard ` +

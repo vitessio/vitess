@@ -71,7 +71,7 @@ func (v *OnlineDDL) GetTableName() string {
 }
 
 // TryExecute implements the Primitive interface
-func (v *OnlineDDL) TryExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool) (result *sqltypes.Result, err error) {
+func (v *OnlineDDL) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (result *sqltypes.Result, err error) {
 	result = &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{
@@ -107,8 +107,8 @@ func (v *OnlineDDL) TryExecute(vcursor VCursor, routing *RouteDestination, bindV
 }
 
 // TryStreamExecute implements the Primitive interface
-func (v *OnlineDDL) TryStreamExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	results, err := v.TryExecute(vcursor, routing, bindVars, wantfields)
+func (v *OnlineDDL) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	results, err := v.TryExecute(vcursor, bindVars, wantfields)
 	if err != nil {
 		return err
 	}
@@ -116,6 +116,6 @@ func (v *OnlineDDL) TryStreamExecute(vcursor VCursor, routing *RouteDestination,
 }
 
 //GetFields implements the Primitive interface
-func (v *OnlineDDL) GetFields(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (v *OnlineDDL) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] GetFields is not reachable")
 }

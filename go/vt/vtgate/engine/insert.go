@@ -222,7 +222,7 @@ func (ins *Insert) GetTableName() string {
 }
 
 // TryExecute performs a non-streaming exec.
-func (ins *Insert) TryExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, _ bool) (*sqltypes.Result, error) {
+func (ins *Insert) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	if ins.QueryTimeout != 0 {
 		cancel := vcursor.SetContextTimeout(time.Duration(ins.QueryTimeout) * time.Millisecond)
 		defer cancel()
@@ -242,8 +242,8 @@ func (ins *Insert) TryExecute(vcursor VCursor, routing *RouteDestination, bindVa
 }
 
 // TryStreamExecute performs a streaming exec.
-func (ins *Insert) TryStreamExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	res, err := ins.TryExecute(vcursor, routing, bindVars, wantfields)
+func (ins *Insert) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	res, err := ins.TryExecute(vcursor, bindVars, wantfields)
 	if err != nil {
 		return err
 	}
@@ -251,7 +251,7 @@ func (ins *Insert) TryStreamExecute(vcursor VCursor, routing *RouteDestination, 
 }
 
 // GetFields fetches the field info.
-func (ins *Insert) GetFields(VCursor, *RouteDestination, map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (ins *Insert) GetFields(VCursor, map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unreachable code for %q", ins.Query)
 }
 

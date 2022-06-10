@@ -95,7 +95,7 @@ func (c *DBDDL) GetTableName() string {
 }
 
 // TryExecute implements the Primitive interface
-func (c *DBDDL) TryExecute(vcursor VCursor, _ *RouteDestination, _ map[string]*querypb.BindVariable, _ bool) (*sqltypes.Result, error) {
+func (c *DBDDL) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	name := vcursor.GetDBDDLPluginName()
 	plugin, ok := databaseCreatorPlugins[name]
 	if !ok {
@@ -181,8 +181,8 @@ func (c *DBDDL) dropDatabase(vcursor VCursor, plugin DBDDLPlugin) (*sqltypes.Res
 }
 
 // TryStreamExecute implements the Primitive interface
-func (c *DBDDL) TryStreamExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	res, err := c.TryExecute(vcursor, routing, bindVars, wantfields)
+func (c *DBDDL) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	res, err := c.TryExecute(vcursor, bindVars, wantfields)
 	if err != nil {
 		return err
 	}
@@ -190,7 +190,7 @@ func (c *DBDDL) TryStreamExecute(vcursor VCursor, routing *RouteDestination, bin
 }
 
 // GetFields implements the Primitive interface
-func (c *DBDDL) GetFields(VCursor, *RouteDestination, map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (c *DBDDL) GetFields(VCursor, map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return &sqltypes.Result{}, nil
 }
 

@@ -80,7 +80,7 @@ func TestEmptyRows(outer *testing.T) {
 				Input: fp,
 			}
 
-			result, err := oa.TryExecute(&noopVCursor{}, nil, nil, false)
+			result, err := oa.TryExecute(&noopVCursor{}, nil, false)
 			assert.NoError(err)
 
 			wantResult := sqltypes.MakeTestResult(
@@ -122,7 +122,7 @@ func TestScalarAggregateStreamExecute(t *testing.T) {
 	}
 
 	var results []*sqltypes.Result
-	err := oa.TryStreamExecute(&noopVCursor{}, nil, nil, true, func(qr *sqltypes.Result) error {
+	err := oa.TryStreamExecute(&noopVCursor{}, nil, true, func(qr *sqltypes.Result) error {
 		results = append(results, qr)
 		return nil
 	})

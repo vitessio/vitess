@@ -59,12 +59,12 @@ func (s *SessionPrimitive) GetTableName() string {
 }
 
 // TryExecute implements the Primitive interface
-func (s *SessionPrimitive) TryExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (s *SessionPrimitive) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	return s.action(vcursor.Session())
 }
 
 // TryStreamExecute implements the Primitive interface
-func (s *SessionPrimitive) TryStreamExecute(vcursor VCursor, _ *RouteDestination, _ map[string]*querypb.BindVariable, _ bool, callback func(*sqltypes.Result) error) error {
+func (s *SessionPrimitive) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	qr, err := s.action(vcursor.Session())
 	if err != nil {
 		return err
@@ -73,7 +73,7 @@ func (s *SessionPrimitive) TryStreamExecute(vcursor VCursor, _ *RouteDestination
 }
 
 // GetFields implements the Primitive interface
-func (s *SessionPrimitive) GetFields(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (s *SessionPrimitive) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "not supported for this primitive")
 }
 

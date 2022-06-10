@@ -52,7 +52,7 @@ func (f *Filter) GetTableName() string {
 }
 
 // TryExecute satisfies the Primitive interface.
-func (f *Filter) TryExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (f *Filter) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	result, err := vcursor.ExecutePrimitive(f.Input, routing, bindVars, wantfields)
 	if err != nil {
 		return nil, err
@@ -79,7 +79,7 @@ func (f *Filter) TryExecute(vcursor VCursor, routing *RouteDestination, bindVars
 }
 
 // TryStreamExecute satisfies the Primitive interface.
-func (f *Filter) TryStreamExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (f *Filter) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	env := evalengine.EnvWithBindVars(bindVars, vcursor.ConnCollation())
 	filter := func(results *sqltypes.Result) error {
 		var rows [][]sqltypes.Value
@@ -106,8 +106,8 @@ func (f *Filter) TryStreamExecute(vcursor VCursor, routing *RouteDestination, bi
 }
 
 // GetFields implements the Primitive interface.
-func (f *Filter) GetFields(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return f.Input.GetFields(vcursor, routing, bindVars)
+func (f *Filter) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	return f.Input.GetFields(vcursor, bindVars)
 }
 
 // Inputs returns the input to limit

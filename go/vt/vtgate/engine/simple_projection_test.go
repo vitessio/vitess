@@ -51,7 +51,7 @@ func TestSubqueryExecute(t *testing.T) {
 		"a": sqltypes.Int64BindVariable(1),
 	}
 
-	r, err := sq.TryExecute(&noopVCursor{}, nil, bv, true)
+	r, err := sq.TryExecute(&noopVCursor{}, bv, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,7 +72,7 @@ func TestSubqueryExecute(t *testing.T) {
 	sq.Input = &fakePrimitive{
 		sendErr: errors.New("err"),
 	}
-	_, err = sq.TryExecute(&noopVCursor{}, nil, bv, true)
+	_, err = sq.TryExecute(&noopVCursor{}, bv, true)
 	require.EqualError(t, err, `err`)
 }
 
@@ -149,7 +149,7 @@ func TestSubqueryGetFields(t *testing.T) {
 		"a": sqltypes.Int64BindVariable(1),
 	}
 
-	r, err := sq.GetFields(nil, nil, bv)
+	r, err := sq.GetFields(nil, bv)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -168,6 +168,6 @@ func TestSubqueryGetFields(t *testing.T) {
 	sq.Input = &fakePrimitive{
 		sendErr: errors.New("err"),
 	}
-	_, err = sq.GetFields(nil, nil, bv)
+	_, err = sq.GetFields(nil, bv)
 	require.EqualError(t, err, `err`)
 }

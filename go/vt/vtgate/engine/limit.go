@@ -52,7 +52,7 @@ func (l *Limit) GetTableName() string {
 }
 
 // TryExecute satisfies the Primitive interface.
-func (l *Limit) TryExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (l *Limit) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	count, offset, err := l.getCountAndOffset(vcursor, bindVars)
 	if err != nil {
 		return nil, err
@@ -82,7 +82,7 @@ func (l *Limit) TryExecute(vcursor VCursor, routing *RouteDestination, bindVars 
 }
 
 // TryStreamExecute satisfies the Primitive interface.
-func (l *Limit) TryStreamExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (l *Limit) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	count, offset, err := l.getCountAndOffset(vcursor, bindVars)
 	if err != nil {
 		return err
@@ -147,8 +147,8 @@ func (l *Limit) TryStreamExecute(vcursor VCursor, routing *RouteDestination, bin
 }
 
 // GetFields implements the Primitive interface.
-func (l *Limit) GetFields(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return l.Input.GetFields(vcursor, routing, bindVars)
+func (l *Limit) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	return l.Input.GetFields(vcursor, bindVars)
 }
 
 // Inputs returns the input to limit

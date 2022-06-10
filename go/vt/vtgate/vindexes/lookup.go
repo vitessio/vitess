@@ -233,6 +233,11 @@ func (lu *LookupUnique) NeedsVCursor() bool {
 	return true
 }
 
+// select * from user where name in (a, b, c)
+// select * from user where name in ::list
+// select * from user where name in (a,b) 80-
+// select * from user where name in (c) -80
+
 // Map can map ids to key.Destination objects.
 func (lu *LookupUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	out := make([]key.Destination, 0, len(ids))
@@ -246,21 +251,7 @@ func (lu *LookupUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([]key.Destin
 	if err != nil {
 		return nil, err
 	}
-	for i, result := range results {
-		switch len(result.Rows) {
-		case 0:
-			out = append(out, key.DestinationNone{})
-		case 1:
-			rowBytes, err := result.Rows[0][0].ToBytes()
-			if err != nil {
-				return nil, err
-			}
-			out = append(out, key.DestinationKeyspaceID(rowBytes))
-		default:
-			return nil, fmt.Errorf("Lookup.Map: unexpected multiple results from vindex %s: %v", lu.lkp.Table, ids[i])
-		}
-	}
-	return out, nil
+	return lu.MapResult(ids, results)
 }
 
 // Verify returns true if ids maps to ksids.
@@ -300,6 +291,31 @@ func (lu *LookupUnique) IsBackfilling() bool {
 	return lu.writeOnly
 }
 
-func (lu *LookupUnique) LookupQuery() (string, error) {
-	return lu.lkp.sel, nil
+func (lu *LookupUnique) Query() string {
+	return lu.lkp.sel
+}
+
+func (lu *LookupUnique) MapResult(ids []sqltypes.Value, results []*sqltypes.Result) ([]key.Destination, error) {
+	out := make([]key.Destination, 0, len(ids))
+	if lu.writeOnly {
+		for range ids {
+			out = append(out, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{}})
+		}
+		return out, nil
+	}
+	for i, result := range results {
+		switch len(result.Rows) {
+		case 0:
+			out = append(out, key.DestinationNone{})
+		case 1:
+			rowBytes, err := result.Rows[0][0].ToBytes()
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, key.DestinationKeyspaceID(rowBytes))
+		default:
+			return nil, fmt.Errorf("Lookup.Map: unexpected multiple results from vindex %s: %v", lu.lkp.Table, ids[i])
+		}
+	}
+	return out, nil
 }

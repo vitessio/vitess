@@ -85,7 +85,7 @@ func formatTwoOptionsNicely(a, b string) string {
 var ErrWrongNumberOfColumnsInSelect = vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.WrongNumberOfColumnsInSelect, "The used SELECT statements have a different number of columns")
 
 // TryExecute performs a non-streaming exec.
-func (c *Concatenate) TryExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (c *Concatenate) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	res, err := c.execSources(vcursor, routing, bindVars, wantfields)
 	if err != nil {
 		return nil, err
@@ -167,7 +167,7 @@ func (c *Concatenate) execSources(vcursor VCursor, routing *RouteDestination, bi
 }
 
 // TryStreamExecute performs a streaming exec.
-func (c *Concatenate) TryStreamExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (c *Concatenate) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	var seenFields []*querypb.Field
 	var outerErr error
 
@@ -234,15 +234,15 @@ func (c *Concatenate) TryStreamExecute(vcursor VCursor, routing *RouteDestinatio
 }
 
 // GetFields fetches the field info.
-func (c *Concatenate) GetFields(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (c *Concatenate) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	// TODO: type coercions
-	res, err := c.Sources[0].GetFields(vcursor, routing, bindVars)
+	res, err := c.Sources[0].GetFields(vcursor, bindVars)
 	if err != nil {
 		return nil, err
 	}
 
 	for i := 1; i < len(c.Sources); i++ {
-		result, err := c.Sources[i].GetFields(vcursor, routing, bindVars)
+		result, err := c.Sources[i].GetFields(vcursor, bindVars)
 		if err != nil {
 			return nil, err
 		}

@@ -75,7 +75,7 @@ func TestSemiJoinExecute(t *testing.T) {
 		},
 		Cols: []int{-1, -2, -3},
 	}
-	r, err := jn.TryExecute(&noopVCursor{}, nil, bv, true)
+	r, err := jn.TryExecute(&noopVCursor{}, bv, true)
 	require.NoError(t, err)
 	leftPrim.ExpectLog(t, []string{
 		`Execute a: type:INT64 value:"10" true`,

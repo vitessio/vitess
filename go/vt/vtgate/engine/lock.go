@@ -73,7 +73,7 @@ func (l *Lock) GetTableName() string {
 }
 
 // TryExecute is part of the Primitive interface
-func (l *Lock) TryExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, _ bool) (*sqltypes.Result, error) {
+func (l *Lock) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	return l.execLock(vcursor, bindVars)
 }
 
@@ -152,8 +152,8 @@ func (lf *LockFunc) execLock(vcursor VCursor, bindVars map[string]*querypb.BindV
 }
 
 // TryStreamExecute is part of the Primitive interface
-func (l *Lock) TryStreamExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	qr, err := l.TryExecute(vcursor, routing, bindVars, wantfields)
+func (l *Lock) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	qr, err := l.TryExecute(vcursor, bindVars, wantfields)
 	if err != nil {
 		return err
 	}
@@ -161,7 +161,7 @@ func (l *Lock) TryStreamExecute(vcursor VCursor, routing *RouteDestination, bind
 }
 
 // GetFields is part of the Primitive interface
-func (l *Lock) GetFields(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (l *Lock) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	rss, _, err := vcursor.ResolveDestinations(l.Keyspace.Name, nil, []key.Destination{l.TargetDestination})
 	if err != nil {
 		return nil, err

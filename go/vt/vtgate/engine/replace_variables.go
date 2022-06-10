@@ -50,7 +50,7 @@ func (r *ReplaceVariables) GetTableName() string {
 }
 
 // TryExecute implements the Primitive interface
-func (r *ReplaceVariables) TryExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (r *ReplaceVariables) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	qr, err := vcursor.ExecutePrimitive(r.Input, routing, bindVars, wantfields)
 	if err != nil {
 		return nil, err
@@ -60,7 +60,7 @@ func (r *ReplaceVariables) TryExecute(vcursor VCursor, routing *RouteDestination
 }
 
 // TryStreamExecute implements the Primitive interface
-func (r *ReplaceVariables) TryStreamExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (r *ReplaceVariables) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	innerCallback := callback
 	callback = func(result *sqltypes.Result) error {
 		replaceVariables(result, bindVars)
@@ -70,8 +70,8 @@ func (r *ReplaceVariables) TryStreamExecute(vcursor VCursor, routing *RouteDesti
 }
 
 // GetFields implements the Primitive interface
-func (r *ReplaceVariables) GetFields(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return r.Input.GetFields(vcursor, routing, bindVars)
+func (r *ReplaceVariables) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	return r.Input.GetFields(vcursor, bindVars)
 }
 
 // Inputs implements the Primitive interface

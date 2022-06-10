@@ -70,7 +70,7 @@ func (upd *Update) GetTableName() string {
 }
 
 // TryExecute performs a non-streaming exec.
-func (upd *Update) TryExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (upd *Update) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	if upd.QueryTimeout != 0 {
 		cancel := vcursor.SetContextTimeout(time.Duration(upd.QueryTimeout) * time.Millisecond)
 		defer cancel()
@@ -97,8 +97,8 @@ func (upd *Update) TryExecute(vcursor VCursor, routing *RouteDestination, bindVa
 }
 
 // TryStreamExecute performs a streaming exec.
-func (upd *Update) TryStreamExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	res, err := upd.TryExecute(vcursor, routing, bindVars, wantfields)
+func (upd *Update) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	res, err := upd.TryExecute(vcursor, bindVars, wantfields)
 	if err != nil {
 		return err
 	}
@@ -107,7 +107,7 @@ func (upd *Update) TryStreamExecute(vcursor VCursor, routing *RouteDestination, 
 }
 
 // GetFields fetches the field info.
-func (upd *Update) GetFields(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (upd *Update) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return nil, fmt.Errorf("BUG: unreachable code for %q", upd.Query)
 }
 

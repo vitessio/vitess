@@ -70,15 +70,13 @@ func (rb *routeGen4) SetLimit(limit *sqlparser.Limit) {
 func (rb *routeGen4) WireupGen4(ctx *plancontext.PlanningContext) error {
 	rb.prepareTheAST()
 
-	{
-		rb.eroute.Query = sqlparser.String(rb.Select)
-		buffer := sqlparser.NewTrackedBuffer(sqlparser.FormatImpossibleQuery)
-		node := buffer.WriteNode(rb.Select)
-		query := node.ParsedQuery()
-		rb.eroute.FieldQuery = query.Query
-	}
+	rb.eroute.Query = sqlparser.String(rb.Select)
+	buffer := sqlparser.NewTrackedBuffer(sqlparser.FormatImpossibleQuery)
+	node := buffer.WriteNode(rb.Select)
+	query := node.ParsedQuery()
+	rb.eroute.FieldQuery = query.Query
 
-	plannable, ok := rb.eroute.RoutingParameters.Vindex.(vindexes.LookupPlannable)
+	plannableVindex, ok := rb.eroute.RoutingParameters.Vindex.(vindexes.LookupPlannable)
 	if !ok {
 		rb.enginePrimitive = rb.eroute
 		return nil
@@ -86,18 +84,14 @@ func (rb *routeGen4) WireupGen4(ctx *plancontext.PlanningContext) error {
 
 	rb.eroute.RoutingParameters.Opcode = engine.ByDestination
 
-	query, err := plannable.LookupQuery()
-	if err != nil {
-		return err
-	}
-
-	stmt, reserved, err := sqlparser.Parse2(query)
+	vindexQuery := plannableVindex.Query()
+	stmt, reserved, err := sqlparser.Parse2(vindexQuery)
 	if err != nil {
 		return err
 	}
 	reservedVars := sqlparser.NewReservedVars("vtg", reserved)
 
-	lookupPrimitive, err := gen4SelectStmtPlanner(query, querypb.ExecuteOptions_Gen4, stmt.(sqlparser.SelectStatement), reservedVars, ctx.VSchema)
+	lookupPrimitive, err := gen4SelectStmtPlanner(vindexQuery, querypb.ExecuteOptions_Gen4, stmt.(sqlparser.SelectStatement), reservedVars, ctx.VSchema)
 	if err != nil {
 		return err
 	}

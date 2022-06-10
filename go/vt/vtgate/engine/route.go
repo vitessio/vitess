@@ -171,7 +171,7 @@ func (route *Route) SetTruncateColumnCount(count int) {
 }
 
 // TryExecute performs a non-streaming exec.
-func (route *Route) TryExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (route *Route) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	if route.QueryTimeout != 0 {
 		cancel := vcursor.SetContextTimeout(time.Duration(route.QueryTimeout) * time.Millisecond)
 		defer cancel()
@@ -201,7 +201,7 @@ func (route *Route) executeInternal(vcursor VCursor, bindVars map[string]*queryp
 	if len(rss) == 0 {
 		if !route.NoRoutesSpecialHandling {
 			if wantfields {
-				return route.GetFields(vcursor, nil, bindVars)
+				return route.GetFields(vcursor, bindVars)
 			}
 			return &sqltypes.Result{}, nil
 		}
@@ -254,7 +254,7 @@ func filterOutNilErrors(errs []error) []error {
 }
 
 // TryStreamExecute performs a streaming exec.
-func (route *Route) TryStreamExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (route *Route) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	if route.QueryTimeout != 0 {
 		cancel := vcursor.SetContextTimeout(time.Duration(route.QueryTimeout) * time.Millisecond)
 		defer cancel()
@@ -268,7 +268,7 @@ func (route *Route) TryStreamExecute(vcursor VCursor, routing *RouteDestination,
 	if len(rss) == 0 {
 		if !route.NoRoutesSpecialHandling {
 			if wantfields {
-				r, err := route.GetFields(vcursor, routing, bindVars)
+				r, err := route.GetFields(vcursor, bindVars)
 				if err != nil {
 					return err
 				}
@@ -331,7 +331,7 @@ func (route *Route) mergeSort(vcursor VCursor, routing *RouteDestination, bindVa
 }
 
 // GetFields fetches the field info.
-func (route *Route) GetFields(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (route *Route) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	rss, _, err := vcursor.ResolveDestinations(route.Keyspace.Name, nil, []key.Destination{key.DestinationAnyShard{}})
 	if err != nil {
 		return nil, err

@@ -62,7 +62,7 @@ func (ps *PulloutSubquery) GetTableName() string {
 }
 
 // TryExecute satisfies the Primitive interface.
-func (ps *PulloutSubquery) TryExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (ps *PulloutSubquery) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	combinedVars, err := ps.execSubquery(vcursor, routing, bindVars)
 	if err != nil {
 		return nil, err
@@ -71,7 +71,7 @@ func (ps *PulloutSubquery) TryExecute(vcursor VCursor, routing *RouteDestination
 }
 
 // TryStreamExecute performs a streaming exec.
-func (ps *PulloutSubquery) TryStreamExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (ps *PulloutSubquery) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	combinedVars, err := ps.execSubquery(vcursor, routing, bindVars)
 	if err != nil {
 		return err
@@ -80,7 +80,7 @@ func (ps *PulloutSubquery) TryStreamExecute(vcursor VCursor, routing *RouteDesti
 }
 
 // GetFields fetches the field info.
-func (ps *PulloutSubquery) GetFields(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (ps *PulloutSubquery) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	combinedVars := make(map[string]*querypb.BindVariable, len(bindVars)+1)
 	for k, v := range bindVars {
 		combinedVars[k] = v
@@ -97,7 +97,7 @@ func (ps *PulloutSubquery) GetFields(vcursor VCursor, routing *RouteDestination,
 	case PulloutExists:
 		combinedVars[ps.HasValues] = sqltypes.Int64BindVariable(0)
 	}
-	return ps.Underlying.GetFields(vcursor, routing, combinedVars)
+	return ps.Underlying.GetFields(vcursor, combinedVars)
 }
 
 // NeedsTransaction implements the Primitive interface

@@ -53,7 +53,7 @@ func (r *Rows) GetTableName() string {
 }
 
 // TryExecute implements the Primitive interface
-func (r *Rows) TryExecute(VCursor, *RouteDestination, map[string]*querypb.BindVariable, bool) (*sqltypes.Result, error) {
+func (r *Rows) TryExecute(VCursor, map[string]*querypb.BindVariable, bool) (*sqltypes.Result, error) {
 	return &sqltypes.Result{
 		Fields:   r.fields,
 		InsertID: 0,
@@ -62,8 +62,8 @@ func (r *Rows) TryExecute(VCursor, *RouteDestination, map[string]*querypb.BindVa
 }
 
 // TryStreamExecute implements the Primitive interface
-func (r *Rows) TryStreamExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantields bool, callback func(*sqltypes.Result) error) error {
-	result, err := r.TryExecute(vcursor, routing, bindVars, wantields)
+func (r *Rows) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	result, err := r.TryExecute(vcursor, bindVars, wantields)
 	if err != nil {
 		return err
 	}
@@ -71,7 +71,7 @@ func (r *Rows) TryStreamExecute(vcursor VCursor, routing *RouteDestination, bind
 }
 
 // GetFields implements the Primitive interface
-func (r *Rows) GetFields(VCursor, *RouteDestination, map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (r *Rows) GetFields(VCursor, map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return &sqltypes.Result{
 		Fields:   r.fields,
 		InsertID: 0,

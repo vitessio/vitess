@@ -47,7 +47,7 @@ type SemiJoin struct {
 }
 
 // TryExecute performs a non-streaming exec.
-func (jn *SemiJoin) TryExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (jn *SemiJoin) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	joinVars := make(map[string]*querypb.BindVariable)
 	lresult, err := vcursor.ExecutePrimitive(jn.Left, routing, bindVars, wantfields)
 	if err != nil {
@@ -70,7 +70,7 @@ func (jn *SemiJoin) TryExecute(vcursor VCursor, routing *RouteDestination, bindV
 }
 
 // TryStreamExecute performs a streaming exec.
-func (jn *SemiJoin) TryStreamExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (jn *SemiJoin) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	joinVars := make(map[string]*querypb.BindVariable)
 	err := vcursor.StreamExecutePrimitive(jn.Left, routing, bindVars, wantfields, func(lresult *sqltypes.Result) error {
 		result := &sqltypes.Result{Fields: projectFields(lresult.Fields, jn.Cols)}
@@ -96,8 +96,8 @@ func (jn *SemiJoin) TryStreamExecute(vcursor VCursor, routing *RouteDestination,
 }
 
 // GetFields fetches the field info.
-func (jn *SemiJoin) GetFields(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return jn.Left.GetFields(vcursor, routing, bindVars)
+func (jn *SemiJoin) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	return jn.Left.GetFields(vcursor, bindVars)
 }
 
 // Inputs returns the input primitives for this SemiJoin

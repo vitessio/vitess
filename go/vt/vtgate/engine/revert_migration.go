@@ -69,7 +69,7 @@ func (v *RevertMigration) GetTableName() string {
 }
 
 // TryExecute implements the Primitive interface
-func (v *RevertMigration) TryExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool) (result *sqltypes.Result, err error) {
+func (v *RevertMigration) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (result *sqltypes.Result, err error) {
 	result = &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{
@@ -109,8 +109,8 @@ func (v *RevertMigration) TryExecute(vcursor VCursor, routing *RouteDestination,
 }
 
 // TryStreamExecute implements the Primitive interface
-func (v *RevertMigration) TryStreamExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	results, err := v.TryExecute(vcursor, routing, bindVars, wantfields)
+func (v *RevertMigration) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	results, err := v.TryExecute(vcursor, bindVars, wantfields)
 	if err != nil {
 		return err
 	}
@@ -118,6 +118,6 @@ func (v *RevertMigration) TryStreamExecute(vcursor VCursor, routing *RouteDestin
 }
 
 //GetFields implements the Primitive interface
-func (v *RevertMigration) GetFields(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (v *RevertMigration) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] GetFields is not reachable")
 }

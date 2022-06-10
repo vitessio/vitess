@@ -432,7 +432,7 @@ const MaxBufferingRetries = 3
 
 func (vc *vcursorImpl) ExecutePrimitive(primitive engine.Primitive, routing *engine.RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	for try := 0; try < MaxBufferingRetries; try++ {
-		res, err := primitive.TryExecute(vc, routing, bindVars, wantfields)
+		res, err := primitive.TryExecute(vc, bindVars, wantfields)
 		if err != nil && vterrors.RootCause(err) == buffer.ShardMissingError {
 			continue
 		}
@@ -443,7 +443,7 @@ func (vc *vcursorImpl) ExecutePrimitive(primitive engine.Primitive, routing *eng
 
 func (vc *vcursorImpl) StreamExecutePrimitive(primitive engine.Primitive, routing *engine.RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	for try := 0; try < MaxBufferingRetries; try++ {
-		err := primitive.TryStreamExecute(vc, routing, bindVars, wantfields, callback)
+		err := primitive.TryStreamExecute(vc, bindVars, wantfields, callback)
 		if err != nil && vterrors.RootCause(err) == buffer.ShardMissingError {
 			continue
 		}

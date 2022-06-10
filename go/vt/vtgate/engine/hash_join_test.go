@@ -63,7 +63,7 @@ func TestHashJoinExecuteSameType(t *testing.T) {
 		LHSKey: 0,
 		RHSKey: 0,
 	}
-	r, err := jn.TryExecute(&noopVCursor{}, nil, map[string]*querypb.BindVariable{}, true)
+	r, err := jn.TryExecute(&noopVCursor{}, map[string]*querypb.BindVariable{}, true)
 	require.NoError(t, err)
 	leftPrim.ExpectLog(t, []string{
 		`Execute  true`,
@@ -125,7 +125,7 @@ func TestHashJoinExecuteDifferentType(t *testing.T) {
 		RHSKey:         0,
 		ComparisonType: querypb.Type_FLOAT64,
 	}
-	r, err := jn.TryExecute(&noopVCursor{}, nil, map[string]*querypb.BindVariable{}, true)
+	r, err := jn.TryExecute(&noopVCursor{}, map[string]*querypb.BindVariable{}, true)
 	require.NoError(t, err)
 	leftPrim.ExpectLog(t, []string{
 		`Execute  true`,

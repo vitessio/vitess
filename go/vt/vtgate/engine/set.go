@@ -118,7 +118,7 @@ func (s *Set) GetTableName() string {
 }
 
 // TryExecute implements the Primitive interface method.
-func (s *Set) TryExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, _ bool) (*sqltypes.Result, error) {
+func (s *Set) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	input, err := vcursor.ExecutePrimitive(s.Input, routing, bindVars, false)
 	if err != nil {
 		return nil, err
@@ -139,8 +139,8 @@ func (s *Set) TryExecute(vcursor VCursor, routing *RouteDestination, bindVars ma
 }
 
 // TryStreamExecute implements the Primitive interface method.
-func (s *Set) TryStreamExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantields bool, callback func(*sqltypes.Result) error) error {
-	result, err := s.TryExecute(vcursor, routing, bindVars, wantields)
+func (s *Set) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	result, err := s.TryExecute(vcursor, bindVars, wantields)
 	if err != nil {
 		return err
 	}
@@ -148,7 +148,7 @@ func (s *Set) TryStreamExecute(vcursor VCursor, routing *RouteDestination, bindV
 }
 
 // GetFields implements the Primitive interface method.
-func (s *Set) GetFields(VCursor, *RouteDestination, map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (s *Set) GetFields(VCursor, map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return &sqltypes.Result{}, nil
 }
 

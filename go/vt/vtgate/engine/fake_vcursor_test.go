@@ -104,11 +104,11 @@ func (t *noopVCursor) ConnCollation() collations.ID {
 }
 
 func (t *noopVCursor) ExecutePrimitive(primitive Primitive, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	return primitive.TryExecute(t, routing, bindVars, wantfields)
+	return primitive.TryExecute(t, bindVars, wantfields)
 }
 
 func (t *noopVCursor) StreamExecutePrimitive(primitive Primitive, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	return primitive.TryStreamExecute(t, routing, bindVars, wantfields, callback)
+	return primitive.TryStreamExecute(t, bindVars, wantfields, callback)
 }
 
 func (t *noopVCursor) HasSystemVariables() bool {
@@ -367,11 +367,11 @@ type tableRoutes struct {
 }
 
 func (f *loggingVCursor) ExecutePrimitive(primitive Primitive, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	return primitive.TryExecute(f, routing, bindVars, wantfields)
+	return primitive.TryExecute(f, bindVars, wantfields)
 }
 
 func (f *loggingVCursor) StreamExecutePrimitive(primitive Primitive, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	return primitive.TryStreamExecute(f, routing, bindVars, wantfields, callback)
+	return primitive.TryStreamExecute(f, bindVars, wantfields, callback)
 }
 
 func (f *loggingVCursor) KeyspaceAvailable(ks string) bool {

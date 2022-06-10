@@ -97,7 +97,7 @@ func (v *nvindex) Map(cursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Dest
 func TestVindexFuncMap(t *testing.T) {
 	// Unique Vindex returning 0 rows.
 	vf := testVindexFunc(&uvindex{})
-	got, err := vf.TryExecute(&noopVCursor{}, nil, nil, false)
+	got, err := vf.TryExecute(&noopVCursor{}, nil, false)
 	require.NoError(t, err)
 	want := &sqltypes.Result{
 		Fields: sqltypes.MakeTestFields("id|keyspace_id|hex(keyspace_id)|range_start|range_end", "varbinary|varbinary|varbinary|varbinary|varbinary"),
@@ -106,7 +106,7 @@ func TestVindexFuncMap(t *testing.T) {
 
 	// Unique Vindex returning 1 row.
 	vf = testVindexFunc(&uvindex{matchid: true})
-	got, err = vf.TryExecute(&noopVCursor{}, nil, nil, false)
+	got, err = vf.TryExecute(&noopVCursor{}, nil, false)
 	require.NoError(t, err)
 	want = sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("id|keyspace_id|hex(keyspace_id)|range_start|range_end", "varbinary|varbinary|varbinary|varbinary|varbinary"),
@@ -126,7 +126,7 @@ func TestVindexFuncMap(t *testing.T) {
 		Vindex: &uvindex{matchid: true},
 		Value:  evalengine.TupleExpr{evalengine.NewLiteralInt(1), evalengine.NewLiteralInt(2), evalengine.NewLiteralInt(3)},
 	}
-	got, err = vf.TryExecute(&noopVCursor{}, nil, nil, false)
+	got, err = vf.TryExecute(&noopVCursor{}, nil, false)
 	require.NoError(t, err)
 	want = sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("id|keyspace_id|hex(keyspace_id)|range_start|range_end", "varbinary|varbinary|varbinary|varbinary|varbinary"),
@@ -142,7 +142,7 @@ func TestVindexFuncMap(t *testing.T) {
 
 	// Unique Vindex returning keyrange.
 	vf = testVindexFunc(&uvindex{matchkr: true})
-	got, err = vf.TryExecute(&noopVCursor{}, nil, nil, false)
+	got, err = vf.TryExecute(&noopVCursor{}, nil, false)
 	require.NoError(t, err)
 	want = &sqltypes.Result{
 		Fields: sqltypes.MakeTestFields("id|keyspace_id|hex(keyspace_id)|range_start|range_end", "varbinary|varbinary|varbinary|varbinary|varbinary"),
@@ -159,7 +159,7 @@ func TestVindexFuncMap(t *testing.T) {
 
 	// NonUnique Vindex returning 0 rows.
 	vf = testVindexFunc(&nvindex{})
-	got, err = vf.TryExecute(&noopVCursor{}, nil, nil, false)
+	got, err = vf.TryExecute(&noopVCursor{}, nil, false)
 	require.NoError(t, err)
 	want = &sqltypes.Result{
 		Fields: sqltypes.MakeTestFields("id|keyspace_id|hex(keyspace_id)|range_start|range_end", "varbinary|varbinary|varbinary|varbinary|varbinary"),
@@ -168,7 +168,7 @@ func TestVindexFuncMap(t *testing.T) {
 
 	// NonUnique Vindex returning 2 rows.
 	vf = testVindexFunc(&nvindex{matchid: true})
-	got, err = vf.TryExecute(&noopVCursor{}, nil, nil, false)
+	got, err = vf.TryExecute(&noopVCursor{}, nil, false)
 	require.NoError(t, err)
 	want = sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("id|keyspace_id|hex(keyspace_id)|range_start|range_end", "varbinary|varbinary|varbinary|varbinary|varbinary"),
@@ -184,7 +184,7 @@ func TestVindexFuncMap(t *testing.T) {
 
 	// NonUnique Vindex returning keyrange
 	vf = testVindexFunc(&nvindex{matchkr: true})
-	got, err = vf.TryExecute(&noopVCursor{}, nil, nil, false)
+	got, err = vf.TryExecute(&noopVCursor{}, nil, false)
 	require.NoError(t, err)
 	want = &sqltypes.Result{
 		Fields: sqltypes.MakeTestFields("id|keyspace_id|hex(keyspace_id)|range_start|range_end", "varbinary|varbinary|varbinary|varbinary|varbinary"),
@@ -212,7 +212,7 @@ func TestVindexFuncStreamExecute(t *testing.T) {
 		}},
 	}}
 	i := 0
-	err := vf.TryStreamExecute(&noopVCursor{}, nil, nil, false, func(qr *sqltypes.Result) error {
+	err := vf.TryStreamExecute(&noopVCursor{}, nil, false, func(qr *sqltypes.Result) error {
 		if !reflect.DeepEqual(qr, want[i]) {
 			t.Errorf("callback(%d):\n%v, want\n%v", i, qr, want[i])
 		}
@@ -226,7 +226,7 @@ func TestVindexFuncStreamExecute(t *testing.T) {
 
 func TestVindexFuncGetFields(t *testing.T) {
 	vf := testVindexFunc(&uvindex{matchid: true})
-	got, err := vf.GetFields(nil, nil, nil)
+	got, err := vf.GetFields(nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -242,7 +242,7 @@ func TestFieldOrder(t *testing.T) {
 	vf := testVindexFunc(&nvindex{matchid: true})
 	vf.Fields = sqltypes.MakeTestFields("keyspace_id|id|keyspace_id", "varbinary|varbinary|varbinary")
 	vf.Cols = []int{1, 0, 1}
-	got, err := vf.TryExecute(&noopVCursor{}, nil, nil, true)
+	got, err := vf.TryExecute(&noopVCursor{}, nil, true)
 	if err != nil {
 		t.Fatal(err)
 	}

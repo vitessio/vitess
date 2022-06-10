@@ -65,7 +65,7 @@ func (ms *MemorySort) SetTruncateColumnCount(count int) {
 }
 
 // TryExecute satisfies the Primitive interface.
-func (ms *MemorySort) TryExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (ms *MemorySort) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	count, err := ms.fetchCount(vcursor, bindVars)
 	if err != nil {
 		return nil, err
@@ -91,7 +91,7 @@ func (ms *MemorySort) TryExecute(vcursor VCursor, routing *RouteDestination, bin
 }
 
 // TryStreamExecute satisfies the Primitive interface.
-func (ms *MemorySort) TryStreamExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (ms *MemorySort) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	count, err := ms.fetchCount(vcursor, bindVars)
 	if err != nil {
 		return err
@@ -143,8 +143,8 @@ func (ms *MemorySort) TryStreamExecute(vcursor VCursor, routing *RouteDestinatio
 }
 
 // GetFields satisfies the Primitive interface.
-func (ms *MemorySort) GetFields(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return ms.Input.GetFields(vcursor, routing, bindVars)
+func (ms *MemorySort) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	return ms.Input.GetFields(vcursor, bindVars)
 }
 
 // Inputs returns the input to memory sort

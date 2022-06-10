@@ -86,7 +86,7 @@ func (ddl *DDL) isOnlineSchemaDDL() bool {
 }
 
 // TryExecute implements the Primitive interface
-func (ddl *DDL) TryExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*query.BindVariable, wantfields bool) (result *sqltypes.Result, err error) {
+func (ddl *DDL) TryExecute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool) (result *sqltypes.Result, err error) {
 	if ddl.CreateTempTable {
 		vcursor.Session().HasCreatedTempTable()
 		vcursor.Session().NeedsReservedConn()
@@ -114,8 +114,8 @@ func (ddl *DDL) TryExecute(vcursor VCursor, routing *RouteDestination, bindVars 
 }
 
 // TryStreamExecute implements the Primitive interface
-func (ddl *DDL) TryStreamExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*query.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	results, err := ddl.TryExecute(vcursor, routing, bindVars, wantfields)
+func (ddl *DDL) TryStreamExecute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	results, err := ddl.TryExecute(vcursor, bindVars, wantfields)
 	if err != nil {
 		return err
 	}
@@ -123,6 +123,6 @@ func (ddl *DDL) TryStreamExecute(vcursor VCursor, routing *RouteDestination, bin
 }
 
 // GetFields implements the Primitive interface
-func (ddl *DDL) GetFields(vcursor VCursor, routing *RouteDestination, bindVars map[string]*query.BindVariable) (*sqltypes.Result, error) {
+func (ddl *DDL) GetFields(vcursor VCursor, bindVars map[string]*query.BindVariable) (*sqltypes.Result, error) {
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] GetFields in not reachable")
 }

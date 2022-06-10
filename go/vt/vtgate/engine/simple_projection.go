@@ -52,7 +52,7 @@ func (sc *SimpleProjection) GetTableName() string {
 }
 
 // TryExecute performs a non-streaming exec.
-func (sc *SimpleProjection) TryExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (sc *SimpleProjection) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	inner, err := vcursor.ExecutePrimitive(sc.Input, routing, bindVars, wantfields)
 	if err != nil {
 		return nil, err
@@ -61,15 +61,15 @@ func (sc *SimpleProjection) TryExecute(vcursor VCursor, routing *RouteDestinatio
 }
 
 // TryStreamExecute performs a streaming exec.
-func (sc *SimpleProjection) TryStreamExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (sc *SimpleProjection) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	return vcursor.StreamExecutePrimitive(sc.Input, routing, bindVars, wantfields, func(inner *sqltypes.Result) error {
 		return callback(sc.buildResult(inner))
 	})
 }
 
 // GetFields fetches the field info.
-func (sc *SimpleProjection) GetFields(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	inner, err := sc.Input.GetFields(vcursor, routing, bindVars)
+func (sc *SimpleProjection) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	inner, err := sc.Input.GetFields(vcursor, bindVars)
 	if err != nil {
 		return nil, err
 	}

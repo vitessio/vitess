@@ -57,8 +57,8 @@ func (gc *Gen4CompareV3) GetTableName() string {
 }
 
 // GetFields implements the Primitive interface
-func (gc *Gen4CompareV3) GetFields(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return gc.Gen4.GetFields(vcursor, routing, bindVars)
+func (gc *Gen4CompareV3) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	return gc.Gen4.GetFields(vcursor, bindVars)
 }
 
 // NeedsTransaction implements the Primitive interface
@@ -67,19 +67,14 @@ func (gc *Gen4CompareV3) NeedsTransaction() bool {
 }
 
 // TryExecute implements the Primitive interface
-func (gc *Gen4CompareV3) TryExecute(
-	vcursor VCursor,
-	routing *RouteDestination,
-	bindVars map[string]*querypb.BindVariable,
-	wantfields bool,
-) (*sqltypes.Result, error) {
+func (gc *Gen4CompareV3) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	var v3Err, gen4Err error
 	v3Result, gen4Result := &sqltypes.Result{}, &sqltypes.Result{}
 	if gc.Gen4 != nil {
-		gen4Result, gen4Err = gc.Gen4.TryExecute(vcursor, routing, bindVars, wantfields)
+		gen4Result, gen4Err = gc.Gen4.TryExecute(vcursor, bindVars, wantfields)
 	}
 	if gc.V3 != nil {
-		v3Result, v3Err = gc.V3.TryExecute(vcursor, routing, bindVars, wantfields)
+		v3Result, v3Err = gc.V3.TryExecute(vcursor, bindVars, wantfields)
 	}
 
 	if err := CompareV3AndGen4Errors(v3Err, gen4Err); err != nil {
@@ -93,19 +88,13 @@ func (gc *Gen4CompareV3) TryExecute(
 }
 
 // TryStreamExecute implements the Primitive interface
-func (gc *Gen4CompareV3) TryStreamExecute(
-	vcursor VCursor,
-	routing *RouteDestination,
-	bindVars map[string]*querypb.BindVariable,
-	wantfields bool,
-	callback func(*sqltypes.Result) error,
-) error {
+func (gc *Gen4CompareV3) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	var mu sync.Mutex
 	var v3Err, gen4Err error
 	v3Result, gen4Result := &sqltypes.Result{}, &sqltypes.Result{}
 
 	if gc.Gen4 != nil {
-		gen4Err = gc.Gen4.TryStreamExecute(vcursor, routing, bindVars, wantfields, func(result *sqltypes.Result) error {
+		gen4Err = gc.Gen4.TryStreamExecute(vcursor, bindVars, wantfields, func(result *sqltypes.Result) error {
 			mu.Lock()
 			defer mu.Unlock()
 			gen4Result.AppendResult(result)
@@ -113,7 +102,7 @@ func (gc *Gen4CompareV3) TryStreamExecute(
 		})
 	}
 	if gc.V3 != nil {
-		v3Err = gc.V3.TryStreamExecute(vcursor, routing, bindVars, wantfields, func(result *sqltypes.Result) error {
+		v3Err = gc.V3.TryStreamExecute(vcursor, bindVars, wantfields, func(result *sqltypes.Result) error {
 			mu.Lock()
 			defer mu.Unlock()
 			v3Result.AppendResult(result)

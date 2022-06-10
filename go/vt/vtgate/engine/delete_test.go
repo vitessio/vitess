@@ -46,7 +46,7 @@ func TestDeleteUnsharded(t *testing.T) {
 	}
 
 	vc := newDMLTestVCursor("0")
-	_, err := del.TryExecute(vc, nil, map[string]*querypb.BindVariable{}, false)
+	_, err := del.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
@@ -55,11 +55,11 @@ func TestDeleteUnsharded(t *testing.T) {
 
 	// Failure cases
 	vc = &loggingVCursor{shardErr: errors.New("shard_error")}
-	_, err = del.TryExecute(vc, nil, map[string]*querypb.BindVariable{}, false)
+	_, err = del.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 	require.EqualError(t, err, "shard_error")
 
 	vc = &loggingVCursor{}
-	_, err = del.TryExecute(vc, nil, map[string]*querypb.BindVariable{}, false)
+	_, err = del.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 	require.EqualError(t, err, "Keyspace 'ks' does not have exactly one shard: []")
 }
 
@@ -81,7 +81,7 @@ func TestDeleteEqual(t *testing.T) {
 	}
 
 	vc := newDMLTestVCursor("-20", "20-")
-	_, err := del.TryExecute(vc, nil, map[string]*querypb.BindVariable{}, false)
+	_, err := del.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks [type:INT64 value:"1"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
@@ -91,7 +91,7 @@ func TestDeleteEqual(t *testing.T) {
 	// Failure case
 	expr := evalengine.NewBindVar("aa", collations.TypedCollation{})
 	del.Values = []evalengine.Expr{expr}
-	_, err = del.TryExecute(vc, nil, map[string]*querypb.BindVariable{}, false)
+	_, err = del.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 	require.EqualError(t, err, "query arguments missing for aa")
 }
 
@@ -113,7 +113,7 @@ func TestDeleteEqualMultiCol(t *testing.T) {
 	}
 
 	vc := newDMLTestVCursor("-20", "20-")
-	_, err := del.TryExecute(vc, nil, map[string]*querypb.BindVariable{}, false)
+	_, err := del.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinationsMultiCol ks [[INT64(1) INT64(2)]] Destinations:DestinationKeyspaceID(0106e7ea22ce92708f)`,
@@ -123,7 +123,7 @@ func TestDeleteEqualMultiCol(t *testing.T) {
 	// Failure case
 	expr := evalengine.NewBindVar("aa", collations.TypedCollation{})
 	del.Values = []evalengine.Expr{expr}
-	_, err = del.TryExecute(vc, nil, map[string]*querypb.BindVariable{}, false)
+	_, err = del.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 	require.EqualError(t, err, "query arguments missing for aa")
 }
 
@@ -149,7 +149,7 @@ func TestDeleteEqualNoRoute(t *testing.T) {
 	}
 
 	vc := newDMLTestVCursor("0")
-	_, err := del.TryExecute(vc, nil, map[string]*querypb.BindVariable{}, false)
+	_, err := del.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		// This lookup query will return no rows. So, the DML will not be sent anywhere.
@@ -182,7 +182,7 @@ func TestDeleteEqualNoScatter(t *testing.T) {
 	}
 
 	vc := newDMLTestVCursor("0")
-	_, err := del.TryExecute(vc, nil, map[string]*querypb.BindVariable{}, false)
+	_, err := del.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 	require.EqualError(t, err, "cannot map vindex to unique keyspace id: DestinationKeyRange(-)")
 }
 
@@ -215,7 +215,7 @@ func TestDeleteOwnedVindex(t *testing.T) {
 	vc := newDMLTestVCursor("-20", "20-")
 	vc.results = results
 
-	_, err := del.TryExecute(vc, nil, map[string]*querypb.BindVariable{}, false)
+	_, err := del.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations sharded [type:INT64 value:"1"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
@@ -231,7 +231,7 @@ func TestDeleteOwnedVindex(t *testing.T) {
 
 	// No rows changing
 	vc = newDMLTestVCursor("-20", "20-")
-	_, err = del.TryExecute(vc, nil, map[string]*querypb.BindVariable{}, false)
+	_, err = del.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations sharded [type:INT64 value:"1"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
@@ -254,7 +254,7 @@ func TestDeleteOwnedVindex(t *testing.T) {
 	vc = newDMLTestVCursor("-20", "20-")
 	vc.results = results
 
-	_, err = del.TryExecute(vc, nil, map[string]*querypb.BindVariable{}, false)
+	_, err = del.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations sharded [type:INT64 value:"1"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
@@ -301,7 +301,7 @@ func TestDeleteOwnedVindexMultiCol(t *testing.T) {
 	vc := newDMLTestVCursor("-20", "20-")
 	vc.results = results
 
-	_, err := del.TryExecute(vc, nil, map[string]*querypb.BindVariable{}, false)
+	_, err := del.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinationsMultiCol sharded [[INT64(1) INT64(2)]] Destinations:DestinationKeyspaceID(0106e7ea22ce92708f)`,
@@ -317,7 +317,7 @@ func TestDeleteOwnedVindexMultiCol(t *testing.T) {
 	// No rows changing
 	vc.Rewind()
 	vc.results = nil
-	_, err = del.TryExecute(vc, nil, map[string]*querypb.BindVariable{}, false)
+	_, err = del.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinationsMultiCol sharded [[INT64(1) INT64(2)]] Destinations:DestinationKeyspaceID(0106e7ea22ce92708f)`,
@@ -340,7 +340,7 @@ func TestDeleteOwnedVindexMultiCol(t *testing.T) {
 	vc.Rewind()
 	vc.results = results
 
-	_, err = del.TryExecute(vc, nil, map[string]*querypb.BindVariable{}, false)
+	_, err = del.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinationsMultiCol sharded [[INT64(1) INT64(2)]] Destinations:DestinationKeyspaceID(0106e7ea22ce92708f)`,
@@ -369,7 +369,7 @@ func TestDeleteSharded(t *testing.T) {
 	}
 
 	vc := newDMLTestVCursor("-20", "20-")
-	_, err := del.TryExecute(vc, nil, map[string]*querypb.BindVariable{}, false)
+	_, err := del.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations sharded [] Destinations:DestinationAllShards()`,
@@ -378,7 +378,7 @@ func TestDeleteSharded(t *testing.T) {
 
 	// Failure case
 	vc = &loggingVCursor{shardErr: errors.New("shard_error")}
-	_, err = del.TryExecute(vc, nil, map[string]*querypb.BindVariable{}, false)
+	_, err = del.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 	require.EqualError(t, err, "shard_error")
 }
 
@@ -433,7 +433,7 @@ func TestDeleteScatterOwnedVindex(t *testing.T) {
 	vc := newDMLTestVCursor("-20", "20-")
 	vc.results = results
 
-	_, err := del.TryExecute(vc, nil, map[string]*querypb.BindVariable{}, false)
+	_, err := del.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations sharded [] Destinations:DestinationAllShards()`,
@@ -450,7 +450,7 @@ func TestDeleteScatterOwnedVindex(t *testing.T) {
 	// No rows changing
 	vc = newDMLTestVCursor("-20", "20-")
 
-	_, err = del.TryExecute(vc, nil, map[string]*querypb.BindVariable{}, false)
+	_, err = del.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations sharded [] Destinations:DestinationAllShards()`,
@@ -473,7 +473,7 @@ func TestDeleteScatterOwnedVindex(t *testing.T) {
 	vc = newDMLTestVCursor("-20", "20-")
 	vc.results = results
 
-	_, err = del.TryExecute(vc, nil, map[string]*querypb.BindVariable{}, false)
+	_, err = del.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations sharded [] Destinations:DestinationAllShards()`,
@@ -525,7 +525,7 @@ func TestDeleteInChangedVindexMultiCol(t *testing.T) {
 	vc := newDMLTestVCursor("-20", "20-")
 	vc.results = results
 
-	_, err := del.TryExecute(vc, nil, map[string]*querypb.BindVariable{}, false)
+	_, err := del.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinationsMultiCol sharded [[INT64(1) INT64(3)] [INT64(2) INT64(3)]] Destinations:DestinationKeyspaceID(014eb190c9a2fa169c),DestinationKeyspaceID(024eb190c9a2fa169c)`,
@@ -561,7 +561,7 @@ func TestDeleteEqualSubshard(t *testing.T) {
 
 	vc := newDMLTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"-20", "20-"}
-	_, err := del.TryExecute(vc, nil, map[string]*querypb.BindVariable{}, false)
+	_, err := del.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinationsMultiCol ks [[INT64(1)]] Destinations:DestinationKeyRange(01-02)`,
@@ -571,7 +571,7 @@ func TestDeleteEqualSubshard(t *testing.T) {
 	vc.Rewind()
 	// as it is single shard so autocommit should be allowed.
 	vc.shardForKsid = []string{"-20"}
-	_, err = del.TryExecute(vc, nil, map[string]*querypb.BindVariable{}, false)
+	_, err = del.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinationsMultiCol ks [[INT64(1)]] Destinations:DestinationKeyRange(01-02)`,

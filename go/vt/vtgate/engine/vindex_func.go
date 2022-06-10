@@ -88,12 +88,12 @@ func (vf *VindexFunc) GetTableName() string {
 }
 
 // TryExecute performs a non-streaming exec.
-func (vf *VindexFunc) TryExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (vf *VindexFunc) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	return vf.mapVindex(vcursor, bindVars)
 }
 
 // TryStreamExecute performs a streaming exec.
-func (vf *VindexFunc) TryStreamExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (vf *VindexFunc) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	r, err := vf.mapVindex(vcursor, bindVars)
 	if err != nil {
 		return err
@@ -105,7 +105,7 @@ func (vf *VindexFunc) TryStreamExecute(vcursor VCursor, routing *RouteDestinatio
 }
 
 // GetFields fetches the field info.
-func (vf *VindexFunc) GetFields(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (vf *VindexFunc) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return &sqltypes.Result{Fields: vf.Fields}, nil
 }
 
