@@ -235,8 +235,8 @@ func (lu *LookupUnique) NeedsVCursor() bool {
 
 // Map can map ids to key.Destination objects.
 func (lu *LookupUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
-	out := make([]key.Destination, 0, len(ids))
 	if lu.writeOnly {
+		out := make([]key.Destination, 0, len(ids))
 		for range ids {
 			out = append(out, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{}})
 		}
@@ -245,6 +245,17 @@ func (lu *LookupUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([]key.Destin
 	results, err := lu.lkp.Lookup(vcursor, ids, vtgatepb.CommitOrder_NORMAL)
 	if err != nil {
 		return nil, err
+	}
+	return lu.MapResult(ids, results)
+}
+
+func (lu *LookupUnique) MapResult(ids []sqltypes.Value, results []*sqltypes.Result) ([]key.Destination, error) {
+	out := make([]key.Destination, 0, len(ids))
+	if lu.writeOnly {
+		for range ids {
+			out = append(out, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{}})
+		}
+		return out, nil
 	}
 	for i, result := range results {
 		switch len(result.Rows) {
@@ -306,29 +317,4 @@ func (lu *LookupUnique) LookupQuery() (string, error) {
 
 func (lu *LookupUnique) Query() (string, []string) {
 	return lu.lkp.sel, lu.lkp.FromColumns
-}
-
-func (lu *LookupUnique) MapResult(ids []sqltypes.Value, results []*sqltypes.Result) ([]key.Destination, error) {
-	out := make([]key.Destination, 0, len(ids))
-	if lu.writeOnly {
-		for range ids {
-			out = append(out, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{}})
-		}
-		return out, nil
-	}
-	for i, result := range results {
-		switch len(result.Rows) {
-		case 0:
-			out = append(out, key.DestinationNone{})
-		case 1:
-			rowBytes, err := result.Rows[0][0].ToBytes()
-			if err != nil {
-				return nil, err
-			}
-			out = append(out, key.DestinationKeyspaceID(rowBytes))
-		default:
-			return nil, fmt.Errorf("Lookup.Map: unexpected multiple results from vindex %s: %v", lu.lkp.Table, ids[i])
-		}
-	}
-	return out, nil
 }

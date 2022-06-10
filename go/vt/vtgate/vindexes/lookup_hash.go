@@ -216,6 +216,12 @@ type LookupHashUnique struct {
 	lkp       lookupInternal
 }
 
+func (lhu *LookupHashUnique) Query() (selQuery string, arguments []string) {
+	return lhu.lkp.sel, lhu.lkp.FromColumns
+}
+
+var _ LookupPlannable = (*LookupHashUnique)(nil)
+
 // NewLookupHashUnique creates a LookupHashUnique vindex.
 // The supplied map has the following required fields:
 //   table: name of the backing table. It can be qualified by the keyspace.
@@ -266,8 +272,8 @@ func (lhu *LookupHashUnique) NeedsVCursor() bool {
 
 // Map can map ids to key.Destination objects.
 func (lhu *LookupHashUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
-	out := make([]key.Destination, 0, len(ids))
 	if lhu.writeOnly {
+		out := make([]key.Destination, 0, len(ids))
 		for range ids {
 			out = append(out, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{}})
 		}
@@ -277,6 +283,17 @@ func (lhu *LookupHashUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([]key.D
 	results, err := lhu.lkp.Lookup(vcursor, ids, vtgatepb.CommitOrder_NORMAL)
 	if err != nil {
 		return nil, err
+	}
+	return lhu.MapResult(ids, results)
+}
+
+func (lhu *LookupHashUnique) MapResult(ids []sqltypes.Value, results []*sqltypes.Result) ([]key.Destination, error) {
+	out := make([]key.Destination, 0, len(ids))
+	if lhu.writeOnly {
+		for range ids {
+			out = append(out, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{}})
+		}
+		return out, nil
 	}
 	for i, result := range results {
 		switch len(result.Rows) {

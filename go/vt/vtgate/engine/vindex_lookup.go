@@ -19,6 +19,8 @@ package engine
 import (
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
@@ -182,5 +184,11 @@ func (vr *VindexLookup) generateIds(vcursor VCursor, bindVars map[string]*queryp
 	if err != nil {
 		return nil, err
 	}
-	return []sqltypes.Value{value.Value()}, nil
+	switch vr.Opcode {
+	case Equal, EqualUnique:
+		return []sqltypes.Value{value.Value()}, nil
+	case IN:
+		return value.TupleValues(), nil
+	}
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "opcode %s not supported for VindexLookup", vr.Opcode.String())
 }
