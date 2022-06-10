@@ -530,8 +530,6 @@ func (s *VtctldServer) CreateKeyspace(ctx context.Context, req *vtctldatapb.Crea
 
 	span.Annotate("keyspace", req.Name)
 	span.Annotate("keyspace_type", topoproto.KeyspaceTypeLString(req.Type))
-	span.Annotate("sharding_column_name", req.ShardingColumnName)
-	span.Annotate("sharding_column_type", topoproto.KeyspaceIDTypeLString(req.ShardingColumnType))
 	span.Annotate("force", req.Force)
 	span.Annotate("allow_empty_vschema", req.AllowEmptyVSchema)
 	span.Annotate("durability_policy", req.DurabilityPolicy)
@@ -554,12 +552,8 @@ func (s *VtctldServer) CreateKeyspace(ctx context.Context, req *vtctldatapb.Crea
 	}
 
 	ki := &topodatapb.Keyspace{
-		KeyspaceType:       req.Type,
-		ShardingColumnName: req.ShardingColumnName,
-		ShardingColumnType: req.ShardingColumnType,
-
-		ServedFroms: req.ServedFroms,
-
+		KeyspaceType:     req.Type,
+		ServedFroms:      req.ServedFroms,
 		BaseKeyspace:     req.BaseKeyspace,
 		SnapshotTime:     req.SnapshotTime,
 		DurabilityPolicy: req.DurabilityPolicy,
@@ -2504,50 +2498,7 @@ func (s *VtctldServer) SetKeyspaceShardingInfo(ctx context.Context, req *vtctlda
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.SetKeyspaceShardingInfo")
 	defer span.Finish()
 
-	span.Annotate("keyspace", req.Keyspace)
-	span.Annotate("column_name", req.ColumnName)
-	span.Annotate("column_type", key.KeyspaceIDTypeString(req.ColumnType))
-	span.Annotate("force", req.Force)
-
-	isColumnNameSet := req.ColumnName != ""
-	isColumnTypeSet := req.ColumnType != topodatapb.KeyspaceIdType_UNSET
-
-	if (isColumnNameSet && !isColumnTypeSet) || (!isColumnNameSet && isColumnTypeSet) {
-		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "both <column_name:%v> and <column_type:%v> must be set, or both must be unset", req.ColumnName, key.KeyspaceIDTypeString(req.ColumnType))
-	}
-
-	ctx, unlock, lockErr := s.ts.LockKeyspace(ctx, req.Keyspace, "SetKeyspaceShardingInfo")
-	if lockErr != nil {
-		return nil, lockErr
-	}
-
-	var err error
-	defer unlock(&err)
-
 	ki, err := s.ts.GetKeyspace(ctx, req.Keyspace)
-	if err != nil {
-		return nil, err
-	}
-
-	if ki.ShardingColumnName != "" && ki.ShardingColumnName != req.ColumnName {
-		if !req.Force {
-			err = vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot change ShardingColumnName from %v to %v (use Force:true to override)", ki.ShardingColumnName, req.ColumnName)
-			return nil, err
-		}
-
-		log.Warningf("Forcing keyspace ShardingColumnName change from %v to %v", ki.ShardingColumnName, req.ColumnName)
-	}
-
-	if ki.ShardingColumnType != topodatapb.KeyspaceIdType_UNSET && ki.ShardingColumnType != req.ColumnType {
-		if !req.Force {
-			err = vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot change ShardingColumnType from %v to %v (use Force:true to override)", key.KeyspaceIDTypeString(ki.ShardingColumnType), key.KeyspaceIDTypeString(req.ColumnType))
-			return nil, err
-		}
-	}
-
-	ki.ShardingColumnName = req.ColumnName
-	ki.ShardingColumnType = req.ColumnType
-	err = s.ts.UpdateKeyspace(ctx, ki)
 	if err != nil {
 		return nil, err
 	}

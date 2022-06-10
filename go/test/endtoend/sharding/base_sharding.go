@@ -56,14 +56,8 @@ const (
 )
 
 // CheckSrvKeyspace verifies the schema with expectedPartition
-func CheckSrvKeyspace(t *testing.T, cell string, ksname string, shardingCol string, colType topodata.KeyspaceIdType, expectedPartition map[topodata.TabletType][]string, ci cluster.LocalProcessCluster) {
+func CheckSrvKeyspace(t *testing.T, cell string, ksname string, expectedPartition map[topodata.TabletType][]string, ci cluster.LocalProcessCluster) {
 	srvKeyspace := GetSrvKeyspace(t, cell, ksname, ci)
-	if shardingCol != "" {
-		assert.Equal(t, srvKeyspace.ShardingColumnName, shardingCol)
-	}
-	if colType != 0 {
-		assert.Equal(t, srvKeyspace.ShardingColumnType, colType)
-	}
 
 	currentPartition := map[topodata.TabletType][]string{}
 

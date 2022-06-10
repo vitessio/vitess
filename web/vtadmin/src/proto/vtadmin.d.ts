@@ -11226,13 +11226,6 @@ export namespace topodata {
         SNAPSHOT = 1
     }
 
-    /** KeyspaceIdType enum. */
-    enum KeyspaceIdType {
-        UNSET = 0,
-        UINT64 = 1,
-        BYTES = 2
-    }
-
     /** Properties of a TabletAlias. */
     interface ITabletAlias {
 
@@ -11860,12 +11853,6 @@ export namespace topodata {
     /** Properties of a Keyspace. */
     interface IKeyspace {
 
-        /** Keyspace sharding_column_name */
-        sharding_column_name?: (string|null);
-
-        /** Keyspace sharding_column_type */
-        sharding_column_type?: (topodata.KeyspaceIdType|null);
-
         /** Keyspace served_froms */
         served_froms?: (topodata.Keyspace.IServedFrom[]|null);
 
@@ -11890,12 +11877,6 @@ export namespace topodata {
          * @param [properties] Properties to set
          */
         constructor(properties?: topodata.IKeyspace);
-
-        /** Keyspace sharding_column_name. */
-        public sharding_column_name: string;
-
-        /** Keyspace sharding_column_type. */
-        public sharding_column_type: topodata.KeyspaceIdType;
 
         /** Keyspace served_froms. */
         public served_froms: topodata.Keyspace.IServedFrom[];
@@ -12581,12 +12562,6 @@ export namespace topodata {
         /** SrvKeyspace partitions */
         partitions?: (topodata.SrvKeyspace.IKeyspacePartition[]|null);
 
-        /** SrvKeyspace sharding_column_name */
-        sharding_column_name?: (string|null);
-
-        /** SrvKeyspace sharding_column_type */
-        sharding_column_type?: (topodata.KeyspaceIdType|null);
-
         /** SrvKeyspace served_from */
         served_from?: (topodata.SrvKeyspace.IServedFrom[]|null);
     }
@@ -12602,12 +12577,6 @@ export namespace topodata {
 
         /** SrvKeyspace partitions. */
         public partitions: topodata.SrvKeyspace.IKeyspacePartition[];
-
-        /** SrvKeyspace sharding_column_name. */
-        public sharding_column_name: string;
-
-        /** SrvKeyspace sharding_column_type. */
-        public sharding_column_type: topodata.KeyspaceIdType;
 
         /** SrvKeyspace served_from. */
         public served_from: topodata.SrvKeyspace.IServedFrom[];
@@ -33802,12 +33771,6 @@ export namespace vtctldata {
         /** CreateKeyspaceRequest allow_empty_v_schema */
         allow_empty_v_schema?: (boolean|null);
 
-        /** CreateKeyspaceRequest sharding_column_name */
-        sharding_column_name?: (string|null);
-
-        /** CreateKeyspaceRequest sharding_column_type */
-        sharding_column_type?: (topodata.KeyspaceIdType|null);
-
         /** CreateKeyspaceRequest served_froms */
         served_froms?: (topodata.Keyspace.IServedFrom[]|null);
 
@@ -33841,12 +33804,6 @@ export namespace vtctldata {
 
         /** CreateKeyspaceRequest allow_empty_v_schema. */
         public allow_empty_v_schema: boolean;
-
-        /** CreateKeyspaceRequest sharding_column_name. */
-        public sharding_column_name: string;
-
-        /** CreateKeyspaceRequest sharding_column_type. */
-        public sharding_column_type: topodata.KeyspaceIdType;
 
         /** CreateKeyspaceRequest served_froms. */
         public served_froms: topodata.Keyspace.IServedFrom[];
@@ -43357,12 +43314,6 @@ export namespace vtctldata {
         /** SetKeyspaceShardingInfoRequest keyspace */
         keyspace?: (string|null);
 
-        /** SetKeyspaceShardingInfoRequest column_name */
-        column_name?: (string|null);
-
-        /** SetKeyspaceShardingInfoRequest column_type */
-        column_type?: (topodata.KeyspaceIdType|null);
-
         /** SetKeyspaceShardingInfoRequest force */
         force?: (boolean|null);
     }
@@ -43378,12 +43329,6 @@ export namespace vtctldata {
 
         /** SetKeyspaceShardingInfoRequest keyspace. */
         public keyspace: string;
-
-        /** SetKeyspaceShardingInfoRequest column_name. */
-        public column_name: string;
-
-        /** SetKeyspaceShardingInfoRequest column_type. */
-        public column_type: topodata.KeyspaceIdType;
 
         /** SetKeyspaceShardingInfoRequest force. */
         public force: boolean;
