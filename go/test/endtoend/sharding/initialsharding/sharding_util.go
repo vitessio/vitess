@@ -633,7 +633,7 @@ func KillVtgateInstances() {
 }
 
 func checkSrvKeyspaceForSharding(t *testing.T, ksName string, expectedPartitions map[topodatapb.TabletType][]string) {
-	sharding.CheckSrvKeyspace(t, cell, ksName, "", 0, expectedPartitions, *ClusterInstance)
+	sharding.CheckSrvKeyspace(t, cell, ksName, expectedPartitions, *ClusterInstance)
 }
 
 // Create a new init_db.sql file that sets up passwords for all users.

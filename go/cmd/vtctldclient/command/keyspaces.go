@@ -24,7 +24,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
-	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -139,9 +138,6 @@ var createKeyspaceOptions = struct {
 	Force             bool
 	AllowEmptyVSchema bool
 
-	ShardingColumnName string
-	ShardingColumnType cli.KeyspaceIDTypeFlag
-
 	ServedFromsMap cli.StringMapValue
 
 	KeyspaceType      cli.KeyspaceTypeFlag
@@ -190,15 +186,13 @@ func commandCreateKeyspace(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
 	req := &vtctldatapb.CreateKeyspaceRequest{
-		Name:               name,
-		Force:              createKeyspaceOptions.Force,
-		AllowEmptyVSchema:  createKeyspaceOptions.AllowEmptyVSchema,
-		ShardingColumnName: createKeyspaceOptions.ShardingColumnName,
-		ShardingColumnType: topodatapb.KeyspaceIdType(createKeyspaceOptions.ShardingColumnType),
-		Type:               topodatapb.KeyspaceType(createKeyspaceOptions.KeyspaceType),
-		BaseKeyspace:       createKeyspaceOptions.BaseKeyspace,
-		SnapshotTime:       snapshotTime,
-		DurabilityPolicy:   createKeyspaceOptions.DurabilityPolicy,
+		Name:              name,
+		Force:             createKeyspaceOptions.Force,
+		AllowEmptyVSchema: createKeyspaceOptions.AllowEmptyVSchema,
+		Type:              topodatapb.KeyspaceType(createKeyspaceOptions.KeyspaceType),
+		BaseKeyspace:      createKeyspaceOptions.BaseKeyspace,
+		SnapshotTime:      snapshotTime,
+		DurabilityPolicy:  createKeyspaceOptions.DurabilityPolicy,
 	}
 
 	for n, v := range createKeyspaceOptions.ServedFromsMap.StringMapValue {
@@ -400,54 +394,6 @@ var setKeyspaceShardingInfoOptions = struct {
 }{}
 
 func commandSetKeyspaceShardingInfo(cmd *cobra.Command, args []string) error {
-	var (
-		keyspace   = cmd.Flags().Arg(0)
-		columnName string
-		columnType = topodatapb.KeyspaceIdType_UNSET
-	)
-
-	switch len(cmd.Flags().Args()) {
-	case 1:
-		// Nothing else to do; we set keyspace already above.
-	case 2:
-		columnName = cmd.Flags().Arg(1)
-	case 3:
-		var err error
-		columnType, err = key.ParseKeyspaceIDType(cmd.Flags().Arg(2))
-		if err != nil {
-			return err
-		}
-	default:
-		// This should be impossible due to cobra.RangeArgs, but we handle it
-		// explicitly anyway.
-		return fmt.Errorf("SetKeyspaceShardingInfo expects between 1 and 3 positional args; have %d", len(cmd.Flags().Args()))
-	}
-
-	isColumnNameSet := columnName != ""
-	isColumnTypeSet := columnType != topodatapb.KeyspaceIdType_UNSET
-
-	if (isColumnNameSet && !isColumnTypeSet) || (!isColumnNameSet && isColumnTypeSet) {
-		return fmt.Errorf("both <column_name:%v> and <column_type:%v> must be set, or both must be unset", columnName, key.KeyspaceIDTypeString(columnType))
-	}
-
-	cli.FinishedParsing(cmd)
-
-	resp, err := client.SetKeyspaceShardingInfo(commandCtx, &vtctldatapb.SetKeyspaceShardingInfoRequest{
-		Keyspace:   keyspace,
-		ColumnName: columnName,
-		ColumnType: columnType,
-		Force:      setKeyspaceShardingInfoOptions.Force,
-	})
-	if err != nil {
-		return err
-	}
-
-	data, err := cli.MarshalJSON(resp)
-	if err != nil {
-		return err
-	}
-
-	fmt.Printf("%s\n", data)
 	return nil
 }
 
@@ -507,8 +453,6 @@ func commandValidateVersionKeyspace(cmd *cobra.Command, args []string) error {
 func init() {
 	CreateKeyspace.Flags().BoolVarP(&createKeyspaceOptions.Force, "force", "f", false, "Proceeds even if the keyspace already exists. Does not overwrite the existing keyspace record")
 	CreateKeyspace.Flags().BoolVarP(&createKeyspaceOptions.AllowEmptyVSchema, "allow-empty-vschema", "e", false, "Allows a new keyspace to have no vschema")
-	CreateKeyspace.Flags().StringVar(&createKeyspaceOptions.ShardingColumnName, "sharding-column-name", "", "The column name to use for sharding operations")
-	CreateKeyspace.Flags().Var(&createKeyspaceOptions.ShardingColumnType, "sharding-column-type", "The type of the column to use for sharding operations")
 	CreateKeyspace.Flags().Var(&createKeyspaceOptions.ServedFromsMap, "served-from", "Specifies a set of db_type:keyspace pairs used to serve traffic for the keyspace.")
 	CreateKeyspace.Flags().Var(&createKeyspaceOptions.KeyspaceType, "type", "The type of the keyspace")
 	CreateKeyspace.Flags().StringVar(&createKeyspaceOptions.BaseKeyspace, "base-keyspace", "", "The base keyspace for a snapshot keyspace.")
