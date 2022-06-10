@@ -191,6 +191,10 @@ func (route *Route) executeInternal(vcursor VCursor, bindVars map[string]*queryp
 		return nil, err
 	}
 
+	return route.executeShards(vcursor, bindVars, wantfields, rss, bvs, err)
+}
+
+func (route *Route) executeShards(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, rss []*srvtopo.ResolvedShard, bvs []map[string]*querypb.BindVariable, err error) (*sqltypes.Result, error) {
 	// Select Next - sequence query does not need to be executed in a dedicated connection (reserved or transaction)
 	if route.Opcode == Next {
 		restoreCtx := vcursor.SetContextWithValue(IgnoreReserveTxn, true)
@@ -442,6 +446,22 @@ func (route *Route) description() PrimitiveDescription {
 		TargetDestination: route.TargetDestination,
 		Other:             other,
 	}
+}
+
+func (route *Route) executeAfterLookup(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, ids []sqltypes.Value, dest []key.Destination) (*sqltypes.Result, error) {
+	protoIds := make([]*querypb.Value, 0, len(ids))
+	for _, id := range ids {
+		protoIds = append(protoIds, sqltypes.ValueToProto(id))
+	}
+	rss, _, err := vcursor.ResolveDestinations(route.Keyspace.Name, protoIds, dest)
+	if err != nil {
+		return nil, err
+	}
+	bvs := make([]map[string]*querypb.BindVariable, len(rss))
+	for i := range bvs {
+		bvs[i] = bindVars
+	}
+	return route.executeShards(vcursor, bindVars, wantfields, rss, bvs, err)
 }
 
 func execShard(vcursor VCursor, query string, bindVars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard, rollbackOnError, canAutocommit bool) (*sqltypes.Result, error) {

@@ -32,6 +32,7 @@
     "Values": [
       "VARCHAR(\"bb\")"
     ],
+    "Vindex": "name_user_map",
     "Inputs": [
       {
         "OperatorType": "Route",

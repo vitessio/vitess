@@ -82,16 +82,17 @@ func (vr *VindexLookup) TryExecute(vcursor VCursor, bindVars map[string]*querypb
 		return nil, err
 	}
 
-	_, err = vr.Vindex.MapResult(nil, results)
+	dest, err := vr.Vindex.MapResult(nil, results)
 	if err != nil {
 		return nil, err
 	}
-	return vcursor.ExecutePrimitive(vr.SendTo, bindVars, wantfields)
+
+	return vr.SendTo.executeAfterLookup(vcursor, bindVars, wantfields, ids, dest)
 }
 
 // TryStreamExecute implements the Primitive interface
 func (vr *VindexLookup) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
@@ -114,6 +115,7 @@ func (vr *VindexLookup) description() PrimitiveDescription {
 		}
 		other["Values"] = formattedValues
 	}
+	other["Vindex"] = vr.Vindex.String()
 
 	return PrimitiveDescription{
 		OperatorType: "VindexLookup",
@@ -125,7 +127,7 @@ func (vr *VindexLookup) description() PrimitiveDescription {
 
 func (vr *VindexLookup) lookup(vcursor VCursor, ids []sqltypes.Value) ([]*sqltypes.Result, error) {
 	results := make([]*sqltypes.Result, 0, len(ids))
-	if ids[0].IsIntegral() { //|| lkp.BatchLookup {
+	if ids[0].IsIntegral() { // || lkp.BatchLookup {
 		// for integral types, batch query all ids and then map them back to the input order
 		vars, err := sqltypes.BuildBindVariable(ids)
 		if err != nil {
