@@ -18,10 +18,7 @@ package engine
 
 import (
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
@@ -29,11 +26,15 @@ import (
 var _ Primitive = (*VindexLookup)(nil)
 
 type VindexLookup struct {
+	Opcode Opcode
+
 	// The vindex to use to do the Map
-	Vindex vindexes.Vindex
+	Vindex vindexes.LookupPlannable
 
 	// Keyspace specifies the keyspace to send the query to.
 	Keyspace *vindexes.Keyspace
+
+	Arguments []string
 
 	// Values specifies the vindex values to use for routing.
 	Values []evalengine.Expr
@@ -42,7 +43,7 @@ type VindexLookup struct {
 	Lookup Primitive
 
 	// This is the side that needs to be routed
-	SendTo Primitive
+	SendTo *Route
 }
 
 // RouteType implements the Primitive interface
@@ -61,7 +62,7 @@ func (vr *VindexLookup) GetTableName() string {
 }
 
 // GetFields implements the Primitive interface
-func (vr *VindexLookup) GetFields(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (vr *VindexLookup) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	panic("implement me")
 }
 
@@ -71,54 +72,25 @@ func (vr *VindexLookup) NeedsTransaction() bool {
 }
 
 // TryExecute implements the Primitive interface
-func (vr *VindexLookup) TryExecute(vcursor VCursor, inRoute *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	if inRoute != nil {
-		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "does not accept routing")
+func (vr *VindexLookup) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	ids, err := vr.generateIds(vcursor, bindVars)
+	if err != nil {
+		return nil, err
 	}
-	var out []key.Destination
-	var outBindVars []map[string]*querypb.BindVariable
-	if vr.Lookup != nil {
-		res, err := vcursor.ExecutePrimitive(vr.Lookup, nil, bindVars, wantfields)
-		if err != nil {
-			return nil, err
-		}
-
-		ksids := make([][]byte, 0, len(res.Rows))
-		for _, row := range res.Rows {
-			rowBytes, err := row[0].ToBytes()
-			if err != nil {
-				return nil, err
-			}
-			ksids = append(ksids, rowBytes)
-		}
-		out = append(out, key.DestinationKeyspaceIDs(ksids))
-		outBindVars = append(outBindVars, bindVars)
-	}
-	env := evalengine.EnvWithBindVars(bindVars, vcursor.ConnCollation())
-
-	var values []*querypb.Value
-	for _, expr := range vr.Values {
-		evaluate, err := env.Evaluate(expr)
-		if err != nil {
-			return nil, err
-		}
-		values = append(values, sqltypes.ValueToProto(evaluate.Value()))
-	}
-
-	destinations, _, err := vcursor.ResolveDestinations(vr.Keyspace.Name, values, out)
+	results, err := vr.lookup(vcursor, ids)
 	if err != nil {
 		return nil, err
 	}
 
-	routing := &RouteDestination{
-		Shards:   destinations,
-		BindVars: outBindVars,
+	_, err = vr.Vindex.MapResult(nil, results)
+	if err != nil {
+		return nil, err
 	}
-	return vcursor.ExecutePrimitive(vr.SendTo, routing, bindVars, wantfields)
+	return vcursor.ExecutePrimitive(vr.SendTo, bindVars, wantfields)
 }
 
 // TryStreamExecute implements the Primitive interface
-func (vr *VindexLookup) TryStreamExecute(vcursor VCursor, routing *RouteDestination, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (vr *VindexLookup) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	//TODO implement me
 	panic("implement me")
 }
@@ -145,7 +117,68 @@ func (vr *VindexLookup) description() PrimitiveDescription {
 
 	return PrimitiveDescription{
 		OperatorType: "VindexLookup",
+		Variant:      vr.Opcode.String(),
 		Keyspace:     vr.Keyspace,
 		Other:        other,
 	}
+}
+
+func (vr *VindexLookup) lookup(vcursor VCursor, ids []sqltypes.Value) ([]*sqltypes.Result, error) {
+	results := make([]*sqltypes.Result, 0, len(ids))
+	if ids[0].IsIntegral() { //|| lkp.BatchLookup {
+		// for integral types, batch query all ids and then map them back to the input order
+		vars, err := sqltypes.BuildBindVariable(ids)
+		if err != nil {
+			return nil, err
+		}
+		bindVars := map[string]*querypb.BindVariable{
+			vr.Arguments[0]: vars,
+		}
+		result, err := vcursor.ExecutePrimitive(vr.Lookup, bindVars, true)
+		if err != nil {
+			return nil, err
+		}
+		resultMap := make(map[string][][]sqltypes.Value)
+		for _, row := range result.Rows {
+			resultMap[row[0].ToString()] = append(resultMap[row[0].ToString()], []sqltypes.Value{row[1]})
+		}
+
+		for _, id := range ids {
+			results = append(results, &sqltypes.Result{
+				Rows: resultMap[id.ToString()],
+			})
+		}
+	} else {
+		// for non integral and binary type, fallback to send query per id
+		for _, id := range ids {
+			vars, err := sqltypes.BuildBindVariable([]any{id})
+			if err != nil {
+				return nil, err
+			}
+			bindVars := map[string]*querypb.BindVariable{
+				vr.Arguments[0]: vars,
+			}
+			result, err := vcursor.ExecutePrimitive(vr.Lookup, bindVars, true)
+			if err != nil {
+				return nil, err
+			}
+			rows := make([][]sqltypes.Value, 0, len(result.Rows))
+			for _, row := range result.Rows {
+				rows = append(rows, []sqltypes.Value{row[1]})
+			}
+			results = append(results, &sqltypes.Result{
+				Rows: rows,
+			})
+		}
+	}
+	return results, nil
+}
+
+func (vr *VindexLookup) generateIds(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]sqltypes.Value, error) {
+	env := evalengine.EnvWithBindVars(bindVars, vcursor.ConnCollation())
+	value, err := env.Evaluate(vr.Values[0])
+	if err != nil {
+		return nil, err
+	}
+	return []sqltypes.Value{value.Value()}, nil
 }

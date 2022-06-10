@@ -303,3 +303,32 @@ func (lu *LookupUnique) IsBackfilling() bool {
 func (lu *LookupUnique) LookupQuery() (string, error) {
 	return lu.lkp.sel, nil
 }
+
+func (lu *LookupUnique) Query() (string, []string) {
+	return lu.lkp.sel, lu.lkp.FromColumns
+}
+
+func (lu *LookupUnique) MapResult(ids []sqltypes.Value, results []*sqltypes.Result) ([]key.Destination, error) {
+	out := make([]key.Destination, 0, len(ids))
+	if lu.writeOnly {
+		for range ids {
+			out = append(out, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{}})
+		}
+		return out, nil
+	}
+	for i, result := range results {
+		switch len(result.Rows) {
+		case 0:
+			out = append(out, key.DestinationNone{})
+		case 1:
+			rowBytes, err := result.Rows[0][0].ToBytes()
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, key.DestinationKeyspaceID(rowBytes))
+		default:
+			return nil, fmt.Errorf("Lookup.Map: unexpected multiple results from vindex %s: %v", lu.lkp.Table, ids[i])
+		}
+	}
+	return out, nil
+}

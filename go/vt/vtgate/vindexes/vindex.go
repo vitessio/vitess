@@ -135,7 +135,8 @@ type (
 
 	// LookupPlannable are for lookup vindexes where we can extract the lookup query at plan time
 	LookupPlannable interface {
-		LookupQuery() (string, error)
+		Query() (selQuery string, arguments []string)
+		MapResult(ids []sqltypes.Value, results []*sqltypes.Result) ([]key.Destination, error)
 	}
 
 	// LookupBackfill interfaces all lookup vindexes that can backfill rows, such as LookupUnique.

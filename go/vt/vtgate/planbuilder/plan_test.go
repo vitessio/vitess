@@ -96,10 +96,6 @@ var _ vindexes.Lookup = (*lookupIndex)(nil)
 // nameLkpIndex satisfies Lookup, NonUnique.
 type nameLkpIndex struct{ name string }
 
-func (v *nameLkpIndex) LookupQuery() (string, error) {
-	return "select col, col2 from user", nil
-}
-
 func (v *nameLkpIndex) String() string   { return v.name }
 func (*nameLkpIndex) Cost() int          { return 3 }
 func (*nameLkpIndex) IsUnique() bool     { return false }
@@ -114,6 +110,12 @@ func (*nameLkpIndex) Create(vindexes.VCursor, [][]sqltypes.Value, [][]byte, bool
 func (*nameLkpIndex) Delete(vindexes.VCursor, [][]sqltypes.Value, []byte) error         { return nil }
 func (*nameLkpIndex) Update(vindexes.VCursor, []sqltypes.Value, []byte, []sqltypes.Value) error {
 	return nil
+}
+func (v *nameLkpIndex) Query() (string, []string) {
+	return "select col1, col2 from user where col1 in ::col1", []string{"col1"}
+}
+func (*nameLkpIndex) MapResult([]sqltypes.Value, []*sqltypes.Result) ([]key.Destination, error) {
+	return nil, nil
 }
 
 func newNameLkpIndex(name string, _ map[string]string) (vindexes.Vindex, error) {
