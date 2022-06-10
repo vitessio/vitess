@@ -24,6 +24,7 @@
   "Original": "select id from user where costly = 'aa' and name = 'bb'",
   "Instructions": {
     "OperatorType": "VindexLookup",
+    "Variant": "Equal",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -39,8 +40,8 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col, col2 from `user` where 1 != 1",
-        "Query": "select col, col2 from `user`",
+        "FieldQuery": "select col1, col2 from `user` where 1 != 1",
+        "Query": "select col1, col2 from `user` where col1 in ::col1",
         "Table": "`user`"
       },
       {
@@ -52,11 +53,7 @@
         },
         "FieldQuery": "select id from `user` where 1 != 1",
         "Query": "select id from `user` where costly = 'aa' and `name` = 'bb'",
-        "Table": "`user`",
-        "Values": [
-          "VARCHAR(\"bb\")"
-        ],
-        "Vindex": "name_user_map"
+        "Table": "`user`"
       }
     ]
   }

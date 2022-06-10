@@ -84,7 +84,17 @@ func (rb *routeGen4) WireupGen4(ctx *plancontext.PlanningContext) error {
 		return nil
 	}
 
+	lookup := &engine.VindexLookup{
+		Opcode:   rb.eroute.Opcode,
+		Vindex:   planableVindex,
+		Keyspace: rb.eroute.Keyspace,
+		Values:   rb.eroute.Values,
+		SendTo:   rb.eroute,
+	}
+	rb.enginePrimitive = lookup
 	rb.eroute.RoutingParameters.Opcode = engine.ByDestination
+	rb.eroute.RoutingParameters.Values = nil
+	rb.eroute.RoutingParameters.Vindex = nil
 
 	query, args := planableVindex.Query()
 	stmt, reserved, err := sqlparser.Parse2(query)
@@ -98,14 +108,7 @@ func (rb *routeGen4) WireupGen4(ctx *plancontext.PlanningContext) error {
 		return err
 	}
 
-	rb.enginePrimitive = &engine.VindexLookup{
-		Vindex:    planableVindex,
-		Keyspace:  rb.eroute.Keyspace,
-		Arguments: args,
-		Values:    rb.eroute.Values,
-		Lookup:    lookupPrimitive,
-		SendTo:    rb.eroute,
-	}
+	lookup.Arguments, lookup.Lookup = args, lookupPrimitive
 
 	return nil
 }
