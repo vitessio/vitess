@@ -124,7 +124,7 @@ func newNameLkpIndex(name string, _ map[string]string) (vindexes.Vindex, error) 
 
 var _ vindexes.Vindex = (*nameLkpIndex)(nil)
 var _ vindexes.Lookup = (*nameLkpIndex)(nil)
-var _ vindexes.LookupPlannable = (*nameLkpIndex)(nil)
+var _ vindexes.LookupPlanable = (*nameLkpIndex)(nil)
 
 // costlyIndex satisfies Lookup, NonUnique.
 type costlyIndex struct{ name string }

@@ -70,31 +70,19 @@ func (rb *routeGen4) SetLimit(limit *sqlparser.Limit) {
 func (rb *routeGen4) WireupGen4(ctx *plancontext.PlanningContext) error {
 	rb.prepareTheAST()
 
-	{
-		rb.eroute.Query = sqlparser.String(rb.Select)
-		buffer := sqlparser.NewTrackedBuffer(sqlparser.FormatImpossibleQuery)
-		node := buffer.WriteNode(rb.Select)
-		query := node.ParsedQuery()
-		rb.eroute.FieldQuery = query.Query
-	}
+	// prepare the queries we will pass down
+	rb.eroute.Query = sqlparser.String(rb.Select)
+	buffer := sqlparser.NewTrackedBuffer(sqlparser.FormatImpossibleQuery)
+	node := buffer.WriteNode(rb.Select)
+	parsedQuery := node.ParsedQuery()
+	rb.eroute.FieldQuery = parsedQuery.Query
 
-	planableVindex, ok := rb.eroute.RoutingParameters.Vindex.(vindexes.LookupPlannable)
+	// if we have a planable vindex lookup, let's extract it into its own primitive
+	planableVindex, ok := rb.eroute.RoutingParameters.Vindex.(vindexes.LookupPlanable)
 	if !ok {
 		rb.enginePrimitive = rb.eroute
 		return nil
 	}
-
-	lookup := &engine.VindexLookup{
-		Opcode:   rb.eroute.Opcode,
-		Vindex:   planableVindex,
-		Keyspace: rb.eroute.Keyspace,
-		Values:   rb.eroute.Values,
-		SendTo:   rb.eroute,
-	}
-	rb.enginePrimitive = lookup
-	rb.eroute.RoutingParameters.Opcode = engine.ByDestination
-	rb.eroute.RoutingParameters.Values = nil
-	rb.eroute.RoutingParameters.Vindex = nil
 
 	query, args := planableVindex.Query()
 	stmt, reserved, err := sqlparser.Parse2(query)
@@ -108,7 +96,19 @@ func (rb *routeGen4) WireupGen4(ctx *plancontext.PlanningContext) error {
 		return err
 	}
 
-	lookup.Arguments, lookup.Lookup = args, lookupPrimitive
+	rb.enginePrimitive = &engine.VindexLookup{
+		Opcode:    rb.eroute.Opcode,
+		Vindex:    planableVindex,
+		Keyspace:  rb.eroute.Keyspace,
+		Values:    rb.eroute.Values,
+		SendTo:    rb.eroute,
+		Arguments: args,
+		Lookup:    lookupPrimitive,
+	}
+
+	rb.eroute.RoutingParameters.Opcode = engine.ByDestination
+	rb.eroute.RoutingParameters.Values = nil
+	rb.eroute.RoutingParameters.Vindex = nil
 
 	return nil
 }

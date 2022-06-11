@@ -220,7 +220,7 @@ func (lhu *LookupHashUnique) Query() (selQuery string, arguments []string) {
 	return lhu.lkp.sel, lhu.lkp.FromColumns
 }
 
-var _ LookupPlannable = (*LookupHashUnique)(nil)
+var _ LookupPlanable = (*LookupHashUnique)(nil)
 
 // NewLookupHashUnique creates a LookupHashUnique vindex.
 // The supplied map has the following required fields:

@@ -31,7 +31,7 @@ type VindexLookup struct {
 	Opcode Opcode
 
 	// The vindex to use to do the Map
-	Vindex vindexes.LookupPlannable
+	Vindex vindexes.LookupPlanable
 
 	// Keyspace specifies the keyspace to send the query to.
 	Keyspace *vindexes.Keyspace

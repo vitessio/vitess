@@ -133,8 +133,8 @@ type (
 		Update(vc VCursor, oldValues []sqltypes.Value, ksid []byte, newValues []sqltypes.Value) error
 	}
 
-	// LookupPlannable are for lookup vindexes where we can extract the lookup query at plan time
-	LookupPlannable interface {
+	// LookupPlanable are for lookup vindexes where we can extract the lookup query at plan time
+	LookupPlanable interface {
 		String() string
 		Query() (selQuery string, arguments []string)
 		MapResult(ids []sqltypes.Value, results []*sqltypes.Result) ([]key.Destination, error)
