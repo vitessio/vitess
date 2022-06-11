@@ -129,6 +129,8 @@ func TestEqualQuery(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
 
-	mcmp.Exec("insert into user (user_id, name) values (1, 'apa'), (2,'monkey')")
+	mcmp.Exec("insert into user (user_id, name) values (1, 'apa'), (2,'monkey'), (3,'bandar')")
 	mcmp.AssertMatches("select user_id from user where name = 'apa'", "[[INT64(1)]]")
+	mcmp.AssertMatches("select user_id from user where name = 'not there'", "[]")
+	mcmp.AssertMatchesNoOrder("select user_id from user where name in ('apa', 'bandar')", "[[INT64(1)] [INT64(3)]]")
 }

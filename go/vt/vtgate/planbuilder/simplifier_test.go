@@ -36,9 +36,9 @@ import (
 // TestSimplifyBuggyQuery should be used to whenever we get a planner bug reported
 // It will try to minimize the query to make it easier to understand and work with the bug.
 func TestSimplifyBuggyQuery(t *testing.T) {
-	query := "select o_orderpriority, count(*) as order_count from orders where o_orderdate >= date('1993-07-01') and o_orderdate < date('1993-07-01') + interval '3' month and exists ( select * from lineitem where l_orderkey = o_orderkey and l_commitdate < l_receiptdate ) group by o_orderpriority order by o_orderpriority"
+	query := "(select id from unsharded union select id from unsharded_auto) union (select id from user union select name from unsharded)"
 	vschema := &vschemaWrapper{
-		v:       loadSchema(t, "tpch_schema_test.json", true),
+		v:       loadSchema(t, "schema_test.json", true),
 		version: Gen4,
 	}
 	stmt, reserved, err := sqlparser.Parse2(query)
