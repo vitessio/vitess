@@ -41,7 +41,7 @@ type VindexLookup struct {
 	// Values specifies the vindex values to use for routing.
 	Values []evalengine.Expr
 
-	// If we need to fetch data in order to do the map, this is where we get it
+	// We fetch data in order to do the map from this primitive
 	Lookup Primitive
 
 	// This is the side that needs to be routed
@@ -89,6 +89,15 @@ func (vr *VindexLookup) TryExecute(vcursor VCursor, bindVars map[string]*querypb
 		return nil, err
 	}
 
+	if vr.Opcode == IN {
+		valsBV := &querypb.BindVariable{Type: querypb.Type_TUPLE}
+		valsBV.Values = make([]*querypb.Value, 0, len(ids))
+		for _, value := range ids {
+			valsBV.Values = append(valsBV.Values, sqltypes.ValueToProto(value))
+		}
+		bindVars[ListVarName] = valsBV
+	}
+
 	return vr.SendTo.executeAfterLookup(vcursor, bindVars, wantfields, ids, dest)
 }
 
@@ -129,7 +138,7 @@ func (vr *VindexLookup) description() PrimitiveDescription {
 
 func (vr *VindexLookup) lookup(vcursor VCursor, ids []sqltypes.Value) ([]*sqltypes.Result, error) {
 	results := make([]*sqltypes.Result, 0, len(ids))
-	if ids[0].IsIntegral() { // || lkp.BatchLookup {
+	if vr.Opcode == IN || ids[0].IsIntegral() {
 		// for integral types, batch query all ids and then map them back to the input order
 		vars, err := sqltypes.BuildBindVariable(ids)
 		if err != nil {
@@ -140,7 +149,7 @@ func (vr *VindexLookup) lookup(vcursor VCursor, ids []sqltypes.Value) ([]*sqltyp
 		}
 		result, err := vcursor.ExecutePrimitive(vr.Lookup, bindVars, true)
 		if err != nil {
-			return nil, err
+			return nil, vterrors.Wrapf(err, "failed while running the lookup query")
 		}
 		resultMap := make(map[string][][]sqltypes.Value)
 		for _, row := range result.Rows {

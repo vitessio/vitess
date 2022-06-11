@@ -133,4 +133,5 @@ func TestEqualQuery(t *testing.T) {
 	mcmp.AssertMatches("select user_id from user where name = 'apa'", "[[INT64(1)]]")
 	mcmp.AssertMatches("select user_id from user where name = 'not there'", "[]")
 	mcmp.AssertMatchesNoOrder("select user_id from user where name in ('apa', 'bandar')", "[[INT64(1)] [INT64(3)]]")
+	mcmp.AssertMatches("select count(*) from user where name in ('apa', 'monkey', 'bandar')", "[[INT64(3)]]")
 }

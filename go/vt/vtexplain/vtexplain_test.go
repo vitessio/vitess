@@ -34,8 +34,6 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 )
 
-var testOutputTempDir string
-
 func defaultTestOpts() *Options {
 	return &Options{
 		ReplicationMode: "ROW",
@@ -122,9 +120,8 @@ func runTestCase(testcase, mode string, opts *Options, topts *testopts, t *testi
 			// temp file to be able to diff the results.
 			t.Errorf("Text output did not match (-want +got):\n%s", diff)
 
-			if testOutputTempDir == "" {
-				testOutputTempDir = t.TempDir()
-			}
+			testOutputTempDir, err := os.MkdirTemp("testdata", "plan_test")
+			require.NoError(t, err)
 			gotFile := fmt.Sprintf("%s/%s-output.txt", testOutputTempDir, testcase)
 			os.WriteFile(gotFile, []byte(explainText), 0644)
 
