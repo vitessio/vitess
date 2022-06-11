@@ -93,7 +93,7 @@ func (rb *routeGen4) WireupGen4(ctx *plancontext.PlanningContext) error {
 
 	lookupPrimitive, err := gen4SelectStmtPlanner(query, querypb.ExecuteOptions_Gen4, stmt.(sqlparser.SelectStatement), reservedVars, ctx.VSchema)
 	if err != nil {
-		return err
+		return vterrors.Wrapf(err, "failed to plan the lookup query: [%s]", query)
 	}
 
 	rb.enginePrimitive = &engine.VindexLookup{

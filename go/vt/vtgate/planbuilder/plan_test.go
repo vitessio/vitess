@@ -300,6 +300,15 @@ func TestOneWithUserAsDefault(t *testing.T) {
 	testFile(t, "onecase.txt", "", vschema)
 }
 
+func TestOneWithTPCHVSchema(t *testing.T) {
+	vschema := &vschemaWrapper{
+		v:             loadSchema(t, "tpch_schema_test.json", true),
+		sysVarEnabled: true,
+	}
+
+	testFile(t, "onecase.txt", "", vschema)
+}
+
 func TestRubyOnRailsQueries(t *testing.T) {
 	vschemaWrapper := &vschemaWrapper{
 		v:             loadSchema(t, "rails_schema_test.json", true),
