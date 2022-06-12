@@ -17,23 +17,24 @@ limitations under the License.
 package vreplication
 
 import (
-	"strings"
 	"sync"
 	"time"
 
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 /*
  * lastError tracks the most recent error for any ongoing process and how long it has persisted.
+ * The err field should be a vterror so as to ensure we have meaningful error codes, causes, stack
+ * traces, etc.
  */
-
 type lastError struct {
-	name               string
-	lastError          error
-	lastErrorStartTime time.Time
-	lastErrorMu        sync.Mutex
-	maxTimeInError     time.Duration // if error persists for this long, canRetry() will return false
+	name           string
+	err            error
+	firstSeen      time.Time
+	mu             sync.Mutex
+	maxTimeInError time.Duration // if error persists for this long, shouldRetry() will return false
 }
 
 func newLastError(name string, maxTimeInError time.Duration) *lastError {
@@ -44,25 +45,26 @@ func newLastError(name string, maxTimeInError time.Duration) *lastError {
 }
 
 func (le *lastError) record(err error) {
-	le.lastErrorMu.Lock()
-	defer le.lastErrorMu.Unlock()
+	le.mu.Lock()
+	defer le.mu.Unlock()
 	if err == nil {
-		le.lastError = nil
-		le.lastErrorStartTime = time.Time{}
+		le.err = nil
+		le.firstSeen = time.Time{}
 		return
 	}
-	if le.lastError == nil || !strings.EqualFold(err.Error(), le.lastError.Error()) {
-		le.lastErrorStartTime = time.Now()
+	if !vterrors.Equals(err, le.err) {
+		le.firstSeen = time.Now()
+		le.err = err
 	}
-	le.lastError = err
+	// The error is unchanged so we don't need to do anything
 }
 
-func (le *lastError) canRetry() bool {
-	le.lastErrorMu.Lock()
-	defer le.lastErrorMu.Unlock()
-	if !time.Time.IsZero(le.lastErrorStartTime) && time.Since(le.lastErrorStartTime) > le.maxTimeInError {
-		log.Errorf("Got same error since %s, will not retry anymore: you will need to manually restart workflow once error '%s' is fixed",
-			le.lastErrorStartTime.UTC(), le.lastError)
+func (le *lastError) shouldRetry() bool {
+	le.mu.Lock()
+	defer le.mu.Unlock()
+	if !le.firstSeen.IsZero() && time.Since(le.firstSeen) > le.maxTimeInError {
+		log.Errorf("VReplication encountered the same error continuously since %s, we will assume this is a non-recoverable error and will not retry anymore; the workflow will need to be manually restarted once error '%s' has been addressed",
+			le.firstSeen.UTC(), le.err)
 		return false
 	}
 	return true

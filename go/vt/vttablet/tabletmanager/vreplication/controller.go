@@ -48,7 +48,7 @@ var (
 	_          = flag.Duration("vreplication_healthcheck_timeout", 1*time.Minute, "healthcheck retry delay")
 	retryDelay = flag.Duration("vreplication_retry_delay", 5*time.Second, "delay before retrying a failed workflow event in the replication phase")
 
-	maxTimeToRetryErrors = flag.Duration("vreplication_max_time_to_retry_errors", 15*time.Minute, "stop trying to retry after this time")
+	maxTimeToRetryError = flag.Duration("vreplication_max_time_to_retry_on_error", 15*time.Minute, "stop automatically retrying when we've had consecutive failures with the same error for this long after the first occurrence")
 )
 
 // controller is created by Engine. Members are initialized upfront.
@@ -88,7 +88,7 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 		blpStats:          blpStats,
 		done:              make(chan struct{}),
 		source:            &binlogdatapb.BinlogSource{},
-		lastWorkflowError: newLastError("VReplication Controller", *maxTimeToRetryErrors),
+		lastWorkflowError: newLastError("VReplication Controller", *maxTimeToRetryError),
 	}
 	log.Infof("creating controller with cell: %v, tabletTypes: %v, and params: %v", cell, tabletTypesStr, params)
 
@@ -280,9 +280,9 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 		err = vr.Replicate(ctx)
 
 		ct.lastWorkflowError.record(err)
-		if isUnrecoverableError(err) /* mysql error that we know needs manual intervention */ ||
-			!ct.lastWorkflowError.canRetry() /* cannot detect if this is recoverable, but it is persisting too long */ {
-
+		// If this is a mysql error that we know needs manual intervention OR
+		// we cannot identify this as non-recoverable, but it has persisted beyond the retry limit (maxTimeToRetryError)
+		if isUnrecoverableError(err) || !ct.lastWorkflowError.shouldRetry() {
 			log.Errorf("vreplication stream %d going into error state due to %+v", ct.id, err)
 			if errSetState := vr.setState(binlogplayer.BlpError, err.Error()); errSetState != nil {
 				return err // yes, err and not errSetState.
