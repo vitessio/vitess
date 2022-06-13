@@ -76,5 +76,5 @@ func linkHandler(filename string) string {
 		return "../"
 	}
 
-	return filename
+	return fmt.Sprintf("./%s/", strings.ToLower(base))
 }
