@@ -29,6 +29,7 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/mysql"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 
 	"github.com/go-sql-driver/mysql"
@@ -321,17 +322,15 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 		resolvedHostname = instance.Key.Hostname
 
 		if instance.LogBinEnabled {
-			waitGroup.Add(1)
-			go func() {
-				defer waitGroup.Done()
-				err := sqlutils.QueryRowsMap(db, "show master status", func(m sqlutils.RowMap) error {
-					var err error
-					instance.SelfBinlogCoordinates.LogFile = m.GetString("File")
-					instance.SelfBinlogCoordinates.LogPos = m.GetInt64("Position")
-					return err
-				})
+			pos, err := mysql.DecodePosition(fullStatus.PrimaryStatus.FilePosition)
+			errorChan <- err
+			if err == nil {
+				binLogCoordinates, err := ParseBinlogCoordinates(pos.String())
 				errorChan <- err
-			}()
+				if err == nil {
+					instance.SelfBinlogCoordinates = *binLogCoordinates
+				}
+			}
 		}
 
 		{
