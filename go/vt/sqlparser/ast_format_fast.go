@@ -3365,6 +3365,132 @@ func (node *JSONUnquoteExpr) formatFast(buf *TrackedBuffer) {
 	buf.WriteString(")")
 }
 
+func (node *Count) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.AggrName())
+	buf.WriteByte('(')
+	if node.Distinct {
+		buf.WriteString(DistinctStr)
+	}
+	node.Args.formatFast(buf)
+	buf.WriteByte(')')
+}
+
+func (node *CountStar) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.AggrName())
+	buf.WriteByte('(')
+	buf.WriteString("*)")
+}
+
+func (node *Avg) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.AggrName())
+	buf.WriteByte('(')
+	if node.Distinct {
+		buf.WriteString(DistinctStr)
+	}
+	buf.printExpr(node, node.Arg, true)
+	buf.WriteByte(')')
+}
+
+func (node *Max) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.AggrName())
+	buf.WriteByte('(')
+	if node.Distinct {
+		buf.WriteString(DistinctStr)
+	}
+	buf.printExpr(node, node.Arg, true)
+	buf.WriteByte(')')
+}
+
+func (node *Min) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.AggrName())
+	buf.WriteByte('(')
+	if node.Distinct {
+		buf.WriteString(DistinctStr)
+	}
+	buf.printExpr(node, node.Arg, true)
+	buf.WriteByte(')')
+}
+
+func (node *Sum) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.AggrName())
+	buf.WriteByte('(')
+	if node.Distinct {
+		buf.WriteString(DistinctStr)
+	}
+	buf.printExpr(node, node.Arg, true)
+	buf.WriteByte(')')
+}
+
+func (node *BitAnd) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.AggrName())
+	buf.WriteByte('(')
+	buf.printExpr(node, node.Arg, true)
+	buf.WriteByte(')')
+}
+
+func (node *BitOr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.AggrName())
+	buf.WriteByte('(')
+	buf.printExpr(node, node.Arg, true)
+	buf.WriteByte(')')
+}
+
+func (node *BitXor) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.AggrName())
+	buf.WriteByte('(')
+	buf.printExpr(node, node.Arg, true)
+	buf.WriteByte(')')
+}
+
+func (node *Std) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.AggrName())
+	buf.WriteByte('(')
+	buf.printExpr(node, node.Arg, true)
+	buf.WriteByte(')')
+}
+
+func (node *StdDev) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.AggrName())
+	buf.WriteByte('(')
+	buf.printExpr(node, node.Arg, true)
+	buf.WriteByte(')')
+}
+
+func (node *StdPop) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.AggrName())
+	buf.WriteByte('(')
+	buf.printExpr(node, node.Arg, true)
+	buf.WriteByte(')')
+}
+
+func (node *StdSamp) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.AggrName())
+	buf.WriteByte('(')
+	buf.printExpr(node, node.Arg, true)
+	buf.WriteByte(')')
+}
+
+func (node *VarPop) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.AggrName())
+	buf.WriteByte('(')
+	buf.printExpr(node, node.Arg, true)
+	buf.WriteByte(')')
+}
+
+func (node *VarSamp) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.AggrName())
+	buf.WriteByte('(')
+	buf.printExpr(node, node.Arg, true)
+	buf.WriteByte(')')
+}
+
+func (node *Variance) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.AggrName())
+	buf.WriteByte('(')
+	buf.printExpr(node, node.Arg, true)
+	buf.WriteByte(')')
+}
+
 // formatFast formats the node.
 func (node *LockingFunc) formatFast(buf *TrackedBuffer) {
 	buf.WriteString(node.Type.ToString() + "(")

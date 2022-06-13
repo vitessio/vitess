@@ -2332,15 +2332,6 @@ type (
 		Exprs     SelectExprs
 	}
 
-	// GroupConcatExpr represents a call to GROUP_CONCAT
-	GroupConcatExpr struct {
-		Distinct  bool
-		Exprs     SelectExprs
-		OrderBy   OrderBy
-		Separator string
-		Limit     *Limit
-	}
-
 	// ValuesFuncExpr represents a function call.
 	ValuesFuncExpr struct {
 		Name *ColName
@@ -2647,6 +2638,108 @@ type (
 		JSONValue Expr
 	}
 
+	AggrFunc interface {
+		Expr
+		AggrName() string
+		GetArg() Expr
+		IsDistinct() bool
+		GetArgs() Exprs
+	}
+
+	Count struct {
+		Args     Exprs
+		Distinct bool
+		Name     string
+	}
+
+	CountStar struct {
+		Name string
+	}
+
+	Avg struct {
+		Arg      Expr
+		Distinct bool
+		Name     string
+	}
+
+	Max struct {
+		Arg      Expr
+		Distinct bool
+		Name     string
+	}
+
+	Min struct {
+		Arg      Expr
+		Distinct bool
+		Name     string
+	}
+
+	Sum struct {
+		Arg      Expr
+		Distinct bool
+		Name     string
+	}
+
+	BitAnd struct {
+		Arg  Expr
+		Name string
+	}
+
+	BitOr struct {
+		Arg  Expr
+		Name string
+	}
+
+	BitXor struct {
+		Arg  Expr
+		Name string
+	}
+
+	Std struct {
+		Arg  Expr
+		Name string
+	}
+
+	StdDev struct {
+		Arg  Expr
+		Name string
+	}
+
+	StdPop struct {
+		Arg  Expr
+		Name string
+	}
+
+	StdSamp struct {
+		Arg  Expr
+		Name string
+	}
+
+	VarPop struct {
+		Arg  Expr
+		Name string
+	}
+
+	VarSamp struct {
+		Arg  Expr
+		Name string
+	}
+
+	Variance struct {
+		Arg  Expr
+		Name string
+	}
+
+	// GroupConcatExpr represents a call to GROUP_CONCAT
+	GroupConcatExpr struct {
+		Distinct  bool
+		Exprs     Exprs
+		OrderBy   OrderBy
+		Separator string
+		Limit     *Limit
+		Name      string
+	}
+
 	// RegexpInstrExpr represents REGEXP_INSTR()
 	// For more information, visit https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-instr
 	RegexpInstrExpr struct {
@@ -2765,6 +2858,96 @@ type (
 )
 
 // iExpr ensures that only expressions nodes can be assigned to a Expr
+func (*Sum) iExpr()             {}
+func (*Min) iExpr()             {}
+func (*Max) iExpr()             {}
+func (*Avg) iExpr()             {}
+func (*CountStar) iExpr()       {}
+func (*Count) iExpr()           {}
+func (*GroupConcatExpr) iExpr() {}
+func (*BitAnd) iExpr()          {}
+func (*BitOr) iExpr()           {}
+func (*BitXor) iExpr()          {}
+func (*Std) iExpr()             {}
+func (*StdDev) iExpr()          {}
+func (*StdPop) iExpr()          {}
+func (*StdSamp) iExpr()         {}
+func (*VarPop) iExpr()          {}
+func (*VarSamp) iExpr()         {}
+func (*Variance) iExpr()        {}
+
+func (sum *Sum) GetArg() Expr                   { return sum.Arg }
+func (min *Min) GetArg() Expr                   { return min.Arg }
+func (max *Max) GetArg() Expr                   { return max.Arg }
+func (avg *Avg) GetArg() Expr                   { return avg.Arg }
+func (*CountStar) GetArg() Expr                 { return nil }
+func (count *Count) GetArg() Expr               { return count.Args[0] }
+func (grpConcat *GroupConcatExpr) GetArg() Expr { return grpConcat.Exprs[0] }
+func (bAnd *BitAnd) GetArg() Expr               { return bAnd.Arg }
+func (bOr *BitOr) GetArg() Expr                 { return bOr.Arg }
+func (bXor *BitXor) GetArg() Expr               { return bXor.Arg }
+func (std *Std) GetArg() Expr                   { return std.Arg }
+func (stdD *StdDev) GetArg() Expr               { return stdD.Arg }
+func (stdP *StdPop) GetArg() Expr               { return stdP.Arg }
+func (stdS *StdSamp) GetArg() Expr              { return stdS.Arg }
+func (varP *VarPop) GetArg() Expr               { return varP.Arg }
+func (varS *VarSamp) GetArg() Expr              { return varS.Arg }
+func (variance *Variance) GetArg() Expr         { return variance.Arg }
+
+func (sum *Sum) GetArgs() Exprs                   { return Exprs{sum.Arg} }
+func (min *Min) GetArgs() Exprs                   { return Exprs{min.Arg} }
+func (max *Max) GetArgs() Exprs                   { return Exprs{max.Arg} }
+func (avg *Avg) GetArgs() Exprs                   { return Exprs{avg.Arg} }
+func (*CountStar) GetArgs() Exprs                 { return nil }
+func (count *Count) GetArgs() Exprs               { return count.Args }
+func (grpConcat *GroupConcatExpr) GetArgs() Exprs { return grpConcat.Exprs }
+func (bAnd *BitAnd) GetArgs() Exprs               { return Exprs{bAnd.Arg} }
+func (bOr *BitOr) GetArgs() Exprs                 { return Exprs{bOr.Arg} }
+func (bXor *BitXor) GetArgs() Exprs               { return Exprs{bXor.Arg} }
+func (std *Std) GetArgs() Exprs                   { return Exprs{std.Arg} }
+func (stdD *StdDev) GetArgs() Exprs               { return Exprs{stdD.Arg} }
+func (stdP *StdPop) GetArgs() Exprs               { return Exprs{stdP.Arg} }
+func (stdS *StdSamp) GetArgs() Exprs              { return Exprs{stdS.Arg} }
+func (varP *VarPop) GetArgs() Exprs               { return Exprs{varP.Arg} }
+func (varS *VarSamp) GetArgs() Exprs              { return Exprs{varS.Arg} }
+func (variance *Variance) GetArgs() Exprs         { return Exprs{variance.Arg} }
+
+func (sum *Sum) IsDistinct() bool                   { return sum.Distinct }
+func (min *Min) IsDistinct() bool                   { return min.Distinct }
+func (max *Max) IsDistinct() bool                   { return max.Distinct }
+func (avg *Avg) IsDistinct() bool                   { return avg.Distinct }
+func (cStar *CountStar) IsDistinct() bool           { return false }
+func (count *Count) IsDistinct() bool               { return count.Distinct }
+func (grpConcat *GroupConcatExpr) IsDistinct() bool { return grpConcat.Distinct }
+func (bAnd *BitAnd) IsDistinct() bool               { return false }
+func (bOr *BitOr) IsDistinct() bool                 { return false }
+func (bXor *BitXor) IsDistinct() bool               { return false }
+func (std *Std) IsDistinct() bool                   { return false }
+func (stdD *StdDev) IsDistinct() bool               { return false }
+func (stdP *StdPop) IsDistinct() bool               { return false }
+func (stdS *StdSamp) IsDistinct() bool              { return false }
+func (varP *VarPop) IsDistinct() bool               { return false }
+func (varS *VarSamp) IsDistinct() bool              { return false }
+func (variance *Variance) IsDistinct() bool         { return false }
+
+func (sum *Sum) AggrName() string                   { return sum.Name }
+func (min *Min) AggrName() string                   { return min.Name }
+func (max *Max) AggrName() string                   { return max.Name }
+func (avg *Avg) AggrName() string                   { return avg.Name }
+func (cStar *CountStar) AggrName() string           { return cStar.Name }
+func (count *Count) AggrName() string               { return count.Name }
+func (grpConcat *GroupConcatExpr) AggrName() string { return grpConcat.Name }
+func (bAnd *BitAnd) AggrName() string               { return bAnd.Name }
+func (bOr *BitOr) AggrName() string                 { return bOr.Name }
+func (bXor *BitXor) AggrName() string               { return bXor.Name }
+func (std *Std) AggrName() string                   { return std.Name }
+func (stdD *StdDev) AggrName() string               { return stdD.Name }
+func (stdP *StdPop) AggrName() string               { return stdP.Name }
+func (stdS *StdSamp) AggrName() string              { return stdS.Name }
+func (varP *VarPop) AggrName() string               { return varP.Name }
+func (varS *VarSamp) AggrName() string              { return varS.Name }
+func (variance *Variance) AggrName() string         { return variance.Name }
+
 func (*AndExpr) iExpr()                            {}
 func (*OrExpr) iExpr()                             {}
 func (*XorExpr) iExpr()                            {}
@@ -2797,7 +2980,6 @@ func (*ConvertExpr) iExpr()                        {}
 func (*SubstrExpr) iExpr()                         {}
 func (*ConvertUsingExpr) iExpr()                   {}
 func (*MatchExpr) iExpr()                          {}
-func (*GroupConcatExpr) iExpr()                    {}
 func (*Default) iExpr()                            {}
 func (*ExtractedSubquery) iExpr()                  {}
 func (*TrimFuncExpr) iExpr()                       {}
