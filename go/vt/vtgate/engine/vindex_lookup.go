@@ -84,7 +84,7 @@ func (vr *VindexLookup) TryExecute(vcursor VCursor, bindVars map[string]*querypb
 		return nil, err
 	}
 
-	dest, err := vr.Vindex.MapResult(nil, results)
+	dest, err := vr.Vindex.MapResult(ids, results)
 	if err != nil {
 		return nil, err
 	}
