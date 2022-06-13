@@ -504,15 +504,25 @@ func TestSchemaEngineCloseTickRace(t *testing.T) {
 	err := se.Open()
 	require.NoError(t, err)
 
-	// Emulate the command of se.Close(), but with a wait in between
-	// to ensure that a reload-tick happens after locking the mutex but before
-	// stopping the ticks
-	se.mu.Lock()
-	defer se.mu.Unlock()
 	time.Sleep(200 * time.Millisecond)
 	finished := make(chan bool)
 	go func() {
-		se.ticks.Stop()
+		{
+			// Emulate the command of se.Close(), but with a wait in between
+			// to ensure that a reload-tick happens after locking the mutex but before
+			// stopping the ticks
+			se.mu.Lock()
+			// Code copied from Close function, so that we can add the wait for
+			// 200 milliseconds and be sure that the timer tick happens after acquiring the lock
+			// in Close function
+			ticksWaitChan := make(chan bool, 0)
+			go func() {
+				se.ticks.Stop()
+				ticksWaitChan <- true
+			}()
+			se.mu.Unlock()
+			<-ticksWaitChan
+		}
 		finished <- true
 	}()
 	// Wait until the ticks are stopped or 2 seonds have expired.

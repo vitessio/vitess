@@ -224,12 +224,21 @@ func (se *Engine) IsOpen() bool {
 // It can be re-opened after Close.
 func (se *Engine) Close() {
 	se.mu.Lock()
-	defer se.mu.Unlock()
 	if !se.isOpen {
+		se.mu.Unlock()
 		return
 	}
 
-	se.ticks.Stop()
+	// Close the Timer in a separate go routine because
+	// there might be a tick after we have acquired the lock above
+	// but before closing the timer, in which case Stop function will wait for the
+	// configured function to complete running and that function (ReloadAt) will block
+	// on the lock we have already acquired
+	ticksWaitChan := make(chan bool, 0)
+	go func() {
+		se.ticks.Stop()
+		ticksWaitChan <- true
+	}()
 	se.historian.Close()
 	se.conns.Close()
 
@@ -237,6 +246,11 @@ func (se *Engine) Close() {
 	se.lastChange = 0
 	se.notifiers = make(map[string]notifier)
 	se.isOpen = false
+
+	// Unlock the mutex. If there is a tick blocked on this lock,
+	// then it will run and we wait for the Stop function to finish it's execution
+	se.mu.Unlock()
+	<-ticksWaitChan
 	log.Info("Schema Engine: closed")
 }
 
