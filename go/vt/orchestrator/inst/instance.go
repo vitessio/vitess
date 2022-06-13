@@ -88,7 +88,6 @@ type Instance struct {
 	IsCoPrimary                        bool
 	HasReplicationCredentials          bool
 	ReplicationCredentialsAvailable    bool
-	SemiSyncAvailable                  bool // when both semi sync plugins (primary & replica) are loaded
 	SemiSyncEnforced                   bool
 	SemiSyncPrimaryEnabled             bool
 	SemiSyncReplicaEnabled             bool

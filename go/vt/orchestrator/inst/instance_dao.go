@@ -29,7 +29,7 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/mysql"
+	vitessmysql "vitess.io/vitess/go/mysql"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 
 	"github.com/go-sql-driver/mysql"
@@ -322,7 +322,7 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 		resolvedHostname = instance.Key.Hostname
 
 		if instance.LogBinEnabled {
-			pos, err := mysql.DecodePosition(fullStatus.PrimaryStatus.FilePosition)
+			pos, err := vitessmysql.DecodePosition(fullStatus.PrimaryStatus.FilePosition)
 			errorChan <- err
 			if err == nil {
 				binLogCoordinates, err := ParseBinlogCoordinates(pos.String())
@@ -337,23 +337,18 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 			waitGroup.Add(1)
 			go func() {
 				defer waitGroup.Done()
-				semiSyncPrimaryPluginLoaded := false
-				semiSyncReplicaPluginLoaded := false
 				err := sqlutils.QueryRowsMap(db, "show global variables like 'rpl_semi_sync_%'", func(m sqlutils.RowMap) error {
 					if m.GetString("Variable_name") == "rpl_semi_sync_master_enabled" {
 						instance.SemiSyncPrimaryEnabled = (m.GetString("Value") == "ON")
-						semiSyncPrimaryPluginLoaded = true
 					} else if m.GetString("Variable_name") == "rpl_semi_sync_master_timeout" {
 						instance.SemiSyncPrimaryTimeout = m.GetUint64("Value")
 					} else if m.GetString("Variable_name") == "rpl_semi_sync_master_wait_for_slave_count" {
 						instance.SemiSyncPrimaryWaitForReplicaCount = m.GetUint("Value")
 					} else if m.GetString("Variable_name") == "rpl_semi_sync_slave_enabled" {
 						instance.SemiSyncReplicaEnabled = (m.GetString("Value") == "ON")
-						semiSyncReplicaPluginLoaded = true
 					}
 					return nil
 				})
-				instance.SemiSyncAvailable = (semiSyncPrimaryPluginLoaded && semiSyncReplicaPluginLoaded)
 				errorChan <- err
 			}()
 		}
@@ -989,7 +984,6 @@ func readInstanceRow(m sqlutils.RowMap) *Instance {
 	instance.Region = m.GetString("region")
 	instance.PhysicalEnvironment = m.GetString("physical_environment")
 	instance.SemiSyncEnforced = m.GetBool("semi_sync_enforced")
-	instance.SemiSyncAvailable = m.GetBool("semi_sync_available")
 	instance.SemiSyncPrimaryEnabled = m.GetBool("semi_sync_primary_enabled")
 	instance.SemiSyncPrimaryTimeout = m.GetUint64("semi_sync_primary_timeout")
 	instance.SemiSyncPrimaryWaitForReplicaCount = m.GetUint("semi_sync_primary_wait_for_replica_count")
@@ -2302,7 +2296,6 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 		"has_replication_credentials",
 		"allow_tls",
 		"semi_sync_enforced",
-		"semi_sync_available",
 		"semi_sync_primary_enabled",
 		"semi_sync_primary_timeout",
 		"semi_sync_primary_wait_for_replica_count",
@@ -2394,7 +2387,6 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 		args = append(args, instance.HasReplicationCredentials)
 		args = append(args, instance.AllowTLS)
 		args = append(args, instance.SemiSyncEnforced)
-		args = append(args, instance.SemiSyncAvailable)
 		args = append(args, instance.SemiSyncPrimaryEnabled)
 		args = append(args, instance.SemiSyncPrimaryTimeout)
 		args = append(args, instance.SemiSyncPrimaryWaitForReplicaCount)
