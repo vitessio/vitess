@@ -125,14 +125,14 @@ func (wd *workflowDiffer) diffTable(ctx context.Context, dbClient binlogplayer.D
 }
 
 func (wd *workflowDiffer) getTotalRowsEstimate(dbClient binlogplayer.DBClient) error {
-	query := "select db_name from _vt.vreplication where workflow = %s limit 1"
+	query := "select db_name as db_name from _vt.vreplication where workflow = %s limit 1"
 	query = fmt.Sprintf(query, encodeString(wd.ct.workflow))
 	qr, err := dbClient.ExecuteFetch(query, 1)
 	if err != nil {
 		return err
 	}
 	dbName, _ := qr.Named().Row().ToString("db_name")
-	query = "select table_name, table_rows from information_schema.tables where table_schema = %s"
+	query = "select table_name as table_name, table_rows as table_rows from information_schema.tables where table_schema = %s"
 	query = fmt.Sprintf(query, encodeString(dbName))
 	qr, err = dbClient.ExecuteFetch(query, -1)
 	if err != nil {
@@ -141,10 +141,7 @@ func (wd *workflowDiffer) getTotalRowsEstimate(dbClient binlogplayer.DBClient) e
 	for _, row := range qr.Named().Rows {
 		tableName, _ := row.ToString("table_name")
 		tableRows, _ := row.ToInt64("table_rows")
-		_, ok := wd.tableSizes[tableName]
-		if ok {
-			wd.tableSizes[tableName] = tableRows
-		}
+		wd.tableSizes[tableName] = tableRows
 	}
 	return nil
 }

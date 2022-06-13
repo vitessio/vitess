@@ -415,13 +415,6 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare *int64, debug, on
 	mismatch := false
 
 	for {
-		// TODO: store the progress in the _vt vdiff tables so that it can be exposed via the CLI interface
-		if dr.ProcessedRows%1e7 == 0 { // log progress every 10 million rows
-			log.Infof("VDiff progress:: table %s: %d rows", td.table.Name, dr.ProcessedRows)
-			if err := td.updateRowsCompared(dbClient, dr.ProcessedRows); err != nil {
-				return nil, err
-			}
-		}
 		if !mismatch && dr.MismatchedRows > 0 {
 			mismatch = true
 			log.Infof("Flagging mismatch for %s: %+v", td.table.Name, dr)
@@ -542,6 +535,14 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare *int64, debug, on
 		default:
 			dr.MatchingRows++
 		}
+
+		// Update progress every 10,000 rows. This will allow us to support resuming from approximately where we left off
+		// on larger tables but without too much overhead for when it's not needed or even desired.
+		if dr.ProcessedRows%1e4 == 0 {
+			if err := td.updateTableProgress(dbClient, dr.ProcessedRows, sourceRow); err != nil {
+				return nil, err
+			}
+		}
 	}
 }
 
@@ -571,8 +572,13 @@ func (td *tableDiffer) compare(sourceRow, targetRow []sqltypes.Value, cols []com
 	return 0, nil
 }
 
-func (td *tableDiffer) updateRowsCompared(dbClient binlogplayer.DBClient, numRows int64) error {
-	query := fmt.Sprintf(sqlUpdateRowsCompared, numRows, td.wd.ct.id, encodeString(td.table.Name))
+func (td *tableDiffer) updateTableProgress(dbClient binlogplayer.DBClient, numRows int64, lastRow []sqltypes.Value) error {
+	lastPK, err := td.lastPKFromRow(lastRow)
+	if err != nil {
+		return err
+	}
+	query := fmt.Sprintf(sqlUpdateTableProgress, numRows, encodeString(string(lastPK)), td.wd.ct.id, encodeString(td.table.Name))
+
 	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
 		return err
 	}
@@ -604,4 +610,19 @@ func updateTableMismatch(dbClient binlogplayer.DBClient, vdiffID int64, table st
 		return err
 	}
 	return nil
+}
+
+func (td *tableDiffer) lastPKFromRow(row []sqltypes.Value) ([]byte, error) {
+	pkColCnt := len(td.tablePlan.pkCols)
+	pkFields := make([]*querypb.Field, pkColCnt)
+	pkVals := make([]sqltypes.Value, pkColCnt)
+	for i, colIndex := range td.tablePlan.pkCols {
+		pkFields[i] = td.tablePlan.table.Fields[colIndex]
+		pkVals[i] = row[colIndex]
+	}
+	buf, err := prototext.Marshal(&querypb.QueryResult{
+		Fields: pkFields,
+		Rows:   []*querypb.Row{sqltypes.RowToProto3(pkVals)},
+	})
+	return buf, err
 }

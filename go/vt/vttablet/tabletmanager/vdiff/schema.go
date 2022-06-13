@@ -81,7 +81,7 @@ const (
 	sqlGetAllVDiffs         = "select * from _vt.vdiff order by id desc"
 
 	sqlNewVDiffTable       = "insert into _vt.vdiff_table(vdiff_id, table_name, state, table_rows) values(%d, %s, 'pending', %d)"
-	sqlUpdateRowsCompared  = "update _vt.vdiff_table set rows_compared = %d where vdiff_id = %d and table_name = %s"
+	sqlUpdateTableProgress = "update _vt.vdiff_table set rows_compared = %d, lastpk = %s where vdiff_id = %d and table_name = %s"
 	sqlUpdateTableState    = "update _vt.vdiff_table set state = %s, report = %s where vdiff_id = %d and table_name = %s"
 	sqlUpdateTableMismatch = "update _vt.vdiff_table set mismatch = true where vdiff_id = %d and table_name = %s"
 
