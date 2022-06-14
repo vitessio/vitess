@@ -255,7 +255,6 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 	}()
 
 	var waitGroup sync.WaitGroup
-	var serverUUIDWaitGroup sync.WaitGroup
 	var tablet *topodatapb.Tablet
 	var durability reparentutil.Durabler
 	var fullStatus *replicationdatapb.FullStatus
@@ -343,21 +342,26 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 		instance.SemiSyncReplicaStatus = fullStatus.SemiSyncReplicaStatus
 
 		if (instance.IsOracleMySQL() || instance.IsPercona()) && !instance.IsSmallerMajorVersionByString("5.6") {
-			waitGroup.Add(1)
-			serverUUIDWaitGroup.Add(1)
-			go func() {
-				defer waitGroup.Done()
-				defer serverUUIDWaitGroup.Done()
-				var primaryInfoRepositoryOnTable bool
-				// Stuff only supported on Oracle MySQL >= 5.6
-				// ...
-				// @@gtid_mode only available in Orcale MySQL >= 5.6
-				// Previous version just issued this query brute-force, but I don't like errors being issued where they shouldn't.
-				_ = db.QueryRow("select @@global.gtid_mode, @@global.server_uuid, @@global.gtid_executed, @@global.gtid_purged, @@global.master_info_repository = 'TABLE', @@global.binlog_row_image").Scan(&instance.GTIDMode, &instance.ServerUUID, &instance.ExecutedGtidSet, &instance.GtidPurged, &primaryInfoRepositoryOnTable, &instance.BinlogRowImage)
-				if instance.GTIDMode != "" && instance.GTIDMode != "OFF" {
-					instance.SupportsOracleGTID = true
-				}
-			}()
+			// Stuff only supported on Oracle MySQL >= 5.6
+			// ...
+			// @@gtid_mode only available in Orcale MySQL >= 5.6
+			instance.GTIDMode = fullStatus.GtidMode
+			instance.ServerUUID = fullStatus.ServerUuid
+			GtidExecutedPos, err := vitessmysql.DecodePosition(fullStatus.PrimaryStatus.Position)
+			errorChan <- err
+			if err == nil {
+				instance.ExecutedGtidSet = GtidExecutedPos.GTIDSet.String()
+			}
+			GtidPurgedPos, err := vitessmysql.DecodePosition(fullStatus.GtidPurged)
+			errorChan <- err
+			if err == nil {
+				instance.GtidPurged = GtidPurgedPos.GTIDSet.String()
+			}
+			instance.BinlogRowImage = fullStatus.BinlogRowImage
+
+			if instance.GTIDMode != "" && instance.GTIDMode != "OFF" {
+				instance.SupportsOracleGTID = true
+			}
 		}
 	}
 	if resolvedHostname != instance.Key.Hostname {
@@ -451,11 +455,7 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 	if err != nil {
 		goto Cleanup
 	}
-	// Populate GR information for the instance in Oracle MySQL 8.0+. To do this we need to wait for the Server UUID to
-	// be populated to be able to find this instance's information in performance_schema.replication_group_members by
-	// comparing UUIDs. We could instead resolve the MEMBER_HOST and MEMBER_PORT columns into an InstanceKey and compare
-	// those instead, but this could require external calls for name resolving, whereas comparing UUIDs does not.
-	serverUUIDWaitGroup.Wait()
+	// Populate GR information for the instance in Oracle MySQL 8.0+.
 	if instance.IsOracleMySQL() && !instance.IsSmallerMajorVersionByString("8.0") {
 		err := PopulateGroupReplicationInformation(instance, db)
 		if err != nil {
