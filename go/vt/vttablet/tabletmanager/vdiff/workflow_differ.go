@@ -93,7 +93,7 @@ func (wd *workflowDiffer) reconcileExtraRows(dr *DiffReport, maxExtraRowsToCompa
 
 func (wd *workflowDiffer) diffTable(ctx context.Context, dbClient binlogplayer.DBClient, td *tableDiffer) error {
 	tableName := td.table.Name
-	log.Infof("starting differ on table %s", tableName)
+	log.Infof("Starting differ on table %s from lastPK %+v", tableName, td.lastPK)
 	if err := td.updateTableState(ctx, dbClient, tableName, "started", nil); err != nil {
 		return err
 	}
@@ -169,9 +169,19 @@ func (wd *workflowDiffer) diff(ctx context.Context) error {
 		if !ok {
 			tableRows = 0
 		}
-		query := fmt.Sprintf(sqlNewVDiffTable, wd.ct.id, encodeString(td.table.Name), tableRows)
-		if _, err := withDDL.Exec(ctx, query, dbClient.ExecuteFetch, dbClient.ExecuteFetch); err != nil {
+		var query string
+		query = fmt.Sprintf(sqlGetVDiffTable, wd.ct.id, encodeString(td.table.Name))
+		qr, err := withDDL.Exec(ctx, query, dbClient.ExecuteFetch, dbClient.ExecuteFetch)
+		if err != nil {
 			return err
+		}
+		if len(qr.Rows) == 1 {
+			td.lastPK = qr.Rows[0]
+		} else {
+			query = fmt.Sprintf(sqlNewVDiffTable, wd.ct.id, encodeString(td.table.Name), tableRows)
+			if _, err := withDDL.Exec(ctx, query, dbClient.ExecuteFetch, dbClient.ExecuteFetch); err != nil {
+				return err
+			}
 		}
 	}
 	for _, td := range wd.tableDiffers {

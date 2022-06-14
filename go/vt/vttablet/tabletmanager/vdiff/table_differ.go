@@ -67,6 +67,7 @@ type tableDiffer struct {
 	// sourceQuery is computed from the associated query for this table in the vreplication workflow's Rule Filter
 	sourceQuery string
 	table       *tabletmanagerdatapb.TableDefinition
+	lastPK      []sqltypes.Value
 }
 
 func newTableDiffer(wd *workflowDiffer, table *tabletmanagerdatapb.TableDefinition, sourceQuery string) *tableDiffer {
@@ -542,8 +543,9 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare *int64, debug, on
 			dr.MatchingRows++
 		}
 
-		// Update progress every 10,000 rows. This will allow us to support resuming from approximately where we left off
-		// on larger tables but without too much overhead for when it's not needed or even desired.
+		// Update progress every 10,000 rows as we go along. This will allow us to provide
+		// approximate progress information but without too much overhead for when it's not
+		// needed or even desired.
 		if dr.ProcessedRows%1e4 == 0 {
 			if err := td.updateTableProgress(dbClient, dr.ProcessedRows, sourceRow); err != nil {
 				return nil, err
