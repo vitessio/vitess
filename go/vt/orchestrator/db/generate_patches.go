@@ -351,11 +351,6 @@ var generateSQLPatches = []string{
 	`
 		ALTER TABLE
 			database_instance
-			ADD COLUMN replication_credentials_available TINYINT UNSIGNED NOT NULL
-	`,
-	`
-		ALTER TABLE
-			database_instance
 			ADD COLUMN has_replication_credentials TINYINT UNSIGNED NOT NULL
 	`,
 	`

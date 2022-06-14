@@ -87,7 +87,6 @@ type Instance struct {
 	ReplicationDepth                   uint
 	IsCoPrimary                        bool
 	HasReplicationCredentials          bool
-	ReplicationCredentialsAvailable    bool
 	SemiSyncEnforced                   bool
 	SemiSyncPrimaryEnabled             bool
 	SemiSyncReplicaEnabled             bool
