@@ -95,6 +95,6 @@ func ensureServerArg() error {
 }
 
 func init() {
-	Root.PersistentFlags().StringVar(&server, "server", "", "server to use for connection")
+	Root.PersistentFlags().StringVar(&server, "server", "", "server to use for connection (required)")
 	Root.PersistentFlags().DurationVar(&actionTimeout, "action_timeout", time.Hour, "timeout for the total command")
 }
