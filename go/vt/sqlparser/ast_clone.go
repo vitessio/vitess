@@ -1346,7 +1346,7 @@ func CloneRefOfJSONAttributesExpr(n *JSONAttributesExpr) *JSONAttributesExpr {
 	}
 	out := *n
 	out.JSONDoc = CloneExpr(n.JSONDoc)
-	out.Path = CloneJSONPathParam(n.Path)
+	out.Path = CloneExpr(n.Path)
 	return &out
 }
 
@@ -1358,7 +1358,7 @@ func CloneRefOfJSONContainsExpr(n *JSONContainsExpr) *JSONContainsExpr {
 	out := *n
 	out.Target = CloneExpr(n.Target)
 	out.Candidate = CloneExpr(n.Candidate)
-	out.PathList = CloneSliceOfJSONPathParam(n.PathList)
+	out.PathList = CloneSliceOfExpr(n.PathList)
 	return &out
 }
 
@@ -1370,7 +1370,7 @@ func CloneRefOfJSONContainsPathExpr(n *JSONContainsPathExpr) *JSONContainsPathEx
 	out := *n
 	out.JSONDoc = CloneExpr(n.JSONDoc)
 	out.OneOrAll = CloneExpr(n.OneOrAll)
-	out.PathList = CloneSliceOfJSONPathParam(n.PathList)
+	out.PathList = CloneSliceOfExpr(n.PathList)
 	return &out
 }
 
@@ -1381,7 +1381,7 @@ func CloneRefOfJSONExtractExpr(n *JSONExtractExpr) *JSONExtractExpr {
 	}
 	out := *n
 	out.JSONDoc = CloneExpr(n.JSONDoc)
-	out.PathList = CloneSliceOfJSONPathParam(n.PathList)
+	out.PathList = CloneSliceOfExpr(n.PathList)
 	return &out
 }
 
@@ -1392,7 +1392,7 @@ func CloneRefOfJSONKeysExpr(n *JSONKeysExpr) *JSONKeysExpr {
 	}
 	out := *n
 	out.JSONDoc = CloneExpr(n.JSONDoc)
-	out.PathList = CloneSliceOfJSONPathParam(n.PathList)
+	out.Path = CloneExpr(n.Path)
 	return &out
 }
 
@@ -1485,7 +1485,7 @@ func CloneRefOfJSONSearchExpr(n *JSONSearchExpr) *JSONSearchExpr {
 	out.OneOrAll = CloneExpr(n.OneOrAll)
 	out.SearchStr = CloneExpr(n.SearchStr)
 	out.EscapeChar = CloneExpr(n.EscapeChar)
-	out.PathList = CloneSliceOfJSONPathParam(n.PathList)
+	out.PathList = CloneSliceOfExpr(n.PathList)
 	return &out
 }
 
@@ -1539,7 +1539,7 @@ func CloneRefOfJSONValueExpr(n *JSONValueExpr) *JSONValueExpr {
 	}
 	out := *n
 	out.JSONDoc = CloneExpr(n.JSONDoc)
-	out.Path = CloneJSONPathParam(n.Path)
+	out.Path = CloneExpr(n.Path)
 	out.ReturningType = CloneRefOfConvertType(n.ReturningType)
 	out.EmptyOnResponse = CloneRefOfJtOnResponse(n.EmptyOnResponse)
 	out.ErrorOnResponse = CloneRefOfJtOnResponse(n.ErrorOnResponse)
@@ -3239,162 +3239,6 @@ func CloneInsertRows(in InsertRows) InsertRows {
 	}
 }
 
-// CloneJSONPathParam creates a deep clone of the input.
-func CloneJSONPathParam(in JSONPathParam) JSONPathParam {
-	if in == nil {
-		return nil
-	}
-	switch in := in.(type) {
-	case *AndExpr:
-		return CloneRefOfAndExpr(in)
-	case Argument:
-		return in
-	case *ArgumentLessWindowExpr:
-		return CloneRefOfArgumentLessWindowExpr(in)
-	case *BetweenExpr:
-		return CloneRefOfBetweenExpr(in)
-	case *BinaryExpr:
-		return CloneRefOfBinaryExpr(in)
-	case BoolVal:
-		return in
-	case *CaseExpr:
-		return CloneRefOfCaseExpr(in)
-	case *CastExpr:
-		return CloneRefOfCastExpr(in)
-	case *ColName:
-		return CloneRefOfColName(in)
-	case *CollateExpr:
-		return CloneRefOfCollateExpr(in)
-	case *ComparisonExpr:
-		return CloneRefOfComparisonExpr(in)
-	case *ConvertExpr:
-		return CloneRefOfConvertExpr(in)
-	case *ConvertUsingExpr:
-		return CloneRefOfConvertUsingExpr(in)
-	case *CurTimeFuncExpr:
-		return CloneRefOfCurTimeFuncExpr(in)
-	case *Default:
-		return CloneRefOfDefault(in)
-	case *ExistsExpr:
-		return CloneRefOfExistsExpr(in)
-	case *ExtractFuncExpr:
-		return CloneRefOfExtractFuncExpr(in)
-	case *ExtractValueExpr:
-		return CloneRefOfExtractValueExpr(in)
-	case *ExtractedSubquery:
-		return CloneRefOfExtractedSubquery(in)
-	case *FirstOrLastValueExpr:
-		return CloneRefOfFirstOrLastValueExpr(in)
-	case *FuncExpr:
-		return CloneRefOfFuncExpr(in)
-	case *GroupConcatExpr:
-		return CloneRefOfGroupConcatExpr(in)
-	case *IntervalExpr:
-		return CloneRefOfIntervalExpr(in)
-	case *IntroducerExpr:
-		return CloneRefOfIntroducerExpr(in)
-	case *IsExpr:
-		return CloneRefOfIsExpr(in)
-	case *JSONArrayExpr:
-		return CloneRefOfJSONArrayExpr(in)
-	case *JSONAttributesExpr:
-		return CloneRefOfJSONAttributesExpr(in)
-	case *JSONContainsExpr:
-		return CloneRefOfJSONContainsExpr(in)
-	case *JSONContainsPathExpr:
-		return CloneRefOfJSONContainsPathExpr(in)
-	case *JSONExtractExpr:
-		return CloneRefOfJSONExtractExpr(in)
-	case *JSONKeysExpr:
-		return CloneRefOfJSONKeysExpr(in)
-	case *JSONObjectExpr:
-		return CloneRefOfJSONObjectExpr(in)
-	case *JSONOverlapsExpr:
-		return CloneRefOfJSONOverlapsExpr(in)
-	case *JSONPrettyExpr:
-		return CloneRefOfJSONPrettyExpr(in)
-	case *JSONQuoteExpr:
-		return CloneRefOfJSONQuoteExpr(in)
-	case *JSONRemoveExpr:
-		return CloneRefOfJSONRemoveExpr(in)
-	case *JSONSchemaValidFuncExpr:
-		return CloneRefOfJSONSchemaValidFuncExpr(in)
-	case *JSONSchemaValidationReportFuncExpr:
-		return CloneRefOfJSONSchemaValidationReportFuncExpr(in)
-	case *JSONSearchExpr:
-		return CloneRefOfJSONSearchExpr(in)
-	case *JSONStorageFreeExpr:
-		return CloneRefOfJSONStorageFreeExpr(in)
-	case *JSONStorageSizeExpr:
-		return CloneRefOfJSONStorageSizeExpr(in)
-	case *JSONUnquoteExpr:
-		return CloneRefOfJSONUnquoteExpr(in)
-	case *JSONValueExpr:
-		return CloneRefOfJSONValueExpr(in)
-	case *JSONValueMergeExpr:
-		return CloneRefOfJSONValueMergeExpr(in)
-	case *JSONValueModifierExpr:
-		return CloneRefOfJSONValueModifierExpr(in)
-	case *LagLeadExpr:
-		return CloneRefOfLagLeadExpr(in)
-	case ListArg:
-		return in
-	case *Literal:
-		return CloneRefOfLiteral(in)
-	case *LockingFunc:
-		return CloneRefOfLockingFunc(in)
-	case *MatchExpr:
-		return CloneRefOfMatchExpr(in)
-	case *MemberOfExpr:
-		return CloneRefOfMemberOfExpr(in)
-	case *NTHValueExpr:
-		return CloneRefOfNTHValueExpr(in)
-	case *NamedWindow:
-		return CloneRefOfNamedWindow(in)
-	case *NotExpr:
-		return CloneRefOfNotExpr(in)
-	case *NtileExpr:
-		return CloneRefOfNtileExpr(in)
-	case *NullVal:
-		return CloneRefOfNullVal(in)
-	case *Offset:
-		return CloneRefOfOffset(in)
-	case *OrExpr:
-		return CloneRefOfOrExpr(in)
-	case *RegexpInstrExpr:
-		return CloneRefOfRegexpInstrExpr(in)
-	case *RegexpLikeExpr:
-		return CloneRefOfRegexpLikeExpr(in)
-	case *RegexpReplaceExpr:
-		return CloneRefOfRegexpReplaceExpr(in)
-	case *RegexpSubstrExpr:
-		return CloneRefOfRegexpSubstrExpr(in)
-	case *Subquery:
-		return CloneRefOfSubquery(in)
-	case *SubstrExpr:
-		return CloneRefOfSubstrExpr(in)
-	case *TimestampFuncExpr:
-		return CloneRefOfTimestampFuncExpr(in)
-	case *TrimFuncExpr:
-		return CloneRefOfTrimFuncExpr(in)
-	case *UnaryExpr:
-		return CloneRefOfUnaryExpr(in)
-	case *UpdateXMLExpr:
-		return CloneRefOfUpdateXMLExpr(in)
-	case ValTuple:
-		return CloneValTuple(in)
-	case *ValuesFuncExpr:
-		return CloneRefOfValuesFuncExpr(in)
-	case *WeightStringFuncExpr:
-		return CloneRefOfWeightStringFuncExpr(in)
-	case *XorExpr:
-		return CloneRefOfXorExpr(in)
-	default:
-		// this should never happen
-		return nil
-	}
-}
-
 // CloneSelectExpr creates a deep clone of the input.
 func CloneSelectExpr(in SelectExpr) SelectExpr {
 	if in == nil {
@@ -3726,14 +3570,14 @@ func CloneSliceOfRefOfIndexOption(n []*IndexOption) []*IndexOption {
 	return res
 }
 
-// CloneSliceOfJSONPathParam creates a deep clone of the input.
-func CloneSliceOfJSONPathParam(n []JSONPathParam) []JSONPathParam {
+// CloneSliceOfExpr creates a deep clone of the input.
+func CloneSliceOfExpr(n []Expr) []Expr {
 	if n == nil {
 		return nil
 	}
-	res := make([]JSONPathParam, len(n))
+	res := make([]Expr, len(n))
 	for i, x := range n {
-		res[i] = CloneJSONPathParam(x)
+		res[i] = CloneExpr(x)
 	}
 	return res
 }

@@ -68,7 +68,6 @@ func bindVariable(yylex yyLexer, bvar string) {
   databaseOption DatabaseOption
   columnType    ColumnType
   columnCharset ColumnCharset
-  jsonPathParam JSONPathParam
 }
 
 %union {
@@ -154,7 +153,6 @@ func bindVariable(yylex yyLexer, bvar string) {
   renameTablePairs []*RenameTablePair
   alterOptions	   []AlterOption
   vindexParams  []VindexParam
-  jsonPathParams []JSONPathParam
   jsonObjectParams []*JSONObjectParam
   partDefs      []*PartitionDefinition
   partitionValueRange	*PartitionValueRange
@@ -546,8 +544,6 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <partSpec> partition_operation
 %type <vindexParam> vindex_param
 %type <vindexParams> vindex_param_list vindex_params_opt
-%type <jsonPathParam> json_path_param
-%type <jsonPathParams> json_path_param_list json_path_param_list_opt
 %type <jsonObjectParam> json_object_param
 %type <jsonObjectParams> json_object_param_list json_object_param_opt
 %type <colIdent> id_or_var vindex_type vindex_type_opt id_or_var_opt
@@ -5709,21 +5705,25 @@ UTC_DATE func_paren_opt
   {
     $$ = &JSONQuoteExpr{ StringArg:$3 }
   }
-| JSON_CONTAINS openb expression ',' expression json_path_param_list_opt closeb
+| JSON_CONTAINS openb expression ',' expression_list closeb
   {
-    $$ = &JSONContainsExpr{Target: $3, Candidate: $5, PathList: $6}
+    $$ = &JSONContainsExpr{Target: $3, Candidate: $5[0], PathList: $5[1:]}
   }
-| JSON_CONTAINS_PATH openb expression ',' expression ',' json_path_param_list closeb
+| JSON_CONTAINS_PATH openb expression ',' expression ',' expression_list closeb
   {
     $$ = &JSONContainsPathExpr{JSONDoc: $3, OneOrAll: $5, PathList: $7}
   }
-| JSON_EXTRACT openb expression ',' json_path_param_list closeb
+| JSON_EXTRACT openb expression ',' expression_list closeb
   {
     $$ = &JSONExtractExpr{JSONDoc: $3, PathList: $5}
   }
-| JSON_KEYS openb expression json_path_param_list_opt closeb
+| JSON_KEYS openb expression closeb
   {
-    $$ = &JSONKeysExpr{JSONDoc: $3, PathList: $4}
+    $$ = &JSONKeysExpr{JSONDoc: $3}
+  }
+| JSON_KEYS openb expression ',' expression closeb
+  {
+    $$ = &JSONKeysExpr{JSONDoc: $3, Path: $5}
   }
 | JSON_OVERLAPS openb expression ',' expression closeb
   {
@@ -5733,23 +5733,23 @@ UTC_DATE func_paren_opt
   {
     $$ = &JSONSearchExpr{JSONDoc: $3, OneOrAll: $5, SearchStr: $7 }
   }
-| JSON_SEARCH openb expression ',' expression ',' expression ',' expression json_path_param_list_opt closeb
+| JSON_SEARCH openb expression ',' expression ',' expression ',' expression_list closeb
   {
-    $$ = &JSONSearchExpr{JSONDoc: $3, OneOrAll: $5, SearchStr: $7, EscapeChar: $9, PathList:$10 }
+    $$ = &JSONSearchExpr{JSONDoc: $3, OneOrAll: $5, SearchStr: $7, EscapeChar: $9[0], PathList:$9[1:] }
   }
-| JSON_VALUE openb expression ',' json_path_param returning_type_opt closeb
+| JSON_VALUE openb expression ',' expression returning_type_opt closeb
   {
     $$ = &JSONValueExpr{JSONDoc: $3, Path: $5, ReturningType: $6}
   }
-| JSON_VALUE openb expression ',' json_path_param returning_type_opt on_empty closeb
+| JSON_VALUE openb expression ',' expression returning_type_opt on_empty closeb
   {
     $$ = &JSONValueExpr{JSONDoc: $3, Path: $5, ReturningType: $6, EmptyOnResponse: $7}
   }
-| JSON_VALUE openb expression ',' json_path_param returning_type_opt on_error closeb
+| JSON_VALUE openb expression ',' expression returning_type_opt on_error closeb
   {
     $$ = &JSONValueExpr{JSONDoc: $3, Path: $5, ReturningType: $6, ErrorOnResponse: $7}
   }
-| JSON_VALUE openb expression ',' json_path_param returning_type_opt on_empty on_error closeb
+| JSON_VALUE openb expression ',' expression returning_type_opt on_empty on_error closeb
   {
     $$ = &JSONValueExpr{JSONDoc: $3, Path: $5, ReturningType: $6, EmptyOnResponse: $7, ErrorOnResponse: $8}
   }
@@ -5769,7 +5769,7 @@ UTC_DATE func_paren_opt
   {
     $$ = &JSONAttributesExpr{Type:LengthAttributeType, JSONDoc:$3 }
   }
-| JSON_LENGTH openb expression ',' json_path_param closeb
+| JSON_LENGTH openb expression ',' expression closeb
   {
     $$ = &JSONAttributesExpr{Type:LengthAttributeType, JSONDoc:$3, Path: $5 }
   }
@@ -5952,35 +5952,6 @@ returning_type_opt:
 | RETURNING convert_type
   {
     $$ = $2
-  }
-
-json_path_param_list_opt:
-  {
-    $$ = nil
-  }
-| ',' json_path_param_list
-  {
-    $$ = $2
-  }
-
-json_path_param_list:
-  json_path_param
-  {
-    $$ = []JSONPathParam{$1}
-  }
-| json_path_param_list ',' json_path_param
-  {
-    $$ = append($$, $3)
-  }
-
-json_path_param:
-  text_literal_or_arg
-  {
-    $$ = JSONPathParam($1)
-  }
-| column_name
-  {
-    $$ = JSONPathParam($1)
   }
 
 interval:

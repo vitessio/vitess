@@ -2652,6 +2652,9 @@ var (
 		input:  `SELECT JSON_EXTRACT('{"a": 1, "b": 2, "c": {"d": 4}}', '$.a', @j)`,
 		output: `select json_extract('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', '$.a', @j) from dual`,
 	}, {
+		input:  "SELECT JSON_EXTRACT(@k, TRIM('abc'))",
+		output: `select json_extract(@k, trim('abc')) from dual`,
+	}, {
 		input:  `SELECT JSON_KEYS('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', '$.a')`,
 		output: `select json_keys('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', '$.a') from dual`,
 	}, {
@@ -3211,9 +3214,6 @@ func TestInvalid(t *testing.T) {
 		input: "SELECT JSON_CONTAINS_PATH(@j, @j2)",
 		err:   "syntax error at position 35",
 	}, {
-		input: "SELECT JSON_EXTRACT(@k, TRIM('abc'))",
-		err:   "syntax error at position 30",
-	}, {
 		input: "SELECT JSON_EXTRACT(@k)",
 		err:   "syntax error at position 24",
 	}, {
@@ -3285,13 +3285,11 @@ func TestInvalid(t *testing.T) {
 	}}
 
 	for _, tcase := range invalidSQL {
-		_, err := Parse(tcase.input)
-		if err == nil {
-			t.Errorf("Parse invalid query(%q), got: nil, want: %s...", tcase.input, tcase.err)
-		}
-		if err != nil && !strings.Contains(err.Error(), tcase.err) {
-			t.Errorf("Parse invalid query(%q), got: %v, want: %s...", tcase.input, err, tcase.err)
-		}
+		t.Run(tcase.input, func(t *testing.T) {
+			_, err := Parse(tcase.input)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), tcase.err)
+		})
 	}
 }
 
@@ -5509,7 +5507,7 @@ func testFile(t *testing.T, filename, tempDir string) {
 		fail := false
 		expected := strings.Builder{}
 		for tcase := range iterateExecFile(filename) {
-			t.Run(fmt.Sprintf("%d : %s", tcase.lineno, tcase.comments), func(t *testing.T) {
+			t.Run(fmt.Sprintf("%d : %s", tcase.lineno, tcase.input), func(t *testing.T) {
 				if tcase.output == "" && tcase.errStr == "" {
 					tcase.output = tcase.input
 				}
@@ -5529,7 +5527,7 @@ func testFile(t *testing.T, filename, tempDir string) {
 					if err != nil {
 						expected.WriteString(fmt.Sprintf("ERROR\n%s\nEND\n", escapeNewLines(err.Error())))
 						fail = true
-						t.Errorf("File: %s, Line: %d\nDiff:\n%s\n[%s] \n[%s]", filename, tcase.lineno, cmp.Diff(tcase.errStr, err.Error()), tcase.errStr, err.Error())
+						t.Errorf("File: %s:%d\nDiff:\n%s\n[%s] \n[%s]", filename, tcase.lineno, cmp.Diff(tcase.errStr, err.Error()), tcase.errStr, err.Error())
 					} else {
 						out := String(tree)
 						expected.WriteString(fmt.Sprintf("OUTPUT\n%s\nEND\n", escapeNewLines(out)))

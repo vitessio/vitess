@@ -2472,13 +2472,9 @@ func (node *JSONExtractExpr) Format(buf *TrackedBuffer) {
 // Format formats the node
 func (node *JSONKeysExpr) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "json_keys(%v", node.JSONDoc)
-	if len(node.PathList) > 0 {
-		buf.literal(", ")
-	}
-	var prefix string
-	for _, n := range node.PathList {
-		buf.astPrintf(node, "%s%v", prefix, n)
-		prefix = ", "
+	if node.Path != nil {
+		buf.astPrintf(node, ", %v)", node.Path)
+		return
 	}
 	buf.WriteByte(')')
 }
