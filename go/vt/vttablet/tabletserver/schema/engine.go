@@ -248,7 +248,7 @@ func (se *Engine) Close() {
 	se.isOpen = false
 
 	// Unlock the mutex. If there is a tick blocked on this lock,
-	// then it will run and we wait for the Stop function to finish it's execution
+	// then it will run and we wait for the Stop function to finish its execution
 	se.mu.Unlock()
 	<-ticksWaitChan
 	log.Info("Schema Engine: closed")

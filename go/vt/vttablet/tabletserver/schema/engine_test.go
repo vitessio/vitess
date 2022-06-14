@@ -504,7 +504,6 @@ func TestSchemaEngineCloseTickRace(t *testing.T) {
 	err := se.Open()
 	require.NoError(t, err)
 
-	time.Sleep(200 * time.Millisecond)
 	finished := make(chan bool)
 	go func() {
 		{
@@ -515,6 +514,7 @@ func TestSchemaEngineCloseTickRace(t *testing.T) {
 			// Code copied from Close function, so that we can add the wait for
 			// 200 milliseconds and be sure that the timer tick happens after acquiring the lock
 			// in Close function
+			time.Sleep(200 * time.Millisecond)
 			ticksWaitChan := make(chan bool, 0)
 			go func() {
 				se.ticks.Stop()
