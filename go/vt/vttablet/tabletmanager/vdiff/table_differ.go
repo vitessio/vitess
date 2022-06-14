@@ -408,13 +408,19 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare *int64, debug, on
 	sourceExecutor := newPrimitiveExecutor(ctx, td.sourcePrimitive, "source")
 	targetExecutor := newPrimitiveExecutor(ctx, td.targetPrimitive, "target")
 	dr := &DiffReport{TableName: td.table.Name}
-	var sourceRow, targetRow []sqltypes.Value
+	var sourceRow, lastProcessedRow, targetRow []sqltypes.Value
 	var err error
 	advanceSource := true
 	advanceTarget := true
 	mismatch := false
 
+	// Save our progress when we complete the run
+	defer func() {
+		_ = td.updateTableProgress(dbClient, dr.ProcessedRows, lastProcessedRow)
+	}()
+
 	for {
+		lastProcessedRow = sourceRow
 		if !mismatch && dr.MismatchedRows > 0 {
 			mismatch = true
 			log.Infof("Flagging mismatch for %s: %+v", td.table.Name, dr)
@@ -573,12 +579,15 @@ func (td *tableDiffer) compare(sourceRow, targetRow []sqltypes.Value, cols []com
 }
 
 func (td *tableDiffer) updateTableProgress(dbClient binlogplayer.DBClient, numRows int64, lastRow []sqltypes.Value) error {
-	lastPK, err := td.lastPKFromRow(lastRow)
-	if err != nil {
-		return err
+	var lastPK []byte
+	var err error
+	if lastRow != nil {
+		lastPK, err = td.lastPKFromRow(lastRow)
+		if err != nil {
+			return err
+		}
 	}
 	query := fmt.Sprintf(sqlUpdateTableProgress, numRows, encodeString(string(lastPK)), td.wd.ct.id, encodeString(td.table.Name))
-
 	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
 		return err
 	}

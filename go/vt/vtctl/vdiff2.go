@@ -120,7 +120,11 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 	var vdiffUUID uuid.UUID
 	switch action {
 	case vdiff.CreateAction:
-		vdiffUUID, err = uuid.NewUUID()
+		if actionArg != "" {
+			vdiffUUID, err = uuid.Parse(actionArg)
+		} else {
+			vdiffUUID, err = uuid.NewUUID()
+		}
 		if err != nil {
 			return err
 		}
@@ -130,8 +134,13 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 		default:
 			vdiffUUID, err = uuid.Parse(actionArg)
 			if err != nil {
-				return fmt.Errorf("can only show specific migration, provide valid uuid; view all with: vdiff -- --v2 show all")
+				return fmt.Errorf("can only show a specific migration, please provide a valid uuid; view all with: vdiff -- --v2 show all")
 			}
+		}
+	case vdiff.ResumeAction:
+		vdiffUUID, err = uuid.Parse(actionArg)
+		if err != nil {
+			return fmt.Errorf("can only resume a specific migration, please provide a valid uuid; view all with: vdiff -- --v2 show all")
 		}
 	default:
 		return fmt.Errorf("invalid command %s", action)
@@ -152,10 +161,11 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 		if output == nil {
 			return fmt.Errorf("invalid response from show command")
 		}
-		log.Infof("show action: %+v", output)
 		if err := displayVDiff2ShowResponse(wr, *format, keyspace, workflowName, actionArg, output); err != nil {
 			return err
 		}
+	case vdiff.ResumeAction:
+		displayVDiff2ResumeResponse(wr, *format, vdiffUUID.String())
 	default:
 		return fmt.Errorf("action %s not valid", action)
 	}
@@ -461,5 +471,18 @@ func displayVDiff2CreateResponse(wr *wrangler.Wrangler, format string, uuid stri
 		wr.Logger().Printf(string(jsonText) + "\n")
 	} else {
 		wr.Logger().Printf("VDiff %s scheduled on target shards, use show to view progress\n", uuid)
+	}
+}
+
+func displayVDiff2ResumeResponse(wr *wrangler.Wrangler, format string, uuid string) {
+	if format == "json" {
+		type ResumeResponse struct {
+			UUID string `json:"ResumedUUID"`
+		}
+		resp := &ResumeResponse{UUID: uuid}
+		jsonText, _ := json.MarshalIndent(resp, "", "\t")
+		wr.Logger().Printf(string(jsonText) + "\n")
+	} else {
+		wr.Logger().Printf("VDiff %s resumed on target shards, use show to view progress\n", uuid)
 	}
 }
