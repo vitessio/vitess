@@ -1,0 +1,22 @@
+name: Check Release Notes labels
+on:
+  pull_request:
+
+concurrency:
+  group: format('{0}-{1}', ${{ github.ref }}, 'Check Release Notes labels')
+  cancel-in-progress: true
+
+jobs:
+  get_release_notes_details_label:
+    timeout-minutes: 10
+    name: Get the "release notes (needs details)" label
+    runs-on: ubuntu-latest
+    if: github.repository == 'vitessio/vitess'
+    steps:
+      - uses: mheap/github-action-required-labels@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          mode: exactly
+          count: 0
+          labels: "release notes (needs details)"
