@@ -1,20 +1,21 @@
-name: Check Release Notes labels
+name: Check Pull Request labels
 on:
   pull_request:
     types: [opened, labeled, unlabeled, synchronize]
 
 concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Check Release Notes labels')
+  group: format('{0}-{1}', ${{ github.ref }}, 'Check Pull Request labels')
   cancel-in-progress: true
 
 jobs:
-  get_release_notes_details_label:
+  check_pull_request_labels:
+    name: Check Pull Request labels
     timeout-minutes: 10
-    name: Get the "release notes (needs details)" label
     runs-on: ubuntu-latest
     if: github.repository == 'vitessio/vitess'
     steps:
       - uses: mheap/github-action-required-labels@v1
+        name: Check release notes label
         id: required_label
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -27,3 +28,24 @@ jobs:
         if: failure() && steps.required_label.outcome == 'failure'
         run: |
           echo The "release notes (needs details)" label is set. The changes made in this Pull Request need to be documented in the release notes summary ('./doc/releasenotes/x_x_x_summary.md'). Once documented, the "release notes (needs details)" can be set to "release notes".
+
+      - name: Check type and component labels
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          LABELS_JSON="/tmp/labels.json"
+          # Get labels for this pull request
+          curl -s \
+            -H 'authorization: Bearer ${{ secrets.GITHUB_TOKEN }}' \
+            -H "Accept: application/vnd.github.v3+json" \
+            -H "Content-type: application/json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/labels" \
+            > "$LABELS_JSON"
+          if ! cat ${LABELS_JSON} | jq -r '.[].name ' | grep -q 'Component:' ; then
+            echo "Expecting PR to have label 'Component: ...'"
+            exit 1
+          fi
+          if ! cat ${LABELS_JSON} | jq -r '.[].name ' | grep -q 'Type:' ; then
+            echo "Expecting PR to have label 'Type: ...'"
+            exit 1
+          fi
