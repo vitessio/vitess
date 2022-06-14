@@ -136,15 +136,6 @@ The entire changelog for this release can be found [here]({{ .PathToChangeLogFil
 	lengthOfSingleSHA = 40
 )
 
-func (l labels) needsToList() bool {
-	for _, label := range l {
-		if label.Name == "release notes" {
-			return true
-		}
-	}
-	return false
-}
-
 func (rn *releaseNote) generate(rnFile, changelogFile *os.File) error {
 	var err error
 	// Generate the release notes
@@ -338,9 +329,7 @@ func loadAllPRs(prs, authorCommits []string) ([]prInfo, []string, error) {
 	addPR := func(in prInfo) {
 		mu.Lock()
 		defer mu.Unlock()
-		if in.Labels.needsToList() {
-			prInfos = append(prInfos, in)
-		}
+		prInfos = append(prInfos, in)
 	}
 
 	for i := 0; i < numberOfThreads; i++ {
