@@ -559,7 +559,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <jsonPathParams> json_path_param_list json_path_param_list_opt
 %type <jsonObjectParam> json_object_param
 %type <jsonObjectParams> json_object_param_list json_object_param_opt
-%type <colIdent> ci_identifier id_or_var vindex_type vindex_type_opt id_or_var_opt
+%type <colIdent> ci_identifier ci_identifier_opt id_or_var vindex_type vindex_type_opt
 %type <str> database_or_schema column_opt insert_method_options row_format_options
 %type <referenceAction> fk_reference_action fk_on_delete fk_on_update
 %type <matchAction> fk_match fk_match_opt fk_match_action
@@ -642,6 +642,15 @@ ci_identifier:
     $$ = NewColIdent(string($1))
   }
 
+ci_identifier_opt:
+  {
+    $$ = NewColIdent("")
+  }
+| ci_identifier
+  {
+    $$ = $1
+  }
+
 id_or_var:
   ID
   {
@@ -654,15 +663,6 @@ id_or_var:
 | AT_AT_ID
   {
     $$ = NewColIdentWithAt(string($1), DoubleAt)
-  }
-
-id_or_var_opt:
-  {
-    $$ = NewColIdentWithAt("", NoAt)
-  }
-| id_or_var
-  {
-    $$ = $1
   }
 
 do_statement:
@@ -1439,7 +1439,7 @@ column_attribute_list_opt:
   {
     $1.Collate = encodeSQLString($3)
   }
-| column_attribute_list_opt COLLATE id_or_var
+| column_attribute_list_opt COLLATE ci_identifier
   {
     $1.Collate = string($3.String())
     $$ = $1
@@ -2219,7 +2219,7 @@ collate_opt:
   {
     $$ = ""
   }
-| COLLATE id_or_var
+| COLLATE ci_identifier
   {
     $$ = string($2.String())
   }
@@ -2275,7 +2275,7 @@ index_option:
   {
     $$ = &IndexOption{Name: string($1) }
   }
-| WITH PARSER id_or_var
+| WITH PARSER ci_identifier
   {
     $$ = &IndexOption{Name: string($1) + " " + string($2), String: $3.String()}
   }
@@ -2376,7 +2376,7 @@ name_opt:
   {
     $$ = ""
   }
-| id_or_var
+| ci_identifier
   {
     $$ = string($1.String())
   }
@@ -2402,7 +2402,7 @@ index_column:
   }
 
 constraint_definition:
-  CONSTRAINT id_or_var_opt constraint_info
+  CONSTRAINT ci_identifier_opt constraint_info
   {
     $$ = &ConstraintDefinition{Name: $2, Details: $3}
   }
@@ -2412,7 +2412,7 @@ constraint_definition:
   }
 
 check_constraint_definition:
-  CONSTRAINT id_or_var_opt check_constraint_info
+  CONSTRAINT ci_identifier_opt check_constraint_info
   {
     $$ = &ConstraintDefinition{Name: $2, Details: $3}
   }
@@ -2938,7 +2938,7 @@ alter_option:
   {
     $$ = &DropColumn{Name:$3}
   }
-| DROP index_or_key id_or_var
+| DROP index_or_key ci_identifier
   {
     $$ = &DropKey{Type:NormalKeyType, Name:$3}
   }
@@ -2946,15 +2946,15 @@ alter_option:
   {
     $$ = &DropKey{Type:PrimaryKeyType}
   }
-| DROP FOREIGN KEY id_or_var
+| DROP FOREIGN KEY ci_identifier
   {
     $$ = &DropKey{Type:ForeignKeyType, Name:$4}
   }
-| DROP CHECK id_or_var
+| DROP CHECK ci_identifier
   {
     $$ = &DropKey{Type:CheckKeyType, Name:$3}
   }
-| DROP CONSTRAINT id_or_var
+| DROP CONSTRAINT ci_identifier
   {
     $$ = &DropKey{Type:CheckKeyType, Name:$3}
   }
@@ -2966,7 +2966,7 @@ alter_option:
   {
     $$ = &RenameTableName{Table:$3}
   }
-| RENAME index_or_key id_or_var TO id_or_var
+| RENAME index_or_key ci_identifier TO ci_identifier
   {
     $$ = &RenameIndex{OldName:$3, NewName:$5}
   }
@@ -3777,7 +3777,7 @@ drop_statement:
   {
     $$ = &DropTable{FromTables: $6, IfExists: $5, Comments: Comments($2).Parsed(), Temp: $3}
   }
-| DROP comment_opt INDEX id_or_var ON table_name algorithm_lock_opt
+| DROP comment_opt INDEX ci_identifier ON table_name algorithm_lock_opt
   {
     // Change this to an alter statement
     if $4.Lowered() == "primary" {
@@ -3983,7 +3983,7 @@ show_statement:
 /*
  * Catch-all for show statements without vitess keywords:
  */
-| SHOW id_or_var ddl_skip_to_end
+| SHOW ci_identifier ddl_skip_to_end
   {
     $$ = &Show{&ShowOther{Command: string($2.String())}}
   }
@@ -3991,7 +3991,7 @@ show_statement:
   {
     $$ = &Show{&ShowOther{Command: string($2) + " " + string($3)}}
    }
-| SHOW BINARY id_or_var ddl_skip_to_end /* SHOW BINARY ... */
+| SHOW BINARY ci_identifier ddl_skip_to_end /* SHOW BINARY ... */
   {
     $$ = &Show{&ShowOther{Command: string($2) + " " + $3.String()}}
   }
@@ -4419,7 +4419,7 @@ for_channel_opt:
   {
     $$ = ""
   }
-| FOR CHANNEL id_or_var
+| FOR CHANNEL ci_identifier
   {
     $$ = " " + string($1) + " " + string($2) + " " + $3.String()
   }
@@ -5446,7 +5446,7 @@ default_opt:
   {
     $$ = ""
   }
-| openb id_or_var closeb
+| openb ci_identifier closeb
   {
     $$ = string($2.String())
   }
@@ -5931,10 +5931,9 @@ null_int_variable_arg:
   {
     $$ = NewIntLiteral($1)
   }
-//  we are currently using id_or_var for variables. This will require a reiteration later.
-| id_or_var
+| user_defined_variable
   {
-    $$ = &ColName{Name: $1}
+    $$ = $1
   }
 | VALUE_ARG
   {

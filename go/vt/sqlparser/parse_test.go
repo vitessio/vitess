@@ -3024,8 +3024,8 @@ var (
 		input:  "SELECT NTILE(NULL) OVER w FROM numbers",
 		output: "select ntile(null) over w from numbers",
 	}, {
-		input:  "SELECT NTILE(val) OVER W, NTILE(@val) OVER w FROM numbers",
-		output: "select ntile(val) over W, ntile(@val) over w from numbers",
+		input:  "SELECT NTILE(@val) OVER w FROM numbers",
+		output: "select ntile(@val) over w from numbers",
 	}, {
 		input:  "SELECT NTH_VALUE(@z,1) OVER w, NTH_VALUE('val',0) OVER w FROM numbers",
 		output: "select nth_value(@z, 1) over w, nth_value('val', 0) over w from numbers",
