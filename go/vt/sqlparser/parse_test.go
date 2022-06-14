@@ -3137,6 +3137,18 @@ var (
 		input: "select var_samp(a) from products",
 	}, {
 		input: "select variance(a) from products",
+	}, {
+		input:  "SELECT FORMAT_BYTES(512), FORMAT_BYTES(18446644073709551615), FORMAT_BYTES(@j), FORMAT_BYTES('asd'), FORMAT_BYTES(TRIM('str'))",
+		output: "select format_bytes(512), format_bytes(18446644073709551615), format_bytes(@j), format_bytes('asd'), format_bytes(trim('str')) from dual",
+	}, {
+		input:  "SELECT FORMAT_PICO_TIME(512), FORMAT_PICO_TIME(18446644073709551615), FORMAT_PICO_TIME(@j), FORMAT_PICO_TIME('asd'), FORMAT_PICO_TIME(TRIM('str'))",
+		output: "select format_pico_time(512), format_pico_time(18446644073709551615), format_pico_time(@j), format_pico_time('asd'), format_pico_time(trim('str')) from dual",
+	}, {
+		input:  "SELECT PS_CURRENT_THREAD_ID()",
+		output: "select ps_current_thread_id() from dual",
+	}, {
+		input:  "SELECT PS_THREAD_ID(512), PS_THREAD_ID(18446644073709551615), PS_THREAD_ID(@j), PS_THREAD_ID('asd'), PS_THREAD_ID(TRIM('str'))",
+		output: "select ps_thread_id(512), ps_thread_id(18446644073709551615), ps_thread_id(@j), ps_thread_id('asd'), ps_thread_id(trim('str')) from dual",
 	}}
 )
 

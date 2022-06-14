@@ -2855,6 +2855,20 @@ type (
 		Name    Expr
 		Timeout Expr
 	}
+
+	// PerformanceSchemaType is an enum that get types of LockingFunc
+	PerformanceSchemaType int8
+
+	// PerformanceSchemaFuncExpr stands for Performance Schema Functions
+	// Argument has different meanings for different types
+	// For FORMAT_BYTES, it means count
+	// For FORMAT_PICO_TIME, it means time_val
+	// For PS_THREAD_ID it means connection_id
+	// For more details, visit https://dev.mysql.com/doc/refman/8.0/en/performance-schema-functions.html
+	PerformanceSchemaFuncExpr struct {
+		Type     PerformanceSchemaType
+		Argument Expr
+	}
 )
 
 // iExpr ensures that only expressions nodes can be assigned to a Expr
@@ -3018,6 +3032,7 @@ func (*NamedWindow) iExpr()                        {}
 func (*ExtractValueExpr) iExpr()                   {}
 func (*UpdateXMLExpr) iExpr()                      {}
 func (*LockingFunc) iExpr()                        {}
+func (*PerformanceSchemaFuncExpr) iExpr()          {}
 
 // iCallable marks all expressions that represent function calls
 func (*FuncExpr) iCallable()                           {}
@@ -3065,6 +3080,7 @@ func (*LagLeadExpr) iCallable()                        {}
 func (*NamedWindow) iCallable()                        {}
 func (*ExtractValueExpr) iCallable()                   {}
 func (*UpdateXMLExpr) iCallable()                      {}
+func (*PerformanceSchemaFuncExpr) iCallable()          {}
 
 // Exprs represents a list of value expressions.
 // It's not a valid expression because it's not parenthesized.

@@ -962,6 +962,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsPartitions(a, b)
+	case *PerformanceSchemaFuncExpr:
+		b, ok := inB.(*PerformanceSchemaFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfPerformanceSchemaFuncExpr(a, b)
 	case *PrepareStmt:
 		b, ok := inB.(*PrepareStmt)
 		if !ok {
@@ -3351,6 +3357,18 @@ func EqualsPartitions(a, b Partitions) bool {
 	return true
 }
 
+// EqualsRefOfPerformanceSchemaFuncExpr does deep equals between the two objects.
+func EqualsRefOfPerformanceSchemaFuncExpr(a, b *PerformanceSchemaFuncExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Type == b.Type &&
+		EqualsExpr(a.Argument, b.Argument)
+}
+
 // EqualsRefOfPrepareStmt does deep equals between the two objects.
 func EqualsRefOfPrepareStmt(a, b *PrepareStmt) bool {
 	if a == b {
@@ -4828,6 +4846,12 @@ func EqualsCallable(inA, inB Callable) bool {
 			return false
 		}
 		return EqualsRefOfNtileExpr(a, b)
+	case *PerformanceSchemaFuncExpr:
+		b, ok := inB.(*PerformanceSchemaFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfPerformanceSchemaFuncExpr(a, b)
 	case *RegexpInstrExpr:
 		b, ok := inB.(*RegexpInstrExpr)
 		if !ok {
@@ -5503,6 +5527,12 @@ func EqualsExpr(inA, inB Expr) bool {
 			return false
 		}
 		return EqualsRefOfOrExpr(a, b)
+	case *PerformanceSchemaFuncExpr:
+		b, ok := inB.(*PerformanceSchemaFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfPerformanceSchemaFuncExpr(a, b)
 	case *RegexpInstrExpr:
 		b, ok := inB.(*RegexpInstrExpr)
 		if !ok {
@@ -6073,6 +6103,12 @@ func EqualsJSONPathParam(inA, inB JSONPathParam) bool {
 			return false
 		}
 		return EqualsRefOfOrExpr(a, b)
+	case *PerformanceSchemaFuncExpr:
+		b, ok := inB.(*PerformanceSchemaFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfPerformanceSchemaFuncExpr(a, b)
 	case *RegexpInstrExpr:
 		b, ok := inB.(*RegexpInstrExpr)
 		if !ok {
