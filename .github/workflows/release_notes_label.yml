@@ -1,6 +1,7 @@
 name: Check Release Notes labels
 on:
   pull_request:
+    types: [opened, labeled, unlabeled, synchronize]
 
 concurrency:
   group: format('{0}-{1}', ${{ github.ref }}, 'Check Release Notes labels')
