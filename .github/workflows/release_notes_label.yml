@@ -14,9 +14,15 @@ jobs:
     if: github.repository == 'vitessio/vitess'
     steps:
       - uses: mheap/github-action-required-labels@v1
+        id: required_label
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           mode: exactly
           count: 0
           labels: "release notes (needs details)"
+
+      - name: Print helper
+        if: failure() && steps.required_label.outcome == 'failure'
+        run: |
+          echo The "release notes (needs details)" label is set. The changes made in this Pull Request need to be documented in the release notes summary ('./doc/releasenotes/x_x_x_summary.md'). Once documented, the "release notes (needs details)" can be set to "release notes".
