@@ -177,7 +177,7 @@ func Fuzz(data []byte) int {
 		to := i + chunkSize //upper
 
 		// Index of command in getCommandType():
-		commandIndex := int(commandPart[command]) % 68
+		commandIndex := int(commandPart[command]) % 69
 		vtCommand := getCommandType(commandIndex)
 		commandSlice := []string{vtCommand}
 		args := strings.Split(string(restOfArray[from:to]), " ")
