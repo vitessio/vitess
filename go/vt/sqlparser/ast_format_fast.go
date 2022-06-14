@@ -2167,6 +2167,15 @@ func (node *UpdateXMLExpr) formatFast(buf *TrackedBuffer) {
 	buf.WriteByte(')')
 }
 
+func (node *PerformanceSchemaFuncExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.Type.ToString())
+	buf.WriteByte('(')
+	if node.Argument != nil {
+		buf.printExpr(node, node.Argument, true)
+	}
+	buf.WriteByte(')')
+}
+
 // formatFast formats the node.
 func (node *SubstrExpr) formatFast(buf *TrackedBuffer) {
 	if node.To == nil {
