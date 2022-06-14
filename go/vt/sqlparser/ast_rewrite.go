@@ -426,6 +426,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfSubstrExpr(parent, node, replacer)
 	case *Sum:
 		return a.rewriteRefOfSum(parent, node, replacer)
+	case *SysVariable:
+		return a.rewriteRefOfSysVariable(parent, node, replacer)
 	case TableExprs:
 		return a.rewriteTableExprs(parent, node, replacer)
 	case TableIdent:
@@ -462,6 +464,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfUpdateXMLExpr(parent, node, replacer)
 	case *Use:
 		return a.rewriteRefOfUse(parent, node, replacer)
+	case *UserVariable:
+		return a.rewriteRefOfUserVariable(parent, node, replacer)
 	case *VStream:
 		return a.rewriteRefOfVStream(parent, node, replacer)
 	case ValTuple:
@@ -2382,6 +2386,15 @@ func (a *application) rewriteRefOfExecuteStmt(parent SQLNode, node *ExecuteStmt,
 		parent.(*ExecuteStmt).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
+	}
+	for x, el := range node.Arguments {
+		if !a.rewriteRefOfUserVariable(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(*ExecuteStmt).Arguments[idx] = newNode.(*UserVariable)
+			}
+		}(x)) {
+			return false
+		}
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -6744,6 +6757,33 @@ func (a *application) rewriteRefOfSum(parent SQLNode, node *Sum, replacer replac
 	}
 	return true
 }
+func (a *application) rewriteRefOfSysVariable(parent SQLNode, node *SysVariable, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteColIdent(node, node.VarName, func(newNode, parent SQLNode) {
+		parent.(*SysVariable).VarName = newNode.(ColIdent)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
 func (a *application) rewriteTableExprs(parent SQLNode, node TableExprs, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -7352,6 +7392,33 @@ func (a *application) rewriteRefOfUse(parent SQLNode, node *Use, replacer replac
 	}
 	if !a.rewriteTableIdent(node, node.DBName, func(newNode, parent SQLNode) {
 		parent.(*Use).DBName = newNode.(TableIdent)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfUserVariable(parent SQLNode, node *UserVariable, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteColIdent(node, node.VarName, func(newNode, parent SQLNode) {
+		parent.(*UserVariable).VarName = newNode.(ColIdent)
 	}) {
 		return false
 	}
@@ -8409,6 +8476,8 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfSubstrExpr(parent, node, replacer)
 	case *Sum:
 		return a.rewriteRefOfSum(parent, node, replacer)
+	case *SysVariable:
+		return a.rewriteRefOfSysVariable(parent, node, replacer)
 	case *TimestampFuncExpr:
 		return a.rewriteRefOfTimestampFuncExpr(parent, node, replacer)
 	case *TrimFuncExpr:
@@ -8417,6 +8486,8 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfUnaryExpr(parent, node, replacer)
 	case *UpdateXMLExpr:
 		return a.rewriteRefOfUpdateXMLExpr(parent, node, replacer)
+	case *UserVariable:
+		return a.rewriteRefOfUserVariable(parent, node, replacer)
 	case ValTuple:
 		return a.rewriteValTuple(parent, node, replacer)
 	case *ValuesFuncExpr:
@@ -8613,6 +8684,8 @@ func (a *application) rewriteJSONPathParam(parent SQLNode, node JSONPathParam, r
 		return a.rewriteRefOfSubstrExpr(parent, node, replacer)
 	case *Sum:
 		return a.rewriteRefOfSum(parent, node, replacer)
+	case *SysVariable:
+		return a.rewriteRefOfSysVariable(parent, node, replacer)
 	case *TimestampFuncExpr:
 		return a.rewriteRefOfTimestampFuncExpr(parent, node, replacer)
 	case *TrimFuncExpr:
@@ -8621,6 +8694,8 @@ func (a *application) rewriteJSONPathParam(parent SQLNode, node JSONPathParam, r
 		return a.rewriteRefOfUnaryExpr(parent, node, replacer)
 	case *UpdateXMLExpr:
 		return a.rewriteRefOfUpdateXMLExpr(parent, node, replacer)
+	case *UserVariable:
+		return a.rewriteRefOfUserVariable(parent, node, replacer)
 	case ValTuple:
 		return a.rewriteValTuple(parent, node, replacer)
 	case *ValuesFuncExpr:

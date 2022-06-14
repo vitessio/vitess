@@ -427,6 +427,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfSubstrExpr(in)
 	case *Sum:
 		return CloneRefOfSum(in)
+	case *SysVariable:
+		return CloneRefOfSysVariable(in)
 	case TableExprs:
 		return CloneTableExprs(in)
 	case TableIdent:
@@ -463,6 +465,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfUpdateXMLExpr(in)
 	case *Use:
 		return CloneRefOfUse(in)
+	case *UserVariable:
+		return CloneRefOfUserVariable(in)
 	case *VStream:
 		return CloneRefOfVStream(in)
 	case ValTuple:
@@ -1144,6 +1148,7 @@ func CloneRefOfExecuteStmt(n *ExecuteStmt) *ExecuteStmt {
 	out := *n
 	out.Name = CloneColIdent(n.Name)
 	out.Comments = CloneRefOfParsedComments(n.Comments)
+	out.Arguments = CloneSliceOfRefOfUserVariable(n.Arguments)
 	return &out
 }
 
@@ -2623,6 +2628,16 @@ func CloneRefOfSum(n *Sum) *Sum {
 	return &out
 }
 
+// CloneRefOfSysVariable creates a deep clone of the input.
+func CloneRefOfSysVariable(n *SysVariable) *SysVariable {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.VarName = CloneColIdent(n.VarName)
+	return &out
+}
+
 // CloneTableExprs creates a deep clone of the input.
 func CloneTableExprs(n TableExprs) TableExprs {
 	if n == nil {
@@ -2816,6 +2831,16 @@ func CloneRefOfUse(n *Use) *Use {
 	}
 	out := *n
 	out.DBName = CloneTableIdent(n.DBName)
+	return &out
+}
+
+// CloneRefOfUserVariable creates a deep clone of the input.
+func CloneRefOfUserVariable(n *UserVariable) *UserVariable {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.VarName = CloneColIdent(n.VarName)
 	return &out
 }
 
@@ -3492,6 +3517,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfSubstrExpr(in)
 	case *Sum:
 		return CloneRefOfSum(in)
+	case *SysVariable:
+		return CloneRefOfSysVariable(in)
 	case *TimestampFuncExpr:
 		return CloneRefOfTimestampFuncExpr(in)
 	case *TrimFuncExpr:
@@ -3500,6 +3527,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfUnaryExpr(in)
 	case *UpdateXMLExpr:
 		return CloneRefOfUpdateXMLExpr(in)
+	case *UserVariable:
+		return CloneRefOfUserVariable(in)
 	case ValTuple:
 		return CloneValTuple(in)
 	case *ValuesFuncExpr:
@@ -3700,6 +3729,8 @@ func CloneJSONPathParam(in JSONPathParam) JSONPathParam {
 		return CloneRefOfSubstrExpr(in)
 	case *Sum:
 		return CloneRefOfSum(in)
+	case *SysVariable:
+		return CloneRefOfSysVariable(in)
 	case *TimestampFuncExpr:
 		return CloneRefOfTimestampFuncExpr(in)
 	case *TrimFuncExpr:
@@ -3708,6 +3739,8 @@ func CloneJSONPathParam(in JSONPathParam) JSONPathParam {
 		return CloneRefOfUnaryExpr(in)
 	case *UpdateXMLExpr:
 		return CloneRefOfUpdateXMLExpr(in)
+	case *UserVariable:
+		return CloneRefOfUserVariable(in)
 	case ValTuple:
 		return CloneValTuple(in)
 	case *ValuesFuncExpr:
@@ -4032,6 +4065,18 @@ func CloneSliceOfString(n []string) []string {
 	}
 	res := make([]string, 0, len(n))
 	copy(res, n)
+	return res
+}
+
+// CloneSliceOfRefOfUserVariable creates a deep clone of the input.
+func CloneSliceOfRefOfUserVariable(n []*UserVariable) []*UserVariable {
+	if n == nil {
+		return nil
+	}
+	res := make([]*UserVariable, 0, len(n))
+	for _, x := range n {
+		res = append(res, CloneRefOfUserVariable(x))
+	}
 	return res
 }
 

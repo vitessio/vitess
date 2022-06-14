@@ -5372,6 +5372,18 @@ var (
 	}, {
 		input:  "execute stmt1 using a, @b",
 		output: "syntax error at position 22 near 'a'",
+	}, {
+		input:  "create index @a on b (col1)",
+		output: "syntax error at position 16 near 'a'",
+	}, {
+		input:  "create database test_db default collate @a",
+		output: "syntax error at position 43 near 'a'",
+	}, {
+		input:  "create database test_db default charset @a",
+		output: "syntax error at position 43 near 'a'",
+	}, {
+		input:  "create database test_db default encryption @a",
+		output: "syntax error at position 46 near 'a'",
 	}}
 )
 
@@ -5380,7 +5392,7 @@ func TestErrors(t *testing.T) {
 		t.Run(tcase.input, func(t *testing.T) {
 			_, err := ParseStrictDDL(tcase.input)
 			require.Error(t, err, tcase.output)
-			require.Equal(t, err.Error(), tcase.output)
+			require.Equal(t, tcase.output, err.Error())
 		})
 	}
 }

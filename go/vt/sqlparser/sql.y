@@ -559,7 +559,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <jsonPathParams> json_path_param_list json_path_param_list_opt
 %type <jsonObjectParam> json_object_param
 %type <jsonObjectParams> json_object_param_list json_object_param_opt
-%type <colIdent> id_or_var vindex_type vindex_type_opt id_or_var_opt
+%type <colIdent> ci_identifier id_or_var vindex_type vindex_type_opt id_or_var_opt
 %type <str> database_or_schema column_opt insert_method_options row_format_options
 %type <referenceAction> fk_reference_action fk_on_delete fk_on_update
 %type <matchAction> fk_match fk_match_opt fk_match_action
@@ -634,6 +634,12 @@ user_defined_variable:
   AT_ID
   {
     $$ = NewUserDefinedVariable($1)
+  }
+
+ci_identifier:
+  ID
+  {
+    $$ = NewColIdent(string($1))
   }
 
 id_or_var:
@@ -1171,22 +1177,22 @@ alter_table_prefix:
   }
 
 create_index_prefix:
-  CREATE comment_opt INDEX id_or_var using_opt ON table_name
+  CREATE comment_opt INDEX ci_identifier using_opt ON table_name
   {
     $$ = &AlterTable{Table: $7, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$4, Type:string($3)}, Options:$5}}}}
     setDDL(yylex, $$)
   }
-| CREATE comment_opt FULLTEXT INDEX id_or_var using_opt ON table_name
+| CREATE comment_opt FULLTEXT INDEX ci_identifier using_opt ON table_name
   {
     $$ = &AlterTable{Table: $8, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$5, Type:string($3)+" "+string($4), Fulltext:true}, Options:$6}}}}
     setDDL(yylex, $$)
   }
-| CREATE comment_opt SPATIAL INDEX id_or_var using_opt ON table_name
+| CREATE comment_opt SPATIAL INDEX ci_identifier using_opt ON table_name
   {
     $$ = &AlterTable{Table: $8, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$5, Type:string($3)+" "+string($4), Spatial:true}, Options:$6}}}}
     setDDL(yylex, $$)
   }
-| CREATE comment_opt UNIQUE INDEX id_or_var using_opt ON table_name
+| CREATE comment_opt UNIQUE INDEX ci_identifier using_opt ON table_name
   {
     $$ = &AlterTable{Table: $8, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$5, Type:string($3)+" "+string($4), Unique:true}, Options:$6}}}}
     setDDL(yylex, $$)
@@ -1264,33 +1270,33 @@ default_optional:
   }
 
 character_set:
-  default_optional charset_or_character_set equal_opt id_or_var
+  default_optional charset_or_character_set equal_opt ID
   {
-    $$ = DatabaseOption{Type:CharacterSetType, Value:($4.String()), IsDefault:$1}
+    $$ = DatabaseOption{Type:CharacterSetType, Value:string($4), IsDefault:$1}
   }
 | default_optional charset_or_character_set equal_opt STRING
   {
-    $$ = DatabaseOption{Type:CharacterSetType, Value:(encodeSQLString($4)), IsDefault:$1}
+    $$ = DatabaseOption{Type:CharacterSetType, Value:encodeSQLString($4), IsDefault:$1}
   }
 
 collate:
-  default_optional COLLATE equal_opt id_or_var
+  default_optional COLLATE equal_opt ID
   {
-    $$ = DatabaseOption{Type:CollateType, Value:($4.String()), IsDefault:$1}
+    $$ = DatabaseOption{Type:CollateType, Value:string($4), IsDefault:$1}
   }
 | default_optional COLLATE equal_opt STRING
   {
-    $$ = DatabaseOption{Type:CollateType, Value:(encodeSQLString($4)), IsDefault:$1}
+    $$ = DatabaseOption{Type:CollateType, Value:encodeSQLString($4), IsDefault:$1}
   }
 
 encryption:
-  default_optional ENCRYPTION equal_opt id_or_var
+  default_optional ENCRYPTION equal_opt ID
   {
-    $$ = DatabaseOption{Type:EncryptionType, Value:($4.String()), IsDefault:$1}
+    $$ = DatabaseOption{Type:EncryptionType, Value:string($4), IsDefault:$1}
   }
 | default_optional ENCRYPTION equal_opt STRING
   {
-    $$ = DatabaseOption{Type:EncryptionType, Value:(encodeSQLString($4)), IsDefault:$1}
+    $$ = DatabaseOption{Type:EncryptionType, Value:encodeSQLString($4), IsDefault:$1}
   }
 
 create_like:
@@ -2884,15 +2890,15 @@ alter_option:
     val := true
     $$ = &AlterColumn{Column: $3, Invisible:&val}
   }
-| ALTER CHECK id_or_var enforced
+| ALTER CHECK ci_identifier enforced
   {
     $$ = &AlterCheck{Name: $3, Enforced: $4}
   }
-| ALTER INDEX id_or_var VISIBLE
+| ALTER INDEX ci_identifier VISIBLE
   {
     $$ = &AlterIndex{Name: $3, Invisible: false}
   }
-| ALTER INDEX id_or_var INVISIBLE
+| ALTER INDEX ci_identifier INVISIBLE
   {
     $$ = &AlterIndex{Name: $3, Invisible: true}
   }
@@ -4482,14 +4488,12 @@ prepare_statement:
   {
     $$ = &PrepareStmt{Name:$3, Comments: Comments($2).Parsed(), Statement:$5}
   }
-| PREPARE comment_opt sql_id FROM AT_ID
+| PREPARE comment_opt sql_id FROM user_defined_variable
   {
     $$ = &PrepareStmt{
     	Name:$3,
     	Comments: Comments($2).Parsed(),
-    	Statement: &ColName{
-    		Name: NewColIdentWithAt(string($5), SingleAt),
-    	},
+    	Statement: $5,
     }
   }
 
