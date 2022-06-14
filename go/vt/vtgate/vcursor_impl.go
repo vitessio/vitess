@@ -556,9 +556,18 @@ func (vc *vcursorImpl) ExecuteKeyspaceID(keyspace string, ksid []byte, query str
 		Sql:           query,
 		BindVariables: bindVars,
 	}}
+	if !rollbackOnError {
+		vc.safeSession.queryFromVindex = true
+		defer func() {
+			vc.safeSession.queryFromVindex = false
+		}()
+	}
 	qr, errs := vc.ExecuteMultiShard(rss, queries, rollbackOnError, autocommit)
-
-	return qr, vterrors.Aggregate(errs)
+	err = vterrors.Aggregate(errs)
+	if err != nil {
+		return nil, vterrors.Wrap(err, "I know I know")
+	}
+	return qr, nil
 }
 
 func (vc *vcursorImpl) InTransactionAndIsDML() bool {

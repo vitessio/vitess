@@ -598,7 +598,10 @@ func (stc *ScatterConn) multiGoTransaction(
 		startTime, statsKey := stc.startAction(name, rs.Target)
 		defer stc.endAction(startTime, allErrors, statsKey, &err, session)
 
-		shardActionInfo := actionInfo(ctx, rs.Target, session, autocommit)
+		shardActionInfo, err := actionInfo(ctx, rs.Target, session, autocommit)
+		if err != nil {
+			return
+		}
 		updated, err := action(rs, i, shardActionInfo)
 		if updated == nil {
 			return
@@ -747,19 +750,22 @@ func requireNewQS(err error, target *querypb.Target) bool {
 }
 
 // actionInfo looks at the current session, and returns information about what needs to be done for this tablet
-func actionInfo(ctx context.Context, target *querypb.Target, session *SafeSession, autocommit bool) *shardActionInfo {
+func actionInfo(ctx context.Context, target *querypb.Target, session *SafeSession, autocommit bool) (*shardActionInfo, error) {
 	if !(session.InTransaction() || session.InReservedConn()) {
-		return &shardActionInfo{}
+		return &shardActionInfo{}, nil
 	}
 	ignoreSession := ctx.Value(engine.IgnoreReserveTxn)
 	if ignoreSession != nil {
-		return &shardActionInfo{}
+		return &shardActionInfo{}, nil
 	}
 	// No need to protect ourselves from the race condition between
 	// Find and AppendOrUpdate. The higher level functions ensure that no
 	// duplicate (target) tuples can execute
 	// this at the same time.
-	transactionID, reservedID, alias := session.Find(target.Keyspace, target.Shard, target.TabletType)
+	transactionID, reservedID, alias, err := session.Find(target.Keyspace, target.Shard, target.TabletType)
+	if err != nil {
+		return nil, err
+	}
 
 	shouldReserve := session.InReservedConn() && reservedID == 0
 	shouldBegin := session.InTransaction() && transactionID == 0 && !autocommit
@@ -779,7 +785,7 @@ func actionInfo(ctx context.Context, target *querypb.Target, session *SafeSessio
 		transactionID: transactionID,
 		reservedID:    reservedID,
 		alias:         alias,
-	}
+	}, nil
 }
 
 // lockInfo looks at the current session, and returns information about what needs to be done for this tablet
