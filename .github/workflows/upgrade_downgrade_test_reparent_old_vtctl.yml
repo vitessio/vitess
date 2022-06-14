@@ -44,7 +44,7 @@ jobs:
       - name: Set output with latest release branch
         id: output-latest-release-branch
         run: |
-          latest_release_branch=$(./tools/get_latest_release.sh ${{github.base_ref}})
+          latest_release_branch=$(./tools/get_latest_release.sh ${{github.base_ref}} ${{github.ref}})
           echo $latest_release_branch
           echo "::set-output name=latest_release_branch::${latest_release_branch}"
 
