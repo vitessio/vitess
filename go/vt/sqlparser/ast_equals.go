@@ -1688,7 +1688,6 @@ func EqualsRefOfAvg(a, b *Avg) bool {
 		return false
 	}
 	return a.Distinct == b.Distinct &&
-		a.Name == b.Name &&
 		EqualsExpr(a.Arg, b.Arg)
 }
 
@@ -1738,8 +1737,7 @@ func EqualsRefOfBitAnd(a, b *BitAnd) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.Name == b.Name &&
-		EqualsExpr(a.Arg, b.Arg)
+	return EqualsExpr(a.Arg, b.Arg)
 }
 
 // EqualsRefOfBitOr does deep equals between the two objects.
@@ -1750,8 +1748,7 @@ func EqualsRefOfBitOr(a, b *BitOr) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.Name == b.Name &&
-		EqualsExpr(a.Arg, b.Arg)
+	return EqualsExpr(a.Arg, b.Arg)
 }
 
 // EqualsRefOfBitXor does deep equals between the two objects.
@@ -1762,8 +1759,7 @@ func EqualsRefOfBitXor(a, b *BitXor) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.Name == b.Name &&
-		EqualsExpr(a.Arg, b.Arg)
+	return EqualsExpr(a.Arg, b.Arg)
 }
 
 // EqualsRefOfCallProc does deep equals between the two objects.
@@ -1989,7 +1985,6 @@ func EqualsRefOfCount(a, b *Count) bool {
 		return false
 	}
 	return a.Distinct == b.Distinct &&
-		a.Name == b.Name &&
 		EqualsExprs(a.Args, b.Args)
 }
 
@@ -2001,7 +1996,7 @@ func EqualsRefOfCountStar(a, b *CountStar) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.Name == b.Name
+	return true
 }
 
 // EqualsRefOfCreateDatabase does deep equals between the two objects.
@@ -2397,8 +2392,7 @@ func EqualsRefOfFuncExpr(a, b *FuncExpr) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.Distinct == b.Distinct &&
-		EqualsTableIdent(a.Qualifier, b.Qualifier) &&
+	return EqualsTableIdent(a.Qualifier, b.Qualifier) &&
 		EqualsColIdent(a.Name, b.Name) &&
 		EqualsSelectExprs(a.Exprs, b.Exprs)
 }
@@ -2426,7 +2420,6 @@ func EqualsRefOfGroupConcatExpr(a, b *GroupConcatExpr) bool {
 	}
 	return a.Distinct == b.Distinct &&
 		a.Separator == b.Separator &&
-		a.Name == b.Name &&
 		EqualsExprs(a.Exprs, b.Exprs) &&
 		EqualsOrderBy(a.OrderBy, b.OrderBy) &&
 		EqualsRefOfLimit(a.Limit, b.Limit)
@@ -2976,7 +2969,6 @@ func EqualsRefOfMax(a, b *Max) bool {
 		return false
 	}
 	return a.Distinct == b.Distinct &&
-		a.Name == b.Name &&
 		EqualsExpr(a.Arg, b.Arg)
 }
 
@@ -3001,7 +2993,6 @@ func EqualsRefOfMin(a, b *Min) bool {
 		return false
 	}
 	return a.Distinct == b.Distinct &&
-		a.Name == b.Name &&
 		EqualsExpr(a.Arg, b.Arg)
 }
 
@@ -3775,8 +3766,7 @@ func EqualsRefOfStd(a, b *Std) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.Name == b.Name &&
-		EqualsExpr(a.Arg, b.Arg)
+	return EqualsExpr(a.Arg, b.Arg)
 }
 
 // EqualsRefOfStdDev does deep equals between the two objects.
@@ -3787,8 +3777,7 @@ func EqualsRefOfStdDev(a, b *StdDev) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.Name == b.Name &&
-		EqualsExpr(a.Arg, b.Arg)
+	return EqualsExpr(a.Arg, b.Arg)
 }
 
 // EqualsRefOfStdPop does deep equals between the two objects.
@@ -3799,8 +3788,7 @@ func EqualsRefOfStdPop(a, b *StdPop) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.Name == b.Name &&
-		EqualsExpr(a.Arg, b.Arg)
+	return EqualsExpr(a.Arg, b.Arg)
 }
 
 // EqualsRefOfStdSamp does deep equals between the two objects.
@@ -3811,8 +3799,7 @@ func EqualsRefOfStdSamp(a, b *StdSamp) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.Name == b.Name &&
-		EqualsExpr(a.Arg, b.Arg)
+	return EqualsExpr(a.Arg, b.Arg)
 }
 
 // EqualsRefOfStream does deep equals between the two objects.
@@ -3919,7 +3906,6 @@ func EqualsRefOfSum(a, b *Sum) bool {
 		return false
 	}
 	return a.Distinct == b.Distinct &&
-		a.Name == b.Name &&
 		EqualsExpr(a.Arg, b.Arg)
 }
 
@@ -4217,8 +4203,7 @@ func EqualsRefOfVarPop(a, b *VarPop) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.Name == b.Name &&
-		EqualsExpr(a.Arg, b.Arg)
+	return EqualsExpr(a.Arg, b.Arg)
 }
 
 // EqualsRefOfVarSamp does deep equals between the two objects.
@@ -4229,8 +4214,7 @@ func EqualsRefOfVarSamp(a, b *VarSamp) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.Name == b.Name &&
-		EqualsExpr(a.Arg, b.Arg)
+	return EqualsExpr(a.Arg, b.Arg)
 }
 
 // EqualsRefOfVariance does deep equals between the two objects.
@@ -4241,8 +4225,7 @@ func EqualsRefOfVariance(a, b *Variance) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.Name == b.Name &&
-		EqualsExpr(a.Arg, b.Arg)
+	return EqualsExpr(a.Arg, b.Arg)
 }
 
 // EqualsVindexParam does deep equals between the two objects.

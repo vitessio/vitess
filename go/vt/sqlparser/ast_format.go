@@ -1459,10 +1459,6 @@ func (node *CollateExpr) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *FuncExpr) Format(buf *TrackedBuffer) {
-	var distinct string
-	if node.Distinct {
-		distinct = "distinct "
-	}
 	if !node.Qualifier.IsEmpty() {
 		buf.astPrintf(node, "%v.", node.Qualifier)
 	}
@@ -1475,7 +1471,7 @@ func (node *FuncExpr) Format(buf *TrackedBuffer) {
 	} else {
 		buf.WriteString(funcName)
 	}
-	buf.astPrintf(node, "(%s%v)", distinct, node.Exprs)
+	buf.astPrintf(node, "(%v)", node.Exprs)
 }
 
 // Format formats the node

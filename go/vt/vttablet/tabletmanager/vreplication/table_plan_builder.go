@@ -429,9 +429,6 @@ func (tpb *tablePlanBuilder) analyzeExpr(selExpr sqlparser.SelectExpr) (*colExpr
 		return cexpr, nil
 	}
 	if expr, ok := aliased.Expr.(*sqlparser.FuncExpr); ok {
-		if expr.Distinct {
-			return nil, fmt.Errorf("unexpected: %v", sqlparser.String(expr))
-		}
 		switch fname := expr.Name.Lowered(); fname {
 		case "keyspace_id":
 			if len(expr.Exprs) != 0 {

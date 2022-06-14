@@ -206,10 +206,10 @@ func TestGetReturnType(t *testing.T) {
 		}},
 		output: querypb.Type_DECIMAL,
 	}, {
-		input:  &sqlparser.Count{Name: "Count"},
+		input:  &sqlparser.Count{},
 		output: querypb.Type_INT64,
 	}, {
-		input:  &sqlparser.CountStar{Name: "Count"},
+		input:  &sqlparser.CountStar{},
 		output: querypb.Type_INT64,
 	}}
 
