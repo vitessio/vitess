@@ -169,11 +169,8 @@ func (vtgate *VtgateProcess) GetStatusForTabletOfShard(name string, endPointsCou
 			for _, key := range object.MapKeys() {
 				if key.String() == name {
 					value := fmt.Sprintf("%v", object.MapIndex(key))
-					valueInt, err := strconv.Atoi(value)
-					if err != nil {
-						return false
-					}
-					return valueInt >= endPointsCount
+					countStr := strconv.Itoa(endPointsCount)
+					return value == countStr
 				}
 			}
 		}
@@ -182,7 +179,7 @@ func (vtgate *VtgateProcess) GetStatusForTabletOfShard(name string, endPointsCou
 }
 
 // WaitForStatusOfTabletInShard function waits till status of a tablet in shard is 1
-// endPointsCount: how many minimum endpoints to wait for
+// endPointsCount: how many endpoints to wait for
 func (vtgate *VtgateProcess) WaitForStatusOfTabletInShard(name string, endPointsCount int) error {
 	timeout := time.Now().Add(15 * time.Second)
 	for time.Now().Before(timeout) {
