@@ -1144,7 +1144,6 @@ func CloneRefOfExecuteStmt(n *ExecuteStmt) *ExecuteStmt {
 	out := *n
 	out.Name = CloneColIdent(n.Name)
 	out.Comments = CloneRefOfParsedComments(n.Comments)
-	out.Arguments = CloneColumns(n.Arguments)
 	return &out
 }
 

@@ -50,6 +50,11 @@ const (
 	LocalStr          = "local"
 	ImplicitStr       = ""
 
+	// SysVariable Scope strings
+	GlobalSysScopeStr      = "global."
+	PersistSysScopeStr     = "persist."
+	PersistOnlySysScopeStr = "persist_only."
+
 	// DDL strings.
 	CreateStr           = "create"
 	AlterStr            = "alter"
@@ -444,6 +449,14 @@ const (
 	AddSequenceDDLAction
 	AddAutoIncDDLAction
 	RevertDDLAction
+)
+
+// Constants for Enum Type - SysVariableScope
+const (
+	GlobalSysScope SysVariableScope = iota
+	SessionSysScope
+	PersistSysScope
+	PersistOnlySysScope
 )
 
 // Constants for Enum Type - Scope

@@ -1068,6 +1068,23 @@ func (scope Scope) ToString() string {
 	}
 }
 
+// ToString returns the string associated with the SysVariableScope enum
+func (scope SysVariableScope) ToString() string {
+	switch scope {
+	case GlobalSysScope:
+		return GlobalSysScopeStr
+	case SessionSysScope:
+		// Default so no scope required
+		return ""
+	case PersistOnlySysScope:
+		return PersistOnlySysScopeStr
+	case PersistSysScope:
+		return PersistSysScopeStr
+	default:
+		return "Unknown SysVariableScope"
+	}
+}
+
 // ToString returns the IgnoreStr if ignore is true.
 func (ignore Ignore) ToString() string {
 	if ignore {
@@ -2016,4 +2033,11 @@ func RemoveKeyspace(in SQLNode) SQLNode {
 func convertStringToInt(integer string) int {
 	val, _ := strconv.Atoi(integer)
 	return val
+}
+
+// NewUserDefinedVariable creates a new user defined variable from the provided variable name
+func NewUserDefinedVariable(varName string) *UserVariable {
+	return &UserVariable{
+		VarName: NewColIdent(varName),
+	}
 }

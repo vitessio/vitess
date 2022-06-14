@@ -655,7 +655,7 @@ type (
 	ExecuteStmt struct {
 		Name      ColIdent
 		Comments  *ParsedComments
-		Arguments Columns
+		Arguments []*UserVariable
 	}
 
 	// DeallocateStmt represents a Deallocate Statement
@@ -2255,6 +2255,20 @@ type (
 		Qualifier TableName
 	}
 
+	// SysVariable represents a system variable
+	SysVariable struct {
+		Scope   SysVariableScope
+		VarName ColIdent
+	}
+
+	// SysVariableScope stores the sys variable scope
+	SysVariableScope int8
+
+	// UserVariable represents a user variable
+	UserVariable struct {
+		VarName ColIdent
+	}
+
 	// ColTuple represents a list of column values.
 	// It can be ValTuple, Subquery, ListArg.
 	ColTuple interface {
@@ -2983,6 +2997,8 @@ func (Argument) iExpr()                            {}
 func (*NullVal) iExpr()                            {}
 func (BoolVal) iExpr()                             {}
 func (*ColName) iExpr()                            {}
+func (*UserVariable) iExpr()                       {}
+func (*SysVariable) iExpr()                        {}
 func (ValTuple) iExpr()                            {}
 func (*Subquery) iExpr()                           {}
 func (ListArg) iExpr()                             {}

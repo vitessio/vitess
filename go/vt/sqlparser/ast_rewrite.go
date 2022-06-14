@@ -2383,11 +2383,6 @@ func (a *application) rewriteRefOfExecuteStmt(parent SQLNode, node *ExecuteStmt,
 	}) {
 		return false
 	}
-	if !a.rewriteColumns(node, node.Arguments, func(newNode, parent SQLNode) {
-		parent.(*ExecuteStmt).Arguments = newNode.(Columns)
-	}) {
-		return false
-	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent

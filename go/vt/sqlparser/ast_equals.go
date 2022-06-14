@@ -2224,8 +2224,7 @@ func EqualsRefOfExecuteStmt(a, b *ExecuteStmt) bool {
 		return false
 	}
 	return EqualsColIdent(a.Name, b.Name) &&
-		EqualsRefOfParsedComments(a.Comments, b.Comments) &&
-		EqualsColumns(a.Arguments, b.Arguments)
+		EqualsRefOfParsedComments(a.Comments, b.Comments)
 }
 
 // EqualsRefOfExistsExpr does deep equals between the two objects.

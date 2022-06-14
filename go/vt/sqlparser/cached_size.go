@@ -1139,10 +1139,6 @@ func (cached *ExecuteStmt) CachedSize(alloc bool) int64 {
 	size += cached.Comments.CachedSize(true)
 	// field Arguments vitess.io/vitess/go/vt/sqlparser.Columns
 	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Arguments)) * int64(40))
-		for _, elem := range cached.Arguments {
-			size += elem.CachedSize(false)
-		}
 	}
 	return size
 }

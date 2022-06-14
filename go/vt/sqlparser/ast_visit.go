@@ -1372,9 +1372,6 @@ func VisitRefOfExecuteStmt(in *ExecuteStmt, f Visit) error {
 	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
 		return err
 	}
-	if err := VisitColumns(in.Arguments, f); err != nil {
-		return err
-	}
 	return nil
 }
 func VisitRefOfExistsExpr(in *ExistsExpr, f Visit) error {

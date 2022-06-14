@@ -209,6 +209,8 @@ func bindVariable(yylex yyLexer, bvar string) {
   jtColumnDefinition *JtColumnDefinition
   jtColumnList	[]*JtColumnDefinition
   jtOnResponse	*JtOnResponse
+  userVariable  *UserVariable
+  userVariables  []*UserVariable
 }
 
 // These precedence rules are there to handle shift-reduce conflicts.
@@ -483,12 +485,14 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <order> order
 %type <orderDirection> asc_desc_opt
 %type <limit> limit_opt limit_clause
+%type <userVariable> user_defined_variable
 %type <selectInto> into_clause
 %type <columnTypeOptions> column_attribute_list_opt generated_column_attribute_list_opt
 %type <str> header_opt export_options manifest_opt overwrite_opt format_opt optionally_opt regexp_symbol
 %type <str> fields_opts fields_opt_list fields_opt lines_opts lines_opt lines_opt_list
 %type <lock> locking_clause
-%type <columns> ins_column_list column_list at_id_list column_list_opt index_list execute_statement_list_opt
+%type <columns> ins_column_list column_list column_list_opt index_list
+%type <userVariables> at_id_list execute_statement_list_opt
 %type <partitions> opt_partition_clause partition_list
 %type <updateExprs> on_dup_opt
 %type <updateExprs> update_list
@@ -625,6 +629,12 @@ command:
 {
   setParseTree(yylex, nil)
 }
+
+user_defined_variable:
+  AT_ID
+  {
+    $$ = NewUserDefinedVariable($1)
+  }
 
 id_or_var:
   ID
@@ -4703,13 +4713,13 @@ column_list:
   }
 
 at_id_list:
-  AT_ID
+  user_defined_variable
   {
-    $$ = Columns{NewColIdentWithAt(string($1), SingleAt)}
+    $$ = []*UserVariable{$1}
   }
-| column_list ',' AT_ID
+| at_id_list ',' user_defined_variable
   {
-    $$ = append($$, NewColIdentWithAt(string($3), SingleAt))
+    $$ = append($$, $3)
   }
 
 index_list:

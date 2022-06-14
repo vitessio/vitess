@@ -5369,6 +5369,9 @@ var (
 		input:        "create table 2t.3t2 (c1 bigint not null, c2 text, primary key(c1))",
 		output:       "syntax error at position 18 near '.3'",
 		excludeMulti: true,
+	}, {
+		input:  "execute stmt1 using a, @b",
+		output: "syntax error at position 22 near 'a'",
 	}}
 )
 
