@@ -39,7 +39,6 @@ var (
 		Use:                   "EmergencyReparentShard <keyspace/shard>",
 		Short:                 "Reparents the shard to the new primary. Assumes the old primary is dead and not responding.",
 		DisableFlagsInUseLine: true,
-		Aliases:               []string{"EmergencyFailoverShard"},
 		Args:                  cobra.ExactArgs(1),
 		RunE:                  commandEmergencyReparentShard,
 	}
@@ -62,7 +61,6 @@ EmergencyReparentShard should be used instead.
 		Use:                   "PlannedReparentShard <keyspace/shard>",
 		Short:                 "Reparents the shard to a new primary, or away from an old primary. Both the old and new primaries must be up and running.",
 		DisableFlagsInUseLine: true,
-		Aliases:               []string{"PlannedFailoverShard"},
 		Args:                  cobra.ExactArgs(1),
 		RunE:                  commandPlannedReparentShard,
 	}
@@ -71,7 +69,6 @@ EmergencyReparentShard should be used instead.
 		Use:                   "ReparentTablet <alias>",
 		Short:                 "Reparent a tablet to the current primary in the shard.",
 		DisableFlagsInUseLine: true,
-		Aliases:               []string{"RefreshTabletReplicationSource"},
 		Args:                  cobra.ExactArgs(1),
 		RunE:                  commandReparentTablet,
 	}
@@ -85,7 +82,6 @@ EmergencyReparentShard should be used instead.
 See the Reparenting guide for more information: https://vitess.io/docs/user-guides/reparenting/#external-reparenting.
 `,
 		DisableFlagsInUseLine: true,
-		Aliases:               []string{"TabletExternallyPromoted"},
 		Args:                  cobra.ExactArgs(1),
 		RunE:                  commandTabletExternallyReparented,
 	}
