@@ -338,24 +338,10 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 		instance.SemiSyncPrimaryWaitForReplicaCount = uint(fullStatus.SemiSyncWaitForReplicaCount)
 		instance.SemiSyncPrimaryTimeout = fullStatus.SemiSyncPrimaryTimeout
 
-		{
-			waitGroup.Add(1)
-			go func() {
-				defer waitGroup.Done()
-				err := sqlutils.QueryRowsMap(db, "show global status like 'rpl_semi_sync_%'", func(m sqlutils.RowMap) error {
-					if m.GetString("Variable_name") == "Rpl_semi_sync_master_status" {
-						instance.SemiSyncPrimaryStatus = (m.GetString("Value") == "ON")
-					} else if m.GetString("Variable_name") == "Rpl_semi_sync_master_clients" {
-						instance.SemiSyncPrimaryClients = m.GetUint("Value")
-					} else if m.GetString("Variable_name") == "Rpl_semi_sync_slave_status" {
-						instance.SemiSyncReplicaStatus = (m.GetString("Value") == "ON")
-					}
+		instance.SemiSyncPrimaryClients = uint(fullStatus.SemiSyncPrimaryClients)
+		instance.SemiSyncPrimaryStatus = fullStatus.SemiSyncPrimaryStatus
+		instance.SemiSyncReplicaStatus = fullStatus.SemiSyncReplicaStatus
 
-					return nil
-				})
-				errorChan <- err
-			}()
-		}
 		if (instance.IsOracleMySQL() || instance.IsPercona()) && !instance.IsSmallerMajorVersionByString("5.6") {
 			waitGroup.Add(1)
 			serverUUIDWaitGroup.Add(1)
