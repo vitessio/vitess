@@ -87,14 +87,17 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 	// Version string "majorVersion.minorVersion.patchRelease"
 	version := tm.MysqlDaemon.GetVersionString()
 
+	// Version comment "select @@global.version_comment"
+	versionComment := tm.MysqlDaemon.GetVersionComment(ctx)
+
 	// Read only - "SHOW VARIABLES LIKE 'read_only'"
 	readOnly, err := tm.MysqlDaemon.IsReadOnly()
 	if err != nil {
 		return nil, err
 	}
 
-	// Binlog Information - "select @@global.binlog_format, @@global.log_bin, @@global.log_slave_updates"
-	binlogFormat, logBin, logReplicaUpdates, err := tm.MysqlDaemon.GetBinlogInformation(ctx)
+	// Binlog Information - "select @@global.binlog_format, @@global.log_bin, @@global.log_slave_updates, @@global.gtid_mode, @@global.binlog_row_image"
+	binlogFormat, logBin, logReplicaUpdates, gtidMode, binlogRowImage, err := tm.MysqlDaemon.GetBinlogInformation(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -108,22 +111,30 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 	//  Semi sync clients count - "show status like 'semi_sync_primary_clients'"
 	semiSyncClients := tm.MysqlDaemon.SemiSyncClients()
 
+	// Semi sync settings - "show status like 'rpl_semi_sync_%'
+	semiSyncTimeout, semiSyncNumReplicas := tm.MysqlDaemon.SemiSyncSettings()
+
 	return &replicationdatapb.FullStatus{
-		ServerId:               serverID,
-		ServerUuid:             serverUUID,
-		ReplicationStatus:      mysql.ReplicationStatusToProto(replicationStatus),
-		PrimaryStatus:          mysql.PrimaryStatusToProto(primaryStatus),
-		GtidPurged:             mysql.EncodePosition(purgedGTIDs),
-		Version:                version,
-		ReadOnly:               readOnly,
-		BinlogFormat:           binlogFormat,
-		LogBinEnabled:          logBin,
-		LogReplicaUpdates:      logReplicaUpdates,
-		SemiSyncPrimaryEnabled: primarySemiSync,
-		SemiSyncReplicaEnabled: replicaSemiSync,
-		SemiSyncPrimaryStatus:  primarySemiSyncStatus,
-		SemiSyncReplicaStatus:  replicaSemiSyncStatus,
-		SemiSyncPrimaryClients: semiSyncClients,
+		ServerId:                    serverID,
+		ServerUuid:                  serverUUID,
+		ReplicationStatus:           mysql.ReplicationStatusToProto(replicationStatus),
+		PrimaryStatus:               mysql.PrimaryStatusToProto(primaryStatus),
+		GtidPurged:                  mysql.EncodePosition(purgedGTIDs),
+		Version:                     version,
+		VersionComment:              versionComment,
+		ReadOnly:                    readOnly,
+		GtidMode:                    gtidMode,
+		BinlogFormat:                binlogFormat,
+		BinlogRowImage:              binlogRowImage,
+		LogBinEnabled:               logBin,
+		LogReplicaUpdates:           logReplicaUpdates,
+		SemiSyncPrimaryEnabled:      primarySemiSync,
+		SemiSyncReplicaEnabled:      replicaSemiSync,
+		SemiSyncPrimaryStatus:       primarySemiSyncStatus,
+		SemiSyncReplicaStatus:       replicaSemiSyncStatus,
+		SemiSyncPrimaryClients:      semiSyncClients,
+		SemiSyncPrimaryTimeout:      semiSyncTimeout,
+		SemiSyncWaitForReplicaCount: semiSyncNumReplicas,
 	}, nil
 }
 

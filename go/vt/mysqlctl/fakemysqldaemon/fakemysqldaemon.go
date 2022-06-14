@@ -322,8 +322,8 @@ func (fmd *FakeMysqlDaemon) ResetReplicationParameters(ctx context.Context) erro
 }
 
 // GetBinlogInformation is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) GetBinlogInformation(ctx context.Context) (binlogFormat string, logEnabled bool, logReplicaUpdate bool, err error) {
-	return "ROW", true, true, fmd.ExecuteSuperQueryList(ctx, []string{
+func (fmd *FakeMysqlDaemon) GetBinlogInformation(ctx context.Context) (binlogFormat string, logEnabled bool, logReplicaUpdate bool, gtidMode string, binlogRowImage string, err error) {
+	return "ROW", true, true, "ON", "FULL", fmd.ExecuteSuperQueryList(ctx, []string{
 		"FAKE select @@global",
 	})
 }
@@ -631,8 +631,13 @@ func (fmd *FakeMysqlDaemon) SemiSyncStatus() (bool, bool) {
 }
 
 // SemiSyncClients is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) SemiSyncClients() int32 {
+func (fmd *FakeMysqlDaemon) SemiSyncClients() uint32 {
 	return 0
+}
+
+// SemiSyncSettings is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) SemiSyncSettings() (timeout uint64, numReplicas uint32) {
+	return 10000000, 1
 }
 
 // SemiSyncReplicationStatus is part of the MysqlDaemon interface.
@@ -643,5 +648,10 @@ func (fmd *FakeMysqlDaemon) SemiSyncReplicationStatus() (bool, error) {
 
 // GetVersionString is part of the MysqlDeamon interface.
 func (fmd *FakeMysqlDaemon) GetVersionString() string {
+	return ""
+}
+
+// GetVersionComment is part of the MysqlDeamon interface.
+func (fmd *FakeMysqlDaemon) GetVersionComment(ctx context.Context) string {
 	return ""
 }

@@ -73,13 +73,18 @@ message FullStatus {
   replicationdata.PrimaryStatus primary_status = 4;
   string gtid_purged = 5;
   string version = 6;
-  bool read_only = 7;
-  string binlog_format = 8;
-  bool log_bin_enabled = 9;
-  bool log_replica_updates = 10;
-  bool semi_sync_primary_enabled = 11;
-  bool semi_sync_replica_enabled = 12;
-  bool semi_sync_primary_status = 13;
-  bool semi_sync_replica_status = 14;
-  int32 semi_sync_primary_clients = 15;
+  string version_comment = 7;
+  bool read_only = 8;
+  string gtid_mode = 9;
+  string binlog_format = 10;
+  string binlog_row_image = 11;
+  bool log_bin_enabled = 12;
+  bool log_replica_updates = 13;
+  bool semi_sync_primary_enabled = 14;
+  bool semi_sync_replica_enabled = 15;
+  bool semi_sync_primary_status = 16;
+  bool semi_sync_replica_status = 17;
+  uint32 semi_sync_primary_clients = 18;
+  uint64 semi_sync_primary_timeout = 19;
+  uint32 semi_sync_wait_for_replica_count = 20;
 }

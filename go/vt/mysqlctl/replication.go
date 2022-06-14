@@ -536,28 +536,36 @@ func (mysqld *Mysqld) DisableBinlogPlayback() error {
 }
 
 // GetBinlogInformation gets the binlog format, whether binlog is enabled and if updates on replica logging is enabled.
-func (mysqld *Mysqld) GetBinlogInformation(ctx context.Context) (string, bool, bool, error) {
-	qr, err := mysqld.FetchSuperQuery(ctx, "select @@global.binlog_format, @@global.log_bin, @@global.log_slave_updates")
+func (mysqld *Mysqld) GetBinlogInformation(ctx context.Context) (string, bool, bool, string, string, error) {
+	qr, err := mysqld.FetchSuperQuery(ctx, "select @@global.binlog_format, @@global.log_bin, @@global.log_slave_updates, @@global.gtid_mode, @@global.binlog_row_image")
 	if err != nil {
-		return "", false, false, err
+		return "", false, false, "", "", err
 	}
 	if len(qr.Rows) != 1 {
-		return "", false, false, errors.New("unable to read global variables binlog_format, log_bin and log_slave_updates")
+		return "", false, false, "", "", errors.New("unable to read global variables binlog_format, log_bin, log_slave_updates, gtid_mode, binlog_row_image")
 	}
 	res := qr.Named().Row()
 	binlogFormat, err := res.ToString("@@global.binlog_format")
 	if err != nil {
-		return "", false, false, err
+		return "", false, false, "", "", err
 	}
 	logBin, err := res.ToInt64("@@global.log_bin")
 	if err != nil {
-		return "", false, false, err
+		return "", false, false, "", "", err
 	}
 	logReplicaUpdates, err := res.ToInt64("@@global.log_slave_updates")
 	if err != nil {
-		return "", false, false, err
+		return "", false, false, "", "", err
 	}
-	return binlogFormat, logBin == 1, logReplicaUpdates == 1, nil
+	gtidMode, err := res.ToString("@@global.gtid_mode")
+	if err != nil {
+		return "", false, false, "", "", err
+	}
+	binlogRowImage, err := res.ToString("@@global.binlog_row_image")
+	if err != nil {
+		return "", false, false, "", "", err
+	}
+	return binlogFormat, logBin == 1, logReplicaUpdates == 1, gtidMode, binlogRowImage, nil
 }
 
 // SetSemiSyncEnabled enables or disables semi-sync replication for
@@ -607,7 +615,7 @@ func (mysqld *Mysqld) SemiSyncStatus() (primary, replica bool) {
 }
 
 // SemiSyncClients returns the number of semi-sync clients for the primary.
-func (mysqld *Mysqld) SemiSyncClients() int32 {
+func (mysqld *Mysqld) SemiSyncClients() uint32 {
 	qr, err := mysqld.FetchSuperQuery(context.TODO(), "SHOW STATUS LIKE 'Rpl_semi_sync_master_clients'")
 	if err != nil {
 		return 0
@@ -616,8 +624,19 @@ func (mysqld *Mysqld) SemiSyncClients() int32 {
 		return 0
 	}
 	countStr := qr.Rows[0][1].ToString()
-	count, _ := strconv.Atoi(countStr)
-	return int32(count)
+	count, _ := strconv.ParseUint(countStr, 10, 0)
+	return uint32(count)
+}
+
+// SemiSyncSettings returns the settings of semi-sync which includes the timeout and the number of replicas to wait for.
+func (mysqld *Mysqld) SemiSyncSettings() (timeout uint64, numReplicas uint32) {
+	vars, err := mysqld.fetchVariables(context.TODO(), "rpl_semi_sync_%")
+	if err != nil {
+		return 0, 0
+	}
+	timeout, _ = strconv.ParseUint(vars["rpl_semi_sync_master_timeout"], 10, 0)
+	numReplicasUint, _ := strconv.ParseUint(vars["rpl_semi_sync_master_wait_for_slave_count"], 10, 0)
+	return timeout, uint32(numReplicasUint)
 }
 
 // SemiSyncReplicationStatus returns whether semi-sync is currently used by replication.

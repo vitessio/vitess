@@ -289,10 +289,26 @@ func (m *FullStatus) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.SemiSyncWaitForReplicaCount != 0 {
+		i = encodeVarint(dAtA, i, uint64(m.SemiSyncWaitForReplicaCount))
+		i--
+		dAtA[i] = 0x1
+		i--
+		dAtA[i] = 0xa0
+	}
+	if m.SemiSyncPrimaryTimeout != 0 {
+		i = encodeVarint(dAtA, i, uint64(m.SemiSyncPrimaryTimeout))
+		i--
+		dAtA[i] = 0x1
+		i--
+		dAtA[i] = 0x98
+	}
 	if m.SemiSyncPrimaryClients != 0 {
 		i = encodeVarint(dAtA, i, uint64(m.SemiSyncPrimaryClients))
 		i--
-		dAtA[i] = 0x78
+		dAtA[i] = 0x1
+		i--
+		dAtA[i] = 0x90
 	}
 	if m.SemiSyncReplicaStatus {
 		i--
@@ -302,7 +318,9 @@ func (m *FullStatus) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 			dAtA[i] = 0
 		}
 		i--
-		dAtA[i] = 0x70
+		dAtA[i] = 0x1
+		i--
+		dAtA[i] = 0x88
 	}
 	if m.SemiSyncPrimaryStatus {
 		i--
@@ -312,7 +330,9 @@ func (m *FullStatus) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 			dAtA[i] = 0
 		}
 		i--
-		dAtA[i] = 0x68
+		dAtA[i] = 0x1
+		i--
+		dAtA[i] = 0x80
 	}
 	if m.SemiSyncReplicaEnabled {
 		i--
@@ -322,7 +342,7 @@ func (m *FullStatus) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 			dAtA[i] = 0
 		}
 		i--
-		dAtA[i] = 0x60
+		dAtA[i] = 0x78
 	}
 	if m.SemiSyncPrimaryEnabled {
 		i--
@@ -332,7 +352,7 @@ func (m *FullStatus) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 			dAtA[i] = 0
 		}
 		i--
-		dAtA[i] = 0x58
+		dAtA[i] = 0x70
 	}
 	if m.LogReplicaUpdates {
 		i--
@@ -342,7 +362,7 @@ func (m *FullStatus) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 			dAtA[i] = 0
 		}
 		i--
-		dAtA[i] = 0x50
+		dAtA[i] = 0x68
 	}
 	if m.LogBinEnabled {
 		i--
@@ -352,14 +372,28 @@ func (m *FullStatus) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 			dAtA[i] = 0
 		}
 		i--
-		dAtA[i] = 0x48
+		dAtA[i] = 0x60
+	}
+	if len(m.BinlogRowImage) > 0 {
+		i -= len(m.BinlogRowImage)
+		copy(dAtA[i:], m.BinlogRowImage)
+		i = encodeVarint(dAtA, i, uint64(len(m.BinlogRowImage)))
+		i--
+		dAtA[i] = 0x5a
 	}
 	if len(m.BinlogFormat) > 0 {
 		i -= len(m.BinlogFormat)
 		copy(dAtA[i:], m.BinlogFormat)
 		i = encodeVarint(dAtA, i, uint64(len(m.BinlogFormat)))
 		i--
-		dAtA[i] = 0x42
+		dAtA[i] = 0x52
+	}
+	if len(m.GtidMode) > 0 {
+		i -= len(m.GtidMode)
+		copy(dAtA[i:], m.GtidMode)
+		i = encodeVarint(dAtA, i, uint64(len(m.GtidMode)))
+		i--
+		dAtA[i] = 0x4a
 	}
 	if m.ReadOnly {
 		i--
@@ -369,7 +403,14 @@ func (m *FullStatus) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 			dAtA[i] = 0
 		}
 		i--
-		dAtA[i] = 0x38
+		dAtA[i] = 0x40
+	}
+	if len(m.VersionComment) > 0 {
+		i -= len(m.VersionComment)
+		copy(dAtA[i:], m.VersionComment)
+		i = encodeVarint(dAtA, i, uint64(len(m.VersionComment)))
+		i--
+		dAtA[i] = 0x3a
 	}
 	if len(m.Version) > 0 {
 		i -= len(m.Version)
@@ -568,10 +609,22 @@ func (m *FullStatus) SizeVT() (n int) {
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
+	l = len(m.VersionComment)
+	if l > 0 {
+		n += 1 + l + sov(uint64(l))
+	}
 	if m.ReadOnly {
 		n += 2
 	}
+	l = len(m.GtidMode)
+	if l > 0 {
+		n += 1 + l + sov(uint64(l))
+	}
 	l = len(m.BinlogFormat)
+	if l > 0 {
+		n += 1 + l + sov(uint64(l))
+	}
+	l = len(m.BinlogRowImage)
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
@@ -588,13 +641,19 @@ func (m *FullStatus) SizeVT() (n int) {
 		n += 2
 	}
 	if m.SemiSyncPrimaryStatus {
-		n += 2
+		n += 3
 	}
 	if m.SemiSyncReplicaStatus {
-		n += 2
+		n += 3
 	}
 	if m.SemiSyncPrimaryClients != 0 {
-		n += 1 + sov(uint64(m.SemiSyncPrimaryClients))
+		n += 2 + sov(uint64(m.SemiSyncPrimaryClients))
+	}
+	if m.SemiSyncPrimaryTimeout != 0 {
+		n += 2 + sov(uint64(m.SemiSyncPrimaryTimeout))
+	}
+	if m.SemiSyncWaitForReplicaCount != 0 {
+		n += 2 + sov(uint64(m.SemiSyncWaitForReplicaCount))
 	}
 	if m.unknownFields != nil {
 		n += len(m.unknownFields)
@@ -1524,6 +1583,38 @@ func (m *FullStatus) UnmarshalVT(dAtA []byte) error {
 			m.Version = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		case 7:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field VersionComment", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.VersionComment = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 8:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field ReadOnly", wireType)
 			}
@@ -1543,7 +1634,39 @@ func (m *FullStatus) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.ReadOnly = bool(v != 0)
-		case 8:
+		case 9:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field GtidMode", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.GtidMode = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 10:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field BinlogFormat", wireType)
 			}
@@ -1575,7 +1698,39 @@ func (m *FullStatus) UnmarshalVT(dAtA []byte) error {
 			}
 			m.BinlogFormat = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
-		case 9:
+		case 11:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field BinlogRowImage", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.BinlogRowImage = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 12:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field LogBinEnabled", wireType)
 			}
@@ -1595,7 +1750,7 @@ func (m *FullStatus) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.LogBinEnabled = bool(v != 0)
-		case 10:
+		case 13:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field LogReplicaUpdates", wireType)
 			}
@@ -1615,7 +1770,7 @@ func (m *FullStatus) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.LogReplicaUpdates = bool(v != 0)
-		case 11:
+		case 14:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field SemiSyncPrimaryEnabled", wireType)
 			}
@@ -1635,7 +1790,7 @@ func (m *FullStatus) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.SemiSyncPrimaryEnabled = bool(v != 0)
-		case 12:
+		case 15:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field SemiSyncReplicaEnabled", wireType)
 			}
@@ -1655,7 +1810,7 @@ func (m *FullStatus) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.SemiSyncReplicaEnabled = bool(v != 0)
-		case 13:
+		case 16:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field SemiSyncPrimaryStatus", wireType)
 			}
@@ -1675,7 +1830,7 @@ func (m *FullStatus) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.SemiSyncPrimaryStatus = bool(v != 0)
-		case 14:
+		case 17:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field SemiSyncReplicaStatus", wireType)
 			}
@@ -1695,7 +1850,7 @@ func (m *FullStatus) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.SemiSyncReplicaStatus = bool(v != 0)
-		case 15:
+		case 18:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field SemiSyncPrimaryClients", wireType)
 			}
@@ -1709,7 +1864,45 @@ func (m *FullStatus) UnmarshalVT(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.SemiSyncPrimaryClients |= int32(b&0x7F) << shift
+				m.SemiSyncPrimaryClients |= uint32(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 19:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field SemiSyncPrimaryTimeout", wireType)
+			}
+			m.SemiSyncPrimaryTimeout = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.SemiSyncPrimaryTimeout |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 20:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field SemiSyncWaitForReplicaCount", wireType)
+			}
+			m.SemiSyncWaitForReplicaCount = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.SemiSyncWaitForReplicaCount |= uint32(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}

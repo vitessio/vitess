@@ -146,10 +146,14 @@ func TestFullStatus(t *testing.T) {
 	assert.True(t, status.SemiSyncPrimaryStatus)
 	assert.False(t, status.SemiSyncReplicaStatus)
 	assert.EqualValues(t, 3, status.SemiSyncPrimaryClients)
+	assert.EqualValues(t, 1000000000000000000, status.SemiSyncPrimaryTimeout)
+	assert.EqualValues(t, 1, status.SemiSyncWaitForReplicaCount)
 	assert.Equal(t, "ROW", status.BinlogFormat)
+	assert.Equal(t, "ON", status.GtidMode)
 	assert.True(t, status.LogReplicaUpdates)
 	assert.True(t, status.LogBinEnabled)
 	assert.Contains(t, status.Version, "5.7")
+	assert.NotEmpty(t, status.VersionComment)
 
 	// Check that full status gives the correct result for a replica tablet
 	status, err = utils.TmcFullStatus(context.Background(), tablets[1])
@@ -167,8 +171,12 @@ func TestFullStatus(t *testing.T) {
 	assert.False(t, status.SemiSyncPrimaryStatus)
 	assert.True(t, status.SemiSyncReplicaStatus)
 	assert.EqualValues(t, 0, status.SemiSyncPrimaryClients)
+	assert.EqualValues(t, 1000000000000000000, status.SemiSyncPrimaryTimeout)
+	assert.EqualValues(t, 1, status.SemiSyncWaitForReplicaCount)
 	assert.Equal(t, "ROW", status.BinlogFormat)
+	assert.Equal(t, "ON", status.GtidMode)
 	assert.True(t, status.LogReplicaUpdates)
 	assert.True(t, status.LogBinEnabled)
 	assert.Contains(t, status.Version, "5.7")
+	assert.NotEmpty(t, status.VersionComment)
 }

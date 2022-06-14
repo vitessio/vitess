@@ -58,10 +58,11 @@ type MysqlDaemon interface {
 	SetSemiSyncEnabled(source, replica bool) error
 	SemiSyncEnabled() (source, replica bool)
 	SemiSyncStatus() (source, replica bool)
-	SemiSyncClients() (count int32)
+	SemiSyncClients() (count uint32)
+	SemiSyncSettings() (timeout uint64, numReplicas uint32)
 	SemiSyncReplicationStatus() (bool, error)
 	ResetReplicationParameters(ctx context.Context) error
-	GetBinlogInformation(ctx context.Context) (binlogFormat string, logEnabled bool, logReplicaUpdate bool, err error)
+	GetBinlogInformation(ctx context.Context) (binlogFormat string, logEnabled bool, logReplicaUpdate bool, gtidMode string, binlogRowImage string, err error)
 
 	// reparenting related methods
 	ResetReplication(ctx context.Context) error
@@ -96,6 +97,9 @@ type MysqlDaemon interface {
 
 	// GetVersionString returns the database version as a string
 	GetVersionString() string
+
+	// GetVersionComment returns the version comment
+	GetVersionComment(ctx context.Context) string
 
 	// ExecuteSuperQueryList executes a list of queries, no result
 	ExecuteSuperQueryList(ctx context.Context, queryList []string) error
