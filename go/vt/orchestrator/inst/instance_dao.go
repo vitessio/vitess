@@ -333,25 +333,11 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 			}
 		}
 
-		{
-			waitGroup.Add(1)
-			go func() {
-				defer waitGroup.Done()
-				err := sqlutils.QueryRowsMap(db, "show global variables like 'rpl_semi_sync_%'", func(m sqlutils.RowMap) error {
-					if m.GetString("Variable_name") == "rpl_semi_sync_master_enabled" {
-						instance.SemiSyncPrimaryEnabled = (m.GetString("Value") == "ON")
-					} else if m.GetString("Variable_name") == "rpl_semi_sync_master_timeout" {
-						instance.SemiSyncPrimaryTimeout = m.GetUint64("Value")
-					} else if m.GetString("Variable_name") == "rpl_semi_sync_master_wait_for_slave_count" {
-						instance.SemiSyncPrimaryWaitForReplicaCount = m.GetUint("Value")
-					} else if m.GetString("Variable_name") == "rpl_semi_sync_slave_enabled" {
-						instance.SemiSyncReplicaEnabled = (m.GetString("Value") == "ON")
-					}
-					return nil
-				})
-				errorChan <- err
-			}()
-		}
+		instance.SemiSyncPrimaryEnabled = fullStatus.SemiSyncPrimaryEnabled
+		instance.SemiSyncReplicaEnabled = fullStatus.SemiSyncReplicaEnabled
+		instance.SemiSyncPrimaryWaitForReplicaCount = uint(fullStatus.SemiSyncWaitForReplicaCount)
+		instance.SemiSyncPrimaryTimeout = fullStatus.SemiSyncPrimaryTimeout
+
 		{
 			waitGroup.Add(1)
 			go func() {
