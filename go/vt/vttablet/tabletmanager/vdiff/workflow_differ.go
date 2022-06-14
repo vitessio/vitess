@@ -175,16 +175,13 @@ func (wd *workflowDiffer) diff(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		if len(qr.Rows) == 1 {
-			td.lastPK = qr.Rows[0]
-		} else {
+		if len(qr.Rows) == 0 {
 			query = fmt.Sprintf(sqlNewVDiffTable, wd.ct.id, encodeString(td.table.Name), tableRows)
 			if _, err := withDDL.Exec(ctx, query, dbClient.ExecuteFetch, dbClient.ExecuteFetch); err != nil {
 				return err
 			}
 		}
-	}
-	for _, td := range wd.tableDiffers {
+
 		log.Infof("starting table %s", td.table.Name)
 		if err := wd.diffTable(ctx, dbClient, td); err != nil {
 			if err := td.updateTableState(ctx, dbClient, td.table.Name, "error", nil); err != nil {

@@ -61,6 +61,10 @@ func (td *tableDiffer) buildTablePlan() (*tablePlan, error) {
 		return nil, fmt.Errorf("unexpected: %v", sqlparser.String(statement))
 	}
 
+	if err := td.setTableLastPK(td.table.Name); err != nil {
+		return nil, err
+	}
+
 	sourceSelect := &sqlparser.Select{}
 	targetSelect := &sqlparser.Select{}
 	// aggregates is the list of Aggregate functions, if any.
@@ -143,7 +147,9 @@ func (td *tableDiffer) buildTablePlan() (*tablePlan, error) {
 		return nil, err
 	}
 	// Remove in_keyrange. It's not understood by mysql.
+	log.Errorf("buildTablePlan:: original source where: %+v", sourceSelect.Where)
 	sourceSelect.Where = sel.Where //removeKeyrange(sel.Where)
+	log.Errorf("buildTablePlan:: new source where: %+v", sourceSelect.Where)
 	// The source should also perform the group by.
 	sourceSelect.GroupBy = sel.GroupBy
 	sourceSelect.OrderBy = tp.orderBy
@@ -151,6 +157,9 @@ func (td *tableDiffer) buildTablePlan() (*tablePlan, error) {
 	// The target should perform the order by, but not the group by.
 	targetSelect.OrderBy = tp.orderBy
 
+	log.Errorf("buildTablePlan:: final source query: %s", sqlparser.String(sourceSelect))
+	log.Errorf("buildTablePlan:: final target query: %s", sqlparser.String(targetSelect))
+	log.Errorf("buildTablePlan:: LastPK: %+v", td.lastPK)
 	tp.sourceQuery = sqlparser.String(sourceSelect)
 	tp.targetQuery = sqlparser.String(targetSelect)
 
@@ -195,5 +204,23 @@ func (tp *tablePlan) findPKs(targetSelect *sqlparser.Select) error {
 		})
 	}
 	tp.orderBy = orderby
+	return nil
+}
+
+func (td *tableDiffer) setTableLastPK(tableName string) error {
+	dbClient := td.wd.ct.dbClientFactory()
+	if err := dbClient.Connect(); err != nil {
+		return err
+	}
+	defer dbClient.Close()
+
+	query := fmt.Sprintf(sqlGetVDiffTable, td.wd.ct.id, encodeString(td.table.Name))
+	qr, err := withDDL.Exec(td.wd.ct.vde.ctx, query, dbClient.ExecuteFetch, dbClient.ExecuteFetch)
+	if err != nil {
+		return err
+	}
+	if len(qr.Rows) == 1 {
+		td.lastPK = qr.Rows[0]
+	}
 	return nil
 }
