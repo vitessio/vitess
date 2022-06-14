@@ -42,6 +42,8 @@ var (
 
 	// Root is the main entrypoint to the vtctldclient CLI.
 	Root = &cobra.Command{
+		Use:   "vtctldclient",
+		Short: "Executes a cluster management command on the remote vtctld server.",
 		// We use PersistentPreRun to set up the tracer, grpc client, and
 		// command context for every command.
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) (err error) {
