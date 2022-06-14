@@ -358,6 +358,9 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> RANDOM REFERENCE REQUIRE_ROW_FORMAT RESOURCE RESPECT RESTART RETAIN REUSE ROLE SECONDARY SECONDARY_ENGINE SECONDARY_ENGINE_ATTRIBUTE SECONDARY_LOAD SECONDARY_UNLOAD SIMPLE SKIP SRID
 %token <str> THREAD_PRIORITY TIES UNBOUNDED VCPU VISIBLE RETURNING
 
+// Performance Schema Functions
+%token <str> FORMAT_BYTES FORMAT_PICO_TIME PS_CURRENT_THREAD_ID PS_THREAD_ID
+
 // Explain tokens
 %token <str> FORMAT TREE VITESS TRADITIONAL
 
@@ -443,7 +446,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <str> generated_always_opt user_username address_opt
 %type <definer> definer_opt user
 %type <expr> expression frame_expression signed_literal signed_literal_or_null null_as_literal now_or_signed_literal signed_literal bit_expr regular_expressions xml_expressions
-%type <expr> interval_value simple_expr literal NUM_literal text_literal text_literal_or_arg bool_pri literal_or_null now predicate tuple_expression null_int_variable_arg
+%type <expr> interval_value simple_expr literal NUM_literal text_literal text_literal_or_arg bool_pri literal_or_null now predicate tuple_expression null_int_variable_arg performance_schema_function_expressions
 %type <tableExprs> from_opt table_references from_clause
 %type <tableExpr> table_reference table_factor join_table json_table_function
 %type <jtColumnDefinition> jt_column
@@ -5903,6 +5906,7 @@ UTC_DATE func_paren_opt
   }
 | regular_expressions
 | xml_expressions
+| performance_schema_function_expressions
 
 null_int_variable_arg:
   null_as_literal
@@ -5932,7 +5936,6 @@ default_with_comma_opt:
   {
     $$ = $2
   }
-
 
 regular_expressions:
   REGEXP_INSTR openb expression ',' expression closeb
@@ -6007,6 +6010,24 @@ xml_expressions:
 | UpdateXML openb expression ',' expression ',' expression closeb
   {
     $$ = &UpdateXMLExpr{ Target:$3, XPathExpr:$5, NewXML:$7 }
+  }
+
+performance_schema_function_expressions:
+  FORMAT_BYTES openb expression closeb
+  {
+    $$ = &PerformanceSchemaFuncExpr{Type: FormatBytesType, Argument:$3}
+  }
+| FORMAT_PICO_TIME openb expression closeb
+  {
+    $$ = &PerformanceSchemaFuncExpr{Type: FormatPicoTimeType, Argument:$3}
+  }
+| PS_CURRENT_THREAD_ID openb closeb
+  {
+    $$ = &PerformanceSchemaFuncExpr{Type: PsCurrentThreadIDType}
+  }
+| PS_THREAD_ID openb expression closeb
+  {
+    $$ = &PerformanceSchemaFuncExpr{Type: PsThreadIDType, Argument:$3}
   }
 
 returning_type_opt:
@@ -7341,6 +7362,8 @@ non_reserved_keyword:
 | FLUSH
 | FOLLOWING
 | FORMAT
+| FORMAT_BYTES %prec FUNCTION_CALL_NON_KEYWORD
+| FORMAT_PICO_TIME %prec FUNCTION_CALL_NON_KEYWORD
 | FULL
 | FUNCTION
 | GENERAL
@@ -7474,6 +7497,8 @@ non_reserved_keyword:
 | PRIVILEGE_CHECKS_USER
 | PRIVILEGES
 | PROCESS
+| PS_CURRENT_THREAD_ID %prec FUNCTION_CALL_NON_KEYWORD
+| PS_THREAD_ID %prec FUNCTION_CALL_NON_KEYWORD
 | PLUGINS
 | POINT
 | POLYGON

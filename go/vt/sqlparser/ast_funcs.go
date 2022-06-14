@@ -1523,6 +1523,22 @@ func (ty LockingFuncType) ToString() string {
 }
 
 // ToString returns the type as a string
+func (ty PerformanceSchemaType) ToString() string {
+	switch ty {
+	case FormatBytesType:
+		return FormatBytesStr
+	case FormatPicoTimeType:
+		return FormatPicoTimeStr
+	case PsCurrentThreadIDType:
+		return PsCurrentThreadIDStr
+	case PsThreadIDType:
+		return PsThreadIDStr
+	default:
+		return "Unknown PerformaceSchemaType"
+	}
+}
+
+// ToString returns the type as a string
 func (ty ExplainType) ToString() string {
 	switch ty {
 	case EmptyType:

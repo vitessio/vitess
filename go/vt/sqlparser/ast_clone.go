@@ -335,6 +335,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfPartitionValueRange(in)
 	case Partitions:
 		return ClonePartitions(in)
+	case *PerformanceSchemaFuncExpr:
+		return CloneRefOfPerformanceSchemaFuncExpr(in)
 	case *PrepareStmt:
 		return CloneRefOfPrepareStmt(in)
 	case ReferenceAction:
@@ -2121,6 +2123,16 @@ func ClonePartitions(n Partitions) Partitions {
 	return res
 }
 
+// CloneRefOfPerformanceSchemaFuncExpr creates a deep clone of the input.
+func CloneRefOfPerformanceSchemaFuncExpr(n *PerformanceSchemaFuncExpr) *PerformanceSchemaFuncExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Argument = CloneExpr(n.Argument)
+	return &out
+}
+
 // CloneRefOfPrepareStmt creates a deep clone of the input.
 func CloneRefOfPrepareStmt(n *PrepareStmt) *PrepareStmt {
 	if n == nil {
@@ -3166,6 +3178,8 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfNamedWindow(in)
 	case *NtileExpr:
 		return CloneRefOfNtileExpr(in)
+	case *PerformanceSchemaFuncExpr:
+		return CloneRefOfPerformanceSchemaFuncExpr(in)
 	case *RegexpInstrExpr:
 		return CloneRefOfRegexpInstrExpr(in)
 	case *RegexpLikeExpr:
@@ -3440,6 +3454,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfOffset(in)
 	case *OrExpr:
 		return CloneRefOfOrExpr(in)
+	case *PerformanceSchemaFuncExpr:
+		return CloneRefOfPerformanceSchemaFuncExpr(in)
 	case *RegexpInstrExpr:
 		return CloneRefOfRegexpInstrExpr(in)
 	case *RegexpLikeExpr:
@@ -3644,6 +3660,8 @@ func CloneJSONPathParam(in JSONPathParam) JSONPathParam {
 		return CloneRefOfOffset(in)
 	case *OrExpr:
 		return CloneRefOfOrExpr(in)
+	case *PerformanceSchemaFuncExpr:
+		return CloneRefOfPerformanceSchemaFuncExpr(in)
 	case *RegexpInstrExpr:
 		return CloneRefOfRegexpInstrExpr(in)
 	case *RegexpLikeExpr:

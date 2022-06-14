@@ -1638,6 +1638,14 @@ func (node *UpdateXMLExpr) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "updatexml(%v, %v, %v)", node.Target, node.XPathExpr, node.NewXML)
 }
 
+func (node *PerformanceSchemaFuncExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "%s(", node.Type.ToString())
+	if node.Argument != nil {
+		buf.astPrintf(node, "%v", node.Argument)
+	}
+	buf.astPrintf(node, ")")
+}
+
 // Format formats the node.
 func (node *SubstrExpr) Format(buf *TrackedBuffer) {
 	if node.To == nil {
