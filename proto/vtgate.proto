@@ -75,6 +75,7 @@ message Session {
     topodata.TabletAlias tablet_alias = 3;
     // reserved connection if a dedicated connection is needed
     int64 reserved_id = 4;
+    bool vindex_only = 5;
   }
   // shard_sessions keep track of per-shard transaction info.
   repeated ShardSession shard_sessions = 2;
