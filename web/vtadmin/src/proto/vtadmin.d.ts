@@ -30370,11 +30370,20 @@ export namespace replicationdata {
         /** FullStatus version */
         version?: (string|null);
 
+        /** FullStatus version_comment */
+        version_comment?: (string|null);
+
         /** FullStatus read_only */
         read_only?: (boolean|null);
 
+        /** FullStatus gtid_mode */
+        gtid_mode?: (string|null);
+
         /** FullStatus binlog_format */
         binlog_format?: (string|null);
+
+        /** FullStatus binlog_row_image */
+        binlog_row_image?: (string|null);
 
         /** FullStatus log_bin_enabled */
         log_bin_enabled?: (boolean|null);
@@ -30396,6 +30405,12 @@ export namespace replicationdata {
 
         /** FullStatus semi_sync_primary_clients */
         semi_sync_primary_clients?: (number|null);
+
+        /** FullStatus semi_sync_primary_timeout */
+        semi_sync_primary_timeout?: (number|Long|null);
+
+        /** FullStatus semi_sync_wait_for_replica_count */
+        semi_sync_wait_for_replica_count?: (number|null);
     }
 
     /** Represents a FullStatus. */
@@ -30425,11 +30440,20 @@ export namespace replicationdata {
         /** FullStatus version. */
         public version: string;
 
+        /** FullStatus version_comment. */
+        public version_comment: string;
+
         /** FullStatus read_only. */
         public read_only: boolean;
 
+        /** FullStatus gtid_mode. */
+        public gtid_mode: string;
+
         /** FullStatus binlog_format. */
         public binlog_format: string;
+
+        /** FullStatus binlog_row_image. */
+        public binlog_row_image: string;
 
         /** FullStatus log_bin_enabled. */
         public log_bin_enabled: boolean;
@@ -30451,6 +30475,12 @@ export namespace replicationdata {
 
         /** FullStatus semi_sync_primary_clients. */
         public semi_sync_primary_clients: number;
+
+        /** FullStatus semi_sync_primary_timeout. */
+        public semi_sync_primary_timeout: (number|Long);
+
+        /** FullStatus semi_sync_wait_for_replica_count. */
+        public semi_sync_wait_for_replica_count: number;
 
         /**
          * Creates a new FullStatus instance using the specified properties.
