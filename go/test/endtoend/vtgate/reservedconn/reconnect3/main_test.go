@@ -90,6 +90,8 @@ func TestMysqlDownServingChange(t *testing.T) {
 	require.NoError(t,
 		clusterInstance.VtctlclientProcess.ExecuteCommand("EmergencyReparentShard", "-keyspace_shard", "ks/0"))
 
+	// test
+
 	// This should work without any error.
 	_, err = conn.ExecuteFetch("select /*vt+ PLANNER=gen4 */ * from test", 5, false)
 	require.NoError(t, err)
