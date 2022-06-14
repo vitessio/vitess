@@ -77,10 +77,26 @@ func panicIf(err error) {
 	}
 }
 
+func open(path string) (output io.Writer, closer func()) {
+	output = os.Stdout
+	closer = func() {}
+
+	if path != "" {
+		f, err := os.Create(path)
+		panicIf(err)
+
+		closer = func() { f.Close() }
+		output = f
+	}
+
+	return output, closer
+}
+
 func main() {
 	path := pflag.StringP("config", "c", "config.json", "authztest configuration (see the Config type in this package for the spec)")
 	pflag.StringVarP(path, "config-path", "p", "config.json", "alias for --config")
 	outputPath := pflag.StringP("output", "o", "", "destination to write generated code. if empty, defaults to os.Stdout")
+	docgen := pflag.Bool("docgen", false, "generate docs table from authztest config instead of authz tests themselves")
 
 	pflag.Parse()
 
@@ -91,20 +107,20 @@ func main() {
 	err = json.Unmarshal(data, &cfg)
 	panicIf(err)
 
+	if *docgen {
+		output, closer := open(*outputPath)
+		defer closer()
+
+	}
+
 	tmpl, err := template.New("tests").Funcs(map[string]any{
 		"getActor":       getActor,
 		"writeAssertion": writeAssertion,
 	}).Parse(_t)
 	panicIf(err)
 
-	var output io.Writer = os.Stdout
-	if *outputPath != "" {
-		f, err := os.Create(*outputPath)
-		panicIf(err)
-
-		defer f.Close()
-		output = f
-	}
+	output, closer := open(*outputPath)
+	defer closer()
 
 	err = tmpl.Execute(output, &cfg)
 	panicIf(err)
