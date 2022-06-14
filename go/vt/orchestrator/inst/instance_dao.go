@@ -306,32 +306,19 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 	if err != nil {
 		goto Cleanup
 	}
+	partialSuccess = true // We at least managed to read something from the server.
 
 	instance.Key = *instanceKey
 	{
 		// We begin with a few operations we can run concurrently, and which do not depend on anything
-		var mysqlHostname, mysqlReportHost string
-		err = db.QueryRow("select @@global.hostname, ifnull(@@global.report_host, ''), @@global.server_id, @@global.version, @@global.version_comment, @@global.read_only, @@global.binlog_format, @@global.log_bin, @@global.log_slave_updates").Scan(
-			&mysqlHostname, &mysqlReportHost, &instance.ServerID, &instance.Version, &instance.VersionComment, &instance.ReadOnly, &instance.BinlogFormat, &instance.LogBinEnabled, &instance.LogReplicationUpdatesEnabled)
-		if err != nil {
-			goto Cleanup
-		}
-		partialSuccess = true // We at least managed to read something from the server.
-		switch strings.ToLower(config.Config.MySQLHostnameResolveMethod) {
-		case "none":
-			resolvedHostname = instance.Key.Hostname
-		case "default", "hostname", "@@hostname":
-			resolvedHostname = mysqlHostname
-		case "report_host", "@@report_host":
-			if mysqlReportHost == "" {
-				err = fmt.Errorf("MySQLHostnameResolveMethod configured to use @@report_host but %+v has NULL/empty @@report_host", instanceKey)
-				goto Cleanup
-			}
-			resolvedHostname = mysqlReportHost
-		default:
-			resolvedHostname = instance.Key.Hostname
-		}
+		instance.ServerID = uint(fullStatus.ServerId)
 		instance.Version = fullStatus.Version
+		instance.ReadOnly = fullStatus.ReadOnly
+		instance.LogBinEnabled = fullStatus.LogBinEnabled
+		instance.BinlogFormat = fullStatus.BinlogFormat
+		instance.LogReplicationUpdatesEnabled = fullStatus.LogReplicaUpdates
+		instance.VersionComment = fullStatus.VersionComment
+		resolvedHostname = instance.Key.Hostname
 
 		if instance.LogBinEnabled {
 			waitGroup.Add(1)
