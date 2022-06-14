@@ -47,25 +47,25 @@ var (
 	GetSrvKeyspaces = &cobra.Command{
 		Use:                   "GetSrvKeyspaces <keyspace> [<cell> ...]",
 		Short:                 "Returns the SrvKeyspaces for the given keyspace in one or more cells.",
+		DisableFlagsInUseLine: true,
 		Args:                  cobra.MinimumNArgs(1),
 		RunE:                  commandGetSrvKeyspaces,
-		DisableFlagsInUseLine: true,
 	}
 	// GetSrvVSchema makes a GetSrvVSchema gRPC call to a vtctld.
 	GetSrvVSchema = &cobra.Command{
 		Use:                   "GetSrvVSchema cell",
 		Short:                 "Returns the SrvVSchema for the given cell.",
+		DisableFlagsInUseLine: true,
 		Args:                  cobra.ExactArgs(1),
 		RunE:                  commandGetSrvVSchema,
-		DisableFlagsInUseLine: true,
 	}
 	// GetSrvVSchemas makes a GetSrvVSchemas gRPC call to a vtctld.
 	GetSrvVSchemas = &cobra.Command{
 		Use:                   "GetSrvVSchemas [<cell> ...]",
 		Short:                 "Returns the SrvVSchema for all cells, optionally filtered by the given cells.",
+		DisableFlagsInUseLine: true,
 		Args:                  cobra.ArbitraryArgs,
 		RunE:                  commandGetSrvVSchemas,
-		DisableFlagsInUseLine: true,
 	}
 	// RebuildKeyspaceGraph makes one or more RebuildKeyspaceGraph gRPC calls to a vtctld.
 	RebuildKeyspaceGraph = &cobra.Command{
@@ -243,6 +243,6 @@ func init() {
 	RebuildKeyspaceGraph.Flags().BoolVar(&rebuildKeyspaceGraphOptions.AllowPartial, "allow-partial", false, "Specifies whether a SNAPSHOT keyspace is allowed to serve with an incomplete set of shards. Ignored for all other types of keyspaces.")
 	Root.AddCommand(RebuildKeyspaceGraph)
 
-	RebuildVSchemaGraph.Flags().StringSliceVarP(&rebuildVSchemaGraphOptions.Cells, "cells", "c", nil, "Specifies a comma-separated list of cells to look for tablets")
+	RebuildVSchemaGraph.Flags().StringSliceVarP(&rebuildVSchemaGraphOptions.Cells, "cells", "c", nil, "Specifies a comma-separated list of cells to look for tablets.")
 	Root.AddCommand(RebuildVSchemaGraph)
 }
