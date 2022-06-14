@@ -1850,24 +1850,13 @@ func formatAddress(address string) string {
 func ContainsAggregation(e SQLNode) bool {
 	hasAggregates := false
 	_ = Walk(func(node SQLNode) (kontinue bool, err error) {
-		if IsAggregation(node) {
+		if _, isAggregate := node.(AggrFunc); isAggregate {
 			hasAggregates = true
 			return false, nil
 		}
 		return true, nil
 	}, e)
 	return hasAggregates
-}
-
-// IsAggregation returns true if the node is an aggregation expression
-func IsAggregation(node SQLNode) bool {
-	switch node := node.(type) {
-	case *FuncExpr:
-		return node.IsAggregate()
-	case *GroupConcatExpr:
-		return true
-	}
-	return false
 }
 
 // GetFirstSelect gets the first select statement

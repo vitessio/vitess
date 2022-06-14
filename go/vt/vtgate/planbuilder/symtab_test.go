@@ -17,7 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -205,25 +204,13 @@ func TestGetReturnType(t *testing.T) {
 				},
 			},
 		}},
-		output:      querypb.Type_DECIMAL,
-		expectedErr: nil,
+		output: querypb.Type_DECIMAL,
 	}, {
-		input: &sqlparser.FuncExpr{Name: sqlparser.NewColIdent("Count"), Exprs: sqlparser.SelectExprs{
-			&sqlparser.StarExpr{},
-		}},
-		output:      querypb.Type_INT64,
-		expectedErr: nil,
+		input:  &sqlparser.Count{Name: "Count"},
+		output: querypb.Type_INT64,
 	}, {
-		input: &sqlparser.FuncExpr{Name: sqlparser.NewColIdent("cOunt"), Exprs: sqlparser.SelectExprs{
-			&sqlparser.StarExpr{},
-		}},
-		output:      querypb.Type_INT64,
-		expectedErr: nil,
-	}, {
-		input: &sqlparser.FuncExpr{Name: sqlparser.NewColIdent("Abs"), Exprs: sqlparser.SelectExprs{
-			&sqlparser.StarExpr{},
-		}},
-		expectedErr: fmt.Errorf("cannot evaluate return type for *sqlparser.FuncExpr"),
+		input:  &sqlparser.CountStar{Name: "Count"},
+		output: querypb.Type_INT64,
 	}}
 
 	for _, test := range tests {

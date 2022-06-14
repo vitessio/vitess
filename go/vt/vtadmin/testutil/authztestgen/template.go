@@ -52,7 +52,9 @@ import (
 	"vitess.io/vitess/go/vt/vtadmin/testutil"
 	"vitess.io/vitess/go/vt/vtadmin/vtctldclient/fakevtctldclient"
 
+	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
@@ -143,7 +145,10 @@ func testClusters(t testing.TB) []*cluster.Cluster {
 							Cell: "{{ .Tablet.Alias.Cell }}",
 							Uid: {{ .Tablet.Alias.Uid }},
 						},
+						Keyspace: "{{ .Tablet.Keyspace }}",
+						Type: topodatapb.TabletType_{{ .Tablet.Type }},
 					},
+					State: vtadminpb.Tablet_{{ .State }},
 				},
 				{{- end }}
 			},

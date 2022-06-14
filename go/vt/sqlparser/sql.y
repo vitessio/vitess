@@ -174,6 +174,7 @@ func bindVariable(yylex yyLexer, bvar string) {
   setExprs      SetExprs
   selectExprs   SelectExprs
   tableOptions     TableOptions
+  starExpr      StarExpr
 
   colKeyOpt     ColumnKeyOption
   referenceAction ReferenceAction
@@ -333,13 +334,14 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> REPLACE
 %token <str> CONVERT CAST
 %token <str> SUBSTR SUBSTRING
-%token <str> GROUP_CONCAT SEPARATOR
+%token <str> SEPARATOR
 %token <str> TIMESTAMPADD TIMESTAMPDIFF
 %token <str> WEIGHT_STRING
 %token <str> LTRIM RTRIM TRIM
 %token <str> JSON_ARRAY JSON_OBJECT JSON_QUOTE
 %token <str> JSON_DEPTH JSON_TYPE JSON_LENGTH JSON_VALID
 %token <str> JSON_ARRAY_APPEND JSON_ARRAY_INSERT JSON_INSERT JSON_MERGE JSON_MERGE_PATCH JSON_MERGE_PRESERVE JSON_REMOVE JSON_REPLACE JSON_SET JSON_UNQUOTE
+%token <str> COUNT AVG MAX MIN SUM GROUP_CONCAT BIT_AND BIT_OR BIT_XOR STD STDDEV STDDEV_POP STDDEV_SAMP VAR_POP VAR_SAMP VARIANCE
 %token <str> REGEXP_INSTR REGEXP_LIKE REGEXP_REPLACE REGEXP_SUBSTR
 %token <str> ExtractValue UpdateXML
 %token <str> GET_LOCK RELEASE_LOCK RELEASE_ALL_LOCKS IS_FREE_LOCK IS_USED_LOCK
@@ -864,8 +866,6 @@ query_primary:
   {
     $$ = NewSelect(Comments($2), $4/*SelectExprs*/, $3/*options*/, nil, $5/*from*/, NewWhere(WhereClause, $6), GroupBy($7), NewWhere(HavingClause, $8), $9)
   }
-
-
 
 insert_statement:
   insert_or_replace comment_opt ignore_opt into_table_name opt_partition_clause insert_data on_dup_opt
@@ -1555,7 +1555,6 @@ CURRENT_TIMESTAMP func_datetime_precision
     $$ = &CurTimeFuncExpr{Name:NewColIdent("now"), Fsp: $2}
   }
 
-
 signed_literal_or_null:
 signed_literal
 | null_as_literal
@@ -2213,7 +2212,6 @@ collate_opt:
     $$ = encodeSQLString($2)
   }
 
-
 index_definition:
   index_info '(' index_column_list ')' index_option_list_opt
   {
@@ -2328,7 +2326,6 @@ index_symbols:
   {
     $$ = string($1)
   }
-
 
 from_or_in:
   FROM
@@ -3522,7 +3519,6 @@ without_valid_opt:
     $$ = true
   }
 
-
 partition_definitions:
   partition_definition
   {
@@ -3792,6 +3788,7 @@ truncate_statement:
   {
     $$ = &TruncateTable{Table: $2}
   }
+
 analyze_statement:
   ANALYZE TABLE table_name
   {
@@ -4148,7 +4145,6 @@ savepoint_opt:
   { $$ = struct{}{} }
 | SAVEPOINT
   { $$ = struct{}{} }
-
 
 savepoint_statement:
   SAVEPOINT sql_id
@@ -5582,10 +5578,6 @@ function_call_keyword:
   {
   	$$ = &SubstrExpr{Name: $3, From: $5}
   }
-| GROUP_CONCAT openb distinct_opt select_expression_list order_by_opt separator_opt limit_opt closeb
-  {
-    $$ = &GroupConcatExpr{Distinct: $3, Exprs: $4, OrderBy: $5, Separator: $6, Limit: $7}
-  }
 | CASE expression_opt when_expression_list else_expression_opt END
   {
     $$ = &CaseExpr{Expr: $2, Whens: $3, Else: $4}
@@ -5627,6 +5619,74 @@ UTC_DATE func_paren_opt
 | CURRENT_TIME func_datetime_precision
   {
     $$ = &CurTimeFuncExpr{Name:NewColIdent("current_time"), Fsp: $2}
+  }
+| COUNT openb '*' closeb
+  {
+    $$ = &CountStar{Name:$1}
+  }
+| COUNT openb distinct_opt expression_list closeb
+  {
+    $$ = &Count{Name:$1, Distinct:$3, Args:$4}
+  }
+| MAX openb distinct_opt expression closeb
+  {
+    $$ = &Max{Name:$1 , Distinct:$3, Arg:$4}
+  }
+| MIN openb distinct_opt expression closeb
+  {
+    $$ = &Min{Name:$1 , Distinct:$3, Arg:$4}
+  }
+| SUM openb distinct_opt expression closeb
+  {
+    $$ = &Sum{Name:$1 , Distinct:$3, Arg:$4}
+  }
+| AVG openb distinct_opt expression closeb
+  {
+    $$ = &Avg{Name:$1 , Distinct:$3, Arg:$4}
+  }
+| BIT_AND openb expression closeb
+  {
+    $$ = &BitAnd{Name:$1 , Arg:$3}
+  }
+| BIT_OR openb expression closeb
+  {
+    $$ = &BitOr{Name:$1 , Arg:$3}
+  }
+| BIT_XOR openb expression closeb
+   {
+     $$ = &BitXor{Name:$1 , Arg:$3}
+   }
+| STD openb expression closeb
+    {
+      $$ = &Std{Name:$1 , Arg:$3}
+    }
+| STDDEV openb expression closeb
+    {
+      $$ = &StdDev{Name:$1 , Arg:$3}
+    }
+| STDDEV_POP openb expression closeb
+    {
+      $$ = &StdPop{Name:$1 , Arg:$3}
+    }
+| STDDEV_SAMP openb expression closeb
+    {
+      $$ = &StdSamp{Name:$1 , Arg:$3}
+    }
+| VAR_POP openb expression closeb
+     {
+       $$ = &VarPop{Name:$1 , Arg:$3}
+     }
+| VAR_SAMP openb expression closeb
+     {
+       $$ = &VarSamp{Name:$1 , Arg:$3}
+     }
+| VARIANCE openb expression closeb
+     {
+       $$ = &Variance{Name:$1 , Arg:$3}
+     }
+| GROUP_CONCAT openb distinct_opt expression_list order_by_opt separator_opt limit_opt closeb
+  {
+    $$ = &GroupConcatExpr{Name:$1, Distinct: $3, Exprs: $4, OrderBy: $5, Separator: $6, Limit: $7}
   }
 | TIMESTAMPADD openb sql_id ',' expression ',' expression closeb
   {
@@ -7216,10 +7276,14 @@ non_reserved_keyword:
 | ASCII
 | AUTO_INCREMENT
 | AUTOEXTEND_SIZE
+| AVG
 | AVG_ROW_LENGTH
 | BEGIN
 | BIGINT
 | BIT
+| BIT_AND
+| BIT_OR
+| BIT_XOR
 | BLOB
 | BOOL
 | BOOLEAN
@@ -7249,6 +7313,7 @@ non_reserved_keyword:
 | COMPRESSION
 | CONNECTION
 | COPY
+| COUNT
 | CSV
 | CURRENT
 | DATA
@@ -7308,6 +7373,7 @@ non_reserved_keyword:
 | GET_LOCK %prec FUNCTION_CALL_NON_KEYWORD
 | GET_MASTER_PUBLIC_KEY
 | GLOBAL
+| GROUP_CONCAT
 | GTID_EXECUTED
 | HASH
 | HEADER
@@ -7379,6 +7445,7 @@ non_reserved_keyword:
 | MASTER_PUBLIC_KEY_PATH
 | MASTER_TLS_CIPHERSUITES
 | MASTER_ZSTD_COMPRESSION_LEVEL
+| MAX
 | MAX_ROWS
 | MEDIUMBLOB
 | MEDIUMINT
@@ -7386,6 +7453,7 @@ non_reserved_keyword:
 | MEMORY
 | MEMBER
 | MERGE
+| MIN
 | MIN_ROWS
 | MODE
 | MODIFY
@@ -7494,9 +7562,14 @@ non_reserved_keyword:
 | STATS_SAMPLE_PAGES
 | STATUS
 | STORAGE
+| STD
+| STDDEV
+| STDDEV_POP
+| STDDEV_SAMP
 | STREAM
 | SUBPARTITION
 | SUBPARTITIONS
+| SUM
 | TABLES
 | TABLESPACE
 | TEMPORARY
@@ -7530,9 +7603,12 @@ non_reserved_keyword:
 | USER
 | USER_RESOURCES
 | VALIDATION
+| VAR_POP
+| VAR_SAMP
 | VARBINARY
 | VARCHAR
 | VARIABLES
+| VARIANCE
 | VCPU
 | VGTID_EXECUTED
 | VIEW
@@ -7574,6 +7650,8 @@ non_reserved_keyword:
 | SECOND_MICROSECOND
 | YEAR_MONTH
 | WEIGHT_STRING %prec FUNCTION_CALL_NON_KEYWORD
+
+
 
 openb:
   '('
