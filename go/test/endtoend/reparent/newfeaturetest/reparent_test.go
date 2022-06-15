@@ -175,6 +175,7 @@ func TestFullStatus(t *testing.T) {
 	assert.Empty(t, replicaStatus.ReplicationStatus.LastSqlError)
 	assert.Equal(t, replicaStatus.ReplicationStatus.SourceUuid, primaryStatus.ServerUuid)
 	assert.EqualValues(t, 0, replicaStatus.ReplicationStatus.ReplicationLagSeconds)
+	assert.EqualValues(t, 0, replicaStatus.ReplicationStatus.SqlDelay)
 	assert.Equal(t, replicaStatus.ReplicationStatus.SourceHost, utils.Hostname)
 	assert.EqualValues(t, replicaStatus.ReplicationStatus.SourcePort, tablets[0].MySQLPort)
 	assert.Equal(t, replicaStatus.ReplicationStatus.SourceUser, "vt_repl")

@@ -465,6 +465,8 @@ func parseReplicationStatus(fields map[string]string) ReplicationStatus {
 	}
 	parseUint, _ = strconv.ParseUint(fields["Master_Server_Id"], 10, 0)
 	status.SourceServerID = uint(parseUint)
+	parseUint, _ = strconv.ParseUint(fields["SQL_Delay"], 10, 0)
+	status.SQLDelay = uint(parseUint)
 
 	executedPosStr := fields["Exec_Master_Log_Pos"]
 	file := fields["Relay_Master_Log_File"]
