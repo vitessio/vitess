@@ -56,8 +56,14 @@ type ReplicationStatus struct {
 	ReplicationLagUnknown bool
 	SourceHost            string
 	SourcePort            int
+	SourceUser            string
 	ConnectRetry          int
 	SourceUUID            SID
+	SQLDelay              uint
+	AutoPosition          bool
+	UsingGTID             bool
+	HasReplicationFilters bool
+	SSLAllowed            bool
 }
 
 // Running returns true if both the IO and SQL threads are running.
@@ -95,6 +101,7 @@ func ReplicationStatusToProto(s ReplicationStatus) *replicationdatapb.Status {
 		ReplicationLagSeconds: uint32(s.ReplicationLagSeconds),
 		RelayLogFilePosition:  EncodePosition(s.RelayLogFilePosition),
 		SourceHost:            s.SourceHost,
+		SourceUser:            s.SourceUser,
 		SourcePort:            int32(s.SourcePort),
 		ConnectRetry:          int32(s.ConnectRetry),
 		SourceUuid:            s.SourceUUID.String(),
@@ -158,6 +165,7 @@ func ProtoToReplicationStatus(s *replicationdatapb.Status) ReplicationStatus {
 		SourceServerID:        uint(s.SourceServerId),
 		ReplicationLagSeconds: uint(s.ReplicationLagSeconds),
 		SourceHost:            s.SourceHost,
+		SourceUser:            s.SourceUser,
 		SourcePort:            int(s.SourcePort),
 		ConnectRetry:          int(s.ConnectRetry),
 		SourceUUID:            sid,

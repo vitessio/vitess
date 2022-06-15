@@ -45,6 +45,12 @@ message Status {
   int32 sql_state = 15;
   string last_sql_error = 16;
   string relay_log_file_position = 17;
+  string source_user = 18;
+  uint32 sql_delay = 19;
+  bool auto_position = 20;
+  bool using_gtid = 21;
+  bool has_replication_filters = 22;
+  bool ssl_allowed = 23;
 }
 
 // StopReplicationStatus represents the replication status before calling StopReplication, and the replication status collected immediately after

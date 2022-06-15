@@ -443,6 +443,7 @@ func parseReplicationStatus(fields map[string]string) ReplicationStatus {
 	// Hence the names still contain Master
 	status := ReplicationStatus{
 		SourceHost: fields["Master_Host"],
+		SourceUser: fields["Master_User"],
 		// These fields are returned from the underlying DB and cannot be renamed
 		IOState:      ReplicationStatusToState(fields["Slave_IO_Running"]),
 		LastIOError:  fields["Last_IO_Error"],

@@ -30024,6 +30024,24 @@ export namespace replicationdata {
 
         /** Status relay_log_file_position */
         relay_log_file_position?: (string|null);
+
+        /** Status source_user */
+        source_user?: (string|null);
+
+        /** Status sql_delay */
+        sql_delay?: (number|null);
+
+        /** Status auto_position */
+        auto_position?: (boolean|null);
+
+        /** Status using_gtid */
+        using_gtid?: (boolean|null);
+
+        /** Status has_replication_filters */
+        has_replication_filters?: (boolean|null);
+
+        /** Status ssl_allowed */
+        ssl_allowed?: (boolean|null);
     }
 
     /** Represents a Status. */
@@ -30085,6 +30103,24 @@ export namespace replicationdata {
 
         /** Status relay_log_file_position. */
         public relay_log_file_position: string;
+
+        /** Status source_user. */
+        public source_user: string;
+
+        /** Status sql_delay. */
+        public sql_delay: number;
+
+        /** Status auto_position. */
+        public auto_position: boolean;
+
+        /** Status using_gtid. */
+        public using_gtid: boolean;
+
+        /** Status has_replication_filters. */
+        public has_replication_filters: boolean;
+
+        /** Status ssl_allowed. */
+        public ssl_allowed: boolean;
 
         /**
          * Creates a new Status instance using the specified properties.
