@@ -30042,6 +30042,9 @@ export namespace replicationdata {
 
         /** Status ssl_allowed */
         ssl_allowed?: (boolean|null);
+
+        /** Status replication_lag_unknown */
+        replication_lag_unknown?: (boolean|null);
     }
 
     /** Represents a Status. */
@@ -30121,6 +30124,9 @@ export namespace replicationdata {
 
         /** Status ssl_allowed. */
         public ssl_allowed: boolean;
+
+        /** Status replication_lag_unknown. */
+        public replication_lag_unknown: boolean;
 
         /**
          * Creates a new Status instance using the specified properties.

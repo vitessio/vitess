@@ -175,6 +175,7 @@ func TestFullStatus(t *testing.T) {
 	assert.Empty(t, replicaStatus.ReplicationStatus.LastSqlError)
 	assert.Equal(t, replicaStatus.ReplicationStatus.SourceUuid, primaryStatus.ServerUuid)
 	assert.EqualValues(t, 0, replicaStatus.ReplicationStatus.ReplicationLagSeconds)
+	assert.False(t, replicaStatus.ReplicationStatus.ReplicationLagUnknown)
 	assert.EqualValues(t, 0, replicaStatus.ReplicationStatus.SqlDelay)
 	assert.False(t, replicaStatus.ReplicationStatus.SslAllowed)
 	assert.False(t, replicaStatus.ReplicationStatus.HasReplicationFilters)
