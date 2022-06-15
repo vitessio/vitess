@@ -85,7 +85,6 @@ const (
 	markdownTemplate = `# Release of Vitess {{.Version}}
 
 {{- if or .Announcement .AddDetails }}
-## Announcement
 {{ .Announcement }}
 {{- end }}
 
@@ -109,7 +108,6 @@ The entire changelog for this release can be found [here]({{ .PathToChangeLogFil
 
 	markdownTemplateChangelog = `# Changelog of Vitess {{.Version}}
 {{ .ChangeLog }}
-{{ .ChangeMetrics }}
 `
 
 	markdownTemplatePR = `

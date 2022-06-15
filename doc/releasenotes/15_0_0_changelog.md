@@ -8,6 +8,8 @@
 #### Governance
  * Update the comment for review checklist with an item for CI workflows #10471
 ### Documentation 
+#### CLI
+ * [vtctldclient] Update CLI docs for usages, flags, and aliases #10502 
 #### VTAdmin
  * [vtadmin] Document known issue with node versions 17+ #10483
 ### Enhancement 
@@ -25,7 +27,8 @@
 #### General
  * Remove v2 resharding fields #10409 
 #### Query Serving
- * Reduce shift-reduce conflicts #10500 
+ * Reduce shift-reduce conflicts #10500
+ * feat: don't stop if compilation errors are happening on the generated files #10506 
 #### VTAdmin
  * [vtadmin] Rename ERS/PRS pools+flags properly #10460 
 #### web UI
@@ -40,9 +43,4 @@
  * [vtadmin] authz tests - tablet actions #10457
  * [vtadmin] Add authz tests for remaining non-schema related actions #10481
  * [vtadmin] Add schema-related authz tests #10486
-
-
-The release includes 21 commits (excluding merges)
-
-Thanks to all our contributors: @GuptaManan100, @K-Kumar-01, @ajm188, @arvind-murty, @dbussink, @frouioui, @harshit-gangal, @notfelineit, @rohit-nayak-ps, @rsajwani, @shlomi-noach, @systay
 

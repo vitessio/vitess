@@ -142,13 +142,11 @@ func TestGenerateReleaseNotes(t *testing.T) {
 			name:        "with announcement",
 			releaseNote: releaseNote{Announcement: "This is the new release.\n\nNew features got added.", Version: "v12.0.0"},
 			expectedOut: "# Release of Vitess v12.0.0\n" +
-				"## Announcement\n" +
 				"This is the new release.\n\nNew features got added.\n",
 		}, {
 			name:        "with announcement and known issues",
 			releaseNote: releaseNote{Announcement: "This is the new release.\n\nNew features got added.", Version: "v12.0.0", KnownIssues: "* bug 1\n* bug 2\n"},
 			expectedOut: "# Release of Vitess v12.0.0\n" +
-				"## Announcement\n" +
 				"This is the new release.\n\nNew features got added.\n" +
 				"------------\n" +
 				"## Known Issues\n" +
@@ -164,15 +162,13 @@ func TestGenerateReleaseNotes(t *testing.T) {
 				ChangeMetrics:     "optimization is the root of all evil",
 			},
 			expectedOut: "# Release of Vitess v12.0.0\n" +
-				"## Announcement\n" +
 				"This is the new release.\n\nNew features got added.\n" +
 				"------------\n" +
 				"The entire changelog for this release can be found [here](https://github.com/vitessio/vitess/blob/main/doc/releasenotes/12_0_0_changelog.md).\n" +
 				"optimization is the root of all evil\n",
 			expectedOutChangeLog: "# Changelog of Vitess v12.0.0\n" +
 				"* PR 1\n" +
-				"* PR 2\n\n" +
-				"optimization is the root of all evil\n",
+				"* PR 2\n\n",
 		}, {
 			name: "with only change log",
 			releaseNote: releaseNote{
@@ -186,8 +182,7 @@ func TestGenerateReleaseNotes(t *testing.T) {
 				"optimization is the root of all evil\n",
 			expectedOutChangeLog: "# Changelog of Vitess v12.0.0\n" +
 				"* PR 1\n" +
-				"* PR 2\n\n" +
-				"optimization is the root of all evil\n",
+				"* PR 2\n\n",
 		},
 	}
 
