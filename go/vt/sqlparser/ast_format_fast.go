@@ -19,7 +19,6 @@ package sqlparser
 
 import (
 	"fmt"
-	"strings"
 
 	"vitess.io/vitess/go/sqltypes"
 )
@@ -2419,21 +2418,12 @@ func (node SetExprs) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the node.
 func (node *SetExpr) formatFast(buf *TrackedBuffer) {
-	if node.Var.Scope != ImplicitScope {
-		buf.WriteString(node.Var.Scope.ToString())
-		buf.WriteByte(' ')
-	}
 	// We don't have to backtick set variable names.
 	switch {
 	case node.Var.VarName.EqualString("charset") || node.Var.VarName.EqualString("names"):
 		buf.WriteString(node.Var.VarName.String())
 		buf.WriteByte(' ')
 		node.Expr.formatFast(buf)
-	case node.Var.VarName.EqualString(TransactionStr):
-		literal := node.Expr.(*Literal)
-		buf.WriteString(node.Var.VarName.String())
-		buf.WriteByte(' ')
-		buf.WriteString(strings.ToLower(literal.Val))
 	default:
 		node.Var.formatFast(buf)
 		buf.WriteString(" = ")
@@ -3518,8 +3508,15 @@ func (node *LockingFunc) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the node.
 func (node *Variable) formatFast(buf *TrackedBuffer) {
-	for i := NoAt; i < node.AtCount; i++ {
-		buf.WriteByte('@')
+	switch node.Scope {
+	case ImplicitScope:
+		buf.WriteString("@@")
+	case VariableScope:
+		buf.WriteString("@")
+	case GlobalScope, SessionScope, PersistSysScope, PersistOnlySysScope:
+		buf.WriteString("@@")
+		buf.WriteString(node.Scope.ToString())
+		buf.WriteByte('.')
 	}
-	formatID(buf, node.VarName.String(), node.AtCount)
+	node.VarName.formatFast(buf)
 }

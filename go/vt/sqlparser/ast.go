@@ -2258,7 +2258,6 @@ type (
 	Variable struct {
 		Scope   Scope
 		VarName ColIdent
-		AtCount AtCount
 	}
 
 	// ColTuple represents a list of column values.

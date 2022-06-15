@@ -29,6 +29,8 @@ import (
 	"sync"
 	"testing"
 
+	"vitess.io/vitess/go/test/utils"
+
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/stretchr/testify/assert"
@@ -1026,11 +1028,8 @@ var (
 	}, {
 		input: "set @@session.autocommit = true",
 	}, {
-		input: "set @@session.`autocommit` = true",
-	}, {
-		input: "set @@session.'autocommit' = true",
-	}, {
-		input: "set @@session.\"autocommit\" = true",
+		input:  "set @@session.`autocommit` = true",
+		output: "set @@session.autocommit = true",
 	}, {
 		input:  "set @@session.autocommit = ON",
 		output: "set @@session.autocommit = 'on'",
@@ -1066,13 +1065,13 @@ var (
 		output: "set charset default",
 	}, {
 		input:  "set session wait_timeout = 3600",
-		output: "set session wait_timeout = 3600",
+		output: "set @@session.wait_timeout = 3600",
 	}, {
 		input:  "set session wait_timeout = 3600, session autocommit = off",
-		output: "set session wait_timeout = 3600, session autocommit = 'off'",
+		output: "set @@session.wait_timeout = 3600, @@session.autocommit = 'off'",
 	}, {
 		input:  "set session wait_timeout = 3600, @@global.autocommit = off",
-		output: "set session wait_timeout = 3600, @@global.autocommit = 'off'",
+		output: "set @@session.wait_timeout = 3600, @@global.autocommit = 'off'",
 	}, {
 		input: "set /* list */ a = 3, b = 4",
 	}, {
@@ -1118,7 +1117,8 @@ var (
 	}, {
 		input: "set @variable = 42",
 	}, {
-		input: "set @period.variable = 42",
+		input:  "set @period.variable = 42",
+		output: "set @`period.variable` = 42",
 	}, {
 		input:  "set S= +++-++-+(4+1)",
 		output: "set S = - -(4 + 1)",
@@ -5164,7 +5164,7 @@ func TestOne(t *testing.T) {
 	testOne := struct {
 		input, output string
 	}{
-		input:  "create database test_db default charset @a",
+		input:  "",
 		output: "",
 	}
 	if testOne.input == "" {
@@ -5604,11 +5604,25 @@ func BenchmarkParse3(b *testing.B) {
 }
 
 func TestValidUnionCases(t *testing.T) {
-	testFile(t, "union_cases.txt", t.TempDir())
+	testFile(t, "union_cases.txt", makeTestOutput(t))
 }
 
 func TestValidSelectCases(t *testing.T) {
-	testFile(t, "select_cases.txt", t.TempDir())
+	testFile(t, "select_cases.txt", makeTestOutput(t))
+}
+
+func makeTestOutput(t *testing.T) string {
+	testOutputTempDir := utils.MakeTestOutput(t, "testdata", "parse_test")
+
+	t.Cleanup(func() {
+		if !t.Failed() {
+			_ = os.RemoveAll(testOutputTempDir)
+		} else {
+			t.Logf("Errors found. If the output is correct, run `cp %s/* testdata/` to update test expectations", testOutputTempDir)
+		}
+	})
+
+	return testOutputTempDir
 }
 
 type testCase struct {

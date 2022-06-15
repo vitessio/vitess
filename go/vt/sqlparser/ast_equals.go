@@ -4264,8 +4264,7 @@ func EqualsRefOfVariable(a, b *Variable) bool {
 		return false
 	}
 	return a.Scope == b.Scope &&
-		EqualsColIdent(a.VarName, b.VarName) &&
-		a.AtCount == b.AtCount
+		EqualsColIdent(a.VarName, b.VarName)
 }
 
 // EqualsRefOfVariance does deep equals between the two objects.

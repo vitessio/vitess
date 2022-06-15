@@ -670,11 +670,50 @@ func NewColIdentWithAt(str string, at AtCount) ColIdent {
 	}
 }
 
-func NewVariable(str string, at AtCount) *Variable {
-	return &Variable{
-		VarName: NewColIdent(str),
-		AtCount: at,
+func NewSetVariable(str string, scope Scope) *Variable {
+	return &Variable{VarName: createColIdent(str), Scope: scope}
+}
+
+func NewSetStatement(comments *ParsedComments, exprs SetExprs) *Set {
+	return &Set{Exprs: exprs, Comments: comments}
+}
+
+func NewVariableExpression(str string, at AtCount) *Variable {
+	l := strings.ToLower(str)
+	v := &Variable{
+		VarName: createColIdent(str),
 	}
+
+	switch at {
+	case DoubleAt:
+		switch {
+		case strings.HasPrefix(l, "session."):
+			v.VarName = createColIdent(str[8:])
+			v.Scope = SessionScope
+		case strings.HasPrefix(l, "global."):
+			v.VarName = createColIdent(str[7:])
+			v.Scope = GlobalScope
+		case strings.HasPrefix(l, "vitess_metadata."):
+			v.VarName = createColIdent(str[16:])
+			v.Scope = VitessMetadataScope
+		default:
+			v.Scope = ImplicitScope
+		}
+	case SingleAt:
+		v.Scope = VariableScope
+	case NoAt:
+		v.Scope = LocalScope
+	}
+
+	return v
+}
+
+func createColIdent(str string) ColIdent {
+	size := len(str)
+	if str[0] == '`' && str[size-1] == '`' {
+		str = str[1 : size-1]
+	}
+	return NewColIdent(str)
 }
 
 func NewOffset(v int, original Expr) *Offset {

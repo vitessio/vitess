@@ -489,7 +489,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <str> fields_opts fields_opt_list fields_opt lines_opts lines_opt lines_opt_list
 %type <lock> locking_clause
 %type <columns> ins_column_list column_list column_list_opt index_list
-%type <variable> variable set_variable user_defined_variable
+%type <variable> variable_expr set_variable user_defined_variable
 %type <variables> at_id_list execute_statement_list_opt
 %type <partitions> opt_partition_clause partition_list
 %type <updateExprs> on_dup_opt
@@ -629,7 +629,7 @@ command:
 user_defined_variable:
   AT_ID
   {
-    $$ = NewVariable($1, SingleAt)
+    $$ = NewVariableExpression($1, SingleAt)
   }
 
 ci_identifier:
@@ -661,14 +661,14 @@ id_or_var:
     $$ = NewColIdentWithAt(string($1), DoubleAt)
   }
 
-variable:
+variable_expr:
   AT_ID
   {
-    $$ = NewVariable(string($1), SingleAt)
+    $$ = NewVariableExpression(string($1), SingleAt)
   }
 | AT_AT_ID
   {
-    $$ = NewVariable(string($1), DoubleAt)
+    $$ = NewVariableExpression(string($1), DoubleAt)
   }
 
 do_statement:
@@ -993,7 +993,7 @@ opt_partition_clause:
 set_statement:
   SET comment_opt set_list
   {
-    $$ = &Set{Comments: Comments($2).Parsed(), Exprs: $3}
+    $$ = NewSetStatement(Comments($2).Parsed(), $3)
   }
 
 set_transaction_statement:
@@ -5177,7 +5177,7 @@ function_call_keyword
   {
   	$$ = $1
   }
-| variable
+| variable_expr
   {
   	$$ = $1
   }
@@ -6974,38 +6974,33 @@ set_list:
 set_expression:
   set_variable '=' ON
   {
-    $1.Scope = ImplicitScope
     $$ = &SetExpr{Var: $1, Expr: NewStrLiteral("on")}
   }
 | set_variable '=' OFF
   {
-    $1.Scope = ImplicitScope
     $$ = &SetExpr{Var: $1, Expr: NewStrLiteral("off")}
   }
 | set_variable '=' expression
   {
-    $1.Scope = ImplicitScope
     $$ = &SetExpr{Var: $1, Expr: $3}
   }
 | charset_or_character_set_or_names charset_value collate_opt
   {
-    variable := &Variable{VarName: NewColIdent(string($1)), Scope: ImplicitScope}
-    $$ = &SetExpr{Var: variable, Expr: $2}
-  }
-|  set_session_or_global set_expression
-  {
-    $2.Var.Scope = $1
-    $$ = $2
+    $$ = &SetExpr{Var: NewSetVariable(string($1), LocalScope), Expr: $2}
   }
 
 set_variable:
   ID
   {
-    $$ = NewVariable(string($1), NoAt)
+    $$ = NewSetVariable(string($1), LocalScope)
   }
-| variable
+| variable_expr
   {
     $$ = $1
+  }
+| set_session_or_global ID
+  {
+    $$ = NewSetVariable(string($2), $1)
   }
 
 charset_or_character_set:

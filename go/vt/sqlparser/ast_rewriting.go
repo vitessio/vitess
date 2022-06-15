@@ -218,11 +218,7 @@ func PrepareAST(
 func RewriteAST(in Statement, keyspace string, selectLimit int, setVarComment string, sysVars map[string]string) (*RewriteASTResult, error) {
 	er := newASTRewriter(keyspace, selectLimit, setVarComment, sysVars)
 	er.shouldRewriteDatabaseFunc = shouldRewriteDatabaseFunc(in)
-	setRewriter := &setNormalizer{}
-	result := Rewrite(in, er.rewrite, setRewriter.rewriteSetComingUp)
-	if setRewriter.err != nil {
-		return nil, setRewriter.err
-	}
+	result := Rewrite(in, er.rewrite, nil)
 
 	out, ok := result.(Statement)
 	if !ok {
@@ -355,10 +351,10 @@ func (er *astRewriter) rewrite(cursor *Cursor) bool {
 	case *FuncExpr:
 		er.funcRewrite(cursor, node)
 	case *Variable:
-		switch node.AtCount {
-		case SingleAt:
+		switch node.Scope {
+		case VariableScope:
 			er.udvRewrite(cursor, node)
-		case DoubleAt:
+		case GlobalScope, SessionScope, ImplicitScope:
 			er.sysVarRewrite(cursor, node)
 		}
 	case *Subquery:

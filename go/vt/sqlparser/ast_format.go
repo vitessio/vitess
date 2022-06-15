@@ -17,8 +17,6 @@ limitations under the License.
 package sqlparser
 
 import (
-	"strings"
-
 	"vitess.io/vitess/go/sqltypes"
 )
 
@@ -1835,17 +1833,10 @@ func (node SetExprs) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *SetExpr) Format(buf *TrackedBuffer) {
-	if node.Var.Scope != ImplicitScope {
-		buf.literal(node.Var.Scope.ToString())
-		buf.WriteByte(' ')
-	}
 	// We don't have to backtick set variable names.
 	switch {
 	case node.Var.VarName.EqualString("charset") || node.Var.VarName.EqualString("names"):
 		buf.astPrintf(node, "%s %v", node.Var.VarName.String(), node.Expr)
-	case node.Var.VarName.EqualString(TransactionStr):
-		literal := node.Expr.(*Literal)
-		buf.astPrintf(node, "%s %s", node.Var.VarName.String(), strings.ToLower(literal.Val))
 	default:
 		buf.astPrintf(node, "%v = %v", node.Var, node.Expr)
 	}
@@ -2692,8 +2683,13 @@ func (node *LockingFunc) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *Variable) Format(buf *TrackedBuffer) {
-	for i := NoAt; i < node.AtCount; i++ {
-		buf.WriteByte('@')
+	switch node.Scope {
+	case ImplicitScope:
+		buf.literal("@@")
+	case VariableScope:
+		buf.literal("@")
+	case GlobalScope, SessionScope, PersistSysScope, PersistOnlySysScope:
+		buf.astPrintf(node, "@@%s.", node.Scope.ToString())
 	}
-	formatID(buf, node.VarName.String(), node.AtCount)
+	buf.astPrintf(node, "%v", node.VarName)
 }

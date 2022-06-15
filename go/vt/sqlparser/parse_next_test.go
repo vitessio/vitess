@@ -18,11 +18,12 @@ package sqlparser
 
 import (
 	"bytes"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"io"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // TestParseNextValid concatenates all the valid SQL test cases and check it can read
@@ -93,18 +94,18 @@ func TestParseNextErrors(t *testing.T) {
 			tokens := NewStringTokenizer(sql)
 
 			// The first statement should be an error
-			_, err := ParseNext(tokens)
+			_, err := ParseNextStrictDDL(tokens)
 			require.EqualError(t, err, tcase.output)
 
 			// The second should be valid
-			tree, err := ParseNext(tokens)
+			tree, err := ParseNextStrictDDL(tokens)
 			require.NoError(t, err)
 
 			want := "select 1 from t"
 			assert.Equal(t, want, String(tree))
 
 			// Read once more and it should be EOF.
-			_, err = ParseNext(tokens)
+			_, err = ParseNextStrictDDL(tokens)
 			require.Same(t, io.EOF, err)
 		})
 	}
