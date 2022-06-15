@@ -25,6 +25,9 @@ import (
 
 // ReplicationStatus holds replication information from SHOW SLAVE STATUS.
 type ReplicationStatus struct {
+	// Position is the current position of the replica. For GTID replication implementations
+	// it is the executed GTID set. For file replication implementation, it is same as
+	// FilePosition
 	Position Position
 	// RelayLogPosition is the Position that the replica would be at if it
 	// were to finish executing everything that's currently in its relay log.
@@ -32,9 +35,15 @@ type ReplicationStatus struct {
 	// in which case RelayLogPosition.IsZero() will be true.
 	// If ReplicationLagUnknown is true then we should not rely on the seconds
 	// behind value and we can instead try to calculate the lag ourselves when
-	// appropriate.
-	RelayLogPosition      Position
-	FilePosition          Position
+	// appropriate. For MySQL GTID replication implementation it is the union of
+	// executed GTID set and retrieved GTID set. For file replication implementation,
+	// it is same as FileRelayLogPosition
+	RelayLogPosition Position
+	// FilePosition stores the position of the source tablets binary log
+	// upto which the SQL thread of the replica has run.
+	FilePosition Position
+	// FileRelayLogPosition stores the position of the source tablets binary log
+	// upto which the IO thread has read and added to the relay log
 	FileRelayLogPosition  Position
 	SourceServerID        uint
 	IOState               ReplicationState
