@@ -18,6 +18,7 @@ package newfeaturetest
 
 import (
 	"context"
+	"strconv"
 	"testing"
 	"time"
 
@@ -132,53 +133,75 @@ func TestFullStatus(t *testing.T) {
 	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
 
 	// Check that full status gives the correct result for a primary tablet
-	status, err := utils.TmcFullStatus(context.Background(), tablets[0])
+	primaryStatus, err := utils.TmcFullStatus(context.Background(), tablets[0])
 	require.NoError(t, err)
-	assert.NotEmpty(t, status.ServerUuid)
-	assert.NotEmpty(t, status.ServerId)
+	assert.NotEmpty(t, primaryStatus.ServerUuid)
+	assert.NotEmpty(t, primaryStatus.ServerId)
 	// For a primary tablet there is no replication status
-	assert.Empty(t, status.ReplicationStatus.Position)
-	assert.Contains(t, status.PrimaryStatus.String(), "vt-0000000101-bin")
-	assert.Equal(t, status.GtidPurged, "MySQL56/")
-	assert.False(t, status.ReadOnly)
-	assert.True(t, status.SemiSyncPrimaryEnabled)
-	assert.True(t, status.SemiSyncReplicaEnabled)
-	assert.True(t, status.SemiSyncPrimaryStatus)
-	assert.False(t, status.SemiSyncReplicaStatus)
-	assert.EqualValues(t, 3, status.SemiSyncPrimaryClients)
-	assert.EqualValues(t, 1000000000000000000, status.SemiSyncPrimaryTimeout)
-	assert.EqualValues(t, 1, status.SemiSyncWaitForReplicaCount)
-	assert.Equal(t, "ROW", status.BinlogFormat)
-	assert.Equal(t, "FULL", status.BinlogRowImage)
-	assert.Equal(t, "ON", status.GtidMode)
-	assert.True(t, status.LogReplicaUpdates)
-	assert.True(t, status.LogBinEnabled)
-	assert.Contains(t, status.Version, "5.7")
-	assert.NotEmpty(t, status.VersionComment)
+	assert.Empty(t, primaryStatus.ReplicationStatus.Position)
+	assert.Contains(t, primaryStatus.PrimaryStatus.String(), "vt-0000000101-bin")
+	assert.Equal(t, primaryStatus.GtidPurged, "MySQL56/")
+	assert.False(t, primaryStatus.ReadOnly)
+	assert.True(t, primaryStatus.SemiSyncPrimaryEnabled)
+	assert.True(t, primaryStatus.SemiSyncReplicaEnabled)
+	assert.True(t, primaryStatus.SemiSyncPrimaryStatus)
+	assert.False(t, primaryStatus.SemiSyncReplicaStatus)
+	assert.EqualValues(t, 3, primaryStatus.SemiSyncPrimaryClients)
+	assert.EqualValues(t, 1000000000000000000, primaryStatus.SemiSyncPrimaryTimeout)
+	assert.EqualValues(t, 1, primaryStatus.SemiSyncWaitForReplicaCount)
+	assert.Equal(t, "ROW", primaryStatus.BinlogFormat)
+	assert.Equal(t, "FULL", primaryStatus.BinlogRowImage)
+	assert.Equal(t, "ON", primaryStatus.GtidMode)
+	assert.True(t, primaryStatus.LogReplicaUpdates)
+	assert.True(t, primaryStatus.LogBinEnabled)
+	assert.Contains(t, primaryStatus.Version, "5.7")
+	assert.NotEmpty(t, primaryStatus.VersionComment)
 
 	// Check that full status gives the correct result for a replica tablet
-	status, err = utils.TmcFullStatus(context.Background(), tablets[1])
+	replicaStatus, err := utils.TmcFullStatus(context.Background(), tablets[1])
 	require.NoError(t, err)
-	assert.NotEmpty(t, status.ServerUuid)
-	assert.NotEmpty(t, status.ServerId)
-	assert.Contains(t, status.ReplicationStatus.Position, "MySQL56/"+status.ReplicationStatus.SourceUuid)
-	assert.EqualValues(t, mysql.ReplicationStateRunning, status.ReplicationStatus.IoState)
-	assert.EqualValues(t, mysql.ReplicationStateRunning, status.ReplicationStatus.SqlState)
-	assert.Contains(t, status.PrimaryStatus.String(), "vt-0000000102-bin")
-	assert.Equal(t, status.GtidPurged, "MySQL56/")
-	assert.True(t, status.ReadOnly)
-	assert.False(t, status.SemiSyncPrimaryEnabled)
-	assert.True(t, status.SemiSyncReplicaEnabled)
-	assert.False(t, status.SemiSyncPrimaryStatus)
-	assert.True(t, status.SemiSyncReplicaStatus)
-	assert.EqualValues(t, 0, status.SemiSyncPrimaryClients)
-	assert.EqualValues(t, 1000000000000000000, status.SemiSyncPrimaryTimeout)
-	assert.EqualValues(t, 1, status.SemiSyncWaitForReplicaCount)
-	assert.Equal(t, "ROW", status.BinlogFormat)
-	assert.Equal(t, "FULL", status.BinlogRowImage)
-	assert.Equal(t, "ON", status.GtidMode)
-	assert.True(t, status.LogReplicaUpdates)
-	assert.True(t, status.LogBinEnabled)
-	assert.Contains(t, status.Version, "5.7")
-	assert.NotEmpty(t, status.VersionComment)
+	assert.NotEmpty(t, replicaStatus.ServerUuid)
+	assert.NotEmpty(t, replicaStatus.ServerId)
+	assert.Contains(t, replicaStatus.ReplicationStatus.Position, "MySQL56/"+replicaStatus.ReplicationStatus.SourceUuid)
+	assert.EqualValues(t, mysql.ReplicationStateRunning, replicaStatus.ReplicationStatus.IoState)
+	assert.EqualValues(t, mysql.ReplicationStateRunning, replicaStatus.ReplicationStatus.SqlState)
+	assert.Equal(t, fileNameFromPosition(replicaStatus.ReplicationStatus.FilePosition), fileNameFromPosition(primaryStatus.PrimaryStatus.FilePosition))
+	assert.LessOrEqual(t, rowNumberFromPosition(replicaStatus.ReplicationStatus.FilePosition), rowNumberFromPosition(primaryStatus.PrimaryStatus.FilePosition))
+	assert.Equal(t, replicaStatus.ReplicationStatus.FileRelayLogPosition, primaryStatus.PrimaryStatus.FilePosition)
+	assert.Contains(t, replicaStatus.ReplicationStatus.RelayLogFilePosition, "vt-0000000102-relay")
+	assert.Equal(t, replicaStatus.ReplicationStatus.Position, primaryStatus.PrimaryStatus.Position)
+	assert.Equal(t, replicaStatus.ReplicationStatus.RelayLogPosition, primaryStatus.PrimaryStatus.Position)
+	assert.Empty(t, replicaStatus.ReplicationStatus.LastIoError)
+	assert.Empty(t, replicaStatus.ReplicationStatus.LastSqlError)
+	assert.Equal(t, replicaStatus.ReplicationStatus.SourceUuid, primaryStatus.ServerUuid)
+	assert.EqualValues(t, 0, replicaStatus.ReplicationStatus.ReplicationLagSeconds)
+	assert.Contains(t, replicaStatus.PrimaryStatus.String(), "vt-0000000102-bin")
+	assert.Equal(t, replicaStatus.GtidPurged, "MySQL56/")
+	assert.True(t, replicaStatus.ReadOnly)
+	assert.False(t, replicaStatus.SemiSyncPrimaryEnabled)
+	assert.True(t, replicaStatus.SemiSyncReplicaEnabled)
+	assert.False(t, replicaStatus.SemiSyncPrimaryStatus)
+	assert.True(t, replicaStatus.SemiSyncReplicaStatus)
+	assert.EqualValues(t, 0, replicaStatus.SemiSyncPrimaryClients)
+	assert.EqualValues(t, 1000000000000000000, replicaStatus.SemiSyncPrimaryTimeout)
+	assert.EqualValues(t, 1, replicaStatus.SemiSyncWaitForReplicaCount)
+	assert.Equal(t, "ROW", replicaStatus.BinlogFormat)
+	assert.Equal(t, "FULL", replicaStatus.BinlogRowImage)
+	assert.Equal(t, "ON", replicaStatus.GtidMode)
+	assert.True(t, replicaStatus.LogReplicaUpdates)
+	assert.True(t, replicaStatus.LogBinEnabled)
+	assert.Contains(t, replicaStatus.Version, "5.7")
+	assert.NotEmpty(t, replicaStatus.VersionComment)
+}
+
+// fileNameFromPosition gets the file name from the position
+func fileNameFromPosition(pos string) string {
+	return pos[0 : len(pos)-4]
+}
+
+// rowNumberFromPosition gets the row number from the position
+func rowNumberFromPosition(pos string) int {
+	rowNumStr := pos[len(pos)-4:]
+	rowNum, _ := strconv.Atoi(rowNumStr)
+	return rowNum
 }
