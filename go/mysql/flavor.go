@@ -445,6 +445,8 @@ func parseReplicationStatus(fields map[string]string) ReplicationStatus {
 		SourceHost:            fields["Master_Host"],
 		SourceUser:            fields["Master_User"],
 		SSLAllowed:            fields["Master_SSL_Allowed"] == "Yes",
+		AutoPosition:          fields["Auto_Position"] == "1",
+		UsingGTID:             fields["Using_Gtid"] != "No" && fields["Using_Gtid"] != "",
 		HasReplicationFilters: (fields["Replicate_Do_DB"] != "") || (fields["Replicate_Ignore_DB"] != "") || (fields["Replicate_Do_Table"] != "") || (fields["Replicate_Ignore_Table"] != "") || (fields["Replicate_Wild_Do_Table"] != "") || (fields["Replicate_Wild_Ignore_Table"] != ""),
 		// These fields are returned from the underlying DB and cannot be renamed
 		IOState:      ReplicationStatusToState(fields["Slave_IO_Running"]),

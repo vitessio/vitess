@@ -112,6 +112,8 @@ func ReplicationStatusToProto(s ReplicationStatus) *replicationdatapb.Status {
 		LastSqlError:          s.LastSQLError,
 		SslAllowed:            s.SSLAllowed,
 		HasReplicationFilters: s.HasReplicationFilters,
+		AutoPosition:          s.AutoPosition,
+		UsingGtid:             s.UsingGTID,
 	}
 
 	// We need to be able to send gRPC response messages from v14 and newer tablets to
@@ -179,6 +181,8 @@ func ProtoToReplicationStatus(s *replicationdatapb.Status) ReplicationStatus {
 		LastSQLError:          s.LastSqlError,
 		SSLAllowed:            s.SslAllowed,
 		HasReplicationFilters: s.HasReplicationFilters,
+		AutoPosition:          s.AutoPosition,
+		UsingGTID:             s.UsingGtid,
 	}
 
 	// We need to be able to process gRPC response messages from v13 and older tablets.
