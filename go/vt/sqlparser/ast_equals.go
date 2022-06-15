@@ -182,6 +182,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfCaseExpr(a, b)
+	case *CastExpr:
+		b, ok := inB.(*CastExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfCastExpr(a, b)
 	case *ChangeColumn:
 		b, ok := inB.(*ChangeColumn)
 		if !ok {
@@ -1634,6 +1640,19 @@ func EqualsRefOfCaseExpr(a, b *CaseExpr) bool {
 		EqualsExpr(a.Else, b.Else)
 }
 
+// EqualsRefOfCastExpr does deep equals between the two objects.
+func EqualsRefOfCastExpr(a, b *CastExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Array == b.Array &&
+		EqualsExpr(a.Expr, b.Expr) &&
+		EqualsRefOfConvertType(a.Type, b.Type)
+}
+
 // EqualsRefOfChangeColumn does deep equals between the two objects.
 func EqualsRefOfChangeColumn(a, b *ChangeColumn) bool {
 	if a == b {
@@ -1792,8 +1811,7 @@ func EqualsRefOfConvertExpr(a, b *ConvertExpr) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.Array == b.Array &&
-		EqualsExpr(a.Expr, b.Expr) &&
+	return EqualsExpr(a.Expr, b.Expr) &&
 		EqualsRefOfConvertType(a.Type, b.Type)
 }
 
@@ -4721,6 +4739,12 @@ func EqualsExpr(inA, inB Expr) bool {
 			return false
 		}
 		return EqualsRefOfCaseExpr(a, b)
+	case *CastExpr:
+		b, ok := inB.(*CastExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfCastExpr(a, b)
 	case *ColName:
 		b, ok := inB.(*ColName)
 		if !ok {
@@ -5195,6 +5219,12 @@ func EqualsJSONPathParam(inA, inB JSONPathParam) bool {
 			return false
 		}
 		return EqualsRefOfCaseExpr(a, b)
+	case *CastExpr:
+		b, ok := inB.(*CastExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfCastExpr(a, b)
 	case *ColName:
 		b, ok := inB.(*ColName)
 		if !ok {
