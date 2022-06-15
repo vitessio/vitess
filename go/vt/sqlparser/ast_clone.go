@@ -2387,8 +2387,7 @@ func CloneRefOfSetExpr(n *SetExpr) *SetExpr {
 		return nil
 	}
 	out := *n
-	out.Var = CloneVariable(n.Var)
-	out.Name = CloneColIdent(n.Name)
+	out.Var = CloneRefOfVariable(n.Var)
 	out.Expr = CloneExpr(n.Expr)
 	return &out
 }
@@ -4084,11 +4083,6 @@ func CloneSliceOfTableExpr(n []TableExpr) []TableExpr {
 		res = append(res, CloneTableExpr(x))
 	}
 	return res
-}
-
-// CloneVariable creates a deep clone of the input.
-func CloneVariable(n Variable) Variable {
-	return *CloneRefOfVariable(&n)
 }
 
 // CloneSliceOfCharacteristic creates a deep clone of the input.

@@ -1845,19 +1845,19 @@ func (node SetExprs) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *SetExpr) Format(buf *TrackedBuffer) {
-	if node.Scope != ImplicitScope {
-		buf.literal(node.Scope.ToString())
+	if node.Var.Scope != ImplicitScope {
+		buf.literal(node.Var.Scope.ToString())
 		buf.WriteByte(' ')
 	}
 	// We don't have to backtick set variable names.
 	switch {
-	case node.Name.EqualString("charset") || node.Name.EqualString("names"):
-		buf.astPrintf(node, "%s %v", node.Name.String(), node.Expr)
-	case node.Name.EqualString(TransactionStr):
+	case node.Var.VarName.EqualString("charset") || node.Var.VarName.EqualString("names"):
+		buf.astPrintf(node, "%s %v", node.Var.VarName.String(), node.Expr)
+	case node.Var.VarName.EqualString(TransactionStr):
 		literal := node.Expr.(*Literal)
-		buf.astPrintf(node, "%s %s", node.Name.String(), strings.ToLower(string(literal.Val)))
+		buf.astPrintf(node, "%s %s", node.Var.VarName.String(), strings.ToLower(literal.Val))
 	default:
-		buf.astPrintf(node, "%v = %v", node.Name, node.Expr)
+		buf.astPrintf(node, "%v = %v", node.Var, node.Expr)
 	}
 }
 

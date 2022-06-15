@@ -6058,8 +6058,8 @@ func (a *application) rewriteRefOfSetExpr(parent SQLNode, node *SetExpr, replace
 			return true
 		}
 	}
-	if !a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
-		parent.(*SetExpr).Name = newNode.(ColIdent)
+	if !a.rewriteRefOfVariable(node, node.Var, func(newNode, parent SQLNode) {
+		parent.(*SetExpr).Var = newNode.(*Variable)
 	}) {
 		return false
 	}

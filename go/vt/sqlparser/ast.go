@@ -3161,10 +3161,8 @@ type SetExprs []*SetExpr
 
 // SetExpr represents a set expression.
 type SetExpr struct {
-	Var   Variable
-	Scope Scope
-	Name  ColIdent
-	Expr  Expr
+	Var  *Variable
+	Expr Expr
 }
 
 // OnDup represents an ON DUPLICATE KEY clause.

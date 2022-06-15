@@ -512,7 +512,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <str> reserved_keyword non_reserved_keyword
 %type <colIdent> sql_id sql_id_opt reserved_sql_id col_alias as_ci_opt
 %type <expr> charset_value
-%type <tableIdent> table_id reserved_table_id table_alias as_opt_id table_id_opt from_database_opt
+%type <tableIdent> table_id reserved_table_id table_alias as_opt_id table_id_opt from_database_opt use_table_name
 %type <empty> as_opt work_opt savepoint_opt
 %type <empty> skip_to_end ddl_skip_to_end
 %type <str> charset
@@ -571,7 +571,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <str> underscore_charsets
 %type <str> expire_opt
 %type <literal> ratio_opt
-%type <variable> variable
+%type <variable> variable set_variable
 %start any_command
 
 %%
@@ -4121,7 +4121,7 @@ from_or_on:
   }
 
 use_statement:
-  USE table_id
+  USE use_table_name
   {
     $$ = &Use{DBName: $2}
   }
@@ -4129,10 +4129,30 @@ use_statement:
   {
     $$ = &Use{DBName:TableIdent{v:""}}
   }
-| USE table_id AT_ID
+| USE use_table_name AT_ID
   {
     $$ = &Use{DBName:NewTableIdent($2.String()+"@"+string($3))}
   }
+
+// We use this because what is legal in `USE <tbl>` is not the same as in `SELECT ... FROM <tbl>`
+use_table_name:
+  ID
+  {
+    $$ = NewTableIdent(string($1))
+  }
+| AT_ID
+  {
+    $$ = NewTableIdent("@"+string($1))
+  }
+| AT_AT_ID
+  {
+    $$ = NewTableIdent("@@"+string($1))
+  }
+| non_reserved_keyword
+  {
+    $$ = NewTableIdent(string($1))
+  }
+
 
 begin_statement:
   BEGIN
@@ -6954,26 +6974,40 @@ set_list:
   }
 
 set_expression:
-  reserved_sql_id '=' ON
+  set_variable '=' ON
   {
-    $$ = &SetExpr{Name: $1, Scope: ImplicitScope, Expr: NewStrLiteral("on")}
+    $1.Scope = ImplicitScope
+    $$ = &SetExpr{Var: $1, Expr: NewStrLiteral("on")}
   }
-| reserved_sql_id '=' OFF
+| set_variable '=' OFF
   {
-    $$ = &SetExpr{Name: $1, Scope: ImplicitScope, Expr: NewStrLiteral("off")}
+    $1.Scope = ImplicitScope
+    $$ = &SetExpr{Var: $1, Expr: NewStrLiteral("off")}
   }
-| reserved_sql_id '=' expression
+| set_variable '=' expression
   {
-    $$ = &SetExpr{Name: $1, Scope: ImplicitScope, Expr: $3}
+    $1.Scope = ImplicitScope
+    $$ = &SetExpr{Var: $1, Expr: $3}
   }
 | charset_or_character_set_or_names charset_value collate_opt
   {
-    $$ = &SetExpr{Name: NewColIdent(string($1)), Scope: ImplicitScope, Expr: $2}
+    variable := &Variable{VarName: NewColIdent(string($1)), Scope: ImplicitScope}
+    $$ = &SetExpr{Var: variable, Expr: $2}
   }
 |  set_session_or_global set_expression
   {
-    $2.Scope = $1
+    $2.Var.Scope = $1
     $$ = $2
+  }
+
+set_variable:
+  ID
+  {
+    $$ = NewVariable(string($1), NoAt)
+  }
+| variable
+  {
+    $$ = $1
   }
 
 charset_or_character_set:

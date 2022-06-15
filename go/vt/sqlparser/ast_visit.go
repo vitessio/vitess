@@ -3044,7 +3044,7 @@ func VisitRefOfSetExpr(in *SetExpr, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitColIdent(in.Name, f); err != nil {
+	if err := VisitRefOfVariable(in.Var, f); err != nil {
 		return err
 	}
 	if err := VisitExpr(in.Expr, f); err != nil {

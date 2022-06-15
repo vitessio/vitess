@@ -2432,23 +2432,23 @@ func (node SetExprs) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the node.
 func (node *SetExpr) formatFast(buf *TrackedBuffer) {
-	if node.Scope != ImplicitScope {
-		buf.WriteString(node.Scope.ToString())
+	if node.Var.Scope != ImplicitScope {
+		buf.WriteString(node.Var.Scope.ToString())
 		buf.WriteByte(' ')
 	}
 	// We don't have to backtick set variable names.
 	switch {
-	case node.Name.EqualString("charset") || node.Name.EqualString("names"):
-		buf.WriteString(node.Name.String())
+	case node.Var.VarName.EqualString("charset") || node.Var.VarName.EqualString("names"):
+		buf.WriteString(node.Var.VarName.String())
 		buf.WriteByte(' ')
 		node.Expr.formatFast(buf)
-	case node.Name.EqualString(TransactionStr):
+	case node.Var.VarName.EqualString(TransactionStr):
 		literal := node.Expr.(*Literal)
-		buf.WriteString(node.Name.String())
+		buf.WriteString(node.Var.VarName.String())
 		buf.WriteByte(' ')
-		buf.WriteString(strings.ToLower(string(literal.Val)))
+		buf.WriteString(strings.ToLower(literal.Val))
 	default:
-		node.Name.formatFast(buf)
+		node.Var.formatFast(buf)
 		buf.WriteString(" = ")
 		node.Expr.formatFast(buf)
 	}

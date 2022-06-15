@@ -45,35 +45,35 @@ func (n *setNormalizer) rewriteSetComingUp(cursor *Cursor) bool {
 func (n *setNormalizer) normalizeSetExpr(in *SetExpr) (*SetExpr, error) {
 	switch in.Var.AtCount { // using switch so we can use break
 	case DoubleAt:
-		if in.Scope != ImplicitScope {
+		if in.Var.Scope != ImplicitScope {
 			return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "cannot use scope and @@")
 		}
 		switch {
-		case strings.HasPrefix(in.Name.Lowered(), "session."):
-			in.Name = createColumn(in.Name.Lowered()[8:])
-			in.Scope = SessionScope
-		case strings.HasPrefix(in.Name.Lowered(), "global."):
-			in.Name = createColumn(in.Name.Lowered()[7:])
-			in.Scope = GlobalScope
-		case strings.HasPrefix(in.Name.Lowered(), "vitess_metadata."):
-			in.Name = createColumn(in.Name.Lowered()[16:])
-			in.Scope = VitessMetadataScope
+		case strings.HasPrefix(in.Var.VarName.Lowered(), "session."):
+			in.Var.VarName = createColumn(in.Var.VarName.Lowered()[8:])
+			in.Var.Scope = SessionScope
+		case strings.HasPrefix(in.Var.VarName.Lowered(), "global."):
+			in.Var.VarName = createColumn(in.Var.VarName.Lowered()[7:])
+			in.Var.Scope = GlobalScope
+		case strings.HasPrefix(in.Var.VarName.Lowered(), "vitess_metadata."):
+			in.Var.VarName = createColumn(in.Var.VarName.Lowered()[16:])
+			in.Var.Scope = VitessMetadataScope
 		default:
 			in.Var.AtCount = NoAt
-			in.Scope = SessionScope
+			in.Var.Scope = SessionScope
 		}
 		return in, nil
 	case SingleAt:
-		if in.Scope != ImplicitScope {
+		if in.Var.Scope != ImplicitScope {
 			return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "cannot mix scope and user defined variables")
 		}
 		return in, nil
 	case NoAt:
-		switch in.Scope {
+		switch in.Var.Scope {
 		case ImplicitScope:
-			in.Scope = SessionScope
+			in.Var.Scope = SessionScope
 		case LocalScope:
-			in.Scope = SessionScope
+			in.Var.Scope = SessionScope
 		}
 		return in, nil
 	}

@@ -3156,20 +3156,7 @@ func (cached *Set) CachedSize(alloc bool) int64 {
 	return size
 }
 func (cached *SetExpr) CachedSize(alloc bool) int64 {
-	if cached == nil {
-		return int64(0)
-	}
-	size := int64(0)
-	if alloc {
-		size += int64(64)
-	}
-	// field Name vitess.io/vitess/go/vt/sqlparser.ColIdent
-	size += cached.Name.CachedSize(false)
-	// field Expr vitess.io/vitess/go/vt/sqlparser.Expr
-	if cc, ok := cached.Expr.(cachedObject); ok {
-		size += cc.CachedSize(true)
-	}
-	return size
+	return 1
 }
 func (cached *SetTransaction) CachedSize(alloc bool) int64 {
 	if cached == nil {

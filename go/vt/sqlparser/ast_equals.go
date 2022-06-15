@@ -3675,9 +3675,7 @@ func EqualsRefOfSetExpr(a, b *SetExpr) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return EqualsVariable(a.Var, b.Var) &&
-		a.Scope == b.Scope &&
-		EqualsColIdent(a.Name, b.Name) &&
+	return EqualsRefOfVariable(a.Var, b.Var) &&
 		EqualsExpr(a.Expr, b.Expr)
 }
 
@@ -6602,13 +6600,6 @@ func EqualsSliceOfTableExpr(a, b []TableExpr) bool {
 		}
 	}
 	return true
-}
-
-// EqualsVariable does deep equals between the two objects.
-func EqualsVariable(a, b Variable) bool {
-	return a.Scope == b.Scope &&
-		EqualsColIdent(a.VarName, b.VarName) &&
-		a.AtCount == b.AtCount
 }
 
 // EqualsSliceOfCharacteristic does deep equals between the two objects.
