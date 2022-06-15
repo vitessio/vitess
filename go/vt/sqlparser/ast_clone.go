@@ -481,6 +481,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfVarPop(in)
 	case *VarSamp:
 		return CloneRefOfVarSamp(in)
+	case *Variable:
+		return CloneRefOfVariable(in)
 	case *Variance:
 		return CloneRefOfVariance(in)
 	case VindexParam:
@@ -2385,6 +2387,7 @@ func CloneRefOfSetExpr(n *SetExpr) *SetExpr {
 		return nil
 	}
 	out := *n
+	out.Var = CloneVariable(n.Var)
 	out.Name = CloneColIdent(n.Name)
 	out.Expr = CloneExpr(n.Expr)
 	return &out
@@ -2918,6 +2921,16 @@ func CloneRefOfVarSamp(n *VarSamp) *VarSamp {
 	}
 	out := *n
 	out.Arg = CloneExpr(n.Arg)
+	return &out
+}
+
+// CloneRefOfVariable creates a deep clone of the input.
+func CloneRefOfVariable(n *Variable) *Variable {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.VarName = CloneColIdent(n.VarName)
 	return &out
 }
 
@@ -3537,6 +3550,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfVarPop(in)
 	case *VarSamp:
 		return CloneRefOfVarSamp(in)
+	case *Variable:
+		return CloneRefOfVariable(in)
 	case *Variance:
 		return CloneRefOfVariance(in)
 	case *WeightStringFuncExpr:
@@ -4069,6 +4084,11 @@ func CloneSliceOfTableExpr(n []TableExpr) []TableExpr {
 		res = append(res, CloneTableExpr(x))
 	}
 	return res
+}
+
+// CloneVariable creates a deep clone of the input.
+func CloneVariable(n Variable) Variable {
+	return *CloneRefOfVariable(&n)
 }
 
 // CloneSliceOfCharacteristic creates a deep clone of the input.

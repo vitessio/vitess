@@ -667,7 +667,13 @@ func NewSelect(comments Comments, exprs SelectExprs, selectOptions []string, int
 func NewColIdentWithAt(str string, at AtCount) ColIdent {
 	return ColIdent{
 		val: str,
-		at:  at,
+	}
+}
+
+func NewVariable(str string, at AtCount) *Variable {
+	return &Variable{
+		VarName: NewColIdent(str),
+		AtCount: at,
 	}
 }
 
@@ -685,11 +691,7 @@ func (node ColIdent) IsEmpty() bool {
 // instead. The Stringer conformance is for usage
 // in templates.
 func (node ColIdent) String() string {
-	atStr := ""
-	for i := NoAt; i < node.at; i++ {
-		atStr += "@"
-	}
-	return atStr + node.val
+	return node.val
 }
 
 // CompliantName returns a compliant id name
@@ -1810,7 +1812,7 @@ const (
 	NoAt AtCount = iota
 	// SingleAt represents @
 	SingleAt
-	// DoubleAt represnts @@
+	// DoubleAt represents @@
 	DoubleAt
 )
 

@@ -480,6 +480,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfVarPop(parent, node, replacer)
 	case *VarSamp:
 		return a.rewriteRefOfVarSamp(parent, node, replacer)
+	case *Variable:
+		return a.rewriteRefOfVariable(parent, node, replacer)
 	case *Variance:
 		return a.rewriteRefOfVariance(parent, node, replacer)
 	case VindexParam:
@@ -7654,6 +7656,33 @@ func (a *application) rewriteRefOfVarSamp(parent SQLNode, node *VarSamp, replace
 	}
 	return true
 }
+func (a *application) rewriteRefOfVariable(parent SQLNode, node *Variable, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteColIdent(node, node.VarName, func(newNode, parent SQLNode) {
+		parent.(*Variable).VarName = newNode.(ColIdent)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
 func (a *application) rewriteRefOfVariance(parent SQLNode, node *Variance, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -8492,6 +8521,8 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfVarPop(parent, node, replacer)
 	case *VarSamp:
 		return a.rewriteRefOfVarSamp(parent, node, replacer)
+	case *Variable:
+		return a.rewriteRefOfVariable(parent, node, replacer)
 	case *Variance:
 		return a.rewriteRefOfVariance(parent, node, replacer)
 	case *WeightStringFuncExpr:

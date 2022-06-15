@@ -480,6 +480,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfVarPop(in, f)
 	case *VarSamp:
 		return VisitRefOfVarSamp(in, f)
+	case *Variable:
+		return VisitRefOfVariable(in, f)
 	case *Variance:
 		return VisitRefOfVariance(in, f)
 	case VindexParam:
@@ -3742,6 +3744,18 @@ func VisitRefOfVarSamp(in *VarSamp, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfVariable(in *Variable, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitColIdent(in.VarName, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfVariance(in *Variance, f Visit) error {
 	if in == nil {
 		return nil
@@ -4385,6 +4399,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfVarPop(in, f)
 	case *VarSamp:
 		return VisitRefOfVarSamp(in, f)
+	case *Variable:
+		return VisitRefOfVariable(in, f)
 	case *Variance:
 		return VisitRefOfVariance(in, f)
 	case *WeightStringFuncExpr:

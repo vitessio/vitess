@@ -354,8 +354,8 @@ func (er *astRewriter) rewrite(cursor *Cursor) bool {
 		}
 	case *FuncExpr:
 		er.funcRewrite(cursor, node)
-	case *ColName:
-		switch node.Name.at {
+	case *Variable:
+		switch node.AtCount {
 		case SingleAt:
 			er.udvRewrite(cursor, node)
 		case DoubleAt:
@@ -443,8 +443,8 @@ func inverseOp(i ComparisonExprOperator) (bool, ComparisonExprOperator) {
 	return false, i
 }
 
-func (er *astRewriter) sysVarRewrite(cursor *Cursor, node *ColName) {
-	lowered := node.Name.Lowered()
+func (er *astRewriter) sysVarRewrite(cursor *Cursor, node *Variable) {
+	lowered := node.VarName.Lowered()
 
 	var found bool
 	if er.sysVars != nil {
@@ -478,8 +478,8 @@ func (er *astRewriter) sysVarRewrite(cursor *Cursor, node *ColName) {
 	}
 }
 
-func (er *astRewriter) udvRewrite(cursor *Cursor, node *ColName) {
-	udv := strings.ToLower(node.Name.CompliantName())
+func (er *astRewriter) udvRewrite(cursor *Cursor, node *Variable) {
+	udv := strings.ToLower(node.VarName.CompliantName())
 	cursor.Replace(bindVarExpression(UserDefinedVariableName + udv))
 	er.bindVars.AddUserDefVar(udv)
 }

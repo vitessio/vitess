@@ -43,7 +43,7 @@ func (n *setNormalizer) rewriteSetComingUp(cursor *Cursor) bool {
 }
 
 func (n *setNormalizer) normalizeSetExpr(in *SetExpr) (*SetExpr, error) {
-	switch in.Name.at { // using switch so we can use break
+	switch in.Var.AtCount { // using switch so we can use break
 	case DoubleAt:
 		if in.Scope != ImplicitScope {
 			return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "cannot use scope and @@")
@@ -59,7 +59,7 @@ func (n *setNormalizer) normalizeSetExpr(in *SetExpr) (*SetExpr, error) {
 			in.Name = createColumn(in.Name.Lowered()[16:])
 			in.Scope = VitessMetadataScope
 		default:
-			in.Name.at = NoAt
+			in.Var.AtCount = NoAt
 			in.Scope = SessionScope
 		}
 		return in, nil

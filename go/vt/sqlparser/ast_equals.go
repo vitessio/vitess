@@ -1400,6 +1400,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfVarSamp(a, b)
+	case *Variable:
+		b, ok := inB.(*Variable)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfVariable(a, b)
 	case *Variance:
 		b, ok := inB.(*Variance)
 		if !ok {
@@ -1851,8 +1857,7 @@ func EqualsRefOfCheckConstraintDefinition(a, b *CheckConstraintDefinition) bool 
 // EqualsColIdent does deep equals between the two objects.
 func EqualsColIdent(a, b ColIdent) bool {
 	return a.val == b.val &&
-		a.lowered == b.lowered &&
-		a.at == b.at
+		a.lowered == b.lowered
 }
 
 // EqualsRefOfColName does deep equals between the two objects.
@@ -3670,7 +3675,8 @@ func EqualsRefOfSetExpr(a, b *SetExpr) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.Scope == b.Scope &&
+	return EqualsVariable(a.Var, b.Var) &&
+		a.Scope == b.Scope &&
 		EqualsColIdent(a.Name, b.Name) &&
 		EqualsExpr(a.Expr, b.Expr)
 }
@@ -4284,6 +4290,19 @@ func EqualsRefOfVarSamp(a, b *VarSamp) bool {
 	}
 	return a.Name == b.Name &&
 		EqualsExpr(a.Arg, b.Arg)
+}
+
+// EqualsRefOfVariable does deep equals between the two objects.
+func EqualsRefOfVariable(a, b *Variable) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Scope == b.Scope &&
+		EqualsColIdent(a.VarName, b.VarName) &&
+		a.AtCount == b.AtCount
 }
 
 // EqualsRefOfVariance does deep equals between the two objects.
@@ -5718,6 +5737,12 @@ func EqualsExpr(inA, inB Expr) bool {
 			return false
 		}
 		return EqualsRefOfVarSamp(a, b)
+	case *Variable:
+		b, ok := inB.(*Variable)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfVariable(a, b)
 	case *Variance:
 		b, ok := inB.(*Variance)
 		if !ok {
@@ -6304,8 +6329,7 @@ func EqualsRefOfColIdent(a, b *ColIdent) bool {
 		return false
 	}
 	return a.val == b.val &&
-		a.lowered == b.lowered &&
-		a.at == b.at
+		a.lowered == b.lowered
 }
 
 // EqualsColumnType does deep equals between the two objects.
@@ -6578,6 +6602,13 @@ func EqualsSliceOfTableExpr(a, b []TableExpr) bool {
 		}
 	}
 	return true
+}
+
+// EqualsVariable does deep equals between the two objects.
+func EqualsVariable(a, b Variable) bool {
+	return a.Scope == b.Scope &&
+		EqualsColIdent(a.VarName, b.VarName) &&
+		a.AtCount == b.AtCount
 }
 
 // EqualsSliceOfCharacteristic does deep equals between the two objects.

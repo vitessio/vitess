@@ -1874,10 +1874,7 @@ func (node ColIdent) Format(buf *TrackedBuffer) {
 	if node.IsEmpty() {
 		return
 	}
-	for i := NoAt; i < node.at; i++ {
-		buf.WriteByte('@')
-	}
-	formatID(buf, node.val, node.at)
+	formatID(buf, node.val, NoAt)
 }
 
 // Format formats the node.
@@ -2701,4 +2698,12 @@ func (node *LockingFunc) Format(buf *TrackedBuffer) {
 		buf.astPrintf(node, ", %v", node.Timeout)
 	}
 	buf.WriteString(")")
+}
+
+// Format formats the node.
+func (node *Variable) Format(buf *TrackedBuffer) {
+	for i := NoAt; i < node.AtCount; i++ {
+		buf.WriteByte('@')
+	}
+	formatID(buf, node.VarName.String(), node.AtCount)
 }

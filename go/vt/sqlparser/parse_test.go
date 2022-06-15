@@ -5164,8 +5164,8 @@ func TestOne(t *testing.T) {
 	testOne := struct {
 		input, output string
 	}{
-		input:  "",
-		output: "",
+		input:  "select col, @a, col, @@b",
+		output: "select col, @a, col, @@b from dual",
 	}
 	if testOne.input == "" {
 		return

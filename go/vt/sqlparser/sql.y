@@ -209,6 +209,7 @@ func bindVariable(yylex yyLexer, bvar string) {
   jtOnResponse	*JtOnResponse
   userVariable  *UserVariable
   userVariables  []*UserVariable
+  variable *Variable
 }
 
 // These precedence rules are there to handle shift-reduce conflicts.
@@ -570,6 +571,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <str> underscore_charsets
 %type <str> expire_opt
 %type <literal> ratio_opt
+%type <variable> variable
 %start any_command
 
 %%
@@ -659,6 +661,16 @@ id_or_var:
 | AT_AT_ID
   {
     $$ = NewColIdentWithAt(string($1), DoubleAt)
+  }
+
+variable:
+  AT_ID
+  {
+    $$ = NewVariable(string($1), SingleAt)
+  }
+| AT_AT_ID
+  {
+    $$ = NewVariable(string($1), DoubleAt)
   }
 
 do_statement:
@@ -5147,6 +5159,10 @@ function_call_keyword
   {
   	$$ = $1
   }
+| variable
+  {
+  	$$ = $1
+  }
 | '+' simple_expr %prec UNARY
   {
 	$$= $2; // TODO: do we really want to ignore unary '+' before any kind of literals?
@@ -6355,9 +6371,13 @@ else_expression_opt:
   }
 
 column_name:
-  sql_id
+  ci_identifier
   {
     $$ = &ColName{Name: $1}
+  }
+| non_reserved_keyword
+  {
+    $$ = &ColName{Name: NewColIdent(string($1))}
   }
 | table_id '.' reserved_sql_id
   {
@@ -7056,9 +7076,9 @@ reserved_sql_id:
   }
 
 table_id:
-  id_or_var
+  ID
   {
-    $$ = NewTableIdent(string($1.String()))
+    $$ = NewTableIdent(string($1))
   }
 | non_reserved_keyword
   {

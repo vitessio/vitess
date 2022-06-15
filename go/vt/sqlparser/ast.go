@@ -2255,6 +2255,12 @@ type (
 		Qualifier TableName
 	}
 
+	Variable struct {
+		Scope   Scope
+		VarName ColIdent
+		AtCount AtCount
+	}
+
 	// SysVariable represents a system variable
 	SysVariable struct {
 		Scope   Scope
@@ -3052,6 +3058,7 @@ func (*ExtractValueExpr) iExpr()                   {}
 func (*UpdateXMLExpr) iExpr()                      {}
 func (*LockingFunc) iExpr()                        {}
 func (*PerformanceSchemaFuncExpr) iExpr()          {}
+func (*Variable) iExpr()                           {}
 
 // iCallable marks all expressions that represent function calls
 func (*FuncExpr) iCallable()                           {}
@@ -3154,6 +3161,7 @@ type SetExprs []*SetExpr
 
 // SetExpr represents a set expression.
 type SetExpr struct {
+	Var   Variable
 	Scope Scope
 	Name  ColIdent
 	Expr  Expr
@@ -3170,18 +3178,12 @@ type ColIdent struct {
 	// last field in the struct.
 	_            [0]struct{ _ []byte }
 	val, lowered string
-	at           AtCount
 }
 
 // TableIdent is a case sensitive SQL identifier. It will be escaped with
 // backquotes if necessary.
 type TableIdent struct {
 	v string
-}
-
-// AtCount return the '@' count present in ColIdent Name
-func (node ColIdent) AtCount() AtCount {
-	return node.at
 }
 
 func (IsolationLevel) iChar() {}
