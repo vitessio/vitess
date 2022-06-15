@@ -444,6 +444,7 @@ func parseReplicationStatus(fields map[string]string) ReplicationStatus {
 	status := ReplicationStatus{
 		SourceHost: fields["Master_Host"],
 		SourceUser: fields["Master_User"],
+		SSLAllowed: fields["Master_SSL_Allowed"] == "Yes",
 		// These fields are returned from the underlying DB and cannot be renamed
 		IOState:      ReplicationStatusToState(fields["Slave_IO_Running"]),
 		LastIOError:  fields["Last_IO_Error"],
