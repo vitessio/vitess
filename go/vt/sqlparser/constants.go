@@ -451,15 +451,7 @@ const (
 	RevertDDLAction
 )
 
-// Constants for Enum Type - SysVariableScope
-const (
-	GlobalSysScope SysVariableScope = iota
-	SessionSysScope
-	PersistSysScope
-	PersistOnlySysScope
-)
-
-// Constants for Enum Type - Scope
+// Constants for scope of system variables
 const (
 	ImplicitScope Scope = iota
 	SessionScope
@@ -467,6 +459,8 @@ const (
 	VitessMetadataScope
 	VariableScope
 	LocalScope
+	PersistSysScope
+	PersistOnlySysScope
 )
 
 // Constants for Enum Type - Lock

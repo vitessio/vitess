@@ -2257,12 +2257,9 @@ type (
 
 	// SysVariable represents a system variable
 	SysVariable struct {
-		Scope   SysVariableScope
+		Scope   Scope
 		VarName ColIdent
 	}
-
-	// SysVariableScope stores the sys variable scope
-	SysVariableScope int8
 
 	// UserVariable represents a user variable
 	UserVariable struct {
