@@ -440,6 +440,58 @@ func translateConvertCharset(charset string, binary bool, lookup TranslationLook
 	return collationID, nil
 }
 
+func translateCastExpr(expr *sqlparser.CastExpr, lookup TranslationLookup) (Expr, error) {
+	var (
+		cast ConvertExpr
+		err  error
+	)
+
+	cast.Inner, err = translateExpr(expr.Expr, lookup)
+	if err != nil {
+		return nil, err
+	}
+
+	cast.Length, cast.HasLength, err = translateIntegral(expr.Type.Length, lookup)
+	if err != nil {
+		return nil, err
+	}
+
+	cast.Scale, cast.HasScale, err = translateIntegral(expr.Type.Scale, lookup)
+	if err != nil {
+		return nil, err
+	}
+
+	cast.Type = strings.ToUpper(expr.Type.Type)
+	switch cast.Type {
+	case "DECIMAL":
+		if cast.Length < cast.Scale {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+				"For float(M,D), double(M,D) or decimal(M,D), M must be >= D (column '%s').",
+				"", // TODO: column name
+			)
+		}
+		if cast.Length > decimal.MyMaxPrecision {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+				"Too-big precision %d specified for '%s'. Maximum is %d.",
+				cast.Length, sqlparser.String(expr.Expr), decimal.MyMaxPrecision)
+		}
+		if cast.Scale > decimal.MyMaxScale {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+				"Too big scale %d specified for column '%s'. Maximum is %d.",
+				cast.Scale, sqlparser.String(expr.Expr), decimal.MyMaxScale)
+		}
+	case "NCHAR":
+		cast.Collation = collations.CollationUtf8ID
+	case "CHAR":
+		cast.Collation, err = translateConvertCharset(expr.Type.Charset.Name, expr.Type.Charset.Binary, lookup)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return &cast, nil
+}
+
 func translateConvertExpr(expr *sqlparser.ConvertExpr, lookup TranslationLookup) (Expr, error) {
 	var (
 		convert ConvertExpr
@@ -610,6 +662,8 @@ func translateExpr(e sqlparser.Expr, lookup TranslationLookup) (Expr, error) {
 		return translateWeightStringFuncExpr(node, lookup)
 	case *sqlparser.UnaryExpr:
 		return translateUnaryExpr(node, lookup)
+	case *sqlparser.CastExpr:
+		return translateCastExpr(node, lookup)
 	case *sqlparser.ConvertExpr:
 		return translateConvertExpr(node, lookup)
 	case *sqlparser.ConvertUsingExpr:

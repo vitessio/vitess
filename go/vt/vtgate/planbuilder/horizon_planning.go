@@ -17,7 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -457,10 +456,7 @@ func addColumnsToOA(
 			o := groupings[count]
 			count++
 			a := aggregationExprs[offset]
-			collID := collations.Unknown
-			if aggr, ok := a.Func.(sqlparser.AggrFunc); ok {
-				collID = ctx.SemTable.CollationForExpr(aggr.GetArg())
-			}
+			collID := ctx.SemTable.CollationForExpr(a.Func.GetArg())
 			oa.aggregates = append(oa.aggregates, &engine.AggregateParams{
 				Opcode:      a.OpCode,
 				Col:         o.col,
@@ -731,10 +727,12 @@ func wrapAndPushExpr(ctx *plancontext.PlanningContext, expr sqlparser.Expr, weig
 		return offset, -1, nil
 	}
 	if !sqlparser.IsColName(expr) {
-		unary, ok := expr.(*sqlparser.ConvertExpr)
-		if ok && sqlparser.IsColName(unary.Expr) {
+		switch unary := expr.(type) {
+		case *sqlparser.CastExpr:
 			expr = unary.Expr
-		} else {
+		case *sqlparser.ConvertExpr:
+			expr = unary.Expr
+		default:
 			return 0, 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: complex order by expression: %s", sqlparser.String(expr))
 		}
 	}
