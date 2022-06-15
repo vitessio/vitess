@@ -42,7 +42,7 @@ jobs:
       - name: Set output with latest release branch
         id: output-previous-release-ref
         run: |
-          previous_release_ref=$(./tools/get_previous_release.sh ${{github.base_ref}} ${{$github.ref}})
+          previous_release_ref=$(./tools/get_previous_release.sh ${{github.base_ref}} ${{github.ref}})
           echo $previous_release_ref
           echo "::set-output name=previous_release_ref::${previous_release_ref}"
 
