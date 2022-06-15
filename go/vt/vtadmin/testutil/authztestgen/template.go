@@ -167,8 +167,7 @@ func testClusters(t testing.TB) []*cluster.Cluster {
 }
 `
 
-const _doct = `
-{{ range .Methods }}
-| {{ backtickEscape .Name }} | {{ range .Rules }}{{ end }} |
-{{ end }}
+const _doct = `{{ range .Methods -}}
+{{ formatDocRow . }}
+{{ end -}}
 `

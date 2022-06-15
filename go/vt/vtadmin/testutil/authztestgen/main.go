@@ -18,6 +18,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"text/template"
@@ -71,6 +72,52 @@ type FakeVtctldClientResult struct {
 	Value     string `json:"value"`
 }
 
+type DocConfig struct {
+	Methods []*DocMethod
+}
+
+type DocMethod struct {
+	Name  string
+	Rules []*struct {
+		Resource rbac.Resource
+		Action   rbac.Action
+	}
+}
+
+func transformConfigForDocs(in Config) DocConfig {
+	cfg := DocConfig{}
+
+	for _, t := range in.Tests {
+		m := &DocMethod{
+			Name: t.Method,
+		}
+
+		resourceActions := map[string]struct{}{}
+		for _, r := range t.Rules {
+			for _, a := range r.Actions {
+				k := fmt.Sprintf("%s.%s", r.Resource, a)
+				if _, ok := resourceActions[k]; ok {
+					continue
+				}
+
+				resourceActions[k] = struct{}{}
+
+				m.Rules = append(m.Rules, &struct {
+					Resource rbac.Resource
+					Action   rbac.Action
+				}{
+					Resource: rbac.Resource(r.Resource),
+					Action:   rbac.Action(a),
+				})
+			}
+		}
+
+		cfg.Methods = append(cfg.Methods, m)
+	}
+
+	return cfg
+}
+
 func panicIf(err error) {
 	if err != nil {
 		panic(err)
@@ -108,9 +155,19 @@ func main() {
 	panicIf(err)
 
 	if *docgen {
+		cfg := transformConfigForDocs(cfg)
+		tmpl, err := template.New("docs").Funcs(map[string]any{
+			"formatDocRow": formatDocRow,
+		}).Parse(_doct)
+		panicIf(err)
+
 		output, closer := open(*outputPath)
 		defer closer()
 
+		err = tmpl.Execute(output, &cfg)
+		panicIf(err)
+
+		return
 	}
 
 	tmpl, err := template.New("tests").Funcs(map[string]any{
