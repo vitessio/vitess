@@ -1702,19 +1702,6 @@ func (node *ColName) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
-func (node *UserVariable) formatFast(buf *TrackedBuffer) {
-	buf.WriteByte('@')
-	node.VarName.formatFast(buf)
-}
-
-// formatFast formats the node.
-func (node *SysVariable) formatFast(buf *TrackedBuffer) {
-	buf.WriteString("@@")
-	buf.WriteString(node.Scope.ToString())
-	buf.WriteString(node.VarName.Lowered())
-}
-
-// formatFast formats the node.
 func (node ValTuple) formatFast(buf *TrackedBuffer) {
 	buf.WriteByte('(')
 	Exprs(node).formatFast(buf)

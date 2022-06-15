@@ -207,9 +207,8 @@ func bindVariable(yylex yyLexer, bvar string) {
   jtColumnDefinition *JtColumnDefinition
   jtColumnList	[]*JtColumnDefinition
   jtOnResponse	*JtOnResponse
-  userVariable  *UserVariable
-  userVariables  []*UserVariable
-  variable *Variable
+  variables      []*Variable
+  variable       *Variable
 }
 
 // These precedence rules are there to handle shift-reduce conflicts.
@@ -484,14 +483,14 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <order> order
 %type <orderDirection> asc_desc_opt
 %type <limit> limit_opt limit_clause
-%type <userVariable> user_defined_variable
 %type <selectInto> into_clause
 %type <columnTypeOptions> column_attribute_list_opt generated_column_attribute_list_opt
 %type <str> header_opt export_options manifest_opt overwrite_opt format_opt optionally_opt regexp_symbol
 %type <str> fields_opts fields_opt_list fields_opt lines_opts lines_opt lines_opt_list
 %type <lock> locking_clause
 %type <columns> ins_column_list column_list column_list_opt index_list
-%type <userVariables> at_id_list execute_statement_list_opt
+%type <variable> variable set_variable user_defined_variable
+%type <variables> at_id_list execute_statement_list_opt
 %type <partitions> opt_partition_clause partition_list
 %type <updateExprs> on_dup_opt
 %type <updateExprs> update_list
@@ -571,7 +570,6 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <str> underscore_charsets
 %type <str> expire_opt
 %type <literal> ratio_opt
-%type <variable> variable set_variable
 %start any_command
 
 %%
@@ -631,7 +629,7 @@ command:
 user_defined_variable:
   AT_ID
   {
-    $$ = NewUserDefinedVariable($1)
+    $$ = NewVariable($1, SingleAt)
   }
 
 ci_identifier:
@@ -4531,7 +4529,7 @@ execute_statement:
     $$ = &ExecuteStmt{Name:$3, Comments: Comments($2).Parsed(), Arguments: $4}
   }
 
-execute_statement_list_opt:
+execute_statement_list_opt: // execute db.foo(@apa) using @foo, @bar
   {
     $$ = nil
   }
@@ -4747,7 +4745,7 @@ column_list:
 at_id_list:
   user_defined_variable
   {
-    $$ = []*UserVariable{$1}
+    $$ = []*Variable{$1}
   }
 | at_id_list ',' user_defined_variable
   {

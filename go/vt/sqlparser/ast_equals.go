@@ -1238,12 +1238,6 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfSum(a, b)
-	case *SysVariable:
-		b, ok := inB.(*SysVariable)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfSysVariable(a, b)
 	case TableExprs:
 		b, ok := inB.(TableExprs)
 		if !ok {
@@ -1352,12 +1346,6 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfUse(a, b)
-	case *UserVariable:
-		b, ok := inB.(*UserVariable)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfUserVariable(a, b)
 	case *VStream:
 		b, ok := inB.(*VStream)
 		if !ok {
@@ -2242,7 +2230,7 @@ func EqualsRefOfExecuteStmt(a, b *ExecuteStmt) bool {
 	}
 	return EqualsColIdent(a.Name, b.Name) &&
 		EqualsRefOfParsedComments(a.Comments, b.Comments) &&
-		EqualsSliceOfRefOfUserVariable(a.Arguments, b.Arguments)
+		EqualsSliceOfRefOfVariable(a.Arguments, b.Arguments)
 }
 
 // EqualsRefOfExistsExpr does deep equals between the two objects.
@@ -3957,18 +3945,6 @@ func EqualsRefOfSum(a, b *Sum) bool {
 		EqualsExpr(a.Arg, b.Arg)
 }
 
-// EqualsRefOfSysVariable does deep equals between the two objects.
-func EqualsRefOfSysVariable(a, b *SysVariable) bool {
-	if a == b {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
-	return a.Scope == b.Scope &&
-		EqualsColIdent(a.VarName, b.VarName)
-}
-
 // EqualsTableExprs does deep equals between the two objects.
 func EqualsTableExprs(a, b TableExprs) bool {
 	if len(a) != len(b) {
@@ -4190,17 +4166,6 @@ func EqualsRefOfUse(a, b *Use) bool {
 		return false
 	}
 	return EqualsTableIdent(a.DBName, b.DBName)
-}
-
-// EqualsRefOfUserVariable does deep equals between the two objects.
-func EqualsRefOfUserVariable(a, b *UserVariable) bool {
-	if a == b {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
-	return EqualsColIdent(a.VarName, b.VarName)
 }
 
 // EqualsRefOfVStream does deep equals between the two objects.
@@ -5675,12 +5640,6 @@ func EqualsExpr(inA, inB Expr) bool {
 			return false
 		}
 		return EqualsRefOfSum(a, b)
-	case *SysVariable:
-		b, ok := inB.(*SysVariable)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfSysVariable(a, b)
 	case *TimestampFuncExpr:
 		b, ok := inB.(*TimestampFuncExpr)
 		if !ok {
@@ -5705,12 +5664,6 @@ func EqualsExpr(inA, inB Expr) bool {
 			return false
 		}
 		return EqualsRefOfUpdateXMLExpr(a, b)
-	case *UserVariable:
-		b, ok := inB.(*UserVariable)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfUserVariable(a, b)
 	case ValTuple:
 		b, ok := inB.(ValTuple)
 		if !ok {
@@ -6386,13 +6339,13 @@ func EqualsSliceOfString(a, b []string) bool {
 	return true
 }
 
-// EqualsSliceOfRefOfUserVariable does deep equals between the two objects.
-func EqualsSliceOfRefOfUserVariable(a, b []*UserVariable) bool {
+// EqualsSliceOfRefOfVariable does deep equals between the two objects.
+func EqualsSliceOfRefOfVariable(a, b []*Variable) bool {
 	if len(a) != len(b) {
 		return false
 	}
 	for i := 0; i < len(a); i++ {
-		if !EqualsRefOfUserVariable(a[i], b[i]) {
+		if !EqualsRefOfVariable(a[i], b[i]) {
 			return false
 		}
 	}

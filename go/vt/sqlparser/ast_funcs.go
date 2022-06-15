@@ -2019,10 +2019,3 @@ func convertStringToInt(integer string) int {
 	val, _ := strconv.Atoi(integer)
 	return val
 }
-
-// NewUserDefinedVariable creates a new user defined variable from the provided variable name
-func NewUserDefinedVariable(varName string) *UserVariable {
-	return &UserVariable{
-		VarName: NewColIdent(varName),
-	}
-}

@@ -634,10 +634,8 @@ func TestColIdentMarshal(t *testing.T) {
 
 func TestColIdentSize(t *testing.T) {
 	size := unsafe.Sizeof(NewColIdent(""))
-	want := 2*unsafe.Sizeof("") + 8
-	if size != want {
-		t.Errorf("Size of ColIdent: %d, want 32", want)
-	}
+	want := 2 * unsafe.Sizeof("")
+	assert.Equal(t, want, size, "size of ColIdent")
 }
 
 func TestTableIdentMarshal(t *testing.T) {

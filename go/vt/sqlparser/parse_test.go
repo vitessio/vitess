@@ -5164,14 +5164,14 @@ func TestOne(t *testing.T) {
 	testOne := struct {
 		input, output string
 	}{
-		input:  "",
+		input:  "create database test_db default charset @a",
 		output: "",
 	}
 	if testOne.input == "" {
 		return
 	}
 	sql := strings.TrimSpace(testOne.input)
-	tree, err := Parse(sql)
+	tree, err := ParseStrictDDL(sql)
 	require.NoError(t, err)
 	got := String(tree)
 	expected := testOne.output

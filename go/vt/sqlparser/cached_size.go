@@ -1138,12 +1138,6 @@ func (cached *ExecuteStmt) CachedSize(alloc bool) int64 {
 	// field Comments *vitess.io/vitess/go/vt/sqlparser.ParsedComments
 	size += cached.Comments.CachedSize(true)
 	// field Arguments []*vitess.io/vitess/go/vt/sqlparser.UserVariable
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Arguments)) * int64(8))
-		for _, elem := range cached.Arguments {
-			size += elem.CachedSize(true)
-		}
-	}
 	return size
 }
 func (cached *ExistsExpr) CachedSize(alloc bool) int64 {
@@ -3489,18 +3483,6 @@ func (cached *Sum) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.Name)))
 	return size
 }
-func (cached *SysVariable) CachedSize(alloc bool) int64 {
-	if cached == nil {
-		return int64(0)
-	}
-	size := int64(0)
-	if alloc {
-		size += int64(48)
-	}
-	// field VarName vitess.io/vitess/go/vt/sqlparser.ColIdent
-	size += cached.VarName.CachedSize(false)
-	return size
-}
 func (cached *TableAndLockType) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -3800,18 +3782,6 @@ func (cached *Use) CachedSize(alloc bool) int64 {
 	}
 	// field DBName vitess.io/vitess/go/vt/sqlparser.TableIdent
 	size += cached.DBName.CachedSize(false)
-	return size
-}
-func (cached *UserVariable) CachedSize(alloc bool) int64 {
-	if cached == nil {
-		return int64(0)
-	}
-	size := int64(0)
-	if alloc {
-		size += int64(48)
-	}
-	// field VarName vitess.io/vitess/go/vt/sqlparser.ColIdent
-	size += cached.VarName.CachedSize(false)
 	return size
 }
 func (cached *VStream) CachedSize(alloc bool) int64 {

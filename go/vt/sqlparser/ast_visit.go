@@ -426,8 +426,6 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfSubstrExpr(in, f)
 	case *Sum:
 		return VisitRefOfSum(in, f)
-	case *SysVariable:
-		return VisitRefOfSysVariable(in, f)
 	case TableExprs:
 		return VisitTableExprs(in, f)
 	case TableIdent:
@@ -464,8 +462,6 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfUpdateXMLExpr(in, f)
 	case *Use:
 		return VisitRefOfUse(in, f)
-	case *UserVariable:
-		return VisitRefOfUserVariable(in, f)
 	case *VStream:
 		return VisitRefOfVStream(in, f)
 	case ValTuple:
@@ -1379,7 +1375,7 @@ func VisitRefOfExecuteStmt(in *ExecuteStmt, f Visit) error {
 		return err
 	}
 	for _, el := range in.Arguments {
-		if err := VisitRefOfUserVariable(el, f); err != nil {
+		if err := VisitRefOfVariable(el, f); err != nil {
 			return err
 		}
 	}
@@ -3355,18 +3351,6 @@ func VisitRefOfSum(in *Sum, f Visit) error {
 	}
 	return nil
 }
-func VisitRefOfSysVariable(in *SysVariable, f Visit) error {
-	if in == nil {
-		return nil
-	}
-	if cont, err := f(in); err != nil || !cont {
-		return err
-	}
-	if err := VisitColIdent(in.VarName, f); err != nil {
-		return err
-	}
-	return nil
-}
 func VisitTableExprs(in TableExprs, f Visit) error {
 	if in == nil {
 		return nil
@@ -3631,18 +3615,6 @@ func VisitRefOfUse(in *Use, f Visit) error {
 		return err
 	}
 	if err := VisitTableIdent(in.DBName, f); err != nil {
-		return err
-	}
-	return nil
-}
-func VisitRefOfUserVariable(in *UserVariable, f Visit) error {
-	if in == nil {
-		return nil
-	}
-	if cont, err := f(in); err != nil || !cont {
-		return err
-	}
-	if err := VisitColIdent(in.VarName, f); err != nil {
 		return err
 	}
 	return nil
@@ -4379,8 +4351,6 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfSubstrExpr(in, f)
 	case *Sum:
 		return VisitRefOfSum(in, f)
-	case *SysVariable:
-		return VisitRefOfSysVariable(in, f)
 	case *TimestampFuncExpr:
 		return VisitRefOfTimestampFuncExpr(in, f)
 	case *TrimFuncExpr:
@@ -4389,8 +4359,6 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfUnaryExpr(in, f)
 	case *UpdateXMLExpr:
 		return VisitRefOfUpdateXMLExpr(in, f)
-	case *UserVariable:
-		return VisitRefOfUserVariable(in, f)
 	case ValTuple:
 		return VisitValTuple(in, f)
 	case *ValuesFuncExpr:

@@ -1303,16 +1303,6 @@ func (node *ColName) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
-func (node *UserVariable) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "@%v", node.VarName)
-}
-
-// Format formats the node.
-func (node *SysVariable) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "@@%s%s", node.Scope.ToString(), node.VarName.Lowered())
-}
-
-// Format formats the node.
 func (node ValTuple) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "(%v)", Exprs(node))
 }
