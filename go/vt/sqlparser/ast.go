@@ -369,7 +369,6 @@ type (
 
 	// SetTransaction represents a SET TRANSACTION statement.
 	SetTransaction struct {
-		SQLNode
 		Comments        *ParsedComments
 		Scope           Scope
 		Characteristics []Characteristic
@@ -2256,8 +2255,8 @@ type (
 	}
 
 	Variable struct {
-		Scope   Scope
-		VarName ColIdent
+		Scope Scope
+		Name  ColIdent
 	}
 
 	// ColTuple represents a list of column values.

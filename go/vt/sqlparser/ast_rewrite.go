@@ -6123,11 +6123,6 @@ func (a *application) rewriteRefOfSetTransaction(parent SQLNode, node *SetTransa
 			return true
 		}
 	}
-	if !a.rewriteSQLNode(node, node.SQLNode, func(newNode, parent SQLNode) {
-		parent.(*SetTransaction).SQLNode = newNode.(SQLNode)
-	}) {
-		return false
-	}
 	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
 		parent.(*SetTransaction).Comments = newNode.(*ParsedComments)
 	}) {
@@ -7610,8 +7605,8 @@ func (a *application) rewriteRefOfVariable(parent SQLNode, node *Variable, repla
 			return true
 		}
 	}
-	if !a.rewriteColIdent(node, node.VarName, func(newNode, parent SQLNode) {
-		parent.(*Variable).VarName = newNode.(ColIdent)
+	if !a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*Variable).Name = newNode.(ColIdent)
 	}) {
 		return false
 	}

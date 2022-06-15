@@ -9188,7 +9188,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:1005
 		{
-			yyLOCAL = &SetTransaction{Comments: Comments(yyDollar[2].strs).Parsed(), Characteristics: yyDollar[4].characteristicsUnion(), Scope: ImplicitScope}
+			yyLOCAL = &SetTransaction{Comments: Comments(yyDollar[2].strs).Parsed(), Characteristics: yyDollar[4].characteristicsUnion(), Scope: SessionScope}
 		}
 		yyVAL.union = yyLOCAL
 	case 107:
@@ -18905,7 +18905,7 @@ yydefault:
 		var yyLOCAL *SetExpr
 //line sql.y:6988
 		{
-			yyLOCAL = &SetExpr{Var: NewSetVariable(string(yyDollar[1].str), LocalScope), Expr: yyDollar[2].exprUnion()}
+			yyLOCAL = &SetExpr{Var: NewSetVariable(string(yyDollar[1].str), NoScope), Expr: yyDollar[2].exprUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1397:
@@ -18913,7 +18913,7 @@ yydefault:
 		var yyLOCAL *Variable
 //line sql.y:6994
 		{
-			yyLOCAL = NewSetVariable(string(yyDollar[1].str), LocalScope)
+			yyLOCAL = NewSetVariable(string(yyDollar[1].str), SessionScope)
 		}
 		yyVAL.union = yyLOCAL
 	case 1398:

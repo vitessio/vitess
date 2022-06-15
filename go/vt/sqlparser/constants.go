@@ -47,8 +47,6 @@ const (
 	GlobalStr         = "global"
 	VitessMetadataStr = "vitess_metadata"
 	VariableStr       = "variable"
-	LocalStr          = "local"
-	ImplicitStr       = ""
 
 	// SysVariable Scope strings
 	GlobalSysScopeStr      = "global."
@@ -453,12 +451,11 @@ const (
 
 // Constants for scope of system variables
 const (
-	ImplicitScope Scope = iota
+	NoScope Scope = iota
 	SessionScope
 	GlobalScope
 	VitessMetadataScope
 	VariableScope
-	LocalScope
 	PersistSysScope
 	PersistOnlySysScope
 )

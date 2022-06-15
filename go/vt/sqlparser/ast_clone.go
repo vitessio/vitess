@@ -2406,7 +2406,6 @@ func CloneRefOfSetTransaction(n *SetTransaction) *SetTransaction {
 		return nil
 	}
 	out := *n
-	out.SQLNode = CloneSQLNode(n.SQLNode)
 	out.Comments = CloneRefOfParsedComments(n.Comments)
 	out.Characteristics = CloneSliceOfCharacteristic(n.Characteristics)
 	return &out
@@ -2905,7 +2904,7 @@ func CloneRefOfVariable(n *Variable) *Variable {
 		return nil
 	}
 	out := *n
-	out.VarName = CloneColIdent(n.VarName)
+	out.Name = CloneColIdent(n.Name)
 	return &out
 }
 

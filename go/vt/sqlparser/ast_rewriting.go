@@ -351,12 +351,17 @@ func (er *astRewriter) rewrite(cursor *Cursor) bool {
 	case *FuncExpr:
 		er.funcRewrite(cursor, node)
 	case *Variable:
+		if v, isSet := cursor.Parent().(*SetExpr); isSet && v.Var == node {
+			break
+		}
 		switch node.Scope {
 		case VariableScope:
 			er.udvRewrite(cursor, node)
-		case GlobalScope, SessionScope, ImplicitScope:
+		case GlobalScope, SessionScope:
 			er.sysVarRewrite(cursor, node)
 		}
+	case *SetExpr:
+
 	case *Subquery:
 		er.unnestSubQueries(cursor, node)
 	case *NotExpr:
@@ -440,7 +445,7 @@ func inverseOp(i ComparisonExprOperator) (bool, ComparisonExprOperator) {
 }
 
 func (er *astRewriter) sysVarRewrite(cursor *Cursor, node *Variable) {
-	lowered := node.VarName.Lowered()
+	lowered := node.Name.Lowered()
 
 	var found bool
 	if er.sysVars != nil {
@@ -475,7 +480,7 @@ func (er *astRewriter) sysVarRewrite(cursor *Cursor, node *Variable) {
 }
 
 func (er *astRewriter) udvRewrite(cursor *Cursor, node *Variable) {
-	udv := strings.ToLower(node.VarName.CompliantName())
+	udv := strings.ToLower(node.Name.CompliantName())
 	cursor.Replace(bindVarExpression(UserDefinedVariableName + udv))
 	er.bindVars.AddUserDefVar(udv)
 }

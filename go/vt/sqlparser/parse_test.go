@@ -1020,28 +1020,32 @@ var (
 		input:  "delete from a1, a2 using t1 as a1 inner join t2 as a2 where a1.id=a2.id",
 		output: "delete a1, a2 from t1 as a1 join t2 as a2 where a1.id = a2.id",
 	}, {
-		input: "set /* simple */ a = 3",
+		input:  "set /* simple */ a = 3",
+		output: "set /* simple */ @@a = 3",
 	}, {
-		input: "set #simple\n b = 4",
+		input:  "set #simple\n b = 4",
+		output: "set #simple\n @@b = 4",
 	}, {
-		input: "set character_set_results = utf8",
+		input:  "set character_set_results = utf8",
+		output: "set @@character_set_results = utf8",
 	}, {
-		input: "set @@session.autocommit = true",
+		input:  "set @@session.autocommit = true",
+		output: "set @@autocommit = true",
 	}, {
 		input:  "set @@session.`autocommit` = true",
-		output: "set @@session.autocommit = true",
+		output: "set @@autocommit = true",
 	}, {
 		input:  "set @@session.autocommit = ON",
-		output: "set @@session.autocommit = 'on'",
+		output: "set @@autocommit = 'on'",
 	}, {
 		input:  "set @@session.autocommit= OFF",
-		output: "set @@session.autocommit = 'off'",
+		output: "set @@autocommit = 'off'",
 	}, {
 		input:  "set autocommit = on",
-		output: "set autocommit = 'on'",
+		output: "set @@autocommit = 'on'",
 	}, {
 		input:  "set autocommit = off",
-		output: "set autocommit = 'off'",
+		output: "set @@autocommit = 'off'",
 	}, {
 		input:  "set names utf8 collate foo",
 		output: "set names 'utf8'",
@@ -1056,7 +1060,7 @@ var (
 		output: "set charset 'utf8'",
 	}, {
 		input:  "set s = 1--4",
-		output: "set s = 1 - -4",
+		output: "set @@s = 1 - -4",
 	}, {
 		input:  "set character set \"utf8\"",
 		output: "set charset 'utf8'",
@@ -1065,55 +1069,74 @@ var (
 		output: "set charset default",
 	}, {
 		input:  "set session wait_timeout = 3600",
-		output: "set @@session.wait_timeout = 3600",
+		output: "set @@wait_timeout = 3600",
 	}, {
 		input:  "set session wait_timeout = 3600, session autocommit = off",
-		output: "set @@session.wait_timeout = 3600, @@session.autocommit = 'off'",
+		output: "set @@wait_timeout = 3600, @@autocommit = 'off'",
 	}, {
 		input:  "set session wait_timeout = 3600, @@global.autocommit = off",
-		output: "set @@session.wait_timeout = 3600, @@global.autocommit = 'off'",
+		output: "set @@wait_timeout = 3600, @@global.autocommit = 'off'",
 	}, {
-		input: "set /* list */ a = 3, b = 4",
+		input:  "set /* list */ a = 3, b = 4",
+		output: "set /* list */ @@a = 3, @@b = 4",
 	}, {
-		input: "set /* mixed list */ a = 3, names 'utf8', charset 'ascii', b = 4",
+		input:  "set /* mixed list */ a = 3, names 'utf8', charset 'ascii', b = 4",
+		output: "set /* mixed list */ @@a = 3, names 'utf8', charset 'ascii', @@b = 4",
 	}, {
 		input: "set session transaction isolation level repeatable read",
 	}, {
-		input: "set transaction isolation level repeatable read",
+		input:  "set transaction isolation level repeatable read",
+		output: "set session transaction isolation level repeatable read",
 	}, {
 		input: "set global transaction isolation level repeatable read",
 	}, {
-		input: "set transaction isolation level repeatable read",
+		input:  "set transaction isolation level repeatable read",
+		output: "set session transaction isolation level repeatable read",
 	}, {
-		input: "set transaction isolation level read committed",
+		input:  "set transaction isolation level read committed",
+		output: "set session transaction isolation level read committed",
 	}, {
-		input: "set transaction isolation level read uncommitted",
+		input:  "set transaction isolation level read uncommitted",
+		output: "set session transaction isolation level read uncommitted",
 	}, {
-		input: "set transaction isolation level serializable",
+		input:  "set transaction isolation level serializable",
+		output: "set session transaction isolation level serializable",
 	}, {
-		input: "set transaction read write",
+		input:  "set transaction read write",
+		output: "set session transaction read write",
 	}, {
-		input: "set transaction read only",
+		input:  "set transaction read only",
+		output: "set session transaction read only",
 	}, {
-		input: "set tx_read_only = 1",
+		input:  "set tx_read_only = 1",
+		output: "set @@tx_read_only = 1",
 	}, {
-		input: "set tx_read_only = 0",
+		input:  "set tx_read_only = 0",
+		output: "set @@tx_read_only = 0",
 	}, {
-		input: "set transaction_read_only = 1",
+		input:  "set transaction_read_only = 1",
+		output: "set @@transaction_read_only = 1",
 	}, {
-		input: "set transaction_read_only = 0",
+		input:  "set transaction_read_only = 0",
+		output: "set @@transaction_read_only = 0",
 	}, {
-		input: "set tx_isolation = 'repeatable read'",
+		input:  "set tx_isolation = 'repeatable read'",
+		output: "set @@tx_isolation = 'repeatable read'",
 	}, {
-		input: "set tx_isolation = 'read committed'",
+		input:  "set tx_isolation = 'read committed'",
+		output: "set @@tx_isolation = 'read committed'",
 	}, {
-		input: "set tx_isolation = 'read uncommitted'",
+		input:  "set tx_isolation = 'read uncommitted'",
+		output: "set @@tx_isolation = 'read uncommitted'",
 	}, {
-		input: "set tx_isolation = 'serializable'",
+		input:  "set tx_isolation = 'serializable'",
+		output: "set @@tx_isolation = 'serializable'",
 	}, {
-		input: "set sql_safe_updates = 0",
+		input:  "set sql_safe_updates = 0",
+		output: "set @@sql_safe_updates = 0",
 	}, {
-		input: "set sql_safe_updates = 1",
+		input:  "set sql_safe_updates = 1",
+		output: "set @@sql_safe_updates = 1",
 	}, {
 		input: "set @variable = 42",
 	}, {
@@ -1121,10 +1144,10 @@ var (
 		output: "set @`period.variable` = 42",
 	}, {
 		input:  "set S= +++-++-+(4+1)",
-		output: "set S = - -(4 + 1)",
+		output: "set @@S = - -(4 + 1)",
 	}, {
 		input:  "set S= +- - - - -(4+1)",
-		output: "set S = - - - - -(4 + 1)",
+		output: "set @@S = - - - - -(4 + 1)",
 	}, {
 		input:  "alter table a add foo int references b (a) on delete restrict first",
 		output: "alter table a add column foo int references b (a) on delete restrict first",
@@ -5164,7 +5187,7 @@ func TestOne(t *testing.T) {
 	testOne := struct {
 		input, output string
 	}{
-		input:  "",
+		input:  "select @@a",
 		output: "",
 	}
 	if testOne.input == "" {

@@ -1003,7 +1003,7 @@ set_transaction_statement:
   }
 | SET comment_opt TRANSACTION transaction_chars
   {
-    $$ = &SetTransaction{Comments: Comments($2).Parsed(), Characteristics: $4, Scope: ImplicitScope}
+    $$ = &SetTransaction{Comments: Comments($2).Parsed(), Characteristics: $4, Scope: SessionScope}
   }
 
 transaction_chars:
@@ -6986,13 +6986,13 @@ set_expression:
   }
 | charset_or_character_set_or_names charset_value collate_opt
   {
-    $$ = &SetExpr{Var: NewSetVariable(string($1), LocalScope), Expr: $2}
+    $$ = &SetExpr{Var: NewSetVariable(string($1), NoScope), Expr: $2}
   }
 
 set_variable:
   ID
   {
-    $$ = NewSetVariable(string($1), LocalScope)
+    $$ = NewSetVariable(string($1), SessionScope)
   }
 | variable_expr
   {

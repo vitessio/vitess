@@ -3069,9 +3069,6 @@ func VisitRefOfSetTransaction(in *SetTransaction, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitSQLNode(in.SQLNode, f); err != nil {
-		return err
-	}
 	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
 		return err
 	}
@@ -3723,7 +3720,7 @@ func VisitRefOfVariable(in *Variable, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitColIdent(in.VarName, f); err != nil {
+	if err := VisitColIdent(in.Name, f); err != nil {
 		return err
 	}
 	return nil

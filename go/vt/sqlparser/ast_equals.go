@@ -3688,8 +3688,7 @@ func EqualsRefOfSetTransaction(a, b *SetTransaction) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return EqualsSQLNode(a.SQLNode, b.SQLNode) &&
-		EqualsRefOfParsedComments(a.Comments, b.Comments) &&
+	return EqualsRefOfParsedComments(a.Comments, b.Comments) &&
 		a.Scope == b.Scope &&
 		EqualsSliceOfCharacteristic(a.Characteristics, b.Characteristics)
 }
@@ -4264,7 +4263,7 @@ func EqualsRefOfVariable(a, b *Variable) bool {
 		return false
 	}
 	return a.Scope == b.Scope &&
-		EqualsColIdent(a.VarName, b.VarName)
+		EqualsColIdent(a.Name, b.Name)
 }
 
 // EqualsRefOfVariance does deep equals between the two objects.

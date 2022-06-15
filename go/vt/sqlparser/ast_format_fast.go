@@ -268,16 +268,10 @@ func (node *Set) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the node.
 func (node *SetTransaction) formatFast(buf *TrackedBuffer) {
-	if node.Scope == ImplicitScope {
-		buf.WriteString("set ")
-		node.Comments.formatFast(buf)
-		buf.WriteString("transaction ")
-	} else {
-		buf.WriteString("set ")
-		node.Comments.formatFast(buf)
-		buf.WriteString(node.Scope.ToString())
-		buf.WriteString(" transaction ")
-	}
+	buf.WriteString("set ")
+	node.Comments.formatFast(buf)
+	buf.WriteString(node.Scope.ToString())
+	buf.WriteString(" transaction ")
 
 	for i, char := range node.Characteristics {
 		if i > 0 {
@@ -2420,8 +2414,8 @@ func (node SetExprs) formatFast(buf *TrackedBuffer) {
 func (node *SetExpr) formatFast(buf *TrackedBuffer) {
 	// We don't have to backtick set variable names.
 	switch {
-	case node.Var.VarName.EqualString("charset") || node.Var.VarName.EqualString("names"):
-		buf.WriteString(node.Var.VarName.String())
+	case node.Var.Name.EqualString("charset") || node.Var.Name.EqualString("names"):
+		buf.WriteString(node.Var.Name.String())
 		buf.WriteByte(' ')
 		node.Expr.formatFast(buf)
 	default:
@@ -3509,14 +3503,14 @@ func (node *LockingFunc) formatFast(buf *TrackedBuffer) {
 // formatFast formats the node.
 func (node *Variable) formatFast(buf *TrackedBuffer) {
 	switch node.Scope {
-	case ImplicitScope:
-		buf.WriteString("@@")
 	case VariableScope:
 		buf.WriteString("@")
-	case GlobalScope, SessionScope, PersistSysScope, PersistOnlySysScope:
+	case SessionScope:
+		buf.WriteString("@@")
+	case GlobalScope, PersistSysScope, PersistOnlySysScope:
 		buf.WriteString("@@")
 		buf.WriteString(node.Scope.ToString())
 		buf.WriteByte('.')
 	}
-	node.VarName.formatFast(buf)
+	node.Name.formatFast(buf)
 }

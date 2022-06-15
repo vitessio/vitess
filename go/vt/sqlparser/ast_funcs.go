@@ -671,7 +671,7 @@ func NewColIdentWithAt(str string, at AtCount) ColIdent {
 }
 
 func NewSetVariable(str string, scope Scope) *Variable {
-	return &Variable{VarName: createColIdent(str), Scope: scope}
+	return &Variable{Name: createColIdent(str), Scope: scope}
 }
 
 func NewSetStatement(comments *ParsedComments, exprs SetExprs) *Set {
@@ -681,28 +681,28 @@ func NewSetStatement(comments *ParsedComments, exprs SetExprs) *Set {
 func NewVariableExpression(str string, at AtCount) *Variable {
 	l := strings.ToLower(str)
 	v := &Variable{
-		VarName: createColIdent(str),
+		Name: createColIdent(str),
 	}
 
 	switch at {
 	case DoubleAt:
 		switch {
 		case strings.HasPrefix(l, "session."):
-			v.VarName = createColIdent(str[8:])
+			v.Name = createColIdent(str[8:])
 			v.Scope = SessionScope
 		case strings.HasPrefix(l, "global."):
-			v.VarName = createColIdent(str[7:])
+			v.Name = createColIdent(str[7:])
 			v.Scope = GlobalScope
 		case strings.HasPrefix(l, "vitess_metadata."):
-			v.VarName = createColIdent(str[16:])
+			v.Name = createColIdent(str[16:])
 			v.Scope = VitessMetadataScope
 		default:
-			v.Scope = ImplicitScope
+			v.Scope = SessionScope
 		}
 	case SingleAt:
 		v.Scope = VariableScope
 	case NoAt:
-		v.Scope = LocalScope
+		panic("we should never see NoAt here")
 	}
 
 	return v
@@ -1100,10 +1100,8 @@ func (scope Scope) ToString() string {
 		return VitessMetadataStr
 	case VariableScope:
 		return VariableStr
-	case LocalScope:
-		return LocalStr
-	case ImplicitScope:
-		return ImplicitStr
+	case NoScope:
+		return ""
 	default:
 		return "Unknown Scope"
 	}

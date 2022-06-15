@@ -175,11 +175,7 @@ func (node *Set) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *SetTransaction) Format(buf *TrackedBuffer) {
-	if node.Scope == ImplicitScope {
-		buf.astPrintf(node, "set %vtransaction ", node.Comments)
-	} else {
-		buf.astPrintf(node, "set %v%s transaction ", node.Comments, node.Scope.ToString())
-	}
+	buf.astPrintf(node, "set %v%s transaction ", node.Comments, node.Scope.ToString())
 
 	for i, char := range node.Characteristics {
 		if i > 0 {
@@ -1835,8 +1831,8 @@ func (node SetExprs) Format(buf *TrackedBuffer) {
 func (node *SetExpr) Format(buf *TrackedBuffer) {
 	// We don't have to backtick set variable names.
 	switch {
-	case node.Var.VarName.EqualString("charset") || node.Var.VarName.EqualString("names"):
-		buf.astPrintf(node, "%s %v", node.Var.VarName.String(), node.Expr)
+	case node.Var.Name.EqualString("charset") || node.Var.Name.EqualString("names"):
+		buf.astPrintf(node, "%s %v", node.Var.Name.String(), node.Expr)
 	default:
 		buf.astPrintf(node, "%v = %v", node.Var, node.Expr)
 	}
@@ -2684,12 +2680,12 @@ func (node *LockingFunc) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node *Variable) Format(buf *TrackedBuffer) {
 	switch node.Scope {
-	case ImplicitScope:
-		buf.literal("@@")
 	case VariableScope:
 		buf.literal("@")
-	case GlobalScope, SessionScope, PersistSysScope, PersistOnlySysScope:
+	case SessionScope:
+		buf.literal("@@")
+	case GlobalScope, PersistSysScope, PersistOnlySysScope:
 		buf.astPrintf(node, "@@%s.", node.Scope.ToString())
 	}
-	buf.astPrintf(node, "%v", node.VarName)
+	buf.astPrintf(node, "%v", node.Name)
 }

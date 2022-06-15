@@ -3161,10 +3161,7 @@ func (cached *SetTransaction) CachedSize(alloc bool) int64 {
 		size += int64(64)
 	}
 	// field SQLNode vitess.io/vitess/go/vt/sqlparser.SQLNode
-	if cc, ok := cached.SQLNode.(cachedObject); ok {
-		size += cc.CachedSize(true)
-	}
-	// field Comments *vitess.io/vitess/go/vt/sqlparser.ParsedComments
+	//field Comments *vitess.io/vitess/go/vt/sqlparser.ParsedComments
 	size += cached.Comments.CachedSize(true)
 	// field Characteristics []vitess.io/vitess/go/vt/sqlparser.Characteristic
 	{
