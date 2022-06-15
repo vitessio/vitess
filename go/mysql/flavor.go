@@ -442,9 +442,10 @@ func parseReplicationStatus(fields map[string]string) ReplicationStatus {
 	// The field names in the map are identical to what we receive from the database
 	// Hence the names still contain Master
 	status := ReplicationStatus{
-		SourceHost: fields["Master_Host"],
-		SourceUser: fields["Master_User"],
-		SSLAllowed: fields["Master_SSL_Allowed"] == "Yes",
+		SourceHost:            fields["Master_Host"],
+		SourceUser:            fields["Master_User"],
+		SSLAllowed:            fields["Master_SSL_Allowed"] == "Yes",
+		HasReplicationFilters: (fields["Replicate_Do_DB"] != "") || (fields["Replicate_Ignore_DB"] != "") || (fields["Replicate_Do_Table"] != "") || (fields["Replicate_Ignore_Table"] != "") || (fields["Replicate_Wild_Do_Table"] != "") || (fields["Replicate_Wild_Ignore_Table"] != ""),
 		// These fields are returned from the underlying DB and cannot be renamed
 		IOState:      ReplicationStatusToState(fields["Slave_IO_Running"]),
 		LastIOError:  fields["Last_IO_Error"],

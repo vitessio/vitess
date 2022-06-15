@@ -177,6 +177,7 @@ func TestFullStatus(t *testing.T) {
 	assert.EqualValues(t, 0, replicaStatus.ReplicationStatus.ReplicationLagSeconds)
 	assert.EqualValues(t, 0, replicaStatus.ReplicationStatus.SqlDelay)
 	assert.False(t, replicaStatus.ReplicationStatus.SslAllowed)
+	assert.False(t, replicaStatus.ReplicationStatus.HasReplicationFilters)
 	assert.Equal(t, replicaStatus.ReplicationStatus.SourceHost, utils.Hostname)
 	assert.EqualValues(t, replicaStatus.ReplicationStatus.SourcePort, tablets[0].MySQLPort)
 	assert.Equal(t, replicaStatus.ReplicationStatus.SourceUser, "vt_repl")
