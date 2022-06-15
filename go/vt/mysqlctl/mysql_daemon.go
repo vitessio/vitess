@@ -62,7 +62,8 @@ type MysqlDaemon interface {
 	SemiSyncSettings() (timeout uint64, numReplicas uint32)
 	SemiSyncReplicationStatus() (bool, error)
 	ResetReplicationParameters(ctx context.Context) error
-	GetBinlogInformation(ctx context.Context) (binlogFormat string, logEnabled bool, logReplicaUpdate bool, gtidMode string, binlogRowImage string, err error)
+	GetBinlogInformation(ctx context.Context) (binlogFormat string, logEnabled bool, logReplicaUpdate bool, binlogRowImage string, err error)
+	GetGTIDMode(ctx context.Context) (gtidMode string, err error)
 
 	// reparenting related methods
 	ResetReplication(ctx context.Context) error

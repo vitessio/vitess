@@ -82,6 +82,18 @@ func (mysqlFlavor) serverUUID(c *Conn) (string, error) {
 	return qr.Rows[0][0].ToString(), nil
 }
 
+// gtidMode is part of the Flavor interface.
+func (mysqlFlavor) gtidMode(c *Conn) (string, error) {
+	qr, err := c.ExecuteFetch("select @@global.gtid_mode", 1, false)
+	if err != nil {
+		return "", err
+	}
+	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
+		return "", vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected result format for gtid_mode: %#v", qr)
+	}
+	return qr.Rows[0][0].ToString(), nil
+}
+
 func (mysqlFlavor) startReplicationCommand() string {
 	return "START SLAVE"
 }

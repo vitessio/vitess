@@ -96,8 +96,14 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 		return nil, err
 	}
 
-	// Binlog Information - "select @@global.binlog_format, @@global.log_bin, @@global.log_slave_updates, @@global.gtid_mode, @@global.binlog_row_image"
-	binlogFormat, logBin, logReplicaUpdates, gtidMode, binlogRowImage, err := tm.MysqlDaemon.GetBinlogInformation(ctx)
+	// Binlog Information - "select @@global.binlog_format, @@global.log_bin, @@global.log_slave_updates, @@global.binlog_row_image"
+	binlogFormat, logBin, logReplicaUpdates, binlogRowImage, err := tm.MysqlDaemon.GetBinlogInformation(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// GTID Mode - "select @@global.gtid_mode" - Only applicable for MySQL variants
+	gtidMode, err := tm.MysqlDaemon.GetGTIDMode(ctx)
 	if err != nil {
 		return nil, err
 	}

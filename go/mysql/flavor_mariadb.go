@@ -63,6 +63,11 @@ func (mariadbFlavor) serverUUID(c *Conn) (string, error) {
 	return "", nil
 }
 
+// gtidMode is part of the Flavor interface.
+func (mariadbFlavor) gtidMode(c *Conn) (string, error) {
+	return "", nil
+}
+
 func (mariadbFlavor) startReplicationUntilAfter(pos Position) string {
 	return fmt.Sprintf("START SLAVE UNTIL master_gtid_pos = \"%s\"", pos)
 }

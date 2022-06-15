@@ -536,36 +536,43 @@ func (mysqld *Mysqld) DisableBinlogPlayback() error {
 }
 
 // GetBinlogInformation gets the binlog format, whether binlog is enabled and if updates on replica logging is enabled.
-func (mysqld *Mysqld) GetBinlogInformation(ctx context.Context) (string, bool, bool, string, string, error) {
-	qr, err := mysqld.FetchSuperQuery(ctx, "select @@global.binlog_format, @@global.log_bin, @@global.log_slave_updates, @@global.gtid_mode, @@global.binlog_row_image")
+func (mysqld *Mysqld) GetBinlogInformation(ctx context.Context) (string, bool, bool, string, error) {
+	qr, err := mysqld.FetchSuperQuery(ctx, "select @@global.binlog_format, @@global.log_bin, @@global.log_slave_updates, @@global.binlog_row_image")
 	if err != nil {
-		return "", false, false, "", "", err
+		return "", false, false, "", err
 	}
 	if len(qr.Rows) != 1 {
-		return "", false, false, "", "", errors.New("unable to read global variables binlog_format, log_bin, log_slave_updates, gtid_mode, binlog_row_image")
+		return "", false, false, "", errors.New("unable to read global variables binlog_format, log_bin, log_slave_updates, gtid_mode, binlog_rowge")
 	}
 	res := qr.Named().Row()
 	binlogFormat, err := res.ToString("@@global.binlog_format")
 	if err != nil {
-		return "", false, false, "", "", err
+		return "", false, false, "", err
 	}
 	logBin, err := res.ToInt64("@@global.log_bin")
 	if err != nil {
-		return "", false, false, "", "", err
+		return "", false, false, "", err
 	}
 	logReplicaUpdates, err := res.ToInt64("@@global.log_slave_updates")
 	if err != nil {
-		return "", false, false, "", "", err
-	}
-	gtidMode, err := res.ToString("@@global.gtid_mode")
-	if err != nil {
-		return "", false, false, "", "", err
+		return "", false, false, "", err
 	}
 	binlogRowImage, err := res.ToString("@@global.binlog_row_image")
 	if err != nil {
-		return "", false, false, "", "", err
+		return "", false, false, "", err
 	}
-	return binlogFormat, logBin == 1, logReplicaUpdates == 1, gtidMode, binlogRowImage, nil
+	return binlogFormat, logBin == 1, logReplicaUpdates == 1, binlogRowImage, nil
+}
+
+// GetGTIDMode gets the GTID mode for the server
+func (mysqld *Mysqld) GetGTIDMode(ctx context.Context) (string, error) {
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
+	if err != nil {
+		return "", err
+	}
+	defer conn.Recycle()
+
+	return conn.GetGTIDMode()
 }
 
 // SetSemiSyncEnabled enables or disables semi-sync replication for

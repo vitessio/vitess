@@ -322,8 +322,15 @@ func (fmd *FakeMysqlDaemon) ResetReplicationParameters(ctx context.Context) erro
 }
 
 // GetBinlogInformation is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) GetBinlogInformation(ctx context.Context) (binlogFormat string, logEnabled bool, logReplicaUpdate bool, gtidMode string, binlogRowImage string, err error) {
-	return "ROW", true, true, "ON", "FULL", fmd.ExecuteSuperQueryList(ctx, []string{
+func (fmd *FakeMysqlDaemon) GetBinlogInformation(ctx context.Context) (binlogFormat string, logEnabled bool, logReplicaUpdate bool, binlogRowImage string, err error) {
+	return "ROW", true, true, "FULL", fmd.ExecuteSuperQueryList(ctx, []string{
+		"FAKE select @@global",
+	})
+}
+
+// GetGTIDMode is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) GetGTIDMode(ctx context.Context) (gtidMode string, err error) {
+	return "ON", fmd.ExecuteSuperQueryList(ctx, []string{
 		"FAKE select @@global",
 	})
 }
