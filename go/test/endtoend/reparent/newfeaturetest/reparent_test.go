@@ -138,7 +138,7 @@ func TestFullStatus(t *testing.T) {
 	assert.NotEmpty(t, primaryStatus.ServerUuid)
 	assert.NotEmpty(t, primaryStatus.ServerId)
 	// For a primary tablet there is no replication status
-	assert.Empty(t, primaryStatus.ReplicationStatus.Position)
+	assert.Nil(t, primaryStatus.ReplicationStatus)
 	assert.Contains(t, primaryStatus.PrimaryStatus.String(), "vt-0000000101-bin")
 	assert.Equal(t, primaryStatus.GtidPurged, "MySQL56/")
 	assert.False(t, primaryStatus.ReadOnly)

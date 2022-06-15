@@ -68,14 +68,22 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 
 	// Replication status - "SHOW REPLICA STATUS"
 	replicationStatus, err := tm.MysqlDaemon.ReplicationStatus()
+	var replicationStatusProto *replicationdatapb.Status
 	if err != nil && err != mysql.ErrNotReplica {
 		return nil, err
+	}
+	if err == nil {
+		replicationStatusProto = mysql.ReplicationStatusToProto(replicationStatus)
 	}
 
 	// Primary status - "SHOW MASTER STATUS"
 	primaryStatus, err := tm.MysqlDaemon.PrimaryStatus(ctx)
+	var primaryStatusProto *replicationdatapb.PrimaryStatus
 	if err != nil && err != mysql.ErrNoPrimaryStatus {
 		return nil, err
+	}
+	if err == nil {
+		primaryStatusProto = mysql.PrimaryStatusToProto(primaryStatus)
 	}
 
 	// Purged GTID set
@@ -123,8 +131,8 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 	return &replicationdatapb.FullStatus{
 		ServerId:                    serverID,
 		ServerUuid:                  serverUUID,
-		ReplicationStatus:           mysql.ReplicationStatusToProto(replicationStatus),
-		PrimaryStatus:               mysql.PrimaryStatusToProto(primaryStatus),
+		ReplicationStatus:           replicationStatusProto,
+		PrimaryStatus:               primaryStatusProto,
 		GtidPurged:                  mysql.EncodePosition(purgedGTIDs),
 		Version:                     version,
 		VersionComment:              versionComment,
