@@ -321,15 +321,9 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 		resolvedHostname = instance.Key.Hostname
 
 		if instance.LogBinEnabled && fullStatus.PrimaryStatus != nil {
-			pos, err := vitessmysql.DecodePosition(fullStatus.PrimaryStatus.FilePosition)
+			binlogPos, err := getBinlogCoordinatesFromPositionString(fullStatus.PrimaryStatus.FilePosition)
+			instance.SelfBinlogCoordinates = binlogPos
 			errorChan <- err
-			if err == nil {
-				binLogCoordinates, err := ParseBinlogCoordinates(pos.String())
-				errorChan <- err
-				if err == nil {
-					instance.SelfBinlogCoordinates = *binLogCoordinates
-				}
-			}
 		}
 
 		instance.SemiSyncPrimaryEnabled = fullStatus.SemiSyncPrimaryEnabled
@@ -409,30 +403,39 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 
 	instance.ReplicationIOThreadState = ReplicationThreadStateNoThread
 	instance.ReplicationSQLThreadState = ReplicationThreadStateNoThread
-	err = sqlutils.QueryRowsMap(db, "show slave status", func(m sqlutils.RowMap) error {
-		instance.HasReplicationCredentials = (m.GetString("Master_User") != "")
-		instance.ReplicationIOThreadState = ReplicationThreadStateFromStatus(m.GetString("Slave_IO_Running"))
-		instance.ReplicationSQLThreadState = ReplicationThreadStateFromStatus(m.GetString("Slave_SQL_Running"))
+	if fullStatus.ReplicationStatus != nil {
+		instance.HasReplicationCredentials = fullStatus.ReplicationStatus.SourceUser != ""
+
+		instance.ReplicationIOThreadState = ReplicationThreadStateFromReplicationState(vitessmysql.ReplicationState(fullStatus.ReplicationStatus.IoState))
+		instance.ReplicationSQLThreadState = ReplicationThreadStateFromReplicationState(vitessmysql.ReplicationState(fullStatus.ReplicationStatus.SqlState))
 		instance.ReplicationIOThreadRuning = instance.ReplicationIOThreadState.IsRunning()
 		instance.ReplicationSQLThreadRuning = instance.ReplicationSQLThreadState.IsRunning()
-		instance.ReadBinlogCoordinates.LogFile = m.GetString("Master_Log_File")
-		instance.ReadBinlogCoordinates.LogPos = m.GetInt64("Read_Master_Log_Pos")
-		instance.ExecBinlogCoordinates.LogFile = m.GetString("Relay_Master_Log_File")
-		instance.ExecBinlogCoordinates.LogPos = m.GetInt64("Exec_Master_Log_Pos")
-		instance.IsDetached, _ = instance.ExecBinlogCoordinates.ExtractDetachedCoordinates()
-		instance.RelaylogCoordinates.LogFile = m.GetString("Relay_Log_File")
-		instance.RelaylogCoordinates.LogPos = m.GetInt64("Relay_Log_Pos")
-		instance.RelaylogCoordinates.Type = RelayLog
-		instance.LastSQLError = emptyQuotesRegexp.ReplaceAllString(strconv.QuoteToASCII(m.GetString("Last_SQL_Error")), "")
-		instance.LastIOError = emptyQuotesRegexp.ReplaceAllString(strconv.QuoteToASCII(m.GetString("Last_IO_Error")), "")
-		instance.SQLDelay = m.GetUintD("SQL_Delay", 0)
-		instance.UsingOracleGTID = (m.GetIntD("Auto_Position", 0) == 1)
-		instance.UsingMariaDBGTID = (m.GetStringD("Using_Gtid", "No") != "No")
-		instance.SourceUUID = m.GetStringD("Master_UUID", "No")
-		instance.HasReplicationFilters = ((m.GetStringD("Replicate_Do_DB", "") != "") || (m.GetStringD("Replicate_Ignore_DB", "") != "") || (m.GetStringD("Replicate_Do_Table", "") != "") || (m.GetStringD("Replicate_Ignore_Table", "") != "") || (m.GetStringD("Replicate_Wild_Do_Table", "") != "") || (m.GetStringD("Replicate_Wild_Ignore_Table", "") != ""))
 
-		primaryHostname := m.GetString("Master_Host")
-		primaryKey, err := NewResolveInstanceKey(primaryHostname, m.GetInt("Master_Port"))
+		binlogPos, err := getBinlogCoordinatesFromPositionString(fullStatus.ReplicationStatus.RelayLogSourceBinlogEquivalentPosition)
+		instance.ReadBinlogCoordinates = binlogPos
+		errorChan <- err
+
+		binlogPos, err = getBinlogCoordinatesFromPositionString(fullStatus.ReplicationStatus.FilePosition)
+		instance.ExecBinlogCoordinates = binlogPos
+		errorChan <- err
+		instance.IsDetached, _ = instance.ExecBinlogCoordinates.ExtractDetachedCoordinates()
+
+		binlogPos, err = getBinlogCoordinatesFromPositionString(fullStatus.ReplicationStatus.RelayLogFilePosition)
+		instance.RelaylogCoordinates = binlogPos
+		instance.RelaylogCoordinates.Type = RelayLog
+		errorChan <- err
+
+		instance.LastSQLError = emptyQuotesRegexp.ReplaceAllString(strconv.QuoteToASCII(fullStatus.ReplicationStatus.LastSqlError), "")
+		instance.LastIOError = emptyQuotesRegexp.ReplaceAllString(strconv.QuoteToASCII(fullStatus.ReplicationStatus.LastIoError), "")
+
+		instance.SQLDelay = uint(fullStatus.ReplicationStatus.SqlDelay)
+		instance.UsingOracleGTID = fullStatus.ReplicationStatus.AutoPosition
+		instance.UsingMariaDBGTID = fullStatus.ReplicationStatus.UsingGtid
+		instance.SourceUUID = fullStatus.ReplicationStatus.SourceUuid
+		instance.HasReplicationFilters = fullStatus.ReplicationStatus.HasReplicationFilters
+
+		primaryHostname := fullStatus.ReplicationStatus.SourceHost
+		primaryKey, err := NewResolveInstanceKey(primaryHostname, int(fullStatus.ReplicationStatus.SourcePort))
 		if err != nil {
 			logReadTopologyInstanceError(instanceKey, "NewResolveInstanceKey", err)
 		}
@@ -442,7 +445,13 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 		}
 		instance.SourceKey = *primaryKey
 		instance.IsDetachedPrimary = instance.SourceKey.IsDetached()
-		instance.SecondsBehindPrimary = m.GetNullInt64("Seconds_Behind_Master")
+
+		if fullStatus.ReplicationStatus.ReplicationLagUnknown {
+			instance.SecondsBehindPrimary.Valid = false
+		} else {
+			instance.SecondsBehindPrimary.Valid = true
+			instance.SecondsBehindPrimary.Int64 = int64(fullStatus.ReplicationStatus.ReplicationLagSeconds)
+		}
 		if instance.SecondsBehindPrimary.Valid && instance.SecondsBehindPrimary.Int64 < 0 {
 			log.Warningf("Host: %+v, instance.ReplicationLagSeconds < 0 [%+v], correcting to 0", instanceKey, instance.SecondsBehindPrimary.Int64)
 			instance.SecondsBehindPrimary.Int64 = 0
@@ -450,13 +459,9 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 		// And until told otherwise:
 		instance.ReplicationLagSeconds = instance.SecondsBehindPrimary
 
-		instance.AllowTLS = (m.GetString("Master_SSL_Allowed") == "Yes")
-		// Not breaking the flow even on error
-		return nil
-	})
-	if err != nil {
-		goto Cleanup
+		instance.AllowTLS = fullStatus.ReplicationStatus.SslAllowed
 	}
+
 	// Populate GR information for the instance in Oracle MySQL 8.0+.
 	if instance.IsOracleMySQL() && !instance.IsSmallerMajorVersionByString("8.0") {
 		err := PopulateGroupReplicationInformation(instance, db)
@@ -730,6 +735,18 @@ Cleanup:
 	_ = UpdateInstanceLastChecked(&instance.Key, partialSuccess)
 	latency.Stop("backend")
 	return nil, err
+}
+
+func getBinlogCoordinatesFromPositionString(position string) (BinlogCoordinates, error) {
+	pos, err := vitessmysql.DecodePosition(position)
+	if err != nil || pos.GTIDSet == nil {
+		return BinlogCoordinates{}, err
+	}
+	binLogCoordinates, err := ParseBinlogCoordinates(pos.String())
+	if err != nil {
+		return BinlogCoordinates{}, err
+	}
+	return *binLogCoordinates, nil
 }
 
 func ReadReplicationGroupPrimary(instance *Instance) (err error) {
