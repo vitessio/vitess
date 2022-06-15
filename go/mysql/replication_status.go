@@ -44,7 +44,9 @@ type ReplicationStatus struct {
 	FilePosition Position
 	// FileRelayLogPosition stores the position of the source tablets binary log
 	// upto which the IO thread has read and added to the relay log
-	FileRelayLogPosition  Position
+	FileRelayLogPosition Position
+	// RelayLogFilePosition stores the position in the relay log file
+	RelayLogFilePosition  Position
 	SourceServerID        uint
 	IOState               ReplicationState
 	LastIOError           string
@@ -91,6 +93,7 @@ func ReplicationStatusToProto(s ReplicationStatus) *replicationdatapb.Status {
 		FileRelayLogPosition:  EncodePosition(s.FileRelayLogPosition),
 		SourceServerId:        uint32(s.SourceServerID),
 		ReplicationLagSeconds: uint32(s.ReplicationLagSeconds),
+		RelayLogFilePosition:  EncodePosition(s.RelayLogFilePosition),
 		SourceHost:            s.SourceHost,
 		SourcePort:            int32(s.SourcePort),
 		ConnectRetry:          int32(s.ConnectRetry),
@@ -135,6 +138,10 @@ func ProtoToReplicationStatus(s *replicationdatapb.Status) ReplicationStatus {
 	if err != nil {
 		panic(vterrors.Wrapf(err, "cannot decode FileRelayLogPosition"))
 	}
+	relayFilePos, err := DecodePosition(s.RelayLogFilePosition)
+	if err != nil {
+		panic(vterrors.Wrapf(err, "cannot decode RelayLogFilePosition"))
+	}
 	var sid SID
 	if s.SourceUuid != "" {
 		sid, err = ParseSID(s.SourceUuid)
@@ -147,6 +154,7 @@ func ProtoToReplicationStatus(s *replicationdatapb.Status) ReplicationStatus {
 		RelayLogPosition:      relayPos,
 		FilePosition:          filePos,
 		FileRelayLogPosition:  fileRelayPos,
+		RelayLogFilePosition:  relayFilePos,
 		SourceServerID:        uint(s.SourceServerId),
 		ReplicationLagSeconds: uint(s.ReplicationLagSeconds),
 		SourceHost:            s.SourceHost,

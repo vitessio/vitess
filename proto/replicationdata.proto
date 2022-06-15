@@ -44,6 +44,7 @@ message Status {
   string last_io_error = 14;
   int32 sql_state = 15;
   string last_sql_error = 16;
+  string relay_log_file_position = 17;
 }
 
 // StopReplicationStatus represents the replication status before calling StopReplication, and the replication status collected immediately after

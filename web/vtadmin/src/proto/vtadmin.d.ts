@@ -30021,6 +30021,9 @@ export namespace replicationdata {
 
         /** Status last_sql_error */
         last_sql_error?: (string|null);
+
+        /** Status relay_log_file_position */
+        relay_log_file_position?: (string|null);
     }
 
     /** Represents a Status. */
@@ -30079,6 +30082,9 @@ export namespace replicationdata {
 
         /** Status last_sql_error. */
         public last_sql_error: string;
+
+        /** Status relay_log_file_position. */
+        public relay_log_file_position: string;
 
         /**
          * Creates a new Status instance using the specified properties.

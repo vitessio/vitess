@@ -48,6 +48,15 @@ func (m *Status) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if len(m.RelayLogFilePosition) > 0 {
+		i -= len(m.RelayLogFilePosition)
+		copy(dAtA[i:], m.RelayLogFilePosition)
+		i = encodeVarint(dAtA, i, uint64(len(m.RelayLogFilePosition)))
+		i--
+		dAtA[i] = 0x1
+		i--
+		dAtA[i] = 0x8a
+	}
 	if len(m.LastSqlError) > 0 {
 		i -= len(m.LastSqlError)
 		copy(dAtA[i:], m.LastSqlError)
@@ -531,6 +540,10 @@ func (m *Status) SizeVT() (n int) {
 		n += 1 + sov(uint64(m.SqlState))
 	}
 	l = len(m.LastSqlError)
+	if l > 0 {
+		n += 2 + l + sov(uint64(l))
+	}
+	l = len(m.RelayLogFilePosition)
 	if l > 0 {
 		n += 2 + l + sov(uint64(l))
 	}
@@ -1105,6 +1118,38 @@ func (m *Status) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			m.LastSqlError = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 17:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field RelayLogFilePosition", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.RelayLogFilePosition = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex

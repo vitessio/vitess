@@ -488,6 +488,18 @@ func parseReplicationStatus(fields map[string]string) ReplicationStatus {
 			}
 		}
 	}
+
+	relayPosStr := fields["Relay_Log_Pos"]
+	file = fields["Relay_Log_File"]
+	if file != "" && relayPosStr != "" {
+		relayFilePos, err := strconv.Atoi(relayPosStr)
+		if err == nil {
+			status.RelayLogFilePosition.GTIDSet = filePosGTID{
+				file: file,
+				pos:  relayFilePos,
+			}
+		}
+	}
 	return status
 }
 
