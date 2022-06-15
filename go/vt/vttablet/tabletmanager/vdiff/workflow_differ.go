@@ -177,9 +177,12 @@ func (wd *workflowDiffer) diff(ctx context.Context) error {
 		}
 		if len(qr.Rows) == 0 {
 			query = fmt.Sprintf(sqlNewVDiffTable, wd.ct.id, encodeString(td.table.Name), tableRows)
-			if _, err := withDDL.Exec(ctx, query, dbClient.ExecuteFetch, dbClient.ExecuteFetch); err != nil {
-				return err
-			}
+		} else {
+			// Update the table rows estimate when resuming
+			query = fmt.Sprintf(sqlUpdateTableRows, tableRows, wd.ct.id, encodeString(td.table.Name))
+		}
+		if _, err := withDDL.Exec(ctx, query, dbClient.ExecuteFetch, dbClient.ExecuteFetch); err != nil {
+			return err
 		}
 
 		log.Infof("starting table %s", td.table.Name)
