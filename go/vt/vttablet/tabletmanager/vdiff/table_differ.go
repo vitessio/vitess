@@ -67,7 +67,7 @@ type tableDiffer struct {
 	// sourceQuery is computed from the associated query for this table in the vreplication workflow's Rule Filter
 	sourceQuery string
 	table       *tabletmanagerdatapb.TableDefinition
-	lastPK      []sqltypes.Value
+	lastPK      *querypb.QueryResult
 }
 
 func newTableDiffer(wd *workflowDiffer, table *tabletmanagerdatapb.TableDefinition, sourceQuery string) *tableDiffer {
@@ -279,7 +279,7 @@ func (td *tableDiffer) startTargetDataStream(ctx context.Context) error {
 	ct := td.wd.ct
 	gtidch := make(chan string, 1)
 	ct.targetShardStreamer.result = make(chan *sqltypes.Result, 1)
-	go td.streamOneShard(ctx, ct.targetShardStreamer, td.tablePlan.targetQuery, gtidch)
+	go td.streamOneShard(ctx, ct.targetShardStreamer, td.tablePlan.targetQuery, td.lastPK, gtidch)
 	gtid, ok := <-gtidch
 	if !ok {
 		log.Infof("streaming error: %w", ct.targetShardStreamer.err)
@@ -293,7 +293,7 @@ func (td *tableDiffer) startSourceDataStreams(ctx context.Context) error {
 	if err := td.forEachSource(func(source *migrationSource) error {
 		gtidch := make(chan string, 1)
 		source.result = make(chan *sqltypes.Result, 1)
-		go td.streamOneShard(ctx, source.shardStreamer, td.tablePlan.sourceQuery, gtidch)
+		go td.streamOneShard(ctx, source.shardStreamer, td.tablePlan.sourceQuery, td.lastPK, gtidch)
 
 		gtid, ok := <-gtidch
 		if !ok {
@@ -315,7 +315,7 @@ func (td *tableDiffer) restartTargetVReplicationStreams(ctx context.Context) err
 	return err
 }
 
-func (td *tableDiffer) streamOneShard(ctx context.Context, participant *shardStreamer, query string, gtidch chan string) {
+func (td *tableDiffer) streamOneShard(ctx context.Context, participant *shardStreamer, query string, lastPK *querypb.QueryResult, gtidch chan string) {
 	log.Infof("streamOneShard Start %s", participant.tablet.Alias.String())
 	defer func() {
 		log.Infof("streamOneShard End %s", participant.tablet.Alias.String())
@@ -335,7 +335,7 @@ func (td *tableDiffer) streamOneShard(ctx context.Context, participant *shardStr
 			TabletType: participant.tablet.Type,
 		}
 		var fields []*querypb.Field
-		return conn.VStreamRows(ctx, target, query, nil, func(vsrRaw *binlogdatapb.VStreamRowsResponse) error {
+		return conn.VStreamRows(ctx, target, query, lastPK, func(vsrRaw *binlogdatapb.VStreamRowsResponse) error {
 			// We clone (deep copy) the VStreamRowsResponse -- which contains a vstream packet with N rows and
 			// their corresponding GTID position/snapshot along with the LastPK in the row set -- so that we
 			// can safely process it while the next VStreamRowsResponse message is getting prepared by the

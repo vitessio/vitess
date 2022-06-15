@@ -93,7 +93,7 @@ func (wd *workflowDiffer) reconcileExtraRows(dr *DiffReport, maxExtraRowsToCompa
 
 func (wd *workflowDiffer) diffTable(ctx context.Context, dbClient binlogplayer.DBClient, td *tableDiffer) error {
 	tableName := td.table.Name
-	log.Infof("Starting differ on table %s from lastPK %+v", tableName, td.lastPK)
+	log.Infof("Starting differ on table %s", tableName)
 	if err := td.updateTableState(ctx, dbClient, tableName, "started", nil); err != nil {
 		return err
 	}

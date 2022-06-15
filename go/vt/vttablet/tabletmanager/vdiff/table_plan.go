@@ -20,6 +20,9 @@ import (
 	"fmt"
 	"strings"
 
+	"google.golang.org/protobuf/encoding/prototext"
+
+	"vitess.io/vitess/go/sqltypes"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 
 	"vitess.io/vitess/go/vt/log"
@@ -61,7 +64,7 @@ func (td *tableDiffer) buildTablePlan() (*tablePlan, error) {
 		return nil, fmt.Errorf("unexpected: %v", sqlparser.String(statement))
 	}
 
-	if err := td.setTableLastPK(td.table.Name); err != nil {
+	if err := td.setLastPK(); err != nil {
 		return nil, err
 	}
 
@@ -146,10 +149,18 @@ func (td *tableDiffer) buildTablePlan() (*tablePlan, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// Note: this is for debugging purposes only -- will be removed
+	log.Errorf("buildTablePlan:: LastPK: %+v", td.lastPK)
+	lastPKWhere := ""
+	if lastPKWhere, err = td.generateLastPKFilter(); err != nil {
+		return nil, err
+	}
+	log.Errorf("buildTablePlan:: lastPKWhere: %s", lastPKWhere)
+	// End of note
+
 	// Remove in_keyrange. It's not understood by mysql.
-	log.Errorf("buildTablePlan:: original source where: %+v", sourceSelect.Where)
 	sourceSelect.Where = sel.Where //removeKeyrange(sel.Where)
-	log.Errorf("buildTablePlan:: new source where: %+v", sourceSelect.Where)
 	// The source should also perform the group by.
 	sourceSelect.GroupBy = sel.GroupBy
 	sourceSelect.OrderBy = tp.orderBy
@@ -157,9 +168,6 @@ func (td *tableDiffer) buildTablePlan() (*tablePlan, error) {
 	// The target should perform the order by, but not the group by.
 	targetSelect.OrderBy = tp.orderBy
 
-	log.Errorf("buildTablePlan:: final source query: %s", sqlparser.String(sourceSelect))
-	log.Errorf("buildTablePlan:: final target query: %s", sqlparser.String(targetSelect))
-	log.Errorf("buildTablePlan:: LastPK: %+v", td.lastPK)
 	tp.sourceQuery = sqlparser.String(sourceSelect)
 	tp.targetQuery = sqlparser.String(targetSelect)
 
@@ -207,7 +215,7 @@ func (tp *tablePlan) findPKs(targetSelect *sqlparser.Select) error {
 	return nil
 }
 
-func (td *tableDiffer) setTableLastPK(tableName string) error {
+func (td *tableDiffer) setLastPK() error {
 	dbClient := td.wd.ct.dbClientFactory()
 	if err := dbClient.Connect(); err != nil {
 		return err
@@ -215,12 +223,54 @@ func (td *tableDiffer) setTableLastPK(tableName string) error {
 	defer dbClient.Close()
 
 	query := fmt.Sprintf(sqlGetVDiffTable, td.wd.ct.id, encodeString(td.table.Name))
-	qr, err := withDDL.Exec(td.wd.ct.vde.ctx, query, dbClient.ExecuteFetch, dbClient.ExecuteFetch)
+	qr, err := dbClient.ExecuteFetch(query, 1)
 	if err != nil {
 		return err
 	}
 	if len(qr.Rows) == 1 {
-		td.lastPK = qr.Rows[0]
+		var lastpk []byte
+		if lastpk, err = qr.Named().Row().ToBytes("lastpk"); err != nil {
+			return err
+		}
+		if len(lastpk) != 0 {
+			var lastpkpb querypb.QueryResult
+			if err := prototext.Unmarshal(lastpk, &lastpkpb); err != nil {
+				return err
+			}
+			td.lastPK = &lastpkpb
+		}
 	}
 	return nil
+}
+
+// This builds the query predicates to support only reading the rows from
+// where we left off when resuming a VDiff.
+// Note: only used for debugging -- will be removed
+func (td *tableDiffer) generateLastPKFilter() (string, error) {
+	buf := sqlparser.NewTrackedBuffer(nil)
+	if td.lastPK != nil {
+		pkColCnt := len(td.table.PrimaryKeyColumns)
+		pkres := sqltypes.Proto3ToResult(td.lastPK)
+		pkVals := pkres.Rows[0]
+		pkCols := td.lastPK.Fields
+		if len(td.lastPK.Fields) != pkColCnt {
+			return "", fmt.Errorf("primary key values don't match length: %v vs %d", td.lastPK, pkColCnt)
+		}
+		buf.WriteString(" where ")
+		prefix := ""
+		for lastcol := pkColCnt - 1; lastcol >= 0; lastcol-- {
+			buf.Myprintf("%s(", prefix)
+			prefix = " or "
+			for i, pkCol := range pkCols[:lastcol] {
+				buf.Myprintf("%v = ", sqlparser.NewColIdent(pkCol.Name))
+				pkVals[i].EncodeSQL(buf)
+				buf.Myprintf(" and ")
+			}
+			buf.Myprintf("%v > ", sqlparser.NewColIdent(pkCols[lastcol].Name))
+			pkVals[lastcol].EncodeSQL(buf)
+			buf.Myprintf(")")
+		}
+	}
+
+	return buf.String(), nil
 }
