@@ -82,12 +82,13 @@ const (
 	sqlGetVDiffID           = "select id as id from _vt.vdiff where vdiff_uuid = %s"
 	sqlGetAllVDiffs         = "select * from _vt.vdiff order by id desc"
 
-	sqlNewVDiffTable       = "insert into _vt.vdiff_table(vdiff_id, table_name, state, table_rows) values(%d, %s, 'pending', %d)"
-	sqlGetVDiffTable       = "select vdt.lastpk as lastpk from _vt.vdiff as vd inner join _vt.vdiff_table as vdt on (vd.id = vdt.vdiff_id) where vdt.vdiff_id = %d and vdt.table_name = %s"
-	sqlUpdateTableRows     = "update _vt.vdiff_table set table_rows = %d where vdiff_id = %d and table_name = %s"
-	sqlUpdateTableProgress = "update _vt.vdiff_table set rows_compared = %d, lastpk = %s where vdiff_id = %d and table_name = %s"
-	sqlUpdateTableState    = "update _vt.vdiff_table set state = %s, report = %s where vdiff_id = %d and table_name = %s"
-	sqlUpdateTableMismatch = "update _vt.vdiff_table set mismatch = true where vdiff_id = %d and table_name = %s"
+	sqlNewVDiffTable         = "insert into _vt.vdiff_table(vdiff_id, table_name, state, table_rows) values(%d, %s, 'pending', %d)"
+	sqlGetVDiffTable         = "select vdt.lastpk as lastpk from _vt.vdiff as vd inner join _vt.vdiff_table as vdt on (vd.id = vdt.vdiff_id) where vdt.vdiff_id = %d and vdt.table_name = %s"
+	sqlUpdateTableRows       = "update _vt.vdiff_table set table_rows = %d where vdiff_id = %d and table_name = %s"
+	sqlUpdateTableProgress   = "update _vt.vdiff_table set rows_compared = %d, lastpk = %s where vdiff_id = %d and table_name = %s"
+	sqlUpdateTableNoProgress = "update _vt.vdiff_table set rows_compared = %d where vdiff_id = %d and table_name = %s"
+	sqlUpdateTableState      = "update _vt.vdiff_table set state = %s, report = %s where vdiff_id = %d and table_name = %s"
+	sqlUpdateTableMismatch   = "update _vt.vdiff_table set mismatch = true where vdiff_id = %d and table_name = %s"
 
 	sqlGetIncompleteTables = "select * from _vt.vdiff_table where vdiff_id = %d and state != 'completed'"
 )

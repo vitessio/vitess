@@ -583,13 +583,18 @@ func (td *tableDiffer) compare(sourceRow, targetRow []sqltypes.Value, cols []com
 func (td *tableDiffer) updateTableProgress(dbClient binlogplayer.DBClient, numRows int64, lastRow []sqltypes.Value) error {
 	var lastPK []byte
 	var err error
+	var query string
 	if lastRow != nil {
 		lastPK, err = td.lastPKFromRow(lastRow)
 		if err != nil {
 			return err
 		}
+		query = fmt.Sprintf(sqlUpdateTableProgress, numRows, encodeString(string(lastPK)), td.wd.ct.id, encodeString(td.table.Name))
+	} else {
+		// We didn't process any rows this time around so reflect that and keep any
+		// lastpk from a previous run. This is only relevant for RESUMEd vdiffs.
+		query = fmt.Sprintf(sqlUpdateTableNoProgress, numRows, td.wd.ct.id, encodeString(td.table.Name))
 	}
-	query := fmt.Sprintf(sqlUpdateTableProgress, numRows, encodeString(string(lastPK)), td.wd.ct.id, encodeString(td.table.Name))
 	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
 		return err
 	}
