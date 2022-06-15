@@ -320,7 +320,7 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 		instance.VersionComment = fullStatus.VersionComment
 		resolvedHostname = instance.Key.Hostname
 
-		if instance.LogBinEnabled {
+		if instance.LogBinEnabled && fullStatus.PrimaryStatus != nil {
 			pos, err := vitessmysql.DecodePosition(fullStatus.PrimaryStatus.FilePosition)
 			errorChan <- err
 			if err == nil {
@@ -347,14 +347,16 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 			// @@gtid_mode only available in Orcale MySQL >= 5.6
 			instance.GTIDMode = fullStatus.GtidMode
 			instance.ServerUUID = fullStatus.ServerUuid
-			GtidExecutedPos, err := vitessmysql.DecodePosition(fullStatus.PrimaryStatus.Position)
-			errorChan <- err
-			if err == nil {
-				instance.ExecutedGtidSet = GtidExecutedPos.GTIDSet.String()
+			if fullStatus.PrimaryStatus != nil {
+				GtidExecutedPos, err := vitessmysql.DecodePosition(fullStatus.PrimaryStatus.Position)
+				errorChan <- err
+				if err == nil && GtidExecutedPos.GTIDSet != nil {
+					instance.ExecutedGtidSet = GtidExecutedPos.GTIDSet.String()
+				}
 			}
 			GtidPurgedPos, err := vitessmysql.DecodePosition(fullStatus.GtidPurged)
 			errorChan <- err
-			if err == nil {
+			if err == nil && GtidPurgedPos.GTIDSet != nil {
 				instance.GtidPurged = GtidPurgedPos.GTIDSet.String()
 			}
 			instance.BinlogRowImage = fullStatus.BinlogRowImage
