@@ -2225,15 +2225,24 @@ func (node WindowDefinitions) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
-func (node *ConvertExpr) formatFast(buf *TrackedBuffer) {
-	buf.WriteString("convert(")
+func (node *CastExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("cast(")
 	buf.printExpr(node, node.Expr, true)
-	buf.WriteString(", ")
+	buf.WriteString(" as ")
 	node.Type.formatFast(buf)
 	if node.Array {
 		buf.WriteByte(' ')
 		buf.WriteString(keywordStrings[ARRAY])
 	}
+	buf.WriteByte(')')
+}
+
+// formatFast formats the node.
+func (node *ConvertExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("convert(")
+	buf.printExpr(node, node.Expr, true)
+	buf.WriteString(", ")
+	node.Type.formatFast(buf)
 	buf.WriteByte(')')
 }
 

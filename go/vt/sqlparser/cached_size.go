@@ -516,6 +516,22 @@ func (cached *CaseExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *CastExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(32)
+	}
+	// field Expr vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Expr.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Type *vitess.io/vitess/go/vt/sqlparser.ConvertType
+	size += cached.Type.CachedSize(true)
+	return size
+}
 func (cached *ChangeColumn) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -746,7 +762,7 @@ func (cached *ConvertExpr) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(32)
+		size += int64(24)
 	}
 	// field Expr vitess.io/vitess/go/vt/sqlparser.Expr
 	if cc, ok := cached.Expr.(cachedObject); ok {

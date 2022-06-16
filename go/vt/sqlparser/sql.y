@@ -5171,11 +5171,11 @@ function_call_keyword
   }
 | CAST openb expression AS convert_type array_opt closeb
   {
-    $$ = &ConvertExpr{Expr: $3, Type: $5, Array: $6}
+    $$ = &CastExpr{Expr: $3, Type: $5, Array: $6}
   }
-| CONVERT openb expression ',' convert_type array_opt closeb
+| CONVERT openb expression ',' convert_type closeb
   {
-    $$ = &ConvertExpr{Expr: $3, Type: $5, Array: $6}
+    $$ = &ConvertExpr{Expr: $3, Type: $5}
   }
 | CONVERT openb expression USING charset closeb
   {

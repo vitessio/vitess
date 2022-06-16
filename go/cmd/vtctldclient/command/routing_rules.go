@@ -146,8 +146,8 @@ func commandGetRoutingRules(cmd *cobra.Command, args []string) error {
 }
 
 func init() {
-	ApplyRoutingRules.Flags().StringVarP(&applyRoutingRulesOptions.Rules, "rules", "r", "", "Routing rules, specified as a string")
-	ApplyRoutingRules.Flags().StringVarP(&applyRoutingRulesOptions.RulesFilePath, "rules-file", "f", "", "Path to a file containing routing rules specified as JSON")
+	ApplyRoutingRules.Flags().StringVarP(&applyRoutingRulesOptions.Rules, "rules", "r", "", "Routing rules, specified as a string.")
+	ApplyRoutingRules.Flags().StringVarP(&applyRoutingRulesOptions.RulesFilePath, "rules-file", "f", "", "Path to a file containing routing rules specified as JSON.")
 	ApplyRoutingRules.Flags().StringSliceVarP(&applyRoutingRulesOptions.Cells, "cells", "c", nil, "Limit the VSchema graph rebuildingg to the specified cells. Ignored if --skip-rebuild is specified.")
 	ApplyRoutingRules.Flags().BoolVar(&applyRoutingRulesOptions.SkipRebuild, "skip-rebuild", false, "Skip rebuilding the SrvVSchema objects.")
 	ApplyRoutingRules.Flags().BoolVarP(&applyRoutingRulesOptions.DryRun, "dry-run", "d", false, "Load the specified routing rules as a validation step, but do not actually apply the rules to the topo.")
