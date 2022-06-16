@@ -57,6 +57,9 @@ func (topo *TopoProcess) Setup(topoFlavor string, cluster *LocalProcessCluster) 
 	case "consul":
 		return topo.SetupConsul(cluster)
 	default:
+		// We still rely on the etcd v2 API for things like mkdir
+		// If this ENV var is not set then tests will fail with etcd 3.x
+		os.Setenv("ETCDCTL_API", "2")
 		return topo.SetupEtcd()
 	}
 }
