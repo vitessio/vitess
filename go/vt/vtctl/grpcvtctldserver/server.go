@@ -476,6 +476,7 @@ func (s *VtctldServer) ChangeTabletType(ctx context.Context, req *vtctldatapb.Ch
 	if err != nil {
 		return nil, err
 	}
+	log.Infof("Getting a new durability policy for %v", durabilityName)
 	durability, err := reparentutil.GetDurabilityPolicy(durabilityName)
 	if err != nil {
 		return nil, err
@@ -1744,6 +1745,7 @@ func (s *VtctldServer) InitShardPrimaryLocked(
 	if err != nil {
 		return err
 	}
+	log.Infof("Getting a new durability policy for %v", durabilityName)
 	durability, err := reparentutil.GetDurabilityPolicy(durabilityName)
 	if err != nil {
 		return err
@@ -2318,6 +2320,7 @@ func (s *VtctldServer) ReparentTablet(ctx context.Context, req *vtctldatapb.Repa
 	if err != nil {
 		return nil, err
 	}
+	log.Infof("Getting a new durability policy for %v", durabilityName)
 	durability, err := reparentutil.GetDurabilityPolicy(durabilityName)
 	if err != nil {
 		return nil, err
@@ -2986,6 +2989,7 @@ func (s *VtctldServer) StartReplication(ctx context.Context, req *vtctldatapb.St
 	if err != nil {
 		return nil, err
 	}
+	log.Infof("Getting a new durability policy for %v", durabilityName)
 	durability, err := reparentutil.GetDurabilityPolicy(durabilityName)
 	if err != nil {
 		return nil, err
@@ -3084,6 +3088,7 @@ func (s *VtctldServer) TabletExternallyReparented(ctx context.Context, req *vtct
 	if err != nil {
 		return nil, err
 	}
+	log.Infof("Getting a new durability policy for %v", durabilityName)
 	durability, err := reparentutil.GetDurabilityPolicy(durabilityName)
 	if err != nil {
 		return nil, err
