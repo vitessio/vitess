@@ -82,6 +82,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfCallProc(in, f)
 	case *CaseExpr:
 		return VisitRefOfCaseExpr(in, f)
+	case *CastExpr:
+		return VisitRefOfCastExpr(in, f)
 	case *ChangeColumn:
 		return VisitRefOfChangeColumn(in, f)
 	case *CheckConstraintDefinition:
@@ -889,6 +891,21 @@ func VisitRefOfCaseExpr(in *CaseExpr, f Visit) error {
 		}
 	}
 	if err := VisitExpr(in.Else, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfCastExpr(in *CastExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Expr, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfConvertType(in.Type, f); err != nil {
 		return err
 	}
 	return nil
@@ -4186,6 +4203,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitBoolVal(in, f)
 	case *CaseExpr:
 		return VisitRefOfCaseExpr(in, f)
+	case *CastExpr:
+		return VisitRefOfCastExpr(in, f)
 	case *ColName:
 		return VisitRefOfColName(in, f)
 	case *CollateExpr:
@@ -4388,6 +4407,8 @@ func VisitJSONPathParam(in JSONPathParam, f Visit) error {
 		return VisitBoolVal(in, f)
 	case *CaseExpr:
 		return VisitRefOfCaseExpr(in, f)
+	case *CastExpr:
+		return VisitRefOfCastExpr(in, f)
 	case *ColName:
 		return VisitRefOfColName(in, f)
 	case *CollateExpr:
