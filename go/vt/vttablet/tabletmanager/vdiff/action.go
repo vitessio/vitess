@@ -100,7 +100,7 @@ func (vde *Engine) PerformVDiffAction(ctx context.Context, req *tabletmanagerdat
 			}
 			resp.Id = int64(qr.InsertID)
 		} else {
-			query := fmt.Sprintf(sqlResumeVDiff, encodeString(req.VdiffUuid))
+			query := fmt.Sprintf(sqlResumeVDiff, encodeString(string(optionsJSON)), encodeString(req.VdiffUuid))
 			if qr, err = withDDL.Exec(context.Background(), query, dbClient.ExecuteFetch, dbClient.ExecuteFetch); err != nil {
 				return nil, err
 			}

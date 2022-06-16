@@ -65,7 +65,7 @@ const (
 		primary key (id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`
 
 	sqlNewVDiff                       = "insert into _vt.vdiff(keyspace, workflow, state, options, shard, db_name, vdiff_uuid) values(%s, %s, '%s', %s, '%s', '%s', '%s')"
-	sqlResumeVDiff                    = "update _vt.vdiff set state = 'pending' where vdiff_uuid = %s"
+	sqlResumeVDiff                    = "update _vt.vdiff set completed_timestamp = NULL, state = 'pending', options = %s where vdiff_uuid = %s"
 	sqlGetVDiffByKeyspaceWorkflowUUID = "select * from _vt.vdiff where keyspace = %s and workflow = %s and vdiff_uuid = %s"
 	sqlGetMostRecentVDiff             = "select * from _vt.vdiff where keyspace = %s and workflow = %s order by id desc limit 1"
 	sqlGetVDiffByID                   = "select * from _vt.vdiff where id = %d"
