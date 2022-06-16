@@ -224,12 +224,6 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfCheckConstraintDefinition(a, b)
-	case ColIdent:
-		b, ok := inB.(ColIdent)
-		if !ok {
-			return false
-		}
-		return EqualsColIdent(a, b)
 	case *ColName:
 		b, ok := inB.(*ColName)
 		if !ok {
@@ -506,6 +500,18 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfGroupConcatExpr(a, b)
+	case IdentifierCI:
+		b, ok := inB.(IdentifierCI)
+		if !ok {
+			return false
+		}
+		return EqualsIdentifierCI(a, b)
+	case IdentifierCS:
+		b, ok := inB.(IdentifierCS)
+		if !ok {
+			return false
+		}
+		return EqualsIdentifierCS(a, b)
 	case *IndexDefinition:
 		b, ok := inB.(*IndexDefinition)
 		if !ok {
@@ -1244,12 +1250,6 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsTableExprs(a, b)
-	case TableIdent:
-		b, ok := inB.(TableIdent)
-		if !ok {
-			return false
-		}
-		return EqualsTableIdent(a, b)
 	case TableName:
 		b, ok := inB.(TableName)
 		if !ok {
@@ -1510,7 +1510,7 @@ func EqualsRefOfAliasedExpr(a, b *AliasedExpr) bool {
 		return false
 	}
 	return EqualsExpr(a.Expr, b.Expr) &&
-		EqualsColIdent(a.As, b.As)
+		EqualsIdentifierCI(a.As, b.As)
 }
 
 // EqualsRefOfAliasedTableExpr does deep equals between the two objects.
@@ -1523,7 +1523,7 @@ func EqualsRefOfAliasedTableExpr(a, b *AliasedTableExpr) bool {
 	}
 	return EqualsSimpleTableExpr(a.Expr, b.Expr) &&
 		EqualsPartitions(a.Partitions, b.Partitions) &&
-		EqualsTableIdent(a.As, b.As) &&
+		EqualsIdentifierCS(a.As, b.As) &&
 		EqualsIndexHints(a.Hints, b.Hints) &&
 		EqualsColumns(a.Columns, b.Columns)
 }
@@ -1549,7 +1549,7 @@ func EqualsRefOfAlterCheck(a, b *AlterCheck) bool {
 		return false
 	}
 	return a.Enforced == b.Enforced &&
-		EqualsColIdent(a.Name, b.Name)
+		EqualsIdentifierCI(a.Name, b.Name)
 }
 
 // EqualsRefOfAlterColumn does deep equals between the two objects.
@@ -1576,7 +1576,7 @@ func EqualsRefOfAlterDatabase(a, b *AlterDatabase) bool {
 	}
 	return a.UpdateDataDirectory == b.UpdateDataDirectory &&
 		a.FullyParsed == b.FullyParsed &&
-		EqualsTableIdent(a.DBName, b.DBName) &&
+		EqualsIdentifierCS(a.DBName, b.DBName) &&
 		EqualsSliceOfDatabaseOption(a.AlterOptions, b.AlterOptions)
 }
 
@@ -1589,7 +1589,7 @@ func EqualsRefOfAlterIndex(a, b *AlterIndex) bool {
 		return false
 	}
 	return a.Invisible == b.Invisible &&
-		EqualsColIdent(a.Name, b.Name)
+		EqualsIdentifierCI(a.Name, b.Name)
 }
 
 // EqualsRefOfAlterMigration does deep equals between the two objects.
@@ -1651,7 +1651,7 @@ func EqualsRefOfAlterVschema(a, b *AlterVschema) bool {
 	return a.Action == b.Action &&
 		EqualsTableName(a.Table, b.Table) &&
 		EqualsRefOfVindexSpec(a.VindexSpec, b.VindexSpec) &&
-		EqualsSliceOfColIdent(a.VindexCols, b.VindexCols) &&
+		EqualsSliceOfIdentifierCI(a.VindexCols, b.VindexCols) &&
 		EqualsRefOfAutoIncSpec(a.AutoIncSpec, b.AutoIncSpec)
 }
 
@@ -1687,7 +1687,7 @@ func EqualsRefOfAutoIncSpec(a, b *AutoIncSpec) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return EqualsColIdent(a.Column, b.Column) &&
+	return EqualsIdentifierCI(a.Column, b.Column) &&
 		EqualsTableName(a.Sequence, b.Sequence)
 }
 
@@ -1842,12 +1842,6 @@ func EqualsRefOfCheckConstraintDefinition(a, b *CheckConstraintDefinition) bool 
 		EqualsExpr(a.Expr, b.Expr)
 }
 
-// EqualsColIdent does deep equals between the two objects.
-func EqualsColIdent(a, b ColIdent) bool {
-	return a.val == b.val &&
-		a.lowered == b.lowered
-}
-
 // EqualsRefOfColName does deep equals between the two objects.
 func EqualsRefOfColName(a, b *ColName) bool {
 	if a == b {
@@ -1856,7 +1850,7 @@ func EqualsRefOfColName(a, b *ColName) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return EqualsColIdent(a.Name, b.Name) &&
+	return EqualsIdentifierCI(a.Name, b.Name) &&
 		EqualsTableName(a.Qualifier, b.Qualifier)
 }
 
@@ -1880,7 +1874,7 @@ func EqualsRefOfColumnDefinition(a, b *ColumnDefinition) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return EqualsColIdent(a.Name, b.Name) &&
+	return EqualsIdentifierCI(a.Name, b.Name) &&
 		EqualsColumnType(a.Type, b.Type)
 }
 
@@ -1908,7 +1902,7 @@ func EqualsColumns(a, b Columns) bool {
 		return false
 	}
 	for i := 0; i < len(a); i++ {
-		if !EqualsColIdent(a[i], b[i]) {
+		if !EqualsIdentifierCI(a[i], b[i]) {
 			return false
 		}
 	}
@@ -1934,7 +1928,7 @@ func EqualsRefOfCommonTableExpr(a, b *CommonTableExpr) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return EqualsTableIdent(a.TableID, b.TableID) &&
+	return EqualsIdentifierCS(a.ID, b.ID) &&
 		EqualsColumns(a.Columns, b.Columns) &&
 		EqualsRefOfSubquery(a.Subquery, b.Subquery)
 }
@@ -1961,7 +1955,7 @@ func EqualsRefOfConstraintDefinition(a, b *ConstraintDefinition) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return EqualsColIdent(a.Name, b.Name) &&
+	return EqualsIdentifierCI(a.Name, b.Name) &&
 		EqualsConstraintInfo(a.Details, b.Details)
 }
 
@@ -2038,7 +2032,7 @@ func EqualsRefOfCreateDatabase(a, b *CreateDatabase) bool {
 	return a.IfNotExists == b.IfNotExists &&
 		a.FullyParsed == b.FullyParsed &&
 		EqualsRefOfParsedComments(a.Comments, b.Comments) &&
-		EqualsTableIdent(a.DBName, b.DBName) &&
+		EqualsIdentifierCS(a.DBName, b.DBName) &&
 		EqualsSliceOfDatabaseOption(a.CreateOptions, b.CreateOptions)
 }
 
@@ -2086,7 +2080,7 @@ func EqualsRefOfCurTimeFuncExpr(a, b *CurTimeFuncExpr) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return EqualsColIdent(a.Name, b.Name) &&
+	return EqualsIdentifierCI(a.Name, b.Name) &&
 		EqualsExpr(a.Fsp, b.Fsp)
 }
 
@@ -2100,7 +2094,7 @@ func EqualsRefOfDeallocateStmt(a, b *DeallocateStmt) bool {
 	}
 	return a.Type == b.Type &&
 		EqualsRefOfParsedComments(a.Comments, b.Comments) &&
-		EqualsColIdent(a.Name, b.Name)
+		EqualsIdentifierCI(a.Name, b.Name)
 }
 
 // EqualsRefOfDefault does deep equals between the two objects.
@@ -2178,7 +2172,7 @@ func EqualsRefOfDropDatabase(a, b *DropDatabase) bool {
 	}
 	return a.IfExists == b.IfExists &&
 		EqualsRefOfParsedComments(a.Comments, b.Comments) &&
-		EqualsTableIdent(a.DBName, b.DBName)
+		EqualsIdentifierCS(a.DBName, b.DBName)
 }
 
 // EqualsRefOfDropKey does deep equals between the two objects.
@@ -2190,7 +2184,7 @@ func EqualsRefOfDropKey(a, b *DropKey) bool {
 		return false
 	}
 	return a.Type == b.Type &&
-		EqualsColIdent(a.Name, b.Name)
+		EqualsIdentifierCI(a.Name, b.Name)
 }
 
 // EqualsRefOfDropTable does deep equals between the two objects.
@@ -2228,7 +2222,7 @@ func EqualsRefOfExecuteStmt(a, b *ExecuteStmt) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return EqualsColIdent(a.Name, b.Name) &&
+	return EqualsIdentifierCI(a.Name, b.Name) &&
 		EqualsRefOfParsedComments(a.Comments, b.Comments) &&
 		EqualsSliceOfRefOfVariable(a.Arguments, b.Arguments)
 }
@@ -2372,7 +2366,7 @@ func EqualsRefOfForeignKeyDefinition(a, b *ForeignKeyDefinition) bool {
 		return false
 	}
 	return EqualsColumns(a.Source, b.Source) &&
-		EqualsColIdent(a.IndexName, b.IndexName) &&
+		EqualsIdentifierCI(a.IndexName, b.IndexName) &&
 		EqualsRefOfReferenceDefinition(a.ReferenceDefinition, b.ReferenceDefinition)
 }
 
@@ -2421,8 +2415,8 @@ func EqualsRefOfFuncExpr(a, b *FuncExpr) bool {
 		return false
 	}
 	return a.Distinct == b.Distinct &&
-		EqualsTableIdent(a.Qualifier, b.Qualifier) &&
-		EqualsColIdent(a.Name, b.Name) &&
+		EqualsIdentifierCS(a.Qualifier, b.Qualifier) &&
+		EqualsIdentifierCI(a.Name, b.Name) &&
 		EqualsSelectExprs(a.Exprs, b.Exprs)
 }
 
@@ -2455,6 +2449,17 @@ func EqualsRefOfGroupConcatExpr(a, b *GroupConcatExpr) bool {
 		EqualsRefOfLimit(a.Limit, b.Limit)
 }
 
+// EqualsIdentifierCI does deep equals between the two objects.
+func EqualsIdentifierCI(a, b IdentifierCI) bool {
+	return a.val == b.val &&
+		a.lowered == b.lowered
+}
+
+// EqualsIdentifierCS does deep equals between the two objects.
+func EqualsIdentifierCS(a, b IdentifierCS) bool {
+	return a.v == b.v
+}
+
 // EqualsRefOfIndexDefinition does deep equals between the two objects.
 func EqualsRefOfIndexDefinition(a, b *IndexDefinition) bool {
 	if a == b {
@@ -2478,7 +2483,7 @@ func EqualsRefOfIndexHint(a, b *IndexHint) bool {
 	}
 	return a.Type == b.Type &&
 		a.ForType == b.ForType &&
-		EqualsSliceOfColIdent(a.Indexes, b.Indexes)
+		EqualsSliceOfIdentifierCI(a.Indexes, b.Indexes)
 }
 
 // EqualsIndexHints does deep equals between the two objects.
@@ -2507,8 +2512,8 @@ func EqualsRefOfIndexInfo(a, b *IndexInfo) bool {
 		a.Spatial == b.Spatial &&
 		a.Fulltext == b.Fulltext &&
 		a.Unique == b.Unique &&
-		EqualsColIdent(a.Name, b.Name) &&
-		EqualsColIdent(a.ConstraintName, b.ConstraintName)
+		EqualsIdentifierCI(a.Name, b.Name) &&
+		EqualsIdentifierCI(a.ConstraintName, b.ConstraintName)
 }
 
 // EqualsRefOfInsert does deep equals between the two objects.
@@ -2772,7 +2777,7 @@ func EqualsRefOfJSONTableExpr(a, b *JSONTableExpr) bool {
 		return false
 	}
 	return EqualsExpr(a.Expr, b.Expr) &&
-		EqualsTableIdent(a.Alias, b.Alias) &&
+		EqualsIdentifierCS(a.Alias, b.Alias) &&
 		EqualsExpr(a.Filter, b.Filter) &&
 		EqualsSliceOfRefOfJtColumnDefinition(a.Columns, b.Columns)
 }
@@ -3250,7 +3255,7 @@ func EqualsRefOfOverClause(a, b *OverClause) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return EqualsColIdent(a.WindowName, b.WindowName) &&
+	return EqualsIdentifierCI(a.WindowName, b.WindowName) &&
 		EqualsRefOfWindowSpecification(a.WindowSpec, b.WindowSpec)
 }
 
@@ -3284,7 +3289,7 @@ func EqualsRefOfPartitionDefinition(a, b *PartitionDefinition) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return EqualsColIdent(a.Name, b.Name) &&
+	return EqualsIdentifierCI(a.Name, b.Name) &&
 		EqualsRefOfPartitionDefinitionOptions(a.Options, b.Options)
 }
 
@@ -3373,7 +3378,7 @@ func EqualsPartitions(a, b Partitions) bool {
 		return false
 	}
 	for i := 0; i < len(a); i++ {
-		if !EqualsColIdent(a[i], b[i]) {
+		if !EqualsIdentifierCI(a[i], b[i]) {
 			return false
 		}
 	}
@@ -3400,7 +3405,7 @@ func EqualsRefOfPrepareStmt(a, b *PrepareStmt) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return EqualsColIdent(a.Name, b.Name) &&
+	return EqualsIdentifierCI(a.Name, b.Name) &&
 		EqualsExpr(a.Statement, b.Statement) &&
 		EqualsRefOfParsedComments(a.Comments, b.Comments)
 }
@@ -3488,7 +3493,7 @@ func EqualsRefOfRelease(a, b *Release) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return EqualsColIdent(a.Name, b.Name)
+	return EqualsIdentifierCI(a.Name, b.Name)
 }
 
 // EqualsRefOfRenameColumn does deep equals between the two objects.
@@ -3511,8 +3516,8 @@ func EqualsRefOfRenameIndex(a, b *RenameIndex) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return EqualsColIdent(a.OldName, b.OldName) &&
-		EqualsColIdent(a.NewName, b.NewName)
+	return EqualsIdentifierCI(a.OldName, b.OldName) &&
+		EqualsIdentifierCI(a.NewName, b.NewName)
 }
 
 // EqualsRefOfRenameTable does deep equals between the two objects.
@@ -3573,7 +3578,7 @@ func EqualsRefOfSRollback(a, b *SRollback) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return EqualsColIdent(a.Name, b.Name)
+	return EqualsIdentifierCI(a.Name, b.Name)
 }
 
 // EqualsRefOfSavepoint does deep equals between the two objects.
@@ -3584,7 +3589,7 @@ func EqualsRefOfSavepoint(a, b *Savepoint) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return EqualsColIdent(a.Name, b.Name)
+	return EqualsIdentifierCI(a.Name, b.Name)
 }
 
 // EqualsRefOfSelect does deep equals between the two objects.
@@ -3715,7 +3720,7 @@ func EqualsRefOfShowBasic(a, b *ShowBasic) bool {
 	return a.Full == b.Full &&
 		a.Command == b.Command &&
 		EqualsTableName(a.Tbl, b.Tbl) &&
-		EqualsTableIdent(a.DbName, b.DbName) &&
+		EqualsIdentifierCS(a.DbName, b.DbName) &&
 		EqualsRefOfShowFilter(a.Filter, b.Filter)
 }
 
@@ -3873,7 +3878,7 @@ func EqualsRefOfSubPartitionDefinition(a, b *SubPartitionDefinition) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return EqualsColIdent(a.Name, b.Name) &&
+	return EqualsIdentifierCI(a.Name, b.Name) &&
 		EqualsRefOfSubPartitionDefinitionOptions(a.Options, b.Options)
 }
 
@@ -3957,15 +3962,10 @@ func EqualsTableExprs(a, b TableExprs) bool {
 	return true
 }
 
-// EqualsTableIdent does deep equals between the two objects.
-func EqualsTableIdent(a, b TableIdent) bool {
-	return a.v == b.v
-}
-
 // EqualsTableName does deep equals between the two objects.
 func EqualsTableName(a, b TableName) bool {
-	return EqualsTableIdent(a.Name, b.Name) &&
-		EqualsTableIdent(a.Qualifier, b.Qualifier)
+	return EqualsIdentifierCS(a.Name, b.Name) &&
+		EqualsIdentifierCS(a.Qualifier, b.Qualifier)
 }
 
 // EqualsTableNames does deep equals between the two objects.
@@ -4164,7 +4164,7 @@ func EqualsRefOfUse(a, b *Use) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return EqualsTableIdent(a.DBName, b.DBName)
+	return EqualsIdentifierCS(a.DBName, b.DBName)
 }
 
 // EqualsRefOfVStream does deep equals between the two objects.
@@ -4263,7 +4263,7 @@ func EqualsRefOfVariable(a, b *Variable) bool {
 		return false
 	}
 	return a.Scope == b.Scope &&
-		EqualsColIdent(a.Name, b.Name)
+		EqualsIdentifierCI(a.Name, b.Name)
 }
 
 // EqualsRefOfVariance does deep equals between the two objects.
@@ -4281,7 +4281,7 @@ func EqualsRefOfVariance(a, b *Variance) bool {
 // EqualsVindexParam does deep equals between the two objects.
 func EqualsVindexParam(a, b VindexParam) bool {
 	return a.Val == b.Val &&
-		EqualsColIdent(a.Key, b.Key)
+		EqualsIdentifierCI(a.Key, b.Key)
 }
 
 // EqualsRefOfVindexSpec does deep equals between the two objects.
@@ -4292,8 +4292,8 @@ func EqualsRefOfVindexSpec(a, b *VindexSpec) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return EqualsColIdent(a.Name, b.Name) &&
-		EqualsColIdent(a.Type, b.Type) &&
+	return EqualsIdentifierCI(a.Name, b.Name) &&
+		EqualsIdentifierCI(a.Type, b.Type) &&
 		EqualsSliceOfVindexParam(a.Params, b.Params)
 }
 
@@ -4341,7 +4341,7 @@ func EqualsRefOfWindowDefinition(a, b *WindowDefinition) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return EqualsColIdent(a.Name, b.Name) &&
+	return EqualsIdentifierCI(a.Name, b.Name) &&
 		EqualsRefOfWindowSpecification(a.WindowSpec, b.WindowSpec)
 }
 
@@ -4366,7 +4366,7 @@ func EqualsRefOfWindowSpecification(a, b *WindowSpecification) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return EqualsColIdent(a.Name, b.Name) &&
+	return EqualsIdentifierCI(a.Name, b.Name) &&
 		EqualsExprs(a.PartitionClause, b.PartitionClause) &&
 		EqualsOrderBy(a.OrderClause, b.OrderClause) &&
 		EqualsRefOfFrameClause(a.FrameClause, b.FrameClause)
@@ -6243,13 +6243,13 @@ func EqualsSliceOfAlterOption(a, b []AlterOption) bool {
 	return true
 }
 
-// EqualsSliceOfColIdent does deep equals between the two objects.
-func EqualsSliceOfColIdent(a, b []ColIdent) bool {
+// EqualsSliceOfIdentifierCI does deep equals between the two objects.
+func EqualsSliceOfIdentifierCI(a, b []IdentifierCI) bool {
 	if len(a) != len(b) {
 		return false
 	}
 	for i := 0; i < len(a); i++ {
-		if !EqualsColIdent(a[i], b[i]) {
+		if !EqualsIdentifierCI(a[i], b[i]) {
 			return false
 		}
 	}
@@ -6267,18 +6267,6 @@ func EqualsSliceOfRefOfWhen(a, b []*When) bool {
 		}
 	}
 	return true
-}
-
-// EqualsRefOfColIdent does deep equals between the two objects.
-func EqualsRefOfColIdent(a, b *ColIdent) bool {
-	if a == b {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
-	return a.val == b.val &&
-		a.lowered == b.lowered
 }
 
 // EqualsColumnType does deep equals between the two objects.
@@ -6348,6 +6336,29 @@ func EqualsSliceOfRefOfVariable(a, b []*Variable) bool {
 		}
 	}
 	return true
+}
+
+// EqualsRefOfIdentifierCI does deep equals between the two objects.
+func EqualsRefOfIdentifierCI(a, b *IdentifierCI) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.val == b.val &&
+		a.lowered == b.lowered
+}
+
+// EqualsRefOfIdentifierCS does deep equals between the two objects.
+func EqualsRefOfIdentifierCS(a, b *IdentifierCS) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.v == b.v
 }
 
 // EqualsSliceOfRefOfIndexColumn does deep equals between the two objects.
@@ -6435,7 +6446,7 @@ func EqualsRefOfJtOrdinalColDef(a, b *JtOrdinalColDef) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return EqualsColIdent(a.Name, b.Name)
+	return EqualsIdentifierCI(a.Name, b.Name)
 }
 
 // EqualsRefOfJtPathColDef does deep equals between the two objects.
@@ -6447,7 +6458,7 @@ func EqualsRefOfJtPathColDef(a, b *JtPathColDef) bool {
 		return false
 	}
 	return a.JtColExists == b.JtColExists &&
-		EqualsColIdent(a.Name, b.Name) &&
+		EqualsIdentifierCI(a.Name, b.Name) &&
 		EqualsColumnType(a.Type, b.Type) &&
 		EqualsExpr(a.Path, b.Path) &&
 		EqualsRefOfJtOnResponse(a.EmptyOnResponse, b.EmptyOnResponse) &&
@@ -6566,17 +6577,6 @@ func EqualsSliceOfCharacteristic(a, b []Characteristic) bool {
 	return true
 }
 
-// EqualsRefOfTableIdent does deep equals between the two objects.
-func EqualsRefOfTableIdent(a, b *TableIdent) bool {
-	if a == b {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
-	return a.v == b.v
-}
-
 // EqualsRefOfTableName does deep equals between the two objects.
 func EqualsRefOfTableName(a, b *TableName) bool {
 	if a == b {
@@ -6585,8 +6585,8 @@ func EqualsRefOfTableName(a, b *TableName) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return EqualsTableIdent(a.Name, b.Name) &&
-		EqualsTableIdent(a.Qualifier, b.Qualifier)
+	return EqualsIdentifierCS(a.Name, b.Name) &&
+		EqualsIdentifierCS(a.Qualifier, b.Qualifier)
 }
 
 // EqualsRefOfTableOption does deep equals between the two objects.
@@ -6639,7 +6639,7 @@ func EqualsRefOfVindexParam(a, b *VindexParam) bool {
 		return false
 	}
 	return a.Val == b.Val &&
-		EqualsColIdent(a.Key, b.Key)
+		EqualsIdentifierCI(a.Key, b.Key)
 }
 
 // EqualsSliceOfVindexParam does deep equals between the two objects.
@@ -6695,7 +6695,7 @@ func EqualsRefOfIndexColumn(a, b *IndexColumn) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return EqualsColIdent(a.Column, b.Column) &&
+	return EqualsIdentifierCI(a.Column, b.Column) &&
 		EqualsRefOfLiteral(a.Length, b.Length) &&
 		EqualsExpr(a.Expression, b.Expression) &&
 		a.Direction == b.Direction

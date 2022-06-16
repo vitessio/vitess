@@ -89,8 +89,6 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfChangeColumn(in)
 	case *CheckConstraintDefinition:
 		return CloneRefOfCheckConstraintDefinition(in)
-	case ColIdent:
-		return CloneColIdent(in)
 	case *ColName:
 		return CloneRefOfColName(in)
 	case *CollateExpr:
@@ -183,6 +181,10 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneGroupBy(in)
 	case *GroupConcatExpr:
 		return CloneRefOfGroupConcatExpr(in)
+	case IdentifierCI:
+		return CloneIdentifierCI(in)
+	case IdentifierCS:
+		return CloneIdentifierCS(in)
 	case *IndexDefinition:
 		return CloneRefOfIndexDefinition(in)
 	case *IndexHint:
@@ -429,8 +431,6 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfSum(in)
 	case TableExprs:
 		return CloneTableExprs(in)
-	case TableIdent:
-		return CloneTableIdent(in)
 	case TableName:
 		return CloneTableName(in)
 	case TableNames:
@@ -545,7 +545,7 @@ func CloneRefOfAliasedExpr(n *AliasedExpr) *AliasedExpr {
 	}
 	out := *n
 	out.Expr = CloneExpr(n.Expr)
-	out.As = CloneColIdent(n.As)
+	out.As = CloneIdentifierCI(n.As)
 	return &out
 }
 
@@ -557,7 +557,7 @@ func CloneRefOfAliasedTableExpr(n *AliasedTableExpr) *AliasedTableExpr {
 	out := *n
 	out.Expr = CloneSimpleTableExpr(n.Expr)
 	out.Partitions = ClonePartitions(n.Partitions)
-	out.As = CloneTableIdent(n.As)
+	out.As = CloneIdentifierCS(n.As)
 	out.Hints = CloneIndexHints(n.Hints)
 	out.Columns = CloneColumns(n.Columns)
 	return &out
@@ -578,7 +578,7 @@ func CloneRefOfAlterCheck(n *AlterCheck) *AlterCheck {
 		return nil
 	}
 	out := *n
-	out.Name = CloneColIdent(n.Name)
+	out.Name = CloneIdentifierCI(n.Name)
 	return &out
 }
 
@@ -600,7 +600,7 @@ func CloneRefOfAlterDatabase(n *AlterDatabase) *AlterDatabase {
 		return nil
 	}
 	out := *n
-	out.DBName = CloneTableIdent(n.DBName)
+	out.DBName = CloneIdentifierCS(n.DBName)
 	out.AlterOptions = CloneSliceOfDatabaseOption(n.AlterOptions)
 	return &out
 }
@@ -611,7 +611,7 @@ func CloneRefOfAlterIndex(n *AlterIndex) *AlterIndex {
 		return nil
 	}
 	out := *n
-	out.Name = CloneColIdent(n.Name)
+	out.Name = CloneIdentifierCI(n.Name)
 	return &out
 }
 
@@ -661,7 +661,7 @@ func CloneRefOfAlterVschema(n *AlterVschema) *AlterVschema {
 	out := *n
 	out.Table = CloneTableName(n.Table)
 	out.VindexSpec = CloneRefOfVindexSpec(n.VindexSpec)
-	out.VindexCols = CloneSliceOfColIdent(n.VindexCols)
+	out.VindexCols = CloneSliceOfIdentifierCI(n.VindexCols)
 	out.AutoIncSpec = CloneRefOfAutoIncSpec(n.AutoIncSpec)
 	return &out
 }
@@ -693,7 +693,7 @@ func CloneRefOfAutoIncSpec(n *AutoIncSpec) *AutoIncSpec {
 		return nil
 	}
 	out := *n
-	out.Column = CloneColIdent(n.Column)
+	out.Column = CloneIdentifierCI(n.Column)
 	out.Sequence = CloneTableName(n.Sequence)
 	return &out
 }
@@ -826,11 +826,6 @@ func CloneRefOfCheckConstraintDefinition(n *CheckConstraintDefinition) *CheckCon
 	return &out
 }
 
-// CloneColIdent creates a deep clone of the input.
-func CloneColIdent(n ColIdent) ColIdent {
-	return *CloneRefOfColIdent(&n)
-}
-
 // CloneRefOfColName creates a deep clone of the input.
 func CloneRefOfColName(n *ColName) *ColName {
 	return n
@@ -852,7 +847,7 @@ func CloneRefOfColumnDefinition(n *ColumnDefinition) *ColumnDefinition {
 		return nil
 	}
 	out := *n
-	out.Name = CloneColIdent(n.Name)
+	out.Name = CloneIdentifierCI(n.Name)
 	out.Type = CloneColumnType(n.Type)
 	return &out
 }
@@ -878,7 +873,7 @@ func CloneColumns(n Columns) Columns {
 	}
 	res := make(Columns, 0, len(n))
 	for _, x := range n {
-		res = append(res, CloneColIdent(x))
+		res = append(res, CloneIdentifierCI(x))
 	}
 	return res
 }
@@ -898,7 +893,7 @@ func CloneRefOfCommonTableExpr(n *CommonTableExpr) *CommonTableExpr {
 		return nil
 	}
 	out := *n
-	out.TableID = CloneTableIdent(n.TableID)
+	out.ID = CloneIdentifierCS(n.ID)
 	out.Columns = CloneColumns(n.Columns)
 	out.Subquery = CloneRefOfSubquery(n.Subquery)
 	return &out
@@ -922,7 +917,7 @@ func CloneRefOfConstraintDefinition(n *ConstraintDefinition) *ConstraintDefiniti
 		return nil
 	}
 	out := *n
-	out.Name = CloneColIdent(n.Name)
+	out.Name = CloneIdentifierCI(n.Name)
 	out.Details = CloneConstraintInfo(n.Details)
 	return &out
 }
@@ -986,7 +981,7 @@ func CloneRefOfCreateDatabase(n *CreateDatabase) *CreateDatabase {
 	}
 	out := *n
 	out.Comments = CloneRefOfParsedComments(n.Comments)
-	out.DBName = CloneTableIdent(n.DBName)
+	out.DBName = CloneIdentifierCS(n.DBName)
 	out.CreateOptions = CloneSliceOfDatabaseOption(n.CreateOptions)
 	return &out
 }
@@ -1024,7 +1019,7 @@ func CloneRefOfCurTimeFuncExpr(n *CurTimeFuncExpr) *CurTimeFuncExpr {
 		return nil
 	}
 	out := *n
-	out.Name = CloneColIdent(n.Name)
+	out.Name = CloneIdentifierCI(n.Name)
 	out.Fsp = CloneExpr(n.Fsp)
 	return &out
 }
@@ -1036,7 +1031,7 @@ func CloneRefOfDeallocateStmt(n *DeallocateStmt) *DeallocateStmt {
 	}
 	out := *n
 	out.Comments = CloneRefOfParsedComments(n.Comments)
-	out.Name = CloneColIdent(n.Name)
+	out.Name = CloneIdentifierCI(n.Name)
 	return &out
 }
 
@@ -1102,7 +1097,7 @@ func CloneRefOfDropDatabase(n *DropDatabase) *DropDatabase {
 	}
 	out := *n
 	out.Comments = CloneRefOfParsedComments(n.Comments)
-	out.DBName = CloneTableIdent(n.DBName)
+	out.DBName = CloneIdentifierCS(n.DBName)
 	return &out
 }
 
@@ -1112,7 +1107,7 @@ func CloneRefOfDropKey(n *DropKey) *DropKey {
 		return nil
 	}
 	out := *n
-	out.Name = CloneColIdent(n.Name)
+	out.Name = CloneIdentifierCI(n.Name)
 	return &out
 }
 
@@ -1144,7 +1139,7 @@ func CloneRefOfExecuteStmt(n *ExecuteStmt) *ExecuteStmt {
 		return nil
 	}
 	out := *n
-	out.Name = CloneColIdent(n.Name)
+	out.Name = CloneIdentifierCI(n.Name)
 	out.Comments = CloneRefOfParsedComments(n.Comments)
 	out.Arguments = CloneSliceOfRefOfVariable(n.Arguments)
 	return &out
@@ -1265,7 +1260,7 @@ func CloneRefOfForeignKeyDefinition(n *ForeignKeyDefinition) *ForeignKeyDefiniti
 	}
 	out := *n
 	out.Source = CloneColumns(n.Source)
-	out.IndexName = CloneColIdent(n.IndexName)
+	out.IndexName = CloneIdentifierCI(n.IndexName)
 	out.ReferenceDefinition = CloneRefOfReferenceDefinition(n.ReferenceDefinition)
 	return &out
 }
@@ -1306,8 +1301,8 @@ func CloneRefOfFuncExpr(n *FuncExpr) *FuncExpr {
 		return nil
 	}
 	out := *n
-	out.Qualifier = CloneTableIdent(n.Qualifier)
-	out.Name = CloneColIdent(n.Name)
+	out.Qualifier = CloneIdentifierCS(n.Qualifier)
+	out.Name = CloneIdentifierCI(n.Name)
 	out.Exprs = CloneSelectExprs(n.Exprs)
 	return &out
 }
@@ -1336,6 +1331,16 @@ func CloneRefOfGroupConcatExpr(n *GroupConcatExpr) *GroupConcatExpr {
 	return &out
 }
 
+// CloneIdentifierCI creates a deep clone of the input.
+func CloneIdentifierCI(n IdentifierCI) IdentifierCI {
+	return *CloneRefOfIdentifierCI(&n)
+}
+
+// CloneIdentifierCS creates a deep clone of the input.
+func CloneIdentifierCS(n IdentifierCS) IdentifierCS {
+	return *CloneRefOfIdentifierCS(&n)
+}
+
 // CloneRefOfIndexDefinition creates a deep clone of the input.
 func CloneRefOfIndexDefinition(n *IndexDefinition) *IndexDefinition {
 	if n == nil {
@@ -1354,7 +1359,7 @@ func CloneRefOfIndexHint(n *IndexHint) *IndexHint {
 		return nil
 	}
 	out := *n
-	out.Indexes = CloneSliceOfColIdent(n.Indexes)
+	out.Indexes = CloneSliceOfIdentifierCI(n.Indexes)
 	return &out
 }
 
@@ -1376,8 +1381,8 @@ func CloneRefOfIndexInfo(n *IndexInfo) *IndexInfo {
 		return nil
 	}
 	out := *n
-	out.Name = CloneColIdent(n.Name)
-	out.ConstraintName = CloneColIdent(n.ConstraintName)
+	out.Name = CloneIdentifierCI(n.Name)
+	out.ConstraintName = CloneIdentifierCI(n.ConstraintName)
 	return &out
 }
 
@@ -1613,7 +1618,7 @@ func CloneRefOfJSONTableExpr(n *JSONTableExpr) *JSONTableExpr {
 	}
 	out := *n
 	out.Expr = CloneExpr(n.Expr)
-	out.Alias = CloneTableIdent(n.Alias)
+	out.Alias = CloneIdentifierCS(n.Alias)
 	out.Filter = CloneExpr(n.Filter)
 	out.Columns = CloneSliceOfRefOfJtColumnDefinition(n.Columns)
 	return &out
@@ -2028,7 +2033,7 @@ func CloneRefOfOverClause(n *OverClause) *OverClause {
 		return nil
 	}
 	out := *n
-	out.WindowName = CloneColIdent(n.WindowName)
+	out.WindowName = CloneIdentifierCI(n.WindowName)
 	out.WindowSpec = CloneRefOfWindowSpecification(n.WindowSpec)
 	return &out
 }
@@ -2059,7 +2064,7 @@ func CloneRefOfPartitionDefinition(n *PartitionDefinition) *PartitionDefinition 
 		return nil
 	}
 	out := *n
-	out.Name = CloneColIdent(n.Name)
+	out.Name = CloneIdentifierCI(n.Name)
 	out.Options = CloneRefOfPartitionDefinitionOptions(n.Options)
 	return &out
 }
@@ -2133,7 +2138,7 @@ func ClonePartitions(n Partitions) Partitions {
 	}
 	res := make(Partitions, 0, len(n))
 	for _, x := range n {
-		res = append(res, CloneColIdent(x))
+		res = append(res, CloneIdentifierCI(x))
 	}
 	return res
 }
@@ -2154,7 +2159,7 @@ func CloneRefOfPrepareStmt(n *PrepareStmt) *PrepareStmt {
 		return nil
 	}
 	out := *n
-	out.Name = CloneColIdent(n.Name)
+	out.Name = CloneIdentifierCI(n.Name)
 	out.Statement = CloneExpr(n.Statement)
 	out.Comments = CloneRefOfParsedComments(n.Comments)
 	return &out
@@ -2233,7 +2238,7 @@ func CloneRefOfRelease(n *Release) *Release {
 		return nil
 	}
 	out := *n
-	out.Name = CloneColIdent(n.Name)
+	out.Name = CloneIdentifierCI(n.Name)
 	return &out
 }
 
@@ -2254,8 +2259,8 @@ func CloneRefOfRenameIndex(n *RenameIndex) *RenameIndex {
 		return nil
 	}
 	out := *n
-	out.OldName = CloneColIdent(n.OldName)
-	out.NewName = CloneColIdent(n.NewName)
+	out.OldName = CloneIdentifierCI(n.OldName)
+	out.NewName = CloneIdentifierCI(n.NewName)
 	return &out
 }
 
@@ -2309,7 +2314,7 @@ func CloneRefOfSRollback(n *SRollback) *SRollback {
 		return nil
 	}
 	out := *n
-	out.Name = CloneColIdent(n.Name)
+	out.Name = CloneIdentifierCI(n.Name)
 	return &out
 }
 
@@ -2319,7 +2324,7 @@ func CloneRefOfSavepoint(n *Savepoint) *Savepoint {
 		return nil
 	}
 	out := *n
-	out.Name = CloneColIdent(n.Name)
+	out.Name = CloneIdentifierCI(n.Name)
 	return &out
 }
 
@@ -2428,7 +2433,7 @@ func CloneRefOfShowBasic(n *ShowBasic) *ShowBasic {
 	}
 	out := *n
 	out.Tbl = CloneTableName(n.Tbl)
-	out.DbName = CloneTableIdent(n.DbName)
+	out.DbName = CloneIdentifierCS(n.DbName)
 	out.Filter = CloneRefOfShowFilter(n.Filter)
 	return &out
 }
@@ -2561,7 +2566,7 @@ func CloneRefOfSubPartitionDefinition(n *SubPartitionDefinition) *SubPartitionDe
 		return nil
 	}
 	out := *n
-	out.Name = CloneColIdent(n.Name)
+	out.Name = CloneIdentifierCI(n.Name)
 	out.Options = CloneRefOfSubPartitionDefinitionOptions(n.Options)
 	return &out
 }
@@ -2635,11 +2640,6 @@ func CloneTableExprs(n TableExprs) TableExprs {
 		res = append(res, CloneTableExpr(x))
 	}
 	return res
-}
-
-// CloneTableIdent creates a deep clone of the input.
-func CloneTableIdent(n TableIdent) TableIdent {
-	return *CloneRefOfTableIdent(&n)
 }
 
 // CloneTableName creates a deep clone of the input.
@@ -2817,7 +2817,7 @@ func CloneRefOfUse(n *Use) *Use {
 		return nil
 	}
 	out := *n
-	out.DBName = CloneTableIdent(n.DBName)
+	out.DBName = CloneIdentifierCS(n.DBName)
 	return &out
 }
 
@@ -2904,7 +2904,7 @@ func CloneRefOfVariable(n *Variable) *Variable {
 		return nil
 	}
 	out := *n
-	out.Name = CloneColIdent(n.Name)
+	out.Name = CloneIdentifierCI(n.Name)
 	return &out
 }
 
@@ -2929,8 +2929,8 @@ func CloneRefOfVindexSpec(n *VindexSpec) *VindexSpec {
 		return nil
 	}
 	out := *n
-	out.Name = CloneColIdent(n.Name)
-	out.Type = CloneColIdent(n.Type)
+	out.Name = CloneIdentifierCI(n.Name)
+	out.Type = CloneIdentifierCI(n.Type)
 	out.Params = CloneSliceOfVindexParam(n.Params)
 	return &out
 }
@@ -2973,7 +2973,7 @@ func CloneRefOfWindowDefinition(n *WindowDefinition) *WindowDefinition {
 		return nil
 	}
 	out := *n
-	out.Name = CloneColIdent(n.Name)
+	out.Name = CloneIdentifierCI(n.Name)
 	out.WindowSpec = CloneRefOfWindowSpecification(n.WindowSpec)
 	return &out
 }
@@ -2996,7 +2996,7 @@ func CloneRefOfWindowSpecification(n *WindowSpecification) *WindowSpecification 
 		return nil
 	}
 	out := *n
-	out.Name = CloneColIdent(n.Name)
+	out.Name = CloneIdentifierCI(n.Name)
 	out.PartitionClause = CloneExprs(n.PartitionClause)
 	out.OrderClause = CloneOrderBy(n.OrderClause)
 	out.FrameClause = CloneRefOfFrameClause(n.FrameClause)
@@ -3787,14 +3787,14 @@ func CloneSliceOfAlterOption(n []AlterOption) []AlterOption {
 	return res
 }
 
-// CloneSliceOfColIdent creates a deep clone of the input.
-func CloneSliceOfColIdent(n []ColIdent) []ColIdent {
+// CloneSliceOfIdentifierCI creates a deep clone of the input.
+func CloneSliceOfIdentifierCI(n []IdentifierCI) []IdentifierCI {
 	if n == nil {
 		return nil
 	}
-	res := make([]ColIdent, 0, len(n))
+	res := make([]IdentifierCI, 0, len(n))
 	for _, x := range n {
-		res = append(res, CloneColIdent(x))
+		res = append(res, CloneIdentifierCI(x))
 	}
 	return res
 }
@@ -3809,15 +3809,6 @@ func CloneSliceOfRefOfWhen(n []*When) []*When {
 		res = append(res, CloneRefOfWhen(x))
 	}
 	return res
-}
-
-// CloneRefOfColIdent creates a deep clone of the input.
-func CloneRefOfColIdent(n *ColIdent) *ColIdent {
-	if n == nil {
-		return nil
-	}
-	out := *n
-	return &out
 }
 
 // CloneColumnType creates a deep clone of the input.
@@ -3869,6 +3860,24 @@ func CloneSliceOfRefOfVariable(n []*Variable) []*Variable {
 		res = append(res, CloneRefOfVariable(x))
 	}
 	return res
+}
+
+// CloneRefOfIdentifierCI creates a deep clone of the input.
+func CloneRefOfIdentifierCI(n *IdentifierCI) *IdentifierCI {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	return &out
+}
+
+// CloneRefOfIdentifierCS creates a deep clone of the input.
+func CloneRefOfIdentifierCS(n *IdentifierCS) *IdentifierCS {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	return &out
 }
 
 // CloneSliceOfRefOfIndexColumn creates a deep clone of the input.
@@ -3948,7 +3957,7 @@ func CloneRefOfJtOrdinalColDef(n *JtOrdinalColDef) *JtOrdinalColDef {
 		return nil
 	}
 	out := *n
-	out.Name = CloneColIdent(n.Name)
+	out.Name = CloneIdentifierCI(n.Name)
 	return &out
 }
 
@@ -3958,7 +3967,7 @@ func CloneRefOfJtPathColDef(n *JtPathColDef) *JtPathColDef {
 		return nil
 	}
 	out := *n
-	out.Name = CloneColIdent(n.Name)
+	out.Name = CloneIdentifierCI(n.Name)
 	out.Type = CloneColumnType(n.Type)
 	out.Path = CloneExpr(n.Path)
 	out.EmptyOnResponse = CloneRefOfJtOnResponse(n.EmptyOnResponse)
@@ -4068,23 +4077,14 @@ func CloneSliceOfCharacteristic(n []Characteristic) []Characteristic {
 	return res
 }
 
-// CloneRefOfTableIdent creates a deep clone of the input.
-func CloneRefOfTableIdent(n *TableIdent) *TableIdent {
-	if n == nil {
-		return nil
-	}
-	out := *n
-	return &out
-}
-
 // CloneRefOfTableName creates a deep clone of the input.
 func CloneRefOfTableName(n *TableName) *TableName {
 	if n == nil {
 		return nil
 	}
 	out := *n
-	out.Name = CloneTableIdent(n.Name)
-	out.Qualifier = CloneTableIdent(n.Qualifier)
+	out.Name = CloneIdentifierCS(n.Name)
+	out.Qualifier = CloneIdentifierCS(n.Qualifier)
 	return &out
 }
 
@@ -4129,7 +4129,7 @@ func CloneRefOfVindexParam(n *VindexParam) *VindexParam {
 		return nil
 	}
 	out := *n
-	out.Key = CloneColIdent(n.Key)
+	out.Key = CloneIdentifierCI(n.Key)
 	return &out
 }
 
@@ -4177,7 +4177,7 @@ func CloneRefOfIndexColumn(n *IndexColumn) *IndexColumn {
 		return nil
 	}
 	out := *n
-	out.Column = CloneColIdent(n.Column)
+	out.Column = CloneIdentifierCI(n.Column)
 	out.Length = CloneRefOfLiteral(n.Length)
 	out.Expression = CloneExpr(n.Expression)
 	return &out

@@ -140,7 +140,7 @@ func (node *With) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *CommonTableExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%v%v as %v ", node.TableID, node.Columns, node.Subquery)
+	buf.astPrintf(node, "%v%v as %v ", node.ID, node.Columns, node.Subquery)
 }
 
 // Format formats the node.
@@ -1847,7 +1847,7 @@ func (node OnDup) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
-func (node ColIdent) Format(buf *TrackedBuffer) {
+func (node IdentifierCI) Format(buf *TrackedBuffer) {
 	if node.IsEmpty() {
 		return
 	}
@@ -1855,7 +1855,7 @@ func (node ColIdent) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
-func (node TableIdent) Format(buf *TrackedBuffer) {
+func (node IdentifierCS) Format(buf *TrackedBuffer) {
 	formatID(buf, node.v, NoAt)
 }
 

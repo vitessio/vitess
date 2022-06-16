@@ -334,7 +334,7 @@ func (er *astRewriter) rewrite(cursor *Cursor) bool {
 					return false
 				}
 				if innerBindVarNeeds.HasRewrites() {
-					aliasedExpr.As = NewColIdent(buf.String())
+					aliasedExpr.As = NewIdentifierCI(buf.String())
 				}
 				er.bindVars.MergeWith(innerBindVarNeeds)
 			}
@@ -396,7 +396,7 @@ func (er *astRewriter) rewrite(cursor *Cursor) bool {
 			break
 		}
 		if er.keyspace != "" && aliasTableName.Qualifier.IsEmpty() {
-			aliasTableName.Qualifier = NewTableIdent(er.keyspace)
+			aliasTableName.Qualifier = NewIdentifierCS(er.keyspace)
 			node.Expr = aliasTableName
 			cursor.Replace(node)
 		}

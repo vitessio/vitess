@@ -209,7 +209,7 @@ func (node *With) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the node.
 func (node *CommonTableExpr) formatFast(buf *TrackedBuffer) {
-	node.TableID.formatFast(buf)
+	node.ID.formatFast(buf)
 	node.Columns.formatFast(buf)
 	buf.WriteString(" as ")
 	node.Subquery.formatFast(buf)
@@ -2435,7 +2435,7 @@ func (node OnDup) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
-func (node ColIdent) formatFast(buf *TrackedBuffer) {
+func (node IdentifierCI) formatFast(buf *TrackedBuffer) {
 	if node.IsEmpty() {
 		return
 	}
@@ -2443,7 +2443,7 @@ func (node ColIdent) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
-func (node TableIdent) formatFast(buf *TrackedBuffer) {
+func (node IdentifierCS) formatFast(buf *TrackedBuffer) {
 	formatID(buf, node.v, NoAt)
 }
 

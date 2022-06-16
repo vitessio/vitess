@@ -88,8 +88,6 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfChangeColumn(parent, node, replacer)
 	case *CheckConstraintDefinition:
 		return a.rewriteRefOfCheckConstraintDefinition(parent, node, replacer)
-	case ColIdent:
-		return a.rewriteColIdent(parent, node, replacer)
 	case *ColName:
 		return a.rewriteRefOfColName(parent, node, replacer)
 	case *CollateExpr:
@@ -182,6 +180,10 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteGroupBy(parent, node, replacer)
 	case *GroupConcatExpr:
 		return a.rewriteRefOfGroupConcatExpr(parent, node, replacer)
+	case IdentifierCI:
+		return a.rewriteIdentifierCI(parent, node, replacer)
+	case IdentifierCS:
+		return a.rewriteIdentifierCS(parent, node, replacer)
 	case *IndexDefinition:
 		return a.rewriteRefOfIndexDefinition(parent, node, replacer)
 	case *IndexHint:
@@ -428,8 +430,6 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfSum(parent, node, replacer)
 	case TableExprs:
 		return a.rewriteTableExprs(parent, node, replacer)
-	case TableIdent:
-		return a.rewriteTableIdent(parent, node, replacer)
 	case TableName:
 		return a.rewriteTableName(parent, node, replacer)
 	case TableNames:
@@ -612,8 +612,8 @@ func (a *application) rewriteRefOfAliasedExpr(parent SQLNode, node *AliasedExpr,
 	}) {
 		return false
 	}
-	if !a.rewriteColIdent(node, node.As, func(newNode, parent SQLNode) {
-		parent.(*AliasedExpr).As = newNode.(ColIdent)
+	if !a.rewriteIdentifierCI(node, node.As, func(newNode, parent SQLNode) {
+		parent.(*AliasedExpr).As = newNode.(IdentifierCI)
 	}) {
 		return false
 	}
@@ -649,8 +649,8 @@ func (a *application) rewriteRefOfAliasedTableExpr(parent SQLNode, node *Aliased
 	}) {
 		return false
 	}
-	if !a.rewriteTableIdent(node, node.As, func(newNode, parent SQLNode) {
-		parent.(*AliasedTableExpr).As = newNode.(TableIdent)
+	if !a.rewriteIdentifierCS(node, node.As, func(newNode, parent SQLNode) {
+		parent.(*AliasedTableExpr).As = newNode.(IdentifierCS)
 	}) {
 		return false
 	}
@@ -710,8 +710,8 @@ func (a *application) rewriteRefOfAlterCheck(parent SQLNode, node *AlterCheck, r
 			return true
 		}
 	}
-	if !a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
-		parent.(*AlterCheck).Name = newNode.(ColIdent)
+	if !a.rewriteIdentifierCI(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*AlterCheck).Name = newNode.(IdentifierCI)
 	}) {
 		return false
 	}
@@ -769,8 +769,8 @@ func (a *application) rewriteRefOfAlterDatabase(parent SQLNode, node *AlterDatab
 			return true
 		}
 	}
-	if !a.rewriteTableIdent(node, node.DBName, func(newNode, parent SQLNode) {
-		parent.(*AlterDatabase).DBName = newNode.(TableIdent)
+	if !a.rewriteIdentifierCS(node, node.DBName, func(newNode, parent SQLNode) {
+		parent.(*AlterDatabase).DBName = newNode.(IdentifierCS)
 	}) {
 		return false
 	}
@@ -796,8 +796,8 @@ func (a *application) rewriteRefOfAlterIndex(parent SQLNode, node *AlterIndex, r
 			return true
 		}
 	}
-	if !a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
-		parent.(*AlterIndex).Name = newNode.(ColIdent)
+	if !a.rewriteIdentifierCI(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*AlterIndex).Name = newNode.(IdentifierCI)
 	}) {
 		return false
 	}
@@ -959,9 +959,9 @@ func (a *application) rewriteRefOfAlterVschema(parent SQLNode, node *AlterVschem
 		return false
 	}
 	for x, el := range node.VindexCols {
-		if !a.rewriteColIdent(node, el, func(idx int) replacerFunc {
+		if !a.rewriteIdentifierCI(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
-				parent.(*AlterVschema).VindexCols[idx] = newNode.(ColIdent)
+				parent.(*AlterVschema).VindexCols[idx] = newNode.(IdentifierCI)
 			}
 		}(x)) {
 			return false
@@ -1053,8 +1053,8 @@ func (a *application) rewriteRefOfAutoIncSpec(parent SQLNode, node *AutoIncSpec,
 			return true
 		}
 	}
-	if !a.rewriteColIdent(node, node.Column, func(newNode, parent SQLNode) {
-		parent.(*AutoIncSpec).Column = newNode.(ColIdent)
+	if !a.rewriteIdentifierCI(node, node.Column, func(newNode, parent SQLNode) {
+		parent.(*AutoIncSpec).Column = newNode.(IdentifierCI)
 	}) {
 		return false
 	}
@@ -1443,27 +1443,6 @@ func (a *application) rewriteRefOfCheckConstraintDefinition(parent SQLNode, node
 	}
 	return true
 }
-func (a *application) rewriteColIdent(parent SQLNode, node ColIdent, replacer replacerFunc) bool {
-	if a.pre != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
-		if !a.pre(&a.cur) {
-			return true
-		}
-	}
-	if a.post != nil {
-		if a.pre == nil {
-			a.cur.replacer = replacer
-			a.cur.parent = parent
-			a.cur.node = node
-		}
-		if !a.post(&a.cur) {
-			return false
-		}
-	}
-	return true
-}
 func (a *application) rewriteRefOfColName(parent SQLNode, node *ColName, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -1476,8 +1455,8 @@ func (a *application) rewriteRefOfColName(parent SQLNode, node *ColName, replace
 			return true
 		}
 	}
-	if !a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
-		parent.(*ColName).Name = newNode.(ColIdent)
+	if !a.rewriteIdentifierCI(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*ColName).Name = newNode.(IdentifierCI)
 	}) {
 		return false
 	}
@@ -1535,8 +1514,8 @@ func (a *application) rewriteRefOfColumnDefinition(parent SQLNode, node *ColumnD
 			return true
 		}
 	}
-	if !a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
-		parent.(*ColumnDefinition).Name = newNode.(ColIdent)
+	if !a.rewriteIdentifierCI(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*ColumnDefinition).Name = newNode.(IdentifierCI)
 	}) {
 		return false
 	}
@@ -1601,9 +1580,9 @@ func (a *application) rewriteColumns(parent SQLNode, node Columns, replacer repl
 		}
 	}
 	for x, el := range node {
-		if !a.rewriteColIdent(node, el, func(idx int) replacerFunc {
+		if !a.rewriteIdentifierCI(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
-				parent.(Columns)[idx] = newNode.(ColIdent)
+				parent.(Columns)[idx] = newNode.(IdentifierCI)
 			}
 		}(x)) {
 			return false
@@ -1655,8 +1634,8 @@ func (a *application) rewriteRefOfCommonTableExpr(parent SQLNode, node *CommonTa
 			return true
 		}
 	}
-	if !a.rewriteTableIdent(node, node.TableID, func(newNode, parent SQLNode) {
-		parent.(*CommonTableExpr).TableID = newNode.(TableIdent)
+	if !a.rewriteIdentifierCS(node, node.ID, func(newNode, parent SQLNode) {
+		parent.(*CommonTableExpr).ID = newNode.(IdentifierCS)
 	}) {
 		return false
 	}
@@ -1729,8 +1708,8 @@ func (a *application) rewriteRefOfConstraintDefinition(parent SQLNode, node *Con
 			return true
 		}
 	}
-	if !a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
-		parent.(*ConstraintDefinition).Name = newNode.(ColIdent)
+	if !a.rewriteIdentifierCI(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*ConstraintDefinition).Name = newNode.(IdentifierCI)
 	}) {
 		return false
 	}
@@ -1908,8 +1887,8 @@ func (a *application) rewriteRefOfCreateDatabase(parent SQLNode, node *CreateDat
 	}) {
 		return false
 	}
-	if !a.rewriteTableIdent(node, node.DBName, func(newNode, parent SQLNode) {
-		parent.(*CreateDatabase).DBName = newNode.(TableIdent)
+	if !a.rewriteIdentifierCS(node, node.DBName, func(newNode, parent SQLNode) {
+		parent.(*CreateDatabase).DBName = newNode.(IdentifierCS)
 	}) {
 		return false
 	}
@@ -2024,8 +2003,8 @@ func (a *application) rewriteRefOfCurTimeFuncExpr(parent SQLNode, node *CurTimeF
 			return true
 		}
 	}
-	if !a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
-		parent.(*CurTimeFuncExpr).Name = newNode.(ColIdent)
+	if !a.rewriteIdentifierCI(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*CurTimeFuncExpr).Name = newNode.(IdentifierCI)
 	}) {
 		return false
 	}
@@ -2061,8 +2040,8 @@ func (a *application) rewriteRefOfDeallocateStmt(parent SQLNode, node *Deallocat
 	}) {
 		return false
 	}
-	if !a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
-		parent.(*DeallocateStmt).Name = newNode.(ColIdent)
+	if !a.rewriteIdentifierCI(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*DeallocateStmt).Name = newNode.(IdentifierCI)
 	}) {
 		return false
 	}
@@ -2257,8 +2236,8 @@ func (a *application) rewriteRefOfDropDatabase(parent SQLNode, node *DropDatabas
 	}) {
 		return false
 	}
-	if !a.rewriteTableIdent(node, node.DBName, func(newNode, parent SQLNode) {
-		parent.(*DropDatabase).DBName = newNode.(TableIdent)
+	if !a.rewriteIdentifierCS(node, node.DBName, func(newNode, parent SQLNode) {
+		parent.(*DropDatabase).DBName = newNode.(IdentifierCS)
 	}) {
 		return false
 	}
@@ -2284,8 +2263,8 @@ func (a *application) rewriteRefOfDropKey(parent SQLNode, node *DropKey, replace
 			return true
 		}
 	}
-	if !a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
-		parent.(*DropKey).Name = newNode.(ColIdent)
+	if !a.rewriteIdentifierCI(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*DropKey).Name = newNode.(IdentifierCI)
 	}) {
 		return false
 	}
@@ -2375,8 +2354,8 @@ func (a *application) rewriteRefOfExecuteStmt(parent SQLNode, node *ExecuteStmt,
 			return true
 		}
 	}
-	if !a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
-		parent.(*ExecuteStmt).Name = newNode.(ColIdent)
+	if !a.rewriteIdentifierCI(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*ExecuteStmt).Name = newNode.(IdentifierCI)
 	}) {
 		return false
 	}
@@ -2728,8 +2707,8 @@ func (a *application) rewriteRefOfForeignKeyDefinition(parent SQLNode, node *For
 	}) {
 		return false
 	}
-	if !a.rewriteColIdent(node, node.IndexName, func(newNode, parent SQLNode) {
-		parent.(*ForeignKeyDefinition).IndexName = newNode.(ColIdent)
+	if !a.rewriteIdentifierCI(node, node.IndexName, func(newNode, parent SQLNode) {
+		parent.(*ForeignKeyDefinition).IndexName = newNode.(IdentifierCI)
 	}) {
 		return false
 	}
@@ -2843,13 +2822,13 @@ func (a *application) rewriteRefOfFuncExpr(parent SQLNode, node *FuncExpr, repla
 			return true
 		}
 	}
-	if !a.rewriteTableIdent(node, node.Qualifier, func(newNode, parent SQLNode) {
-		parent.(*FuncExpr).Qualifier = newNode.(TableIdent)
+	if !a.rewriteIdentifierCS(node, node.Qualifier, func(newNode, parent SQLNode) {
+		parent.(*FuncExpr).Qualifier = newNode.(IdentifierCS)
 	}) {
 		return false
 	}
-	if !a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
-		parent.(*FuncExpr).Name = newNode.(ColIdent)
+	if !a.rewriteIdentifierCI(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*FuncExpr).Name = newNode.(IdentifierCI)
 	}) {
 		return false
 	}
@@ -2942,6 +2921,48 @@ func (a *application) rewriteRefOfGroupConcatExpr(parent SQLNode, node *GroupCon
 	}
 	return true
 }
+func (a *application) rewriteIdentifierCI(parent SQLNode, node IdentifierCI, replacer replacerFunc) bool {
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if a.post != nil {
+		if a.pre == nil {
+			a.cur.replacer = replacer
+			a.cur.parent = parent
+			a.cur.node = node
+		}
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteIdentifierCS(parent SQLNode, node IdentifierCS, replacer replacerFunc) bool {
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if a.post != nil {
+		if a.pre == nil {
+			a.cur.replacer = replacer
+			a.cur.parent = parent
+			a.cur.node = node
+		}
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
 func (a *application) rewriteRefOfIndexDefinition(parent SQLNode, node *IndexDefinition, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -2982,9 +3003,9 @@ func (a *application) rewriteRefOfIndexHint(parent SQLNode, node *IndexHint, rep
 		}
 	}
 	for x, el := range node.Indexes {
-		if !a.rewriteColIdent(node, el, func(idx int) replacerFunc {
+		if !a.rewriteIdentifierCI(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
-				parent.(*IndexHint).Indexes[idx] = newNode.(ColIdent)
+				parent.(*IndexHint).Indexes[idx] = newNode.(IdentifierCI)
 			}
 		}(x)) {
 			return false
@@ -3049,13 +3070,13 @@ func (a *application) rewriteRefOfIndexInfo(parent SQLNode, node *IndexInfo, rep
 			return true
 		}
 	}
-	if !a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
-		parent.(*IndexInfo).Name = newNode.(ColIdent)
+	if !a.rewriteIdentifierCI(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*IndexInfo).Name = newNode.(IdentifierCI)
 	}) {
 		return false
 	}
-	if !a.rewriteColIdent(node, node.ConstraintName, func(newNode, parent SQLNode) {
-		parent.(*IndexInfo).ConstraintName = newNode.(ColIdent)
+	if !a.rewriteIdentifierCI(node, node.ConstraintName, func(newNode, parent SQLNode) {
+		parent.(*IndexInfo).ConstraintName = newNode.(IdentifierCI)
 	}) {
 		return false
 	}
@@ -3775,8 +3796,8 @@ func (a *application) rewriteRefOfJSONTableExpr(parent SQLNode, node *JSONTableE
 	}) {
 		return false
 	}
-	if !a.rewriteTableIdent(node, node.Alias, func(newNode, parent SQLNode) {
-		parent.(*JSONTableExpr).Alias = newNode.(TableIdent)
+	if !a.rewriteIdentifierCS(node, node.Alias, func(newNode, parent SQLNode) {
+		parent.(*JSONTableExpr).Alias = newNode.(IdentifierCS)
 	}) {
 		return false
 	}
@@ -4963,8 +4984,8 @@ func (a *application) rewriteRefOfOverClause(parent SQLNode, node *OverClause, r
 			return true
 		}
 	}
-	if !a.rewriteColIdent(node, node.WindowName, func(newNode, parent SQLNode) {
-		parent.(*OverClause).WindowName = newNode.(ColIdent)
+	if !a.rewriteIdentifierCI(node, node.WindowName, func(newNode, parent SQLNode) {
+		parent.(*OverClause).WindowName = newNode.(IdentifierCI)
 	}) {
 		return false
 	}
@@ -5046,8 +5067,8 @@ func (a *application) rewriteRefOfPartitionDefinition(parent SQLNode, node *Part
 			return true
 		}
 	}
-	if !a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
-		parent.(*PartitionDefinition).Name = newNode.(ColIdent)
+	if !a.rewriteIdentifierCI(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*PartitionDefinition).Name = newNode.(IdentifierCI)
 	}) {
 		return false
 	}
@@ -5280,9 +5301,9 @@ func (a *application) rewritePartitions(parent SQLNode, node Partitions, replace
 		}
 	}
 	for x, el := range node {
-		if !a.rewriteColIdent(node, el, func(idx int) replacerFunc {
+		if !a.rewriteIdentifierCI(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
-				parent.(Partitions)[idx] = newNode.(ColIdent)
+				parent.(Partitions)[idx] = newNode.(IdentifierCI)
 			}
 		}(x)) {
 			return false
@@ -5337,8 +5358,8 @@ func (a *application) rewriteRefOfPrepareStmt(parent SQLNode, node *PrepareStmt,
 			return true
 		}
 	}
-	if !a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
-		parent.(*PrepareStmt).Name = newNode.(ColIdent)
+	if !a.rewriteIdentifierCI(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*PrepareStmt).Name = newNode.(IdentifierCI)
 	}) {
 		return false
 	}
@@ -5609,8 +5630,8 @@ func (a *application) rewriteRefOfRelease(parent SQLNode, node *Release, replace
 			return true
 		}
 	}
-	if !a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
-		parent.(*Release).Name = newNode.(ColIdent)
+	if !a.rewriteIdentifierCI(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*Release).Name = newNode.(IdentifierCI)
 	}) {
 		return false
 	}
@@ -5668,13 +5689,13 @@ func (a *application) rewriteRefOfRenameIndex(parent SQLNode, node *RenameIndex,
 			return true
 		}
 	}
-	if !a.rewriteColIdent(node, node.OldName, func(newNode, parent SQLNode) {
-		parent.(*RenameIndex).OldName = newNode.(ColIdent)
+	if !a.rewriteIdentifierCI(node, node.OldName, func(newNode, parent SQLNode) {
+		parent.(*RenameIndex).OldName = newNode.(IdentifierCI)
 	}) {
 		return false
 	}
-	if !a.rewriteColIdent(node, node.NewName, func(newNode, parent SQLNode) {
-		parent.(*RenameIndex).NewName = newNode.(ColIdent)
+	if !a.rewriteIdentifierCI(node, node.NewName, func(newNode, parent SQLNode) {
+		parent.(*RenameIndex).NewName = newNode.(IdentifierCI)
 	}) {
 		return false
 	}
@@ -5826,8 +5847,8 @@ func (a *application) rewriteRefOfSRollback(parent SQLNode, node *SRollback, rep
 			return true
 		}
 	}
-	if !a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
-		parent.(*SRollback).Name = newNode.(ColIdent)
+	if !a.rewriteIdentifierCI(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*SRollback).Name = newNode.(IdentifierCI)
 	}) {
 		return false
 	}
@@ -5853,8 +5874,8 @@ func (a *application) rewriteRefOfSavepoint(parent SQLNode, node *Savepoint, rep
 			return true
 		}
 	}
-	if !a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
-		parent.(*Savepoint).Name = newNode.(ColIdent)
+	if !a.rewriteIdentifierCI(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*Savepoint).Name = newNode.(IdentifierCI)
 	}) {
 		return false
 	}
@@ -6191,8 +6212,8 @@ func (a *application) rewriteRefOfShowBasic(parent SQLNode, node *ShowBasic, rep
 	}) {
 		return false
 	}
-	if !a.rewriteTableIdent(node, node.DbName, func(newNode, parent SQLNode) {
-		parent.(*ShowBasic).DbName = newNode.(TableIdent)
+	if !a.rewriteIdentifierCS(node, node.DbName, func(newNode, parent SQLNode) {
+		parent.(*ShowBasic).DbName = newNode.(IdentifierCS)
 	}) {
 		return false
 	}
@@ -6556,8 +6577,8 @@ func (a *application) rewriteRefOfSubPartitionDefinition(parent SQLNode, node *S
 			return true
 		}
 	}
-	if !a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
-		parent.(*SubPartitionDefinition).Name = newNode.(ColIdent)
+	if !a.rewriteIdentifierCI(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*SubPartitionDefinition).Name = newNode.(IdentifierCI)
 	}) {
 		return false
 	}
@@ -6783,27 +6804,6 @@ func (a *application) rewriteTableExprs(parent SQLNode, node TableExprs, replace
 	}
 	return true
 }
-func (a *application) rewriteTableIdent(parent SQLNode, node TableIdent, replacer replacerFunc) bool {
-	if a.pre != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
-		if !a.pre(&a.cur) {
-			return true
-		}
-	}
-	if a.post != nil {
-		if a.pre == nil {
-			a.cur.replacer = replacer
-			a.cur.parent = parent
-			a.cur.node = node
-		}
-		if !a.post(&a.cur) {
-			return false
-		}
-	}
-	return true
-}
 func (a *application) rewriteTableName(parent SQLNode, node TableName, replacer replacerFunc) bool {
 	if a.pre != nil {
 		a.cur.replacer = replacer
@@ -6813,12 +6813,12 @@ func (a *application) rewriteTableName(parent SQLNode, node TableName, replacer 
 			return true
 		}
 	}
-	if !a.rewriteTableIdent(node, node.Name, func(newNode, parent SQLNode) {
+	if !a.rewriteIdentifierCS(node, node.Name, func(newNode, parent SQLNode) {
 		panic("[BUG] tried to replace 'Name' on 'TableName'")
 	}) {
 		return false
 	}
-	if !a.rewriteTableIdent(node, node.Qualifier, func(newNode, parent SQLNode) {
+	if !a.rewriteIdentifierCS(node, node.Qualifier, func(newNode, parent SQLNode) {
 		panic("[BUG] tried to replace 'Qualifier' on 'TableName'")
 	}) {
 		return false
@@ -7352,8 +7352,8 @@ func (a *application) rewriteRefOfUse(parent SQLNode, node *Use, replacer replac
 			return true
 		}
 	}
-	if !a.rewriteTableIdent(node, node.DBName, func(newNode, parent SQLNode) {
-		parent.(*Use).DBName = newNode.(TableIdent)
+	if !a.rewriteIdentifierCS(node, node.DBName, func(newNode, parent SQLNode) {
+		parent.(*Use).DBName = newNode.(IdentifierCS)
 	}) {
 		return false
 	}
@@ -7605,8 +7605,8 @@ func (a *application) rewriteRefOfVariable(parent SQLNode, node *Variable, repla
 			return true
 		}
 	}
-	if !a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
-		parent.(*Variable).Name = newNode.(ColIdent)
+	if !a.rewriteIdentifierCI(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*Variable).Name = newNode.(IdentifierCI)
 	}) {
 		return false
 	}
@@ -7656,7 +7656,7 @@ func (a *application) rewriteVindexParam(parent SQLNode, node VindexParam, repla
 			return true
 		}
 	}
-	if !a.rewriteColIdent(node, node.Key, func(newNode, parent SQLNode) {
+	if !a.rewriteIdentifierCI(node, node.Key, func(newNode, parent SQLNode) {
 		panic("[BUG] tried to replace 'Key' on 'VindexParam'")
 	}) {
 		return false
@@ -7683,13 +7683,13 @@ func (a *application) rewriteRefOfVindexSpec(parent SQLNode, node *VindexSpec, r
 			return true
 		}
 	}
-	if !a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
-		parent.(*VindexSpec).Name = newNode.(ColIdent)
+	if !a.rewriteIdentifierCI(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*VindexSpec).Name = newNode.(IdentifierCI)
 	}) {
 		return false
 	}
-	if !a.rewriteColIdent(node, node.Type, func(newNode, parent SQLNode) {
-		parent.(*VindexSpec).Type = newNode.(ColIdent)
+	if !a.rewriteIdentifierCI(node, node.Type, func(newNode, parent SQLNode) {
+		parent.(*VindexSpec).Type = newNode.(IdentifierCI)
 	}) {
 		return false
 	}
@@ -7815,8 +7815,8 @@ func (a *application) rewriteRefOfWindowDefinition(parent SQLNode, node *WindowD
 			return true
 		}
 	}
-	if !a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
-		parent.(*WindowDefinition).Name = newNode.(ColIdent)
+	if !a.rewriteIdentifierCI(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*WindowDefinition).Name = newNode.(IdentifierCI)
 	}) {
 		return false
 	}
@@ -7884,8 +7884,8 @@ func (a *application) rewriteRefOfWindowSpecification(parent SQLNode, node *Wind
 			return true
 		}
 	}
-	if !a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
-		parent.(*WindowSpecification).Name = newNode.(ColIdent)
+	if !a.rewriteIdentifierCI(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*WindowSpecification).Name = newNode.(IdentifierCI)
 	}) {
 		return false
 	}
@@ -8829,7 +8829,31 @@ func (a *application) rewriteReferenceAction(parent SQLNode, node ReferenceActio
 	}
 	return true
 }
-func (a *application) rewriteRefOfColIdent(parent SQLNode, node *ColIdent, replacer replacerFunc) bool {
+func (a *application) rewriteRefOfIdentifierCI(parent SQLNode, node *IdentifierCI, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if a.post != nil {
+		if a.pre == nil {
+			a.cur.replacer = replacer
+			a.cur.parent = parent
+			a.cur.node = node
+		}
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfIdentifierCS(parent SQLNode, node *IdentifierCS, replacer replacerFunc) bool {
 	if node == nil {
 		return true
 	}
@@ -8912,30 +8936,6 @@ func (a *application) rewriteRefOfRootNode(parent SQLNode, node *RootNode, repla
 	}
 	return true
 }
-func (a *application) rewriteRefOfTableIdent(parent SQLNode, node *TableIdent, replacer replacerFunc) bool {
-	if node == nil {
-		return true
-	}
-	if a.pre != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
-		if !a.pre(&a.cur) {
-			return true
-		}
-	}
-	if a.post != nil {
-		if a.pre == nil {
-			a.cur.replacer = replacer
-			a.cur.parent = parent
-			a.cur.node = node
-		}
-		if !a.post(&a.cur) {
-			return false
-		}
-	}
-	return true
-}
 func (a *application) rewriteRefOfTableName(parent SQLNode, node *TableName, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -8948,13 +8948,13 @@ func (a *application) rewriteRefOfTableName(parent SQLNode, node *TableName, rep
 			return true
 		}
 	}
-	if !a.rewriteTableIdent(node, node.Name, func(newNode, parent SQLNode) {
-		parent.(*TableName).Name = newNode.(TableIdent)
+	if !a.rewriteIdentifierCS(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*TableName).Name = newNode.(IdentifierCS)
 	}) {
 		return false
 	}
-	if !a.rewriteTableIdent(node, node.Qualifier, func(newNode, parent SQLNode) {
-		parent.(*TableName).Qualifier = newNode.(TableIdent)
+	if !a.rewriteIdentifierCS(node, node.Qualifier, func(newNode, parent SQLNode) {
+		parent.(*TableName).Qualifier = newNode.(IdentifierCS)
 	}) {
 		return false
 	}
@@ -8980,8 +8980,8 @@ func (a *application) rewriteRefOfVindexParam(parent SQLNode, node *VindexParam,
 			return true
 		}
 	}
-	if !a.rewriteColIdent(node, node.Key, func(newNode, parent SQLNode) {
-		parent.(*VindexParam).Key = newNode.(ColIdent)
+	if !a.rewriteIdentifierCI(node, node.Key, func(newNode, parent SQLNode) {
+		parent.(*VindexParam).Key = newNode.(IdentifierCI)
 	}) {
 		return false
 	}

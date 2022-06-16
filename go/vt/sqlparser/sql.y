@@ -58,12 +58,12 @@ func bindVariable(yylex yyLexer, bvar string) {
   empty         struct{}
   LengthScaleOption LengthScaleOption
   tableName     TableName
-  tableIdent    TableIdent
+  identifierCS    IdentifierCS
   str           string
   strs          []string
   vindexParam   VindexParam
   jsonObjectParam *JSONObjectParam
-  colIdent      ColIdent
+  identifierCI      IdentifierCI
   joinCondition *JoinCondition
   databaseOption DatabaseOption
   columnType    ColumnType
@@ -509,9 +509,9 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <boolean> exists_opt not_exists_opt enforced enforced_opt temp_opt full_opt
 %type <empty> to_opt
 %type <str> reserved_keyword non_reserved_keyword
-%type <colIdent> sql_id sql_id_opt reserved_sql_id col_alias as_ci_opt
+%type <identifierCI> sql_id sql_id_opt reserved_sql_id col_alias as_ci_opt
 %type <expr> charset_value
-%type <tableIdent> table_id reserved_table_id table_alias as_opt_id table_id_opt from_database_opt use_table_name
+%type <identifierCS> table_id reserved_table_id table_alias as_opt_id table_id_opt from_database_opt use_table_name
 %type <empty> as_opt work_opt savepoint_opt
 %type <empty> skip_to_end ddl_skip_to_end
 %type <str> charset
@@ -555,7 +555,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <vindexParams> vindex_param_list vindex_params_opt
 %type <jsonObjectParam> json_object_param
 %type <jsonObjectParams> json_object_param_list json_object_param_opt
-%type <colIdent> ci_identifier ci_identifier_opt id_or_var vindex_type vindex_type_opt
+%type <identifierCI> ci_identifier ci_identifier_opt vindex_type vindex_type_opt
 %type <str> database_or_schema column_opt insert_method_options row_format_options
 %type <referenceAction> fk_reference_action fk_on_delete fk_on_update
 %type <matchAction> fk_match fk_match_opt fk_match_action
@@ -635,30 +635,16 @@ user_defined_variable:
 ci_identifier:
   ID
   {
-    $$ = NewColIdent(string($1))
+    $$ = NewIdentifierCI(string($1))
   }
 
 ci_identifier_opt:
   {
-    $$ = NewColIdent("")
+    $$ = NewIdentifierCI("")
   }
 | ci_identifier
   {
     $$ = $1
-  }
-
-id_or_var:
-  ID
-  {
-    $$ = NewColIdentWithAt(string($1), NoAt)
-  }
-| AT_ID
-  {
-    $$ = NewColIdentWithAt(string($1), SingleAt)
-  }
-| AT_AT_ID
-  {
-    $$ = NewColIdentWithAt(string($1), DoubleAt)
   }
 
 variable_expr:
@@ -715,7 +701,7 @@ with_list:
 common_table_expr:
   table_id column_list_opt AS subquery
   {
-	$$ = &CommonTableExpr{TableID: $1, Columns: $2, Subquery: $4}
+	$$ = &CommonTableExpr{ID: $1, Columns: $2, Subquery: $4}
   }
 
 query_expression_parens:
@@ -1103,7 +1089,7 @@ replace_opt:
 
 vindex_type_opt:
   {
-    $$ = NewColIdent("")
+    $$ = NewIdentifierCI("")
   }
 | USING vindex_type
   {
@@ -1558,23 +1544,23 @@ now
 now:
 CURRENT_TIMESTAMP func_datetime_precision
   {
-    $$ = &CurTimeFuncExpr{Name:NewColIdent("current_timestamp"), Fsp: $2}
+    $$ = &CurTimeFuncExpr{Name:NewIdentifierCI("current_timestamp"), Fsp: $2}
   }
 | LOCALTIME func_datetime_precision
   {
-    $$ = &CurTimeFuncExpr{Name:NewColIdent("localtime"), Fsp: $2}
+    $$ = &CurTimeFuncExpr{Name:NewIdentifierCI("localtime"), Fsp: $2}
   }
 | LOCALTIMESTAMP func_datetime_precision
   {
-    $$ = &CurTimeFuncExpr{Name:NewColIdent("localtimestamp"), Fsp: $2}
+    $$ = &CurTimeFuncExpr{Name:NewIdentifierCI("localtimestamp"), Fsp: $2}
   }
 | UTC_TIMESTAMP func_datetime_precision
   {
-    $$ = &CurTimeFuncExpr{Name:NewColIdent("utc_timestamp"), Fsp:$2}
+    $$ = &CurTimeFuncExpr{Name:NewIdentifierCI("utc_timestamp"), Fsp:$2}
   }
 | NOW func_datetime_precision
   {
-    $$ = &CurTimeFuncExpr{Name:NewColIdent("now"), Fsp: $2}
+    $$ = &CurTimeFuncExpr{Name:NewIdentifierCI("now"), Fsp: $2}
   }
 
 signed_literal_or_null:
@@ -2307,23 +2293,23 @@ equal_opt:
 index_info:
   constraint_name_opt PRIMARY KEY name_opt
   {
-    $$ = &IndexInfo{Type: string($2) + " " + string($3), ConstraintName: NewColIdent($1), Name: NewColIdent("PRIMARY"), Primary: true, Unique: true}
+    $$ = &IndexInfo{Type: string($2) + " " + string($3), ConstraintName: NewIdentifierCI($1), Name: NewIdentifierCI("PRIMARY"), Primary: true, Unique: true}
   }
 | SPATIAL index_or_key_opt name_opt
   {
-    $$ = &IndexInfo{Type: string($1) + " " + string($2), Name: NewColIdent($3), Spatial: true, Unique: false}
+    $$ = &IndexInfo{Type: string($1) + " " + string($2), Name: NewIdentifierCI($3), Spatial: true, Unique: false}
   }
 | FULLTEXT index_or_key_opt name_opt
   {
-    $$ = &IndexInfo{Type: string($1) + " " + string($2), Name: NewColIdent($3), Fulltext: true, Unique: false}
+    $$ = &IndexInfo{Type: string($1) + " " + string($2), Name: NewIdentifierCI($3), Fulltext: true, Unique: false}
   }
 | constraint_name_opt UNIQUE index_or_key_opt name_opt
   {
-    $$ = &IndexInfo{Type: string($2) + " " + string($3), ConstraintName: NewColIdent($1), Name: NewColIdent($4), Unique: true}
+    $$ = &IndexInfo{Type: string($2) + " " + string($3), ConstraintName: NewIdentifierCI($1), Name: NewIdentifierCI($4), Unique: true}
   }
 | index_or_key name_opt
   {
-    $$ = &IndexInfo{Type: string($1), Name: NewColIdent($2), Unique: false}
+    $$ = &IndexInfo{Type: string($1), Name: NewIdentifierCI($2), Unique: false}
   }
 
 constraint_name_opt:
@@ -2430,7 +2416,7 @@ check_constraint_definition:
 constraint_info:
   FOREIGN KEY name_opt '(' column_list ')' reference_definition
   {
-    $$ = &ForeignKeyDefinition{IndexName: NewColIdent($3), Source: $5, ReferenceDefinition: $7}
+    $$ = &ForeignKeyDefinition{IndexName: NewIdentifierCI($3), Source: $5, ReferenceDefinition: $7}
   }
 
 reference_definition:
@@ -3087,7 +3073,7 @@ alter_statement:
         Action: CreateVindexDDLAction,
         Table: $6,
         VindexSpec: &VindexSpec{
-          Name: NewColIdent($6.Name.String()),
+          Name: NewIdentifierCI($6.Name.String()),
           Type: $7,
           Params: $8,
         },
@@ -3099,7 +3085,7 @@ alter_statement:
         Action: DropVindexDDLAction,
         Table: $6,
         VindexSpec: &VindexSpec{
-          Name: NewColIdent($6.Name.String()),
+          Name: NewIdentifierCI($6.Name.String()),
         },
       }
   }
@@ -4059,7 +4045,7 @@ columns_or_fields:
 from_database_opt:
   /* empty */
   {
-    $$ = NewTableIdent("")
+    $$ = NewIdentifierCS("")
   }
 | FROM table_id
   {
@@ -4125,30 +4111,30 @@ use_statement:
   }
 | USE
   {
-    $$ = &Use{DBName:TableIdent{v:""}}
+    $$ = &Use{DBName:IdentifierCS{v:""}}
   }
 | USE use_table_name AT_ID
   {
-    $$ = &Use{DBName:NewTableIdent($2.String()+"@"+string($3))}
+    $$ = &Use{DBName:NewIdentifierCS($2.String()+"@"+string($3))}
   }
 
 // We use this because what is legal in `USE <tbl>` is not the same as in `SELECT ... FROM <tbl>`
 use_table_name:
   ID
   {
-    $$ = NewTableIdent(string($1))
+    $$ = NewIdentifierCS(string($1))
   }
 | AT_ID
   {
-    $$ = NewTableIdent("@"+string($1))
+    $$ = NewIdentifierCS("@"+string($1))
   }
 | AT_AT_ID
   {
-    $$ = NewTableIdent("@@"+string($1))
+    $$ = NewIdentifierCS("@@"+string($1))
   }
 | non_reserved_keyword
   {
-    $$ = NewTableIdent(string($1))
+    $$ = NewIdentifierCS(string($1))
   }
 
 
@@ -4638,7 +4624,7 @@ select_expression:
 
 as_ci_opt:
   {
-    $$ = ColIdent{}
+    $$ = IdentifierCI{}
   }
 | col_alias
   {
@@ -4653,12 +4639,12 @@ col_alias:
   sql_id
 | STRING
   {
-    $$ = NewColIdent(string($1))
+    $$ = NewIdentifierCI(string($1))
   }
 
 from_opt:
   %prec EMPTY_FROM_CLAUSE {
-    $$ = TableExprs{&AliasedTableExpr{Expr:TableName{Name: NewTableIdent("dual")}}}
+    $$ = TableExprs{&AliasedTableExpr{Expr:TableName{Name: NewIdentifierCS("dual")}}}
   }
   | from_clause
   {
@@ -4759,7 +4745,7 @@ index_list:
   }
 | PRIMARY
   {
-    $$ = Columns{NewColIdent(string($1))}
+    $$ = Columns{NewIdentifierCI(string($1))}
   }
 | index_list ',' sql_id
   {
@@ -4767,7 +4753,7 @@ index_list:
   }
 | index_list ',' PRIMARY
   {
-    $$ = append($$, NewColIdent(string($3)))
+    $$ = append($$, NewIdentifierCI(string($3)))
   }
 
 partition_list:
@@ -4830,7 +4816,7 @@ as_opt:
 
 as_opt_id:
   {
-    $$ = NewTableIdent("")
+    $$ = NewIdentifierCS("")
   }
 | table_alias
   {
@@ -4845,7 +4831,7 @@ table_alias:
   table_id
 | STRING
   {
-    $$ = NewTableIdent(string($1))
+    $$ = NewIdentifierCS(string($1))
   }
 
 inner_join:
@@ -5600,11 +5586,11 @@ function_call_generic:
 function_call_keyword:
   LEFT openb select_expression_list closeb
   {
-    $$ = &FuncExpr{Name: NewColIdent("left"), Exprs: $3}
+    $$ = &FuncExpr{Name: NewIdentifierCI("left"), Exprs: $3}
   }
 | RIGHT openb select_expression_list closeb
   {
-    $$ = &FuncExpr{Name: NewColIdent("right"), Exprs: $3}
+    $$ = &FuncExpr{Name: NewIdentifierCI("right"), Exprs: $3}
   }
 | SUBSTRING openb expression ',' expression ',' expression closeb
   {
@@ -5632,7 +5618,7 @@ function_call_keyword:
   }
 | CURRENT_USER func_paren_opt
   {
-    $$ =  &FuncExpr{Name: NewColIdent($1)}
+    $$ =  &FuncExpr{Name: NewIdentifierCI($1)}
   }
 
 /*
@@ -5643,7 +5629,7 @@ function_call_nonkeyword:
 /* doesn't support fsp */
 UTC_DATE func_paren_opt
   {
-    $$ = &FuncExpr{Name:NewColIdent("utc_date")}
+    $$ = &FuncExpr{Name:NewIdentifierCI("utc_date")}
   }
 | now
   {
@@ -5653,16 +5639,16 @@ UTC_DATE func_paren_opt
 /* doesn't support fsp */
 | CURRENT_DATE func_paren_opt
   {
-    $$ = &FuncExpr{Name:NewColIdent("current_date")}
+    $$ = &FuncExpr{Name:NewIdentifierCI("current_date")}
   }
 | UTC_TIME func_datetime_precision
   {
-    $$ = &CurTimeFuncExpr{Name:NewColIdent("utc_time"), Fsp: $2}
+    $$ = &CurTimeFuncExpr{Name:NewIdentifierCI("utc_time"), Fsp: $2}
   }
   // curtime
 | CURRENT_TIME func_datetime_precision
   {
-    $$ = &CurTimeFuncExpr{Name:NewColIdent("current_time"), Fsp: $2}
+    $$ = &CurTimeFuncExpr{Name:NewIdentifierCI("current_time"), Fsp: $2}
   }
 | COUNT openb '*' closeb
   {
@@ -6202,23 +6188,23 @@ func_datetime_precision:
 function_call_conflict:
   IF openb select_expression_list closeb
   {
-    $$ = &FuncExpr{Name: NewColIdent("if"), Exprs: $3}
+    $$ = &FuncExpr{Name: NewIdentifierCI("if"), Exprs: $3}
   }
 | DATABASE openb select_expression_list_opt closeb
   {
-    $$ = &FuncExpr{Name: NewColIdent("database"), Exprs: $3}
+    $$ = &FuncExpr{Name: NewIdentifierCI("database"), Exprs: $3}
   }
 | SCHEMA openb select_expression_list_opt closeb
   {
-    $$ = &FuncExpr{Name: NewColIdent("schema"), Exprs: $3}
+    $$ = &FuncExpr{Name: NewIdentifierCI("schema"), Exprs: $3}
   }
 | MOD openb select_expression_list closeb
   {
-    $$ = &FuncExpr{Name: NewColIdent("mod"), Exprs: $3}
+    $$ = &FuncExpr{Name: NewIdentifierCI("mod"), Exprs: $3}
   }
 | REPLACE openb select_expression_list closeb
   {
-    $$ = &FuncExpr{Name: NewColIdent("replace"), Exprs: $3}
+    $$ = &FuncExpr{Name: NewIdentifierCI("replace"), Exprs: $3}
   }
 
 match_option:
@@ -6395,7 +6381,7 @@ column_name:
   }
 | non_reserved_keyword
   {
-    $$ = &ColName{Name: NewColIdent(string($1))}
+    $$ = &ColName{Name: NewIdentifierCI(string($1))}
   }
 | table_id '.' reserved_sql_id
   {
@@ -7086,36 +7072,36 @@ using_index_type:
   }
 
 sql_id:
-  id_or_var
+  ci_identifier
   {
     $$ = $1
   }
 | non_reserved_keyword
   {
-    $$ = NewColIdent(string($1))
+    $$ = NewIdentifierCI(string($1))
   }
 
 reserved_sql_id:
   sql_id
 | reserved_keyword
   {
-    $$ = NewColIdent(string($1))
+    $$ = NewIdentifierCI(string($1))
   }
 
 table_id:
   ID
   {
-    $$ = NewTableIdent(string($1))
+    $$ = NewIdentifierCS(string($1))
   }
 | non_reserved_keyword
   {
-    $$ = NewTableIdent(string($1))
+    $$ = NewIdentifierCS(string($1))
   }
 
 table_id_opt:
   /* empty */ %prec LOWER_THAN_CHARSET
   {
-    $$ = NewTableIdent("")
+    $$ = NewIdentifierCS("")
   }
 | table_id
   {
@@ -7126,7 +7112,7 @@ reserved_table_id:
   table_id
 | reserved_keyword
   {
-    $$ = NewTableIdent(string($1))
+    $$ = NewIdentifierCS(string($1))
   }
 /*
   These are not all necessarily reserved in MySQL, but some are.

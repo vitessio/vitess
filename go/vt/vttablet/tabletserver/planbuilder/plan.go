@@ -180,8 +180,8 @@ type Plan struct {
 }
 
 // TableName returns the table name for the plan.
-func (plan *Plan) TableName() sqlparser.TableIdent {
-	var tableName sqlparser.TableIdent
+func (plan *Plan) TableName() sqlparser.IdentifierCS {
+	var tableName sqlparser.IdentifierCS
 	if plan.Table != nil {
 		tableName = plan.Table.Name
 	}
