@@ -281,6 +281,35 @@ func TestLookupNonUniqueVerify(t *testing.T) {
 	utils.MustMatch(t, []bool{true, true}, got)
 }
 
+func TestLookupNonUniqueNoVerify(t *testing.T) {
+	vindex, err := CreateVindex("lookup", "lookup", map[string]string{
+		"table":     "t",
+		"from":      "fromc",
+		"to":        "toc",
+		"no_verify": "true",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	lookupNonUnique := vindex.(SingleColumn)
+	vc := &vcursor{numRows: 1}
+
+	_, err = lookupNonUnique.Verify(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}, [][]byte{[]byte("test1"), []byte("test2")})
+	require.NoError(t, err)
+
+	var wantqueries []*querypb.BoundQuery
+	if !reflect.DeepEqual(vc.queries, wantqueries) {
+		t.Errorf("lookup.Verify queries:\n%v, want\n%v", vc.queries, wantqueries)
+	}
+
+	// Test query fail.
+	vc.mustFail = true
+	_, err = lookupNonUnique.Verify(vc, []sqltypes.Value{sqltypes.NewInt64(1)}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")})
+	if err != nil {
+		t.Errorf("lookupNonUnique(query fail) got err: %v, want %v", err, nil)
+	}
+}
+
 func TestLookupNonUniqueVerifyAutocommit(t *testing.T) {
 	vindex, err := CreateVindex("lookup", "lookup", map[string]string{
 		"table":      "t",
