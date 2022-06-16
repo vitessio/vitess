@@ -97,7 +97,7 @@ func (wd *workflowDiffer) reconcileExtraRows(dr *DiffReport, maxExtraRowsToCompa
 func (wd *workflowDiffer) diffTable(ctx context.Context, dbClient binlogplayer.DBClient, td *tableDiffer) error {
 	tableName := td.table.Name
 	log.Infof("Starting differ on table %s", tableName)
-	if err := td.updateTableState(ctx, dbClient, tableName, "started", nil); err != nil {
+	if err := td.updateTableState(ctx, dbClient, tableName, StartedState, nil); err != nil {
 		return err
 	}
 	if err := td.initialize(ctx); err != nil {
@@ -121,7 +121,7 @@ func (wd *workflowDiffer) diffTable(ctx context.Context, dbClient binlogplayer.D
 	}
 
 	log.Infof("td.diff after reconciliation for %s, with dr %+v", tableName, dr)
-	if err := td.updateTableState(ctx, dbClient, tableName, "completed", dr); err != nil {
+	if err := td.updateTableState(ctx, dbClient, tableName, CompletedState, dr); err != nil {
 		return err
 	}
 	return nil
@@ -211,7 +211,7 @@ func (wd *workflowDiffer) markIfCompleted(ctx context.Context, dbClient binlogpl
 		return err
 	}
 	if len(qr.Rows) == 0 {
-		if err := wd.ct.updateState(dbClient, "completed"); err != nil {
+		if err := wd.ct.updateState(dbClient, CompletedState); err != nil {
 			return err
 		}
 	}

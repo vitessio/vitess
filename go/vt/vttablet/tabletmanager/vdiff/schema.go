@@ -69,14 +69,14 @@ const (
 	sqlGetVDiffByKeyspaceWorkflowUUID = "select * from _vt.vdiff where keyspace = %s and workflow = %s and vdiff_uuid = %s"
 	sqlGetMostRecentVDiff             = "select * from _vt.vdiff where keyspace = %s and workflow = %s order by id desc limit 1"
 	sqlGetVDiffByID                   = "select * from _vt.vdiff where id = %d"
-	sqlVDiffSummary                   = `select vt.vdiff_id, v.state as vdiff_state, vt.table_name, 
+	sqlVDiffSummary                   = `select vt.vdiff_id, v.state as vdiff_state, vt.table_name as table_name, 
 										v.vdiff_uuid as 'uuid',
-										vt.state as table_state, vt.table_rows, 
-										vt.rows_compared, 
-										IF(vt.mismatch = 1, 1, 0) as has_mismatch, vt.report
+										vt.state as table_state, vt.table_rows as table_rows, 
+										vt.rows_compared as rows_compared, 
+										IF(vt.mismatch = 1, 1, 0) as has_mismatch, vt.report as report
 										from _vt.vdiff v, _vt.vdiff_table vt 
 										where v.id = vt.vdiff_id and v.id = %d`
-	sqlUpdateVDiffState     = "update _vt.vdiff set state = %s where id = %d"
+	sqlUpdateVDiffState     = "update _vt.vdiff set state = %s, completed_timestamp = %s where id = %d"
 	sqlGetVReplicationEntry = "select * from _vt.vreplication %s"
 	sqlGetPendingVDiffs     = "select * from _vt.vdiff where state = 'pending'"
 	sqlGetVDiffID           = "select id as id from _vt.vdiff where vdiff_uuid = %s"
@@ -90,5 +90,5 @@ const (
 	sqlUpdateTableState      = "update _vt.vdiff_table set state = %s, report = %s where vdiff_id = %d and table_name = %s"
 	sqlUpdateTableMismatch   = "update _vt.vdiff_table set mismatch = true where vdiff_id = %d and table_name = %s"
 
-	sqlGetIncompleteTables = "select * from _vt.vdiff_table where vdiff_id = %d and state != 'completed'"
+	sqlGetIncompleteTables = "select table_name as table_name from _vt.vdiff_table where vdiff_id = %d and state != 'completed'"
 )

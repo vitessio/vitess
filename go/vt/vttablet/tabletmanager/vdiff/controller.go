@@ -19,7 +19,7 @@ package vdiff
 import (
 	"context"
 	"fmt"
-	"strings"
+	"time"
 
 	"vitess.io/vitess/go/vt/withddl"
 
@@ -40,6 +40,14 @@ import (
   vdiff operation states: pending/started/completed/error
   vdiff table states: pending/started/completed/error
 */
+type VDiffState string //nolint
+const (
+	PendingState   VDiffState = "pending"
+	StartedState   VDiffState = "started"
+	CompletedState VDiffState = "completed"
+	ErrorState     VDiffState = "error"
+	UnknownState   VDiffState = ""
+)
 
 type controller struct {
 	id              int64 // id from row in _vt.vdiff
@@ -119,14 +127,14 @@ func (ct *controller) run(ctx context.Context) {
 	}
 
 	row := qr.Named().Row()
-	state := row["state"].ToString()
+	state := VDiffState(row["state"].ToString())
 	switch state {
-	case "pending":
+	case PendingState:
 		log.Infof("Starting vdiff")
 		if err := ct.start(ctx, dbClient); err != nil {
 			log.Errorf("run() failed: %s", err)
 			insertVDiffLog(ctx, dbClient, ct.id, fmt.Sprintf("Error: %s", err))
-			if err := ct.updateState(dbClient, "error"); err != nil {
+			if err := ct.updateState(dbClient, ErrorState); err != nil {
 				return
 			}
 			return
@@ -144,9 +152,13 @@ type migrationSource struct {
 	position mysql.Position
 }
 
-func (ct *controller) updateState(dbClient binlogplayer.DBClient, state string) error {
-	state = strings.ToLower(state)
-	query := fmt.Sprintf(sqlUpdateVDiffState, encodeString(state), ct.id)
+func (ct *controller) updateState(dbClient binlogplayer.DBClient, state VDiffState) error {
+	completedTS := "NULL"
+	if state == CompletedState {
+		t := time.Now().UTC()
+		completedTS = encodeString(t.Format("2006-01-02 15:04:05"))
+	}
+	query := fmt.Sprintf(sqlUpdateVDiffState, encodeString(string(state)), completedTS, ct.id)
 	if _, err := withDDL.Exec(ct.vde.ctx, query, dbClient.ExecuteFetch, dbClient.ExecuteFetch); err != nil {
 		return err
 	}
@@ -191,7 +203,7 @@ func (ct *controller) start(ctx context.Context, dbClient binlogplayer.DBClient)
 	if err != nil {
 		return err
 	}
-	if err := ct.updateState(dbClient, "started"); err != nil {
+	if err := ct.updateState(dbClient, StartedState); err != nil {
 		return err
 	}
 	if err := wd.diff(ctx); err != nil {

@@ -96,7 +96,7 @@ func (vde *Engine) PerformVDiffAction(ctx context.Context, req *tabletmanagerdat
 				return nil, err
 			}
 			if qr.InsertID == 0 {
-				return nil, fmt.Errorf("unable to create vdiff record")
+				return nil, fmt.Errorf("unable to create vdiff record; statement: %s", query)
 			}
 			resp.Id = int64(qr.InsertID)
 		} else {
@@ -105,7 +105,7 @@ func (vde *Engine) PerformVDiffAction(ctx context.Context, req *tabletmanagerdat
 				return nil, err
 			}
 			if qr.RowsAffected == 0 {
-				return nil, fmt.Errorf("unable to update vdiff record")
+				return nil, fmt.Errorf("unable to update vdiff record; statement: %s", query)
 			}
 		}
 		resp.VdiffUuid = req.VdiffUuid

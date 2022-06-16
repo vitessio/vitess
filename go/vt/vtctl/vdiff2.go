@@ -177,13 +177,14 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 // summary aggregates/selects the current state of the vdiff from all shards
 
 type vdiffTableSummary struct {
-	TableName, State string
-	RowsCompared     int64
-	MatchingRows     int64
-	MismatchedRows   int64
-	ExtraRowsSource  int64
-	ExtraRowsTarget  int64
-	LastUpdated      string `json:"LastUpdated,omitempty"`
+	TableName       string
+	State           vdiff.VDiffState
+	RowsCompared    int64
+	MatchingRows    int64
+	MismatchedRows  int64
+	ExtraRowsSource int64
+	ExtraRowsTarget int64
+	LastUpdated     string `json:"LastUpdated,omitempty"`
 }
 type vdiffSummary struct {
 	Workflow, Keyspace, State string
@@ -412,17 +413,17 @@ func buildVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid st
 
 				}
 				ts := tableSummaryMap[table]
-				state := strings.ToLower(row.AsString("table_state", ""))
+				state := vdiff.VDiffState(strings.ToLower(row.AsString("table_state", "")))
 
 				switch state {
-				case "completed":
-					if ts.State == "" {
+				case vdiff.CompletedState:
+					if ts.State == vdiff.UnknownState {
 						ts.State = state
 					}
-				case "error":
+				case vdiff.ErrorState:
 					ts.State = state
 				default:
-					if ts.State != "error" {
+					if ts.State != vdiff.ErrorState {
 						ts.State = state
 					}
 				}

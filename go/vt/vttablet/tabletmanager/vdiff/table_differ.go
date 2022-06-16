@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -415,7 +414,7 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare *int64, debug, on
 	advanceTarget := true
 	mismatch := false
 
-	// Save our progress when we complete the run
+	// Save our progress when we finish the run
 	defer func() {
 		_ = td.updateTableProgress(dbClient, dr.ProcessedRows, lastProcessedRow)
 	}()
@@ -604,8 +603,7 @@ func (td *tableDiffer) updateTableProgress(dbClient binlogplayer.DBClient, numRo
 	return nil
 }
 
-func (td *tableDiffer) updateTableState(ctx context.Context, dbClient binlogplayer.DBClient, tableName, state string, dr *DiffReport) error {
-	state = strings.ToLower(state)
+func (td *tableDiffer) updateTableState(ctx context.Context, dbClient binlogplayer.DBClient, tableName string, state VDiffState, dr *DiffReport) error {
 	reportJSON := "{}"
 	if dr != nil {
 		reportJSONBytes, err := json.Marshal(dr)
@@ -614,7 +612,7 @@ func (td *tableDiffer) updateTableState(ctx context.Context, dbClient binlogplay
 		}
 		reportJSON = string(reportJSONBytes)
 	}
-	query := fmt.Sprintf(sqlUpdateTableState, encodeString(state), encodeString(reportJSON), td.wd.ct.id, encodeString(tableName))
+	query := fmt.Sprintf(sqlUpdateTableState, encodeString(string(state)), encodeString(reportJSON), td.wd.ct.id, encodeString(tableName))
 	if _, err := withDDL.Exec(ctx, query, dbClient.ExecuteFetch, dbClient.ExecuteFetch); err != nil {
 		return err
 	}

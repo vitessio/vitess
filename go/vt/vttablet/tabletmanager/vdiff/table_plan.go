@@ -142,7 +142,6 @@ func (td *tableDiffer) buildTablePlan() (*tablePlan, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	// Remove in_keyrange. It's not understood by mysql.
 	sourceSelect.Where = sel.Where //removeKeyrange(sel.Where)
 	// The source should also perform the group by.
