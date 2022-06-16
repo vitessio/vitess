@@ -21,8 +21,11 @@ import (
 	"fmt"
 	"strings"
 
+	"google.golang.org/protobuf/encoding/prototext"
+
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 
 	"vitess.io/vitess/go/sqltypes"
 
@@ -75,6 +78,35 @@ func insertVDiffLog(ctx context.Context, dbClient binlogplayer.DBClient, vdiffID
 	if _, err := withDDL.Exec(ctx, query, dbClient.ExecuteFetch, dbClient.ExecuteFetch); err != nil {
 		log.Error("Error inserting into _vt.vdiff_log: %w", err)
 	}
+}
+
+// getTableLastPK gets the lastPK protobuf message for a given vdiff and table using the
+// given database client
+func getTableLastPK(dbClient binlogplayer.DBClient, vdiffID int64, tableName string) (*querypb.QueryResult, error) {
+	if err := dbClient.Connect(); err != nil {
+		return nil, err
+	}
+	defer dbClient.Close()
+
+	query := fmt.Sprintf(sqlGetVDiffTable, vdiffID, encodeString(tableName))
+	qr, err := dbClient.ExecuteFetch(query, 1)
+	if err != nil {
+		return nil, err
+	}
+	if len(qr.Rows) == 1 {
+		var lastpk []byte
+		if lastpk, err = qr.Named().Row().ToBytes("lastpk"); err != nil {
+			return nil, err
+		}
+		if len(lastpk) != 0 {
+			var lastpkpb querypb.QueryResult
+			if err := prototext.Unmarshal(lastpk, &lastpkpb); err != nil {
+				return nil, err
+			}
+			return &lastpkpb, nil
+		}
+	}
+	return nil, nil
 }
 
 func stringListContains(lst []string, item string) bool {

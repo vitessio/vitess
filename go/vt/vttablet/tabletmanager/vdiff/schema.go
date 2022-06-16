@@ -29,7 +29,7 @@ func init() {
 const (
 	sqlCreateSidecarDB  = "CREATE DATABASE IF NOT EXISTS _vt"
 	sqlCreateVDiffTable = `CREATE TABLE IF NOT EXISTS _vt.vdiff (
-		id int AUTO_INCREMENT,
+		id bigint AUTO_INCREMENT,
 		vdiff_uuid varchar(64) NOT NULL,
 		workflow varbinary(1024),
 		keyspace varbinary(1024),
