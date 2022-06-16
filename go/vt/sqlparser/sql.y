@@ -6972,7 +6972,7 @@ set_expression:
   }
 | charset_or_character_set_or_names charset_value collate_opt
   {
-    $$ = &SetExpr{Var: NewSetVariable(string($1), NoScope), Expr: $2}
+    $$ = &SetExpr{Var: NewSetVariable(string($1), SessionScope), Expr: $2}
   }
 
 set_variable:

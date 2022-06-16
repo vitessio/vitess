@@ -19017,7 +19017,7 @@ yydefault:
 		var yyLOCAL *SetExpr
 //line sql.y:6974
 		{
-			yyLOCAL = &SetExpr{Var: NewSetVariable(string(yyDollar[1].str), NoScope), Expr: yyDollar[2].exprUnion()}
+			yyLOCAL = &SetExpr{Var: NewSetVariable(string(yyDollar[1].str), SessionScope), Expr: yyDollar[2].exprUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1394:
