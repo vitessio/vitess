@@ -146,6 +146,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfAutoIncSpec(a, b)
+	case *Avg:
+		b, ok := inB.(*Avg)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfAvg(a, b)
 	case *Begin:
 		b, ok := inB.(*Begin)
 		if !ok {
@@ -164,6 +170,24 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfBinaryExpr(a, b)
+	case *BitAnd:
+		b, ok := inB.(*BitAnd)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfBitAnd(a, b)
+	case *BitOr:
+		b, ok := inB.(*BitOr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfBitOr(a, b)
+	case *BitXor:
+		b, ok := inB.(*BitXor)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfBitXor(a, b)
 	case BoolVal:
 		b, ok := inB.(BoolVal)
 		if !ok {
@@ -182,6 +206,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfCaseExpr(a, b)
+	case *CastExpr:
+		b, ok := inB.(*CastExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfCastExpr(a, b)
 	case *ChangeColumn:
 		b, ok := inB.(*ChangeColumn)
 		if !ok {
@@ -272,6 +302,18 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfConvertUsingExpr(a, b)
+	case *Count:
+		b, ok := inB.(*Count)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfCount(a, b)
+	case *CountStar:
+		b, ok := inB.(*CountStar)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfCountStar(a, b)
 	case *CreateDatabase:
 		b, ok := inB.(*CreateDatabase)
 		if !ok {
@@ -740,12 +782,24 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfMatchExpr(a, b)
+	case *Max:
+		b, ok := inB.(*Max)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfMax(a, b)
 	case *MemberOfExpr:
 		b, ok := inB.(*MemberOfExpr)
 		if !ok {
 			return false
 		}
 		return EqualsRefOfMemberOfExpr(a, b)
+	case *Min:
+		b, ok := inB.(*Min)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfMin(a, b)
 	case *ModifyColumn:
 		b, ok := inB.(*ModifyColumn)
 		if !ok {
@@ -914,6 +968,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsPartitions(a, b)
+	case *PerformanceSchemaFuncExpr:
+		b, ok := inB.(*PerformanceSchemaFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfPerformanceSchemaFuncExpr(a, b)
 	case *PrepareStmt:
 		b, ok := inB.(*PrepareStmt)
 		if !ok {
@@ -1106,6 +1166,30 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfStarExpr(a, b)
+	case *Std:
+		b, ok := inB.(*Std)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfStd(a, b)
+	case *StdDev:
+		b, ok := inB.(*StdDev)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfStdDev(a, b)
+	case *StdPop:
+		b, ok := inB.(*StdPop)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfStdPop(a, b)
+	case *StdSamp:
+		b, ok := inB.(*StdSamp)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfStdSamp(a, b)
 	case *Stream:
 		b, ok := inB.(*Stream)
 		if !ok {
@@ -1148,6 +1232,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfSubstrExpr(a, b)
+	case *Sum:
+		b, ok := inB.(*Sum)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfSum(a, b)
 	case TableExprs:
 		b, ok := inB.(TableExprs)
 		if !ok {
@@ -1286,6 +1376,24 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfValuesFuncExpr(a, b)
+	case *VarPop:
+		b, ok := inB.(*VarPop)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfVarPop(a, b)
+	case *VarSamp:
+		b, ok := inB.(*VarSamp)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfVarSamp(a, b)
+	case *Variance:
+		b, ok := inB.(*Variance)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfVariance(a, b)
 	case VindexParam:
 		b, ok := inB.(VindexParam)
 		if !ok {
@@ -1577,6 +1685,19 @@ func EqualsRefOfAutoIncSpec(a, b *AutoIncSpec) bool {
 		EqualsTableName(a.Sequence, b.Sequence)
 }
 
+// EqualsRefOfAvg does deep equals between the two objects.
+func EqualsRefOfAvg(a, b *Avg) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Distinct == b.Distinct &&
+		a.Name == b.Name &&
+		EqualsExpr(a.Arg, b.Arg)
+}
+
 // EqualsRefOfBegin does deep equals between the two objects.
 func EqualsRefOfBegin(a, b *Begin) bool {
 	if a == b {
@@ -1615,6 +1736,42 @@ func EqualsRefOfBinaryExpr(a, b *BinaryExpr) bool {
 		EqualsExpr(a.Right, b.Right)
 }
 
+// EqualsRefOfBitAnd does deep equals between the two objects.
+func EqualsRefOfBitAnd(a, b *BitAnd) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Name == b.Name &&
+		EqualsExpr(a.Arg, b.Arg)
+}
+
+// EqualsRefOfBitOr does deep equals between the two objects.
+func EqualsRefOfBitOr(a, b *BitOr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Name == b.Name &&
+		EqualsExpr(a.Arg, b.Arg)
+}
+
+// EqualsRefOfBitXor does deep equals between the two objects.
+func EqualsRefOfBitXor(a, b *BitXor) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Name == b.Name &&
+		EqualsExpr(a.Arg, b.Arg)
+}
+
 // EqualsRefOfCallProc does deep equals between the two objects.
 func EqualsRefOfCallProc(a, b *CallProc) bool {
 	if a == b {
@@ -1638,6 +1795,19 @@ func EqualsRefOfCaseExpr(a, b *CaseExpr) bool {
 	return EqualsExpr(a.Expr, b.Expr) &&
 		EqualsSliceOfRefOfWhen(a.Whens, b.Whens) &&
 		EqualsExpr(a.Else, b.Else)
+}
+
+// EqualsRefOfCastExpr does deep equals between the two objects.
+func EqualsRefOfCastExpr(a, b *CastExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Array == b.Array &&
+		EqualsExpr(a.Expr, b.Expr) &&
+		EqualsRefOfConvertType(a.Type, b.Type)
 }
 
 // EqualsRefOfChangeColumn does deep equals between the two objects.
@@ -1798,8 +1968,7 @@ func EqualsRefOfConvertExpr(a, b *ConvertExpr) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.Array == b.Array &&
-		EqualsExpr(a.Expr, b.Expr) &&
+	return EqualsExpr(a.Expr, b.Expr) &&
 		EqualsRefOfConvertType(a.Type, b.Type)
 }
 
@@ -1827,6 +1996,30 @@ func EqualsRefOfConvertUsingExpr(a, b *ConvertUsingExpr) bool {
 	}
 	return a.Type == b.Type &&
 		EqualsExpr(a.Expr, b.Expr)
+}
+
+// EqualsRefOfCount does deep equals between the two objects.
+func EqualsRefOfCount(a, b *Count) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Distinct == b.Distinct &&
+		a.Name == b.Name &&
+		EqualsExprs(a.Args, b.Args)
+}
+
+// EqualsRefOfCountStar does deep equals between the two objects.
+func EqualsRefOfCountStar(a, b *CountStar) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Name == b.Name
 }
 
 // EqualsRefOfCreateDatabase does deep equals between the two objects.
@@ -2251,7 +2444,8 @@ func EqualsRefOfGroupConcatExpr(a, b *GroupConcatExpr) bool {
 	}
 	return a.Distinct == b.Distinct &&
 		a.Separator == b.Separator &&
-		EqualsSelectExprs(a.Exprs, b.Exprs) &&
+		a.Name == b.Name &&
+		EqualsExprs(a.Exprs, b.Exprs) &&
 		EqualsOrderBy(a.OrderBy, b.OrderBy) &&
 		EqualsRefOfLimit(a.Limit, b.Limit)
 }
@@ -2791,6 +2985,19 @@ func EqualsRefOfMatchExpr(a, b *MatchExpr) bool {
 		a.Option == b.Option
 }
 
+// EqualsRefOfMax does deep equals between the two objects.
+func EqualsRefOfMax(a, b *Max) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Distinct == b.Distinct &&
+		a.Name == b.Name &&
+		EqualsExpr(a.Arg, b.Arg)
+}
+
 // EqualsRefOfMemberOfExpr does deep equals between the two objects.
 func EqualsRefOfMemberOfExpr(a, b *MemberOfExpr) bool {
 	if a == b {
@@ -2801,6 +3008,19 @@ func EqualsRefOfMemberOfExpr(a, b *MemberOfExpr) bool {
 	}
 	return EqualsExpr(a.Value, b.Value) &&
 		EqualsExpr(a.JSONArr, b.JSONArr)
+}
+
+// EqualsRefOfMin does deep equals between the two objects.
+func EqualsRefOfMin(a, b *Min) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Distinct == b.Distinct &&
+		a.Name == b.Name &&
+		EqualsExpr(a.Arg, b.Arg)
 }
 
 // EqualsRefOfModifyColumn does deep equals between the two objects.
@@ -3153,6 +3373,18 @@ func EqualsPartitions(a, b Partitions) bool {
 		}
 	}
 	return true
+}
+
+// EqualsRefOfPerformanceSchemaFuncExpr does deep equals between the two objects.
+func EqualsRefOfPerformanceSchemaFuncExpr(a, b *PerformanceSchemaFuncExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Type == b.Type &&
+		EqualsExpr(a.Argument, b.Argument)
 }
 
 // EqualsRefOfPrepareStmt does deep equals between the two objects.
@@ -3553,6 +3785,54 @@ func EqualsRefOfStarExpr(a, b *StarExpr) bool {
 	return EqualsTableName(a.TableName, b.TableName)
 }
 
+// EqualsRefOfStd does deep equals between the two objects.
+func EqualsRefOfStd(a, b *Std) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Name == b.Name &&
+		EqualsExpr(a.Arg, b.Arg)
+}
+
+// EqualsRefOfStdDev does deep equals between the two objects.
+func EqualsRefOfStdDev(a, b *StdDev) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Name == b.Name &&
+		EqualsExpr(a.Arg, b.Arg)
+}
+
+// EqualsRefOfStdPop does deep equals between the two objects.
+func EqualsRefOfStdPop(a, b *StdPop) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Name == b.Name &&
+		EqualsExpr(a.Arg, b.Arg)
+}
+
+// EqualsRefOfStdSamp does deep equals between the two objects.
+func EqualsRefOfStdSamp(a, b *StdSamp) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Name == b.Name &&
+		EqualsExpr(a.Arg, b.Arg)
+}
+
 // EqualsRefOfStream does deep equals between the two objects.
 func EqualsRefOfStream(a, b *Stream) bool {
 	if a == b {
@@ -3646,6 +3926,19 @@ func EqualsRefOfSubstrExpr(a, b *SubstrExpr) bool {
 	return EqualsExpr(a.Name, b.Name) &&
 		EqualsExpr(a.From, b.From) &&
 		EqualsExpr(a.To, b.To)
+}
+
+// EqualsRefOfSum does deep equals between the two objects.
+func EqualsRefOfSum(a, b *Sum) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Distinct == b.Distinct &&
+		a.Name == b.Name &&
+		EqualsExpr(a.Arg, b.Arg)
 }
 
 // EqualsTableExprs does deep equals between the two objects.
@@ -3934,6 +4227,42 @@ func EqualsRefOfValuesFuncExpr(a, b *ValuesFuncExpr) bool {
 	return EqualsRefOfColName(a.Name, b.Name)
 }
 
+// EqualsRefOfVarPop does deep equals between the two objects.
+func EqualsRefOfVarPop(a, b *VarPop) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Name == b.Name &&
+		EqualsExpr(a.Arg, b.Arg)
+}
+
+// EqualsRefOfVarSamp does deep equals between the two objects.
+func EqualsRefOfVarSamp(a, b *VarSamp) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Name == b.Name &&
+		EqualsExpr(a.Arg, b.Arg)
+}
+
+// EqualsRefOfVariance does deep equals between the two objects.
+func EqualsRefOfVariance(a, b *Variance) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Name == b.Name &&
+		EqualsExpr(a.Arg, b.Arg)
+}
+
 // EqualsVindexParam does deep equals between the two objects.
 func EqualsVindexParam(a, b VindexParam) bool {
 	return a.Val == b.Val &&
@@ -4050,6 +4379,123 @@ func EqualsRefOfXorExpr(a, b *XorExpr) bool {
 	}
 	return EqualsExpr(a.Left, b.Left) &&
 		EqualsExpr(a.Right, b.Right)
+}
+
+// EqualsAggrFunc does deep equals between the two objects.
+func EqualsAggrFunc(inA, inB AggrFunc) bool {
+	if inA == nil && inB == nil {
+		return true
+	}
+	if inA == nil || inB == nil {
+		return false
+	}
+	switch a := inA.(type) {
+	case *Avg:
+		b, ok := inB.(*Avg)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfAvg(a, b)
+	case *BitAnd:
+		b, ok := inB.(*BitAnd)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfBitAnd(a, b)
+	case *BitOr:
+		b, ok := inB.(*BitOr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfBitOr(a, b)
+	case *BitXor:
+		b, ok := inB.(*BitXor)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfBitXor(a, b)
+	case *Count:
+		b, ok := inB.(*Count)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfCount(a, b)
+	case *CountStar:
+		b, ok := inB.(*CountStar)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfCountStar(a, b)
+	case *GroupConcatExpr:
+		b, ok := inB.(*GroupConcatExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfGroupConcatExpr(a, b)
+	case *Max:
+		b, ok := inB.(*Max)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfMax(a, b)
+	case *Min:
+		b, ok := inB.(*Min)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfMin(a, b)
+	case *Std:
+		b, ok := inB.(*Std)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfStd(a, b)
+	case *StdDev:
+		b, ok := inB.(*StdDev)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfStdDev(a, b)
+	case *StdPop:
+		b, ok := inB.(*StdPop)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfStdPop(a, b)
+	case *StdSamp:
+		b, ok := inB.(*StdSamp)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfStdSamp(a, b)
+	case *Sum:
+		b, ok := inB.(*Sum)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfSum(a, b)
+	case *VarPop:
+		b, ok := inB.(*VarPop)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfVarPop(a, b)
+	case *VarSamp:
+		b, ok := inB.(*VarSamp)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfVarSamp(a, b)
+	case *Variance:
+		b, ok := inB.(*Variance)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfVariance(a, b)
+	default:
+		// this should never happen
+		return false
+	}
 }
 
 // EqualsAlterOption does deep equals between the two objects.
@@ -4418,6 +4864,12 @@ func EqualsCallable(inA, inB Callable) bool {
 			return false
 		}
 		return EqualsRefOfNtileExpr(a, b)
+	case *PerformanceSchemaFuncExpr:
+		b, ok := inB.(*PerformanceSchemaFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfPerformanceSchemaFuncExpr(a, b)
 	case *RegexpInstrExpr:
 		b, ok := inB.(*RegexpInstrExpr)
 		if !ok {
@@ -4721,6 +5173,12 @@ func EqualsExpr(inA, inB Expr) bool {
 			return false
 		}
 		return EqualsRefOfArgumentLessWindowExpr(a, b)
+	case *Avg:
+		b, ok := inB.(*Avg)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfAvg(a, b)
 	case *BetweenExpr:
 		b, ok := inB.(*BetweenExpr)
 		if !ok {
@@ -4733,6 +5191,24 @@ func EqualsExpr(inA, inB Expr) bool {
 			return false
 		}
 		return EqualsRefOfBinaryExpr(a, b)
+	case *BitAnd:
+		b, ok := inB.(*BitAnd)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfBitAnd(a, b)
+	case *BitOr:
+		b, ok := inB.(*BitOr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfBitOr(a, b)
+	case *BitXor:
+		b, ok := inB.(*BitXor)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfBitXor(a, b)
 	case BoolVal:
 		b, ok := inB.(BoolVal)
 		if !ok {
@@ -4745,6 +5221,12 @@ func EqualsExpr(inA, inB Expr) bool {
 			return false
 		}
 		return EqualsRefOfCaseExpr(a, b)
+	case *CastExpr:
+		b, ok := inB.(*CastExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfCastExpr(a, b)
 	case *ColName:
 		b, ok := inB.(*ColName)
 		if !ok {
@@ -4775,6 +5257,18 @@ func EqualsExpr(inA, inB Expr) bool {
 			return false
 		}
 		return EqualsRefOfConvertUsingExpr(a, b)
+	case *Count:
+		b, ok := inB.(*Count)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfCount(a, b)
+	case *CountStar:
+		b, ok := inB.(*CountStar)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfCountStar(a, b)
 	case *CurTimeFuncExpr:
 		b, ok := inB.(*CurTimeFuncExpr)
 		if !ok {
@@ -4997,12 +5491,24 @@ func EqualsExpr(inA, inB Expr) bool {
 			return false
 		}
 		return EqualsRefOfMatchExpr(a, b)
+	case *Max:
+		b, ok := inB.(*Max)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfMax(a, b)
 	case *MemberOfExpr:
 		b, ok := inB.(*MemberOfExpr)
 		if !ok {
 			return false
 		}
 		return EqualsRefOfMemberOfExpr(a, b)
+	case *Min:
+		b, ok := inB.(*Min)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfMin(a, b)
 	case *NTHValueExpr:
 		b, ok := inB.(*NTHValueExpr)
 		if !ok {
@@ -5045,6 +5551,12 @@ func EqualsExpr(inA, inB Expr) bool {
 			return false
 		}
 		return EqualsRefOfOrExpr(a, b)
+	case *PerformanceSchemaFuncExpr:
+		b, ok := inB.(*PerformanceSchemaFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfPerformanceSchemaFuncExpr(a, b)
 	case *RegexpInstrExpr:
 		b, ok := inB.(*RegexpInstrExpr)
 		if !ok {
@@ -5069,6 +5581,30 @@ func EqualsExpr(inA, inB Expr) bool {
 			return false
 		}
 		return EqualsRefOfRegexpSubstrExpr(a, b)
+	case *Std:
+		b, ok := inB.(*Std)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfStd(a, b)
+	case *StdDev:
+		b, ok := inB.(*StdDev)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfStdDev(a, b)
+	case *StdPop:
+		b, ok := inB.(*StdPop)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfStdPop(a, b)
+	case *StdSamp:
+		b, ok := inB.(*StdSamp)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfStdSamp(a, b)
 	case *Subquery:
 		b, ok := inB.(*Subquery)
 		if !ok {
@@ -5081,6 +5617,12 @@ func EqualsExpr(inA, inB Expr) bool {
 			return false
 		}
 		return EqualsRefOfSubstrExpr(a, b)
+	case *Sum:
+		b, ok := inB.(*Sum)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfSum(a, b)
 	case *TimestampFuncExpr:
 		b, ok := inB.(*TimestampFuncExpr)
 		if !ok {
@@ -5117,6 +5659,24 @@ func EqualsExpr(inA, inB Expr) bool {
 			return false
 		}
 		return EqualsRefOfValuesFuncExpr(a, b)
+	case *VarPop:
+		b, ok := inB.(*VarPop)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfVarPop(a, b)
+	case *VarSamp:
+		b, ok := inB.(*VarSamp)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfVarSamp(a, b)
+	case *Variance:
+		b, ok := inB.(*Variance)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfVariance(a, b)
 	case *WeightStringFuncExpr:
 		b, ok := inB.(*WeightStringFuncExpr)
 		if !ok {
@@ -5195,6 +5755,12 @@ func EqualsJSONPathParam(inA, inB JSONPathParam) bool {
 			return false
 		}
 		return EqualsRefOfArgumentLessWindowExpr(a, b)
+	case *Avg:
+		b, ok := inB.(*Avg)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfAvg(a, b)
 	case *BetweenExpr:
 		b, ok := inB.(*BetweenExpr)
 		if !ok {
@@ -5207,6 +5773,24 @@ func EqualsJSONPathParam(inA, inB JSONPathParam) bool {
 			return false
 		}
 		return EqualsRefOfBinaryExpr(a, b)
+	case *BitAnd:
+		b, ok := inB.(*BitAnd)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfBitAnd(a, b)
+	case *BitOr:
+		b, ok := inB.(*BitOr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfBitOr(a, b)
+	case *BitXor:
+		b, ok := inB.(*BitXor)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfBitXor(a, b)
 	case BoolVal:
 		b, ok := inB.(BoolVal)
 		if !ok {
@@ -5219,6 +5803,12 @@ func EqualsJSONPathParam(inA, inB JSONPathParam) bool {
 			return false
 		}
 		return EqualsRefOfCaseExpr(a, b)
+	case *CastExpr:
+		b, ok := inB.(*CastExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfCastExpr(a, b)
 	case *ColName:
 		b, ok := inB.(*ColName)
 		if !ok {
@@ -5249,6 +5839,18 @@ func EqualsJSONPathParam(inA, inB JSONPathParam) bool {
 			return false
 		}
 		return EqualsRefOfConvertUsingExpr(a, b)
+	case *Count:
+		b, ok := inB.(*Count)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfCount(a, b)
+	case *CountStar:
+		b, ok := inB.(*CountStar)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfCountStar(a, b)
 	case *CurTimeFuncExpr:
 		b, ok := inB.(*CurTimeFuncExpr)
 		if !ok {
@@ -5471,12 +6073,24 @@ func EqualsJSONPathParam(inA, inB JSONPathParam) bool {
 			return false
 		}
 		return EqualsRefOfMatchExpr(a, b)
+	case *Max:
+		b, ok := inB.(*Max)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfMax(a, b)
 	case *MemberOfExpr:
 		b, ok := inB.(*MemberOfExpr)
 		if !ok {
 			return false
 		}
 		return EqualsRefOfMemberOfExpr(a, b)
+	case *Min:
+		b, ok := inB.(*Min)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfMin(a, b)
 	case *NTHValueExpr:
 		b, ok := inB.(*NTHValueExpr)
 		if !ok {
@@ -5519,6 +6133,12 @@ func EqualsJSONPathParam(inA, inB JSONPathParam) bool {
 			return false
 		}
 		return EqualsRefOfOrExpr(a, b)
+	case *PerformanceSchemaFuncExpr:
+		b, ok := inB.(*PerformanceSchemaFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfPerformanceSchemaFuncExpr(a, b)
 	case *RegexpInstrExpr:
 		b, ok := inB.(*RegexpInstrExpr)
 		if !ok {
@@ -5543,6 +6163,30 @@ func EqualsJSONPathParam(inA, inB JSONPathParam) bool {
 			return false
 		}
 		return EqualsRefOfRegexpSubstrExpr(a, b)
+	case *Std:
+		b, ok := inB.(*Std)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfStd(a, b)
+	case *StdDev:
+		b, ok := inB.(*StdDev)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfStdDev(a, b)
+	case *StdPop:
+		b, ok := inB.(*StdPop)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfStdPop(a, b)
+	case *StdSamp:
+		b, ok := inB.(*StdSamp)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfStdSamp(a, b)
 	case *Subquery:
 		b, ok := inB.(*Subquery)
 		if !ok {
@@ -5555,6 +6199,12 @@ func EqualsJSONPathParam(inA, inB JSONPathParam) bool {
 			return false
 		}
 		return EqualsRefOfSubstrExpr(a, b)
+	case *Sum:
+		b, ok := inB.(*Sum)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfSum(a, b)
 	case *TimestampFuncExpr:
 		b, ok := inB.(*TimestampFuncExpr)
 		if !ok {
@@ -5591,6 +6241,24 @@ func EqualsJSONPathParam(inA, inB JSONPathParam) bool {
 			return false
 		}
 		return EqualsRefOfValuesFuncExpr(a, b)
+	case *VarPop:
+		b, ok := inB.(*VarPop)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfVarPop(a, b)
+	case *VarSamp:
+		b, ok := inB.(*VarSamp)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfVarSamp(a, b)
+	case *Variance:
+		b, ok := inB.(*Variance)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfVariance(a, b)
 	case *WeightStringFuncExpr:
 		b, ok := inB.(*WeightStringFuncExpr)
 		if !ok {
