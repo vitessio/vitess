@@ -75,6 +75,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfCallProc(in)
 	case *CaseExpr:
 		return CloneRefOfCaseExpr(in)
+	case *CastExpr:
+		return CloneRefOfCastExpr(in)
 	case *ChangeColumn:
 		return CloneRefOfChangeColumn(in)
 	case *CheckConstraintDefinition:
@@ -710,6 +712,17 @@ func CloneRefOfCaseExpr(n *CaseExpr) *CaseExpr {
 	out.Expr = CloneExpr(n.Expr)
 	out.Whens = CloneSliceOfRefOfWhen(n.Whens)
 	out.Else = CloneExpr(n.Else)
+	return &out
+}
+
+// CloneRefOfCastExpr creates a deep clone of the input.
+func CloneRefOfCastExpr(n *CastExpr) *CastExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Expr = CloneExpr(n.Expr)
+	out.Type = CloneRefOfConvertType(n.Type)
 	return &out
 }
 
@@ -3072,6 +3085,8 @@ func CloneExpr(in Expr) Expr {
 		return in
 	case *CaseExpr:
 		return CloneRefOfCaseExpr(in)
+	case *CastExpr:
+		return CloneRefOfCastExpr(in)
 	case *ColName:
 		return CloneRefOfColName(in)
 	case *CollateExpr:
@@ -3244,6 +3259,8 @@ func CloneJSONPathParam(in JSONPathParam) JSONPathParam {
 		return in
 	case *CaseExpr:
 		return CloneRefOfCaseExpr(in)
+	case *CastExpr:
+		return CloneRefOfCastExpr(in)
 	case *ColName:
 		return CloneRefOfColName(in)
 	case *CollateExpr:

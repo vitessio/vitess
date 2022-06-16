@@ -745,10 +745,13 @@ func wrapAndPushExpr(ctx *plancontext.PlanningContext, expr sqlparser.Expr, weig
 		return offset, -1, nil
 	}
 	if !sqlparser.IsColName(expr) {
-		unary, ok := expr.(*sqlparser.ConvertExpr)
-		if ok && sqlparser.IsColName(unary.Expr) {
+		switch unary := expr.(type) {
+		case *sqlparser.CastExpr:
 			expr = unary.Expr
-		} else {
+		case *sqlparser.ConvertExpr:
+			expr = unary.Expr
+		}
+		if !sqlparser.IsColName(expr) {
 			return 0, 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: complex order by expression: %s", sqlparser.String(expr))
 		}
 	}
