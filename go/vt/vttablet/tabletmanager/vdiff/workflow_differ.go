@@ -22,6 +22,8 @@ import (
 	"reflect"
 	"strings"
 
+	"google.golang.org/protobuf/encoding/prototext"
+
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 
 	"vitess.io/vitess/go/vt/schema"
@@ -29,6 +31,7 @@ import (
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtctl/schematools"
@@ -158,7 +161,7 @@ func (wd *workflowDiffer) diff(ctx context.Context) error {
 	if err != nil {
 		return vterrors.Wrap(err, "GetSchema")
 	}
-	if err = wd.buildPlan(filter, schm); err != nil {
+	if err = wd.buildPlan(dbClient, filter, schm); err != nil {
 		return vterrors.Wrap(err, "buildPlan")
 	}
 	if err := wd.getTotalRowsEstimate(dbClient); err != nil {
@@ -215,7 +218,7 @@ func (wd *workflowDiffer) markIfCompleted(ctx context.Context, dbClient binlogpl
 	return nil
 }
 
-func (wd *workflowDiffer) buildPlan(filter *binlogdatapb.Filter, schm *tabletmanagerdatapb.SchemaDefinition) error {
+func (wd *workflowDiffer) buildPlan(dbClient binlogplayer.DBClient, filter *binlogdatapb.Filter, schm *tabletmanagerdatapb.SchemaDefinition) error {
 	var specifiedTables []string
 	optTables := strings.TrimSpace(wd.opts.CoreOptions.Tables)
 	if optTables != "" {
@@ -250,6 +253,11 @@ func (wd *workflowDiffer) buildPlan(filter *binlogdatapb.Filter, schm *tabletman
 		}
 
 		td := newTableDiffer(wd, table, sourceQuery)
+		lastpkpb, err := wd.getTableLastPK(dbClient, table.Name)
+		if err != nil {
+			return err
+		}
+		td.lastPK = lastpkpb
 		wd.tableDiffers[table.Name] = td
 		if _, err := td.buildTablePlan(); err != nil {
 			return err
@@ -259,4 +267,27 @@ func (wd *workflowDiffer) buildPlan(filter *binlogdatapb.Filter, schm *tabletman
 		return fmt.Errorf("no tables found to diff, %s:%s", optTables, specifiedTables)
 	}
 	return nil
+}
+
+// getTableLastPK gets the lastPK protobuf message for a given vdiff table
+func (wd *workflowDiffer) getTableLastPK(dbClient binlogplayer.DBClient, tableName string) (*querypb.QueryResult, error) {
+	query := fmt.Sprintf(sqlGetVDiffTable, wd.ct.id, encodeString(tableName))
+	qr, err := dbClient.ExecuteFetch(query, 1)
+	if err != nil {
+		return nil, err
+	}
+	if len(qr.Rows) == 1 {
+		var lastpk []byte
+		if lastpk, err = qr.Named().Row().ToBytes("lastpk"); err != nil {
+			return nil, err
+		}
+		if len(lastpk) != 0 {
+			var lastpkpb querypb.QueryResult
+			if err := prototext.Unmarshal(lastpk, &lastpkpb); err != nil {
+				return nil, err
+			}
+			return &lastpkpb, nil
+		}
+	}
+	return nil, nil
 }

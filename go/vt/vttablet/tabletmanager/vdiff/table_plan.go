@@ -61,12 +61,6 @@ func (td *tableDiffer) buildTablePlan() (*tablePlan, error) {
 		return nil, fmt.Errorf("unexpected: %v", sqlparser.String(statement))
 	}
 
-	lastpkpb, err := getTableLastPK(td.wd.ct.dbClientFactory(), td.wd.ct.id, td.table.Name)
-	if err != nil {
-		return nil, err
-	}
-	td.lastPK = lastpkpb
-
 	sourceSelect := &sqlparser.Select{}
 	targetSelect := &sqlparser.Select{}
 	// aggregates is the list of Aggregate functions, if any.

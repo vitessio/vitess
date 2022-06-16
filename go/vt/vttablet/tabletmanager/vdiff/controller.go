@@ -37,8 +37,8 @@ import (
 )
 
 /*
-  vdiff operation states: pending/completed/error
-  vdiff table states: pending/completed/error
+  vdiff operation states: pending/started/completed/error
+  vdiff table states: pending/started/completed/error
 */
 
 type controller struct {
