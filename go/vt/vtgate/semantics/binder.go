@@ -113,14 +113,7 @@ func (b *binder) up(cursor *sqlparser.Cursor) error {
 		if deps.typ != nil {
 			b.typer.setTypeFor(node, *deps.typ)
 		}
-	case *sqlparser.FuncExpr:
-		// need special handling so that any lingering `*` expressions are bound to all local tables
-		if len(node.Exprs) != 1 {
-			break
-		}
-		if _, isStar := node.Exprs[0].(*sqlparser.StarExpr); !isStar {
-			break
-		}
+	case *sqlparser.CountStar:
 		scope := b.scoper.currentScope()
 		var ts TableSet
 		for _, table := range scope.tables {

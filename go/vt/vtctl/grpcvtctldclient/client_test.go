@@ -90,10 +90,8 @@ func TestGetKeyspace(t *testing.T) {
 	testutil.WithTestServer(t, vtctld, func(t *testing.T, client vtctldclient.VtctldClient) {
 		expected := &vtctldatapb.GetKeyspaceResponse{
 			Keyspace: &vtctldatapb.Keyspace{
-				Name: "testkeyspace",
-				Keyspace: &topodatapb.Keyspace{
-					ShardingColumnName: "col1",
-				},
+				Name:     "testkeyspace",
+				Keyspace: &topodatapb.Keyspace{},
 			},
 		}
 		testutil.AddKeyspace(ctx, t, ts, expected.Keyspace)

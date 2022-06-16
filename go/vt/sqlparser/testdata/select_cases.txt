@@ -176,7 +176,7 @@ INPUT
 select @sum;
 END
 OUTPUT
-select @sum from dual
+select @`sum` from dual
 END
 INPUT
 select s1 from t1 group by 1 having 1 = 0;
@@ -2222,7 +2222,7 @@ INPUT
 select a.id, b.category as catid, b.state as stateid, b.county as countyid from t1 a, t2 b where (a.token = 'a71250b7ed780f6ef3185bfffe027983') and (a.count = b.id) order by a.id;
 END
 OUTPUT
-select a.id, b.category as catid, b.state as stateid, b.county as countyid from t1 as a, t2 as b where a.token = 'a71250b7ed780f6ef3185bfffe027983' and a.count = b.id order by a.id asc
+select a.id, b.category as catid, b.state as stateid, b.county as countyid from t1 as a, t2 as b where a.token = 'a71250b7ed780f6ef3185bfffe027983' and a.`count` = b.id order by a.id asc
 END
 INPUT
 select sql_data_access from information_schema.routines where specific_name like 'p%' and ROUTINE_SCHEMA != 'sys';
@@ -2480,7 +2480,7 @@ INPUT
 select a.id, b.category as catid, b.state as stateid, b.county as countyid from t1 a, t2 b ignore index (primary) where (a.token ='a71250b7ed780f6ef3185bfffe027983') and (a.count = b.id);
 END
 OUTPUT
-select a.id, b.category as catid, b.state as stateid, b.county as countyid from t1 as a, t2 as b ignore index (`primary`) where a.token = 'a71250b7ed780f6ef3185bfffe027983' and a.count = b.id
+select a.id, b.category as catid, b.state as stateid, b.county as countyid from t1 as a, t2 as b ignore index (`primary`) where a.token = 'a71250b7ed780f6ef3185bfffe027983' and a.`count` = b.id
 END
 INPUT
 select count(distinct n2) from t1;
@@ -2708,7 +2708,7 @@ INPUT
 select t2.count, t1.name from t2 inner join t1 using (color);
 END
 OUTPUT
-select t2.count, t1.`name` from t2 join t1 using (color)
+select t2.`count`, t1.`name` from t2 join t1 using (color)
 END
 INPUT
 select st_touches(st_union(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)')));
@@ -10844,7 +10844,7 @@ INPUT
 select t2.count, t1.name from t2 natural join t1;
 END
 OUTPUT
-select t2.count, t1.`name` from t2 natural join t1
+select t2.`count`, t1.`name` from t2 natural join t1
 END
 INPUT
 select 1+1,1-1,1+1*2,8/5,8%5,mod(8,5),mod(8,5)|0,-(1+1)*-2;
@@ -17714,7 +17714,7 @@ INPUT
 select grp, sum(a)+count(a)+avg(a)+std(a)+variance(a)+bit_or(a)+bit_and(a)+min(a)+max(a)+min(c)+max(c) as sum from t1 group by grp;
 END
 OUTPUT
-select grp, sum(a) + count(a) + avg(a) + std(a) + variance(a) + bit_or(a) + bit_and(a) + min(a) + max(a) + min(c) + max(c) as sum from t1 group by grp
+select grp, sum(a) + count(a) + avg(a) + std(a) + variance(a) + bit_or(a) + bit_and(a) + min(a) + max(a) + min(c) + max(c) as `sum` from t1 group by grp
 END
 INPUT
 select -9223372036854775808 1 as result;

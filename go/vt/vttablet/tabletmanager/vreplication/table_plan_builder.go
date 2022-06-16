@@ -433,21 +433,32 @@ func (tpb *tablePlanBuilder) analyzeExpr(selExpr sqlparser.SelectExpr) (*colExpr
 			return nil, fmt.Errorf("unexpected: %v", sqlparser.String(expr))
 		}
 		switch fname := expr.Name.Lowered(); fname {
+		case "keyspace_id":
+			if len(expr.Exprs) != 0 {
+				return nil, fmt.Errorf("unexpected: %v", sqlparser.String(expr))
+			}
+			tpb.sendSelect.SelectExprs = append(tpb.sendSelect.SelectExprs, &sqlparser.AliasedExpr{Expr: aliased.Expr})
+			// The vstreamer responds with "keyspace_id" as the field name for this request.
+			cexpr.expr = &sqlparser.ColName{Name: sqlparser.NewColIdent("keyspace_id")}
+			return cexpr, nil
+		}
+	}
+	if expr, ok := aliased.Expr.(sqlparser.AggrFunc); ok {
+		if expr.IsDistinct() {
+			return nil, fmt.Errorf("unexpected: %v", sqlparser.String(expr))
+		}
+		switch fname := strings.ToLower(expr.AggrName()); fname {
 		case "count":
-			if _, ok := expr.Exprs[0].(*sqlparser.StarExpr); !ok {
+			if _, ok := expr.(*sqlparser.CountStar); !ok {
 				return nil, fmt.Errorf("only count(*) is supported: %v", sqlparser.String(expr))
 			}
 			cexpr.operation = opCount
 			return cexpr, nil
 		case "sum":
-			if len(expr.Exprs) != 1 {
+			if len(expr.GetArgs()) != 1 {
 				return nil, fmt.Errorf("unexpected: %v", sqlparser.String(expr))
 			}
-			aInner, ok := expr.Exprs[0].(*sqlparser.AliasedExpr)
-			if !ok {
-				return nil, fmt.Errorf("unexpected: %v", sqlparser.String(expr))
-			}
-			innerCol, ok := aInner.Expr.(*sqlparser.ColName)
+			innerCol, ok := expr.GetArg().(*sqlparser.ColName)
 			if !ok {
 				return nil, fmt.Errorf("unexpected: %v", sqlparser.String(expr))
 			}
@@ -458,14 +469,6 @@ func (tpb *tablePlanBuilder) analyzeExpr(selExpr sqlparser.SelectExpr) (*colExpr
 			cexpr.expr = innerCol
 			tpb.addCol(innerCol.Name)
 			cexpr.references[innerCol.Name.String()] = true
-			return cexpr, nil
-		case "keyspace_id":
-			if len(expr.Exprs) != 0 {
-				return nil, fmt.Errorf("unexpected: %v", sqlparser.String(expr))
-			}
-			tpb.sendSelect.SelectExprs = append(tpb.sendSelect.SelectExprs, &sqlparser.AliasedExpr{Expr: aliased.Expr})
-			// The vstreamer responds with "keyspace_id" as the field name for this request.
-			cexpr.expr = &sqlparser.ColName{Name: sqlparser.NewColIdent("keyspace_id")}
 			return cexpr, nil
 		}
 	}
@@ -479,11 +482,8 @@ func (tpb *tablePlanBuilder) analyzeExpr(selExpr sqlparser.SelectExpr) (*colExpr
 			cexpr.references[node.Name.String()] = true
 		case *sqlparser.Subquery:
 			return false, fmt.Errorf("unsupported subquery: %v", sqlparser.String(node))
-		case *sqlparser.FuncExpr:
-			// Other aggregates are not supported.
-			if node.IsAggregate() {
-				return false, fmt.Errorf("unexpected: %v", sqlparser.String(node))
-			}
+		case sqlparser.AggrFunc:
+			return false, fmt.Errorf("unexpected: %v", sqlparser.String(node))
 		}
 		return true, nil
 	}, aliased.Expr)

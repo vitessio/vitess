@@ -62,12 +62,20 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfArgumentLessWindowExpr(parent, node, replacer)
 	case *AutoIncSpec:
 		return a.rewriteRefOfAutoIncSpec(parent, node, replacer)
+	case *Avg:
+		return a.rewriteRefOfAvg(parent, node, replacer)
 	case *Begin:
 		return a.rewriteRefOfBegin(parent, node, replacer)
 	case *BetweenExpr:
 		return a.rewriteRefOfBetweenExpr(parent, node, replacer)
 	case *BinaryExpr:
 		return a.rewriteRefOfBinaryExpr(parent, node, replacer)
+	case *BitAnd:
+		return a.rewriteRefOfBitAnd(parent, node, replacer)
+	case *BitOr:
+		return a.rewriteRefOfBitOr(parent, node, replacer)
+	case *BitXor:
+		return a.rewriteRefOfBitXor(parent, node, replacer)
 	case BoolVal:
 		return a.rewriteBoolVal(parent, node, replacer)
 	case *CallProc:
@@ -104,6 +112,10 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfConvertType(parent, node, replacer)
 	case *ConvertUsingExpr:
 		return a.rewriteRefOfConvertUsingExpr(parent, node, replacer)
+	case *Count:
+		return a.rewriteRefOfCount(parent, node, replacer)
+	case *CountStar:
+		return a.rewriteRefOfCountStar(parent, node, replacer)
 	case *CreateDatabase:
 		return a.rewriteRefOfCreateDatabase(parent, node, replacer)
 	case *CreateTable:
@@ -260,8 +272,12 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteMatchAction(parent, node, replacer)
 	case *MatchExpr:
 		return a.rewriteRefOfMatchExpr(parent, node, replacer)
+	case *Max:
+		return a.rewriteRefOfMax(parent, node, replacer)
 	case *MemberOfExpr:
 		return a.rewriteRefOfMemberOfExpr(parent, node, replacer)
+	case *Min:
+		return a.rewriteRefOfMin(parent, node, replacer)
 	case *ModifyColumn:
 		return a.rewriteRefOfModifyColumn(parent, node, replacer)
 	case *NTHValueExpr:
@@ -318,6 +334,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfPartitionValueRange(parent, node, replacer)
 	case Partitions:
 		return a.rewritePartitions(parent, node, replacer)
+	case *PerformanceSchemaFuncExpr:
+		return a.rewriteRefOfPerformanceSchemaFuncExpr(parent, node, replacer)
 	case *PrepareStmt:
 		return a.rewriteRefOfPrepareStmt(parent, node, replacer)
 	case ReferenceAction:
@@ -382,6 +400,14 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfShowThrottledApps(parent, node, replacer)
 	case *StarExpr:
 		return a.rewriteRefOfStarExpr(parent, node, replacer)
+	case *Std:
+		return a.rewriteRefOfStd(parent, node, replacer)
+	case *StdDev:
+		return a.rewriteRefOfStdDev(parent, node, replacer)
+	case *StdPop:
+		return a.rewriteRefOfStdPop(parent, node, replacer)
+	case *StdSamp:
+		return a.rewriteRefOfStdSamp(parent, node, replacer)
 	case *Stream:
 		return a.rewriteRefOfStream(parent, node, replacer)
 	case *SubPartition:
@@ -396,6 +422,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfSubquery(parent, node, replacer)
 	case *SubstrExpr:
 		return a.rewriteRefOfSubstrExpr(parent, node, replacer)
+	case *Sum:
+		return a.rewriteRefOfSum(parent, node, replacer)
 	case TableExprs:
 		return a.rewriteTableExprs(parent, node, replacer)
 	case TableIdent:
@@ -442,6 +470,12 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteValues(parent, node, replacer)
 	case *ValuesFuncExpr:
 		return a.rewriteRefOfValuesFuncExpr(parent, node, replacer)
+	case *VarPop:
+		return a.rewriteRefOfVarPop(parent, node, replacer)
+	case *VarSamp:
+		return a.rewriteRefOfVarSamp(parent, node, replacer)
+	case *Variance:
+		return a.rewriteRefOfVariance(parent, node, replacer)
 	case VindexParam:
 		return a.rewriteVindexParam(parent, node, replacer)
 	case *VindexSpec:
@@ -1035,6 +1069,33 @@ func (a *application) rewriteRefOfAutoIncSpec(parent SQLNode, node *AutoIncSpec,
 	}
 	return true
 }
+func (a *application) rewriteRefOfAvg(parent SQLNode, node *Avg, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.Arg, func(newNode, parent SQLNode) {
+		parent.(*Avg).Arg = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
 func (a *application) rewriteRefOfBegin(parent SQLNode, node *Begin, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -1115,6 +1176,87 @@ func (a *application) rewriteRefOfBinaryExpr(parent SQLNode, node *BinaryExpr, r
 	}
 	if !a.rewriteExpr(node, node.Right, func(newNode, parent SQLNode) {
 		parent.(*BinaryExpr).Right = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfBitAnd(parent SQLNode, node *BitAnd, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.Arg, func(newNode, parent SQLNode) {
+		parent.(*BitAnd).Arg = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfBitOr(parent SQLNode, node *BitOr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.Arg, func(newNode, parent SQLNode) {
+		parent.(*BitOr).Arg = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfBitXor(parent SQLNode, node *BitXor, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.Arg, func(newNode, parent SQLNode) {
+		parent.(*BitXor).Arg = newNode.(Expr)
 	}) {
 		return false
 	}
@@ -1656,6 +1798,57 @@ func (a *application) rewriteRefOfConvertUsingExpr(parent SQLNode, node *Convert
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfCount(parent SQLNode, node *Count, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExprs(node, node.Args, func(newNode, parent SQLNode) {
+		parent.(*Count).Args = newNode.(Exprs)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfCountStar(parent SQLNode, node *CountStar, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if a.post != nil {
+		if a.pre == nil {
+			a.cur.replacer = replacer
+			a.cur.parent = parent
+			a.cur.node = node
+		}
 		if !a.post(&a.cur) {
 			return false
 		}
@@ -2684,8 +2877,8 @@ func (a *application) rewriteRefOfGroupConcatExpr(parent SQLNode, node *GroupCon
 			return true
 		}
 	}
-	if !a.rewriteSelectExprs(node, node.Exprs, func(newNode, parent SQLNode) {
-		parent.(*GroupConcatExpr).Exprs = newNode.(SelectExprs)
+	if !a.rewriteExprs(node, node.Exprs, func(newNode, parent SQLNode) {
+		parent.(*GroupConcatExpr).Exprs = newNode.(Exprs)
 	}) {
 		return false
 	}
@@ -4100,6 +4293,33 @@ func (a *application) rewriteRefOfMatchExpr(parent SQLNode, node *MatchExpr, rep
 	}
 	return true
 }
+func (a *application) rewriteRefOfMax(parent SQLNode, node *Max, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.Arg, func(newNode, parent SQLNode) {
+		parent.(*Max).Arg = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
 func (a *application) rewriteRefOfMemberOfExpr(parent SQLNode, node *MemberOfExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -4119,6 +4339,33 @@ func (a *application) rewriteRefOfMemberOfExpr(parent SQLNode, node *MemberOfExp
 	}
 	if !a.rewriteExpr(node, node.JSONArr, func(newNode, parent SQLNode) {
 		parent.(*MemberOfExpr).JSONArr = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfMin(parent SQLNode, node *Min, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.Arg, func(newNode, parent SQLNode) {
+		parent.(*Min).Arg = newNode.(Expr)
 	}) {
 		return false
 	}
@@ -5004,6 +5251,33 @@ func (a *application) rewritePartitions(parent SQLNode, node Partitions, replace
 		}(x)) {
 			return false
 		}
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfPerformanceSchemaFuncExpr(parent SQLNode, node *PerformanceSchemaFuncExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.Argument, func(newNode, parent SQLNode) {
+		parent.(*PerformanceSchemaFuncExpr).Argument = newNode.(Expr)
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -6062,6 +6336,114 @@ func (a *application) rewriteRefOfStarExpr(parent SQLNode, node *StarExpr, repla
 	}
 	return true
 }
+func (a *application) rewriteRefOfStd(parent SQLNode, node *Std, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.Arg, func(newNode, parent SQLNode) {
+		parent.(*Std).Arg = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfStdDev(parent SQLNode, node *StdDev, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.Arg, func(newNode, parent SQLNode) {
+		parent.(*StdDev).Arg = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfStdPop(parent SQLNode, node *StdPop, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.Arg, func(newNode, parent SQLNode) {
+		parent.(*StdPop).Arg = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfStdSamp(parent SQLNode, node *StdSamp, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.Arg, func(newNode, parent SQLNode) {
+		parent.(*StdSamp).Arg = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
 func (a *application) rewriteRefOfStream(parent SQLNode, node *Stream, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -6293,6 +6675,33 @@ func (a *application) rewriteRefOfSubstrExpr(parent SQLNode, node *SubstrExpr, r
 	}
 	if !a.rewriteExpr(node, node.To, func(newNode, parent SQLNode) {
 		parent.(*SubstrExpr).To = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfSum(parent SQLNode, node *Sum, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.Arg, func(newNode, parent SQLNode) {
+		parent.(*Sum).Arg = newNode.(Expr)
 	}) {
 		return false
 	}
@@ -7099,6 +7508,87 @@ func (a *application) rewriteRefOfValuesFuncExpr(parent SQLNode, node *ValuesFun
 	}
 	return true
 }
+func (a *application) rewriteRefOfVarPop(parent SQLNode, node *VarPop, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.Arg, func(newNode, parent SQLNode) {
+		parent.(*VarPop).Arg = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfVarSamp(parent SQLNode, node *VarSamp, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.Arg, func(newNode, parent SQLNode) {
+		parent.(*VarSamp).Arg = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfVariance(parent SQLNode, node *Variance, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.Arg, func(newNode, parent SQLNode) {
+		parent.(*Variance).Arg = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
 func (a *application) rewriteVindexParam(parent SQLNode, node VindexParam, replacer replacerFunc) bool {
 	if a.pre != nil {
 		a.cur.replacer = replacer
@@ -7429,6 +7919,50 @@ func (a *application) rewriteRefOfXorExpr(parent SQLNode, node *XorExpr, replace
 	}
 	return true
 }
+func (a *application) rewriteAggrFunc(parent SQLNode, node AggrFunc, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	switch node := node.(type) {
+	case *Avg:
+		return a.rewriteRefOfAvg(parent, node, replacer)
+	case *BitAnd:
+		return a.rewriteRefOfBitAnd(parent, node, replacer)
+	case *BitOr:
+		return a.rewriteRefOfBitOr(parent, node, replacer)
+	case *BitXor:
+		return a.rewriteRefOfBitXor(parent, node, replacer)
+	case *Count:
+		return a.rewriteRefOfCount(parent, node, replacer)
+	case *CountStar:
+		return a.rewriteRefOfCountStar(parent, node, replacer)
+	case *GroupConcatExpr:
+		return a.rewriteRefOfGroupConcatExpr(parent, node, replacer)
+	case *Max:
+		return a.rewriteRefOfMax(parent, node, replacer)
+	case *Min:
+		return a.rewriteRefOfMin(parent, node, replacer)
+	case *Std:
+		return a.rewriteRefOfStd(parent, node, replacer)
+	case *StdDev:
+		return a.rewriteRefOfStdDev(parent, node, replacer)
+	case *StdPop:
+		return a.rewriteRefOfStdPop(parent, node, replacer)
+	case *StdSamp:
+		return a.rewriteRefOfStdSamp(parent, node, replacer)
+	case *Sum:
+		return a.rewriteRefOfSum(parent, node, replacer)
+	case *VarPop:
+		return a.rewriteRefOfVarPop(parent, node, replacer)
+	case *VarSamp:
+		return a.rewriteRefOfVarSamp(parent, node, replacer)
+	case *Variance:
+		return a.rewriteRefOfVariance(parent, node, replacer)
+	default:
+		// this should never happen
+		return true
+	}
+}
 func (a *application) rewriteAlterOption(parent SQLNode, node AlterOption, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -7558,6 +8092,8 @@ func (a *application) rewriteCallable(parent SQLNode, node Callable, replacer re
 		return a.rewriteRefOfNamedWindow(parent, node, replacer)
 	case *NtileExpr:
 		return a.rewriteRefOfNtileExpr(parent, node, replacer)
+	case *PerformanceSchemaFuncExpr:
+		return a.rewriteRefOfPerformanceSchemaFuncExpr(parent, node, replacer)
 	case *RegexpInstrExpr:
 		return a.rewriteRefOfRegexpInstrExpr(parent, node, replacer)
 	case *RegexpLikeExpr:
@@ -7694,10 +8230,18 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteArgument(parent, node, replacer)
 	case *ArgumentLessWindowExpr:
 		return a.rewriteRefOfArgumentLessWindowExpr(parent, node, replacer)
+	case *Avg:
+		return a.rewriteRefOfAvg(parent, node, replacer)
 	case *BetweenExpr:
 		return a.rewriteRefOfBetweenExpr(parent, node, replacer)
 	case *BinaryExpr:
 		return a.rewriteRefOfBinaryExpr(parent, node, replacer)
+	case *BitAnd:
+		return a.rewriteRefOfBitAnd(parent, node, replacer)
+	case *BitOr:
+		return a.rewriteRefOfBitOr(parent, node, replacer)
+	case *BitXor:
+		return a.rewriteRefOfBitXor(parent, node, replacer)
 	case BoolVal:
 		return a.rewriteBoolVal(parent, node, replacer)
 	case *CaseExpr:
@@ -7712,6 +8256,10 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfConvertExpr(parent, node, replacer)
 	case *ConvertUsingExpr:
 		return a.rewriteRefOfConvertUsingExpr(parent, node, replacer)
+	case *Count:
+		return a.rewriteRefOfCount(parent, node, replacer)
+	case *CountStar:
+		return a.rewriteRefOfCountStar(parent, node, replacer)
 	case *CurTimeFuncExpr:
 		return a.rewriteRefOfCurTimeFuncExpr(parent, node, replacer)
 	case *Default:
@@ -7786,8 +8334,12 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfLockingFunc(parent, node, replacer)
 	case *MatchExpr:
 		return a.rewriteRefOfMatchExpr(parent, node, replacer)
+	case *Max:
+		return a.rewriteRefOfMax(parent, node, replacer)
 	case *MemberOfExpr:
 		return a.rewriteRefOfMemberOfExpr(parent, node, replacer)
+	case *Min:
+		return a.rewriteRefOfMin(parent, node, replacer)
 	case *NTHValueExpr:
 		return a.rewriteRefOfNTHValueExpr(parent, node, replacer)
 	case *NamedWindow:
@@ -7802,6 +8354,8 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfOffset(parent, node, replacer)
 	case *OrExpr:
 		return a.rewriteRefOfOrExpr(parent, node, replacer)
+	case *PerformanceSchemaFuncExpr:
+		return a.rewriteRefOfPerformanceSchemaFuncExpr(parent, node, replacer)
 	case *RegexpInstrExpr:
 		return a.rewriteRefOfRegexpInstrExpr(parent, node, replacer)
 	case *RegexpLikeExpr:
@@ -7810,10 +8364,20 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfRegexpReplaceExpr(parent, node, replacer)
 	case *RegexpSubstrExpr:
 		return a.rewriteRefOfRegexpSubstrExpr(parent, node, replacer)
+	case *Std:
+		return a.rewriteRefOfStd(parent, node, replacer)
+	case *StdDev:
+		return a.rewriteRefOfStdDev(parent, node, replacer)
+	case *StdPop:
+		return a.rewriteRefOfStdPop(parent, node, replacer)
+	case *StdSamp:
+		return a.rewriteRefOfStdSamp(parent, node, replacer)
 	case *Subquery:
 		return a.rewriteRefOfSubquery(parent, node, replacer)
 	case *SubstrExpr:
 		return a.rewriteRefOfSubstrExpr(parent, node, replacer)
+	case *Sum:
+		return a.rewriteRefOfSum(parent, node, replacer)
 	case *TimestampFuncExpr:
 		return a.rewriteRefOfTimestampFuncExpr(parent, node, replacer)
 	case *TrimFuncExpr:
@@ -7826,6 +8390,12 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteValTuple(parent, node, replacer)
 	case *ValuesFuncExpr:
 		return a.rewriteRefOfValuesFuncExpr(parent, node, replacer)
+	case *VarPop:
+		return a.rewriteRefOfVarPop(parent, node, replacer)
+	case *VarSamp:
+		return a.rewriteRefOfVarSamp(parent, node, replacer)
+	case *Variance:
+		return a.rewriteRefOfVariance(parent, node, replacer)
 	case *WeightStringFuncExpr:
 		return a.rewriteRefOfWeightStringFuncExpr(parent, node, replacer)
 	case *XorExpr:
@@ -7862,10 +8432,18 @@ func (a *application) rewriteJSONPathParam(parent SQLNode, node JSONPathParam, r
 		return a.rewriteArgument(parent, node, replacer)
 	case *ArgumentLessWindowExpr:
 		return a.rewriteRefOfArgumentLessWindowExpr(parent, node, replacer)
+	case *Avg:
+		return a.rewriteRefOfAvg(parent, node, replacer)
 	case *BetweenExpr:
 		return a.rewriteRefOfBetweenExpr(parent, node, replacer)
 	case *BinaryExpr:
 		return a.rewriteRefOfBinaryExpr(parent, node, replacer)
+	case *BitAnd:
+		return a.rewriteRefOfBitAnd(parent, node, replacer)
+	case *BitOr:
+		return a.rewriteRefOfBitOr(parent, node, replacer)
+	case *BitXor:
+		return a.rewriteRefOfBitXor(parent, node, replacer)
 	case BoolVal:
 		return a.rewriteBoolVal(parent, node, replacer)
 	case *CaseExpr:
@@ -7880,6 +8458,10 @@ func (a *application) rewriteJSONPathParam(parent SQLNode, node JSONPathParam, r
 		return a.rewriteRefOfConvertExpr(parent, node, replacer)
 	case *ConvertUsingExpr:
 		return a.rewriteRefOfConvertUsingExpr(parent, node, replacer)
+	case *Count:
+		return a.rewriteRefOfCount(parent, node, replacer)
+	case *CountStar:
+		return a.rewriteRefOfCountStar(parent, node, replacer)
 	case *CurTimeFuncExpr:
 		return a.rewriteRefOfCurTimeFuncExpr(parent, node, replacer)
 	case *Default:
@@ -7954,8 +8536,12 @@ func (a *application) rewriteJSONPathParam(parent SQLNode, node JSONPathParam, r
 		return a.rewriteRefOfLockingFunc(parent, node, replacer)
 	case *MatchExpr:
 		return a.rewriteRefOfMatchExpr(parent, node, replacer)
+	case *Max:
+		return a.rewriteRefOfMax(parent, node, replacer)
 	case *MemberOfExpr:
 		return a.rewriteRefOfMemberOfExpr(parent, node, replacer)
+	case *Min:
+		return a.rewriteRefOfMin(parent, node, replacer)
 	case *NTHValueExpr:
 		return a.rewriteRefOfNTHValueExpr(parent, node, replacer)
 	case *NamedWindow:
@@ -7970,6 +8556,8 @@ func (a *application) rewriteJSONPathParam(parent SQLNode, node JSONPathParam, r
 		return a.rewriteRefOfOffset(parent, node, replacer)
 	case *OrExpr:
 		return a.rewriteRefOfOrExpr(parent, node, replacer)
+	case *PerformanceSchemaFuncExpr:
+		return a.rewriteRefOfPerformanceSchemaFuncExpr(parent, node, replacer)
 	case *RegexpInstrExpr:
 		return a.rewriteRefOfRegexpInstrExpr(parent, node, replacer)
 	case *RegexpLikeExpr:
@@ -7978,10 +8566,20 @@ func (a *application) rewriteJSONPathParam(parent SQLNode, node JSONPathParam, r
 		return a.rewriteRefOfRegexpReplaceExpr(parent, node, replacer)
 	case *RegexpSubstrExpr:
 		return a.rewriteRefOfRegexpSubstrExpr(parent, node, replacer)
+	case *Std:
+		return a.rewriteRefOfStd(parent, node, replacer)
+	case *StdDev:
+		return a.rewriteRefOfStdDev(parent, node, replacer)
+	case *StdPop:
+		return a.rewriteRefOfStdPop(parent, node, replacer)
+	case *StdSamp:
+		return a.rewriteRefOfStdSamp(parent, node, replacer)
 	case *Subquery:
 		return a.rewriteRefOfSubquery(parent, node, replacer)
 	case *SubstrExpr:
 		return a.rewriteRefOfSubstrExpr(parent, node, replacer)
+	case *Sum:
+		return a.rewriteRefOfSum(parent, node, replacer)
 	case *TimestampFuncExpr:
 		return a.rewriteRefOfTimestampFuncExpr(parent, node, replacer)
 	case *TrimFuncExpr:
@@ -7994,6 +8592,12 @@ func (a *application) rewriteJSONPathParam(parent SQLNode, node JSONPathParam, r
 		return a.rewriteValTuple(parent, node, replacer)
 	case *ValuesFuncExpr:
 		return a.rewriteRefOfValuesFuncExpr(parent, node, replacer)
+	case *VarPop:
+		return a.rewriteRefOfVarPop(parent, node, replacer)
+	case *VarSamp:
+		return a.rewriteRefOfVarSamp(parent, node, replacer)
+	case *Variance:
+		return a.rewriteRefOfVariance(parent, node, replacer)
 	case *WeightStringFuncExpr:
 		return a.rewriteRefOfWeightStringFuncExpr(parent, node, replacer)
 	case *XorExpr:

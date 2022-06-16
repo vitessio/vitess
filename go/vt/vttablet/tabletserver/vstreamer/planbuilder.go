@@ -588,6 +588,29 @@ func (plan *Plan) analyzeExpr(vschema *localVSchema, selExpr sqlparser.SelectExp
 			ColNum: colnum,
 			Field:  plan.Table.Fields[colnum],
 		}, nil
+	case sqlparser.AggrFunc:
+		if strings.ToLower(inner.AggrName()) != "keyspace_id" {
+			return ColExpr{}, fmt.Errorf("unsupported function: %v", sqlparser.String(inner))
+		}
+		if len(inner.GetArgs()) != 0 {
+			return ColExpr{}, fmt.Errorf("unexpected: %v", sqlparser.String(inner))
+		}
+		cv, err := vschema.FindColVindex(plan.Table.Name)
+		if err != nil {
+			return ColExpr{}, err
+		}
+		vindexColumns, err := buildVindexColumns(plan.Table, cv.Columns)
+		if err != nil {
+			return ColExpr{}, err
+		}
+		return ColExpr{
+			Field: &querypb.Field{
+				Name: "keyspace_id",
+				Type: sqltypes.VarBinary,
+			},
+			Vindex:        cv.Vindex,
+			VindexColumns: vindexColumns,
+		}, nil
 	case *sqlparser.FuncExpr:
 		if inner.Name.Lowered() != "keyspace_id" {
 			return ColExpr{}, fmt.Errorf("unsupported function: %v", sqlparser.String(inner))
