@@ -2888,7 +2888,7 @@ INPUT
 select @@session.transaction_isolation;
 END
 OUTPUT
-select @@session.transaction_isolation from dual
+select @@transaction_isolation from dual
 END
 INPUT
 select hex(left(_utf16 0xD800DC00D87FDFFF, 1));
@@ -15752,7 +15752,7 @@ INPUT
 select @@session.thread_handling;
 END
 OUTPUT
-select @@session.thread_handling from dual
+select @@thread_handling from dual
 END
 INPUT
 select convert(_koi8r'�' using utf8) < convert(_koi8r'�' using utf8);

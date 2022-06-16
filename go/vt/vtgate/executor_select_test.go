@@ -1229,7 +1229,7 @@ func TestSelectDual(t *testing.T) {
 	_, err := executorExec(executor, "select @@aa.bb from dual", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select @@aa.bb from dual",
+		Sql:           "select @@`aa.bb` from dual",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
