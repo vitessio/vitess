@@ -40,9 +40,9 @@ var (
 	`)
 	debugEnvRow = template.Must(template.New("debugenv").Parse(`
 	<tr><form method="POST">
-		<td>{{.Name}}</td>
+		<td>{{.VarName}}</td>
 		<td>
-			<input type="hidden" name="varname" value="{{.Name}}"></input>
+			<input type="hidden" name="varname" value="{{.VarName}}"></input>
 			<input type="text" name="value" value="{{.Value}}"></input>
 		</td>
 		<td><input type="submit" name="Action" value="Modify"></input></td>

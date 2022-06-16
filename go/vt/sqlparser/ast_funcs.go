@@ -663,14 +663,18 @@ func NewSelect(comments Comments, exprs SelectExprs, selectOptions []string, int
 	}
 }
 
+// NewSetVariable returns a variable that can be used with SET.
 func NewSetVariable(str string, scope Scope) *Variable {
 	return &Variable{Name: createIdentifierCI(str), Scope: scope}
 }
 
+// NewSetStatement returns a Set struct
 func NewSetStatement(comments *ParsedComments, exprs SetExprs) *Set {
 	return &Set{Exprs: exprs, Comments: comments}
 }
 
+// NewVariableExpression returns an expression the evaluates to a variable at runtime.
+// The AtCount and the prefix of the name of the variable will decide how it's evaluated
 func NewVariableExpression(str string, at AtCount) *Variable {
 	l := strings.ToLower(str)
 	v := &Variable{
@@ -709,6 +713,7 @@ func createIdentifierCI(str string) IdentifierCI {
 	return NewIdentifierCI(str)
 }
 
+// NewOffset creates an offset and returns it
 func NewOffset(v int, original Expr) *Offset {
 	return &Offset{V: v, Original: String(original)}
 }

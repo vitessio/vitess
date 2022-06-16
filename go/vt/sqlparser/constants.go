@@ -48,11 +48,6 @@ const (
 	VitessMetadataStr = "vitess_metadata"
 	VariableStr       = "variable"
 
-	// SysVariable Scope strings
-	GlobalSysScopeStr      = "global."
-	PersistSysScopeStr     = "persist."
-	PersistOnlySysScopeStr = "persist_only."
-
 	// DDL strings.
 	CreateStr           = "create"
 	AlterStr            = "alter"
@@ -449,15 +444,26 @@ const (
 	RevertDDLAction
 )
 
-// Constants for scope of system variables
+// Constants for scope of variables
+/*
+variable: {
+    user_var_name
+  | param_name
+  | local_var_name
+  | {GLOBAL | @@GLOBAL.} system_var_name
+  | {PERSIST | @@PERSIST.} system_var_name
+  | {PERSIST_ONLY | @@PERSIST_ONLY.} system_var_name
+  | [SESSION | @@SESSION. | @@] system_var_name
+}
+*/
 const (
-	NoScope Scope = iota
-	SessionScope
-	GlobalScope
-	VitessMetadataScope
-	VariableScope
-	PersistSysScope
-	PersistOnlySysScope
+	NoScope             Scope = iota
+	SessionScope              // [SESSION | @@SESSION. | @@] This is the default if no scope is given
+	GlobalScope               // {GLOBAL | @@GLOBAL.} system_var_name
+	VitessMetadataScope       // @@vitess_metadata.system_var_name
+	VariableScope             // @var_name   This is used for user defined variables. Not really a scope, but it works.
+	PersistSysScope           // {PERSIST_ONLY | @@PERSIST_ONLY.} system_var_name
+	PersistOnlySysScope       // {PERSIST_ONLY | @@PERSIST_ONLY.} system_var_name
 )
 
 // Constants for Enum Type - Lock

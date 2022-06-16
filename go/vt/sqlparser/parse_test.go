@@ -5187,14 +5187,14 @@ func TestOne(t *testing.T) {
 	testOne := struct {
 		input, output string
 	}{
-		input:  "select @@a",
+		input:  "",
 		output: "",
 	}
 	if testOne.input == "" {
 		return
 	}
 	sql := strings.TrimSpace(testOne.input)
-	tree, err := ParseStrictDDL(sql)
+	tree, err := Parse(sql)
 	require.NoError(t, err)
 	got := String(tree)
 	expected := testOne.output
