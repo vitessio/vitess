@@ -187,19 +187,22 @@ type vdiffTableSummary struct {
 	LastUpdated     string `json:"LastUpdated,omitempty"`
 }
 type vdiffSummary struct {
-	Workflow, Keyspace, State string
-	UUID                      string
-	HasMismatch               bool
-	Shards                    string
-	LastUpdated               string                                 `json:"LastUpdated,omitempty"`
-	TableSummaryMap           map[string]vdiffTableSummary           `json:"TableSummary,omitempty"`
-	Reports                   map[string]map[string]vdiff.DiffReport `json:"Reports,omitempty"`
+	Workflow, Keyspace string
+	State              vdiff.VDiffState
+	UUID               string
+	RowsCompared       int64
+	HasMismatch        bool
+	Shards             string
+	LastUpdated        string                                 `json:"LastUpdated,omitempty"`
+	TableSummaryMap    map[string]vdiffTableSummary           `json:"TableSummary,omitempty"`
+	Reports            map[string]map[string]vdiff.DiffReport `json:"Reports,omitempty"`
 }
 
 const (
 	summaryTextTemplate = `
 VDiff Summary for {{.Keyspace}}.{{.Workflow}} ({{.UUID}})
 State: {{.State}}
+RowsCompared: {{.RowsCompared}}
 HasMismatch: {{.HasMismatch}}
 {{ range $table := .TableSummaryMap}} 
 Table {{$table.TableName}}:
@@ -374,13 +377,14 @@ func displayVDiff2ShowSingleSummary(wr *wrangler.Wrangler, format, keyspace, wor
 }
 func buildVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid string, output *wrangler.VDiffOutput) (*vdiffSummary, error) {
 	summary := &vdiffSummary{
-		Workflow:    workflow,
-		Keyspace:    keyspace,
-		UUID:        uuid,
-		State:       "",
-		HasMismatch: false,
-		Shards:      "",
-		Reports:     make(map[string]map[string]vdiff.DiffReport),
+		Workflow:     workflow,
+		Keyspace:     keyspace,
+		UUID:         uuid,
+		State:        vdiff.UnknownState,
+		RowsCompared: 0,
+		HasMismatch:  false,
+		Shards:       "",
+		Reports:      make(map[string]map[string]vdiff.DiffReport),
 	}
 
 	var tableSummaryMap map[string]vdiffTableSummary
@@ -398,9 +402,10 @@ func buildVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid st
 			for _, row := range qr.Named().Rows {
 				if first {
 					first = false
-					summary.State, _ = row.ToString("vdiff_state")
-					summary.State = strings.ToLower(summary.State)
+					s, _ := row.ToString("vdiff_state")
+					summary.State = vdiff.VDiffState(strings.ToLower(s))
 				}
+				summary.RowsCompared += row.AsInt64("rows_compared", 0)
 				// If we had a mismatch on any table then the vdiff as a unit does too
 				if mm, _ := row.ToBool("has_mismatch"); mm {
 					summary.HasMismatch = true
