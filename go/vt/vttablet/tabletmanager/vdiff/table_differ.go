@@ -590,6 +590,9 @@ func (td *tableDiffer) updateTableProgress(dbClient binlogplayer.DBClient, numRo
 			return err
 		}
 		query = fmt.Sprintf(sqlUpdateTableProgress, numRows, encodeString(string(lastPK)), td.wd.ct.id, encodeString(td.table.Name))
+	} else if numRows != 0 {
+		// This should never happen
+		return fmt.Errorf("invalid vdiff state detected, %d row(s) were processed but the row data is missing", numRows)
 	} else {
 		// We didn't process any rows this time around so reflect that and keep any
 		// lastpk from a previous run. This is only relevant for RESUMEd vdiffs.

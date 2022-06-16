@@ -46,9 +46,9 @@ const (
 
 	sqlCreateVDiffTableTable = `CREATE TABLE IF NOT EXISTS _vt.vdiff_table(
 		vdiff_id varchar(64) NOT NULL,
-		table_name varbinary(1024),
-		state varbinary(128),
-		lastpk varbinary(1024),
+		table_name varbinary(128),
+		state varbinary(64),
+		lastpk varbinary(2000),
 		table_rows int not null default 0,
 		rows_compared int not null default 0,
 		mismatch bool not null default false,
