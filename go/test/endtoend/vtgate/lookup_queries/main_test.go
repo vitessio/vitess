@@ -1,5 +1,5 @@
 /*
-Copyright 2021 The Vitess Authors.
+Copyright 2022 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -125,13 +125,22 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 	}
 }
 
-func TestEqualQuery(t *testing.T) {
+func TestLookupQueries(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
 
-	mcmp.Exec("insert into user (user_id, name) values (1, 'apa'), (2,'monkey'), (3,'bandar')")
-	mcmp.AssertMatches("select user_id from user where name = 'apa'", "[[INT64(1)]]")
-	mcmp.AssertMatches("select user_id from user where name = 'not there'", "[]")
-	mcmp.AssertMatchesNoOrder("select user_id from user where name in ('apa', 'bandar')", "[[INT64(1)] [INT64(3)]]")
-	mcmp.AssertMatches("select count(*) from user where name in ('apa', 'monkey', 'bandar')", "[[INT64(3)]]")
+	mcmp.Exec(`insert into user 
+    (id, lookup,   lookup_unique) values 
+	(1, 'apa',    'apa'), 
+	(2, 'apa',    'bandar'), 
+	(3, 'monkey', 'monkey')`)
+	mcmp.AssertMatches("select id from user where lookup = 'apa'", "[[INT64(1)] [INT64(2)]]")
+	mcmp.AssertMatches("select id from user where lookup = 'not there'", "[]")
+	mcmp.AssertMatchesNoOrder("select id from user where lookup in ('apa', 'monkey')", "[[INT64(1)] [INT64(2)] [INT64(3)]]")
+	mcmp.AssertMatches("select count(*) from user where lookup in ('apa', 'monkey')", "[[INT64(3)]]")
+
+	mcmp.AssertMatches("select id from user where lookup_unique = 'apa'", "[[INT64(1)]]")
+	mcmp.AssertMatches("select id from user where lookup_unique = 'not there'", "[]")
+	mcmp.AssertMatchesNoOrder("select id from user where lookup_unique in ('apa', 'bandar')", "[[INT64(1)] [INT64(2)]]")
+	mcmp.AssertMatches("select count(*) from user where lookup_unique in ('apa', 'monkey', 'bandar')", "[[INT64(3)]]")
 }

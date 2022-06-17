@@ -4,12 +4,25 @@
     "hash_index": {
       "type": "hash"
     },
+    "md5_index": {
+      "type": "unicode_loose_md5"
+    },
     "lookup_vdx": {
-      "type": "lookup_hash_unique",
+      "type": "lookup",
       "params": {
         "table": "lookup",
-        "from": "name",
-        "to": "id",
+        "from": "lookup,id",
+        "to": "keyspace_id",
+        "autocommit": "true"
+      },
+      "owner": "user"
+    },
+    "lookup_unique_vdx": {
+      "type": "lookup_unique",
+      "params": {
+        "table": "lookup_unique",
+        "from": "lookup_unique",
+        "to": "keyspace_id",
         "autocommit": "true"
       },
       "owner": "user"
@@ -19,20 +32,35 @@
     "user": {
       "column_vindexes": [
         {
-          "column": "user_id",
+          "column": "id",
           "name": "hash_index"
         },
         {
-          "column": "name",
+          "columns": [
+            "lookup",
+            "id"
+          ],
           "name": "lookup_vdx"
+        },
+        {
+          "column": "lookup_unique",
+          "name": "lookup_unique_vdx"
         }
       ]
     },
     "lookup": {
       "column_vindexes": [
         {
-          "column": "id",
-          "name": "hash_index"
+          "column": "lookup",
+          "name": "md5_index"
+        }
+      ]
+    },
+    "lookup_unique": {
+      "column_vindexes": [
+        {
+          "column": "lookup_unique",
+          "name": "md5_index"
         }
       ]
     }
