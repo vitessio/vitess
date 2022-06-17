@@ -440,6 +440,7 @@
                 }
             ],
             "request": "&vtadminpb.FindSchemaRequest{\nTable: \"t1\",\n}",
+            "serialize_cases": true,
             "cases": [
                 {
                     "name": "unauthorized actor",
@@ -808,6 +809,7 @@
                 }
             ],
             "request": "&vtadminpb.GetSchemaRequest{\nClusterId: \"test\",\nKeyspace: \"test\",\nTable: \"t1\",\n}",
+            "serialize_cases": true,
             "cases": [
                 {
                     "name": "unauthorized actor",
@@ -847,6 +849,7 @@
                 }
             ],
             "request": "&vtadminpb.GetSchemasRequest{}",
+            "serialize_cases": true,
             "cases": [
                 {
                     "name": "unauthorized actor",
