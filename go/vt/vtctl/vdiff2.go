@@ -67,7 +67,7 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 	var action vdiff.VDiffAction
 	var actionArg string
 
-	usage := fmt.Errorf("usage: vdiff -- --v2 <keyspace>.<workflow> %s [%s|<uuid>]", strings.Join(*(*[]string)(unsafe.Pointer(&vdiff.Actions)), "|"), strings.Join(vdiff.ActionArgs, "|"))
+	usage := fmt.Errorf("usage: vdiff -- --v2 <keyspace>.<workflow> %s [%s|<UUID>]", strings.Join(*(*[]string)(unsafe.Pointer(&vdiff.Actions)), "|"), strings.Join(vdiff.ActionArgs, "|"))
 	switch subFlags.NArg() {
 	case 1: // for backward compatibility with vdiff1
 		action = vdiff.CreateAction
@@ -126,7 +126,7 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 			vdiffUUID, err = uuid.NewUUID()
 		}
 		if err != nil {
-			return fmt.Errorf("invalid uuid (%v), please provide a valid v1 uuid", err)
+			return fmt.Errorf("invalid UUID (%v), please provide a valid v1 UUID", err)
 		}
 	case vdiff.ShowAction:
 		switch actionArg {
@@ -134,13 +134,13 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 		default:
 			vdiffUUID, err = uuid.Parse(actionArg)
 			if err != nil {
-				return fmt.Errorf("can only show a specific migration, please provide a valid uuid; view all with: VDiff -- --v2 %s.%s show all", keyspace, workflowName)
+				return fmt.Errorf("can only show a specific migration, please provide a valid UUID; view all with: VDiff -- --v2 %s.%s show all", keyspace, workflowName)
 			}
 		}
 	case vdiff.ResumeAction:
 		vdiffUUID, err = uuid.Parse(actionArg)
 		if err != nil {
-			return fmt.Errorf("can only resume a specific migration, please provide a valid uuid; view all with: VDiff -- --v2 %s.%s show all", keyspace, workflowName)
+			return fmt.Errorf("can only resume a specific migration, please provide a valid UUID; view all with: VDiff -- --v2 %s.%s show all", keyspace, workflowName)
 		}
 	default:
 		return fmt.Errorf("invalid action %s; %s", action, usage)

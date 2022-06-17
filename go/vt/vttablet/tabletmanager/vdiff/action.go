@@ -71,10 +71,10 @@ func (vde *Engine) PerformVDiffAction(ctx context.Context, req *tabletmanagerdat
 		}
 		recordFound := len(qr.Rows) == 1
 		if recordFound && action == CreateAction {
-			return nil, fmt.Errorf("vdiff with uuid %s already exists", req.VdiffUuid)
+			return nil, fmt.Errorf("vdiff with UUID %s already exists", req.VdiffUuid)
 		} else if action == ResumeAction {
 			if !recordFound {
-				return nil, fmt.Errorf("vdiff with uuid %s not found", req.VdiffUuid)
+				return nil, fmt.Errorf("vdiff with UUID %s not found", req.VdiffUuid)
 			}
 			if resp.Id, err = qr.Named().Row().ToInt64("id"); err != nil {
 				return nil, fmt.Errorf("vdiff found with invalid id: %w", err)
