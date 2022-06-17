@@ -27,10 +27,12 @@ import (
 )
 
 var (
-	_ SingleColumn = (*LookupUnique)(nil)
-	_ Lookup       = (*LookupUnique)(nil)
-	_ SingleColumn = (*LookupNonUnique)(nil)
-	_ Lookup       = (*LookupNonUnique)(nil)
+	_ SingleColumn   = (*LookupUnique)(nil)
+	_ Lookup         = (*LookupUnique)(nil)
+	_ LookupPlanable = (*LookupUnique)(nil)
+	_ SingleColumn   = (*LookupNonUnique)(nil)
+	_ Lookup         = (*LookupNonUnique)(nil)
+	_ LookupPlanable = (*LookupNonUnique)(nil)
 )
 
 func init() {
@@ -88,6 +90,19 @@ func (ln *LookupNonUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([]key.Des
 	if err != nil {
 		return nil, err
 	}
+
+	return ln.MapResult(ids, results)
+}
+
+// MapResult implements the LookupPlanable interface
+func (ln *LookupNonUnique) MapResult(ids []sqltypes.Value, results []*sqltypes.Result) ([]key.Destination, error) {
+	out := make([]key.Destination, 0, len(ids))
+	if ln.writeOnly {
+		for range ids {
+			out = append(out, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{}})
+		}
+		return out, nil
+	}
 	for _, result := range results {
 		if len(result.Rows) == 0 {
 			out = append(out, key.DestinationNone{})
@@ -136,6 +151,11 @@ func (ln *LookupNonUnique) Update(vcursor VCursor, oldValues []sqltypes.Value, k
 // MarshalJSON returns a JSON representation of LookupHash.
 func (ln *LookupNonUnique) MarshalJSON() ([]byte, error) {
 	return json.Marshal(ln.lkp)
+}
+
+// Query implements the LookupPlanable interface
+func (ln *LookupNonUnique) Query() (selQuery string, arguments []string) {
+	return ln.lkp.sel, ln.lkp.FromColumns
 }
 
 // NewLookup creates a LookupNonUnique vindex.

@@ -473,6 +473,56 @@ func TestLookupNonUniqueUpdate(t *testing.T) {
 	utils.MustMatch(t, wantqueries, vc.queries)
 }
 
+func TestLookupMapResult(t *testing.T) {
+	lookup := createLookup(t, "lookup", false)
+
+	ids := []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}
+	results := []*sqltypes.Result{{
+		Fields:       sqltypes.MakeTestFields("key|col", "int64|int32"),
+		RowsAffected: 2,
+		Rows: []sqltypes.Row{
+			{sqltypes.NewInt64(1), sqltypes.NewInt64(3)},
+			{sqltypes.NewInt64(3), sqltypes.NewInt64(4)},
+			{sqltypes.NewInt64(5), sqltypes.NewInt64(6)},
+		},
+	}}
+
+	got, err := lookup.(LookupPlanable).MapResult(ids, results)
+	require.NoError(t, err)
+	want := []key.Destination{
+		key.DestinationKeyspaceIDs([][]byte{
+			[]byte("1"),
+			[]byte("3"),
+			[]byte("5"),
+		}),
+	}
+	utils.MustMatch(t, want, got)
+}
+
+func TestLookupUniqueMapResult(t *testing.T) {
+	lookup := createLookup(t, "lookup_unique", false)
+
+	ids := []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}
+	results := []*sqltypes.Result{{
+		Fields:       sqltypes.MakeTestFields("key|col", "int64|int32"),
+		RowsAffected: 2,
+		Rows: []sqltypes.Row{
+			{sqltypes.NewInt64(1), sqltypes.NewInt64(3)},
+		},
+	}}
+
+	got, err := lookup.(LookupPlanable).MapResult(ids, results)
+	require.NoError(t, err)
+	want := []key.Destination{
+		key.DestinationKeyspaceID("1"),
+	}
+	utils.MustMatch(t, want, got)
+
+	results[0].Rows = append(results[0].Rows, results[0].Rows...)
+	_, err = lookup.(LookupPlanable).MapResult(ids, results)
+	require.Error(t, err)
+}
+
 func createLookup(t *testing.T, name string, writeOnly bool) SingleColumn {
 	t.Helper()
 	write := "false"
