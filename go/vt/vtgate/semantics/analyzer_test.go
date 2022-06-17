@@ -1380,7 +1380,8 @@ func TestSingleUnshardedKeyspace(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.query, func(t *testing.T) {
 			_, semTable := parseAndAnalyze(t, test.query, "d")
-			assert.Equal(t, test.unsharded, semTable.SingleUnshardedKeyspace())
+			queryIsUnsharded, _ := semTable.SingleUnshardedKeyspace()
+			assert.Equal(t, test.unsharded, queryIsUnsharded)
 		})
 	}
 }

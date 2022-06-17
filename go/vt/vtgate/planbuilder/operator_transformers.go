@@ -180,8 +180,10 @@ func transformUpdatePlan(ctx *plancontext.PlanningContext, op *physical.Route, u
 	ast := upd.AST
 	replaceSubQuery(ctx, ast)
 	edml := &engine.DML{
-		Query:            generateQuery(ast),
-		Table:            upd.VTable,
+		Query: generateQuery(ast),
+		Table: []*vindexes.Table{
+			upd.VTable,
+		},
 		OwnedVindexQuery: upd.OwnedVindexQuery,
 		RoutingParameters: &engine.RoutingParameters{
 			Opcode:            op.RouteOpCode,

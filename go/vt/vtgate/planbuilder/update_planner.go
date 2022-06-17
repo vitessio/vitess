@@ -46,7 +46,7 @@ func buildUpdatePlan(query string) stmtPlanner {
 			return eupd, nil
 		}
 
-		cvv, ovq, err := buildChangedVindexesValues(upd, eupd.Table, ksidVindex.Columns)
+		cvv, ovq, err := buildChangedVindexesValues(upd, eupd.Table[0], ksidVindex.Columns)
 		if err != nil {
 			return nil, err
 		}

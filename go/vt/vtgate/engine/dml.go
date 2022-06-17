@@ -43,7 +43,7 @@ type DML struct {
 	KsidLength int
 
 	// Table specifies the table for the update.
-	Table *vindexes.Table
+	Table []*vindexes.Table
 
 	// OwnedVindexQuery is used for updating changes in lookup vindexes.
 	OwnedVindexQuery string

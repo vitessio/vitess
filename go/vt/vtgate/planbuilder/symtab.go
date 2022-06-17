@@ -205,6 +205,18 @@ func (st *symtab) AllTables() []*table {
 	return tables
 }
 
+// AllVschemaTableNames returns an ordered list of all current vschema tables.
+func (st *symtab) AllVschemaTableNames() []*vindexes.Table {
+	if len(st.tableNames) == 0 {
+		return nil
+	}
+	tables := make([]*vindexes.Table, 0, len(st.tableNames))
+	for _, tname := range st.tableNames {
+		tables = append(tables, st.tables[tname].vschemaTable)
+	}
+	return tables
+}
+
 // FindTable finds a table in symtab. This function is specifically used
 // for expanding 'select a.*' constructs. If you're in a subquery,
 // you're most likely referring to a table in the local 'from' clause.

@@ -18,6 +18,8 @@ package engine
 
 import (
 	"fmt"
+	"sort"
+	"strings"
 	"time"
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -54,7 +56,18 @@ func (del *Delete) GetKeyspaceName() string {
 // GetTableName specifies the table that this primitive routes to.
 func (del *Delete) GetTableName() string {
 	if del.Table != nil {
-		return del.Table.Name.String()
+		tableNameMap := map[string]any{}
+		for _, table := range del.Table {
+			tableNameMap[table.Name.String()] = nil
+		}
+
+		var tableNames []string
+		for name := range tableNameMap {
+			tableNames = append(tableNames, name)
+		}
+		sort.Strings(tableNames)
+
+		return strings.Join(tableNames, ", ")
 	}
 	return ""
 }
@@ -128,7 +141,7 @@ func (del *Delete) deleteVindexEntries(vcursor VCursor, bindVars map[string]*que
 			return err
 		}
 		colnum := del.KsidLength
-		for _, colVindex := range del.Table.Owned {
+		for _, colVindex := range del.Table[0].Owned {
 			// Fetch the column values. colnum must keep incrementing.
 			fromIds := make([]sqltypes.Value, 0, len(colVindex.Columns))
 			for range colVindex.Columns {

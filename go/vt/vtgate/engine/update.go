@@ -19,6 +19,7 @@ package engine
 import (
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -64,7 +65,18 @@ func (upd *Update) GetKeyspaceName() string {
 // GetTableName specifies the table that this primitive routes to.
 func (upd *Update) GetTableName() string {
 	if upd.Table != nil {
-		return upd.Table.Name.String()
+		tableNameMap := map[string]any{}
+		for _, table := range upd.Table {
+			tableNameMap[table.Name.String()] = nil
+		}
+
+		var tableNames []string
+		for name := range tableNameMap {
+			tableNames = append(tableNames, name)
+		}
+		sort.Strings(tableNames)
+
+		return strings.Join(tableNames, ", ")
 	}
 	return ""
 }
@@ -148,7 +160,7 @@ func (upd *Update) updateVindexEntries(vcursor VCursor, bindVars map[string]*que
 			return err
 		}
 
-		for _, colVindex := range upd.Table.ColumnVindexes {
+		for _, colVindex := range upd.Table[0].ColumnVindexes {
 			// Skip this vindex if no rows are being changed
 			updColValues, ok := upd.ChangedVindexValues[colVindex.Name]
 			if !ok {
