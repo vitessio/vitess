@@ -118,15 +118,53 @@ func vdiff2(t *testing.T, keyspace, workflow, cells string, want *expectedVDiff2
 
 		require.Equal(t, workflow, info.Workflow)
 		require.Equal(t, keyspace, info.Keyspace)
+		// I'm not sure if we always have rows in every table
+		//require.Greater(t, info.RowsCompared, int64(0))
 		if want != nil {
 			require.Equal(t, want.state, info.State)
 			require.Equal(t, strings.Join(want.shards, ","), info.Shards)
 			require.Equal(t, want.hasMismatch, info.HasMismatch)
 		} else {
-			require.Equal(t, info.State, "completed")
+			require.Equal(t, "completed", info.State)
 			require.False(t, info.HasMismatch)
-
 		}
+
+		/*
+			Trying to figure out why we always have more rows come through after
+			the initial VDiff completes here on these two specific test runs...
+
+				VTDATAROOT is /opt/vtdataroot/vreple2e_864315
+				--- FAIL: TestVDiff2 (151.68s)
+				    --- FAIL: TestVDiff2/MoveTables_unsharded_to_two_shards (33.87s)
+				        --- FAIL: TestVDiff2/MoveTables_unsharded_to_two_shards/vdiff2_customer.p1c2 (19.77s)
+				            vdiff_helper_test.go:139:
+				                	Error Trace:	vdiff_helper_test.go:139
+				                	Error:      	Not equal:
+				                	            	expected: 0
+				                	            	actual  : 1
+				                	Test:       	TestVDiff2/MoveTables_unsharded_to_two_shards/vdiff2_customer.p1c2
+				    --- FAIL: TestVDiff2/Reshard_Split/Merge_2_to_3 (59.94s)
+				        --- FAIL: TestVDiff2/Reshard_Split/Merge_2_to_3/vdiff2_customer.c2c3 (32.23s)
+				            vdiff_helper_test.go:139:
+				                	Error Trace:	vdiff_helper_test.go:139
+				                	Error:      	Not equal:
+				                	            	expected: 0
+				                	            	actual  : 4
+				                	Test:       	TestVDiff2/Reshard_Split/Merge_2_to_3/vdiff2_customer.c2c3
+				FAIL
+				FAIL	vitess.io/vitess/go/test/endtoend/vreplication	152.254s
+				FAIL
+
+			// Test resume, w/o adding anymore rows we should start where we
+			// left off and thus compare no more rows.
+			uuid, _ = performVDiff2Action(t, ksWorkflow, "resume", uuid)
+			// sleep a few seconds as the state was completed before we resumed...
+			// so we need to wait for it to resume -- where it goes from completed->
+			// pending->started -- before waiting for it again to move to completed
+			time.Sleep(5 * time.Second)
+			info = waitForVDiff2ToComplete(t, ksWorkflow, uuid)
+			require.Equal(t, int64(0), info.RowsCompared)
+		*/
 	})
 }
 
@@ -145,6 +183,7 @@ func performVDiff2Action(t *testing.T, ksWorkflow, action, actionArg string) (uu
 type vdiffInfo struct {
 	Workflow, Keyspace string
 	State, Shards      string
+	RowsCompared       int64
 	HasMismatch        bool
 }
 
@@ -155,6 +194,7 @@ func getVDiffInfo(jsonStr string) *vdiffInfo {
 	info.Keyspace, _ = jsonparser.GetString(json, "Keyspace")
 	info.State, _ = jsonparser.GetString(json, "State")
 	info.Shards, _ = jsonparser.GetString(json, "Shards")
+	info.RowsCompared, _ = jsonparser.GetInt(json, "RowsCompared")
 	info.HasMismatch, _ = jsonparser.GetBoolean(json, "HasMismatch")
 
 	return &info

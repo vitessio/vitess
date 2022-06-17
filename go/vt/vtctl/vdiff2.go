@@ -483,7 +483,7 @@ func displayVDiff2CreateResponse(wr *wrangler.Wrangler, format string, uuid stri
 func displayVDiff2ResumeResponse(wr *wrangler.Wrangler, format string, uuid string) {
 	if format == "json" {
 		type ResumeResponse struct {
-			UUID string `json:"ResumedUUID"`
+			UUID string `json:"UUID"`
 		}
 		resp := &ResumeResponse{UUID: uuid}
 		jsonText, _ := json.MarshalIndent(resp, "", "\t")

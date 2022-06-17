@@ -69,7 +69,7 @@ const (
 	deleteOpenTxQuery = "delete from customer where name = 'openTxQuery'"
 
 	merchantKeyspace = "merchant-type"
-	maxWait          = 10 * time.Second
+	maxWait          = 60 * time.Second
 	BypassLagCheck   = true // temporary fix for flakiness seen only in CI when lag check is introduced
 )
 

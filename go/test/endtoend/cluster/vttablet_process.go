@@ -466,12 +466,11 @@ func (vttablet *VttabletProcess) ToggleProfiling() error {
 
 // WaitForVReplicationToCatchup waits for "workflow" to finish copying
 func (vttablet *VttabletProcess) WaitForVReplicationToCatchup(t testing.TB, workflow, database string, duration time.Duration) {
-	queries := [3]string{
-		fmt.Sprintf(`select count(*) from _vt.vreplication where workflow = "%s" and db_name = "%s" and pos = ''`, workflow, database),
-		"select count(*) from information_schema.tables where table_schema='_vt' and table_name='copy_state' limit 1;",
-		fmt.Sprintf(`select count(*) from _vt.copy_state where vrepl_id in (select id from _vt.vreplication where workflow = "%s" and db_name = "%s" )`, workflow, database),
+	queries := [2]string{
+		fmt.Sprintf(`select count(*) from _vt.vreplication where workflow = "%s" and db_name = "%s" group by id`, workflow, database),
+		fmt.Sprintf(`select count(*) from _vt.vreplication where workflow = "%s" and db_name = "%s" and state != 'Running'`, workflow, database),
 	}
-	results := [3]string{"[INT64(0)]", "[INT64(1)]", "[INT64(0)]"}
+	results := [2]string{"[INT64(1)]", "[INT64(0)]"}
 
 	conn, err := vttablet.defaultConn("")
 	if err != nil {
