@@ -258,7 +258,7 @@ func parseFilePosReplicationStatus(resultMap map[string]string) (ReplicationStat
 	status := parseReplicationStatus(resultMap)
 
 	status.Position = status.FilePosition
-	status.RelayLogPosition = status.FileRelayLogPosition
+	status.RelayLogPosition = status.RelayLogSourceBinLogEquivalentPosition
 
 	return status, nil
 }

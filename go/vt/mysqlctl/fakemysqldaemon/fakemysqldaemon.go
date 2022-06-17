@@ -278,10 +278,10 @@ func (fmd *FakeMysqlDaemon) ReplicationStatus() (mysql.ReplicationStatus, error)
 	fmd.mu.Lock()
 	defer fmd.mu.Unlock()
 	return mysql.ReplicationStatus{
-		Position:              fmd.CurrentPrimaryPosition,
-		FilePosition:          fmd.CurrentSourceFilePosition,
-		FileRelayLogPosition:  fmd.CurrentSourceFilePosition,
-		ReplicationLagSeconds: fmd.ReplicationLagSeconds,
+		Position:                               fmd.CurrentPrimaryPosition,
+		FilePosition:                           fmd.CurrentSourceFilePosition,
+		RelayLogSourceBinLogEquivalentPosition: fmd.CurrentSourceFilePosition,
+		ReplicationLagSeconds:                  fmd.ReplicationLagSeconds,
 		// implemented as AND to avoid changing all tests that were
 		// previously using Replicating = false
 		IOState:    mysql.ReplicationStatusToState(fmt.Sprintf("%v", fmd.Replicating && fmd.IOThreadRunning)),

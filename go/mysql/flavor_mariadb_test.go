@@ -104,15 +104,15 @@ func TestMariadbRetrieveFileBasedPositions(t *testing.T) {
 	}
 
 	want := ReplicationStatus{
-		FilePosition:         Position{GTIDSet: filePosGTID{file: "master-bin.000002", pos: 1307}},
-		FileRelayLogPosition: Position{GTIDSet: filePosGTID{file: "master-bin.000003", pos: 1308}},
-		RelayLogFilePosition: Position{GTIDSet: filePosGTID{file: "relay-bin.000004", pos: 1309}},
+		FilePosition:                           Position{GTIDSet: filePosGTID{file: "master-bin.000002", pos: 1307}},
+		RelayLogSourceBinLogEquivalentPosition: Position{GTIDSet: filePosGTID{file: "master-bin.000003", pos: 1308}},
+		RelayLogFilePosition:                   Position{GTIDSet: filePosGTID{file: "relay-bin.000004", pos: 1309}},
 	}
 	got, err := parseMariadbReplicationStatus(resultMap)
 	require.NoError(t, err)
 	assert.Equalf(t, got.RelayLogFilePosition.GTIDSet, want.RelayLogFilePosition.GTIDSet, "got RelayLogFilePosition: %v; want RelayLogFilePosition: %v", got.RelayLogFilePosition.GTIDSet, want.RelayLogFilePosition.GTIDSet)
 	assert.Equal(t, got.FilePosition.GTIDSet, want.FilePosition.GTIDSet, fmt.Sprintf("got FilePosition: %v; want FilePosition: %v", got.FilePosition.GTIDSet, want.FilePosition.GTIDSet))
-	assert.Equal(t, got.FileRelayLogPosition.GTIDSet, want.FileRelayLogPosition.GTIDSet, fmt.Sprintf("got FileRelayLogPosition: %v; want FileRelayLogPosition: %v", got.FileRelayLogPosition.GTIDSet, want.FileRelayLogPosition.GTIDSet))
+	assert.Equal(t, got.RelayLogSourceBinLogEquivalentPosition.GTIDSet, want.RelayLogSourceBinLogEquivalentPosition.GTIDSet, fmt.Sprintf("got RelayLogSourceBinLogEquivalentPosition: %v; want RelayLogSourceBinLogEquivalentPosition: %v", got.RelayLogSourceBinLogEquivalentPosition.GTIDSet, want.RelayLogSourceBinLogEquivalentPosition.GTIDSet))
 }
 
 func TestMariadbShouldGetNilRelayLogPosition(t *testing.T) {

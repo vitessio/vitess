@@ -171,10 +171,10 @@ func (m *Status) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i--
 		dAtA[i] = 0x58
 	}
-	if len(m.FileRelayLogPosition) > 0 {
-		i -= len(m.FileRelayLogPosition)
-		copy(dAtA[i:], m.FileRelayLogPosition)
-		i = encodeVarint(dAtA, i, uint64(len(m.FileRelayLogPosition)))
+	if len(m.RelayLogSourceBinLogEquivalentPosition) > 0 {
+		i -= len(m.RelayLogSourceBinLogEquivalentPosition)
+		copy(dAtA[i:], m.RelayLogSourceBinLogEquivalentPosition)
+		i = encodeVarint(dAtA, i, uint64(len(m.RelayLogSourceBinLogEquivalentPosition)))
 		i--
 		dAtA[i] = 0x52
 	}
@@ -594,7 +594,7 @@ func (m *Status) SizeVT() (n int) {
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
-	l = len(m.FileRelayLogPosition)
+	l = len(m.RelayLogSourceBinLogEquivalentPosition)
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
@@ -1034,7 +1034,7 @@ func (m *Status) UnmarshalVT(dAtA []byte) error {
 			iNdEx = postIndex
 		case 10:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field FileRelayLogPosition", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field RelayLogSourceBinLogEquivalentPosition", wireType)
 			}
 			var stringLen uint64
 			for shift := uint(0); ; shift += 7 {
@@ -1062,7 +1062,7 @@ func (m *Status) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.FileRelayLogPosition = string(dAtA[iNdEx:postIndex])
+			m.RelayLogSourceBinLogEquivalentPosition = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		case 11:
 			if wireType != 0 {
