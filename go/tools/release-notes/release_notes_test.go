@@ -125,9 +125,10 @@ func TestLoadSummaryReadme(t *testing.T) {
 
 func TestGenerateReleaseNotes(t *testing.T) {
 	tcs := []struct {
-		name        string
-		releaseNote releaseNote
-		expectedOut string
+		name                 string
+		releaseNote          releaseNote
+		expectedOut          string
+		expectedOutChangeLog string
 	}{
 		{
 			name:        "empty",
@@ -141,13 +142,11 @@ func TestGenerateReleaseNotes(t *testing.T) {
 			name:        "with announcement",
 			releaseNote: releaseNote{Announcement: "This is the new release.\n\nNew features got added.", Version: "v12.0.0"},
 			expectedOut: "# Release of Vitess v12.0.0\n" +
-				"## Announcement\n" +
 				"This is the new release.\n\nNew features got added.\n",
 		}, {
 			name:        "with announcement and known issues",
 			releaseNote: releaseNote{Announcement: "This is the new release.\n\nNew features got added.", Version: "v12.0.0", KnownIssues: "* bug 1\n* bug 2\n"},
 			expectedOut: "# Release of Vitess v12.0.0\n" +
-				"## Announcement\n" +
 				"This is the new release.\n\nNew features got added.\n" +
 				"------------\n" +
 				"## Known Issues\n" +
@@ -156,46 +155,46 @@ func TestGenerateReleaseNotes(t *testing.T) {
 		}, {
 			name: "with announcement and change log",
 			releaseNote: releaseNote{
-				Announcement:  "This is the new release.\n\nNew features got added.",
-				Version:       "v12.0.0",
-				ChangeLog:     "* PR 1\n* PR 2\n",
-				ChangeMetrics: "optimization is the root of all evil",
+				Announcement:      "This is the new release.\n\nNew features got added.",
+				Version:           "v12.0.0",
+				VersionUnderscore: "12_0_0",
+				ChangeLog:         "* PR 1\n* PR 2\n",
+				ChangeMetrics:     "optimization is the root of all evil",
 			},
 			expectedOut: "# Release of Vitess v12.0.0\n" +
-				"## Announcement\n" +
 				"This is the new release.\n\nNew features got added.\n" +
 				"------------\n" +
-				"## Changelog\n" +
-				"* PR 1\n" +
-				"* PR 2\n\n" +
+				"The entire changelog for this release can be found [here](https://github.com/vitessio/vitess/blob/main/doc/releasenotes/12_0_0_changelog.md).\n" +
 				"optimization is the root of all evil\n",
+			expectedOutChangeLog: "# Changelog of Vitess v12.0.0\n" +
+				"* PR 1\n" +
+				"* PR 2\n\n",
 		}, {
-			name: "with add details and change log",
+			name: "with only change log",
 			releaseNote: releaseNote{
-				AddDetails:    "* PR 92\n",
-				Version:       "v12.0.0",
-				ChangeLog:     "* PR 1\n* PR 2\n",
-				ChangeMetrics: "optimization is the root of all evil",
+				Version:           "v12.0.0",
+				VersionUnderscore: "12_0_0",
+				ChangeLog:         "* PR 1\n* PR 2\n",
+				ChangeMetrics:     "optimization is the root of all evil",
 			},
 			expectedOut: "# Release of Vitess v12.0.0\n" +
-				"## Announcement\n\n" +
-				"> TODO: please detail these pull requests.\n" +
-				"* PR 92\n\n" +
-				"------------\n" +
-				"## Changelog\n" +
-				"* PR 1\n" +
-				"* PR 2\n\n" +
+				"The entire changelog for this release can be found [here](https://github.com/vitessio/vitess/blob/main/doc/releasenotes/12_0_0_changelog.md).\n" +
 				"optimization is the root of all evil\n",
+			expectedOutChangeLog: "# Changelog of Vitess v12.0.0\n" +
+				"* PR 1\n" +
+				"* PR 2\n\n",
 		},
 	}
 
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
-			outFile, err := os.CreateTemp("", "*.md")
+			outFileRn, err := os.CreateTemp("", "*.md")
 			require.NoError(t, err)
-			err = tc.releaseNote.generate(outFile)
+			outFileChangelog, err := os.CreateTemp("", "*.md")
 			require.NoError(t, err)
-			all, err := os.ReadFile(outFile.Name())
+			err = tc.releaseNote.generate(outFileRn, outFileChangelog)
+			require.NoError(t, err)
+			all, err := os.ReadFile(outFileRn.Name())
 			require.NoError(t, err)
 			require.Equal(t, tc.expectedOut, string(all))
 		})
