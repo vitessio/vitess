@@ -143,7 +143,7 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 			return fmt.Errorf("can only resume a specific migration, please provide a valid uuid; view all with: vdiff -- --v2 show all")
 		}
 	default:
-		return fmt.Errorf("invalid command %s", action)
+		return fmt.Errorf("invalid action %s", action)
 	}
 	type ErrorResponse struct {
 		Error string
