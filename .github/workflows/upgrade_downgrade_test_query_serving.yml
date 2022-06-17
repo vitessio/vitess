@@ -60,7 +60,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v2
       with:
-        go-version: 1.17.11
+        go-version: 1.18.3
 
     - name: Set up python
       uses: actions/setup-python@v2
@@ -68,6 +68,9 @@ jobs:
     - name: Tune the OS
       run: |
         echo '1024 65535' | sudo tee -a /proc/sys/net/ipv4/ip_local_port_range
+
+    - name: Checkout to commit's code
+      uses: actions/checkout@v2
 
     - name: Get base dependencies
       run: |

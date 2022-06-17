@@ -60,7 +60,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v2
       with:
-        go-version: 1.17.11
+        go-version: 1.18.3
 
     - name: Set up python
       uses: actions/setup-python@v2
@@ -74,6 +74,9 @@ jobs:
       run: |
         echo -e "$(ip addr show eth0 | grep "inet\b" | awk '{print $2}' | cut -d/ -f1)\t$(hostname -f) $(hostname -s)" | sudo tee -a /etc/hosts
     # DON'T FORGET TO REMOVE CODE ABOVE WHEN ISSUE IS ADRESSED!
+
+    - name: Checkout to commit's code
+      uses: actions/checkout@v2
 
     - name: Get base dependencies
       run: |
