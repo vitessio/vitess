@@ -556,6 +556,12 @@ func (vc *vcursorImpl) ExecuteKeyspaceID(keyspace string, ksid []byte, query str
 		Sql:           query,
 		BindVariables: bindVars,
 	}}
+
+	// This applies only when VTGate works in SINGLE transaction_mode.
+	// This function is only called from consistent_lookup vindex when the lookup row getting inserting finds a duplicate.
+	// In such scenario, original row needs to be locked to check if it already exists or no other transaction is working on it or does not write to it.
+	// This creates a transaction but that transaction is for locking purpose only and should not cause multi-db transaction error.
+	// This fields helps in to ignore multi-db transaction error when it states `queryFromVindex`.
 	if !rollbackOnError {
 		vc.safeSession.queryFromVindex = true
 		defer func() {
@@ -563,11 +569,7 @@ func (vc *vcursorImpl) ExecuteKeyspaceID(keyspace string, ksid []byte, query str
 		}()
 	}
 	qr, errs := vc.ExecuteMultiShard(rss, queries, rollbackOnError, autocommit)
-	err = vterrors.Aggregate(errs)
-	if err != nil {
-		return nil, vterrors.Wrap(err, "I know I know")
-	}
-	return qr, nil
+	return qr, vterrors.Aggregate(errs)
 }
 
 func (vc *vcursorImpl) InTransactionAndIsDML() bool {

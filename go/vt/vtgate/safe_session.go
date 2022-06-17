@@ -286,8 +286,9 @@ func (session *SafeSession) InTransaction() bool {
 	return session.Session.InTransaction
 }
 
-// Find returns the transactionId and tabletAlias, if any, for a session
-func (session *SafeSession) Find(keyspace, shard string, tabletType topodatapb.TabletType) (int64, int64, *topodatapb.TabletAlias, error) {
+// FindAndChangeSessionIfInSingleTxMode returns the transactionId and tabletAlias, if any, for a session
+// modifies the shard session in a specific case for single mode transaction.
+func (session *SafeSession) FindAndChangeSessionIfInSingleTxMode(keyspace, shard string, tabletType topodatapb.TabletType, txMode vtgatepb.TransactionMode) (int64, int64, *topodatapb.TabletAlias, error) {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	sessions := session.ShardSessions
@@ -299,17 +300,18 @@ func (session *SafeSession) Find(keyspace, shard string, tabletType topodatapb.T
 	}
 	for _, shardSession := range sessions {
 		if keyspace == shardSession.Target.Keyspace && tabletType == shardSession.Target.TabletType && shard == shardSession.Target.Shard {
-			if getTxMode() == vtgatepb.TransactionMode_SINGLE && shardSession.VindexOnly && !session.queryFromVindex {
-				count := actualNoOfShardSession(session.ShardSessions)
-				// If the count of shard session which are non vindex only is greater than 0, then it is a
-				if count > 0 {
-					session.mustRollback = true
-					return 0, 0, nil, vterrors.Errorf(vtrpcpb.Code_ABORTED, "multi-db transaction attempted: %v", session.ShardSessions)
-				}
-				// the shard session is now used by non-vindex query as well,
-				// so it is not an exclusive vindex only shard session anymore.
-				shardSession.VindexOnly = false
+			if txMode != vtgatepb.TransactionMode_SINGLE || !shardSession.VindexOnly || session.queryFromVindex {
+				return shardSession.TransactionId, shardSession.ReservedId, shardSession.TabletAlias, nil
 			}
+			count := actualNoOfShardSession(session.ShardSessions)
+			// If the count of shard session which are non vindex only is greater than 0, then it is a
+			if count > 0 {
+				session.mustRollback = true
+				return 0, 0, nil, vterrors.Errorf(vtrpcpb.Code_ABORTED, "multi-db transaction attempted: %v", session.ShardSessions)
+			}
+			// the shard session is now used by non-vindex query as well,
+			// so it is not an exclusive vindex only shard session anymore.
+			shardSession.VindexOnly = false
 			return shardSession.TransactionId, shardSession.ReservedId, shardSession.TabletAlias, nil
 		}
 	}

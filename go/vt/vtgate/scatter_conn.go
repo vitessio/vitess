@@ -598,7 +598,7 @@ func (stc *ScatterConn) multiGoTransaction(
 		startTime, statsKey := stc.startAction(name, rs.Target)
 		defer stc.endAction(startTime, allErrors, statsKey, &err, session)
 
-		shardActionInfo, err := actionInfo(ctx, rs.Target, session, autocommit)
+		shardActionInfo, err := actionInfo(ctx, rs.Target, session, autocommit, stc.txConn.mode)
 		if err != nil {
 			return
 		}
@@ -750,7 +750,7 @@ func requireNewQS(err error, target *querypb.Target) bool {
 }
 
 // actionInfo looks at the current session, and returns information about what needs to be done for this tablet
-func actionInfo(ctx context.Context, target *querypb.Target, session *SafeSession, autocommit bool) (*shardActionInfo, error) {
+func actionInfo(ctx context.Context, target *querypb.Target, session *SafeSession, autocommit bool, txMode vtgatepb.TransactionMode) (*shardActionInfo, error) {
 	if !(session.InTransaction() || session.InReservedConn()) {
 		return &shardActionInfo{}, nil
 	}
@@ -762,7 +762,7 @@ func actionInfo(ctx context.Context, target *querypb.Target, session *SafeSessio
 	// Find and AppendOrUpdate. The higher level functions ensure that no
 	// duplicate (target) tuples can execute
 	// this at the same time.
-	transactionID, reservedID, alias, err := session.Find(target.Keyspace, target.Shard, target.TabletType)
+	transactionID, reservedID, alias, err := session.FindAndChangeSessionIfInSingleTxMode(target.Keyspace, target.Shard, target.TabletType, txMode)
 	if err != nil {
 		return nil, err
 	}
