@@ -69,6 +69,9 @@ jobs:
       run: |
         echo '1024 65535' | sudo tee -a /proc/sys/net/ipv4/ip_local_port_range
 
+    - name: Checkout to commit's code
+      uses: actions/checkout@v2
+
     - name: Get base dependencies
       run: |
         sudo DEBIAN_FRONTEND="noninteractive" apt-get update

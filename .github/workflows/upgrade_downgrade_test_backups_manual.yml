@@ -75,6 +75,9 @@ jobs:
         echo -e "$(ip addr show eth0 | grep "inet\b" | awk '{print $2}' | cut -d/ -f1)\t$(hostname -f) $(hostname -s)" | sudo tee -a /etc/hosts
     # DON'T FORGET TO REMOVE CODE ABOVE WHEN ISSUE IS ADRESSED!
 
+    - name: Checkout to commit's code
+      uses: actions/checkout@v2
+
     - name: Get base dependencies
       run: |
         sudo DEBIAN_FRONTEND="noninteractive" apt-get update
