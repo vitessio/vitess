@@ -44,7 +44,7 @@ import (
 var (
 	cell                     = flag.String("cell", "test_nj", "cell to use")
 	tabletTypesToWait        = flag.String("tablet_types_to_wait", "", "wait till connected for specified tablet types during Gateway initialization")
-	plannerVersion           = flag.String("planner-version", "gen4", "Sets the default planner to use when the session has not changed it. Valid values are: V3, Gen4, Gen4Greedy and Gen4Fallback. Gen4Fallback tries the gen4 planner and falls back to the V3 planner if the gen4 fails.")
+	plannerVersion           = flag.String("planner-version", "", "Sets the default planner to use when the session has not changed it. Valid values are: V3, Gen4, Gen4Greedy and Gen4Fallback. Gen4Fallback tries the gen4 planner and falls back to the V3 planner if the gen4 fails.")
 	plannerVersionDeprecated = flag.String("planner_version", "", "Deprecated flag. Use planner-version instead")
 )
 
