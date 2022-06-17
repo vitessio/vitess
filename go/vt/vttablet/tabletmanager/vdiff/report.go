@@ -57,7 +57,7 @@ type DiffMismatch struct {
 // RowDiff is a row that didn't match as part of the comparison.
 type RowDiff struct {
 	Row   map[string]string `json:"Row,omitempty"`
-	Query string            `json:"-"`
+	Query string            `json:"Query,omitempty"`
 }
 
 func (td *tableDiffer) genRowDiff(queryStmt string, row []sqltypes.Value, debug, onlyPks bool) (*RowDiff, error) {

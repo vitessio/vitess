@@ -104,7 +104,7 @@ func (wd *workflowDiffer) diffTable(ctx context.Context, dbClient binlogplayer.D
 		return err
 	}
 	log.Infof("initialize done")
-	dr, err := td.diff(ctx, &wd.opts.CoreOptions.MaxRows, false, false, wd.opts.CoreOptions.MaxExtraRowsToCompare)
+	dr, err := td.diff(ctx, &wd.opts.CoreOptions.MaxRows, wd.opts.ReportOptions.DebugQuery, false, wd.opts.CoreOptions.MaxExtraRowsToCompare)
 	if err != nil {
 		log.Errorf("td.diff error %s", err.Error())
 		return err
