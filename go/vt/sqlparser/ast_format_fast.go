@@ -268,10 +268,16 @@ func (node *Set) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the node.
 func (node *SetTransaction) formatFast(buf *TrackedBuffer) {
-	buf.WriteString("set ")
-	node.Comments.formatFast(buf)
-	buf.WriteString(node.Scope.ToString())
-	buf.WriteString(" transaction ")
+	if node.Scope == NoScope {
+		buf.WriteString("set ")
+		node.Comments.formatFast(buf)
+		buf.WriteString("transaction ")
+	} else {
+		buf.WriteString("set ")
+		node.Comments.formatFast(buf)
+		buf.WriteString(node.Scope.ToString())
+		buf.WriteString(" transaction ")
+	}
 
 	for i, char := range node.Characteristics {
 		if i > 0 {

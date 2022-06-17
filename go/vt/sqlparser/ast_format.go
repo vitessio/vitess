@@ -175,7 +175,11 @@ func (node *Set) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *SetTransaction) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "set %v%s transaction ", node.Comments, node.Scope.ToString())
+	if node.Scope == NoScope {
+		buf.astPrintf(node, "set %vtransaction ", node.Comments)
+	} else {
+		buf.astPrintf(node, "set %v%s transaction ", node.Comments, node.Scope.ToString())
+	}
 
 	for i, char := range node.Characteristics {
 		if i > 0 {

@@ -1085,28 +1085,21 @@ var (
 	}, {
 		input: "set session transaction isolation level repeatable read",
 	}, {
-		input:  "set transaction isolation level repeatable read",
-		output: "set session transaction isolation level repeatable read",
+		input: "set transaction isolation level repeatable read",
 	}, {
 		input: "set global transaction isolation level repeatable read",
 	}, {
-		input:  "set transaction isolation level repeatable read",
-		output: "set session transaction isolation level repeatable read",
+		input: "set transaction isolation level repeatable read",
 	}, {
-		input:  "set transaction isolation level read committed",
-		output: "set session transaction isolation level read committed",
+		input: "set transaction isolation level read committed",
 	}, {
-		input:  "set transaction isolation level read uncommitted",
-		output: "set session transaction isolation level read uncommitted",
+		input: "set transaction isolation level read uncommitted",
 	}, {
-		input:  "set transaction isolation level serializable",
-		output: "set session transaction isolation level serializable",
+		input: "set transaction isolation level serializable",
 	}, {
-		input:  "set transaction read write",
-		output: "set session transaction read write",
+		input: "set transaction read write",
 	}, {
-		input:  "set transaction read only",
-		output: "set session transaction read only",
+		input: "set transaction read only",
 	}, {
 		input:  "set tx_read_only = 1",
 		output: "set @@tx_read_only = 1",

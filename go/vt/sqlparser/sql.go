@@ -9300,7 +9300,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:991
 		{
-			yyLOCAL = &SetTransaction{Comments: Comments(yyDollar[2].strs).Parsed(), Characteristics: yyDollar[4].characteristicsUnion(), Scope: SessionScope}
+			yyLOCAL = &SetTransaction{Comments: Comments(yyDollar[2].strs).Parsed(), Characteristics: yyDollar[4].characteristicsUnion(), Scope: NoScope}
 		}
 		yyVAL.union = yyLOCAL
 	case 104:
