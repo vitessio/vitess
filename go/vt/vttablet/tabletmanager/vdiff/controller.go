@@ -42,11 +42,12 @@ import (
 */
 type VDiffState string //nolint
 const (
-	PendingState   VDiffState = "pending"
-	StartedState   VDiffState = "started"
-	CompletedState VDiffState = "completed"
-	ErrorState     VDiffState = "error"
-	UnknownState   VDiffState = ""
+	PendingState    VDiffState = "pending"
+	StartedState    VDiffState = "started"
+	CompletedState  VDiffState = "completed"
+	ErrorState      VDiffState = "error"
+	UnknownState    VDiffState = ""
+	TimestampFormat            = "2006-01-02 15:04:05"
 )
 
 type controller struct {
@@ -156,7 +157,7 @@ func (ct *controller) updateState(dbClient binlogplayer.DBClient, state VDiffSta
 	completedTS := "NULL"
 	if state == CompletedState {
 		t := time.Now().UTC()
-		completedTS = encodeString(t.Format("2006-01-02 15:04:05"))
+		completedTS = encodeString(t.Format(TimestampFormat))
 	}
 	query := fmt.Sprintf(sqlUpdateVDiffState, encodeString(string(state)), completedTS, ct.id)
 	if _, err := withDDL.Exec(ct.vde.ctx, query, dbClient.ExecuteFetch, dbClient.ExecuteFetch); err != nil {

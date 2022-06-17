@@ -38,9 +38,9 @@ const (
 		state varbinary(1024),
 		options json,
 		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		started_timestamp timestamp NULL DEFAULT NULL,
+		started_at timestamp NULL DEFAULT NULL,
 		liveness_timestamp timestamp NULL DEFAULT NULL,
-		completed_timestamp timestamp NULL DEFAULT NULL,
+		completed_at timestamp NULL DEFAULT NULL,
 		unique key uuid_idx (vdiff_uuid),
 		primary key (id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`
 
@@ -65,18 +65,18 @@ const (
 		primary key (id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`
 
 	sqlNewVDiff                       = "insert into _vt.vdiff(keyspace, workflow, state, options, shard, db_name, vdiff_uuid) values(%s, %s, '%s', %s, '%s', '%s', '%s')"
-	sqlResumeVDiff                    = "update _vt.vdiff set completed_timestamp = NULL, state = 'pending', options = %s where vdiff_uuid = %s"
+	sqlResumeVDiff                    = "update _vt.vdiff set completed_at = NULL, state = 'pending', options = %s where vdiff_uuid = %s"
 	sqlGetVDiffByKeyspaceWorkflowUUID = "select * from _vt.vdiff where keyspace = %s and workflow = %s and vdiff_uuid = %s"
 	sqlGetMostRecentVDiff             = "select * from _vt.vdiff where keyspace = %s and workflow = %s order by id desc limit 1"
 	sqlGetVDiffByID                   = "select * from _vt.vdiff where id = %d"
 	sqlVDiffSummary                   = `select vt.vdiff_id, v.state as vdiff_state, vt.table_name as table_name, 
 										v.vdiff_uuid as 'uuid',
 										vt.state as table_state, vt.table_rows as table_rows, 
-										vt.rows_compared as rows_compared, 
+										vt.rows_compared as rows_compared, v.completed_at as completed_at, 
 										IF(vt.mismatch = 1, 1, 0) as has_mismatch, vt.report as report
 										from _vt.vdiff v, _vt.vdiff_table vt 
 										where v.id = vt.vdiff_id and v.id = %d`
-	sqlUpdateVDiffState     = "update _vt.vdiff set state = %s, completed_timestamp = %s where id = %d"
+	sqlUpdateVDiffState     = "update _vt.vdiff set state = %s, completed_at = %s where id = %d"
 	sqlGetVReplicationEntry = "select * from _vt.vreplication %s"
 	sqlGetPendingVDiffs     = "select * from _vt.vdiff where state = 'pending'"
 	sqlGetVDiffID           = "select id as id from _vt.vdiff where vdiff_uuid = %s"

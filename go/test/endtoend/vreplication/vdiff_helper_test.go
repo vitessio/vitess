@@ -32,6 +32,7 @@ import (
 
 const (
 	vdiffTimeout = time.Second * 60
+	tsFormat     = "2006-01-02 15:04:05"
 )
 
 var (
@@ -80,7 +81,7 @@ func doVDiff1(t *testing.T, ksWorkflow, cells string) {
 	})
 }
 
-func waitForVDiff2ToComplete(t *testing.T, ksWorkflow, uuid string) *vdiffInfo {
+func waitForVDiff2ToComplete(t *testing.T, ksWorkflow, uuid string, completedAtMin time.Time) *vdiffInfo {
 	var info *vdiffInfo
 	ch := make(chan bool)
 	go func() {
@@ -88,6 +89,13 @@ func waitForVDiff2ToComplete(t *testing.T, ksWorkflow, uuid string) *vdiffInfo {
 			time.Sleep(1 * time.Second)
 			_, jsonStr := performVDiff2Action(t, ksWorkflow, "show", uuid)
 			if info = getVDiffInfo(jsonStr); info.State == "completed" {
+				if !completedAtMin.IsZero() {
+					ca := info.CompletedAt
+					completedAt, _ := time.Parse(tsFormat, ca)
+					if !completedAt.After(completedAtMin) {
+						continue
+					}
+				}
 				ch <- true
 				return
 			}
@@ -114,7 +122,7 @@ func vdiff2(t *testing.T, keyspace, workflow, cells string, want *expectedVDiff2
 	ksWorkflow := fmt.Sprintf("%s.%s", keyspace, workflow)
 	t.Run(fmt.Sprintf("vdiff2 %s", ksWorkflow), func(t *testing.T) {
 		uuid, _ := performVDiff2Action(t, ksWorkflow, "create", "")
-		info := waitForVDiff2ToComplete(t, ksWorkflow, uuid)
+		info := waitForVDiff2ToComplete(t, ksWorkflow, uuid, time.Time{})
 
 		require.Equal(t, workflow, info.Workflow)
 		require.Equal(t, keyspace, info.Keyspace)
@@ -128,43 +136,18 @@ func vdiff2(t *testing.T, keyspace, workflow, cells string, want *expectedVDiff2
 			require.Equal(t, "completed", info.State)
 			require.False(t, info.HasMismatch)
 		}
+		createCompletedTS, err := time.Parse(tsFormat, info.CompletedAt)
+		require.NoError(t, err)
 
-		/*
-			Trying to figure out why we always have more rows come through after
-			the initial VDiff completes here on these two specific test runs...
-
-				VTDATAROOT is /opt/vtdataroot/vreple2e_864315
-				--- FAIL: TestVDiff2 (151.68s)
-				    --- FAIL: TestVDiff2/MoveTables_unsharded_to_two_shards (33.87s)
-				        --- FAIL: TestVDiff2/MoveTables_unsharded_to_two_shards/vdiff2_customer.p1c2 (19.77s)
-				            vdiff_helper_test.go:139:
-				                	Error Trace:	vdiff_helper_test.go:139
-				                	Error:      	Not equal:
-				                	            	expected: 0
-				                	            	actual  : 1
-				                	Test:       	TestVDiff2/MoveTables_unsharded_to_two_shards/vdiff2_customer.p1c2
-				    --- FAIL: TestVDiff2/Reshard_Split/Merge_2_to_3 (59.94s)
-				        --- FAIL: TestVDiff2/Reshard_Split/Merge_2_to_3/vdiff2_customer.c2c3 (32.23s)
-				            vdiff_helper_test.go:139:
-				                	Error Trace:	vdiff_helper_test.go:139
-				                	Error:      	Not equal:
-				                	            	expected: 0
-				                	            	actual  : 4
-				                	Test:       	TestVDiff2/Reshard_Split/Merge_2_to_3/vdiff2_customer.c2c3
-				FAIL
-				FAIL	vitess.io/vitess/go/test/endtoend/vreplication	152.254s
-				FAIL
-
-			// Test resume, w/o adding anymore rows we should start where we
-			// left off and thus compare no more rows.
-			uuid, _ = performVDiff2Action(t, ksWorkflow, "resume", uuid)
-			// sleep a few seconds as the state was completed before we resumed...
-			// so we need to wait for it to resume -- where it goes from completed->
-			// pending->started -- before waiting for it again to move to completed
-			time.Sleep(5 * time.Second)
-			info = waitForVDiff2ToComplete(t, ksWorkflow, uuid)
-			require.Equal(t, int64(0), info.RowsCompared)
-		*/
+		uuid, _ = performVDiff2Action(t, ksWorkflow, "resume", uuid)
+		// Pass the previous completed time as we need to wait for it to resume -- where
+		// it goes from completed-> pending->started -- before waiting for it again to
+		// move to completed
+		info = waitForVDiff2ToComplete(t, ksWorkflow, uuid, createCompletedTS)
+		resumeCompletedTS, err := time.Parse(tsFormat, info.CompletedAt)
+		require.NoError(t, err)
+		require.False(t, info.HasMismatch)
+		require.Greater(t, resumeCompletedTS, createCompletedTS)
 	})
 }
 
@@ -184,6 +167,7 @@ type vdiffInfo struct {
 	Workflow, Keyspace string
 	State, Shards      string
 	RowsCompared       int64
+	CompletedAt        string
 	HasMismatch        bool
 }
 
@@ -195,6 +179,7 @@ func getVDiffInfo(jsonStr string) *vdiffInfo {
 	info.State, _ = jsonparser.GetString(json, "State")
 	info.Shards, _ = jsonparser.GetString(json, "Shards")
 	info.RowsCompared, _ = jsonparser.GetInt(json, "RowsCompared")
+	info.CompletedAt, _ = jsonparser.GetString(json, "CompletedAt")
 	info.HasMismatch, _ = jsonparser.GetBoolean(json, "HasMismatch")
 
 	return &info

@@ -466,6 +466,8 @@ func (vttablet *VttabletProcess) ToggleProfiling() error {
 
 // WaitForVReplicationToCatchup waits for "workflow" to finish copying
 func (vttablet *VttabletProcess) WaitForVReplicationToCatchup(t testing.TB, workflow, database string, duration time.Duration) {
+	// First we wait for the workflow to get created
+	// Then we wait for the workflow to get past the copy phase for all tables involved
 	queries := [2]string{
 		fmt.Sprintf(`select count(*) from _vt.vreplication where workflow = "%s" and db_name = "%s" group by id`, workflow, database),
 		fmt.Sprintf(`select count(*) from _vt.vreplication where workflow = "%s" and db_name = "%s" and state != 'Running'`, workflow, database),

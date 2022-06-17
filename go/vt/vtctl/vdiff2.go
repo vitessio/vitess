@@ -193,7 +193,7 @@ type vdiffSummary struct {
 	RowsCompared       int64
 	HasMismatch        bool
 	Shards             string
-	LastUpdated        string                                 `json:"LastUpdated,omitempty"`
+	CompletedAt        string                                 `json:"CompletedAt,omitempty"`
 	TableSummaryMap    map[string]vdiffTableSummary           `json:"TableSummary,omitempty"`
 	Reports            map[string]map[string]vdiff.DiffReport `json:"Reports,omitempty"`
 }
@@ -203,7 +203,8 @@ const (
 VDiff Summary for {{.Keyspace}}.{{.Workflow}} ({{.UUID}})
 State: {{.State}}
 RowsCompared: {{.RowsCompared}}
-HasMismatch: {{.HasMismatch}}
+CompletedAt:  {{.CompletedAt}}
+HasMismatch:  {{.HasMismatch}}
 {{ range $table := .TableSummaryMap}} 
 Table {{$table.TableName}}:
 	State:            {{$table.State}}
@@ -382,6 +383,7 @@ func buildVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid st
 		UUID:         uuid,
 		State:        vdiff.UnknownState,
 		RowsCompared: 0,
+		CompletedAt:  "",
 		HasMismatch:  false,
 		Shards:       "",
 		Reports:      make(map[string]map[string]vdiff.DiffReport),
@@ -404,6 +406,7 @@ func buildVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid st
 					first = false
 					s, _ := row.ToString("vdiff_state")
 					summary.State = vdiff.VDiffState(strings.ToLower(s))
+					summary.CompletedAt = row.AsString("completed_at", "")
 				}
 				summary.RowsCompared += row.AsInt64("rows_compared", 0)
 				// If we had a mismatch on any table then the vdiff as a unit does too
