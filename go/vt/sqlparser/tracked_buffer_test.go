@@ -201,16 +201,20 @@ func TestCanonicalOutput(t *testing.T) {
 			"SELECT NOT REGEXP_REPLACE('abc def ghi', '[a-z]+', 'X', 1, 3, 'c'), NOT REGEXP_LIKE('dog cat dog', 'dog'), NOT REGEXP_SUBSTR('abc def ghi', '[a-z]+', 1), NOT REGEXP_INSTR('aa aaa aaaa aaaa aaaa aaaa', 'a{4}', 1), 'Michael!' NOT REGEXP '.*' FROM `dual`",
 		},
 		{
+			"revert /* vt+ foo */ vitess_migration '9aecb3b4_b8a9_11ec_929a_0a43f95f28a3'",
+			"REVERT /* vt+ foo */ VITESS_MIGRATION '9aecb3b4_b8a9_11ec_929a_0a43f95f28a3'",
+		},
+		{
 			"select count(a) from t",
 			"SELECT COUNT(`a`) FROM `t`",
 		},
 		{
-			input:     "select var_pop(a) from products",
-			canonical: "SELECT VAR_POP(`a`) FROM `products`",
+			"select var_pop(a) from products",
+			"SELECT VAR_POP(`a`) FROM `products`",
 		},
 		{
-			input:     "select /* function with distinct */ count(distinct a) from t",
-			canonical: "SELECT /* FUNCTION WITH DISTINCT */ COUNT(DISTINCT `a`) FROM `t`",
+			"select /* function with distinct */ count(distinct a) from t",
+			"SELECT /* FUNCTION WITH DISTINCT */ COUNT(DISTINCT `a`) FROM `t`",
 		},
 	}
 
