@@ -299,12 +299,12 @@ func (node *AlterMigration) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *RevertMigration) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "revert %vvitess_migration '%s'", node.Comments, node.UUID)
+	buf.astPrintf(node, "revert %vvitess_migration '%#s'", node.Comments, node.UUID)
 }
 
 // Format formats the node.
 func (node *ShowMigrationLogs) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "show vitess_migration '%s' logs", node.UUID)
+	buf.astPrintf(node, "show vitess_migration '%#s' logs", node.UUID)
 }
 
 // Format formats the node.
@@ -1043,7 +1043,7 @@ func (node *ParsedComments) Format(buf *TrackedBuffer) {
 		return
 	}
 	for _, c := range node.comments {
-		buf.astPrintf(node, "%s ", c)
+		buf.astPrintf(node, "%#s ", c)
 	}
 }
 
