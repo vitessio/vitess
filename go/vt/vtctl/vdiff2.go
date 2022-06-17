@@ -83,7 +83,7 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 		return usage
 	}
 	if action == "" {
-		return fmt.Errorf("invalid action %s", subFlags.Arg(1))
+		return fmt.Errorf("invalid action %s; %s", subFlags.Arg(1), usage)
 	}
 	keyspace, workflowName, err := splitKeyspaceWorkflow(subFlags.Arg(0))
 	if err != nil {
@@ -92,7 +92,7 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 	log.Infof("VDiff2 action is %s, args %s", action, strings.Join(args, " "))
 
 	if *maxRows <= 0 {
-		return fmt.Errorf("maximum number of rows to compare needs to be greater than 0")
+		return fmt.Errorf("invalid --limit value (%d), maximum number of rows to compare needs to be greater than 0", *maxRows)
 	}
 
 	options := &tabletmanagerdatapb.VDiffOptions{
@@ -143,7 +143,7 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 			return fmt.Errorf("can only resume a specific migration, please provide a valid uuid; view all with: vdiff -- --v2 show all")
 		}
 	default:
-		return fmt.Errorf("invalid action %s", action)
+		return fmt.Errorf("invalid action %s; %s", action, usage)
 	}
 	type ErrorResponse struct {
 		Error string
@@ -159,7 +159,8 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 		displayVDiff2CreateResponse(wr, *format, vdiffUUID.String())
 	case vdiff.ShowAction:
 		if output == nil {
-			return fmt.Errorf("invalid response from show command")
+			// should not happen
+			return fmt.Errorf("invalid (empty) response from show command")
 		}
 		if err := displayVDiff2ShowResponse(wr, *format, keyspace, workflowName, actionArg, output); err != nil {
 			return err
@@ -167,7 +168,7 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 	case vdiff.ResumeAction:
 		displayVDiff2ResumeResponse(wr, *format, vdiffUUID.String())
 	default:
-		return fmt.Errorf("action %s not valid", action)
+		return fmt.Errorf("invalid action %s; %s", action, usage)
 	}
 	return nil
 }
