@@ -30001,8 +30001,8 @@ export namespace replicationdata {
         /** Status file_position */
         file_position?: (string|null);
 
-        /** Status file_relay_log_position */
-        file_relay_log_position?: (string|null);
+        /** Status relay_log_source_bin_log_equivalent_position */
+        relay_log_source_bin_log_equivalent_position?: (string|null);
 
         /** Status source_server_id */
         source_server_id?: (number|null);
@@ -30083,8 +30083,8 @@ export namespace replicationdata {
         /** Status file_position. */
         public file_position: string;
 
-        /** Status file_relay_log_position. */
-        public file_relay_log_position: string;
+        /** Status relay_log_source_bin_log_equivalent_position. */
+        public relay_log_source_bin_log_equivalent_position: string;
 
         /** Status source_server_id. */
         public source_server_id: number;
