@@ -126,7 +126,7 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 			vdiffUUID, err = uuid.NewUUID()
 		}
 		if err != nil {
-			return err
+			return fmt.Errorf("invalid uuid (%v), please provide a valid v1 uuid", err)
 		}
 	case vdiff.ShowAction:
 		switch actionArg {
