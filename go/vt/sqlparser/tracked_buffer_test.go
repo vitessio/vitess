@@ -214,7 +214,7 @@ func TestCanonicalOutput(t *testing.T) {
 		},
 		{
 			"select /* function with distinct */ count(distinct a) from t",
-			"SELECT /* FUNCTION WITH DISTINCT */ COUNT(DISTINCT `a`) FROM `t`",
+			"SELECT /* function with distinct */ COUNT(DISTINCT `a`) FROM `t`",
 		},
 	}
 
