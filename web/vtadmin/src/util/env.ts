@@ -13,8 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+export var env: NodeJS.ProcessEnv = { ...window.env, ...process.env };
 
 // process.env variables are always strings, hence this tiny helper function
 // to transmute it into a boolean. It is a function, rather than a constant,
 // to support dynamic updates to process.env in tests.
-export const isReadOnlyMode = (): boolean => process.env.REACT_APP_READONLY_MODE === 'true';
+export const isReadOnlyMode = (): boolean => env.REACT_APP_READONLY_MODE === 'true';
