@@ -15,8 +15,9 @@
  */
 import BugsnagJS from '@bugsnag/js';
 import { ErrorHandler } from './errorTypes';
+import { env } from '../util/env';
 
-const { REACT_APP_BUGSNAG_API_KEY } = process.env;
+const { REACT_APP_BUGSNAG_API_KEY } = env;
 
 /**
  * If using Bugsnag, Bugsnag.start() will automatically capture and report
