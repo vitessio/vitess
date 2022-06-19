@@ -373,6 +373,12 @@ const (
 	ReleaseAllLocksStr = "release_all_locks"
 	ReleaseLockStr     = "release_lock"
 
+	// PerformanceSchemaType strings
+	FormatBytesStr       = "format_bytes"
+	FormatPicoTimeStr    = "format_pico_time"
+	PsCurrentThreadIDStr = "ps_current_thread_id"
+	PsThreadIDStr        = "ps_thread_id"
+
 	// LockOptionType strings
 	NoneTypeStr      = "none"
 	SharedTypeStr    = "shared"
@@ -551,6 +557,14 @@ const (
 	IsUsedLock
 	ReleaseAllLocks
 	ReleaseLock
+)
+
+// Constants for Enum Type - PerformanceSchemaType
+const (
+	FormatBytesType PerformanceSchemaType = iota
+	FormatPicoTimeType
+	PsCurrentThreadIDType
+	PsThreadIDType
 )
 
 // Constants for Enum Type - WhereType

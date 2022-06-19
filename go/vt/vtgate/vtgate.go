@@ -26,6 +26,8 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+
 	"vitess.io/vitess/go/vt/key"
 
 	"context"
@@ -82,7 +84,6 @@ var (
 	// Put set-passthrough under a flag.
 	sysVarSetEnabled = flag.Bool("enable_system_settings", true, "This will enable the system settings to be changed per session at the database connection level")
 	setVarEnabled    = flag.Bool("enable_set_var", true, "This will enable the use of MySQL's SET_VAR query hint for certain system variables instead of using reserved connections")
-	plannerVersion   = flag.String("planner_version", "gen4", "Sets the default planner to use when the session has not changed it. Valid values are: V3, Gen4, Gen4Greedy and Gen4Fallback. Gen4Fallback tries the gen4 planner and falls back to the V3 planner if the gen4 fails.")
 
 	// lockHeartbeatTime is used to set the next heartbeat time.
 	lockHeartbeatTime = flag.Duration("lock_heartbeat_time", 5*time.Second, "If there is lock function used. This will keep the lock connection active by using this heartbeat")
@@ -160,7 +161,14 @@ type RegisterVTGate func(vtgateservice.VTGateService)
 var RegisterVTGates []RegisterVTGate
 
 // Init initializes VTGate server.
-func Init(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, cell string, tabletTypesToWait []topodatapb.TabletType) *VTGate {
+func Init(
+	ctx context.Context,
+	hc discovery.HealthCheck,
+	serv srvtopo.Server,
+	cell string,
+	tabletTypesToWait []topodatapb.TabletType,
+	pv plancontext.PlannerVersion,
+) *VTGate {
 	if rpcVTGate != nil {
 		log.Fatalf("VTGate already initialized")
 	}
@@ -228,6 +236,7 @@ func Init(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, ce
 		cacheCfg,
 		si,
 		*noScatter,
+		pv,
 	)
 
 	// connect the schema tracker with the vschema manager

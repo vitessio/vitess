@@ -2167,6 +2167,15 @@ func (node *UpdateXMLExpr) formatFast(buf *TrackedBuffer) {
 	buf.WriteByte(')')
 }
 
+func (node *PerformanceSchemaFuncExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.Type.ToString())
+	buf.WriteByte('(')
+	if node.Argument != nil {
+		buf.printExpr(node, node.Argument, true)
+	}
+	buf.WriteByte(')')
+}
+
 // formatFast formats the node.
 func (node *SubstrExpr) formatFast(buf *TrackedBuffer) {
 	if node.To == nil {
@@ -2221,15 +2230,24 @@ func (node WindowDefinitions) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
-func (node *ConvertExpr) formatFast(buf *TrackedBuffer) {
-	buf.WriteString("convert(")
+func (node *CastExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("cast(")
 	buf.printExpr(node, node.Expr, true)
-	buf.WriteString(", ")
+	buf.WriteString(" as ")
 	node.Type.formatFast(buf)
 	if node.Array {
 		buf.WriteByte(' ')
 		buf.WriteString(keywordStrings[ARRAY])
 	}
+	buf.WriteByte(')')
+}
+
+// formatFast formats the node.
+func (node *ConvertExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("convert(")
+	buf.printExpr(node, node.Expr, true)
+	buf.WriteString(", ")
+	node.Type.formatFast(buf)
 	buf.WriteByte(')')
 }
 
@@ -2866,6 +2884,14 @@ func (node *ModifyColumn) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node
+func (node *RenameColumn) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("rename column ")
+	node.OldName.formatFast(buf)
+	buf.WriteString(" to ")
+	node.NewName.formatFast(buf)
+}
+
+// formatFast formats the node
 func (node *AlterCharset) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("convert to character set ")
 	buf.WriteString(node.CharacterSet)
@@ -3355,6 +3381,132 @@ func (node *JSONUnquoteExpr) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("json_unquote(")
 	buf.printExpr(node, node.JSONValue, true)
 	buf.WriteString(")")
+}
+
+func (node *Count) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.AggrName())
+	buf.WriteByte('(')
+	if node.Distinct {
+		buf.WriteString(DistinctStr)
+	}
+	node.Args.formatFast(buf)
+	buf.WriteByte(')')
+}
+
+func (node *CountStar) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.AggrName())
+	buf.WriteByte('(')
+	buf.WriteString("*)")
+}
+
+func (node *Avg) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.AggrName())
+	buf.WriteByte('(')
+	if node.Distinct {
+		buf.WriteString(DistinctStr)
+	}
+	buf.printExpr(node, node.Arg, true)
+	buf.WriteByte(')')
+}
+
+func (node *Max) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.AggrName())
+	buf.WriteByte('(')
+	if node.Distinct {
+		buf.WriteString(DistinctStr)
+	}
+	buf.printExpr(node, node.Arg, true)
+	buf.WriteByte(')')
+}
+
+func (node *Min) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.AggrName())
+	buf.WriteByte('(')
+	if node.Distinct {
+		buf.WriteString(DistinctStr)
+	}
+	buf.printExpr(node, node.Arg, true)
+	buf.WriteByte(')')
+}
+
+func (node *Sum) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.AggrName())
+	buf.WriteByte('(')
+	if node.Distinct {
+		buf.WriteString(DistinctStr)
+	}
+	buf.printExpr(node, node.Arg, true)
+	buf.WriteByte(')')
+}
+
+func (node *BitAnd) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.AggrName())
+	buf.WriteByte('(')
+	buf.printExpr(node, node.Arg, true)
+	buf.WriteByte(')')
+}
+
+func (node *BitOr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.AggrName())
+	buf.WriteByte('(')
+	buf.printExpr(node, node.Arg, true)
+	buf.WriteByte(')')
+}
+
+func (node *BitXor) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.AggrName())
+	buf.WriteByte('(')
+	buf.printExpr(node, node.Arg, true)
+	buf.WriteByte(')')
+}
+
+func (node *Std) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.AggrName())
+	buf.WriteByte('(')
+	buf.printExpr(node, node.Arg, true)
+	buf.WriteByte(')')
+}
+
+func (node *StdDev) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.AggrName())
+	buf.WriteByte('(')
+	buf.printExpr(node, node.Arg, true)
+	buf.WriteByte(')')
+}
+
+func (node *StdPop) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.AggrName())
+	buf.WriteByte('(')
+	buf.printExpr(node, node.Arg, true)
+	buf.WriteByte(')')
+}
+
+func (node *StdSamp) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.AggrName())
+	buf.WriteByte('(')
+	buf.printExpr(node, node.Arg, true)
+	buf.WriteByte(')')
+}
+
+func (node *VarPop) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.AggrName())
+	buf.WriteByte('(')
+	buf.printExpr(node, node.Arg, true)
+	buf.WriteByte(')')
+}
+
+func (node *VarSamp) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.AggrName())
+	buf.WriteByte('(')
+	buf.printExpr(node, node.Arg, true)
+	buf.WriteByte(')')
+}
+
+func (node *Variance) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.AggrName())
+	buf.WriteByte('(')
+	buf.printExpr(node, node.Arg, true)
+	buf.WriteByte(')')
 }
 
 // formatFast formats the node.

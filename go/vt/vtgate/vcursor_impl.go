@@ -36,7 +36,6 @@ import (
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/key"
-	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -51,7 +50,6 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/buffer"
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vtgate/vschemaacl"
@@ -113,6 +111,7 @@ type vcursorImpl struct {
 	warnShardedOnly     bool // when using sharded only features, a warning will be warnings field
 
 	warnings []*querypb.QueryWarning // any warnings that are accumulated during the planning phase are stored here
+	pv       plancontext.PlannerVersion
 }
 
 // newVcursorImpl creates a vcursorImpl. Before creating this object, you have to separate out any marginComments that came with
@@ -130,6 +129,7 @@ func newVCursorImpl(
 	resolver *srvtopo.Resolver,
 	serv srvtopo.Server,
 	warnShardedOnly bool,
+	pv plancontext.PlannerVersion,
 ) (*vcursorImpl, error) {
 	keyspace, tabletType, destination, err := parseDestinationTarget(safeSession.TargetString, vschema)
 	if err != nil {
@@ -175,6 +175,7 @@ func newVCursorImpl(
 		vm:              vm,
 		topoServer:      ts,
 		warnShardedOnly: warnShardedOnly,
+		pv:              pv,
 	}, nil
 }
 
@@ -413,13 +414,7 @@ func (vc *vcursorImpl) Planner() plancontext.PlannerVersion {
 		vc.safeSession.Options.PlannerVersion != querypb.ExecuteOptions_DEFAULT_PLANNER {
 		return vc.safeSession.Options.PlannerVersion
 	}
-	version, done := plancontext.PlannerNameToVersion(*plannerVersion)
-	if done {
-		return version
-	}
-
-	log.Warning("unknown planner version configured. using the default")
-	return planbuilder.V3
+	return vc.pv
 }
 
 // GetSemTable implements the ContextVSchema interface
@@ -561,8 +556,19 @@ func (vc *vcursorImpl) ExecuteKeyspaceID(keyspace string, ksid []byte, query str
 		Sql:           query,
 		BindVariables: bindVars,
 	}}
-	qr, errs := vc.ExecuteMultiShard(rss, queries, rollbackOnError, autocommit)
 
+	// This applies only when VTGate works in SINGLE transaction_mode.
+	// This function is only called from consistent_lookup vindex when the lookup row getting inserting finds a duplicate.
+	// In such scenario, original row needs to be locked to check if it already exists or no other transaction is working on it or does not write to it.
+	// This creates a transaction but that transaction is for locking purpose only and should not cause multi-db transaction error.
+	// This fields helps in to ignore multi-db transaction error when it states `queryFromVindex`.
+	if !rollbackOnError {
+		vc.safeSession.queryFromVindex = true
+		defer func() {
+			vc.safeSession.queryFromVindex = false
+		}()
+	}
+	qr, errs := vc.ExecuteMultiShard(rss, queries, rollbackOnError, autocommit)
 	return qr, vterrors.Aggregate(errs)
 }
 

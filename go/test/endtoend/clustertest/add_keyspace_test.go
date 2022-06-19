@@ -62,7 +62,7 @@ primary key (id)
 
 func TestAddKeyspace(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	if err := clusterInstance.StartKeyspace(*testKeyspace, []string{"-80", "80-"}, 1, true); err != nil {
+	if err := clusterInstance.StartKeyspace(*testKeyspace, []string{"-80", "80-"}, 0, false); err != nil {
 		log.Errorf("failed to AddKeyspace %v: %v", *testKeyspace, err)
 		t.Fatal(err)
 	}

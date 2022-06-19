@@ -188,6 +188,7 @@ func SetReplicationSource(ctx context.Context, ts *topo.Server, tmc tmclient.Tab
 	if err != nil {
 		return err
 	}
+	log.Infof("Getting a new durability policy for %v", durabilityName)
 	durability, err := GetDurabilityPolicy(durabilityName)
 	if err != nil {
 		return err

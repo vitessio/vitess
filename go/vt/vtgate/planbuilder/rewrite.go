@@ -191,7 +191,8 @@ func rewriteHavingClause(node *sqlparser.Select) {
 				}
 				return false
 			default:
-				hasAggr = hasAggr || sqlparser.IsAggregation(x)
+				_, isAggregate := x.(sqlparser.AggrFunc)
+				hasAggr = hasAggr || isAggregate
 			}
 			return true
 		}, nil)
