@@ -55,6 +55,7 @@ vttablet \
  --grpc_port $grpc_port \
  --service_map 'grpc-queryservice,grpc-tabletmanager,grpc-updatestream' \
  --pid_file $VTDATAROOT/$tablet_dir/vttablet.pid \
+ --vstream_dynamic_packet_size=false \
  --vtctld_addr http://$hostname:$vtctld_web_port/ \
  > $VTDATAROOT/$tablet_dir/vttablet.out 2>&1 &
 

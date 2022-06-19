@@ -24,6 +24,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/sync2"
+
 	"vitess.io/vitess/go/vt/discovery"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/topo"
@@ -231,7 +233,13 @@ func (vsm *vstreamManager) GetTotalStreamDelay() int64 {
 	return vstreamSkewDelayCount.Get()
 }
 
+var streamCounter sync2.AtomicInt64
+var startOneStreamCounter sync2.AtomicInt64
+
 func (vs *vstream) stream(ctx context.Context) error {
+	log.Infof(">>>>> streamCounter %d, startOneStreamCounter %d", streamCounter.Get(), startOneStreamCounter.Get())
+	streamCounter.Add(1)
+	defer streamCounter.Add(-1)
 	ctx, vs.cancel = context.WithCancel(ctx)
 	defer vs.cancel()
 
@@ -275,6 +283,7 @@ func (vs *vstream) sendEvents(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
+			log.Infof("Context is done, returning from vstream.sendEvents")
 			vs.once.Do(func() {
 				vs.setError(fmt.Errorf("context canceled"))
 			})
@@ -306,11 +315,14 @@ func (vs *vstream) sendEvents(ctx context.Context) {
 
 // startOneStream sets up one shard stream.
 func (vs *vstream) startOneStream(ctx context.Context, sgtid *binlogdatapb.ShardGtid) {
+	startOneStreamCounter.Add(1)
+	defer startOneStreamCounter.Add(-1)
+
 	vs.wg.Add(1)
 	go func() {
 		defer vs.wg.Done()
 		err := vs.streamFromTablet(ctx, sgtid)
-
+		log.Infof(">>>>> vs.streamFromTablet returned %+v", err)
 		// Set the error on exit. First one wins.
 		if err != nil {
 			log.Errorf("Error in vstream for %+v: %s", sgtid, err)
@@ -474,7 +486,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 
 		errCh := make(chan error, 1)
 		go func() {
-			_ = tabletConn.StreamHealth(ctx, func(shr *querypb.StreamHealthResponse) error {
+			err := tabletConn.StreamHealth(ctx, func(shr *querypb.StreamHealthResponse) error {
 				var err error
 				if ctx.Err() != nil {
 					err = fmt.Errorf("context has ended")
@@ -489,9 +501,11 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 				}
 				if err != nil {
 					errCh <- err
+					return err
 				}
 				return nil
 			})
+			log.Infof("StreamHealth returned %+v", err)
 		}()
 
 		log.Infof("Starting to vstream from %s", tablet.Alias.String())
@@ -502,6 +516,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 
 			select {
 			case <-ctx.Done():
+				log.Warningf("context is done, returning %s", ctx.Err())
 				return ctx.Err()
 			case streamErr := <-errCh:
 				log.Warningf("Tablet state changed: %s, attempting to restart", streamErr)
@@ -660,7 +675,9 @@ func (vs *vstream) sendAll(sgtid *binlogdatapb.ShardGtid, eventss [][]*binlogdat
 				}
 			}
 		}
+		log.Infof("VStream SendAll: sending %d events", len(events))
 		vs.eventCh <- events
+		log.Infof("VStream SendAll: SENT %d events", len(events))
 	}
 	return nil
 }
