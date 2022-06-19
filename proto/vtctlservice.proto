@@ -204,8 +204,6 @@ service Vtctld {
   //
   // The ServedFromMap is automatically updated as a part of MigrateServedFrom.
   rpc SetKeyspaceServedFrom(vtctldata.SetKeyspaceServedFromRequest) returns (vtctldata.SetKeyspaceServedFromResponse) {};
-  // SetKeyspaceShardingInfo updates the sharding information for a keyspace.
-  rpc SetKeyspaceShardingInfo(vtctldata.SetKeyspaceShardingInfoRequest) returns (vtctldata.SetKeyspaceShardingInfoResponse) {};
   // SetShardIsPrimaryServing adds or removes a shard from serving.
   //
   // This is meant as an emergency function. It does not rebuild any serving

@@ -592,12 +592,12 @@ func GetReturnType(input sqlparser.Expr) (querypb.Type, error) {
 					return GetReturnType(expr.Expr)
 				}
 			}
-		case "COUNT":
-			return querypb.Type_INT64, nil
 		}
 	case *sqlparser.ColName:
 		col := node.Metadata.(*column)
 		return col.typ, nil
+	case *sqlparser.Count, *sqlparser.CountStar:
+		return querypb.Type_INT64, nil
 	}
 	return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot evaluate return type for %T", input)
 }

@@ -1505,6 +1505,40 @@ func (ty JSONValueMergeType) ToString() string {
 }
 
 // ToString returns the type as a string
+func (ty LockingFuncType) ToString() string {
+	switch ty {
+	case GetLock:
+		return GetLockStr
+	case IsFreeLock:
+		return IsFreeLockStr
+	case IsUsedLock:
+		return IsUsedLockStr
+	case ReleaseAllLocks:
+		return ReleaseAllLocksStr
+	case ReleaseLock:
+		return ReleaseLockStr
+	default:
+		return "Unknown LockingFuncType"
+	}
+}
+
+// ToString returns the type as a string
+func (ty PerformanceSchemaType) ToString() string {
+	switch ty {
+	case FormatBytesType:
+		return FormatBytesStr
+	case FormatPicoTimeType:
+		return FormatPicoTimeStr
+	case PsCurrentThreadIDType:
+		return PsCurrentThreadIDStr
+	case PsThreadIDType:
+		return PsThreadIDStr
+	default:
+		return "Unknown PerformaceSchemaType"
+	}
+}
+
+// ToString returns the type as a string
 func (ty ExplainType) ToString() string {
 	switch ty {
 	case EmptyType:
@@ -1816,24 +1850,13 @@ func formatAddress(address string) string {
 func ContainsAggregation(e SQLNode) bool {
 	hasAggregates := false
 	_ = Walk(func(node SQLNode) (kontinue bool, err error) {
-		if IsAggregation(node) {
+		if _, isAggregate := node.(AggrFunc); isAggregate {
 			hasAggregates = true
 			return false, nil
 		}
 		return true, nil
 	}, e)
 	return hasAggregates
-}
-
-// IsAggregation returns true if the node is an aggregation expression
-func IsAggregation(node SQLNode) bool {
-	switch node := node.(type) {
-	case *FuncExpr:
-		return node.IsAggregate()
-	case *GroupConcatExpr:
-		return true
-	}
-	return false
 }
 
 // GetFirstSelect gets the first select statement

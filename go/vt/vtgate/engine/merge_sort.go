@@ -33,7 +33,7 @@ import (
 // StreamExecutor is a subset of Primitive that MergeSort
 // requires its inputs to satisfy.
 type StreamExecutor interface {
-	StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantields bool, callback func(*sqltypes.Result) error) error
+	StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error
 }
 
 var _ Primitive = (*MergeSort)(nil)

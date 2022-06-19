@@ -1744,6 +1744,7 @@ func (e *Executor) CancelMigration(ctx context.Context, uuid string, message str
 	if !e.isOpen {
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "online ddl is disabled")
 	}
+	log.Infof("CancelMigration: request to cancel %s with message: %v", uuid, message)
 
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
@@ -1757,6 +1758,7 @@ func (e *Executor) CancelMigration(ctx context.Context, uuid string, message str
 
 	switch onlineDDL.Status {
 	case schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed:
+		log.Infof("CancelMigration: migration %s is in non-cancellable status: %v", uuid, onlineDDL.Status)
 		return emptyResult, nil
 	case schema.OnlineDDLStatusQueued, schema.OnlineDDLStatusReady:
 		log.Infof("CancelMigration: cancelling %s with status: %v", uuid, onlineDDL.Status)
@@ -1773,6 +1775,8 @@ func (e *Executor) CancelMigration(ctx context.Context, uuid string, message str
 	if migrationFound {
 		log.Infof("CancelMigration: terminated %s with status: %v", uuid, onlineDDL.Status)
 		rowsAffected = 1
+	} else {
+		log.Infof("CancelMigration: migration %s wasn't found to be running", uuid)
 	}
 	if err != nil {
 		return result, err
@@ -1918,6 +1922,7 @@ func (e *Executor) scheduleNextMigration(ctx context.Context) error {
 			// We only schedule a single migration in the execution of this function
 			onlyScheduleOneMigration.Do(func() {
 				err = e.updateMigrationStatus(ctx, uuid, schema.OnlineDDLStatusReady)
+				log.Infof("Executor.scheduleNextMigration: scheduling migration %s; err: %v", uuid, err)
 			})
 			if err != nil {
 				return err
@@ -2910,6 +2915,7 @@ func (e *Executor) runNextMigration(ctx context.Context) error {
 			onlineDDL.SQL = sqlparser.String(ddlStmt)
 		}
 	}
+	log.Infof("Executor.runNextMigration: migration %s is non conflicting and will be executed next", onlineDDL.UUID)
 	e.executeMigration(ctx, onlineDDL)
 	return nil
 }
@@ -3417,6 +3423,7 @@ func (e *Executor) gcArtifacts(ctx context.Context) error {
 		artifacts := row["artifacts"].ToString()
 		logPath := row["log_path"].ToString()
 
+		log.Infof("Executor.gcArtifacts: will GC artifacts for migration %s", uuid)
 		// Remove tables:
 		artifactTables := textutil.SplitDelimitedList(artifacts)
 
@@ -3425,6 +3432,7 @@ func (e *Executor) gcArtifacts(ctx context.Context) error {
 			// We wish to generate distinct timestamp values for each table in this UUID,
 			// because all tables will be renamed as _something_UUID_timestamp. Since UUID
 			// is shared for all artifacts in this loop, we differentiate via timestamp
+			log.Infof("Executor.gcArtifacts: will GC artifact %s for migration %s", artifactTable, uuid)
 			t := timeNow.Add(time.Duration(i) * time.Second).UTC()
 			if err := e.gcArtifactTable(ctx, artifactTable, uuid, t); err != nil {
 				return err
@@ -3451,6 +3459,7 @@ func (e *Executor) gcArtifacts(ctx context.Context) error {
 		if err := e.updateMigrationTimestamp(ctx, "cleanup_timestamp", uuid); err != nil {
 			return err
 		}
+		log.Infof("Executor.gcArtifacts: done migration %s", uuid)
 	}
 
 	return nil
@@ -3889,6 +3898,7 @@ func (e *Executor) CleanupMigration(ctx context.Context, uuid string) (result *s
 	if !schema.IsOnlineDDLUUID(uuid) {
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "Not a valid migration ID in CLEANUP: %s", uuid)
 	}
+	log.Infof("CompleteMigration: request to cleanup migration %s", uuid)
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
@@ -3898,7 +3908,12 @@ func (e *Executor) CleanupMigration(ctx context.Context, uuid string) (result *s
 	if err != nil {
 		return nil, err
 	}
-	return e.execQuery(ctx, query)
+	rs, err := e.execQuery(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	log.Infof("CompleteMigration: migration %s marked as ready to clean up", uuid)
+	return rs, nil
 }
 
 // CompleteMigration clears the postpone_completion flag for a given migration, assuming it was set in the first place
@@ -3909,6 +3924,8 @@ func (e *Executor) CompleteMigration(ctx context.Context, uuid string) (result *
 	if !schema.IsOnlineDDLUUID(uuid) {
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "Not a valid migration ID in COMPLETE: %s", uuid)
 	}
+	log.Infof("CompleteMigration: request to complete migration %s", uuid)
+
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
@@ -3924,7 +3941,12 @@ func (e *Executor) CompleteMigration(ctx context.Context, uuid string) (result *
 		// if the file does not exist. An error here indicates a general system error of sorts.
 		return nil, err
 	}
-	return e.execQuery(ctx, query)
+	rs, err := e.execQuery(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	log.Infof("CompleteMigration: migration %s marked as unpostponed", uuid)
+	return rs, nil
 }
 
 func (e *Executor) submittedMigrationConflictsWithPendingMigrationInSingletonContext(
@@ -3957,6 +3979,7 @@ func (e *Executor) SubmitMigration(
 	if !e.isOpen {
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "online ddl is disabled")
 	}
+	log.Infof("SubmitMigration: request to submit migration with statement: %0.50s...", sqlparser.CanonicalString(stmt))
 	if ddlStmt, ok := stmt.(sqlparser.DDLStatement); ok {
 		// This validation should have taken place on submission. However, the query may have mutated
 		// during transfer, and this validation is here to catch any malformed mutation.
@@ -3973,8 +3996,9 @@ func (e *Executor) SubmitMigration(
 	if err != nil {
 		return nil, err
 	}
-	revertedUUID, _ := onlineDDL.GetRevertUUID() // Empty value if the migration is not actually a REVERT. Safe to ignore error.
+	log.Infof("SubmitMigration: request to submit migration %s; action=%s, table=%s", onlineDDL.UUID, actionStr, onlineDDL.Table)
 
+	revertedUUID, _ := onlineDDL.GetRevertUUID() // Empty value if the migration is not actually a REVERT. Safe to ignore error.
 	retainArtifactsSeconds := int64((*retainOnlineDDLTables).Seconds())
 	_, allowConcurrentMigration := e.allowConcurrentMigration(onlineDDL)
 	query, err := sqlparser.ParseAndBind(sqlInsertMigration,
@@ -4052,6 +4076,7 @@ func (e *Executor) SubmitMigration(
 			return nil, err
 		}
 	}
+	log.Infof("SubmitMigration: migration %s submitted", onlineDDL.UUID)
 
 	defer e.triggerNextCheckInterval()
 

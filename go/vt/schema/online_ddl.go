@@ -433,7 +433,7 @@ func (onlineDDL *OnlineDDL) GetGCUUID() string {
 // CreateOnlineDDLUUID creates a UUID in OnlineDDL format, e.g.:
 // a0638f6b_ec7b_11ea_9bf8_000d3a9b8a9a
 func CreateOnlineDDLUUID() (string, error) {
-	return createUUID("_")
+	return CreateUUIDWithDelimiter("_")
 }
 
 // IsOnlineDDLUUID answers 'true' when the given string is an online-ddl UUID, e.g.:

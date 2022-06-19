@@ -1,13 +1,13 @@
 ## Major Changes
 
-## Command-line syntax deprecations
+### Command-line syntax deprecations
 
 Vitess has begun a transition to a new library for CLI flag parsing.
 In order to facilitate a smooth transition, certain syntaxes that will not be supported in the future now issue deprecation warnings when used.
 
 The messages you will likely see, along with explanations and migrations, are:
 
-### "Use of single-dash long flags is deprecated"
+#### "Use of single-dash long flags is deprecated"
 
 Single-dash usage will be only possible for short flags (e.g. `-v` is okay, but `-verbose` is not).
 
@@ -23,7 +23,7 @@ To:
 $ vttablet --tablet_alias zone1-100 --init_keyspace mykeyspace ... # new way
 ```
 
-### "Detected a dashed argument after a position argument."
+#### "Detected a dashed argument after a position argument."
 
 As the full deprecation text goes on to (attempt to) explain, mixing flags and positional arguments will change in a future version that will break scripts.
 
@@ -188,6 +188,36 @@ When `--heartbeat_on_demand_duration` is not set, there is no change in behavior
 
 When `--heartbeat_on_demand_duration` is set to a positive value, then the throttler ensures that the heartbeat writer generated heartbeats for at least the following duration. This also means at the first throttler check, it's possible that heartbeats are idle, and so the first check will fail. As heartbeats start running, followup checks will get a more accurate lag evaluation and will respond accordingly. In a sense, it's a "cold engine" scenario, where the engine takes time to start up, and then runs smoothly.
 
+### VDiff2
+
+We introduced a new version of VDiff -- currently marked as Experimental -- that executes the VDiff on tablets rather than in vtctld. While this is experimental we encourage you to try it out and provide feedback! This input will be invaluable as we improve this feature on the march toward a production-ready version. You can try it out by adding the `--v2` flag to your VDiff command. Here's an example:
+```
+$ vtctlclient --server=localhost:15999 VDiff -- --v2 customer.commerce2customer
+VDiff bf9dfc5f-e5e6-11ec-823d-0aa62e50dd24 scheduled on target shards, use show to view progress
+
+$ vtctlclient --server=localhost:15999 VDiff -- --v2 customer.commerce2customer show last
+
+VDiff Summary for customer.commerce2customer (bf9dfc5f-e5e6-11ec-823d-0aa62e50dd24)
+State: completed
+HasMismatch: false
+
+Use "--format=json" for more detailed output.
+
+$ vtctlclient --server=localhost:15999 VDiff -- --v2 --format=json customer.commerce2customer show last
+{
+	"Workflow": "commerce2customer",
+	"Keyspace": "customer",
+	"State": "completed",
+	"UUID": "bf9dfc5f-e5e6-11ec-823d-0aa62e50dd24",
+	"HasMismatch": false,
+	"Shards": "0"
+}
+```
+
+:information_source:  NOTE: even before it's marked as production-ready (feature complete and tested widely in 1+ releases), it should be safe to use and is likely to provide much better results for very large tables.
+
+For additional details, please see the [RFC](https://github.com/vitessio/vitess/issues/10134) and the [README](https://github.com/vitessio/vitess/tree/main/go/vt/vttablet/tabletmanager/vdiff/README.md).
+
 ### Durability Policy
 
 #### Deprecation of durability_policy Flag
@@ -212,4 +242,3 @@ the topo server. This allows VTOrc to monitor and repair multiple keyspaces whic
 **VTOrc will ignore the keyspaces which have no durability policy specified in the keyspace record. So on upgrading to v14, users must run
 the command `SetKeyspaceDurabilityPolicy` specified above, to ensure VTOrc continues to work as desired. The recommended upgrade 
 path is to upgrade vtctld, run `SetKeyspaceDurabilityPolicy` and then upgrade VTOrc.**
-

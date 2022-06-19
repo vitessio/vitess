@@ -319,6 +319,8 @@ func (mysqlFlavor57) baseShowTablesWithSizes() string {
 // supportsCapability is part of the Flavor interface.
 func (mysqlFlavor57) supportsCapability(serverVersion string, capability FlavorCapability) (bool, error) {
 	switch capability {
+	case MySQLJSONFlavorCapability:
+		return true, nil
 	default:
 		return false, nil
 	}
@@ -343,6 +345,10 @@ func (mysqlFlavor80) supportsCapability(serverVersion string, capability FlavorC
 		return ServerVersionAtLeast(serverVersion, 8, 0, 17)
 	case FastDropTableFlavorCapability:
 		return ServerVersionAtLeast(serverVersion, 8, 0, 23)
+	case MySQLJSONFlavorCapability:
+		return true, nil
+	case MySQLUpgradeInServerFlavorCapability:
+		return ServerVersionAtLeast(serverVersion, 8, 0, 16)
 	default:
 		return false, nil
 	}
