@@ -369,10 +369,6 @@ func (e *Executor) proposedMigrationConflictsWithRunningMigration(runningMigrati
 		// migrations operate on same table
 		return true
 	}
-	// if !proposedMigration.StrategySetting().IsAllowConcurrent() && !runningMigration.StrategySetting().IsAllowConcurrent() {
-	// 	// Neither allow concurrency
-	// 	return false
-	// }
 	_, isRunningMigrationAllowConcurrent := e.allowConcurrentMigration(runningMigration)
 	proposedMigrationAction, isProposedMigrationAllowConcurrent := e.allowConcurrentMigration(proposedMigration)
 	if !isRunningMigrationAllowConcurrent && !isProposedMigrationAllowConcurrent {
