@@ -124,6 +124,7 @@ const (
 	databasePoolSize                         = 3
 	vreplicationCutOverThreshold             = 5 * time.Second
 	vreplicationTestSuiteWaitSeconds         = 5
+	maxConcurrentMigrations                  = 256
 )
 
 var (
@@ -332,6 +333,19 @@ func (e *Executor) triggerNextCheckInterval() {
 	for _, interval := range migrationNextCheckIntervals {
 		e.ticks.TriggerAfter(interval)
 	}
+}
+
+// countOwnedRunningMigrations returns an estimate of current count of running migrations; this is
+// normally an accurate number, but can be inexact because the exdcutor peridocially reviews
+// e.ownedRunningMigrations and adds/removes migrations based on actual migration state.
+func (e *Executor) countOwnedRunningMigrations() (count int) {
+	e.ownedRunningMigrations.Range(func(_, val any) bool {
+		if _, ok := val.(*schema.OnlineDDL); ok {
+			count++
+		}
+		return true // continue iteration
+	})
+	return count
 }
 
 // allowConcurrentMigration checks if the given migration is allowed to run concurrently.
@@ -2887,8 +2901,10 @@ func (e *Executor) runNextMigration(ctx context.Context) error {
 				return nil, err
 			}
 			if !e.isAnyConflictingMigrationRunning(onlineDDL) {
-				// This migration seems good to go
-				return onlineDDL, err
+				if e.countOwnedRunningMigrations() < maxConcurrentMigrations {
+					// This migration seems good to go
+					return onlineDDL, err
+				}
 			}
 		}
 		// no non-conflicting migration found...
