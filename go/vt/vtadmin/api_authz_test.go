@@ -20,24 +20,32 @@ package vtadmin_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtadmin"
 	"vitess.io/vitess/go/vt/vtadmin/cluster"
 	"vitess.io/vitess/go/vt/vtadmin/rbac"
 	"vitess.io/vitess/go/vt/vtadmin/testutil"
 	"vitess.io/vitess/go/vt/vtadmin/vtctldclient/fakevtctldclient"
 
+	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 func TestCreateKeyspace(t *testing.T) {
+	t.Parallel()
+
 	opts := vtadmin.Options{
 		RBAC: &rbac.Config{
 			Rules: []*struct {
@@ -105,6 +113,8 @@ func TestCreateKeyspace(t *testing.T) {
 }
 
 func TestCreateShard(t *testing.T) {
+	t.Parallel()
+
 	opts := vtadmin.Options{
 		RBAC: &rbac.Config{
 			Rules: []*struct {
@@ -174,6 +184,8 @@ func TestCreateShard(t *testing.T) {
 }
 
 func TestDeleteKeyspace(t *testing.T) {
+	t.Parallel()
+
 	opts := vtadmin.Options{
 		RBAC: &rbac.Config{
 			Rules: []*struct {
@@ -241,6 +253,8 @@ func TestDeleteKeyspace(t *testing.T) {
 }
 
 func TestDeleteShards(t *testing.T) {
+	t.Parallel()
+
 	opts := vtadmin.Options{
 		RBAC: &rbac.Config{
 			Rules: []*struct {
@@ -318,6 +332,8 @@ func TestDeleteShards(t *testing.T) {
 }
 
 func TestDeleteTablet(t *testing.T) {
+	t.Parallel()
+
 	opts := vtadmin.Options{
 		RBAC: &rbac.Config{
 			Rules: []*struct {
@@ -386,7 +402,162 @@ func TestDeleteTablet(t *testing.T) {
 	})
 }
 
+func TestEmergencyFailoverShard(t *testing.T) {
+	t.Parallel()
+
+	opts := vtadmin.Options{
+		RBAC: &rbac.Config{
+			Rules: []*struct {
+				Resource string
+				Actions  []string
+				Subjects []string
+				Clusters []string
+			}{
+				{
+					Resource: "Shard",
+					Actions:  []string{"emergency_failover_shard"},
+					Subjects: []string{"user:allowed"},
+					Clusters: []string{"*"},
+				},
+			},
+		},
+	}
+	err := opts.RBAC.Reify()
+	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
+
+	api := vtadmin.NewAPI(testClusters(t), opts)
+	t.Cleanup(func() {
+		if err := api.Close(); err != nil {
+			t.Logf("api did not close cleanly: %s", err.Error())
+		}
+	})
+
+	t.Run("unauthorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "other"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.EmergencyFailoverShard(ctx, &vtadminpb.EmergencyFailoverShardRequest{
+			ClusterId: "test",
+			Options: &vtctldatapb.EmergencyReparentShardRequest{
+				Keyspace: "test",
+				Shard:    "-",
+			},
+		})
+		require.NoError(t, err)
+		assert.Nil(t, resp, "actor %+v should not be permitted to EmergencyFailoverShard", actor)
+	})
+
+	t.Run("authorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "allowed"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.EmergencyFailoverShard(ctx, &vtadminpb.EmergencyFailoverShardRequest{
+			ClusterId: "test",
+			Options: &vtctldatapb.EmergencyReparentShardRequest{
+				Keyspace: "test",
+				Shard:    "-",
+			},
+		})
+		require.NoError(t, err)
+		assert.NotNil(t, resp, "actor %+v should be permitted to EmergencyFailoverShard", actor)
+	})
+}
+
+func TestFindSchema(t *testing.T) {
+	t.Parallel()
+
+	opts := vtadmin.Options{
+		RBAC: &rbac.Config{
+			Rules: []*struct {
+				Resource string
+				Actions  []string
+				Subjects []string
+				Clusters []string
+			}{
+				{
+					Resource: "Schema",
+					Actions:  []string{"get"},
+					Subjects: []string{"user:allowed-all"},
+					Clusters: []string{"*"},
+				},
+				{
+					Resource: "Schema",
+					Actions:  []string{"get"},
+					Subjects: []string{"user:allowed-other"},
+					Clusters: []string{"other"},
+				},
+			},
+		},
+	}
+	err := opts.RBAC.Reify()
+	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
+
+	api := vtadmin.NewAPI(testClusters(t), opts)
+	t.Cleanup(func() {
+		if err := api.Close(); err != nil {
+			t.Logf("api did not close cleanly: %s", err.Error())
+		}
+	})
+
+	t.Run("unauthorized actor", func(t *testing.T) {
+		actor := &rbac.Actor{Name: "unauthorized"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.FindSchema(ctx, &vtadminpb.FindSchemaRequest{
+			Table: "t1",
+		})
+		assert.Error(t, err)
+		assert.Nil(t, resp, "actor %+v should not be permitted to FindSchema", actor)
+	})
+
+	t.Run("partial access", func(t *testing.T) {
+		actor := &rbac.Actor{Name: "allowed-other"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, _ := api.FindSchema(ctx, &vtadminpb.FindSchemaRequest{
+			Table: "t1",
+		})
+		assert.NotEmpty(t, resp, "actor %+v should be permitted to FindSchema", actor)
+	})
+
+	t.Run("full access", func(t *testing.T) {
+		actor := &rbac.Actor{Name: "allowed-all"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.FindSchema(ctx, &vtadminpb.FindSchemaRequest{
+			Table: "t1",
+		})
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "multiple schemas found")
+		assert.Nil(t, resp)
+	})
+}
+
 func TestGetBackups(t *testing.T) {
+	t.Parallel()
+
 	opts := vtadmin.Options{
 		RBAC: &rbac.Config{
 			Rules: []*struct {
@@ -464,6 +635,8 @@ func TestGetBackups(t *testing.T) {
 }
 
 func TestGetCellInfos(t *testing.T) {
+	t.Parallel()
+
 	opts := vtadmin.Options{
 		RBAC: &rbac.Config{
 			Rules: []*struct {
@@ -546,76 +719,9 @@ func TestGetCellInfos(t *testing.T) {
 	})
 }
 
-func TestGetClusters(t *testing.T) {
-	opts := vtadmin.Options{
-		RBAC: &rbac.Config{
-			Rules: []*struct {
-				Resource string
-				Actions  []string
-				Subjects []string
-				Clusters []string
-			}{
-				{
-					Resource: "Cluster",
-					Actions:  []string{"get"},
-					Subjects: []string{"user:allowed"},
-					Clusters: []string{"*"},
-				},
-			},
-		},
-	}
-	err := opts.RBAC.Reify()
-	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
-
-	api := vtadmin.NewAPI(testClusters(t), opts)
-	t.Cleanup(func() {
-		if err := api.Close(); err != nil {
-			t.Logf("api did not close cleanly: %s", err.Error())
-		}
-	})
-
-	t.Run("unauthenticated", func(t *testing.T) {
-		t.Parallel()
-		var actor *rbac.Actor
-
-		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
-
-		resp, _ := api.GetClusters(ctx, &vtadminpb.GetClustersRequest{})
-		assert.Empty(t, resp.Clusters, "actor %+v should not be permitted to GetClusters", actor)
-	})
-
-	t.Run("unauthorized actor", func(t *testing.T) {
-		t.Parallel()
-		actor := &rbac.Actor{Name: "other"}
-
-		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
-
-		resp, _ := api.GetClusters(ctx, &vtadminpb.GetClustersRequest{})
-		assert.Empty(t, resp.Clusters, "actor %+v should not be permitted to GetClusters", actor)
-	})
-
-	t.Run("authorized actor", func(t *testing.T) {
-		t.Parallel()
-		actor := &rbac.Actor{Name: "allowed"}
-
-		ctx := context.Background()
-		if actor != nil {
-			ctx = rbac.NewContext(ctx, actor)
-		}
-
-		resp, err := api.GetClusters(ctx, &vtadminpb.GetClustersRequest{})
-		require.NoError(t, err)
-		assert.NotEmpty(t, resp.Clusters, "actor %+v should be permitted to GetClusters", actor)
-	})
-}
-
 func TestGetCellsAliases(t *testing.T) {
+	t.Parallel()
+
 	opts := vtadmin.Options{
 		RBAC: &rbac.Config{
 			Rules: []*struct {
@@ -692,6 +798,2307 @@ func TestGetCellsAliases(t *testing.T) {
 	})
 }
 
+func TestGetClusters(t *testing.T) {
+	t.Parallel()
+
+	opts := vtadmin.Options{
+		RBAC: &rbac.Config{
+			Rules: []*struct {
+				Resource string
+				Actions  []string
+				Subjects []string
+				Clusters []string
+			}{
+				{
+					Resource: "Cluster",
+					Actions:  []string{"get"},
+					Subjects: []string{"user:allowed"},
+					Clusters: []string{"*"},
+				},
+			},
+		},
+	}
+	err := opts.RBAC.Reify()
+	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
+
+	api := vtadmin.NewAPI(testClusters(t), opts)
+	t.Cleanup(func() {
+		if err := api.Close(); err != nil {
+			t.Logf("api did not close cleanly: %s", err.Error())
+		}
+	})
+
+	t.Run("unauthenticated", func(t *testing.T) {
+		t.Parallel()
+		var actor *rbac.Actor
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, _ := api.GetClusters(ctx, &vtadminpb.GetClustersRequest{})
+		assert.Empty(t, resp.Clusters, "actor %+v should not be permitted to GetClusters", actor)
+	})
+
+	t.Run("unauthorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "other"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, _ := api.GetClusters(ctx, &vtadminpb.GetClustersRequest{})
+		assert.Empty(t, resp.Clusters, "actor %+v should not be permitted to GetClusters", actor)
+	})
+
+	t.Run("authorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "allowed"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.GetClusters(ctx, &vtadminpb.GetClustersRequest{})
+		require.NoError(t, err)
+		assert.NotEmpty(t, resp.Clusters, "actor %+v should be permitted to GetClusters", actor)
+	})
+}
+
+func TestGetGates(t *testing.T) {
+	t.Parallel()
+
+	opts := vtadmin.Options{
+		RBAC: &rbac.Config{
+			Rules: []*struct {
+				Resource string
+				Actions  []string
+				Subjects []string
+				Clusters []string
+			}{
+				{
+					Resource: "VTGate",
+					Actions:  []string{"get"},
+					Subjects: []string{"user:allowed-all"},
+					Clusters: []string{"*"},
+				},
+				{
+					Resource: "VTGate",
+					Actions:  []string{"get"},
+					Subjects: []string{"user:allowed-other"},
+					Clusters: []string{"other"},
+				},
+			},
+		},
+	}
+	err := opts.RBAC.Reify()
+	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
+
+	api := vtadmin.NewAPI(testClusters(t), opts)
+	t.Cleanup(func() {
+		if err := api.Close(); err != nil {
+			t.Logf("api did not close cleanly: %s", err.Error())
+		}
+	})
+
+	t.Run("unauthorized actor", func(t *testing.T) {
+		actor := &rbac.Actor{Name: "unauthorized"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.GetGates(ctx, &vtadminpb.GetGatesRequest{})
+		assert.NoError(t, err)
+		assert.Empty(t, resp.Gates, "actor %+v should not be permitted to GetGates", actor)
+	})
+
+	t.Run("partial access", func(t *testing.T) {
+		actor := &rbac.Actor{Name: "allowed-other"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, _ := api.GetGates(ctx, &vtadminpb.GetGatesRequest{})
+		assert.NotEmpty(t, resp.Gates, "actor %+v should be permitted to GetGates", actor)
+		// testutil.BuildCluster creates exactly one gate per cluster
+		assert.Len(t, resp.Gates, 1, "actor %+v should only be able to see VTGate from cluster 'other'", actor)
+	})
+
+	t.Run("full access", func(t *testing.T) {
+		actor := &rbac.Actor{Name: "allowed-all"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, _ := api.GetGates(ctx, &vtadminpb.GetGatesRequest{})
+		assert.NotEmpty(t, resp.Gates, "actor %+v should be permitted to GetGates", actor)
+		// testutil.BuildCluster creates exactly one gate per cluster
+		assert.Len(t, resp.Gates, 2, "actor %+v should be able to see VTGate from all clusters", actor)
+	})
+}
+
+func TestGetKeyspace(t *testing.T) {
+	t.Parallel()
+
+	opts := vtadmin.Options{
+		RBAC: &rbac.Config{
+			Rules: []*struct {
+				Resource string
+				Actions  []string
+				Subjects []string
+				Clusters []string
+			}{
+				{
+					Resource: "Keyspace",
+					Actions:  []string{"get"},
+					Subjects: []string{"user:allowed"},
+					Clusters: []string{"*"},
+				},
+			},
+		},
+	}
+	err := opts.RBAC.Reify()
+	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
+
+	api := vtadmin.NewAPI(testClusters(t), opts)
+	t.Cleanup(func() {
+		if err := api.Close(); err != nil {
+			t.Logf("api did not close cleanly: %s", err.Error())
+		}
+	})
+
+	t.Run("unauthorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "other"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.GetKeyspace(ctx, &vtadminpb.GetKeyspaceRequest{
+			ClusterId: "test",
+			Keyspace:  "test",
+		})
+		require.NoError(t, err)
+		assert.Nil(t, resp, "actor %+v should not be permitted to GetKeyspace", actor)
+	})
+
+	t.Run("authorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "allowed"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.GetKeyspace(ctx, &vtadminpb.GetKeyspaceRequest{
+			ClusterId: "test",
+			Keyspace:  "test",
+		})
+		require.NoError(t, err)
+		assert.NotNil(t, resp, "actor %+v should be permitted to GetKeyspace", actor)
+	})
+}
+
+func TestGetKeyspaces(t *testing.T) {
+	t.Parallel()
+
+	opts := vtadmin.Options{
+		RBAC: &rbac.Config{
+			Rules: []*struct {
+				Resource string
+				Actions  []string
+				Subjects []string
+				Clusters []string
+			}{
+				{
+					Resource: "Keyspace",
+					Actions:  []string{"get"},
+					Subjects: []string{"user:allowed-all"},
+					Clusters: []string{"*"},
+				},
+				{
+					Resource: "Keyspace",
+					Actions:  []string{"get"},
+					Subjects: []string{"user:allowed-other"},
+					Clusters: []string{"other"},
+				},
+			},
+		},
+	}
+	err := opts.RBAC.Reify()
+	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
+
+	api := vtadmin.NewAPI(testClusters(t), opts)
+	t.Cleanup(func() {
+		if err := api.Close(); err != nil {
+			t.Logf("api did not close cleanly: %s", err.Error())
+		}
+	})
+
+	t.Run("unauthorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "unauthorized"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.GetKeyspaces(ctx, &vtadminpb.GetKeyspacesRequest{})
+		assert.NoError(t, err)
+		assert.Empty(t, resp.Keyspaces, "actor %+v should not be permitted to GetKeyspaces", actor)
+	})
+
+	t.Run("partial access", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "allowed-other"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, _ := api.GetKeyspaces(ctx, &vtadminpb.GetKeyspacesRequest{})
+		assert.NotEmpty(t, resp.Keyspaces, "actor %+v should be permitted to GetKeyspaces", actor)
+		ksMap := map[string][]string{}
+		for _, ks := range resp.Keyspaces {
+			if _, ok := ksMap[ks.Cluster.Id]; !ok {
+				ksMap[ks.Cluster.Id] = []string{}
+			}
+			ksMap[ks.Cluster.Id] = append(ksMap[ks.Cluster.Id], ks.Keyspace.Name)
+		}
+		assert.Equal(t, ksMap, map[string][]string{"other": {"otherks"}}, "actor %+v should be permitted to GetKeyspaces", actor)
+	})
+
+	t.Run("full access", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "allowed-all"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, _ := api.GetKeyspaces(ctx, &vtadminpb.GetKeyspacesRequest{})
+		assert.NotEmpty(t, resp.Keyspaces, "actor %+v should be permitted to GetKeyspaces", actor)
+		ksMap := map[string][]string{}
+		for _, ks := range resp.Keyspaces {
+			if _, ok := ksMap[ks.Cluster.Id]; !ok {
+				ksMap[ks.Cluster.Id] = []string{}
+			}
+			ksMap[ks.Cluster.Id] = append(ksMap[ks.Cluster.Id], ks.Keyspace.Name)
+		}
+		assert.Equal(t, ksMap, map[string][]string{"test": {"test"}, "other": {"otherks"}}, "actor %+v should be permitted to GetKeyspaces", actor)
+	})
+}
+
+func TestGetSchema(t *testing.T) {
+	t.Parallel()
+
+	opts := vtadmin.Options{
+		RBAC: &rbac.Config{
+			Rules: []*struct {
+				Resource string
+				Actions  []string
+				Subjects []string
+				Clusters []string
+			}{
+				{
+					Resource: "Schema",
+					Actions:  []string{"get"},
+					Subjects: []string{"user:allowed"},
+					Clusters: []string{"*"},
+				},
+			},
+		},
+	}
+	err := opts.RBAC.Reify()
+	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
+
+	api := vtadmin.NewAPI(testClusters(t), opts)
+	t.Cleanup(func() {
+		if err := api.Close(); err != nil {
+			t.Logf("api did not close cleanly: %s", err.Error())
+		}
+	})
+
+	t.Run("unauthorized actor", func(t *testing.T) {
+		actor := &rbac.Actor{Name: "other"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.GetSchema(ctx, &vtadminpb.GetSchemaRequest{
+			ClusterId: "test",
+			Keyspace:  "test",
+			Table:     "t1",
+		})
+		require.NoError(t, err)
+		assert.Nil(t, resp, "actor %+v should not be permitted to GetSchema", actor)
+	})
+
+	t.Run("authorized actor", func(t *testing.T) {
+		actor := &rbac.Actor{Name: "allowed"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.GetSchema(ctx, &vtadminpb.GetSchemaRequest{
+			ClusterId: "test",
+			Keyspace:  "test",
+			Table:     "t1",
+		})
+		require.NoError(t, err)
+		assert.NotNil(t, resp, "actor %+v should be permitted to GetSchema", actor)
+	})
+}
+
+func TestGetSchemas(t *testing.T) {
+	t.Parallel()
+
+	opts := vtadmin.Options{
+		RBAC: &rbac.Config{
+			Rules: []*struct {
+				Resource string
+				Actions  []string
+				Subjects []string
+				Clusters []string
+			}{
+				{
+					Resource: "Schema",
+					Actions:  []string{"get"},
+					Subjects: []string{"user:allowed-all"},
+					Clusters: []string{"*"},
+				},
+				{
+					Resource: "Schema",
+					Actions:  []string{"get"},
+					Subjects: []string{"user:allowed-other"},
+					Clusters: []string{"other"},
+				},
+			},
+		},
+	}
+	err := opts.RBAC.Reify()
+	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
+
+	api := vtadmin.NewAPI(testClusters(t), opts)
+	t.Cleanup(func() {
+		if err := api.Close(); err != nil {
+			t.Logf("api did not close cleanly: %s", err.Error())
+		}
+	})
+
+	t.Run("unauthorized actor", func(t *testing.T) {
+		actor := &rbac.Actor{Name: "unauthorized"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.GetSchemas(ctx, &vtadminpb.GetSchemasRequest{})
+		assert.NoError(t, err)
+		assert.Empty(t, resp.Schemas, "actor %+v should not be permitted to GetSchemas", actor)
+	})
+
+	t.Run("partial access", func(t *testing.T) {
+		actor := &rbac.Actor{Name: "allowed-other"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, _ := api.GetSchemas(ctx, &vtadminpb.GetSchemasRequest{})
+		assert.NotEmpty(t, resp.Schemas, "actor %+v should be permitted to GetSchemas", actor)
+		schemaMap := map[string][]string{}
+		for _, schema := range resp.Schemas {
+			if _, ok := schemaMap[schema.Cluster.Id]; !ok {
+				schemaMap[schema.Cluster.Id] = []string{}
+			}
+			schemaMap[schema.Cluster.Id] = append(schemaMap[schema.Cluster.Id], schema.Keyspace)
+		}
+		assert.Equal(t, schemaMap, map[string][]string{"other": {"otherks"}}, "actor %+v should be permitted to GetSchemas", actor)
+	})
+
+	t.Run("full access", func(t *testing.T) {
+		actor := &rbac.Actor{Name: "allowed-all"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, _ := api.GetSchemas(ctx, &vtadminpb.GetSchemasRequest{})
+		assert.NotEmpty(t, resp.Schemas, "actor %+v should be permitted to GetSchemas", actor)
+		schemaMap := map[string][]string{}
+		for _, schema := range resp.Schemas {
+			if _, ok := schemaMap[schema.Cluster.Id]; !ok {
+				schemaMap[schema.Cluster.Id] = []string{}
+			}
+			schemaMap[schema.Cluster.Id] = append(schemaMap[schema.Cluster.Id], schema.Keyspace)
+		}
+		assert.Equal(t, schemaMap, map[string][]string{"test": {"test"}, "other": {"otherks"}}, "actor %+v should be permitted to GetSchemas", actor)
+	})
+}
+
+func TestGetShardReplicationPositions(t *testing.T) {
+	t.Parallel()
+
+	opts := vtadmin.Options{
+		RBAC: &rbac.Config{
+			Rules: []*struct {
+				Resource string
+				Actions  []string
+				Subjects []string
+				Clusters []string
+			}{
+				{
+					Resource: "ShardReplicationPosition",
+					Actions:  []string{"get"},
+					Subjects: []string{"user:allowed-all"},
+					Clusters: []string{"*"},
+				},
+				{
+					Resource: "ShardReplicationPosition",
+					Actions:  []string{"get"},
+					Subjects: []string{"user:allowed-other"},
+					Clusters: []string{"other"},
+				},
+			},
+		},
+	}
+	err := opts.RBAC.Reify()
+	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
+
+	api := vtadmin.NewAPI(testClusters(t), opts)
+	t.Cleanup(func() {
+		if err := api.Close(); err != nil {
+			t.Logf("api did not close cleanly: %s", err.Error())
+		}
+	})
+
+	t.Run("unauthorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "unauthorized"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.GetShardReplicationPositions(ctx, &vtadminpb.GetShardReplicationPositionsRequest{})
+		assert.NoError(t, err)
+		assert.Empty(t, resp.ReplicationPositions, "actor %+v should not be permitted to GetShardReplicationPositions", actor)
+	})
+
+	t.Run("partial access", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "allowed-other"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, _ := api.GetShardReplicationPositions(ctx, &vtadminpb.GetShardReplicationPositionsRequest{})
+		assert.NotEmpty(t, resp.ReplicationPositions, "actor %+v should be permitted to GetShardReplicationPositions", actor)
+		posMap := map[string][]string{}
+		for _, pos := range resp.ReplicationPositions {
+			if _, ok := posMap[pos.Cluster.Id]; !ok {
+				posMap[pos.Cluster.Id] = []string{}
+			}
+			posMap[pos.Cluster.Id] = append(posMap[pos.Cluster.Id], fmt.Sprintf("%s/%s", pos.Keyspace, pos.Shard))
+		}
+		assert.Equal(t, posMap, map[string][]string{"other": {"otherks/-"}}, "actor %+v should be permitted to GetShardReplicationPositions", actor)
+	})
+
+	t.Run("full access", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "allowed-all"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, _ := api.GetShardReplicationPositions(ctx, &vtadminpb.GetShardReplicationPositionsRequest{})
+		assert.NotEmpty(t, resp.ReplicationPositions, "actor %+v should be permitted to GetShardReplicationPositions", actor)
+		posMap := map[string][]string{}
+		for _, pos := range resp.ReplicationPositions {
+			if _, ok := posMap[pos.Cluster.Id]; !ok {
+				posMap[pos.Cluster.Id] = []string{}
+			}
+			posMap[pos.Cluster.Id] = append(posMap[pos.Cluster.Id], fmt.Sprintf("%s/%s", pos.Keyspace, pos.Shard))
+		}
+		assert.Equal(t, posMap, map[string][]string{"test": {"test/-"}, "other": {"otherks/-"}}, "actor %+v should be permitted to GetShardReplicationPositions", actor)
+	})
+}
+
+func TestGetSrvVSchema(t *testing.T) {
+	t.Parallel()
+
+	opts := vtadmin.Options{
+		RBAC: &rbac.Config{
+			Rules: []*struct {
+				Resource string
+				Actions  []string
+				Subjects []string
+				Clusters []string
+			}{
+				{
+					Resource: "SrvVSchema",
+					Actions:  []string{"get"},
+					Subjects: []string{"user:allowed"},
+					Clusters: []string{"*"},
+				},
+			},
+		},
+	}
+	err := opts.RBAC.Reify()
+	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
+
+	api := vtadmin.NewAPI(testClusters(t), opts)
+	t.Cleanup(func() {
+		if err := api.Close(); err != nil {
+			t.Logf("api did not close cleanly: %s", err.Error())
+		}
+	})
+
+	t.Run("unauthorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "other"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.GetSrvVSchema(ctx, &vtadminpb.GetSrvVSchemaRequest{
+			ClusterId: "test",
+			Cell:      "zone1",
+		})
+		require.NoError(t, err)
+		assert.Nil(t, resp, "actor %+v should not be permitted to GetSrvVSchema", actor)
+	})
+
+	t.Run("authorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "allowed"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.GetSrvVSchema(ctx, &vtadminpb.GetSrvVSchemaRequest{
+			ClusterId: "test",
+			Cell:      "zone1",
+		})
+		require.NoError(t, err)
+		assert.NotNil(t, resp, "actor %+v should be permitted to GetSrvVSchema", actor)
+	})
+}
+
+func TestGetSrvVSchemas(t *testing.T) {
+	t.Parallel()
+
+	opts := vtadmin.Options{
+		RBAC: &rbac.Config{
+			Rules: []*struct {
+				Resource string
+				Actions  []string
+				Subjects []string
+				Clusters []string
+			}{
+				{
+					Resource: "SrvVSchema",
+					Actions:  []string{"get"},
+					Subjects: []string{"user:allowed-all"},
+					Clusters: []string{"*"},
+				},
+				{
+					Resource: "SrvVSchema",
+					Actions:  []string{"get"},
+					Subjects: []string{"user:allowed-other"},
+					Clusters: []string{"other"},
+				},
+			},
+		},
+	}
+	err := opts.RBAC.Reify()
+	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
+
+	api := vtadmin.NewAPI(testClusters(t), opts)
+	t.Cleanup(func() {
+		if err := api.Close(); err != nil {
+			t.Logf("api did not close cleanly: %s", err.Error())
+		}
+	})
+
+	t.Run("unauthorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "unauthorized"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.GetSrvVSchemas(ctx, &vtadminpb.GetSrvVSchemasRequest{})
+		require.NoError(t, err)
+		assert.Nil(t, resp.SrvVSchemas, "actor %+v should not be permitted to GetSrvVSchemas", actor)
+	})
+
+	t.Run("partial access", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "allowed-other"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, _ := api.GetSrvVSchemas(ctx, &vtadminpb.GetSrvVSchemasRequest{})
+		assert.NotEmpty(t, resp.SrvVSchemas, "actor %+v should be permitted to GetSrvVSchemas", actor)
+		clusterCells := map[string][]string{}
+		for _, svs := range resp.SrvVSchemas {
+			if _, ok := clusterCells[svs.Cluster.Id]; !ok {
+				clusterCells[svs.Cluster.Id] = []string{}
+			}
+			clusterCells[svs.Cluster.Id] = append(clusterCells[svs.Cluster.Id], svs.Cell)
+		}
+		assert.Equal(t, clusterCells, map[string][]string{"other": {"other1"}}, "actor %+v should be permitted to GetSrvVSchemas", actor)
+	})
+
+	t.Run("full access", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "allowed-all"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, _ := api.GetSrvVSchemas(ctx, &vtadminpb.GetSrvVSchemasRequest{})
+		assert.NotEmpty(t, resp.SrvVSchemas, "actor %+v should be permitted to GetSrvVSchemas", actor)
+		clusterCells := map[string][]string{}
+		for _, svs := range resp.SrvVSchemas {
+			if _, ok := clusterCells[svs.Cluster.Id]; !ok {
+				clusterCells[svs.Cluster.Id] = []string{}
+			}
+			clusterCells[svs.Cluster.Id] = append(clusterCells[svs.Cluster.Id], svs.Cell)
+		}
+		assert.Equal(t, clusterCells, map[string][]string{"test": {"zone1"}, "other": {"other1"}}, "actor %+v should be permitted to GetSrvVSchemas", actor)
+	})
+}
+
+func TestGetTablet(t *testing.T) {
+	t.Parallel()
+
+	opts := vtadmin.Options{
+		RBAC: &rbac.Config{
+			Rules: []*struct {
+				Resource string
+				Actions  []string
+				Subjects []string
+				Clusters []string
+			}{
+				{
+					Resource: "Tablet",
+					Actions:  []string{"get"},
+					Subjects: []string{"user:allowed"},
+					Clusters: []string{"*"},
+				},
+			},
+		},
+	}
+	err := opts.RBAC.Reify()
+	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
+
+	api := vtadmin.NewAPI(testClusters(t), opts)
+	t.Cleanup(func() {
+		if err := api.Close(); err != nil {
+			t.Logf("api did not close cleanly: %s", err.Error())
+		}
+	})
+
+	t.Run("unauthorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "other"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.GetTablet(ctx, &vtadminpb.GetTabletRequest{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  100,
+			},
+		})
+		assert.Error(t, err, "actor %+v should not be permitted to GetTablet", actor)
+		assert.Nil(t, resp, "actor %+v should not be permitted to GetTablet", actor)
+	})
+
+	t.Run("authorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "allowed"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.GetTablet(ctx, &vtadminpb.GetTabletRequest{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  100,
+			},
+		})
+		require.NoError(t, err)
+		assert.NotNil(t, resp, "actor %+v should be permitted to GetTablet", actor)
+	})
+}
+
+func TestGetTablets(t *testing.T) {
+	t.Parallel()
+
+	opts := vtadmin.Options{
+		RBAC: &rbac.Config{
+			Rules: []*struct {
+				Resource string
+				Actions  []string
+				Subjects []string
+				Clusters []string
+			}{
+				{
+					Resource: "Tablet",
+					Actions:  []string{"get"},
+					Subjects: []string{"user:allowed-all"},
+					Clusters: []string{"*"},
+				},
+				{
+					Resource: "Tablet",
+					Actions:  []string{"get"},
+					Subjects: []string{"user:allowed-other"},
+					Clusters: []string{"other"},
+				},
+			},
+		},
+	}
+	err := opts.RBAC.Reify()
+	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
+
+	api := vtadmin.NewAPI(testClusters(t), opts)
+	t.Cleanup(func() {
+		if err := api.Close(); err != nil {
+			t.Logf("api did not close cleanly: %s", err.Error())
+		}
+	})
+
+	t.Run("unauthorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "unauthorized"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.GetTablets(ctx, &vtadminpb.GetTabletsRequest{})
+		require.NoError(t, err)
+		assert.Nil(t, resp.Tablets, "actor %+v should not be permitted to GetTablets", actor)
+	})
+
+	t.Run("partial access", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "allowed-other"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, _ := api.GetTablets(ctx, &vtadminpb.GetTabletsRequest{})
+		assert.NotEmpty(t, resp.Tablets, "actor %+v should be permitted to GetTablets", actor)
+		clusterAliases := map[string][]string{}
+		for _, tablet := range resp.Tablets {
+			if _, ok := clusterAliases[tablet.Cluster.Id]; !ok {
+				clusterAliases[tablet.Cluster.Id] = []string{}
+			}
+			clusterAliases[tablet.Cluster.Id] = append(clusterAliases[tablet.Cluster.Id], topoproto.TabletAliasString(tablet.Tablet.Alias))
+		}
+		assert.Equal(t, clusterAliases, map[string][]string{"other": {"other1-0000000100"}}, "actor %+v should be permitted to GetTablets", actor)
+	})
+
+	t.Run("full access", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "allowed-all"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, _ := api.GetTablets(ctx, &vtadminpb.GetTabletsRequest{})
+		assert.NotEmpty(t, resp.Tablets, "actor %+v should be permitted to GetTablets", actor)
+		clusterAliases := map[string][]string{}
+		for _, tablet := range resp.Tablets {
+			if _, ok := clusterAliases[tablet.Cluster.Id]; !ok {
+				clusterAliases[tablet.Cluster.Id] = []string{}
+			}
+			clusterAliases[tablet.Cluster.Id] = append(clusterAliases[tablet.Cluster.Id], topoproto.TabletAliasString(tablet.Tablet.Alias))
+		}
+		assert.Equal(t, clusterAliases, map[string][]string{"test": {"zone1-0000000100"}, "other": {"other1-0000000100"}}, "actor %+v should be permitted to GetTablets", actor)
+	})
+}
+
+func TestGetVSchema(t *testing.T) {
+	t.Parallel()
+
+	opts := vtadmin.Options{
+		RBAC: &rbac.Config{
+			Rules: []*struct {
+				Resource string
+				Actions  []string
+				Subjects []string
+				Clusters []string
+			}{
+				{
+					Resource: "VSchema",
+					Actions:  []string{"get"},
+					Subjects: []string{"user:allowed"},
+					Clusters: []string{"*"},
+				},
+			},
+		},
+	}
+	err := opts.RBAC.Reify()
+	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
+
+	api := vtadmin.NewAPI(testClusters(t), opts)
+	t.Cleanup(func() {
+		if err := api.Close(); err != nil {
+			t.Logf("api did not close cleanly: %s", err.Error())
+		}
+	})
+
+	t.Run("unauthorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "other"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.GetVSchema(ctx, &vtadminpb.GetVSchemaRequest{
+			ClusterId: "test",
+			Keyspace:  "test",
+		})
+		require.NoError(t, err)
+		assert.Nil(t, resp, "actor %+v should not be permitted to GetVSchema", actor)
+	})
+
+	t.Run("authorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "allowed"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.GetVSchema(ctx, &vtadminpb.GetVSchemaRequest{
+			ClusterId: "test",
+			Keyspace:  "test",
+		})
+		require.NoError(t, err)
+		assert.NotNil(t, resp, "actor %+v should be permitted to GetVSchema", actor)
+	})
+}
+
+func TestGetVSchemas(t *testing.T) {
+	t.Parallel()
+
+	opts := vtadmin.Options{
+		RBAC: &rbac.Config{
+			Rules: []*struct {
+				Resource string
+				Actions  []string
+				Subjects []string
+				Clusters []string
+			}{
+				{
+					Resource: "VSchema",
+					Actions:  []string{"get"},
+					Subjects: []string{"user:allowed-all"},
+					Clusters: []string{"*"},
+				},
+				{
+					Resource: "VSchema",
+					Actions:  []string{"get"},
+					Subjects: []string{"user:allowed-other"},
+					Clusters: []string{"other"},
+				},
+			},
+		},
+	}
+	err := opts.RBAC.Reify()
+	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
+
+	api := vtadmin.NewAPI(testClusters(t), opts)
+	t.Cleanup(func() {
+		if err := api.Close(); err != nil {
+			t.Logf("api did not close cleanly: %s", err.Error())
+		}
+	})
+
+	t.Run("unauthorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "unauthorized"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.GetVSchemas(ctx, &vtadminpb.GetVSchemasRequest{})
+		require.NoError(t, err)
+		assert.Nil(t, resp.VSchemas, "actor %+v should not be permitted to GetVSchemas", actor)
+	})
+
+	t.Run("partial access", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "allowed-other"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, _ := api.GetVSchemas(ctx, &vtadminpb.GetVSchemasRequest{})
+		assert.NotEmpty(t, resp.VSchemas, "actor %+v should be permitted to GetVSchemas", actor)
+		clusterKeyspaces := map[string][]string{}
+		for _, vs := range resp.VSchemas {
+			if _, ok := clusterKeyspaces[vs.Cluster.Id]; !ok {
+				clusterKeyspaces[vs.Cluster.Id] = []string{}
+			}
+			clusterKeyspaces[vs.Cluster.Id] = append(clusterKeyspaces[vs.Cluster.Id], vs.Name)
+		}
+		assert.Equal(t, clusterKeyspaces, map[string][]string{"other": {"otherks"}}, "actor %+v should be permitted to GetVSchemas", actor)
+	})
+
+	t.Run("full access", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "allowed-all"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, _ := api.GetVSchemas(ctx, &vtadminpb.GetVSchemasRequest{})
+		assert.NotEmpty(t, resp.VSchemas, "actor %+v should be permitted to GetVSchemas", actor)
+		clusterKeyspaces := map[string][]string{}
+		for _, vs := range resp.VSchemas {
+			if _, ok := clusterKeyspaces[vs.Cluster.Id]; !ok {
+				clusterKeyspaces[vs.Cluster.Id] = []string{}
+			}
+			clusterKeyspaces[vs.Cluster.Id] = append(clusterKeyspaces[vs.Cluster.Id], vs.Name)
+		}
+		assert.Equal(t, clusterKeyspaces, map[string][]string{"test": {"test"}, "other": {"otherks"}}, "actor %+v should be permitted to GetVSchemas", actor)
+	})
+}
+
+func TestGetVtctlds(t *testing.T) {
+	t.Parallel()
+
+	opts := vtadmin.Options{
+		RBAC: &rbac.Config{
+			Rules: []*struct {
+				Resource string
+				Actions  []string
+				Subjects []string
+				Clusters []string
+			}{
+				{
+					Resource: "Vtctld",
+					Actions:  []string{"get"},
+					Subjects: []string{"user:allowed-all"},
+					Clusters: []string{"*"},
+				},
+				{
+					Resource: "Vtctld",
+					Actions:  []string{"get"},
+					Subjects: []string{"user:allowed-other"},
+					Clusters: []string{"other"},
+				},
+			},
+		},
+	}
+	err := opts.RBAC.Reify()
+	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
+
+	api := vtadmin.NewAPI(testClusters(t), opts)
+	t.Cleanup(func() {
+		if err := api.Close(); err != nil {
+			t.Logf("api did not close cleanly: %s", err.Error())
+		}
+	})
+
+	t.Run("unauthorized actor", func(t *testing.T) {
+		actor := &rbac.Actor{Name: "unauthorized"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.GetVtctlds(ctx, &vtadminpb.GetVtctldsRequest{})
+		assert.NoError(t, err)
+		assert.Empty(t, resp.Vtctlds, "actor %+v should not be permitted to GetVtctlds", actor)
+	})
+
+	t.Run("partial access", func(t *testing.T) {
+		actor := &rbac.Actor{Name: "allowed-other"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, _ := api.GetVtctlds(ctx, &vtadminpb.GetVtctldsRequest{})
+		assert.NotEmpty(t, resp.Vtctlds, "actor %+v should be permitted to GetVtctlds", actor)
+		// testutil.BuildCluster creates exactly one gate per cluster
+		assert.Len(t, resp.Vtctlds, 1, "actor %+v should only be able to see Vtctld from cluster 'other'", actor)
+	})
+
+	t.Run("full access", func(t *testing.T) {
+		actor := &rbac.Actor{Name: "allowed-all"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, _ := api.GetVtctlds(ctx, &vtadminpb.GetVtctldsRequest{})
+		assert.NotEmpty(t, resp.Vtctlds, "actor %+v should be permitted to GetVtctlds", actor)
+		// testutil.BuildCluster creates exactly one gate per cluster
+		assert.Len(t, resp.Vtctlds, 2, "actor %+v should be able to see Vtctld from all clusters", actor)
+	})
+}
+
+func TestGetWorkflow(t *testing.T) {
+	t.Parallel()
+
+	opts := vtadmin.Options{
+		RBAC: &rbac.Config{
+			Rules: []*struct {
+				Resource string
+				Actions  []string
+				Subjects []string
+				Clusters []string
+			}{
+				{
+					Resource: "Workflow",
+					Actions:  []string{"get"},
+					Subjects: []string{"user:allowed"},
+					Clusters: []string{"*"},
+				},
+			},
+		},
+	}
+	err := opts.RBAC.Reify()
+	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
+
+	api := vtadmin.NewAPI(testClusters(t), opts)
+	t.Cleanup(func() {
+		if err := api.Close(); err != nil {
+			t.Logf("api did not close cleanly: %s", err.Error())
+		}
+	})
+
+	t.Run("unauthorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "other"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.GetWorkflow(ctx, &vtadminpb.GetWorkflowRequest{
+			ClusterId: "test",
+			Keyspace:  "test",
+			Name:      "testworkflow",
+		})
+		require.NoError(t, err)
+		assert.Nil(t, resp, "actor %+v should not be permitted to GetWorkflow", actor)
+	})
+
+	t.Run("authorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "allowed"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.GetWorkflow(ctx, &vtadminpb.GetWorkflowRequest{
+			ClusterId: "test",
+			Keyspace:  "test",
+			Name:      "testworkflow",
+		})
+		require.NoError(t, err)
+		assert.NotNil(t, resp, "actor %+v should be permitted to GetWorkflow", actor)
+	})
+}
+
+func TestGetWorkflows(t *testing.T) {
+	t.Parallel()
+
+	opts := vtadmin.Options{
+		RBAC: &rbac.Config{
+			Rules: []*struct {
+				Resource string
+				Actions  []string
+				Subjects []string
+				Clusters []string
+			}{
+				{
+					Resource: "Workflow",
+					Actions:  []string{"get"},
+					Subjects: []string{"user:allowed-all"},
+					Clusters: []string{"*"},
+				},
+				{
+					Resource: "Workflow",
+					Actions:  []string{"get"},
+					Subjects: []string{"user:allowed-other"},
+					Clusters: []string{"other"},
+				},
+			},
+		},
+	}
+	err := opts.RBAC.Reify()
+	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
+
+	api := vtadmin.NewAPI(testClusters(t), opts)
+	t.Cleanup(func() {
+		if err := api.Close(); err != nil {
+			t.Logf("api did not close cleanly: %s", err.Error())
+		}
+	})
+
+	t.Run("unauthorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "unauthorized"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.GetWorkflows(ctx, &vtadminpb.GetWorkflowsRequest{})
+		require.NoError(t, err)
+		assert.Empty(t, resp.WorkflowsByCluster, "actor %+v should not be permitted to GetWorkflows", actor)
+	})
+
+	t.Run("partial access", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "allowed-other"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, _ := api.GetWorkflows(ctx, &vtadminpb.GetWorkflowsRequest{})
+		assert.NotEmpty(t, resp.WorkflowsByCluster, "actor %+v should be permitted to GetWorkflows", actor)
+		assert.Equal(t, resp.WorkflowsByCluster, map[string]*vtadminpb.ClusterWorkflows{"other": {Workflows: []*vtadminpb.Workflow{{Cluster: &vtadminpb.Cluster{Id: "other", Name: "other"}, Keyspace: "otherks", Workflow: &vtctldatapb.Workflow{Name: "otherks_workflow"}}}}}, "actor %+v should be permitted to GetWorkflows", actor)
+	})
+
+	t.Run("full access", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "allowed-all"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, _ := api.GetWorkflows(ctx, &vtadminpb.GetWorkflowsRequest{})
+		assert.NotEmpty(t, resp.WorkflowsByCluster, "actor %+v should be permitted to GetWorkflows", actor)
+		assert.Equal(t, resp.WorkflowsByCluster, map[string]*vtadminpb.ClusterWorkflows{"test": {Workflows: []*vtadminpb.Workflow{{Cluster: &vtadminpb.Cluster{Id: "test", Name: "test"}, Keyspace: "test", Workflow: &vtctldatapb.Workflow{Name: "testworkflow"}}}}, "other": {Workflows: []*vtadminpb.Workflow{{Cluster: &vtadminpb.Cluster{Id: "other", Name: "other"}, Keyspace: "otherks", Workflow: &vtctldatapb.Workflow{Name: "otherks_workflow"}}}}}, "actor %+v should be permitted to GetWorkflows", actor)
+	})
+}
+
+func TestPingTablet(t *testing.T) {
+	t.Parallel()
+
+	opts := vtadmin.Options{
+		RBAC: &rbac.Config{
+			Rules: []*struct {
+				Resource string
+				Actions  []string
+				Subjects []string
+				Clusters []string
+			}{
+				{
+					Resource: "Tablet",
+					Actions:  []string{"ping"},
+					Subjects: []string{"user:allowed"},
+					Clusters: []string{"*"},
+				},
+			},
+		},
+	}
+	err := opts.RBAC.Reify()
+	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
+
+	api := vtadmin.NewAPI(testClusters(t), opts)
+	t.Cleanup(func() {
+		if err := api.Close(); err != nil {
+			t.Logf("api did not close cleanly: %s", err.Error())
+		}
+	})
+
+	t.Run("unauthorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "other"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.PingTablet(ctx, &vtadminpb.PingTabletRequest{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  100,
+			},
+		})
+		assert.Error(t, err, "actor %+v should not be permitted to PingTablet", actor)
+		assert.Nil(t, resp, "actor %+v should not be permitted to PingTablet", actor)
+	})
+
+	t.Run("authorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "allowed"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.PingTablet(ctx, &vtadminpb.PingTabletRequest{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  100,
+			},
+		})
+		require.NoError(t, err)
+		assert.NotNil(t, resp, "actor %+v should be permitted to PingTablet", actor)
+	})
+}
+
+func TestPlannedFailoverShard(t *testing.T) {
+	t.Parallel()
+
+	opts := vtadmin.Options{
+		RBAC: &rbac.Config{
+			Rules: []*struct {
+				Resource string
+				Actions  []string
+				Subjects []string
+				Clusters []string
+			}{
+				{
+					Resource: "Shard",
+					Actions:  []string{"planned_failover_shard"},
+					Subjects: []string{"user:allowed"},
+					Clusters: []string{"*"},
+				},
+			},
+		},
+	}
+	err := opts.RBAC.Reify()
+	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
+
+	api := vtadmin.NewAPI(testClusters(t), opts)
+	t.Cleanup(func() {
+		if err := api.Close(); err != nil {
+			t.Logf("api did not close cleanly: %s", err.Error())
+		}
+	})
+
+	t.Run("unauthorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "other"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.PlannedFailoverShard(ctx, &vtadminpb.PlannedFailoverShardRequest{
+			ClusterId: "test",
+			Options: &vtctldatapb.PlannedReparentShardRequest{
+				Keyspace: "test",
+				Shard:    "-",
+			},
+		})
+		require.NoError(t, err)
+		assert.Nil(t, resp, "actor %+v should not be permitted to PlannedFailoverShard", actor)
+	})
+
+	t.Run("authorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "allowed"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.PlannedFailoverShard(ctx, &vtadminpb.PlannedFailoverShardRequest{
+			ClusterId: "test",
+			Options: &vtctldatapb.PlannedReparentShardRequest{
+				Keyspace: "test",
+				Shard:    "-",
+			},
+		})
+		require.NoError(t, err)
+		assert.NotNil(t, resp, "actor %+v should be permitted to PlannedFailoverShard", actor)
+	})
+}
+
+func TestRefreshState(t *testing.T) {
+	t.Parallel()
+
+	opts := vtadmin.Options{
+		RBAC: &rbac.Config{
+			Rules: []*struct {
+				Resource string
+				Actions  []string
+				Subjects []string
+				Clusters []string
+			}{
+				{
+					Resource: "Tablet",
+					Actions:  []string{"put"},
+					Subjects: []string{"user:allowed"},
+					Clusters: []string{"*"},
+				},
+			},
+		},
+	}
+	err := opts.RBAC.Reify()
+	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
+
+	api := vtadmin.NewAPI(testClusters(t), opts)
+	t.Cleanup(func() {
+		if err := api.Close(); err != nil {
+			t.Logf("api did not close cleanly: %s", err.Error())
+		}
+	})
+
+	t.Run("unauthorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "other"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.RefreshState(ctx, &vtadminpb.RefreshStateRequest{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  100,
+			},
+		})
+		assert.Error(t, err, "actor %+v should not be permitted to RefreshState", actor)
+		assert.Nil(t, resp, "actor %+v should not be permitted to RefreshState", actor)
+	})
+
+	t.Run("authorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "allowed"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.RefreshState(ctx, &vtadminpb.RefreshStateRequest{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  100,
+			},
+		})
+		require.NoError(t, err)
+		assert.NotNil(t, resp, "actor %+v should be permitted to RefreshState", actor)
+	})
+}
+
+func TestRefreshTabletReplicationSource(t *testing.T) {
+	t.Parallel()
+
+	opts := vtadmin.Options{
+		RBAC: &rbac.Config{
+			Rules: []*struct {
+				Resource string
+				Actions  []string
+				Subjects []string
+				Clusters []string
+			}{
+				{
+					Resource: "Tablet",
+					Actions:  []string{"refresh_tablet_replication_source"},
+					Subjects: []string{"user:allowed"},
+					Clusters: []string{"*"},
+				},
+			},
+		},
+	}
+	err := opts.RBAC.Reify()
+	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
+
+	api := vtadmin.NewAPI(testClusters(t), opts)
+	t.Cleanup(func() {
+		if err := api.Close(); err != nil {
+			t.Logf("api did not close cleanly: %s", err.Error())
+		}
+	})
+
+	t.Run("unauthorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "other"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.RefreshTabletReplicationSource(ctx, &vtadminpb.RefreshTabletReplicationSourceRequest{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  100,
+			},
+		})
+		assert.Error(t, err, "actor %+v should not be permitted to RefreshTabletReplicationSource", actor)
+		assert.Nil(t, resp, "actor %+v should not be permitted to RefreshTabletReplicationSource", actor)
+	})
+
+	t.Run("authorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "allowed"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.RefreshTabletReplicationSource(ctx, &vtadminpb.RefreshTabletReplicationSourceRequest{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  100,
+			},
+		})
+		require.NoError(t, err)
+		assert.NotNil(t, resp, "actor %+v should be permitted to RefreshTabletReplicationSource", actor)
+	})
+}
+
+func TestReloadSchemas(t *testing.T) {
+	t.Parallel()
+
+	opts := vtadmin.Options{
+		RBAC: &rbac.Config{
+			Rules: []*struct {
+				Resource string
+				Actions  []string
+				Subjects []string
+				Clusters []string
+			}{
+				{
+					Resource: "Schema",
+					Actions:  []string{"reload"},
+					Subjects: []string{"user:allowed-all"},
+					Clusters: []string{"*"},
+				},
+				{
+					Resource: "Schema",
+					Actions:  []string{"reload"},
+					Subjects: []string{"user:allowed-other"},
+					Clusters: []string{"other"},
+				},
+			},
+		},
+	}
+	err := opts.RBAC.Reify()
+	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
+
+	api := vtadmin.NewAPI(testClusters(t), opts)
+	t.Cleanup(func() {
+		if err := api.Close(); err != nil {
+			t.Logf("api did not close cleanly: %s", err.Error())
+		}
+	})
+
+	t.Run("unauthorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "unauthorized"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.ReloadSchemas(ctx, &vtadminpb.ReloadSchemasRequest{
+			Keyspaces: []string{
+				"test",
+				"otherks",
+			},
+		})
+		require.NoError(t, err)
+		assert.Empty(t, resp.KeyspaceResults, "actor %+v should not be permitted to ReloadSchemas", actor)
+	})
+
+	t.Run("partial access", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "allowed-other"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, _ := api.ReloadSchemas(ctx, &vtadminpb.ReloadSchemasRequest{
+			Keyspaces: []string{
+				"test",
+				"otherks",
+			},
+		})
+		assert.NotEmpty(t, resp.KeyspaceResults, "actor %+v should be permitted to ReloadSchemas", actor)
+	})
+
+	t.Run("full access", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "allowed-all"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, _ := api.ReloadSchemas(ctx, &vtadminpb.ReloadSchemasRequest{
+			Keyspaces: []string{
+				"test",
+				"otherks",
+			},
+		})
+		assert.NotEmpty(t, resp.KeyspaceResults, "actor %+v should be permitted to ReloadSchemas", actor)
+	})
+}
+
+func TestRunHealthCheck(t *testing.T) {
+	t.Parallel()
+
+	opts := vtadmin.Options{
+		RBAC: &rbac.Config{
+			Rules: []*struct {
+				Resource string
+				Actions  []string
+				Subjects []string
+				Clusters []string
+			}{
+				{
+					Resource: "Tablet",
+					Actions:  []string{"get"},
+					Subjects: []string{"user:allowed"},
+					Clusters: []string{"*"},
+				},
+			},
+		},
+	}
+	err := opts.RBAC.Reify()
+	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
+
+	api := vtadmin.NewAPI(testClusters(t), opts)
+	t.Cleanup(func() {
+		if err := api.Close(); err != nil {
+			t.Logf("api did not close cleanly: %s", err.Error())
+		}
+	})
+
+	t.Run("unauthorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "other"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.RunHealthCheck(ctx, &vtadminpb.RunHealthCheckRequest{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  100,
+			},
+		})
+		assert.Error(t, err, "actor %+v should not be permitted to RunHealthCheck", actor)
+		assert.Nil(t, resp, "actor %+v should not be permitted to RunHealthCheck", actor)
+	})
+
+	t.Run("authorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "allowed"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.RunHealthCheck(ctx, &vtadminpb.RunHealthCheckRequest{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  100,
+			},
+		})
+		require.NoError(t, err)
+		assert.NotNil(t, resp, "actor %+v should be permitted to RunHealthCheck", actor)
+	})
+}
+
+func TestSetReadOnly(t *testing.T) {
+	t.Parallel()
+
+	opts := vtadmin.Options{
+		RBAC: &rbac.Config{
+			Rules: []*struct {
+				Resource string
+				Actions  []string
+				Subjects []string
+				Clusters []string
+			}{
+				{
+					Resource: "Tablet",
+					Actions:  []string{"manage_tablet_writability"},
+					Subjects: []string{"user:allowed"},
+					Clusters: []string{"*"},
+				},
+			},
+		},
+	}
+	err := opts.RBAC.Reify()
+	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
+
+	api := vtadmin.NewAPI(testClusters(t), opts)
+	t.Cleanup(func() {
+		if err := api.Close(); err != nil {
+			t.Logf("api did not close cleanly: %s", err.Error())
+		}
+	})
+
+	t.Run("unauthorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "other"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.SetReadOnly(ctx, &vtadminpb.SetReadOnlyRequest{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  100,
+			},
+		})
+		assert.Error(t, err, "actor %+v should not be permitted to SetReadOnly", actor)
+		assert.Nil(t, resp, "actor %+v should not be permitted to SetReadOnly", actor)
+	})
+
+	t.Run("authorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "allowed"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.SetReadOnly(ctx, &vtadminpb.SetReadOnlyRequest{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  100,
+			},
+		})
+		require.NoError(t, err)
+		assert.NotNil(t, resp, "actor %+v should be permitted to SetReadOnly", actor)
+	})
+}
+
+func TestSetReadWrite(t *testing.T) {
+	t.Parallel()
+
+	opts := vtadmin.Options{
+		RBAC: &rbac.Config{
+			Rules: []*struct {
+				Resource string
+				Actions  []string
+				Subjects []string
+				Clusters []string
+			}{
+				{
+					Resource: "Tablet",
+					Actions:  []string{"manage_tablet_writability"},
+					Subjects: []string{"user:allowed"},
+					Clusters: []string{"*"},
+				},
+			},
+		},
+	}
+	err := opts.RBAC.Reify()
+	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
+
+	api := vtadmin.NewAPI(testClusters(t), opts)
+	t.Cleanup(func() {
+		if err := api.Close(); err != nil {
+			t.Logf("api did not close cleanly: %s", err.Error())
+		}
+	})
+
+	t.Run("unauthorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "other"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.SetReadWrite(ctx, &vtadminpb.SetReadWriteRequest{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  100,
+			},
+		})
+		assert.Error(t, err, "actor %+v should not be permitted to SetReadWrite", actor)
+		assert.Nil(t, resp, "actor %+v should not be permitted to SetReadWrite", actor)
+	})
+
+	t.Run("authorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "allowed"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.SetReadWrite(ctx, &vtadminpb.SetReadWriteRequest{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  100,
+			},
+		})
+		require.NoError(t, err)
+		assert.NotNil(t, resp, "actor %+v should be permitted to SetReadWrite", actor)
+	})
+}
+
+func TestStartReplication(t *testing.T) {
+	t.Parallel()
+
+	opts := vtadmin.Options{
+		RBAC: &rbac.Config{
+			Rules: []*struct {
+				Resource string
+				Actions  []string
+				Subjects []string
+				Clusters []string
+			}{
+				{
+					Resource: "Tablet",
+					Actions:  []string{"manage_tablet_replication"},
+					Subjects: []string{"user:allowed"},
+					Clusters: []string{"*"},
+				},
+			},
+		},
+	}
+	err := opts.RBAC.Reify()
+	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
+
+	api := vtadmin.NewAPI(testClusters(t), opts)
+	t.Cleanup(func() {
+		if err := api.Close(); err != nil {
+			t.Logf("api did not close cleanly: %s", err.Error())
+		}
+	})
+
+	t.Run("unauthorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "other"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.StartReplication(ctx, &vtadminpb.StartReplicationRequest{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  100,
+			},
+		})
+		assert.Error(t, err, "actor %+v should not be permitted to StartReplication", actor)
+		assert.Nil(t, resp, "actor %+v should not be permitted to StartReplication", actor)
+	})
+
+	t.Run("authorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "allowed"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.StartReplication(ctx, &vtadminpb.StartReplicationRequest{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  100,
+			},
+		})
+		require.NoError(t, err)
+		assert.NotNil(t, resp, "actor %+v should be permitted to StartReplication", actor)
+	})
+}
+
+func TestStopReplication(t *testing.T) {
+	t.Parallel()
+
+	opts := vtadmin.Options{
+		RBAC: &rbac.Config{
+			Rules: []*struct {
+				Resource string
+				Actions  []string
+				Subjects []string
+				Clusters []string
+			}{
+				{
+					Resource: "Tablet",
+					Actions:  []string{"manage_tablet_replication"},
+					Subjects: []string{"user:allowed"},
+					Clusters: []string{"*"},
+				},
+			},
+		},
+	}
+	err := opts.RBAC.Reify()
+	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
+
+	api := vtadmin.NewAPI(testClusters(t), opts)
+	t.Cleanup(func() {
+		if err := api.Close(); err != nil {
+			t.Logf("api did not close cleanly: %s", err.Error())
+		}
+	})
+
+	t.Run("unauthorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "other"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.StopReplication(ctx, &vtadminpb.StopReplicationRequest{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  100,
+			},
+		})
+		assert.Error(t, err, "actor %+v should not be permitted to StopReplication", actor)
+		assert.Nil(t, resp, "actor %+v should not be permitted to StopReplication", actor)
+	})
+
+	t.Run("authorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "allowed"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.StopReplication(ctx, &vtadminpb.StopReplicationRequest{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  100,
+			},
+		})
+		require.NoError(t, err)
+		assert.NotNil(t, resp, "actor %+v should be permitted to StopReplication", actor)
+	})
+}
+
+func TestTabletExternallyPromoted(t *testing.T) {
+	t.Parallel()
+
+	opts := vtadmin.Options{
+		RBAC: &rbac.Config{
+			Rules: []*struct {
+				Resource string
+				Actions  []string
+				Subjects []string
+				Clusters []string
+			}{
+				{
+					Resource: "Shard",
+					Actions:  []string{"tablet_externally_promoted"},
+					Subjects: []string{"user:allowed"},
+					Clusters: []string{"*"},
+				},
+			},
+		},
+	}
+	err := opts.RBAC.Reify()
+	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
+
+	api := vtadmin.NewAPI(testClusters(t), opts)
+	t.Cleanup(func() {
+		if err := api.Close(); err != nil {
+			t.Logf("api did not close cleanly: %s", err.Error())
+		}
+	})
+
+	t.Run("unauthorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "other"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.TabletExternallyPromoted(ctx, &vtadminpb.TabletExternallyPromotedRequest{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  100,
+			},
+		})
+		assert.Error(t, err, "actor %+v should not be permitted to TabletExternallyPromoted", actor)
+		assert.Nil(t, resp, "actor %+v should not be permitted to TabletExternallyPromoted", actor)
+	})
+
+	t.Run("authorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "allowed"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.TabletExternallyPromoted(ctx, &vtadminpb.TabletExternallyPromotedRequest{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  100,
+			},
+		})
+		require.NoError(t, err)
+		assert.NotNil(t, resp, "actor %+v should be permitted to TabletExternallyPromoted", actor)
+	})
+}
+
+func TestVTExplain(t *testing.T) {
+	t.Parallel()
+
+	opts := vtadmin.Options{
+		RBAC: &rbac.Config{
+			Rules: []*struct {
+				Resource string
+				Actions  []string
+				Subjects []string
+				Clusters []string
+			}{
+				{
+					Resource: "VTExplain",
+					Actions:  []string{"get"},
+					Subjects: []string{"user:allowed"},
+					Clusters: []string{"*"},
+				},
+			},
+		},
+	}
+	err := opts.RBAC.Reify()
+	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
+
+	api := vtadmin.NewAPI(testClusters(t), opts)
+	t.Cleanup(func() {
+		if err := api.Close(); err != nil {
+			t.Logf("api did not close cleanly: %s", err.Error())
+		}
+	})
+
+	t.Run("unauthorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "other"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.VTExplain(ctx, &vtadminpb.VTExplainRequest{
+			Cluster:  "test",
+			Keyspace: "test",
+			Sql:      "select id from t1;"})
+		require.NoError(t, err)
+		assert.Nil(t, resp, "actor %+v should not be permitted to VTExplain", actor)
+	})
+
+	t.Run("authorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "allowed"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.VTExplain(ctx, &vtadminpb.VTExplainRequest{
+			Cluster:  "test",
+			Keyspace: "test",
+			Sql:      "select id from t1;"})
+		require.NoError(t, err)
+		assert.NotNil(t, resp, "actor %+v should be permitted to VTExplain", actor)
+	})
+}
+
+func TestValidateKeyspace(t *testing.T) {
+	t.Parallel()
+
+	opts := vtadmin.Options{
+		RBAC: &rbac.Config{
+			Rules: []*struct {
+				Resource string
+				Actions  []string
+				Subjects []string
+				Clusters []string
+			}{
+				{
+					Resource: "Keyspace",
+					Actions:  []string{"put"},
+					Subjects: []string{"user:allowed"},
+					Clusters: []string{"*"},
+				},
+			},
+		},
+	}
+	err := opts.RBAC.Reify()
+	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
+
+	api := vtadmin.NewAPI(testClusters(t), opts)
+	t.Cleanup(func() {
+		if err := api.Close(); err != nil {
+			t.Logf("api did not close cleanly: %s", err.Error())
+		}
+	})
+
+	t.Run("unauthorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "other"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.ValidateKeyspace(ctx, &vtadminpb.ValidateKeyspaceRequest{
+			ClusterId: "test",
+			Keyspace:  "test",
+		})
+		require.NoError(t, err)
+		assert.Nil(t, resp, "actor %+v should not be permitted to ValidateKeyspace", actor)
+	})
+
+	t.Run("authorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "allowed"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.ValidateKeyspace(ctx, &vtadminpb.ValidateKeyspaceRequest{
+			ClusterId: "test",
+			Keyspace:  "test",
+		})
+		require.NoError(t, err)
+		assert.NotNil(t, resp, "actor %+v should be permitted to ValidateKeyspace", actor)
+	})
+}
+
+func TestValidateSchemaKeyspace(t *testing.T) {
+	t.Parallel()
+
+	opts := vtadmin.Options{
+		RBAC: &rbac.Config{
+			Rules: []*struct {
+				Resource string
+				Actions  []string
+				Subjects []string
+				Clusters []string
+			}{
+				{
+					Resource: "Keyspace",
+					Actions:  []string{"put"},
+					Subjects: []string{"user:allowed"},
+					Clusters: []string{"*"},
+				},
+			},
+		},
+	}
+	err := opts.RBAC.Reify()
+	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
+
+	api := vtadmin.NewAPI(testClusters(t), opts)
+	t.Cleanup(func() {
+		if err := api.Close(); err != nil {
+			t.Logf("api did not close cleanly: %s", err.Error())
+		}
+	})
+
+	t.Run("unauthorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "other"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.ValidateSchemaKeyspace(ctx, &vtadminpb.ValidateSchemaKeyspaceRequest{
+			ClusterId: "test",
+			Keyspace:  "test",
+		})
+		require.NoError(t, err)
+		assert.Nil(t, resp, "actor %+v should not be permitted to ValidateSchemaKeyspace", actor)
+	})
+
+	t.Run("authorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "allowed"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.ValidateSchemaKeyspace(ctx, &vtadminpb.ValidateSchemaKeyspaceRequest{
+			ClusterId: "test",
+			Keyspace:  "test",
+		})
+		require.NoError(t, err)
+		assert.NotNil(t, resp, "actor %+v should be permitted to ValidateSchemaKeyspace", actor)
+	})
+}
+
+func TestValidateVersionKeyspace(t *testing.T) {
+	t.Parallel()
+
+	opts := vtadmin.Options{
+		RBAC: &rbac.Config{
+			Rules: []*struct {
+				Resource string
+				Actions  []string
+				Subjects []string
+				Clusters []string
+			}{
+				{
+					Resource: "Keyspace",
+					Actions:  []string{"put"},
+					Subjects: []string{"user:allowed"},
+					Clusters: []string{"*"},
+				},
+			},
+		},
+	}
+	err := opts.RBAC.Reify()
+	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
+
+	api := vtadmin.NewAPI(testClusters(t), opts)
+	t.Cleanup(func() {
+		if err := api.Close(); err != nil {
+			t.Logf("api did not close cleanly: %s", err.Error())
+		}
+	})
+
+	t.Run("unauthorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "other"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.ValidateVersionKeyspace(ctx, &vtadminpb.ValidateVersionKeyspaceRequest{
+			ClusterId: "test",
+			Keyspace:  "test",
+		})
+		require.NoError(t, err)
+		assert.Nil(t, resp, "actor %+v should not be permitted to ValidateVersionKeyspace", actor)
+	})
+
+	t.Run("authorized actor", func(t *testing.T) {
+		t.Parallel()
+		actor := &rbac.Actor{Name: "allowed"}
+
+		ctx := context.Background()
+		if actor != nil {
+			ctx = rbac.NewContext(ctx, actor)
+		}
+
+		resp, err := api.ValidateVersionKeyspace(ctx, &vtadminpb.ValidateVersionKeyspaceRequest{
+			ClusterId: "test",
+			Keyspace:  "test",
+		})
+		require.NoError(t, err)
+		assert.NotNil(t, resp, "actor %+v should be permitted to ValidateVersionKeyspace", actor)
+	})
+}
+
 func testClusters(t testing.TB) []*cluster.Cluster {
 	configs := []testutil.TestClusterConfig{
 		{
@@ -706,6 +3113,14 @@ func testClusters(t testing.TB) []*cluster.Cluster {
 				DeleteTabletsResults: map[string]error{
 					"zone1-0000000100": nil,
 				},
+				EmergencyReparentShardResults: map[string]struct {
+					Response *vtctldatapb.EmergencyReparentShardResponse
+					Error    error
+				}{
+					"test/-": {
+						Response: &vtctldatapb.EmergencyReparentShardResponse{},
+					},
+				},
 				FindAllShardsInKeyspaceResults: map[string]struct {
 					Response *vtctldatapb.FindAllShardsInKeyspaceResponse
 					Error    error
@@ -716,7 +3131,9 @@ func testClusters(t testing.TB) []*cluster.Cluster {
 								"-": {
 									Keyspace: "test",
 									Name:     "-",
-									Shard:    &topodatapb.Shard{},
+									Shard: &topodatapb.Shard{
+										KeyRange: &topodatapb.KeyRange{},
+									},
 								},
 							},
 						},
@@ -753,6 +3170,19 @@ func testClusters(t testing.TB) []*cluster.Cluster {
 						},
 					},
 				},
+				GetKeyspaceResults: map[string]struct {
+					Response *vtctldatapb.GetKeyspaceResponse
+					Error    error
+				}{
+					"test": {
+						Response: &vtctldatapb.GetKeyspaceResponse{
+							Keyspace: &vtctldatapb.Keyspace{
+								Name:     "test",
+								Keyspace: &topodatapb.Keyspace{},
+							},
+						},
+					},
+				},
 				GetKeyspacesResults: &struct {
 					Keyspaces []*vtctldatapb.Keyspace
 					Error     error
@@ -764,6 +3194,158 @@ func testClusters(t testing.TB) []*cluster.Cluster {
 						},
 					},
 				},
+				GetSchemaResults: map[string]struct {
+					Response *vtctldatapb.GetSchemaResponse
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Response: &vtctldatapb.GetSchemaResponse{
+							Schema: &tabletmanagerdatapb.SchemaDefinition{
+								TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+									{Name: "t1", Schema: "create table t1 (id int(11) not null primary key);"},
+									{Name: "t2"},
+								},
+							},
+						},
+					},
+				},
+				GetSrvVSchemaResults: map[string]struct {
+					Response *vtctldatapb.GetSrvVSchemaResponse
+					Error    error
+				}{
+					"zone1": {
+						Response: &vtctldatapb.GetSrvVSchemaResponse{
+							SrvVSchema: &vschemapb.SrvVSchema{
+								Keyspaces: map[string]*vschemapb.Keyspace{
+									"test": {
+										Sharded: true,
+										Vindexes: map[string]*vschemapb.Vindex{
+											"id": {
+												Type: "hash",
+											},
+										},
+										Tables: map[string]*vschemapb.Table{
+											"t1": {
+												ColumnVindexes: []*vschemapb.ColumnVindex{
+													{
+														Name:   "id",
+														Column: "id",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				GetVSchemaResults: map[string]struct {
+					Response *vtctldatapb.GetVSchemaResponse
+					Error    error
+				}{
+					"test": {
+						Response: &vtctldatapb.GetVSchemaResponse{
+							VSchema: &vschemapb.Keyspace{},
+						},
+					},
+				},
+				GetWorkflowsResults: map[string]struct {
+					Response *vtctldatapb.GetWorkflowsResponse
+					Error    error
+				}{
+					"test": {
+						Response: &vtctldatapb.GetWorkflowsResponse{
+							Workflows: []*vtctldatapb.Workflow{
+								{
+									Name: "testworkflow",
+								},
+							},
+						}},
+				},
+				PingTabletResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+				PlannedReparentShardResults: map[string]struct {
+					Response *vtctldatapb.PlannedReparentShardResponse
+					Error    error
+				}{
+					"test/-": {
+						Response: &vtctldatapb.PlannedReparentShardResponse{},
+					},
+				},
+				RefreshStateResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+				ReloadSchemaKeyspaceResults: map[string]struct {
+					Response *vtctldatapb.ReloadSchemaKeyspaceResponse
+					Error    error
+				}{
+					"test": {
+						Response: &vtctldatapb.ReloadSchemaKeyspaceResponse{
+							Events: []*logutilpb.Event{{}, {}, {}}},
+					},
+				},
+				ReparentTabletResults: map[string]struct {
+					Response *vtctldatapb.ReparentTabletResponse
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Response: &vtctldatapb.ReparentTabletResponse{},
+					},
+				},
+				RunHealthCheckResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+				SetWritableResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+				ShardReplicationPositionsResults: map[string]struct {
+					Response *vtctldatapb.ShardReplicationPositionsResponse
+					Error    error
+				}{
+					"test/-": {
+						Response: &vtctldatapb.ShardReplicationPositionsResponse{},
+					},
+				},
+				StartReplicationResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+				StopReplicationResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+				TabletExternallyReparentedResults: map[string]struct {
+					Response *vtctldatapb.TabletExternallyReparentedResponse
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Response: &vtctldatapb.TabletExternallyReparentedResponse{},
+					},
+				},
+				ValidateKeyspaceResults: map[string]struct {
+					Response *vtctldatapb.ValidateKeyspaceResponse
+					Error    error
+				}{
+					"test": {
+						Response: &vtctldatapb.ValidateKeyspaceResponse{},
+					},
+				},
+				ValidateSchemaKeyspaceResults: map[string]struct {
+					Response *vtctldatapb.ValidateSchemaKeyspaceResponse
+					Error    error
+				}{
+					"test": {
+						Response: &vtctldatapb.ValidateSchemaKeyspaceResponse{},
+					},
+				},
+				ValidateVersionKeyspaceResults: map[string]struct {
+					Response *vtctldatapb.ValidateVersionKeyspaceResponse
+					Error    error
+				}{
+					"test": {
+						Response: &vtctldatapb.ValidateVersionKeyspaceResponse{},
+					},
+				},
 			},
 			Tablets: []*vtadminpb.Tablet{
 				{
@@ -773,7 +3355,16 @@ func testClusters(t testing.TB) []*cluster.Cluster {
 							Cell: "zone1",
 							Uid:  100,
 						},
+						Keyspace: "test",
+						Type:     topodatapb.TabletType_REPLICA,
 					},
+					State: vtadminpb.Tablet_SERVING,
+				},
+			},
+			Config: &cluster.Config{
+				TopoReadPoolConfig: &cluster.RPCPoolConfig{
+					Size:        100,
+					WaitTimeout: time.Millisecond * 50,
 				},
 			},
 		}, {
@@ -840,8 +3431,91 @@ func testClusters(t testing.TB) []*cluster.Cluster {
 						},
 					},
 				},
+				GetSchemaResults: map[string]struct {
+					Response *vtctldatapb.GetSchemaResponse
+					Error    error
+				}{
+					"other1-0000000100": {
+						Response: &vtctldatapb.GetSchemaResponse{
+							Schema: &tabletmanagerdatapb.SchemaDefinition{
+								TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+									{Name: "t1"},
+								},
+							},
+						},
+					},
+				},
+				GetSrvVSchemaResults: map[string]struct {
+					Response *vtctldatapb.GetSrvVSchemaResponse
+					Error    error
+				}{
+					"other1": {
+						Response: &vtctldatapb.GetSrvVSchemaResponse{
+							SrvVSchema: &vschemapb.SrvVSchema{},
+						},
+					},
+				},
+				GetVSchemaResults: map[string]struct {
+					Response *vtctldatapb.GetVSchemaResponse
+					Error    error
+				}{
+					"otherks": {
+						Response: &vtctldatapb.GetVSchemaResponse{
+							VSchema: &vschemapb.Keyspace{},
+						},
+					},
+				},
+				GetWorkflowsResults: map[string]struct {
+					Response *vtctldatapb.GetWorkflowsResponse
+					Error    error
+				}{
+					"otherks": {
+						Response: &vtctldatapb.GetWorkflowsResponse{
+							Workflows: []*vtctldatapb.Workflow{
+								{
+									Name: "otherks_workflow",
+								},
+							},
+						}},
+				},
+				ShardReplicationPositionsResults: map[string]struct {
+					Response *vtctldatapb.ShardReplicationPositionsResponse
+					Error    error
+				}{
+					"otherks/-": {
+						Response: &vtctldatapb.ShardReplicationPositionsResponse{},
+					},
+				},
+				ReloadSchemaKeyspaceResults: map[string]struct {
+					Response *vtctldatapb.ReloadSchemaKeyspaceResponse
+					Error    error
+				}{
+					"otherks": {
+						Response: &vtctldatapb.ReloadSchemaKeyspaceResponse{
+							Events: []*logutilpb.Event{{}}},
+					},
+				},
 			},
-			Tablets: []*vtadminpb.Tablet{},
+			Tablets: []*vtadminpb.Tablet{
+				{
+					Cluster: &vtadminpb.Cluster{Id: "other", Name: "other"},
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "other1",
+							Uid:  100,
+						},
+						Keyspace: "otherks",
+						Type:     topodatapb.TabletType_UNKNOWN,
+					},
+					State: vtadminpb.Tablet_SERVING,
+				},
+			},
+			Config: &cluster.Config{
+				TopoReadPoolConfig: &cluster.RPCPoolConfig{
+					Size:        100,
+					WaitTimeout: time.Millisecond * 50,
+				},
+			},
 		},
 	}
 

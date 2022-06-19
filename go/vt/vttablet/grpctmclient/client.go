@@ -24,6 +24,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/vt/callerid"
 
 	"google.golang.org/grpc"
@@ -678,6 +680,21 @@ func (client *Client) VReplicationWaitForPos(ctx context.Context, tablet *topoda
 		return err
 	}
 	return nil
+}
+
+// VDiff is part of the tmclient.TabletManagerClient interface.
+func (client *Client) VDiff(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.VDiffRequest) (*tabletmanagerdatapb.VDiffResponse, error) {
+	log.Infof("VDiff for tablet %s, request %+v", tablet.Alias.String(), req)
+	c, closer, err := client.dialer.dial(ctx, tablet)
+	if err != nil {
+		return nil, err
+	}
+	defer closer.Close()
+	response, err := c.VDiff(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	return response, nil
 }
 
 //

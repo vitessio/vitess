@@ -40,6 +40,7 @@ func TestCreateTableDiff(t *testing.T) {
 		errorMsg   string
 		autoinc    int
 		rotation   int
+		colrename  int
 		constraint int
 	}{
 		{
@@ -125,6 +126,47 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t2 (id int primary key, ts timestamp null, `i` bigint unsigned default null)",
 			diff:  "alter table t1 drop column c, modify column i bigint unsigned, add column ts timestamp null after id",
 			cdiff: "ALTER TABLE `t1` DROP COLUMN `c`, MODIFY COLUMN `i` bigint unsigned, ADD COLUMN `ts` timestamp NULL AFTER `id`",
+		},
+		// columns, rename
+		{
+			name:  "rename mid column. consider different",
+			from:  "create table t1 (id int primary key, i1 int not null, c char(3) default '')",
+			to:    "create table t2 (id int primary key, i2 int not null, c char(3) default '')",
+			diff:  "alter table t1 drop column i1, add column i2 int not null after id",
+			cdiff: "ALTER TABLE `t1` DROP COLUMN `i1`, ADD COLUMN `i2` int NOT NULL AFTER `id`",
+		},
+		{
+			name:      "rename mid column. statement",
+			from:      "create table t1 (id int primary key, i1 int not null, c char(3) default '')",
+			to:        "create table t2 (id int primary key, i2 int not null, c char(3) default '')",
+			colrename: ColumnRenameHeuristicStatement,
+			diff:      "alter table t1 rename column i1 to i2",
+			cdiff:     "ALTER TABLE `t1` RENAME COLUMN `i1` TO `i2`",
+		},
+		{
+			name:      "rename last column. statement",
+			from:      "create table t1 (id int primary key, i1 int not null)",
+			to:        "create table t2 (id int primary key, i2 int not null)",
+			colrename: ColumnRenameHeuristicStatement,
+			diff:      "alter table t1 rename column i1 to i2",
+			cdiff:     "ALTER TABLE `t1` RENAME COLUMN `i1` TO `i2`",
+		},
+		{
+			name:      "rename two columns. statement",
+			from:      "create table t1 (id int primary key, i1 int not null, c char(3) default '', v1 varchar(32))",
+			to:        "create table t2 (id int primary key, i2 int not null, c char(3) default '', v2 varchar(32))",
+			colrename: ColumnRenameHeuristicStatement,
+			diff:      "alter table t1 rename column i1 to i2, rename column v1 to v2",
+			cdiff:     "ALTER TABLE `t1` RENAME COLUMN `i1` TO `i2`, RENAME COLUMN `v1` TO `v2`",
+		},
+		{
+			// in a future iteration, this will generate a RENAME for both column, like in the previous test. Until then, we do not RENAME two successive columns
+			name:      "rename two successive columns. statement",
+			from:      "create table t1 (id int primary key, i1 int not null, v1 varchar(32))",
+			to:        "create table t2 (id int primary key, i2 int not null, v2 varchar(32))",
+			colrename: ColumnRenameHeuristicStatement,
+			diff:      "alter table t1 drop column i1, drop column v1, add column i2 int not null, add column v2 varchar(32)",
+			cdiff:     "ALTER TABLE `t1` DROP COLUMN `i1`, DROP COLUMN `v1`, ADD COLUMN `i2` int NOT NULL, ADD COLUMN `v2` varchar(32)",
 		},
 		// columns, reordering
 		{
@@ -930,6 +972,7 @@ func TestCreateTableDiff(t *testing.T) {
 			hints.AutoIncrementStrategy = ts.autoinc
 			hints.RangeRotationStrategy = ts.rotation
 			hints.ConstraintNamesStrategy = ts.constraint
+			hints.ColumnRenameStrategy = ts.colrename
 			alter, err := c.Diff(other, &hints)
 
 			require.Equal(t, len(ts.diffs), len(ts.cdiffs))

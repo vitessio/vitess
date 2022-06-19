@@ -38,25 +38,33 @@ package {{ .Package }}
 
 import (
 	"context"
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtadmin"
 	"vitess.io/vitess/go/vt/vtadmin/cluster"
 	"vitess.io/vitess/go/vt/vtadmin/rbac"
 	"vitess.io/vitess/go/vt/vtadmin/testutil"
 	"vitess.io/vitess/go/vt/vtadmin/vtctldclient/fakevtctldclient"
 
+	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 {{ range .Tests }}
 func Test{{ .Method }}(t *testing.T) {
+	t.Parallel()
+
 	opts := vtadmin.Options{
 		RBAC: &rbac.Config{
 			Rules: []*struct{
@@ -89,7 +97,7 @@ func Test{{ .Method }}(t *testing.T) {
 	{{ with $test := . -}}
 	{{ range .Cases }}
 	t.Run("{{ .Name }}", func(t *testing.T) {
-		t.Parallel()
+		{{- if not $test.SerializeCases -}}t.Parallel(){{- end }}
 		{{ getActor .Actor }}
 
 		ctx := context.Background()
@@ -137,9 +145,18 @@ func testClusters(t testing.TB) []*cluster.Cluster {
 							Cell: "{{ .Tablet.Alias.Cell }}",
 							Uid: {{ .Tablet.Alias.Uid }},
 						},
+						Keyspace: "{{ .Tablet.Keyspace }}",
+						Type: topodatapb.TabletType_{{ .Tablet.Type }},
 					},
+					State: vtadminpb.Tablet_{{ .State }},
 				},
 				{{- end }}
+			},
+			Config: &cluster.Config{
+				TopoReadPoolConfig: &cluster.RPCPoolConfig{
+					Size: 100,
+					WaitTimeout: time.Millisecond * 50,
+				},
 			},
 		},
 		{{- end -}}
@@ -148,4 +165,9 @@ func testClusters(t testing.TB) []*cluster.Cluster {
 
 	return testutil.BuildClusters(t, configs...)
 }
+`
+
+const _doct = `{{ range .Methods -}}
+{{ formatDocRow . }}
+{{ end -}}
 `

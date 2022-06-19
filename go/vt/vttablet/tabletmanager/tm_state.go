@@ -300,6 +300,14 @@ func (ts *tmState) updateLocked(ctx context.Context) error {
 		}
 	}
 
+	if ts.tm.VDiffEngine != nil {
+		if ts.tablet.Type == topodatapb.TabletType_PRIMARY {
+			ts.tm.VDiffEngine.Open(ts.tm.BatchCtx, ts.tm.VREngine)
+		} else {
+			ts.tm.VDiffEngine.Close()
+		}
+	}
+
 	if ts.isShardServing[ts.tablet.Type] {
 		ts.isInSrvKeyspace = true
 		statsIsInSrvKeyspace.Set(1)

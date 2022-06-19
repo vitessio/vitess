@@ -1151,6 +1151,8 @@ var (
 	}, {
 		input: "alter table a modify column foo int default 1 first",
 	}, {
+		input: "alter table a rename column foo to bar",
+	}, {
 		input:  "alter table a add foo varchar(255) generated always as (concat(bar, ' ', baz)) stored",
 		output: "alter table a add column foo varchar(255) as (concat(bar, ' ', baz)) stored",
 	}, {
@@ -3075,6 +3077,78 @@ var (
 	}, {
 		input:  "SELECT UpdateXML('<a><d></d><b>ccc</b><d></d></a>', '/a/d', '<e>fff</e>') AS val5",
 		output: "select updatexml('<a><d></d><b>ccc</b><d></d></a>', '/a/d', '<e>fff</e>') as val5 from dual",
+	}, {
+		input: "select get_lock('a', 10), is_free_lock('b'), is_used_lock('c'), release_all_locks(), release_lock('d') from dual",
+	}, {
+		input: "select /* function with distinct */ count(a) from t",
+	}, {
+		input:  "select /* function with distinct */ count(a) 'total col' from t",
+		output: "select /* function with distinct */ count(a) as `total col` from t",
+	}, {
+		input: "select /* function with distinct */ count(distinct a) from t",
+	}, {
+		input:  "select /* function with distinct */ count(distinct(a)) from t",
+		output: "select /* function with distinct */ count(distinct a) from t",
+	}, {
+		input: "select /* function with distinct */ count(*) from t",
+	}, {
+		input: "select avg(a) from products",
+	}, {
+		input:  "select avg(distinct(a)) from products",
+		output: "select avg(distinct a) from products",
+	}, {
+		input:  "select avg(a) 'Avg Price' from products",
+		output: "select avg(a) as `Avg Price` from products",
+	}, {
+		input: "select format(avg(distinct a), 2) from products",
+	}, {
+		input: "select max(a) from products",
+	}, {
+		input: "select min(a) from products",
+	}, {
+		input: "select sum(a) from products",
+	}, {
+		input:  "select sum(distinct(a)) from products",
+		output: "select sum(distinct a) from products",
+	}, {
+		input: "select sum(distinct a) from products",
+	}, {
+		input:  "select sum(a) 'sum Price' from products",
+		output: "select sum(a) as `sum Price` from products",
+	}, {
+		input: "select sum(a * b) from products",
+	}, {
+		input: "select bit_and(a) from products",
+	}, {
+		input: "select bit_or(a) from products",
+	}, {
+		input: "select bit_xor(a) from products",
+	}, {
+		input: "select std(a) from products",
+	}, {
+		input: "select stddev(a) from products",
+	}, {
+		input: "select stddev_pop(a) from products",
+	}, {
+		input: "select stddev_samp(a) from products",
+	}, {
+		input: "select var_pop(a) from products",
+	}, {
+		input: "select var_samp(a) from products",
+	}, {
+		input: "select variance(a) from products",
+	}, {
+		input:  "SELECT FORMAT_BYTES(512), FORMAT_BYTES(18446644073709551615), FORMAT_BYTES(@j), FORMAT_BYTES('asd'), FORMAT_BYTES(TRIM('str'))",
+		output: "select format_bytes(512), format_bytes(18446644073709551615), format_bytes(@j), format_bytes('asd'), format_bytes(trim('str')) from dual",
+	}, {
+		input:  "SELECT FORMAT_PICO_TIME(512), FORMAT_PICO_TIME(18446644073709551615), FORMAT_PICO_TIME(@j), FORMAT_PICO_TIME('asd'), FORMAT_PICO_TIME(TRIM('str'))",
+		output: "select format_pico_time(512), format_pico_time(18446644073709551615), format_pico_time(@j), format_pico_time('asd'), format_pico_time(trim('str')) from dual",
+	}, {
+		input:  "SELECT PS_CURRENT_THREAD_ID()",
+		output: "select ps_current_thread_id() from dual",
+	}, {
+		input:  "SELECT PS_THREAD_ID(512), PS_THREAD_ID(18446644073709551615), PS_THREAD_ID(@j), PS_THREAD_ID('asd'), PS_THREAD_ID(TRIM('str'))",
+		output: "select ps_thread_id(512), ps_thread_id(18446644073709551615), ps_thread_id(@j), ps_thread_id('asd'), ps_thread_id(trim('str')) from dual",
 	}}
 )
 
@@ -3281,7 +3355,41 @@ func TestInvalid(t *testing.T) {
 	}, {
 		input: "SELECT time, subject, val, FIRST_VALUE(val)  OVER w AS 'first', LAST_VALUE(val) OVER w AS 'last', NTH_VALUE(val, 2) OVER w AS 'second', NTH_VALUE(val, 4) OVER w AS 'fourth' FROM observations WINDOW w AS (PARTITION BY subject ORDER BY time ROWS -10 FOLLOWING);",
 		err:   "syntax error at position 246",
-	}}
+	}, {
+		input: "SELECT BIT_AND(DISTINCT a) FROM products",
+		err:   "syntax error at position 24 near 'DISTINCT'",
+	}, {
+		input: "SELECT BIT_OR(DISTINCT a) FROM products",
+		err:   "syntax error at position 23 near 'DISTINCT'",
+	}, {
+		input: "SELECT BIT_XOR(DISTINCT a) FROM products",
+		err:   "syntax error at position 24 near 'DISTINCT'",
+	}, {
+		input: "SELECT STD(DISTINCT a) FROM products",
+		err:   "syntax error at position 20 near 'DISTINCT'",
+	}, {
+		input: "SELECT STDDEV(DISTINCT a) FROM products",
+		err:   "syntax error at position 23 near 'DISTINCT'",
+	}, {
+		input: "SELECT STDDEV_POP(DISTINCT a) FROM products",
+		err:   "syntax error at position 27 near 'DISTINCT'",
+	}, {
+		input: "SELECT STDDEV_SAMP(DISTINCT a) FROM products",
+		err:   "syntax error at position 28 near 'DISTINCT'",
+	}, {
+		input: "SELECT VAR_POP(DISTINCT a) FROM products",
+		err:   "syntax error at position 24 near 'DISTINCT'",
+	}, {
+		input: "SELECT VAR_SAMP(DISTINCT a) FROM products",
+		err:   "syntax error at position 25 near 'DISTINCT'",
+	}, {
+		input: "SELECT VARIANCE(DISTINCT a) FROM products",
+		err:   "syntax error at position 25 near 'DISTINCT'",
+	}, {
+		input: "SELECT COUNT(DISTINCT *) FROM user",
+		err:   "syntax error at position 24",
+	},
+	}
 
 	for _, tcase := range invalidSQL {
 		_, err := Parse(tcase.input)
@@ -3646,8 +3754,7 @@ func TestConvert(t *testing.T) {
 		input  string
 		output string
 	}{{
-		input:  "select cast('abc' as date) from t",
-		output: "select convert('abc', date) from t",
+		input: "select cast('abc' as date) from t",
 	}, {
 		input: "select convert('abc', binary(4)) from t",
 	}, {
@@ -3700,10 +3807,7 @@ func TestConvert(t *testing.T) {
 	}, {
 		input: "select convert('abc', json) from t",
 	}, {
-		input: "select convert(json_keys(c), char(64) array) from t",
-	}, {
-		input:  "select cast(json_keys(c) as char(64) array) from t",
-		output: "select convert(json_keys(c), char(64) array) from t",
+		input: "select cast(json_keys(c) as char(64) array) from t",
 	}}
 
 	for _, tcase := range validSQL {
@@ -5040,7 +5144,7 @@ partition by range (YEAR(purchased)) subpartition by hash (TO_DAYS(purchased))
 		},
 		{
 			input:  "create table t (id int, info JSON, INDEX zips((CAST(info->'$.field' AS unsigned ARRAY))))",
-			output: "create table t (\n\tid int,\n\tinfo JSON,\n\tINDEX zips ((convert(info -> '$.field', unsigned array)))\n)",
+			output: "create table t (\n\tid int,\n\tinfo JSON,\n\tINDEX zips ((cast(info -> '$.field' as unsigned array)))\n)",
 		},
 	}
 	for _, test := range createTableQueries {

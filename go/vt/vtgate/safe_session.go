@@ -51,6 +51,11 @@ type SafeSession struct {
 	// this is a signal that found_rows has already been handles by the primitives,
 	// and doesn't have to be updated by the executor
 	foundRowsHandled bool
+
+	// queryFromVindex is used to avoid erroring out on multi-db transaction
+	// as the query that started a new transaction on the shard belong to a vindex.
+	queryFromVindex bool
+
 	*vtgatepb.Session
 }
 
@@ -281,8 +286,9 @@ func (session *SafeSession) InTransaction() bool {
 	return session.Session.InTransaction
 }
 
-// Find returns the transactionId and tabletAlias, if any, for a session
-func (session *SafeSession) Find(keyspace, shard string, tabletType topodatapb.TabletType) (transactionID int64, reservedID int64, alias *topodatapb.TabletAlias) {
+// FindAndChangeSessionIfInSingleTxMode returns the transactionId and tabletAlias, if any, for a session
+// modifies the shard session in a specific case for single mode transaction.
+func (session *SafeSession) FindAndChangeSessionIfInSingleTxMode(keyspace, shard string, tabletType topodatapb.TabletType, txMode vtgatepb.TransactionMode) (int64, int64, *topodatapb.TabletAlias, error) {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	sessions := session.ShardSessions
@@ -294,10 +300,22 @@ func (session *SafeSession) Find(keyspace, shard string, tabletType topodatapb.T
 	}
 	for _, shardSession := range sessions {
 		if keyspace == shardSession.Target.Keyspace && tabletType == shardSession.Target.TabletType && shard == shardSession.Target.Shard {
-			return shardSession.TransactionId, shardSession.ReservedId, shardSession.TabletAlias
+			if txMode != vtgatepb.TransactionMode_SINGLE || !shardSession.VindexOnly || session.queryFromVindex {
+				return shardSession.TransactionId, shardSession.ReservedId, shardSession.TabletAlias, nil
+			}
+			count := actualNoOfShardSession(session.ShardSessions)
+			// If the count of shard session which are non vindex only is greater than 0, then it is a
+			if count > 0 {
+				session.mustRollback = true
+				return 0, 0, nil, vterrors.Errorf(vtrpcpb.Code_ABORTED, "multi-db transaction attempted: %v", session.ShardSessions)
+			}
+			// the shard session is now used by non-vindex query as well,
+			// so it is not an exclusive vindex only shard session anymore.
+			shardSession.VindexOnly = false
+			return shardSession.TransactionId, shardSession.ReservedId, shardSession.TabletAlias, nil
 		}
 	}
-	return 0, 0, nil
+	return 0, 0, nil, nil
 }
 
 func addOrUpdate(shardSession *vtgatepb.Session_ShardSession, sessions []*vtgatepb.Session_ShardSession) ([]*vtgatepb.Session_ShardSession, error) {
@@ -347,13 +365,24 @@ func (session *SafeSession) AppendOrUpdate(shardSession *vtgatepb.Session_ShardS
 	// Always append, in order for rollback to succeed.
 	switch session.commitOrder {
 	case vtgatepb.CommitOrder_NORMAL:
+		if session.queryFromVindex {
+			shardSession.VindexOnly = true
+		}
 		newSessions, err := addOrUpdate(shardSession, session.ShardSessions)
 		if err != nil {
 			return err
 		}
 		session.ShardSessions = newSessions
+
+		if session.queryFromVindex {
+			break
+		}
 		// isSingle is enforced only for normmal commit order operations.
 		if session.isSingleDB(txMode) && len(session.ShardSessions) > 1 {
+			count := actualNoOfShardSession(session.ShardSessions)
+			if count <= 1 {
+				break
+			}
 			session.mustRollback = true
 			return vterrors.Errorf(vtrpcpb.Code_ABORTED, "multi-db transaction attempted: %v", session.ShardSessions)
 		}
@@ -375,6 +404,17 @@ func (session *SafeSession) AppendOrUpdate(shardSession *vtgatepb.Session_ShardS
 	}
 
 	return nil
+}
+
+func actualNoOfShardSession(sessions []*vtgatepb.Session_ShardSession) int {
+	actualSS := 0
+	for _, ss := range sessions {
+		if ss.VindexOnly {
+			continue
+		}
+		actualSS++
+	}
+	return actualSS
 }
 
 func (session *SafeSession) isSingleDB(txMode vtgatepb.TransactionMode) bool {
@@ -532,6 +572,7 @@ func (session *SafeSession) ResetLock() {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	session.LockSession = nil
+	session.AdvisoryLock = nil
 }
 
 // ResetAll resets the shard sessions and lock session.
@@ -547,6 +588,7 @@ func (session *SafeSession) ResetAll() {
 	session.PreSessions = nil
 	session.PostSessions = nil
 	session.LockSession = nil
+	session.AdvisoryLock = nil
 }
 
 // ResetShard reset the shard session for the provided tablet alias.
@@ -732,4 +774,56 @@ func (session *SafeSession) RemoveInternalSavepoint() {
 	if strings.Contains(session.Savepoints[sLast], session.savepointName) {
 		session.Savepoints = session.Savepoints[0:sLast]
 	}
+}
+
+// HasAdvisoryLock returns if any advisory lock is taken
+func (session *SafeSession) HasAdvisoryLock() bool {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
+	return len(session.AdvisoryLock) != 0
+}
+
+// AddAdvisoryLock adds the advisory lock to the list.
+func (session *SafeSession) AddAdvisoryLock(name string) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
+	if session.AdvisoryLock == nil {
+		session.AdvisoryLock = map[string]int64{name: 1}
+		return
+	}
+	count, exists := session.AdvisoryLock[name]
+	if exists {
+		count++
+	}
+	session.AdvisoryLock[name] = count
+}
+
+// RemoveAdvisoryLock removes the advisory lock from the list.
+func (session *SafeSession) RemoveAdvisoryLock(name string) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
+	if session.AdvisoryLock == nil {
+		return
+	}
+	count, exists := session.AdvisoryLock[name]
+	if !exists {
+		return
+	}
+	count--
+	if count == 0 {
+		delete(session.AdvisoryLock, name)
+		return
+	}
+	session.AdvisoryLock[name] = count
+}
+
+// ClearAdvisoryLock clears the advisory lock list.
+func (session *SafeSession) ClearAdvisoryLock() {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
+	session.AdvisoryLock = nil
 }

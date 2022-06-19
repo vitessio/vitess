@@ -301,10 +301,7 @@ func buildSQLCalcFoundRowsPlan(
 	sel2.Limit = nil
 
 	countStartExpr := []sqlparser.SelectExpr{&sqlparser.AliasedExpr{
-		Expr: &sqlparser.FuncExpr{
-			Name:  sqlparser.NewColIdent("count"),
-			Exprs: []sqlparser.SelectExpr{&sqlparser.StarExpr{}},
-		},
+		Expr: &sqlparser.CountStar{Name: "count"},
 	}}
 	if sel2.GroupBy == nil && sel2.Having == nil {
 		// if there is no grouping, we can use the same query and
@@ -349,15 +346,28 @@ func handleDualSelects(sel *sqlparser.Select, vschema plancontext.VSchema) (engi
 
 	exprs := make([]evalengine.Expr, len(sel.SelectExprs))
 	cols := make([]string, len(sel.SelectExprs))
+	var lockFunctions []*engine.LockFunc
 	for i, e := range sel.SelectExprs {
 		expr, ok := e.(*sqlparser.AliasedExpr)
 		if !ok {
 			return nil, nil
 		}
 		var err error
-		if sqlparser.IsLockingFunc(expr.Expr) {
-			// if we are using any locking functions, we bail out here and send the whole query to a single destination
-			return buildLockingPrimitive(sel, vschema)
+		lFunc, isLFunc := expr.Expr.(*sqlparser.LockingFunc)
+		if isLFunc {
+			elem := &engine.LockFunc{Typ: expr.Expr.(*sqlparser.LockingFunc)}
+			if lFunc.Name != nil {
+				n, err := evalengine.Translate(lFunc.Name, nil)
+				if err != nil {
+					return nil, err
+				}
+				elem.Name = n
+			}
+			lockFunctions = append(lockFunctions, elem)
+			continue
+		}
+		if len(lockFunctions) > 0 {
+			return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: lock function and other expression in same select query")
 		}
 		exprs[i], err = evalengine.Translate(expr.Expr, evalengine.LookupDefaultCollation(vschema.ConnCollation()))
 		if err != nil {
@@ -368,6 +378,9 @@ func handleDualSelects(sel *sqlparser.Select, vschema plancontext.VSchema) (engi
 			cols[i] = sqlparser.String(expr.Expr)
 		}
 	}
+	if len(lockFunctions) > 0 {
+		return buildLockingPrimitive(sel, vschema, lockFunctions)
+	}
 	return &engine.Projection{
 		Exprs: exprs,
 		Cols:  cols,
@@ -375,7 +388,7 @@ func handleDualSelects(sel *sqlparser.Select, vschema plancontext.VSchema) (engi
 	}, nil
 }
 
-func buildLockingPrimitive(sel *sqlparser.Select, vschema plancontext.VSchema) (engine.Primitive, error) {
+func buildLockingPrimitive(sel *sqlparser.Select, vschema plancontext.VSchema, lockFunctions []*engine.LockFunc) (engine.Primitive, error) {
 	ks, err := vschema.FirstSortedKeyspace()
 	if err != nil {
 		return nil, err
@@ -384,8 +397,8 @@ func buildLockingPrimitive(sel *sqlparser.Select, vschema plancontext.VSchema) (
 	return &engine.Lock{
 		Keyspace:          ks,
 		TargetDestination: key.DestinationKeyspaceID{0},
-		Query:             sqlparser.String(sel),
 		FieldQuery:        buf.String(),
+		LockFunctions:     lockFunctions,
 	}, nil
 }
 

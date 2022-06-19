@@ -261,8 +261,7 @@ func TestSchemaChange(t *testing.T) {
 	mysqlVersion = onlineddl.GetMySQLVersion(t, clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet())
 	require.NotEmpty(t, mysqlVersion)
 
-	_, flavorFamily, _ := mysql.GetFlavor(mysqlVersion, nil)
-	require.NotEqual(t, mysql.UnknownFlavorFamily, flavorFamily)
+	_, capableOf, _ := mysql.GetFlavor(mysqlVersion, nil)
 
 	var uuids []string
 	ddlStrategy := "online"
@@ -664,7 +663,9 @@ func TestSchemaChange(t *testing.T) {
 		require.NotNil(t, row)
 		specialPlan := row.AsString("special_plan", "")
 		artifacts := row.AsString("artifacts", "")
-		if flavorFamily == mysql.MySQL80FlavorFamily {
+		instantDDLCapable, err := capableOf(mysql.InstantDDLFlavorCapability)
+		assert.NoError(t, err)
+		if instantDDLCapable {
 			// instant DDL expected to apply in 8.0
 			assert.Contains(t, specialPlan, "instant-ddl")
 			assert.Empty(t, artifacts)
@@ -677,7 +678,9 @@ func TestSchemaChange(t *testing.T) {
 	t.Run("INSTANT DDL: fail revert", func(t *testing.T) {
 		uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)
 		uuids = append(uuids, uuid)
-		if flavorFamily == mysql.MySQL80FlavorFamily {
+		instantDDLCapable, err := capableOf(mysql.InstantDDLFlavorCapability)
+		assert.NoError(t, err)
+		if instantDDLCapable {
 			// instant DDL expected to apply in 8.0, therefore revert is impossible
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed)
 		} else {

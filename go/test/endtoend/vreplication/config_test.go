@@ -1,3 +1,19 @@
+/*
+Copyright 2022 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package vreplication
 
 // The product, customer, Lead, Lead-1 tables are used to exercise and test most Workflow variants.
@@ -12,7 +28,7 @@ package vreplication
 //   2. Column and table names with special characters in them, namely a dash
 //   3. Identifiers using reserved words, as lead is a reserved word in MySQL 8.0+ (https://dev.mysql.com/doc/refman/8.0/en/keywords.html)
 // The internal table _vt_PURGE_4f9194b43b2011eb8a0104ed332e05c2_20221210194431 should be ignored by vreplication
-// The db_order_test table is used to ensure vreplication and vdiff work well with complex non-integer PKs, even across DB versions.
+// The db_order_test table is used to ensure vreplication and vdiff1 work well with complex non-integer PKs, even across DB versions.
 var (
 	initialProductSchema = `
 create table product(pid int, description varbinary(128), date1 datetime not null default '0000-00-00 00:00:00', date2 datetime not null default '2021-00-01 00:00:00', primary key(pid)) CHARSET=utf8mb4;

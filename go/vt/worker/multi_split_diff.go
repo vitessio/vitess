@@ -848,11 +848,9 @@ func (msdw *MultiSplitDiffWorker) diff(ctx context.Context) error {
 
 	// read the vschema if needed
 	var keyspaceSchema *vindexes.KeyspaceSchema
-	if *useV3ReshardingMode {
-		keyspaceSchema, err = msdw.loadVSchema(ctx)
-		if err != nil {
-			return err
-		}
+	keyspaceSchema, err = msdw.loadVSchema(ctx)
+	if err != nil {
+		return err
 	}
 
 	msdw.wr.Logger().Infof("running the diffs...")

@@ -163,6 +163,12 @@ type (
 		After            *ColName
 	}
 
+	// RenameColumn is used to change the column definition in alter table command
+	RenameColumn struct {
+		OldName *ColName
+		NewName *ColName
+	}
+
 	// AlterCharset is used to set the default or change the character set and collation in alter table command
 	AlterCharset struct {
 		CharacterSet string
@@ -744,6 +750,7 @@ func (*AlterCheck) iAlterOption()              {}
 func (*AlterIndex) iAlterOption()              {}
 func (*ChangeColumn) iAlterOption()            {}
 func (*ModifyColumn) iAlterOption()            {}
+func (*RenameColumn) iAlterOption()            {}
 func (*AlterCharset) iAlterOption()            {}
 func (*KeyState) iAlterOption()                {}
 func (*TablespaceOperation) iAlterOption()     {}
@@ -2325,15 +2332,6 @@ type (
 		Exprs     SelectExprs
 	}
 
-	// GroupConcatExpr represents a call to GROUP_CONCAT
-	GroupConcatExpr struct {
-		Distinct  bool
-		Exprs     SelectExprs
-		OrderBy   OrderBy
-		Separator string
-		Limit     *Limit
-	}
-
 	// ValuesFuncExpr represents a function call.
 	ValuesFuncExpr struct {
 		Name *ColName
@@ -2350,12 +2348,20 @@ type (
 		To   Expr
 	}
 
-	// ConvertExpr represents a call to CONVERT(expr, type)
-	// or it's equivalent CAST(expr AS type). Both are rewritten to the former.
-	ConvertExpr struct {
+	// CastExpr represents a call to CAST(expr AS type)
+	// This is separate from CONVERT(expr, type) since there are
+	// places such as in CREATE TABLE statements where they
+	// are treated differently.
+	CastExpr struct {
 		Expr  Expr
 		Type  *ConvertType
 		Array bool
+	}
+
+	// ConvertExpr represents a call to CONVERT(expr, type)
+	ConvertExpr struct {
+		Expr Expr
+		Type *ConvertType
 	}
 
 	// ConvertUsingExpr represents a call to CONVERT(expr USING charset).
@@ -2640,6 +2646,108 @@ type (
 		JSONValue Expr
 	}
 
+	AggrFunc interface {
+		Expr
+		AggrName() string
+		GetArg() Expr
+		IsDistinct() bool
+		GetArgs() Exprs
+	}
+
+	Count struct {
+		Args     Exprs
+		Distinct bool
+		Name     string
+	}
+
+	CountStar struct {
+		Name string
+	}
+
+	Avg struct {
+		Arg      Expr
+		Distinct bool
+		Name     string
+	}
+
+	Max struct {
+		Arg      Expr
+		Distinct bool
+		Name     string
+	}
+
+	Min struct {
+		Arg      Expr
+		Distinct bool
+		Name     string
+	}
+
+	Sum struct {
+		Arg      Expr
+		Distinct bool
+		Name     string
+	}
+
+	BitAnd struct {
+		Arg  Expr
+		Name string
+	}
+
+	BitOr struct {
+		Arg  Expr
+		Name string
+	}
+
+	BitXor struct {
+		Arg  Expr
+		Name string
+	}
+
+	Std struct {
+		Arg  Expr
+		Name string
+	}
+
+	StdDev struct {
+		Arg  Expr
+		Name string
+	}
+
+	StdPop struct {
+		Arg  Expr
+		Name string
+	}
+
+	StdSamp struct {
+		Arg  Expr
+		Name string
+	}
+
+	VarPop struct {
+		Arg  Expr
+		Name string
+	}
+
+	VarSamp struct {
+		Arg  Expr
+		Name string
+	}
+
+	Variance struct {
+		Arg  Expr
+		Name string
+	}
+
+	// GroupConcatExpr represents a call to GROUP_CONCAT
+	GroupConcatExpr struct {
+		Distinct  bool
+		Exprs     Exprs
+		OrderBy   OrderBy
+		Separator string
+		Limit     *Limit
+		Name      string
+	}
+
 	// RegexpInstrExpr represents REGEXP_INSTR()
 	// For more information, visit https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-instr
 	RegexpInstrExpr struct {
@@ -2745,9 +2853,123 @@ type (
 		XPathExpr Expr
 		NewXML    Expr
 	}
+
+	// LockingFuncType is an enum that get types of LockingFunc
+	LockingFuncType int8
+
+	// LockingFunc represents the advisory lock functions.
+	LockingFunc struct {
+		Type    LockingFuncType
+		Name    Expr
+		Timeout Expr
+	}
+
+	// PerformanceSchemaType is an enum that get types of LockingFunc
+	PerformanceSchemaType int8
+
+	// PerformanceSchemaFuncExpr stands for Performance Schema Functions
+	// Argument has different meanings for different types
+	// For FORMAT_BYTES, it means count
+	// For FORMAT_PICO_TIME, it means time_val
+	// For PS_THREAD_ID it means connection_id
+	// For more details, visit https://dev.mysql.com/doc/refman/8.0/en/performance-schema-functions.html
+	PerformanceSchemaFuncExpr struct {
+		Type     PerformanceSchemaType
+		Argument Expr
+	}
 )
 
 // iExpr ensures that only expressions nodes can be assigned to a Expr
+func (*Sum) iExpr()             {}
+func (*Min) iExpr()             {}
+func (*Max) iExpr()             {}
+func (*Avg) iExpr()             {}
+func (*CountStar) iExpr()       {}
+func (*Count) iExpr()           {}
+func (*GroupConcatExpr) iExpr() {}
+func (*BitAnd) iExpr()          {}
+func (*BitOr) iExpr()           {}
+func (*BitXor) iExpr()          {}
+func (*Std) iExpr()             {}
+func (*StdDev) iExpr()          {}
+func (*StdPop) iExpr()          {}
+func (*StdSamp) iExpr()         {}
+func (*VarPop) iExpr()          {}
+func (*VarSamp) iExpr()         {}
+func (*Variance) iExpr()        {}
+
+func (sum *Sum) GetArg() Expr                   { return sum.Arg }
+func (min *Min) GetArg() Expr                   { return min.Arg }
+func (max *Max) GetArg() Expr                   { return max.Arg }
+func (avg *Avg) GetArg() Expr                   { return avg.Arg }
+func (*CountStar) GetArg() Expr                 { return nil }
+func (count *Count) GetArg() Expr               { return count.Args[0] }
+func (grpConcat *GroupConcatExpr) GetArg() Expr { return grpConcat.Exprs[0] }
+func (bAnd *BitAnd) GetArg() Expr               { return bAnd.Arg }
+func (bOr *BitOr) GetArg() Expr                 { return bOr.Arg }
+func (bXor *BitXor) GetArg() Expr               { return bXor.Arg }
+func (std *Std) GetArg() Expr                   { return std.Arg }
+func (stdD *StdDev) GetArg() Expr               { return stdD.Arg }
+func (stdP *StdPop) GetArg() Expr               { return stdP.Arg }
+func (stdS *StdSamp) GetArg() Expr              { return stdS.Arg }
+func (varP *VarPop) GetArg() Expr               { return varP.Arg }
+func (varS *VarSamp) GetArg() Expr              { return varS.Arg }
+func (variance *Variance) GetArg() Expr         { return variance.Arg }
+
+func (sum *Sum) GetArgs() Exprs                   { return Exprs{sum.Arg} }
+func (min *Min) GetArgs() Exprs                   { return Exprs{min.Arg} }
+func (max *Max) GetArgs() Exprs                   { return Exprs{max.Arg} }
+func (avg *Avg) GetArgs() Exprs                   { return Exprs{avg.Arg} }
+func (*CountStar) GetArgs() Exprs                 { return nil }
+func (count *Count) GetArgs() Exprs               { return count.Args }
+func (grpConcat *GroupConcatExpr) GetArgs() Exprs { return grpConcat.Exprs }
+func (bAnd *BitAnd) GetArgs() Exprs               { return Exprs{bAnd.Arg} }
+func (bOr *BitOr) GetArgs() Exprs                 { return Exprs{bOr.Arg} }
+func (bXor *BitXor) GetArgs() Exprs               { return Exprs{bXor.Arg} }
+func (std *Std) GetArgs() Exprs                   { return Exprs{std.Arg} }
+func (stdD *StdDev) GetArgs() Exprs               { return Exprs{stdD.Arg} }
+func (stdP *StdPop) GetArgs() Exprs               { return Exprs{stdP.Arg} }
+func (stdS *StdSamp) GetArgs() Exprs              { return Exprs{stdS.Arg} }
+func (varP *VarPop) GetArgs() Exprs               { return Exprs{varP.Arg} }
+func (varS *VarSamp) GetArgs() Exprs              { return Exprs{varS.Arg} }
+func (variance *Variance) GetArgs() Exprs         { return Exprs{variance.Arg} }
+
+func (sum *Sum) IsDistinct() bool                   { return sum.Distinct }
+func (min *Min) IsDistinct() bool                   { return min.Distinct }
+func (max *Max) IsDistinct() bool                   { return max.Distinct }
+func (avg *Avg) IsDistinct() bool                   { return avg.Distinct }
+func (cStar *CountStar) IsDistinct() bool           { return false }
+func (count *Count) IsDistinct() bool               { return count.Distinct }
+func (grpConcat *GroupConcatExpr) IsDistinct() bool { return grpConcat.Distinct }
+func (bAnd *BitAnd) IsDistinct() bool               { return false }
+func (bOr *BitOr) IsDistinct() bool                 { return false }
+func (bXor *BitXor) IsDistinct() bool               { return false }
+func (std *Std) IsDistinct() bool                   { return false }
+func (stdD *StdDev) IsDistinct() bool               { return false }
+func (stdP *StdPop) IsDistinct() bool               { return false }
+func (stdS *StdSamp) IsDistinct() bool              { return false }
+func (varP *VarPop) IsDistinct() bool               { return false }
+func (varS *VarSamp) IsDistinct() bool              { return false }
+func (variance *Variance) IsDistinct() bool         { return false }
+
+func (sum *Sum) AggrName() string                   { return sum.Name }
+func (min *Min) AggrName() string                   { return min.Name }
+func (max *Max) AggrName() string                   { return max.Name }
+func (avg *Avg) AggrName() string                   { return avg.Name }
+func (cStar *CountStar) AggrName() string           { return cStar.Name }
+func (count *Count) AggrName() string               { return count.Name }
+func (grpConcat *GroupConcatExpr) AggrName() string { return grpConcat.Name }
+func (bAnd *BitAnd) AggrName() string               { return bAnd.Name }
+func (bOr *BitOr) AggrName() string                 { return bOr.Name }
+func (bXor *BitXor) AggrName() string               { return bXor.Name }
+func (std *Std) AggrName() string                   { return std.Name }
+func (stdD *StdDev) AggrName() string               { return stdD.Name }
+func (stdP *StdPop) AggrName() string               { return stdP.Name }
+func (stdS *StdSamp) AggrName() string              { return stdS.Name }
+func (varP *VarPop) AggrName() string               { return varP.Name }
+func (varS *VarSamp) AggrName() string              { return varS.Name }
+func (variance *Variance) AggrName() string         { return variance.Name }
+
 func (*AndExpr) iExpr()                            {}
 func (*OrExpr) iExpr()                             {}
 func (*XorExpr) iExpr()                            {}
@@ -2776,11 +2998,11 @@ func (*WeightStringFuncExpr) iExpr()               {}
 func (*CurTimeFuncExpr) iExpr()                    {}
 func (*CaseExpr) iExpr()                           {}
 func (*ValuesFuncExpr) iExpr()                     {}
+func (*CastExpr) iExpr()                           {}
 func (*ConvertExpr) iExpr()                        {}
 func (*SubstrExpr) iExpr()                         {}
 func (*ConvertUsingExpr) iExpr()                   {}
 func (*MatchExpr) iExpr()                          {}
-func (*GroupConcatExpr) iExpr()                    {}
 func (*Default) iExpr()                            {}
 func (*ExtractedSubquery) iExpr()                  {}
 func (*TrimFuncExpr) iExpr()                       {}
@@ -2818,6 +3040,8 @@ func (*LagLeadExpr) iExpr()                        {}
 func (*NamedWindow) iExpr()                        {}
 func (*ExtractValueExpr) iExpr()                   {}
 func (*UpdateXMLExpr) iExpr()                      {}
+func (*LockingFunc) iExpr()                        {}
+func (*PerformanceSchemaFuncExpr) iExpr()          {}
 
 // iCallable marks all expressions that represent function calls
 func (*FuncExpr) iCallable()                           {}
@@ -2865,6 +3089,7 @@ func (*LagLeadExpr) iCallable()                        {}
 func (*NamedWindow) iCallable()                        {}
 func (*ExtractValueExpr) iCallable()                   {}
 func (*UpdateXMLExpr) iCallable()                      {}
+func (*PerformanceSchemaFuncExpr) iCallable()          {}
 
 // Exprs represents a list of value expressions.
 // It's not a valid expression because it's not parenthesized.

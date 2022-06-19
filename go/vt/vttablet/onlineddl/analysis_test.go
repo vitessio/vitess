@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -155,7 +156,8 @@ func TestAnalyzeInstantDDL(t *testing.T) {
 			alterTable, ok := stmt.(*sqlparser.AlterTable)
 			require.True(t, ok)
 
-			plan, err := AnalyzeInstantDDL(alterTable, createTable, tc.version)
+			_, capableOf, _ := mysql.GetFlavor(tc.version, nil)
+			plan, err := AnalyzeInstantDDL(alterTable, createTable, capableOf)
 			if tc.expectError {
 				assert.Error(t, err)
 			} else {

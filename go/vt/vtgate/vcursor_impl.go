@@ -36,7 +36,6 @@ import (
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/key"
-	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -51,7 +50,6 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/buffer"
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vtgate/vschemaacl"
@@ -67,10 +65,11 @@ type iExecute interface {
 	Execute(ctx context.Context, method string, session *SafeSession, s string, vars map[string]*querypb.BindVariable) (*sqltypes.Result, error)
 	ExecuteMultiShard(ctx context.Context, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, session *SafeSession, autocommit bool, ignoreMaxMemoryRows bool) (qr *sqltypes.Result, errs []error)
 	StreamExecuteMulti(ctx context.Context, query string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, session *SafeSession, autocommit bool, callback func(reply *sqltypes.Result) error) []error
-	ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, session *SafeSession) (*sqltypes.Result, error)
+	ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, session *SafeSession, lockFuncType sqlparser.LockingFuncType) (*sqltypes.Result, error)
 	Commit(ctx context.Context, safeSession *SafeSession) error
 	ExecuteMessageStream(ctx context.Context, rss []*srvtopo.ResolvedShard, name string, callback func(*sqltypes.Result) error) error
 	ExecuteVStream(ctx context.Context, rss []*srvtopo.ResolvedShard, filter *binlogdatapb.Filter, gtid string, callback func(evs []*binlogdatapb.VEvent) error) error
+	ReleaseLock(ctx context.Context, session *SafeSession) error
 
 	showVitessReplicationStatus(ctx context.Context, filter *sqlparser.ShowFilter) (*sqltypes.Result, error)
 	showShards(ctx context.Context, filter *sqlparser.ShowFilter, destTabletType topodatapb.TabletType) (*sqltypes.Result, error)
@@ -112,6 +111,7 @@ type vcursorImpl struct {
 	warnShardedOnly     bool // when using sharded only features, a warning will be warnings field
 
 	warnings []*querypb.QueryWarning // any warnings that are accumulated during the planning phase are stored here
+	pv       plancontext.PlannerVersion
 }
 
 // newVcursorImpl creates a vcursorImpl. Before creating this object, you have to separate out any marginComments that came with
@@ -129,6 +129,7 @@ func newVCursorImpl(
 	resolver *srvtopo.Resolver,
 	serv srvtopo.Server,
 	warnShardedOnly bool,
+	pv plancontext.PlannerVersion,
 ) (*vcursorImpl, error) {
 	keyspace, tabletType, destination, err := parseDestinationTarget(safeSession.TargetString, vschema)
 	if err != nil {
@@ -174,6 +175,7 @@ func newVCursorImpl(
 		vm:              vm,
 		topoServer:      ts,
 		warnShardedOnly: warnShardedOnly,
+		pv:              pv,
 	}, nil
 }
 
@@ -412,13 +414,7 @@ func (vc *vcursorImpl) Planner() plancontext.PlannerVersion {
 		vc.safeSession.Options.PlannerVersion != querypb.ExecuteOptions_DEFAULT_PLANNER {
 		return vc.safeSession.Options.PlannerVersion
 	}
-	version, done := plancontext.PlannerNameToVersion(*plannerVersion)
-	if done {
-		return version
-	}
-
-	log.Warning("unknown planner version configured. using the default")
-	return planbuilder.V3
+	return vc.pv
 }
 
 // GetSemTable implements the ContextVSchema interface
@@ -528,6 +524,12 @@ func (vc *vcursorImpl) StreamExecuteMulti(query string, rss []*srvtopo.ResolvedS
 	return errs
 }
 
+// ExecuteLock is for executing advisory lock statements.
+func (vc *vcursorImpl) ExecuteLock(rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, lockFuncType sqlparser.LockingFuncType) (*sqltypes.Result, error) {
+	query.Sql = vc.marginComments.Leading + query.Sql + vc.marginComments.Trailing
+	return vc.executor.ExecuteLock(vc.ctx, rs, query, vc.safeSession, lockFuncType)
+}
+
 // ExecuteStandalone is part of the engine.VCursor interface.
 func (vc *vcursorImpl) ExecuteStandalone(query string, bindVars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard) (*sqltypes.Result, error) {
 	rss := []*srvtopo.ResolvedShard{rs}
@@ -543,11 +545,6 @@ func (vc *vcursorImpl) ExecuteStandalone(query string, bindVars map[string]*quer
 	return qr, vterrors.Aggregate(errs)
 }
 
-func (vc *vcursorImpl) ExecuteLock(rs *srvtopo.ResolvedShard, query *querypb.BoundQuery) (*sqltypes.Result, error) {
-	query.Sql = vc.marginComments.Leading + query.Sql + vc.marginComments.Trailing
-	return vc.executor.ExecuteLock(vc.ctx, rs, query, vc.safeSession)
-}
-
 // ExecuteKeyspaceID is part of the engine.VCursor interface.
 func (vc *vcursorImpl) ExecuteKeyspaceID(keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, rollbackOnError, autocommit bool) (*sqltypes.Result, error) {
 	atomic.AddUint64(&vc.logStats.ShardQueries, 1)
@@ -559,8 +556,19 @@ func (vc *vcursorImpl) ExecuteKeyspaceID(keyspace string, ksid []byte, query str
 		Sql:           query,
 		BindVariables: bindVars,
 	}}
-	qr, errs := vc.ExecuteMultiShard(rss, queries, rollbackOnError, autocommit)
 
+	// This applies only when VTGate works in SINGLE transaction_mode.
+	// This function is only called from consistent_lookup vindex when the lookup row getting inserting finds a duplicate.
+	// In such scenario, original row needs to be locked to check if it already exists or no other transaction is working on it or does not write to it.
+	// This creates a transaction but that transaction is for locking purpose only and should not cause multi-db transaction error.
+	// This fields helps in to ignore multi-db transaction error when it states `queryFromVindex`.
+	if !rollbackOnError {
+		vc.safeSession.queryFromVindex = true
+		defer func() {
+			vc.safeSession.queryFromVindex = false
+		}()
+	}
+	qr, errs := vc.ExecuteMultiShard(rss, queries, rollbackOnError, autocommit)
 	return qr, vterrors.Aggregate(errs)
 }
 
@@ -730,13 +738,13 @@ func (vc *vcursorImpl) SetSkipQueryPlanCache(skipQueryPlanCache bool) error {
 	return nil
 }
 
-// SetSkipQueryPlanCache implements the SessionActions interface
+// SetSQLSelectLimit implements the SessionActions interface
 func (vc *vcursorImpl) SetSQLSelectLimit(limit int64) error {
 	vc.safeSession.GetOrCreateOptions().SqlSelectLimit = limit
 	return nil
 }
 
-// SetSkipQueryPlanCache implements the SessionActions interface
+// SetTransactionMode implements the SessionActions interface
 func (vc *vcursorImpl) SetTransactionMode(mode vtgatepb.TransactionMode) {
 	vc.safeSession.TransactionMode = mode
 }
@@ -757,12 +765,12 @@ func (vc *vcursorImpl) SetFoundRows(foundRows uint64) {
 	vc.safeSession.foundRowsHandled = true
 }
 
-// SetReadAfterWriteGTID implements the SessionActions interface
+// SetDDLStrategy implements the SessionActions interface
 func (vc *vcursorImpl) SetDDLStrategy(strategy string) {
 	vc.safeSession.SetDDLStrategy(strategy)
 }
 
-// SetReadAfterWriteGTID implements the SessionActions interface
+// GetDDLStrategy implements the SessionActions interface
 func (vc *vcursorImpl) GetDDLStrategy() string {
 	return vc.safeSession.GetDDLStrategy()
 }
@@ -806,6 +814,21 @@ func (vc *vcursorImpl) HasCreatedTempTable() {
 // GetWarnings implements the SessionActions interface
 func (vc *vcursorImpl) GetWarnings() []*querypb.QueryWarning {
 	return vc.safeSession.GetWarnings()
+}
+
+// AnyAdvisoryLockTaken implements the SessionActions interface
+func (vc *vcursorImpl) AnyAdvisoryLockTaken() bool {
+	return vc.safeSession.HasAdvisoryLock()
+}
+
+// AddAdvisoryLock implements the SessionActions interface
+func (vc *vcursorImpl) AddAdvisoryLock(name string) {
+	vc.safeSession.AddAdvisoryLock(name)
+}
+
+// RemoveAdvisoryLock implements the SessionActions interface
+func (vc *vcursorImpl) RemoveAdvisoryLock(name string) {
+	vc.safeSession.RemoveAdvisoryLock(name)
 }
 
 // GetDBDDLPluginName implements the VCursor interface
@@ -971,4 +994,8 @@ func (vc *vcursorImpl) SetExec(name string, value string) error {
 
 func (vc *vcursorImpl) CanUseSetVar() bool {
 	return sqlparser.IsMySQL80AndAbove() && *setVarEnabled
+}
+
+func (vc *vcursorImpl) ReleaseLock() error {
+	return vc.executor.ReleaseLock(vc.ctx, vc.safeSession)
 }

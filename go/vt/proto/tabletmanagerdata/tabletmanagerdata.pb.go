@@ -4649,6 +4649,442 @@ func (x *VExecResponse) GetResult() *query.QueryResult {
 	return nil
 }
 
+type VDiffRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Keyspace   string        `protobuf:"bytes,1,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
+	Workflow   string        `protobuf:"bytes,2,opt,name=workflow,proto3" json:"workflow,omitempty"`
+	Command    string        `protobuf:"bytes,3,opt,name=command,proto3" json:"command,omitempty"`
+	SubCommand string        `protobuf:"bytes,4,opt,name=sub_command,json=subCommand,proto3" json:"sub_command,omitempty"`
+	VdiffUuid  string        `protobuf:"bytes,5,opt,name=vdiff_uuid,json=vdiffUuid,proto3" json:"vdiff_uuid,omitempty"`
+	Options    *VDiffOptions `protobuf:"bytes,6,opt,name=options,proto3" json:"options,omitempty"`
+}
+
+func (x *VDiffRequest) Reset() {
+	*x = VDiffRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_tabletmanagerdata_proto_msgTypes[94]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *VDiffRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*VDiffRequest) ProtoMessage() {}
+
+func (x *VDiffRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_tabletmanagerdata_proto_msgTypes[94]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use VDiffRequest.ProtoReflect.Descriptor instead.
+func (*VDiffRequest) Descriptor() ([]byte, []int) {
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{94}
+}
+
+func (x *VDiffRequest) GetKeyspace() string {
+	if x != nil {
+		return x.Keyspace
+	}
+	return ""
+}
+
+func (x *VDiffRequest) GetWorkflow() string {
+	if x != nil {
+		return x.Workflow
+	}
+	return ""
+}
+
+func (x *VDiffRequest) GetCommand() string {
+	if x != nil {
+		return x.Command
+	}
+	return ""
+}
+
+func (x *VDiffRequest) GetSubCommand() string {
+	if x != nil {
+		return x.SubCommand
+	}
+	return ""
+}
+
+func (x *VDiffRequest) GetVdiffUuid() string {
+	if x != nil {
+		return x.VdiffUuid
+	}
+	return ""
+}
+
+func (x *VDiffRequest) GetOptions() *VDiffOptions {
+	if x != nil {
+		return x.Options
+	}
+	return nil
+}
+
+type VDiffResponse struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Id        int64              `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Output    *query.QueryResult `protobuf:"bytes,2,opt,name=output,proto3" json:"output,omitempty"`
+	VdiffUuid string             `protobuf:"bytes,3,opt,name=vdiff_uuid,json=vdiffUuid,proto3" json:"vdiff_uuid,omitempty"`
+}
+
+func (x *VDiffResponse) Reset() {
+	*x = VDiffResponse{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_tabletmanagerdata_proto_msgTypes[95]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *VDiffResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*VDiffResponse) ProtoMessage() {}
+
+func (x *VDiffResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_tabletmanagerdata_proto_msgTypes[95]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use VDiffResponse.ProtoReflect.Descriptor instead.
+func (*VDiffResponse) Descriptor() ([]byte, []int) {
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{95}
+}
+
+func (x *VDiffResponse) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *VDiffResponse) GetOutput() *query.QueryResult {
+	if x != nil {
+		return x.Output
+	}
+	return nil
+}
+
+func (x *VDiffResponse) GetVdiffUuid() string {
+	if x != nil {
+		return x.VdiffUuid
+	}
+	return ""
+}
+
+// options that influence the tablet selected by the picker for streaming data from
+type VDiffPickerOptions struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	TabletTypes string `protobuf:"bytes,1,opt,name=tablet_types,json=tabletTypes,proto3" json:"tablet_types,omitempty"`
+	SourceCell  string `protobuf:"bytes,2,opt,name=source_cell,json=sourceCell,proto3" json:"source_cell,omitempty"`
+	TargetCell  string `protobuf:"bytes,3,opt,name=target_cell,json=targetCell,proto3" json:"target_cell,omitempty"`
+}
+
+func (x *VDiffPickerOptions) Reset() {
+	*x = VDiffPickerOptions{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_tabletmanagerdata_proto_msgTypes[96]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *VDiffPickerOptions) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*VDiffPickerOptions) ProtoMessage() {}
+
+func (x *VDiffPickerOptions) ProtoReflect() protoreflect.Message {
+	mi := &file_tabletmanagerdata_proto_msgTypes[96]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use VDiffPickerOptions.ProtoReflect.Descriptor instead.
+func (*VDiffPickerOptions) Descriptor() ([]byte, []int) {
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{96}
+}
+
+func (x *VDiffPickerOptions) GetTabletTypes() string {
+	if x != nil {
+		return x.TabletTypes
+	}
+	return ""
+}
+
+func (x *VDiffPickerOptions) GetSourceCell() string {
+	if x != nil {
+		return x.SourceCell
+	}
+	return ""
+}
+
+func (x *VDiffPickerOptions) GetTargetCell() string {
+	if x != nil {
+		return x.TargetCell
+	}
+	return ""
+}
+
+// options that only influence how vdiff differences are reported
+type VDiffReportOptions struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	OnlyPKS    bool   `protobuf:"varint,1,opt,name=only_p_k_s,json=onlyPKS,proto3" json:"only_p_k_s,omitempty"`
+	DebugQuery bool   `protobuf:"varint,2,opt,name=debug_query,json=debugQuery,proto3" json:"debug_query,omitempty"`
+	Format     string `protobuf:"bytes,3,opt,name=format,proto3" json:"format,omitempty"`
+}
+
+func (x *VDiffReportOptions) Reset() {
+	*x = VDiffReportOptions{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_tabletmanagerdata_proto_msgTypes[97]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *VDiffReportOptions) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*VDiffReportOptions) ProtoMessage() {}
+
+func (x *VDiffReportOptions) ProtoReflect() protoreflect.Message {
+	mi := &file_tabletmanagerdata_proto_msgTypes[97]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use VDiffReportOptions.ProtoReflect.Descriptor instead.
+func (*VDiffReportOptions) Descriptor() ([]byte, []int) {
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{97}
+}
+
+func (x *VDiffReportOptions) GetOnlyPKS() bool {
+	if x != nil {
+		return x.OnlyPKS
+	}
+	return false
+}
+
+func (x *VDiffReportOptions) GetDebugQuery() bool {
+	if x != nil {
+		return x.DebugQuery
+	}
+	return false
+}
+
+func (x *VDiffReportOptions) GetFormat() string {
+	if x != nil {
+		return x.Format
+	}
+	return ""
+}
+
+type VDiffCoreOptions struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Tables                string `protobuf:"bytes,1,opt,name=tables,proto3" json:"tables,omitempty"`
+	Resumable             bool   `protobuf:"varint,2,opt,name=resumable,proto3" json:"resumable,omitempty"`
+	MaxRows               int64  `protobuf:"varint,3,opt,name=max_rows,json=maxRows,proto3" json:"max_rows,omitempty"`
+	Checksum              bool   `protobuf:"varint,4,opt,name=checksum,proto3" json:"checksum,omitempty"`
+	SamplePct             int64  `protobuf:"varint,5,opt,name=sample_pct,json=samplePct,proto3" json:"sample_pct,omitempty"`
+	TimeoutSeconds        int64  `protobuf:"varint,6,opt,name=timeout_seconds,json=timeoutSeconds,proto3" json:"timeout_seconds,omitempty"`
+	MaxExtraRowsToCompare int64  `protobuf:"varint,7,opt,name=max_extra_rows_to_compare,json=maxExtraRowsToCompare,proto3" json:"max_extra_rows_to_compare,omitempty"`
+}
+
+func (x *VDiffCoreOptions) Reset() {
+	*x = VDiffCoreOptions{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_tabletmanagerdata_proto_msgTypes[98]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *VDiffCoreOptions) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*VDiffCoreOptions) ProtoMessage() {}
+
+func (x *VDiffCoreOptions) ProtoReflect() protoreflect.Message {
+	mi := &file_tabletmanagerdata_proto_msgTypes[98]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use VDiffCoreOptions.ProtoReflect.Descriptor instead.
+func (*VDiffCoreOptions) Descriptor() ([]byte, []int) {
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{98}
+}
+
+func (x *VDiffCoreOptions) GetTables() string {
+	if x != nil {
+		return x.Tables
+	}
+	return ""
+}
+
+func (x *VDiffCoreOptions) GetResumable() bool {
+	if x != nil {
+		return x.Resumable
+	}
+	return false
+}
+
+func (x *VDiffCoreOptions) GetMaxRows() int64 {
+	if x != nil {
+		return x.MaxRows
+	}
+	return 0
+}
+
+func (x *VDiffCoreOptions) GetChecksum() bool {
+	if x != nil {
+		return x.Checksum
+	}
+	return false
+}
+
+func (x *VDiffCoreOptions) GetSamplePct() int64 {
+	if x != nil {
+		return x.SamplePct
+	}
+	return 0
+}
+
+func (x *VDiffCoreOptions) GetTimeoutSeconds() int64 {
+	if x != nil {
+		return x.TimeoutSeconds
+	}
+	return 0
+}
+
+func (x *VDiffCoreOptions) GetMaxExtraRowsToCompare() int64 {
+	if x != nil {
+		return x.MaxExtraRowsToCompare
+	}
+	return 0
+}
+
+type VDiffOptions struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	PickerOptions *VDiffPickerOptions `protobuf:"bytes,1,opt,name=picker_options,json=pickerOptions,proto3" json:"picker_options,omitempty"`
+	CoreOptions   *VDiffCoreOptions   `protobuf:"bytes,2,opt,name=core_options,json=coreOptions,proto3" json:"core_options,omitempty"`
+	ReportOptions *VDiffReportOptions `protobuf:"bytes,3,opt,name=report_options,json=reportOptions,proto3" json:"report_options,omitempty"`
+}
+
+func (x *VDiffOptions) Reset() {
+	*x = VDiffOptions{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_tabletmanagerdata_proto_msgTypes[99]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *VDiffOptions) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*VDiffOptions) ProtoMessage() {}
+
+func (x *VDiffOptions) ProtoReflect() protoreflect.Message {
+	mi := &file_tabletmanagerdata_proto_msgTypes[99]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use VDiffOptions.ProtoReflect.Descriptor instead.
+func (*VDiffOptions) Descriptor() ([]byte, []int) {
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{99}
+}
+
+func (x *VDiffOptions) GetPickerOptions() *VDiffPickerOptions {
+	if x != nil {
+		return x.PickerOptions
+	}
+	return nil
+}
+
+func (x *VDiffOptions) GetCoreOptions() *VDiffCoreOptions {
+	if x != nil {
+		return x.CoreOptions
+	}
+	return nil
+}
+
+func (x *VDiffOptions) GetReportOptions() *VDiffReportOptions {
+	if x != nil {
+		return x.ReportOptions
+	}
+	return nil
+}
+
 var File_tabletmanagerdata_proto protoreflect.FileDescriptor
 
 var file_tabletmanagerdata_proto_rawDesc = []byte{
@@ -5113,10 +5549,77 @@ var file_tabletmanagerdata_proto_rawDesc = []byte{
 	0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x2a, 0x0a, 0x06, 0x72, 0x65, 0x73, 0x75,
 	0x6c, 0x74, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x12, 0x2e, 0x71, 0x75, 0x65, 0x72, 0x79,
 	0x2e, 0x51, 0x75, 0x65, 0x72, 0x79, 0x52, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x52, 0x06, 0x72, 0x65,
-	0x73, 0x75, 0x6c, 0x74, 0x42, 0x30, 0x5a, 0x2e, 0x76, 0x69, 0x74, 0x65, 0x73, 0x73, 0x2e, 0x69,
-	0x6f, 0x2f, 0x76, 0x69, 0x74, 0x65, 0x73, 0x73, 0x2f, 0x67, 0x6f, 0x2f, 0x76, 0x74, 0x2f, 0x70,
-	0x72, 0x6f, 0x74, 0x6f, 0x2f, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x6d, 0x61, 0x6e, 0x61, 0x67,
-	0x65, 0x72, 0x64, 0x61, 0x74, 0x61, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x73, 0x75, 0x6c, 0x74, 0x22, 0xdb, 0x01, 0x0a, 0x0c, 0x56, 0x44, 0x69, 0x66, 0x66, 0x52, 0x65,
+	0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1a, 0x0a, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63,
+	0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63,
+	0x65, 0x12, 0x1a, 0x0a, 0x08, 0x77, 0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x18, 0x02, 0x20,
+	0x01, 0x28, 0x09, 0x52, 0x08, 0x77, 0x6f, 0x72, 0x6b, 0x66, 0x6c, 0x6f, 0x77, 0x12, 0x18, 0x0a,
+	0x07, 0x63, 0x6f, 0x6d, 0x6d, 0x61, 0x6e, 0x64, 0x18, 0x03, 0x20, 0x01, 0x28, 0x09, 0x52, 0x07,
+	0x63, 0x6f, 0x6d, 0x6d, 0x61, 0x6e, 0x64, 0x12, 0x1f, 0x0a, 0x0b, 0x73, 0x75, 0x62, 0x5f, 0x63,
+	0x6f, 0x6d, 0x6d, 0x61, 0x6e, 0x64, 0x18, 0x04, 0x20, 0x01, 0x28, 0x09, 0x52, 0x0a, 0x73, 0x75,
+	0x62, 0x43, 0x6f, 0x6d, 0x6d, 0x61, 0x6e, 0x64, 0x12, 0x1d, 0x0a, 0x0a, 0x76, 0x64, 0x69, 0x66,
+	0x66, 0x5f, 0x75, 0x75, 0x69, 0x64, 0x18, 0x05, 0x20, 0x01, 0x28, 0x09, 0x52, 0x09, 0x76, 0x64,
+	0x69, 0x66, 0x66, 0x55, 0x75, 0x69, 0x64, 0x12, 0x39, 0x0a, 0x07, 0x6f, 0x70, 0x74, 0x69, 0x6f,
+	0x6e, 0x73, 0x18, 0x06, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x1f, 0x2e, 0x74, 0x61, 0x62, 0x6c, 0x65,
+	0x74, 0x6d, 0x61, 0x6e, 0x61, 0x67, 0x65, 0x72, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x56, 0x44, 0x69,
+	0x66, 0x66, 0x4f, 0x70, 0x74, 0x69, 0x6f, 0x6e, 0x73, 0x52, 0x07, 0x6f, 0x70, 0x74, 0x69, 0x6f,
+	0x6e, 0x73, 0x22, 0x6a, 0x0a, 0x0d, 0x56, 0x44, 0x69, 0x66, 0x66, 0x52, 0x65, 0x73, 0x70, 0x6f,
+	0x6e, 0x73, 0x65, 0x12, 0x0e, 0x0a, 0x02, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x03, 0x52,
+	0x02, 0x69, 0x64, 0x12, 0x2a, 0x0a, 0x06, 0x6f, 0x75, 0x74, 0x70, 0x75, 0x74, 0x18, 0x02, 0x20,
+	0x01, 0x28, 0x0b, 0x32, 0x12, 0x2e, 0x71, 0x75, 0x65, 0x72, 0x79, 0x2e, 0x51, 0x75, 0x65, 0x72,
+	0x79, 0x52, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x52, 0x06, 0x6f, 0x75, 0x74, 0x70, 0x75, 0x74, 0x12,
+	0x1d, 0x0a, 0x0a, 0x76, 0x64, 0x69, 0x66, 0x66, 0x5f, 0x75, 0x75, 0x69, 0x64, 0x18, 0x03, 0x20,
+	0x01, 0x28, 0x09, 0x52, 0x09, 0x76, 0x64, 0x69, 0x66, 0x66, 0x55, 0x75, 0x69, 0x64, 0x22, 0x79,
+	0x0a, 0x12, 0x56, 0x44, 0x69, 0x66, 0x66, 0x50, 0x69, 0x63, 0x6b, 0x65, 0x72, 0x4f, 0x70, 0x74,
+	0x69, 0x6f, 0x6e, 0x73, 0x12, 0x21, 0x0a, 0x0c, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x5f, 0x74,
+	0x79, 0x70, 0x65, 0x73, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x0b, 0x74, 0x61, 0x62, 0x6c,
+	0x65, 0x74, 0x54, 0x79, 0x70, 0x65, 0x73, 0x12, 0x1f, 0x0a, 0x0b, 0x73, 0x6f, 0x75, 0x72, 0x63,
+	0x65, 0x5f, 0x63, 0x65, 0x6c, 0x6c, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x0a, 0x73, 0x6f,
+	0x75, 0x72, 0x63, 0x65, 0x43, 0x65, 0x6c, 0x6c, 0x12, 0x1f, 0x0a, 0x0b, 0x74, 0x61, 0x72, 0x67,
+	0x65, 0x74, 0x5f, 0x63, 0x65, 0x6c, 0x6c, 0x18, 0x03, 0x20, 0x01, 0x28, 0x09, 0x52, 0x0a, 0x74,
+	0x61, 0x72, 0x67, 0x65, 0x74, 0x43, 0x65, 0x6c, 0x6c, 0x22, 0x6a, 0x0a, 0x12, 0x56, 0x44, 0x69,
+	0x66, 0x66, 0x52, 0x65, 0x70, 0x6f, 0x72, 0x74, 0x4f, 0x70, 0x74, 0x69, 0x6f, 0x6e, 0x73, 0x12,
+	0x1b, 0x0a, 0x0a, 0x6f, 0x6e, 0x6c, 0x79, 0x5f, 0x70, 0x5f, 0x6b, 0x5f, 0x73, 0x18, 0x01, 0x20,
+	0x01, 0x28, 0x08, 0x52, 0x07, 0x6f, 0x6e, 0x6c, 0x79, 0x50, 0x4b, 0x53, 0x12, 0x1f, 0x0a, 0x0b,
+	0x64, 0x65, 0x62, 0x75, 0x67, 0x5f, 0x71, 0x75, 0x65, 0x72, 0x79, 0x18, 0x02, 0x20, 0x01, 0x28,
+	0x08, 0x52, 0x0a, 0x64, 0x65, 0x62, 0x75, 0x67, 0x51, 0x75, 0x65, 0x72, 0x79, 0x12, 0x16, 0x0a,
+	0x06, 0x66, 0x6f, 0x72, 0x6d, 0x61, 0x74, 0x18, 0x03, 0x20, 0x01, 0x28, 0x09, 0x52, 0x06, 0x66,
+	0x6f, 0x72, 0x6d, 0x61, 0x74, 0x22, 0x81, 0x02, 0x0a, 0x10, 0x56, 0x44, 0x69, 0x66, 0x66, 0x43,
+	0x6f, 0x72, 0x65, 0x4f, 0x70, 0x74, 0x69, 0x6f, 0x6e, 0x73, 0x12, 0x16, 0x0a, 0x06, 0x74, 0x61,
+	0x62, 0x6c, 0x65, 0x73, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x06, 0x74, 0x61, 0x62, 0x6c,
+	0x65, 0x73, 0x12, 0x1c, 0x0a, 0x09, 0x72, 0x65, 0x73, 0x75, 0x6d, 0x61, 0x62, 0x6c, 0x65, 0x18,
+	0x02, 0x20, 0x01, 0x28, 0x08, 0x52, 0x09, 0x72, 0x65, 0x73, 0x75, 0x6d, 0x61, 0x62, 0x6c, 0x65,
+	0x12, 0x19, 0x0a, 0x08, 0x6d, 0x61, 0x78, 0x5f, 0x72, 0x6f, 0x77, 0x73, 0x18, 0x03, 0x20, 0x01,
+	0x28, 0x03, 0x52, 0x07, 0x6d, 0x61, 0x78, 0x52, 0x6f, 0x77, 0x73, 0x12, 0x1a, 0x0a, 0x08, 0x63,
+	0x68, 0x65, 0x63, 0x6b, 0x73, 0x75, 0x6d, 0x18, 0x04, 0x20, 0x01, 0x28, 0x08, 0x52, 0x08, 0x63,
+	0x68, 0x65, 0x63, 0x6b, 0x73, 0x75, 0x6d, 0x12, 0x1d, 0x0a, 0x0a, 0x73, 0x61, 0x6d, 0x70, 0x6c,
+	0x65, 0x5f, 0x70, 0x63, 0x74, 0x18, 0x05, 0x20, 0x01, 0x28, 0x03, 0x52, 0x09, 0x73, 0x61, 0x6d,
+	0x70, 0x6c, 0x65, 0x50, 0x63, 0x74, 0x12, 0x27, 0x0a, 0x0f, 0x74, 0x69, 0x6d, 0x65, 0x6f, 0x75,
+	0x74, 0x5f, 0x73, 0x65, 0x63, 0x6f, 0x6e, 0x64, 0x73, 0x18, 0x06, 0x20, 0x01, 0x28, 0x03, 0x52,
+	0x0e, 0x74, 0x69, 0x6d, 0x65, 0x6f, 0x75, 0x74, 0x53, 0x65, 0x63, 0x6f, 0x6e, 0x64, 0x73, 0x12,
+	0x38, 0x0a, 0x19, 0x6d, 0x61, 0x78, 0x5f, 0x65, 0x78, 0x74, 0x72, 0x61, 0x5f, 0x72, 0x6f, 0x77,
+	0x73, 0x5f, 0x74, 0x6f, 0x5f, 0x63, 0x6f, 0x6d, 0x70, 0x61, 0x72, 0x65, 0x18, 0x07, 0x20, 0x01,
+	0x28, 0x03, 0x52, 0x15, 0x6d, 0x61, 0x78, 0x45, 0x78, 0x74, 0x72, 0x61, 0x52, 0x6f, 0x77, 0x73,
+	0x54, 0x6f, 0x43, 0x6f, 0x6d, 0x70, 0x61, 0x72, 0x65, 0x22, 0xf2, 0x01, 0x0a, 0x0c, 0x56, 0x44,
+	0x69, 0x66, 0x66, 0x4f, 0x70, 0x74, 0x69, 0x6f, 0x6e, 0x73, 0x12, 0x4c, 0x0a, 0x0e, 0x70, 0x69,
+	0x63, 0x6b, 0x65, 0x72, 0x5f, 0x6f, 0x70, 0x74, 0x69, 0x6f, 0x6e, 0x73, 0x18, 0x01, 0x20, 0x01,
+	0x28, 0x0b, 0x32, 0x25, 0x2e, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x6d, 0x61, 0x6e, 0x61, 0x67,
+	0x65, 0x72, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x56, 0x44, 0x69, 0x66, 0x66, 0x50, 0x69, 0x63, 0x6b,
+	0x65, 0x72, 0x4f, 0x70, 0x74, 0x69, 0x6f, 0x6e, 0x73, 0x52, 0x0d, 0x70, 0x69, 0x63, 0x6b, 0x65,
+	0x72, 0x4f, 0x70, 0x74, 0x69, 0x6f, 0x6e, 0x73, 0x12, 0x46, 0x0a, 0x0c, 0x63, 0x6f, 0x72, 0x65,
+	0x5f, 0x6f, 0x70, 0x74, 0x69, 0x6f, 0x6e, 0x73, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x23,
+	0x2e, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x6d, 0x61, 0x6e, 0x61, 0x67, 0x65, 0x72, 0x64, 0x61,
+	0x74, 0x61, 0x2e, 0x56, 0x44, 0x69, 0x66, 0x66, 0x43, 0x6f, 0x72, 0x65, 0x4f, 0x70, 0x74, 0x69,
+	0x6f, 0x6e, 0x73, 0x52, 0x0b, 0x63, 0x6f, 0x72, 0x65, 0x4f, 0x70, 0x74, 0x69, 0x6f, 0x6e, 0x73,
+	0x12, 0x4c, 0x0a, 0x0e, 0x72, 0x65, 0x70, 0x6f, 0x72, 0x74, 0x5f, 0x6f, 0x70, 0x74, 0x69, 0x6f,
+	0x6e, 0x73, 0x18, 0x03, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x25, 0x2e, 0x74, 0x61, 0x62, 0x6c, 0x65,
+	0x74, 0x6d, 0x61, 0x6e, 0x61, 0x67, 0x65, 0x72, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x56, 0x44, 0x69,
+	0x66, 0x66, 0x52, 0x65, 0x70, 0x6f, 0x72, 0x74, 0x4f, 0x70, 0x74, 0x69, 0x6f, 0x6e, 0x73, 0x52,
+	0x0d, 0x72, 0x65, 0x70, 0x6f, 0x72, 0x74, 0x4f, 0x70, 0x74, 0x69, 0x6f, 0x6e, 0x73, 0x42, 0x30,
+	0x5a, 0x2e, 0x76, 0x69, 0x74, 0x65, 0x73, 0x73, 0x2e, 0x69, 0x6f, 0x2f, 0x76, 0x69, 0x74, 0x65,
+	0x73, 0x73, 0x2f, 0x67, 0x6f, 0x2f, 0x76, 0x74, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2f, 0x74,
+	0x61, 0x62, 0x6c, 0x65, 0x74, 0x6d, 0x61, 0x6e, 0x61, 0x67, 0x65, 0x72, 0x64, 0x61, 0x74, 0x61,
+	0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -5131,7 +5634,7 @@ func file_tabletmanagerdata_proto_rawDescGZIP() []byte {
 	return file_tabletmanagerdata_proto_rawDescData
 }
 
-var file_tabletmanagerdata_proto_msgTypes = make([]protoimpl.MessageInfo, 97)
+var file_tabletmanagerdata_proto_msgTypes = make([]protoimpl.MessageInfo, 103)
 var file_tabletmanagerdata_proto_goTypes = []interface{}{
 	(*TableDefinition)(nil),                       // 0: tabletmanagerdata.TableDefinition
 	(*SchemaDefinition)(nil),                      // 1: tabletmanagerdata.SchemaDefinition
@@ -5227,64 +5730,75 @@ var file_tabletmanagerdata_proto_goTypes = []interface{}{
 	(*RestoreFromBackupResponse)(nil),             // 91: tabletmanagerdata.RestoreFromBackupResponse
 	(*VExecRequest)(nil),                          // 92: tabletmanagerdata.VExecRequest
 	(*VExecResponse)(nil),                         // 93: tabletmanagerdata.VExecResponse
-	nil,                                           // 94: tabletmanagerdata.UserPermission.PrivilegesEntry
-	nil,                                           // 95: tabletmanagerdata.DbPermission.PrivilegesEntry
-	nil,                                           // 96: tabletmanagerdata.ExecuteHookRequest.ExtraEnvEntry
-	(*query.Field)(nil),                           // 97: query.Field
-	(topodata.TabletType)(0),                      // 98: topodata.TabletType
-	(*vtrpc.CallerID)(nil),                        // 99: vtrpc.CallerID
-	(*query.QueryResult)(nil),                     // 100: query.QueryResult
-	(*replicationdata.Status)(nil),                // 101: replicationdata.Status
-	(*replicationdata.PrimaryStatus)(nil),         // 102: replicationdata.PrimaryStatus
-	(*topodata.TabletAlias)(nil),                  // 103: topodata.TabletAlias
-	(replicationdata.StopReplicationMode)(0),      // 104: replicationdata.StopReplicationMode
-	(*replicationdata.StopReplicationStatus)(nil), // 105: replicationdata.StopReplicationStatus
-	(*logutil.Event)(nil),                         // 106: logutil.Event
-	(*vttime.Time)(nil),                           // 107: vttime.Time
+	(*VDiffRequest)(nil),                          // 94: tabletmanagerdata.VDiffRequest
+	(*VDiffResponse)(nil),                         // 95: tabletmanagerdata.VDiffResponse
+	(*VDiffPickerOptions)(nil),                    // 96: tabletmanagerdata.VDiffPickerOptions
+	(*VDiffReportOptions)(nil),                    // 97: tabletmanagerdata.VDiffReportOptions
+	(*VDiffCoreOptions)(nil),                      // 98: tabletmanagerdata.VDiffCoreOptions
+	(*VDiffOptions)(nil),                          // 99: tabletmanagerdata.VDiffOptions
+	nil,                                           // 100: tabletmanagerdata.UserPermission.PrivilegesEntry
+	nil,                                           // 101: tabletmanagerdata.DbPermission.PrivilegesEntry
+	nil,                                           // 102: tabletmanagerdata.ExecuteHookRequest.ExtraEnvEntry
+	(*query.Field)(nil),                           // 103: query.Field
+	(topodata.TabletType)(0),                      // 104: topodata.TabletType
+	(*vtrpc.CallerID)(nil),                        // 105: vtrpc.CallerID
+	(*query.QueryResult)(nil),                     // 106: query.QueryResult
+	(*replicationdata.Status)(nil),                // 107: replicationdata.Status
+	(*replicationdata.PrimaryStatus)(nil),         // 108: replicationdata.PrimaryStatus
+	(*topodata.TabletAlias)(nil),                  // 109: topodata.TabletAlias
+	(replicationdata.StopReplicationMode)(0),      // 110: replicationdata.StopReplicationMode
+	(*replicationdata.StopReplicationStatus)(nil), // 111: replicationdata.StopReplicationStatus
+	(*logutil.Event)(nil),                         // 112: logutil.Event
+	(*vttime.Time)(nil),                           // 113: vttime.Time
 }
 var file_tabletmanagerdata_proto_depIdxs = []int32{
-	97,  // 0: tabletmanagerdata.TableDefinition.fields:type_name -> query.Field
+	103, // 0: tabletmanagerdata.TableDefinition.fields:type_name -> query.Field
 	0,   // 1: tabletmanagerdata.SchemaDefinition.table_definitions:type_name -> tabletmanagerdata.TableDefinition
 	1,   // 2: tabletmanagerdata.SchemaChangeResult.before_schema:type_name -> tabletmanagerdata.SchemaDefinition
 	1,   // 3: tabletmanagerdata.SchemaChangeResult.after_schema:type_name -> tabletmanagerdata.SchemaDefinition
-	94,  // 4: tabletmanagerdata.UserPermission.privileges:type_name -> tabletmanagerdata.UserPermission.PrivilegesEntry
-	95,  // 5: tabletmanagerdata.DbPermission.privileges:type_name -> tabletmanagerdata.DbPermission.PrivilegesEntry
+	100, // 4: tabletmanagerdata.UserPermission.privileges:type_name -> tabletmanagerdata.UserPermission.PrivilegesEntry
+	101, // 5: tabletmanagerdata.DbPermission.privileges:type_name -> tabletmanagerdata.DbPermission.PrivilegesEntry
 	3,   // 6: tabletmanagerdata.Permissions.user_permissions:type_name -> tabletmanagerdata.UserPermission
 	4,   // 7: tabletmanagerdata.Permissions.db_permissions:type_name -> tabletmanagerdata.DbPermission
-	96,  // 8: tabletmanagerdata.ExecuteHookRequest.extra_env:type_name -> tabletmanagerdata.ExecuteHookRequest.ExtraEnvEntry
+	102, // 8: tabletmanagerdata.ExecuteHookRequest.extra_env:type_name -> tabletmanagerdata.ExecuteHookRequest.ExtraEnvEntry
 	1,   // 9: tabletmanagerdata.GetSchemaResponse.schema_definition:type_name -> tabletmanagerdata.SchemaDefinition
 	5,   // 10: tabletmanagerdata.GetPermissionsResponse.permissions:type_name -> tabletmanagerdata.Permissions
-	98,  // 11: tabletmanagerdata.ChangeTypeRequest.tablet_type:type_name -> topodata.TabletType
+	104, // 11: tabletmanagerdata.ChangeTypeRequest.tablet_type:type_name -> topodata.TabletType
 	2,   // 12: tabletmanagerdata.PreflightSchemaResponse.change_results:type_name -> tabletmanagerdata.SchemaChangeResult
 	1,   // 13: tabletmanagerdata.ApplySchemaRequest.before_schema:type_name -> tabletmanagerdata.SchemaDefinition
 	1,   // 14: tabletmanagerdata.ApplySchemaRequest.after_schema:type_name -> tabletmanagerdata.SchemaDefinition
 	1,   // 15: tabletmanagerdata.ApplySchemaResponse.before_schema:type_name -> tabletmanagerdata.SchemaDefinition
 	1,   // 16: tabletmanagerdata.ApplySchemaResponse.after_schema:type_name -> tabletmanagerdata.SchemaDefinition
-	99,  // 17: tabletmanagerdata.ExecuteQueryRequest.caller_id:type_name -> vtrpc.CallerID
-	100, // 18: tabletmanagerdata.ExecuteQueryResponse.result:type_name -> query.QueryResult
-	100, // 19: tabletmanagerdata.ExecuteFetchAsDbaResponse.result:type_name -> query.QueryResult
-	100, // 20: tabletmanagerdata.ExecuteFetchAsAllPrivsResponse.result:type_name -> query.QueryResult
-	100, // 21: tabletmanagerdata.ExecuteFetchAsAppResponse.result:type_name -> query.QueryResult
-	101, // 22: tabletmanagerdata.ReplicationStatusResponse.status:type_name -> replicationdata.Status
-	102, // 23: tabletmanagerdata.PrimaryStatusResponse.status:type_name -> replicationdata.PrimaryStatus
-	100, // 24: tabletmanagerdata.VReplicationExecResponse.result:type_name -> query.QueryResult
-	103, // 25: tabletmanagerdata.PopulateReparentJournalRequest.primary_alias:type_name -> topodata.TabletAlias
-	103, // 26: tabletmanagerdata.InitReplicaRequest.parent:type_name -> topodata.TabletAlias
-	102, // 27: tabletmanagerdata.DemotePrimaryResponse.primary_status:type_name -> replicationdata.PrimaryStatus
-	103, // 28: tabletmanagerdata.SetReplicationSourceRequest.parent:type_name -> topodata.TabletAlias
-	103, // 29: tabletmanagerdata.ReplicaWasRestartedRequest.parent:type_name -> topodata.TabletAlias
-	104, // 30: tabletmanagerdata.StopReplicationAndGetStatusRequest.stop_replication_mode:type_name -> replicationdata.StopReplicationMode
-	101, // 31: tabletmanagerdata.StopReplicationAndGetStatusResponse.hybrid_status:type_name -> replicationdata.Status
-	105, // 32: tabletmanagerdata.StopReplicationAndGetStatusResponse.status:type_name -> replicationdata.StopReplicationStatus
-	106, // 33: tabletmanagerdata.BackupResponse.event:type_name -> logutil.Event
-	107, // 34: tabletmanagerdata.RestoreFromBackupRequest.backup_time:type_name -> vttime.Time
-	106, // 35: tabletmanagerdata.RestoreFromBackupResponse.event:type_name -> logutil.Event
-	100, // 36: tabletmanagerdata.VExecResponse.result:type_name -> query.QueryResult
-	37,  // [37:37] is the sub-list for method output_type
-	37,  // [37:37] is the sub-list for method input_type
-	37,  // [37:37] is the sub-list for extension type_name
-	37,  // [37:37] is the sub-list for extension extendee
-	0,   // [0:37] is the sub-list for field type_name
+	105, // 17: tabletmanagerdata.ExecuteQueryRequest.caller_id:type_name -> vtrpc.CallerID
+	106, // 18: tabletmanagerdata.ExecuteQueryResponse.result:type_name -> query.QueryResult
+	106, // 19: tabletmanagerdata.ExecuteFetchAsDbaResponse.result:type_name -> query.QueryResult
+	106, // 20: tabletmanagerdata.ExecuteFetchAsAllPrivsResponse.result:type_name -> query.QueryResult
+	106, // 21: tabletmanagerdata.ExecuteFetchAsAppResponse.result:type_name -> query.QueryResult
+	107, // 22: tabletmanagerdata.ReplicationStatusResponse.status:type_name -> replicationdata.Status
+	108, // 23: tabletmanagerdata.PrimaryStatusResponse.status:type_name -> replicationdata.PrimaryStatus
+	106, // 24: tabletmanagerdata.VReplicationExecResponse.result:type_name -> query.QueryResult
+	109, // 25: tabletmanagerdata.PopulateReparentJournalRequest.primary_alias:type_name -> topodata.TabletAlias
+	109, // 26: tabletmanagerdata.InitReplicaRequest.parent:type_name -> topodata.TabletAlias
+	108, // 27: tabletmanagerdata.DemotePrimaryResponse.primary_status:type_name -> replicationdata.PrimaryStatus
+	109, // 28: tabletmanagerdata.SetReplicationSourceRequest.parent:type_name -> topodata.TabletAlias
+	109, // 29: tabletmanagerdata.ReplicaWasRestartedRequest.parent:type_name -> topodata.TabletAlias
+	110, // 30: tabletmanagerdata.StopReplicationAndGetStatusRequest.stop_replication_mode:type_name -> replicationdata.StopReplicationMode
+	107, // 31: tabletmanagerdata.StopReplicationAndGetStatusResponse.hybrid_status:type_name -> replicationdata.Status
+	111, // 32: tabletmanagerdata.StopReplicationAndGetStatusResponse.status:type_name -> replicationdata.StopReplicationStatus
+	112, // 33: tabletmanagerdata.BackupResponse.event:type_name -> logutil.Event
+	113, // 34: tabletmanagerdata.RestoreFromBackupRequest.backup_time:type_name -> vttime.Time
+	112, // 35: tabletmanagerdata.RestoreFromBackupResponse.event:type_name -> logutil.Event
+	106, // 36: tabletmanagerdata.VExecResponse.result:type_name -> query.QueryResult
+	99,  // 37: tabletmanagerdata.VDiffRequest.options:type_name -> tabletmanagerdata.VDiffOptions
+	106, // 38: tabletmanagerdata.VDiffResponse.output:type_name -> query.QueryResult
+	96,  // 39: tabletmanagerdata.VDiffOptions.picker_options:type_name -> tabletmanagerdata.VDiffPickerOptions
+	98,  // 40: tabletmanagerdata.VDiffOptions.core_options:type_name -> tabletmanagerdata.VDiffCoreOptions
+	97,  // 41: tabletmanagerdata.VDiffOptions.report_options:type_name -> tabletmanagerdata.VDiffReportOptions
+	42,  // [42:42] is the sub-list for method output_type
+	42,  // [42:42] is the sub-list for method input_type
+	42,  // [42:42] is the sub-list for extension type_name
+	42,  // [42:42] is the sub-list for extension extendee
+	0,   // [0:42] is the sub-list for field type_name
 }
 
 func init() { file_tabletmanagerdata_proto_init() }
@@ -6421,6 +6935,78 @@ func file_tabletmanagerdata_proto_init() {
 				return nil
 			}
 		}
+		file_tabletmanagerdata_proto_msgTypes[94].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*VDiffRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_tabletmanagerdata_proto_msgTypes[95].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*VDiffResponse); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_tabletmanagerdata_proto_msgTypes[96].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*VDiffPickerOptions); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_tabletmanagerdata_proto_msgTypes[97].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*VDiffReportOptions); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_tabletmanagerdata_proto_msgTypes[98].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*VDiffCoreOptions); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_tabletmanagerdata_proto_msgTypes[99].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*VDiffOptions); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -6428,7 +7014,7 @@ func file_tabletmanagerdata_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_tabletmanagerdata_proto_rawDesc,
 			NumEnums:      0,
-			NumMessages:   97,
+			NumMessages:   103,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

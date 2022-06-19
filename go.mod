@@ -120,6 +120,8 @@ require (
 	sigs.k8s.io/yaml v1.2.0
 )
 
+require github.com/bndr/gotabulate v1.1.2
+
 require (
 	cloud.google.com/go v0.81.0 // indirect
 	github.com/BurntSushi/toml v0.3.1 // indirect

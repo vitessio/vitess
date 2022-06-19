@@ -249,7 +249,10 @@ func (mariadbFlavor) readBinlogEvent(c *Conn) (BinlogEvent, error) {
 	return ev, nil
 }
 
-// supportsFastDropTable is part of the Flavor interface.
-func (mariadbFlavor) supportsFastDropTable(c *Conn) (bool, error) {
-	return false, nil
+// supportsCapability is part of the Flavor interface.
+func (mariadbFlavor) supportsCapability(serverVersion string, capability FlavorCapability) (bool, error) {
+	switch capability {
+	default:
+		return false, nil
+	}
 }
