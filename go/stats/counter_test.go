@@ -19,6 +19,8 @@ package stats
 import (
 	"expvar"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestCounter(t *testing.T) {
@@ -81,21 +83,11 @@ func TestGaugeFloat64(t *testing.T) {
 		gotv = v.(*GaugeFloat64)
 	})
 	v := NewGaugeFloat64("f", "help")
-	if gotname != "f" {
-		t.Errorf("want Int, got %s", gotname)
-	}
-	if gotv != v {
-		t.Errorf("want %#v, got %#v", v, gotv)
-	}
+	assert.Equal(t, "f", gotname)
+	assert.Equal(t, v, gotv)
 	v.Set(3.14)
-	if v.Get() != 3.14 {
-		t.Errorf("want 1, got %v", v.Get())
-	}
-	if v.String() != "3.14" {
-		t.Errorf("want 1, got %v", v.Get())
-	}
+	assert.Equal(t, 3.14, v.Get())
+	assert.Equal(t, "3.14", v.String())
 	v.Reset()
-	if v.Get() != 0 {
-		t.Errorf("want 0, got %v", v.Get())
-	}
+	assert.Equal(t, float64(0), v.Get())
 }
