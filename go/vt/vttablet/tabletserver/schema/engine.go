@@ -241,10 +241,11 @@ func (se *Engine) closeLocked() {
 	// but before closing the timer, in which case Stop function will wait for the
 	// configured function to complete running and that function (ReloadAt) will block
 	// on the lock we have already acquired
-	ticksWaitChan := make(chan bool, 0)
+	wg := sync.WaitGroup{}
+	wg.Add(1)
 	go func() {
 		se.ticks.Stop()
-		ticksWaitChan <- true
+		wg.Done()
 	}()
 	se.historian.Close()
 	se.conns.Close()
@@ -257,7 +258,7 @@ func (se *Engine) closeLocked() {
 	// Unlock the mutex. If there is a tick blocked on this lock,
 	// then it will run and we wait for the Stop function to finish its execution
 	se.mu.Unlock()
-	<-ticksWaitChan
+	wg.Wait()
 }
 
 // MakeNonPrimary clears the sequence caches to make sure that
