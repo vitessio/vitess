@@ -684,6 +684,9 @@ func NewVariableExpression(str string, at AtCount) *Variable {
 	switch at {
 	case DoubleAt:
 		switch {
+		case strings.HasPrefix(l, "local."):
+			v.Name = createIdentifierCI(str[6:])
+			v.Scope = SessionScope
 		case strings.HasPrefix(l, "session."):
 			v.Name = createIdentifierCI(str[8:])
 			v.Scope = SessionScope

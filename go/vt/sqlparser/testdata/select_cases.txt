@@ -1958,7 +1958,7 @@ INPUT
 select @@local.profiling_history_size;
 END
 OUTPUT
-select @@`local.profiling_history_size` from dual
+select @@profiling_history_size from dual
 END
 INPUT
 select 0 % null as 'NULL';
@@ -9260,7 +9260,7 @@ INPUT
 select @@local.profiling;
 END
 OUTPUT
-select @@`local.profiling` from dual
+select @@profiling from dual
 END
 INPUT
 select 5.0 div 2;

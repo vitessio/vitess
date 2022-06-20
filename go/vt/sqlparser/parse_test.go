@@ -1077,6 +1077,12 @@ var (
 		input:  "set session wait_timeout = 3600, @@global.autocommit = off",
 		output: "set @@wait_timeout = 3600, @@global.autocommit = 'off'",
 	}, {
+		input:  "set local wait_timeout = 3600",
+		output: "set @@wait_timeout = 3600",
+	}, {
+		input:  "set @@local.wait_timeout = 3600",
+		output: "set @@wait_timeout = 3600",
+	}, {
 		input:  "set /* list */ a = 3, b = 4",
 		output: "set /* list */ @@a = 3, @@b = 4",
 	}, {

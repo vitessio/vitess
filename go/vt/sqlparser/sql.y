@@ -1039,6 +1039,10 @@ set_session_or_global:
   {
     $$ = SessionScope
   }
+| LOCAL
+  {
+    $$ = SessionScope
+  }
 | GLOBAL
   {
     $$ = GlobalScope
