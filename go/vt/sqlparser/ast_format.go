@@ -297,12 +297,12 @@ func (node *AlterMigration) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *RevertMigration) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "revert %vvitess_migration '%s'", node.Comments, node.UUID)
+	buf.astPrintf(node, "revert %vvitess_migration '%#s'", node.Comments, node.UUID)
 }
 
 // Format formats the node.
 func (node *ShowMigrationLogs) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "show vitess_migration '%s' logs", node.UUID)
+	buf.astPrintf(node, "show vitess_migration '%#s' logs", node.UUID)
 }
 
 // Format formats the node.
@@ -1041,7 +1041,7 @@ func (node *ParsedComments) Format(buf *TrackedBuffer) {
 		return
 	}
 	for _, c := range node.comments {
-		buf.astPrintf(node, "%s ", c)
+		buf.astPrintf(node, "%#s ", c)
 	}
 }
 
@@ -1457,10 +1457,6 @@ func (node *CollateExpr) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *FuncExpr) Format(buf *TrackedBuffer) {
-	var distinct string
-	if node.Distinct {
-		distinct = "distinct "
-	}
 	if !node.Qualifier.IsEmpty() {
 		buf.astPrintf(node, "%v.", node.Qualifier)
 	}
@@ -1473,7 +1469,7 @@ func (node *FuncExpr) Format(buf *TrackedBuffer) {
 	} else {
 		buf.WriteString(funcName)
 	}
-	buf.astPrintf(node, "(%s%v)", distinct, node.Exprs)
+	buf.astPrintf(node, "(%v)", node.Exprs)
 }
 
 // Format formats the node

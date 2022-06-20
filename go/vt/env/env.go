@@ -106,15 +106,19 @@ func VtMysqlBaseDir() (string, error) {
 // CheckPlannerVersionFlag takes two string references and checks that just one
 // has a value or that they agree with each other.
 func CheckPlannerVersionFlag(correct, deprecated *string) (string, error) {
-	if deprecated != nil && *deprecated != "" {
-		if correct != nil && *deprecated != *correct {
-			return "", fmt.Errorf("can't specify planner-version and planner_version with different versions")
+	if deprecated == nil || *deprecated == "" {
+		if correct == nil {
+			return "", nil
 		}
+		return *correct, nil
+	}
+	if correct == nil || *correct == "" {
+		// we know deprecated is not nil here
 		log.Warningf("planner_version is deprecated. please use planner-version instead")
 		return *deprecated, nil
 	}
-	if correct == nil {
-		return "", nil
+	if *deprecated != *correct {
+		return "", fmt.Errorf("can't specify planner-version and planner_version with different versions")
 	}
-	return *correct, nil
+	return *deprecated, nil
 }

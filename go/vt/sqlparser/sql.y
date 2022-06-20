@@ -5570,14 +5570,6 @@ function_call_generic:
   {
     $$ = &FuncExpr{Name: $1, Exprs: $3}
   }
-| sql_id openb DISTINCT select_expression_list closeb
-  {
-    $$ = &FuncExpr{Name: $1, Distinct: true, Exprs: $4}
-  }
-| sql_id openb DISTINCTROW select_expression_list closeb
-  {
-    $$ = &FuncExpr{Name: $1, Distinct: true, Exprs: $4}
-  }
 | table_id '.' reserved_sql_id openb select_expression_list_opt closeb
   {
     $$ = &FuncExpr{Qualifier: $1, Name: $3, Exprs: $5}
@@ -5656,71 +5648,71 @@ UTC_DATE func_paren_opt
   }
 | COUNT openb '*' closeb
   {
-    $$ = &CountStar{Name:$1}
+    $$ = &CountStar{}
   }
 | COUNT openb distinct_opt expression_list closeb
   {
-    $$ = &Count{Name:$1, Distinct:$3, Args:$4}
+    $$ = &Count{Distinct:$3, Args:$4}
   }
 | MAX openb distinct_opt expression closeb
   {
-    $$ = &Max{Name:$1 , Distinct:$3, Arg:$4}
+    $$ = &Max{Distinct:$3, Arg:$4}
   }
 | MIN openb distinct_opt expression closeb
   {
-    $$ = &Min{Name:$1 , Distinct:$3, Arg:$4}
+    $$ = &Min{Distinct:$3, Arg:$4}
   }
 | SUM openb distinct_opt expression closeb
   {
-    $$ = &Sum{Name:$1 , Distinct:$3, Arg:$4}
+    $$ = &Sum{Distinct:$3, Arg:$4}
   }
 | AVG openb distinct_opt expression closeb
   {
-    $$ = &Avg{Name:$1 , Distinct:$3, Arg:$4}
+    $$ = &Avg{Distinct:$3, Arg:$4}
   }
 | BIT_AND openb expression closeb
   {
-    $$ = &BitAnd{Name:$1 , Arg:$3}
+    $$ = &BitAnd{Arg:$3}
   }
 | BIT_OR openb expression closeb
   {
-    $$ = &BitOr{Name:$1 , Arg:$3}
+    $$ = &BitOr{Arg:$3}
   }
 | BIT_XOR openb expression closeb
    {
-     $$ = &BitXor{Name:$1 , Arg:$3}
+     $$ = &BitXor{Arg:$3}
    }
 | STD openb expression closeb
     {
-      $$ = &Std{Name:$1 , Arg:$3}
+      $$ = &Std{Arg:$3}
     }
 | STDDEV openb expression closeb
     {
-      $$ = &StdDev{Name:$1 , Arg:$3}
+      $$ = &StdDev{Arg:$3}
     }
 | STDDEV_POP openb expression closeb
     {
-      $$ = &StdPop{Name:$1 , Arg:$3}
+      $$ = &StdPop{Arg:$3}
     }
 | STDDEV_SAMP openb expression closeb
     {
-      $$ = &StdSamp{Name:$1 , Arg:$3}
+      $$ = &StdSamp{Arg:$3}
     }
 | VAR_POP openb expression closeb
      {
-       $$ = &VarPop{Name:$1 , Arg:$3}
+       $$ = &VarPop{Arg:$3}
      }
 | VAR_SAMP openb expression closeb
      {
-       $$ = &VarSamp{Name:$1 , Arg:$3}
+       $$ = &VarSamp{Arg:$3}
      }
 | VARIANCE openb expression closeb
      {
-       $$ = &Variance{Name:$1 , Arg:$3}
+       $$ = &Variance{Arg:$3}
      }
 | GROUP_CONCAT openb distinct_opt expression_list order_by_opt separator_opt limit_opt closeb
   {
-    $$ = &GroupConcatExpr{Name:$1, Distinct: $3, Exprs: $4, OrderBy: $5, Separator: $6, Limit: $7}
+    $$ = &GroupConcatExpr{Distinct: $3, Exprs: $4, OrderBy: $5, Separator: $6, Limit: $7}
   }
 | TIMESTAMPADD openb sql_id ',' expression ',' expression closeb
   {

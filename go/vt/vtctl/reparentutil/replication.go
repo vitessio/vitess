@@ -188,6 +188,7 @@ func SetReplicationSource(ctx context.Context, ts *topo.Server, tmc tmclient.Tab
 	if err != nil {
 		return err
 	}
+	log.Infof("Getting a new durability policy for %v", durabilityName)
 	durability, err := GetDurabilityPolicy(durabilityName)
 	if err != nil {
 		return err
@@ -335,7 +336,7 @@ func stopReplicationAndBuildStatusMaps(
 func WaitForRelayLogsToApply(ctx context.Context, tmc tmclient.TabletManagerClient, tabletInfo *topo.TabletInfo, status *replicationdatapb.StopReplicationStatus) error {
 	switch status.After.RelayLogPosition {
 	case "":
-		return tmc.WaitForPosition(ctx, tabletInfo.Tablet, status.After.FileRelayLogPosition)
+		return tmc.WaitForPosition(ctx, tabletInfo.Tablet, status.After.RelayLogSourceBinlogEquivalentPosition)
 	default:
 		return tmc.WaitForPosition(ctx, tabletInfo.Tablet, status.After.RelayLogPosition)
 	}

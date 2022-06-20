@@ -1926,10 +1926,6 @@ func (node *CollateExpr) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the node.
 func (node *FuncExpr) formatFast(buf *TrackedBuffer) {
-	var distinct string
-	if node.Distinct {
-		distinct = "distinct "
-	}
 	if !node.Qualifier.IsEmpty() {
 		node.Qualifier.formatFast(buf)
 		buf.WriteByte('.')
@@ -1944,7 +1940,6 @@ func (node *FuncExpr) formatFast(buf *TrackedBuffer) {
 		buf.WriteString(funcName)
 	}
 	buf.WriteByte('(')
-	buf.WriteString(distinct)
 	node.Exprs.formatFast(buf)
 	buf.WriteByte(')')
 }

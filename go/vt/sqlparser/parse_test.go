@@ -184,7 +184,7 @@ var (
 		output: "with recursive odd_num_cte(id, n) as (select 1, 1 from dual union all select id + 1, n + 2 from odd_num_cte where id < 5) select * from odd_num_cte",
 	}, {
 		input:  "WITH topsales2003 AS (SELECT salesRepEmployeeNumber employeeNumber, SUM(quantityOrdered * priceEach) sales FROM orders INNER JOIN orderdetails USING (orderNumber) INNER JOIN customers USING (customerNumber) WHERE YEAR(shippedDate) = 2003 AND status = 'Shipped' GROUP BY salesRepEmployeeNumber ORDER BY sales DESC LIMIT 5)SELECT employeeNumber, firstName, lastName, sales FROM employees JOIN topsales2003 USING (employeeNumber)",
-		output: "with topsales2003 as (select salesRepEmployeeNumber as employeeNumber, SUM(quantityOrdered * priceEach) as sales from orders join orderdetails using (orderNumber) join customers using (customerNumber) where YEAR(shippedDate) = 2003 and `status` = 'Shipped' group by salesRepEmployeeNumber order by sales desc limit 5) select employeeNumber, firstName, lastName, sales from employees join topsales2003 using (employeeNumber)",
+		output: "with topsales2003 as (select salesRepEmployeeNumber as employeeNumber, sum(quantityOrdered * priceEach) as sales from orders join orderdetails using (orderNumber) join customers using (customerNumber) where YEAR(shippedDate) = 2003 and `status` = 'Shipped' group by salesRepEmployeeNumber order by sales desc limit 5) select employeeNumber, firstName, lastName, sales from employees join topsales2003 using (employeeNumber)",
 	}, {
 		input: "select 1 from t",
 	}, {
@@ -2146,7 +2146,8 @@ var (
 	}, {
 		input: "select * from t group by a collate utf8_general_ci",
 	}, {
-		input: "select MAX(k collate latin1_german2_ci) from t1",
+		input:  "select MAX(k collate latin1_german2_ci) from t1",
+		output: "select max(k collate latin1_german2_ci) from t1",
 	}, {
 		input: "select distinct k collate latin1_german2_ci from t1",
 	}, {
@@ -3624,8 +3625,6 @@ func TestCaseSensitivity(t *testing.T) {
 	}, {
 		input: "select A(B, C) from b",
 	}, {
-		input: "select A(distinct B, C) from b",
-	}, {
 		// IF is an exception. It's always lower-cased.
 		input:  "select IF(B, C) from b",
 		output: "select if(B, C) from b",
@@ -3875,6 +3874,9 @@ func TestConvert(t *testing.T) {
 	}, {
 		input:  "@@",
 		output: "syntax error at position 3",
+	}, {
+		input:  "select A(distinct B, C) from b",
+		output: "syntax error at position 18 near 'distinct'",
 	}}
 
 	for _, tcase := range invalidSQL {

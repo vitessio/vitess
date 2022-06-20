@@ -137,6 +137,7 @@ func (wr *Wrangler) TabletExternallyReparented(ctx context.Context, newPrimaryAl
 		if err != nil {
 			return err
 		}
+		log.Infof("Getting a new durability policy for %v", durabilityName)
 		durability, err := reparentutil.GetDurabilityPolicy(durabilityName)
 		if err != nil {
 			return err

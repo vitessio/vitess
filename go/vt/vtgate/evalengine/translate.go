@@ -440,7 +440,7 @@ func translateConvertCharset(charset string, binary bool, lookup TranslationLook
 	return collationID, nil
 }
 
-func translateConvertExpr(expr sqlparser.Expr, type_ *sqlparser.ConvertType, lookup TranslationLookup) (Expr, error) {
+func translateConvertExpr(expr sqlparser.Expr, convertType *sqlparser.ConvertType, lookup TranslationLookup) (Expr, error) {
 	var (
 		convert ConvertExpr
 		err     error
@@ -451,17 +451,17 @@ func translateConvertExpr(expr sqlparser.Expr, type_ *sqlparser.ConvertType, loo
 		return nil, err
 	}
 
-	convert.Length, convert.HasLength, err = translateIntegral(type_.Length, lookup)
+	convert.Length, convert.HasLength, err = translateIntegral(convertType.Length, lookup)
 	if err != nil {
 		return nil, err
 	}
 
-	convert.Scale, convert.HasScale, err = translateIntegral(type_.Scale, lookup)
+	convert.Scale, convert.HasScale, err = translateIntegral(convertType.Scale, lookup)
 	if err != nil {
 		return nil, err
 	}
 
-	convert.Type = strings.ToUpper(type_.Type)
+	convert.Type = strings.ToUpper(convertType.Type)
 	switch convert.Type {
 	case "DECIMAL":
 		if convert.Length < convert.Scale {
@@ -483,7 +483,7 @@ func translateConvertExpr(expr sqlparser.Expr, type_ *sqlparser.ConvertType, loo
 	case "NCHAR":
 		convert.Collation = collations.CollationUtf8ID
 	case "CHAR":
-		convert.Collation, err = translateConvertCharset(type_.Charset.Name, type_.Charset.Binary, lookup)
+		convert.Collation, err = translateConvertCharset(convertType.Charset.Name, convertType.Charset.Binary, lookup)
 		if err != nil {
 			return nil, err
 		}

@@ -594,7 +594,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 				Filter: "select hour(distinct c1) as a from t1",
 			}},
 		},
-		err: "unexpected: hour(distinct c1)",
+		err: "syntax error at position 21 near 'distinct'",
 	}, {
 		// funcs need alias
 		input: &binlogdatapb.Filter{

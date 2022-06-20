@@ -510,7 +510,6 @@ func TestFindSchema(t *testing.T) {
 	})
 
 	t.Run("unauthorized actor", func(t *testing.T) {
-		t.Parallel()
 		actor := &rbac.Actor{Name: "unauthorized"}
 
 		ctx := context.Background()
@@ -526,7 +525,6 @@ func TestFindSchema(t *testing.T) {
 	})
 
 	t.Run("partial access", func(t *testing.T) {
-		t.Parallel()
 		actor := &rbac.Actor{Name: "allowed-other"}
 
 		ctx := context.Background()
@@ -541,7 +539,6 @@ func TestFindSchema(t *testing.T) {
 	})
 
 	t.Run("full access", func(t *testing.T) {
-		t.Parallel()
 		actor := &rbac.Actor{Name: "allowed-all"}
 
 		ctx := context.Background()
@@ -1139,7 +1136,6 @@ func TestGetSchema(t *testing.T) {
 	})
 
 	t.Run("unauthorized actor", func(t *testing.T) {
-		t.Parallel()
 		actor := &rbac.Actor{Name: "other"}
 
 		ctx := context.Background()
@@ -1157,7 +1153,6 @@ func TestGetSchema(t *testing.T) {
 	})
 
 	t.Run("authorized actor", func(t *testing.T) {
-		t.Parallel()
 		actor := &rbac.Actor{Name: "allowed"}
 
 		ctx := context.Background()
@@ -1212,7 +1207,6 @@ func TestGetSchemas(t *testing.T) {
 	})
 
 	t.Run("unauthorized actor", func(t *testing.T) {
-		t.Parallel()
 		actor := &rbac.Actor{Name: "unauthorized"}
 
 		ctx := context.Background()
@@ -1226,7 +1220,6 @@ func TestGetSchemas(t *testing.T) {
 	})
 
 	t.Run("partial access", func(t *testing.T) {
-		t.Parallel()
 		actor := &rbac.Actor{Name: "allowed-other"}
 
 		ctx := context.Background()
@@ -1247,7 +1240,6 @@ func TestGetSchemas(t *testing.T) {
 	})
 
 	t.Run("full access", func(t *testing.T) {
-		t.Parallel()
 		actor := &rbac.Actor{Name: "allowed-all"}
 
 		ctx := context.Background()
