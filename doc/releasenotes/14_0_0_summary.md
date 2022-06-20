@@ -4,10 +4,10 @@
 
 The new planner has been in the works since end of 2020, and it's finally grown enough to be able to become the default planner for Vitess.
 This means that many more queries are supported on sharded keyspaces, and old queries might get planned better than before. 
-You can always roll back to the earlier planner, either by providing the flag `--planner-version=Gen4` to `vtgate`, or by adding a comment to individual queries, like so:
+You can always roll back to the earlier planner, either by providing the flag `--planner-version=V3` to `vtgate`, or by adding a comment to individual queries, like so:
 
 ```sql
-select /*vt+ PLANNER=gen4 */ name, count(*) from users
+select /*vt+ PLANNER=V3 */ name, count(*) from users
 ```
 
 ### New query support
