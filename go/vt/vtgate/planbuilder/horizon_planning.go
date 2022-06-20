@@ -1007,7 +1007,7 @@ func (hp *horizonPlanning) addDistinct(ctx *plancontext.PlanningContext, plan lo
 	return oa, nil
 }
 
-func isAmbiguousOrderBy(index int, col sqlparser.ColIdent, exprs []abstract.SelectExpr) bool {
+func isAmbiguousOrderBy(index int, col sqlparser.IdentifierCI, exprs []abstract.SelectExpr) bool {
 	if col.String() == "" {
 		return false
 	}
@@ -1124,7 +1124,7 @@ func removeKeyspaceFromSelectExpr(expr sqlparser.SelectExpr) {
 	case *sqlparser.AliasedExpr:
 		sqlparser.RemoveKeyspaceFromColName(expr.Expr)
 	case *sqlparser.StarExpr:
-		expr.TableName.Qualifier = sqlparser.NewTableIdent("")
+		expr.TableName.Qualifier = sqlparser.NewIdentifierCS("")
 	}
 }
 

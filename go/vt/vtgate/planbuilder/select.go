@@ -316,7 +316,7 @@ func buildSQLCalcFoundRowsPlan(
 			From: []sqlparser.TableExpr{
 				&sqlparser.AliasedTableExpr{
 					Expr: &sqlparser.DerivedTable{Select: sel2},
-					As:   sqlparser.NewTableIdent("t"),
+					As:   sqlparser.NewIdentifierCS("t"),
 				},
 			},
 		}

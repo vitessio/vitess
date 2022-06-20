@@ -479,7 +479,7 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			}
 
 			// Find and fill in the table schema.
-			tce.ti = bls.se.GetTable(sqlparser.NewTableIdent(tm.Name))
+			tce.ti = bls.se.GetTable(sqlparser.NewIdentifierCS(tm.Name))
 			if tce.ti == nil {
 				return pos, fmt.Errorf("unknown table %v in schema", tm.Name)
 			}
@@ -604,7 +604,7 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 func (bls *Streamer) appendInserts(statements []FullBinlogStatement, tce *tableCacheEntry, rows *mysql.Rows) []FullBinlogStatement {
 	for i := range rows.Rows {
 		sql := sqlparser.NewTrackedBuffer(nil)
-		sql.Myprintf("INSERT INTO %v SET ", sqlparser.NewTableIdent(tce.tm.Name))
+		sql.Myprintf("INSERT INTO %v SET ", sqlparser.NewIdentifierCS(tce.tm.Name))
 
 		keyspaceIDCell, pkValues, err := writeValuesAsSQL(sql, tce, rows, i, tce.pkNames != nil)
 		if err != nil {
@@ -640,7 +640,7 @@ func (bls *Streamer) appendInserts(statements []FullBinlogStatement, tce *tableC
 func (bls *Streamer) appendUpdates(statements []FullBinlogStatement, tce *tableCacheEntry, rows *mysql.Rows) []FullBinlogStatement {
 	for i := range rows.Rows {
 		sql := sqlparser.NewTrackedBuffer(nil)
-		sql.Myprintf("UPDATE %v SET ", sqlparser.NewTableIdent(tce.tm.Name))
+		sql.Myprintf("UPDATE %v SET ", sqlparser.NewIdentifierCS(tce.tm.Name))
 
 		keyspaceIDCell, pkValues, err := writeValuesAsSQL(sql, tce, rows, i, tce.pkNames != nil)
 		if err != nil {
@@ -683,7 +683,7 @@ func (bls *Streamer) appendUpdates(statements []FullBinlogStatement, tce *tableC
 func (bls *Streamer) appendDeletes(statements []FullBinlogStatement, tce *tableCacheEntry, rows *mysql.Rows) []FullBinlogStatement {
 	for i := range rows.Rows {
 		sql := sqlparser.NewTrackedBuffer(nil)
-		sql.Myprintf("DELETE FROM %v WHERE ", sqlparser.NewTableIdent(tce.tm.Name))
+		sql.Myprintf("DELETE FROM %v WHERE ", sqlparser.NewIdentifierCS(tce.tm.Name))
 
 		keyspaceIDCell, pkValues, err := writeIdentifiersAsSQL(sql, tce, rows, i, tce.pkNames != nil)
 		if err != nil {
@@ -743,7 +743,7 @@ func writeValuesAsSQL(sql *sqlparser.TrackedBuffer, tce *tableCacheEntry, rs *my
 		if valueIndex > 0 {
 			sql.WriteString(", ")
 		}
-		sql.Myprintf("%v", sqlparser.NewColIdent(tce.ti.Fields[c].Name))
+		sql.Myprintf("%v", sqlparser.NewIdentifierCI(tce.ti.Fields[c].Name))
 		sql.WriteByte('=')
 
 		if rs.Rows[rowIndex].NullColumns.Bit(valueIndex) {
@@ -808,7 +808,7 @@ func writeIdentifiersAsSQL(sql *sqlparser.TrackedBuffer, tce *tableCacheEntry, r
 		if valueIndex > 0 {
 			sql.WriteString(" AND ")
 		}
-		sql.Myprintf("%v", sqlparser.NewColIdent(tce.ti.Fields[c].Name))
+		sql.Myprintf("%v", sqlparser.NewIdentifierCI(tce.ti.Fields[c].Name))
 
 		if rs.Rows[rowIndex].NullIdentifyColumns.Bit(valueIndex) {
 			// This column is represented, but its value is NULL.

@@ -1958,7 +1958,7 @@ INPUT
 select @@local.profiling_history_size;
 END
 OUTPUT
-select @@local.profiling_history_size from dual
+select @@profiling_history_size from dual
 END
 INPUT
 select 0 % null as 'NULL';
@@ -2888,7 +2888,7 @@ INPUT
 select @@session.transaction_isolation;
 END
 OUTPUT
-select @@session.transaction_isolation from dual
+select @@transaction_isolation from dual
 END
 INPUT
 select hex(left(_utf16 0xD800DC00D87FDFFF, 1));
@@ -9260,7 +9260,7 @@ INPUT
 select @@local.profiling;
 END
 OUTPUT
-select @@local.profiling from dual
+select @@profiling from dual
 END
 INPUT
 select 5.0 div 2;
@@ -12632,7 +12632,7 @@ INPUT
 select @@keycache1.key_buffer_size;
 END
 OUTPUT
-select @@keycache1.key_buffer_size from dual
+select @@`keycache1.key_buffer_size` from dual
 END
 INPUT
 select group_concat(c1 order by binary c1 separator '') from t1 group by c1 collate utf32_polish_ci;
@@ -12878,7 +12878,7 @@ INPUT
 select @@keycache2.key_buffer_size;
 END
 OUTPUT
-select @@keycache2.key_buffer_size from dual
+select @@`keycache2.key_buffer_size` from dual
 END
 INPUT
 select from t1 where MATCH(a,b) AGAINST ("indexes collections");
@@ -15056,7 +15056,7 @@ INPUT
 select @@keycache2.key_cache_block_size;
 END
 OUTPUT
-select @@keycache2.key_cache_block_size from dual
+select @@`keycache2.key_cache_block_size` from dual
 END
 INPUT
 select date_add("1997-12-31 23:59:59",INTERVAL "1 1:1:1" DAY_SECOND);
@@ -15104,7 +15104,7 @@ INPUT
 select @@keycache1.key_cache_block_size;
 END
 OUTPUT
-select @@keycache1.key_cache_block_size from dual
+select @@`keycache1.key_cache_block_size` from dual
 END
 INPUT
 select rand(rand);
@@ -15752,7 +15752,7 @@ INPUT
 select @@session.thread_handling;
 END
 OUTPUT
-select @@session.thread_handling from dual
+select @@thread_handling from dual
 END
 INPUT
 select convert(_koi8r'�' using utf8) < convert(_koi8r'�' using utf8);

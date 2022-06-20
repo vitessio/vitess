@@ -395,7 +395,7 @@ func (df *vdiff) buildVDiffPlan(ctx context.Context, filter *binlogdatapb.Filter
 		query := rule.Filter
 		if rule.Filter == "" || key.IsKeyRange(rule.Filter) {
 			buf := sqlparser.NewTrackedBuffer(nil)
-			buf.Myprintf("select * from %v", sqlparser.NewTableIdent(table.Name))
+			buf.Myprintf("select * from %v", sqlparser.NewIdentifierCS(table.Name))
 			query = buf.String()
 		}
 		include := true
@@ -453,7 +453,7 @@ func findPKs(table *tabletmanagerdatapb.TableDefinition, targetSelect *sqlparser
 			return nil, fmt.Errorf("column %v not found in table %v", pk, table.Name)
 		}
 		orderby = append(orderby, &sqlparser.Order{
-			Expr:      &sqlparser.ColName{Name: sqlparser.NewColIdent(pk)},
+			Expr:      &sqlparser.ColName{Name: sqlparser.NewIdentifierCI(pk)},
 			Direction: sqlparser.AscOrder,
 		})
 	}
@@ -480,7 +480,7 @@ func (df *vdiff) adjustForSourceTimeZone(targetSelectExprs sqlparser.SelectExprs
 				fieldType := fields[colName]
 				if fieldType == querypb.Type_DATETIME {
 					convertTZFuncExpr = &sqlparser.FuncExpr{
-						Name: sqlparser.NewColIdent("convert_tz"),
+						Name: sqlparser.NewIdentifierCI("convert_tz"),
 						Exprs: sqlparser.SelectExprs{
 							expr,
 							&sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral(df.targetTimeZone)},
@@ -542,7 +542,7 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 		case *sqlparser.StarExpr:
 			// If it's a '*' expression, expand column list from the schema.
 			for _, fld := range table.Fields {
-				aliased := &sqlparser.AliasedExpr{Expr: &sqlparser.ColName{Name: sqlparser.NewColIdent(fld.Name)}}
+				aliased := &sqlparser.AliasedExpr{Expr: &sqlparser.ColName{Name: sqlparser.NewIdentifierCI(fld.Name)}}
 				sourceSelect.SelectExprs = append(sourceSelect.SelectExprs, aliased)
 				targetSelect.SelectExprs = append(targetSelect.SelectExprs, aliased)
 			}
@@ -607,7 +607,7 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 	targetSelect.From = sqlparser.TableExprs{
 		&sqlparser.AliasedTableExpr{
 			Expr: &sqlparser.TableName{
-				Name: sqlparser.NewTableIdent(table.Name),
+				Name: sqlparser.NewIdentifierCS(table.Name),
 			},
 		},
 	}
