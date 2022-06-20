@@ -307,6 +307,9 @@ func (e *Exporter) NewGauge(name string, help string) *stats.Gauge {
 	return lvar
 }
 
+// NewGaugeFloat64
+// exporter assumes all counters/gauges are int64 based; I haven't found a good solution for exporting
+// a float64 gauge yet. (Shlomi)
 func (e *Exporter) NewGaugeFloat64(name string, help string) *stats.GaugeFloat64 {
 	return nil
 }
