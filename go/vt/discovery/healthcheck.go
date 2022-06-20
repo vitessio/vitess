@@ -44,6 +44,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"vitess.io/vitess/go/netutil"
 
 	"vitess.io/vitess/go/flagutil"
 	"vitess.io/vitess/go/stats"
@@ -85,8 +86,8 @@ var (
 
 // See the documentation for NewHealthCheck below for an explanation of these parameters.
 const (
-	defaultHealthCheckRetryDelay = 5 * time.Second
-	defaultHealthCheckTimeout    = 1 * time.Minute
+	DefaultHealthCheckRetryDelay = 5 * time.Second
+	DefaultHealthCheckTimeout    = 1 * time.Minute
 
 	// DefaultTopoReadConcurrency is used as the default value for the topoReadConcurrency parameter of a TopologyWatcher.
 	DefaultTopoReadConcurrency int = 5
@@ -166,6 +167,8 @@ type tabletAliasString string
 
 // HealthCheck declares what the TabletGateway needs from the HealthCheck
 type HealthCheck interface {
+	TabletRecorder
+
 	// CacheStatus returns a displayable version of the health check cache.
 	CacheStatus() TabletsCacheStatusList
 
@@ -898,4 +901,16 @@ func (hc *HealthCheckImpl) stateChecksum() int64 {
 	}
 
 	return int64(crc32.ChecksumIEEE(buf.Bytes()))
+}
+
+// TabletToMapKey creates a key to the map from tablet's host and ports.
+// It should only be used in discovery and related module.
+func TabletToMapKey(tablet *topodata.Tablet) string {
+	parts := make([]string, 0, 1)
+	for name, port := range tablet.PortMap {
+		parts = append(parts, netutil.JoinHostPort(name, port))
+	}
+	sort.Strings(parts)
+	parts = append([]string{tablet.Hostname}, parts...)
+	return strings.Join(parts, ",")
 }

@@ -29,7 +29,7 @@ type replicationLagRecord struct {
 	time time.Time
 
 	// LegacyTabletStats holds a copy of the current health data of the tablet.
-	discovery.LegacyTabletStats
+	discovery.TabletHealth
 }
 
 func (r replicationLagRecord) isZero() bool {

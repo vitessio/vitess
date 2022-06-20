@@ -372,7 +372,7 @@ type legacyTabletHealth struct {
 
 // NewLegacyDefaultHealthCheck creates a new LegacyHealthCheck object with a default configuration.
 func NewLegacyDefaultHealthCheck() LegacyHealthCheck {
-	return NewLegacyHealthCheck(defaultHealthCheckRetryDelay, defaultHealthCheckTimeout)
+	return NewLegacyHealthCheck(DefaultHealthCheckRetryDelay, DefaultHealthCheckTimeout)
 }
 
 // NewLegacyHealthCheck creates a new LegacyHealthCheck object.
@@ -959,16 +959,4 @@ func (hc *LegacyHealthCheckImpl) Close() error {
 	hc.connsWG.Wait()
 
 	return nil
-}
-
-// TabletToMapKey creates a key to the map from tablet's host and ports.
-// It should only be used in discovery and related module.
-func TabletToMapKey(tablet *topodatapb.Tablet) string {
-	parts := make([]string, 0, 1)
-	for name, port := range tablet.PortMap {
-		parts = append(parts, netutil.JoinHostPort(name, port))
-	}
-	sort.Strings(parts)
-	parts = append([]string{tablet.Hostname}, parts...)
-	return strings.Join(parts, ",")
 }
