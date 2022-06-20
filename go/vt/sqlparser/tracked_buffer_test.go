@@ -204,6 +204,18 @@ func TestCanonicalOutput(t *testing.T) {
 			"revert /* vt+ foo */ vitess_migration '9aecb3b4_b8a9_11ec_929a_0a43f95f28a3'",
 			"REVERT /* vt+ foo */ VITESS_MIGRATION '9aecb3b4_b8a9_11ec_929a_0a43f95f28a3'",
 		},
+		{
+			"select count(a) from t",
+			"SELECT COUNT(`a`) FROM `t`",
+		},
+		{
+			"select var_pop(a) from products",
+			"SELECT VAR_POP(`a`) FROM `products`",
+		},
+		{
+			"select /* function with distinct */ count(distinct a) from t",
+			"SELECT /* function with distinct */ COUNT(DISTINCT `a`) FROM `t`",
+		},
 	}
 
 	for _, tc := range testcases {
