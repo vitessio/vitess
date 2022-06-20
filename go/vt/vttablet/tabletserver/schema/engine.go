@@ -224,12 +224,29 @@ func (se *Engine) IsOpen() bool {
 // It can be re-opened after Close.
 func (se *Engine) Close() {
 	se.mu.Lock()
-	defer se.mu.Unlock()
 	if !se.isOpen {
+		se.mu.Unlock()
 		return
 	}
 
-	se.ticks.Stop()
+	se.closeLocked()
+	log.Info("Schema Engine: closed")
+}
+
+// closeLocked closes the schema engine. It is meant to be called after locking the mutex of the schema engine.
+// It also unlocks the engine when it returns.
+func (se *Engine) closeLocked() {
+	// Close the Timer in a separate go routine because
+	// there might be a tick after we have acquired the lock above
+	// but before closing the timer, in which case Stop function will wait for the
+	// configured function to complete running and that function (ReloadAt) will block
+	// on the lock we have already acquired
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		se.ticks.Stop()
+		wg.Done()
+	}()
 	se.historian.Close()
 	se.conns.Close()
 
@@ -237,7 +254,11 @@ func (se *Engine) Close() {
 	se.lastChange = 0
 	se.notifiers = make(map[string]notifier)
 	se.isOpen = false
-	log.Info("Schema Engine: closed")
+
+	// Unlock the mutex. If there is a tick blocked on this lock,
+	// then it will run and we wait for the Stop function to finish its execution
+	se.mu.Unlock()
+	wg.Wait()
 }
 
 // MakeNonPrimary clears the sequence caches to make sure that
