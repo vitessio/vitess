@@ -229,6 +229,13 @@ func (se *Engine) Close() {
 		return
 	}
 
+	se.closeLocked()
+	log.Info("Schema Engine: closed")
+}
+
+// closeLocked closes the schema engine. It is meant to be called after locking the mutex of the schema engine.
+// It also unlocks the engine when it returns.
+func (se *Engine) closeLocked() {
 	// Close the Timer in a separate go routine because
 	// there might be a tick after we have acquired the lock above
 	// but before closing the timer, in which case Stop function will wait for the
@@ -251,7 +258,6 @@ func (se *Engine) Close() {
 	// then it will run and we wait for the Stop function to finish its execution
 	se.mu.Unlock()
 	<-ticksWaitChan
-	log.Info("Schema Engine: closed")
 }
 
 // MakeNonPrimary clears the sequence caches to make sure that
