@@ -351,6 +351,10 @@ func (er *astRewriter) rewrite(cursor *Cursor) bool {
 	case *FuncExpr:
 		er.funcRewrite(cursor, node)
 	case *Variable:
+		// Iff we are in SET, we want to change the scope of variables if a modifier has been set
+		// and only on the lhs of the assignment:
+		// set session sql_mode = @someElse
+		// here we need to change the scope of `sql_mode` and not of `@someElse`
 		if v, isSet := cursor.Parent().(*SetExpr); isSet && v.Var == node {
 			break
 		}
@@ -360,8 +364,6 @@ func (er *astRewriter) rewrite(cursor *Cursor) bool {
 		case GlobalScope, SessionScope:
 			er.sysVarRewrite(cursor, node)
 		}
-	case *SetExpr:
-
 	case *Subquery:
 		er.unnestSubQueries(cursor, node)
 	case *NotExpr:

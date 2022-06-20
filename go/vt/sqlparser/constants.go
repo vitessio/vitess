@@ -412,7 +412,7 @@ const (
 	ReadWrite
 )
 
-//Constants for Enum type - IsolationLevel
+// Constants for Enum type - IsolationLevel
 const (
 	ReadUncommitted IsolationLevel = iota
 	ReadCommitted
@@ -445,25 +445,15 @@ const (
 )
 
 // Constants for scope of variables
-/*
-variable: {
-    user_var_name
-  | param_name
-  | local_var_name
-  | {GLOBAL | @@GLOBAL.} system_var_name
-  | {PERSIST | @@PERSIST.} system_var_name
-  | {PERSIST_ONLY | @@PERSIST_ONLY.} system_var_name
-  | [SESSION | @@SESSION. | @@] system_var_name
-}
-*/
+// See https://dev.mysql.com/doc/refman/8.0/en/set-variable.html
 const (
-	NoScope             Scope = iota
-	SessionScope              // [SESSION | @@SESSION. | @@] This is the default if no scope is given
-	GlobalScope               // {GLOBAL | @@GLOBAL.} system_var_name
-	VitessMetadataScope       // @@vitess_metadata.system_var_name
-	VariableScope             // @var_name   This is used for user defined variables. Not really a scope, but it works.
-	PersistSysScope           // {PERSIST_ONLY | @@PERSIST_ONLY.} system_var_name
-	PersistOnlySysScope       // {PERSIST_ONLY | @@PERSIST_ONLY.} system_var_name
+	NoScope             Scope = iota // This is only used for SET ISOLATION LEVEL
+	SessionScope                     // [SESSION | @@SESSION.| @@LOCAL. | @@] This is the default if no scope is given
+	GlobalScope                      // {GLOBAL | @@GLOBAL.} system_var_name
+	VitessMetadataScope              // @@vitess_metadata.system_var_name
+	PersistSysScope                  // {PERSIST_ONLY | @@PERSIST_ONLY.} system_var_name
+	PersistOnlySysScope              // {PERSIST_ONLY | @@PERSIST_ONLY.} system_var_name
+	VariableScope                    // @var_name   This is used for user defined variables.
 )
 
 // Constants for Enum Type - Lock
