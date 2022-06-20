@@ -280,7 +280,7 @@ func (fmd *FakeMysqlDaemon) ReplicationStatus() (mysql.ReplicationStatus, error)
 	return mysql.ReplicationStatus{
 		Position:                               fmd.CurrentPrimaryPosition,
 		FilePosition:                           fmd.CurrentSourceFilePosition,
-		RelayLogSourceBinLogEquivalentPosition: fmd.CurrentSourceFilePosition,
+		RelayLogSourceBinlogEquivalentPosition: fmd.CurrentSourceFilePosition,
 		ReplicationLagSeconds:                  fmd.ReplicationLagSeconds,
 		// implemented as AND to avoid changing all tests that were
 		// previously using Replicating = false

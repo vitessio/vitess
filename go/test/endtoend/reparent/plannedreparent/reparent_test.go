@@ -395,7 +395,7 @@ func TestReplicationStatus(t *testing.T) {
 	require.True(t, ioThread)
 	require.False(t, sqlThread)
 	// Assert that the 4 file log positions are non-empty
-	assert.NotEmpty(t, replicationStatus.RelayLogSourceBinLogEquivalentPosition)
+	assert.NotEmpty(t, replicationStatus.RelayLogSourceBinlogEquivalentPosition)
 	assert.NotEmpty(t, replicationStatus.FilePosition)
 	assert.NotEmpty(t, replicationStatus.Position)
 	assert.NotEmpty(t, replicationStatus.RelayLogPosition)
@@ -408,7 +408,7 @@ func TestReplicationStatus(t *testing.T) {
 	require.False(t, ioThread)
 	require.False(t, sqlThread)
 	// Assert that the 4 file log positions are non-empty
-	assert.NotEmpty(t, replicationStatus.RelayLogSourceBinLogEquivalentPosition)
+	assert.NotEmpty(t, replicationStatus.RelayLogSourceBinlogEquivalentPosition)
 	assert.NotEmpty(t, replicationStatus.FilePosition)
 	assert.NotEmpty(t, replicationStatus.Position)
 	assert.NotEmpty(t, replicationStatus.RelayLogPosition)
@@ -421,7 +421,7 @@ func TestReplicationStatus(t *testing.T) {
 	require.True(t, ioThread)
 	require.True(t, sqlThread)
 	// Assert that the 4 file log positions are non-empty
-	assert.NotEmpty(t, replicationStatus.RelayLogSourceBinLogEquivalentPosition)
+	assert.NotEmpty(t, replicationStatus.RelayLogSourceBinlogEquivalentPosition)
 	assert.NotEmpty(t, replicationStatus.FilePosition)
 	assert.NotEmpty(t, replicationStatus.Position)
 	assert.NotEmpty(t, replicationStatus.RelayLogPosition)
@@ -434,7 +434,7 @@ func TestReplicationStatus(t *testing.T) {
 	require.False(t, ioThread)
 	require.True(t, sqlThread)
 	// Assert that the 4 file log positions are non-empty
-	assert.NotEmpty(t, replicationStatus.RelayLogSourceBinLogEquivalentPosition)
+	assert.NotEmpty(t, replicationStatus.RelayLogSourceBinlogEquivalentPosition)
 	assert.NotEmpty(t, replicationStatus.FilePosition)
 	assert.NotEmpty(t, replicationStatus.Position)
 	assert.NotEmpty(t, replicationStatus.RelayLogPosition)

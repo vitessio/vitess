@@ -37,7 +37,7 @@ message Status {
   // RelayLogPosition will be empty for flavors that do not support returning the full GTIDSet from the relay log, such as MariaDB.
   string relay_log_position = 8;
   string file_position = 9;
-  string relay_log_source_bin_log_equivalent_position = 10;
+  string relay_log_source_binlog_equivalent_position = 10;
   uint32 source_server_id = 11;
   string source_uuid = 12;
   int32 io_state = 13;

@@ -489,7 +489,7 @@ func parseReplicationStatus(fields map[string]string) ReplicationStatus {
 	if file != "" && readPosStr != "" {
 		fileRelayPos, err := strconv.Atoi(readPosStr)
 		if err == nil {
-			status.RelayLogSourceBinLogEquivalentPosition.GTIDSet = filePosGTID{
+			status.RelayLogSourceBinlogEquivalentPosition.GTIDSet = filePosGTID{
 				file: file,
 				pos:  fileRelayPos,
 			}

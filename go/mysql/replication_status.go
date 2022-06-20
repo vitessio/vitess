@@ -37,14 +37,14 @@ type ReplicationStatus struct {
 	// behind value and we can instead try to calculate the lag ourselves when
 	// appropriate. For MySQL GTID replication implementation it is the union of
 	// executed GTID set and retrieved GTID set. For file replication implementation,
-	// it is same as RelayLogSourceBinLogEquivalentPosition
+	// it is same as RelayLogSourceBinlogEquivalentPosition
 	RelayLogPosition Position
 	// FilePosition stores the position of the source tablets binary log
 	// upto which the SQL thread of the replica has run.
 	FilePosition Position
-	// RelayLogSourceBinLogEquivalentPosition stores the position of the source tablets binary log
+	// RelayLogSourceBinlogEquivalentPosition stores the position of the source tablets binary log
 	// upto which the IO thread has read and added to the relay log
-	RelayLogSourceBinLogEquivalentPosition Position
+	RelayLogSourceBinlogEquivalentPosition Position
 	// RelayLogFilePosition stores the position in the relay log file
 	RelayLogFilePosition  Position
 	SourceServerID        uint
@@ -96,7 +96,7 @@ func ReplicationStatusToProto(s ReplicationStatus) *replicationdatapb.Status {
 		Position:                               EncodePosition(s.Position),
 		RelayLogPosition:                       EncodePosition(s.RelayLogPosition),
 		FilePosition:                           EncodePosition(s.FilePosition),
-		RelayLogSourceBinLogEquivalentPosition: EncodePosition(s.RelayLogSourceBinLogEquivalentPosition),
+		RelayLogSourceBinlogEquivalentPosition: EncodePosition(s.RelayLogSourceBinlogEquivalentPosition),
 		SourceServerId:                         uint32(s.SourceServerID),
 		ReplicationLagSeconds:                  uint32(s.ReplicationLagSeconds),
 		ReplicationLagUnknown:                  s.ReplicationLagUnknown,
@@ -147,9 +147,9 @@ func ProtoToReplicationStatus(s *replicationdatapb.Status) ReplicationStatus {
 	if err != nil {
 		panic(vterrors.Wrapf(err, "cannot decode FilePosition"))
 	}
-	fileRelayPos, err := DecodePosition(s.RelayLogSourceBinLogEquivalentPosition)
+	fileRelayPos, err := DecodePosition(s.RelayLogSourceBinlogEquivalentPosition)
 	if err != nil {
-		panic(vterrors.Wrapf(err, "cannot decode RelayLogSourceBinLogEquivalentPosition"))
+		panic(vterrors.Wrapf(err, "cannot decode RelayLogSourceBinlogEquivalentPosition"))
 	}
 	relayFilePos, err := DecodePosition(s.RelayLogFilePosition)
 	if err != nil {
@@ -166,7 +166,7 @@ func ProtoToReplicationStatus(s *replicationdatapb.Status) ReplicationStatus {
 		Position:                               pos,
 		RelayLogPosition:                       relayPos,
 		FilePosition:                           filePos,
-		RelayLogSourceBinLogEquivalentPosition: fileRelayPos,
+		RelayLogSourceBinlogEquivalentPosition: fileRelayPos,
 		RelayLogFilePosition:                   relayFilePos,
 		SourceServerID:                         uint(s.SourceServerId),
 		ReplicationLagSeconds:                  uint(s.ReplicationLagSeconds),

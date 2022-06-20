@@ -897,7 +897,7 @@ func (tm *TabletManager) StopReplicationAndGetStatus(ctx context.Context, stopRe
 	rs.Position = rsAfter.Position
 	rs.RelayLogPosition = rsAfter.RelayLogPosition
 	rs.FilePosition = rsAfter.FilePosition
-	rs.RelayLogSourceBinLogEquivalentPosition = rsAfter.RelayLogSourceBinLogEquivalentPosition
+	rs.RelayLogSourceBinlogEquivalentPosition = rsAfter.RelayLogSourceBinlogEquivalentPosition
 
 	return StopReplicationAndGetStatusResponse{
 		HybridStatus: mysql.ReplicationStatusToProto(rs),

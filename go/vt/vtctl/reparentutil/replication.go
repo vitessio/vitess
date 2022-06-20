@@ -335,7 +335,7 @@ func stopReplicationAndBuildStatusMaps(
 func WaitForRelayLogsToApply(ctx context.Context, tmc tmclient.TabletManagerClient, tabletInfo *topo.TabletInfo, status *replicationdatapb.StopReplicationStatus) error {
 	switch status.After.RelayLogPosition {
 	case "":
-		return tmc.WaitForPosition(ctx, tabletInfo.Tablet, status.After.RelayLogSourceBinLogEquivalentPosition)
+		return tmc.WaitForPosition(ctx, tabletInfo.Tablet, status.After.RelayLogSourceBinlogEquivalentPosition)
 	default:
 		return tmc.WaitForPosition(ctx, tabletInfo.Tablet, status.After.RelayLogPosition)
 	}

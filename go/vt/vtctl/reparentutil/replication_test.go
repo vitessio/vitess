@@ -1349,7 +1349,7 @@ func TestWaitForRelayLogsToApply(t *testing.T) {
 			client: &waitForRelayLogsToApplyTestTMClient{},
 			status: &replicationdatapb.StopReplicationStatus{
 				After: &replicationdatapb.Status{
-					RelayLogSourceBinLogEquivalentPosition: "file-relay-pos",
+					RelayLogSourceBinlogEquivalentPosition: "file-relay-pos",
 				},
 			},
 			expectedCalledPositions: []string{"file-relay-pos"},
