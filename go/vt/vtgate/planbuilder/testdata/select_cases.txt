@@ -600,8 +600,8 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": false
     },
-    "FieldQuery": "select @@session.auto_increment_increment from dual where 1 != 1",
-    "Query": "select @@session.auto_increment_increment from dual",
+    "FieldQuery": "select @@auto_increment_increment from dual where 1 != 1",
+    "Query": "select @@auto_increment_increment from dual",
     "Table": "dual"
   }
 }
@@ -642,8 +642,8 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select @@session.auto_increment_increment from dual where 1 != 1",
-    "Query": "select @@session.auto_increment_increment from dual",
+    "FieldQuery": "select @@auto_increment_increment from dual where 1 != 1",
+    "Query": "select @@auto_increment_increment from dual",
     "Table": "dual"
   }
 }

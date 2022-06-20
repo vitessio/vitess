@@ -29,6 +29,8 @@ import (
 	"sync"
 	"testing"
 
+	"vitess.io/vitess/go/test/utils"
+
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/stretchr/testify/assert"
@@ -1018,31 +1020,32 @@ var (
 		input:  "delete from a1, a2 using t1 as a1 inner join t2 as a2 where a1.id=a2.id",
 		output: "delete a1, a2 from t1 as a1 join t2 as a2 where a1.id = a2.id",
 	}, {
-		input: "set /* simple */ a = 3",
+		input:  "set /* simple */ a = 3",
+		output: "set /* simple */ @@a = 3",
 	}, {
-		input: "set #simple\n b = 4",
+		input:  "set #simple\n b = 4",
+		output: "set #simple\n @@b = 4",
 	}, {
-		input: "set character_set_results = utf8",
+		input:  "set character_set_results = utf8",
+		output: "set @@character_set_results = utf8",
 	}, {
-		input: "set @@session.autocommit = true",
+		input:  "set @@session.autocommit = true",
+		output: "set @@autocommit = true",
 	}, {
-		input: "set @@session.`autocommit` = true",
-	}, {
-		input: "set @@session.'autocommit' = true",
-	}, {
-		input: "set @@session.\"autocommit\" = true",
+		input:  "set @@session.`autocommit` = true",
+		output: "set @@autocommit = true",
 	}, {
 		input:  "set @@session.autocommit = ON",
-		output: "set @@session.autocommit = 'on'",
+		output: "set @@autocommit = 'on'",
 	}, {
 		input:  "set @@session.autocommit= OFF",
-		output: "set @@session.autocommit = 'off'",
+		output: "set @@autocommit = 'off'",
 	}, {
 		input:  "set autocommit = on",
-		output: "set autocommit = 'on'",
+		output: "set @@autocommit = 'on'",
 	}, {
 		input:  "set autocommit = off",
-		output: "set autocommit = 'off'",
+		output: "set @@autocommit = 'off'",
 	}, {
 		input:  "set names utf8 collate foo",
 		output: "set names 'utf8'",
@@ -1057,7 +1060,7 @@ var (
 		output: "set charset 'utf8'",
 	}, {
 		input:  "set s = 1--4",
-		output: "set s = 1 - -4",
+		output: "set @@s = 1 - -4",
 	}, {
 		input:  "set character set \"utf8\"",
 		output: "set charset 'utf8'",
@@ -1066,17 +1069,25 @@ var (
 		output: "set charset default",
 	}, {
 		input:  "set session wait_timeout = 3600",
-		output: "set session wait_timeout = 3600",
+		output: "set @@wait_timeout = 3600",
 	}, {
 		input:  "set session wait_timeout = 3600, session autocommit = off",
-		output: "set session wait_timeout = 3600, session autocommit = 'off'",
+		output: "set @@wait_timeout = 3600, @@autocommit = 'off'",
 	}, {
 		input:  "set session wait_timeout = 3600, @@global.autocommit = off",
-		output: "set session wait_timeout = 3600, @@global.autocommit = 'off'",
+		output: "set @@wait_timeout = 3600, @@global.autocommit = 'off'",
 	}, {
-		input: "set /* list */ a = 3, b = 4",
+		input:  "set local wait_timeout = 3600",
+		output: "set @@wait_timeout = 3600",
 	}, {
-		input: "set /* mixed list */ a = 3, names 'utf8', charset 'ascii', b = 4",
+		input:  "set @@local.wait_timeout = 3600",
+		output: "set @@wait_timeout = 3600",
+	}, {
+		input:  "set /* list */ a = 3, b = 4",
+		output: "set /* list */ @@a = 3, @@b = 4",
+	}, {
+		input:  "set /* mixed list */ a = 3, names 'utf8', charset 'ascii', b = 4",
+		output: "set /* mixed list */ @@a = 3, names 'utf8', charset 'ascii', @@b = 4",
 	}, {
 		input: "set session transaction isolation level repeatable read",
 	}, {
@@ -1096,35 +1107,46 @@ var (
 	}, {
 		input: "set transaction read only",
 	}, {
-		input: "set tx_read_only = 1",
+		input:  "set tx_read_only = 1",
+		output: "set @@tx_read_only = 1",
 	}, {
-		input: "set tx_read_only = 0",
+		input:  "set tx_read_only = 0",
+		output: "set @@tx_read_only = 0",
 	}, {
-		input: "set transaction_read_only = 1",
+		input:  "set transaction_read_only = 1",
+		output: "set @@transaction_read_only = 1",
 	}, {
-		input: "set transaction_read_only = 0",
+		input:  "set transaction_read_only = 0",
+		output: "set @@transaction_read_only = 0",
 	}, {
-		input: "set tx_isolation = 'repeatable read'",
+		input:  "set tx_isolation = 'repeatable read'",
+		output: "set @@tx_isolation = 'repeatable read'",
 	}, {
-		input: "set tx_isolation = 'read committed'",
+		input:  "set tx_isolation = 'read committed'",
+		output: "set @@tx_isolation = 'read committed'",
 	}, {
-		input: "set tx_isolation = 'read uncommitted'",
+		input:  "set tx_isolation = 'read uncommitted'",
+		output: "set @@tx_isolation = 'read uncommitted'",
 	}, {
-		input: "set tx_isolation = 'serializable'",
+		input:  "set tx_isolation = 'serializable'",
+		output: "set @@tx_isolation = 'serializable'",
 	}, {
-		input: "set sql_safe_updates = 0",
+		input:  "set sql_safe_updates = 0",
+		output: "set @@sql_safe_updates = 0",
 	}, {
-		input: "set sql_safe_updates = 1",
+		input:  "set sql_safe_updates = 1",
+		output: "set @@sql_safe_updates = 1",
 	}, {
 		input: "set @variable = 42",
 	}, {
-		input: "set @period.variable = 42",
+		input:  "set @period.variable = 42",
+		output: "set @`period.variable` = 42",
 	}, {
 		input:  "set S= +++-++-+(4+1)",
-		output: "set S = - -(4 + 1)",
+		output: "set @@S = - -(4 + 1)",
 	}, {
 		input:  "set S= +- - - - -(4+1)",
-		output: "set S = - - - - -(4 + 1)",
+		output: "set @@S = - - - - -(4 + 1)",
 	}, {
 		input:  "alter table a add foo int references b (a) on delete restrict first",
 		output: "alter table a add column foo int references b (a) on delete restrict first",
@@ -2656,6 +2678,9 @@ var (
 		input:  `SELECT JSON_EXTRACT('{"a": 1, "b": 2, "c": {"d": 4}}', '$.a', @j)`,
 		output: `select json_extract('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', '$.a', @j) from dual`,
 	}, {
+		input:  "SELECT JSON_EXTRACT(@k, TRIM('abc'))",
+		output: `select json_extract(@k, trim('abc')) from dual`,
+	}, {
 		input:  `SELECT JSON_KEYS('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', '$.a')`,
 		output: `select json_keys('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', '$.a') from dual`,
 	}, {
@@ -3025,8 +3050,8 @@ var (
 		input:  "SELECT NTILE(NULL) OVER w FROM numbers",
 		output: "select ntile(null) over w from numbers",
 	}, {
-		input:  "SELECT NTILE(val) OVER W, NTILE(@val) OVER w FROM numbers",
-		output: "select ntile(val) over W, ntile(@val) over w from numbers",
+		input:  "SELECT NTILE(@val) OVER w FROM numbers",
+		output: "select ntile(@val) over w from numbers",
 	}, {
 		input:  "SELECT NTH_VALUE(@z,1) OVER w, NTH_VALUE('val',0) OVER w FROM numbers",
 		output: "select nth_value(@z, 1) over w, nth_value('val', 0) over w from numbers",
@@ -3285,9 +3310,6 @@ func TestInvalid(t *testing.T) {
 		input: "SELECT JSON_CONTAINS_PATH(@j, @j2)",
 		err:   "syntax error at position 35",
 	}, {
-		input: "SELECT JSON_EXTRACT(@k, TRIM('abc'))",
-		err:   "syntax error at position 30",
-	}, {
 		input: "SELECT JSON_EXTRACT(@k)",
 		err:   "syntax error at position 24",
 	}, {
@@ -3393,13 +3415,11 @@ func TestInvalid(t *testing.T) {
 	}
 
 	for _, tcase := range invalidSQL {
-		_, err := Parse(tcase.input)
-		if err == nil {
-			t.Errorf("Parse invalid query(%q), got: nil, want: %s...", tcase.input, tcase.err)
-		}
-		if err != nil && !strings.Contains(err.Error(), tcase.err) {
-			t.Errorf("Parse invalid query(%q), got: %v, want: %s...", tcase.input, err, tcase.err)
-		}
+		t.Run(tcase.input, func(t *testing.T) {
+			_, err := Parse(tcase.input)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), tcase.err)
+		})
 	}
 }
 
@@ -5371,6 +5391,21 @@ var (
 		input:        "create table 2t.3t2 (c1 bigint not null, c2 text, primary key(c1))",
 		output:       "syntax error at position 18 near '.3'",
 		excludeMulti: true,
+	}, {
+		input:  "execute stmt1 using a, @b",
+		output: "syntax error at position 22 near 'a'",
+	}, {
+		input:  "create index @a on b (col1)",
+		output: "syntax error at position 16 near 'a'",
+	}, {
+		input:  "create database test_db default collate @a",
+		output: "syntax error at position 43 near 'a'",
+	}, {
+		input:  "create database test_db default charset @a",
+		output: "syntax error at position 43 near 'a'",
+	}, {
+		input:  "create database test_db default encryption @a",
+		output: "syntax error at position 46 near 'a'",
 	}}
 )
 
@@ -5379,7 +5414,7 @@ func TestErrors(t *testing.T) {
 		t.Run(tcase.input, func(t *testing.T) {
 			_, err := ParseStrictDDL(tcase.input)
 			require.Error(t, err, tcase.output)
-			require.Equal(t, err.Error(), tcase.output)
+			require.Equal(t, tcase.output, err.Error())
 		})
 	}
 }
@@ -5593,11 +5628,25 @@ func BenchmarkParse3(b *testing.B) {
 }
 
 func TestValidUnionCases(t *testing.T) {
-	testFile(t, "union_cases.txt", t.TempDir())
+	testFile(t, "union_cases.txt", makeTestOutput(t))
 }
 
 func TestValidSelectCases(t *testing.T) {
-	testFile(t, "select_cases.txt", t.TempDir())
+	testFile(t, "select_cases.txt", makeTestOutput(t))
+}
+
+func makeTestOutput(t *testing.T) string {
+	testOutputTempDir := utils.MakeTestOutput(t, "testdata", "parse_test")
+
+	t.Cleanup(func() {
+		if !t.Failed() {
+			_ = os.RemoveAll(testOutputTempDir)
+		} else {
+			t.Logf("Errors found. If the output is correct, run `cp %s/* testdata/` to update test expectations", testOutputTempDir)
+		}
+	})
+
+	return testOutputTempDir
 }
 
 type testCase struct {
@@ -5618,7 +5667,7 @@ func testFile(t *testing.T, filename, tempDir string) {
 		fail := false
 		expected := strings.Builder{}
 		for tcase := range iterateExecFile(filename) {
-			t.Run(fmt.Sprintf("%d : %s", tcase.lineno, tcase.comments), func(t *testing.T) {
+			t.Run(fmt.Sprintf("%d : %s", tcase.lineno, tcase.input), func(t *testing.T) {
 				if tcase.output == "" && tcase.errStr == "" {
 					tcase.output = tcase.input
 				}
@@ -5638,7 +5687,7 @@ func testFile(t *testing.T, filename, tempDir string) {
 					if err != nil {
 						expected.WriteString(fmt.Sprintf("ERROR\n%s\nEND\n", escapeNewLines(err.Error())))
 						fail = true
-						t.Errorf("File: %s, Line: %d\nDiff:\n%s\n[%s] \n[%s]", filename, tcase.lineno, cmp.Diff(tcase.errStr, err.Error()), tcase.errStr, err.Error())
+						t.Errorf("File: %s:%d\nDiff:\n%s\n[%s] \n[%s]", filename, tcase.lineno, cmp.Diff(tcase.errStr, err.Error()), tcase.errStr, err.Error())
 					} else {
 						out := String(tree)
 						expected.WriteString(fmt.Sprintf("OUTPUT\n%s\nEND\n", escapeNewLines(out)))
