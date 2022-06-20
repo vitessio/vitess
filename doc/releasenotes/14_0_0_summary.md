@@ -1,5 +1,26 @@
 ## Major Changes
 
+### Gen4 is now the default planner
+
+The new planner has been in the works since end of 2020, and it's finally grown enough to be able to become the default planner for Vitess.
+This means that many more queries are supported on sharded keyspaces, and old queries might get planned better than before. 
+You can always roll back to the earlier planner, either by providing the flag `--planner-version=V3` to `vtgate`, or by adding a comment to individual queries, like so:
+
+```sql
+select /*vt+ PLANNER=V3 */ name, count(*) from users
+```
+
+### New query support
+
+#### Support for aggregation across shards
+Vitess can now plan and execute most aggregation queries across multiple shards and/or keyspaces.
+
+#### INSERT from SELECT
+Support has been added for inserting new data from SELECT queries.
+
+#### UPDATE from SELECT
+Similarly, we have added support for UPDATE with scalar sub-queries.
+
 ### Command-line syntax deprecations
 
 Vitess has begun a transition to a new library for CLI flag parsing.
@@ -242,3 +263,6 @@ the topo server. This allows VTOrc to monitor and repair multiple keyspaces whic
 **VTOrc will ignore the keyspaces which have no durability policy specified in the keyspace record. So on upgrading to v14, users must run
 the command `SetKeyspaceDurabilityPolicy` specified above, to ensure VTOrc continues to work as desired. The recommended upgrade 
 path is to upgrade vtctld, run `SetKeyspaceDurabilityPolicy` and then upgrade VTOrc.**
+
+### Advisory locking optimisations
+Work has gone into making the advisory locks (`get_lock()`, `release_lock()`, et al) release reserved connections faster and in more situations than before.
