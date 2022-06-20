@@ -41,7 +41,7 @@ import (
 // executor is also used for executing vreplication and RefreshState commands.
 type executor struct {
 	wr        *wrangler.Wrangler
-	tsc       *discovery.LegacyTabletStatsCache
+	hc        *discovery.HealthCheckImpl
 	throttler *throttler.Throttler
 	keyspace  string
 	shard     string
@@ -51,10 +51,10 @@ type executor struct {
 	statsKey []string
 }
 
-func newExecutor(wr *wrangler.Wrangler, tsc *discovery.LegacyTabletStatsCache, throttler *throttler.Throttler, keyspace, shard string, threadID int) *executor {
+func newExecutor(wr *wrangler.Wrangler, hc *discovery.HealthCheckImpl, throttler *throttler.Throttler, keyspace, shard string, threadID int) *executor {
 	return &executor{
 		wr:        wr,
-		tsc:       tsc,
+		hc:        hc,
 		throttler: throttler,
 		keyspace:  keyspace,
 		shard:     shard,
@@ -122,18 +122,18 @@ func (e *executor) fetchWithRetries(ctx context.Context, action func(ctx context
 	// Is this current attempt a retry of a previous attempt?
 	isRetry := false
 	for {
-		var primary *discovery.LegacyTabletStats
+		var primary *discovery.TabletHealth
 		var err error
 
 		// Get the current primary from the LegacyTabletStatsCache.
-		primaries := e.tsc.GetHealthyTabletStats(e.keyspace, e.shard, topodatapb.TabletType_PRIMARY)
+		primaries := e.hc.GetHealthyTabletStats(&querypb.Target{Keyspace: e.keyspace, Shard: e.shard, TabletType: topodatapb.TabletType_PRIMARY})
 		if len(primaries) == 0 {
 			e.wr.Logger().Warningf("ExecuteFetch failed for keyspace/shard %v/%v because no PRIMARY is available; will retry until there is PRIMARY again", e.keyspace, e.shard)
 			statsRetryCount.Add(1)
 			statsRetryCounters.Add(retryCategoryNoPrimaryAvailable, 1)
 			goto retry
 		}
-		primary = &primaries[0]
+		primary = primaries[0]
 
 		// Block if we are throttled.
 		if e.throttler != nil {
@@ -194,7 +194,7 @@ func (e *executor) fetchWithRetries(ctx context.Context, action func(ctx context
 // checkError returns true if the error can be ignored and the command
 // succeeded, false if the error is retryable and a non-nil error if the
 // command must not be retried.
-func (e *executor) checkError(ctx context.Context, err error, isRetry bool, primary *discovery.LegacyTabletStats) (bool, error) {
+func (e *executor) checkError(ctx context.Context, err error, isRetry bool, primary *discovery.TabletHealth) (bool, error) {
 	tabletString := fmt.Sprintf("%v (%v/%v)", topoproto.TabletAliasString(primary.Tablet.Alias), e.keyspace, e.shard)
 
 	// first see if it was a context timeout.

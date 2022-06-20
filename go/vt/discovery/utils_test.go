@@ -27,36 +27,36 @@ import (
 func TestRemoveUnhealthyTablets(t *testing.T) {
 	var testcases = []struct {
 		desc  string
-		input []LegacyTabletStats
-		want  []LegacyTabletStats
+		input []TabletHealth
+		want  []TabletHealth
 	}{{
 		desc:  "tablets missing Stats",
-		input: []LegacyTabletStats{replica(1), replica(2)},
-		want:  []LegacyTabletStats{},
+		input: []TabletHealth{replica(1), replica(2)},
+		want:  []TabletHealth{},
 	}, {
 		desc:  "all tablets healthy",
-		input: []LegacyTabletStats{healthy(replica(1)), healthy(replica(2))},
-		want:  []LegacyTabletStats{healthy(replica(1)), healthy(replica(2))},
+		input: []TabletHealth{healthy(replica(1)), healthy(replica(2))},
+		want:  []TabletHealth{healthy(replica(1)), healthy(replica(2))},
 	}, {
 		desc:  "one unhealthy tablet (error)",
-		input: []LegacyTabletStats{healthy(replica(1)), unhealthyError(replica(2))},
-		want:  []LegacyTabletStats{healthy(replica(1))},
+		input: []TabletHealth{healthy(replica(1)), unhealthyError(replica(2))},
+		want:  []TabletHealth{healthy(replica(1))},
 	}, {
 		desc:  "one error tablet",
-		input: []LegacyTabletStats{healthy(replica(1)), unhealthyLastError(replica(2))},
-		want:  []LegacyTabletStats{healthy(replica(1))},
+		input: []TabletHealth{healthy(replica(1)), unhealthyLastError(replica(2))},
+		want:  []TabletHealth{healthy(replica(1))},
 	}, {
 		desc:  "one unhealthy tablet (lag)",
-		input: []LegacyTabletStats{healthy(replica(1)), unhealthyLag(replica(2))},
-		want:  []LegacyTabletStats{healthy(replica(1))},
+		input: []TabletHealth{healthy(replica(1)), unhealthyLag(replica(2))},
+		want:  []TabletHealth{healthy(replica(1))},
 	}, {
 		desc:  "no filtering by tablet type",
-		input: []LegacyTabletStats{healthy(primary(1)), healthy(replica(2)), healthy(rdonly(3))},
-		want:  []LegacyTabletStats{healthy(primary(1)), healthy(replica(2)), healthy(rdonly(3))},
+		input: []TabletHealth{healthy(primary(1)), healthy(replica(2)), healthy(rdonly(3))},
+		want:  []TabletHealth{healthy(primary(1)), healthy(replica(2)), healthy(rdonly(3))},
 	}, {
 		desc:  "non-serving tablets won't be removed",
-		input: []LegacyTabletStats{notServing(healthy(replica(1)))},
-		want:  []LegacyTabletStats{notServing(healthy(replica(1)))},
+		input: []TabletHealth{notServing(healthy(replica(1)))},
+		want:  []TabletHealth{notServing(healthy(replica(1)))},
 	}}
 
 	for _, tc := range testcases {
@@ -73,20 +73,20 @@ func TestRemoveUnhealthyTablets(t *testing.T) {
 	}
 }
 
-func primary(uid uint32) LegacyTabletStats {
+func primary(uid uint32) TabletHealth {
 	return minimalTabletStats(uid, topodatapb.TabletType_PRIMARY)
 }
 
-func replica(uid uint32) LegacyTabletStats {
+func replica(uid uint32) TabletHealth {
 	return minimalTabletStats(uid, topodatapb.TabletType_REPLICA)
 }
 
-func rdonly(uid uint32) LegacyTabletStats {
+func rdonly(uid uint32) TabletHealth {
 	return minimalTabletStats(uid, topodatapb.TabletType_RDONLY)
 }
 
-func minimalTabletStats(uid uint32, tabletType topodatapb.TabletType) LegacyTabletStats {
-	return LegacyTabletStats{
+func minimalTabletStats(uid uint32, tabletType topodatapb.TabletType) TabletHealth {
+	return TabletHealth{
 		Tablet: &topodatapb.Tablet{
 			Alias: &topodatapb.TabletAlias{
 				Uid: uid},
@@ -100,33 +100,33 @@ func minimalTabletStats(uid uint32, tabletType topodatapb.TabletType) LegacyTabl
 	}
 }
 
-func healthy(ts LegacyTabletStats) LegacyTabletStats {
+func healthy(ts TabletHealth) TabletHealth {
 	ts.Stats = &querypb.RealtimeStats{
 		ReplicationLagSeconds: uint32(1),
 	}
 	return ts
 }
 
-func unhealthyLag(ts LegacyTabletStats) LegacyTabletStats {
+func unhealthyLag(ts TabletHealth) TabletHealth {
 	ts.Stats = &querypb.RealtimeStats{
 		ReplicationLagSeconds: uint32(3600),
 	}
 	return ts
 }
 
-func unhealthyError(ts LegacyTabletStats) LegacyTabletStats {
+func unhealthyError(ts TabletHealth) TabletHealth {
 	ts.Stats = &querypb.RealtimeStats{
 		HealthError: "unhealthy",
 	}
 	return ts
 }
 
-func unhealthyLastError(ts LegacyTabletStats) LegacyTabletStats {
+func unhealthyLastError(ts TabletHealth) TabletHealth {
 	ts.LastError = errors.New("err")
 	return ts
 }
 
-func notServing(ts LegacyTabletStats) LegacyTabletStats {
+func notServing(ts TabletHealth) TabletHealth {
 	ts.Serving = false
 	return ts
 }

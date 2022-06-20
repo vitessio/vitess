@@ -19,6 +19,8 @@ package worker
 import (
 	"fmt"
 
+	querypb "vitess.io/vitess/go/vt/proto/query"
+
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"context"
@@ -75,20 +77,20 @@ func (p *singleTabletProvider) description() string {
 // shardTabletProvider returns a random healthy RDONLY tablet for a given
 // keyspace and shard. It uses the LegacyHealthCheck module to retrieve the tablets.
 type shardTabletProvider struct {
-	tsc        *discovery.LegacyTabletStatsCache
+	hc         *discovery.HealthCheckImpl
 	tracker    *TabletTracker
 	keyspace   string
 	shard      string
 	tabletType topodatapb.TabletType
 }
 
-func newShardTabletProvider(tsc *discovery.LegacyTabletStatsCache, tracker *TabletTracker, keyspace, shard string, tabletType topodatapb.TabletType) *shardTabletProvider {
-	return &shardTabletProvider{tsc, tracker, keyspace, shard, tabletType}
+func newShardTabletProvider(healthCheck *discovery.HealthCheckImpl, tracker *TabletTracker, keyspace, shard string, tabletType topodatapb.TabletType) *shardTabletProvider {
+	return &shardTabletProvider{healthCheck, tracker, keyspace, shard, tabletType}
 }
 
 func (p *shardTabletProvider) getTablet() (*topodatapb.Tablet, error) {
 	// Pick any healthy serving tablet.
-	tablets := p.tsc.GetHealthyTabletStats(p.keyspace, p.shard, p.tabletType)
+	tablets := p.hc.GetHealthyTabletStats(&querypb.Target{Keyspace: p.keyspace, Shard: p.shard, TabletType: p.tabletType})
 	if len(tablets) == 0 {
 		return nil, fmt.Errorf("%v: no healthy %v tablets available", p.description(), p.tabletType)
 	}

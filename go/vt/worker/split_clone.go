@@ -24,6 +24,8 @@ import (
 	"sync"
 	"time"
 
+	querypb "vitess.io/vitess/go/vt/proto/query"
+
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -97,8 +99,8 @@ type SplitCloneWorker struct {
 	// PRIMARY tablet, b) get the list of healthy RDONLY tablets and c) track the
 	// replication lag of all REPLICA tablets.
 	// It must be closed at the end of the command.
-	healthCheck discovery.LegacyHealthCheck
-	tsc         *discovery.LegacyTabletStatsCache
+	healthCheck   *discovery.HealthCheckImpl
+	healthCheckCh chan *discovery.TabletHealth
 
 	// populated during WorkerStateFindTargets, read-only after that
 	sourceTablets []*topodatapb.Tablet
@@ -109,7 +111,7 @@ type SplitCloneWorker struct {
 	// shard. It updates the list of tablets in the healthcheck if replicas are
 	// added/removed.
 	// Each watcher must be stopped at the end of the command.
-	shardWatchers []*discovery.LegacyTopologyWatcher
+	shardWatchers []*discovery.TopologyWatcher
 	// destinationDbNames stores for each destination keyspace/shard the MySQL
 	// database name.
 	// Example Map Entry: test_keyspace/-80 => vt_test_keyspace
@@ -558,17 +560,25 @@ func (scw *SplitCloneWorker) init(ctx context.Context) error {
 	}
 
 	// Initialize healthcheck and add destination shards to it.
-	scw.healthCheck = discovery.NewLegacyHealthCheck(*healthcheckRetryDelay, *healthCheckTimeout)
-	scw.tsc = discovery.NewTabletStatsCacheDoNotSetListener(scw.wr.TopoServer(), scw.cell)
-	// We set sendDownEvents=true because it's required by LegacyTabletStatsCache.
-	scw.healthCheck.SetListener(scw, true /* sendDownEvents */)
+	scw.healthCheck = discovery.NewHealthCheck(ctx, *healthcheckRetryDelay, *healthCheckTimeout, scw.wr.TopoServer(), scw.cell, "")
+	scw.healthCheckCh = scw.healthCheck.Subscribe()
+	go func() {
+		for {
+			select {
+			case th := <-scw.healthCheckCh:
+				scw.StatsUpdate(th)
+			default:
+				return
+			}
+		}
+	}()
 
 	// Start watchers to get tablets added automatically to healthCheck.
 	allShards := append(scw.sourceShards, scw.destinationShards...)
 	for _, si := range allShards {
-		watcher := discovery.NewLegacyShardReplicationWatcher(ctx, scw.wr.TopoServer(), scw.healthCheck,
-			scw.cell, si.Keyspace(), si.ShardName(),
-			*healthCheckTopologyRefresh, discovery.DefaultTopoReadConcurrency)
+		watcher := discovery.NewCellTabletsWatcher(ctx, scw.wr.TopoServer(), scw.healthCheck,
+			discovery.NewFilterByKeyspace([]string{si.Keyspace()}), scw.cell, *healthCheckTopologyRefresh,
+			true, discovery.DefaultTopoReadConcurrency)
 		scw.shardWatchers = append(scw.shardWatchers, watcher)
 	}
 
@@ -761,7 +771,7 @@ func (scw *SplitCloneWorker) findOfflineSourceTablets(ctx context.Context) error
 	scw.sourceAliases = make([]*topodatapb.TabletAlias, len(scw.sourceShards))
 	for i, si := range scw.sourceShards {
 		var err error
-		scw.sourceAliases[i], err = FindWorkerTablet(ctx, scw.wr, scw.cleaner, scw.tsc, scw.cell, si.Keyspace(), si.ShardName(), scw.minHealthyTablets, scw.tabletType)
+		scw.sourceAliases[i], err = FindWorkerTablet(ctx, scw.wr, scw.cleaner, scw.healthCheck, scw.cell, si.Keyspace(), si.ShardName(), scw.minHealthyTablets, scw.tabletType)
 		if err != nil {
 			return vterrors.Wrapf(err, "FindWorkerTablet() failed for %v/%v/%v", scw.cell, si.Keyspace(), si.ShardName())
 		}
@@ -806,7 +816,7 @@ func (scw *SplitCloneWorker) findTransactionalSources(ctx context.Context) error
 	// find an appropriate tablet in the source shard
 	si := scw.sourceShards[0]
 	scw.sourceAliases = make([]*topodatapb.TabletAlias, 1)
-	scw.sourceAliases[0], err = FindHealthyTablet(ctx, scw.wr, scw.tsc, scw.cell, si.Keyspace(), si.ShardName(), scw.minHealthyTablets, scw.tabletType)
+	scw.sourceAliases[0], err = FindHealthyTablet(ctx, scw.wr, scw.healthCheck, scw.cell, si.Keyspace(), si.ShardName(), scw.minHealthyTablets, scw.tabletType)
 	if err != nil {
 		return vterrors.Wrapf(err, "FindHealthyTablet() failed for %v/%v/%v", scw.cell, si.Keyspace(), si.ShardName())
 	}
@@ -842,12 +852,12 @@ func (scw *SplitCloneWorker) findDestinationPrimarys(ctx context.Context) error 
 	scw.wr.Logger().Infof("Finding a PRIMARY tablet for each destination shard...")
 	for _, si := range scw.destinationShards {
 		waitCtx, waitCancel := context.WithTimeout(ctx, *waitForHealthyTabletsTimeout)
-		err := scw.tsc.WaitForTablets(waitCtx, si.Keyspace(), si.ShardName(), topodatapb.TabletType_PRIMARY)
+		err := scw.healthCheck.WaitForTablets(waitCtx, si.Keyspace(), si.ShardName(), topodatapb.TabletType_PRIMARY)
 		waitCancel()
 		if err != nil {
 			return vterrors.Wrapf(err, "cannot find PRIMARY tablet for destination shard for %v/%v (in cell: %v)", si.Keyspace(), si.ShardName(), scw.cell)
 		}
-		primarys := scw.tsc.GetHealthyTabletStats(si.Keyspace(), si.ShardName(), topodatapb.TabletType_PRIMARY)
+		primarys := scw.healthCheck.GetHealthyTabletStats(&querypb.Target{Keyspace: si.Keyspace(), Shard: si.ShardName(), TabletType: topodatapb.TabletType_PRIMARY})
 		if len(primarys) == 0 {
 			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot find PRIMARY tablet for destination shard for %v/%v (in cell: %v) in LegacyHealthCheck: empty LegacyTabletStats list", si.Keyspace(), si.ShardName(), scw.cell)
 		}
@@ -881,7 +891,7 @@ func (scw *SplitCloneWorker) waitForTablets(ctx context.Context, shardInfos []*t
 			// We wait for --min_healthy_tablets because we will use several
 			// tablets per shard to spread reading the chunks of rows across as many
 			// tablets as possible.
-			if _, err := waitForHealthyTablets(ctx, scw.wr, scw.tsc, scw.cell, keyspace, shard, scw.minHealthyTablets, timeout, scw.tabletType); err != nil {
+			if _, err := waitForHealthyTablets(ctx, scw.wr, scw.healthCheck, scw.cell, keyspace, shard, scw.minHealthyTablets, timeout, scw.tabletType); err != nil {
 				rec.RecordError(err)
 			}
 		}(si.Keyspace(), si.ShardName())
@@ -898,7 +908,7 @@ func (scw *SplitCloneWorker) findFirstSourceTablet(ctx context.Context, state St
 
 	// Pick any healthy serving source tablet.
 	si := scw.sourceShards[0]
-	tablets := scw.tsc.GetHealthyTabletStats(si.Keyspace(), si.ShardName(), scw.tabletType)
+	tablets := scw.healthCheck.GetHealthyTabletStats(&querypb.Target{Keyspace: si.Keyspace(), Shard: si.ShardName(), TabletType: scw.tabletType})
 	if len(tablets) == 0 {
 		// We fail fast on this problem and don't retry because at the start all tablets should be healthy.
 		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no healthy %v tablet in source shard (%v) available (required to find out the schema)", topodatapb.TabletType_name[int32(scw.tabletType)], topoproto.KeyspaceShardString(si.Keyspace(), si.ShardName()))
@@ -922,9 +932,9 @@ func (scw *SplitCloneWorker) getCounters(state StatusWorkerState) ([]*stats.Coun
 func (scw *SplitCloneWorker) startExecutor(ctx context.Context, wg *sync.WaitGroup, keyspace, shard string, insertChannel chan string, threadID int, processError func(string, ...any)) {
 	defer wg.Done()
 	t := scw.getThrottler(keyspace, shard)
-	//defer t.ThreadFinished(threadID)
+	// defer t.ThreadFinished(threadID)
 
-	executor := newExecutor(scw.wr, scw.tsc, t, keyspace, shard, threadID)
+	executor := newExecutor(scw.wr, scw.healthCheck, t, keyspace, shard, threadID)
 	if err := executor.fetchLoop(ctx, insertChannel); err != nil {
 		processError("executer.FetchLoop failed: %v", err)
 	}
@@ -961,7 +971,7 @@ func (scw *SplitCloneWorker) getSourceResultReader(ctx context.Context, td *tabl
 			if txID < 1 {
 				return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "tried using consistent snapshot without a valid transaction")
 			}
-			tp := newShardTabletProvider(scw.tsc, scw.tabletTracker, si.Keyspace(), si.ShardName(), scw.tabletType)
+			tp := newShardTabletProvider(scw.healthCheck, scw.tabletTracker, si.Keyspace(), si.ShardName(), scw.tabletType)
 			sourceResultReader, err = NewTransactionalRestartableResultReader(ctx, scw.wr.Logger(), tp, td, chunk, false, txID)
 			if err != nil {
 				closeReaders(ctx, sourceReaders)
@@ -980,7 +990,7 @@ func (scw *SplitCloneWorker) getSourceResultReader(ctx context.Context, td *tabl
 				// longer stopped at the same point as we took it offline initially.
 				allowMultipleRetries = false
 			} else {
-				tp = newShardTabletProvider(scw.tsc, scw.tabletTracker, si.Keyspace(), si.ShardName(), scw.tabletType)
+				tp = newShardTabletProvider(scw.healthCheck, scw.tabletTracker, si.Keyspace(), si.ShardName(), scw.tabletType)
 			}
 			sourceResultReader, err = NewRestartableResultReader(ctx, scw.wr.Logger(), tp, td, chunk, allowMultipleRetries)
 			if err != nil {
@@ -1002,7 +1012,7 @@ func (scw *SplitCloneWorker) getDestinationResultReader(ctx context.Context, td 
 	destReaders := make([]ResultReader, len(scw.destinationShards))
 
 	for shardIndex, si := range scw.destinationShards {
-		tp := newShardTabletProvider(scw.tsc, scw.tabletTracker, si.Keyspace(), si.ShardName(), topodatapb.TabletType_PRIMARY)
+		tp := newShardTabletProvider(scw.healthCheck, scw.tabletTracker, si.Keyspace(), si.ShardName(), topodatapb.TabletType_PRIMARY)
 		destResultReader, err := NewRestartableResultReader(ctx, scw.wr.Logger(), tp, td, chunk, true /* allowMultipleRetries */)
 		if err != nil {
 			closeReaders(ctx, destReaders)
@@ -1268,7 +1278,7 @@ func (scw *SplitCloneWorker) setUpVReplication(ctx context.Context) error {
 			defer wg.Done()
 			scw.wr.Logger().Infof("Making and populating vreplication table")
 
-			exc := newExecutor(scw.wr, scw.tsc, nil, keyspace, shard, 0)
+			exc := newExecutor(scw.wr, scw.healthCheck, nil, keyspace, shard, 0)
 			for shardIndex, src := range scw.sourceShards {
 				// Check if any error occurred in any other gorouties:
 				select {
@@ -1351,8 +1361,8 @@ func (scw *SplitCloneWorker) createKeyResolver(td *tabletmanagerdatapb.TableDefi
 // and forwards them to the respective throttler instance.
 // It also forwards any update to the LegacyTabletStatsCache to keep it up to date.
 // It is part of the discovery.LegacyHealthCheckStatsListener interface.
-func (scw *SplitCloneWorker) StatsUpdate(ts *discovery.LegacyTabletStats) {
-	scw.tsc.StatsUpdate(ts)
+func (scw *SplitCloneWorker) StatsUpdate(ts *discovery.TabletHealth) {
+	// scw.tsc.StatsUpdate(ts)
 
 	// Ignore unless REPLICA or RDONLY.
 	if ts.Target.TabletType != topodatapb.TabletType_REPLICA && ts.Target.TabletType != topodatapb.TabletType_RDONLY {

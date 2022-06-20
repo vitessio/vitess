@@ -44,9 +44,9 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"vitess.io/vitess/go/netutil"
 
 	"vitess.io/vitess/go/flagutil"
+	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/query"
