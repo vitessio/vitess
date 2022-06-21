@@ -248,6 +248,7 @@ const (
 	VitessStr      = "vitess"
 	TraditionalStr = "traditional"
 	AnalyzeStr     = "analyze"
+	VTExplainStr   = "vtexplain"
 
 	// Lock Types
 	ReadStr             = "read"
@@ -706,6 +707,7 @@ const (
 	TreeType
 	JSONType
 	VitessType
+	VTExplainType
 	TraditionalType
 	AnalyzeType
 )

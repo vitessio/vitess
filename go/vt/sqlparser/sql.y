@@ -362,7 +362,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> FORMAT_BYTES FORMAT_PICO_TIME PS_CURRENT_THREAD_ID PS_THREAD_ID
 
 // Explain tokens
-%token <str> FORMAT TREE VITESS TRADITIONAL
+%token <str> FORMAT TREE VITESS TRADITIONAL VTEXPLAIN
 
 // Lock type tokens
 %token <str> LOCAL LOW_PRIORITY
@@ -4205,6 +4205,10 @@ explain_format_opt:
 | FORMAT '=' VITESS
   {
     $$ = VitessType
+  }
+| FORMAT '=' VTEXPLAIN
+  {
+    $$ = VTExplainType
   }
 | FORMAT '=' TRADITIONAL
   {

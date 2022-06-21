@@ -659,6 +659,7 @@ var keywords = []keyword{
 	{"vitess_throttled_apps", VITESS_THROTTLED_APPS},
 	{"vschema", VSCHEMA},
 	{"vstream", VSTREAM},
+	{"vtexplain", VTEXPLAIN},
 	{"warnings", WARNINGS},
 	{"weight_string", WEIGHT_STRING},
 	{"when", WHEN},
