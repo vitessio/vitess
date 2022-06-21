@@ -24,6 +24,8 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -32,66 +34,83 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-// SafeSession is a mutex-protected version of the Session.
-// It is thread-safe if each thread only accesses one shard.
-// (the use pattern is 'Find', if not found, then 'AppendOrUpdate',
-// for a single shard)
-type SafeSession struct {
-	mu              sync.Mutex
-	mustRollback    bool
-	autocommitState autocommitState
-	commitOrder     vtgatepb.CommitOrder
-	savepointState  savepointState
-	// rollbackOnPartialExec is set if any DML was successfully
-	// executed. If there was a subsequent failure, if we have a savepoint we rollback to that.
-	// Otherwise, the transaction is rolled back.
-	rollbackOnPartialExec string
-	savepointName         string
+type (
+	// SafeSession is a mutex-protected version of the Session.
+	// It is thread-safe if each thread only accesses one shard.
+	// (the use pattern is 'Find', if not found, then 'AppendOrUpdate',
+	// for a single shard)
+	SafeSession struct {
+		mu              sync.Mutex
+		mustRollback    bool
+		autocommitState autocommitState
+		commitOrder     vtgatepb.CommitOrder
+		savepointState  savepointState
+		// rollbackOnPartialExec is set if any DML was successfully
+		// executed. If there was a subsequent failure, if we have a savepoint we rollback to that.
+		// Otherwise, the transaction is rolled back.
+		rollbackOnPartialExec string
+		savepointName         string
 
-	// this is a signal that found_rows has already been handles by the primitives,
-	// and doesn't have to be updated by the executor
-	foundRowsHandled bool
+		// this is a signal that found_rows has already been handles by the primitives,
+		// and doesn't have to be updated by the executor
+		foundRowsHandled bool
 
-	// queryFromVindex is used to avoid erroring out on multi-db transaction
-	// as the query that started a new transaction on the shard belong to a vindex.
-	queryFromVindex bool
+		// queryFromVindex is used to avoid erroring out on multi-db transaction
+		// as the query that started a new transaction on the shard belong to a vindex.
+		queryFromVindex bool
 
-	*vtgatepb.Session
-}
+		logging *executeLogger
 
-// autocommitState keeps track of whether a single round-trip
-// commit to vttablet is possible. It starts as autocommitable
-// if we started a transaction because of the autocommit flag
-// being set. Otherwise, it starts as notAutocommitable.
-// If execute is recursively called using the same session,
-// like from a vindex, we will already be in a transaction,
-// and this should cause the state to become notAutocommitable.
-//
-// SafeSession lets you request a commit token, which will
-// be issued if the state is autocommitable,
-// implying that no intermediate transactions were started.
-// If so, the state transitions to autocommited, which is terminal.
-// If the token is successfully issued, the caller has to perform
-// the commit. If a token cannot be issued, then a traditional
-// commit has to be performed at the outermost level where
-// the autocommitable transition happened.
-type autocommitState int
+		*vtgatepb.Session
+	}
+
+	executeEntry struct {
+		Keyspace   string
+		Shard      string
+		TabletType topodatapb.TabletType
+		Cell       string
+		Query      string
+	}
+
+	executeLogger struct {
+		mu      sync.Mutex
+		entries []executeEntry
+	}
+
+	// autocommitState keeps track of whether a single round-trip
+	// commit to vttablet is possible. It starts as autocommitable
+	// if we started a transaction because of the autocommit flag
+	// being set. Otherwise, it starts as notAutocommitable.
+	// If execute is recursively called using the same session,
+	// like from a vindex, we will already be in a transaction,
+	// and this should cause the state to become notAutocommitable.
+	//
+	// SafeSession lets you request a commit token, which will
+	// be issued if the state is autocommitable,
+	// implying that no intermediate transactions were started.
+	// If so, the state transitions to autocommited, which is terminal.
+	// If the token is successfully issued, the caller has to perform
+	// the commit. If a token cannot be issued, then a traditional
+	// commit has to be performed at the outermost level where
+	// the autocommitable transition happened.
+	autocommitState int
+
+	// savepointState keeps track of whether savepoints need to be inserted
+	// before running the query. This will help us prevent rolling back the
+	// entire transaction in case of partial failures, and be closer to MySQL
+	// compatibility, by only reverting the changes from the failed statement
+	// If execute is recursively called using the same session,
+	// like from a vindex, we should not override the savePointState.
+	// It is set the first time and is then permanent for the remainder of the query
+	// execution. It should not be affected later by transactions starting or not.
+	savepointState int
+)
 
 const (
 	notAutocommittable = autocommitState(iota)
 	autocommittable
 	autocommitted
 )
-
-// savepointState keeps track of whether savepoints need to be inserted
-// before running the query. This will help us prevent rolling back the
-// entire transaction in case of partial failures, and be closer to MySQL
-// compatibility, by only reverting the changes from the failed statement
-// If execute is recursively called using the same session,
-// like from a vindex, we should not override the savePointState.
-// It is set the first time and is then permanent for the remainder of the query
-// execution. It should not be affected later by transactions starting or not.
-type savepointState int
 
 const (
 	savepointStateNotSet = savepointState(iota)
@@ -826,4 +845,23 @@ func (session *SafeSession) ClearAdvisoryLock() {
 	defer session.mu.Unlock()
 
 	session.AdvisoryLock = nil
+}
+
+func (l *executeLogger) log(rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery) {
+	if len(rss) != len(queries) {
+		log.Warning("could not log queries because number of shards did not match number of queries")
+		return
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	for i, resolvedShard := range rss {
+		q := queries[i]
+		l.entries = append(l.entries, executeEntry{
+			Keyspace:   resolvedShard.Target.Keyspace,
+			Shard:      resolvedShard.Target.Shard,
+			TabletType: resolvedShard.Target.TabletType,
+			Cell:       resolvedShard.Target.Cell,
+			Query:      q.Sql,
+		})
+	}
 }

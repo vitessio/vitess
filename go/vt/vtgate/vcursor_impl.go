@@ -496,6 +496,9 @@ const txRollback = "Rollback Transaction"
 
 // ExecuteMultiShard is part of the engine.VCursor interface.
 func (vc *vcursorImpl) ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, rollbackOnError, autocommit bool) (*sqltypes.Result, []error) {
+	if vc.safeSession.logging != nil {
+		vc.safeSession.logging.log(rss, queries)
+	}
 	noOfShards := len(rss)
 	atomic.AddUint64(&vc.logStats.ShardQueries, uint64(noOfShards))
 	err := vc.markSavepoint(rollbackOnError && (noOfShards > 1), map[string]*querypb.BindVariable{})
