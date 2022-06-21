@@ -185,7 +185,7 @@ func (e *executor) fetchWithRetries(ctx context.Context, action func(ctx context
 			}
 			return vterrors.Wrapf(err, "interrupted while trying to run a command on tablet %v", tabletString)
 		case <-time.After(*executeFetchRetryTime):
-			// Retry 30s after the failure using the current primary seen by the LegacyHealthCheck.
+			// Retry 30s after the failure using the current primary seen by the HealthCheck.
 		}
 		isRetry = true
 	}

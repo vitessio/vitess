@@ -23,7 +23,7 @@ import (
 )
 
 // replicationLagRecord stores the tablet health data for a given point in time.
-// This data is obtained via the LegacyHealthCheck module.
+// This data is obtained via the HealthCheck module.
 type replicationLagRecord struct {
 	// time is the time at which "value" was observed.
 	time time.Time

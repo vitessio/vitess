@@ -41,7 +41,7 @@ import (
 
 // TxThrottler throttles transactions based on replication lag.
 // It's a thin wrapper around the throttler found in vitess/go/vt/throttler.
-// It uses a discovery.LegacyHealthCheck to send replication-lag updates to the wrapped throttler.
+// It uses a discovery.HealthCheck to send replication-lag updates to the wrapped throttler.
 //
 // Intended Usage:
 //   // Assuming topoServer is a topo.Server variable pointing to a Vitess topology server.
@@ -348,7 +348,7 @@ func (ts *txThrottlerState) deallocateResources() {
 	ts.throttler = nil
 }
 
-// StatsUpdate is part of the LegacyHealthCheckStatsListener interface.
+// StatsUpdate updates the health of a tablet with the given healthcheck.
 func (ts *txThrottlerState) StatsUpdate(tabletStats *discovery.TabletHealth) {
 	// Ignore PRIMARY and RDONLY stats.
 	// We currently do not monitor RDONLY tablets for replication lag. RDONLY tablets are not

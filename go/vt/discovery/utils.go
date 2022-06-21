@@ -24,8 +24,7 @@ import (
 )
 
 // This file contains helper filter methods to process the unfiltered list of
-// tablets returned by LegacyHealthCheck.GetTabletStatsFrom*.
-// See also legacy_replicationlag.go for a more sophisicated filter used by vtgate.
+// tablets returned by HealthCheckImpl.GetTabletHealth*.
 
 func TabletHealthReferenceListToValue(thl []*TabletHealth) []TabletHealth {
 	newTh := []TabletHealth{}

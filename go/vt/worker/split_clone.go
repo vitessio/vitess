@@ -422,7 +422,7 @@ func (scw *SplitCloneWorker) Run(ctx context.Context) error {
 		// After Close returned, we can be sure that it won't call our listener
 		// implementation (method StatsUpdate) anymore.
 		if err := scw.healthCheck.Close(); err != nil {
-			scw.wr.Logger().Errorf2(err, "LegacyHealthCheck.Close() failed")
+			scw.wr.Logger().Errorf2(err, "HealthCheck.Close() failed")
 		}
 	}
 
@@ -859,7 +859,7 @@ func (scw *SplitCloneWorker) findDestinationPrimarys(ctx context.Context) error 
 		}
 		primarys := scw.healthCheck.GetHealthyTabletStats(&querypb.Target{Keyspace: si.Keyspace(), Shard: si.ShardName(), TabletType: topodatapb.TabletType_PRIMARY})
 		if len(primarys) == 0 {
-			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot find PRIMARY tablet for destination shard for %v/%v (in cell: %v) in LegacyHealthCheck: empty LegacyTabletStats list", si.Keyspace(), si.ShardName(), scw.cell)
+			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot find PRIMARY tablet for destination shard for %v/%v (in cell: %v) in HealthCheck: empty TabletHealth list", si.Keyspace(), si.ShardName(), scw.cell)
 		}
 		primary := primarys[0]
 
@@ -869,7 +869,7 @@ func (scw *SplitCloneWorker) findDestinationPrimarys(ctx context.Context) error 
 
 		scw.wr.Logger().Infof("Using tablet %v as destination primary for %v/%v", topoproto.TabletAliasString(primary.Tablet.Alias), si.Keyspace(), si.ShardName())
 	}
-	scw.wr.Logger().Infof("NOTE: The used primary of a destination shard might change over the course of the copy e.g. due to a reparent. The LegacyHealthCheck module will track and log primary changes and any error message will always refer the actually used primary address.")
+	scw.wr.Logger().Infof("NOTE: The used primary of a destination shard might change over the course of the copy e.g. due to a reparent. The HealthCheck module will track and log primary changes and any error message will always refer the actually used primary address.")
 
 	return nil
 }
@@ -1357,13 +1357,9 @@ func (scw *SplitCloneWorker) createKeyResolver(td *tabletmanagerdatapb.TableDefi
 	return newV3ResolverFromTableDefinition(scw.keyspaceSchema, td)
 }
 
-// StatsUpdate receives replication lag updates for each destination primary
+// StatsUpdate receives replication lag updates from the healthcheck for each destination primary
 // and forwards them to the respective throttler instance.
-// It also forwards any update to the LegacyTabletStatsCache to keep it up to date.
-// It is part of the discovery.LegacyHealthCheckStatsListener interface.
 func (scw *SplitCloneWorker) StatsUpdate(ts *discovery.TabletHealth) {
-	// scw.tsc.StatsUpdate(ts)
-
 	// Ignore unless REPLICA or RDONLY.
 	if ts.Target.TabletType != topodatapb.TabletType_REPLICA && ts.Target.TabletType != topodatapb.TabletType_RDONLY {
 		return

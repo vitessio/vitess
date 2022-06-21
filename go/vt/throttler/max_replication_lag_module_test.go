@@ -225,7 +225,7 @@ func TestMaxReplicationLagModule_ReplicaUnderTest_LastErrorOrNotUp(t *testing.T)
 
 	// r2 @  75s, 0s lag, LastError set
 	rError := lagRecord(sinceZero(75*time.Second), r2, 0)
-	rError.LastError = errors.New("LegacyHealthCheck reporting broken")
+	rError.LastError = errors.New("HealthCheck reporting broken")
 	tf.m.replicaLagCache.add(rError)
 
 	// r1 @ 110s, 0s lag

@@ -126,7 +126,7 @@ func (c *replicationLagCache) sortByLag(ignoreNSlowestReplicas int, minimumRepli
 	}
 }
 
-// byLagAndTabletUID is a slice of discovery.LegacyTabletStats elements that
+// byLagAndTabletUID is a slice of discovery.TabletHealth elements that
 // implements sort.Interface to sort by replication lag and tablet Uid.
 type byLagAndTabletUID []discovery.TabletHealth
 

@@ -277,8 +277,7 @@ func (c *client) stop() {
 	c.throttler.Close()
 }
 
-// StatsUpdate implements discovery.LegacyHealthCheckStatsListener.
-// It gets called by the healthCheck instance every time a tablet broadcasts
+// StatsUpdate gets called by the healthCheck instance every time a tablet broadcasts
 // a health update.
 func (c *client) StatsUpdate(ts *discovery.TabletHealth) {
 	// Ignore unless REPLICA or RDONLY.
