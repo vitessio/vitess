@@ -38,7 +38,7 @@ func GetSchema(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManagerC
 
 	sd, err := tmc.GetSchema(ctx, ti.Tablet, tables, excludeTables, includeViews, tableSchemaOnly)
 	if err != nil {
-		return nil, vterrors.Wrapf(err, "GetSchema(%v, %v, %v, %v) failed: %v", ti.Tablet, tables, excludeTables, includeViews, err)
+		return nil, vterrors.Wrapf(err, "GetSchema(%v, %v, %v, %v, %v) failed: %v", ti.Tablet, tables, excludeTables, includeViews, tableSchemaOnly, err)
 	}
 
 	return sd, nil
