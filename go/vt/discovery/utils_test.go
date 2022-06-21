@@ -32,7 +32,7 @@ func TestRemoveUnhealthyTablets(t *testing.T) {
 	}{{
 		desc:  "tablets missing Stats",
 		input: []TabletHealth{replica(1), replica(2)},
-		want:  []TabletHealth{},
+		want:  []TabletHealth{replica(1), replica(2)},
 	}, {
 		desc:  "all tablets healthy",
 		input: []TabletHealth{healthy(replica(1)), healthy(replica(2))},
@@ -60,16 +60,18 @@ func TestRemoveUnhealthyTablets(t *testing.T) {
 	}}
 
 	for _, tc := range testcases {
-		got := RemoveUnhealthyTablets(tc.input)
-		if len(got) != len(tc.want) {
-			t.Errorf("test case '%v' failed: RemoveUnhealthyTablets(%v) = %#v, want: %#v", tc.desc, tc.input, got, tc.want)
-		} else {
-			for i := range tc.want {
-				if !got[i].DeepEqual(&tc.want[i]) {
-					t.Errorf("test case '%v' failed: RemoveUnhealthyTablets(%v) = %#v, want: %#v", tc.desc, tc.input, got, tc.want)
+		t.Run(tc.desc, func(t *testing.T) {
+			got := RemoveUnhealthyTablets(tc.input)
+			if len(got) != len(tc.want) {
+				t.Errorf("test case '%v' failed: RemoveUnhealthyTablets(%v) = %#v, want: %#v", tc.desc, tc.input, got, tc.want)
+			} else {
+				for i := range tc.want {
+					if !got[i].DeepEqual(&tc.want[i]) {
+						t.Errorf("test case '%v' failed: RemoveUnhealthyTablets(%v) = %#v, want: %#v", tc.desc, tc.input, got, tc.want)
+					}
 				}
 			}
-		}
+		})
 	}
 }
 
