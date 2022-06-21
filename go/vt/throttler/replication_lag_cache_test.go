@@ -19,6 +19,7 @@ package throttler
 import (
 	"testing"
 	"time"
+
 	"vitess.io/vitess/go/vt/discovery"
 )
 

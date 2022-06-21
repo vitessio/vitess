@@ -207,7 +207,7 @@ func (m *managerImpl) throttlerNamesLocked() []string {
 
 // Log returns the most recent changes of the MaxReplicationLag module.
 // There will be one result for each processed replication lag record.
-func (m *managerImpl) Log(throttlerName string) ([]result, error) {
+func (m *managerImpl) Log(throttlerName string) ([]Result, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 

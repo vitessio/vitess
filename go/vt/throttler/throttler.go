@@ -316,6 +316,6 @@ func (t *Throttler) ResetConfiguration() {
 }
 
 // Log returns the most recent changes of the MaxReplicationLag module.
-func (t *Throttler) Log() []result {
+func (t *Throttler) Log() []Result {
 	return t.maxReplicationLagModule.log()
 }

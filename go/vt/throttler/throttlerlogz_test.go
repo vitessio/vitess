@@ -55,7 +55,7 @@ func TestThrottlerlogzHandler(t *testing.T) {
 
 	testcases := []struct {
 		desc string
-		r    result
+		r    Result
 		want string
 	}{
 		{
