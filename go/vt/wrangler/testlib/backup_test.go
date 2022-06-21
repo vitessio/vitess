@@ -24,9 +24,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
-
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/discovery"
 
@@ -46,7 +45,52 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
+type compressionDetails struct {
+	BuiltinCompressor       string
+	BuiltinDecompressor     string
+	ExternalCompressorCmd   string
+	ExternalCompressorExt   string
+	ExternalDecompressorCmd string
+}
+
 func TestBackupRestore(t *testing.T) {
+	testBackupRestore(t, nil)
+}
+
+func TestBackupRestoreWithLz4(t *testing.T) {
+	var cDetails *compressionDetails
+	cDetails = &compressionDetails{
+		BuiltinCompressor: "lz4",
+	}
+
+	testBackupRestore(t, cDetails)
+}
+
+// TODO: @rameez. I was expecting this test to fail but it turns out
+// we infer decompressor through compression engine in builtinEngine.
+// It is only in xtrabackup where we infer decompressor through extension & BuiltinDecompressor param.
+func TestBackupRestoreWithCompressionDecompression(t *testing.T) {
+	var cDetails *compressionDetails
+	cDetails = &compressionDetails{
+		BuiltinCompressor:   "lz4",
+		BuiltinDecompressor: "pargzip",
+	}
+
+	testBackupRestore(t, cDetails)
+}
+
+func TestBackupRestoreWithExternalCompression(t *testing.T) {
+	var cDetails *compressionDetails
+	cDetails = &compressionDetails{
+		ExternalCompressorCmd:   "gzip",
+		ExternalCompressorExt:   ".gz",
+		ExternalDecompressorCmd: "gzip -d",
+	}
+
+	testBackupRestore(t, cDetails)
+}
+
+func testBackupRestore(t *testing.T, cDetails *compressionDetails) {
 	delay := discovery.GetTabletPickerRetryDelay()
 	defer func() {
 		discovery.SetTabletPickerRetryDelay(delay)
@@ -82,6 +126,23 @@ func TestBackupRestore(t *testing.T) {
 	fbsRoot := path.Join(root, "fbs")
 	*filebackupstorage.FileBackupStorageRoot = fbsRoot
 	*backupstorage.BackupStorageImplementation = "file"
+	if cDetails != nil {
+		if cDetails.BuiltinCompressor != "" {
+			*mysqlctl.BuiltinCompressor = cDetails.BuiltinCompressor
+		}
+		if cDetails.BuiltinDecompressor != "" {
+			*mysqlctl.BuiltinDecompressor = cDetails.BuiltinDecompressor
+		}
+		if cDetails.ExternalCompressorCmd != "" {
+			*mysqlctl.ExternalCompressorCmd = cDetails.ExternalCompressorCmd
+		}
+		if cDetails.ExternalCompressorExt != "" {
+			*mysqlctl.ExternalCompressorExt = cDetails.ExternalCompressorExt
+		}
+		if cDetails.ExternalDecompressorCmd != "" {
+			*mysqlctl.ExternalDecompressorCmd = cDetails.ExternalDecompressorCmd
+		}
+	}
 
 	// Initialize the fake mysql root directories
 	sourceInnodbDataDir := path.Join(root, "source_innodb_data")

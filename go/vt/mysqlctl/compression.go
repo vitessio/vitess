@@ -39,12 +39,12 @@ import (
 var (
 	compressionLevel = flag.Int("compression_level", 1, "What level to pass to the compressor")
 	// switch which compressor/decompressor to use
-	builtinCompressor   = flag.String("builtin_compressor", "pgzip", "which builtin compressor engine to use")
-	builtinDecompressor = flag.String("builtin_decompressor", "auto", "which builtin decompressor engine to use")
+	BuiltinCompressor   = flag.String("builtin_compressor", "pgzip", "which builtin compressor engine to use")
+	BuiltinDecompressor = flag.String("builtin_decompressor", "auto", "which builtin decompressor engine to use")
 	// use and external command to decompress the backups
-	externalCompressorCmd   = flag.String("external_compressor", "", "command with arguments to use when decompressing a backup")
-	externalCompressorExt   = flag.String("external_compressor_extension", "", "which extension to use when using an external decompressor")
-	externalDecompressorCmd = flag.String("external_decompressor", "", "command with arguments to use when compressing a backup")
+	ExternalCompressorCmd   = flag.String("external_compressor", "", "command with arguments to use when decompressing a backup")
+	ExternalCompressorExt   = flag.String("external_compressor_extension", "", "which extension to use when using an external decompressor")
+	ExternalDecompressorCmd = flag.String("external_decompressor", "", "command with arguments to use when compressing a backup")
 
 	errUnsupportedCompressionEngine    = errors.New("unsupported engine")
 	errUnsupportedCompressionExtension = errors.New("unsupported extension")

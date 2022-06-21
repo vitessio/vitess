@@ -19,10 +19,51 @@ package vtctlbackup
 import (
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	backup "vitess.io/vitess/go/test/endtoend/backup/vtctlbackup"
 )
 
 // TestXtraBackup - tests the backup using xtrabackup
 func TestXtrabackup(t *testing.T) {
-	backup.TestBackup(t, backup.XtraBackup, "tar", 0)
+	backup.TestBackup(t, backup.XtraBackup, "tar", 0, nil)
+}
+
+func TestBackupMainWithlz4Compression(t *testing.T) {
+	var cDetails *backup.CompressionDetails
+	cDetails = &backup.CompressionDetails{
+		BuiltinCompressor: "lz4",
+	}
+
+	backup.TestBackup(t, backup.XtraBackup, "tar", 0, cDetails)
+}
+
+func TestBackupMainWithPargzipCompression(t *testing.T) {
+	var cDetails *backup.CompressionDetails
+	cDetails = &backup.CompressionDetails{
+		BuiltinCompressor: "pargzip",
+	}
+
+	backup.TestBackup(t, backup.XtraBackup, "tar", 0, cDetails)
+}
+
+func TestBackupMainWithError(t *testing.T) {
+	var cDetails *backup.CompressionDetails
+	cDetails = &backup.CompressionDetails{
+		BuiltinCompressor:   "pargzip",
+		BuiltinDecompressor: "lz4",
+	}
+	err := backup.TestBackup(t, backup.XtraBackup, "tar", 0, cDetails)
+	require.EqualError(t, err, "test failure: TestReplicaBackup")
+}
+
+func TestBackupMainWithZstdCompression(t *testing.T) {
+	var cDetails *backup.CompressionDetails
+	cDetails = &backup.CompressionDetails{
+		ExternalCompressorCmd:   "zstd",
+		ExternalCompressorExt:   ".zst",
+		ExternalDecompressorCmd: "zstd -d",
+	}
+
+	backup.TestBackup(t, backup.XtraBackup, "tar", 0, cDetails)
 }

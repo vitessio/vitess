@@ -24,5 +24,34 @@ import (
 
 // TestBackupMysqlctld - tests the backup using mysqlctld.
 func TestBackupMysqlctld(t *testing.T) {
-	backup.TestBackup(t, backup.Mysqlctld, "", 0)
+	backup.TestBackup(t, backup.Mysqlctld, "", 0, nil)
+}
+
+func TestBackupMainWithlz4Compression(t *testing.T) {
+	var cDetails *backup.CompressionDetails
+	cDetails = &backup.CompressionDetails{
+		BuiltinCompressor: "lz4",
+	}
+
+	backup.TestBackup(t, backup.Mysqlctld, "", 0, cDetails)
+}
+
+func TestBackupMainWithPargzipCompression(t *testing.T) {
+	var cDetails *backup.CompressionDetails
+	cDetails = &backup.CompressionDetails{
+		BuiltinCompressor: "pargzip",
+	}
+
+	backup.TestBackup(t, backup.Mysqlctld, "", 0, cDetails)
+}
+
+func TestBackupMainWithZstdCompression(t *testing.T) {
+	var cDetails *backup.CompressionDetails
+	cDetails = &backup.CompressionDetails{
+		ExternalCompressorCmd:   "zstd",
+		ExternalCompressorExt:   ".zst",
+		ExternalDecompressorCmd: "zstd -d",
+	}
+
+	backup.TestBackup(t, backup.Mysqlctld, "", 0, cDetails)
 }

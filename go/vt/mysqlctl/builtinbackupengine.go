@@ -354,7 +354,7 @@ func (be *BuiltinBackupEngine) backupFiles(ctx context.Context, params BackupPar
 		FileEntries:       fes,
 		TransformHook:     *backupStorageHook,
 		SkipCompress:      !*backupStorageCompress,
-		CompressionEngine: *builtinCompressor,
+		CompressionEngine: *BuiltinCompressor,
 	}
 	data, err := json.MarshalIndent(bm, "", "  ")
 	if err != nil {
@@ -502,10 +502,10 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 	var compressor io.WriteCloser
 	if *backupStorageCompress {
 
-		if *externalCompressorCmd != "" {
-			compressor, err = newExternalCompressor(ctx, *externalCompressorCmd, writer, params.Logger)
+		if *ExternalCompressorCmd != "" {
+			compressor, err = newExternalCompressor(ctx, *ExternalCompressorCmd, writer, params.Logger)
 		} else {
-			compressor, err = newBuiltinCompressor(*builtinCompressor, writer, params.Logger)
+			compressor, err = newBuiltinCompressor(*BuiltinCompressor, writer, params.Logger)
 		}
 		if err != nil {
 			return vterrors.Wrap(err, "can't create compressor")
@@ -662,8 +662,8 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 	if compress {
 		var decompressor io.ReadCloser
 
-		if *externalDecompressorCmd != "" {
-			decompressor, err = newExternalDecompressor(ctx, *externalDecompressorCmd, reader, params.Logger)
+		if *ExternalDecompressorCmd != "" {
+			decompressor, err = newExternalDecompressor(ctx, *ExternalDecompressorCmd, reader, params.Logger)
 		} else {
 			decompressor, err = newBuiltinDecompressor(compressionEngine, reader, params.Logger)
 		}

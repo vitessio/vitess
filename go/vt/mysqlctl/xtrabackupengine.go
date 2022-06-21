@@ -106,10 +106,10 @@ func (be *XtrabackupEngine) backupFileName() string {
 		fileName += *xtrabackupStreamMode
 	}
 	if *backupStorageCompress {
-		if *externalDecompressorCmd != "" {
-			fileName += *externalCompressorExt
+		if *ExternalDecompressorCmd != "" {
+			fileName += *ExternalCompressorExt
 		} else {
-			if ext, err := getExtensionFromEngine(*builtinCompressor); err != nil {
+			if ext, err := getExtensionFromEngine(*BuiltinCompressor); err != nil {
 				// there is a check for this, but just in case that fails, we set a extension to the file
 				fileName += ".unknown"
 			} else {
@@ -139,7 +139,7 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, params BackupPara
 	}
 
 	// an extension is required when using an external compressor
-	if *backupStorageCompress && *externalCompressorCmd != "" && *externalCompressorExt == "" {
+	if *backupStorageCompress && *ExternalCompressorCmd != "" && *ExternalCompressorExt == "" {
 		return false, vterrors.New(vtrpc.Code_INVALID_ARGUMENT,
 			"xtrabackup_external_compressor_extension not provided when using an external compressor")
 	}
@@ -296,10 +296,10 @@ func (be *XtrabackupEngine) backupFiles(ctx context.Context, params BackupParams
 		if *backupStorageCompress {
 			var compressor io.WriteCloser
 
-			if *externalCompressorCmd != "" {
-				compressor, err = newExternalCompressor(ctx, *externalCompressorCmd, writer, params.Logger)
+			if *ExternalCompressorCmd != "" {
+				compressor, err = newExternalCompressor(ctx, *ExternalCompressorCmd, writer, params.Logger)
 			} else {
-				compressor, err = newBuiltinCompressor(*builtinCompressor, writer, params.Logger)
+				compressor, err = newBuiltinCompressor(*BuiltinCompressor, writer, params.Logger)
 			}
 			if err != nil {
 				return replicationPosition, vterrors.Wrap(err, "can't create compressor")
@@ -555,10 +555,10 @@ func (be *XtrabackupEngine) extractFiles(ctx context.Context, logger logutil.Log
 		if compressed {
 			var decompressor io.ReadCloser
 
-			if *externalDecompressorCmd != "" {
-				decompressor, err = newExternalDecompressor(ctx, *externalDecompressorCmd, reader, logger)
+			if *ExternalDecompressorCmd != "" {
+				decompressor, err = newExternalDecompressor(ctx, *ExternalDecompressorCmd, reader, logger)
 			} else {
-				decompressor, err = newBuiltinDecompressorFromExtension(extension, *builtinDecompressor, reader, logger)
+				decompressor, err = newBuiltinDecompressorFromExtension(extension, *BuiltinDecompressor, reader, logger)
 			}
 			if err != nil {
 				return vterrors.Wrap(err, "can't create decompressor")

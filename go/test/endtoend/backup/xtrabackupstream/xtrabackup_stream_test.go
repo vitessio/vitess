@@ -24,5 +24,5 @@ import (
 
 // TestXtrabackupStream - tests the backup using xtrabackup with xbstream mode
 func TestXtrabackupStream(t *testing.T) {
-	backup.TestBackup(t, backup.XtraBackup, "xbstream", 8)
+	backup.TestBackup(t, backup.XtraBackup, "xbstream", 8, nil)
 }
