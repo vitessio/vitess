@@ -255,7 +255,7 @@ func (mysqld *Mysqld) normalizedSchema(ctx context.Context, dbName, tableName, t
 // ResolveTables returns a list of actual tables+views matching a list
 // of regexps
 func ResolveTables(ctx context.Context, mysqld MysqlDaemon, dbName string, tables []string) ([]string, error) {
-	sd, err := mysqld.GetSchema(ctx, dbName, tables, nil, true, false)
+	sd, err := mysqld.GetSchema(ctx, dbName, tables, nil, true, true /* skip column/field introspection */)
 	if err != nil {
 		return nil, err
 	}
