@@ -233,7 +233,7 @@ func (exec *TabletExecutor) detectBigSchemaChanges(ctx context.Context, parsedDD
 	primaryTabletInfo := exec.tablets[0]
 	// get database schema, excluding views.
 	dbSchema, err := exec.tmc.GetSchema(
-		ctx, primaryTabletInfo, []string{}, []string{}, false)
+		ctx, primaryTabletInfo, []string{}, []string{}, false, false)
 	if err != nil {
 		return false, fmt.Errorf("unable to get database schema, error: %v", err)
 	}

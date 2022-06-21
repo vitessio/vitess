@@ -732,6 +732,16 @@ func (m *GetSchemaRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.TableSchemaOnly {
+		i--
+		if m.TableSchemaOnly {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x20
+	}
 	if len(m.ExcludeTables) > 0 {
 		for iNdEx := len(m.ExcludeTables) - 1; iNdEx >= 0; iNdEx-- {
 			i -= len(m.ExcludeTables[iNdEx])
@@ -4967,6 +4977,9 @@ func (m *GetSchemaRequest) SizeVT() (n int) {
 			n += 1 + l + sov(uint64(l))
 		}
 	}
+	if m.TableSchemaOnly {
+		n += 2
+	}
 	if m.unknownFields != nil {
 		n += len(m.unknownFields)
 	}
@@ -8458,6 +8471,26 @@ func (m *GetSchemaRequest) UnmarshalVT(dAtA []byte) error {
 			}
 			m.ExcludeTables = append(m.ExcludeTables, string(dAtA[iNdEx:postIndex]))
 			iNdEx = postIndex
+		case 4:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field TableSchemaOnly", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.TableSchemaOnly = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])

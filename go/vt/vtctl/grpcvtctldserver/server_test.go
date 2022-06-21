@@ -4657,6 +4657,31 @@ func TestGetSchema(t *testing.T) {
 			},
 			shouldErr: false,
 		},
+		{
+			name: "table schema only",
+			req: &vtctldatapb.GetSchemaRequest{
+				TabletAlias:     validAlias,
+				TableSchemaOnly: true,
+			},
+			expected: &vtctldatapb.GetSchemaResponse{
+				Schema: &tabletmanagerdatapb.SchemaDefinition{
+					DatabaseSchema: "CREATE DATABASE vt_testkeyspace",
+					TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+						{
+							Name: "t1",
+							Schema: `CREATE TABLE t1 (
+	id int(11) not null,
+	PRIMARY KEY (id)
+);`,
+							Type:       "BASE",
+							DataLength: 100,
+							RowCount:   50,
+						},
+					},
+				},
+			},
+			shouldErr: false,
+		},
 		// error cases
 		{
 			name: "no tablet",
