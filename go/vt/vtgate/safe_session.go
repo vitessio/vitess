@@ -26,8 +26,6 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -841,21 +839,25 @@ func (session *SafeSession) ClearAdvisoryLock() {
 	session.AdvisoryLock = nil
 }
 
-func (l *executeLogger) log(rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery) {
-	if len(rss) != len(queries) {
-		log.Warning("could not log queries because number of shards did not match number of queries")
+func (l *executeLogger) log(target *querypb.Target, query string) {
+	if l == nil {
 		return
 	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	for i, resolvedShard := range rss {
-		q := queries[i]
-		l.entries = append(l.entries, engine.ExecuteEntry{
-			Keyspace:   resolvedShard.Target.Keyspace,
-			Shard:      resolvedShard.Target.Shard,
-			TabletType: resolvedShard.Target.TabletType,
-			Cell:       resolvedShard.Target.Cell,
-			Query:      q.Sql,
-		})
-	}
+	l.entries = append(l.entries, engine.ExecuteEntry{
+		Keyspace:   target.Keyspace,
+		Shard:      target.Shard,
+		TabletType: target.TabletType,
+		Cell:       target.Cell,
+		Query:      query,
+	})
+}
+
+func (l *executeLogger) GetLogs() []engine.ExecuteEntry {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	result := make([]engine.ExecuteEntry, len(l.entries))
+	copy(result, l.entries)
+	return result
 }

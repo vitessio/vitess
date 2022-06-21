@@ -17,8 +17,6 @@ limitations under the License.
 package engine
 
 import (
-	"fmt"
-
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -67,7 +65,8 @@ func (v *VTExplain) NeedsTransaction() bool {
 // TryExecute implements the Primitive interface
 func (v *VTExplain) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	vcursor.EnableLogging()
-	res, err := vcursor.ExecutePrimitive(v.Input, bindVars, wantfields)
+	defer vcursor.DisableLogging()
+	_, err := vcursor.ExecutePrimitive(v.Input, bindVars, wantfields)
 	if err != nil {
 		return nil, err
 	}
@@ -75,12 +74,25 @@ func (v *VTExplain) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bin
 	if err != nil {
 		return nil, err
 	}
+	fields := []*querypb.Field{{
+		Name: "#", Type: sqltypes.Int32,
+	}, {
+		Name: "keyspace", Type: sqltypes.VarChar,
+	}, {
+		Name: "shard", Type: sqltypes.VarChar,
+	}, {
+		Name: "query", Type: sqltypes.VarChar,
+	}}
+	res := &sqltypes.Result{
+		Fields: fields,
+	}
 	for i, log := range logs {
-		warn := &querypb.QueryWarning{
-			Code:    1003,
-			Message: fmt.Sprintf("%d %s/%s: %s", i, log.Keyspace, log.Shard, log.Query),
-		}
-		vcursor.Session().RecordWarning(warn)
+		res.Rows = append(res.Rows, sqltypes.Row{
+			sqltypes.NewInt32(int32(i)),
+			sqltypes.NewVarChar(log.Keyspace),
+			sqltypes.NewVarChar(log.Shard),
+			sqltypes.NewVarChar(log.Query),
+		})
 	}
 	return res, nil
 }

@@ -220,6 +220,7 @@ func (stc *ScatterConn) ExecuteMultiShard(
 					})
 				}
 			case begin:
+				session.logging.log(rs.Target, "begin")
 				innerqr, transactionID, alias, err = qs.BeginExecute(ctx, rs.Target, session.SavePoints(), queries[i].Sql, queries[i].BindVariables, reservedID, opts)
 				if err != nil {
 					retryRequest(func() {
@@ -231,10 +232,13 @@ func (stc *ScatterConn) ExecuteMultiShard(
 			case reserve:
 				innerqr, reservedID, alias, err = qs.ReserveExecute(ctx, rs.Target, session.SetPreQueries(), queries[i].Sql, queries[i].BindVariables, transactionID, opts)
 			case reserveBegin:
+				session.logging.log(rs.Target, "begin")
 				innerqr, transactionID, reservedID, alias, err = qs.ReserveBeginExecute(ctx, rs.Target, session.SetPreQueries(), session.SavePoints(), queries[i].Sql, queries[i].BindVariables, opts)
 			default:
 				return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected actionNeeded on query execution: %v", info.actionNeeded)
 			}
+			session.logging.log(rs.Target, queries[i].Sql)
+
 			// We need to new shard info irrespective of the error.
 			newInfo := info.updateTransactionAndReservedID(transactionID, reservedID, alias)
 			if err != nil {

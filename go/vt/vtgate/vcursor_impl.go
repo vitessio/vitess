@@ -497,9 +497,6 @@ const txRollback = "Rollback Transaction"
 
 // ExecuteMultiShard is part of the engine.VCursor interface.
 func (vc *vcursorImpl) ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, rollbackOnError, autocommit bool) (*sqltypes.Result, []error) {
-	if vc.safeSession.logging != nil {
-		vc.safeSession.logging.log(rss, queries)
-	}
 	noOfShards := len(rss)
 	atomic.AddUint64(&vc.logStats.ShardQueries, uint64(noOfShards))
 	err := vc.markSavepoint(rollbackOnError && (noOfShards > 1), map[string]*querypb.BindVariable{})
@@ -542,9 +539,6 @@ func (vc *vcursorImpl) ExecuteStandalone(query string, bindVars map[string]*quer
 			Sql:           vc.marginComments.Leading + query + vc.marginComments.Trailing,
 			BindVariables: bindVars,
 		},
-	}
-	if vc.safeSession.logging != nil {
-		vc.safeSession.logging.log(rss, bqs)
 	}
 	// The autocommit flag is always set to false because we currently don't
 	// execute DMLs through ExecuteStandalone.
@@ -1010,12 +1004,13 @@ func (vc *vcursorImpl) ReleaseLock() error {
 func (vc *vcursorImpl) EnableLogging() {
 	vc.safeSession.logging = &executeLogger{}
 }
+func (vc *vcursorImpl) DisableLogging() {
+	vc.safeSession.logging = nil
+}
 
 func (vc *vcursorImpl) GetLogs() ([]engine.ExecuteEntry, error) {
 	if vc.safeSession.logging == nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vtexplain logging not enabled")
 	}
-	result := vc.safeSession.logging
-	vc.safeSession.logging = nil
-	return result.entries, nil
+	return vc.safeSession.logging.GetLogs(), nil
 }

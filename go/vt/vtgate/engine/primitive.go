@@ -132,6 +132,7 @@ type (
 		ReleaseLock() error
 
 		EnableLogging()
+		DisableLogging()
 		GetLogs() ([]ExecuteEntry, error)
 	}
 

@@ -76,6 +76,7 @@ func (txc *TxConn) Commit(ctx context.Context, session *SafeSession) error {
 	case vtgatepb.TransactionMode_UNSPECIFIED:
 		twopc = txc.mode == vtgatepb.TransactionMode_TWOPC
 	}
+
 	if twopc {
 		return txc.commit2PC(ctx, session)
 	}
