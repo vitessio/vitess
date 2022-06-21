@@ -82,6 +82,9 @@ var (
 	refreshKnownTablets = flag.Bool("tablet_refresh_known_tablets", true, "tablet refresh reloads the tablet address/port map from topo in case it changes")
 	// topoReadConcurrency tells us how many topo reads are allowed in parallel
 	topoReadConcurrency = flag.Int("topo_read_concurrency", 32, "concurrent topo reads")
+
+	// How much to sleep between each check.
+	waitAvailableTabletInterval = 100 * time.Millisecond
 )
 
 // See the documentation for NewHealthCheck below for an explanation of these parameters.
