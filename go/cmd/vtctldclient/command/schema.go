@@ -301,9 +301,9 @@ func init() {
 	GetSchema.Flags().StringSliceVar(&getSchemaOptions.Tables, "tables", nil, "List of tables to display the schema for. Each is either an exact match, or a regular expression of the form `/regexp/`.")
 	GetSchema.Flags().StringSliceVar(&getSchemaOptions.ExcludeTables, "exclude-tables", nil, "List of tables to exclude from the result. Each is either an exact match, or a regular expression of the form `/regexp/`.")
 	GetSchema.Flags().BoolVar(&getSchemaOptions.IncludeViews, "include-views", false, "Includes views in the output in addition to base tables.")
-	GetSchema.Flags().BoolVarP(&getSchemaOptions.TableNamesOnly, "table-names-only", "", false, "Display only table names in the result.")
+	GetSchema.Flags().BoolVarP(&getSchemaOptions.TableNamesOnly, "table-names-only", "n", false, "Display only table names in the result.")
 	GetSchema.Flags().BoolVarP(&getSchemaOptions.TableSizesOnly, "table-sizes-only", "s", false, "Display only size information for matching tables. Ignored if --table-names-only is set.")
-	GetSchema.Flags().BoolVarP(&getSchemaOptions.TableSchemaOnly, "table-schema-only", "n", false, "Display only table schemas in the result, skip columns and fields.")
+	GetSchema.Flags().BoolVarP(&getSchemaOptions.TableSchemaOnly, "table-schema-only", "", false, "Display only table schemas in the result, skip columns and fields.")
 
 	Root.AddCommand(GetSchema)
 
