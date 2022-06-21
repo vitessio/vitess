@@ -25,6 +25,8 @@ import (
 	"sync"
 	"time"
 
+	querypb "vitess.io/vitess/go/vt/proto/query"
+
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -917,7 +919,7 @@ func (wr *Wrangler) updateFrozenFlag(ctx context.Context, shards []*topo.ShardIn
 // the tablet was actually drained. At later times, a QPS rate > 0.0 could still
 // be observed.
 func (wr *Wrangler) WaitForDrain(ctx context.Context, cells []string, keyspace, shard string, servedType topodatapb.TabletType,
-	retryDelay, healthCheckTopologyRefresh, healthcheckRetryDelay, healthCheckTimeout, initialWait time.Duration) error {
+	retryDelay, healthcheckRetryDelay, healthCheckTimeout, initialWait time.Duration) error {
 	var err error
 	if len(cells) == 0 {
 		// Retrieve list of cells for the shard from the topology.
@@ -934,8 +936,7 @@ func (wr *Wrangler) WaitForDrain(ctx context.Context, cells []string, keyspace, 
 		wg.Add(1)
 		go func(cell string) {
 			defer wg.Done()
-			rec.RecordError(wr.waitForDrainInCell(ctx, cell, keyspace, shard, servedType,
-				retryDelay, healthCheckTopologyRefresh, healthcheckRetryDelay, healthCheckTimeout, initialWait))
+			rec.RecordError(wr.waitForDrainInCell(ctx, cell, keyspace, shard, servedType, retryDelay, healthcheckRetryDelay, healthCheckTimeout, initialWait))
 		}(cell)
 	}
 	wg.Wait()
@@ -944,19 +945,14 @@ func (wr *Wrangler) WaitForDrain(ctx context.Context, cells []string, keyspace, 
 }
 
 func (wr *Wrangler) waitForDrainInCell(ctx context.Context, cell, keyspace, shard string, servedType topodatapb.TabletType,
-	retryDelay, healthCheckTopologyRefresh, healthcheckRetryDelay, healthCheckTimeout, initialWait time.Duration) error {
+	retryDelay, healthcheckRetryDelay, healthCheckTimeout, initialWait time.Duration) error {
 
 	// Create the healthheck module, with a cache.
-	hc := discovery.NewLegacyHealthCheck(healthcheckRetryDelay, healthCheckTimeout)
+	hc := discovery.NewHealthCheck(ctx, healthcheckRetryDelay, healthCheckTimeout, wr.TopoServer(), cell, "")
 	defer hc.Close()
-	tsc := discovery.NewLegacyTabletStatsCache(hc, wr.TopoServer(), cell)
-
-	// Create a tablet watcher.
-	watcher := discovery.NewLegacyShardReplicationWatcher(ctx, wr.TopoServer(), hc, cell, keyspace, shard, healthCheckTopologyRefresh, discovery.DefaultTopoReadConcurrency)
-	defer watcher.Stop()
 
 	// Wait for at least one tablet.
-	if err := tsc.WaitForTablets(ctx, keyspace, shard, servedType); err != nil {
+	if err := hc.WaitForTablets(ctx, keyspace, shard, servedType); err != nil {
 		return fmt.Errorf("%v: error waiting for initial %v tablets for %v/%v: %v", cell, servedType, keyspace, shard, err)
 	}
 
@@ -974,15 +970,15 @@ func (wr *Wrangler) waitForDrainInCell(ctx context.Context, cell, keyspace, shar
 	startTime := time.Now()
 	for {
 		// map key: tablet uid
-		drainedHealthyTablets := make(map[uint32]*discovery.LegacyTabletStats)
-		notDrainedHealtyTablets := make(map[uint32]*discovery.LegacyTabletStats)
+		drainedHealthyTablets := make(map[uint32]*discovery.TabletHealth)
+		notDrainedHealtyTablets := make(map[uint32]*discovery.TabletHealth)
 
-		healthyTablets := tsc.GetHealthyTabletStats(keyspace, shard, servedType)
+		healthyTablets := hc.GetTabletStats(&querypb.Target{Keyspace: keyspace, Shard: shard, TabletType: servedType})
 		for _, ts := range healthyTablets {
 			if ts.Stats.Qps == 0.0 {
-				drainedHealthyTablets[ts.Tablet.Alias.Uid] = &ts
+				drainedHealthyTablets[ts.Tablet.Alias.Uid] = ts
 			} else {
-				notDrainedHealtyTablets[ts.Tablet.Alias.Uid] = &ts
+				notDrainedHealtyTablets[ts.Tablet.Alias.Uid] = ts
 			}
 		}
 
@@ -1018,7 +1014,7 @@ func (wr *Wrangler) waitForDrainInCell(ctx context.Context, cell, keyspace, shar
 	return nil
 }
 
-func formatTabletStats(ts *discovery.LegacyTabletStats) string {
+func formatTabletStats(ts *discovery.TabletHealth) string {
 	webURL := "unknown http port"
 	if webPort, ok := ts.Tablet.PortMap["vt"]; ok {
 		webURL = fmt.Sprintf("http://%v:%d/", ts.Tablet.Hostname, webPort)

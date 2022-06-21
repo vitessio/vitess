@@ -1354,8 +1354,7 @@ func commandWaitForDrain(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 		return err
 	}
 
-	return wr.WaitForDrain(ctx, cells, keyspace, shard, servedType,
-		*retryDelay, *HealthCheckTopologyRefresh, *HealthcheckRetryDelay, *HealthCheckTimeout, *initialWait)
+	return wr.WaitForDrain(ctx, cells, keyspace, shard, servedType, *retryDelay, *HealthcheckRetryDelay, *HealthCheckTimeout, *initialWait)
 }
 
 func commandSleep(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -2403,7 +2402,7 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 		return err
 	}
 
-	//TODO: check if invalid parameters were passed in that do not apply to this action
+	// TODO: check if invalid parameters were passed in that do not apply to this action
 	originalAction := action
 	action = strings.ToLower(action) // allow users to input action in a case-insensitive manner
 	if workflowType == wrangler.MigrateWorkflow {
@@ -2649,7 +2648,7 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 
 func commandCreateLookupVindex(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	cells := subFlags.String("cells", "", "Source cells to replicate from.")
-	//TODO: keep --cell around for backward compatibility and remove it in a future version
+	// TODO: keep --cell around for backward compatibility and remove it in a future version
 	cell := subFlags.String("cell", "", "Cell to replicate from.")
 	tabletTypes := subFlags.String("tablet_types", "", "Source tablet types to replicate from.")
 	continueAfterCopyWithOwner := subFlags.Bool("continue_after_copy_with_owner", false, "Vindex will continue materialization after copy when an owner is provided")
@@ -2749,7 +2748,7 @@ func commandVDiff(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fla
 	maxRows := subFlags.Int64("limit", math.MaxInt64, "Max rows to stop comparing after")
 	debugQuery := subFlags.Bool("debug_query", false, "Adds a mysql query to the report that can be used for further debugging")
 	onlyPks := subFlags.Bool("only_pks", false, "When reporting missing rows, only show primary keys in the report.")
-	format := subFlags.String("format", "", "Format of report") //"json" or ""
+	format := subFlags.String("format", "", "Format of report") // "json" or ""
 	tables := subFlags.String("tables", "", "Only run vdiff for these tables in the workflow")
 	maxExtraRowsToCompare := subFlags.Int("max_extra_rows_to_compare", 1000, "If there are collation differences between the source and target, you can have rows that are identical but simply returned in a different order from MySQL. We will do a second pass to compare the rows for any actual differences in this case and this flag allows you to control the resources used for this operation.")
 	if err := subFlags.Parse(args); err != nil {
