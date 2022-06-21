@@ -83,7 +83,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Scalar",
-    "Aggregates": "sum(0) AS count",
+    "Aggregates": "sum_count(0) AS count",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -106,7 +106,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Scalar",
-    "Aggregates": "sum(0) AS count(*)",
+    "Aggregates": "sum_count_star(0) AS count(*)",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -178,7 +178,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Scalar",
-    "Aggregates": "sum(0) AS count",
+    "Aggregates": "sum_count(0) AS count",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -201,7 +201,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Scalar",
-    "Aggregates": "sum(0) AS count(*)",
+    "Aggregates": "sum_count_star(0) AS count(*)",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -227,7 +227,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Scalar",
-    "Aggregates": "sum(0) AS count",
+    "Aggregates": "sum_count(0) AS count",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -250,7 +250,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Scalar",
-    "Aggregates": "sum(0) AS count(*)",
+    "Aggregates": "sum_count_star(0) AS count(*)",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -1758,7 +1758,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum(0) AS count",
+        "Aggregates": "sum_count(0) AS count",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1802,7 +1802,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum(0) AS count(*)",
+        "Aggregates": "sum_count_star(0) AS count(*)",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1894,7 +1894,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum(0) AS count",
+        "Aggregates": "sum_count(0) AS count",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1940,7 +1940,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum(0) AS count(*)",
+        "Aggregates": "sum_count_star(0) AS count(*)",
         "Inputs": [
           {
             "OperatorType": "Route",
