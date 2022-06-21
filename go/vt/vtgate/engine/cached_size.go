@@ -1167,6 +1167,20 @@ func (cached *VStream) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.Position)))
 	return size
 }
+func (cached *VTExplain) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(16)
+	}
+	// field Input vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	if cc, ok := cached.Input.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
 func (cached *VindexFunc) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

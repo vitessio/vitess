@@ -22,6 +22,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtgate/engine"
+
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/vt/log"
@@ -64,17 +66,9 @@ type (
 		*vtgatepb.Session
 	}
 
-	executeEntry struct {
-		Keyspace   string
-		Shard      string
-		TabletType topodatapb.TabletType
-		Cell       string
-		Query      string
-	}
-
 	executeLogger struct {
 		mu      sync.Mutex
-		entries []executeEntry
+		entries []engine.ExecuteEntry
 	}
 
 	// autocommitState keeps track of whether a single round-trip
@@ -856,7 +850,7 @@ func (l *executeLogger) log(rss []*srvtopo.ResolvedShard, queries []*querypb.Bou
 	defer l.mu.Unlock()
 	for i, resolvedShard := range rss {
 		q := queries[i]
-		l.entries = append(l.entries, executeEntry{
+		l.entries = append(l.entries, engine.ExecuteEntry{
 			Keyspace:   resolvedShard.Target.Keyspace,
 			Shard:      resolvedShard.Target.Shard,
 			TabletType: resolvedShard.Target.TabletType,

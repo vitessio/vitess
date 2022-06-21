@@ -130,6 +130,9 @@ type (
 
 		// ReleaseLock releases all the held advisory locks.
 		ReleaseLock() error
+
+		EnableLogging()
+		GetLogs() ([]ExecuteEntry, error)
 	}
 
 	//SessionActions gives primitives ability to interact with the session state

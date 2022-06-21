@@ -728,6 +728,13 @@ func (f *loggingVCursor) CanUseSetVar() bool {
 	return useSetVar
 }
 
+func (t *noopVCursor) EnableLogging() {
+}
+
+func (t *noopVCursor) GetLogs() ([]ExecuteEntry, error) {
+	return nil, nil
+}
+
 func expectResult(t *testing.T, msg string, result, want *sqltypes.Result) {
 	t.Helper()
 	if !reflect.DeepEqual(result, want) {

@@ -1002,3 +1002,16 @@ func (vc *vcursorImpl) CanUseSetVar() bool {
 func (vc *vcursorImpl) ReleaseLock() error {
 	return vc.executor.ReleaseLock(vc.ctx, vc.safeSession)
 }
+
+func (vc *vcursorImpl) EnableLogging() {
+	vc.safeSession.logging = &executeLogger{}
+}
+
+func (vc *vcursorImpl) GetLogs() ([]engine.ExecuteEntry, error) {
+	if vc.safeSession.logging == nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vtexplain logging not enabled")
+	}
+	result := vc.safeSession.logging
+	vc.safeSession.logging = nil
+	return result.entries, nil
+}

@@ -36,10 +36,14 @@ func buildExplainPlan(stmt sqlparser.Explain, reservedVars *sqlparser.ReservedVa
 	case *sqlparser.ExplainTab:
 		return explainTabPlan(explain, vschema)
 	case *sqlparser.ExplainStmt:
-		if explain.Type == sqlparser.VitessType {
+		switch explain.Type {
+		case sqlparser.VitessType:
 			return buildVitessTypePlan(explain, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
+		case sqlparser.VTExplainType:
+			return buildVTExplainTypePlan(explain, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
+		default:
+			return buildOtherReadAndAdmin(sqlparser.String(explain), vschema)
 		}
-		return buildOtherReadAndAdmin(sqlparser.String(explain), vschema)
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected explain type: %T", stmt)
 }
@@ -109,6 +113,14 @@ func buildVitessTypePlan(explain *sqlparser.ExplainStmt, reservedVars *sqlparser
 	}
 
 	return engine.NewRowsPrimitive(rows, fields), nil
+}
+
+func buildVTExplainTypePlan(explain *sqlparser.ExplainStmt, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (engine.Primitive, error) {
+	input, err := createInstructionFor(sqlparser.String(explain.Statement), explain.Statement, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
+	if err != nil {
+		return nil, err
+	}
+	return &engine.VTExplain{Input: input}, nil
 }
 
 func extractQuery(m map[string]any) string {
