@@ -458,6 +458,7 @@ func (vc *vcursorImpl) Execute(method string, query string, bindVars map[string]
 	if co == vtgatepb.CommitOrder_AUTOCOMMIT {
 		// For autocommit, we have to create an independent session.
 		session = NewAutocommitSession(vc.safeSession.Session)
+		session.logging = vc.safeSession.logging
 		rollbackOnError = false
 	} else {
 		session.SetCommitOrder(co)
@@ -541,6 +542,9 @@ func (vc *vcursorImpl) ExecuteStandalone(query string, bindVars map[string]*quer
 			Sql:           vc.marginComments.Leading + query + vc.marginComments.Trailing,
 			BindVariables: bindVars,
 		},
+	}
+	if vc.safeSession.logging != nil {
+		vc.safeSession.logging.log(rss, bqs)
 	}
 	// The autocommit flag is always set to false because we currently don't
 	// execute DMLs through ExecuteStandalone.

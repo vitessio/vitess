@@ -596,8 +596,12 @@ func buildWarnings() (engine.Primitive, error) {
 		rows := make([][]sqltypes.Value, 0, len(warns))
 
 		for _, warn := range warns {
+			txt := "Warning"
+			if warn.Code == 1003 {
+				txt = "Note"
+			}
 			rows = append(rows, []sqltypes.Value{
-				sqltypes.NewVarChar("Warning"),
+				sqltypes.NewVarChar(txt),
 				sqltypes.NewUint32(warn.Code),
 				sqltypes.NewVarChar(warn.Message),
 			})
