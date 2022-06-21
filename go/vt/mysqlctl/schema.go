@@ -389,7 +389,7 @@ func (mysqld *Mysqld) PreflightSchemaChange(ctx context.Context, dbName string, 
 	results := make([]*tabletmanagerdatapb.SchemaChangeResult, len(changes))
 
 	// Get current schema from the real database.
-	originalSchema, err := mysqld.GetSchema(ctx, dbName, nil, nil, true, false)
+	originalSchema, err := mysqld.GetSchema(ctx, dbName, nil, nil, true, true /* skip column introspection */)
 	if err != nil {
 		return nil, err
 	}
