@@ -91,7 +91,7 @@ func waitForHealthyTablets(ctx context.Context, wr *wrangler.Wrangler, healthChe
 		default:
 		}
 
-		healthyTablets = discovery.RemoveUnhealthyTablets(discovery.TabletHealthReferenceListToValue(healthCheck.GetHealthyTabletStats(&querypb.Target{Shard: shard, Keyspace: keyspace, TabletType: tabletType})))
+		healthyTablets = discovery.RemoveUnhealthyTablets(discovery.TabletHealthReferenceListToValue(healthCheck.GetTabletStats(&querypb.Target{Shard: shard, Keyspace: keyspace, TabletType: tabletType})))
 		if len(healthyTablets) >= minHealthyRdonlyTablets {
 			break
 		}

@@ -628,6 +628,25 @@ func (hc *HealthCheckImpl) GetHealthyTabletStats(target *query.Target) []*Tablet
 	return append(result, hc.healthy[KeyFromTarget(target)]...)
 }
 
+// GetHealthyTabletStats returns only the healthy tablets.
+// The returned array is owned by the caller.
+// For TabletType_PRIMARY, this will only return at most one entry,
+// the most recent tablet of type primary.
+// This returns a copy of the data so that callers can access without
+// synchronization
+func (hc *HealthCheckImpl) GetTabletStats(target *query.Target) []*TabletHealth {
+	var result []*TabletHealth
+	hc.mu.Lock()
+	defer hc.mu.Unlock()
+	if target.Shard == "" {
+		target.Shard = "0"
+	}
+	for _, health := range hc.healthData[KeyFromTarget(target)] {
+		result = append(result, health)
+	}
+	return result
+}
+
 // getTabletStats returns all tablets for the given target.
 // The returned array is owned by the caller.
 // For TabletType_PRIMARY, this will only return at most one entry,
