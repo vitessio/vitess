@@ -21,7 +21,7 @@ source $DIR/shell_functions.inc
 # a tar ball might be used, which will prevent the git metadata from being available.
 # Should this be the case then allow environment variables to be used to source
 # this information instead.
-DEFAULT_BUILD_GIT_REV=$(git rev-parse --short HEAD)
+DEFAULT_BUILD_GIT_REV=$(git rev-parse HEAD)
 DEFAULT_BUILD_GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 
 echo "\

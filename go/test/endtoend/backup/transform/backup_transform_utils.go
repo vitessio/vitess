@@ -68,7 +68,6 @@ func TestMainSetup(m *testing.M, useMysqlctld bool) {
 		localCluster = cluster.NewCluster(cell, hostname)
 		defer localCluster.Teardown()
 
-		localCluster.VtctldExtraArgs = append(localCluster.VtctldExtraArgs, "--durability_policy=semi_sync")
 		// Start topo server
 		err := localCluster.StartTopo()
 		if err != nil {
@@ -149,6 +148,11 @@ func TestMainSetup(m *testing.M, useMysqlctld bool) {
 			if err := localCluster.VtctlclientProcess.InitTablet(tablet, cell, keyspaceName, hostname, shard.Name); err != nil {
 				return 1, err
 			}
+		}
+		vtctldClientProcess := cluster.VtctldClientProcessInstance("localhost", localCluster.VtctldProcess.GrpcPort, localCluster.TmpDirectory)
+		_, err = vtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=semi_sync")
+		if err != nil {
+			return 1, err
 		}
 
 		// create database for primary and replica

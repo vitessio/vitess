@@ -82,7 +82,7 @@ func (s *server) GetSchema(ctx context.Context, request *tabletmanagerdatapb.Get
 	defer s.tm.HandleRPCPanic(ctx, "GetSchema", request, response, false /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.GetSchemaResponse{}
-	sd, err := s.tm.GetSchema(ctx, request.Tables, request.ExcludeTables, request.IncludeViews)
+	sd, err := s.tm.GetSchema(ctx, request.Tables, request.ExcludeTables, request.IncludeViews, request.TableSchemaOnly)
 	if err == nil {
 		response.SchemaDefinition = sd
 	}
@@ -261,11 +261,11 @@ func (s *server) ReplicationStatus(ctx context.Context, request *tabletmanagerda
 	return response, err
 }
 
-func (s *server) MasterStatus(ctx context.Context, request *tabletmanagerdatapb.PrimaryStatusRequest) (response *tabletmanagerdatapb.PrimaryStatusResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "PrimaryStatus", request, response, false /*verbose*/, &err)
+func (s *server) FullStatus(ctx context.Context, request *tabletmanagerdatapb.FullStatusRequest) (response *tabletmanagerdatapb.FullStatusResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "FullStatus", request, response, false /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
-	response = &tabletmanagerdatapb.PrimaryStatusResponse{}
-	status, err := s.tm.PrimaryStatus(ctx)
+	response = &tabletmanagerdatapb.FullStatusResponse{}
+	status, err := s.tm.FullStatus(ctx)
 	if err == nil {
 		response.Status = status
 	}
@@ -279,17 +279,6 @@ func (s *server) PrimaryStatus(ctx context.Context, request *tabletmanagerdatapb
 	status, err := s.tm.PrimaryStatus(ctx)
 	if err == nil {
 		response.Status = status
-	}
-	return response, err
-}
-
-func (s *server) MasterPosition(ctx context.Context, request *tabletmanagerdatapb.PrimaryPositionRequest) (response *tabletmanagerdatapb.PrimaryPositionResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "PrimaryPosition", request, response, false /*verbose*/, &err)
-	ctx = callinfo.GRPCCallInfo(ctx)
-	response = &tabletmanagerdatapb.PrimaryPositionResponse{}
-	position, err := s.tm.PrimaryPosition(ctx)
-	if err == nil {
-		response.Position = position
 	}
 	return response, err
 }
@@ -378,6 +367,13 @@ func (s *server) VReplicationWaitForPos(ctx context.Context, request *tabletmana
 	return &tabletmanagerdatapb.VReplicationWaitForPosResponse{}, err
 }
 
+func (s *server) VDiff(ctx context.Context, request *tabletmanagerdatapb.VDiffRequest) (response *tabletmanagerdatapb.VDiffResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "VDiff", request, response, true /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+	response, err = s.tm.VDiff(ctx, request)
+	return response, err
+}
+
 //
 // Reparenting related functions
 //
@@ -387,17 +383,6 @@ func (s *server) ResetReplication(ctx context.Context, request *tabletmanagerdat
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.ResetReplicationResponse{}
 	return response, s.tm.ResetReplication(ctx)
-}
-
-func (s *server) InitMaster(ctx context.Context, request *tabletmanagerdatapb.InitPrimaryRequest) (response *tabletmanagerdatapb.InitPrimaryResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "InitMaster", request, response, true /*verbose*/, &err)
-	ctx = callinfo.GRPCCallInfo(ctx)
-	response = &tabletmanagerdatapb.InitPrimaryResponse{}
-	position, err := s.tm.InitPrimary(ctx, request.GetSemiSync())
-	if err == nil {
-		response.Position = position
-	}
-	return response, err
 }
 
 func (s *server) InitPrimary(ctx context.Context, request *tabletmanagerdatapb.InitPrimaryRequest) (response *tabletmanagerdatapb.InitPrimaryResponse, err error) {
@@ -425,18 +410,6 @@ func (s *server) InitReplica(ctx context.Context, request *tabletmanagerdatapb.I
 	return response, s.tm.InitReplica(ctx, request.Parent, request.ReplicationPosition, request.TimeCreatedNs, request.GetSemiSync())
 }
 
-func (s *server) DemoteMaster(ctx context.Context, request *tabletmanagerdatapb.DemotePrimaryRequest) (response *tabletmanagerdatapb.DemotePrimaryResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "DemoteMaster", request, response, true /*verbose*/, &err)
-	ctx = callinfo.GRPCCallInfo(ctx)
-	response = &tabletmanagerdatapb.DemotePrimaryResponse{}
-	status, err := s.tm.DemotePrimary(ctx)
-	if err == nil {
-		response.DeprecatedPosition = status.Position //nolint
-		response.PrimaryStatus = status
-	}
-	return response, err
-}
-
 func (s *server) DemotePrimary(ctx context.Context, request *tabletmanagerdatapb.DemotePrimaryRequest) (response *tabletmanagerdatapb.DemotePrimaryResponse, err error) {
 	defer s.tm.HandleRPCPanic(ctx, "DemotePrimary", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
@@ -446,14 +419,6 @@ func (s *server) DemotePrimary(ctx context.Context, request *tabletmanagerdatapb
 		response.DeprecatedPosition = status.Position //nolint
 		response.PrimaryStatus = status
 	}
-	return response, err
-}
-
-func (s *server) UndoDemoteMaster(ctx context.Context, request *tabletmanagerdatapb.UndoDemotePrimaryRequest) (response *tabletmanagerdatapb.UndoDemotePrimaryResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "UndoDemoteMaster", request, response, true /*verbose*/, &err)
-	ctx = callinfo.GRPCCallInfo(ctx)
-	response = &tabletmanagerdatapb.UndoDemotePrimaryResponse{}
-	err = s.tm.UndoDemotePrimary(ctx, request.GetSemiSync())
 	return response, err
 }
 
@@ -472,11 +437,11 @@ func (s *server) ReplicaWasPromoted(ctx context.Context, request *tabletmanagerd
 	return response, s.tm.ReplicaWasPromoted(ctx)
 }
 
-func (s *server) SetMaster(ctx context.Context, request *tabletmanagerdatapb.SetReplicationSourceRequest) (response *tabletmanagerdatapb.SetReplicationSourceResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "SetMaster", request, response, true /*verbose*/, &err)
+func (s *server) ResetReplicationParameters(ctx context.Context, request *tabletmanagerdatapb.ResetReplicationParametersRequest) (response *tabletmanagerdatapb.ResetReplicationParametersResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "ResetReplicationParameters", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
-	response = &tabletmanagerdatapb.SetReplicationSourceResponse{}
-	return response, s.tm.SetReplicationSource(ctx, request.Parent, request.TimeCreatedNs, request.WaitPosition, request.ForceStartReplication, request.GetSemiSync())
+	response = &tabletmanagerdatapb.ResetReplicationParametersResponse{}
+	return response, s.tm.ResetReplicationParameters(ctx)
 }
 
 func (s *server) SetReplicationSource(ctx context.Context, request *tabletmanagerdatapb.SetReplicationSourceRequest) (response *tabletmanagerdatapb.SetReplicationSourceResponse, err error) {

@@ -35,6 +35,8 @@ import (
 	"syscall"
 	"time"
 
+	"vitess.io/vitess/go/vt/withddl"
+
 	"google.golang.org/protobuf/proto"
 
 	"google.golang.org/protobuf/encoding/prototext"
@@ -60,6 +62,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/vttablet/vexec"
 )
@@ -106,6 +109,7 @@ var ptOSCOverridePath = flag.String("pt-osc-path", "", "override default pt-onli
 var migrationCheckInterval = flag.Duration("migration_check_interval", 1*time.Minute, "Interval between migration checks")
 var retainOnlineDDLTables = flag.Duration("retain_online_ddl_tables", 24*time.Hour, "How long should vttablet keep an old migrated table before purging it")
 var migrationNextCheckIntervals = []time.Duration{1 * time.Second, 5 * time.Second, 10 * time.Second, 20 * time.Second}
+var maxConstraintNameLength = 64
 
 const (
 	maxPasswordLength                        = 32 // MySQL's *replication* password may not exceed 32 characters
@@ -127,6 +131,7 @@ var (
 	migrationFailureFileName = "migration-failure.log"
 	onlineDDLUser            = "vt-online-ddl-internal"
 	onlineDDLGrant           = fmt.Sprintf("'%s'@'%s'", onlineDDLUser, "%")
+	throttlerOnlineDDLApp    = "online-ddl"
 )
 
 type mysqlVariables struct {
@@ -143,6 +148,7 @@ type Executor struct {
 	pool                  *connpool.Pool
 	tabletTypeFunc        func() topodatapb.TabletType
 	ts                    *topo.Server
+	lagThrottler          *throttle.Throttler
 	toggleBufferTableFunc func(cancelCtx context.Context, tableName string, bufferQueries bool)
 	tabletAlias           *topodatapb.TabletAlias
 
@@ -202,6 +208,7 @@ func newGCTableRetainTime() time.Time {
 
 // NewExecutor creates a new gh-ost executor.
 func NewExecutor(env tabletenv.Env, tabletAlias *topodatapb.TabletAlias, ts *topo.Server,
+	lagThrottler *throttle.Throttler,
 	tabletTypeFunc func() topodatapb.TabletType,
 	toggleBufferTableFunc func(cancelCtx context.Context, tableName string, bufferQueries bool),
 ) *Executor {
@@ -215,6 +222,7 @@ func NewExecutor(env tabletenv.Env, tabletAlias *topodatapb.TabletAlias, ts *top
 		}),
 		tabletTypeFunc:        tabletTypeFunc,
 		ts:                    ts,
+		lagThrottler:          lagThrottler,
 		toggleBufferTableFunc: toggleBufferTableFunc,
 		ticks:                 timer.NewTimer(*migrationCheckInterval),
 	}
@@ -234,6 +242,13 @@ func (e *Executor) execQuery(ctx context.Context, query string) (result *sqltype
 // TabletAliasString returns tablet alias as string (duh)
 func (e *Executor) TabletAliasString() string {
 	return topoproto.TabletAliasString(e.tabletAlias)
+}
+
+// PrepareForQueryExecutor is called by QueryExecutor, possibly before the backing
+// _vt.schema_migrations table has had the chance to be created.
+// This function prepares the schema.
+func (e *Executor) PrepareForQueryExecutor(ctx context.Context) error {
+	return e.initSchema(ctx)
 }
 
 func (e *Executor) initSchema(ctx context.Context) error {
@@ -874,6 +889,119 @@ func (e *Executor) initMigrationSQLMode(ctx context.Context, onlineDDL *schema.O
 	return deferFunc, nil
 }
 
+// validateAndEditCreateTableStatement inspects the CreateTable AST and does the following:
+// - extra validation (no FKs for now...)
+// - generate new and unique names for all constraints (CHECK and FK; yes, why not handle FK names; even as we don't support FKs today, we may in the future)
+func (e *Executor) validateAndEditCreateTableStatement(ctx context.Context, onlineDDL *schema.OnlineDDL, createTable *sqlparser.CreateTable) (constraintMap map[string]string, err error) {
+	constraintMap = map[string]string{}
+	hashExists := map[string]bool{}
+
+	// newConstraintName generates a new, unique name for a constraint. Our problem is that a MySQL
+	// constraint's name is unique in the schema (!). And so as we duplicate the original table, we must
+	// create completely new names for all constraints.
+	// Moreover, we really want this name to be consistent across all shards. We therefore use a deterministic
+	// UUIDv5 (SHA) function over the migration UUID, table name, and constraint's _contents_.
+	// We _also_ include the original constraint name as prefix, as room allows
+	// for example, if the original constraint name is "check_1",
+	// we might generate "check_1_cps1okb4uafunfqusi2lp22u3".
+	// If we then again migrate a table whose constraint name is "check_1_cps1okb4uafunfqusi2lp22u3	" we
+	// get for example "check_1_19l09s37kbhj4axnzmi10e18k" (hash changes, and we still try to preserve original name)
+	newConstraintName := func(seed string, oldName string) string {
+		oldName = schemadiff.ExtractConstraintOriginalName(oldName)
+
+		hash := textutil.UUIDv5Base36(onlineDDL.UUID, onlineDDL.Table, seed)
+		for i := 1; hashExists[hash]; i++ {
+			hash = textutil.UUIDv5Base36(onlineDDL.UUID, onlineDDL.Table, seed, fmt.Sprintf("%d", i))
+		}
+		hashExists[hash] = true
+		suffix := "_" + hash
+		maxAllowedNameLength := maxConstraintNameLength - len(suffix)
+		newName := oldName
+		if len(newName) > maxAllowedNameLength {
+			newName = newName[0:maxAllowedNameLength]
+		}
+		newName = newName + suffix
+		return newName
+	}
+	validateWalk := func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		switch node := node.(type) {
+		case *sqlparser.ForeignKeyDefinition:
+			return false, schema.ErrForeignKeyFound
+		case *sqlparser.ConstraintDefinition:
+			oldName := node.Name.String()
+			newName := newConstraintName(sqlparser.CanonicalString(node.Details), oldName)
+			node.Name = sqlparser.NewIdentifierCI(newName)
+			constraintMap[oldName] = newName
+		}
+		return true, nil
+	}
+	if err := sqlparser.Walk(validateWalk, createTable); err != nil {
+		return constraintMap, err
+	}
+	return constraintMap, nil
+}
+
+// validateAndEditAlterTableStatement inspects the AlterTable statement and:
+// - modifies any CONSTRAINT name according to given name mapping
+func (e *Executor) validateAndEditAlterTableStatement(ctx context.Context, alterTable *sqlparser.AlterTable, constraintMap map[string]string) (err error) {
+	validateWalk := func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		switch node := node.(type) {
+		case *sqlparser.DropKey:
+			if node.Type == sqlparser.CheckKeyType {
+				// drop a check constraint
+				mappedName, ok := constraintMap[node.Name.String()]
+				if !ok {
+					return false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Found DROP CONSTRAINT: %v, but could not find constraint name in map", sqlparser.CanonicalString(node))
+				}
+				node.Name = sqlparser.NewIdentifierCI(mappedName)
+			}
+		}
+		return true, nil
+	}
+	if err := sqlparser.Walk(validateWalk, alterTable); err != nil {
+		return err
+	}
+	return nil
+}
+
+// createTableLike creates the table named by `newTableName` in the likeness of onlineDDL.Table
+// This function emulates MySQL's `CREATE TABLE LIKE ...` statement. The difference is that this function takes control over the generated CONSTRAINT names,
+// if any, such that they are detrministic across shards, as well as preserve original names where possible.
+func (e *Executor) createTableLike(ctx context.Context, newTableName string, onlineDDL *schema.OnlineDDL, conn *dbconnpool.DBConnection) (constraintMap map[string]string, err error) {
+	existingShowCreateTable, err := e.showCreateTable(ctx, onlineDDL.Table)
+	if err != nil {
+		return nil, err
+	}
+	stmt, err := sqlparser.ParseStrictDDL(existingShowCreateTable)
+	if err != nil {
+		return nil, err
+	}
+	createTable, ok := stmt.(*sqlparser.CreateTable)
+	if !ok {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected CreateTable statement, got: %v", sqlparser.CanonicalString(stmt))
+	}
+	createTable.SetTable(createTable.GetTable().Qualifier.CompliantName(), newTableName)
+	// manipulate CreateTable statement: take care of constraints names which have to be
+	// unique across the schema
+	constraintMap, err = e.validateAndEditCreateTableStatement(ctx, onlineDDL, createTable)
+	if err != nil {
+		return nil, err
+	}
+	// Create the table
+	if _, err := conn.ExecuteFetch(sqlparser.CanonicalString(createTable), 0, false); err != nil {
+		return nil, err
+	}
+	return constraintMap, nil
+}
+
+// initVreplicationOriginalMigration performs the first steps towards running a VRepl ALTER migration:
+// - analyze the original table
+// - formalize a new CreateTable statement
+// - inspect the ALTER TABLE query
+// - formalize an AlterTable statement
+// - create the vrepl table
+// - modify the vrepl table
+// - Create and return a VRepl instance
 func (e *Executor) initVreplicationOriginalMigration(ctx context.Context, onlineDDL *schema.OnlineDDL, conn *dbconnpool.DBConnection) (v *VRepl, err error) {
 	restoreSQLModeFunc, err := e.initMigrationSQLMode(ctx, onlineDDL, conn)
 	defer restoreSQLModeFunc()
@@ -885,22 +1013,31 @@ func (e *Executor) initVreplicationOriginalMigration(ctx context.Context, online
 	if err := e.updateArtifacts(ctx, onlineDDL.UUID, vreplTableName); err != nil {
 		return v, err
 	}
+	constraintMap, err := e.createTableLike(ctx, vreplTableName, onlineDDL, conn)
+	if err != nil {
+		return nil, err
+	}
 	{
-		// Apply CREATE TABLE for materialized table
-		parsed := sqlparser.BuildParsedQuery(sqlCreateTableLike, vreplTableName, onlineDDL.Table)
-		if _, err := conn.ExecuteFetch(parsed.Query, 0, false); err != nil {
+		stmt, err := sqlparser.ParseStrictDDL(onlineDDL.SQL)
+		if err != nil {
+			return nil, err
+		}
+		alterTable, ok := stmt.(*sqlparser.AlterTable)
+		if !ok {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected AlterTable statement, got: %v", sqlparser.CanonicalString(stmt))
+		}
+		// ALTER TABLE should apply to the vrepl table
+		alterTable.SetTable(alterTable.GetTable().Qualifier.CompliantName(), vreplTableName)
+		// Also, change any constraint names:
+		if err := e.validateAndEditAlterTableStatement(ctx, alterTable, constraintMap); err != nil {
 			return v, err
 		}
-	}
-	alterOptions := e.parseAlterOptions(ctx, onlineDDL)
-	{
 		// Apply ALTER TABLE to materialized table
-		parsed := sqlparser.BuildParsedQuery(sqlAlterTableOptions, vreplTableName, alterOptions)
-		if _, err := conn.ExecuteFetch(parsed.Query, 0, false); err != nil {
+		if _, err := conn.ExecuteFetch(sqlparser.CanonicalString(alterTable), 0, false); err != nil {
 			return v, err
 		}
 	}
-	v = NewVRepl(onlineDDL.UUID, e.keyspace, e.shard, e.dbName, onlineDDL.Table, vreplTableName, alterOptions)
+	v = NewVRepl(onlineDDL.UUID, e.keyspace, e.shard, e.dbName, onlineDDL.Table, vreplTableName, onlineDDL.SQL)
 	return v, nil
 }
 
@@ -1219,7 +1356,7 @@ exit $exit_code
 			fmt.Sprintf("--serve-socket-file=%s", serveSocketFile),
 			fmt.Sprintf("--hooks-path=%s", tempDir),
 			fmt.Sprintf(`--hooks-hint-token=%s`, onlineDDL.UUID),
-			fmt.Sprintf(`--throttle-http=http://localhost:%d/throttler/check?app=online-ddl:gh-ost:%s&p=low`, *servenv.Port, onlineDDL.UUID),
+			fmt.Sprintf(`--throttle-http=http://localhost:%d/throttler/check?app=%s:gh-ost:%s&p=low`, *servenv.Port, throttlerOnlineDDLApp, onlineDDL.UUID),
 			fmt.Sprintf(`--database=%s`, e.dbName),
 			fmt.Sprintf(`--table=%s`, onlineDDL.Table),
 			fmt.Sprintf(`--alter=%s`, alterOptions),
@@ -1371,7 +1508,7 @@ export MYSQL_PWD
 		my ($self, %args) = @_;
 
 		return sub {
-			if (head("http://localhost:{{VTTABLET_PORT}}/throttler/check?app=online-ddl:pt-osc:{{MIGRATION_UUID}}&p=low")) {
+			if (head("http://localhost:{{VTTABLET_PORT}}/throttler/check?app={{THROTTLER_ONLINE_DDL_APP}}:pt-osc:{{MIGRATION_UUID}}&p=low")) {
 				# Got HTTP 200 OK, means throttler is happy
 				return 0;
 			}	else {
@@ -1385,6 +1522,8 @@ export MYSQL_PWD
 	`
 	pluginCode = strings.ReplaceAll(pluginCode, "{{VTTABLET_PORT}}", fmt.Sprintf("%d", *servenv.Port))
 	pluginCode = strings.ReplaceAll(pluginCode, "{{MIGRATION_UUID}}", onlineDDL.UUID)
+	pluginCode = strings.ReplaceAll(pluginCode, "{{THROTTLER_ONLINE_DDL_APP}}", throttlerOnlineDDLApp)
+
 	pluginCode = strings.ReplaceAll(pluginCode, "{{OnlineDDLStatusRunning}}", string(schema.OnlineDDLStatusRunning))
 	pluginCode = strings.ReplaceAll(pluginCode, "{{OnlineDDLStatusComplete}}", string(schema.OnlineDDLStatusComplete))
 	pluginCode = strings.ReplaceAll(pluginCode, "{{OnlineDDLStatusFailed}}", string(schema.OnlineDDLStatusFailed))
@@ -1612,6 +1751,7 @@ func (e *Executor) CancelMigration(ctx context.Context, uuid string, message str
 	if !e.isOpen {
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "online ddl is disabled")
 	}
+	log.Infof("CancelMigration: request to cancel %s with message: %v", uuid, message)
 
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
@@ -1625,6 +1765,7 @@ func (e *Executor) CancelMigration(ctx context.Context, uuid string, message str
 
 	switch onlineDDL.Status {
 	case schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed:
+		log.Infof("CancelMigration: migration %s is in non-cancellable status: %v", uuid, onlineDDL.Status)
 		return emptyResult, nil
 	case schema.OnlineDDLStatusQueued, schema.OnlineDDLStatusReady:
 		log.Infof("CancelMigration: cancelling %s with status: %v", uuid, onlineDDL.Status)
@@ -1641,6 +1782,8 @@ func (e *Executor) CancelMigration(ctx context.Context, uuid string, message str
 	if migrationFound {
 		log.Infof("CancelMigration: terminated %s with status: %v", uuid, onlineDDL.Status)
 		rowsAffected = 1
+	} else {
+		log.Infof("CancelMigration: migration %s wasn't found to be running", uuid)
 	}
 	if err != nil {
 		return result, err
@@ -1687,6 +1830,68 @@ func (e *Executor) CancelPendingMigrations(ctx context.Context, message string) 
 	return result, nil
 }
 
+func (e *Executor) validateThrottleParams(ctx context.Context, expireString string, ratioLiteral *sqlparser.Literal) (duration time.Duration, ratio float64, err error) {
+	duration = time.Hour * 24 * 365 * 100
+	if expireString != "" {
+		duration, err = time.ParseDuration(expireString)
+		if err != nil || duration < 0 {
+			return duration, ratio, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid EXPIRE value: %s. Try '120s', '30m', '1h', etc. Allowed units are (s)ec, (m)in, (h)hour", expireString)
+		}
+	}
+	ratio = 1.0
+	if ratioLiteral != nil {
+		ratio, err = strconv.ParseFloat(ratioLiteral.Val, 64)
+		if err != nil || ratio < 0 || ratio > 1 {
+			return duration, ratio, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid RATIO value: %s. Try any decimal number between '0.0' (no throttle) and `1.0` (fully throttled)", ratioLiteral.Val)
+		}
+	}
+	return duration, ratio, nil
+}
+
+// ThrottleMigration
+func (e *Executor) ThrottleMigration(ctx context.Context, uuid string, expireString string, ratioLiteral *sqlparser.Literal) (result *sqltypes.Result, err error) {
+	duration, ratio, err := e.validateThrottleParams(ctx, expireString, ratioLiteral)
+	if err != nil {
+		return nil, err
+	}
+	if err := e.lagThrottler.CheckIsReady(); err != nil {
+		return nil, err
+	}
+	_ = e.lagThrottler.ThrottleApp(uuid, time.Now().Add(duration), ratio)
+	return emptyResult, nil
+}
+
+// ThrottleAllMigrations
+func (e *Executor) ThrottleAllMigrations(ctx context.Context, expireString string, ratioLiteral *sqlparser.Literal) (result *sqltypes.Result, err error) {
+	duration, ratio, err := e.validateThrottleParams(ctx, expireString, ratioLiteral)
+	if err != nil {
+		return nil, err
+	}
+	if err := e.lagThrottler.CheckIsReady(); err != nil {
+		return nil, err
+	}
+	_ = e.lagThrottler.ThrottleApp(throttlerOnlineDDLApp, time.Now().Add(duration), ratio)
+	return emptyResult, nil
+}
+
+// UnthrottleMigration
+func (e *Executor) UnthrottleMigration(ctx context.Context, uuid string) (result *sqltypes.Result, err error) {
+	if err := e.lagThrottler.CheckIsReady(); err != nil {
+		return nil, err
+	}
+	_ = e.lagThrottler.UnthrottleApp(uuid)
+	return emptyResult, nil
+}
+
+// UnthrottleAllMigrations
+func (e *Executor) UnthrottleAllMigrations(ctx context.Context) (result *sqltypes.Result, err error) {
+	if err := e.lagThrottler.CheckIsReady(); err != nil {
+		return nil, err
+	}
+	_ = e.lagThrottler.UnthrottleApp(throttlerOnlineDDLApp)
+	return emptyResult, nil
+}
+
 // scheduleNextMigration attemps to schedule a single migration to run next.
 // possibly there are migrations to run.
 // The effect of this function is to move a migration from 'queued' state to 'ready' state, is all.
@@ -1722,6 +1927,7 @@ func (e *Executor) scheduleNextMigration(ctx context.Context) error {
 			// We only schedule a single migration in the execution of this function
 			onlyScheduleOneMigration.Do(func() {
 				err = e.updateMigrationStatus(ctx, uuid, schema.OnlineDDLStatusReady)
+				log.Infof("Executor.scheduleNextMigration: scheduling migration %s; err: %v", uuid, err)
 			})
 			if err != nil {
 				return err
@@ -2340,6 +2546,95 @@ func (e *Executor) executeAlterViewOnline(ctx context.Context, onlineDDL *schema
 	return nil
 }
 
+// addInstantAlgorithm adds or modifies the AlterTable's ALGORITHM to INSTANT
+func (e *Executor) addInstantAlgorithm(alterTable *sqlparser.AlterTable) {
+	instantOpt := sqlparser.AlgorithmValue("INSTANT")
+	for i, opt := range alterTable.AlterOptions {
+		if _, ok := opt.(sqlparser.AlgorithmValue); ok {
+			// replace an existing algorithm
+			alterTable.AlterOptions[i] = instantOpt
+			return
+		}
+	}
+	// append an algorithm
+	alterTable.AlterOptions = append(alterTable.AlterOptions, instantOpt)
+}
+
+// executeSpecialAlterDDLActionMigrationIfApplicable sees if the given migration can be executed via special execution path, that isn't a full blown online schema change process.
+func (e *Executor) executeSpecialAlterDDLActionMigrationIfApplicable(ctx context.Context, onlineDDL *schema.OnlineDDL) (specialMigrationExecuted bool, err error) {
+	// Before we jump on to strategies... Some ALTERs can be optimized without having to run through
+	// a full online schema change process. Let's find out if this is the case!
+	conn, err := dbconnpool.NewDBConnection(ctx, e.env.Config().DB.DbaWithDB())
+	if err != nil {
+		return false, err
+	}
+	defer conn.Close()
+	_, capableOf, _ := mysql.GetFlavor(conn.ServerVersion, nil)
+
+	specialPlan, err := e.analyzeSpecialAlterPlan(ctx, onlineDDL, capableOf)
+	if err != nil {
+		return false, err
+	}
+	if specialPlan == nil {
+		return false, nil
+	}
+	switch specialPlan.operation {
+	case instantDDLSpecialOperation:
+		e.addInstantAlgorithm(specialPlan.alterTable)
+		onlineDDL.SQL = sqlparser.CanonicalString(specialPlan.alterTable)
+		if _, err := e.executeDirectly(ctx, onlineDDL); err != nil {
+			return false, err
+		}
+	case dropRangePartitionSpecialOperation:
+		dropPartition := func() error {
+			artifactTableName, err := schema.GenerateGCTableName(schema.HoldTableGCState, newGCTableRetainTime())
+			if err != nil {
+				return err
+			}
+			if err := e.updateArtifacts(ctx, onlineDDL.UUID, artifactTableName); err != nil {
+				return err
+			}
+
+			// Apply CREATE TABLE for artifact table
+			if _, err := e.createTableLike(ctx, artifactTableName, onlineDDL, conn); err != nil {
+				return err
+			}
+			// Remove partitioning
+			parsed := sqlparser.BuildParsedQuery(sqlAlterTableRemovePartitioning, artifactTableName)
+			if _, err := conn.ExecuteFetch(parsed.Query, 0, false); err != nil {
+				return err
+			}
+			// Exchange with partition
+			partitionName := specialPlan.Detail("partition_name")
+			parsed = sqlparser.BuildParsedQuery(sqlAlterTableExchangePartition, onlineDDL.Table, partitionName, artifactTableName)
+			if _, err := conn.ExecuteFetch(parsed.Query, 0, false); err != nil {
+				return err
+			}
+			// Drop table's partition
+			parsed = sqlparser.BuildParsedQuery(sqlAlterTableDropPartition, onlineDDL.Table, partitionName)
+			if _, err := conn.ExecuteFetch(parsed.Query, 0, false); err != nil {
+				return err
+			}
+			return nil
+		}
+		if err := dropPartition(); err != nil {
+			return false, err
+		}
+	case addRangePartitionSpecialOperation:
+		if _, err := e.executeDirectly(ctx, onlineDDL); err != nil {
+			return false, err
+		}
+	default:
+		return false, nil
+	}
+	if err := e.updateMigrationSpecialPlan(ctx, onlineDDL.UUID, specialPlan.String()); err != nil {
+		return true, err
+	}
+	_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, progressPctFull, etaSecondsNow, rowsCopiedUnknown, emptyHint)
+	return true, nil
+}
+
+// executeAlterDDLActionMigration
 func (e *Executor) executeAlterDDLActionMigration(ctx context.Context, onlineDDL *schema.OnlineDDL) error {
 	failMigration := func(err error) error {
 		return e.failMigration(ctx, onlineDDL, err)
@@ -2367,8 +2662,19 @@ func (e *Executor) executeAlterDDLActionMigration(ctx context.Context, onlineDDL
 		}
 		return nil
 	}
+	// This is a real TABLE and not a VIEW
 
-	// This is a real TABLE
+	// Before we jump on to strategies... Some ALTERs can be optimized without having to run through
+	// a full online schema change process. Let's find out if this is the case!
+	specialMigrationExecuted, err := e.executeSpecialAlterDDLActionMigrationIfApplicable(ctx, onlineDDL)
+	if err != nil {
+		return failMigration(err)
+	}
+	if specialMigrationExecuted {
+		return nil
+	}
+
+	// OK, nothing special about this ALTER. Let's go ahead and execute it.
 	switch onlineDDL.Strategy {
 	case schema.DDLStrategyOnline, schema.DDLStrategyVitess:
 		go func() {
@@ -2516,9 +2822,9 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 				} else {
 					// a TABLE
 					ddlAction = sqlparser.AlterDDLAction
-					onlineDDL.SQL = diff.StatementString()
+					onlineDDL.SQL = diff.CanonicalStatementString()
 				}
-				_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, diff.StatementString())
+				_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, diff.CanonicalStatementString())
 			} else {
 				{
 					// table does not exist, so this declarative CREATE turns out to really be an actual CREATE. No further action is needed here.
@@ -2614,6 +2920,7 @@ func (e *Executor) runNextMigration(ctx context.Context) error {
 			onlineDDL.SQL = sqlparser.String(ddlStmt)
 		}
 	}
+	log.Infof("Executor.runNextMigration: migration %s is non conflicting and will be executed next", onlineDDL.UUID)
 	e.executeMigration(ctx, onlineDDL)
 	return nil
 }
@@ -2809,6 +3116,17 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
+	var currentUserThrottleRatio float64
+	if err := e.lagThrottler.CheckIsReady(); err == nil {
+		// No point in reviewing throttler info if it's not enabled&open
+		for _, app := range e.lagThrottler.ThrottledApps() {
+			if app.AppName == throttlerOnlineDDLApp {
+				currentUserThrottleRatio = app.Ratio
+				break
+			}
+		}
+	}
+
 	r, err := e.execQuery(ctx, sqlSelectRunningMigrations)
 	if err != nil {
 		return countRunnning, cancellable, err
@@ -2849,6 +3167,7 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 
 		uuidsFoundRunning[uuid] = true
 
+		_ = e.updateMigrationUserThrottleRatio(ctx, uuid, currentUserThrottleRatio)
 		switch onlineDDL.StrategySetting().Strategy {
 		case schema.DDLStrategyOnline, schema.DDLStrategyVitess:
 			{
@@ -3036,7 +3355,7 @@ func (e *Executor) vreplicationExec(ctx context.Context, tmClient tmclient.Table
 	e.initVreplicationDDLOnce.Do(func() {
 		// Ensure vreplication schema is up-to-date by invoking a query with non-existing columns.
 		// This will make vreplication run through its WithDDL schema changes.
-		_, _ = tmClient.VReplicationExec(ctx, tablet, sqlImpossibleSelectVreplication)
+		_, _ = tmClient.VReplicationExec(ctx, tablet, withddl.QueryToTriggerWithDDL)
 	})
 	return tmClient.VReplicationExec(ctx, tablet, query)
 }
@@ -3109,6 +3428,7 @@ func (e *Executor) gcArtifacts(ctx context.Context) error {
 		artifacts := row["artifacts"].ToString()
 		logPath := row["log_path"].ToString()
 
+		log.Infof("Executor.gcArtifacts: will GC artifacts for migration %s", uuid)
 		// Remove tables:
 		artifactTables := textutil.SplitDelimitedList(artifacts)
 
@@ -3117,6 +3437,7 @@ func (e *Executor) gcArtifacts(ctx context.Context) error {
 			// We wish to generate distinct timestamp values for each table in this UUID,
 			// because all tables will be renamed as _something_UUID_timestamp. Since UUID
 			// is shared for all artifacts in this loop, we differentiate via timestamp
+			log.Infof("Executor.gcArtifacts: will GC artifact %s for migration %s", artifactTable, uuid)
 			t := timeNow.Add(time.Duration(i) * time.Second).UTC()
 			if err := e.gcArtifactTable(ctx, artifactTable, uuid, t); err != nil {
 				return err
@@ -3143,6 +3464,7 @@ func (e *Executor) gcArtifacts(ctx context.Context) error {
 		if err := e.updateMigrationTimestamp(ctx, "cleanup_timestamp", uuid); err != nil {
 			return err
 		}
+		log.Infof("Executor.gcArtifacts: done migration %s", uuid)
 	}
 
 	return nil
@@ -3262,6 +3584,18 @@ func (e *Executor) updateArtifacts(ctx context.Context, uuid string, artifacts .
 
 func (e *Executor) clearArtifacts(ctx context.Context, uuid string) error {
 	query, err := sqlparser.ParseAndBind(sqlClearArtifacts,
+		sqltypes.StringBindVariable(uuid),
+	)
+	if err != nil {
+		return err
+	}
+	_, err = e.execQuery(ctx, query)
+	return err
+}
+
+func (e *Executor) updateMigrationSpecialPlan(ctx context.Context, uuid string, specialPlan string) error {
+	query, err := sqlparser.ParseAndBind(sqlUpdateSpecialPlan,
+		sqltypes.StringBindVariable(specialPlan),
 		sqltypes.StringBindVariable(uuid),
 	)
 	if err != nil {
@@ -3498,6 +3832,18 @@ func (e *Executor) updateMigrationStowawayTable(ctx context.Context, uuid string
 	return err
 }
 
+func (e *Executor) updateMigrationUserThrottleRatio(ctx context.Context, uuid string, ratio float64) error {
+	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationUserThrottleRatio,
+		sqltypes.Float64BindVariable(ratio),
+		sqltypes.StringBindVariable(uuid),
+	)
+	if err != nil {
+		return err
+	}
+	_, err = e.execQuery(ctx, query)
+	return err
+}
+
 // retryMigrationWhere retries a migration based on a given WHERE clause
 func (e *Executor) retryMigrationWhere(ctx context.Context, whereExpr string) (result *sqltypes.Result, err error) {
 	e.migrationMutex.Lock()
@@ -3546,6 +3892,7 @@ func (e *Executor) CleanupMigration(ctx context.Context, uuid string) (result *s
 	if !schema.IsOnlineDDLUUID(uuid) {
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "Not a valid migration ID in CLEANUP: %s", uuid)
 	}
+	log.Infof("CompleteMigration: request to cleanup migration %s", uuid)
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
@@ -3555,7 +3902,12 @@ func (e *Executor) CleanupMigration(ctx context.Context, uuid string) (result *s
 	if err != nil {
 		return nil, err
 	}
-	return e.execQuery(ctx, query)
+	rs, err := e.execQuery(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	log.Infof("CompleteMigration: migration %s marked as ready to clean up", uuid)
+	return rs, nil
 }
 
 // CompleteMigration clears the postpone_completion flag for a given migration, assuming it was set in the first place
@@ -3566,6 +3918,8 @@ func (e *Executor) CompleteMigration(ctx context.Context, uuid string) (result *
 	if !schema.IsOnlineDDLUUID(uuid) {
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "Not a valid migration ID in COMPLETE: %s", uuid)
 	}
+	log.Infof("CompleteMigration: request to complete migration %s", uuid)
+
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
@@ -3581,7 +3935,34 @@ func (e *Executor) CompleteMigration(ctx context.Context, uuid string) (result *
 		// if the file does not exist. An error here indicates a general system error of sorts.
 		return nil, err
 	}
-	return e.execQuery(ctx, query)
+	rs, err := e.execQuery(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	log.Infof("CompleteMigration: migration %s marked as unpostponed", uuid)
+	return rs, nil
+}
+
+func (e *Executor) submittedMigrationConflictsWithPendingMigrationInSingletonContext(
+	ctx context.Context, submittedMigration, pendingOnlineDDL *schema.OnlineDDL,
+) bool {
+	if pendingOnlineDDL.MigrationContext == submittedMigration.MigrationContext {
+		// same migration context. this is obviously allowed
+		return false
+	}
+	// Let's see if the pending migration is a revert:
+	if _, err := pendingOnlineDDL.GetRevertUUID(); err != nil {
+		// Not a revert. So the pending migration definitely conflicts with our migration.
+		return true
+	}
+
+	// The pending migration is a revert
+	if !pendingOnlineDDL.StrategySetting().IsSingletonContext() {
+		// Aha! So, our "conflict" is with a REVERT migration, which does _not_ have a -singleton-context
+		// flag. Because we want to allow REVERT migrations to run as concurrently as possible, we allow this scenario.
+		return false
+	}
+	return true
 }
 
 // SubmitMigration inserts a new migration request
@@ -3592,6 +3973,15 @@ func (e *Executor) SubmitMigration(
 	if !e.isOpen {
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "online ddl is disabled")
 	}
+	log.Infof("SubmitMigration: request to submit migration with statement: %0.50s...", sqlparser.CanonicalString(stmt))
+	if ddlStmt, ok := stmt.(sqlparser.DDLStatement); ok {
+		// This validation should have taken place on submission. However, the query may have mutated
+		// during transfer, and this validation is here to catch any malformed mutation.
+		if !ddlStmt.IsFullyParsed() {
+			return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "error parsing statement")
+		}
+	}
+
 	onlineDDL, err := schema.OnlineDDLFromCommentedStatement(stmt)
 	if err != nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Error submitting migration %s: %v", sqlparser.String(stmt), err)
@@ -3600,8 +3990,9 @@ func (e *Executor) SubmitMigration(
 	if err != nil {
 		return nil, err
 	}
-	revertedUUID, _ := onlineDDL.GetRevertUUID() // Empty value if the migration is not actually a REVERT. Safe to ignore error.
+	log.Infof("SubmitMigration: request to submit migration %s; action=%s, table=%s", onlineDDL.UUID, actionStr, onlineDDL.Table)
 
+	revertedUUID, _ := onlineDDL.GetRevertUUID() // Empty value if the migration is not actually a REVERT. Safe to ignore error.
 	retainArtifactsSeconds := int64((*retainOnlineDDLTables).Seconds())
 	query, err := sqlparser.ParseAndBind(sqlInsertMigration,
 		sqltypes.StringBindVariable(onlineDDL.UUID),
@@ -3657,9 +4048,10 @@ func (e *Executor) SubmitMigration(
 					if err != nil {
 						return err
 					}
-					if pendingOnlineDDL.MigrationContext != onlineDDL.MigrationContext {
-						return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "singleton migration rejected: found pending migration: %s in different context: %s", pendingUUID, pendingOnlineDDL.MigrationContext)
+					if e.submittedMigrationConflictsWithPendingMigrationInSingletonContext(ctx, onlineDDL, pendingOnlineDDL) {
+						return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "singleton-context migration rejected: found pending migration: %s in different context: %s", pendingUUID, pendingOnlineDDL.MigrationContext)
 					}
+					// no conflict? continue looking for other pending migrations
 				}
 			}
 			// OK to go! We can submit the migration:
@@ -3677,6 +4069,7 @@ func (e *Executor) SubmitMigration(
 			return nil, err
 		}
 	}
+	log.Infof("SubmitMigration: migration %s submitted", onlineDDL.UUID)
 
 	defer e.triggerNextCheckInterval()
 

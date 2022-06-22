@@ -256,6 +256,11 @@ func (client *localVtctldClient) GetKeyspaces(ctx context.Context, in *vtctldata
 	return client.s.GetKeyspaces(ctx, in)
 }
 
+// GetPermissions is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) GetPermissions(ctx context.Context, in *vtctldatapb.GetPermissionsRequest, opts ...grpc.CallOption) (*vtctldatapb.GetPermissionsResponse, error) {
+	return client.s.GetPermissions(ctx, in)
+}
+
 // GetRoutingRules is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) GetRoutingRules(ctx context.Context, in *vtctldatapb.GetRoutingRulesRequest, opts ...grpc.CallOption) (*vtctldatapb.GetRoutingRulesResponse, error) {
 	return client.s.GetRoutingRules(ctx, in)
@@ -442,14 +447,14 @@ func (client *localVtctldClient) RunHealthCheck(ctx context.Context, in *vtctlda
 	return client.s.RunHealthCheck(ctx, in)
 }
 
+// SetKeyspaceDurabilityPolicy is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) SetKeyspaceDurabilityPolicy(ctx context.Context, in *vtctldatapb.SetKeyspaceDurabilityPolicyRequest, opts ...grpc.CallOption) (*vtctldatapb.SetKeyspaceDurabilityPolicyResponse, error) {
+	return client.s.SetKeyspaceDurabilityPolicy(ctx, in)
+}
+
 // SetKeyspaceServedFrom is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) SetKeyspaceServedFrom(ctx context.Context, in *vtctldatapb.SetKeyspaceServedFromRequest, opts ...grpc.CallOption) (*vtctldatapb.SetKeyspaceServedFromResponse, error) {
 	return client.s.SetKeyspaceServedFrom(ctx, in)
-}
-
-// SetKeyspaceShardingInfo is part of the vtctlservicepb.VtctldClient interface.
-func (client *localVtctldClient) SetKeyspaceShardingInfo(ctx context.Context, in *vtctldatapb.SetKeyspaceShardingInfoRequest, opts ...grpc.CallOption) (*vtctldatapb.SetKeyspaceShardingInfoResponse, error) {
-	return client.s.SetKeyspaceShardingInfo(ctx, in)
 }
 
 // SetShardIsPrimaryServing is part of the vtctlservicepb.VtctldClient interface.

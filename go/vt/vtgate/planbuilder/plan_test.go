@@ -28,6 +28,8 @@ import (
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/test/utils"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -37,8 +39,6 @@ import (
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
-
-	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -190,8 +190,7 @@ const (
 )
 
 func makeTestOutput(t *testing.T) string {
-	testOutputTempDir, err := os.MkdirTemp("testdata", "plan_test")
-	require.NoError(t, err)
+	testOutputTempDir := utils.MakeTestOutput(t, "testdata", "plan_test")
 
 	t.Cleanup(func() {
 		if !t.Failed() {
@@ -253,6 +252,42 @@ func TestSysVarSetDisabled(t *testing.T) {
 func TestOne(t *testing.T) {
 	vschema := &vschemaWrapper{
 		v: loadSchema(t, "schema_test.json", true),
+	}
+
+	testFile(t, "onecase.txt", "", vschema)
+}
+
+func TestOneWithMainAsDefault(t *testing.T) {
+	vschema := &vschemaWrapper{
+		v: loadSchema(t, "schema_test.json", true),
+		keyspace: &vindexes.Keyspace{
+			Name:    "main",
+			Sharded: false,
+		},
+	}
+
+	testFile(t, "onecase.txt", "", vschema)
+}
+
+func TestOneWithSecondUserAsDefault(t *testing.T) {
+	vschema := &vschemaWrapper{
+		v: loadSchema(t, "schema_test.json", true),
+		keyspace: &vindexes.Keyspace{
+			Name:    "second_user",
+			Sharded: true,
+		},
+	}
+
+	testFile(t, "onecase.txt", "", vschema)
+}
+
+func TestOneWithUserAsDefault(t *testing.T) {
+	vschema := &vschemaWrapper{
+		v: loadSchema(t, "schema_test.json", true),
+		keyspace: &vindexes.Keyspace{
+			Name:    "user",
+			Sharded: true,
+		},
 	}
 
 	testFile(t, "onecase.txt", "", vschema)
@@ -372,6 +407,36 @@ func TestWithDefaultKeyspaceFromFile(t *testing.T) {
 	testFile(t, "call_cases.txt", testOutputTempDir, vschema)
 }
 
+func TestWithDefaultKeyspaceFromFileSharded(t *testing.T) {
+	// We are testing this separately so we can set a default keyspace
+	vschema := &vschemaWrapper{
+		v: loadSchema(t, "schema_test.json", true),
+		keyspace: &vindexes.Keyspace{
+			Name:    "second_user",
+			Sharded: true,
+		},
+		tabletType: topodatapb.TabletType_PRIMARY,
+	}
+
+	testOutputTempDir := makeTestOutput(t)
+	testFile(t, "select_cases_with_default.txt", testOutputTempDir, vschema)
+}
+
+func TestWithUserDefaultKeyspaceFromFileSharded(t *testing.T) {
+	// We are testing this separately so we can set a default keyspace
+	vschema := &vschemaWrapper{
+		v: loadSchema(t, "schema_test.json", true),
+		keyspace: &vindexes.Keyspace{
+			Name:    "user",
+			Sharded: true,
+		},
+		tabletType: topodatapb.TabletType_PRIMARY,
+	}
+
+	testOutputTempDir := makeTestOutput(t)
+	testFile(t, "select_cases_with_user_as_default.txt", testOutputTempDir, vschema)
+}
+
 func TestWithSystemSchemaAsDefaultKeyspace(t *testing.T) {
 	// We are testing this separately so we can set a default keyspace
 	vschema := &vschemaWrapper{
@@ -440,6 +505,24 @@ type vschemaWrapper struct {
 	version       plancontext.PlannerVersion
 }
 
+func (vw *vschemaWrapper) GetVSchema() *vindexes.VSchema {
+	return vw.v
+}
+
+func (vw *vschemaWrapper) GetSrvVschema() *vschemapb.SrvVSchema {
+	return &vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"user": {
+				Sharded:  true,
+				Vindexes: map[string]*vschemapb.Vindex{},
+				Tables: map[string]*vschemapb.Table{
+					"user": {},
+				},
+			},
+		},
+	}
+}
+
 func (vw *vschemaWrapper) ConnCollation() collations.ID {
 	return collations.Unknown
 }
@@ -456,6 +539,17 @@ func (vw *vschemaWrapper) AllKeyspace() ([]*vindexes.Keyspace, error) {
 		return nil, errors.New("keyspace not available")
 	}
 	return []*vindexes.Keyspace{vw.keyspace}, nil
+}
+
+// FindKeyspace implements the VSchema interface
+func (vw *vschemaWrapper) FindKeyspace(keyspace string) (*vindexes.Keyspace, error) {
+	if vw.keyspace == nil {
+		return nil, errors.New("keyspace not available")
+	}
+	if vw.keyspace.Name == keyspace {
+		return vw.keyspace, nil
+	}
+	return nil, nil
 }
 
 func (vw *vschemaWrapper) Planner() plancontext.PlannerVersion {

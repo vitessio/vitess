@@ -152,7 +152,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/backup/xtrabackup"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "20",
+			"Shard": "xb_backup",
 			"RetryMax": 2,
 			"Tags": []
 		},
@@ -161,7 +161,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/backup/xtrabackupstream"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "20",
+			"Shard": "xb_backup",
 			"RetryMax": 1,
 			"Tags": []
 		},
@@ -170,7 +170,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/cellalias"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "12",
+			"Shard": "13",
 			"RetryMax": 3,
 			"Tags": []
 		},
@@ -647,7 +647,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "17",
+			"Shard": "vtgate_general_heavy",
 			"RetryMax": 2,
 			"Tags": []
 		},
@@ -694,7 +694,7 @@
 			"Manual": false,
 			"Shard": "vtgate_queries",
 			"RetryMax": 2,
-			"Tags": ["upgrade_downgrade_query_serving"]
+			"Tags": ["upgrade_downgrade_query_serving_queries"]
 		},
 		"vtgate_queries_subquery": {
 			"File": "unused.go",
@@ -703,7 +703,7 @@
 			"Manual": false,
 			"Shard": "vtgate_queries",
 			"RetryMax": 2,
-			"Tags": ["upgrade_downgrade_query_serving"]
+			"Tags": ["upgrade_downgrade_query_serving_queries"]
 		},
 		"vtgate_queries_union": {
 			"File": "unused.go",
@@ -712,7 +712,7 @@
 			"Manual": false,
 			"Shard": "vtgate_queries",
 			"RetryMax": 2,
-			"Tags": ["upgrade_downgrade_query_serving"]
+			"Tags": ["upgrade_downgrade_query_serving_queries"]
 		},
 		"vtgate_queries_insert": {
 			"File": "unused.go",
@@ -748,7 +748,7 @@
 			"Manual": false,
 			"Shard": "vtgate_schema",
 			"RetryMax": 1,
-			"Tags": ["upgrade_downgrade_query_serving"]
+			"Tags": ["upgrade_downgrade_query_serving_schema"]
 		},
 		"vtgate_schematracker_loadkeyspace": {
 			"File": "unused.go",
@@ -775,7 +775,16 @@
 			"Manual": false,
 			"Shard": "vtgate_schema_tracker",
 			"RetryMax": 1,
-			"Tags": ["upgrade_downgrade_query_serving"]
+			"Tags": ["upgrade_downgrade_query_serving_schema"]
+		},
+		"vtgate_schematracker_sharded_prs": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/schematracker/sharded_prs"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vtgate_schema_tracker",
+			"RetryMax": 1,
+			"Tags": ["upgrade_downgrade_query_serving_schema"]
 		},
 		"vtgate_schematracker_unsharded": {
 			"File": "unused.go",
@@ -784,7 +793,7 @@
 			"Manual": false,
 			"Shard": "vtgate_schema_tracker",
 			"RetryMax": 1,
-			"Tags": ["upgrade_downgrade_query_serving"]
+			"Tags": ["upgrade_downgrade_query_serving_schema"]
 		},
 		"vtgate_mysql80": {
 			"File": "unused.go",
@@ -809,7 +818,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/sequence"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "17",
+			"Shard": "vtgate_general_heavy",
 			"RetryMax": 1,
 			"Tags": []
 		},
@@ -834,6 +843,24 @@
 		"vtgate_reserved_conn2": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/reservedconn/reconnect2"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vtgate_reservedconn",
+			"RetryMax": 1,
+			"Tags": []
+		},
+		"vtgate_reserved_conn3": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/reservedconn/reconnect3"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vtgate_reservedconn",
+			"RetryMax": 1,
+			"Tags": []
+		},
+		"vtgate_reserved_conn4": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/reservedconn/reconnect4"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_reservedconn",
@@ -867,6 +894,15 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
+		"vtgate_transaction_single": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/transaction/single"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vtgate_transaction",
+			"RetryMax": 1,
+			"Tags": []
+		},
 		"vtgate_transaction_partial_exec": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/partialfailure"],
@@ -892,7 +928,7 @@
 			"Manual": false,
 			"Shard": "vtgate_vschema",
 			"RetryMax": 1,
-			"Tags": ["upgrade_downgrade_query_serving"]
+			"Tags": ["upgrade_downgrade_query_serving_schema"]
 		},
 		"vtgate_readafterwrite": {
 			"File": "unused.go",
@@ -908,7 +944,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/createdb_plugin"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "17",
+			"Shard": "vtgate_general_heavy",
 			"RetryMax": 1,
 			"Tags": []
 		},
@@ -971,7 +1007,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/errors_as_warnings"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "17",
+			"Shard": "vtgate_general_heavy",
 			"RetryMax": 1,
 			"Tags": []
 		},
@@ -980,7 +1016,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/prefixfanout"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "vtgate_vindex",
+			"Shard": "vtgate_vindex_heavy",
 			"RetryMax": 1,
 			"Tags": []
 		},
@@ -989,7 +1025,16 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/vindex_bindvars"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "vtgate_vindex",
+			"Shard": "vtgate_vindex_heavy",
+			"RetryMax": 2,
+			"Tags": []
+		},
+		"vindex_secondary": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/sec_vind"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vtgate_vindex_heavy",
 			"RetryMax": 2,
 			"Tags": []
 		},
@@ -1067,6 +1112,15 @@
 			"RetryMax": 2,
 			"Tags": []
 		},
+		"vreplication_copy_throttling": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestVreplicationCopyThrottling"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vreplication_basic",
+			"RetryMax": 2,
+			"Tags": []
+		},
 		"vstream_failover": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "VStreamFailover"],
@@ -1130,6 +1184,42 @@
 			"RetryMax": 3,
 			"Tags": []
 		},
+		"vtorc_readtopologyinstance": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtorc/readtopologyinstance"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vtorc",
+			"RetryMax": 3,
+			"Tags": []
+		},
+		"vtorc_primary_failure_8.0": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtorc/primaryfailure"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vtorc_8.0",
+			"RetryMax": 3,
+			"Tags": []
+		},
+		"vtorc_graceful_takeover_8.0": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtorc/gracefultakeover"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vtorc_8.0",
+			"RetryMax": 3,
+			"Tags": []
+		},
+		"vtorc_general_8.0": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtorc/general"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vtorc_8.0",
+			"RetryMax": 3,
+			"Tags": []
+		},
 		"vault": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vault"],
@@ -1163,6 +1253,24 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_migrate",
+			"RetryMax": 1,
+			"Tags": []
+		},
+		"vdiff2": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestVDiff2"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vreplication_migrate",
+			"RetryMax": 1,
+			"Tags": []
+		},
+		"topo_connection_cache": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/topoconncache", "-run", "TestVtctldListAllTablets"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "topo_connection_cache",
 			"RetryMax": 1,
 			"Tags": []
 		}

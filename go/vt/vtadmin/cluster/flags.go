@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/vtadmin/cache"
 )
 
 // FlagsByImpl groups a set of flags by discovery implementation. Its mapping is
@@ -213,6 +214,43 @@ func parseOne(cfg *Config, name string, val string) error {
 			}
 
 			if err := cfg.WorkflowReadPoolConfig.parseFlag(strings.TrimPrefix(name, "workflow-read-pool-"), val); err != nil {
+				return fmt.Errorf("error parsing %s: %w", name, err)
+			}
+		case strings.HasPrefix(name, "emergency-failover-pool-"):
+			if cfg.EmergencyFailoverPoolConfig == nil {
+				cfg.EmergencyFailoverPoolConfig = &RPCPoolConfig{
+					Size:        -1,
+					WaitTimeout: -1,
+				}
+			}
+
+			if err := cfg.EmergencyFailoverPoolConfig.parseFlag(strings.TrimPrefix(name, "emergency-failover-pool-"), val); err != nil {
+				return fmt.Errorf("error parsing %s: %w", name, err)
+			}
+		case strings.HasPrefix(name, "failover-pool-"):
+			if cfg.FailoverPoolConfig == nil {
+				cfg.FailoverPoolConfig = &RPCPoolConfig{
+					Size:        -1,
+					WaitTimeout: -1,
+				}
+			}
+
+			if err := cfg.FailoverPoolConfig.parseFlag(strings.TrimPrefix(name, "failover-pool-"), val); err != nil {
+				return fmt.Errorf("error parsing %s: %w", name, err)
+			}
+		case strings.HasPrefix(name, "schema-cache-"):
+			if cfg.SchemaCacheConfig == nil {
+				cfg.SchemaCacheConfig = &cache.Config{
+					DefaultExpiration:                -1,
+					CleanupInterval:                  -1,
+					BackfillRequestTTL:               -1,
+					BackfillRequestDuplicateInterval: -1,
+					BackfillQueueSize:                -1,
+					BackfillEnqueueWaitTime:          -1,
+				}
+			}
+
+			if err := parseCacheConfigFlag(cfg.SchemaCacheConfig, strings.TrimPrefix(name, "schema-cache-"), val); err != nil {
 				return fmt.Errorf("error parsing %s: %w", name, err)
 			}
 		default:

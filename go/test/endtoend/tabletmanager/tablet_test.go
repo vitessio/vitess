@@ -17,6 +17,7 @@ limitations under the License.
 package tabletmanager
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
@@ -44,7 +45,7 @@ func TestEnsureDB(t *testing.T) {
 
 	// Make it the primary.
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("TabletExternallyReparented", tablet.Alias)
-	require.NoError(t, err)
+	require.EqualError(t, err, "exit status 1")
 
 	// It is still NOT_SERVING because the db is read-only.
 	assert.Equal(t, "NOT_SERVING", tablet.VttabletProcess.GetTabletStatus())
@@ -110,4 +111,39 @@ func TestLocalMetadata(t *testing.T) {
 	// Reset the VtTabletExtraArgs and kill tablets
 	clusterInstance.VtTabletExtraArgs = []string{}
 	killTablets(t, rTablet, rTablet2)
+}
+
+// TestResetReplicationParameters tests that the RPC ResetReplicationParameters works as intended.
+func TestResetReplicationParameters(t *testing.T) {
+	defer cluster.PanicHandler(t)
+
+	// Create new tablet
+	tablet := clusterInstance.NewVttabletInstance("replica", 0, "")
+	tablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory)
+	err := tablet.MysqlctlProcess.Start()
+	require.NoError(t, err)
+
+	log.Info(fmt.Sprintf("Started vttablet %v", tablet))
+	// Start vttablet process as replica. It won't be able to serve because there's no db.
+	err = clusterInstance.StartVttablet(tablet, "NOT_SERVING", false, cell, "dbtest", hostname, "0")
+	require.NoError(t, err)
+
+	// Set a replication source on the tablet and start replication
+	_, err = tablet.VttabletProcess.QueryTablet("stop slave;change master to master_host = 'localhost', master_port = 123;start slave;", keyspaceName, false)
+	require.NoError(t, err)
+
+	// Check the replica status.
+	res, err := tablet.VttabletProcess.QueryTablet("show slave status", keyspaceName, false)
+	require.NoError(t, err)
+	// This is expected to return 1 row result
+	require.Len(t, res.Rows, 1)
+
+	// Reset the replication parameters on the tablet
+	err = tmcResetReplicationParameters(context.Background(), tablet.GrpcPort)
+	require.NoError(t, err)
+
+	// Recheck the replica status and this time is should be empty
+	res, err = tablet.VttabletProcess.QueryTablet("show slave status", keyspaceName, false)
+	require.NoError(t, err)
+	require.Len(t, res.Rows, 0)
 }

@@ -85,6 +85,12 @@ message MaterializeSettings {
   string external_cluster = 8;
   // MaterializationIntent is used to identify the reason behind the materialization workflow: eg. MoveTables, CreateLookupVindex
   MaterializationIntent materialization_intent = 9;
+  // SourceTimeZone is the time zone in which datetimes on the source were stored, provided as an option in MoveTable
+  string source_time_zone =10;
+  // TargetTimeZone is not currently specifiable by the user, defaults to UTC for the forward workflows
+  // and to the SourceTimeZone in reverse workflows
+  string target_time_zone = 11;
+
 }
 
 /* Data types for VtctldServer */
@@ -288,11 +294,11 @@ message CreateKeyspaceRequest {
   // AllowEmptyVSchema allows a keyspace to be created with no vschema.
   bool allow_empty_v_schema = 3;
 
-  // ShardingColumnName specifies the column to use for sharding operations.
-  string sharding_column_name = 4;
-  // ShardingColumnType specifies the type of the column to use for sharding
-  // operations.
-  topodata.KeyspaceIdType sharding_column_type = 5;
+  // OBSOLETE string sharding_column_name = 4;
+  reserved 4;
+
+  // OBSOLETE topodata.KeyspaceIdType sharding_column_type = 5;
+  reserved 5;
 
   // ServedFroms specifies a set of db_type:keyspace pairs used to serve
   // traffic for the keyspace.
@@ -306,6 +312,9 @@ message CreateKeyspaceRequest {
   // SnapshotTime specifies the snapshot time for this keyspace. It is required
   // to create a SNAPSHOT keyspace.
   vttime.Time snapshot_time = 9;
+  // DurabilityPolicy is the durability policy to be
+  // used for this keyspace.
+  string durability_policy = 10;
 }
 
 message CreateKeyspaceResponse {
@@ -555,6 +564,14 @@ message GetKeyspaceResponse {
   Keyspace keyspace = 1;
 }
 
+message GetPermissionsRequest {
+  topodata.TabletAlias tablet_alias = 1;
+}
+
+message GetPermissionsResponse {
+  tabletmanagerdata.Permissions permissions = 1;
+}
+
 message GetRoutingRulesRequest {
 }
 
@@ -579,6 +596,9 @@ message GetSchemaRequest {
   // rather than full schema information for each table. It is ignored if
   // TableNamesOnly is set to true.
   bool table_sizes_only = 6;
+  // TableSchemaOnly specifies whether to limit the results to just table/view
+  // schema definition (CREATE TABLE/VIEW statements) and skip column/field information
+  bool table_schema_only = 7;
 }
 
 message GetSchemaResponse {
@@ -790,6 +810,8 @@ message RefreshStateByShardRequest {
 
 message RefreshStateByShardResponse {
   bool is_partial_refresh = 1;
+  // This explains why we had a partial refresh (if we did)
+  string partial_refresh_details = 2;
 }
 
 message ReloadSchemaRequest {
@@ -907,6 +929,16 @@ message RunHealthCheckRequest {
 message RunHealthCheckResponse {
 }
 
+message SetKeyspaceDurabilityPolicyRequest {
+  string keyspace = 1;
+  string durability_policy = 2;
+}
+
+message SetKeyspaceDurabilityPolicyResponse {
+  // Keyspace is the updated keyspace record.
+  topodata.Keyspace keyspace = 1;
+}
+
 message SetKeyspaceServedFromRequest {
   string keyspace = 1;
   topodata.TabletType tablet_type = 2;
@@ -922,8 +954,10 @@ message SetKeyspaceServedFromResponse {
 
 message SetKeyspaceShardingInfoRequest {
   string keyspace = 1;
-  string column_name = 2;
-  topodata.KeyspaceIdType column_type = 3;
+  // OBSOLETE string column_name = 2;
+  reserved 2;
+  // OBSOLETE topodata.KeyspaceIdType column_type = 3;
+  reserved 3;
   bool force = 4;
 }
 

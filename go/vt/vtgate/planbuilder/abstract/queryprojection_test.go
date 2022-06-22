@@ -39,19 +39,16 @@ func TestQP(t *testing.T) {
 			sql: "select * from user",
 		},
 		{
-			sql:    "select 1, count(1) from user",
-			expErr: "In aggregated query without GROUP BY, expression of SELECT list contains nonaggregated column '1'; this is incompatible with sql_mode=only_full_group_by",
+			sql: "select 1, count(1) from user",
 		},
 		{
 			sql: "select max(id) from user",
 		},
 		{
-			sql:    "select max(a, b) from user",
-			expErr: "aggregate functions take a single argument 'max(a, b)'",
-		},
-		{
-			sql:    "select 1, count(1) from user order by 1",
-			expErr: "In aggregated query without GROUP BY, expression of SELECT list contains nonaggregated column '1'; this is incompatible with sql_mode=only_full_group_by",
+			sql: "select 1, count(1) from user order by 1",
+			expOrder: []OrderBy{
+				{Inner: &sqlparser.Order{Expr: sqlparser.NewIntLiteral("1")}, WeightStrExpr: sqlparser.NewIntLiteral("1")},
+			},
 		},
 		{
 			sql: "select id from user order by col, id, 1",
@@ -67,7 +64,7 @@ func TestQP(t *testing.T) {
 				{
 					Inner: &sqlparser.Order{Expr: sqlparser.NewColName("full_name")},
 					WeightStrExpr: &sqlparser.FuncExpr{
-						Name: sqlparser.NewColIdent("CONCAT"),
+						Name: sqlparser.NewIdentifierCI("CONCAT"),
 						Exprs: sqlparser.SelectExprs{
 							&sqlparser.AliasedExpr{Expr: sqlparser.NewColName("last_name")},
 							&sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral(", ")},
@@ -91,7 +88,7 @@ func TestQP(t *testing.T) {
 			_, err = semantics.Analyze(sel, "", &semantics.FakeSI{})
 			require.NoError(t, err)
 
-			qp, err := CreateQPFromSelect(sel, semantics.EmptySemTable())
+			qp, err := CreateQPFromSelect(sel)
 			if tcase.expErr != "" {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), tcase.expErr)
@@ -198,7 +195,7 @@ func TestQPSimplifiedExpr(t *testing.T) {
 			_, err = semantics.Analyze(sel, "", &semantics.FakeSI{})
 			require.NoError(t, err)
 
-			qp, err := CreateQPFromSelect(sel, semantics.EmptySemTable())
+			qp, err := CreateQPFromSelect(sel)
 			require.NoError(t, err)
 			require.Equal(t, tc.expected[1:], qp.toString())
 		})

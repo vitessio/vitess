@@ -37,7 +37,6 @@ import (
 	ometrics "vitess.io/vitess/go/vt/orchestrator/metrics"
 	"vitess.io/vitess/go/vt/orchestrator/process"
 	"vitess.io/vitess/go/vt/orchestrator/util"
-	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 )
 
 const (
@@ -51,8 +50,6 @@ var discoveryQueue *discovery.Queue
 var snapshotDiscoveryKeys chan inst.InstanceKey
 var snapshotDiscoveryKeysMutex sync.Mutex
 var hasReceivedSIGTERM int32
-var ersInProgressMutex sync.Mutex
-var ersInProgress bool
 
 var discoveriesCounter = metrics.NewCounter()
 var failedDiscoveriesCounter = metrics.NewCounter()
@@ -416,7 +413,6 @@ func ContinuousDiscovery() {
 	go ometrics.InitMetrics()
 	go acceptSignals()
 	go kv.InitKVStores()
-	reparentutil.SetDurabilityPolicy(config.Config.Durability)
 
 	if *config.RuntimeCLIFlags.GrabElection {
 		process.GrabElection()
@@ -506,6 +502,7 @@ func ContinuousDiscovery() {
 				}
 			}()
 		case <-tabletTopoTick:
+			go RefreshAllKeyspaces()
 			go RefreshTablets(false /* forceRefresh */)
 		}
 	}

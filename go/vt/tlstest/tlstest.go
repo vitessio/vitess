@@ -19,108 +19,145 @@ limitations under the License.
 package tlstest
 
 import (
+	"bytes"
+	"crypto"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
+	"errors"
 	"fmt"
+	"math/big"
+	"net"
 	"os"
-	"os/exec"
 	"path"
+	"strconv"
+	"time"
 
 	"vitess.io/vitess/go/vt/log"
 )
 
 const (
 	// CA is the name of the CA toplevel cert.
-	CA = "ca"
-
-	caConfigTemplate = `
-[ ca ]
-default_ca = default_ca
-
-[ default_ca ]
-database = %s
-default_md = default
-default_crl_days = 30
-
-[ req ]
- default_bits           = 4096
- default_keyfile        = keyfile.pem
- distinguished_name     = req_distinguished_name
- attributes             = req_attributes
- x509_extensions       = req_ext
- prompt                 = no
- output_password        = mypass
-[ req_distinguished_name ]
- C                      = US
- ST                     = California
- L                      = Mountain View
- O                      = Vitessio
- OU                     = Vitess
- CN                     = CA
- emailAddress           = test@email.address
-[ req_attributes ]
- challengePassword      = A challenge password
-[ req_ext ]
- basicConstraints       = CA:TRUE
-
-`
-
-	certConfig = `
-[ req ]
- default_bits           = 4096
- default_keyfile        = keyfile.pem
- distinguished_name     = req_distinguished_name
- attributes             = req_attributes
- req_extensions        = req_ext
- prompt                 = no
- output_password        = mypass
-[ req_distinguished_name ]
- C                      = US
- ST                     = California
- L                      = Mountain View
- O                      = Vitessio
- OU                     = Vitess
- CN                     = %s
- emailAddress           = test@email.address
-[ req_attributes ]
- challengePassword      = A challenge password
-[ req_ext ]
- basicConstraints       = CA:TRUE
- subjectAltName         = @alternate_names
- extendedKeyUsage       =serverAuth,clientAuth
-[ alternate_names ]
- DNS.1                  = localhost
- DNS.2                  = 127.0.0.1
- DNS.3                  = %s
-`
+	CA          = "ca"
+	permissions = 0700
 )
 
-// openssl runs the openssl binary with the provided command.
-func openssl(argv ...string) {
-	cmd := exec.Command("openssl", argv...)
-	output, err := cmd.CombinedOutput()
+func loadCert(certPath string) (*x509.Certificate, error) {
+	certData, err := os.ReadFile(certPath)
 	if err != nil {
-		if len(output) > 0 {
-			log.Errorf("openssl %v returned:\n%v", argv, string(output))
-		}
-		log.Fatalf("openssl %v failed: %v", argv, err)
+		return nil, err
+	}
+
+	block, _ := pem.Decode(certData)
+	if block == nil {
+		return nil, errors.New("failed to parse certificate PEM")
+	}
+	return x509.ParseCertificate(block.Bytes)
+}
+
+func saveCert(certificate *x509.Certificate, certPath string) error {
+	out := &bytes.Buffer{}
+	err := pem.Encode(out, &pem.Block{Type: "CERTIFICATE", Bytes: certificate.Raw})
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(certPath, out.Bytes(), permissions)
+}
+
+func generateKey() (crypto.PrivateKey, error) {
+	return ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+}
+
+func loadKey(keyPath string) (crypto.PrivateKey, error) {
+	keyData, err := os.ReadFile(keyPath)
+	if err != nil {
+		return nil, err
+	}
+
+	block, _ := pem.Decode(keyData)
+	if block == nil {
+		return nil, errors.New("failed to parse key PEM")
+	}
+
+	switch block.Type {
+	case "PRIVATE KEY":
+		return x509.ParsePKCS8PrivateKey(block.Bytes)
+	case "RSA PRIVATE KEY":
+		return x509.ParsePKCS1PrivateKey(block.Bytes)
+	case "EC PRIVATE KEY":
+		return x509.ParseECPrivateKey(block.Bytes)
+	default:
+		return nil, fmt.Errorf("unknown private key format: %+v", block.Type)
 	}
 }
 
-// createKeyDBAndCAConfig creates a key database and ca config file
-// for the passed in CA (possibly an intermediate CA)
-func createKeyDBAndCAConfig(root, parent string) {
-	databasePath := path.Join(root, parent+"-keys.db")
-	if _, err := os.Stat(databasePath); os.IsNotExist(err) {
-		if err := os.WriteFile(databasePath, []byte{}, os.ModePerm); err != nil {
-			log.Fatalf("cannot write file %v: %v", databasePath, err)
-		}
+func saveKey(key crypto.PrivateKey, keyPath string) error {
+	keyData, err := x509.MarshalPKCS8PrivateKey(key)
+	if err != nil {
+		return err
+	}
+	out := &bytes.Buffer{}
+	err = pem.Encode(out, &pem.Block{Type: "PRIVATE KEY", Bytes: keyData})
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(keyPath, out.Bytes(), permissions)
+}
+
+// pubkey is an interface to get a public key from a private key
+// The Go specification for a private key defines that this always
+// exists, although there's no interface for it since it would break
+// backwards compatibility. See https://pkg.go.dev/crypto#PrivateKey
+type pubKey interface {
+	Public() crypto.PublicKey
+}
+
+func publicKey(priv crypto.PrivateKey) crypto.PublicKey {
+	return priv.(pubKey).Public()
+}
+
+func signCert(parent *x509.Certificate, parentPriv crypto.PrivateKey, certPub crypto.PublicKey, commonName string, serial int64, ca bool) (*x509.Certificate, error) {
+	keyUsage := x509.KeyUsageDigitalSignature
+	var extKeyUsage []x509.ExtKeyUsage
+	var dnsNames []string
+	var ipAddresses []net.IP
+
+	if ca {
+		keyUsage = keyUsage | x509.KeyUsageCRLSign | x509.KeyUsageCertSign
+	} else {
+		extKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth}
+		dnsNames = []string{"localhost", commonName}
+		ipAddresses = []net.IP{net.ParseIP("127.0.0.1"), net.ParseIP("::1")}
 	}
 
-	config := path.Join(root, parent+"-ca.config")
-	if _, err := os.Stat(config); os.IsNotExist(err) {
-		if err := os.WriteFile(config, []byte(fmt.Sprintf(caConfigTemplate, databasePath)), os.ModePerm); err != nil {
-			log.Fatalf("cannot write file %v: %v", config, err)
-		}
+	template := x509.Certificate{
+		SerialNumber: big.NewInt(serial),
+		Subject: pkix.Name{
+			CommonName: commonName,
+		},
+		NotBefore:             time.Now().Add(-30 * time.Second),
+		NotAfter:              time.Now().Add(24 * time.Hour),
+		KeyUsage:              keyUsage,
+		ExtKeyUsage:           extKeyUsage,
+		BasicConstraintsValid: true,
+		IsCA:                  ca,
+		DNSNames:              dnsNames,
+		IPAddresses:           ipAddresses,
 	}
+
+	// No parent defined means we create a self signed one.
+	if parent == nil {
+		parent = &template
+	}
+
+	certificate, err := x509.CreateCertificate(rand.Reader, &template, parent, certPub, parentPriv)
+	if err != nil {
+		return nil, err
+	}
+	return x509.ParseCertificate(certificate)
 }
 
 // CreateCA creates the toplevel 'ca' certificate and key, and places it
@@ -128,17 +165,68 @@ func createKeyDBAndCAConfig(root, parent string) {
 // directory.
 func CreateCA(root string) {
 	log.Infof("Creating test root CA in %v", root)
-	key := path.Join(root, "ca-key.pem")
-	cert := path.Join(root, "ca-cert.pem")
-	config := path.Join(root, "ca-ca.config")
-	createKeyDBAndCAConfig(root, "ca")
+	keyPath := path.Join(root, "ca-key.pem")
+	certPath := path.Join(root, "ca-cert.pem")
 
-	openssl("genrsa", "-out", key)
+	priv, err := generateKey()
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	openssl("req", "-new", "-x509", "-nodes", "-days", "3600", "-batch",
-		"-config", config,
-		"-key", key,
-		"-out", cert)
+	err = saveKey(priv, keyPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	ca, err := signCert(nil, priv, publicKey(priv), CA, 1, true)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = saveCert(ca, certPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+func CreateIntermediateCA(root, parent, serial, name, commonName string) {
+	caKeyPath := path.Join(root, parent+"-key.pem")
+	caCertPath := path.Join(root, parent+"-cert.pem")
+	keyPath := path.Join(root, name+"-key.pem")
+	certPath := path.Join(root, name+"-cert.pem")
+
+	caKey, err := loadKey(caKeyPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	caCert, err := loadCert(caCertPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	priv, err := generateKey()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = saveKey(priv, keyPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	serialNr, err := strconv.ParseInt(serial, 10, 64)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	intermediate, err := signCert(caCert, caKey, publicKey(priv), commonName, serialNr, true)
+	if err != nil {
+		log.Fatal(err)
+	}
+	err = saveCert(intermediate, certPath)
+	if err != nil {
+		log.Fatal(err)
+	}
 }
 
 // CreateSignedCert creates a new certificate signed by the provided parent,
@@ -146,68 +234,147 @@ func CreateCA(root string) {
 // name is the file name to use. Common Name is the certificate common name.
 func CreateSignedCert(root, parent, serial, name, commonName string) {
 	log.Infof("Creating signed cert and key %v", commonName)
-	caKey := path.Join(root, parent+"-key.pem")
-	caCert := path.Join(root, parent+"-cert.pem")
-	key := path.Join(root, name+"-key.pem")
-	cert := path.Join(root, name+"-cert.pem")
-	req := path.Join(root, name+"-req.pem")
 
-	config := path.Join(root, name+".config")
-	if err := os.WriteFile(config, []byte(fmt.Sprintf(certConfig, commonName, commonName)), os.ModePerm); err != nil {
-		log.Fatalf("cannot write file %v: %v", config, err)
+	caKeyPath := path.Join(root, parent+"-key.pem")
+	caCertPath := path.Join(root, parent+"-cert.pem")
+	keyPath := path.Join(root, name+"-key.pem")
+	certPath := path.Join(root, name+"-cert.pem")
+
+	caKey, err := loadKey(caKeyPath)
+	if err != nil {
+		log.Fatal(err)
 	}
-	openssl("req", "-newkey", "rsa:2048", "-days", "3600", "-nodes",
-		"-batch",
-		"-config", config,
-		"-keyout", key, "-out", req)
-	openssl("rsa", "-in", key, "-out", key)
-	openssl("x509", "-req",
-		"-in", req,
-		"-days", "3600",
-		"-CA", caCert,
-		"-CAkey", caKey,
-		"-set_serial", serial,
-		"-extensions", "req_ext",
-		"-extfile", config,
-		"-out", cert)
+	caCert, err := loadCert(caCertPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	priv, err := generateKey()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = saveKey(priv, keyPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	serialNr, err := strconv.ParseInt(serial, 10, 64)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	leaf, err := signCert(caCert, caKey, publicKey(priv), commonName, serialNr, false)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = saveCert(leaf, certPath)
+	if err != nil {
+		log.Fatal(err)
+	}
 }
 
 // CreateCRL creates a new empty certificate revocation list
 // for the provided parent
 func CreateCRL(root, parent string) {
 	log.Infof("Creating CRL for root CA in %v", root)
-	caKey := path.Join(root, parent+"-key.pem")
-	caCert := path.Join(root, parent+"-cert.pem")
-	configPath := path.Join(root, parent+"-ca.config")
+	caKeyPath := path.Join(root, parent+"-key.pem")
+	caCertPath := path.Join(root, parent+"-cert.pem")
 	crlPath := path.Join(root, parent+"-crl.pem")
-	createKeyDBAndCAConfig(root, parent)
 
-	openssl("ca", "-gencrl",
-		"-keyfile", caKey,
-		"-cert", caCert,
-		"-config", configPath,
-		"-out",
-		crlPath,
-	)
+	caKey, err := loadKey(caKeyPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	caCert, err := loadCert(caCertPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	crlList, err := x509.CreateRevocationList(rand.Reader, &x509.RevocationList{
+		RevokedCertificates: nil,
+		Number:              big.NewInt(1),
+	}, caCert, caKey.(crypto.Signer))
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	out := &bytes.Buffer{}
+	err = pem.Encode(out, &pem.Block{Type: "X509 CRL", Bytes: crlList})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = os.WriteFile(crlPath, out.Bytes(), permissions)
+	if err != nil {
+		log.Fatal(err)
+	}
 }
 
 // RevokeCertAndRegenerateCRL revokes a provided certificate under the
 // provided parent CA and regenerates the CRL file for that parent
 func RevokeCertAndRegenerateCRL(root, parent, name string) {
 	log.Infof("Revoking certificate %s", name)
-	caKey := path.Join(root, parent+"-key.pem")
-	caCert := path.Join(root, parent+"-cert.pem")
-	cert := path.Join(root, name+"-cert.pem")
-	configPath := path.Join(root, parent+"-ca.config")
-	createKeyDBAndCAConfig(root, parent)
+	caKeyPath := path.Join(root, parent+"-key.pem")
+	caCertPath := path.Join(root, parent+"-cert.pem")
+	crlPath := path.Join(root, parent+"-crl.pem")
+	certPath := path.Join(root, name+"-cert.pem")
 
-	openssl("ca", "-revoke", cert,
-		"-keyfile", caKey,
-		"-cert", caCert,
-		"-config", configPath,
-	)
+	certificate, err := loadCert(certPath)
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	CreateCRL(root, parent)
+	// Check if CRL already exists. If it doesn't,
+	// create an empty CRL to start with.
+	_, err = os.Stat(crlPath)
+	if errors.Is(err, os.ErrNotExist) {
+		CreateCRL(root, parent)
+	}
+
+	data, err := os.ReadFile(crlPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	crlList, err := x509.ParseCRL(data)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	revoked := crlList.TBSCertList.RevokedCertificates
+	revoked = append(revoked, pkix.RevokedCertificate{
+		SerialNumber:   certificate.SerialNumber,
+		RevocationTime: time.Now(),
+	})
+
+	caKey, err := loadKey(caKeyPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	caCert, err := loadCert(caCertPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	newCrl, err := x509.CreateRevocationList(rand.Reader, &x509.RevocationList{
+		RevokedCertificates: revoked,
+		Number:              big.NewInt(int64(crlList.TBSCertList.Version) + 1),
+	}, caCert, caKey.(crypto.Signer))
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	out := &bytes.Buffer{}
+	err = pem.Encode(out, &pem.Block{Type: "X509 CRL", Bytes: newCrl})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = os.WriteFile(crlPath, out.Bytes(), permissions)
+	if err != nil {
+		log.Fatal(err)
+	}
 }
 
 // ClientServerKeyPairs is used in tests
@@ -260,12 +427,12 @@ func CreateClientServerCertPairs(root string) ClientServerKeyPairs {
 	revokedClientCertName := fmt.Sprintf("client-instance-%s", revokedClientSerial)
 	revokedClientCertCommonName := fmt.Sprintf("client%s.example.com", revokedClientSerial)
 
-	CreateSignedCert(root, CA, serverCASerial, serverCAName, serverCACommonName)
+	CreateIntermediateCA(root, CA, serverCASerial, serverCAName, serverCACommonName)
 	CreateSignedCert(root, serverCAName, serverSerial, serverCertName, serverCertCommonName)
 	CreateSignedCert(root, serverCAName, revokedServerSerial, revokedServerCertName, revokedServerCertCommonName)
 	RevokeCertAndRegenerateCRL(root, serverCAName, revokedServerCertName)
 
-	CreateSignedCert(root, CA, clientCASerial, clientCAName, clientCACommonName)
+	CreateIntermediateCA(root, CA, clientCASerial, clientCAName, clientCACommonName)
 	CreateSignedCert(root, clientCAName, clientCertSerial, clientCertName, clientCertCommonName)
 	CreateSignedCert(root, clientCAName, revokedClientSerial, revokedClientCertName, revokedClientCertCommonName)
 	RevokeCertAndRegenerateCRL(root, clientCAName, revokedClientCertName)
@@ -284,7 +451,7 @@ func CreateClientServerCertPairs(root string) ClientServerKeyPairs {
 		log.Fatalf("Could not read client CRL file")
 	}
 
-	err = os.WriteFile(combinedCRLPath, append(serverCRLBytes, clientCRLBytes...), 0777)
+	err = os.WriteFile(combinedCRLPath, append(serverCRLBytes, clientCRLBytes...), permissions)
 	if err != nil {
 		log.Fatalf("Could not write combined CRL file")
 	}

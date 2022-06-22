@@ -30,6 +30,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/withddl"
+
 	"google.golang.org/protobuf/proto"
 
 	"context"
@@ -558,7 +560,7 @@ func CreateVReplicationTable() []string {
 // AlterVReplicationTable adds new columns to vreplication table
 var AlterVReplicationTable = []string{
 	"ALTER TABLE _vt.vreplication ADD COLUMN db_name VARBINARY(255) NOT NULL",
-	"ALTER TABLE _vt.vreplication MODIFY source BLOB NOT NULL",
+	"ALTER TABLE _vt.vreplication MODIFY source MEDIUMBLOB NOT NULL",
 	"ALTER TABLE _vt.vreplication ADD KEY workflow_idx (workflow(64))",
 	"ALTER TABLE _vt.vreplication ADD COLUMN rows_copied BIGINT(20) NOT NULL DEFAULT 0",
 	"ALTER TABLE _vt.vreplication ADD COLUMN tags VARBINARY(1024) NOT NULL DEFAULT ''",
@@ -572,10 +574,13 @@ var AlterVReplicationTable = []string{
 // - are to be expected by the mock db client during tests, or
 // - trigger some of the above _vt.vreplication schema changes to take effect
 //   when the binlogplayer starts up
+// todo: cleanup here. QueryToTriggerWithDDL will be enough to ensure vreplication schema gets created/altered correctly.
+//   So do that explicitly and move queries required into the mock code.
 var WithDDLInitialQueries = []string{
 	"SELECT db_name FROM _vt.vreplication LIMIT 0",
 	"SELECT rows_copied FROM _vt.vreplication LIMIT 0",
 	"SELECT time_heartbeat FROM _vt.vreplication LIMIT 0",
+	withddl.QueryToTriggerWithDDL,
 }
 
 // VRSettings contains the settings of a vreplication table.

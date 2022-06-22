@@ -170,45 +170,35 @@ func (sq *msdSourceTabletServer) StreamExecute(ctx context.Context, target *quer
 
 // TODO(aaijazi): Create a test in which source and destination data does not match
 
-func testMultiSplitDiff(t *testing.T, v3 bool) {
-	*useV3ReshardingMode = v3
+func testMultiSplitDiff(t *testing.T) {
 	ts := memorytopo.NewServer("cell1", "cell2")
 	ctx := context.Background()
 	wi := NewInstance(ts, "cell1", time.Second)
 
-	if v3 {
-		if err := ts.CreateKeyspace(ctx, "ks", &topodatapb.Keyspace{}); err != nil {
-			t.Fatalf("CreateKeyspace v3 failed: %v", err)
-		}
+	if err := ts.CreateKeyspace(ctx, "ks", &topodatapb.Keyspace{}); err != nil {
+		t.Fatalf("CreateKeyspace v3 failed: %v", err)
+	}
 
-		vs := &vschemapb.Keyspace{
-			Sharded: true,
-			Vindexes: map[string]*vschemapb.Vindex{
-				"table1_index": {
-					Type: "numeric",
-				},
+	vs := &vschemapb.Keyspace{
+		Sharded: true,
+		Vindexes: map[string]*vschemapb.Vindex{
+			"table1_index": {
+				Type: "numeric",
 			},
-			Tables: map[string]*vschemapb.Table{
-				"table1": {
-					ColumnVindexes: []*vschemapb.ColumnVindex{
-						{
-							Column: "keyspace_id",
-							Name:   "table1_index",
-						},
+		},
+		Tables: map[string]*vschemapb.Table{
+			"table1": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{
+					{
+						Column: "keyspace_id",
+						Name:   "table1_index",
 					},
 				},
 			},
-		}
-		if err := ts.SaveVSchema(ctx, "ks", vs); err != nil {
-			t.Fatalf("SaveVSchema v3 failed: %v", err)
-		}
-	} else {
-		if err := ts.CreateKeyspace(ctx, "ks", &topodatapb.Keyspace{
-			ShardingColumnName: "keyspace_id",
-			ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
-		}); err != nil {
-			t.Fatalf("CreateKeyspace failed: %v", err)
-		}
+		},
+	}
+	if err := ts.SaveVSchema(ctx, "ks", vs); err != nil {
+		t.Fatalf("SaveVSchema v3 failed: %v", err)
 	}
 
 	sourcePrimary := testlib.NewFakeTablet(t, wi.wr, "cell1", 0,
@@ -237,13 +227,7 @@ func testMultiSplitDiff(t *testing.T, v3 bool) {
 		t.Fatalf("CreateShard(\"-80\") failed: %v", err)
 	}
 	wi.wr.SetSourceShards(ctx, "ks", "-40", []*topodatapb.TabletAlias{sourceRdonly1.Tablet.Alias}, nil)
-	if err := wi.wr.SetKeyspaceShardingInfo(ctx, "ks", "keyspace_id", topodatapb.KeyspaceIdType_UINT64, false); err != nil {
-		t.Fatalf("SetKeyspaceShardingInfo failed: %v", err)
-	}
 	wi.wr.SetSourceShards(ctx, "ks", "40-80", []*topodatapb.TabletAlias{sourceRdonly1.Tablet.Alias}, nil)
-	if err := wi.wr.SetKeyspaceShardingInfo(ctx, "ks", "keyspace_id", topodatapb.KeyspaceIdType_UINT64, false); err != nil {
-		t.Fatalf("SetKeyspaceShardingInfo failed: %v", err)
-	}
 	if err := topotools.RebuildKeyspace(ctx, wi.wr.Logger(), wi.wr.TopoServer(), "ks", nil, false); err != nil {
 		t.Fatalf("RebuildKeyspaceGraph failed: %v", err)
 	}
@@ -282,7 +266,7 @@ func testMultiSplitDiff(t *testing.T, v3 bool) {
 
 			StreamHealthQueryService: qs,
 			excludedTable:            excludedTable,
-			v3:                       v3,
+			v3:                       true,
 		})
 	}
 
@@ -331,11 +315,6 @@ func testMultiSplitDiff(t *testing.T, v3 bool) {
 	}
 }
 
-func TestMultiSplitDiffv2(t *testing.T) {
-	// TODO: Make MultiSplitDiff work with V2
-	// testMultiSplitDiff(t, false)
-}
-
 func TestMultiSplitDiffv3(t *testing.T) {
 	delay := discovery.GetTabletPickerRetryDelay()
 	defer func() {
@@ -343,5 +322,5 @@ func TestMultiSplitDiffv3(t *testing.T) {
 	}()
 	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
 
-	testMultiSplitDiff(t, true)
+	testMultiSplitDiff(t)
 }

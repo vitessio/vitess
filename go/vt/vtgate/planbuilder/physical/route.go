@@ -17,6 +17,7 @@ limitations under the License.
 package physical
 
 import (
+	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -48,6 +49,9 @@ type (
 		// SeenPredicates contains all the predicates that have had a chance to influence routing.
 		// If we need to replan routing, we'll use this list
 		SeenPredicates []sqlparser.Expr
+
+		// TargetDestination specifies an explicit target destination tablet type
+		TargetDestination key.Destination
 	}
 
 	// VindexPlusPredicates is a struct used to store all the predicates that the vindex can be used to query
@@ -130,6 +134,10 @@ func (r *Route) Clone() abstract.PhysicalOperator {
 
 func (r *Route) UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) error {
 	r.SeenPredicates = append(r.SeenPredicates, expr)
+	return r.tryImprovingVindex(ctx, expr)
+}
+
+func (r *Route) tryImprovingVindex(ctx *plancontext.PlanningContext, expr sqlparser.Expr) error {
 	if r.canImprove() {
 		newVindexFound, err := r.searchForNewVindexes(ctx, expr)
 		if err != nil {
@@ -301,7 +309,7 @@ func (r *Route) haveMatchingVindex(
 				// single column vindex - just add the option
 				routeOpcode := opcode(v.ColVindex)
 				vindex := vfunc(v.ColVindex)
-				if vindex == nil {
+				if vindex == nil || routeOpcode == engine.Scatter {
 					continue
 				}
 				v.Options = append(v.Options, &VindexOption{
@@ -347,7 +355,7 @@ func (r *Route) haveMatchingVindex(
 			}
 			v.Options = append(v.Options, newOption...)
 
-			// multi column vindex - just always add as new option for furince we do not have one already
+			// multi column vindex - just always add as new option
 			option := createOption(v.ColVindex, vfunc)
 			optionReady := option.updateWithNewColumn(colLoweredName, valueExpr, indexOfCol, value, node, v.ColVindex, opcode)
 			if optionReady {
@@ -606,7 +614,7 @@ func (r *Route) resetRoutingSelections(ctx *plancontext.PlanningContext) error {
 	}
 
 	for _, predicate := range r.SeenPredicates {
-		err := r.UpdateRoutingLogic(ctx, predicate)
+		err := r.tryImprovingVindex(ctx, predicate)
 		if err != nil {
 			return err
 		}
@@ -627,6 +635,9 @@ func tupleAccess(expr sqlparser.Expr, coordinates []int) sqlparser.Expr {
 }
 
 func equalOrEqualUnique(vindex *vindexes.ColumnVindex) engine.Opcode {
+	if vindex.IsPartialVindex() {
+		return engine.SubShard
+	}
 	if vindex.IsUnique() {
 		return engine.EqualUnique
 	}
@@ -700,6 +711,12 @@ func (r *Route) planIsExpr(ctx *plancontext.PlanningContext, node *sqlparser.IsE
 	if val == nil {
 		return false
 	}
+	opcodeF := func(vindex *vindexes.ColumnVindex) engine.Opcode {
+		if _, ok := vindex.Vindex.(vindexes.Lookup); ok {
+			return engine.Scatter
+		}
+		return equalOrEqualUnique(vindex)
+	}
 
-	return r.haveMatchingVindex(ctx, node, vdValue, column, val, equalOrEqualUnique, justTheVindex)
+	return r.haveMatchingVindex(ctx, node, vdValue, column, val, opcodeF, justTheVindex)
 }

@@ -20,7 +20,6 @@ import (
 	"context"
 	"crypto/tls"
 	"net"
-	"os"
 	"path"
 	"reflect"
 	"testing"
@@ -46,11 +45,7 @@ func TestValidCert(t *testing.T) {
 	port := l.Addr().(*net.TCPAddr).Port
 
 	// Create the certs.
-	root, err := os.MkdirTemp("", "TestSSLConnection")
-	if err != nil {
-		t.Fatalf("TempDir failed: %v", err)
-	}
-	defer os.RemoveAll(root)
+	root := t.TempDir()
 	tlstest.CreateCA(root)
 	tlstest.CreateSignedCert(root, tlstest.CA, "01", "server", "server.example.com")
 	tlstest.CreateSignedCert(root, tlstest.CA, "02", "client", clientCertUsername)
@@ -107,7 +102,7 @@ func TestValidCert(t *testing.T) {
 		t.Errorf("userdata username is %v, expected %v", userData.Username, clientCertUsername)
 	}
 
-	expectedGroups := []string{"localhost", "127.0.0.1", clientCertUsername}
+	expectedGroups := []string{"localhost", clientCertUsername}
 	if !reflect.DeepEqual(userData.Groups, expectedGroups) {
 		t.Errorf("userdata groups is %v, expected %v", userData.Groups, expectedGroups)
 	}
@@ -131,11 +126,7 @@ func TestNoCert(t *testing.T) {
 	port := l.Addr().(*net.TCPAddr).Port
 
 	// Create the certs.
-	root, err := os.MkdirTemp("", "TestSSLConnection")
-	if err != nil {
-		t.Fatalf("TempDir failed: %v", err)
-	}
-	defer os.RemoveAll(root)
+	root := t.TempDir()
 	tlstest.CreateCA(root)
 	tlstest.CreateSignedCert(root, tlstest.CA, "01", "server", "server.example.com")
 	tlstest.CreateCRL(root, tlstest.CA)

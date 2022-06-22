@@ -45,18 +45,26 @@ func buildExplainPlan(stmt sqlparser.Explain, reservedVars *sqlparser.ReservedVa
 }
 
 func explainTabPlan(explain *sqlparser.ExplainTab, vschema plancontext.VSchema) (engine.Primitive, error) {
-	table, _, _, _, destination, err := vschema.FindTableOrVindex(explain.Table)
+	_, _, ks, _, destination, err := vschema.FindTableOrVindex(explain.Table)
 	if err != nil {
 		return nil, err
 	}
-	explain.Table.Qualifier = sqlparser.NewTableIdent("")
+	explain.Table.Qualifier = sqlparser.NewIdentifierCS("")
 
 	if destination == nil {
 		destination = key.DestinationAnyShard{}
 	}
 
+	keyspace, err := vschema.FindKeyspace(ks)
+	if err != nil {
+		return nil, err
+	}
+	if keyspace == nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "Cannot find keyspace for: %s", ks)
+	}
+
 	return &engine.Send{
-		Keyspace:          table.Keyspace,
+		Keyspace:          keyspace,
 		TargetDestination: destination,
 		Query:             sqlparser.String(explain),
 		SingleShardOnly:   true,

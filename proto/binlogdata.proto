@@ -250,6 +250,12 @@ message BinlogSource {
   // ExternalCluster is the name of the mounted cluster which has the source keyspace/db for this workflow
   // it is of the type <cluster_type.cluster_name>
   string external_cluster = 10;
+
+  // SourceTimeZone is the time zone in which datetimes on the source were stored, provided as an option in MoveTables
+  string source_time_zone = 11;
+  // TargetTimeZone is not currently specifiable by the user, defaults to UTC for the forward workflows
+  // and to the SourceTimeZone in reverse workflows
+  string target_time_zone = 12;
 }
 
 // VEventType enumerates the event types. Many of these types

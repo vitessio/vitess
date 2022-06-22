@@ -25,6 +25,7 @@ import (
 	"strings"
 	"sync"
 	"text/template"
+	"time"
 
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
@@ -63,8 +64,9 @@ type materializer struct {
 }
 
 const (
-	createDDLAsCopy               = "copy"
-	createDDLAsCopyDropConstraint = "copy:drop_constraint"
+	createDDLAsCopy                = "copy"
+	createDDLAsCopyDropConstraint  = "copy:drop_constraint"
+	createDDLAsCopyDropForeignKeys = "copy:drop_foreign_keys"
 )
 
 // addTablesToVSchema adds tables to an (unsharded) vschema. Depending on copyAttributes It will also add any sequence info
@@ -118,7 +120,7 @@ func shouldInclude(table string, excludes []string) bool {
 // MoveTables initiates moving table(s) over to another keyspace
 func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, targetKeyspace, tableSpecs,
 	cell, tabletTypes string, allTables bool, excludeTables string, autoStart, stopAfterCopy bool,
-	externalCluster string, dropConstraints bool) error {
+	externalCluster string, dropForeignKeys bool, sourceTimeZone string) error {
 	//FIXME validate tableSpecs, allTables, excludeTables
 	var tables []string
 	var externalTopo *topo.Server
@@ -244,14 +246,19 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 		ExternalCluster:       externalCluster,
 	}
 
+	if sourceTimeZone != "" {
+		ms.SourceTimeZone = sourceTimeZone
+		ms.TargetTimeZone = "UTC"
+	}
+
 	createDDLMode := createDDLAsCopy
-	if dropConstraints {
-		createDDLMode = createDDLAsCopyDropConstraint
+	if dropForeignKeys {
+		createDDLMode = createDDLAsCopyDropForeignKeys
 	}
 
 	for _, table := range tables {
 		buf := sqlparser.NewTrackedBuffer(nil)
-		buf.Myprintf("select * from %v", sqlparser.NewTableIdent(table))
+		buf.Myprintf("select * from %v", sqlparser.NewIdentifierCS(table))
 		ms.TableSettings = append(ms.TableSettings, &vtctldatapb.TableMaterializeSettings{
 			TargetTable:      table,
 			SourceExpression: buf.String(),
@@ -262,6 +269,13 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 	if err != nil {
 		return err
 	}
+
+	if sourceTimeZone != "" {
+		if err := mz.checkTZConversion(ctx, sourceTimeZone); err != nil {
+			return err
+		}
+	}
+
 	tabletShards, err := wr.collectTargetStreams(ctx, mz)
 	if err != nil {
 		return err
@@ -337,7 +351,7 @@ func (wr *Wrangler) getKeyspaceTables(ctx context.Context, ks string, ts *topo.S
 	if err != nil {
 		return nil, err
 	}
-	schema, err := wr.tmc.GetSchema(ctx, ti.Tablet, allTables, nil, false)
+	schema, err := wr.tmc.GetSchema(ctx, ti.Tablet, allTables, nil, false, false)
 	if err != nil {
 		return nil, err
 	}
@@ -569,7 +583,7 @@ func (wr *Wrangler) prepareCreateLookup(ctx context.Context, keyspace string, sp
 	if onesource.PrimaryAlias == nil {
 		return nil, nil, nil, fmt.Errorf("source shard has no primary: %v", onesource.ShardName())
 	}
-	tableSchema, err := schematools.GetSchema(ctx, wr.ts, wr.tmc, onesource.PrimaryAlias, []string{sourceTableName}, nil, false)
+	tableSchema, err := schematools.GetSchema(ctx, wr.ts, wr.tmc, onesource.PrimaryAlias, []string{sourceTableName}, nil, false, false)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -614,21 +628,21 @@ func (wr *Wrangler) prepareCreateLookup(ctx context.Context, keyspace string, sp
 	buf = sqlparser.NewTrackedBuffer(nil)
 	buf.Myprintf("select ")
 	for i := range vindexFromCols {
-		buf.Myprintf("%v as %v, ", sqlparser.NewColIdent(sourceVindexColumns[i]), sqlparser.NewColIdent(vindexFromCols[i]))
+		buf.Myprintf("%v as %v, ", sqlparser.NewIdentifierCI(sourceVindexColumns[i]), sqlparser.NewIdentifierCI(vindexFromCols[i]))
 	}
 	if strings.EqualFold(vindexToCol, "keyspace_id") || strings.EqualFold(vindex.Type, "consistent_lookup_unique") || strings.EqualFold(vindex.Type, "consistent_lookup") {
-		buf.Myprintf("keyspace_id() as %v ", sqlparser.NewColIdent(vindexToCol))
+		buf.Myprintf("keyspace_id() as %v ", sqlparser.NewIdentifierCI(vindexToCol))
 	} else {
-		buf.Myprintf("%v as %v ", sqlparser.NewColIdent(vindexToCol), sqlparser.NewColIdent(vindexToCol))
+		buf.Myprintf("%v as %v ", sqlparser.NewIdentifierCI(vindexToCol), sqlparser.NewIdentifierCI(vindexToCol))
 	}
-	buf.Myprintf("from %v", sqlparser.NewTableIdent(sourceTableName))
+	buf.Myprintf("from %v", sqlparser.NewIdentifierCS(sourceTableName))
 	if vindex.Owner != "" {
 		// Only backfill
 		buf.Myprintf(" group by ")
 		for i := range vindexFromCols {
-			buf.Myprintf("%v, ", sqlparser.NewColIdent(vindexFromCols[i]))
+			buf.Myprintf("%v, ", sqlparser.NewIdentifierCI(vindexFromCols[i]))
 		}
-		buf.Myprintf("%v", sqlparser.NewColIdent(vindexToCol))
+		buf.Myprintf("%v", sqlparser.NewIdentifierCI(vindexToCol))
 	}
 	materializeQuery = buf.String()
 
@@ -934,6 +948,7 @@ func (wr *Wrangler) buildMaterializer(ctx context.Context, ms *vtctldatapb.Mater
 	if err != nil {
 		return nil, err
 	}
+
 	return &materializer{
 		wr:            wr,
 		ms:            ms,
@@ -956,7 +971,7 @@ func (mz *materializer) getSourceTableDDLs(ctx context.Context) (map[string]stri
 	if err != nil {
 		return nil, err
 	}
-	sourceSchema, err := mz.wr.tmc.GetSchema(ctx, ti.Tablet, allTables, nil, false)
+	sourceSchema, err := mz.wr.tmc.GetSchema(ctx, ti.Tablet, allTables, nil, false, false)
 	if err != nil {
 		return nil, err
 	}
@@ -975,7 +990,7 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 		allTables := []string{"/.*/"}
 
 		hasTargetTable := map[string]bool{}
-		targetSchema, err := schematools.GetSchema(ctx, mz.wr.ts, mz.wr.tmc, target.PrimaryAlias, allTables, nil, false)
+		targetSchema, err := schematools.GetSchema(ctx, mz.wr.ts, mz.wr.tmc, target.PrimaryAlias, allTables, nil, false, false)
 		if err != nil {
 			return err
 		}
@@ -1014,7 +1029,7 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 			}
 
 			createDDL := ts.CreateDdl
-			if createDDL == createDDLAsCopy || createDDL == createDDLAsCopyDropConstraint {
+			if createDDL == createDDLAsCopy || createDDL == createDDLAsCopyDropConstraint || createDDL == createDDLAsCopyDropForeignKeys {
 				if ts.SourceExpression != "" {
 					// Check for table if non-empty SourceExpression.
 					sourceTableName, err := sqlparser.TableFromStatement(ts.SourceExpression)
@@ -1034,6 +1049,15 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 
 				if createDDL == createDDLAsCopyDropConstraint {
 					strippedDDL, err := stripTableConstraints(ddl)
+					if err != nil {
+						return err
+					}
+
+					ddl = strippedDDL
+				}
+
+				if createDDL == createDDLAsCopyDropForeignKeys {
+					strippedDDL, err := stripTableForeignKeys(ddl)
 					if err != nil {
 						return err
 					}
@@ -1062,6 +1086,36 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 
 		return nil
 	})
+}
+
+func stripTableForeignKeys(ddl string) (string, error) {
+
+	ast, err := sqlparser.ParseStrictDDL(ddl)
+	if err != nil {
+		return "", err
+	}
+
+	stripFKConstraints := func(cursor *sqlparser.Cursor) bool {
+		switch node := cursor.Node().(type) {
+		case sqlparser.DDLStatement:
+			if node.GetTableSpec() != nil {
+				var noFKConstraints []*sqlparser.ConstraintDefinition
+				for _, constraint := range node.GetTableSpec().Constraints {
+					if constraint.Details != nil {
+						if _, ok := constraint.Details.(*sqlparser.ForeignKeyDefinition); !ok {
+							noFKConstraints = append(noFKConstraints, constraint)
+						}
+					}
+				}
+				node.GetTableSpec().Constraints = noFKConstraints
+			}
+		}
+		return true
+	}
+
+	noFKConstraintAST := sqlparser.Rewrite(ast, stripFKConstraints, nil)
+	newDDL := sqlparser.String(noFKConstraintAST)
+	return newDDL, nil
 }
 
 func stripTableConstraints(ddl string) (string, error) {
@@ -1103,6 +1157,8 @@ func (mz *materializer) generateInserts(ctx context.Context, targetShard *topo.S
 			Filter:          &binlogdatapb.Filter{},
 			StopAfterCopy:   mz.ms.StopAfterCopy,
 			ExternalCluster: mz.ms.ExternalCluster,
+			SourceTimeZone:  mz.ms.SourceTimeZone,
+			TargetTimeZone:  mz.ms.TargetTimeZone,
 		}
 		for _, ts := range mz.ms.TableSettings {
 			rule := &binlogdatapb.Rule{
@@ -1145,7 +1201,7 @@ func (mz *materializer) generateInserts(ctx context.Context, targetShard *topo.S
 				subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral(vindexName)})
 				subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral("{{.keyrange}}")})
 				inKeyRange := &sqlparser.FuncExpr{
-					Name:  sqlparser.NewColIdent("in_keyrange"),
+					Name:  sqlparser.NewIdentifierCI("in_keyrange"),
 					Exprs: subExprs,
 				}
 				if sel.Where != nil {
@@ -1175,7 +1231,7 @@ func (mz *materializer) generateInserts(ctx context.Context, targetShard *topo.S
 	return ig.String(), nil
 }
 
-func matchColInSelect(col sqlparser.ColIdent, sel *sqlparser.Select) (*sqlparser.ColName, error) {
+func matchColInSelect(col sqlparser.IdentifierCI, sel *sqlparser.Select) (*sqlparser.ColName, error) {
 	for _, selExpr := range sel.SelectExprs {
 		switch selExpr := selExpr.(type) {
 		case *sqlparser.StarExpr:
@@ -1256,4 +1312,30 @@ func (mz *materializer) forAllTargets(f func(*topo.ShardInfo) error) error {
 	}
 	wg.Wait()
 	return allErrors.AggrError(vterrors.Aggregate)
+}
+
+// checkTZConversion is a light-weight consistency check to validate that, if a source time zone is specified to MoveTables,
+// that the current primary has the time zone loaded in order to run the convert_tz() function used by VReplication to do the
+// datetime conversions. We only check the current primaries on each shard and note here that it is possible a new primary
+// gets elected: in this case user will either see errors during vreplication or vdiff will report mismatches.
+func (mz *materializer) checkTZConversion(ctx context.Context, tz string) error {
+	err := mz.forAllTargets(func(target *topo.ShardInfo) error {
+		targetPrimary, err := mz.wr.ts.GetTablet(ctx, target.PrimaryAlias)
+		if err != nil {
+			return vterrors.Wrapf(err, "GetTablet(%v) failed", target.PrimaryAlias)
+		}
+		testDateTime := "2006-01-02 15:04:05"
+		query := fmt.Sprintf("select convert_tz(%s, %s, 'UTC')", encodeString(testDateTime), encodeString(tz))
+		qrproto, err := mz.wr.tmc.ExecuteFetchAsApp(ctx, targetPrimary.Tablet, false, []byte(query), 1)
+		if err != nil {
+			return vterrors.Wrapf(err, "ExecuteFetchAsApp(%v, %s)", targetPrimary.Tablet, query)
+		}
+		qr := sqltypes.Proto3ToResult(qrproto)
+		if gotDate, err := time.Parse(testDateTime, qr.Rows[0][0].ToString()); err != nil {
+			return fmt.Errorf("unable to perform time_zone conversions from %s to UTC — result of the attempt was: %s. Either the specified source time zone is invalid or the time zone tables have not been loaded on the %s tablet",
+				tz, gotDate, targetPrimary.Alias)
+		}
+		return nil
+	})
+	return err
 }

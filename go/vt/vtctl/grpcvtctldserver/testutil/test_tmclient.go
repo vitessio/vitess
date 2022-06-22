@@ -171,6 +171,13 @@ type TabletManagerClient struct {
 		Error    error
 	}
 	// keyed by tablet alias.
+	GetPermissionsDelays map[string]time.Duration
+	// keyed by tablet alias.
+	GetPermissionsResults map[string]struct {
+		Permissions *tabletmanagerdatapb.Permissions
+		Error       error
+	}
+	// keyed by tablet alias.
 	GetReplicasResults map[string]struct {
 		Replicas []string
 		Error    error
@@ -180,6 +187,16 @@ type TabletManagerClient struct {
 	// keyed by tablet alias.
 	GetSchemaResults map[string]struct {
 		Schema *tabletmanagerdatapb.SchemaDefinition
+		Error  error
+	}
+	// keyed by tablet alias.
+	InitPrimaryDelays map[string]time.Duration
+	// keyed by tablet alias. injects a sleep to the end of the function
+	// regardless of parent context timeout or error result.
+	InitPrimaryPostDelays map[string]time.Duration
+	// keyed by tablet alias.
+	InitPrimaryResults map[string]struct {
+		Result string
 		Error  error
 	}
 	// keyed by tablet alias.
@@ -208,16 +225,6 @@ type TabletManagerClient struct {
 		Error  error
 	}
 	// keyed by tablet alias.
-	InitPrimaryDelays map[string]time.Duration
-	// keyed by tablet alias. injects a sleep to the end of the function
-	// regardless of parent context timeout or error result.
-	InitPrimaryPostDelays map[string]time.Duration
-	// keyed by tablet alias.
-	InitPrimaryResults map[string]struct {
-		Result string
-		Error  error
-	}
-	// keyed by tablet alias.
 	RefreshStateResults map[string]error
 	// keyed by `<tablet_alias>/<wait_pos>`.
 	ReloadSchemaDelays map[string]time.Duration
@@ -242,6 +249,8 @@ type TabletManagerClient struct {
 	SetReplicationSourceDelays map[string]time.Duration
 	// keyed by tablet alias.
 	SetReplicationSourceResults map[string]error
+	// keyed by tablet alias.
+	SetReplicationSourceSemiSync map[string]bool
 	// keyed by tablet alias
 	SetReadOnlyDelays map[string]time.Duration
 	// keyed by tablet alias
@@ -505,6 +514,36 @@ func (fake *TabletManagerClient) ExecuteHook(ctx context.Context, tablet *topoda
 	return nil, fmt.Errorf("%w: no ExecuteHook result set for tablet %s", assert.AnError, key)
 }
 
+// GetPermission is part of the tmclient.TabletManagerClient interface.
+func (fake *TabletManagerClient) GetPermissions(ctx context.Context, tablet *topodatapb.Tablet) (*tabletmanagerdatapb.Permissions, error) {
+	if fake.GetPermissionsResults == nil {
+		return nil, assert.AnError
+	}
+
+	if tablet.Alias == nil {
+		return nil, assert.AnError
+	}
+
+	key := topoproto.TabletAliasString(tablet.Alias)
+
+	if fake.GetPermissionsDelays != nil {
+		if delay, ok := fake.GetPermissionsDelays[key]; ok {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(delay):
+				// proceed to results
+			}
+		}
+	}
+
+	if result, ok := fake.GetPermissionsResults[key]; ok {
+		return result.Permissions, result.Error
+	}
+
+	return nil, fmt.Errorf("%w: no permissions for %s", assert.AnError, key)
+}
+
 // GetReplicas is part of the tmclient.TabletManagerClient interface.
 func (fake *TabletManagerClient) GetReplicas(ctx context.Context, tablet *topodatapb.Tablet) ([]string, error) {
 	if fake.GetReplicasResults == nil {
@@ -520,7 +559,7 @@ func (fake *TabletManagerClient) GetReplicas(ctx context.Context, tablet *topoda
 }
 
 // GetSchema is part of the tmclient.TabletManagerClient interface.
-func (fake *TabletManagerClient) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, tablets []string, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
+func (fake *TabletManagerClient) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, tablets []string, excludeTables []string, includeViews bool, tableSchemaOnly bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
 	if fake.GetSchemaResults == nil {
 		return nil, assert.AnError
 	}
@@ -547,6 +586,42 @@ func (fake *TabletManagerClient) GetSchema(ctx context.Context, tablet *topodata
 	}
 
 	return nil, fmt.Errorf("%w: no schemas for %s", assert.AnError, key)
+}
+
+// InitPrimary is part of the tmclient.TabletManagerClient interface.
+func (fake *TabletManagerClient) InitPrimary(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) (string, error) {
+	if fake.InitPrimaryResults == nil {
+		return "", assert.AnError
+	}
+
+	key := topoproto.TabletAliasString(tablet.Alias)
+
+	defer func() {
+		if fake.InitPrimaryPostDelays == nil {
+			return
+		}
+
+		if delay, ok := fake.InitPrimaryPostDelays[key]; ok {
+			time.Sleep(delay)
+		}
+	}()
+
+	if fake.InitPrimaryDelays != nil {
+		if delay, ok := fake.InitPrimaryDelays[key]; ok {
+			select {
+			case <-ctx.Done():
+				return "", ctx.Err()
+			case <-time.After(delay):
+				// proceed to results
+			}
+		}
+	}
+
+	if result, ok := fake.InitPrimaryResults[key]; ok {
+		return result.Result, result.Error
+	}
+
+	return "", assert.AnError
 }
 
 // PrimaryPosition is part of the tmclient.TabletManagerClient interface.
@@ -665,42 +740,6 @@ func (fake *TabletManagerClient) PromoteReplica(ctx context.Context, tablet *top
 	}
 
 	if result, ok := fake.PromoteReplicaResults[key]; ok {
-		return result.Result, result.Error
-	}
-
-	return "", assert.AnError
-}
-
-// InitPrimary is part of the tmclient.TabletManagerClient interface.
-func (fake *TabletManagerClient) InitPrimary(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) (string, error) {
-	if fake.InitPrimaryResults == nil {
-		return "", assert.AnError
-	}
-
-	key := topoproto.TabletAliasString(tablet.Alias)
-
-	defer func() {
-		if fake.InitPrimaryPostDelays == nil {
-			return
-		}
-
-		if delay, ok := fake.InitPrimaryPostDelays[key]; ok {
-			time.Sleep(delay)
-		}
-	}()
-
-	if fake.InitPrimaryDelays != nil {
-		if delay, ok := fake.InitPrimaryDelays[key]; ok {
-			select {
-			case <-ctx.Done():
-				return "", ctx.Err()
-			case <-time.After(delay):
-				// proceed to results
-			}
-		}
-	}
-
-	if result, ok := fake.InitPrimaryResults[key]; ok {
 		return result.Result, result.Error
 	}
 
@@ -912,6 +951,14 @@ func (fake *TabletManagerClient) SetReplicationSource(ctx context.Context, table
 				return ctx.Err()
 			case <-time.After(delay):
 				// proceed to results
+			}
+		}
+	}
+
+	if fake.SetReplicationSourceSemiSync != nil {
+		if semiSyncRequirement, ok := fake.SetReplicationSourceSemiSync[key]; ok {
+			if semiSyncRequirement != semiSync {
+				return fmt.Errorf("semi-sync settings incorrect")
 			}
 		}
 	}

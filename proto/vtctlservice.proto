@@ -109,6 +109,8 @@ service Vtctld {
   rpc GetKeyspace(vtctldata.GetKeyspaceRequest) returns (vtctldata.GetKeyspaceResponse) {};
   // GetKeyspaces returns the keyspace struct of all keyspaces in the topo.
   rpc GetKeyspaces(vtctldata.GetKeyspacesRequest) returns (vtctldata.GetKeyspacesResponse) {};
+  // GetPermissions returns the permissions set on the remote tablet.
+  rpc GetPermissions(vtctldata.GetPermissionsRequest) returns (vtctldata.GetPermissionsResponse) {};
   // GetRoutingRules returns the VSchema routing rules.
   rpc GetRoutingRules(vtctldata.GetRoutingRulesRequest) returns (vtctldata.GetRoutingRulesResponse) {};
   // GetSchema returns the schema for a tablet, or just the schema for the
@@ -195,13 +197,13 @@ service Vtctld {
   rpc RestoreFromBackup(vtctldata.RestoreFromBackupRequest) returns (stream vtctldata.RestoreFromBackupResponse) {};
   // RunHealthCheck runs a healthcheck on the remote tablet.
   rpc RunHealthCheck(vtctldata.RunHealthCheckRequest) returns (vtctldata.RunHealthCheckResponse) {};
+  // SetKeyspaceDurabilityPolicy updates the DurabilityPolicy for a keyspace.
+  rpc SetKeyspaceDurabilityPolicy(vtctldata.SetKeyspaceDurabilityPolicyRequest) returns (vtctldata.SetKeyspaceDurabilityPolicyResponse) {};
   // SetKeyspaceServedFrom changes the ServedFromMap manually, and is intended
   // only for emergency fixes. This does not rebuild the serving graph.
   //
   // The ServedFromMap is automatically updated as a part of MigrateServedFrom.
   rpc SetKeyspaceServedFrom(vtctldata.SetKeyspaceServedFromRequest) returns (vtctldata.SetKeyspaceServedFromResponse) {};
-  // SetKeyspaceShardingInfo updates the sharding information for a keyspace.
-  rpc SetKeyspaceShardingInfo(vtctldata.SetKeyspaceShardingInfoRequest) returns (vtctldata.SetKeyspaceShardingInfoResponse) {};
   // SetShardIsPrimaryServing adds or removes a shard from serving.
   //
   // This is meant as an emergency function. It does not rebuild any serving

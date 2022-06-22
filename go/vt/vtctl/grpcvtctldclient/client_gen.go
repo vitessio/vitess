@@ -272,6 +272,15 @@ func (client *gRPCVtctldClient) GetKeyspaces(ctx context.Context, in *vtctldatap
 	return client.c.GetKeyspaces(ctx, in, opts...)
 }
 
+// GetPermissions is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) GetPermissions(ctx context.Context, in *vtctldatapb.GetPermissionsRequest, opts ...grpc.CallOption) (*vtctldatapb.GetPermissionsResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.GetPermissions(ctx, in, opts...)
+}
+
 // GetRoutingRules is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) GetRoutingRules(ctx context.Context, in *vtctldatapb.GetRoutingRulesRequest, opts ...grpc.CallOption) (*vtctldatapb.GetRoutingRulesResponse, error) {
 	if client.c == nil {
@@ -524,6 +533,15 @@ func (client *gRPCVtctldClient) RunHealthCheck(ctx context.Context, in *vtctldat
 	return client.c.RunHealthCheck(ctx, in, opts...)
 }
 
+// SetKeyspaceDurabilityPolicy is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) SetKeyspaceDurabilityPolicy(ctx context.Context, in *vtctldatapb.SetKeyspaceDurabilityPolicyRequest, opts ...grpc.CallOption) (*vtctldatapb.SetKeyspaceDurabilityPolicyResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.SetKeyspaceDurabilityPolicy(ctx, in, opts...)
+}
+
 // SetKeyspaceServedFrom is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) SetKeyspaceServedFrom(ctx context.Context, in *vtctldatapb.SetKeyspaceServedFromRequest, opts ...grpc.CallOption) (*vtctldatapb.SetKeyspaceServedFromResponse, error) {
 	if client.c == nil {
@@ -531,15 +549,6 @@ func (client *gRPCVtctldClient) SetKeyspaceServedFrom(ctx context.Context, in *v
 	}
 
 	return client.c.SetKeyspaceServedFrom(ctx, in, opts...)
-}
-
-// SetKeyspaceShardingInfo is part of the vtctlservicepb.VtctldClient interface.
-func (client *gRPCVtctldClient) SetKeyspaceShardingInfo(ctx context.Context, in *vtctldatapb.SetKeyspaceShardingInfoRequest, opts ...grpc.CallOption) (*vtctldatapb.SetKeyspaceShardingInfoResponse, error) {
-	if client.c == nil {
-		return nil, status.Error(codes.Unavailable, connClosedMsg)
-	}
-
-	return client.c.SetKeyspaceShardingInfo(ctx, in, opts...)
 }
 
 // SetShardIsPrimaryServing is part of the vtctlservicepb.VtctldClient interface.

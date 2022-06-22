@@ -11,20 +11,40 @@ jobs:
         topo: [consul,etcd,k8s]
 
     steps:
-
-    - name: Set up Go
-      uses: actions/setup-go@v2
-      with:
-        go-version: 1.18
-
-    - name: Tune the OS
-      run: |
-        echo '1024 65535' | sudo tee -a /proc/sys/net/ipv4/ip_local_port_range
-
     - name: Check out code
       uses: actions/checkout@v2
 
+    - name: Check for changes in relevant files
+      uses: frouioui/paths-filter@main
+      id: changes
+      with:
+        token: ''
+        filters: |
+          examples:
+            - 'go/**/*.go'
+            - 'test.go'
+            - 'Makefile'
+            - 'build.env'
+            - 'go.[sumod]'
+            - 'proto/*.proto'
+            - 'tools/**'
+            - 'config/**'
+            - 'bootstrap.sh'
+            - 'examples/**'
+
+    - name: Set up Go
+      if: steps.changes.outputs.examples == 'true'
+      uses: actions/setup-go@v2
+      with:
+        go-version: 1.18.3
+
+    - name: Tune the OS
+      if: steps.changes.outputs.examples == 'true'
+      run: |
+        echo '1024 65535' | sudo tee -a /proc/sys/net/ipv4/ip_local_port_range
+
     - name: Get dependencies
+      if: steps.changes.outputs.examples == 'true'
       run: |
         if [ ${{matrix.os}} = "ubuntu-latest" ]; then
           # Setup MySQL 8.0
@@ -46,14 +66,17 @@ jobs:
         go mod download
 
     - name: Run make minimaltools
+      if: steps.changes.outputs.examples == 'true'
       run: |
         make minimaltools
 
     - name: Build
+      if: steps.changes.outputs.examples == 'true'
       run: |
         make build
 
     - name: local_example
+      if: steps.changes.outputs.examples == 'true'
       timeout-minutes: 30
       run: |
         export TOPO=${{matrix.topo}}

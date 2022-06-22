@@ -35,34 +35,6 @@ import (
 	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
 )
 
-func TestWaitForReady(t *testing.T) {
-	ts := memorytopo.NewServer("cell1")
-	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return grpcvtctldserver.NewVtctldServer(ts)
-	})
-
-	testutil.WithTestServer(t, vtctld, func(t *testing.T, client vtctldclient.VtctldClient) {
-		ctx := context.Background()
-		err := client.WaitForReady(ctx)
-		assert.NoError(t, err)
-	})
-}
-
-func TestWaitForReadyShutdown(t *testing.T) {
-	ts := memorytopo.NewServer("cell1")
-	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return grpcvtctldserver.NewVtctldServer(ts)
-	})
-
-	testutil.WithTestServer(t, vtctld, func(t *testing.T, client vtctldclient.VtctldClient) {
-		client.Close()
-		ctx := context.Background()
-		err := client.WaitForReady(ctx)
-
-		assert.Error(t, ErrConnectionShutdown, err)
-	})
-}
-
 func TestFindAllShardsInKeyspace(t *testing.T) {
 	ctx := context.Background()
 	ts := memorytopo.NewServer("cell1")
@@ -118,10 +90,8 @@ func TestGetKeyspace(t *testing.T) {
 	testutil.WithTestServer(t, vtctld, func(t *testing.T, client vtctldclient.VtctldClient) {
 		expected := &vtctldatapb.GetKeyspaceResponse{
 			Keyspace: &vtctldatapb.Keyspace{
-				Name: "testkeyspace",
-				Keyspace: &topodatapb.Keyspace{
-					ShardingColumnName: "col1",
-				},
+				Name:     "testkeyspace",
+				Keyspace: &topodatapb.Keyspace{},
 			},
 		}
 		testutil.AddKeyspace(ctx, t, ts, expected.Keyspace)

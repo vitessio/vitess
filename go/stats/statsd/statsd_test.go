@@ -93,6 +93,35 @@ func TestStatsdGauge(t *testing.T) {
 	}
 }
 
+func TestStatsdGaugeFloat64(t *testing.T) {
+	sb, server := getBackend(t)
+	defer server.Close()
+	name := "gauge_name_f64"
+	s := stats.NewGaugeFloat64(name, "help")
+	s.Set(3.14)
+	found := false
+	expvar.Do(func(kv expvar.KeyValue) {
+		if kv.Key == name {
+			found = true
+			sb.addExpVar(kv)
+			if err := sb.statsdClient.Flush(); err != nil {
+				t.Errorf("Error flushing: %s", err)
+			}
+			bytes := make([]byte, 4096)
+			n, err := server.Read(bytes)
+			if err != nil {
+				t.Fatal(err)
+			}
+			result := string(bytes[:n])
+			expected := "test.gauge_name_f64:3.140000|g"
+			assert.Equal(t, result, expected)
+		}
+	})
+	if !found {
+		t.Errorf("Stat %s not found...", name)
+	}
+}
+
 func TestStatsdGaugeFunc(t *testing.T) {
 	sb, server := getBackend(t)
 	defer server.Close()

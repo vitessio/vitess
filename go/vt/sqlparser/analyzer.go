@@ -71,7 +71,7 @@ func ASTToStatementType(stmt Statement) StatementType {
 		return StmtUpdate
 	case *Delete:
 		return StmtDelete
-	case *Set:
+	case *Set, *SetTransaction:
 		return StmtSet
 	case *Show:
 		return StmtShow
@@ -127,22 +127,22 @@ func CanNormalize(stmt Statement) bool {
 
 // CachePlan takes Statement and returns true if the query plan should be cached
 func CachePlan(stmt Statement) bool {
-	var directives CommentDirectives
+	var comments *ParsedComments
 	switch stmt := stmt.(type) {
 	case *Select:
-		directives = ExtractCommentDirectives(stmt.Comments)
+		comments = stmt.Comments
 	case *Insert:
-		directives = ExtractCommentDirectives(stmt.Comments)
+		comments = stmt.Comments
 	case *Update:
-		directives = ExtractCommentDirectives(stmt.Comments)
+		comments = stmt.Comments
 	case *Delete:
-		directives = ExtractCommentDirectives(stmt.Comments)
+		comments = stmt.Comments
 	case *Union, *Stream:
 		return true
 	default:
 		return false
 	}
-	return !directives.IsSet(DirectiveSkipQueryPlanCache)
+	return !comments.Directives().IsSet(DirectiveSkipQueryPlanCache)
 }
 
 // MustRewriteAST takes Statement and returns true if RewriteAST must run on it for correct execution irrespective of user flags.
@@ -391,12 +391,12 @@ func TableFromStatement(sql string) (TableName, error) {
 
 // GetTableName returns the table name from the SimpleTableExpr
 // only if it's a simple expression. Otherwise, it returns "".
-func GetTableName(node SimpleTableExpr) TableIdent {
+func GetTableName(node SimpleTableExpr) IdentifierCS {
 	if n, ok := node.(TableName); ok && n.Qualifier.IsEmpty() {
 		return n.Name
 	}
 	// sub-select or '.' expression
-	return NewTableIdent("")
+	return NewIdentifierCS("")
 }
 
 // IsColName returns true if the Expr is a *ColName.
@@ -449,18 +449,9 @@ func IsSimpleTuple(node Expr) bool {
 
 //IsLockingFunc returns true for all functions that are used to work with mysql advisory locks
 func IsLockingFunc(node Expr) bool {
-	switch p := node.(type) {
-	case *FuncExpr:
-		_, found := lockingFunctions[p.Name.Lowered()]
-		return found
+	switch node.(type) {
+	case *LockingFunc:
+		return true
 	}
 	return false
-}
-
-var lockingFunctions = map[string]any{
-	"get_lock":          nil,
-	"is_free_lock":      nil,
-	"is_used_lock":      nil,
-	"release_all_locks": nil,
-	"release_lock":      nil,
 }

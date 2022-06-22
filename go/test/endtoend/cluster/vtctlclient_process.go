@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+	"time"
 
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -43,7 +44,7 @@ type VtctlClientParams struct {
 	MigrationContext string
 	SkipPreflight    bool
 	UUIDList         string
-	CallerId         string
+	CallerID         string
 }
 
 // InitShardPrimary executes vtctlclient command to make specified tablet the primary for the shard.
@@ -91,8 +92,8 @@ func (vtctlclient *VtctlClientProcess) ApplySchemaWithOutput(Keyspace string, SQ
 		args = append(args, "--skip_preflight")
 	}
 
-	if params.CallerId != "" {
-		args = append(args, "--caller_id", params.CallerId)
+	if params.CallerID != "" {
+		args = append(args, "--caller_id", params.CallerID)
 	}
 	args = append(args, Keyspace)
 	return vtctlclient.ExecuteCommandWithOutput(args...)
@@ -189,19 +190,31 @@ func (vtctlclient *VtctlClientProcess) ExecuteCommand(args ...string) (err error
 }
 
 // ExecuteCommandWithOutput executes any vtctlclient command and returns output
-func (vtctlclient *VtctlClientProcess) ExecuteCommandWithOutput(args ...string) (result string, err error) {
+func (vtctlclient *VtctlClientProcess) ExecuteCommandWithOutput(args ...string) (string, error) {
+	var resultByte []byte
+	var resultStr string
+	var err error
+	retries := 10
+	retryDelay := 1 * time.Second
 	pArgs := []string{"--server", vtctlclient.Server}
 	if *isCoverage {
 		pArgs = append(pArgs, "--test.coverprofile="+getCoveragePath("vtctlclient-"+args[0]+".out"), "--test.v")
 	}
 	pArgs = append(pArgs, args...)
-	tmpProcess := exec.Command(
-		vtctlclient.Binary,
-		filterDoubleDashArgs(pArgs, vtctlclient.VtctlClientMajorVersion)...,
-	)
-	log.Infof("Executing vtctlclient with command: %v", strings.Join(tmpProcess.Args, " "))
-	resultByte, err := tmpProcess.CombinedOutput()
-	return filterResultWhenRunsForCoverage(string(resultByte)), err
+	for i := 1; i <= retries; i++ {
+		tmpProcess := exec.Command(
+			vtctlclient.Binary,
+			filterDoubleDashArgs(pArgs, vtctlclient.VtctlClientMajorVersion)...,
+		)
+		log.Infof("Executing vtctlclient with command: %v (attempt %d of %d)", strings.Join(tmpProcess.Args, " "), i, retries)
+		resultByte, err = tmpProcess.CombinedOutput()
+		resultStr = string(resultByte)
+		if err == nil || !shouldRetry(resultStr) {
+			break
+		}
+		time.Sleep(retryDelay)
+	}
+	return filterResultWhenRunsForCoverage(resultStr), err
 }
 
 // VtctlClientProcessInstance returns a VtctlProcess handle for vtctlclient process
@@ -240,4 +253,13 @@ func (vtctlclient *VtctlClientProcess) InitTablet(tablet *Vttablet, cell string,
 	}
 	args = append(args, fmt.Sprintf("%s-%010d", cell, tablet.TabletUID), tabletType)
 	return vtctlclient.ExecuteCommand(args...)
+}
+
+// shouldRetry tells us if the command should be retried based on the results/output -- meaning that it
+// is likely an ephemeral or recoverable issue that is likely to succeed when retried.
+func shouldRetry(cmdResults string) bool {
+	if strings.Contains(cmdResults, "Deadlock found when trying to get lock; try restarting transaction") {
+		return true
+	}
+	return false
 }

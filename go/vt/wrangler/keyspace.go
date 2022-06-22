@@ -33,7 +33,6 @@ import (
 	"vitess.io/vitess/go/vt/key"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
@@ -48,23 +47,11 @@ const (
 
 // TODO(b/26388813): Remove these flags once vtctl WaitForDrain is integrated in the vtctl MigrateServed* commands.
 var (
-	waitForDrainSleepRdonly  = flag.Duration("wait_for_drain_sleep_rdonly", 5*time.Second, "time to wait before shutting the query service on old RDONLY tablets during MigrateServedTypes")
-	waitForDrainSleepReplica = flag.Duration("wait_for_drain_sleep_replica", 15*time.Second, "time to wait before shutting the query service on old REPLICA tablets during MigrateServedTypes")
+	waitForDrainSleepRdonly  = flag.Duration("wait_for_drain_sleep_rdonly", 5*time.Second, "(DEPRECATED) time to wait before shutting the query service on old RDONLY tablets during MigrateServedTypes")
+	waitForDrainSleepReplica = flag.Duration("wait_for_drain_sleep_replica", 15*time.Second, "(DEPRECATED) time to wait before shutting the query service on old REPLICA tablets during MigrateServedTypes")
 )
 
 // keyspace related methods for Wrangler
-
-// SetKeyspaceShardingInfo locks a keyspace and sets its ShardingColumnName
-// and ShardingColumnType
-func (wr *Wrangler) SetKeyspaceShardingInfo(ctx context.Context, keyspace, shardingColumnName string, shardingColumnType topodatapb.KeyspaceIdType, force bool) error {
-	_, err := wr.VtctldServer().SetKeyspaceShardingInfo(ctx, &vtctldatapb.SetKeyspaceShardingInfoRequest{
-		Keyspace:   keyspace,
-		ColumnName: shardingColumnName,
-		ColumnType: shardingColumnType,
-		Force:      force,
-	})
-	return err
-}
 
 // validateNewWorkflow ensures that the specified workflow doesn't already exist
 // in the keyspace.
@@ -354,7 +341,7 @@ func (wr *Wrangler) cancelHorizontalResharding(ctx context.Context, keyspace, sh
 
 		destinationShards[i] = updatedShard
 
-		if _, err := topotools.RefreshTabletsByShard(ctx, wr.ts, wr.tmc, si, nil, wr.Logger()); err != nil {
+		if _, _, err := topotools.RefreshTabletsByShard(ctx, wr.ts, wr.tmc, si, nil, wr.Logger()); err != nil {
 			return err
 		}
 	}
@@ -442,7 +429,7 @@ func (wr *Wrangler) MigrateServedTypes(ctx context.Context, keyspace, shard stri
 		refreshShards = destinationShards
 	}
 	for _, si := range refreshShards {
-		_, err := topotools.RefreshTabletsByShard(ctx, wr.ts, wr.tmc, si, cells, wr.Logger())
+		_, _, err := topotools.RefreshTabletsByShard(ctx, wr.ts, wr.tmc, si, cells, wr.Logger())
 		rec.RecordError(err)
 	}
 	return rec.Error()
@@ -792,7 +779,7 @@ func (wr *Wrangler) masterMigrateServedType(ctx context.Context, keyspace string
 	}
 
 	for _, si := range destinationShards {
-		if _, err := topotools.RefreshTabletsByShard(ctx, wr.ts, wr.tmc, si, nil, wr.Logger()); err != nil {
+		if _, _, err := topotools.RefreshTabletsByShard(ctx, wr.ts, wr.tmc, si, nil, wr.Logger()); err != nil {
 			return err
 		}
 	}
@@ -1226,7 +1213,7 @@ func (wr *Wrangler) replicaMigrateServedFrom(ctx context.Context, ki *topo.Keysp
 
 	// Now refresh the source servers so they reload the denylist
 	event.DispatchUpdate(ev, "refreshing sources tablets state so they update their denied tables")
-	_, err := topotools.RefreshTabletsByShard(ctx, wr.ts, wr.tmc, sourceShard, cells, wr.Logger())
+	_, _, err := topotools.RefreshTabletsByShard(ctx, wr.ts, wr.tmc, sourceShard, cells, wr.Logger())
 	return err
 }
 

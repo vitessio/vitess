@@ -28,12 +28,11 @@ vtctld \
  --cell $cell \
  --workflow_manager_init \
  --workflow_manager_use_election \
- --service_map 'grpc-vtctl' \
+ --service_map 'grpc-vtctl,grpc-vtctld' \
  --backup_storage_implementation file \
  --file_backup_storage_root $VTDATAROOT/backups \
  --log_dir $VTDATAROOT/tmp \
  --port $vtctld_web_port \
- --durability_policy 'semi_sync' \
  --grpc_port $grpc_port \
  --pid_file $VTDATAROOT/tmp/vtctld.pid \
   > $VTDATAROOT/tmp/vtctld.out 2>&1 &

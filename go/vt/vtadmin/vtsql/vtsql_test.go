@@ -18,21 +18,15 @@ package vtsql
 
 import (
 	"context"
-	"database/sql"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/grpcclient"
-	"vitess.io/vitess/go/vt/vitessdriver"
-	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery/fakediscovery"
-	"vitess.io/vitess/go/vt/vtadmin/vtsql/fakevtsql"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
@@ -85,98 +79,4 @@ func Test_getQueryContext(t *testing.T) {
 	assert.NotEqual(t, callerctx, outctx, "getQueryContext should override an existing callerid in the context")
 	assertEffectiveCaller(t, callerid.EffectiveCallerIDFromContext(outctx), "efuser", "vtadmin", "")
 	assertImmediateCaller(t, callerid.ImmediateCallerIDFromContext(outctx), "imuser")
-}
-
-func TestDial(t *testing.T) {
-	t.Helper()
-
-	tests := []struct {
-		name      string
-		disco     *fakediscovery.Fake
-		gates     []*vtadminpb.VTGate
-		proxy     *VTGateProxy
-		dialer    func(cfg vitessdriver.Configuration) (*sql.DB, error)
-		shouldErr bool
-	}{
-		{
-			name: "existing conn",
-			proxy: &VTGateProxy{
-				cluster:         &vtadminpb.Cluster{},
-				conn:            sql.OpenDB(&fakevtsql.Connector{}),
-				dialPingTimeout: time.Millisecond * 10,
-			},
-			shouldErr: false,
-		},
-		{
-			name:  "discovery error",
-			disco: fakediscovery.New(),
-			proxy: &VTGateProxy{
-				cluster: &vtadminpb.Cluster{},
-			},
-			shouldErr: true,
-		},
-		{
-			name:  "dialer error",
-			disco: fakediscovery.New(),
-			gates: []*vtadminpb.VTGate{
-				{
-					Hostname: "gate",
-				},
-			},
-			proxy: &VTGateProxy{
-				cluster: &vtadminpb.Cluster{},
-				DialFunc: func(cfg vitessdriver.Configuration) (*sql.DB, error) {
-					return nil, assert.AnError
-				},
-			},
-			shouldErr: true,
-		},
-		{
-			name:  "success",
-			disco: fakediscovery.New(),
-			gates: []*vtadminpb.VTGate{
-				{
-					Hostname: "gate",
-				},
-			},
-			proxy: &VTGateProxy{
-				cluster: &vtadminpb.Cluster{},
-				creds: &StaticAuthCredentials{
-					StaticAuthClientCreds: &grpcclient.StaticAuthClientCreds{
-						Username: "user",
-						Password: "pass",
-					},
-				},
-				DialFunc: func(cfg vitessdriver.Configuration) (*sql.DB, error) {
-					return sql.OpenDB(&fakevtsql.Connector{}), nil
-				},
-			},
-		},
-	}
-
-	ctx := context.Background()
-
-	for _, tt := range tests {
-		tt := tt
-
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			if tt.disco != nil {
-				if len(tt.gates) > 0 {
-					tt.disco.AddTaggedGates(nil, tt.gates...)
-				}
-
-				tt.proxy.discovery = tt.disco
-			}
-
-			err := tt.proxy.Dial(ctx, "")
-			if tt.shouldErr {
-				assert.Error(t, err)
-				return
-			}
-
-			assert.NoError(t, err)
-		})
-	}
 }

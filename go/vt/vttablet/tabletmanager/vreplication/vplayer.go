@@ -66,6 +66,8 @@ type vplayer struct {
 	canAcceptStmtEvents bool
 
 	phase string
+
+	throttlerAppName string
 }
 
 // newVPlayer creates a new vplayer. Parameters:
@@ -84,15 +86,16 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 		saveStop = false
 	}
 	return &vplayer{
-		vr:            vr,
-		startPos:      settings.StartPos,
-		pos:           settings.StartPos,
-		stopPos:       settings.StopPos,
-		saveStop:      saveStop,
-		copyState:     copyState,
-		timeLastSaved: time.Now(),
-		tablePlans:    make(map[string]*TablePlan),
-		phase:         phase,
+		vr:               vr,
+		startPos:         settings.StartPos,
+		pos:              settings.StartPos,
+		stopPos:          settings.StopPos,
+		saveStop:         saveStop,
+		copyState:        copyState,
+		timeLastSaved:    time.Now(),
+		tablePlans:       make(map[string]*TablePlan),
+		phase:            phase,
+		throttlerAppName: vr.throttlerAppName(),
 	}
 }
 
@@ -106,7 +109,7 @@ func (vp *vplayer) play(ctx context.Context) error {
 		return nil
 	}
 
-	plan, err := buildReplicatorPlan(vp.vr.source.Filter, vp.vr.colInfoMap, vp.copyState, vp.vr.stats)
+	plan, err := buildReplicatorPlan(vp.vr.source, vp.vr.colInfoMap, vp.copyState, vp.vr.stats)
 	if err != nil {
 		vp.vr.stats.ErrorCounts.Add([]string{"Plan"}, 1)
 		return err
@@ -339,7 +342,7 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 			return ctx.Err()
 		}
 		// check throttler.
-		if !vp.vr.vre.throttlerClient.ThrottleCheckOKOrWait(ctx) {
+		if !vp.vr.vre.throttlerClient.ThrottleCheckOKOrWaitAppName(ctx, vp.throttlerAppName) {
 			continue
 		}
 

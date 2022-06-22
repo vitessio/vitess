@@ -41,48 +41,58 @@ const (
 )
 
 // This file contains the commands to control the throttler which is used during
-// resharding (vtworker) and by filtered replication (vttablet).
+// resharding and by filtered replication (vttablet).
 
 func init() {
 	addCommandGroup(throttlerGroupName)
 
 	addCommand(throttlerGroupName, command{
-		name:   "ThrottlerMaxRates",
-		method: commandThrottlerMaxRates,
-		params: "-server <vtworker or vttablet>",
-		help:   "Returns the current max rate of all active resharding throttlers on the server.",
+		name:         "ThrottlerMaxRates",
+		method:       commandThrottlerMaxRates,
+		params:       "--server <vttablet>",
+		help:         "Returns the current max rate of all active resharding throttlers on the server.",
+		deprecated:   true,
+		deprecatedBy: "the new Reshard/MoveTables workflows",
 	})
 	addCommand(throttlerGroupName, command{
-		name:   "ThrottlerSetMaxRate",
-		method: commandThrottlerSetMaxRate,
-		params: "-server <vtworker or vttablet> <rate>",
-		help:   "Sets the max rate for all active resharding throttlers on the server.",
+		name:         "ThrottlerSetMaxRate",
+		method:       commandThrottlerSetMaxRate,
+		params:       "--server <vttablet> <rate>",
+		help:         "Sets the max rate for all active resharding throttlers on the server.",
+		deprecated:   true,
+		deprecatedBy: "the new Reshard/MoveTables workflows",
 	})
 
 	addCommand(throttlerGroupName, command{
-		name:   "GetThrottlerConfiguration",
-		method: commandGetThrottlerConfiguration,
-		params: "-server <vtworker or vttablet> [<throttler name>]",
-		help:   "Returns the current configuration of the MaxReplicationLag module. If no throttler name is specified, the configuration of all throttlers will be returned.",
+		name:         "GetThrottlerConfiguration",
+		method:       commandGetThrottlerConfiguration,
+		params:       "--server <vttablet> [<throttler name>]",
+		help:         "Returns the current configuration of the MaxReplicationLag module. If no throttler name is specified, the configuration of all throttlers will be returned.",
+		deprecated:   true,
+		deprecatedBy: "the new Reshard/MoveTables workflows",
 	})
 	addCommand(throttlerGroupName, command{
 		name:   "UpdateThrottlerConfiguration",
 		method: commandUpdateThrottlerConfiguration,
 		// Note: <configuration protobuf text> is put in quotes to tell the user
 		// that the value must be quoted such that it's one argument only.
-		params: `-server <vtworker or vttablet> [-copy_zero_values] "<configuration protobuf text>" [<throttler name>]`,
-		help:   "Updates the configuration of the MaxReplicationLag module. The configuration must be specified as protobuf text. If a field is omitted or has a zero value, it will be ignored unless -copy_zero_values is specified. If no throttler name is specified, all throttlers will be updated.",
+		params:       `--server <vttablet> [--copy_zero_values] "<configuration protobuf text>" [<throttler name>]`,
+		help:         "Updates the configuration of the MaxReplicationLag module. The configuration must be specified as protobuf text. If a field is omitted or has a zero value, it will be ignored unless --copy_zero_values is specified. If no throttler name is specified, all throttlers will be updated.",
+		deprecated:   true,
+		deprecatedBy: "the new Reshard/MoveTables workflows",
 	})
 	addCommand(throttlerGroupName, command{
-		name:   "ResetThrottlerConfiguration",
-		method: commandResetThrottlerConfiguration,
-		params: "-server <vtworker or vttablet> [<throttler name>]",
-		help:   "Resets the current configuration of the MaxReplicationLag module. If no throttler name is specified, the configuration of all throttlers will be reset.",
+		name:         "ResetThrottlerConfiguration",
+		method:       commandResetThrottlerConfiguration,
+		params:       "--server <vttablet> [<throttler name>]",
+		help:         "Resets the current configuration of the MaxReplicationLag module. If no throttler name is specified, the configuration of all throttlers will be reset.",
+		deprecated:   true,
+		deprecatedBy: "the new Reshard/MoveTables workflows",
 	})
 }
 
 func commandThrottlerMaxRates(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	server := subFlags.String("server", "", "vtworker or vttablet to connect to")
+	server := subFlags.String("server", "", "vttablet to connect to")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -125,7 +135,7 @@ func commandThrottlerMaxRates(ctx context.Context, wr *wrangler.Wrangler, subFla
 }
 
 func commandThrottlerSetMaxRate(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	server := subFlags.String("server", "", "vtworker or vttablet to connect to")
+	server := subFlags.String("server", "", "vttablet to connect to")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -167,7 +177,7 @@ func commandThrottlerSetMaxRate(ctx context.Context, wr *wrangler.Wrangler, subF
 }
 
 func commandGetThrottlerConfiguration(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	server := subFlags.String("server", "", "vtworker or vttablet to connect to")
+	server := subFlags.String("server", "", "vttablet to connect to")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -215,7 +225,7 @@ func commandGetThrottlerConfiguration(ctx context.Context, wr *wrangler.Wrangler
 }
 
 func commandUpdateThrottlerConfiguration(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	server := subFlags.String("server", "", "vtworker or vttablet to connect to")
+	server := subFlags.String("server", "", "vttablet to connect to")
 	copyZeroValues := subFlags.Bool("copy_zero_values", false, "If true, fields with zero values will be copied as well")
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -260,7 +270,7 @@ func commandUpdateThrottlerConfiguration(ctx context.Context, wr *wrangler.Wrang
 }
 
 func commandResetThrottlerConfiguration(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	server := subFlags.String("server", "", "vtworker or vttablet to connect to")
+	server := subFlags.String("server", "", "vttablet to connect to")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}

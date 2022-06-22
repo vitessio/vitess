@@ -83,7 +83,6 @@ var (
 // LaunchCluster : starts the cluster as per given params.
 func LaunchCluster(setupType int, streamMode string, stripes int) (int, error) {
 	localCluster = cluster.NewCluster(cell, hostname)
-	localCluster.VtctldExtraArgs = append(localCluster.VtctldExtraArgs, "--durability_policy=semi_sync")
 
 	// Start topo server
 	err := localCluster.StartTopo()
@@ -186,6 +185,11 @@ func LaunchCluster(setupType int, streamMode string, stripes int) (int, error) {
 		return 1, err
 	}
 	if err := localCluster.VtctlclientProcess.InitTablet(replica1, cell, keyspaceName, hostname, shard.Name); err != nil {
+		return 1, err
+	}
+	vtctldClientProcess := cluster.VtctldClientProcessInstance("localhost", localCluster.VtctldProcess.GrpcPort, localCluster.TmpDirectory)
+	_, err = vtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=semi_sync")
+	if err != nil {
 		return 1, err
 	}
 

@@ -116,6 +116,10 @@ gets scheduled nor executed.
 of `-migration_context` as it is more consistent with output of `SHOW VITESS_MIGRATIONS ...` which includes
 the `migration_context` column.
 
+### vtctl/vtctlclient ApplySchema -caller_id
+`-caller_id` flag sets the Effective Caller ID of the ApplySchema operation so that the operation can succeed with a database that 
+is enforcing strict ACL checking.
+
 ### vtctl/vtctlclient OnlineDDL ... complete
 
 Complementing the `alter vitess_migration ... complete` query, a migration can also be completed via `vtctl`

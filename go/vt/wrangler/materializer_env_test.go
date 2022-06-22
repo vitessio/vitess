@@ -194,7 +194,7 @@ func (tmc *testMaterializerTMClient) getSchemaRequestCount(uid uint32) int {
 	return tmc.getSchemaCounts[key]
 }
 
-func (tmc *testMaterializerTMClient) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
+func (tmc *testMaterializerTMClient) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, tables, excludeTables []string, includeViews bool, tableSchemaOnly bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
 	tmc.schemaRequested(tablet.Alias.Uid)
 	schemaDefn := &tabletmanagerdatapb.SchemaDefinition{}
 	for _, table := range tables {

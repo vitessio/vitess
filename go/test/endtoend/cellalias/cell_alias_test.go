@@ -242,8 +242,8 @@ func TestAlias(t *testing.T) {
 	expectedPartitions[topodata.TabletType_PRIMARY] = []string{shard1.Name, shard2.Name}
 	expectedPartitions[topodata.TabletType_REPLICA] = []string{shard1.Name, shard2.Name}
 	expectedPartitions[topodata.TabletType_RDONLY] = []string{shard1.Name, shard2.Name}
-	sharding.CheckSrvKeyspace(t, cell1, keyspaceName, "", 0, expectedPartitions, *localCluster)
-	sharding.CheckSrvKeyspace(t, cell2, keyspaceName, "", 0, expectedPartitions, *localCluster)
+	sharding.CheckSrvKeyspace(t, cell1, keyspaceName, expectedPartitions, *localCluster)
+	sharding.CheckSrvKeyspace(t, cell2, keyspaceName, expectedPartitions, *localCluster)
 
 	// Adds alias so vtgate can route to replica/rdonly tablets that are not in the same cell, but same alias
 	err = localCluster.VtctlclientProcess.ExecuteCommand("AddCellsAlias", "--",
@@ -258,8 +258,6 @@ func TestAlias(t *testing.T) {
 	vtgateInstance := localCluster.NewVtgateInstance()
 	vtgateInstance.CellsToWatch = allCells
 	vtgateInstance.TabletTypesToWait = "PRIMARY,REPLICA"
-	// Use legacy gateway. There's a separate test for tabletgateway in go/test/endtoend/tabletgateway/cellalias/cell_alias_test.go
-	vtgateInstance.GatewayImplementation = "discoverygateway"
 	err = vtgateInstance.Setup()
 	require.NoError(t, err)
 
@@ -308,8 +306,8 @@ func TestAddAliasWhileVtgateUp(t *testing.T) {
 	expectedPartitions[topodata.TabletType_PRIMARY] = []string{shard1.Name, shard2.Name}
 	expectedPartitions[topodata.TabletType_REPLICA] = []string{shard1.Name, shard2.Name}
 	expectedPartitions[topodata.TabletType_RDONLY] = []string{shard1.Name, shard2.Name}
-	sharding.CheckSrvKeyspace(t, cell1, keyspaceName, "", 0, expectedPartitions, *localCluster)
-	sharding.CheckSrvKeyspace(t, cell2, keyspaceName, "", 0, expectedPartitions, *localCluster)
+	sharding.CheckSrvKeyspace(t, cell1, keyspaceName, expectedPartitions, *localCluster)
+	sharding.CheckSrvKeyspace(t, cell2, keyspaceName, expectedPartitions, *localCluster)
 
 	vtgateInstance := localCluster.NewVtgateInstance()
 	vtgateInstance.CellsToWatch = allCells
@@ -340,11 +338,11 @@ func TestAddAliasWhileVtgateUp(t *testing.T) {
 func waitTillAllTabletsAreHealthyInVtgate(t *testing.T, vtgateInstance cluster.VtgateProcess, shards ...string) {
 	for _, shard := range shards {
 		err := vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", keyspaceName, shard), 1)
-		require.NoError(t, err)
+		require.Nil(t, err)
 		err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspaceName, shard), 1)
-		require.NoError(t, err)
+		require.Nil(t, err)
 		err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", keyspaceName, shard), 1)
-		require.NoError(t, err)
+		require.Nil(t, err)
 	}
 }
 

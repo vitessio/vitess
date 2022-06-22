@@ -224,6 +224,7 @@ func TestMain(m *testing.M) {
 			"--throttle_threshold", "1s",
 			"--heartbeat_enable",
 			"--heartbeat_interval", "250ms",
+			"--heartbeat_on_demand_duration", "5s",
 			"--migration_check_interval", "5s",
 		}
 		clusterInstance.VtGateExtraArgs = []string{
@@ -245,8 +246,6 @@ func TestMain(m *testing.M) {
 		}
 
 		vtgateInstance := clusterInstance.NewVtgateInstance()
-		// set the gateway we want to use
-		vtgateInstance.GatewayImplementation = "tabletgateway"
 		// Start vtgate
 		if err := vtgateInstance.Setup(); err != nil {
 			return 1, err
