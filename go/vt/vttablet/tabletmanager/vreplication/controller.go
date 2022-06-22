@@ -46,9 +46,9 @@ var (
 	_          = flag.Duration("vreplication_healthcheck_topology_refresh", 30*time.Second, "refresh interval for re-reading the topology")
 	_          = flag.Duration("vreplication_healthcheck_retry_delay", 5*time.Second, "healthcheck retry delay")
 	_          = flag.Duration("vreplication_healthcheck_timeout", 1*time.Minute, "healthcheck retry delay")
-	retryDelay = flag.Duration("vreplication_retry_delay", 5*time.Second, "delay before retrying a failed workflow event in the replication phase")
+	retryDelay = flag.Duration("vreplication_retry_delay", 5*time.Second, "delay before retrying a failed workflow event in the replication phase (min: 5 seconds)")
 
-	maxTimeToRetryError = flag.Duration("vreplication_max_time_to_retry_on_error", 15*time.Minute, "stop automatically retrying when we've had consecutive failures with the same error for this long after the first occurrence")
+	maxTimeToRetryError = flag.Duration("vreplication_max_time_to_retry_on_error", 15*time.Minute, "stop automatically retrying when we've had consecutive failures with the same error for this long after the first occurrence (min: vreplication_retry_delay * 5, max: 24 hours)")
 )
 
 // controller is created by Engine. Members are initialized upfront.
@@ -81,6 +81,16 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 	if blpStats == nil {
 		blpStats = binlogplayer.NewStats()
 	}
+	minRetryDelay := 5 * time.Second
+	if *retryDelay < minRetryDelay {
+		*retryDelay = minRetryDelay
+	}
+	if *maxTimeToRetryError < *retryDelay*5 {
+		*maxTimeToRetryError = *retryDelay * 5
+	} else if *maxTimeToRetryError > 24*time.Hour {
+		*maxTimeToRetryError = 24 * time.Hour
+	}
+
 	ct := &controller{
 		vre:               vre,
 		dbClientFactory:   dbClientFactory,
