@@ -19,12 +19,12 @@
 
 source ./env.sh
 
-for i in 300 301 302; do
+for i in 300; do
 	CELL=zone1 TABLET_UID=$i ./scripts/mysqlctl-up.sh
 	SHARD=-80 CELL=zone1 KEYSPACE=customer TABLET_UID=$i ./scripts/vttablet-up.sh
 done
 
-for i in 400 401 402; do
+for i in 400; do
 	CELL=zone1 TABLET_UID=$i ./scripts/mysqlctl-up.sh
 	SHARD=80- CELL=zone1 KEYSPACE=customer TABLET_UID=$i ./scripts/vttablet-up.sh
 done

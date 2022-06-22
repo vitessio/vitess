@@ -60,7 +60,7 @@ func main() {
 	}
 	go func() {
 		for {
-			cmd := exec.Command("mysql", "-u", "root", "--host","127.0.0.1", "-P", "15306", "-e", "insert into customer(email,lt) values('a',repeat('a', 100000))")
+			cmd := exec.Command("mysql", "-u", "root", "--host","127.0.0.1", "-P", "15306", "-e", "insert into customer(email,lt) values('a',repeat('a', 100000)),('a',repeat('a', 100000)),('a',repeat('a', 100000)),('a',repeat('a', 100000)),('a',repeat('a', 100000)),('a',repeat('a', 100000)),('a',repeat('a', 100000)),('a',repeat('a', 100000)),('a',repeat('a', 100000)),('a',repeat('a', 100000)),('a',repeat('a', 100000)),('a',repeat('a', 100000)),('a',repeat('a', 100000)),('a',repeat('a', 100000)),('a',repeat('a', 100000)),('a',repeat('a', 100000)),('a',repeat('a', 100000)),('a',repeat('a', 100000)),('a',repeat('a', 100000)),('a',repeat('a', 100000)),('a',repeat('a', 100000)),('a',repeat('a', 100000)),('a',repeat('a', 100000)),('a',repeat('a', 100000)),('a',repeat('a', 100000)),('a',repeat('a', 100000)),('a',repeat('a', 100000)),('a',repeat('a', 100000)),('a',repeat('a', 100000)),('a',repeat('a', 100000)),('a',repeat('a', 100000)),('a',repeat('a', 100000)),('a',repeat('a', 100000)),('a',repeat('a', 100000)),('a',repeat('a', 100000)),('a',repeat('a', 100000)),('a',repeat('a', 100000)),('a',repeat('a', 100000)),('a',repeat('a', 100000)),('a',repeat('a', 100000)),('a',repeat('a', 100000)),('a',repeat('a', 100000)),('a',repeat('a', 100000)),('a',repeat('a', 100000))")
 			o, err := cmd.Output()
 			if err != nil {
 				panic(o)
@@ -68,7 +68,7 @@ func main() {
 			time.Sleep(1 * time.Millisecond)
 		}
 	}()
-	ticker := time.NewTicker(2 * time.Second)
+	ticker := time.NewTicker(20 * time.Minute)
 	for {
 		log.Printf("#Active Counters: %d", ctr.Get())
 		ctx2, cancel := context.WithCancel(context.Background())
@@ -100,7 +100,6 @@ func stream(ctx context.Context, filter *binlogdatapb.Filter, vgtid *binlogdatap
 		switch err {
 		case nil:
 			_ = evs
-			fmt.Printf(".")
 			for _, ev := range evs {
 				if ev.Vgtid != nil {
 					gvgtid = ev.Vgtid
