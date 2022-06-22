@@ -280,7 +280,7 @@ var testGetSchemaReply = &tabletmanagerdatapb.SchemaDefinition{
 	Version: "xxx",
 }
 
-func (fra *fakeRPCTM) GetSchema(ctx context.Context, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
+func (fra *fakeRPCTM) GetSchema(ctx context.Context, tables, excludeTables []string, includeViews bool, tableSchemaOnly bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -291,12 +291,12 @@ func (fra *fakeRPCTM) GetSchema(ctx context.Context, tables, excludeTables []str
 }
 
 func tmRPCTestGetSchema(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	result, err := client.GetSchema(ctx, tablet, testGetSchemaTables, testGetSchemaExcludeTables, true)
+	result, err := client.GetSchema(ctx, tablet, testGetSchemaTables, testGetSchemaExcludeTables, true, false)
 	compareError(t, "GetSchema", err, result, testGetSchemaReply)
 }
 
 func tmRPCTestGetSchemaPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	_, err := client.GetSchema(ctx, tablet, testGetSchemaTables, testGetSchemaExcludeTables, true)
+	_, err := client.GetSchema(ctx, tablet, testGetSchemaTables, testGetSchemaExcludeTables, true, false)
 	expectHandleRPCPanic(t, "GetSchema", false /*verbose*/, err)
 }
 

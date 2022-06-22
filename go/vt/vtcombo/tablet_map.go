@@ -751,12 +751,13 @@ func (itmc *internalTabletManagerClient) GetSchema(
 	tablet *topodatapb.Tablet,
 	tables, excludeTables []string,
 	includeViews bool,
+	tableSchemaOnly bool,
 ) (*tabletmanagerdatapb.SchemaDefinition, error) {
 	t, ok := tabletMap[tablet.Alias.Uid]
 	if !ok {
 		return nil, fmt.Errorf("tmclient: cannot find tablet %v", tablet.Alias.Uid)
 	}
-	return t.tm.GetSchema(ctx, tables, excludeTables, includeViews)
+	return t.tm.GetSchema(ctx, tables, excludeTables, includeViews, tableSchemaOnly)
 }
 
 func (itmc *internalTabletManagerClient) GetPermissions(ctx context.Context, tablet *topodatapb.Tablet) (*tabletmanagerdatapb.Permissions, error) {
