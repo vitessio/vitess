@@ -33,7 +33,8 @@ sleep 5 # Give vtgate time to really start.
 
 mysql < ../common/insert_commerce_data.sql
 mysql --table < ../common/select_commerce_data.sql
-
+vtctlclient --server localhost:15999 ApplySchema --sql "ALTER TABLE customer ADD lt longtext " commerce
+mysql -h 127.0.0.1 -P 15306 commerce -e "update customer set lt = repeat('a', 100000)"
 ./201_customer_tablets.sh
 
 for shard in "customer/0"; do
@@ -81,6 +82,7 @@ sleep 3 # TODO: Required for now!
 mysql --table < ../common/select_customer-80_data.sql
 mysql --table < ../common/select_customer80-_data.sql
 
+exit
 ./306_down_shard_0.sh
 
 ./401_teardown.sh

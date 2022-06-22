@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"os/exec"
 	"time"
 	"vitess.io/vitess/go/sync2"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
@@ -36,12 +37,18 @@ import (
 	This is a sample client for streaming using the vstream API. It is setup to work with the local example and you can
     either stream from the unsharded commerce keyspace or the customer keyspace after the sharding step.
 */
+
+var gvgtid *binlogdatapb.VGtid
+
 func main() {
-	var vgtid *binlogdatapb.VGtid
-	vgtid = &binlogdatapb.VGtid{
+	gvgtid = &binlogdatapb.VGtid{
 		ShardGtids: []*binlogdatapb.ShardGtid{{
-			Keyspace: "commerce",
-			Shard:    "0",
+			Keyspace: "customer",
+			Shard:    "-80",
+			Gtid:     "",
+		},{
+			Keyspace: "customer",
+			Shard:    "80-",
 			Gtid:     "",
 		}},
 	}
@@ -51,6 +58,16 @@ func main() {
 			Filter: "select * from customer",
 		}},
 	}
+	go func() {
+		for {
+			cmd := exec.Command("mysql", "-u", "root", "--host","127.0.0.1", "-P", "15306", "-e", "insert into customer(email,lt) values('a',repeat('a', 100000))")
+			o, err := cmd.Output()
+			if err != nil {
+				panic(o)
+			}
+			time.Sleep(1 * time.Millisecond)
+		}
+	}()
 	ticker := time.NewTicker(2 * time.Second)
 	for {
 		log.Printf("#Active Counters: %d", ctr.Get())
@@ -60,7 +77,8 @@ func main() {
 			defer func() {
 				ctr.Add(-1)
 			}()
-			stream(ctx2, filter, vgtid)
+			log.Printf("Streaming from %+v\n", gvgtid)
+			stream(ctx2, filter, gvgtid)
 		}()
 		select {
 		case <-ticker.C:
@@ -78,11 +96,17 @@ func stream(ctx context.Context, filter *binlogdatapb.Filter, vgtid *binlogdatap
 	defer conn.Close()
 	reader, err := conn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, &vtgatepb.VStreamFlags{})
 	for {
-		e, err := reader.Recv()
+		evs, err := reader.Recv()
 		switch err {
 		case nil:
-			_ = e
+			_ = evs
 			fmt.Printf(".")
+			for _, ev := range evs {
+				if ev.Vgtid != nil {
+					gvgtid = ev.Vgtid
+					//log.Printf("Setting vgtid as %+v", ev.Vgtid)
+				}
+			}
 		case io.EOF:
 			fmt.Printf("\nstream ended\n")
 			return
