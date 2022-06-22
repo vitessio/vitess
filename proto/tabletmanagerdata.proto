@@ -135,6 +135,9 @@ message GetSchemaRequest {
   repeated string tables = 1;
   bool include_views = 2;
   repeated string exclude_tables = 3;
+  // TableSchemaOnly specifies whether to limit the results to just table/view
+  // schema definition (CREATE TABLE/VIEW statements) and skip column/field information
+  bool table_schema_only = 4;
 }
 
 message GetSchemaResponse {
