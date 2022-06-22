@@ -631,10 +631,7 @@ func (hc *HealthCheckImpl) GetHealthyTabletStats(target *query.Target) []*Tablet
 	return append(result, hc.healthy[KeyFromTarget(target)]...)
 }
 
-// GetHealthyTabletStats returns only the healthy tablets.
-// The returned array is owned by the caller.
-// For TabletType_PRIMARY, this will only return at most one entry,
-// the most recent tablet of type primary.
+// GetTabletStats returns only the tablets that matches the given target.
 // This returns a copy of the data so that callers can access without
 // synchronization
 func (hc *HealthCheckImpl) GetTabletStats(target *query.Target) []*TabletHealth {
