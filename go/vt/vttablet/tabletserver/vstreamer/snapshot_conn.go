@@ -47,7 +47,15 @@ func snapshotConnect(ctx context.Context, cp dbconfigs.Connector) (*snapshotConn
 // startSnapshot starts a streaming query with a snapshot view of the specified table.
 // It returns the gtid of the time when the snapshot was taken.
 func (conn *snapshotConn) streamWithSnapshot(ctx context.Context, table, query string) (gtid string, err error) {
-	gtid, err = conn.startSnapshot(ctx, table)
+	supportsTransactionalGTID, err := conn.SupportsCapability(mysql.TransactionalGtidExecutedFlavorCapability)
+	if err != nil {
+		return "", err
+	}
+	if supportsTransactionalGTID {
+		gtid, err = conn.startSnapshotWithConsistentGTID(ctx)
+	} else {
+		gtid, err = conn.startSnapshot(ctx, table)
+	}
 	if err != nil {
 		return "", err
 	}
@@ -95,6 +103,29 @@ func (conn *snapshotConn) startSnapshot(ctx context.Context, table string) (gtid
 		return "", err
 	}
 	if _, err := conn.ExecuteFetch("set @@session.time_zone = '+00:00'", 1, false); err != nil {
+		return "", err
+	}
+	return mysql.EncodePosition(mpos), nil
+}
+
+// startSnapshotWithConsistentGTID performs the snapshotting without locking tables. As of MySQL 8.0.17,
+// table mysql.gtid_executed is transactionally consistent with a user's transaction.
+// That is, the value of gtid_executed in that table is consistent with an open transaction, and represents
+// the GTID of the database at that transaction
+func (conn *snapshotConn) startSnapshotWithConsistentGTID(ctx context.Context) (gtid string, err error) {
+	// Starting a transaction now will allow us to start the read later,
+	// which will happen after we release the lock on the table.
+	if _, err := conn.ExecuteFetch("set transaction isolation level repeatable read", 1, false); err != nil {
+		return "", err
+	}
+	if _, err := conn.ExecuteFetch("start transaction with consistent snapshot", 1, false); err != nil {
+		return "", err
+	}
+	if _, err := conn.ExecuteFetch("set @@session.time_zone = '+00:00'", 1, false); err != nil {
+		return "", err
+	}
+	mpos, err := conn.PrimaryPosition()
+	if err != nil {
 		return "", err
 	}
 	return mysql.EncodePosition(mpos), nil
