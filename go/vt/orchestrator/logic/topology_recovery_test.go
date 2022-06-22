@@ -17,13 +17,20 @@ limitations under the License.
 package logic
 
 import (
+	"context"
 	"testing"
 	"time"
 
 	"github.com/patrickmn/go-cache"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/orchestrator/db"
 	"vitess.io/vitess/go/vt/orchestrator/inst"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo/memorytopo"
+
+	// import the gRPC client implementation for tablet manager
+	_ "vitess.io/vitess/go/vt/vttablet/grpctmclient"
 )
 
 func TestAnalysisEntriesHaveSameRecovery(t *testing.T) {
@@ -84,4 +91,40 @@ func TestAnalysisEntriesHaveSameRecovery(t *testing.T) {
 			require.Equal(t, tt.shouldBeEqual, res)
 		})
 	}
+}
+
+func TestElectNewPrimaryPanic(t *testing.T) {
+	orcDb, err := db.OpenOrchestrator()
+	require.NoError(t, err)
+	oldTs := ts
+	defer func() {
+		ts = oldTs
+		_, err = orcDb.Exec("delete from vitess_tablet")
+		require.NoError(t, err)
+	}()
+
+	tablet := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "zone1",
+			Uid:  100,
+		},
+		Hostname:      "localhost",
+		MysqlHostname: "localhost",
+		MysqlPort:     1200,
+		Keyspace:      "ks",
+		Shard:         "-",
+		Type:          topodatapb.TabletType_REPLICA,
+	}
+	err = inst.SaveTablet(tablet)
+	require.NoError(t, err)
+	analysisEntry := inst.ReplicationAnalysis{
+		AnalyzedInstanceKey: inst.InstanceKey{
+			Hostname: tablet.MysqlHostname,
+			Port:     int(tablet.MysqlPort),
+		},
+	}
+	ts = memorytopo.NewServer("zone1")
+	recoveryAttempted, _, err := electNewPrimary(context.Background(), analysisEntry, nil, false, false)
+	require.True(t, recoveryAttempted)
+	require.Error(t, err)
 }
