@@ -81,14 +81,15 @@ func doVDiff1(t *testing.T, ksWorkflow, cells string) {
 	})
 }
 
-func waitForVDiff2ToComplete(t *testing.T, ksWorkflow, uuid string, completedAtMin time.Time) *vdiffInfo {
+func waitForVDiff2ToComplete(t *testing.T, ksWorkflow, cells, uuid string, completedAtMin time.Time) *vdiffInfo {
 	var info *vdiffInfo
 	ch := make(chan bool)
 	go func() {
 		for {
 			time.Sleep(1 * time.Second)
-			_, jsonStr := performVDiff2Action(t, ksWorkflow, "show", uuid)
-			if info = getVDiffInfo(jsonStr); info.State == "completed" {
+			_, jsonStr := performVDiff2Action(t, ksWorkflow, cells, "show", uuid)
+			info = getVDiffInfo(jsonStr)
+			if info.State == "completed" {
 				if !completedAtMin.IsZero() {
 					ca := info.CompletedAt
 					completedAt, _ := time.Parse(tsFormat, ca)
@@ -98,12 +99,18 @@ func waitForVDiff2ToComplete(t *testing.T, ksWorkflow, uuid string, completedAtM
 				}
 				ch <- true
 				return
+			} else if info.State == "error" {
+				ch <- false
+				return
 			}
 		}
 	}()
 
 	select {
-	case <-ch:
+	case good := <-ch:
+		if !good {
+			require.FailNow(t, "VDiff encountered an error")
+		}
 		return info
 	case <-time.After(vdiffTimeout):
 		require.FailNowf(t, "VDiff never completed: %s", uuid)
@@ -117,12 +124,11 @@ type expectedVDiff2Result struct {
 	hasMismatch bool
 }
 
-// todo: use specified cells
 func vdiff2(t *testing.T, keyspace, workflow, cells string, want *expectedVDiff2Result) {
 	ksWorkflow := fmt.Sprintf("%s.%s", keyspace, workflow)
 	t.Run(fmt.Sprintf("vdiff2 %s", ksWorkflow), func(t *testing.T) {
-		uuid, _ := performVDiff2Action(t, ksWorkflow, "create", "")
-		info := waitForVDiff2ToComplete(t, ksWorkflow, uuid, time.Time{})
+		uuid, _ := performVDiff2Action(t, ksWorkflow, cells, "create", "")
+		info := waitForVDiff2ToComplete(t, ksWorkflow, cells, uuid, time.Time{})
 
 		require.Equal(t, workflow, info.Workflow)
 		require.Equal(t, keyspace, info.Keyspace)
@@ -139,11 +145,11 @@ func vdiff2(t *testing.T, keyspace, workflow, cells string, want *expectedVDiff2
 		createCompletedTS, err := time.Parse(tsFormat, info.CompletedAt)
 		require.NoError(t, err)
 
-		uuid, _ = performVDiff2Action(t, ksWorkflow, "resume", uuid)
-		// Pass the previous completed time as we need to wait for it to resume -- where
-		// it goes from completed-> pending->started -- before waiting for it again to
-		// move to completed
-		info = waitForVDiff2ToComplete(t, ksWorkflow, uuid, createCompletedTS)
+		uuid, _ = performVDiff2Action(t, ksWorkflow, cells, "resume", uuid)
+		// Pass the previous completed time as we need to wait for it to
+		// resume -- where it goes from completed-> pending->started -- before
+		// waiting for it again to move to completed
+		info = waitForVDiff2ToComplete(t, ksWorkflow, cells, uuid, createCompletedTS)
 		resumeCompletedTS, err := time.Parse(tsFormat, info.CompletedAt)
 		require.NoError(t, err)
 		require.False(t, info.HasMismatch)
@@ -151,9 +157,9 @@ func vdiff2(t *testing.T, keyspace, workflow, cells string, want *expectedVDiff2
 	})
 }
 
-func performVDiff2Action(t *testing.T, ksWorkflow, action, actionArg string) (uuid string, output string) {
+func performVDiff2Action(t *testing.T, ksWorkflow, cells, action, actionArg string) (uuid string, output string) {
 	var err error
-	output, err = vc.VtctlClient.ExecuteCommandWithOutput("VDiff", "--", "--v2", "--format", "json", ksWorkflow, action, actionArg)
+	output, err = vc.VtctlClient.ExecuteCommandWithOutput("VDiff", "--", "--v2", "--tablet_types=primary", "--source_cell="+cells, "--format", "json", ksWorkflow, action, actionArg)
 	log.Infof("vdiff2 output: %+v (err: %+v)", output, err)
 	require.Nil(t, err)
 

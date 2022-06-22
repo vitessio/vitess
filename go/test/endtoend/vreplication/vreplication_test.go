@@ -490,11 +490,11 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 
 		customerTab1 := custKs.Shards["-80"].Tablets["zone1-200"].Vttablet
 		customerTab2 := custKs.Shards["80-"].Tablets["zone1-300"].Vttablet
+		productTab := vc.Cells[defaultCell.Name].Keyspaces["product"].Shards["0"].Tablets["zone1-100"].Vttablet
 
 		catchup(t, customerTab1, workflow, "MoveTables")
 		catchup(t, customerTab2, workflow, "MoveTables")
 
-		productTab := vc.Cells[defaultCell.Name].Keyspaces["product"].Shards["0"].Tablets["zone1-100"].Vttablet
 		query := "select * from customer"
 		require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "product", query, query))
 		insertQuery1 := "insert into customer(cid, name) values(1001, 'tempCustomer1')"
@@ -526,6 +526,9 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		if withOpenTx && commit != nil {
 			commit(t)
 		}
+
+		catchup(t, productTab, workflow, "MoveTables")
+
 		vdiff1(t, "product.p2c_reverse", "")
 		if withOpenTx {
 			execVtgateQuery(t, vtgateConn, "", deleteOpenTxQuery)
