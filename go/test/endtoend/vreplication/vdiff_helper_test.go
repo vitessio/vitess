@@ -142,6 +142,10 @@ func vdiff2(t *testing.T, keyspace, workflow, cells string, want *expectedVDiff2
 			require.Equal(t, "completed", info.State)
 			require.False(t, info.HasMismatch)
 		}
+		if strings.Contains(t.Name(), "AcrossDBVersions") {
+			log.Errorf("VDiff resume cannot be guaranteed between major MySQL versions due to implied collation differences, skipping resume test...")
+			return
+		}
 		createCompletedTS, err := time.Parse(tsFormat, info.CompletedAt)
 		require.NoError(t, err)
 
