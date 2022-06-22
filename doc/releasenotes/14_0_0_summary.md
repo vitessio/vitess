@@ -165,6 +165,30 @@ API endpoint `/throttler/throttle-app` now accepts a `ratio` query argument, a f
 - `1` means "always throttle"
 - any numbr in between is allowd. For example, `0.3` means "throttle in 0.3 probability", ie on a per request and based on a dice roll, there's a `30%` change a request is denied. Overall we can expect about `30%` of requests to be denied. Example: `/throttler/throttle-app?app=vreplication&ratio=0.25`
 
+API endpoint `/debug/vars` now exposes throttler metrics, such as number of hits and errors per app per check type. Example:
+
+```shell
+$ curl -s 'http://127.0.0.1:15100/debug/vars' | jq . | grep throttler
+  "throttler.aggregated.mysql.self": 133.19334,
+  "throttler.aggregated.mysql.shard": 132.997847,
+  "throttler.check.any.error": 1086,
+  "throttler.check.any.mysql.self.error": 542,
+  "throttler.check.any.mysql.self.total": 570,
+  "throttler.check.any.mysql.shard.error": 544,
+  "throttler.check.any.mysql.shard.total": 570,
+  "throttler.check.any.total": 1140,
+  "throttler.check.mysql.self.seconds_since_healthy": 132,
+  "throttler.check.mysql.shard.seconds_since_healthy": 132,
+  "throttler.check.vitess.error": 1086,
+  "throttler.check.vitess.mysql.self.error": 542,
+  "throttler.check.vitess.mysql.self.total": 570,
+  "throttler.check.vitess.mysql.shard.error": 544,
+  "throttler.check.vitess.mysql.shard.total": 570,
+  "throttler.check.vitess.total": 1140,
+  "throttler.probes.latency": 292982,
+  "throttler.probes.total": 1138
+```
+
 See new SQL syntax for controlling/viewing throttling, down below.
 
 ### New Syntax
