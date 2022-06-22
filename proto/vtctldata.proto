@@ -596,6 +596,9 @@ message GetSchemaRequest {
   // rather than full schema information for each table. It is ignored if
   // TableNamesOnly is set to true.
   bool table_sizes_only = 6;
+  // TableSchemaOnly specifies whether to limit the results to just table/view
+  // schema definition (CREATE TABLE/VIEW statements) and skip column/field information
+  bool table_schema_only = 7;
 }
 
 message GetSchemaResponse {

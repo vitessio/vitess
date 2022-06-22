@@ -226,7 +226,7 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflowName, sou
 		oneFilter = bls.Filter
 		break
 	}
-	schm, err := schematools.GetSchema(ctx, wr.ts, wr.tmc, oneTarget.GetPrimary().Alias, nil, nil, false)
+	schm, err := schematools.GetSchema(ctx, wr.ts, wr.tmc, oneTarget.GetPrimary().Alias, nil, nil, false, false)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "GetSchema")
 	}

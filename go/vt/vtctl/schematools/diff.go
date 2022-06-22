@@ -41,12 +41,12 @@ func CompareSchemas(
 	excludeTables []string,
 	includeViews bool,
 ) (diffs []string, err error) {
-	sourceSchema, err := GetSchema(ctx, ts, tmc, source, tables, excludeTables, includeViews)
+	sourceSchema, err := GetSchema(ctx, ts, tmc, source, tables, excludeTables, includeViews, false)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get schema from tablet %v. err: %v", source, err)
 	}
 
-	destSchema, err := GetSchema(ctx, ts, tmc, dest, tables, excludeTables, includeViews)
+	destSchema, err := GetSchema(ctx, ts, tmc, dest, tables, excludeTables, includeViews, false)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get schema from tablet %v. err: %v", dest, err)
 	}
