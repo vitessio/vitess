@@ -180,7 +180,6 @@ func (ct *controller) run(ctx context.Context) {
 
 		ct.blpStats.ErrorCounts.Add([]string{"Stream Error"}, 1)
 		binlogplayer.LogError(fmt.Sprintf("error in stream %v, retrying after %v", ct.id, *retryDelay), err)
-		log.Flush()
 		timer := time.NewTimer(*retryDelay)
 		select {
 		case <-ctx.Done():
