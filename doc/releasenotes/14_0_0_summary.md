@@ -3,7 +3,7 @@
 - [Gen4 is now the default planner](#gen4-is-now-the-default-planner)
 - [New query support](#new-query-support)
 - [Command-line syntax deprecations](#command-line-syntax-deprecations)
-- [New or removed command line flags and behavior](#new-or-removed-command-line-flags-and-behavior)
+- [New command line flags and behavior](#new-command-line-flags-and-behavior)
 - [Online DDL changes](#online-ddl-changes)
 - [Table lifecycle](#table-lifecycle)
 - [Tablet throttler](#tablet-throttler)
@@ -90,7 +90,7 @@ $ # the following will NOT work, because --topo_implementation is a top-level fl
 $ vtctl -- --topo_implementation etcd2 AddCellInfo --root "/vitess/global"
 ```
 
-### New or removed command line flags and behavior
+### New command line flags and behavior
 
 #### vttablet --heartbeat_on_demand_duration
 
