@@ -977,10 +977,12 @@ max_rate_approach_threshold: 0.9
 	refresh interval for re-reading the topology (default 30s)
   --vreplication_heartbeat_update_interval int
 	Frequency (in seconds, default 1, max 60) at which the time_updated column of a vreplication stream when idling (default 1)
+  --vreplication_max_time_to_retry_on_error duration
+	stop automatically retrying when we've had consecutive failures with the same error for this long after the first occurrence (min: vreplication_retry_delay * 5, max: 24 hours) (default 15m0s)
   --vreplication_replica_lag_tolerance duration
 	Replica lag threshold duration: once lag is below this we switch from copy phase to the replication (streaming) phase (default 1m0s)
   --vreplication_retry_delay duration
-	delay before retrying a failed binlog connection (default 5s)
+	delay before retrying a failed workflow event in the replication phase (min: 5 seconds) (default 5s)
   --vreplication_store_compressed_gtid
 	Store compressed gtids in the pos column of _vt.vreplication
   --vreplication_tablet_type string
