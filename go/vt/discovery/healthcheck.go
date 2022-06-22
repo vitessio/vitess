@@ -631,9 +631,10 @@ func (hc *HealthCheckImpl) GetHealthyTabletStats(target *query.Target) []*Tablet
 	return append(result, hc.healthy[KeyFromTarget(target)]...)
 }
 
-// GetTabletStats returns only the tablets that matches the given target.
-// This returns a copy of the data so that callers can access without
-// synchronization
+// GetTabletStats returns all tablets for the given target.
+// The returned array is owned by the caller.
+// For TabletType_PRIMARY, this will only return at most one entry,
+// the most recent tablet of type primary.
 func (hc *HealthCheckImpl) GetTabletStats(target *query.Target) []*TabletHealth {
 	var result []*TabletHealth
 	hc.mu.Lock()
@@ -641,20 +642,6 @@ func (hc *HealthCheckImpl) GetTabletStats(target *query.Target) []*TabletHealth 
 	if target.Shard == "" {
 		target.Shard = "0"
 	}
-	for _, health := range hc.healthData[KeyFromTarget(target)] {
-		result = append(result, health)
-	}
-	return result
-}
-
-// getTabletStats returns all tablets for the given target.
-// The returned array is owned by the caller.
-// For TabletType_PRIMARY, this will only return at most one entry,
-// the most recent tablet of type primary.
-func (hc *HealthCheckImpl) getTabletStats(target *query.Target) []*TabletHealth {
-	var result []*TabletHealth
-	hc.mu.Lock()
-	defer hc.mu.Unlock()
 	ths := hc.healthData[KeyFromTarget(target)]
 	for _, th := range ths {
 		result = append(result, th)
@@ -720,7 +707,7 @@ func (hc *HealthCheckImpl) waitForTablets(ctx context.Context, targets []*query.
 			if requireServing {
 				tabletHealths = hc.GetHealthyTabletStats(target)
 			} else {
-				tabletHealths = hc.getTabletStats(target)
+				tabletHealths = hc.GetTabletStats(target)
 			}
 			if len(tabletHealths) == 0 {
 				allPresent = false
