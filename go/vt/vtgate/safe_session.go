@@ -839,12 +839,28 @@ func (session *SafeSession) ClearAdvisoryLock() {
 	session.AdvisoryLock = nil
 }
 
-func (l *executeLogger) log(target *querypb.Target, query string) {
+func (session *SafeSession) EnableLogging() {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
+	session.logging = &executeLogger{}
+}
+
+func (l *executeLogger) log(target *querypb.Target, query string, begin bool) {
 	if l == nil {
 		return
 	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	if begin {
+		l.entries = append(l.entries, engine.ExecuteEntry{
+			Keyspace:   target.Keyspace,
+			Shard:      target.Shard,
+			TabletType: target.TabletType,
+			Cell:       target.Cell,
+			Query:      "begin",
+		})
+	}
 	l.entries = append(l.entries, engine.ExecuteEntry{
 		Keyspace:   target.Keyspace,
 		Shard:      target.Shard,

@@ -728,8 +728,8 @@ func (f *loggingVCursor) CanUseSetVar() bool {
 	return useSetVar
 }
 
-func (t *noopVCursor) EnableLogging()  {}
-func (t *noopVCursor) DisableLogging() {}
+func (t *noopVCursor) VtExplainLogging() {}
+func (t *noopVCursor) DisableLogging()   {}
 
 func (t *noopVCursor) GetLogs() ([]ExecuteEntry, error) {
 	return nil, nil

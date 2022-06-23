@@ -130,10 +130,6 @@ type (
 
 		// ReleaseLock releases all the held advisory locks.
 		ReleaseLock() error
-
-		EnableLogging()
-		DisableLogging()
-		GetLogs() ([]ExecuteEntry, error)
 	}
 
 	//SessionActions gives primitives ability to interact with the session state
@@ -191,6 +187,8 @@ type (
 		AddAdvisoryLock(name string)
 		// RemoveAdvisoryLock removes advisory lock from the session
 		RemoveAdvisoryLock(name string)
+
+		VtExplainLogging()
 	}
 
 	// Plan represents the execution strategy for a given query.

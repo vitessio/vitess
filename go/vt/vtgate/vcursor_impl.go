@@ -1001,16 +1001,6 @@ func (vc *vcursorImpl) ReleaseLock() error {
 	return vc.executor.ReleaseLock(vc.ctx, vc.safeSession)
 }
 
-func (vc *vcursorImpl) EnableLogging() {
-	vc.safeSession.logging = &executeLogger{}
-}
-func (vc *vcursorImpl) DisableLogging() {
-	vc.safeSession.logging = nil
-}
-
-func (vc *vcursorImpl) GetLogs() ([]engine.ExecuteEntry, error) {
-	if vc.safeSession.logging == nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vtexplain logging not enabled")
-	}
-	return vc.safeSession.logging.GetLogs(), nil
+func (vc *vcursorImpl) VtExplainLogging() {
+	vc.safeSession.EnableLogging()
 }
