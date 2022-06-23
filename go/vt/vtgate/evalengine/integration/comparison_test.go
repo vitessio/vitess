@@ -351,7 +351,7 @@ func TestNumericTypes(t *testing.T) {
 	defer conn.Close()
 
 	for _, rhs := range numbers {
-		compareRemoteExpr(t, conn, fmt.Sprintf("%s", rhs))
+		compareRemoteExpr(t, conn, rhs)
 	}
 }
 
@@ -527,7 +527,7 @@ func TestLargeIntegers(t *testing.T) {
 	var largepi = Pi + Pi
 
 	for pos := 1; pos < len(largepi); pos++ {
-		query := fmt.Sprintf("%s", largepi[:pos])
+		query := largepi[:pos]
 		compareRemoteExpr(t, conn, query)
 
 		query = fmt.Sprintf("-%s", largepi[:pos])
