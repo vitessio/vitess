@@ -19,6 +19,7 @@ package mysql
 import (
 	"fmt"
 	"io"
+	"math"
 	"time"
 
 	"context"
@@ -54,6 +55,30 @@ func (mysqlFlavor) primaryGTIDSet(c *Conn) (GTIDSet, error) {
 		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected result format for gtid_executed: %#v", qr)
 	}
 	return parseMysql56GTIDSet(qr.Rows[0][0].ToString())
+}
+
+// primaryTransactionalGTIDSet is part of the Flavor interface.
+func (mysqlFlavor) primaryTransactionalGTIDSet(c *Conn) (GTIDSet, error) {
+	capable, err := c.SupportsCapability(TransactionalGtidExecutedFlavorCapability)
+	if err != nil {
+		return nil, err
+	}
+	if !capable {
+		return nil, ErrTransactionalGtidUnsupported
+	}
+	qr, err := c.ExecuteFetch("SELECT GTID_SUBTRACT(CONCAT(source_uuid, ':', interval_start, '-', interval_end), '') AS gtid_set FROM mysql.gtid_executed", math.MaxInt32, false)
+	if err != nil {
+		return nil, err
+	}
+	var set GTIDSet = Mysql56GTIDSet{}
+	for _, row := range qr.Rows {
+		gtidSet, err := parseMysql56GTIDSet(row[0].ToString())
+		if err != nil {
+			return nil, err
+		}
+		set = set.Union(gtidSet)
+	}
+	return set, nil
 }
 
 // purgedGTIDSet is part of the Flavor interface.

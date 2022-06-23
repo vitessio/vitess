@@ -36,6 +36,9 @@ var (
 
 	// ErrNoPrimaryStatus means no status was returned by ShowPrimaryStatus().
 	ErrNoPrimaryStatus = errors.New("no master status")
+
+	// ErrTransactionalGtidUnsupported means you cannot query for gtid_executed transactionally in mysql.gtid_executed system table
+	ErrTransactionalGtidUnsupported = errors.New("transactional GTID is unsupported for this flavor/version")
 )
 
 type FlavorCapability int
@@ -74,6 +77,9 @@ const (
 type flavor interface {
 	// primaryGTIDSet returns the current GTIDSet of a server.
 	primaryGTIDSet(c *Conn) (GTIDSet, error)
+
+	// primaryTransactionalGTIDSet returns the current GTIDSet of a server using a transaction. Not all flavors know how to implement this.
+	primaryTransactionalGTIDSet(c *Conn) (GTIDSet, error)
 
 	// purgedGTIDSet returns the purged GTIDSet of a server.
 	purgedGTIDSet(c *Conn) (GTIDSet, error)
@@ -271,6 +277,17 @@ func (c *Conn) IsMariaDB() bool {
 // PrimaryPosition returns the current primary's replication position.
 func (c *Conn) PrimaryPosition() (Position, error) {
 	gtidSet, err := c.flavor.primaryGTIDSet(c)
+	if err != nil {
+		return Position{}, err
+	}
+	return Position{
+		GTIDSet: gtidSet,
+	}, nil
+}
+
+// PrimaryPosition returns the current primary's replication position.
+func (c *Conn) PrimaryTransactionalPosition() (Position, error) {
+	gtidSet, err := c.flavor.primaryTransactionalGTIDSet(c)
 	if err != nil {
 		return Position{}, err
 	}

@@ -53,6 +53,11 @@ func (mariadbFlavor) primaryGTIDSet(c *Conn) (GTIDSet, error) {
 	return parseMariadbGTIDSet(qr.Rows[0][0].ToString())
 }
 
+// primaryTransactionalGTIDSet is part of the Flavor interface.
+func (mariadbFlavor) primaryTransactionalGTIDSet(c *Conn) (GTIDSet, error) {
+	return nil, ErrTransactionalGtidUnsupported
+}
+
 // purgedGTIDSet is part of the Flavor interface.
 func (mariadbFlavor) purgedGTIDSet(c *Conn) (GTIDSet, error) {
 	return nil, nil

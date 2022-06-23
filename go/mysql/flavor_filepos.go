@@ -64,6 +64,11 @@ func (flv *filePosFlavor) primaryGTIDSet(c *Conn) (GTIDSet, error) {
 	}, nil
 }
 
+// primaryTransactionalGTIDSet is part of the Flavor interface.
+func (*filePosFlavor) primaryTransactionalGTIDSet(c *Conn) (GTIDSet, error) {
+	return nil, ErrTransactionalGtidUnsupported
+}
+
 // purgedGTIDSet is part of the Flavor interface.
 func (flv *filePosFlavor) purgedGTIDSet(c *Conn) (GTIDSet, error) {
 	return nil, nil

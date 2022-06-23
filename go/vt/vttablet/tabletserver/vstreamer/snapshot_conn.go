@@ -124,7 +124,7 @@ func (conn *snapshotConn) startSnapshotWithConsistentGTID(ctx context.Context) (
 	if _, err := conn.ExecuteFetch("set @@session.time_zone = '+00:00'", 1, false); err != nil {
 		return "", err
 	}
-	mpos, err := conn.PrimaryPosition()
+	mpos, err := conn.PrimaryTransactionalPosition()
 	if err != nil {
 		return "", err
 	}
