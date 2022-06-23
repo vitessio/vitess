@@ -2973,11 +2973,13 @@ equal_opt:
   }
 
 index_info:
-  PRIMARY KEY
+  // A name may be specified for a primary key, but it is ignored since the primary
+  // key is always named 'PRIMARY'
+  PRIMARY KEY name_opt
   {
     $$ = &IndexInfo{Type: string($1) + " " + string($2), Name: NewColIdent("PRIMARY"), Primary: true, Unique: true}
   }
-| CONSTRAINT ID PRIMARY KEY
+| CONSTRAINT ID PRIMARY KEY name_opt
   {
     $$ = &IndexInfo{Type: string($3) + " " + string($4), Name: NewColIdent(string($2)), Primary: true, Unique: true}
   }
@@ -3404,10 +3406,12 @@ alter_table_statement_part:
   {
     $$ = &DDL{Action: AlterStr, IndexSpec: &IndexSpec{Action: DropStr, Type: PrimaryStr}}
   }
-| ADD pk_name_opt PRIMARY KEY '(' index_column_list ')' index_option_list_opt
+// A name may be specified for a primary key, but it is ignored since the primary
+// key is always named 'PRIMARY'
+| ADD pk_name_opt PRIMARY KEY name_opt '(' index_column_list ')' index_option_list_opt
   {
     ddl := &DDL{Action: AlterStr, IndexSpec: &IndexSpec{Action: CreateStr}}
-    ddl.IndexSpec = &IndexSpec{Action: CreateStr, Using: NewColIdent(""), ToName: NewColIdent($2), Type: PrimaryStr, Columns: $6, Options: $8}
+    ddl.IndexSpec = &IndexSpec{Action: CreateStr, Using: NewColIdent(""), ToName: NewColIdent($2), Type: PrimaryStr, Columns: $7, Options: $9}
     $$ = ddl
   }
 | DISABLE KEYS
