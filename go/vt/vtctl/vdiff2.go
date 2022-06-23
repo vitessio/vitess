@@ -67,7 +67,7 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 	var action vdiff.VDiffAction
 	var actionArg string
 
-	usage := fmt.Errorf("usage: vdiff -- --v2 <keyspace>.<workflow> %s [%s|<UUID>]", strings.Join(*(*[]string)(unsafe.Pointer(&vdiff.Actions)), "|"), strings.Join(vdiff.ActionArgs, "|"))
+	usage := fmt.Errorf("usage: VDiff -- --v2 <keyspace>.<workflow> %s [%s|<UUID>]", strings.Join(*(*[]string)(unsafe.Pointer(&vdiff.Actions)), "|"), strings.Join(vdiff.ActionArgs, "|"))
 	switch subFlags.NArg() {
 	case 1: // for backward compatibility with vdiff1
 		action = vdiff.CreateAction
