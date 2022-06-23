@@ -163,7 +163,7 @@ func isUnrecoverableError(err error) bool {
 		mysql.ERInvalidCastToJSON,
 		mysql.ERJSONValueTooBig,
 		mysql.ERJSONDocumentTooDeep:
-		log.Errorf("got unrecoverable error: %v", sqlErr)
+		log.Errorf("Got unrecoverable error: %v", sqlErr)
 		return true
 	}
 	return false
