@@ -141,7 +141,6 @@ type VTGate struct {
 	vsm      *vstreamManager
 	txConn   *TxConn
 	gw       *TabletGateway
-	pv       plancontext.PlannerVersion
 
 	// stats objects.
 	// TODO(sougou): This needs to be cleaned up. There

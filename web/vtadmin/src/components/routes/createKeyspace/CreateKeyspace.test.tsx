@@ -107,7 +107,6 @@ describe('CreateKeyspace integration test', () => {
         const user = userEvent.setup();
         await user.click(screen.getByText('local (local)'));
         await user.type(screen.getByLabelText('Keyspace Name'), 'some-keyspace');
-        await user.type(screen.getByLabelText('Sharding Column Name'), 'some-column-name');
 
         // Submit the form
         const submitButton = screen.getByText('Create Keyspace', {
@@ -121,7 +120,6 @@ describe('CreateKeyspace integration test', () => {
             credentials: undefined,
             body: JSON.stringify({
                 name: 'some-keyspace',
-                sharding_column_name: 'some-column-name',
             }),
             method: 'post',
         });

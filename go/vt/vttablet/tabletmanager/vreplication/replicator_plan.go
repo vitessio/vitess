@@ -96,14 +96,14 @@ func (rp *ReplicatorPlan) buildExecutionPlan(fieldEvent *binlogdatapb.FieldEvent
 // requires us to wait for the field info sent by the source.
 func (rp *ReplicatorPlan) buildFromFields(tableName string, lastpk *sqltypes.Result, fields []*querypb.Field) (*TablePlan, error) {
 	tpb := &tablePlanBuilder{
-		name:     sqlparser.NewTableIdent(tableName),
+		name:     sqlparser.NewIdentifierCS(tableName),
 		lastpk:   lastpk,
 		colInfos: rp.ColInfoMap[tableName],
 		stats:    rp.stats,
 		source:   rp.Source,
 	}
 	for _, field := range fields {
-		colName := sqlparser.NewColIdent(field.Name)
+		colName := sqlparser.NewIdentifierCI(field.Name)
 		isGenerated := false
 		for _, colInfo := range tpb.colInfos {
 			if !strings.EqualFold(colInfo.Name, field.Name) {

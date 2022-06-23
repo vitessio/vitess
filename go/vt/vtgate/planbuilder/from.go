@@ -168,7 +168,7 @@ func (pb *primitiveBuilder) processAliasedTable(tableExpr *sqlparser.AliasedTabl
 				}
 			}
 			vschemaTable.ColumnVindexes = append(vschemaTable.ColumnVindexes, &vindexes.ColumnVindex{
-				Columns: []sqlparser.ColIdent{rc.alias},
+				Columns: []sqlparser.IdentifierCI{rc.alias},
 				Vindex:  rc.column.vindex,
 			})
 		}

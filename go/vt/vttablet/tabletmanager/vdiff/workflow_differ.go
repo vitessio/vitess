@@ -157,7 +157,7 @@ func (wd *workflowDiffer) diff(ctx context.Context) error {
 	defer dbClient.Close()
 
 	filter := wd.ct.filter
-	schm, err := schematools.GetSchema(ctx, wd.ct.ts, wd.ct.tmc, wd.ct.vde.thisTablet.Alias, nil, nil, false)
+	schm, err := schematools.GetSchema(ctx, wd.ct.ts, wd.ct.tmc, wd.ct.vde.thisTablet.Alias, nil, nil, false, false)
 	if err != nil {
 		return vterrors.Wrap(err, "GetSchema")
 	}
@@ -234,11 +234,11 @@ func (wd *workflowDiffer) buildPlan(filter *binlogdatapb.Filter, schm *tabletman
 		switch {
 		case rule.Filter == "":
 			buf := sqlparser.NewTrackedBuffer(nil)
-			buf.Myprintf("select * from %v", sqlparser.NewTableIdent(table.Name))
+			buf.Myprintf("select * from %v", sqlparser.NewIdentifierCS(table.Name))
 			sourceQuery = buf.String()
 		case key.IsKeyRange(rule.Filter):
 			buf := sqlparser.NewTrackedBuffer(nil)
-			buf.Myprintf("select * from %v where in_keyrange(%v)", sqlparser.NewTableIdent(table.Name), sqlparser.NewStrLiteral(rule.Filter))
+			buf.Myprintf("select * from %v where in_keyrange(%v)", sqlparser.NewIdentifierCS(table.Name), sqlparser.NewStrLiteral(rule.Filter))
 			sourceQuery = buf.String()
 		}
 

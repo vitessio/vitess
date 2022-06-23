@@ -620,8 +620,6 @@ func checkSrvKeyspaceServedFrom(t *testing.T, cell string, ksname string, expect
 		result = result + fmt.Sprintf("ServedFrom(%s): %s\n", "replica", tabletTypeKeyspaceMap["replica"])
 	}
 	assert.Equal(t, expected, result, fmt.Sprintf("Mismatch in srv keyspace for cell %s keyspace %s, expected:\n %s\ngot:\n%s", cell, ksname, expected, result))
-	assert.Equal(t, "", srvKeyspace.GetShardingColumnName(), fmt.Sprintf("Got a sharding_column_name in SrvKeyspace: %s", srvKeyspace.GetShardingColumnName()))
-	assert.Equal(t, "UNSET", srvKeyspace.GetShardingColumnType().String(), fmt.Sprintf("Got a sharding_column_type in SrvKeyspace: %s", srvKeyspace.GetShardingColumnType().String()))
 }
 
 func initializeCluster() (int, error) {

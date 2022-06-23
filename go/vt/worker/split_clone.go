@@ -734,21 +734,19 @@ func (scw *SplitCloneWorker) sanityCheckShardInfos(ctx context.Context) error {
 
 func (scw *SplitCloneWorker) loadVSchema(ctx context.Context) error {
 	var keyspaceSchema *vindexes.KeyspaceSchema
-	if *useV3ReshardingMode {
-		kschema, err := scw.wr.TopoServer().GetVSchema(ctx, scw.destinationKeyspace)
-		if err != nil {
-			return vterrors.Wrapf(err, "cannot load VSchema for keyspace %v", scw.destinationKeyspace)
-		}
-		if kschema == nil {
-			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no VSchema for keyspace %v", scw.destinationKeyspace)
-		}
-
-		keyspaceSchema, err = vindexes.BuildKeyspaceSchema(kschema, scw.destinationKeyspace)
-		if err != nil {
-			return vterrors.Wrapf(err, "cannot build vschema for keyspace %v", scw.destinationKeyspace)
-		}
-		scw.keyspaceSchema = keyspaceSchema
+	kschema, err := scw.wr.TopoServer().GetVSchema(ctx, scw.destinationKeyspace)
+	if err != nil {
+		return vterrors.Wrapf(err, "cannot load VSchema for keyspace %v", scw.destinationKeyspace)
 	}
+	if kschema == nil {
+		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no VSchema for keyspace %v", scw.destinationKeyspace)
+	}
+
+	keyspaceSchema, err = vindexes.BuildKeyspaceSchema(kschema, scw.destinationKeyspace)
+	if err != nil {
+		return vterrors.Wrapf(err, "cannot build vschema for keyspace %v", scw.destinationKeyspace)
+	}
+	scw.keyspaceSchema = keyspaceSchema
 	return nil
 }
 
@@ -1320,7 +1318,7 @@ func (scw *SplitCloneWorker) getSourceSchema(ctx context.Context, tablet *topoda
 	// in each source shard for each table to be about the same
 	// (rowCount is used to estimate an ETA)
 	shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-	sourceSchemaDefinition, err := schematools.GetSchema(shortCtx, scw.wr.TopoServer(), scw.wr.TabletManagerClient(), tablet.Alias, scw.tables, scw.excludeTables, false /* includeViews */)
+	sourceSchemaDefinition, err := schematools.GetSchema(shortCtx, scw.wr.TopoServer(), scw.wr.TabletManagerClient(), tablet.Alias, scw.tables, scw.excludeTables, false /* includeViews */, false)
 	cancel()
 	if err != nil {
 		return nil, vterrors.Wrapf(err, "cannot get schema from source %v", topoproto.TabletAliasString(tablet.Alias))
@@ -1346,11 +1344,7 @@ func (scw *SplitCloneWorker) createKeyResolver(td *tabletmanagerdatapb.TableDefi
 		// and therefore does not require routing between multiple shards.
 		return nil, nil
 	}
-
-	if *useV3ReshardingMode {
-		return newV3ResolverFromTableDefinition(scw.keyspaceSchema, td)
-	}
-	return newV2Resolver(scw.destinationKeyspaceInfo, td)
+	return newV3ResolverFromTableDefinition(scw.keyspaceSchema, td)
 }
 
 // StatsUpdate receives replication lag updates for each destination primary

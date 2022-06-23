@@ -2241,11 +2241,6 @@ Gen4 plan same as above
 "Unknown column '2' in 'group statement'"
 Gen4 plan same as above
 
-# syntax error detected by planbuilder
-"select count(distinct *) from user"
-"syntax error: count(distinct *)"
-Gen4 plan same as above
-
 # here it is safe to remove the order by on the derived table since it will not influence the output of the count(*)
 "select count(*) from (select user.col, user_extra.extra from user join user_extra on user.id = user_extra.user_id order by user_extra.extra) a"
 "unsupported: cross-shard query with aggregates"
@@ -3332,7 +3327,7 @@ Gen4 plan same as above
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinColumnIndexes": "L:0,R:0",
+            "JoinColumnIndexes": "L:0,R:1",
             "TableName": "`user`_user_extra",
             "Inputs": [
               {
@@ -3353,8 +3348,8 @@ Gen4 plan same as above
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select count(*) from user_extra where 1 != 1",
-                "Query": "select count(*) from user_extra",
+                "FieldQuery": "select 1, count(*) from user_extra where 1 != 1 group by 1",
+                "Query": "select 1, count(*) from user_extra group by 1",
                 "Table": "user_extra"
               }
             ]
@@ -3443,7 +3438,7 @@ Gen4 plan same as above
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinColumnIndexes": "L:1,L:2,L:0,R:0",
+            "JoinColumnIndexes": "L:1,L:2,L:0,R:1",
             "TableName": "`user`_user_extra",
             "Inputs": [
               {
@@ -3465,8 +3460,8 @@ Gen4 plan same as above
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select count(*) from user_extra where 1 != 1",
-                "Query": "select count(*) from user_extra",
+                "FieldQuery": "select 1, count(*) from user_extra where 1 != 1 group by 1",
+                "Query": "select 1, count(*) from user_extra group by 1",
                 "Table": "user_extra"
               }
             ]
@@ -3501,7 +3496,7 @@ Gen4 plan same as above
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinColumnIndexes": "L:1,L:2,L:0,R:0",
+            "JoinColumnIndexes": "L:1,L:2,L:0,R:1",
             "TableName": "`user`_user_extra",
             "Inputs": [
               {
@@ -3523,8 +3518,8 @@ Gen4 plan same as above
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select count(user_extra.a) from user_extra where 1 != 1",
-                "Query": "select count(user_extra.a) from user_extra",
+                "FieldQuery": "select 1, count(user_extra.a) from user_extra where 1 != 1 group by 1",
+                "Query": "select 1, count(user_extra.a) from user_extra group by 1",
                 "Table": "user_extra"
               }
             ]
@@ -4013,7 +4008,7 @@ Gen4 plan same as above
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinColumnIndexes": "L:0,L:1,L:2,R:0,R:1",
+            "JoinColumnIndexes": "L:0,L:1,L:2,R:1,R:2",
             "JoinVars": {
               "user_col": 0
             },
@@ -4038,8 +4033,8 @@ Gen4 plan same as above
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select min(user_extra.foo), max(user_extra.bar) from user_extra where 1 != 1",
-                "Query": "select min(user_extra.foo), max(user_extra.bar) from user_extra where user_extra.bar = :user_col",
+                "FieldQuery": "select 1, min(user_extra.foo), max(user_extra.bar) from user_extra where 1 != 1 group by 1",
+                "Query": "select 1, min(user_extra.foo), max(user_extra.bar) from user_extra where user_extra.bar = :user_col group by 1",
                 "Table": "user_extra"
               }
             ]
@@ -4110,7 +4105,7 @@ Gen4 error: aggregate functions take a single argument 'count(distinct user_id, 
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinColumnIndexes": "L:0,L:1,L:2,R:0",
+            "JoinColumnIndexes": "L:0,L:1,L:2,R:1",
             "TableName": "`user`_user_extra",
             "Inputs": [
               {
@@ -4131,8 +4126,8 @@ Gen4 error: aggregate functions take a single argument 'count(distinct user_id, 
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select count(*) from user_extra where 1 != 1",
-                "Query": "select count(*) from user_extra",
+                "FieldQuery": "select 1, count(*) from user_extra where 1 != 1 group by 1",
+                "Query": "select 1, count(*) from user_extra group by 1",
                 "Table": "user_extra"
               }
             ]
@@ -4598,7 +4593,7 @@ Gen4 error: aggregate functions take a single argument 'count(distinct user_id, 
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinColumnIndexes": "L:1,L:2,L:0,R:0",
+            "JoinColumnIndexes": "L:1,L:2,L:0,R:1",
             "JoinVars": {
               "user_col": 0
             },
@@ -4623,8 +4618,8 @@ Gen4 error: aggregate functions take a single argument 'count(distinct user_id, 
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select count(*) from user_extra where 1 != 1",
-                "Query": "select count(*) from user_extra where user_extra.col = :user_col",
+                "FieldQuery": "select 1, count(*) from user_extra where 1 != 1 group by 1",
+                "Query": "select 1, count(*) from user_extra where user_extra.col = :user_col group by 1",
                 "Table": "user_extra"
               }
             ]
@@ -4734,7 +4729,7 @@ Gen4 error: aggregate functions take a single argument 'count(distinct user_id, 
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinColumnIndexes": "L:0,L:1,L:0,R:0",
+            "JoinColumnIndexes": "L:0,L:1,L:0,R:1",
             "TableName": "`user`_user_extra",
             "Inputs": [
               {
@@ -4756,8 +4751,8 @@ Gen4 error: aggregate functions take a single argument 'count(distinct user_id, 
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select count(*) from user_extra where 1 != 1",
-                "Query": "select count(*) from user_extra",
+                "FieldQuery": "select 1, count(*) from user_extra where 1 != 1 group by 1",
+                "Query": "select 1, count(*) from user_extra group by 1",
                 "Table": "user_extra"
               }
             ]
