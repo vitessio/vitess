@@ -59,7 +59,8 @@ type (
 		// as the query that started a new transaction on the shard belong to a vindex.
 		queryFromVindex bool
 
-		logging *executeLogger
+		vindexExec bool
+		logging    *executeLogger
 
 		*vtgatepb.Session
 	}

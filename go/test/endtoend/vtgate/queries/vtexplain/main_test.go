@@ -28,11 +28,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/test/endtoend/utils"
-	cmp "vitess.io/vitess/go/test/utils"
-
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/utils"
 )
 
 var (
@@ -116,12 +114,10 @@ func TestVtGateVtExplain(t *testing.T) {
 		"17|ks|-40|commit",
 		"18|ks|40-80|commit",
 	)
-	qr := utils.Exec(t, conn, `explain format=vtexplain insert into user (id,lookup,lookup_unique) values (1,'apa','apa'),(2,'apa','bandar'),(3,'monkey','monkey')`)
-	cmp.MustMatch(t, cmp.SortString(fmt.Sprintf("%v", wantQr.Rows)), cmp.SortString(fmt.Sprintf("%v", qr.Rows)))
+	utils.AssertMatchesNoOrder(t, conn, `explain format=vtexplain insert into user (id,lookup,lookup_unique) values (1,'apa','apa'),(2,'apa','bandar'),(3,'monkey','monkey')`, fmt.Sprintf("%v", wantQr.Rows))
 
 	wantQr = sqltypes.MakeTestResult(sqltypes.MakeTestFields("#|keyspace|shard|query", "int32|varchar|varchar|varchar"),
 		"1|ks|-40|select lookup, keyspace_id from lookup where lookup in ::__vals",
 		"2|ks|40-80|select id from `user` where lookup = :_lookup_0")
-	qr = utils.Exec(t, conn, `explain format=vtexplain select id from user where lookup = "apa"`)
-	cmp.MustMatch(t, wantQr.Rows, qr.Rows)
+	utils.AssertMatches(t, conn, `explain format=vtexplain select id from user where lookup = "apa"`, fmt.Sprintf("%v", wantQr.Rows))
 }

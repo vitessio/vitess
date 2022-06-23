@@ -454,6 +454,10 @@ func (vc *vcursorImpl) StreamExecutePrimitive(primitive engine.Primitive, bindVa
 
 // Execute is part of the engine.VCursor interface.
 func (vc *vcursorImpl) Execute(method string, query string, bindVars map[string]*querypb.BindVariable, rollbackOnError bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error) {
+	vc.safeSession.vindexExec = true
+	defer func() {
+		vc.safeSession.vindexExec = false
+	}()
 	session := vc.safeSession
 	if co == vtgatepb.CommitOrder_AUTOCOMMIT {
 		// For autocommit, we have to create an independent session.

@@ -381,7 +381,7 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 		qr = result
 		return nil
 	})
-	if safeSession.logging != nil {
+	if safeSession.logging != nil && !safeSession.vindexExec {
 		qr = convertToVTExplainResult(safeSession)
 	}
 

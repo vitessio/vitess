@@ -2487,6 +2487,18 @@ func TestExecutorDescHash(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestExecutorVtExplain(t *testing.T) {
+	executor, _, _, sbclookup := createExecutorEnv()
+	session := NewAutocommitSession(&vtgatepb.Session{})
+
+	sbclookup.SetResults([]*sqltypes.Result{
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("name|user_id", "varchar|int64"), "apa|1", "apa|2"),
+	})
+	qr, err := executor.Execute(ctx, "TestExecutorVtExplain", session, "explain format=vtexplain select * from user where name = 'apa'", nil)
+	require.NoError(t, err)
+	fmt.Printf("%v\n", qr.Rows)
+}
+
 func exec(executor *Executor, session *SafeSession, sql string) (*sqltypes.Result, error) {
 	return executor.Execute(context.Background(), "TestExecute", session, sql, nil)
 }
