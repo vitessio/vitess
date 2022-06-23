@@ -188,8 +188,10 @@ func TestQueryPlanCache(t *testing.T) {
 	ctx := context.Background()
 	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats")
 	if cache.DefaultConfig.LFU {
-		qe.SetQueryPlanCacheCap(1024)
+		// this cache capacity is in bytes
+		qe.SetQueryPlanCacheCap(512)
 	} else {
+		// this cache capacity is in number of elements
 		qe.SetQueryPlanCacheCap(1)
 	}
 	firstPlan, err := qe.GetPlan(logStats, firstQuery, false, 0, nil)

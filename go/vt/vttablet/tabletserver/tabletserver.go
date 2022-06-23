@@ -1817,7 +1817,7 @@ func (tsv *TabletServer) TxTimeout() time.Duration {
 	return tsv.txTimeout.Get()
 }
 
-// SetQueryPlanCacheCap changes the pool size to the specified value.
+// SetQueryPlanCacheCap changes the plan cache capacity to the specified value.
 func (tsv *TabletServer) SetQueryPlanCacheCap(val int) {
 	tsv.qe.SetQueryPlanCacheCap(val)
 }
