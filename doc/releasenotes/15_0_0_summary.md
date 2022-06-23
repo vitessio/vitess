@@ -19,7 +19,6 @@ RowsCompared: 196
 CompletedAt:  2022-06-17 14:37:25
 HasMismatch:  false
 
-
 Use "--format=json" for more detailed output.
 
 $ vtctlclient --server=localhost:15999 VDiff -- --v2 --format=json customer.commerce2customer show last
