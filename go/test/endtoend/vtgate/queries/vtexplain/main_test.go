@@ -24,6 +24,8 @@ import (
 	"os"
 	"testing"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder"
+
 	"vitess.io/vitess/go/sqltypes"
 
 	"github.com/stretchr/testify/require"
@@ -74,6 +76,7 @@ func TestMain(m *testing.M) {
 		}
 
 		// Start vtgate
+		clusterInstance.VtGatePlannerVersion = planbuilder.Gen4
 		err = clusterInstance.StartVtgate()
 		if err != nil {
 			return 1
@@ -118,6 +121,32 @@ func TestVtGateVtExplain(t *testing.T) {
 
 	wantQr = sqltypes.MakeTestResult(sqltypes.MakeTestFields("#|keyspace|shard|query", "int32|varchar|varchar|varchar"),
 		"1|ks|-40|select lookup, keyspace_id from lookup where lookup in ::__vals",
-		"2|ks|40-80|select id from `user` where lookup = :_lookup_0")
+		"2|ks|40-80|select id from `user` where lookup = 'apa'")
 	utils.AssertMatches(t, conn, `explain format=vtexplain select id from user where lookup = "apa"`, fmt.Sprintf("%v", wantQr.Rows))
+
+	utils.Exec(t, conn, "begin")
+	wantQr = sqltypes.MakeTestResult(sqltypes.MakeTestFields("#|keyspace|shard|query", "int32|varchar|varchar|varchar"),
+		"1|ks|-40|begin",
+		"2|ks|-40|insert into lookup(lookup, id, keyspace_id) values (:_lookup_0, :id_0, :keyspace_id_0),(:_lookup_1, :id_1, :keyspace_id_1) on duplicate key update lookup = values(lookup), id = values(id), keyspace_id = values(keyspace_id)",
+		"3|ks|40-80|begin",
+		"4|ks|40-80|insert into lookup(lookup, id, keyspace_id) values (:_lookup_2, :id_2, :keyspace_id_2) on duplicate key update lookup = values(lookup), id = values(id), keyspace_id = values(keyspace_id)",
+		"5|ks|-40|commit",
+		"6|ks|40-80|commit",
+		"7|ks|-40|begin",
+		"8|ks|-40|insert into lookup_unique(lookup_unique, keyspace_id) values (:_lookup_unique_1, :keyspace_id_1)",
+		"9|ks|80-c0|begin",
+		"10|ks|80-c0|insert into lookup_unique(lookup_unique, keyspace_id) values (:_lookup_unique_0, :keyspace_id_0)",
+		"11|ks|c0-|begin",
+		"12|ks|c0-|insert into lookup_unique(lookup_unique, keyspace_id) values (:_lookup_unique_2, :keyspace_id_2)",
+		"13|ks|-40|commit",
+		"14|ks|80-c0|commit",
+		"15|ks|c0-|commit",
+		"16|ks|40-80|begin",
+		"17|ks|40-80|insert into `user`(id, lookup, lookup_unique) values (:_id_1, :_lookup_1, :_lookup_unique_1)",
+		"18|ks|c0-|begin",
+		"19|ks|c0-|insert into `user`(id, lookup, lookup_unique) values (:_id_0, :_lookup_0, :_lookup_unique_0),(:_id_2, :_lookup_2, :_lookup_unique_2)",
+	)
+	// transaction explicitly started to no commit in the end.
+	utils.AssertMatchesNoOrder(t, conn, `explain format=vtexplain insert into user (id,lookup,lookup_unique) values (4,'apa','foo'),(5,'apa','bar'),(6,'monkey','nobar')`, fmt.Sprintf("%v", wantQr.Rows))
+	utils.Exec(t, conn, "rollback")
 }
