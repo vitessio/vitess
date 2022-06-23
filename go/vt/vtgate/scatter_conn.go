@@ -235,7 +235,7 @@ func (stc *ScatterConn) ExecuteMultiShard(
 			default:
 				return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected actionNeeded on query execution: %v", info.actionNeeded)
 			}
-			session.logging.log(rs.Target, queries[i].Sql, info.actionNeeded == begin || info.actionNeeded == reserveBegin)
+			session.logging.log(rs.Target, queries[i].Sql, info.actionNeeded == begin || info.actionNeeded == reserveBegin, queries[i].BindVariables)
 
 			// We need to new shard info irrespective of the error.
 			newInfo := info.updateTransactionAndReservedID(transactionID, reservedID, alias)

@@ -402,9 +402,9 @@ func convertToVTExplainResult(safeSession *SafeSession) *sqltypes.Result {
 	qr := &sqltypes.Result{
 		Fields: fields,
 	}
-	for i, line := range logs {
+	for _, line := range logs {
 		qr.Rows = append(qr.Rows, sqltypes.Row{
-			sqltypes.NewInt32(int32(i + 1)),
+			sqltypes.NewInt32(int32(line.ID)),
 			sqltypes.NewVarChar(line.Keyspace),
 			sqltypes.NewVarChar(line.Shard),
 			sqltypes.NewVarChar(line.Query),

@@ -106,7 +106,7 @@ func (txc *TxConn) commitShard(ctx context.Context, s *vtgatepb.Session_ShardSes
 	}
 	s.TransactionId = 0
 	s.ReservedId = reservedID
-	logging.log(s.Target, "commit", false)
+	logging.log(s.Target, "commit", false, nil)
 	return nil
 }
 
@@ -212,7 +212,7 @@ func (txc *TxConn) Rollback(ctx context.Context, session *SafeSession) error {
 		}
 		s.TransactionId = 0
 		s.ReservedId = reservedID
-		logging.log(s.Target, "rollback", false)
+		logging.log(s.Target, "rollback", false, nil)
 		return nil
 	})
 	if err != nil {

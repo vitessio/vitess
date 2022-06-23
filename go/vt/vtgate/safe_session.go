@@ -22,6 +22,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/sqlparser"
+
 	"vitess.io/vitess/go/vt/vtgate/engine"
 
 	"google.golang.org/protobuf/proto"
@@ -68,6 +70,7 @@ type (
 	executeLogger struct {
 		mu      sync.Mutex
 		entries []engine.ExecuteEntry
+		lastID  int
 	}
 
 	// autocommitState keeps track of whether a single round-trip
@@ -847,14 +850,17 @@ func (session *SafeSession) EnableLogging() {
 	session.logging = &executeLogger{}
 }
 
-func (l *executeLogger) log(target *querypb.Target, query string, begin bool) {
+func (l *executeLogger) log(target *querypb.Target, query string, begin bool, bv map[string]*querypb.BindVariable) {
 	if l == nil {
 		return
 	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	id := l.lastID
+	l.lastID++
 	if begin {
 		l.entries = append(l.entries, engine.ExecuteEntry{
+			ID:         id,
 			Keyspace:   target.Keyspace,
 			Shard:      target.Shard,
 			TabletType: target.TabletType,
@@ -862,12 +868,26 @@ func (l *executeLogger) log(target *querypb.Target, query string, begin bool) {
 			Query:      "begin",
 		})
 	}
+	ast, err := sqlparser.Parse(query)
+	if err != nil {
+		panic("query not able to parse. this should not happen")
+	}
+	pq := sqlparser.NewParsedQuery(ast)
+	if bv == nil {
+		bv = map[string]*querypb.BindVariable{}
+	}
+	q, err := pq.GenerateQuery(bv, nil)
+	if err != nil {
+		panic("query not able to generate query. this should not happen")
+	}
+
 	l.entries = append(l.entries, engine.ExecuteEntry{
+		ID:         id,
 		Keyspace:   target.Keyspace,
 		Shard:      target.Shard,
 		TabletType: target.TabletType,
 		Cell:       target.Cell,
-		Query:      query,
+		Query:      q,
 	})
 }
 

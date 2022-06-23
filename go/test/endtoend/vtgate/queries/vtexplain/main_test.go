@@ -20,13 +20,10 @@ import (
 	"context"
 	_ "embed"
 	"flag"
-	"fmt"
 	"os"
 	"testing"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder"
-
-	"vitess.io/vitess/go/sqltypes"
 
 	"github.com/stretchr/testify/require"
 
@@ -96,57 +93,51 @@ func TestVtGateVtExplain(t *testing.T) {
 	conn, err := mysql.Connect(context.Background(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
+	expected := `[[INT32(0) VARCHAR("ks") VARCHAR("40-80") VARCHAR("begin")] ` +
+		`[INT32(0) VARCHAR("ks") VARCHAR("40-80") VARCHAR("insert into lookup(lookup, id, keyspace_id) values ('monkey', 3, 'N\xb1\x90ɢ\xfa\x16\x9c') on duplicate key update lookup = values(lookup), id = values(id), keyspace_id = values(keyspace_id)")] ` +
+		`[INT32(1) VARCHAR("ks") VARCHAR("-40") VARCHAR("begin")] ` +
+		`[INT32(1) VARCHAR("ks") VARCHAR("-40") VARCHAR("insert into lookup(lookup, id, keyspace_id) values ('apa', 1, '\x16k@\xb4J\xbaK\xd6'), ('apa', 2, '\x06\xe7\xea\\\"Βp\x8f') on duplicate key update lookup = values(lookup), id = values(id), keyspace_id = values(keyspace_id)")] ` +
+		`[INT32(2) VARCHAR("ks") VARCHAR("40-80") VARCHAR("commit")] ` +
+		`[INT32(3) VARCHAR("ks") VARCHAR("-40") VARCHAR("commit")] ` +
+		`[INT32(4) VARCHAR("ks") VARCHAR("40-80") VARCHAR("begin")] ` +
+		`[INT32(4) VARCHAR("ks") VARCHAR("40-80") VARCHAR("insert into lookup_unique(lookup_unique, keyspace_id) values ('monkey', 'N\xb1\x90ɢ\xfa\x16\x9c')")] ` +
+		`[INT32(5) VARCHAR("ks") VARCHAR("-40") VARCHAR("begin")] ` +
+		`[INT32(5) VARCHAR("ks") VARCHAR("-40") VARCHAR("insert into lookup_unique(lookup_unique, keyspace_id) values ('apa', '\x16k@\xb4J\xbaK\xd6'), ('bandar', '\x06\xe7\xea\\\"Βp\x8f')")] ` +
+		`[INT32(6) VARCHAR("ks") VARCHAR("40-80") VARCHAR("commit")] ` +
+		`[INT32(7) VARCHAR("ks") VARCHAR("-40") VARCHAR("commit")] ` +
+		`[INT32(8) VARCHAR("ks") VARCHAR("40-80") VARCHAR("begin")] ` +
+		`[INT32(8) VARCHAR("ks") VARCHAR("40-80") VARCHAR("insert into ` + "`user`" + `(id, lookup, lookup_unique) values (3, 'monkey', 'monkey')")] ` +
+		`[INT32(9) VARCHAR("ks") VARCHAR("-40") VARCHAR("begin")] ` +
+		`[INT32(9) VARCHAR("ks") VARCHAR("-40") VARCHAR("insert into ` + "`user`" + `(id, lookup, lookup_unique) values (1, 'apa', 'apa'), (2, 'apa', 'bandar')")] ` +
+		`[INT32(10) VARCHAR("ks") VARCHAR("40-80") VARCHAR("commit")] ` +
+		`[INT32(11) VARCHAR("ks") VARCHAR("-40") VARCHAR("commit")]]`
+	utils.AssertMatchesNoOrder(t, conn, `explain format=vtexplain insert into user (id,lookup,lookup_unique) values (1,'apa','apa'),(2,'apa','bandar'),(3,'monkey','monkey')`, expected)
 
-	wantQr := sqltypes.MakeTestResult(sqltypes.MakeTestFields("#|keyspace|shard|query", "int32|varchar|varchar|varchar"),
-		"1|ks|-40|begin",
-		"2|ks|-40|insert into lookup(lookup, id, keyspace_id) values (:_lookup_0, :id_0, :keyspace_id_0),(:_lookup_1, :id_1, :keyspace_id_1) on duplicate key update lookup = values(lookup), id = values(id), keyspace_id = values(keyspace_id)",
-		"3|ks|40-80|begin",
-		"4|ks|40-80|insert into lookup(lookup, id, keyspace_id) values (:_lookup_2, :id_2, :keyspace_id_2) on duplicate key update lookup = values(lookup), id = values(id), keyspace_id = values(keyspace_id)",
-		"5|ks|-40|commit",
-		"6|ks|40-80|commit",
-		"7|ks|-40|begin",
-		"8|ks|-40|insert into lookup_unique(lookup_unique, keyspace_id) values (:_lookup_unique_0, :keyspace_id_0),(:_lookup_unique_1, :keyspace_id_1)",
-		"9|ks|40-80|begin",
-		"10|ks|40-80|insert into lookup_unique(lookup_unique, keyspace_id) values (:_lookup_unique_2, :keyspace_id_2)",
-		"11|ks|-40|commit",
-		"12|ks|40-80|commit",
-		"13|ks|-40|begin",
-		"14|ks|-40|insert into `user`(id, lookup, lookup_unique) values (:_id_0, :_lookup_0, :_lookup_unique_0),(:_id_1, :_lookup_1, :_lookup_unique_1)",
-		"15|ks|40-80|begin",
-		"16|ks|40-80|insert into `user`(id, lookup, lookup_unique) values (:_id_2, :_lookup_2, :_lookup_unique_2)",
-		"17|ks|-40|commit",
-		"18|ks|40-80|commit",
-	)
-	utils.AssertMatchesNoOrder(t, conn, `explain format=vtexplain insert into user (id,lookup,lookup_unique) values (1,'apa','apa'),(2,'apa','bandar'),(3,'monkey','monkey')`, fmt.Sprintf("%v", wantQr.Rows))
+	expected = `[[INT32(0) VARCHAR("ks") VARCHAR("-40") VARCHAR("select lookup, keyspace_id from lookup where lookup in ('apa')")]` +
+		` [INT32(1) VARCHAR("ks") VARCHAR("40-80") VARCHAR("select id from ` + "`user`" + ` where lookup = 'apa'")]]`
+	utils.AssertMatches(t, conn, `explain format=vtexplain select id from user where lookup = "apa"`, expected)
 
-	wantQr = sqltypes.MakeTestResult(sqltypes.MakeTestFields("#|keyspace|shard|query", "int32|varchar|varchar|varchar"),
-		"1|ks|-40|select lookup, keyspace_id from lookup where lookup in ::__vals",
-		"2|ks|40-80|select id from `user` where lookup = 'apa'")
-	utils.AssertMatches(t, conn, `explain format=vtexplain select id from user where lookup = "apa"`, fmt.Sprintf("%v", wantQr.Rows))
-
-	utils.Exec(t, conn, "begin")
-	wantQr = sqltypes.MakeTestResult(sqltypes.MakeTestFields("#|keyspace|shard|query", "int32|varchar|varchar|varchar"),
-		"1|ks|-40|begin",
-		"2|ks|-40|insert into lookup(lookup, id, keyspace_id) values (:_lookup_0, :id_0, :keyspace_id_0),(:_lookup_1, :id_1, :keyspace_id_1) on duplicate key update lookup = values(lookup), id = values(id), keyspace_id = values(keyspace_id)",
-		"3|ks|40-80|begin",
-		"4|ks|40-80|insert into lookup(lookup, id, keyspace_id) values (:_lookup_2, :id_2, :keyspace_id_2) on duplicate key update lookup = values(lookup), id = values(id), keyspace_id = values(keyspace_id)",
-		"5|ks|-40|commit",
-		"6|ks|40-80|commit",
-		"7|ks|-40|begin",
-		"8|ks|-40|insert into lookup_unique(lookup_unique, keyspace_id) values (:_lookup_unique_1, :keyspace_id_1)",
-		"9|ks|80-c0|begin",
-		"10|ks|80-c0|insert into lookup_unique(lookup_unique, keyspace_id) values (:_lookup_unique_0, :keyspace_id_0)",
-		"11|ks|c0-|begin",
-		"12|ks|c0-|insert into lookup_unique(lookup_unique, keyspace_id) values (:_lookup_unique_2, :keyspace_id_2)",
-		"13|ks|-40|commit",
-		"14|ks|80-c0|commit",
-		"15|ks|c0-|commit",
-		"16|ks|40-80|begin",
-		"17|ks|40-80|insert into `user`(id, lookup, lookup_unique) values (:_id_1, :_lookup_1, :_lookup_unique_1)",
-		"18|ks|c0-|begin",
-		"19|ks|c0-|insert into `user`(id, lookup, lookup_unique) values (:_id_0, :_lookup_0, :_lookup_unique_0),(:_id_2, :_lookup_2, :_lookup_unique_2)",
-	)
 	// transaction explicitly started to no commit in the end.
-	utils.AssertMatchesNoOrder(t, conn, `explain format=vtexplain insert into user (id,lookup,lookup_unique) values (4,'apa','foo'),(5,'apa','bar'),(6,'monkey','nobar')`, fmt.Sprintf("%v", wantQr.Rows))
+	utils.Exec(t, conn, "begin")
+	expected = `[[INT32(0) VARCHAR("ks") VARCHAR("-40") VARCHAR("begin")]` +
+		` [INT32(0) VARCHAR("ks") VARCHAR("-40") VARCHAR("insert into lookup(lookup, id, keyspace_id) values ('apa', 4, '\xd2\xfd\x88g\xd5\\r-\xfe'), ('apa', 5, 'p\xbb\x02<\x81\f\xa8z') on duplicate key update lookup = values(lookup), id = values(id), keyspace_id = values(keyspace_id)")]` +
+		` [INT32(1) VARCHAR("ks") VARCHAR("40-80") VARCHAR("begin")]` +
+		` [INT32(1) VARCHAR("ks") VARCHAR("40-80") VARCHAR("insert into lookup(lookup, id, keyspace_id) values ('monkey', 6, '\xf0\x98H\\n\xc4ľq') on duplicate key update lookup = values(lookup), id = values(id), keyspace_id = values(keyspace_id)")]` +
+		` [INT32(2) VARCHAR("ks") VARCHAR("-40") VARCHAR("commit")]` +
+		` [INT32(3) VARCHAR("ks") VARCHAR("40-80") VARCHAR("commit")]` +
+		` [INT32(4) VARCHAR("ks") VARCHAR("-40") VARCHAR("begin")]` +
+		` [INT32(4) VARCHAR("ks") VARCHAR("-40") VARCHAR("insert into lookup_unique(lookup_unique, keyspace_id) values ('foo', '\xd2\xfd\x88g\xd5\\r-\xfe')")]` +
+		` [INT32(5) VARCHAR("ks") VARCHAR("80-c0") VARCHAR("begin")]` +
+		` [INT32(5) VARCHAR("ks") VARCHAR("80-c0") VARCHAR("insert into lookup_unique(lookup_unique, keyspace_id) values ('bar', 'p\xbb\x02<\x81\f\xa8z')")]` +
+		` [INT32(6) VARCHAR("ks") VARCHAR("c0-") VARCHAR("begin")]` +
+		` [INT32(6) VARCHAR("ks") VARCHAR("c0-") VARCHAR("insert into lookup_unique(lookup_unique, keyspace_id) values ('nobar', '\xf0\x98H\\n\xc4ľq')")]` +
+		` [INT32(7) VARCHAR("ks") VARCHAR("-40") VARCHAR("commit")]` +
+		` [INT32(8) VARCHAR("ks") VARCHAR("80-c0") VARCHAR("commit")]` +
+		` [INT32(9) VARCHAR("ks") VARCHAR("c0-") VARCHAR("commit")]` +
+		` [INT32(10) VARCHAR("ks") VARCHAR("40-80") VARCHAR("begin")]` +
+		` [INT32(10) VARCHAR("ks") VARCHAR("40-80") VARCHAR("insert into ` + "`user`" + `(id, lookup, lookup_unique) values (5, 'apa', 'bar')")]` +
+		` [INT32(11) VARCHAR("ks") VARCHAR("c0-") VARCHAR("begin")]` +
+		` [INT32(11) VARCHAR("ks") VARCHAR("c0-") VARCHAR("insert into ` + "`user`" + `(id, lookup, lookup_unique) values (4, 'apa', 'foo'), (6, 'monkey', 'nobar')")]]`
+	utils.AssertMatchesNoOrder(t, conn, `explain format=vtexplain insert into user (id,lookup,lookup_unique) values (4,'apa','foo'),(5,'apa','bar'),(6,'monkey','nobar')`, expected)
 	utils.Exec(t, conn, "rollback")
 }

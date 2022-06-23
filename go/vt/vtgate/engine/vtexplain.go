@@ -24,6 +24,7 @@ import (
 
 type (
 	ExecuteEntry struct {
+		ID         int
 		Keyspace   string
 		Shard      string
 		TabletType topodatapb.TabletType
