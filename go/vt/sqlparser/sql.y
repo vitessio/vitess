@@ -2974,7 +2974,7 @@ equal_opt:
 
 index_info:
   // A name may be specified for a primary key, but it is ignored since the primary
-  // key is always be named 'PRIMARY'
+  // key is always named 'PRIMARY'
   PRIMARY KEY name_opt
   {
     $$ = &IndexInfo{Type: string($1) + " " + string($2), Name: NewColIdent("PRIMARY"), Primary: true, Unique: true}
@@ -3407,7 +3407,7 @@ alter_table_statement_part:
     $$ = &DDL{Action: AlterStr, IndexSpec: &IndexSpec{Action: DropStr, Type: PrimaryStr}}
   }
 // A name may be specified for a primary key, but it is ignored since the primary
-// key will always be named 'PRIMARY'
+// key is always named 'PRIMARY'
 | ADD pk_name_opt PRIMARY KEY name_opt '(' index_column_list ')' index_option_list_opt
   {
     ddl := &DDL{Action: AlterStr, IndexSpec: &IndexSpec{Action: CreateStr}}
