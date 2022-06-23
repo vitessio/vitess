@@ -64,7 +64,7 @@ export const notify = (error: Error, metadata?: object) => {
  * leaking sensitive environment variables, like API keys.
  */
 const sanitizeEnv = () =>
-    pick(env, [
+    pick(env(), [
         'REACT_APP_BUILD_BRANCH',
         'REACT_APP_BUILD_SHA',
         'REACT_APP_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS',
