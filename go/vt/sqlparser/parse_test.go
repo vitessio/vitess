@@ -1229,6 +1229,9 @@ var (
 			input:  "alter table a enable keys",
 			output: "alter table a enable keys",
 		}, {
+			input:  "alter table t add primary key `foo` (`id`)",
+			output: "alter table t add primary key (id)",
+		}, {
 			input:  "create table a (\n\t`a` int\n)",
 			output: "create table a (\n\ta int\n)",
 		}, {
@@ -2486,6 +2489,12 @@ var (
 		}, {
 			input:  "CREATE TABLE mytable (pk int NOT NULL, col2 varchar(20) NOT NULL DEFAULT sometext, PRIMARY KEY (pk), CONSTRAINT status CHECK (col2 like _utf8mb4'%sometext%'))",
 			output: "create table mytable (\n\tpk int not null,\n\tcol2 varchar(20) not null default sometext,\n\tPRIMARY KEY (pk),\n\tconstraint status check (col2 like _utf8mb4 '%sometext%')\n)",
+		}, {
+			input:  "create table t (pk int not null, primary key `pk_id` (`pk`))",
+			output: "create table t (\n\tpk int not null,\n\tprimary key (pk)\n)",
+		}, {
+			input:  "create table t (pk int not null, constraint `mykey` primary key `pk_id` (`pk`))",
+			output: "create table t (\n\tpk int not null,\n\tprimary key (pk)\n)",
 		}, {
 			input:  "SELECT _utf8mb4'abc'",
 			output: "select _utf8mb4 'abc' from dual",
