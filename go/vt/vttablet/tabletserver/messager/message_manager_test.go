@@ -64,7 +64,7 @@ var (
 
 func newMMTable() *schema.Table {
 	return &schema.Table{
-		Name: sqlparser.NewTableIdent("foo"),
+		Name: sqlparser.NewIdentifierCS("foo"),
 		Type: schema.Message,
 		MessageInfo: &schema.MessageInfo{
 			Fields:             testFields,
@@ -80,7 +80,7 @@ func newMMTable() *schema.Table {
 
 func newMMTableWithBackoff() *schema.Table {
 	return &schema.Table{
-		Name: sqlparser.NewTableIdent("foo"),
+		Name: sqlparser.NewIdentifierCS("foo"),
 		Type: schema.Message,
 		MessageInfo: &schema.MessageInfo{
 			Fields:             testFields,

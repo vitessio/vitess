@@ -75,8 +75,8 @@ func TestCreateKeyspace(t *testing.T) {
 
 	t.Run("unauthorized actor", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "other"}
 
+		actor := &rbac.Actor{Name: "other"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -94,8 +94,8 @@ func TestCreateKeyspace(t *testing.T) {
 
 	t.Run("authorized actor", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "allowed"}
 
+		actor := &rbac.Actor{Name: "allowed"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -144,8 +144,8 @@ func TestCreateShard(t *testing.T) {
 
 	t.Run("unauthorized actor", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "other"}
 
+		actor := &rbac.Actor{Name: "other"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -164,8 +164,8 @@ func TestCreateShard(t *testing.T) {
 
 	t.Run("authorized actor", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "allowed"}
 
+		actor := &rbac.Actor{Name: "allowed"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -215,8 +215,8 @@ func TestDeleteKeyspace(t *testing.T) {
 
 	t.Run("unauthorized actor", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "other"}
 
+		actor := &rbac.Actor{Name: "other"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -234,8 +234,8 @@ func TestDeleteKeyspace(t *testing.T) {
 
 	t.Run("authorized actor", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "allowed"}
 
+		actor := &rbac.Actor{Name: "allowed"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -284,8 +284,8 @@ func TestDeleteShards(t *testing.T) {
 
 	t.Run("unauthorized actor", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "other"}
 
+		actor := &rbac.Actor{Name: "other"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -308,8 +308,8 @@ func TestDeleteShards(t *testing.T) {
 
 	t.Run("authorized actor", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "allowed"}
 
+		actor := &rbac.Actor{Name: "allowed"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -363,8 +363,8 @@ func TestDeleteTablet(t *testing.T) {
 
 	t.Run("unauthorized actor", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "other"}
 
+		actor := &rbac.Actor{Name: "other"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -383,8 +383,8 @@ func TestDeleteTablet(t *testing.T) {
 
 	t.Run("authorized actor", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "allowed"}
 
+		actor := &rbac.Actor{Name: "allowed"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -434,8 +434,8 @@ func TestEmergencyFailoverShard(t *testing.T) {
 
 	t.Run("unauthorized actor", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "other"}
 
+		actor := &rbac.Actor{Name: "other"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -454,8 +454,8 @@ func TestEmergencyFailoverShard(t *testing.T) {
 
 	t.Run("authorized actor", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "allowed"}
 
+		actor := &rbac.Actor{Name: "allowed"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -502,17 +502,17 @@ func TestFindSchema(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts)
-	t.Cleanup(func() {
-		if err := api.Close(); err != nil {
-			t.Logf("api did not close cleanly: %s", err.Error())
-		}
-	})
-
 	t.Run("unauthorized actor", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "unauthorized"}
 
+		api := vtadmin.NewAPI(testClusters(t), opts)
+		t.Cleanup(func() {
+			if err := api.Close(); err != nil {
+				t.Logf("api did not close cleanly: %s", err.Error())
+			}
+		})
+
+		actor := &rbac.Actor{Name: "unauthorized"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -527,8 +527,15 @@ func TestFindSchema(t *testing.T) {
 
 	t.Run("partial access", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "allowed-other"}
 
+		api := vtadmin.NewAPI(testClusters(t), opts)
+		t.Cleanup(func() {
+			if err := api.Close(); err != nil {
+				t.Logf("api did not close cleanly: %s", err.Error())
+			}
+		})
+
+		actor := &rbac.Actor{Name: "allowed-other"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -542,8 +549,15 @@ func TestFindSchema(t *testing.T) {
 
 	t.Run("full access", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "allowed-all"}
 
+		api := vtadmin.NewAPI(testClusters(t), opts)
+		t.Cleanup(func() {
+			if err := api.Close(); err != nil {
+				t.Logf("api did not close cleanly: %s", err.Error())
+			}
+		})
+
+		actor := &rbac.Actor{Name: "allowed-all"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -596,8 +610,8 @@ func TestGetBackups(t *testing.T) {
 
 	t.Run("unauthorized actor", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "unauthorized"}
 
+		actor := &rbac.Actor{Name: "unauthorized"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -610,8 +624,8 @@ func TestGetBackups(t *testing.T) {
 
 	t.Run("partial access", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "allowed-other"}
 
+		actor := &rbac.Actor{Name: "allowed-other"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -624,8 +638,8 @@ func TestGetBackups(t *testing.T) {
 
 	t.Run("full access", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "allowed-all"}
 
+		actor := &rbac.Actor{Name: "allowed-all"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -675,8 +689,8 @@ func TestGetCellInfos(t *testing.T) {
 
 	t.Run("unauthorized actor", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "unauthorized"}
 
+		actor := &rbac.Actor{Name: "unauthorized"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -691,8 +705,8 @@ func TestGetCellInfos(t *testing.T) {
 
 	t.Run("partial access", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "allowed-other"}
 
+		actor := &rbac.Actor{Name: "allowed-other"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -707,8 +721,8 @@ func TestGetCellInfos(t *testing.T) {
 
 	t.Run("full access", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "allowed-all"}
 
+		actor := &rbac.Actor{Name: "allowed-all"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -760,8 +774,8 @@ func TestGetCellsAliases(t *testing.T) {
 
 	t.Run("unauthorized actor", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "unauthorized"}
 
+		actor := &rbac.Actor{Name: "unauthorized"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -774,8 +788,8 @@ func TestGetCellsAliases(t *testing.T) {
 
 	t.Run("partial access", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "allowed-other"}
 
+		actor := &rbac.Actor{Name: "allowed-other"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -788,8 +802,8 @@ func TestGetCellsAliases(t *testing.T) {
 
 	t.Run("full access", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "allowed-all"}
 
+		actor := &rbac.Actor{Name: "allowed-all"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -833,8 +847,8 @@ func TestGetClusters(t *testing.T) {
 
 	t.Run("unauthenticated", func(t *testing.T) {
 		t.Parallel()
-		var actor *rbac.Actor
 
+		var actor *rbac.Actor
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -846,8 +860,8 @@ func TestGetClusters(t *testing.T) {
 
 	t.Run("unauthorized actor", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "other"}
 
+		actor := &rbac.Actor{Name: "other"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -859,8 +873,8 @@ func TestGetClusters(t *testing.T) {
 
 	t.Run("authorized actor", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "allowed"}
 
+		actor := &rbac.Actor{Name: "allowed"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -901,16 +915,17 @@ func TestGetGates(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts)
-	t.Cleanup(func() {
-		if err := api.Close(); err != nil {
-			t.Logf("api did not close cleanly: %s", err.Error())
-		}
-	})
-
 	t.Run("unauthorized actor", func(t *testing.T) {
-		actor := &rbac.Actor{Name: "unauthorized"}
+		t.Parallel()
 
+		api := vtadmin.NewAPI(testClusters(t), opts)
+		t.Cleanup(func() {
+			if err := api.Close(); err != nil {
+				t.Logf("api did not close cleanly: %s", err.Error())
+			}
+		})
+
+		actor := &rbac.Actor{Name: "unauthorized"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -922,8 +937,16 @@ func TestGetGates(t *testing.T) {
 	})
 
 	t.Run("partial access", func(t *testing.T) {
-		actor := &rbac.Actor{Name: "allowed-other"}
+		t.Parallel()
 
+		api := vtadmin.NewAPI(testClusters(t), opts)
+		t.Cleanup(func() {
+			if err := api.Close(); err != nil {
+				t.Logf("api did not close cleanly: %s", err.Error())
+			}
+		})
+
+		actor := &rbac.Actor{Name: "allowed-other"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -936,8 +959,16 @@ func TestGetGates(t *testing.T) {
 	})
 
 	t.Run("full access", func(t *testing.T) {
-		actor := &rbac.Actor{Name: "allowed-all"}
+		t.Parallel()
 
+		api := vtadmin.NewAPI(testClusters(t), opts)
+		t.Cleanup(func() {
+			if err := api.Close(); err != nil {
+				t.Logf("api did not close cleanly: %s", err.Error())
+			}
+		})
+
+		actor := &rbac.Actor{Name: "allowed-all"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -982,8 +1013,8 @@ func TestGetKeyspace(t *testing.T) {
 
 	t.Run("unauthorized actor", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "other"}
 
+		actor := &rbac.Actor{Name: "other"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -999,8 +1030,8 @@ func TestGetKeyspace(t *testing.T) {
 
 	t.Run("authorized actor", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "allowed"}
 
+		actor := &rbac.Actor{Name: "allowed"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -1053,8 +1084,8 @@ func TestGetKeyspaces(t *testing.T) {
 
 	t.Run("unauthorized actor", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "unauthorized"}
 
+		actor := &rbac.Actor{Name: "unauthorized"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -1067,8 +1098,8 @@ func TestGetKeyspaces(t *testing.T) {
 
 	t.Run("partial access", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "allowed-other"}
 
+		actor := &rbac.Actor{Name: "allowed-other"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -1088,8 +1119,8 @@ func TestGetKeyspaces(t *testing.T) {
 
 	t.Run("full access", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "allowed-all"}
 
+		actor := &rbac.Actor{Name: "allowed-all"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -1131,17 +1162,17 @@ func TestGetSchema(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts)
-	t.Cleanup(func() {
-		if err := api.Close(); err != nil {
-			t.Logf("api did not close cleanly: %s", err.Error())
-		}
-	})
-
 	t.Run("unauthorized actor", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "other"}
 
+		api := vtadmin.NewAPI(testClusters(t), opts)
+		t.Cleanup(func() {
+			if err := api.Close(); err != nil {
+				t.Logf("api did not close cleanly: %s", err.Error())
+			}
+		})
+
+		actor := &rbac.Actor{Name: "other"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -1158,8 +1189,15 @@ func TestGetSchema(t *testing.T) {
 
 	t.Run("authorized actor", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "allowed"}
 
+		api := vtadmin.NewAPI(testClusters(t), opts)
+		t.Cleanup(func() {
+			if err := api.Close(); err != nil {
+				t.Logf("api did not close cleanly: %s", err.Error())
+			}
+		})
+
+		actor := &rbac.Actor{Name: "allowed"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -1204,17 +1242,17 @@ func TestGetSchemas(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts)
-	t.Cleanup(func() {
-		if err := api.Close(); err != nil {
-			t.Logf("api did not close cleanly: %s", err.Error())
-		}
-	})
-
 	t.Run("unauthorized actor", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "unauthorized"}
 
+		api := vtadmin.NewAPI(testClusters(t), opts)
+		t.Cleanup(func() {
+			if err := api.Close(); err != nil {
+				t.Logf("api did not close cleanly: %s", err.Error())
+			}
+		})
+
+		actor := &rbac.Actor{Name: "unauthorized"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -1227,8 +1265,15 @@ func TestGetSchemas(t *testing.T) {
 
 	t.Run("partial access", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "allowed-other"}
 
+		api := vtadmin.NewAPI(testClusters(t), opts)
+		t.Cleanup(func() {
+			if err := api.Close(); err != nil {
+				t.Logf("api did not close cleanly: %s", err.Error())
+			}
+		})
+
+		actor := &rbac.Actor{Name: "allowed-other"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -1248,8 +1293,15 @@ func TestGetSchemas(t *testing.T) {
 
 	t.Run("full access", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "allowed-all"}
 
+		api := vtadmin.NewAPI(testClusters(t), opts)
+		t.Cleanup(func() {
+			if err := api.Close(); err != nil {
+				t.Logf("api did not close cleanly: %s", err.Error())
+			}
+		})
+
+		actor := &rbac.Actor{Name: "allowed-all"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -1306,8 +1358,8 @@ func TestGetShardReplicationPositions(t *testing.T) {
 
 	t.Run("unauthorized actor", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "unauthorized"}
 
+		actor := &rbac.Actor{Name: "unauthorized"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -1320,8 +1372,8 @@ func TestGetShardReplicationPositions(t *testing.T) {
 
 	t.Run("partial access", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "allowed-other"}
 
+		actor := &rbac.Actor{Name: "allowed-other"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -1341,8 +1393,8 @@ func TestGetShardReplicationPositions(t *testing.T) {
 
 	t.Run("full access", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "allowed-all"}
 
+		actor := &rbac.Actor{Name: "allowed-all"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -1393,8 +1445,8 @@ func TestGetSrvVSchema(t *testing.T) {
 
 	t.Run("unauthorized actor", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "other"}
 
+		actor := &rbac.Actor{Name: "other"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -1410,8 +1462,8 @@ func TestGetSrvVSchema(t *testing.T) {
 
 	t.Run("authorized actor", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "allowed"}
 
+		actor := &rbac.Actor{Name: "allowed"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -1464,8 +1516,8 @@ func TestGetSrvVSchemas(t *testing.T) {
 
 	t.Run("unauthorized actor", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "unauthorized"}
 
+		actor := &rbac.Actor{Name: "unauthorized"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -1478,8 +1530,8 @@ func TestGetSrvVSchemas(t *testing.T) {
 
 	t.Run("partial access", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "allowed-other"}
 
+		actor := &rbac.Actor{Name: "allowed-other"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -1499,8 +1551,8 @@ func TestGetSrvVSchemas(t *testing.T) {
 
 	t.Run("full access", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "allowed-all"}
 
+		actor := &rbac.Actor{Name: "allowed-all"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -1551,8 +1603,8 @@ func TestGetTablet(t *testing.T) {
 
 	t.Run("unauthorized actor", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "other"}
 
+		actor := &rbac.Actor{Name: "other"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -1570,8 +1622,8 @@ func TestGetTablet(t *testing.T) {
 
 	t.Run("authorized actor", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "allowed"}
 
+		actor := &rbac.Actor{Name: "allowed"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -1626,8 +1678,8 @@ func TestGetTablets(t *testing.T) {
 
 	t.Run("unauthorized actor", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "unauthorized"}
 
+		actor := &rbac.Actor{Name: "unauthorized"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -1640,8 +1692,8 @@ func TestGetTablets(t *testing.T) {
 
 	t.Run("partial access", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "allowed-other"}
 
+		actor := &rbac.Actor{Name: "allowed-other"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -1661,8 +1713,8 @@ func TestGetTablets(t *testing.T) {
 
 	t.Run("full access", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "allowed-all"}
 
+		actor := &rbac.Actor{Name: "allowed-all"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -1713,8 +1765,8 @@ func TestGetVSchema(t *testing.T) {
 
 	t.Run("unauthorized actor", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "other"}
 
+		actor := &rbac.Actor{Name: "other"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -1730,8 +1782,8 @@ func TestGetVSchema(t *testing.T) {
 
 	t.Run("authorized actor", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "allowed"}
 
+		actor := &rbac.Actor{Name: "allowed"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -1784,8 +1836,8 @@ func TestGetVSchemas(t *testing.T) {
 
 	t.Run("unauthorized actor", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "unauthorized"}
 
+		actor := &rbac.Actor{Name: "unauthorized"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -1798,8 +1850,8 @@ func TestGetVSchemas(t *testing.T) {
 
 	t.Run("partial access", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "allowed-other"}
 
+		actor := &rbac.Actor{Name: "allowed-other"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -1819,8 +1871,8 @@ func TestGetVSchemas(t *testing.T) {
 
 	t.Run("full access", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "allowed-all"}
 
+		actor := &rbac.Actor{Name: "allowed-all"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -1868,16 +1920,17 @@ func TestGetVtctlds(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
-	api := vtadmin.NewAPI(testClusters(t), opts)
-	t.Cleanup(func() {
-		if err := api.Close(); err != nil {
-			t.Logf("api did not close cleanly: %s", err.Error())
-		}
-	})
-
 	t.Run("unauthorized actor", func(t *testing.T) {
-		actor := &rbac.Actor{Name: "unauthorized"}
+		t.Parallel()
 
+		api := vtadmin.NewAPI(testClusters(t), opts)
+		t.Cleanup(func() {
+			if err := api.Close(); err != nil {
+				t.Logf("api did not close cleanly: %s", err.Error())
+			}
+		})
+
+		actor := &rbac.Actor{Name: "unauthorized"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -1889,8 +1942,16 @@ func TestGetVtctlds(t *testing.T) {
 	})
 
 	t.Run("partial access", func(t *testing.T) {
-		actor := &rbac.Actor{Name: "allowed-other"}
+		t.Parallel()
 
+		api := vtadmin.NewAPI(testClusters(t), opts)
+		t.Cleanup(func() {
+			if err := api.Close(); err != nil {
+				t.Logf("api did not close cleanly: %s", err.Error())
+			}
+		})
+
+		actor := &rbac.Actor{Name: "allowed-other"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -1903,8 +1964,16 @@ func TestGetVtctlds(t *testing.T) {
 	})
 
 	t.Run("full access", func(t *testing.T) {
-		actor := &rbac.Actor{Name: "allowed-all"}
+		t.Parallel()
 
+		api := vtadmin.NewAPI(testClusters(t), opts)
+		t.Cleanup(func() {
+			if err := api.Close(); err != nil {
+				t.Logf("api did not close cleanly: %s", err.Error())
+			}
+		})
+
+		actor := &rbac.Actor{Name: "allowed-all"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -1949,8 +2018,8 @@ func TestGetWorkflow(t *testing.T) {
 
 	t.Run("unauthorized actor", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "other"}
 
+		actor := &rbac.Actor{Name: "other"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -1967,8 +2036,8 @@ func TestGetWorkflow(t *testing.T) {
 
 	t.Run("authorized actor", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "allowed"}
 
+		actor := &rbac.Actor{Name: "allowed"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -2022,8 +2091,8 @@ func TestGetWorkflows(t *testing.T) {
 
 	t.Run("unauthorized actor", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "unauthorized"}
 
+		actor := &rbac.Actor{Name: "unauthorized"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -2036,8 +2105,8 @@ func TestGetWorkflows(t *testing.T) {
 
 	t.Run("partial access", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "allowed-other"}
 
+		actor := &rbac.Actor{Name: "allowed-other"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -2050,8 +2119,8 @@ func TestGetWorkflows(t *testing.T) {
 
 	t.Run("full access", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "allowed-all"}
 
+		actor := &rbac.Actor{Name: "allowed-all"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -2095,8 +2164,8 @@ func TestPingTablet(t *testing.T) {
 
 	t.Run("unauthorized actor", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "other"}
 
+		actor := &rbac.Actor{Name: "other"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -2114,8 +2183,8 @@ func TestPingTablet(t *testing.T) {
 
 	t.Run("authorized actor", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "allowed"}
 
+		actor := &rbac.Actor{Name: "allowed"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -2164,8 +2233,8 @@ func TestPlannedFailoverShard(t *testing.T) {
 
 	t.Run("unauthorized actor", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "other"}
 
+		actor := &rbac.Actor{Name: "other"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -2184,8 +2253,8 @@ func TestPlannedFailoverShard(t *testing.T) {
 
 	t.Run("authorized actor", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "allowed"}
 
+		actor := &rbac.Actor{Name: "allowed"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -2235,8 +2304,8 @@ func TestRefreshState(t *testing.T) {
 
 	t.Run("unauthorized actor", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "other"}
 
+		actor := &rbac.Actor{Name: "other"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -2254,8 +2323,8 @@ func TestRefreshState(t *testing.T) {
 
 	t.Run("authorized actor", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "allowed"}
 
+		actor := &rbac.Actor{Name: "allowed"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -2304,8 +2373,8 @@ func TestRefreshTabletReplicationSource(t *testing.T) {
 
 	t.Run("unauthorized actor", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "other"}
 
+		actor := &rbac.Actor{Name: "other"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -2323,8 +2392,8 @@ func TestRefreshTabletReplicationSource(t *testing.T) {
 
 	t.Run("authorized actor", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "allowed"}
 
+		actor := &rbac.Actor{Name: "allowed"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -2379,8 +2448,8 @@ func TestReloadSchemas(t *testing.T) {
 
 	t.Run("unauthorized actor", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "unauthorized"}
 
+		actor := &rbac.Actor{Name: "unauthorized"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -2398,8 +2467,8 @@ func TestReloadSchemas(t *testing.T) {
 
 	t.Run("partial access", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "allowed-other"}
 
+		actor := &rbac.Actor{Name: "allowed-other"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -2416,8 +2485,8 @@ func TestReloadSchemas(t *testing.T) {
 
 	t.Run("full access", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "allowed-all"}
 
+		actor := &rbac.Actor{Name: "allowed-all"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -2465,8 +2534,8 @@ func TestRunHealthCheck(t *testing.T) {
 
 	t.Run("unauthorized actor", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "other"}
 
+		actor := &rbac.Actor{Name: "other"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -2484,8 +2553,8 @@ func TestRunHealthCheck(t *testing.T) {
 
 	t.Run("authorized actor", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "allowed"}
 
+		actor := &rbac.Actor{Name: "allowed"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -2534,8 +2603,8 @@ func TestSetReadOnly(t *testing.T) {
 
 	t.Run("unauthorized actor", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "other"}
 
+		actor := &rbac.Actor{Name: "other"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -2553,8 +2622,8 @@ func TestSetReadOnly(t *testing.T) {
 
 	t.Run("authorized actor", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "allowed"}
 
+		actor := &rbac.Actor{Name: "allowed"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -2603,8 +2672,8 @@ func TestSetReadWrite(t *testing.T) {
 
 	t.Run("unauthorized actor", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "other"}
 
+		actor := &rbac.Actor{Name: "other"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -2622,8 +2691,8 @@ func TestSetReadWrite(t *testing.T) {
 
 	t.Run("authorized actor", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "allowed"}
 
+		actor := &rbac.Actor{Name: "allowed"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -2672,8 +2741,8 @@ func TestStartReplication(t *testing.T) {
 
 	t.Run("unauthorized actor", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "other"}
 
+		actor := &rbac.Actor{Name: "other"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -2691,8 +2760,8 @@ func TestStartReplication(t *testing.T) {
 
 	t.Run("authorized actor", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "allowed"}
 
+		actor := &rbac.Actor{Name: "allowed"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -2741,8 +2810,8 @@ func TestStopReplication(t *testing.T) {
 
 	t.Run("unauthorized actor", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "other"}
 
+		actor := &rbac.Actor{Name: "other"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -2760,8 +2829,8 @@ func TestStopReplication(t *testing.T) {
 
 	t.Run("authorized actor", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "allowed"}
 
+		actor := &rbac.Actor{Name: "allowed"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -2810,8 +2879,8 @@ func TestTabletExternallyPromoted(t *testing.T) {
 
 	t.Run("unauthorized actor", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "other"}
 
+		actor := &rbac.Actor{Name: "other"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -2829,8 +2898,8 @@ func TestTabletExternallyPromoted(t *testing.T) {
 
 	t.Run("authorized actor", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "allowed"}
 
+		actor := &rbac.Actor{Name: "allowed"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -2879,8 +2948,8 @@ func TestVTExplain(t *testing.T) {
 
 	t.Run("unauthorized actor", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "other"}
 
+		actor := &rbac.Actor{Name: "other"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -2896,8 +2965,8 @@ func TestVTExplain(t *testing.T) {
 
 	t.Run("authorized actor", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "allowed"}
 
+		actor := &rbac.Actor{Name: "allowed"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -2944,8 +3013,8 @@ func TestValidateKeyspace(t *testing.T) {
 
 	t.Run("unauthorized actor", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "other"}
 
+		actor := &rbac.Actor{Name: "other"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -2961,8 +3030,8 @@ func TestValidateKeyspace(t *testing.T) {
 
 	t.Run("authorized actor", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "allowed"}
 
+		actor := &rbac.Actor{Name: "allowed"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -3009,8 +3078,8 @@ func TestValidateSchemaKeyspace(t *testing.T) {
 
 	t.Run("unauthorized actor", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "other"}
 
+		actor := &rbac.Actor{Name: "other"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -3026,8 +3095,8 @@ func TestValidateSchemaKeyspace(t *testing.T) {
 
 	t.Run("authorized actor", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "allowed"}
 
+		actor := &rbac.Actor{Name: "allowed"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -3074,8 +3143,8 @@ func TestValidateVersionKeyspace(t *testing.T) {
 
 	t.Run("unauthorized actor", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "other"}
 
+		actor := &rbac.Actor{Name: "other"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)
@@ -3091,8 +3160,8 @@ func TestValidateVersionKeyspace(t *testing.T) {
 
 	t.Run("authorized actor", func(t *testing.T) {
 		t.Parallel()
-		actor := &rbac.Actor{Name: "allowed"}
 
+		actor := &rbac.Actor{Name: "allowed"}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)

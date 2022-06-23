@@ -74,11 +74,11 @@ func (conn *snapshotConn) startSnapshot(ctx context.Context, table string) (gtid
 		lockConn.Close()
 	}()
 
-	tableIdent := sqlparser.String(sqlparser.NewTableIdent(table))
+	tableName := sqlparser.String(sqlparser.NewIdentifierCS(table))
 
 	log.Infof("Locking table %s for copying", table)
-	if _, err := lockConn.ExecuteFetch(fmt.Sprintf("lock tables %s read", tableIdent), 1, false); err != nil {
-		log.Infof("Error locking table %s to read", tableIdent)
+	if _, err := lockConn.ExecuteFetch(fmt.Sprintf("lock tables %s read", tableName), 1, false); err != nil {
+		log.Infof("Error locking table %s to read", tableName)
 		return "", err
 	}
 	mpos, err := lockConn.PrimaryPosition()
