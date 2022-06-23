@@ -19,6 +19,8 @@ import (
 	"testing"
 	"time"
 
+	"google.golang.org/grpc/credentials/insecure"
+
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	pb "google.golang.org/grpc/examples/helloworld/helloworld"
@@ -110,7 +112,7 @@ func TestOptionalTLS(t *testing.T) {
 
 	t.Run("Plain2TLS", func(t *testing.T) {
 		for i := 0; i < 5; i++ {
-			testFunc(t, grpc.WithInsecure())
+			testFunc(t, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		}
 	})
 	t.Run("TLS2TLS", func(t *testing.T) {
