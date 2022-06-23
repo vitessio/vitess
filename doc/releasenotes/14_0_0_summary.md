@@ -7,13 +7,12 @@
 - [Online DDL changes](#online-ddl-changes)
 - [Table lifecycle](#table-lifecycle)
 - [Tablet throttler](#tablet-throttler)
-- [New Syntax](#new-syntax)
 - [Heartbeat](#heartbeat)
 - [VDiff2](#vdiff2)
 - [Durability Policy](#durability-policy)
 - [Deprecation of Durability Configuration](#deprecation-of-durability-configuration)
-- [Advisory locking optimisations](#advisory-locking-optimisations)
-- [Drop the use of the legacy healthcheck in VTCtld](#drop-the-use-of-the-legacy-healthcheck-in-vtctld)
+- [Advisory locking optimizations](#advisory-locking-optimizations)
+- [Pre-Legacy Resharding is now deprecated](#pre-legacy-resharding-is-now-deprecated)
 
 ## Major Changes
 
@@ -65,13 +64,13 @@ $ vttablet --tablet_alias zone1-100 --init_keyspace mykeyspace ... # new way
 
 As the full deprecation text goes on to (attempt to) explain, mixing flags and positional arguments will change in a future version that will break scripts.
 
-Currently, when invoking a binary like
+Currently, when invoking a binary like:
 
 ```
 $ vtctl --topo_implementation etcd2 AddCellInfo --root "/vitess/global"
 ```
 
-everything after the `AddCellInfo` is treated by `package flag` as a positional argument, and we then use a sub FlagSet to parse flags specific to the subcommand.
+Everything after the `AddCellInfo` is treated by `package flag` as a positional argument, and we then use a sub FlagSet to parse flags specific to the subcommand.
 So, at the top-level, `flag.Args()` returns `["AddCellInfo", "--root", "/vitess/global"]`.
 
 The library we are transitioning to is more flexible, allowing flags and positional arguments to be interwoven on the command-line.
@@ -100,7 +99,10 @@ $ vtctl -- --topo_implementation etcd2 AddCellInfo --root "/vitess/global"
 
 The default value for `--heartbeat_on_demand_duration` is zero, which means the flag is not set and there is no change in behavior.
 
-When `--heartbeat_on_demand_duration` has a positive value, then heartbeats are only injected on demand, per internal requests. For example, when `--heartbeat_on_demand_duration=5s`, the tablet starts without injecting heartbeats. An internal module, like the lag throttle, may request the heartbeat writer for heartbeats. Starting at that point in time, and for the duration (a lease) of `5s` in our example, the tablet will write heartbeats. If no other requests come in during that duration, then the tablet then ceases to write heartbeats. If more requests for heartbeats come while heartbeats are being written, then the tablet extends the lease for the next `5s` following up each request. Thus, it stops writing heartbeats `5s` after the last request is received.
+When `--heartbeat_on_demand_duration` has a positive value, then heartbeats are only injected on demand, per internal requests. For example, when `--heartbeat_on_demand_duration=5s`, the tablet starts without injecting heartbeats.
+An internal module, like the lag throttle, may request the heartbeat writer for heartbeats. Starting at that point in time, and for the duration (a lease) of `5s` in our example, the tablet will write heartbeats.
+If no other requests come in during that duration, then the tablet then ceases to write heartbeats. If more requests for heartbeats come while heartbeats are being written, then the tablet extends the lease for the next `5s` following up each request.
+Thus, it stops writing heartbeats `5s` after the last request is received.
 
 The heartbeats are generated according to `--heartbeat_interval`.
 
@@ -130,7 +132,7 @@ Online DDL is no longer experimental (with the exception of `pt-osc` strategy). 
 - Revertible migrations
 - Declarative migrations
 - Postponed migrations
-- and all other functionality
+- And all other functionalities
 
 Are all considered production-ready.
 
@@ -138,7 +140,7 @@ Are all considered production-ready.
 
 #### Throttling
 
-See new SQL syntax for controlling/viewing throttling for Online DDL, down below.
+See new SQL syntax for controlling/viewing throttling for Online DDL, down below in [New Syntax](#new-syntax).
 
 #### ddl_strategy: 'vitess'
 
@@ -178,45 +180,21 @@ On Mysql `8.0.23` or later, the states `PURGE` and `EVAC` are automatically skip
 
 #### API changes
 
-Added `/throttler/throttled-apps` endpoint, which reports back all current throttling instructions. Note, this only reports explicit throttling requests (sych as ones submitted by `/throtler/throttle-app?app=...`). It does not list incidental rejections based on throttle thresholds.
+Added `/throttler/throttled-apps` endpoint, which reports back all current throttling instructions. Note, this only reports explicit throttling requests (such as ones submitted by `/throtler/throttle-app?app=...`). It does not list incidental rejections based on throttle thresholds.
 
 API endpoint `/throttler/throttle-app` now accepts a `ratio` query argument, a floating point in the range `[0..1]`, where:
 
 - `0` means "do not throttle at all"
 - `1` means "always throttle"
-- any numbr in between is allowd. For example, `0.3` means "throttle in 0.3 probability", ie on a per request and based on a dice roll, there's a `30%` change a request is denied. Overall we can expect about `30%` of requests to be denied. Example: `/throttler/throttle-app?app=vreplication&ratio=0.25`
+- Any number in between is allowed. For example, `0.3` means "throttle with 0.3 probability", i.e. for any given request there's a 30% chance that the request is denied. Overall we can expect about `30%` of requests to be denied. Example: `/throttler/throttle-app?app=vreplication&ratio=0.25`.
 
-API endpoint `/debug/vars` now exposes throttler metrics, such as number of hits and errors per app per check type. Example:
+See new SQL syntax for controlling/viewing throttling, down below in [New Syntax](#new-syntax).
 
-```shell
-$ curl -s 'http://127.0.0.1:15100/debug/vars' | jq . | grep throttler
-  "throttler.aggregated.mysql.self": 133.19334,
-  "throttler.aggregated.mysql.shard": 132.997847,
-  "throttler.check.any.error": 1086,
-  "throttler.check.any.mysql.self.error": 542,
-  "throttler.check.any.mysql.self.total": 570,
-  "throttler.check.any.mysql.shard.error": 544,
-  "throttler.check.any.mysql.shard.total": 570,
-  "throttler.check.any.total": 1140,
-  "throttler.check.mysql.self.seconds_since_healthy": 132,
-  "throttler.check.mysql.shard.seconds_since_healthy": 132,
-  "throttler.check.vitess.error": 1086,
-  "throttler.check.vitess.mysql.self.error": 542,
-  "throttler.check.vitess.mysql.self.total": 570,
-  "throttler.check.vitess.mysql.shard.error": 544,
-  "throttler.check.vitess.mysql.shard.total": 570,
-  "throttler.check.vitess.total": 1140,
-  "throttler.probes.latency": 292982,
-  "throttler.probes.total": 1138
-```
+#### New Syntax
 
-See new SQL syntax for controlling/viewing throttling, down below.
+##### Control and view Online DDL throttling
 
-### New Syntax
-
-#### Control and view Online DDL throttling
-
-We introduce the following syntax, to:
+We introduce the following syntax to:
 
 - Start/stop throttling for all Online DDL migrations, in general
 - Start/stop throttling for a particular Online DDL migration
@@ -231,17 +209,17 @@ ALTER VITESS_MIGRATION UNTHROTTLE ALL;
 SHOW VITESS_THROTTLED_APPS;
 ```
 
-default `duration` is "infinite" (set as 100 years)
+The default `duration` is "infinite" (set as 100 years):
+- Allowed units are (s)ec, (m)in, (h)our
 
-- allowed units are (s)ec, (m)in, (h)our
-ratio is in the range `[0..1]`.
+The ratio is in the range `[0..1]`:
 - `1` means full throttle - the app will not make any progress
 - `0` means no throttling at all
 - `0.8` means on 8 out of 10 checks the app makes, it gets refused
 
-The syntax `SHOW VITESS_THROTTLED_APPS` is a generic call to the throttler, and returns information about all throttled apps, not specific to migrations
+The syntax `SHOW VITESS_THROTTLED_APPS` is a generic call to the throttler, and returns information about all throttled apps, not specific to migrations.
 
-`SHOW VITESS_MIGRATIONS ...` output now includes `user_throttle_ratio`
+The output of `SHOW VITESS_MIGRATIONS ...` now includes `user_throttle_ratio`.
 
 This column is updated "once in a while", while a migration is running. Normally this is once a minute, but can be more frequent. The migration reports back what was the throttling instruction set by the user while it was/is running.
 This column does not indicate any actual lag-based throttling that takes place per production state. It only reports the explicit throttling value set by the user.
@@ -252,11 +230,15 @@ The throttler now checks in with the heartbeat writer to request heartbeats, any
 
 When `--heartbeat_on_demand_duration` is not set, there is no change in behavior.
 
-When `--heartbeat_on_demand_duration` is set to a positive value, then the throttler ensures that the heartbeat writer generated heartbeats for at least the following duration. This also means at the first throttler check, it's possible that heartbeats are idle, and so the first check will fail. As heartbeats start running, followup checks will get a more accurate lag evaluation and will respond accordingly. In a sense, it's a "cold engine" scenario, where the engine takes time to start up, and then runs smoothly.
+When `--heartbeat_on_demand_duration` is set to a positive value, then the throttler ensures that the heartbeat writer generated heartbeats for at least the following duration.
+This also means at the first throttler check, it's possible that heartbeats are idle, and so the first check will fail. As heartbeats start running, followup checks will get a more accurate lag evaluation and will respond accordingly.
+In a sense, it's a "cold engine" scenario, where the engine takes time to start up, and then runs smoothly.
 
 ### VDiff2
 
-We introduced a new version of VDiff -- currently marked as Experimental -- that executes the VDiff on tablets rather than in vtctld. While this is experimental we encourage you to try it out and provide feedback! This input will be invaluable as we improve this feature on the march toward a production-ready version. You can try it out by adding the `--v2` flag to your VDiff command. Here's an example:
+We introduced a new version of VDiff -- currently marked as Experimental -- that executes the VDiff on tablets rather than in vtctld.
+While this is experimental we encourage you to try it out and provide feedback! This input will be invaluable as we improve this feature on the march toward a production-ready version.
+You can try it out by adding the `--v2` flag to your VDiff command. Here's an example:
 ```
 $ vtctlclient --server=localhost:15999 VDiff -- --v2 customer.commerce2customer
 VDiff bf9dfc5f-e5e6-11ec-823d-0aa62e50dd24 scheduled on target shards, use show to view progress
@@ -280,7 +262,7 @@ $ vtctlclient --server=localhost:15999 VDiff -- --v2 --format=json customer.comm
 }
 ```
 
-:information_source:  NOTE: even before it's marked as production-ready (feature complete and tested widely in 1+ releases), it should be safe to use and is likely to provide much better results for very large tables.
+> Even before it's marked as production-ready (feature complete and tested widely in 1+ releases), it should be safe to use and is likely to provide much better results for very large tables.
 
 For additional details, please see the [RFC](https://github.com/vitessio/vitess/issues/10134) and the [README](https://github.com/vitessio/vitess/tree/main/go/vt/vttablet/tabletmanager/vdiff/README.md).
 
@@ -314,6 +296,3 @@ Work has gone into making the advisory locks (`get_lock()`, `release_lock()`, et
 
 ### Pre-Legacy Resharding is now deprecated
 A long time ago, the sharding column and type were specified at the keyspace level. This syntax is now deprecated and will be removed in v15.
-
-### Drop the use of the legacy healthcheck in VTCtld
-In release `7.0.0`, a new healthcheck was developed and the old one was renamed legacy healthcheck. In Vitess 14, we have changed VTCtld to use the new healthcheck instead of the legacy.
