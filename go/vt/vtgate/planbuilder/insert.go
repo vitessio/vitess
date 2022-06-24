@@ -133,10 +133,8 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table, reserv
 		}
 		eins.Ignore = true
 	}
-	if len(ins.Columns) == 0 {
-		if table.ColumnListAuthoritative {
-			populateInsertColumnlist(ins, table)
-		}
+	if ins.Columns == nil && table.ColumnListAuthoritative {
+		populateInsertColumnlist(ins, table)
 	}
 
 	applyCommentDirectives(ins, eins)
