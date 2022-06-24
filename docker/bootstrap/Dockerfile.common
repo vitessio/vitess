@@ -1,3 +1,17 @@
+FROM node:16-bullseye-slim as node
+
+COPY web/vtadmin /vt/web/vtadmin
+
+# install/build/clean web dependencies
+RUN npm --prefix /vt/web/vtadmin ci && \
+    npm run --prefix /vt/web/vtadmin build && \
+    find /vt/web/vtadmin -name "*" \
+      -not -path "/vt/web/vtadmin" \
+      -not -path "/vt/web/vtadmin/build*" \
+      -not -path "/vt/web/vtadmin/node_modules" \
+      -not -path "/vt/web/vtadmin/node_modules/.bin" \
+      -not -path "/vt/web/vtadmin/node_modules/.bin/serve" | xargs rm -rf
+
 FROM golang:1.18.3-buster
 
 # Install Vitess build dependencies
@@ -29,6 +43,7 @@ ENV USER vitess
 COPY bootstrap.sh dev.env build.env go.mod go.sum /vt/src/vitess.io/vitess/
 COPY config /vt/src/vitess.io/vitess/config
 COPY tools /vt/src/vitess.io/vitess/tools
+COPY --from=node /vt/web/vtadmin /vt/src/vitess.io/vitess/web/vtadmin
 
 # Create vitess user
 RUN groupadd -r vitess && useradd -r -g vitess vitess && \
