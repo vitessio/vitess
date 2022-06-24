@@ -43,8 +43,13 @@ RUN deluser node && \
    groupadd -r --gid 2000 vitess && \
    useradd -r -g vitess --uid 1000 vitess && \
    chown -R vitess:vitess /vt && \
-   chown -R vitess:vitess /vtdataroot
+   chown -R vitess:vitess /vtdataroot && \
+   # the entrypoint need to edit vtadmin configuration, so it needs to be writable by every user
+   chmod 777 /vt/web/vtadmin/build/index.html
+
+USER vitess
 
 ENTRYPOINT ["/vt/entrypoint.sh"]
 
 CMD ["/vt/web/vtadmin/node_modules/.bin/serve", "--no-clipboard", "-l", "$VTADMIN_WEB_PORT", "-s", "/vt/web/vtadmin/build"]
+

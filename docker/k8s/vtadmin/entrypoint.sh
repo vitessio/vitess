@@ -14,13 +14,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set -ex
+set -e
 
-sed -i "s|#REACT_APP_VTADMIN_API_ADDRESS#|$REACT_APP_VTADMIN_API_ADDRESS|" /vt/web/vtadmin/build/index.html
-sed -i "s|#REACT_APP_FETCH_CREDENTIALS#|${REACT_APP_FETCH_CREDENTIALS:-}|" /vt/web/vtadmin/build/index.html
-sed -i "s|#REACT_APP_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS#|${REACT_APP_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS:-true}|" /vt/web/vtadmin/build/index.html
-sed -i "s|#REACT_APP_BUGSNAG_API_KEY#|${REACT_APP_BUGSNAG_API_KEY:-}|" /vt/web/vtadmin/build/index.html
-sed -i "s|#REACT_APP_DOCUMENT_TITLE#|${REACT_APP_DOCUMENT_TITLE:-}|" /vt/web/vtadmin/build/index.html
-sed -i "s|#REACT_APP_READONLY_MODE#|${REACT_APP_READONLY_MODE:-false}|" /vt/web/vtadmin/build/index.html
+content=$(cat /vt/web/vtadmin/build/index.html)
+content=$(echo $content | sed "s|#REACT_APP_VTADMIN_API_ADDRESS#|$REACT_APP_VTADMIN_API_ADDRESS|")
+content=$(echo $content | sed "s|#REACT_APP_FETCH_CREDENTIALS#|${REACT_APP_FETCH_CREDENTIALS:-}|")
+content=$(echo $content | sed "s|#REACT_APP_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS#|${REACT_APP_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS:-true}|")
+content=$(echo $content | sed "s|#REACT_APP_BUGSNAG_API_KEY#|${REACT_APP_BUGSNAG_API_KEY:-}|")
+content=$(echo $content | sed "s|#REACT_APP_DOCUMENT_TITLE#|${REACT_APP_DOCUMENT_TITLE:-}|")
+content=$(echo $content | sed "s|#REACT_APP_READONLY_MODE#|${REACT_APP_READONLY_MODE:-false}|")
+echo "$content" > /vt/web/vtadmin/build/index.html
 
 exec /bin/bash -c "$*"
