@@ -35,6 +35,7 @@ RUN npm --prefix /vt/web/vtadmin ci && \
       -not -path "/vt/web/vtadmin" \
       -not -path "/vt/web/vtadmin/build*" \
       -not -path "/vt/web/vtadmin/node_modules" \
+      -not -path "/vt/web/vtadmin/node_modules/serve*" \
       -not -path "/vt/web/vtadmin/node_modules/.bin" \
       -not -path "/vt/web/vtadmin/node_modules/.bin/serve" | xargs rm -rf
 
