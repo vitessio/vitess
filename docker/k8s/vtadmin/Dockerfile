@@ -27,8 +27,6 @@ ENV VTADMIN_WEB_PORT=14201
 RUN mkdir -p /vt/bin && \
    mkdir -p /vt/web && mkdir -p /vtdataroot
 
-ADD entrypoint.sh /vt/entrypoint.sh
-
 # Copy binaries
 COPY --from=k8s /vt/bin/vtadmin /vt/bin/
 
@@ -47,13 +45,11 @@ RUN deluser node && \
    groupadd -r --gid 2000 vitess && \
    useradd -r -g vitess --uid 1000 vitess && \
    chown -R vitess:vitess /vt && \
-   chown -R vitess:vitess /vtdataroot && \
-   # the entrypoint need to edit vtadmin configuration, so it needs to be writable by every user
-   chmod 777 /vt/web/vtadmin/build/index.html
+   chown -R vitess:vitess /vtdataroot
 
 USER vitess
 
-ENTRYPOINT ["/vt/entrypoint.sh"]
+VOLUME /vt/web/vtadmin/build/config.js
 
-CMD ["/vt/web/vtadmin/node_modules/.bin/serve", "--no-clipboard", "-l", "$VTADMIN_WEB_PORT", "-s", "/vt/web/vtadmin/build"]
+CMD ["/bin/bash", "-c", "/vt/web/vtadmin/node_modules/.bin/serve --no-clipboard -l $VTADMIN_WEB_PORT -s /vt/web/vtadmin/build"]
 
