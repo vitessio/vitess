@@ -99,10 +99,10 @@ $ vtctl -- --topo_implementation etcd2 AddCellInfo --root "/vitess/global"
 
 The default value for `--heartbeat_on_demand_duration` is zero, which means the flag is not set and there is no change in behavior.
 
-When `--heartbeat_on_demand_duration` has a positive value, then heartbeats are only injected on demand, per internal requests. For example, when `--heartbeat_on_demand_duration=5s`, the tablet starts without injecting heartbeats.
-An internal module, like the lag throttle, may request the heartbeat writer for heartbeats. Starting at that point in time, and for the duration (a lease) of `5s` in our example, the tablet will write heartbeats.
-If no other requests come in during that duration, then the tablet then ceases to write heartbeats. If more requests for heartbeats come while heartbeats are being written, then the tablet extends the lease for the next `5s` following up each request.
-Thus, it stops writing heartbeats `5s` after the last request is received.
+When `--heartbeat_on_demand_duration` has a positive value, then heartbeats are only injected on demand, based on internal requests. For example, when `--heartbeat_on_demand_duration=5s`, the tablet starts without injecting heartbeats.
+An internal module, like the lag throttler, may request the heartbeat writer for heartbeats. Starting at that point in time, and for the duration (a lease) of `5s` in our example, the tablet will write heartbeats.
+If no other requests come in during that time, the tablet then ceases to write heartbeats. If more requests for heartbeats come in, the tablet extends the lease for the next `5s` following each request.
+It stops writing heartbeats `5s` after the last request is received.
 
 The heartbeats are generated according to `--heartbeat_interval`.
 
@@ -110,13 +110,9 @@ The heartbeats are generated according to `--heartbeat_interval`.
 
 The flag `--online_ddl_check_interval` is deprecated and will be removed in `v15`. It has been unused in `v13`.
 
-#### Deprecation of --planner-version for vtexplain
-
-The flag `--planner-version` is deprecated and will be removed in `v15`. Instead, please use `--planer_version`.
-
 #### Removal of --gateway_implementation
 
-In previous releases, the `discoverygateway` was deprecated. In Vitess 14 it is now entirely removed, along with the VTGate flag that allowed us to select the tablet gateway.
+In previous releases, the `discoverygateway` was deprecated. In Vitess 14 it is now entirely removed, along with the VTGate flag that allowed us to choose a gateway.
 
 ### Online DDL changes
 
@@ -132,19 +128,15 @@ Online DDL is no longer experimental (with the exception of `pt-osc` strategy). 
 - Revertible migrations
 - Declarative migrations
 - Postponed migrations
-- And all other functionalities
+- And all other functionality
 
 Are all considered production-ready.
 
 `pt-osc` strategy (online DDL via 3rd party `pt-online-schema-change`) remains experimental.
 
-#### Throttling
-
-See new SQL syntax for controlling/viewing throttling for Online DDL, down below in [New Syntax](#new-syntax).
-
 #### ddl_strategy: 'vitess'
 
-`ddl_strategy` now takes the value of `vitess` to indicate VReplication-based migrations. It is a synonym to `online` and uses the exact same functionality. In the future, the `online` term will phase out, and `vitess` will remain the term of preference.
+`ddl_strategy` now takes the value of `vitess` to indicate VReplication-based migrations. It is a synonym to `online` and uses the exact same functionality. The `online` term will be phased out in the future and `vitess` will remain the term of preference.
 
 Example:
 
@@ -158,7 +150,7 @@ It is now possible to submit a migration with `--singleton-context` strategy fla
 
 #### Support for CHECK constraints
 
-Online DDL operations are more aware of `CHECK` constraints, and properly handle the limitation where a `CHECK`'s name has to be unique in the schema. As opposed to letting MySQL choose arbitrary names for shadow table's `CHECK` consraints, Online DDL now generates unique yet deterministic names, such that all shards converge onto same names.
+Online DDL operations are more aware of `CHECK` constraints, and properly handle the limitation where a `CHECK`'s name has to be unique in the schema. As opposed to letting MySQL choose arbitrary names for shadow table's `CHECK` constraints, Online DDL now generates unique yet deterministic names, such that all shards converge onto the same names.
 
 Online DDL attempts to preserve the original check's name as a suffix to the generated name, where possible (names are limited to `64` characters).
 
@@ -170,11 +162,11 @@ Online DDL attempts to preserve the original check's name as a suffix to the gen
 
 #### Views
 
-Table lifecycle now supports views. It ensures to not purge rows from views, and does not keep views in `EVAC` state (they are immediately transitioned to `DROP` state).
+Table lifecycle now supports views. It does not purge rows from views, and does not keep views in `EVAC` state (they are immediately transitioned to `DROP` state).
 
 #### Fast drops
 
-On Mysql `8.0.23` or later, the states `PURGE` and `EVAC` are automatically skipped, thanks to `8.0.23` improvement to `DROP TABLE` speed of operation.
+On Mysql `8.0.23` or later, the states `PURGE` and `EVAC` are automatically skipped, thanks to `8.0.23` improvements to `DROP TABLE` speed of operation.
 
 ### Tablet throttler
 
@@ -182,13 +174,13 @@ On Mysql `8.0.23` or later, the states `PURGE` and `EVAC` are automatically skip
 
 Added `/throttler/throttled-apps` endpoint, which reports back all current throttling instructions. Note, this only reports explicit throttling requests (such as ones submitted by `/throtler/throttle-app?app=...`). It does not list incidental rejections based on throttle thresholds.
 
-API endpoint `/throttler/throttle-app` now accepts a `ratio` query argument, a floating point in the range `[0..1]`, where:
+API endpoint `/throttler/throttle-app` now accepts a `ratio` query argument, a floating point value in the range `[0..1]`, where:
 
 - `0` means "do not throttle at all"
 - `1` means "always throttle"
 - Any number in between is allowed. For example, `0.3` means "throttle with 0.3 probability", i.e. for any given request there's a 30% chance that the request is denied. Overall we can expect about `30%` of requests to be denied. Example: `/throttler/throttle-app?app=vreplication&ratio=0.25`.
 
-See new SQL syntax for controlling/viewing throttling, down below in [New Syntax](#new-syntax).
+See new SQL syntax for controlling/viewing throttling, under [New Syntax](#new-syntax).
 
 #### New Syntax
 
@@ -213,7 +205,7 @@ The default `duration` is "infinite" (set as 100 years):
 - Allowed units are (s)ec, (m)in, (h)our
 
 The ratio is in the range `[0..1]`:
-- `1` means full throttle - the app will not make any progress
+- `1` means throttle everything - the app will not make any progress
 - `0` means no throttling at all
 - `0.8` means on 8 out of 10 checks the app makes, it gets refused
 
@@ -221,8 +213,8 @@ The syntax `SHOW VITESS_THROTTLED_APPS` is a generic call to the throttler, and 
 
 The output of `SHOW VITESS_MIGRATIONS ...` now includes `user_throttle_ratio`.
 
-This column is updated "once in a while", while a migration is running. Normally this is once a minute, but can be more frequent. The migration reports back what was the throttling instruction set by the user while it was/is running.
-This column does not indicate any actual lag-based throttling that takes place per production state. It only reports the explicit throttling value set by the user.
+This column is updated "once in a while", while a migration is running. Normally this is once a minute, but can be more frequent. The migration reports back the throttling instruction set by the user while it was running.
+This column does not indicate any lag-based throttling that might take place based on the throttler configuration. It only reports the explicit throttling value set by the user.
 
 ### Heartbeat
 
@@ -230,13 +222,13 @@ The throttler now checks in with the heartbeat writer to request heartbeats, any
 
 When `--heartbeat_on_demand_duration` is not set, there is no change in behavior.
 
-When `--heartbeat_on_demand_duration` is set to a positive value, then the throttler ensures that the heartbeat writer generated heartbeats for at least the following duration.
+When `--heartbeat_on_demand_duration` is set to a positive value, then the throttler ensures that the heartbeat writer generates heartbeats for at least the following duration.
 This also means at the first throttler check, it's possible that heartbeats are idle, and so the first check will fail. As heartbeats start running, followup checks will get a more accurate lag evaluation and will respond accordingly.
 In a sense, it's a "cold engine" scenario, where the engine takes time to start up, and then runs smoothly.
 
 ### VDiff2
 
-We introduced a new version of VDiff -- currently marked as Experimental -- that executes the VDiff on tablets rather than in vtctld.
+We introduced a new version of VDiff -- currently marked as Experimental -- that executes the VDiff on tablets rather than in VTCtld.
 While this is experimental we encourage you to try it out and provide feedback! This input will be invaluable as we improve this feature on the march toward a production-ready version.
 You can try it out by adding the `--v2` flag to your VDiff command. Here's an example:
 ```
@@ -269,11 +261,11 @@ For additional details, please see the [RFC](https://github.com/vitessio/vitess/
 ### Durability Policy
 
 #### Deprecation of durability_policy Flag
-The durability policy for a keyspace is now stored in the keyspace record in the topo server.
-The `durability_policy` flag used by vtctl, vtctld, and vtworker binaries has been deprecated.
+The durability policy for a keyspace is now stored in the keyspace record in the topology server.
+The `durability_policy` flag used by vtctl, vtctld, and vtworker binaries has been deprecated and will be removed in a future release.
 
 #### New and Augmented Commands
-The vtctld command `CreateKeyspace` has been augmented to take in an additional argument called `durability-policy` which will
+The vtctld command `CreateKeyspace` has been augmented to take in an additional argument `--durability-policy` which will
 allow users to set the desired durability policy for a keyspace at creation time.
 
 For existing keyspaces, a new command `SetKeyspaceDurabilityPolicy` has been added, which allows users to change the
@@ -283,11 +275,11 @@ If semi-sync is not being used then durability policy should be set to `none` fo
 
 If semi-sync is being used then durability policy should be set to `semi_sync` for the keyspace and `--enable_semi_sync` should be set on vttablets.
 
-### Deprecation of Durability Configuration
+### VTOrc - Deprecation of Durability Configuration
 The `Durability` configuration is deprecated and removed from VTOrc. Instead VTOrc will find the durability policy of the keyspace from
-the topo server. This allows VTOrc to monitor and repair multiple keyspaces which have different durability policies in use.
+the topology server. This allows VTOrc to monitor and repair multiple keyspaces which have different durability policies in use.
 
-**VTOrc will ignore the keyspaces which have no durability policy specified in the keyspace record. So on upgrading to v14, users must run
+**VTOrc will ignore keyspaces which have no durability policy specified in the keyspace record. So on upgrading to v14, users must run
 the command `SetKeyspaceDurabilityPolicy` specified above, to ensure VTOrc continues to work as desired. The recommended upgrade 
 path is to upgrade vtctld, run `SetKeyspaceDurabilityPolicy` and then upgrade VTOrc.**
 
