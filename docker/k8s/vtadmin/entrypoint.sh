@@ -23,4 +23,4 @@ sed -i "s|#REACT_APP_BUGSNAG_API_KEY#|${REACT_APP_BUGSNAG_API_KEY:-}|" /vt/web/v
 sed -i "s|#REACT_APP_DOCUMENT_TITLE#|${REACT_APP_DOCUMENT_TITLE:-}|" /vt/web/vtadmin/build/index.html
 sed -i "s|#REACT_APP_READONLY_MODE#|${REACT_APP_READONLY_MODE:-false}|" /vt/web/vtadmin/build/index.html
 
-exec $@
+exec /bin/bash -c "$*"

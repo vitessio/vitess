@@ -47,4 +47,4 @@ RUN deluser node && \
 
 ENTRYPOINT ["/vt/entrypoint.sh"]
 
-CMD ["/bin/bash", "-c", "/vt/web/vtadmin/node_modules/.bin/serve --no-clipboard -l ${VTADMIN_WEB_PORT} -s /vt/web/vtadmin/build"]
+CMD ["/vt/web/vtadmin/node_modules/.bin/serve", "--no-clipboard", "-l", "$VTADMIN_WEB_PORT", "-s", "/vt/web/vtadmin/build"]
