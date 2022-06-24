@@ -17,7 +17,7 @@ ARG DEBIAN_VER=bullseye-slim
 
 FROM vitess/k8s:${VT_BASE_VER} AS k8s
 
-FROM node:16-${DEBIAN_VER}
+FROM node:16-${DEBIAN_VER} as node
 
 # Set up Vitess environment (just enough to run pre-built Go binaries)
 ENV VTROOT /vt
@@ -37,6 +37,10 @@ COPY --from=k8s /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificate
 
 # copy web admin files
 COPY --from=k8s /vt/web/vtadmin /vt/web/vtadmin
+
+# install/build/clean web dependencies
+RUN npm --prefix /vt/web/vtadmin ci && \
+    npm run --prefix /vt/web/vtadmin build
 
 # add vitess user/group and add permissions
 RUN deluser node && \

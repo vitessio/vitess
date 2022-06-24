@@ -29,7 +29,6 @@ ENV USER vitess
 COPY bootstrap.sh dev.env build.env go.mod go.sum /vt/src/vitess.io/vitess/
 COPY config /vt/src/vitess.io/vitess/config
 COPY tools /vt/src/vitess.io/vitess/tools
-COPY --from=node /vt/web/vtadmin /vt/src/vitess.io/vitess/web/vtadmin
 
 # Create vitess user
 RUN groupadd -r vitess && useradd -r -g vitess vitess && \

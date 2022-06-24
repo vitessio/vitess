@@ -24,14 +24,6 @@
 ARG bootstrap_version=9
 ARG image="vitess/bootstrap:${bootstrap_version}-mysql57"
 
-FROM node:16-bullseye-slim as node
-
-COPY web/vtadmin /vt/web/vtadmin
-
-# install/build/clean web dependencies
-RUN npm --prefix /vt/web/vtadmin ci && \
-    npm run --prefix /vt/web/vtadmin build
-
 FROM "${image}"
 
 # Allows some docker builds to disable CGO
@@ -42,7 +34,6 @@ ARG BUILD_NUMBER
 
 # Re-copy sources from working tree
 USER root
-COPY --from=node /vt/web/vtadmin /vt/src/vitess.io/vitess/web/vtadmin
 COPY . /vt/src/vitess.io/vitess
 
 # Build Vitess
