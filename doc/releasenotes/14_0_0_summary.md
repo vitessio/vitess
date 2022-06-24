@@ -1,3 +1,20 @@
+## Summary
+
+- [Gen4 is now the default planner](#gen4-is-now-the-default-planner)
+- [New query support](#new-query-support)
+- [Command-line syntax deprecations](#command-line-syntax-deprecations)
+- [New command line flags and behavior](#new-command-line-flags-and-behavior)
+- [Online DDL changes](#online-ddl-changes)
+- [Table lifecycle](#table-lifecycle)
+- [Tablet throttler](#tablet-throttler)
+- [New Syntax](#new-syntax)
+- [Heartbeat](#heartbeat)
+- [VDiff2](#vdiff2)
+- [Durability Policy](#durability-policy)
+- [Deprecation of Durability Configuration](#deprecation-of-durability-configuration)
+- [Advisory locking optimisations](#advisory-locking-optimisations)
+- [Drop the use of the legacy healthcheck in VTCtld](#drop-the-use-of-the-legacy-healthcheck-in-vtctld)
+
 ## Major Changes
 
 ### Gen4 is now the default planner
@@ -95,6 +112,10 @@ The flag `--online_ddl_check_interval` is deprecated and will be removed in `v15
 
 The flag `--planner-version` is deprecated and will be removed in `v15`. Instead, please use `--planer_version`.
 
+#### Removal of --gateway_implementation
+
+In previous releases, the `discoverygateway` was deprecated. In Vitess 14 it is now entirely removed, along with the VTGate flag that allowed us to select the tablet gateway.
+
 ### Online DDL changes
 
 #### Online DDL is generally available
@@ -164,30 +185,6 @@ API endpoint `/throttler/throttle-app` now accepts a `ratio` query argument, a f
 - `0` means "do not throttle at all"
 - `1` means "always throttle"
 - any numbr in between is allowd. For example, `0.3` means "throttle in 0.3 probability", ie on a per request and based on a dice roll, there's a `30%` change a request is denied. Overall we can expect about `30%` of requests to be denied. Example: `/throttler/throttle-app?app=vreplication&ratio=0.25`
-
-API endpoint `/debug/vars` now exposes throttler metrics, such as number of hits and errors per app per check type. Example:
-
-```shell
-$ curl -s 'http://127.0.0.1:15100/debug/vars' | jq . | grep throttler
-  "throttler.aggregated.mysql.self": 133.19334,
-  "throttler.aggregated.mysql.shard": 132.997847,
-  "throttler.check.any.error": 1086,
-  "throttler.check.any.mysql.self.error": 542,
-  "throttler.check.any.mysql.self.total": 570,
-  "throttler.check.any.mysql.shard.error": 544,
-  "throttler.check.any.mysql.shard.total": 570,
-  "throttler.check.any.total": 1140,
-  "throttler.check.mysql.self.seconds_since_healthy": 132,
-  "throttler.check.mysql.shard.seconds_since_healthy": 132,
-  "throttler.check.vitess.error": 1086,
-  "throttler.check.vitess.mysql.self.error": 542,
-  "throttler.check.vitess.mysql.self.total": 570,
-  "throttler.check.vitess.mysql.shard.error": 544,
-  "throttler.check.vitess.mysql.shard.total": 570,
-  "throttler.check.vitess.total": 1140,
-  "throttler.probes.latency": 292982,
-  "throttler.probes.total": 1138
-```
 
 See new SQL syntax for controlling/viewing throttling, down below.
 
@@ -290,3 +287,6 @@ path is to upgrade vtctld, run `SetKeyspaceDurabilityPolicy` and then upgrade VT
 
 ### Advisory locking optimisations
 Work has gone into making the advisory locks (`get_lock()`, `release_lock()`, et al) release reserved connections faster and in more situations than before.
+
+### Drop the use of the legacy healthcheck in VTCtld
+In release `7.0.0`, a new healthcheck was developed and the old one was renamed legacy healthcheck. In Vitess 14, we have changed VTCtld to use the new healthcheck instead of the legacy.
