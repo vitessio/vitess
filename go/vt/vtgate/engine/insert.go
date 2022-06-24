@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -243,11 +244,57 @@ func (ins *Insert) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bind
 
 // TryStreamExecute performs a streaming exec.
 func (ins *Insert) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	res, err := ins.TryExecute(vcursor, bindVars, wantfields)
+	if ins.Opcode != InsertSelect {
+		res, err := ins.TryExecute(vcursor, bindVars, wantfields)
+		if err != nil {
+			return err
+		}
+		return callback(res)
+	}
+	if ins.QueryTimeout != 0 {
+		cancel := vcursor.SetContextTimeout(time.Duration(ins.QueryTimeout) * time.Millisecond)
+		defer cancel()
+	}
+	// run the SELECT query
+	if ins.Input == nil {
+		// unreachable
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: something went wrong planning INSERT SELECT")
+	}
+
+	var mu sync.Mutex
+	output := &sqltypes.Result{}
+	err := vcursor.StreamExecutePrimitive(ins.Input, bindVars, false, func(result *sqltypes.Result) error {
+		if len(result.Rows) == 0 {
+			return nil
+		}
+
+		insertID, err := ins.processGenerateFromRows(vcursor, result.Rows)
+		if err != nil {
+			return err
+		}
+
+		rss, queries, err := ins.getInsertSelectQueries(vcursor, bindVars, result.Rows)
+		if err != nil {
+			return err
+		}
+
+		qr, err := ins.executeInsertQueries(vcursor, rss, queries, insertID)
+		if err != nil {
+			return err
+		}
+
+		mu.Lock()
+		defer mu.Unlock()
+		output.RowsAffected += qr.RowsAffected
+		if output.InsertID == 0 && insertID != 0 {
+			output.InsertID = uint64(insertID)
+		}
+		return nil
+	})
 	if err != nil {
 		return err
 	}
-	return callback(res)
+	return callback(output)
 }
 
 // GetFields fetches the field info.
