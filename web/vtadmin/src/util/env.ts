@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-export const env: ()=> NodeJS.ProcessEnv = () => { 
-    return {...window.env, ...process.env };
+export const env: () => NodeJS.ProcessEnv = () => {
+    return { ...window.env, ...process.env };
 };
 
 // process.env variables are always strings, hence this tiny helper function
