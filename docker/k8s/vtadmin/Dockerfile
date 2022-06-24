@@ -26,6 +26,8 @@ ENV VTROOT /vt
 RUN mkdir -p /vt/bin && \
    mkdir -p /vt/web && mkdir -p /vtdataroot
 
+ADD entrypoint.sh /vt/entrypoint.sh
+
 # Copy binaries
 COPY --from=k8s /vt/bin/vtadmin /vt/bin/
 
@@ -41,3 +43,7 @@ RUN deluser node && \
    useradd -r -g vitess --uid 1000 vitess && \
    chown -R vitess:vitess /vt && \
    chown -R vitess:vitess /vtdataroot
+
+ENTRYPOINT ["/vt/entrypoint.sh"]
+
+CMD ["/vt/web/vtadmin/node_modules/.bin/serve", "--no-clipboard", "-l", "14201", "-s", "/vt/web/vtadmin/build"]

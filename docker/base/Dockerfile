@@ -30,14 +30,7 @@ COPY web/vtadmin /vt/web/vtadmin
 
 # install/build/clean web dependencies
 RUN npm --prefix /vt/web/vtadmin ci && \
-    npm run --prefix /vt/web/vtadmin build && \
-    find /vt/web/vtadmin -name "*" \
-      -not -path "/vt/web/vtadmin" \
-      -not -path "/vt/web/vtadmin/build*" \
-      -not -path "/vt/web/vtadmin/node_modules" \
-      -not -path "/vt/web/vtadmin/node_modules/serve*" \
-      -not -path "/vt/web/vtadmin/node_modules/.bin" \
-      -not -path "/vt/web/vtadmin/node_modules/.bin/serve" | xargs rm -rf
+    npm run --prefix /vt/web/vtadmin build
 
 FROM "${image}"
 

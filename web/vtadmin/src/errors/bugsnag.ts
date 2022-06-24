@@ -25,7 +25,7 @@ const { REACT_APP_BUGSNAG_API_KEY } = env();
  * initialize it for capturing handled errors.
  */
 export const initialize = () => {
-    if (typeof REACT_APP_BUGSNAG_API_KEY === 'string') {
+    if (typeof REACT_APP_BUGSNAG_API_KEY === 'string' && REACT_APP_BUGSNAG_API_KEY.length) {
         BugsnagJS.start(REACT_APP_BUGSNAG_API_KEY);
     }
 };
