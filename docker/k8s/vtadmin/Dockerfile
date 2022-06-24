@@ -21,7 +21,7 @@ FROM node:16-${DEBIAN_VER}
 
 # Set up Vitess environment (just enough to run pre-built Go binaries)
 ENV VTROOT /vt
-ENV VTADMIN_WEB_PORT 14201
+ENV VTADMIN_WEB_PORT=14201
 
 # Prepare directory structure.
 RUN mkdir -p /vt/bin && \
@@ -47,4 +47,4 @@ RUN deluser node && \
 
 ENTRYPOINT ["/vt/entrypoint.sh"]
 
-CMD ["/vt/web/vtadmin/node_modules/.bin/serve", "--no-clipboard", "-l", "${VTADMIN_WEB_PORT}", "-s", "/vt/web/vtadmin/build"]
+CMD ["/bin/bash", "-c", "/vt/web/vtadmin/node_modules/.bin/serve --no-clipboard -l ${VTADMIN_WEB_PORT} -s /vt/web/vtadmin/build"]
