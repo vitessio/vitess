@@ -30,8 +30,7 @@ func TestXtrabackup(t *testing.T) {
 }
 
 func TestBackupMainWithlz4Compression(t *testing.T) {
-	var cDetails *backup.CompressionDetails
-	cDetails = &backup.CompressionDetails{
+	cDetails := &backup.CompressionDetails{
 		BuiltinCompressor: "lz4",
 	}
 
@@ -39,8 +38,7 @@ func TestBackupMainWithlz4Compression(t *testing.T) {
 }
 
 func TestBackupMainWithZstdCompression(t *testing.T) {
-	var cDetails *backup.CompressionDetails
-	cDetails = &backup.CompressionDetails{
+	cDetails := &backup.CompressionDetails{
 		ExternalCompressorCmd:   "zstd",
 		ExternalCompressorExt:   ".zst",
 		ExternalDecompressorCmd: "zstd -d",
@@ -50,8 +48,7 @@ func TestBackupMainWithZstdCompression(t *testing.T) {
 }
 
 func TestBackupMainWithError(t *testing.T) {
-	var cDetails *backup.CompressionDetails
-	cDetails = &backup.CompressionDetails{
+	cDetails := &backup.CompressionDetails{
 		BuiltinCompressor:   "pargzip",
 		BuiltinDecompressor: "lz4",
 	}

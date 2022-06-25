@@ -306,7 +306,7 @@ func TestBackup(t *testing.T, setupType int, streamMode string, stripes int, cDe
 	// Run all the backup tests
 
 	for _, test := range testMethods {
-		if retVal := t.Run(test.name, test.method); retVal == false {
+		if retVal := t.Run(test.name, test.method); !retVal {
 			return vterrors.Errorf(vtrpc.Code_UNKNOWN, "test failure: %s", test.name)
 		}
 	}

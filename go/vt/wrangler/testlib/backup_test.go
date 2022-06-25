@@ -61,8 +61,7 @@ func TestBackupRestore(t *testing.T) {
 // we infer decompressor through compression engine in builtinEngine.
 // It is only in xtrabackup where we infer decompressor through extension & BuiltinDecompressor param.
 func TestBackupRestoreWithPargzip(t *testing.T) {
-	var cDetails *compressionDetails
-	cDetails = &compressionDetails{
+	cDetails := &compressionDetails{
 		BuiltinCompressor:   "pargzip",
 		BuiltinDecompressor: "lz4",
 	}

@@ -28,8 +28,7 @@ func TestBackupMysqlctld(t *testing.T) {
 }
 
 func TestBackupMainWithlz4Compression(t *testing.T) {
-	var cDetails *backup.CompressionDetails
-	cDetails = &backup.CompressionDetails{
+	cDetails := &backup.CompressionDetails{
 		BuiltinCompressor: "lz4",
 	}
 
