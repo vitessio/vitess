@@ -23,13 +23,21 @@ var withDDL *withddl.WithDDL
 func init() {
 	var ddls []string
 	ddls = append(ddls, sqlCreateSidecarDB, sqlCreateVDiffTable, sqlCreateVDiffTableTable, sqlCreateVDiffLogTable)
+	ddls = append(ddls, []string{
+		"ALTER TABLE _vt.vdiff MODIFY COLUMN id bigint AUTO_INCREMENT",
+		"ALTER TABLE _vt.vdiff RENAME COLUMN started_timestamp TO started_at",
+		"ALTER TABLE _vt.vdiff RENAME COLUMN completed_timestamp TO completed_at",
+		"ALTER TABLE _vt.vdiff_table MODIFY COLUMN table_name varbinary(128)",
+		"ALTER TABLE _vt.vdiff_table MODIFY COLUMN state varbinary(64)",
+		"ALTER TABLE _vt.vdiff_table MODIFY COLUMN lastpk varbinary(2000)",
+	}...)
 	withDDL = withddl.New(ddls)
 }
 
 const (
 	sqlCreateSidecarDB  = "CREATE DATABASE IF NOT EXISTS _vt"
 	sqlCreateVDiffTable = `CREATE TABLE IF NOT EXISTS _vt.vdiff (
-		id bigint AUTO_INCREMENT,
+		id int AUTO_INCREMENT,
 		vdiff_uuid varchar(64) NOT NULL,
 		workflow varbinary(1024),
 		keyspace varbinary(1024),
@@ -38,17 +46,17 @@ const (
 		state varbinary(1024),
 		options json,
 		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		started_at timestamp NULL DEFAULT NULL,
+		started_timestamp timestamp NULL DEFAULT NULL,
 		liveness_timestamp timestamp NULL DEFAULT NULL,
-		completed_at timestamp NULL DEFAULT NULL,
+		completed_timestamp timestamp NULL DEFAULT NULL,
 		unique key uuid_idx (vdiff_uuid),
 		primary key (id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`
 
 	sqlCreateVDiffTableTable = `CREATE TABLE IF NOT EXISTS _vt.vdiff_table(
 		vdiff_id varchar(64) NOT NULL,
-		table_name varbinary(128),
-		state varbinary(64),
-		lastpk varbinary(2000),
+		table_name varbinary(1024),
+		state varbinary(128),
+		lastpk varbinary(1024),
 		table_rows int not null default 0,
 		rows_compared int not null default 0,
 		mismatch bool not null default false,
