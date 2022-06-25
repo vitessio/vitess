@@ -279,8 +279,9 @@ If semi-sync is being used then durability policy should be set to `semi_sync` f
 The `Durability` configuration is deprecated and removed from VTOrc. Instead VTOrc will find the durability policy of the keyspace from
 the topology server. This allows VTOrc to monitor and repair multiple keyspaces which have different durability policies in use.
 
-**VTOrc will ignore keyspaces which have no durability policy specified in the keyspace record. So on upgrading to v14, users must run
-the command `SetKeyspaceDurabilityPolicy` specified above, to ensure VTOrc continues to work as desired. The recommended upgrade 
+**VTOrc will ignore keyspaces which have no durability policy specified in the keyspace record. This is to avoid clobbering an existing
+config from a previous release. So on upgrading to v14, users must run the command `SetKeyspaceDurabilityPolicy` specified above,
+to ensure that VTOrc continues to work as desired. The recommended upgrade
 path is to upgrade vtctld, run `SetKeyspaceDurabilityPolicy` and then upgrade VTOrc.**
 
 ### Advisory locking optimizations
