@@ -74,26 +74,27 @@ const (
 		message text NOT NULL,
 		primary key (id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`
 
-	sqlNewVDiff                       = "insert into _vt.vdiff(keyspace, workflow, state, options, shard, db_name, vdiff_uuid) values(%s, %s, '%s', %s, '%s', '%s', '%s')"
-	sqlResumeVDiff                    = "update _vt.vdiff set completed_at = NULL, state = 'pending', options = %s where vdiff_uuid = %s"
+	sqlNewVDiff    = "insert into _vt.vdiff(keyspace, workflow, state, options, shard, db_name, vdiff_uuid) values(%s, %s, '%s', %s, '%s', '%s', '%s')"
+	sqlResumeVDiff = `update _vt.vdiff as vd, _vt.vdiff_table as vdt set vd.completed_at = NULL, vd.state = 'pending',
+										vd.options = %s, vdt.rows_compared = 0 where vd.vdiff_uuid = %s and vd.id = vdt.vdiff_id`
 	sqlGetVDiffByKeyspaceWorkflowUUID = "select * from _vt.vdiff where keyspace = %s and workflow = %s and vdiff_uuid = %s"
 	sqlGetMostRecentVDiff             = "select * from _vt.vdiff where keyspace = %s and workflow = %s order by id desc limit 1"
 	sqlGetVDiffByID                   = "select * from _vt.vdiff where id = %d"
-	sqlVDiffSummary                   = `select vt.vdiff_id, v.state as vdiff_state, vt.table_name as table_name, 
-										v.vdiff_uuid as 'uuid',
-										vt.state as table_state, vt.table_rows as table_rows, 
-										vt.rows_compared as rows_compared, v.completed_at as completed_at, 
-										IF(vt.mismatch = 1, 1, 0) as has_mismatch, vt.report as report
-										from _vt.vdiff v, _vt.vdiff_table vt 
-										where v.id = vt.vdiff_id and v.id = %d`
+	sqlVDiffSummary                   = `select vd.state as vdiff_state, vdt.table_name as table_name,
+										vd.vdiff_uuid as 'uuid', vdt.state as table_state, vdt.table_rows as table_rows,
+										vdt.rows_compared as rows_compared, vd.completed_at as completed_at,
+										IF(vdt.mismatch = 1, 1, 0) as has_mismatch, vdt.report as report
+										from _vt.vdiff as vd inner join _vt.vdiff_table as vdt on (vd.id = vdt.vdiff_id)
+										where vdt.vdiff_id = %d`
 	sqlUpdateVDiffState     = "update _vt.vdiff set state = %s, completed_at = %s where id = %d"
 	sqlGetVReplicationEntry = "select * from _vt.vreplication %s"
 	sqlGetPendingVDiffs     = "select * from _vt.vdiff where state = 'pending'"
 	sqlGetVDiffID           = "select id as id from _vt.vdiff where vdiff_uuid = %s"
 	sqlGetAllVDiffs         = "select * from _vt.vdiff order by id desc"
 
-	sqlNewVDiffTable         = "insert into _vt.vdiff_table(vdiff_id, table_name, state, table_rows) values(%d, %s, 'pending', %d)"
-	sqlGetVDiffTable         = "select vdt.lastpk as lastpk from _vt.vdiff as vd inner join _vt.vdiff_table as vdt on (vd.id = vdt.vdiff_id) where vdt.vdiff_id = %d and vdt.table_name = %s"
+	sqlNewVDiffTable = "insert into _vt.vdiff_table(vdiff_id, table_name, state, table_rows) values(%d, %s, 'pending', %d)"
+	sqlGetVDiffTable = `select vdt.lastpk as lastpk from _vt.vdiff as vd inner join _vt.vdiff_table as vdt on (vd.id = vdt.vdiff_id)
+						where vdt.vdiff_id = %d and vdt.table_name = %s`
 	sqlUpdateTableRows       = "update _vt.vdiff_table set table_rows = %d where vdiff_id = %d and table_name = %s"
 	sqlUpdateTableProgress   = "update _vt.vdiff_table set rows_compared = %d, lastpk = %s where vdiff_id = %d and table_name = %s"
 	sqlUpdateTableNoProgress = "update _vt.vdiff_table set rows_compared = %d where vdiff_id = %d and table_name = %s"
