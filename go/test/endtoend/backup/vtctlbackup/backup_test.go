@@ -25,24 +25,6 @@ func TestBackupMain(t *testing.T) {
 	TestBackup(t, Backup, "", 0, nil)
 }
 
-func TestBackupMainWithlz4Compression(t *testing.T) {
-	var cDetails *CompressionDetails
-	cDetails = &CompressionDetails{
-		BuiltinCompressor: "lz4",
-	}
-
-	TestBackup(t, Backup, "", 0, cDetails)
-}
-
-func TestBackupMainWithPargzipCompression(t *testing.T) {
-	var cDetails *CompressionDetails
-	cDetails = &CompressionDetails{
-		BuiltinCompressor: "pargzip",
-	}
-
-	TestBackup(t, Backup, "", 0, cDetails)
-}
-
 func TestBackupMainWithZstdCompression(t *testing.T) {
 	var cDetails *CompressionDetails
 	cDetails = &CompressionDetails{

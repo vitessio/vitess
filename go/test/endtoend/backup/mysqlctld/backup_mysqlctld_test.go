@@ -35,23 +35,3 @@ func TestBackupMainWithlz4Compression(t *testing.T) {
 
 	backup.TestBackup(t, backup.Mysqlctld, "", 0, cDetails)
 }
-
-func TestBackupMainWithPargzipCompression(t *testing.T) {
-	var cDetails *backup.CompressionDetails
-	cDetails = &backup.CompressionDetails{
-		BuiltinCompressor: "pargzip",
-	}
-
-	backup.TestBackup(t, backup.Mysqlctld, "", 0, cDetails)
-}
-
-func TestBackupMainWithZstdCompression(t *testing.T) {
-	var cDetails *backup.CompressionDetails
-	cDetails = &backup.CompressionDetails{
-		ExternalCompressorCmd:   "zstd",
-		ExternalCompressorExt:   ".zst",
-		ExternalDecompressorCmd: "zstd -d",
-	}
-
-	backup.TestBackup(t, backup.Mysqlctld, "", 0, cDetails)
-}
