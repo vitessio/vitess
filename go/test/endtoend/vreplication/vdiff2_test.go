@@ -30,11 +30,13 @@ type testCase struct {
 	tables                        string
 	workflow                      string
 	tabletBaseID                  int
+	resume                        bool
+	resumeInsert                  string
 }
 
 var testCases = []*testCase{
 	{
-		name:         "MoveTables unsharded to two shards",
+		name:         "MoveTables/unsharded to two shards",
 		workflow:     "p1c2",
 		typ:          "MoveTables",
 		sourceKs:     "product",
@@ -43,9 +45,11 @@ var testCases = []*testCase{
 		targetShards: "-80,80-",
 		tabletBaseID: 200,
 		tables:       "customer,Lead,Lead-1",
+		resume:       true,
+		resumeInsert: `insert into customer(cid, name, typ) values(12345678, 'Testy McTester', 'soho')`,
 	},
 	{
-		name:         "Reshard Split/Merge 2 to 3",
+		name:         "Reshard/split 2 to 3",
 		workflow:     "c2c3",
 		typ:          "Reshard",
 		sourceKs:     "customer",
@@ -53,9 +57,11 @@ var testCases = []*testCase{
 		sourceShards: "-80,80-",
 		targetShards: "-40,40-a0,a0-",
 		tabletBaseID: 400,
+		resume:       true,
+		resumeInsert: `insert into customer(cid, name, typ) values(987654321, 'Testy McTester Jr.', 'enterprise'), (987654322, 'Testy McTester III', 'enterprise')`,
 	},
 	{
-		name:         "Reshard Merge 3 to 1",
+		name:         "Reshard/merge 3 to 1",
 		workflow:     "c3c1",
 		typ:          "Reshard",
 		sourceKs:     "customer",
@@ -118,6 +124,9 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, cells []*Cell) 
 	if tc.typ == "Reshard" {
 		tks := vc.Cells[cells[0].Name].Keyspaces[tc.targetKs]
 		require.NoError(t, vc.AddShards(t, cells, tks, tc.targetShards, 0, 0, tc.tabletBaseID))
+		for _, shard := range arrTargetShards {
+			require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", tc.targetKs, shard), 1))
+		}
 	}
 	ksWorkflow := fmt.Sprintf("%s.%s", tc.targetKs, tc.workflow)
 	var args []string
@@ -134,9 +143,23 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, cells []*Cell) 
 
 	for _, shard := range arrTargetShards {
 		tab := vc.getPrimaryTablet(t, tc.targetKs, shard)
+		require.NotNil(t, tab)
 		catchup(t, tab, tc.workflow, tc.typ)
 	}
 	vdiff(t, tc.targetKs, tc.workflow, cells[0].Name, true, true, nil)
+
+	if tc.resume {
+		expectedRows := int64(0)
+		if tc.resumeInsert != "" {
+			vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+			_, err := vtgateConn.ExecuteFetch("use "+tc.sourceKs, 1, false)
+			require.NoError(t, err)
+			res, err := vtgateConn.ExecuteFetch(tc.resumeInsert, -1, true)
+			require.NoError(t, err)
+			expectedRows = int64(res.RowsAffected)
+		}
+		vdiff2Resume(t, tc.targetKs, tc.workflow, cells[0].Name, expectedRows)
+	}
 
 	err = vc.VtctlClient.ExecuteCommand(tc.typ, "--", "SwitchTraffic", ksWorkflow)
 	require.NoError(t, err)

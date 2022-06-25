@@ -86,7 +86,7 @@ func waitForVDiff2ToComplete(t *testing.T, ksWorkflow, cells, uuid string, compl
 	ch := make(chan bool)
 	go func() {
 		for {
-			time.Sleep(1 * time.Second)
+			time.Sleep(5 * time.Second)
 			_, jsonStr := performVDiff2Action(t, ksWorkflow, cells, "show", uuid)
 			info = getVDiffInfo(jsonStr)
 			if info.State == "completed" {
@@ -146,24 +146,25 @@ func vdiff2(t *testing.T, keyspace, workflow, cells string, want *expectedVDiff2
 			log.Errorf("VDiff resume cannot be guaranteed between major MySQL versions due to implied collation differences, skipping resume test...")
 			return
 		}
-		createCompletedTS, err := time.Parse(tsFormat, info.CompletedAt)
-		require.NoError(t, err)
-
-		uuid, _ = performVDiff2Action(t, ksWorkflow, cells, "resume", uuid)
-		// Pass the previous completed time as we need to wait for it to
-		// resume -- where it goes from completed-> pending->started -- before
-		// waiting for it again to move to completed
-		info = waitForVDiff2ToComplete(t, ksWorkflow, cells, uuid, createCompletedTS)
-		resumeCompletedTS, err := time.Parse(tsFormat, info.CompletedAt)
-		require.NoError(t, err)
-		require.False(t, info.HasMismatch)
-		require.Greater(t, resumeCompletedTS, createCompletedTS)
 	})
+}
+
+func vdiff2Resume(t *testing.T, keyspace, workflow, cells string, expectedRows int64) {
+	ksWorkflow := fmt.Sprintf("%s.%s", keyspace, workflow)
+	startTs := time.Now()
+	uuid, _ := performVDiff2Action(t, ksWorkflow, cells, "show", "last")
+	uuid, _ = performVDiff2Action(t, ksWorkflow, cells, "resume", uuid)
+	info := waitForVDiff2ToComplete(t, ksWorkflow, cells, uuid, startTs)
+	require.False(t, info.HasMismatch)
+	completedTs, err := time.Parse(tsFormat, info.CompletedAt)
+	require.NoError(t, err)
+	require.Greater(t, completedTs, startTs)
+	require.Equal(t, expectedRows, info.RowsCompared)
 }
 
 func performVDiff2Action(t *testing.T, ksWorkflow, cells, action, actionArg string) (uuid string, output string) {
 	var err error
-	output, err = vc.VtctlClient.ExecuteCommandWithOutput("VDiff", "--", "--v2", "--tablet_types=primary", "--source_cell="+cells, "--format", "json", ksWorkflow, action, actionArg)
+	output, err = vc.VtctlClient.ExecuteCommandWithOutput("VDiff", "--", "--v2", "--tablet_types=primary", "--source_cell="+cells, "--format=json", ksWorkflow, action, actionArg)
 	log.Infof("vdiff2 output: %+v (err: %+v)", output, err)
 	require.Nil(t, err)
 

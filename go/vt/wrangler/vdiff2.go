@@ -71,7 +71,6 @@ func (wr *Wrangler) VDiff2(ctx context.Context, keyspace, workflowName string, c
 		log.Errorf("Error in command %s: %w", command, output.Err)
 		return nil, output.Err
 	}
-	log.Infof("Output for %s is %+v", command, output)
 
 	return output, nil
 }

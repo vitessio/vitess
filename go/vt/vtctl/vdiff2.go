@@ -89,7 +89,6 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 	if err != nil {
 		return err
 	}
-	log.Infof("VDiff2 action is %s, args %s", action, strings.Join(args, " "))
 
 	if *maxRows <= 0 {
 		return fmt.Errorf("invalid --limit value (%d), maximum number of rows to compare needs to be greater than 0", *maxRows)

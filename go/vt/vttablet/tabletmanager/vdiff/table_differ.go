@@ -89,7 +89,7 @@ func (td *tableDiffer) initialize(ctx context.Context) error {
 	log.Infof("Locking target keyspace %s", targetKeyspace)
 	ctx, unlock, lockErr := td.wd.ct.ts.LockKeyspace(ctx, targetKeyspace, "vdiff")
 	if lockErr != nil {
-		log.Errorf("LockKeyspace failed: %w", lockErr)
+		log.Errorf("LockKeyspace failed: %v", lockErr)
 		return lockErr
 	}
 
@@ -97,7 +97,7 @@ func (td *tableDiffer) initialize(ctx context.Context) error {
 	defer func() {
 		unlock(&err)
 		if err != nil {
-			log.Errorf("UnlockKeyspace %s failed: %w", targetKeyspace, lockErr)
+			log.Errorf("UnlockKeyspace %s failed: %v", targetKeyspace, lockErr)
 		}
 	}()
 
@@ -106,7 +106,7 @@ func (td *tableDiffer) initialize(ctx context.Context) error {
 	}
 	defer func() {
 		if err := td.restartTargetVReplicationStreams(ctx); err != nil {
-			log.Errorf("error restarting target streams: %w", err)
+			log.Errorf("error restarting target streams: %v", err)
 		}
 	}()
 
@@ -281,7 +281,7 @@ func (td *tableDiffer) startTargetDataStream(ctx context.Context) error {
 	go td.streamOneShard(ctx, ct.targetShardStreamer, td.tablePlan.targetQuery, td.lastPK, gtidch)
 	gtid, ok := <-gtidch
 	if !ok {
-		log.Infof("streaming error: %w", ct.targetShardStreamer.err)
+		log.Infof("streaming error: %v", ct.targetShardStreamer.err)
 		return ct.targetShardStreamer.err
 	}
 	ct.targetShardStreamer.snapshotPosition = gtid
@@ -416,7 +416,9 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare *int64, debug, on
 
 	// Save our progress when we finish the run
 	defer func() {
-		_ = td.updateTableProgress(dbClient, dr.ProcessedRows, lastProcessedRow)
+		if err := td.updateTableProgress(dbClient, dr.ProcessedRows, lastProcessedRow); err != nil {
+			log.Errorf("Failed to update VDiff progress on table %s: %v", td.table.Name, err)
+		}
 	}()
 
 	for {
