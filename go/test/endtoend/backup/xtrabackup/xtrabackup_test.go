@@ -38,16 +38,6 @@ func TestBackupMainWithlz4Compression(t *testing.T) {
 	backup.TestBackup(t, backup.XtraBackup, "tar", 0, cDetails)
 }
 
-func TestBackupMainWithError(t *testing.T) {
-	var cDetails *backup.CompressionDetails
-	cDetails = &backup.CompressionDetails{
-		BuiltinCompressor:   "pargzip",
-		BuiltinDecompressor: "lz4",
-	}
-	err := backup.TestBackup(t, backup.XtraBackup, "tar", 0, cDetails)
-	require.EqualError(t, err, "test failure: TestReplicaBackup")
-}
-
 func TestBackupMainWithZstdCompression(t *testing.T) {
 	var cDetails *backup.CompressionDetails
 	cDetails = &backup.CompressionDetails{
@@ -57,4 +47,14 @@ func TestBackupMainWithZstdCompression(t *testing.T) {
 	}
 
 	backup.TestBackup(t, backup.XtraBackup, "tar", 0, cDetails)
+}
+
+func TestBackupMainWithError(t *testing.T) {
+	var cDetails *backup.CompressionDetails
+	cDetails = &backup.CompressionDetails{
+		BuiltinCompressor:   "pargzip",
+		BuiltinDecompressor: "lz4",
+	}
+	err := backup.TestBackup(t, backup.XtraBackup, "tar", 0, cDetails)
+	require.EqualError(t, err, "test failure: TestReplicaBackup")
 }

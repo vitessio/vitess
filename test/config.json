@@ -104,7 +104,7 @@
 		},
 		"backup": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/backup/vtctlbackup"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/backup/vtctlbackup", "-timeout", "20m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtctlbackup_sharded_clustertest_heavy",
@@ -113,7 +113,7 @@
 		},
 		"backup_mysqlctld": { 
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/backup/mysqlctld"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/backup/mysqlctld", "-timeout", "20m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "21",
@@ -149,7 +149,7 @@
 		},
 		"backup_xtrabackup": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/backup/xtrabackup"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/backup/xtrabackup", "-timeout", "30m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "xb_backup",
