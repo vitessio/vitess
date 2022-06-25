@@ -49,7 +49,7 @@ RUN deluser node && \
 
 USER vitess
 
-VOLUME /vt/web/vtadmin/build/config.js
+VOLUME /vt/web/vtadmin/build/config
 
 CMD ["/bin/bash", "-c", "/vt/web/vtadmin/node_modules/.bin/serve --no-clipboard -l $VTADMIN_WEB_PORT -s /vt/web/vtadmin/build"]
 
