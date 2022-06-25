@@ -25,14 +25,14 @@ func init() {
 	// Initial VDiff related schema
 	ddls = append(ddls, sqlCreateSidecarDB, sqlCreateVDiffTable, sqlCreateVDiffTableTable, sqlCreateVDiffLogTable)
 	// Changes to VDiff related schema over time
-	ddls = append(ddls, []string{
+	ddls = append(ddls,
 		"ALTER TABLE _vt.vdiff MODIFY COLUMN id bigint AUTO_INCREMENT",
 		"ALTER TABLE _vt.vdiff CHANGE started_timestamp started_at timestamp NULL DEFAULT NULL",
 		"ALTER TABLE _vt.vdiff CHANGE completed_timestamp completed_at timestamp NULL DEFAULT NULL",
 		"ALTER TABLE _vt.vdiff_table MODIFY COLUMN table_name varbinary(128)",
 		"ALTER TABLE _vt.vdiff_table MODIFY COLUMN state varbinary(64)",
 		"ALTER TABLE _vt.vdiff_table MODIFY COLUMN lastpk varbinary(2000)",
-	}...)
+	)
 	withDDL = withddl.New(ddls)
 }
 
