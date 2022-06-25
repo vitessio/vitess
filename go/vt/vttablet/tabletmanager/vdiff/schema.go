@@ -22,7 +22,9 @@ var withDDL *withddl.WithDDL
 
 func init() {
 	var ddls []string
+	// Initial VDiff related schema
 	ddls = append(ddls, sqlCreateSidecarDB, sqlCreateVDiffTable, sqlCreateVDiffTableTable, sqlCreateVDiffLogTable)
+	// Changes to VDiff related schema over time
 	ddls = append(ddls, []string{
 		"ALTER TABLE _vt.vdiff MODIFY COLUMN id bigint AUTO_INCREMENT",
 		"ALTER TABLE _vt.vdiff RENAME COLUMN started_timestamp TO started_at",
