@@ -19,6 +19,7 @@ package vdiff
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"vitess.io/vitess/go/vt/withddl"
@@ -128,7 +129,7 @@ func (ct *controller) run(ctx context.Context) {
 	}
 
 	row := qr.Named().Row()
-	state := VDiffState(row["state"].ToString())
+	state := VDiffState(strings.ToLower(row["state"].ToString()))
 	switch state {
 	case PendingState:
 		log.Infof("Starting vdiff")

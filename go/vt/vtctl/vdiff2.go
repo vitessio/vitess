@@ -404,8 +404,7 @@ func buildVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid st
 			for _, row := range qr.Named().Rows {
 				if first {
 					first = false
-					s, _ := row.ToString("vdiff_state")
-					summary.State = vdiff.VDiffState(strings.ToLower(s))
+					summary.State = vdiff.VDiffState(strings.ToLower(row.AsString("vdiff_state", "")))
 					summary.CompletedAt = row.AsString("completed_at", "")
 				}
 				summary.RowsCompared += row.AsInt64("rows_compared", 0)
