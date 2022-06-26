@@ -237,7 +237,7 @@ func pickTablet(ctx context.Context, ts *topo.Server, cell, keyspace, shard, tab
 func (td *tableDiffer) syncSourceStreams(ctx context.Context) error {
 	// source can be replica, wait for them to at least reach max gtid of all target streams
 	ct := td.wd.ct
-	waitCtx, cancel := context.WithTimeout(ctx, time.Duration(ct.options.CoreOptions.TimeoutSeconds)*time.Second)
+	waitCtx, cancel := context.WithTimeout(ctx, time.Duration(ct.options.CoreOptions.TimeoutSeconds*int64(time.Second)))
 	defer cancel()
 
 	if err := td.forEachSource(func(source *migrationSource) error {
@@ -254,7 +254,7 @@ func (td *tableDiffer) syncSourceStreams(ctx context.Context) error {
 
 func (td *tableDiffer) syncTargetStreams(ctx context.Context) error {
 	ct := td.wd.ct
-	waitCtx, cancel := context.WithTimeout(ctx, time.Duration(ct.options.CoreOptions.TimeoutSeconds)*time.Second)
+	waitCtx, cancel := context.WithTimeout(ctx, time.Duration(ct.options.CoreOptions.TimeoutSeconds*int64(time.Second)))
 	defer cancel()
 
 	if err := td.forEachSource(func(source *migrationSource) error {
@@ -417,12 +417,13 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare *int64, debug, on
 	// Save our progress when we finish the run
 	defer func() {
 		if err := td.updateTableProgress(dbClient, dr.ProcessedRows, lastProcessedRow); err != nil {
-			log.Errorf("Failed to update VDiff progress on %s table: %v", td.table.Name, err)
+			log.Errorf("Failed to update vdiff progress on %s table: %v", td.table.Name, err)
 		}
 	}()
 
 	for {
 		lastProcessedRow = sourceRow
+
 		if !mismatch && dr.MismatchedRows > 0 {
 			mismatch = true
 			log.Infof("Flagging mismatch for %s: %+v", td.table.Name, dr)

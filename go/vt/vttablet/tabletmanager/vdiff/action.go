@@ -96,7 +96,7 @@ func (vde *Engine) PerformVDiffAction(ctx context.Context, req *tabletmanagerdat
 				return nil, err
 			}
 			if qr.InsertID == 0 {
-				return nil, fmt.Errorf("unable to create vdiff record; statement: %s", query)
+				return nil, fmt.Errorf("unable to create vdiff record (%w); statement: %s", err, query)
 			}
 			resp.Id = int64(qr.InsertID)
 		} else {
@@ -105,7 +105,7 @@ func (vde *Engine) PerformVDiffAction(ctx context.Context, req *tabletmanagerdat
 				return nil, err
 			}
 			if qr.RowsAffected == 0 {
-				return nil, fmt.Errorf("unable to update vdiff record; statement: %s", query)
+				return nil, fmt.Errorf("unable to update vdiff record (%w); statement: %s", err, query)
 			}
 		}
 		resp.VdiffUuid = req.VdiffUuid
@@ -140,7 +140,7 @@ func (vde *Engine) PerformVDiffAction(ctx context.Context, req *tabletmanagerdat
 			}
 			switch len(qr.Rows) {
 			case 0:
-				return nil, fmt.Errorf("no VDiff found for keyspace %s and workflow %s: %s", req.Keyspace, req.Workflow, query)
+				return nil, fmt.Errorf("no vdiff found for keyspace %s and workflow %s: %s", req.Keyspace, req.Workflow, query)
 			case 1:
 				row := qr.Named().Row()
 				vdiffID, _ := row["id"].ToInt64()
@@ -150,7 +150,7 @@ func (vde *Engine) PerformVDiffAction(ctx context.Context, req *tabletmanagerdat
 					return nil, err
 				}
 			default:
-				return nil, fmt.Errorf("error: too many VDiffs found (%d) for keyspace %s and workflow %s", len(qr.Rows), req.Keyspace, req.Workflow)
+				return nil, fmt.Errorf("too many vdiffs found (%d) for keyspace %s and workflow %s", len(qr.Rows), req.Keyspace, req.Workflow)
 			}
 		}
 		switch req.SubCommand {

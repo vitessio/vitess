@@ -92,7 +92,9 @@ func TestVDiff2(t *testing.T) {
 
 	vtgate = defaultCell.Vtgates[0]
 	require.NotNil(t, vtgate)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", sourceKs, sourceShards[0]), 1)
+	for _, shard := range sourceShards {
+		require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", sourceKs, shard), 1))
+	}
 
 	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
@@ -107,10 +109,9 @@ func TestVDiff2(t *testing.T) {
 
 	_, err := vc.AddKeyspace(t, cells, targetKs, strings.Join(targetShards, ","), customerVSchema, customerSchema, 0, 0, 200, targetKsOpts)
 	require.NoError(t, err)
-	err = vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", targetKs, targetShards[0]), 1)
-	require.NoError(t, err)
-	err = vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", targetKs, targetShards[1]), 1)
-	require.NoError(t, err)
+	for _, shard := range targetShards {
+		require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", targetKs, shard), 1))
+	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {

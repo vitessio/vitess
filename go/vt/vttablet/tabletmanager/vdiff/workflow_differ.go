@@ -190,7 +190,7 @@ func (wd *workflowDiffer) diff(ctx context.Context) error {
 
 		log.Infof("starting table %s", td.table.Name)
 		if err := wd.diffTable(ctx, dbClient, td); err != nil {
-			if err := td.updateTableState(ctx, dbClient, td.table.Name, "error", nil); err != nil {
+			if err := td.updateTableState(ctx, dbClient, td.table.Name, ErrorState, nil); err != nil {
 				return err
 			}
 			insertVDiffLog(ctx, dbClient, wd.ct.id, fmt.Sprintf("Table %s Error: %s", td.table.Name, err))
