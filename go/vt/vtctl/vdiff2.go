@@ -202,7 +202,7 @@ type vdiffSummary struct {
 const (
 	summaryTextTemplate = `
 VDiff Summary for {{.Keyspace}}.{{.Workflow}} ({{.UUID}})
-State: {{.State}}
+State:        {{.State}}
 RowsCompared: {{.RowsCompared}}
 StartedAt:    {{.StartedAt}}
 CompletedAt:  {{.CompletedAt}}
