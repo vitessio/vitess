@@ -405,74 +405,92 @@ func buildVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid st
 				reports = make(map[string]map[string]vdiff.DiffReport, 0)
 			}
 			for _, row := range qr.Named().Rows {
-				// This is the per-tablet summary state
-				tabletState := vdiff.VDiffState(strings.ToLower(row.AsString("vdiff_state", "")))
+				// Update the global VDiff summary based on the per shard level summary.
+				// Since these values will be the same for all subsequent rows we only use the first row.
 				if first {
 					first = false
-					// The global summary timestamps are approximate so we use the first one
-					summary.StartedAt = row.AsString("started_at", "")
-					summary.CompletedAt = row.AsString("completed_at", "")
-				}
-				summary.RowsCompared += row.AsInt64("rows_compared", 0)
-				// If we had a mismatch on any table then the vdiff as a unit does too
-				if mm, _ := row.ToBool("has_mismatch"); mm {
-					summary.HasMismatch = true
-				}
+					// This is the per-tablet VDiff summary state
+					summary.State = vdiff.VDiffState(strings.ToLower(row.AsString("vdiff_state", "")))
 
-				table := row.AsString("table_name", "")
-				// Create the table summary if it doesn't exist
-				if _, ok := tableSummaryMap[table]; !ok {
-					tableSummaryMap[table] = vdiffTableSummary{
-						TableName: table,
-						State:     vdiff.UnknownState,
+					// Our timestamps are strings in `2022-06-26 20:43:25` format so we sort them lexicographically.
+					// We should use the earliest started_at across all shards.
+					if sa := row.AsString("started_at", ""); summary.StartedAt == "" || sa < summary.StartedAt {
+						summary.StartedAt = sa
 					}
-
-				}
-				ts := tableSummaryMap[table]
-				shardState := vdiff.VDiffState(strings.ToLower(row.AsString("table_state", "")))
-
-				switch shardState {
-				case vdiff.CompletedState:
-					if ts.State == vdiff.UnknownState {
-						ts.State = shardState
-					}
-				case vdiff.ErrorState:
-					ts.State = shardState
-				default:
-					if ts.State != vdiff.ErrorState {
-						ts.State = shardState
-
+					// And we should use the latest completed_at across all shards.
+					if ca := row.AsString("completed_at", ""); summary.CompletedAt == "" || ca > summary.CompletedAt {
+						summary.CompletedAt = ca
 					}
 				}
 
-				diffReport := row.AsString("report", "")
-				dr := vdiff.DiffReport{}
-				if diffReport != "" {
-					err := json.Unmarshal([]byte(diffReport), &dr)
-					if err != nil {
-						return nil, err
+				{ // Global VDiff summary updates that take into account the per table details per shard
+					summary.RowsCompared += row.AsInt64("rows_compared", 0)
+
+					// If we had a mismatch on any table on any shard then the global VDiff summary does too
+					if mm, _ := row.ToBool("has_mismatch"); mm {
+						summary.HasMismatch = true
 					}
-					ts.RowsCompared += dr.ProcessedRows
-					ts.MismatchedRows += dr.MismatchedRows
-					ts.MatchingRows += dr.MatchingRows
-					ts.ExtraRowsTarget += dr.ExtraRowsTarget
-					ts.ExtraRowsSource += dr.ExtraRowsSource
-				}
-				if _, ok := reports[table]; !ok {
-					reports[table] = make(map[string]vdiff.DiffReport)
 				}
 
-				reports[table][shard] = dr
-				tableSummaryMap[table] = ts
+				{ // Table summary information that must be accounted for across all shards
+					table := row.AsString("table_name", "")
+					// Create the global VDiff table summary object if it doesn't exist
+					if _, ok := tableSummaryMap[table]; !ok {
+						tableSummaryMap[table] = vdiffTableSummary{
+							TableName: table,
+							State:     vdiff.UnknownState,
+						}
 
-				// The global VDiff summary needs to align with the tablet level summary across all
-				// shards. It should progress from pending->started->completed with error at any point
-				// being sticky. This largely mirrors the global table summary, with the exception
-				// being the started state, which should also be sticky; i.e. we shouldn't go from
-				// started->pending->started in the global VDiff state.
-				if summary.State != tabletState &&
-					(summary.State != vdiff.StartedState && tabletState != vdiff.PendingState) {
-					summary.State = ts.State
+					}
+					ts := tableSummaryMap[table]
+					// This is the shard level VDiff table state
+					sts := vdiff.VDiffState(strings.ToLower(row.AsString("table_state", "")))
+
+					// The error state must be sticky, and we should not override any other
+					// known state with completed.
+					switch sts {
+					case vdiff.CompletedState:
+						if ts.State == vdiff.UnknownState {
+							ts.State = sts
+						}
+					case vdiff.ErrorState:
+						ts.State = sts
+					default:
+						if ts.State != vdiff.ErrorState {
+							ts.State = sts
+
+						}
+					}
+
+					diffReport := row.AsString("report", "")
+					dr := vdiff.DiffReport{}
+					if diffReport != "" {
+						err := json.Unmarshal([]byte(diffReport), &dr)
+						if err != nil {
+							return nil, err
+						}
+						ts.RowsCompared += dr.ProcessedRows
+						ts.MismatchedRows += dr.MismatchedRows
+						ts.MatchingRows += dr.MatchingRows
+						ts.ExtraRowsTarget += dr.ExtraRowsTarget
+						ts.ExtraRowsSource += dr.ExtraRowsSource
+					}
+					if _, ok := reports[table]; !ok {
+						reports[table] = make(map[string]vdiff.DiffReport)
+					}
+
+					reports[table][shard] = dr
+					tableSummaryMap[table] = ts
+
+					// The global VDiff summary needs to align with the table states across all
+					// shards. It should progress from pending->started->completed with error at any point
+					// being sticky. This largely mirrors the global table summary, with the exception
+					// being the started state, which should also be sticky; i.e. we shouldn't go from
+					// started->pending->started in the global VDiff summary state.
+					if summary.State != ts.State &&
+						(summary.State != vdiff.StartedState && ts.State != vdiff.PendingState) {
+						summary.State = ts.State
+					}
 				}
 			}
 		}
