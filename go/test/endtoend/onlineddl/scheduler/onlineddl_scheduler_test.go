@@ -258,8 +258,8 @@ func TestSchemaChange(t *testing.T) {
 	})
 	t.Run("ALTER both tables, elligible for concurrenct", func(t *testing.T) {
 		// ALTER TABLE is allowed to run concurrently when no other ALTER is busy with copy state. Our tables are tiny so we expect to find both migrations running
-		t1uuid = testOnlineDDLStatement(t, trivialAlterT1Statement, ddlStrategy+" -allow-concurrent -postpone-completion", "vtgate", "", "", true) // skip wait
-		t2uuid = testOnlineDDLStatement(t, trivialAlterT2Statement, ddlStrategy+" -allow-concurrent -postpone-completion", "vtgate", "", "", true) // skip wait
+		t1uuid = testOnlineDDLStatement(t, trivialAlterT1Statement, ddlStrategy+" --allow-concurrent --postpone-completion", "vtgate", "", "", true) // skip wait
+		t2uuid = testOnlineDDLStatement(t, trivialAlterT2Statement, ddlStrategy+" --allow-concurrent --postpone-completion", "vtgate", "", "", true) // skip wait
 
 		testAllowConcurrent(t, "t1", t1uuid, 1)
 		testAllowConcurrent(t, "t2", t2uuid, 1)
