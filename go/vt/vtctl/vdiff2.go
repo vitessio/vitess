@@ -193,6 +193,7 @@ type vdiffSummary struct {
 	RowsCompared       int64
 	HasMismatch        bool
 	Shards             string
+	StartedAt          string                                 `json:"StartedAt,omitempty"`
 	CompletedAt        string                                 `json:"CompletedAt,omitempty"`
 	TableSummaryMap    map[string]vdiffTableSummary           `json:"TableSummary,omitempty"`
 	Reports            map[string]map[string]vdiff.DiffReport `json:"Reports,omitempty"`
@@ -203,6 +204,7 @@ const (
 VDiff Summary for {{.Keyspace}}.{{.Workflow}} ({{.UUID}})
 State: {{.State}}
 RowsCompared: {{.RowsCompared}}
+StartedAt:    {{.StartedAt}}
 CompletedAt:  {{.CompletedAt}}
 HasMismatch:  {{.HasMismatch}}
 {{ range $table := .TableSummaryMap}} 
@@ -383,6 +385,7 @@ func buildVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid st
 		UUID:         uuid,
 		State:        vdiff.UnknownState,
 		RowsCompared: 0,
+		StartedAt:    "",
 		CompletedAt:  "",
 		HasMismatch:  false,
 		Shards:       "",
@@ -405,6 +408,7 @@ func buildVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid st
 				if first {
 					first = false
 					summary.State = vdiff.VDiffState(strings.ToLower(row.AsString("vdiff_state", "")))
+					summary.StartedAt = row.AsString("started_at", "")
 					summary.CompletedAt = row.AsString("completed_at", "")
 				}
 				summary.RowsCompared += row.AsInt64("rows_compared", 0)
@@ -412,28 +416,33 @@ func buildVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid st
 				if mm, _ := row.ToBool("has_mismatch"); mm {
 					summary.HasMismatch = true
 				}
+
 				table := row.AsString("table_name", "")
+				// Create the table summary if it doesn't exist
 				if _, ok := tableSummaryMap[table]; !ok {
 					tableSummaryMap[table] = vdiffTableSummary{
 						TableName: table,
+						State:     vdiff.UnknownState,
 					}
 
 				}
 				ts := tableSummaryMap[table]
-				state := vdiff.VDiffState(strings.ToLower(row.AsString("table_state", "")))
+				shardState := vdiff.VDiffState(strings.ToLower(row.AsString("table_state", "")))
 
-				switch state {
+				switch shardState {
 				case vdiff.CompletedState:
 					if ts.State == vdiff.UnknownState {
-						ts.State = state
+						ts.State = shardState
 					}
 				case vdiff.ErrorState:
-					ts.State = state
+					ts.State = shardState
 				default:
 					if ts.State != vdiff.ErrorState {
-						ts.State = state
+						ts.State = shardState
+
 					}
 				}
+
 				diffReport := row.AsString("report", "")
 				dr := vdiff.DiffReport{}
 				if diffReport != "" {
@@ -453,6 +462,16 @@ func buildVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid st
 
 				reports[table][shard] = dr
 				tableSummaryMap[table] = ts
+
+				// The global VDiff summary needs to align with the table summary across all shards.
+				// It should progress from pending->started->completed with error at any point being
+				// sticky. This largely mirrors the global table summary, with the exception being
+				// the started state, which should also be sticky; i.e. we shouldn't go from
+				// started->pending->started in the global VDiff state.
+				if summary.State != ts.State &&
+					(summary.State != vdiff.StartedState && ts.State != vdiff.PendingState) {
+					summary.State = ts.State
+				}
 			}
 		}
 	}

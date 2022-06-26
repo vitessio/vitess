@@ -155,12 +155,15 @@ type migrationSource struct {
 }
 
 func (ct *controller) updateState(dbClient binlogplayer.DBClient, state VDiffState) error {
+	extraCols := ""
 	completedTS := "NULL"
-	if state == CompletedState {
+	if state == StartedState {
+		extraCols = ", started_at = utc_timestamp()"
+	} else if state == CompletedState {
 		t := time.Now().UTC()
 		completedTS = encodeString(t.Format(TimestampFormat))
 	}
-	query := fmt.Sprintf(sqlUpdateVDiffState, encodeString(string(state)), completedTS, ct.id)
+	query := fmt.Sprintf(sqlUpdateVDiffState, encodeString(string(state)), completedTS, extraCols, ct.id)
 	if _, err := withDDL.Exec(ct.vde.ctx, query, dbClient.ExecuteFetch, dbClient.ExecuteFetch); err != nil {
 		return err
 	}

@@ -86,7 +86,7 @@ func waitForVDiff2ToComplete(t *testing.T, ksWorkflow, cells, uuid string, compl
 	ch := make(chan bool)
 	go func() {
 		for {
-			time.Sleep(5 * time.Second)
+			time.Sleep(1 * time.Second)
 			_, jsonStr := performVDiff2Action(t, ksWorkflow, cells, "show", uuid)
 			info = getVDiffInfo(jsonStr)
 			if info.State == "completed" {
@@ -178,6 +178,7 @@ type vdiffInfo struct {
 	Workflow, Keyspace string
 	State, Shards      string
 	RowsCompared       int64
+	StartedAt          string
 	CompletedAt        string
 	HasMismatch        bool
 }
@@ -190,6 +191,7 @@ func getVDiffInfo(jsonStr string) *vdiffInfo {
 	info.State, _ = jsonparser.GetString(json, "State")
 	info.Shards, _ = jsonparser.GetString(json, "Shards")
 	info.RowsCompared, _ = jsonparser.GetInt(json, "RowsCompared")
+	info.StartedAt, _ = jsonparser.GetString(json, "StartedAt")
 	info.CompletedAt, _ = jsonparser.GetString(json, "CompletedAt")
 	info.HasMismatch, _ = jsonparser.GetBoolean(json, "HasMismatch")
 
