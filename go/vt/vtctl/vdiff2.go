@@ -409,9 +409,6 @@ func buildVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid st
 				// Since these values will be the same for all subsequent rows we only use the first row.
 				if first {
 					first = false
-					// This is the per-tablet VDiff summary state
-					summary.State = vdiff.VDiffState(strings.ToLower(row.AsString("vdiff_state", "")))
-
 					// Our timestamps are strings in `2022-06-26 20:43:25` format so we sort them lexicographically.
 					// We should use the earliest started_at across all shards.
 					if sa := row.AsString("started_at", ""); summary.StartedAt == "" || sa < summary.StartedAt {
@@ -502,6 +499,10 @@ func buildVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid st
 	if !summary.HasMismatch {
 		summary.Reports = nil
 		summary.TableSummaryMap = nil
+	}
+	// If we haven't completed the global VDiff then be sure to reflect that with an empty CompletedAt
+	if summary.State != vdiff.CompletedState {
+		summary.CompletedAt = ""
 	}
 	return summary, nil
 }
