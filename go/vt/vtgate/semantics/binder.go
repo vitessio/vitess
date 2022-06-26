@@ -147,7 +147,7 @@ func (b *binder) rewriteJoinUsingColName(deps dependency, node *sqlparser.ColNam
 		node.Qualifier = name
 	} else {
 		node.Qualifier = sqlparser.TableName{
-			Name: sqlparser.NewTableIdent(alias.String()),
+			Name: sqlparser.NewIdentifierCS(alias.String()),
 		}
 	}
 	deps, err = b.resolveColumn(node, currentScope, false)

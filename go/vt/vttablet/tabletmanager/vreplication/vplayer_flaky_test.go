@@ -861,15 +861,17 @@ func TestPlayerFilters(t *testing.T) {
 	}}
 
 	for _, tcase := range testcases {
-		if tcase.logs != nil {
-			logch := vrLogStatsLogger.Subscribe("vrlogstats")
-			defer expectLogsAndUnsubscribe(t, tcase.logs, logch)
-		}
-		execStatements(t, []string{tcase.input})
-		expectDBClientQueries(t, tcase.output)
-		if tcase.table != "" {
-			expectData(t, tcase.table, tcase.data)
-		}
+		t.Run(tcase.input, func(t *testing.T) {
+			if tcase.logs != nil {
+				logch := vrLogStatsLogger.Subscribe("vrlogstats")
+				defer expectLogsAndUnsubscribe(t, tcase.logs, logch)
+			}
+			execStatements(t, []string{tcase.input})
+			expectDBClientQueries(t, tcase.output)
+			if tcase.table != "" {
+				expectData(t, tcase.table, tcase.data)
+			}
+		})
 	}
 }
 
@@ -2441,7 +2443,6 @@ func TestRestartOnVStreamEnd(t *testing.T) {
 		"/update _vt.vreplication set message='vstream ended'",
 	})
 	streamerEngine.Open()
-
 	execStatements(t, []string{
 		"insert into t1 values(2, 'aaa')",
 	})

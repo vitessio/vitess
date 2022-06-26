@@ -258,8 +258,5 @@ func (vtctlclient *VtctlClientProcess) InitTablet(tablet *Vttablet, cell string,
 // shouldRetry tells us if the command should be retried based on the results/output -- meaning that it
 // is likely an ephemeral or recoverable issue that is likely to succeed when retried.
 func shouldRetry(cmdResults string) bool {
-	if strings.Contains(cmdResults, "Deadlock found when trying to get lock; try restarting transaction") {
-		return true
-	}
-	return false
+	return strings.Contains(cmdResults, "Deadlock found when trying to get lock; try restarting transaction")
 }

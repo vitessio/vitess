@@ -879,8 +879,8 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": true
     },
-    "FieldQuery": "select SUM(ol_amount) as sm from order_line1 where 1 != 1",
-    "Query": "select SUM(ol_amount) as sm from order_line1 where ol_o_id = 680 and ol_d_id = 201 and ol_w_id = 87",
+    "FieldQuery": "select sum(ol_amount) as sm from order_line1 where 1 != 1",
+    "Query": "select sum(ol_amount) as sm from order_line1 where ol_o_id = 680 and ol_d_id = 201 and ol_w_id = 87",
     "Table": "order_line1",
     "Values": [
       "INT64(87)"
@@ -968,8 +968,8 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": true
     },
-    "FieldQuery": "select COUNT(distinct s.s_i_id) from stock1 as s join order_line1 as ol on ol.ol_w_id = s.s_w_id and ol.ol_i_id = s.s_i_id where 1 != 1",
-    "Query": "select COUNT(distinct s.s_i_id) from stock1 as s join order_line1 as ol on ol.ol_w_id = s.s_w_id and ol.ol_i_id = s.s_i_id where ol.ol_w_id = 12 and ol.ol_d_id = 1908 and ol.ol_o_id \u003c 30 and ol.ol_o_id \u003e= 15 and s.s_w_id = 12 and s.s_quantity \u003c 10",
+    "FieldQuery": "select count(distinct s.s_i_id) from stock1 as s join order_line1 as ol on ol.ol_w_id = s.s_w_id and ol.ol_i_id = s.s_i_id where 1 != 1",
+    "Query": "select count(distinct s.s_i_id) from stock1 as s join order_line1 as ol on ol.ol_w_id = s.s_w_id and ol.ol_i_id = s.s_i_id where ol.ol_w_id = 12 and ol.ol_d_id = 1908 and ol.ol_o_id \u003c 30 and ol.ol_o_id \u003e= 15 and s.s_w_id = 12 and s.s_quantity \u003c 10",
     "Table": "stock1, order_line1",
     "Values": [
       "INT64(12)"
@@ -987,8 +987,8 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": true
     },
-    "FieldQuery": "select COUNT(distinct s.s_i_id) from stock1 as s, order_line1 as ol where 1 != 1",
-    "Query": "select COUNT(distinct s.s_i_id) from stock1 as s, order_line1 as ol where s.s_w_id = 12 and s.s_quantity \u003c 10 and ol.ol_w_id = 12 and ol.ol_d_id = 1908 and ol.ol_o_id \u003c 30 and ol.ol_o_id \u003e= 15 and ol.ol_w_id = s.s_w_id and ol.ol_i_id = s.s_i_id",
+    "FieldQuery": "select count(distinct s.s_i_id) from stock1 as s, order_line1 as ol where 1 != 1",
+    "Query": "select count(distinct s.s_i_id) from stock1 as s, order_line1 as ol where s.s_w_id = 12 and s.s_quantity \u003c 10 and ol.ol_w_id = 12 and ol.ol_d_id = 1908 and ol.ol_o_id \u003c 30 and ol.ol_o_id \u003e= 15 and ol.ol_w_id = s.s_w_id and ol.ol_i_id = s.s_i_id",
     "Table": "order_line1, stock1",
     "Values": [
       "INT64(12)"

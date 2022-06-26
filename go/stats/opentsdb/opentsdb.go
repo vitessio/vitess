@@ -208,6 +208,8 @@ func (dc *dataCollector) addExpVar(kv expvar.KeyValue) {
 		dc.addInt(k, v.F(), nil)
 	case *stats.Gauge:
 		dc.addInt(k, v.Get(), nil)
+	case *stats.GaugeFloat64:
+		dc.addFloat(k, v.Get(), nil)
 	case *stats.GaugeFunc:
 		dc.addInt(k, v.F(), nil)
 	case *stats.CounterDuration:

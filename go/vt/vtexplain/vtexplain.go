@@ -390,7 +390,7 @@ func (vte *VTExplain) specialHandlingOfSavepoints(q *MysqlQuery) error {
 		vte.spMap[sp.Name.String()] = spName
 		vte.spCount++
 	}
-	sp.Name = sqlparser.NewColIdent(spName)
+	sp.Name = sqlparser.NewIdentifierCI(spName)
 	q.SQL = sqlparser.String(sp)
 
 	return nil

@@ -94,11 +94,6 @@ var generateSQLPatches = []string{
 	`,
 	`
 		ALTER TABLE
-			database_instance
-			ADD COLUMN uptime INT UNSIGNED NOT NULL AFTER last_seen
-	`,
-	`
-		ALTER TABLE
 			cluster_alias
 			ADD UNIQUE KEY alias_uidx (alias)
 	`,
@@ -356,11 +351,6 @@ var generateSQLPatches = []string{
 	`
 		ALTER TABLE
 			database_instance
-			ADD COLUMN replication_credentials_available TINYINT UNSIGNED NOT NULL
-	`,
-	`
-		ALTER TABLE
-			database_instance
 			ADD COLUMN has_replication_credentials TINYINT UNSIGNED NOT NULL
 	`,
 	`
@@ -570,11 +560,6 @@ var generateSQLPatches = []string{
 		ALTER TABLE
 			database_instance
 			ADD COLUMN semi_sync_primary_clients INT UNSIGNED NOT NULL DEFAULT 0 AFTER semi_sync_primary_status
-	`,
-	`
-		ALTER TABLE
-			database_instance
-			ADD COLUMN semi_sync_available TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER semi_sync_enforced
 	`,
 	`
 		ALTER TABLE /* sqlite3-skip */

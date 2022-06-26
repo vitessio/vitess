@@ -5,6 +5,10 @@
 
 ### New command line flags and behavior
 
+#### vtctl GetSchema --table-schema-only
+
+The new flag `--table-schema-only` skips columns introspection. `GetSchema` only returns general schema analysis, and specifically it includes the `CREATE TABLE|VIEW` statement in `schema` field.
+
 ### Online DDL changes
 ------------
 The entire changelog for this release can be found [here](https://github.com/vitessio/vitess/blob/main/doc/releasenotes/15_0_0_changelog.md).

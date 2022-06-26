@@ -366,7 +366,7 @@ func (vsdw *VerticalSplitDiffWorker) diff(ctx context.Context) error {
 		var err error
 		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
 		vsdw.destinationSchemaDefinition, err = schematools.GetSchema(
-			shortCtx, vsdw.wr.TopoServer(), vsdw.wr.TabletManagerClient(), vsdw.destinationAlias, vsdw.shardInfo.SourceShards[0].Tables, nil /* excludeTables */, false /* includeViews */)
+			shortCtx, vsdw.wr.TopoServer(), vsdw.wr.TabletManagerClient(), vsdw.destinationAlias, vsdw.shardInfo.SourceShards[0].Tables, nil /* excludeTables */, false /* includeViews */, false /* tableSchemaOnly */)
 		cancel()
 		if err != nil {
 			vsdw.markAsWillFail(rec, err)
@@ -379,7 +379,7 @@ func (vsdw *VerticalSplitDiffWorker) diff(ctx context.Context) error {
 		var err error
 		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
 		vsdw.sourceSchemaDefinition, err = schematools.GetSchema(
-			shortCtx, vsdw.wr.TopoServer(), vsdw.wr.TabletManagerClient(), vsdw.sourceAlias, vsdw.shardInfo.SourceShards[0].Tables, nil /* excludeTables */, false /* includeViews */)
+			shortCtx, vsdw.wr.TopoServer(), vsdw.wr.TabletManagerClient(), vsdw.sourceAlias, vsdw.shardInfo.SourceShards[0].Tables, nil /* excludeTables */, false /* includeViews */, false /* tableSchemaOnly */)
 		cancel()
 		if err != nil {
 			vsdw.markAsWillFail(rec, err)

@@ -605,7 +605,7 @@ func TestMultiInternalSavepointVtGate(t *testing.T) {
 	sbc3.Queries = nil
 
 	// single shard so no savepoint will be created and neither any old savepoint will be executed
-	session, _, err = rpcVTGate.Execute(context.Background(), session, "insert into sp_tbl(user_id) values (5)", nil)
+	_, _, err = rpcVTGate.Execute(context.Background(), session, "insert into sp_tbl(user_id) values (5)", nil)
 	require.NoError(t, err)
 	wantQ = []*querypb.BoundQuery{{
 		Sql: "insert into sp_tbl(user_id) values (:_user_id_0)",

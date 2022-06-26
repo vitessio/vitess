@@ -365,8 +365,8 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": false
     },
-    "FieldQuery": "select SUM(data_length + index_length) as size from information_schema.`TABLES` where 1 != 1",
-    "Query": "select SUM(data_length + index_length) as size from information_schema.`TABLES` where table_schema = :__vtschemaname",
+    "FieldQuery": "select sum(data_length + index_length) as size from information_schema.`TABLES` where 1 != 1",
+    "Query": "select sum(data_length + index_length) as size from information_schema.`TABLES` where table_schema = :__vtschemaname",
     "SysTableTableSchema": "[:v1]",
     "Table": "information_schema.`TABLES`"
   }
@@ -707,8 +707,8 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": false
     },
-    "FieldQuery": "select COUNT(*) from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
-    "Query": "select COUNT(*) from INFORMATION_SCHEMA.`TABLES` where table_schema = :__vtschemaname and table_name = :table_name",
+    "FieldQuery": "select count(*) from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
+    "Query": "select count(*) from INFORMATION_SCHEMA.`TABLES` where table_schema = :__vtschemaname and table_name = :table_name",
     "SysTableTableName": "[table_name:VARCHAR(\"foo\")]",
     "SysTableTableSchema": "[VARCHAR(\"performance_schema\")]",
     "Table": "INFORMATION_SCHEMA.`TABLES`"

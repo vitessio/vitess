@@ -88,8 +88,8 @@ func (client *FakeTabletManagerClient) ExecuteHook(ctx context.Context, tablet *
 }
 
 // GetSchema is part of the tmclient.TabletManagerClient interface.
-func (client *FakeTabletManagerClient) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
-	return client.tmc.GetSchema(ctx, tablet, tables, excludeTables, includeViews)
+func (client *FakeTabletManagerClient) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, tables, excludeTables []string, includeViews bool, tableSchemaOnly bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
+	return client.tmc.GetSchema(ctx, tablet, tables, excludeTables, includeViews, tableSchemaOnly)
 }
 
 // GetPermissions is part of the tmclient.TabletManagerClient interface.
@@ -180,6 +180,11 @@ func (client *FakeTabletManagerClient) ReplicationStatus(ctx context.Context, ta
 	return &replicationdatapb.Status{}, nil
 }
 
+// FullStatus is part of the tmclient.TabletManagerClient interface.
+func (client *FakeTabletManagerClient) FullStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.FullStatus, error) {
+	return &replicationdatapb.FullStatus{}, nil
+}
+
 // StopReplication is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) StopReplication(ctx context.Context, tablet *topodatapb.Tablet) error {
 	return nil
@@ -217,6 +222,11 @@ func (client *FakeTabletManagerClient) InitReplica(ctx context.Context, tablet *
 
 // ReplicaWasPromoted is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) ReplicaWasPromoted(ctx context.Context, tablet *topodatapb.Tablet) error {
+	return nil
+}
+
+// ResetReplicationParameters is part of the tmclient.TabletManagerClient interface.
+func (client *FakeTabletManagerClient) ResetReplicationParameters(ctx context.Context, tablet *topodatapb.Tablet) error {
 	return nil
 }
 
