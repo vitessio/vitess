@@ -2860,6 +2860,20 @@ type (
 		Type     PerformanceSchemaType
 		Argument Expr
 	}
+
+	// GTIDType is an enum that get types of GTIDFunc
+	GTIDType int8
+
+	// GTIDFuncExpr stands for GTID Functions
+	// Set1 Acts as gtid_set for WAIT_FOR_EXECUTED_GTID_SET() and WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS()
+	// For more details, visit https://dev.mysql.com/doc/refman/8.0/en/gtid-functions.html
+	GTIDFuncExpr struct {
+		Type    GTIDType
+		Set1    Expr
+		Set2    Expr
+		Timeout Expr
+		Channel Expr
+	}
 )
 
 // iExpr ensures that only expressions nodes can be assigned to a Expr
@@ -2935,6 +2949,7 @@ func (*ExtractValueExpr) iExpr()                   {}
 func (*UpdateXMLExpr) iExpr()                      {}
 func (*LockingFunc) iExpr()                        {}
 func (*PerformanceSchemaFuncExpr) iExpr()          {}
+func (*GTIDFuncExpr) iExpr()                       {}
 func (*Sum) iExpr()                                {}
 func (*Min) iExpr()                                {}
 func (*Max) iExpr()                                {}
@@ -3001,6 +3016,7 @@ func (*NamedWindow) iCallable()                        {}
 func (*ExtractValueExpr) iCallable()                   {}
 func (*UpdateXMLExpr) iCallable()                      {}
 func (*PerformanceSchemaFuncExpr) iCallable()          {}
+func (*GTIDFuncExpr) iCallable()                       {}
 
 func (sum *Sum) GetArg() Expr                   { return sum.Arg }
 func (min *Min) GetArg() Expr                   { return min.Arg }

@@ -488,6 +488,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfFuncExpr(a, b)
+	case *GTIDFuncExpr:
+		b, ok := inB.(*GTIDFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfGTIDFuncExpr(a, b)
 	case GroupBy:
 		b, ok := inB.(GroupBy)
 		if !ok {
@@ -2412,6 +2418,21 @@ func EqualsRefOfFuncExpr(a, b *FuncExpr) bool {
 	return EqualsIdentifierCS(a.Qualifier, b.Qualifier) &&
 		EqualsIdentifierCI(a.Name, b.Name) &&
 		EqualsSelectExprs(a.Exprs, b.Exprs)
+}
+
+// EqualsRefOfGTIDFuncExpr does deep equals between the two objects.
+func EqualsRefOfGTIDFuncExpr(a, b *GTIDFuncExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Type == b.Type &&
+		EqualsExpr(a.Set1, b.Set1) &&
+		EqualsExpr(a.Set2, b.Set2) &&
+		EqualsExpr(a.Timeout, b.Timeout) &&
+		EqualsExpr(a.Channel, b.Channel)
 }
 
 // EqualsGroupBy does deep equals between the two objects.
@@ -4700,6 +4721,12 @@ func EqualsCallable(inA, inB Callable) bool {
 			return false
 		}
 		return EqualsRefOfFuncExpr(a, b)
+	case *GTIDFuncExpr:
+		b, ok := inB.(*GTIDFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfGTIDFuncExpr(a, b)
 	case *GroupConcatExpr:
 		b, ok := inB.(*GroupConcatExpr)
 		if !ok {
@@ -5315,6 +5342,12 @@ func EqualsExpr(inA, inB Expr) bool {
 			return false
 		}
 		return EqualsRefOfFuncExpr(a, b)
+	case *GTIDFuncExpr:
+		b, ok := inB.(*GTIDFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfGTIDFuncExpr(a, b)
 	case *GroupConcatExpr:
 		b, ok := inB.(*GroupConcatExpr)
 		if !ok {

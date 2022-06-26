@@ -2170,6 +2170,26 @@ func (node *PerformanceSchemaFuncExpr) formatFast(buf *TrackedBuffer) {
 	buf.WriteByte(')')
 }
 
+// formatFast formats the node
+func (node *GTIDFuncExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.Type.ToString())
+	buf.WriteByte('(')
+	buf.printExpr(node, node.Set1, true)
+	if node.Set2 != nil {
+		buf.WriteString(", ")
+		buf.printExpr(node, node.Set2, true)
+	}
+	if node.Timeout != nil {
+		buf.WriteString(", ")
+		buf.printExpr(node, node.Timeout, true)
+	}
+	if node.Channel != nil {
+		buf.WriteString(", ")
+		buf.printExpr(node, node.Channel, true)
+	}
+	buf.WriteByte(')')
+}
+
 // formatFast formats the node.
 func (node *SubstrExpr) formatFast(buf *TrackedBuffer) {
 	if node.To == nil {

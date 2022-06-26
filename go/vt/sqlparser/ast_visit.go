@@ -176,6 +176,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfFromFirstLastClause(in, f)
 	case *FuncExpr:
 		return VisitRefOfFuncExpr(in, f)
+	case *GTIDFuncExpr:
+		return VisitRefOfGTIDFuncExpr(in, f)
 	case GroupBy:
 		return VisitGroupBy(in, f)
 	case *GroupConcatExpr:
@@ -1580,6 +1582,27 @@ func VisitRefOfFuncExpr(in *FuncExpr, f Visit) error {
 		return err
 	}
 	if err := VisitSelectExprs(in.Exprs, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfGTIDFuncExpr(in *GTIDFuncExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Set1, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Set2, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Timeout, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Channel, f); err != nil {
 		return err
 	}
 	return nil
@@ -4006,6 +4029,8 @@ func VisitCallable(in Callable, f Visit) error {
 		return VisitRefOfFirstOrLastValueExpr(in, f)
 	case *FuncExpr:
 		return VisitRefOfFuncExpr(in, f)
+	case *GTIDFuncExpr:
+		return VisitRefOfGTIDFuncExpr(in, f)
 	case *GroupConcatExpr:
 		return VisitRefOfGroupConcatExpr(in, f)
 	case *JSONArrayExpr:
@@ -4246,6 +4271,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfFirstOrLastValueExpr(in, f)
 	case *FuncExpr:
 		return VisitRefOfFuncExpr(in, f)
+	case *GTIDFuncExpr:
+		return VisitRefOfGTIDFuncExpr(in, f)
 	case *GroupConcatExpr:
 		return VisitRefOfGroupConcatExpr(in, f)
 	case *IntervalExpr:

@@ -361,6 +361,9 @@ func bindVariable(yylex yyLexer, bvar string) {
 // Performance Schema Functions
 %token <str> FORMAT_BYTES FORMAT_PICO_TIME PS_CURRENT_THREAD_ID PS_THREAD_ID
 
+// GTID Functions
+%token <str> GTID_SUBSET GTID_SUBTRACT WAIT_FOR_EXECUTED_GTID_SET WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS
+
 // Explain tokens
 %token <str> FORMAT TREE VITESS TRADITIONAL
 
@@ -446,7 +449,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <str> generated_always_opt user_username address_opt
 %type <definer> definer_opt user
 %type <expr> expression frame_expression signed_literal signed_literal_or_null null_as_literal now_or_signed_literal signed_literal bit_expr regular_expressions xml_expressions
-%type <expr> interval_value simple_expr literal NUM_literal text_literal text_literal_or_arg bool_pri literal_or_null now predicate tuple_expression null_int_variable_arg performance_schema_function_expressions
+%type <expr> interval_value simple_expr literal NUM_literal text_literal text_literal_or_arg bool_pri literal_or_null now predicate tuple_expression null_int_variable_arg performance_schema_function_expressions gtid_function_expressions
 %type <tableExprs> from_opt table_references from_clause
 %type <tableExpr> table_reference table_factor join_table json_table_function
 %type <jtColumnDefinition> jt_column
@@ -5937,6 +5940,7 @@ UTC_DATE func_paren_opt
 | regular_expressions
 | xml_expressions
 | performance_schema_function_expressions
+| gtid_function_expressions
 
 null_int_variable_arg:
   null_as_literal
@@ -6057,6 +6061,36 @@ performance_schema_function_expressions:
 | PS_THREAD_ID openb expression closeb
   {
     $$ = &PerformanceSchemaFuncExpr{Type: PsThreadIDType, Argument:$3}
+  }
+
+gtid_function_expressions:
+  GTID_SUBSET openb expression ',' expression closeb
+  {
+    $$ = &GTIDFuncExpr{Type: GTIDSubsetType, Set1:$3, Set2: $5 }
+  }
+| GTID_SUBTRACT openb expression ',' expression closeb
+  {
+    $$ = &GTIDFuncExpr{Type: GTIDSubtractType, Set1:$3, Set2: $5 }
+  }
+| WAIT_FOR_EXECUTED_GTID_SET openb expression closeb
+  {
+    $$ = &GTIDFuncExpr{Type: WaitForExecutedGTIDSetType, Set1: $3}
+  }
+| WAIT_FOR_EXECUTED_GTID_SET openb expression ',' expression closeb
+  {
+    $$ = &GTIDFuncExpr{Type: WaitForExecutedGTIDSetType, Set1: $3, Timeout: $5 }
+  }
+| WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS openb expression closeb
+  {
+    $$ = &GTIDFuncExpr{Type: WaitUntilSQLThreadAfterGTIDSType, Set1: $3 }
+  }
+| WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS openb expression ',' expression closeb
+  {
+    $$ = &GTIDFuncExpr{Type: WaitUntilSQLThreadAfterGTIDSType, Set1: $3, Timeout: $5 }
+  }
+| WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS openb expression ',' expression ',' expression closeb
+  {
+    $$ = &GTIDFuncExpr{Type: WaitUntilSQLThreadAfterGTIDSType, Set1: $3, Timeout: $5, Channel: $7 }
   }
 
 returning_type_opt:
@@ -7388,6 +7422,8 @@ non_reserved_keyword:
 | GLOBAL
 | GROUP_CONCAT %prec FUNCTION_CALL_NON_KEYWORD
 | GTID_EXECUTED
+| GTID_SUBSET %prec FUNCTION_CALL_NON_KEYWORD
+| GTID_SUBTRACT %prec FUNCTION_CALL_NON_KEYWORD
 | HASH
 | HEADER
 | HISTOGRAM
@@ -7639,6 +7675,8 @@ non_reserved_keyword:
 | VITESS_TARGET
 | VITESS_THROTTLED_APPS
 | VSCHEMA
+| WAIT_FOR_EXECUTED_GTID_SET %prec FUNCTION_CALL_NON_KEYWORD
+| WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS %prec FUNCTION_CALL_NON_KEYWORD
 | WARNINGS
 | WITHOUT
 | WORK

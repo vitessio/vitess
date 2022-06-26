@@ -1326,6 +1326,32 @@ func (cached *FuncExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *GTIDFuncExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(80)
+	}
+	// field Set1 vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Set1.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Set2 vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Set2.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Timeout vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Timeout.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Channel vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Channel.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
 func (cached *GroupConcatExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

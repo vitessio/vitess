@@ -177,6 +177,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfFromFirstLastClause(in)
 	case *FuncExpr:
 		return CloneRefOfFuncExpr(in)
+	case *GTIDFuncExpr:
+		return CloneRefOfGTIDFuncExpr(in)
 	case GroupBy:
 		return CloneGroupBy(in)
 	case *GroupConcatExpr:
@@ -1304,6 +1306,19 @@ func CloneRefOfFuncExpr(n *FuncExpr) *FuncExpr {
 	out.Qualifier = CloneIdentifierCS(n.Qualifier)
 	out.Name = CloneIdentifierCI(n.Name)
 	out.Exprs = CloneSelectExprs(n.Exprs)
+	return &out
+}
+
+// CloneRefOfGTIDFuncExpr creates a deep clone of the input.
+func CloneRefOfGTIDFuncExpr(n *GTIDFuncExpr) *GTIDFuncExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Set1 = CloneExpr(n.Set1)
+	out.Set2 = CloneExpr(n.Set2)
+	out.Timeout = CloneExpr(n.Timeout)
+	out.Channel = CloneExpr(n.Channel)
 	return &out
 }
 
@@ -3148,6 +3163,8 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfFirstOrLastValueExpr(in)
 	case *FuncExpr:
 		return CloneRefOfFuncExpr(in)
+	case *GTIDFuncExpr:
+		return CloneRefOfGTIDFuncExpr(in)
 	case *GroupConcatExpr:
 		return CloneRefOfGroupConcatExpr(in)
 	case *JSONArrayExpr:
@@ -3402,6 +3419,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfFirstOrLastValueExpr(in)
 	case *FuncExpr:
 		return CloneRefOfFuncExpr(in)
+	case *GTIDFuncExpr:
+		return CloneRefOfGTIDFuncExpr(in)
 	case *GroupConcatExpr:
 		return CloneRefOfGroupConcatExpr(in)
 	case *IntervalExpr:
