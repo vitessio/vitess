@@ -42,7 +42,7 @@ func CompareSchemas(
 	excludeTables []string,
 	includeViews bool,
 ) (diffs []string, err error) {
-	req := &tabletmanagerdatapb.GetSchemaRequest{Tables: tables, ExcludeTables: excludeTables}
+	req := &tabletmanagerdatapb.GetSchemaRequest{Tables: tables, ExcludeTables: excludeTables, IncludeViews: includeViews}
 	sourceSchema, err := GetSchema(ctx, ts, tmc, source, req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get schema from tablet %v. err: %v", source, err)
