@@ -88,7 +88,7 @@ const (
 										from _vt.vdiff as vd inner join _vt.vdiff_table as vdt on (vd.id = vdt.vdiff_id)
 										where vdt.vdiff_id = %d`
 	// sqlUpdateVDiffState has a penultimate placeholder for any additional columns you want to update, e.g. `, foo = 1`
-	sqlUpdateVDiffState     = "update _vt.vdiff set state = %s, completed_at = %s %s where id = %d"
+	sqlUpdateVDiffState     = "update _vt.vdiff set state = %s %s where id = %d"
 	sqlGetVReplicationEntry = "select * from _vt.vreplication %s"
 	sqlGetPendingVDiffs     = "select * from _vt.vdiff where state = 'pending'"
 	sqlGetVDiffID           = "select id as id from _vt.vdiff where vdiff_uuid = %s"

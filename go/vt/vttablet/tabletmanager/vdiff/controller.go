@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"vitess.io/vitess/go/vt/withddl"
 
@@ -156,14 +155,12 @@ type migrationSource struct {
 
 func (ct *controller) updateState(dbClient binlogplayer.DBClient, state VDiffState) error {
 	extraCols := ""
-	completedTS := "NULL"
 	if state == StartedState {
 		extraCols = ", started_at = utc_timestamp()"
 	} else if state == CompletedState {
-		t := time.Now().UTC()
-		completedTS = encodeString(t.Format(TimestampFormat))
+		extraCols = ", completed_at = utc_timestamp()"
 	}
-	query := fmt.Sprintf(sqlUpdateVDiffState, encodeString(string(state)), completedTS, extraCols, ct.id)
+	query := fmt.Sprintf(sqlUpdateVDiffState, encodeString(string(state)), extraCols, ct.id)
 	if _, err := withDDL.Exec(ct.vde.ctx, query, dbClient.ExecuteFetch, dbClient.ExecuteFetch); err != nil {
 		return err
 	}

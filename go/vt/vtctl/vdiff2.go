@@ -405,9 +405,11 @@ func buildVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid st
 				reports = make(map[string]map[string]vdiff.DiffReport, 0)
 			}
 			for _, row := range qr.Named().Rows {
+				// This is the per-tablet summary state
+				tabletState := vdiff.VDiffState(strings.ToLower(row.AsString("vdiff_state", "")))
 				if first {
 					first = false
-					summary.State = vdiff.VDiffState(strings.ToLower(row.AsString("vdiff_state", "")))
+					// The global summary timestamps are approximate so we use the first one
 					summary.StartedAt = row.AsString("started_at", "")
 					summary.CompletedAt = row.AsString("completed_at", "")
 				}
@@ -463,13 +465,13 @@ func buildVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid st
 				reports[table][shard] = dr
 				tableSummaryMap[table] = ts
 
-				// The global VDiff summary needs to align with the table summary across all shards.
-				// It should progress from pending->started->completed with error at any point being
-				// sticky. This largely mirrors the global table summary, with the exception being
-				// the started state, which should also be sticky; i.e. we shouldn't go from
+				// The global VDiff summary needs to align with the tablet level summary across all
+				// shards. It should progress from pending->started->completed with error at any point
+				// being sticky. This largely mirrors the global table summary, with the exception
+				// being the started state, which should also be sticky; i.e. we shouldn't go from
 				// started->pending->started in the global VDiff state.
-				if summary.State != ts.State &&
-					(summary.State != vdiff.StartedState && ts.State != vdiff.PendingState) {
+				if summary.State != tabletState &&
+					(summary.State != vdiff.StartedState && tabletState != vdiff.PendingState) {
 					summary.State = ts.State
 				}
 			}

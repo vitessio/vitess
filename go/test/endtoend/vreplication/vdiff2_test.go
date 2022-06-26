@@ -79,6 +79,7 @@ func TestVDiff2(t *testing.T) {
 	sourceShards := []string{"0"}
 	targetKs := "customer"
 	targetShards := []string{"-80", "80-"}
+	// This forces us to use multiple vstream packets even with small test tables
 	extraVTTabletArgs = []string{"--vstream_packet_size=1"}
 
 	vc = NewVitessCluster(t, "TestVDiff2", []string{allCellNames}, mainClusterConfig)
