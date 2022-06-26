@@ -204,9 +204,9 @@ const (
 VDiff Summary for {{.Keyspace}}.{{.Workflow}} ({{.UUID}})
 State:        {{.State}}
 RowsCompared: {{.RowsCompared}}
+HasMismatch:  {{.HasMismatch}}
 StartedAt:    {{.StartedAt}}
 CompletedAt:  {{.CompletedAt}}
-HasMismatch:  {{.HasMismatch}}
 {{ range $table := .TableSummaryMap}} 
 Table {{$table.TableName}}:
 	State:            {{$table.State}}
