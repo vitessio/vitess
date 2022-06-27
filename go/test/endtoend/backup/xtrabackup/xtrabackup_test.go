@@ -19,8 +19,6 @@ package vtctlbackup
 import (
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
 	backup "vitess.io/vitess/go/test/endtoend/backup/vtctlbackup"
 )
 
@@ -45,14 +43,4 @@ func TestBackupMainWithZstdCompression(t *testing.T) {
 	}
 
 	backup.TestBackup(t, backup.XtraBackup, "tar", 0, cDetails, []string{"TestReplicaBackup"})
-}
-
-func TestBackupMainWithError(t *testing.T) {
-	cDetails := &backup.CompressionDetails{
-		BuiltinCompressor:   "pargzip",
-		BuiltinDecompressor: "lz4",
-	}
-
-	err := backup.TestBackup(t, backup.XtraBackup, "tar", 0, cDetails, []string{"TestPrimaryBackup"})
-	require.EqualError(t, err, "test failure: TestPrimaryBackup")
 }
