@@ -26,7 +26,7 @@ import (
 
 // TestXtraBackup - tests the backup using xtrabackup
 func TestXtrabackup(t *testing.T) {
-	backup.TestBackup(t, backup.XtraBackup, "tar", 0, nil)
+	backup.TestBackup(t, backup.XtraBackup, "tar", 0, nil, nil)
 }
 
 func TestBackupMainWithlz4Compression(t *testing.T) {
@@ -34,7 +34,7 @@ func TestBackupMainWithlz4Compression(t *testing.T) {
 		BuiltinCompressor: "lz4",
 	}
 
-	backup.TestBackup(t, backup.XtraBackup, "tar", 0, cDetails)
+	backup.TestBackup(t, backup.XtraBackup, "tar", 0, cDetails, []string{"TestReplicaBackup", "TestPrimaryBackup"})
 }
 
 func TestBackupMainWithZstdCompression(t *testing.T) {
@@ -44,7 +44,7 @@ func TestBackupMainWithZstdCompression(t *testing.T) {
 		ExternalDecompressorCmd: "zstd -d",
 	}
 
-	backup.TestBackup(t, backup.XtraBackup, "tar", 0, cDetails)
+	backup.TestBackup(t, backup.XtraBackup, "tar", 0, cDetails, []string{"TestReplicaBackup", "TestPrimaryBackup"})
 }
 
 func TestBackupMainWithError(t *testing.T) {
@@ -52,6 +52,7 @@ func TestBackupMainWithError(t *testing.T) {
 		BuiltinCompressor:   "pargzip",
 		BuiltinDecompressor: "lz4",
 	}
-	err := backup.TestBackup(t, backup.XtraBackup, "tar", 0, cDetails)
+
+	err := backup.TestBackup(t, backup.XtraBackup, "tar", 0, cDetails, []string{"TestReplicaBackup", "TestPrimaryBackup"})
 	require.EqualError(t, err, "test failure: TestReplicaBackup")
 }

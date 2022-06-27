@@ -254,7 +254,7 @@ func TearDownCluster() {
 }
 
 // TestBackup runs all the backup tests
-func TestBackup(t *testing.T, setupType int, streamMode string, stripes int, cDetails *CompressionDetails) error {
+func TestBackup(t *testing.T, setupType int, streamMode string, stripes int, cDetails *CompressionDetails, runSpecific []string) error {
 
 	testMethods := []struct {
 		name   string
@@ -295,7 +295,6 @@ func TestBackup(t *testing.T, setupType int, streamMode string, stripes int, cDe
 	}
 
 	defer cluster.PanicHandler(t)
-
 	// setup cluster for the testing
 	code, err := LaunchCluster(setupType, streamMode, stripes, cDetails)
 	require.Nilf(t, err, "setup failed with status code %d", code)
@@ -306,11 +305,23 @@ func TestBackup(t *testing.T, setupType int, streamMode string, stripes int, cDe
 	// Run all the backup tests
 
 	for _, test := range testMethods {
+		if len(runSpecific) > 0 && !isRegistered(test.name, runSpecific) {
+			continue
+		}
 		if retVal := t.Run(test.name, test.method); !retVal {
 			return vterrors.Errorf(vtrpc.Code_UNKNOWN, "test failure: %s", test.name)
 		}
 	}
 	return nil
+}
+
+func isRegistered(name string, runlist []string) bool {
+	for _, f := range runlist {
+		if f == name {
+			return true
+		}
+	}
+	return false
 }
 
 type restoreMethod func(t *testing.T, tablet *cluster.Vttablet)

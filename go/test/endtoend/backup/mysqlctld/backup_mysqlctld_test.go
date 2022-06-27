@@ -24,7 +24,7 @@ import (
 
 // TestBackupMysqlctld - tests the backup using mysqlctld.
 func TestBackupMysqlctld(t *testing.T) {
-	backup.TestBackup(t, backup.Mysqlctld, "", 0, nil)
+	backup.TestBackup(t, backup.Mysqlctld, "", 0, nil, nil)
 }
 
 func TestBackupMainWithlz4Compression(t *testing.T) {
@@ -32,5 +32,5 @@ func TestBackupMainWithlz4Compression(t *testing.T) {
 		BuiltinCompressor: "lz4",
 	}
 
-	backup.TestBackup(t, backup.Mysqlctld, "", 0, cDetails)
+	backup.TestBackup(t, backup.Mysqlctld, "", 0, cDetails, []string{"TestReplicaBackup", "TestPrimaryBackup"})
 }
