@@ -1639,6 +1639,9 @@ var (
 			input:  "use db",
 			output: "use db",
 		}, {
+			input:  "use db/branch",
+			output: "use `db/branch`",
+		}, {
 			input:  "use duplicate",
 			output: "use `duplicate`",
 		}, {
@@ -4669,6 +4672,9 @@ var (
 		output       string
 		excludeMulti bool // Don't use in the ParseNext multi-statement parsing tests.
 	}{{
+		input:  "use db/",
+		output: "syntax error at position 8 near 'db'",
+	}, {
 		input:  "select $ from t",
 		output: "syntax error at position 9 near '$'",
 	}, {

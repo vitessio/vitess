@@ -3829,6 +3829,10 @@ use_statement:
   {
     $$ = &Use{DBName: $2}
   }
+| USE table_id '/' table_id
+  {
+    $$ = &Use{DBName:TableIdent{v:$2.v+"/"+$4.v}}
+  }
 | USE
   {
     $$ = &Use{DBName:TableIdent{v:""}}
