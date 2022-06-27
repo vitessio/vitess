@@ -36,7 +36,7 @@ Support has been added for inserting new data from SELECT queries.
 Now you can insert data from a query into a table using a query like:
 
 ```sql
-insert into tbl select   
+insert into tbl (col) select id from users 
 ```
 
 #### UPDATE from SELECT
