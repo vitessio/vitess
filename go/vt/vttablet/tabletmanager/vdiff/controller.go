@@ -105,7 +105,7 @@ func (ct *controller) run(ctx context.Context) {
 		close(ct.done)
 	}()
 
-	dbClient := ct.dbClientFactory()
+	dbClient := ct.vde.dbClientFactoryFiltered()
 	if err := dbClient.Connect(); err != nil {
 		log.Errorf("db connect error: %v", err)
 		return

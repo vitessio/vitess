@@ -31,8 +31,8 @@ type testCase struct {
 	workflow                      string
 	tabletBaseID                  int
 	resume                        bool
-	resumeInsert                  string
-	testCLIErrors                 bool // this only need be done on a single test case
+	resumeInsert                  string // if testing resume, what new rows should be diff'd
+	testCLIErrors                 bool   // this only need be done on a single test case
 }
 
 var testCases = []*testCase{
@@ -167,14 +167,13 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, cells []*Cell) 
 
 	if tc.testCLIErrors {
 		t.Run("Client error handling", func(t *testing.T) {
-			var uuid string
 			_, output := performVDiff2Action(t, ksWorkflow, allCellNames, "badcmd", "", true)
 			require.Contains(t, output, "usage:")
 			_, output = performVDiff2Action(t, ksWorkflow, allCellNames, "create", "invalid_uuid", true)
 			require.Contains(t, output, "please provide a valid v1 UUID")
 			_, output = performVDiff2Action(t, ksWorkflow, allCellNames, "resume", "invalid_uuid", true)
 			require.Contains(t, output, "please provide a valid v1 UUID")
-			uuid, _ = performVDiff2Action(t, ksWorkflow, allCellNames, "show", "last", false)
+			uuid, _ := performVDiff2Action(t, ksWorkflow, allCellNames, "show", "last", false)
 			_, output = performVDiff2Action(t, ksWorkflow, allCellNames, "create", uuid, true)
 			require.Contains(t, output, "already exists")
 		})

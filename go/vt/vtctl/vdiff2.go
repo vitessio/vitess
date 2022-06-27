@@ -500,7 +500,7 @@ func buildVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid st
 		summary.Reports = nil
 		summary.TableSummaryMap = nil
 	}
-	// If we haven't completed the global VDiff then be sure to reflect that with an empty CompletedAt
+	// If we haven't completed the global VDiff then be sure to reflect that with no CompletedAt value
 	if summary.State != vdiff.CompletedState {
 		summary.CompletedAt = ""
 	}
