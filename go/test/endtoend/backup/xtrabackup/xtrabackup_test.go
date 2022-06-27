@@ -54,5 +54,5 @@ func TestBackupMainWithError(t *testing.T) {
 	}
 
 	err := backup.TestBackup(t, backup.XtraBackup, "tar", 0, cDetails, []string{"TestPrimaryBackup"})
-	require.EqualError(t, err, "test failure: TestReplicaBackup")
+	require.EqualError(t, err, "test failure: TestPrimaryBackup")
 }
