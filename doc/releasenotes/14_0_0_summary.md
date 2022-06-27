@@ -253,9 +253,12 @@ VDiff bf9dfc5f-e5e6-11ec-823d-0aa62e50dd24 scheduled on target shards, use show 
 
 $ vtctlclient --server=localhost:15999 VDiff -- --v2 customer.commerce2customer show last
 
-VDiff Summary for customer.commerce2customer (bf9dfc5f-e5e6-11ec-823d-0aa62e50dd24)
-State: completed
-HasMismatch: false
+VDiff Summary for customer.commerce2customer (4c664dc2-eba9-11ec-9ef7-920702940ee0)
+State:        completed
+RowsCompared: 196
+HasMismatch:  false
+StartedAt:    2022-06-26 22:44:29
+CompletedAt:  2022-06-26 22:44:31
 
 Use "--format=json" for more detailed output.
 
@@ -264,15 +267,18 @@ $ vtctlclient --server=localhost:15999 VDiff -- --v2 --format=json customer.comm
 	"Workflow": "commerce2customer",
 	"Keyspace": "customer",
 	"State": "completed",
-	"UUID": "bf9dfc5f-e5e6-11ec-823d-0aa62e50dd24",
+	"UUID": "4c664dc2-eba9-11ec-9ef7-920702940ee0",
+	"RowsCompared": 196,
 	"HasMismatch": false,
-	"Shards": "0"
+	"Shards": "0",
+	"StartedAt": "2022-06-26 22:44:29",
+	"CompletedAt": "2022-06-26 22:44:31"
 }
 ```
 
 > Even before it's marked as production-ready (feature complete and tested widely in 1+ releases), it should be safe to use and is likely to provide much better results for very large tables.
 
-For additional details, please see the [RFC](https://github.com/vitessio/vitess/issues/10134) and the [README](https://github.com/vitessio/vitess/tree/main/go/vt/vttablet/tabletmanager/vdiff/README.md).
+For additional details please see the [RFC](https://github.com/vitessio/vitess/issues/10134), the [README](https://github.com/vitessio/vitess/blob/release-14.0/go/vt/vttablet/tabletmanager/vdiff/README.md), and the VDiff2 [documentation](https://vitess.io/docs/14.0/reference/vreplication/vdiff2/).
 
 ### Durability Policy
 
