@@ -6854,7 +6854,7 @@ insert_data:
   }
 | openb closeb VALUES tuple_list
   {
-    $$ = &Insert{Rows: $4}
+    $$ = &Insert{Columns: []IdentifierCI{}, Rows: $4}
   }
 | openb ins_column_list closeb select_statement
   {

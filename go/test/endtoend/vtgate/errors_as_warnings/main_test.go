@@ -145,10 +145,10 @@ func TestScatterErrsAsWarns(t *testing.T) {
 			assertContainsOneOf(t, mode.conn, showQ, "no valid tablet", "no healthy tablet", "mysql.sock: connect: no such file or directory")
 
 			// invalid_field should throw error and not warning
-			_, err = mode.conn.ExecuteFetch("SELECT /*vt+ SCATTER_ERRORS_AS_WARNINGS */ invalid_field from t1;", 1, false)
+			_, err = mode.conn.ExecuteFetch("SELECT /*vt+ PLANNER=Gen4 SCATTER_ERRORS_AS_WARNINGS */ invalid_field from t1;", 1, false)
 			require.Error(t, err)
 			serr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
-			require.Equal(t, 1054, serr.Number())
+			require.Equal(t, 1054, serr.Number(), serr.Error())
 		})
 	}
 }
