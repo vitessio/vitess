@@ -39,7 +39,7 @@ const (
 	reverseKsWorkflow = sourceKs + "." + workflowName + "_reverse"
 	tablesToMove      = "customer"
 	defaultCellName   = "zone1"
-	readQuery         = "select * from customer"
+	readQuery         = "select cid from customer"
 )
 
 const (

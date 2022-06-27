@@ -18538,7 +18538,7 @@ yydefault:
 		var yyLOCAL *Insert
 //line sql.y:6767
 		{
-			yyLOCAL = &Insert{Rows: yyDollar[4].valuesUnion()}
+			yyLOCAL = &Insert{Columns: []ColIdent{}, Rows: yyDollar[4].valuesUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1347:
