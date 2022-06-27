@@ -21,6 +21,9 @@ import (
 	"sync"
 	"time"
 
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"vitess.io/vitess/go/vt/callerid"
 
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
@@ -136,6 +139,10 @@ func (t *Tracker) initKeyspace(th *discovery.TabletHealth) error {
 	err := t.LoadKeyspace(th.Conn, th.Target)
 	if err != nil {
 		log.Warningf("Unable to add the %s keyspace to the schema tracker: %v", th.Target.Keyspace, err)
+		code := vterrors.Code(err)
+		if code == vtrpcpb.Code_UNAUTHENTICATED || code == vtrpcpb.Code_PERMISSION_DENIED {
+			log.Warning("Table ACL might be enabled, --schema_change_signal_user needs to be passed to VTGate for schema tracking to work. More details on vitess.io")
+		}
 		return err
 	}
 	return nil
@@ -181,6 +188,10 @@ func (t *Tracker) updateSchema(th *discovery.TabletHealth) bool {
 		t.tracked[th.Target.Keyspace].setLoaded(false)
 		// TODO: optimize for the tables that got errored out.
 		log.Warningf("error fetching new schema for %v, making them non-authoritative: %v", tablesUpdated, err)
+		code := vterrors.Code(err)
+		if code == vtrpcpb.Code_UNAUTHENTICATED || code == vtrpcpb.Code_PERMISSION_DENIED {
+			log.Warning("Table ACL might be enabled, --schema_change_signal_user needs to be passed to VTGate for schema tracking to work. More details on vitess.io")
+		}
 		return false
 	}
 
