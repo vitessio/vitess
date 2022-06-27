@@ -26,8 +26,7 @@ func TestBackupMain(t *testing.T) {
 }
 
 func TestBackupMainWithZstdCompression(t *testing.T) {
-	var cDetails *CompressionDetails
-	cDetails = &CompressionDetails{
+	cDetails := &CompressionDetails{
 		ExternalCompressorCmd:   "zstd",
 		ExternalCompressorExt:   ".zst",
 		ExternalDecompressorCmd: "zstd -d",
