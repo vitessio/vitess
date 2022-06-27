@@ -83,7 +83,7 @@ Everything after the `AddCellInfo` is treated by `package flag` as a positional 
 So, at the top-level, `flag.Args()` returns `["AddCellInfo", "--root", "/vitess/global"]`.
 
 The library we are transitioning to is more flexible, allowing flags and positional arguments to be interwoven on the command-line.
-For the above example, this means that we would attempt to parse `--root` as a top-level flag for the `vtctl` binary.
+For the above example, this means that we would attempt to parse `--root` as a top-level flag for the `VTCtl` binary.
 This will cause the program to exit on error, because that flag is only defined on the `AddCellInfo` subcommand.
 
 In order to transition, a standalone double-dash (literally, `--`) will cause the new flag library to treat everything following that as a positional argument, and also works with the current flag parsing code we use.
@@ -278,10 +278,10 @@ For additional details, please see the [RFC](https://github.com/vitessio/vitess/
 
 #### Deprecation of durability_policy Flag
 The durability policy for a keyspace is now stored in the keyspace record in the topology server.
-The `durability_policy` flag used by vtctl, vtctld, and vtworker binaries has been deprecated and will be removed in a future release.
+The `durability_policy` flag used by VTCtl, VTCtld, and VTWorker binaries has been deprecated and will be removed in a future release.
 
 #### New and Augmented Commands
-The vtctld command `CreateKeyspace` has been augmented to take in an additional argument `--durability-policy` which will
+The VTCtld command `CreateKeyspace` has been augmented to take in an additional argument `--durability-policy` which will
 allow users to set the desired durability policy for a keyspace at creation time.
 
 For existing keyspaces, a new command `SetKeyspaceDurabilityPolicy` has been added, which allows users to change the
@@ -298,7 +298,7 @@ the topology server. This allows VTOrc to monitor and repair multiple keyspaces 
 **VTOrc will ignore keyspaces which have no durability policy specified in the keyspace record. This is to avoid clobbering an existing
 config from a previous release. So on upgrading to v14, users must run the command `SetKeyspaceDurabilityPolicy` specified above,
 to ensure that VTOrc continues to work as desired. The recommended upgrade
-path is to upgrade vtctld, run `SetKeyspaceDurabilityPolicy` and then upgrade VTOrc.**
+path is to upgrade VTCtld, run `SetKeyspaceDurabilityPolicy` and then upgrade VTOrc.**
 
 ### Advisory locking optimizations
 Work has gone into making the advisory locks (`get_lock()`, `release_lock()`, etc.) release reserved connections faster and in more situations than before.
