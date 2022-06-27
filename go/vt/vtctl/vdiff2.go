@@ -125,7 +125,7 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 			vdiffUUID, err = uuid.NewUUID()
 		}
 		if err != nil {
-			return fmt.Errorf("%v, please provide a valid v1 UUID", err)
+			return fmt.Errorf("%v, please provide a valid UUID", err)
 		}
 	case vdiff.ShowAction:
 		switch actionArg {
@@ -133,13 +133,13 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 		default:
 			vdiffUUID, err = uuid.Parse(actionArg)
 			if err != nil {
-				return fmt.Errorf("can only show a specific vdiff, please provide a valid v1 UUID; view all with: VDiff -- --v2 %s.%s show all", keyspace, workflowName)
+				return fmt.Errorf("can only show a specific vdiff, please provide a valid UUID; view all with: VDiff -- --v2 %s.%s show all", keyspace, workflowName)
 			}
 		}
 	case vdiff.ResumeAction:
 		vdiffUUID, err = uuid.Parse(actionArg)
 		if err != nil {
-			return fmt.Errorf("can only resume a specific vdiff, please provide a valid v1 UUID; view all with: VDiff -- --v2 %s.%s show all", keyspace, workflowName)
+			return fmt.Errorf("can only resume a specific vdiff, please provide a valid UUID; view all with: VDiff -- --v2 %s.%s show all", keyspace, workflowName)
 		}
 	default:
 		return fmt.Errorf("invalid action %s; %s", action, usage)
@@ -154,8 +154,8 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 	}
 
 	switch action {
-	case vdiff.CreateAction:
-		displayVDiff2CreateResponse(wr, *format, vdiffUUID.String())
+	case vdiff.CreateAction, vdiff.ResumeAction:
+		displayVDiff2ScheduledResponse(wr, *format, vdiffUUID.String(), action)
 	case vdiff.ShowAction:
 		if output == nil {
 			// should not happen
@@ -164,8 +164,6 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 		if err := displayVDiff2ShowResponse(wr, *format, keyspace, workflowName, actionArg, output); err != nil {
 			return err
 		}
-	case vdiff.ResumeAction:
-		displayVDiff2ResumeResponse(wr, *format, vdiffUUID.String())
 	default:
 		return fmt.Errorf("invalid action %s; %s", action, usage)
 	}
@@ -509,28 +507,20 @@ func buildVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid st
 
 //endregion
 
-func displayVDiff2CreateResponse(wr *wrangler.Wrangler, format string, uuid string) {
+func displayVDiff2ScheduledResponse(wr *wrangler.Wrangler, format string, uuid string, typ vdiff.VDiffAction) {
 	if format == "json" {
-		type CreateResponse struct {
+		type ScheduledResponse struct {
 			UUID string
 		}
-		resp := &CreateResponse{UUID: uuid}
+		resp := &ScheduledResponse{UUID: uuid}
 		jsonText, _ := json.MarshalIndent(resp, "", "\t")
 		wr.Logger().Printf(string(jsonText) + "\n")
 	} else {
-		wr.Logger().Printf("VDiff %s scheduled on target shards, use show to view progress\n", uuid)
-	}
-}
-
-func displayVDiff2ResumeResponse(wr *wrangler.Wrangler, format string, uuid string) {
-	if format == "json" {
-		type ResumeResponse struct {
-			UUID string `json:"UUID"`
+		addtlMsg := ""
+		if typ == vdiff.ResumeAction {
+			addtlMsg = "to resume "
 		}
-		resp := &ResumeResponse{UUID: uuid}
-		jsonText, _ := json.MarshalIndent(resp, "", "\t")
-		wr.Logger().Printf(string(jsonText) + "\n")
-	} else {
-		wr.Logger().Printf("VDiff %s resumed on target shards, use show to view progress\n", uuid)
+		msg := fmt.Sprintf("VDiff %s scheduled %son target shards, use show to view progress\n", uuid, addtlMsg)
+		wr.Logger().Printf(msg)
 	}
 }

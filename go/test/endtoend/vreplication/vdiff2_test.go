@@ -30,9 +30,9 @@ type testCase struct {
 	tables                        string
 	workflow                      string
 	tabletBaseID                  int
-	resume                        bool
+	resume                        bool   // test resume functionality with this workflow
 	resumeInsert                  string // if testing resume, what new rows should be diff'd
-	testCLIErrors                 bool   // this only need be done on a single test case
+	testCLIErrors                 bool   // test CLI errors against this workflow
 }
 
 var testCases = []*testCase{
@@ -48,10 +48,10 @@ var testCases = []*testCase{
 		tables:        "customer,Lead,Lead-1",
 		resume:        true,
 		resumeInsert:  `insert into customer(cid, name, typ) values(12345678, 'Testy McTester', 'soho')`,
-		testCLIErrors: true, // test for errors in the simplest test case
+		testCLIErrors: true, // test for errors in the simplest workflow
 	},
 	{
-		name:         "Reshard/split 2 to 3",
+		name:         "Reshard Merge/split 2 to 3",
 		workflow:     "c2c3",
 		typ:          "Reshard",
 		sourceKs:     "customer",
@@ -147,7 +147,6 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, cells []*Cell) 
 
 	for _, shard := range arrTargetShards {
 		tab := vc.getPrimaryTablet(t, tc.targetKs, shard)
-		require.NotNil(t, tab)
 		catchup(t, tab, tc.workflow, tc.typ)
 	}
 	vdiff(t, tc.targetKs, tc.workflow, cells[0].Name, true, true, nil)
@@ -155,24 +154,21 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, cells []*Cell) 
 	if tc.resume {
 		expectedRows := int64(0)
 		if tc.resumeInsert != "" {
-			vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
-			_, err := vtgateConn.ExecuteFetch("use "+tc.sourceKs, 1, false)
-			require.NoError(t, err)
-			res, err := vtgateConn.ExecuteFetch(tc.resumeInsert, -1, true)
-			require.NoError(t, err)
+			res := execVtgateQuery(t, vtgateConn, tc.sourceKs, tc.resumeInsert)
 			expectedRows = int64(res.RowsAffected)
 		}
 		vdiff2Resume(t, tc.targetKs, tc.workflow, cells[0].Name, expectedRows)
 	}
 
+	// This is done here so that we have a valid workflow to test the commands against
 	if tc.testCLIErrors {
 		t.Run("Client error handling", func(t *testing.T) {
 			_, output := performVDiff2Action(t, ksWorkflow, allCellNames, "badcmd", "", true)
 			require.Contains(t, output, "usage:")
 			_, output = performVDiff2Action(t, ksWorkflow, allCellNames, "create", "invalid_uuid", true)
-			require.Contains(t, output, "please provide a valid v1 UUID")
+			require.Contains(t, output, "please provide a valid UUID")
 			_, output = performVDiff2Action(t, ksWorkflow, allCellNames, "resume", "invalid_uuid", true)
-			require.Contains(t, output, "please provide a valid v1 UUID")
+			require.Contains(t, output, "can only resume a specific vdiff, please provide a valid UUID")
 			uuid, _ := performVDiff2Action(t, ksWorkflow, allCellNames, "show", "last", false)
 			_, output = performVDiff2Action(t, ksWorkflow, allCellNames, "create", uuid, true)
 			require.Contains(t, output, "already exists")
