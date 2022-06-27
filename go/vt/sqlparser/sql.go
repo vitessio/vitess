@@ -18671,7 +18671,7 @@ yydefault:
 		var yyLOCAL *Insert
 //line sql.y:6856
 		{
-			yyLOCAL = &Insert{Rows: yyDollar[4].valuesUnion()}
+			yyLOCAL = &Insert{Columns: []IdentifierCI{}, Rows: yyDollar[4].valuesUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1370:
