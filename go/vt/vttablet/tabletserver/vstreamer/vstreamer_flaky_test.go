@@ -293,7 +293,7 @@ func TestVersion(t *testing.T) {
 			`commit`}},
 	}}
 	runCases(t, nil, testcases, "", nil)
-	mt, err := env.SchemaEngine.GetTableForPos(sqlparser.NewTableIdent("t1"), gtid)
+	mt, err := env.SchemaEngine.GetTableForPos(sqlparser.NewIdentifierCS("t1"), gtid)
 	require.NoError(t, err)
 	assert.True(t, proto.Equal(mt, dbSchema.Tables[0]))
 }

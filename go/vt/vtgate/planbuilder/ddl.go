@@ -237,7 +237,7 @@ func buildCreateView(vschema plancontext.VSchema, ddl *sqlparser.CreateView, res
 	if err != nil {
 		return nil, nil, err
 	}
-	ddl.ViewName.Qualifier = sqlparser.NewTableIdent("")
+	ddl.ViewName.Qualifier = sqlparser.NewIdentifierCS("")
 
 	var selectPlan engine.Primitive
 	selectPlan, err = createInstructionFor(sqlparser.String(ddl.Select), ddl.Select, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)

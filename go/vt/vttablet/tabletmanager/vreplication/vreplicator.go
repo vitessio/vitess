@@ -210,8 +210,8 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		// If any of the operations below changed state to Stopped, we should return.
-		if settings.State == binlogplayer.BlpStopped {
+		// If any of the operations below changed state to Stopped or Error, we should return.
+		if settings.State == binlogplayer.BlpStopped || settings.State == binlogplayer.BlpError {
 			return nil
 		}
 		switch {
@@ -267,7 +267,7 @@ type ColumnInfo struct {
 }
 
 func (vr *vreplicator) buildColInfoMap(ctx context.Context) (map[string][]*ColumnInfo, error) {
-	schema, err := vr.mysqld.GetSchema(ctx, vr.dbClient.DBName(), []string{"/.*/"}, nil, false)
+	schema, err := vr.mysqld.GetSchema(ctx, vr.dbClient.DBName(), []string{"/.*/"}, nil, false, false)
 	if err != nil {
 		return nil, err
 	}

@@ -1919,8 +1919,6 @@ func commandDeleteShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 }
 
 func commandCreateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	shardingColumnName := subFlags.String("sharding_column_name", "", "Specifies the column to use for sharding operations")
-	shardingColumnType := subFlags.String("sharding_column_type", "", "Specifies the type of the column to use for sharding operations")
 	force := subFlags.Bool("force", false, "Proceeds even if the keyspace already exists")
 	allowEmptyVSchema := subFlags.Bool("allow_empty_vschema", false, "If set this will allow a new keyspace to have no vschema")
 
@@ -1938,10 +1936,6 @@ func commandCreateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	}
 
 	keyspace := subFlags.Arg(0)
-	kit, err := key.ParseKeyspaceIDType(*shardingColumnType)
-	if err != nil {
-		return err
-	}
 	ktype := topodatapb.KeyspaceType_NORMAL
 	if *keyspaceType != "" {
 		kt, err := topoproto.ParseKeyspaceType(*keyspaceType)
@@ -1977,12 +1971,10 @@ func commandCreateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 		snapshotTime = logutil.TimeToProto(timeTime)
 	}
 	ki := &topodatapb.Keyspace{
-		ShardingColumnName: *shardingColumnName,
-		ShardingColumnType: kit,
-		KeyspaceType:       ktype,
-		BaseKeyspace:       *baseKeyspace,
-		SnapshotTime:       snapshotTime,
-		DurabilityPolicy:   *durabilityPolicy,
+		KeyspaceType:     ktype,
+		BaseKeyspace:     *baseKeyspace,
+		SnapshotTime:     snapshotTime,
+		DurabilityPolicy: *durabilityPolicy,
 	}
 	if len(servedFrom) > 0 {
 		for name, value := range servedFrom {
@@ -1996,7 +1988,7 @@ func commandCreateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 			})
 		}
 	}
-	err = wr.TopoServer().CreateKeyspace(ctx, keyspace, ki)
+	err := wr.TopoServer().CreateKeyspace(ctx, keyspace, ki)
 	if *force && topo.IsErrType(err, topo.NodeExists) {
 		wr.Logger().Infof("keyspace %v already exists (ignoring error with --force)", keyspace)
 		err = nil
@@ -2114,35 +2106,7 @@ func commandGetKeyspaces(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 
 func commandSetKeyspaceShardingInfo(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	wr.Logger().Printf("*** This is a legacy sharding command that will soon be removed! Please use VReplication instead: https://vitess.io/docs/reference/vreplication/ ***\n")
-	force := subFlags.Bool("force", false, "Updates fields even if they are already set. Use caution before calling this command.")
-	if err := subFlags.Parse(args); err != nil {
-		return err
-	}
-	if subFlags.NArg() > 3 || subFlags.NArg() < 1 {
-		return fmt.Errorf("the <keyspace name> argument is required for the SetKeyspaceShardingInfo command. The <column name> and <column type> arguments are both optional")
-	}
-
-	keyspace := subFlags.Arg(0)
-	columnName := ""
-	if subFlags.NArg() >= 2 {
-		columnName = subFlags.Arg(1)
-	}
-	kit := topodatapb.KeyspaceIdType_UNSET
-	if subFlags.NArg() >= 3 {
-		var err error
-		kit, err = key.ParseKeyspaceIDType(subFlags.Arg(2))
-		if err != nil {
-			return err
-		}
-	}
-
-	keyspaceIDTypeSet := (kit != topodatapb.KeyspaceIdType_UNSET)
-	columnNameSet := (columnName != "")
-	if (keyspaceIDTypeSet && !columnNameSet) || (!keyspaceIDTypeSet && columnNameSet) {
-		return fmt.Errorf("both <column name> and <column type> must be set, or both must be unset")
-	}
-
-	return wr.SetKeyspaceShardingInfo(ctx, keyspace, columnName, kit, *force)
+	return nil
 }
 
 func commandSetKeyspaceServedFrom(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -3156,8 +3120,10 @@ func commandGetSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag
 	tables := subFlags.String("tables", "", "Specifies a comma-separated list of tables for which we should gather information. Each is either an exact match, or a regular expression of the form /regexp/")
 	excludeTables := subFlags.String("exclude_tables", "", "Specifies a comma-separated list of tables to exclude. Each is either an exact match, or a regular expression of the form /regexp/")
 	includeViews := subFlags.Bool("include-views", false, "Includes views in the output")
+	// skipFields := subFlags.Bool("skip-fields", false, "Skip fields introspection")
 	tableNamesOnly := subFlags.Bool("table_names_only", false, "Only displays table names that match")
 	tableSizesOnly := subFlags.Bool("table_sizes_only", false, "Only displays size information for tables. Ignored if --table_names_only is passed.")
+	tableSchemaOnly := subFlags.Bool("table_schema_only", false, "Only displays table schema. Skip columns and fields.")
 
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -3179,12 +3145,13 @@ func commandGetSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag
 	}
 
 	resp, err := wr.VtctldServer().GetSchema(ctx, &vtctldatapb.GetSchemaRequest{
-		TabletAlias:    tabletAlias,
-		Tables:         tableArray,
-		ExcludeTables:  excludeTableArray,
-		IncludeViews:   *includeViews,
-		TableNamesOnly: *tableNamesOnly,
-		TableSizesOnly: *tableSizesOnly,
+		TabletAlias:     tabletAlias,
+		Tables:          tableArray,
+		ExcludeTables:   excludeTableArray,
+		IncludeViews:    *includeViews,
+		TableNamesOnly:  *tableNamesOnly,
+		TableSizesOnly:  *tableSizesOnly,
+		TableSchemaOnly: *tableSchemaOnly,
 	})
 	if err != nil {
 		return err

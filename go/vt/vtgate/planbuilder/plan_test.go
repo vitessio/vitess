@@ -28,6 +28,7 @@ import (
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/test/utils"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
@@ -38,8 +39,6 @@ import (
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
-
-	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -191,8 +190,7 @@ const (
 )
 
 func makeTestOutput(t *testing.T) string {
-	testOutputTempDir, err := os.MkdirTemp("testdata", "plan_test")
-	require.NoError(t, err)
+	testOutputTempDir := utils.MakeTestOutput(t, "testdata", "plan_test")
 
 	t.Cleanup(func() {
 		if !t.Failed() {

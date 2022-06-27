@@ -17,8 +17,11 @@ limitations under the License.
 package utils
 
 import (
+	"os"
 	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 
 	"google.golang.org/protobuf/encoding/prototext"
 
@@ -101,4 +104,19 @@ func MustMatchPB(t *testing.T, expected string, pb proto.Message) {
 	}
 
 	MustMatch(t, expectedPb, pb)
+}
+
+func MakeTestOutput(t *testing.T, dir, pattern string) string {
+	testOutputTempDir, err := os.MkdirTemp(dir, pattern)
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		if !t.Failed() {
+			_ = os.RemoveAll(testOutputTempDir)
+		} else {
+			t.Logf("Errors found in plantests. If the output is correct, run `cp %s/* testdata/` to update test expectations", testOutputTempDir)
+		}
+	})
+
+	return testOutputTempDir
 }

@@ -47,7 +47,7 @@ type TabletManagerClient interface {
 	Ping(ctx context.Context, tablet *topodatapb.Tablet) error
 
 	// GetSchema asks the remote tablet for its database schema
-	GetSchema(ctx context.Context, tablet *topodatapb.Tablet, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error)
+	GetSchema(ctx context.Context, tablet *topodatapb.Tablet, tables, excludeTables []string, includeViews bool, tableSchemaOnly bool) (*tabletmanagerdatapb.SchemaDefinition, error)
 
 	// GetPermissions asks the remote tablet for its permissions list
 	GetPermissions(ctx context.Context, tablet *topodatapb.Tablet) (*tabletmanagerdatapb.Permissions, error)
@@ -115,6 +115,9 @@ type TabletManagerClient interface {
 	// ReplicationStatus returns the tablet's mysql replication status.
 	ReplicationStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.Status, error)
 
+	// FullStatus returns the tablet's mysql replication status.
+	FullStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.FullStatus, error)
+
 	// StopReplication stops the mysql replication
 	StopReplication(ctx context.Context, tablet *topodatapb.Tablet) error
 
@@ -179,6 +182,9 @@ type TabletManagerClient interface {
 
 	// ReplicaWasPromoted tells the remote tablet it is now the primary
 	ReplicaWasPromoted(ctx context.Context, tablet *topodatapb.Tablet) error
+
+	// ResetReplicationParameters resets the replica replication parameters
+	ResetReplicationParameters(ctx context.Context, tablet *topodatapb.Tablet) error
 
 	// SetReplicationSource tells a tablet to start replicating from the
 	// passed in tablet alias, and wait for the row in the

@@ -19,7 +19,6 @@ package worker
 import (
 	"bytes"
 	"encoding/binary"
-	"encoding/hex"
 	"fmt"
 	"io"
 	"strings"
@@ -268,7 +267,7 @@ func CreateTargetFrom(tablet *topodatapb.Tablet) *query.Target {
 // If keyspaceSchema is passed in, we go into v3 mode, and we ask for all
 // source data, and filter here. Otherwise we stick with v2 mode, where we can
 // ask the source tablet to do the filtering.
-func TableScanByKeyRange(ctx context.Context, log logutil.Logger, ts *topo.Server, tabletAlias *topodatapb.TabletAlias, td *tabletmanagerdatapb.TableDefinition, keyRange *topodatapb.KeyRange, keyspaceSchema *vindexes.KeyspaceSchema, shardingColumnName string, shardingColumnType topodatapb.KeyspaceIdType) (*QueryResultReader, error) {
+func TableScanByKeyRange(ctx context.Context, log logutil.Logger, ts *topo.Server, tabletAlias *topodatapb.TabletAlias, td *tabletmanagerdatapb.TableDefinition, keyRange *topodatapb.KeyRange, keyspaceSchema *vindexes.KeyspaceSchema) (*QueryResultReader, error) {
 	if keyspaceSchema != nil {
 		// switch to v3 mode.
 		keyResolver, err := newV3ResolverFromColumnList(keyspaceSchema, td.Name, orderedColumns(td))
@@ -290,50 +289,7 @@ func TableScanByKeyRange(ctx context.Context, log logutil.Logger, ts *topo.Serve
 		}
 		return scan, nil
 	}
-
-	// in v2 mode, we can do the filtering at the source
-	where := ""
-	switch shardingColumnType {
-	case topodatapb.KeyspaceIdType_UINT64:
-		if len(keyRange.Start) > 0 {
-			if len(keyRange.End) > 0 {
-				// have start & end
-				where = fmt.Sprintf("WHERE %v >= %v AND %v < %v", sqlescape.EscapeID(shardingColumnName), uint64FromKeyspaceID(keyRange.Start), sqlescape.EscapeID(shardingColumnName), uint64FromKeyspaceID(keyRange.End))
-			} else {
-				// have start only
-				where = fmt.Sprintf("WHERE %v >= %v", sqlescape.EscapeID(shardingColumnName), uint64FromKeyspaceID(keyRange.Start))
-			}
-		} else {
-			if len(keyRange.End) > 0 {
-				// have end only
-				where = fmt.Sprintf("WHERE %v < %v", sqlescape.EscapeID(shardingColumnName), uint64FromKeyspaceID(keyRange.End))
-			}
-		}
-	case topodatapb.KeyspaceIdType_BYTES:
-		if len(keyRange.Start) > 0 {
-			if len(keyRange.End) > 0 {
-				// have start & end
-				where = fmt.Sprintf("WHERE HEX(%v) >= '%v' AND HEX(%v) < '%v'", sqlescape.EscapeID(shardingColumnName), hex.EncodeToString(keyRange.Start), sqlescape.EscapeID(shardingColumnName), hex.EncodeToString(keyRange.End))
-			} else {
-				// have start only
-				where = fmt.Sprintf("WHERE HEX(%v) >= '%v'", sqlescape.EscapeID(shardingColumnName), hex.EncodeToString(keyRange.Start))
-			}
-		} else {
-			if len(keyRange.End) > 0 {
-				// have end only
-				where = fmt.Sprintf("WHERE HEX(%v) < '%v'", sqlescape.EscapeID(shardingColumnName), hex.EncodeToString(keyRange.End))
-			}
-		}
-	default:
-		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "unsupported ShardingColumnType: %v", shardingColumnType)
-	}
-
-	sql := fmt.Sprintf("SELECT %v FROM %v %v", strings.Join(escapeAll(orderedColumns(td)), ", "), sqlescape.EscapeID(td.Name), where)
-	if len(td.PrimaryKeyColumns) > 0 {
-		sql += fmt.Sprintf(" ORDER BY %v", strings.Join(escapeAll(td.PrimaryKeyColumns), ", "))
-	}
-	log.Infof("SQL query for %v/%v: %v", topoproto.TabletAliasString(tabletAlias), td.Name, sql)
-	return NewQueryResultReaderForTablet(ctx, ts, tabletAlias, sql)
+	return nil, vterrors.New(vtrpc.Code_FAILED_PRECONDITION, "vschema should not be empty")
 }
 
 // ErrStoppedRowReader is returned by RowReader.Next() when

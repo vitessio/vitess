@@ -74,7 +74,7 @@ func TestAbortExpressionCursor(t *testing.T) {
 		cursor.replace(sqlparser.NewIntLiteral("1"))
 		fmt.Println(sqlparser.String(ast))
 		cursor.replace(cursor.expr)
-		_, isFunc := cursor.expr.(*sqlparser.FuncExpr)
+		_, isFunc := cursor.expr.(sqlparser.AggrFunc)
 		return !isFunc
 	})
 }

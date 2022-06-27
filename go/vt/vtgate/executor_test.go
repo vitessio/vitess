@@ -383,7 +383,7 @@ func TestExecutorAutocommit(t *testing.T) {
 	// autocommit = 1
 	_, err = executor.Execute(ctx, "TestExecute", session, "set autocommit=1", nil)
 	require.NoError(t, err)
-	logStats = testQueryLog(t, logChan, "TestExecute", "SET", "set session autocommit = 1", 0)
+	_ = testQueryLog(t, logChan, "TestExecute", "SET", "set @@autocommit = 1", 0)
 
 	// Setting autocommit=1 commits existing transaction.
 	if got, want := sbclookup.CommitCount.Get(), startCount+1; got != want {
@@ -2346,7 +2346,7 @@ func TestExecutorSavepointInTxWithReservedConn(t *testing.T) {
 
 	utils.MustMatch(t, sbc1WantQueries, sbc1.Queries, "")
 	utils.MustMatch(t, sbc2WantQueries, sbc2.Queries, "")
-	testQueryLog(t, logChan, "TestExecute", "SET", "set session sql_mode = ''", 1)
+	testQueryLog(t, logChan, "TestExecute", "SET", "set @@sql_mode = ''", 1)
 	testQueryLog(t, logChan, "TestExecute", "BEGIN", "begin", 0)
 	testQueryLog(t, logChan, "TestExecute", "SAVEPOINT", "savepoint a", 0)
 	testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from user where id = 1", 1)

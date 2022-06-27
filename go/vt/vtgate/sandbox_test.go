@@ -156,8 +156,6 @@ func createShardedSrvKeyspace(shardSpec, servedFromKeyspace string) (*topodatapb
 		shards = append(shards, shard)
 	}
 	shardedSrvKeyspace := &topodatapb.SrvKeyspace{
-		ShardingColumnName: "user_id", // exact value is ignored
-		ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
 		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
 			{
 				ServedType:      topodatapb.TabletType_PRIMARY,
