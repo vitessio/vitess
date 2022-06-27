@@ -32,21 +32,23 @@ type testCase struct {
 	tabletBaseID                  int
 	resume                        bool
 	resumeInsert                  string
+	testCLIErrors                 bool // this only need be done on a single test case
 }
 
 var testCases = []*testCase{
 	{
-		name:         "MoveTables/unsharded to two shards",
-		workflow:     "p1c2",
-		typ:          "MoveTables",
-		sourceKs:     "product",
-		targetKs:     "customer",
-		sourceShards: "0",
-		targetShards: "-80,80-",
-		tabletBaseID: 200,
-		tables:       "customer,Lead,Lead-1",
-		resume:       true,
-		resumeInsert: `insert into customer(cid, name, typ) values(12345678, 'Testy McTester', 'soho')`,
+		name:          "MoveTables/unsharded to two shards",
+		workflow:      "p1c2",
+		typ:           "MoveTables",
+		sourceKs:      "product",
+		targetKs:      "customer",
+		sourceShards:  "0",
+		targetShards:  "-80,80-",
+		tabletBaseID:  200,
+		tables:        "customer,Lead,Lead-1",
+		resume:        true,
+		resumeInsert:  `insert into customer(cid, name, typ) values(12345678, 'Testy McTester', 'soho')`,
+		testCLIErrors: true, // test for errors in the simplest test case
 	},
 	{
 		name:         "Reshard/split 2 to 3",
@@ -161,6 +163,21 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, cells []*Cell) 
 			expectedRows = int64(res.RowsAffected)
 		}
 		vdiff2Resume(t, tc.targetKs, tc.workflow, cells[0].Name, expectedRows)
+	}
+
+	if tc.testCLIErrors {
+		t.Run("Client error handling", func(t *testing.T) {
+			var uuid string
+			_, output := performVDiff2Action(t, ksWorkflow, allCellNames, "badcmd", "", true)
+			require.Contains(t, output, "usage:")
+			_, output = performVDiff2Action(t, ksWorkflow, allCellNames, "create", "invalid_uuid", true)
+			require.Contains(t, output, "please provide a valid v1 UUID")
+			_, output = performVDiff2Action(t, ksWorkflow, allCellNames, "resume", "invalid_uuid", true)
+			require.Contains(t, output, "please provide a valid v1 UUID")
+			uuid, _ = performVDiff2Action(t, ksWorkflow, allCellNames, "show", "last", false)
+			_, output = performVDiff2Action(t, ksWorkflow, allCellNames, "create", uuid, true)
+			require.Contains(t, output, "already exists")
+		})
 	}
 
 	err = vc.VtctlClient.ExecuteCommand(tc.typ, "--", "SwitchTraffic", ksWorkflow)

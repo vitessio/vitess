@@ -87,7 +87,7 @@ func waitForVDiff2ToComplete(t *testing.T, ksWorkflow, cells, uuid string, compl
 	go func() {
 		for {
 			time.Sleep(1 * time.Second)
-			_, jsonStr := performVDiff2Action(t, ksWorkflow, cells, "show", uuid)
+			_, jsonStr := performVDiff2Action(t, ksWorkflow, cells, "show", uuid, false)
 			info = getVDiffInfo(jsonStr)
 			if info.State == "completed" {
 				if !completedAtMin.IsZero() {
@@ -127,7 +127,7 @@ type expectedVDiff2Result struct {
 func vdiff2(t *testing.T, keyspace, workflow, cells string, want *expectedVDiff2Result) {
 	ksWorkflow := fmt.Sprintf("%s.%s", keyspace, workflow)
 	t.Run(fmt.Sprintf("vdiff2 %s", ksWorkflow), func(t *testing.T) {
-		uuid, _ := performVDiff2Action(t, ksWorkflow, cells, "create", "")
+		uuid, _ := performVDiff2Action(t, ksWorkflow, cells, "create", "", false)
 		info := waitForVDiff2ToComplete(t, ksWorkflow, cells, uuid, time.Time{})
 
 		require.Equal(t, workflow, info.Workflow)
@@ -152,8 +152,8 @@ func vdiff2(t *testing.T, keyspace, workflow, cells string, want *expectedVDiff2
 func vdiff2Resume(t *testing.T, keyspace, workflow, cells string, expectedRows int64) {
 	ksWorkflow := fmt.Sprintf("%s.%s", keyspace, workflow)
 	startTs := time.Now()
-	uuid, _ := performVDiff2Action(t, ksWorkflow, cells, "show", "last")
-	uuid, _ = performVDiff2Action(t, ksWorkflow, cells, "resume", uuid)
+	uuid, _ := performVDiff2Action(t, ksWorkflow, cells, "show", "last", false)
+	uuid, _ = performVDiff2Action(t, ksWorkflow, cells, "resume", uuid, false)
 	info := waitForVDiff2ToComplete(t, ksWorkflow, cells, uuid, startTs)
 	require.False(t, info.HasMismatch)
 	completedTs, err := time.Parse(tsFormat, info.CompletedAt)
@@ -162,15 +162,16 @@ func vdiff2Resume(t *testing.T, keyspace, workflow, cells string, expectedRows i
 	require.Equal(t, expectedRows, info.RowsCompared)
 }
 
-func performVDiff2Action(t *testing.T, ksWorkflow, cells, action, actionArg string) (uuid string, output string) {
+func performVDiff2Action(t *testing.T, ksWorkflow, cells, action, actionArg string, expectError bool) (uuid string, output string) {
 	var err error
 	output, err = vc.VtctlClient.ExecuteCommandWithOutput("VDiff", "--", "--v2", "--tablet_types=primary", "--source_cell="+cells, "--format=json", ksWorkflow, action, actionArg)
 	log.Infof("vdiff2 output: %+v (err: %+v)", output, err)
-	require.Nil(t, err)
-
-	uuid, err = jsonparser.GetString([]byte(output), "UUID")
-	require.NoError(t, err)
-	require.NotEmpty(t, uuid)
+	if !expectError {
+		require.Nil(t, err)
+		uuid, err = jsonparser.GetString([]byte(output), "UUID")
+		require.NoError(t, err)
+		require.NotEmpty(t, uuid)
+	}
 	return uuid, output
 }
 

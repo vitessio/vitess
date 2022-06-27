@@ -133,13 +133,13 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 		default:
 			vdiffUUID, err = uuid.Parse(actionArg)
 			if err != nil {
-				return fmt.Errorf("can only show a specific vdiff, please provide a valid UUID; view all with: VDiff -- --v2 %s.%s show all", keyspace, workflowName)
+				return fmt.Errorf("can only show a specific vdiff, please provide a valid v1 UUID; view all with: VDiff -- --v2 %s.%s show all", keyspace, workflowName)
 			}
 		}
 	case vdiff.ResumeAction:
 		vdiffUUID, err = uuid.Parse(actionArg)
 		if err != nil {
-			return fmt.Errorf("can only resume a specific vdiff, please provide a valid UUID; view all with: VDiff -- --v2 %s.%s show all", keyspace, workflowName)
+			return fmt.Errorf("can only resume a specific vdiff, please provide a valid v1 UUID; view all with: VDiff -- --v2 %s.%s show all", keyspace, workflowName)
 		}
 	default:
 		return fmt.Errorf("invalid action %s; %s", action, usage)
