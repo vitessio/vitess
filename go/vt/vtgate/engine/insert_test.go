@@ -2303,7 +2303,7 @@ func TestInsertSelectShardingCases(t *testing.T) {
 	vc.ExpectLog(t, []string{
 		// the select query
 		`ResolveDestinations sks2 [] Destinations:DestinationAllShards()`,
-		`ExecuteMultiShard sks2.-20: dummy_select {} sks2.20-: dummy_select {} false false`,
+		`StreamExecuteMulti dummy_select sks2.-20: {} sks2.20-: {} `,
 
 		// the query exec
 		`ResolveDestinations uks1 [] Destinations:DestinationAllShards()`,
@@ -2332,7 +2332,7 @@ func TestInsertSelectShardingCases(t *testing.T) {
 	vc.ExpectLog(t, []string{
 		// the select query
 		`ResolveDestinations uks2 [] Destinations:DestinationAllShards()`,
-		`ExecuteMultiShard uks2.0: dummy_select {} false false`,
+		`StreamExecuteMulti dummy_select uks2.0: {} `,
 
 		// the query exec
 		`ResolveDestinations uks1 [] Destinations:DestinationAllShards()`,
