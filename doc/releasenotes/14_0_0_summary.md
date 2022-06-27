@@ -244,8 +244,8 @@ In a sense, it's a "cold engine" scenario, where the engine takes time to start 
 
 ### VDiff2
 
-We introduced a new version of VDiff -- currently marked as Experimental -- that executes the VDiff on tablets rather than in VTCtld.
-While this is experimental we encourage you to try it out and provide feedback! This input will be invaluable as we improve this feature on the march toward a production-ready version.
+We introduced a new version of VDiff -- currently marked as EXPERIMENTAL -- that executes the VDiff on vttablets rather than in vtctld.
+While this is experimental we encourage you to try it out and provide feedback! This input will be invaluable as we improve the feature on the march toward [a production-ready version](https://github.com/vitessio/vitess/issues/10494).
 You can try it out by adding the `--v2` flag to your VDiff command. Here's an example:
 ```
 $ vtctlclient --server=localhost:15999 VDiff -- --v2 customer.commerce2customer
