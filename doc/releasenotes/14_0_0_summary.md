@@ -33,9 +33,18 @@ Vitess can now plan and execute most aggregation queries across multiple shards 
 
 #### INSERT from SELECT
 Support has been added for inserting new data from SELECT queries.
+Now you can insert data from a query into a table using a query like:
+
+```sql
+insert into tbl select   
+```
 
 #### UPDATE from SELECT
-Similarly, we have added support for UPDATE with scalar sub-queries.
+Similarly, we have added support for UPDATE with scalar sub-queries. This allows for queries where the updated value is fetched using a subquery, such as this example:
+
+```sql
+update tbl set foo = (select count(*) from otherTbl)
+```
 
 ### Command-line syntax deprecations
 
@@ -113,6 +122,13 @@ The flag `--online_ddl_check_interval` is deprecated and will be removed in `v15
 #### Removal of --gateway_implementation
 
 In previous releases, the `discoverygateway` was deprecated. In Vitess 14 it is now entirely removed, along with the VTGate flag that allowed us to choose a gateway.
+
+#### Deprecation of --planner_version
+
+The flag `--planner_version` is deprecated and will be removed in `v15`. 
+Some binaries used `--planner_version`, and some used `--planner-version`. 
+This has been made consistent - all binaries that allow you to configure the planner now take `--planner-version`.
+All uses of the underscore form have been deprecated and will be removed in `v15`. 
 
 ### Online DDL changes
 
