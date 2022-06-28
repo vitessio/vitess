@@ -271,22 +271,45 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 	timer := time.NewTimer(HeartbeatTime)
 	defer timer.Stop()
 
-	// throttledEvents can be read just like you would read from events
-	// throttledEvents pulls data from events, but throttles pulling data,
-	// which in turn blocks the BinlogConnection from pushing events to the channel
-	throttledEvents := make(chan mysql.BinlogEvent)
-	go func() {
+	injectHeartbeat := func(timeValue int64) error {
+		err := bufferAndTransmit(&binlogdatapb.VEvent{
+			Type:        binlogdatapb.VEventType_HEARTBEAT,
+			Timestamp:   timeValue / 1e9,
+			CurrentTime: timeValue,
+		})
+		if err == io.EOF {
+			err = nil
+		}
+		return err
+	}
+
+	throttleEvents := func(throttledEvents chan mysql.BinlogEvent) {
+		throttledHeartbeats := time.NewTicker(HeartbeatTime)
 		for {
+			isThrottled := false
 			// check throttler.
 			if !vs.vse.throttlerClient.ThrottleCheckOKOrWait(ctx) {
-				select {
 				// make sure to leave if context is cancelled
+				select {
 				case <-ctx.Done():
 					return
 				default:
 					// do nothing special
 				}
+				isThrottled = true
+			}
+			select {
+			case <-throttledHeartbeats.C:
+				// always drain the ticker, but only do something if we're actively throttling.
+				if isThrottled {
+					_ = injectHeartbeat(int64(binlogdatapb.StreamerHeartbeatHint_VSTREAMER_THROTTLED))
+				}
+			default:
+				// do nothing special
+			}
+			if isThrottled {
 				continue
+				// we won't process events, until we're no longer throttling
 			}
 			select {
 			case ev, ok := <-events:
@@ -303,9 +326,14 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			case <-ctx.Done():
 				return
 			}
-
 		}
-	}()
+	}
+	// throttledEvents can be read just like you would read from events
+	// throttledEvents pulls data from events, but throttles pulling data,
+	// which in turn blocks the BinlogConnection from pushing events to the channel
+	throttledEvents := make(chan mysql.BinlogEvent)
+	go throttleEvents(throttledEvents)
+
 	for {
 		timer.Reset(HeartbeatTime)
 		// Drain event if timer fired before reset.
@@ -347,15 +375,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 		case <-ctx.Done():
 			return nil
 		case <-timer.C:
-			now := time.Now().UnixNano()
-			if err := bufferAndTransmit(&binlogdatapb.VEvent{
-				Type:        binlogdatapb.VEventType_HEARTBEAT,
-				Timestamp:   now / 1e9,
-				CurrentTime: now,
-			}); err != nil {
-				if err == io.EOF {
-					return nil
-				}
+			if err := injectHeartbeat(time.Now().UnixNano()); err != nil {
 				vs.vse.errorCounts.Add("Send", 1)
 				return fmt.Errorf("error sending event: %v", err)
 			}

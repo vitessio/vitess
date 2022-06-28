@@ -102,6 +102,7 @@ func (rs *resultStreamer) Stream() error {
 
 		// check throttler.
 		if !rs.vse.throttlerClient.ThrottleCheckOKOrWait(rs.ctx) {
+			fmt.Println("=========== ZZZ resultstreamer throttled")
 			continue
 		}
 

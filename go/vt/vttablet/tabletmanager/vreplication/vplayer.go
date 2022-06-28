@@ -343,6 +343,7 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 		}
 		// check throttler.
 		if !vp.vr.vre.throttlerClient.ThrottleCheckOKOrWaitAppName(ctx, vp.throttlerAppName) {
+			_ = vp.vr.updateTimeThrottled("vplayer")
 			continue
 		}
 
@@ -633,11 +634,21 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		stats.Send(fmt.Sprintf("%v", event.Journal))
 		return io.EOF
 	case binlogdatapb.VEventType_HEARTBEAT:
-		if !vp.vr.dbClient.InTransaction {
-			vp.numAccumulatedHeartbeats++
-			err := vp.recordHeartbeat()
-			if err != nil {
+		switch event.CurrentTime {
+		case int64(binlogdatapb.StreamerHeartbeatHint_VSTREAMER_THROTTLED):
+			if err := vp.vr.updateTimeThrottled("vstreamer"); err != nil {
 				return err
+			}
+		case int64(binlogdatapb.StreamerHeartbeatHint_ROWSTREAMER_THROTTLED):
+			if err := vp.vr.updateTimeThrottled("rowstreamer"); err != nil {
+				return err
+			}
+		default:
+			if !vp.vr.dbClient.InTransaction {
+				vp.numAccumulatedHeartbeats++
+				if err := vp.recordHeartbeat(); err != nil {
+					return err
+				}
 			}
 		}
 	}

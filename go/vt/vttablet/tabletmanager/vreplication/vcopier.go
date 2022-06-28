@@ -240,7 +240,9 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 			}
 			// verify throttler is happy, otherwise keep looping
 			if vc.vr.vre.throttlerClient.ThrottleCheckOKOrWaitAppName(ctx, vc.throttlerAppName) {
-				break
+				break // out of 'for' loop
+			} else { // we're throttled
+				_ = vc.vr.updateTimeThrottled("vcopier")
 			}
 		}
 		if vc.tablePlan == nil {

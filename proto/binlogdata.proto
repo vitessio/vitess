@@ -213,6 +213,12 @@ enum VReplicationWorkflowType {
   ONLINEDDL = 5;
 }
 
+enum StreamerHeartbeatHint {
+  NONE = 0;
+  VSTREAMER_THROTTLED = 1;
+  ROWSTREAMER_THROTTLED = 2;
+}
+
 // BinlogSource specifies the source  and filter parameters for
 // Filtered Replication. KeyRange and Tables are legacy. Filter
 // is the new way to specify the filtering rules.
@@ -456,6 +462,7 @@ message VStreamRowsResponse {
   string gtid = 3;
   repeated query.Row rows = 4;
   query.Row lastpk = 5;
+  bool throttled = 6;
 }
 
 message LastPKEvent {

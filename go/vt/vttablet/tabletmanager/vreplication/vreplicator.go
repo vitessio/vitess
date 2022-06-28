@@ -23,6 +23,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -105,6 +106,9 @@ type vreplicator struct {
 
 	WorkflowType int64
 	WorkflowName string
+
+	timeThrottledTicks       int64
+	lastWrittenTimeThrottled int64
 }
 
 // newVReplicator creates a new vreplicator. The valid fields from the source are:
@@ -166,6 +170,13 @@ func newVReplicator(id uint32, source *binlogdatapb.BinlogSource, sourceVStreame
 // However, there are some subtle differences, explained in the plan builder
 // code.
 func (vr *vreplicator) Replicate(ctx context.Context) error {
+	go func() {
+		tick := time.NewTicker(time.Second)
+		defer tick.Stop()
+		for range tick.C {
+			atomic.AddInt64(&vr.timeThrottledTicks, 1)
+		}
+	}()
 	err := vr.replicate(ctx)
 	if err != nil {
 		if err := vr.setMessage(err.Error()); err != nil {
@@ -498,6 +509,24 @@ func (vr *vreplicator) throttlerAppName() string {
 		names = append(names, throttlerOnlineDDLAppName)
 	}
 	return strings.Join(names, ":")
+}
+
+func (vr *vreplicator) updateTimeThrottled(componentThrottled string) error {
+	if vr.lastWrittenTimeThrottled >= atomic.LoadInt64(&vr.timeThrottledTicks) {
+		// time_throttled was written just recently. Avoid spamming the database.
+		return nil
+	}
+
+	tm := time.Now().Unix()
+	update, err := binlogplayer.GenerateUpdateTimeThrottled(vr.id, tm, componentThrottled)
+	if err != nil {
+		return err
+	}
+	if _, err := withDDL.Exec(vr.vre.ctx, update, vr.dbClient.ExecuteFetch, vr.dbClient.ExecuteFetch); err != nil {
+		return fmt.Errorf("error %v updating time throttled", err)
+	}
+	vr.lastWrittenTimeThrottled = atomic.LoadInt64(&vr.timeThrottledTicks)
+	return nil
 }
 
 func (vr *vreplicator) clearFKCheck() error {

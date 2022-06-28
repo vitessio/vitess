@@ -399,6 +399,7 @@ const (
 			stowaway_table,
 			rows_copied,
 			vitess_liveness_indicator,
+			user_throttle_ratio,
 			postpone_completion
 		FROM _vt.schema_migrations
 		WHERE
@@ -534,6 +535,9 @@ const (
 			pos,
 			time_updated,
 			transaction_timestamp,
+			time_heartbeat,
+			time_throttled,
+			component_throttled,
 			state,
 			message,
 			rows_copied

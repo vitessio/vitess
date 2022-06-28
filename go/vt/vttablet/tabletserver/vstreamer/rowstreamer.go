@@ -320,6 +320,7 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 
 		// check throttler.
 		if !rs.vse.throttlerClient.ThrottleCheckOKOrWait(rs.ctx) {
+			fmt.Println("=========== ZZZ rowstreamer throttled")
 			continue
 		}
 
