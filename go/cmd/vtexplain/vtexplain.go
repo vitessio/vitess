@@ -52,7 +52,7 @@ var (
 	normalize          = flag.Bool("normalize", false, "Whether to enable vtgate normalization")
 	outputMode         = flag.String("output-mode", "text", "Output in human-friendly text or json")
 	dbName             = flag.String("dbname", "", "Optional database target to override normal routing")
-	plannerVersionStr  = flag.String("planner-version", "gen4", "Sets the query planner version to use when generating the explain output. Valid values are V3 and Gen4")
+	plannerVersionStr  = flag.String("planner-version", "", "Sets the query planner version to use when generating the explain output. Valid values are V3 and Gen4")
 	badPlannerVersion  = flag.String("planner_version", "", "Deprecated flag. Use planner-version instead")
 
 	// vtexplainFlags lists all the flags that should show in usage
@@ -129,6 +129,16 @@ func main() {
 }
 
 func parseAndRun() error {
+	verStr, err := env.CheckPlannerVersionFlag(plannerVersionStr, badPlannerVersion)
+	if err != nil {
+		return err
+	}
+
+	plannerVersion, _ := plancontext.PlannerNameToVersion(verStr)
+	if plannerVersion != querypb.ExecuteOptions_V3 && plannerVersion != querypb.ExecuteOptions_Gen4 {
+		return fmt.Errorf("invalid value specified for planner-version of '%s' -- valid values are V3 and Gen4", *plannerVersionStr)
+	}
+
 	sql, err := getFileParam(*sqlFlag, *sqlFileFlag, "sql", true)
 	if err != nil {
 		return err
@@ -147,16 +157,6 @@ func parseAndRun() error {
 	ksShardMap, err := getFileParam(*ksShardMapFlag, *ksShardMapFileFlag, "ks-shard-map", false)
 	if err != nil {
 		return err
-	}
-
-	verStr, err := env.CheckPlannerVersionFlag(plannerVersionStr, badPlannerVersion)
-	if err != nil {
-		return err
-	}
-
-	plannerVersion, _ := plancontext.PlannerNameToVersion(verStr)
-	if plannerVersion != querypb.ExecuteOptions_V3 && plannerVersion != querypb.ExecuteOptions_Gen4 {
-		return fmt.Errorf("invalid value specified for planner-version of '%s' -- valid values are V3 and Gen4", *plannerVersionStr)
 	}
 
 	opts := &vtexplain.Options{
