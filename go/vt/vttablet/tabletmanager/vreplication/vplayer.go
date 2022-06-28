@@ -639,10 +639,6 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			if err := vp.vr.updateTimeThrottled("vstreamer"); err != nil {
 				return err
 			}
-		case int64(binlogdatapb.StreamerHeartbeatHint_ROWSTREAMER_THROTTLED):
-			if err := vp.vr.updateTimeThrottled("rowstreamer"); err != nil {
-				return err
-			}
 		default:
 			if !vp.vr.dbClient.InTransaction {
 				vp.numAccumulatedHeartbeats++

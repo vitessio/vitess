@@ -216,7 +216,6 @@ enum VReplicationWorkflowType {
 enum StreamerHeartbeatHint {
   NONE = 0;
   VSTREAMER_THROTTLED = 1;
-  ROWSTREAMER_THROTTLED = 2;
 }
 
 // BinlogSource specifies the source  and filter parameters for

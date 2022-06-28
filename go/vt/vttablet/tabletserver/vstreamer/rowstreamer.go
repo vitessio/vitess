@@ -25,6 +25,7 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
+	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -72,6 +73,8 @@ type rowStreamer struct {
 	sendQuery     string
 	vse           *Engine
 	pktsize       PacketSizer
+
+	throttleResponseRateLimiter *timer.RateLimiter
 }
 
 func newRowStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, query string, lastpk []sqltypes.Value, vschema *localVSchema, send func(*binlogdatapb.VStreamRowsResponse) error, vse *Engine) *rowStreamer {
@@ -87,6 +90,8 @@ func newRowStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engi
 		vschema: vschema,
 		vse:     vse,
 		pktsize: DefaultPacketSizer(),
+
+		throttleResponseRateLimiter: timer.NewRateLimiter(time.Second * 10),
 	}
 }
 
@@ -320,7 +325,9 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 
 		// check throttler.
 		if !rs.vse.throttlerClient.ThrottleCheckOKOrWait(rs.ctx) {
-			fmt.Println("=========== ZZZ rowstreamer throttled")
+			rs.throttleResponseRateLimiter.Do(func() error {
+				return send(&binlogdatapb.VStreamRowsResponse{Throttled: true})
+			})
 			continue
 		}
 

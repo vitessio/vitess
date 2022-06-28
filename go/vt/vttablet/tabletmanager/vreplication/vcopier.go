@@ -229,6 +229,10 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 	var sqlbuffer bytes2.Buffer
 
 	err = vc.vr.sourceVStreamer.VStreamRows(ctx, initialPlan.SendRule.Filter, lastpkpb, func(rows *binlogdatapb.VStreamRowsResponse) error {
+		if rows.Throttled {
+			_ = vc.vr.updateTimeThrottled("rowstreamer")
+			return nil
+		}
 		for {
 			select {
 			case <-rowsCopiedTicker.C:
