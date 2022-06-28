@@ -41,10 +41,11 @@ var (
 )
 
 type TestResource struct {
-	num       int64
-	closed    bool
-	setting   string
-	failApply bool
+	num         int64
+	timeCreated time.Time
+	closed      bool
+	setting     string
+	failApply   bool
 }
 
 func (tr *TestResource) ResetSetting(ctx context.Context) error {
@@ -79,13 +80,17 @@ func (tr *TestResource) Close() {
 
 var _ Resource = (*TestResource)(nil)
 
+func (tr *TestResource) TimeCreated() time.Time {
+	return tr.timeCreated
+}
+
 func logWait(start time.Time) {
 	waitStarts = append(waitStarts, start)
 }
 
 func PoolFactory(context.Context) (Resource, error) {
 	count.Add(1)
-	return &TestResource{num: lastID.Add(1)}, nil
+	return &TestResource{num: lastID.Add(1), timeCreated: time.Now()}, nil
 }
 
 func FailFactory(context.Context) (Resource, error) {
@@ -108,7 +113,7 @@ func TestOpen(t *testing.T) {
 	count.Set(0)
 	waitStarts = waitStarts[:0]
 
-	p := NewResourcePool(PoolFactory, 6, 6, time.Second, logWait, nil, 0)
+	p := NewResourcePool(PoolFactory, 6, 6, time.Second, 0, logWait, nil, 0)
 	p.SetCapacity(5)
 	var resources [10]Resource
 	var r Resource
@@ -227,7 +232,7 @@ func TestShrinking(t *testing.T) {
 	count.Set(0)
 	waitStarts = waitStarts[:0]
 
-	p := NewResourcePool(PoolFactory, 5, 5, time.Second, logWait, nil, 0)
+	p := NewResourcePool(PoolFactory, 5, 5, time.Second, 0, logWait, nil, 0)
 	var resources [10]Resource
 	// Leave one empty slot in the pool
 	for i := 0; i < 4; i++ {
@@ -246,7 +251,7 @@ func TestShrinking(t *testing.T) {
 		p.SetCapacity(3)
 		done <- true
 	}()
-	expected := `{"Capacity": 3, "Available": 0, "Active": 4, "InUse": 4, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000, "IdleClosed": 0, "Exhausted": 0}`
+	expected := `{"Capacity": 3, "Available": 0, "Active": 4, "InUse": 4, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000, "IdleClosed": 0, "RefreshTimeout": 0, "RefreshClosed": 0, "Exhausted": 0}`
 	for i := 0; i < 10; i++ {
 		time.Sleep(10 * time.Millisecond)
 		stats := p.StatsJSON()
@@ -265,7 +270,7 @@ func TestShrinking(t *testing.T) {
 		p.Put(resources[i])
 	}
 	stats := p.StatsJSON()
-	expected = `{"Capacity": 3, "Available": 3, "Active": 3, "InUse": 0, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000, "IdleClosed": 0, "Exhausted": 0}`
+	expected = `{"Capacity": 3, "Available": 3, "Active": 3, "InUse": 0, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000, "IdleClosed": 0, "RefreshTimeout": 0, "RefreshClosed": 0, "Exhausted": 0}`
 	assert.Equal(t, expected, stats)
 	assert.EqualValues(t, 3, count.Get())
 
@@ -360,7 +365,7 @@ func TestClosing(t *testing.T) {
 	ctx := context.Background()
 	lastID.Set(0)
 	count.Set(0)
-	p := NewResourcePool(PoolFactory, 5, 5, time.Second, logWait, nil, 0)
+	p := NewResourcePool(PoolFactory, 5, 5, time.Second, 0, logWait, nil, 0)
 	var resources [10]Resource
 	for i := 0; i < 5; i++ {
 		var r Resource
@@ -382,7 +387,7 @@ func TestClosing(t *testing.T) {
 	// Wait for goroutine to call Close
 	time.Sleep(10 * time.Millisecond)
 	stats := p.StatsJSON()
-	expected := `{"Capacity": 0, "Available": 0, "Active": 5, "InUse": 5, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000, "IdleClosed": 0, "Exhausted": 1}`
+	expected := `{"Capacity": 0, "Available": 0, "Active": 5, "InUse": 5, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000, "IdleClosed": 0, "RefreshTimeout": 0, "RefreshClosed": 0, "Exhausted": 1}`
 	assert.Equal(t, expected, stats)
 
 	// Put is allowed when closing
@@ -394,7 +399,7 @@ func TestClosing(t *testing.T) {
 	<-ch
 
 	stats = p.StatsJSON()
-	expected = `{"Capacity": 0, "Available": 0, "Active": 0, "InUse": 0, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000, "IdleClosed": 0, "Exhausted": 1}`
+	expected = `{"Capacity": 0, "Available": 0, "Active": 0, "InUse": 0, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000, "IdleClosed": 0, "RefreshTimeout": 0, "RefreshClosed": 0, "Exhausted": 1}`
 	assert.Equal(t, expected, stats)
 	assert.EqualValues(t, 5, lastID.Get())
 	assert.EqualValues(t, 0, count.Get())
@@ -407,7 +412,7 @@ func TestReopen(t *testing.T) {
 	refreshCheck := func() (bool, error) {
 		return true, nil
 	}
-	p := NewResourcePool(PoolFactory, 5, 5, time.Second, logWait, refreshCheck, 500*time.Millisecond)
+	p := NewResourcePool(PoolFactory, 5, 5, time.Second, 0, logWait, refreshCheck, 500*time.Millisecond)
 	var resources [10]Resource
 	for i := 0; i < 5; i++ {
 		var r Resource
@@ -423,7 +428,7 @@ func TestReopen(t *testing.T) {
 
 	time.Sleep(10 * time.Millisecond)
 	stats := p.StatsJSON()
-	expected := `{"Capacity": 5, "Available": 0, "Active": 5, "InUse": 5, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000, "IdleClosed": 0, "Exhausted": 1}`
+	expected := `{"Capacity": 5, "Available": 0, "Active": 5, "InUse": 5, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000, "IdleClosed": 0, "RefreshTimeout": 0, "RefreshClosed": 0, "Exhausted": 1}`
 	assert.Equal(t, expected, stats)
 
 	time.Sleep(650 * time.Millisecond)
@@ -432,7 +437,7 @@ func TestReopen(t *testing.T) {
 	}
 	time.Sleep(50 * time.Millisecond)
 	stats = p.StatsJSON()
-	expected = `{"Capacity": 5, "Available": 5, "Active": 0, "InUse": 0, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000, "IdleClosed": 0, "Exhausted": 1}`
+	expected = `{"Capacity": 5, "Available": 5, "Active": 0, "InUse": 0, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000, "IdleClosed": 0, "RefreshTimeout": 0, "RefreshClosed": 0, "Exhausted": 1}`
 	assert.Equal(t, expected, stats)
 	assert.EqualValues(t, 5, lastID.Get())
 	assert.EqualValues(t, 0, count.Get())
@@ -442,7 +447,7 @@ func TestIdleTimeout(t *testing.T) {
 	ctx := context.Background()
 	lastID.Set(0)
 	count.Set(0)
-	p := NewResourcePool(PoolFactory, 1, 1, 10*time.Millisecond, logWait, nil, 0)
+	p := NewResourcePool(PoolFactory, 1, 1, 10*time.Millisecond, 0, logWait, nil, 0)
 	defer p.Close()
 
 	r, err := p.Get(ctx, nil)
@@ -500,73 +505,81 @@ func TestIdleTimeout(t *testing.T) {
 	assert.EqualValues(t, 2, p.IdleClosed())
 }
 
-func TestIdleTimeoutWithSettings(t *testing.T) {
-	ctx := context.Background()
+func TestRefreshTimeout(t *testing.T) {
+    // refreshTimeout 0
+    ctx := context.Background()
 	lastID.Set(0)
 	count.Set(0)
-	p := NewResourcePool(PoolFactory, 1, 1, 10*time.Millisecond, logWait, nil, 0)
-	defer p.Close()
 
-	r, err := p.Get(ctx, sFooBar)
+    p := NewResourcePool(PoolFactory, 1, 1, 10*time.Second, 0, logWait, nil, 0)
+    defer p.Close()
+
+    r, err := p.Get(ctx, nil)
 	require.NoError(t, err)
 	assert.EqualValues(t, 1, count.Get())
-	assert.EqualValues(t, 0, p.IdleClosed())
+	assert.EqualValues(t, 0, p.RefreshClosed())
+
+	time.Sleep(10 * time.Millisecond)
 
 	p.Put(r)
 	assert.EqualValues(t, 1, lastID.Get())
 	assert.EqualValues(t, 1, count.Get())
-	assert.EqualValues(t, 0, p.IdleClosed())
+	assert.EqualValues(t, 0, p.RefreshClosed())
 
-	time.Sleep(15 * time.Millisecond)
-	assert.EqualValues(t, 1, count.Get())
-	assert.EqualValues(t, 1, p.IdleClosed())
+    // refreshTimeout > 1
+    ctx = context.Background()
+	lastID.Set(0)
+	count.Set(0)
 
-	r, err = p.Get(ctx, sFooBar)
+    p = NewResourcePool(PoolFactory, 1, 1, 10*time.Second, 10*time.Millisecond, logWait, nil, 0)
+    defer p.Close()
+
+    r, err = p.Get(ctx, nil)
 	require.NoError(t, err)
-	assert.EqualValues(t, 2, lastID.Get())
 	assert.EqualValues(t, 1, count.Get())
-	assert.EqualValues(t, 1, p.IdleClosed())
+	assert.EqualValues(t, 0, p.RefreshClosed())
 
-	// sleep to let the idle closer run while all resources are in use
-	// then make sure things are still as we expect
-	time.Sleep(15 * time.Millisecond)
-	assert.EqualValues(t, 2, lastID.Get())
-	assert.EqualValues(t, 1, count.Get())
-	assert.EqualValues(t, 1, p.IdleClosed())
+	time.Sleep(5 * time.Millisecond)
 
 	p.Put(r)
-	r, err = p.Get(ctx, sFooBar)
+	assert.EqualValues(t, 1, lastID.Get())
+	assert.EqualValues(t, 1, count.Get())
+	assert.EqualValues(t, 0, p.RefreshClosed())
+
+    r, err = p.Get(ctx, nil)
 	require.NoError(t, err)
+	assert.EqualValues(t, 1, count.Get())
+	assert.EqualValues(t, 0, p.RefreshClosed())
+
+	time.Sleep(10 * time.Millisecond * 2)
+
+	p.Put(r)
 	assert.EqualValues(t, 2, lastID.Get())
 	assert.EqualValues(t, 1, count.Get())
-	assert.EqualValues(t, 1, p.IdleClosed())
+	assert.EqualValues(t, 1, p.RefreshClosed())
+}
 
-	// the idle close thread wakes up every 1/100 of the idle time, so ensure
-	// the timeout change applies to newly added resources
-	p.SetIdleTimeout(1000 * time.Millisecond)
-	p.Put(r)
+func TestExtendedRefreshTimeout(t *testing.T) {
+    // refreshTimeout 0
+    p := NewResourcePool(PoolFactory, 5, 5, time.Second, 0, logWait, nil, 0)
+    defer p.Close()
+    assert.Zero(t, p.ExtendedRefreshTimeout())
 
-	time.Sleep(15 * time.Millisecond)
-	assert.EqualValues(t, 2, lastID.Get())
-	assert.EqualValues(t, 1, count.Get())
-	assert.EqualValues(t, 1, p.IdleClosed())
-
-	// Get and Put to refresh timeUsed
-	r, err = p.Get(ctx, sFooBar)
-	require.NoError(t, err)
-	p.Put(r)
-	p.SetIdleTimeout(10 * time.Millisecond)
-	time.Sleep(15 * time.Millisecond)
-	assert.EqualValues(t, 3, lastID.Get())
-	assert.EqualValues(t, 1, count.Get())
-	assert.EqualValues(t, 2, p.IdleClosed())
+    // refreshTimeout > 1
+    refreshTimeout := 10*time.Millisecond
+    for i := 0; i< 10; i++ {
+        p = NewResourcePool(PoolFactory, 5, 5, time.Second, refreshTimeout, logWait, nil, 0)
+        defer p.Close()
+        assert.LessOrEqual(t, refreshTimeout, p.ExtendedRefreshTimeout())
+        assert.Greater(t, 2 * refreshTimeout, p.ExtendedRefreshTimeout())
+    }
 }
 
 func TestIdleTimeoutCreateFail(t *testing.T) {
 	ctx := context.Background()
 	lastID.Set(0)
 	count.Set(0)
-	p := NewResourcePool(PoolFactory, 1, 1, 10*time.Millisecond, logWait, nil, 0)
+	p := NewResourcePool(PoolFactory, 1, 1, 10*time.Millisecond, 0, logWait, nil, 0)
 	defer p.Close()
 	for _, setting := range []*Setting{nil, sFoo} {
 		r, err := p.Get(ctx, setting)
@@ -588,7 +601,7 @@ func TestCreateFail(t *testing.T) {
 	ctx := context.Background()
 	lastID.Set(0)
 	count.Set(0)
-	p := NewResourcePool(FailFactory, 5, 5, time.Second, logWait, nil, 0)
+	p := NewResourcePool(FailFactory, 5, 5, time.Second, 0, logWait, nil, 0)
 	defer p.Close()
 
 	for _, setting := range []*Setting{nil, sFoo} {
@@ -596,7 +609,7 @@ func TestCreateFail(t *testing.T) {
 			t.Errorf("Expecting Failed, received %v", err)
 		}
 		stats := p.StatsJSON()
-		expected := `{"Capacity": 5, "Available": 5, "Active": 0, "InUse": 0, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000, "IdleClosed": 0, "Exhausted": 0}`
+		expected := `{"Capacity": 5, "Available": 5, "Active": 0, "InUse": 0, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000, "IdleClosed": 0, "RefreshTimeout": 0, "RefreshClosed": 0, "Exhausted": 0}`
 		assert.Equal(t, expected, stats)
 	}
 }
@@ -605,7 +618,7 @@ func TestCreateFailOnPut(t *testing.T) {
 	ctx := context.Background()
 	lastID.Set(0)
 	count.Set(0)
-	p := NewResourcePool(PoolFactory, 5, 5, time.Second, logWait, nil, 0)
+	p := NewResourcePool(PoolFactory, 5, 5, time.Second, 0, logWait, nil, 0)
 	defer p.Close()
 
 	for _, setting := range []*Setting{nil, sFoo} {
@@ -626,7 +639,7 @@ func TestSlowCreateFail(t *testing.T) {
 	ctx := context.Background()
 	lastID.Set(0)
 	count.Set(0)
-	p := NewResourcePool(SlowFailFactory, 2, 2, time.Second, logWait, nil, 0)
+	p := NewResourcePool(SlowFailFactory, 2, 2, time.Second, 0, logWait, nil, 0)
 	defer p.Close()
 	ch := make(chan bool)
 	for _, setting := range []*Setting{nil, sFoo} {
@@ -648,7 +661,7 @@ func TestTimeout(t *testing.T) {
 	ctx := context.Background()
 	lastID.Set(0)
 	count.Set(0)
-	p := NewResourcePool(PoolFactory, 1, 1, time.Second, logWait, nil, 0)
+	p := NewResourcePool(PoolFactory, 1, 1, time.Second, 0, logWait, nil, 0)
 	defer p.Close()
 
 	// take the only connection available
@@ -671,7 +684,7 @@ func TestTimeout(t *testing.T) {
 func TestExpired(t *testing.T) {
 	lastID.Set(0)
 	count.Set(0)
-	p := NewResourcePool(PoolFactory, 1, 1, time.Second, logWait, nil, 0)
+	p := NewResourcePool(PoolFactory, 1, 1, time.Second, 0, logWait, nil, 0)
 	defer p.Close()
 
 	for _, setting := range []*Setting{nil, sFoo} {
@@ -689,7 +702,7 @@ func TestMultiSettings(t *testing.T) {
 	count.Set(0)
 	waitStarts = waitStarts[:0]
 
-	p := NewResourcePool(PoolFactory, 5, 5, time.Second, logWait, nil, 0)
+	p := NewResourcePool(PoolFactory, 5, 5, time.Second, 0, logWait, nil, 0)
 	var resources [10]Resource
 	var r Resource
 	var err error
@@ -752,7 +765,7 @@ func TestMultiSettingsWithReset(t *testing.T) {
 	count.Set(0)
 	resetCount.Set(0)
 
-	p := NewResourcePool(PoolFactory, 5, 5, time.Second, logWait, nil, 0)
+	p := NewResourcePool(PoolFactory, 5, 5, time.Second, 0, logWait, nil, 0)
 	var resources [10]Resource
 	var r Resource
 	var err error
@@ -798,7 +811,7 @@ func TestApplySettingsFailure(t *testing.T) {
 	var r Resource
 	var err error
 
-	p := NewResourcePool(PoolFactory, 5, 5, time.Second, logWait, nil, 0)
+	p := NewResourcePool(PoolFactory, 5, 5, time.Second, 0, logWait, nil, 0)
 	defer p.Close()
 
 	settings := []*Setting{nil, sFoo, sBar, sBar, sFoo}

@@ -53,6 +53,7 @@ type DBConn struct {
 	dbaPool      *dbconnpool.ConnectionPool
 	stats        *tabletenv.Stats
 	current      sync2.AtomicString
+	createdTime  time.Time
 	setting      string
 	resetSetting string
 
@@ -73,11 +74,12 @@ func NewDBConn(ctx context.Context, cp *Pool, appParams dbconfigs.Connector) (*D
 		return nil, err
 	}
 	return &DBConn{
-		conn:    c,
-		info:    appParams,
-		pool:    cp,
-		dbaPool: cp.dbaPool,
-		stats:   cp.env.Stats(),
+		conn:        c,
+		info:        appParams,
+		pool:        cp,
+		dbaPool:     cp.dbaPool,
+		createdTime: time.Now(),
+		stats:       cp.env.Stats(),
 	}, nil
 }
 
@@ -88,11 +90,12 @@ func NewDBConnNoPool(ctx context.Context, params dbconfigs.Connector, dbaPool *d
 		return nil, err
 	}
 	dbconn := &DBConn{
-		conn:    c,
-		info:    params,
-		dbaPool: dbaPool,
-		pool:    nil,
-		stats:   tabletenv.NewStats(servenv.NewExporter("Temp", "Tablet")),
+		conn:        c,
+		info:        params,
+		dbaPool:     dbaPool,
+		pool:        nil,
+		createdTime: time.Now(),
+		stats:       tabletenv.NewStats(servenv.NewExporter("Temp", "Tablet")),
 	}
 	if setting == nil {
 		return dbconn, nil
@@ -361,6 +364,11 @@ var _ pools.Resource = (*DBConn)(nil)
 // IsClosed returns true if DBConn is closed.
 func (dbc *DBConn) IsClosed() bool {
 	return dbc.conn.IsClosed()
+}
+
+// TimeCreated returns when the connection was opened
+func (dbc *DBConn) TimeCreated() time.Time {
+	return dbc.createdTime
 }
 
 // Recycle returns the DBConn to the pool.

@@ -121,6 +121,7 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	SecondsVar(fs, &currentConfig.OlapReadPool.TimeoutSeconds, "queryserver-config-stream-pool-timeout", defaultConfig.OlapReadPool.TimeoutSeconds, "query server stream pool timeout (in seconds), it is how long vttablet waits for a connection from the stream pool. If set to 0 (default) then there is no timeout.")
 	SecondsVar(fs, &currentConfig.TxPool.TimeoutSeconds, "queryserver-config-txpool-timeout", defaultConfig.TxPool.TimeoutSeconds, "query server transaction pool timeout, it is how long vttablet waits if tx pool is full")
 	SecondsVar(fs, &currentConfig.OltpReadPool.IdleTimeoutSeconds, "queryserver-config-idle-timeout", defaultConfig.OltpReadPool.IdleTimeoutSeconds, "query server idle timeout (in seconds), vttablet manages various mysql connection pools. This config means if a connection has not been used in given idle timeout, this connection will be removed from pool. This effectively manages number of connection objects and optimize the pool performance.")
+	SecondsVar(fs, &currentConfig.OltpReadPool.RefreshTimeoutSeconds, "queryserver-config-refresh-timeout", defaultConfig.OltpReadPool.RefreshTimeoutSeconds, "query server refresh timeout (in seconds), vttablet manages various mysql connection pools. This config means if a connection has lived at least this long, it connection will be removed from pool upon the next time it is returned to the pool.")
 	fs.IntVar(&currentConfig.OltpReadPool.MaxWaiters, "queryserver-config-query-pool-waiter-cap", defaultConfig.OltpReadPool.MaxWaiters, "query server query pool waiter limit, this is the maximum number of queries that can be queued waiting to get a connection")
 	fs.IntVar(&currentConfig.OlapReadPool.MaxWaiters, "queryserver-config-stream-pool-waiter-cap", defaultConfig.OlapReadPool.MaxWaiters, "query server stream pool waiter limit, this is the maximum number of streaming queries that can be queued waiting to get a connection")
 	fs.IntVar(&currentConfig.TxPool.MaxWaiters, "queryserver-config-txpool-waiter-cap", defaultConfig.TxPool.MaxWaiters, "query server transaction pool waiter limit, this is the maximum number of transactions that can be queued waiting to get a connection")
@@ -190,6 +191,8 @@ func Init() {
 	// TODO(sougou): Make a decision on whether this should be global or per-pool.
 	currentConfig.OlapReadPool.IdleTimeoutSeconds = currentConfig.OltpReadPool.IdleTimeoutSeconds
 	currentConfig.TxPool.IdleTimeoutSeconds = currentConfig.OltpReadPool.IdleTimeoutSeconds
+	currentConfig.OlapReadPool.RefreshTimeoutSeconds = currentConfig.OltpReadPool.RefreshTimeoutSeconds
+	currentConfig.TxPool.RefreshTimeoutSeconds = currentConfig.OltpReadPool.RefreshTimeoutSeconds
 
 	if enableHotRowProtection {
 		if enableHotRowProtectionDryRun {
@@ -319,11 +322,12 @@ type TabletConfig struct {
 
 // ConnPoolConfig contains the config for a conn pool.
 type ConnPoolConfig struct {
-	Size               int     `json:"size,omitempty"`
-	TimeoutSeconds     Seconds `json:"timeoutSeconds,omitempty"`
-	IdleTimeoutSeconds Seconds `json:"idleTimeoutSeconds,omitempty"`
-	PrefillParallelism int     `json:"prefillParallelism,omitempty"`
-	MaxWaiters         int     `json:"maxWaiters,omitempty"`
+	Size                  int     `json:"size,omitempty"`
+	TimeoutSeconds        Seconds `json:"timeoutSeconds,omitempty"`
+	IdleTimeoutSeconds    Seconds `json:"idleTimeoutSeconds,omitempty"`
+	RefreshTimeoutSeconds Seconds `json:"refreshTimeoutSeconds,omitempty"`
+	PrefillParallelism    int     `json:"prefillParallelism,omitempty"`
+	MaxWaiters            int     `json:"maxWaiters,omitempty"`
 }
 
 // OlapConfig contains the config for olap settings.
@@ -487,19 +491,22 @@ func (c *TabletConfig) verifyTransactionLimitConfig() error {
 // They actually get overwritten during Init.
 var defaultConfig = TabletConfig{
 	OltpReadPool: ConnPoolConfig{
-		Size:               16,
-		IdleTimeoutSeconds: 30 * 60,
-		MaxWaiters:         5000,
+		Size:                  16,
+		IdleTimeoutSeconds:    30 * 60,
+		RefreshTimeoutSeconds: 0, // Refresh disabled
+		MaxWaiters:            5000,
 	},
 	OlapReadPool: ConnPoolConfig{
-		Size:               200,
-		IdleTimeoutSeconds: 30 * 60,
+		Size:                  200,
+		IdleTimeoutSeconds:    30 * 60,
+		RefreshTimeoutSeconds: 0,
 	},
 	TxPool: ConnPoolConfig{
-		Size:               20,
-		TimeoutSeconds:     1,
-		IdleTimeoutSeconds: 30 * 60,
-		MaxWaiters:         5000,
+		Size:                  20,
+		TimeoutSeconds:        1,
+		IdleTimeoutSeconds:    30 * 60,
+		RefreshTimeoutSeconds: 0,
+		MaxWaiters:            5000,
 	},
 	Olap: OlapConfig{
 		TxTimeoutSeconds: 30,

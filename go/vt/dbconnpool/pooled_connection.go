@@ -18,6 +18,7 @@ package dbconnpool
 
 import (
 	"context"
+	"time"
 
 	"vitess.io/vitess/go/pools"
 )
@@ -25,7 +26,12 @@ import (
 // PooledDBConnection re-exposes DBConnection to be used by ConnectionPool.
 type PooledDBConnection struct {
 	*DBConnection
-	pool *ConnectionPool
+	timeCreated time.Time
+	pool        *ConnectionPool
+}
+
+func (pc *PooledDBConnection) TimeCreated() time.Time {
+	return pc.timeCreated
 }
 
 func (pc *PooledDBConnection) ApplySetting(context.Context, *pools.Setting) error {
@@ -64,5 +70,6 @@ func (pc *PooledDBConnection) Reconnect(ctx context.Context) error {
 		return err
 	}
 	pc.DBConnection = newConn
+	pc.timeCreated = time.Now()
 	return nil
 }
