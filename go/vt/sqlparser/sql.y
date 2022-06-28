@@ -6765,7 +6765,7 @@ insert_data:
   }
 | openb closeb VALUES tuple_list
   {
-    $$ = &Insert{Rows: $4}
+    $$ = &Insert{Columns: []ColIdent{}, Rows: $4}
   }
 | openb ins_column_list closeb select_statement
   {

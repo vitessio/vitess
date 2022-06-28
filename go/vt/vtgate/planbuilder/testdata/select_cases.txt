@@ -3472,3 +3472,23 @@ Gen4 plan same as above
     ]
   }
 }
+
+# Getting variable value from an authoritative table should work just fine
+# V3 still fails. Fixed in v15
+"select @@foo from authoritative"
+"symbol @@foo not found in table or subquery"
+{
+  "QueryType": "SELECT",
+  "Original": "select @@foo from authoritative",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select @@foo from authoritative where 1 != 1",
+    "Query": "select @@foo from authoritative",
+    "Table": "authoritative"
+  }
+}
