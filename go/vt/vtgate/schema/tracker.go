@@ -61,6 +61,9 @@ type (
 // defaultConsumeDelay is the default time, the updateController will wait before checking the schema fetch request queue.
 const defaultConsumeDelay = 1 * time.Second
 
+// aclErrorMessageLog is for logging a warning when an acl error message is received for querying schema tracking table.
+const aclErrorMessageLog = "Table ACL might be enabled, --schema_change_signal_user needs to be passed to VTGate for schema tracking to work. Check 'schema tracking' docs on vitess.io"
+
 // NewTracker creates the tracker object.
 func NewTracker(ch chan *discovery.TabletHealth, user *string) *Tracker {
 	ctx := context.Background()
@@ -141,7 +144,7 @@ func (t *Tracker) initKeyspace(th *discovery.TabletHealth) error {
 		log.Warningf("Unable to add the %s keyspace to the schema tracker: %v", th.Target.Keyspace, err)
 		code := vterrors.Code(err)
 		if code == vtrpcpb.Code_UNAUTHENTICATED || code == vtrpcpb.Code_PERMISSION_DENIED {
-			log.Warning("Table ACL might be enabled, --schema_change_signal_user needs to be passed to VTGate for schema tracking to work. More details on vitess.io")
+			log.Warning(aclErrorMessageLog)
 		}
 		return err
 	}
@@ -190,7 +193,7 @@ func (t *Tracker) updateSchema(th *discovery.TabletHealth) bool {
 		log.Warningf("error fetching new schema for %v, making them non-authoritative: %v", tablesUpdated, err)
 		code := vterrors.Code(err)
 		if code == vtrpcpb.Code_UNAUTHENTICATED || code == vtrpcpb.Code_PERMISSION_DENIED {
-			log.Warning("Table ACL might be enabled, --schema_change_signal_user needs to be passed to VTGate for schema tracking to work. More details on vitess.io")
+			log.Warning(aclErrorMessageLog)
 		}
 		return false
 	}

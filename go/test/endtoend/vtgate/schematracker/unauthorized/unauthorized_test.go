@@ -22,6 +22,7 @@ import (
 	"flag"
 	"os"
 	"path"
+	"strings"
 	"testing"
 	"time"
 
@@ -86,23 +87,30 @@ func TestMain(m *testing.M) {
 	os.Exit(exitCode)
 }
 
-func TestVschemaInfo(t *testing.T) {
+func TestSchemaTrackingError(t *testing.T) {
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
-	// wait for some time to try loading schema.
-	time.Sleep(1 * time.Minute)
-
 	logDir := clusterInstance.VtgateProcess.LogDir
 
-	// teardown vtgate to flush logs
-	err = clusterInstance.VtgateProcess.TearDown()
-	require.NoError(t, err)
-
-	// check info logs
-	all, err := os.ReadFile(path.Join(logDir, "vtgate.WARNING"))
-	require.NoError(t, err)
-	require.Contains(t, string(all), "Table ACL might be enabled, --schema_change_signal_user needs to be passed to VTGate for schema tracking to work. More details on vitess.io")
+	timeout := time.After(1 * time.Minute)
+	var present bool
+	for {
+		select {
+		case <-timeout:
+			t.Error("timeout waiting for schema tracking error")
+		case <-time.After(1 * time.Second):
+			// check info logs
+			all, err := os.ReadFile(path.Join(logDir, "vtgate.WARNING"))
+			require.NoError(t, err)
+			if strings.Contains(string(all), "Table ACL might be enabled, --schema_change_signal_user needs to be passed to VTGate for schema tracking to work. Check 'schema tracking' docs on vitess.io") {
+				present = true
+			}
+		}
+		if present {
+			break
+		}
+	}
 }
