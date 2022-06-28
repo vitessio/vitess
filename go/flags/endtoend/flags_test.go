@@ -304,7 +304,7 @@ var (
   --retry-count int
 	retry count (default 2)
   --schema_change_signal
-	Enable the schema tracker; requires queryserver-config-schema-change-signal to be enabled on the underlying vttablets for this to work
+	Enable the schema tracker; requires queryserver-config-schema-change-signal to be enabled on the underlying vttablets for this to work (default true)
   --schema_change_signal_user string
 	User to be used to send down query to vttablet to retrieve schema changes
   --security_policy string
@@ -1110,7 +1110,7 @@ var (
   --queryserver-config-query-timeout float
 	query server query timeout (in seconds), this is the query timeout in vttablet side. If a query takes more than this timeout, it will be killed. (default 30)
   --queryserver-config-schema-change-signal
-	query server schema signal, will signal connected vtgates that schema has changed whenever this is detected. VTGates will need to have -schema_change_signal enabled for this to work
+	query server schema signal, will signal connected vtgates that schema has changed whenever this is detected. VTGates will need to have -schema_change_signal enabled for this to work (default true)
   --queryserver-config-schema-change-signal-interval float
 	query server schema change signal interval defines at which interval the query server shall send schema updates to vtgate. (default 5)
   --queryserver-config-schema-reload-time float
