@@ -26,3 +26,11 @@ import (
 func TestXtrabackupStream(t *testing.T) {
 	backup.TestBackup(t, backup.XtraBackup, "xbstream", 8, nil, nil)
 }
+
+func TestXtrabackupStreamWithlz4Compression(t *testing.T) {
+	cDetails := &backup.CompressionDetails{
+		BuiltinCompressor: "lz4",
+	}
+
+	backup.TestBackup(t, backup.XtraBackup, "xbstream", 8, cDetails, []string{"TestReplicaBackup"})
+}

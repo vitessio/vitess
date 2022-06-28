@@ -223,7 +223,7 @@ func newBuiltinDecompressor(engine string, reader io.Reader, logger logutil.Logg
 		return decompressor, err
 	}
 
-	logger.Infof("Decompressing backup using built-in engine %q", engine)
+	logger.Infof("Decompressing backup using engine %q", engine)
 
 	return decompressor, err
 }
@@ -238,21 +238,18 @@ func newBuiltinCompressor(engine string, writer io.Writer, logger logutil.Logger
 		}
 
 		gzip.SetConcurrency(*backupCompressBlockSize, *backupCompressBlocks)
-
 		compressor = gzip
 	case "pargzip":
 		gzip := pargzip.NewWriter(writer)
 		gzip.ChunkSize = *backupCompressBlockSize
 		gzip.Parallel = *backupCompressBlocks
 		gzip.CompressionLevel = *compressionLevel
-
 		compressor = gzip
 	case "lz4":
 		lz4Writer := lz4.NewWriter(writer).WithConcurrency(*backupCompressBlocks)
 		lz4Writer.Header = lz4.Header{
 			CompressionLevel: *compressionLevel,
 		}
-
 		compressor = lz4Writer
 	case "zstd":
 		zst, err := zstd.NewWriter(writer, zstd.WithEncoderLevel(zstd.EncoderLevel(*compressionLevel)))
@@ -266,7 +263,7 @@ func newBuiltinCompressor(engine string, writer io.Writer, logger logutil.Logger
 		return compressor, err
 	}
 
-	logger.Infof("Compressing backup using built-in engine %q", engine)
+	logger.Infof("Compressing backup using engine %q", engine)
 
 	return
 }

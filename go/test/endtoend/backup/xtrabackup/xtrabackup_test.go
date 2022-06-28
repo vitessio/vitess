@@ -27,15 +27,7 @@ func TestXtrabackup(t *testing.T) {
 	backup.TestBackup(t, backup.XtraBackup, "tar", 0, nil, nil)
 }
 
-func TestBackupMainWithlz4Compression(t *testing.T) {
-	cDetails := &backup.CompressionDetails{
-		BuiltinCompressor: "lz4",
-	}
-
-	backup.TestBackup(t, backup.XtraBackup, "tar", 0, cDetails, []string{"TestReplicaBackup"})
-}
-
-func TestBackupMainWithZstdCompression(t *testing.T) {
+func TestXtrabackWithZstdCompression(t *testing.T) {
 	cDetails := &backup.CompressionDetails{
 		ExternalCompressorCmd:   "zstd",
 		ExternalCompressorExt:   ".zst",

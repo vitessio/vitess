@@ -27,7 +27,7 @@ func TestBackupMysqlctld(t *testing.T) {
 	backup.TestBackup(t, backup.Mysqlctld, "", 0, nil, nil)
 }
 
-func TestBackupMainWithlz4Compression(t *testing.T) {
+func TestBackupMysqlctldWithlz4Compression(t *testing.T) {
 	cDetails := &backup.CompressionDetails{
 		BuiltinCompressor: "lz4",
 	}
