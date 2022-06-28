@@ -2188,6 +2188,19 @@ func (node *SubstrExpr) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
+func (node *InsertExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("insert(")
+	buf.printExpr(node, node.Str, true)
+	buf.WriteString(", ")
+	buf.printExpr(node, node.Pos, true)
+	buf.WriteString(", ")
+	buf.printExpr(node, node.Len, true)
+	buf.WriteString(", ")
+	buf.printExpr(node, node.NewStr, true)
+	buf.WriteByte(')')
+}
+
+// formatFast formats the node.
 func (node *NamedWindow) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("window ")
 	node.Windows.formatFast(buf)

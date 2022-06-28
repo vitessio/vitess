@@ -3480,6 +3480,36 @@ Gen4 plan same as above
 {
   "QueryType": "SELECT",
   "Original": "select @@foo from authoritative",
+      "FieldQuery": "select @@foo from authoritative where 1 != 1",
+      "Query": "select @@foo from authoritative",
+      "Table": "authoritative"
+    }
+  }
+}
+# insert function not requiring any table
+"select insert('Quadratic', 3, 4, 'What')"
+{
+  "QueryType": "SELECT",
+  "Original": "select insert('Quadratic', 3, 4, 'What')",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Reference",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select insert('Quadratic', 3, 4, 'What') from dual where 1 != 1",
+    "Query": "select insert('Quadratic', 3, 4, 'What') from dual",
+    "Table": "dual"
+  }
+}
+Gen4 plan same as above
+
+# insert function using column names as arguments
+"select insert(tcol1, id, 3, tcol2) from user"
+{
+  "QueryType": "SELECT",
+  "Original": "select insert(tcol1, id, 3, tcol2) from user",
   "Instructions": {
     "OperatorType": "Route",
     "Variant": "Scatter",
@@ -3487,8 +3517,9 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select @@foo from authoritative where 1 != 1",
-    "Query": "select @@foo from authoritative",
-    "Table": "authoritative"
+    "FieldQuery": "select insert(tcol1, id, 3, tcol2) from `user` where 1 != 1",
+    "Query": "select insert(tcol1, id, 3, tcol2) from `user`",
+    "Table": "`user`"
   }
 }
+Gen4 plan same as above

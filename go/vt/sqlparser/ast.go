@@ -2396,6 +2396,14 @@ type (
 		Else  Expr
 	}
 
+	// InsertExpr represents an INSERT expression
+	InsertExpr struct {
+		Str    Expr
+		Pos    Expr
+		Len    Expr
+		NewStr Expr
+	}
+
 	// Default represents a DEFAULT expression.
 	Default struct {
 		ColName string
@@ -2804,6 +2812,7 @@ func (*ValuesFuncExpr) iExpr()                     {}
 func (*CastExpr) iExpr()                           {}
 func (*ConvertExpr) iExpr()                        {}
 func (*SubstrExpr) iExpr()                         {}
+func (*InsertExpr) iExpr()                         {}
 func (*ConvertUsingExpr) iExpr()                   {}
 func (*MatchExpr) iExpr()                          {}
 func (*GroupConcatExpr) iExpr()                    {}
@@ -2856,6 +2865,7 @@ func (*ValuesFuncExpr) iCallable()                     {}
 func (*ConvertExpr) iCallable()                        {}
 func (*TrimFuncExpr) iCallable()                       {}
 func (*SubstrExpr) iCallable()                         {}
+func (*InsertExpr) iCallable()                         {}
 func (*ConvertUsingExpr) iCallable()                   {}
 func (*MatchExpr) iCallable()                          {}
 func (*GroupConcatExpr) iCallable()                    {}

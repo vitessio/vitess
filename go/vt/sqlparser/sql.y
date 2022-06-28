@@ -5591,6 +5591,10 @@ function_call_keyword:
   {
     $$ = &ValuesFuncExpr{Name: $3}
   }
+| INSERT openb expression ',' expression ',' expression ',' expression closeb
+  {
+    $$ = &InsertExpr{Str: $3, Pos: $5, Len: $7, NewStr: $9}
+  }
 | CURRENT_USER func_paren_opt
   {
     $$ =  &FuncExpr{Name: NewColIdent($1)}
