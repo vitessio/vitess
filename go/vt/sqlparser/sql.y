@@ -6064,6 +6064,8 @@ ignore_number_opt:
   { $$ = nil }
 | IGNORE INTEGRAL LINES
   { $$ = NewIntVal($2) }
+| IGNORE INTEGRAL ROWS
+  { $$ = NewIntVal($2) }
 
 to_or_as:
   TO

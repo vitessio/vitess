@@ -938,7 +938,7 @@ func TestTLSServer(t *testing.T) {
 		path.Join(root, "ca-cert.pem"),
 		"",
 		"",
-		tls.VersionTLS12)
+		tls.VersionTLS13)
 	if err != nil {
 		t.Fatalf("TLSServerConfig failed: %v", err)
 	}
@@ -1045,7 +1045,7 @@ func TestTLSRequired(t *testing.T) {
 		path.Join(root, "ca-cert.pem"),
 		path.Join(root, "ca-crl.pem"),
 		"",
-		tls.VersionTLS12)
+		tls.VersionTLS13)
 	if err != nil {
 		t.Fatalf("TLSServerConfig failed: %v", err)
 	}
@@ -1104,6 +1104,10 @@ func checkCountForTLSVer(t *testing.T, version string, expected int64) {
 			t.Errorf("Expected connection count for version %s to be %d, got %d", version, expected, count)
 		}
 	} else {
+		if expected == 0 {
+			return
+		}
+
 		t.Errorf("No count found for version %s", version)
 	}
 }
