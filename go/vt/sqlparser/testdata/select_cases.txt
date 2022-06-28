@@ -169,8 +169,8 @@ END
 INPUT
 select insert('hello', 1, 18446744073709551616, 'hi');
 END
-ERROR
-syntax error at position 14 near 'insert'
+OUTPUT
+select insert('hello', 1, 18446744073709551616, 'hi') from dual
 END
 INPUT
 select @sum;
@@ -415,8 +415,8 @@ END
 INPUT
 select insert("aa",100,1,"b"),insert("aa",1,3,"b");
 END
-ERROR
-syntax error at position 14 near 'insert'
+OUTPUT
+select insert('aa', 100, 1, 'b'), insert('aa', 1, 3, 'b') from dual
 END
 INPUT
 select from t1 where MATCH a,b AGAINST ('+(support collections) +foobar*' IN BOOLEAN MODE);
@@ -667,8 +667,8 @@ END
 INPUT
 select insert('txs',null,null,'hi'),insert(null,null,null,null);
 END
-ERROR
-syntax error at position 14 near 'insert'
+OUTPUT
+select insert('txs', null, null, 'hi'), insert(null, null, null, null) from dual
 END
 INPUT
 select 'is still running;
@@ -1873,8 +1873,8 @@ END
 INPUT
 select insert('hello', -18446744073709551615, 1, 'hi');
 END
-ERROR
-syntax error at position 14 near 'insert'
+OUTPUT
+select insert('hello', -18446744073709551615, 1, 'hi') from dual
 END
 INPUT
 select substring('hello', -18446744073709551616, 1);
@@ -2065,8 +2065,8 @@ END
 INPUT
 select insert('hello', -4294967295, 1, 'hi');
 END
-ERROR
-syntax error at position 14 near 'insert'
+OUTPUT
+select insert('hello', -4294967295, 1, 'hi') from dual
 END
 INPUT
 select count(distinct f1,if(1,'',f1)) from t1;
@@ -2101,8 +2101,8 @@ END
 INPUT
 select insert('hello', 4294967297, 4294967297, 'hi');
 END
-ERROR
-syntax error at position 14 near 'insert'
+OUTPUT
+select insert('hello', 4294967297, 4294967297, 'hi') from dual
 END
 INPUT
 select 1, max(1) from t1i where a=99;
@@ -3163,8 +3163,8 @@ END
 INPUT
 select insert('hello', 18446744073709551615, 18446744073709551615, 'hi');
 END
-ERROR
-syntax error at position 14 near 'insert'
+OUTPUT
+select insert('hello', 18446744073709551615, 18446744073709551615, 'hi') from dual
 END
 INPUT
 select now()-curdate()*1000000-curtime();
@@ -3253,8 +3253,8 @@ END
 INPUT
 select insert('hello', 18446744073709551616, 1, 'hi');
 END
-ERROR
-syntax error at position 14 near 'insert'
+OUTPUT
+select insert('hello', 18446744073709551616, 1, 'hi') from dual
 END
 INPUT
 select b, group_concat(a) from t1 order by 1, 2;
@@ -3265,8 +3265,8 @@ END
 INPUT
 select insert('hello', -1, 1, 'hi');
 END
-ERROR
-syntax error at position 14 near 'insert'
+OUTPUT
+select insert('hello', -1, 1, 'hi') from dual
 END
 INPUT
 select from t1 join (t2 join t4 on b + 1 = y) on t1.c = t4.c;
@@ -4123,8 +4123,8 @@ END
 INPUT
 select insert(_ucs2 0x006100620063,1,2,_ucs2 0x006400650066);
 END
-ERROR
-syntax error at position 14 near 'insert'
+OUTPUT
+select insert(_ucs2 0x006100620063, 1, 2, _ucs2 0x006400650066) from dual
 END
 INPUT
 select hex(@utf81);
@@ -4825,8 +4825,8 @@ END
 INPUT
 select insert('hello', -18446744073709551616, 1, 'hi');
 END
-ERROR
-syntax error at position 14 near 'insert'
+OUTPUT
+select insert('hello', -18446744073709551616, 1, 'hi') from dual
 END
 INPUT
 select sql_big_result trim(v),count(t) from t1 group by v order by v limit 10;
@@ -4963,8 +4963,8 @@ END
 INPUT
 select insert('hello', 18446744073709551617, 1, 'hi');
 END
-ERROR
-syntax error at position 14 near 'insert'
+OUTPUT
+select insert('hello', 18446744073709551617, 1, 'hi') from dual
 END
 INPUT
 select distinct n2 from t1;
@@ -5089,8 +5089,8 @@ END
 INPUT
 select insert('hello', -4294967297, 1, 'hi');
 END
-ERROR
-syntax error at position 14 near 'insert'
+OUTPUT
+select insert('hello', -4294967297, 1, 'hi') from dual
 END
 INPUT
 select from (t3 cross join t4) natural join t1;
@@ -5113,8 +5113,8 @@ END
 INPUT
 select collation(insert(_latin2'abcd',2,3,_latin2'ef')), coercibility(insert(_latin2'abcd',2,3,_latin2'ef'));
 END
-ERROR
-syntax error at position 24 near 'insert'
+OUTPUT
+select collation(insert(_latin2 'abcd', 2, 3, _latin2 'ef')), coercibility(insert(_latin2 'abcd', 2, 3, _latin2 'ef')) from dual
 END
 INPUT
 select grp, group_concat(a separator "")+0 from t1 group by grp;
@@ -5665,8 +5665,8 @@ END
 INPUT
 select insert('hello', 1, -18446744073709551616, 'hi');
 END
-ERROR
-syntax error at position 14 near 'insert'
+OUTPUT
+select insert('hello', 1, -18446744073709551616, 'hi') from dual
 END
 INPUT
 select substring_index('aaaaaaaaa1','aaa',-1);
@@ -5857,8 +5857,8 @@ END
 INPUT
 select insert('hello', 1, 4294967296, 'hi');
 END
-ERROR
-syntax error at position 14 near 'insert'
+OUTPUT
+select insert('hello', 1, 4294967296, 'hi') from dual
 END
 INPUT
 select charset(a) from t3;
@@ -6289,8 +6289,8 @@ END
 INPUT
 select insert(null,2,1,'hi'),insert('txs',null,1,'hi');
 END
-ERROR
-syntax error at position 14 near 'insert'
+OUTPUT
+select insert(null, 2, 1, 'hi'), insert('txs', null, 1, 'hi') from dual
 END
 INPUT
 select date_add("1997-12-31",INTERVAL 1 DAY);
@@ -6679,8 +6679,8 @@ END
 INPUT
 select insert('hello', -4294967297, -4294967297, 'hi');
 END
-ERROR
-syntax error at position 14 near 'insert'
+OUTPUT
+select insert('hello', -4294967297, -4294967297, 'hi') from dual
 END
 INPUT
 select column_name as 'Field',column_type as 'Type',is_nullable as 'Null',column_key as 'Key',column_default as 'Default',extra as 'Extra' from information_schema.columns where table_schema='mysqltest_db1' and table_name='t_no_priv';
@@ -6793,8 +6793,8 @@ END
 INPUT
 select insert('hello', -4294967296, -4294967296, 'hi');
 END
-ERROR
-syntax error at position 14 near 'insert'
+OUTPUT
+select insert('hello', -4294967296, -4294967296, 'hi') from dual
 END
 INPUT
 select replace(concat(lcase(concat('THIS',' ','IS',' ','A',' ')),ucase('false'),' ','test'),'FALSE','REAL');
@@ -7843,8 +7843,8 @@ END
 INPUT
 select insert('hello', 1, -4294967297, 'hi');
 END
-ERROR
-syntax error at position 14 near 'insert'
+OUTPUT
+select insert('hello', 1, -4294967297, 'hi') from dual
 END
 INPUT
 select @category1_id:= 10001;
@@ -7891,8 +7891,8 @@ END
 INPUT
 select insert('hello', 1, 4294967295, 'hi');
 END
-ERROR
-syntax error at position 14 near 'insert'
+OUTPUT
+select insert('hello', 1, 4294967295, 'hi') from dual
 END
 INPUT
 select t1.* from t t0 cross join (t t1 join t t2 on 100=t0.a);
@@ -7963,8 +7963,8 @@ END
 INPUT
 select insert(_utf32 0x000000610000006200000063,1,2,_utf32 0x000000640000006500000066);
 END
-ERROR
-syntax error at position 14 near 'insert'
+OUTPUT
+select insert(_utf32 0x000000610000006200000063, 1, 2, _utf32 0x000000640000006500000066) from dual
 END
 INPUT
 select from t1 where tt like '%Aa%';
@@ -8329,8 +8329,8 @@ END
 INPUT
 select insert('hello', 1, -18446744073709551617, 'hi');
 END
-ERROR
-syntax error at position 14 near 'insert'
+OUTPUT
+select insert('hello', 1, -18446744073709551617, 'hi') from dual
 END
 INPUT
 select from t1 union all select from t2;
@@ -9841,8 +9841,8 @@ END
 INPUT
 select insert('hello', -4294967296, 1, 'hi');
 END
-ERROR
-syntax error at position 14 near 'insert'
+OUTPUT
+select insert('hello', -4294967296, 1, 'hi') from dual
 END
 INPUT
 select from t1 natural join t2 natural join t3 natural join t4;
@@ -9895,8 +9895,8 @@ END
 INPUT
 select length(repeat("a",1000000)),length(concat(repeat("a",32000),repeat("a",32000),repeat("a",32000))),length(replace("aaaaa","a",concat(repeat("a",32000)))),length(insert(repeat("a",48000),1,1000,repeat("a",48000)));
 END
-ERROR
-syntax error at position 174 near 'insert'
+OUTPUT
+select length(repeat('a', 1000000)), length(concat(repeat('a', 32000), repeat('a', 32000), repeat('a', 32000))), length(replace('aaaaa', 'a', concat(repeat('a', 32000)))), length(insert(repeat('a', 48000), 1, 1000, repeat('a', 48000))) from dual
 END
 INPUT
 select a1,a2,b,min(c),max(c) from t2 where (a2 >= 'b') and (b = 'a') and (c > 'b111') group by a1,a2,b;
@@ -11449,8 +11449,8 @@ END
 INPUT
 select t1.a as str, length(t1.a) as str_length, t2.a as pos, t2.a + 10 as length, insert(t1.a, t2.a, t2.a + 10, '1234567') as 'insert' from t1, t2;
 END
-ERROR
-syntax error at position 89 near 'insert'
+OUTPUT
+select t1.a as str, length(t1.a) as str_length, t2.a as pos, t2.a + 10 as length, insert(t1.a, t2.a, t2.a + 10, '1234567') as `insert` from t1, t2
 END
 INPUT
 select from mysql.slow_log;
@@ -11695,8 +11695,8 @@ END
 INPUT
 select insert('hello', -4294967295, -4294967295, 'hi');
 END
-ERROR
-syntax error at position 14 near 'insert'
+OUTPUT
+select insert('hello', -4294967295, -4294967295, 'hi') from dual
 END
 INPUT
 select strcmp('af','�'),strcmp('�','a'),strcmp('aeq','��'),strcmp('aeaeq','��');
@@ -11827,14 +11827,14 @@ END
 INPUT
 select insert('hello', 4294967297, 1, 'hi');
 END
-ERROR
-syntax error at position 14 near 'insert'
+OUTPUT
+select insert('hello', 4294967297, 1, 'hi') from dual
 END
 INPUT
 select insert('hello', 18446744073709551617, 18446744073709551617, 'hi');
 END
-ERROR
-syntax error at position 14 near 'insert'
+OUTPUT
+select insert('hello', 18446744073709551617, 18446744073709551617, 'hi') from dual
 END
 INPUT
 select from t1 where a is null;
@@ -11923,8 +11923,8 @@ END
 INPUT
 select insert('hello', 18446744073709551616, 18446744073709551616, 'hi');
 END
-ERROR
-syntax error at position 14 near 'insert'
+OUTPUT
+select insert('hello', 18446744073709551616, 18446744073709551616, 'hi') from dual
 END
 INPUT
 select date_add("1997-12-31 23:59:59.000002",INTERVAL "999999" MICROSECOND);
@@ -12109,8 +12109,8 @@ END
 INPUT
 select insert('hello', 18446744073709551615, 1, 'hi');
 END
-ERROR
-syntax error at position 14 near 'insert'
+OUTPUT
+select insert('hello', 18446744073709551615, 1, 'hi') from dual
 END
 INPUT
 select (select d from t2 where d > a), t1.* as 'with_alias' from t1;
@@ -12619,8 +12619,8 @@ END
 INPUT
 select insert(_utf16 0x006100620063,1,2,_utf16 0x006400650066);
 END
-ERROR
-syntax error at position 14 near 'insert'
+OUTPUT
+select insert(_utf16 0x006100620063, 1, 2, _utf16 0x006400650066) from dual
 END
 INPUT
 select length(_utf8 0xD0B1), bit_length(_utf8 0xD0B1), char_length(_utf8 0xD0B1);
@@ -12931,8 +12931,8 @@ END
 INPUT
 select concat("a",NULL),replace(NULL,"a","b"),replace("string","i",NULL),replace("string",NULL,"i"),insert("abc",1,1,NULL),left(NULL,1);
 END
-ERROR
-syntax error at position 107 near 'insert'
+OUTPUT
+select concat('a', null), replace(null, 'a', 'b'), replace('string', 'i', null), replace('string', null, 'i'), insert('abc', 1, 1, null), left(null, 1) from dual
 END
 INPUT
 select substring_index('aaaaaaaaa1','1',1);
@@ -13045,8 +13045,8 @@ END
 INPUT
 select insert('txs',2,1,'hi'),insert('is ',4,0,'a'),insert('txxxxt',2,4,'es');
 END
-ERROR
-syntax error at position 14 near 'insert'
+OUTPUT
+select insert('txs', 2, 1, 'hi'), insert('is ', 4, 0, 'a'), insert('txxxxt', 2, 4, 'es') from dual
 END
 INPUT
 select ifnull(A, 'N') as A, ifnull(B, 'N') as B, ifnull(not A, 'N') as nA, ifnull(not B, 'N') as nB, ifnull(A and B, 'N') as AB, ifnull(not (A and B), 'N') as `n(AB)`, ifnull((not A or not B), 'N') as nAonB, ifnull(A or B, 'N') as AoB, ifnull(not(A or B), 'N') as `n(AoB)`, ifnull(not A and not B, 'N') as nAnB from t1;
@@ -13285,8 +13285,8 @@ END
 INPUT
 select insert(_utf16 0x006100620063,10,2,_utf16 0x006400650066);
 END
-ERROR
-syntax error at position 14 near 'insert'
+OUTPUT
+select insert(_utf16 0x006100620063, 10, 2, _utf16 0x006400650066) from dual
 END
 INPUT
 select FIELD('1',_latin2'3','2',1);
@@ -13429,8 +13429,8 @@ END
 INPUT
 select insert('hello', 4294967295, 4294967295, 'hi');
 END
-ERROR
-syntax error at position 14 near 'insert'
+OUTPUT
+select insert('hello', 4294967295, 4294967295, 'hi') from dual
 END
 INPUT
 select INDEX_NAME from information_schema.statistics where table_schema='test' order by INDEX_NAME;
@@ -14617,8 +14617,8 @@ END
 INPUT
 select insert('hello', -18446744073709551617, -18446744073709551617, 'hi');
 END
-ERROR
-syntax error at position 14 near 'insert'
+OUTPUT
+select insert('hello', -18446744073709551617, -18446744073709551617, 'hi') from dual
 END
 INPUT
 select from t1 where word=CAST(0xDF as CHAR);
@@ -14713,8 +14713,8 @@ END
 INPUT
 select insert('hello', -18446744073709551616, -18446744073709551616, 'hi');
 END
-ERROR
-syntax error at position 14 near 'insert'
+OUTPUT
+select insert('hello', -18446744073709551616, -18446744073709551616, 'hi') from dual
 END
 INPUT
 select concat("*",name,"*") from t1 order by 1;
@@ -15991,8 +15991,8 @@ END
 INPUT
 select insert('hello', -1, -1, 'hi');
 END
-ERROR
-syntax error at position 14 near 'insert'
+OUTPUT
+select insert('hello', -1, -1, 'hi') from dual
 END
 INPUT
 select FIELD('b' COLLATE latin1_bin,'A','B');
@@ -16381,8 +16381,8 @@ END
 INPUT
 select insert('hello', 1, -4294967296, 'hi');
 END
-ERROR
-syntax error at position 14 near 'insert'
+OUTPUT
+select insert('hello', 1, -4294967296, 'hi') from dual
 END
 INPUT
 select from t1, t2 where t2.a=t1.a and t2.b + 1;
@@ -16429,8 +16429,8 @@ END
 INPUT
 select insert('txs',2,null,'hi'),insert('txs',2,1,null);
 END
-ERROR
-syntax error at position 14 near 'insert'
+OUTPUT
+select insert('txs', 2, null, 'hi'), insert('txs', 2, 1, null) from dual
 END
 INPUT
 select concat(a,'.') from t1 where a='a';
@@ -16765,8 +16765,8 @@ END
 INPUT
 select insert('hello', 4294967295, 1, 'hi');
 END
-ERROR
-syntax error at position 14 near 'insert'
+OUTPUT
+select insert('hello', 4294967295, 1, 'hi') from dual
 END
 INPUT
 select 'The cost of accessing t1 (dont care if it changes' '^';
@@ -16807,8 +16807,8 @@ END
 INPUT
 select insert('hello', 1, -4294967295, 'hi');
 END
-ERROR
-syntax error at position 14 near 'insert'
+OUTPUT
+select insert('hello', 1, -4294967295, 'hi') from dual
 END
 INPUT
 select hex(ucs2),hex(ujis),name from t1 order by name;
@@ -17173,8 +17173,8 @@ END
 INPUT
 select insert('hello', 1, -18446744073709551615, 'hi');
 END
-ERROR
-syntax error at position 14 near 'insert'
+OUTPUT
+select insert('hello', 1, -18446744073709551615, 'hi') from dual
 END
 INPUT
 select value,description,bug_id from t2 left join t1 on t2.program=t1.product and t2.value=t1.component where program="AAAAA";
@@ -17347,8 +17347,8 @@ END
 INPUT
 select insert("aa",100,1,"b"),insert("aa",1,3,"b"),left("aa",-1),substring("a",1,2);
 END
-ERROR
-syntax error at position 14 near 'insert'
+OUTPUT
+select insert('aa', 100, 1, 'b'), insert('aa', 1, 3, 'b'), left('aa', -1), substr('a', 1, 2) from dual
 END
 INPUT
 select "Test delimiter //" as " ";
@@ -17857,8 +17857,8 @@ END
 INPUT
 select insert('hello', 1, -1, 'hi');
 END
-ERROR
-syntax error at position 14 near 'insert'
+OUTPUT
+select insert('hello', 1, -1, 'hi') from dual
 END
 INPUT
 select i from t1 where i = 1 into j;
@@ -18847,8 +18847,8 @@ END
 INPUT
 select insert('hello', 4294967296, 1, 'hi');
 END
-ERROR
-syntax error at position 14 near 'insert'
+OUTPUT
+select insert('hello', 4294967296, 1, 'hi') from dual
 END
 INPUT
 select one.id, elt(two.val,'one','two') from t1 one, t2 two where two.id=one.id;
@@ -19093,8 +19093,8 @@ END
 INPUT
 select insert('hello', 4294967296, 4294967296, 'hi');
 END
-ERROR
-syntax error at position 14 near 'insert'
+OUTPUT
+select insert('hello', 4294967296, 4294967296, 'hi') from dual
 END
 INPUT
 select aes_decrypt(NULL,"a");
@@ -19525,8 +19525,8 @@ END
 INPUT
 select insert('hello', 1, 18446744073709551617, 'hi');
 END
-ERROR
-syntax error at position 14 near 'insert'
+OUTPUT
+select insert('hello', 1, 18446744073709551617, 'hi') from dual
 END
 INPUT
 select format(d, 2) from t1;
@@ -19987,8 +19987,8 @@ END
 INPUT
 select insert(_utf32 0x000000610000006200000063,10,2,_utf32 0x000000640000006500000066);
 END
-ERROR
-syntax error at position 14 near 'insert'
+OUTPUT
+select insert(_utf32 0x000000610000006200000063, 10, 2, _utf32 0x000000640000006500000066) from dual
 END
 INPUT
 select a,sec_to_time(sum(time_to_sec(t))) from t1 group by a,b;
@@ -20035,8 +20035,8 @@ END
 INPUT
 select insert(c1,1,2,'�'),insert('�',1,2,c1) from t1;
 END
-ERROR
-syntax error at position 14 near 'insert'
+OUTPUT
+select insert(c1, 1, 2, '�'), insert('�', 1, 2, c1) from t1
 END
 INPUT
 select substring_index('the king of the the null',null,3);
@@ -20755,8 +20755,8 @@ END
 INPUT
 select insert('hello', -18446744073709551615, -18446744073709551615, 'hi');
 END
-ERROR
-syntax error at position 14 near 'insert'
+OUTPUT
+select insert('hello', -18446744073709551615, -18446744073709551615, 'hi') from dual
 END
 INPUT
 select s1,hex(s1),char_length(s1),octet_length(s1) from t1;
@@ -21019,8 +21019,8 @@ END
 INPUT
 select insert('hello', 1, 18446744073709551615, 'hi');
 END
-ERROR
-syntax error at position 14 near 'insert'
+OUTPUT
+select insert('hello', 1, 18446744073709551615, 'hi') from dual
 END
 INPUT
 select 1 /bin /boot /cdrom /dev /etc /home /lib /lib32 /lib64 /libx32 /lost+found /media /mnt /opt /proc /root /run /sbin /snap /srv /swapfile /sys /tmp /usr /var long multi line comment */;
@@ -21433,8 +21433,8 @@ END
 INPUT
 select insert(_ucs2 0x006100620063,10,2,_ucs2 0x006400650066);
 END
-ERROR
-syntax error at position 14 near 'insert'
+OUTPUT
+select insert(_ucs2 0x006100620063, 10, 2, _ucs2 0x006400650066) from dual
 END
 INPUT
 select *, MATCH(a,b) AGAINST("support collections" IN BOOLEAN MODE) as x from t1;
@@ -22027,8 +22027,8 @@ END
 INPUT
 select insert('hello', -18446744073709551617, 1, 'hi');
 END
-ERROR
-syntax error at position 14 near 'insert'
+OUTPUT
+select insert('hello', -18446744073709551617, 1, 'hi') from dual
 END
 INPUT
 select 'a' like 'a';
@@ -22261,8 +22261,8 @@ END
 INPUT
 select insert('hello', 1, 4294967297, 'hi');
 END
-ERROR
-syntax error at position 14 near 'insert'
+OUTPUT
+select insert('hello', 1, 4294967297, 'hi') from dual
 END
 INPUT
 select last_day('2005-00-01');
@@ -22357,8 +22357,8 @@ END
 INPUT
 select length(repeat("a",65500)),length(concat(repeat("a",32000),repeat("a",32000))),length(replace("aaaaa","a",concat(repeat("a",10000)))),length(insert(repeat("a",40000),1,30000,repeat("b",50000)));
 END
-ERROR
-syntax error at position 154 near 'insert'
+OUTPUT
+select length(repeat('a', 65500)), length(concat(repeat('a', 32000), repeat('a', 32000))), length(replace('aaaaa', 'a', concat(repeat('a', 10000)))), length(insert(repeat('a', 40000), 1, 30000, repeat('b', 50000))) from dual
 END
 INPUT
 select date_add(date,INTERVAL 1 HOUR) from t1;
