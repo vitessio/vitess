@@ -365,6 +365,18 @@ func TestSchemaChange(t *testing.T) {
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusRunning)
 		testRows(t)
 
+		rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+		require.NotNil(t, rs)
+		for _, row := range rs.Named().Rows {
+			startedTimestamp := row.AsString("started_timestamp", "")
+			require.NotEmpty(t, startedTimestamp)
+			lastThrottledTimestamp := row.AsString("last_throttled_timestamp", "")
+			assert.NotEmpty(t, lastThrottledTimestamp)
+			assert.Greater(t, lastThrottledTimestamp, startedTimestamp)
+			component := row.AsString("component_throttled", "")
+			assert.Contains(t, []string{"vcopier", "vplayer"}, component)
+		}
+
 		// unthrottle
 		onlineddl.UnthrottleAllMigrations(t, &vtParams)
 		onlineddl.CheckThrottledApps(t, &vtParams, throttlerAppName, false)
