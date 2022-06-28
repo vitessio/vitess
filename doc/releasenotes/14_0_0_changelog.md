@@ -1,4 +1,4 @@
-                        # Changelog of Vitess v14.0.0
+# Changelog of Vitess v14.0.0
 
 ### Announcement
 #### CLI
