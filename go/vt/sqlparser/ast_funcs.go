@@ -2012,3 +2012,7 @@ func convertStringToInt(integer string) int {
 	val, _ := strconv.Atoi(integer)
 	return val
 }
+
+func (node *ColName) IsVariable() bool {
+	return node.Name.AtCount() != NoAt
+}
