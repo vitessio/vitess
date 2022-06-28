@@ -783,6 +783,26 @@ Gen4 plan same as above
 }
 Gen4 plan same as above
 
+#delete with join from multi table join subquery
+"delete foo from unsharded as foo left join (select id from unsharded a join unsharded_b b on a.user_id = b.user_id) as keepers on foo.id = keepers.id where keepers.id is null and foo.col is not null and foo.col < 1000"
+{
+  "QueryType": "DELETE",
+  "Original": "delete foo from unsharded as foo left join (select id from unsharded a join unsharded_b b on a.user_id = b.user_id) as keepers on foo.id = keepers.id where keepers.id is null and foo.col is not null and foo.col \u003c 1000",
+  "Instructions": {
+    "OperatorType": "Delete",
+    "Variant": "Unsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetTabletType": "PRIMARY",
+    "MultiShardAutocommit": false,
+    "Query": "delete foo from unsharded as foo left join (select id from unsharded as a join unsharded_b as b on a.user_id = b.user_id) as keepers on foo.id = keepers.id where keepers.id is null and foo.col is not null and foo.col \u003c 1000",
+    "Table": "unsharded, unsharded, unsharded_b"
+  }
+}
+Gen4 plan same as above
+
 # routing rules: deleted from a routed table
 "delete from route1 where id = 1"
 {

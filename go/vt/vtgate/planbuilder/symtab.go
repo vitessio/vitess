@@ -212,7 +212,9 @@ func (st *symtab) AllVschemaTableNames() []*vindexes.Table {
 	}
 	tables := make([]*vindexes.Table, 0, len(st.tableNames))
 	for _, tname := range st.tableNames {
-		tables = append(tables, st.tables[tname].vschemaTable)
+		if vschemaTable := st.tables[tname].vschemaTable; vschemaTable != nil {
+			tables = append(tables, vschemaTable)
+		}
 	}
 	return tables
 }
