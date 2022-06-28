@@ -3201,6 +3201,7 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 					_ = e.updateRowsCopied(ctx, uuid, s.rowsCopied)
 					_ = e.updateMigrationProgressByRowsCopied(ctx, uuid, s.rowsCopied)
 					_ = e.updateMigrationETASecondsByProgress(ctx, uuid)
+					_ = e.updateMigrationLastThrottled(ctx, uuid, s.timeThrottled, s.componentThrottled)
 
 					isReady, err := e.isVReplMigrationReadyToCutOver(ctx, s)
 					if err != nil {
@@ -3769,6 +3770,19 @@ func (e *Executor) updateMigrationProgressByRowsCopied(ctx context.Context, uuid
 
 func (e *Executor) updateMigrationETASecondsByProgress(ctx context.Context, uuid string) error {
 	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationETASecondsByProgress,
+		sqltypes.StringBindVariable(uuid),
+	)
+	if err != nil {
+		return err
+	}
+	_, err = e.execQuery(ctx, query)
+	return err
+}
+
+func (e *Executor) updateMigrationLastThrottled(ctx context.Context, uuid string, lastThrottledUnixTime int64, throttledCompnent string) error {
+	query, err := sqlparser.ParseAndBind(sqlUpdateLastThrottled,
+		sqltypes.Int64BindVariable(lastThrottledUnixTime),
+		sqltypes.StringBindVariable(throttledCompnent),
 		sqltypes.StringBindVariable(uuid),
 	)
 	if err != nil {
