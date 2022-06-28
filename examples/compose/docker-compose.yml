@@ -124,7 +124,7 @@ services:
     - -c
     - ' /vt/bin/vtctld -topo_implementation consul -topo_global_server_address consul1:8500
       -topo_global_root vitess/global -cell test -workflow_manager_init -workflow_manager_use_election
-      -service_map ''grpc-vtctl'' -backup_storage_implementation file -file_backup_storage_root
+      -service_map ''grpc-vtctl,grpc-vtctld'' -backup_storage_implementation file -file_backup_storage_root
       /vt/vtdataroot/backups -logtostderr=true -port 8080 -grpc_port 15999 '
     depends_on:
       external_db_host:
@@ -163,6 +163,8 @@ services:
     environment:
     - TOPOLOGY_FLAGS=-topo_implementation consul -topo_global_server_address consul1:8500
       -topo_global_root vitess/global
+    - KEYSPACES=test_keyspace lookup_keyspace
+    - GRPC_PORT=15999
     - EXTERNAL_DB=0
     - DB_USER=
     - DB_PASS=

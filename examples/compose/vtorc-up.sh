@@ -18,6 +18,9 @@ set -u
 
 external=${EXTERNAL_DB:-0}
 config=${VTORC_CONFIG:-/vt/orchestrator/config.json}
+keyspaces=${KEYSPACES:-'test_keyspace lookup_keyspace'}
+sleeptime=${SLEEPTIME:-'10'}
+
 # Copy config directory
 cp -R /script/orchestrator /vt
 # Update credentials
@@ -35,6 +38,14 @@ if [ $external = 1 ] ; then
 else
     cp /vt/orchestrator/default.json /vt/orchestrator/config.json
 fi
+
+sleep $sleeptime
+
+# set the correct durability policy for the keyspace
+for keyspace in $keyspaces; do
+  echo "Set Keyspace Durability Policy ${keyspace} to none"
+  /vt/bin/vtctldclient --server vtctld:$GRPC_PORT SetKeyspaceDurabilityPolicy --durability-policy=none $keyspace
+done
 
 echo "Starting vtorc..."
 exec /vt/bin/vtorc \
