@@ -1,0 +1,26 @@
+name: close_stale_pull_requests
+on:
+  schedule:
+    - cron: '0 1 * * *'
+
+permissions:
+  pull-requests: write
+
+jobs:
+  close_stale_pull_requests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/stale@v5
+        with:
+          days-before-stale: 30
+          # Do not handle issues at all. We only want to handle PRs.
+          days-before-issue-stale: -1
+
+          stale-pr-message: "This PR is stale because it has been open for 30 days with no activity. Remove stale label or comment, or this will be closed in 7 days."
+          close-pr-message: "This PR was closed because it has been stale for 7 days with no activity."
+
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+          # (TODO:ajm188) - remove these after testing/validating the workflow.
+          debug-only: true
+          enable-statistics: true
