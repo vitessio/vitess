@@ -107,7 +107,8 @@
  * fix: aggregation empty row on join with grouping and aggregations #10480
  * Backport to release-14: Fix parsing of CAST() statements #10512 and #10514 #10517
  * Fix casing of vitess migration syntax and comments printing #10535
- * VReplication: more unrecoverable error codes #10559 
+ * VReplication: more unrecoverable error codes #10559
+ * [14.0] fix: handle planner_version and planner-version correctly #10604 
 #### VReplication
  * Update error description for deprecated command #9622
  * Support VDiff across DB versions #9679
@@ -580,13 +581,15 @@
 #### Build/CI
  * Updating 13.0.0 release notes on main #9759
  * Rework how the `release notes` labels are handled by the CI #10508
- * Rework the generation of the release notes #10510 
+ * Rework the generation of the release notes #10510
+ * Post release 14.0.0 updates #10600 
 #### General
  * Moving dev to 14.0.0-SNAPSHOT #9611
  * Addition of release notes for v13.0.1 #10097
  * add caller_id to 13.0.0 release notes #10124
  * Release notes documents for `v12.0.4` on `main` #10350
  * [14.0] Update and prepare the `v14.0.0` summary #10569
+ * Revert snapshot incrementation in release-14.0 #10605
 ### Testing 
 #### Build/CI
  * More aggressive tests for vitess migration cut-over #9956
