@@ -26,6 +26,7 @@ import (
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/timer"
 	vtschema "vitess.io/vitess/go/vt/schema"
 
 	"vitess.io/vitess/go/mysql"
@@ -268,8 +269,8 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 	}
 
 	// Main loop: calls bufferAndTransmit as events arrive.
-	timer := time.NewTimer(HeartbeatTime)
-	defer timer.Stop()
+	hbTimer := time.NewTimer(HeartbeatTime)
+	defer hbTimer.Stop()
 
 	now := time.Now().UnixNano()
 	injectHeartbeat := func(throttled bool) error {
@@ -286,9 +287,8 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 	}
 
 	throttleEvents := func(throttledEvents chan mysql.BinlogEvent) {
-		throttledHeartbeats := time.NewTicker(HeartbeatTime)
+		throttledHeartbeatsRateLimiter := timer.NewRateLimiter(HeartbeatTime)
 		for {
-			isThrottled := false
 			// check throttler.
 			if !vs.vse.throttlerClient.ThrottleCheckOKOrWait(ctx) {
 				// make sure to leave if context is cancelled
@@ -298,20 +298,11 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 				default:
 					// do nothing special
 				}
-				isThrottled = true
-			}
-			select {
-			case <-throttledHeartbeats.C:
-				// always drain the ticker, but only do something if we're actively throttling.
-				if isThrottled {
-					_ = injectHeartbeat(true)
-				}
-			default:
-				// do nothing special
-			}
-			if isThrottled {
-				continue
+				throttledHeartbeatsRateLimiter.Do(func() error {
+					return injectHeartbeat(true)
+				})
 				// we won't process events, until we're no longer throttling
+				continue
 			}
 			select {
 			case ev, ok := <-events:
@@ -337,10 +328,10 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 	go throttleEvents(throttledEvents)
 
 	for {
-		timer.Reset(HeartbeatTime)
+		hbTimer.Reset(HeartbeatTime)
 		// Drain event if timer fired before reset.
 		select {
-		case <-timer.C:
+		case <-hbTimer.C:
 		default:
 		}
 
@@ -376,7 +367,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			vschemaUpdateCount.Add(1)
 		case <-ctx.Done():
 			return nil
-		case <-timer.C:
+		case <-hbTimer.C:
 			if err := injectHeartbeat(false); err != nil {
 				vs.vse.errorCounts.Add("Send", 1)
 				return fmt.Errorf("error sending event: %v", err)
