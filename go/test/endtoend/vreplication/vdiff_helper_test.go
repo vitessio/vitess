@@ -162,15 +162,22 @@ func vdiff2Resume(t *testing.T, keyspace, workflow, cells string, expectedRows i
 	require.Equal(t, expectedRows, info.RowsCompared)
 }
 
-func performVDiff2Action(t *testing.T, ksWorkflow, cells, action, actionArg string, expectError bool) (uuid string, output string) {
+func performVDiff2Action(t *testing.T, ksWorkflow, cells, action, actionArg string, expectError bool, extraFlags ...string) (uuid string, output string) {
 	var err error
-	output, err = vc.VtctlClient.ExecuteCommandWithOutput("VDiff", "--", "--v2", "--tablet_types=primary", "--source_cell="+cells, "--format=json", ksWorkflow, action, actionArg)
+	if len(extraFlags) > 0 {
+		output, err = vc.VtctlClient.ExecuteCommandWithOutput("VDiff", "--", "--v2", "--tablet_types=primary", "--source_cell="+cells, "--format=json",
+			strings.Join(extraFlags, " "), ksWorkflow, action, actionArg)
+	} else {
+		output, err = vc.VtctlClient.ExecuteCommandWithOutput("VDiff", "--", "--v2", "--tablet_types=primary", "--source_cell="+cells, "--format=json", ksWorkflow, action, actionArg)
+	}
 	log.Infof("vdiff2 output: %+v (err: %+v)", output, err)
 	if !expectError {
 		require.Nil(t, err)
 		uuid, err = jsonparser.GetString([]byte(output), "UUID")
-		require.NoError(t, err)
-		require.NotEmpty(t, uuid)
+		if action != "delete" && !(action == "show" && actionArg == "all") { // a UUID is not required
+			require.NoError(t, err)
+			require.NotEmpty(t, uuid)
+		}
 	}
 	return uuid, output
 }

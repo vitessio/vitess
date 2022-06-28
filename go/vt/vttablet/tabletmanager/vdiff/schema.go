@@ -81,12 +81,17 @@ const (
 	sqlGetVDiffByKeyspaceWorkflowUUID = "select * from _vt.vdiff where keyspace = %s and workflow = %s and vdiff_uuid = %s"
 	sqlGetMostRecentVDiff             = "select * from _vt.vdiff where keyspace = %s and workflow = %s order by id desc limit 1"
 	sqlGetVDiffByID                   = "select * from _vt.vdiff where id = %d"
-	sqlVDiffSummary                   = `select vd.state as vdiff_state, vdt.table_name as table_name,
-										vd.vdiff_uuid as 'uuid', vdt.state as table_state, vdt.table_rows as table_rows,
-										vd.started_at as started_at, vdt.rows_compared as rows_compared, vd.completed_at as completed_at,
-										IF(vdt.mismatch = 1, 1, 0) as has_mismatch, vdt.report as report
-										from _vt.vdiff as vd inner join _vt.vdiff_table as vdt on (vd.id = vdt.vdiff_id)
-										where vdt.vdiff_id = %d`
+	// sqlDeleteVDiffs has a placeholder for any query predicates -- deleting all VDiffs by default
+	sqlDeleteVDiffs = `delete from vd, vdt using _vt.vdiff as vd inner join _vt.vdiff_table as vdt on (vd.id = vdt.vdiff_id) where
+						vd.keyspace = %s and vd.workflow = %s`
+	sqlDeleteVDiffByUUID = `delete from vd, vdt using _vt.vdiff as vd inner join _vt.vdiff_table as vdt on (vd.id = vdt.vdiff_id)
+							and vd.keyspace = %s and vd.workflow = %s and vd.vdiff_uuid = %s`
+	sqlVDiffSummary = `select vd.state as vdiff_state, vdt.table_name as table_name,
+						vd.vdiff_uuid as 'uuid', vdt.state as table_state, vdt.table_rows as table_rows,
+						vd.started_at as started_at, vdt.rows_compared as rows_compared, vd.completed_at as completed_at,
+						IF(vdt.mismatch = 1, 1, 0) as has_mismatch, vdt.report as report
+						from _vt.vdiff as vd inner join _vt.vdiff_table as vdt on (vd.id = vdt.vdiff_id)
+						where vdt.vdiff_id = %d`
 	// sqlUpdateVDiffState has a penultimate placeholder for any additional columns you want to update, e.g. `, foo = 1`
 	sqlUpdateVDiffState     = "update _vt.vdiff set state = %s %s where id = %d"
 	sqlGetVReplicationEntry = "select * from _vt.vreplication %s"

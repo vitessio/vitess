@@ -175,6 +175,15 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, cells []*Cell) 
 		})
 	}
 
+	// test show verbose and delete
+	_, output := performVDiff2Action(t, ksWorkflow, allCellNames, "show", "last", false, "--verbose")
+	// only present with --verbose
+	require.Contains(t, output, `"TableSummary":`)
+	_, output = performVDiff2Action(t, ksWorkflow, allCellNames, "delete", "all", false)
+	require.Contains(t, output, `"Status": "completed"`)
+	_, output = performVDiff2Action(t, ksWorkflow, allCellNames, "show", "all", false)
+	require.Equal(t, "[]\n", output)
+
 	err = vc.VtctlClient.ExecuteCommand(tc.typ, "--", "SwitchTraffic", ksWorkflow)
 	require.NoError(t, err)
 	err = vc.VtctlClient.ExecuteCommand(tc.typ, "--", "Complete", ksWorkflow)
