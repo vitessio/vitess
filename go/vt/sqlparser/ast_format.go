@@ -1651,6 +1651,11 @@ func (node *SubstrExpr) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
+func (node *InsertExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "insert(%v, %v, %v, %v)", node.Str, node.Pos, node.Len, node.NewStr)
+}
+
+// Format formats the node.
 func (node *NamedWindow) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "window %v", node.Windows)
 }
