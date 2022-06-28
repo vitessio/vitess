@@ -1540,6 +1540,32 @@ func (cached *Insert) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *InsertExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(64)
+	}
+	// field Str vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Str.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Pos vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Pos.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Len vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Len.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field NewStr vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.NewStr.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
 func (cached *IntervalExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

@@ -1080,7 +1080,8 @@ func (node Columns) Format(buf *TrackedBuffer) {
 	if node == nil {
 		return
 	}
-	prefix := "("
+	buf.WriteByte('(')
+	prefix := ""
 	for _, n := range node {
 		buf.astPrintf(node, "%s%v", prefix, n)
 		prefix = ", "
@@ -1662,6 +1663,11 @@ func (node *SubstrExpr) Format(buf *TrackedBuffer) {
 	} else {
 		buf.astPrintf(node, "substr(%v, %v, %v)", node.Name, node.From, node.To)
 	}
+}
+
+// Format formats the node.
+func (node *InsertExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "insert(%v, %v, %v, %v)", node.Str, node.Pos, node.Len, node.NewStr)
 }
 
 // Format formats the node.

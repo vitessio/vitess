@@ -73,7 +73,7 @@ func tableListSQL(tables []string) (string, error) {
 
 // GetSchema returns the schema for database for tables listed in
 // tables. If tables is empty, return the schema for all tables.
-func (mysqld *Mysqld) GetSchema(ctx context.Context, dbName string, tables, excludeTables []string, includeViews bool, tableSchemaOnly bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
+func (mysqld *Mysqld) GetSchema(ctx context.Context, dbName string, request *tabletmanagerdatapb.GetSchemaRequest) (*tabletmanagerdatapb.SchemaDefinition, error) {
 	sd := &tabletmanagerdatapb.SchemaDefinition{}
 	backtickDBName := sqlescape.EscapeID(dbName)
 
@@ -87,7 +87,7 @@ func (mysqld *Mysqld) GetSchema(ctx context.Context, dbName string, tables, excl
 	}
 	sd.DatabaseSchema = strings.Replace(qr.Rows[0][1].ToString(), backtickDBName, "{{.DatabaseName}}", 1)
 
-	tds, err := mysqld.collectBasicTableData(ctx, dbName, tables, excludeTables, includeViews)
+	tds, err := mysqld.collectBasicTableData(ctx, dbName, request.Tables, request.ExcludeTables, request.IncludeViews)
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +107,7 @@ func (mysqld *Mysqld) GetSchema(ctx context.Context, dbName string, tables, excl
 		go func(td *tabletmanagerdatapb.TableDefinition) {
 			defer wg.Done()
 
-			fields, columns, schema, err := mysqld.collectSchema(ctx, dbName, td.Name, td.Type, tableSchemaOnly)
+			fields, columns, schema, err := mysqld.collectSchema(ctx, dbName, td.Name, td.Type, request.TableSchemaOnly)
 			if err != nil {
 				allErrors.RecordError(err)
 				cancel()
@@ -255,7 +255,8 @@ func (mysqld *Mysqld) normalizedSchema(ctx context.Context, dbName, tableName, t
 // ResolveTables returns a list of actual tables+views matching a list
 // of regexps
 func ResolveTables(ctx context.Context, mysqld MysqlDaemon, dbName string, tables []string) ([]string, error) {
-	sd, err := mysqld.GetSchema(ctx, dbName, tables, nil, true, true /* skip column/field introspection */)
+	req := &tabletmanagerdatapb.GetSchemaRequest{Tables: tables, IncludeViews: true, TableSchemaOnly: true}
+	sd, err := mysqld.GetSchema(ctx, dbName, req)
 	if err != nil {
 		return nil, err
 	}
@@ -389,7 +390,8 @@ func (mysqld *Mysqld) PreflightSchemaChange(ctx context.Context, dbName string, 
 	results := make([]*tabletmanagerdatapb.SchemaChangeResult, len(changes))
 
 	// Get current schema from the real database.
-	originalSchema, err := mysqld.GetSchema(ctx, dbName, nil, nil, true, true /* skip column introspection */)
+	req := &tabletmanagerdatapb.GetSchemaRequest{IncludeViews: true, TableSchemaOnly: true}
+	originalSchema, err := mysqld.GetSchema(ctx, dbName, req)
 	if err != nil {
 		return nil, err
 	}
@@ -421,7 +423,8 @@ func (mysqld *Mysqld) PreflightSchemaChange(ctx context.Context, dbName string, 
 
 	// For each change, record the schema before and after.
 	for i, change := range changes {
-		beforeSchema, err := mysqld.GetSchema(ctx, "_vt_preflight", nil, nil, true, false)
+		req := &tabletmanagerdatapb.GetSchemaRequest{IncludeViews: true}
+		beforeSchema, err := mysqld.GetSchema(ctx, "_vt_preflight", req)
 		if err != nil {
 			return nil, err
 		}
@@ -435,7 +438,7 @@ func (mysqld *Mysqld) PreflightSchemaChange(ctx context.Context, dbName string, 
 		}
 
 		// get the result
-		afterSchema, err := mysqld.GetSchema(ctx, "_vt_preflight", nil, nil, true, false)
+		afterSchema, err := mysqld.GetSchema(ctx, "_vt_preflight", req)
 		if err != nil {
 			return nil, err
 		}
@@ -456,7 +459,8 @@ func (mysqld *Mysqld) PreflightSchemaChange(ctx context.Context, dbName string, 
 // ApplySchemaChange will apply the schema change to the given database.
 func (mysqld *Mysqld) ApplySchemaChange(ctx context.Context, dbName string, change *tmutils.SchemaChange) (*tabletmanagerdatapb.SchemaChangeResult, error) {
 	// check current schema matches
-	beforeSchema, err := mysqld.GetSchema(ctx, dbName, nil, nil, true, false)
+	req := &tabletmanagerdatapb.GetSchemaRequest{IncludeViews: true}
+	beforeSchema, err := mysqld.GetSchema(ctx, dbName, req)
 	if err != nil {
 		return nil, err
 	}
@@ -510,7 +514,7 @@ func (mysqld *Mysqld) ApplySchemaChange(ctx context.Context, dbName string, chan
 	}
 
 	// get AfterSchema
-	afterSchema, err := mysqld.GetSchema(ctx, dbName, nil, nil, true, false)
+	afterSchema, err := mysqld.GetSchema(ctx, dbName, req)
 	if err != nil {
 		return nil, err
 	}

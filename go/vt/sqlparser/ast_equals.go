@@ -548,6 +548,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfInsert(a, b)
+	case *InsertExpr:
+		b, ok := inB.(*InsertExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfInsertExpr(a, b)
 	case *IntervalExpr:
 		b, ok := inB.(*IntervalExpr)
 		if !ok {
@@ -2546,6 +2552,20 @@ func EqualsRefOfInsert(a, b *Insert) bool {
 		EqualsColumns(a.Columns, b.Columns) &&
 		EqualsInsertRows(a.Rows, b.Rows) &&
 		EqualsOnDup(a.OnDup, b.OnDup)
+}
+
+// EqualsRefOfInsertExpr does deep equals between the two objects.
+func EqualsRefOfInsertExpr(a, b *InsertExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsExpr(a.Str, b.Str) &&
+		EqualsExpr(a.Pos, b.Pos) &&
+		EqualsExpr(a.Len, b.Len) &&
+		EqualsExpr(a.NewStr, b.NewStr)
 }
 
 // EqualsRefOfIntervalExpr does deep equals between the two objects.
@@ -4733,6 +4753,12 @@ func EqualsCallable(inA, inB Callable) bool {
 			return false
 		}
 		return EqualsRefOfGroupConcatExpr(a, b)
+	case *InsertExpr:
+		b, ok := inB.(*InsertExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfInsertExpr(a, b)
 	case *JSONArrayExpr:
 		b, ok := inB.(*JSONArrayExpr)
 		if !ok {
@@ -5354,6 +5380,12 @@ func EqualsExpr(inA, inB Expr) bool {
 			return false
 		}
 		return EqualsRefOfGroupConcatExpr(a, b)
+	case *InsertExpr:
+		b, ok := inB.(*InsertExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfInsertExpr(a, b)
 	case *IntervalExpr:
 		b, ok := inB.(*IntervalExpr)
 		if !ok {

@@ -760,8 +760,9 @@ func (msdw *MultiSplitDiffWorker) gatherSchemaInfo(ctx context.Context) ([]*tabl
 		go func(i int, destinationAlias *topodatapb.TabletAlias) {
 			var err error
 			shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+			req := &tabletmanagerdatapb.GetSchemaRequest{ExcludeTables: msdw.excludeTables}
 			destinationSchemaDefinition, err := schematools.GetSchema(
-				shortCtx, msdw.wr.TopoServer(), msdw.wr.TabletManagerClient(), destinationAlias, nil /* tables */, msdw.excludeTables, false /* includeViews */, false)
+				shortCtx, msdw.wr.TopoServer(), msdw.wr.TabletManagerClient(), destinationAlias, req)
 			cancel()
 			if err != nil {
 				msdw.markAsWillFail(rec, err)
@@ -775,8 +776,9 @@ func (msdw *MultiSplitDiffWorker) gatherSchemaInfo(ctx context.Context) ([]*tabl
 	go func() {
 		var err error
 		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+		req := &tabletmanagerdatapb.GetSchemaRequest{ExcludeTables: msdw.excludeTables}
 		sourceSchemaDefinition, err = schematools.GetSchema(
-			shortCtx, msdw.wr.TopoServer(), msdw.wr.TabletManagerClient(), msdw.sourceAlias, nil /* tables */, msdw.excludeTables, false /* includeViews */, false)
+			shortCtx, msdw.wr.TopoServer(), msdw.wr.TabletManagerClient(), msdw.sourceAlias, req)
 		cancel()
 		if err != nil {
 			msdw.markAsWillFail(rec, err)

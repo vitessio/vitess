@@ -40,7 +40,7 @@ type RPCTM interface {
 
 	Ping(ctx context.Context, args string) string
 
-	GetSchema(ctx context.Context, tables, excludeTables []string, includeViews bool, tableSchemaOnly bool) (*tabletmanagerdatapb.SchemaDefinition, error)
+	GetSchema(ctx context.Context, request *tabletmanagerdatapb.GetSchemaRequest) (*tabletmanagerdatapb.SchemaDefinition, error)
 
 	GetPermissions(ctx context.Context) (*tabletmanagerdatapb.Permissions, error)
 

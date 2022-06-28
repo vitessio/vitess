@@ -196,6 +196,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfIndexInfo(parent, node, replacer)
 	case *Insert:
 		return a.rewriteRefOfInsert(parent, node, replacer)
+	case *InsertExpr:
+		return a.rewriteRefOfInsertExpr(parent, node, replacer)
 	case *IntervalExpr:
 		return a.rewriteRefOfIntervalExpr(parent, node, replacer)
 	case *IntroducerExpr:
@@ -3173,6 +3175,48 @@ func (a *application) rewriteRefOfInsert(parent SQLNode, node *Insert, replacer 
 	}
 	if !a.rewriteOnDup(node, node.OnDup, func(newNode, parent SQLNode) {
 		parent.(*Insert).OnDup = newNode.(OnDup)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfInsertExpr(parent SQLNode, node *InsertExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.Str, func(newNode, parent SQLNode) {
+		parent.(*InsertExpr).Str = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.Pos, func(newNode, parent SQLNode) {
+		parent.(*InsertExpr).Pos = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.Len, func(newNode, parent SQLNode) {
+		parent.(*InsertExpr).Len = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.NewStr, func(newNode, parent SQLNode) {
+		parent.(*InsertExpr).NewStr = newNode.(Expr)
 	}) {
 		return false
 	}
@@ -8144,6 +8188,8 @@ func (a *application) rewriteCallable(parent SQLNode, node Callable, replacer re
 		return a.rewriteRefOfGTIDFuncExpr(parent, node, replacer)
 	case *GroupConcatExpr:
 		return a.rewriteRefOfGroupConcatExpr(parent, node, replacer)
+	case *InsertExpr:
+		return a.rewriteRefOfInsertExpr(parent, node, replacer)
 	case *JSONArrayExpr:
 		return a.rewriteRefOfJSONArrayExpr(parent, node, replacer)
 	case *JSONAttributesExpr:
@@ -8386,6 +8432,8 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfGTIDFuncExpr(parent, node, replacer)
 	case *GroupConcatExpr:
 		return a.rewriteRefOfGroupConcatExpr(parent, node, replacer)
+	case *InsertExpr:
+		return a.rewriteRefOfInsertExpr(parent, node, replacer)
 	case *IntervalExpr:
 		return a.rewriteRefOfIntervalExpr(parent, node, replacer)
 	case *IntroducerExpr:
