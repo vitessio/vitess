@@ -634,17 +634,15 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		stats.Send(fmt.Sprintf("%v", event.Journal))
 		return io.EOF
 	case binlogdatapb.VEventType_HEARTBEAT:
-		switch event.CurrentTime {
-		case int64(binlogdatapb.StreamerHeartbeatHint_VSTREAMER_THROTTLED):
+		if event.Throttled {
 			if err := vp.vr.updateTimeThrottled("vstreamer"); err != nil {
 				return err
 			}
-		default:
-			if !vp.vr.dbClient.InTransaction {
-				vp.numAccumulatedHeartbeats++
-				if err := vp.recordHeartbeat(); err != nil {
-					return err
-				}
+		}
+		if !vp.vr.dbClient.InTransaction {
+			vp.numAccumulatedHeartbeats++
+			if err := vp.recordHeartbeat(); err != nil {
+				return err
 			}
 		}
 	}

@@ -229,10 +229,6 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 	var sqlbuffer bytes2.Buffer
 
 	err = vc.vr.sourceVStreamer.VStreamRows(ctx, initialPlan.SendRule.Filter, lastpkpb, func(rows *binlogdatapb.VStreamRowsResponse) error {
-		if rows.Throttled {
-			_ = vc.vr.updateTimeThrottled("rowstreamer")
-			return nil
-		}
 		for {
 			select {
 			case <-rowsCopiedTicker.C:
@@ -241,6 +237,10 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 			case <-ctx.Done():
 				return io.EOF
 			default:
+			}
+			if rows.Throttled {
+				_ = vc.vr.updateTimeThrottled("rowstreamer")
+				return nil
 			}
 			// verify throttler is happy, otherwise keep looping
 			if vc.vr.vre.throttlerClient.ThrottleCheckOKOrWaitAppName(ctx, vc.throttlerAppName) {

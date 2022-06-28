@@ -271,11 +271,13 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 	timer := time.NewTimer(HeartbeatTime)
 	defer timer.Stop()
 
-	injectHeartbeat := func(timeValue int64) error {
+	now := time.Now().UnixNano()
+	injectHeartbeat := func(throttled bool) error {
 		err := bufferAndTransmit(&binlogdatapb.VEvent{
 			Type:        binlogdatapb.VEventType_HEARTBEAT,
-			Timestamp:   timeValue / 1e9,
-			CurrentTime: timeValue,
+			Timestamp:   now / 1e9,
+			CurrentTime: now,
+			Throttled:   throttled,
 		})
 		if err == io.EOF {
 			err = nil
@@ -302,7 +304,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			case <-throttledHeartbeats.C:
 				// always drain the ticker, but only do something if we're actively throttling.
 				if isThrottled {
-					_ = injectHeartbeat(int64(binlogdatapb.StreamerHeartbeatHint_VSTREAMER_THROTTLED))
+					_ = injectHeartbeat(true)
 				}
 			default:
 				// do nothing special
@@ -375,7 +377,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 		case <-ctx.Done():
 			return nil
 		case <-timer.C:
-			if err := injectHeartbeat(time.Now().UnixNano()); err != nil {
+			if err := injectHeartbeat(false); err != nil {
 				vs.vse.errorCounts.Add("Send", 1)
 				return fmt.Errorf("error sending event: %v", err)
 			}

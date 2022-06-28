@@ -213,11 +213,6 @@ enum VReplicationWorkflowType {
   ONLINEDDL = 5;
 }
 
-enum StreamerHeartbeatHint {
-  NONE = 0;
-  VSTREAMER_THROTTLED = 1;
-}
-
 // BinlogSource specifies the source  and filter parameters for
 // Filtered Replication. KeyRange and Tables are legacy. Filter
 // is the new way to specify the filtering rules.
@@ -415,7 +410,8 @@ message VEvent {
   string keyspace = 22;
   // the source shard
   string shard = 23;
-
+  // indicate that we are beign throttled right now
+  bool throttled = 24;
 }
 
 message MinimalTable {
