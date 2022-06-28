@@ -25,7 +25,7 @@ import (
 )
 
 // buildDeletePlan builds the instructions for a DELETE statement.
-func buildDeletePlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (engine.Primitive, error) {
+func buildDeletePlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
 	del := stmt.(*sqlparser.Delete)
 	if del.With != nil {
 		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: with expression in delete statement")
@@ -44,7 +44,7 @@ func buildDeletePlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedV
 	edel := &engine.Delete{DML: dml}
 
 	if dml.Opcode == engine.Unsharded {
-		return edel, nil
+		return newPlanResult(edel), nil
 	}
 
 	if len(del.Targets) > 1 {
@@ -70,7 +70,7 @@ func buildDeletePlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedV
 		edel.KsidLength = len(ksidVindex.Columns)
 	}
 
-	return edel, nil
+	return newPlanResult(edel), nil
 }
 
 func rewriteSingleTbl(del *sqlparser.Delete) (*sqlparser.Delete, error) {

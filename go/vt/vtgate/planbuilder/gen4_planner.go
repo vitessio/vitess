@@ -32,7 +32,7 @@ import (
 var _ stmtPlanner = gen4Planner("apa", 0)
 
 func gen4Planner(query string, plannerVersion querypb.ExecuteOptions_PlannerVersion) stmtPlanner {
-	return func(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (engine.Primitive, error) {
+	return func(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
 		switch stmt := stmt.(type) {
 		case sqlparser.SelectStatement:
 			return gen4SelectStmtPlanner(query, plannerVersion, stmt, reservedVars, vschema)
@@ -50,7 +50,7 @@ func gen4SelectStmtPlanner(
 	stmt sqlparser.SelectStatement,
 	reservedVars *sqlparser.ReservedVars,
 	vschema plancontext.VSchema,
-) (engine.Primitive, error) {
+) (*planResult, error) {
 	switch node := stmt.(type) {
 	case *sqlparser.Select:
 		if node.With != nil {
@@ -67,7 +67,7 @@ func gen4SelectStmtPlanner(
 		// handle dual table for processing at vtgate.
 		p, err := handleDualSelects(sel, vschema)
 		if err != nil || p != nil {
-			return p, err
+			return newPlanResult(p), err
 		}
 
 		if sel.SQLCalcFoundRows && sel.Limit != nil {
@@ -90,7 +90,7 @@ func gen4SelectStmtPlanner(
 		// by transforming the predicates to CNF, the planner will sometimes find better plans
 		primitive := gen4CNFRewrite(stmt, getPlan)
 		if primitive != nil {
-			return primitive, nil
+			return newPlanResult(primitive), nil
 		}
 	}
 
@@ -105,10 +105,10 @@ func gen4SelectStmtPlanner(
 		}
 	}
 
-	return primitive, nil
+	return newPlanResult(primitive), nil
 }
 
-func gen4planSQLCalcFoundRows(vschema plancontext.VSchema, sel *sqlparser.Select, query string, reservedVars *sqlparser.ReservedVars) (engine.Primitive, error) {
+func gen4planSQLCalcFoundRows(vschema plancontext.VSchema, sel *sqlparser.Select, query string, reservedVars *sqlparser.ReservedVars) (*planResult, error) {
 	ksName := ""
 	if ks, _ := vschema.DefaultKeyspace(); ks != nil {
 		ksName = ks.Name
@@ -128,7 +128,7 @@ func gen4planSQLCalcFoundRows(vschema plancontext.VSchema, sel *sqlparser.Select
 	if err != nil {
 		return nil, err
 	}
-	return plan.Primitive(), nil
+	return newPlanResult(plan.Primitive()), nil
 }
 
 func planSelectGen4(reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, sel *sqlparser.Select) (*jointab, logicalPlan, error) {
@@ -233,7 +233,7 @@ func gen4UpdateStmtPlanner(
 	updStmt *sqlparser.Update,
 	reservedVars *sqlparser.ReservedVars,
 	vschema plancontext.VSchema,
-) (engine.Primitive, error) {
+) (*planResult, error) {
 	if updStmt.With != nil {
 		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: with expression in update statement")
 	}
@@ -261,7 +261,7 @@ func gen4UpdateStmtPlanner(
 		edml.Opcode = engine.Unsharded
 		edml.Query = generateQuery(updStmt)
 		upd := &engine.Update{DML: edml}
-		return upd, nil
+		return newPlanResult(upd), nil
 	}
 
 	if semTable.NotUnshardedErr != nil {
@@ -299,13 +299,13 @@ func gen4UpdateStmtPlanner(
 		return nil, err
 	}
 
-	setLockOnAllSelect(err, plan)
+	setLockOnAllSelect(plan)
 
 	if err := plan.WireupGen4(semTable); err != nil {
 		return nil, err
 	}
 
-	return plan.Primitive(), nil
+	return newPlanResult(plan.Primitive()), nil
 }
 
 func rewriteRoutedTables(updStmt *sqlparser.Update, vschema plancontext.VSchema) (err error) {
@@ -340,7 +340,7 @@ func rewriteRoutedTables(updStmt *sqlparser.Update, vschema plancontext.VSchema)
 	return
 }
 
-func setLockOnAllSelect(err error, plan logicalPlan) {
+func setLockOnAllSelect(plan logicalPlan) {
 	_, _ = visit(plan, func(plan logicalPlan) (bool, logicalPlan, error) {
 		switch node := plan.(type) {
 		case *routeGen4:
