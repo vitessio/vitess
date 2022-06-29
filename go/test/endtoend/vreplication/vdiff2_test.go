@@ -190,6 +190,8 @@ func testCLIErrors(t *testing.T, ksWorkflow, cells string) {
 		require.Contains(t, output, "please provide a valid UUID")
 		_, output = performVDiff2Action(t, ksWorkflow, cells, "resume", "invalid_uuid", true)
 		require.Contains(t, output, "can only resume a specific vdiff, please provide a valid UUID")
+		_, output = performVDiff2Action(t, ksWorkflow, cells, "delete", "invalid_uuid", true)
+		require.Contains(t, output, "can only delete a specific vdiff, please provide a valid UUID")
 		uuid, _ := performVDiff2Action(t, ksWorkflow, cells, "show", "last", false)
 		_, output = performVDiff2Action(t, ksWorkflow, cells, "create", uuid, true)
 		require.Contains(t, output, "already exists")
@@ -199,9 +201,11 @@ func testCLIErrors(t *testing.T, ksWorkflow, cells string) {
 func testDelete(t *testing.T, ksWorkflow, cells string) {
 	t.Run("Delete", func(t *testing.T) {
 		// test show verbose too as a side effect
-		_, output := performVDiff2Action(t, ksWorkflow, cells, "show", "last", false, "--verbose")
+		uuid, output := performVDiff2Action(t, ksWorkflow, cells, "show", "last", false, "--verbose")
 		// only present with --verbose
 		require.Contains(t, output, `"TableSummary":`)
+		_, output = performVDiff2Action(t, ksWorkflow, cells, "delete", uuid, false)
+		require.Contains(t, output, `"Status": "completed"`)
 		_, output = performVDiff2Action(t, ksWorkflow, cells, "delete", "all", false)
 		require.Contains(t, output, `"Status": "completed"`)
 		_, output = performVDiff2Action(t, ksWorkflow, cells, "show", "all", false)
