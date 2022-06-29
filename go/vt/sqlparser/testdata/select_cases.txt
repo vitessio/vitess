@@ -5245,8 +5245,8 @@ END
 INPUT
 select count(*), case interval(qty,2,3,4,5,6,7,8) when -1 then NULL when 0 then "zero" when 1 then "one" when 2 then "two" end as category from t1 group by category;
 END
-ERROR
-syntax error at position 55 near 'when'
+OUTPUT
+select count(*), case interval(qty, 2, 3, 4, 5, 6, 7, 8) when -1 then null when 0 then 'zero' when 1 then 'one' when 2 then 'two' end as category from t1 group by category
 END
 INPUT
 select table_priv,column_priv from mysql.tables_priv where user="mysqltest_1";
@@ -6823,8 +6823,8 @@ END
 INPUT
 select interval(55,10,20,30,40,50,60,70,80,90,100),interval(3,1,1+1,1+1+1+1),field("IBM","NCA","ICL","SUN","IBM","DIGITAL"),field("A","B","C"),elt(2,"ONE","TWO","THREE"),interval(0,1,2,3,4),elt(1,1,2,3)|0,elt(1,1.1,1.2,1.3)+0;
 END
-ERROR
-syntax error at position 52
+OUTPUT
+select interval(55, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100), interval(3, 1, 1 + 1, 1 + 1 + 1 + 1), field('IBM', 'NCA', 'ICL', 'SUN', 'IBM', 'DIGITAL'), field('A', 'B', 'C'), elt(2, 'ONE', 'TWO', 'THREE'), interval(0, 1, 2, 3, 4), elt(1, 1, 2, 3) | 0, elt(1, 1.1, 1.2, 1.3) + 0 from dual
 END
 INPUT
 select FIELD('b',_latin2'A','B');
@@ -11719,8 +11719,8 @@ END
 INPUT
 select a, MAX(b), INTERVAL (MAX(b), 1,3,10,30,39,40,50,60,100,1000) from t1 group by a;
 END
-ERROR
-syntax error at position 73 near 'from'
+OUTPUT
+select a, max(b), interval(max(b), 1, 3, 10, 30, 39, 40, 50, 60, 100, 1000) from t1 group by a
 END
 INPUT
 select d as e, two as f from v;
@@ -14125,8 +14125,8 @@ END
 INPUT
 select interval(null, 1, 10, 100);
 END
-ERROR
-syntax error at position 35
+OUTPUT
+select interval(null, 1, 10, 100) from dual
 END
 INPUT
 select TABLE_ROWS from information_schema.tables where table_schema="information_schema" and table_name="COLUMNS";
@@ -16825,8 +16825,8 @@ END
 INPUT
 select count(*), interval(qty,2,3,4,5,6,7,8) as category from t1 group by category;
 END
-ERROR
-syntax error at position 48 near 'as'
+OUTPUT
+select count(*), interval(qty, 2, 3, 4, 5, 6, 7, 8) as category from t1 group by category
 END
 INPUT
 select SQL_BUFFER_RESULT from t1 order by 1, 2;
