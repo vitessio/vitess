@@ -316,6 +316,6 @@ A long time ago, the sharding column and type were specified at the keyspace lev
 ------------
 The entire changelog for this release can be found [here](https://github.com/vitessio/vitess/blob/main/doc/releasenotes/14_0_0_changelog.md).
 
-The release includes 1098 commits (excluding merges)
+The release includes 1101 commits (excluding merges)
 
 Thanks to all our contributors: @FancyFane, @GuptaManan100, @Juneezee, @K-Kumar-01, @Phanatic, @ajm188, @akenneth, @aquarapid, @arthurschreiber, @brendar, @cuishuang, @dasl-, @dbussink, @deepthi, @dependabot[bot], @derekperkins, @doeg, @fatih, @frouioui, @harshit-gangal, @malpani, @matthiasr, @mattlord, @mattrobenolt, @notfelineit, @pjambet, @rohit-nayak-ps, @rsajwani, @shlomi-noach, @simon-engledew, @systay, @utk9, @vmg, @vmogilev, @y5w, @yields
