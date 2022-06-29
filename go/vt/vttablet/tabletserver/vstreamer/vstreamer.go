@@ -280,9 +280,6 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			CurrentTime: now,
 			Throttled:   throttled,
 		})
-		if err == io.EOF {
-			err = nil
-		}
 		return err
 	}
 
@@ -369,6 +366,9 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			return nil
 		case <-hbTimer.C:
 			if err := injectHeartbeat(false); err != nil {
+				if err == io.EOF {
+					return nil
+				}
 				vs.vse.errorCounts.Add("Send", 1)
 				return fmt.Errorf("error sending event: %v", err)
 			}
