@@ -213,11 +213,11 @@ func buildInsertSelectPlan(ins *sqlparser.Insert, table *vindexes.Table, reserve
 	// When the table you are steaming data from and table you are inserting from are same.
 	// Then due to locking of the index range on the table we might not be able to insert into the table.
 	// Therefore, instead of streaming, this flag will ensure the records are first read and then inserted.
-	if strings.Contains(plan.GetTableName(), table.Name.String()) {
+	if strings.Contains(plan.primitive.GetTableName(), table.Name.String()) {
 		eins.ForceNonStreaming = true
 	}
 
-	// auto-increment column is added explicility if not provided.
+	// auto-increment column is added explicitly if not provided.
 	if err := modifyForAutoinc(ins, eins); err != nil {
 		return nil, err
 	}

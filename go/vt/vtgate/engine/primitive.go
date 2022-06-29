@@ -18,7 +18,6 @@ package engine
 
 import (
 	"context"
-	"time"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
@@ -115,7 +114,7 @@ type (
 		StreamExecutePrimitiveStandalone(ctx context.Context, primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(result *sqltypes.Result) error) error
 	}
 
-	//SessionActions gives primitives ability to interact with the session state
+	// SessionActions gives primitives ability to interact with the session state
 	SessionActions interface {
 		// RecordWarning stores the given warning in the current session
 		RecordWarning(warning *querypb.QueryWarning)

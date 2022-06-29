@@ -246,7 +246,7 @@ func createInstructionFor(query string, stmt sqlparser.Statement, reservedVars *
 	case *sqlparser.CommentOnly:
 		// There is only a comment in the input.
 		// This is essentially a No-op
-		return engine.NewRowsPrimitive(nil, nil), nil
+		return newPlanResult(engine.NewRowsPrimitive(nil, nil)), nil
 	}
 
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unexpected statement type: %T", stmt)
