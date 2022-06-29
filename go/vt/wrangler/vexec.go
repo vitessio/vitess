@@ -45,9 +45,9 @@ import (
 )
 
 const (
-	vexecTableQualifier    = "_vt"
-	vreplicationTableName  = "vreplication"
-	sqlVReplicationlDelete = "delete from _vt.vreplication"
+	vexecTableQualifier   = "_vt"
+	vreplicationTableName = "vreplication"
+	sqlVReplicationDelete = "delete from _vt.vreplication"
 )
 
 // vexec is the construct by which we run a query against backend shards. vexec is created by user-facing
@@ -215,7 +215,7 @@ func (vx *vexec) exec() (map[*topo.TabletInfo]*querypb.QueryResult, error) {
 			} else {
 				// If we deleted a workflow then let's make a best effort attempt to clean
 				// up any related data.
-				if vx.query == sqlVReplicationlDelete {
+				if vx.query == sqlVReplicationDelete {
 					query := fmt.Sprintf(sqlDeleteVDiffs, encodeString(primary.Keyspace), encodeString(vx.workflow))
 					if _, err := vx.wr.tmc.ExecuteFetchAsDba(ctx, primary.Tablet, false, []byte(query), -1, false, false); err != nil {
 						vx.wr.Logger().Infof("Error deleting vdiff data for %s.%s workflow: %v", primary.Keyspace, vx.workflow, err)
@@ -324,7 +324,7 @@ func (wr *Wrangler) getWorkflowActionQuery(action string) (string, error) {
 	case "start":
 		query = fmt.Sprintf(updateSQL, encodeString("Running"))
 	case "delete":
-		query = sqlVReplicationlDelete
+		query = sqlVReplicationDelete
 	default:
 		return "", fmt.Errorf("invalid action found: %s", action)
 	}
