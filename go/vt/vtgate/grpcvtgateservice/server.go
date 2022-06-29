@@ -110,12 +110,6 @@ func (vtg *VTGate) Execute(ctx context.Context, request *vtgatepb.ExecuteRequest
 	if session == nil {
 		session = &vtgatepb.Session{Autocommit: true}
 	}
-	if session.TargetString == "" && request.TabletType != topodatapb.TabletType_UNKNOWN {
-		session.TargetString = request.KeyspaceShard + "@" + topoproto.TabletTypeLString(request.TabletType)
-	}
-	if session.Options == nil {
-		session.Options = request.Options
-	}
 	session, result, err := vtg.server.Execute(ctx, session, request.Query.Sql, request.Query.BindVariables)
 	return &vtgatepb.ExecuteResponse{
 		Result:  sqltypes.ResultToProto3(result),

@@ -161,9 +161,6 @@ message ReadAfterWrite {
 
 // ExecuteRequest is the payload to Execute.
 message ExecuteRequest {
-  // Deprecated:
-  // bool not_in_transaction = 5;
-  reserved 5;
   // caller_id identifies the caller. This is the effective caller ID,
   // set by the application to further identify the caller.
   vtrpc.CallerID caller_id = 1;
@@ -175,10 +172,16 @@ message ExecuteRequest {
   query.BoundQuery query = 3;
 
   // These values are deprecated. Use session instead.
-  // TODO(sougou): remove in 3.1
-  topodata.TabletType tablet_type = 4;
-  string keyspace_shard = 6;
-  query.ExecuteOptions options = 7;
+  // topodata.TabletType tablet_type = 4;
+  // string keyspace_shard = 6;
+  // query.ExecuteOptions options = 7;
+  reserved 4;
+  reserved 6;
+  reserved 7;
+  // Deprecated:
+  // bool not_in_transaction = 5;
+  reserved 5;
+
 }
 
 // ExecuteResponse is the returned value from Execute.
