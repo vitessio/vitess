@@ -17,6 +17,7 @@ limitations under the License.
 package planbuilder
 
 import (
+	"fmt"
 	"sort"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -67,11 +68,15 @@ type (
 	stmtPlanner func(sqlparser.Statement, *sqlparser.ReservedVars, plancontext.VSchema) (*planResult, error)
 )
 
-func newPlanResult(prim engine.Primitive) *planResult {
-	return &planResult{primitive: prim}
+func newPlanResult(prim engine.Primitive, tablesUsed ...string) *planResult {
+	return &planResult{primitive: prim, tables: tablesUsed}
 }
 
-func newPlanResultFromSemTable(prim engine.Primitive, semTable *semantics.SemTable) *planResult {
+func singleTable(ks, tbl string) string {
+	return fmt.Sprintf("%s.%s", ks, tbl)
+}
+
+func tablesFromSemantics(semTable *semantics.SemTable) []string {
 	tables := make(map[string]any, len(semTable.Tables))
 	for _, info := range semTable.Tables {
 		vindexTable := info.GetVindexTable()
@@ -86,7 +91,7 @@ func newPlanResultFromSemTable(prim engine.Primitive, semTable *semantics.SemTab
 		names = append(names, tbl)
 	}
 	sort.Strings(names)
-	return &planResult{primitive: prim, tables: names}
+	return names
 }
 
 // TestBuilder builds a plan for a query based on the specified vschema.
@@ -351,7 +356,7 @@ func buildVSchemaDDLPlan(stmt *sqlparser.AlterVschema, vschema plancontext.VSche
 	return newPlanResult(&engine.AlterVSchema{
 		Keyspace:        keyspace,
 		AlterVschemaDDL: stmt,
-	}), nil
+	}, singleTable(keyspace.Name, stmt.Table.Name.String())), nil
 }
 
 func buildFlushPlan(stmt *sqlparser.Flush, vschema plancontext.VSchema) (*planResult, error) {
@@ -369,16 +374,22 @@ func buildFlushOptions(stmt *sqlparser.Flush, vschema plancontext.VSchema) (*pla
 	if dest == nil {
 		dest = key.DestinationAllShards{}
 	}
+	tc := &tableCollector{}
+	for _, tbl := range stmt.TableNames {
+		tc.addASTTable(keyspace.Name, tbl)
+	}
+
 	return newPlanResult(&engine.Send{
 		Keyspace:          keyspace,
 		TargetDestination: dest,
 		Query:             sqlparser.String(stmt),
 		IsDML:             false,
 		SingleShardOnly:   false,
-	}), nil
+	}, tc.getTables()...), nil
 }
 
 func buildFlushTables(stmt *sqlparser.Flush, vschema plancontext.VSchema) (*planResult, error) {
+	tc := &tableCollector{}
 	type sendDest struct {
 		ks   *vindexes.Keyspace
 		dest key.Destination
@@ -403,7 +414,7 @@ func buildFlushTables(stmt *sqlparser.Flush, vschema plancontext.VSchema) (*plan
 		if table == nil {
 			return nil, vindexes.NotFoundError{TableName: tab.Name.String()}
 		}
-
+		tc.addTable(table.Keyspace.Name, table.Name.String())
 		ksTab = table.Keyspace
 		stmt.TableNames[i] = sqlparser.TableName{
 			Name: table.Name,
@@ -424,7 +435,7 @@ func buildFlushTables(stmt *sqlparser.Flush, vschema plancontext.VSchema) (*plan
 				Keyspace:          sendDest.ks,
 				TargetDestination: sendDest.dest,
 				Query:             sqlparser.String(newFlushStmt(stmt, tables)),
-			}), nil
+			}, tc.getTables()...), nil
 		}
 	}
 
@@ -441,7 +452,51 @@ func buildFlushTables(stmt *sqlparser.Flush, vschema plancontext.VSchema) (*plan
 		}
 		sources = append(sources, plan)
 	}
-	return newPlanResult(engine.NewConcatenate(sources, nil)), nil
+	return newPlanResult(engine.NewConcatenate(sources, nil), tc.getTables()...), nil
+}
+
+type tableCollector struct {
+	tables map[string]any
+}
+
+func (tc *tableCollector) addTable(ks, tbl string) {
+	if tc.tables == nil {
+		tc.tables = map[string]any{}
+	}
+	tc.tables[fmt.Sprintf("%s.%s", ks, tbl)] = nil
+}
+func (tc *tableCollector) addASTTable(ks string, tbl sqlparser.TableName) {
+	tc.addTable(ks, tbl.Name.String())
+}
+
+func (tc *tableCollector) getTables() []string {
+	tableNames := make([]string, 0, len(tc.tables))
+	for tbl := range tc.tables {
+		tableNames = append(tableNames, tbl)
+	}
+
+	sort.Strings(tableNames)
+	return tableNames
+}
+
+func (tc *tableCollector) addVindexTable(t *vindexes.Table) {
+	if t == nil {
+		return
+	}
+	ks, tbl := "", t.Name.String()
+	if t.Keyspace != nil {
+		ks = t.Keyspace.Name
+	}
+	tc.addTable(ks, tbl)
+}
+
+func (tc *tableCollector) addAllTables(tables []string) {
+	if tc.tables == nil {
+		tc.tables = map[string]any{}
+	}
+	for _, tbl := range tables {
+		tc.tables[tbl] = nil
+	}
 }
 
 func newFlushStmt(stmt *sqlparser.Flush, tables sqlparser.TableNames) *sqlparser.Flush {

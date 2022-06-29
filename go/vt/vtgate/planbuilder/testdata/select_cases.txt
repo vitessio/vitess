@@ -831,7 +831,24 @@ Gen4 error: Column 'col' in field list is ambiguous
     ]
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select database() from dual",
+  "Instructions": {
+    "OperatorType": "Projection",
+    "Expressions": [
+      ":__vtdbname as database()"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "SingleRow"
+      }
+    ]
+  },
+  "TablesUsed": [
+    "dual"
+  ]
+}
 
 # last_insert_id for unsharded route
 "select last_insert_id() as x from main.unsharded"
@@ -2664,7 +2681,24 @@ Gen4 error: symbol t.col not found
     ]
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select 42",
+  "Instructions": {
+    "OperatorType": "Projection",
+    "Expressions": [
+      "INT64(42) as 42"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "SingleRow"
+      }
+    ]
+  },
+  "TablesUsed": [
+    "dual"
+  ]
+}
 
 # don't filter on the vtgate
 "select 42 from dual where false"
@@ -2719,7 +2753,24 @@ Gen4 plan same as above
     ]
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select 42+2",
+  "Instructions": {
+    "OperatorType": "Projection",
+    "Expressions": [
+      "INT64(44) as 42 + 2"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "SingleRow"
+      }
+    ]
+  },
+  "TablesUsed": [
+    "dual"
+  ]
+}
 
 # sql_calc_found_rows without limit
 "select sql_calc_found_rows * from music where user_id = 1"
@@ -2853,7 +2904,10 @@ Gen4 plan same as above
         ]
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "user.music"
+  ]
 }
 
 # sql_calc_found_rows with SelectEqualUnique plans
@@ -2897,7 +2951,48 @@ Gen4 plan same as above
     ]
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select sql_calc_found_rows * from music where user_id = 1 limit 2",
+  "Instructions": {
+    "OperatorType": "SQL_CALC_FOUND_ROWS",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select * from music where 1 != 1",
+        "Query": "select * from music where user_id = 1 limit 2",
+        "Table": "music",
+        "Values": [
+          "INT64(1)"
+        ],
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select count(*) from music where 1 != 1",
+        "Query": "select count(*) from music where user_id = 1",
+        "Table": "music",
+        "Values": [
+          "INT64(1)"
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  },
+  "TablesUsed": [
+    "user.music"
+  ]
+}
 
 # sql_calc_found_rows with group by and having
 "select sql_calc_found_rows user_id, count(id) from music group by user_id having count(user_id) = 1 order by user_id limit 2"
@@ -2991,7 +3086,10 @@ Gen4 plan same as above
         ]
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "user.music"
+  ]
 }
 
 # sql_calc_found_rows in sub queries
@@ -3262,7 +3360,24 @@ Gen4 plan same as above
     ]
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "((((select 1))))",
+  "Instructions": {
+    "OperatorType": "Projection",
+    "Expressions": [
+      "INT64(1) as 1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "SingleRow"
+      }
+    ]
+  },
+  "TablesUsed": [
+    "dual"
+  ]
+}
 
 # Merging dual with user
 "select 42, id from dual, user"
@@ -3689,7 +3804,24 @@ Gen4 plan same as above
     ]
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select N'string' from dual",
+  "Instructions": {
+    "OperatorType": "Projection",
+    "Expressions": [
+      "VARCHAR(\"string\") as N'string'"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "SingleRow"
+      }
+    ]
+  },
+  "TablesUsed": [
+    "dual"
+  ]
+}
 
 # select expression having dependencies on both sides of a join
 "select user.id * user_id as amount from user, user_extra"
@@ -4965,7 +5097,24 @@ Gen4 plan same as above
     "Table": "dual"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select insert('Quadratic', 3, 4, 'What')",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Reference",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select insert('Quadratic', 3, 4, 'What') from dual where 1 != 1",
+    "Query": "select insert('Quadratic', 3, 4, 'What') from dual",
+    "Table": "dual"
+  },
+  "TablesUsed": [
+    "main.dual"
+  ]
+}
 
 # insert function using column names as arguments
 "select insert(tcol1, id, 3, tcol2) from user"
@@ -4984,7 +5133,24 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select insert(tcol1, id, 3, tcol2) from user",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select insert(tcol1, id, 3, tcol2) from `user` where 1 != 1",
+    "Query": "select insert(tcol1, id, 3, tcol2) from `user`",
+    "Table": "`user`"
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
+}
 
 # gtid functions
 "select gtid_subset('3E11FA47-71CA-11E1-9E33-C80AA9429562:23','3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57'), gtid_subtract('3E11FA47-71CA-11E1-9E33-C80AA9429562:23','3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57')"
@@ -5003,5 +5169,21 @@ Gen4 plan same as above
     "Table": "dual"
   }
 }
-Gen4 plan same as above
-
+{
+  "QueryType": "SELECT",
+  "Original": "select gtid_subset('3E11FA47-71CA-11E1-9E33-C80AA9429562:23','3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57'), gtid_subtract('3E11FA47-71CA-11E1-9E33-C80AA9429562:23','3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57')",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Reference",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select gtid_subset('3E11FA47-71CA-11E1-9E33-C80AA9429562:23', '3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57'), gtid_subtract('3E11FA47-71CA-11E1-9E33-C80AA9429562:23', '3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57') from dual where 1 != 1",
+    "Query": "select gtid_subset('3E11FA47-71CA-11E1-9E33-C80AA9429562:23', '3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57'), gtid_subtract('3E11FA47-71CA-11E1-9E33-C80AA9429562:23', '3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57') from dual",
+    "Table": "dual"
+  },
+  "TablesUsed": [
+    "main.dual"
+  ]
+}

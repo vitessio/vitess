@@ -80,7 +80,12 @@ func buildGeneralDDLPlan(sql string, ddlStatement sqlparser.DDLStatement, reserv
 
 		CreateTempTable: ddlStatement.IsTemporary(),
 	}
-	return newPlanResult(eddl), nil
+	tc := &tableCollector{}
+	for _, tbl := range ddlStatement.AffectedTables() {
+		tc.addASTTable(normalDDLPlan.Keyspace.Name, tbl)
+	}
+
+	return newPlanResult(eddl, tc.getTables()...), nil
 }
 
 func buildByPassDDLPlan(sql string, vschema plancontext.VSchema) (*planResult, error) {

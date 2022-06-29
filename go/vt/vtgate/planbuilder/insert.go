@@ -74,6 +74,8 @@ func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table, rese
 		table.Keyspace,
 	)
 	var rows sqlparser.Values
+	tc := &tableCollector{}
+	tc.addVindexTable(table)
 	switch insertValues := ins.Rows.(type) {
 	case *sqlparser.Select, *sqlparser.Union:
 		if eins.Table.AutoIncrement != nil {
@@ -83,13 +85,14 @@ func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table, rese
 		if err != nil {
 			return nil, err
 		}
+		tc.addAllTables(plan.tables)
 		if route, ok := plan.primitive.(*engine.Route); ok && !route.Keyspace.Sharded && table.Keyspace.Name == route.Keyspace.Name {
 			eins.Query = generateQuery(ins)
-			return newPlanResult(eins), nil
+		} else {
+			eins.Input = plan.primitive
+			generateInsertSelectQuery(ins, eins)
 		}
-		eins.Input = plan.primitive
-		generateInsertSelectQuery(ins, eins)
-		return newPlanResult(eins), nil
+		return newPlanResult(eins, tc.getTables()...), nil
 	case sqlparser.Values:
 		rows = insertValues
 	default:
@@ -119,7 +122,7 @@ func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table, rese
 		eins.Query = generateQuery(ins)
 	}
 
-	return newPlanResult(eins), nil
+	return newPlanResult(eins, tc.getTables()...), nil
 }
 
 func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
@@ -127,6 +130,8 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table, reserv
 		Table:    table,
 		Keyspace: table.Keyspace,
 	}
+	tc := &tableCollector{}
+	tc.addVindexTable(table)
 	eins.Ignore = bool(ins.Ignore)
 	if ins.OnDup != nil {
 		if isVindexChanging(sqlparser.UpdateExprs(ins.OnDup), eins.Table.ColumnVindexes) {
@@ -194,6 +199,8 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table, reserv
 // buildInsertSelectPlan builds an insert using select plan.
 func buildInsertSelectPlan(ins *sqlparser.Insert, table *vindexes.Table, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, eins *engine.Insert) (*planResult, error) {
 	eins.Opcode = engine.InsertSelect
+	tc := &tableCollector{}
+	tc.addVindexTable(table)
 
 	// check if column list is provided if not, then vschema should be able to provide the column list.
 	if len(ins.Columns) == 0 {
@@ -208,6 +215,7 @@ func buildInsertSelectPlan(ins *sqlparser.Insert, table *vindexes.Table, reserve
 	if err != nil {
 		return nil, err
 	}
+	tc.addAllTables(plan.tables)
 	eins.Input = plan.primitive
 
 	// When the table you are steaming data from and table you are inserting from are same.
@@ -229,7 +237,7 @@ func buildInsertSelectPlan(ins *sqlparser.Insert, table *vindexes.Table, reserve
 	}
 
 	generateInsertSelectQuery(ins, eins)
-	return newPlanResult(eins), nil
+	return newPlanResult(eins, tc.getTables()...), nil
 }
 
 func subquerySelectPlan(ins *sqlparser.Insert, vschema plancontext.VSchema, reservedVars *sqlparser.ReservedVars, sharded bool) (*planResult, error) {

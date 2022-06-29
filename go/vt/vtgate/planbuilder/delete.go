@@ -37,14 +37,13 @@ func buildDeletePlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedV
 			return nil, err
 		}
 	}
-	dml, ksidVindex, err := buildDMLPlan(vschema, "delete", del, reservedVars, del.TableExprs, del.Where, del.OrderBy, del.Limit, del.Comments, del.Targets)
+	dml, tables, ksidVindex, err := buildDMLPlan(vschema, "delete", del, reservedVars, del.TableExprs, del.Where, del.OrderBy, del.Limit, del.Comments, del.Targets)
 	if err != nil {
 		return nil, err
 	}
 	edel := &engine.Delete{DML: dml}
-
 	if dml.Opcode == engine.Unsharded {
-		return newPlanResult(edel), nil
+		return newPlanResult(edel, tables...), nil
 	}
 
 	if len(del.Targets) > 1 {
@@ -70,7 +69,7 @@ func buildDeletePlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedV
 		edel.KsidLength = len(ksidVindex.Columns)
 	}
 
-	return newPlanResult(edel), nil
+	return newPlanResult(edel, tables...), nil
 }
 
 func rewriteSingleTbl(del *sqlparser.Delete) (*sqlparser.Delete, error) {

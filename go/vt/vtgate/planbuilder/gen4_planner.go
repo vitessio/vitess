@@ -67,7 +67,7 @@ func gen4SelectStmtPlanner(
 		// handle dual table for processing at vtgate.
 		p, err := handleDualSelects(sel, vschema)
 		if err != nil || p != nil {
-			return newPlanResult(p), err
+			return newPlanResult(p, "dual"), err
 		}
 
 		if sel.SQLCalcFoundRows && sel.Limit != nil {
@@ -90,7 +90,7 @@ func gen4SelectStmtPlanner(
 		// by transforming the predicates to CNF, the planner will sometimes find better plans
 		primitive, st := gen4CNFRewrite(stmt, getPlan)
 		if primitive != nil {
-			return newPlanResultFromSemTable(primitive, st), nil
+			return newPlanResult(primitive, tablesFromSemantics(st)...), nil
 		}
 	}
 
@@ -105,7 +105,7 @@ func gen4SelectStmtPlanner(
 		}
 	}
 
-	return newPlanResultFromSemTable(primitive, st), nil
+	return newPlanResult(primitive, tablesFromSemantics(st)...), nil
 }
 
 func gen4planSQLCalcFoundRows(vschema plancontext.VSchema, sel *sqlparser.Select, query string, reservedVars *sqlparser.ReservedVars) (*planResult, error) {
@@ -128,7 +128,7 @@ func gen4planSQLCalcFoundRows(vschema plancontext.VSchema, sel *sqlparser.Select
 	if err != nil {
 		return nil, err
 	}
-	return newPlanResult(plan.Primitive()), nil
+	return newPlanResult(plan.Primitive(), tablesFromSemantics(semTable)...), nil
 }
 
 func planSelectGen4(reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, sel *sqlparser.Select) (*jointab, logicalPlan, error) {
@@ -262,7 +262,7 @@ func gen4UpdateStmtPlanner(
 		edml.Opcode = engine.Unsharded
 		edml.Query = generateQuery(updStmt)
 		upd := &engine.Update{DML: edml}
-		return newPlanResult(upd), nil
+		return newPlanResult(upd, tablesFromSemantics(semTable)...), nil
 	}
 
 	if semTable.NotUnshardedErr != nil {
@@ -306,7 +306,7 @@ func gen4UpdateStmtPlanner(
 		return nil, err
 	}
 
-	return newPlanResult(plan.Primitive()), nil
+	return newPlanResult(plan.Primitive(), tablesFromSemantics(semTable)...), nil
 }
 
 func rewriteRoutedTables(updStmt *sqlparser.Update, vschema plancontext.VSchema) (err error) {

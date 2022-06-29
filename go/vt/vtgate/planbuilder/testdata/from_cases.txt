@@ -4325,7 +4325,24 @@ Gen4 plan same as above
     ]
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select last_insert_id()",
+  "Instructions": {
+    "OperatorType": "Projection",
+    "Expressions": [
+      ":__lastInsertId as last_insert_id()"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "SingleRow"
+      }
+    ]
+  },
+  "TablesUsed": [
+    "dual"
+  ]
+}
 
 # last_insert_id for sharded keyspace
 "select last_insert_id() from user"

@@ -107,7 +107,10 @@
       "INT64(8546)"
     ],
     "Vindex": "hash"
-  }
+  },
+  "TablesUsed": [
+    "main.district1"
+  ]
 }
 {
   "QueryType": "UPDATE",
@@ -127,7 +130,10 @@
       "INT64(8546)"
     ],
     "Vindex": "hash"
-  }
+  },
+  "TablesUsed": [
+    "main.district1"
+  ]
 }
 
 # TPC-C insert into orders1
@@ -284,7 +290,10 @@ Gen4 plan same as above
       "INT64(6)"
     ],
     "Vindex": "hash"
-  }
+  },
+  "TablesUsed": [
+    "main.stock1"
+  ]
 }
 {
   "QueryType": "UPDATE",
@@ -304,7 +313,10 @@ Gen4 plan same as above
       "INT64(6)"
     ],
     "Vindex": "hash"
-  }
+  },
+  "TablesUsed": [
+    "main.stock1"
+  ]
 }
 
 # TPC-C insert into order_line1
@@ -350,7 +362,10 @@ Gen4 plan same as above
       "INT64(3)"
     ],
     "Vindex": "hash"
-  }
+  },
+  "TablesUsed": [
+    "main.warehouse1"
+  ]
 }
 {
   "QueryType": "UPDATE",
@@ -370,7 +385,10 @@ Gen4 plan same as above
       "INT64(3)"
     ],
     "Vindex": "hash"
-  }
+  },
+  "TablesUsed": [
+    "main.warehouse1"
+  ]
 }
 
 # TPC-C select warehouse1 unique
@@ -437,7 +455,10 @@ Gen4 plan same as above
       "INT64(89)"
     ],
     "Vindex": "hash"
-  }
+  },
+  "TablesUsed": [
+    "main.district1"
+  ]
 }
 {
   "QueryType": "UPDATE",
@@ -457,7 +478,10 @@ Gen4 plan same as above
       "INT64(89)"
     ],
     "Vindex": "hash"
-  }
+  },
+  "TablesUsed": [
+    "main.district1"
+  ]
 }
 
 # TPC-C select district1 unique
@@ -700,7 +724,10 @@ Gen4 plan same as above
       "INT64(20)"
     ],
     "Vindex": "hash"
-  }
+  },
+  "TablesUsed": [
+    "main.customer1"
+  ]
 }
 {
   "QueryType": "UPDATE",
@@ -720,7 +747,10 @@ Gen4 plan same as above
       "INT64(20)"
     ],
     "Vindex": "hash"
-  }
+  },
+  "TablesUsed": [
+    "main.customer1"
+  ]
 }
 
 # TPC-C update customer1 unique and float value
@@ -743,7 +773,10 @@ Gen4 plan same as above
       "INT64(20)"
     ],
     "Vindex": "hash"
-  }
+  },
+  "TablesUsed": [
+    "main.customer1"
+  ]
 }
 {
   "QueryType": "UPDATE",
@@ -763,7 +796,10 @@ Gen4 plan same as above
       "INT64(20)"
     ],
     "Vindex": "hash"
-  }
+  },
+  "TablesUsed": [
+    "main.customer1"
+  ]
 }
 
 # TPC-C insert into history1
@@ -1073,7 +1109,10 @@ Gen4 plan same as above
       "INT64(98465)"
     ],
     "Vindex": "hash"
-  }
+  },
+  "TablesUsed": [
+    "main.new_orders1"
+  ]
 }
 Gen4 plan same as above
 
@@ -1141,7 +1180,10 @@ Gen4 plan same as above
       "INT64(897)"
     ],
     "Vindex": "hash"
-  }
+  },
+  "TablesUsed": [
+    "main.orders1"
+  ]
 }
 {
   "QueryType": "UPDATE",
@@ -1161,7 +1203,10 @@ Gen4 plan same as above
       "INT64(897)"
     ],
     "Vindex": "hash"
-  }
+  },
+  "TablesUsed": [
+    "main.orders1"
+  ]
 }
 
 # TPC-C update order_line1
@@ -1184,7 +1229,10 @@ Gen4 plan same as above
       "INT64(8)"
     ],
     "Vindex": "hash"
-  }
+  },
+  "TablesUsed": [
+    "main.order_line1"
+  ]
 }
 {
   "QueryType": "UPDATE",
@@ -1204,7 +1252,10 @@ Gen4 plan same as above
       "INT64(8)"
     ],
     "Vindex": "hash"
-  }
+  },
+  "TablesUsed": [
+    "main.order_line1"
+  ]
 }
 
 # TPC-C select sum order_line1
@@ -1271,7 +1322,10 @@ Gen4 plan same as above
       "INT64(160)"
     ],
     "Vindex": "hash"
-  }
+  },
+  "TablesUsed": [
+    "main.customer1"
+  ]
 }
 {
   "QueryType": "UPDATE",
@@ -1291,7 +1345,10 @@ Gen4 plan same as above
       "INT64(160)"
     ],
     "Vindex": "hash"
-  }
+  },
+  "TablesUsed": [
+    "main.customer1"
+  ]
 }
 
 # TPC-C select unique district1
@@ -1565,7 +1622,10 @@ Gen4 plan same as above
       "INT64(178)"
     ],
     "Vindex": "hash"
-  }
+  },
+  "TablesUsed": [
+    "main.order_line1"
+  ]
 }
 Gen4 plan same as above
 
@@ -1589,7 +1649,10 @@ Gen4 plan same as above
       "INT64(1)"
     ],
     "Vindex": "hash"
-  }
+  },
+  "TablesUsed": [
+    "main.orders1"
+  ]
 }
 Gen4 plan same as above
 
@@ -1613,6 +1676,9 @@ Gen4 plan same as above
       "INT64(75)"
     ],
     "Vindex": "hash"
-  }
+  },
+  "TablesUsed": [
+    "main.history1"
+  ]
 }
 Gen4 plan same as above

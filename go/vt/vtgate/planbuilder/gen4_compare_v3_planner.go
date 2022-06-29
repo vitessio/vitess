@@ -69,7 +69,7 @@ func gen4CompareV3Planner(query string) func(sqlparser.Statement, *sqlparser.Res
 			HasOrderBy: hasOrderBy,
 		}
 
-		return newPlanResult(primitive), nil
+		return newPlanResult(primitive, gen4Primitive.tables...), nil
 	}
 }
 
