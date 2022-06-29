@@ -355,7 +355,6 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 		if mysqlrow != nil {
 			mysqlrow = mysqlrow[:0]
 		}
-		time.Sleep(time.Minute)
 		mysqlrow, err = conn.FetchNext(mysqlrow)
 		if err != nil {
 			return err
