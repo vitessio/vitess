@@ -161,7 +161,7 @@ func (pb *primitiveBuilder) processAliasedTable(tableExpr *sqlparser.AliasedTabl
 		sort.Strings(tableNames)
 		vschemaTable := &vindexes.Table{
 			Keyspace: subroute.eroute.Keyspace,
-			Name:     sqlparser.NewTableIdent(strings.Join(tableNames, ", ")),
+			Name:     sqlparser.NewIdentifierCS(strings.Join(tableNames, ", ")),
 		}
 		for _, rc := range subroute.ResultColumns() {
 			if rc.column.vindex == nil {
