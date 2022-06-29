@@ -19,10 +19,10 @@ package mysqlctl
 import (
 	"bytes"
 	"context"
+	"fmt"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
 )
 
@@ -61,6 +61,110 @@ var (
 // and _vt.shard_metadata tables.
 type MetadataManager struct{}
 
+func InitTabletMetadata(tabletName string) error {
+	log.Infof("Init for table metadata...")
+	f1 := func(conn *mysql.Conn) error {
+		if _, err := conn.ExecuteFetch("CREATE DATABASE IF NOT EXISTS _vt", 0, false); err != nil {
+			log.Errorf("Error executing %v: %v", "CREATE DATABASE IF NOT EXISTS _vt", err)
+			//return err
+		}
+
+		if _, err := conn.ExecuteFetch(SQLCreateLocalMetadataTable, 0, false); err != nil {
+			log.Errorf("Error executing %v: %v", SQLCreateLocalMetadataTable, err)
+			//return err
+		}
+
+		for _, sql := range SQLAlterLocalMetadataTable {
+			if _, err := conn.ExecuteFetch(sql, 0, false); err != nil {
+				// Ignore "Duplicate column name 'db_name'" errors which can happen on every restart.
+				if merr, ok := err.(*mysql.SQLError); !ok || merr.Num != mysql.ERDupFieldName {
+					log.Errorf("Error executing %v: %v", sql, err)
+					//return err
+				}
+			}
+		}
+
+		sql := fmt.Sprintf(SQLUpdateLocalMetadataTable, tabletName)
+		if _, err := conn.ExecuteFetch(sql, 0, false); err != nil {
+			log.Errorf("Error executing %v: %v, continuing. Please check the data in _vt.local_metadata and take corrective action.", sql, err)
+		}
+
+		if _, err := conn.ExecuteFetch(SQLCreateShardMetadataTable, 0, false); err != nil {
+			log.Errorf("Error executing %v: %v", SQLCreateShardMetadataTable, err)
+			//return err
+		}
+
+		for _, sql := range SQLAlterShardMetadataTable {
+			if _, err := conn.ExecuteFetch(sql, 0, false); err != nil {
+				// Ignore "Duplicate column name 'db_name'" errors which can happen on every restart.
+				if merr, ok := err.(*mysql.SQLError); !ok || merr.Num != mysql.ERDupFieldName {
+					log.Errorf("Error executing %v: %v", sql, err)
+					//return err
+				}
+			}
+		}
+
+		sql = fmt.Sprintf(SQLUpdateShardMetadataTable, tabletName)
+		if _, err := conn.ExecuteFetch(sql, 0, false); err != nil {
+			log.Errorf("Error executing %v: %v, continuing. Please check the data in _vt.shard_metadata and take corrective action.", sql, err)
+		}
+
+		return nil
+	}
+
+	if err := mysql.SchemaInitializer.RegisterSchemaInitializer("Initial TM Schema", f1, true); err != nil {
+		log.Infof("error is %s", err)
+		return err
+	}
+
+	return nil
+}
+
+func InitUpsertLocalMetadata(localMetadata map[string]string, tabletName string) error {
+	log.Infof("Init for Upsert local metadata...")
+	f := func(conn *mysql.Conn) error {
+		// Populate local_metadata from the passed list of values.
+		if _, err := conn.ExecuteFetch("BEGIN", 0, false); err != nil {
+			log.Errorf("Error executing %v: %v", "BEGIN", err)
+			//return err
+		}
+		for name, val := range localMetadata {
+			nameValue := sqltypes.NewVarChar(name)
+			valValue := sqltypes.NewVarChar(val)
+			dbNameValue := sqltypes.NewVarBinary(tabletName)
+
+			queryBuf := bytes.Buffer{}
+			queryBuf.WriteString("INSERT INTO _vt.local_metadata (name,value, db_name) VALUES (")
+			nameValue.EncodeSQL(&queryBuf)
+			queryBuf.WriteByte(',')
+			valValue.EncodeSQL(&queryBuf)
+			queryBuf.WriteByte(',')
+			dbNameValue.EncodeSQL(&queryBuf)
+			queryBuf.WriteString(") ON DUPLICATE KEY UPDATE value = ")
+			valValue.EncodeSQL(&queryBuf)
+
+			if _, err := conn.ExecuteFetch(queryBuf.String(), 0, false); err != nil {
+				log.Errorf("Error executing %v: %v", queryBuf.String(), err)
+				//return err
+			}
+		}
+
+		if _, err := conn.ExecuteFetch("COMMIT", 0, false); err != nil {
+			log.Errorf("Error executing %v: %v", "COMMIT", err)
+			//return err
+		}
+
+		return nil
+	}
+
+	if err := mysql.SchemaInitializer.RegisterSchemaInitializer("Upsert Local Metadata", f, false); err != nil {
+		log.Infof("error is %s", err)
+		return err
+	}
+
+	return nil
+}
+
 // PopulateMetadataTables creates and fills the _vt.local_metadata table and
 // creates the _vt.shard_metadata table.
 //
@@ -98,10 +202,10 @@ func (m *MetadataManager) PopulateMetadataTables(mysqld MysqlDaemon, localMetada
 	//}
 
 	// Populate local_metadata from the passed list of values.
-	if err := mysql.SchemaInitializer.InitializeSchema(); err != nil {
+	/*if err := mysql.SchemaInitializer.InitializeSchemaOld(); err != nil {
 		log.Infof("error is %s", err)
 		return err
-	}
+	}*/
 	return nil
 	//return upsertLocalMetadata(conn, localMetadata, dbName)
 }
@@ -130,7 +234,8 @@ func (m *MetadataManager) UpsertLocalMetadata(mysqld MysqlDaemon, localMetadata 
 		return err
 	}
 
-	return upsertLocalMetadata(conn, localMetadata, dbName)
+	return nil
+	//return upsertLocalMetadata(conn, localMetadata, dbName)
 }
 
 /*func createMetadataTables(conn *dbconnpool.DBConnection, dbName string) error {
@@ -204,7 +309,7 @@ func createShardMetadataTable(conn *dbconnpool.DBConnection, dbName string) erro
 // Callers are responsible for ensuring the _vt.local_metadata table exists
 // before calling this function, usually by calling CreateMetadataTables at
 // least once prior.
-func upsertLocalMetadata(conn *dbconnpool.DBConnection, localMetadata map[string]string, dbName string) error {
+/*func upsertLocalMetadata(conn *dbconnpool.DBConnection, localMetadata map[string]string, dbName string) error {
 	// Populate local_metadata from the passed list of values.
 	if _, err := conn.ExecuteFetch("BEGIN", 0, false); err != nil {
 		return err
@@ -234,4 +339,4 @@ func upsertLocalMetadata(conn *dbconnpool.DBConnection, localMetadata map[string
 	}
 
 	return nil
-}
+}*/

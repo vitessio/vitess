@@ -29,24 +29,24 @@ func TestSchemaInitializer(t *testing.T) {
 	func1 := func() error { return nil }
 	func2 := func() error { return vterrors.Errorf(vtrpc.Code_ABORTED, "test aborted ...") }
 
-	if err := SchemaInitializer.RegisterSchemaInitializer("func1", func1, false); err != nil {
+	if err := SchemaInitializer.RegisterSchemaInitializerOld("func1", func1, false); err != nil {
 		assert.FailNow(t, "Error should not be nil")
 	}
 
-	if err := SchemaInitializer.RegisterSchemaInitializer("func2", func2, false); err != nil {
+	if err := SchemaInitializer.RegisterSchemaInitializerOld("func2", func2, false); err != nil {
 		assert.FailNow(t, "Error should not be nil")
 	}
 
-	err := SchemaInitializer.InitializeSchema()
+	err := SchemaInitializer.InitializeSchemaOld()
 	assert.EqualErrorf(t, err, "test aborted ...", "Error mismatch")
 
 	SchemaInitializer.initialized = true
 
-	if err := SchemaInitializer.RegisterSchemaInitializer("func3", func1, false); err != nil {
+	if err := SchemaInitializer.RegisterSchemaInitializerOld("func3", func1, false); err != nil {
 		assert.FailNow(t, "Error should not be nil")
 	}
 
-	if err := SchemaInitializer.RegisterSchemaInitializer("func4", func2, false); err != nil {
+	if err := SchemaInitializer.RegisterSchemaInitializerOld("func4", func2, false); err != nil {
 		assert.EqualErrorf(t, err, "test aborted ...", "Error mismatch")
 	} else {
 		assert.FailNow(t, "Error should not be nil")

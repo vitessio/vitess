@@ -44,6 +44,32 @@ var (
 	reparentQueries  []string
 )
 
+func init() {
+	// combine all queires
+	reparentQueries = append([]string{}, mysqlctl.CreateReparentJournal()...)
+	reparentQueries = append(reparentQueries, mysqlctl.AlterReparentJournal()...)
+}
+
+func InitReparentJournal() error {
+	log.Infof("ensureReparentJournal for Tablet Manager")
+	f := func(conn *mysql.Conn) error {
+		for _, sql := range reparentQueries {
+			if _, err := conn.ExecuteFetch(sql, 0, false); err != nil {
+				log.Errorf("Error executing %v: %v", sql, err)
+				// return err
+			}
+		}
+		return nil
+	}
+
+	if err := mysql.SchemaInitializer.RegisterSchemaInitializer("Alter Reparent Journal", f, false); err != nil {
+		log.Infof("error is %s", err)
+		return err
+	}
+
+	return nil
+}
+
 // ReplicationStatus returns the replication status
 func (tm *TabletManager) ReplicationStatus(ctx context.Context) (*replicationdatapb.Status, error) {
 	status, err := tm.MysqlDaemon.ReplicationStatus()
@@ -232,10 +258,6 @@ func (tm *TabletManager) ResetReplication(ctx context.Context) error {
 func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string, error) {
 	log.Infof("InitPrimary")
 
-	// combine all queires
-	reparentQueries = append([]string{}, mysqlctl.CreateReparentJournal()...)
-	reparentQueries = append(reparentQueries, mysqlctl.AlterReparentJournal()...)
-
 	if err := tm.lock(ctx); err != nil {
 		return "", err
 	}
@@ -255,9 +277,9 @@ func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string
 		}
 	}
 
-	if _, err := tm.ensureReparentJournal(ctx); err != nil {
-		return "", err
-	}
+	/*if _, err := tm.ensureReparentJournal(ctx); err != nil {
+		//return "", err
+	}*/
 
 	/*
 		// we need to insert something in the binlogs, so we can get the
@@ -293,48 +315,6 @@ func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string
 	}
 	log.Info("init primary done...")
 	return mysql.EncodePosition(pos), nil
-}
-
-// We plan to refactor so that we remove WithDDL, just define the list of DDLs required to reach the desired
-// and execute vreplication queries normally.
-func (tm *TabletManager) ensureReparentJournal(ctx context.Context) (bool, error) {
-	log.Infof("ensureReparentJournal for Tablet Manager")
-	f := func() error {
-		//ctx := context.Background()
-		conn2, err := tm.MysqlDaemon.GetDbaConnection(ctx)
-		if err != nil {
-			return err
-		}
-		defer conn2.Close()
-		_, err = conn2.ExecuteFetch(mysql.UnSetSuperUser, 1, false)
-		if err != nil {
-			log.Infof("unsetting super read-only user %s", err)
-			return err
-		}
-		if err := tm.MysqlDaemon.ExecuteSuperQueryList(ctx, reparentQueries); err != nil {
-			return err
-		}
-
-		_, err = conn2.ExecuteFetch(mysql.SetSuperUser, 1, false)
-		if err != nil {
-			log.Infof("setting super read-only user %s", err)
-			return err
-		}
-		return nil
-	}
-
-	if err := mysql.SchemaInitializer.RegisterSchemaInitializer("Initial TM Schema", f, true); err != nil {
-		log.Infof("error is %s", err)
-		return false, err
-	}
-
-	if err := mysql.SchemaInitializer.InitializeSchema(); err != nil {
-		log.Infof("error is %s", err)
-		return false, err
-	}
-	log.Infof("ensureReparentJournal for Tablet Manager END")
-
-	return true, nil
 }
 
 // PopulateReparentJournal adds an entry into the reparent_journal table.

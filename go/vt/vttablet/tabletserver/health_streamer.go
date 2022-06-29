@@ -326,13 +326,13 @@ func (hs *healthStreamer) reload() error {
 	}
 	defer conn.Recycle()
 
-	if !hs.initSuccess {
+	/*if !hs.initSuccess {
 		hs.initSuccess, err = hs.InitSchemaLocked(conn)
 		if err != nil {
 			log.Infof("error is %s", err)
 			return err
 		}
-	}
+	}*/
 
 	log.Infof("InitSchemaLocked END: %t, %t", hs.schemaRegistered, hs.initSuccess)
 	var tables []string
@@ -395,45 +395,27 @@ func (hs *healthStreamer) reload() error {
 	return nil
 }
 
-func (hs *healthStreamer) InitSchemaLocked(conn *connpool.DBConn) (bool, error) {
-	log.Infof("InitSchemaLocked: %t, %t", hs.schemaRegistered, hs.initSuccess)
-	f := func() error {
-		ctx := context.Background()
-		conn2, err := hs.conns.Get(ctx)
-		if err != nil {
-			return err
-		}
-		defer conn2.Recycle()
-		_, err = conn2.Exec(ctx, mysql.UnSetSuperUser, 1, false)
-		if err != nil {
-			log.Infof("unsetting super read-only user %s", err)
-			return err
-		}
-		for _, query := range mysql.VTDatabaseInit {
-			_, err := conn2.Exec(ctx, query, 1, false)
-			if err != nil {
-				return err
+func InitSchema() error {
+	log.Infof("InitSchema for health stream: ")
+	f := func(conn *mysql.Conn) error {
+		for _, sql := range mysql.VTDatabaseInit {
+			if _, err := conn.ExecuteFetch(sql, 0, false); err != nil {
+				log.Errorf("Error executing %v: %v", sql, err)
+				/*if mysql.IsSchemaApplyError(err) {
+					continue
+				}
+				if err != nil {
+					return err
+				}*/
 			}
 		}
-		_, err = conn2.Exec(ctx, mysql.SetSuperUser, 1, false)
-		if err != nil {
-			log.Infof("setting super read-only user %s", err)
-			return err
-		}
+
 		return nil
 	}
-	if !hs.schemaRegistered {
-		if err := mysql.SchemaInitializer.RegisterSchemaInitializer("Initial VT Schema", f, true); err != nil {
-			log.Infof("error is %s", err)
-			return false, err
-		}
-		hs.schemaRegistered = true
-	}
-	if err := mysql.SchemaInitializer.InitializeSchema(); err != nil {
+	if err := mysql.SchemaInitializer.RegisterSchemaInitializer("Initial VT Schema", f, false); err != nil {
 		log.Infof("error is %s", err)
-		return false, err
+		return err
 	}
-	log.Infof("InitSchemaLocked END: %t, %t", hs.schemaRegistered, hs.initSuccess)
 
-	return true, nil
+	return nil
 }

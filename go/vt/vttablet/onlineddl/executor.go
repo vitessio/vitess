@@ -248,47 +248,23 @@ func (e *Executor) TabletAliasString() string {
 // _vt.schema_migrations table has had the chance to be created.
 // This function prepares the schema.
 func (e *Executor) PrepareForQueryExecutor(ctx context.Context) error {
-	return e.initSchema(ctx)
+	return nil
+	//return e.initSchema(ctx)
 }
 
-func (e *Executor) initSchema(ctx context.Context) error {
-	e.initMutex.Lock()
-	defer e.initMutex.Unlock()
-
-	if e.schemaInitialized {
-		return nil
-	}
-
-	defer e.env.LogError()
-
+func InitDDLSchema() error {
 	log.Infof("init Schema for OnlineDDL ...")
-	f := func() error {
-		conn, err := dbconnpool.NewDBConnection(ctx, e.env.Config().DB.DbaConnector())
-		if err != nil {
-			return err
-		}
-		defer conn.Close()
-
-		_, err = conn.ExecuteFetch(mysql.UnSetSuperUser, 1, false)
-		if err != nil {
-			log.Infof("unsetting super read-only user %s", err)
-			return err
-		}
-
-		for _, ddl := range ApplyDDL {
-			_, err := conn.ExecuteFetch(ddl, math.MaxInt32, false)
-			if mysql.IsSchemaApplyError(err) {
-				continue
+	f := func(conn *mysql.Conn) error {
+		for _, sql := range ApplyDDL {
+			if _, err := conn.ExecuteFetch(sql, 0, false); err != nil {
+				log.Errorf("Error executing %v: %v", sql, err)
+				/*if mysql.IsSchemaApplyError(err) {
+					continue
+				}
+				if err != nil {
+					return err
+				}*/
 			}
-			if err != nil {
-				return err
-			}
-		}
-
-		_, err = conn.ExecuteFetch(mysql.SetSuperUser, 1, false)
-		if err != nil {
-			log.Infof("setting super read-only user %s", err)
-			return err
 		}
 		return nil
 	}
@@ -297,13 +273,7 @@ func (e *Executor) initSchema(ctx context.Context) error {
 		log.Infof("error is %s", err)
 		return err
 	}
-	if err := mysql.SchemaInitializer.InitializeSchema(); err != nil {
-		log.Infof("error is %s", err)
-		return err
-	}
-	log.Infof("init Schema for OnlineDDL END...")
 
-	e.schemaInitialized = true
 	return nil
 }
 
@@ -3367,7 +3337,7 @@ func (e *Executor) reviewStaleMigrations(ctx context.Context) error {
 // retryTabletFailureMigrations looks for migrations failed by tablet failure (e.g. by failover)
 // and retry them (put them back in the queue)
 func (e *Executor) retryTabletFailureMigrations(ctx context.Context) error {
-	_, err := e.retryMigrationWhere(ctx, sqlWhereTabletFailure)
+	_, err := e.retryMigrationWhere(ctx, SQLWhereTabletFailure)
 	return err
 }
 
@@ -3505,12 +3475,12 @@ func (e *Executor) gcArtifacts(ctx context.Context) error {
 		return nil
 	}
 
-	if err := mysql.SchemaInitializer.RegisterSchemaInitializer("Artifacts Schema", f, true); err != nil {
+	if err := mysql.SchemaInitializer.RegisterSchemaInitializerOld("Artifacts Schema", f, true); err != nil {
 		log.Infof("error is %s", err)
 		return err
 	}
 
-	if err := mysql.SchemaInitializer.InitializeSchema(); err != nil {
+	if err := mysql.SchemaInitializer.InitializeSchemaOld(); err != nil {
 		log.Infof("error is %s", err)
 		return err
 	}
@@ -3546,10 +3516,10 @@ func (e *Executor) onMigrationCheckTick() {
 	}
 
 	ctx := context.Background()
-	if err := e.initSchema(ctx); err != nil {
+	/*if err := e.initSchema(ctx); err != nil {
 		log.Error(err)
 		return
-	}
+	}*/
 	if err := e.retryTabletFailureMigrations(ctx); err != nil {
 		log.Error(err)
 	}
@@ -3935,12 +3905,12 @@ func (e *Executor) retryMigrationWhere(ctx context.Context, whereExpr string) (r
 		return nil
 	}
 
-	if err := mysql.SchemaInitializer.RegisterSchemaInitializer("Retry Migration Schema", f, true); err != nil {
+	if err := mysql.SchemaInitializer.RegisterSchemaInitializerOld("Retry Migration Schema", f, true); err != nil {
 		log.Infof("error is %s", err)
 		return result, err
 	}
 
-	if err := mysql.SchemaInitializer.InitializeSchema(); err != nil {
+	if err := mysql.SchemaInitializer.InitializeSchemaOld(); err != nil {
 		log.Infof("error is %s", err)
 		return result, err
 	}
@@ -4092,10 +4062,10 @@ func (e *Executor) SubmitMigration(
 		return nil, err
 	}
 
-	if err := e.initSchema(ctx); err != nil {
+	/*if err := e.initSchema(ctx); err != nil {
 		log.Error(err)
 		return nil, err
-	}
+	}*/
 
 	if onlineDDL.StrategySetting().IsSingleton() || onlineDDL.StrategySetting().IsSingletonContext() {
 		// we need two wrap some logic within a mutex, so as to make sure we can't submit the migration whilst
@@ -4288,10 +4258,10 @@ func (e *Executor) VExec(ctx context.Context, vx *vexec.TabletVExec) (qr *queryp
 	}
 
 	log.Info("init schema in VExec")
-	if err := e.initSchema(ctx); err != nil {
+	/*if err := e.initSchema(ctx); err != nil {
 		log.Error(err)
 		return nil, err
-	}
+	}*/
 
 	switch stmt := vx.Stmt.(type) {
 	case *sqlparser.Delete:

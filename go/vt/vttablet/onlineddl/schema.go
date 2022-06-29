@@ -286,7 +286,7 @@ const (
 			migration_status IN ('failed', 'cancelled')
 			AND migration_uuid=%a
 	`
-	sqlWhereTabletFailure = `
+	SQLWhereTabletFailure = `
 		tablet_failure=1
 		AND migration_status='failed'
 		AND retries=0

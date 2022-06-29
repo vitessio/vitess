@@ -45,6 +45,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/vttablet/onlineddl"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vdiff"
@@ -114,13 +116,13 @@ var (
 	// The following variables can be changed to speed up tests.
 	mysqlPortRetryInterval       = 1 * time.Second
 	rebuildKeyspaceRetryInterval = 1 * time.Second
-	VTDatabaseInit               = []string{
+	/*VTDatabaseInit               = []string{
 		"CREATE DATABASE IF NOT EXISTS _vt",
 		mysqlctl.SQLCreateLocalMetadataTable,
 		mysqlctl.SQLUpdateLocalMetadataTable,
 		mysqlctl.SQLCreateShardMetadataTable,
 		mysqlctl.SQLUpdateShardMetadataTable,
-	}
+	}*/
 )
 
 func init() {
@@ -409,13 +411,40 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, healthCheckInterval ti
 	}
 	servenv.OnRun(tm.registerTabletManager)
 
-	if _, err := tm.InitSchema(); err != nil {
-		return err
-	}
+	log.Infof("%s -- %s", topoproto.TabletDbName(tm.Tablet()), tm.tabletAlias.String())
+	_ = mysqlctl.InitTabletMetadata(topoproto.TabletDbName(tm.Tablet()))
 	localMetadata := tm.getLocalMetadataValues(tablet.Type)
-	if _, err := tm.upsertLocalMetadata(localMetadata); err != nil {
+	_ = mysqlctl.InitUpsertLocalMetadata(localMetadata, topoproto.TabletDbName(tm.Tablet()))
+	_ = vreplication.InitVReplicationSchema()
+	_ = InitReparentJournal()
+	_ = onlineddl.InitDDLSchema()
+	_ = tabletserver.InitSchema()
+
+	// get a dba connection
+	conn, err := tm.MysqlDaemon.GetDbaConnection(ctx)
+	if err != nil {
+		log.Infof("error in getting connection object %s", err)
 		return err
 	}
+	defer conn.Close()
+	// execute all the schema changes.
+	if err := mysql.SchemaInitializer.InitializeSchema(ctx, conn.Conn); err != nil {
+		log.Infof("error in RunAllMutations %s", err)
+		return err
+	}
+
+	/*_ = mysql.SchemaInitializer.RegisterMutations(tm.tabletAlias.String(), localMetadata, onlineddl.SQLWhereTabletFailure)
+	conn, err := tm.MysqlDaemon.GetDbaConnection(ctx)
+	if err != nil {
+		log.Infof("error in getting connection object %s", err)
+		return err
+	}
+	defer conn.Close()
+	if err := mysql.SchemaInitializer.RunAllMutations(ctx, conn.Conn); err != nil {
+		log.Infof("error in RunAllMutations %s", err)
+		return err
+	}*/
+
 	restoring, err := tm.handleRestore(tm.BatchCtx)
 	if err != nil {
 		return err
@@ -501,12 +530,12 @@ func (tm *TabletManager) InitSchema() (bool, error) {
 		return nil
 	}
 
-	if err := mysql.SchemaInitializer.RegisterSchemaInitializer("Initial TM Schema", f, true); err != nil {
+	if err := mysql.SchemaInitializer.RegisterSchemaInitializerOld("Initial TM Schema", f, true); err != nil {
 		log.Infof("error is %s", err)
 		return false, err
 	}
 
-	if err := mysql.SchemaInitializer.InitializeSchema(); err != nil {
+	if err := mysql.SchemaInitializer.InitializeSchemaOld(); err != nil {
 		log.Infof("error is %s", err)
 		return false, err
 	}
@@ -573,12 +602,12 @@ func (tm *TabletManager) upsertLocalMetadata(localMetadata map[string]string) (b
 		return nil
 	}
 
-	if err := mysql.SchemaInitializer.RegisterSchemaInitializer("Upsert Local Metadata", f, false); err != nil {
+	if err := mysql.SchemaInitializer.RegisterSchemaInitializerOld("Upsert Local Metadata", f, false); err != nil {
 		log.Infof("error is %s", err)
 		return false, err
 	}
 
-	/*if err := mysql.SchemaInitializer.InitializeSchema(); err != nil {
+	/*if err := mysql.SchemaInitializer.InitializeSchemaOld(); err != nil {
 		log.Infof("error is %s", err)
 		return false, err
 	}*/
