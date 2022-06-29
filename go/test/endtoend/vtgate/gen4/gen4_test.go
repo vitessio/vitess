@@ -454,3 +454,13 @@ func TestUsingJoin(t *testing.T) {
 	mcmp.AssertMatchesNoOrderInclColumnNames(`select * from t2 join t3 using (tcol1) having tcol1 = 12`,
 		`[[VARCHAR("12") INT64(1) VARCHAR("12") INT64(1) VARCHAR("12")]]`)
 }
+
+// TestInsertFunction tests the INSERT function
+func TestInsertFunction(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec(`insert into t2(id, tcol1, tcol2) values (1, "Test", "This"),(2, "Testing", "Is"),(3, "TEST", "A")`)
+	mcmp.AssertMatches(`SELECT INSERT('Quadratic', 3, 4, 'What')`, `[[VARCHAR("QuWhattic")]]`)
+	mcmp.AssertMatches(`SELECT INSERT(tcol1, id, 3, tcol2) from t2`, `[[VARCHAR("Thist")] [VARCHAR("TIsing")] [VARCHAR("TEA")]]`)
+}

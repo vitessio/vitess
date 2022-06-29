@@ -23,6 +23,9 @@
 target_release=""
 
 base_release_branch=$(echo "$1" | grep -E 'release-[0-9]*.0$')
+if [ "$base_release_branch" == "" ]; then
+  base_release_branch=$(echo "$2" | grep -E 'release-[0-9]*.0$')
+fi
 if [ "$base_release_branch" != "" ]; then
   major_release=$(echo "$base_release_branch" | sed 's/release-*//' | sed 's/\.0//')
   target_major_release=$((major_release-1))

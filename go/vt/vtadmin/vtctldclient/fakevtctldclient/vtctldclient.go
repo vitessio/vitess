@@ -127,6 +127,18 @@ type VtctldClient struct {
 		Response *vtctldatapb.TabletExternallyReparentedResponse
 		Error    error
 	}
+	ValidateKeyspaceResults map[string]struct {
+		Response *vtctldatapb.ValidateKeyspaceResponse
+		Error    error
+	}
+	ValidateSchemaKeyspaceResults map[string]struct {
+		Response *vtctldatapb.ValidateSchemaKeyspaceResponse
+		Error    error
+	}
+	ValidateVersionKeyspaceResults map[string]struct {
+		Response *vtctldatapb.ValidateVersionKeyspaceResponse
+		Error    error
+	}
 }
 
 // Compile-time type assertion to make sure we haven't overriden a method
@@ -143,12 +155,10 @@ func (fake *VtctldClient) CreateKeyspace(ctx context.Context, req *vtctldatapb.C
 	}
 
 	ks := &topodatapb.Keyspace{
-		ShardingColumnName: req.ShardingColumnName,
-		ShardingColumnType: req.ShardingColumnType,
-		ServedFroms:        req.ServedFroms,
-		KeyspaceType:       req.Type,
-		BaseKeyspace:       req.BaseKeyspace,
-		SnapshotTime:       req.SnapshotTime,
+		ServedFroms:  req.ServedFroms,
+		KeyspaceType: req.Type,
+		BaseKeyspace: req.BaseKeyspace,
+		SnapshotTime: req.SnapshotTime,
 	}
 
 	return &vtctldatapb.CreateKeyspaceResponse{
@@ -614,6 +624,48 @@ func (fake *VtctldClient) TabletExternallyReparented(ctx context.Context, req *v
 
 	key := topoproto.TabletAliasString(req.Tablet)
 	if result, ok := fake.TabletExternallyReparentedResults[key]; ok {
+		return result.Response, result.Error
+	}
+
+	return nil, fmt.Errorf("%w: no result set for %s", assert.AnError, key)
+}
+
+// ValidateKeyspace is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) ValidateKeyspace(ctx context.Context, req *vtctldatapb.ValidateKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.ValidateKeyspaceResponse, error) {
+	if fake.ValidateKeyspaceResults == nil {
+		return nil, fmt.Errorf("%w: ValidateKeyspaceResults not set on fake vtctldclient", assert.AnError)
+	}
+
+	key := req.Keyspace
+	if result, ok := fake.ValidateKeyspaceResults[key]; ok {
+		return result.Response, result.Error
+	}
+
+	return nil, fmt.Errorf("%w: no result set for %s", assert.AnError, key)
+}
+
+// ValidateSchemaKeyspace is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) ValidateSchemaKeyspace(ctx context.Context, req *vtctldatapb.ValidateSchemaKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.ValidateSchemaKeyspaceResponse, error) {
+	if fake.ValidateSchemaKeyspaceResults == nil {
+		return nil, fmt.Errorf("%w: ValidateSchemaKeyspaceResults not set on fake vtctldclient", assert.AnError)
+	}
+
+	key := req.Keyspace
+	if result, ok := fake.ValidateSchemaKeyspaceResults[key]; ok {
+		return result.Response, result.Error
+	}
+
+	return nil, fmt.Errorf("%w: no result set for %s", assert.AnError, key)
+}
+
+// ValidateVersionKeyspace is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) ValidateVersionKeyspace(ctx context.Context, req *vtctldatapb.ValidateVersionKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.ValidateVersionKeyspaceResponse, error) {
+	if fake.ValidateVersionKeyspaceResults == nil {
+		return nil, fmt.Errorf("%w: ValidateVersionKeyspaceResults not set on fake vtctldclient", assert.AnError)
+	}
+
+	key := req.Keyspace
+	if result, ok := fake.ValidateVersionKeyspaceResults[key]; ok {
 		return result.Response, result.Error
 	}
 

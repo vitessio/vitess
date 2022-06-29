@@ -655,9 +655,7 @@ type testConn struct {
 }
 
 func (t testConn) Read(b []byte) (n int, err error) {
-	for j, i := range t.queryPacket {
-		b[j] = i
-	}
+	copy(b, t.queryPacket)
 	return len(b), nil
 }
 

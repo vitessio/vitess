@@ -81,19 +81,21 @@ func (hp *horizonPlanning) pushAggregation(
 
 		for _, aggr := range aggregations {
 			var offset int
-			fExpr, ok := aggr.Original.Expr.(*sqlparser.FuncExpr)
+			aggrExpr, ok := aggr.Original.Expr.(sqlparser.AggrFunc)
 			if !ok {
 				return nil, nil, nil, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: unexpected expression: %v", aggr.Original)
 			}
-			if len(fExpr.Exprs) != 1 {
-				return nil, nil, nil, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: unexpected expression: %v", fExpr)
-			}
-			switch e := fExpr.Exprs[0].(type) {
-			case *sqlparser.StarExpr:
+
+			switch aggrExpr.(type) {
+			case *sqlparser.CountStar:
 				offset = 0
-			case *sqlparser.AliasedExpr:
-				offset, _, err = pushProjection(ctx, e, plan.input, true, true, false)
+			default:
+				if len(aggrExpr.GetArgs()) != 1 {
+					return nil, nil, nil, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: unexpected expression: %v", aggrExpr)
+				}
+				offset, _, err = pushProjection(ctx, &sqlparser.AliasedExpr{Expr: aggrExpr.GetArg() /*As: expr.As*/}, plan.input, true, true, false)
 			}
+
 			if err != nil {
 				return nil, nil, nil, false, err
 			}
@@ -225,11 +227,7 @@ func addAggregationToSelect(sel *sqlparser.Select, aggregation abstract.Aggr) of
 }
 
 func countStarAggr() *abstract.Aggr {
-	f := &sqlparser.FuncExpr{
-		Name:     sqlparser.NewColIdent("count"),
-		Distinct: false,
-		Exprs:    []sqlparser.SelectExpr{&sqlparser.StarExpr{}},
-	}
+	f := &sqlparser.CountStar{}
 
 	return &abstract.Aggr{
 		Original: &sqlparser.AliasedExpr{Expr: f},
@@ -439,7 +437,7 @@ func splitAggregationsToLeftAndRight(
 	var lhsAggrs, rhsAggrs []*abstract.Aggr
 	for _, aggr := range aggregations {
 		newAggr := aggr
-		if isCountStar(aggr.Original.Expr) {
+		if _, ok := aggr.Original.Expr.(*sqlparser.CountStar); ok {
 			lhsAggrs = append(lhsAggrs, &newAggr)
 			rhsAggrs = append(rhsAggrs, &newAggr)
 		} else {

@@ -144,7 +144,7 @@ type LookupBackfill interface {
 // satisfy to request info about the owner table. This information can
 // be used to query the owner's table for the owning row's presence.
 type WantOwnerInfo interface {
-	SetOwnerInfo(keyspace, table string, cols []sqlparser.ColIdent) error
+	SetOwnerInfo(keyspace, table string, cols []sqlparser.IdentifierCI) error
 }
 
 // A NewVindexFunc is a function that creates a Vindex based on the

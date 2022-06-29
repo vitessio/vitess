@@ -301,10 +301,7 @@ func buildSQLCalcFoundRowsPlan(
 	sel2.Limit = nil
 
 	countStartExpr := []sqlparser.SelectExpr{&sqlparser.AliasedExpr{
-		Expr: &sqlparser.FuncExpr{
-			Name:  sqlparser.NewColIdent("count"),
-			Exprs: []sqlparser.SelectExpr{&sqlparser.StarExpr{}},
-		},
+		Expr: &sqlparser.CountStar{},
 	}}
 	if sel2.GroupBy == nil && sel2.Having == nil {
 		// if there is no grouping, we can use the same query and
@@ -319,7 +316,7 @@ func buildSQLCalcFoundRowsPlan(
 			From: []sqlparser.TableExpr{
 				&sqlparser.AliasedTableExpr{
 					Expr: &sqlparser.DerivedTable{Select: sel2},
-					As:   sqlparser.NewTableIdent("t"),
+					As:   sqlparser.NewIdentifierCS("t"),
 				},
 			},
 		}

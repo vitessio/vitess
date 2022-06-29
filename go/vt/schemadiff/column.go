@@ -24,7 +24,7 @@ import (
 
 func colWithMaskedName(col *sqlparser.ColumnDefinition) string {
 	col = sqlparser.CloneRefOfColumnDefinition(col)
-	col.Name = sqlparser.NewColIdent("mask")
+	col.Name = sqlparser.NewIdentifierCI("mask")
 	return sqlparser.CanonicalString(col)
 
 }
@@ -57,8 +57,8 @@ func (c *columnDetails) nextColName() string {
 	return c.nextCol.col.Name.String()
 }
 
-func getColName(colIdent *sqlparser.ColIdent) *sqlparser.ColName {
-	return &sqlparser.ColName{Name: *colIdent}
+func getColName(id *sqlparser.IdentifierCI) *sqlparser.ColName {
+	return &sqlparser.ColName{Name: *id}
 }
 
 type ModifyColumnDiff struct {
