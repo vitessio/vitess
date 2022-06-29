@@ -948,8 +948,7 @@ var (
 		input:  "insert into user(format, tree, vitess) values ('Chuck', 42, 'Barry')",
 		output: "insert into `user`(`format`, `tree`, `vitess`) values ('Chuck', 42, 'Barry')",
 	}, {
-		input:  "insert into customer () values ()",
-		output: "insert into customer values ()",
+		input: "insert into customer() values ()",
 	}, {
 		input: "update /* simple */ a set b = 3",
 	}, {
@@ -3022,6 +3021,9 @@ var (
 	}, {
 		input:  "SELECT TRIM('Michael!') RLIKE @j",
 		output: "select trim('Michael!') regexp @j from dual",
+	}, {
+		input:  "SELECT INSERT('Quadratic', 3, 4, 'What')",
+		output: "select insert('Quadratic', 3, 4, 'What') from dual",
 	}, {
 		input:  "SELECT val, CUME_DIST() OVER w, ROW_NUMBER() OVER w, DENSE_RANK() OVER w, PERCENT_RANK() OVER w, RANK() OVER w AS 'cd' FROM numbers",
 		output: "select val, cume_dist() over w, row_number() over w, dense_rank() over w, percent_rank() over w, rank() over w as cd from numbers",

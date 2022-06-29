@@ -543,14 +543,14 @@ func (fmd *FakeMysqlDaemon) CheckSuperQueryList() error {
 }
 
 // GetSchema is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) GetSchema(ctx context.Context, dbName string, tables, excludeTables []string, includeViews bool, tableSchemaOnly bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
+func (fmd *FakeMysqlDaemon) GetSchema(ctx context.Context, dbName string, request *tabletmanagerdatapb.GetSchemaRequest) (*tabletmanagerdatapb.SchemaDefinition, error) {
 	if fmd.SchemaFunc != nil {
 		return fmd.SchemaFunc()
 	}
 	if fmd.Schema == nil {
 		return nil, fmt.Errorf("no schema defined")
 	}
-	return tmutils.FilterTables(fmd.Schema, tables, excludeTables, includeViews)
+	return tmutils.FilterTables(fmd.Schema, request.Tables, request.ExcludeTables, request.IncludeViews)
 }
 
 // GetColumns is part of the MysqlDaemon interface

@@ -494,7 +494,7 @@ var defaultConfig = TabletConfig{
 	SignalSchemaChangeReloadIntervalSeconds: 5,
 	MessagePostponeParallelism:              4,
 	DeprecatedCacheResultFields:             true,
-	SignalWhenSchemaChange:                  false, // while this feature is experimental, the safe default is off
+	SignalWhenSchemaChange:                  true,
 
 	EnableTxThrottler:           false,
 	TxThrottlerConfig:           defaultTxThrottlerConfig(),

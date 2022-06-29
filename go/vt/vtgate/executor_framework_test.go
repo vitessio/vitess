@@ -664,9 +664,7 @@ var testPlannedQueries = map[string]bool{}
 func testQueryLog(t *testing.T, logChan chan any, method, stmtType, sql string, shardQueries int) *LogStats {
 	t.Helper()
 
-	var logStats *LogStats
-
-	logStats = getQueryLog(logChan)
+	logStats := getQueryLog(logChan)
 	require.NotNil(t, logStats)
 
 	var log bytes.Buffer

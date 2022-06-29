@@ -11,27 +11,10 @@ concurrency:
 # (vtgate, vttablet, etc) built on different versions.
 
 jobs:
-  get_upgrade_downgrade_label:
-    if: github.repository == 'vitessio/vitess'
-    name: Get the Upgrade Downgrade pull request label
-    runs-on: ubuntu-latest
-    outputs:
-      hasLabel: ${{ steps.check_label.outputs.hasLabel }}
-
-    steps:
-      - name: Check Label for PR
-        if: github.event_name == 'pull_request'
-        uses: Dreamcodeio/pr-has-label-action@master
-        id: check_label
-        with:
-          label: Skip Upgrade Downgrade
-
   get_previous_release:
-    if: always() && (github.event_name != 'pull_request' || needs.get_upgrade_downgrade_label.outputs.hasLabel != 'true')
+    if: always() && github.event_name == 'pull_request'
     name: Get latest release
     runs-on: ubuntu-latest
-    needs:
-      - get_upgrade_downgrade_label
     outputs:
       previous_release: ${{ steps.output-previous-release-ref.outputs.previous_release_ref }}
 
@@ -53,7 +36,6 @@ jobs:
     name: Run Upgrade Downgrade Test
     runs-on: ubuntu-latest
     needs:
-      - get_upgrade_downgrade_label
       - get_previous_release
 
     steps:

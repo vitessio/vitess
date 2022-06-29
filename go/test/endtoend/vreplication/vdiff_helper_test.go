@@ -32,6 +32,7 @@ import (
 
 const (
 	vdiffTimeout = time.Second * 60
+	tsFormat     = "2006-01-02 15:04:05"
 )
 
 var (
@@ -80,22 +81,36 @@ func doVDiff1(t *testing.T, ksWorkflow, cells string) {
 	})
 }
 
-func waitForVDiff2ToComplete(t *testing.T, ksWorkflow, uuid string) *vdiffInfo {
+func waitForVDiff2ToComplete(t *testing.T, ksWorkflow, cells, uuid string, completedAtMin time.Time) *vdiffInfo {
 	var info *vdiffInfo
 	ch := make(chan bool)
 	go func() {
 		for {
 			time.Sleep(1 * time.Second)
-			_, jsonStr := performVDiff2Action(t, ksWorkflow, "show", uuid)
-			if info = getVDiffInfo(jsonStr); info.State == "completed" {
+			_, jsonStr := performVDiff2Action(t, ksWorkflow, cells, "show", uuid, false)
+			info = getVDiffInfo(jsonStr)
+			if info.State == "completed" {
+				if !completedAtMin.IsZero() {
+					ca := info.CompletedAt
+					completedAt, _ := time.Parse(tsFormat, ca)
+					if !completedAt.After(completedAtMin) {
+						continue
+					}
+				}
 				ch <- true
+				return
+			} else if info.State == "error" {
+				ch <- false
 				return
 			}
 		}
 	}()
 
 	select {
-	case <-ch:
+	case good := <-ch:
+		if !good {
+			require.FailNow(t, "VDiff encountered an error")
+		}
 		return info
 	case <-time.After(vdiffTimeout):
 		require.FailNowf(t, "VDiff never completed: %s", uuid)
@@ -109,42 +124,63 @@ type expectedVDiff2Result struct {
 	hasMismatch bool
 }
 
-// todo: use specified cells
 func vdiff2(t *testing.T, keyspace, workflow, cells string, want *expectedVDiff2Result) {
 	ksWorkflow := fmt.Sprintf("%s.%s", keyspace, workflow)
 	t.Run(fmt.Sprintf("vdiff2 %s", ksWorkflow), func(t *testing.T) {
-		uuid, _ := performVDiff2Action(t, ksWorkflow, "create", "")
-		info := waitForVDiff2ToComplete(t, ksWorkflow, uuid)
+		uuid, _ := performVDiff2Action(t, ksWorkflow, cells, "create", "", false)
+		info := waitForVDiff2ToComplete(t, ksWorkflow, cells, uuid, time.Time{})
 
 		require.Equal(t, workflow, info.Workflow)
 		require.Equal(t, keyspace, info.Keyspace)
+		// I'm not sure if we always have rows in every table
+		//require.Greater(t, info.RowsCompared, int64(0))
 		if want != nil {
 			require.Equal(t, want.state, info.State)
 			require.Equal(t, strings.Join(want.shards, ","), info.Shards)
 			require.Equal(t, want.hasMismatch, info.HasMismatch)
 		} else {
-			require.Equal(t, info.State, "completed")
+			require.Equal(t, "completed", info.State)
 			require.False(t, info.HasMismatch)
-
+		}
+		if strings.Contains(t.Name(), "AcrossDBVersions") {
+			log.Errorf("VDiff resume cannot be guaranteed between major MySQL versions due to implied collation differences, skipping resume test...")
+			return
 		}
 	})
 }
 
-func performVDiff2Action(t *testing.T, ksWorkflow, action, actionArg string) (uuid string, output string) {
-	var err error
-	output, err = vc.VtctlClient.ExecuteCommandWithOutput("VDiff", "--", "--v2", "--format", "json", ksWorkflow, action, actionArg)
-	log.Infof("vdiff2 output: %+v (err: %+v)", output, err)
-	require.Nil(t, err)
-
-	uuid, err = jsonparser.GetString([]byte(output), "UUID")
+func vdiff2Resume(t *testing.T, keyspace, workflow, cells string, expectedRows int64) {
+	ksWorkflow := fmt.Sprintf("%s.%s", keyspace, workflow)
+	startTs := time.Now()
+	uuid, _ := performVDiff2Action(t, ksWorkflow, cells, "show", "last", false)
+	uuid, _ = performVDiff2Action(t, ksWorkflow, cells, "resume", uuid, false)
+	info := waitForVDiff2ToComplete(t, ksWorkflow, cells, uuid, startTs)
+	require.False(t, info.HasMismatch)
+	completedTs, err := time.Parse(tsFormat, info.CompletedAt)
 	require.NoError(t, err)
-	require.NotEmpty(t, uuid)
+	require.Greater(t, completedTs, startTs)
+	require.Equal(t, expectedRows, info.RowsCompared)
+}
+
+func performVDiff2Action(t *testing.T, ksWorkflow, cells, action, actionArg string, expectError bool) (uuid string, output string) {
+	var err error
+	output, err = vc.VtctlClient.ExecuteCommandWithOutput("VDiff", "--", "--v2", "--tablet_types=primary", "--source_cell="+cells, "--format=json", ksWorkflow, action, actionArg)
+	log.Infof("vdiff2 output: %+v (err: %+v)", output, err)
+	if !expectError {
+		require.Nil(t, err)
+		uuid, err = jsonparser.GetString([]byte(output), "UUID")
+		require.NoError(t, err)
+		require.NotEmpty(t, uuid)
+	}
 	return uuid, output
 }
 
 type vdiffInfo struct {
 	Workflow, Keyspace string
 	State, Shards      string
+	RowsCompared       int64
+	StartedAt          string
+	CompletedAt        string
 	HasMismatch        bool
 }
 
@@ -155,6 +191,9 @@ func getVDiffInfo(jsonStr string) *vdiffInfo {
 	info.Keyspace, _ = jsonparser.GetString(json, "Keyspace")
 	info.State, _ = jsonparser.GetString(json, "State")
 	info.Shards, _ = jsonparser.GetString(json, "Shards")
+	info.RowsCompared, _ = jsonparser.GetInt(json, "RowsCompared")
+	info.StartedAt, _ = jsonparser.GetString(json, "StartedAt")
+	info.CompletedAt, _ = jsonparser.GetString(json, "CompletedAt")
 	info.HasMismatch, _ = jsonparser.GetBoolean(json, "HasMismatch")
 
 	return &info

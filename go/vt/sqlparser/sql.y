@@ -5612,6 +5612,10 @@ function_call_keyword:
   {
     $$ = &ValuesFuncExpr{Name: $3}
   }
+| INSERT openb expression ',' expression ',' expression ',' expression closeb
+  {
+    $$ = &InsertExpr{Str: $3, Pos: $5, Len: $7, NewStr: $9}
+  }
 | CURRENT_USER func_paren_opt
   {
     $$ =  &FuncExpr{Name: NewIdentifierCI($1)}
@@ -6854,7 +6858,7 @@ insert_data:
   }
 | openb closeb VALUES tuple_list
   {
-    $$ = &Insert{Rows: $4}
+    $$ = &Insert{Columns: []IdentifierCI{}, Rows: $4}
   }
 | openb ins_column_list closeb select_statement
   {
