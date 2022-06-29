@@ -17,6 +17,7 @@ limitations under the License.
 package vtgate
 
 import (
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"io"
@@ -54,6 +55,7 @@ type LogStats struct {
 	ExecuteTime   time.Duration
 	CommitTime    time.Duration
 	Error         error
+	TablesUsed    []string
 	SessionUUID   string
 	CachedPlan    bool
 }
@@ -152,36 +154,78 @@ func (stats *LogStats) Logf(w io.Writer, params url.Values) error {
 	var fmtString string
 	switch *streamlog.QueryLogFormat {
 	case streamlog.QueryLogFormatText:
-		fmtString = "%v\t%v\t%v\t'%v'\t'%v'\t%v\t%v\t%.6f\t%.6f\t%.6f\t%.6f\t%v\t%q\t%v\t%v\t%v\t%q\t%q\t%q\t%q\t%q\t%v\t\n"
+		if len(stats.TablesUsed) == 0 {
+			fmtString = "%v\t%v\t%v\t'%v'\t'%v'\t%v\t%v\t%.6f\t%.6f\t%.6f\t%.6f\t%v\t%q\t%v\t%v\t%v\t%q\t%q\t%q\t%q\t%q\t%v\n"
+		} else {
+			fmtString = "%v\t%v\t%v\t'%v'\t'%v'\t%v\t%v\t%.6f\t%.6f\t%.6f\t%.6f\t%v\t%q\t%v\t%v\t%v\t%q\t%q\t%q\t%q\t%q\t%v\t%v\n"
+		}
 	case streamlog.QueryLogFormatJSON:
-		fmtString = "{\"Method\": %q, \"RemoteAddr\": %q, \"Username\": %q, \"ImmediateCaller\": %q, \"Effective Caller\": %q, \"Start\": \"%v\", \"End\": \"%v\", \"TotalTime\": %.6f, \"PlanTime\": %v, \"ExecuteTime\": %v, \"CommitTime\": %v, \"StmtType\": %q, \"SQL\": %q, \"BindVars\": %v, \"ShardQueries\": %v, \"RowsAffected\": %v, \"Error\": %q,  \"Keyspace\": %q, \"Table\": %q, \"TabletType\": %q, \"SessionUUID\": %q, \"Cached Plan\": %v}\n"
+		if len(stats.TablesUsed) == 0 {
+			fmtString = "{\"Method\": %q, \"RemoteAddr\": %q, \"Username\": %q, \"ImmediateCaller\": %q, \"Effective Caller\": %q, \"Start\": \"%v\", \"End\": \"%v\", \"TotalTime\": %.6f, \"PlanTime\": %v, \"ExecuteTime\": %v, \"CommitTime\": %v, \"StmtType\": %q, \"SQL\": %q, \"BindVars\": %v, \"ShardQueries\": %v, \"RowsAffected\": %v, \"Error\": %q,  \"Keyspace\": %q, \"Table\": %q, \"TabletType\": %q, \"SessionUUID\": %q, \"Cached Plan\": %v}\n"
+		} else {
+			fmtString = "{\"Method\": %q, \"RemoteAddr\": %q, \"Username\": %q, \"ImmediateCaller\": %q, \"Effective Caller\": %q, \"Start\": \"%v\", \"End\": \"%v\", \"TotalTime\": %.6f, \"PlanTime\": %v, \"ExecuteTime\": %v, \"CommitTime\": %v, \"StmtType\": %q, \"SQL\": %q, \"BindVars\": %v, \"ShardQueries\": %v, \"RowsAffected\": %v, \"Error\": %q,  \"Keyspace\": %q, \"Table\": %q, \"TabletType\": %q, \"SessionUUID\": %q, \"Cached Plan\": %v, \"TablesUsed\": %v}\n"
+		}
 	}
 
-	_, err := fmt.Fprintf(
-		w,
-		fmtString,
-		stats.Method,
-		remoteAddr,
-		username,
-		stats.ImmediateCaller(),
-		stats.EffectiveCaller(),
-		stats.StartTime.Format("2006-01-02 15:04:05.000000"),
-		stats.EndTime.Format("2006-01-02 15:04:05.000000"),
-		stats.TotalTime().Seconds(),
-		stats.PlanTime.Seconds(),
-		stats.ExecuteTime.Seconds(),
-		stats.CommitTime.Seconds(),
-		stats.StmtType,
-		stats.SQL,
-		formattedBindVars,
-		stats.ShardQueries,
-		stats.RowsAffected,
-		stats.ErrorStr(),
-		stats.Keyspace,
-		stats.Table,
-		stats.TabletType,
-		stats.SessionUUID,
-		stats.CachedPlan,
-	)
+	var err error
+	if len(stats.TablesUsed) == 0 {
+		_, err = fmt.Fprintf(
+			w,
+			fmtString,
+			stats.Method,
+			remoteAddr,
+			username,
+			stats.ImmediateCaller(),
+			stats.EffectiveCaller(),
+			stats.StartTime.Format("2006-01-02 15:04:05.000000"),
+			stats.EndTime.Format("2006-01-02 15:04:05.000000"),
+			stats.TotalTime().Seconds(),
+			stats.PlanTime.Seconds(),
+			stats.ExecuteTime.Seconds(),
+			stats.CommitTime.Seconds(),
+			stats.StmtType,
+			stats.SQL,
+			formattedBindVars,
+			stats.ShardQueries,
+			stats.RowsAffected,
+			stats.ErrorStr(),
+			stats.Keyspace,
+			stats.Table,
+			stats.TabletType,
+			stats.SessionUUID,
+			stats.CachedPlan)
+	} else {
+		tablesUsed, marshalErr := json.Marshal(stats.TablesUsed)
+		if marshalErr != nil {
+			return marshalErr
+		}
+		_, err = fmt.Fprintf(
+			w,
+			fmtString,
+			stats.Method,
+			remoteAddr,
+			username,
+			stats.ImmediateCaller(),
+			stats.EffectiveCaller(),
+			stats.StartTime.Format("2006-01-02 15:04:05.000000"),
+			stats.EndTime.Format("2006-01-02 15:04:05.000000"),
+			stats.TotalTime().Seconds(),
+			stats.PlanTime.Seconds(),
+			stats.ExecuteTime.Seconds(),
+			stats.CommitTime.Seconds(),
+			stats.StmtType,
+			stats.SQL,
+			formattedBindVars,
+			stats.ShardQueries,
+			stats.RowsAffected,
+			stats.ErrorStr(),
+			stats.Keyspace,
+			stats.Table,
+			stats.TabletType,
+			stats.SessionUUID,
+			stats.CachedPlan,
+			string(tablesUsed),
+		)
+	}
 	return err
 }
