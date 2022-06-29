@@ -30,7 +30,7 @@ select /*vt+ PLANNER=V3 */ name, count(*) from users
 ### Schema Tracking is no longer experimental
 
 Schema tracking is now GA. It is enabled by default. Schema tracking allows the Gen4 planner to plan many more queries.
-This can be turned off if necessary (for example, if you choose to continue to use the V3 planner) by changing the [relevant flags](https://vitess.io/docs/14.0/reference/features/schema-tracking/) on VTGate and VTTablet.
+This can be turned off if necessary by changing the [relevant flags](https://vitess.io/docs/14.0/reference/features/schema-tracking/) on VTGate and VTTablet.
 
 ### New query support
 
