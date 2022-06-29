@@ -550,7 +550,7 @@ func displayVDiff2ActionStatusResponse(wr *wrangler.Wrangler, format string, act
 		jsonText, _ := json.MarshalIndent(resp, "", "\t")
 		wr.Logger().Printf(string(jsonText) + "\n")
 	} else {
-		msg := fmt.Sprintf("VDiff %s is %s on target shards\n", action, status)
+		msg := fmt.Sprintf("VDiff %s status is %s on target shards\n", action, status)
 		wr.Logger().Printf(msg)
 	}
 }
