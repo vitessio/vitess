@@ -2201,6 +2201,15 @@ func (node *InsertExpr) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
+func (node *IntervalFuncExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("interval(")
+	buf.printExpr(node, node.Expr, true)
+	buf.WriteString(", ")
+	node.Exprs.formatFast(buf)
+	buf.WriteByte(')')
+}
+
+// formatFast formats the node.
 func (node *NamedWindow) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("window ")
 	node.Windows.formatFast(buf)
