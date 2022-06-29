@@ -119,6 +119,14 @@ func (dml *DML) GetTableName() string {
 	return ""
 }
 
+// GetSingleTable returns single table used in dml.
+func (dml *DML) GetSingleTable() (*vindexes.Table, error) {
+	if len(dml.Table) > 1 {
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported dml on complex table expression")
+	}
+	return dml.Table[0], nil
+}
+
 func allowOnlyPrimary(rss ...*srvtopo.ResolvedShard) error {
 	for _, rs := range rss {
 		if rs != nil && rs.Target.TabletType != topodatapb.TabletType_PRIMARY {

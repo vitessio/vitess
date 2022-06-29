@@ -155,7 +155,11 @@ func (pb *primitiveBuilder) processAliasedTable(tableExpr *sqlparser.AliasedTabl
 		// and those vindex maps will be returned. They have to replace the old vindex
 		// maps of the inherited route options.
 		var tableNames []string
-		for _, table := range spb.st.AllVschemaTableNames() {
+		spbTables, err := spb.st.AllVschemaTableNames()
+		if err != nil {
+			return err
+		}
+		for _, table := range spbTables {
 			tableNames = append(tableNames, table.Name.String())
 		}
 		sort.Strings(tableNames)

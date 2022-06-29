@@ -130,7 +130,11 @@ func (upd *Update) updateVindexEntries(vcursor VCursor, bindVars map[string]*que
 			return err
 		}
 
-		for _, colVindex := range upd.Table[0].ColumnVindexes {
+		vindexTable, err := upd.GetSingleTable()
+		if err != nil {
+			return err
+		}
+		for _, colVindex := range vindexTable.ColumnVindexes {
 			// Skip this vindex if no rows are being changed
 			updColValues, ok := upd.ChangedVindexValues[colVindex.Name]
 			if !ok {

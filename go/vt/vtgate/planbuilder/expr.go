@@ -249,7 +249,11 @@ func (pb *primitiveBuilder) finalizeUnshardedDMLSubqueries(reservedVars *sqlpars
 				for _, sub := range innerRoute.substitutions {
 					*sub.oldExpr = *sub.newExpr
 				}
-				tables = append(tables, spb.st.AllVschemaTableNames()...)
+				spbTables, err := spb.st.AllVschemaTableNames()
+				if err != nil {
+					return false, err
+				}
+				tables = append(tables, spbTables...)
 			case *sqlparser.Union:
 				if !inSubQuery {
 					return true, nil
@@ -268,7 +272,6 @@ func (pb *primitiveBuilder) finalizeUnshardedDMLSubqueries(reservedVars *sqlpars
 					samePlan = false
 					return false, dummyErr
 				}
-				tables = append(tables, spb.st.AllVschemaTableNames()...)
 			}
 
 			return true, nil

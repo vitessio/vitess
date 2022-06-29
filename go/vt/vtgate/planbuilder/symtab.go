@@ -206,17 +206,21 @@ func (st *symtab) AllTables() []*table {
 }
 
 // AllVschemaTableNames returns an ordered list of all current vschema tables.
-func (st *symtab) AllVschemaTableNames() []*vindexes.Table {
+func (st *symtab) AllVschemaTableNames() ([]*vindexes.Table, error) {
 	if len(st.tableNames) == 0 {
-		return nil
+		return nil, nil
 	}
 	tables := make([]*vindexes.Table, 0, len(st.tableNames))
 	for _, tname := range st.tableNames {
-		if vschemaTable := st.tables[tname].vschemaTable; vschemaTable != nil {
-			tables = append(tables, vschemaTable)
+		t, ok := st.tables[tname]
+		if !ok {
+			return nil, fmt.Errorf("table %v not found", sqlparser.String(tname))
+		}
+		if t.vschemaTable != nil {
+			tables = append(tables, t.vschemaTable)
 		}
 	}
-	return tables
+	return tables, nil
 }
 
 // FindTable finds a table in symtab. This function is specifically used
