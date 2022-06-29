@@ -520,6 +520,17 @@ func (vr *vreplicator) updateTimeThrottled(componentThrottled string) error {
 	return err
 }
 
+func (vr *vreplicator) updateHeartbeatTime(tm int64) error {
+	update, err := binlogplayer.GenerateUpdateHeartbeat(vr.id, tm)
+	if err != nil {
+		return err
+	}
+	if _, err := withDDL.Exec(vr.vre.ctx, update, vr.dbClient.ExecuteFetch, vr.dbClient.ExecuteFetch); err != nil {
+		return fmt.Errorf("error %v updating time", err)
+	}
+	return nil
+}
+
 func (vr *vreplicator) clearFKCheck() error {
 	_, err := vr.dbClient.Execute("set foreign_key_checks=0;")
 	return err

@@ -242,6 +242,10 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 				_ = vc.vr.updateTimeThrottled("rowstreamer")
 				return nil
 			}
+			if rows.Heartbeat {
+				_ = vc.vr.updateHeartbeatTime(time.Now().Unix())
+				return nil
+			}
 			// verify throttler is happy, otherwise keep looping
 			if vc.vr.vre.throttlerClient.ThrottleCheckOKOrWaitAppName(ctx, vc.throttlerAppName) {
 				break // out of 'for' loop
