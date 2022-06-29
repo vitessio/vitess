@@ -50819,6 +50819,9 @@ export namespace binlogdata {
 
         /** VStreamRowsResponse throttled */
         throttled?: (boolean|null);
+
+        /** VStreamRowsResponse heartbeat */
+        heartbeat?: (boolean|null);
     }
 
     /** Represents a VStreamRowsResponse. */
@@ -50847,6 +50850,9 @@ export namespace binlogdata {
 
         /** VStreamRowsResponse throttled. */
         public throttled: boolean;
+
+        /** VStreamRowsResponse heartbeat. */
+        public heartbeat: boolean;
 
         /**
          * Creates a new VStreamRowsResponse instance using the specified properties.
