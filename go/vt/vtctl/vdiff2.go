@@ -56,17 +56,18 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 	onlyPks := subFlags.Bool("only_pks", false, "When reporting missing rows, only show primary keys in the report.")
 	var format string
 	subFlags.StringVar(&format, "format", "text", "Format of report") // "json" or "text"
-	format = strings.ToLower(format)
 	maxExtraRowsToCompare := subFlags.Int64("max_extra_rows_to_compare", 1000, "If there are collation differences between the source and target, you can have rows that are identical but simply returned in a different order from MySQL. We will do a second pass to compare the rows for any actual differences in this case and this flag allows you to control the resources used for this operation.")
 
 	resumable := subFlags.Bool("resumable", false, "Should this vdiff retry in case of recoverable errors, not yet implemented")
 	checksum := subFlags.Bool("checksum", false, "Use row-level checksums to compare, not yet implemented")
 	samplePct := subFlags.Int64("sample_pct", 100, "How many rows to sample, not yet implemented")
-	verbose := subFlags.Bool("verbose", false, "Show full vdiff output in summaries (only applicable when using JSON format)")
+	verbose := subFlags.Bool("verbose", false, "Show verbose vdiff output in summaries")
 
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
+	format = strings.ToLower(format)
+
 	var action vdiff.VDiffAction
 	var actionArg string
 
