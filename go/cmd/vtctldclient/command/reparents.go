@@ -36,38 +36,54 @@ import (
 var (
 	// EmergencyReparentShard makes an EmergencyReparent gRPC call to a vtctld.
 	EmergencyReparentShard = &cobra.Command{
-		Use:  "EmergencyReparentShard <keyspace/shard>",
-		Args: cobra.ExactArgs(1),
-		Long: "Reparents the shard to the new primary. Assumes the old primary is dead and not responding",
-		RunE: commandEmergencyReparentShard,
+		Use:                   "EmergencyReparentShard <keyspace/shard>",
+		Short:                 "Reparents the shard to the new primary. Assumes the old primary is dead and not responding.",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(1),
+		RunE:                  commandEmergencyReparentShard,
 	}
 	// InitShardPrimary makes an InitShardPrimary gRPC call to a vtctld.
 	InitShardPrimary = &cobra.Command{
-		Use:  "InitShardPrimary <keyspace/shard> <primary alias>",
-		Args: cobra.ExactArgs(2),
-		RunE: commandInitShardPrimary,
+		Use:   "InitShardPrimary <keyspace/shard> <primary alias>",
+		Short: "Sets the initial primary for the shard.",
+		Long: `Sets the initial primary for the shard.
+
+This will make all other tablets in the shard become replicas of the promoted tablet.
+WARNING: this can cause data loss on an already-replicating shard. PlannedReparentShard or
+EmergencyReparentShard should be used instead.
+`,
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(2),
+		RunE:                  commandInitShardPrimary,
 	}
 	// PlannedReparentShard makes a PlannedReparentShard gRPC call to a vtctld.
 	PlannedReparentShard = &cobra.Command{
-		Use:  "PlannedReparentShard <keyspace/shard>",
-		Args: cobra.ExactArgs(1),
-		Long: "string",
-		RunE: commandPlannedReparentShard,
+		Use:                   "PlannedReparentShard <keyspace/shard>",
+		Short:                 "Reparents the shard to a new primary, or away from an old primary. Both the old and new primaries must be up and running.",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(1),
+		RunE:                  commandPlannedReparentShard,
 	}
 	// ReparentTablet makes a ReparentTablet gRPC call to a vtctld.
 	ReparentTablet = &cobra.Command{
-		Use: "ReparentTablet <alias>",
-		Long: "Reparent a tablet to the current primary in the shard. This only works if the current replica position " +
-			"matches the last known reparent action.",
-		Args: cobra.ExactArgs(1),
-		RunE: commandReparentTablet,
+		Use:                   "ReparentTablet <alias>",
+		Short:                 "Reparent a tablet to the current primary in the shard.",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(1),
+		RunE:                  commandReparentTablet,
 	}
 	// TabletExternallyReparented makes a TabletExternallyReparented gRPC call
 	// to a vtctld.
 	TabletExternallyReparented = &cobra.Command{
-		Use:  "TabletExternallyReparented <alias>",
-		Args: cobra.ExactArgs(1),
-		RunE: commandTabletExternallyReparented,
+		Use:   "TabletExternallyReparented <alias>",
+		Short: "Updates the topology record for the tablet's shard to acknowledge that an external tool made this tablet the primary.",
+		Long: `Updates the topology record for the tablet's shard to acknowledge that an external tool made this tablet the primary.
+
+See the Reparenting guide for more information: https://vitess.io/docs/user-guides/reparenting/#external-reparenting.
+`,
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(1),
+		RunE:                  commandTabletExternallyReparented,
 	}
 )
 
@@ -263,12 +279,12 @@ func commandTabletExternallyReparented(cmd *cobra.Command, args []string) error 
 func init() {
 	EmergencyReparentShard.Flags().DurationVar(&emergencyReparentShardOptions.WaitReplicasTimeout, "wait-replicas-timeout", *topo.RemoteOperationTimeout, "Time to wait for replicas to catch up in reparenting.")
 	EmergencyReparentShard.Flags().StringVar(&emergencyReparentShardOptions.NewPrimaryAliasStr, "new-primary", "", "Alias of a tablet that should be the new primary. If not specified, the vtctld will select the best candidate to promote.")
-	EmergencyReparentShard.Flags().BoolVar(&emergencyReparentShardOptions.PreventCrossCellPromotion, "prevent-cross-cell-promotion", false, "Only promotes a new primary from the same cell as the previous primary")
+	EmergencyReparentShard.Flags().BoolVar(&emergencyReparentShardOptions.PreventCrossCellPromotion, "prevent-cross-cell-promotion", false, "Only promotes a new primary from the same cell as the previous primary.")
 	EmergencyReparentShard.Flags().StringSliceVarP(&emergencyReparentShardOptions.IgnoreReplicaAliasStrList, "ignore-replicas", "i", nil, "Comma-separated, repeated list of replica tablet aliases to ignore during the emergency reparent.")
 	Root.AddCommand(EmergencyReparentShard)
 
-	InitShardPrimary.Flags().DurationVar(&initShardPrimaryOptions.WaitReplicasTimeout, "wait-replicas-timeout", 30*time.Second, "time to wait for replicas to catch up in reparenting")
-	InitShardPrimary.Flags().BoolVar(&initShardPrimaryOptions.Force, "force", false, "will force the reparent even if the provided tablet is not writable or the shard primary")
+	InitShardPrimary.Flags().DurationVar(&initShardPrimaryOptions.WaitReplicasTimeout, "wait-replicas-timeout", 30*time.Second, "Time to wait for replicas to catch up in reparenting.")
+	InitShardPrimary.Flags().BoolVar(&initShardPrimaryOptions.Force, "force", false, "Force the reparent even if the provided tablet is not writable or the shard primary.")
 	Root.AddCommand(InitShardPrimary)
 
 	PlannedReparentShard.Flags().DurationVar(&plannedReparentShardOptions.WaitReplicasTimeout, "wait-replicas-timeout", *topo.RemoteOperationTimeout, "Time to wait for replicas to catch up on replication both before and after reparenting.")

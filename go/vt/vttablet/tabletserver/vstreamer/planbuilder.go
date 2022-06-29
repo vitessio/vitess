@@ -119,7 +119,7 @@ type Table struct {
 
 // FindColumn finds a column in the table. It returns the index if found.
 // Otherwise, it returns -1.
-func (ta *Table) FindColumn(name sqlparser.ColIdent) int {
+func (ta *Table) FindColumn(name sqlparser.IdentifierCI) int {
 	for i, col := range ta.Fields {
 		if name.EqualString(col.Name) {
 			return i
@@ -433,7 +433,7 @@ func buildTablePlan(ti *Table, vschema *localVSchema, query string) (*Plan, erro
 	return plan, nil
 }
 
-func analyzeSelect(query string) (sel *sqlparser.Select, fromTable sqlparser.TableIdent, err error) {
+func analyzeSelect(query string) (sel *sqlparser.Select, fromTable sqlparser.IdentifierCS, err error) {
 	statement, err := sqlparser.Parse(query)
 	if err != nil {
 		return nil, fromTable, err
@@ -588,6 +588,29 @@ func (plan *Plan) analyzeExpr(vschema *localVSchema, selExpr sqlparser.SelectExp
 			ColNum: colnum,
 			Field:  plan.Table.Fields[colnum],
 		}, nil
+	case sqlparser.AggrFunc:
+		if strings.ToLower(inner.AggrName()) != "keyspace_id" {
+			return ColExpr{}, fmt.Errorf("unsupported function: %v", sqlparser.String(inner))
+		}
+		if len(inner.GetArgs()) != 0 {
+			return ColExpr{}, fmt.Errorf("unexpected: %v", sqlparser.String(inner))
+		}
+		cv, err := vschema.FindColVindex(plan.Table.Name)
+		if err != nil {
+			return ColExpr{}, err
+		}
+		vindexColumns, err := buildVindexColumns(plan.Table, cv.Columns)
+		if err != nil {
+			return ColExpr{}, err
+		}
+		return ColExpr{
+			Field: &querypb.Field{
+				Name: "keyspace_id",
+				Type: sqltypes.VarBinary,
+			},
+			Vindex:        cv.Vindex,
+			VindexColumns: vindexColumns,
+		}, nil
 	case *sqlparser.FuncExpr:
 		if inner.Name.Lowered() != "keyspace_id" {
 			return ColExpr{}, fmt.Errorf("unsupported function: %v", sqlparser.String(inner))
@@ -652,7 +675,7 @@ func (plan *Plan) analyzeExpr(vschema *localVSchema, selExpr sqlparser.SelectExp
 // "in_keyrange(col, 'hash', '-80')", "in_keyrange(col, 'local_vindex', '-80')", or
 // "in_keyrange(col, 'ks.external_vindex', '-80')".
 func (plan *Plan) analyzeInKeyRange(vschema *localVSchema, exprs sqlparser.SelectExprs) error {
-	var colnames []sqlparser.ColIdent
+	var colnames []sqlparser.IdentifierCI
 	var krExpr sqlparser.SelectExpr
 	whereFilter := Filter{
 		Opcode: VindexMatch,
@@ -733,7 +756,7 @@ func selString(expr sqlparser.SelectExpr) (string, error) {
 
 // buildVindexColumns builds the list of column numbers of the table
 // that will be the input to the vindex function.
-func buildVindexColumns(ti *Table, colnames []sqlparser.ColIdent) ([]int, error) {
+func buildVindexColumns(ti *Table, colnames []sqlparser.IdentifierCI) ([]int, error) {
 	vindexColumns := make([]int, 0, len(colnames))
 	for _, colname := range colnames {
 		colnum, err := findColumn(ti, colname)
@@ -745,7 +768,7 @@ func buildVindexColumns(ti *Table, colnames []sqlparser.ColIdent) ([]int, error)
 	return vindexColumns, nil
 }
 
-func findColumn(ti *Table, name sqlparser.ColIdent) (int, error) {
+func findColumn(ti *Table, name sqlparser.IdentifierCI) (int, error) {
 	for i, col := range ti.Fields {
 		if name.EqualString(col.Name) {
 			return i, nil

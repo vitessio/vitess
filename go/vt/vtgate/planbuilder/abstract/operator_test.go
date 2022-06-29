@@ -96,9 +96,8 @@ func TestOperator(t *testing.T) {
 		}
 		t.Run(fmt.Sprintf("%d:%s", tc.line, tc.query), func(t *testing.T) {
 			require.NoError(t, err)
-			tree, err := sqlparser.Parse(tc.query)
+			stmt, err := sqlparser.Parse(tc.query)
 			require.NoError(t, err)
-			stmt := tree.(sqlparser.Statement)
 			semTable, err := semantics.Analyze(stmt, "", si)
 			require.NoError(t, err)
 			optree, err := CreateLogicalOperatorFromAST(stmt, semTable)

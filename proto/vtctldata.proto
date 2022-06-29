@@ -294,11 +294,11 @@ message CreateKeyspaceRequest {
   // AllowEmptyVSchema allows a keyspace to be created with no vschema.
   bool allow_empty_v_schema = 3;
 
-  // ShardingColumnName specifies the column to use for sharding operations.
-  string sharding_column_name = 4;
-  // ShardingColumnType specifies the type of the column to use for sharding
-  // operations.
-  topodata.KeyspaceIdType sharding_column_type = 5;
+  // OBSOLETE string sharding_column_name = 4;
+  reserved 4;
+
+  // OBSOLETE topodata.KeyspaceIdType sharding_column_type = 5;
+  reserved 5;
 
   // ServedFroms specifies a set of db_type:keyspace pairs used to serve
   // traffic for the keyspace.
@@ -596,6 +596,9 @@ message GetSchemaRequest {
   // rather than full schema information for each table. It is ignored if
   // TableNamesOnly is set to true.
   bool table_sizes_only = 6;
+  // TableSchemaOnly specifies whether to limit the results to just table/view
+  // schema definition (CREATE TABLE/VIEW statements) and skip column/field information
+  bool table_schema_only = 7;
 }
 
 message GetSchemaResponse {
@@ -951,8 +954,10 @@ message SetKeyspaceServedFromResponse {
 
 message SetKeyspaceShardingInfoRequest {
   string keyspace = 1;
-  string column_name = 2;
-  topodata.KeyspaceIdType column_type = 3;
+  // OBSOLETE string column_name = 2;
+  reserved 2;
+  // OBSOLETE topodata.KeyspaceIdType column_type = 3;
+  reserved 3;
   bool force = 4;
 }
 

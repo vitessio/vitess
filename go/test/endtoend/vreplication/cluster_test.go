@@ -310,10 +310,12 @@ func NewVitessCluster(t *testing.T, name string, cellNames []string, clusterConf
 
 	require.NotNil(t, topo)
 	require.Nil(t, topo.Setup("etcd2", nil))
-	topo.ManageTopoDir("mkdir", "/vitess/global")
+	err := topo.ManageTopoDir("mkdir", "/vitess/global")
+	require.NoError(t, err)
 	vc.Topo = topo
 	for _, cellName := range cellNames {
-		topo.ManageTopoDir("mkdir", "/vitess/"+cellName)
+		err := topo.ManageTopoDir("mkdir", "/vitess/"+cellName)
+		require.NoError(t, err)
 	}
 
 	vtctld := cluster.VtctldProcessInstance(vc.ClusterConfig.vtctldPort, vc.ClusterConfig.vtctldGrpcPort,

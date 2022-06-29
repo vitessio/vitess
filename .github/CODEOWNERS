@@ -11,7 +11,7 @@ bootstrap.sh @deepthi
 /go/cache @vmg
 /go/cmd @ajm188
 /go/cmd/vtadmin @ajm188 @doeg @notfelineit
-/go/cmd/vtctldclient @ajm188 @doeg @notfelineit
+/go/cmd/vtctldclient @ajm188 @notfelineit
 /go/internal/flag @ajm188
 /go/mysql @harshit-gangal @systay @mattlord
 /go/protoutil @ajm188
@@ -30,11 +30,11 @@ bootstrap.sh @deepthi
 /go/vt/topo @deepthi @rafael
 /go/vt/vtadmin @ajm188 @doeg @notfelineit @rohit-nayak-ps
 /go/vt/vtctl @deepthi
-/go/vt/vtctl/vtctl.go @ajm188 @doeg @notfelineit
-/go/vt/vtctl/grpcvtctldclient @ajm188 @doeg @notfelineit
-/go/vt/vtctl/grpcvtctldserver @ajm188 @doeg @notfelineit
-/go/vt/vtctl/vtctldclient @ajm188 @doeg @notfelineit
-/go/vt/vtctld @ajm188 @deepthi @doeg @notfelineit @rohit-nayak-ps
+/go/vt/vtctl/vtctl.go @ajm188 @notfelineit
+/go/vt/vtctl/grpcvtctldclient @ajm188 @notfelineit
+/go/vt/vtctl/grpcvtctldserver @ajm188 @notfelineit
+/go/vt/vtctl/vtctldclient @ajm188 @notfelineit
+/go/vt/vtctld @ajm188 @deepthi @notfelineit @rohit-nayak-ps
 /go/vt/vtexplain @systay
 /go/vt/vtgate @harshit-gangal @systay @frouioui
 /go/vt/vttablet/tabletmanager @deepthi @shlomi-noach
@@ -45,7 +45,7 @@ bootstrap.sh @deepthi
 /go/vt/wrangler @deepthi @rohit-nayak-ps @mattlord
 /go/vt/workflow @rohit-nayak-ps @mattlord
 /proto/vtadmin.proto @ajm188 @doeg @notfelineit
-/proto/vtctldata.proto @ajm188 @doeg @notfelineit
-/proto/vtctlservice.proto @ajm188 @doeg @notfelineit
+/proto/vtctldata.proto @ajm188 @notfelineit
+/proto/vtctlservice.proto @ajm188 @notfelineit
 /web/vtadmin @ajm188 @doeg @notfelineit
-/web/vtctld2 @doeg @notfelineit @rohit-nayak-ps
+/web/vtctld2 @notfelineit @rohit-nayak-ps

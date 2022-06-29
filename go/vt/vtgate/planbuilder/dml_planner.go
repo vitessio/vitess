@@ -352,7 +352,7 @@ func buildDMLPlan(vschema plancontext.VSchema, dmlType string, stmt sqlparser.St
 	return edml, ksidVindex, nil
 }
 
-func generateDMLSubquery(tblExpr sqlparser.TableExpr, where *sqlparser.Where, orderBy sqlparser.OrderBy, limit *sqlparser.Limit, table *vindexes.Table, ksidCols []sqlparser.ColIdent) string {
+func generateDMLSubquery(tblExpr sqlparser.TableExpr, where *sqlparser.Where, orderBy sqlparser.OrderBy, limit *sqlparser.Limit, table *vindexes.Table, ksidCols []sqlparser.IdentifierCI) string {
 	buf := sqlparser.NewTrackedBuffer(nil)
 	for idx, col := range ksidCols {
 		if idx == 0 {

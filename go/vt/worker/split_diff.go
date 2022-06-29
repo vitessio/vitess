@@ -403,8 +403,9 @@ func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 	go func() {
 		var err error
 		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+		req := &tabletmanagerdatapb.GetSchemaRequest{ExcludeTables: sdw.excludeTables}
 		sdw.destinationSchemaDefinition, err = schematools.GetSchema(
-			shortCtx, sdw.wr.TopoServer(), sdw.wr.TabletManagerClient(), sdw.destinationAlias, nil /* tables */, sdw.excludeTables, false /* includeViews */)
+			shortCtx, sdw.wr.TopoServer(), sdw.wr.TabletManagerClient(), sdw.destinationAlias, req)
 		cancel()
 		if err != nil {
 			sdw.markAsWillFail(rec, err)
@@ -416,8 +417,9 @@ func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 	go func() {
 		var err error
 		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+		req := &tabletmanagerdatapb.GetSchemaRequest{ExcludeTables: sdw.excludeTables}
 		sdw.sourceSchemaDefinition, err = schematools.GetSchema(
-			shortCtx, sdw.wr.TopoServer(), sdw.wr.TabletManagerClient(), sdw.sourceAlias, nil /* tables */, sdw.excludeTables, false /* includeViews */)
+			shortCtx, sdw.wr.TopoServer(), sdw.wr.TabletManagerClient(), sdw.sourceAlias, req)
 		cancel()
 		if err != nil {
 			sdw.markAsWillFail(rec, err)
@@ -455,19 +457,17 @@ func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 
 	// read the vschema if needed
 	var keyspaceSchema *vindexes.KeyspaceSchema
-	if *useV3ReshardingMode {
-		kschema, err := sdw.wr.TopoServer().GetVSchema(ctx, sdw.keyspace)
-		if err != nil {
-			return vterrors.Wrapf(err, "cannot load VSchema for keyspace %v", sdw.keyspace)
-		}
-		if kschema == nil {
-			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no VSchema for keyspace %v", sdw.keyspace)
-		}
+	kschema, err := sdw.wr.TopoServer().GetVSchema(ctx, sdw.keyspace)
+	if err != nil {
+		return vterrors.Wrapf(err, "cannot load VSchema for keyspace %v", sdw.keyspace)
+	}
+	if kschema == nil {
+		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no VSchema for keyspace %v", sdw.keyspace)
+	}
 
-		keyspaceSchema, err = vindexes.BuildKeyspaceSchema(kschema, sdw.keyspace)
-		if err != nil {
-			return vterrors.Wrapf(err, "cannot build vschema for keyspace %v", sdw.keyspace)
-		}
+	keyspaceSchema, err = vindexes.BuildKeyspaceSchema(kschema, sdw.keyspace)
+	if err != nil {
+		return vterrors.Wrapf(err, "cannot build vschema for keyspace %v", sdw.keyspace)
 	}
 
 	// Compute the overlap keyrange. Later, we'll compare it with
@@ -514,7 +514,7 @@ func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 			if key.KeyRangeEqual(overlap, sdw.sourceShard.KeyRange) {
 				sourceQueryResultReader, err = TableScan(ctx, sdw.wr.Logger(), sdw.wr.TopoServer(), sdw.sourceAlias, tableDefinition)
 			} else {
-				sourceQueryResultReader, err = TableScanByKeyRange(ctx, sdw.wr.Logger(), sdw.wr.TopoServer(), sdw.sourceAlias, tableDefinition, overlap, keyspaceSchema, sdw.keyspaceInfo.ShardingColumnName, sdw.keyspaceInfo.ShardingColumnType)
+				sourceQueryResultReader, err = TableScanByKeyRange(ctx, sdw.wr.Logger(), sdw.wr.TopoServer(), sdw.sourceAlias, tableDefinition, overlap, keyspaceSchema)
 			}
 			if err != nil {
 				newErr := vterrors.Wrap(err, "TableScan(ByKeyRange?)(source) failed")
@@ -530,7 +530,7 @@ func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 			if key.KeyRangeEqual(overlap, sdw.shardInfo.KeyRange) {
 				destinationQueryResultReader, err = TableScan(ctx, sdw.wr.Logger(), sdw.wr.TopoServer(), sdw.destinationAlias, tableDefinition)
 			} else {
-				destinationQueryResultReader, err = TableScanByKeyRange(ctx, sdw.wr.Logger(), sdw.wr.TopoServer(), sdw.destinationAlias, tableDefinition, overlap, keyspaceSchema, sdw.keyspaceInfo.ShardingColumnName, sdw.keyspaceInfo.ShardingColumnType)
+				destinationQueryResultReader, err = TableScanByKeyRange(ctx, sdw.wr.Logger(), sdw.wr.TopoServer(), sdw.destinationAlias, tableDefinition, overlap, keyspaceSchema)
 			}
 			if err != nil {
 				newErr := vterrors.Wrap(err, "TableScan(ByKeyRange?)(destination) failed")

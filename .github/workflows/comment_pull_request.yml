@@ -26,7 +26,8 @@ jobs:
             Hello reviewers! :wave: Please follow this checklist when reviewing this Pull Request.
             
             #### General
-            - [ ] Ensure that the Pull Request has the correct `release notes` label. `release notes none` should only be used for PRs that are so trivial that they need not be included.
+            - [ ] Ensure that the Pull Request has a descriptive title.
+            - [ ] If this is a change that users need to know about, please apply the `release notes (needs details)` label so that merging is blocked unless the summary release notes document is included.
             - [ ] If a new flag is being introduced, review whether it is really needed. The flag names should be clear and intuitive (as far as possible), and the flag's help should be descriptive.
             - [ ] If a workflow is added or modified, each items in `Jobs` should be named in order to mark it as `required`. If the workflow should be required, the GitHub Admin should be notified.
   
