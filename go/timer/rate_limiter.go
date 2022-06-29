@@ -17,6 +17,8 @@ limitations under the License.
 package timer
 
 import (
+	"context"
+	"math"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -29,16 +31,24 @@ type RateLimiter struct {
 	tickerValue int64
 	lastDoValue int64
 
-	mu sync.Mutex
+	mu     sync.Mutex
+	cancel context.CancelFunc
 }
 
 // NewRateLimiter creates a new limiter with given duration. It is immediately ready to run tasks.
 func NewRateLimiter(d time.Duration) *RateLimiter {
 	r := &RateLimiter{tickerValue: 1}
+	ctx, cancel := context.WithCancel(context.Background())
+	r.cancel = cancel
 	go func() {
 		ticker := time.NewTicker(d)
-		for range ticker.C {
-			atomic.StoreInt64(&r.tickerValue, r.tickerValue+1)
+		for {
+			select {
+			case <-ctx.Done():
+				ticker.Stop()
+			case <-ticker.C:
+				atomic.StoreInt64(&r.tickerValue, r.tickerValue+1)
+			}
 		}
 	}()
 	return r
@@ -55,4 +65,14 @@ func (r *RateLimiter) Do(f func() error) error {
 	err := f()
 	r.lastDoValue = atomic.LoadInt64(&r.tickerValue)
 	return err
+}
+
+// Stop terminates rate limiter's operation and will not allow any more Do() executions.
+func (r *RateLimiter) Stop() {
+	r.cancel()
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.lastDoValue = math.MaxInt64
 }

@@ -50,3 +50,25 @@ func TestRateLimiterShort(t *testing.T) {
 	assert.Greater(t, val, 2)
 	assert.Less(t, val, 10)
 }
+
+func TestRateLimiterStop(t *testing.T) {
+	r := NewRateLimiter(time.Millisecond * 10)
+	require.NotNil(t, r)
+	val := 0
+	incr := func() error { val++; return nil }
+	for i := 0; i < 5; i++ {
+		time.Sleep(time.Millisecond * 10)
+		err := r.Do(incr)
+		assert.NoError(t, err)
+	}
+	// we expect some 3-5 entries; this depends on the CI server performance.
+	assert.Greater(t, val, 2)
+	valSnapshot := val
+	r.Stop()
+	for i := 0; i < 5; i++ {
+		time.Sleep(time.Millisecond * 10)
+		err := r.Do(incr)
+		assert.NoError(t, err)
+	}
+	assert.Equal(t, valSnapshot, val)
+}
