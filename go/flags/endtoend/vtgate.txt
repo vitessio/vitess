@@ -257,6 +257,8 @@ Usage of vtgate:
 	Enable HAProxy PROXY protocol on MySQL listener socket
   --purge_logs_interval duration
 	how often try to remove old logs (default 1h0m0s)
+  --querylog-buffer-size int
+	Maximum number of buffered query logs before throttling log output (default 10)
   --querylog-filter-tag string
 	string that must be present in the query for it to be logged; if using a value as the tag, you need to disable query normalization
   --querylog-format string
