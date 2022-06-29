@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/spf13/pflag"
+
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -137,7 +139,7 @@ func main() {
 	_flag.SetUsage(flag.CommandLine, _flag.UsageOptions{
 		Preface: func(w io.Writer) { fmt.Fprint(w, doc) },
 	})
-	_flag.Parse()
+	_flag.Parse(pflag.NewFlagSet("vttlstest", pflag.ExitOnError))
 	args := _flag.Args()
 	if len(args) == 0 {
 		flag.Usage()

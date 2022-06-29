@@ -24,6 +24,8 @@ import (
 	"io"
 	"os"
 
+	"github.com/spf13/pflag"
+
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -60,7 +62,7 @@ func main() {
 	defer exit.Recover()
 	defer logutil.Flush()
 
-	_flag.Parse()
+	_flag.Parse(pflag.NewFlagSet("zkctl", pflag.ExitOnError))
 	args := _flag.Args()
 
 	if len(args) == 0 {

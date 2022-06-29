@@ -18,6 +18,8 @@ import (
 	"flag"
 	"strings"
 
+	"github.com/spf13/pflag"
+
 	"vitess.io/vitess/go/vt/vtgr"
 
 	// Include deprecation warnings for soon-to-be-unsupported flag invocations.
@@ -26,7 +28,7 @@ import (
 
 func main() {
 	clustersToWatch := flag.String("clusters_to_watch", "", "Comma-separated list of keyspaces or keyspace/shards that this instance will monitor and repair. Defaults to all clusters in the topology. Example: \"ks1,ks2/-80\"")
-	_flag.Parse()
+	_flag.Parse(pflag.NewFlagSet("vtgr", pflag.ExitOnError))
 
 	// openTabletDiscovery will open up a connection to topo server
 	// and populate the tablets in memory
