@@ -85,6 +85,7 @@ func (p *Plan) MarshalJSON() ([]byte, error) {
 		RowsAffected uint64                `json:",omitempty"`
 		RowsReturned uint64                `json:",omitempty"`
 		Errors       uint64                `json:",omitempty"`
+		TablesUsed   []string              `json:",omitempty"`
 	}{
 		QueryType:    p.Type.String(),
 		Original:     p.Original,
@@ -95,6 +96,7 @@ func (p *Plan) MarshalJSON() ([]byte, error) {
 		RowsAffected: atomic.LoadUint64(&p.RowsAffected),
 		RowsReturned: atomic.LoadUint64(&p.RowsReturned),
 		Errors:       atomic.LoadUint64(&p.Errors),
+		TablesUsed:   p.TablesUsed,
 	}
 	return json.Marshal(marshalPlan)
 }

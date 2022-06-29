@@ -19,7 +19,28 @@
     "Vindex": "hash"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT c FROM sbtest34 WHERE id=15",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": true
+    },
+    "FieldQuery": "select c from sbtest34 where 1 != 1",
+    "Query": "select c from sbtest34 where id = 15",
+    "Table": "sbtest34",
+    "Values": [
+      "INT64(15)"
+    ],
+    "Vindex": "hash"
+  },
+  "TablesUsed": [
+    "main.sbtest34"
+  ]
+}
 
 # OLTP simple range select
 "SELECT c FROM sbtest12 WHERE id BETWEEN 1 AND 10"
@@ -38,7 +59,24 @@ Gen4 plan same as above
     "Table": "sbtest12"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT c FROM sbtest12 WHERE id BETWEEN 1 AND 10",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": true
+    },
+    "FieldQuery": "select c from sbtest12 where 1 != 1",
+    "Query": "select c from sbtest12 where id between 1 and 10",
+    "Table": "sbtest12"
+  },
+  "TablesUsed": [
+    "main.sbtest12"
+  ]
+}
 
 # OLTP sum range select
 "SELECT SUM(k) FROM sbtest43 WHERE id BETWEEN 90 AND 990"
@@ -84,7 +122,10 @@ Gen4 plan same as above
         "Table": "sbtest43"
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "main.sbtest43"
+  ]
 }
 
 # OLTP order range select
@@ -120,7 +161,10 @@ Gen4 plan same as above
     "OrderBy": "0 ASC COLLATE latin1_swedish_ci",
     "Query": "select c from sbtest1 where id between 50 and 235 order by c asc",
     "Table": "sbtest1"
-  }
+  },
+  "TablesUsed": [
+    "main.sbtest1"
+  ]
 }
 
 # OLTP distinct range select
@@ -172,7 +216,10 @@ Gen4 plan same as above
         "Table": "sbtest30"
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "main.sbtest30"
+  ]
 }
 
 # OLTP index udpate

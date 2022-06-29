@@ -17,7 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	"fmt"
 	"sort"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -76,14 +75,17 @@ func newPlanResultFromSemTable(prim engine.Primitive, semTable *semantics.SemTab
 	tables := make(map[string]any, len(semTable.Tables))
 	for _, info := range semTable.Tables {
 		vindexTable := info.GetVindexTable()
-		tblName := fmt.Sprintf("%s.%s", vindexTable.Keyspace.Name, vindexTable.Name.String())
-		tables[tblName] = nil
+		if vindexTable == nil {
+			continue
+		}
+		tables[vindexTable.ToString()] = nil
 	}
 
 	names := make([]string, 0, len(tables))
 	for tbl := range tables {
 		names = append(names, tbl)
 	}
+	sort.Strings(names)
 	return &planResult{primitive: prim, tables: names}
 }
 
@@ -111,15 +113,17 @@ func BuildFromStmt(query string, stmt sqlparser.Statement, reservedVars *sqlpars
 	}
 
 	var primitive engine.Primitive
+	var tablesUsed []string
 	if planResult != nil {
 		primitive = planResult.primitive
+		tablesUsed = planResult.tables
 	}
 	plan := &engine.Plan{
 		Type:         sqlparser.ASTToStatementType(stmt),
 		Original:     query,
 		Instructions: primitive,
 		BindVarNeeds: bindVarNeeds,
-		TablesUsed:   planResult.tables,
+		TablesUsed:   tablesUsed,
 	}
 	return plan, nil
 }
