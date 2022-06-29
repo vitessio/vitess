@@ -19,7 +19,6 @@ package engine
 import (
 	"fmt"
 	"sort"
-	"strings"
 	"time"
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -50,35 +49,6 @@ type Update struct {
 
 	// Update does not take inputs
 	noInputs
-}
-
-// RouteType returns a description of the query routing type used by the primitive
-func (upd *Update) RouteType() string {
-	return upd.Opcode.String()
-}
-
-// GetKeyspaceName specifies the Keyspace that this primitive routes to.
-func (upd *Update) GetKeyspaceName() string {
-	return upd.Keyspace.Name
-}
-
-// GetTableName specifies the table that this primitive routes to.
-func (upd *Update) GetTableName() string {
-	if upd.Table != nil {
-		tableNameMap := map[string]any{}
-		for _, table := range upd.Table {
-			tableNameMap[table.Name.String()] = nil
-		}
-
-		var tableNames []string
-		for name := range tableNameMap {
-			tableNames = append(tableNames, name)
-		}
-		sort.Strings(tableNames)
-
-		return strings.Join(tableNames, ", ")
-	}
-	return ""
 }
 
 // TryExecute performs a non-streaming exec.

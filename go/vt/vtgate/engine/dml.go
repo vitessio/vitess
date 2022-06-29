@@ -18,6 +18,8 @@ package engine
 
 import (
 	"fmt"
+	"sort"
+	"strings"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -86,6 +88,35 @@ func (dml *DML) execMultiDestination(vcursor VCursor, bindVars map[string]*query
 		}
 	}
 	return execMultiShard(vcursor, rss, queries, dml.MultiShardAutocommit)
+}
+
+// RouteType returns a description of the query routing type used by the primitive
+func (dml *DML) RouteType() string {
+	return dml.Opcode.String()
+}
+
+// GetKeyspaceName specifies the Keyspace that this primitive routes to.
+func (dml *DML) GetKeyspaceName() string {
+	return dml.Keyspace.Name
+}
+
+// GetTableName specifies the table that this primitive routes to.
+func (dml *DML) GetTableName() string {
+	if dml.Table != nil {
+		tableNameMap := map[string]any{}
+		for _, table := range dml.Table {
+			tableNameMap[table.Name.String()] = nil
+		}
+
+		var tableNames []string
+		for name := range tableNameMap {
+			tableNames = append(tableNames, name)
+		}
+		sort.Strings(tableNames)
+
+		return strings.Join(tableNames, ", ")
+	}
+	return ""
 }
 
 func allowOnlyPrimary(rss ...*srvtopo.ResolvedShard) error {

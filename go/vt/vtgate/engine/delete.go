@@ -18,8 +18,6 @@ package engine
 
 import (
 	"fmt"
-	"sort"
-	"strings"
 	"time"
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -41,35 +39,6 @@ type Delete struct {
 
 	// Delete does not take inputs
 	noInputs
-}
-
-// RouteType returns a description of the query routing type used by the primitive
-func (del *Delete) RouteType() string {
-	return del.Opcode.String()
-}
-
-// GetKeyspaceName specifies the Keyspace that this primitive routes to.
-func (del *Delete) GetKeyspaceName() string {
-	return del.Keyspace.Name
-}
-
-// GetTableName specifies the table that this primitive routes to.
-func (del *Delete) GetTableName() string {
-	if del.Table != nil {
-		tableNameMap := map[string]any{}
-		for _, table := range del.Table {
-			tableNameMap[table.Name.String()] = nil
-		}
-
-		var tableNames []string
-		for name := range tableNameMap {
-			tableNames = append(tableNames, name)
-		}
-		sort.Strings(tableNames)
-
-		return strings.Join(tableNames, ", ")
-	}
-	return ""
 }
 
 // TryExecute performs a non-streaming exec.
