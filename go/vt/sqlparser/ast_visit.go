@@ -200,6 +200,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfInsertExpr(in, f)
 	case *IntervalExpr:
 		return VisitRefOfIntervalExpr(in, f)
+	case *IntervalFuncExpr:
+		return VisitRefOfIntervalFuncExpr(in, f)
 	case *IntroducerExpr:
 		return VisitRefOfIntroducerExpr(in, f)
 	case *IsExpr:
@@ -1764,6 +1766,21 @@ func VisitRefOfIntervalExpr(in *IntervalExpr, f Visit) error {
 		return err
 	}
 	if err := VisitExpr(in.Expr, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfIntervalFuncExpr(in *IntervalFuncExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Expr, f); err != nil {
+		return err
+	}
+	if err := VisitExprs(in.Exprs, f); err != nil {
 		return err
 	}
 	return nil
@@ -4058,6 +4075,8 @@ func VisitCallable(in Callable, f Visit) error {
 		return VisitRefOfGroupConcatExpr(in, f)
 	case *InsertExpr:
 		return VisitRefOfInsertExpr(in, f)
+	case *IntervalFuncExpr:
+		return VisitRefOfIntervalFuncExpr(in, f)
 	case *JSONArrayExpr:
 		return VisitRefOfJSONArrayExpr(in, f)
 	case *JSONAttributesExpr:
@@ -4304,6 +4323,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfInsertExpr(in, f)
 	case *IntervalExpr:
 		return VisitRefOfIntervalExpr(in, f)
+	case *IntervalFuncExpr:
+		return VisitRefOfIntervalFuncExpr(in, f)
 	case *IntroducerExpr:
 		return VisitRefOfIntroducerExpr(in, f)
 	case *IsExpr:

@@ -560,6 +560,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfIntervalExpr(a, b)
+	case *IntervalFuncExpr:
+		b, ok := inB.(*IntervalFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfIntervalFuncExpr(a, b)
 	case *IntroducerExpr:
 		b, ok := inB.(*IntroducerExpr)
 		if !ok {
@@ -2578,6 +2584,18 @@ func EqualsRefOfIntervalExpr(a, b *IntervalExpr) bool {
 	}
 	return a.Unit == b.Unit &&
 		EqualsExpr(a.Expr, b.Expr)
+}
+
+// EqualsRefOfIntervalFuncExpr does deep equals between the two objects.
+func EqualsRefOfIntervalFuncExpr(a, b *IntervalFuncExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsExpr(a.Expr, b.Expr) &&
+		EqualsExprs(a.Exprs, b.Exprs)
 }
 
 // EqualsRefOfIntroducerExpr does deep equals between the two objects.
@@ -4759,6 +4777,12 @@ func EqualsCallable(inA, inB Callable) bool {
 			return false
 		}
 		return EqualsRefOfInsertExpr(a, b)
+	case *IntervalFuncExpr:
+		b, ok := inB.(*IntervalFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfIntervalFuncExpr(a, b)
 	case *JSONArrayExpr:
 		b, ok := inB.(*JSONArrayExpr)
 		if !ok {
@@ -5392,6 +5416,12 @@ func EqualsExpr(inA, inB Expr) bool {
 			return false
 		}
 		return EqualsRefOfIntervalExpr(a, b)
+	case *IntervalFuncExpr:
+		b, ok := inB.(*IntervalFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfIntervalFuncExpr(a, b)
 	case *IntroducerExpr:
 		b, ok := inB.(*IntroducerExpr)
 		if !ok {

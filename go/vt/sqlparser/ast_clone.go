@@ -201,6 +201,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfInsertExpr(in)
 	case *IntervalExpr:
 		return CloneRefOfIntervalExpr(in)
+	case *IntervalFuncExpr:
+		return CloneRefOfIntervalFuncExpr(in)
 	case *IntroducerExpr:
 		return CloneRefOfIntroducerExpr(in)
 	case *IsExpr:
@@ -1438,6 +1440,17 @@ func CloneRefOfIntervalExpr(n *IntervalExpr) *IntervalExpr {
 	}
 	out := *n
 	out.Expr = CloneExpr(n.Expr)
+	return &out
+}
+
+// CloneRefOfIntervalFuncExpr creates a deep clone of the input.
+func CloneRefOfIntervalFuncExpr(n *IntervalFuncExpr) *IntervalFuncExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Expr = CloneExpr(n.Expr)
+	out.Exprs = CloneExprs(n.Exprs)
 	return &out
 }
 
@@ -3184,6 +3197,8 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfGroupConcatExpr(in)
 	case *InsertExpr:
 		return CloneRefOfInsertExpr(in)
+	case *IntervalFuncExpr:
+		return CloneRefOfIntervalFuncExpr(in)
 	case *JSONArrayExpr:
 		return CloneRefOfJSONArrayExpr(in)
 	case *JSONAttributesExpr:
@@ -3444,6 +3459,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfInsertExpr(in)
 	case *IntervalExpr:
 		return CloneRefOfIntervalExpr(in)
+	case *IntervalFuncExpr:
+		return CloneRefOfIntervalFuncExpr(in)
 	case *IntroducerExpr:
 		return CloneRefOfIntroducerExpr(in)
 	case *IsExpr:
