@@ -1680,6 +1680,16 @@ func (m *VStreamRowsResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.Heartbeat {
+		i--
+		if m.Heartbeat {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x38
+	}
 	if m.Throttled {
 		i--
 		if m.Throttled {
@@ -2751,6 +2761,9 @@ func (m *VStreamRowsResponse) SizeVT() (n int) {
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.Throttled {
+		n += 2
+	}
+	if m.Heartbeat {
 		n += 2
 	}
 	if m.unknownFields != nil {
@@ -7529,6 +7542,26 @@ func (m *VStreamRowsResponse) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.Throttled = bool(v != 0)
+		case 7:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Heartbeat", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.Heartbeat = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])
