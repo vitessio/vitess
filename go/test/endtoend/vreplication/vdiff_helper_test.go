@@ -26,6 +26,7 @@ import (
 	"github.com/buger/jsonparser"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/wrangler"
 )
@@ -204,4 +205,10 @@ func getVDiffInfo(jsonStr string) *vdiffInfo {
 	info.HasMismatch, _ = jsonparser.GetBoolean(json, "HasMismatch")
 
 	return &info
+}
+
+func encodeString(in string) string {
+	var buf strings.Builder
+	sqltypes.NewVarChar(in).EncodeSQL(&buf)
+	return buf.String()
 }

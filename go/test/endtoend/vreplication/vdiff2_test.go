@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -162,30 +163,60 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, cells []*Cell) 
 
 	// This is done here so that we have a valid workflow to test the commands against
 	if tc.testCLIErrors {
-		t.Run("Client error handling", func(t *testing.T) {
-			_, output := performVDiff2Action(t, ksWorkflow, allCellNames, "badcmd", "", true)
-			require.Contains(t, output, "usage:")
-			_, output = performVDiff2Action(t, ksWorkflow, allCellNames, "create", "invalid_uuid", true)
-			require.Contains(t, output, "please provide a valid UUID")
-			_, output = performVDiff2Action(t, ksWorkflow, allCellNames, "resume", "invalid_uuid", true)
-			require.Contains(t, output, "can only resume a specific vdiff, please provide a valid UUID")
-			uuid, _ := performVDiff2Action(t, ksWorkflow, allCellNames, "show", "last", false)
-			_, output = performVDiff2Action(t, ksWorkflow, allCellNames, "create", uuid, true)
-			require.Contains(t, output, "already exists")
-		})
+		testCLIErrors(t, ksWorkflow, allCellNames)
 	}
 
-	// test show verbose and delete
-	_, output := performVDiff2Action(t, ksWorkflow, allCellNames, "show", "last", false, "--verbose")
-	// only present with --verbose
-	require.Contains(t, output, `"TableSummary":`)
-	_, output = performVDiff2Action(t, ksWorkflow, allCellNames, "delete", "all", false)
-	require.Contains(t, output, `"Status": "completed"`)
-	_, output = performVDiff2Action(t, ksWorkflow, allCellNames, "show", "all", false)
-	require.Equal(t, "[]\n", output)
+	testDelete(t, ksWorkflow, allCellNames)
+
+	// create another VDiff record to confirm it gets deleted when the workflow is completed
+	ts := time.Now()
+	uuid, _ := performVDiff2Action(t, ksWorkflow, allCellNames, "create", "", false)
+	waitForVDiff2ToComplete(t, ksWorkflow, allCellNames, uuid, ts)
 
 	err = vc.VtctlClient.ExecuteCommand(tc.typ, "--", "SwitchTraffic", ksWorkflow)
 	require.NoError(t, err)
 	err = vc.VtctlClient.ExecuteCommand(tc.typ, "--", "Complete", ksWorkflow)
 	require.NoError(t, err)
+
+	// confirm the VDiff data is deleted for the workflow
+	testNoOrphanedData(t, tc.targetKs, tc.workflow, arrTargetShards)
+}
+
+func testCLIErrors(t *testing.T, ksWorkflow, cells string) {
+	t.Run("Client error handling", func(t *testing.T) {
+		_, output := performVDiff2Action(t, ksWorkflow, cells, "badcmd", "", true)
+		require.Contains(t, output, "usage:")
+		_, output = performVDiff2Action(t, ksWorkflow, cells, "create", "invalid_uuid", true)
+		require.Contains(t, output, "please provide a valid UUID")
+		_, output = performVDiff2Action(t, ksWorkflow, cells, "resume", "invalid_uuid", true)
+		require.Contains(t, output, "can only resume a specific vdiff, please provide a valid UUID")
+		uuid, _ := performVDiff2Action(t, ksWorkflow, cells, "show", "last", false)
+		_, output = performVDiff2Action(t, ksWorkflow, cells, "create", uuid, true)
+		require.Contains(t, output, "already exists")
+	})
+}
+
+func testDelete(t *testing.T, ksWorkflow, cells string) {
+	t.Run("Delete", func(t *testing.T) {
+		// test show verbose too as a side effect
+		_, output := performVDiff2Action(t, ksWorkflow, cells, "show", "last", false, "--verbose")
+		// only present with --verbose
+		require.Contains(t, output, `"TableSummary":`)
+		_, output = performVDiff2Action(t, ksWorkflow, cells, "delete", "all", false)
+		require.Contains(t, output, `"Status": "completed"`)
+		_, output = performVDiff2Action(t, ksWorkflow, cells, "show", "all", false)
+		require.Equal(t, "[]\n", output)
+	})
+}
+
+func testNoOrphanedData(t *testing.T, keyspace, workflow string, shards []string) {
+	t.Run("No orphaned data", func(t *testing.T) {
+		query := fmt.Sprintf("select vd.id as vdiff_id, vdt.vdiff_id as vdiff_table_id from _vt.vdiff as vd inner join _vt.vdiff_table as vdt on (vd.id = vdt.vdiff_id) where vd.keyspace = %s and vd.workflow = %s",
+			encodeString(keyspace), encodeString(workflow))
+		for _, shard := range shards {
+			res, err := vc.getPrimaryTablet(t, keyspace, shard).QueryTablet(query, keyspace, false)
+			require.NoError(t, err)
+			require.Equal(t, 0, len(res.Rows))
+		}
+	})
 }
