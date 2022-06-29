@@ -132,7 +132,7 @@ func TestConnectTimeout(t *testing.T) {
 	_, err = Connect(ctx, params)
 	os.Remove(name)
 	t.Log(err)
-	assertSQLError(t, err, CRConnectionError, SSUnknownSQLState, "connection refused", "", "net\\.Dial\\(([a-z0-9A-Z\\/]*)\\) to local server failed:")
+	assertSQLError(t, err, CRConnectionError, SSUnknownSQLState, "connection refused", "", "net\\.Dial\\(([a-z0-9A-Z_\\/]*)\\) to local server failed:")
 }
 
 // TestTLSClientDisabled creates a Server with TLS support, then connects
