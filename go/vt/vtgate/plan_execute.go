@@ -250,6 +250,7 @@ func (e *Executor) setLogStats(logStats *LogStats, plan *engine.Plan, vcursor *v
 	logStats.StmtType = plan.Type.String()
 	logStats.Keyspace = plan.Instructions.GetKeyspaceName()
 	logStats.Table = plan.Instructions.GetTableName()
+	logStats.TablesUsed = plan.TablesUsed
 	logStats.TabletType = vcursor.TabletType().String()
 	errCount := e.logExecutionEnd(logStats, execStart, plan, err, qr)
 	plan.AddStats(1, time.Since(logStats.StartTime), logStats.ShardQueries, logStats.RowsAffected, logStats.RowsReturned, errCount)

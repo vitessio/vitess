@@ -17,6 +17,7 @@ limitations under the License.
 package planbuilder
 
 import (
+	"fmt"
 	"sort"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -29,6 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -60,6 +62,7 @@ type (
 
 	planResult struct {
 		primitive engine.Primitive
+		tables    []string
 	}
 
 	stmtPlanner func(sqlparser.Statement, *sqlparser.ReservedVars, plancontext.VSchema) (*planResult, error)
@@ -67,6 +70,21 @@ type (
 
 func newPlanResult(prim engine.Primitive) *planResult {
 	return &planResult{primitive: prim}
+}
+
+func newPlanResultFromSemTable(prim engine.Primitive, semTable *semantics.SemTable) *planResult {
+	tables := make(map[string]any, len(semTable.Tables))
+	for _, info := range semTable.Tables {
+		vindexTable := info.GetVindexTable()
+		tblName := fmt.Sprintf("%s.%s", vindexTable.Keyspace.Name, vindexTable.Name.String())
+		tables[tblName] = nil
+	}
+
+	names := make([]string, 0, len(tables))
+	for tbl := range tables {
+		names = append(names, tbl)
+	}
+	return &planResult{primitive: prim, tables: names}
 }
 
 // TestBuilder builds a plan for a query based on the specified vschema.
@@ -101,6 +119,7 @@ func BuildFromStmt(query string, stmt sqlparser.Statement, reservedVars *sqlpars
 		Original:     query,
 		Instructions: primitive,
 		BindVarNeeds: bindVarNeeds,
+		TablesUsed:   planResult.tables,
 	}
 	return plan, nil
 }
@@ -391,7 +410,7 @@ func buildFlushTables(stmt *sqlparser.Flush, vschema plancontext.VSchema) (*plan
 		if !isAvail {
 			keys = append(keys, key)
 		}
-		tables = append(tables, stmt.TableNames[i]) // = append(tables.TableNames, stmt.TableNames[i])
+		tables = append(tables, stmt.TableNames[i])
 		tablesMap[key] = tables
 	}
 
