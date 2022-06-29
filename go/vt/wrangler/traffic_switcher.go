@@ -1586,9 +1586,9 @@ func (ts *trafficSwitcher) dropSourceReverseVReplicationStreams(ctx context.Cont
 		if _, err := ts.TabletManagerClient().VReplicationExec(ctx, source.GetPrimary().Tablet, query); err != nil {
 			return err
 		}
-		query = fmt.Sprintf(sqlDeleteVDiffs, encodeString(source.GetPrimary().Keyspace), encodeString(ts.WorkflowName()))
+		query = fmt.Sprintf(sqlDeleteVDiffs, encodeString(source.GetPrimary().Keyspace), encodeString(workflow.ReverseWorkflowName(ts.WorkflowName())))
 		if _, err := ts.wr.tmc.ExecuteFetchAsDba(ctx, source.GetPrimary().Tablet, false, []byte(query), -1, false, false); err != nil {
-			ts.Logger().Infof("Error deleting vdiff data for %s.%s workflow: %v", source.GetPrimary().Keyspace, ts.WorkflowName(), err)
+			ts.Logger().Infof("Error deleting vdiff data for %s.%s workflow: %v", source.GetPrimary().Keyspace, workflow.ReverseWorkflowName(ts.WorkflowName()), err)
 		}
 		return nil
 	})
