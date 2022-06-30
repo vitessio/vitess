@@ -393,10 +393,10 @@ func TestVtorcWithPrs(t *testing.T) {
 	utils.CheckReplication(t, clusterInfo, curPrimary, shard0.Vttablets, 10*time.Second)
 
 	output, err := clusterInfo.ClusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
-		"PlannedReparentShard",
-		"-keyspace_shard", fmt.Sprintf("%s/%s", keyspace.Name, shard0.Name),
-		"-wait_replicas_timeout", "31s",
-		"-new_primary", replica.Alias)
+		"PlannedReparentShard", "--",
+		"--keyspace_shard", fmt.Sprintf("%s/%s", keyspace.Name, shard0.Name),
+		"--wait_replicas_timeout", "31s",
+		"--new_primary", replica.Alias)
 	require.NoError(t, err, "error in PlannedReparentShard output - %s", output)
 
 	time.Sleep(40 * time.Second)
