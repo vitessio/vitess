@@ -25,6 +25,7 @@ package flag
 
 import (
 	goflag "flag"
+	"os"
 	"reflect"
 	"strings"
 
@@ -42,8 +43,26 @@ import (
 //
 // See VEP-4, phase 1 for details: https://github.com/vitessio/enhancements/blob/c766ea905e55409cddeb666d6073cd2ac4c9783e/veps/vep-4.md#phase-1-preparation
 func Parse(fs *flag.FlagSet) {
+	fs.AddGoFlagSet(goflag.CommandLine)
+
+	if fs.Lookup("help") == nil {
+		var help bool
+
+		if fs.ShorthandLookup("h") == nil {
+			fs.BoolVarP(&help, "help", "h", false, "display usage and exit")
+		} else {
+			fs.BoolVar(&help, "help", false, "display usage and exit")
+		}
+
+		defer func() {
+			if help {
+				flag.Usage()
+				os.Exit(0)
+			}
+		}()
+	}
+
 	flag.CommandLine = fs
-	flag.CommandLine.AddGoFlagSet(goflag.CommandLine)
 	flag.Parse()
 }
 
