@@ -54,22 +54,34 @@ type compressionDetails struct {
 }
 
 func TestBackupRestore(t *testing.T) {
-	testBackupRestore(t, nil)
+	defer setDefaultCompressionFlag()
+	err := testBackupRestore(t, nil)
+	require.NoError(t, err)
 }
 
 // TODO: @rameez. I was expecting this test to fail but it turns out
 // we infer decompressor through compression engine in builtinEngine.
 // It is only in xtrabackup where we infer decompressor through extension & BuiltinDecompressor param.
 func TestBackupRestoreWithPargzip(t *testing.T) {
+	defer setDefaultCompressionFlag()
 	cDetails := &compressionDetails{
 		BuiltinCompressor:   "pargzip",
 		BuiltinDecompressor: "lz4",
 	}
 
-	testBackupRestore(t, cDetails)
+	err := testBackupRestore(t, cDetails)
+	require.ErrorContains(t, err, "lz4: bad magic number")
 }
 
-func testBackupRestore(t *testing.T, cDetails *compressionDetails) {
+func setDefaultCompressionFlag() {
+	*mysqlctl.BuiltinCompressor = "pgzip"
+	*mysqlctl.BuiltinDecompressor = "auto"
+	*mysqlctl.ExternalCompressorCmd = ""
+	*mysqlctl.ExternalCompressorExt = ""
+	*mysqlctl.ExternalDecompressorCmd = ""
+}
+
+func testBackupRestore(t *testing.T, cDetails *compressionDetails) error {
 	delay := discovery.GetTabletPickerRetryDelay()
 	defer func() {
 		discovery.SetTabletPickerRetryDelay(delay)
@@ -238,7 +250,10 @@ func testBackupRestore(t *testing.T, cDetails *compressionDetails) {
 		RelayLogInfoPath:      path.Join(root, "relay-log.info"),
 	}
 
-	require.NoError(t, destTablet.TM.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */, time.Time{} /* backupTime */))
+	err := destTablet.TM.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */, time.Time{} /* backupTime */)
+	if err != nil {
+		return err
+	}
 	// verify the full status
 	require.NoError(t, destTablet.FakeMysqlDaemon.CheckSuperQueryList(), "destTablet.FakeMysqlDaemon.CheckSuperQueryList failed")
 	assert.True(t, destTablet.FakeMysqlDaemon.Replicating)
@@ -293,6 +308,7 @@ func testBackupRestore(t *testing.T, cDetails *compressionDetails) {
 	assert.Equal(t, topodatapb.TabletType_PRIMARY, primary.Tablet.Type)
 	assert.False(t, primary.FakeMysqlDaemon.Replicating)
 	assert.True(t, primary.FakeMysqlDaemon.Running)
+	return nil
 }
 
 // TestBackupRestoreLagged tests the changes made in https://github.com/vitessio/vitess/pull/5000

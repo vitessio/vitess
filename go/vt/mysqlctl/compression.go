@@ -63,7 +63,6 @@ func getEngineFromExtension(extension string) (string, error) {
 			return eng[0], nil // we select the first supported engine in auto mode
 		}
 	}
-
 	return "", fmt.Errorf("%w %q", errUnsupportedCompressionExtension, extension)
 }
 
@@ -75,7 +74,6 @@ func getExtensionFromEngine(engine string) (string, error) {
 			}
 		}
 	}
-
 	return "", fmt.Errorf("%w %q", errUnsupportedCompressionEngine, engine)
 }
 
@@ -84,7 +82,6 @@ func validateExternalCmd(cmd string) (string, error) {
 	if cmd == "" {
 		return "", errors.New("external command is empty")
 	}
-
 	return exec.LookPath(cmd)
 }
 
@@ -93,16 +90,13 @@ func prepareExternalCompressionCmd(ctx context.Context, cmdStr string) (*exec.Cm
 	if err != nil {
 		return nil, err
 	}
-
 	if len(cmdArgs) < 1 {
 		return nil, errors.New("external command is empty")
 	}
-
 	cmdPath, err := validateExternalCmd(cmdArgs[0])
 	if err != nil {
 		return nil, err
 	}
-
 	return exec.CommandContext(ctx, cmdPath, cmdArgs[1:]...), nil
 }
 
@@ -115,16 +109,12 @@ func newExternalCompressor(ctx context.Context, cmdStr string, writer io.Writer,
 		return nil, vterrors.Wrap(err, "unable to start external command")
 	}
 	compressor := &externalCompressor{cmd: cmd}
-
 	cmd.Stdout = writer
-
 	cmdIn, err := cmd.StdinPipe()
 	if err != nil {
 		return nil, vterrors.Wrap(err, "cannot create external ompressor stdin pipe")
 	}
-
 	compressor.stdin = cmdIn
-
 	cmdErr, err := cmd.StderrPipe()
 	if err != nil {
 		return nil, vterrors.Wrap(err, "cannot create external ompressor stderr pipe")
@@ -136,7 +126,6 @@ func newExternalCompressor(ctx context.Context, cmdStr string, writer io.Writer,
 
 	compressor.wg.Add(1) // we wait for the gorouting to finish when we call Close() on the writer
 	go scanLinesToLogger("compressor stderr", cmdErr, logger, compressor.wg.Done)
-
 	return compressor, nil
 }
 
@@ -149,18 +138,13 @@ func newExternalDecompressor(ctx context.Context, cmdStr string, reader io.Reade
 	if err != nil {
 		return nil, vterrors.Wrap(err, "unable to start external command")
 	}
-
 	decompressor := &externalDecompressor{cmd: cmd}
-
 	cmd.Stdin = reader
-
 	cmdOut, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, vterrors.Wrap(err, "cannot create external decompressor stdout pipe")
 	}
-
 	decompressor.stdout = cmdOut
-
 	cmdErr, err := cmd.StderrPipe()
 	if err != nil {
 		return nil, vterrors.Wrap(err, "cannot create external decompressor stderr pipe")
@@ -172,7 +156,6 @@ func newExternalDecompressor(ctx context.Context, cmdStr string, reader io.Reade
 
 	decompressor.wg.Add(1) // we wait for the gorouting to finish when we call Close() on the reader
 	go scanLinesToLogger("decompressor stderr", cmdErr, logger, decompressor.wg.Done)
-
 	return decompressor, nil
 }
 
@@ -186,10 +169,8 @@ func newBuiltinDecompressorFromExtension(extension, engine string, reader io.Rea
 		if err != nil {
 			return decompressor, err
 		}
-
 		engine = eng
 	}
-
 	return newBuiltinDecompressor(engine, reader, logger)
 }
 
@@ -197,7 +178,6 @@ func newBuiltinDecompressorFromExtension(extension, engine string, reader io.Rea
 func newBuiltinDecompressor(engine string, reader io.Reader, logger logutil.Logger) (decompressor io.ReadCloser, err error) {
 	if engine == "pargzip" {
 		logger.Warningf("engine \"pargzip\" doesn't support decompression, using \"pgzip\" instead")
-
 		engine = "pgzip"
 	}
 
@@ -207,7 +187,6 @@ func newBuiltinDecompressor(engine string, reader io.Reader, logger logutil.Logg
 		if err != nil {
 			return nil, err
 		}
-
 		decompressor = d
 	case "lz4":
 		decompressor = ioutil.NopCloser(lz4.NewReader(reader))
@@ -216,7 +195,6 @@ func newBuiltinDecompressor(engine string, reader io.Reader, logger logutil.Logg
 		if err != nil {
 			return nil, err
 		}
-
 		decompressor = d.IOReadCloser()
 	default:
 		err = fmt.Errorf("Unkown decompressor engine: %q", engine)
@@ -224,7 +202,6 @@ func newBuiltinDecompressor(engine string, reader io.Reader, logger logutil.Logg
 	}
 
 	logger.Infof("Decompressing backup using engine %q", engine)
-
 	return decompressor, err
 }
 
@@ -236,7 +213,6 @@ func newBuiltinCompressor(engine string, writer io.Writer, logger logutil.Logger
 		if err != nil {
 			return compressor, vterrors.Wrap(err, "cannot create gzip compressor")
 		}
-
 		gzip.SetConcurrency(*backupCompressBlockSize, *backupCompressBlocks)
 		compressor = gzip
 	case "pargzip":
@@ -256,7 +232,6 @@ func newBuiltinCompressor(engine string, writer io.Writer, logger logutil.Logger
 		if err != nil {
 			return compressor, vterrors.Wrap(err, "cannot create zstd compressor")
 		}
-
 		compressor = zst
 	default:
 		err = fmt.Errorf("Unkown compressor engine: %q", engine)
@@ -264,7 +239,6 @@ func newBuiltinCompressor(engine string, writer io.Writer, logger logutil.Logger
 	}
 
 	logger.Infof("Compressing backup using engine %q", engine)
-
 	return
 }
 
@@ -286,7 +260,6 @@ func (e *externalCompressor) Close() error {
 
 	// wait for the stderr to finish reading as well
 	e.wg.Wait()
-
 	return e.cmd.Wait()
 }
 

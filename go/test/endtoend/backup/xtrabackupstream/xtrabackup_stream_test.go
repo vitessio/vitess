@@ -19,6 +19,8 @@ package vtctlbackup
 import (
 	"testing"
 
+	"vitess.io/vitess/go/vt/mysqlctl"
+
 	backup "vitess.io/vitess/go/test/endtoend/backup/vtctlbackup"
 )
 
@@ -28,9 +30,18 @@ func TestXtrabackupStream(t *testing.T) {
 }
 
 func TestXtrabackupStreamWithlz4Compression(t *testing.T) {
+	defer setDefaultCompressionFlag()
 	cDetails := &backup.CompressionDetails{
 		BuiltinCompressor: "lz4",
 	}
 
 	backup.TestBackup(t, backup.XtraBackup, "xbstream", 8, cDetails, []string{"TestReplicaBackup"})
+}
+
+func setDefaultCompressionFlag() {
+	*mysqlctl.BuiltinCompressor = "pgzip"
+	*mysqlctl.BuiltinDecompressor = "auto"
+	*mysqlctl.ExternalCompressorCmd = ""
+	*mysqlctl.ExternalCompressorExt = ""
+	*mysqlctl.ExternalDecompressorCmd = ""
 }

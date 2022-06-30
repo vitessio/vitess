@@ -60,40 +60,33 @@ func TestGetExtensionFromEngine(t *testing.T) {
 
 func TestBuiltinCompressors(t *testing.T) {
 	data := []byte("foo bar foobar")
-
 	logger := logutil.NewMemoryLogger()
 
 	for _, engine := range []string{"pgzip", "lz4", "zstd"} {
 		t.Run(engine, func(t *testing.T) {
 			var compressed, decompressed bytes.Buffer
-
 			reader := bytes.NewReader(data)
-
 			compressor, err := newBuiltinCompressor(engine, &compressed, logger)
 			if err != nil {
 				t.Fatal(err)
 			}
-
 			_, err = io.Copy(compressor, reader)
 			if err != nil {
 				t.Error(err)
 				return
 			}
 			compressor.Close()
-
 			decompressor, err := newBuiltinDecompressor(engine, &compressed, logger)
 			if err != nil {
 				t.Error(err)
 				return
 			}
-
 			_, err = io.Copy(&decompressed, decompressor)
 			if err != nil {
 				t.Error(err)
 				return
 			}
 			decompressor.Close()
-
 			if len(data) != len(decompressed.Bytes()) {
 				t.Errorf("Different size of original (%d bytes) and uncompressed (%d bytes) data", len(data), len(decompressed.Bytes()))
 			}
@@ -124,9 +117,7 @@ func TestExternalCompressors(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.compress, func(t *testing.T) {
 			var compressed, decompressed bytes.Buffer
-
 			reader := bytes.NewReader(data)
-
 			for _, cmd := range []string{tt.compress, tt.decompress} {
 				cmdArgs := strings.Split(cmd, " ")
 
@@ -135,40 +126,33 @@ func TestExternalCompressors(t *testing.T) {
 					t.Skip("Command not available in this host:", err)
 				}
 			}
-
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 			defer cancel()
-
 			compressor, err := newExternalCompressor(ctx, tt.compress, &compressed, logger)
 			if err != nil {
 				t.Error(err)
 				return
 			}
-
 			_, err = io.Copy(compressor, reader)
 			if err != nil {
 				t.Error(err)
 				return
 			}
 			compressor.Close()
-
 			decompressor, err := newExternalDecompressor(ctx, tt.decompress, &compressed, logger)
 			if err != nil {
 				t.Error(err)
 				return
 			}
-
 			_, err = io.Copy(&decompressed, decompressor)
 			if err != nil {
 				t.Error(err)
 				return
 			}
 			decompressor.Close()
-
 			if len(data) != len(decompressed.Bytes()) {
 				t.Errorf("Different size of original (%d bytes) and uncompressed (%d bytes) data", len(data), len(decompressed.Bytes()))
 			}
-
 			if !reflect.DeepEqual(data, decompressed.Bytes()) {
 				t.Error("decompressed content differs from the original")
 			}
@@ -192,15 +176,12 @@ func TestValidateExternalCmd(t *testing.T) {
 	for i, tt := range tests {
 		t.Run(fmt.Sprintf("Test #%d", i+1), func(t *testing.T) {
 			CmdName := tt.cmdName
-
 			path, err := validateExternalCmd(CmdName)
-
 			if tt.path != "" {
 				if !strings.HasSuffix(path, tt.path) {
 					t.Errorf("Expected path \"%s\" to include \"%s\"", path, tt.path)
 				}
 			}
-
 			if tt.errStr == "" {
 				if err != nil {
 					t.Errorf("Expected result \"%v\", got \"%v\"", "<nil>", err)
