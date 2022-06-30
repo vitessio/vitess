@@ -24,7 +24,7 @@ A serious performance degradation might fall into this category unless it was so
 
 ### Severity 3
 
-Some feature impact. This indicates the feature is usable but a Vitess cluster runs with minor issues/limitations. The task that you were attempting to use behaved in a manner that is incorrect and/or unexpected, or presented misleading or confusing information.
+Some feature impacts. This indicates the feature is usable but a Vitess cluster runs with minor issues/limitations. The task that you were attempting to use behaved in a manner that is incorrect and/or unexpected, or presented misleading or confusing information.
 This can include documentation that was incomplete or incorrect, making it difficult to know how to use a task. This can include poor or unexplained log messages where no clear error was evident. This can include situations where some side effect is observed which does not significantly harm operations.
 Documentation that causes the customer to perform some operation that damaged data (unintentional deletion, corruption, etc.) would more likely be listed as a severity 2 problem.
 This can not include cases where customer data is inaccurately stored, or retrieved. Data integrity problems require a severity of 2 or higher.
