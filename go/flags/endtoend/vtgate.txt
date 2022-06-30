@@ -1,4 +1,4 @@
-Usage of ./bin/vtgate:
+Usage of vtgate:
       --allowed_tablet_types TabletTypeList                              Specifies the tablet types this vtgate is allowed to route queries to
       --alsologtostderr                                                  log to standard error as well as files
       --buffer_drain_concurrency int                                     Maximum number of requests retried simultaneously. More concurrency will increase the load on the PRIMARY vttablet when draining the buffer. (default 1)
