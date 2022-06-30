@@ -27,6 +27,7 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -721,7 +722,17 @@ func (vre *Engine) WaitForPos(ctx context.Context, id int, pos string) error {
 		qr, err := dbClient.ExecuteFetch(binlogplayer.ReadVReplicationStatus(uint32(id)), 10)
 		switch {
 		case err != nil:
-			return err
+			// We have high contention on the _vt.vreplication row, so retry if our read gets
+			// killed off by the deadlock detector and should be re-tried.
+			// The full error we get back from MySQL in that case is:
+			// Deadlock found when trying to get lock; try restarting transaction (errno 1213) (sqlstate 40001)
+			// Docs: https://dev.mysql.com/doc/mysql-errors/en/server-error-reference.html#error_er_lock_deadlock
+			// There's no need to wait before retrying as the deadlock scenario has been cleared.
+			if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Number() == mysql.ERLockDeadlock {
+				continue
+			} else {
+				return err
+			}
 		case len(qr.Rows) == 0:
 			return fmt.Errorf("vreplication stream %d not found", id)
 		case len(qr.Rows) > 1 || len(qr.Rows[0]) != 3:
