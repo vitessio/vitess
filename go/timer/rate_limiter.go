@@ -55,14 +55,17 @@ func NewRateLimiter(d time.Duration) *RateLimiter {
 }
 
 // Do runs a given func assuming rate limiting allows. This function is thread safe.
-func (r *RateLimiter) Do(f func() error) error {
+// f may be nil, in which case it is not invoked.
+func (r *RateLimiter) Do(f func() error) (err error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	if r.lastDoValue >= atomic.LoadInt64(&r.tickerValue) {
 		return nil // rate limited. Skipped.
 	}
-	err := f()
+	if f != nil {
+		err = f()
+	}
 	r.lastDoValue = atomic.LoadInt64(&r.tickerValue)
 	return err
 }
