@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/json2"
+	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
@@ -71,6 +72,9 @@ func initVtgateExecutor(vSchemaStr, ksShardMapStr string, opts *Options) error {
 	streamSize := 10
 	var schemaTracker vtgate.SchemaInfo // no schema tracker for these tests
 	vtgateExecutor = vtgate.NewExecutor(context.Background(), explainTopo, vtexplainCell, resolver, opts.Normalize, false /*do not warn for sharded only*/, streamSize, cache.DefaultConfig, schemaTracker)
+
+	queryLogBufferSize := 10
+	vtgate.QueryLogger = streamlog.New("VTGate", queryLogBufferSize)
 
 	return nil
 }
