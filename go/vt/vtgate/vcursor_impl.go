@@ -114,6 +114,18 @@ type vcursorImpl struct {
 	pv       plancontext.PlannerVersion
 }
 
+func (vc *vcursorImpl) StreamPrimitiveAsTransaction(primitive engine.Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(result *sqltypes.Result) error) error {
+	newVC := vc.cloneWithAutocommitSession()
+	for try := 0; try < MaxBufferingRetries; try++ {
+		err := primitive.TryStreamExecute(newVC, bindVars, wantfields, callback)
+		if err != nil && vterrors.RootCause(err) == buffer.ShardMissingError {
+			continue
+		}
+		return err
+	}
+	return vterrors.New(vtrpcpb.Code_UNAVAILABLE, "upstream shards are not available")
+}
+
 // newVcursorImpl creates a vcursorImpl. Before creating this object, you have to separate out any marginComments that came with
 // the query and supply it here. Trailing comments are typically sent by the application for various reasons,
 // including as identifying markers. So, they have to be added back to all queries that are executed
@@ -998,4 +1010,26 @@ func (vc *vcursorImpl) CanUseSetVar() bool {
 
 func (vc *vcursorImpl) ReleaseLock() error {
 	return vc.executor.ReleaseLock(vc.ctx, vc.safeSession)
+}
+
+func (vc *vcursorImpl) cloneWithAutocommitSession() *vcursorImpl {
+	safeSession := NewAutocommitSession(vc.safeSession.Session)
+	return &vcursorImpl{
+		ctx:             vc.ctx,
+		cancel:          vc.cancel,
+		safeSession:     safeSession,
+		keyspace:        vc.keyspace,
+		tabletType:      vc.tabletType,
+		destination:     vc.destination,
+		marginComments:  vc.marginComments,
+		executor:        vc.executor,
+		logStats:        vc.logStats,
+		collation:       vc.collation,
+		resolver:        vc.resolver,
+		vschema:         vc.vschema,
+		vm:              vc.vm,
+		topoServer:      vc.topoServer,
+		warnShardedOnly: vc.warnShardedOnly,
+		pv:              vc.pv,
+	}
 }

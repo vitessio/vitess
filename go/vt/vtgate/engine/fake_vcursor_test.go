@@ -61,6 +61,10 @@ func newNoopVCursor(ctx context.Context) *noopVCursor {
 	return n
 }
 
+func (t *noopVCursor) StreamPrimitiveAsTransaction(primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(result *sqltypes.Result) error) error {
+	return primitive.TryStreamExecute(t, bindVars, wantfields, callback)
+}
+
 func (t *noopVCursor) AnyAdvisoryLockTaken() bool {
 	//TODO implement me
 	panic("implement me")
@@ -371,6 +375,10 @@ func (f *loggingVCursor) ExecutePrimitive(primitive Primitive, bindVars map[stri
 }
 
 func (f *loggingVCursor) StreamExecutePrimitive(primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	return primitive.TryStreamExecute(f, bindVars, wantfields, callback)
+}
+
+func (f *loggingVCursor) StreamPrimitiveAsTransaction(primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	return primitive.TryStreamExecute(f, bindVars, wantfields, callback)
 }
 

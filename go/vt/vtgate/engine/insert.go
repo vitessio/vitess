@@ -259,7 +259,8 @@ func (ins *Insert) TryStreamExecute(vcursor VCursor, bindVars map[string]*queryp
 	unsharded := ins.Opcode == InsertUnsharded
 	var mu sync.Mutex
 	output := &sqltypes.Result{}
-	err := vcursor.StreamExecutePrimitive(ins.Input, bindVars, false, func(result *sqltypes.Result) error {
+
+	err := vcursor.StreamPrimitiveAsTransaction(ins.Input, bindVars, false, func(result *sqltypes.Result) error {
 		if len(result.Rows) == 0 {
 			return nil
 		}
