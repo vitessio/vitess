@@ -272,8 +272,8 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 	hbTimer := time.NewTimer(HeartbeatTime)
 	defer hbTimer.Stop()
 
-	now := time.Now().UnixNano()
 	injectHeartbeat := func(throttled bool) error {
+		now := time.Now().UnixNano()
 		err := bufferAndTransmit(&binlogdatapb.VEvent{
 			Type:        binlogdatapb.VEventType_HEARTBEAT,
 			Timestamp:   now / 1e9,
