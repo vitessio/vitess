@@ -163,7 +163,7 @@ func (e *Executor) Execute(ctx context.Context, method string, safeSession *Safe
 	trace.AnnotateSQL(span, sql)
 	defer span.Finish()
 
-	logStats := NewLogStats(ctx, method, sql, bindVars)
+	logStats := NewLogStats(ctx, method, sql, safeSession.GetSessionUUID(), bindVars)
 	stmtType, result, err := e.execute(ctx, safeSession, sql, bindVars, logStats)
 	logStats.Error = err
 	saveSessionStats(safeSession, stmtType, result, err)
@@ -175,7 +175,7 @@ func (e *Executor) Execute(ctx context.Context, method string, safeSession *Safe
 		}
 		log.Warningf("%q exceeds warning threshold of max memory rows: %v", piiSafeSQL, *warnMemoryRows)
 	}
-
+	logStats.InTransaction = safeSession.InTransaction()
 	logStats.Send()
 	return result, err
 }
@@ -1020,7 +1020,7 @@ func (e *Executor) handleOther(ctx context.Context, safeSession *SafeSession, sq
 
 // StreamExecute executes a streaming query.
 func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, target *querypb.Target, callback func(*sqltypes.Result) error) (err error) {
-	logStats := NewLogStats(ctx, method, sql, bindVars)
+	logStats := NewLogStats(ctx, method, sql, safeSession.GetSessionUUID(), bindVars)
 	defer logStats.Send()
 
 	if bindVars == nil {
@@ -1363,7 +1363,7 @@ func isValidPayloadSize(query string) bool {
 
 // Prepare executes a prepare statements.
 func (e *Executor) Prepare(ctx context.Context, method string, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable) (fld []*querypb.Field, err error) {
-	logStats := NewLogStats(ctx, method, sql, bindVars)
+	logStats := NewLogStats(ctx, method, sql, safeSession.GetSessionUUID(), bindVars)
 	fld, err = e.prepare(ctx, safeSession, sql, bindVars, logStats)
 	logStats.Error = err
 
@@ -1371,6 +1371,7 @@ func (e *Executor) Prepare(ctx context.Context, method string, safeSession *Safe
 	// To avoid spamming the log with no-op rollback records, ignore it if
 	// it was a no-op record (i.e. didn't issue any queries)
 	if !(logStats.StmtType == "ROLLBACK" && logStats.ShardQueries == 0) {
+		logStats.InTransaction = safeSession.InTransaction()
 		logStats.Send()
 	}
 	return fld, err

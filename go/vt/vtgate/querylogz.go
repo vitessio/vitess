@@ -39,6 +39,7 @@ var (
 				<th>Context</th>
 				<th>Effective Caller</th>
 				<th>Immediate Caller</th>
+				<th>SessionUUID</th>
 				<th>Start</th>
 				<th>End</th>
 				<th>Duration</th>
@@ -47,6 +48,7 @@ var (
 				<th>Commit Time</th>
 				<th>Stmt Type</th>
 				<th>SQL</th>
+				<th>InTransaction</th>
 				<th>ShardQueries</th>
 				<th>RowsAffected</th>
 				<th>Error</th>
@@ -65,6 +67,7 @@ var (
 			<td>{{.ContextHTML}}</td>
 			<td>{{.EffectiveCaller}}</td>
 			<td>{{.ImmediateCaller}}</td>
+			<td>{{.SessionUUID}}</td>
 			<td>{{.StartTime | stampMicro}}</td>
 			<td>{{.EndTime | stampMicro}}</td>
 			<td>{{.TotalTime.Seconds}}</td>
@@ -73,6 +76,7 @@ var (
 			<td>{{.CommitTime.Seconds}}</td>
 			<td>{{.StmtType}}</td>
 			<td>{{.SQL | truncateQuery | unquote | cssWrappable}}</td>
+			<td>{{.InTransaction}}</td>
 			<td>{{.ShardQueries}}</td>
 			<td>{{.RowsAffected}}</td>
 			<td>{{.ErrorStr}}</td>

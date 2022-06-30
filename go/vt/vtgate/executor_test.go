@@ -119,7 +119,7 @@ func TestExecutorMaxMemoryRowsExceeded(t *testing.T) {
 
 func TestLegacyExecutorTransactionsNoAutoCommit(t *testing.T) {
 	executor, _, _, sbclookup := createLegacyExecutorEnv()
-	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master"})
+	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master", SessionUUID: "suuid"})
 
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
@@ -127,23 +127,27 @@ func TestLegacyExecutorTransactionsNoAutoCommit(t *testing.T) {
 	// begin.
 	_, err := executor.Execute(ctx, "TestExecute", session, "begin", nil)
 	require.NoError(t, err)
-	wantSession := &vtgatepb.Session{InTransaction: true, TargetString: "@master"}
+	wantSession := &vtgatepb.Session{InTransaction: true, TargetString: "@master", SessionUUID: "suuid"}
 	utils.MustMatch(t, wantSession, session.Session, "session")
 	assert.EqualValues(t, 0, sbclookup.CommitCount.Get(), "commit count")
 	logStats := testQueryLog(t, logChan, "TestExecute", "BEGIN", "begin", 0)
 	assert.EqualValues(t, 0, logStats.CommitTime, "logstats: expected zero CommitTime")
+	assert.EqualValues(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
+	assert.EqualValues(t, true, logStats.InTransaction, "logstats: expected InTransaction to be true after BEGIN")
 
 	// commit.
 	_, err = executor.Execute(ctx, "TestExecute", session, "select id from main1", nil)
 	require.NoError(t, err)
 	logStats = testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from main1", 1)
 	assert.EqualValues(t, 0, logStats.CommitTime, "logstats: expected zero CommitTime")
+	assert.EqualValues(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
+	assert.EqualValues(t, true, logStats.InTransaction, "logstats: expected InTransaction to be true")
 
 	_, err = executor.Execute(context.Background(), "TestExecute", session, "commit", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantSession = &vtgatepb.Session{TargetString: "@master"}
+	wantSession = &vtgatepb.Session{TargetString: "@master", SessionUUID: "suuid"}
 	if !proto.Equal(session.Session, wantSession) {
 		t.Errorf("begin: %v, want %v", session.Session, wantSession)
 	}
@@ -154,6 +158,8 @@ func TestLegacyExecutorTransactionsNoAutoCommit(t *testing.T) {
 	if logStats.CommitTime == 0 {
 		t.Errorf("logstats: expected non-zero CommitTime")
 	}
+	assert.EqualValues(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
+	assert.EqualValues(t, false, logStats.InTransaction, "logstats: expected InTransaction to be false after COMMIT")
 
 	// rollback.
 	_, err = executor.Execute(ctx, "TestExecute", session, "begin", nil)
@@ -162,7 +168,7 @@ func TestLegacyExecutorTransactionsNoAutoCommit(t *testing.T) {
 	require.NoError(t, err)
 	_, err = executor.Execute(ctx, "TestExecute", session, "rollback", nil)
 	require.NoError(t, err)
-	wantSession = &vtgatepb.Session{TargetString: "@master"}
+	wantSession = &vtgatepb.Session{TargetString: "@master", SessionUUID: "suuid"}
 	utils.MustMatch(t, wantSession, session.Session, "session")
 	assert.EqualValues(t, 1, sbclookup.RollbackCount.Get(), "rollback count")
 	_ = testQueryLog(t, logChan, "TestExecute", "BEGIN", "begin", 0)
@@ -171,6 +177,8 @@ func TestLegacyExecutorTransactionsNoAutoCommit(t *testing.T) {
 	if logStats.CommitTime == 0 {
 		t.Errorf("logstats: expected non-zero CommitTime")
 	}
+	assert.EqualValues(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
+	assert.EqualValues(t, false, logStats.InTransaction, "logstats: expected InTransaction to be false after ROLLBACK")
 
 	// CloseSession doesn't log anything
 	err = executor.CloseSession(ctx, session)
@@ -181,20 +189,20 @@ func TestLegacyExecutorTransactionsNoAutoCommit(t *testing.T) {
 	}
 
 	// Prevent transactions on non-master.
-	session = NewSafeSession(&vtgatepb.Session{TargetString: "@replica", InTransaction: true})
+	session = NewSafeSession(&vtgatepb.Session{TargetString: "@replica", InTransaction: true, SessionUUID: "suuid"})
 	_, err = executor.Execute(ctx, "TestExecute", session, "select id from main1", nil)
 	require.Error(t, err)
 	want := "transaction is supported only for master tablet type, current type: REPLICA"
 	require.Contains(t, err.Error(), want)
 
 	// Prevent begin on non-master.
-	session = NewSafeSession(&vtgatepb.Session{TargetString: "@replica"})
+	session = NewSafeSession(&vtgatepb.Session{TargetString: "@replica", SessionUUID: "suuid"})
 	_, err = executor.Execute(ctx, "TestExecute", session, "begin", nil)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), want)
 
 	// Prevent use of non-master if in_transaction is on.
-	session = NewSafeSession(&vtgatepb.Session{TargetString: "@master", InTransaction: true})
+	session = NewSafeSession(&vtgatepb.Session{TargetString: "@master", InTransaction: true, SessionUUID: "suuid"})
 	_, err = executor.Execute(ctx, "TestExecute", session, "use @replica", nil)
 	require.EqualError(t, err, `can't execute the given command because you have an active transaction`)
 }
@@ -220,7 +228,7 @@ func TestDirectTargetRewrites(t *testing.T) {
 
 func TestExecutorTransactionsAutoCommit(t *testing.T) {
 	executor, _, _, sbclookup := createLegacyExecutorEnv()
-	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master", Autocommit: true})
+	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master", Autocommit: true, SessionUUID: "suuid"})
 
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
@@ -228,26 +236,29 @@ func TestExecutorTransactionsAutoCommit(t *testing.T) {
 	// begin.
 	_, err := executor.Execute(ctx, "TestExecute", session, "begin", nil)
 	require.NoError(t, err)
-	wantSession := &vtgatepb.Session{InTransaction: true, TargetString: "@master", Autocommit: true}
+	wantSession := &vtgatepb.Session{InTransaction: true, TargetString: "@master", Autocommit: true, SessionUUID: "suuid"}
 	utils.MustMatch(t, wantSession, session.Session, "session")
 	if commitCount := sbclookup.CommitCount.Get(); commitCount != 0 {
 		t.Errorf("want 0, got %d", commitCount)
 	}
-	_ = testQueryLog(t, logChan, "TestExecute", "BEGIN", "begin", 0)
+	logStats := testQueryLog(t, logChan, "TestExecute", "BEGIN", "begin", 0)
+	assert.EqualValues(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
 
 	// commit.
 	_, err = executor.Execute(ctx, "TestExecute", session, "select id from main1", nil)
 	require.NoError(t, err)
 	_, err = executor.Execute(ctx, "TestExecute", session, "commit", nil)
 	require.NoError(t, err)
-	wantSession = &vtgatepb.Session{TargetString: "@master", Autocommit: true}
+	wantSession = &vtgatepb.Session{TargetString: "@master", Autocommit: true, SessionUUID: "suuid"}
 	utils.MustMatch(t, wantSession, session.Session, "session")
 	assert.EqualValues(t, 1, sbclookup.CommitCount.Get())
 
-	logStats := testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from main1", 1)
+	logStats = testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from main1", 1)
 	assert.EqualValues(t, 0, logStats.CommitTime)
+	assert.EqualValues(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
 	logStats = testQueryLog(t, logChan, "TestExecute", "COMMIT", "commit", 1)
 	assert.NotEqual(t, 0, logStats.CommitTime)
+	assert.EqualValues(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
 
 	// rollback.
 	_, err = executor.Execute(ctx, "TestExecute", session, "begin", nil)
@@ -256,11 +267,15 @@ func TestExecutorTransactionsAutoCommit(t *testing.T) {
 	require.NoError(t, err)
 	_, err = executor.Execute(ctx, "TestExecute", session, "rollback", nil)
 	require.NoError(t, err)
-	wantSession = &vtgatepb.Session{TargetString: "@master", Autocommit: true}
+	wantSession = &vtgatepb.Session{TargetString: "@master", Autocommit: true, SessionUUID: "suuid"}
 	utils.MustMatch(t, wantSession, session.Session, "session")
 	if rollbackCount := sbclookup.RollbackCount.Get(); rollbackCount != 1 {
 		t.Errorf("want 1, got %d", rollbackCount)
 	}
+	_ = testQueryLog(t, logChan, "TestExecute", "BEGIN", "begin", 0)
+	_ = testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from main1", 1)
+	logStats = testQueryLog(t, logChan, "TestExecute", "ROLLBACK", "rollback", 1)
+	assert.EqualValues(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
 }
 
 func TestExecutorDeleteMetadata(t *testing.T) {
@@ -297,7 +312,7 @@ func TestExecutorDeleteMetadata(t *testing.T) {
 
 func TestExecutorAutocommit(t *testing.T) {
 	executor, _, _, sbclookup := createLegacyExecutorEnv()
-	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master"})
+	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master", SessionUUID: "suuid"})
 
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
@@ -306,7 +321,7 @@ func TestExecutorAutocommit(t *testing.T) {
 	startCount := sbclookup.CommitCount.Get()
 	_, err := executor.Execute(ctx, "TestExecute", session, "select id from main1", nil)
 	require.NoError(t, err)
-	wantSession := &vtgatepb.Session{TargetString: "@master", InTransaction: true, FoundRows: 1, RowCount: -1}
+	wantSession := &vtgatepb.Session{TargetString: "@master", InTransaction: true, FoundRows: 1, RowCount: -1, SessionUUID: "suuid"}
 	testSession := proto.Clone(session.Session).(*vtgatepb.Session)
 	testSession.ShardSessions = nil
 	utils.MustMatch(t, wantSession, testSession, "session does not match for autocommit=0")
@@ -318,11 +333,15 @@ func TestExecutorAutocommit(t *testing.T) {
 	if logStats.RowsReturned == 0 {
 		t.Errorf("logstats: expected non-zero RowsReturned")
 	}
+	assert.EqualValues(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
+	assert.EqualValues(t, true, logStats.InTransaction, "logstats: expected InTransaction to be true in autocommit=0")
 
 	// autocommit = 1
 	_, err = executor.Execute(ctx, "TestExecute", session, "set autocommit=1", nil)
 	require.NoError(t, err)
-	_ = testQueryLog(t, logChan, "TestExecute", "SET", "set session autocommit = 1", 0)
+	logStats = testQueryLog(t, logChan, "TestExecute", "SET", "set session autocommit = 1", 0)
+	assert.EqualValues(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
+	assert.EqualValues(t, false, logStats.InTransaction, "logstats: expected InTransaction to be false in autocommit=1")
 
 	// Setting autocommit=1 commits existing transaction.
 	if got, want := sbclookup.CommitCount.Get(), startCount+1; got != want {
@@ -331,29 +350,33 @@ func TestExecutorAutocommit(t *testing.T) {
 
 	_, err = executor.Execute(ctx, "TestExecute", session, "update main1 set id=1", nil)
 	require.NoError(t, err)
-	wantSession = &vtgatepb.Session{Autocommit: true, TargetString: "@master", FoundRows: 0, RowCount: 1}
+	wantSession = &vtgatepb.Session{Autocommit: true, TargetString: "@master", FoundRows: 0, RowCount: 1, SessionUUID: "suuid"}
 	utils.MustMatch(t, wantSession, session.Session, "session does not match for autocommit=1")
 
 	logStats = testQueryLog(t, logChan, "TestExecute", "UPDATE", "update main1 set id=1", 1)
 	assert.NotEqual(t, time.Duration(0), logStats.CommitTime, "logstats: expected non-zero CommitTime")
 	assert.NotEqual(t, uint64(0), logStats.RowsAffected, "logstats: expected non-zero RowsAffected")
+	assert.EqualValues(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
+	assert.EqualValues(t, false, logStats.InTransaction, "logstats: expected InTransaction to be false in autocommit=1")
 
 	// autocommit = 1, "begin"
 	session.ResetTx()
 	startCount = sbclookup.CommitCount.Get()
 	_, err = executor.Execute(ctx, "TestExecute", session, "begin", nil)
 	require.NoError(t, err)
-	_ = testQueryLog(t, logChan, "TestExecute", "BEGIN", "begin", 0)
+	logStats = testQueryLog(t, logChan, "TestExecute", "BEGIN", "begin", 0)
+	assert.EqualValues(t, true, logStats.InTransaction, "logstats: expected InTransaction to be true after BEGIN")
 
 	_, err = executor.Execute(ctx, "TestExecute", session, "update main1 set id=1", nil)
 	require.NoError(t, err)
-	wantSession = &vtgatepb.Session{InTransaction: true, Autocommit: true, TargetString: "@master", FoundRows: 0, RowCount: 1}
+	wantSession = &vtgatepb.Session{InTransaction: true, Autocommit: true, TargetString: "@master", FoundRows: 0, RowCount: 1, SessionUUID: "suuid"}
 	testSession = proto.Clone(session.Session).(*vtgatepb.Session)
 	testSession.ShardSessions = nil
 	utils.MustMatch(t, wantSession, testSession, "session does not match for autocommit=1")
 	if got, want := sbclookup.CommitCount.Get(), startCount; got != want {
 		t.Errorf("Commit count: %d, want %d", got, want)
 	}
+	assert.EqualValues(t, true, logStats.InTransaction, "logstats: expected InTransaction to be true")
 
 	logStats = testQueryLog(t, logChan, "TestExecute", "UPDATE", "update main1 set id=1", 1)
 	if logStats.CommitTime != 0 {
@@ -362,30 +385,38 @@ func TestExecutorAutocommit(t *testing.T) {
 	if logStats.RowsAffected == 0 {
 		t.Errorf("logstats: expected non-zero RowsAffected")
 	}
+	assert.EqualValues(t, true, logStats.InTransaction, "logstats: expected InTransaction to be true")
 
 	_, err = executor.Execute(ctx, "TestExecute", session, "commit", nil)
 	require.NoError(t, err)
-	wantSession = &vtgatepb.Session{Autocommit: true, TargetString: "@master"}
+	wantSession = &vtgatepb.Session{Autocommit: true, TargetString: "@master", SessionUUID: "suuid"}
 	if !proto.Equal(session.Session, wantSession) {
 		t.Errorf("autocommit=1: %v, want %v", session.Session, wantSession)
 	}
 	if got, want := sbclookup.CommitCount.Get(), startCount+1; got != want {
 		t.Errorf("Commit count: %d, want %d", got, want)
 	}
-	_ = testQueryLog(t, logChan, "TestExecute", "COMMIT", "commit", 1)
+	logStats = testQueryLog(t, logChan, "TestExecute", "COMMIT", "commit", 1)
+	assert.EqualValues(t, false, logStats.InTransaction, "logstats: expected InTransaction to be false after COMMIT")
 
 	// transition autocommit from 0 to 1 in the middle of a transaction.
 	startCount = sbclookup.CommitCount.Get()
 	session = NewSafeSession(&vtgatepb.Session{TargetString: "@master"})
 	_, err = executor.Execute(ctx, "TestExecute", session, "begin", nil)
 	require.NoError(t, err)
+	logStats = testQueryLog(t, logChan, "TestExecute", "BEGIN", "begin", 0)
+	assert.EqualValues(t, true, logStats.InTransaction, "logstats: expected InTransaction to be true after BEGIN")
 	_, err = executor.Execute(ctx, "TestExecute", session, "update main1 set id=1", nil)
 	require.NoError(t, err)
+	logStats = testQueryLog(t, logChan, "TestExecute", "UPDATE", "update main1 set id=1", 1)
+	assert.EqualValues(t, true, logStats.InTransaction, "logstats: expected InTransaction to be true")
 	if got, want := sbclookup.CommitCount.Get(), startCount; got != want {
 		t.Errorf("Commit count: %d, want %d", got, want)
 	}
 	_, err = executor.Execute(ctx, "TestExecute", session, "set autocommit=1", nil)
 	require.NoError(t, err)
+	logStats = testQueryLog(t, logChan, "TestExecute", "SET", "set session autocommit = 1", 0)
+	assert.EqualValues(t, false, logStats.InTransaction, "logstats: expected InTransaction to be false after set session autocommit=1")
 	wantSession = &vtgatepb.Session{Autocommit: true, TargetString: "@master"}
 	if !proto.Equal(session.Session, wantSession) {
 		t.Errorf("autocommit=1: %v, want %v", session.Session, wantSession)
@@ -1503,7 +1534,7 @@ func assertCacheContains(t *testing.T, c cache.Cache, want []string) {
 }
 
 func getPlanCached(t *testing.T, e *Executor, vcursor *vcursorImpl, sql string, comments sqlparser.MarginComments, bindVars map[string]*querypb.BindVariable, skipQueryPlanCache bool) (*engine.Plan, *LogStats) {
-	logStats := NewLogStats(ctx, "Test", "", nil)
+	logStats := NewLogStats(ctx, "Test", "", "", nil)
 	plan, err := e.getPlan(vcursor, sql, comments, bindVars, skipQueryPlanCache, logStats)
 	require.NoError(t, err)
 
