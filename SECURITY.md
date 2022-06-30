@@ -26,7 +26,7 @@ If you know of a publicly disclosed security vulnerability please IMMEDIATELY em
 
 For each reported vulnerability, a member of the maintainers team will volunteer to lead coordination of the fix (Fix Lead), and ensure that it is backported to each supported branch. They will then coordinate with the remainder of the maintainers team to coordinate new releases and ensure a communication plan is in place for vulnerability disclosure.
 
-All of the timelines below are suggestions and assume a private disclosure. The Fix Lead drives the
+All the timelines below are suggestions and assume a private disclosure. The Fix Lead drives the
 schedule using their best judgment based on severity and development time. If the Fix Lead is
 dealing with a public disclosure all timelines become ASAP (assuming the vulnerability has a CVSS
 score >= 4; see below). If the fix relies on another upstream project's disclosure timeline, that
