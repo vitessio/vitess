@@ -144,12 +144,14 @@ func TestDeleteOwnedVindex(t *testing.T) {
 	ks := buildTestVSchema().Keyspaces["sharded"]
 	del := &Delete{
 		DML: DML{
-			Opcode:           Equal,
-			Keyspace:         ks.Keyspace,
-			Query:            "dummy_delete",
-			Vindex:           ks.Vindexes["hash"].(vindexes.SingleColumn),
-			Values:           []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}},
-			Table:            ks.Tables["t1"],
+			Opcode:   Equal,
+			Keyspace: ks.Keyspace,
+			Query:    "dummy_delete",
+			Vindex:   ks.Vindexes["hash"].(vindexes.SingleColumn),
+			Values:   []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}},
+			Table: []*vindexes.Table{
+				ks.Tables["t1"],
+			},
 			OwnedVindexQuery: "dummy_subquery",
 			KsidVindex:       ks.Vindexes["hash"].(vindexes.SingleColumn),
 		},
@@ -230,7 +232,9 @@ func TestDeleteSharded(t *testing.T) {
 			Opcode:   Scatter,
 			Keyspace: ks.Keyspace,
 			Query:    "dummy_delete",
-			Table:    ks.Tables["t2"],
+			Table: []*vindexes.Table{
+				ks.Tables["t2"],
+			},
 		},
 	}
 
@@ -258,10 +262,12 @@ func TestDeleteScatterOwnedVindex(t *testing.T) {
 	ks := buildTestVSchema().Keyspaces["sharded"]
 	del := &Delete{
 		DML: DML{
-			Opcode:           Scatter,
-			Keyspace:         ks.Keyspace,
-			Query:            "dummy_delete",
-			Table:            ks.Tables["t1"],
+			Opcode:   Scatter,
+			Keyspace: ks.Keyspace,
+			Query:    "dummy_delete",
+			Table: []*vindexes.Table{
+				ks.Tables["t1"],
+			},
 			OwnedVindexQuery: "dummy_subquery",
 			KsidVindex:       ks.Vindexes["hash"].(vindexes.SingleColumn),
 		},

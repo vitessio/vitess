@@ -49,12 +49,16 @@ func buildDeletePlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedV
 		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "multi-table delete statement in not supported in sharded database")
 	}
 
-	if len(del.Targets) == 1 && del.Targets[0].Name != edel.Table.Name {
+	edelTable, err := edel.GetSingleTable()
+	if err != nil {
+		return nil, err
+	}
+	if len(del.Targets) == 1 && del.Targets[0].Name != edelTable.Name {
 		return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.UnknownTable, "Unknown table '%s' in MULTI DELETE", del.Targets[0].Name.String())
 	}
 
-	if len(edel.Table.Owned) > 0 {
-		edel.OwnedVindexQuery = generateDMLSubquery(del.Where, del.OrderBy, del.Limit, edel.Table, ksidCol)
+	if len(edelTable.Owned) > 0 {
+		edel.OwnedVindexQuery = generateDMLSubquery(del.Where, del.OrderBy, del.Limit, edelTable, ksidCol)
 		edel.KsidVindex = ksidVindex
 	}
 

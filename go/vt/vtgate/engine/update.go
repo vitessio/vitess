@@ -62,24 +62,6 @@ var updName = map[DMLOpcode]string{
 	ByDestination: "UpdateByDestination",
 }
 
-// RouteType returns a description of the query routing type used by the primitive
-func (upd *Update) RouteType() string {
-	return updName[upd.Opcode]
-}
-
-// GetKeyspaceName specifies the Keyspace that this primitive routes to.
-func (upd *Update) GetKeyspaceName() string {
-	return upd.Keyspace.Name
-}
-
-// GetTableName specifies the table that this primitive routes to.
-func (upd *Update) GetTableName() string {
-	if upd.Table != nil {
-		return upd.Table.Name.String()
-	}
-	return ""
-}
-
 // Execute performs a non-streaming exec.
 func (upd *Update) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	if upd.QueryTimeout != 0 {
@@ -229,7 +211,11 @@ func (upd *Update) updateVindexEntries(vcursor VCursor, bindVars map[string]*que
 		if err != nil {
 			return err
 		}
-		for _, colVindex := range upd.Table.Owned {
+		vindexTable, err := upd.GetSingleTable()
+		if err != nil {
+			return err
+		}
+		for _, colVindex := range vindexTable.Owned {
 			// Update columns only if they're being changed.
 			if updColValues, ok := upd.ChangedVindexValues[colVindex.Name]; ok {
 				offset := updColValues.Offset

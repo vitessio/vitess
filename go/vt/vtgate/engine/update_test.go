@@ -196,12 +196,14 @@ func TestUpdateEqualChangedVindex(t *testing.T) {
 	ks := buildTestVSchema().Keyspaces["sharded"]
 	upd := &Update{
 		DML: DML{
-			Opcode:           Equal,
-			Keyspace:         ks.Keyspace,
-			Query:            "dummy_update",
-			Vindex:           ks.Vindexes["hash"].(vindexes.SingleColumn),
-			Values:           []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}},
-			Table:            ks.Tables["t1"],
+			Opcode:   Equal,
+			Keyspace: ks.Keyspace,
+			Query:    "dummy_update",
+			Vindex:   ks.Vindexes["hash"].(vindexes.SingleColumn),
+			Values:   []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}},
+			Table: []*vindexes.Table{
+				ks.Tables["t1"],
+			},
 			OwnedVindexQuery: "dummy_subquery",
 			KsidVindex:       ks.Vindexes["hash"].(vindexes.SingleColumn),
 		},
@@ -337,10 +339,12 @@ func TestUpdateScatterChangedVindex(t *testing.T) {
 	ks := buildTestVSchema().Keyspaces["sharded"]
 	upd := &Update{
 		DML: DML{
-			Opcode:           Scatter,
-			Keyspace:         ks.Keyspace,
-			Query:            "dummy_update",
-			Table:            ks.Tables["t1"],
+			Opcode:   Scatter,
+			Keyspace: ks.Keyspace,
+			Query:    "dummy_update",
+			Table: []*vindexes.Table{
+				ks.Tables["t1"],
+			},
 			OwnedVindexQuery: "dummy_subquery",
 			KsidVindex:       ks.Vindexes["hash"].(vindexes.SingleColumn),
 		},
@@ -481,7 +485,9 @@ func TestUpdateInChangedVindex(t *testing.T) {
 					{Value: sqltypes.NewInt64(2)},
 				}},
 			},
-			Table:            ks.Tables["t1"],
+			Table: []*vindexes.Table{
+				ks.Tables["t1"],
+			},
 			OwnedVindexQuery: "dummy_subquery",
 			KsidVindex:       ks.Vindexes["hash"].(vindexes.SingleColumn),
 		},

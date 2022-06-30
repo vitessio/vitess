@@ -54,7 +54,7 @@ func buildInsertPlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedV
 		vschemaTable = tval.vschemaTable
 	}
 	if !rb.eroute.Keyspace.Sharded {
-		if pb.finalizeUnshardedDMLSubqueries(reservedVars, ins) {
+		if subqueryIsUnsharded, _ := pb.finalizeUnshardedDMLSubqueries(reservedVars, ins); subqueryIsUnsharded {
 			vschema.WarnUnshardedOnly("subqueries can't be sharded for INSERT")
 		} else {
 			return nil, errors.New("unsupported: sharded subquery in insert values")

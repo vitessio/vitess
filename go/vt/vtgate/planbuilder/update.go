@@ -41,7 +41,11 @@ func buildUpdatePlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedV
 		return eupd, nil
 	}
 
-	cvv, ovq, err := buildChangedVindexesValues(upd, eupd.Table, ksidCol)
+	vindexTable, err := eupd.GetSingleTable()
+	if err != nil {
+		return nil, err
+	}
+	cvv, ovq, err := buildChangedVindexesValues(upd, vindexTable, ksidCol)
 	if err != nil {
 		return nil, err
 	}
