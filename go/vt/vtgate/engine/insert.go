@@ -100,6 +100,10 @@ type (
 		// Input is a select query plan to retrieve results for inserting data.
 		Input Primitive `json:",omitempty"`
 
+		// ForceNonStreaming is true when the insert table and select table are same.
+		// This will avoid locking by the select table.
+		ForceNonStreaming bool
+
 		// Insert needs tx handling
 		txNeeded
 	}
@@ -244,7 +248,7 @@ func (ins *Insert) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bind
 
 // TryStreamExecute performs a streaming exec.
 func (ins *Insert) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	if ins.Input == nil {
+	if ins.Input == nil || ins.ForceNonStreaming {
 		res, err := ins.TryExecute(vcursor, bindVars, wantfields)
 		if err != nil {
 			return err

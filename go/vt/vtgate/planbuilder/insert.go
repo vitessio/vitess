@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
@@ -208,6 +209,10 @@ func buildInsertSelectPlan(ins *sqlparser.Insert, table *vindexes.Table, reserve
 		return nil, err
 	}
 	eins.Input = plan
+
+	if strings.Contains(plan.GetTableName(), table.Name.String()) {
+		eins.ForceNonStreaming = true
+	}
 
 	// auto-increment column is added explicility if not provided.
 	if err := modifyForAutoinc(ins, eins); err != nil {
