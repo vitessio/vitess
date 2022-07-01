@@ -25,6 +25,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"vitess.io/vitess/go/trace"
+
 	"context"
 
 	"vitess.io/vitess/go/acl"
@@ -281,7 +283,9 @@ func (qe *QueryEngine) Close() {
 }
 
 // GetPlan returns the TabletPlan that for the query. Plans are cached in a cache.LRUCache.
-func (qe *QueryEngine) GetPlan(logStats *tabletenv.LogStats, sql string, skipQueryPlanCache bool, reservedConnID int64, te *TxEngine) (*TabletPlan, error) {
+func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats, sql string, skipQueryPlanCache bool, reservedConnID int64) (*TabletPlan, error) {
+	span, _ := trace.NewSpan(ctx, "QueryEngine.GetPlan")
+	defer span.Finish()
 	if plan := qe.getQuery(sql); plan != nil {
 		logStats.CachedPlan = true
 		return plan, nil
