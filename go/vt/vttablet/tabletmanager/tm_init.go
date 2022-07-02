@@ -34,7 +34,6 @@ and which run changeCallback.
 package tabletmanager
 
 import (
-	"bytes"
 	"context"
 	"encoding/hex"
 	"flag"
@@ -45,10 +44,9 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/vttablet/onlineddl"
 
-	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vdiff"
 
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -116,13 +114,6 @@ var (
 	// The following variables can be changed to speed up tests.
 	mysqlPortRetryInterval       = 1 * time.Second
 	rebuildKeyspaceRetryInterval = 1 * time.Second
-	/*VTDatabaseInit               = []string{
-		"CREATE DATABASE IF NOT EXISTS _vt",
-		mysqlctl.SQLCreateLocalMetadataTable,
-		mysqlctl.SQLUpdateLocalMetadataTable,
-		mysqlctl.SQLCreateShardMetadataTable,
-		mysqlctl.SQLUpdateShardMetadataTable,
-	}*/
 )
 
 func init() {
@@ -411,6 +402,26 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, healthCheckInterval ti
 	}
 	servenv.OnRun(tm.registerTabletManager)
 
+	// init schema
+	if err := tm.initSchema(ctx, tablet); err != nil {
+
+	}
+
+	restoring, err := tm.handleRestore(tm.BatchCtx)
+	if err != nil {
+		return err
+	}
+	if restoring {
+		// If restore was triggered, it will take care
+		// of updating the tablet state.
+		return nil
+	}
+
+	tm.tmState.Open()
+	return nil
+}
+
+func (tm *TabletManager) initSchema(ctx context.Context, tablet *topodatapb.Tablet) error {
 	log.Infof("%s -- %s", topoproto.TabletDbName(tm.Tablet()), tm.tabletAlias.String())
 	_ = mysqlctl.InitTabletMetadata(topoproto.TabletDbName(tm.Tablet()))
 	localMetadata := tm.getLocalMetadataValues(tablet.Type)
@@ -433,187 +444,7 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, healthCheckInterval ti
 		return err
 	}
 
-	/*_ = mysql.SchemaInitializer.RegisterMutations(tm.tabletAlias.String(), localMetadata, onlineddl.SQLWhereTabletFailure)
-	conn, err := tm.MysqlDaemon.GetDbaConnection(ctx)
-	if err != nil {
-		log.Infof("error in getting connection object %s", err)
-		return err
-	}
-	defer conn.Close()
-	if err := mysql.SchemaInitializer.RunAllMutations(ctx, conn.Conn); err != nil {
-		log.Infof("error in RunAllMutations %s", err)
-		return err
-	}*/
-
-	restoring, err := tm.handleRestore(tm.BatchCtx)
-	if err != nil {
-		return err
-	}
-	if restoring {
-		// If restore was triggered, it will take care
-		// of updating the tablet state.
-		return nil
-	}
-
-	tm.tmState.Open()
 	return nil
-}
-
-func (tm *TabletManager) InitSchema() (bool, error) {
-	log.Infof("InitSchema for Tablet Manager")
-	f := func() error {
-		ctx := context.Background()
-		conn2, err := tm.MysqlDaemon.GetDbaConnection(ctx)
-		if err != nil {
-			return err
-		}
-		defer conn2.Close()
-		_, err = conn2.ExecuteFetch(mysql.UnSetSuperUser, 1, false)
-		if err != nil {
-			log.Infof("unsetting super read-only user %s", err)
-			return err
-		}
-
-		// Disable replication on this session. We close the connection after using
-		// it, so there's no need to re-enable replication when we're done.
-		if _, err := conn2.ExecuteFetch("SET @@session.sql_log_bin = 0", 0, false); err != nil {
-			return err
-		}
-
-		if _, err := conn2.ExecuteFetch("CREATE DATABASE IF NOT EXISTS _vt", 0, false); err != nil {
-			return err
-		}
-
-		if _, err := conn2.ExecuteFetch(mysqlctl.SQLCreateLocalMetadataTable, 0, false); err != nil {
-			return err
-		}
-
-		for _, sql := range mysqlctl.SQLAlterLocalMetadataTable {
-			if _, err := conn2.ExecuteFetch(sql, 0, false); err != nil {
-				// Ignore "Duplicate column name 'db_name'" errors which can happen on every restart.
-				if merr, ok := err.(*mysql.SQLError); !ok || merr.Num != mysql.ERDupFieldName {
-					log.Errorf("Error executing %v: %v", sql, err)
-					return err
-				}
-			}
-		}
-
-		sql := fmt.Sprintf(mysqlctl.SQLUpdateLocalMetadataTable, topoproto.TabletDbName(tm.Tablet()))
-		if _, err := conn2.ExecuteFetch(sql, 0, false); err != nil {
-			log.Errorf("Error executing %v: %v, continuing. Please check the data in _vt.local_metadata and take corrective action.", sql, err)
-		}
-
-		if _, err := conn2.ExecuteFetch(mysqlctl.SQLCreateShardMetadataTable, 0, false); err != nil {
-			return err
-		}
-
-		for _, sql := range mysqlctl.SQLAlterShardMetadataTable {
-			if _, err := conn2.ExecuteFetch(sql, 0, false); err != nil {
-				// Ignore "Duplicate column name 'db_name'" errors which can happen on every restart.
-				if merr, ok := err.(*mysql.SQLError); !ok || merr.Num != mysql.ERDupFieldName {
-					log.Errorf("Error executing %v: %v", sql, err)
-					return err
-				}
-			}
-		}
-
-		sql = fmt.Sprintf(mysqlctl.SQLUpdateShardMetadataTable, topoproto.TabletDbName(tm.Tablet()))
-		if _, err := conn2.ExecuteFetch(sql, 0, false); err != nil {
-			log.Errorf("Error executing %v: %v, continuing. Please check the data in _vt.shard_metadata and take corrective action.", sql, err)
-		}
-
-		_, err = conn2.ExecuteFetch(mysql.SetSuperUser, 1, false)
-		if err != nil {
-			log.Infof("setting super read-only user %s", err)
-			return err
-		}
-		return nil
-	}
-
-	if err := mysql.SchemaInitializer.RegisterSchemaInitializerOld("Initial TM Schema", f, true); err != nil {
-		log.Infof("error is %s", err)
-		return false, err
-	}
-
-	if err := mysql.SchemaInitializer.InitializeSchemaOld(); err != nil {
-		log.Infof("error is %s", err)
-		return false, err
-	}
-	log.Infof("InitSchema for Tablet Manager END")
-
-	return true, nil
-}
-
-func (tm *TabletManager) upsertLocalMetadata(localMetadata map[string]string) (bool, error) {
-	log.Infof("upsertLocalMetadata...")
-	f := func() error {
-		ctx := context.Background()
-		conn2, err := tm.MysqlDaemon.GetDbaConnection(ctx)
-		if err != nil {
-			return err
-		}
-		defer conn2.Close()
-		_, err = conn2.ExecuteFetch(mysql.UnSetSuperUser, 1, false)
-		if err != nil {
-			log.Infof("unsetting super read-only user %s", err)
-			return err
-		}
-
-		// Disable replication on this session. We close the connection after using
-		// it, so there's no need to re-enable replication when we're done.
-		if _, err := conn2.ExecuteFetch("SET @@session.sql_log_bin = 0", 0, false); err != nil {
-			return err
-		}
-
-		// Populate local_metadata from the passed list of values.
-		if _, err := conn2.ExecuteFetch("BEGIN", 0, false); err != nil {
-			return err
-		}
-		for name, val := range localMetadata {
-			nameValue := sqltypes.NewVarChar(name)
-			valValue := sqltypes.NewVarChar(val)
-			dbNameValue := sqltypes.NewVarBinary(topoproto.TabletDbName(tm.Tablet()))
-
-			queryBuf := bytes.Buffer{}
-			queryBuf.WriteString("INSERT INTO _vt.local_metadata (name,value, db_name) VALUES (")
-			nameValue.EncodeSQL(&queryBuf)
-			queryBuf.WriteByte(',')
-			valValue.EncodeSQL(&queryBuf)
-			queryBuf.WriteByte(',')
-			dbNameValue.EncodeSQL(&queryBuf)
-			queryBuf.WriteString(") ON DUPLICATE KEY UPDATE value = ")
-			valValue.EncodeSQL(&queryBuf)
-
-			if _, err := conn2.ExecuteFetch(queryBuf.String(), 0, false); err != nil {
-				return err
-			}
-		}
-
-		if _, err := conn2.ExecuteFetch("COMMIT", 0, false); err != nil {
-			return err
-		}
-
-		_, err = conn2.ExecuteFetch(mysql.SetSuperUser, 1, false)
-		if err != nil {
-			log.Infof("setting super read-only user %s", err)
-			return err
-		}
-
-		return nil
-	}
-
-	if err := mysql.SchemaInitializer.RegisterSchemaInitializerOld("Upsert Local Metadata", f, false); err != nil {
-		log.Infof("error is %s", err)
-		return false, err
-	}
-
-	/*if err := mysql.SchemaInitializer.InitializeSchemaOld(); err != nil {
-		log.Infof("error is %s", err)
-		return false, err
-	}*/
-	log.Infof("Register Schema for Tablet Manager END")
-
-	return true, nil
 }
 
 // Close prepares a tablet for shutdown. First we check our tablet ownership and
@@ -929,7 +760,6 @@ func (tm *TabletManager) initTablet(ctx context.Context) error {
 
 func (tm *TabletManager) handleRestore(ctx context.Context) (bool, error) {
 	log.Infof("inside handle restore")
-	tablet := tm.Tablet()
 	// Sanity check for inconsistent flags
 	if tm.Cnf == nil && *restoreFromBackup {
 		return false, fmt.Errorf("you cannot enable -restore_from_backup without a my.cnf file")
@@ -962,24 +792,6 @@ func (tm *TabletManager) handleRestore(ctx context.Context) (bool, error) {
 		return true, nil
 	}
 
-	// optionally populate metadata records
-	if *initPopulateMetadata {
-		localMetadata := tm.getLocalMetadataValues(tablet.Type)
-		if tm.Cnf != nil { // we are managing mysqld
-			// we'll use batchCtx here because we are still initializing and can't proceed unless this succeeds
-			if err := tm.MysqlDaemon.Wait(ctx, tm.Cnf); err != nil {
-				return false, err
-			}
-		}
-
-		if tm.MetadataManager != nil {
-			err := tm.MetadataManager.PopulateMetadataTables(tm.MysqlDaemon, localMetadata, topoproto.TabletDbName(tablet))
-			//_, err := tm.upsertLocalMetadata(localMetadata)
-			if err != nil {
-				return false, vterrors.Wrap(err, "failed to -init_populate_metadata")
-			}
-		}
-	}
 	return false, nil
 }
 

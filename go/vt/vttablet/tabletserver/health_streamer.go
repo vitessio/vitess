@@ -326,14 +326,6 @@ func (hs *healthStreamer) reload() error {
 	}
 	defer conn.Recycle()
 
-	/*if !hs.initSuccess {
-		hs.initSuccess, err = hs.InitSchemaLocked(conn)
-		if err != nil {
-			log.Infof("error is %s", err)
-			return err
-		}
-	}*/
-
 	log.Infof("InitSchemaLocked END: %t, %t", hs.schemaRegistered, hs.initSuccess)
 	var tables []string
 	var tableNames []string

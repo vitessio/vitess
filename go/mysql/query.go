@@ -304,48 +304,6 @@ func (c *Conn) ExecuteFetch(query string, maxrows int, wantfields bool) (result 
 	return result, err
 }
 
-func (c *Conn) ExecuteUnSetSuperReadOnly() (result *sqltypes.Result, err error) {
-	// Note: MariaDB does not have super_read_only but support for it is EOL in v14.0+
-	if !c.IsMariaDB() {
-		if err := c.WriteComQuery("SELECT @@global.super_read_only"); err != nil {
-			return nil, err
-		}
-		res, _, _, err := c.ReadQueryResult(1, false)
-		if err == nil && len(res.Rows) == 1 {
-			sro := res.Rows[0][0].ToString()
-			if sro == "1" || sro == "ON" {
-				// defer c.WriteComQuery("SET GLOBAL super_read_only='ON'")
-				if err = c.WriteComQuery("SET GLOBAL super_read_only='OFF'"); err != nil {
-					return nil, err
-				}
-			}
-		}
-	}
-
-	return result, err
-}
-
-func (c *Conn) ExecuteSetSuperReadOnly() (result *sqltypes.Result, err error) {
-	// Note: MariaDB does not have super_read_only but support for it is EOL in v14.0+
-	if !c.IsMariaDB() {
-		if err := c.WriteComQuery("SELECT @@global.super_read_only"); err != nil {
-			return nil, err
-		}
-		res, _, _, err := c.ReadQueryResult(1, false)
-		if err == nil && len(res.Rows) == 1 {
-			sro := res.Rows[0][0].ToString()
-			if sro == "0" || sro == "OFF" {
-				// defer c.WriteComQuery("SET GLOBAL super_read_only='OFF'")
-				if err = c.WriteComQuery("SET GLOBAL super_read_only='ON'"); err != nil {
-					return nil, err
-				}
-			}
-		}
-	}
-
-	return result, err
-}
-
 // ExecuteFetchMulti is for fetching multiple results from a multi-statement result.
 // It returns an additional 'more' flag. If it is set, you must fetch the additional
 // results using ReadQueryResult.

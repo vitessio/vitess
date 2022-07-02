@@ -331,6 +331,7 @@ func (ts *tmState) updateLocked(ctx context.Context) error {
 	return returnErr
 }
 
+// TODO: We don't need this method anymore
 func (ts *tmState) populateLocalMetadataLocked() {
 	if ts.tm.MetadataManager == nil {
 		return
@@ -340,22 +341,7 @@ func (ts *tmState) populateLocalMetadataLocked() {
 		return
 	}
 
-	localMetadata := ts.tm.getLocalMetadataValues(ts.tablet.Type)
-	dbName := topoproto.TabletDbName(ts.tablet)
-
-	if !ts.hasCreatedMetadataTables {
-		if err := ts.tm.MetadataManager.PopulateMetadataTables(ts.tm.MysqlDaemon, localMetadata, dbName); err != nil {
-			log.Errorf("PopulateMetadataTables(%v) failed: %v", localMetadata, err)
-			return
-		}
-
-		ts.hasCreatedMetadataTables = true
-		return
-	}
-
-	if err := ts.tm.MetadataManager.UpsertLocalMetadata(ts.tm.MysqlDaemon, localMetadata, dbName); err != nil {
-		log.Errorf("UpsertMetadataTables(%v) failed: %v", localMetadata, err)
-	}
+	ts.hasCreatedMetadataTables = true
 }
 
 func (ts *tmState) canServe(tabletType topodatapb.TabletType) string {

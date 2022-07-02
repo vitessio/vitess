@@ -66,7 +66,6 @@ const (
 )
 
 var withDDL *withddl.WithDDL
-var withDDL2 *withddl.WithDDL
 var withDDLInitialQueries []string
 var allDDLQueries []string
 
@@ -85,12 +84,11 @@ func init() {
 	withDDLInitialQueries = append(withDDLInitialQueries, binlogplayer.WithDDLInitialQueries...)
 
 	/* this should replace the above code eventually */
-	allDDLQueries := append([]string{}, binlogplayer.CreateVReplicationTable()...)
+	allDDLQueries = append([]string{}, binlogplayer.CreateVReplicationTable()...)
 	allDDLQueries = append(allDDLQueries, binlogplayer.AlterVReplicationTable...)
 	allDDLQueries = append(allDDLQueries, createReshardingJournalTable, createCopyState)
 	allDDLQueries = append(allDDLQueries, createVReplicationLogTable)
 	allDDLQueries = append(allDDLQueries, withDDLInitialQueries...)
-	withDDL2 = withddl.New(allDDLQueries)
 }
 
 // this are the default tablet_types that will be used by the tablet picker to find sources for a vreplication stream
@@ -224,12 +222,6 @@ func (vre *Engine) Open(ctx context.Context) {
 }
 
 func (vre *Engine) openLocked(ctx context.Context) error {
-	/*if err := vre.ensureValidSchema(ctx); err != nil {
-		log.Infof("SchemaInitializer: error in ensuring valid schema %s", err)
-		// lets not return from here but we will eventually return from here but not now.
-		//return err
-	}*/
-
 	rows, err := vre.readAllRows(ctx)
 	if err != nil {
 		return err

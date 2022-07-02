@@ -283,8 +283,6 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 		return nil, vterrors.Wrap(err, "ListBackups failed")
 	}
 
-	metadataManager := &MetadataManager{}
-
 	if len(bhs) == 0 {
 		// There are no backups (not even broken/incomplete ones).
 		params.Logger.Errorf("no backup to restore on BackupStorage for directory %v. Starting up empty.", backupDir)
@@ -298,10 +296,6 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 			params.Logger.Errorf("error resetting replication: %v. Continuing", err)
 		}
 
-		if err := metadataManager.PopulateMetadataTables(params.Mysqld, params.LocalMetadata, params.DbName); err != nil {
-			params.Logger.Errorf("error populating metadata tables: %v. Continuing", err)
-
-		}
 		// Always return ErrNoBackup
 		return nil, ErrNoBackup
 	}
@@ -358,14 +352,6 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 	// Add backupTime and restorePosition to LocalMetadata
 	params.LocalMetadata["RestoredBackupTime"] = manifest.BackupTime
 	params.LocalMetadata["RestorePosition"] = mysql.EncodePosition(manifest.Position)
-
-	// Populate local_metadata before starting without --skip-networking,
-	// so it's there before we start announcing ourselves.
-	params.Logger.Infof("Restore: populating local_metadata")
-	err = metadataManager.PopulateMetadataTables(params.Mysqld, params.LocalMetadata, params.DbName)
-	if err != nil {
-		return nil, err
-	}
 
 	// The MySQL manual recommends restarting mysqld after running mysql_upgrade,
 	// so that any changes made to system tables take effect.
