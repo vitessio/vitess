@@ -38,12 +38,13 @@ const (
 	CreateAction  VDiffAction = "create"
 	ShowAction    VDiffAction = "show"
 	ResumeAction  VDiffAction = "resume"
+	DeleteAction  VDiffAction = "delete"
 	AllActionArg              = "all"
 	LastActionArg             = "last"
 )
 
 var (
-	Actions    = []VDiffAction{CreateAction, ShowAction, ResumeAction}
+	Actions    = []VDiffAction{CreateAction, ShowAction, ResumeAction, DeleteAction}
 	ActionArgs = []string{AllActionArg, LastActionArg}
 )
 
@@ -164,6 +165,21 @@ func (vde *Engine) PerformVDiffAction(ctx context.Context, req *tabletmanagerdat
 			if _, err := uuid.Parse(req.SubCommand); err != nil {
 				return nil, fmt.Errorf("action argument %s not supported", req.SubCommand)
 			}
+		}
+	case DeleteAction:
+		query := ""
+		switch req.SubCommand {
+		case AllActionArg:
+			query = fmt.Sprintf(sqlDeleteVDiffs, encodeString(req.Keyspace), encodeString(req.Workflow))
+		default:
+			uuid, err := uuid.Parse(req.SubCommand)
+			if err != nil {
+				return nil, fmt.Errorf("action argument %s not supported", req.SubCommand)
+			}
+			query = fmt.Sprintf(sqlDeleteVDiffByUUID, encodeString(req.Keyspace), encodeString(req.Workflow), encodeString(uuid.String()))
+		}
+		if _, err = withDDL.Exec(context.Background(), query, dbClient.ExecuteFetch, dbClient.ExecuteFetch); err != nil {
+			return nil, err
 		}
 	default:
 		return nil, fmt.Errorf("action %s not supported", action)
