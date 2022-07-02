@@ -81,8 +81,9 @@ const (
 	sqlGetVDiffByKeyspaceWorkflowUUID = "select * from _vt.vdiff where keyspace = %s and workflow = %s and vdiff_uuid = %s"
 	sqlGetMostRecentVDiff             = "select * from _vt.vdiff where keyspace = %s and workflow = %s order by id desc limit 1"
 	sqlGetVDiffByID                   = "select * from _vt.vdiff where id = %d"
-	sqlDeleteVDiffs                   = `delete from vd, vdt using _vt.vdiff as vd inner join _vt.vdiff_table as vdt on (vd.id = vdt.vdiff_id) where
-										vd.keyspace = %s and vd.workflow = %s`
+	sqlDeleteVDiffs                   = `delete from vd, vdt, vdl using _vt.vdiff as vd inner join _vt.vdiff_table as vdt on (vd.id = vdt.vdiff_id)
+										inner join _vt.vdiff_log as vdl on (vd.id = vdl.vdiff_id)
+										where vd.keyspace = %s and vd.workflow = %s`
 	sqlDeleteVDiffByUUID = `delete from vd, vdt using _vt.vdiff as vd inner join _vt.vdiff_table as vdt on (vd.id = vdt.vdiff_id)
 							and vd.keyspace = %s and vd.workflow = %s and vd.vdiff_uuid = %s`
 	sqlVDiffSummary = `select vd.state as vdiff_state, vdt.table_name as table_name,

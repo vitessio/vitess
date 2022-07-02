@@ -57,8 +57,9 @@ const (
 	renameTableTemplate = "_%.59s_old" // limit table name to 64 characters
 
 	sqlDeleteWorkflow = "delete from _vt.vreplication where db_name = %s and workflow = %s"
-	sqlDeleteVDiffs   = `delete from vd, vdt using _vt.vdiff as vd inner join _vt.vdiff_table as vdt on
-						(vd.id = vdt.vdiff_id) where vd.keyspace = %s and vd.workflow = %s`
+	sqlDeleteVDiffs   = `delete from vd, vdt, vdl using _vt.vdiff as vd inner join _vt.vdiff_table as vdt on (vd.id = vdt.vdiff_id)
+						inner join _vt.vdiff_log as vdl on (vd.id = vdl.vdiff_id)
+						where vd.keyspace = %s and vd.workflow = %s`
 )
 
 // accessType specifies the type of access for a shard (allow/disallow writes).
