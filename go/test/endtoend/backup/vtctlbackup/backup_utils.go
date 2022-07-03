@@ -35,7 +35,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/test/endtoend/sharding/initialsharding"
 )
 
 // constants for test variants
@@ -102,11 +101,11 @@ func LaunchCluster(setupType int, streamMode string, stripes int) (int, error) {
 	}
 	shard := &localCluster.Keyspaces[0].Shards[0]
 
-	dbCredentialFile = initialsharding.WriteDbCredentialToTmp(localCluster.TmpDirectory)
+	dbCredentialFile = cluster.WriteDbCredentialToTmp(localCluster.TmpDirectory)
 	initDb, _ := os.ReadFile(path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"))
 	sql := string(initDb)
 	newInitDBFile = path.Join(localCluster.TmpDirectory, "init_db_with_passwords.sql")
-	sql = sql + initialsharding.GetPasswordUpdateSQL(localCluster)
+	sql = sql + cluster.GetPasswordUpdateSQL(localCluster)
 	err = os.WriteFile(newInitDBFile, []byte(sql), 0666)
 	if err != nil {
 		return 1, err

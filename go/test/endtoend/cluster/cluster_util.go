@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path"
 	"strings"
 	"testing"
 	"time"
@@ -37,7 +38,8 @@ import (
 )
 
 var (
-	tmClient = tmc.NewClient()
+	tmClient         = tmc.NewClient()
+	dbCredentialFile string
 )
 
 // Restart restarts vttablet and mysql.
@@ -291,4 +293,62 @@ func filterDoubleDashArgs(args []string, version int) (filtered []string) {
 	}
 
 	return filtered
+}
+
+// WriteDbCredentialToTmp writes json format db credentials to tmp directory
+func WriteDbCredentialToTmp(tmpDir string) string {
+	data := []byte(`{
+        "vt_dba": ["VtDbaPass"],
+        "vt_app": ["VtAppPass"],
+        "vt_allprivs": ["VtAllprivsPass"],
+        "vt_repl": ["VtReplPass"],
+        "vt_filtered": ["VtFilteredPass"]
+	}`)
+	dbCredentialFile = path.Join(tmpDir, "db_credentials.json")
+	os.WriteFile(dbCredentialFile, data, 0666)
+	return dbCredentialFile
+}
+
+// GetPasswordUpdateSQL returns the sql for password update
+func GetPasswordUpdateSQL(localCluster *LocalProcessCluster) string {
+	pwdChangeCmd := `
+					# Set real passwords for all users.
+					UPDATE mysql.user SET %s = PASSWORD('RootPass')
+					  WHERE User = 'root' AND Host = 'localhost';
+					UPDATE mysql.user SET %s = PASSWORD('VtDbaPass')
+					  WHERE User = 'vt_dba' AND Host = 'localhost';
+					UPDATE mysql.user SET %s = PASSWORD('VtAppPass')
+					  WHERE User = 'vt_app' AND Host = 'localhost';
+					UPDATE mysql.user SET %s = PASSWORD('VtAllprivsPass')
+					  WHERE User = 'vt_allprivs' AND Host = 'localhost';
+					UPDATE mysql.user SET %s = PASSWORD('VtReplPass')
+					  WHERE User = 'vt_repl' AND Host = '%%';
+					UPDATE mysql.user SET %s = PASSWORD('VtFilteredPass')
+					  WHERE User = 'vt_filtered' AND Host = 'localhost';
+					FLUSH PRIVILEGES;
+					`
+	pwdCol, _ := getPasswordField(localCluster)
+	return fmt.Sprintf(pwdChangeCmd, pwdCol, pwdCol, pwdCol, pwdCol, pwdCol, pwdCol)
+}
+
+// getPasswordField Determines which column is used for user passwords in this MySQL version.
+func getPasswordField(localCluster *LocalProcessCluster) (pwdCol string, err error) {
+	tablet := &Vttablet{
+		Type:            "relpica",
+		TabletUID:       100,
+		MySQLPort:       15000,
+		MysqlctlProcess: *MysqlCtlProcessInstance(100, 15000, localCluster.TmpDirectory),
+	}
+	if err = tablet.MysqlctlProcess.Start(); err != nil {
+		return "", err
+	}
+	tablet.VttabletProcess = VttabletProcessInstance(tablet.HTTPPort, tablet.GrpcPort, tablet.TabletUID, "", "", "", 0, tablet.Type, localCluster.TopoPort, "", "", nil, false, localCluster.DefaultCharset)
+	result, err := tablet.VttabletProcess.QueryTablet("select password from mysql.user limit 0", "", false)
+	if err == nil && len(result.Rows) > 0 {
+		return "password", nil
+	}
+	tablet.MysqlctlProcess.Stop()
+	os.RemoveAll(path.Join(tablet.VttabletProcess.Directory))
+	return "authentication_string", nil
+
 }

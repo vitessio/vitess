@@ -119,8 +119,6 @@ var (
 		"vtgate_queries",
 		"vtgate_schema_tracker",
 		"xb_recovery",
-		"resharding",
-		"resharding_bytes",
 		"mysql80",
 		"vreplication_across_db_versions",
 		"vreplication_multicell",
