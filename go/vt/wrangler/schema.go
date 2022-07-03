@@ -261,8 +261,7 @@ func (wr *Wrangler) CopySchemaShard(ctx context.Context, sourceTabletAlias *topo
 	// where the database already existed on the destination, but with different
 	// options e.g. a different character set.
 	// In that case, MySQL would have skipped our CREATE DATABASE IF NOT EXISTS
-	// statement. We want to fail early in this case because vtworker SplitDiff
-	// fails in case of such an inconsistency as well.
+	// statement.
 	if !skipVerify {
 		diffs, err = schematools.CompareSchemas(ctx, wr.ts, wr.tmc, sourceTabletAlias, destShardInfo.PrimaryAlias, tables, excludeTables, includeViews)
 		if err != nil {

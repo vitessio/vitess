@@ -120,43 +120,6 @@ func (wr *Wrangler) printShards(ctx context.Context, si []*topo.ShardInfo) error
 	return nil
 }
 
-// findSourceDest derives the source and destination from the overlapping shards.
-// Whichever side has SourceShards is a destination.
-func (wr *Wrangler) findSourceDest(ctx context.Context, os *topotools.OverlappingShards) (sourceShards, destinationShards []*topo.ShardInfo, err error) {
-	// It's possible that both source and destination have source shards because of reversible replication.
-	// If so, the Frozen flag in the tablet control record dictates the direction.
-	// So, check that first.
-	for _, left := range os.Left {
-		tc := left.GetTabletControl(topodatapb.TabletType_PRIMARY)
-		if tc == nil {
-			continue
-		}
-		if tc.Frozen {
-			return os.Left, os.Right, nil
-		}
-	}
-	for _, right := range os.Right {
-		tc := right.GetTabletControl(topodatapb.TabletType_PRIMARY)
-		if tc == nil {
-			continue
-		}
-		if tc.Frozen {
-			return os.Right, os.Left, nil
-		}
-	}
-	for _, left := range os.Left {
-		if len(left.SourceShards) != 0 {
-			return os.Right, os.Left, nil
-		}
-	}
-	for _, right := range os.Right {
-		if len(right.SourceShards) != 0 {
-			return os.Left, os.Right, nil
-		}
-	}
-	return nil, nil, fmt.Errorf("neither Shard '%v' nor Shard '%v' have a 'SourceShards' entry. Did you successfully run vtworker SplitClone before? Or did you already migrate the MASTER type?", os.Left[0].ShardName(), os.Right[0].ShardName())
-}
-
 func (wr *Wrangler) getPrimaryPositions(ctx context.Context, shards []*topo.ShardInfo) (map[*topo.ShardInfo]string, error) {
 	mu := sync.Mutex{}
 	result := make(map[*topo.ShardInfo]string)

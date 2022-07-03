@@ -63,9 +63,7 @@ COMMAND ARGUMENT DEFINITIONS
              for backup purposes
   -- batch: A replicated copy of data for OLAP load patterns (typically for
             MapReduce jobs)
-  -- drained: A tablet that is reserved for a background process. For example,
-              a tablet used by a vtworker process, where the tablet is likely
-              lagging in replication.
+  -- drained: A tablet that is reserved for a background process.
   -- experimental: A replica copy of data that is ready but not serving query
                    traffic. The value indicates a special characteristic of
                    the tablet that indicates the tablet should not be
