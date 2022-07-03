@@ -83,8 +83,8 @@ that shard.`,
 		Short: "Sets the TabletControl record for a shard and tablet type. Only use this for an emergency fix or after a finished MoveTables.",
 		Long: `Sets the TabletControl record for a shard and tablet type.
 
-Only use this for an emergency fix or after a finished MoveTables. The MigrateServedFrom
-and MigrateServedType commands set this record appropriately already.
+Only use this for an emergency fix or after a finished MoveTables. The MigrateServedType
+commands set this record appropriately already.
 
 Always specify the denied-tables flag for MoveTables, but never for Reshard operations.
 
