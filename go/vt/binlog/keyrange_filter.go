@@ -31,7 +31,7 @@ import (
 // in the transaction match the specified keyrange. The resulting function can be
 // passed into the Streamer: bls.Stream(file, pos, sendTransaction) ->
 // bls.Stream(file, pos, KeyRangeFilterFunc(keyrange, sendTransaction))
-func KeyRangeFilterFunc(keyrange *topodatapb.KeyRange, callback func(*binlogdatapb.BinlogTransaction) error) sendTransactionFunc {
+func KeyRangeFilterFunc(keyrange *topodatapb.KeyRange, callback func(*binlogdatapb.BinlogTransaction) error) sendTransactionFunc { // nolint:revive
 	return func(eventToken *querypb.EventToken, statements []FullBinlogStatement) error {
 		matched := false
 		filtered := make([]*binlogdatapb.BinlogTransaction_Statement, 0, len(statements))

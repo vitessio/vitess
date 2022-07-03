@@ -34,7 +34,7 @@ const (
 // in the transaction match the specified tables. The resulting function can be
 // passed into the Streamer: bls.Stream(file, pos, sendTransaction) ->
 // bls.Stream(file, pos, TablesFilterFunc(sendTransaction))
-func TablesFilterFunc(tables []string, callback func(*binlogdatapb.BinlogTransaction) error) sendTransactionFunc {
+func TablesFilterFunc(tables []string, callback func(*binlogdatapb.BinlogTransaction) error) sendTransactionFunc { // nolint:revive
 	return func(eventToken *querypb.EventToken, statements []FullBinlogStatement) error {
 		matched := false
 		filtered := make([]*binlogdatapb.BinlogTransaction_Statement, 0, len(statements))

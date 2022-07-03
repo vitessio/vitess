@@ -15,7 +15,7 @@ limitations under the License.
 */
 
 // gRPC RPC interface for the internal resharding throttler (go/vt/throttler)
-// which is used vreplication.
+// which is used by vreplication.
 
 syntax = "proto3";
 option go_package = "vitess.io/vitess/go/vt/proto/throttlerservice";
