@@ -101,14 +101,9 @@ func getCommandType(index int) string {
 		56: "ExternalizeVindex",
 		57: "Materialize",
 		60: "VDiff",
-		61: "MigrateServedTypes",
-		62: "MigrateServedFrom",
 		63: "SwitchReads",
 		64: "SwitchWrites",
-		65: "CancelResharding",
-		66: "ShowResharding",
 		67: "FindAllShardsInKeyspace",
-		68: "WaitForDrain",
 	}
 	return m[index]
 
