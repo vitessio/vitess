@@ -1,9 +1,9 @@
 # DO NOT MODIFY: THIS FILE IS GENERATED USING "make generate_ci_workflows"
 
-name: Cluster (24)
+name: Cluster (mysql_server_vault)
 on: [push, pull_request]
 concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (24)')
+  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (mysql_server_vault)')
   cancel-in-progress: true
 
 env:
@@ -13,7 +13,7 @@ env:
 
 jobs:
   build:
-    name: Run endtoend tests on Cluster (24)
+    name: Run endtoend tests on Cluster (mysql_server_vault)
     runs-on: ubuntu-18.04
 
     steps:
@@ -99,7 +99,7 @@ jobs:
         set -x
 
         # run the tests however you normally do, then produce a JUnit XML file
-        eatmydata -- go run test.go -docker=false -follow -shard 24 | tee -a output.txt | go-junit-report -set-exit-code > report.xml
+        eatmydata -- go run test.go -docker=false -follow -shard mysql_server_vault | tee -a output.txt | go-junit-report -set-exit-code > report.xml
 
     - name: Print test output and Record test result in launchable
       if: steps.changes.outputs.end_to_end == 'true' && always()

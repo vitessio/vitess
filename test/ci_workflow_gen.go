@@ -78,7 +78,7 @@ var (
 		"xb_backup",
 		"21",
 		"22",
-		"24",
+		"mysql_server_vault",
 		"26",
 		"vstream_failover",
 		"vstream_stoponreshard_true",
@@ -140,7 +140,7 @@ var (
 	}
 	clustersRequiringMakeTools = []string{
 		"18",
-		"24",
+		"mysql_server_vault",
 		"vtgate_topo_consul",
 		"tabletmanager_consul",
 	}

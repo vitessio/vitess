@@ -177,7 +177,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/mysqlserver"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "24",
+			"Shard": "mysql_server_vault",
 			"RetryMax": 1,
 			"Tags": []
 		},
@@ -1103,7 +1103,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vault"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "vault_heavy",
+			"Shard": "mysql_server_vault",
 			"RetryMax": 1,
 			"Tags": []
 		},
