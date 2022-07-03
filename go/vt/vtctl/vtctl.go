@@ -339,7 +339,7 @@ var commands = []commandGroup{
 				name:   "UpdateSrvKeyspacePartition",
 				method: commandUpdateSrvKeyspacePartition,
 				params: "[--cells=c1,c2,...] [--remove] <keyspace/shard> <tablet type>",
-				help:   "Updates KeyspaceGraph partition for a shard and tablet type. Only use this for an emergency fix during an horizontal shard split. Specify the remove flag, if you want the shard to be removed from the desired partition.",
+				help:   "Updates KeyspaceGraph partition for a shard and tablet type. Only use this for emergency fixes. Specify the remove flag, if you want the shard to be removed from the desired partition.",
 			},
 			{
 				name:   "SourceShardDelete",
@@ -1587,9 +1587,9 @@ func commandUpdateSrvKeyspacePartition(ctx context.Context, wr *wrangler.Wrangle
 
 func commandSetShardTabletControl(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	cellsStr := subFlags.String("cells", "", "Specifies a comma-separated list of cells to update")
-	deniedTablesStr := subFlags.String("denied_tables", "", "Specifies a comma-separated list of tables to add to the denylist (used for vertical split). Each is either an exact match, or a regular expression of the form '/regexp/'.")
+	deniedTablesStr := subFlags.String("denied_tables", "", "Specifies a comma-separated list of tables to add to the denylist (used for VReplication). Each is either an exact match, or a regular expression of the form '/regexp/'.")
 
-	remove := subFlags.Bool("remove", false, "Removes cells for vertical splits.")
+	remove := subFlags.Bool("remove", false, "Removes cells.")
 	disableQueryService := subFlags.Bool("disable_query_service", false, "Disables query service on the provided nodes. This flag requires 'denied_tables' and 'remove' to be unset, otherwise it's ignored.")
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -1647,7 +1647,7 @@ func commandSourceShardDelete(ctx context.Context, wr *wrangler.Wrangler, subFla
 
 func commandSourceShardAdd(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	keyRange := subFlags.String("key_range", "", "Identifies the key range to use for the SourceShard")
-	tablesStr := subFlags.String("tables", "", "Specifies a comma-separated list of tables to replicate (used for vertical split). Each is either an exact match, or a regular expression of the form /regexp/")
+	tablesStr := subFlags.String("tables", "", "Specifies a comma-separated list of tables to replicate. Each is either an exact match, or a regular expression of the form /regexp/")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
