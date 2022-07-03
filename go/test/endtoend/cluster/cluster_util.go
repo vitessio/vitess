@@ -21,11 +21,14 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/json2"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
+	"vitess.io/vitess/go/vt/proto/topodata"
 
 	"github.com/stretchr/testify/assert"
 
@@ -38,8 +41,9 @@ import (
 )
 
 var (
-	tmClient         = tmc.NewClient()
-	dbCredentialFile string
+	tmClient                 = tmc.NewClient()
+	dbCredentialFile         string
+	InsertTabletTemplateKsID = `insert into %s (id, msg) values (%d, '%s') /* id:%d */`
 )
 
 // Restart restarts vttablet and mysql.
@@ -351,4 +355,43 @@ func getPasswordField(localCluster *LocalProcessCluster) (pwdCol string, err err
 	os.RemoveAll(path.Join(tablet.VttabletProcess.Directory))
 	return "authentication_string", nil
 
+}
+
+func CheckSrvKeyspace(t *testing.T, cell string, ksname string, expectedPartition map[topodata.TabletType][]string, ci LocalProcessCluster) {
+	srvKeyspace := GetSrvKeyspace(t, cell, ksname, ci)
+
+	currentPartition := map[topodata.TabletType][]string{}
+
+	for _, partition := range srvKeyspace.Partitions {
+		currentPartition[partition.ServedType] = []string{}
+		for _, shardRef := range partition.ShardReferences {
+			currentPartition[partition.ServedType] = append(currentPartition[partition.ServedType], shardRef.Name)
+		}
+	}
+
+	assert.True(t, reflect.DeepEqual(currentPartition, expectedPartition))
+}
+
+// GetSrvKeyspace return the Srv Keyspace structure
+func GetSrvKeyspace(t *testing.T, cell string, ksname string, ci LocalProcessCluster) *topodata.SrvKeyspace {
+	output, err := ci.VtctlclientProcess.ExecuteCommandWithOutput("GetSrvKeyspace", cell, ksname)
+	require.Nil(t, err)
+	var srvKeyspace topodata.SrvKeyspace
+
+	err = json2.Unmarshal([]byte(output), &srvKeyspace)
+	require.Nil(t, err)
+	return &srvKeyspace
+}
+
+// ExecuteOnTablet executes a write query on specified vttablet
+// It should always be called with a primary tablet for the keyspace/shard
+func ExecuteOnTablet(t *testing.T, query string, vttablet Vttablet, ks string, expectFail bool) {
+	_, _ = vttablet.VttabletProcess.QueryTablet("begin", ks, true)
+	_, err := vttablet.VttabletProcess.QueryTablet(query, ks, true)
+	if expectFail {
+		require.Error(t, err)
+	} else {
+		require.Nil(t, err)
+	}
+	_, _ = vttablet.VttabletProcess.QueryTablet("commit", ks, true)
 }

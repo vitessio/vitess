@@ -90,8 +90,6 @@ func getCommandType(index int) string {
 		45: "RemoveKeyspaceCell",
 		46: "GetKeyspace",
 		47: "GetKeyspaces",
-		48: "SetKeyspaceShardingInfo",
-		49: "SetKeyspaceServedFrom",
 		50: "RebuildKeyspaceGraph",
 		51: "ValidateKeyspace",
 		52: "Reshard",

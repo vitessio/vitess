@@ -106,15 +106,6 @@ SetKeyspaceDurabilityPolicy --durability-policy='semi_sync' customer`,
 		Args:                  cobra.ExactArgs(1),
 		RunE:                  commandSetKeyspaceDurabilityPolicy,
 	}
-	// SetKeyspaceShardingInfo makes a SetKeyspaceShardingInfo gRPC call to a vtcltd.
-	SetKeyspaceShardingInfo = &cobra.Command{
-		Use:                   "SetKeyspaceShardingInfo [--force] <keyspace> [<column name> [<column type>]]",
-		Short:                 "Updates the sharding information for a keyspace.",
-		DisableFlagsInUseLine: true,
-		Args:                  cobra.RangeArgs(1, 3),
-		RunE:                  commandSetKeyspaceShardingInfo,
-		Deprecated:            "and will soon be removed! Please use VReplication instead: https://vitess.io/docs/reference/vreplication",
-	}
 	// ValidateSchemaKeyspace makes a ValidateSchemaKeyspace gRPC call to a vtctld.
 	ValidateSchemaKeyspace = &cobra.Command{
 		Use:                   "ValidateSchemaKeyspace [--exclude-tables=<exclude_tables>] [--include-views] [--skip-no-primary] [--include-vschema] <keyspace>",
@@ -355,14 +346,6 @@ func commandSetKeyspaceDurabilityPolicy(cmd *cobra.Command, args []string) error
 	return nil
 }
 
-var setKeyspaceShardingInfoOptions = struct {
-	Force bool
-}{}
-
-func commandSetKeyspaceShardingInfo(cmd *cobra.Command, args []string) error {
-	return nil
-}
-
 var validateSchemaKeyspaceOptions = struct {
 	ExcludeTables  []string
 	IncludeViews   bool
@@ -440,9 +423,6 @@ func init() {
 
 	SetKeyspaceDurabilityPolicy.Flags().StringVar(&setKeyspaceDurabilityPolicyOptions.DurabilityPolicy, "durability-policy", "none", "Type of durability to enforce for this keyspace. Default is none. Other values include 'semi_sync' and others as dictated by registered plugins.")
 	Root.AddCommand(SetKeyspaceDurabilityPolicy)
-
-	SetKeyspaceShardingInfo.Flags().BoolVarP(&setKeyspaceShardingInfoOptions.Force, "force", "f", false, "Updates fields even if they are already set. Use caution before passing force to this command.")
-	Root.AddCommand(SetKeyspaceShardingInfo)
 
 	ValidateSchemaKeyspace.Flags().BoolVar(&validateSchemaKeyspaceOptions.IncludeViews, "include-views", false, "Includes views in compared schemas.")
 	ValidateSchemaKeyspace.Flags().BoolVar(&validateSchemaKeyspaceOptions.IncludeVSchema, "include-vschema", false, "Includes VSchema validation in validation results.")
