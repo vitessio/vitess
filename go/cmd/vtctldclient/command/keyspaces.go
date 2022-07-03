@@ -26,7 +26,6 @@ import (
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
@@ -106,15 +105,6 @@ SetKeyspaceDurabilityPolicy --durability-policy='semi_sync' customer`,
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.ExactArgs(1),
 		RunE:                  commandSetKeyspaceDurabilityPolicy,
-	}
-	// SetKeyspaceServedFrom makes a SetKeyspaceServedFrom gRPC call to a vtcltd.
-	SetKeyspaceServedFrom = &cobra.Command{
-		Use:                   "SetKeyspaceServedFrom [--source <keyspace>] [--remove] [--cells=<cells>] <keyspace> <tablet_type>",
-		Short:                 "Updates the ServedFromMap for a keyspace manually. This command is intended for emergency fixes. This command does not rebuild the serving graph.",
-		DisableFlagsInUseLine: true,
-		Args:                  cobra.ExactArgs(2),
-		RunE:                  commandSetKeyspaceServedFrom,
-		Deprecated:            "and will soon be removed! Please use VReplication instead: https://vitess.io/docs/reference/vreplication",
 	}
 	// SetKeyspaceShardingInfo makes a SetKeyspaceShardingInfo gRPC call to a vtcltd.
 	SetKeyspaceShardingInfo = &cobra.Command{
@@ -365,41 +355,6 @@ func commandSetKeyspaceDurabilityPolicy(cmd *cobra.Command, args []string) error
 	return nil
 }
 
-var setKeyspaceServedFromOptions = struct {
-	Cells          []string
-	SourceKeyspace string
-	Remove         bool
-}{}
-
-func commandSetKeyspaceServedFrom(cmd *cobra.Command, args []string) error {
-	keyspace := cmd.Flags().Arg(0)
-	tabletType, err := topoproto.ParseTabletType(cmd.Flags().Arg(1))
-	if err != nil {
-		return err
-	}
-
-	cli.FinishedParsing(cmd)
-
-	resp, err := client.SetKeyspaceServedFrom(commandCtx, &vtctldatapb.SetKeyspaceServedFromRequest{
-		Keyspace:       keyspace,
-		TabletType:     tabletType,
-		Cells:          setKeyspaceServedFromOptions.Cells,
-		SourceKeyspace: setKeyspaceServedFromOptions.SourceKeyspace,
-		Remove:         setKeyspaceServedFromOptions.Remove,
-	})
-	if err != nil {
-		return err
-	}
-
-	data, err := cli.MarshalJSON(resp)
-	if err != nil {
-		return err
-	}
-
-	fmt.Printf("%s\n", data)
-	return nil
-}
-
 var setKeyspaceShardingInfoOptions = struct {
 	Force bool
 }{}
@@ -482,11 +437,6 @@ func init() {
 	RemoveKeyspaceCell.Flags().BoolVarP(&removeKeyspaceCellOptions.Force, "force", "f", false, "Proceed even if the cell's topology server cannot be reached. The assumption is that you turned down the entire cell, and just need to update the global topo data.")
 	RemoveKeyspaceCell.Flags().BoolVarP(&removeKeyspaceCellOptions.Recursive, "recursive", "r", false, "Also delete all tablets in that cell beloning to the specified keyspace.")
 	Root.AddCommand(RemoveKeyspaceCell)
-
-	SetKeyspaceServedFrom.Flags().StringSliceVarP(&setKeyspaceServedFromOptions.Cells, "cells", "c", nil, "Cells to affect (comma-separated).")
-	SetKeyspaceServedFrom.Flags().BoolVarP(&setKeyspaceServedFromOptions.Remove, "remove", "r", false, "If set, remove the ServedFrom record.")
-	SetKeyspaceServedFrom.Flags().StringVar(&setKeyspaceServedFromOptions.SourceKeyspace, "source", "", "Specifies the source keyspace name.")
-	Root.AddCommand(SetKeyspaceServedFrom)
 
 	SetKeyspaceDurabilityPolicy.Flags().StringVar(&setKeyspaceDurabilityPolicyOptions.DurabilityPolicy, "durability-policy", "none", "Type of durability to enforce for this keyspace. Default is none. Other values include 'semi_sync' and others as dictated by registered plugins.")
 	Root.AddCommand(SetKeyspaceDurabilityPolicy)

@@ -80,17 +80,6 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
-		"legacy_local_example": {
-			"File": "",
-			"Args": [],
-			"Command": [
-				"test/legacy_local_example.sh"
-			],
-			"Manual": false,
-			"Shard": "",
-			"RetryMax": 1,
-			"Tags": []
-		},
 		"region_example": {
 			"File": "",
 			"Args": [],
