@@ -439,7 +439,8 @@ Gen4 plan same as above
     },
     "FieldQuery": "select cc.constraint_name as `name` from information_schema.check_constraints as cc where 1 != 1",
     "Query": "select cc.constraint_name as `name` from information_schema.check_constraints as cc where cc.constraint_schema = :__vtschemaname and cc.table_schema = :__vtschemaname",
-    "SysTableTableSchema": "[VARBINARY(\"constraint_schema\"), VARBINARY(\"a\")]"
+    "SysTableTableSchema": "[VARBINARY(\"constraint_schema\"), VARBINARY(\"a\")]",
+    "Table": "information_schema.check_constraints"
   }
 }
 

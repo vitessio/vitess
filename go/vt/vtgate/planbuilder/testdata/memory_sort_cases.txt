@@ -236,7 +236,7 @@
             "OperatorType": "Join",
             "Variant": "Join",
             "JoinColumnIndexes": "-1,-2,-3",
-            "TableName": "`user`_user_extra",
+            "TableName": "`user`, user_extra",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -282,7 +282,7 @@
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "-1,-2,1,2",
-        "TableName": "`user`_music",
+        "TableName": "`user`, music",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -334,7 +334,7 @@
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "-1,-2,1,-3,2,-4",
-        "TableName": "`user`_music",
+        "TableName": "`user`, music",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -386,7 +386,7 @@
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "-1,-2,1,-3,2",
-        "TableName": "`user`_unsharded",
+        "TableName": "`user`, unsharded",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -430,7 +430,7 @@
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "1,2,-1,3,-2",
-        "TableName": "unsharded_`user`",
+        "TableName": "unsharded, `user`",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -521,7 +521,7 @@
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1",
-    "TableName": "`user`_music",
+    "TableName": "`user`, music",
     "Inputs": [
       {
         "OperatorType": "Route",

@@ -114,7 +114,7 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1,1",
-    "TableName": "_unsharded",
+    "TableName": ", unsharded",
     "Inputs": [
       {
         "OperatorType": "VindexFunc",
@@ -152,7 +152,7 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "1,-1",
-    "TableName": "unsharded_",
+    "TableName": "unsharded, ",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -190,7 +190,7 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1,-2,1",
-    "TableName": "_unsharded",
+    "TableName": ", unsharded",
     "Inputs": [
       {
         "OperatorType": "VindexFunc",
@@ -230,7 +230,7 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1,1",
-    "TableName": "_unsharded",
+    "TableName": ", unsharded",
     "Inputs": [
       {
         "OperatorType": "VindexFunc",
@@ -270,7 +270,7 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1,1",
-    "TableName": "_unsharded",
+    "TableName": ", unsharded",
     "Inputs": [
       {
         "OperatorType": "VindexFunc",

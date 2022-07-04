@@ -6,7 +6,7 @@
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1",
-    "TableName": "`user`_user_extra_user_metadata_music_unsharded_unsharded_a_unsharded_b_unsharded_auto_music_extra",
+    "TableName": "`user`, user_extra, user_metadata, music, unsharded, unsharded_a, unsharded_b, unsharded_auto, music_extra",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -22,7 +22,7 @@
       {
         "OperatorType": "Join",
         "Variant": "Join",
-        "TableName": "user_extra_user_metadata_music_unsharded_unsharded_a_unsharded_b_unsharded_auto_music_extra",
+        "TableName": "user_extra, user_metadata, music, unsharded, unsharded_a, unsharded_b, unsharded_auto, music_extra",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -42,7 +42,7 @@
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "TableName": "user_metadata_music_unsharded_unsharded_a_unsharded_b_unsharded_auto_music_extra",
+            "TableName": "user_metadata, music, unsharded, unsharded_a, unsharded_b, unsharded_auto, music_extra",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -62,7 +62,7 @@
               {
                 "OperatorType": "Join",
                 "Variant": "Join",
-                "TableName": "music_unsharded_unsharded_a_unsharded_b_unsharded_auto_music_extra",
+                "TableName": "music, unsharded, unsharded_a, unsharded_b, unsharded_auto, music_extra",
                 "Inputs": [
                   {
                     "OperatorType": "Route",
@@ -78,7 +78,7 @@
                   {
                     "OperatorType": "Join",
                     "Variant": "Join",
-                    "TableName": "unsharded_unsharded_a_unsharded_b_unsharded_auto_music_extra",
+                    "TableName": "unsharded, unsharded_a, unsharded_b, unsharded_auto, music_extra",
                     "Inputs": [
                       {
                         "OperatorType": "Route",
@@ -94,7 +94,7 @@
                       {
                         "OperatorType": "Join",
                         "Variant": "Join",
-                        "TableName": "unsharded_a_unsharded_b_unsharded_auto_music_extra",
+                        "TableName": "unsharded_a, unsharded_b, unsharded_auto, music_extra",
                         "Inputs": [
                           {
                             "OperatorType": "Route",
@@ -110,7 +110,7 @@
                           {
                             "OperatorType": "Join",
                             "Variant": "Join",
-                            "TableName": "unsharded_b_unsharded_auto_music_extra",
+                            "TableName": "unsharded_b, unsharded_auto, music_extra",
                             "Inputs": [
                               {
                                 "OperatorType": "Route",
@@ -126,7 +126,7 @@
                               {
                                 "OperatorType": "Join",
                                 "Variant": "Join",
-                                "TableName": "unsharded_auto_music_extra",
+                                "TableName": "unsharded_auto, music_extra",
                                 "Inputs": [
                                   {
                                     "OperatorType": "Route",
@@ -178,7 +178,7 @@
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "1",
-    "TableName": "music, music_extra_`user`, user_extra, user_metadata_unsharded, unsharded_a, unsharded_auto, unsharded_b",
+    "TableName": "music, music_extra, `user`, user_extra, user_metadata, unsharded, unsharded_a, unsharded_auto, unsharded_b",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -195,7 +195,7 @@
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "-1",
-        "TableName": "`user`, user_extra, user_metadata_unsharded, unsharded_a, unsharded_auto, unsharded_b",
+        "TableName": "`user`, user_extra, user_metadata, unsharded, unsharded_a, unsharded_auto, unsharded_b",
         "Inputs": [
           {
             "OperatorType": "Route",

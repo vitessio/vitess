@@ -238,7 +238,7 @@ func (jn *Join) GetKeyspaceName() string {
 
 // GetTableName specifies the table that this primitive routes to.
 func (jn *Join) GetTableName() string {
-	return jn.Left.GetTableName() + "_" + jn.Right.GetTableName()
+	return jn.Left.GetTableName() + ", " + jn.Right.GetTableName()
 }
 
 // NeedsTransaction implements the Primitive interface

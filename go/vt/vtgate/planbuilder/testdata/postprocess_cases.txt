@@ -29,7 +29,7 @@
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1,1",
-    "TableName": "`user`_user_extra",
+    "TableName": "`user`, user_extra",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -66,7 +66,7 @@
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1,-2,1",
-    "TableName": "`user`_user_extra",
+    "TableName": "`user`, user_extra",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -450,7 +450,7 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1,-2,1",
-    "TableName": "`user`_music",
+    "TableName": "`user`, music",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -495,7 +495,7 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1,-2,1",
-    "TableName": "`user`_music",
+    "TableName": "`user`, music",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -540,7 +540,7 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1,-2,1",
-    "TableName": "`user`_music",
+    "TableName": "`user`, music",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -638,7 +638,7 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1,-2,1",
-    "TableName": "`user`_music",
+    "TableName": "`user`, music",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -787,7 +787,7 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1,1",
-    "TableName": "`user`_user_extra",
+    "TableName": "`user`, user_extra",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -938,7 +938,7 @@ Gen4 plan same as above
     },
     "FieldQuery": "select * from `user` as u join (select user_id from user_extra where 1 != 1) as eu on u.id = eu.user_id where 1 != 1",
     "Query": "select * from `user` as u join (select user_id from user_extra where user_id = 5) as eu on u.id = eu.user_id where u.id = 5 order by eu.user_id asc",
-    "Table": "`user`",
+    "Table": "`user`, user_extra",
     "Values": [
       5
     ],
@@ -1006,7 +1006,7 @@ Gen4 plan same as above
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "-1",
-        "TableName": "`user`_user_extra",
+        "TableName": "`user`, user_extra",
         "Inputs": [
           {
             "OperatorType": "Route",

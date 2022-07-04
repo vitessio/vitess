@@ -9,7 +9,7 @@
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1,1",
-    "TableName": "`user`_unsharded",
+    "TableName": "`user`, unsharded",
     "Inputs": [
       {
         "OperatorType": "Route",

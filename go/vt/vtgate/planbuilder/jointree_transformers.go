@@ -112,8 +112,9 @@ func transformRoutePlan(n *routePlan) (*route, error) {
 			LeftExpr:  lft,
 		}
 		tablesForSelect = sqlparser.TableExprs{joinExpr}
-		// todo: add table
-		// tableNameMap[sqlparser.String()] = nil
+		for _, tblNames := range leftJoin.right.tableNames() {
+			tableNameMap[tblNames] = nil
+		}
 	}
 
 	predicates := n.Predicates()

@@ -198,6 +198,7 @@ func (pb *primitiveBuilder) buildTablePrimitive(tableExpr *sqlparser.AliasedTabl
 		}
 		rb, st := newRoute(sel)
 		rb.eroute = engine.NewSimpleRoute(engine.SelectDBA, ks)
+		rb.eroute.TableName = sqlparser.String(tableName)
 		pb.plan, pb.st = rb, st
 		// Add the table to symtab
 		return st.AddTable(&table{
@@ -355,6 +356,14 @@ func (pb *primitiveBuilder) join(rpb *primitiveBuilder, ajoin *sqlparser.JoinTab
 	} else {
 		sel.From = sqlparser.TableExprs{ajoin}
 	}
+
+	// join table name
+	if lRoute.eroute.TableName != rRoute.eroute.TableName {
+		lRoute.eroute.TableName = strings.Join([]string{lRoute.eroute.TableName, rRoute.eroute.TableName}, ", ")
+	}
+
+	// join sysTableNames
+	lRoute.eroute.SysTableTableName = append(lRoute.eroute.SysTableTableName, rRoute.eroute.SysTableTableName...)
 
 	// Since the routes have merged, set st.singleRoute to point at
 	// the merged route.
