@@ -3237,7 +3237,7 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 						// - with on demand heartbeats
 						// - the streamer running on a replica
 						// - the streamer was throttled for long enough
-						// - then vplayer and vcopier are lbocked, waiting for the streamer to do something
+						// - then vplayer and vcopier are locked, waiting for the streamer to do something
 						// - since they are blocked, they're not running throttler checks
 						// - since streamer runs on replica, it only checks that replica
 						// - therefore no one asking for on-demand heartbeats
