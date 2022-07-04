@@ -415,7 +415,7 @@ func TestSchemaChange(t *testing.T) {
 			// rowstreamer throttle timestamp only updates once in 10 seconds, so greater or equals" is good enough here.
 			assert.GreaterOrEqual(t, lastThrottledTimestamp, startedTimestamp)
 			component := row.AsString("component_throttled", "")
-			assert.Contains(t, []string{string(vreplication.VCopierComponentName), string(vreplication.VPlayerComponentName)}, component)
+			assert.Contains(t, []string{string(vreplication.VStreamerComponentName), string(vreplication.RowStreamerComponentName)}, component)
 		}()
 		// now unthrottled
 		_ = onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalMigrationWait, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
