@@ -973,7 +973,7 @@ func (wr *Wrangler) waitForDrainInCell(ctx context.Context, cell, keyspace, shar
 		drainedHealthyTablets := make(map[uint32]*discovery.TabletHealth)
 		notDrainedHealtyTablets := make(map[uint32]*discovery.TabletHealth)
 
-		healthyTablets := hc.GetTabletStats(&querypb.Target{Keyspace: keyspace, Shard: shard, TabletType: servedType})
+		healthyTablets := hc.GetHealthyTabletStats(&querypb.Target{Keyspace: keyspace, Shard: shard, TabletType: servedType})
 		for _, ts := range healthyTablets {
 			if ts.Stats.Qps == 0.0 {
 				drainedHealthyTablets[ts.Tablet.Alias.Uid] = ts

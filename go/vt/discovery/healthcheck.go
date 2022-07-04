@@ -625,9 +625,6 @@ func (hc *HealthCheckImpl) GetHealthyTabletStats(target *query.Target) []*Tablet
 	var result []*TabletHealth
 	hc.mu.Lock()
 	defer hc.mu.Unlock()
-	if target.Shard == "" {
-		target.Shard = "0"
-	}
 	return append(result, hc.healthy[KeyFromTarget(target)]...)
 }
 
@@ -639,9 +636,6 @@ func (hc *HealthCheckImpl) GetTabletStats(target *query.Target) []*TabletHealth 
 	var result []*TabletHealth
 	hc.mu.Lock()
 	defer hc.mu.Unlock()
-	if target.Shard == "" {
-		target.Shard = "0"
-	}
 	ths := hc.healthData[KeyFromTarget(target)]
 	for _, th := range ths {
 		result = append(result, th)
