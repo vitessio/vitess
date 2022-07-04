@@ -66,7 +66,7 @@ type VReplStream struct {
 // - transaction_timestamp
 // - time_heartbeat
 // - time_throttled.
-// Update of any of them, also updates time_updated, indicating liveness.
+// Updating any of them, also updates time_updated, indicating liveness.
 func (v *VReplStream) livenessTimeIndicator() int64 {
 	return v.timeUpdated
 }
