@@ -108,7 +108,7 @@ func TestExecutorSet(t *testing.T) {
 		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{}},
 	}, {
 		in:  "set global @@session.client_found_rows = 1",
-		err: "cannot use scope and @@",
+		err: "syntax error at position 39 near 'session.client_found_rows'",
 	}, {
 		in:  "set client_found_rows = 'aa'",
 		err: "variable 'client_found_rows' can't be set to the value: 'aa' is not a boolean",
@@ -177,7 +177,7 @@ func TestExecutorSet(t *testing.T) {
 		out: &vtgatepb.Session{Autocommit: true},
 	}, {
 		in:  "set foo = 1",
-		err: "Unknown system variable 'session foo = 1'",
+		err: "Unknown system variable '@@foo = 1'",
 	}, {
 		in:  "set names utf8",
 		out: &vtgatepb.Session{Autocommit: true},

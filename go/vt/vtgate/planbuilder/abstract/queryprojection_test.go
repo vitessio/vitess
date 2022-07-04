@@ -64,7 +64,7 @@ func TestQP(t *testing.T) {
 				{
 					Inner: &sqlparser.Order{Expr: sqlparser.NewColName("full_name")},
 					WeightStrExpr: &sqlparser.FuncExpr{
-						Name: sqlparser.NewColIdent("CONCAT"),
+						Name: sqlparser.NewIdentifierCI("CONCAT"),
 						Exprs: sqlparser.SelectExprs{
 							&sqlparser.AliasedExpr{Expr: sqlparser.NewColName("last_name")},
 							&sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral(", ")},

@@ -82,7 +82,7 @@ func (s *server) GetSchema(ctx context.Context, request *tabletmanagerdatapb.Get
 	defer s.tm.HandleRPCPanic(ctx, "GetSchema", request, response, false /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.GetSchemaResponse{}
-	sd, err := s.tm.GetSchema(ctx, request.Tables, request.ExcludeTables, request.IncludeViews)
+	sd, err := s.tm.GetSchema(ctx, request)
 	if err == nil {
 		response.SchemaDefinition = sd
 	}
@@ -261,6 +261,17 @@ func (s *server) ReplicationStatus(ctx context.Context, request *tabletmanagerda
 	return response, err
 }
 
+func (s *server) FullStatus(ctx context.Context, request *tabletmanagerdatapb.FullStatusRequest) (response *tabletmanagerdatapb.FullStatusResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "FullStatus", request, response, false /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+	response = &tabletmanagerdatapb.FullStatusResponse{}
+	status, err := s.tm.FullStatus(ctx)
+	if err == nil {
+		response.Status = status
+	}
+	return response, err
+}
+
 func (s *server) PrimaryStatus(ctx context.Context, request *tabletmanagerdatapb.PrimaryStatusRequest) (response *tabletmanagerdatapb.PrimaryStatusResponse, err error) {
 	defer s.tm.HandleRPCPanic(ctx, "PrimaryStatus", request, response, false /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
@@ -424,6 +435,13 @@ func (s *server) ReplicaWasPromoted(ctx context.Context, request *tabletmanagerd
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.ReplicaWasPromotedResponse{}
 	return response, s.tm.ReplicaWasPromoted(ctx)
+}
+
+func (s *server) ResetReplicationParameters(ctx context.Context, request *tabletmanagerdatapb.ResetReplicationParametersRequest) (response *tabletmanagerdatapb.ResetReplicationParametersResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "ResetReplicationParameters", request, response, true /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+	response = &tabletmanagerdatapb.ResetReplicationParametersResponse{}
+	return response, s.tm.ResetReplicationParameters(ctx)
 }
 
 func (s *server) SetReplicationSource(ctx context.Context, request *tabletmanagerdatapb.SetReplicationSourceRequest) (response *tabletmanagerdatapb.SetReplicationSourceResponse, err error) {

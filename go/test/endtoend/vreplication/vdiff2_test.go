@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -30,22 +31,28 @@ type testCase struct {
 	tables                        string
 	workflow                      string
 	tabletBaseID                  int
+	resume                        bool   // test resume functionality with this workflow
+	resumeInsert                  string // if testing resume, what new rows should be diff'd
+	testCLIErrors                 bool   // test CLI errors against this workflow
 }
 
 var testCases = []*testCase{
 	{
-		name:         "MoveTables unsharded to two shards",
-		workflow:     "p1c2",
-		typ:          "MoveTables",
-		sourceKs:     "product",
-		targetKs:     "customer",
-		sourceShards: "0",
-		targetShards: "-80,80-",
-		tabletBaseID: 200,
-		tables:       "customer,Lead,Lead-1",
+		name:          "MoveTables/unsharded to two shards",
+		workflow:      "p1c2",
+		typ:           "MoveTables",
+		sourceKs:      "product",
+		targetKs:      "customer",
+		sourceShards:  "0",
+		targetShards:  "-80,80-",
+		tabletBaseID:  200,
+		tables:        "customer,Lead,Lead-1",
+		resume:        true,
+		resumeInsert:  `insert into customer(cid, name, typ) values(12345678, 'Testy McTester', 'soho')`,
+		testCLIErrors: true, // test for errors in the simplest workflow
 	},
 	{
-		name:         "Reshard Split/Merge 2 to 3",
+		name:         "Reshard Merge/split 2 to 3",
 		workflow:     "c2c3",
 		typ:          "Reshard",
 		sourceKs:     "customer",
@@ -53,9 +60,11 @@ var testCases = []*testCase{
 		sourceShards: "-80,80-",
 		targetShards: "-40,40-a0,a0-",
 		tabletBaseID: 400,
+		resume:       true,
+		resumeInsert: `insert into customer(cid, name, typ) values(987654321, 'Testy McTester Jr.', 'enterprise'), (987654322, 'Testy McTester III', 'enterprise')`,
 	},
 	{
-		name:         "Reshard Merge 3 to 1",
+		name:         "Reshard/merge 3 to 1",
 		workflow:     "c3c1",
 		typ:          "Reshard",
 		sourceKs:     "customer",
@@ -73,6 +82,7 @@ func TestVDiff2(t *testing.T) {
 	sourceShards := []string{"0"}
 	targetKs := "customer"
 	targetShards := []string{"-80", "80-"}
+	// This forces us to use multiple vstream packets even with small test tables
 	extraVTTabletArgs = []string{"--vstream_packet_size=1"}
 
 	vc = NewVitessCluster(t, "TestVDiff2", []string{allCellNames}, mainClusterConfig)
@@ -86,7 +96,9 @@ func TestVDiff2(t *testing.T) {
 
 	vtgate = defaultCell.Vtgates[0]
 	require.NotNil(t, vtgate)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", sourceKs, sourceShards[0]), 1)
+	for _, shard := range sourceShards {
+		require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", sourceKs, shard), 1))
+	}
 
 	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
@@ -101,10 +113,9 @@ func TestVDiff2(t *testing.T) {
 
 	_, err := vc.AddKeyspace(t, cells, targetKs, strings.Join(targetShards, ","), customerVSchema, customerSchema, 0, 0, 200, targetKsOpts)
 	require.NoError(t, err)
-	err = vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", targetKs, targetShards[0]), 1)
-	require.NoError(t, err)
-	err = vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", targetKs, targetShards[1]), 1)
-	require.NoError(t, err)
+	for _, shard := range targetShards {
+		require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", targetKs, shard), 1))
+	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -118,6 +129,9 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, cells []*Cell) 
 	if tc.typ == "Reshard" {
 		tks := vc.Cells[cells[0].Name].Keyspaces[tc.targetKs]
 		require.NoError(t, vc.AddShards(t, cells, tks, tc.targetShards, 0, 0, tc.tabletBaseID))
+		for _, shard := range arrTargetShards {
+			require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", tc.targetKs, shard), 1))
+		}
 	}
 	ksWorkflow := fmt.Sprintf("%s.%s", tc.targetKs, tc.workflow)
 	var args []string
@@ -138,8 +152,75 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, cells []*Cell) 
 	}
 	vdiff(t, tc.targetKs, tc.workflow, cells[0].Name, true, true, nil)
 
+	if tc.resume {
+		expectedRows := int64(0)
+		if tc.resumeInsert != "" {
+			res := execVtgateQuery(t, vtgateConn, tc.sourceKs, tc.resumeInsert)
+			expectedRows = int64(res.RowsAffected)
+		}
+		vdiff2Resume(t, tc.targetKs, tc.workflow, cells[0].Name, expectedRows)
+	}
+
+	// This is done here so that we have a valid workflow to test the commands against
+	if tc.testCLIErrors {
+		testCLIErrors(t, ksWorkflow, allCellNames)
+	}
+
+	testDelete(t, ksWorkflow, allCellNames)
+
+	// create another VDiff record to confirm it gets deleted when the workflow is completed
+	ts := time.Now()
+	uuid, _ := performVDiff2Action(t, ksWorkflow, allCellNames, "create", "", false)
+	waitForVDiff2ToComplete(t, ksWorkflow, allCellNames, uuid, ts)
+
 	err = vc.VtctlClient.ExecuteCommand(tc.typ, "--", "SwitchTraffic", ksWorkflow)
 	require.NoError(t, err)
 	err = vc.VtctlClient.ExecuteCommand(tc.typ, "--", "Complete", ksWorkflow)
 	require.NoError(t, err)
+
+	// confirm the VDiff data is deleted for the workflow
+	testNoOrphanedData(t, tc.targetKs, tc.workflow, arrTargetShards)
+}
+
+func testCLIErrors(t *testing.T, ksWorkflow, cells string) {
+	t.Run("Client error handling", func(t *testing.T) {
+		_, output := performVDiff2Action(t, ksWorkflow, cells, "badcmd", "", true)
+		require.Contains(t, output, "usage:")
+		_, output = performVDiff2Action(t, ksWorkflow, cells, "create", "invalid_uuid", true)
+		require.Contains(t, output, "please provide a valid UUID")
+		_, output = performVDiff2Action(t, ksWorkflow, cells, "resume", "invalid_uuid", true)
+		require.Contains(t, output, "can only resume a specific vdiff, please provide a valid UUID")
+		_, output = performVDiff2Action(t, ksWorkflow, cells, "delete", "invalid_uuid", true)
+		require.Contains(t, output, "can only delete a specific vdiff, please provide a valid UUID")
+		uuid, _ := performVDiff2Action(t, ksWorkflow, cells, "show", "last", false)
+		_, output = performVDiff2Action(t, ksWorkflow, cells, "create", uuid, true)
+		require.Contains(t, output, "already exists")
+	})
+}
+
+func testDelete(t *testing.T, ksWorkflow, cells string) {
+	t.Run("Delete", func(t *testing.T) {
+		// test show verbose too as a side effect
+		uuid, output := performVDiff2Action(t, ksWorkflow, cells, "show", "last", false, "--verbose")
+		// only present with --verbose
+		require.Contains(t, output, `"TableSummary":`)
+		_, output = performVDiff2Action(t, ksWorkflow, cells, "delete", uuid, false)
+		require.Contains(t, output, `"Status": "completed"`)
+		_, output = performVDiff2Action(t, ksWorkflow, cells, "delete", "all", false)
+		require.Contains(t, output, `"Status": "completed"`)
+		_, output = performVDiff2Action(t, ksWorkflow, cells, "show", "all", false)
+		require.Equal(t, "[]\n", output)
+	})
+}
+
+func testNoOrphanedData(t *testing.T, keyspace, workflow string, shards []string) {
+	t.Run("No orphaned data", func(t *testing.T) {
+		query := fmt.Sprintf("select vd.id as vdiff_id, vdt.vdiff_id as vdiff_table_id, vdl.vdiff_id as vdiff_log_id from _vt.vdiff as vd inner join _vt.vdiff_table as vdt on (vd.id = vdt.vdiff_id) inner join _vt.vdiff_log as vdl on (vd.id = vdl.vdiff_id) where vd.keyspace = %s and vd.workflow = %s",
+			encodeString(keyspace), encodeString(workflow))
+		for _, shard := range shards {
+			res, err := vc.getPrimaryTablet(t, keyspace, shard).QueryTablet(query, keyspace, false)
+			require.NoError(t, err)
+			require.Equal(t, 0, len(res.Rows))
+		}
+	})
 }

@@ -37,7 +37,7 @@ type resultStreamer struct {
 
 	cp        dbconfigs.Connector
 	query     string
-	tableName sqlparser.TableIdent
+	tableName sqlparser.IdentifierCS
 	send      func(*binlogdatapb.VStreamResultsResponse) error
 	vse       *Engine
 	pktsize   PacketSizer

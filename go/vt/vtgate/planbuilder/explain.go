@@ -49,7 +49,7 @@ func explainTabPlan(explain *sqlparser.ExplainTab, vschema plancontext.VSchema) 
 	if err != nil {
 		return nil, err
 	}
-	explain.Table.Qualifier = sqlparser.NewTableIdent("")
+	explain.Table.Qualifier = sqlparser.NewIdentifierCS("")
 
 	if destination == nil {
 		destination = key.DestinationAnyShard{}

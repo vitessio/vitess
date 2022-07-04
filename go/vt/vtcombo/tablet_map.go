@@ -749,14 +749,13 @@ func (itmc *internalTabletManagerClient) Ping(ctx context.Context, tablet *topod
 func (itmc *internalTabletManagerClient) GetSchema(
 	ctx context.Context,
 	tablet *topodatapb.Tablet,
-	tables, excludeTables []string,
-	includeViews bool,
+	request *tabletmanagerdatapb.GetSchemaRequest,
 ) (*tabletmanagerdatapb.SchemaDefinition, error) {
 	t, ok := tabletMap[tablet.Alias.Uid]
 	if !ok {
 		return nil, fmt.Errorf("tmclient: cannot find tablet %v", tablet.Alias.Uid)
 	}
-	return t.tm.GetSchema(ctx, tables, excludeTables, includeViews)
+	return t.tm.GetSchema(ctx, request)
 }
 
 func (itmc *internalTabletManagerClient) GetPermissions(ctx context.Context, tablet *topodatapb.Tablet) (*tabletmanagerdatapb.Permissions, error) {
@@ -925,6 +924,10 @@ func (itmc *internalTabletManagerClient) ReplicationStatus(context.Context, *top
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 
+func (itmc *internalTabletManagerClient) FullStatus(context.Context, *topodatapb.Tablet) (*replicationdatapb.FullStatus, error) {
+	return nil, fmt.Errorf("not implemented in vtcombo")
+}
+
 func (itmc *internalTabletManagerClient) StopReplication(context.Context, *topodatapb.Tablet) error {
 	return fmt.Errorf("not implemented in vtcombo")
 }
@@ -950,6 +953,10 @@ func (itmc *internalTabletManagerClient) InitReplica(context.Context, *topodatap
 }
 
 func (itmc *internalTabletManagerClient) ReplicaWasPromoted(context.Context, *topodatapb.Tablet) error {
+	return fmt.Errorf("not implemented in vtcombo")
+}
+
+func (itmc *internalTabletManagerClient) ResetReplicationParameters(context.Context, *topodatapb.Tablet) error {
 	return fmt.Errorf("not implemented in vtcombo")
 }
 

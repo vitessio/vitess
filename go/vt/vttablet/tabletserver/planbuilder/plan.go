@@ -162,9 +162,6 @@ type Plan struct {
 	// Permissions stores the permissions for the tables accessed in the query.
 	Permissions []Permission
 
-	// FieldQuery is used to fetch field info
-	FieldQuery *sqlparser.ParsedQuery
-
 	// FullQuery will be set for all plans.
 	FullQuery *sqlparser.ParsedQuery
 
@@ -180,8 +177,8 @@ type Plan struct {
 }
 
 // TableName returns the table name for the plan.
-func (plan *Plan) TableName() sqlparser.TableIdent {
-	var tableName sqlparser.TableIdent
+func (plan *Plan) TableName() sqlparser.IdentifierCS {
+	var tableName sqlparser.IdentifierCS
 	if plan.Table != nil {
 		tableName = plan.Table.Name
 	}
@@ -205,9 +202,8 @@ func Build(statement sqlparser.Statement, tables map[string]*schema.Table, isRes
 	switch stmt := statement.(type) {
 	case *sqlparser.Union:
 		plan, err = &Plan{
-			PlanID:     PlanSelect,
-			FieldQuery: GenerateFieldQuery(stmt),
-			FullQuery:  GenerateLimitQuery(stmt),
+			PlanID:    PlanSelect,
+			FullQuery: GenerateLimitQuery(stmt),
 		}, nil
 	case *sqlparser.Select:
 		plan, err = analyzeSelect(stmt, tables)

@@ -22,6 +22,8 @@ import (
 	"fmt"
 	"strconv"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/sqlparser"
 
@@ -142,7 +144,9 @@ func isUnrecoverableError(err error) bool {
 		mysql.ERWarnDataOutOfRange,
 		mysql.ERDataTooLong,
 		mysql.ERWarnDataTruncated,
+		mysql.ERTruncatedWrongValue,
 		mysql.ERTruncatedWrongValueForField,
+		mysql.ERIllegalValueForType,
 		mysql.ErrWrongValueForType,
 		mysql.ErrCantCreateGeometryObject,
 		mysql.ErrGISDataWrongEndianess,
@@ -159,6 +163,7 @@ func isUnrecoverableError(err error) bool {
 		mysql.ERInvalidCastToJSON,
 		mysql.ERJSONValueTooBig,
 		mysql.ERJSONDocumentTooDeep:
+		log.Errorf("Got unrecoverable error: %v", sqlErr)
 		return true
 	}
 	return false

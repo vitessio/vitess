@@ -113,7 +113,7 @@ var maxConstraintNameLength = 64
 
 const (
 	maxPasswordLength                        = 32 // MySQL's *replication* password may not exceed 32 characters
-	staleMigrationMinutes                    = 10
+	staleMigrationMinutes                    = 180
 	progressPctStarted               float64 = 0
 	progressPctFull                  float64 = 100.0
 	etaSecondsUnknown                        = -1
@@ -930,7 +930,7 @@ func (e *Executor) validateAndEditCreateTableStatement(ctx context.Context, onli
 		case *sqlparser.ConstraintDefinition:
 			oldName := node.Name.String()
 			newName := newConstraintName(sqlparser.CanonicalString(node.Details), oldName)
-			node.Name = sqlparser.NewColIdent(newName)
+			node.Name = sqlparser.NewIdentifierCI(newName)
 			constraintMap[oldName] = newName
 		}
 		return true, nil
@@ -953,7 +953,7 @@ func (e *Executor) validateAndEditAlterTableStatement(ctx context.Context, alter
 				if !ok {
 					return false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Found DROP CONSTRAINT: %v, but could not find constraint name in map", sqlparser.CanonicalString(node))
 				}
-				node.Name = sqlparser.NewColIdent(mappedName)
+				node.Name = sqlparser.NewIdentifierCI(mappedName)
 			}
 		}
 		return true, nil
@@ -1698,6 +1698,7 @@ func (e *Executor) readPendingMigrationsUUIDs(ctx context.Context) (uuids []stri
 
 // terminateMigration attempts to interrupt and hard-stop a running migration
 func (e *Executor) terminateMigration(ctx context.Context, onlineDDL *schema.OnlineDDL) (foundRunning bool, err error) {
+	log.Infof("terminateMigration: request to terminate %s", onlineDDL.UUID)
 	// It's possible the killing the migration fails for whatever reason, in which case
 	// the logic will retry killing it later on.
 	// Whatever happens in this function, this executor stops owning the given migration.
@@ -3313,7 +3314,8 @@ func (e *Executor) reviewStaleMigrations(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		message := fmt.Sprintf("stale migration %s: found running but indicates no liveness", onlineDDL.UUID)
+		log.Infof("reviewStaleMigrations: stale migration found: %s", onlineDDL.UUID)
+		message := fmt.Sprintf("stale migration %s: found running but indicates no liveness in the past %v minutes", onlineDDL.UUID, staleMigrationMinutes)
 		if onlineDDL.TabletAlias != e.TabletAliasString() {
 			// This means another tablet started the migration, and the migration has failed due to the tablet failure (e.g. primary failover)
 			if err := e.updateTabletFailure(ctx, onlineDDL.UUID); err != nil {
@@ -3635,6 +3637,7 @@ func (e *Executor) updateTabletFailure(ctx context.Context, uuid string) error {
 }
 
 func (e *Executor) updateMigrationStatus(ctx context.Context, uuid string, status schema.OnlineDDLStatus) error {
+	log.Infof("updateMigrationStatus: transitioning migration: %s into status: %s", uuid, string(status))
 	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationStatus,
 		sqltypes.StringBindVariable(string(status)),
 		sqltypes.StringBindVariable(uuid),
@@ -3659,6 +3662,7 @@ func (e *Executor) updateDDLAction(ctx context.Context, uuid string, actionStr s
 }
 
 func (e *Executor) updateMigrationMessage(ctx context.Context, uuid string, message string) error {
+	log.Infof("updateMigrationMessage: uuid=%s, message=%s", uuid, message)
 	query, err := sqlparser.ParseAndBind(sqlUpdateMessage,
 		sqltypes.StringBindVariable(message),
 		sqltypes.StringBindVariable(uuid),

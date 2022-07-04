@@ -39,6 +39,7 @@ var (
 				<th>Context</th>
 				<th>Effective Caller</th>
 				<th>Immediate Caller</th>
+				<th>SessionUUID</th>
 				<th>Start</th>
 				<th>End</th>
 				<th>Duration</th>
@@ -65,6 +66,7 @@ var (
 			<td>{{.ContextHTML}}</td>
 			<td>{{.EffectiveCaller}}</td>
 			<td>{{.ImmediateCaller}}</td>
+			<td>{{.SessionUUID}}</td>
 			<td>{{.StartTime | stampMicro}}</td>
 			<td>{{.EndTime | stampMicro}}</td>
 			<td>{{.TotalTime.Seconds}}</td>
