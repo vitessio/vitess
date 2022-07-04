@@ -590,11 +590,11 @@ func assertQueries(t *testing.T, sbc *sandboxconn.SandboxConn, wantQueries []*qu
 		if len(wantQueries) < idx {
 			t.Errorf("got more queries than expected")
 		}
-		require.Equal(t, wantQueries[idx].BindVariables, query.BindVariables)
 		got := query.Sql
 		expected := wantQueries[idx].Sql
-		idx++
 		assert.Equal(t, expected, got)
+		assert.Equal(t, wantQueries[idx].BindVariables, query.BindVariables)
+		idx++
 	}
 }
 
