@@ -1354,7 +1354,8 @@ func commandWaitForDrain(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 		return err
 	}
 
-	return wr.WaitForDrain(ctx, cells, keyspace, shard, servedType, *retryDelay, *HealthcheckRetryDelay, *HealthCheckTimeout, *initialWait)
+	return wr.WaitForDrain(ctx, cells, keyspace, shard, servedType,
+		*retryDelay, *HealthCheckTopologyRefresh, *HealthcheckRetryDelay, *HealthCheckTimeout, *initialWait)
 }
 
 func commandSleep(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

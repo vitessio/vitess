@@ -919,7 +919,7 @@ func (wr *Wrangler) updateFrozenFlag(ctx context.Context, shards []*topo.ShardIn
 // the tablet was actually drained. At later times, a QPS rate > 0.0 could still
 // be observed.
 func (wr *Wrangler) WaitForDrain(ctx context.Context, cells []string, keyspace, shard string, servedType topodatapb.TabletType,
-	retryDelay, healthcheckRetryDelay, healthCheckTimeout, initialWait time.Duration) error {
+	retryDelay, healthCheckTopologyRefresh, healthcheckRetryDelay, healthCheckTimeout, initialWait time.Duration) error {
 	var err error
 	if len(cells) == 0 {
 		// Retrieve list of cells for the shard from the topology.
@@ -936,7 +936,7 @@ func (wr *Wrangler) WaitForDrain(ctx context.Context, cells []string, keyspace, 
 		wg.Add(1)
 		go func(cell string) {
 			defer wg.Done()
-			rec.RecordError(wr.waitForDrainInCell(ctx, cell, keyspace, shard, servedType, retryDelay, healthcheckRetryDelay, healthCheckTimeout, initialWait))
+			rec.RecordError(wr.waitForDrainInCell(ctx, cell, keyspace, shard, servedType, retryDelay, healthCheckTopologyRefresh, healthcheckRetryDelay, healthCheckTimeout, initialWait))
 		}(cell)
 	}
 	wg.Wait()
@@ -945,11 +945,14 @@ func (wr *Wrangler) WaitForDrain(ctx context.Context, cells []string, keyspace, 
 }
 
 func (wr *Wrangler) waitForDrainInCell(ctx context.Context, cell, keyspace, shard string, servedType topodatapb.TabletType,
-	retryDelay, healthcheckRetryDelay, healthCheckTimeout, initialWait time.Duration) error {
+	retryDelay, healthCheckTopologyRefresh, healthcheckRetryDelay, healthCheckTimeout, initialWait time.Duration) error {
 
 	// Create the healthheck module, with a cache.
 	hc := discovery.NewHealthCheck(ctx, healthcheckRetryDelay, healthCheckTimeout, wr.TopoServer(), cell, "")
 	defer hc.Close()
+
+	watcher := discovery.NewCellTabletsWatcher(ctx, wr.TopoServer(), hc, discovery.NewFilterByKeyspace([]string{keyspace}), cell, healthCheckTopologyRefresh, true, discovery.DefaultTopoReadConcurrency)
+	defer watcher.Stop()
 
 	// Wait for at least one tablet.
 	if err := hc.WaitForTablets(ctx, keyspace, shard, servedType); err != nil {
