@@ -1427,7 +1427,8 @@ func (node Columns) formatFast(buf *TrackedBuffer) {
 	if node == nil {
 		return
 	}
-	prefix := "("
+	buf.WriteByte('(')
+	prefix := ""
 	for _, n := range node {
 		buf.WriteString(prefix)
 		n.formatFast(buf)
@@ -2187,6 +2188,28 @@ func (node *SubstrExpr) formatFast(buf *TrackedBuffer) {
 		buf.printExpr(node, node.To, true)
 		buf.WriteByte(')')
 	}
+}
+
+// formatFast formats the node.
+func (node *InsertExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("insert(")
+	buf.printExpr(node, node.Str, true)
+	buf.WriteString(", ")
+	buf.printExpr(node, node.Pos, true)
+	buf.WriteString(", ")
+	buf.printExpr(node, node.Len, true)
+	buf.WriteString(", ")
+	buf.printExpr(node, node.NewStr, true)
+	buf.WriteByte(')')
+}
+
+// formatFast formats the node.
+func (node *IntervalFuncExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("interval(")
+	buf.printExpr(node, node.Expr, true)
+	buf.WriteString(", ")
+	node.Exprs.formatFast(buf)
+	buf.WriteByte(')')
 }
 
 // formatFast formats the node.
