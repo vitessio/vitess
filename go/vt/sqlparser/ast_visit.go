@@ -194,8 +194,12 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfIndexInfo(in, f)
 	case *Insert:
 		return VisitRefOfInsert(in, f)
+	case *InsertExpr:
+		return VisitRefOfInsertExpr(in, f)
 	case *IntervalExpr:
 		return VisitRefOfIntervalExpr(in, f)
+	case *IntervalFuncExpr:
+		return VisitRefOfIntervalFuncExpr(in, f)
 	case *IntroducerExpr:
 		return VisitRefOfIntroducerExpr(in, f)
 	case *IsExpr:
@@ -1710,6 +1714,27 @@ func VisitRefOfInsert(in *Insert, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfInsertExpr(in *InsertExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Str, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Pos, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Len, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.NewStr, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfIntervalExpr(in *IntervalExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -1718,6 +1743,21 @@ func VisitRefOfIntervalExpr(in *IntervalExpr, f Visit) error {
 		return err
 	}
 	if err := VisitExpr(in.Expr, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfIntervalFuncExpr(in *IntervalFuncExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Expr, f); err != nil {
+		return err
+	}
+	if err := VisitExprs(in.Exprs, f); err != nil {
 		return err
 	}
 	return nil
@@ -4008,6 +4048,10 @@ func VisitCallable(in Callable, f Visit) error {
 		return VisitRefOfFuncExpr(in, f)
 	case *GroupConcatExpr:
 		return VisitRefOfGroupConcatExpr(in, f)
+	case *InsertExpr:
+		return VisitRefOfInsertExpr(in, f)
+	case *IntervalFuncExpr:
+		return VisitRefOfIntervalFuncExpr(in, f)
 	case *JSONArrayExpr:
 		return VisitRefOfJSONArrayExpr(in, f)
 	case *JSONAttributesExpr:
@@ -4248,8 +4292,12 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfFuncExpr(in, f)
 	case *GroupConcatExpr:
 		return VisitRefOfGroupConcatExpr(in, f)
+	case *InsertExpr:
+		return VisitRefOfInsertExpr(in, f)
 	case *IntervalExpr:
 		return VisitRefOfIntervalExpr(in, f)
+	case *IntervalFuncExpr:
+		return VisitRefOfIntervalFuncExpr(in, f)
 	case *IntroducerExpr:
 		return VisitRefOfIntroducerExpr(in, f)
 	case *IsExpr:

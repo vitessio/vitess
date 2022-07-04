@@ -195,8 +195,12 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfIndexInfo(in)
 	case *Insert:
 		return CloneRefOfInsert(in)
+	case *InsertExpr:
+		return CloneRefOfInsertExpr(in)
 	case *IntervalExpr:
 		return CloneRefOfIntervalExpr(in)
+	case *IntervalFuncExpr:
+		return CloneRefOfIntervalFuncExpr(in)
 	case *IntroducerExpr:
 		return CloneRefOfIntroducerExpr(in)
 	case *IsExpr:
@@ -1401,6 +1405,19 @@ func CloneRefOfInsert(n *Insert) *Insert {
 	return &out
 }
 
+// CloneRefOfInsertExpr creates a deep clone of the input.
+func CloneRefOfInsertExpr(n *InsertExpr) *InsertExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Str = CloneExpr(n.Str)
+	out.Pos = CloneExpr(n.Pos)
+	out.Len = CloneExpr(n.Len)
+	out.NewStr = CloneExpr(n.NewStr)
+	return &out
+}
+
 // CloneRefOfIntervalExpr creates a deep clone of the input.
 func CloneRefOfIntervalExpr(n *IntervalExpr) *IntervalExpr {
 	if n == nil {
@@ -1408,6 +1425,17 @@ func CloneRefOfIntervalExpr(n *IntervalExpr) *IntervalExpr {
 	}
 	out := *n
 	out.Expr = CloneExpr(n.Expr)
+	return &out
+}
+
+// CloneRefOfIntervalFuncExpr creates a deep clone of the input.
+func CloneRefOfIntervalFuncExpr(n *IntervalFuncExpr) *IntervalFuncExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Expr = CloneExpr(n.Expr)
+	out.Exprs = CloneExprs(n.Exprs)
 	return &out
 }
 
@@ -3150,6 +3178,10 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfFuncExpr(in)
 	case *GroupConcatExpr:
 		return CloneRefOfGroupConcatExpr(in)
+	case *InsertExpr:
+		return CloneRefOfInsertExpr(in)
+	case *IntervalFuncExpr:
+		return CloneRefOfIntervalFuncExpr(in)
 	case *JSONArrayExpr:
 		return CloneRefOfJSONArrayExpr(in)
 	case *JSONAttributesExpr:
@@ -3404,8 +3436,12 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfFuncExpr(in)
 	case *GroupConcatExpr:
 		return CloneRefOfGroupConcatExpr(in)
+	case *InsertExpr:
+		return CloneRefOfInsertExpr(in)
 	case *IntervalExpr:
 		return CloneRefOfIntervalExpr(in)
+	case *IntervalFuncExpr:
+		return CloneRefOfIntervalFuncExpr(in)
 	case *IntroducerExpr:
 		return CloneRefOfIntroducerExpr(in)
 	case *IsExpr:

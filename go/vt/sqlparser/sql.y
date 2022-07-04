@@ -5229,12 +5229,16 @@ function_call_keyword
   }
 | interval_value
   {
-	// This rule prevents the usage of INTERVAL
-	// as a function. If support is needed for that,
-	// we'll need to revisit this. The solution
-	// will be non-trivial because of grammar conflicts.
+	// INTERVAL can trigger a shift / reduce conflict. We want
+	// to shift here for the interval rule. In case we do have
+	// the additional expression_list below, we'd pick that path
+	// and thus properly parse it as a function when needed.
 	$$ = $1
   }
+| INTERVAL openb expression ',' expression_list closeb
+{
+       $$ = &IntervalFuncExpr{Expr: $3, Exprs: $5}
+}
 | column_name JSON_EXTRACT_OP text_literal_or_arg
   {
 	$$ = &BinaryExpr{Left: $1, Operator: JSONExtractOp, Right: $3}
@@ -5611,6 +5615,10 @@ function_call_keyword:
 | VALUES openb column_name closeb
   {
     $$ = &ValuesFuncExpr{Name: $3}
+  }
+| INSERT openb expression ',' expression ',' expression ',' expression closeb
+  {
+    $$ = &InsertExpr{Str: $3, Pos: $5, Len: $7, NewStr: $9}
   }
 | CURRENT_USER func_paren_opt
   {
@@ -6854,7 +6862,7 @@ insert_data:
   }
 | openb closeb VALUES tuple_list
   {
-    $$ = &Insert{Rows: $4}
+    $$ = &Insert{Columns: []IdentifierCI{}, Rows: $4}
   }
 | openb ins_column_list closeb select_statement
   {

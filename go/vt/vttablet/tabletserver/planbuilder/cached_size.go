@@ -41,7 +41,7 @@ func (cached *Plan) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(128)
+		size += int64(112)
 	}
 	// field Table *vitess.io/vitess/go/vt/vttablet/tabletserver/schema.Table
 	size += cached.Table.CachedSize(true)
@@ -59,8 +59,6 @@ func (cached *Plan) CachedSize(alloc bool) int64 {
 			size += elem.CachedSize(false)
 		}
 	}
-	// field FieldQuery *vitess.io/vitess/go/vt/sqlparser.ParsedQuery
-	size += cached.FieldQuery.CachedSize(true)
 	// field FullQuery *vitess.io/vitess/go/vt/sqlparser.ParsedQuery
 	size += cached.FullQuery.CachedSize(true)
 	// field NextCount vitess.io/vitess/go/vt/vtgate/evalengine.Expr

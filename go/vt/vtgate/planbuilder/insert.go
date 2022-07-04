@@ -98,7 +98,9 @@ func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table, rese
 		eins.Query = generateQuery(ins)
 	} else {
 		// Table has auto-inc and has a VALUES clause.
-		if len(ins.Columns) == 0 {
+		// If the column list is nil then add all the columns
+		// If the column list is empty then add only the auto-inc column and this happens on calling modifyForAutoinc
+		if ins.Columns == nil {
 			if table.ColumnListAuthoritative {
 				populateInsertColumnlist(ins, table)
 			} else {
@@ -131,10 +133,8 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table, reserv
 		}
 		eins.Ignore = true
 	}
-	if len(ins.Columns) == 0 {
-		if table.ColumnListAuthoritative {
-			populateInsertColumnlist(ins, table)
-		}
+	if ins.Columns == nil && table.ColumnListAuthoritative {
+		populateInsertColumnlist(ins, table)
 	}
 
 	applyCommentDirectives(ins, eins)
