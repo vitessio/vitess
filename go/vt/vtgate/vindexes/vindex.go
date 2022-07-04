@@ -17,6 +17,7 @@ limitations under the License.
 package vindexes
 
 import (
+	"context"
 	"fmt"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -35,8 +36,8 @@ import (
 // in the current context and session of a VTGate request. Vindexes
 // can use this interface to execute lookup queries.
 type VCursor interface {
-	Execute(method string, query string, bindvars map[string]*querypb.BindVariable, rollbackOnError bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error)
-	ExecuteKeyspaceID(keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, rollbackOnError, autocommit bool) (*sqltypes.Result, error)
+	Execute(ctx context.Context, method string, query string, bindvars map[string]*querypb.BindVariable, rollbackOnError bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error)
+	ExecuteKeyspaceID(ctx context.Context, keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, rollbackOnError, autocommit bool) (*sqltypes.Result, error)
 	InTransactionAndIsDML() bool
 	LookupRowLockShardSession() vtgatepb.CommitOrder
 }

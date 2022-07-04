@@ -17,6 +17,7 @@ limitations under the License.
 package vindexes
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"reflect"
@@ -521,7 +522,7 @@ func (vc *loggingVCursor) AddResult(qr *sqltypes.Result, err error) {
 	vc.errors = append(vc.errors, err)
 }
 
-func (vc *loggingVCursor) Execute(method string, query string, bindvars map[string]*querypb.BindVariable, rollbackOnError bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error) {
+func (vc *loggingVCursor) Execute(ctx context.Context, method string, query string, bindvars map[string]*querypb.BindVariable, rollbackOnError bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error) {
 	name := "Unknown"
 	switch co {
 	case vtgatepb.CommitOrder_NORMAL:
@@ -536,7 +537,7 @@ func (vc *loggingVCursor) Execute(method string, query string, bindvars map[stri
 	return vc.execute(name, query, bindvars, rollbackOnError)
 }
 
-func (vc *loggingVCursor) ExecuteKeyspaceID(keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, rollbackOnError, autocommit bool) (*sqltypes.Result, error) {
+func (vc *loggingVCursor) ExecuteKeyspaceID(ctx context.Context, keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, rollbackOnError, autocommit bool) (*sqltypes.Result, error) {
 	return vc.execute("ExecuteKeyspaceID", query, bindVars, rollbackOnError)
 }
 

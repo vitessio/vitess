@@ -18,6 +18,7 @@ package vindexes
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -283,13 +284,13 @@ func (lu *clCommon) handleDup(vcursor VCursor, values []sqltypes.Value, ksid []b
 	bindVars[lu.lkp.To] = sqltypes.BytesBindVariable(ksid)
 
 	// Lock the lookup row using pre priority.
-	qr, err := vcursor.Execute("VindexCreate", lu.lockLookupQuery, bindVars, false /* rollbackOnError */, vtgatepb.CommitOrder_PRE)
+	qr, err := vcursor.Execute(context.Background() /* TODO: HACK - needs handling */, "VindexCreate", lu.lockLookupQuery, bindVars, false, vtgatepb.CommitOrder_PRE)
 	if err != nil {
 		return err
 	}
 	switch len(qr.Rows) {
 	case 0:
-		if _, err := vcursor.Execute("VindexCreate", lu.insertLookupQuery, bindVars, true /* rollbackOnError */, vtgatepb.CommitOrder_PRE); err != nil {
+		if _, err := vcursor.Execute(context.Background() /* TODO: HACK - needs handling */, "VindexCreate", lu.insertLookupQuery, bindVars, true, vtgatepb.CommitOrder_PRE); err != nil {
 			return err
 		}
 	case 1:
@@ -298,7 +299,8 @@ func (lu *clCommon) handleDup(vcursor VCursor, values []sqltypes.Value, ksid []b
 			return err
 		}
 		// Lock the target row using normal transaction priority.
-		qr, err = vcursor.ExecuteKeyspaceID(lu.keyspace, existingksid, lu.lockOwnerQuery, bindVars, false /* rollbackOnError */, false /* autocommit */)
+		// TODO: context needs to be passed on.
+		qr, err = vcursor.ExecuteKeyspaceID(context.Background(), lu.keyspace, existingksid, lu.lockOwnerQuery, bindVars, false, false)
 		if err != nil {
 			return err
 		}
@@ -308,7 +310,7 @@ func (lu *clCommon) handleDup(vcursor VCursor, values []sqltypes.Value, ksid []b
 		if bytes.Equal(existingksid, ksid) {
 			return nil
 		}
-		if _, err := vcursor.Execute("VindexCreate", lu.updateLookupQuery, bindVars, true /* rollbackOnError */, vtgatepb.CommitOrder_PRE); err != nil {
+		if _, err := vcursor.Execute(context.Background() /* TODO: HACK - needs handling */, "VindexCreate", lu.updateLookupQuery, bindVars, true, vtgatepb.CommitOrder_PRE); err != nil {
 			return err
 		}
 	default:

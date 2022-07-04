@@ -17,6 +17,7 @@ limitations under the License.
 package vindexes
 
 import (
+	"context"
 	"errors"
 	"reflect"
 	"testing"
@@ -59,7 +60,7 @@ func (vc *vcursor) InTransactionAndIsDML() bool {
 	return false
 }
 
-func (vc *vcursor) Execute(method string, query string, bindvars map[string]*querypb.BindVariable, rollbackOnError bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error) {
+func (vc *vcursor) Execute(ctx context.Context, method string, query string, bindvars map[string]*querypb.BindVariable, rollbackOnError bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error) {
 	switch co {
 	case vtgatepb.CommitOrder_PRE:
 		vc.pre++
@@ -71,7 +72,7 @@ func (vc *vcursor) Execute(method string, query string, bindvars map[string]*que
 	return vc.execute(method, query, bindvars, rollbackOnError)
 }
 
-func (vc *vcursor) ExecuteKeyspaceID(keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, rollbackOnError, autocommit bool) (*sqltypes.Result, error) {
+func (vc *vcursor) ExecuteKeyspaceID(ctx context.Context, keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, rollbackOnError, autocommit bool) (*sqltypes.Result, error) {
 	return vc.execute("ExecuteKeyspaceID", query, bindVars, rollbackOnError)
 }
 
