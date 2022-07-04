@@ -568,7 +568,7 @@ var AlterVReplicationTable = []string{
 	// records the time of the last heartbeat. Heartbeats are only received if the source has no recent events
 	"ALTER TABLE _vt.vreplication ADD COLUMN time_heartbeat BIGINT(20) NOT NULL DEFAULT 0",
 	"ALTER TABLE _vt.vreplication ADD COLUMN workflow_type int NOT NULL DEFAULT 0",
-	"ALTER TABLE _vt.vreplication ADD COLUMN time_throttled BIGINT(20) NOT NULL DEFAULT 0",
+	"ALTER TABLE _vt.vreplication ADD COLUMN time_throttled BIGINT NOT NULL DEFAULT 0",
 	"ALTER TABLE _vt.vreplication ADD COLUMN component_throttled VARCHAR(255) NOT NULL DEFAULT ''",
 }
 
