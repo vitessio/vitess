@@ -32,6 +32,7 @@ import (
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/onlineddl"
 	"vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	throttlebase "vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 
 	"github.com/stretchr/testify/assert"
@@ -374,7 +375,7 @@ func TestSchemaChange(t *testing.T) {
 		// to be strictly higher than started_timestamp
 		assert.Greater(t, lastThrottledTimestamp, startedTimestamp)
 		component := row.AsString("component_throttled", "")
-		assert.Contains(t, []string{"vcopier", "vplayer"}, component)
+		assert.Contains(t, []string{string(vreplication.VCopierComponentName), string(vreplication.VPlayerComponentName)}, component)
 
 		// unthrottle
 		onlineddl.UnthrottleAllMigrations(t, &vtParams)
@@ -414,7 +415,7 @@ func TestSchemaChange(t *testing.T) {
 			// rowstreamer throttle timestamp only updates once in 10 seconds, so greater or equals" is good enough here.
 			assert.GreaterOrEqual(t, lastThrottledTimestamp, startedTimestamp)
 			component := row.AsString("component_throttled", "")
-			assert.Contains(t, []string{"vcopier", "vplayer"}, component)
+			assert.Contains(t, []string{string(vreplication.VCopierComponentName), string(vreplication.VPlayerComponentName)}, component)
 		}()
 		// now unthrottled
 		_ = onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalMigrationWait, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)

@@ -332,7 +332,7 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 		}
 		// check throttler.
 		if !vp.vr.vre.throttlerClient.ThrottleCheckOKOrWaitAppName(ctx, vp.throttlerAppName) {
-			_ = vp.vr.updateTimeThrottled("vplayer")
+			_ = vp.vr.updateTimeThrottled(VPlayerComponentName)
 			continue
 		}
 
@@ -624,7 +624,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		return io.EOF
 	case binlogdatapb.VEventType_HEARTBEAT:
 		if event.Throttled {
-			if err := vp.vr.updateTimeThrottled("vstreamer"); err != nil {
+			if err := vp.vr.updateTimeThrottled(VStreamerComponentName); err != nil {
 				return err
 			}
 		}

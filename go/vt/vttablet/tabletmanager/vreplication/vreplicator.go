@@ -88,6 +88,15 @@ const (
 	setSQLModeQueryf = `SET @@session.sql_mode='%s'`
 )
 
+type ComponentName string
+
+const (
+	VPlayerComponentName     ComponentName = "vplayer"
+	VCopierComponentName     ComponentName = "vcopier"
+	VStreamerComponentName   ComponentName = "vstreamer"
+	RowStreamerComponentName ComponentName = "rowstreamer"
+)
+
 // vreplicator provides the core logic to start vreplication streams
 type vreplicator struct {
 	vre      *Engine
@@ -507,10 +516,10 @@ func (vr *vreplicator) throttlerAppName() string {
 	return strings.Join(names, ":")
 }
 
-func (vr *vreplicator) updateTimeThrottled(componentThrottled string) error {
+func (vr *vreplicator) updateTimeThrottled(componentThrottled ComponentName) error {
 	err := vr.throttleUpdatesRateLimiter.Do(func() error {
 		tm := time.Now().Unix()
-		update, err := binlogplayer.GenerateUpdateTimeThrottled(vr.id, tm, componentThrottled)
+		update, err := binlogplayer.GenerateUpdateTimeThrottled(vr.id, tm, string(componentThrottled))
 		if err != nil {
 			return err
 		}
