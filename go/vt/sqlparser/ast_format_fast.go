@@ -2232,6 +2232,17 @@ func (node *LocateExpr) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
+func (node *CharExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("char(")
+	node.Exprs.formatFast(buf)
+	if node.Charset != "" {
+		buf.WriteString(" using ")
+		buf.WriteString(node.Charset)
+	}
+	buf.WriteByte(')')
+}
+
+// formatFast formats the node.
 func (node *NamedWindow) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("window ")
 	node.Windows.formatFast(buf)

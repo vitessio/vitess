@@ -2245,8 +2245,8 @@ END
 INPUT
 select char(2557 using utf8mb4);
 END
-ERROR
-syntax error at position 23 near 'using'
+OUTPUT
+select char(2557 using utf8mb4) from dual
 END
 INPUT
 select compress(a), compress(a) from t1;
@@ -4591,8 +4591,8 @@ END
 INPUT
 select char(2557 using utf8);
 END
-ERROR
-syntax error at position 23 near 'using'
+OUTPUT
+select char(2557 using utf8) from dual
 END
 INPUT
 select uncompressed_length("");
@@ -7009,8 +7009,8 @@ END
 INPUT
 select hex(char(0xFF using utf8mb4));
 END
-ERROR
-syntax error at position 27 near 'using'
+OUTPUT
+select hex(char(0xFF using utf8mb4)) from dual
 END
 INPUT
 select from `information_schema`.`TABLE_CONSTRAINTS` where `TABLE_SCHEMA` = NULL;
@@ -7573,8 +7573,8 @@ END
 INPUT
 select char(195 using utf8mb4);
 END
-ERROR
-syntax error at position 22 near 'using'
+OUTPUT
+select char(195 using utf8mb4) from dual
 END
 INPUT
 select concat(a, if(b>10, N'x', N'y')) from t1;
@@ -7855,8 +7855,8 @@ END
 INPUT
 select hex(char(0x0102 using utf32));
 END
-ERROR
-syntax error at position 29 near 'using'
+OUTPUT
+select hex(char(0x0102 using utf32)) from dual
 END
 INPUT
 select 5 mod 3, 5 mod -3, -5 mod 3, -5 mod -3;
@@ -9595,8 +9595,8 @@ END
 INPUT
 select char(0xd18f using utf8);
 END
-ERROR
-syntax error at position 25 near 'using'
+OUTPUT
+select char(0xd18f using utf8) from dual
 END
 INPUT
 select count(*) + MAX_REQ - MAX_REQ + MAX_REQ - MAX_REQ + MAX_REQ - MAX_REQ + MAX_REQ - MAX_REQ + MAX_REQ - MAX_REQ from t1 group by MAX_REQ;
@@ -9697,8 +9697,8 @@ END
 INPUT
 select hex(char(0x010203 using ucs2));
 END
-ERROR
-syntax error at position 31 near 'using'
+OUTPUT
+select hex(char(0x010203 using ucs2)) from dual
 END
 INPUT
 select ST_astext(st_difference(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_difference(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)'))));
@@ -10819,8 +10819,8 @@ END
 INPUT
 select hex(convert(char(2557 using latin1) using utf8));
 END
-ERROR
-syntax error at position 35 near 'using'
+OUTPUT
+select hex(convert(char(2557 using latin1) using utf8)) from dual
 END
 INPUT
 select group_concat(t1.b,t2.c) from t1 inner join t2 using(a) group by t1.a;
@@ -11365,8 +11365,8 @@ END
 INPUT
 select hex(char(1 using utf8mb4));
 END
-ERROR
-syntax error at position 24 near 'using'
+OUTPUT
+select hex(char(1 using utf8mb4)) from dual
 END
 INPUT
 select left('hello',null), right('hello',null);
@@ -13033,8 +13033,8 @@ END
 INPUT
 select char(0xff,0x8f using utf8mb4);
 END
-ERROR
-syntax error at position 28 near 'using'
+OUTPUT
+select char(0xff, 0x8f using utf8mb4) from dual
 END
 INPUT
 select a, group_concat(b) from t1 group by a with rollup;
@@ -13261,8 +13261,8 @@ END
 INPUT
 select hex(char(0x01020304 using ucs2));
 END
-ERROR
-syntax error at position 33 near 'using'
+OUTPUT
+select hex(char(0x01020304 using ucs2)) from dual
 END
 INPUT
 select 'a' union select concat('a', -0.0000);
@@ -13825,8 +13825,8 @@ END
 INPUT
 select hex(char(0xFF using utf8));
 END
-ERROR
-syntax error at position 27 near 'using'
+OUTPUT
+select hex(char(0xFF using utf8)) from dual
 END
 INPUT
 select date_add("1997-12-31 23:59:59",INTERVAL -100000 YEAR);
@@ -14809,8 +14809,8 @@ END
 INPUT
 select char(196 using utf8);
 END
-ERROR
-syntax error at position 22 near 'using'
+OUTPUT
+select char(196 using utf8) from dual
 END
 INPUT
 select group_concat(c1 order by binary c1 separator '') from t1 group by c1 collate utf32_romanian_ci;
@@ -15469,8 +15469,8 @@ END
 INPUT
 select hex(char(0x01020304 using utf32));
 END
-ERROR
-syntax error at position 33 near 'using'
+OUTPUT
+select hex(char(0x01020304 using utf32)) from dual
 END
 INPUT
 select count(distinct case when id<=64 then id end) from tb;
@@ -16237,8 +16237,8 @@ END
 INPUT
 select hex(char(0x01 using ucs2));
 END
-ERROR
-syntax error at position 27 near 'using'
+OUTPUT
+select hex(char(0x01 using ucs2)) from dual
 END
 INPUT
 select from information_schema.columns where table_schema = NULL;
@@ -16333,8 +16333,8 @@ END
 INPUT
 select hex(char(0x01 using utf32));
 END
-ERROR
-syntax error at position 27 near 'using'
+OUTPUT
+select hex(char(0x01 using utf32)) from dual
 END
 INPUT
 select str_to_date("2003-01-02 10:11:12.0012ABCD", "%Y-%m-%d %H:%i:%S.%f") as f1, addtime("-01:01:01.01 GGG", "-23:59:59.1") as f2, microsecond("1997-12-31 23:59:59.01XXXX") as f3;
@@ -17851,8 +17851,8 @@ END
 INPUT
 select hex(char(0x41 using ucs2));
 END
-ERROR
-syntax error at position 27 near 'using'
+OUTPUT
+select hex(char(0x41 using ucs2)) from dual
 END
 INPUT
 select insert('hello', 1, -1, 'hi');
@@ -17935,8 +17935,8 @@ END
 INPUT
 select char(0xff,0x8f using utf8);
 END
-ERROR
-syntax error at position 28 near 'using'
+OUTPUT
+select char(0xff, 0x8f using utf8) from dual
 END
 INPUT
 select TRUE,FALSE,NULL;
@@ -18037,8 +18037,8 @@ END
 INPUT
 select char(0xd1,0x8f using utf8);
 END
-ERROR
-syntax error at position 28 near 'using'
+OUTPUT
+select char(0xd1, 0x8f using utf8) from dual
 END
 INPUT
 select distinct b from t2 where (a2 >= 'b') and (b = 'a');
@@ -18121,8 +18121,8 @@ END
 INPUT
 select collation(char(123)), collation(char(123 using binary));
 END
-ERROR
-syntax error at position 54 near 'using'
+OUTPUT
+select collation(char(123)), collation(char(123 using binary)) from dual
 END
 INPUT
 select c cy from t1 where c='y';
@@ -18175,8 +18175,8 @@ END
 INPUT
 select hex(convert(char(2557 using latin1) using utf8mb4));
 END
-ERROR
-syntax error at position 35 near 'using'
+OUTPUT
+select hex(convert(char(2557 using latin1) using utf8mb4)) from dual
 END
 INPUT
 select 0x961838f6fc3c7f9ec17b5d900410d8aa like '%-113%';
@@ -18673,8 +18673,8 @@ END
 INPUT
 select char(123 using binary);
 END
-ERROR
-syntax error at position 22 near 'using'
+OUTPUT
+select char(123 using binary) from dual
 END
 INPUT
 select char_length(left(@a:='тест',5)), length(@a), @a;
@@ -19141,8 +19141,8 @@ END
 INPUT
 select char(196 using utf8mb4);
 END
-ERROR
-syntax error at position 22 near 'using'
+OUTPUT
+select char(196 using utf8mb4) from dual
 END
 INPUT
 select trim(null from 'kate') as "must_be_null";
@@ -20101,8 +20101,8 @@ END
 INPUT
 select char(53647 using utf8mb4);
 END
-ERROR
-syntax error at position 24 near 'using'
+OUTPUT
+select char(53647 using utf8mb4) from dual
 END
 INPUT
 select right('hello', -18446744073709551617);
@@ -20263,8 +20263,8 @@ END
 INPUT
 select char(0xd1,0x8f using utf8mb4);
 END
-ERROR
-syntax error at position 28 near 'using'
+OUTPUT
+select char(0xd1, 0x8f using utf8mb4) from dual
 END
 INPUT
 select quote(1/0), quote('Z');
@@ -20395,8 +20395,8 @@ END
 INPUT
 select hex(char(0x0102 using ucs2));
 END
-ERROR
-syntax error at position 29 near 'using'
+OUTPUT
+select hex(char(0x0102 using ucs2)) from dual
 END
 INPUT
 select f1 from t1 where makedate(2006,1) between date(f1) and date(f3);
@@ -21133,8 +21133,8 @@ END
 INPUT
 select char(195 using utf8);
 END
-ERROR
-syntax error at position 22 near 'using'
+OUTPUT
+select char(195 using utf8) from dual
 END
 INPUT
 select a1,a2,b,min(c),max(c) from t2 where (c < 'a0') group by a1,a2,b;
@@ -21775,8 +21775,8 @@ END
 INPUT
 select hex(char(1 using utf8));
 END
-ERROR
-syntax error at position 24 near 'using'
+OUTPUT
+select hex(char(1 using utf8)) from dual
 END
 INPUT
 select col1 as count_col1,col2 from t1 as tmp1 group by col1,col2 having count_col1 = 10;
@@ -22291,8 +22291,8 @@ END
 INPUT
 select char(53647 using utf8);
 END
-ERROR
-syntax error at position 24 near 'using'
+OUTPUT
+select char(53647 using utf8) from dual
 END
 INPUT
 select 'A' like 'a' collate utf8mb4_bin;
@@ -22429,8 +22429,8 @@ END
 INPUT
 select char(0xd18f using utf8mb4);
 END
-ERROR
-syntax error at position 25 near 'using'
+OUTPUT
+select char(0xd18f using utf8mb4) from dual
 END
 INPUT
 select st_within(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)')));
@@ -22639,8 +22639,8 @@ END
 INPUT
 select hex(char(0x010203 using utf32));
 END
-ERROR
-syntax error at position 31 near 'using'
+OUTPUT
+select hex(char(0x010203 using utf32)) from dual
 END
 INPUT
 select ST_geometryfromtext(b) IS NULL, ST_geometryfromwkb(b) IS NULL, ST_astext(b) IS NULL, ST_aswkb(b) IS NULL, ST_geometrytype(b) IS NULL, ST_centroid(b) IS NULL, ST_envelope(b) IS NULL, ST_startpoint(b) IS NULL, ST_endpoint(b) IS NULL, ST_exteriorring(b) IS NULL, ST_pointn(b, 1) IS NULL, ST_geometryn(b, 1) IS NULL, ST_interiorringn(b, 1) IS NULL, multipoint(b) IS NULL, ST_isempty(b) IS NULL, ST_issimple(b) IS NULL, ST_isclosed(b) IS NULL, ST_dimension(b) IS NULL, ST_numgeometries(b) IS NULL, ST_numinteriorrings(b) IS NULL, ST_numpoints(b) IS NULL, ST_area(b) IS NULL, ST_length(b) IS NULL, ST_srid(b) IS NULL, ST_x(b) IS NULL, ST_y(b) IS NULL from t1;

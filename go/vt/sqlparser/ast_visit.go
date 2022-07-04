@@ -86,6 +86,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfCastExpr(in, f)
 	case *ChangeColumn:
 		return VisitRefOfChangeColumn(in, f)
+	case *CharExpr:
+		return VisitRefOfCharExpr(in, f)
 	case *CheckConstraintDefinition:
 		return VisitRefOfCheckConstraintDefinition(in, f)
 	case *ColName:
@@ -932,6 +934,18 @@ func VisitRefOfChangeColumn(in *ChangeColumn, f Visit) error {
 		return err
 	}
 	if err := VisitRefOfColName(in.After, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfCharExpr(in *CharExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExprs(in.Exprs, f); err != nil {
 		return err
 	}
 	return nil
@@ -4052,6 +4066,8 @@ func VisitCallable(in Callable, f Visit) error {
 	switch in := in.(type) {
 	case *ArgumentLessWindowExpr:
 		return VisitRefOfArgumentLessWindowExpr(in, f)
+	case *CharExpr:
+		return VisitRefOfCharExpr(in, f)
 	case *ConvertExpr:
 		return VisitRefOfConvertExpr(in, f)
 	case *ConvertUsingExpr:
@@ -4282,6 +4298,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfCaseExpr(in, f)
 	case *CastExpr:
 		return VisitRefOfCastExpr(in, f)
+	case *CharExpr:
+		return VisitRefOfCharExpr(in, f)
 	case *ColName:
 		return VisitRefOfColName(in, f)
 	case *CollateExpr:

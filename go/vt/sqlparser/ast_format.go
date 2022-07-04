@@ -1670,6 +1670,15 @@ func (node *LocateExpr) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
+func (node *CharExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "char(%v", node.Exprs)
+	if node.Charset != "" {
+		buf.astPrintf(node, " using %#s", node.Charset)
+	}
+	buf.astPrintf(node, ")")
+}
+
+// Format formats the node.
 func (node *NamedWindow) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "window %v", node.Windows)
 }

@@ -86,6 +86,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfCastExpr(parent, node, replacer)
 	case *ChangeColumn:
 		return a.rewriteRefOfChangeColumn(parent, node, replacer)
+	case *CharExpr:
+		return a.rewriteRefOfCharExpr(parent, node, replacer)
 	case *CheckConstraintDefinition:
 		return a.rewriteRefOfCheckConstraintDefinition(parent, node, replacer)
 	case *ColName:
@@ -1409,6 +1411,33 @@ func (a *application) rewriteRefOfChangeColumn(parent SQLNode, node *ChangeColum
 	}
 	if !a.rewriteRefOfColName(node, node.After, func(newNode, parent SQLNode) {
 		parent.(*ChangeColumn).After = newNode.(*ColName)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfCharExpr(parent SQLNode, node *CharExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExprs(node, node.Exprs, func(newNode, parent SQLNode) {
+		parent.(*CharExpr).Exprs = newNode.(Exprs)
 	}) {
 		return false
 	}
@@ -8199,6 +8228,8 @@ func (a *application) rewriteCallable(parent SQLNode, node Callable, replacer re
 	switch node := node.(type) {
 	case *ArgumentLessWindowExpr:
 		return a.rewriteRefOfArgumentLessWindowExpr(parent, node, replacer)
+	case *CharExpr:
+		return a.rewriteRefOfCharExpr(parent, node, replacer)
 	case *ConvertExpr:
 		return a.rewriteRefOfConvertExpr(parent, node, replacer)
 	case *ConvertUsingExpr:
@@ -8429,6 +8460,8 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfCaseExpr(parent, node, replacer)
 	case *CastExpr:
 		return a.rewriteRefOfCastExpr(parent, node, replacer)
+	case *CharExpr:
+		return a.rewriteRefOfCharExpr(parent, node, replacer)
 	case *ColName:
 		return a.rewriteRefOfColName(parent, node, replacer)
 	case *CollateExpr:

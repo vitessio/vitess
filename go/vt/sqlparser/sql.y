@@ -5767,6 +5767,14 @@ UTC_DATE func_paren_opt
   {
     $$ = &TrimFuncExpr{StringArg: $3}
   }
+| CHAR openb expression_list closeb
+  {
+    $$ = &CharExpr{Exprs: $3}
+  }
+| CHAR openb expression_list USING charset closeb
+  {
+    $$ = &CharExpr{Exprs: $3, Charset: $5}
+  }
 | TRIM openb expression FROM expression closeb
   {
     $$ = &TrimFuncExpr{TrimArg:$3, StringArg: $5}
@@ -7327,7 +7335,7 @@ non_reserved_keyword:
 | CASCADE
 | CASCADED
 | CHANNEL
-| CHAR
+| CHAR %prec FUNCTION_CALL_NON_KEYWORD
 | CHARSET
 | CHECKSUM
 | CLEANUP
