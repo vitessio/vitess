@@ -131,8 +131,8 @@ type (
 		// ReleaseLock releases all the held advisory locks.
 		ReleaseLock() error
 
-		// StreamPrimitiveAsTransaction executes the primitive in its own transaction.
-		StreamPrimitiveAsTransaction(input Primitive, vars map[string]*querypb.BindVariable, b bool, f func(result *sqltypes.Result) error) error
+		// StreamExecutePrimitiveStandalone executes the primitive in its own new autocommit session.
+		StreamExecutePrimitiveStandalone(primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(result *sqltypes.Result) error) error
 	}
 
 	//SessionActions gives primitives ability to interact with the session state

@@ -61,7 +61,7 @@ func newNoopVCursor(ctx context.Context) *noopVCursor {
 	return n
 }
 
-func (t *noopVCursor) StreamPrimitiveAsTransaction(primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(result *sqltypes.Result) error) error {
+func (t *noopVCursor) StreamExecutePrimitiveStandalone(primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(result *sqltypes.Result) error) error {
 	return primitive.TryStreamExecute(t, bindVars, wantfields, callback)
 }
 
@@ -378,7 +378,7 @@ func (f *loggingVCursor) StreamExecutePrimitive(primitive Primitive, bindVars ma
 	return primitive.TryStreamExecute(f, bindVars, wantfields, callback)
 }
 
-func (f *loggingVCursor) StreamPrimitiveAsTransaction(primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (f *loggingVCursor) StreamExecutePrimitiveStandalone(primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(result *sqltypes.Result) error) error {
 	return primitive.TryStreamExecute(f, bindVars, wantfields, callback)
 }
 
