@@ -1745,7 +1745,15 @@ func (node *ConvertType) Format(buf *TrackedBuffer) {
 
 // Format formats the node
 func (node *MatchExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "match(%v) against (%v%s)", node.Columns, node.Expr, node.Option.ToString())
+	buf.astPrintf(node, "match(")
+	for i, col := range node.Columns {
+		if i != 0 {
+			buf.astPrintf(node, ", %v", col)
+		} else {
+			buf.astPrintf(node, "%v", col)
+		}
+	}
+	buf.astPrintf(node, ") against (%v%s)", node.Expr, node.Option.ToString())
 }
 
 // Format formats the node.
