@@ -687,11 +687,11 @@ func GenerateUpdateHeartbeat(uid uint32, timeUpdated int64) (string, error) {
 }
 
 // GenerateUpdateTimeThrottled returns a statement to record the latest throttle time in the _vt.vreplication table.
-func GenerateUpdateTimeThrottled(uid uint32, timeThrottled int64, componentThrottled string) (string, error) {
-	if timeThrottled == 0 {
+func GenerateUpdateTimeThrottled(uid uint32, timeThrottledUnix int64, componentThrottled string) (string, error) {
+	if timeThrottledUnix == 0 {
 		return "", fmt.Errorf("timeUpdated cannot be zero")
 	}
-	return fmt.Sprintf("update _vt.vreplication set time_updated=%v, time_throttled=%v, component_throttled='%v' where id=%v", timeThrottled, timeThrottled, componentThrottled, uid), nil
+	return fmt.Sprintf("update _vt.vreplication set time_updated=%v, time_throttled=%v, component_throttled='%v' where id=%v", timeThrottledUnix, timeThrottledUnix, componentThrottled, uid), nil
 }
 
 // StartVReplication returns a statement to start the replication.
