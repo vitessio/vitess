@@ -125,7 +125,7 @@ func throttlerlogzHandler(w http.ResponseWriter, r *http.Request, m *managerImpl
 }
 
 func showThrottlerLog(w http.ResponseWriter, m *managerImpl, name string) {
-	results, err := m.Log(name)
+	results, err := m.log(name)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -152,7 +152,7 @@ func showThrottlerLog(w http.ResponseWriter, m *managerImpl, name string) {
 			colorLevel = "high"
 		}
 		data := struct {
-			Result
+			result
 			ColorLevel string
 		}{r, colorLevel}
 
