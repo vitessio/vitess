@@ -770,6 +770,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfLoad(a, b)
+	case *LocateExpr:
+		b, ok := inB.(*LocateExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfLocateExpr(a, b)
 	case *LockOption:
 		b, ok := inB.(*LockOption)
 		if !ok {
@@ -2978,6 +2984,19 @@ func EqualsRefOfLoad(a, b *Load) bool {
 	return true
 }
 
+// EqualsRefOfLocateExpr does deep equals between the two objects.
+func EqualsRefOfLocateExpr(a, b *LocateExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsExpr(a.SubStr, b.SubStr) &&
+		EqualsExpr(a.Str, b.Str) &&
+		EqualsExpr(a.Pos, b.Pos)
+}
+
 // EqualsRefOfLockOption does deep equals between the two objects.
 func EqualsRefOfLockOption(a, b *LockOption) bool {
 	if a == b {
@@ -4882,6 +4901,12 @@ func EqualsCallable(inA, inB Callable) bool {
 			return false
 		}
 		return EqualsRefOfLagLeadExpr(a, b)
+	case *LocateExpr:
+		b, ok := inB.(*LocateExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfLocateExpr(a, b)
 	case *MatchExpr:
 		b, ok := inB.(*MatchExpr)
 		if !ok {
@@ -5539,6 +5564,12 @@ func EqualsExpr(inA, inB Expr) bool {
 			return false
 		}
 		return EqualsRefOfLiteral(a, b)
+	case *LocateExpr:
+		b, ok := inB.(*LocateExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfLocateExpr(a, b)
 	case *LockingFunc:
 		b, ok := inB.(*LockingFunc)
 		if !ok {

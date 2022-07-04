@@ -345,6 +345,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> REGEXP_INSTR REGEXP_LIKE REGEXP_REPLACE REGEXP_SUBSTR
 %token <str> ExtractValue UpdateXML
 %token <str> GET_LOCK RELEASE_LOCK RELEASE_ALL_LOCKS IS_FREE_LOCK IS_USED_LOCK
+%token <str> LOCATE POSITION
 
 // Match
 %token <str> MATCH AGAINST BOOLEAN LANGUAGE WITH QUERY EXPANSION WITHOUT VALIDATION
@@ -5770,6 +5771,18 @@ UTC_DATE func_paren_opt
   {
     $$ = &TrimFuncExpr{TrimArg:$3, StringArg: $5}
   }
+| LOCATE openb expression ',' expression closeb
+  {
+    $$ = &LocateExpr{SubStr: $3, Str: $5}
+  }
+| LOCATE openb expression ',' expression ',' expression closeb
+  {
+    $$ = &LocateExpr{SubStr: $3, Str: $5, Pos: $7}
+  }
+| POSITION openb bit_expr IN expression closeb
+  {
+    $$ = &LocateExpr{SubStr: $3, Str: $5}
+  }
 | GET_LOCK openb expression ',' expression closeb
   {
     $$ = &LockingFunc{Type: GetLock, Name:$3, Timeout:$5}
@@ -7456,6 +7469,7 @@ non_reserved_keyword:
 | LIST
 | LOAD
 | LOCAL
+| LOCATE %prec FUNCTION_CALL_NON_KEYWORD
 | LOCKED
 | LOGS
 | LONGBLOB
@@ -7523,6 +7537,7 @@ non_reserved_keyword:
 | PLUGINS
 | POINT
 | POLYGON
+| POSITION %prec FUNCTION_CALL_NON_KEYWORD
 | PROCEDURE
 | PROCESSLIST
 | QUERY

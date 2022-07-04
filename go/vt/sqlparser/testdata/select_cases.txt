@@ -3151,8 +3151,8 @@ END
 INPUT
 select position(("1" in (1,2,3)) in "01");
 END
-ERROR
-syntax error at position 41 near '01'
+OUTPUT
+select locate('1' in (1, 2, 3), '01') from dual
 END
 INPUT
 select cast(variance(ff) as decimal(10,3)) from t2;
@@ -5257,8 +5257,8 @@ END
 INPUT
 select position('bb' in 'abba');
 END
-ERROR
-syntax error at position 31 near 'abba'
+OUTPUT
+select locate('bb', 'abba') from dual
 END
 INPUT
 select min(7) from t1m;
@@ -5275,8 +5275,8 @@ END
 INPUT
 select position("0" in "baaa" in (1)),position("0" in "1" in (1,2,3)),position("sql" in ("mysql"));
 END
-ERROR
-syntax error at position 30 near 'baaa'
+OUTPUT
+select locate('0', 'baaa' in (1)), locate('0', '1' in (1, 2, 3)), locate('sql', 'mysql') from dual
 END
 INPUT
 select count(*) from t1 where a = 'aaayyy';
@@ -9673,8 +9673,8 @@ END
 INPUT
 select POSITION(_latin1'B' IN _latin1'abcd');
 END
-ERROR
-syntax error at position 38 near '_latin1'
+OUTPUT
+select locate(_latin1 'B', _latin1 'abcd') from dual
 END
 INPUT
 select from t1 where MATCH b AGAINST ("sear*" IN BOOLEAN MODE);
@@ -10531,8 +10531,8 @@ END
 INPUT
 select POSITION(_latin1'B' COLLATE latin1_general_ci IN _latin1'abcd' COLLATE latin1_bin);
 END
-ERROR
-syntax error at position 64 near '_latin1'
+OUTPUT
+select locate(_latin1 'B' collate latin1_general_ci, _latin1 'abcd' collate latin1_bin) from dual
 END
 INPUT
 select charset(user());
@@ -11863,8 +11863,8 @@ END
 INPUT
 select POSITION(_latin1'B' IN _latin2'abcd');
 END
-ERROR
-syntax error at position 38 near '_latin2'
+OUTPUT
+select locate(_latin1 'B', _latin2 'abcd') from dual
 END
 INPUT
 select t1.id, t1.data, t2.data from t1, t2 where t1.id = t2.id order by t1.id;
@@ -11965,8 +11965,8 @@ END
 INPUT
 select POSITION(_latin1'B' IN _latin1'abcd' COLLATE latin1_bin);
 END
-ERROR
-syntax error at position 38 near '_latin1'
+OUTPUT
+select locate(_latin1 'B', _latin1 'abcd' collate latin1_bin) from dual
 END
 INPUT
 select concat(a,'.') from t1 where a='aaa';
@@ -12415,8 +12415,8 @@ END
 INPUT
 select position(binary 'll' in 'hello'),position('a' in binary 'hello');
 END
-ERROR
-syntax error at position 39 near 'hello'
+OUTPUT
+select locate(convert('ll', binary), 'hello'), locate('a', convert('hello', binary)) from dual
 END
 INPUT
 select CAST('10 ' as unsigned integer);
@@ -17977,8 +17977,8 @@ END
 INPUT
 select POSITION(_latin1'B' COLLATE latin1_bin IN _latin1'abcd');
 END
-ERROR
-syntax error at position 57 near '_latin1'
+OUTPUT
+select locate(_latin1 'B' collate latin1_bin, _latin1 'abcd') from dual
 END
 INPUT
 select from v2;

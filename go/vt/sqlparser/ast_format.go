@@ -1661,6 +1661,15 @@ func (node *IntervalFuncExpr) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
+func (node *LocateExpr) Format(buf *TrackedBuffer) {
+	if node.Pos != nil {
+		buf.astPrintf(node, "locate(%v, %v, %v)", node.SubStr, node.Str, node.Pos)
+	} else {
+		buf.astPrintf(node, "locate(%v, %v)", node.SubStr, node.Str)
+	}
+}
+
+// Format formats the node.
 func (node *NamedWindow) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "window %v", node.Windows)
 }

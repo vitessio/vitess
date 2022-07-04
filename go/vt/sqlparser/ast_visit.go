@@ -270,6 +270,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfLiteral(in, f)
 	case *Load:
 		return VisitRefOfLoad(in, f)
+	case *LocateExpr:
+		return VisitRefOfLocateExpr(in, f)
 	case *LockOption:
 		return VisitRefOfLockOption(in, f)
 	case *LockTables:
@@ -2256,6 +2258,24 @@ func VisitRefOfLoad(in *Load, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfLocateExpr(in *LocateExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.SubStr, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Str, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Pos, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfLockOption(in *LockOption, f Visit) error {
 	if in == nil {
 		return nil
@@ -4094,6 +4114,8 @@ func VisitCallable(in Callable, f Visit) error {
 		return VisitRefOfJSONValueModifierExpr(in, f)
 	case *LagLeadExpr:
 		return VisitRefOfLagLeadExpr(in, f)
+	case *LocateExpr:
+		return VisitRefOfLocateExpr(in, f)
 	case *MatchExpr:
 		return VisitRefOfMatchExpr(in, f)
 	case *MemberOfExpr:
@@ -4348,6 +4370,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitListArg(in, f)
 	case *Literal:
 		return VisitRefOfLiteral(in, f)
+	case *LocateExpr:
+		return VisitRefOfLocateExpr(in, f)
 	case *LockingFunc:
 		return VisitRefOfLockingFunc(in, f)
 	case *MatchExpr:
