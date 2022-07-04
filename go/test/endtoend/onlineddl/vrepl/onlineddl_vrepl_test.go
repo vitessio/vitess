@@ -368,20 +368,13 @@ func TestSchemaChange(t *testing.T) {
 
 		// gotta give the migration a few seconds to read throttling info from _vt.vreplication and write
 		// to _vt.schema_migrations
-		time.Sleep(5 * time.Second)
-		rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
-		require.NotNil(t, rs)
-		for _, row := range rs.Named().Rows {
-			startedTimestamp := row.AsString("started_timestamp", "")
-			require.NotEmpty(t, startedTimestamp)
-			lastThrottledTimestamp := row.AsString("last_throttled_timestamp", "")
-			assert.NotEmpty(t, lastThrottledTimestamp)
-			// vplayer and vcopier update throttle timestamp every second, so we expect the value
-			// to be strictly higher than started_timestamp
-			assert.Greater(t, lastThrottledTimestamp, startedTimestamp)
-			component := row.AsString("component_throttled", "")
-			assert.Contains(t, []string{"vcopier", "vplayer"}, component)
-		}
+		row, startedTimestamp, lastThrottledTimestamp := onlineddl.WaitForThrottledTimestamp(t, &vtParams, uuid, normalMigrationWait)
+		require.NotNil(t, row)
+		// vplayer and vcopier update throttle timestamp every second, so we expect the value
+		// to be strictly higher than started_timestamp
+		assert.Greater(t, lastThrottledTimestamp, startedTimestamp)
+		component := row.AsString("component_throttled", "")
+		assert.Contains(t, []string{"vcopier", "vplayer"}, component)
 
 		// unthrottle
 		onlineddl.UnthrottleAllMigrations(t, &vtParams)
@@ -416,19 +409,12 @@ func TestSchemaChange(t *testing.T) {
 
 			// gotta give the migration a few seconds to read throttling info from _vt.vreplication and write
 			// to _vt.schema_migrations
-			time.Sleep(5 * time.Second)
-			rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
-			require.NotNil(t, rs)
-			for _, row := range rs.Named().Rows {
-				startedTimestamp := row.AsString("started_timestamp", "")
-				require.NotEmpty(t, startedTimestamp)
-				lastThrottledTimestamp := row.AsString("last_throttled_timestamp", "")
-				assert.NotEmpty(t, lastThrottledTimestamp)
-				// rowstreamer throttle timestamp only updates once in 10 seconds, so greater or equals" is good enough here.
-				assert.GreaterOrEqual(t, lastThrottledTimestamp, startedTimestamp)
-				component := row.AsString("component_throttled", "")
-				assert.Contains(t, []string{"vstreamer", "rowstreamer"}, component)
-			}
+			row, startedTimestamp, lastThrottledTimestamp := onlineddl.WaitForThrottledTimestamp(t, &vtParams, uuid, normalMigrationWait)
+			require.NotNil(t, row)
+			// rowstreamer throttle timestamp only updates once in 10 seconds, so greater or equals" is good enough here.
+			assert.GreaterOrEqual(t, lastThrottledTimestamp, startedTimestamp)
+			component := row.AsString("component_throttled", "")
+			assert.Contains(t, []string{"vcopier", "vplayer"}, component)
 		}()
 		// now unthrottled
 		_ = onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalMigrationWait, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
