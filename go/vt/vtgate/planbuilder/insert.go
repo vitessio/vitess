@@ -210,6 +210,9 @@ func buildInsertSelectPlan(ins *sqlparser.Insert, table *vindexes.Table, reserve
 	}
 	eins.Input = plan
 
+	// When the table you are steaming data from and table you are inserting from are same.
+	// Then due to locking of the index range on the table we might not be able to insert into the table.
+	// Therefore, instead of streaming, this flag will ensure the records are first read and then inserted.
 	if strings.Contains(plan.GetTableName(), table.Name.String()) {
 		eins.ForceNonStreaming = true
 	}
