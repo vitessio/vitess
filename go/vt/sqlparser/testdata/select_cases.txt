@@ -31,8 +31,8 @@ END
 INPUT
 select ref_mag from t1 where match ref_mag against ('+test' in boolean mode);
 END
-ERROR
-syntax error at position 43 near 'ref_mag'
+OUTPUT
+select ref_mag from t1 where match(ref_mag) against ('+test' in boolean mode)
 END
 INPUT
 select week(20010101,0) as '0', week(20010101,1) as '1', week(20010101,2) as '2', week(20010101,3) as '3', week(20010101,4) as '4', week(20010101,5) as '5', week(20010101,6) as '6', week(20010101,7) as '7';
@@ -985,8 +985,8 @@ END
 INPUT
 select count(*) from t1 where match a against ('aaaxxx');
 END
-ERROR
-syntax error at position 38 near 'a'
+OUTPUT
+select count(*) from t1 where match(a) against ('aaaxxx')
 END
 INPUT
 select benchmark(100, NULL);
@@ -1471,8 +1471,8 @@ END
 INPUT
 select count(*) from t1 where match a against ('aaazzz' in boolean mode);
 END
-ERROR
-syntax error at position 38 near 'a'
+OUTPUT
+select count(*) from t1 where match(a) against ('aaazzz' in boolean mode)
 END
 INPUT
 select find_in_set("d","a,b,c"),find_in_set("dd","a,bbb,d"),find_in_set("bb","a,bbb,dd");
@@ -3721,8 +3721,8 @@ END
 INPUT
 select count(*) from t1 where match a against ('aaaxxx' in boolean mode);
 END
-ERROR
-syntax error at position 38 near 'a'
+OUTPUT
+select count(*) from t1 where match(a) against ('aaaxxx' in boolean mode)
 END
 INPUT
 select date_add("1997-12-31 23:59:59.000002",INTERVAL "10000 99:99:99.999999" DAY_MICROSECOND);
@@ -8545,8 +8545,8 @@ END
 INPUT
 select count(*) from t1 where match a against ('aaayyy');
 END
-ERROR
-syntax error at position 38 near 'a'
+OUTPUT
+select count(*) from t1 where match(a) against ('aaayyy')
 END
 INPUT
 select microsecond("1997-12-31 23:59:59.000001");
@@ -10405,8 +10405,8 @@ END
 INPUT
 select count(*) from t1 where match a against ('aaax*' in boolean mode);
 END
-ERROR
-syntax error at position 38 near 'a'
+OUTPUT
+select count(*) from t1 where match(a) against ('aaax*' in boolean mode)
 END
 INPUT
 select extract(DAY_SECOND FROM "225 10:11:12");
@@ -12127,8 +12127,8 @@ END
 INPUT
 select count(*) from t1 where match a against ('000000');
 END
-ERROR
-syntax error at position 38 near 'a'
+OUTPUT
+select count(*) from t1 where match(a) against ('000000')
 END
 INPUT
 select hex(_utf16 0x113344);
@@ -15127,8 +15127,8 @@ END
 INPUT
 select count(*) from t1 where match a against ('aaayyy' in boolean mode);
 END
-ERROR
-syntax error at position 38 near 'a'
+OUTPUT
+select count(*) from t1 where match(a) against ('aaayyy' in boolean mode)
 END
 INPUT
 select time("1997-12-31 23:59:59.000001");
@@ -17041,8 +17041,8 @@ END
 INPUT
 select count(*) from t1 where match a against ('aaay*' in boolean mode);
 END
-ERROR
-syntax error at position 38 near 'a'
+OUTPUT
+select count(*) from t1 where match(a) against ('aaay*' in boolean mode)
 END
 INPUT
 select a as like_ll from t1 where a like 'll%';
@@ -21451,8 +21451,8 @@ END
 INPUT
 select count(*) from t1 where match a against ('aaa*' in boolean mode);
 END
-ERROR
-syntax error at position 38 near 'a'
+OUTPUT
+select count(*) from t1 where match(a) against ('aaa*' in boolean mode)
 END
 INPUT
 select from t1 where field < '2006-11-06 04:08:36.0';
@@ -21859,8 +21859,8 @@ END
 INPUT
 select count(*) from t1 where match a against ('aaaxxx aaayyy aaazzz');
 END
-ERROR
-syntax error at position 38 near 'a'
+OUTPUT
+select count(*) from t1 where match(a) against ('aaaxxx aaayyy aaazzz')
 END
 INPUT
 select a.f1 as a, b.f2 as b, a.f1 > b.f2 as gt, a.f1 < b.f2 as lt, a.f1<=>b.f2 as eq from t1 a, t1 b;
@@ -22045,8 +22045,8 @@ END
 INPUT
 select count(*) from t1 where match a against ('aaazzz');
 END
-ERROR
-syntax error at position 38 near 'a'
+OUTPUT
+select count(*) from t1 where match(a) against ('aaazzz')
 END
 INPUT
 select round(4, cast(-2 as unsigned)), round(4, 18446744073709551614), round(4, -2);
@@ -22069,8 +22069,8 @@ END
 INPUT
 select count(*) from t1 where match a against ('aaaxxx aaayyy aaazzz' in boolean mode);
 END
-ERROR
-syntax error at position 38 near 'a'
+OUTPUT
+select count(*) from t1 where match(a) against ('aaaxxx aaayyy aaazzz' in boolean mode)
 END
 INPUT
 select concat(c1, repeat('xx', 250)) as cc from t2 group by cc order by 1;

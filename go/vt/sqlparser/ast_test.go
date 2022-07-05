@@ -520,15 +520,6 @@ func TestReplaceExpr(t *testing.T) {
 		in:  "select * from t where convert((select a from b) using utf8)",
 		out: "convert(:a using utf8)",
 	}, {
-		in:  "select * from t where match((select a from b), 1) against (a)",
-		out: "match(:a, 1) against (a)",
-	}, {
-		in:  "select * from t where match(1, (select a from b), 1) against (a)",
-		out: "match(1, :a, 1) against (a)",
-	}, {
-		in:  "select * from t where match(1, a, 1) against ((select a from b))",
-		out: "match(1, a, 1) against (:a)",
-	}, {
 		in:  "select * from t where case (select a from b) when a then b when b then c else d end",
 		out: "case :a when a then b when b then c else d end",
 	}, {

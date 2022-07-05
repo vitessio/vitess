@@ -1857,7 +1857,7 @@ func CloneRefOfMatchExpr(n *MatchExpr) *MatchExpr {
 		return nil
 	}
 	out := *n
-	out.Columns = CloneSelectExprs(n.Columns)
+	out.Columns = CloneSliceOfRefOfColName(n.Columns)
 	out.Expr = CloneExpr(n.Expr)
 	return &out
 }
@@ -4064,6 +4064,18 @@ func CloneTableAndLockTypes(n TableAndLockTypes) TableAndLockTypes {
 	res := make(TableAndLockTypes, 0, len(n))
 	for _, x := range n {
 		res = append(res, CloneRefOfTableAndLockType(x))
+	}
+	return res
+}
+
+// CloneSliceOfRefOfColName creates a deep clone of the input.
+func CloneSliceOfRefOfColName(n []*ColName) []*ColName {
+	if n == nil {
+		return nil
+	}
+	res := make([]*ColName, 0, len(n))
+	for _, x := range n {
+		res = append(res, CloneRefOfColName(x))
 	}
 	return res
 }
