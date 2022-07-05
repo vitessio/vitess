@@ -232,7 +232,7 @@ func parseNext(tokenizer *Tokenizer, strict bool) (Statement, error) {
 }
 
 // ErrEmpty is a sentinel error returned when parsing empty statements.
-var ErrEmpty = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.EmptyQuery, "query was empty")
+var ErrEmpty = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.EmptyQuery, "Query was empty")
 
 // SplitStatement returns the first sql statement up to either a ; or EOF
 // and the remainder from the given buffer
