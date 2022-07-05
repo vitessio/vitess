@@ -606,6 +606,11 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreP
 			// And restore the file.
 			name := fmt.Sprintf("%v", i)
 			params.Logger.Infof("Copying file %v: %v", name, fes[i].Name)
+			// For backward compatibility. Incase if Manifest is from N-1 binary
+			// then we assign the default value of compressionEngine.
+			if bm.CompressionEngine == "" {
+				bm.CompressionEngine = *BuiltinCompressor
+			}
 			var decompEngine = bm.CompressionEngine
 			if *BuiltinDecompressor != "auto" {
 				decompEngine = *BuiltinDecompressor
