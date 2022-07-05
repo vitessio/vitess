@@ -26,6 +26,7 @@ import (
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/timer"
 	vtschema "vitess.io/vitess/go/vt/schema"
 
 	"vitess.io/vitess/go/mysql"
@@ -268,24 +269,36 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 	}
 
 	// Main loop: calls bufferAndTransmit as events arrive.
-	timer := time.NewTimer(HeartbeatTime)
-	defer timer.Stop()
+	hbTimer := time.NewTimer(HeartbeatTime)
+	defer hbTimer.Stop()
 
-	// throttledEvents can be read just like you would read from events
-	// throttledEvents pulls data from events, but throttles pulling data,
-	// which in turn blocks the BinlogConnection from pushing events to the channel
-	throttledEvents := make(chan mysql.BinlogEvent)
-	go func() {
+	injectHeartbeat := func(throttled bool) error {
+		now := time.Now().UnixNano()
+		err := bufferAndTransmit(&binlogdatapb.VEvent{
+			Type:        binlogdatapb.VEventType_HEARTBEAT,
+			Timestamp:   now / 1e9,
+			CurrentTime: now,
+			Throttled:   throttled,
+		})
+		return err
+	}
+
+	throttleEvents := func(throttledEvents chan mysql.BinlogEvent) {
+		throttledHeartbeatsRateLimiter := timer.NewRateLimiter(HeartbeatTime)
 		for {
 			// check throttler.
 			if !vs.vse.throttlerClient.ThrottleCheckOKOrWait(ctx) {
-				select {
 				// make sure to leave if context is cancelled
+				select {
 				case <-ctx.Done():
 					return
 				default:
 					// do nothing special
 				}
+				throttledHeartbeatsRateLimiter.Do(func() error {
+					return injectHeartbeat(true)
+				})
+				// we won't process events, until we're no longer throttling
 				continue
 			}
 			select {
@@ -303,14 +316,19 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			case <-ctx.Done():
 				return
 			}
-
 		}
-	}()
+	}
+	// throttledEvents can be read just like you would read from events
+	// throttledEvents pulls data from events, but throttles pulling data,
+	// which in turn blocks the BinlogConnection from pushing events to the channel
+	throttledEvents := make(chan mysql.BinlogEvent)
+	go throttleEvents(throttledEvents)
+
 	for {
-		timer.Reset(HeartbeatTime)
+		hbTimer.Reset(HeartbeatTime)
 		// Drain event if timer fired before reset.
 		select {
-		case <-timer.C:
+		case <-hbTimer.C:
 		default:
 		}
 
@@ -346,13 +364,8 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			vschemaUpdateCount.Add(1)
 		case <-ctx.Done():
 			return nil
-		case <-timer.C:
-			now := time.Now().UnixNano()
-			if err := bufferAndTransmit(&binlogdatapb.VEvent{
-				Type:        binlogdatapb.VEventType_HEARTBEAT,
-				Timestamp:   now / 1e9,
-				CurrentTime: now,
-			}); err != nil {
+		case <-hbTimer.C:
+			if err := injectHeartbeat(false); err != nil {
 				if err == io.EOF {
 					return nil
 				}

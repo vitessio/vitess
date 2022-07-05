@@ -4520,10 +4520,14 @@ func (a *application) rewriteRefOfMatchExpr(parent SQLNode, node *MatchExpr, rep
 			return true
 		}
 	}
-	if !a.rewriteSelectExprs(node, node.Columns, func(newNode, parent SQLNode) {
-		parent.(*MatchExpr).Columns = newNode.(SelectExprs)
-	}) {
-		return false
+	for x, el := range node.Columns {
+		if !a.rewriteRefOfColName(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(*MatchExpr).Columns[idx] = newNode.(*ColName)
+			}
+		}(x)) {
+			return false
+		}
 	}
 	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*MatchExpr).Expr = newNode.(Expr)
