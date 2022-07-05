@@ -125,7 +125,7 @@ func (del *Delete) deleteVindexEntries(ctx context.Context, vcursor VCursor, bin
 	}
 
 	for _, row := range subQueryResults.Rows {
-		ksid, err := resolveKeyspaceID(vcursor, del.KsidVindex, row[0:del.KsidLength])
+		ksid, err := resolveKeyspaceID(ctx, vcursor, del.KsidVindex, row[0:del.KsidLength])
 		if err != nil {
 			return err
 		}
@@ -137,7 +137,7 @@ func (del *Delete) deleteVindexEntries(ctx context.Context, vcursor VCursor, bin
 				fromIds = append(fromIds, row[colnum])
 				colnum++
 			}
-			if err := colVindex.Vindex.(vindexes.Lookup).Delete(vcursor, [][]sqltypes.Value{fromIds}, ksid); err != nil {
+			if err := colVindex.Vindex.(vindexes.Lookup).Delete(ctx, vcursor, [][]sqltypes.Value{fromIds}, ksid); err != nil {
 				return err
 			}
 		}

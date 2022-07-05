@@ -130,7 +130,7 @@ func (vf *VindexFunc) mapVindex(ctx context.Context, vcursor VCursor, bindVars m
 		if err != nil {
 			return nil, err
 		}
-		destinations, err := vf.Vindex.Map(vcursor, []sqltypes.Value{value})
+		destinations, err := vf.Vindex.Map(ctx, vcursor, []sqltypes.Value{value})
 		if err != nil {
 			return nil, err
 		}

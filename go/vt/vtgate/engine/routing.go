@@ -464,7 +464,7 @@ func resolveShards(ctx context.Context, vcursor VCursor, vindex vindexes.SingleC
 	}
 
 	// Map using the Vindex
-	destinations, err := vindex.Map(vcursor, vindexKeys)
+	destinations, err := vindex.Map(ctx, vcursor, vindexKeys)
 	if err != nil {
 		return nil, nil, err
 
@@ -475,7 +475,7 @@ func resolveShards(ctx context.Context, vcursor VCursor, vindex vindexes.SingleC
 }
 
 func resolveShardsMultiCol(ctx context.Context, vcursor VCursor, vindex vindexes.MultiColumn, keyspace *vindexes.Keyspace, rowColValues [][]sqltypes.Value, shardIdsNeeded bool) ([]*srvtopo.ResolvedShard, [][][]*querypb.Value, error) {
-	destinations, err := vindex.Map(vcursor, rowColValues)
+	destinations, err := vindex.Map(ctx, vcursor, rowColValues)
 	if err != nil {
 		return nil, nil, err
 	}

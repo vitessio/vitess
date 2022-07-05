@@ -145,7 +145,7 @@ func (upd *Update) updateVindexEntries(ctx context.Context, vcursor VCursor, bin
 	env := evalengine.EnvWithBindVars(bindVars, vcursor.ConnCollation())
 
 	for _, row := range subQueryResult.Rows {
-		ksid, err := resolveKeyspaceID(vcursor, upd.KsidVindex, row[0:upd.KsidLength])
+		ksid, err := resolveKeyspaceID(ctx, vcursor, upd.KsidVindex, row[0:upd.KsidLength])
 		if err != nil {
 			return err
 		}
@@ -187,7 +187,7 @@ func (upd *Update) updateVindexEntries(ctx context.Context, vcursor VCursor, bin
 			}
 
 			if colVindex.Owned {
-				if err := colVindex.Vindex.(vindexes.Lookup).Update(vcursor, fromIds, ksid, vindexColumnKeys); err != nil {
+				if err := colVindex.Vindex.(vindexes.Lookup).Update(ctx, vcursor, fromIds, ksid, vindexColumnKeys); err != nil {
 					return err
 				}
 			} else {
@@ -205,7 +205,7 @@ func (upd *Update) updateVindexEntries(ctx context.Context, vcursor VCursor, bin
 				}
 
 				// If values were supplied, we validate against keyspace id.
-				verified, err := vindexes.Verify(colVindex.Vindex, vcursor, [][]sqltypes.Value{vindexColumnKeys}, [][]byte{ksid})
+				verified, err := vindexes.Verify(ctx, colVindex.Vindex, vcursor, [][]sqltypes.Value{vindexColumnKeys}, [][]byte{ksid})
 				if err != nil {
 					return err
 				}

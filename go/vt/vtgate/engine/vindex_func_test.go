@@ -39,11 +39,11 @@ func (*uvindex) String() string     { return "uvindex" }
 func (*uvindex) Cost() int          { return 1 }
 func (*uvindex) IsUnique() bool     { return true }
 func (*uvindex) NeedsVCursor() bool { return false }
-func (*uvindex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
+func (*uvindex) Verify(context.Context, vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	panic("unimplemented")
 }
 
-func (v *uvindex) Map(cursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+func (v *uvindex) Map(ctx context.Context, vcursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	if v.matchkr {
 		return []key.Destination{
 			key.DestinationKeyRange{
@@ -69,11 +69,11 @@ func (*nvindex) String() string     { return "nvindex" }
 func (*nvindex) Cost() int          { return 1 }
 func (*nvindex) IsUnique() bool     { return false }
 func (*nvindex) NeedsVCursor() bool { return false }
-func (*nvindex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
+func (*nvindex) Verify(context.Context, vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	panic("unimplemented")
 }
 
-func (v *nvindex) Map(cursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+func (v *nvindex) Map(ctx context.Context, vcursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	if v.matchid {
 		return []key.Destination{
 			key.DestinationKeyspaceIDs([][]byte{

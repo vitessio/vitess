@@ -104,14 +104,14 @@ func execMultiShard(ctx context.Context, vcursor VCursor, rss []*srvtopo.Resolve
 	return result, vterrors.Aggregate(errs)
 }
 
-func resolveKeyspaceID(vcursor VCursor, vindex vindexes.Vindex, vindexKey []sqltypes.Value) ([]byte, error) {
+func resolveKeyspaceID(ctx context.Context, vcursor VCursor, vindex vindexes.Vindex, vindexKey []sqltypes.Value) ([]byte, error) {
 	var destinations []key.Destination
 	var err error
 	switch vdx := vindex.(type) {
 	case vindexes.MultiColumn:
-		destinations, err = vdx.Map(vcursor, [][]sqltypes.Value{vindexKey})
+		destinations, err = vdx.Map(ctx, vcursor, [][]sqltypes.Value{vindexKey})
 	case vindexes.SingleColumn:
-		destinations, err = vdx.Map(vcursor, vindexKey)
+		destinations, err = vdx.Map(ctx, vcursor, vindexKey)
 	}
 
 	if err != nil {
