@@ -1,80 +1,37 @@
+/*
+Copyright 2022 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+	http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package main
 
 import (
-	"errors"
-	"fmt"
-	"io/fs"
-	"os"
-	"path/filepath"
-	"strings"
-
 	"github.com/spf13/cobra"
-	"github.com/spf13/cobra/doc"
 
+	"vitess.io/vitess/go/cmd/internal/docgen"
 	"vitess.io/vitess/go/cmd/vtctldclient/command"
 )
-
-func recursivelyDisableAutoGenTags(root *cobra.Command) {
-	commands := []*cobra.Command{root}
-	for cmd := commands[0]; len(commands) > 0; cmd, commands = commands[0], commands[1:] {
-		cmd.DisableAutoGenTag = true
-
-		commands = append(commands, cmd.Commands()...)
-	}
-}
 
 func main() {
 	var dir string
 	cmd := cobra.Command{
 		Use: "docgen [-d <dir>]",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fi, err := os.Stat(dir)
-			switch {
-			case errors.Is(err, fs.ErrNotExist):
-				if err := os.Mkdir(dir, 0755); err != nil {
-					return err
-				}
-			case err != nil:
-				return err
-			case !fi.IsDir():
-				return fmt.Errorf("%s exists but is not a directory", dir)
-			}
-
-			recursivelyDisableAutoGenTags(command.Root)
-			return doc.GenMarkdownTreeCustom(command.Root, dir, frontmatterFilePrepender, linkHandler)
+			return docgen.GenerateMarkdownTree(command.Root, dir)
 		},
 	}
 
 	cmd.Flags().StringVarP(&dir, "dir", "d", "doc", "output directory to write documentation")
 	_ = cmd.Execute()
-}
-
-const frontmatter = `---
-title: %s
-series: %s
-description:
----
-`
-
-func frontmatterFilePrepender(filename string) string {
-	name := filepath.Base(filename)
-	base := strings.TrimSuffix(name, filepath.Ext(name))
-
-	root, cmdName, ok := strings.Cut(base, "_")
-	if !ok { // no `_`, so not a subcommand
-		cmdName = root
-	}
-
-	return fmt.Sprintf(frontmatter, cmdName, root)
-}
-
-func linkHandler(filename string) string {
-	name := filepath.Base(filename)
-	base := strings.TrimSuffix(name, filepath.Ext(name))
-
-	if _, _, ok := strings.Cut(base, "_"); !ok {
-		return "../"
-	}
-
-	return fmt.Sprintf("./%s/", strings.ToLower(base))
 }
