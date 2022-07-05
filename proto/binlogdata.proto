@@ -410,7 +410,8 @@ message VEvent {
   string keyspace = 22;
   // the source shard
   string shard = 23;
-
+  // indicate that we are being throttled right now
+  bool throttled = 24;
 }
 
 message MinimalTable {
@@ -456,6 +457,10 @@ message VStreamRowsResponse {
   string gtid = 3;
   repeated query.Row rows = 4;
   query.Row lastpk = 5;
+  // Throttled indicates that rowstreamer is being throttled right now
+  bool throttled = 6;
+  // Heartbeat indicates that this is a heartbeat message
+  bool heartbeat = 7;
 }
 
 message LastPKEvent {

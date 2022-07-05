@@ -544,6 +544,9 @@ func TestVStreamCopyWithDifferentFilters(t *testing.T) {
 				if ev.Type == binlogdatapb.VEventType_HEARTBEAT {
 					continue
 				}
+				if ev.Throttled {
+					continue
+				}
 				allEvents = append(allEvents, ev)
 			}
 			if len(allEvents) == len(expectedEvents) {
@@ -2126,6 +2129,9 @@ func expectLog(ctx context.Context, t *testing.T, input any, ch <-chan []*binlog
 				for _, ev := range allevs {
 					// Ignore spurious heartbeats that can happen on slow machines.
 					if ev.Type == binlogdatapb.VEventType_HEARTBEAT {
+						continue
+					}
+					if ev.Throttled {
 						continue
 					}
 					evs = append(evs, ev)
