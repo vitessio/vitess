@@ -548,6 +548,27 @@ func (cached *ChangeColumn) CachedSize(alloc bool) int64 {
 	size += cached.After.CachedSize(true)
 	return size
 }
+func (cached *CharExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field Exprs vitess.io/vitess/go/vt/sqlparser.Exprs
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Exprs)) * int64(16))
+		for _, elem := range cached.Exprs {
+			if cc, ok := elem.(cachedObject); ok {
+				size += cc.CachedSize(true)
+			}
+		}
+	}
+	// field Charset string
+	size += hack.RuntimeAllocSize(int64(len(cached.Charset)))
+	return size
+}
 func (cached *CheckConstraintDefinition) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1326,6 +1347,32 @@ func (cached *FuncExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *GTIDFuncExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(80)
+	}
+	// field Set1 vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Set1.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Set2 vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Set2.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Timeout vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Timeout.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Channel vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Channel.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
 func (cached *GroupConcatExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1554,6 +1601,29 @@ func (cached *IntervalExpr) CachedSize(alloc bool) int64 {
 	}
 	// field Unit string
 	size += hack.RuntimeAllocSize(int64(len(cached.Unit)))
+	return size
+}
+func (cached *IntervalFuncExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field Expr vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Expr.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Exprs vitess.io/vitess/go/vt/sqlparser.Exprs
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Exprs)) * int64(16))
+		for _, elem := range cached.Exprs {
+			if cc, ok := elem.(cachedObject); ok {
+				size += cc.CachedSize(true)
+			}
+		}
+	}
 	return size
 }
 func (cached *IntroducerExpr) CachedSize(alloc bool) int64 {
@@ -2224,6 +2294,28 @@ func (cached *Literal) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.Val)))
 	return size
 }
+func (cached *LocateExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field SubStr vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.SubStr.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Str vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Str.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Pos vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Pos.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
 func (cached *LockOption) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2277,13 +2369,11 @@ func (cached *MatchExpr) CachedSize(alloc bool) int64 {
 	if alloc {
 		size += int64(48)
 	}
-	// field Columns vitess.io/vitess/go/vt/sqlparser.SelectExprs
+	// field Columns []*vitess.io/vitess/go/vt/sqlparser.ColName
 	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Columns)) * int64(16))
+		size += hack.RuntimeAllocSize(int64(cap(cached.Columns)) * int64(8))
 		for _, elem := range cached.Columns {
-			if cc, ok := elem.(cachedObject); ok {
-				size += cc.CachedSize(true)
-			}
+			size += elem.CachedSize(true)
 		}
 	}
 	// field Expr vitess.io/vitess/go/vt/sqlparser.Expr

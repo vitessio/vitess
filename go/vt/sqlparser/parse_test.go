@@ -3025,6 +3025,15 @@ var (
 		input:  "SELECT INSERT('Quadratic', 3, 4, 'What')",
 		output: "select insert('Quadratic', 3, 4, 'What') from dual",
 	}, {
+		input:  "SELECT INTERVAL(1, 3, 4)",
+		output: "select interval(1, 3, 4) from dual",
+	}, {
+		input:  "SELECT POSITION('bar' IN 'foobarbar')",
+		output: "select locate('bar', 'foobarbar') from dual",
+	}, {
+		input:  "SELECT CHAR(77,121,83,81,'76' USING utf8mb4)",
+		output: "select char(77, 121, 83, 81, '76' using utf8mb4) from dual",
+	}, {
 		input:  "SELECT val, CUME_DIST() OVER w, ROW_NUMBER() OVER w, DENSE_RANK() OVER w, PERCENT_RANK() OVER w, RANK() OVER w AS 'cd' FROM numbers",
 		output: "select val, cume_dist() over w, row_number() over w, dense_rank() over w, percent_rank() over w, rank() over w as cd from numbers",
 	}, {
@@ -3177,6 +3186,33 @@ var (
 	}, {
 		input:  "SELECT PS_THREAD_ID(512), PS_THREAD_ID(18446644073709551615), PS_THREAD_ID(@j), PS_THREAD_ID('asd'), PS_THREAD_ID(TRIM('str'))",
 		output: "select ps_thread_id(512), ps_thread_id(18446644073709551615), ps_thread_id(@j), ps_thread_id('asd'), ps_thread_id(trim('str')) from dual",
+	}, {
+		input:  "SELECT GTID_SUBSET('3E11FA47-71CA-11E1-9E33-C80AA9429562:23','3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57')",
+		output: "select gtid_subset('3E11FA47-71CA-11E1-9E33-C80AA9429562:23', '3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57') from dual",
+	}, {
+		input:  "SELECT GTID_SUBSET(@j,TRIM('3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57'))",
+		output: "select gtid_subset(@j, trim('3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57')) from dual",
+	}, {
+		input:  "SELECT GTID_SUBTRACT('3E11FA47-71CA-11E1-9E33-C80AA9429562:23','3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57')",
+		output: "select gtid_subtract('3E11FA47-71CA-11E1-9E33-C80AA9429562:23', '3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57') from dual",
+	}, {
+		input:  "SELECT GTID_SUBTRACT(@j,TRIM('3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57'))",
+		output: "select gtid_subtract(@j, trim('3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57')) from dual",
+	}, {
+		input:  "SELECT WAIT_FOR_EXECUTED_GTID_SET('3E11FA47-71CA-11E1-9E33-C80AA9429562:23')",
+		output: "select wait_for_executed_gtid_set('3E11FA47-71CA-11E1-9E33-C80AA9429562:23') from dual",
+	}, {
+		input:  "SELECT WAIT_FOR_EXECUTED_GTID_SET(TRIM('3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57'), @j)",
+		output: "select wait_for_executed_gtid_set(trim('3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57'), @j) from dual",
+	}, {
+		input:  "SELECT WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS('3E11FA47-71CA-11E1-9E33-C80AA9429562:23')",
+		output: "select wati_until_sql_thread_after_gtids('3E11FA47-71CA-11E1-9E33-C80AA9429562:23') from dual",
+	}, {
+		input:  "SELECT WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS(TRIM('3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57'), @j)",
+		output: "select wati_until_sql_thread_after_gtids(trim('3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57'), @j) from dual",
+	}, {
+		input:  "SELECT WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS(TRIM('3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57'), 10, @i)",
+		output: "select wati_until_sql_thread_after_gtids(trim('3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57'), 10, @i) from dual",
 	}}
 )
 

@@ -130,6 +130,9 @@ type (
 
 		// ReleaseLock releases all the held advisory locks.
 		ReleaseLock() error
+
+		// StreamExecutePrimitiveStandalone executes the primitive in its own new autocommit session.
+		StreamExecutePrimitiveStandalone(primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(result *sqltypes.Result) error) error
 	}
 
 	//SessionActions gives primitives ability to interact with the session state
