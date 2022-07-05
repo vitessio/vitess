@@ -123,6 +123,7 @@ func NewAutocommitSession(sessn *vtgatepb.Session) *SafeSession {
 	newSession.ShardSessions = nil
 	newSession.PreSessions = nil
 	newSession.PostSessions = nil
+	newSession.LockSession = nil
 	newSession.Autocommit = true
 	newSession.Warnings = nil
 	return NewSafeSession(newSession)

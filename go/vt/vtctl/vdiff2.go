@@ -54,16 +54,20 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 
 	debugQuery := subFlags.Bool("debug_query", false, "Adds a mysql query to the report that can be used for further debugging")
 	onlyPks := subFlags.Bool("only_pks", false, "When reporting missing rows, only show primary keys in the report.")
-	format := subFlags.String("format", "", "Format of report") // "json" or ""
+	var format string
+	subFlags.StringVar(&format, "format", "text", "Format of report") // "json" or "text"
 	maxExtraRowsToCompare := subFlags.Int64("max_extra_rows_to_compare", 1000, "If there are collation differences between the source and target, you can have rows that are identical but simply returned in a different order from MySQL. We will do a second pass to compare the rows for any actual differences in this case and this flag allows you to control the resources used for this operation.")
 
 	resumable := subFlags.Bool("resumable", false, "Should this vdiff retry in case of recoverable errors, not yet implemented")
 	checksum := subFlags.Bool("checksum", false, "Use row-level checksums to compare, not yet implemented")
 	samplePct := subFlags.Int64("sample_pct", 100, "How many rows to sample, not yet implemented")
+	verbose := subFlags.Bool("verbose", false, "Show verbose vdiff output in summaries")
 
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
+	format = strings.ToLower(format)
+
 	var action vdiff.VDiffAction
 	var actionArg string
 
@@ -112,7 +116,7 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 		ReportOptions: &tabletmanagerdatapb.VDiffReportOptions{
 			OnlyPKS:    *onlyPks,
 			DebugQuery: *debugQuery,
-			Format:     *format,
+			Format:     format,
 		},
 	}
 
@@ -141,6 +145,15 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 		if err != nil {
 			return fmt.Errorf("can only resume a specific vdiff, please provide a valid UUID; view all with: VDiff -- --v2 %s.%s show all", keyspace, workflowName)
 		}
+	case vdiff.DeleteAction:
+		switch actionArg {
+		case vdiff.AllActionArg:
+		default:
+			vdiffUUID, err = uuid.Parse(actionArg)
+			if err != nil {
+				return fmt.Errorf("can only delete a specific vdiff, please provide a valid UUID; view all with: VDiff -- --v2 %s.%s show all", keyspace, workflowName)
+			}
+		}
 	default:
 		return fmt.Errorf("invalid action %s; %s", action, usage)
 	}
@@ -155,15 +168,17 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 
 	switch action {
 	case vdiff.CreateAction, vdiff.ResumeAction:
-		displayVDiff2ScheduledResponse(wr, *format, vdiffUUID.String(), action)
+		displayVDiff2ScheduledResponse(wr, format, vdiffUUID.String(), action)
 	case vdiff.ShowAction:
 		if output == nil {
 			// should not happen
 			return fmt.Errorf("invalid (empty) response from show command")
 		}
-		if err := displayVDiff2ShowResponse(wr, *format, keyspace, workflowName, actionArg, output); err != nil {
+		if err := displayVDiff2ShowResponse(wr, format, keyspace, workflowName, actionArg, output, *verbose); err != nil {
 			return err
 		}
+	case vdiff.DeleteAction:
+		displayVDiff2ActionStatusResponse(wr, format, action, vdiff.CompletedState)
 	default:
 		return fmt.Errorf("invalid action %s; %s", action, usage)
 	}
@@ -264,7 +279,7 @@ func displayListings(listings []*VDiffListing) string {
 	return str
 }
 
-func displayVDiff2ShowResponse(wr *wrangler.Wrangler, format, keyspace, workflowName, actionArg string, output *wrangler.VDiffOutput) error {
+func displayVDiff2ShowResponse(wr *wrangler.Wrangler, format, keyspace, workflowName, actionArg string, output *wrangler.VDiffOutput, verbose bool) error {
 	var vdiffUUID uuid.UUID
 	var err error
 	switch actionArg {
@@ -294,7 +309,7 @@ func displayVDiff2ShowResponse(wr *wrangler.Wrangler, format, keyspace, workflow
 		if len(output.Responses) == 0 {
 			return fmt.Errorf("no response received for vdiff show of %s.%s(%s)", keyspace, workflowName, vdiffUUID.String())
 		}
-		return displayVDiff2ShowSingleSummary(wr, format, keyspace, workflowName, vdiffUUID.String(), output)
+		return displayVDiff2ShowSingleSummary(wr, format, keyspace, workflowName, vdiffUUID.String(), output, verbose)
 	}
 }
 
@@ -342,9 +357,9 @@ func buildVDiff2Recent(output *wrangler.VDiffOutput) ([]*VDiffListing, error) {
 	return listings, nil
 }
 
-func displayVDiff2ShowSingleSummary(wr *wrangler.Wrangler, format, keyspace, workflowName, uuid string, output *wrangler.VDiffOutput) error {
+func displayVDiff2ShowSingleSummary(wr *wrangler.Wrangler, format, keyspace, workflowName, uuid string, output *wrangler.VDiffOutput, verbose bool) error {
 	str := ""
-	summary, err := buildVDiff2SingleSummary(wr, keyspace, workflowName, uuid, output)
+	summary, err := buildVDiff2SingleSummary(wr, keyspace, workflowName, uuid, output, verbose)
 	if err != nil {
 		return err
 	}
@@ -376,7 +391,7 @@ func displayVDiff2ShowSingleSummary(wr *wrangler.Wrangler, format, keyspace, wor
 	wr.Logger().Printf(str + "\n")
 	return nil
 }
-func buildVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid string, output *wrangler.VDiffOutput) (*vdiffSummary, error) {
+func buildVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid string, output *wrangler.VDiffOutput, verbose bool) (*vdiffSummary, error) {
 	summary := &vdiffSummary{
 		Workflow:     workflow,
 		Keyspace:     keyspace,
@@ -494,7 +509,7 @@ func buildVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid st
 	summary.Shards = strings.Join(shards, ",")
 	summary.TableSummaryMap = tableSummaryMap
 	summary.Reports = reports
-	if !summary.HasMismatch {
+	if !summary.HasMismatch && !verbose {
 		summary.Reports = nil
 		summary.TableSummaryMap = nil
 	}
@@ -521,6 +536,21 @@ func displayVDiff2ScheduledResponse(wr *wrangler.Wrangler, format string, uuid s
 			addtlMsg = "to resume "
 		}
 		msg := fmt.Sprintf("VDiff %s scheduled %son target shards, use show to view progress\n", uuid, addtlMsg)
+		wr.Logger().Printf(msg)
+	}
+}
+
+func displayVDiff2ActionStatusResponse(wr *wrangler.Wrangler, format string, action vdiff.VDiffAction, status vdiff.VDiffState) {
+	if format == "json" {
+		type ActionStatusResponse struct {
+			Action vdiff.VDiffAction
+			Status vdiff.VDiffState
+		}
+		resp := &ActionStatusResponse{Action: action, Status: status}
+		jsonText, _ := json.MarshalIndent(resp, "", "\t")
+		wr.Logger().Printf(string(jsonText) + "\n")
+	} else {
+		msg := fmt.Sprintf("VDiff %s status is %s on target shards\n", action, status)
 		wr.Logger().Printf(msg)
 	}
 }

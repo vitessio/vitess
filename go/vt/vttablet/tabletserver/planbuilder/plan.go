@@ -162,9 +162,6 @@ type Plan struct {
 	// Permissions stores the permissions for the tables accessed in the query.
 	Permissions []Permission
 
-	// FieldQuery is used to fetch field info
-	FieldQuery *sqlparser.ParsedQuery
-
 	// FullQuery will be set for all plans.
 	FullQuery *sqlparser.ParsedQuery
 
@@ -205,9 +202,8 @@ func Build(statement sqlparser.Statement, tables map[string]*schema.Table, isRes
 	switch stmt := statement.(type) {
 	case *sqlparser.Union:
 		plan, err = &Plan{
-			PlanID:     PlanSelect,
-			FieldQuery: GenerateFieldQuery(stmt),
-			FullQuery:  GenerateLimitQuery(stmt),
+			PlanID:    PlanSelect,
+			FullQuery: GenerateLimitQuery(stmt),
 		}, nil
 	case *sqlparser.Select:
 		plan, err = analyzeSelect(stmt, tables)
@@ -299,9 +295,6 @@ func BuildStreaming(sql string, tables map[string]*schema.Table, isReservedConn 
 
 	switch stmt := statement.(type) {
 	case *sqlparser.Select:
-		if stmt.Lock != sqlparser.NoLock {
-			return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "select with lock not allowed for streaming")
-		}
 		plan.Table, plan.AllTables = lookupTables(stmt.From, tables)
 	case *sqlparser.OtherRead, *sqlparser.Show, *sqlparser.Union, *sqlparser.CallProc, sqlparser.Explain:
 		// pass

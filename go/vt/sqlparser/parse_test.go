@@ -3028,6 +3028,12 @@ var (
 		input:  "SELECT INTERVAL(1, 3, 4)",
 		output: "select interval(1, 3, 4) from dual",
 	}, {
+		input:  "SELECT POSITION('bar' IN 'foobarbar')",
+		output: "select locate('bar', 'foobarbar') from dual",
+	}, {
+		input:  "SELECT CHAR(77,121,83,81,'76' USING utf8mb4)",
+		output: "select char(77, 121, 83, 81, '76' using utf8mb4) from dual",
+	}, {
 		input:  "SELECT val, CUME_DIST() OVER w, ROW_NUMBER() OVER w, DENSE_RANK() OVER w, PERCENT_RANK() OVER w, RANK() OVER w AS 'cd' FROM numbers",
 		output: "select val, cume_dist() over w, row_number() over w, dense_rank() over w, percent_rank() over w, rank() over w as cd from numbers",
 	}, {

@@ -86,6 +86,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfCastExpr(parent, node, replacer)
 	case *ChangeColumn:
 		return a.rewriteRefOfChangeColumn(parent, node, replacer)
+	case *CharExpr:
+		return a.rewriteRefOfCharExpr(parent, node, replacer)
 	case *CheckConstraintDefinition:
 		return a.rewriteRefOfCheckConstraintDefinition(parent, node, replacer)
 	case *ColName:
@@ -272,6 +274,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfLiteral(parent, node, replacer)
 	case *Load:
 		return a.rewriteRefOfLoad(parent, node, replacer)
+	case *LocateExpr:
+		return a.rewriteRefOfLocateExpr(parent, node, replacer)
 	case *LockOption:
 		return a.rewriteRefOfLockOption(parent, node, replacer)
 	case *LockTables:
@@ -1409,6 +1413,33 @@ func (a *application) rewriteRefOfChangeColumn(parent SQLNode, node *ChangeColum
 	}
 	if !a.rewriteRefOfColName(node, node.After, func(newNode, parent SQLNode) {
 		parent.(*ChangeColumn).After = newNode.(*ColName)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfCharExpr(parent SQLNode, node *CharExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExprs(node, node.Exprs, func(newNode, parent SQLNode) {
+		parent.(*CharExpr).Exprs = newNode.(Exprs)
 	}) {
 		return false
 	}
@@ -4354,6 +4385,43 @@ func (a *application) rewriteRefOfLoad(parent SQLNode, node *Load, replacer repl
 			a.cur.parent = parent
 			a.cur.node = node
 		}
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfLocateExpr(parent SQLNode, node *LocateExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.SubStr, func(newNode, parent SQLNode) {
+		parent.(*LocateExpr).SubStr = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.Str, func(newNode, parent SQLNode) {
+		parent.(*LocateExpr).Str = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.Pos, func(newNode, parent SQLNode) {
+		parent.(*LocateExpr).Pos = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
 		if !a.post(&a.cur) {
 			return false
 		}
@@ -8204,6 +8272,8 @@ func (a *application) rewriteCallable(parent SQLNode, node Callable, replacer re
 	switch node := node.(type) {
 	case *ArgumentLessWindowExpr:
 		return a.rewriteRefOfArgumentLessWindowExpr(parent, node, replacer)
+	case *CharExpr:
+		return a.rewriteRefOfCharExpr(parent, node, replacer)
 	case *ConvertExpr:
 		return a.rewriteRefOfConvertExpr(parent, node, replacer)
 	case *ConvertUsingExpr:
@@ -8268,6 +8338,8 @@ func (a *application) rewriteCallable(parent SQLNode, node Callable, replacer re
 		return a.rewriteRefOfJSONValueModifierExpr(parent, node, replacer)
 	case *LagLeadExpr:
 		return a.rewriteRefOfLagLeadExpr(parent, node, replacer)
+	case *LocateExpr:
+		return a.rewriteRefOfLocateExpr(parent, node, replacer)
 	case *MatchExpr:
 		return a.rewriteRefOfMatchExpr(parent, node, replacer)
 	case *MemberOfExpr:
@@ -8434,6 +8506,8 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfCaseExpr(parent, node, replacer)
 	case *CastExpr:
 		return a.rewriteRefOfCastExpr(parent, node, replacer)
+	case *CharExpr:
+		return a.rewriteRefOfCharExpr(parent, node, replacer)
 	case *ColName:
 		return a.rewriteRefOfColName(parent, node, replacer)
 	case *CollateExpr:
@@ -8524,6 +8598,8 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteListArg(parent, node, replacer)
 	case *Literal:
 		return a.rewriteRefOfLiteral(parent, node, replacer)
+	case *LocateExpr:
+		return a.rewriteRefOfLocateExpr(parent, node, replacer)
 	case *LockingFunc:
 		return a.rewriteRefOfLockingFunc(parent, node, replacer)
 	case *MatchExpr:

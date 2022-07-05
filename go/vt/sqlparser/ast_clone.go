@@ -87,6 +87,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfCastExpr(in)
 	case *ChangeColumn:
 		return CloneRefOfChangeColumn(in)
+	case *CharExpr:
+		return CloneRefOfCharExpr(in)
 	case *CheckConstraintDefinition:
 		return CloneRefOfCheckConstraintDefinition(in)
 	case *ColName:
@@ -273,6 +275,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfLiteral(in)
 	case *Load:
 		return CloneRefOfLoad(in)
+	case *LocateExpr:
+		return CloneRefOfLocateExpr(in)
 	case *LockOption:
 		return CloneRefOfLockOption(in)
 	case *LockTables:
@@ -819,6 +823,16 @@ func CloneRefOfChangeColumn(n *ChangeColumn) *ChangeColumn {
 	out.OldColumn = CloneRefOfColName(n.OldColumn)
 	out.NewColDefinition = CloneRefOfColumnDefinition(n.NewColDefinition)
 	out.After = CloneRefOfColName(n.After)
+	return &out
+}
+
+// CloneRefOfCharExpr creates a deep clone of the input.
+func CloneRefOfCharExpr(n *CharExpr) *CharExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Exprs = CloneExprs(n.Exprs)
 	return &out
 }
 
@@ -1807,6 +1821,18 @@ func CloneRefOfLoad(n *Load) *Load {
 		return nil
 	}
 	out := *n
+	return &out
+}
+
+// CloneRefOfLocateExpr creates a deep clone of the input.
+func CloneRefOfLocateExpr(n *LocateExpr) *LocateExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.SubStr = CloneExpr(n.SubStr)
+	out.Str = CloneExpr(n.Str)
+	out.Pos = CloneExpr(n.Pos)
 	return &out
 }
 
@@ -3177,6 +3203,8 @@ func CloneCallable(in Callable) Callable {
 	switch in := in.(type) {
 	case *ArgumentLessWindowExpr:
 		return CloneRefOfArgumentLessWindowExpr(in)
+	case *CharExpr:
+		return CloneRefOfCharExpr(in)
 	case *ConvertExpr:
 		return CloneRefOfConvertExpr(in)
 	case *ConvertUsingExpr:
@@ -3241,6 +3269,8 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfJSONValueModifierExpr(in)
 	case *LagLeadExpr:
 		return CloneRefOfLagLeadExpr(in)
+	case *LocateExpr:
+		return CloneRefOfLocateExpr(in)
 	case *MatchExpr:
 		return CloneRefOfMatchExpr(in)
 	case *MemberOfExpr:
@@ -3421,6 +3451,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfCaseExpr(in)
 	case *CastExpr:
 		return CloneRefOfCastExpr(in)
+	case *CharExpr:
+		return CloneRefOfCharExpr(in)
 	case *ColName:
 		return CloneRefOfColName(in)
 	case *CollateExpr:
@@ -3511,6 +3543,8 @@ func CloneExpr(in Expr) Expr {
 		return in
 	case *Literal:
 		return CloneRefOfLiteral(in)
+	case *LocateExpr:
+		return CloneRefOfLocateExpr(in)
 	case *LockingFunc:
 		return CloneRefOfLockingFunc(in)
 	case *MatchExpr:
