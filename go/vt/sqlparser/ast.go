@@ -2410,6 +2410,19 @@ type (
 		Exprs Exprs
 	}
 
+	// LocateExpr represents a LOCATE function expression
+	LocateExpr struct {
+		SubStr Expr
+		Str    Expr
+		Pos    Expr
+	}
+
+	// CharExpr represents a CHAR function expression
+	CharExpr struct {
+		Exprs   Exprs
+		Charset string
+	}
+
 	// Default represents a DEFAULT expression.
 	Default struct {
 		ColName string
@@ -2820,6 +2833,8 @@ func (*ConvertExpr) iExpr()                        {}
 func (*SubstrExpr) iExpr()                         {}
 func (*InsertExpr) iExpr()                         {}
 func (*IntervalFuncExpr) iExpr()                   {}
+func (*LocateExpr) iExpr()                         {}
+func (*CharExpr) iExpr()                           {}
 func (*ConvertUsingExpr) iExpr()                   {}
 func (*MatchExpr) iExpr()                          {}
 func (*GroupConcatExpr) iExpr()                    {}
@@ -2874,6 +2889,8 @@ func (*TrimFuncExpr) iCallable()                       {}
 func (*SubstrExpr) iCallable()                         {}
 func (*InsertExpr) iCallable()                         {}
 func (*IntervalFuncExpr) iCallable()                   {}
+func (*LocateExpr) iCallable()                         {}
+func (*CharExpr) iCallable()                           {}
 func (*ConvertUsingExpr) iCallable()                   {}
 func (*MatchExpr) iCallable()                          {}
 func (*GroupConcatExpr) iCallable()                    {}

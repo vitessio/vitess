@@ -194,6 +194,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfChangeColumn(a, b)
+	case *CharExpr:
+		b, ok := inB.(*CharExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfCharExpr(a, b)
 	case *CheckConstraintDefinition:
 		b, ok := inB.(*CheckConstraintDefinition)
 		if !ok {
@@ -728,6 +734,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfLoad(a, b)
+	case *LocateExpr:
+		b, ok := inB.(*LocateExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfLocateExpr(a, b)
 	case *LockOption:
 		b, ok := inB.(*LockOption)
 		if !ok {
@@ -1683,6 +1695,18 @@ func EqualsRefOfChangeColumn(a, b *ChangeColumn) bool {
 		EqualsRefOfColName(a.OldColumn, b.OldColumn) &&
 		EqualsRefOfColumnDefinition(a.NewColDefinition, b.NewColDefinition) &&
 		EqualsRefOfColName(a.After, b.After)
+}
+
+// EqualsRefOfCharExpr does deep equals between the two objects.
+func EqualsRefOfCharExpr(a, b *CharExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Charset == b.Charset &&
+		EqualsExprs(a.Exprs, b.Exprs)
 }
 
 // EqualsRefOfCheckConstraintDefinition does deep equals between the two objects.
@@ -2797,6 +2821,19 @@ func EqualsRefOfLoad(a, b *Load) bool {
 		return false
 	}
 	return true
+}
+
+// EqualsRefOfLocateExpr does deep equals between the two objects.
+func EqualsRefOfLocateExpr(a, b *LocateExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsExpr(a.SubStr, b.SubStr) &&
+		EqualsExpr(a.Str, b.Str) &&
+		EqualsExpr(a.Pos, b.Pos)
 }
 
 // EqualsRefOfLockOption does deep equals between the two objects.
@@ -4270,6 +4307,12 @@ func EqualsCallable(inA, inB Callable) bool {
 			return false
 		}
 		return EqualsRefOfArgumentLessWindowExpr(a, b)
+	case *CharExpr:
+		b, ok := inB.(*CharExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfCharExpr(a, b)
 	case *ConvertExpr:
 		b, ok := inB.(*ConvertExpr)
 		if !ok {
@@ -4456,6 +4499,12 @@ func EqualsCallable(inA, inB Callable) bool {
 			return false
 		}
 		return EqualsRefOfLagLeadExpr(a, b)
+	case *LocateExpr:
+		b, ok := inB.(*LocateExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfLocateExpr(a, b)
 	case *MatchExpr:
 		b, ok := inB.(*MatchExpr)
 		if !ok {
@@ -4819,6 +4868,12 @@ func EqualsExpr(inA, inB Expr) bool {
 			return false
 		}
 		return EqualsRefOfCastExpr(a, b)
+	case *CharExpr:
+		b, ok := inB.(*CharExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfCharExpr(a, b)
 	case *ColName:
 		b, ok := inB.(*ColName)
 		if !ok {
@@ -5077,6 +5132,12 @@ func EqualsExpr(inA, inB Expr) bool {
 			return false
 		}
 		return EqualsRefOfLockingFunc(a, b)
+	case *LocateExpr:
+		b, ok := inB.(*LocateExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfLocateExpr(a, b)
 	case *MatchExpr:
 		b, ok := inB.(*MatchExpr)
 		if !ok {
@@ -5311,6 +5372,12 @@ func EqualsJSONPathParam(inA, inB JSONPathParam) bool {
 			return false
 		}
 		return EqualsRefOfCastExpr(a, b)
+	case *CharExpr:
+		b, ok := inB.(*CharExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfCharExpr(a, b)
 	case *ColName:
 		b, ok := inB.(*ColName)
 		if !ok {
@@ -5569,6 +5636,12 @@ func EqualsJSONPathParam(inA, inB JSONPathParam) bool {
 			return false
 		}
 		return EqualsRefOfLockingFunc(a, b)
+	case *LocateExpr:
+		b, ok := inB.(*LocateExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfLocateExpr(a, b)
 	case *MatchExpr:
 		b, ok := inB.(*MatchExpr)
 		if !ok {

@@ -204,6 +204,10 @@ func TestCanonicalOutput(t *testing.T) {
 			"revert /* vt+ foo */ vitess_migration '9aecb3b4_b8a9_11ec_929a_0a43f95f28a3'",
 			"REVERT /* vt+ foo */ VITESS_MIGRATION '9aecb3b4_b8a9_11ec_929a_0a43f95f28a3'",
 		},
+		{
+			"select char(77, 121, 83, 81, '76' using utf8mb4) from dual",
+			"SELECT CHAR(77, 121, 83, 81, '76' USING utf8mb4) FROM `dual`",
+		},
 	}
 
 	for _, tc := range testcases {
