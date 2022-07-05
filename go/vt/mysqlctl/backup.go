@@ -283,6 +283,7 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 		return nil, vterrors.Wrap(err, "ListBackups failed")
 	}
 
+	metadataManager := &MetadataManager{}
 	if len(bhs) == 0 {
 		// There are no backups (not even broken/incomplete ones).
 		params.Logger.Errorf("no backup to restore on BackupStorage for directory %v. Starting up empty.", backupDir)
@@ -295,7 +296,21 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 		if err := params.Mysqld.ResetReplication(ctx); err != nil {
 			params.Logger.Errorf("error resetting replication: %v. Continuing", err)
 		}
+		// initialize the schema. We will not return in case of error
+		// but we will just log them and move on.
+		params.Logger.Infof("initialize schema >> since no valid backup")
+		if errors := initSchema(ctx, params); errors != nil {
+			log.Infof("Error in executing following schema changes")
+			for err := range errors {
+				log.Infof("%v", err)
+			}
+		}
+		if *InitPopulateMetadata {
+			if err := metadataManager.PopulateMetadataTables(params.Mysqld, params.LocalMetadata, params.DbName); err != nil {
+				params.Logger.Errorf("error populating metadata tables: %v. Continuing", err)
 
+			}
+		}
 		// Always return ErrNoBackup
 		return nil, ErrNoBackup
 	}
@@ -329,6 +344,7 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 		return nil, err
 	}
 
+	// TODO: @rameez not sure if this is needed anymore since we are doing initSchema after upgrade
 	// We disable super_read_only, in case it is in the default MySQL startup
 	// parameters and will be blocking the writes we need to do in
 	// PopulateMetadataTables().  We do it blindly, since
@@ -353,6 +369,25 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 	params.LocalMetadata["RestoredBackupTime"] = manifest.BackupTime
 	params.LocalMetadata["RestorePosition"] = mysql.EncodePosition(manifest.Position)
 
+	// initialize the schema. We will not return in case of error
+	// but we will just log them and move on.
+	params.Logger.Infof("initialize schema >> after restore")
+	if errors := initSchema(ctx, params); errors != nil {
+		log.Infof("Error in executing following schema changes")
+		for err := range errors {
+			log.Infof("%v", err)
+		}
+	}
+	// Populate local_metadata before starting without --skip-networking,
+	// so it's there before we start announcing ourselves.
+	params.Logger.Infof("Restore: populating local_metadata")
+	if *InitPopulateMetadata {
+		err = metadataManager.PopulateMetadataTables(params.Mysqld, params.LocalMetadata, params.DbName)
+	}
+	if err != nil {
+		return nil, err
+	}
+
 	// The MySQL manual recommends restarting mysqld after running mysql_upgrade,
 	// so that any changes made to system tables take effect.
 	params.Logger.Infof("Restore: restarting mysqld after mysql_upgrade")
@@ -371,4 +406,21 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 
 	restoreDuration.Set(int64(time.Since(startTs).Seconds()))
 	return manifest, nil
+}
+
+func initSchema(ctx context.Context, params RestoreParams) []error {
+	// get a dba connection
+	conn, err := params.Mysqld.GetDbaConnection(ctx)
+	if err != nil {
+		log.Infof("error in getting connection object %s", err)
+		return []error{err}
+	}
+	defer conn.Close()
+	// execute all the schema changes.
+	if errors := mysql.SchemaInitializer.InitializeSchema(conn.Conn); errors != nil {
+		log.Infof("error in RunAllMutations %s", err)
+		return errors
+	}
+
+	return nil
 }

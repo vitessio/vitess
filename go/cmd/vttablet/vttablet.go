@@ -57,7 +57,6 @@ var (
 )
 
 func init() {
-	log.Infof("inside init of vttablet")
 	servenv.RegisterDefaultFlags()
 }
 
@@ -201,7 +200,6 @@ func extractOnlineDDL() error {
 }
 
 func createTabletServer(config *tabletenv.TabletConfig, ts *topo.Server, tabletAlias *topodatapb.TabletAlias) *tabletserver.TabletServer {
-	log.Infof("creating new tablet server...")
 	if *tableACLConfig != "" {
 		// To override default simpleacl, other ACL plugins must set themselves to be default ACL factory
 		tableacl.Register("simpleacl", &simpleacl.Factory{})

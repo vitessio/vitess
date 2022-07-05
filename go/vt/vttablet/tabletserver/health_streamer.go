@@ -78,7 +78,6 @@ type healthStreamer struct {
 	conns                  *connpool.Pool
 	initSuccess            bool
 	signalWhenSchemaChange bool
-	schemaRegistered       bool
 }
 
 func newHealthStreamer(env tabletenv.Env, alias *topodatapb.TabletAlias) *healthStreamer {
@@ -326,7 +325,7 @@ func (hs *healthStreamer) reload() error {
 	}
 	defer conn.Recycle()
 
-	log.Infof("InitSchemaLocked END: %t, %t", hs.schemaRegistered, hs.initSuccess)
+	log.Infof("InitSchemaLocked END: %t", hs.initSuccess)
 	var tables []string
 	var tableNames []string
 
@@ -387,6 +386,10 @@ func (hs *healthStreamer) reload() error {
 	return nil
 }
 
+func init() {
+	InitSchema()
+}
+
 func InitSchema() error {
 	log.Infof("InitSchema for health stream: ")
 	f := func(conn *mysql.Conn) error {
@@ -404,10 +407,6 @@ func InitSchema() error {
 
 		return nil
 	}
-	if err := mysql.SchemaInitializer.RegisterSchemaInitializer("Initial VT Schema", f, false); err != nil {
-		log.Infof("error is %s", err)
-		return err
-	}
-
+	mysql.SchemaInitializer.RegisterSchemaInitializer("Initial VT Schema", f, false)
 	return nil
 }

@@ -45,8 +45,6 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/vt/vttablet/onlineddl"
-
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vdiff"
 
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -88,8 +86,7 @@ var (
 	skipBuildInfoTags  = flag.String("vttablet_skip_buildinfo_tags", "/.*/", "comma-separated list of buildinfo tags to skip from merging with -init_tags. each tag is either an exact match or a regular expression of the form '/regexp/'.")
 	initTags           flagutil.StringMapValue
 
-	initPopulateMetadata = flag.Bool("init_populate_metadata", false, "(init parameter) populate metadata tables even if restore_from_backup is disabled. If restore_from_backup is enabled, metadata tables are always populated regardless of this flag.")
-	initTimeout          = flag.Duration("init_timeout", 1*time.Minute, "(init parameter) timeout to use for the init phase.")
+	initTimeout = flag.Duration("init_timeout", 1*time.Minute, "(init parameter) timeout to use for the init phase.")
 
 	// statsTabletType is set to expose the current tablet type.
 	statsTabletType *stats.String
@@ -402,10 +399,16 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, healthCheckInterval ti
 	}
 	servenv.OnRun(tm.registerTabletManager)
 
-	// init schema
-	if err := tm.initSchema(ctx, tablet); err != nil {
-
-	}
+	/*
+		// initialize the schema. We will not return in case of error
+		// but we will just log them and move on.
+		if errors := tm.initSchema(ctx, tablet); errors != nil {
+			log.Infof("Error in executing following schema changes")
+			for err := range errors {
+				log.Infof("%v", err)
+			}
+		}
+	*/
 
 	restoring, err := tm.handleRestore(tm.BatchCtx)
 	if err != nil {
@@ -421,27 +424,18 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, healthCheckInterval ti
 	return nil
 }
 
-func (tm *TabletManager) initSchema(ctx context.Context, tablet *topodatapb.Tablet) error {
-	log.Infof("%s -- %s", topoproto.TabletDbName(tm.Tablet()), tm.tabletAlias.String())
-	_ = mysqlctl.InitTabletMetadata(topoproto.TabletDbName(tm.Tablet()))
-	localMetadata := tm.getLocalMetadataValues(tablet.Type)
-	_ = mysqlctl.InitUpsertLocalMetadata(localMetadata, topoproto.TabletDbName(tm.Tablet()))
-	_ = vreplication.InitVReplicationSchema()
-	_ = InitReparentJournal()
-	_ = onlineddl.InitDDLSchema()
-	_ = tabletserver.InitSchema()
-
+func (tm *TabletManager) initSchema(ctx context.Context, tablet *topodatapb.Tablet) []error {
 	// get a dba connection
 	conn, err := tm.MysqlDaemon.GetDbaConnection(ctx)
 	if err != nil {
 		log.Infof("error in getting connection object %s", err)
-		return err
+		return []error{err}
 	}
 	defer conn.Close()
 	// execute all the schema changes.
-	if err := mysql.SchemaInitializer.InitializeSchema(ctx, conn.Conn); err != nil {
+	if errors := mysql.SchemaInitializer.InitializeSchema(conn.Conn); errors != nil {
 		log.Infof("error in RunAllMutations %s", err)
-		return err
+		return errors
 	}
 
 	return nil
@@ -759,7 +753,7 @@ func (tm *TabletManager) initTablet(ctx context.Context) error {
 }
 
 func (tm *TabletManager) handleRestore(ctx context.Context) (bool, error) {
-	log.Infof("inside handle restore")
+	tablet := tm.Tablet()
 	// Sanity check for inconsistent flags
 	if tm.Cnf == nil && *restoreFromBackup {
 		return false, fmt.Errorf("you cannot enable -restore_from_backup without a my.cnf file")
@@ -791,7 +785,32 @@ func (tm *TabletManager) handleRestore(ctx context.Context) (bool, error) {
 		}()
 		return true, nil
 	}
+	// optionally populate metadata records
+	if *mysqlctl.InitPopulateMetadata {
+		// initialize the schema. We will not return in case of error
+		// but we will just log them and move on.
+		log.Infof("initialize schema >> no backup provided")
+		if errors := tm.initSchema(ctx, tablet); errors != nil {
+			log.Infof("Error in executing following schema changes")
+			for err := range errors {
+				log.Infof("%v", err)
+			}
+		}
+		localMetadata := tm.getLocalMetadataValues(tablet.Type)
+		if tm.Cnf != nil { // we are managing mysqld
+			// we'll use batchCtx here because we are still initializing and can't proceed unless this succeeds
+			if err := tm.MysqlDaemon.Wait(ctx, tm.Cnf); err != nil {
+				return false, err
+			}
+		}
 
+		if tm.MetadataManager != nil {
+			err := tm.MetadataManager.PopulateMetadataTables(tm.MysqlDaemon, localMetadata, topoproto.TabletDbName(tablet))
+			if err != nil {
+				return false, vterrors.Wrap(err, "failed to -init_populate_metadata")
+			}
+		}
+	}
 	return false, nil
 }
 

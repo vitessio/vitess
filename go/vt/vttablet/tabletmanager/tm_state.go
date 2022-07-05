@@ -204,7 +204,6 @@ func (ts *tmState) ChangeTabletType(ctx context.Context, tabletType topodatapb.T
 			}
 		}
 		if action == DBActionSetReadWrite {
-			log.Infof("setting global read only")
 			// We call SetReadOnly only after the topo has been updated to avoid
 			// situations where two tablets are primary at the DB level but not at the vitess level
 			if err := ts.tm.MysqlDaemon.SetReadOnly(false); err != nil {
@@ -295,7 +294,6 @@ func (ts *tmState) updateLocked(ctx context.Context) error {
 
 	if ts.tm.VREngine != nil {
 		if ts.tablet.Type == topodatapb.TabletType_PRIMARY {
-			log.Info("ts.tm.VREngine open ...")
 			ts.tm.VREngine.Open(ts.tm.BatchCtx)
 		} else {
 			ts.tm.VREngine.Close()
@@ -304,7 +302,6 @@ func (ts *tmState) updateLocked(ctx context.Context) error {
 
 	if ts.tm.VDiffEngine != nil {
 		if ts.tablet.Type == topodatapb.TabletType_PRIMARY {
-			log.Info("ts.tm.VDiffEngine open ...")
 			ts.tm.VDiffEngine.Open(ts.tm.BatchCtx, ts.tm.VREngine)
 		} else {
 			ts.tm.VDiffEngine.Close()
@@ -329,19 +326,6 @@ func (ts *tmState) updateLocked(ctx context.Context) error {
 	}
 
 	return returnErr
-}
-
-// TODO: We don't need this method anymore
-func (ts *tmState) populateLocalMetadataLocked() {
-	if ts.tm.MetadataManager == nil {
-		return
-	}
-
-	if ts.isOpening && !*initPopulateMetadata {
-		return
-	}
-
-	ts.hasCreatedMetadataTables = true
 }
 
 func (ts *tmState) canServe(tabletType topodatapb.TabletType) string {

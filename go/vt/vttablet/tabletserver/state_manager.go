@@ -245,18 +245,14 @@ func (sm *stateManager) execTransition(tabletType topodatapb.TabletType, state s
 	switch state {
 	case StateServing:
 		if tabletType == topodatapb.TabletType_PRIMARY {
-			log.Info("starting StateServing servePrimary...")
 			err = sm.servePrimary()
 		} else {
-			log.Info("starting StateServing serveNonPrimary...")
 			err = sm.serveNonPrimary(tabletType)
 		}
 	case StateNotServing:
 		if tabletType == topodatapb.TabletType_PRIMARY {
-			log.Info("starting StateNotServing unservePrimary...")
 			err = sm.unservePrimary()
 		} else {
-			log.Info("starting StateNotServing unserveNonPrimary...")
 			err = sm.unserveNonPrimary(tabletType)
 		}
 	case StateNotConnected:

@@ -19,37 +19,45 @@ package mysql
 import (
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
-
-	"github.com/stretchr/testify/assert"
 )
 
-func TestSchemaInitializer(t *testing.T) {
-	func1 := func() error { return nil }
-	func2 := func() error { return vterrors.Errorf(vtrpc.Code_ABORTED, "test aborted ...") }
+func TestSchemaInitializerRegisterInitializer(t *testing.T) {
 
-	if err := SchemaInitializer.RegisterSchemaInitializerOld("func1", func1, false); err != nil {
-		assert.FailNow(t, "Error should not be nil")
-	}
+	func1 := func(conn *Conn) error { return nil }
+	func2 := func(conn *Conn) error { return vterrors.Errorf(vtrpc.Code_ABORTED, "test aborted ...") }
 
-	if err := SchemaInitializer.RegisterSchemaInitializerOld("func2", func2, false); err != nil {
-		assert.FailNow(t, "Error should not be nil")
-	}
+	SchemaInitializer.RegisterSchemaInitializer("func1", func1, false)
+	SchemaInitializer.RegisterSchemaInitializer("func2", func2, false)
+	// duplication of same name is ignored
+	SchemaInitializer.RegisterSchemaInitializer("func1", func1, false)
 
-	err := SchemaInitializer.InitializeSchemaOld()
-	assert.EqualErrorf(t, err, "test aborted ...", "Error mismatch")
+	require.EqualValues(t, len(SchemaInitializer.getAllRegisteredFunctions()), 2)
+}
 
-	SchemaInitializer.initialized = true
+func TestSchemaInitializerOrderInitializer(t *testing.T) {
 
-	if err := SchemaInitializer.RegisterSchemaInitializerOld("func3", func1, false); err != nil {
-		assert.FailNow(t, "Error should not be nil")
-	}
+	func1 := func(conn *Conn) error { return nil }
+	func2 := func(conn *Conn) error { return vterrors.Errorf(vtrpc.Code_ABORTED, "test aborted ...") }
 
-	if err := SchemaInitializer.RegisterSchemaInitializerOld("func4", func2, false); err != nil {
-		assert.EqualErrorf(t, err, "test aborted ...", "Error mismatch")
-	} else {
-		assert.FailNow(t, "Error should not be nil")
-	}
+	SchemaInitializer.RegisterSchemaInitializer("func1", func1, false)
+	SchemaInitializer.RegisterSchemaInitializer("func2", func2, false)
+	// duplication of same name is ignored
+	SchemaInitializer.RegisterSchemaInitializer("func1", func1, false)
 
+	functions := SchemaInitializer.getAllRegisteredFunctions()
+	require.EqualValues(t, len(functions), 2)
+	require.EqualValues(t, functions[0], "func1")
+	require.EqualValues(t, functions[1], "func2")
+
+	// now add another one at head
+	SchemaInitializer.RegisterSchemaInitializer("func3", func1, true)
+	functions = SchemaInitializer.getAllRegisteredFunctions()
+	require.EqualValues(t, len(functions), 3)
+	require.EqualValues(t, functions[0], "func3")
+	require.EqualValues(t, functions[1], "func1")
+	require.EqualValues(t, functions[2], "func2")
 }

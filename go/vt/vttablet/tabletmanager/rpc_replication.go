@@ -48,6 +48,8 @@ func init() {
 	// combine all queires
 	reparentQueries = append([]string{}, mysqlctl.CreateReparentJournal()...)
 	reparentQueries = append(reparentQueries, mysqlctl.AlterReparentJournal()...)
+
+	_ = InitReparentJournal()
 }
 
 func InitReparentJournal() error {
@@ -61,12 +63,7 @@ func InitReparentJournal() error {
 		}
 		return nil
 	}
-
-	if err := mysql.SchemaInitializer.RegisterSchemaInitializer("Alter Reparent Journal", f, false); err != nil {
-		log.Infof("error is %s", err)
-		return err
-	}
-
+	mysql.SchemaInitializer.RegisterSchemaInitializer("Alter Reparent Journal", f, false)
 	return nil
 }
 
@@ -283,20 +280,18 @@ func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string
 		return "", err
 	}
 
-	log.Info("changeTypeLocked...")
 	// Set the server read-write, from now on we can accept real
 	// client writes. Note that if semi-sync replication is enabled,
 	// we'll still need some replicas to be able to commit transactions.
 	if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_PRIMARY, DBActionSetReadWrite, convertBoolToSemiSyncAction(semiSync)); err != nil {
 		return "", err
 	}
-	log.Info("fix semi sync...")
 	// Enforce semi-sync after changing the tablet)type to PRIMARY. Otherwise, the
 	// primary will hang while trying to create the database.
 	if err := tm.fixSemiSync(topodatapb.TabletType_PRIMARY, convertBoolToSemiSyncAction(semiSync)); err != nil {
 		return "", err
 	}
-	log.Info("init primary done...")
+	log.Info("out of init primary")
 	return mysql.EncodePosition(pos), nil
 }
 
@@ -307,17 +302,7 @@ func (tm *TabletManager) PopulateReparentJournal(ctx context.Context, timeCreate
 	if err != nil {
 		return err
 	}
-	cmds := mysqlctl.CreateReparentJournal()
-	if err := tm.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds); err != nil {
-		return err
-	}
-
-	// Execute ALTER statement on reparent_journal table and ignore errors
-	cmds = mysqlctl.AlterReparentJournal()
-	_ = tm.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds)
-
-	cmds = []string{mysqlctl.PopulateReparentJournal(timeCreatedNS, actionName, topoproto.TabletAliasString(primaryAlias), pos)}
-
+	cmds := []string{mysqlctl.PopulateReparentJournal(timeCreatedNS, actionName, topoproto.TabletAliasString(primaryAlias), pos)}
 	return tm.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds)
 }
 

@@ -75,6 +75,7 @@ const (
 )
 
 func init() {
+	log.Infof("init for allddls")
 	allddls := append([]string{}, binlogplayer.CreateVReplicationTable()...)
 	allddls = append(allddls, binlogplayer.AlterVReplicationTable...)
 	allddls = append(allddls, createReshardingJournalTable, createCopyState)
@@ -89,6 +90,8 @@ func init() {
 	allDDLQueries = append(allDDLQueries, createReshardingJournalTable, createCopyState)
 	allDDLQueries = append(allDDLQueries, createVReplicationLogTable)
 	allDDLQueries = append(allDDLQueries, withDDLInitialQueries...)
+
+	InitVReplicationSchema()
 }
 
 // this are the default tablet_types that will be used by the tablet picker to find sources for a vreplication stream
@@ -248,10 +251,7 @@ func InitVReplicationSchema() error {
 
 		return nil
 	}
-	if err := mysql.SchemaInitializer.RegisterSchemaInitializer("Init VReplication Schema", f, false); err != nil {
-		log.Infof("SchemaInitializer: error registering schema initializer %s", err)
-		return err
-	}
+	mysql.SchemaInitializer.RegisterSchemaInitializer("Init VReplication Schema", f, false)
 	return nil
 }
 
