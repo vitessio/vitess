@@ -66,6 +66,13 @@ func (node *Select) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
+func (node *CommentOnly) Format(buf *TrackedBuffer) {
+	for _, comment := range node.Comments {
+		buf.WriteString(comment)
+	}
+}
+
+// Format formats the node.
 func (node *Union) Format(buf *TrackedBuffer) {
 	if requiresParen(node.Left) {
 		buf.astPrintf(node, "(%v)", node.Left)

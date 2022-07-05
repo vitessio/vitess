@@ -78,6 +78,13 @@ func (node *Select) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
+func (node *CommentOnly) formatFast(buf *TrackedBuffer) {
+	for _, comment := range node.Comments {
+		buf.WriteString(comment)
+	}
+}
+
+// formatFast formats the node.
 func (node *Union) formatFast(buf *TrackedBuffer) {
 	if requiresParen(node.Left) {
 		buf.WriteByte('(')

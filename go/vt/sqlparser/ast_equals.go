@@ -254,6 +254,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsColumns(a, b)
+	case *CommentOnly:
+		b, ok := inB.(*CommentOnly)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfCommentOnly(a, b)
 	case *Commit:
 		b, ok := inB.(*Commit)
 		if !ok {
@@ -1903,6 +1909,17 @@ func EqualsColumns(a, b Columns) bool {
 		}
 	}
 	return true
+}
+
+// EqualsRefOfCommentOnly does deep equals between the two objects.
+func EqualsRefOfCommentOnly(a, b *CommentOnly) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsSliceOfString(a.Comments, b.Comments)
 }
 
 // EqualsRefOfCommit does deep equals between the two objects.
@@ -5903,6 +5920,12 @@ func EqualsStatement(inA, inB Statement) bool {
 			return false
 		}
 		return EqualsRefOfCallProc(a, b)
+	case *CommentOnly:
+		b, ok := inB.(*CommentOnly)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfCommentOnly(a, b)
 	case *Commit:
 		b, ok := inB.(*Commit)
 		if !ok {
