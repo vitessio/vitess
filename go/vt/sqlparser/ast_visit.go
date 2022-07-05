@@ -2330,8 +2330,10 @@ func VisitRefOfMatchExpr(in *MatchExpr, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitSelectExprs(in.Columns, f); err != nil {
-		return err
+	for _, el := range in.Columns {
+		if err := VisitRefOfColName(el, f); err != nil {
+			return err
+		}
 	}
 	if err := VisitExpr(in.Expr, f); err != nil {
 		return err
