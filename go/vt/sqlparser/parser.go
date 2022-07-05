@@ -225,7 +225,8 @@ func parseNext(tokenizer *Tokenizer, strict bool) (Statement, error) {
 		}
 		return nil, tokenizer.LastError
 	}
-	if tokenizer.ParseTree == nil {
+	_, isCommentOnly := tokenizer.ParseTree.(*CommentOnly)
+	if tokenizer.ParseTree == nil || isCommentOnly {
 		return ParseNext(tokenizer)
 	}
 	return tokenizer.ParseTree, nil

@@ -3286,7 +3286,7 @@ func TestInvalid(t *testing.T) {
 		err:   "syntax error",
 	}, {
 		input: "/*!*/",
-		err:   "query was empty",
+		err:   "Query was empty",
 	}, {
 		input: "select /* union with limit on lhs */ 1 from t limit 1 union select 1 from t",
 		err:   "syntax error at position 60 near 'union'",
