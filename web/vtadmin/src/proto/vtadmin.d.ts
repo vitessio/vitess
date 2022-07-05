@@ -50199,6 +50199,9 @@ export namespace binlogdata {
 
         /** VEvent shard */
         shard?: (string|null);
+
+        /** VEvent throttled */
+        throttled?: (boolean|null);
     }
 
     /** Represents a VEvent. */
@@ -50248,6 +50251,9 @@ export namespace binlogdata {
 
         /** VEvent shard. */
         public shard: string;
+
+        /** VEvent throttled. */
+        public throttled: boolean;
 
         /**
          * Creates a new VEvent instance using the specified properties.
@@ -50853,6 +50859,12 @@ export namespace binlogdata {
 
         /** VStreamRowsResponse lastpk */
         lastpk?: (query.IRow|null);
+
+        /** VStreamRowsResponse throttled */
+        throttled?: (boolean|null);
+
+        /** VStreamRowsResponse heartbeat */
+        heartbeat?: (boolean|null);
     }
 
     /** Represents a VStreamRowsResponse. */
@@ -50878,6 +50890,12 @@ export namespace binlogdata {
 
         /** VStreamRowsResponse lastpk. */
         public lastpk?: (query.IRow|null);
+
+        /** VStreamRowsResponse throttled. */
+        public throttled: boolean;
+
+        /** VStreamRowsResponse heartbeat. */
+        public heartbeat: boolean;
 
         /**
          * Creates a new VStreamRowsResponse instance using the specified properties.

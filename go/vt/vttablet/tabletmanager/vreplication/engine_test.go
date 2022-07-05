@@ -508,6 +508,8 @@ func TestCreateDBAndTable(t *testing.T) {
 			"ALTER TABLE _vt.vreplication ADD COLUMN tags.*",
 			"ALTER TABLE _vt.vreplication ADD COLUMN time_heartbeat.*",
 			"ALTER TABLE _vt.vreplication ADD COLUMN workflow_type int NOT NULL DEFAULT 0",
+			"ALTER TABLE _vt.vreplication ADD COLUMN time_throttled.*",
+			"ALTER TABLE _vt.vreplication ADD COLUMN component_throttled.*",
 			"create table if not exists _vt.resharding_journal.*",
 			"create table if not exists _vt.copy_state.*",
 		}

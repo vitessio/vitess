@@ -77,6 +77,8 @@ const (
 	alterSchemaMigrationsTableVreplLivenessIndicator   = "ALTER TABLE _vt.schema_migrations add column vitess_liveness_indicator bigint NOT NULL DEFAULT 0"
 	alterSchemaMigrationsTableUserThrottleRatio        = "ALTER TABLE _vt.schema_migrations add column user_throttle_ratio float NOT NULL DEFAULT 0"
 	alterSchemaMigrationsTableSpecialPlan              = "ALTER TABLE _vt.schema_migrations add column special_plan text NOT NULL"
+	alterSchemaMigrationsLastThrottled                 = "ALTER TABLE _vt.schema_migrations add column last_throttled_timestamp timestamp NULL DEFAULT NULL"
+	alterSchemaMigrationsComponentThrottled            = "ALTER TABLE _vt.schema_migrations add column component_throttled tinytext NOT NULL"
 
 	sqlInsertMigration = `INSERT IGNORE INTO _vt.schema_migrations (
 		migration_uuid,
@@ -98,7 +100,7 @@ const (
 		reverted_uuid,
 		is_view
 	) VALUES (
-		%a, %a, %a, %a, %a, %a, %a, %a, %a, FROM_UNIXTIME(NOW()), %a, %a, %a, %a, %a, %a, %a, %a
+		%a, %a, %a, %a, %a, %a, %a, %a, %a, NOW(), %a, %a, %a, %a, %a, %a, %a, %a
 	)`
 
 	sqlSelectQueuedMigrations = `SELECT
@@ -255,6 +257,11 @@ const (
 		WHERE
 			migration_uuid=%a
 	`
+	sqlUpdateLastThrottled = `UPDATE _vt.schema_migrations
+			SET last_throttled_timestamp=FROM_UNIXTIME(%a), component_throttled=%a
+		WHERE
+			migration_uuid=%a
+	`
 	sqlRetryMigrationWhere = `UPDATE _vt.schema_migrations
 		SET
 			migration_status='queued',
@@ -399,6 +406,9 @@ const (
 			stowaway_table,
 			rows_copied,
 			vitess_liveness_indicator,
+			user_throttle_ratio,
+			last_throttled_timestamp,
+			component_throttled,
 			postpone_completion
 		FROM _vt.schema_migrations
 		WHERE
@@ -534,6 +544,9 @@ const (
 			pos,
 			time_updated,
 			transaction_timestamp,
+			time_heartbeat,
+			time_throttled,
+			component_throttled,
 			state,
 			message,
 			rows_copied
@@ -610,4 +623,6 @@ var ApplyDDL = []string{
 	alterSchemaMigrationsTableVreplLivenessIndicator,
 	alterSchemaMigrationsTableUserThrottleRatio,
 	alterSchemaMigrationsTableSpecialPlan,
+	alterSchemaMigrationsLastThrottled,
+	alterSchemaMigrationsComponentThrottled,
 }

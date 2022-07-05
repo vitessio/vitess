@@ -568,6 +568,8 @@ var AlterVReplicationTable = []string{
 	// records the time of the last heartbeat. Heartbeats are only received if the source has no recent events
 	"ALTER TABLE _vt.vreplication ADD COLUMN time_heartbeat BIGINT(20) NOT NULL DEFAULT 0",
 	"ALTER TABLE _vt.vreplication ADD COLUMN workflow_type int NOT NULL DEFAULT 0",
+	"ALTER TABLE _vt.vreplication ADD COLUMN time_throttled BIGINT NOT NULL DEFAULT 0",
+	"ALTER TABLE _vt.vreplication ADD COLUMN component_throttled VARCHAR(255) NOT NULL DEFAULT ''",
 }
 
 // WithDDLInitialQueries contains the queries that:
@@ -682,6 +684,14 @@ func GenerateUpdateHeartbeat(uid uint32, timeUpdated int64) (string, error) {
 		return "", fmt.Errorf("timeUpdated cannot be zero")
 	}
 	return fmt.Sprintf("update _vt.vreplication set time_updated=%v, time_heartbeat=%v where id=%v", timeUpdated, timeUpdated, uid), nil
+}
+
+// GenerateUpdateTimeThrottled returns a statement to record the latest throttle time in the _vt.vreplication table.
+func GenerateUpdateTimeThrottled(uid uint32, timeThrottledUnix int64, componentThrottled string) (string, error) {
+	if timeThrottledUnix == 0 {
+		return "", fmt.Errorf("timeUpdated cannot be zero")
+	}
+	return fmt.Sprintf("update _vt.vreplication set time_updated=%v, time_throttled=%v, component_throttled='%v' where id=%v", timeThrottledUnix, timeThrottledUnix, componentThrottled, uid), nil
 }
 
 // StartVReplication returns a statement to start the replication.
