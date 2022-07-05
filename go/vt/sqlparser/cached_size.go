@@ -2271,13 +2271,11 @@ func (cached *MatchExpr) CachedSize(alloc bool) int64 {
 	if alloc {
 		size += int64(48)
 	}
-	// field Columns vitess.io/vitess/go/vt/sqlparser.SelectExprs
+	// field Columns []*vitess.io/vitess/go/vt/sqlparser.ColName
 	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Columns)) * int64(16))
+		size += hack.RuntimeAllocSize(int64(cap(cached.Columns)) * int64(8))
 		for _, elem := range cached.Columns {
-			if cc, ok := elem.(cachedObject); ok {
-				size += cc.CachedSize(true)
-			}
+			size += elem.CachedSize(true)
 		}
 	}
 	// field Expr vitess.io/vitess/go/vt/sqlparser.Expr

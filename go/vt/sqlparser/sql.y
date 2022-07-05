@@ -84,6 +84,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 
   ins           *Insert
   colName       *ColName
+  colNames      []*ColName
   indexHint    *IndexHint
   indexHints    IndexHints
   indexHintForType IndexHintForType
@@ -470,6 +471,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <subquery> subquery
 %type <derivedTable> derived_table
 %type <colName> column_name after_opt
+%type <colNames> column_names column_names_opt_paren
 %type <whens> when_expression_list
 %type <when> when_expression
 %type <expr> expression_opt else_expression_opt default_with_comma_opt
@@ -5167,9 +5169,9 @@ function_call_keyword
   {
 	$$ = &ExistsExpr{Subquery: $2}
   }
-| MATCH openb select_expression_list closeb AGAINST openb bit_expr match_option closeb
+| MATCH column_names_opt_paren AGAINST openb bit_expr match_option closeb
   {
-  $$ = &MatchExpr{Columns: $3, Expr: $7, Option: $8}
+  $$ = &MatchExpr{Columns: $2, Expr: $5, Option: $6}
   }
 | CAST openb expression AS convert_type array_opt closeb
   {
@@ -5220,6 +5222,26 @@ interval_value:
   INTERVAL simple_expr sql_id
   {
      $$ = &IntervalExpr{Expr: $2, Unit: $3.String()}
+  }
+
+column_names_opt_paren:
+  column_names
+  {
+    $$ = $1
+  }
+| openb column_names closeb
+  {
+    $$ = $2
+  }
+
+column_names:
+  column_name
+  {
+    $$ = []*ColName{$1}
+  }
+| column_names ',' column_name
+  {
+    $$ = append($1, $3)
   }
 
 trim_type:

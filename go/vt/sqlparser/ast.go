@@ -2381,7 +2381,7 @@ type (
 
 	// MatchExpr represents a call to the MATCH function
 	MatchExpr struct {
-		Columns SelectExprs
+		Columns []*ColName
 		Expr    Expr
 		Option  MatchExprOption
 	}

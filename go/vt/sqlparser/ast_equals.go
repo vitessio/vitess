@@ -2879,7 +2879,7 @@ func EqualsRefOfMatchExpr(a, b *MatchExpr) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return EqualsSelectExprs(a.Columns, b.Columns) &&
+	return EqualsSliceOfRefOfColName(a.Columns, b.Columns) &&
 		EqualsExpr(a.Expr, b.Expr) &&
 		a.Option == b.Option
 }
@@ -6498,6 +6498,19 @@ func EqualsTableAndLockTypes(a, b TableAndLockTypes) bool {
 	}
 	for i := 0; i < len(a); i++ {
 		if !EqualsRefOfTableAndLockType(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// EqualsSliceOfRefOfColName does deep equals between the two objects.
+func EqualsSliceOfRefOfColName(a, b []*ColName) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !EqualsRefOfColName(a[i], b[i]) {
 			return false
 		}
 	}

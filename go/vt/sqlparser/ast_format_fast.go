@@ -2329,7 +2329,14 @@ func (node *ConvertType) formatFast(buf *TrackedBuffer) {
 // formatFast formats the node
 func (node *MatchExpr) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("match(")
-	node.Columns.formatFast(buf)
+	for i, col := range node.Columns {
+		if i != 0 {
+			buf.WriteString(", ")
+			buf.printExpr(node, col, true)
+		} else {
+			buf.printExpr(node, col, true)
+		}
+	}
 	buf.WriteString(") against (")
 	buf.printExpr(node, node.Expr, true)
 	buf.WriteString(node.Option.ToString())
