@@ -2213,6 +2213,36 @@ func (node *IntervalFuncExpr) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
+func (node *LocateExpr) formatFast(buf *TrackedBuffer) {
+	if node.Pos != nil {
+		buf.WriteString("locate(")
+		buf.printExpr(node, node.SubStr, true)
+		buf.WriteString(", ")
+		buf.printExpr(node, node.Str, true)
+		buf.WriteString(", ")
+		buf.printExpr(node, node.Pos, true)
+		buf.WriteByte(')')
+	} else {
+		buf.WriteString("locate(")
+		buf.printExpr(node, node.SubStr, true)
+		buf.WriteString(", ")
+		buf.printExpr(node, node.Str, true)
+		buf.WriteByte(')')
+	}
+}
+
+// formatFast formats the node.
+func (node *CharExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("char(")
+	node.Exprs.formatFast(buf)
+	if node.Charset != "" {
+		buf.WriteString(" using ")
+		buf.WriteString(node.Charset)
+	}
+	buf.WriteByte(')')
+}
+
+// formatFast formats the node.
 func (node *NamedWindow) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("window ")
 	node.Windows.formatFast(buf)
