@@ -122,6 +122,7 @@ require (
 )
 
 require github.com/bndr/gotabulate v1.1.2
+
 require github.com/syndtr/goleveldb v1.0.0
 
 require (
