@@ -83,6 +83,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 
   ins           *Insert
   colName       *ColName
+  colNames      []*ColName
   indexHint    *IndexHint
   indexHints    IndexHints
   indexHintForType IndexHintForType
@@ -345,6 +346,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> REGEXP_INSTR REGEXP_LIKE REGEXP_REPLACE REGEXP_SUBSTR
 %token <str> ExtractValue UpdateXML
 %token <str> GET_LOCK RELEASE_LOCK RELEASE_ALL_LOCKS IS_FREE_LOCK IS_USED_LOCK
+%token <str> LOCATE POSITION
 
 // Match
 %token <str> MATCH AGAINST BOOLEAN LANGUAGE WITH QUERY EXPANSION WITHOUT VALIDATION
@@ -360,6 +362,9 @@ func bindVariable(yylex yyLexer, bvar string) {
 
 // Performance Schema Functions
 %token <str> FORMAT_BYTES FORMAT_PICO_TIME PS_CURRENT_THREAD_ID PS_THREAD_ID
+
+// GTID Functions
+%token <str> GTID_SUBSET GTID_SUBTRACT WAIT_FOR_EXECUTED_GTID_SET WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS
 
 // Explain tokens
 %token <str> FORMAT TREE VITESS TRADITIONAL
@@ -446,7 +451,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <str> generated_always_opt user_username address_opt
 %type <definer> definer_opt user
 %type <expr> expression frame_expression signed_literal signed_literal_or_null null_as_literal now_or_signed_literal signed_literal bit_expr regular_expressions xml_expressions
-%type <expr> interval_value simple_expr literal NUM_literal text_literal text_literal_or_arg bool_pri literal_or_null now predicate tuple_expression null_int_variable_arg performance_schema_function_expressions
+%type <expr> interval_value simple_expr literal NUM_literal text_literal text_literal_or_arg bool_pri literal_or_null now predicate tuple_expression null_int_variable_arg performance_schema_function_expressions gtid_function_expressions
 %type <tableExprs> from_opt table_references from_clause
 %type <tableExpr> table_reference table_factor join_table json_table_function
 %type <jtColumnDefinition> jt_column
@@ -474,6 +479,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <subquery> subquery
 %type <derivedTable> derived_table
 %type <colName> column_name after_opt
+%type <colNames> column_names column_names_opt_paren
 %type <whens> when_expression_list
 %type <when> when_expression
 %type <expr> expression_opt else_expression_opt default_with_comma_opt
@@ -5207,9 +5213,9 @@ function_call_keyword
   {
 	$$ = &ExistsExpr{Subquery: $2}
   }
-| MATCH openb select_expression_list closeb AGAINST openb bit_expr match_option closeb
+| MATCH column_names_opt_paren AGAINST openb bit_expr match_option closeb
   {
-  $$ = &MatchExpr{Columns: $3, Expr: $7, Option: $8}
+  $$ = &MatchExpr{Columns: $2, Expr: $5, Option: $6}
   }
 | CAST openb expression AS convert_type array_opt closeb
   {
@@ -5237,12 +5243,16 @@ function_call_keyword
   }
 | interval_value
   {
-	// This rule prevents the usage of INTERVAL
-	// as a function. If support is needed for that,
-	// we'll need to revisit this. The solution
-	// will be non-trivial because of grammar conflicts.
+	// INTERVAL can trigger a shift / reduce conflict. We want
+	// to shift here for the interval rule. In case we do have
+	// the additional expression_list below, we'd pick that path
+	// and thus properly parse it as a function when needed.
 	$$ = $1
   }
+| INTERVAL openb expression ',' expression_list closeb
+{
+       $$ = &IntervalFuncExpr{Expr: $3, Exprs: $5}
+}
 | column_name JSON_EXTRACT_OP text_literal_or_arg
   {
 	$$ = &BinaryExpr{Left: $1, Operator: JSONExtractOp, Right: $3}
@@ -5256,6 +5266,26 @@ interval_value:
   INTERVAL simple_expr sql_id
   {
      $$ = &IntervalExpr{Expr: $2, Unit: $3.String()}
+  }
+
+column_names_opt_paren:
+  column_names
+  {
+    $$ = $1
+  }
+| openb column_names closeb
+  {
+    $$ = $2
+  }
+
+column_names:
+  column_name
+  {
+    $$ = []*ColName{$1}
+  }
+| column_names ',' column_name
+  {
+    $$ = append($1, $3)
   }
 
 trim_type:
@@ -5620,6 +5650,10 @@ function_call_keyword:
   {
     $$ = &ValuesFuncExpr{Name: $3}
   }
+| INSERT openb expression ',' expression ',' expression ',' expression closeb
+  {
+    $$ = &InsertExpr{Str: $3, Pos: $5, Len: $7, NewStr: $9}
+  }
 | CURRENT_USER func_paren_opt
   {
     $$ =  &FuncExpr{Name: NewIdentifierCI($1)}
@@ -5766,9 +5800,29 @@ UTC_DATE func_paren_opt
   {
     $$ = &TrimFuncExpr{StringArg: $3}
   }
+| CHAR openb expression_list closeb
+  {
+    $$ = &CharExpr{Exprs: $3}
+  }
+| CHAR openb expression_list USING charset closeb
+  {
+    $$ = &CharExpr{Exprs: $3, Charset: $5}
+  }
 | TRIM openb expression FROM expression closeb
   {
     $$ = &TrimFuncExpr{TrimArg:$3, StringArg: $5}
+  }
+| LOCATE openb expression ',' expression closeb
+  {
+    $$ = &LocateExpr{SubStr: $3, Str: $5}
+  }
+| LOCATE openb expression ',' expression ',' expression closeb
+  {
+    $$ = &LocateExpr{SubStr: $3, Str: $5, Pos: $7}
+  }
+| POSITION openb bit_expr IN expression closeb
+  {
+    $$ = &LocateExpr{SubStr: $3, Str: $5}
   }
 | GET_LOCK openb expression ',' expression closeb
   {
@@ -5945,6 +5999,7 @@ UTC_DATE func_paren_opt
 | regular_expressions
 | xml_expressions
 | performance_schema_function_expressions
+| gtid_function_expressions
 
 null_int_variable_arg:
   null_as_literal
@@ -6065,6 +6120,36 @@ performance_schema_function_expressions:
 | PS_THREAD_ID openb expression closeb
   {
     $$ = &PerformanceSchemaFuncExpr{Type: PsThreadIDType, Argument:$3}
+  }
+
+gtid_function_expressions:
+  GTID_SUBSET openb expression ',' expression closeb
+  {
+    $$ = &GTIDFuncExpr{Type: GTIDSubsetType, Set1:$3, Set2: $5 }
+  }
+| GTID_SUBTRACT openb expression ',' expression closeb
+  {
+    $$ = &GTIDFuncExpr{Type: GTIDSubtractType, Set1:$3, Set2: $5 }
+  }
+| WAIT_FOR_EXECUTED_GTID_SET openb expression closeb
+  {
+    $$ = &GTIDFuncExpr{Type: WaitForExecutedGTIDSetType, Set1: $3}
+  }
+| WAIT_FOR_EXECUTED_GTID_SET openb expression ',' expression closeb
+  {
+    $$ = &GTIDFuncExpr{Type: WaitForExecutedGTIDSetType, Set1: $3, Timeout: $5 }
+  }
+| WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS openb expression closeb
+  {
+    $$ = &GTIDFuncExpr{Type: WaitUntilSQLThreadAfterGTIDSType, Set1: $3 }
+  }
+| WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS openb expression ',' expression closeb
+  {
+    $$ = &GTIDFuncExpr{Type: WaitUntilSQLThreadAfterGTIDSType, Set1: $3, Timeout: $5 }
+  }
+| WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS openb expression ',' expression ',' expression closeb
+  {
+    $$ = &GTIDFuncExpr{Type: WaitUntilSQLThreadAfterGTIDSType, Set1: $3, Timeout: $5, Channel: $7 }
   }
 
 returning_type_opt:
@@ -7314,7 +7399,7 @@ non_reserved_keyword:
 | CASCADE
 | CASCADED
 | CHANNEL
-| CHAR
+| CHAR %prec FUNCTION_CALL_NON_KEYWORD
 | CHARSET
 | CHECKSUM
 | CLEANUP
@@ -7396,6 +7481,8 @@ non_reserved_keyword:
 | GLOBAL
 | GROUP_CONCAT %prec FUNCTION_CALL_NON_KEYWORD
 | GTID_EXECUTED
+| GTID_SUBSET %prec FUNCTION_CALL_NON_KEYWORD
+| GTID_SUBTRACT %prec FUNCTION_CALL_NON_KEYWORD
 | HASH
 | HEADER
 | HISTOGRAM
@@ -7456,6 +7543,7 @@ non_reserved_keyword:
 | LIST
 | LOAD
 | LOCAL
+| LOCATE %prec FUNCTION_CALL_NON_KEYWORD
 | LOCKED
 | LOGS
 | LONGBLOB
@@ -7523,6 +7611,7 @@ non_reserved_keyword:
 | PLUGINS
 | POINT
 | POLYGON
+| POSITION %prec FUNCTION_CALL_NON_KEYWORD
 | PROCEDURE
 | PROCESSLIST
 | QUERY
@@ -7647,6 +7736,8 @@ non_reserved_keyword:
 | VITESS_TARGET
 | VITESS_THROTTLED_APPS
 | VSCHEMA
+| WAIT_FOR_EXECUTED_GTID_SET %prec FUNCTION_CALL_NON_KEYWORD
+| WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS %prec FUNCTION_CALL_NON_KEYWORD
 | WARNINGS
 | WITHOUT
 | WORK

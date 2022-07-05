@@ -2178,6 +2178,26 @@ func (node *PerformanceSchemaFuncExpr) formatFast(buf *TrackedBuffer) {
 	buf.WriteByte(')')
 }
 
+// formatFast formats the node
+func (node *GTIDFuncExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.Type.ToString())
+	buf.WriteByte('(')
+	buf.printExpr(node, node.Set1, true)
+	if node.Set2 != nil {
+		buf.WriteString(", ")
+		buf.printExpr(node, node.Set2, true)
+	}
+	if node.Timeout != nil {
+		buf.WriteString(", ")
+		buf.printExpr(node, node.Timeout, true)
+	}
+	if node.Channel != nil {
+		buf.WriteString(", ")
+		buf.printExpr(node, node.Channel, true)
+	}
+	buf.WriteByte(')')
+}
+
 // formatFast formats the node.
 func (node *SubstrExpr) formatFast(buf *TrackedBuffer) {
 	if node.To == nil {
@@ -2195,6 +2215,58 @@ func (node *SubstrExpr) formatFast(buf *TrackedBuffer) {
 		buf.printExpr(node, node.To, true)
 		buf.WriteByte(')')
 	}
+}
+
+// formatFast formats the node.
+func (node *InsertExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("insert(")
+	buf.printExpr(node, node.Str, true)
+	buf.WriteString(", ")
+	buf.printExpr(node, node.Pos, true)
+	buf.WriteString(", ")
+	buf.printExpr(node, node.Len, true)
+	buf.WriteString(", ")
+	buf.printExpr(node, node.NewStr, true)
+	buf.WriteByte(')')
+}
+
+// formatFast formats the node.
+func (node *IntervalFuncExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("interval(")
+	buf.printExpr(node, node.Expr, true)
+	buf.WriteString(", ")
+	node.Exprs.formatFast(buf)
+	buf.WriteByte(')')
+}
+
+// formatFast formats the node.
+func (node *LocateExpr) formatFast(buf *TrackedBuffer) {
+	if node.Pos != nil {
+		buf.WriteString("locate(")
+		buf.printExpr(node, node.SubStr, true)
+		buf.WriteString(", ")
+		buf.printExpr(node, node.Str, true)
+		buf.WriteString(", ")
+		buf.printExpr(node, node.Pos, true)
+		buf.WriteByte(')')
+	} else {
+		buf.WriteString("locate(")
+		buf.printExpr(node, node.SubStr, true)
+		buf.WriteString(", ")
+		buf.printExpr(node, node.Str, true)
+		buf.WriteByte(')')
+	}
+}
+
+// formatFast formats the node.
+func (node *CharExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("char(")
+	node.Exprs.formatFast(buf)
+	if node.Charset != "" {
+		buf.WriteString(" using ")
+		buf.WriteString(node.Charset)
+	}
+	buf.WriteByte(')')
 }
 
 // formatFast formats the node.
@@ -2287,7 +2359,14 @@ func (node *ConvertType) formatFast(buf *TrackedBuffer) {
 // formatFast formats the node
 func (node *MatchExpr) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("match(")
-	node.Columns.formatFast(buf)
+	for i, col := range node.Columns {
+		if i != 0 {
+			buf.WriteString(", ")
+			buf.printExpr(node, col, true)
+		} else {
+			buf.printExpr(node, col, true)
+		}
+	}
 	buf.WriteString(") against (")
 	buf.printExpr(node, node.Expr, true)
 	buf.WriteString(node.Option.ToString())
