@@ -37,6 +37,7 @@ import (
 	"syscall"
 	"time"
 
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -722,6 +723,34 @@ func (cluster *LocalProcessCluster) WaitForTabletsToHealthyInVtgate() (err error
 		}
 	}
 	return nil
+}
+
+// ExecOnTablet executes a query on the local cluster Vttablet and returns the
+// result.
+func (cluster *LocalProcessCluster) ExecOnTablet(ctx context.Context, vttablet *Vttablet, sql string, binds map[string]any, opts *querypb.ExecuteOptions) (*sqltypes.Result, error) {
+	bindvars, err := sqltypes.BuildBindVariables(binds)
+	if err != nil {
+		return nil, err
+	}
+
+	tablet, err := cluster.vtctlclientGetTablet(vttablet)
+	if err != nil {
+		return nil, err
+	}
+
+	conn, err := tabletconn.GetDialer()(tablet, grpcclient.FailFast(false))
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close(ctx)
+
+	txID, reservedID := 0, 0
+
+	return conn.Execute(ctx, &querypb.Target{
+		Keyspace:   tablet.Keyspace,
+		Shard:      tablet.Shard,
+		TabletType: tablet.Type,
+	}, sql, bindvars, int64(txID), int64(reservedID), opts)
 }
 
 // StreamTabletHealth invokes a HealthStream on a local cluster Vttablet and
