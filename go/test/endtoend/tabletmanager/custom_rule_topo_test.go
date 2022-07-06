@@ -83,14 +83,9 @@ func TestTopoCustomRule(t *testing.T) {
 	// It might take a while to replicate the two rows.
 	timeout := time.Now().Add(10 * time.Second)
 	for time.Now().Before(timeout) {
-		result, err := vtctlExec("select id, value from t1", rTablet.Alias)
+		qr, err := clusterInstance.ExecOnTablet(context.Background(), rTablet, "select id, value from t1", nil, nil)
 		if err == nil {
-			resultMap := make(map[string]any)
-			err = json.Unmarshal([]byte(result), &resultMap)
-			require.NoError(t, err)
-
-			rowsAffected := resultMap["rows"].([]any)
-			if len(rowsAffected) == 2 {
+			if len(qr.Rows) == 2 {
 				break
 			}
 		}
@@ -113,9 +108,11 @@ func TestTopoCustomRule(t *testing.T) {
 	// And wait until the query fails with the right error.
 	timeout = time.Now().Add(10 * time.Second)
 	for time.Now().Before(timeout) {
-		result, err := vtctlExec("select id, value from t1", rTablet.Alias)
+		qr, err := clusterInstance.ExecOnTablet(context.Background(), rTablet, "select id, value from t1", nil, nil)
 		if err != nil {
-			assert.Contains(t, result, "disallow select on table t1")
+			result, err2 := json.Marshal(qr)
+			require.NoError(t, err2)
+			assert.Contains(t, string(result), "disallow select on table t1")
 			break
 		}
 		time.Sleep(300 * time.Millisecond)
@@ -127,9 +124,4 @@ func TestTopoCustomRule(t *testing.T) {
 	clusterInstance.VtTabletExtraArgs = []string{}
 	// Tear down custom processes
 	killTablets(t, rTablet)
-}
-
-func vtctlExec(sql string, tabletAlias string) (string, error) {
-	args := []string{"VtTabletExecute", "--", "--json", tabletAlias, sql}
-	return clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(args...)
 }

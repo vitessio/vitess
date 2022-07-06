@@ -18,6 +18,7 @@ package tabletmanager
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"sync"
@@ -76,16 +77,12 @@ func TestTabletReshuffle(t *testing.T) {
 	require.NoError(t, err)
 
 	sql := "select value from t1"
-	args := []string{
-		"VtTabletExecute", "--",
-		"--options", "included_fields:TYPE_ONLY",
-		"--json",
-		rTablet.Alias,
-		sql,
-	}
-	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(args...)
+	qr, err := clusterInstance.ExecOnTablet(ctx, rTablet, sql, nil, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_TYPE_ONLY})
 	require.NoError(t, err)
-	assertExcludeFields(t, result)
+
+	result, err := json.Marshal(qr)
+	require.NoError(t, err)
+	assertExcludeFields(t, string(result))
 
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Backup", rTablet.Alias)
 	assert.Error(t, err, "cannot perform backup without my.cnf")
