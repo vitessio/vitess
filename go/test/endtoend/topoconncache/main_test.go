@@ -57,7 +57,6 @@ var (
 		"--enable_replication_reporter",
 		"--serving_state_grace_period", "1s",
 		"--binlog_player_protocol", "grpc",
-		"--enable-autocommit",
 	}
 	vSchema = `
 		{
