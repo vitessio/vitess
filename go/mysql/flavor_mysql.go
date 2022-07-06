@@ -66,18 +66,36 @@ func (mysqlFlavor) primaryTransactionalGTIDSet(c *Conn) (GTIDSet, error) {
 	if !capable {
 		return nil, ErrTransactionalGtidUnsupported
 	}
-	qr, err := c.ExecuteFetch("SELECT GTID_SUBTRACT(CONCAT(source_uuid, ':', interval_start, '-', interval_end), '') AS gtid_set FROM mysql.gtid_executed", math.MaxInt32, false)
+	// qr, err := c.ExecuteFetch("SELECT GTID_SUBTRACT(CONCAT(source_uuid, ':', interval_start, '-', interval_end), '') AS gtid_set FROM mysql.gtid_executed", math.MaxInt32, false)
+	// if err != nil {
+	// 	return nil, err
+	// }
+	// var set GTIDSet = Mysql56GTIDSet{}
+	// for _, row := range qr.Rows {
+	// 	gtidSet, err := parseMysql56GTIDSet(row[0].ToString())
+	// 	if err != nil {
+	// 		return nil, err
+	// 	}
+	// 	set = set.Union(gtidSet)
+	// }
+	query := "select @g as transactional_gtid_executed from (SELECT @g := GTID_SUBTRACT(CONCAT(@g, ',', source_uuid, ':', interval_start, '-', interval_end), '') AS gtid_set FROM mysql.gtid_executed, (select @g:='') as sel1) as sel limit 1"
+	qr, err := c.ExecuteFetch(query, math.MaxInt32, false)
 	if err != nil {
 		return nil, err
 	}
-	var set GTIDSet = Mysql56GTIDSet{}
-	for _, row := range qr.Rows {
-		gtidSet, err := parseMysql56GTIDSet(row[0].ToString())
-		if err != nil {
-			return nil, err
-		}
-		set = set.Union(gtidSet)
+	row := qr.Named().Row()
+	if err != nil {
+		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected row count from mysql.gtid_executed in primaryTransactionalGTIDSet: %#v", len(qr.Rows))
 	}
+	transactionalGtid := row.AsString("transactional_gtid_executed", "")
+	if transactionalGtid == "" {
+		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected empty transactional GTID in primaryTransactionalGTIDSet")
+	}
+	set, err := parseMysql56GTIDSet(transactionalGtid)
+	if err != nil {
+		return nil, err
+	}
+
 	return set, nil
 }
 
