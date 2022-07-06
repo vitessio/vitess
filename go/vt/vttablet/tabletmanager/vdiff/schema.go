@@ -77,7 +77,8 @@ const (
 
 	sqlNewVDiff    = "insert into _vt.vdiff(keyspace, workflow, state, options, shard, db_name, vdiff_uuid) values(%s, %s, '%s', %s, '%s', '%s', '%s')"
 	sqlResumeVDiff = `update _vt.vdiff as vd, _vt.vdiff_table as vdt set vd.started_at = NULL, vd.completed_at = NULL, vd.state = 'pending',
-						vd.options = %s, vdt.state = 'pending', vdt.rows_compared = 0 where vd.vdiff_uuid = %s and vd.id = vdt.vdiff_id`
+						vd.options = %s, vdt.state = 'pending', vdt.rows_compared = 0 where vd.vdiff_uuid = %s and vd.id = vdt.vdiff_id and
+						vd.state = 'completed'`
 	sqlGetVDiffByKeyspaceWorkflowUUID = "select * from _vt.vdiff where keyspace = %s and workflow = %s and vdiff_uuid = %s"
 	sqlGetMostRecentVDiff             = "select * from _vt.vdiff where keyspace = %s and workflow = %s order by id desc limit 1"
 	sqlGetVDiffByID                   = "select * from _vt.vdiff where id = %d"

@@ -106,7 +106,11 @@ func (vde *Engine) PerformVDiffAction(ctx context.Context, req *tabletmanagerdat
 				return nil, err
 			}
 			if qr.RowsAffected == 0 {
-				return nil, fmt.Errorf("unable to update vdiff record (%w); statement: %s", err, query)
+				msg := fmt.Sprintf("no completed vdiff found for UUID %s", req.VdiffUuid)
+				if err != nil {
+					msg = fmt.Sprintf("%s (%v)", msg, err)
+				}
+				return nil, fmt.Errorf(msg)
 			}
 		}
 		resp.VdiffUuid = req.VdiffUuid
