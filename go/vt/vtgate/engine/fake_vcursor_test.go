@@ -25,9 +25,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time"
-
-	"golang.org/x/sync/errgroup"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
@@ -51,14 +48,6 @@ var _ SessionActions = (*noopVCursor)(nil)
 
 // noopVCursor is used to build other vcursors.
 type noopVCursor struct {
-	ctx    context.Context
-	cancel context.CancelFunc
-}
-
-func newNoopVCursor(ctx context.Context) *noopVCursor {
-	n := &noopVCursor{}
-	n.ctx, n.cancel = context.WithCancel(ctx)
-	return n
 }
 
 func (t *noopVCursor) StreamExecutePrimitiveStandalone(ctx context.Context, primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(result *sqltypes.Result) error) error {
@@ -85,10 +74,6 @@ func (t *noopVCursor) ReleaseLock(context.Context) error {
 	panic("implement me")
 }
 
-func (t *noopVCursor) CancelContext() {
-	t.cancel()
-}
-
 func (t *noopVCursor) SetExec(ctx context.Context, name string, value string) error {
 	panic("implement me")
 }
@@ -108,11 +93,11 @@ func (t *noopVCursor) ConnCollation() collations.ID {
 }
 
 func (t *noopVCursor) ExecutePrimitive(ctx context.Context, primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	return primitive.TryExecute(context.Background(), t, bindVars, wantfields)
+	return primitive.TryExecute(ctx, t, bindVars, wantfields)
 }
 
 func (t *noopVCursor) StreamExecutePrimitive(ctx context.Context, primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	return primitive.TryStreamExecute(context.Background(), t, bindVars, wantfields, callback)
+	return primitive.TryStreamExecute(ctx, t, bindVars, wantfields, callback)
 }
 
 func (t *noopVCursor) HasSystemVariables() bool {
@@ -258,12 +243,6 @@ func (t *noopVCursor) SetTarget(string) error {
 	panic("implement me")
 }
 
-func (t *noopVCursor) Context() context.Context {
-	if t.ctx == nil {
-		return context.Background()
-	}
-	return t.ctx
-}
 func (t *noopVCursor) MaxMemoryRows() int {
 	return testMaxMemoryRows
 }
@@ -274,18 +253,6 @@ func (t *noopVCursor) ExceedsMaxMemoryRows(numRows int) bool {
 
 func (t *noopVCursor) GetKeyspace() string {
 	return ""
-}
-
-func (t *noopVCursor) SetContextTimeout(timeout time.Duration) context.CancelFunc {
-	ctx, cancel := context.WithTimeout(t.Context(), timeout)
-	t.ctx = ctx
-	return cancel
-}
-
-func (t *noopVCursor) ErrorGroupCancellableContext() (*errgroup.Group, func()) {
-	g, ctx := errgroup.WithContext(t.ctx)
-	t.ctx = ctx
-	return g, func() {}
 }
 
 func (t *noopVCursor) RecordWarning(warning *querypb.QueryWarning) {
@@ -371,11 +338,11 @@ type tableRoutes struct {
 }
 
 func (f *loggingVCursor) ExecutePrimitive(ctx context.Context, primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	return primitive.TryExecute(context.Background(), f, bindVars, wantfields)
+	return primitive.TryExecute(ctx, f, bindVars, wantfields)
 }
 
 func (f *loggingVCursor) StreamExecutePrimitive(ctx context.Context, primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	return primitive.TryStreamExecute(context.Background(), f, bindVars, wantfields, callback)
+	return primitive.TryStreamExecute(ctx, f, bindVars, wantfields, callback)
 }
 
 func (f *loggingVCursor) StreamExecutePrimitiveStandalone(ctx context.Context, primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(result *sqltypes.Result) error) error {
@@ -439,23 +406,6 @@ func (f *loggingVCursor) Session() SessionActions {
 func (f *loggingVCursor) SetTarget(target string) error {
 	f.log = append(f.log, fmt.Sprintf("Target set to %s", target))
 	return nil
-}
-
-func (f *loggingVCursor) Context() context.Context {
-	if f.ctx == nil {
-		return context.Background()
-	}
-	return f.ctx
-}
-
-func (f *loggingVCursor) SetContextTimeout(timeout time.Duration) context.CancelFunc {
-	ctx, cancel := context.WithTimeout(f.Context(), timeout)
-	f.ctx = ctx
-	return cancel
-}
-
-func (f *loggingVCursor) ErrorGroupCancellableContext() (*errgroup.Group, func()) {
-	panic("implement me")
 }
 
 func (f *loggingVCursor) GetKeyspace() string {

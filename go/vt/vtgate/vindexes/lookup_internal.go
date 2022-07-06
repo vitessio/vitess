@@ -95,7 +95,7 @@ func (lkp *lookupInternal) Lookup(ctx context.Context, vcursor VCursor, ids []sq
 		bindVars := map[string]*querypb.BindVariable{
 			lkp.FromColumns[0]: vars,
 		}
-		result, err := vcursor.Execute(ctx, "VindexLookup", sel, bindVars, false, co)
+		result, err := vcursor.Execute(ctx, "VindexLookup", sel, bindVars, false /* rollbackOnError */, co)
 		if err != nil {
 			return nil, fmt.Errorf("lookup.Map: %v", err)
 		}
@@ -120,7 +120,7 @@ func (lkp *lookupInternal) Lookup(ctx context.Context, vcursor VCursor, ids []sq
 				lkp.FromColumns[0]: vars,
 			}
 			var result *sqltypes.Result
-			result, err = vcursor.Execute(ctx, "VindexLookup", sel, bindVars, false, co)
+			result, err = vcursor.Execute(ctx, "VindexLookup", sel, bindVars, false /* rollbackOnError */, co)
 			if err != nil {
 				return nil, fmt.Errorf("lookup.Map: %v", err)
 			}
@@ -152,7 +152,7 @@ func (lkp *lookupInternal) VerifyCustom(ctx context.Context, vcursor VCursor, id
 			lkp.FromColumns[0]: sqltypes.ValueBindVariable(id),
 			lkp.To:             sqltypes.ValueBindVariable(values[i]),
 		}
-		result, err := vcursor.Execute(ctx, "VindexVerify", lkp.ver, bindVars, false, co)
+		result, err := vcursor.Execute(ctx, "VindexVerify", lkp.ver, bindVars, false /* rollbackOnError */, co)
 		if err != nil {
 			return nil, fmt.Errorf("lookup.Verify: %v", err)
 		}
@@ -274,7 +274,7 @@ nextRow:
 		fmt.Fprintf(buf, "%s=values(%s)", lkp.To, lkp.To)
 	}
 
-	if _, err := vcursor.Execute(ctx, "VindexCreate", buf.String(), bindVars, true, co); err != nil {
+	if _, err := vcursor.Execute(ctx, "VindexCreate", buf.String(), bindVars, true /* rollbackOnError */, co); err != nil {
 		return fmt.Errorf("lookup.Create: %v", err)
 	}
 	return nil
@@ -315,7 +315,7 @@ func (lkp *lookupInternal) Delete(ctx context.Context, vcursor VCursor, rowsColV
 			bindVars[lkp.FromColumns[colIdx]] = sqltypes.ValueBindVariable(columnValue)
 		}
 		bindVars[lkp.To] = sqltypes.ValueBindVariable(value)
-		_, err := vcursor.Execute(ctx, "VindexDelete", lkp.del, bindVars, true, co)
+		_, err := vcursor.Execute(ctx, "VindexDelete", lkp.del, bindVars, true /* rollbackOnError */, co)
 		if err != nil {
 			return fmt.Errorf("lookup.Delete: %v", err)
 		}

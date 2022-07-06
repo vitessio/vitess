@@ -225,7 +225,7 @@ func (route *Route) executeInternal(ctx context.Context, vcursor VCursor, bindVa
 	}
 
 	queries := getQueries(route.Query, bvs)
-	result, errs := vcursor.ExecuteMultiShard(ctx, rss, queries, false, false)
+	result, errs := vcursor.ExecuteMultiShard(ctx, rss, queries, false /* rollbackOnError */, false)
 
 	if errs != nil {
 		errs = filterOutNilErrors(errs)
@@ -297,7 +297,7 @@ func (route *Route) TryStreamExecute(ctx context.Context, vcursor VCursor, bindV
 	}
 
 	if len(route.OrderBy) == 0 {
-		errs := vcursor.StreamExecuteMulti(ctx, route.Query, rss, bvs, false, false, func(qr *sqltypes.Result) error {
+		errs := vcursor.StreamExecuteMulti(ctx, route.Query, rss, bvs, false /* rollbackOnError */, false /* autocommit */, func(qr *sqltypes.Result) error {
 			return callback(qr.Truncate(route.TruncateColumnCount))
 		})
 		if len(errs) > 0 {
@@ -346,7 +346,7 @@ func (route *Route) GetFields(ctx context.Context, vcursor VCursor, bindVars map
 		// This code is unreachable. It's just a sanity check.
 		return nil, fmt.Errorf("no shards for keyspace: %s", route.Keyspace.Name)
 	}
-	qr, err := execShard(ctx, vcursor, route.FieldQuery, bindVars, rss[0], false, false)
+	qr, err := execShard(ctx, vcursor, route.FieldQuery, bindVars, rss[0], false /* rollbackOnError */, false /* canAutocommit */)
 	if err != nil {
 		return nil, err
 	}

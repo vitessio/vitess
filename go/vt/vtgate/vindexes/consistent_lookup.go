@@ -300,7 +300,7 @@ func (lu *clCommon) handleDup(ctx context.Context, vcursor VCursor, values []sql
 		}
 		// Lock the target row using normal transaction priority.
 		// TODO: context needs to be passed on.
-		qr, err = vcursor.ExecuteKeyspaceID(context.Background(), lu.keyspace, existingksid, lu.lockOwnerQuery, bindVars, false, false)
+		qr, err = vcursor.ExecuteKeyspaceID(context.Background(), lu.keyspace, existingksid, lu.lockOwnerQuery, bindVars, false /* rollbackOnError */, false /* autocommit */)
 		if err != nil {
 			return err
 		}

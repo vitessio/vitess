@@ -43,7 +43,3 @@ func (vc *contextVCursor) ExecutePrimitive(ctx context.Context, primitive engine
 func (vc *contextVCursor) StreamExecutePrimitive(ctx context.Context, primitive engine.Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	return primitive.TryStreamExecute(ctx, vc, bindVars, wantfields, callback)
 }
-
-func (vc *contextVCursor) Context() context.Context {
-	return vc.ctx
-}

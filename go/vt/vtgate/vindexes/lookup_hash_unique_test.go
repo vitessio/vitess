@@ -30,7 +30,7 @@ import (
 )
 
 func TestLookupHashUniqueNew(t *testing.T) {
-	l := createLookup(t, "lookup_hash_unique", false)
+	l := createLookup(t, "lookup_hash_unique", false /* writeOnly */)
 	if want, got := l.(*LookupHashUnique).writeOnly, false; got != want {
 		t.Errorf("Create(lookup, false): %v, want %v", got, want)
 	}
@@ -59,7 +59,7 @@ func TestLookupHashUniqueNew(t *testing.T) {
 }
 
 func TestLookupHashUniqueInfo(t *testing.T) {
-	lhu := createLookup(t, "lookup_hash_unique", false)
+	lhu := createLookup(t, "lookup_hash_unique", false /* writeOnly */)
 	assert.Equal(t, 10, lhu.Cost())
 	assert.Equal(t, "lookup_hash_unique", lhu.String())
 	assert.True(t, lhu.IsUnique())
@@ -67,7 +67,7 @@ func TestLookupHashUniqueInfo(t *testing.T) {
 }
 
 func TestLookupHashUniqueMap(t *testing.T) {
-	lhu := createLookup(t, "lookup_hash_unique", false)
+	lhu := createLookup(t, "lookup_hash_unique", false /* writeOnly */)
 	vc := &vcursor{numRows: 1}
 
 	got, err := lhu.Map(context.Background(), vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
@@ -142,7 +142,7 @@ func TestLookupHashUniqueMapWriteOnly(t *testing.T) {
 }
 
 func TestLookupHashUniqueVerify(t *testing.T) {
-	lhu := createLookup(t, "lookup_hash_unique", false)
+	lhu := createLookup(t, "lookup_hash_unique", false /* writeOnly */)
 	vc := &vcursor{numRows: 1}
 
 	// The check doesn't actually happen. But we give correct values
@@ -185,16 +185,16 @@ func TestLookupHashUniqueVerifyWriteOnly(t *testing.T) {
 }
 
 func TestLookupHashUniqueCreate(t *testing.T) {
-	lhu := createLookup(t, "lookup_hash_unique", false)
+	lhu := createLookup(t, "lookup_hash_unique", false /* writeOnly */)
 	vc := &vcursor{}
 
-	err := lhu.(Lookup).Create(context.Background(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")}, false)
+	err := lhu.(Lookup).Create(context.Background(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")}, false /* ignoreMode */)
 	require.NoError(t, err)
 	if got, want := len(vc.queries), 1; got != want {
 		t.Errorf("vc.queries length: %v, want %v", got, want)
 	}
 
-	err = lhu.(Lookup).Create(context.Background(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}}, [][]byte{[]byte("bogus")}, false)
+	err = lhu.(Lookup).Create(context.Background(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}}, [][]byte{[]byte("bogus")}, false /* ignoreMode */)
 	want := "lookup.Create.vunhash: invalid keyspace id: 626f677573"
 	if err == nil || err.Error() != want {
 		t.Errorf("lhu.Create(bogus) err: %v, want %s", err, want)
@@ -202,7 +202,7 @@ func TestLookupHashUniqueCreate(t *testing.T) {
 }
 
 func TestLookupHashUniqueDelete(t *testing.T) {
-	lhu := createLookup(t, "lookup_hash_unique", false)
+	lhu := createLookup(t, "lookup_hash_unique", false /* writeOnly */)
 	vc := &vcursor{}
 
 	err := lhu.(Lookup).Delete(context.Background(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}}, []byte("\x16k@\xb4J\xbaK\xd6"))
@@ -219,7 +219,7 @@ func TestLookupHashUniqueDelete(t *testing.T) {
 }
 
 func TestLookupHashUniqueUpdate(t *testing.T) {
-	lhu := createLookup(t, "lookup_hash_unique", false)
+	lhu := createLookup(t, "lookup_hash_unique", false /* writeOnly */)
 	vc := &vcursor{}
 
 	err := lhu.(Lookup).Update(context.Background(), vc, []sqltypes.Value{sqltypes.NewInt64(1)}, []byte("\x16k@\xb4J\xbaK\xd6"), []sqltypes.Value{sqltypes.NewInt64(2)})

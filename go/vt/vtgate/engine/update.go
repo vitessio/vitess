@@ -127,7 +127,7 @@ func (upd *Update) updateVindexEntries(ctx context.Context, vcursor VCursor, bin
 	for i := range rss {
 		queries[i] = &querypb.BoundQuery{Sql: upd.OwnedVindexQuery, BindVariables: bindVars}
 	}
-	subQueryResult, errors := vcursor.ExecuteMultiShard(ctx, rss, queries, false, false)
+	subQueryResult, errors := vcursor.ExecuteMultiShard(ctx, rss, queries, false /* rollbackOnError */, false)
 	for _, err := range errors {
 		if err != nil {
 			return err

@@ -65,7 +65,7 @@ func TestMultiply(t *testing.T) {
 		)},
 	}
 	proj.Input = fp
-	qr, err = wrapStreamExecute(proj, newNoopVCursor(context.Background()), nil, true)
+	qr, err = wrapStreamExecute(proj, &noopVCursor{}, nil, true)
 	require.NoError(t, err)
 	assert.Equal(t, "[[UINT64(6)] [UINT64(0)] [UINT64(2)]]", fmt.Sprintf("%v", qr.Rows))
 }

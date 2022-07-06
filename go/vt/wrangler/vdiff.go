@@ -943,7 +943,7 @@ func newPrimitiveExecutor(ctx context.Context, prim engine.Primitive) *primitive
 		prim:     prim,
 		resultch: make(chan *sqltypes.Result, 1),
 	}
-	vcursor := &contextVCursor{ctx: ctx}
+	vcursor := &contextVCursor{}
 	go func() {
 		defer close(pe.resultch)
 		pe.err = vcursor.StreamExecutePrimitive(ctx, pe.prim, make(map[string]*querypb.BindVariable), true, func(qr *sqltypes.Result) error {
@@ -1247,11 +1247,9 @@ func (td *tableDiffer) genDebugQueryDiff(sel *sqlparser.Select, row []sqltypes.V
 //-----------------------------------------------------------------
 // contextVCursor
 
-// contextVCursor satisfies VCursor, but only implements Context().
-// MergeSort only requires Context to be implemented.
+// contextVCursor satisfies VCursor interface
 type contextVCursor struct {
 	engine.VCursor
-	ctx context.Context
 }
 
 func (vc *contextVCursor) ConnCollation() collations.ID {
@@ -1264,10 +1262,6 @@ func (vc *contextVCursor) ExecutePrimitive(ctx context.Context, primitive engine
 
 func (vc *contextVCursor) StreamExecutePrimitive(ctx context.Context, primitive engine.Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	return primitive.TryStreamExecute(ctx, vc, bindVars, wantfields, callback)
-}
-
-func (vc *contextVCursor) Context() context.Context {
-	return vc.ctx
 }
 
 //-----------------------------------------------------------------
