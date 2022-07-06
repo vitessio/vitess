@@ -19,7 +19,7 @@ vtadmin \
   --alsologtostderr \
   --rbac \
   --rbac-config="./vtadmin/rbac.yaml" \
-  --cluster "id=local,name=local,discovery=staticfile,discovery-staticfile-path=./vtadmin/discovery.json,tablet-fqdn-tmpl={{ .Tablet.Hostname }}:15{{ .Tablet.Alias.Uid }}" \
+  --cluster-config="./vtadmin/cluster-config.yaml" \
   > "${log_dir}/vtadmin-api.out" 2>&1 &
 
 vtadmin_api_pid=$!
