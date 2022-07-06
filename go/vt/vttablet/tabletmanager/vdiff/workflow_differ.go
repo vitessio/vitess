@@ -212,7 +212,7 @@ func (wd *workflowDiffer) markIfCompleted(ctx context.Context, dbClient binlogpl
 		return err
 	}
 	if len(qr.Rows) == 0 {
-		if err := wd.ct.updateState(dbClient, CompletedState); err != nil {
+		if err := wd.ct.updateState(dbClient, CompletedState, nil); err != nil {
 			return err
 		}
 	}

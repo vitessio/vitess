@@ -58,7 +58,7 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 	subFlags.StringVar(&format, "format", "text", "Format of report") // "json" or "text"
 	maxExtraRowsToCompare := subFlags.Int64("max_extra_rows_to_compare", 1000, "If there are collation differences between the source and target, you can have rows that are identical but simply returned in a different order from MySQL. We will do a second pass to compare the rows for any actual differences in this case and this flag allows you to control the resources used for this operation.")
 
-	resumable := subFlags.Bool("resumable", false, "Should this vdiff retry in case of recoverable errors, not yet implemented")
+	autoRetry := subFlags.Bool("auto-retry", false, "Should this vdiff automatically retry and continue in case of recoverable errors")
 	checksum := subFlags.Bool("checksum", false, "Use row-level checksums to compare, not yet implemented")
 	samplePct := subFlags.Int64("sample_pct", 100, "How many rows to sample, not yet implemented")
 	verbose := subFlags.Bool("verbose", false, "Show verbose vdiff output in summaries")
@@ -106,7 +106,7 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 		},
 		CoreOptions: &tabletmanagerdatapb.VDiffCoreOptions{
 			Tables:                *tables,
-			Resumable:             *resumable,
+			AutoRetry:             *autoRetry,
 			MaxRows:               *maxRows,
 			Checksum:              *checksum,
 			SamplePct:             *samplePct,
@@ -210,25 +210,27 @@ type vdiffSummary struct {
 	CompletedAt        string                                 `json:"CompletedAt,omitempty"`
 	TableSummaryMap    map[string]vdiffTableSummary           `json:"TableSummary,omitempty"`
 	Reports            map[string]map[string]vdiff.DiffReport `json:"Reports,omitempty"`
+	Errors             map[string]string                      `json:"Errors,omitempty"`
 }
 
 const (
 	summaryTextTemplate = `
 VDiff Summary for {{.Keyspace}}.{{.Workflow}} ({{.UUID}})
 State:        {{.State}}
+{{if .Errors}}{{range $shard, $error := .Errors}}	Error: (shard {{$shard}}) {{$error}}{{end}}{{end}}
 RowsCompared: {{.RowsCompared}}
 HasMismatch:  {{.HasMismatch}}
 StartedAt:    {{.StartedAt}}
-CompletedAt:  {{.CompletedAt}}
-{{ range $table := .TableSummaryMap}} 
+{{if .CompletedAt}}CompletedAt:  {{.CompletedAt}}{{end}}
+{{range $table := .TableSummaryMap}} 
 Table {{$table.TableName}}:
 	State:            {{$table.State}}
 	ProcessedRows:    {{$table.RowsCompared}}
 	MatchingRows:     {{$table.MatchingRows}}
-{{ if $table.MismatchedRows}}	MismatchedRows:   {{$table.MismatchedRows}}{{ end }}
-{{ if $table.ExtraRowsSource}}	ExtraRowsSource:  {{$table.ExtraRowsSource}}{{ end }}
-{{ if $table.ExtraRowsTarget}}	ExtraRowsTarget:  {{$table.ExtraRowsTarget}}{{ end }}
-{{ end }}
+{{if $table.MismatchedRows}}	MismatchedRows:   {{$table.MismatchedRows}}{{end}}
+{{if $table.ExtraRowsSource}}	ExtraRowsSource:  {{$table.ExtraRowsSource}}{{end}}
+{{if $table.ExtraRowsTarget}}	ExtraRowsTarget:  {{$table.ExtraRowsTarget}}{{end}}
+{{end}}
  
 Use "--format=json" for more detailed output.
 `
@@ -403,13 +405,14 @@ func buildVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid st
 		HasMismatch:  false,
 		Shards:       "",
 		Reports:      make(map[string]map[string]vdiff.DiffReport),
+		Errors:       make(map[string]string),
 	}
 
 	var tableSummaryMap map[string]vdiffTableSummary
 	var reports map[string]map[string]vdiff.DiffReport
-	first := true
 	var shards []string
 	for shard, resp := range output.Responses {
+		first := true
 		if resp != nil && resp.Output != nil {
 			shards = append(shards, shard)
 			qr := sqltypes.Proto3ToResult(resp.Output)
@@ -430,6 +433,10 @@ func buildVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid st
 					// And we should use the latest completed_at across all shards.
 					if ca := row.AsString("completed_at", ""); summary.CompletedAt == "" || ca > summary.CompletedAt {
 						summary.CompletedAt = ca
+					}
+					// If we had an error on the shard, then let's save that.
+					if e := row.AsString("last_error", ""); e != "" {
+						summary.Errors[shard] = e
 					}
 				}
 
@@ -505,7 +512,7 @@ func buildVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid st
 			}
 		}
 	}
-	sort.Strings(shards) // sort for predictable output, for test purposes
+	sort.Strings(shards) // sort for predictable output
 	summary.Shards = strings.Join(shards, ",")
 	summary.TableSummaryMap = tableSummaryMap
 	summary.Reports = reports

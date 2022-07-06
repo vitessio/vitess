@@ -135,7 +135,7 @@ func (ct *controller) run(ctx context.Context) {
 		if err := ct.start(ctx, dbClient); err != nil {
 			log.Errorf("run() failed: %s", err)
 			insertVDiffLog(ctx, dbClient, ct.id, fmt.Sprintf("Error: %s", err))
-			if err := ct.updateState(dbClient, ErrorState); err != nil {
+			if err := ct.updateState(dbClient, ErrorState, err); err != nil {
 				return
 			}
 			return
@@ -153,12 +153,17 @@ type migrationSource struct {
 	position mysql.Position
 }
 
-func (ct *controller) updateState(dbClient binlogplayer.DBClient, state VDiffState) error {
+func (ct *controller) updateState(dbClient binlogplayer.DBClient, state VDiffState, err error) error {
 	extraCols := ""
-	if state == StartedState {
+	switch state {
+	case StartedState:
 		extraCols = ", started_at = utc_timestamp()"
-	} else if state == CompletedState {
+	case CompletedState:
 		extraCols = ", completed_at = utc_timestamp()"
+	default:
+	}
+	if err != nil {
+		extraCols += fmt.Sprintf(", last_error = %s", encodeString(err.Error()))
 	}
 	query := fmt.Sprintf(sqlUpdateVDiffState, encodeString(string(state)), extraCols, ct.id)
 	if _, err := withDDL.Exec(ct.vde.ctx, query, dbClient.ExecuteFetch, dbClient.ExecuteFetch); err != nil {
@@ -205,7 +210,7 @@ func (ct *controller) start(ctx context.Context, dbClient binlogplayer.DBClient)
 	if err != nil {
 		return err
 	}
-	if err := ct.updateState(dbClient, StartedState); err != nil {
+	if err := ct.updateState(dbClient, StartedState, nil); err != nil {
 		return err
 	}
 	if err := wd.diff(ctx); err != nil {
