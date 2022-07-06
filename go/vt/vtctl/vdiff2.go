@@ -210,14 +210,14 @@ type vdiffSummary struct {
 	CompletedAt        string                                 `json:"CompletedAt,omitempty"`
 	TableSummaryMap    map[string]vdiffTableSummary           `json:"TableSummary,omitempty"`
 	Reports            map[string]map[string]vdiff.DiffReport `json:"Reports,omitempty"`
-	Errors             map[string]string                      `json:"Errors,omitempty"`
+	Errors             map[string]vdiff.Error                 `json:"Errors,omitempty"`
 }
 
 const (
 	summaryTextTemplate = `
 VDiff Summary for {{.Keyspace}}.{{.Workflow}} ({{.UUID}})
 State:        {{.State}}
-{{if .Errors}}{{range $shard, $error := .Errors}}              Error: (shard {{$shard}}) {{$error}}{{end}}{{end}}
+{{if .Errors}}{{range $shard, $error := .Errors}}              Error: (shard {{$shard}}) {{$error.Message}}{{end}}{{end}}
 RowsCompared: {{.RowsCompared}}
 HasMismatch:  {{.HasMismatch}}
 StartedAt:    {{.StartedAt}}
@@ -405,7 +405,7 @@ func buildVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid st
 		HasMismatch:  false,
 		Shards:       "",
 		Reports:      make(map[string]map[string]vdiff.DiffReport),
-		Errors:       make(map[string]string),
+		Errors:       make(map[string]vdiff.Error),
 	}
 
 	var tableSummaryMap map[string]vdiffTableSummary
@@ -434,9 +434,11 @@ func buildVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid st
 					if ca := row.AsString("completed_at", ""); summary.CompletedAt == "" || ca > summary.CompletedAt {
 						summary.CompletedAt = ca
 					}
-					// If we had an error on the shard, then let's save that.
+					// If we had an error on the shard, then let's add that to the summary.
 					if e := row.AsString("last_error", ""); e != "" {
-						summary.Errors[shard] = e
+						lastErr := vdiff.Error{}
+						json.Unmarshal([]byte(e), &lastErr)
+						summary.Errors[shard] = lastErr
 					}
 				}
 
