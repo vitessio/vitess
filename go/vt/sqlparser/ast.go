@@ -144,7 +144,7 @@ type (
 
 	// CommonTableExpr is the structure for supporting common table expressions
 	CommonTableExpr struct {
-		TableID  TableIdent
+		ID       IdentifierCS
 		Columns  Columns
 		Subquery *Subquery
 	}
@@ -177,13 +177,13 @@ type (
 
 	// AlterCheck represents the `ALTER CHECK` part in an `ALTER TABLE ALTER CHECK` command.
 	AlterCheck struct {
-		Name     ColIdent
+		Name     IdentifierCI
 		Enforced bool
 	}
 
 	// AlterIndex represents the `ALTER INDEX` part in an `ALTER TABLE ALTER INDEX` command.
 	AlterIndex struct {
-		Name      ColIdent
+		Name      IdentifierCI
 		Invisible bool
 	}
 
@@ -208,7 +208,7 @@ type (
 	// DropKey is used to drop a key in an alter table statement
 	DropKey struct {
 		Type DropKeyType
-		Name ColIdent
+		Name IdentifierCI
 	}
 
 	// Force is used to specify force alter option in an alter table statement
@@ -234,8 +234,8 @@ type (
 
 	// RenameIndex clause is used to rename indexes in an alter table statement
 	RenameIndex struct {
-		OldName ColIdent
-		NewName ColIdent
+		OldName IdentifierCI
+		NewName IdentifierCI
 	}
 
 	// Validation clause is used to specify whether to use validation or not
@@ -369,7 +369,6 @@ type (
 
 	// SetTransaction represents a SET TRANSACTION statement.
 	SetTransaction struct {
-		SQLNode
 		Comments        *ParsedComments
 		Scope           Scope
 		Characteristics []Characteristic
@@ -393,7 +392,7 @@ type (
 	// DropDatabase represents a DROP database statement.
 	DropDatabase struct {
 		Comments *ParsedComments
-		DBName   TableIdent
+		DBName   IdentifierCS
 		IfExists bool
 	}
 
@@ -410,7 +409,7 @@ type (
 	// CreateDatabase represents a CREATE database statement.
 	CreateDatabase struct {
 		Comments      *ParsedComments
-		DBName        TableIdent
+		DBName        IdentifierCS
 		IfNotExists   bool
 		CreateOptions []DatabaseOption
 		FullyParsed   bool
@@ -418,7 +417,7 @@ type (
 
 	// AlterDatabase represents a ALTER database statement.
 	AlterDatabase struct {
-		DBName              TableIdent
+		DBName              IdentifierCS
 		UpdateDataDirectory bool
 		AlterOptions        []DatabaseOption
 		FullyParsed         bool
@@ -458,7 +457,7 @@ type (
 		VindexSpec *VindexSpec
 
 		// VindexCols is set for AddColVindexDDLAction.
-		VindexCols []ColIdent
+		VindexCols []IdentifierCI
 
 		// AutoIncSpec is set for AddAutoIncDDLAction.
 		AutoIncSpec *AutoIncSpec
@@ -574,7 +573,7 @@ type (
 
 	// Use represents a use statement.
 	Use struct {
-		DBName TableIdent
+		DBName IdentifierCS
 	}
 
 	// Begin represents a Begin statement.
@@ -588,17 +587,17 @@ type (
 
 	// SRollback represents a rollback to savepoint statement.
 	SRollback struct {
-		Name ColIdent
+		Name IdentifierCI
 	}
 
 	// Savepoint represents a savepoint statement.
 	Savepoint struct {
-		Name ColIdent
+		Name IdentifierCI
 	}
 
 	// Release represents a release savepoint statement.
 	Release struct {
-		Name ColIdent
+		Name IdentifierCI
 	}
 
 	// CallProc represents a CALL statement
@@ -645,7 +644,7 @@ type (
 	// PrepareStmt represents a Prepare Statement
 	// More info available on https://dev.mysql.com/doc/refman/8.0/en/sql-prepared-statements.html
 	PrepareStmt struct {
-		Name      ColIdent
+		Name      IdentifierCI
 		Statement Expr
 		Comments  *ParsedComments
 	}
@@ -653,9 +652,9 @@ type (
 	// ExecuteStmt represents an Execute Statement
 	// More info available on https://dev.mysql.com/doc/refman/8.0/en/execute.html
 	ExecuteStmt struct {
-		Name      ColIdent
+		Name      IdentifierCI
 		Comments  *ParsedComments
-		Arguments Columns
+		Arguments []*Variable
 	}
 
 	// DeallocateStmt represents a Deallocate Statement
@@ -663,7 +662,7 @@ type (
 	DeallocateStmt struct {
 		Type     DeallocateStmtType
 		Comments *ParsedComments
-		Name     ColIdent
+		Name     IdentifierCI
 	}
 
 	// DeallocateStmtType is an enum to get types of deallocate
@@ -682,6 +681,11 @@ type (
 	// It should be used only as an indicator. It does not contain
 	// the full AST for the statement.
 	OtherAdmin struct{}
+
+	// CommentOnly represents a query which only has comments
+	CommentOnly struct {
+		Comments []string
+	}
 )
 
 func (*Union) iStatement()             {}
@@ -705,6 +709,7 @@ func (*Savepoint) iStatement()         {}
 func (*Release) iStatement()           {}
 func (*OtherRead) iStatement()         {}
 func (*OtherAdmin) iStatement()        {}
+func (*CommentOnly) iStatement()       {}
 func (*Select) iSelectStatement()      {}
 func (*Union) iSelectStatement()       {}
 func (*Load) iStatement()              {}
@@ -1493,32 +1498,32 @@ func (node *DropView) AffectedTables() TableNames {
 
 // SetTable implements DDLStatement.
 func (node *TruncateTable) SetTable(qualifier string, name string) {
-	node.Table.Qualifier = NewTableIdent(qualifier)
-	node.Table.Name = NewTableIdent(name)
+	node.Table.Qualifier = NewIdentifierCS(qualifier)
+	node.Table.Name = NewIdentifierCS(name)
 }
 
 // SetTable implements DDLStatement.
 func (node *AlterTable) SetTable(qualifier string, name string) {
-	node.Table.Qualifier = NewTableIdent(qualifier)
-	node.Table.Name = NewTableIdent(name)
+	node.Table.Qualifier = NewIdentifierCS(qualifier)
+	node.Table.Name = NewIdentifierCS(name)
 }
 
 // SetTable implements DDLStatement.
 func (node *CreateTable) SetTable(qualifier string, name string) {
-	node.Table.Qualifier = NewTableIdent(qualifier)
-	node.Table.Name = NewTableIdent(name)
+	node.Table.Qualifier = NewIdentifierCS(qualifier)
+	node.Table.Name = NewIdentifierCS(name)
 }
 
 // SetTable implements DDLStatement.
 func (node *CreateView) SetTable(qualifier string, name string) {
-	node.ViewName.Qualifier = NewTableIdent(qualifier)
-	node.ViewName.Name = NewTableIdent(name)
+	node.ViewName.Qualifier = NewIdentifierCS(qualifier)
+	node.ViewName.Name = NewIdentifierCS(name)
 }
 
 // SetTable implements DDLStatement.
 func (node *AlterView) SetTable(qualifier string, name string) {
-	node.ViewName.Qualifier = NewTableIdent(qualifier)
-	node.ViewName.Name = NewTableIdent(name)
+	node.ViewName.Qualifier = NewIdentifierCS(qualifier)
+	node.ViewName.Name = NewIdentifierCS(name)
 }
 
 // SetTable implements DDLStatement.
@@ -1593,7 +1598,7 @@ type (
 		Command ShowCommandType
 		Full    bool
 		Tbl     TableName
-		DbName  TableIdent
+		DbName  IdentifierCS
 		Filter  *ShowFilter
 	}
 
@@ -1644,7 +1649,7 @@ type PartitionSpecAction int8
 
 // PartitionDefinition describes a very minimal partition definition
 type PartitionDefinition struct {
-	Name    ColIdent
+	Name    IdentifierCI
 	Options *PartitionDefinitionOptions
 }
 
@@ -1662,7 +1667,7 @@ type PartitionDefinitionOptions struct {
 
 // Subpartition Definition Corresponds to the subpartition_definition option of partition_definition
 type SubPartitionDefinition struct {
-	Name    ColIdent
+	Name    IdentifierCI
 	Options *SubPartitionDefinitionOptions
 }
 
@@ -1733,7 +1738,7 @@ type TableSpec struct {
 
 // ColumnDefinition describes a column in a CREATE TABLE statement
 type ColumnDefinition struct {
-	Name ColIdent
+	Name IdentifierCI
 	// TODO: Should this not be a reference?
 	Type ColumnType
 }
@@ -1838,8 +1843,8 @@ type IndexDefinition struct {
 // IndexInfo describes the name and type of an index in a CREATE TABLE statement
 type IndexInfo struct {
 	Type           string
-	Name           ColIdent
-	ConstraintName ColIdent
+	Name           IdentifierCI
+	ConstraintName IdentifierCI
 	Primary        bool
 	Spatial        bool
 	Fulltext       bool
@@ -1848,26 +1853,26 @@ type IndexInfo struct {
 
 // VindexSpec defines a vindex for a CREATE VINDEX or DROP VINDEX statement
 type VindexSpec struct {
-	Name   ColIdent
-	Type   ColIdent
+	Name   IdentifierCI
+	Type   IdentifierCI
 	Params []VindexParam
 }
 
 // AutoIncSpec defines and autoincrement value for a ADD AUTO_INCREMENT statement
 type AutoIncSpec struct {
-	Column   ColIdent
+	Column   IdentifierCI
 	Sequence TableName
 }
 
 // VindexParam defines a key/value parameter for a CREATE VINDEX statement
 type VindexParam struct {
-	Key ColIdent
+	Key IdentifierCI
 	Val string
 }
 
 // ConstraintDefinition describes a constraint in a CREATE TABLE statement
 type ConstraintDefinition struct {
-	Name    ColIdent
+	Name    IdentifierCI
 	Details ConstraintInfo
 }
 
@@ -1881,7 +1886,7 @@ type (
 	// ForeignKeyDefinition describes a foreign key in a CREATE TABLE statement
 	ForeignKeyDefinition struct {
 		Source              Columns
-		IndexName           ColIdent
+		IndexName           IdentifierCI
 		ReferenceDefinition *ReferenceDefinition
 	}
 
@@ -1940,7 +1945,7 @@ type (
 	// AliasedExpr defines an aliased SELECT expression.
 	AliasedExpr struct {
 		Expr Expr
-		As   ColIdent
+		As   IdentifierCI
 	}
 
 	// Nextval defines the NEXT VALUE expression.
@@ -1954,7 +1959,7 @@ func (*AliasedExpr) iSelectExpr() {}
 func (*Nextval) iSelectExpr()     {}
 
 // Columns represents an insert column list.
-type Columns []ColIdent
+type Columns []IdentifierCI
 
 // Partitions is a type alias for Columns so we can handle printing efficiently
 type Partitions Columns
@@ -1975,7 +1980,7 @@ type (
 	AliasedTableExpr struct {
 		Expr       SimpleTableExpr
 		Partitions Partitions
-		As         TableIdent
+		As         IdentifierCS
 		Hints      IndexHints
 		Columns    Columns
 	}
@@ -2015,7 +2020,7 @@ type (
 	// This means two TableName vars can be compared for equality
 	// and a TableName can also be used as key in a map.
 	TableName struct {
-		Name, Qualifier TableIdent
+		Name, Qualifier IdentifierCS
 	}
 
 	// Subquery represents a subquery used as an value expression.
@@ -2048,7 +2053,7 @@ type JoinCondition struct {
 type IndexHint struct {
 	Type    IndexHintType
 	ForType IndexHintForType
-	Indexes []ColIdent
+	Indexes []IdentifierCI
 }
 
 // IndexHints represents a list of index hints.
@@ -2091,14 +2096,14 @@ type (
 	// WindowSpecification represents window_spec
 	// More information available here: https://dev.mysql.com/doc/refman/8.0/en/window-functions-usage.html
 	WindowSpecification struct {
-		Name            ColIdent
+		Name            IdentifierCI
 		PartitionClause Exprs
 		OrderClause     OrderBy
 		FrameClause     *FrameClause
 	}
 
 	WindowDefinition struct {
-		Name       ColIdent
+		Name       IdentifierCI
 		WindowSpec *WindowSpecification
 	}
 
@@ -2128,7 +2133,7 @@ type (
 	// OverClause refers to over_clause
 	// More information available here: https://dev.mysql.com/doc/refman/8.0/en/window-functions-usage.html
 	OverClause struct {
-		WindowName ColIdent
+		WindowName IdentifierCI
 		WindowSpec *WindowSpecification
 	}
 
@@ -2251,8 +2256,13 @@ type (
 		// additional data, typically info about which
 		// table or column this node references.
 		Metadata  any
-		Name      ColIdent
+		Name      IdentifierCI
 		Qualifier TableName
+	}
+
+	Variable struct {
+		Scope Scope
+		Name  IdentifierCI
 	}
 
 	// ColTuple represents a list of column values.
@@ -2326,9 +2336,8 @@ type (
 
 	// FuncExpr represents a function call.
 	FuncExpr struct {
-		Qualifier TableIdent
-		Name      ColIdent
-		Distinct  bool
+		Qualifier IdentifierCS
+		Name      IdentifierCI
 		Exprs     SelectExprs
 	}
 
@@ -2372,7 +2381,7 @@ type (
 
 	// MatchExpr represents a call to the MATCH function
 	MatchExpr struct {
-		Columns SelectExprs
+		Columns []*ColName
 		Expr    Expr
 		Option  MatchExprOption
 	}
@@ -2385,6 +2394,33 @@ type (
 		Expr  Expr
 		Whens []*When
 		Else  Expr
+	}
+
+	// InsertExpr represents an INSERT expression
+	InsertExpr struct {
+		Str    Expr
+		Pos    Expr
+		Len    Expr
+		NewStr Expr
+	}
+
+	// IntervalFuncExpr represents an INTERVAL function expression
+	IntervalFuncExpr struct {
+		Expr  Expr
+		Exprs Exprs
+	}
+
+	// LocateExpr represents a LOCATE function expression
+	LocateExpr struct {
+		SubStr Expr
+		Str    Expr
+		Pos    Expr
+	}
+
+	// CharExpr represents a CHAR function expression
+	CharExpr struct {
+		Exprs   Exprs
+		Charset string
 	}
 
 	// Default represents a DEFAULT expression.
@@ -2401,7 +2437,7 @@ type (
 	// CurTimeFuncExpr represents the function and arguments for CURRENT DATE/TIME functions
 	// supported functions are documented in the grammar
 	CurTimeFuncExpr struct {
-		Name ColIdent
+		Name IdentifierCI
 		Fsp  Expr // fractional seconds precision, integer from 0 to 6 or an Argument
 	}
 
@@ -2473,7 +2509,7 @@ type (
 	// For more information, visit https://dev.mysql.com/doc/refman/8.0/en/json-table-functions.html#function_json-table
 	JSONTableExpr struct {
 		Expr    Expr
-		Alias   TableIdent
+		Alias   IdentifierCS
 		Filter  Expr
 		Columns []*JtColumnDefinition
 	}
@@ -2490,12 +2526,12 @@ type (
 
 	// JtOrdinalColDef is a type of column definition similar to using AUTO_INCREMENT with a column
 	JtOrdinalColDef struct {
-		Name ColIdent
+		Name IdentifierCI
 	}
 
 	// JtPathColDef is a type of column definition specifying the path in JSON structure to extract values
 	JtPathColDef struct {
-		Name            ColIdent
+		Name            IdentifierCI
 		Type            ColumnType
 		JtColExists     bool
 		Path            Expr
@@ -2515,15 +2551,12 @@ type (
 		Expr         Expr
 	}
 
-	// JSONPathParam is used to store the path used as arguments in different JSON functions
-	JSONPathParam Expr
-
 	// JSONContainsExpr represents the function and arguments for JSON_CONTAINS()
 	// For more information, see https://dev.mysql.com/doc/refman/8.0/en/json-search-functions.html#function_json-contains
 	JSONContainsExpr struct {
 		Target    Expr
 		Candidate Expr
-		PathList  []JSONPathParam
+		PathList  []Expr
 	}
 
 	// JSONContainsPathExpr represents the function and arguments for JSON_CONTAINS_PATH()
@@ -2531,7 +2564,7 @@ type (
 	JSONContainsPathExpr struct {
 		JSONDoc  Expr
 		OneOrAll Expr
-		PathList []JSONPathParam
+		PathList []Expr
 	}
 
 	// JSONContainsPathType is an enum to get types of Trim
@@ -2541,14 +2574,14 @@ type (
 	// For more information, see https://dev.mysql.com/doc/refman/8.0/en/json-search-functions.html#function_json-extract
 	JSONExtractExpr struct {
 		JSONDoc  Expr
-		PathList []JSONPathParam
+		PathList []Expr
 	}
 
 	// JSONKeysExpr represents the function and arguments for JSON_KEYS()
 	// For more information, see https://dev.mysql.com/doc/refman/8.0/en/json-search-functions.html#function_json-keys
 	JSONKeysExpr struct {
-		JSONDoc  Expr
-		PathList []JSONPathParam
+		JSONDoc Expr
+		Path    Expr
 	}
 
 	// JSONOverlapsExpr represents the function and arguments for JSON_OVERLAPS()
@@ -2565,14 +2598,14 @@ type (
 		OneOrAll   Expr
 		SearchStr  Expr
 		EscapeChar Expr
-		PathList   []JSONPathParam
+		PathList   []Expr
 	}
 
 	// JSONValueExpr represents the function and arguments for JSON_VALUE()
 	// For more information, see https://dev.mysql.com/doc/refman/8.0/en/json-search-functions.html#function_json-value
 	JSONValueExpr struct {
 		JSONDoc         Expr
-		Path            JSONPathParam
+		Path            Expr
 		ReturningType   *ConvertType
 		EmptyOnResponse *JtOnResponse
 		ErrorOnResponse *JtOnResponse
@@ -2604,7 +2637,7 @@ type (
 	JSONAttributesExpr struct {
 		Type    JSONAttributeType
 		JSONDoc Expr
-		Path    JSONPathParam
+		Path    Expr
 	}
 
 	// JSONAttributeType is an enum to get types of TrimFunc.
@@ -2657,85 +2690,69 @@ type (
 	Count struct {
 		Args     Exprs
 		Distinct bool
-		Name     string
 	}
 
 	CountStar struct {
-		Name string
 	}
 
 	Avg struct {
 		Arg      Expr
 		Distinct bool
-		Name     string
 	}
 
 	Max struct {
 		Arg      Expr
 		Distinct bool
-		Name     string
 	}
 
 	Min struct {
 		Arg      Expr
 		Distinct bool
-		Name     string
 	}
 
 	Sum struct {
 		Arg      Expr
 		Distinct bool
-		Name     string
 	}
 
 	BitAnd struct {
-		Arg  Expr
-		Name string
+		Arg Expr
 	}
 
 	BitOr struct {
-		Arg  Expr
-		Name string
+		Arg Expr
 	}
 
 	BitXor struct {
-		Arg  Expr
-		Name string
+		Arg Expr
 	}
 
 	Std struct {
-		Arg  Expr
-		Name string
+		Arg Expr
 	}
 
 	StdDev struct {
-		Arg  Expr
-		Name string
+		Arg Expr
 	}
 
 	StdPop struct {
-		Arg  Expr
-		Name string
+		Arg Expr
 	}
 
 	StdSamp struct {
-		Arg  Expr
-		Name string
+		Arg Expr
 	}
 
 	VarPop struct {
-		Arg  Expr
-		Name string
+		Arg Expr
 	}
 
 	VarSamp struct {
-		Arg  Expr
-		Name string
+		Arg Expr
 	}
 
 	Variance struct {
-		Arg  Expr
-		Name string
+		Arg Expr
 	}
 
 	// GroupConcatExpr represents a call to GROUP_CONCAT
@@ -2745,7 +2762,6 @@ type (
 		OrderBy   OrderBy
 		Separator string
 		Limit     *Limit
-		Name      string
 	}
 
 	// RegexpInstrExpr represents REGEXP_INSTR()
@@ -2877,26 +2893,171 @@ type (
 		Type     PerformanceSchemaType
 		Argument Expr
 	}
+
+	// GTIDType is an enum that get types of GTIDFunc
+	GTIDType int8
+
+	// GTIDFuncExpr stands for GTID Functions
+	// Set1 Acts as gtid_set for WAIT_FOR_EXECUTED_GTID_SET() and WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS()
+	// For more details, visit https://dev.mysql.com/doc/refman/8.0/en/gtid-functions.html
+	GTIDFuncExpr struct {
+		Type    GTIDType
+		Set1    Expr
+		Set2    Expr
+		Timeout Expr
+		Channel Expr
+	}
 )
 
 // iExpr ensures that only expressions nodes can be assigned to a Expr
-func (*Sum) iExpr()             {}
-func (*Min) iExpr()             {}
-func (*Max) iExpr()             {}
-func (*Avg) iExpr()             {}
-func (*CountStar) iExpr()       {}
-func (*Count) iExpr()           {}
-func (*GroupConcatExpr) iExpr() {}
-func (*BitAnd) iExpr()          {}
-func (*BitOr) iExpr()           {}
-func (*BitXor) iExpr()          {}
-func (*Std) iExpr()             {}
-func (*StdDev) iExpr()          {}
-func (*StdPop) iExpr()          {}
-func (*StdSamp) iExpr()         {}
-func (*VarPop) iExpr()          {}
-func (*VarSamp) iExpr()         {}
-func (*Variance) iExpr()        {}
+func (*AndExpr) iExpr()                            {}
+func (*OrExpr) iExpr()                             {}
+func (*XorExpr) iExpr()                            {}
+func (*NotExpr) iExpr()                            {}
+func (*ComparisonExpr) iExpr()                     {}
+func (*BetweenExpr) iExpr()                        {}
+func (*IsExpr) iExpr()                             {}
+func (*ExistsExpr) iExpr()                         {}
+func (*Literal) iExpr()                            {}
+func (Argument) iExpr()                            {}
+func (*NullVal) iExpr()                            {}
+func (BoolVal) iExpr()                             {}
+func (*ColName) iExpr()                            {}
+func (ValTuple) iExpr()                            {}
+func (*Subquery) iExpr()                           {}
+func (ListArg) iExpr()                             {}
+func (*BinaryExpr) iExpr()                         {}
+func (*UnaryExpr) iExpr()                          {}
+func (*IntroducerExpr) iExpr()                     {}
+func (*IntervalExpr) iExpr()                       {}
+func (*CollateExpr) iExpr()                        {}
+func (*FuncExpr) iExpr()                           {}
+func (*TimestampFuncExpr) iExpr()                  {}
+func (*ExtractFuncExpr) iExpr()                    {}
+func (*WeightStringFuncExpr) iExpr()               {}
+func (*CurTimeFuncExpr) iExpr()                    {}
+func (*CaseExpr) iExpr()                           {}
+func (*ValuesFuncExpr) iExpr()                     {}
+func (*CastExpr) iExpr()                           {}
+func (*ConvertExpr) iExpr()                        {}
+func (*SubstrExpr) iExpr()                         {}
+func (*InsertExpr) iExpr()                         {}
+func (*IntervalFuncExpr) iExpr()                   {}
+func (*LocateExpr) iExpr()                         {}
+func (*CharExpr) iExpr()                           {}
+func (*ConvertUsingExpr) iExpr()                   {}
+func (*MatchExpr) iExpr()                          {}
+func (*Default) iExpr()                            {}
+func (*ExtractedSubquery) iExpr()                  {}
+func (*TrimFuncExpr) iExpr()                       {}
+func (*JSONSchemaValidFuncExpr) iExpr()            {}
+func (*JSONSchemaValidationReportFuncExpr) iExpr() {}
+func (*Offset) iExpr()                             {}
+func (*JSONPrettyExpr) iExpr()                     {}
+func (*JSONStorageFreeExpr) iExpr()                {}
+func (*JSONStorageSizeExpr) iExpr()                {}
+func (*JSONContainsExpr) iExpr()                   {}
+func (*JSONContainsPathExpr) iExpr()               {}
+func (*JSONExtractExpr) iExpr()                    {}
+func (*JSONKeysExpr) iExpr()                       {}
+func (*JSONOverlapsExpr) iExpr()                   {}
+func (*JSONSearchExpr) iExpr()                     {}
+func (*JSONValueExpr) iExpr()                      {}
+func (*JSONArrayExpr) iExpr()                      {}
+func (*JSONObjectExpr) iExpr()                     {}
+func (*JSONQuoteExpr) iExpr()                      {}
+func (*JSONAttributesExpr) iExpr()                 {}
+func (*JSONValueModifierExpr) iExpr()              {}
+func (*JSONValueMergeExpr) iExpr()                 {}
+func (*JSONRemoveExpr) iExpr()                     {}
+func (*JSONUnquoteExpr) iExpr()                    {}
+func (*MemberOfExpr) iExpr()                       {}
+func (*RegexpInstrExpr) iExpr()                    {}
+func (*RegexpLikeExpr) iExpr()                     {}
+func (*RegexpReplaceExpr) iExpr()                  {}
+func (*RegexpSubstrExpr) iExpr()                   {}
+func (*ArgumentLessWindowExpr) iExpr()             {}
+func (*FirstOrLastValueExpr) iExpr()               {}
+func (*NtileExpr) iExpr()                          {}
+func (*NTHValueExpr) iExpr()                       {}
+func (*LagLeadExpr) iExpr()                        {}
+func (*NamedWindow) iExpr()                        {}
+func (*ExtractValueExpr) iExpr()                   {}
+func (*UpdateXMLExpr) iExpr()                      {}
+func (*LockingFunc) iExpr()                        {}
+func (*PerformanceSchemaFuncExpr) iExpr()          {}
+func (*GTIDFuncExpr) iExpr()                       {}
+func (*Sum) iExpr()                                {}
+func (*Min) iExpr()                                {}
+func (*Max) iExpr()                                {}
+func (*Avg) iExpr()                                {}
+func (*CountStar) iExpr()                          {}
+func (*Count) iExpr()                              {}
+func (*GroupConcatExpr) iExpr()                    {}
+func (*BitAnd) iExpr()                             {}
+func (*BitOr) iExpr()                              {}
+func (*BitXor) iExpr()                             {}
+func (*Std) iExpr()                                {}
+func (*StdDev) iExpr()                             {}
+func (*StdPop) iExpr()                             {}
+func (*StdSamp) iExpr()                            {}
+func (*VarPop) iExpr()                             {}
+func (*VarSamp) iExpr()                            {}
+func (*Variance) iExpr()                           {}
+func (*Variable) iExpr()                           {}
+
+// iCallable marks all expressions that represent function calls
+func (*FuncExpr) iCallable()                           {}
+func (*TimestampFuncExpr) iCallable()                  {}
+func (*ExtractFuncExpr) iCallable()                    {}
+func (*WeightStringFuncExpr) iCallable()               {}
+func (*CurTimeFuncExpr) iCallable()                    {}
+func (*ValuesFuncExpr) iCallable()                     {}
+func (*ConvertExpr) iCallable()                        {}
+func (*TrimFuncExpr) iCallable()                       {}
+func (*SubstrExpr) iCallable()                         {}
+func (*InsertExpr) iCallable()                         {}
+func (*IntervalFuncExpr) iCallable()                   {}
+func (*LocateExpr) iCallable()                         {}
+func (*CharExpr) iCallable()                           {}
+func (*ConvertUsingExpr) iCallable()                   {}
+func (*MatchExpr) iCallable()                          {}
+func (*GroupConcatExpr) iCallable()                    {}
+func (*JSONSchemaValidFuncExpr) iCallable()            {}
+func (*JSONSchemaValidationReportFuncExpr) iCallable() {}
+func (*JSONPrettyExpr) iCallable()                     {}
+func (*JSONStorageFreeExpr) iCallable()                {}
+func (*JSONStorageSizeExpr) iCallable()                {}
+func (*JSONArrayExpr) iCallable()                      {}
+func (*JSONObjectExpr) iCallable()                     {}
+func (*JSONQuoteExpr) iCallable()                      {}
+func (*JSONContainsExpr) iCallable()                   {}
+func (*JSONContainsPathExpr) iCallable()               {}
+func (*JSONExtractExpr) iCallable()                    {}
+func (*JSONKeysExpr) iCallable()                       {}
+func (*JSONValueExpr) iCallable()                      {}
+func (*JSONSearchExpr) iCallable()                     {}
+func (*JSONOverlapsExpr) iCallable()                   {}
+func (*JSONAttributesExpr) iCallable()                 {}
+func (*JSONValueModifierExpr) iCallable()              {}
+func (*JSONValueMergeExpr) iCallable()                 {}
+func (*JSONRemoveExpr) iCallable()                     {}
+func (*JSONUnquoteExpr) iCallable()                    {}
+func (*MemberOfExpr) iCallable()                       {}
+func (*RegexpInstrExpr) iCallable()                    {}
+func (*RegexpLikeExpr) iCallable()                     {}
+func (*RegexpReplaceExpr) iCallable()                  {}
+func (*RegexpSubstrExpr) iCallable()                   {}
+func (*ArgumentLessWindowExpr) iCallable()             {}
+func (*FirstOrLastValueExpr) iCallable()               {}
+func (*NtileExpr) iCallable()                          {}
+func (*NTHValueExpr) iCallable()                       {}
+func (*LagLeadExpr) iCallable()                        {}
+func (*NamedWindow) iCallable()                        {}
+func (*ExtractValueExpr) iCallable()                   {}
+func (*UpdateXMLExpr) iCallable()                      {}
+func (*PerformanceSchemaFuncExpr) iCallable()          {}
+func (*GTIDFuncExpr) iCallable()                       {}
 
 func (sum *Sum) GetArg() Expr                   { return sum.Arg }
 func (min *Min) GetArg() Expr                   { return min.Arg }
@@ -2952,144 +3113,23 @@ func (varP *VarPop) IsDistinct() bool               { return false }
 func (varS *VarSamp) IsDistinct() bool              { return false }
 func (variance *Variance) IsDistinct() bool         { return false }
 
-func (sum *Sum) AggrName() string                   { return sum.Name }
-func (min *Min) AggrName() string                   { return min.Name }
-func (max *Max) AggrName() string                   { return max.Name }
-func (avg *Avg) AggrName() string                   { return avg.Name }
-func (cStar *CountStar) AggrName() string           { return cStar.Name }
-func (count *Count) AggrName() string               { return count.Name }
-func (grpConcat *GroupConcatExpr) AggrName() string { return grpConcat.Name }
-func (bAnd *BitAnd) AggrName() string               { return bAnd.Name }
-func (bOr *BitOr) AggrName() string                 { return bOr.Name }
-func (bXor *BitXor) AggrName() string               { return bXor.Name }
-func (std *Std) AggrName() string                   { return std.Name }
-func (stdD *StdDev) AggrName() string               { return stdD.Name }
-func (stdP *StdPop) AggrName() string               { return stdP.Name }
-func (stdS *StdSamp) AggrName() string              { return stdS.Name }
-func (varP *VarPop) AggrName() string               { return varP.Name }
-func (varS *VarSamp) AggrName() string              { return varS.Name }
-func (variance *Variance) AggrName() string         { return variance.Name }
-
-func (*AndExpr) iExpr()                            {}
-func (*OrExpr) iExpr()                             {}
-func (*XorExpr) iExpr()                            {}
-func (*NotExpr) iExpr()                            {}
-func (*ComparisonExpr) iExpr()                     {}
-func (*BetweenExpr) iExpr()                        {}
-func (*IsExpr) iExpr()                             {}
-func (*ExistsExpr) iExpr()                         {}
-func (*Literal) iExpr()                            {}
-func (Argument) iExpr()                            {}
-func (*NullVal) iExpr()                            {}
-func (BoolVal) iExpr()                             {}
-func (*ColName) iExpr()                            {}
-func (ValTuple) iExpr()                            {}
-func (*Subquery) iExpr()                           {}
-func (ListArg) iExpr()                             {}
-func (*BinaryExpr) iExpr()                         {}
-func (*UnaryExpr) iExpr()                          {}
-func (*IntroducerExpr) iExpr()                     {}
-func (*IntervalExpr) iExpr()                       {}
-func (*CollateExpr) iExpr()                        {}
-func (*FuncExpr) iExpr()                           {}
-func (*TimestampFuncExpr) iExpr()                  {}
-func (*ExtractFuncExpr) iExpr()                    {}
-func (*WeightStringFuncExpr) iExpr()               {}
-func (*CurTimeFuncExpr) iExpr()                    {}
-func (*CaseExpr) iExpr()                           {}
-func (*ValuesFuncExpr) iExpr()                     {}
-func (*CastExpr) iExpr()                           {}
-func (*ConvertExpr) iExpr()                        {}
-func (*SubstrExpr) iExpr()                         {}
-func (*ConvertUsingExpr) iExpr()                   {}
-func (*MatchExpr) iExpr()                          {}
-func (*Default) iExpr()                            {}
-func (*ExtractedSubquery) iExpr()                  {}
-func (*TrimFuncExpr) iExpr()                       {}
-func (*JSONSchemaValidFuncExpr) iExpr()            {}
-func (*JSONSchemaValidationReportFuncExpr) iExpr() {}
-func (*Offset) iExpr()                             {}
-func (*JSONPrettyExpr) iExpr()                     {}
-func (*JSONStorageFreeExpr) iExpr()                {}
-func (*JSONStorageSizeExpr) iExpr()                {}
-func (*JSONContainsExpr) iExpr()                   {}
-func (*JSONContainsPathExpr) iExpr()               {}
-func (*JSONExtractExpr) iExpr()                    {}
-func (*JSONKeysExpr) iExpr()                       {}
-func (*JSONOverlapsExpr) iExpr()                   {}
-func (*JSONSearchExpr) iExpr()                     {}
-func (*JSONValueExpr) iExpr()                      {}
-func (*JSONArrayExpr) iExpr()                      {}
-func (*JSONObjectExpr) iExpr()                     {}
-func (*JSONQuoteExpr) iExpr()                      {}
-func (*JSONAttributesExpr) iExpr()                 {}
-func (*JSONValueModifierExpr) iExpr()              {}
-func (*JSONValueMergeExpr) iExpr()                 {}
-func (*JSONRemoveExpr) iExpr()                     {}
-func (*JSONUnquoteExpr) iExpr()                    {}
-func (*MemberOfExpr) iExpr()                       {}
-func (*RegexpInstrExpr) iExpr()                    {}
-func (*RegexpLikeExpr) iExpr()                     {}
-func (*RegexpReplaceExpr) iExpr()                  {}
-func (*RegexpSubstrExpr) iExpr()                   {}
-func (*ArgumentLessWindowExpr) iExpr()             {}
-func (*FirstOrLastValueExpr) iExpr()               {}
-func (*NtileExpr) iExpr()                          {}
-func (*NTHValueExpr) iExpr()                       {}
-func (*LagLeadExpr) iExpr()                        {}
-func (*NamedWindow) iExpr()                        {}
-func (*ExtractValueExpr) iExpr()                   {}
-func (*UpdateXMLExpr) iExpr()                      {}
-func (*LockingFunc) iExpr()                        {}
-func (*PerformanceSchemaFuncExpr) iExpr()          {}
-
-// iCallable marks all expressions that represent function calls
-func (*FuncExpr) iCallable()                           {}
-func (*TimestampFuncExpr) iCallable()                  {}
-func (*ExtractFuncExpr) iCallable()                    {}
-func (*WeightStringFuncExpr) iCallable()               {}
-func (*CurTimeFuncExpr) iCallable()                    {}
-func (*ValuesFuncExpr) iCallable()                     {}
-func (*ConvertExpr) iCallable()                        {}
-func (*TrimFuncExpr) iCallable()                       {}
-func (*SubstrExpr) iCallable()                         {}
-func (*ConvertUsingExpr) iCallable()                   {}
-func (*MatchExpr) iCallable()                          {}
-func (*GroupConcatExpr) iCallable()                    {}
-func (*JSONSchemaValidFuncExpr) iCallable()            {}
-func (*JSONSchemaValidationReportFuncExpr) iCallable() {}
-func (*JSONPrettyExpr) iCallable()                     {}
-func (*JSONStorageFreeExpr) iCallable()                {}
-func (*JSONStorageSizeExpr) iCallable()                {}
-func (*JSONArrayExpr) iCallable()                      {}
-func (*JSONObjectExpr) iCallable()                     {}
-func (*JSONQuoteExpr) iCallable()                      {}
-func (*JSONContainsExpr) iCallable()                   {}
-func (*JSONContainsPathExpr) iCallable()               {}
-func (*JSONExtractExpr) iCallable()                    {}
-func (*JSONKeysExpr) iCallable()                       {}
-func (*JSONValueExpr) iCallable()                      {}
-func (*JSONSearchExpr) iCallable()                     {}
-func (*JSONOverlapsExpr) iCallable()                   {}
-func (*JSONAttributesExpr) iCallable()                 {}
-func (*JSONValueModifierExpr) iCallable()              {}
-func (*JSONValueMergeExpr) iCallable()                 {}
-func (*JSONRemoveExpr) iCallable()                     {}
-func (*JSONUnquoteExpr) iCallable()                    {}
-func (*MemberOfExpr) iCallable()                       {}
-func (*RegexpInstrExpr) iCallable()                    {}
-func (*RegexpLikeExpr) iCallable()                     {}
-func (*RegexpReplaceExpr) iCallable()                  {}
-func (*RegexpSubstrExpr) iCallable()                   {}
-func (*ArgumentLessWindowExpr) iCallable()             {}
-func (*FirstOrLastValueExpr) iCallable()               {}
-func (*NtileExpr) iCallable()                          {}
-func (*NTHValueExpr) iCallable()                       {}
-func (*LagLeadExpr) iCallable()                        {}
-func (*NamedWindow) iCallable()                        {}
-func (*ExtractValueExpr) iCallable()                   {}
-func (*UpdateXMLExpr) iCallable()                      {}
-func (*PerformanceSchemaFuncExpr) iCallable()          {}
+func (sum *Sum) AggrName() string                   { return "sum" }
+func (min *Min) AggrName() string                   { return "min" }
+func (max *Max) AggrName() string                   { return "max" }
+func (avg *Avg) AggrName() string                   { return "avg" }
+func (cStar *CountStar) AggrName() string           { return "count" }
+func (count *Count) AggrName() string               { return "count" }
+func (grpConcat *GroupConcatExpr) AggrName() string { return "group_concat" }
+func (bAnd *BitAnd) AggrName() string               { return "bit_and" }
+func (bOr *BitOr) AggrName() string                 { return "bit_or" }
+func (bXor *BitXor) AggrName() string               { return "bit_xor" }
+func (std *Std) AggrName() string                   { return "std" }
+func (stdD *StdDev) AggrName() string               { return "stddev" }
+func (stdP *StdPop) AggrName() string               { return "stddev_pop" }
+func (stdS *StdSamp) AggrName() string              { return "stddev_samp" }
+func (varP *VarPop) AggrName() string               { return "var_pop" }
+func (varS *VarSamp) AggrName() string              { return "var_samp" }
+func (variance *Variance) AggrName() string         { return "variance" }
 
 // Exprs represents a list of value expressions.
 // It's not a valid expression because it's not parenthesized.
@@ -3144,34 +3184,27 @@ type SetExprs []*SetExpr
 
 // SetExpr represents a set expression.
 type SetExpr struct {
-	Scope Scope
-	Name  ColIdent
-	Expr  Expr
+	Var  *Variable
+	Expr Expr
 }
 
 // OnDup represents an ON DUPLICATE KEY clause.
 type OnDup UpdateExprs
 
-// ColIdent is a case insensitive SQL identifier. It will be escaped with
+// IdentifierCI is a case insensitive SQL identifier. It will be escaped with
 // backquotes if necessary.
-type ColIdent struct {
+type IdentifierCI struct {
 	// This artifact prevents this struct from being compared
 	// with itself. It consumes no space as long as it's not the
 	// last field in the struct.
 	_            [0]struct{ _ []byte }
 	val, lowered string
-	at           AtCount
 }
 
-// TableIdent is a case sensitive SQL identifier. It will be escaped with
+// IdentifierCS is a case sensitive SQL identifier. It will be escaped with
 // backquotes if necessary.
-type TableIdent struct {
+type IdentifierCS struct {
 	v string
-}
-
-// AtCount return the '@' count present in ColIdent Name
-func (node ColIdent) AtCount() AtCount {
-	return node.at
 }
 
 func (IsolationLevel) iChar() {}

@@ -71,8 +71,6 @@ Usage of vttablet:
 	catch and ignore SIGPIPE on stdout and stderr if specified
   --ceph_backup_storage_config string
 	Path to JSON config file for ceph backup storage (default ceph_backup_config.json)
-  --client-found-rows-pool-size int
-	DEPRECATED: queryserver-config-transaction-cap will be used instead.
   --compression_level int
 	what level to pass to the compressor (default 1)
   --consul_auth_static_file string
@@ -375,8 +373,6 @@ Usage of vttablet:
 	the replication lag that is considered low enough to be healthy (default 30s)
   --emit_stats
 	If set, emit stats to push-based monitoring and stats backends
-  --enable-autocommit
-	This flag is deprecated. Autocommit is always allowed. (default true)
   --enable-consolidator
 	Synonym to -enable_consolidator (default true)
   --enable-consolidator-replicas
@@ -398,7 +394,7 @@ Usage of vttablet:
   --enable_lag_throttler
 	If true, vttablet will run a throttler service, and will implicitly enable heartbeats
   --enable_query_plan_field_caching
-	This option fetches & caches fields (columns) when storing query plans (default true)
+	(DEPRECATED) This option fetches & caches fields (columns) when storing query plans (default true)
   --enable_replication_reporter
 	Use polling to track replication lag.
   --enable_semi_sync
@@ -625,8 +621,6 @@ Usage of vttablet:
 	If set, the process will write its pid to the named file, and delete it on graceful shutdown.
   --pitr_gtid_lookup_timeout duration
 	PITR restore parameter: timeout for fetching gtid from timestamp. (default 1m0s)
-  --pool-name-prefix string
-	Deprecated
   --pool_hostname_resolve_interval duration
 	if set force an update to all hostnames and reconnect if changed, defaults to 0 (disabled)
   --port int
@@ -649,22 +643,14 @@ Usage of vttablet:
 	Number of rows a query has to return or affect before being logged; not useful for streaming queries. 0 means all queries will be logged.
   --queryserver-config-acl-exempt-acl string
 	an acl that exempt from table acl checking (this acl is free to access any vitess tables).
-  --queryserver-config-allowunsafe-dmls
-	deprecated
   --queryserver-config-annotate-queries
 	prefix queries to MySQL backend with comment indicating vtgate principal (user) and target tablet type
   --queryserver-config-enable-table-acl-dry-run
 	If this flag is enabled, tabletserver will emit monitoring metrics and let the request pass regardless of table acl check results
   --queryserver-config-idle-timeout float
 	query server idle timeout (in seconds), vttablet manages various mysql connection pools. This config means if a connection has not been used in given idle timeout, this connection will be removed from pool. This effectively manages number of connection objects and optimize the pool performance. (default 1800)
-  --queryserver-config-max-dml-rows int
-	query server max dml rows per statement, maximum number of rows allowed to return at a time for an update or delete with either 1) an equality where clauses on primary keys, or 2) a subselect statement. For update and delete statements in above two categories, vttablet will split the original query into multiple small queries based on this configuration value. 
   --queryserver-config-max-result-size int
 	query server max result size, maximum number of rows allowed to return from vttablet for non-streaming queries. (default 10000)
-  --queryserver-config-message-conn-pool-prefill-parallelism int
-	DEPRECATED: Unused.
-  --queryserver-config-message-conn-pool-size int
-	DEPRECATED
   --queryserver-config-message-postpone-cap int
 	query server message postpone cap is the maximum number of messages that can be postponed at any given time. Set this number to substantially lower than transaction cap, so that the transaction pool isn't exhausted by the message subsystem. (default 4)
   --queryserver-config-passthrough-dmls
@@ -686,7 +672,7 @@ Usage of vttablet:
   --queryserver-config-query-timeout float
 	query server query timeout (in seconds), this is the query timeout in vttablet side. If a query takes more than this timeout, it will be killed. (default 30)
   --queryserver-config-schema-change-signal
-	query server schema signal, will signal connected vtgates that schema has changed whenever this is detected. VTGates will need to have -schema_change_signal enabled for this to work
+	query server schema signal, will signal connected vtgates that schema has changed whenever this is detected. VTGates will need to have -schema_change_signal enabled for this to work (default true)
   --queryserver-config-schema-change-signal-interval float
 	query server schema change signal interval defines at which interval the query server shall send schema updates to vtgate. (default 5)
   --queryserver-config-schema-reload-time float
@@ -923,8 +909,6 @@ Usage of vttablet:
 	Include VTGateCallerID.username when considering who the user is for the purpose of transaction limit. (default true)
   --transaction_limit_per_user float
 	Maximum number of transactions a single user is allowed to use at any time, represented as fraction of -transaction_cap. (default 0.4)
-  --transaction_shutdown_grace_period float
-	DEPRECATED: use shutdown_grace_period instead.
   --twopc_abandon_age float
 	time in seconds. Any unresolved transaction older than this time will be sent to the coordinator to be resolved.
   --twopc_coordinator_address string
@@ -989,10 +973,12 @@ max_rate_approach_threshold: 0.9
 	refresh interval for re-reading the topology (default 30s)
   --vreplication_heartbeat_update_interval int
 	Frequency (in seconds, default 1, max 60) at which the time_updated column of a vreplication stream when idling (default 1)
+  --vreplication_max_time_to_retry_on_error duration
+	stop automatically retrying when we've had consecutive failures with the same error for this long after the first occurrence (default 15m0s)
   --vreplication_replica_lag_tolerance duration
 	Replica lag threshold duration: once lag is below this we switch from copy phase to the replication (streaming) phase (default 1m0s)
   --vreplication_retry_delay duration
-	delay before retrying a failed binlog connection (default 5s)
+	delay before retrying a failed workflow event in the replication phase (default 5s)
   --vreplication_store_compressed_gtid
 	Store compressed gtids in the pos column of _vt.vreplication
   --vreplication_tablet_type string

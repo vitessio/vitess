@@ -369,6 +369,9 @@ func expectLogs(ctx context.Context, t *testing.T, query string, eventCh chan []
 				if ev.Type == binlogdatapb.VEventType_HEARTBEAT {
 					continue
 				}
+				if ev.Throttled {
+					continue
+				}
 				// Also ignore begin/commit to reduce list of events to expect, for readability ...
 				if ev.Type == binlogdatapb.VEventType_BEGIN {
 					continue

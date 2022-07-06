@@ -58,6 +58,7 @@ const (
 	StmtCallProc
 	StmtRevert
 	StmtShowMigrationLogs
+	StmtCommentOnly
 )
 
 //ASTToStatementType returns a StatementType from an AST stmt
@@ -111,6 +112,8 @@ func ASTToStatementType(stmt Statement) StatementType {
 		return StmtStream
 	case *VStream:
 		return StmtVStream
+	case *CommentOnly:
+		return StmtCommentOnly
 	default:
 		return StmtUnknown
 	}
@@ -294,6 +297,8 @@ func (s StatementType) String() string {
 		return "FLUSH"
 	case StmtCallProc:
 		return "CALL_PROC"
+	case StmtCommentOnly:
+		return "COMMENT_ONLY"
 	default:
 		return "UNKNOWN"
 	}
@@ -391,12 +396,12 @@ func TableFromStatement(sql string) (TableName, error) {
 
 // GetTableName returns the table name from the SimpleTableExpr
 // only if it's a simple expression. Otherwise, it returns "".
-func GetTableName(node SimpleTableExpr) TableIdent {
+func GetTableName(node SimpleTableExpr) IdentifierCS {
 	if n, ok := node.(TableName); ok && n.Qualifier.IsEmpty() {
 		return n.Name
 	}
 	// sub-select or '.' expression
-	return NewTableIdent("")
+	return NewIdentifierCS("")
 }
 
 // IsColName returns true if the Expr is a *ColName.

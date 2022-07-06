@@ -129,7 +129,6 @@ func TestEmergencyReparentShardSlow(t *testing.T) {
 					"zone1-0000000101": nil,
 				},
 				StopReplicationAndGetStatusResults: map[string]struct {
-					Status     *replicationdatapb.Status
 					StopStatus *replicationdatapb.StopReplicationStatus
 					Error      error
 				}{
@@ -248,7 +247,6 @@ func TestEmergencyReparentShardSlow(t *testing.T) {
 					"zone1-0000000101": nil,
 				},
 				StopReplicationAndGetStatusResults: map[string]struct {
-					Status     *replicationdatapb.Status
 					StopStatus *replicationdatapb.StopReplicationStatus
 					Error      error
 				}{

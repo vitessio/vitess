@@ -67,7 +67,7 @@ func Append(buf *strings.Builder, node SQLNode) {
 type IndexColumn struct {
 	// Only one of Column or Expression can be specified
 	// Length is an optional field which is only applicable when Column is used
-	Column     ColIdent
+	Column     IdentifierCI
 	Length     *Literal
 	Expression Expr
 	Direction  OrderDirection
@@ -372,7 +372,7 @@ func (c *CheckConstraintDefinition) iConstraintInfo() {}
 
 // FindColumn finds a column in the column list, returning
 // the index if it exists or -1 otherwise
-func (node Columns) FindColumn(col ColIdent) int {
+func (node Columns) FindColumn(col IdentifierCI) int {
 	for i, colName := range node {
 		if colName.Equal(col) {
 			return i
@@ -414,7 +414,7 @@ func (node TableName) IsEmpty() bool {
 func (node TableName) ToViewName() TableName {
 	return TableName{
 		Qualifier: node.Qualifier,
-		Name:      NewTableIdent(strings.ToLower(node.Name.v)),
+		Name:      NewIdentifierCS(strings.ToLower(node.Name.v)),
 	}
 }
 
@@ -601,9 +601,9 @@ func (node *FuncExpr) IsAggregate() bool {
 	return Aggregates[node.Name.Lowered()]
 }
 
-// NewColIdent makes a new ColIdent.
-func NewColIdent(str string) ColIdent {
-	return ColIdent{
+// NewIdentifierCI makes a new IdentifierCI.
+func NewIdentifierCI(str string) IdentifierCI {
+	return IdentifierCI{
 		val: str,
 	}
 }
@@ -611,17 +611,17 @@ func NewColIdent(str string) ColIdent {
 // NewColName makes a new ColName
 func NewColName(str string) *ColName {
 	return &ColName{
-		Name: NewColIdent(str),
+		Name: NewIdentifierCI(str),
 	}
 }
 
 // NewColNameWithQualifier makes a new ColName pointing to a specific table
 func NewColNameWithQualifier(identifier string, table TableName) *ColName {
 	return &ColName{
-		Name: NewColIdent(identifier),
+		Name: NewIdentifierCI(identifier),
 		Qualifier: TableName{
-			Name:      NewTableIdent(table.Name.String()),
-			Qualifier: NewTableIdent(table.Qualifier.String()),
+			Name:      NewIdentifierCS(table.Name.String()),
+			Qualifier: NewIdentifierCS(table.Qualifier.String()),
 		},
 	}
 }
@@ -663,20 +663,66 @@ func NewSelect(comments Comments, exprs SelectExprs, selectOptions []string, int
 	}
 }
 
-// NewColIdentWithAt makes a new ColIdent.
-func NewColIdentWithAt(str string, at AtCount) ColIdent {
-	return ColIdent{
-		val: str,
-		at:  at,
-	}
+// NewSetVariable returns a variable that can be used with SET.
+func NewSetVariable(str string, scope Scope) *Variable {
+	return &Variable{Name: createIdentifierCI(str), Scope: scope}
 }
 
+// NewSetStatement returns a Set struct
+func NewSetStatement(comments *ParsedComments, exprs SetExprs) *Set {
+	return &Set{Exprs: exprs, Comments: comments}
+}
+
+// NewVariableExpression returns an expression the evaluates to a variable at runtime.
+// The AtCount and the prefix of the name of the variable will decide how it's evaluated
+func NewVariableExpression(str string, at AtCount) *Variable {
+	l := strings.ToLower(str)
+	v := &Variable{
+		Name: createIdentifierCI(str),
+	}
+
+	switch at {
+	case DoubleAt:
+		switch {
+		case strings.HasPrefix(l, "local."):
+			v.Name = createIdentifierCI(str[6:])
+			v.Scope = SessionScope
+		case strings.HasPrefix(l, "session."):
+			v.Name = createIdentifierCI(str[8:])
+			v.Scope = SessionScope
+		case strings.HasPrefix(l, "global."):
+			v.Name = createIdentifierCI(str[7:])
+			v.Scope = GlobalScope
+		case strings.HasPrefix(l, "vitess_metadata."):
+			v.Name = createIdentifierCI(str[16:])
+			v.Scope = VitessMetadataScope
+		default:
+			v.Scope = SessionScope
+		}
+	case SingleAt:
+		v.Scope = VariableScope
+	case NoAt:
+		panic("we should never see NoAt here")
+	}
+
+	return v
+}
+
+func createIdentifierCI(str string) IdentifierCI {
+	size := len(str)
+	if str[0] == '`' && str[size-1] == '`' {
+		str = str[1 : size-1]
+	}
+	return NewIdentifierCI(str)
+}
+
+// NewOffset creates an offset and returns it
 func NewOffset(v int, original Expr) *Offset {
 	return &Offset{V: v, Original: String(original)}
 }
 
 // IsEmpty returns true if the name is empty.
-func (node ColIdent) IsEmpty() bool {
+func (node IdentifierCI) IsEmpty() bool {
 	return node.val == ""
 }
 
@@ -684,24 +730,20 @@ func (node ColIdent) IsEmpty() bool {
 // not be used for SQL generation. Use sqlparser.String
 // instead. The Stringer conformance is for usage
 // in templates.
-func (node ColIdent) String() string {
-	atStr := ""
-	for i := NoAt; i < node.at; i++ {
-		atStr += "@"
-	}
-	return atStr + node.val
+func (node IdentifierCI) String() string {
+	return node.val
 }
 
 // CompliantName returns a compliant id name
 // that can be used for a bind var.
-func (node ColIdent) CompliantName() string {
+func (node IdentifierCI) CompliantName() string {
 	return compliantName(node.val)
 }
 
 // Lowered returns a lower-cased column name.
 // This function should generally be used only for optimizing
 // comparisons.
-func (node ColIdent) Lowered() string {
+func (node IdentifierCI) Lowered() string {
 	if node.val == "" {
 		return ""
 	}
@@ -712,22 +754,22 @@ func (node ColIdent) Lowered() string {
 }
 
 // Equal performs a case-insensitive compare.
-func (node ColIdent) Equal(in ColIdent) bool {
+func (node IdentifierCI) Equal(in IdentifierCI) bool {
 	return node.Lowered() == in.Lowered()
 }
 
 // EqualString performs a case-insensitive compare with str.
-func (node ColIdent) EqualString(str string) bool {
+func (node IdentifierCI) EqualString(str string) bool {
 	return node.Lowered() == strings.ToLower(str)
 }
 
 // MarshalJSON marshals into JSON.
-func (node ColIdent) MarshalJSON() ([]byte, error) {
+func (node IdentifierCI) MarshalJSON() ([]byte, error) {
 	return json.Marshal(node.val)
 }
 
 // UnmarshalJSON unmarshals from JSON.
-func (node *ColIdent) UnmarshalJSON(b []byte) error {
+func (node *IdentifierCI) UnmarshalJSON(b []byte) error {
 	var result string
 	err := json.Unmarshal(b, &result)
 	if err != nil {
@@ -737,17 +779,17 @@ func (node *ColIdent) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-// NewTableIdent creates a new TableIdent.
-func NewTableIdent(str string) TableIdent {
+// NewIdentifierCS creates a new IdentifierCS.
+func NewIdentifierCS(str string) IdentifierCS {
 	// Use StringClone on the table name to ensure it is not pinned to the
 	// underlying query string that has been generated by the parser. This
 	// could lead to a significant increase in memory usage when the table
 	// name comes from a large query.
-	return TableIdent{v: strings.Clone(str)}
+	return IdentifierCS{v: strings.Clone(str)}
 }
 
 // IsEmpty returns true if TabIdent is empty.
-func (node TableIdent) IsEmpty() bool {
+func (node IdentifierCS) IsEmpty() bool {
 	return node.v == ""
 }
 
@@ -755,23 +797,23 @@ func (node TableIdent) IsEmpty() bool {
 // not be used for SQL generation. Use sqlparser.String
 // instead. The Stringer conformance is for usage
 // in templates.
-func (node TableIdent) String() string {
+func (node IdentifierCS) String() string {
 	return node.v
 }
 
 // CompliantName returns a compliant id name
 // that can be used for a bind var.
-func (node TableIdent) CompliantName() string {
+func (node IdentifierCS) CompliantName() string {
 	return compliantName(node.v)
 }
 
 // MarshalJSON marshals into JSON.
-func (node TableIdent) MarshalJSON() ([]byte, error) {
+func (node IdentifierCS) MarshalJSON() ([]byte, error) {
 	return json.Marshal(node.v)
 }
 
 // UnmarshalJSON unmarshals from JSON.
-func (node *TableIdent) UnmarshalJSON(b []byte) error {
+func (node *IdentifierCS) UnmarshalJSON(b []byte) error {
 	var result string
 	err := json.Unmarshal(b, &result)
 	if err != nil {
@@ -1059,10 +1101,8 @@ func (scope Scope) ToString() string {
 		return VitessMetadataStr
 	case VariableScope:
 		return VariableStr
-	case LocalScope:
-		return LocalStr
-	case ImplicitScope:
-		return ImplicitStr
+	case NoScope:
+		return ""
 	default:
 		return "Unknown Scope"
 	}
@@ -1539,6 +1579,22 @@ func (ty PerformanceSchemaType) ToString() string {
 }
 
 // ToString returns the type as a string
+func (ty GTIDType) ToString() string {
+	switch ty {
+	case GTIDSubsetType:
+		return GTIDSubsetStr
+	case GTIDSubtractType:
+		return GTIDSubtractStr
+	case WaitForExecutedGTIDSetType:
+		return WaitForExecutedGTIDSetStr
+	case WaitUntilSQLThreadAfterGTIDSType:
+		return WaitUntilSQLThreadAfterGTIDSStr
+	default:
+		return "Unknown GTIDType"
+	}
+}
+
+// ToString returns the type as a string
 func (ty ExplainType) ToString() string {
 	switch ty {
 	case EmptyType:
@@ -1802,7 +1858,7 @@ func isExprAliasForCurrentTimeStamp(expr Expr) bool {
 	return false
 }
 
-// AtCount represents the '@' count in ColIdent
+// AtCount represents the '@' count in IdentifierCI
 type AtCount int
 
 const (
@@ -1810,7 +1866,7 @@ const (
 	NoAt AtCount = iota
 	// SingleAt represents @
 	SingleAt
-	// DoubleAt represnts @@
+	// DoubleAt represents @@
 	DoubleAt
 )
 
@@ -2006,7 +2062,7 @@ func RemoveKeyspace(in SQLNode) SQLNode {
 		switch col := cursor.Node().(type) {
 		case *ColName:
 			if !col.Qualifier.Qualifier.IsEmpty() {
-				col.Qualifier.Qualifier = NewTableIdent("")
+				col.Qualifier.Qualifier = NewIdentifierCS("")
 			}
 		}
 		return true

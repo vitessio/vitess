@@ -401,7 +401,7 @@ func (oa *orderedAggregate) WireupGen4(semTable *semantics.SemTable) error {
 func (oa *orderedAggregate) OutputColumns() []sqlparser.SelectExpr {
 	outputCols := sqlparser.CloneSelectExprs(oa.input.OutputColumns())
 	for _, aggr := range oa.aggregates {
-		outputCols[aggr.Col] = &sqlparser.AliasedExpr{Expr: aggr.Expr, As: sqlparser.NewColIdent(aggr.Alias)}
+		outputCols[aggr.Col] = &sqlparser.AliasedExpr{Expr: aggr.Expr, As: sqlparser.NewIdentifierCI(aggr.Alias)}
 	}
 	if oa.truncateColumnCount > 0 {
 		return outputCols[:oa.truncateColumnCount]

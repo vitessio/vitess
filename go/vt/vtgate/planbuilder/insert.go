@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
@@ -98,7 +99,9 @@ func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table, rese
 		eins.Query = generateQuery(ins)
 	} else {
 		// Table has auto-inc and has a VALUES clause.
-		if len(ins.Columns) == 0 {
+		// If the column list is nil then add all the columns
+		// If the column list is empty then add only the auto-inc column and this happens on calling modifyForAutoinc
+		if ins.Columns == nil {
 			if table.ColumnListAuthoritative {
 				populateInsertColumnlist(ins, table)
 			} else {
@@ -131,10 +134,8 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table, reserv
 		}
 		eins.Ignore = true
 	}
-	if len(ins.Columns) == 0 {
-		if table.ColumnListAuthoritative {
-			populateInsertColumnlist(ins, table)
-		}
+	if ins.Columns == nil && table.ColumnListAuthoritative {
+		populateInsertColumnlist(ins, table)
 	}
 
 	applyCommentDirectives(ins, eins)
@@ -208,6 +209,13 @@ func buildInsertSelectPlan(ins *sqlparser.Insert, table *vindexes.Table, reserve
 		return nil, err
 	}
 	eins.Input = plan
+
+	// When the table you are steaming data from and table you are inserting from are same.
+	// Then due to locking of the index range on the table we might not be able to insert into the table.
+	// Therefore, instead of streaming, this flag will ensure the records are first read and then inserted.
+	if strings.Contains(plan.GetTableName(), table.Name.String()) {
+		eins.ForceNonStreaming = true
+	}
 
 	// auto-increment column is added explicility if not provided.
 	if err := modifyForAutoinc(ins, eins); err != nil {
@@ -320,7 +328,7 @@ func extractColVindexOffsets(ins *sqlparser.Insert, colVindexes []*vindexes.Colu
 
 // findColumn returns the column index where it is placed on the insert column list.
 // Otherwise, return -1 when not found.
-func findColumn(ins *sqlparser.Insert, col sqlparser.ColIdent) int {
+func findColumn(ins *sqlparser.Insert, col sqlparser.IdentifierCI) int {
 	for i, column := range ins.Columns {
 		if col.Equal(column) {
 			return i
@@ -404,7 +412,7 @@ func modifyForAutoinc(ins *sqlparser.Insert, eins *engine.Insert) error {
 
 // findOrAddColumn finds the position of a column in the insert. If it's
 // absent it appends it to the with NULL values and returns that position.
-func findOrAddColumn(ins *sqlparser.Insert, col sqlparser.ColIdent) int {
+func findOrAddColumn(ins *sqlparser.Insert, col sqlparser.IdentifierCI) int {
 	colNum := findColumn(ins, col)
 	if colNum >= 0 {
 		return colNum

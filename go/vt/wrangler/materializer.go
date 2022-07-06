@@ -51,6 +51,7 @@ import (
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
@@ -258,7 +259,7 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 
 	for _, table := range tables {
 		buf := sqlparser.NewTrackedBuffer(nil)
-		buf.Myprintf("select * from %v", sqlparser.NewTableIdent(table))
+		buf.Myprintf("select * from %v", sqlparser.NewIdentifierCS(table))
 		ms.TableSettings = append(ms.TableSettings, &vtctldatapb.TableMaterializeSettings{
 			TargetTable:      table,
 			SourceExpression: buf.String(),
@@ -351,7 +352,8 @@ func (wr *Wrangler) getKeyspaceTables(ctx context.Context, ks string, ts *topo.S
 	if err != nil {
 		return nil, err
 	}
-	schema, err := wr.tmc.GetSchema(ctx, ti.Tablet, allTables, nil, false)
+	req := &tabletmanagerdatapb.GetSchemaRequest{Tables: allTables}
+	schema, err := wr.tmc.GetSchema(ctx, ti.Tablet, req)
 	if err != nil {
 		return nil, err
 	}
@@ -583,7 +585,8 @@ func (wr *Wrangler) prepareCreateLookup(ctx context.Context, keyspace string, sp
 	if onesource.PrimaryAlias == nil {
 		return nil, nil, nil, fmt.Errorf("source shard has no primary: %v", onesource.ShardName())
 	}
-	tableSchema, err := schematools.GetSchema(ctx, wr.ts, wr.tmc, onesource.PrimaryAlias, []string{sourceTableName}, nil, false)
+	req := &tabletmanagerdatapb.GetSchemaRequest{Tables: []string{sourceTableName}}
+	tableSchema, err := schematools.GetSchema(ctx, wr.ts, wr.tmc, onesource.PrimaryAlias, req)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -628,21 +631,21 @@ func (wr *Wrangler) prepareCreateLookup(ctx context.Context, keyspace string, sp
 	buf = sqlparser.NewTrackedBuffer(nil)
 	buf.Myprintf("select ")
 	for i := range vindexFromCols {
-		buf.Myprintf("%v as %v, ", sqlparser.NewColIdent(sourceVindexColumns[i]), sqlparser.NewColIdent(vindexFromCols[i]))
+		buf.Myprintf("%v as %v, ", sqlparser.NewIdentifierCI(sourceVindexColumns[i]), sqlparser.NewIdentifierCI(vindexFromCols[i]))
 	}
 	if strings.EqualFold(vindexToCol, "keyspace_id") || strings.EqualFold(vindex.Type, "consistent_lookup_unique") || strings.EqualFold(vindex.Type, "consistent_lookup") {
-		buf.Myprintf("keyspace_id() as %v ", sqlparser.NewColIdent(vindexToCol))
+		buf.Myprintf("keyspace_id() as %v ", sqlparser.NewIdentifierCI(vindexToCol))
 	} else {
-		buf.Myprintf("%v as %v ", sqlparser.NewColIdent(vindexToCol), sqlparser.NewColIdent(vindexToCol))
+		buf.Myprintf("%v as %v ", sqlparser.NewIdentifierCI(vindexToCol), sqlparser.NewIdentifierCI(vindexToCol))
 	}
-	buf.Myprintf("from %v", sqlparser.NewTableIdent(sourceTableName))
+	buf.Myprintf("from %v", sqlparser.NewIdentifierCS(sourceTableName))
 	if vindex.Owner != "" {
 		// Only backfill
 		buf.Myprintf(" group by ")
 		for i := range vindexFromCols {
-			buf.Myprintf("%v, ", sqlparser.NewColIdent(vindexFromCols[i]))
+			buf.Myprintf("%v, ", sqlparser.NewIdentifierCI(vindexFromCols[i]))
 		}
-		buf.Myprintf("%v", sqlparser.NewColIdent(vindexToCol))
+		buf.Myprintf("%v", sqlparser.NewIdentifierCI(vindexToCol))
 	}
 	materializeQuery = buf.String()
 
@@ -971,7 +974,8 @@ func (mz *materializer) getSourceTableDDLs(ctx context.Context) (map[string]stri
 	if err != nil {
 		return nil, err
 	}
-	sourceSchema, err := mz.wr.tmc.GetSchema(ctx, ti.Tablet, allTables, nil, false)
+	req := &tabletmanagerdatapb.GetSchemaRequest{Tables: allTables}
+	sourceSchema, err := mz.wr.tmc.GetSchema(ctx, ti.Tablet, req)
 	if err != nil {
 		return nil, err
 	}
@@ -990,7 +994,8 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 		allTables := []string{"/.*/"}
 
 		hasTargetTable := map[string]bool{}
-		targetSchema, err := schematools.GetSchema(ctx, mz.wr.ts, mz.wr.tmc, target.PrimaryAlias, allTables, nil, false)
+		req := &tabletmanagerdatapb.GetSchemaRequest{Tables: allTables}
+		targetSchema, err := schematools.GetSchema(ctx, mz.wr.ts, mz.wr.tmc, target.PrimaryAlias, req)
 		if err != nil {
 			return err
 		}
@@ -1201,7 +1206,7 @@ func (mz *materializer) generateInserts(ctx context.Context, targetShard *topo.S
 				subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral(vindexName)})
 				subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral("{{.keyrange}}")})
 				inKeyRange := &sqlparser.FuncExpr{
-					Name:  sqlparser.NewColIdent("in_keyrange"),
+					Name:  sqlparser.NewIdentifierCI("in_keyrange"),
 					Exprs: subExprs,
 				}
 				if sel.Where != nil {
@@ -1231,7 +1236,7 @@ func (mz *materializer) generateInserts(ctx context.Context, targetShard *topo.S
 	return ig.String(), nil
 }
 
-func matchColInSelect(col sqlparser.ColIdent, sel *sqlparser.Select) (*sqlparser.ColName, error) {
+func matchColInSelect(col sqlparser.IdentifierCI, sel *sqlparser.Select) (*sqlparser.ColName, error) {
 	for _, selExpr := range sel.SelectExprs {
 		switch selExpr := selExpr.(type) {
 		case *sqlparser.StarExpr:

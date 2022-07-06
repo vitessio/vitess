@@ -82,7 +82,7 @@ var sysvarPlanningFuncs sysvarPlanCache
 
 func (pc *sysvarPlanCache) Get(expr *sqlparser.SetExpr) (planFunc, error) {
 	pc.init()
-	pf, ok := pc.funcs[expr.Name.Lowered()]
+	pf, ok := pc.funcs[expr.Var.Name.Lowered()]
 	if !ok {
 		return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.UnknownSystemVariable, "Unknown system variable '%s'", sqlparser.String(expr))
 	}

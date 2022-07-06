@@ -248,7 +248,7 @@ func stopReplicationAndBuildStatusMaps(
 
 		logger.Infof("getting replication position from %v", alias)
 
-		_, stopReplicationStatus, err := tmc.StopReplicationAndGetStatus(groupCtx, tabletInfo.Tablet, replicationdatapb.StopReplicationMode_IOTHREADONLY)
+		stopReplicationStatus, err := tmc.StopReplicationAndGetStatus(groupCtx, tabletInfo.Tablet, replicationdatapb.StopReplicationMode_IOTHREADONLY)
 		if err != nil {
 			sqlErr, isSQLErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
 			if isSQLErr && sqlErr != nil && sqlErr.Number() == mysql.ERNotReplica {
@@ -336,7 +336,7 @@ func stopReplicationAndBuildStatusMaps(
 func WaitForRelayLogsToApply(ctx context.Context, tmc tmclient.TabletManagerClient, tabletInfo *topo.TabletInfo, status *replicationdatapb.StopReplicationStatus) error {
 	switch status.After.RelayLogPosition {
 	case "":
-		return tmc.WaitForPosition(ctx, tabletInfo.Tablet, status.After.FileRelayLogPosition)
+		return tmc.WaitForPosition(ctx, tabletInfo.Tablet, status.After.RelayLogSourceBinlogEquivalentPosition)
 	default:
 		return tmc.WaitForPosition(ctx, tabletInfo.Tablet, status.After.RelayLogPosition)
 	}

@@ -47,8 +47,6 @@ const (
 	GlobalStr         = "global"
 	VitessMetadataStr = "vitess_metadata"
 	VariableStr       = "variable"
-	LocalStr          = "local"
-	ImplicitStr       = ""
 
 	// DDL strings.
 	CreateStr           = "create"
@@ -379,6 +377,12 @@ const (
 	PsCurrentThreadIDStr = "ps_current_thread_id"
 	PsThreadIDStr        = "ps_thread_id"
 
+	// GTIDType strings
+	GTIDSubsetStr                   = "gtid_subset"
+	GTIDSubtractStr                 = "gtid_subtract"
+	WaitForExecutedGTIDSetStr       = "wait_for_executed_gtid_set"
+	WaitUntilSQLThreadAfterGTIDSStr = "wati_until_sql_thread_after_gtids"
+
 	// LockOptionType strings
 	NoneTypeStr      = "none"
 	SharedTypeStr    = "shared"
@@ -414,7 +418,7 @@ const (
 	ReadWrite
 )
 
-//Constants for Enum type - IsolationLevel
+// Constants for Enum type - IsolationLevel
 const (
 	ReadUncommitted IsolationLevel = iota
 	ReadCommitted
@@ -446,14 +450,16 @@ const (
 	RevertDDLAction
 )
 
-// Constants for Enum Type - Scope
+// Constants for scope of variables
+// See https://dev.mysql.com/doc/refman/8.0/en/set-variable.html
 const (
-	ImplicitScope Scope = iota
-	SessionScope
-	GlobalScope
-	VitessMetadataScope
-	VariableScope
-	LocalScope
+	NoScope             Scope = iota // This is only used for SET ISOLATION LEVEL
+	SessionScope                     // [SESSION | @@SESSION.| @@LOCAL. | @@] This is the default if no scope is given
+	GlobalScope                      // {GLOBAL | @@GLOBAL.} system_var_name
+	VitessMetadataScope              // @@vitess_metadata.system_var_name
+	PersistSysScope                  // {PERSIST_ONLY | @@PERSIST_ONLY.} system_var_name
+	PersistOnlySysScope              // {PERSIST_ONLY | @@PERSIST_ONLY.} system_var_name
+	VariableScope                    // @var_name   This is used for user defined variables.
 )
 
 // Constants for Enum Type - Lock
@@ -565,6 +571,14 @@ const (
 	FormatPicoTimeType
 	PsCurrentThreadIDType
 	PsThreadIDType
+)
+
+// Constants for Enum Type - GTIDType
+const (
+	GTIDSubsetType GTIDType = iota
+	GTIDSubtractType
+	WaitForExecutedGTIDSetType
+	WaitUntilSQLThreadAfterGTIDSType
 )
 
 // Constants for Enum Type - WhereType

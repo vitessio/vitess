@@ -275,7 +275,6 @@ type TabletManagerClient struct {
 	StopReplicationAndGetStatusDelays map[string]time.Duration
 	// keyed by tablet alias.
 	StopReplicationAndGetStatusResults map[string]struct {
-		Status     *replicationdatapb.Status
 		StopStatus *replicationdatapb.StopReplicationStatus
 		Error      error
 	}
@@ -559,7 +558,7 @@ func (fake *TabletManagerClient) GetReplicas(ctx context.Context, tablet *topoda
 }
 
 // GetSchema is part of the tmclient.TabletManagerClient interface.
-func (fake *TabletManagerClient) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, tablets []string, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
+func (fake *TabletManagerClient) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.GetSchemaRequest) (*tabletmanagerdatapb.SchemaDefinition, error) {
 	if fake.GetSchemaResults == nil {
 		return nil, assert.AnError
 	}
@@ -1123,13 +1122,13 @@ func (fake *TabletManagerClient) StopReplication(ctx context.Context, tablet *to
 
 // StopReplicationAndGetStatus is part of the tmclient.TabletManagerClient
 // interface.
-func (fake *TabletManagerClient) StopReplicationAndGetStatus(ctx context.Context, tablet *topodatapb.Tablet, mode replicationdatapb.StopReplicationMode) (*replicationdatapb.Status, *replicationdatapb.StopReplicationStatus, error) {
+func (fake *TabletManagerClient) StopReplicationAndGetStatus(ctx context.Context, tablet *topodatapb.Tablet, mode replicationdatapb.StopReplicationMode) (*replicationdatapb.StopReplicationStatus, error) {
 	if fake.StopReplicationAndGetStatusResults == nil {
-		return nil, nil, assert.AnError
+		return nil, assert.AnError
 	}
 
 	if tablet.Alias == nil {
-		return nil, nil, assert.AnError
+		return nil, assert.AnError
 	}
 
 	key := topoproto.TabletAliasString(tablet.Alias)
@@ -1138,7 +1137,7 @@ func (fake *TabletManagerClient) StopReplicationAndGetStatus(ctx context.Context
 		if delay, ok := fake.StopReplicationAndGetStatusDelays[key]; ok {
 			select {
 			case <-ctx.Done():
-				return nil, nil, ctx.Err()
+				return nil, ctx.Err()
 			case <-time.After(delay):
 				// proceed to results
 			}
@@ -1146,10 +1145,10 @@ func (fake *TabletManagerClient) StopReplicationAndGetStatus(ctx context.Context
 	}
 
 	if result, ok := fake.StopReplicationAndGetStatusResults[key]; ok {
-		return result.Status, result.StopStatus, result.Error
+		return result.StopStatus, result.Error
 	}
 
-	return nil, nil, assert.AnError
+	return nil, assert.AnError
 }
 
 // WaitForPosition is part of the tmclient.TabletManagerClient interface.
