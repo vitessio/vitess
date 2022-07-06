@@ -99,11 +99,11 @@ func TestReshardingWorkflowErrorsAndMisc(t *testing.T) {
 
 func expectCanSwitchQueries(t *testing.T, tme *testMigraterEnv, keyspace, state string, currentLag int64) {
 	now := time.Now().Unix()
-	rowTemplate := "1|||||%s|vt_%s|%d|%d|0||"
+	rowTemplate := "1|||||%s|vt_%s|%d|%d|0|0|||"
 	row := fmt.Sprintf(rowTemplate, state, keyspace, now, now-currentLag)
 	replicationResult := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-		"id|source|pos|stop_pos|max_replication_lag|state|db_name|time_updated|transaction_timestamp|time_heartbeat|message|tags",
-		"int64|varchar|int64|int64|int64|varchar|varchar|int64|int64|int64|varchar|varchar"),
+		"id|source|pos|stop_pos|max_replication_lag|state|db_name|time_updated|transaction_timestamp|time_heartbeat|time_throttled|component_throttled|message|tags",
+		"int64|varchar|int64|int64|int64|varchar|varchar|int64|int64|int64|int64|varchar|varchar|varchar"),
 		row)
 	copyStateResult := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 		"table|lastpk",

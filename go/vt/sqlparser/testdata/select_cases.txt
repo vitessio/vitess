@@ -31,8 +31,8 @@ END
 INPUT
 select ref_mag from t1 where match ref_mag against ('+test' in boolean mode);
 END
-ERROR
-syntax error at position 43 near 'ref_mag'
+OUTPUT
+select ref_mag from t1 where match(ref_mag) against ('+test' in boolean mode)
 END
 INPUT
 select week(20010101,0) as '0', week(20010101,1) as '1', week(20010101,2) as '2', week(20010101,3) as '3', week(20010101,4) as '4', week(20010101,5) as '5', week(20010101,6) as '6', week(20010101,7) as '7';
@@ -985,8 +985,8 @@ END
 INPUT
 select count(*) from t1 where match a against ('aaaxxx');
 END
-ERROR
-syntax error at position 38 near 'a'
+OUTPUT
+select count(*) from t1 where match(a) against ('aaaxxx')
 END
 INPUT
 select benchmark(100, NULL);
@@ -1471,8 +1471,8 @@ END
 INPUT
 select count(*) from t1 where match a against ('aaazzz' in boolean mode);
 END
-ERROR
-syntax error at position 38 near 'a'
+OUTPUT
+select count(*) from t1 where match(a) against ('aaazzz' in boolean mode)
 END
 INPUT
 select find_in_set("d","a,b,c"),find_in_set("dd","a,bbb,d"),find_in_set("bb","a,bbb,dd");
@@ -2245,8 +2245,8 @@ END
 INPUT
 select char(2557 using utf8mb4);
 END
-ERROR
-syntax error at position 23 near 'using'
+OUTPUT
+select char(2557 using utf8mb4) from dual
 END
 INPUT
 select compress(a), compress(a) from t1;
@@ -3151,8 +3151,8 @@ END
 INPUT
 select position(("1" in (1,2,3)) in "01");
 END
-ERROR
-syntax error at position 41 near '01'
+OUTPUT
+select locate('1' in (1, 2, 3), '01') from dual
 END
 INPUT
 select cast(variance(ff) as decimal(10,3)) from t2;
@@ -3721,8 +3721,8 @@ END
 INPUT
 select count(*) from t1 where match a against ('aaaxxx' in boolean mode);
 END
-ERROR
-syntax error at position 38 near 'a'
+OUTPUT
+select count(*) from t1 where match(a) against ('aaaxxx' in boolean mode)
 END
 INPUT
 select date_add("1997-12-31 23:59:59.000002",INTERVAL "10000 99:99:99.999999" DAY_MICROSECOND);
@@ -4591,8 +4591,8 @@ END
 INPUT
 select char(2557 using utf8);
 END
-ERROR
-syntax error at position 23 near 'using'
+OUTPUT
+select char(2557 using utf8) from dual
 END
 INPUT
 select uncompressed_length("");
@@ -5257,8 +5257,8 @@ END
 INPUT
 select position('bb' in 'abba');
 END
-ERROR
-syntax error at position 31 near 'abba'
+OUTPUT
+select locate('bb', 'abba') from dual
 END
 INPUT
 select min(7) from t1m;
@@ -5275,8 +5275,8 @@ END
 INPUT
 select position("0" in "baaa" in (1)),position("0" in "1" in (1,2,3)),position("sql" in ("mysql"));
 END
-ERROR
-syntax error at position 30 near 'baaa'
+OUTPUT
+select locate('0', 'baaa' in (1)), locate('0', '1' in (1, 2, 3)), locate('sql', 'mysql') from dual
 END
 INPUT
 select count(*) from t1 where a = 'aaayyy';
@@ -7009,8 +7009,8 @@ END
 INPUT
 select hex(char(0xFF using utf8mb4));
 END
-ERROR
-syntax error at position 27 near 'using'
+OUTPUT
+select hex(char(0xFF using utf8mb4)) from dual
 END
 INPUT
 select from `information_schema`.`TABLE_CONSTRAINTS` where `TABLE_SCHEMA` = NULL;
@@ -7573,8 +7573,8 @@ END
 INPUT
 select char(195 using utf8mb4);
 END
-ERROR
-syntax error at position 22 near 'using'
+OUTPUT
+select char(195 using utf8mb4) from dual
 END
 INPUT
 select concat(a, if(b>10, N'x', N'y')) from t1;
@@ -7855,8 +7855,8 @@ END
 INPUT
 select hex(char(0x0102 using utf32));
 END
-ERROR
-syntax error at position 29 near 'using'
+OUTPUT
+select hex(char(0x0102 using utf32)) from dual
 END
 INPUT
 select 5 mod 3, 5 mod -3, -5 mod 3, -5 mod -3;
@@ -8545,8 +8545,8 @@ END
 INPUT
 select count(*) from t1 where match a against ('aaayyy');
 END
-ERROR
-syntax error at position 38 near 'a'
+OUTPUT
+select count(*) from t1 where match(a) against ('aaayyy')
 END
 INPUT
 select microsecond("1997-12-31 23:59:59.000001");
@@ -9595,8 +9595,8 @@ END
 INPUT
 select char(0xd18f using utf8);
 END
-ERROR
-syntax error at position 25 near 'using'
+OUTPUT
+select char(0xd18f using utf8) from dual
 END
 INPUT
 select count(*) + MAX_REQ - MAX_REQ + MAX_REQ - MAX_REQ + MAX_REQ - MAX_REQ + MAX_REQ - MAX_REQ + MAX_REQ - MAX_REQ from t1 group by MAX_REQ;
@@ -9673,8 +9673,8 @@ END
 INPUT
 select POSITION(_latin1'B' IN _latin1'abcd');
 END
-ERROR
-syntax error at position 38 near '_latin1'
+OUTPUT
+select locate(_latin1 'B', _latin1 'abcd') from dual
 END
 INPUT
 select from t1 where MATCH b AGAINST ("sear*" IN BOOLEAN MODE);
@@ -9697,8 +9697,8 @@ END
 INPUT
 select hex(char(0x010203 using ucs2));
 END
-ERROR
-syntax error at position 31 near 'using'
+OUTPUT
+select hex(char(0x010203 using ucs2)) from dual
 END
 INPUT
 select ST_astext(st_difference(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_difference(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)'))));
@@ -10405,8 +10405,8 @@ END
 INPUT
 select count(*) from t1 where match a against ('aaax*' in boolean mode);
 END
-ERROR
-syntax error at position 38 near 'a'
+OUTPUT
+select count(*) from t1 where match(a) against ('aaax*' in boolean mode)
 END
 INPUT
 select extract(DAY_SECOND FROM "225 10:11:12");
@@ -10531,8 +10531,8 @@ END
 INPUT
 select POSITION(_latin1'B' COLLATE latin1_general_ci IN _latin1'abcd' COLLATE latin1_bin);
 END
-ERROR
-syntax error at position 64 near '_latin1'
+OUTPUT
+select locate(_latin1 'B' collate latin1_general_ci, _latin1 'abcd' collate latin1_bin) from dual
 END
 INPUT
 select charset(user());
@@ -10819,8 +10819,8 @@ END
 INPUT
 select hex(convert(char(2557 using latin1) using utf8));
 END
-ERROR
-syntax error at position 35 near 'using'
+OUTPUT
+select hex(convert(char(2557 using latin1) using utf8)) from dual
 END
 INPUT
 select group_concat(t1.b,t2.c) from t1 inner join t2 using(a) group by t1.a;
@@ -11365,8 +11365,8 @@ END
 INPUT
 select hex(char(1 using utf8mb4));
 END
-ERROR
-syntax error at position 24 near 'using'
+OUTPUT
+select hex(char(1 using utf8mb4)) from dual
 END
 INPUT
 select left('hello',null), right('hello',null);
@@ -11863,8 +11863,8 @@ END
 INPUT
 select POSITION(_latin1'B' IN _latin2'abcd');
 END
-ERROR
-syntax error at position 38 near '_latin2'
+OUTPUT
+select locate(_latin1 'B', _latin2 'abcd') from dual
 END
 INPUT
 select t1.id, t1.data, t2.data from t1, t2 where t1.id = t2.id order by t1.id;
@@ -11965,8 +11965,8 @@ END
 INPUT
 select POSITION(_latin1'B' IN _latin1'abcd' COLLATE latin1_bin);
 END
-ERROR
-syntax error at position 38 near '_latin1'
+OUTPUT
+select locate(_latin1 'B', _latin1 'abcd' collate latin1_bin) from dual
 END
 INPUT
 select concat(a,'.') from t1 where a='aaa';
@@ -12127,8 +12127,8 @@ END
 INPUT
 select count(*) from t1 where match a against ('000000');
 END
-ERROR
-syntax error at position 38 near 'a'
+OUTPUT
+select count(*) from t1 where match(a) against ('000000')
 END
 INPUT
 select hex(_utf16 0x113344);
@@ -12415,8 +12415,8 @@ END
 INPUT
 select position(binary 'll' in 'hello'),position('a' in binary 'hello');
 END
-ERROR
-syntax error at position 39 near 'hello'
+OUTPUT
+select locate(convert('ll', binary), 'hello'), locate('a', convert('hello', binary)) from dual
 END
 INPUT
 select CAST('10 ' as unsigned integer);
@@ -13033,8 +13033,8 @@ END
 INPUT
 select char(0xff,0x8f using utf8mb4);
 END
-ERROR
-syntax error at position 28 near 'using'
+OUTPUT
+select char(0xff, 0x8f using utf8mb4) from dual
 END
 INPUT
 select a, group_concat(b) from t1 group by a with rollup;
@@ -13261,8 +13261,8 @@ END
 INPUT
 select hex(char(0x01020304 using ucs2));
 END
-ERROR
-syntax error at position 33 near 'using'
+OUTPUT
+select hex(char(0x01020304 using ucs2)) from dual
 END
 INPUT
 select 'a' union select concat('a', -0.0000);
@@ -13825,8 +13825,8 @@ END
 INPUT
 select hex(char(0xFF using utf8));
 END
-ERROR
-syntax error at position 27 near 'using'
+OUTPUT
+select hex(char(0xFF using utf8)) from dual
 END
 INPUT
 select date_add("1997-12-31 23:59:59",INTERVAL -100000 YEAR);
@@ -14809,8 +14809,8 @@ END
 INPUT
 select char(196 using utf8);
 END
-ERROR
-syntax error at position 22 near 'using'
+OUTPUT
+select char(196 using utf8) from dual
 END
 INPUT
 select group_concat(c1 order by binary c1 separator '') from t1 group by c1 collate utf32_romanian_ci;
@@ -15127,8 +15127,8 @@ END
 INPUT
 select count(*) from t1 where match a against ('aaayyy' in boolean mode);
 END
-ERROR
-syntax error at position 38 near 'a'
+OUTPUT
+select count(*) from t1 where match(a) against ('aaayyy' in boolean mode)
 END
 INPUT
 select time("1997-12-31 23:59:59.000001");
@@ -15469,8 +15469,8 @@ END
 INPUT
 select hex(char(0x01020304 using utf32));
 END
-ERROR
-syntax error at position 33 near 'using'
+OUTPUT
+select hex(char(0x01020304 using utf32)) from dual
 END
 INPUT
 select count(distinct case when id<=64 then id end) from tb;
@@ -16237,8 +16237,8 @@ END
 INPUT
 select hex(char(0x01 using ucs2));
 END
-ERROR
-syntax error at position 27 near 'using'
+OUTPUT
+select hex(char(0x01 using ucs2)) from dual
 END
 INPUT
 select from information_schema.columns where table_schema = NULL;
@@ -16333,8 +16333,8 @@ END
 INPUT
 select hex(char(0x01 using utf32));
 END
-ERROR
-syntax error at position 27 near 'using'
+OUTPUT
+select hex(char(0x01 using utf32)) from dual
 END
 INPUT
 select str_to_date("2003-01-02 10:11:12.0012ABCD", "%Y-%m-%d %H:%i:%S.%f") as f1, addtime("-01:01:01.01 GGG", "-23:59:59.1") as f2, microsecond("1997-12-31 23:59:59.01XXXX") as f3;
@@ -17041,8 +17041,8 @@ END
 INPUT
 select count(*) from t1 where match a against ('aaay*' in boolean mode);
 END
-ERROR
-syntax error at position 38 near 'a'
+OUTPUT
+select count(*) from t1 where match(a) against ('aaay*' in boolean mode)
 END
 INPUT
 select a as like_ll from t1 where a like 'll%';
@@ -17851,8 +17851,8 @@ END
 INPUT
 select hex(char(0x41 using ucs2));
 END
-ERROR
-syntax error at position 27 near 'using'
+OUTPUT
+select hex(char(0x41 using ucs2)) from dual
 END
 INPUT
 select insert('hello', 1, -1, 'hi');
@@ -17935,8 +17935,8 @@ END
 INPUT
 select char(0xff,0x8f using utf8);
 END
-ERROR
-syntax error at position 28 near 'using'
+OUTPUT
+select char(0xff, 0x8f using utf8) from dual
 END
 INPUT
 select TRUE,FALSE,NULL;
@@ -17977,8 +17977,8 @@ END
 INPUT
 select POSITION(_latin1'B' COLLATE latin1_bin IN _latin1'abcd');
 END
-ERROR
-syntax error at position 57 near '_latin1'
+OUTPUT
+select locate(_latin1 'B' collate latin1_bin, _latin1 'abcd') from dual
 END
 INPUT
 select from v2;
@@ -18037,8 +18037,8 @@ END
 INPUT
 select char(0xd1,0x8f using utf8);
 END
-ERROR
-syntax error at position 28 near 'using'
+OUTPUT
+select char(0xd1, 0x8f using utf8) from dual
 END
 INPUT
 select distinct b from t2 where (a2 >= 'b') and (b = 'a');
@@ -18121,8 +18121,8 @@ END
 INPUT
 select collation(char(123)), collation(char(123 using binary));
 END
-ERROR
-syntax error at position 54 near 'using'
+OUTPUT
+select collation(char(123)), collation(char(123 using binary)) from dual
 END
 INPUT
 select c cy from t1 where c='y';
@@ -18175,8 +18175,8 @@ END
 INPUT
 select hex(convert(char(2557 using latin1) using utf8mb4));
 END
-ERROR
-syntax error at position 35 near 'using'
+OUTPUT
+select hex(convert(char(2557 using latin1) using utf8mb4)) from dual
 END
 INPUT
 select 0x961838f6fc3c7f9ec17b5d900410d8aa like '%-113%';
@@ -18673,8 +18673,8 @@ END
 INPUT
 select char(123 using binary);
 END
-ERROR
-syntax error at position 22 near 'using'
+OUTPUT
+select char(123 using binary) from dual
 END
 INPUT
 select char_length(left(@a:='тест',5)), length(@a), @a;
@@ -19141,8 +19141,8 @@ END
 INPUT
 select char(196 using utf8mb4);
 END
-ERROR
-syntax error at position 22 near 'using'
+OUTPUT
+select char(196 using utf8mb4) from dual
 END
 INPUT
 select trim(null from 'kate') as "must_be_null";
@@ -20101,8 +20101,8 @@ END
 INPUT
 select char(53647 using utf8mb4);
 END
-ERROR
-syntax error at position 24 near 'using'
+OUTPUT
+select char(53647 using utf8mb4) from dual
 END
 INPUT
 select right('hello', -18446744073709551617);
@@ -20263,8 +20263,8 @@ END
 INPUT
 select char(0xd1,0x8f using utf8mb4);
 END
-ERROR
-syntax error at position 28 near 'using'
+OUTPUT
+select char(0xd1, 0x8f using utf8mb4) from dual
 END
 INPUT
 select quote(1/0), quote('Z');
@@ -20395,8 +20395,8 @@ END
 INPUT
 select hex(char(0x0102 using ucs2));
 END
-ERROR
-syntax error at position 29 near 'using'
+OUTPUT
+select hex(char(0x0102 using ucs2)) from dual
 END
 INPUT
 select f1 from t1 where makedate(2006,1) between date(f1) and date(f3);
@@ -21133,8 +21133,8 @@ END
 INPUT
 select char(195 using utf8);
 END
-ERROR
-syntax error at position 22 near 'using'
+OUTPUT
+select char(195 using utf8) from dual
 END
 INPUT
 select a1,a2,b,min(c),max(c) from t2 where (c < 'a0') group by a1,a2,b;
@@ -21451,8 +21451,8 @@ END
 INPUT
 select count(*) from t1 where match a against ('aaa*' in boolean mode);
 END
-ERROR
-syntax error at position 38 near 'a'
+OUTPUT
+select count(*) from t1 where match(a) against ('aaa*' in boolean mode)
 END
 INPUT
 select from t1 where field < '2006-11-06 04:08:36.0';
@@ -21775,8 +21775,8 @@ END
 INPUT
 select hex(char(1 using utf8));
 END
-ERROR
-syntax error at position 24 near 'using'
+OUTPUT
+select hex(char(1 using utf8)) from dual
 END
 INPUT
 select col1 as count_col1,col2 from t1 as tmp1 group by col1,col2 having count_col1 = 10;
@@ -21859,8 +21859,8 @@ END
 INPUT
 select count(*) from t1 where match a against ('aaaxxx aaayyy aaazzz');
 END
-ERROR
-syntax error at position 38 near 'a'
+OUTPUT
+select count(*) from t1 where match(a) against ('aaaxxx aaayyy aaazzz')
 END
 INPUT
 select a.f1 as a, b.f2 as b, a.f1 > b.f2 as gt, a.f1 < b.f2 as lt, a.f1<=>b.f2 as eq from t1 a, t1 b;
@@ -22045,8 +22045,8 @@ END
 INPUT
 select count(*) from t1 where match a against ('aaazzz');
 END
-ERROR
-syntax error at position 38 near 'a'
+OUTPUT
+select count(*) from t1 where match(a) against ('aaazzz')
 END
 INPUT
 select round(4, cast(-2 as unsigned)), round(4, 18446744073709551614), round(4, -2);
@@ -22069,8 +22069,8 @@ END
 INPUT
 select count(*) from t1 where match a against ('aaaxxx aaayyy aaazzz' in boolean mode);
 END
-ERROR
-syntax error at position 38 near 'a'
+OUTPUT
+select count(*) from t1 where match(a) against ('aaaxxx aaayyy aaazzz' in boolean mode)
 END
 INPUT
 select concat(c1, repeat('xx', 250)) as cc from t2 group by cc order by 1;
@@ -22291,8 +22291,8 @@ END
 INPUT
 select char(53647 using utf8);
 END
-ERROR
-syntax error at position 24 near 'using'
+OUTPUT
+select char(53647 using utf8) from dual
 END
 INPUT
 select 'A' like 'a' collate utf8mb4_bin;
@@ -22429,8 +22429,8 @@ END
 INPUT
 select char(0xd18f using utf8mb4);
 END
-ERROR
-syntax error at position 25 near 'using'
+OUTPUT
+select char(0xd18f using utf8mb4) from dual
 END
 INPUT
 select st_within(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)')));
@@ -22639,8 +22639,8 @@ END
 INPUT
 select hex(char(0x010203 using utf32));
 END
-ERROR
-syntax error at position 31 near 'using'
+OUTPUT
+select hex(char(0x010203 using utf32)) from dual
 END
 INPUT
 select ST_geometryfromtext(b) IS NULL, ST_geometryfromwkb(b) IS NULL, ST_astext(b) IS NULL, ST_aswkb(b) IS NULL, ST_geometrytype(b) IS NULL, ST_centroid(b) IS NULL, ST_envelope(b) IS NULL, ST_startpoint(b) IS NULL, ST_endpoint(b) IS NULL, ST_exteriorring(b) IS NULL, ST_pointn(b, 1) IS NULL, ST_geometryn(b, 1) IS NULL, ST_interiorringn(b, 1) IS NULL, multipoint(b) IS NULL, ST_isempty(b) IS NULL, ST_issimple(b) IS NULL, ST_isclosed(b) IS NULL, ST_dimension(b) IS NULL, ST_numgeometries(b) IS NULL, ST_numinteriorrings(b) IS NULL, ST_numpoints(b) IS NULL, ST_area(b) IS NULL, ST_length(b) IS NULL, ST_srid(b) IS NULL, ST_x(b) IS NULL, ST_y(b) IS NULL from t1;
