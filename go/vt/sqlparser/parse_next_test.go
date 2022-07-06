@@ -66,19 +66,11 @@ func TestIgnoreSpecialComments(t *testing.T) {
 	tokenizer := NewStringTokenizer(input)
 	tokenizer.SkipSpecialComments = true
 	one, err := ParseNextStrictDDL(tokenizer)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
+	require.Equal(t, "select 1 from dual", String(one))
 	two, err := ParseNextStrictDDL(tokenizer)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got, want := String(one), "select 1 from dual"; got != want {
-		t.Fatalf("got %s want %s", got, want)
-	}
-	if got, want := String(two), "select 2 from dual"; got != want {
-		t.Fatalf("got %s want %s", got, want)
-	}
+	require.NoError(t, err)
+	require.Equal(t, "select 2 from dual", String(two))
 }
 
 // TestParseNextErrors tests all the error cases, and ensures a valid

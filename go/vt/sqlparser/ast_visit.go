@@ -100,6 +100,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfColumnType(in, f)
 	case Columns:
 		return VisitColumns(in, f)
+	case *CommentOnly:
+		return VisitRefOfCommentOnly(in, f)
 	case *Commit:
 		return VisitRefOfCommit(in, f)
 	case *CommonTableExpr:
@@ -1029,6 +1031,15 @@ func VisitColumns(in Columns, f Visit) error {
 		if err := VisitIdentifierCI(el, f); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+func VisitRefOfCommentOnly(in *CommentOnly, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
 	}
 	return nil
 }
@@ -4591,6 +4602,8 @@ func VisitStatement(in Statement, f Visit) error {
 		return VisitRefOfBegin(in, f)
 	case *CallProc:
 		return VisitRefOfCallProc(in, f)
+	case *CommentOnly:
+		return VisitRefOfCommentOnly(in, f)
 	case *Commit:
 		return VisitRefOfCommit(in, f)
 	case *CreateDatabase:

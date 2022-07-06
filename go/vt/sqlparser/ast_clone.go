@@ -101,6 +101,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfColumnType(in)
 	case Columns:
 		return CloneColumns(in)
+	case *CommentOnly:
+		return CloneRefOfCommentOnly(in)
 	case *Commit:
 		return CloneRefOfCommit(in)
 	case *CommonTableExpr:
@@ -896,6 +898,16 @@ func CloneColumns(n Columns) Columns {
 		res = append(res, CloneIdentifierCI(x))
 	}
 	return res
+}
+
+// CloneRefOfCommentOnly creates a deep clone of the input.
+func CloneRefOfCommentOnly(n *CommentOnly) *CommentOnly {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Comments = CloneSliceOfString(n.Comments)
+	return &out
 }
 
 // CloneRefOfCommit creates a deep clone of the input.
@@ -3729,6 +3741,8 @@ func CloneStatement(in Statement) Statement {
 		return CloneRefOfBegin(in)
 	case *CallProc:
 		return CloneRefOfCallProc(in)
+	case *CommentOnly:
+		return CloneRefOfCommentOnly(in)
 	case *Commit:
 		return CloneRefOfCommit(in)
 	case *CreateDatabase:

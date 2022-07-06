@@ -100,6 +100,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfColumnType(parent, node, replacer)
 	case Columns:
 		return a.rewriteColumns(parent, node, replacer)
+	case *CommentOnly:
+		return a.rewriteRefOfCommentOnly(parent, node, replacer)
 	case *Commit:
 		return a.rewriteRefOfCommit(parent, node, replacer)
 	case *CommonTableExpr:
@@ -1629,6 +1631,30 @@ func (a *application) rewriteColumns(parent SQLNode, node Columns, replacer repl
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfCommentOnly(parent SQLNode, node *CommentOnly, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if a.post != nil {
+		if a.pre == nil {
+			a.cur.replacer = replacer
+			a.cur.parent = parent
+			a.cur.node = node
+		}
 		if !a.post(&a.cur) {
 			return false
 		}
@@ -8776,6 +8802,8 @@ func (a *application) rewriteStatement(parent SQLNode, node Statement, replacer 
 		return a.rewriteRefOfBegin(parent, node, replacer)
 	case *CallProc:
 		return a.rewriteRefOfCallProc(parent, node, replacer)
+	case *CommentOnly:
+		return a.rewriteRefOfCommentOnly(parent, node, replacer)
 	case *Commit:
 		return a.rewriteRefOfCommit(parent, node, replacer)
 	case *CreateDatabase:
