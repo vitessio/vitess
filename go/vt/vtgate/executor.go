@@ -1010,8 +1010,13 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 	_, _ = planHash.Write(hack.StringBytes(query))
 	planKey := hex.EncodeToString(planHash.Sum(nil))
 
-	if plan, ok := e.plans.Get(planKey); ok {
-		return plan.(*engine.Plan), nil
+	if qo.cachePlan() && sqlparser.CachePlan(statement) {
+		if plan, ok := e.plans.Get(planKey); ok {
+			if logStats != nil {
+				logStats.CachedPlan = true
+			}
+			return plan.(*engine.Plan), nil
+		}
 	}
 
 	plan, err := planbuilder.BuildFromStmt(query, statement, reservedVars, vcursor, bindVarNeeds, *enableOnlineDDL, *enableDirectDDL)

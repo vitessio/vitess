@@ -286,11 +286,6 @@ func (qe *QueryEngine) Close() {
 func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats, sql string, skipQueryPlanCache bool, reservedConnID int64) (*TabletPlan, error) {
 	span, _ := trace.NewSpan(ctx, "QueryEngine.GetPlan")
 	defer span.Finish()
-	if plan := qe.getQuery(sql); plan != nil {
-		logStats.CachedPlan = true
-		return plan, nil
-	}
-
 	// Obtain read lock to prevent schema from changing while
 	// we build a plan. The read lock allows multiple identical
 	// queries to build the same plan. One of them will win by
@@ -300,6 +295,13 @@ func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats
 	qe.mu.RLock()
 	defer qe.mu.RUnlock()
 	statement, err := sqlparser.Parse(sql)
+	if !skipQueryPlanCache && !sqlparser.SkipQueryPlanCacheDirective(statement) {
+		if plan := qe.getQuery(sql); plan != nil {
+			logStats.CachedPlan = true
+			return plan, nil
+		}
+	}
+
 	if err != nil {
 		return nil, err
 	}
