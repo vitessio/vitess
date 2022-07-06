@@ -328,7 +328,7 @@ func (lkp *lookupInternal) Update(ctx context.Context, vcursor VCursor, oldValue
 	if err := lkp.Delete(ctx, vcursor, [][]sqltypes.Value{oldValues}, toValue, vtgatepb.CommitOrder_NORMAL); err != nil {
 		return err
 	}
-	return lkp.Create(ctx, vcursor, [][]sqltypes.Value{newValues}, []sqltypes.Value{toValue}, false)
+	return lkp.Create(ctx, vcursor, [][]sqltypes.Value{newValues}, []sqltypes.Value{toValue}, false /* ignoreMode */)
 }
 
 func (lkp *lookupInternal) initDelStmt() string {

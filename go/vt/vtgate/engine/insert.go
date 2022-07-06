@@ -817,7 +817,7 @@ func (ins *Insert) processPrimary(ctx context.Context, vcursor VCursor, vindexCo
 // processOwned creates vindex entries for the values of an owned column.
 func (ins *Insert) processOwned(ctx context.Context, vcursor VCursor, vindexColumnsKeys []sqltypes.Row, colVindex *vindexes.ColumnVindex, ksids []ksID) error {
 	if !ins.Ignore {
-		return colVindex.Vindex.(vindexes.Lookup).Create(ctx, vcursor, vindexColumnsKeys, ksids, false)
+		return colVindex.Vindex.(vindexes.Lookup).Create(ctx, vcursor, vindexColumnsKeys, ksids, false /* ignoreMode */)
 	}
 
 	// InsertIgnore

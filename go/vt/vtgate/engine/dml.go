@@ -68,7 +68,7 @@ func NewDML() *DML {
 }
 
 func (dml *DML) execUnsharded(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, rss []*srvtopo.ResolvedShard) (*sqltypes.Result, error) {
-	return execShard(ctx, vcursor, dml.Query, bindVars, rss[0], true, true)
+	return execShard(ctx, vcursor, dml.Query, bindVars, rss[0], true /* rollbackOnError */, true /* canAutocommit */)
 }
 
 func (dml *DML) execMultiDestination(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, rss []*srvtopo.ResolvedShard, dmlSpecialFunc func(context.Context, VCursor, map[string]*querypb.BindVariable, []*srvtopo.ResolvedShard) error) (*sqltypes.Result, error) {

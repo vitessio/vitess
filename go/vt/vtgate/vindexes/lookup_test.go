@@ -382,7 +382,7 @@ func TestLookupNonUniqueCreate(t *testing.T) {
 
 	// With ignore.
 	vc.queries = nil
-	err = lookupNonUnique.(Lookup).Create(context.Background(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(2)}, {sqltypes.NewInt64(1)}}, [][]byte{[]byte("test2"), []byte("test1")}, true)
+	err = lookupNonUnique.(Lookup).Create(context.Background(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(2)}, {sqltypes.NewInt64(1)}}, [][]byte{[]byte("test2"), []byte("test1")}, true /* ignoreMode */)
 	require.NoError(t, err)
 	wantqueries[0].Sql = "insert ignore into t(fromc, toc) values(:fromc_0, :toc_0), (:fromc_1, :toc_1)"
 	if !reflect.DeepEqual(vc.queries, wantqueries) {
@@ -390,7 +390,7 @@ func TestLookupNonUniqueCreate(t *testing.T) {
 	}
 
 	// With ignore_nulls off
-	err = lookupNonUnique.(Lookup).Create(context.Background(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(2)}, {sqltypes.NULL}}, [][]byte{[]byte("test2"), []byte("test1")}, true)
+	err = lookupNonUnique.(Lookup).Create(context.Background(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(2)}, {sqltypes.NULL}}, [][]byte{[]byte("test2"), []byte("test1")}, true /* ignoreMode */)
 	want := "lookup.Create: input has null values: row: 1, col: 0"
 	if err == nil || err.Error() != want {
 		t.Errorf("lookupNonUnique(query fail) err: %v, want %s", err, want)
@@ -399,7 +399,7 @@ func TestLookupNonUniqueCreate(t *testing.T) {
 	// With ignore_nulls on
 	vc.queries = nil
 	lookupNonUnique.(*LookupNonUnique).lkp.IgnoreNulls = true
-	err = lookupNonUnique.(Lookup).Create(context.Background(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(2)}, {sqltypes.NULL}}, [][]byte{[]byte("test2"), []byte("test1")}, true)
+	err = lookupNonUnique.(Lookup).Create(context.Background(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(2)}, {sqltypes.NULL}}, [][]byte{[]byte("test2"), []byte("test1")}, true /* ignoreMode */)
 	require.NoError(t, err)
 	wantqueries = []*querypb.BoundQuery{{
 		Sql: "insert ignore into t(fromc, toc) values(:fromc_0, :toc_0)",

@@ -121,7 +121,7 @@ func (f *fakePrimitive) TryStreamExecute(ctx context.Context, vcursor VCursor, b
 }
 func (f *fakePrimitive) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	f.log = append(f.log, fmt.Sprintf("GetFields %v", printBindVars(bindVars)))
-	return f.TryExecute(ctx, vcursor, bindVars, true)
+	return f.TryExecute(ctx, vcursor, bindVars, true /* wantfields */)
 }
 
 func (f *fakePrimitive) ExpectLog(t *testing.T, want []string) {

@@ -152,7 +152,7 @@ func FuzzVindex(data []byte) int {
 		if err != nil {
 			return 0
 		}
-		_ = l.(Lookup).Create(ctx, vc, allValues, ksids, false)
+		_ = l.(Lookup).Create(ctx, vc, allValues, ksids, false /* ignoreMode */)
 	}
 	return 1
 }

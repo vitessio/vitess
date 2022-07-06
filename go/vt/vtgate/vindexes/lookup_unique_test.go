@@ -165,7 +165,7 @@ func TestLookupUniqueCreate(t *testing.T) {
 	}
 	vc := &vcursor{}
 
-	err = lookupUnique.(Lookup).Create(context.Background(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}}, [][]byte{[]byte("test")}, false)
+	err = lookupUnique.(Lookup).Create(context.Background(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}}, [][]byte{[]byte("test")}, false /* ignoreMode */)
 	require.NoError(t, err)
 
 	wantqueries := []*querypb.BoundQuery{{
@@ -188,7 +188,7 @@ func TestLookupUniqueCreateAutocommit(t *testing.T) {
 	lookupUnique := createLookup(t, "lookup_unique", false)
 	vc := &vcursor{}
 
-	err := lookupUnique.(Lookup).Create(context.Background(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}}, [][]byte{[]byte("test")}, false)
+	err := lookupUnique.(Lookup).Create(context.Background(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}}, [][]byte{[]byte("test")}, false /* ignoreMode */)
 	require.NoError(t, err)
 	if got, want := len(vc.queries), 1; got != want {
 		t.Errorf("vc.queries length: %v, want %v", got, want)

@@ -284,13 +284,13 @@ func (lu *clCommon) handleDup(ctx context.Context, vcursor VCursor, values []sql
 	bindVars[lu.lkp.To] = sqltypes.BytesBindVariable(ksid)
 
 	// Lock the lookup row using pre priority.
-	qr, err := vcursor.Execute(ctx, "VindexCreate", lu.lockLookupQuery, bindVars, false, vtgatepb.CommitOrder_PRE)
+	qr, err := vcursor.Execute(ctx, "VindexCreate", lu.lockLookupQuery, bindVars, false /* rollbackOnError */, vtgatepb.CommitOrder_PRE)
 	if err != nil {
 		return err
 	}
 	switch len(qr.Rows) {
 	case 0:
-		if _, err := vcursor.Execute(ctx, "VindexCreate", lu.insertLookupQuery, bindVars, true, vtgatepb.CommitOrder_PRE); err != nil {
+		if _, err := vcursor.Execute(ctx, "VindexCreate", lu.insertLookupQuery, bindVars, true /* rollbackOnError */, vtgatepb.CommitOrder_PRE); err != nil {
 			return err
 		}
 	case 1:
@@ -310,7 +310,7 @@ func (lu *clCommon) handleDup(ctx context.Context, vcursor VCursor, values []sql
 		if bytes.Equal(existingksid, ksid) {
 			return nil
 		}
-		if _, err := vcursor.Execute(ctx, "VindexCreate", lu.updateLookupQuery, bindVars, true, vtgatepb.CommitOrder_PRE); err != nil {
+		if _, err := vcursor.Execute(ctx, "VindexCreate", lu.updateLookupQuery, bindVars, true /* rollbackOnError */, vtgatepb.CommitOrder_PRE); err != nil {
 			return err
 		}
 	default:
@@ -342,7 +342,7 @@ func (lu *clCommon) Update(ctx context.Context, vcursor VCursor, oldValues []sql
 	if err := lu.Delete(ctx, vcursor, [][]sqltypes.Value{oldValues}, ksid); err != nil {
 		return err
 	}
-	return lu.Create(ctx, vcursor, [][]sqltypes.Value{newValues}, [][]byte{ksid}, false)
+	return lu.Create(ctx, vcursor, [][]sqltypes.Value{newValues}, [][]byte{ksid}, false /* ignoreMode */)
 }
 
 // MarshalJSON returns a JSON representation of clCommon.

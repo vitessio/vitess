@@ -225,7 +225,7 @@ func (route *Route) executeInternal(ctx context.Context, vcursor VCursor, bindVa
 	}
 
 	queries := getQueries(route.Query, bvs)
-	result, errs := vcursor.ExecuteMultiShard(ctx, rss, queries, false /* rollbackOnError */, false)
+	result, errs := vcursor.ExecuteMultiShard(ctx, rss, queries, false /* rollbackOnError */, false /* canAutocommit */)
 
 	if errs != nil {
 		errs = filterOutNilErrors(errs)
