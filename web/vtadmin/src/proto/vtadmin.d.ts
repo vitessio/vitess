@@ -20198,9 +20198,6 @@ export namespace tabletmanagerdata {
     /** Properties of a DemotePrimaryResponse. */
     interface IDemotePrimaryResponse {
 
-        /** DemotePrimaryResponse deprecated_position */
-        deprecated_position?: (string|null);
-
         /** DemotePrimaryResponse primary_status */
         primary_status?: (replicationdata.IPrimaryStatus|null);
     }
@@ -20213,9 +20210,6 @@ export namespace tabletmanagerdata {
          * @param [properties] Properties to set
          */
         constructor(properties?: tabletmanagerdata.IDemotePrimaryResponse);
-
-        /** DemotePrimaryResponse deprecated_position. */
-        public deprecated_position: string;
 
         /** DemotePrimaryResponse primary_status. */
         public primary_status?: (replicationdata.IPrimaryStatus|null);
@@ -21440,9 +21434,6 @@ export namespace tabletmanagerdata {
     /** Properties of a StopReplicationAndGetStatusResponse. */
     interface IStopReplicationAndGetStatusResponse {
 
-        /** StopReplicationAndGetStatusResponse hybrid_status */
-        hybrid_status?: (replicationdata.IStatus|null);
-
         /** StopReplicationAndGetStatusResponse status */
         status?: (replicationdata.IStopReplicationStatus|null);
     }
@@ -21455,9 +21446,6 @@ export namespace tabletmanagerdata {
          * @param [properties] Properties to set
          */
         constructor(properties?: tabletmanagerdata.IStopReplicationAndGetStatusResponse);
-
-        /** StopReplicationAndGetStatusResponse hybrid_status. */
-        public hybrid_status?: (replicationdata.IStatus|null);
 
         /** StopReplicationAndGetStatusResponse status. */
         public status?: (replicationdata.IStopReplicationStatus|null);

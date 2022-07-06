@@ -1121,7 +1121,6 @@ func (fra *fakeRPCTM) StopReplicationAndGetStatus(ctx context.Context, stopRepli
 		panic(fmt.Errorf("test-triggered panic"))
 	}
 	return tabletmanager.StopReplicationAndGetStatusResponse{
-		HybridStatus: testReplicationStatus,
 		Status: &replicationdatapb.StopReplicationStatus{
 			Before: testReplicationStatus,
 			After:  testReplicationStatus,
@@ -1155,14 +1154,14 @@ func tmRPCTestReplicaWasRestartedPanic(ctx context.Context, t *testing.T, client
 }
 
 func tmRPCTestStopReplicationAndGetStatus(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	rp, _, err := client.StopReplicationAndGetStatus(ctx, tablet, replicationdatapb.StopReplicationMode_IOANDSQLTHREAD)
+	rp, err := client.StopReplicationAndGetStatus(ctx, tablet, replicationdatapb.StopReplicationMode_IOANDSQLTHREAD)
 	compareError(t, "StopReplicationAndGetStatus", err, rp, testReplicationStatus)
-	rp, _, err = client.StopReplicationAndGetStatus(ctx, tablet, replicationdatapb.StopReplicationMode_IOTHREADONLY)
+	rp, err = client.StopReplicationAndGetStatus(ctx, tablet, replicationdatapb.StopReplicationMode_IOTHREADONLY)
 	compareError(t, "StopReplicationAndGetStatus", err, rp, testReplicationStatus)
 }
 
 func tmRPCTestStopReplicationAndGetStatusPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	_, _, err := client.StopReplicationAndGetStatus(ctx, tablet, replicationdatapb.StopReplicationMode_IOANDSQLTHREAD)
+	_, err := client.StopReplicationAndGetStatus(ctx, tablet, replicationdatapb.StopReplicationMode_IOANDSQLTHREAD)
 	expectHandleRPCPanic(t, "StopReplicationAndGetStatus", true /*verbose*/, err)
 }
 
