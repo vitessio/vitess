@@ -243,7 +243,7 @@ func TestInsightsSafeErrors(t *testing.T) {
 			expect(queryTopic, `normalized_sql:{value:\"select :vtg1`, `code = Aborted`).butNot("foo", "BindVars", "Sql"),
 			expect(queryTopic, `normalized_sql:{value:\"select :vtg1`, `code = ResourceExhausted`),
 			expect(queryTopic, `normalized_sql:{value:\"select :vtg1`, `code = Unavailable`),
-			expect(queryStatsBundleTopic, `normalized_sql:{value:\"<error>\"}`, `statement_type:\"ERROR\"`, "query_count:5", "error_count:5").butNot("foo", "BindVars", ":vtg1"),
+			expect(queryStatsBundleTopic, `normalized_sql:{value:\"select :vtg1 from dual\"}`, `statement_type:\"ERROR\"`, "query_count:5", "error_count:5").butNot("foo", "BindVars", ":vtg1"),
 		})
 }
 

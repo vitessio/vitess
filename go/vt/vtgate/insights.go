@@ -468,14 +468,7 @@ func (ii *Insights) addToAggregates(ls *LogStats, sql string, tables []string) b
 		Keyspace: ls.Keyspace,
 	}
 
-	// When there is an error, `sql` isn't normalized.  To protect private information and
-	// avoid high cardinality in ii.Aggregations, combine all error statements into a single
-	// bucket.
-	if ls.Error == nil {
-		key.SQL = sql
-	} else {
-		key.SQL = "<error>"
-	}
+	key.SQL = sql
 
 	pa, ok := ii.Aggregations[key]
 	if !ok {
