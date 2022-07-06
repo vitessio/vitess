@@ -78,31 +78,32 @@ func (mysqlFlavor) primaryTransactionalGTIDSet(c *Conn) (GTIDSet, error) {
 	// 	}
 	// 	set = set.Union(gtidSet)
 	// }
-	qr, err := c.ExecuteFetch("SELECT @@global.gtid_executed as gtid_executed", 1, false)
+
+	query := "select @g as transactional_gtid_executed from (SELECT @g := GTID_SUBTRACT(CONCAT(@g, ',', source_uuid, ':', interval_start, '-', interval_end), '') AS gtid_set FROM mysql.gtid_executed, (select @g:='') as sel1) as sel limit 1"
+	qr, err := c.ExecuteFetch(query, math.MaxInt32, false)
 	if err != nil {
 		return nil, err
 	}
 	row := qr.Named().Row()
 	if row == nil {
-		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected nil row in SELECT @@global.gtid_executed")
-	}
-	gtidExecuted := row.AsString("gtid_executed", "")
-	if gtidExecuted == "" {
-		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected empty gtidExecuted in primaryTransactionalGTIDSet")
-	}
-
-	query := "select @g as transactional_gtid_executed from (SELECT @g := GTID_SUBTRACT(CONCAT(@g, ',', source_uuid, ':', interval_start, '-', interval_end), '') AS gtid_set FROM mysql.gtid_executed, (select @g:='') as sel1) as sel limit 1"
-	qr, err = c.ExecuteFetch(query, math.MaxInt32, false)
-	if err != nil {
-		return nil, err
-	}
-	row = qr.Named().Row()
-	if row == nil {
 		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected row count from mysql.gtid_executed in primaryTransactionalGTIDSet: %#v", len(qr.Rows))
 	}
 	transactionalGtid := row.AsString("transactional_gtid_executed", "")
 	if transactionalGtid == "" {
-		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected empty transactional GTID in primaryTransactionalGTIDSet. gtidExecuted=%v", gtidExecuted)
+		// an empty GTID set is possible in tests, but doesn't make sense in production. Cross reference with @@global.gitd_executed
+		qr, err := c.ExecuteFetch("SELECT @@global.gtid_executed as gtid_executed", 1, false)
+		if err != nil {
+			return nil, err
+		}
+		row := qr.Named().Row()
+		if row == nil {
+			return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected nil row in SELECT @@global.gtid_executed")
+		}
+		gtidExecuted := row.AsString("gtid_executed", "")
+
+		if gtidExecuted != "" {
+			return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected empty transactional GTID in primaryTransactionalGTIDSet. gtidExecuted=%v", gtidExecuted)
+		}
 	}
 	set, err := parseMysql56GTIDSet(transactionalGtid)
 	if err != nil {
