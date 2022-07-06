@@ -3286,7 +3286,7 @@ func TestInvalid(t *testing.T) {
 		err:   "syntax error",
 	}, {
 		input: "/*!*/",
-		err:   "query was empty",
+		err:   "Query was empty",
 	}, {
 		input: "select /* union with limit on lhs */ 1 from t limit 1 union select 1 from t",
 		err:   "syntax error at position 60 near 'union'",
@@ -3900,9 +3900,6 @@ func TestConvert(t *testing.T) {
 	}, {
 		input:  "select convert('abc', decimal(4+9)) from t",
 		output: "syntax error at position 33",
-	}, {
-		input:  "/* a comment */",
-		output: "query was empty",
 	}, {
 		input:  "set transaction isolation level 12345",
 		output: "syntax error at position 38 near '12345'",

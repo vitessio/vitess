@@ -581,9 +581,17 @@ func bindVariable(yylex yyLexer, bvar string) {
 %%
 
 any_command:
-  command semicolon_opt
+  comment_opt command semicolon_opt
   {
-    setParseTree(yylex, $1)
+    stmt := $2
+    // If the statement is empty and we have comments
+    // then we create a special struct which stores them.
+    // This is required because we need to update the rows_returned
+    // and other query stats and not return a `query was empty` error
+    if stmt == nil && $1 != nil {
+       stmt = &CommentOnly{Comments: $1}
+    }
+    setParseTree(yylex, stmt)
   }
 
 semicolon_opt:
