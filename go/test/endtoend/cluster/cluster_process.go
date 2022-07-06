@@ -18,8 +18,11 @@ package cluster
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"math/rand"
 	"net"
@@ -34,9 +37,13 @@ import (
 	"syscall"
 	"time"
 
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-
+	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vttablet/tabletconn"
+
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // DefaultCell : If no cell name is passed, then use following
@@ -715,6 +722,56 @@ func (cluster *LocalProcessCluster) WaitForTabletsToHealthyInVtgate() (err error
 		}
 	}
 	return nil
+}
+
+// StreamTabletHealth invokes a HealthStream on a local cluster Vttablet and
+// returns the responses. It returns an error if the stream ends with fewer than
+// `count` responses.
+func (cluster *LocalProcessCluster) StreamTabletHealth(ctx context.Context, vttablet *Vttablet, count int) (responses []*querypb.StreamHealthResponse, err error) {
+	tablet, err := cluster.vtctlclientGetTablet(vttablet)
+	if err != nil {
+		return nil, err
+	}
+
+	conn, err := tabletconn.GetDialer()(tablet, grpcclient.FailFast(false))
+	if err != nil {
+		return nil, err
+	}
+
+	i := 0
+	err = conn.StreamHealth(ctx, func(shr *querypb.StreamHealthResponse) error {
+		responses = append(responses, shr)
+
+		i++
+		if i >= count {
+			return io.EOF
+		}
+
+		return nil
+	})
+
+	switch {
+	case err != nil:
+		return nil, err
+	case len(responses) < count:
+		return nil, errors.New("stream ended early")
+	}
+
+	return responses, nil
+}
+
+func (cluster *LocalProcessCluster) vtctlclientGetTablet(tablet *Vttablet) (*topodatapb.Tablet, error) {
+	result, err := cluster.VtctlclientProcess.ExecuteCommandWithOutput("GetTablet", "--", tablet.Alias)
+	if err != nil {
+		return nil, err
+	}
+
+	var ti topodatapb.Tablet
+	if err := json.Unmarshal([]byte(result), &ti); err != nil {
+		return nil, err
+	}
+
+	return &ti, nil
 }
 
 // Teardown brings down the cluster by invoking teardown for individual processes
