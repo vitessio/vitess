@@ -288,6 +288,7 @@ var keywords = []keyword{
 	{"general", GENERAL},
 	{"generated", GENERATED},
 	{"geometry", GEOMETRY},
+	{"geomcollection", GEOMETRYCOLLECTION},
 	{"geometrycollection", GEOMETRYCOLLECTION},
 	{"get", UNUSED},
 	{"get_lock", GET_LOCK},
