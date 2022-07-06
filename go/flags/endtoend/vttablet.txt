@@ -59,9 +59,9 @@ Usage of vttablet:
 	(DEPRECATED) True if and only if the binlog streamer should use V3-style sharding, which doesn't require a preset sharding key column. (default true)
   --binlog_user string
 	PITR restore parameter: username of binlog server.
-  --builtin_compressor string
+  --builtin-compressor string
 	builtin compressor engine to use (default pgzip)
-  --builtin_decompressor string
+  --builtin-decompressor string
 	builtin decompressor engine to use (default auto)
   --builtinbackup_mysqld_timeout duration
 	how long to wait for mysqld to shutdown at the start of the backup (default 10m0s)
@@ -71,7 +71,7 @@ Usage of vttablet:
 	catch and ignore SIGPIPE on stdout and stderr if specified
   --ceph_backup_storage_config string
 	Path to JSON config file for ceph backup storage (default ceph_backup_config.json)
-  --compression_level int
+  --compression-level int
 	what level to pass to the compressor (default 1)
   --consul_auth_static_file string
 	JSON File to read the topos/tokens from.
@@ -409,11 +409,11 @@ Usage of vttablet:
 	if this flag is true, vttablet will fail to start if a valid tableacl config does not exist
   --enforce_strict_trans_tables
 	If true, vttablet requires MySQL to run with STRICT_TRANS_TABLES or STRICT_ALL_TABLES on. It is recommended to not turn this flag off. Otherwise MySQL may alter your supplied values before saving them to the database. (default true)
-  --external_compressor string
+  --external-compressor string
 	command with arguments to use when compressing a backup
-  --external_compressor_extension string
+  --external-compressor-extension string
 	extension to use when using an external compressor
-  --external_decompressor string
+  --external-decompressor string
 	command with arguments to use when decompressing a backup
   --file_backup_storage_root string
 	root directory for the file backup storage
