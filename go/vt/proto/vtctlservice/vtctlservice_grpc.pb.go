@@ -304,9 +304,6 @@ type VtctldClient interface {
 	RunHealthCheck(ctx context.Context, in *vtctldata.RunHealthCheckRequest, opts ...grpc.CallOption) (*vtctldata.RunHealthCheckResponse, error)
 	// SetKeyspaceDurabilityPolicy updates the DurabilityPolicy for a keyspace.
 	SetKeyspaceDurabilityPolicy(ctx context.Context, in *vtctldata.SetKeyspaceDurabilityPolicyRequest, opts ...grpc.CallOption) (*vtctldata.SetKeyspaceDurabilityPolicyResponse, error)
-	// SetKeyspaceServedFrom changes the ServedFromMap manually, and is intended
-	// only for emergency fixes. This does not rebuild the serving graph.
-	//
 	// SetShardIsPrimaryServing adds or removes a shard from serving.
 	//
 	// This is meant as an emergency function. It does not rebuild any serving
@@ -1342,9 +1339,6 @@ type VtctldServer interface {
 	RunHealthCheck(context.Context, *vtctldata.RunHealthCheckRequest) (*vtctldata.RunHealthCheckResponse, error)
 	// SetKeyspaceDurabilityPolicy updates the DurabilityPolicy for a keyspace.
 	SetKeyspaceDurabilityPolicy(context.Context, *vtctldata.SetKeyspaceDurabilityPolicyRequest) (*vtctldata.SetKeyspaceDurabilityPolicyResponse, error)
-	// SetKeyspaceServedFrom changes the ServedFromMap manually, and is intended
-	// only for emergency fixes. This does not rebuild the serving graph.
-	//
 	// SetShardIsPrimaryServing adds or removes a shard from serving.
 	//
 	// This is meant as an emergency function. It does not rebuild any serving

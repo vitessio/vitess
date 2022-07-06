@@ -26,17 +26,15 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/json2"
-	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
-	"vitess.io/vitess/go/vt/proto/topodata"
-
 	"github.com/stretchr/testify/assert"
-
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/mysql"
-	tabletpb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
+
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	tmc "vitess.io/vitess/go/vt/vttablet/grpctmclient"
 )
 
@@ -189,10 +187,10 @@ func ResetTabletDirectory(tablet Vttablet) error {
 	return tablet.MysqlctlProcess.Start()
 }
 
-func getTablet(tabletGrpcPort int, hostname string) *tabletpb.Tablet {
+func getTablet(tabletGrpcPort int, hostname string) *topodatapb.Tablet {
 	portMap := make(map[string]int32)
 	portMap["grpc"] = int32(tabletGrpcPort)
-	return &tabletpb.Tablet{Hostname: hostname, PortMap: portMap}
+	return &topodatapb.Tablet{Hostname: hostname, PortMap: portMap}
 }
 
 func filterResultForWarning(input string) string {
@@ -299,7 +297,8 @@ func filterDoubleDashArgs(args []string, version int) (filtered []string) {
 	return filtered
 }
 
-// WriteDbCredentialToTmp writes json format db credentials to tmp directory
+// WriteDbCredentialToTmp writes JSON formatted db credentials to the
+// specified tmp directory.
 func WriteDbCredentialToTmp(tmpDir string) string {
 	data := []byte(`{
         "vt_dba": ["VtDbaPass"],
@@ -313,7 +312,8 @@ func WriteDbCredentialToTmp(tmpDir string) string {
 	return dbCredentialFile
 }
 
-// GetPasswordUpdateSQL returns the sql for password update
+// GetPasswordUpdateSQL returns the SQL for updating the users' passwords
+// to the static creds used throughout tests.
 func GetPasswordUpdateSQL(localCluster *LocalProcessCluster) string {
 	pwdChangeCmd := `
 					# Set real passwords for all users.
@@ -335,7 +335,7 @@ func GetPasswordUpdateSQL(localCluster *LocalProcessCluster) string {
 	return fmt.Sprintf(pwdChangeCmd, pwdCol, pwdCol, pwdCol, pwdCol, pwdCol, pwdCol)
 }
 
-// getPasswordField Determines which column is used for user passwords in this MySQL version.
+// getPasswordField determines which column is used for user passwords in this MySQL version.
 func getPasswordField(localCluster *LocalProcessCluster) (pwdCol string, err error) {
 	tablet := &Vttablet{
 		Type:            "relpica",
@@ -357,10 +357,12 @@ func getPasswordField(localCluster *LocalProcessCluster) (pwdCol string, err err
 
 }
 
-func CheckSrvKeyspace(t *testing.T, cell string, ksname string, expectedPartition map[topodata.TabletType][]string, ci LocalProcessCluster) {
+// CheckSrvKeyspace confirms that the cell and keyspace contain the expected
+// shard mappings.
+func CheckSrvKeyspace(t *testing.T, cell string, ksname string, expectedPartition map[topodatapb.TabletType][]string, ci LocalProcessCluster) {
 	srvKeyspace := GetSrvKeyspace(t, cell, ksname, ci)
 
-	currentPartition := map[topodata.TabletType][]string{}
+	currentPartition := map[topodatapb.TabletType][]string{}
 
 	for _, partition := range srvKeyspace.Partitions {
 		currentPartition[partition.ServedType] = []string{}
@@ -372,19 +374,19 @@ func CheckSrvKeyspace(t *testing.T, cell string, ksname string, expectedPartitio
 	assert.True(t, reflect.DeepEqual(currentPartition, expectedPartition))
 }
 
-// GetSrvKeyspace return the Srv Keyspace structure
-func GetSrvKeyspace(t *testing.T, cell string, ksname string, ci LocalProcessCluster) *topodata.SrvKeyspace {
+// GetSrvKeyspace returns the SrvKeyspace structure for the cell and keyspace.
+func GetSrvKeyspace(t *testing.T, cell string, ksname string, ci LocalProcessCluster) *topodatapb.SrvKeyspace {
 	output, err := ci.VtctlclientProcess.ExecuteCommandWithOutput("GetSrvKeyspace", cell, ksname)
 	require.Nil(t, err)
-	var srvKeyspace topodata.SrvKeyspace
+	var srvKeyspace topodatapb.SrvKeyspace
 
 	err = json2.Unmarshal([]byte(output), &srvKeyspace)
 	require.Nil(t, err)
 	return &srvKeyspace
 }
 
-// ExecuteOnTablet executes a write query on specified vttablet
-// It should always be called with a primary tablet for the keyspace/shard
+// ExecuteOnTablet executes a query on the specified vttablet.
+// It should always be called with a primary tablet for a keyspace/shard.
 func ExecuteOnTablet(t *testing.T, query string, vttablet Vttablet, ks string, expectFail bool) {
 	_, _ = vttablet.VttabletProcess.QueryTablet("begin", ks, true)
 	_, err := vttablet.VttabletProcess.QueryTablet(query, ks, true)

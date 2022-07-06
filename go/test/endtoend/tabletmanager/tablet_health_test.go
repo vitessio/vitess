@@ -267,7 +267,7 @@ func TestHealthCheckDrainedStateDoesNotShutdownQueryService(t *testing.T) {
 
 	// Change from rdonly to drained and stop replication. (These
 	// actions are similar to the old SplitClone vtworker command
-	// implementation.)  The tablet will stay healthy, and the
+	// implementation).  The tablet will stay healthy, and the
 	// query service is still running.
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", rdonlyTablet.Alias, "drained")
 	require.NoError(t, err)
