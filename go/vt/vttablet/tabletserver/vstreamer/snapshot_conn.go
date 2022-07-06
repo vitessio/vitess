@@ -115,6 +115,9 @@ func (conn *snapshotConn) startSnapshot(ctx context.Context, table string) (gtid
 func (conn *snapshotConn) startSnapshotWithConsistentGTID(ctx context.Context) (gtid string, err error) {
 	// Starting a transaction now will allow us to start the read later,
 	// which will happen after we release the lock on the table.
+	if _, err := conn.ExecuteFetch("flush binary logs", 1, false); err != nil { // experimental
+		return "", err
+	}
 	if _, err := conn.ExecuteFetch("set transaction isolation level repeatable read", 1, false); err != nil {
 		return "", err
 	}
