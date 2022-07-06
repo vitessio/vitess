@@ -257,6 +257,8 @@ Usage of vtgate:
 	Enable HAProxy PROXY protocol on MySQL listener socket
   --purge_logs_interval duration
 	how often try to remove old logs (default 1h0m0s)
+  --querylog-buffer-size int
+	Maximum number of buffered query logs before throttling log output (default 10)
   --querylog-filter-tag string
 	string that must be present in the query for it to be logged; if using a value as the tag, you need to disable query normalization
   --querylog-format string
@@ -270,7 +272,7 @@ Usage of vtgate:
   --retry-count int
 	retry count (default 2)
   --schema_change_signal
-	Enable the schema tracker; requires queryserver-config-schema-change-signal to be enabled on the underlying vttablets for this to work
+	Enable the schema tracker; requires queryserver-config-schema-change-signal to be enabled on the underlying vttablets for this to work (default true)
   --schema_change_signal_user string
 	User to be used to send down query to vttablet to retrieve schema changes
   --security_policy string

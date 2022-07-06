@@ -113,7 +113,7 @@ var maxConstraintNameLength = 64
 
 const (
 	maxPasswordLength                        = 32 // MySQL's *replication* password may not exceed 32 characters
-	staleMigrationMinutes                    = 10
+	staleMigrationMinutes                    = 180
 	progressPctStarted               float64 = 0
 	progressPctFull                  float64 = 100.0
 	etaSecondsUnknown                        = -1
@@ -124,6 +124,7 @@ const (
 	databasePoolSize                         = 3
 	vreplicationCutOverThreshold             = 5 * time.Second
 	vreplicationTestSuiteWaitSeconds         = 5
+	maxConcurrentMigrations                  = 256
 )
 
 var (
@@ -132,6 +133,7 @@ var (
 	onlineDDLUser            = "vt-online-ddl-internal"
 	onlineDDLGrant           = fmt.Sprintf("'%s'@'%s'", onlineDDLUser, "%")
 	throttlerOnlineDDLApp    = "online-ddl"
+	throttleCheckFlags       = &throttle.CheckFlags{}
 )
 
 type mysqlVariables struct {
@@ -334,85 +336,86 @@ func (e *Executor) triggerNextCheckInterval() {
 	}
 }
 
+// countOwnedRunningMigrations returns an estimate of current count of running migrations; this is
+// normally an accurate number, but can be inexact because the exdcutor peridocially reviews
+// e.ownedRunningMigrations and adds/removes migrations based on actual migration state.
+func (e *Executor) countOwnedRunningMigrations() (count int) {
+	e.ownedRunningMigrations.Range(func(_, val any) bool {
+		if _, ok := val.(*schema.OnlineDDL); ok {
+			count++
+		}
+		return true // continue iteration
+	})
+	return count
+}
+
 // allowConcurrentMigration checks if the given migration is allowed to run concurrently.
 // First, the migration itself must declare --allow-concurrent. But then, there's also some
 // restrictions on which migrations exactly are allowed such concurrency.
-func (e *Executor) allowConcurrentMigration(onlineDDL *schema.OnlineDDL) bool {
+func (e *Executor) allowConcurrentMigration(onlineDDL *schema.OnlineDDL) (action sqlparser.DDLAction, allowConcurrent bool) {
 	if !onlineDDL.StrategySetting().IsAllowConcurrent() {
-		return false
+		return action, false
 	}
 
-	action, err := onlineDDL.GetAction()
+	var err error
+	action, err = onlineDDL.GetAction()
 	if err != nil {
-		return false
+		return action, false
 	}
 	switch action {
 	case sqlparser.CreateDDLAction, sqlparser.DropDDLAction:
 		// CREATE TABLE, DROP TABLE are allowed to run concurrently.
-		return true
+		return action, true
+	case sqlparser.AlterDDLAction:
+		// ALTER is only allowed concurrent execution if this is a Vitess migration
+		strategy := onlineDDL.StrategySetting().Strategy
+		return action, (strategy == schema.DDLStrategyOnline || strategy == schema.DDLStrategyVitess)
 	case sqlparser.RevertDDLAction:
 		// REVERT is allowed to run concurrently.
-		// Reminder that REVERT is supported for CREATE, DROP and for 'online' ALTER, but never for
+		// Reminder that REVERT is supported for CREATE, DROP and for 'vitess' ALTER, but never for
 		// 'gh-ost' or 'pt-osc' ALTERs
+		return action, true
+	}
+	return action, false
+}
+
+func (e *Executor) proposedMigrationConflictsWithRunningMigration(runningMigration, proposedMigration *schema.OnlineDDL) bool {
+	if runningMigration.Table == proposedMigration.Table {
+		// migrations operate on same table
 		return true
 	}
+	_, isRunningMigrationAllowConcurrent := e.allowConcurrentMigration(runningMigration)
+	proposedMigrationAction, isProposedMigrationAllowConcurrent := e.allowConcurrentMigration(proposedMigration)
+	if !isRunningMigrationAllowConcurrent && !isProposedMigrationAllowConcurrent {
+		// neither allowed concurrently
+		return true
+	}
+	if proposedMigrationAction == sqlparser.AlterDDLAction {
+		// A new ALTER migration conflicts with an existing migration if the existing migration is still not ready to complete.
+		// Specifically, if the running migration is an ALTER, and is still busy with copying rows (copy_state), then
+		// we consider the two to be conflicting. But, if the running migration is done copying rows, and is now only
+		// applying binary logs, and is up-to-date, then we consider a new ALTER migration to be non-conflicting.
+		return atomic.LoadInt64(&runningMigration.ReadyToComplete) == 0
+	}
 	return false
-}
-
-// isAnyNonConcurrentMigrationRunning sees if there's any migration running right now
-// that does not have -allow-concurrent.
-// such a running migration will for example prevent a new non-concurrent migration from running.
-func (e *Executor) isAnyNonConcurrentMigrationRunning() bool {
-	nonConcurrentMigrationFound := false
-
-	e.ownedRunningMigrations.Range(func(_, val any) bool {
-		onlineDDL, ok := val.(*schema.OnlineDDL)
-		if !ok {
-			return true
-		}
-		if !e.allowConcurrentMigration(onlineDDL) {
-			// The migratoin may have declared itself to be --allow-concurrent, but our scheduler
-			// reserves the right to say "no, you're NOT in fact allowed to run concurrently"
-			// (as example, think a `gh-ost` ALTER migration that says --allow-concurrent)
-			nonConcurrentMigrationFound = true
-			return false // stop iteration, no need to review other migrations
-		}
-		return true
-	})
-
-	return nonConcurrentMigrationFound
-}
-
-// isAnyMigrationRunningOnTable sees if there's any migration running right now
-// operating on given table.
-func (e *Executor) isAnyMigrationRunningOnTable(tableName string) bool {
-	sameTableMigrationFound := false
-	e.ownedRunningMigrations.Range(func(_, val any) bool {
-		onlineDDL, ok := val.(*schema.OnlineDDL)
-		if !ok {
-			return true
-		}
-		if onlineDDL.Table == tableName {
-			sameTableMigrationFound = true
-			return false // stop iteration, no need to review other migrations
-		}
-		return true
-	})
-	return sameTableMigrationFound
 }
 
 // isAnyConflictingMigrationRunning checks if there's any running migration that conflicts with the
 // given migration, such that they can't both run concurrently.
 func (e *Executor) isAnyConflictingMigrationRunning(onlineDDL *schema.OnlineDDL) bool {
-
-	if e.isAnyNonConcurrentMigrationRunning() && !e.allowConcurrentMigration(onlineDDL) {
-		return true
-	}
-	if e.isAnyMigrationRunningOnTable(onlineDDL.Table) {
-		return true
-	}
-
-	return false
+	conflictFound := false
+	e.ownedRunningMigrations.Range(func(_, val any) bool {
+		runningMigration, ok := val.(*schema.OnlineDDL)
+		if !ok {
+			return true // continue iteration
+		}
+		if e.proposedMigrationConflictsWithRunningMigration(runningMigration, onlineDDL) {
+			conflictFound = true
+			return false // stop iteration, no need to review other migrations
+		}
+		return true // continue iteration
+	})
+	return conflictFound
 }
 
 func (e *Executor) ghostPanicFlagFileName(uuid string) string {
@@ -1677,6 +1680,7 @@ func (e *Executor) readMigration(ctx context.Context, uuid string) (onlineDDL *s
 		Options:          row["options"].ToString(),
 		Status:           schema.OnlineDDLStatus(row["migration_status"].ToString()),
 		Retries:          row.AsInt64("retries", 0),
+		ReadyToComplete:  row.AsInt64("ready_to_complete", 0),
 		TabletAlias:      row["tablet"].ToString(),
 		MigrationContext: row["migration_context"].ToString(),
 	}
@@ -1698,6 +1702,7 @@ func (e *Executor) readPendingMigrationsUUIDs(ctx context.Context) (uuids []stri
 
 // terminateMigration attempts to interrupt and hard-stop a running migration
 func (e *Executor) terminateMigration(ctx context.Context, onlineDDL *schema.OnlineDDL) (foundRunning bool, err error) {
+	log.Infof("terminateMigration: request to terminate %s", onlineDDL.UUID)
 	// It's possible the killing the migration fails for whatever reason, in which case
 	// the logic will retry killing it later on.
 	// Whatever happens in this function, this executor stops owning the given migration.
@@ -1879,6 +1884,7 @@ func (e *Executor) UnthrottleMigration(ctx context.Context, uuid string) (result
 	if err := e.lagThrottler.CheckIsReady(); err != nil {
 		return nil, err
 	}
+	defer e.triggerNextCheckInterval()
 	_ = e.lagThrottler.UnthrottleApp(uuid)
 	return emptyResult, nil
 }
@@ -1888,6 +1894,7 @@ func (e *Executor) UnthrottleAllMigrations(ctx context.Context) (result *sqltype
 	if err := e.lagThrottler.CheckIsReady(); err != nil {
 		return nil, err
 	}
+	defer e.triggerNextCheckInterval()
 	_ = e.lagThrottler.UnthrottleApp(throttlerOnlineDDLApp)
 	return emptyResult, nil
 }
@@ -2896,8 +2903,10 @@ func (e *Executor) runNextMigration(ctx context.Context) error {
 				return nil, err
 			}
 			if !e.isAnyConflictingMigrationRunning(onlineDDL) {
-				// This migration seems good to go
-				return onlineDDL, err
+				if e.countOwnedRunningMigrations() < maxConcurrentMigrations {
+					// This migration seems good to go
+					return onlineDDL, err
+				}
 			}
 		}
 		// no non-conflicting migration found...
@@ -3017,6 +3026,8 @@ func (e *Executor) readVReplStream(ctx context.Context, uuid string, okIfMissing
 		pos:                  row.AsString("pos", ""),
 		timeUpdated:          row.AsInt64("time_updated", 0),
 		timeHeartbeat:        row.AsInt64("time_heartbeat", 0),
+		timeThrottled:        row.AsInt64("time_throttled", 0),
+		componentThrottled:   row.AsString("component_throttled", ""),
 		transactionTimestamp: row.AsInt64("transaction_timestamp", 0),
 		state:                row.AsString("state", ""),
 		message:              row.AsString("message", ""),
@@ -3127,6 +3138,7 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 		}
 	}
 
+	var throttlerOnce sync.Once
 	r, err := e.execQuery(ctx, sqlSelectRunningMigrations)
 	if err != nil {
 		return countRunnning, cancellable, err
@@ -3197,6 +3209,7 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 					_ = e.updateRowsCopied(ctx, uuid, s.rowsCopied)
 					_ = e.updateMigrationProgressByRowsCopied(ctx, uuid, s.rowsCopied)
 					_ = e.updateMigrationETASecondsByProgress(ctx, uuid)
+					_ = e.updateMigrationLastThrottled(ctx, uuid, s.timeThrottled, s.componentThrottled)
 
 					isReady, err := e.isVReplMigrationReadyToCutOver(ctx, s)
 					if err != nil {
@@ -3222,6 +3235,25 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 							return countRunnning, cancellable, err
 						}
 					}
+					go throttlerOnce.Do(func() {
+						if e.lagThrottler.CheckIsReady() != nil {
+							return
+						}
+						// Self healing: in the following scenario:
+						// - a vitess migration
+						// - with on demand heartbeats
+						// - the streamer running on a replica
+						// - the streamer was throttled for long enough
+						// - then vplayer and vcopier are locked, waiting for the streamer to do something
+						// - since they are blocked, they're not running throttler checks
+						// - since streamer runs on replica, it only checks that replica
+						// - therefore no one asking for on-demand heartbeats
+						// - then, if the conditions for the streamer's throttling are done, the streamer then thinks there's replication lag, with nothing to remediate it.
+						// - it's a deadlock.
+						// And so, once per reviewRunningMigrations(), and assuming there _are_ running migrations, we ensure to hit a throttler check. This will kick
+						// on-demand heartbeats, unlocking the deadlock.
+						e.lagThrottler.CheckByType(ctx, throttlerOnlineDDLApp, "", throttleCheckFlags, throttle.ThrottleCheckPrimaryWrite)
+					})
 				}
 			}
 		case schema.DDLStrategyPTOSC:
@@ -3313,7 +3345,8 @@ func (e *Executor) reviewStaleMigrations(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		message := fmt.Sprintf("stale migration %s: found running but indicates no liveness", onlineDDL.UUID)
+		log.Infof("reviewStaleMigrations: stale migration found: %s", onlineDDL.UUID)
+		message := fmt.Sprintf("stale migration %s: found running but indicates no liveness in the past %v minutes", onlineDDL.UUID, staleMigrationMinutes)
 		if onlineDDL.TabletAlias != e.TabletAliasString() {
 			// This means another tablet started the migration, and the migration has failed due to the tablet failure (e.g. primary failover)
 			if err := e.updateTabletFailure(ctx, onlineDDL.UUID); err != nil {
@@ -3635,6 +3668,7 @@ func (e *Executor) updateTabletFailure(ctx context.Context, uuid string) error {
 }
 
 func (e *Executor) updateMigrationStatus(ctx context.Context, uuid string, status schema.OnlineDDLStatus) error {
+	log.Infof("updateMigrationStatus: transitioning migration: %s into status: %s", uuid, string(status))
 	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationStatus,
 		sqltypes.StringBindVariable(string(status)),
 		sqltypes.StringBindVariable(uuid),
@@ -3659,6 +3693,7 @@ func (e *Executor) updateDDLAction(ctx context.Context, uuid string, actionStr s
 }
 
 func (e *Executor) updateMigrationMessage(ctx context.Context, uuid string, message string) error {
+	log.Infof("updateMigrationMessage: uuid=%s, message=%s", uuid, message)
 	query, err := sqlparser.ParseAndBind(sqlUpdateMessage,
 		sqltypes.StringBindVariable(message),
 		sqltypes.StringBindVariable(uuid),
@@ -3755,6 +3790,19 @@ func (e *Executor) updateMigrationETASecondsByProgress(ctx context.Context, uuid
 	return err
 }
 
+func (e *Executor) updateMigrationLastThrottled(ctx context.Context, uuid string, lastThrottledUnixTime int64, throttledCompnent string) error {
+	query, err := sqlparser.ParseAndBind(sqlUpdateLastThrottled,
+		sqltypes.Int64BindVariable(lastThrottledUnixTime),
+		sqltypes.StringBindVariable(throttledCompnent),
+		sqltypes.StringBindVariable(uuid),
+	)
+	if err != nil {
+		return err
+	}
+	_, err = e.execQuery(ctx, query)
+	return err
+}
+
 func (e *Executor) updateMigrationTableRows(ctx context.Context, uuid string, tableRows int64) error {
 	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationTableRows,
 		sqltypes.Int64BindVariable(tableRows),
@@ -3816,8 +3864,19 @@ func (e *Executor) updateMigrationReadyToComplete(ctx context.Context, uuid stri
 	if err != nil {
 		return err
 	}
-	_, err = e.execQuery(ctx, query)
-	return err
+	if _, err := e.execQuery(ctx, query); err != nil {
+		return err
+	}
+	if val, ok := e.ownedRunningMigrations.Load(uuid); ok {
+		if runningMigration, ok := val.(*schema.OnlineDDL); ok {
+			var storeValue int64
+			if isReady {
+				storeValue = 1
+			}
+			atomic.StoreInt64(&runningMigration.ReadyToComplete, storeValue)
+		}
+	}
+	return nil
 }
 
 func (e *Executor) updateMigrationStowawayTable(ctx context.Context, uuid string, tableName string) error {
@@ -3994,6 +4053,7 @@ func (e *Executor) SubmitMigration(
 
 	revertedUUID, _ := onlineDDL.GetRevertUUID() // Empty value if the migration is not actually a REVERT. Safe to ignore error.
 	retainArtifactsSeconds := int64((*retainOnlineDDLTables).Seconds())
+	_, allowConcurrentMigration := e.allowConcurrentMigration(onlineDDL)
 	query, err := sqlparser.ParseAndBind(sqlInsertMigration,
 		sqltypes.StringBindVariable(onlineDDL.UUID),
 		sqltypes.StringBindVariable(e.keyspace),
@@ -4009,7 +4069,7 @@ func (e *Executor) SubmitMigration(
 		sqltypes.StringBindVariable(e.TabletAliasString()),
 		sqltypes.Int64BindVariable(retainArtifactsSeconds),
 		sqltypes.BoolBindVariable(onlineDDL.StrategySetting().IsPostponeCompletion()),
-		sqltypes.BoolBindVariable(e.allowConcurrentMigration(onlineDDL)),
+		sqltypes.BoolBindVariable(allowConcurrentMigration),
 		sqltypes.StringBindVariable(revertedUUID),
 		sqltypes.BoolBindVariable(onlineDDL.IsView()),
 	)

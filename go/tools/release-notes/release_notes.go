@@ -495,7 +495,7 @@ func main() {
 	flag.Parse()
 
 	// The -version flag must be of a valid format.
-	rx := regexp.MustCompile("v([0-9]+)\\.([0-9]+)\\.([0-9]+)")
+	rx := regexp.MustCompile(`v(\d+)\.(\d+)\.(\d+)`)
 	// There should be 4 sub-matches, input: "v14.0.0", output: ["v14.0.0", "14", "0", "0"].
 	versionMatch := rx.FindStringSubmatch(*versionName)
 	if len(versionMatch) != 4 {

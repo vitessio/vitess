@@ -392,7 +392,7 @@ Usage of vttablet:
   --enable_lag_throttler
 	If true, vttablet will run a throttler service, and will implicitly enable heartbeats
   --enable_query_plan_field_caching
-	This option fetches & caches fields (columns) when storing query plans (default true)
+	(DEPRECATED) This option fetches & caches fields (columns) when storing query plans (default true)
   --enable_replication_reporter
 	Use polling to track replication lag.
   --enable_semi_sync
@@ -674,7 +674,7 @@ Usage of vttablet:
   --queryserver-config-query-timeout float
 	query server query timeout (in seconds), this is the query timeout in vttablet side. If a query takes more than this timeout, it will be killed. (default 30)
   --queryserver-config-schema-change-signal
-	query server schema signal, will signal connected vtgates that schema has changed whenever this is detected. VTGates will need to have -schema_change_signal enabled for this to work
+	query server schema signal, will signal connected vtgates that schema has changed whenever this is detected. VTGates will need to have -schema_change_signal enabled for this to work (default true)
   --queryserver-config-schema-change-signal-interval float
 	query server schema change signal interval defines at which interval the query server shall send schema updates to vtgate. (default 5)
   --queryserver-config-schema-reload-time float
@@ -977,10 +977,12 @@ max_rate_approach_threshold: 0.9
 	refresh interval for re-reading the topology (default 30s)
   --vreplication_heartbeat_update_interval int
 	Frequency (in seconds, default 1, max 60) at which the time_updated column of a vreplication stream when idling (default 1)
+  --vreplication_max_time_to_retry_on_error duration
+	stop automatically retrying when we've had consecutive failures with the same error for this long after the first occurrence (default 15m0s)
   --vreplication_replica_lag_tolerance duration
 	Replica lag threshold duration: once lag is below this we switch from copy phase to the replication (streaming) phase (default 1m0s)
   --vreplication_retry_delay duration
-	delay before retrying a failed binlog connection (default 5s)
+	delay before retrying a failed workflow event in the replication phase (default 5s)
   --vreplication_store_compressed_gtid
 	Store compressed gtids in the pos column of _vt.vreplication
   --vreplication_tablet_type string
