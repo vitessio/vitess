@@ -433,6 +433,9 @@ func applyKeyspaceDependentPatches(
 		primaryTablets = append(primaryTablets, strconv.Itoa((i+1)*100+1))
 	}
 
+	setKeyspaceDurabilityPolicy := generateSetKeyspaceDurabilityPolicy(primaryTablets, keyspaceData.keyspace, opts)
+	dockerComposeFile = applyInMemoryPatch(dockerComposeFile, setKeyspaceDurabilityPolicy)
+
 	schemaLoad := generateSchemaload(primaryTablets, "", keyspaceData.keyspace, externalDbInfo, opts)
 	dockerComposeFile = applyInMemoryPatch(dockerComposeFile, schemaLoad)
 
@@ -480,7 +483,7 @@ func applyDefaultDockerPatches(
 	dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateVtgate(opts))
 	dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateVtwork(opts))
 	dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateVreplication(dbInfo, opts))
-	dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateVtorc(dbInfo, opts))
+	dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateVtorc(dbInfo, keyspaceInfoMap, opts))
 	return dockerComposeFile
 }
 
@@ -672,7 +675,7 @@ func generateVtctld(opts vtOptions) string {
         -cell %[4]s \
         -workflow_manager_init \
         -workflow_manager_use_election \
-        -service_map 'grpc-vtctl' \
+        -service_map 'grpc-vtctl,grpc-vtctld' \
         -backup_storage_implementation file \
         -file_backup_storage_root /vt/vtdataroot/backups \
         -logtostderr=true \
@@ -744,11 +747,19 @@ func generateVtwork(opts vtOptions) string {
 `, opts.webPort, opts.gRpcPort, opts.topologyFlags, opts.cell)
 }
 
-func generateVtorc(dbInfo externalDbInfo, opts vtOptions) string {
+func generateVtorc(dbInfo externalDbInfo, keyspaceInfoMap map[string]keyspaceInfo, opts vtOptions) string {
 	externalDb := "0"
 	if dbInfo.dbName != "" {
 		externalDb = "1"
 	}
+
+	var depends []string
+	for _, keyspaceData := range keyspaceInfoMap {
+		depends = append(depends, "set_keyspace_durability_policy_"+keyspaceData.keyspace)
+	}
+	depends = append(depends, "vtctld")
+	dependsOn := "depends_on: [" + strings.Join(depends, ", ") + "]"
+
 	return fmt.Sprintf(`
 - op: add
   path: /services/vtorc
@@ -764,9 +775,8 @@ func generateVtorc(dbInfo externalDbInfo, opts vtOptions) string {
     ports:
       - "13000:3000"
     command: ["sh", "-c", "/script/vtorc-up.sh"]
-    depends_on:
-      - vtctld
-`, opts.topologyFlags, externalDb, dbInfo.dbUser, dbInfo.dbPass)
+    %[5]s
+`, opts.topologyFlags, externalDb, dbInfo.dbUser, dbInfo.dbPass, dependsOn)
 }
 
 func generateVreplication(dbInfo externalDbInfo, opts vtOptions) string {
@@ -788,6 +798,33 @@ func generateVreplication(dbInfo externalDbInfo, opts vtOptions) string {
     depends_on:
       - vtctld
 `, opts.topologyFlags, externalDb)
+}
+
+func generateSetKeyspaceDurabilityPolicy(
+	tabletAliases []string,
+	keyspace string,
+	opts vtOptions,
+) string {
+	// Formatting for list in yaml
+	var aliases []string
+	for _, tabletId := range tabletAliases {
+		aliases = append(aliases, "vttablet"+tabletId)
+	}
+	dependsOn := "depends_on: [" + strings.Join(aliases, ", ") + "]"
+
+	return fmt.Sprintf(`
+- op: add
+  path: /services/set_keyspace_durability_policy_%[3]s
+  value:
+    image: vitess/lite:${VITESS_TAG:-latest}
+    volumes:
+      - ".:/script"
+    environment:
+      - GRPC_PORT=%[2]d
+      - KEYSPACES=%[3]s
+    command: ["sh", "-c", "/script/set_keyspace_durability_policy.sh"]
+    %[1]s
+`, dependsOn, opts.gRpcPort, keyspace)
 }
 
 func generateSchemaload(
