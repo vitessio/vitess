@@ -362,7 +362,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 	}
 
 	// See what auth method the AuthServer wants to use for that user.
-	authServerMethod, err := l.authServer.AuthMethod(user)
+	authServerMethod, err := l.authServer.AuthMethod(user, conn.RemoteAddr().String())
 	if err != nil {
 		c.writeErrorPacketFromError(err)
 		return

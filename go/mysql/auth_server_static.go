@@ -225,7 +225,7 @@ func validateConfig(config map[string][]*AuthServerStaticEntry) error {
 }
 
 // AuthMethod is part of the AuthServer interface.
-func (a *AuthServerStatic) AuthMethod(user string) (string, error) {
+func (a *AuthServerStatic) AuthMethod(user, host string) (string, error) {
 	return a.Method, nil
 }
 
