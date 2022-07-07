@@ -732,7 +732,7 @@ Usage of vttablet:
   --security_policy string
 	the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
   --service_map value
-	comma separated list of services to enable (or disable if prefixed with '-') Example: grpc-vtgateservice
+	comma separated list of services to enable (or disable if prefixed with '-') Example: grpc-queryservice
   --serving_state_grace_period duration
 	how long to pause after broadcasting health to vtgate, before enforcing a new serving state
   --shard_sync_retry_delay duration
