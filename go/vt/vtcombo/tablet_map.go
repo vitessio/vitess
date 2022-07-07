@@ -901,8 +901,8 @@ func (itmc *internalTabletManagerClient) SetReplicationSource(context.Context, *
 	return fmt.Errorf("not implemented in vtcombo")
 }
 
-func (itmc *internalTabletManagerClient) StopReplicationAndGetStatus(context.Context, *topodatapb.Tablet, replicationdatapb.StopReplicationMode) (*replicationdatapb.Status, *replicationdatapb.StopReplicationStatus, error) {
-	return nil, nil, fmt.Errorf("not implemented in vtcombo")
+func (itmc *internalTabletManagerClient) StopReplicationAndGetStatus(context.Context, *topodatapb.Tablet, replicationdatapb.StopReplicationMode) (*replicationdatapb.StopReplicationStatus, error) {
+	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 
 func (itmc *internalTabletManagerClient) PromoteReplica(context.Context, *topodatapb.Tablet, bool) (string, error) {

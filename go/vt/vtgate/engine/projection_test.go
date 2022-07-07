@@ -52,7 +52,7 @@ func TestMultiply(t *testing.T) {
 		Input:      fp,
 		noTxNeeded: noTxNeeded{},
 	}
-	qr, err := proj.TryExecute(&noopVCursor{}, map[string]*querypb.BindVariable{}, false)
+	qr, err := proj.TryExecute(context.Background(), &noopVCursor{}, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	assert.Equal(t, "[[UINT64(6)] [UINT64(0)] [UINT64(2)]]", fmt.Sprintf("%v", qr.Rows))
 
@@ -65,7 +65,7 @@ func TestMultiply(t *testing.T) {
 		)},
 	}
 	proj.Input = fp
-	qr, err = wrapStreamExecute(proj, newNoopVCursor(context.Background()), nil, true)
+	qr, err = wrapStreamExecute(proj, &noopVCursor{}, nil, true)
 	require.NoError(t, err)
 	assert.Equal(t, "[[UINT64(6)] [UINT64(0)] [UINT64(2)]]", fmt.Sprintf("%v", qr.Rows))
 }
@@ -87,7 +87,7 @@ func TestEmptyInput(t *testing.T) {
 		Input:      fp,
 		noTxNeeded: noTxNeeded{},
 	}
-	qr, err := proj.TryExecute(&noopVCursor{}, map[string]*querypb.BindVariable{}, false)
+	qr, err := proj.TryExecute(context.Background(), &noopVCursor{}, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	assert.Equal(t, "[]", fmt.Sprintf("%v", qr.Rows))
 

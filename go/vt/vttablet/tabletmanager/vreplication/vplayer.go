@@ -254,17 +254,6 @@ func (vp *vplayer) updatePos(ts int64) (posReached bool, err error) {
 	return posReached, nil
 }
 
-func (vp *vplayer) updateHeartbeat(tm int64) error {
-	update, err := binlogplayer.GenerateUpdateHeartbeat(vp.vr.id, tm)
-	if err != nil {
-		return err
-	}
-	if _, err := withDDL.Exec(vp.vr.vre.ctx, update, vp.vr.dbClient.ExecuteFetch, vp.vr.dbClient.ExecuteFetch); err != nil {
-		return fmt.Errorf("error %v updating time", err)
-	}
-	return nil
-}
-
 func (vp *vplayer) mustUpdateHeartbeat() bool {
 	return vp.numAccumulatedHeartbeats >= *vreplicationHeartbeatUpdateInterval ||
 		vp.numAccumulatedHeartbeats >= vreplicationMinimumHeartbeatUpdateInterval
@@ -277,7 +266,7 @@ func (vp *vplayer) recordHeartbeat() error {
 		return nil
 	}
 	vp.numAccumulatedHeartbeats = 0
-	return vp.updateHeartbeat(tm)
+	return vp.vr.updateHeartbeatTime(tm)
 }
 
 // applyEvents is the main thread that applies the events. It has the following use
@@ -343,6 +332,7 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 		}
 		// check throttler.
 		if !vp.vr.vre.throttlerClient.ThrottleCheckOKOrWaitAppName(ctx, vp.throttlerAppName) {
+			_ = vp.vr.updateTimeThrottled(VPlayerComponentName)
 			continue
 		}
 
@@ -633,10 +623,14 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		stats.Send(fmt.Sprintf("%v", event.Journal))
 		return io.EOF
 	case binlogdatapb.VEventType_HEARTBEAT:
+		if event.Throttled {
+			if err := vp.vr.updateTimeThrottled(VStreamerComponentName); err != nil {
+				return err
+			}
+		}
 		if !vp.vr.dbClient.InTransaction {
 			vp.numAccumulatedHeartbeats++
-			err := vp.recordHeartbeat()
-			if err != nil {
+			if err := vp.recordHeartbeat(); err != nil {
 				return err
 			}
 		}

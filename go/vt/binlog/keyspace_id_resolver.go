@@ -102,7 +102,7 @@ type keyspaceIDResolverFactoryV3 struct {
 }
 
 func (r *keyspaceIDResolverFactoryV3) keyspaceID(v sqltypes.Value) ([]byte, error) {
-	destinations, err := r.vindex.Map(nil, []sqltypes.Value{v})
+	destinations, err := r.vindex.Map(context.TODO(), nil, []sqltypes.Value{v})
 	if err != nil {
 		return nil, err
 	}
