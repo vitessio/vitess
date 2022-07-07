@@ -236,7 +236,7 @@ func VtgateProcessInstance(
 		Binary:                "vtgate",
 		FileToLogQueries:      path.Join(tmpDirectory, "/vtgate_querylog.txt"),
 		Directory:             os.Getenv("VTDATAROOT"),
-		ServiceMap:            "grpc-tabletmanager,grpc-throttler,grpc-queryservice,grpc-updatestream,grpc-vtctl,grpc-vtworker,grpc-vtgateservice",
+		ServiceMap:            "grpc-tabletmanager,grpc-throttler,grpc-queryservice,grpc-updatestream,grpc-vtctl,grpc-vtgateservice",
 		LogDir:                tmpDirectory,
 		Port:                  port,
 		GrpcPort:              grpcPort,

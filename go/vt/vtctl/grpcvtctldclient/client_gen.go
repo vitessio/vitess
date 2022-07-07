@@ -542,15 +542,6 @@ func (client *gRPCVtctldClient) SetKeyspaceDurabilityPolicy(ctx context.Context,
 	return client.c.SetKeyspaceDurabilityPolicy(ctx, in, opts...)
 }
 
-// SetKeyspaceServedFrom is part of the vtctlservicepb.VtctldClient interface.
-func (client *gRPCVtctldClient) SetKeyspaceServedFrom(ctx context.Context, in *vtctldatapb.SetKeyspaceServedFromRequest, opts ...grpc.CallOption) (*vtctldatapb.SetKeyspaceServedFromResponse, error) {
-	if client.c == nil {
-		return nil, status.Error(codes.Unavailable, connClosedMsg)
-	}
-
-	return client.c.SetKeyspaceServedFrom(ctx, in, opts...)
-}
-
 // SetShardIsPrimaryServing is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) SetShardIsPrimaryServing(ctx context.Context, in *vtctldatapb.SetShardIsPrimaryServingRequest, opts ...grpc.CallOption) (*vtctldatapb.SetShardIsPrimaryServingResponse, error) {
 	if client.c == nil {

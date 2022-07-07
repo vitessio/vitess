@@ -33,10 +33,6 @@ func RemoveUnhealthyTablets(tabletStatsList []LegacyTabletStats) []LegacyTabletS
 	result := make([]LegacyTabletStats, 0, len(tabletStatsList))
 	for _, ts := range tabletStatsList {
 		// Note we do not check the 'Serving' flag here.
-		// This is mainly to avoid the case where we run a vtworker Diff between a
-		// source and destination, and the source is not serving (disabled by
-		// TabletControl). When we switch the tablet to 'worker', it will
-		// go back to serving state.
 		if ts.Stats == nil || ts.Stats.HealthError != "" || ts.LastError != nil || LegacyIsReplicationLagHigh(&ts) {
 			continue
 		}

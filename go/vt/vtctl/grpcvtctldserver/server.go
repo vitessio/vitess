@@ -2498,21 +2498,6 @@ func (s *VtctldServer) SetKeyspaceServedFrom(ctx context.Context, req *vtctldata
 	}, nil
 }
 
-// SetKeyspaceShardingInfo is part of the vtctlservicepb.VtctldServer interface.
-func (s *VtctldServer) SetKeyspaceShardingInfo(ctx context.Context, req *vtctldatapb.SetKeyspaceShardingInfoRequest) (*vtctldatapb.SetKeyspaceShardingInfoResponse, error) {
-	span, ctx := trace.NewSpan(ctx, "VtctldServer.SetKeyspaceShardingInfo")
-	defer span.Finish()
-
-	ki, err := s.ts.GetKeyspace(ctx, req.Keyspace)
-	if err != nil {
-		return nil, err
-	}
-
-	return &vtctldatapb.SetKeyspaceShardingInfoResponse{
-		Keyspace: ki.Keyspace,
-	}, nil
-}
-
 // SetShardIsPrimaryServing is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) SetShardIsPrimaryServing(ctx context.Context, req *vtctldatapb.SetShardIsPrimaryServingRequest) (*vtctldatapb.SetShardIsPrimaryServingResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.SetShardIsPrimaryServing")
