@@ -55,8 +55,6 @@ Usage of vttablet:
 	PITR restore parameter: Filename containing mTLS client private key for use in binlog server authentication.
   --binlog_ssl_server_name string
 	PITR restore parameter: TLS server name (common name) to verify against for the binlog server we are connecting to (If not set: use the hostname or IP supplied in -binlog_host).
-  --binlog_use_v3_resharding_mode
-	(DEPRECATED) True if and only if the binlog streamer should use V3-style sharding, which doesn't require a preset sharding key column. (default true)
   --binlog_user string
 	PITR restore parameter: username of binlog server.
   --builtinbackup_mysqld_timeout duration
@@ -734,7 +732,7 @@ Usage of vttablet:
   --security_policy string
 	the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
   --service_map value
-	comma separated list of services to enable (or disable if prefixed with '-') Example: grpc-vtworker
+	comma separated list of services to enable (or disable if prefixed with '-') Example: grpc-queryservice
   --serving_state_grace_period duration
 	how long to pause after broadcasting health to vtgate, before enforcing a new serving state
   --shard_sync_retry_delay duration

@@ -481,7 +481,6 @@ func applyDefaultDockerPatches(
 
 	dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateVtctld(opts))
 	dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateVtgate(opts))
-	dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateVtwork(opts))
 	dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateVreplication(dbInfo, opts))
 	dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateVtorc(dbInfo, keyspaceInfoMap, opts))
 	return dockerComposeFile
@@ -722,29 +721,6 @@ func generateVtgate(opts vtOptions) string {
     depends_on:
       - vtctld
 `, opts.webPort, opts.gRpcPort, opts.mySqlPort, opts.topologyFlags, opts.cell)
-}
-
-func generateVtwork(opts vtOptions) string {
-	return fmt.Sprintf(`
-- op: add
-  path: /services/vtwork
-  value:
-    image: vitess/lite:${VITESS_TAG:-latest}
-    ports:
-      - "%[1]d"
-      - "%[2]d"
-    command: ["sh", "-c", "/vt/bin/vtworker \
-        %[3]s \
-        -cell %[4]s \
-        -logtostderr=true \
-        -service_map 'grpc-vtworker' \
-        -port %[1]d \
-        -grpc_port %[2]d \
-        -use_v3_resharding_mode=true \
-        "]
-    depends_on:
-      - vtctld
-`, opts.webPort, opts.gRpcPort, opts.topologyFlags, opts.cell)
 }
 
 func generateVtorc(dbInfo externalDbInfo, keyspaceInfoMap map[string]keyspaceInfo, opts vtOptions) string {
