@@ -36,14 +36,10 @@ func (vc *contextVCursor) ConnCollation() collations.ID {
 	return collations.CollationBinaryID
 }
 
-func (vc *contextVCursor) ExecutePrimitive(primitive engine.Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	return primitive.TryExecute(vc, bindVars, wantfields)
+func (vc *contextVCursor) ExecutePrimitive(ctx context.Context, primitive engine.Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	return primitive.TryExecute(ctx, vc, bindVars, wantfields)
 }
 
-func (vc *contextVCursor) StreamExecutePrimitive(primitive engine.Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	return primitive.TryStreamExecute(vc, bindVars, wantfields, callback)
-}
-
-func (vc *contextVCursor) Context() context.Context {
-	return vc.ctx
+func (vc *contextVCursor) StreamExecutePrimitive(ctx context.Context, primitive engine.Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	return primitive.TryStreamExecute(ctx, vc, bindVars, wantfields, callback)
 }
