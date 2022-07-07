@@ -17,6 +17,7 @@ limitations under the License.
 package vindexes
 
 import (
+	"context"
 	"reflect"
 	"testing"
 
@@ -79,7 +80,7 @@ func TestUnicodeLooseMD5Map(t *testing.T) {
 		out: "\xd4\x1d\x8cُ\x00\xb2\x04\xe9\x80\t\x98\xec\xf8B~",
 	}}
 	for _, tcase := range tcases {
-		got, err := charVindexMD5.Map(nil, []sqltypes.Value{tcase.in})
+		got, err := charVindexMD5.Map(context.Background(), nil, []sqltypes.Value{tcase.in})
 		if err != nil {
 			t.Error(err)
 		}
@@ -93,7 +94,7 @@ func TestUnicodeLooseMD5Map(t *testing.T) {
 func TestUnicodeLooseMD5Verify(t *testing.T) {
 	ids := []sqltypes.Value{sqltypes.NewVarBinary("Test"), sqltypes.NewVarBinary("TEst"), sqltypes.NewVarBinary("different")}
 	ksids := [][]byte{[]byte("\v^۴\x01\xfdu$96\x90I\x1dd\xf1\xf5"), []byte("\v^۴\x01\xfdu$96\x90I\x1dd\xf1\xf5"), []byte("\v^۴\x01\xfdu$96\x90I\x1dd\xf1\xf5")}
-	got, err := charVindexMD5.Verify(nil, ids, ksids)
+	got, err := charVindexMD5.Verify(context.Background(), nil, ids, ksids)
 	if err != nil {
 		t.Fatal(err)
 	}

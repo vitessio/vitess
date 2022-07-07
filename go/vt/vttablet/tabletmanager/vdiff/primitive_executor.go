@@ -62,7 +62,7 @@ func newPrimitiveExecutor(ctx context.Context, prim vtgateEngine.Primitive, name
 	// handles each callback from the merge sorter, waits for a result set from the shard streamer and pushes it on the result channel
 	go func() {
 		defer close(pe.resultch)
-		pe.err = vcursor.StreamExecutePrimitive(pe.prim, make(map[string]*querypb.BindVariable), true, func(qr *sqltypes.Result) error {
+		pe.err = vcursor.StreamExecutePrimitive(ctx, pe.prim, make(map[string]*querypb.BindVariable), true, func(qr *sqltypes.Result) error {
 
 			select {
 			case pe.resultch <- qr:
