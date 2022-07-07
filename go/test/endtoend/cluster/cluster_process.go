@@ -41,6 +41,7 @@ import (
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -751,6 +752,25 @@ func (cluster *LocalProcessCluster) ExecOnTablet(ctx context.Context, vttablet *
 		Shard:      tablet.Shard,
 		TabletType: tablet.Type,
 	}, sql, bindvars, int64(txID), int64(reservedID), opts)
+}
+
+// ExecOnVTGate executes a query on a local cluster VTGate with the provided
+// target, bindvars, and execute options.
+func (cluster *LocalProcessCluster) ExecOnVTGate(ctx context.Context, addr string, target string, sql string, binds map[string]any, opts *querypb.ExecuteOptions) (*sqltypes.Result, error) {
+	bindvars, err := sqltypes.BuildBindVariables(binds)
+	if err != nil {
+		return nil, err
+	}
+
+	conn, err := vtgateconn.Dial(ctx, addr)
+	if err != nil {
+		return nil, err
+	}
+
+	session := conn.Session(target, opts)
+	defer conn.Close()
+
+	return session.Execute(ctx, sql, bindvars)
 }
 
 // StreamTabletHealth invokes a HealthStream on a local cluster Vttablet and
