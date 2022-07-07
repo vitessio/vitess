@@ -4168,6 +4168,17 @@ func TestCreateTable(t *testing.T) {
 	key by_email (email(10), username)
 )`,
 		},
+		// geometrycollection & geomcollection alias
+		{
+			input: `create table t (
+	id int auto_increment,
+	col_geometrycollection1 geometrycollection,
+	col_geometrycollection2 geometrycollection not null,
+	col_geometrycollection3 geomcollection,
+	col_geometrycollection4 geomcollection not null,
+	primary key (id)
+)`,
+		},
 		// foreign keys
 		{
 			input: `create table t (
