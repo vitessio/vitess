@@ -229,19 +229,19 @@ func getCompressorArgs(cDetails *CompressionDetails) []string {
 	}
 
 	if cDetails.BuiltinCompressor != "" {
-		args = append(args, fmt.Sprintf("--builtin_compressor=%s", cDetails.BuiltinCompressor))
+		args = append(args, fmt.Sprintf("--builtin-compressor=%s", cDetails.BuiltinCompressor))
 	}
 	if cDetails.BuiltinDecompressor != "" {
-		args = append(args, fmt.Sprintf("--builtin_decompressor=%s", cDetails.BuiltinDecompressor))
+		args = append(args, fmt.Sprintf("--builtin-decompressor=%s", cDetails.BuiltinDecompressor))
 	}
 	if cDetails.ExternalCompressorCmd != "" {
-		args = append(args, fmt.Sprintf("--external_compressor=%s", cDetails.ExternalCompressorCmd))
+		args = append(args, fmt.Sprintf("--external-compressor=%s", cDetails.ExternalCompressorCmd))
 	}
 	if cDetails.ExternalCompressorExt != "" {
-		args = append(args, fmt.Sprintf("--external_compressor_extension=%s", cDetails.ExternalCompressorExt))
+		args = append(args, fmt.Sprintf("--external-compressor-extension=%s", cDetails.ExternalCompressorExt))
 	}
 	if cDetails.ExternalDecompressorCmd != "" {
-		args = append(args, fmt.Sprintf("--external_decompressor=%s", cDetails.ExternalDecompressorCmd))
+		args = append(args, fmt.Sprintf("--external-decompressor=%s", cDetails.ExternalDecompressorCmd))
 	}
 
 	return args

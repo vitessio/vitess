@@ -141,7 +141,7 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, params BackupPara
 	// an extension is required when using an external compressor
 	if *backupStorageCompress && *ExternalCompressorCmd != "" && *ExternalCompressorExt == "" {
 		return false, vterrors.New(vtrpc.Code_INVALID_ARGUMENT,
-			"xtrabackup_external_compressor_extension not provided when using an external compressor")
+			"xtrabackup-external-compressor-extension not provided when using an external compressor")
 	}
 
 	// use a mysql connection to detect flavor at runtime
