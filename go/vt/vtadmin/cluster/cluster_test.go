@@ -889,7 +889,7 @@ func TestFindWorkflows(t *testing.T) {
 					Name: "cluster1",
 				},
 				VtctldClient: &fakevtctldclient.VtctldClient{
-					GetKeyspacesResults: struct {
+					GetKeyspacesResults: &struct {
 						Keyspaces []*vtctldatapb.Keyspace
 						Error     error
 					}{
@@ -910,7 +910,7 @@ func TestFindWorkflows(t *testing.T) {
 					Name: "cluster1",
 				},
 				VtctldClient: &fakevtctldclient.VtctldClient{
-					GetKeyspacesResults: struct {
+					GetKeyspacesResults: &struct {
 						Keyspaces []*vtctldatapb.Keyspace
 						Error     error
 					}{
@@ -933,7 +933,7 @@ func TestFindWorkflows(t *testing.T) {
 					Name: "cluster1",
 				},
 				VtctldClient: &fakevtctldclient.VtctldClient{
-					GetKeyspacesResults: struct {
+					GetKeyspacesResults: &struct {
 						Keyspaces []*vtctldatapb.Keyspace
 						Error     error
 					}{
@@ -1003,7 +1003,7 @@ func TestFindWorkflows(t *testing.T) {
 					Name: "cluster1",
 				},
 				VtctldClient: &fakevtctldclient.VtctldClient{
-					GetKeyspacesResults: struct {
+					GetKeyspacesResults: &struct {
 						Keyspaces []*vtctldatapb.Keyspace
 						Error     error
 					}{

@@ -19,7 +19,7 @@ import * as errorHandler from '../errors/errorHandler';
 import { HttpFetchError, HttpResponseNotOkError, MalformedHttpResponseError } from '../errors/errorTypes';
 import { HttpOkResponse } from './responseTypes';
 import { TabletDebugVars } from '../util/tabletDebugVars';
-import { isReadOnlyMode } from '../util/env';
+import { env, isReadOnlyMode } from '../util/env';
 
 /**
  * vtfetch makes HTTP requests against the given vtadmin-api endpoint
@@ -41,8 +41,7 @@ export const vtfetch = async (endpoint: string, options: RequestInit = {}): Prom
             throw new Error(`Cannot execute write request in read-only mode: ${options.method} ${endpoint}`);
         }
 
-        const { REACT_APP_VTADMIN_API_ADDRESS } = process.env;
-        const url = `${REACT_APP_VTADMIN_API_ADDRESS}${endpoint}`;
+        const url = `${env().REACT_APP_VTADMIN_API_ADDRESS}${endpoint}`;
         const opts = { ...vtfetchOpts(), ...options };
 
         let response = null;
@@ -87,7 +86,7 @@ export const vtfetch = async (endpoint: string, options: RequestInit = {}): Prom
 };
 
 export const vtfetchOpts = (): RequestInit => {
-    const credentials = process.env.REACT_APP_FETCH_CREDENTIALS;
+    const credentials = env().REACT_APP_FETCH_CREDENTIALS;
     if (credentials && credentials !== 'omit' && credentials !== 'same-origin' && credentials !== 'include') {
         throw Error(
             `Invalid fetch credentials property: ${credentials}. Must be undefined or one of omit, same-origin, include`
@@ -274,18 +273,18 @@ export const deleteTablet = async ({ allowPrimary, clusterID, alias }: DeleteTab
     return pb.DeleteTabletResponse.create(result);
 };
 
-export interface ReparentTabletParams {
+export interface RefreshTabletReplicationSourceParams {
     clusterID: string;
     alias: string;
 }
 
-export const reparentTablet = async ({ clusterID, alias }: ReparentTabletParams) => {
-    const { result } = await vtfetch(`/api/tablet/${alias}/reparent`, { method: 'put' });
+export const refreshTabletReplicationSource = async ({ clusterID, alias }: RefreshTabletReplicationSourceParams) => {
+    const { result } = await vtfetch(`/api/tablet/${alias}/refresh_replication_source`, { method: 'put' });
 
-    const err = pb.ReparentTabletResponse.verify(result);
+    const err = pb.RefreshTabletReplicationSourceResponse.verify(result);
     if (err) throw Error(err);
 
-    return pb.ReparentTabletResponse.create(result);
+    return pb.RefreshTabletReplicationSourceResponse.create(result);
 };
 
 export interface PingTabletParams {
@@ -384,7 +383,7 @@ export interface TabletDebugVarsResponse {
 }
 
 export const fetchExperimentalTabletDebugVars = async (params: FetchTabletParams): Promise<TabletDebugVarsResponse> => {
-    if (!process.env.REACT_APP_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS) {
+    if (!env().REACT_APP_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS) {
         return Promise.resolve({ params });
     }
 

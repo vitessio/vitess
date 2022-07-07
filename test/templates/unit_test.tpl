@@ -34,7 +34,7 @@ jobs:
       if: steps.changes.outputs.unit_tests == 'true'
       uses: actions/setup-go@v2
       with:
-        go-version: 1.18.1
+        go-version: 1.18.3
 
     - name: Tune the OS
       if: steps.changes.outputs.unit_tests == 'true'

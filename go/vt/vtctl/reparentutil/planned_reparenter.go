@@ -59,6 +59,7 @@ type PlannedReparentOptions struct {
 	// back out to the caller.
 
 	lockAction string
+	durability Durabler
 }
 
 // NewPlannedReparenter returns a new PlannedReparenter object, ready to perform
@@ -163,7 +164,7 @@ func (pr *PlannedReparenter) preflightChecks(
 
 		event.DispatchUpdate(ev, "searching for primary candidate")
 
-		opts.NewPrimaryAlias, err = ChooseNewPrimary(ctx, pr.tmc, &ev.ShardInfo, tabletMap, opts.AvoidPrimaryAlias, opts.WaitReplicasTimeout, pr.logger)
+		opts.NewPrimaryAlias, err = ChooseNewPrimary(ctx, pr.tmc, &ev.ShardInfo, tabletMap, opts.AvoidPrimaryAlias, opts.WaitReplicasTimeout, opts.durability, pr.logger)
 		if err != nil {
 			return true, err
 		}
@@ -229,7 +230,7 @@ func (pr *PlannedReparenter) performGracefulPromotion(
 	setSourceCtx, setSourceCancel := context.WithTimeout(ctx, opts.WaitReplicasTimeout)
 	defer setSourceCancel()
 
-	if err := pr.tmc.SetReplicationSource(setSourceCtx, primaryElect, currentPrimary.Alias, 0, snapshotPos, true, IsReplicaSemiSync(currentPrimary.Tablet, primaryElect)); err != nil {
+	if err := pr.tmc.SetReplicationSource(setSourceCtx, primaryElect, currentPrimary.Alias, 0, snapshotPos, true, IsReplicaSemiSync(opts.durability, currentPrimary.Tablet, primaryElect)); err != nil {
 		return "", vterrors.Wrapf(err, "replication on primary-elect %v did not catch up in time; replication must be healthy to perform PlannedReparent", primaryElectAliasStr)
 	}
 
@@ -277,7 +278,7 @@ func (pr *PlannedReparenter) performGracefulPromotion(
 		undoCtx, undoCancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
 		defer undoCancel()
 
-		if undoErr := pr.tmc.UndoDemotePrimary(undoCtx, currentPrimary.Tablet, SemiSyncAckers(currentPrimary.Tablet) > 0); undoErr != nil {
+		if undoErr := pr.tmc.UndoDemotePrimary(undoCtx, currentPrimary.Tablet, SemiSyncAckers(opts.durability, currentPrimary.Tablet) > 0); undoErr != nil {
 			pr.logger.Warningf("encountered error while performing UndoDemotePrimary(%v): %v", currentPrimary.AliasString(), undoErr)
 			finalWaitErr = vterrors.Wrapf(finalWaitErr, "encountered error while performing UndoDemotePrimary(%v): %v", currentPrimary.AliasString(), undoErr)
 		}
@@ -290,7 +291,7 @@ func (pr *PlannedReparenter) performGracefulPromotion(
 	promoteCtx, promoteCancel := context.WithTimeout(ctx, opts.WaitReplicasTimeout)
 	defer promoteCancel()
 
-	rp, err := pr.tmc.PromoteReplica(promoteCtx, primaryElect, SemiSyncAckers(primaryElect) > 0)
+	rp, err := pr.tmc.PromoteReplica(promoteCtx, primaryElect, SemiSyncAckers(opts.durability, primaryElect) > 0)
 	if err != nil {
 		return "", vterrors.Wrapf(err, "primary-elect tablet %v failed to be promoted to primary; please try again", primaryElectAliasStr)
 	}
@@ -321,7 +322,7 @@ func (pr *PlannedReparenter) performInitialPromotion(
 	// This is done to guarantee safety, in the sense that the semi-sync is on before we start accepting writes.
 	// However, during initialization, it is likely that the database would not be created in the MySQL instance.
 	// Therefore, we have to first set read-write mode, create the database and then fix semi-sync, otherwise we get blocked.
-	rp, err := pr.tmc.InitPrimary(promoteCtx, primaryElect, SemiSyncAckers(primaryElect) > 0)
+	rp, err := pr.tmc.InitPrimary(promoteCtx, primaryElect, SemiSyncAckers(opts.durability, primaryElect) > 0)
 	if err != nil {
 		return "", vterrors.Wrapf(err, "primary-elect tablet %v failed to be promoted to primary; please try again", primaryElectAliasStr)
 	}
@@ -366,6 +367,7 @@ func (pr *PlannedReparenter) performPotentialPromotion(
 	shard string,
 	primaryElect *topodatapb.Tablet,
 	tabletMap map[string]*topo.TabletInfo,
+	opts PlannedReparentOptions,
 ) (string, error) {
 	primaryElectAliasStr := topoproto.TabletAliasString(primaryElect.Alias)
 
@@ -487,7 +489,7 @@ func (pr *PlannedReparenter) performPotentialPromotion(
 	promoteCtx, promoteCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
 	defer promoteCancel()
 
-	rp, err := pr.tmc.PromoteReplica(promoteCtx, primaryElect, SemiSyncAckers(primaryElect) > 0)
+	rp, err := pr.tmc.PromoteReplica(promoteCtx, primaryElect, SemiSyncAckers(opts.durability, primaryElect) > 0)
 	if err != nil {
 		return "", vterrors.Wrapf(err, "failed to promote %v to primary", primaryElectAliasStr)
 	}
@@ -503,6 +505,17 @@ func (pr *PlannedReparenter) reparentShardLocked(
 	opts PlannedReparentOptions,
 ) error {
 	shardInfo, err := pr.ts.GetShard(ctx, keyspace, shard)
+	if err != nil {
+		return err
+	}
+
+	keyspaceDurability, err := pr.ts.GetKeyspaceDurability(ctx, keyspace)
+	if err != nil {
+		return err
+	}
+
+	pr.logger.Infof("Getting a new durability policy for %v", keyspaceDurability)
+	opts.durability, err = GetDurabilityPolicy(keyspaceDurability)
 	if err != nil {
 		return err
 	}
@@ -573,7 +586,7 @@ func (pr *PlannedReparenter) reparentShardLocked(
 	case currentPrimary == nil && ev.ShardInfo.PrimaryAlias != nil:
 		// Case (2): no clear current primary. Try to find a safe promotion
 		// candidate, and promote to it.
-		reparentJournalPos, err = pr.performPotentialPromotion(ctx, keyspace, shard, ev.NewPrimary, tabletMap)
+		reparentJournalPos, err = pr.performPotentialPromotion(ctx, keyspace, shard, ev.NewPrimary, tabletMap, opts)
 	case topoproto.TabletAliasEqual(currentPrimary.Alias, opts.NewPrimaryAlias):
 		// Case (3): desired new primary is the current primary. Attempt to fix
 		// up replicas to recover from a previous partial promotion.
@@ -654,7 +667,7 @@ func (pr *PlannedReparenter) reparentTablets(
 			// that it needs to start replication after transitioning from
 			// PRIMARY => REPLICA.
 			forceStartReplication := false
-			if err := pr.tmc.SetReplicationSource(replCtx, tablet, ev.NewPrimary.Alias, reparentJournalTimestamp, "", forceStartReplication, IsReplicaSemiSync(ev.NewPrimary, tablet)); err != nil {
+			if err := pr.tmc.SetReplicationSource(replCtx, tablet, ev.NewPrimary.Alias, reparentJournalTimestamp, "", forceStartReplication, IsReplicaSemiSync(opts.durability, ev.NewPrimary, tablet)); err != nil {
 				rec.RecordError(vterrors.Wrapf(err, "tablet %v failed to SetReplicationSource(%v): %v", alias, primaryElectAliasStr, err))
 			}
 		}(alias, tabletInfo.Tablet)

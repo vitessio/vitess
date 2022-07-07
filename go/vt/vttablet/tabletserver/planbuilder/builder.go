@@ -31,9 +31,8 @@ import (
 
 func analyzeSelect(sel *sqlparser.Select, tables map[string]*schema.Table) (plan *Plan, err error) {
 	plan = &Plan{
-		PlanID:     PlanSelect,
-		FieldQuery: GenerateFieldQuery(sel),
-		FullQuery:  GenerateLimitQuery(sel),
+		PlanID:    PlanSelect,
+		FullQuery: GenerateLimitQuery(sel),
 	}
 	plan.Table, plan.AllTables = lookupTables(sel.From, tables)
 
@@ -56,7 +55,6 @@ func analyzeSelect(sel *sqlparser.Select, tables map[string]*schema.Table) (plan
 			return nil, err
 		}
 		plan.NextCount = v
-		plan.FieldQuery = nil
 		plan.FullQuery = nil
 	}
 	return plan, nil
@@ -143,7 +141,7 @@ func analyzeShow(show *sqlparser.Show, dbName string) (plan *Plan, err error) {
 		}, nil
 	case *sqlparser.ShowCreate:
 		if showInternal.Command == sqlparser.CreateDb && !sqlparser.SystemSchema(showInternal.Op.Name.String()) {
-			showInternal.Op.Name = sqlparser.NewTableIdent(dbName)
+			showInternal.Op.Name = sqlparser.NewIdentifierCS(dbName)
 		}
 		return &Plan{
 			PlanID:    PlanShow,

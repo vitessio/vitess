@@ -469,7 +469,7 @@ func createExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn
 	bad.VSchema = badVSchema
 
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
-	executor = NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig, nil, false)
+	executor = NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig, nil, false, querypb.ExecuteOptions_V3)
 
 	key.AnyShardPicker = DestinationAnyShardPickerFirstShard{}
 	// create a new session each time so that ShardSessions don't get re-used across tests
@@ -493,7 +493,7 @@ func createCustomExecutor(vschema string) (executor *Executor, sbc1, sbc2, sbclo
 	sbclookup = hc.AddTestTablet(cell, "0", 1, KsTestUnsharded, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 
-	executor = NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig, nil, false)
+	executor = NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig, nil, false, querypb.ExecuteOptions_V3)
 	// create a new session each time so that ShardSessions don't get re-used across tests
 	primarySession = &vtgatepb.Session{
 		TargetString: "@primary",
@@ -522,7 +522,7 @@ func createCustomExecutorSetValues(vschema string, values []*sqltypes.Result) (e
 	sbclookup = hc.AddTestTablet(cell, "0", 1, KsTestUnsharded, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 
-	executor = NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig, nil, false)
+	executor = NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig, nil, false, querypb.ExecuteOptions_V3)
 	// create a new session each time so that ShardSessions don't get re-used across tests
 	primarySession = &vtgatepb.Session{
 		TargetString: "@primary",
@@ -590,11 +590,11 @@ func assertQueries(t *testing.T, sbc *sandboxconn.SandboxConn, wantQueries []*qu
 		if len(wantQueries) < idx {
 			t.Errorf("got more queries than expected")
 		}
-		require.Equal(t, wantQueries[idx].BindVariables, query.BindVariables)
 		got := query.Sql
 		expected := wantQueries[idx].Sql
-		idx++
 		assert.Equal(t, expected, got)
+		assert.Equal(t, wantQueries[idx].BindVariables, query.BindVariables)
+		idx++
 	}
 }
 
@@ -664,9 +664,7 @@ var testPlannedQueries = map[string]bool{}
 func testQueryLog(t *testing.T, logChan chan any, method, stmtType, sql string, shardQueries int) *LogStats {
 	t.Helper()
 
-	var logStats *LogStats
-
-	logStats = getQueryLog(logChan)
+	logStats := getQueryLog(logChan)
 	require.NotNil(t, logStats)
 
 	var log bytes.Buffer

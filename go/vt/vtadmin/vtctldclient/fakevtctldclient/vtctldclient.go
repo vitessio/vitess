@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
@@ -38,7 +39,10 @@ type VtctldClient struct {
 	vtctldclient.VtctldClient
 
 	CreateKeyspaceShouldErr bool
+	CreateShardShouldErr    bool
 	DeleteKeyspaceShouldErr bool
+	// Keyed by _sorted_ <ks/shard> list string joined by commas.
+	DeleteShardsResults map[string]error
 	// Keyed by _sorted_ TabletAlias list string joined by commas.
 	DeleteTabletsResults          map[string]error
 	EmergencyReparentShardResults map[string]struct {
@@ -47,6 +51,10 @@ type VtctldClient struct {
 	}
 	FindAllShardsInKeyspaceResults map[string]struct {
 		Response *vtctldatapb.FindAllShardsInKeyspaceResponse
+		Error    error
+	}
+	GetBackupsResults map[string]struct {
+		Response *vtctldatapb.GetBackupsResponse
 		Error    error
 	}
 	GetCellInfoNamesResults *struct {
@@ -65,12 +73,16 @@ type VtctldClient struct {
 		Response *vtctldatapb.GetKeyspaceResponse
 		Error    error
 	}
-	GetKeyspacesResults struct {
+	GetKeyspacesResults *struct {
 		Keyspaces []*vtctldatapb.Keyspace
 		Error     error
 	}
 	GetSchemaResults map[string]struct {
 		Response *vtctldatapb.GetSchemaResponse
+		Error    error
+	}
+	GetSrvVSchemaResults map[string]struct {
+		Response *vtctldatapb.GetSrvVSchemaResponse
 		Error    error
 	}
 	GetVSchemaResults map[string]struct {
@@ -81,6 +93,7 @@ type VtctldClient struct {
 		Response *vtctldatapb.GetWorkflowsResponse
 		Error    error
 	}
+	PingTabletResults           map[string]error
 	PlannedReparentShardResults map[string]struct {
 		Response *vtctldatapb.PlannedReparentShardResponse
 		Error    error
@@ -102,6 +115,7 @@ type VtctldClient struct {
 		Response *vtctldatapb.ReparentTabletResponse
 		Error    error
 	}
+	RunHealthCheckResults            map[string]error
 	SetWritableResults               map[string]error
 	ShardReplicationPositionsResults map[string]struct {
 		Response *vtctldatapb.ShardReplicationPositionsResponse
@@ -111,6 +125,18 @@ type VtctldClient struct {
 	StopReplicationResults            map[string]error
 	TabletExternallyReparentedResults map[string]struct {
 		Response *vtctldatapb.TabletExternallyReparentedResponse
+		Error    error
+	}
+	ValidateKeyspaceResults map[string]struct {
+		Response *vtctldatapb.ValidateKeyspaceResponse
+		Error    error
+	}
+	ValidateSchemaKeyspaceResults map[string]struct {
+		Response *vtctldatapb.ValidateSchemaKeyspaceResponse
+		Error    error
+	}
+	ValidateVersionKeyspaceResults map[string]struct {
+		Response *vtctldatapb.ValidateVersionKeyspaceResponse
 		Error    error
 	}
 }
@@ -129,18 +155,35 @@ func (fake *VtctldClient) CreateKeyspace(ctx context.Context, req *vtctldatapb.C
 	}
 
 	ks := &topodatapb.Keyspace{
-		ShardingColumnName: req.ShardingColumnName,
-		ShardingColumnType: req.ShardingColumnType,
-		ServedFroms:        req.ServedFroms,
-		KeyspaceType:       req.Type,
-		BaseKeyspace:       req.BaseKeyspace,
-		SnapshotTime:       req.SnapshotTime,
+		ServedFroms:  req.ServedFroms,
+		KeyspaceType: req.Type,
+		BaseKeyspace: req.BaseKeyspace,
+		SnapshotTime: req.SnapshotTime,
 	}
 
 	return &vtctldatapb.CreateKeyspaceResponse{
 		Keyspace: &vtctldatapb.Keyspace{
 			Name:     req.Name,
 			Keyspace: ks,
+		},
+	}, nil
+}
+
+// CreateShard is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) CreateShard(cxt context.Context, req *vtctldatapb.CreateShardRequest, opts ...grpc.CallOption) (*vtctldatapb.CreateShardResponse, error) {
+	if fake.CreateShardShouldErr {
+		return nil, fmt.Errorf("%w: CreateShard error", assert.AnError)
+	}
+
+	return &vtctldatapb.CreateShardResponse{
+		Keyspace: &vtctldatapb.Keyspace{
+			Name:     req.Keyspace,
+			Keyspace: &topodatapb.Keyspace{},
+		},
+		Shard: &vtctldatapb.Shard{
+			Keyspace: req.Keyspace,
+			Name:     req.ShardName,
+			Shard:    &topodatapb.Shard{},
 		},
 	}, nil
 }
@@ -152,6 +195,30 @@ func (fake *VtctldClient) DeleteKeyspace(ctx context.Context, req *vtctldatapb.D
 	}
 
 	return &vtctldatapb.DeleteKeyspaceResponse{}, nil
+}
+
+// DeleteShards is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) DeleteShards(ctx context.Context, req *vtctldatapb.DeleteShardsRequest, opts ...grpc.CallOption) (*vtctldatapb.DeleteShardsResponse, error) {
+	if fake.DeleteShardsResults == nil {
+		return nil, fmt.Errorf("%w: DeleteShardsResults not set on fake vtctldclient", assert.AnError)
+	}
+
+	shards := make([]string, len(req.Shards))
+	for i, shard := range req.Shards {
+		shards[i] = fmt.Sprintf("%s/%s", shard.Keyspace, shard.Name)
+	}
+	sort.Strings(shards)
+	key := strings.Join(shards, ",")
+
+	if err, ok := fake.DeleteShardsResults[key]; ok {
+		if err != nil {
+			return nil, err
+		}
+
+		return &vtctldatapb.DeleteShardsResponse{}, nil
+	}
+
+	return nil, fmt.Errorf("%w: no result set for %s", assert.AnError, key)
 }
 
 // DeleteTablets is part of the vtctldclient.VtctldClient interface.
@@ -202,17 +269,18 @@ func (fake *VtctldClient) FindAllShardsInKeyspace(ctx context.Context, req *vtct
 	return nil, fmt.Errorf("%w: no result set for keyspace %s", assert.AnError, req.Keyspace)
 }
 
-// GetKeyspace is part of the vtctldclient.VtctldClient interface.
-func (fake *VtctldClient) GetKeyspace(ctx context.Context, req *vtctldatapb.GetKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.GetKeyspaceResponse, error) {
-	if fake.GetKeyspaceResults == nil {
-		return nil, fmt.Errorf("%w: GetKeyspaceResults not set on fake vtctldclient", assert.AnError)
+// GetBackups is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) GetBackups(ctx context.Context, req *vtctldatapb.GetBackupsRequest, opts ...grpc.CallOption) (*vtctldatapb.GetBackupsResponse, error) {
+	if fake.GetBackupsResults == nil {
+		return nil, fmt.Errorf("%w: GetBackupsResults not set on fake vtctldclient", assert.AnError)
 	}
 
-	if result, ok := fake.GetKeyspaceResults[req.Keyspace]; ok {
+	key := fmt.Sprintf("%s/%s", req.Keyspace, req.Shard)
+	if result, ok := fake.GetBackupsResults[key]; ok {
 		return result.Response, result.Error
 	}
 
-	return nil, fmt.Errorf("%w: no result set for keyspace %s", assert.AnError, req.Keyspace)
+	return nil, fmt.Errorf("%w: no result set for %s", assert.AnError, key)
 }
 
 // GetCellInfo is part of the vtctldclient.VtctldClient interface.
@@ -231,7 +299,7 @@ func (fake *VtctldClient) GetCellInfo(ctx context.Context, req *vtctldatapb.GetC
 // GetCellInfoNames is part of the vtctldclient.VtctldClient interface.
 func (fake *VtctldClient) GetCellInfoNames(ctx context.Context, req *vtctldatapb.GetCellInfoNamesRequest, opts ...grpc.CallOption) (*vtctldatapb.GetCellInfoNamesResponse, error) {
 	if fake.GetCellInfoNamesResults == nil {
-		return nil, fmt.Errorf("%w: GetCellInfoNames not set of fake vtctldclient", assert.AnError)
+		return nil, fmt.Errorf("%w: GetCellInfoNamesResults not set on fake vtctldclient", assert.AnError)
 	}
 
 	return fake.GetCellInfoNamesResults.Response, fake.GetCellInfoNamesResults.Error
@@ -240,14 +308,31 @@ func (fake *VtctldClient) GetCellInfoNames(ctx context.Context, req *vtctldatapb
 // GetCellsAliases is part of the vtctldclient.VtctldClient interface.
 func (fake *VtctldClient) GetCellsAliases(ctx context.Context, req *vtctldatapb.GetCellsAliasesRequest, opts ...grpc.CallOption) (*vtctldatapb.GetCellsAliasesResponse, error) {
 	if fake.GetCellsAliasesResults == nil {
-		return nil, fmt.Errorf("%w: GetCellsAliases not set of fake vtctldclient", assert.AnError)
+		return nil, fmt.Errorf("%w: GetCellsAliasesResults not set on fake vtctldclient", assert.AnError)
 	}
 
 	return fake.GetCellsAliasesResults.Response, fake.GetCellsAliasesResults.Error
 }
 
+// GetKeyspace is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) GetKeyspace(ctx context.Context, req *vtctldatapb.GetKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.GetKeyspaceResponse, error) {
+	if fake.GetKeyspaceResults == nil {
+		return nil, fmt.Errorf("%w: GetKeyspaceResults not set on fake vtctldclient", assert.AnError)
+	}
+
+	if result, ok := fake.GetKeyspaceResults[req.Keyspace]; ok {
+		return result.Response, result.Error
+	}
+
+	return nil, fmt.Errorf("%w: no result set for keyspace %s", assert.AnError, req.Keyspace)
+}
+
 // GetKeyspaces is part of the vtctldclient.VtctldClient interface.
 func (fake *VtctldClient) GetKeyspaces(ctx context.Context, req *vtctldatapb.GetKeyspacesRequest, opts ...grpc.CallOption) (*vtctldatapb.GetKeyspacesResponse, error) {
+	if fake.GetKeyspacesResults == nil {
+		return nil, fmt.Errorf("%w: GetKeyspacesResults not set on fake vtctldclient", assert.AnError)
+	}
+
 	if fake.GetKeyspacesResults.Error != nil {
 		return nil, fake.GetKeyspacesResults.Error
 	}
@@ -276,6 +361,44 @@ func (fake *VtctldClient) GetSchema(ctx context.Context, req *vtctldatapb.GetSch
 	return nil, fmt.Errorf("%w: no result set for tablet alias %s", assert.AnError, key)
 }
 
+// GetSrvVSchema is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) GetSrvVSchema(ctx context.Context, req *vtctldatapb.GetSrvVSchemaRequest, opts ...grpc.CallOption) (*vtctldatapb.GetSrvVSchemaResponse, error) {
+	if fake.GetSrvVSchemaResults == nil {
+		return nil, fmt.Errorf("%w: GetSrvVSchemaResults not set on fake vtctldclient", assert.AnError)
+	}
+
+	if result, ok := fake.GetSrvVSchemaResults[req.Cell]; ok {
+		return result.Response, result.Error
+	}
+
+	return nil, fmt.Errorf("%w: no result set for key %s", assert.AnError, req.Cell)
+}
+
+// GetSrvVSchemas is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) GetSrvVSchemas(ctx context.Context, req *vtctldatapb.GetSrvVSchemasRequest, opts ...grpc.CallOption) (resp *vtctldatapb.GetSrvVSchemasResponse, err error) {
+	resp = &vtctldatapb.GetSrvVSchemasResponse{
+		SrvVSchemas: map[string]*vschemapb.SrvVSchema{},
+	}
+
+	cells := req.Cells
+	if len(req.Cells) == 0 {
+		for cell := range fake.GetSrvVSchemaResults {
+			cells = append(cells, cell)
+		}
+	}
+
+	for _, cell := range cells {
+		r, err := fake.GetSrvVSchema(ctx, &vtctldatapb.GetSrvVSchemaRequest{Cell: cell}, opts...)
+		if err != nil {
+			return nil, err
+		}
+
+		resp.SrvVSchemas[cell] = r.SrvVSchema
+	}
+
+	return resp, nil
+}
+
 // GetVSchema is part of the vtctldclient.VtctldClient interface.
 func (fake *VtctldClient) GetVSchema(ctx context.Context, req *vtctldatapb.GetVSchemaRequest, opts ...grpc.CallOption) (*vtctldatapb.GetVSchemaResponse, error) {
 	if fake.GetVSchemaResults == nil {
@@ -300,6 +423,24 @@ func (fake *VtctldClient) GetWorkflows(ctx context.Context, req *vtctldatapb.Get
 	}
 
 	return nil, fmt.Errorf("%w: no result set for keyspace %s", assert.AnError, req.Keyspace)
+}
+
+// PingTablet is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) PingTablet(ctx context.Context, req *vtctldatapb.PingTabletRequest, opts ...grpc.CallOption) (*vtctldatapb.PingTabletResponse, error) {
+	if fake.PingTabletResults == nil {
+		return nil, fmt.Errorf("%w: PingTabletResults not set on fake vtctldclient", assert.AnError)
+	}
+
+	key := topoproto.TabletAliasString(req.TabletAlias)
+	if err, ok := fake.PingTabletResults[key]; ok {
+		if err != nil {
+			return nil, err
+		}
+
+		return &vtctldatapb.PingTabletResponse{}, nil
+	}
+
+	return nil, fmt.Errorf("%w: no result set for %s", assert.AnError, key)
 }
 
 // PlannedReparentShard is part of the vtctldclient.VtctldClient interface.
@@ -389,6 +530,24 @@ func (fake *VtctldClient) ReparentTablet(ctx context.Context, req *vtctldatapb.R
 	return nil, fmt.Errorf("%w: no result set for %s", assert.AnError, key)
 }
 
+// RunHealthCheck is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) RunHealthCheck(ctx context.Context, req *vtctldatapb.RunHealthCheckRequest, opts ...grpc.CallOption) (*vtctldatapb.RunHealthCheckResponse, error) {
+	if fake.RunHealthCheckResults == nil {
+		return nil, fmt.Errorf("%w: RunHealthCheckResults not set on fake vtctldclient", assert.AnError)
+	}
+
+	key := topoproto.TabletAliasString(req.TabletAlias)
+	if err, ok := fake.RunHealthCheckResults[key]; ok {
+		if err != nil {
+			return nil, err
+		}
+
+		return &vtctldatapb.RunHealthCheckResponse{}, nil
+	}
+
+	return nil, fmt.Errorf("%w: no result set for %s", assert.AnError, key)
+}
+
 // SetWritable is part of the vtctldclient.VtctldClient interface.
 func (fake *VtctldClient) SetWritable(ctx context.Context, req *vtctldatapb.SetWritableRequest, opts ...grpc.CallOption) (*vtctldatapb.SetWritableResponse, error) {
 	if fake.SetWritableResults == nil {
@@ -465,6 +624,48 @@ func (fake *VtctldClient) TabletExternallyReparented(ctx context.Context, req *v
 
 	key := topoproto.TabletAliasString(req.Tablet)
 	if result, ok := fake.TabletExternallyReparentedResults[key]; ok {
+		return result.Response, result.Error
+	}
+
+	return nil, fmt.Errorf("%w: no result set for %s", assert.AnError, key)
+}
+
+// ValidateKeyspace is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) ValidateKeyspace(ctx context.Context, req *vtctldatapb.ValidateKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.ValidateKeyspaceResponse, error) {
+	if fake.ValidateKeyspaceResults == nil {
+		return nil, fmt.Errorf("%w: ValidateKeyspaceResults not set on fake vtctldclient", assert.AnError)
+	}
+
+	key := req.Keyspace
+	if result, ok := fake.ValidateKeyspaceResults[key]; ok {
+		return result.Response, result.Error
+	}
+
+	return nil, fmt.Errorf("%w: no result set for %s", assert.AnError, key)
+}
+
+// ValidateSchemaKeyspace is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) ValidateSchemaKeyspace(ctx context.Context, req *vtctldatapb.ValidateSchemaKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.ValidateSchemaKeyspaceResponse, error) {
+	if fake.ValidateSchemaKeyspaceResults == nil {
+		return nil, fmt.Errorf("%w: ValidateSchemaKeyspaceResults not set on fake vtctldclient", assert.AnError)
+	}
+
+	key := req.Keyspace
+	if result, ok := fake.ValidateSchemaKeyspaceResults[key]; ok {
+		return result.Response, result.Error
+	}
+
+	return nil, fmt.Errorf("%w: no result set for %s", assert.AnError, key)
+}
+
+// ValidateVersionKeyspace is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) ValidateVersionKeyspace(ctx context.Context, req *vtctldatapb.ValidateVersionKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.ValidateVersionKeyspaceResponse, error) {
+	if fake.ValidateVersionKeyspaceResults == nil {
+		return nil, fmt.Errorf("%w: ValidateVersionKeyspaceResults not set on fake vtctldclient", assert.AnError)
+	}
+
+	key := req.Keyspace
+	if result, ok := fake.ValidateVersionKeyspaceResults[key]; ok {
 		return result.Response, result.Error
 	}
 

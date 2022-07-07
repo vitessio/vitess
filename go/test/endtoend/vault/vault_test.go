@@ -154,8 +154,8 @@ func TestVaultAuth(t *testing.T) {
 	require.True(t, bytes.Contains(logContents, []byte(tokenRenewalString)))
 }
 
-func startVaultServer(t *testing.T) *VaultServer {
-	vs := &VaultServer{
+func startVaultServer(t *testing.T) *Server {
+	vs := &Server{
 		address: hostname,
 		port1:   clusterInstance.GetAndReservePort(),
 		port2:   clusterInstance.GetAndReservePort(),
@@ -167,7 +167,7 @@ func startVaultServer(t *testing.T) *VaultServer {
 }
 
 // Setup everything we need in the Vault server
-func setupVaultServer(t *testing.T, vs *VaultServer) (string, string) {
+func setupVaultServer(t *testing.T, vs *Server) (string, string) {
 	// The setup script uses these environment variables
 	//   We also reuse VAULT_ADDR and VAULT_CACERT later on
 	os.Setenv("VAULT", vs.execPath)
@@ -246,6 +246,9 @@ func initializeClusterLate(t *testing.T) {
 
 	err := clusterInstance.SetupCluster(keyspace, []cluster.Shard{*shard})
 	require.NoError(t, err)
+	vtctldClientProcess := cluster.VtctldClientProcessInstance("localhost", clusterInstance.VtctldProcess.GrpcPort, clusterInstance.TmpDirectory)
+	out, err := vtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=semi_sync")
+	require.NoError(t, err, out)
 
 	// Start MySQL
 	var mysqlCtlProcessList []*exec.Cmd

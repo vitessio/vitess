@@ -115,6 +115,9 @@ service TabletManager {
   rpc VReplicationExec(tabletmanagerdata.VReplicationExecRequest) returns(tabletmanagerdata.VReplicationExecResponse) {};
   rpc VReplicationWaitForPos(tabletmanagerdata.VReplicationWaitForPosRequest) returns(tabletmanagerdata.VReplicationWaitForPosResponse) {};
 
+  // VDiff API
+  rpc VDiff(tabletmanagerdata.VDiffRequest) returns(tabletmanagerdata.VDiffResponse) {};
+
   //
   // Reparenting related functions
   //
@@ -140,6 +143,12 @@ service TabletManager {
 
   // ReplicaWasPromoted tells the remote tablet it is now the primary
   rpc ReplicaWasPromoted(tabletmanagerdata.ReplicaWasPromotedRequest) returns (tabletmanagerdata.ReplicaWasPromotedResponse) {};
+
+  // ResetReplicationParameters resets the replica replication parameters
+  rpc ResetReplicationParameters(tabletmanagerdata.ResetReplicationParametersRequest) returns (tabletmanagerdata.ResetReplicationParametersResponse) {};
+
+  // FullStatus collects and returns the full status of MySQL including the replication information, semi-sync information, GTID information among others
+  rpc FullStatus(tabletmanagerdata.FullStatusRequest) returns (tabletmanagerdata.FullStatusResponse) {};
 
   // SetReplicationSource tells the replica to reparent
   rpc SetReplicationSource(tabletmanagerdata.SetReplicationSourceRequest) returns (tabletmanagerdata.SetReplicationSourceResponse) {};

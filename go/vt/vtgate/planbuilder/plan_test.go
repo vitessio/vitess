@@ -28,6 +28,7 @@ import (
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/test/utils"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
@@ -38,8 +39,6 @@ import (
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
-
-	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -191,8 +190,7 @@ const (
 )
 
 func makeTestOutput(t *testing.T) string {
-	testOutputTempDir, err := os.MkdirTemp("testdata", "plan_test")
-	require.NoError(t, err)
+	testOutputTempDir := utils.MakeTestOutput(t, "testdata", "plan_test")
 
 	t.Cleanup(func() {
 		if !t.Failed() {
@@ -276,6 +274,18 @@ func TestOneWithSecondUserAsDefault(t *testing.T) {
 		v: loadSchema(t, "schema_test.json", true),
 		keyspace: &vindexes.Keyspace{
 			Name:    "second_user",
+			Sharded: true,
+		},
+	}
+
+	testFile(t, "onecase.txt", "", vschema)
+}
+
+func TestOneWithUserAsDefault(t *testing.T) {
+	vschema := &vschemaWrapper{
+		v: loadSchema(t, "schema_test.json", true),
+		keyspace: &vindexes.Keyspace{
+			Name:    "user",
 			Sharded: true,
 		},
 	}
@@ -410,6 +420,21 @@ func TestWithDefaultKeyspaceFromFileSharded(t *testing.T) {
 
 	testOutputTempDir := makeTestOutput(t)
 	testFile(t, "select_cases_with_default.txt", testOutputTempDir, vschema)
+}
+
+func TestWithUserDefaultKeyspaceFromFileSharded(t *testing.T) {
+	// We are testing this separately so we can set a default keyspace
+	vschema := &vschemaWrapper{
+		v: loadSchema(t, "schema_test.json", true),
+		keyspace: &vindexes.Keyspace{
+			Name:    "user",
+			Sharded: true,
+		},
+		tabletType: topodatapb.TabletType_PRIMARY,
+	}
+
+	testOutputTempDir := makeTestOutput(t)
+	testFile(t, "select_cases_with_user_as_default.txt", testOutputTempDir, vschema)
 }
 
 func TestWithSystemSchemaAsDefaultKeyspace(t *testing.T) {

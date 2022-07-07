@@ -59,6 +59,7 @@ func initializeAnalysisDaoPostConfiguration() {
 type clusterAnalysis struct {
 	hasClusterwideAction bool
 	primaryKey           *InstanceKey
+	durability           reparentutil.Durabler
 }
 
 // GetReplicationAnalysis will check for replication problems (dead primary; unreachable primary; etc)
@@ -74,6 +75,9 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		vitess_tablet.port,
 		vitess_tablet.tablet_type,
 		vitess_tablet.primary_timestamp,
+		vitess_keyspace.keyspace AS keyspace,
+		vitess_keyspace.keyspace_type AS keyspace_type,
+		vitess_keyspace.durability_policy AS durability_policy,
 		primary_instance.read_only AS read_only,
 		MIN(primary_instance.data_center) AS data_center,
 		MIN(primary_instance.region) AS region,
@@ -308,6 +312,9 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		) AS count_distinct_logging_major_versions
 	FROM
 		vitess_tablet
+		JOIN vitess_keyspace ON (
+			vitess_tablet.keyspace = vitess_keyspace.keyspace
+		)
 		JOIN database_instance primary_instance ON (
 			vitess_tablet.hostname = primary_instance.hostname
 			AND vitess_tablet.port = primary_instance.port
@@ -385,7 +392,13 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		}
 
 		a.TabletType = tablet.Type
+		a.AnalyzedKeyspace = m.GetString("keyspace")
 		a.PrimaryTimeStamp = m.GetTime("primary_timestamp")
+
+		if keyspaceType := topodatapb.KeyspaceType(m.GetInt("keyspace_type")); keyspaceType == topodatapb.KeyspaceType_SNAPSHOT {
+			log.Errorf("keyspace %v is a snapshot keyspace. Skipping.", a.AnalyzedKeyspace)
+			return nil
+		}
 
 		a.IsPrimary = m.GetBool("is_primary")
 		countCoPrimaryReplicas := m.GetUint("count_co_primary_replicas")
@@ -468,11 +481,26 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 				a.IsClusterPrimary = true
 				clusters[a.SuggestedClusterAlias].primaryKey = &a.AnalyzedInstanceKey
 			}
+			durabilityPolicy := m.GetString("durability_policy")
+			if durabilityPolicy == "" {
+				log.Errorf("ignoring keyspace %v because no durability_policy is set. Please set it using SetKeyspaceDurabilityPolicy", a.AnalyzedKeyspace)
+				return nil
+			}
+			durability, err := reparentutil.GetDurabilityPolicy(durabilityPolicy)
+			if err != nil {
+				log.Errorf("can't get the durability policy %v - %v. Skipping keyspace - %v.", durabilityPolicy, err, a.AnalyzedKeyspace)
+				return nil
+			}
+			clusters[a.SuggestedClusterAlias].durability = durability
 		}
 		// ca has clusterwide info
 		ca := clusters[a.SuggestedClusterAlias]
 		if ca.hasClusterwideAction {
 			// We can only take one cluster level action at a time.
+			return nil
+		}
+		if ca.durability == nil {
+			// We failed to load the durability policy, so we shouldn't run any analysis
 			return nil
 		}
 		if a.IsClusterPrimary && !a.LastCheckValid && a.CountReplicas == 0 {
@@ -504,11 +532,11 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 			a.Analysis = PrimaryIsReadOnly
 			a.Description = "Primary is read-only"
 			//
-		} else if a.IsClusterPrimary && reparentutil.SemiSyncAckers(tablet) != 0 && !a.SemiSyncPrimaryEnabled {
+		} else if a.IsClusterPrimary && SemiSyncAckers(ca.durability, tablet) != 0 && !a.SemiSyncPrimaryEnabled {
 			a.Analysis = PrimarySemiSyncMustBeSet
 			a.Description = "Primary semi-sync must be set"
 			//
-		} else if a.IsClusterPrimary && reparentutil.SemiSyncAckers(tablet) == 0 && a.SemiSyncPrimaryEnabled {
+		} else if a.IsClusterPrimary && SemiSyncAckers(ca.durability, tablet) == 0 && a.SemiSyncPrimaryEnabled {
 			a.Analysis = PrimarySemiSyncMustNotBeSet
 			a.Description = "Primary semi-sync must not be set"
 			//
@@ -532,11 +560,11 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 			a.Analysis = ReplicationStopped
 			a.Description = "Replication is stopped"
 			//
-		} else if topo.IsReplicaType(a.TabletType) && !a.IsPrimary && reparentutil.IsReplicaSemiSync(primaryTablet, tablet) && !a.SemiSyncReplicaEnabled {
+		} else if topo.IsReplicaType(a.TabletType) && !a.IsPrimary && IsReplicaSemiSync(ca.durability, primaryTablet, tablet) && !a.SemiSyncReplicaEnabled {
 			a.Analysis = ReplicaSemiSyncMustBeSet
 			a.Description = "Replica semi-sync must be set"
 			//
-		} else if topo.IsReplicaType(a.TabletType) && !a.IsPrimary && !reparentutil.IsReplicaSemiSync(primaryTablet, tablet) && a.SemiSyncReplicaEnabled {
+		} else if topo.IsReplicaType(a.TabletType) && !a.IsPrimary && !IsReplicaSemiSync(ca.durability, primaryTablet, tablet) && a.SemiSyncReplicaEnabled {
 			a.Analysis = ReplicaSemiSyncMustNotBeSet
 			a.Description = "Replica semi-sync must not be set"
 			//

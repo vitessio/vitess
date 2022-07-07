@@ -79,6 +79,11 @@ func TestMain(m *testing.M) {
 			},
 		}
 		shard := &localCluster.Keyspaces[0].Shards[0]
+		vtctldClientProcess := cluster.VtctldClientProcessInstance("localhost", localCluster.VtctldProcess.GrpcPort, localCluster.TmpDirectory)
+		_, err = vtctldClientProcess.ExecuteCommandWithOutput("CreateKeyspace", keyspaceName, "--durability-policy=semi_sync")
+		if err != nil {
+			return 1, err
+		}
 
 		// Create a new init_db.sql file that sets up passwords for all users.
 		// Then we use a db-credentials-file with the passwords.
@@ -112,12 +117,11 @@ func TestMain(m *testing.M) {
 			tablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, localCluster.TmpDirectory)
 			tablet.MysqlctlProcess.InitDBFile = newInitDBFile
 			tablet.MysqlctlProcess.ExtraArgs = extraArgs
-			if proc, err := tablet.MysqlctlProcess.StartProcess(); err != nil {
+			proc, err := tablet.MysqlctlProcess.StartProcess()
+			if err != nil {
 				return 1, err
-			} else {
-				// ignore golint warning, we need the else block to use proc
-				mysqlProcs = append(mysqlProcs, proc)
 			}
+			mysqlProcs = append(mysqlProcs, proc)
 		}
 		for _, proc := range mysqlProcs {
 			if err := proc.Wait(); err != nil {

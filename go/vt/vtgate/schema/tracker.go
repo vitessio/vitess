@@ -21,6 +21,9 @@ import (
 	"sync"
 	"time"
 
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"vitess.io/vitess/go/vt/callerid"
 
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
@@ -57,6 +60,9 @@ type (
 
 // defaultConsumeDelay is the default time, the updateController will wait before checking the schema fetch request queue.
 const defaultConsumeDelay = 1 * time.Second
+
+// aclErrorMessageLog is for logging a warning when an acl error message is received for querying schema tracking table.
+const aclErrorMessageLog = "Table ACL might be enabled, --schema_change_signal_user needs to be passed to VTGate for schema tracking to work. Check 'schema tracking' docs on vitess.io"
 
 // NewTracker creates the tracker object.
 func NewTracker(ch chan *discovery.TabletHealth, user *string) *Tracker {
@@ -136,6 +142,10 @@ func (t *Tracker) initKeyspace(th *discovery.TabletHealth) error {
 	err := t.LoadKeyspace(th.Conn, th.Target)
 	if err != nil {
 		log.Warningf("Unable to add the %s keyspace to the schema tracker: %v", th.Target.Keyspace, err)
+		code := vterrors.Code(err)
+		if code == vtrpcpb.Code_UNAUTHENTICATED || code == vtrpcpb.Code_PERMISSION_DENIED {
+			log.Warning(aclErrorMessageLog)
+		}
 		return err
 	}
 	return nil
@@ -181,6 +191,10 @@ func (t *Tracker) updateSchema(th *discovery.TabletHealth) bool {
 		t.tracked[th.Target.Keyspace].setLoaded(false)
 		// TODO: optimize for the tables that got errored out.
 		log.Warningf("error fetching new schema for %v, making them non-authoritative: %v", tablesUpdated, err)
+		code := vterrors.Code(err)
+		if code == vtrpcpb.Code_UNAUTHENTICATED || code == vtrpcpb.Code_PERMISSION_DENIED {
+			log.Warning(aclErrorMessageLog)
+		}
 		return false
 	}
 
@@ -204,7 +218,7 @@ func (t *Tracker) updateTables(keyspace string, res *sqltypes.Result) {
 		collation := row[3].ToString()
 
 		cType := sqlparser.ColumnType{Type: colType}
-		col := vindexes.Column{Name: sqlparser.NewColIdent(colName), Type: cType.SQLType(), CollationName: collation}
+		col := vindexes.Column{Name: sqlparser.NewIdentifierCI(colName), Type: cType.SQLType(), CollationName: collation}
 		cols := t.tables.get(keyspace, tbl)
 
 		t.tables.set(keyspace, tbl, append(cols, col))

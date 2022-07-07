@@ -112,12 +112,19 @@ func ClusterWrapper(isMulti bool) (int, error) {
 		return 1, err
 	}
 	ClusterInstance.Keyspaces = append(ClusterInstance.Keyspaces, cluster.Keyspace{Name: keyspaceName1})
+	vtctldClientProcess := cluster.VtctldClientProcessInstance("localhost", ClusterInstance.VtctldProcess.GrpcPort, ClusterInstance.TmpDirectory)
+	if _, err := vtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName1, "--durability-policy=semi_sync"); err != nil {
+		return 1, err
+	}
 
 	if isMulti {
 		if err := ClusterInstance.VtctlProcess.CreateKeyspace(keyspaceName2); err != nil {
 			return 1, err
 		}
 		ClusterInstance.Keyspaces = append(ClusterInstance.Keyspaces, cluster.Keyspace{Name: keyspaceName2})
+		if _, err := vtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName2, "--durability-policy=semi_sync"); err != nil {
+			return 1, err
+		}
 	}
 
 	initClusterForInitialSharding(keyspaceName1, []string{"0"}, 3, true, isMulti)
@@ -626,7 +633,7 @@ func KillVtgateInstances() {
 }
 
 func checkSrvKeyspaceForSharding(t *testing.T, ksName string, expectedPartitions map[topodatapb.TabletType][]string) {
-	sharding.CheckSrvKeyspace(t, cell, ksName, "", 0, expectedPartitions, *ClusterInstance)
+	sharding.CheckSrvKeyspace(t, cell, ksName, expectedPartitions, *ClusterInstance)
 }
 
 // Create a new init_db.sql file that sets up passwords for all users.

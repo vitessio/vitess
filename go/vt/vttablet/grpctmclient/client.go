@@ -24,6 +24,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/vt/callerid"
 
 	"google.golang.org/grpc"
@@ -233,17 +235,13 @@ func (client *Client) ExecuteHook(ctx context.Context, tablet *topodatapb.Tablet
 }
 
 // GetSchema is part of the tmclient.TabletManagerClient interface.
-func (client *Client) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
+func (client *Client) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.GetSchemaRequest) (*tabletmanagerdatapb.SchemaDefinition, error) {
 	c, closer, err := client.dialer.dial(ctx, tablet)
 	if err != nil {
 		return nil, err
 	}
 	defer closer.Close()
-	response, err := c.GetSchema(ctx, &tabletmanagerdatapb.GetSchemaRequest{
-		Tables:        tables,
-		ExcludeTables: excludeTables,
-		IncludeViews:  includeViews,
-	})
+	response, err := c.GetSchema(ctx, request)
 	if err != nil {
 		return nil, err
 	}
@@ -530,6 +528,20 @@ func (client *Client) ReplicationStatus(ctx context.Context, tablet *topodatapb.
 	return response.Status, nil
 }
 
+// FullStatus is part of the tmclient.TabletManagerClient interface.
+func (client *Client) FullStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.FullStatus, error) {
+	c, closer, err := client.dialer.dial(ctx, tablet)
+	if err != nil {
+		return nil, err
+	}
+	defer closer.Close()
+	response, err := c.FullStatus(ctx, &tabletmanagerdatapb.FullStatusRequest{})
+	if err != nil {
+		return nil, err
+	}
+	return response.Status, nil
+}
+
 // PrimaryStatus is part of the tmclient.TabletManagerClient interface.
 func (client *Client) PrimaryStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
 	c, closer, err := client.dialer.dial(ctx, tablet)
@@ -680,6 +692,21 @@ func (client *Client) VReplicationWaitForPos(ctx context.Context, tablet *topoda
 	return nil
 }
 
+// VDiff is part of the tmclient.TabletManagerClient interface.
+func (client *Client) VDiff(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.VDiffRequest) (*tabletmanagerdatapb.VDiffResponse, error) {
+	log.Infof("VDiff for tablet %s, request %+v", tablet.Alias.String(), req)
+	c, closer, err := client.dialer.dial(ctx, tablet)
+	if err != nil {
+		return nil, err
+	}
+	defer closer.Close()
+	response, err := c.VDiff(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
 //
 // Reparenting related functions
 //
@@ -755,15 +782,7 @@ func (client *Client) DemotePrimary(ctx context.Context, tablet *topodatapb.Tabl
 	if err != nil {
 		return nil, err
 	}
-	status := response.PrimaryStatus
-	if status == nil {
-		// We are assuming this means a response came from an older server.
-		status = &replicationdatapb.PrimaryStatus{
-			Position:     response.DeprecatedPosition, //nolint
-			FilePosition: "",
-		}
-	}
-	return status, nil
+	return response.PrimaryStatus, nil
 }
 
 // UndoDemotePrimary is part of the tmclient.TabletManagerClient interface.
@@ -787,6 +806,17 @@ func (client *Client) ReplicaWasPromoted(ctx context.Context, tablet *topodatapb
 	}
 	defer closer.Close()
 	_, err = c.ReplicaWasPromoted(ctx, &tabletmanagerdatapb.ReplicaWasPromotedRequest{})
+	return err
+}
+
+// ResetReplicationParameters is part of the tmclient.TabletManagerClient interface.
+func (client *Client) ResetReplicationParameters(ctx context.Context, tablet *topodatapb.Tablet) error {
+	c, closer, err := client.dialer.dial(ctx, tablet)
+	if err != nil {
+		return err
+	}
+	defer closer.Close()
+	_, err = c.ResetReplicationParameters(ctx, &tabletmanagerdatapb.ResetReplicationParametersRequest{})
 	return err
 }
 
@@ -821,19 +851,19 @@ func (client *Client) ReplicaWasRestarted(ctx context.Context, tablet *topodatap
 }
 
 // StopReplicationAndGetStatus is part of the tmclient.TabletManagerClient interface.
-func (client *Client) StopReplicationAndGetStatus(ctx context.Context, tablet *topodatapb.Tablet, stopReplicationMode replicationdatapb.StopReplicationMode) (hybridStatus *replicationdatapb.Status, status *replicationdatapb.StopReplicationStatus, err error) {
+func (client *Client) StopReplicationAndGetStatus(ctx context.Context, tablet *topodatapb.Tablet, stopReplicationMode replicationdatapb.StopReplicationMode) (status *replicationdatapb.StopReplicationStatus, err error) {
 	c, closer, err := client.dialer.dial(ctx, tablet)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	defer closer.Close()
 	response, err := c.StopReplicationAndGetStatus(ctx, &tabletmanagerdatapb.StopReplicationAndGetStatusRequest{
 		StopReplicationMode: stopReplicationMode,
 	})
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	return response.HybridStatus, &replicationdatapb.StopReplicationStatus{ //nolint
+	return &replicationdatapb.StopReplicationStatus{ //nolint
 		Before: response.Status.Before,
 		After:  response.Status.After,
 	}, nil

@@ -28,6 +28,8 @@ import (
 	"testing"
 	"time"
 
+	tmc "vitess.io/vitess/go/vt/vttablet/grpctmclient"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -89,8 +91,10 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 	clusterInstance := cluster.NewCluster(cells[0], Hostname)
 	keyspace := &cluster.Keyspace{Name: KeyspaceName}
 
+	durability := "none"
 	if enableSemiSync {
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--enable_semi_sync")
+		durability = "semi_sync"
 	}
 
 	// Start topo server
@@ -159,6 +163,11 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 			clusterInstance.PrintMysqlctlLogFiles()
 			require.FailNow(t, "Error starting mysql: %s", err.Error())
 		}
+	}
+	if clusterInstance.VtctlMajorVersion >= 14 {
+		vtctldClientProcess := cluster.VtctldClientProcessInstance("localhost", clusterInstance.VtctldProcess.GrpcPort, clusterInstance.TmpDirectory)
+		out, err := vtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", KeyspaceName, fmt.Sprintf("--durability-policy=%s", durability))
+		require.NoError(t, err, out)
 	}
 
 	setupShard(ctx, t, clusterInstance, shardName, tablets)
@@ -200,8 +209,10 @@ func setupClusterLegacy(ctx context.Context, t *testing.T, shardName string, cel
 	clusterInstance := cluster.NewCluster(cells[0], Hostname)
 	keyspace := &cluster.Keyspace{Name: KeyspaceName}
 
+	durability := "none"
 	if enableSemiSync {
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--enable_semi_sync")
+		durability = "semi_sync"
 	}
 
 	// Start topo server
@@ -270,6 +281,12 @@ func setupClusterLegacy(ctx context.Context, t *testing.T, shardName string, cel
 			clusterInstance.PrintMysqlctlLogFiles()
 			require.FailNow(t, "Error starting mysql: %s", err.Error())
 		}
+	}
+
+	if clusterInstance.VtctlMajorVersion >= 14 {
+		vtctldClientProcess := cluster.VtctldClientProcessInstance("localhost", clusterInstance.VtctldProcess.GrpcPort, clusterInstance.TmpDirectory)
+		out, err := vtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", KeyspaceName, fmt.Sprintf("--durability-policy=%s", durability))
+		require.NoError(t, err, out)
 	}
 
 	setupShardLegacy(ctx, t, clusterInstance, shardName, tablets)
@@ -777,4 +794,19 @@ func ReplicationThreadsStatus(t *testing.T, status *replicationdatapb.Status, vt
 		sqlThread = sqlState == mysql.ReplicationStateRunning
 	}
 	return ioThread, sqlThread
+}
+
+// TmcFullStatus retuns the result of the TabletManagerClient RPC FullStatus
+func TmcFullStatus(ctx context.Context, tablet *cluster.Vttablet) (*replicationdatapb.FullStatus, error) {
+	// create tablet manager client
+	tmClient := tmc.NewClient()
+
+	vttablet := getTablet(tablet.GrpcPort)
+	return tmClient.FullStatus(ctx, vttablet)
+}
+
+func getTablet(tabletGrpcPort int) *topodatapb.Tablet {
+	portMap := make(map[string]int32)
+	portMap["grpc"] = int32(tabletGrpcPort)
+	return &topodatapb.Tablet{Hostname: Hostname, PortMap: portMap}
 }

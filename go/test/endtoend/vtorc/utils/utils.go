@@ -70,10 +70,11 @@ type CellInfo struct {
 
 // VtOrcClusterInfo stores the information for a cluster. This is supposed to be used only for VtOrc tests.
 type VtOrcClusterInfo struct {
-	ClusterInstance *cluster.LocalProcessCluster
-	Ts              *topo.Server
-	CellInfos       []*CellInfo
-	lastUsedValue   int
+	ClusterInstance     *cluster.LocalProcessCluster
+	Ts                  *topo.Server
+	CellInfos           []*CellInfo
+	VtctldClientProcess *cluster.VtctldClientProcess
+	lastUsedValue       int
 }
 
 // CreateClusterAndStartTopo starts the cluster and topology service
@@ -102,13 +103,17 @@ func CreateClusterAndStartTopo(cellInfos []*CellInfo) (*VtOrcClusterInfo, error)
 		return nil, err
 	}
 
+	// store the vtctldclient process
+	vtctldClientProcess := cluster.VtctldClientProcessInstance("localhost", clusterInstance.VtctldProcess.GrpcPort, clusterInstance.TmpDirectory)
+
 	// create topo server connection
 	ts, err := topo.OpenServer(*clusterInstance.TopoFlavorString(), clusterInstance.VtctlProcess.TopoGlobalAddress, clusterInstance.VtctlProcess.TopoGlobalRoot)
 	return &VtOrcClusterInfo{
-		ClusterInstance: clusterInstance,
-		Ts:              ts,
-		CellInfos:       cellInfos,
-		lastUsedValue:   100,
+		ClusterInstance:     clusterInstance,
+		Ts:                  ts,
+		CellInfos:           cellInfos,
+		lastUsedValue:       100,
+		VtctldClientProcess: vtctldClientProcess,
 	}, err
 }
 
@@ -266,7 +271,7 @@ func StopVtorcs(t *testing.T, clusterInfo *VtOrcClusterInfo) {
 }
 
 // SetupVttabletsAndVtorc is used to setup the vttablets and start the orchestrator
-func SetupVttabletsAndVtorc(t *testing.T, clusterInfo *VtOrcClusterInfo, numReplicasReqCell1, numRdonlyReqCell1 int, orcExtraArgs []string, config cluster.VtorcConfiguration, vtorcCount int) {
+func SetupVttabletsAndVtorc(t *testing.T, clusterInfo *VtOrcClusterInfo, numReplicasReqCell1, numRdonlyReqCell1 int, orcExtraArgs []string, config cluster.VtorcConfiguration, vtorcCount int, durability string) {
 	// stop vtorc if it is running
 	StopVtorcs(t, clusterInfo)
 
@@ -307,6 +312,12 @@ func SetupVttabletsAndVtorc(t *testing.T, clusterInfo *VtOrcClusterInfo, numRepl
 		err := tablet.VttabletProcess.WaitForTabletTypes([]string{"replica", "rdonly"})
 		require.NoError(t, err)
 	}
+
+	if durability == "" {
+		durability = "none"
+	}
+	out, err := clusterInfo.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, fmt.Sprintf("--durability-policy=%s", durability))
+	require.NoError(t, err, out)
 
 	// start vtorc
 	StartVtorcs(t, clusterInfo, orcExtraArgs, config, vtorcCount)
@@ -427,7 +438,7 @@ func CheckReplication(t *testing.T, clusterInfo *VtOrcClusterInfo, primary *clus
 		default:
 			_, err := RunSQL(t, sqlSchema, primary, "")
 			if err != nil {
-				log.Warning("create table failed on primary, will retry")
+				log.Warningf("create table failed on primary - %v, will retry", err)
 				time.Sleep(100 * time.Millisecond)
 				break
 			}
@@ -789,13 +800,85 @@ func SetupNewClusterSemiSync(t *testing.T) *VtOrcClusterInfo {
 		require.NoError(t, err)
 	}
 
+	vtctldClientProcess := cluster.VtctldClientProcessInstance("localhost", clusterInstance.VtctldProcess.GrpcPort, clusterInstance.TmpDirectory)
+
+	out, err := vtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=semi_sync")
+	require.NoError(t, err, out)
+
 	clusterInfo := &VtOrcClusterInfo{
-		ClusterInstance: clusterInstance,
-		Ts:              nil,
-		CellInfos:       nil,
-		lastUsedValue:   100,
+		ClusterInstance:     clusterInstance,
+		Ts:                  nil,
+		CellInfos:           nil,
+		lastUsedValue:       100,
+		VtctldClientProcess: vtctldClientProcess,
 	}
 	return clusterInfo
+}
+
+// AddSemiSyncKeyspace is used to setup a new keyspace with semi-sync.
+// It creates a keyspace with 3 tablets
+func AddSemiSyncKeyspace(t *testing.T, clusterInfo *VtOrcClusterInfo) {
+	var tablets []*cluster.Vttablet
+	keyspaceSemiSyncName := "ks2"
+	keyspace := &cluster.Keyspace{Name: keyspaceSemiSyncName}
+
+	for i := 0; i < 3; i++ {
+		tablet := clusterInfo.ClusterInstance.NewVttabletInstance("replica", 300+i, Cell1)
+		tablets = append(tablets, tablet)
+	}
+
+	shard := &cluster.Shard{Name: shardName}
+	shard.Vttablets = tablets
+
+	oldVttabletArgs := clusterInfo.ClusterInstance.VtTabletExtraArgs
+	defer func() {
+		clusterInfo.ClusterInstance.VtTabletExtraArgs = oldVttabletArgs
+	}()
+	clusterInfo.ClusterInstance.VtTabletExtraArgs = []string{
+		"--lock_tables_timeout", "5s",
+		"--disable_active_reparents",
+		"--enable_semi_sync",
+	}
+
+	// Initialize Cluster
+	err := clusterInfo.ClusterInstance.SetupCluster(keyspace, []cluster.Shard{*shard})
+	require.NoError(t, err, "Cannot launch cluster: %v", err)
+
+	//Start MySql
+	var mysqlCtlProcessList []*exec.Cmd
+	for _, shard := range clusterInfo.ClusterInstance.Keyspaces[1].Shards {
+		for _, tablet := range shard.Vttablets {
+			log.Infof("Starting MySql for tablet %v", tablet.Alias)
+			proc, err := tablet.MysqlctlProcess.StartProcess()
+			if err != nil {
+				require.NoError(t, err, "Error starting start mysql: %v", err)
+			}
+			mysqlCtlProcessList = append(mysqlCtlProcessList, proc)
+		}
+	}
+
+	// Wait for mysql processes to start
+	for _, proc := range mysqlCtlProcessList {
+		if err := proc.Wait(); err != nil {
+			require.NoError(t, err, "Error starting mysql: %v", err)
+		}
+	}
+
+	for _, tablet := range tablets {
+		require.NoError(t, err)
+		// Start the tablet
+		err = tablet.VttabletProcess.Setup()
+		require.NoError(t, err)
+	}
+
+	for _, tablet := range tablets {
+		err := tablet.VttabletProcess.WaitForTabletStatuses([]string{"SERVING", "NOT_SERVING"})
+		require.NoError(t, err)
+	}
+
+	vtctldClientProcess := cluster.VtctldClientProcessInstance("localhost", clusterInfo.ClusterInstance.VtctldProcess.GrpcPort, clusterInfo.ClusterInstance.TmpDirectory)
+	out, err := vtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceSemiSyncName, "--durability-policy=semi_sync")
+	require.NoError(t, err, out)
 }
 
 // IsSemiSyncSetupCorrectly checks that the semi-sync is setup correctly on the given vttablet

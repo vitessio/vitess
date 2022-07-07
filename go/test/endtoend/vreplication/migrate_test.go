@@ -49,6 +49,15 @@ func TestMigrate(t *testing.T) {
 	allCellNames = "zone1"
 	vc = NewVitessCluster(t, "TestMigrate", cells, mainClusterConfig)
 
+	// VDiff2 does not support this mount+migrate use case today
+	// TODO: add support for this in the tablet picker phase
+	if runVDiffsSideBySide {
+		runVDiffsSideBySide = false
+		defer func() {
+			runVDiffsSideBySide = true
+		}()
+	}
+
 	require.NotNil(t, vc)
 	defaultReplicas = 0
 	defaultRdonly = 0
@@ -117,7 +126,7 @@ func TestMigrate(t *testing.T) {
 		time.Sleep(1 * time.Second) // wait for stream to find row
 		validateCount(t, vtgateConn, "product:0", "rating", 3)
 		validateCount(t, vtgateConn, "product:0", "review", 4)
-		vdiff(t, ksWorkflow, "extcell1")
+		vdiff1(t, ksWorkflow, "extcell1")
 
 		if output, err = vc.VtctlClient.ExecuteCommandWithOutput("Migrate", "complete", ksWorkflow); err != nil {
 			t.Fatalf("Migrate command failed with %+v : %s\n", err, output)

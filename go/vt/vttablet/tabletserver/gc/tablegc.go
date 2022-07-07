@@ -112,8 +112,8 @@ type TableGC struct {
 	lifecycleStates map[schema.TableGCState]bool
 }
 
-// GCStatus published some status valus from the collector
-type GCStatus struct {
+// Status published some status valus from the collector
+type Status struct {
 	Keyspace string
 	Shard    string
 
@@ -184,7 +184,7 @@ func (collector *TableGC) Open() (err error) {
 		return err
 	}
 	defer conn.Close()
-	serverSupportsFastDrops, err := conn.SupportsFastDropTable()
+	serverSupportsFastDrops, err := conn.SupportsCapability(mysql.FastDropTableFlavorCapability)
 	if err != nil {
 		return err
 	}
@@ -633,11 +633,11 @@ func (collector *TableGC) nextTableToPurge() (tableName string, ok bool) {
 }
 
 // Status exports a status breakdown
-func (collector *TableGC) Status() *GCStatus {
+func (collector *TableGC) Status() *Status {
 	collector.purgeMutex.Lock()
 	defer collector.purgeMutex.Unlock()
 
-	status := &GCStatus{
+	status := &Status{
 		Keyspace: collector.keyspace,
 		Shard:    collector.shard,
 

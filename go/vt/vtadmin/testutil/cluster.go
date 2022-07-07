@@ -71,6 +71,10 @@ type TestClusterConfig struct {
 	Tablets []*vtadminpb.Tablet
 	// DBConfig controls the behavior of the cluster's vtsql.DB.
 	DBConfig Dbcfg
+	// Config controls certain cluster config options, primarily used to
+	// properly setup various RPC pools for different testing scenarios.
+	// Other fields (such as ID, Name, and DiscoveryImpl) are ignored.
+	Config *cluster.Config
 }
 
 const discoveryTestImplName = "vtadmin.testutil"
@@ -106,11 +110,16 @@ func BuildCluster(t testing.TB, cfg TestClusterConfig) *cluster.Cluster {
 		tablets[i] = tablet
 	}
 
-	clusterConf := cluster.Config{
-		ID:            cfg.Cluster.Id,
-		Name:          cfg.Cluster.Name,
-		DiscoveryImpl: discoveryTestImplName,
-	}.WithVtctldTestConfigOptions(vtadminvtctldclient.WithDialFunc(func(addr string, ff grpcclient.FailFast, opts ...grpc.DialOption) (vtctldclient.VtctldClient, error) {
+	var clusterConf cluster.Config
+	if cfg.Config != nil {
+		clusterConf = *cfg.Config
+	}
+
+	clusterConf.ID = cfg.Cluster.Id
+	clusterConf.Name = cfg.Cluster.Name
+	clusterConf.DiscoveryImpl = discoveryTestImplName
+
+	clusterConf = clusterConf.WithVtctldTestConfigOptions(vtadminvtctldclient.WithDialFunc(func(addr string, ff grpcclient.FailFast, opts ...grpc.DialOption) (vtctldclient.VtctldClient, error) {
 		return cfg.VtctldClient, nil
 	})).WithVtSQLTestConfigOptions(vtsql.WithDialFunc(func(c vitessdriver.Configuration) (*sql.DB, error) {
 		return sql.OpenDB(&fakevtsql.Connector{Tablets: tablets, ShouldErr: cfg.DBConfig.ShouldErr}), nil

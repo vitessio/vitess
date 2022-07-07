@@ -102,7 +102,7 @@ type (
 
 		ConnCollation() collations.ID
 
-		ExecuteLock(rs *srvtopo.ResolvedShard, query *querypb.BoundQuery) (*sqltypes.Result, error)
+		ExecuteLock(rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, lockFuncType sqlparser.LockingFuncType) (*sqltypes.Result, error)
 
 		InTransactionAndIsDML() bool
 
@@ -127,6 +127,12 @@ type (
 
 		// CanUseSetVar returns true if system_settings can use SET_VAR hint.
 		CanUseSetVar() bool
+
+		// ReleaseLock releases all the held advisory locks.
+		ReleaseLock() error
+
+		// StreamExecutePrimitiveStandalone executes the primitive in its own new autocommit session.
+		StreamExecutePrimitiveStandalone(primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(result *sqltypes.Result) error) error
 	}
 
 	//SessionActions gives primitives ability to interact with the session state
@@ -177,6 +183,13 @@ type (
 		// HasCreatedTempTable will mark the session as having created temp tables
 		HasCreatedTempTable()
 		GetWarnings() []*querypb.QueryWarning
+
+		// AnyAdvisoryLockTaken returns true of any advisory lock is taken
+		AnyAdvisoryLockTaken() bool
+		// AddAdvisoryLock adds advisory lock to the session
+		AddAdvisoryLock(name string)
+		// RemoveAdvisoryLock removes advisory lock from the session
+		RemoveAdvisoryLock(name string)
 	}
 
 	// Plan represents the execution strategy for a given query.

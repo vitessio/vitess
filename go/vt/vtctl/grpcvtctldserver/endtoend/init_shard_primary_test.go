@@ -29,7 +29,6 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver"
-	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/wrangler"
@@ -43,7 +42,6 @@ func TestInitShardPrimary(t *testing.T) {
 	ts := memorytopo.NewServer("cell1")
 	tmc := tmclient.NewTabletManagerClient()
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmc)
-	_ = reparentutil.SetDurabilityPolicy("none")
 
 	primaryDb := fakesqldb.New(t)
 	primaryDb.AddQuery("create database if not exists `vt_test_keyspace`", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
@@ -103,7 +101,6 @@ func TestInitShardPrimaryNoFormerPrimary(t *testing.T) {
 	ts := memorytopo.NewServer("cell1")
 	tmc := tmclient.NewTabletManagerClient()
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmc)
-	_ = reparentutil.SetDurabilityPolicy("none")
 
 	primaryDb := fakesqldb.New(t)
 	primaryDb.AddQuery("create database if not exists `vt_test_keyspace`", &sqltypes.Result{InsertID: 0, RowsAffected: 0})

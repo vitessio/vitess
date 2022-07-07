@@ -122,7 +122,6 @@ percona80)
         libperconaserverclient21
         percona-server-rocksdb
         percona-server-server
-        percona-server-tokudb
         percona-xtrabackup-80
     )
     ;;

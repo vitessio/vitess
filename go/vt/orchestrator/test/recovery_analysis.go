@@ -31,6 +31,9 @@ type InfoForRecoveryAnalysis struct {
 	TabletInfo                                *topodatapb.Tablet
 	PrimaryTabletInfo                         *topodatapb.Tablet
 	PrimaryTimestamp                          *time.Time
+	Keyspace                                  string
+	KeyspaceType                              int
+	DurabilityPolicy                          string
 	IsPrimary                                 int
 	IsCoPrimary                               int
 	Hostname                                  string
@@ -115,6 +118,7 @@ func (info *InfoForRecoveryAnalysis) ConvertToRowMap() sqlutils.RowMap {
 	rowMap["data_center"] = sqlutils.CellData{String: info.DataCenter, Valid: true}
 	rowMap["downtime_end_timestamp"] = sqlutils.CellData{String: info.DowntimeEndTimestamp, Valid: true}
 	rowMap["downtime_remaining_seconds"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.DowntimeRemainingSeconds), Valid: true}
+	rowMap["durability_policy"] = sqlutils.CellData{String: info.DurabilityPolicy, Valid: true}
 	rowMap["gtid_mode"] = sqlutils.CellData{String: info.GTIDMode, Valid: true}
 	rowMap["hostname"] = sqlutils.CellData{String: info.Hostname, Valid: true}
 	rowMap["is_binlog_server"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.IsBinlogServer), Valid: true}
@@ -124,6 +128,7 @@ func (info *InfoForRecoveryAnalysis) ConvertToRowMap() sqlutils.RowMap {
 	rowMap["is_last_check_valid"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.LastCheckValid), Valid: true}
 	rowMap["is_primary"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.IsPrimary), Valid: true}
 	rowMap["is_stale_binlog_coordinates"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.IsStaleBinlogCoordinates), Valid: true}
+	rowMap["keyspace_type"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.KeyspaceType), Valid: true}
 	rowMap["last_check_partial_success"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.LastCheckPartialSuccess), Valid: true}
 	rowMap["max_replica_gtid_errant"] = sqlutils.CellData{String: info.MaxReplicaGTIDErrant, Valid: true}
 	rowMap["max_replica_gtid_mode"] = sqlutils.CellData{String: info.MaxReplicaGTIDMode, Valid: true}
@@ -159,6 +164,7 @@ func (info *InfoForRecoveryAnalysis) SetValuesFromTabletInfo() {
 	info.Hostname = info.TabletInfo.MysqlHostname
 	info.Port = int(info.TabletInfo.MysqlPort)
 	info.DataCenter = info.TabletInfo.Alias.Cell
+	info.Keyspace = info.TabletInfo.Keyspace
 	info.ClusterName = fmt.Sprintf("%v:%d", info.TabletInfo.MysqlHostname, info.TabletInfo.MysqlPort)
 	info.ClusterAlias = fmt.Sprintf("%v:%d", info.TabletInfo.MysqlHostname, info.TabletInfo.MysqlPort)
 	info.ClusterDomain = fmt.Sprintf("%v:%d", info.TabletInfo.MysqlHostname, info.TabletInfo.MysqlPort)

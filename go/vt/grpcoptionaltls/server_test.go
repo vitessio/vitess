@@ -16,9 +16,10 @@ import (
 	"context"
 	"crypto/tls"
 	"net"
-	"os"
 	"testing"
 	"time"
+
+	"google.golang.org/grpc/credentials/insecure"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -48,13 +49,9 @@ type testCredentials struct {
 	server credentials.TransportCredentials
 }
 
-func createCredentials() (*testCredentials, error) {
+func createCredentials(t *testing.T) (*testCredentials, error) {
 	// Create a temporary directory.
-	certDir, err := os.MkdirTemp("", "optionaltls_grpc_test")
-	if err != nil {
-		return nil, err
-	}
-	defer os.RemoveAll(certDir)
+	certDir := t.TempDir()
 
 	certs := tlstest.CreateClientServerCertPairs(certDir)
 	cert, err := tls.LoadX509KeyPair(certs.ServerCert, certs.ServerKey)
@@ -77,7 +74,7 @@ func TestOptionalTLS(t *testing.T) {
 	testCtx, testCancel := context.WithCancel(context.Background())
 	defer testCancel()
 
-	tc, err := createCredentials()
+	tc, err := createCredentials(t)
 	if err != nil {
 		t.Fatalf("failed to create credentials %v", err)
 	}
@@ -115,7 +112,7 @@ func TestOptionalTLS(t *testing.T) {
 
 	t.Run("Plain2TLS", func(t *testing.T) {
 		for i := 0; i < 5; i++ {
-			testFunc(t, grpc.WithInsecure())
+			testFunc(t, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		}
 	})
 	t.Run("TLS2TLS", func(t *testing.T) {

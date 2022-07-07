@@ -47,8 +47,6 @@ const (
 	GlobalStr         = "global"
 	VitessMetadataStr = "vitess_metadata"
 	VariableStr       = "variable"
-	LocalStr          = "local"
-	ImplicitStr       = ""
 
 	// DDL strings.
 	CreateStr           = "create"
@@ -309,6 +307,40 @@ const (
 	LeadingTrimStr  = "leading"
 	TrailingTrimStr = "trailing"
 
+	// FrameUnitType strings
+	FrameRowsStr  = "rows"
+	FrameRangeStr = "range"
+
+	// FramePointType strings
+	CurrentRowStr         = "current row"
+	UnboundedPrecedingStr = "unbounded preceding"
+	UnboundedFollowingStr = "unbounded following"
+	ExprPrecedingStr      = "preceding"
+	ExprFollowingStr      = "following"
+
+	// ArgumentLessWindowExprType strings
+	CumeDistExprStr    = "cume_dist"
+	DenseRankExprStr   = "dense_rank"
+	PercentRankExprStr = "percent_rank"
+	RankExprStr        = "rank"
+	RowNumberExprStr   = "row_number"
+
+	// NullTreatmentType strings
+	RespectNullsStr = "respect nulls"
+	IgnoreNullsStr  = "ignore nulls"
+
+	// FromFirstLastType strings
+	FromFirstStr = "respect nulls"
+	FromLastStr  = "ignore nulls"
+
+	// FirstOrLastValueExprType strings
+	FirstValueExprStr = "first_value"
+	LastValueExprStr  = "last_value"
+
+	// FirstOrLastValueExprType strings
+	LagExprStr  = "lag"
+	LeadExprStr = "lead"
+
 	// TrimFuncType strings
 	NormalTrimStr = "trim"
 	LTrimStr      = "ltrim"
@@ -331,6 +363,25 @@ const (
 	JSONMergeStr         = "json_merge"
 	JSONMergePatchStr    = "json_merge_patch"
 	JSONMergePreserveStr = "json_merge_preserve"
+
+	// LockingFuncType strings
+	GetLockStr         = "get_lock"
+	IsFreeLockStr      = "is_free_lock"
+	IsUsedLockStr      = "is_used_lock"
+	ReleaseAllLocksStr = "release_all_locks"
+	ReleaseLockStr     = "release_lock"
+
+	// PerformanceSchemaType strings
+	FormatBytesStr       = "format_bytes"
+	FormatPicoTimeStr    = "format_pico_time"
+	PsCurrentThreadIDStr = "ps_current_thread_id"
+	PsThreadIDStr        = "ps_thread_id"
+
+	// GTIDType strings
+	GTIDSubsetStr                   = "gtid_subset"
+	GTIDSubtractStr                 = "gtid_subtract"
+	WaitForExecutedGTIDSetStr       = "wait_for_executed_gtid_set"
+	WaitUntilSQLThreadAfterGTIDSStr = "wati_until_sql_thread_after_gtids"
 
 	// LockOptionType strings
 	NoneTypeStr      = "none"
@@ -367,7 +418,7 @@ const (
 	ReadWrite
 )
 
-//Constants for Enum type - IsolationLevel
+// Constants for Enum type - IsolationLevel
 const (
 	ReadUncommitted IsolationLevel = iota
 	ReadCommitted
@@ -399,14 +450,16 @@ const (
 	RevertDDLAction
 )
 
-// Constants for Enum Type - Scope
+// Constants for scope of variables
+// See https://dev.mysql.com/doc/refman/8.0/en/set-variable.html
 const (
-	ImplicitScope Scope = iota
-	SessionScope
-	GlobalScope
-	VitessMetadataScope
-	VariableScope
-	LocalScope
+	NoScope             Scope = iota // This is only used for SET ISOLATION LEVEL
+	SessionScope                     // [SESSION | @@SESSION.| @@LOCAL. | @@] This is the default if no scope is given
+	GlobalScope                      // {GLOBAL | @@GLOBAL.} system_var_name
+	VitessMetadataScope              // @@vitess_metadata.system_var_name
+	PersistSysScope                  // {PERSIST_ONLY | @@PERSIST_ONLY.} system_var_name
+	PersistOnlySysScope              // {PERSIST_ONLY | @@PERSIST_ONLY.} system_var_name
+	VariableScope                    // @var_name   This is used for user defined variables.
 )
 
 // Constants for Enum Type - Lock
@@ -431,6 +484,54 @@ const (
 	RTrimType
 )
 
+// Constants for Enum Type - FrameUnitType
+const (
+	FrameRowsType FrameUnitType = iota
+	FrameRangeType
+)
+
+// Constants for Enum Type - FramePointType
+const (
+	CurrentRowType FramePointType = iota
+	UnboundedPrecedingType
+	UnboundedFollowingType
+	ExprPrecedingType
+	ExprFollowingType
+)
+
+// Constants for Enum Type - ArgumentLessWindowExprType
+const (
+	CumeDistExprType ArgumentLessWindowExprType = iota
+	DenseRankExprType
+	PercentRankExprType
+	RankExprType
+	RowNumberExprType
+)
+
+// Constants for Enum Type - NullTreatmentType
+const (
+	RespectNullsType NullTreatmentType = iota
+	IgnoreNullsType
+)
+
+// Constants for Enum Type - FromFirstLastType
+const (
+	FromFirstType FromFirstLastType = iota
+	FromLastType
+)
+
+// Constants for Enum Type - FirstOrLastValueExprType
+const (
+	FirstValueExprType FirstOrLastValueExprType = iota
+	LastValueExprType
+)
+
+// Constants for Enum Type - FirstOrLastValueExprType
+const (
+	LagExprType LagLeadExprType = iota
+	LeadExprType
+)
+
 // Constants for Enum Type - JSONAttributeType
 const (
 	DepthAttributeType JSONAttributeType = iota
@@ -453,6 +554,31 @@ const (
 	JSONMergeType JSONValueMergeType = iota
 	JSONMergePatchType
 	JSONMergePreserveType
+)
+
+// Constants for Enum Type - LockingFuncType
+const (
+	GetLock LockingFuncType = iota
+	IsFreeLock
+	IsUsedLock
+	ReleaseAllLocks
+	ReleaseLock
+)
+
+// Constants for Enum Type - PerformanceSchemaType
+const (
+	FormatBytesType PerformanceSchemaType = iota
+	FormatPicoTimeType
+	PsCurrentThreadIDType
+	PsThreadIDType
+)
+
+// Constants for Enum Type - GTIDType
+const (
+	GTIDSubsetType GTIDType = iota
+	GTIDSubtractType
+	WaitForExecutedGTIDSetType
+	WaitUntilSQLThreadAfterGTIDSType
 )
 
 // Constants for Enum Type - WhereType

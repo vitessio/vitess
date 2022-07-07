@@ -93,6 +93,11 @@ func (mysqlGRFlavor) resetReplicationCommands(c *Conn) []string {
 	return []string{}
 }
 
+// resetReplicationParametersCommands is part of the Flavor interface.
+func (mysqlGRFlavor) resetReplicationParametersCommands(c *Conn) []string {
+	return []string{}
+}
+
 // setReplicationPositionCommands is disabled in mysqlGRFlavor
 func (mysqlGRFlavor) setReplicationPositionCommands(pos Position) []string {
 	return []string{}
@@ -238,9 +243,27 @@ func (mysqlGRFlavor) baseShowTablesWithSizes() string {
 	return TablesWithSize80
 }
 
-// supportsFastDropTable is part of the Flavor interface.
-func (mysqlGRFlavor) supportsFastDropTable(c *Conn) (bool, error) {
-	return false, nil
+// supportsCapability is part of the Flavor interface.
+func (mysqlGRFlavor) supportsCapability(serverVersion string, capability FlavorCapability) (bool, error) {
+	switch capability {
+	case InstantDDLFlavorCapability,
+		InstantAddLastColumnFlavorCapability,
+		InstantAddDropVirtualColumnFlavorCapability,
+		InstantChangeColumnDefaultFlavorCapability:
+		return ServerVersionAtLeast(serverVersion, 8, 0, 0)
+	case InstantAddDropColumnFlavorCapability:
+		return ServerVersionAtLeast(serverVersion, 8, 0, 29)
+	case TransactionalGtidExecutedFlavorCapability:
+		return ServerVersionAtLeast(serverVersion, 8, 0, 17)
+	case FastDropTableFlavorCapability:
+		return ServerVersionAtLeast(serverVersion, 8, 0, 23)
+	case MySQLJSONFlavorCapability:
+		return ServerVersionAtLeast(serverVersion, 5, 7, 0)
+	case MySQLUpgradeInServerFlavorCapability:
+		return ServerVersionAtLeast(serverVersion, 8, 0, 16)
+	default:
+		return false, nil
+	}
 }
 
 func init() {

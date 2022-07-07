@@ -52,7 +52,7 @@ func transformVindexPlan(ctx *plancontext.PlanningContext, op *physical.Vindex) 
 	for _, col := range op.Columns {
 		_, err := plan.SupplyProjection(&sqlparser.AliasedExpr{
 			Expr: col,
-			As:   sqlparser.ColIdent{},
+			As:   sqlparser.IdentifierCI{},
 		}, false)
 		if err != nil {
 			return nil, err

@@ -309,7 +309,7 @@ func (r *Route) haveMatchingVindex(
 				// single column vindex - just add the option
 				routeOpcode := opcode(v.ColVindex)
 				vindex := vfunc(v.ColVindex)
-				if vindex == nil {
+				if vindex == nil || routeOpcode == engine.Scatter {
 					continue
 				}
 				v.Options = append(v.Options, &VindexOption{
@@ -711,6 +711,12 @@ func (r *Route) planIsExpr(ctx *plancontext.PlanningContext, node *sqlparser.IsE
 	if val == nil {
 		return false
 	}
+	opcodeF := func(vindex *vindexes.ColumnVindex) engine.Opcode {
+		if _, ok := vindex.Vindex.(vindexes.Lookup); ok {
+			return engine.Scatter
+		}
+		return equalOrEqualUnique(vindex)
+	}
 
-	return r.haveMatchingVindex(ctx, node, vdValue, column, val, equalOrEqualUnique, justTheVindex)
+	return r.haveMatchingVindex(ctx, node, vdValue, column, val, opcodeF, justTheVindex)
 }

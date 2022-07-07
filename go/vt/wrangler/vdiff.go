@@ -226,7 +226,8 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflowName, sou
 		oneFilter = bls.Filter
 		break
 	}
-	schm, err := schematools.GetSchema(ctx, wr.ts, wr.tmc, oneTarget.GetPrimary().Alias, nil, nil, false)
+	req := &tabletmanagerdatapb.GetSchemaRequest{}
+	schm, err := schematools.GetSchema(ctx, wr.ts, wr.tmc, oneTarget.GetPrimary().Alias, req)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "GetSchema")
 	}
@@ -395,7 +396,7 @@ func (df *vdiff) buildVDiffPlan(ctx context.Context, filter *binlogdatapb.Filter
 		query := rule.Filter
 		if rule.Filter == "" || key.IsKeyRange(rule.Filter) {
 			buf := sqlparser.NewTrackedBuffer(nil)
-			buf.Myprintf("select * from %v", sqlparser.NewTableIdent(table.Name))
+			buf.Myprintf("select * from %v", sqlparser.NewIdentifierCS(table.Name))
 			query = buf.String()
 		}
 		include := true
@@ -453,7 +454,7 @@ func findPKs(table *tabletmanagerdatapb.TableDefinition, targetSelect *sqlparser
 			return nil, fmt.Errorf("column %v not found in table %v", pk, table.Name)
 		}
 		orderby = append(orderby, &sqlparser.Order{
-			Expr:      &sqlparser.ColName{Name: sqlparser.NewColIdent(pk)},
+			Expr:      &sqlparser.ColName{Name: sqlparser.NewIdentifierCI(pk)},
 			Direction: sqlparser.AscOrder,
 		})
 	}
@@ -480,7 +481,7 @@ func (df *vdiff) adjustForSourceTimeZone(targetSelectExprs sqlparser.SelectExprs
 				fieldType := fields[colName]
 				if fieldType == querypb.Type_DATETIME {
 					convertTZFuncExpr = &sqlparser.FuncExpr{
-						Name: sqlparser.NewColIdent("convert_tz"),
+						Name: sqlparser.NewIdentifierCI("convert_tz"),
 						Exprs: sqlparser.SelectExprs{
 							expr,
 							&sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral(df.targetTimeZone)},
@@ -542,7 +543,7 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 		case *sqlparser.StarExpr:
 			// If it's a '*' expression, expand column list from the schema.
 			for _, fld := range table.Fields {
-				aliased := &sqlparser.AliasedExpr{Expr: &sqlparser.ColName{Name: sqlparser.NewColIdent(fld.Name)}}
+				aliased := &sqlparser.AliasedExpr{Expr: &sqlparser.ColName{Name: sqlparser.NewIdentifierCI(fld.Name)}}
 				sourceSelect.SelectExprs = append(sourceSelect.SelectExprs, aliased)
 				targetSelect.SelectExprs = append(targetSelect.SelectExprs, aliased)
 			}
@@ -562,8 +563,8 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 			targetSelect.SelectExprs = append(targetSelect.SelectExprs, &sqlparser.AliasedExpr{Expr: targetCol})
 
 			// Check if it's an aggregate expression
-			if expr, ok := selExpr.Expr.(*sqlparser.FuncExpr); ok {
-				switch fname := expr.Name.Lowered(); fname {
+			if expr, ok := selExpr.Expr.(sqlparser.AggrFunc); ok {
+				switch fname := strings.ToLower(expr.AggrName()); fname {
 				case "count", "sum":
 					// this will only work as long as aggregates can be pushed down to tablets
 					// this won't work: "select count(*) from (select id from t limit 1)"
@@ -607,7 +608,7 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 	targetSelect.From = sqlparser.TableExprs{
 		&sqlparser.AliasedTableExpr{
 			Expr: &sqlparser.TableName{
-				Name: sqlparser.NewTableIdent(table.Name),
+				Name: sqlparser.NewIdentifierCS(table.Name),
 			},
 		},
 	}
@@ -998,7 +999,7 @@ func (sm *shardStreamer) StreamExecute(vcursor engine.VCursor, bindVars map[stri
 }
 
 // humanInt formats large integers to a value easier to the eye: 100000=100k 1e12=1b 234000000=234m ...
-func humanInt(n int64) string {
+func humanInt(n int64) string { // nolint
 	var val float64
 	var unit string
 	switch true {
