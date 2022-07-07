@@ -18,7 +18,6 @@ package vdiff
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -50,11 +49,6 @@ const (
 	UnknownState    VDiffState = ""
 	TimestampFormat            = "2006-01-02 15:04:05"
 )
-
-type Error struct {
-	Code    int
-	Message string
-}
 
 type controller struct {
 	id              int64 // id from row in _vt.vdiff
@@ -136,8 +130,8 @@ func (ct *controller) run(ctx context.Context) {
 	row := qr.Named().Row()
 	state := VDiffState(strings.ToLower(row["state"].ToString()))
 	switch state {
-	case PendingState:
-		log.Infof("Starting vdiff")
+	case PendingState, ErrorState:
+		log.Infof("[Re]starting vdiff from initial state of %s", string(state))
 		if err := ct.start(ctx, dbClient); err != nil {
 			log.Errorf("run() failed: %s", err)
 			insertVDiffLog(ctx, dbClient, ct.id, fmt.Sprintf("Error: %s", err))
@@ -169,15 +163,7 @@ func (ct *controller) updateState(dbClient binlogplayer.DBClient, state VDiffSta
 	default:
 	}
 	if err != nil {
-		// We want to retain any error code so that we can later determine if this is a
-		// retryable error or not. We don't want to indefinitely retry when it's clearly
-		// NOT an ephemeral error that can be addressed by retrying.
-		myerr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
-		lastErr, merr := json.Marshal(Error{Code: myerr.Num, Message: myerr.Message})
-		if merr != nil {
-			return fmt.Errorf("failed to marshal error from %v: %v ", err, merr)
-		}
-		extraCols += fmt.Sprintf(", last_error = %s", encodeString(string(lastErr)))
+		extraCols += fmt.Sprintf(", last_error = %s", encodeString(err.Error()))
 	}
 	query := fmt.Sprintf(sqlUpdateVDiffState, encodeString(string(state)), extraCols, ct.id)
 	if _, err := withDDL.Exec(ct.vde.ctx, query, dbClient.ExecuteFetch, dbClient.ExecuteFetch); err != nil {

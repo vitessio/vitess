@@ -97,12 +97,13 @@ const (
 	// sqlUpdateVDiffState has a penultimate placeholder for any additional columns you want to update, e.g. `, foo = 1`
 	sqlUpdateVDiffState     = "update _vt.vdiff set state = %s %s where id = %d"
 	sqlGetVReplicationEntry = "select * from _vt.vreplication %s"
-	sqlGetPendingVDiffs     = "select * from _vt.vdiff where state = 'pending'"
+	sqlGetVDiffsToExec      = "select * from _vt.vdiff where state in ('pending', 'error')"
 	sqlGetVDiffID           = "select id as id from _vt.vdiff where vdiff_uuid = %s"
 	sqlGetAllVDiffs         = "select * from _vt.vdiff order by id desc"
 
 	sqlNewVDiffTable = "insert into _vt.vdiff_table(vdiff_id, table_name, state, table_rows) values(%d, %s, 'pending', %d)"
-	sqlGetVDiffTable = `select vdt.lastpk as lastpk from _vt.vdiff as vd inner join _vt.vdiff_table as vdt on (vd.id = vdt.vdiff_id)
+	sqlGetVDiffTable = `select vdt.lastpk as lastpk, vdt.rows_compared as rows_compared, vdt.mismatch as mismatch, vdt.report as report
+						from _vt.vdiff as vd inner join _vt.vdiff_table as vdt on (vd.id = vdt.vdiff_id)
 						where vdt.vdiff_id = %d and vdt.table_name = %s`
 	sqlUpdateTableRows       = "update _vt.vdiff_table set table_rows = %d where vdiff_id = %d and table_name = %s"
 	sqlUpdateTableProgress   = "update _vt.vdiff_table set rows_compared = %d, lastpk = %s where vdiff_id = %d and table_name = %s"

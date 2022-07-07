@@ -19,10 +19,12 @@ package vdiff
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	"vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
@@ -107,7 +109,7 @@ func (vde *Engine) Open(ctx context.Context, vre *vreplication.Engine) {
 }
 
 func (vde *Engine) openLocked(ctx context.Context) error {
-	rows, err := vde.getPendingVDiffs(ctx)
+	rows, err := vde.getVDiffsToExec(ctx)
 	if err != nil {
 		return err
 	}
@@ -173,8 +175,28 @@ func (vde *Engine) initControllers(qr *sqltypes.Result) error {
 		if err := json.Unmarshal([]byte(row.AsString("options", "{}")), options); err != nil {
 			return err
 		}
-		if err := vde.addController(row, options); err != nil {
-			return err
+		execIt := false
+		state := VDiffState(row.AsString("state", ""))
+		switch state {
+		case PendingState:
+			execIt = true
+		case ErrorState:
+			log.Infof("VDiff engine: found a vdiff stream in error state: %+v", row)
+			if options.GetCoreOptions().AutoRetry {
+				log.Infof("VDiff engine: auto retry is enabled")
+				// let's only bother if we had a retry worthy error
+				if lastError := mysql.NewSQLErrorFromError(errors.New(row.AsString("last_error", ""))); mysql.IsEphemeralError(lastError) {
+					log.Infof("VDiff engine: and its a retry worthy error")
+					execIt = true
+				}
+			}
+		default:
+		}
+
+		if execIt {
+			if err := vde.addController(row, options); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -225,13 +247,13 @@ func (vde *Engine) getDBClient(isAdmin bool) binlogplayer.DBClient {
 	}
 	return vde.dbClientFactoryFiltered()
 }
-func (vde *Engine) getPendingVDiffs(ctx context.Context) (*sqltypes.Result, error) {
+func (vde *Engine) getVDiffsToExec(ctx context.Context) (*sqltypes.Result, error) {
 	dbClient := vde.dbClientFactoryFiltered()
 	if err := dbClient.Connect(); err != nil {
 		return nil, err
 	}
 	defer dbClient.Close()
-	qr, err := withDDL.ExecIgnore(ctx, sqlGetPendingVDiffs, dbClient.ExecuteFetch)
+	qr, err := withDDL.ExecIgnore(ctx, sqlGetVDiffsToExec, dbClient.ExecuteFetch)
 	if err != nil {
 		return nil, err
 	}

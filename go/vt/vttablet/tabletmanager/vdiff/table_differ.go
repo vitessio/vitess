@@ -405,14 +405,35 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare *int64, debug, on
 	}
 	defer dbClient.Close()
 
+	// We need to continue were we left off when appropriate.
+	// This can be an auto-retry on error, or a manual retry (vs resume, which resets the state).
+	// Otherwise the existing state will be empty and we start from scratch.
+	query := fmt.Sprintf(sqlGetVDiffTable, td.wd.ct.id, encodeString(td.table.Name))
+	log.Infof("Getting VDiff table %s status with %s", td.table.Name, query)
+	cs, err := dbClient.ExecuteFetch(query, 1)
+	if err != nil {
+		return nil, err
+	}
+	if len(cs.Rows) == 0 {
+		return nil, fmt.Errorf("no state found for vdiff table %s for vdiff_id %d", td.table.Name, td.wd.ct.id)
+	} else if len(cs.Rows) > 1 {
+		return nil, fmt.Errorf("invalid state found for vdiff table %s (multiple records) for vdiff_id %d", td.table.Name, td.wd.ct.id)
+	}
+	curState := cs.Named().Row()
+	log.Infof("VDiff table %s has current state %v (%d rows)", td.table.Name, cs, len(cs.Rows))
+	mismatch := curState.AsBool("mismatch", false)
+	dr := &DiffReport{}
+	if err = json.Unmarshal(curState.AsBytes("report", nil), dr); err != nil {
+		return nil, err
+	}
+	log.Infof("Unmarshalled DiffReport: %v", dr)
+	dr.TableName = td.table.Name
+
 	sourceExecutor := newPrimitiveExecutor(ctx, td.sourcePrimitive, "source")
 	targetExecutor := newPrimitiveExecutor(ctx, td.targetPrimitive, "target")
-	dr := &DiffReport{TableName: td.table.Name}
 	var sourceRow, lastProcessedRow, targetRow []sqltypes.Value
-	var err error
 	advanceSource := true
 	advanceTarget := true
-	mismatch := false
 
 	// Save our progress when we finish the run
 	defer func() {
