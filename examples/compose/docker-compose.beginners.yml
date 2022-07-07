@@ -144,7 +144,7 @@ services:
     depends_on:
       - vttablet100
     environment:
-      - KEYSPACES=commerce
+      - KEYSPACES=$KEYSPACE
       - GRPC_PORT=15999
     image: vitess/lite:${VITESS_TAG:-latest}
     volumes:
