@@ -753,12 +753,12 @@ func generateVtorc(dbInfo externalDbInfo, keyspaceInfoMap map[string]keyspaceInf
 		externalDb = "1"
 	}
 
-    var depends []string
-    for _, keyspaceData := range keyspaceInfoMap {
-        depends = append(depends, "set_keyspace_durability_policy_" + keyspaceData.keyspace)
-    }
-    depends = append(depends, "vtctld")
-    dependsOn := "depends_on: [" + strings.Join(depends, ", ") + "]"
+	var depends []string
+	for _, keyspaceData := range keyspaceInfoMap {
+		depends = append(depends, "set_keyspace_durability_policy_"+keyspaceData.keyspace)
+	}
+	depends = append(depends, "vtctld")
+	dependsOn := "depends_on: [" + strings.Join(depends, ", ") + "]"
 
 	return fmt.Sprintf(`
 - op: add
@@ -808,7 +808,7 @@ func generateSetKeyspaceDurabilityPolicy(
 	// Formatting for list in yaml
 	var aliases []string
 	for _, tabletId := range tabletAliases {
-		aliases = append(aliases, "vttablet" + tabletId)
+		aliases = append(aliases, "vttablet"+tabletId)
 	}
 	dependsOn := "depends_on: [" + strings.Join(aliases, ", ") + "]"
 
