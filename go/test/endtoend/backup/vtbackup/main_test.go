@@ -25,7 +25,6 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/test/endtoend/sharding/initialsharding"
 	"vitess.io/vitess/go/vt/log"
 )
 
@@ -87,11 +86,11 @@ func TestMain(m *testing.M) {
 
 		// Create a new init_db.sql file that sets up passwords for all users.
 		// Then we use a db-credentials-file with the passwords.
-		dbCredentialFile = initialsharding.WriteDbCredentialToTmp(localCluster.TmpDirectory)
+		dbCredentialFile = cluster.WriteDbCredentialToTmp(localCluster.TmpDirectory)
 		initDb, _ := os.ReadFile(path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"))
 		sql := string(initDb)
 		newInitDBFile = path.Join(localCluster.TmpDirectory, "init_db_with_passwords.sql")
-		sql = sql + initialsharding.GetPasswordUpdateSQL(localCluster)
+		sql = sql + cluster.GetPasswordUpdateSQL(localCluster)
 		err = os.WriteFile(newInitDBFile, []byte(sql), 0666)
 		if err != nil {
 			return 1, err
