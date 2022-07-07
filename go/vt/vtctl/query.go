@@ -27,11 +27,9 @@ import (
 
 	"google.golang.org/protobuf/encoding/prototext"
 
-	"vitess.io/vitess/go/cmd/vtctldclient/cli"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/grpcclient"
-	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
@@ -444,20 +442,4 @@ func commandVtTabletStreamHealth(ctx context.Context, wr *wrangler.Wrangler, sub
 		return errors.New("stream ended early")
 	}
 	return nil
-}
-
-// loggerWriter turns a Logger into a Writer by decorating it with a Write()
-// method that sends everything to Logger.Printf().
-type loggerWriter struct {
-	logutil.Logger
-}
-
-func (lw loggerWriter) Write(p []byte) (int, error) {
-	lw.Logger.Printf("%s", p)
-	return len(p), nil
-}
-
-// printQueryResult will pretty-print a QueryResult to the logger.
-func printQueryResult(writer io.Writer, qr *sqltypes.Result) {
-	cli.WriteQueryResultTable(writer, qr)
 }
