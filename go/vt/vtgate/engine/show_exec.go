@@ -17,6 +17,8 @@ limitations under the License.
 package engine
 
 import (
+	"context"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -45,8 +47,8 @@ func (s *ShowExec) GetTableName() string {
 	return ""
 }
 
-func (s *ShowExec) GetFields(vcursor VCursor, bindVars map[string]*query.BindVariable) (*sqltypes.Result, error) {
-	qr, err := s.TryExecute(vcursor, bindVars, true)
+func (s *ShowExec) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*query.BindVariable) (*sqltypes.Result, error) {
+	qr, err := s.TryExecute(ctx, vcursor, bindVars, true)
 	if err != nil {
 		return nil, err
 	}
@@ -54,12 +56,12 @@ func (s *ShowExec) GetFields(vcursor VCursor, bindVars map[string]*query.BindVar
 	return qr, nil
 }
 
-func (s *ShowExec) TryExecute(vcursor VCursor, _ map[string]*query.BindVariable, _ bool) (*sqltypes.Result, error) {
-	return vcursor.ShowExec(s.Command, s.ShowFilter)
+func (s *ShowExec) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	return vcursor.ShowExec(ctx, s.Command, s.ShowFilter)
 }
 
-func (s *ShowExec) TryStreamExecute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	qr, err := s.TryExecute(vcursor, bindVars, wantfields)
+func (s *ShowExec) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	qr, err := s.TryExecute(ctx, vcursor, bindVars, wantfields)
 	if err != nil {
 		return err
 	}

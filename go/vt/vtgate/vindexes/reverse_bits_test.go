@@ -17,6 +17,7 @@ limitations under the License.
 package vindexes
 
 import (
+	"context"
 	"reflect"
 	"testing"
 
@@ -45,7 +46,7 @@ func TestReverseBitsInfo(t *testing.T) {
 }
 
 func TestReverseBitsMap(t *testing.T) {
-	got, err := reverseBits.Map(nil, []sqltypes.Value{
+	got, err := reverseBits.Map(context.Background(), nil, []sqltypes.Value{
 		sqltypes.NewInt64(1),
 		sqltypes.NewInt64(2),
 		sqltypes.NewInt64(3),
@@ -72,7 +73,7 @@ func TestReverseBitsMap(t *testing.T) {
 func TestReverseBitsVerify(t *testing.T) {
 	ids := []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}
 	ksids := [][]byte{[]byte("\x80\x00\x00\x00\x00\x00\x00\x00"), []byte("\x80\x00\x00\x00\x00\x00\x00\x00")}
-	got, err := reverseBits.Verify(nil, ids, ksids)
+	got, err := reverseBits.Verify(context.Background(), nil, ids, ksids)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,7 +83,7 @@ func TestReverseBitsVerify(t *testing.T) {
 	}
 
 	// Failure test
-	_, err = reverseBits.Verify(nil, []sqltypes.Value{sqltypes.NewVarBinary("aa")}, [][]byte{nil})
+	_, err = reverseBits.Verify(context.Background(), nil, []sqltypes.Value{sqltypes.NewVarBinary("aa")}, [][]byte{nil})
 	require.EqualError(t, err, "could not parse value: 'aa'")
 }
 
