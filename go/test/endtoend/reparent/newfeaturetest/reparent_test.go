@@ -18,6 +18,7 @@ package newfeaturetest
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"testing"
 	"time"
@@ -213,4 +214,97 @@ func rowNumberFromPosition(pos string) int {
 	rowNumStr := pos[len(pos)-4:]
 	rowNum, _ := strconv.Atoi(rowNumStr)
 	return rowNum
+}
+
+func TestDemotePrimarySemiSyncHang(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	clusterInstance := utils.SetupReparentCluster(t, true)
+
+	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
+	primary := tablets[0]
+	// stop all the tablets other than the primary tablet
+	for _, tablet := range tablets {
+		if tablet != primary {
+			utils.StopTablet(t, tablet, true)
+		}
+	}
+
+	// Try and insert data into the primary, which should block since
+	// there are no semi-sync ackers
+	insertStatement := "insert into vt_insert_test values (2022, 'ml')"
+	go func() {
+		utils.RunSQLIgnoreError(context.Background(), t, insertStatement, primary)
+	}()
+
+	// Sleep here to be sure that the previous insert is stuck before proceeding
+	time.Sleep(1 * time.Second)
+
+	// Also try and set the primary to super read only, but this too
+	// will block because of the preceding statement holding a lock in MySQL
+	// Please look at the MySQL bug https://bugs.mysql.com/bug.php?id=104012 for more information
+	superReadOnlyStatement := "set global super_read_only=ON"
+	go func() {
+		utils.RunSQL(context.Background(), t, superReadOnlyStatement, primary)
+	}()
+
+	// Sleep here to be sure that the previous call to set super read only is stuck before proceeding
+	time.Sleep(1 * time.Second)
+
+	// Verify that both the statements are stuck
+	processListRes := utils.RunSQL(context.Background(), t, "show processlist", primary)
+	insertWaiting := false
+	insertID := 0
+	readOnlyWaiting := false
+	for _, row := range processListRes.Rows {
+		if row[6].ToString() == "Waiting for semi-sync ACK from slave" && row[7].ToString() == insertStatement {
+			id, err := row[0].ToInt64()
+			require.NoError(t, err)
+			insertID = int(id)
+			insertWaiting = true
+		}
+		if row[6].ToString() == "Waiting for global read lock" && row[7].ToString() == superReadOnlyStatement {
+			readOnlyWaiting = true
+		}
+	}
+	require.True(t, insertWaiting)
+	require.True(t, readOnlyWaiting)
+
+	// Now we kill the query that was stuck
+	utils.RunSQL(context.Background(), t, fmt.Sprintf("kill %d", insertID), primary)
+
+	// We verify again that the queries are still stuck
+	processListRes = utils.RunSQL(context.Background(), t, "show processlist", primary)
+	insertWaiting = false
+	readOnlyWaiting = false
+	for _, row := range processListRes.Rows {
+		if row[6].ToString() == "Waiting for semi-sync ACK from slave" && row[7].ToString() == insertStatement {
+			insertWaiting = true
+		}
+		if row[6].ToString() == "Waiting for global read lock" && row[7].ToString() == superReadOnlyStatement {
+			readOnlyWaiting = true
+		}
+	}
+	require.True(t, insertWaiting)
+	require.True(t, readOnlyWaiting)
+
+	// Now we will turn off semi-sync
+	utils.RunSQL(context.Background(), t, "set global rpl_semi_sync_master_enabled = off", primary)
+	// Now the queries shouldn't be stuck anymore
+	processListRes = utils.RunSQL(context.Background(), t, "show processlist", primary)
+	insertWaiting = false
+	readOnlyWaiting = false
+	for _, row := range processListRes.Rows {
+		if row[6].ToString() == "Waiting for semi-sync ACK from slave" && row[7].ToString() == insertStatement {
+			insertWaiting = true
+		}
+		if row[6].ToString() == "Waiting for global read lock" && row[7].ToString() == superReadOnlyStatement {
+			readOnlyWaiting = true
+		}
+	}
+	require.False(t, insertWaiting)
+	require.False(t, readOnlyWaiting)
+
+	// Also verify that the query doesn't get rolled-forward and we don't see any data in the table
+	res := utils.RunSQL(context.Background(), t, "select * from vt_insert_test", primary)
+	require.Len(t, res.Rows, 0)
 }

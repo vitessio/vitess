@@ -348,10 +348,25 @@ func RunSQL(ctx context.Context, t *testing.T, sql string, tablet *cluster.Vttab
 	return execute(t, conn, sql)
 }
 
+// RunSQLIgnoreError is used to run a SQL command directly on the MySQL instance of a vttablet
+func RunSQLIgnoreError(ctx context.Context, t *testing.T, sql string, tablet *cluster.Vttablet) *sqltypes.Result {
+	tabletParams := getMysqlConnParam(tablet)
+	conn, err := mysql.Connect(ctx, &tabletParams)
+	require.Nil(t, err)
+	defer conn.Close()
+	return executeIgnoreError(t, conn, sql)
+}
+
 func execute(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 	t.Helper()
 	qr, err := conn.ExecuteFetch(query, 1000, true)
-	require.Nil(t, err)
+	require.NoError(t, err)
+	return qr
+}
+
+func executeIgnoreError(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
+	t.Helper()
+	qr, _ := conn.ExecuteFetch(query, 1000, true)
 	return qr
 }
 
