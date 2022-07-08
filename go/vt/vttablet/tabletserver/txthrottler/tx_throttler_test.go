@@ -17,7 +17,7 @@ limitations under the License.
 package txthrottler
 
 // Commands to generate the mocks for this test.
-//go:generate mockgen -destination mock_healthcheck_test.go -package txthrottler -mock_names "LegacyHealthCheck=MockHealthCheck" vitess.io/vitess/go/vt/discovery LegacyHealthCheck
+//go:generate mockgen -destination mock_healthcheck_test.go -package txthrottler -mock_names "HealthCheck=MockHealthCheck" vitess.io/vitess/go/vt/discovery HealthCheck
 //go:generate mockgen -destination mock_throttler_test.go -package txthrottler vitess.io/vitess/go/vt/vttablet/tabletserver/txthrottler ThrottlerInterface
 //go:generate mockgen -destination mock_topology_watcher_test.go -package txthrottler vitess.io/vitess/go/vt/vttablet/tabletserver/txthrottler TopologyWatcherInterface
 
@@ -61,17 +61,15 @@ func TestEnabledThrottler(t *testing.T) {
 	ts := memorytopo.NewServer("cell1", "cell2")
 
 	mockHealthCheck := NewMockHealthCheck(mockCtrl)
-	var hcListener discovery.LegacyHealthCheckStatsListener
-	hcCall1 := mockHealthCheck.EXPECT().SetListener(gomock.Any(), false /* sendDownEvents */)
-	hcCall1.Do(func(listener discovery.LegacyHealthCheckStatsListener, sendDownEvents bool) {
-		// Record the listener we're given.
-		hcListener = listener
-	})
+	hcCall1 := mockHealthCheck.EXPECT().Subscribe()
+	hcCall1.Do(func() {})
 	hcCall2 := mockHealthCheck.EXPECT().Close()
 	hcCall2.After(hcCall1)
-	healthCheckFactory = func() discovery.LegacyHealthCheck { return mockHealthCheck }
+	healthCheckFactory = func(topoServer *topo.Server, cell string, cellsToWatch []string) discovery.HealthCheck {
+		return mockHealthCheck
+	}
 
-	topologyWatcherFactory = func(topoServer *topo.Server, tr discovery.LegacyTabletRecorder, cell, keyspace, shard string, refreshInterval time.Duration, topoReadConcurrency int) TopologyWatcherInterface {
+	topologyWatcherFactory = func(topoServer *topo.Server, hc discovery.HealthCheck, cell, keyspace, shard string, refreshInterval time.Duration, topoReadConcurrency int) TopologyWatcherInterface {
 		if ts != topoServer {
 			t.Errorf("want: %v, got: %v", ts, topoServer)
 		}
@@ -100,7 +98,7 @@ func TestEnabledThrottler(t *testing.T) {
 	call0 := mockThrottler.EXPECT().UpdateConfiguration(gomock.Any(), true /* copyZeroValues */)
 	call1 := mockThrottler.EXPECT().Throttle(0)
 	call1.Return(0 * time.Second)
-	tabletStats := &discovery.LegacyTabletStats{
+	tabletStats := &discovery.TabletHealth{
 		Target: &querypb.Target{
 			TabletType: topodatapb.TabletType_REPLICA,
 		},
@@ -132,14 +130,14 @@ func TestEnabledThrottler(t *testing.T) {
 	if result := throttler.Throttle(); result != false {
 		t.Errorf("want: false, got: %v", result)
 	}
-	hcListener.StatsUpdate(tabletStats)
-	rdonlyTabletStats := &discovery.LegacyTabletStats{
+	throttler.state.StatsUpdate(tabletStats)
+	rdonlyTabletStats := &discovery.TabletHealth{
 		Target: &querypb.Target{
 			TabletType: topodatapb.TabletType_RDONLY,
 		},
 	}
 	// This call should not be forwarded to the go/vt/throttler.Throttler object.
-	hcListener.StatsUpdate(rdonlyTabletStats)
+	throttler.state.StatsUpdate(rdonlyTabletStats)
 	// The second throttle call should reject.
 	if result := throttler.Throttle(); result != true {
 		t.Errorf("want: true, got: %v", result)

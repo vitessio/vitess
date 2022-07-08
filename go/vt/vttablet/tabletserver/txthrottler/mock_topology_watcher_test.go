@@ -33,6 +33,18 @@ func (m *MockTopologyWatcherInterface) EXPECT() *MockTopologyWatcherInterfaceMoc
 	return m.recorder
 }
 
+// Start mocks base method.
+func (m *MockTopologyWatcherInterface) Start() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Start")
+}
+
+// Start indicates an expected call of Start.
+func (mr *MockTopologyWatcherInterfaceMockRecorder) Start() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Start", reflect.TypeOf((*MockTopologyWatcherInterface)(nil).Start))
+}
+
 // Stop mocks base method.
 func (m *MockTopologyWatcherInterface) Stop() {
 	m.ctrl.T.Helper()
@@ -43,18 +55,4 @@ func (m *MockTopologyWatcherInterface) Stop() {
 func (mr *MockTopologyWatcherInterfaceMockRecorder) Stop() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Stop", reflect.TypeOf((*MockTopologyWatcherInterface)(nil).Stop))
-}
-
-// WaitForInitialTopology mocks base method.
-func (m *MockTopologyWatcherInterface) WaitForInitialTopology() error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "WaitForInitialTopology")
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// WaitForInitialTopology indicates an expected call of WaitForInitialTopology.
-func (mr *MockTopologyWatcherInterfaceMockRecorder) WaitForInitialTopology() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WaitForInitialTopology", reflect.TypeOf((*MockTopologyWatcherInterface)(nil).WaitForInitialTopology))
 }
