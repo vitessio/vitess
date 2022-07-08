@@ -45,9 +45,6 @@ var (
 )
 
 func init() {
-	// this should be the first query. This will disable replication
-	// since we close the connection in the end so we don't need to reset it back.
-
 	SchemaInitializer = newSchemaInitializer()
 }
 func newSchemaInitializer() *schemaInitializer {
@@ -139,7 +136,7 @@ func (si *schemaInitializer) InitializeSchema(conn *Conn) []error {
 	return errors
 }
 
-// PrintSchema if for debugging purpose
+// getAllRegisteredFunctions is for debugging purpose
 func (si *schemaInitializer) getAllRegisteredFunctions() []string {
 	var functions []string
 	for _, f := range si.funcs {

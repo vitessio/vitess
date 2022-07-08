@@ -1012,7 +1012,6 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 	if err == nil && qo.cachePlan() && sqlparser.CachePlan(statement) {
 		e.plans.Set(planKey, plan)
 	}
-
 	return plan, err
 }
 

@@ -180,9 +180,24 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 
 	// Check whether we're going to restore before changing to RESTORE type,
 	// so we keep our PrimaryTermStartTime (if any) if we aren't actually restoring.
-	_, err = mysqlctl.ShouldRestore(ctx, params)
+	ok, err := mysqlctl.ShouldRestore(ctx, params)
 	if err != nil {
 		return err
+	}
+	if !ok {
+		params.Logger.Infof("Attempting to restore, but mysqld already contains data. Assuming vttablet was just restarted.")
+		log.Infof("initialize schema >> mysqld already contains data")
+		if errors := tm.initSchema(ctx); errors != nil {
+			log.Infof("Error in executing following schema changes")
+			for err := range errors {
+				log.Infof("%v", err)
+			}
+		}
+		// (NOTE:@ajm188) the legacy behavior is to always populate the metadata
+		// tables in this branch. Since tm.MetadataManager could be nil, we
+		// create a new instance for use here.
+		metadataManager := &mysqlctl.MetadataManager{}
+		return metadataManager.PopulateMetadataTables(params.Mysqld, params.LocalMetadata, params.DbName)
 	}
 	// We should not become primary after restore, because that would incorrectly
 	// start a new primary term, and it's likely our data dir will be out of date.

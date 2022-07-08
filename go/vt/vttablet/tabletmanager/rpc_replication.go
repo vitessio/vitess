@@ -254,7 +254,6 @@ func (tm *TabletManager) ResetReplication(ctx context.Context) error {
 // InitPrimary enables writes and returns the replication position.
 func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string, error) {
 	log.Infof("InitPrimary")
-
 	if err := tm.lock(ctx); err != nil {
 		return "", err
 	}
@@ -291,7 +290,6 @@ func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string
 	if err := tm.fixSemiSync(topodatapb.TabletType_PRIMARY, convertBoolToSemiSyncAction(semiSync)); err != nil {
 		return "", err
 	}
-	log.Info("out of init primary")
 	return mysql.EncodePosition(pos), nil
 }
 

@@ -237,8 +237,6 @@ func (vre *Engine) openLocked(ctx context.Context) error {
 	return nil
 }
 
-// We plan to refactor so that we remove WithDDL, just define the list of DDLs required to reach the desired
-// and execute vreplication queries normally.
 func InitVReplicationSchema() error {
 	log.Info("SchemaInitializer: initializing vreplication engine...")
 	f := func(conn *mysql.Conn) error {

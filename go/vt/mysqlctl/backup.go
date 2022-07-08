@@ -284,6 +284,7 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 	}
 
 	metadataManager := &MetadataManager{}
+
 	if len(bhs) == 0 {
 		// There are no backups (not even broken/incomplete ones).
 		params.Logger.Errorf("no backup to restore on BackupStorage for directory %v. Starting up empty.", backupDir)
@@ -301,10 +302,12 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 		params.Logger.Infof("initialize schema >> since no valid backup")
 		if errors := initSchema(ctx, params); errors != nil {
 			log.Infof("Error in executing following schema changes")
+			// TODO: @rameez should we fail if we are not able to initialize schema
 			for err := range errors {
 				log.Infof("%v", err)
 			}
 		}
+		// TODO: @rameez. Should I do this change of introducing flag for InitPopulateMetadata in a separate PR.
 		if *InitPopulateMetadata {
 			if err := metadataManager.PopulateMetadataTables(params.Mysqld, params.LocalMetadata, params.DbName); err != nil {
 				params.Logger.Errorf("error populating metadata tables: %v. Continuing", err)

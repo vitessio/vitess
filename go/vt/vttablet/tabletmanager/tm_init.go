@@ -114,7 +114,6 @@ var (
 )
 
 func init() {
-	log.Infof("inside init of table manager")
 	flag.Var(&initTags, "init_tags", "(init parameter) comma separated list of key:value pairs used to tag the tablet")
 
 	statsTabletType = stats.NewString("TabletType")
@@ -399,17 +398,6 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, healthCheckInterval ti
 	}
 	servenv.OnRun(tm.registerTabletManager)
 
-	/*
-		// initialize the schema. We will not return in case of error
-		// but we will just log them and move on.
-		if errors := tm.initSchema(ctx, tablet); errors != nil {
-			log.Infof("Error in executing following schema changes")
-			for err := range errors {
-				log.Infof("%v", err)
-			}
-		}
-	*/
-
 	restoring, err := tm.handleRestore(tm.BatchCtx)
 	if err != nil {
 		return err
@@ -424,7 +412,7 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, healthCheckInterval ti
 	return nil
 }
 
-func (tm *TabletManager) initSchema(ctx context.Context, tablet *topodatapb.Tablet) []error {
+func (tm *TabletManager) initSchema(ctx context.Context) []error {
 	// get a dba connection
 	conn, err := tm.MysqlDaemon.GetDbaConnection(ctx)
 	if err != nil {
@@ -790,7 +778,7 @@ func (tm *TabletManager) handleRestore(ctx context.Context) (bool, error) {
 		// initialize the schema. We will not return in case of error
 		// but we will just log them and move on.
 		log.Infof("initialize schema >> no backup provided")
-		if errors := tm.initSchema(ctx, tablet); errors != nil {
+		if errors := tm.initSchema(ctx); errors != nil {
 			log.Infof("Error in executing following schema changes")
 			for err := range errors {
 				log.Infof("%v", err)

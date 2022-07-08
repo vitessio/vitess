@@ -168,9 +168,8 @@ type Executor struct {
 	tickReentranceFlag            int64
 	reviewedRunningMigrationsFlag bool
 
-	ticks             *timer.Timer
-	isOpen            bool
-	schemaInitialized bool
+	ticks  *timer.Timer
+	isOpen bool
 
 	initVreplicationDDLOnce sync.Once
 }
@@ -242,14 +241,6 @@ func (e *Executor) execQuery(ctx context.Context, query string) (result *sqltype
 // TabletAliasString returns tablet alias as string (duh)
 func (e *Executor) TabletAliasString() string {
 	return topoproto.TabletAliasString(e.tabletAlias)
-}
-
-// PrepareForQueryExecutor is called by QueryExecutor, possibly before the backing
-// _vt.schema_migrations table has had the chance to be created.
-// This function prepares the schema.
-func (e *Executor) PrepareForQueryExecutor(ctx context.Context) error {
-	return nil
-	//return e.initSchema(ctx)
 }
 
 func init() {
@@ -3427,7 +3418,6 @@ func (e *Executor) gcArtifacts(ctx context.Context) error {
 			// We wish to generate distinct timestamp values for each table in this UUID,
 			// because all tables will be renamed as _something_UUID_timestamp. Since UUID
 			// is shared for all artifacts in this loop, we differentiate via timestamp
-			log.Infof("Executor.gcArtifacts: will GC artifact %s for migration %s", artifactTable, uuid)
 			t := timeNow.Add(time.Duration(i) * time.Second).UTC()
 			if err := e.gcArtifactTable(ctx, artifactTable, uuid, t); err != nil {
 				return err
@@ -3454,7 +3444,6 @@ func (e *Executor) gcArtifacts(ctx context.Context) error {
 		if err := e.updateMigrationTimestamp(ctx, "cleanup_timestamp", uuid); err != nil {
 			return err
 		}
-		log.Infof("Executor.gcArtifacts: done migration %s", uuid)
 	}
 
 	return nil
@@ -3462,7 +3451,6 @@ func (e *Executor) gcArtifacts(ctx context.Context) error {
 
 // onMigrationCheckTick runs all migrations life cycle
 func (e *Executor) onMigrationCheckTick() {
-	log.Info("onMigrationCheckTick...")
 	// This function can be called by multiple triggers. First, there's the normal ticker.
 	// Then, any time a migration completes, we set a timer to trigger this function.
 	// also, any time a new INSERT arrives, we set a timer to trigger this function.
@@ -3486,10 +3474,6 @@ func (e *Executor) onMigrationCheckTick() {
 	}
 
 	ctx := context.Background()
-	/*if err := e.initSchema(ctx); err != nil {
-		log.Error(err)
-		return
-	}*/
 	if err := e.retryTabletFailureMigrations(ctx); err != nil {
 		log.Error(err)
 	}
@@ -3993,11 +3977,6 @@ func (e *Executor) SubmitMigration(
 		return nil, err
 	}
 
-	/*if err := e.initSchema(ctx); err != nil {
-		log.Error(err)
-		return nil, err
-	}*/
-
 	if onlineDDL.StrategySetting().IsSingleton() || onlineDDL.StrategySetting().IsSingletonContext() {
 		// we need two wrap some logic within a mutex, so as to make sure we can't submit the migration whilst
 		// another query submits a conflicting migration
@@ -4187,12 +4166,6 @@ func (e *Executor) VExec(ctx context.Context, vx *vexec.TabletVExec) (qr *queryp
 		}
 		return sqltypes.ResultToProto3(result), nil
 	}
-
-	log.Info("init schema in VExec")
-	/*if err := e.initSchema(ctx); err != nil {
-		log.Error(err)
-		return nil, err
-	}*/
 
 	switch stmt := vx.Stmt.(type) {
 	case *sqlparser.Delete:
