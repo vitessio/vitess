@@ -18,7 +18,6 @@ package cluster
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -37,6 +36,7 @@ import (
 	"syscall"
 	"time"
 
+	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/log"
@@ -820,7 +820,7 @@ func (cluster *LocalProcessCluster) vtctlclientGetTablet(tablet *Vttablet) (*top
 	}
 
 	var ti topodatapb.Tablet
-	if err := json.Unmarshal([]byte(result), &ti); err != nil {
+	if err := json2.Unmarshal([]byte(result), &ti); err != nil {
 		return nil, err
 	}
 
