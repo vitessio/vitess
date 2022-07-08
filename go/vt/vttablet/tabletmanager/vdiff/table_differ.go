@@ -409,7 +409,6 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare *int64, debug, on
 	// This can be an auto-retry on error, or a manual retry (vs resume, which resets the state).
 	// Otherwise the existing state will be empty and we start from scratch.
 	query := fmt.Sprintf(sqlGetVDiffTable, td.wd.ct.id, encodeString(td.table.Name))
-	log.Infof("Getting VDiff table %s status with %s", td.table.Name, query)
 	cs, err := dbClient.ExecuteFetch(query, 1)
 	if err != nil {
 		return nil, err
@@ -422,8 +421,10 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare *int64, debug, on
 	curState := cs.Named().Row()
 	mismatch := curState.AsBool("mismatch", false)
 	dr := &DiffReport{}
-	if err = json.Unmarshal(curState.AsBytes("report", nil), dr); err != nil {
-		return nil, err
+	if rpt := curState.AsBytes("report", []byte("{}")); json.Valid(rpt) {
+		if err = json.Unmarshal(rpt, dr); err != nil {
+			return nil, err
+		}
 	}
 	dr.TableName = td.table.Name
 
