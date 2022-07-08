@@ -17,6 +17,7 @@ limitations under the License.
 package engine
 
 import (
+	"context"
 	"sync"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -85,8 +86,8 @@ func formatTwoOptionsNicely(a, b string) string {
 var ErrWrongNumberOfColumnsInSelect = vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.WrongNumberOfColumnsInSelect, "The used SELECT statements have a different number of columns")
 
 // TryExecute performs a non-streaming exec.
-func (c *Concatenate) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	res, err := c.execSources(vcursor, bindVars, wantfields)
+func (c *Concatenate) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	res, err := c.execSources(ctx, vcursor, bindVars, wantfields)
 	if err != nil {
 		return nil, err
 	}
@@ -141,7 +142,10 @@ func (c *Concatenate) getFields(res []*sqltypes.Result) ([]*querypb.Field, error
 	return fields, nil
 }
 
-func (c *Concatenate) execSources(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) ([]*sqltypes.Result, error) {
+func (c *Concatenate) execSources(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) ([]*sqltypes.Result, error) {
+	var cancel context.CancelFunc
+	ctx, cancel = context.WithCancel(ctx)
+	defer cancel()
 	results := make([]*sqltypes.Result, len(c.Sources))
 	var wg sync.WaitGroup
 	var outerErr error
@@ -151,10 +155,10 @@ func (c *Concatenate) execSources(vcursor VCursor, bindVars map[string]*querypb.
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			result, err := vcursor.ExecutePrimitive(currSource, vars, wantfields)
+			result, err := vcursor.ExecutePrimitive(ctx, currSource, vars, wantfields)
 			if err != nil {
 				outerErr = err
-				vcursor.CancelContext()
+				cancel()
 			}
 			results[currIndex] = result
 		}()
@@ -167,7 +171,7 @@ func (c *Concatenate) execSources(vcursor VCursor, bindVars map[string]*querypb.
 }
 
 // TryStreamExecute performs a streaming exec.
-func (c *Concatenate) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (c *Concatenate) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	var seenFields []*querypb.Field
 	var outerErr error
 
@@ -182,7 +186,7 @@ func (c *Concatenate) TryStreamExecute(vcursor VCursor, bindVars map[string]*que
 
 		go func() {
 			defer wg.Done()
-			err := vcursor.StreamExecutePrimitive(currSource, bindVars, wantfields, func(resultChunk *sqltypes.Result) error {
+			err := vcursor.StreamExecutePrimitive(ctx, currSource, bindVars, wantfields, func(resultChunk *sqltypes.Result) error {
 				// if we have fields to compare, make sure all the fields are all the same
 				if currIndex == 0 {
 					fieldsMu.Lock()
@@ -207,7 +211,7 @@ func (c *Concatenate) TryStreamExecute(vcursor VCursor, bindVars map[string]*que
 				cbMu.Lock()
 				defer cbMu.Unlock()
 				select {
-				case <-vcursor.Context().Done():
+				case <-ctx.Done():
 					return nil
 				default:
 					return callback(resultChunk)
@@ -224,7 +228,7 @@ func (c *Concatenate) TryStreamExecute(vcursor VCursor, bindVars map[string]*que
 			}
 			if err != nil {
 				outerErr = err
-				vcursor.CancelContext()
+				ctx.Done()
 			}
 		}()
 
@@ -234,15 +238,15 @@ func (c *Concatenate) TryStreamExecute(vcursor VCursor, bindVars map[string]*que
 }
 
 // GetFields fetches the field info.
-func (c *Concatenate) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (c *Concatenate) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	// TODO: type coercions
-	res, err := c.Sources[0].GetFields(vcursor, bindVars)
+	res, err := c.Sources[0].GetFields(ctx, vcursor, bindVars)
 	if err != nil {
 		return nil, err
 	}
 
 	for i := 1; i < len(c.Sources); i++ {
-		result, err := c.Sources[i].GetFields(vcursor, bindVars)
+		result, err := c.Sources[i].GetFields(ctx, vcursor, bindVars)
 		if err != nil {
 			return nil, err
 		}

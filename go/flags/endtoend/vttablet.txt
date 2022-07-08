@@ -55,10 +55,12 @@ Usage of vttablet:
 	PITR restore parameter: Filename containing mTLS client private key for use in binlog server authentication.
   --binlog_ssl_server_name string
 	PITR restore parameter: TLS server name (common name) to verify against for the binlog server we are connecting to (If not set: use the hostname or IP supplied in -binlog_host).
-  --binlog_use_v3_resharding_mode
-	(DEPRECATED) True if and only if the binlog streamer should use V3-style sharding, which doesn't require a preset sharding key column. (default true)
   --binlog_user string
 	PITR restore parameter: username of binlog server.
+  --builtin-compressor string
+	builtin compressor engine to use (default pgzip)
+  --builtin-decompressor string
+	builtin decompressor engine to use (default auto)
   --builtinbackup_mysqld_timeout duration
 	how long to wait for mysqld to shutdown at the start of the backup (default 10m0s)
   --builtinbackup_progress duration
@@ -67,6 +69,8 @@ Usage of vttablet:
 	catch and ignore SIGPIPE on stdout and stderr if specified
   --ceph_backup_storage_config string
 	Path to JSON config file for ceph backup storage (default ceph_backup_config.json)
+  --compression-level int
+	what level to pass to the compressor (default 1)
   --consul_auth_static_file string
 	JSON File to read the topos/tokens from.
   --cpu_profile string
@@ -403,6 +407,12 @@ Usage of vttablet:
 	if this flag is true, vttablet will fail to start if a valid tableacl config does not exist
   --enforce_strict_trans_tables
 	If true, vttablet requires MySQL to run with STRICT_TRANS_TABLES or STRICT_ALL_TABLES on. It is recommended to not turn this flag off. Otherwise MySQL may alter your supplied values before saving them to the database. (default true)
+  --external-compressor string
+	command with arguments to use when compressing a backup
+  --external-compressor-extension string
+	extension to use when using an external compressor
+  --external-decompressor string
+	command with arguments to use when decompressing a backup
   --file_backup_storage_root string
 	root directory for the file backup storage
   --filecustomrules string
@@ -734,7 +744,7 @@ Usage of vttablet:
   --security_policy string
 	the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
   --service_map value
-	comma separated list of services to enable (or disable if prefixed with '-') Example: grpc-vtworker
+	comma separated list of services to enable (or disable if prefixed with '-') Example: grpc-queryservice
   --serving_state_grace_period duration
 	how long to pause after broadcasting health to vtgate, before enforcing a new serving state
   --shard_sync_retry_delay duration

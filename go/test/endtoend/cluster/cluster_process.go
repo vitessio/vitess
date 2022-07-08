@@ -87,7 +87,6 @@ type LocalProcessCluster struct {
 	TopoProcess     TopoProcess
 	VtctldProcess   VtctldProcess
 	VtgateProcess   VtgateProcess
-	VtworkerProcess VtworkerProcess
 	VtbackupProcess VtbackupProcess
 	VtorcProcesses  []*VtorcProcess
 
@@ -826,22 +825,6 @@ func (cluster *LocalProcessCluster) waitForMySQLProcessToExit(mysqlctlProcessLis
 		}(cmd, mysqlctlTabletUIDs[i])
 	}
 	wg.Wait()
-}
-
-// StartVtworker starts a vtworker
-func (cluster *LocalProcessCluster) StartVtworker(cell string, extraArgs ...string) error {
-	httpPort := cluster.GetAndReservePort()
-	grpcPort := cluster.GetAndReservePort()
-	log.Infof("Starting vtworker with http_port=%d, grpc_port=%d", httpPort, grpcPort)
-	cluster.VtworkerProcess = *VtworkerProcessInstance(
-		httpPort,
-		grpcPort,
-		cluster.TopoPort,
-		cluster.Hostname,
-		cluster.TmpDirectory)
-	cluster.VtworkerProcess.ExtraArgs = extraArgs
-	return cluster.VtworkerProcess.Setup(cell)
-
 }
 
 // StartVtbackup starts a vtbackup

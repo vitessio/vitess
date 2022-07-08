@@ -6,20 +6,13 @@ local graphPanel = grafana.graphPanel;
 local prometheus = grafana.prometheus;
 
 // TODO: add description for each panel.
-// TODO: create a _helper _config file for each group [vtctld,vtworker],
+// TODO: create a _helper _config file for each group [vtctld],
 {
   //        _       _   _     _
   // __   _| |_ ___| |_| | __| |
   // \ \ / / __/ __| __| |/ _` |
   //  \ V /| || (__| |_| | (_| |
   //   \_/  \__\___|\__|_|\__,_|
-  //
-
-  //        _                      _
-  // __   _| |___      _____  _ __| | _____ _ __
-  // \ \ / / __\ \ /\ / / _ \| '__| |/ / _ \ '__|
-  //  \ V /| |_ \ V  V / (_) | |  |   <  __/ |
-  //   \_/  \__| \_/\_/ \___/|_|  |_|\_\___|_|
   //
 
   //            _

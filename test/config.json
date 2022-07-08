@@ -80,17 +80,6 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
-		"legacy_local_example": {
-			"File": "",
-			"Args": [],
-			"Command": [
-				"test/legacy_local_example.sh"
-			],
-			"Manual": false,
-			"Shard": "",
-			"RetryMax": 1,
-			"Tags": []
-		},
 		"region_example": {
 			"File": "",
 			"Args": [],
@@ -104,7 +93,7 @@
 		},
 		"backup": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/backup/vtctlbackup"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/backup/vtctlbackup", "-timeout", "15m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtctlbackup_sharded_clustertest_heavy",
@@ -113,7 +102,7 @@
 		},
 		"backup_mysqlctld": { 
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/backup/mysqlctld"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/backup/mysqlctld", "-timeout", "15m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "21",
@@ -188,7 +177,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/mysqlserver"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "24",
+			"Shard": "mysql_server_vault",
 			"RetryMax": 1,
 			"Tags": []
 		},
@@ -228,33 +217,6 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
-		"initial_sharding": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/sharding/initialsharding/v3"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "13",
-			"RetryMax": 1,
-			"Tags": []
-		},
-		"initial_sharding_bytes": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/sharding/initialsharding/bytes"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "13",
-			"RetryMax": 1,
-			"Tags": []
-		},
-		"initial_sharding_multi": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/sharding/initialsharding/multi"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "",
-			"RetryMax": 3,
-			"Tags": []
-		},
 		"keyspace": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/keyspace"],
@@ -264,28 +226,6 @@
 			"RetryMax": 1,
 			"Tags": [
 				"site_test"
-			]
-		},
-		"merge_sharding": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/sharding/mergesharding/int"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "22",
-			"RetryMax": 2,
-			"Tags": [
-				"worker_test"
-			]
-		},
-		"merge_sharding_bytes": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/sharding/mergesharding/string"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "22",
-			"RetryMax": 1,
-			"Tags": [
-				"worker_test"
 			]
 		},
 		"mysqlctl": {
@@ -467,52 +407,12 @@
 			"RetryMax": 1,
 			"Tags": [""]
 		},
-		"resharding": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/sharding/resharding/v3"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "resharding",
-			"RetryMax": 1,
-			"Tags": [
-				"worker_test"
-			]
-		},
-		"resharding_bytes": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/sharding/resharding/string"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "resharding_bytes",
-			"RetryMax": 2,
-			"Tags": [
-				"worker_test"
-			]
-		},
 		"sharded": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/sharded"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtctlbackup_sharded_clustertest_heavy",
-			"RetryMax": 1,
-			"Tags": []
-		},
-		"sharded_recovery": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/recovery/shardedrecovery"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "shardedrecovery_stress_verticalsplit_heavy",
-			"RetryMax": 2,
-			"Tags": []
-		},
-		"stress": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/stress"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "shardedrecovery_stress_verticalsplit_heavy",
 			"RetryMax": 1,
 			"Tags": []
 		},
@@ -630,17 +530,6 @@
 			"Shard": "28",
 			"RetryMax": 1,
 			"Tags": []
-		},
-		"vertical_split": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/sharding/verticalsplit"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "shardedrecovery_stress_verticalsplit_heavy",
-			"RetryMax": 1,
-			"Tags": [
-				"worker_test"
-			]
 		},
 		"vtgate": {
 			"File": "unused.go",
@@ -1074,17 +963,6 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
-		"worker": {
-			"File": "worker_test.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/worker"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "worker_vault_heavy",
-			"RetryMax": 3,
-			"Tags": [
-				"worker_test"
-			]
-		},
 		"vreplication_multicell": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "MultiCell"],
@@ -1234,7 +1112,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vault"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "worker_vault_heavy",
+			"Shard": "mysql_server_vault",
 			"RetryMax": 1,
 			"Tags": []
 		},
