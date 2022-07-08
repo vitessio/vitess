@@ -167,591 +167,591 @@ var commandsMutex sync.Mutex
 var commands = []commandGroup{
 	{
 		"Tablets", []command{
-			{
-				name:       "InitTablet",
-				method:     commandInitTablet,
-				params:     "[--allow_update] [--allow_different_shard] [--allow_master_override] [--parent] [--db_name_override=<db name>] [--hostname=<hostname>] [--mysql_port=<port>] [--port=<port>] [--grpc_port=<port>] [--tags=tag1:value1,tag2:value2] --keyspace=<keyspace> --shard=<shard> <tablet alias> <tablet type>",
-				help:       "Initializes a tablet in the topology.",
-				deprecated: true,
-			},
-			{
-				name:   "GetTablet",
-				method: commandGetTablet,
-				params: "<tablet alias>",
-				help:   "Outputs a JSON structure that contains information about the Tablet.",
-			},
-			{
-				name:       "UpdateTabletAddrs",
-				method:     commandUpdateTabletAddrs,
-				params:     "[--hostname <hostname>] [--ip-addr <ip addr>] [--mysql-port <mysql port>] [--vt-port <vt port>] [--grpc-port <grpc port>] <tablet alias> ",
-				help:       "Updates the IP address and port numbers of a tablet.",
-				deprecated: true,
-			},
-			{
-				name:   "DeleteTablet",
-				method: commandDeleteTablet,
-				params: "[--allow_primary] <tablet alias> ...",
-				help:   "Deletes tablet(s) from the topology.",
-			},
-			{
-				name:   "SetReadOnly",
-				method: commandSetReadOnly,
-				params: "<tablet alias>",
-				help:   "Sets the tablet as read-only.",
-			},
-			{
-				name:   "SetReadWrite",
-				method: commandSetReadWrite,
-				params: "<tablet alias>",
-				help:   "Sets the tablet as read-write.",
-			},
-			{
-				name:   "StartReplication",
-				method: commandStartReplication,
-				params: "<table alias>",
-				help:   "Starts replication on the specified tablet.",
-			},
-			{
-				name:   "StopReplication",
-				method: commandStopReplication,
-				params: "<tablet alias>",
-				help:   "Stops replication on the specified tablet.",
-			},
-			{
-				name:   "ChangeTabletType",
-				method: commandChangeTabletType,
-				params: "[--dry-run] <tablet alias> <tablet type>",
-				help: "Changes the db type for the specified tablet, if possible. This command is used primarily to arrange replicas, and it will not convert a primary.\n" +
-					"NOTE: This command automatically updates the serving graph.\n",
-			},
-			{
-				name:   "Ping",
-				method: commandPing,
-				params: "<tablet alias>",
-				help:   "Checks that the specified tablet is awake and responding to RPCs. This command can be blocked by other in-flight operations.",
-			},
-			{
-				name:   "RefreshState",
-				method: commandRefreshState,
-				params: "<tablet alias>",
-				help:   "Reloads the tablet record on the specified tablet.",
-			},
-			{
-				name:   "RefreshStateByShard",
-				method: commandRefreshStateByShard,
-				params: "[--cells=c1,c2,...] <keyspace/shard>",
-				help:   "Runs 'RefreshState' on all tablets in the given shard.",
-			},
-			{
-				name:   "RunHealthCheck",
-				method: commandRunHealthCheck,
-				params: "<tablet alias>",
-				help:   "Runs a health check on a remote tablet.",
-			},
-			{
-				name:       "IgnoreHealthError",
-				method:     commandIgnoreHealthError,
-				params:     "<tablet alias> <ignore regexp>",
-				help:       "Sets the regexp for health check errors to ignore on the specified tablet. The pattern has implicit ^$ anchors. Set to empty string or restart vttablet to stop ignoring anything.",
-				deprecated: true,
-			},
-			{
-				name:   "Sleep",
-				method: commandSleep,
-				params: "<tablet alias> <duration>",
-				help:   "Blocks the action queue on the specified tablet for the specified amount of time. This is typically used for testing.",
-			},
-			{
-				name:   "ExecuteHook",
-				method: commandExecuteHook,
-				params: "<tablet alias> <hook name> [<param1=value1> <param2=value2> ...]",
-				help: "Runs the specified hook on the given tablet. A hook is a script that resides in the $VTROOT/vthook directory. You can put any script into that directory and use this command to run that script.\n" +
-					"For this command, the param=value arguments are parameters that the command passes to the specified hook.",
-			},
-			{
-				name:   "ExecuteFetchAsApp",
-				method: commandExecuteFetchAsApp,
-				params: "[--max_rows=10000] [--json] [--use_pool] <tablet alias> <sql command>",
-				help:   "Runs the given SQL command as a App on the remote tablet.",
-			},
-			{
-				name:   "ExecuteFetchAsDba",
-				method: commandExecuteFetchAsDba,
-				params: "[--max_rows=10000] [--disable_binlogs] [--json] <tablet alias> <sql command>",
-				help:   "Runs the given SQL command as a DBA on the remote tablet.",
-			},
-			{
-				name:   "VReplicationExec",
-				method: commandVReplicationExec,
-				params: "[--json] <tablet alias> <sql command>",
-				help:   "Runs the given VReplication command on the remote tablet.",
-			},
+		{
+			name:       "InitTablet",
+			method:     commandInitTablet,
+			params:     "[--allow_update] [--allow_different_shard] [--allow_master_override] [--parent] [--db_name_override=<db name>] [--hostname=<hostname>] [--mysql_port=<port>] [--port=<port>] [--grpc_port=<port>] [--tags=tag1:value1,tag2:value2] --keyspace=<keyspace> --shard=<shard> <tablet alias> <tablet type>",
+			help:       "Initializes a tablet in the topology.",
+			deprecated: true,
 		},
+		{
+			name:   "GetTablet",
+			method: commandGetTablet,
+			params: "<tablet alias>",
+			help:   "Outputs a JSON structure that contains information about the Tablet.",
+		},
+		{
+			name:       "UpdateTabletAddrs",
+			method:     commandUpdateTabletAddrs,
+			params:     "[--hostname <hostname>] [--ip-addr <ip addr>] [--mysql-port <mysql port>] [--vt-port <vt port>] [--grpc-port <grpc port>] <tablet alias> ",
+			help:       "Updates the IP address and port numbers of a tablet.",
+			deprecated: true,
+		},
+		{
+			name:   "DeleteTablet",
+			method: commandDeleteTablet,
+			params: "[--allow_primary] <tablet alias> ...",
+			help:   "Deletes tablet(s) from the topology.",
+		},
+		{
+			name:   "SetReadOnly",
+			method: commandSetReadOnly,
+			params: "<tablet alias>",
+			help:   "Sets the tablet as read-only.",
+		},
+		{
+			name:   "SetReadWrite",
+			method: commandSetReadWrite,
+			params: "<tablet alias>",
+			help:   "Sets the tablet as read-write.",
+		},
+		{
+			name:   "StartReplication",
+			method: commandStartReplication,
+			params: "<table alias>",
+			help:   "Starts replication on the specified tablet.",
+		},
+		{
+			name:   "StopReplication",
+			method: commandStopReplication,
+			params: "<tablet alias>",
+			help:   "Stops replication on the specified tablet.",
+		},
+		{
+			name:   "ChangeTabletType",
+			method: commandChangeTabletType,
+			params: "[--dry-run] <tablet alias> <tablet type>",
+			help: "Changes the db type for the specified tablet, if possible. This command is used primarily to arrange replicas, and it will not convert a primary.\n" +
+				"NOTE: This command automatically updates the serving graph.\n",
+		},
+		{
+			name:   "Ping",
+			method: commandPing,
+			params: "<tablet alias>",
+			help:   "Checks that the specified tablet is awake and responding to RPCs. This command can be blocked by other in-flight operations.",
+		},
+		{
+			name:   "RefreshState",
+			method: commandRefreshState,
+			params: "<tablet alias>",
+			help:   "Reloads the tablet record on the specified tablet.",
+		},
+		{
+			name:   "RefreshStateByShard",
+			method: commandRefreshStateByShard,
+			params: "[--cells=c1,c2,...] <keyspace/shard>",
+			help:   "Runs 'RefreshState' on all tablets in the given shard.",
+		},
+		{
+			name:   "RunHealthCheck",
+			method: commandRunHealthCheck,
+			params: "<tablet alias>",
+			help:   "Runs a health check on a remote tablet.",
+		},
+		{
+			name:       "IgnoreHealthError",
+			method:     commandIgnoreHealthError,
+			params:     "<tablet alias> <ignore regexp>",
+			help:       "Sets the regexp for health check errors to ignore on the specified tablet. The pattern has implicit ^$ anchors. Set to empty string or restart vttablet to stop ignoring anything.",
+			deprecated: true,
+		},
+		{
+			name:   "Sleep",
+			method: commandSleep,
+			params: "<tablet alias> <duration>",
+			help:   "Blocks the action queue on the specified tablet for the specified amount of time. This is typically used for testing.",
+		},
+		{
+			name:   "ExecuteHook",
+			method: commandExecuteHook,
+			params: "<tablet alias> <hook name> [<param1=value1> <param2=value2> ...]",
+			help: "Runs the specified hook on the given tablet. A hook is a script that resides in the $VTROOT/vthook directory. You can put any script into that directory and use this command to run that script.\n" +
+				"For this command, the param=value arguments are parameters that the command passes to the specified hook.",
+		},
+		{
+			name:   "ExecuteFetchAsApp",
+			method: commandExecuteFetchAsApp,
+			params: "[--max_rows=10000] [--json] [--use_pool] <tablet alias> <sql command>",
+			help:   "Runs the given SQL command as a App on the remote tablet.",
+		},
+		{
+			name:   "ExecuteFetchAsDba",
+			method: commandExecuteFetchAsDba,
+			params: "[--max_rows=10000] [--disable_binlogs] [--json] <tablet alias> <sql command>",
+			help:   "Runs the given SQL command as a DBA on the remote tablet.",
+		},
+		{
+			name:   "VReplicationExec",
+			method: commandVReplicationExec,
+			params: "[--json] <tablet alias> <sql command>",
+			help:   "Runs the given VReplication command on the remote tablet.",
+		},
+	},
 	},
 	{
 		"Shards", []command{
-			{
-				name:   "CreateShard",
-				method: commandCreateShard,
-				params: "[--force] [--parent] <keyspace/shard>",
-				help:   "Creates the specified shard.",
-			},
-			{
-				name:   "GetShard",
-				method: commandGetShard,
-				params: "<keyspace/shard>",
-				help:   "Outputs a JSON structure that contains information about the Shard.",
-			},
-			{
-				name:   "ValidateShard",
-				method: commandValidateShard,
-				params: "[--ping-tablets] <keyspace/shard>",
-				help:   "Validates that all nodes that are reachable from this shard are consistent.",
-			},
-			{
-				name:   "ShardReplicationPositions",
-				method: commandShardReplicationPositions,
-				params: "<keyspace/shard>",
-				help:   "Shows the replication status of each replica in the shard graph. In this case, the status refers to the replication lag between the primary vttablet and the replica vttablet. In Vitess, data is always written to the primary vttablet first and then replicated to all replica vttablets. Output is sorted by tablet type, then replication position. Use ctrl-C to interrupt command and see partial result if needed.",
-			},
-			{
-				name:   "ListShardTablets",
-				method: commandListShardTablets,
-				params: "<keyspace/shard>",
-				help:   "Lists all tablets in the specified shard.",
-			},
-			{
-				name:   "SetShardIsPrimaryServing",
-				method: commandSetShardIsPrimaryServing,
-				params: "<keyspace/shard> <is_serving>",
-				help:   "Add or remove a shard from serving. This is meant as an emergency function. It does not rebuild any serving graph i.e. does not run 'RebuildKeyspaceGraph'.",
-			},
-			{
-				name:   "SetShardTabletControl",
-				method: commandSetShardTabletControl,
-				params: "[--cells=c1,c2,...] [--denied_tables=t1,t2,...] [--remove] [--disable_query_service] <keyspace/shard> <tablet type>",
-				help: "Sets the TabletControl record for a shard and tablet type. Only use this for an emergency fix.\n" +
-					"To set the DisableQueryServiceFlag, keep 'denied_tables' empty, and set 'disable_query_service' to true or false.\n" +
-					"To change the list of denied tables, specify the 'denied_tables' parameter with the new list.\n" +
-					"To just remove the ShardTabletControl entirely, use the 'remove' flag.",
-			},
-			{
-				name:   "UpdateSrvKeyspacePartition",
-				method: commandUpdateSrvKeyspacePartition,
-				params: "[--cells=c1,c2,...] [--remove] <keyspace/shard> <tablet type>",
-				help:   "Updates KeyspaceGraph partition for a shard and tablet type. Only use this for emergency fixes. Specify the remove flag, if you want the shard to be removed from the desired partition.",
-			},
-			{
-				name:   "SourceShardDelete",
-				method: commandSourceShardDelete,
-				params: "<keyspace/shard> <uid>",
-				help:   "Deletes the SourceShard record with the provided index. This is meant as an emergency cleanup function. It does not call RefreshState for the shard primary.",
-			},
-			{
-				name:   "SourceShardAdd",
-				method: commandSourceShardAdd,
-				params: "[--key_range=<keyrange>] [--tables=<table1,table2,...>] <keyspace/shard> <uid> <source keyspace/shard>",
-				help:   "Adds the SourceShard record with the provided index. This is meant as an emergency function. It does not call RefreshState for the shard primary.",
-			},
-			{
-				name:   "ShardReplicationAdd",
-				method: commandShardReplicationAdd,
-				params: "<keyspace/shard> <tablet alias> <parent tablet alias>",
-				help:   "Adds an entry to the replication graph in the given cell.",
-				hidden: true,
-			},
-			{
-				name:   "ShardReplicationRemove",
-				method: commandShardReplicationRemove,
-				params: "<keyspace/shard> <tablet alias>",
-				help:   "Removes an entry from the replication graph in the given cell.",
-				hidden: true,
-			},
-			{
-				name:   "ShardReplicationFix",
-				method: commandShardReplicationFix,
-				params: "<cell> <keyspace/shard>",
-				help:   "Walks through a ShardReplication object and fixes the first error that it encounters.",
-			},
-			{
-				name:   "WaitForFilteredReplication",
-				method: commandWaitForFilteredReplication,
-				params: "[--max_delay <max_delay, default 30s>] <keyspace/shard>",
-				help:   "Blocks until the specified shard has caught up with the filtered replication of its source shard.",
-			},
-			{
-				name:   "RemoveShardCell",
-				method: commandRemoveShardCell,
-				params: "[--force] [--recursive] <keyspace/shard> <cell>",
-				help:   "Removes the cell from the shard's Cells list.",
-			},
-			{
-				name:   "DeleteShard",
-				method: commandDeleteShard,
-				params: "[--recursive] [--even_if_serving] <keyspace/shard> ...",
-				help:   "Deletes the specified shard(s). In recursive mode, it also deletes all tablets belonging to the shard. Otherwise, there must be no tablets left in the shard.",
-			},
+		{
+			name:   "CreateShard",
+			method: commandCreateShard,
+			params: "[--force] [--parent] <keyspace/shard>",
+			help:   "Creates the specified shard.",
 		},
+		{
+			name:   "GetShard",
+			method: commandGetShard,
+			params: "<keyspace/shard>",
+			help:   "Outputs a JSON structure that contains information about the Shard.",
+		},
+		{
+			name:   "ValidateShard",
+			method: commandValidateShard,
+			params: "[--ping-tablets] <keyspace/shard>",
+			help:   "Validates that all nodes that are reachable from this shard are consistent.",
+		},
+		{
+			name:   "ShardReplicationPositions",
+			method: commandShardReplicationPositions,
+			params: "<keyspace/shard>",
+			help:   "Shows the replication status of each replica in the shard graph. In this case, the status refers to the replication lag between the primary vttablet and the replica vttablet. In Vitess, data is always written to the primary vttablet first and then replicated to all replica vttablets. Output is sorted by tablet type, then replication position. Use ctrl-C to interrupt command and see partial result if needed.",
+		},
+		{
+			name:   "ListShardTablets",
+			method: commandListShardTablets,
+			params: "<keyspace/shard>",
+			help:   "Lists all tablets in the specified shard.",
+		},
+		{
+			name:   "SetShardIsPrimaryServing",
+			method: commandSetShardIsPrimaryServing,
+			params: "<keyspace/shard> <is_serving>",
+			help:   "Add or remove a shard from serving. This is meant as an emergency function. It does not rebuild any serving graph i.e. does not run 'RebuildKeyspaceGraph'.",
+		},
+		{
+			name:   "SetShardTabletControl",
+			method: commandSetShardTabletControl,
+			params: "[--cells=c1,c2,...] [--denied_tables=t1,t2,...] [--remove] [--disable_query_service] <keyspace/shard> <tablet type>",
+			help: "Sets the TabletControl record for a shard and tablet type. Only use this for an emergency fix.\n" +
+				"To set the DisableQueryServiceFlag, keep 'denied_tables' empty, and set 'disable_query_service' to true or false.\n" +
+				"To change the list of denied tables, specify the 'denied_tables' parameter with the new list.\n" +
+				"To just remove the ShardTabletControl entirely, use the 'remove' flag.",
+		},
+		{
+			name:   "UpdateSrvKeyspacePartition",
+			method: commandUpdateSrvKeyspacePartition,
+			params: "[--cells=c1,c2,...] [--remove] <keyspace/shard> <tablet type>",
+			help:   "Updates KeyspaceGraph partition for a shard and tablet type. Only use this for emergency fixes. Specify the remove flag, if you want the shard to be removed from the desired partition.",
+		},
+		{
+			name:   "SourceShardDelete",
+			method: commandSourceShardDelete,
+			params: "<keyspace/shard> <uid>",
+			help:   "Deletes the SourceShard record with the provided index. This is meant as an emergency cleanup function. It does not call RefreshState for the shard primary.",
+		},
+		{
+			name:   "SourceShardAdd",
+			method: commandSourceShardAdd,
+			params: "[--key_range=<keyrange>] [--tables=<table1,table2,...>] <keyspace/shard> <uid> <source keyspace/shard>",
+			help:   "Adds the SourceShard record with the provided index. This is meant as an emergency function. It does not call RefreshState for the shard primary.",
+		},
+		{
+			name:   "ShardReplicationAdd",
+			method: commandShardReplicationAdd,
+			params: "<keyspace/shard> <tablet alias> <parent tablet alias>",
+			help:   "Adds an entry to the replication graph in the given cell.",
+			hidden: true,
+		},
+		{
+			name:   "ShardReplicationRemove",
+			method: commandShardReplicationRemove,
+			params: "<keyspace/shard> <tablet alias>",
+			help:   "Removes an entry from the replication graph in the given cell.",
+			hidden: true,
+		},
+		{
+			name:   "ShardReplicationFix",
+			method: commandShardReplicationFix,
+			params: "<cell> <keyspace/shard>",
+			help:   "Walks through a ShardReplication object and fixes the first error that it encounters.",
+		},
+		{
+			name:   "WaitForFilteredReplication",
+			method: commandWaitForFilteredReplication,
+			params: "[--max_delay <max_delay, default 30s>] <keyspace/shard>",
+			help:   "Blocks until the specified shard has caught up with the filtered replication of its source shard.",
+		},
+		{
+			name:   "RemoveShardCell",
+			method: commandRemoveShardCell,
+			params: "[--force] [--recursive] <keyspace/shard> <cell>",
+			help:   "Removes the cell from the shard's Cells list.",
+		},
+		{
+			name:   "DeleteShard",
+			method: commandDeleteShard,
+			params: "[--recursive] [--even_if_serving] <keyspace/shard> ...",
+			help:   "Deletes the specified shard(s). In recursive mode, it also deletes all tablets belonging to the shard. Otherwise, there must be no tablets left in the shard.",
+		},
+	},
 	},
 	{
 		"Keyspaces", []command{
-			{
-				name:   "CreateKeyspace",
-				method: commandCreateKeyspace,
-				params: "[--sharding_column_name=name] [--sharding_column_type=type] [--served_from=tablettype1:ks1,tablettype2:ks2,...] [--force] [--keyspace_type=type] [--base_keyspace=base_keyspace] [--snapshot_time=time] [--durability-policy=policy_name] <keyspace name>",
-				help:   "Creates the specified keyspace. keyspace_type can be NORMAL or SNAPSHOT. For a SNAPSHOT keyspace you must specify the name of a base_keyspace, and a snapshot_time in UTC, in RFC3339 time format, e.g. 2006-01-02T15:04:05+00:00",
-			},
-			{
-				name:   "DeleteKeyspace",
-				method: commandDeleteKeyspace,
-				params: "[--recursive] <keyspace>",
-				help:   "Deletes the specified keyspace. In recursive mode, it also recursively deletes all shards in the keyspace. Otherwise, there must be no shards left in the keyspace.",
-			},
-			{
-				name:   "RemoveKeyspaceCell",
-				method: commandRemoveKeyspaceCell,
-				params: "[--force] [--recursive] <keyspace> <cell>",
-				help:   "Removes the cell from the Cells list for all shards in the keyspace, and the SrvKeyspace for that keyspace in that cell.",
-			},
-			{
-				name:   "GetKeyspace",
-				method: commandGetKeyspace,
-				params: "<keyspace>",
-				help:   "Outputs a JSON structure that contains information about the Keyspace.",
-			},
-			{
-				name:   "GetKeyspaces",
-				method: commandGetKeyspaces,
-				params: "",
-				help:   "Outputs a sorted list of all keyspaces.",
-			},
-			{
-				name:   "RebuildKeyspaceGraph",
-				method: commandRebuildKeyspaceGraph,
-				params: "[--cells=c1,c2,...] [--allow_partial] <keyspace> ...",
-				help:   "Rebuilds the serving data for the keyspace. This command may trigger an update to all connected clients.",
-			},
-			{
-				name:   "ValidateKeyspace",
-				method: commandValidateKeyspace,
-				params: "[--ping-tablets] <keyspace name>",
-				help:   "Validates that all nodes reachable from the specified keyspace are consistent.",
-			},
-			{
-				name:   "Reshard",
-				method: commandReshard,
-				params: "[--source_shards=<source_shards>] [--target_shards=<target_shards>] [--cells=<cells>] [--tablet_types=<source_tablet_types>]  [--skip_schema_copy] <action> 'action must be one of the following: Create, Complete, Cancel, SwitchTraffic, ReverseTrafffic, Show, or Progress' <keyspace.workflow>",
-				help:   "Start a Resharding process. Example: Reshard --cells='zone1,alias1' --tablet_types='PRIMARY,REPLICA,RDONLY'  ks.workflow001 '0' '-80,80-'",
-			},
-			{
-				name:   "MoveTables",
-				method: commandMoveTables,
-				params: "[--source=<sourceKs>] [--tables=<tableSpecs>] [--cells=<cells>] [--tablet_types=<source_tablet_types>] [--all] [--exclude=<tables>] [--auto_start] [--stop_after_copy] <action> 'action must be one of the following: Create, Complete, Cancel, SwitchTraffic, ReverseTrafffic, Show, or Progress' <targetKs.workflow>",
-				help:   `Move table(s) to another keyspace, table_specs is a list of tables or the tables section of the vschema for the target keyspace. Example: '{"t1":{"column_vindexes": [{"column": "id1", "name": "hash"}]}, "t2":{"column_vindexes": [{"column": "id2", "name": "hash"}]}}'.  In the case of an unsharded target keyspace the vschema for each table may be empty. Example: '{"t1":{}, "t2":{}}'.`,
-			},
-			{
-				name:   "Migrate",
-				method: commandMigrate,
-				params: "[--cells=<cells>] [--tablet_types=<source_tablet_types>] --workflow=<workflow> <source_keyspace> <target_keyspace> <table_specs>",
-				help:   `Move table(s) to another keyspace, table_specs is a list of tables or the tables section of the vschema for the target keyspace. Example: '{"t1":{"column_vindexes": [{"column": "id1", "name": "hash"}]}, "t2":{"column_vindexes": [{"column": "id2", "name": "hash"}]}}'.  In the case of an unsharded target keyspace the vschema for each table may be empty. Example: '{"t1":{}, "t2":{}}'.`,
-			},
-			{
-				name:   "DropSources",
-				method: commandDropSources,
-				params: "[--dry_run] [--rename_tables] <keyspace.workflow>",
-				help:   "After a MoveTables or Resharding workflow cleanup unused artifacts like source tables, source shards and denylists",
-			},
-			{
-				name:   "CreateLookupVindex",
-				method: commandCreateLookupVindex,
-				params: "[--cell=<source_cells> DEPRECATED] [--cells=<source_cells>] [--tablet_types=<source_tablet_types>] <keyspace> <json_spec>",
-				help:   `Create and backfill a lookup vindex. the json_spec must contain the vindex and colvindex specs for the new lookup.`,
-			},
-			{
-				name:   "ExternalizeVindex",
-				method: commandExternalizeVindex,
-				params: "<keyspace>.<vindex>",
-				help:   `Externalize a backfilled vindex.`,
-			},
-			{
-				name:   "Materialize",
-				method: commandMaterialize,
-				params: `[--cells=<cells>] [--tablet_types=<source_tablet_types>] <json_spec>, example : '{"workflow": "aaa", "source_keyspace": "source", "target_keyspace": "target", "table_settings": [{"target_table": "customer", "source_expression": "select * from customer", "create_ddl": "copy"}]}'`,
-				help:   "Performs materialization based on the json spec. Is used directly to form VReplication rules, with an optional step to copy table structure/DDL.",
-			},
-			{
-				name:   "VDiff",
-				method: commandVDiff,
-				params: "[--source_cell=<cell>] [--target_cell=<cell>] [--tablet_types=in_order:RDONLY,REPLICA,PRIMARY] [--filtered_replication_wait_time=30s] [--max_extra_rows_to_compare=1000] <keyspace.workflow>",
-				help:   "Perform a diff of all tables in the workflow",
-			},
-			{
-				name:   "SwitchReads",
-				method: commandSwitchReads,
-				params: "[--cells=c1,c2,...] [--reverse] --tablet_type={replica|rdonly} [--dry_run] <keyspace.workflow>",
-				help:   "Switch read traffic for the specified workflow.",
-			},
-			{
-				name:   "SwitchWrites",
-				method: commandSwitchWrites,
-				params: "[--timeout=30s] [--reverse] [--reverse_replication=true] [--dry_run] <keyspace.workflow>",
-				help:   "Switch write traffic for the specified workflow.",
-			},
-			{
-				name:   "FindAllShardsInKeyspace",
-				method: commandFindAllShardsInKeyspace,
-				params: "<keyspace>",
-				help:   "Displays all of the shards in the specified keyspace.",
-			},
-			{
-				name:   "Mount",
-				method: commandMount,
-				params: "[--topo_type=etcd2|consul|zookeeper] [--topo_server=topo_url] [--topo_root=root_topo_node> [--unmount] [--list] [--show]  [<cluster_name>]",
-				help:   "Add/Remove/Display/List external cluster(s) to this vitess cluster",
-			},
+		{
+			name:   "CreateKeyspace",
+			method: commandCreateKeyspace,
+			params: "[--sharding_column_name=name] [--sharding_column_type=type] [--served_from=tablettype1:ks1,tablettype2:ks2,...] [--force] [--keyspace_type=type] [--base_keyspace=base_keyspace] [--snapshot_time=time] [--durability-policy=policy_name] <keyspace name>",
+			help:   "Creates the specified keyspace. keyspace_type can be NORMAL or SNAPSHOT. For a SNAPSHOT keyspace you must specify the name of a base_keyspace, and a snapshot_time in UTC, in RFC3339 time format, e.g. 2006-01-02T15:04:05+00:00",
 		},
+		{
+			name:   "DeleteKeyspace",
+			method: commandDeleteKeyspace,
+			params: "[--recursive] <keyspace>",
+			help:   "Deletes the specified keyspace. In recursive mode, it also recursively deletes all shards in the keyspace. Otherwise, there must be no shards left in the keyspace.",
+		},
+		{
+			name:   "RemoveKeyspaceCell",
+			method: commandRemoveKeyspaceCell,
+			params: "[--force] [--recursive] <keyspace> <cell>",
+			help:   "Removes the cell from the Cells list for all shards in the keyspace, and the SrvKeyspace for that keyspace in that cell.",
+		},
+		{
+			name:   "GetKeyspace",
+			method: commandGetKeyspace,
+			params: "<keyspace>",
+			help:   "Outputs a JSON structure that contains information about the Keyspace.",
+		},
+		{
+			name:   "GetKeyspaces",
+			method: commandGetKeyspaces,
+			params: "",
+			help:   "Outputs a sorted list of all keyspaces.",
+		},
+		{
+			name:   "RebuildKeyspaceGraph",
+			method: commandRebuildKeyspaceGraph,
+			params: "[--cells=c1,c2,...] [--allow_partial] <keyspace> ...",
+			help:   "Rebuilds the serving data for the keyspace. This command may trigger an update to all connected clients.",
+		},
+		{
+			name:   "ValidateKeyspace",
+			method: commandValidateKeyspace,
+			params: "[--ping-tablets] <keyspace name>",
+			help:   "Validates that all nodes reachable from the specified keyspace are consistent.",
+		},
+		{
+			name:   "Reshard",
+			method: commandReshard,
+			params: "[--source_shards=<source_shards>] [--target_shards=<target_shards>] [--cells=<cells>] [--tablet_types=<source_tablet_types>]  [--skip_schema_copy] <action> 'action must be one of the following: Create, Complete, Cancel, SwitchTraffic, ReverseTrafffic, Show, or Progress' <keyspace.workflow>",
+			help:   "Start a Resharding process. Example: Reshard --cells='zone1,alias1' --tablet_types='PRIMARY,REPLICA,RDONLY'  ks.workflow001 '0' '-80,80-'",
+		},
+		{
+			name:   "MoveTables",
+			method: commandMoveTables,
+			params: "[--source=<sourceKs>] [--tables=<tableSpecs>] [--cells=<cells>] [--tablet_types=<source_tablet_types>] [--all] [--exclude=<tables>] [--auto_start] [--stop_after_copy] <action> 'action must be one of the following: Create, Complete, Cancel, SwitchTraffic, ReverseTrafffic, Show, or Progress' <targetKs.workflow>",
+			help:   `Move table(s) to another keyspace, table_specs is a list of tables or the tables section of the vschema for the target keyspace. Example: '{"t1":{"column_vindexes": [{"column": "id1", "name": "hash"}]}, "t2":{"column_vindexes": [{"column": "id2", "name": "hash"}]}}'.  In the case of an unsharded target keyspace the vschema for each table may be empty. Example: '{"t1":{}, "t2":{}}'.`,
+		},
+		{
+			name:   "Migrate",
+			method: commandMigrate,
+			params: "[--cells=<cells>] [--tablet_types=<source_tablet_types>] --workflow=<workflow> <source_keyspace> <target_keyspace> <table_specs>",
+			help:   `Move table(s) to another keyspace, table_specs is a list of tables or the tables section of the vschema for the target keyspace. Example: '{"t1":{"column_vindexes": [{"column": "id1", "name": "hash"}]}, "t2":{"column_vindexes": [{"column": "id2", "name": "hash"}]}}'.  In the case of an unsharded target keyspace the vschema for each table may be empty. Example: '{"t1":{}, "t2":{}}'.`,
+		},
+		{
+			name:   "DropSources",
+			method: commandDropSources,
+			params: "[--dry_run] [--rename_tables] <keyspace.workflow>",
+			help:   "After a MoveTables or Resharding workflow cleanup unused artifacts like source tables, source shards and denylists",
+		},
+		{
+			name:   "CreateLookupVindex",
+			method: commandCreateLookupVindex,
+			params: "[--cell=<source_cells> DEPRECATED] [--cells=<source_cells>] [--tablet_types=<source_tablet_types>] <keyspace> <json_spec>",
+			help:   `Create and backfill a lookup vindex. the json_spec must contain the vindex and colvindex specs for the new lookup.`,
+		},
+		{
+			name:   "ExternalizeVindex",
+			method: commandExternalizeVindex,
+			params: "<keyspace>.<vindex>",
+			help:   `Externalize a backfilled vindex.`,
+		},
+		{
+			name:   "Materialize",
+			method: commandMaterialize,
+			params: `[--cells=<cells>] [--tablet_types=<source_tablet_types>] <json_spec>, example : '{"workflow": "aaa", "source_keyspace": "source", "target_keyspace": "target", "table_settings": [{"target_table": "customer", "source_expression": "select * from customer", "create_ddl": "copy"}]}'`,
+			help:   "Performs materialization based on the json spec. Is used directly to form VReplication rules, with an optional step to copy table structure/DDL.",
+		},
+		{
+			name:   "VDiff",
+			method: commandVDiff,
+			params: "[--source_cell=<cell>] [--target_cell=<cell>] [--tablet_types=in_order:RDONLY,REPLICA,PRIMARY] [--filtered_replication_wait_time=30s] [--max_extra_rows_to_compare=1000] <keyspace.workflow>",
+			help:   "Perform a diff of all tables in the workflow",
+		},
+		{
+			name:   "SwitchReads",
+			method: commandSwitchReads,
+			params: "[--cells=c1,c2,...] [--reverse] --tablet_type={replica|rdonly} [--dry_run] <keyspace.workflow>",
+			help:   "Switch read traffic for the specified workflow.",
+		},
+		{
+			name:   "SwitchWrites",
+			method: commandSwitchWrites,
+			params: "[--timeout=30s] [--reverse] [--reverse_replication=true] [--dry_run] <keyspace.workflow>",
+			help:   "Switch write traffic for the specified workflow.",
+		},
+		{
+			name:   "FindAllShardsInKeyspace",
+			method: commandFindAllShardsInKeyspace,
+			params: "<keyspace>",
+			help:   "Displays all of the shards in the specified keyspace.",
+		},
+		{
+			name:   "Mount",
+			method: commandMount,
+			params: "[--topo_type=etcd2|consul|zookeeper] [--topo_server=topo_url] [--topo_root=root_topo_node> [--unmount] [--list] [--show]  [<cluster_name>]",
+			help:   "Add/Remove/Display/List external cluster(s) to this vitess cluster",
+		},
+	},
 	},
 	{
 		"Generic", []command{
-			{
-				name:   "Validate",
-				method: commandValidate,
-				params: "[--ping-tablets]",
-				help:   "Validates that all nodes reachable from the global replication graph and that all tablets in all discoverable cells are consistent.",
-			},
-			{
-				name:   "ListAllTablets",
-				method: commandListAllTablets,
-				params: "[--keyspace=''] [--tablet_type=<PRIMARY,REPLICA,RDONLY,SPARE>] [<cell_name1>,<cell_name2>,...]",
-				help:   "Lists all tablets in an awk-friendly way.",
-			},
-			{
-				name:   "ListTablets",
-				method: commandListTablets,
-				params: "<tablet alias> ...",
-				help:   "Lists specified tablets in an awk-friendly way.",
-			},
-			{
-				name:   "GenerateShardRanges",
-				method: commandGenerateShardRanges,
-				params: "[--num_shards 2]",
-				help:   "Generates shard ranges assuming a keyspace with N shards.",
-			},
-			{
-				name:   "Panic",
-				method: commandPanic,
-				params: "",
-				help:   "Triggers a panic on the server side, to test the handling.",
-				hidden: true,
-			},
-			{
-				name: "LegacyVtctlCommand",
-				method: func(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-					subFlags.Usage = func() {
-						fmt.Fprintln(subFlags.Output(), "Runs the vtctl request through the legacy vtctlclient program syntax (default).")
-					}
-
-					return subFlags.Parse(args)
-				},
-				params: "<command> [args...]",
-				help:   "Runs the vtctl request through the legacy vtctlclient program syntax (default).",
-			},
-			{
-				name: "VtctldCommand",
-				method: func(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-					subFlags.Usage = func() {
-						fmt.Fprintln(subFlags.Output(), "Runs the vtctl request through the new vtctldclient program syntax. This will become the default in a future version of Vitess.")
-					}
-
-					return subFlags.Parse(args)
-				},
-				params: "<command> [args ...]",
-				help:   "Runs the vtctl request through the new vtctldclient program syntax. This will become the default in a future version of Vitess.",
-			},
+		{
+			name:   "Validate",
+			method: commandValidate,
+			params: "[--ping-tablets]",
+			help:   "Validates that all nodes reachable from the global replication graph and that all tablets in all discoverable cells are consistent.",
 		},
+		{
+			name:   "ListAllTablets",
+			method: commandListAllTablets,
+			params: "[--keyspace=''] [--tablet_type=<PRIMARY,REPLICA,RDONLY,SPARE>] [<cell_name1>,<cell_name2>,...]",
+			help:   "Lists all tablets in an awk-friendly way.",
+		},
+		{
+			name:   "ListTablets",
+			method: commandListTablets,
+			params: "<tablet alias> ...",
+			help:   "Lists specified tablets in an awk-friendly way.",
+		},
+		{
+			name:   "GenerateShardRanges",
+			method: commandGenerateShardRanges,
+			params: "[--num_shards 2]",
+			help:   "Generates shard ranges assuming a keyspace with N shards.",
+		},
+		{
+			name:   "Panic",
+			method: commandPanic,
+			params: "",
+			help:   "Triggers a panic on the server side, to test the handling.",
+			hidden: true,
+		},
+		{
+			name: "LegacyVtctlCommand",
+			method: func(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+				subFlags.Usage = func() {
+					fmt.Fprintln(subFlags.Output(), "Runs the vtctl request through the legacy vtctlclient program syntax (default).")
+				}
+
+				return subFlags.Parse(args)
+			},
+			params: "<command> [args...]",
+			help:   "Runs the vtctl request through the legacy vtctlclient program syntax (default).",
+		},
+		{
+			name: "VtctldCommand",
+			method: func(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+				subFlags.Usage = func() {
+					fmt.Fprintln(subFlags.Output(), "Runs the vtctl request through the new vtctldclient program syntax. This will become the default in a future version of Vitess.")
+				}
+
+				return subFlags.Parse(args)
+			},
+			params: "<command> [args ...]",
+			help:   "Runs the vtctl request through the new vtctldclient program syntax. This will become the default in a future version of Vitess.",
+		},
+	},
 	},
 	{
 		"Schema, Version, Permissions", []command{
-			{
-				name:   "GetSchema",
-				method: commandGetSchema,
-				params: "[--tables=<table1>,<table2>,...] [--exclude_tables=<table1>,<table2>,...] [--include-views] <tablet alias>",
-				help:   "Displays the full schema for a tablet, or just the schema for the specified tables in that tablet.",
-			},
-			{
-				name:   "ReloadSchema",
-				method: commandReloadSchema,
-				params: "<tablet alias>",
-				help:   "Reloads the schema on a remote tablet.",
-			},
-			{
-				name:   "ReloadSchemaShard",
-				method: commandReloadSchemaShard,
-				params: "[--concurrency=10] [--include_primary=false] <keyspace/shard>",
-				help:   "Reloads the schema on all the tablets in a shard.",
-			},
-			{
-				name:   "ReloadSchemaKeyspace",
-				method: commandReloadSchemaKeyspace,
-				params: "[--concurrency=10] [--include_primary=false] <keyspace>",
-				help:   "Reloads the schema on all the tablets in a keyspace.",
-			},
-			{
-				name:   "ValidateSchemaShard",
-				method: commandValidateSchemaShard,
-				params: "[--exclude_tables=''] [--include-views] [--include-vschema] <keyspace/shard>",
-				help:   "Validates that the schema on primary tablet matches all of the replica tablets.",
-			},
-			{
-				name:   "ValidateSchemaKeyspace",
-				method: commandValidateSchemaKeyspace,
-				params: "[--exclude_tables=''] [--include-views] [--skip-no-primary] [--include-vschema] <keyspace name>",
-				help:   "Validates that the schema on the primary tablet for shard 0 matches the schema on all of the other tablets in the keyspace.",
-			},
-			{
-				name:   "ApplySchema",
-				method: commandApplySchema,
-				params: "[--allow_long_unavailability] [--wait_replicas_timeout=10s] [--ddl_strategy=<ddl_strategy>] [--uuid_list=<comma_separated_uuids>] [--migration_context=<unique-request-context>] [--skip_preflight] {--sql=<sql> || --sql-file=<filename>} <keyspace>",
-				help:   "Applies the schema change to the specified keyspace on every primary, running in parallel on all shards. The changes are then propagated to replicas via replication. If --allow_long_unavailability is set, schema changes affecting a large number of rows (and possibly incurring a longer period of unavailability) will not be rejected. -ddl_strategy is used to instruct migrations via vreplication, gh-ost or pt-osc with optional parameters. -migration_context allows the user to specify a custom request context for online DDL migrations. If -skip_preflight, SQL goes directly to shards without going through sanity checks.",
-			},
-			{
-				name:   "CopySchemaShard",
-				method: commandCopySchemaShard,
-				params: "[--tables=<table1>,<table2>,...] [--exclude_tables=<table1>,<table2>,...] [--include-views] [--skip-verify] [--wait_replicas_timeout=10s] {<source keyspace/shard> || <source tablet alias>} <destination keyspace/shard>",
-				help:   "Copies the schema from a source shard's primary (or a specific tablet) to a destination shard. The schema is applied directly on the primary of the destination shard, and it is propagated to the replicas through binlogs.",
-			},
-			{
-				name:   "OnlineDDL",
-				method: commandOnlineDDL,
-				params: "[--json] <keyspace> <command> [<migration_uuid>]",
-				help: "Operates on online DDL (migrations). Examples:" +
-					" \nvtctl OnlineDDL test_keyspace show 82fa54ac_e83e_11ea_96b7_f875a4d24e90" +
-					" \nvtctl OnlineDDL test_keyspace show all" +
-					" \nvtctl OnlineDDL test_keyspace show running" +
-					" \nvtctl OnlineDDL test_keyspace show complete" +
-					" \nvtctl OnlineDDL test_keyspace show failed" +
-					" \nvtctl OnlineDDL test_keyspace retry 82fa54ac_e83e_11ea_96b7_f875a4d24e90" +
-					" \nvtctl OnlineDDL test_keyspace cancel 82fa54ac_e83e_11ea_96b7_f875a4d24e90",
-			},
-			{
-				name:   "ValidateVersionShard",
-				method: commandValidateVersionShard,
-				params: "<keyspace/shard>",
-				help:   "Validates that the version on primary matches all of the replicas.",
-			},
-			{
-				name:   "ValidateVersionKeyspace",
-				method: commandValidateVersionKeyspace,
-				params: "<keyspace name>",
-				help:   "Validates that the version on primary of shard 0 matches all of the other tablets in the keyspace.",
-			},
-			{
-				name:   "GetPermissions",
-				method: commandGetPermissions,
-				params: "<tablet alias>",
-				help:   "Displays the permissions for a tablet.",
-			},
-			{
-				name:   "ValidatePermissionsShard",
-				method: commandValidatePermissionsShard,
-				params: "<keyspace/shard>",
-				help:   "Validates that the permissions on primary match all the replicas.",
-			},
-			{
-				name:   "ValidatePermissionsKeyspace",
-				method: commandValidatePermissionsKeyspace,
-				params: "<keyspace name>",
-				help:   "Validates that the permissions on primary of shard 0 match those of all of the other tablets in the keyspace.",
-			},
-			{
-				name:   "GetVSchema",
-				method: commandGetVSchema,
-				params: "<keyspace>",
-				help:   "Displays the VTGate routing schema.",
-			},
-			{
-				name:   "ApplyVSchema",
-				method: commandApplyVSchema,
-				params: "{--vschema=<vschema> || --vschema_file=<vschema file> || --sql=<sql> || --sql_file=<sql file>} [--cells=c1,c2,...] [--skip_rebuild] [--dry-run] <keyspace>",
-				help:   "Applies the VTGate routing schema to the provided keyspace. Shows the result after application.",
-			},
-			{
-				name:   "GetRoutingRules",
-				method: commandGetRoutingRules,
-				params: "",
-				help:   "Displays the VSchema routing rules.",
-			},
-			{
-				name:   "ApplyRoutingRules",
-				method: commandApplyRoutingRules,
-				params: "{--rules=<rules> || --rules_file=<rules_file>} [--cells=c1,c2,...] [--skip_rebuild] [--dry-run]",
-				help:   "Applies the VSchema routing rules.",
-			},
-			{
-				name:   "RebuildVSchemaGraph",
-				method: commandRebuildVSchemaGraph,
-				params: "[--cells=c1,c2,...]",
-				help:   "Rebuilds the cell-specific SrvVSchema from the global VSchema objects in the provided cells (or all cells if none provided).",
-			},
+		{
+			name:   "GetSchema",
+			method: commandGetSchema,
+			params: "[--tables=<table1>,<table2>,...] [--exclude_tables=<table1>,<table2>,...] [--include-views] <tablet alias>",
+			help:   "Displays the full schema for a tablet, or just the schema for the specified tables in that tablet.",
 		},
+		{
+			name:   "ReloadSchema",
+			method: commandReloadSchema,
+			params: "<tablet alias>",
+			help:   "Reloads the schema on a remote tablet.",
+		},
+		{
+			name:   "ReloadSchemaShard",
+			method: commandReloadSchemaShard,
+			params: "[--concurrency=10] [--include_primary=false] <keyspace/shard>",
+			help:   "Reloads the schema on all the tablets in a shard.",
+		},
+		{
+			name:   "ReloadSchemaKeyspace",
+			method: commandReloadSchemaKeyspace,
+			params: "[--concurrency=10] [--include_primary=false] <keyspace>",
+			help:   "Reloads the schema on all the tablets in a keyspace.",
+		},
+		{
+			name:   "ValidateSchemaShard",
+			method: commandValidateSchemaShard,
+			params: "[--exclude_tables=''] [--include-views] [--include-vschema] <keyspace/shard>",
+			help:   "Validates that the schema on primary tablet matches all of the replica tablets.",
+		},
+		{
+			name:   "ValidateSchemaKeyspace",
+			method: commandValidateSchemaKeyspace,
+			params: "[--exclude_tables=''] [--include-views] [--skip-no-primary] [--include-vschema] <keyspace name>",
+			help:   "Validates that the schema on the primary tablet for shard 0 matches the schema on all of the other tablets in the keyspace.",
+		},
+		{
+			name:   "ApplySchema",
+			method: commandApplySchema,
+			params: "[--allow_long_unavailability] [--wait_replicas_timeout=10s] [--ddl_strategy=<ddl_strategy>] [--uuid_list=<comma_separated_uuids>] [--migration_context=<unique-request-context>] [--skip_preflight] {--sql=<sql> || --sql-file=<filename>} <keyspace>",
+			help:   "Applies the schema change to the specified keyspace on every primary, running in parallel on all shards. The changes are then propagated to replicas via replication. If --allow_long_unavailability is set, schema changes affecting a large number of rows (and possibly incurring a longer period of unavailability) will not be rejected. -ddl_strategy is used to instruct migrations via vreplication, gh-ost or pt-osc with optional parameters. -migration_context allows the user to specify a custom request context for online DDL migrations. If -skip_preflight, SQL goes directly to shards without going through sanity checks.",
+		},
+		{
+			name:   "CopySchemaShard",
+			method: commandCopySchemaShard,
+			params: "[--tables=<table1>,<table2>,...] [--exclude_tables=<table1>,<table2>,...] [--include-views] [--skip-verify] [--wait_replicas_timeout=10s] {<source keyspace/shard> || <source tablet alias>} <destination keyspace/shard>",
+			help:   "Copies the schema from a source shard's primary (or a specific tablet) to a destination shard. The schema is applied directly on the primary of the destination shard, and it is propagated to the replicas through binlogs.",
+		},
+		{
+			name:   "OnlineDDL",
+			method: commandOnlineDDL,
+			params: "[--json] <keyspace> <command> [<migration_uuid>]",
+			help: "Operates on online DDL (migrations). Examples:" +
+				" \nvtctl OnlineDDL test_keyspace show 82fa54ac_e83e_11ea_96b7_f875a4d24e90" +
+				" \nvtctl OnlineDDL test_keyspace show all" +
+				" \nvtctl OnlineDDL test_keyspace show running" +
+				" \nvtctl OnlineDDL test_keyspace show complete" +
+				" \nvtctl OnlineDDL test_keyspace show failed" +
+				" \nvtctl OnlineDDL test_keyspace retry 82fa54ac_e83e_11ea_96b7_f875a4d24e90" +
+				" \nvtctl OnlineDDL test_keyspace cancel 82fa54ac_e83e_11ea_96b7_f875a4d24e90",
+		},
+		{
+			name:   "ValidateVersionShard",
+			method: commandValidateVersionShard,
+			params: "<keyspace/shard>",
+			help:   "Validates that the version on primary matches all of the replicas.",
+		},
+		{
+			name:   "ValidateVersionKeyspace",
+			method: commandValidateVersionKeyspace,
+			params: "<keyspace name>",
+			help:   "Validates that the version on primary of shard 0 matches all of the other tablets in the keyspace.",
+		},
+		{
+			name:   "GetPermissions",
+			method: commandGetPermissions,
+			params: "<tablet alias>",
+			help:   "Displays the permissions for a tablet.",
+		},
+		{
+			name:   "ValidatePermissionsShard",
+			method: commandValidatePermissionsShard,
+			params: "<keyspace/shard>",
+			help:   "Validates that the permissions on primary match all the replicas.",
+		},
+		{
+			name:   "ValidatePermissionsKeyspace",
+			method: commandValidatePermissionsKeyspace,
+			params: "<keyspace name>",
+			help:   "Validates that the permissions on primary of shard 0 match those of all of the other tablets in the keyspace.",
+		},
+		{
+			name:   "GetVSchema",
+			method: commandGetVSchema,
+			params: "<keyspace>",
+			help:   "Displays the VTGate routing schema.",
+		},
+		{
+			name:   "ApplyVSchema",
+			method: commandApplyVSchema,
+			params: "{--vschema=<vschema> || --vschema_file=<vschema file> || --sql=<sql> || --sql_file=<sql file>} [--cells=c1,c2,...] [--skip_rebuild] [--dry-run] <keyspace>",
+			help:   "Applies the VTGate routing schema to the provided keyspace. Shows the result after application.",
+		},
+		{
+			name:   "GetRoutingRules",
+			method: commandGetRoutingRules,
+			params: "",
+			help:   "Displays the VSchema routing rules.",
+		},
+		{
+			name:   "ApplyRoutingRules",
+			method: commandApplyRoutingRules,
+			params: "{--rules=<rules> || --rules_file=<rules_file>} [--cells=c1,c2,...] [--skip_rebuild] [--dry-run]",
+			help:   "Applies the VSchema routing rules.",
+		},
+		{
+			name:   "RebuildVSchemaGraph",
+			method: commandRebuildVSchemaGraph,
+			params: "[--cells=c1,c2,...]",
+			help:   "Rebuilds the cell-specific SrvVSchema from the global VSchema objects in the provided cells (or all cells if none provided).",
+		},
+	},
 	},
 	{
 		"Serving Graph", []command{
-			{
-				name:   "GetSrvKeyspaceNames",
-				method: commandGetSrvKeyspaceNames,
-				params: "<cell>",
-				help:   "Outputs a list of keyspace names.",
-			},
-			{
-				name:   "GetSrvKeyspace",
-				method: commandGetSrvKeyspace,
-				params: "<cell> <keyspace>",
-				help:   "Outputs a JSON structure that contains information about the SrvKeyspace.",
-			},
-			{
-				name:   "GetSrvVSchema",
-				method: commandGetSrvVSchema,
-				params: "<cell>",
-				help:   "Outputs a JSON structure that contains information about the SrvVSchema.",
-			},
-			{
-				name:   "DeleteSrvVSchema",
-				method: commandDeleteSrvVSchema,
-				params: "<cell>",
-				help:   "Deletes the SrvVSchema object in the given cell.",
-			},
+		{
+			name:   "GetSrvKeyspaceNames",
+			method: commandGetSrvKeyspaceNames,
+			params: "<cell>",
+			help:   "Outputs a list of keyspace names.",
 		},
+		{
+			name:   "GetSrvKeyspace",
+			method: commandGetSrvKeyspace,
+			params: "<cell> <keyspace>",
+			help:   "Outputs a JSON structure that contains information about the SrvKeyspace.",
+		},
+		{
+			name:   "GetSrvVSchema",
+			method: commandGetSrvVSchema,
+			params: "<cell>",
+			help:   "Outputs a JSON structure that contains information about the SrvVSchema.",
+		},
+		{
+			name:   "DeleteSrvVSchema",
+			method: commandDeleteSrvVSchema,
+			params: "<cell>",
+			help:   "Deletes the SrvVSchema object in the given cell.",
+		},
+	},
 	},
 	{
 		"Replication Graph", []command{
-			{
-				name:   "GetShardReplication",
-				method: commandGetShardReplication,
-				params: "<cell> <keyspace/shard>",
-				help:   "Outputs a JSON structure that contains information about the ShardReplication.",
-			},
+		{
+			name:   "GetShardReplication",
+			method: commandGetShardReplication,
+			params: "<cell> <keyspace/shard>",
+			help:   "Outputs a JSON structure that contains information about the ShardReplication.",
 		},
+	},
 	},
 	{
 		"Workflow", []command{
-			{
-				name:   "VExec",
-				method: commandVExec,
-				params: "<ks.workflow> <query> --dry-run",
-				help:   "Runs query on all tablets in workflow. Example: VExec merchant.morders \"update _vt.vreplication set Status='Running'\"",
-			},
+		{
+			name:   "VExec",
+			method: commandVExec,
+			params: "<ks.workflow> <query> --dry-run",
+			help:   "Runs query on all tablets in workflow. Example: VExec merchant.morders \"update _vt.vreplication set Status='Running'\"",
 		},
+	},
 	},
 	{
 		"Workflow", []command{
-			{
-				name:   "Workflow",
-				method: commandWorkflow,
-				params: "<ks.workflow> <action> --dry-run",
-				help:   "Start/Stop/Delete/Show/ListAll/Tags Workflow on all target tablets in workflow. Example: Workflow merchant.morders Start",
-			},
+		{
+			name:   "Workflow",
+			method: commandWorkflow,
+			params: "<ks.workflow> <action> --dry-run",
+			help:   "Start/Stop/Delete/Show/ListAll/Tags Workflow on all target tablets in workflow. Example: Workflow merchant.morders Start",
 		},
+	},
 	},
 }
 
@@ -3126,6 +3126,9 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 
 func commandOnlineDDL(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	json := subFlags.Bool("json", false, "Output JSON instead of human-readable table")
+	orderBy := subFlags.String("order", "ascending", "results ordered by  added_at timestamp, default is ascending. Allowed values are ascending, descending")
+	limit := subFlags.Int64("limit", 0, "limit number of rows returned")
+	skip := subFlags.Int64("skip", 0, "skip specified number of rows returned")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -3168,6 +3171,16 @@ func commandOnlineDDL(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag
 				condition, bindErr = sqlparser.ParseAndBind("migration_context=%a", sqltypes.StringBindVariable(arg))
 			}
 		}
+		order := " order by added_timestamp ascending"
+		if *orderBy == "descending" {
+			order = " order by added_timestamp descending"
+		}
+		condition += order
+
+		if *limit > 0 {
+			condition += fmt.Sprintf(" LIMIT %v, %v", *skip, *limit)
+		}
+
 		query = fmt.Sprintf(`select
 				*
 				from _vt.schema_migrations where %s`, condition)
