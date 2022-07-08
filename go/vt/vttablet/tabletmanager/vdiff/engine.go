@@ -19,12 +19,10 @@ package vdiff
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	"vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
@@ -57,6 +55,7 @@ type Engine struct {
 	vre *vreplication.Engine
 
 	wg         sync.WaitGroup
+	done       chan bool
 	thisTablet *topodata.Tablet
 
 	// snapshotMu is used to ensure that only one vdiff snapshot cycle is active at a time,
@@ -106,10 +105,27 @@ func (vde *Engine) Open(ctx context.Context, vre *vreplication.Engine) {
 		vde.cancelRetry = cancel
 		go vde.retry(ctx, err)
 	}
+
+	// Auto retry error'd VDiffs
+	go func() {
+		tkr := time.NewTicker(time.Second * 30)
+		for {
+			select {
+			case <-tkr.C:
+				if err := vde.retryVDiffs(ctx); err != nil {
+					log.Errorf("Error retrying VDiffs: %v", err)
+				}
+			case <-ctx.Done():
+				return
+			case <-vde.done:
+				return
+			}
+		}
+	}()
 }
 
 func (vde *Engine) openLocked(ctx context.Context) error {
-	rows, err := vde.getVDiffsToExec(ctx)
+	rows, err := vde.getPendingVDiffs(ctx)
 	if err != nil {
 		return err
 	}
@@ -172,31 +188,11 @@ func (vde *Engine) initControllers(qr *sqltypes.Result) error {
 	}
 	for _, row := range qr.Named().Rows {
 		options := &tabletmanagerdata.VDiffOptions{}
-		if err := json.Unmarshal([]byte(row.AsString("options", "{}")), options); err != nil {
+		if err := json.Unmarshal(row.AsBytes("options", []byte("{}")), options); err != nil {
 			return err
 		}
-		execIt := false
-		state := VDiffState(row.AsString("state", ""))
-		switch state {
-		case PendingState:
-			execIt = true
-		case ErrorState:
-			log.Infof("VDiff engine: found a vdiff stream in error state: %+v", row)
-			if options.GetCoreOptions().AutoRetry {
-				log.Infof("VDiff engine: auto retry is enabled")
-				// let's only bother if we had a retry worthy error
-				if lastError := mysql.NewSQLErrorFromError(errors.New(row.AsString("last_error", ""))); mysql.IsEphemeralError(lastError) {
-					log.Infof("VDiff engine: and its a retry worthy error")
-					execIt = true
-				}
-			}
-		default:
-		}
-
-		if execIt {
-			if err := vde.addController(row, options); err != nil {
-				return err
-			}
+		if err := vde.addController(row, options); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -226,6 +222,8 @@ func (vde *Engine) Close() {
 		return
 	}
 
+	// end the goroutine that retries error'd vdiffs
+	vde.done <- true
 	vde.cancel()
 	// We still have to wait for all controllers to stop.
 	for _, ct := range vde.controllers {
@@ -247,13 +245,30 @@ func (vde *Engine) getDBClient(isAdmin bool) binlogplayer.DBClient {
 	}
 	return vde.dbClientFactoryFiltered()
 }
-func (vde *Engine) getVDiffsToExec(ctx context.Context) (*sqltypes.Result, error) {
+
+func (vde *Engine) getPendingVDiffs(ctx context.Context) (*sqltypes.Result, error) {
 	dbClient := vde.dbClientFactoryFiltered()
 	if err := dbClient.Connect(); err != nil {
 		return nil, err
 	}
 	defer dbClient.Close()
-	qr, err := withDDL.ExecIgnore(ctx, sqlGetVDiffsToExec, dbClient.ExecuteFetch)
+	qr, err := withDDL.ExecIgnore(ctx, sqlGetPendingVDiffs, dbClient.ExecuteFetch)
+	if err != nil {
+		return nil, err
+	}
+	if len(qr.Rows) == 0 {
+		return nil, nil
+	}
+	return qr, nil
+}
+
+func (vde *Engine) getVDiffsToRetry(ctx context.Context) (*sqltypes.Result, error) {
+	dbClient := vde.dbClientFactoryFiltered()
+	if err := dbClient.Connect(); err != nil {
+		return nil, err
+	}
+	defer dbClient.Close()
+	qr, err := withDDL.ExecIgnore(ctx, sqlGetVDiffsToRetry, dbClient.ExecuteFetch)
 	if err != nil {
 		return nil, err
 	}
@@ -277,4 +292,32 @@ func (vde *Engine) getVDiffByID(ctx context.Context, id int64) (*sqltypes.Result
 		return nil, fmt.Errorf("unable to read vdiff table for %d", id)
 	}
 	return qr, nil
+}
+
+func (vde *Engine) retryVDiffs(ctx context.Context) error {
+	qr, err := vde.getVDiffsToRetry(ctx)
+	if err != nil {
+		return err
+	}
+	if qr == nil || len(qr.Rows) == 0 {
+		return nil
+	}
+	for _, row := range qr.Named().Rows {
+		id, err := row.ToInt64("id")
+		if err != nil {
+			return err
+		}
+		qr, err := vde.getVDiffByID(ctx, id)
+		if err != nil {
+			return err
+		}
+		options := &tabletmanagerdata.VDiffOptions{}
+		if err := json.Unmarshal(row.AsBytes("options", []byte("{}")), options); err != nil {
+			return err
+		}
+		if err := vde.addController(qr.Named().Row(), options); err != nil {
+			return err
+		}
+	}
+	return nil
 }

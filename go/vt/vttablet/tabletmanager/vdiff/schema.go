@@ -97,7 +97,8 @@ const (
 	// sqlUpdateVDiffState has a penultimate placeholder for any additional columns you want to update, e.g. `, foo = 1`
 	sqlUpdateVDiffState     = "update _vt.vdiff set state = %s, last_error = %s %s where id = %d"
 	sqlGetVReplicationEntry = "select * from _vt.vreplication %s"
-	sqlGetVDiffsToExec      = "select * from _vt.vdiff where state in ('pending', 'error')"
+	sqlGetPendingVDiffs     = "select * from _vt.vdiff where state = 'pending'"
+	sqlGetVDiffsToRetry     = "select * from _vt.vdiff where state = 'error' and options->>'$.core_options.auto_retry' = 'true'"
 	sqlGetVDiffID           = "select id as id from _vt.vdiff where vdiff_uuid = %s"
 	sqlGetAllVDiffs         = "select * from _vt.vdiff order by id desc"
 
