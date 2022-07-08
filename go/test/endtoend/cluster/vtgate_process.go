@@ -84,9 +84,12 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 		"-cell", vtgate.Cell,
 		"-cells_to_watch", vtgate.CellsToWatch,
 		"-tablet_types_to_wait", vtgate.TabletTypesToWait,
-		"-gateway_implementation", vtgate.GatewayImplementation,
 		"-service_map", vtgate.ServiceMap,
 		"-mysql_auth_server_impl", vtgate.MySQLAuthServerImpl,
+	}
+	// the gateway_implementation flag has been removed in v14, removing for upgrade-downgrade tests
+	if v, err := GetMajorVersion("vtgate"); err != nil && v < 14 {
+		args = append(args, "-gateway_implementation", vtgate.GatewayImplementation)
 	}
 	if vtgate.PlannerVersion > 0 {
 		args = append(args, "-planner_version", vtgate.PlannerVersion.String())
