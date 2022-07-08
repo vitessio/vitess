@@ -19,10 +19,12 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"math/rand"
 	"os"
 	"os/exec"
 	"path"
+	"strings"
 	"testing"
 	"time"
 
@@ -34,6 +36,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/tlstest"
 	"vitess.io/vitess/go/vt/vtctl/vtctlclient"
 	"vitess.io/vitess/go/vt/vttest"
@@ -176,7 +179,7 @@ func TestForeignKeysAndDDLModes(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestCanVtGateExecute(t *testing.T) {
+func TestCanGetKeyspaces(t *testing.T) {
 	args := os.Args
 	conf := config
 	defer resetFlags(args, conf)
@@ -185,7 +188,7 @@ func TestCanVtGateExecute(t *testing.T) {
 	assert.NoError(t, err)
 	defer cluster.TearDown()
 
-	// assertVtGateExecute(t, cluster)
+	assertGetKeyspaces(t, cluster)
 }
 
 func TestExternalTopoServerConsul(t *testing.T) {
@@ -211,7 +214,7 @@ func TestExternalTopoServerConsul(t *testing.T) {
 	assert.NoError(t, err)
 	defer cluster.TearDown()
 
-	// assertVtGateExecute(t, cluster)
+	assertGetKeyspaces(t, cluster)
 }
 
 func TestMtlsAuth(t *testing.T) {
@@ -301,10 +304,15 @@ func startPersistentCluster(dir string, flags ...string) (vttest.LocalCluster, e
 	return startCluster(flags...)
 }
 
+var clusterKeyspaces = []string{
+	"test_keyspace",
+	"app_customer",
+}
+
 func startCluster(flags ...string) (vttest.LocalCluster, error) {
 	schemaDirArg := "--schema_dir=data/schema"
 	tabletHostname := "--tablet_hostname=localhost"
-	keyspaceArg := "--keyspaces=test_keyspace,app_customer"
+	keyspaceArg := "--keyspaces=" + strings.Join(clusterKeyspaces, ",")
 	numShardsArg := "--num_shards=2,2"
 	vschemaDDLAuthorizedUsers := "--vschema_ddl_authorized_users=%"
 	os.Args = append(os.Args, []string{schemaDirArg, keyspaceArg, numShardsArg, tabletHostname, vschemaDDLAuthorizedUsers}...)
@@ -371,41 +379,45 @@ func randomPort() int {
 	return int(v + 10000)
 }
 
-// TODO: (ajm188) okay to remove entirely? or replace with a mysql.Conn-based query?
-// func assertVtGateExecute(t *testing.T, cluster vttest.LocalCluster) {
-// 	client, err := vtctlclient.New(fmt.Sprintf("localhost:%v", cluster.GrpcPort()))
-// 	assert.NoError(t, err)
-// 	defer client.Close()
-// 	stream, err := client.ExecuteVtctlCommand(
-// 		context.Background(),
-// 		[]string{
-// 			"VtGateExecute",
-// 			"--server",
-// 			fmt.Sprintf("localhost:%v", cluster.GrpcPort()),
-// 			"select 'success';",
-// 		},
-// 		30*time.Second,
-// 	)
-// 	assert.NoError(t, err)
-//
-// 	var b strings.Builder
-// 	b.Grow(1024)
-//
-// Out:
-// 	for {
-// 		e, err := stream.Recv()
-// 		switch err {
-// 		case nil:
-// 			b.WriteString(e.Value)
-// 		case io.EOF:
-// 			break Out
-// 		default:
-// 			assert.FailNow(t, err.Error())
-// 		}
-// 	}
-//
-// 	assert.Contains(t, b.String(), "success")
-// }
+func assertGetKeyspaces(t *testing.T, cluster vttest.LocalCluster) {
+	client, err := vtctlclient.New(fmt.Sprintf("localhost:%v", cluster.GrpcPort()))
+	assert.NoError(t, err)
+	defer client.Close()
+	stream, err := client.ExecuteVtctlCommand(
+		context.Background(),
+		[]string{
+			"GetKeyspaces",
+			"--server",
+			fmt.Sprintf("localhost:%v", cluster.GrpcPort()),
+		},
+		30*time.Second,
+	)
+	assert.NoError(t, err)
+
+	resp, err := consumeEventStream(stream)
+	require.NoError(t, err)
+
+	keyspaces := strings.Split(resp, "\n")
+	if keyspaces[len(keyspaces)-1] == "" { // trailing newlines make Split annoying
+		keyspaces = keyspaces[:len(keyspaces)-1]
+	}
+
+	assert.ElementsMatch(t, clusterKeyspaces, keyspaces)
+}
+
+func consumeEventStream(stream logutil.EventStream) (string, error) {
+	var buf strings.Builder
+	for {
+		switch e, err := stream.Recv(); err {
+		case nil:
+			buf.WriteString(e.Value)
+		case io.EOF:
+			return buf.String(), nil
+		default:
+			return "", err
+		}
+	}
+}
 
 // startConsul starts a consul subprocess, and waits for it to be ready.
 // Returns the exec.Cmd forked, and the server address to RPC-connect to.
