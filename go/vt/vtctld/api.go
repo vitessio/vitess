@@ -62,7 +62,7 @@ const (
 	jsonContentType = "application/json; charset=utf-8"
 )
 
-// TabletStats represents realtime stats from a discovery.LegacyTabletStats struct.
+// TabletStats represents realtime stats from a discovery.TabletHealth struct.
 type TabletStats struct {
 	LastError string                 `json:"last_error,omitempty"`
 	Realtime  *querypb.RealtimeStats `json:"realtime,omitempty"`
