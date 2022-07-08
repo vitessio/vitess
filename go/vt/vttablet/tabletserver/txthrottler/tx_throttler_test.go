@@ -69,7 +69,7 @@ func TestEnabledThrottler(t *testing.T) {
 		return mockHealthCheck
 	}
 
-	topologyWatcherFactory = func(topoServer *topo.Server, tr discovery.TabletRecorder, cell, keyspace, shard string, refreshInterval time.Duration, topoReadConcurrency int) TopologyWatcherInterface {
+	topologyWatcherFactory = func(topoServer *topo.Server, hc discovery.HealthCheck, cell, keyspace, shard string, refreshInterval time.Duration, topoReadConcurrency int) TopologyWatcherInterface {
 		if ts != topoServer {
 			t.Errorf("want: %v, got: %v", ts, topoServer)
 		}

@@ -154,23 +154,19 @@ func FilteringKeyspaces() bool {
 	return len(KeyspacesToWatch) > 0
 }
 
-// TabletRecorder is a sub interface of HealthCheck.
-// It is separated out to enable unit testing.
-type TabletRecorder interface {
-	// AddTablet adds the tablet.
-	AddTablet(tablet *topodata.Tablet)
-	// RemoveTablet removes the tablet.
-	RemoveTablet(tablet *topodata.Tablet)
-	// ReplaceTablet does an AddTablet and RemoveTablet in one call, effectively replacing the old tablet with the new.
-	ReplaceTablet(old, new *topodata.Tablet)
-}
-
 type KeyspaceShardTabletType string
 type tabletAliasString string
 
 // HealthCheck declares what the TabletGateway needs from the HealthCheck
 type HealthCheck interface {
-	TabletRecorder
+	// AddTablet adds the tablet.
+	AddTablet(tablet *topodata.Tablet)
+
+	// RemoveTablet removes the tablet.
+	RemoveTablet(tablet *topodata.Tablet)
+
+	// ReplaceTablet does an AddTablet and RemoveTablet in one call, effectively replacing the old tablet with the new.
+	ReplaceTablet(old, new *topodata.Tablet)
 
 	// CacheStatus returns a displayable version of the health check cache.
 	CacheStatus() TabletsCacheStatusList
