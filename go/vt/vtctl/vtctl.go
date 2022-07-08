@@ -3175,15 +3175,15 @@ func commandOnlineDDL(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag
 		if *orderBy == "descending" {
 			order = " order by added_timestamp descending"
 		}
-		condition += order
 
+		skipLimit := ""
 		if *limit > 0 {
-			condition += fmt.Sprintf(" LIMIT %v, %v", *skip, *limit)
+			skipLimit = fmt.Sprintf(" LIMIT %v, %v", *skip, *limit)
 		}
 
 		query = fmt.Sprintf(`select
 				*
-				from _vt.schema_migrations where %s`, condition)
+				from _vt.schema_migrations where %s %s %s`, condition, order, skipLimit)
 	case "retry":
 		if arg == "" {
 			return fmt.Errorf("UUID required")
