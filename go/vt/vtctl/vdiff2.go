@@ -58,7 +58,7 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 	subFlags.StringVar(&format, "format", "text", "Format of report") // "json" or "text"
 	maxExtraRowsToCompare := subFlags.Int64("max_extra_rows_to_compare", 1000, "If there are collation differences between the source and target, you can have rows that are identical but simply returned in a different order from MySQL. We will do a second pass to compare the rows for any actual differences in this case and this flag allows you to control the resources used for this operation.")
 
-	autoRetry := subFlags.Bool("auto-retry", false, "Should this vdiff automatically retry and continue in case of recoverable errors")
+	autoRetry := subFlags.Bool("auto-retry", true, "Should this vdiff automatically retry and continue in case of recoverable errors")
 	checksum := subFlags.Bool("checksum", false, "Use row-level checksums to compare, not yet implemented")
 	samplePct := subFlags.Int64("sample_pct", 100, "How many rows to sample, not yet implemented")
 	verbose := subFlags.Bool("verbose", false, "Show verbose vdiff output in summaries")
