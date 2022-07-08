@@ -140,7 +140,7 @@ func (td *tableDiffer) stopTargetVReplicationStreams(ctx context.Context, dbClie
 
 	// update position of all source streams
 	query = fmt.Sprintf("select id, source, pos from _vt.vreplication %s", ct.workflowFilter)
-	qr, err := withDDL.Exec(ctx, query, dbClient.ExecuteFetch, dbClient.ExecuteFetch)
+	qr, err := dbClient.ExecuteFetch(query, -1)
 	if err != nil {
 		return err
 	}
@@ -409,7 +409,7 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare *int64, debug, on
 	// This can be an auto-retry on error, or a manual retry (vs resume, which resets the state).
 	// Otherwise the existing state will be empty and we start from scratch.
 	query := fmt.Sprintf(sqlGetVDiffTable, td.wd.ct.id, encodeString(td.table.Name))
-	cs, err := dbClient.ExecuteFetch(query, 1)
+	cs, err := dbClient.ExecuteFetch(query, -1)
 	if err != nil {
 		return nil, err
 	}
@@ -635,7 +635,7 @@ func (td *tableDiffer) updateTableProgress(dbClient binlogplayer.DBClient, dr *D
 
 func (td *tableDiffer) updateTableState(ctx context.Context, dbClient binlogplayer.DBClient, tableName string, state VDiffState) error {
 	query := fmt.Sprintf(sqlUpdateTableState, encodeString(string(state)), td.wd.ct.id, encodeString(tableName))
-	if _, err := withDDL.Exec(ctx, query, dbClient.ExecuteFetch, dbClient.ExecuteFetch); err != nil {
+	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
 		return err
 	}
 	insertVDiffLog(ctx, dbClient, td.wd.ct.id, fmt.Sprintf("%s: table %s", state, encodeString(tableName)))
@@ -655,7 +655,7 @@ func (td *tableDiffer) updateTableStateAndReport(ctx context.Context, dbClient b
 		report = "{}"
 	}
 	query := fmt.Sprintf(sqlUpdateTableStateAndReport, encodeString(string(state)), encodeString(report), td.wd.ct.id, encodeString(tableName))
-	if _, err := withDDL.Exec(ctx, query, dbClient.ExecuteFetch, dbClient.ExecuteFetch); err != nil {
+	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
 		return err
 	}
 	insertVDiffLog(ctx, dbClient, td.wd.ct.id, fmt.Sprintf("%s: table %s", state, encodeString(tableName)))

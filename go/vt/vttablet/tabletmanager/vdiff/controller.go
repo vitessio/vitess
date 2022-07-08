@@ -118,7 +118,7 @@ func (ct *controller) run(ctx context.Context) {
 	})
 
 	query := fmt.Sprintf(sqlGetVDiffByID, ct.id)
-	qr, err := withDDL.Exec(ctx, query, dbClient.ExecuteFetch, dbClient.ExecuteFetch)
+	qr, err := dbClient.ExecuteFetch(query, 1)
 	if err != nil {
 		log.Errorf(fmt.Sprintf("No data for %s", query), err)
 		return
@@ -168,7 +168,7 @@ func (ct *controller) updateState(dbClient binlogplayer.DBClient, state VDiffSta
 		err = errors.New("")
 	}
 	query := fmt.Sprintf(sqlUpdateVDiffState, encodeString(string(state)), encodeString(err.Error()), extraCols, ct.id)
-	if _, err := withDDL.Exec(ct.vde.ctx, query, dbClient.ExecuteFetch, dbClient.ExecuteFetch); err != nil {
+	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
 		return err
 	}
 	insertVDiffLog(ct.vde.ctx, dbClient, ct.id, fmt.Sprintf("State changed to: %s", state))
@@ -178,7 +178,7 @@ func (ct *controller) updateState(dbClient binlogplayer.DBClient, state VDiffSta
 func (ct *controller) start(ctx context.Context, dbClient binlogplayer.DBClient) error {
 	ct.workflowFilter = fmt.Sprintf("where workflow = %s and db_name = %s", encodeString(ct.workflow), encodeString(ct.vde.dbName))
 	query := fmt.Sprintf(sqlGetVReplicationEntry, ct.workflowFilter)
-	qr, err := withDDL.Exec(ct.vde.ctx, query, dbClient.ExecuteFetch, dbClient.ExecuteFetch)
+	qr, err := dbClient.ExecuteFetch(query, -1)
 	if err != nil {
 		return err
 	}

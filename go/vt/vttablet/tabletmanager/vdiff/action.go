@@ -196,7 +196,7 @@ func (vde *Engine) getVDiffSummary(vdiffID int64, dbClient binlogplayer.DBClient
 	var err error
 
 	query := fmt.Sprintf(sqlVDiffSummary, vdiffID)
-	if qr, err = withDDL.Exec(context.Background(), query, dbClient.ExecuteFetch, dbClient.ExecuteFetch); err != nil {
+	if qr, err = dbClient.ExecuteFetch(query, -1); err != nil {
 		return nil, err
 	}
 	return sqltypes.ResultToProto3(qr), nil

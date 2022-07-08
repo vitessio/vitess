@@ -175,7 +175,7 @@ func (wd *workflowDiffer) diff(ctx context.Context) error {
 		}
 		var query string
 		query = fmt.Sprintf(sqlGetVDiffTable, wd.ct.id, encodeString(td.table.Name))
-		qr, err := withDDL.Exec(ctx, query, dbClient.ExecuteFetch, dbClient.ExecuteFetch)
+		qr, err := dbClient.ExecuteFetch(query, 1)
 		if err != nil {
 			return err
 		}
@@ -185,7 +185,7 @@ func (wd *workflowDiffer) diff(ctx context.Context) error {
 			// Update the table rows estimate when resuming
 			query = fmt.Sprintf(sqlUpdateTableRows, tableRows, wd.ct.id, encodeString(td.table.Name))
 		}
-		if _, err := withDDL.Exec(ctx, query, dbClient.ExecuteFetch, dbClient.ExecuteFetch); err != nil {
+		if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
 			return err
 		}
 
@@ -207,7 +207,7 @@ func (wd *workflowDiffer) diff(ctx context.Context) error {
 
 func (wd *workflowDiffer) markIfCompleted(ctx context.Context, dbClient binlogplayer.DBClient) error {
 	query := fmt.Sprintf(sqlGetIncompleteTables, wd.ct.id)
-	qr, err := withDDL.Exec(ctx, query, dbClient.ExecuteFetch, dbClient.ExecuteFetch)
+	qr, err := dbClient.ExecuteFetch(query, -1)
 	if err != nil {
 		return err
 	}
