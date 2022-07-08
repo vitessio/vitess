@@ -52,7 +52,7 @@ func newSchemaInitializer() *schemaInitializer {
 }
 
 // Set super-read-only flag to 'ON'
-func (si *schemaInitializer) setSuperReadOnlyUser(conn *Conn) error {
+func (si *schemaInitializer) SetSuperReadOnlyUser(conn *Conn) error {
 	var err error
 	log.Infof("%s", setSuperUser)
 	// setting super_read_only to true, given it was set during tm_init.start()
@@ -64,7 +64,7 @@ func (si *schemaInitializer) setSuperReadOnlyUser(conn *Conn) error {
 }
 
 // Set super-read-only flag to 'OFF'
-func (si *schemaInitializer) unsetSuperReadOnlyUser(conn *Conn) error {
+func (si *schemaInitializer) UnsetSuperReadOnlyUser(conn *Conn) error {
 	var err error
 	// setting super_read_only to true, given it was set during tm_init.start()
 	log.Infof("%s", unSetSuperUser)
@@ -86,7 +86,7 @@ func (si *schemaInitializer) isRegistered(name string) bool {
 
 func (si *schemaInitializer) RegisterSchemaInitializer(name string, initFunc func(conn *Conn) error, atHead bool) {
 	si.mu.Lock()
-	log.Infof("SchemaInitializer: registering function: %s %d", name, len(si.funcs))
+	//log.Infof("SchemaInitializer: registering function: %s %d", name, len(si.funcs))
 	defer si.mu.Unlock()
 	if si.isRegistered(name) {
 		return
@@ -100,20 +100,22 @@ func (si *schemaInitializer) RegisterSchemaInitializer(name string, initFunc fun
 }
 
 // TODO do we need context here
-func (si *schemaInitializer) InitializeSchema(conn *Conn) []error {
+func (si *schemaInitializer) InitializeSchema(conn *Conn, disableSuperReadOnly bool) []error {
 	log.Infof("run all mutation")
 	si.mu.Lock()
 	defer si.mu.Unlock()
 
-	if err := si.unsetSuperReadOnlyUser(conn); err != nil {
-		log.Infof("error in setting super read-only user %s", err)
-		return []error{err}
-	}
-	defer func() {
-		if err := si.setSuperReadOnlyUser(conn); err != nil {
-			log.Infof("error in un-setting super read-only user %s", err)
+	if disableSuperReadOnly {
+		if err := si.UnsetSuperReadOnlyUser(conn); err != nil {
+			log.Infof("error in setting super read-only user %s", err)
+			return []error{err}
 		}
-	}()
+		defer func() {
+			if err := si.SetSuperReadOnlyUser(conn); err != nil {
+				log.Infof("error in un-setting super read-only user %s", err)
+			}
+		}()
+	}
 
 	if _, err := conn.ExecuteFetch(replicationDisable, 0, false); err != nil {
 		log.Infof("error in disabling replication %s", err)

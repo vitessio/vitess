@@ -223,7 +223,6 @@ func upsertLocalMetadata(conn *dbconnpool.DBConnection, localMetadata map[string
 // This function is semantically equivalent to calling createMetadataTables
 // followed immediately by upsertLocalMetadata.
 func InitTabletMetadata() error {
-	log.Infof("Init for table metadata...")
 	f1 := func(conn *mysql.Conn) error {
 		if _, err := conn.ExecuteFetch("CREATE DATABASE IF NOT EXISTS _vt", 0, false); err != nil {
 			log.Errorf("Error executing %v: %v", "CREATE DATABASE IF NOT EXISTS _vt", err)
@@ -267,6 +266,5 @@ func InitTabletMetadata() error {
 }
 
 func init() {
-	log.Infof("inside init of metadata_tables")
 	InitTabletMetadata()
 }

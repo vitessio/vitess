@@ -412,21 +412,44 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, healthCheckInterval ti
 	return nil
 }
 
-func (tm *TabletManager) initSchema(ctx context.Context) []error {
+func (tm *TabletManager) initSchema(ctx context.Context,
+	mysqld mysqlctl.MysqlDaemon,
+	localMetadata map[string]string,
+	dbName string,
+	metadataManager *mysqlctl.MetadataManager) ([]error, error) {
 	// get a dba connection
-	conn, err := tm.MysqlDaemon.GetDbaConnection(ctx)
+	conn, err := mysqld.GetDbaConnection(ctx)
 	if err != nil {
 		log.Infof("error in getting connection object %s", err)
-		return []error{err}
+		return nil, err
 	}
 	defer conn.Close()
-	// execute all the schema changes.
-	if errors := mysql.SchemaInitializer.InitializeSchema(conn.Conn); errors != nil {
-		log.Infof("error in RunAllMutations %s", err)
-		return errors
+
+	if err := mysql.SchemaInitializer.UnsetSuperReadOnlyUser(conn.Conn); err != nil {
+		return nil, err
 	}
 
-	return nil
+	defer func() {
+		if err := mysql.SchemaInitializer.SetSuperReadOnlyUser(conn.Conn); err != nil {
+			log.Warning("not able to set super-read-only user")
+		}
+	}()
+
+	// execute all the schema changes.
+	errors := mysql.SchemaInitializer.InitializeSchema(conn.Conn, false)
+
+	log.Infof("Restore: populating local_metadata")
+	// TODO: @rameez. Should I do change of introducing flag for InitPopulateMetadata in this PR.
+	// Populate local_metadata before starting without --skip-networking,
+	// so it's there before we start announcing ourselves.
+	if metadataManager != nil {
+		if err := metadataManager.PopulateMetadataTables(mysqld, localMetadata, dbName); err != nil {
+			log.Errorf("error populating metadata tables: %v. Continuing", err)
+			return errors, err
+		}
+	}
+
+	return errors, nil
 }
 
 // Close prepares a tablet for shutdown. First we check our tablet ownership and
@@ -775,15 +798,6 @@ func (tm *TabletManager) handleRestore(ctx context.Context) (bool, error) {
 	}
 	// optionally populate metadata records
 	if *mysqlctl.InitPopulateMetadata {
-		// initialize the schema. We will not return in case of error
-		// but we will just log them and move on.
-		log.Infof("initialize schema >> no backup provided")
-		if errors := tm.initSchema(ctx); errors != nil {
-			log.Infof("Error in executing following schema changes")
-			for err := range errors {
-				log.Infof("%v", err)
-			}
-		}
 		localMetadata := tm.getLocalMetadataValues(tablet.Type)
 		if tm.Cnf != nil { // we are managing mysqld
 			// we'll use batchCtx here because we are still initializing and can't proceed unless this succeeds
@@ -792,11 +806,23 @@ func (tm *TabletManager) handleRestore(ctx context.Context) (bool, error) {
 			}
 		}
 
-		if tm.MetadataManager != nil {
-			err := tm.MetadataManager.PopulateMetadataTables(tm.MysqlDaemon, localMetadata, topoproto.TabletDbName(tablet))
-			if err != nil {
-				return false, vterrors.Wrap(err, "failed to -init_populate_metadata")
+		// initialize the schema. We will not return in case of error
+		// but we will just log them and move on.
+		log.Infof("initialize schema >> no backup provided")
+		var schemaErrors []error
+		var metadataError error
+		schemaErrors, metadataError = tm.initSchema(ctx, tm.MysqlDaemon, localMetadata, topoproto.TabletDbName(tablet), tm.MetadataManager)
+		if schemaErrors != nil {
+			log.Infof("Error in executing following schema changes")
+			for err := range schemaErrors {
+				log.Infof("%v", err)
 			}
+		}
+		// (NOTE:@ajm188) the legacy behavior is to always populate the metadata
+		// tables in this branch. Since tm.MetadataManager could be nil, we
+		// create a new instance for use here.
+		if metadataError != nil {
+			return false, vterrors.Wrap(metadataError, "failed to -init_populate_metadata")
 		}
 	}
 	return false, nil

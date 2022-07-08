@@ -74,7 +74,6 @@ const (
 )
 
 func init() {
-	log.Infof("init for allddls")
 	allddls := append([]string{}, binlogplayer.CreateVReplicationTable()...)
 	allddls = append(allddls, binlogplayer.AlterVReplicationTable...)
 	allddls = append(allddls, createReshardingJournalTable, createCopyState)
@@ -237,7 +236,6 @@ func (vre *Engine) openLocked(ctx context.Context) error {
 }
 
 func InitVReplicationSchema() error {
-	log.Info("SchemaInitializer: initializing vreplication engine...")
 	f := func(conn *mysql.Conn) error {
 		for _, sql := range allDDLQueries {
 			if _, err := conn.ExecuteFetch(sql, 0, false); err != nil {

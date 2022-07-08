@@ -283,8 +283,6 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 		return nil, vterrors.Wrap(err, "ListBackups failed")
 	}
 
-	metadataManager := &MetadataManager{}
-
 	if len(bhs) == 0 {
 		// There are no backups (not even broken/incomplete ones).
 		params.Logger.Errorf("no backup to restore on BackupStorage for directory %v. Starting up empty.", backupDir)
@@ -300,18 +298,13 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 		// initialize the schema. We will not return in case of error
 		// but we will just log them and move on.
 		params.Logger.Infof("initialize schema >> since no valid backup")
-		if errors := initSchema(ctx, params); errors != nil {
+		var schemaErrors []error
+		schemaErrors, _ = initSchema(ctx, params)
+		if schemaErrors != nil {
 			log.Infof("Error in executing following schema changes")
 			// TODO: @rameez should we fail if we are not able to initialize schema
-			for err := range errors {
+			for err := range schemaErrors {
 				log.Infof("%v", err)
-			}
-		}
-		// TODO: @rameez. Should I do this change of introducing flag for InitPopulateMetadata in a separate PR.
-		if *InitPopulateMetadata {
-			if err := metadataManager.PopulateMetadataTables(params.Mysqld, params.LocalMetadata, params.DbName); err != nil {
-				params.Logger.Errorf("error populating metadata tables: %v. Continuing", err)
-
 			}
 		}
 		// Always return ErrNoBackup
@@ -375,20 +368,17 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 	// initialize the schema. We will not return in case of error
 	// but we will just log them and move on.
 	params.Logger.Infof("initialize schema >> after restore")
-	if errors := initSchema(ctx, params); errors != nil {
+	var schemaErrors []error
+	var metadataError error
+	schemaErrors, metadataError = initSchema(ctx, params)
+	if schemaErrors != nil {
 		log.Infof("Error in executing following schema changes")
-		for err := range errors {
+		for err := range schemaErrors {
 			log.Infof("%v", err)
 		}
 	}
-	// Populate local_metadata before starting without --skip-networking,
-	// so it's there before we start announcing ourselves.
-	params.Logger.Infof("Restore: populating local_metadata")
-	if *InitPopulateMetadata {
-		err = metadataManager.PopulateMetadataTables(params.Mysqld, params.LocalMetadata, params.DbName)
-	}
-	if err != nil {
-		return nil, err
+	if metadataError != nil {
+		return nil, metadataError
 	}
 
 	// The MySQL manual recommends restarting mysqld after running mysql_upgrade,
@@ -411,19 +401,37 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 	return manifest, nil
 }
 
-func initSchema(ctx context.Context, params RestoreParams) []error {
+func initSchema(ctx context.Context, params RestoreParams) ([]error, error) {
 	// get a dba connection
 	conn, err := params.Mysqld.GetDbaConnection(ctx)
 	if err != nil {
 		log.Infof("error in getting connection object %s", err)
-		return []error{err}
+		return nil, err
 	}
 	defer conn.Close()
-	// execute all the schema changes.
-	if errors := mysql.SchemaInitializer.InitializeSchema(conn.Conn); errors != nil {
-		log.Infof("error in RunAllMutations %s", err)
-		return errors
+
+	if err := mysql.SchemaInitializer.UnsetSuperReadOnlyUser(conn.Conn); err != nil {
+		return nil, err
 	}
 
-	return nil
+	defer func() {
+		if err := mysql.SchemaInitializer.SetSuperReadOnlyUser(conn.Conn); err != nil {
+			log.Warning("not able to set super-read-only user")
+		}
+	}()
+
+	metadataManager := &MetadataManager{}
+	// execute all the schema changes.
+	errors := mysql.SchemaInitializer.InitializeSchema(conn.Conn, false)
+
+	params.Logger.Infof("Restore: populating local_metadata")
+	// TODO: @rameez. Should I do change of introducing flag for InitPopulateMetadata in this PR.
+	// Populate local_metadata before starting without --skip-networking,
+	// so it's there before we start announcing ourselves.
+	if err := metadataManager.PopulateMetadataTables(params.Mysqld, params.LocalMetadata, params.DbName); err != nil {
+		params.Logger.Errorf("error populating metadata tables: %v. Continuing", err)
+		return errors, err
+	}
+
+	return errors, nil
 }
