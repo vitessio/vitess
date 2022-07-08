@@ -111,6 +111,9 @@ func (vde *Engine) Open(ctx context.Context, vre *vreplication.Engine) {
 	// Auto retry error'd VDiffs
 	go func() {
 		tkr := time.NewTicker(time.Second * 30)
+		defer func() {
+			tkr.Stop()
+		}()
 		for {
 			select {
 			case <-tkr.C:
@@ -212,6 +215,9 @@ func (vde *Engine) Close() {
 	vde.mu.Lock()
 	defer vde.mu.Unlock()
 
+	// end the goroutine that retries error'd vdiffs
+	vde.done <- true
+
 	// If we're retrying, we're not open.
 	// Just cancel the retry loop.
 	if vde.cancelRetry != nil {
@@ -224,8 +230,6 @@ func (vde *Engine) Close() {
 		return
 	}
 
-	// end the goroutine that retries error'd vdiffs
-	vde.done <- true
 	vde.cancel()
 	// We still have to wait for all controllers to stop.
 	for _, ct := range vde.controllers {
