@@ -131,8 +131,8 @@ func (ct *controller) run(ctx context.Context) {
 	row := qr.Named().Row()
 	state := VDiffState(strings.ToLower(row["state"].ToString()))
 	switch state {
-	case PendingState, ErrorState:
-		log.Infof("[Re]starting vdiff from initial state of %s", string(state))
+	case PendingState:
+		log.Infof("Starting vdiff")
 		if err := ct.start(ctx, dbClient); err != nil {
 			log.Errorf("run() failed: %s", err)
 			insertVDiffLog(ctx, dbClient, ct.id, fmt.Sprintf("Error: %s", err))
