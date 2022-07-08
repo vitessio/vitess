@@ -3129,7 +3129,7 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 
 func commandOnlineDDL(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	json := subFlags.Bool("json", false, "Output JSON instead of human-readable table")
-	orderBy := subFlags.String("order", "ascending", "Sort the results by added_at timestamp of the Schema migration (default is ascending. Allowed values are ascending, descending.")
+	orderBy := subFlags.String("order", "ascending", "Sort the results by `added_at` timestamp of the Schema migration (default is ascending. Allowed values are `ascending` or `descending`.")
 	limit := subFlags.Int64("limit", 0, "Limit number of rows returned in output")
 	skip := subFlags.Int64("skip", 0, "Skip specified number of rows returned in output")
 	if err := subFlags.Parse(args); err != nil {
