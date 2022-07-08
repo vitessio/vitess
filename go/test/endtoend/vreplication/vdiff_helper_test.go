@@ -32,7 +32,7 @@ import (
 )
 
 const (
-	vdiffTimeout = time.Second * 60
+	vdiffTimeout = time.Second * 90 // we can leverage auto retry on error with this longer-than-usual timeout
 	tsFormat     = "2006-01-02 15:04:05"
 )
 
@@ -89,32 +89,18 @@ func waitForVDiff2ToComplete(t *testing.T, ksWorkflow, cells, uuid string, compl
 		for {
 			time.Sleep(1 * time.Second)
 			_, jsonStr := performVDiff2Action(t, ksWorkflow, cells, "show", uuid, false)
-			info = getVDiffInfo(jsonStr)
-			if info.State == "completed" {
-				if !completedAtMin.IsZero() {
-					ca := info.CompletedAt
-					completedAt, _ := time.Parse(tsFormat, ca)
-					if !completedAt.After(completedAtMin) {
-						continue
-					}
-				}
+			if info = getVDiffInfo(jsonStr); info.State == "completed" {
 				ch <- true
-				return
-			} else if info.State == "error" {
-				ch <- false
 				return
 			}
 		}
 	}()
 
 	select {
-	case good := <-ch:
-		if !good {
-			require.FailNow(t, "VDiff encountered an error")
-		}
+	case <-ch:
 		return info
 	case <-time.After(vdiffTimeout):
-		require.FailNowf(t, "VDiff never completed: %s", uuid)
+		require.FailNow(t, fmt.Sprintf("VDiff never completed for UUID %s", uuid))
 		return nil
 	}
 }
@@ -128,7 +114,7 @@ type expectedVDiff2Result struct {
 func vdiff2(t *testing.T, keyspace, workflow, cells string, want *expectedVDiff2Result) {
 	ksWorkflow := fmt.Sprintf("%s.%s", keyspace, workflow)
 	t.Run(fmt.Sprintf("vdiff2 %s", ksWorkflow), func(t *testing.T) {
-		uuid, _ := performVDiff2Action(t, ksWorkflow, cells, "create", "", false)
+		uuid, _ := performVDiff2Action(t, ksWorkflow, cells, "create", "", false, "--auto-retry")
 		info := waitForVDiff2ToComplete(t, ksWorkflow, cells, uuid, time.Time{})
 
 		require.Equal(t, workflow, info.Workflow)

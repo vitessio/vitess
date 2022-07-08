@@ -19,10 +19,12 @@ package vdiff
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	"vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
@@ -262,12 +264,7 @@ func (vde *Engine) getPendingVDiffs(ctx context.Context) (*sqltypes.Result, erro
 	return qr, nil
 }
 
-func (vde *Engine) getVDiffsToRetry(ctx context.Context) (*sqltypes.Result, error) {
-	dbClient := vde.dbClientFactoryFiltered()
-	if err := dbClient.Connect(); err != nil {
-		return nil, err
-	}
-	defer dbClient.Close()
+func (vde *Engine) getVDiffsToRetry(ctx context.Context, dbClient binlogplayer.DBClient) (*sqltypes.Result, error) {
 	qr, err := withDDL.ExecIgnore(ctx, sqlGetVDiffsToRetry, dbClient.ExecuteFetch)
 	if err != nil {
 		return nil, err
@@ -278,12 +275,7 @@ func (vde *Engine) getVDiffsToRetry(ctx context.Context) (*sqltypes.Result, erro
 	return qr, nil
 }
 
-func (vde *Engine) getVDiffByID(ctx context.Context, id int64) (*sqltypes.Result, error) {
-	dbClient := vde.dbClientFactoryFiltered()
-	if err := dbClient.Connect(); err != nil {
-		return nil, err
-	}
-	defer dbClient.Close()
+func (vde *Engine) getVDiffByID(ctx context.Context, dbClient binlogplayer.DBClient, id int64) (*sqltypes.Result, error) {
 	qr, err := withDDL.Exec(ctx, fmt.Sprintf(sqlGetVDiffByID, id), dbClient.ExecuteFetch, dbClient.ExecuteFetch)
 	if err != nil {
 		return nil, err
@@ -295,7 +287,12 @@ func (vde *Engine) getVDiffByID(ctx context.Context, id int64) (*sqltypes.Result
 }
 
 func (vde *Engine) retryVDiffs(ctx context.Context) error {
-	qr, err := vde.getVDiffsToRetry(ctx)
+	dbClient := vde.dbClientFactoryFiltered()
+	if err := dbClient.Connect(); err != nil {
+		return err
+	}
+	defer dbClient.Close()
+	qr, err := vde.getVDiffsToRetry(ctx, dbClient)
 	if err != nil {
 		return err
 	}
@@ -303,19 +300,24 @@ func (vde *Engine) retryVDiffs(ctx context.Context) error {
 		return nil
 	}
 	for _, row := range qr.Named().Rows {
+		lastError := mysql.NewSQLErrorFromError(errors.New(row.AsString("last_error", "")))
+		uuid := row.AsString("vdiff_uuid", "")
+		if !mysql.IsEphemeralError(lastError) {
+			return nil
+		}
 		id, err := row.ToInt64("id")
 		if err != nil {
 			return err
 		}
-		qr, err := vde.getVDiffByID(ctx, id)
-		if err != nil {
+		log.Infof("Retrying VDiff %s that had an ephemeral error of '%v'", uuid, lastError)
+		if _, err = dbClient.ExecuteFetch(fmt.Sprintf(sqlRetryVDiff, id), 1); err != nil {
 			return err
 		}
 		options := &tabletmanagerdata.VDiffOptions{}
 		if err := json.Unmarshal(row.AsBytes("options", []byte("{}")), options); err != nil {
 			return err
 		}
-		if err := vde.addController(qr.Named().Row(), options); err != nil {
+		if err := vde.addController(row, options); err != nil {
 			return err
 		}
 	}

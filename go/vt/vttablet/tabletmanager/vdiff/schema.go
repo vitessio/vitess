@@ -80,6 +80,8 @@ const (
 	sqlResumeVDiff = `update _vt.vdiff as vd, _vt.vdiff_table as vdt set vd.started_at = NULL, vd.completed_at = NULL, vd.state = 'pending',
 						vd.options = %s, vdt.state = 'pending', vdt.rows_compared = 0, vdt.report = '{}' where vd.vdiff_uuid = %s and
 						vd.id = vdt.vdiff_id and vd.state = 'completed'`
+	sqlRetryVDiff = `update _vt.vdiff as vd, _vt.vdiff_table as vdt set vd.state = 'pending', vd.last_error = '', vdt.state = 'pending'
+					where vd.id = %d and vd.id = vdt.vdiff_id and vd.state = 'error' and vdt.state = 'error'`
 	sqlGetVDiffByKeyspaceWorkflowUUID = "select * from _vt.vdiff where keyspace = %s and workflow = %s and vdiff_uuid = %s"
 	sqlGetMostRecentVDiff             = "select * from _vt.vdiff where keyspace = %s and workflow = %s order by id desc limit 1"
 	sqlGetVDiffByID                   = "select * from _vt.vdiff where id = %d"

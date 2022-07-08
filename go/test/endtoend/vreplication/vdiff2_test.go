@@ -34,7 +34,13 @@ type testCase struct {
 	resume                        bool   // test resume functionality with this workflow
 	resumeInsert                  string // if testing resume, what new rows should be diff'd
 	testCLIErrors                 bool   // test CLI errors against this workflow
+	autoRetryError                bool   // if true, test auto retry on error against this workflow
+	retryInsert                   string // if testing auto retry on error, what new rows should be diff'd
 }
+
+var sqlSimulateError = `update _vt.vdiff as vd, _vt.vdiff_table as vdt set vd.state = 'error', vdt.state = 'error', vd.completed_at = NULL,
+						vd.last_error = 'vttablet: rpc error: code = Unknown desc = (errno 1213) (sqlstate 40001): Deadlock found when trying to get lock; try restarting transaction'
+						where vd.vdiff_uuid = %s and vd.id = vdt.vdiff_id`
 
 var testCases = []*testCase{
 	{
@@ -64,14 +70,16 @@ var testCases = []*testCase{
 		resumeInsert: `insert into customer(cid, name, typ) values(987654321, 'Testy McTester Jr.', 'enterprise'), (987654322, 'Testy McTester III', 'enterprise')`,
 	},
 	{
-		name:         "Reshard/merge 3 to 1",
-		workflow:     "c3c1",
-		typ:          "Reshard",
-		sourceKs:     "customer",
-		targetKs:     "customer",
-		sourceShards: "-40,40-a0,a0-",
-		targetShards: "0",
-		tabletBaseID: 700,
+		name:           "Reshard/merge 3 to 1",
+		workflow:       "c3c1",
+		typ:            "Reshard",
+		sourceKs:       "customer",
+		targetKs:       "customer",
+		sourceShards:   "-40,40-a0,a0-",
+		targetShards:   "0",
+		tabletBaseID:   700,
+		autoRetryError: true,
+		retryInsert:    `insert into customer(cid, name, typ) values(997654323, 'Testy McTester IV', 'enterprise')`,
 	},
 }
 
@@ -150,7 +158,12 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, cells []*Cell) 
 		tab := vc.getPrimaryTablet(t, tc.targetKs, shard)
 		catchup(t, tab, tc.workflow, tc.typ)
 	}
+
 	vdiff(t, tc.targetKs, tc.workflow, cells[0].Name, true, true, nil)
+
+	if tc.autoRetryError {
+		testAutoRetryError(t, tc, cells[0].Name)
+	}
 
 	if tc.resume {
 		expectedRows := int64(0)
@@ -222,5 +235,45 @@ func testNoOrphanedData(t *testing.T, keyspace, workflow string, shards []string
 			require.NoError(t, err)
 			require.Equal(t, 0, len(res.Rows))
 		}
+	})
+}
+
+func testAutoRetryError(t *testing.T, tc *testCase, cells string) {
+	t.Run("Auto retry on error", func(t *testing.T) {
+		ksWorkflow := fmt.Sprintf("%s.%s", tc.targetKs, tc.workflow)
+
+		// confirm the last VDiff is in the expected completed state
+		uuid, output := performVDiff2Action(t, ksWorkflow, cells, "show", "last", false)
+		jsonOutput := getVDiffInfo(output)
+		require.Equal(t, "completed", jsonOutput.State)
+		// save the number of rows compared in the first run
+		rowsCompared := jsonOutput.RowsCompared
+		ogTime := time.Now() // the completed_at should be later than this upon retry
+
+		// create new data since original VDiff run -- if requested -- to confirm that the rows
+		// compared is cumulative
+		expectedNewRows := int64(0)
+		if tc.retryInsert != "" {
+			res := execVtgateQuery(t, vtgateConn, tc.sourceKs, tc.retryInsert)
+			expectedNewRows = int64(res.RowsAffected)
+		}
+		expectedRows := rowsCompared + expectedNewRows
+
+		// update the VDiff to simulate an ephemeral error having occurred
+		tab := vc.getPrimaryTablet(t, tc.targetKs, strings.Split(tc.targetShards, ",")[0])
+		res, err := tab.QueryTabletWithDB(fmt.Sprintf(sqlSimulateError, encodeString(uuid)), "vt_"+tc.targetKs)
+		require.NoError(t, err)
+		// should have updated the vdiff record and at least one vdiff_table record
+		require.GreaterOrEqual(t, int(res.RowsAffected), 2)
+
+		// confirm the VDiff is now in the expected error state
+		_, output = performVDiff2Action(t, ksWorkflow, cells, "show", uuid, false)
+		jsonOutput = getVDiffInfo(output)
+		require.Equal(t, "error", jsonOutput.State)
+
+		// confirm that the VDiff was retried, able to complete, and we compared the expected
+		// number of rows in total (original run and retry)
+		info := waitForVDiff2ToComplete(t, ksWorkflow, cells, uuid, ogTime)
+		require.Equal(t, expectedRows, info.RowsCompared)
 	})
 }
