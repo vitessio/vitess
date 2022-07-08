@@ -2,8 +2,19 @@
 
 ### Command-line syntax deprecations
 
-#### vttablet startup flag --enable-query-plan-field-caching
-This flag is now deprecated. It will be removed in v16.
+#### vttablet startup flag deletions
+The following VTTablet flags were deprecated in 7.0. They have now been deleted
+- --queryserver-config-message-conn-pool-size
+- --queryserver-config-message-conn-pool-prefill-parallelism
+- --client-found-rows-pool-size --queryserver-config-transaction-cap will be used instead
+- --transaction_shutdown_grace_period Use --shutdown_grace_period instead
+- --queryserver-config-max-dml-rows
+- --queryserver-config-allowunsafe-dmls
+- --pool-name-prefix
+- --enable-autocommit Autocommit is always allowed
+
+#### vttablet startup flag deprecations
+- --enable-query-plan-field-caching is now deprecated. It will be removed in v16.
 
 ### New Syntax
 
@@ -43,7 +54,46 @@ Please see the VDiff2 [documentation](https://vitess.io/docs/15.0/reference/vrep
 
 ### New command line flags and behavior
 
+#### Support for additional compressors and decompressors during backup & restore
+Backup/Restore now allow you many more options for compression and decompression instead of relying on the default compressor(pgzip).
+There are some built-in compressors which you can use out-of-the-box. Users will need to evaluate which option works best for their
+use-case. Here are the flags that control this feature
+
+- --builtin-compressor
+- --builtin-decompressor
+- --external-compressor
+- --external-decompressor
+- --external-compressor-extension
+- --compression-level
+
+builtin compressor as of today supports the following options
+- pgzip
+- pargzip
+- lz4
+- zstd
+
+If you want to use any of the builtin compressors, simply set one of the above values for `--builtin-compressor`. You don't need to set
+the `--builtin-decompressor` flag in this case as we infer it automatically from the MANIFEST file. The default value for
+`--builtin-decompressor` is  `auto`.
+
+If you would like to use a custom command or external tool for compression/decompression then you need to provide the full command with
+arguments to the `--external-compressor` and `--external-decompressor` flags. `--external-compressor-extension` flag also needs to be provided
+so that compressed files are created with the correct extension. There is no need to override `--builtin-compressor` and `--builtin-decompressor`
+when using an external compressor/decompressor. Please note that if you want the current behavior then you don't need to change anything
+in these flags. You can read more about backup & restore [here] (https://vitess.io/docs/15.0/user-guides/operating-vitess/backup-and-restore/).
+
 ### Online DDL changes
+
+#### Concurrent vitess migrations
+
+All Online DDL migrations using the `vitess` strategy are now eligible to run concurrently, given `--allow-concurrent` DDL strategy flag. Until now, only `CREATE`, `DROP` and `REVERT` migrations were eligible, and now `ALTER` migrations are supported, as well. The terms for `ALTER` migrations concurrency:
+
+- DDL strategy must be `vitess --allow-concurent ...`
+- No two migrations can run concurrently on same table
+- No two `ALTER`s will copy table data concurrently
+- A concurrent `ALTER` migration will not start if another `ALTER` is running and is not `ready_to_complete`
+
+The main use case is to run multiple concurrent migrations, all with `--postpone-completion`. All table-copy operations will run sequentially, but no migration will actually cut-over, and eventually all migration will be `ready_to_complete`, continuously tailing the binary logs and keeping up-to-date. A quick and iterative `ALTER VITESS_MIGRATION '...' COMPLETE` sequence of commands will cut-over all migrations _closely together_ (though not atomically together).
 
 ### Tablet throttler
 

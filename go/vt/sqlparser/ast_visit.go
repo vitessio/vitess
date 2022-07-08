@@ -86,6 +86,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfCastExpr(in, f)
 	case *ChangeColumn:
 		return VisitRefOfChangeColumn(in, f)
+	case *CharExpr:
+		return VisitRefOfCharExpr(in, f)
 	case *CheckConstraintDefinition:
 		return VisitRefOfCheckConstraintDefinition(in, f)
 	case *ColName:
@@ -98,6 +100,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfColumnType(in, f)
 	case Columns:
 		return VisitColumns(in, f)
+	case *CommentOnly:
+		return VisitRefOfCommentOnly(in, f)
 	case *Commit:
 		return VisitRefOfCommit(in, f)
 	case *CommonTableExpr:
@@ -176,6 +180,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfFromFirstLastClause(in, f)
 	case *FuncExpr:
 		return VisitRefOfFuncExpr(in, f)
+	case *GTIDFuncExpr:
+		return VisitRefOfGTIDFuncExpr(in, f)
 	case GroupBy:
 		return VisitGroupBy(in, f)
 	case *GroupConcatExpr:
@@ -270,6 +276,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfLiteral(in, f)
 	case *Load:
 		return VisitRefOfLoad(in, f)
+	case *LocateExpr:
+		return VisitRefOfLocateExpr(in, f)
 	case *LockOption:
 		return VisitRefOfLockOption(in, f)
 	case *LockTables:
@@ -934,6 +942,18 @@ func VisitRefOfChangeColumn(in *ChangeColumn, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfCharExpr(in *CharExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExprs(in.Exprs, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfCheckConstraintDefinition(in *CheckConstraintDefinition, f Visit) error {
 	if in == nil {
 		return nil
@@ -1011,6 +1031,15 @@ func VisitColumns(in Columns, f Visit) error {
 		if err := VisitIdentifierCI(el, f); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+func VisitRefOfCommentOnly(in *CommentOnly, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
 	}
 	return nil
 }
@@ -1584,6 +1613,27 @@ func VisitRefOfFuncExpr(in *FuncExpr, f Visit) error {
 		return err
 	}
 	if err := VisitSelectExprs(in.Exprs, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfGTIDFuncExpr(in *GTIDFuncExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Set1, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Set2, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Timeout, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Channel, f); err != nil {
 		return err
 	}
 	return nil
@@ -2256,6 +2306,24 @@ func VisitRefOfLoad(in *Load, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfLocateExpr(in *LocateExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.SubStr, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Str, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Pos, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfLockOption(in *LockOption, f Visit) error {
 	if in == nil {
 		return nil
@@ -2296,8 +2364,10 @@ func VisitRefOfMatchExpr(in *MatchExpr, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitSelectExprs(in.Columns, f); err != nil {
-		return err
+	for _, el := range in.Columns {
+		if err := VisitRefOfColName(el, f); err != nil {
+			return err
+		}
 	}
 	if err := VisitExpr(in.Expr, f); err != nil {
 		return err
@@ -4032,6 +4102,8 @@ func VisitCallable(in Callable, f Visit) error {
 	switch in := in.(type) {
 	case *ArgumentLessWindowExpr:
 		return VisitRefOfArgumentLessWindowExpr(in, f)
+	case *CharExpr:
+		return VisitRefOfCharExpr(in, f)
 	case *ConvertExpr:
 		return VisitRefOfConvertExpr(in, f)
 	case *ConvertUsingExpr:
@@ -4046,6 +4118,8 @@ func VisitCallable(in Callable, f Visit) error {
 		return VisitRefOfFirstOrLastValueExpr(in, f)
 	case *FuncExpr:
 		return VisitRefOfFuncExpr(in, f)
+	case *GTIDFuncExpr:
+		return VisitRefOfGTIDFuncExpr(in, f)
 	case *GroupConcatExpr:
 		return VisitRefOfGroupConcatExpr(in, f)
 	case *InsertExpr:
@@ -4094,6 +4168,8 @@ func VisitCallable(in Callable, f Visit) error {
 		return VisitRefOfJSONValueModifierExpr(in, f)
 	case *LagLeadExpr:
 		return VisitRefOfLagLeadExpr(in, f)
+	case *LocateExpr:
+		return VisitRefOfLocateExpr(in, f)
 	case *MatchExpr:
 		return VisitRefOfMatchExpr(in, f)
 	case *MemberOfExpr:
@@ -4260,6 +4336,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfCaseExpr(in, f)
 	case *CastExpr:
 		return VisitRefOfCastExpr(in, f)
+	case *CharExpr:
+		return VisitRefOfCharExpr(in, f)
 	case *ColName:
 		return VisitRefOfColName(in, f)
 	case *CollateExpr:
@@ -4290,6 +4368,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfFirstOrLastValueExpr(in, f)
 	case *FuncExpr:
 		return VisitRefOfFuncExpr(in, f)
+	case *GTIDFuncExpr:
+		return VisitRefOfGTIDFuncExpr(in, f)
 	case *GroupConcatExpr:
 		return VisitRefOfGroupConcatExpr(in, f)
 	case *InsertExpr:
@@ -4348,6 +4428,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitListArg(in, f)
 	case *Literal:
 		return VisitRefOfLiteral(in, f)
+	case *LocateExpr:
+		return VisitRefOfLocateExpr(in, f)
 	case *LockingFunc:
 		return VisitRefOfLockingFunc(in, f)
 	case *MatchExpr:
@@ -4520,6 +4602,8 @@ func VisitStatement(in Statement, f Visit) error {
 		return VisitRefOfBegin(in, f)
 	case *CallProc:
 		return VisitRefOfCallProc(in, f)
+	case *CommentOnly:
+		return VisitRefOfCommentOnly(in, f)
 	case *Commit:
 		return VisitRefOfCommit(in, f)
 	case *CreateDatabase:

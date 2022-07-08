@@ -1579,6 +1579,22 @@ func (ty PerformanceSchemaType) ToString() string {
 }
 
 // ToString returns the type as a string
+func (ty GTIDType) ToString() string {
+	switch ty {
+	case GTIDSubsetType:
+		return GTIDSubsetStr
+	case GTIDSubtractType:
+		return GTIDSubtractStr
+	case WaitForExecutedGTIDSetType:
+		return WaitForExecutedGTIDSetStr
+	case WaitUntilSQLThreadAfterGTIDSType:
+		return WaitUntilSQLThreadAfterGTIDSStr
+	default:
+		return "Unknown GTIDType"
+	}
+}
+
+// ToString returns the type as a string
 func (ty ExplainType) ToString() string {
 	switch ty {
 	case EmptyType:

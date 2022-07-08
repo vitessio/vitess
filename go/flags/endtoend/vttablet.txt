@@ -55,10 +55,12 @@ Usage of vttablet:
 	PITR restore parameter: Filename containing mTLS client private key for use in binlog server authentication.
   --binlog_ssl_server_name string
 	PITR restore parameter: TLS server name (common name) to verify against for the binlog server we are connecting to (If not set: use the hostname or IP supplied in -binlog_host).
-  --binlog_use_v3_resharding_mode
-	(DEPRECATED) True if and only if the binlog streamer should use V3-style sharding, which doesn't require a preset sharding key column. (default true)
   --binlog_user string
 	PITR restore parameter: username of binlog server.
+  --builtin-compressor string
+	builtin compressor engine to use (default pgzip)
+  --builtin-decompressor string
+	builtin decompressor engine to use (default auto)
   --builtinbackup_mysqld_timeout duration
 	how long to wait for mysqld to shutdown at the start of the backup (default 10m0s)
   --builtinbackup_progress duration
@@ -67,8 +69,8 @@ Usage of vttablet:
 	catch and ignore SIGPIPE on stdout and stderr if specified
   --ceph_backup_storage_config string
 	Path to JSON config file for ceph backup storage (default ceph_backup_config.json)
-  --client-found-rows-pool-size int
-	DEPRECATED: queryserver-config-transaction-cap will be used instead.
+  --compression-level int
+	what level to pass to the compressor (default 1)
   --consul_auth_static_file string
 	JSON File to read the topos/tokens from.
   --cpu_profile string
@@ -369,8 +371,6 @@ Usage of vttablet:
 	the replication lag that is considered low enough to be healthy (default 30s)
   --emit_stats
 	If set, emit stats to push-based monitoring and stats backends
-  --enable-autocommit
-	This flag is deprecated. Autocommit is always allowed. (default true)
   --enable-consolidator
 	Synonym to -enable_consolidator (default true)
   --enable-consolidator-replicas
@@ -407,6 +407,12 @@ Usage of vttablet:
 	if this flag is true, vttablet will fail to start if a valid tableacl config does not exist
   --enforce_strict_trans_tables
 	If true, vttablet requires MySQL to run with STRICT_TRANS_TABLES or STRICT_ALL_TABLES on. It is recommended to not turn this flag off. Otherwise MySQL may alter your supplied values before saving them to the database. (default true)
+  --external-compressor string
+	command with arguments to use when compressing a backup
+  --external-compressor-extension string
+	extension to use when using an external compressor
+  --external-decompressor string
+	command with arguments to use when decompressing a backup
   --file_backup_storage_root string
 	root directory for the file backup storage
   --filecustomrules string
@@ -613,8 +619,6 @@ Usage of vttablet:
 	If set, the process will write its pid to the named file, and delete it on graceful shutdown.
   --pitr_gtid_lookup_timeout duration
 	PITR restore parameter: timeout for fetching gtid from timestamp. (default 1m0s)
-  --pool-name-prefix string
-	Deprecated
   --pool_hostname_resolve_interval duration
 	if set force an update to all hostnames and reconnect if changed, defaults to 0 (disabled)
   --port int
@@ -637,22 +641,14 @@ Usage of vttablet:
 	Number of rows a query has to return or affect before being logged; not useful for streaming queries. 0 means all queries will be logged.
   --queryserver-config-acl-exempt-acl string
 	an acl that exempt from table acl checking (this acl is free to access any vitess tables).
-  --queryserver-config-allowunsafe-dmls
-	deprecated
   --queryserver-config-annotate-queries
 	prefix queries to MySQL backend with comment indicating vtgate principal (user) and target tablet type
   --queryserver-config-enable-table-acl-dry-run
 	If this flag is enabled, tabletserver will emit monitoring metrics and let the request pass regardless of table acl check results
   --queryserver-config-idle-timeout float
 	query server idle timeout (in seconds), vttablet manages various mysql connection pools. This config means if a connection has not been used in given idle timeout, this connection will be removed from pool. This effectively manages number of connection objects and optimize the pool performance. (default 1800)
-  --queryserver-config-max-dml-rows int
-	query server max dml rows per statement, maximum number of rows allowed to return at a time for an update or delete with either 1) an equality where clauses on primary keys, or 2) a subselect statement. For update and delete statements in above two categories, vttablet will split the original query into multiple small queries based on this configuration value. 
   --queryserver-config-max-result-size int
 	query server max result size, maximum number of rows allowed to return from vttablet for non-streaming queries. (default 10000)
-  --queryserver-config-message-conn-pool-prefill-parallelism int
-	DEPRECATED: Unused.
-  --queryserver-config-message-conn-pool-size int
-	DEPRECATED
   --queryserver-config-message-postpone-cap int
 	query server message postpone cap is the maximum number of messages that can be postponed at any given time. Set this number to substantially lower than transaction cap, so that the transaction pool isn't exhausted by the message subsystem. (default 4)
   --queryserver-config-passthrough-dmls
@@ -748,7 +744,7 @@ Usage of vttablet:
   --security_policy string
 	the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
   --service_map value
-	comma separated list of services to enable (or disable if prefixed with '-') Example: grpc-vtworker
+	comma separated list of services to enable (or disable if prefixed with '-') Example: grpc-queryservice
   --serving_state_grace_period duration
 	how long to pause after broadcasting health to vtgate, before enforcing a new serving state
   --shard_sync_retry_delay duration
@@ -911,8 +907,6 @@ Usage of vttablet:
 	Include VTGateCallerID.username when considering who the user is for the purpose of transaction limit. (default true)
   --transaction_limit_per_user float
 	Maximum number of transactions a single user is allowed to use at any time, represented as fraction of -transaction_cap. (default 0.4)
-  --transaction_shutdown_grace_period float
-	DEPRECATED: use shutdown_grace_period instead.
   --twopc_abandon_age float
 	time in seconds. Any unresolved transaction older than this time will be sent to the coordinator to be resolved.
   --twopc_coordinator_address string

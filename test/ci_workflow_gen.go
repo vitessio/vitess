@@ -73,14 +73,12 @@ var (
 		"13",
 		"ers_prs_newfeatures_heavy",
 		"15",
-		"shardedrecovery_stress_verticalsplit_heavy",
 		"vtgate_general_heavy",
 		"19",
 		"xb_backup",
 		"21",
 		"22",
-		"worker_vault_heavy",
-		"24",
+		"mysql_server_vault",
 		"26",
 		"vstream_failover",
 		"vstream_stoponreshard_true",
@@ -119,8 +117,6 @@ var (
 		"vtgate_queries",
 		"vtgate_schema_tracker",
 		"xb_recovery",
-		"resharding",
-		"resharding_bytes",
 		"mysql80",
 		"vreplication_across_db_versions",
 		"vreplication_multicell",
@@ -144,7 +140,7 @@ var (
 	}
 	clustersRequiringMakeTools = []string{
 		"18",
-		"24",
+		"mysql_server_vault",
 		"vtgate_topo_consul",
 		"tabletmanager_consul",
 	}

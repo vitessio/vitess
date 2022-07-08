@@ -40,10 +40,6 @@ func RemoveUnhealthyTablets(tabletStatsList []TabletHealth) []TabletHealth {
 	result := make([]TabletHealth, 0, len(tabletStatsList))
 	for _, ts := range tabletStatsList {
 		// Note we do not check the 'Serving' flag here.
-		// This is mainly to avoid the case where we run a vtworker Diff between a
-		// source and destination, and the source is not serving (disabled by
-		// TabletControl). When we switch the tablet to 'worker', it will
-		// go back to serving state.
 		if ts.LastError != nil || ts.Stats != nil && (ts.Stats.HealthError != "" || IsReplicationLagHigh(&ts)) {
 			continue
 		}

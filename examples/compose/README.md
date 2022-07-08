@@ -70,19 +70,28 @@ Check the status of the cluster.
 vitess/examples/compose$ docker-compose ps
            Name                         Command                  State                                                                     Ports
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-compose_consul1_1            docker-entrypoint.sh agent ...   Up             8300/tcp, 8301/tcp, 8301/udp, 8302/tcp, 8302/udp, 0.0.0.0:8400->8400/tcp, 0.0.0.0:8500->8500/tcp, 0.0.0.0:8600->8600/tcp, 8600/udp
-compose_consul2_1            docker-entrypoint.sh agent ...   Up             8300/tcp, 8301/tcp, 8301/udp, 8302/tcp, 8302/udp, 8400/tcp, 8500/tcp, 8600/tcp, 8600/udp
-compose_consul3_1            docker-entrypoint.sh agent ...   Up             8300/tcp, 8301/tcp, 8301/udp, 8302/tcp, 8302/udp, 8400/tcp, 8500/tcp, 8600/tcp, 8600/udp
-compose_external_db_host_1   docker-entrypoint.sh mysqld      Up (healthy)   0.0.0.0:32835->3306/tcp, 33060/tcp
-compose_schemaload_1         sh -c /script/schemaload.sh      Exit 0
-compose_vreplication_1       sh -c [ $EXTERNAL_DB -eq 1 ...   Exit 0
-compose_vtctld_1             sh -c  /vt/bin/vtctld -top ...   Up             0.0.0.0:32836->15999/tcp, 0.0.0.0:15000->8080/tcp
-compose_vtgate_1             sh -c /vt/bin/vtgate -topo ...   Up             0.0.0.0:15306->15306/tcp, 0.0.0.0:32845->15999/tcp, 0.0.0.0:15099->8080/tcp
-compose_vtorc_1              sh -c /script/vtorc-up.sh        Up (healthy)   0.0.0.0:13000->3000/tcp
-compose_vttablet100_1        sh -c [ $EXTERNAL_DB -eq 1 ...   Exit 0
-compose_vttablet101_1        sh -c /script/vttablet-up. ...   Up (healthy)   0.0.0.0:32838->15999/tcp, 0.0.0.0:32840->3306/tcp, 0.0.0.0:15101->8080/tcp
-compose_vttablet102_1        sh -c /script/vttablet-up. ...   Up (healthy)   0.0.0.0:32842->15999/tcp, 0.0.0.0:32844->3306/tcp, 0.0.0.0:15102->8080/tcp
-compose_vttablet103_1        sh -c /script/vttablet-up. ...   Up (healthy)   0.0.0.0:32841->15999/tcp, 0.0.0.0:32843->3306/tcp, 0.0.0.0:15103->8080/tcp
+compose_consul1_1                          docker-entrypoint.sh agent ...   Up             8300/tcp, 8301/tcp, 8301/udp, 8302/tcp, 8302/udp,
+                                                                                           0.0.0.0:8400->8400/tcp,:::8400->8400/tcp, 0.0.0.0:8500->8500/tcp,:::8500->8500/tcp,
+                                                                                           0.0.0.0:8600->8600/tcp,:::8600->8600/tcp, 8600/udp
+compose_consul2_1                          docker-entrypoint.sh agent ...   Up             8300/tcp, 8301/tcp, 8301/udp, 8302/tcp, 8302/udp, 8400/tcp, 8500/tcp, 8600/tcp,
+                                                                                           8600/udp
+compose_consul3_1                          docker-entrypoint.sh agent ...   Up             8300/tcp, 8301/tcp, 8301/udp, 8302/tcp, 8302/udp, 8400/tcp, 8500/tcp, 8600/tcp,
+                                                                                           8600/udp
+compose_external_db_host_1                 docker-entrypoint.sh --ser ...   Up (healthy)   0.0.0.0:59816->3306/tcp, 33060/tcp
+compose_schemaload_1                       sh -c /script/schemaload.sh      Exit 0
+compose_set_keyspace_durability_policy_1   sh -c /script/set_keyspace ...   Exit 0
+compose_vreplication_1                     sh -c [ $EXTERNAL_DB -eq 1 ...   Exit 0
+compose_vtctld_1                           sh -c  /vt/bin/vtctld -top ...   Up             0.0.0.0:59823->15999/tcp, 0.0.0.0:15000->8080/tcp,:::15000->8080/tcp
+compose_vtgate_1                           sh -c /vt/bin/vtgate -topo ...   Up             0.0.0.0:15306->15306/tcp,:::15306->15306/tcp, 0.0.0.0:59830->15999/tcp,
+                                                                                           0.0.0.0:15099->8080/tcp,:::15099->8080/tcp
+compose_vtorc_1                            sh -c /script/vtorc-up.sh        Up (healthy)   0.0.0.0:13000->3000/tcp,:::13000->3000/tcp
+compose_vttablet100_1                      sh -c [ $EXTERNAL_DB -eq 1 ...   Exit 0
+compose_vttablet101_1                      sh -c /script/vttablet-up. ...   Up (healthy)   0.0.0.0:59824->15999/tcp, 0.0.0.0:59825->3306/tcp,
+                                                                                           0.0.0.0:15101->8080/tcp,:::15101->8080/tcp
+compose_vttablet102_1                      sh -c /script/vttablet-up. ...   Up (healthy)   0.0.0.0:59826->15999/tcp, 0.0.0.0:59827->3306/tcp,
+                                                                                           0.0.0.0:15102->8080/tcp,:::15102->8080/tcp
+compose_vttablet103_1                      sh -c /script/vttablet-up. ...   Up (healthy)   0.0.0.0:65284->15999/tcp, 0.0.0.0:65285->3306/tcp,
+                                                                                           0.0.0.0:15103->8080/tcp,:::15103->8080/tcp
 ```
 
 ### Check the status of the containers
