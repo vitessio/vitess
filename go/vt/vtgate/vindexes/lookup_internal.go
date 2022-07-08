@@ -24,25 +24,29 @@ import (
 	"strconv"
 	"strings"
 
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"vitess.io/vitess/go/sqltypes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // lookupInternal implements the functions for the Lookup vindexes.
 type lookupInternal struct {
-	Table         string   `json:"table"`
-	FromColumns   []string `json:"from_columns"`
-	To            string   `json:"to"`
-	Autocommit    bool     `json:"autocommit,omitempty"`
-	Upsert        bool     `json:"upsert,omitempty"`
-	IgnoreNulls   bool     `json:"ignore_nulls,omitempty"`
-	BatchLookup   bool     `json:"batch_lookup,omitempty"`
-	sel, ver, del string
+	Table                string   `json:"table"`
+	FromColumns          []string `json:"from_columns"`
+	To                   string   `json:"to"`
+	Autocommit           bool     `json:"autocommit,omitempty"`
+	MultiShardAutocommit bool     `json:"multi_shard_autocommit,omitempty"`
+	Upsert               bool     `json:"upsert,omitempty"`
+	IgnoreNulls          bool     `json:"ignore_nulls,omitempty"`
+	BatchLookup          bool     `json:"batch_lookup,omitempty"`
+	sel, ver, del        string
 }
 
-func (lkp *lookupInternal) Init(lookupQueryParams map[string]string, autocommit, upsert bool) error {
+func (lkp *lookupInternal) Init(lookupQueryParams map[string]string, autocommit, upsert, multiShardAutocommit bool) error {
 	lkp.Table = lookupQueryParams["table"]
 	lkp.To = lookupQueryParams["to"]
 	var fromColumns []string
@@ -63,6 +67,10 @@ func (lkp *lookupInternal) Init(lookupQueryParams map[string]string, autocommit,
 
 	lkp.Autocommit = autocommit
 	lkp.Upsert = upsert
+	if multiShardAutocommit {
+		lkp.Autocommit = true
+		lkp.MultiShardAutocommit = true
+	}
 
 	// TODO @rafael: update sel and ver to support multi column vindexes. This will be done
 	// as part of face 2 of https://github.com/vitessio/vitess/issues/3481
@@ -239,11 +247,15 @@ nextRow:
 	}
 	sort.Sort(&sorter{rowsColValues: trimmedRowsCols, toValues: trimmedToValues})
 
+	insStmt := "insert"
+	if lkp.MultiShardAutocommit {
+		insStmt = "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */"
+	}
 	buf := new(bytes.Buffer)
 	if ignoreMode {
-		fmt.Fprintf(buf, "insert ignore into %s(", lkp.Table)
+		fmt.Fprintf(buf, "%s ignore into %s(", insStmt, lkp.Table)
 	} else {
-		fmt.Fprintf(buf, "insert into %s(", lkp.Table)
+		fmt.Fprintf(buf, "%s into %s(", insStmt, lkp.Table)
 	}
 	for _, col := range lkp.FromColumns {
 		fmt.Fprintf(buf, "%s, ", col)
@@ -344,6 +356,23 @@ func (lkp *lookupInternal) initDelStmt() string {
 	return delBuffer.String()
 }
 
+type commonConfig struct {
+	autocommit           bool
+	multiShardAutocommit bool
+}
+
+func parseCommonConfig(m map[string]string) (*commonConfig, error) {
+	var c commonConfig
+	var err error
+	if c.autocommit, err = boolFromMap(m, "autocommit"); err != nil {
+		return nil, err
+	}
+	if c.multiShardAutocommit, err = boolFromMap(m, "multi_shard_autocommit"); err != nil {
+		return nil, err
+	}
+	return &c, nil
+}
+
 func boolFromMap(m map[string]string, key string) (bool, error) {
 	val, ok := m[key]
 	if !ok {
@@ -355,6 +384,6 @@ func boolFromMap(m map[string]string, key string) (bool, error) {
 	case "false":
 		return false, nil
 	default:
-		return false, fmt.Errorf("%s value must be 'true' or 'false': '%s'", key, val)
+		return false, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s value must be 'true' or 'false': '%s'", key, val)
 	}
 }
