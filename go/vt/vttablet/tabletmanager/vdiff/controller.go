@@ -18,6 +18,7 @@ package vdiff
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -162,10 +163,11 @@ func (ct *controller) updateState(dbClient binlogplayer.DBClient, state VDiffSta
 		extraCols = ", completed_at = utc_timestamp()"
 	default:
 	}
-	if err != nil {
-		extraCols += fmt.Sprintf(", last_error = %s", encodeString(err.Error()))
+	if err == nil {
+		// Clear out any previous error for the vdiff on this shard
+		err = errors.New("")
 	}
-	query := fmt.Sprintf(sqlUpdateVDiffState, encodeString(string(state)), extraCols, ct.id)
+	query := fmt.Sprintf(sqlUpdateVDiffState, encodeString(string(state)), encodeString(err.Error()), extraCols, ct.id)
 	if _, err := withDDL.Exec(ct.vde.ctx, query, dbClient.ExecuteFetch, dbClient.ExecuteFetch); err != nil {
 		return err
 	}

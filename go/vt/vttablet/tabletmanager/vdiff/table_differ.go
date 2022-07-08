@@ -420,13 +420,11 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare *int64, debug, on
 		return nil, fmt.Errorf("invalid state found for vdiff table %s (multiple records) for vdiff_id %d", td.table.Name, td.wd.ct.id)
 	}
 	curState := cs.Named().Row()
-	log.Infof("VDiff table %s has current state %v (%d rows)", td.table.Name, cs, len(cs.Rows))
 	mismatch := curState.AsBool("mismatch", false)
 	dr := &DiffReport{}
 	if err = json.Unmarshal(curState.AsBytes("report", nil), dr); err != nil {
 		return nil, err
 	}
-	log.Infof("Unmarshalled DiffReport: %v", dr)
 	dr.TableName = td.table.Name
 
 	sourceExecutor := newPrimitiveExecutor(ctx, td.sourcePrimitive, "source")
@@ -437,7 +435,7 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare *int64, debug, on
 
 	// Save our progress when we finish the run
 	defer func() {
-		if err := td.updateTableProgress(dbClient, dr.ProcessedRows, lastProcessedRow); err != nil {
+		if err := td.updateTableProgress(dbClient, dr, lastProcessedRow); err != nil {
 			log.Errorf("Failed to update vdiff progress on %s table: %v", td.table.Name, err)
 		}
 	}()
@@ -570,7 +568,7 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare *int64, debug, on
 		// approximate progress information but without too much overhead for when it's not
 		// needed or even desired.
 		if dr.ProcessedRows%1e4 == 0 {
-			if err := td.updateTableProgress(dbClient, dr.ProcessedRows, sourceRow); err != nil {
+			if err := td.updateTableProgress(dbClient, dr, sourceRow); err != nil {
 				return nil, err
 			}
 		}
@@ -603,7 +601,10 @@ func (td *tableDiffer) compare(sourceRow, targetRow []sqltypes.Value, cols []com
 	return 0, nil
 }
 
-func (td *tableDiffer) updateTableProgress(dbClient binlogplayer.DBClient, numRows int64, lastRow []sqltypes.Value) error {
+func (td *tableDiffer) updateTableProgress(dbClient binlogplayer.DBClient, dr *DiffReport, lastRow []sqltypes.Value) error {
+	if dr == nil {
+		return fmt.Errorf("cannot update progress with a nil diff report")
+	}
 	var lastPK []byte
 	var err error
 	var query string
@@ -612,14 +613,18 @@ func (td *tableDiffer) updateTableProgress(dbClient binlogplayer.DBClient, numRo
 		if err != nil {
 			return err
 		}
-		query = fmt.Sprintf(sqlUpdateTableProgress, numRows, encodeString(string(lastPK)), td.wd.ct.id, encodeString(td.table.Name))
-	} else if numRows != 0 {
+		rpt, err := json.Marshal(dr)
+		if err != nil {
+			return err
+		}
+		query = fmt.Sprintf(sqlUpdateTableProgress, dr.ProcessedRows, encodeString(string(lastPK)), encodeString(string(rpt)), td.wd.ct.id, encodeString(td.table.Name))
+	} else if dr.ProcessedRows != 0 {
 		// This should never happen
-		return fmt.Errorf("invalid vdiff state detected, %d row(s) were processed but the row data is missing", numRows)
+		return fmt.Errorf("invalid vdiff state detected, %d row(s) were processed but the row data is missing", dr.ProcessedRows)
 	} else {
 		// We didn't process any rows this time around so reflect that and keep any
 		// lastpk from a previous run. This is only relevant for RESUMEd vdiffs.
-		query = fmt.Sprintf(sqlUpdateTableNoProgress, numRows, td.wd.ct.id, encodeString(td.table.Name))
+		query = fmt.Sprintf(sqlUpdateTableNoProgress, 0, td.wd.ct.id, encodeString(td.table.Name))
 	}
 	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
 		return err
@@ -627,16 +632,28 @@ func (td *tableDiffer) updateTableProgress(dbClient binlogplayer.DBClient, numRo
 	return nil
 }
 
-func (td *tableDiffer) updateTableState(ctx context.Context, dbClient binlogplayer.DBClient, tableName string, state VDiffState, dr *DiffReport) error {
-	reportJSON := "{}"
+func (td *tableDiffer) updateTableState(ctx context.Context, dbClient binlogplayer.DBClient, tableName string, state VDiffState) error {
+	query := fmt.Sprintf(sqlUpdateTableState, encodeString(string(state)), td.wd.ct.id, encodeString(tableName))
+	if _, err := withDDL.Exec(ctx, query, dbClient.ExecuteFetch, dbClient.ExecuteFetch); err != nil {
+		return err
+	}
+	insertVDiffLog(ctx, dbClient, td.wd.ct.id, fmt.Sprintf("%s: table %s", state, encodeString(tableName)))
+
+	return nil
+}
+
+func (td *tableDiffer) updateTableStateAndReport(ctx context.Context, dbClient binlogplayer.DBClient, tableName string, state VDiffState, dr *DiffReport) error {
+	var report string
 	if dr != nil {
 		reportJSONBytes, err := json.Marshal(dr)
 		if err != nil {
 			return err
 		}
-		reportJSON = string(reportJSONBytes)
+		report = string(reportJSONBytes)
+	} else {
+		report = "{}"
 	}
-	query := fmt.Sprintf(sqlUpdateTableState, encodeString(string(state)), encodeString(reportJSON), td.wd.ct.id, encodeString(tableName))
+	query := fmt.Sprintf(sqlUpdateTableStateAndReport, encodeString(string(state)), encodeString(report), td.wd.ct.id, encodeString(tableName))
 	if _, err := withDDL.Exec(ctx, query, dbClient.ExecuteFetch, dbClient.ExecuteFetch); err != nil {
 		return err
 	}

@@ -97,7 +97,7 @@ func (wd *workflowDiffer) reconcileExtraRows(dr *DiffReport, maxExtraRowsToCompa
 func (wd *workflowDiffer) diffTable(ctx context.Context, dbClient binlogplayer.DBClient, td *tableDiffer) error {
 	tableName := td.table.Name
 	log.Infof("Starting differ on table %s", tableName)
-	if err := td.updateTableState(ctx, dbClient, tableName, StartedState, nil); err != nil {
+	if err := td.updateTableState(ctx, dbClient, tableName, StartedState); err != nil {
 		return err
 	}
 	if err := td.initialize(ctx); err != nil {
@@ -121,7 +121,7 @@ func (wd *workflowDiffer) diffTable(ctx context.Context, dbClient binlogplayer.D
 	}
 
 	log.Infof("td.diff after reconciliation for %s, with dr %+v", tableName, dr)
-	if err := td.updateTableState(ctx, dbClient, tableName, CompletedState, dr); err != nil {
+	if err := td.updateTableStateAndReport(ctx, dbClient, tableName, CompletedState, dr); err != nil {
 		return err
 	}
 	return nil
@@ -191,7 +191,7 @@ func (wd *workflowDiffer) diff(ctx context.Context) error {
 
 		log.Infof("starting table %s", td.table.Name)
 		if err := wd.diffTable(ctx, dbClient, td); err != nil {
-			if err := td.updateTableState(ctx, dbClient, td.table.Name, ErrorState, nil); err != nil {
+			if err := td.updateTableState(ctx, dbClient, td.table.Name, ErrorState); err != nil {
 				return err
 			}
 			insertVDiffLog(ctx, dbClient, wd.ct.id, fmt.Sprintf("Table %s Error: %s", td.table.Name, err))
