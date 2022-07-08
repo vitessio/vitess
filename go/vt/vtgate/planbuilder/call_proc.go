@@ -41,7 +41,7 @@ func buildCallProcPlan(stmt *sqlparser.CallProc, vschema plancontext.VSchema) (e
 		dest = key.DestinationAnyShard{}
 	}
 
-	stmt.Name.Qualifier = sqlparser.NewTableIdent("")
+	stmt.Name.Qualifier = sqlparser.NewIdentifierCS("")
 
 	return &engine.Send{
 		Keyspace:          keyspace,

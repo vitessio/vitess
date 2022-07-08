@@ -267,7 +267,7 @@ func (client *fakeTabletManagerClient) PreflightSchema(ctx context.Context, tabl
 	return result, nil
 }
 
-func (client *fakeTabletManagerClient) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
+func (client *fakeTabletManagerClient) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.GetSchemaRequest) (*tabletmanagerdatapb.SchemaDefinition, error) {
 	result, ok := client.schemaDefinitions[topoproto.TabletDbName(tablet)]
 	if !ok {
 		return nil, fmt.Errorf("unknown database: %s", topoproto.TabletDbName(tablet))

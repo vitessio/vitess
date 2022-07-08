@@ -30,6 +30,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/acl"
@@ -89,6 +91,7 @@ type Executor struct {
 	resolver    *Resolver
 	scatterConn *ScatterConn
 	txConn      *TxConn
+	pv          plancontext.PlannerVersion
 
 	mu           sync.Mutex
 	vschema      *vindexes.VSchema
@@ -113,7 +116,18 @@ const pathScatterStats = "/debug/scatter_stats"
 const pathVSchema = "/debug/vschema"
 
 // NewExecutor creates a new Executor.
-func NewExecutor(ctx context.Context, serv srvtopo.Server, cell string, resolver *Resolver, normalize, warnOnShardedOnly bool, streamSize int, cacheCfg *cache.Config, schemaTracker SchemaInfo, noScatter bool) *Executor {
+func NewExecutor(
+	ctx context.Context,
+	serv srvtopo.Server,
+	cell string,
+	resolver *Resolver,
+	normalize, warnOnShardedOnly bool,
+	streamSize int,
+	cacheCfg *cache.Config,
+	schemaTracker SchemaInfo,
+	noScatter bool,
+	pv plancontext.PlannerVersion,
+) *Executor {
 	e := &Executor{
 		serv:            serv,
 		cell:            cell,
@@ -126,6 +140,7 @@ func NewExecutor(ctx context.Context, serv srvtopo.Server, cell string, resolver
 		streamSize:      streamSize,
 		schemaTracker:   schemaTracker,
 		allowScatter:    !noScatter,
+		pv:              pv,
 	}
 
 	vschemaacl.Init()
@@ -171,7 +186,7 @@ func (e *Executor) Execute(ctx context.Context, method string, safeSession *Safe
 	trace.AnnotateSQL(span, sqlparser.Preview(sql))
 	defer span.Finish()
 
-	logStats := NewLogStats(ctx, method, sql, bindVars)
+	logStats := NewLogStats(ctx, method, sql, safeSession.GetSessionUUID(), bindVars)
 	stmtType, result, err := e.execute(ctx, safeSession, sql, bindVars, logStats)
 	logStats.Error = err
 	if result == nil {
@@ -227,11 +242,11 @@ func (e *Executor) StreamExecute(
 	trace.AnnotateSQL(span, sqlparser.Preview(sql))
 	defer span.Finish()
 
-	logStats := NewLogStats(ctx, method, sql, bindVars)
+	logStats := NewLogStats(ctx, method, sql, safeSession.GetSessionUUID(), bindVars)
 	srr := &streaminResultReceiver{callback: callback}
 	var err error
 
-	resultHandler := func(plan *engine.Plan, vc *vcursorImpl, bindVars map[string]*querypb.BindVariable, execStart time.Time) error {
+	resultHandler := func(ctx context.Context, plan *engine.Plan, vc *vcursorImpl, bindVars map[string]*querypb.BindVariable, execStart time.Time) error {
 		var seenResults sync2.AtomicBool
 		var resultMu sync.Mutex
 		result := &sqltypes.Result{}
@@ -273,7 +288,7 @@ func (e *Executor) StreamExecute(
 		}
 
 		// 4: Execute!
-		err := vc.StreamExecutePrimitive(plan.Instructions, bindVars, true, func(qr *sqltypes.Result) error {
+		err := vc.StreamExecutePrimitive(ctx, plan.Instructions, bindVars, true, func(qr *sqltypes.Result) error {
 			return srr.storeResultStats(plan.Type, qr)
 		})
 
@@ -357,7 +372,7 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 	var err error
 	var qr *sqltypes.Result
 	var stmtType sqlparser.StatementType
-	err = e.newExecute(ctx, safeSession, sql, bindVars, logStats, func(plan *engine.Plan, vc *vcursorImpl, bindVars map[string]*querypb.BindVariable, time time.Time) error {
+	err = e.newExecute(ctx, safeSession, sql, bindVars, logStats, func(ctx context.Context, plan *engine.Plan, vc *vcursorImpl, bindVars map[string]*querypb.BindVariable, time time.Time) error {
 		stmtType = plan.Type
 		qr, err = e.executePlan(ctx, safeSession, plan, vc, bindVars, logStats, time)
 		return err
@@ -940,7 +955,7 @@ type iQueryOption interface {
 
 // getPlan computes the plan for the given query. If one is in
 // the cache, it reuses it.
-func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.MarginComments, bindVars map[string]*querypb.BindVariable, qo iQueryOption, logStats *LogStats) (*engine.Plan, error) {
+func (e *Executor) getPlan(ctx context.Context, vcursor *vcursorImpl, sql string, comments sqlparser.MarginComments, bindVars map[string]*querypb.BindVariable, qo iQueryOption, logStats *LogStats) (*engine.Plan, error) {
 	if e.VSchema() == nil {
 		return nil, errors.New("vschema not initialized")
 	}
@@ -990,7 +1005,7 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 	}
 
 	planHash := sha256.New()
-	_, _ = planHash.Write([]byte(vcursor.planPrefixKey()))
+	_, _ = planHash.Write([]byte(vcursor.planPrefixKey(ctx)))
 	_, _ = planHash.Write([]byte{':'})
 	_, _ = planHash.Write(hack.StringBytes(query))
 	planKey := hex.EncodeToString(planHash.Sum(nil))
@@ -1169,7 +1184,7 @@ func isValidPayloadSize(query string) bool {
 
 // Prepare executes a prepare statements.
 func (e *Executor) Prepare(ctx context.Context, method string, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable) (fld []*querypb.Field, err error) {
-	logStats := NewLogStats(ctx, method, sql, bindVars)
+	logStats := NewLogStats(ctx, method, sql, safeSession.GetSessionUUID(), bindVars)
 	fld, err = e.prepare(ctx, safeSession, sql, bindVars, logStats)
 	logStats.Error = err
 
@@ -1221,15 +1236,8 @@ func (e *Executor) prepare(ctx context.Context, safeSession *SafeSession, sql st
 func (e *Executor) handlePrepare(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *LogStats) ([]*querypb.Field, error) {
 	// V3 mode.
 	query, comments := sqlparser.SplitMarginComments(sql)
-	vcursor, _ := newVCursorImpl(ctx, safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver, e.serv, e.warnShardedOnly)
-	plan, err := e.getPlan(
-		vcursor,
-		query,
-		comments,
-		bindVars,
-		safeSession,
-		logStats,
-	)
+	vcursor, _ := newVCursorImpl(safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver, e.serv, e.warnShardedOnly, e.pv)
+	plan, err := e.getPlan(ctx, vcursor, query, comments, bindVars, safeSession, logStats)
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 
@@ -1244,7 +1252,7 @@ func (e *Executor) handlePrepare(ctx context.Context, safeSession *SafeSession, 
 		return nil, err
 	}
 
-	qr, err := plan.Instructions.GetFields(vcursor, bindVars)
+	qr, err := plan.Instructions.GetFields(ctx, vcursor, bindVars)
 	logStats.ExecuteTime = time.Since(execStart)
 	var errCount uint64
 	if err != nil {

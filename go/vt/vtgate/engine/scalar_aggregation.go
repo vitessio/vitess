@@ -17,6 +17,7 @@ limitations under the License.
 package engine
 
 import (
+	"context"
 	"sync"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -69,8 +70,8 @@ func (sa *ScalarAggregate) GetTableName() string {
 }
 
 // GetFields implements the Primitive interface
-func (sa *ScalarAggregate) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	qr, err := sa.Input.GetFields(vcursor, bindVars)
+func (sa *ScalarAggregate) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	qr, err := sa.Input.GetFields(ctx, vcursor, bindVars)
 	if err != nil {
 		return nil, err
 	}
@@ -84,8 +85,8 @@ func (sa *ScalarAggregate) NeedsTransaction() bool {
 }
 
 // TryExecute implements the Primitive interface
-func (sa *ScalarAggregate) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	result, err := vcursor.ExecutePrimitive(sa.Input, bindVars, wantfields)
+func (sa *ScalarAggregate) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	result, err := vcursor.ExecutePrimitive(ctx, sa.Input, bindVars, wantfields)
 	if err != nil {
 		return nil, err
 	}
@@ -125,7 +126,7 @@ func (sa *ScalarAggregate) TryExecute(vcursor VCursor, bindVars map[string]*quer
 }
 
 // TryStreamExecute implements the Primitive interface
-func (sa *ScalarAggregate) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (sa *ScalarAggregate) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	cb := func(qr *sqltypes.Result) error {
 		return callback(qr.Truncate(sa.TruncateColumnCount))
 	}
@@ -135,7 +136,7 @@ func (sa *ScalarAggregate) TryStreamExecute(vcursor VCursor, bindVars map[string
 	fieldsSent := false
 	var mu sync.Mutex
 
-	err := vcursor.StreamExecutePrimitive(sa.Input, bindVars, wantfields, func(result *sqltypes.Result) error {
+	err := vcursor.StreamExecutePrimitive(ctx, sa.Input, bindVars, wantfields, func(result *sqltypes.Result) error {
 		// as the underlying primitive call is not sync
 		// and here scalar aggregate is using shared variables we have to sync the callback
 		// for correct aggregation.
@@ -167,6 +168,20 @@ func (sa *ScalarAggregate) TryStreamExecute(vcursor VCursor, bindVars map[string
 		return err
 	}
 
+	if current == nil {
+		// When doing aggregation without grouping keys, we need to produce a single row containing zero-value for the
+		// different aggregation functions
+		current, err = sa.createEmptyRow()
+		if err != nil {
+			return err
+		}
+	} else {
+		current, err = convertFinal(current, sa.Aggregates)
+		if err != nil {
+			return err
+		}
+	}
+
 	return cb(&sqltypes.Result{Rows: [][]sqltypes.Value{current}})
 }
 
@@ -174,7 +189,11 @@ func (sa *ScalarAggregate) TryStreamExecute(vcursor VCursor, bindVars map[string
 func (sa *ScalarAggregate) createEmptyRow() ([]sqltypes.Value, error) {
 	out := make([]sqltypes.Value, len(sa.Aggregates))
 	for i, aggr := range sa.Aggregates {
-		value, err := createEmptyValueFor(aggr.Opcode)
+		op := aggr.Opcode
+		if aggr.OrigOpcode != AggregateUnassigned {
+			op = aggr.OrigOpcode
+		}
+		value, err := createEmptyValueFor(op)
 		if err != nil {
 			return nil, err
 		}

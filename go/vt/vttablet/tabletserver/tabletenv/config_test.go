@@ -153,6 +153,7 @@ rowStreamer:
   maxMySQLReplLagSecs: 43200
 schemaReloadIntervalSeconds: 1800
 signalSchemaChangeReloadIntervalSeconds: 5
+signalWhenSchemaChange: true
 streamBufferSize: 32768
 txPool:
   idleTimeoutSeconds: 1800
@@ -217,9 +218,10 @@ func TestFlags(t *testing.T) {
 		QueryCacheLFU:                           cache.DefaultConfig.LFU,
 		SchemaReloadIntervalSeconds:             1800,
 		SignalSchemaChangeReloadIntervalSeconds: 5,
+		SignalWhenSchemaChange:                  true,
 		TrackSchemaVersions:                     false,
 		MessagePostponeParallelism:              4,
-		CacheResultFields:                       true,
+		DeprecatedCacheResultFields:             true,
 		TxThrottlerConfig:                       "target_replication_lag_sec: 2\nmax_replication_lag_sec: 10\ninitial_rate: 100\nmax_increase: 1\nemergency_decrease: 0.5\nmin_duration_between_increases_sec: 40\nmax_duration_between_increases_sec: 62\nmin_duration_between_decreases_sec: 20\nspread_backlog_across_sec: 20\nage_bad_rate_after_sec: 180\nbad_rate_increase: 0.1\nmax_rate_approach_threshold: 0.9\n",
 		TxThrottlerHealthCheckCells:             []string{},
 		TransactionLimitConfig: TransactionLimitConfig{

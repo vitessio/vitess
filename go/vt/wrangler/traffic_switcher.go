@@ -55,6 +55,11 @@ const (
 	errorNoStreams = "no streams found in keyspace %s for: %s"
 	// use pt-osc's naming convention, this format also ensures vstreamer ignores such tables
 	renameTableTemplate = "_%.59s_old" // limit table name to 64 characters
+
+	sqlDeleteWorkflow = "delete from _vt.vreplication where db_name = %s and workflow = %s"
+	sqlDeleteVDiffs   = `delete from vd, vdt, vdl using _vt.vdiff as vd inner join _vt.vdiff_table as vdt on (vd.id = vdt.vdiff_id)
+						inner join _vt.vdiff_log as vdl on (vd.id = vdl.vdiff_id)
+						where vd.keyspace = %s and vd.workflow = %s`
 )
 
 // accessType specifies the type of access for a shard (allow/disallow writes).
@@ -1180,7 +1185,7 @@ func (ts *trafficSwitcher) createReverseVReplication(ctx context.Context) error 
 			var filter string
 			if strings.HasPrefix(rule.Match, "/") {
 				if ts.SourceKeyspaceSchema().Keyspace.Sharded {
-					filter = key.KeyRangeString(source.GetShard().KeyRange)
+					filter = key.RangeString(source.GetShard().KeyRange)
 				}
 			} else {
 				var inKeyrange string
@@ -1191,7 +1196,7 @@ func (ts *trafficSwitcher) createReverseVReplication(ctx context.Context) error 
 					}
 					// TODO(sougou): handle degenerate cases like sequence, etc.
 					// We currently assume the primary vindex is the best way to filter, which may not be true.
-					inKeyrange = fmt.Sprintf(" where in_keyrange(%s, '%s.%s', '%s')", sqlparser.String(vtable.ColumnVindexes[0].Columns[0]), ts.SourceKeyspaceName(), vtable.ColumnVindexes[0].Name, key.KeyRangeString(source.GetShard().KeyRange))
+					inKeyrange = fmt.Sprintf(" where in_keyrange(%s, '%s.%s', '%s')", sqlparser.String(vtable.ColumnVindexes[0].Columns[0]), ts.SourceKeyspaceName(), vtable.ColumnVindexes[0].Name, key.RangeString(source.GetShard().KeyRange))
 				}
 				filter = fmt.Sprintf("select * from %s%s", sqlescape.EscapeID(rule.Match), inKeyrange)
 			}
@@ -1237,9 +1242,15 @@ func (ts *trafficSwitcher) getReverseVReplicationUpdateQuery(targetCell string, 
 
 func (ts *trafficSwitcher) deleteReverseVReplication(ctx context.Context) error {
 	return ts.ForAllSources(func(source *workflow.MigrationSource) error {
-		query := fmt.Sprintf("delete from _vt.vreplication where db_name=%s and workflow=%s", encodeString(source.GetPrimary().DbName()), encodeString(ts.reverseWorkflow))
-		_, err := ts.TabletManagerClient().VReplicationExec(ctx, source.GetPrimary().Tablet, query)
-		return err
+		query := fmt.Sprintf(sqlDeleteWorkflow, encodeString(source.GetPrimary().DbName()), encodeString(ts.reverseWorkflow))
+		if _, err := ts.TabletManagerClient().VReplicationExec(ctx, source.GetPrimary().Tablet, query); err != nil {
+			return err
+		}
+		query = fmt.Sprintf(sqlDeleteVDiffs, encodeString(source.GetPrimary().Keyspace), encodeString(ts.reverseWorkflow))
+		if _, err := ts.wr.tmc.ExecuteFetchAsDba(ctx, source.GetPrimary().Tablet, false, []byte(query), -1, false, false); err != nil {
+			ts.Logger().Infof("Error deleting vdiff data for %s.%s workflow: %v", source.GetPrimary().Keyspace, ts.reverseWorkflow, err)
+		}
+		return nil
 	})
 }
 
@@ -1556,20 +1567,31 @@ func (ts *trafficSwitcher) freezeTargetVReplication(ctx context.Context) error {
 
 func (ts *trafficSwitcher) dropTargetVReplicationStreams(ctx context.Context) error {
 	return ts.ForAllTargets(func(target *workflow.MigrationTarget) error {
-		ts.Logger().Infof("Deleting target streams for workflow %s db_name %s", ts.WorkflowName(), target.GetPrimary().DbName())
-		query := fmt.Sprintf("delete from _vt.vreplication where db_name=%s and workflow=%s", encodeString(target.GetPrimary().DbName()), encodeString(ts.WorkflowName()))
-		_, err := ts.TabletManagerClient().VReplicationExec(ctx, target.GetPrimary().Tablet, query)
-		return err
+		ts.Logger().Infof("Deleting target streams and related data for workflow %s db_name %s", ts.WorkflowName(), target.GetPrimary().DbName())
+		query := fmt.Sprintf(sqlDeleteWorkflow, encodeString(target.GetPrimary().DbName()), encodeString(ts.WorkflowName()))
+		if _, err := ts.TabletManagerClient().VReplicationExec(ctx, target.GetPrimary().Tablet, query); err != nil {
+			return err
+		}
+		query = fmt.Sprintf(sqlDeleteVDiffs, encodeString(target.GetPrimary().Keyspace), encodeString(ts.WorkflowName()))
+		if _, err := ts.wr.tmc.ExecuteFetchAsDba(ctx, target.GetPrimary().Tablet, false, []byte(query), -1, false, false); err != nil {
+			ts.Logger().Infof("Error deleting vdiff data for %s.%s workflow: %v", target.GetPrimary().Keyspace, ts.WorkflowName(), err)
+		}
+		return nil
 	})
 }
 
 func (ts *trafficSwitcher) dropSourceReverseVReplicationStreams(ctx context.Context) error {
 	return ts.ForAllSources(func(source *workflow.MigrationSource) error {
-		ts.Logger().Infof("Deleting reverse streams for workflow %s db_name %s", ts.WorkflowName(), source.GetPrimary().DbName())
-		query := fmt.Sprintf("delete from _vt.vreplication where db_name=%s and workflow=%s",
-			encodeString(source.GetPrimary().DbName()), encodeString(workflow.ReverseWorkflowName(ts.WorkflowName())))
-		_, err := ts.TabletManagerClient().VReplicationExec(ctx, source.GetPrimary().Tablet, query)
-		return err
+		ts.Logger().Infof("Deleting reverse streams and related data for workflow %s db_name %s", ts.WorkflowName(), source.GetPrimary().DbName())
+		query := fmt.Sprintf(sqlDeleteWorkflow, encodeString(source.GetPrimary().DbName()), encodeString(workflow.ReverseWorkflowName(ts.WorkflowName())))
+		if _, err := ts.TabletManagerClient().VReplicationExec(ctx, source.GetPrimary().Tablet, query); err != nil {
+			return err
+		}
+		query = fmt.Sprintf(sqlDeleteVDiffs, encodeString(source.GetPrimary().Keyspace), encodeString(workflow.ReverseWorkflowName(ts.WorkflowName())))
+		if _, err := ts.wr.tmc.ExecuteFetchAsDba(ctx, source.GetPrimary().Tablet, false, []byte(query), -1, false, false); err != nil {
+			ts.Logger().Infof("Error deleting vdiff data for %s.%s workflow: %v", source.GetPrimary().Keyspace, workflow.ReverseWorkflowName(ts.WorkflowName()), err)
+		}
+		return nil
 	})
 }
 

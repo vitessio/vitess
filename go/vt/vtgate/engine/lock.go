@@ -17,6 +17,7 @@ limitations under the License.
 package engine
 
 import (
+	"context"
 	"fmt"
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -73,12 +74,12 @@ func (l *Lock) GetTableName() string {
 }
 
 // TryExecute is part of the Primitive interface
-func (l *Lock) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, _ bool) (*sqltypes.Result, error) {
-	return l.execLock(vcursor, bindVars)
+func (l *Lock) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	return l.execLock(ctx, vcursor, bindVars)
 }
 
-func (l *Lock) execLock(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	rss, _, err := vcursor.ResolveDestinations(l.Keyspace.Name, nil, []key.Destination{l.TargetDestination})
+func (l *Lock) execLock(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	rss, _, err := vcursor.ResolveDestinations(ctx, l.Keyspace.Name, nil, []key.Destination{l.TargetDestination})
 	if err != nil {
 		return nil, err
 	}
@@ -98,7 +99,7 @@ func (l *Lock) execLock(vcursor VCursor, bindVars map[string]*querypb.BindVariab
 			}
 			lName = er.Value().ToString()
 		}
-		qr, err := lf.execLock(vcursor, bindVars, rss[0])
+		qr, err := lf.execLock(ctx, vcursor, bindVars, rss[0])
 		if err != nil {
 			return nil, err
 		}
@@ -113,7 +114,7 @@ func (l *Lock) execLock(vcursor VCursor, bindVars map[string]*querypb.BindVariab
 				vcursor.Session().AddAdvisoryLock(lName)
 			}
 		case sqlparser.ReleaseAllLocks:
-			err = vcursor.ReleaseLock()
+			err = vcursor.ReleaseLock(ctx)
 			if err != nil {
 				return nil, err
 			}
@@ -123,7 +124,7 @@ func (l *Lock) execLock(vcursor VCursor, bindVars map[string]*querypb.BindVariab
 				vcursor.Session().RemoveAdvisoryLock(lName)
 			}
 			if !vcursor.Session().AnyAdvisoryLockTaken() {
-				err = vcursor.ReleaseLock()
+				err = vcursor.ReleaseLock(ctx)
 				if err != nil {
 					return nil, err
 				}
@@ -136,12 +137,12 @@ func (l *Lock) execLock(vcursor VCursor, bindVars map[string]*querypb.BindVariab
 	}, nil
 }
 
-func (lf *LockFunc) execLock(vcursor VCursor, bindVars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard) (*sqltypes.Result, error) {
+func (lf *LockFunc) execLock(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard) (*sqltypes.Result, error) {
 	boundQuery := &querypb.BoundQuery{
 		Sql:           fmt.Sprintf("select %s from dual", sqlparser.String(lf.Typ)),
 		BindVariables: bindVars,
 	}
-	qr, err := vcursor.ExecuteLock(rs, boundQuery, lf.Typ.Type)
+	qr, err := vcursor.ExecuteLock(ctx, rs, boundQuery, lf.Typ.Type)
 	if err != nil {
 		return nil, err
 	}
@@ -152,8 +153,8 @@ func (lf *LockFunc) execLock(vcursor VCursor, bindVars map[string]*querypb.BindV
 }
 
 // TryStreamExecute is part of the Primitive interface
-func (l *Lock) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	qr, err := l.TryExecute(vcursor, bindVars, wantfields)
+func (l *Lock) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	qr, err := l.TryExecute(ctx, vcursor, bindVars, wantfields)
 	if err != nil {
 		return err
 	}
@@ -161,8 +162,8 @@ func (l *Lock) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.Bi
 }
 
 // GetFields is part of the Primitive interface
-func (l *Lock) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	rss, _, err := vcursor.ResolveDestinations(l.Keyspace.Name, nil, []key.Destination{l.TargetDestination})
+func (l *Lock) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	rss, _, err := vcursor.ResolveDestinations(ctx, l.Keyspace.Name, nil, []key.Destination{l.TargetDestination})
 	if err != nil {
 		return nil, err
 	}
@@ -173,7 +174,7 @@ func (l *Lock) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVaria
 		Sql:           l.FieldQuery,
 		BindVariables: bindVars,
 	}}
-	qr, errs := vcursor.ExecuteMultiShard(rss, boundQuery, false, true)
+	qr, errs := vcursor.ExecuteMultiShard(ctx, rss, boundQuery, false, true)
 	if len(errs) > 0 {
 		return nil, vterrors.Aggregate(errs)
 	}
@@ -186,7 +187,7 @@ func (l *Lock) description() PrimitiveDescription {
 	}
 	var lf []string
 	for _, f := range l.LockFunctions {
-		lf = append(lf, fmt.Sprintf("%s", sqlparser.String(f.Typ)))
+		lf = append(lf, sqlparser.String(f.Typ))
 	}
 	other["lock_func"] = lf
 	return PrimitiveDescription{

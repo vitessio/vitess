@@ -255,6 +255,7 @@ func tmRPCTestRPCTimeout(ctx context.Context, t *testing.T, client tmclient.Tabl
 
 var testGetSchemaTables = []string{"table1", "table2"}
 var testGetSchemaExcludeTables = []string{"etable1", "etable2", "etable3"}
+var testGetSchemaReq = &tabletmanagerdatapb.GetSchemaRequest{Tables: testGetSchemaTables, ExcludeTables: testGetSchemaExcludeTables, IncludeViews: true}
 var testGetSchemaReply = &tabletmanagerdatapb.SchemaDefinition{
 	DatabaseSchema: "CREATE DATABASE {{.DatabaseName}}",
 	TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
@@ -280,23 +281,23 @@ var testGetSchemaReply = &tabletmanagerdatapb.SchemaDefinition{
 	Version: "xxx",
 }
 
-func (fra *fakeRPCTM) GetSchema(ctx context.Context, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
+func (fra *fakeRPCTM) GetSchema(ctx context.Context, request *tabletmanagerdatapb.GetSchemaRequest) (*tabletmanagerdatapb.SchemaDefinition, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
-	compare(fra.t, "GetSchema tables", tables, testGetSchemaTables)
-	compare(fra.t, "GetSchema excludeTables", excludeTables, testGetSchemaExcludeTables)
-	compareBool(fra.t, "GetSchema includeViews", includeViews)
+	compare(fra.t, "GetSchema tables", request.Tables, testGetSchemaTables)
+	compare(fra.t, "GetSchema excludeTables", request.ExcludeTables, testGetSchemaExcludeTables)
+	compareBool(fra.t, "GetSchema includeViews", request.IncludeViews)
 	return testGetSchemaReply, nil
 }
 
 func tmRPCTestGetSchema(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	result, err := client.GetSchema(ctx, tablet, testGetSchemaTables, testGetSchemaExcludeTables, true)
+	result, err := client.GetSchema(ctx, tablet, testGetSchemaReq)
 	compareError(t, "GetSchema", err, result, testGetSchemaReply)
 }
 
 func tmRPCTestGetSchemaPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	_, err := client.GetSchema(ctx, tablet, testGetSchemaTables, testGetSchemaExcludeTables, true)
+	_, err := client.GetSchema(ctx, tablet, testGetSchemaReq)
 	expectHandleRPCPanic(t, "GetSchema", false /*verbose*/, err)
 }
 
@@ -699,6 +700,10 @@ var testReplicationStatus = &replicationdatapb.Status{
 	ConnectRetry:          12,
 }
 
+var testFullStatus = &replicationdatapb.FullStatus{
+	ReplicationStatus: testReplicationStatus,
+}
+
 var testPrimaryStatus = &replicationdatapb.PrimaryStatus{Position: "MariaDB/1-345-789"}
 
 func (fra *fakeRPCTM) PrimaryStatus(ctx context.Context) (*replicationdatapb.PrimaryStatus, error) {
@@ -723,6 +728,23 @@ func tmRPCTestReplicationStatus(ctx context.Context, t *testing.T, client tmclie
 func tmRPCTestReplicationStatusPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	_, err := client.ReplicationStatus(ctx, tablet)
 	expectHandleRPCPanic(t, "ReplicationStatus", false /*verbose*/, err)
+}
+
+func (fra *fakeRPCTM) FullStatus(ctx context.Context) (*replicationdatapb.FullStatus, error) {
+	if fra.panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
+	return testFullStatus, nil
+}
+
+func tmRPCTestFullStatus(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	rs, err := client.FullStatus(ctx, tablet)
+	compareError(t, "FullStatus", err, rs, testFullStatus)
+}
+
+func tmRPCTestFullStatusPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	_, err := client.FullStatus(ctx, tablet)
+	expectHandleRPCPanic(t, "FullStatus", false /*verbose*/, err)
 }
 
 var testReplicationPosition = "MariaDB/5-456-890"
@@ -1049,6 +1071,26 @@ func tmRPCTestReplicaWasPromotedPanic(ctx context.Context, t *testing.T, client 
 	expectHandleRPCPanic(t, "ReplicaWasPromoted", true /*verbose*/, err)
 }
 
+var testResetReplicationParametersCalled = false
+
+func (fra *fakeRPCTM) ResetReplicationParameters(ctx context.Context) error {
+	if fra.panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
+	testResetReplicationParametersCalled = true
+	return nil
+}
+
+func tmRPCTestResetReplicationParameters(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	err := client.ResetReplicationParameters(ctx, tablet)
+	compareError(t, "ResetReplicationParameters", err, true, testResetReplicationParametersCalled)
+}
+
+func tmRPCTestResetReplicationParametersPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	err := client.ResetReplicationParameters(ctx, tablet)
+	expectHandleRPCPanic(t, "ResetReplicationParameters", true /*verbose*/, err)
+}
+
 var testSetReplicationSourceCalled = false
 var testForceStartReplica = true
 
@@ -1079,7 +1121,6 @@ func (fra *fakeRPCTM) StopReplicationAndGetStatus(ctx context.Context, stopRepli
 		panic(fmt.Errorf("test-triggered panic"))
 	}
 	return tabletmanager.StopReplicationAndGetStatusResponse{
-		HybridStatus: testReplicationStatus,
 		Status: &replicationdatapb.StopReplicationStatus{
 			Before: testReplicationStatus,
 			After:  testReplicationStatus,
@@ -1113,14 +1154,14 @@ func tmRPCTestReplicaWasRestartedPanic(ctx context.Context, t *testing.T, client
 }
 
 func tmRPCTestStopReplicationAndGetStatus(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	rp, _, err := client.StopReplicationAndGetStatus(ctx, tablet, replicationdatapb.StopReplicationMode_IOANDSQLTHREAD)
+	rp, err := client.StopReplicationAndGetStatus(ctx, tablet, replicationdatapb.StopReplicationMode_IOANDSQLTHREAD)
 	compareError(t, "StopReplicationAndGetStatus", err, rp, testReplicationStatus)
-	rp, _, err = client.StopReplicationAndGetStatus(ctx, tablet, replicationdatapb.StopReplicationMode_IOTHREADONLY)
+	rp, err = client.StopReplicationAndGetStatus(ctx, tablet, replicationdatapb.StopReplicationMode_IOTHREADONLY)
 	compareError(t, "StopReplicationAndGetStatus", err, rp, testReplicationStatus)
 }
 
 func tmRPCTestStopReplicationAndGetStatusPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	_, _, err := client.StopReplicationAndGetStatus(ctx, tablet, replicationdatapb.StopReplicationMode_IOANDSQLTHREAD)
+	_, err := client.StopReplicationAndGetStatus(ctx, tablet, replicationdatapb.StopReplicationMode_IOANDSQLTHREAD)
 	expectHandleRPCPanic(t, "StopReplicationAndGetStatus", true /*verbose*/, err)
 }
 
@@ -1260,6 +1301,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 	tmRPCTestPrimaryPosition(ctx, t, client, tablet)
 
 	tmRPCTestReplicationStatus(ctx, t, client, tablet)
+	tmRPCTestFullStatus(ctx, t, client, tablet)
 	tmRPCTestPrimaryPosition(ctx, t, client, tablet)
 	tmRPCTestStopReplication(ctx, t, client, tablet)
 	tmRPCTestStopReplicationMinimum(ctx, t, client, tablet)
@@ -1284,6 +1326,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 	tmRPCTestInitReplica(ctx, t, client, tablet)
 	tmRPCTestReplicaWasPromoted(ctx, t, client, tablet)
 	tmRPCTestReplicaWasRestarted(ctx, t, client, tablet)
+	tmRPCTestResetReplicationParameters(ctx, t, client, tablet)
 
 	// Backup / restore related methods
 	tmRPCTestBackup(ctx, t, client, tablet)
@@ -1314,6 +1357,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 	// Replication related methods
 	tmRPCTestPrimaryPositionPanic(ctx, t, client, tablet)
 	tmRPCTestReplicationStatusPanic(ctx, t, client, tablet)
+	tmRPCTestFullStatusPanic(ctx, t, client, tablet)
 	tmRPCTestStopReplicationPanic(ctx, t, client, tablet)
 	tmRPCTestStopReplicationMinimumPanic(ctx, t, client, tablet)
 	tmRPCTestStartReplicationPanic(ctx, t, client, tablet)
@@ -1334,6 +1378,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 
 	tmRPCTestInitReplicaPanic(ctx, t, client, tablet)
 	tmRPCTestReplicaWasPromotedPanic(ctx, t, client, tablet)
+	tmRPCTestResetReplicationParametersPanic(ctx, t, client, tablet)
 	tmRPCTestReplicaWasRestartedPanic(ctx, t, client, tablet)
 	// Backup / restore related methods
 	tmRPCTestBackupPanic(ctx, t, client, tablet)

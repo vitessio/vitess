@@ -18,6 +18,7 @@ package vindexes
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -83,7 +84,7 @@ func (lu *ConsistentLookup) NeedsVCursor() bool {
 }
 
 // Map can map ids to key.Destination objects.
-func (lu *ConsistentLookup) Map(vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+func (lu *ConsistentLookup) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	out := make([]key.Destination, 0, len(ids))
 	if lu.writeOnly {
 		for range ids {
@@ -100,7 +101,7 @@ func (lu *ConsistentLookup) Map(vcursor VCursor, ids []sqltypes.Value) ([]key.De
 		return out, nil
 	}
 
-	results, err := lu.lkp.Lookup(vcursor, ids, vcursor.LookupRowLockShardSession())
+	results, err := lu.lkp.Lookup(ctx, vcursor, ids, vcursor.LookupRowLockShardSession())
 	if err != nil {
 		return nil, err
 	}
@@ -160,7 +161,7 @@ func (lu *ConsistentLookupUnique) NeedsVCursor() bool {
 }
 
 // Map can map ids to key.Destination objects.
-func (lu *ConsistentLookupUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+func (lu *ConsistentLookupUnique) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	out := make([]key.Destination, 0, len(ids))
 	if lu.writeOnly {
 		for range ids {
@@ -169,7 +170,7 @@ func (lu *ConsistentLookupUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([]
 		return out, nil
 	}
 
-	results, err := lu.lkp.Lookup(vcursor, ids, vcursor.LookupRowLockShardSession())
+	results, err := lu.lkp.Lookup(ctx, vcursor, ids, vcursor.LookupRowLockShardSession())
 	if err != nil {
 		return nil, err
 	}
@@ -224,9 +225,9 @@ func newCLCommon(name string, m map[string]string) (*clCommon, error) {
 	return lu, nil
 }
 
-func (lu *clCommon) SetOwnerInfo(keyspace, table string, cols []sqlparser.ColIdent) error {
+func (lu *clCommon) SetOwnerInfo(keyspace, table string, cols []sqlparser.IdentifierCI) error {
 	lu.keyspace = keyspace
-	lu.ownerTable = sqlparser.String(sqlparser.NewTableIdent(table))
+	lu.ownerTable = sqlparser.String(sqlparser.NewIdentifierCS(table))
 	if len(cols) != len(lu.lkp.FromColumns) {
 		return fmt.Errorf("owner table column count does not match vindex %s", lu.name)
 	}
@@ -247,7 +248,7 @@ func (lu *clCommon) String() string {
 }
 
 // Verify returns true if ids maps to ksids.
-func (lu *clCommon) Verify(vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
+func (lu *clCommon) Verify(ctx context.Context, vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
 	if lu.writeOnly {
 		out := make([]bool, len(ids))
 		for i := range ids {
@@ -255,12 +256,12 @@ func (lu *clCommon) Verify(vcursor VCursor, ids []sqltypes.Value, ksids [][]byte
 		}
 		return out, nil
 	}
-	return lu.lkp.VerifyCustom(vcursor, ids, ksidsToValues(ksids), vtgate.CommitOrder_PRE)
+	return lu.lkp.VerifyCustom(ctx, vcursor, ids, ksidsToValues(ksids), vtgate.CommitOrder_PRE)
 }
 
 // Create reserves the id by inserting it into the vindex table.
-func (lu *clCommon) Create(vcursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte, ignoreMode bool) error {
-	origErr := lu.lkp.createCustom(vcursor, rowsColValues, ksidsToValues(ksids), ignoreMode, vtgatepb.CommitOrder_PRE)
+func (lu *clCommon) Create(ctx context.Context, vcursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte, ignoreMode bool) error {
+	origErr := lu.lkp.createCustom(ctx, vcursor, rowsColValues, ksidsToValues(ksids), ignoreMode, vtgatepb.CommitOrder_PRE)
 	if origErr == nil {
 		return nil
 	}
@@ -268,14 +269,14 @@ func (lu *clCommon) Create(vcursor VCursor, rowsColValues [][]sqltypes.Value, ks
 		return origErr
 	}
 	for i, row := range rowsColValues {
-		if err := lu.handleDup(vcursor, row, ksids[i], origErr); err != nil {
+		if err := lu.handleDup(ctx, vcursor, row, ksids[i], origErr); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (lu *clCommon) handleDup(vcursor VCursor, values []sqltypes.Value, ksid []byte, dupError error) error {
+func (lu *clCommon) handleDup(ctx context.Context, vcursor VCursor, values []sqltypes.Value, ksid []byte, dupError error) error {
 	bindVars := make(map[string]*querypb.BindVariable, len(values))
 	for colnum, val := range values {
 		bindVars[lu.lkp.FromColumns[colnum]] = sqltypes.ValueBindVariable(val)
@@ -283,13 +284,13 @@ func (lu *clCommon) handleDup(vcursor VCursor, values []sqltypes.Value, ksid []b
 	bindVars[lu.lkp.To] = sqltypes.BytesBindVariable(ksid)
 
 	// Lock the lookup row using pre priority.
-	qr, err := vcursor.Execute("VindexCreate", lu.lockLookupQuery, bindVars, false /* rollbackOnError */, vtgatepb.CommitOrder_PRE)
+	qr, err := vcursor.Execute(ctx, "VindexCreate", lu.lockLookupQuery, bindVars, false /* rollbackOnError */, vtgatepb.CommitOrder_PRE)
 	if err != nil {
 		return err
 	}
 	switch len(qr.Rows) {
 	case 0:
-		if _, err := vcursor.Execute("VindexCreate", lu.insertLookupQuery, bindVars, true /* rollbackOnError */, vtgatepb.CommitOrder_PRE); err != nil {
+		if _, err := vcursor.Execute(ctx, "VindexCreate", lu.insertLookupQuery, bindVars, true /* rollbackOnError */, vtgatepb.CommitOrder_PRE); err != nil {
 			return err
 		}
 	case 1:
@@ -298,7 +299,8 @@ func (lu *clCommon) handleDup(vcursor VCursor, values []sqltypes.Value, ksid []b
 			return err
 		}
 		// Lock the target row using normal transaction priority.
-		qr, err = vcursor.ExecuteKeyspaceID(lu.keyspace, existingksid, lu.lockOwnerQuery, bindVars, false /* rollbackOnError */, false /* autocommit */)
+		// TODO: context needs to be passed on.
+		qr, err = vcursor.ExecuteKeyspaceID(context.Background(), lu.keyspace, existingksid, lu.lockOwnerQuery, bindVars, false /* rollbackOnError */, false /* autocommit */)
 		if err != nil {
 			return err
 		}
@@ -308,7 +310,7 @@ func (lu *clCommon) handleDup(vcursor VCursor, values []sqltypes.Value, ksid []b
 		if bytes.Equal(existingksid, ksid) {
 			return nil
 		}
-		if _, err := vcursor.Execute("VindexCreate", lu.updateLookupQuery, bindVars, true /* rollbackOnError */, vtgatepb.CommitOrder_PRE); err != nil {
+		if _, err := vcursor.Execute(ctx, "VindexCreate", lu.updateLookupQuery, bindVars, true /* rollbackOnError */, vtgatepb.CommitOrder_PRE); err != nil {
 			return err
 		}
 	default:
@@ -318,12 +320,12 @@ func (lu *clCommon) handleDup(vcursor VCursor, values []sqltypes.Value, ksid []b
 }
 
 // Delete deletes the entry from the vindex table.
-func (lu *clCommon) Delete(vcursor VCursor, rowsColValues [][]sqltypes.Value, ksid []byte) error {
-	return lu.lkp.Delete(vcursor, rowsColValues, sqltypes.MakeTrusted(sqltypes.VarBinary, ksid), vtgatepb.CommitOrder_POST)
+func (lu *clCommon) Delete(ctx context.Context, vcursor VCursor, rowsColValues [][]sqltypes.Value, ksid []byte) error {
+	return lu.lkp.Delete(ctx, vcursor, rowsColValues, sqltypes.MakeTrusted(sqltypes.VarBinary, ksid), vtgatepb.CommitOrder_POST)
 }
 
 // Update updates the entry in the vindex table.
-func (lu *clCommon) Update(vcursor VCursor, oldValues []sqltypes.Value, ksid []byte, newValues []sqltypes.Value) error {
+func (lu *clCommon) Update(ctx context.Context, vcursor VCursor, oldValues []sqltypes.Value, ksid []byte, newValues []sqltypes.Value) error {
 	equal := true
 	for i := range oldValues {
 		// TODO(king-11) make collation aware
@@ -337,10 +339,10 @@ func (lu *clCommon) Update(vcursor VCursor, oldValues []sqltypes.Value, ksid []b
 	if equal {
 		return nil
 	}
-	if err := lu.Delete(vcursor, [][]sqltypes.Value{oldValues}, ksid); err != nil {
+	if err := lu.Delete(ctx, vcursor, [][]sqltypes.Value{oldValues}, ksid); err != nil {
 		return err
 	}
-	return lu.Create(vcursor, [][]sqltypes.Value{newValues}, [][]byte{ksid}, false /* ignoreMode */)
+	return lu.Create(ctx, vcursor, [][]sqltypes.Value{newValues}, [][]byte{ksid}, false /* ignoreMode */)
 }
 
 // MarshalJSON returns a JSON representation of clCommon.

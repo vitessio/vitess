@@ -808,7 +808,7 @@ func (tm *TabletManager) exportStats() {
 	statsShard.Set(tablet.Shard)
 	statsTabletType.Set(topoproto.TabletTypeLString(tm.tmState.tablet.Type))
 	statsTabletTypeCount.Add(topoproto.TabletTypeLString(tm.tmState.tablet.Type), 1)
-	if key.KeyRangeIsPartial(tablet.KeyRange) {
+	if key.RangeIsPartial(tablet.KeyRange) {
 		statsKeyRangeStart.Set(hex.EncodeToString(tablet.KeyRange.Start))
 		statsKeyRangeEnd.Set(hex.EncodeToString(tablet.KeyRange.End))
 	}

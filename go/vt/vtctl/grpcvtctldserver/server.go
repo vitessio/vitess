@@ -476,6 +476,7 @@ func (s *VtctldServer) ChangeTabletType(ctx context.Context, req *vtctldatapb.Ch
 	if err != nil {
 		return nil, err
 	}
+	log.Infof("Getting a new durability policy for %v", durabilityName)
 	durability, err := reparentutil.GetDurabilityPolicy(durabilityName)
 	if err != nil {
 		return nil, err
@@ -530,8 +531,6 @@ func (s *VtctldServer) CreateKeyspace(ctx context.Context, req *vtctldatapb.Crea
 
 	span.Annotate("keyspace", req.Name)
 	span.Annotate("keyspace_type", topoproto.KeyspaceTypeLString(req.Type))
-	span.Annotate("sharding_column_name", req.ShardingColumnName)
-	span.Annotate("sharding_column_type", topoproto.KeyspaceIDTypeLString(req.ShardingColumnType))
 	span.Annotate("force", req.Force)
 	span.Annotate("allow_empty_vschema", req.AllowEmptyVSchema)
 	span.Annotate("durability_policy", req.DurabilityPolicy)
@@ -554,12 +553,8 @@ func (s *VtctldServer) CreateKeyspace(ctx context.Context, req *vtctldatapb.Crea
 	}
 
 	ki := &topodatapb.Keyspace{
-		KeyspaceType:       req.Type,
-		ShardingColumnName: req.ShardingColumnName,
-		ShardingColumnType: req.ShardingColumnType,
-
-		ServedFroms: req.ServedFroms,
-
+		KeyspaceType:     req.Type,
+		ServedFroms:      req.ServedFroms,
 		BaseKeyspace:     req.BaseKeyspace,
 		SnapshotTime:     req.SnapshotTime,
 		DurabilityPolicy: req.DurabilityPolicy,
@@ -1229,8 +1224,10 @@ func (s *VtctldServer) GetSchema(ctx context.Context, req *vtctldatapb.GetSchema
 	span.Annotate("include_views", req.IncludeViews)
 	span.Annotate("table_names_only", req.TableNamesOnly)
 	span.Annotate("table_sizes_only", req.TableSizesOnly)
+	span.Annotate("table_schema_only", req.TableSchemaOnly)
 
-	sd, err := schematools.GetSchema(ctx, s.ts, s.tmc, req.TabletAlias, req.Tables, req.ExcludeTables, req.IncludeViews)
+	r := &tabletmanagerdatapb.GetSchemaRequest{Tables: req.Tables, ExcludeTables: req.ExcludeTables, IncludeViews: req.IncludeViews, TableSchemaOnly: req.TableSchemaOnly}
+	sd, err := schematools.GetSchema(ctx, s.ts, s.tmc, req.TabletAlias, r)
 	if err != nil {
 		return nil, err
 	}
@@ -1750,6 +1747,7 @@ func (s *VtctldServer) InitShardPrimaryLocked(
 	if err != nil {
 		return err
 	}
+	log.Infof("Getting a new durability policy for %v", durabilityName)
 	durability, err := reparentutil.GetDurabilityPolicy(durabilityName)
 	if err != nil {
 		return err
@@ -2324,6 +2322,7 @@ func (s *VtctldServer) ReparentTablet(ctx context.Context, req *vtctldatapb.Repa
 	if err != nil {
 		return nil, err
 	}
+	log.Infof("Getting a new durability policy for %v", durabilityName)
 	durability, err := reparentutil.GetDurabilityPolicy(durabilityName)
 	if err != nil {
 		return nil, err
@@ -2495,64 +2494,6 @@ func (s *VtctldServer) SetKeyspaceServedFrom(ctx context.Context, req *vtctldata
 	}
 
 	return &vtctldatapb.SetKeyspaceServedFromResponse{
-		Keyspace: ki.Keyspace,
-	}, nil
-}
-
-// SetKeyspaceShardingInfo is part of the vtctlservicepb.VtctldServer interface.
-func (s *VtctldServer) SetKeyspaceShardingInfo(ctx context.Context, req *vtctldatapb.SetKeyspaceShardingInfoRequest) (*vtctldatapb.SetKeyspaceShardingInfoResponse, error) {
-	span, ctx := trace.NewSpan(ctx, "VtctldServer.SetKeyspaceShardingInfo")
-	defer span.Finish()
-
-	span.Annotate("keyspace", req.Keyspace)
-	span.Annotate("column_name", req.ColumnName)
-	span.Annotate("column_type", key.KeyspaceIDTypeString(req.ColumnType))
-	span.Annotate("force", req.Force)
-
-	isColumnNameSet := req.ColumnName != ""
-	isColumnTypeSet := req.ColumnType != topodatapb.KeyspaceIdType_UNSET
-
-	if (isColumnNameSet && !isColumnTypeSet) || (!isColumnNameSet && isColumnTypeSet) {
-		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "both <column_name:%v> and <column_type:%v> must be set, or both must be unset", req.ColumnName, key.KeyspaceIDTypeString(req.ColumnType))
-	}
-
-	ctx, unlock, lockErr := s.ts.LockKeyspace(ctx, req.Keyspace, "SetKeyspaceShardingInfo")
-	if lockErr != nil {
-		return nil, lockErr
-	}
-
-	var err error
-	defer unlock(&err)
-
-	ki, err := s.ts.GetKeyspace(ctx, req.Keyspace)
-	if err != nil {
-		return nil, err
-	}
-
-	if ki.ShardingColumnName != "" && ki.ShardingColumnName != req.ColumnName {
-		if !req.Force {
-			err = vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot change ShardingColumnName from %v to %v (use Force:true to override)", ki.ShardingColumnName, req.ColumnName)
-			return nil, err
-		}
-
-		log.Warningf("Forcing keyspace ShardingColumnName change from %v to %v", ki.ShardingColumnName, req.ColumnName)
-	}
-
-	if ki.ShardingColumnType != topodatapb.KeyspaceIdType_UNSET && ki.ShardingColumnType != req.ColumnType {
-		if !req.Force {
-			err = vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot change ShardingColumnType from %v to %v (use Force:true to override)", key.KeyspaceIDTypeString(ki.ShardingColumnType), key.KeyspaceIDTypeString(req.ColumnType))
-			return nil, err
-		}
-	}
-
-	ki.ShardingColumnName = req.ColumnName
-	ki.ShardingColumnType = req.ColumnType
-	err = s.ts.UpdateKeyspace(ctx, ki)
-	if err != nil {
-		return nil, err
-	}
-
-	return &vtctldatapb.SetKeyspaceShardingInfoResponse{
 		Keyspace: ki.Keyspace,
 	}, nil
 }
@@ -2894,7 +2835,7 @@ func (s *VtctldServer) SourceShardAdd(ctx context.Context, req *vtctldatapb.Sour
 	span.Annotate("uid", req.Uid)
 	span.Annotate("source_keyspace", req.SourceKeyspace)
 	span.Annotate("source_shard", req.SourceShard)
-	span.Annotate("keyrange", key.KeyRangeString(req.KeyRange))
+	span.Annotate("keyrange", key.RangeString(req.KeyRange))
 	span.Annotate("tables", strings.Join(req.Tables, ","))
 
 	var (
@@ -3035,6 +2976,7 @@ func (s *VtctldServer) StartReplication(ctx context.Context, req *vtctldatapb.St
 	if err != nil {
 		return nil, err
 	}
+	log.Infof("Getting a new durability policy for %v", durabilityName)
 	durability, err := reparentutil.GetDurabilityPolicy(durabilityName)
 	if err != nil {
 		return nil, err
@@ -3133,6 +3075,7 @@ func (s *VtctldServer) TabletExternallyReparented(ctx context.Context, req *vtct
 	if err != nil {
 		return nil, err
 	}
+	log.Infof("Getting a new durability policy for %v", durabilityName)
 	durability, err := reparentutil.GetDurabilityPolicy(durabilityName)
 	if err != nil {
 		return nil, err
@@ -3465,6 +3408,7 @@ func (s *VtctldServer) ValidateSchemaKeyspace(ctx context.Context, req *vtctldat
 		wg              sync.WaitGroup
 	)
 
+	r := &tabletmanagerdatapb.GetSchemaRequest{ExcludeTables: req.ExcludeTables, IncludeViews: req.IncludeViews}
 	for _, shard := range shards[0:] {
 		wg.Add(1)
 		go func(shard string) {
@@ -3493,7 +3437,7 @@ func (s *VtctldServer) ValidateSchemaKeyspace(ctx context.Context, req *vtctldat
 
 			if referenceSchema == nil {
 				referenceAlias = si.PrimaryAlias
-				referenceSchema, err = schematools.GetSchema(ctx, s.ts, s.tmc, referenceAlias, nil, req.ExcludeTables /*excludeTables*/, req.IncludeViews /*includeViews*/)
+				referenceSchema, err = schematools.GetSchema(ctx, s.ts, s.tmc, referenceAlias, r)
 				if err != nil {
 					return
 				}
@@ -3517,7 +3461,7 @@ func (s *VtctldServer) ValidateSchemaKeyspace(ctx context.Context, req *vtctldat
 				aliasWg.Add(1)
 				go func(alias *topodatapb.TabletAlias) {
 					defer aliasWg.Done()
-					replicaSchema, err := schematools.GetSchema(ctx, s.ts, s.tmc, alias, nil, req.ExcludeTables, req.IncludeViews)
+					replicaSchema, err := schematools.GetSchema(ctx, s.ts, s.tmc, alias, r)
 					if err != nil {
 						aliasErrs.RecordError(fmt.Errorf("GetSchema(%v, nil, %v, %v) failed: %v", alias, req.ExcludeTables, req.IncludeViews, err))
 						return
@@ -3860,7 +3804,8 @@ func (s *VtctldServer) ValidateVSchema(ctx context.Context, req *vtctldatapb.Val
 				m.Unlock()
 				return
 			}
-			primarySchema, err := schematools.GetSchema(ctx, s.ts, s.tmc, si.PrimaryAlias, nil, excludeTables, includeViews)
+			r := &tabletmanagerdatapb.GetSchemaRequest{ExcludeTables: req.ExcludeTables, IncludeViews: req.IncludeViews}
+			primarySchema, err := schematools.GetSchema(ctx, s.ts, s.tmc, si.PrimaryAlias, r)
 			if err != nil {
 				errorMessage := fmt.Sprintf("GetSchema(%s, nil, %v, %v) (%v/%v) failed: %v", si.PrimaryAlias.String(),
 					excludeTables, includeViews, keyspace, shard, err,

@@ -135,7 +135,7 @@ func TestScatterConnStreamExecuteMulti(t *testing.T) {
 		bvs := make([]map[string]*querypb.BindVariable, len(rss))
 		qr := new(sqltypes.Result)
 		var mu sync.Mutex
-		errors := sc.StreamExecuteMulti(ctx, "query", rss, bvs, NewSafeSession(&vtgatepb.Session{InTransaction: true}), true, func(r *sqltypes.Result) error {
+		errors := sc.StreamExecuteMulti(ctx, "query", rss, bvs, NewSafeSession(&vtgatepb.Session{InTransaction: true}), true /* autocommit */, func(r *sqltypes.Result) error {
 			mu.Lock()
 			defer mu.Unlock()
 			qr.AppendResult(r)
@@ -446,7 +446,7 @@ func TestMultiExecs(t *testing.T) {
 			"bv1": sqltypes.Int64BindVariable(1),
 		},
 	}
-	_ = sc.StreamExecuteMulti(ctx, "query", rss, bvs, session, false, func(*sqltypes.Result) error {
+	_ = sc.StreamExecuteMulti(ctx, "query", rss, bvs, session, false /* autocommit */, func(*sqltypes.Result) error {
 		return nil
 	})
 	if !reflect.DeepEqual(sbc0.Queries[0].BindVariables, wantVars0) {

@@ -57,7 +57,7 @@ func initShardArray(t *testing.T, shardingSpec string) []*topodatapb.ShardRefere
 
 	result := make([]*topodatapb.ShardReference, len(shardKrArray))
 	for i, kr := range shardKrArray {
-		shard := KeyRangeString(kr)
+		shard := RangeString(kr)
 		result[i] = &topodatapb.ShardReference{
 			Name:     shard,
 			KeyRange: kr,

@@ -17,6 +17,7 @@ limitations under the License.
 package vindexes
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -311,24 +312,15 @@ func TestCFCComputeKsidXxhash(t *testing.T) {
 func TestCFCVerifyNoHash(t *testing.T) {
 	cfc := makeCFC(t, nil)
 	id := []byte{3, 10, 7, 200}
-	out, err := cfc.Verify(
-		nil,
-		[]sqltypes.Value{sqltypes.NewVarBinary(string(id))},
-		[][]byte{id})
+	out, err := cfc.Verify(context.Background(), nil, []sqltypes.Value{sqltypes.NewVarBinary(string(id))}, [][]byte{id})
 	assert.NoError(t, err)
 	assert.EqualValues(t, []bool{true}, out)
 
-	out, err = cfc.Verify(
-		nil,
-		[]sqltypes.Value{sqltypes.NewVarBinary("foobar")},
-		[][]byte{id})
+	out, err = cfc.Verify(context.Background(), nil, []sqltypes.Value{sqltypes.NewVarBinary("foobar")}, [][]byte{id})
 	assert.NoError(t, err)
 	assert.EqualValues(t, []bool{false}, out)
 	pcfc := cfc.PrefixVindex()
-	out, err = pcfc.Verify(
-		nil,
-		[]sqltypes.Value{sqltypes.NewVarBinary("foobar")},
-		[][]byte{id})
+	out, err = pcfc.Verify(context.Background(), nil, []sqltypes.Value{sqltypes.NewVarBinary("foobar")}, [][]byte{id})
 	assert.NoError(t, err)
 	assert.EqualValues(t, []bool{false}, out)
 }
@@ -338,24 +330,15 @@ func TestCFCVerifyWithHash(t *testing.T) {
 	id := [][]byte{
 		{1, 234, 3}, {12, 32}, {7, 9},
 	}
-	out, err := cfc.Verify(
-		nil,
-		[]sqltypes.Value{sqltypes.NewVarBinary(string(flattenKey(id)))},
-		[][]byte{expectedHash(id)})
+	out, err := cfc.Verify(context.Background(), nil, []sqltypes.Value{sqltypes.NewVarBinary(string(flattenKey(id)))}, [][]byte{expectedHash(id)})
 	assert.NoError(t, err)
 	assert.EqualValues(t, []bool{true}, out)
 
-	_, err = cfc.Verify(
-		nil,
-		[]sqltypes.Value{sqltypes.NewVarBinary("foo")},
-		[][]byte{expectedHash(id)})
+	_, err = cfc.Verify(context.Background(), nil, []sqltypes.Value{sqltypes.NewVarBinary("foo")}, [][]byte{expectedHash(id)})
 	assert.Error(t, err)
 
 	pcfc := cfc.PrefixVindex()
-	out, err = pcfc.Verify(
-		nil,
-		[]sqltypes.Value{sqltypes.NewVarBinary(string(flattenKey(id)))},
-		[][]byte{expectedHash(id)})
+	out, err = pcfc.Verify(context.Background(), nil, []sqltypes.Value{sqltypes.NewVarBinary(string(flattenKey(id)))}, [][]byte{expectedHash(id)})
 	assert.NoError(t, err)
 	assert.EqualValues(t, []bool{true}, out)
 
@@ -363,14 +346,14 @@ func TestCFCVerifyWithHash(t *testing.T) {
 
 func TestCFCMap(t *testing.T) {
 	cfc := makeCFC(t, map[string]string{"hash": "md5", "offsets": "[3,5]"})
-	_, err := cfc.Map(nil, []sqltypes.Value{sqltypes.NewVarBinary("abc")})
+	_, err := cfc.Map(context.Background(), nil, []sqltypes.Value{sqltypes.NewVarBinary("abc")})
 	assert.EqualError(t, err, "insufficient size for cfc vindex cfc. need 5, got 3")
 
-	dests, err := cfc.Map(nil, []sqltypes.Value{sqltypes.NewVarBinary("12345567")})
+	dests, err := cfc.Map(context.Background(), nil, []sqltypes.Value{sqltypes.NewVarBinary("12345567")})
 	require.NoError(t, err)
 	ksid, ok := dests[0].(key.DestinationKeyspaceID)
 	require.True(t, ok)
-	out, err := cfc.Verify(nil, []sqltypes.Value{sqltypes.NewVarBinary("12345567")}, [][]byte{ksid})
+	out, err := cfc.Verify(context.Background(), nil, []sqltypes.Value{sqltypes.NewVarBinary("12345567")}, [][]byte{ksid})
 	assert.NoError(t, err)
 	assert.EqualValues(t, []bool{true}, out)
 }
@@ -418,7 +401,7 @@ func TestCFCPrefixMap(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.testName, func(t *testing.T) {
-			dests, err := prefixcfc.Map(nil, []sqltypes.Value{sqltypes.NewVarBinary(tc.id)})
+			dests, err := prefixcfc.Map(context.Background(), nil, []sqltypes.Value{sqltypes.NewVarBinary(tc.id)})
 			require.NoError(t, err)
 			assert.EqualValues(t, tc.dest, dests[0])
 		})
@@ -441,7 +424,7 @@ func TestCFCPrefixQueryMapNoHash(t *testing.T) {
 	for _, exp := range expected {
 		ids = append(ids, sqltypes.NewVarBinary(string(exp.start)+"%"))
 	}
-	dests, err := prefixcfc.Map(nil, ids)
+	dests, err := prefixcfc.Map(context.Background(), nil, ids)
 	require.NoError(t, err)
 
 	for i, dest := range dests {

@@ -83,7 +83,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Scalar",
-    "Aggregates": "sum(0) AS count",
+    "Aggregates": "sum_count(0) AS count",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -106,7 +106,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Scalar",
-    "Aggregates": "sum(0) AS count(*)",
+    "Aggregates": "sum_count_star(0) AS count(*)",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -178,7 +178,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Scalar",
-    "Aggregates": "sum(0) AS count",
+    "Aggregates": "sum_count(0) AS count",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -201,7 +201,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Scalar",
-    "Aggregates": "sum(0) AS count(*)",
+    "Aggregates": "sum_count_star(0) AS count(*)",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -227,7 +227,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Scalar",
-    "Aggregates": "sum(0) AS count",
+    "Aggregates": "sum_count(0) AS count",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -250,7 +250,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Scalar",
-    "Aggregates": "sum(0) AS count(*)",
+    "Aggregates": "sum_count_star(0) AS count(*)",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -600,8 +600,8 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": false
     },
-    "FieldQuery": "select @@session.auto_increment_increment from dual where 1 != 1",
-    "Query": "select @@session.auto_increment_increment from dual",
+    "FieldQuery": "select @@auto_increment_increment from dual where 1 != 1",
+    "Query": "select @@auto_increment_increment from dual",
     "Table": "dual"
   }
 }
@@ -642,8 +642,8 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select @@session.auto_increment_increment from dual where 1 != 1",
-    "Query": "select @@session.auto_increment_increment from dual",
+    "FieldQuery": "select @@auto_increment_increment from dual where 1 != 1",
+    "Query": "select @@auto_increment_increment from dual",
     "Table": "dual"
   }
 }
@@ -1758,7 +1758,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum(0) AS count",
+        "Aggregates": "sum_count(0) AS count",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1802,7 +1802,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum(0) AS count(*)",
+        "Aggregates": "sum_count_star(0) AS count(*)",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1894,7 +1894,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum(0) AS count",
+        "Aggregates": "sum_count(0) AS count",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1940,7 +1940,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum(0) AS count(*)",
+        "Aggregates": "sum_count_star(0) AS count(*)",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -3280,8 +3280,8 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": false
     },
-    "FieldQuery": "select json_array_append('{\\\"a\\\": 1}', '$', 'z'), json_array_insert('[\\\"a\\\", {\\\"b\\\": [1, 2]}, [3, 4]]', '$[0]', 'x', '$[2][1]', 'y'), json_insert('{ \\\"a\\\": 1, \\\"b\\\": [2, 3]}', '$.a', 10, '$.c', convert('[true, false]', JSON)) from dual where 1 != 1",
-    "Query": "select json_array_append('{\\\"a\\\": 1}', '$', 'z'), json_array_insert('[\\\"a\\\", {\\\"b\\\": [1, 2]}, [3, 4]]', '$[0]', 'x', '$[2][1]', 'y'), json_insert('{ \\\"a\\\": 1, \\\"b\\\": [2, 3]}', '$.a', 10, '$.c', convert('[true, false]', JSON)) from dual",
+    "FieldQuery": "select json_array_append('{\\\"a\\\": 1}', '$', 'z'), json_array_insert('[\\\"a\\\", {\\\"b\\\": [1, 2]}, [3, 4]]', '$[0]', 'x', '$[2][1]', 'y'), json_insert('{ \\\"a\\\": 1, \\\"b\\\": [2, 3]}', '$.a', 10, '$.c', cast('[true, false]' as JSON)) from dual where 1 != 1",
+    "Query": "select json_array_append('{\\\"a\\\": 1}', '$', 'z'), json_array_insert('[\\\"a\\\", {\\\"b\\\": [1, 2]}, [3, 4]]', '$[0]', 'x', '$[2][1]', 'y'), json_insert('{ \\\"a\\\": 1, \\\"b\\\": [2, 3]}', '$.a', 10, '$.c', cast('[true, false]' as JSON)) from dual",
     "Table": "dual"
   }
 }
@@ -3472,3 +3472,61 @@ Gen4 plan same as above
     ]
   }
 }
+
+# insert function not requiring any table
+"select insert('Quadratic', 3, 4, 'What')"
+{
+  "QueryType": "SELECT",
+  "Original": "select insert('Quadratic', 3, 4, 'What')",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Reference",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select insert('Quadratic', 3, 4, 'What') from dual where 1 != 1",
+    "Query": "select insert('Quadratic', 3, 4, 'What') from dual",
+    "Table": "dual"
+  }
+}
+Gen4 plan same as above
+
+# insert function using column names as arguments
+"select insert(tcol1, id, 3, tcol2) from user"
+{
+  "QueryType": "SELECT",
+  "Original": "select insert(tcol1, id, 3, tcol2) from user",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select insert(tcol1, id, 3, tcol2) from `user` where 1 != 1",
+    "Query": "select insert(tcol1, id, 3, tcol2) from `user`",
+    "Table": "`user`"
+  }
+}
+Gen4 plan same as above
+
+# gtid functions
+"select gtid_subset('3E11FA47-71CA-11E1-9E33-C80AA9429562:23','3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57'), gtid_subtract('3E11FA47-71CA-11E1-9E33-C80AA9429562:23','3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57')"
+{
+  "QueryType": "SELECT",
+  "Original": "select gtid_subset('3E11FA47-71CA-11E1-9E33-C80AA9429562:23','3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57'), gtid_subtract('3E11FA47-71CA-11E1-9E33-C80AA9429562:23','3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57')",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Reference",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select gtid_subset('3E11FA47-71CA-11E1-9E33-C80AA9429562:23', '3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57'), gtid_subtract('3E11FA47-71CA-11E1-9E33-C80AA9429562:23', '3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57') from dual where 1 != 1",
+    "Query": "select gtid_subset('3E11FA47-71CA-11E1-9E33-C80AA9429562:23', '3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57'), gtid_subtract('3E11FA47-71CA-11E1-9E33-C80AA9429562:23', '3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57') from dual",
+    "Table": "dual"
+  }
+}
+Gen4 plan same as above
+

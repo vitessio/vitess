@@ -151,12 +151,6 @@ func KeyspaceEquality(left, right *topodatapb.Keyspace) bool {
 	if left.KeyspaceType != right.KeyspaceType {
 		return false
 	}
-	if left.ShardingColumnName != right.ShardingColumnName {
-		return false
-	}
-	if left.ShardingColumnType != right.ShardingColumnType {
-		return false
-	}
 	if len(left.ServedFroms) != len(right.ServedFroms) {
 		return false
 	}

@@ -87,7 +87,7 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 		"--mysql_auth_server_impl", vtgate.MySQLAuthServerImpl,
 	}
 	if vtgate.PlannerVersion > 0 {
-		args = append(args, "--planner_version", vtgate.PlannerVersion.String())
+		args = append(args, "--planner-version", vtgate.PlannerVersion.String())
 	}
 	if vtgate.SysVarSetEnabled {
 		args = append(args, "--enable_system_settings")
@@ -236,7 +236,7 @@ func VtgateProcessInstance(
 		Binary:                "vtgate",
 		FileToLogQueries:      path.Join(tmpDirectory, "/vtgate_querylog.txt"),
 		Directory:             os.Getenv("VTDATAROOT"),
-		ServiceMap:            "grpc-tabletmanager,grpc-throttler,grpc-queryservice,grpc-updatestream,grpc-vtctl,grpc-vtworker,grpc-vtgateservice",
+		ServiceMap:            "grpc-tabletmanager,grpc-throttler,grpc-queryservice,grpc-updatestream,grpc-vtctl,grpc-vtgateservice",
 		LogDir:                tmpDirectory,
 		Port:                  port,
 		GrpcPort:              grpcPort,

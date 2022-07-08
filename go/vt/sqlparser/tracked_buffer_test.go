@@ -125,6 +125,10 @@ func TestCanonicalOutput(t *testing.T) {
 			"ALTER TABLE `t1` MODIFY COLUMN `a` int FIRST, MODIFY COLUMN `b` int AFTER `a`",
 		},
 		{
+			"alter table t2 rename column foo to bar",
+			"ALTER TABLE `t2` RENAME COLUMN `foo` TO `bar`",
+		},
+		{
 			"alter table t1 drop key `PRIMARY`, add primary key (id,n)",
 			"ALTER TABLE `t1` DROP KEY `PRIMARY`, ADD PRIMARY KEY (`id`, `n`)",
 		},
@@ -195,6 +199,26 @@ func TestCanonicalOutput(t *testing.T) {
 		{
 			"select not regexp_replace('abc def ghi', '[a-z]+', 'X', 1, 3, 'c'), not regexp_like('dog cat dog', 'dog'), not regexp_substr('abc def ghi', '[a-z]+', 1), not regexp_instr('aa aaa aaaa aaaa aaaa aaaa', 'a{4}',1), 'Michael!' not rlike '.*' from dual",
 			"SELECT NOT REGEXP_REPLACE('abc def ghi', '[a-z]+', 'X', 1, 3, 'c'), NOT REGEXP_LIKE('dog cat dog', 'dog'), NOT REGEXP_SUBSTR('abc def ghi', '[a-z]+', 1), NOT REGEXP_INSTR('aa aaa aaaa aaaa aaaa aaaa', 'a{4}', 1), 'Michael!' NOT REGEXP '.*' FROM `dual`",
+		},
+		{
+			"revert /* vt+ foo */ vitess_migration '9aecb3b4_b8a9_11ec_929a_0a43f95f28a3'",
+			"REVERT /* vt+ foo */ VITESS_MIGRATION '9aecb3b4_b8a9_11ec_929a_0a43f95f28a3'",
+		},
+		{
+			"select count(a) from t",
+			"SELECT COUNT(`a`) FROM `t`",
+		},
+		{
+			"select var_pop(a) from products",
+			"SELECT VAR_POP(`a`) FROM `products`",
+		},
+		{
+			"select /* function with distinct */ count(distinct a) from t",
+			"SELECT /* function with distinct */ COUNT(DISTINCT `a`) FROM `t`",
+		},
+		{
+			"select char(77, 121, 83, 81, '76' using utf8mb4) from dual",
+			"SELECT CHAR(77, 121, 83, 81, '76' USING utf8mb4) FROM `dual`",
 		},
 	}
 

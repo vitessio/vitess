@@ -150,14 +150,12 @@ func createShardedSrvKeyspace(shardSpec, servedFromKeyspace string) (*topodatapb
 	shards := make([]*topodatapb.ShardReference, 0, len(shardKrArray))
 	for i := 0; i < len(shardKrArray); i++ {
 		shard := &topodatapb.ShardReference{
-			Name:     key.KeyRangeString(shardKrArray[i]),
+			Name:     key.RangeString(shardKrArray[i]),
 			KeyRange: shardKrArray[i],
 		}
 		shards = append(shards, shard)
 	}
 	shardedSrvKeyspace := &topodatapb.SrvKeyspace{
-		ShardingColumnName: "user_id", // exact value is ignored
-		ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
 		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
 			{
 				ServedType:      topodatapb.TabletType_PRIMARY,

@@ -1431,9 +1431,7 @@ func TestCreateKeyspace(t *testing.T) {
 			name: "keyspace exists/no force",
 			topo: map[string]*topodatapb.Keyspace{
 				"testkeyspace": {
-					KeyspaceType:       topodatapb.KeyspaceType_NORMAL,
-					ShardingColumnName: "col1",
-					ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
+					KeyspaceType: topodatapb.KeyspaceType_NORMAL,
 				},
 			},
 			req: &vtctldatapb.CreateKeyspaceRequest{
@@ -1448,9 +1446,7 @@ func TestCreateKeyspace(t *testing.T) {
 			name: "keyspace exists/force",
 			topo: map[string]*topodatapb.Keyspace{
 				"testkeyspace": {
-					KeyspaceType:       topodatapb.KeyspaceType_NORMAL,
-					ShardingColumnName: "col1",
-					ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
+					KeyspaceType: topodatapb.KeyspaceType_NORMAL,
 				},
 			},
 			req: &vtctldatapb.CreateKeyspaceRequest{
@@ -1462,9 +1458,7 @@ func TestCreateKeyspace(t *testing.T) {
 				Keyspace: &vtctldatapb.Keyspace{
 					Name: "testkeyspace",
 					Keyspace: &topodatapb.Keyspace{
-						KeyspaceType:       topodatapb.KeyspaceType_NORMAL,
-						ShardingColumnName: "col1",
-						ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
+						KeyspaceType: topodatapb.KeyspaceType_NORMAL,
 					},
 				},
 			},
@@ -3414,7 +3408,6 @@ func TestEmergencyReparentShard(t *testing.T) {
 					"zone1-0000000101": nil,
 				},
 				StopReplicationAndGetStatusResults: map[string]struct {
-					Status     *replicationdatapb.Status
 					StopStatus *replicationdatapb.StopReplicationStatus
 					Error      error
 				}{
@@ -4134,10 +4127,8 @@ func TestGetKeyspace(t *testing.T) {
 
 	expected := &vtctldatapb.GetKeyspaceResponse{
 		Keyspace: &vtctldatapb.Keyspace{
-			Name: "testkeyspace",
-			Keyspace: &topodatapb.Keyspace{
-				ShardingColumnName: "col1",
-			},
+			Name:     "testkeyspace",
+			Keyspace: &topodatapb.Keyspace{},
 		},
 	}
 	testutil.AddKeyspace(ctx, t, ts, expected.Keyspace)
@@ -4265,22 +4256,16 @@ func TestGetKeyspaces(t *testing.T) {
 
 	expected := []*vtctldatapb.Keyspace{
 		{
-			Name: "ks1",
-			Keyspace: &topodatapb.Keyspace{
-				ShardingColumnName: "ks1_col1",
-			},
+			Name:     "ks1",
+			Keyspace: &topodatapb.Keyspace{},
 		},
 		{
-			Name: "ks2",
-			Keyspace: &topodatapb.Keyspace{
-				ShardingColumnName: "ks2_col1",
-			},
+			Name:     "ks2",
+			Keyspace: &topodatapb.Keyspace{},
 		},
 		{
-			Name: "ks3",
-			Keyspace: &topodatapb.Keyspace{
-				ShardingColumnName: "ks3_col1",
-			},
+			Name:     "ks3",
+			Keyspace: &topodatapb.Keyspace{},
 		},
 	}
 	for _, ks := range expected {
@@ -4953,18 +4938,14 @@ func TestGetSrvKeyspaces(t *testing.T) {
 			cells: []string{"zone1", "zone2"},
 			srvKeyspaces: []*testutil.SrvKeyspace{
 				{
-					Cell:     "zone1",
-					Keyspace: "testkeyspace",
-					SrvKeyspace: &topodatapb.SrvKeyspace{
-						ShardingColumnName: "zone1-sharding-col",
-					},
+					Cell:        "zone1",
+					Keyspace:    "testkeyspace",
+					SrvKeyspace: &topodatapb.SrvKeyspace{},
 				},
 				{
-					Cell:     "zone2",
-					Keyspace: "testkeyspace",
-					SrvKeyspace: &topodatapb.SrvKeyspace{
-						ShardingColumnName: "zone2-sharding-col",
-					},
+					Cell:        "zone2",
+					Keyspace:    "testkeyspace",
+					SrvKeyspace: &topodatapb.SrvKeyspace{},
 				},
 			},
 			req: &vtctldatapb.GetSrvKeyspacesRequest{
@@ -4972,12 +4953,8 @@ func TestGetSrvKeyspaces(t *testing.T) {
 			},
 			expected: &vtctldatapb.GetSrvKeyspacesResponse{
 				SrvKeyspaces: map[string]*topodatapb.SrvKeyspace{
-					"zone1": {
-						ShardingColumnName: "zone1-sharding-col",
-					},
-					"zone2": {
-						ShardingColumnName: "zone2-sharding-col",
-					},
+					"zone1": {},
+					"zone2": {},
 				},
 			},
 			shouldErr: false,
@@ -4987,18 +4964,14 @@ func TestGetSrvKeyspaces(t *testing.T) {
 			cells: []string{"zone1", "zone2"},
 			srvKeyspaces: []*testutil.SrvKeyspace{
 				{
-					Cell:     "zone1",
-					Keyspace: "testkeyspace",
-					SrvKeyspace: &topodatapb.SrvKeyspace{
-						ShardingColumnName: "zone1-sharding-col",
-					},
+					Cell:        "zone1",
+					Keyspace:    "testkeyspace",
+					SrvKeyspace: &topodatapb.SrvKeyspace{},
 				},
 				{
-					Cell:     "zone2",
-					Keyspace: "testkeyspace",
-					SrvKeyspace: &topodatapb.SrvKeyspace{
-						ShardingColumnName: "zone2-sharding-col",
-					},
+					Cell:        "zone2",
+					Keyspace:    "testkeyspace",
+					SrvKeyspace: &topodatapb.SrvKeyspace{},
 				},
 			},
 			req: &vtctldatapb.GetSrvKeyspacesRequest{
@@ -5007,9 +4980,7 @@ func TestGetSrvKeyspaces(t *testing.T) {
 			},
 			expected: &vtctldatapb.GetSrvKeyspacesResponse{
 				SrvKeyspaces: map[string]*topodatapb.SrvKeyspace{
-					"zone1": {
-						ShardingColumnName: "zone1-sharding-col",
-					},
+					"zone1": {},
 				},
 			},
 			shouldErr: false,
@@ -5019,11 +4990,9 @@ func TestGetSrvKeyspaces(t *testing.T) {
 			cells: []string{"zone1", "zone2"},
 			srvKeyspaces: []*testutil.SrvKeyspace{
 				{
-					Cell:     "zone1",
-					Keyspace: "testkeyspace",
-					SrvKeyspace: &topodatapb.SrvKeyspace{
-						ShardingColumnName: "zone1-sharding-col",
-					},
+					Cell:        "zone1",
+					Keyspace:    "testkeyspace",
+					SrvKeyspace: &topodatapb.SrvKeyspace{},
 				},
 			},
 			req: &vtctldatapb.GetSrvKeyspacesRequest{
@@ -5031,9 +5000,7 @@ func TestGetSrvKeyspaces(t *testing.T) {
 			},
 			expected: &vtctldatapb.GetSrvKeyspacesResponse{
 				SrvKeyspaces: map[string]*topodatapb.SrvKeyspace{
-					"zone1": {
-						ShardingColumnName: "zone1-sharding-col",
-					},
+					"zone1": {},
 					"zone2": nil,
 				},
 			},
@@ -5044,11 +5011,9 @@ func TestGetSrvKeyspaces(t *testing.T) {
 			cells: []string{"zone1"},
 			srvKeyspaces: []*testutil.SrvKeyspace{
 				{
-					Cell:     "zone1",
-					Keyspace: "testkeyspace",
-					SrvKeyspace: &topodatapb.SrvKeyspace{
-						ShardingColumnName: "zone1-sharding-col",
-					},
+					Cell:        "zone1",
+					Keyspace:    "testkeyspace",
+					SrvKeyspace: &topodatapb.SrvKeyspace{},
 				},
 			},
 			topoErr: assert.AnError,
@@ -5062,11 +5027,9 @@ func TestGetSrvKeyspaces(t *testing.T) {
 			cells: []string{"zone1"},
 			srvKeyspaces: []*testutil.SrvKeyspace{
 				{
-					Cell:     "zone1",
-					Keyspace: "testkeyspace",
-					SrvKeyspace: &topodatapb.SrvKeyspace{
-						ShardingColumnName: "zone1-sharding-col",
-					},
+					Cell:        "zone1",
+					Keyspace:    "testkeyspace",
+					SrvKeyspace: &topodatapb.SrvKeyspace{},
 				},
 			},
 			topoErr: assert.AnError,
@@ -8408,241 +8371,6 @@ func TestSetKeyspaceDurabilityPolicy(t *testing.T) {
 			resp, err := vtctld.SetKeyspaceDurabilityPolicy(ctx, tt.req)
 			if tt.expectedErr != "" {
 				assert.EqualError(t, err, tt.expectedErr)
-				return
-			}
-
-			require.NoError(t, err)
-			utils.MustMatch(t, tt.expected, resp)
-		})
-	}
-}
-
-func TestSetKeyspaceServedFrom(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name      string
-		keyspaces []*vtctldatapb.Keyspace
-		req       *vtctldatapb.SetKeyspaceServedFromRequest
-		expected  *vtctldatapb.SetKeyspaceServedFromResponse
-		shouldErr bool
-	}{
-		{
-			name: "ok",
-			keyspaces: []*vtctldatapb.Keyspace{
-				{
-					Name:     "ks1",
-					Keyspace: &topodatapb.Keyspace{},
-				},
-				{
-					Name:     "ks2",
-					Keyspace: &topodatapb.Keyspace{},
-				},
-			},
-			req: &vtctldatapb.SetKeyspaceServedFromRequest{
-				Keyspace:       "ks1",
-				TabletType:     topodatapb.TabletType_REPLICA,
-				Cells:          []string{"zone1"},
-				SourceKeyspace: "ks2",
-			},
-			expected: &vtctldatapb.SetKeyspaceServedFromResponse{
-				Keyspace: &topodatapb.Keyspace{
-					ServedFroms: []*topodatapb.Keyspace_ServedFrom{
-						{
-							TabletType: topodatapb.TabletType_REPLICA,
-							Cells:      []string{"zone1"},
-							Keyspace:   "ks2",
-						},
-					},
-				},
-			},
-		},
-		{
-			name: "keyspace not found",
-			req: &vtctldatapb.SetKeyspaceServedFromRequest{
-				Keyspace: "ks1",
-			},
-			shouldErr: true,
-		},
-		{
-			name: "fail to update servedfrom map",
-			keyspaces: []*vtctldatapb.Keyspace{
-				{
-					Name:     "ks1",
-					Keyspace: &topodatapb.Keyspace{},
-				},
-			},
-			req: &vtctldatapb.SetKeyspaceServedFromRequest{
-				TabletType: topodatapb.TabletType_PRIMARY,
-			},
-			shouldErr: true,
-		},
-	}
-
-	ctx := context.Background()
-
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			ts := memorytopo.NewServer("zone1")
-			testutil.AddKeyspaces(ctx, t, ts, tt.keyspaces...)
-
-			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts)
-			})
-			resp, err := vtctld.SetKeyspaceServedFrom(ctx, tt.req)
-			if tt.shouldErr {
-				assert.Error(t, err)
-				return
-			}
-
-			require.NoError(t, err)
-			utils.MustMatch(t, tt.expected, resp)
-		})
-	}
-}
-
-func TestSetKeyspaceShardingInfo(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name      string
-		keyspaces []*vtctldatapb.Keyspace
-		req       *vtctldatapb.SetKeyspaceShardingInfoRequest
-		expected  *vtctldatapb.SetKeyspaceShardingInfoResponse
-		shouldErr bool
-	}{
-		{
-			name: "ok",
-			keyspaces: []*vtctldatapb.Keyspace{
-				{
-					Name:     "ks1",
-					Keyspace: &topodatapb.Keyspace{},
-				},
-			},
-			req: &vtctldatapb.SetKeyspaceShardingInfoRequest{
-				Keyspace:   "ks1",
-				ColumnName: "mycol",
-				ColumnType: topodatapb.KeyspaceIdType_UINT64,
-			},
-			expected: &vtctldatapb.SetKeyspaceShardingInfoResponse{
-				Keyspace: &topodatapb.Keyspace{
-					ShardingColumnName: "mycol",
-					ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
-				},
-			},
-		},
-		{
-			name: "keyspace not found",
-			req: &vtctldatapb.SetKeyspaceShardingInfoRequest{
-				Keyspace: "ks1",
-			},
-			shouldErr: true,
-		},
-		{
-			name: "update sharding column without force",
-			keyspaces: []*vtctldatapb.Keyspace{
-				{
-					Name: "ks1",
-					Keyspace: &topodatapb.Keyspace{
-						ShardingColumnName: "mycol",
-						ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
-					},
-				},
-			},
-			req: &vtctldatapb.SetKeyspaceShardingInfoRequest{
-				Keyspace:   "ks1",
-				ColumnName: "anothercol",
-				ColumnType: topodatapb.KeyspaceIdType_UINT64,
-			},
-			shouldErr: true,
-		},
-		{
-			name: "update sharding column with force",
-			keyspaces: []*vtctldatapb.Keyspace{
-				{
-					Name: "ks1",
-					Keyspace: &topodatapb.Keyspace{
-						ShardingColumnName: "mycol",
-						ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
-					},
-				},
-			},
-			req: &vtctldatapb.SetKeyspaceShardingInfoRequest{
-				Keyspace:   "ks1",
-				ColumnName: "anothercol",
-				ColumnType: topodatapb.KeyspaceIdType_UINT64,
-				Force:      true,
-			},
-			expected: &vtctldatapb.SetKeyspaceShardingInfoResponse{
-				Keyspace: &topodatapb.Keyspace{
-					ShardingColumnName: "anothercol",
-					ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
-				},
-			},
-		},
-		{
-			name: "update sharding column type without force",
-			keyspaces: []*vtctldatapb.Keyspace{
-				{
-					Name: "ks1",
-					Keyspace: &topodatapb.Keyspace{
-						ShardingColumnName: "mycol",
-						ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
-					},
-				},
-			},
-			req: &vtctldatapb.SetKeyspaceShardingInfoRequest{
-				Keyspace:   "ks1",
-				ColumnName: "mycol",
-				ColumnType: topodatapb.KeyspaceIdType_BYTES,
-			},
-			shouldErr: true,
-		},
-		{
-			name: "update sharding column type with force",
-			keyspaces: []*vtctldatapb.Keyspace{
-				{
-					Name: "ks1",
-					Keyspace: &topodatapb.Keyspace{
-						ShardingColumnName: "mycol",
-						ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
-					},
-				},
-			},
-			req: &vtctldatapb.SetKeyspaceShardingInfoRequest{
-				Keyspace:   "ks1",
-				ColumnName: "mycol",
-				ColumnType: topodatapb.KeyspaceIdType_BYTES,
-				Force:      true,
-			},
-			expected: &vtctldatapb.SetKeyspaceShardingInfoResponse{
-				Keyspace: &topodatapb.Keyspace{
-					ShardingColumnName: "mycol",
-					ShardingColumnType: topodatapb.KeyspaceIdType_BYTES,
-				},
-			},
-		},
-	}
-
-	ctx := context.Background()
-
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			ts := memorytopo.NewServer("zone1")
-			testutil.AddKeyspaces(ctx, t, ts, tt.keyspaces...)
-
-			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts)
-			})
-			resp, err := vtctld.SetKeyspaceShardingInfo(ctx, tt.req)
-			if tt.shouldErr {
-				assert.Error(t, err)
 				return
 			}
 

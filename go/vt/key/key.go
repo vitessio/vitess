@@ -50,32 +50,6 @@ func (i Uint64Key) Bytes() []byte {
 }
 
 //
-// KeyspaceIdType helper methods
-//
-
-// ParseKeyspaceIDType parses the keyspace id type into the enum
-func ParseKeyspaceIDType(param string) (topodatapb.KeyspaceIdType, error) {
-	if param == "" {
-		return topodatapb.KeyspaceIdType_UNSET, nil
-	}
-	value, ok := topodatapb.KeyspaceIdType_value[strings.ToUpper(param)]
-	if !ok {
-		return topodatapb.KeyspaceIdType_UNSET, fmt.Errorf("unknown KeyspaceIdType %v", param)
-	}
-	return topodatapb.KeyspaceIdType(value), nil
-}
-
-// KeyspaceIDTypeString returns the string representation of a keyspace id type.
-func KeyspaceIDTypeString(id topodatapb.KeyspaceIdType) string {
-	s, ok := topodatapb.KeyspaceIdType_name[int32(id)]
-	if !ok {
-		return KeyspaceIDTypeString(topodatapb.KeyspaceIdType_UNSET)
-	}
-
-	return s
-}
-
-//
 // KeyRange helper methods
 //
 
@@ -133,9 +107,9 @@ func EvenShardsKeyRange(i, n int) (*topodatapb.KeyRange, error) {
 	return &topodatapb.KeyRange{Start: startBytes, End: endBytes}, nil
 }
 
-// KeyRangeAdd adds two adjacent keyranges into a single value.
+// RangeAdd adds two adjacent keyranges into a single value.
 // If the values are not adjacent, it returns false.
-func KeyRangeAdd(first, second *topodatapb.KeyRange) (*topodatapb.KeyRange, bool) {
+func RangeAdd(first, second *topodatapb.KeyRange) (*topodatapb.KeyRange, bool) {
 	if first == nil || second == nil {
 		return nil, false
 	}
@@ -148,8 +122,8 @@ func KeyRangeAdd(first, second *topodatapb.KeyRange) (*topodatapb.KeyRange, bool
 	return nil, false
 }
 
-// KeyRangeContains returns true if the provided id is in the keyrange.
-func KeyRangeContains(kr *topodatapb.KeyRange, id []byte) bool {
+// RangeContains returns true if the provided id is in the keyrange.
+func RangeContains(kr *topodatapb.KeyRange, id []byte) bool {
 	if kr == nil {
 		return true
 	}
@@ -170,24 +144,24 @@ func ParseKeyRangeParts(start, end string) (*topodatapb.KeyRange, error) {
 	return &topodatapb.KeyRange{Start: s, End: e}, nil
 }
 
-// KeyRangeString prints a topodatapb.KeyRange
-func KeyRangeString(k *topodatapb.KeyRange) string {
+// RangeString prints a topodatapb.KeyRange
+func RangeString(k *topodatapb.KeyRange) string {
 	if k == nil {
 		return "-"
 	}
 	return hex.EncodeToString(k.Start) + "-" + hex.EncodeToString(k.End)
 }
 
-// KeyRangeIsPartial returns true if the KeyRange does not cover the entire space.
-func KeyRangeIsPartial(kr *topodatapb.KeyRange) bool {
+// RangeIsPartial returns true if the KeyRange does not cover the entire space.
+func RangeIsPartial(kr *topodatapb.KeyRange) bool {
 	if kr == nil {
 		return false
 	}
 	return !(len(kr.Start) == 0 && len(kr.End) == 0)
 }
 
-// KeyRangeEqual returns true if both key ranges cover the same area
-func KeyRangeEqual(left, right *topodatapb.KeyRange) bool {
+// RangeEqual returns true if both key ranges cover the same area
+func RangeEqual(left, right *topodatapb.KeyRange) bool {
 	if left == nil {
 		return right == nil || (len(right.Start) == 0 && len(right.End) == 0)
 	}
@@ -220,8 +194,8 @@ func addPadding(kr []byte) []byte {
 	return paddedKr
 }
 
-// KeyRangeStartSmaller returns true if right's keyrange start is _after_ left's start
-func KeyRangeStartSmaller(left, right *topodatapb.KeyRange) bool {
+// RangeStartSmaller returns true if right's keyrange start is _after_ left's start
+func RangeStartSmaller(left, right *topodatapb.KeyRange) bool {
 	if left == nil {
 		return right != nil
 	}
@@ -231,8 +205,8 @@ func KeyRangeStartSmaller(left, right *topodatapb.KeyRange) bool {
 	return bytes.Compare(left.Start, right.Start) < 0
 }
 
-// KeyRangeStartEqual returns true if both key ranges have the same start
-func KeyRangeStartEqual(left, right *topodatapb.KeyRange) bool {
+// RangeStartEqual returns true if both key ranges have the same start
+func RangeStartEqual(left, right *topodatapb.KeyRange) bool {
 	if left == nil {
 		return right == nil || len(right.Start) == 0
 	}
@@ -242,9 +216,9 @@ func KeyRangeStartEqual(left, right *topodatapb.KeyRange) bool {
 	return bytes.Equal(addPadding(left.Start), addPadding(right.Start))
 }
 
-// KeyRangeContiguous returns true if the end of the left key range exactly
+// RangeContiguous returns true if the end of the left key range exactly
 // matches the start of the right key range (i.e they are contigious)
-func KeyRangeContiguous(left, right *topodatapb.KeyRange) bool {
+func RangeContiguous(left, right *topodatapb.KeyRange) bool {
 	if left == nil {
 		return right == nil || (len(right.Start) == 0 && len(right.End) == 0)
 	}
@@ -254,8 +228,8 @@ func KeyRangeContiguous(left, right *topodatapb.KeyRange) bool {
 	return bytes.Equal(addPadding(left.End), addPadding(right.Start))
 }
 
-// KeyRangeEndEqual returns true if both key ranges have the same end
-func KeyRangeEndEqual(left, right *topodatapb.KeyRange) bool {
+// RangeEndEqual returns true if both key ranges have the same end
+func RangeEndEqual(left, right *topodatapb.KeyRange) bool {
 	if left == nil {
 		return right == nil || len(right.End) == 0
 	}
@@ -271,8 +245,8 @@ func KeyRangeEndEqual(left, right *topodatapb.KeyRange) bool {
 // intersects = (b > c) && (a < d)
 // overlap = min(b, d) - max(c, a)
 
-// KeyRangesIntersect returns true if some Keyspace values exist in both ranges.
-func KeyRangesIntersect(first, second *topodatapb.KeyRange) bool {
+// RangesIntersect returns true if some Keyspace values exist in both ranges.
+func RangesIntersect(first, second *topodatapb.KeyRange) bool {
 	if first == nil || second == nil {
 		return true
 	}
@@ -280,10 +254,10 @@ func KeyRangesIntersect(first, second *topodatapb.KeyRange) bool {
 		(len(second.End) == 0 || bytes.Compare(first.Start, second.End) < 0)
 }
 
-// KeyRangesOverlap returns the overlap between two KeyRanges.
+// RangesOverlap returns the overlap between two KeyRanges.
 // They need to overlap, otherwise an error is returned.
-func KeyRangesOverlap(first, second *topodatapb.KeyRange) (*topodatapb.KeyRange, error) {
-	if !KeyRangesIntersect(first, second) {
+func RangesOverlap(first, second *topodatapb.KeyRange) (*topodatapb.KeyRange, error) {
+	if !RangesIntersect(first, second) {
 		return nil, fmt.Errorf("KeyRanges %v and %v don't overlap", first, second)
 	}
 	if first == nil {
@@ -309,10 +283,10 @@ func KeyRangesOverlap(first, second *topodatapb.KeyRange) (*topodatapb.KeyRange,
 	return result, nil
 }
 
-// KeyRangeIncludes returns true if the first provided KeyRange, big,
+// RangeIncludes returns true if the first provided KeyRange, big,
 // contains the second KeyRange, small. If they intersect, but small
 // spills out, this returns false.
-func KeyRangeIncludes(big, small *topodatapb.KeyRange) bool {
+func RangeIncludes(big, small *topodatapb.KeyRange) bool {
 	if big == nil {
 		// The outside one covers everything, we're good.
 		return true

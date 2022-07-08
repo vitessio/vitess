@@ -21,6 +21,8 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/grpc/credentials/insecure"
+
 	"google.golang.org/grpc"
 	grpcresolver "google.golang.org/grpc/resolver"
 
@@ -113,7 +115,7 @@ func (vtctld *ClientProxy) dial(ctx context.Context) error {
 		// TODO: make configurable. right now, omitting this and attempting
 		// to not use TLS results in:
 		//		grpc: no transport security set (use grpc.WithInsecure() explicitly or set credentials)
-		grpc.WithInsecure(),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	}
 
 	if vtctld.creds != nil {

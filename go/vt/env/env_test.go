@@ -18,7 +18,10 @@ package env
 
 import (
 	"os"
+	"strconv"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestVtDataRoot(t *testing.T) {
@@ -41,5 +44,53 @@ func TestVtDataRoot(t *testing.T) {
 	root = VtDataRoot()
 	if root != passed {
 		t.Errorf("The value of VtDataRoot should be %v, not %v.", passed, root)
+	}
+}
+
+func TestPlannerVersion(t *testing.T) {
+	empty := ""
+	v3 := "V3"
+	gen4 := "gen4"
+
+	tests := []struct {
+		a, b   *string
+		expect string
+		err    bool
+	}{{
+		a:   &v3,
+		b:   &gen4,
+		err: true,
+	}, {
+		a:      &v3,
+		b:      &v3,
+		expect: v3,
+	}, {
+		a:      &v3,
+		b:      nil,
+		expect: v3,
+	}, {
+		a:      nil,
+		b:      &gen4,
+		expect: gen4,
+	}, {
+		a:      &v3,
+		b:      &empty,
+		expect: v3,
+	}, {
+		a:      &empty,
+		b:      &v3,
+		expect: v3,
+	}}
+
+	for i, test := range tests {
+		t.Run(strconv.Itoa(i), func(t *testing.T) {
+			v, err := CheckPlannerVersionFlag(test.a, test.b)
+			if test.err {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, test.expect, v)
+		})
 	}
 }

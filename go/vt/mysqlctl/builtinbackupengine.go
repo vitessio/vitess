@@ -32,9 +32,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/klauspost/pgzip"
-	"github.com/planetscale/pargzip"
-
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/concurrency"
@@ -77,6 +74,9 @@ type BuiltinBackupEngine struct {
 type builtinBackupManifest struct {
 	// BackupManifest is an anonymous embedding of the base manifest struct.
 	BackupManifest
+
+	// CompressionEngine stores which compression engine was used to originally compress the files.
+	CompressionEngine string `json:",omitempty"`
 
 	// FileEntries contains all the files in the backup
 	FileEntries []FileEntry
@@ -351,9 +351,10 @@ func (be *BuiltinBackupEngine) backupFiles(ctx context.Context, params BackupPar
 		},
 
 		// Builtin-specific fields
-		FileEntries:   fes,
-		TransformHook: *backupStorageHook,
-		SkipCompress:  !*backupStorageCompress,
+		FileEntries:       fes,
+		TransformHook:     *backupStorageHook,
+		SkipCompress:      !*backupStorageCompress,
+		CompressionEngine: *BuiltinCompressor,
 	}
 	data, err := json.MarshalIndent(bm, "", "  ")
 	if err != nil {
@@ -498,13 +499,19 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 	}
 
 	// Create the gzip compression pipe, if necessary.
-	var gzip *pargzip.Writer
+	var compressor io.WriteCloser
 	if *backupStorageCompress {
-		gzip = pargzip.NewWriter(writer)
-		gzip.ChunkSize = *backupCompressBlockSize
-		gzip.Parallel = *backupCompressBlocks
-		gzip.CompressionLevel = pargzip.BestSpeed
-		writer = gzip
+
+		if *ExternalCompressorCmd != "" {
+			compressor, err = newExternalCompressor(ctx, *ExternalCompressorCmd, writer, params.Logger)
+		} else {
+			compressor, err = newBuiltinCompressor(*BuiltinCompressor, writer, params.Logger)
+		}
+		if err != nil {
+			return vterrors.Wrap(err, "can't create compressor")
+		}
+
+		writer = compressor
 	}
 
 	// Copy from the source file to writer (optional gzip,
@@ -515,9 +522,9 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 	}
 
 	// Close gzip to flush it, after that all data is sent to writer.
-	if gzip != nil {
-		if err = gzip.Close(); err != nil {
-			return vterrors.Wrap(err, "cannot close gzip")
+	if compressor != nil {
+		if err = compressor.Close(); err != nil {
+			return vterrors.Wrap(err, "cannot close compressor")
 		}
 	}
 
@@ -599,7 +606,16 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreP
 			// And restore the file.
 			name := fmt.Sprintf("%v", i)
 			params.Logger.Infof("Copying file %v: %v", name, fes[i].Name)
-			err := be.restoreFile(ctx, params, bh, &fes[i], bm.TransformHook, !bm.SkipCompress, name)
+			// For backward compatibility. Incase if Manifest is from N-1 binary
+			// then we assign the default value of compressionEngine.
+			if bm.CompressionEngine == "" {
+				bm.CompressionEngine = *BuiltinCompressor
+			}
+			var decompEngine = bm.CompressionEngine
+			if *BuiltinDecompressor != "auto" {
+				decompEngine = *BuiltinDecompressor
+			}
+			err := be.restoreFile(ctx, params, bh, &fes[i], bm.TransformHook, !bm.SkipCompress, decompEngine, name)
 			if err != nil {
 				rec.RecordError(vterrors.Wrapf(err, "can't restore file %v to %v", name, fes[i].Name))
 			}
@@ -610,7 +626,7 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreP
 }
 
 // restoreFile restores an individual file.
-func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle, fe *FileEntry, transformHook string, compress bool, name string) (finalErr error) {
+func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle, fe *FileEntry, transformHook string, compress bool, deCompressionEngine string, name string) (finalErr error) {
 	// Open the source file for reading.
 	source, err := bh.ReadFile(ctx, name)
 	if err != nil {
@@ -653,21 +669,29 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 
 	// Create the uncompresser if needed.
 	if compress {
-		gz, err := pgzip.NewReader(reader)
-		if err != nil {
-			return vterrors.Wrap(err, "can't open gzip decompressor")
+		var decompressor io.ReadCloser
+
+		if *ExternalDecompressorCmd != "" {
+			decompressor, err = newExternalDecompressor(ctx, *ExternalDecompressorCmd, reader, params.Logger)
+		} else {
+			decompressor, err = newBuiltinDecompressor(deCompressionEngine, reader, params.Logger)
 		}
+		if err != nil {
+			return vterrors.Wrap(err, "can't create decompressor")
+		}
+
 		defer func() {
-			if cerr := gz.Close(); cerr != nil {
+			if cerr := decompressor.Close(); cerr != nil {
+				params.Logger.Errorf("failed to close decompressor: %v", cerr)
 				if finalErr != nil {
 					// We already have an error, just log this one.
-					log.Errorf("failed to close gzip decompressor %v: %v", name, cerr)
+					log.Errorf("failed to close decompressor %v: %v", name, cerr)
 				} else {
-					finalErr = vterrors.Wrap(err, "failed to close gzip decompressor")
+					finalErr = vterrors.Wrap(cerr, "failed to close decompressor")
 				}
 			}
 		}()
-		reader = gz
+		reader = decompressor
 	}
 
 	// Copy the data. Will also write to the hasher.

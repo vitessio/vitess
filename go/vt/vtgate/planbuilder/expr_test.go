@@ -29,19 +29,19 @@ func TestValEqual(t *testing.T) {
 		in1, in2 sqlparser.Expr
 		out      bool
 	}{{
-		in1: &sqlparser.ColName{Metadata: c1, Name: sqlparser.NewColIdent("c1")},
-		in2: &sqlparser.ColName{Metadata: c1, Name: sqlparser.NewColIdent("c1")},
+		in1: &sqlparser.ColName{Metadata: c1, Name: sqlparser.NewIdentifierCI("c1")},
+		in2: &sqlparser.ColName{Metadata: c1, Name: sqlparser.NewIdentifierCI("c1")},
 		out: true,
 	}, {
 		// Objects that have the same name need not be the same because
 		// they might have appeared in different scopes and could have
 		// resolved to different columns.
-		in1: &sqlparser.ColName{Metadata: c1, Name: sqlparser.NewColIdent("c1")},
-		in2: &sqlparser.ColName{Metadata: c2, Name: sqlparser.NewColIdent("c1")},
+		in1: &sqlparser.ColName{Metadata: c1, Name: sqlparser.NewIdentifierCI("c1")},
+		in2: &sqlparser.ColName{Metadata: c2, Name: sqlparser.NewIdentifierCI("c1")},
 		out: false,
 	}, {
 		in1: sqlparser.NewArgument("aa"),
-		in2: &sqlparser.ColName{Metadata: c1, Name: sqlparser.NewColIdent("c1")},
+		in2: &sqlparser.ColName{Metadata: c1, Name: sqlparser.NewIdentifierCI("c1")},
 		out: false,
 	}, {
 		in1: sqlparser.NewArgument("aa"),
