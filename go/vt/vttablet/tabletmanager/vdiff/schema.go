@@ -30,7 +30,10 @@ func init() {
 		"ALTER TABLE _vt.vdiff CHANGE started_timestamp started_at timestamp NULL DEFAULT NULL",
 		"ALTER TABLE _vt.vdiff CHANGE completed_timestamp completed_at timestamp NULL DEFAULT NULL",
 		"ALTER TABLE _vt.vdiff MODIFY COLUMN state varbinary(64)",
+		"ALTER TABLE _vt.vdiff MODIFY COLUMN keyspace varbinary(256)",
 		"ALTER TABLE _vt.vdiff ADD COLUMN last_error varbinary(512)",
+		"ALTER TABLE _vt.vdiff ADD INDEX (state)",
+		"ALTER TABLE _vt.vdiff ADD INDEX ks_wf_idx (keyspace(64), workflow(64))",
 		"ALTER TABLE _vt.vdiff_table MODIFY COLUMN table_name varbinary(128)",
 		"ALTER TABLE _vt.vdiff_table MODIFY COLUMN state varbinary(64)",
 		"ALTER TABLE _vt.vdiff_table MODIFY COLUMN lastpk varbinary(2000)",
@@ -89,7 +92,7 @@ const (
 										inner join _vt.vdiff_log as vdl on (vd.id = vdl.vdiff_id)
 										where vd.keyspace = %s and vd.workflow = %s`
 	sqlDeleteVDiffByUUID = `delete from vd, vdt using _vt.vdiff as vd inner join _vt.vdiff_table as vdt on (vd.id = vdt.vdiff_id)
-							and vd.keyspace = %s and vd.workflow = %s and vd.vdiff_uuid = %s`
+							and vd.vdiff_uuid = %s`
 	sqlVDiffSummary = `select vd.state as vdiff_state, vd.last_error as last_error, vdt.table_name as table_name,
 						vd.vdiff_uuid as 'uuid', vdt.state as table_state, vdt.table_rows as table_rows,
 						vd.started_at as started_at, vdt.rows_compared as rows_compared, vd.completed_at as completed_at,

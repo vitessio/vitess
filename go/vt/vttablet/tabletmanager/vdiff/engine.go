@@ -301,6 +301,11 @@ func (vde *Engine) retryVDiffs(ctx context.Context) error {
 		return nil
 	}
 	for _, row := range qr.Named().Rows {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
 		lastError := mysql.NewSQLErrorFromError(errors.New(row.AsString("last_error", "")))
 		if !mysql.IsEphemeralError(lastError) {
 			continue

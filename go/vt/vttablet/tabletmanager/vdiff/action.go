@@ -186,7 +186,7 @@ func (vde *Engine) PerformVDiffAction(ctx context.Context, req *tabletmanagerdat
 			if err != nil {
 				return nil, fmt.Errorf("action argument %s not supported", req.SubCommand)
 			}
-			query = fmt.Sprintf(sqlDeleteVDiffByUUID, encodeString(req.Keyspace), encodeString(req.Workflow), encodeString(uuid.String()))
+			query = fmt.Sprintf(sqlDeleteVDiffByUUID, encodeString(uuid.String()))
 		}
 		if _, err = dbClient.ExecuteFetch(query, 1); err != nil {
 			return nil, err
