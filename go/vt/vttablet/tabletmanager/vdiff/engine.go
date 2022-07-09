@@ -289,7 +289,7 @@ func (vde *Engine) getVDiffByID(ctx context.Context, dbClient binlogplayer.DBCli
 		return nil, err
 	}
 	if len(qr.Rows) != 1 {
-		return nil, fmt.Errorf("unable to read vdiff table for %d", id)
+		return nil, fmt.Errorf("unable to read vdiff record for vdiff id %d", id)
 	}
 	return qr, nil
 }
