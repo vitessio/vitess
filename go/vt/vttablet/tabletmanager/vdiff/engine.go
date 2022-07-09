@@ -215,9 +215,6 @@ func (vde *Engine) Close() {
 	vde.mu.Lock()
 	defer vde.mu.Unlock()
 
-	// end the goroutine that retries error'd vdiffs
-	vde.done <- true
-
 	// If we're retrying, we're not open.
 	// Just cancel the retry loop.
 	if vde.cancelRetry != nil {
@@ -229,6 +226,9 @@ func (vde *Engine) Close() {
 	if !vde.isOpen {
 		return
 	}
+
+	// end the goroutine that retries error'd vdiffs
+	vde.done <- true
 
 	vde.cancel()
 	// We still have to wait for all controllers to stop.
@@ -291,6 +291,8 @@ func (vde *Engine) getVDiffByID(ctx context.Context, dbClient binlogplayer.DBCli
 }
 
 func (vde *Engine) retryVDiffs(ctx context.Context) error {
+	vde.mu.Lock()
+	defer vde.mu.Unlock()
 	dbClient := vde.dbClientFactoryFiltered()
 	if err := dbClient.Connect(); err != nil {
 		return err
