@@ -46,6 +46,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/flagutil"
+	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/query"
@@ -81,12 +82,15 @@ var (
 	refreshKnownTablets = flag.Bool("tablet_refresh_known_tablets", true, "tablet refresh reloads the tablet address/port map from topo in case it changes")
 	// topoReadConcurrency tells us how many topo reads are allowed in parallel
 	topoReadConcurrency = flag.Int("topo_read_concurrency", 32, "concurrent topo reads")
+
+	// How much to sleep between each check.
+	waitAvailableTabletInterval = 100 * time.Millisecond
 )
 
 // See the documentation for NewHealthCheck below for an explanation of these parameters.
 const (
-	defaultHealthCheckRetryDelay = 5 * time.Second
-	defaultHealthCheckTimeout    = 1 * time.Minute
+	DefaultHealthCheckRetryDelay = 5 * time.Second
+	DefaultHealthCheckTimeout    = 1 * time.Minute
 
 	// DefaultTopoReadConcurrency is used as the default value for the topoReadConcurrency parameter of a TopologyWatcher.
 	DefaultTopoReadConcurrency int = 5
@@ -150,22 +154,20 @@ func FilteringKeyspaces() bool {
 	return len(KeyspacesToWatch) > 0
 }
 
-// TabletRecorder is a sub interface of HealthCheck.
-// It is separated out to enable unit testing.
-type TabletRecorder interface {
-	// AddTablet adds the tablet.
-	AddTablet(tablet *topodata.Tablet)
-	// RemoveTablet removes the tablet.
-	RemoveTablet(tablet *topodata.Tablet)
-	// ReplaceTablet does an AddTablet and RemoveTablet in one call, effectively replacing the old tablet with the new.
-	ReplaceTablet(old, new *topodata.Tablet)
-}
-
 type KeyspaceShardTabletType string
 type tabletAliasString string
 
 // HealthCheck declares what the TabletGateway needs from the HealthCheck
 type HealthCheck interface {
+	// AddTablet adds the tablet.
+	AddTablet(tablet *topodata.Tablet)
+
+	// RemoveTablet removes the tablet.
+	RemoveTablet(tablet *topodata.Tablet)
+
+	// ReplaceTablet does an AddTablet and RemoveTablet in one call, effectively replacing the old tablet with the new.
+	ReplaceTablet(old, new *topodata.Tablet)
+
 	// CacheStatus returns a displayable version of the health check cache.
 	CacheStatus() TabletsCacheStatusList
 
@@ -619,17 +621,14 @@ func (hc *HealthCheckImpl) GetHealthyTabletStats(target *query.Target) []*Tablet
 	var result []*TabletHealth
 	hc.mu.Lock()
 	defer hc.mu.Unlock()
-	if target.Shard == "" {
-		target.Shard = "0"
-	}
 	return append(result, hc.healthy[KeyFromTarget(target)]...)
 }
 
-// getTabletStats returns all tablets for the given target.
+// GetTabletStats returns all tablets for the given target.
 // The returned array is owned by the caller.
 // For TabletType_PRIMARY, this will only return at most one entry,
 // the most recent tablet of type primary.
-func (hc *HealthCheckImpl) getTabletStats(target *query.Target) []*TabletHealth {
+func (hc *HealthCheckImpl) GetTabletStats(target *query.Target) []*TabletHealth {
 	var result []*TabletHealth
 	hc.mu.Lock()
 	defer hc.mu.Unlock()
@@ -698,7 +697,7 @@ func (hc *HealthCheckImpl) waitForTablets(ctx context.Context, targets []*query.
 			if requireServing {
 				tabletHealths = hc.GetHealthyTabletStats(target)
 			} else {
-				tabletHealths = hc.getTabletStats(target)
+				tabletHealths = hc.GetTabletStats(target)
 			}
 			if len(tabletHealths) == 0 {
 				allPresent = false
@@ -898,4 +897,16 @@ func (hc *HealthCheckImpl) stateChecksum() int64 {
 	}
 
 	return int64(crc32.ChecksumIEEE(buf.Bytes()))
+}
+
+// TabletToMapKey creates a key to the map from tablet's host and ports.
+// It should only be used in discovery and related module.
+func TabletToMapKey(tablet *topodata.Tablet) string {
+	parts := make([]string, 0, 1)
+	for name, port := range tablet.PortMap {
+		parts = append(parts, netutil.JoinHostPort(name, port))
+	}
+	sort.Strings(parts)
+	parts = append([]string{tablet.Hostname}, parts...)
+	return strings.Join(parts, ",")
 }

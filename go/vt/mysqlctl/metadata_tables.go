@@ -78,7 +78,7 @@ type MetadataManager struct{}
 // old version of Vitess, or databases that are getting converted to run under
 // Vitess.
 //
-// This function is semantically equivalent to calling createMetadataTables
+// This function is semantically equivalent to calling updateMetadataTables
 // followed immediately by upsertLocalMetadata.
 func (m *MetadataManager) PopulateMetadataTables(mysqld MysqlDaemon, localMetadata map[string]string, dbName string) error {
 	log.Infof("Populating _vt.local_metadata table...")
@@ -97,7 +97,7 @@ func (m *MetadataManager) PopulateMetadataTables(mysqld MysqlDaemon, localMetada
 	}
 
 	// Create the database and table if necessary.
-	if err := createMetadataTables(conn, dbName); err != nil {
+	if err := updateMetadataTables(conn, dbName); err != nil {
 		return err
 	}
 
@@ -132,11 +132,7 @@ func (m *MetadataManager) UpsertLocalMetadata(mysqld MysqlDaemon, localMetadata 
 	return upsertLocalMetadata(conn, localMetadata, dbName)
 }
 
-func createMetadataTables(conn *dbconnpool.DBConnection, dbName string) error {
-	if _, err := conn.ExecuteFetch("CREATE DATABASE IF NOT EXISTS _vt", 0, false); err != nil {
-		return err
-	}
-
+func updateMetadataTables(conn *dbconnpool.DBConnection, dbName string) error {
 	if err := updateLocalMetadataTable(conn, dbName); err != nil {
 		return err
 	}
@@ -220,7 +216,7 @@ func upsertLocalMetadata(conn *dbconnpool.DBConnection, localMetadata map[string
 // old version of Vitess, or databases that are getting converted to run under
 // Vitess.
 //
-// This function is semantically equivalent to calling createMetadataTables
+// This function is semantically equivalent to calling updateMetadataTables
 // followed immediately by upsertLocalMetadata.
 func InitTabletMetadata() error {
 	f1 := func(conn *mysql.Conn) error {
