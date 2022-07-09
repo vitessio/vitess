@@ -60,6 +60,10 @@ func (vde *Engine) PerformVDiffAction(ctx context.Context, req *tabletmanagerdat
 	}
 	defer dbClient.Close()
 
+	vde.vdiffSchemaCreateOnce.Do(func() {
+		_ = withDDL.ExecDDL(ctx, dbClient.ExecuteFetch)
+	})
+
 	var qr *sqltypes.Result
 	var err error
 	options := req.Options

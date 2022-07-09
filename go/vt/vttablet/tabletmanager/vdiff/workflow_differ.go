@@ -33,6 +33,7 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtctl/schematools"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -96,6 +97,11 @@ func (wd *workflowDiffer) reconcileExtraRows(dr *DiffReport, maxExtraRowsToCompa
 
 func (wd *workflowDiffer) diffTable(ctx context.Context, dbClient binlogplayer.DBClient, td *tableDiffer) error {
 	tableName := td.table.Name
+	select {
+	case <-ctx.Done():
+		return vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
+	default:
+	}
 	log.Infof("Starting differ on table %s", tableName)
 	if err := td.updateTableState(ctx, dbClient, tableName, StartedState); err != nil {
 		return err
@@ -156,6 +162,12 @@ func (wd *workflowDiffer) diff(ctx context.Context) error {
 	}
 	defer dbClient.Close()
 
+	select {
+	case <-ctx.Done():
+		return vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
+	default:
+	}
+
 	filter := wd.ct.filter
 	req := &tabletmanagerdatapb.GetSchemaRequest{}
 	schm, err := schematools.GetSchema(ctx, wd.ct.ts, wd.ct.tmc, wd.ct.vde.thisTablet.Alias, req)
@@ -169,6 +181,11 @@ func (wd *workflowDiffer) diff(ctx context.Context) error {
 		return err
 	}
 	for _, td := range wd.tableDiffers {
+		select {
+		case <-ctx.Done():
+			return vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
+		default:
+		}
 		tableRows, ok := wd.tableSizes[td.table.Name]
 		if !ok {
 			tableRows = 0

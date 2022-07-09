@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/topo"
 
 	"google.golang.org/protobuf/encoding/prototext"
@@ -442,6 +443,11 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare *int64, debug, on
 	}()
 
 	for {
+		select {
+		case <-ctx.Done():
+			return nil, vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
+		default:
+		}
 		lastProcessedRow = sourceRow
 
 		if !mismatch && dr.MismatchedRows > 0 {

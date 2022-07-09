@@ -115,9 +115,6 @@ func (vde *Engine) openLocked(ctx context.Context) error {
 		return err
 	}
 	defer dbClient.Close()
-	vde.vdiffSchemaCreateOnce.Do(func() {
-		_ = withDDL.ExecDDL(ctx, dbClient.ExecuteFetch)
-	})
 
 	// Start any pending VDiffs
 	rows, err := vde.getPendingVDiffs(ctx, dbClient)
@@ -247,7 +244,7 @@ func (vde *Engine) getDBClient(isAdmin bool) binlogplayer.DBClient {
 }
 
 func (vde *Engine) getPendingVDiffs(ctx context.Context, dbClient binlogplayer.DBClient) (*sqltypes.Result, error) {
-	qr, err := dbClient.ExecuteFetch(sqlGetPendingVDiffs, -1)
+	qr, err := withDDL.ExecIgnore(ctx, sqlGetPendingVDiffs, dbClient.ExecuteFetch)
 	if err != nil {
 		return nil, err
 	}
@@ -258,7 +255,7 @@ func (vde *Engine) getPendingVDiffs(ctx context.Context, dbClient binlogplayer.D
 }
 
 func (vde *Engine) getVDiffsToRetry(ctx context.Context, dbClient binlogplayer.DBClient) (*sqltypes.Result, error) {
-	qr, err := dbClient.ExecuteFetch(sqlGetVDiffsToRetry, -1)
+	qr, err := withDDL.ExecIgnore(ctx, sqlGetVDiffsToRetry, dbClient.ExecuteFetch)
 	if err != nil {
 		return nil, err
 	}

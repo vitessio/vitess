@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	"google.golang.org/protobuf/encoding/prototext"
 
@@ -31,6 +32,7 @@ import (
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 )
@@ -111,14 +113,13 @@ func (ct *controller) run(ctx context.Context) {
 	}
 	defer dbClient.Close()
 
-	query := fmt.Sprintf(sqlGetVDiffByID, ct.id)
-	qr, err := dbClient.ExecuteFetch(query, 1)
+	ct.vde.vdiffSchemaCreateOnce.Do(func() {
+		_ = withDDL.ExecDDL(ctx, dbClient.ExecuteFetch)
+	})
+
+	qr, err := ct.vde.getVDiffByID(ctx, dbClient, ct.id)
 	if err != nil {
-		log.Errorf(fmt.Sprintf("No data for %s", query), err)
-		return
-	}
-	if len(qr.Rows) == 0 {
-		log.Errorf("Missing vdiff row for %s", query)
+		log.Errorf("Error getting vdiff record: %v", err)
 		return
 	}
 
@@ -170,6 +171,11 @@ func (ct *controller) updateState(dbClient binlogplayer.DBClient, state VDiffSta
 }
 
 func (ct *controller) start(ctx context.Context, dbClient binlogplayer.DBClient) error {
+	select {
+	case <-ctx.Done():
+		return vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
+	default:
+	}
 	ct.workflowFilter = fmt.Sprintf("where workflow = %s and db_name = %s", encodeString(ct.workflow), encodeString(ct.vde.dbName))
 	query := fmt.Sprintf(sqlGetVReplicationEntry, ct.workflowFilter)
 	qr, err := dbClient.ExecuteFetch(query, -1)
@@ -178,6 +184,11 @@ func (ct *controller) start(ctx context.Context, dbClient binlogplayer.DBClient)
 	}
 	log.Infof("Found %d vreplication streams for %s", len(qr.Rows), ct.workflow)
 	for i, row := range qr.Named().Rows {
+		select {
+		case <-ctx.Done():
+			return vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
+		default:
+		}
 		source := newMigrationSource()
 		sourceBytes, err := row["source"].ToBytes()
 		if err != nil {
