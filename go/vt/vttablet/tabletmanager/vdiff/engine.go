@@ -331,7 +331,7 @@ func (vde *Engine) retryVDiffs(ctx context.Context) error {
 }
 
 func (vde *Engine) retryErroredVDiffs() {
-	tkr := time.NewTicker(time.Second * 10)
+	tkr := time.NewTicker(time.Second * 30)
 	defer func() {
 		tkr.Stop()
 	}()
