@@ -111,9 +111,6 @@ func (vde *Engine) Open(ctx context.Context, vre *vreplication.Engine) {
 }
 
 func (vde *Engine) openLocked(ctx context.Context) error {
-	vde.ctx, vde.cancel = context.WithCancel(ctx)
-	vde.isOpen = true
-
 	// Start any pending VDiffs
 	rows, err := vde.getPendingVDiffs(ctx)
 	if err != nil {
@@ -123,26 +120,13 @@ func (vde *Engine) openLocked(ctx context.Context) error {
 		return err
 	}
 
+	vde.ctx, vde.cancel = context.WithCancel(ctx)
+	vde.isOpen = true
+
 	// Auto retry error'd VDiffs until the engine is closed.
 	// Only run if we've successfully started the engine (not retrying).
 	if vde.cancelRetry == nil {
-		go func() {
-			tkr := time.NewTicker(time.Second * 30)
-			defer func() {
-				tkr.Stop()
-			}()
-			for {
-				select {
-				case <-tkr.C:
-					if err := vde.retryVDiffs(ctx); err != nil {
-						log.Errorf("Error retrying VDiffs: %v", err)
-					}
-				case <-vde.ctx.Done():
-					log.Info("VDiff engine: closing...")
-					return
-				}
-			}
-		}()
+		go vde.retryErroredVDiffs()
 	}
 
 	return nil
@@ -339,4 +323,26 @@ func (vde *Engine) retryVDiffs(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+func (vde *Engine) retryErroredVDiffs() {
+	tkr := time.NewTicker(time.Second * 30)
+	defer func() {
+		tkr.Stop()
+	}()
+	for {
+		select {
+		case <-tkr.C:
+			if err := vde.retryVDiffs(vde.ctx); err != nil {
+				log.Errorf("Error retrying VDiffs: %v", err)
+			}
+		case <-vde.ctx.Done():
+			log.Info("VDiff engine: closing...")
+			return
+		}
+		// should never happen, but as a fail-safe
+		if !vde.IsOpen() {
+			return
+		}
+	}
 }
