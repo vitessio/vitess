@@ -115,7 +115,6 @@ func (vde *Engine) openLocked(ctx context.Context) error {
 		return err
 	}
 	defer dbClient.Close()
-
 	vde.vdiffSchemaCreateOnce.Do(func() {
 		_ = withDDL.ExecDDL(ctx, dbClient.ExecuteFetch)
 	})
@@ -125,12 +124,11 @@ func (vde *Engine) openLocked(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	vde.ctx, vde.cancel = context.WithCancel(ctx)
+	vde.isOpen = true // now we are open and have things to close
 	if err := vde.initControllers(rows); err != nil {
 		return err
 	}
-
-	vde.ctx, vde.cancel = context.WithCancel(ctx)
-	vde.isOpen = true
 
 	// Auto retry error'd VDiffs until the engine is closed.
 	// Only run if we've successfully started the engine (not retrying).
