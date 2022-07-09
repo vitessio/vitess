@@ -26,17 +26,17 @@ func init() {
 	ddls = append(ddls, sqlCreateSidecarDB, sqlCreateVDiffTable, sqlCreateVDiffTableTable, sqlCreateVDiffLogTable)
 	// Changes to VDiff related schema over time
 	ddls = append(ddls,
-		"ALTER TABLE _vt.vdiff MODIFY COLUMN id bigint AUTO_INCREMENT",
-		"ALTER TABLE _vt.vdiff CHANGE started_timestamp started_at timestamp NULL DEFAULT NULL",
-		"ALTER TABLE _vt.vdiff CHANGE completed_timestamp completed_at timestamp NULL DEFAULT NULL",
-		"ALTER TABLE _vt.vdiff MODIFY COLUMN state varbinary(64)",
-		"ALTER TABLE _vt.vdiff MODIFY COLUMN keyspace varbinary(256)",
-		"ALTER TABLE _vt.vdiff ADD COLUMN last_error varbinary(512)",
-		"ALTER TABLE _vt.vdiff ADD INDEX (state)",
-		"ALTER TABLE _vt.vdiff ADD INDEX ks_wf_idx (keyspace(64), workflow(64))",
-		"ALTER TABLE _vt.vdiff_table MODIFY COLUMN table_name varbinary(128)",
-		"ALTER TABLE _vt.vdiff_table MODIFY COLUMN state varbinary(64)",
-		"ALTER TABLE _vt.vdiff_table MODIFY COLUMN lastpk varbinary(2000)",
+		`ALTER TABLE _vt.vdiff MODIFY COLUMN id bigint AUTO_INCREMENT,
+			CHANGE started_timestamp started_at timestamp NULL DEFAULT NULL,
+			CHANGE completed_timestamp completed_at timestamp NULL DEFAULT NULL,
+			MODIFY COLUMN state varbinary(64),
+			MODIFY COLUMN keyspace varbinary(256),
+			ADD COLUMN last_error varbinary(512),
+			ADD INDEX (state),
+			ADD INDEX ks_wf_idx (keyspace(64), workflow(64))`,
+		`ALTER TABLE _vt.vdiff_table MODIFY COLUMN table_name varbinary(128),
+			MODIFY COLUMN state varbinary(64),
+			MODIFY COLUMN lastpk varbinary(2000)`,
 	)
 	withDDL = withddl.New(ddls)
 }

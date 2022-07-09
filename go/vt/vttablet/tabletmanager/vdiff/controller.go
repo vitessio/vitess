@@ -22,8 +22,6 @@ import (
 	"fmt"
 	"strings"
 
-	"vitess.io/vitess/go/vt/withddl"
-
 	"vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 
 	"google.golang.org/protobuf/encoding/prototext"
@@ -112,10 +110,6 @@ func (ct *controller) run(ctx context.Context) {
 		return
 	}
 	defer dbClient.Close()
-
-	ct.vde.vdiffSchemaCreateOnce.Do(func() {
-		_, _ = withDDL.Exec(ctx, withddl.QueryToTriggerWithDDL, dbClient.ExecuteFetch, dbClient.ExecuteFetch)
-	})
 
 	query := fmt.Sprintf(sqlGetVDiffByID, ct.id)
 	qr, err := dbClient.ExecuteFetch(query, 1)

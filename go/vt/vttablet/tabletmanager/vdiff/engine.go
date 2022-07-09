@@ -28,7 +28,6 @@ import (
 	"vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	"vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
-	"vitess.io/vitess/go/vt/withddl"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"
@@ -111,8 +110,18 @@ func (vde *Engine) Open(ctx context.Context, vre *vreplication.Engine) {
 }
 
 func (vde *Engine) openLocked(ctx context.Context) error {
+	dbClient := vde.dbClientFactoryFiltered()
+	if err := dbClient.Connect(); err != nil {
+		return err
+	}
+	defer dbClient.Close()
+
+	vde.vdiffSchemaCreateOnce.Do(func() {
+		_ = withDDL.ExecDDL(ctx, dbClient.ExecuteFetch)
+	})
+
 	// Start any pending VDiffs
-	rows, err := vde.getPendingVDiffs(ctx)
+	rows, err := vde.getPendingVDiffs(ctx, dbClient)
 	if err != nil {
 		return err
 	}
@@ -239,17 +248,7 @@ func (vde *Engine) getDBClient(isAdmin bool) binlogplayer.DBClient {
 	return vde.dbClientFactoryFiltered()
 }
 
-func (vde *Engine) getPendingVDiffs(ctx context.Context) (*sqltypes.Result, error) {
-	dbClient := vde.dbClientFactoryFiltered()
-	if err := dbClient.Connect(); err != nil {
-		return nil, err
-	}
-	defer dbClient.Close()
-
-	vde.vdiffSchemaCreateOnce.Do(func() {
-		_, _ = withDDL.Exec(ctx, withddl.QueryToTriggerWithDDL, dbClient.ExecuteFetch, dbClient.ExecuteFetch)
-	})
-
+func (vde *Engine) getPendingVDiffs(ctx context.Context, dbClient binlogplayer.DBClient) (*sqltypes.Result, error) {
 	qr, err := dbClient.ExecuteFetch(sqlGetPendingVDiffs, -1)
 	if err != nil {
 		return nil, err
@@ -288,10 +287,6 @@ func (vde *Engine) retryVDiffs(ctx context.Context) error {
 		return err
 	}
 	defer dbClient.Close()
-
-	vde.vdiffSchemaCreateOnce.Do(func() {
-		_, _ = withDDL.Exec(ctx, withddl.QueryToTriggerWithDDL, dbClient.ExecuteFetch, dbClient.ExecuteFetch)
-	})
 
 	qr, err := vde.getVDiffsToRetry(ctx, dbClient)
 	if err != nil {
