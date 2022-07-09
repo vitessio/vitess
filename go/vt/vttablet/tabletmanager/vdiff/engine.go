@@ -331,7 +331,7 @@ func (vde *Engine) retryVDiffs(ctx context.Context) error {
 }
 
 func (vde *Engine) retryErroredVDiffs() {
-	tkr := time.NewTicker(time.Second * 30)
+	tkr := time.NewTicker(time.Second * 10)
 	defer func() {
 		tkr.Stop()
 	}()
@@ -343,24 +343,8 @@ func (vde *Engine) retryErroredVDiffs() {
 		case <-tkr.C:
 		}
 
-		vde.mu.Lock()
-		// these conditions should (almost) never happen, but
-		// as a fail-safe...
-		if !vde.isOpen {
-			vde.mu.Unlock()
-			return
-		}
-		select {
-		case <-vde.ctx.Done():
-			log.Info("VDiff engine: closing...")
-			vde.mu.Unlock()
-			return
-		default:
-		}
-
 		if err := vde.retryVDiffs(vde.ctx); err != nil {
 			log.Errorf("Error retrying VDiffs: %v", err)
 		}
-		vde.mu.Unlock()
 	}
 }
