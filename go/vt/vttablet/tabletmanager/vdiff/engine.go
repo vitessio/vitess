@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	"vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
+	"vitess.io/vitess/go/vt/withddl"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"
@@ -95,6 +96,7 @@ func (vde *Engine) Open(ctx context.Context, vre *vreplication.Engine) {
 		return
 	}
 	log.Infof("VDiff Engine: opening...")
+
 	if vde.cancelRetry != nil {
 		vde.cancelRetry()
 		vde.cancelRetry = nil
@@ -255,7 +257,12 @@ func (vde *Engine) getPendingVDiffs(ctx context.Context) (*sqltypes.Result, erro
 		return nil, err
 	}
 	defer dbClient.Close()
-	qr, err := withDDL.Exec(ctx, sqlGetPendingVDiffs, dbClient.ExecuteFetch, dbClient.ExecuteFetch)
+
+	vde.vdiffSchemaCreateOnce.Do(func() {
+		_, _ = withDDL.Exec(ctx, withddl.QueryToTriggerWithDDL, dbClient.ExecuteFetch, dbClient.ExecuteFetch)
+	})
+
+	qr, err := dbClient.ExecuteFetch(sqlGetPendingVDiffs, -1)
 	if err != nil {
 		return nil, err
 	}
@@ -266,7 +273,7 @@ func (vde *Engine) getPendingVDiffs(ctx context.Context) (*sqltypes.Result, erro
 }
 
 func (vde *Engine) getVDiffsToRetry(ctx context.Context, dbClient binlogplayer.DBClient) (*sqltypes.Result, error) {
-	qr, err := withDDL.Exec(ctx, sqlGetVDiffsToRetry, dbClient.ExecuteFetch, dbClient.ExecuteFetch)
+	qr, err := dbClient.ExecuteFetch(sqlGetVDiffsToRetry, -1)
 	if err != nil {
 		return nil, err
 	}
@@ -277,7 +284,7 @@ func (vde *Engine) getVDiffsToRetry(ctx context.Context, dbClient binlogplayer.D
 }
 
 func (vde *Engine) getVDiffByID(ctx context.Context, dbClient binlogplayer.DBClient, id int64) (*sqltypes.Result, error) {
-	qr, err := withDDL.Exec(ctx, fmt.Sprintf(sqlGetVDiffByID, id), dbClient.ExecuteFetch, dbClient.ExecuteFetch)
+	qr, err := dbClient.ExecuteFetch(fmt.Sprintf(sqlGetVDiffByID, id), -1)
 	if err != nil {
 		return nil, err
 	}
@@ -288,13 +295,16 @@ func (vde *Engine) getVDiffByID(ctx context.Context, dbClient binlogplayer.DBCli
 }
 
 func (vde *Engine) retryVDiffs(ctx context.Context) error {
-	vde.mu.Lock()
-	defer vde.mu.Unlock()
 	dbClient := vde.dbClientFactoryFiltered()
 	if err := dbClient.Connect(); err != nil {
 		return err
 	}
 	defer dbClient.Close()
+
+	vde.vdiffSchemaCreateOnce.Do(func() {
+		_, _ = withDDL.Exec(ctx, withddl.QueryToTriggerWithDDL, dbClient.ExecuteFetch, dbClient.ExecuteFetch)
+	})
+
 	qr, err := vde.getVDiffsToRetry(ctx, dbClient)
 	if err != nil {
 		return err
