@@ -332,17 +332,30 @@ func (vde *Engine) retryErroredVDiffs() {
 	}()
 	for {
 		select {
-		case <-tkr.C:
-			if err := vde.retryVDiffs(vde.ctx); err != nil {
-				log.Errorf("Error retrying VDiffs: %v", err)
-			}
 		case <-vde.ctx.Done():
 			log.Info("VDiff engine: closing...")
 			return
+		case <-tkr.C:
 		}
-		// should never happen, but as a fail-safe
-		if !vde.IsOpen() {
+
+		vde.mu.Lock()
+		// these conditions should (almost) never happen, but
+		// as a fail-safe...
+		if !vde.isOpen {
+			vde.mu.Unlock()
 			return
 		}
+		select {
+		case <-vde.ctx.Done():
+			log.Info("VDiff engine: closing...")
+			vde.mu.Unlock()
+			return
+		default:
+		}
+
+		if err := vde.retryVDiffs(vde.ctx); err != nil {
+			log.Errorf("Error retrying VDiffs: %v", err)
+		}
+		vde.mu.Unlock()
 	}
 }

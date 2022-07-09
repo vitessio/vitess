@@ -44,18 +44,19 @@ var sqlSimulateError = `update _vt.vdiff as vd, _vt.vdiff_table as vdt set vd.st
 
 var testCases = []*testCase{
 	{
-		name:          "MoveTables/unsharded to two shards",
-		workflow:      "p1c2",
-		typ:           "MoveTables",
-		sourceKs:      "product",
-		targetKs:      "customer",
-		sourceShards:  "0",
-		targetShards:  "-80,80-",
-		tabletBaseID:  200,
-		tables:        "customer,Lead,Lead-1",
-		resume:        true,
-		resumeInsert:  `insert into customer(cid, name, typ) values(12345678, 'Testy McTester', 'soho')`,
-		testCLIErrors: true, // test for errors in the simplest workflow
+		name:           "MoveTables/unsharded to two shards",
+		workflow:       "p1c2",
+		typ:            "MoveTables",
+		sourceKs:       "product",
+		targetKs:       "customer",
+		sourceShards:   "0",
+		targetShards:   "-80,80-",
+		tabletBaseID:   200,
+		tables:         "customer,Lead,Lead-1",
+		resume:         true,
+		resumeInsert:   `insert into customer(cid, name, typ) values(12345678, 'Testy McTester', 'soho')`,
+		testCLIErrors:  true, // test for errors in the simplest workflow
+		autoRetryError: true,
 	},
 	{
 		name:         "Reshard Merge/split 2 to 3",
