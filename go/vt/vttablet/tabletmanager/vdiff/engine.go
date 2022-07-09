@@ -57,7 +57,6 @@ type Engine struct {
 	vre *vreplication.Engine
 
 	wg         sync.WaitGroup
-	done       chan bool
 	thisTablet *topodata.Tablet
 
 	// snapshotMu is used to ensure that only one vdiff snapshot cycle is active at a time,
@@ -95,7 +94,7 @@ func (vde *Engine) Open(ctx context.Context, vre *vreplication.Engine) {
 	if vde.ts == nil || vde.isOpen {
 		return
 	}
-	log.Infof("VDiff Engine: opening")
+	log.Infof("VDiff Engine: opening...")
 	if vde.cancelRetry != nil {
 		vde.cancelRetry()
 		vde.cancelRetry = nil
@@ -107,6 +106,16 @@ func (vde *Engine) Open(ctx context.Context, vre *vreplication.Engine) {
 		vde.cancelRetry = cancel
 		go vde.retry(ctx, err)
 	}
+}
+
+func (vde *Engine) openLocked(ctx context.Context) error {
+	rows, err := vde.getPendingVDiffs(ctx)
+	if err != nil {
+		return err
+	}
+
+	vde.ctx, vde.cancel = context.WithCancel(ctx)
+	vde.isOpen = true
 
 	// Auto retry error'd VDiffs
 	go func() {
@@ -122,21 +131,13 @@ func (vde *Engine) Open(ctx context.Context, vre *vreplication.Engine) {
 				}
 			case <-ctx.Done():
 				return
-			case <-vde.done:
+			case <-vde.ctx.Done():
+				log.Info("VDiff engine: closing...")
 				return
 			}
 		}
 	}()
-}
 
-func (vde *Engine) openLocked(ctx context.Context) error {
-	rows, err := vde.getPendingVDiffs(ctx)
-	if err != nil {
-		return err
-	}
-
-	vde.ctx, vde.cancel = context.WithCancel(ctx)
-	vde.isOpen = true
 	if err := vde.initControllers(rows); err != nil {
 		return err
 	}
@@ -146,7 +147,7 @@ func (vde *Engine) openLocked(ctx context.Context) error {
 var openRetryInterval = sync2.NewAtomicDuration(1 * time.Second)
 
 func (vde *Engine) retry(ctx context.Context, err error) {
-	log.Errorf("Error starting vdiff engine: %v, will keep retrying.", err)
+	log.Errorf("Error starting VDiff engine: %v, will keep retrying.", err)
 	for {
 		timer := time.NewTimer(openRetryInterval.Get())
 		select {
@@ -167,7 +168,7 @@ func (vde *Engine) retry(ctx context.Context, err error) {
 		default:
 		}
 		if err := vde.openLocked(ctx); err == nil {
-			log.Infof("VDiff engine opened successfully")
+			log.Infof("VDiff engine: opened successfully")
 			// Don't invoke cancelRetry because openLocked
 			// will hold on to this context for later cancelation.
 			vde.cancelRetry = nil
@@ -227,10 +228,8 @@ func (vde *Engine) Close() {
 		return
 	}
 
-	// end the goroutine that retries error'd vdiffs
-	vde.done <- true
-
 	vde.cancel()
+
 	// We still have to wait for all controllers to stop.
 	for _, ct := range vde.controllers {
 		ct.Stop()
@@ -258,7 +257,7 @@ func (vde *Engine) getPendingVDiffs(ctx context.Context) (*sqltypes.Result, erro
 		return nil, err
 	}
 	defer dbClient.Close()
-	qr, err := withDDL.ExecIgnore(ctx, sqlGetPendingVDiffs, dbClient.ExecuteFetch)
+	qr, err := withDDL.Exec(ctx, sqlGetPendingVDiffs, dbClient.ExecuteFetch, dbClient.ExecuteFetch)
 	if err != nil {
 		return nil, err
 	}
@@ -269,7 +268,7 @@ func (vde *Engine) getPendingVDiffs(ctx context.Context) (*sqltypes.Result, erro
 }
 
 func (vde *Engine) getVDiffsToRetry(ctx context.Context, dbClient binlogplayer.DBClient) (*sqltypes.Result, error) {
-	qr, err := withDDL.ExecIgnore(ctx, sqlGetVDiffsToRetry, dbClient.ExecuteFetch)
+	qr, err := withDDL.Exec(ctx, sqlGetVDiffsToRetry, dbClient.ExecuteFetch, dbClient.ExecuteFetch)
 	if err != nil {
 		return nil, err
 	}
@@ -307,10 +306,10 @@ func (vde *Engine) retryVDiffs(ctx context.Context) error {
 	}
 	for _, row := range qr.Named().Rows {
 		lastError := mysql.NewSQLErrorFromError(errors.New(row.AsString("last_error", "")))
-		uuid := row.AsString("vdiff_uuid", "")
 		if !mysql.IsEphemeralError(lastError) {
-			return nil
+			continue
 		}
+		uuid := row.AsString("vdiff_uuid", "")
 		id, err := row.ToInt64("id")
 		if err != nil {
 			return err

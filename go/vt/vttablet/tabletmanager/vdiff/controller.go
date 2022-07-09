@@ -114,7 +114,7 @@ func (ct *controller) run(ctx context.Context) {
 	defer dbClient.Close()
 
 	ct.vde.vdiffSchemaCreateOnce.Do(func() {
-		_, _ = withDDL.ExecIgnore(ctx, withddl.QueryToTriggerWithDDL, dbClient.ExecuteFetch)
+		_, _ = withDDL.Exec(ctx, withddl.QueryToTriggerWithDDL, dbClient.ExecuteFetch, dbClient.ExecuteFetch)
 	})
 
 	query := fmt.Sprintf(sqlGetVDiffByID, ct.id)
