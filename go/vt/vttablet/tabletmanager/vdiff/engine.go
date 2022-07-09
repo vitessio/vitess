@@ -129,8 +129,6 @@ func (vde *Engine) openLocked(ctx context.Context) error {
 				if err := vde.retryVDiffs(ctx); err != nil {
 					log.Errorf("Error retrying VDiffs: %v", err)
 				}
-			case <-ctx.Done():
-				return
 			case <-vde.ctx.Done():
 				log.Info("VDiff engine: closing...")
 				return
