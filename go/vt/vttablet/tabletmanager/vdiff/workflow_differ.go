@@ -214,6 +214,9 @@ func (wd *workflowDiffer) diff(ctx context.Context) error {
 			insertVDiffLog(ctx, dbClient, wd.ct.id, fmt.Sprintf("Table %s Error: %s", td.table.Name, err))
 			return err
 		}
+		if err := td.updateTableState(ctx, dbClient, td.table.Name, CompletedState); err != nil {
+			return err
+		}
 		log.Infof("done table %s", td.table.Name)
 	}
 	if err := wd.markIfCompleted(ctx, dbClient); err != nil {

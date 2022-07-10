@@ -443,12 +443,13 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare *int64, debug, on
 	}()
 
 	for {
+		lastProcessedRow = sourceRow
+
 		select {
 		case <-ctx.Done():
 			return nil, vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
 		default:
 		}
-		lastProcessedRow = sourceRow
 
 		if !mismatch && dr.MismatchedRows > 0 {
 			mismatch = true
@@ -615,23 +616,19 @@ func (td *tableDiffer) updateTableProgress(dbClient binlogplayer.DBClient, dr *D
 	var lastPK []byte
 	var err error
 	var query string
+	rpt, err := json.Marshal(dr)
+	if err != nil {
+		return err
+	}
 	if lastRow != nil {
 		lastPK, err = td.lastPKFromRow(lastRow)
 		if err != nil {
 			return err
 		}
-		rpt, err := json.Marshal(dr)
-		if err != nil {
-			return err
-		}
+
 		query = fmt.Sprintf(sqlUpdateTableProgress, dr.ProcessedRows, encodeString(string(lastPK)), encodeString(string(rpt)), td.wd.ct.id, encodeString(td.table.Name))
-	} else if dr.ProcessedRows != 0 {
-		// This should never happen
-		return fmt.Errorf("invalid vdiff state detected, %d row(s) were processed but the row data is missing", dr.ProcessedRows)
 	} else {
-		// We didn't process any rows this time around so reflect that and keep any
-		// lastpk from a previous run. This is only relevant for RESUMEd vdiffs.
-		query = fmt.Sprintf(sqlUpdateTableNoProgress, 0, td.wd.ct.id, encodeString(td.table.Name))
+		query = fmt.Sprintf(sqlUpdateTableNoProgress, dr.ProcessedRows, encodeString(string(rpt)), td.wd.ct.id, encodeString(td.table.Name))
 	}
 	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
 		return err
@@ -660,7 +657,7 @@ func (td *tableDiffer) updateTableStateAndReport(ctx context.Context, dbClient b
 	} else {
 		report = "{}"
 	}
-	query := fmt.Sprintf(sqlUpdateTableStateAndReport, encodeString(string(state)), encodeString(report), td.wd.ct.id, encodeString(tableName))
+	query := fmt.Sprintf(sqlUpdateTableStateAndReport, encodeString(string(state)), dr.ProcessedRows, encodeString(report), td.wd.ct.id, encodeString(tableName))
 	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
 		return err
 	}

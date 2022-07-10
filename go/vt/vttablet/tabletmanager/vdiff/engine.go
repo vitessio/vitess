@@ -61,7 +61,8 @@ type Engine struct {
 
 	// snapshotMu is used to ensure that only one vdiff snapshot cycle is active at a time,
 	// because we stop/start vreplication workflows during this process
-	snapshotMu            sync.Mutex
+	snapshotMu sync.Mutex
+
 	vdiffSchemaCreateOnce sync.Once
 }
 
@@ -110,14 +111,8 @@ func (vde *Engine) Open(ctx context.Context, vre *vreplication.Engine) {
 }
 
 func (vde *Engine) openLocked(ctx context.Context) error {
-	dbClient := vde.dbClientFactoryFiltered()
-	if err := dbClient.Connect(); err != nil {
-		return err
-	}
-	defer dbClient.Close()
-
 	// Start any pending VDiffs
-	rows, err := vde.getPendingVDiffs(ctx, dbClient)
+	rows, err := vde.getPendingVDiffs(ctx)
 	if err != nil {
 		return err
 	}
@@ -127,11 +122,9 @@ func (vde *Engine) openLocked(ctx context.Context) error {
 		return err
 	}
 
-	// Auto retry error'd VDiffs until the engine is closed.
-	// Only run if we've successfully started the engine (not retrying).
-	if vde.cancelRetry == nil {
-		go vde.retryErroredVDiffs()
-	}
+	// At this point we've fully and succesfully opened so begin
+	// retrying error'd VDiffs until the engine is closed.
+	go vde.retryErroredVDiffs()
 
 	return nil
 }
@@ -243,8 +236,20 @@ func (vde *Engine) getDBClient(isAdmin bool) binlogplayer.DBClient {
 	return vde.dbClientFactoryFiltered()
 }
 
-func (vde *Engine) getPendingVDiffs(ctx context.Context, dbClient binlogplayer.DBClient) (*sqltypes.Result, error) {
-	qr, err := withDDL.ExecIgnore(ctx, sqlGetPendingVDiffs, dbClient.ExecuteFetch)
+func (vde *Engine) getPendingVDiffs(ctx context.Context) (*sqltypes.Result, error) {
+	dbClient := vde.dbClientFactoryFiltered()
+	if err := dbClient.Connect(); err != nil {
+		return nil, err
+	}
+	defer dbClient.Close()
+
+	// This is the query entrypoint when opening the engine, so we ensure the
+	// schema is in place and up-to-date.
+	vde.vdiffSchemaCreateOnce.Do(func() {
+		_ = withDDL.ExecDDL(ctx, dbClient.ExecuteFetch)
+	})
+
+	qr, err := dbClient.ExecuteFetch(sqlGetPendingVDiffs, -1)
 	if err != nil {
 		return nil, err
 	}
@@ -255,7 +260,7 @@ func (vde *Engine) getPendingVDiffs(ctx context.Context, dbClient binlogplayer.D
 }
 
 func (vde *Engine) getVDiffsToRetry(ctx context.Context, dbClient binlogplayer.DBClient) (*sqltypes.Result, error) {
-	qr, err := withDDL.ExecIgnore(ctx, sqlGetVDiffsToRetry, dbClient.ExecuteFetch)
+	qr, err := dbClient.ExecuteFetch(sqlGetVDiffsToRetry, -1)
 	if err != nil {
 		return nil, err
 	}

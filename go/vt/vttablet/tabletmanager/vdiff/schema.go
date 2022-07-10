@@ -113,9 +113,9 @@ const (
 						where vdt.vdiff_id = %d and vdt.table_name = %s`
 	sqlUpdateTableRows           = "update _vt.vdiff_table set table_rows = %d where vdiff_id = %d and table_name = %s"
 	sqlUpdateTableProgress       = "update _vt.vdiff_table set rows_compared = %d, lastpk = %s, report = %s where vdiff_id = %d and table_name = %s"
-	sqlUpdateTableNoProgress     = "update _vt.vdiff_table set rows_compared = %d where vdiff_id = %d and table_name = %s"
+	sqlUpdateTableNoProgress     = "update _vt.vdiff_table set rows_compared = %d, report = %s where vdiff_id = %d and table_name = %s"
 	sqlUpdateTableState          = "update _vt.vdiff_table set state = %s where vdiff_id = %d and table_name = %s"
-	sqlUpdateTableStateAndReport = "update _vt.vdiff_table set state = %s, report = %s where vdiff_id = %d and table_name = %s"
+	sqlUpdateTableStateAndReport = "update _vt.vdiff_table set state = %s, rows_compared = %d, report = %s where vdiff_id = %d and table_name = %s"
 	sqlUpdateTableMismatch       = "update _vt.vdiff_table set mismatch = true where vdiff_id = %d and table_name = %s"
 
 	sqlGetIncompleteTables = "select table_name as table_name from _vt.vdiff_table where vdiff_id = %d and state != 'completed'"

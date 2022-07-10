@@ -113,10 +113,6 @@ func (ct *controller) run(ctx context.Context) {
 	}
 	defer dbClient.Close()
 
-	ct.vde.vdiffSchemaCreateOnce.Do(func() {
-		_ = withDDL.ExecDDL(ctx, dbClient.ExecuteFetch)
-	})
-
 	qr, err := ct.vde.getVDiffByID(ctx, dbClient, ct.id)
 	if err != nil {
 		log.Errorf("Error getting vdiff record: %v", err)

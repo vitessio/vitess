@@ -119,8 +119,6 @@ func vdiff2(t *testing.T, keyspace, workflow, cells string, want *expectedVDiff2
 
 		require.Equal(t, workflow, info.Workflow)
 		require.Equal(t, keyspace, info.Keyspace)
-		// I'm not sure if we always have rows in every table
-		//require.Greater(t, info.RowsCompared, int64(0))
 		if want != nil {
 			require.Equal(t, want.state, info.State)
 			require.Equal(t, strings.Join(want.shards, ","), info.Shards)

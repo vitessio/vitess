@@ -410,6 +410,14 @@ func buildVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid st
 
 	var tableSummaryMap map[string]vdiffTableSummary
 	var reports map[string]map[string]vdiff.DiffReport
+	// Keep a tally of the states across all tables and shards
+	tableStateCounts := map[vdiff.VDiffState]int{
+		vdiff.UnknownState:   0,
+		vdiff.PendingState:   0,
+		vdiff.StartedState:   0,
+		vdiff.ErrorState:     0,
+		vdiff.CompletedState: 0,
+	}
 	var shards []string
 	for shard, resp := range output.Responses {
 		first := true
@@ -462,6 +470,7 @@ func buildVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid st
 					ts := tableSummaryMap[table]
 					// This is the shard level VDiff table state
 					sts := vdiff.VDiffState(strings.ToLower(row.AsString("table_state", "")))
+					tableStateCounts[sts]++
 
 					// The error state must be sticky, and we should not override any other
 					// known state with completed.
@@ -475,7 +484,6 @@ func buildVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid st
 					default:
 						if ts.State != vdiff.ErrorState {
 							ts.State = sts
-
 						}
 					}
 
@@ -498,20 +506,26 @@ func buildVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid st
 
 					reports[table][shard] = dr
 					tableSummaryMap[table] = ts
-
-					// The global VDiff summary needs to align with the table states across all
-					// shards. It should progress from pending->started->completed with error at any point
-					// being sticky. This largely mirrors the global table summary, with the exception
-					// being the started state, which should also be sticky; i.e. we shouldn't go from
-					// started->pending->started in the global VDiff summary state.
-					if summary.State != ts.State &&
-						(summary.State != vdiff.StartedState && ts.State != vdiff.PendingState) {
-						summary.State = ts.State
-					}
 				}
 			}
 		}
 	}
+
+	// The global VDiff summary should progress from pending->started->completed with
+	// error for any table being sticky for the global summary. We should only consider
+	// the VDiff to be complete if it's completed for every table on every shard.
+	if tableStateCounts[vdiff.ErrorState] > 0 {
+		summary.State = vdiff.ErrorState
+	} else if tableStateCounts[vdiff.StartedState] > 0 {
+		summary.State = vdiff.StartedState
+	} else if tableStateCounts[vdiff.PendingState] > 0 {
+		summary.State = vdiff.PendingState
+	} else if tableStateCounts[vdiff.CompletedState] == (len(tableSummaryMap) * len(shards)) {
+		summary.State = vdiff.CompletedState
+	} else {
+		summary.State = vdiff.UnknownState
+	}
+
 	sort.Strings(shards) // sort for predictable output
 	summary.Shards = strings.Join(shards, ",")
 	summary.TableSummaryMap = tableSummaryMap

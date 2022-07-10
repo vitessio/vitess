@@ -31,11 +31,13 @@ type testCase struct {
 	tables                        string
 	workflow                      string
 	tabletBaseID                  int
-	resume                        bool   // test resume functionality with this workflow
-	resumeInsert                  string // if testing resume, what new rows should be diff'd
-	testCLIErrors                 bool   // test CLI errors against this workflow
-	autoRetryError                bool   // if true, test auto retry on error against this workflow
-	retryInsert                   string // if testing auto retry on error, what new rows should be diff'd
+	resume                        bool // test resume functionality with this workflow
+	autoRetryError                bool // if true, test auto retry on error against this workflow
+	// If testing auto retry on error, what new rows should be diff'd. These rows must have a PK > all initial rows.
+	retryInsert string
+	// If testing resume, what new rows should be diff'd. These rows must have a PK > all initial rows and retry rows.
+	resumeInsert  string
+	testCLIErrors bool // test CLI errors against this workflow
 }
 
 var sqlSimulateError = `update _vt.vdiff as vd, _vt.vdiff_table as vdt set vd.state = 'error', vdt.state = 'error', vd.completed_at = NULL,
@@ -67,20 +69,27 @@ var testCases = []*testCase{
 		sourceShards: "-80,80-",
 		targetShards: "-40,40-a0,a0-",
 		tabletBaseID: 400,
+		// TODO: figure out how we should be tracking progress for merges where there's a single
+		//       target shard -- and thus a single _vt.vdiff_table record -- but > 1 source shard.
+		//autoRetryError: true,
+		//retryInsert:    `insert into customer(cid, name, typ) values(12345679, 'Testy McTester IV', 'enterprise')`,
 		resume:       true,
-		resumeInsert: `insert into customer(cid, name, typ) values(987654321, 'Testy McTester Jr.', 'enterprise'), (987654322, 'Testy McTester III', 'enterprise')`,
+		resumeInsert: `insert into customer(cid, name, typ) values(12345680, 'Testy McTester Jr.', 'enterprise'), (12345681, 'Testy McTester III', 'enterprise')`,
 	},
 	{
-		name:           "Reshard/merge 3 to 1",
-		workflow:       "c3c1",
-		typ:            "Reshard",
-		sourceKs:       "customer",
-		targetKs:       "customer",
-		sourceShards:   "-40,40-a0,a0-",
-		targetShards:   "0",
-		tabletBaseID:   700,
-		autoRetryError: true,
-		retryInsert:    `insert into customer(cid, name, typ) values(997654323, 'Testy McTester IV', 'enterprise')`,
+		name:         "Reshard/merge 3 to 1",
+		workflow:     "c3c1",
+		typ:          "Reshard",
+		sourceKs:     "customer",
+		targetKs:     "customer",
+		sourceShards: "-40,40-a0,a0-",
+		targetShards: "0",
+		tabletBaseID: 700,
+		// TODO: figure out how we should be tracking progress for merges where there's a single
+		//       target shard -- and thus a single _vt.vdiff_table record -- but > 1 source shard.
+		//resume:         true,
+		//autoRetryError: true,
+		//retryInsert:    `insert into customer(cid, name, typ) values(12345682, 'Testy McTester V', 'enterprise')`,
 	},
 }
 
@@ -266,11 +275,6 @@ func testAutoRetryError(t *testing.T, tc *testCase, cells string) {
 		require.NoError(t, err)
 		// should have updated the vdiff record and at least one vdiff_table record
 		require.GreaterOrEqual(t, int(res.RowsAffected), 2)
-
-		// confirm the VDiff is now in the expected error state
-		_, output = performVDiff2Action(t, ksWorkflow, cells, "show", uuid, false)
-		jsonOutput = getVDiffInfo(output)
-		require.Equal(t, "error", jsonOutput.State)
 
 		// confirm that the VDiff was retried, able to complete, and we compared the expected
 		// number of rows in total (original run and retry)
