@@ -78,13 +78,22 @@ func (mysqlFlavor) primaryTransactionalGTIDSet(c *Conn) (GTIDSet, error) {
 	// 	set = set.Union(gtidSet)
 	// }
 
+	// query := `
+	// 	select @g as transactional_gtid_executed from (
+	// 			select @g := GTID_SUBTRACT(CONCAT(@g, ',', source_uuid, ':', interval_start, '-', interval_end), '') AS gtid_set
+	// 				from mysql.gtid_executed, (select @g := '') as sel_init
+	// 		) as sel_iterate
+	// 		limit 1
+	// `
 	query := `
-		select @g as transactional_gtid_executed from (
-				select @g := GTID_SUBTRACT(CONCAT(@g, ',', source_uuid, ':', interval_start, '-', interval_end), '') AS gtid_set
-					from mysql.gtid_executed, (select @g := '') as sel_init
-			) as sel_iterate
-			limit 1
-	`
+	select @g as transactional_gtid_executed from (
+		SELECT
+		@g := GTID_SUBTRACT(CONCAT(@g, ',', source_uuid, ':', interval_start, '-', interval_end), '') AS gtid_set
+		FROM
+		(select source_uuid, min(interval_start) as interval_start, max(interval_end) as interval_end from mysql.gtid_executed group by source_uuid) as no_punctures,
+		(select @g:='') as sel_init
+		) as sel_iterate limit 1
+					`
 	qr, err := c.ExecuteFetch(query, 1, true)
 	if err != nil {
 		return nil, err
