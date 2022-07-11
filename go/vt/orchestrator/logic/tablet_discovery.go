@@ -320,28 +320,33 @@ func tabletDemotePrimary(instanceKey inst.InstanceKey, forward bool) error {
 	return err
 }
 
-func ShardPrimary(instanceKey *inst.InstanceKey) (primaryKey *inst.InstanceKey, err error) {
-	tablet, err := inst.ReadTablet(*instanceKey)
-	if err != nil {
-		return nil, err
-	}
-	sCtx, sCancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
-	defer sCancel()
-	si, err := ts.GetShard(sCtx, tablet.Keyspace, tablet.Shard)
+// SetReadOnly calls the said RPC for the given tablet
+func SetReadOnly(ctx context.Context, tablet *topodatapb.Tablet) error {
+	tmc := tmclient.NewTabletManagerClient()
+	return tmc.SetReadOnly(ctx, tablet)
+}
+
+// SetReplicationSource calls the said RPC with the parameters provided
+func SetReplicationSource(ctx context.Context, replica *topodatapb.Tablet, primary *topodatapb.Tablet, semiSync bool) error {
+	tmc := tmclient.NewTabletManagerClient()
+	return tmc.SetReplicationSource(ctx, replica, primary.Alias, 0, "", true, semiSync)
+}
+
+// ShardPrimary finds the primary of the given keyspace-shard by reading the topo server
+func ShardPrimary(ctx context.Context, keyspace string, shard string) (primary *topodatapb.Tablet, err error) {
+	si, err := ts.GetShard(ctx, keyspace, shard)
 	if err != nil {
 		return nil, err
 	}
 	if !si.HasPrimary() {
-		return nil, fmt.Errorf("no primary tablet for shard %v/%v", tablet.Keyspace, tablet.Shard)
+		return nil, fmt.Errorf("no primary tablet for shard %v/%v", keyspace, shard)
 	}
-	tCtx, tCancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
-	defer tCancel()
-	primary, err := ts.GetTablet(tCtx, si.PrimaryAlias)
+	// TODO(GuptaManan100): Instead of another topo call, use the local information by calling
+	// ReadTablet. Currently this isn't possible since we only have the primary alias and not the source host and port
+	// This should be fixed once the tablet alias is changed to be the primary key of the table
+	primaryInfo, err := ts.GetTablet(ctx, si.PrimaryAlias)
 	if err != nil {
 		return nil, err
 	}
-	return &inst.InstanceKey{
-		Hostname: primary.MysqlHostname,
-		Port:     int(primary.MysqlPort),
-	}, nil
+	return primaryInfo.Tablet, nil
 }
