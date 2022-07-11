@@ -15,3 +15,7 @@ limitations under the License.
 */
 
 package newfeaturetest
+
+import (
+	_ "vitess.io/vitess/go/vt/log"
+)
