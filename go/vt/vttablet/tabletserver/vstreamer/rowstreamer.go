@@ -313,6 +313,7 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 		charsets[i] = collations.ID(fld.Charset)
 	}
 
+	var gtidReadFromRow bool
 	var reportGTIDOnce sync.Once
 	reportGTID := func() error {
 		var err error
@@ -371,12 +372,13 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 		if mysqlrow == nil {
 			break
 		}
-		if gtid == "" {
+		if !gtidReadFromRow {
 			gtid = mysqlrow[len(mysqlrow)-1].ToString()
 			log.Infof("======== ZZZ got gtid from row: %v\n", gtid)
 			if err := reportGTID(); err != nil {
 				return err
 			}
+			gtidReadFromRow = true
 		}
 		// truncate the row -- remove @@gtid_executed
 		// mysqlrow = mysqlrow[0 : len(mysqlrow)-1]
