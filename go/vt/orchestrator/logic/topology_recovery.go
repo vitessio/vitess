@@ -1776,8 +1776,19 @@ func fixPrimary(ctx context.Context, analysisEntry inst.ReplicationAnalysis, can
 		resolveRecovery(topologyRecovery, nil)
 	}()
 
-	if err := TabletUndoDemotePrimary(analysisEntry.AnalyzedInstanceKey); err != nil {
+	analyzedTablet, err := inst.ReadTablet(analysisEntry.AnalyzedInstanceKey)
+	if err != nil {
 		return false, topologyRecovery, err
+	}
+
+	durabilityPolicy, err := inst.GetDurabilityPolicy(analyzedTablet)
+	if err != nil {
+		log.Info("Could not read the durability policy for %v/%v", analyzedTablet.Keyspace, analyzedTablet.Shard)
+		return false, topologyRecovery, err
+	}
+
+	if err := tabletUndoDemotePrimary(ctx, analyzedTablet, inst.SemiSyncAckers(durabilityPolicy, analyzedTablet) > 0); err != nil {
+		return true, topologyRecovery, err
 	}
 	return true, topologyRecovery, nil
 }
@@ -1801,7 +1812,7 @@ func fixReplica(ctx context.Context, analysisEntry inst.ReplicationAnalysis, can
 		return false, topologyRecovery, err
 	}
 
-	primaryTablet, err := ShardPrimary(ctx, analyzedTablet.Keyspace, analyzedTablet.Shard)
+	primaryTablet, err := shardPrimary(ctx, analyzedTablet.Keyspace, analyzedTablet.Shard)
 	if err != nil {
 		log.Info("Could not compute primary for %v/%v", analyzedTablet.Keyspace, analyzedTablet.Shard)
 		return false, topologyRecovery, err
@@ -1813,12 +1824,12 @@ func fixReplica(ctx context.Context, analysisEntry inst.ReplicationAnalysis, can
 		return false, topologyRecovery, err
 	}
 
-	err = SetReadOnly(ctx, analyzedTablet)
+	err = setReadOnly(ctx, analyzedTablet)
 	if err != nil {
 		log.Info("Could not set the tablet %v to readonly - %v", topoproto.TabletAliasString(analyzedTablet.Alias), err)
 		return true, topologyRecovery, err
 	}
 
-	err = SetReplicationSource(ctx, analyzedTablet, primaryTablet, inst.IsReplicaSemiSync(durabilityPolicy, primaryTablet, analyzedTablet))
+	err = setReplicationSource(ctx, analyzedTablet, primaryTablet, inst.IsReplicaSemiSync(durabilityPolicy, primaryTablet, analyzedTablet))
 	return true, topologyRecovery, err
 }

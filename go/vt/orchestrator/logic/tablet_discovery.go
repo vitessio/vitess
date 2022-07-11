@@ -43,6 +43,7 @@ import (
 
 var (
 	ts                *topo.Server
+	tmc               tmclient.TabletManagerClient
 	clustersToWatch   = flag.String("clusters_to_watch", "", "Comma-separated list of keyspaces or keyspace/shards that this instance will monitor and repair. Defaults to all clusters in the topology. Example: \"ks1,ks2/-80\"")
 	shutdownWaitTime  = flag.Duration("shutdown_wait_time", 30*time.Second, "maximum time to wait for vtorc to release all the locks that it is holding before shutting down on SIGTERM")
 	shardsLockCounter int32
@@ -55,6 +56,7 @@ func OpenTabletDiscovery() <-chan time.Time {
 	ts = topo.Open()
 	// TODO(sougou): remove ts and push some functions into inst.
 	inst.TopoServ = ts
+	tmc = tmclient.NewTabletManagerClient()
 	// Clear existing cache and perform a new refresh.
 	if _, err := db.ExecOrchestrator("delete from vitess_tablet"); err != nil {
 		log.Errore(err)
@@ -285,55 +287,23 @@ func TabletRefresh(instanceKey inst.InstanceKey) (*topodatapb.Tablet, error) {
 	return ti.Tablet, nil
 }
 
-// TabletDemotePrimary requests the primary tablet to stop accepting transactions.
-func TabletDemotePrimary(instanceKey inst.InstanceKey) error {
-	return tabletDemotePrimary(instanceKey, true)
+// tabletUndoDemotePrimary calls the said RPC for the given tablet.
+func tabletUndoDemotePrimary(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) error {
+	return tmc.UndoDemotePrimary(ctx, tablet, semiSync)
 }
 
-// TabletUndoDemotePrimary requests the primary tablet to undo the demote.
-func TabletUndoDemotePrimary(instanceKey inst.InstanceKey) error {
-	return tabletDemotePrimary(instanceKey, false)
-}
-
-func tabletDemotePrimary(instanceKey inst.InstanceKey, forward bool) error {
-	if instanceKey.Hostname == "" {
-		return errors.New("can't demote/undo primary: instance is unspecified")
-	}
-	tablet, err := inst.ReadTablet(instanceKey)
-	if err != nil {
-		return err
-	}
-	durability, err := inst.GetDurabilityPolicy(tablet)
-	if err != nil {
-		return err
-	}
-	tmc := tmclient.NewTabletManagerClient()
-	// TODO(sougou): this should be controllable because we may want
-	// to give a longer timeout for a graceful takeover.
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-	defer cancel()
-	if forward {
-		_, err = tmc.DemotePrimary(ctx, tablet)
-	} else {
-		err = tmc.UndoDemotePrimary(ctx, tablet, inst.SemiSyncAckers(durability, instanceKey) > 0)
-	}
-	return err
-}
-
-// SetReadOnly calls the said RPC for the given tablet
-func SetReadOnly(ctx context.Context, tablet *topodatapb.Tablet) error {
-	tmc := tmclient.NewTabletManagerClient()
+// setReadOnly calls the said RPC for the given tablet
+func setReadOnly(ctx context.Context, tablet *topodatapb.Tablet) error {
 	return tmc.SetReadOnly(ctx, tablet)
 }
 
-// SetReplicationSource calls the said RPC with the parameters provided
-func SetReplicationSource(ctx context.Context, replica *topodatapb.Tablet, primary *topodatapb.Tablet, semiSync bool) error {
-	tmc := tmclient.NewTabletManagerClient()
+// setReplicationSource calls the said RPC with the parameters provided
+func setReplicationSource(ctx context.Context, replica *topodatapb.Tablet, primary *topodatapb.Tablet, semiSync bool) error {
 	return tmc.SetReplicationSource(ctx, replica, primary.Alias, 0, "", true, semiSync)
 }
 
-// ShardPrimary finds the primary of the given keyspace-shard by reading the topo server
-func ShardPrimary(ctx context.Context, keyspace string, shard string) (primary *topodatapb.Tablet, err error) {
+// shardPrimary finds the primary of the given keyspace-shard by reading the topo server
+func shardPrimary(ctx context.Context, keyspace string, shard string) (primary *topodatapb.Tablet, err error) {
 	si, err := ts.GetShard(ctx, keyspace, shard)
 	if err != nil {
 		return nil, err
