@@ -90,6 +90,13 @@ func waitForVDiff2ToComplete(t *testing.T, ksWorkflow, cells, uuid string, compl
 			time.Sleep(1 * time.Second)
 			_, jsonStr := performVDiff2Action(t, ksWorkflow, cells, "show", uuid, false)
 			if info = getVDiffInfo(jsonStr); info.State == "completed" {
+				if !completedAtMin.IsZero() {
+					ca := info.CompletedAt
+					completedAt, _ := time.Parse(tsFormat, ca)
+					if !completedAt.After(completedAtMin) {
+						continue
+					}
+				}
 				ch <- true
 				return
 			}

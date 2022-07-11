@@ -231,7 +231,11 @@ func (wd *workflowDiffer) markIfCompleted(ctx context.Context, dbClient binlogpl
 	if err != nil {
 		return err
 	}
-	if len(qr.Rows) == 0 {
+
+	// When consolidating/merging shards a target tablet will have > 1 source shard
+	// so we should only mark the vdiff as complete for the shard if all controllers
+	// have finished (we check for 1 here as the count includes this controller).
+	if len(qr.Rows) == 0 && wd.ct.vde.activeControllerCount(wd.ct.uuid) == 1 {
 		if err := wd.ct.updateState(dbClient, CompletedState, nil); err != nil {
 			return err
 		}

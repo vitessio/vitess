@@ -418,6 +418,8 @@ func buildVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid st
 		vdiff.ErrorState:     0,
 		vdiff.CompletedState: 0,
 	}
+	// Keep a tally of the shards that have been marked as completed
+	completedShards := 0
 	var shards []string
 	for shard, resp := range output.Responses {
 		first := true
@@ -445,6 +447,11 @@ func buildVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid st
 					// If we had an error on the shard, then let's add that to the summary.
 					if le := row.AsString("last_error", ""); le != "" {
 						summary.Errors[shard] = le
+					}
+					// Keep track of how many shards are marked as completed. We check this combined
+					// with the shard.table states to determine the VDiff summary state.
+					if vdiff.VDiffState(strings.ToLower(row.AsString("vdiff_state", ""))) == vdiff.CompletedState {
+						completedShards++
 					}
 				}
 
@@ -521,7 +528,15 @@ func buildVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid st
 	} else if tableStateCounts[vdiff.PendingState] > 0 {
 		summary.State = vdiff.PendingState
 	} else if tableStateCounts[vdiff.CompletedState] == (len(tableSummaryMap) * len(shards)) {
-		summary.State = vdiff.CompletedState
+		// When doing shard consolidations/merges, we cannot rely solely on the
+		// vdiff_table state as the source can have more than 1 target shard and we
+		// only mark the vdiff for the shard as completed when all of those streams
+		// have finished.
+		if completedShards == len(shards) {
+			summary.State = vdiff.CompletedState
+		} else {
+			summary.State = vdiff.StartedState
+		}
 	} else {
 		summary.State = vdiff.UnknownState
 	}

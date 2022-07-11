@@ -25,6 +25,7 @@ import (
 	"github.com/google/uuid"
 
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/withddl"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -60,6 +61,10 @@ func (vde *Engine) PerformVDiffAction(ctx context.Context, req *tabletmanagerdat
 	}
 	defer dbClient.Close()
 
+	vde.vdiffSchemaCreateOnce.Do(func() {
+		_, _ = withDDL.Exec(ctx, withddl.QueryToTriggerWithDDL, dbClient.ExecuteFetch, dbClient.ExecuteFetch)
+	})
+
 	var qr *sqltypes.Result
 	var err error
 	options := req.Options
@@ -73,15 +78,15 @@ func (vde *Engine) PerformVDiffAction(ctx context.Context, req *tabletmanagerdat
 		}
 		recordFound := len(qr.Rows) == 1
 		if recordFound && action == CreateAction {
-			return nil, fmt.Errorf("vdiff with UUID %s already exists on tablet %s",
+			return nil, fmt.Errorf("vdiff with UUID %s already exists on tablet %v",
 				req.VdiffUuid, vde.thisTablet.Alias)
 		} else if action == ResumeAction {
 			if !recordFound {
-				return nil, fmt.Errorf("vdiff with UUID %s not found on tablet %s",
+				return nil, fmt.Errorf("vdiff with UUID %s not found on tablet %v",
 					req.VdiffUuid, vde.thisTablet.Alias)
 			}
 			if resp.Id, err = qr.Named().Row().ToInt64("id"); err != nil {
-				return nil, fmt.Errorf("vdiff found with invalid id on tablet %s: %w",
+				return nil, fmt.Errorf("vdiff found with invalid id on tablet %v: %w",
 					vde.thisTablet.Alias, err)
 			}
 		}
@@ -101,7 +106,7 @@ func (vde *Engine) PerformVDiffAction(ctx context.Context, req *tabletmanagerdat
 				return nil, err
 			}
 			if qr.InsertID == 0 {
-				return nil, fmt.Errorf("unable to create vdiff for UUID %s on tablet %s (%w)",
+				return nil, fmt.Errorf("unable to create vdiff for UUID %s on tablet %v (%w)",
 					req.VdiffUuid, vde.thisTablet.Alias, err)
 			}
 			resp.Id = int64(qr.InsertID)
@@ -111,7 +116,7 @@ func (vde *Engine) PerformVDiffAction(ctx context.Context, req *tabletmanagerdat
 				return nil, err
 			}
 			if qr.RowsAffected == 0 {
-				msg := fmt.Sprintf("no completed vdiff found for UUID %s on tablet %s",
+				msg := fmt.Sprintf("no completed vdiff found for UUID %s on tablet %v",
 					req.VdiffUuid, vde.thisTablet.Alias)
 				if err != nil {
 					msg = fmt.Sprintf("%s (%v)", msg, err)
@@ -151,7 +156,7 @@ func (vde *Engine) PerformVDiffAction(ctx context.Context, req *tabletmanagerdat
 			}
 			switch len(qr.Rows) {
 			case 0:
-				return nil, fmt.Errorf("no vdiff found for UUID %s keyspace %s and workflow %s on tablet %s",
+				return nil, fmt.Errorf("no vdiff found for UUID %s keyspace %s and workflow %s on tablet %v",
 					vdiffUUID, req.Keyspace, req.Workflow, vde.thisTablet.Alias)
 			case 1:
 				row := qr.Named().Row()
@@ -162,7 +167,7 @@ func (vde *Engine) PerformVDiffAction(ctx context.Context, req *tabletmanagerdat
 					return nil, err
 				}
 			default:
-				return nil, fmt.Errorf("too many vdiffs found (%d) for UUID %s keyspace %s and workflow %s on tablet %s",
+				return nil, fmt.Errorf("too many vdiffs found (%d) for UUID %s keyspace %s and workflow %s on tablet %v",
 					len(qr.Rows), vdiffUUID, req.Keyspace, req.Workflow, vde.thisTablet.Alias)
 			}
 		}

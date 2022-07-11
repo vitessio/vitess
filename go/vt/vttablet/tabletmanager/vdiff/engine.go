@@ -243,13 +243,7 @@ func (vde *Engine) getPendingVDiffs(ctx context.Context) (*sqltypes.Result, erro
 	}
 	defer dbClient.Close()
 
-	// This is the query entrypoint when opening the engine, so we ensure the
-	// schema is in place and up-to-date.
-	vde.vdiffSchemaCreateOnce.Do(func() {
-		_ = withDDL.ExecDDL(ctx, dbClient.ExecuteFetch)
-	})
-
-	qr, err := dbClient.ExecuteFetch(sqlGetPendingVDiffs, -1)
+	qr, err := withDDL.Exec(ctx, sqlGetPendingVDiffs, dbClient.ExecuteFetch, dbClient.ExecuteFetch)
 	if err != nil {
 		return nil, err
 	}
@@ -260,7 +254,7 @@ func (vde *Engine) getPendingVDiffs(ctx context.Context) (*sqltypes.Result, erro
 }
 
 func (vde *Engine) getVDiffsToRetry(ctx context.Context, dbClient binlogplayer.DBClient) (*sqltypes.Result, error) {
-	qr, err := dbClient.ExecuteFetch(sqlGetVDiffsToRetry, -1)
+	qr, err := withDDL.Exec(ctx, sqlGetVDiffsToRetry, dbClient.ExecuteFetch, dbClient.ExecuteFetch)
 	if err != nil {
 		return nil, err
 	}
@@ -342,4 +336,24 @@ func (vde *Engine) retryErroredVDiffs() {
 			log.Errorf("Error retrying VDiffs: %v", err)
 		}
 	}
+}
+
+// activeControllerCount returns the number of active controllers
+// for a given UUID. This should only ever be > 1 when doing shard
+// consolidations/merges.
+func (vde *Engine) activeControllerCount(uuid string) int {
+	vde.mu.Lock()
+	defer vde.mu.Unlock()
+
+	cnt := 0
+	for _, ct := range vde.controllers {
+		if ct.uuid == uuid {
+			select {
+			case <-ct.done:
+			default:
+				cnt++
+			}
+		}
+	}
+	return cnt
 }

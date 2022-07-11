@@ -55,41 +55,39 @@ var testCases = []*testCase{
 		targetShards:   "-80,80-",
 		tabletBaseID:   200,
 		tables:         "customer,Lead,Lead-1",
-		resume:         true,
-		resumeInsert:   `insert into customer(cid, name, typ) values(12345678, 'Testy McTester', 'soho')`,
-		testCLIErrors:  true, // test for errors in the simplest workflow
 		autoRetryError: true,
+		retryInsert:    `insert into customer(cid, name, typ) values(1234, 'Testy McTester', 'soho')`,
+		resume:         true,
+		resumeInsert:   `insert into customer(cid, name, typ) values(2234, 'Testy McTester (redux)', 'enterprise')`,
+		testCLIErrors:  true, // test for errors in the simplest workflow
 	},
 	{
-		name:         "Reshard Merge/split 2 to 3",
-		workflow:     "c2c3",
-		typ:          "Reshard",
-		sourceKs:     "customer",
-		targetKs:     "customer",
-		sourceShards: "-80,80-",
-		targetShards: "-40,40-a0,a0-",
-		tabletBaseID: 400,
-		// TODO: figure out how we should be tracking progress for merges where there's a single
-		//       target shard -- and thus a single _vt.vdiff_table record -- but > 1 source shard.
-		//autoRetryError: true,
-		//retryInsert:    `insert into customer(cid, name, typ) values(12345679, 'Testy McTester IV', 'enterprise')`,
-		resume:       true,
-		resumeInsert: `insert into customer(cid, name, typ) values(12345680, 'Testy McTester Jr.', 'enterprise'), (12345681, 'Testy McTester III', 'enterprise')`,
+		name:           "Reshard Merge/split 2 to 3",
+		workflow:       "c2c3",
+		typ:            "Reshard",
+		sourceKs:       "customer",
+		targetKs:       "customer",
+		sourceShards:   "-80,80-",
+		targetShards:   "-40,40-a0,a0-",
+		tabletBaseID:   400,
+		autoRetryError: true,
+		retryInsert:    `insert into customer(cid, name, typ) values(3234, 'Testy McTester Jr', 'enterprise'), (4234, 'Testy McTester II', 'enterprise')`,
+		resume:         true,
+		resumeInsert:   `insert into customer(cid, name, typ) values(5234, 'Testy McTester III', 'enterprise')`,
 	},
 	{
-		name:         "Reshard/merge 3 to 1",
-		workflow:     "c3c1",
-		typ:          "Reshard",
-		sourceKs:     "customer",
-		targetKs:     "customer",
-		sourceShards: "-40,40-a0,a0-",
-		targetShards: "0",
-		tabletBaseID: 700,
-		// TODO: figure out how we should be tracking progress for merges where there's a single
-		//       target shard -- and thus a single _vt.vdiff_table record -- but > 1 source shard.
-		//resume:         true,
-		//autoRetryError: true,
-		//retryInsert:    `insert into customer(cid, name, typ) values(12345682, 'Testy McTester V', 'enterprise')`,
+		name:           "Reshard/merge 3 to 1",
+		workflow:       "c3c1",
+		typ:            "Reshard",
+		sourceKs:       "customer",
+		targetKs:       "customer",
+		sourceShards:   "-40,40-a0,a0-",
+		targetShards:   "0",
+		tabletBaseID:   700,
+		autoRetryError: true,
+		retryInsert:    `insert into customer(cid, name, typ) values(6234, 'Testy McTester IV', 'enterprise')`,
+		resume:         true,
+		resumeInsert:   `insert into customer(cid, name, typ) values(7234, 'Testy McTester V', 'enterprise'), (8234, 'Testy McTester VI', 'enterprise')`,
 	},
 }
 
@@ -270,11 +268,13 @@ func testAutoRetryError(t *testing.T, tc *testCase, cells string) {
 		expectedRows := rowsCompared + expectedNewRows
 
 		// update the VDiff to simulate an ephemeral error having occurred
-		tab := vc.getPrimaryTablet(t, tc.targetKs, strings.Split(tc.targetShards, ",")[0])
-		res, err := tab.QueryTabletWithDB(fmt.Sprintf(sqlSimulateError, encodeString(uuid)), "vt_"+tc.targetKs)
-		require.NoError(t, err)
-		// should have updated the vdiff record and at least one vdiff_table record
-		require.GreaterOrEqual(t, int(res.RowsAffected), 2)
+		for _, shard := range strings.Split(tc.targetShards, ",") {
+			tab := vc.getPrimaryTablet(t, tc.targetKs, shard)
+			res, err := tab.QueryTabletWithDB(fmt.Sprintf(sqlSimulateError, encodeString(uuid)), "vt_"+tc.targetKs)
+			require.NoError(t, err)
+			// should have updated the vdiff record and at least one vdiff_table record
+			require.GreaterOrEqual(t, int(res.RowsAffected), 2)
+		}
 
 		// confirm that the VDiff was retried, able to complete, and we compared the expected
 		// number of rows in total (original run and retry)
