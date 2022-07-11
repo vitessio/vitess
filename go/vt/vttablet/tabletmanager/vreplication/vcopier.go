@@ -229,6 +229,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 	var sqlbuffer bytes2.Buffer
 
 	err = vc.vr.sourceVStreamer.VStreamRows(ctx, initialPlan.SendRule.Filter, lastpkpb, func(rows *binlogdatapb.VStreamRowsResponse) error {
+		fmt.Printf("======== ZZZ2 got rows.gtid: %v\n", rows.Gtid)
 		for {
 			select {
 			case <-rowsCopiedTicker.C:
@@ -257,6 +258,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 			if len(rows.Fields) == 0 {
 				return fmt.Errorf("expecting field event first, got: %v", rows)
 			}
+			fmt.Printf("======== ZZZ2 calling fastForward with gtid: %v\n", rows.Gtid)
 			if err := vc.fastForward(ctx, copyState, rows.Gtid); err != nil {
 				return err
 			}
@@ -349,7 +351,9 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 
 func (vc *vcopier) fastForward(ctx context.Context, copyState map[string]*sqltypes.Result, gtid string) error {
 	defer vc.vr.stats.PhaseTimings.Record("fastforward", time.Now())
+	fmt.Printf("======== ZZZ3  fastForward gtid: %v\n", gtid)
 	pos, err := mysql.DecodePosition(gtid)
+	fmt.Printf("======== ZZZ4 fastForward pos: %v, err: %v\n", pos, err)
 	if err != nil {
 		return err
 	}

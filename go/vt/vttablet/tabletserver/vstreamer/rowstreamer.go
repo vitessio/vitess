@@ -290,7 +290,7 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 	}
 
 	log.Infof("Streaming query: %v\n", rs.sendQuery)
-	gtid, err := conn.streamWithSnapshot(rs.ctx, rs.plan.Table.Name, rs.sendQuery)
+	snpshotGTID, err := conn.streamWithSnapshot(rs.ctx, rs.plan.Table.Name, rs.sendQuery)
 	if err != nil {
 		return err
 	}
@@ -315,7 +315,7 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 
 	var gtidReadFromRow bool
 	var reportGTIDOnce sync.Once
-	reportGTID := func() error {
+	reportGTID := func(gtid string) error {
 		var err error
 		reportGTIDOnce.Do(func() {
 			err = safeSend(&binlogdatapb.VStreamRowsResponse{
@@ -324,6 +324,7 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 				Gtid:     gtid,
 			})
 			log.Infof("======== ZZZ reported gtid! %v\n", gtid)
+			fmt.Printf("======== ZZZ1 reported gtid! %v\n", gtid)
 		})
 		if err != nil {
 			return fmt.Errorf("stream send error: %v", err)
@@ -373,9 +374,10 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 			break
 		}
 		if !gtidReadFromRow {
-			gtid = mysqlrow[len(mysqlrow)-1].ToString()
+			gtid := fmt.Sprintf("%s/%s", mysql.Mysql56FlavorID, mysqlrow[len(mysqlrow)-1].ToString())
 			log.Infof("======== ZZZ got gtid from row: %v\n", gtid)
-			if err := reportGTID(); err != nil {
+			fmt.Printf("======== ZZZ1 got gtid from row: %v\n", gtid)
+			if err := reportGTID(gtid); err != nil {
 				return err
 			}
 			gtidReadFromRow = true
@@ -417,7 +419,7 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 			byteCount = 0
 		}
 	}
-	if err := reportGTID(); err != nil {
+	if err := reportGTID(snpshotGTID); err != nil {
 		return err
 	}
 
