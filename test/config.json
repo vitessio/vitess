@@ -1125,6 +1125,15 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
+		"vreplication_movetables_tz": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestMoveTablesTZ"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vreplication_movetables_tz",
+			"RetryMax": 1,
+			"Tags": []
+		},
 		"vreplication_across_db_versions": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestV2WorkflowsAcrossDBVersions"],

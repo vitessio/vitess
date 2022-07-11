@@ -127,6 +127,7 @@ var (
 		"vtorc_8.0",
 		"schemadiff_vrepl",
 		"topo_connection_cache",
+		"vreplication_movetables_tz",
 	}
 
 	clusterSelfHostedList = []string{
