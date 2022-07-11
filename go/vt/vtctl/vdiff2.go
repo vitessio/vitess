@@ -211,6 +211,7 @@ type vdiffSummary struct {
 	TableSummaryMap    map[string]vdiffTableSummary           `json:"TableSummary,omitempty"`
 	Reports            map[string]map[string]vdiff.DiffReport `json:"Reports,omitempty"`
 	Errors             map[string]string                      `json:"Errors,omitempty"`
+	Progress           *vdiff.ProgressReport                  `json:"Progress,omitempty"`
 }
 
 const (
@@ -221,6 +222,7 @@ State:        {{.State}}
 RowsCompared: {{.RowsCompared}}
 HasMismatch:  {{.HasMismatch}}
 StartedAt:    {{.StartedAt}}
+{{if (eq .State "started")}}Progress:     {{printf "%.2f" .Progress.Percentage}}%%, ETA: {{.Progress.ETA}}{{end}}
 {{if .CompletedAt}}CompletedAt:  {{.CompletedAt}}{{end}}
 {{range $table := .TableSummaryMap}} 
 Table {{$table.TableName}}:
@@ -406,6 +408,7 @@ func buildVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid st
 		Shards:       "",
 		Reports:      make(map[string]map[string]vdiff.DiffReport),
 		Errors:       make(map[string]string),
+		Progress:     nil,
 	}
 
 	var tableSummaryMap map[string]vdiffTableSummary
@@ -420,6 +423,8 @@ func buildVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid st
 	}
 	// Keep a tally of the shards that have been marked as completed
 	completedShards := 0
+	// Keep a tally of the approximate total rows to process as we'll use this for our progress report
+	totalRowsToCompare := int64(0)
 	var shards []string
 	for shard, resp := range output.Responses {
 		first := true
@@ -457,6 +462,7 @@ func buildVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid st
 
 				{ // Global VDiff summary updates that take into account the per table details per shard
 					summary.RowsCompared += row.AsInt64("rows_compared", 0)
+					totalRowsToCompare += row.AsInt64("table_rows", 0)
 
 					// If we had a mismatch on any table on any shard then the global VDiff summary does too
 					if mm, _ := row.ToBool("has_mismatch"); mm {
@@ -541,6 +547,11 @@ func buildVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid st
 		summary.State = vdiff.UnknownState
 	}
 
+	// If the vdiff has been started then we can calculate the progress
+	if summary.State == vdiff.StartedState {
+		buildProgressReport(summary, totalRowsToCompare)
+	}
+
 	sort.Strings(shards) // sort for predictable output
 	summary.Shards = strings.Join(shards, ",")
 	summary.TableSummaryMap = tableSummaryMap
@@ -589,4 +600,21 @@ func displayVDiff2ActionStatusResponse(wr *wrangler.Wrangler, format string, act
 		msg := fmt.Sprintf("VDiff %s status is %s on target shards\n", action, status)
 		wr.Logger().Printf(msg)
 	}
+}
+
+func buildProgressReport(summary *vdiffSummary, rowsToCompare int64) {
+	report := &vdiff.ProgressReport{}
+	if summary.RowsCompared >= 0 {
+		// Round to 2 decimal points
+		report.Percentage = math.Round(math.Min((float64(summary.RowsCompared)/float64(rowsToCompare))*100, 100.00)*100) / 100
+	} else {
+		report.Percentage = 0
+	}
+	pctToGo := math.Abs(report.Percentage - 100.00)
+	startTime, _ := time.Parse(vdiff.TimestampFormat, summary.StartedAt)
+	curTime := time.Now().UTC()
+	runTime := curTime.Unix() - startTime.Unix()
+	eta := time.Unix((int64(runTime)*int64(pctToGo))+curTime.Unix(), 1).UTC()
+	report.ETA = eta.Format(vdiff.TimestampFormat)
+	summary.Progress = report
 }

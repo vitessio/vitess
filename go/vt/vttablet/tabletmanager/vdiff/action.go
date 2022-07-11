@@ -124,6 +124,7 @@ func (vde *Engine) PerformVDiffAction(ctx context.Context, req *tabletmanagerdat
 				return nil, fmt.Errorf(msg)
 			}
 		}
+
 		resp.VdiffUuid = req.VdiffUuid
 		qr, err := vde.getVDiffByID(ctx, dbClient, resp.Id)
 		if err != nil {

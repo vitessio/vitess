@@ -121,7 +121,8 @@ func (td *tableDiffer) buildTablePlan() (*tablePlan, error) {
 		colname := targetSelect.SelectExprs[i].(*sqlparser.AliasedExpr).Expr.(*sqlparser.ColName).Name.Lowered()
 		_, ok := fields[colname]
 		if !ok {
-			return nil, fmt.Errorf("column %v not found in table %v", colname, tp.table.Name)
+			return nil, fmt.Errorf("column %v not found in table %v on tablet %v",
+				colname, tp.table.Name, td.wd.ct.vde.thisTablet.Alias)
 		}
 		tp.compareCols[i].colName = colname
 

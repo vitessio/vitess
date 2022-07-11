@@ -167,7 +167,8 @@ func (vde *Engine) retry(ctx context.Context, err error) {
 func (vde *Engine) addController(row sqltypes.RowNamedValues, options *tabletmanagerdata.VDiffOptions) error {
 	ct, err := newController(vde.ctx, row, vde.dbClientFactoryDba, vde.ts, vde, options)
 	if err != nil {
-		return fmt.Errorf("controller could not be initialized for stream: %+v", row)
+		return fmt.Errorf("controller could not be initialized for stream %+v on tablet %v",
+			row, vde.thisTablet.Alias)
 	}
 	vde.controllers[ct.id] = ct
 	return nil
@@ -270,7 +271,8 @@ func (vde *Engine) getVDiffByID(ctx context.Context, dbClient binlogplayer.DBCli
 		return nil, err
 	}
 	if len(qr.Rows) != 1 {
-		return nil, fmt.Errorf("unable to read vdiff record for vdiff id %d", id)
+		return nil, fmt.Errorf("unable to read vdiff record for vdiff id %d on tablet %v",
+			id, vde.thisTablet.Alias)
 	}
 	return qr, nil
 }

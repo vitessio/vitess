@@ -46,7 +46,6 @@ type workflowDiffer struct {
 	ct *controller
 
 	tableDiffers map[string]*tableDiffer // key is table name
-	tableSizes   map[string]int64        // approx. size of tables when vdiff started
 	opts         *tabletmanagerdatapb.VDiffOptions
 }
 
@@ -54,7 +53,6 @@ func newWorkflowDiffer(ct *controller, opts *tabletmanagerdatapb.VDiffOptions) (
 	wd := &workflowDiffer{
 		ct:           ct,
 		opts:         opts,
-		tableSizes:   make(map[string]int64),
 		tableDiffers: make(map[string]*tableDiffer, 1),
 	}
 	return wd, nil
@@ -96,14 +94,14 @@ func (wd *workflowDiffer) reconcileExtraRows(dr *DiffReport, maxExtraRowsToCompa
 }
 
 func (wd *workflowDiffer) diffTable(ctx context.Context, dbClient binlogplayer.DBClient, td *tableDiffer) error {
-	tableName := td.table.Name
 	select {
 	case <-ctx.Done():
 		return vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
 	default:
 	}
-	log.Infof("Starting differ on table %s", tableName)
-	if err := td.updateTableState(ctx, dbClient, tableName, StartedState); err != nil {
+
+	log.Infof("Starting differ on table %s", td.table.Name)
+	if err := td.updateTableState(ctx, dbClient, StartedState); err != nil {
 		return err
 	}
 	if err := td.initialize(ctx); err != nil {
@@ -115,42 +113,20 @@ func (wd *workflowDiffer) diffTable(ctx context.Context, dbClient binlogplayer.D
 		log.Errorf("td.diff error %s", err.Error())
 		return err
 	}
-	log.Infof("td.diff done for %s, with dr %+v", tableName, dr)
+	log.Infof("td.diff done for %s, with dr %+v", td.table.Name, dr)
 	if dr.ExtraRowsSource > 0 || dr.ExtraRowsTarget > 0 {
 		wd.reconcileExtraRows(dr, wd.opts.CoreOptions.MaxExtraRowsToCompare)
 	}
 
 	if dr.MismatchedRows > 0 || dr.ExtraRowsTarget > 0 || dr.ExtraRowsSource > 0 {
-		if err := updateTableMismatch(dbClient, wd.ct.id, tableName); err != nil {
+		if err := updateTableMismatch(dbClient, wd.ct.id, td.table.Name); err != nil {
 			return err
 		}
 	}
 
-	log.Infof("td.diff after reconciliation for %s, with dr %+v", tableName, dr)
-	if err := td.updateTableStateAndReport(ctx, dbClient, tableName, CompletedState, dr); err != nil {
+	log.Infof("td.diff after reconciliation for %s, with dr %+v", td.table.Name, dr)
+	if err := td.updateTableStateAndReport(ctx, dbClient, td.table.Name, CompletedState, dr); err != nil {
 		return err
-	}
-	return nil
-}
-
-func (wd *workflowDiffer) getTotalRowsEstimate(dbClient binlogplayer.DBClient) error {
-	query := "select db_name as db_name from _vt.vreplication where workflow = %s limit 1"
-	query = fmt.Sprintf(query, encodeString(wd.ct.workflow))
-	qr, err := dbClient.ExecuteFetch(query, 1)
-	if err != nil {
-		return err
-	}
-	dbName, _ := qr.Named().Row().ToString("db_name")
-	query = "select table_name as table_name, table_rows as table_rows from information_schema.tables where table_schema = %s"
-	query = fmt.Sprintf(query, encodeString(dbName))
-	qr, err = dbClient.ExecuteFetch(query, -1)
-	if err != nil {
-		return err
-	}
-	for _, row := range qr.Named().Rows {
-		tableName, _ := row.ToString("table_name")
-		tableRows, _ := row.ToInt64("table_rows")
-		wd.tableSizes[tableName] = tableRows
 	}
 	return nil
 }
@@ -177,18 +153,11 @@ func (wd *workflowDiffer) diff(ctx context.Context) error {
 	if err = wd.buildPlan(dbClient, filter, schm); err != nil {
 		return vterrors.Wrap(err, "buildPlan")
 	}
-	if err := wd.getTotalRowsEstimate(dbClient); err != nil {
-		return err
-	}
 	for _, td := range wd.tableDiffers {
 		select {
 		case <-ctx.Done():
 			return vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
 		default:
-		}
-		tableRows, ok := wd.tableSizes[td.table.Name]
-		if !ok {
-			tableRows = 0
 		}
 		var query string
 		query = fmt.Sprintf(sqlGetVDiffTable, wd.ct.id, encodeString(td.table.Name))
@@ -197,24 +166,19 @@ func (wd *workflowDiffer) diff(ctx context.Context) error {
 			return err
 		}
 		if len(qr.Rows) == 0 {
-			query = fmt.Sprintf(sqlNewVDiffTable, wd.ct.id, encodeString(td.table.Name), tableRows)
-		} else {
-			// Update the table rows estimate when resuming
-			query = fmt.Sprintf(sqlUpdateTableRows, tableRows, wd.ct.id, encodeString(td.table.Name))
-		}
-		if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
-			return err
+			return fmt.Errorf("no vdiff table found for %s on tablet %v",
+				td.table.Name, wd.ct.vde.thisTablet.Alias)
 		}
 
 		log.Infof("starting table %s", td.table.Name)
 		if err := wd.diffTable(ctx, dbClient, td); err != nil {
-			if err := td.updateTableState(ctx, dbClient, td.table.Name, ErrorState); err != nil {
+			if err := td.updateTableState(ctx, dbClient, ErrorState); err != nil {
 				return err
 			}
 			insertVDiffLog(ctx, dbClient, wd.ct.id, fmt.Sprintf("Table %s Error: %s", td.table.Name, err))
 			return err
 		}
-		if err := td.updateTableState(ctx, dbClient, td.table.Name, CompletedState); err != nil {
+		if err := td.updateTableState(ctx, dbClient, CompletedState); err != nil {
 			return err
 		}
 		log.Infof("done table %s", td.table.Name)
@@ -289,7 +253,8 @@ func (wd *workflowDiffer) buildPlan(dbClient binlogplayer.DBClient, filter *binl
 		}
 	}
 	if len(wd.tableDiffers) == 0 {
-		return fmt.Errorf("no tables found to diff, %s:%s", optTables, specifiedTables)
+		return fmt.Errorf("no tables found to diff, %s:%s, on tablet %v",
+			optTables, specifiedTables, wd.ct.vde.thisTablet.Alias)
 	}
 	return nil
 }
@@ -315,4 +280,35 @@ func (wd *workflowDiffer) getTableLastPK(dbClient binlogplayer.DBClient, tableNa
 		}
 	}
 	return nil, nil
+}
+
+func (wd *workflowDiffer) initVDiffTables(dbClient binlogplayer.DBClient) error {
+	query := fmt.Sprintf(sqlGetAllTableRows, encodeString(wd.ct.vde.dbName))
+	qr, err := dbClient.ExecuteFetch(query, -1)
+	if err != nil {
+		return err
+	}
+	for _, row := range qr.Named().Rows {
+		tableName, _ := row.ToString("table_name")
+		tableRows, _ := row.ToInt64("table_rows")
+
+		query := fmt.Sprintf(sqlGetVDiffTable, wd.ct.id, encodeString(tableName))
+		qr, err := dbClient.ExecuteFetch(query, -1)
+		if err != nil {
+			return err
+		}
+		if len(qr.Rows) == 0 {
+			query = fmt.Sprintf(sqlNewVDiffTable, wd.ct.id, encodeString(tableName), tableRows)
+		} else if len(qr.Rows) == 1 {
+			query = fmt.Sprintf(sqlUpdateTableRows, tableRows, wd.ct.id, encodeString(tableName))
+		} else {
+			return fmt.Errorf("no state found for vdiff table %s for vdiff_id %d on tablet %s",
+				tableName, wd.ct.id, wd.ct.vde.thisTablet.Alias)
+		}
+
+		if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
+			return err
+		}
+	}
+	return nil
 }

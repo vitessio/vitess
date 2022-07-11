@@ -40,9 +40,12 @@ type testCase struct {
 	testCLIErrors bool // test CLI errors against this workflow
 }
 
-var sqlSimulateError = `update _vt.vdiff as vd, _vt.vdiff_table as vdt set vd.state = 'error', vdt.state = 'error', vd.completed_at = NULL,
+const (
+	sqlSimulateError = `update _vt.vdiff as vd, _vt.vdiff_table as vdt set vd.state = 'error', vdt.state = 'error', vd.completed_at = NULL,
 						vd.last_error = 'vttablet: rpc error: code = Unknown desc = (errno 1213) (sqlstate 40001): Deadlock found when trying to get lock; try restarting transaction'
 						where vd.vdiff_uuid = %s and vd.id = vdt.vdiff_id`
+	sqlAnalyzeTable = `analyze table %s`
+)
 
 var testCases = []*testCase{
 	{
@@ -56,9 +59,9 @@ var testCases = []*testCase{
 		tabletBaseID:   200,
 		tables:         "customer,Lead,Lead-1",
 		autoRetryError: true,
-		retryInsert:    `insert into customer(cid, name, typ) values(1234, 'Testy McTester', 'soho')`,
+		retryInsert:    `insert into customer(cid, name, typ) values(91234, 'Testy McTester', 'soho')`,
 		resume:         true,
-		resumeInsert:   `insert into customer(cid, name, typ) values(2234, 'Testy McTester (redux)', 'enterprise')`,
+		resumeInsert:   `insert into customer(cid, name, typ) values(92234, 'Testy McTester (redux)', 'enterprise')`,
 		testCLIErrors:  true, // test for errors in the simplest workflow
 	},
 	{
@@ -71,9 +74,9 @@ var testCases = []*testCase{
 		targetShards:   "-40,40-a0,a0-",
 		tabletBaseID:   400,
 		autoRetryError: true,
-		retryInsert:    `insert into customer(cid, name, typ) values(3234, 'Testy McTester Jr', 'enterprise'), (4234, 'Testy McTester II', 'enterprise')`,
+		retryInsert:    `insert into customer(cid, name, typ) values(93234, 'Testy McTester Jr', 'enterprise'), (94234, 'Testy McTester II', 'enterprise')`,
 		resume:         true,
-		resumeInsert:   `insert into customer(cid, name, typ) values(5234, 'Testy McTester III', 'enterprise')`,
+		resumeInsert:   `insert into customer(cid, name, typ) values(95234, 'Testy McTester III', 'enterprise')`,
 	},
 	{
 		name:           "Reshard/merge 3 to 1",
@@ -85,9 +88,9 @@ var testCases = []*testCase{
 		targetShards:   "0",
 		tabletBaseID:   700,
 		autoRetryError: true,
-		retryInsert:    `insert into customer(cid, name, typ) values(6234, 'Testy McTester IV', 'enterprise')`,
+		retryInsert:    `insert into customer(cid, name, typ) values(96234, 'Testy McTester IV', 'enterprise')`,
 		resume:         true,
-		resumeInsert:   `insert into customer(cid, name, typ) values(7234, 'Testy McTester V', 'enterprise'), (8234, 'Testy McTester VI', 'enterprise')`,
+		resumeInsert:   `insert into customer(cid, name, typ) values(97234, 'Testy McTester V', 'enterprise'), (98234, 'Testy McTester VI', 'enterprise')`,
 	},
 }
 
@@ -121,11 +124,12 @@ func TestVDiff2(t *testing.T) {
 	verifyClusterHealth(t, vc)
 
 	insertInitialData(t)
-
 	// Insert null and empty enum values for testing vdiff comparisons for those values.
 	// If we add this to the initial data list, the counts in several other tests will need to change
 	query := `insert into customer(cid, name, typ, sport) values(1001, null, 'soho','')`
 	execVtgateQuery(t, vtgateConn, fmt.Sprintf("%s:%s", sourceKs, sourceShards[0]), query)
+
+	generateMoreCustomers(t, sourceKs, 100)
 
 	_, err := vc.AddKeyspace(t, cells, targetKs, strings.Join(targetShards, ","), customerVSchema, customerSchema, 0, 0, 200, targetKsOpts)
 	require.NoError(t, err)
@@ -165,6 +169,7 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, cells []*Cell) 
 	for _, shard := range arrTargetShards {
 		tab := vc.getPrimaryTablet(t, tc.targetKs, shard)
 		catchup(t, tab, tc.workflow, tc.typ)
+		updateTableStats(t, tab, tc.tables) // need to do this in order to test progress reports
 	}
 
 	vdiff(t, tc.targetKs, tc.workflow, cells[0].Name, true, true, nil)
@@ -174,12 +179,7 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, cells []*Cell) 
 	}
 
 	if tc.resume {
-		expectedRows := int64(0)
-		if tc.resumeInsert != "" {
-			res := execVtgateQuery(t, vtgateConn, tc.sourceKs, tc.resumeInsert)
-			expectedRows = int64(res.RowsAffected)
-		}
-		vdiff2Resume(t, tc.targetKs, tc.workflow, cells[0].Name, expectedRows)
+		testResume(t, tc, cells[0].Name)
 	}
 
 	// This is done here so that we have a valid workflow to test the commands against
@@ -246,6 +246,34 @@ func testNoOrphanedData(t *testing.T, keyspace, workflow string, shards []string
 	})
 }
 
+func testResume(t *testing.T, tc *testCase, cells string) {
+	t.Run("Resume", func(t *testing.T) {
+		ksWorkflow := fmt.Sprintf("%s.%s", tc.targetKs, tc.workflow)
+
+		// confirm the last VDiff is in the expected completed state
+		uuid, output := performVDiff2Action(t, ksWorkflow, cells, "show", "last", false)
+		jsonOutput := getVDiffInfo(output)
+		require.Equal(t, "completed", jsonOutput.State)
+		// save the number of rows compared in previous runs
+		rowsCompared := jsonOutput.RowsCompared
+		ogTime := time.Now() // the completed_at should be later than this after resuming
+
+		expectedNewRows := int64(0)
+		if tc.resumeInsert != "" {
+			res := execVtgateQuery(t, vtgateConn, tc.sourceKs, tc.resumeInsert)
+			expectedNewRows = int64(res.RowsAffected)
+		}
+		expectedRows := rowsCompared + expectedNewRows
+
+		// confirm that the VDiff was resumed, able to complete, and we compared the
+		// expected number of rows in total (original run and resume)
+		uuid, _ = performVDiff2Action(t, ksWorkflow, cells, "resume", uuid, false)
+		info := waitForVDiff2ToComplete(t, ksWorkflow, cells, uuid, ogTime)
+		require.False(t, info.HasMismatch)
+		require.Equal(t, expectedRows, info.RowsCompared)
+	})
+}
+
 func testAutoRetryError(t *testing.T, tc *testCase, cells string) {
 	t.Run("Auto retry on error", func(t *testing.T) {
 		ksWorkflow := fmt.Sprintf("%s.%s", tc.targetKs, tc.workflow)
@@ -279,6 +307,7 @@ func testAutoRetryError(t *testing.T, tc *testCase, cells string) {
 		// confirm that the VDiff was retried, able to complete, and we compared the expected
 		// number of rows in total (original run and retry)
 		info := waitForVDiff2ToComplete(t, ksWorkflow, cells, uuid, ogTime)
+		require.False(t, info.HasMismatch)
 		require.Equal(t, expectedRows, info.RowsCompared)
 	})
 }

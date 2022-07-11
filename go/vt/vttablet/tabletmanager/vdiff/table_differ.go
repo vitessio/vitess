@@ -153,7 +153,8 @@ func (td *tableDiffer) stopTargetVReplicationStreams(ctx context.Context, dbClie
 			return err
 		}
 		if mpos.IsZero() {
-			return fmt.Errorf("stream %d has not started", id)
+			return fmt.Errorf("stream %d has not started on tablet %v",
+				id, td.wd.ct.vde.thisTablet.Alias)
 		}
 		sourceBytes, err := row["source"].ToBytes()
 		if err != nil {
@@ -347,7 +348,8 @@ func (td *tableDiffer) streamOneShard(ctx context.Context, participant *shardStr
 
 			if len(fields) == 0 {
 				if len(vsr.Fields) == 0 {
-					return fmt.Errorf("did not received expected fields in response %+v", vsr)
+					return fmt.Errorf("did not received expected fields in response %+v on tablet %v",
+						vsr, td.wd.ct.vde.thisTablet.Alias)
 				}
 				fields = vsr.Fields
 				gtidch <- vsr.Gtid
@@ -415,9 +417,11 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare *int64, debug, on
 		return nil, err
 	}
 	if len(cs.Rows) == 0 {
-		return nil, fmt.Errorf("no state found for vdiff table %s for vdiff_id %d", td.table.Name, td.wd.ct.id)
+		return nil, fmt.Errorf("no state found for vdiff table %s for vdiff_id %d on tablet %v",
+			td.table.Name, td.wd.ct.id, td.wd.ct.vde.thisTablet.Alias)
 	} else if len(cs.Rows) > 1 {
-		return nil, fmt.Errorf("invalid state found for vdiff table %s (multiple records) for vdiff_id %d", td.table.Name, td.wd.ct.id)
+		return nil, fmt.Errorf("invalid state found for vdiff table %s (multiple records) for vdiff_id %d on tablet %v",
+			td.table.Name, td.wd.ct.id, td.wd.ct.vde.thisTablet.Alias)
 	}
 	curState := cs.Named().Row()
 	mismatch := curState.AsBool("mismatch", false)
@@ -636,12 +640,26 @@ func (td *tableDiffer) updateTableProgress(dbClient binlogplayer.DBClient, dr *D
 	return nil
 }
 
-func (td *tableDiffer) updateTableState(ctx context.Context, dbClient binlogplayer.DBClient, tableName string, state VDiffState) error {
-	query := fmt.Sprintf(sqlUpdateTableState, encodeString(string(state)), td.wd.ct.id, encodeString(tableName))
+func (td *tableDiffer) updateTableRows(ctx context.Context, dbClient binlogplayer.DBClient) error {
+	query := fmt.Sprintf(sqlGetTableRows, encodeString(td.wd.ct.vde.dbName), encodeString(td.table.Name))
+	qr, err := dbClient.ExecuteFetch(query, 1)
+	if err != nil {
+		return err
+	}
+	row := qr.Named().Row()
+	query = fmt.Sprintf(sqlUpdateTableRows, row.AsInt64("table_rows", 0), td.wd.ct.id, encodeString(td.table.Name))
 	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
 		return err
 	}
-	insertVDiffLog(ctx, dbClient, td.wd.ct.id, fmt.Sprintf("%s: table %s", state, encodeString(tableName)))
+	return nil
+}
+
+func (td *tableDiffer) updateTableState(ctx context.Context, dbClient binlogplayer.DBClient, state VDiffState) error {
+	query := fmt.Sprintf(sqlUpdateTableState, encodeString(string(state)), td.wd.ct.id, encodeString(td.table.Name))
+	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
+		return err
+	}
+	insertVDiffLog(ctx, dbClient, td.wd.ct.id, fmt.Sprintf("%s: table %s", state, encodeString(td.table.Name)))
 
 	return nil
 }
