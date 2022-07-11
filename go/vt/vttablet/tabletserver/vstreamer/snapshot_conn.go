@@ -48,7 +48,7 @@ func snapshotConnect(ctx context.Context, cp dbconfigs.Connector) (*snapshotConn
 // It returns the gtid of the time when the snapshot was taken.
 func (conn *snapshotConn) streamWithSnapshot(ctx context.Context, table, query string) (gtid string, err error) {
 	// gtid, err = conn.startSnapshot(ctx, table)
-	gtid, err = conn.startSnapshotWithoutGTID(ctx)
+	gtid, err = conn.startSnapshotWithoutLock(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -102,7 +102,7 @@ func (conn *snapshotConn) startSnapshot(ctx context.Context, table string) (gtid
 }
 
 // snapshot performs the snapshotting.
-func (conn *snapshotConn) startSnapshotWithoutGTID(ctx context.Context) (gtid string, err error) {
+func (conn *snapshotConn) startSnapshotWithoutLock(ctx context.Context) (gtid string, err error) {
 	// Starting a transaction now will allow us to start the read later,
 	// which will happen after we release the lock on the table.
 	if _, err := conn.ExecuteFetch("set transaction isolation level repeatable read", 1, false); err != nil {
@@ -114,7 +114,11 @@ func (conn *snapshotConn) startSnapshotWithoutGTID(ctx context.Context) (gtid st
 	if _, err := conn.ExecuteFetch("set @@session.time_zone = '+00:00'", 1, false); err != nil {
 		return "", err
 	}
-	return "", nil
+	mpos, err := conn.PrimaryPosition()
+	if err != nil {
+		return "", err
+	}
+	return mysql.EncodePosition(mpos), nil
 }
 
 // Close rollsback any open transactions and closes the connection.

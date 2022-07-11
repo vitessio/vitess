@@ -65,13 +65,12 @@ type rowStreamer struct {
 	ctx    context.Context
 	cancel func()
 
-	cp             dbconfigs.Connector
-	se             *schema.Engine
-	query          string
-	lastpk         []sqltypes.Value
-	send           func(*binlogdatapb.VStreamRowsResponse) error
-	vschema        *localVSchema
-	reportGTIDOnce sync.Once
+	cp      dbconfigs.Connector
+	se      *schema.Engine
+	query   string
+	lastpk  []sqltypes.Value
+	send    func(*binlogdatapb.VStreamRowsResponse) error
+	vschema *localVSchema
 
 	plan          *Plan
 	pkColumns     []int
@@ -314,9 +313,10 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 		charsets[i] = collations.ID(fld.Charset)
 	}
 
+	var reportGTIDOnce sync.Once
 	reportGTID := func() error {
 		var err error
-		rs.reportGTIDOnce.Do(func() {
+		reportGTIDOnce.Do(func() {
 			err = safeSend(&binlogdatapb.VStreamRowsResponse{
 				Fields:   rs.plan.fields(),
 				Pkfields: pkfields,
@@ -329,12 +329,7 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 		}
 		return nil
 	}
-	defer reportGTID()
-	if gtid != "" {
-		if err := reportGTID(); err != nil {
-			return err
-		}
-	}
+
 	// streamQuery sends heartbeats as long as it operates
 	heartbeatTicker := time.NewTicker(rowStreamertHeartbeatInterval)
 	defer heartbeatTicker.Stop()
@@ -419,6 +414,9 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 			rowCount = 0
 			byteCount = 0
 		}
+	}
+	if err := reportGTID(); err != nil {
+		return err
 	}
 
 	if rowCount > 0 {
