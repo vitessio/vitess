@@ -64,9 +64,6 @@ func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error)
 		"--service_map", vtctld.ServiceMap,
 		"--backup_storage_implementation", vtctld.BackupStorageImplementation,
 		"--file_backup_storage_root", vtctld.FileBackupStorageRoot,
-		// hard-code these two soon-to-be deprecated drain values.
-		"--wait_for_drain_sleep_rdonly", "1s",
-		"--wait_for_drain_sleep_replica", "1s",
 		"--log_dir", vtctld.LogDir,
 		"--port", fmt.Sprintf("%d", vtctld.Port),
 		"--grpc_port", fmt.Sprintf("%d", vtctld.GrpcPort),
@@ -158,7 +155,7 @@ func VtctldProcessInstance(httpPort int, grpcPort int, topoPort int, hostname st
 		Name:                        "vtctld",
 		Binary:                      "vtctld",
 		CommonArg:                   *vtctl,
-		ServiceMap:                  "grpc-vtctl",
+		ServiceMap:                  "grpc-vtctl,grpc-vtctld",
 		BackupStorageImplementation: "file",
 		FileBackupStorageRoot:       path.Join(os.Getenv("VTDATAROOT"), "/backups"),
 		LogDir:                      tmpDirectory,

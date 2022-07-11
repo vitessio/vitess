@@ -49,8 +49,7 @@ export CGO_CFLAGS := -O1
 
 # regenerate rice-box.go when any of the .cnf files change
 embed_config:
-	cd go/vt/mysqlctl && go run github.com/GeertJohan/go.rice/rice embed-go
-	cd go/vt/mysqlctl && go build .
+	cd go/vt/mysqlctl && go run github.com/GeertJohan/go.rice/rice embed-go && go build .
 
 # build the vitess binaries with dynamic dependency on libc
 build-dyn:
@@ -108,21 +107,21 @@ endif
 install: build
 	# binaries
 	mkdir -p "$${PREFIX}/bin"
-	cp "$${VTROOT}/bin/"{mysqlctl,mysqlctld,vtorc,vtadmin,vtctld,vtctlclient,vtctldclient,vtgate,vttablet,vtworker,vtbackup} "$${PREFIX}/bin/"
+	cp "$${VTROOT}/bin/"{mysqlctl,mysqlctld,vtorc,vtadmin,vtctld,vtctlclient,vtctldclient,vtgate,vttablet,vtbackup} "$${PREFIX}/bin/"
 
 # Will only work inside the docker bootstrap for now
 cross-install: cross-build
 	# binaries
 	mkdir -p "$${PREFIX}/bin"
 	# Still no vtorc for cross-compile
-	cp "/go/bin/${GOOS}_${GOARCH}/"{mysqlctl,mysqlctld,vtadmin,vtctld,vtctlclient,vtctldclient,vtgate,vttablet,vtworker,vtbackup} "$${PREFIX}/bin/"
+	cp "/go/bin/${GOOS}_${GOARCH}/"{mysqlctl,mysqlctld,vtadmin,vtctld,vtctlclient,vtctldclient,vtgate,vttablet,vtbackup} "$${PREFIX}/bin/"
 
 # Install local install the binaries needed to run vitess locally
 # Usage: make install-local PREFIX=/path/to/install/root
 install-local: build
 	# binaries
 	mkdir -p "$${PREFIX}/bin"
-	cp "$${VTROOT}/bin/"{mysqlctl,mysqlctld,vtorc,vtadmin,vtctl,vtctld,vtctlclient,vtctldclient,vtgate,vttablet,vtworker,vtbackup} "$${PREFIX}/bin/"
+	cp "$${VTROOT}/bin/"{mysqlctl,mysqlctld,vtorc,vtadmin,vtctl,vtctld,vtctlclient,vtctldclient,vtgate,vttablet,vtbackup} "$${PREFIX}/bin/"
 
 
 # install copies the files needed to run test Vitess using vtcombo into the given directory tree.
@@ -232,7 +231,6 @@ install_protoc-gen-go:
 PROTO_SRCS = $(wildcard proto/*.proto)
 PROTO_SRC_NAMES = $(basename $(notdir $(PROTO_SRCS)))
 PROTO_GO_OUTS = $(foreach name, $(PROTO_SRC_NAMES), go/vt/proto/$(name)/$(name).pb.go)
-
 # This rule rebuilds all the go files from the proto definitions for gRPC.
 proto: $(PROTO_GO_OUTS)
 
@@ -256,9 +254,9 @@ $(PROTO_GO_OUTS): minimaltools install_protoc-gen-go proto/*.proto
 # Please read docker/README.md to understand the different available images.
 
 # This rule builds the bootstrap images for all flavors.
-DOCKER_IMAGES_FOR_TEST = mariadb mariadb103 mysql56 mysql57 mysql80 percona percona57 percona80
+DOCKER_IMAGES_FOR_TEST = mariadb mariadb103 mysql57 mysql80 percona57 percona80
 DOCKER_IMAGES = common $(DOCKER_IMAGES_FOR_TEST)
-BOOTSTRAP_VERSION=6
+BOOTSTRAP_VERSION=9
 ensure_bootstrap_version:
 	find docker/ -type f -exec sed -i "s/^\(ARG bootstrap_version\)=.*/\1=${BOOTSTRAP_VERSION}/" {} \;
 	sed -i 's/\(^.*flag.String(\"bootstrap-version\",\) *\"[^\"]\+\"/\1 \"${BOOTSTRAP_VERSION}\"/' test.go
@@ -294,7 +292,7 @@ endef
 docker_base:
 	${call build_docker_image,docker/base/Dockerfile,vitess/base}
 
-DOCKER_BASE_SUFFIX = mysql56 mysql80 mariadb mariadb103 percona percona57 percona80
+DOCKER_BASE_SUFFIX = mysql80 mariadb mariadb103 percona57 percona80
 DOCKER_BASE_TARGETS = $(addprefix docker_base_, $(DOCKER_BASE_SUFFIX))
 $(DOCKER_BASE_TARGETS): docker_base_%:
 	${call build_docker_image,docker/base/Dockerfile.$*,vitess/base:$*}
@@ -304,7 +302,7 @@ docker_base_all: docker_base $(DOCKER_BASE_TARGETS)
 docker_lite:
 	${call build_docker_image,docker/lite/Dockerfile,vitess/lite}
 
-DOCKER_LITE_SUFFIX = mysql56 mysql57 ubi7.mysql57 mysql80 ubi7.mysql80 mariadb mariadb103 percona percona57 ubi7.percona57 percona80 ubi7.percona80 alpine testing ubi8.mysql80 ubi8.arm64.mysql80
+DOCKER_LITE_SUFFIX = mysql57 ubi7.mysql57 mysql80 ubi7.mysql80 mariadb mariadb103 percona57 ubi7.percona57 percona80 ubi7.percona80 alpine testing ubi8.mysql80 ubi8.arm64.mysql80
 DOCKER_LITE_TARGETS = $(addprefix docker_lite_,$(DOCKER_LITE_SUFFIX))
 $(DOCKER_LITE_TARGETS): docker_lite_%:
 	${call build_docker_image,docker/lite/Dockerfile.$*,vitess/lite:$*}
@@ -445,6 +443,10 @@ vtadmin_web_install:
 # While vtadmin-web is new and unstable, however, we can keep it out of the critical build path.
 vtadmin_web_proto_types: vtadmin_web_install
 	./web/vtadmin/bin/generate-proto-types.sh
+
+vtadmin_authz_testgen:
+	go generate ./go/vt/vtadmin/
+	go fmt ./go/vt/vtadmin/
 
 # Generate github CI actions workflow files for unit tests and cluster endtoend tests based on templates in the test/templates directory
 # Needs to be called if the templates change or if a new test "shard" is created. We do not need to rebuild tests if only the test/config.json

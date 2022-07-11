@@ -55,6 +55,11 @@ const (
 	errorNoStreams = "no streams found in keyspace %s for: %s"
 	// use pt-osc's naming convention, this format also ensures vstreamer ignores such tables
 	renameTableTemplate = "_%.59s_old" // limit table name to 64 characters
+
+	sqlDeleteWorkflow = "delete from _vt.vreplication where db_name = %s and workflow = %s"
+	sqlDeleteVDiffs   = `delete from vd, vdt, vdl using _vt.vdiff as vd inner join _vt.vdiff_table as vdt on (vd.id = vdt.vdiff_id)
+						inner join _vt.vdiff_log as vdl on (vd.id = vdl.vdiff_id)
+						where vd.keyspace = %s and vd.workflow = %s`
 )
 
 // accessType specifies the type of access for a shard (allow/disallow writes).
@@ -68,6 +73,16 @@ const (
 	lockTablesCycles = 2
 	// time to wait between LOCK TABLES cycles on the sources during SwitchWrites
 	lockTablesCycleDelay = time.Duration(100 * time.Millisecond)
+
+	// How long to wait when refreshing the state of each tablet in a shard. Note that these
+	// are refreshed in parallel, non-topo errors are ignored (in the error handling) and we
+	// may only do a partial refresh. Because in some cases it's unsafe to switch the traffic
+	// if some tablets do not refresh, we may need to look for partial results and produce
+	// an error (with the provided details of WHY) if we see them.
+	// Side note: the default lock/lease TTL in etcd is 60s so the default tablet refresh
+	// timeout of 60s can cause us to lose our keyspace lock before completing the
+	// operation too.
+	shardTabletRefreshTimeout = time.Duration(30 * time.Second)
 )
 
 // trafficSwitcher contains the metadata for switching read and write traffic
@@ -92,6 +107,8 @@ type trafficSwitcher struct {
 	optTabletTypes   string //tabletTypes option passed to MoveTables/Reshard
 	externalCluster  string
 	externalTopo     *topo.Server
+	sourceTimeZone   string
+	targetTimeZone   string
 }
 
 /*
@@ -122,6 +139,8 @@ func (ts *trafficSwitcher) Tables() []string                               { ret
 func (ts *trafficSwitcher) TargetKeyspaceName() string                     { return ts.targetKeyspace }
 func (ts *trafficSwitcher) Targets() map[string]*workflow.MigrationTarget  { return ts.targets }
 func (ts *trafficSwitcher) WorkflowName() string                           { return ts.workflow }
+func (ts *trafficSwitcher) SourceTimeZone() string                         { return ts.sourceTimeZone }
+func (ts *trafficSwitcher) TargetTimeZone() string                         { return ts.targetTimeZone }
 
 func (ts *trafficSwitcher) ForAllSources(f func(source *workflow.MigrationSource) error) error {
 	var wg sync.WaitGroup
@@ -798,6 +817,8 @@ func (wr *Wrangler) buildTrafficSwitcher(ctx context.Context, targetKeyspace, wo
 		for _, bls := range target.Sources {
 			if ts.sourceKeyspace == "" {
 				ts.sourceKeyspace = bls.Keyspace
+				ts.sourceTimeZone = bls.SourceTimeZone
+				ts.targetTimeZone = bls.TargetTimeZone
 				ts.externalCluster = bls.ExternalCluster
 				if ts.externalCluster != "" {
 					externalTopo, err := wr.ts.OpenExternalVitessClusterServer(ctx, ts.externalCluster)
@@ -1015,7 +1036,13 @@ func (ts *trafficSwitcher) changeTableSourceWrites(ctx context.Context, access a
 		}); err != nil {
 			return err
 		}
-		_, err := topotools.RefreshTabletsByShard(ctx, ts.TopoServer(), ts.TabletManagerClient(), source.GetShard(), nil, ts.Logger())
+		rtbsCtx, cancel := context.WithTimeout(ctx, shardTabletRefreshTimeout)
+		defer cancel()
+		isPartial, partialDetails, err := topotools.RefreshTabletsByShard(rtbsCtx, ts.TopoServer(), ts.TabletManagerClient(), source.GetShard(), nil, ts.Logger())
+		if isPartial {
+			err = fmt.Errorf("failed to successfully refresh all tablets in the %s/%s source shard (%v):\n  %v",
+				source.GetShard().Keyspace(), source.GetShard().ShardName(), err, partialDetails)
+		}
 		return err
 	})
 }
@@ -1141,12 +1168,15 @@ func (ts *trafficSwitcher) createReverseVReplication(ctx context.Context) error 
 		bls := target.Sources[uid]
 		source := ts.Sources()[bls.Shard]
 		reverseBls := &binlogdatapb.BinlogSource{
-			Keyspace:   ts.TargetKeyspaceName(),
-			Shard:      target.GetShard().ShardName(),
-			TabletType: bls.TabletType,
-			Filter:     &binlogdatapb.Filter{},
-			OnDdl:      bls.OnDdl,
+			Keyspace:       ts.TargetKeyspaceName(),
+			Shard:          target.GetShard().ShardName(),
+			TabletType:     bls.TabletType,
+			Filter:         &binlogdatapb.Filter{},
+			OnDdl:          bls.OnDdl,
+			SourceTimeZone: bls.TargetTimeZone,
+			TargetTimeZone: bls.SourceTimeZone,
 		}
+
 		for _, rule := range bls.Filter.Rules {
 			if rule.Filter == "exclude" {
 				reverseBls.Filter.Rules = append(reverseBls.Filter.Rules, rule)
@@ -1212,9 +1242,15 @@ func (ts *trafficSwitcher) getReverseVReplicationUpdateQuery(targetCell string, 
 
 func (ts *trafficSwitcher) deleteReverseVReplication(ctx context.Context) error {
 	return ts.ForAllSources(func(source *workflow.MigrationSource) error {
-		query := fmt.Sprintf("delete from _vt.vreplication where db_name=%s and workflow=%s", encodeString(source.GetPrimary().DbName()), encodeString(ts.reverseWorkflow))
-		_, err := ts.TabletManagerClient().VReplicationExec(ctx, source.GetPrimary().Tablet, query)
-		return err
+		query := fmt.Sprintf(sqlDeleteWorkflow, encodeString(source.GetPrimary().DbName()), encodeString(ts.reverseWorkflow))
+		if _, err := ts.TabletManagerClient().VReplicationExec(ctx, source.GetPrimary().Tablet, query); err != nil {
+			return err
+		}
+		query = fmt.Sprintf(sqlDeleteVDiffs, encodeString(source.GetPrimary().Keyspace), encodeString(ts.reverseWorkflow))
+		if _, err := ts.wr.tmc.ExecuteFetchAsDba(ctx, source.GetPrimary().Tablet, false, []byte(query), -1, false, false); err != nil {
+			ts.Logger().Infof("Error deleting vdiff data for %s.%s workflow: %v", source.GetPrimary().Keyspace, ts.reverseWorkflow, err)
+		}
+		return nil
 	})
 }
 
@@ -1283,7 +1319,9 @@ func (ts *trafficSwitcher) allowTableTargetWrites(ctx context.Context) error {
 		}); err != nil {
 			return err
 		}
-		_, err := topotools.RefreshTabletsByShard(ctx, ts.TopoServer(), ts.TabletManagerClient(), target.GetShard(), nil, ts.Logger())
+		rtbsCtx, cancel := context.WithTimeout(ctx, shardTabletRefreshTimeout)
+		defer cancel()
+		_, _, err := topotools.RefreshTabletsByShard(rtbsCtx, ts.TopoServer(), ts.TabletManagerClient(), target.GetShard(), nil, ts.Logger())
 		return err
 	})
 }
@@ -1389,7 +1427,9 @@ func (ts *trafficSwitcher) dropSourceDeniedTables(ctx context.Context) error {
 		}); err != nil {
 			return err
 		}
-		_, err := topotools.RefreshTabletsByShard(ctx, ts.TopoServer(), ts.TabletManagerClient(), source.GetShard(), nil, ts.Logger())
+		rtbsCtx, cancel := context.WithTimeout(ctx, shardTabletRefreshTimeout)
+		defer cancel()
+		_, _, err := topotools.RefreshTabletsByShard(rtbsCtx, ts.TopoServer(), ts.TabletManagerClient(), source.GetShard(), nil, ts.Logger())
 		return err
 	})
 }
@@ -1527,20 +1567,31 @@ func (ts *trafficSwitcher) freezeTargetVReplication(ctx context.Context) error {
 
 func (ts *trafficSwitcher) dropTargetVReplicationStreams(ctx context.Context) error {
 	return ts.ForAllTargets(func(target *workflow.MigrationTarget) error {
-		ts.Logger().Infof("Deleting target streams for workflow %s db_name %s", ts.WorkflowName(), target.GetPrimary().DbName())
-		query := fmt.Sprintf("delete from _vt.vreplication where db_name=%s and workflow=%s", encodeString(target.GetPrimary().DbName()), encodeString(ts.WorkflowName()))
-		_, err := ts.TabletManagerClient().VReplicationExec(ctx, target.GetPrimary().Tablet, query)
-		return err
+		ts.Logger().Infof("Deleting target streams and related data for workflow %s db_name %s", ts.WorkflowName(), target.GetPrimary().DbName())
+		query := fmt.Sprintf(sqlDeleteWorkflow, encodeString(target.GetPrimary().DbName()), encodeString(ts.WorkflowName()))
+		if _, err := ts.TabletManagerClient().VReplicationExec(ctx, target.GetPrimary().Tablet, query); err != nil {
+			return err
+		}
+		query = fmt.Sprintf(sqlDeleteVDiffs, encodeString(target.GetPrimary().Keyspace), encodeString(ts.WorkflowName()))
+		if _, err := ts.wr.tmc.ExecuteFetchAsDba(ctx, target.GetPrimary().Tablet, false, []byte(query), -1, false, false); err != nil {
+			ts.Logger().Infof("Error deleting vdiff data for %s.%s workflow: %v", target.GetPrimary().Keyspace, ts.WorkflowName(), err)
+		}
+		return nil
 	})
 }
 
 func (ts *trafficSwitcher) dropSourceReverseVReplicationStreams(ctx context.Context) error {
 	return ts.ForAllSources(func(source *workflow.MigrationSource) error {
-		ts.Logger().Infof("Deleting reverse streams for workflow %s db_name %s", ts.WorkflowName(), source.GetPrimary().DbName())
-		query := fmt.Sprintf("delete from _vt.vreplication where db_name=%s and workflow=%s",
-			encodeString(source.GetPrimary().DbName()), encodeString(workflow.ReverseWorkflowName(ts.WorkflowName())))
-		_, err := ts.TabletManagerClient().VReplicationExec(ctx, source.GetPrimary().Tablet, query)
-		return err
+		ts.Logger().Infof("Deleting reverse streams and related data for workflow %s db_name %s", ts.WorkflowName(), source.GetPrimary().DbName())
+		query := fmt.Sprintf(sqlDeleteWorkflow, encodeString(source.GetPrimary().DbName()), encodeString(workflow.ReverseWorkflowName(ts.WorkflowName())))
+		if _, err := ts.TabletManagerClient().VReplicationExec(ctx, source.GetPrimary().Tablet, query); err != nil {
+			return err
+		}
+		query = fmt.Sprintf(sqlDeleteVDiffs, encodeString(source.GetPrimary().Keyspace), encodeString(workflow.ReverseWorkflowName(ts.WorkflowName())))
+		if _, err := ts.wr.tmc.ExecuteFetchAsDba(ctx, source.GetPrimary().Tablet, false, []byte(query), -1, false, false); err != nil {
+			ts.Logger().Infof("Error deleting vdiff data for %s.%s workflow: %v", source.GetPrimary().Keyspace, workflow.ReverseWorkflowName(ts.WorkflowName()), err)
+		}
+		return nil
 	})
 }
 

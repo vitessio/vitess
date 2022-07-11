@@ -861,15 +861,17 @@ func TestPlayerFilters(t *testing.T) {
 	}}
 
 	for _, tcase := range testcases {
-		if tcase.logs != nil {
-			logch := vrLogStatsLogger.Subscribe("vrlogstats")
-			defer expectLogsAndUnsubscribe(t, tcase.logs, logch)
-		}
-		execStatements(t, []string{tcase.input})
-		expectDBClientQueries(t, tcase.output)
-		if tcase.table != "" {
-			expectData(t, tcase.table, tcase.data)
-		}
+		t.Run(tcase.input, func(t *testing.T) {
+			if tcase.logs != nil {
+				logch := vrLogStatsLogger.Subscribe("vrlogstats")
+				defer expectLogsAndUnsubscribe(t, tcase.logs, logch)
+			}
+			execStatements(t, []string{tcase.input})
+			expectDBClientQueries(t, tcase.output)
+			if tcase.table != "" {
+				expectData(t, tcase.table, tcase.data)
+			}
+		})
 	}
 }
 
@@ -1384,7 +1386,7 @@ func TestPlayerTypes(t *testing.T) {
 	log.Errorf("TestPlayerTypes: flavor is %s", env.Flavor)
 	enableJSONColumnTesting := false
 	flavor := strings.ToLower(env.Flavor)
-	// Disable tests on percona (which identifies as mysql56) and mariadb platforms in CI since they
+	// Disable tests on percona and mariadb platforms in CI since they
 	// either don't support JSON or JSON support is not enabled by default
 	if strings.Contains(flavor, "mysql57") || strings.Contains(flavor, "mysql80") {
 		log.Infof("Running JSON column type tests on flavor %s", flavor)
@@ -2441,7 +2443,6 @@ func TestRestartOnVStreamEnd(t *testing.T) {
 		"/update _vt.vreplication set message='vstream ended'",
 	})
 	streamerEngine.Open()
-
 	execStatements(t, []string{
 		"insert into t1 values(2, 'aaa')",
 	})

@@ -39,8 +39,8 @@ import (
 )
 
 var (
-	_                = flag.Bool("enable_semi_sync", false, "(DEPRECATED - Set the correct durability_policy instead) Enable semi-sync when configuring replication, on primary and replica tablets only (rdonly tablets will not ack).")
-	setSuperReadOnly = flag.Bool("use_super_read_only", true, "Set super_read_only flag when performing planned failover.")
+	enableSemiSync   = flag.Bool("enable_semi_sync", false, "Enable semi-sync when configuring replication, on primary and replica tablets only (rdonly tablets will not ack).")
+	setSuperReadOnly = flag.Bool("use_super_read_only", false, "Set super_read_only flag when performing planned failover.")
 )
 
 // ReplicationStatus returns the replication status
@@ -52,9 +52,104 @@ func (tm *TabletManager) ReplicationStatus(ctx context.Context) (*replicationdat
 	return mysql.ReplicationStatusToProto(status), nil
 }
 
-// MasterStatus is the old version of PrimaryStatus. Deprecated.
-func (tm *TabletManager) MasterStatus(ctx context.Context) (*replicationdatapb.PrimaryStatus, error) {
-	return tm.PrimaryStatus(ctx)
+// FullStatus returns the full status of MySQL including the replication information, semi-sync information, GTID information among others
+func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.FullStatus, error) {
+	// Server ID - "select @@global.server_id"
+	serverID, err := tm.MysqlDaemon.GetServerID(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Server UUID - "select @@global.server_uuid"
+	serverUUID, err := tm.MysqlDaemon.GetServerUUID(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Replication status - "SHOW REPLICA STATUS"
+	replicationStatus, err := tm.MysqlDaemon.ReplicationStatus()
+	var replicationStatusProto *replicationdatapb.Status
+	if err != nil && err != mysql.ErrNotReplica {
+		return nil, err
+	}
+	if err == nil {
+		replicationStatusProto = mysql.ReplicationStatusToProto(replicationStatus)
+	}
+
+	// Primary status - "SHOW MASTER STATUS"
+	primaryStatus, err := tm.MysqlDaemon.PrimaryStatus(ctx)
+	var primaryStatusProto *replicationdatapb.PrimaryStatus
+	if err != nil && err != mysql.ErrNoPrimaryStatus {
+		return nil, err
+	}
+	if err == nil {
+		primaryStatusProto = mysql.PrimaryStatusToProto(primaryStatus)
+	}
+
+	// Purged GTID set
+	purgedGTIDs, err := tm.MysqlDaemon.GetGTIDPurged(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Version string "majorVersion.minorVersion.patchRelease"
+	version := tm.MysqlDaemon.GetVersionString()
+
+	// Version comment "select @@global.version_comment"
+	versionComment := tm.MysqlDaemon.GetVersionComment(ctx)
+
+	// Read only - "SHOW VARIABLES LIKE 'read_only'"
+	readOnly, err := tm.MysqlDaemon.IsReadOnly()
+	if err != nil {
+		return nil, err
+	}
+
+	// Binlog Information - "select @@global.binlog_format, @@global.log_bin, @@global.log_slave_updates, @@global.binlog_row_image"
+	binlogFormat, logBin, logReplicaUpdates, binlogRowImage, err := tm.MysqlDaemon.GetBinlogInformation(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// GTID Mode - "select @@global.gtid_mode" - Only applicable for MySQL variants
+	gtidMode, err := tm.MysqlDaemon.GetGTIDMode(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Semi sync settings - "show global variables like 'rpl_semi_sync_%_enabled'"
+	primarySemiSync, replicaSemiSync := tm.MysqlDaemon.SemiSyncEnabled()
+
+	// Semi sync status - "show status like 'Rpl_semi_sync_%_status'"
+	primarySemiSyncStatus, replicaSemiSyncStatus := tm.MysqlDaemon.SemiSyncStatus()
+
+	//  Semi sync clients count - "show status like 'semi_sync_primary_clients'"
+	semiSyncClients := tm.MysqlDaemon.SemiSyncClients()
+
+	// Semi sync settings - "show status like 'rpl_semi_sync_%'
+	semiSyncTimeout, semiSyncNumReplicas := tm.MysqlDaemon.SemiSyncSettings()
+
+	return &replicationdatapb.FullStatus{
+		ServerId:                    serverID,
+		ServerUuid:                  serverUUID,
+		ReplicationStatus:           replicationStatusProto,
+		PrimaryStatus:               primaryStatusProto,
+		GtidPurged:                  mysql.EncodePosition(purgedGTIDs),
+		Version:                     version,
+		VersionComment:              versionComment,
+		ReadOnly:                    readOnly,
+		GtidMode:                    gtidMode,
+		BinlogFormat:                binlogFormat,
+		BinlogRowImage:              binlogRowImage,
+		LogBinEnabled:               logBin,
+		LogReplicaUpdates:           logReplicaUpdates,
+		SemiSyncPrimaryEnabled:      primarySemiSync,
+		SemiSyncReplicaEnabled:      replicaSemiSync,
+		SemiSyncPrimaryStatus:       primarySemiSyncStatus,
+		SemiSyncReplicaStatus:       replicaSemiSyncStatus,
+		SemiSyncPrimaryClients:      semiSyncClients,
+		SemiSyncPrimaryTimeout:      semiSyncTimeout,
+		SemiSyncWaitForReplicaCount: semiSyncNumReplicas,
+	}, nil
 }
 
 // PrimaryStatus returns the replication status for a primary tablet.
@@ -64,11 +159,6 @@ func (tm *TabletManager) PrimaryStatus(ctx context.Context) (*replicationdatapb.
 		return nil, err
 	}
 	return mysql.PrimaryStatusToProto(status), nil
-}
-
-// MasterPosition is the old version of PrimaryPosition. Deprecated.
-func (tm *TabletManager) MasterPosition(ctx context.Context) (string, error) {
-	return tm.PrimaryPosition(ctx)
 }
 
 // PrimaryPosition returns the position of a primary database
@@ -237,11 +327,6 @@ func (tm *TabletManager) ResetReplication(ctx context.Context) error {
 	return tm.MysqlDaemon.ResetReplication(ctx)
 }
 
-// InitMaster is the old version of InitPrimary. Deprecated.
-func (tm *TabletManager) InitMaster(ctx context.Context, semiSync bool) (string, error) {
-	return tm.InitPrimary(ctx, semiSync)
-}
-
 // InitPrimary enables writes and returns the replication position.
 func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string, error) {
 	log.Infof("InitPrimary")
@@ -390,11 +475,6 @@ func (tm *TabletManager) DemotePrimary(ctx context.Context) (*replicationdatapb.
 	return tm.demotePrimary(ctx, true /* revertPartialFailure */)
 }
 
-// DemoteMaster is the old version of DemotePrimary. Deprecated.
-func (tm *TabletManager) DemoteMaster(ctx context.Context) (*replicationdatapb.PrimaryStatus, error) {
-	return tm.DemotePrimary(ctx)
-}
-
 // demotePrimary implements DemotePrimary with an additional, private option.
 //
 // If revertPartialFailure is true, and a step fails in the middle, it will try
@@ -500,11 +580,6 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 	return mysql.PrimaryStatusToProto(status), nil
 }
 
-// UndoDemoteMaster is the old version of UndoDemotePrimary. Deprecated.
-func (tm *TabletManager) UndoDemoteMaster(ctx context.Context, semiSync bool) error {
-	return tm.UndoDemotePrimary(ctx, semiSync)
-}
-
 // UndoDemotePrimary reverts a previous call to DemotePrimary
 // it sets read-only to false, fixes semi-sync
 // and returns its primary position.
@@ -554,6 +629,27 @@ func (tm *TabletManager) ReplicaWasPromoted(ctx context.Context) error {
 	return tm.changeTypeLocked(ctx, topodatapb.TabletType_PRIMARY, DBActionNone, SemiSyncActionNone)
 }
 
+// ResetReplicationParameters resets the replica replication parameters
+func (tm *TabletManager) ResetReplicationParameters(ctx context.Context) error {
+	log.Infof("ResetReplicationParameters")
+	if err := tm.lock(ctx); err != nil {
+		return err
+	}
+	defer tm.unlock()
+
+	tm.replManager.setReplicationStopped(true)
+	err := tm.MysqlDaemon.StopReplication(tm.hookExtraEnv())
+	if err != nil {
+		return err
+	}
+
+	err = tm.MysqlDaemon.ResetReplicationParameters(ctx)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // SetReplicationSource sets replication primary, and waits for the
 // reparent_journal table entry up to context timeout
 func (tm *TabletManager) SetReplicationSource(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool, semiSync bool) error {
@@ -566,11 +662,6 @@ func (tm *TabletManager) SetReplicationSource(ctx context.Context, parentAlias *
 	// setReplicationSourceLocked also fixes the semi-sync. In case the tablet type is primary it assumes that it will become a replica if SetReplicationSource
 	// is called, so we always call fixSemiSync with a non-primary tablet type. This will always set the source side replication to false.
 	return tm.setReplicationSourceLocked(ctx, parentAlias, timeCreatedNS, waitPosition, forceStartReplication, convertBoolToSemiSyncAction(semiSync))
-}
-
-// SetMaster is the old version of SetReplicationSource. Deprecated.
-func (tm *TabletManager) SetMaster(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool, semiSync bool) error {
-	return tm.SetReplicationSource(ctx, parentAlias, timeCreatedNS, waitPosition, forceStartReplication, semiSync)
 }
 
 func (tm *TabletManager) setReplicationSourceRepairReplication(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool) (err error) {
@@ -758,7 +849,6 @@ func (tm *TabletManager) StopReplicationAndGetStatus(ctx context.Context, stopRe
 	if stopReplicationMode == replicationdatapb.StopReplicationMode_IOTHREADONLY {
 		if !rs.IOHealthy() {
 			return StopReplicationAndGetStatusResponse{
-				HybridStatus: before,
 				Status: &replicationdatapb.StopReplicationStatus{
 					Before: before,
 					After:  before,
@@ -776,7 +866,6 @@ func (tm *TabletManager) StopReplicationAndGetStatus(ctx context.Context, stopRe
 		if !rs.Healthy() {
 			// no replication is running, just return what we got
 			return StopReplicationAndGetStatusResponse{
-				HybridStatus: before,
 				Status: &replicationdatapb.StopReplicationStatus{
 					Before: before,
 					After:  before,
@@ -806,10 +895,9 @@ func (tm *TabletManager) StopReplicationAndGetStatus(ctx context.Context, stopRe
 	rs.Position = rsAfter.Position
 	rs.RelayLogPosition = rsAfter.RelayLogPosition
 	rs.FilePosition = rsAfter.FilePosition
-	rs.FileRelayLogPosition = rsAfter.FileRelayLogPosition
+	rs.RelayLogSourceBinlogEquivalentPosition = rsAfter.RelayLogSourceBinlogEquivalentPosition
 
 	return StopReplicationAndGetStatusResponse{
-		HybridStatus: mysql.ReplicationStatusToProto(rs),
 		Status: &replicationdatapb.StopReplicationStatus{
 			Before: before,
 			After:  after,
@@ -820,11 +908,6 @@ func (tm *TabletManager) StopReplicationAndGetStatus(ctx context.Context, stopRe
 // StopReplicationAndGetStatusResponse holds the original hybrid Status struct, as well as a new Status field, which
 // hold the result of show replica status called before stopping replication, and after stopping replication.
 type StopReplicationAndGetStatusResponse struct {
-	// HybridStatus is deprecated. It currently represents a hybrid struct where all data represents the before state,
-	// except for all position related data which comes from the after state. Please use status instead, which holds
-	// discrete replication status calls before and after stopping the replica, or stopping the replica's io_thread.
-	HybridStatus *replicationdatapb.Status
-
 	// Status represents the replication status call right before, and right after telling the replica to stop.
 	Status *replicationdatapb.StopReplicationStatus
 }
@@ -902,18 +985,45 @@ func isPrimaryEligible(tabletType topodatapb.TabletType) bool {
 }
 
 func (tm *TabletManager) fixSemiSync(tabletType topodatapb.TabletType, semiSync SemiSyncAction) error {
-	switch semiSync {
-	case SemiSyncActionNone:
+	if !*enableSemiSync {
+		// Semi-sync handling is not enabled.
+		if semiSync == SemiSyncActionSet {
+			log.Error("invalid configuration - semi-sync should be setup according to durability policies, but enable_semi_sync is not set")
+		}
 		return nil
-	case SemiSyncActionSet:
-		// Always enable replica-side since it doesn't hurt to keep it on for a primary.
-		// The primary-side needs to be off for a replica, or else it will get stuck.
-		return tm.MysqlDaemon.SetSemiSyncEnabled(tabletType == topodatapb.TabletType_PRIMARY, true)
-	case SemiSyncActionUnset:
-		return tm.MysqlDaemon.SetSemiSyncEnabled(false, false)
-	default:
-		return vterrors.Errorf(vtrpc.Code_INTERNAL, "Unknown SemiSyncAction - %v", semiSync)
 	}
+
+	// Only enable if we're eligible for becoming primary (REPLICA type).
+	// Ineligible tablets (RDONLY) shouldn't ACK because we'll never promote them.
+	if !isPrimaryEligible(tabletType) {
+		if semiSync == SemiSyncActionSet {
+			log.Error("invalid configuration - semi-sync should be setup according to durability policies, but the tablet is not primaryEligible")
+		}
+		return tm.MysqlDaemon.SetSemiSyncEnabled(false, false)
+	}
+
+	if semiSync == SemiSyncActionUnset {
+		log.Error("invalid configuration - enabling semi sync even though not specified by durability policies. Possibly in the process of upgrading.")
+	}
+	// Always enable replica-side since it doesn't hurt to keep it on for a primary.
+	// The primary-side needs to be off for a replica, or else it will get stuck.
+	return tm.MysqlDaemon.SetSemiSyncEnabled(tabletType == topodatapb.TabletType_PRIMARY, true)
+
+	// This following code will be uncommented and the above deleted when we are ready to use the
+	// durability policies for setting the semi_sync information
+
+	//switch semiSync {
+	//case SemiSyncActionNone:
+	//	return nil
+	//case SemiSyncActionSet:
+	//	// Always enable replica-side since it doesn't hurt to keep it on for a primary.
+	//	// The primary-side needs to be off for a replica, or else it will get stuck.
+	//	return tm.MysqlDaemon.SetSemiSyncEnabled(tabletType == topodatapb.TabletType_PRIMARY, true)
+	//case SemiSyncActionUnset:
+	//	return tm.MysqlDaemon.SetSemiSyncEnabled(false, false)
+	//default:
+	//	return vterrors.Errorf(vtrpc.Code_INTERNAL, "Unknown SemiSyncAction - %v", semiSync)
+	//}
 }
 
 func (tm *TabletManager) isPrimarySideSemiSyncEnabled() bool {
@@ -922,10 +1032,14 @@ func (tm *TabletManager) isPrimarySideSemiSyncEnabled() bool {
 }
 
 func (tm *TabletManager) fixSemiSyncAndReplication(tabletType topodatapb.TabletType, semiSync SemiSyncAction) error {
-	if semiSync == SemiSyncActionNone {
-		// Semi-sync handling is not required.
+	if !*enableSemiSync {
+		// Semi-sync handling is not enabled.
 		return nil
 	}
+	//if semiSync == SemiSyncActionNone {
+	//	// Semi-sync handling is not required.
+	//	return nil
+	//}
 
 	if tabletType == topodatapb.TabletType_PRIMARY {
 		// Primary is special. It is always handled at the
@@ -951,7 +1065,8 @@ func (tm *TabletManager) fixSemiSyncAndReplication(tabletType topodatapb.TabletT
 		return nil
 	}
 
-	shouldAck := semiSync == SemiSyncActionSet
+	//shouldAck := semiSync == SemiSyncActionSet
+	shouldAck := isPrimaryEligible(tabletType)
 	acking, err := tm.MysqlDaemon.SemiSyncReplicationStatus()
 	if err != nil {
 		return vterrors.Wrap(err, "failed to get SemiSyncReplicationStatus")

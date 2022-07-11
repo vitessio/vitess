@@ -55,7 +55,7 @@ func init() {
 	addCommand(queriesGroupName, command{
 		name:       "VtGateExecute",
 		method:     commandVtGateExecute,
-		params:     "-server <vtgate> [-bind_variables <JSON map>] [-keyspace <default keyspace>] [-tablet_type <tablet type>] [-options <proto text options>] [-json] <sql>",
+		params:     "--server <vtgate> [--bind_variables <JSON map>] [--keyspace <default keyspace>] [--tablet_type <tablet type>] [--options <proto text options>] [--json] <sql>",
 		help:       "Executes the given SQL query with the provided bound variables against the vtgate server.",
 		deprecated: true,
 	})
@@ -64,36 +64,36 @@ func init() {
 	addCommand(queriesGroupName, command{
 		name:         "VtTabletExecute",
 		method:       commandVtTabletExecute,
-		params:       "[-username <TableACL user>] [-transaction_id <transaction_id>] [-options <proto text options>] [-json] <tablet alias> <sql>",
-		help:         "Executes the given query on the given tablet. -transaction_id is optional. Use VtTabletBegin to start a transaction.",
+		params:       "[--username <TableACL user>] [--transaction_id <transaction_id>] [--options <proto text options>] [--json] <tablet alias> <sql>",
+		help:         "Executes the given query on the given tablet. --transaction_id is optional. Use VtTabletBegin to start a transaction.",
 		deprecated:   true,
 		deprecatedBy: "ExecuteFetchAsApp",
 	})
 	addCommand(queriesGroupName, command{
 		name:       "VtTabletBegin",
 		method:     commandVtTabletBegin,
-		params:     "[-username <TableACL user>] <tablet alias>",
+		params:     "[--username <TableACL user>] <tablet alias>",
 		help:       "Starts a transaction on the provided server.",
 		deprecated: true,
 	})
 	addCommand(queriesGroupName, command{
 		name:       "VtTabletCommit",
 		method:     commandVtTabletCommit,
-		params:     "[-username <TableACL user>] <transaction_id>",
+		params:     "[--username <TableACL user>] <transaction_id>",
 		help:       "Commits the given transaction on the provided server.",
 		deprecated: true,
 	})
 	addCommand(queriesGroupName, command{
 		name:       "VtTabletRollback",
 		method:     commandVtTabletRollback,
-		params:     "[-username <TableACL user>] <tablet alias> <transaction_id>",
+		params:     "[--username <TableACL user>] <tablet alias> <transaction_id>",
 		help:       "Rollbacks the given transaction on the provided server.",
 		deprecated: true,
 	})
 	addCommand(queriesGroupName, command{
 		name:       "VtTabletStreamHealth",
 		method:     commandVtTabletStreamHealth,
-		params:     "[-count <count, default 1>] <tablet alias>",
+		params:     "[--count <count, default 1>] <tablet alias>",
 		help:       "Executes the StreamHealth streaming query to a vttablet process. Will stop after getting <count> answers.",
 		deprecated: true,
 	})

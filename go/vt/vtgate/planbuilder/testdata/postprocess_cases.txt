@@ -1837,7 +1837,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Scalar",
-    "Aggregates": "count(0)",
+    "Aggregates": "sum_count(0) AS count",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -1853,7 +1853,28 @@ Gen4 plan same as above
     ]
   }
 }
-Gen4 error: In aggregated query without GROUP BY, expression of SELECT list contains nonaggregated column 'num'; this is incompatible with sql_mode=only_full_group_by
+{
+  "QueryType": "SELECT",
+  "Original": "select count(id), num from user",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Scalar",
+    "Aggregates": "sum_count(0) AS count(id), random(1) AS num",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select count(id), num from `user` where 1 != 1",
+        "Query": "select count(id), num from `user`",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
 
 # aggregation and non-aggregations column with order by
 "select count(id), num from user order by 2"
@@ -1869,7 +1890,7 @@ Gen4 error: In aggregated query without GROUP BY, expression of SELECT list cont
       {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "count(0)",
+        "Aggregates": "sum_count(0) AS count",
         "ResultColumns": 3,
         "Inputs": [
           {
@@ -1888,7 +1909,30 @@ Gen4 error: In aggregated query without GROUP BY, expression of SELECT list cont
     ]
   }
 }
-Gen4 error: In aggregated query without GROUP BY, expression of SELECT list contains nonaggregated column 'num'; this is incompatible with sql_mode=only_full_group_by
+{
+  "QueryType": "SELECT",
+  "Original": "select count(id), num from user order by 2",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Scalar",
+    "Aggregates": "sum_count(0) AS count(id), random(1) AS num",
+    "ResultColumns": 2,
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select count(id), num, weight_string(num) from `user` where 1 != 1",
+        "OrderBy": "(1|2) ASC",
+        "Query": "select count(id), num, weight_string(num) from `user` order by num asc",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
 
 # aggregation and non-aggregations column with group by
 "select count(id), num from user group by 2"
@@ -1898,7 +1942,7 @@ Gen4 error: In aggregated query without GROUP BY, expression of SELECT list cont
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count(0)",
+    "Aggregates": "sum_count(0) AS count",
     "GroupBy": "1",
     "Inputs": [
       {
@@ -1923,7 +1967,7 @@ Gen4 error: In aggregated query without GROUP BY, expression of SELECT list cont
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "sum(0) AS count(id)",
+    "Aggregates": "sum_count(0) AS count(id)",
     "GroupBy": "(1|2)",
     "ResultColumns": 2,
     "Inputs": [
@@ -1956,7 +2000,7 @@ Gen4 error: In aggregated query without GROUP BY, expression of SELECT list cont
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "count(0)",
+        "Aggregates": "sum_count(0) AS count",
         "GroupBy": "1",
         "Inputs": [
           {
@@ -1989,7 +2033,7 @@ Gen4 error: In aggregated query without GROUP BY, expression of SELECT list cont
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "sum(0) AS count(id)",
+        "Aggregates": "sum_count(0) AS count(id)",
         "GroupBy": "(1|2)",
         "Inputs": [
           {
@@ -2073,7 +2117,31 @@ Gen4 error: In aggregated query without GROUP BY, expression of SELECT list cont
 # Scatter order by and aggregation: order by column must reference column from select list
 "select col, count(*) from user group by col order by c1"
 "unsupported: memory sort: order by must reference a column in the select list: c1 asc"
-Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column 'c1' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
+{
+  "QueryType": "SELECT",
+  "Original": "select col, count(*) from user group by col order by c1",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "sum_count_star(1) AS count(*), random(2) AS c1",
+    "GroupBy": "0",
+    "ResultColumns": 2,
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col, count(*), c1, weight_string(c1) from `user` where 1 != 1 group by col",
+        "OrderBy": "(2|3) ASC, 0 ASC",
+        "Query": "select col, count(*), c1, weight_string(c1) from `user` group by col order by c1 asc, col asc",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
 
 # Distinct with cross shard query
 "select distinct user.a from user join user_extra"
@@ -2271,7 +2339,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
       {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum(0) AS a",
+        "Aggregates": "sum_count_star(0) AS a",
         "Inputs": [
           {
             "OperatorType": "Route",

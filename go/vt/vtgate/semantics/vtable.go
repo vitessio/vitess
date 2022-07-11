@@ -37,7 +37,6 @@ var _ TableInfo = (*vTableInfo)(nil)
 // dependencies implements the TableInfo interface
 func (v *vTableInfo) dependencies(colName string, org originable) (dependencies, error) {
 	var deps dependencies = &nothing{}
-	var err error
 	for i, name := range v.columnNames {
 		if name != colName {
 			continue
@@ -45,10 +44,7 @@ func (v *vTableInfo) dependencies(colName string, org originable) (dependencies,
 		directDeps, recursiveDeps, qt := org.depsForExpr(v.cols[i])
 
 		newDeps := createCertain(directDeps, recursiveDeps, qt)
-		deps, err = deps.merge(newDeps)
-		if err != nil {
-			return nil, err
-		}
+		deps = deps.merge(newDeps, false)
 	}
 	if deps.empty() && v.hasStar() {
 		return createUncertain(v.tables, v.tables), nil
@@ -97,7 +93,7 @@ func (v *vTableInfo) hasStar() bool {
 }
 
 // GetTables implements the TableInfo interface
-func (v *vTableInfo) getTableSet(org originable) TableSet {
+func (v *vTableInfo) getTableSet(_ originable) TableSet {
 	return v.tables
 }
 

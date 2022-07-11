@@ -27,12 +27,12 @@ const (
 	readableTimeFormat = "20060102150405"
 )
 
-// CreateUUID creates a globally unique ID, with a given delimiter
+// CreateUUIDWithDelimiter creates a globally unique ID, with a given delimiter
 // example results:
 // - 1876a01a-354d-11eb-9a79-f8e4e33000bb (delimiter = "-")
 // - 7cee19dd_354b_11eb_82cd_f875a4d24e90 (delimiter = "_")
 // - 55d00cdce6ab11eabfe60242ac1c000d (delimiter = "")
-func createUUID(delimiter string) (string, error) {
+func CreateUUIDWithDelimiter(delimiter string) (string, error) {
 	u, err := uuid.NewUUID()
 	if err != nil {
 		return "", err
@@ -45,7 +45,7 @@ func createUUID(delimiter string) (string, error) {
 // CreateUUID creates a globally unique ID
 // example result "1876a01a-354d-11eb-9a79-f8e4e33000bb"
 func CreateUUID() (string, error) {
-	return createUUID("-")
+	return CreateUUIDWithDelimiter("-")
 }
 
 // ToReadableTimestamp returns a timestamp, in seconds resolution, that is human readable

@@ -46,7 +46,7 @@ import {
     refreshState,
     runHealthCheck,
     deleteTablet,
-    reparentTablet,
+    refreshTabletReplicationSource,
     startReplication,
     stopReplication,
     setReadOnly,
@@ -57,6 +57,9 @@ import {
     ValidateSchemaKeyspaceParams,
     ValidateVersionKeyspaceParams,
     validateVersionKeyspace,
+    fetchShardReplicationPositions,
+    createKeyspace,
+    reloadSchema,
 } from '../api/http';
 import { vtadmin as pb } from '../proto/vtadmin';
 import { formatAlias } from '../util/tablets';
@@ -96,6 +99,18 @@ export const useKeyspace = (
         },
         ...options,
     });
+};
+
+/**
+ * useCreateKeyspace is a mutation query hook that creates a keyspace.
+ */
+export const useCreateKeyspace = (
+    params: Parameters<typeof createKeyspace>[0],
+    options: UseMutationOptions<Awaited<ReturnType<typeof createKeyspace>>, Error>
+) => {
+    return useMutation<Awaited<ReturnType<typeof createKeyspace>>, Error>(() => {
+        return createKeyspace(params);
+    }, options);
 };
 
 /**
@@ -152,15 +167,15 @@ export const useDeleteTablet = (
 };
 
 /**
- * useReparentTablet reparents a tablet to the current primary in the shard.
- * This only works if the current replication position matches the last known reparent action.
+ * useRefreshTabletReplicationSource performs a `CHANGE REPLICATION SOURCE TO`
+ * on a tablet to replicate from the current primary in the shard.
  */
-export const useReparentTablet = (
-    params: Parameters<typeof reparentTablet>[0],
-    options: UseMutationOptions<Awaited<ReturnType<typeof reparentTablet>>, Error>
+export const useRefreshTabletReplicationSource = (
+    params: Parameters<typeof refreshTabletReplicationSource>[0],
+    options: UseMutationOptions<Awaited<ReturnType<typeof refreshTabletReplicationSource>>, Error>
 ) => {
-    return useMutation<Awaited<ReturnType<typeof reparentTablet>>, Error>(() => {
-        return reparentTablet(params);
+    return useMutation<Awaited<ReturnType<typeof refreshTabletReplicationSource>>, Error>(() => {
+        return refreshTabletReplicationSource(params);
     }, options);
 };
 
@@ -187,6 +202,15 @@ export const useSetReadWrite = (
         return setReadWrite(params);
     }, options);
 };
+
+/**
+ * useShardReplicationPositions is a query hook that shows the replication status
+ * of each replica machine in the shard graph.
+ */
+export const useShardReplicationPositions = (
+    params: Parameters<typeof fetchShardReplicationPositions>[0],
+    options?: UseQueryOptions<pb.GetShardReplicationPositionsResponse, Error> | undefined
+) => useQuery(['shard_replication_positions', params], () => fetchShardReplicationPositions(params), options);
 
 /**
  * useStartReplication starts replication on the specified tablet.
@@ -405,4 +429,17 @@ export const useWorkflow = (
         },
         ...options,
     });
+};
+
+/**
+ * useReloadSchema is a mutate hook that reloads schemas in one or more
+ * keyspaces, shards, or tablets in the cluster, depending on the request parameters.
+ */
+export const useReloadSchema = (
+    params: Parameters<typeof reloadSchema>[0],
+    options?: UseMutationOptions<Awaited<ReturnType<typeof reloadSchema>>, Error>
+) => {
+    return useMutation<Awaited<ReturnType<typeof reloadSchema>>, Error>(() => {
+        return reloadSchema(params);
+    }, options);
 };

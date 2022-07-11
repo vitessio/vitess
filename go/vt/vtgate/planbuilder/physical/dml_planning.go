@@ -61,7 +61,7 @@ func getVindexInformation(
 // buildChangedVindexesValues adds to the plan all the lookup vindexes that are changing.
 // Updates can only be performed to secondary lookup vindexes with no complex expressions
 // in the set clause.
-func buildChangedVindexesValues(update *sqlparser.Update, table *vindexes.Table, ksidCols []sqlparser.ColIdent) (map[string]*engine.VindexValues, string, error) {
+func buildChangedVindexesValues(update *sqlparser.Update, table *vindexes.Table, ksidCols []sqlparser.IdentifierCI) (map[string]*engine.VindexValues, string, error) {
 	changedVindexes := make(map[string]*engine.VindexValues)
 	buf, offset := initialQuery(ksidCols, table)
 	for i, vindex := range table.ColumnVindexes {
@@ -105,9 +105,6 @@ func buildChangedVindexesValues(update *sqlparser.Update, table *vindexes.Table,
 		if _, ok := vindex.Vindex.(vindexes.Lookup); !ok {
 			return nil, "", vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: You can only update lookup vindexes. Invalid update on vindex: %v", vindex.Name)
 		}
-		if !vindex.Owned {
-			return nil, "", vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: You can only update owned vindexes. Invalid update on vindex: %v", vindex.Name)
-		}
 		changedVindexes[vindex.Name] = &engine.VindexValues{
 			PvMap:  vindexValueMap,
 			Offset: offset,
@@ -127,7 +124,7 @@ func buildChangedVindexesValues(update *sqlparser.Update, table *vindexes.Table,
 	return changedVindexes, buf.String(), nil
 }
 
-func initialQuery(ksidCols []sqlparser.ColIdent, table *vindexes.Table) (*sqlparser.TrackedBuffer, int) {
+func initialQuery(ksidCols []sqlparser.IdentifierCI, table *vindexes.Table) (*sqlparser.TrackedBuffer, int) {
 	buf := sqlparser.NewTrackedBuffer(nil)
 	offset := 0
 	for _, col := range ksidCols {

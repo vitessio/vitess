@@ -23,10 +23,12 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
 	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -210,7 +212,7 @@ func (vse *Engine) Stream(ctx context.Context, startPos string, tablePKs []*binl
 		if !vse.isOpen {
 			return nil, 0, errors.New("VStreamer is not open")
 		}
-		streamer := newUVStreamer(ctx, vse, vse.env.Config().DB.AppWithDB(), vse.se, startPos, tablePKs, filter, vse.lvschema, send)
+		streamer := newUVStreamer(ctx, vse, vse.env.Config().DB.FilteredWithDB(), vse.se, startPos, tablePKs, filter, vse.lvschema, send)
 		idx := vse.streamIdx
 		vse.streamers[idx] = streamer
 		vse.streamIdx++
@@ -252,7 +254,7 @@ func (vse *Engine) StreamRows(ctx context.Context, query string, lastpk []sqltyp
 			return nil, 0, errors.New("VStreamer is not open")
 		}
 
-		rowStreamer := newRowStreamer(ctx, vse.env.Config().DB.AppWithDB(), vse.se, query, lastpk, vse.lvschema, send, vse)
+		rowStreamer := newRowStreamer(ctx, vse.env.Config().DB.FilteredWithDB(), vse.se, query, lastpk, vse.lvschema, send, vse)
 		idx := vse.streamIdx
 		vse.rowStreamers[idx] = rowStreamer
 		vse.streamIdx++
@@ -286,7 +288,7 @@ func (vse *Engine) StreamResults(ctx context.Context, query string, send func(*b
 		if !vse.isOpen {
 			return nil, 0, errors.New("VStreamer is not open")
 		}
-		resultStreamer := newResultStreamer(ctx, vse.env.Config().DB.AppWithDB(), query, send, vse)
+		resultStreamer := newResultStreamer(ctx, vse.env.Config().DB.FilteredWithDB(), query, send, vse)
 		idx := vse.streamIdx
 		vse.resultStreamers[idx] = resultStreamer
 		vse.streamIdx++
@@ -510,4 +512,29 @@ func (vse *Engine) getMySQLEndpoint(ctx context.Context, db dbconfigs.Connector)
 	host := res.Rows[0][0].ToString()
 	port, _ := res.Rows[0][1].ToInt64()
 	return fmt.Sprintf("%s:%d", host, port), nil
+}
+
+// mapPKEquivalentCols gets a PK equivalent from mysqld for the table
+// and maps the column names to field indexes in the MinimalTable struct.
+func (vse *Engine) mapPKEquivalentCols(ctx context.Context, table *binlogdatapb.MinimalTable) ([]int, error) {
+	mysqld := mysqlctl.NewMysqld(vse.env.Config().DB)
+	pkeColNames, err := mysqld.GetPrimaryKeyEquivalentColumns(ctx, vse.env.Config().DB.DBName, table.Name)
+	if err != nil {
+		return nil, err
+	}
+	pkeCols := make([]int, len(pkeColNames))
+	matches := 0
+	for n, field := range table.Fields {
+		for i, pkeColName := range pkeColNames {
+			if strings.EqualFold(field.Name, pkeColName) {
+				pkeCols[i] = n
+				matches++
+				break
+			}
+		}
+		if matches == len(pkeColNames) {
+			break
+		}
+	}
+	return pkeCols, nil
 }

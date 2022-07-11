@@ -180,6 +180,7 @@ func TestMain(m *testing.M) {
 			"--throttle_threshold", "1s",
 			"--heartbeat_enable",
 			"--heartbeat_interval", "250ms",
+			"--heartbeat_on_demand_duration", "5s",
 			"--migration_check_interval", "5s",
 		}
 		clusterInstance.VtGateExtraArgs = []string{
@@ -362,9 +363,24 @@ func checkTable(t *testing.T, showTableName string) {
 // checkTablesCount checks the number of tables in the given tablet
 func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName string, expectCount int) {
 	query := fmt.Sprintf(`show tables like '%%%s%%';`, showTableName)
-	queryResult, err := tablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
-	require.Nil(t, err)
-	assert.Equal(t, expectCount, len(queryResult.Rows))
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	rowcount := 0
+	for {
+		queryResult, err := tablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
+		require.Nil(t, err)
+		rowcount = len(queryResult.Rows)
+		if rowcount > 0 {
+			break
+		}
+
+		select {
+		case <-time.After(time.Second):
+		case <-ctx.Done():
+			break
+		}
+	}
+	assert.Equal(t, expectCount, rowcount)
 }
 
 // checkMigratedTables checks the CREATE STATEMENT of a table after migration

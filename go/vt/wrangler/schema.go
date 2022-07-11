@@ -48,7 +48,8 @@ const (
 func (wr *Wrangler) diffSchema(ctx context.Context, primarySchema *tabletmanagerdatapb.SchemaDefinition, primaryTabletAlias, alias *topodatapb.TabletAlias, excludeTables []string, includeViews bool, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
 	defer wg.Done()
 	log.Infof("Gathering schema for %v", topoproto.TabletAliasString(alias))
-	replicaSchema, err := schematools.GetSchema(ctx, wr.ts, wr.tmc, alias, nil, excludeTables, includeViews)
+	req := &tabletmanagerdatapb.GetSchemaRequest{ExcludeTables: excludeTables, IncludeViews: includeViews}
+	replicaSchema, err := schematools.GetSchema(ctx, wr.ts, wr.tmc, alias, req)
 	if err != nil {
 		er.RecordError(fmt.Errorf("GetSchema(%v, nil, %v, %v) failed: %v", alias, excludeTables, includeViews, err))
 		return
@@ -70,7 +71,8 @@ func (wr *Wrangler) ValidateSchemaShard(ctx context.Context, keyspace, shard str
 		return fmt.Errorf("no primary in shard %v/%v", keyspace, shard)
 	}
 	log.Infof("Gathering schema for primary %v", topoproto.TabletAliasString(si.PrimaryAlias))
-	primarySchema, err := schematools.GetSchema(ctx, wr.ts, wr.tmc, si.PrimaryAlias, nil, excludeTables, includeViews)
+	req := &tabletmanagerdatapb.GetSchemaRequest{ExcludeTables: excludeTables, IncludeViews: includeViews}
+	primarySchema, err := schematools.GetSchema(ctx, wr.ts, wr.tmc, si.PrimaryAlias, req)
 	if err != nil {
 		return fmt.Errorf("GetSchema(%v, nil, %v, %v) failed: %v", si.PrimaryAlias, excludeTables, includeViews, err)
 	}
@@ -148,7 +150,8 @@ func (wr *Wrangler) ValidateVSchema(ctx context.Context, keyspace string, shards
 				shardFailures.RecordError(fmt.Errorf("GetShard(%v, %v) failed: %v", keyspace, shard, err))
 				return
 			}
-			primarySchema, err := schematools.GetSchema(ctx, wr.ts, wr.tmc, si.PrimaryAlias, nil, excludeTables, includeViews)
+			req := &tabletmanagerdatapb.GetSchemaRequest{ExcludeTables: excludeTables, IncludeViews: includeViews}
+			primarySchema, err := schematools.GetSchema(ctx, wr.ts, wr.tmc, si.PrimaryAlias, req)
 			if err != nil {
 				shardFailures.RecordError(fmt.Errorf("GetSchema(%s, nil, %v, %v) (%v/%v) failed: %v", si.PrimaryAlias.String(),
 					excludeTables, includeViews, keyspace, shard, err,
@@ -226,7 +229,8 @@ func (wr *Wrangler) CopySchemaShard(ctx context.Context, sourceTabletAlias *topo
 		return nil
 	}
 
-	sourceSd, err := schematools.GetSchema(ctx, wr.ts, wr.tmc, sourceTabletAlias, tables, excludeTables, includeViews)
+	req := &tabletmanagerdatapb.GetSchemaRequest{Tables: tables, ExcludeTables: excludeTables, IncludeViews: includeViews}
+	sourceSd, err := schematools.GetSchema(ctx, wr.ts, wr.tmc, sourceTabletAlias, req)
 	if err != nil {
 		return fmt.Errorf("GetSchema(%v, %v, %v, %v) failed: %v", sourceTabletAlias, tables, excludeTables, includeViews, err)
 	}
@@ -257,8 +261,7 @@ func (wr *Wrangler) CopySchemaShard(ctx context.Context, sourceTabletAlias *topo
 	// where the database already existed on the destination, but with different
 	// options e.g. a different character set.
 	// In that case, MySQL would have skipped our CREATE DATABASE IF NOT EXISTS
-	// statement. We want to fail early in this case because vtworker SplitDiff
-	// fails in case of such an inconsistency as well.
+	// statement.
 	if !skipVerify {
 		diffs, err = schematools.CompareSchemas(ctx, wr.ts, wr.tmc, sourceTabletAlias, destShardInfo.PrimaryAlias, tables, excludeTables, includeViews)
 		if err != nil {

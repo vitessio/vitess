@@ -101,7 +101,7 @@ var acceptRanges = [16]acceptRange{
 type Charset_utf8mb3 struct{}
 
 func (u Charset_utf8mb3) Name() string {
-	return "utf8"
+	return "utf8mb3"
 }
 
 func (u Charset_utf8mb3) IsSuperset(other types.Charset) bool {

@@ -86,6 +86,7 @@ func TestMain(m *testing.M) {
 			"--throttle_threshold", "1s",
 			"--heartbeat_enable",
 			"--heartbeat_interval", "250ms",
+			"--heartbeat_on_demand_duration", "5s",
 			"--migration_check_interval", "5s",
 		}
 
@@ -254,7 +255,7 @@ func testSingle(t *testing.T, testName string) {
 		return
 	}
 	// We do not expect failure.
-	require.Equal(t, string(schema.OnlineDDLStatusComplete), migrationStatus)
+	require.Equal(t, string(schema.OnlineDDLStatusComplete), migrationStatus, migrationMessage)
 
 	if content, exists := readTestFile(t, testName, "expect_table_structure"); exists {
 		createStatement := getCreateTableStatement(t, afterTableName)

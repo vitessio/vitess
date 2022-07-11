@@ -309,7 +309,7 @@ func (r *Route) haveMatchingVindex(
 				// single column vindex - just add the option
 				routeOpcode := opcode(v.ColVindex)
 				vindex := vfunc(v.ColVindex)
-				if vindex == nil {
+				if vindex == nil || routeOpcode == engine.Scatter {
 					continue
 				}
 				v.Options = append(v.Options, &VindexOption{
@@ -355,7 +355,7 @@ func (r *Route) haveMatchingVindex(
 			}
 			v.Options = append(v.Options, newOption...)
 
-			// multi column vindex - just always add as new option for furince we do not have one already
+			// multi column vindex - just always add as new option
 			option := createOption(v.ColVindex, vfunc)
 			optionReady := option.updateWithNewColumn(colLoweredName, valueExpr, indexOfCol, value, node, v.ColVindex, opcode)
 			if optionReady {
@@ -635,6 +635,9 @@ func tupleAccess(expr sqlparser.Expr, coordinates []int) sqlparser.Expr {
 }
 
 func equalOrEqualUnique(vindex *vindexes.ColumnVindex) engine.Opcode {
+	if vindex.IsPartialVindex() {
+		return engine.SubShard
+	}
 	if vindex.IsUnique() {
 		return engine.EqualUnique
 	}
@@ -708,6 +711,12 @@ func (r *Route) planIsExpr(ctx *plancontext.PlanningContext, node *sqlparser.IsE
 	if val == nil {
 		return false
 	}
+	opcodeF := func(vindex *vindexes.ColumnVindex) engine.Opcode {
+		if _, ok := vindex.Vindex.(vindexes.Lookup); ok {
+			return engine.Scatter
+		}
+		return equalOrEqualUnique(vindex)
+	}
 
-	return r.haveMatchingVindex(ctx, node, vdValue, column, val, equalOrEqualUnique, justTheVindex)
+	return r.haveMatchingVindex(ctx, node, vdValue, column, val, opcodeF, justTheVindex)
 }

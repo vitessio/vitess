@@ -172,6 +172,10 @@ func CheckMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, shards []clu
 
 // WaitForMigrationStatus waits for a migration to reach either provided statuses (returns immediately), or eventually time out
 func WaitForMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, shards []cluster.Shard, uuid string, timeout time.Duration, expectStatuses ...schema.OnlineDDLStatus) schema.OnlineDDLStatus {
+	shardNames := map[string]bool{}
+	for _, shard := range shards {
+		shardNames[shard.Name] = true
+	}
 	query, err := sqlparser.ParseAndBind("show vitess_migrations like %a",
 		sqltypes.StringBindVariable(uuid),
 	)
@@ -187,6 +191,11 @@ func WaitForMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, shards []c
 		countMatchedShards := 0
 		r := VtgateExecQuery(t, vtParams, query, "")
 		for _, row := range r.Named().Rows {
+			shardName := row["shard"].ToString()
+			if !shardNames[shardName] {
+				// irrelevant shard
+				continue
+			}
 			lastKnownStatus = row["migration_status"].ToString()
 			if row["migration_uuid"].ToString() == uuid && statusesMap[lastKnownStatus] {
 				countMatchedShards++
@@ -234,4 +243,55 @@ func ReadMigrationLogs(t *testing.T, vtParams *mysql.ConnParams, uuid string) (l
 		logs = append(logs, migrationLog)
 	}
 	return logs
+}
+
+// ThrottleAllMigrations fully throttles online-ddl apps
+func ThrottleAllMigrations(t *testing.T, vtParams *mysql.ConnParams) {
+	query := "alter vitess_migration throttle all expire '24h' ratio 1"
+	_ = VtgateExecQuery(t, vtParams, query, "")
+}
+
+// UnthrottleAllMigrations cancels migration throttling
+func UnthrottleAllMigrations(t *testing.T, vtParams *mysql.ConnParams) {
+	query := "alter vitess_migration unthrottle all"
+	_ = VtgateExecQuery(t, vtParams, query, "")
+}
+
+// CheckThrottledApps checks for existence or non-existence of an app in the throttled apps list
+func CheckThrottledApps(t *testing.T, vtParams *mysql.ConnParams, appName string, expectFind bool) {
+	query := "show vitess_throttled_apps"
+	r := VtgateExecQuery(t, vtParams, query, "")
+
+	found := false
+	for _, row := range r.Named().Rows {
+		if row.AsString("app", "") == appName {
+			found = true
+		}
+	}
+	assert.Equal(t, expectFind, found, "check app %v in throttled apps: %v", appName, found)
+}
+
+// WaitForThrottledTimestamp waits for a migration to have a non-empty last_throttled_timestamp
+func WaitForThrottledTimestamp(t *testing.T, vtParams *mysql.ConnParams, uuid string, timeout time.Duration) (
+	row sqltypes.RowNamedValues,
+	startedTimestamp string,
+	lastThrottledTimestamp string,
+) {
+	startTime := time.Now()
+	for time.Since(startTime) < timeout {
+		rs := ReadMigrations(t, vtParams, uuid)
+		require.NotNil(t, rs)
+		for _, row = range rs.Named().Rows {
+			startedTimestamp = row.AsString("started_timestamp", "")
+			require.NotEmpty(t, startedTimestamp)
+			lastThrottledTimestamp = row.AsString("last_throttled_timestamp", "")
+			if lastThrottledTimestamp != "" {
+				// good. This is what we've been waiting for.
+				return row, startedTimestamp, lastThrottledTimestamp
+			}
+		}
+		time.Sleep(1 * time.Second)
+	}
+	t.Error("timeout waiting for last_throttled_timestamp to have nonempty value")
+	return
 }

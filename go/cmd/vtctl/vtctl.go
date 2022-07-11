@@ -39,7 +39,6 @@ import (
 	"vitess.io/vitess/go/vt/vtctl"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver"
 	"vitess.io/vitess/go/vt/vtctl/localvtctldclient"
-	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/workflow"
 	"vitess.io/vitess/go/vt/wrangler"
@@ -49,9 +48,9 @@ import (
 )
 
 var (
-	waitTime         = flag.Duration("wait-time", 24*time.Hour, "time to wait on an action")
-	detachedMode     = flag.Bool("detach", false, "detached mode - run vtcl detached from the terminal")
-	durabilityPolicy = flag.String("durability_policy", "none", "type of durability to enforce. Default is none. Other values are dictated by registered plugins")
+	waitTime     = flag.Duration("wait-time", 24*time.Hour, "time to wait on an action")
+	detachedMode = flag.Bool("detach", false, "detached mode - run vtcl detached from the terminal")
+	_            = flag.String("durability_policy", "none", "type of durability to enforce. Default is none. Other values are dictated by registered plugins")
 )
 
 func init() {
@@ -98,11 +97,6 @@ func main() {
 		syslogger.Info(startMsg) // nolint:errcheck
 	} else {
 		log.Warningf("cannot connect to syslog: %v", err)
-	}
-
-	if err := reparentutil.SetDurabilityPolicy(*durabilityPolicy); err != nil {
-		log.Errorf("error in setting durability policy: %v", err)
-		exit.Return(1)
 	}
 
 	closer := trace.StartTracing("vtctl")

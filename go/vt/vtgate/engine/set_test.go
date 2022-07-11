@@ -17,6 +17,7 @@ limitations under the License.
 package engine
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"testing"
@@ -59,7 +60,7 @@ func TestSetSystemVariableAsString(t *testing.T) {
 			"foobar",
 		)},
 	}
-	_, err := set.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err := set.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 
 	vc.ExpectLog(t, []string{
@@ -359,7 +360,8 @@ func TestSetTable(t *testing.T) {
 			"a,b|B,a,A,B,b,a",
 		)},
 	}, {
-		testName: "sql_mode change - changed additional",
+		testName:     "sql_mode change - changed additional - MySQL57",
+		mysqlVersion: "50709",
 		setOps: []SetOp{
 			&SysVarReservedConn{
 				Name:          "sql_mode",
@@ -378,7 +380,8 @@ func TestSetTable(t *testing.T) {
 			"a,b|B,a,A,B,b,a,c",
 		)},
 	}, {
-		testName: "sql_mode change - changed less",
+		testName:     "sql_mode change - changed less - MySQL57",
+		mysqlVersion: "50709",
 		setOps: []SetOp{
 			&SysVarReservedConn{
 				Name:          "sql_mode",
@@ -414,7 +417,8 @@ func TestSetTable(t *testing.T) {
 			"|",
 		)},
 	}, {
-		testName: "sql_mode change - empty orig",
+		testName:     "sql_mode change - empty orig - MySQL57",
+		mysqlVersion: "50709",
 		setOps: []SetOp{
 			&SysVarReservedConn{
 				Name:          "sql_mode",
@@ -466,7 +470,7 @@ func TestSetTable(t *testing.T) {
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
 			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'a' new {} false false`,
 			"SysVar set with (sql_mode,'a')",
-			"SET_VAR enabled: true",
+			"SET_VAR can be used",
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
 			"|a",
@@ -486,7 +490,6 @@ func TestSetTable(t *testing.T) {
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
 			`ExecuteMultiShard ks.-20: select @@sql_mode orig, '' new {} false false`,
 			"SysVar set with (sql_mode,'')",
-			"SET_VAR enabled: true",
 			"Needs Reserved Conn",
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
@@ -507,11 +510,30 @@ func TestSetTable(t *testing.T) {
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
 			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'a' new {} false false`,
 			"SysVar set with (sql_mode,'a')",
-			"SET_VAR enabled: false",
 			"Needs Reserved Conn",
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
 			"|a",
+		)},
+		disableSetVar: true,
+	}, {
+		testName:     "sql_mode set an unsupported mode",
+		mysqlVersion: "80000",
+		setOps: []SetOp{
+			&SysVarReservedConn{
+				Name:          "sql_mode",
+				Keyspace:      &vindexes.Keyspace{Name: "ks", Sharded: true},
+				Expr:          "'REAL_AS_FLOAT'",
+				SupportSetVar: true,
+			},
+		},
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
+			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'REAL_AS_FLOAT' new {} false false`,
+		},
+		expectedError: "setting the REAL_AS_FLOAT sql_mode is unsupported",
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
+			"|REAL_AS_FLOAT",
 		)},
 		disableSetVar: true,
 	}, {
@@ -528,7 +550,6 @@ func TestSetTable(t *testing.T) {
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
 			`ExecuteMultiShard ks.-20: select 'a' from dual where @@default_week_format != 'a' {} false false`,
 			"SysVar set with (default_week_format,'a')",
-			"SET_VAR enabled: true",
 			"Needs Reserved Conn",
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("new", "varchar"),
@@ -558,7 +579,7 @@ func TestSetTable(t *testing.T) {
 				multiShardErrs: []error{tc.execErr},
 				disableSetVar:  tc.disableSetVar,
 			}
-			_, err := set.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
+			_, err := set.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 			if tc.expectedError == "" {
 				require.NoError(t, err)
 			} else {
@@ -598,7 +619,7 @@ func TestSysVarSetErr(t *testing.T) {
 		shards:         []string{"-20", "20-"},
 		multiShardErrs: []error{fmt.Errorf("error")},
 	}
-	_, err := set.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err := set.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	require.EqualError(t, err, "error")
 	vc.ExpectLog(t, expectedQueryLog)
 }

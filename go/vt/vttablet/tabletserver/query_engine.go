@@ -25,6 +25,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"vitess.io/vitess/go/trace"
+
 	"context"
 
 	"vitess.io/vitess/go/acl"
@@ -33,7 +35,6 @@ import (
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/sync2"
-	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -46,18 +47,15 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/txserializer"
-
-	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
-//_______________________________________________
+// _______________________________________________
 
 // TabletPlan wraps the planbuilder's exec plan to enforce additional rules
 // and track stats.
 type TabletPlan struct {
 	*planbuilder.Plan
 	Original   string
-	Fields     []*querypb.Field
 	Rules      *rules.Rules
 	Authorized []*tableacl.ACLResult
 
@@ -98,7 +96,7 @@ func (ep *TabletPlan) buildAuthorized() {
 	}
 }
 
-//_______________________________________________
+// _______________________________________________
 
 // QueryEngine implements the core functionality of tabletserver.
 // It assumes that no requests will be sent to it before Open is
@@ -146,8 +144,7 @@ type QueryEngine struct {
 
 	strictTransTables bool
 
-	consolidatorMode            sync2.AtomicString
-	enableQueryPlanFieldCaching bool
+	consolidatorMode sync2.AtomicString
 
 	// stats
 	queryCounts, queryTimes, queryRowCounts, queryErrorCounts, queryRowsAffected, queryRowsReturned *stats.CountersWithMultiLabels
@@ -178,7 +175,6 @@ func NewQueryEngine(env tabletenv.Env, se *schema.Engine) *QueryEngine {
 	qe.conns = connpool.NewPool(env, "ConnPool", config.OltpReadPool)
 	qe.streamConns = connpool.NewPool(env, "StreamConnPool", config.OlapReadPool)
 	qe.consolidatorMode.Set(config.Consolidator)
-	qe.enableQueryPlanFieldCaching = config.CacheResultFields
 	qe.consolidator = sync2.NewConsolidator()
 	if config.ConsolidatorStreamTotalSize > 0 && config.ConsolidatorStreamQuerySize > 0 {
 		qe.streamConsolidator = NewStreamConsolidator(config.ConsolidatorStreamTotalSize, config.ConsolidatorStreamQuerySize, returnStreamResult)
@@ -287,10 +283,9 @@ func (qe *QueryEngine) Close() {
 }
 
 // GetPlan returns the TabletPlan that for the query. Plans are cached in a cache.LRUCache.
-func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats, sql string, skipQueryPlanCache bool, isReservedConn bool) (*TabletPlan, error) {
-	span, ctx := trace.NewSpan(ctx, "QueryEngine.GetPlan")
+func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats, sql string, skipQueryPlanCache bool, reservedConnID int64) (*TabletPlan, error) {
+	span, _ := trace.NewSpan(ctx, "QueryEngine.GetPlan")
 	defer span.Finish()
-
 	if plan := qe.getQuery(sql); plan != nil {
 		logStats.CachedPlan = true
 		return plan, nil
@@ -308,31 +303,14 @@ func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats
 	if err != nil {
 		return nil, err
 	}
-	splan, err := planbuilder.Build(statement, qe.tables, isReservedConn, qe.env.Config().DB.DBName)
+	splan, err := planbuilder.Build(statement, qe.tables, reservedConnID != 0, qe.env.Config().DB.DBName)
 	if err != nil {
 		return nil, err
 	}
 	plan := &TabletPlan{Plan: splan, Original: sql}
 	plan.Rules = qe.queryRuleSources.FilterByPlan(sql, plan.PlanID, plan.TableNames()...)
 	plan.buildAuthorized()
-	if plan.PlanID.IsSelect() {
-		if !skipQueryPlanCache && qe.enableQueryPlanFieldCaching && plan.FieldQuery != nil {
-			conn, err := qe.conns.Get(ctx)
-			if err != nil {
-				return nil, err
-			}
-			defer conn.Recycle()
-
-			sql := plan.FieldQuery.Query
-			start := time.Now()
-			r, err := conn.Exec(ctx, sql, 1, true)
-			logStats.AddRewrittenSQL(sql, start)
-			if err != nil {
-				return nil, err
-			}
-			plan.Fields = r.Fields
-		}
-	} else if plan.PlanID == planbuilder.PlanDDL || plan.PlanID == planbuilder.PlanSet {
+	if plan.PlanID == planbuilder.PlanDDL || plan.PlanID == planbuilder.PlanSet {
 		return plan, nil
 	}
 	if !skipQueryPlanCache && !sqlparser.SkipQueryPlanCacheDirective(statement) {

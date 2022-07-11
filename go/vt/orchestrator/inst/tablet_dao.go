@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/vt/orchestrator/db"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/sqlutils"
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -46,7 +47,11 @@ var ErrTabletAliasNil = errors.New("tablet alias is nil")
 // The proactive propagation allows a competing Orchestrator from discovering
 // the successful action of a previous one, which reduces churn.
 func SwitchPrimary(newPrimaryKey, oldPrimaryKey InstanceKey) error {
-	newPrimaryTablet, err := ChangeTabletType(newPrimaryKey, topodatapb.TabletType_PRIMARY, SemiSyncAckers(newPrimaryKey) > 0)
+	durability, err := GetDurabilityPolicy(newPrimaryKey)
+	if err != nil {
+		return err
+	}
+	newPrimaryTablet, err := ChangeTabletType(newPrimaryKey, topodatapb.TabletType_PRIMARY, SemiSyncAckers(durability, newPrimaryKey) > 0)
 	if err != nil {
 		return err
 	}
@@ -80,7 +85,7 @@ func SwitchPrimary(newPrimaryKey, oldPrimaryKey InstanceKey) error {
 		log.Errore(err)
 		return nil
 	}
-	if _, err := ChangeTabletType(oldPrimaryKey, topodatapb.TabletType_REPLICA, IsReplicaSemiSync(newPrimaryKey, oldPrimaryKey)); err != nil {
+	if _, err := ChangeTabletType(oldPrimaryKey, topodatapb.TabletType_REPLICA, IsReplicaSemiSync(durability, newPrimaryKey, oldPrimaryKey)); err != nil {
 		// This is best effort.
 		log.Errore(err)
 	}
@@ -112,6 +117,33 @@ func ChangeTabletType(instanceKey InstanceKey, tabletType topodatapb.TabletType,
 		log.Errore(err)
 	}
 	return ti.Tablet, nil
+}
+
+// ResetReplicationParameters resets the replication parameters on the given tablet.
+func ResetReplicationParameters(instanceKey InstanceKey) error {
+	tablet, err := ReadTablet(instanceKey)
+	if err != nil {
+		return err
+	}
+	tmc := tmclient.NewTabletManagerClient()
+	tmcCtx, tmcCancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
+	defer tmcCancel()
+	if err := tmc.ResetReplicationParameters(tmcCtx, tablet); err != nil {
+		return err
+	}
+	return nil
+}
+
+// FullStatus gets the full status of the MySQL running in vttablet.
+func FullStatus(instanceKey InstanceKey) (*replicationdatapb.FullStatus, error) {
+	tablet, err := ReadTablet(instanceKey)
+	if err != nil {
+		return nil, err
+	}
+	tmc := tmclient.NewTabletManagerClient()
+	tmcCtx, tmcCancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
+	defer tmcCancel()
+	return tmc.FullStatus(tmcCtx, tablet)
 }
 
 // ReadTablet reads the vitess tablet record.

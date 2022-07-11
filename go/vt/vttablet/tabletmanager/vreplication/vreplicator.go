@@ -25,6 +25,7 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -40,6 +41,7 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
 
 var (
@@ -86,6 +88,15 @@ const (
 	setSQLModeQueryf = `SET @@session.sql_mode='%s'`
 )
 
+type ComponentName string
+
+const (
+	VPlayerComponentName     ComponentName = "vplayer"
+	VCopierComponentName     ComponentName = "vcopier"
+	VStreamerComponentName   ComponentName = "vstreamer"
+	RowStreamerComponentName ComponentName = "rowstreamer"
+)
+
 // vreplicator provides the core logic to start vreplication streams
 type vreplicator struct {
 	vre      *Engine
@@ -102,6 +113,11 @@ type vreplicator struct {
 
 	originalFKCheckSetting int64
 	originalSQLMode        string
+
+	WorkflowType int64
+	WorkflowName string
+
+	throttleUpdatesRateLimiter *timer.RateLimiter
 }
 
 // newVReplicator creates a new vreplicator. The valid fields from the source are:
@@ -138,6 +154,8 @@ func newVReplicator(id uint32, source *binlogdatapb.BinlogSource, sourceVStreame
 		stats:           stats,
 		dbClient:        newVDBClient(dbClient, stats),
 		mysqld:          mysqld,
+
+		throttleUpdatesRateLimiter: timer.NewRateLimiter(time.Second),
 	}
 }
 
@@ -207,8 +225,8 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		// If any of the operations below changed state to Stopped, we should return.
-		if settings.State == binlogplayer.BlpStopped {
+		// If any of the operations below changed state to Stopped or Error, we should return.
+		if settings.State == binlogplayer.BlpStopped || settings.State == binlogplayer.BlpError {
 			return nil
 		}
 		switch {
@@ -264,7 +282,8 @@ type ColumnInfo struct {
 }
 
 func (vr *vreplicator) buildColInfoMap(ctx context.Context) (map[string][]*ColumnInfo, error) {
-	schema, err := vr.mysqld.GetSchema(ctx, vr.dbClient.DBName(), []string{"/.*/"}, nil, false)
+	req := &tabletmanagerdatapb.GetSchemaRequest{Tables: []string{"/.*/"}}
+	schema, err := vr.mysqld.GetSchema(ctx, vr.dbClient.DBName(), req)
 	if err != nil {
 		return nil, err
 	}
@@ -282,9 +301,17 @@ func (vr *vreplicator) buildColInfoMap(ctx context.Context) (map[string][]*Colum
 
 		var pks []string
 		if len(td.PrimaryKeyColumns) != 0 {
+			// Use the PK
 			pks = td.PrimaryKeyColumns
 		} else {
-			pks = td.Columns
+			// Use a PK equivalent if one exists
+			if pks, err = vr.mysqld.GetPrimaryKeyEquivalentColumns(ctx, vr.dbClient.DBName(), td.Name); err != nil {
+				return nil, err
+			}
+			// Fall back to using every column in the table if there's no PK or PKE
+			if len(pks) == 0 {
+				pks = td.Columns
+			}
 		}
 		var colInfo []*ColumnInfo
 		for _, row := range qr.Rows {
@@ -356,6 +383,8 @@ func (vr *vreplicator) readSettings(ctx context.Context) (settings binlogplayer.
 	if err != nil {
 		return settings, numTablesToCopy, err
 	}
+	vr.WorkflowType = settings.WorkflowType
+	vr.WorkflowName = settings.WorkflowName
 	return settings, numTablesToCopy, nil
 }
 
@@ -469,6 +498,48 @@ func (vr *vreplicator) setSQLMode(ctx context.Context) (func(), error) {
 	}
 
 	return resetFunc, nil
+}
+
+// throttlerAppName returns the app name to be used by throttlerClient for this particular workflow
+// example results:
+// - "vreplication" for most flows
+// - "vreplication:online-ddl" for online ddl flows.
+//   Note that with such name, it's possible to throttle
+//   the worflow by either /throttler/throttle-app?app=vreplication and/or /throttler/throttle-app?app=online-ddl
+//   This is useful when we want to throttle all migrations. We throttle "online-ddl" and that applies to both vreplication
+//   migrations as well as gh-ost migrations.
+func (vr *vreplicator) throttlerAppName() string {
+	names := []string{vr.WorkflowName, throttlerVReplicationAppName}
+	if vr.WorkflowType == int64(binlogdatapb.VReplicationWorkflowType_ONLINEDDL) {
+		names = append(names, throttlerOnlineDDLAppName)
+	}
+	return strings.Join(names, ":")
+}
+
+func (vr *vreplicator) updateTimeThrottled(componentThrottled ComponentName) error {
+	err := vr.throttleUpdatesRateLimiter.Do(func() error {
+		tm := time.Now().Unix()
+		update, err := binlogplayer.GenerateUpdateTimeThrottled(vr.id, tm, string(componentThrottled))
+		if err != nil {
+			return err
+		}
+		if _, err := withDDL.Exec(vr.vre.ctx, update, vr.dbClient.ExecuteFetch, vr.dbClient.ExecuteFetch); err != nil {
+			return fmt.Errorf("error %v updating time throttled", err)
+		}
+		return nil
+	})
+	return err
+}
+
+func (vr *vreplicator) updateHeartbeatTime(tm int64) error {
+	update, err := binlogplayer.GenerateUpdateHeartbeat(vr.id, tm)
+	if err != nil {
+		return err
+	}
+	if _, err := withDDL.Exec(vr.vre.ctx, update, vr.dbClient.ExecuteFetch, vr.dbClient.ExecuteFetch); err != nil {
+		return fmt.Errorf("error %v updating time", err)
+	}
+	return nil
 }
 
 func (vr *vreplicator) clearFKCheck() error {

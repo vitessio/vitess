@@ -186,10 +186,5 @@ func Validate(collation Collation, input []byte) bool {
 // into a byte slice encoded in `dstCollation`'s charset. The resulting byte slice is
 // appended to `dst` and returned.
 func Convert(dst []byte, dstCollation Collation, src []byte, srcCollation Collation) ([]byte, error) {
-	switch srcCollation.(type) {
-	case *Collation_binary:
-		return charset.ConvertFromBinary(dst, dstCollation.Charset(), src)
-	default:
-		return charset.Convert(dst, dstCollation.Charset(), src, srcCollation.Charset())
-	}
+	return charset.Convert(dst, dstCollation.Charset(), src, srcCollation.Charset())
 }

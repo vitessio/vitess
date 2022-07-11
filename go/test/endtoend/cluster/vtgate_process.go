@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"os/exec"
@@ -86,7 +87,7 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 		"--mysql_auth_server_impl", vtgate.MySQLAuthServerImpl,
 	}
 	if vtgate.PlannerVersion > 0 {
-		args = append(args, "--planner_version", vtgate.PlannerVersion.String())
+		args = append(args, "--planner-version", vtgate.PlannerVersion.String())
 	}
 	if vtgate.SysVarSetEnabled {
 		args = append(args, "--enable_system_settings")
@@ -178,7 +179,9 @@ func (vtgate *VtgateProcess) GetStatusForTabletOfShard(name string, endPointsCou
 // WaitForStatusOfTabletInShard function waits till status of a tablet in shard is 1
 // endPointsCount: how many endpoints to wait for
 func (vtgate *VtgateProcess) WaitForStatusOfTabletInShard(name string, endPointsCount int) error {
-	timeout := time.Now().Add(15 * time.Second)
+	log.Infof("Waiting for healthy status of %d %s tablets in cell %s",
+		endPointsCount, name, vtgate.Cell)
+	timeout := time.Now().Add(30 * time.Second)
 	for time.Now().Before(timeout) {
 		if vtgate.GetStatusForTabletOfShard(name, endPointsCount) {
 			return nil
@@ -233,7 +236,7 @@ func VtgateProcessInstance(
 		Binary:                "vtgate",
 		FileToLogQueries:      path.Join(tmpDirectory, "/vtgate_querylog.txt"),
 		Directory:             os.Getenv("VTDATAROOT"),
-		ServiceMap:            "grpc-tabletmanager,grpc-throttler,grpc-queryservice,grpc-updatestream,grpc-vtctl,grpc-vtworker,grpc-vtgateservice",
+		ServiceMap:            "grpc-tabletmanager,grpc-throttler,grpc-queryservice,grpc-updatestream,grpc-vtctl,grpc-vtgateservice",
 		LogDir:                tmpDirectory,
 		Port:                  port,
 		GrpcPort:              grpcPort,
@@ -270,4 +273,24 @@ func (vtgate *VtgateProcess) GetVars() (map[string]any, error) {
 		return resultMap, nil
 	}
 	return nil, fmt.Errorf("unsuccessful response")
+}
+
+// ReadVSchema reads the vschema from the vtgate endpoint for it and returns
+// a pointer to the interface. To read this vschema, the caller must convert it to a map
+func (vtgate *VtgateProcess) ReadVSchema() (*interface{}, error) {
+	httpClient := &http.Client{Timeout: 5 * time.Second}
+	resp, err := httpClient.Get(vtgate.VSchemaURL)
+	if err != nil {
+		return nil, err
+	}
+	res, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	var results interface{}
+	err = json.Unmarshal(res, &results)
+	if err != nil {
+		return nil, err
+	}
+	return &results, nil
 }

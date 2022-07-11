@@ -17,6 +17,7 @@ limitations under the License.
 package vindexes
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"reflect"
@@ -46,12 +47,14 @@ type cheapVindex struct {
 	Params map[string]string
 }
 
-func (v *cheapVindex) String() string                                           { return v.name }
-func (*cheapVindex) Cost() int                                                  { return 0 }
-func (*cheapVindex) IsUnique() bool                                             { return true }
-func (*cheapVindex) NeedsVCursor() bool                                         { return false }
-func (*cheapVindex) Verify(VCursor, []sqltypes.Value, [][]byte) ([]bool, error) { return []bool{}, nil }
-func (*cheapVindex) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+func (v *cheapVindex) String() string   { return v.name }
+func (*cheapVindex) Cost() int          { return 0 }
+func (*cheapVindex) IsUnique() bool     { return true }
+func (*cheapVindex) NeedsVCursor() bool { return false }
+func (*cheapVindex) Verify(context.Context, VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
+	return []bool{}, nil
+}
+func (*cheapVindex) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	return nil, nil
 }
 
@@ -67,12 +70,16 @@ type stFU struct {
 	Params map[string]string
 }
 
-func (v *stFU) String() string                                                    { return v.name }
-func (*stFU) Cost() int                                                           { return 1 }
-func (*stFU) IsUnique() bool                                                      { return true }
-func (*stFU) NeedsVCursor() bool                                                  { return false }
-func (*stFU) Verify(VCursor, []sqltypes.Value, [][]byte) ([]bool, error)          { return []bool{}, nil }
-func (*stFU) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) { return nil, nil }
+func (v *stFU) String() string   { return v.name }
+func (*stFU) Cost() int          { return 1 }
+func (*stFU) IsUnique() bool     { return true }
+func (*stFU) NeedsVCursor() bool { return false }
+func (*stFU) Verify(context.Context, VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
+	return []bool{}, nil
+}
+func (*stFU) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+	return nil, nil
+}
 
 func NewSTFU(name string, params map[string]string) (Vindex, error) {
 	return &stFU{name: name, Params: params}, nil
@@ -86,12 +93,16 @@ type stFN struct {
 	Params map[string]string
 }
 
-func (v *stFN) String() string                                                    { return v.name }
-func (*stFN) Cost() int                                                           { return 1 }
-func (*stFN) IsUnique() bool                                                      { return false }
-func (*stFN) NeedsVCursor() bool                                                  { return false }
-func (*stFN) Verify(VCursor, []sqltypes.Value, [][]byte) ([]bool, error)          { return []bool{}, nil }
-func (*stFN) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) { return nil, nil }
+func (v *stFN) String() string   { return v.name }
+func (*stFN) Cost() int          { return 1 }
+func (*stFN) IsUnique() bool     { return false }
+func (*stFN) NeedsVCursor() bool { return false }
+func (*stFN) Verify(context.Context, VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
+	return []bool{}, nil
+}
+func (*stFN) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+	return nil, nil
+}
 
 func NewSTFN(name string, params map[string]string) (Vindex, error) {
 	return &stFN{name: name, Params: params}, nil
@@ -105,15 +116,21 @@ type stLN struct {
 	Params map[string]string
 }
 
-func (v *stLN) String() string                                                    { return v.name }
-func (*stLN) Cost() int                                                           { return 0 }
-func (*stLN) IsUnique() bool                                                      { return false }
-func (*stLN) NeedsVCursor() bool                                                  { return true }
-func (*stLN) Verify(VCursor, []sqltypes.Value, [][]byte) ([]bool, error)          { return []bool{}, nil }
-func (*stLN) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) { return nil, nil }
-func (*stLN) Create(VCursor, [][]sqltypes.Value, [][]byte, bool) error            { return nil }
-func (*stLN) Delete(VCursor, [][]sqltypes.Value, []byte) error                    { return nil }
-func (*stLN) Update(VCursor, []sqltypes.Value, []byte, []sqltypes.Value) error    { return nil }
+func (v *stLN) String() string   { return v.name }
+func (*stLN) Cost() int          { return 0 }
+func (*stLN) IsUnique() bool     { return false }
+func (*stLN) NeedsVCursor() bool { return true }
+func (*stLN) Verify(context.Context, VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
+	return []bool{}, nil
+}
+func (*stLN) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+	return nil, nil
+}
+func (*stLN) Create(context.Context, VCursor, [][]sqltypes.Value, [][]byte, bool) error { return nil }
+func (*stLN) Delete(context.Context, VCursor, [][]sqltypes.Value, []byte) error         { return nil }
+func (*stLN) Update(context.Context, VCursor, []sqltypes.Value, []byte, []sqltypes.Value) error {
+	return nil
+}
 
 func NewSTLN(name string, params map[string]string) (Vindex, error) {
 	return &stLN{name: name, Params: params}, nil
@@ -128,15 +145,21 @@ type stLU struct {
 	Params map[string]string
 }
 
-func (v *stLU) String() string                                                    { return v.name }
-func (*stLU) Cost() int                                                           { return 2 }
-func (*stLU) IsUnique() bool                                                      { return true }
-func (*stLU) NeedsVCursor() bool                                                  { return true }
-func (*stLU) Verify(VCursor, []sqltypes.Value, [][]byte) ([]bool, error)          { return []bool{}, nil }
-func (*stLU) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) { return nil, nil }
-func (*stLU) Create(VCursor, [][]sqltypes.Value, [][]byte, bool) error            { return nil }
-func (*stLU) Delete(VCursor, [][]sqltypes.Value, []byte) error                    { return nil }
-func (*stLU) Update(VCursor, []sqltypes.Value, []byte, []sqltypes.Value) error    { return nil }
+func (v *stLU) String() string   { return v.name }
+func (*stLU) Cost() int          { return 2 }
+func (*stLU) IsUnique() bool     { return true }
+func (*stLU) NeedsVCursor() bool { return true }
+func (*stLU) Verify(context.Context, VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
+	return []bool{}, nil
+}
+func (*stLU) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+	return nil, nil
+}
+func (*stLU) Create(context.Context, VCursor, [][]sqltypes.Value, [][]byte, bool) error { return nil }
+func (*stLU) Delete(context.Context, VCursor, [][]sqltypes.Value, []byte) error         { return nil }
+func (*stLU) Update(context.Context, VCursor, []sqltypes.Value, []byte, []sqltypes.Value) error {
+	return nil
+}
 
 func NewSTLU(name string, params map[string]string) (Vindex, error) {
 	return &stLU{name: name, Params: params}, nil
@@ -151,19 +174,25 @@ type stLO struct {
 	keyspace string
 	name     string
 	table    string
-	cols     []sqlparser.ColIdent
+	cols     []sqlparser.IdentifierCI
 }
 
-func (v *stLO) String() string                                                    { return v.name }
-func (*stLO) Cost() int                                                           { return 2 }
-func (*stLO) IsUnique() bool                                                      { return true }
-func (*stLO) NeedsVCursor() bool                                                  { return true }
-func (*stLO) Verify(VCursor, []sqltypes.Value, [][]byte) ([]bool, error)          { return []bool{}, nil }
-func (*stLO) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) { return nil, nil }
-func (*stLO) Create(VCursor, [][]sqltypes.Value, [][]byte, bool) error            { return nil }
-func (*stLO) Delete(VCursor, [][]sqltypes.Value, []byte) error                    { return nil }
-func (*stLO) Update(VCursor, []sqltypes.Value, []byte, []sqltypes.Value) error    { return nil }
-func (v *stLO) SetOwnerInfo(keyspace, table string, cols []sqlparser.ColIdent) error {
+func (v *stLO) String() string   { return v.name }
+func (*stLO) Cost() int          { return 2 }
+func (*stLO) IsUnique() bool     { return true }
+func (*stLO) NeedsVCursor() bool { return true }
+func (*stLO) Verify(context.Context, VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
+	return []bool{}, nil
+}
+func (*stLO) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+	return nil, nil
+}
+func (*stLO) Create(context.Context, VCursor, [][]sqltypes.Value, [][]byte, bool) error { return nil }
+func (*stLO) Delete(context.Context, VCursor, [][]sqltypes.Value, []byte) error         { return nil }
+func (*stLO) Update(context.Context, VCursor, []sqltypes.Value, []byte, []sqltypes.Value) error {
+	return nil
+}
+func (v *stLO) SetOwnerInfo(keyspace, table string, cols []sqlparser.IdentifierCI) error {
 	v.keyspace = keyspace
 	v.table = table
 	v.cols = cols
@@ -183,13 +212,17 @@ type mcFU struct {
 	Params map[string]string
 }
 
-func (v *mcFU) String() string                                                      { return v.name }
-func (*mcFU) Cost() int                                                             { return 1 }
-func (*mcFU) IsUnique() bool                                                        { return true }
-func (*mcFU) NeedsVCursor() bool                                                    { return false }
-func (*mcFU) Verify(VCursor, [][]sqltypes.Value, [][]byte) ([]bool, error)          { return []bool{}, nil }
-func (*mcFU) Map(cursor VCursor, ids [][]sqltypes.Value) ([]key.Destination, error) { return nil, nil }
-func (*mcFU) PartialVindex() bool                                                   { return false }
+func (v *mcFU) String() string   { return v.name }
+func (*mcFU) Cost() int          { return 1 }
+func (*mcFU) IsUnique() bool     { return true }
+func (*mcFU) NeedsVCursor() bool { return false }
+func (*mcFU) Verify(context.Context, VCursor, [][]sqltypes.Value, [][]byte) ([]bool, error) {
+	return []bool{}, nil
+}
+func (*mcFU) Map(ctx context.Context, vcursor VCursor, rowsColValues [][]sqltypes.Value) ([]key.Destination, error) {
+	return nil, nil
+}
+func (*mcFU) PartialVindex() bool { return false }
 
 func NewMCFU(name string, params map[string]string) (Vindex, error) {
 	return &mcFU{name: name, Params: params}, nil
@@ -236,11 +269,11 @@ func TestUnshardedVSchema(t *testing.T) {
 		Name: "unsharded",
 	}
 	t1 := &Table{
-		Name:     sqlparser.NewTableIdent("t1"),
+		Name:     sqlparser.NewIdentifierCS("t1"),
 		Keyspace: ks,
 	}
 	dual := &Table{
-		Name:     sqlparser.NewTableIdent("dual"),
+		Name:     sqlparser.NewIdentifierCS("dual"),
 		Keyspace: ks,
 		Type:     TypeReference,
 	}
@@ -291,18 +324,18 @@ func TestVSchemaColumns(t *testing.T) {
 		Name: "unsharded",
 	}
 	t1 := &Table{
-		Name:     sqlparser.NewTableIdent("t1"),
+		Name:     sqlparser.NewIdentifierCS("t1"),
 		Keyspace: ks,
 		Columns: []Column{{
-			Name: sqlparser.NewColIdent("c1"),
+			Name: sqlparser.NewIdentifierCI("c1"),
 			Type: sqltypes.Null,
 		}, {
-			Name: sqlparser.NewColIdent("c2"),
+			Name: sqlparser.NewIdentifierCI("c2"),
 			Type: sqltypes.VarChar,
 		}},
 	}
 	dual := &Table{
-		Name:     sqlparser.NewTableIdent("dual"),
+		Name:     sqlparser.NewIdentifierCS("dual"),
 		Keyspace: ks,
 		Type:     TypeReference,
 	}
@@ -354,19 +387,19 @@ func TestVSchemaColumnListAuthoritative(t *testing.T) {
 		Name: "unsharded",
 	}
 	t1 := &Table{
-		Name:     sqlparser.NewTableIdent("t1"),
+		Name:     sqlparser.NewIdentifierCS("t1"),
 		Keyspace: ks,
 		Columns: []Column{{
-			Name: sqlparser.NewColIdent("c1"),
+			Name: sqlparser.NewIdentifierCI("c1"),
 			Type: sqltypes.Null,
 		}, {
-			Name: sqlparser.NewColIdent("c2"),
+			Name: sqlparser.NewIdentifierCI("c2"),
 			Type: sqltypes.VarChar,
 		}},
 		ColumnListAuthoritative: true,
 	}
 	dual := &Table{
-		Name:     sqlparser.NewTableIdent("dual"),
+		Name:     sqlparser.NewIdentifierCS("dual"),
 		Keyspace: ks,
 		Type:     TypeReference,
 	}
@@ -440,12 +473,12 @@ func TestVSchemaPinned(t *testing.T) {
 		Sharded: true,
 	}
 	t1 := &Table{
-		Name:     sqlparser.NewTableIdent("t1"),
+		Name:     sqlparser.NewIdentifierCS("t1"),
 		Keyspace: ks,
 		Pinned:   []byte{0x80},
 	}
 	dual := &Table{
-		Name:     sqlparser.NewTableIdent("dual"),
+		Name:     sqlparser.NewIdentifierCS("dual"),
 		Keyspace: ks,
 		Type:     TypeReference,
 	}
@@ -523,11 +556,11 @@ func TestShardedVSchemaOwned(t *testing.T) {
 	}
 	vindex2 := &stLN{name: "stln1"}
 	t1 := &Table{
-		Name:     sqlparser.NewTableIdent("t1"),
+		Name:     sqlparser.NewIdentifierCS("t1"),
 		Keyspace: ks,
 		ColumnVindexes: []*ColumnVindex{
 			{
-				Columns:  []sqlparser.ColIdent{sqlparser.NewColIdent("c1")},
+				Columns:  []sqlparser.IdentifierCI{sqlparser.NewIdentifierCI("c1")},
 				Type:     "stfu",
 				Name:     "stfu1",
 				Vindex:   vindex1,
@@ -535,7 +568,7 @@ func TestShardedVSchemaOwned(t *testing.T) {
 				cost:     vindex1.Cost(),
 			},
 			{
-				Columns:  []sqlparser.ColIdent{sqlparser.NewColIdent("c2")},
+				Columns:  []sqlparser.IdentifierCI{sqlparser.NewIdentifierCI("c2")},
 				Type:     "stln",
 				Name:     "stln1",
 				Owned:    true,
@@ -551,7 +584,7 @@ func TestShardedVSchemaOwned(t *testing.T) {
 	}
 	t1.Owned = t1.ColumnVindexes[1:]
 	dual := &Table{
-		Name:     sqlparser.NewTableIdent("dual"),
+		Name:     sqlparser.NewIdentifierCS("dual"),
 		Keyspace: ks,
 		Type:     TypeReference,
 	}
@@ -748,10 +781,10 @@ func TestVSchemaRoutingRules(t *testing.T) {
 		name: "stfu1",
 	}
 	t1 := &Table{
-		Name:     sqlparser.NewTableIdent("t1"),
+		Name:     sqlparser.NewIdentifierCS("t1"),
 		Keyspace: ks1,
 		ColumnVindexes: []*ColumnVindex{{
-			Columns:  []sqlparser.ColIdent{sqlparser.NewColIdent("c1")},
+			Columns:  []sqlparser.IdentifierCI{sqlparser.NewIdentifierCI("c1")},
 			Type:     "stfu",
 			Name:     "stfu1",
 			Vindex:   vindex1,
@@ -763,16 +796,16 @@ func TestVSchemaRoutingRules(t *testing.T) {
 		t1.ColumnVindexes[0],
 	}
 	t2 := &Table{
-		Name:     sqlparser.NewTableIdent("t2"),
+		Name:     sqlparser.NewIdentifierCS("t2"),
 		Keyspace: ks2,
 	}
 	dual1 := &Table{
-		Name:     sqlparser.NewTableIdent("dual"),
+		Name:     sqlparser.NewIdentifierCS("dual"),
 		Keyspace: ks1,
 		Type:     TypeReference,
 	}
 	dual2 := &Table{
-		Name:     sqlparser.NewTableIdent("dual"),
+		Name:     sqlparser.NewIdentifierCS("dual"),
 		Keyspace: ks2,
 		Type:     TypeReference,
 	}
@@ -1059,11 +1092,11 @@ func TestFindVindexForSharding(t *testing.T) {
 	}
 	vindex2 := &stLN{name: "stln1"}
 	t1 := &Table{
-		Name:     sqlparser.NewTableIdent("t1"),
+		Name:     sqlparser.NewIdentifierCS("t1"),
 		Keyspace: ks,
 		ColumnVindexes: []*ColumnVindex{
 			{
-				Columns:  []sqlparser.ColIdent{sqlparser.NewColIdent("c1")},
+				Columns:  []sqlparser.IdentifierCI{sqlparser.NewIdentifierCI("c1")},
 				Type:     "stfu",
 				Name:     "stfu1",
 				Vindex:   vindex1,
@@ -1071,7 +1104,7 @@ func TestFindVindexForSharding(t *testing.T) {
 				cost:     vindex1.Cost(),
 			},
 			{
-				Columns:  []sqlparser.ColIdent{sqlparser.NewColIdent("c2")},
+				Columns:  []sqlparser.IdentifierCI{sqlparser.NewIdentifierCI("c2")},
 				Type:     "stln",
 				Name:     "stln1",
 				Owned:    true,
@@ -1096,11 +1129,11 @@ func TestFindVindexForShardingError(t *testing.T) {
 	vindex1 := &stLU{name: "stlu1"}
 	vindex2 := &stLN{name: "stln1"}
 	t1 := &Table{
-		Name:     sqlparser.NewTableIdent("t1"),
+		Name:     sqlparser.NewIdentifierCS("t1"),
 		Keyspace: ks,
 		ColumnVindexes: []*ColumnVindex{
 			{
-				Columns:  []sqlparser.ColIdent{sqlparser.NewColIdent("c1")},
+				Columns:  []sqlparser.IdentifierCI{sqlparser.NewIdentifierCI("c1")},
 				Type:     "stlu",
 				Name:     "stlu1",
 				Vindex:   vindex1,
@@ -1108,7 +1141,7 @@ func TestFindVindexForShardingError(t *testing.T) {
 				cost:     vindex1.Cost(),
 			},
 			{
-				Columns:  []sqlparser.ColIdent{sqlparser.NewColIdent("c2")},
+				Columns:  []sqlparser.IdentifierCI{sqlparser.NewIdentifierCI("c2")},
 				Type:     "stln",
 				Name:     "stln1",
 				Owned:    true,
@@ -1141,11 +1174,11 @@ func TestFindVindexForSharding2(t *testing.T) {
 		},
 	}
 	t1 := &Table{
-		Name:     sqlparser.NewTableIdent("t1"),
+		Name:     sqlparser.NewIdentifierCS("t1"),
 		Keyspace: ks,
 		ColumnVindexes: []*ColumnVindex{
 			{
-				Columns:  []sqlparser.ColIdent{sqlparser.NewColIdent("c1")},
+				Columns:  []sqlparser.IdentifierCI{sqlparser.NewIdentifierCI("c1")},
 				Type:     "stlu",
 				Name:     "stlu1",
 				Vindex:   vindex1,
@@ -1153,7 +1186,7 @@ func TestFindVindexForSharding2(t *testing.T) {
 				cost:     vindex1.Cost(),
 			},
 			{
-				Columns:  []sqlparser.ColIdent{sqlparser.NewColIdent("c2")},
+				Columns:  []sqlparser.IdentifierCI{sqlparser.NewIdentifierCI("c2")},
 				Type:     "stfu",
 				Name:     "stfu1",
 				Owned:    true,
@@ -1211,11 +1244,11 @@ func TestShardedVSchemaMultiColumnVindex(t *testing.T) {
 		},
 	}
 	t1 := &Table{
-		Name:     sqlparser.NewTableIdent("t1"),
+		Name:     sqlparser.NewIdentifierCS("t1"),
 		Keyspace: ks,
 		ColumnVindexes: []*ColumnVindex{
 			{
-				Columns:  []sqlparser.ColIdent{sqlparser.NewColIdent("c1"), sqlparser.NewColIdent("c2")},
+				Columns:  []sqlparser.IdentifierCI{sqlparser.NewIdentifierCI("c1"), sqlparser.NewIdentifierCI("c2")},
 				Type:     "stfu",
 				Name:     "stfu1",
 				Vindex:   vindex1,
@@ -1228,7 +1261,7 @@ func TestShardedVSchemaMultiColumnVindex(t *testing.T) {
 		t1.ColumnVindexes[0],
 	}
 	dual := &Table{
-		Name:     sqlparser.NewTableIdent("dual"),
+		Name:     sqlparser.NewIdentifierCS("dual"),
 		Keyspace: ks,
 		Type:     TypeReference,
 	}
@@ -1302,11 +1335,11 @@ func TestShardedVSchemaNotOwned(t *testing.T) {
 	vindex1 := &stLU{name: "stlu1"}
 	vindex2 := &stFU{name: "stfu1"}
 	t1 := &Table{
-		Name:     sqlparser.NewTableIdent("t1"),
+		Name:     sqlparser.NewIdentifierCS("t1"),
 		Keyspace: ks,
 		ColumnVindexes: []*ColumnVindex{
 			{
-				Columns:  []sqlparser.ColIdent{sqlparser.NewColIdent("c1")},
+				Columns:  []sqlparser.IdentifierCI{sqlparser.NewIdentifierCI("c1")},
 				Type:     "stlu",
 				Name:     "stlu1",
 				Owned:    false,
@@ -1315,7 +1348,7 @@ func TestShardedVSchemaNotOwned(t *testing.T) {
 				cost:     vindex1.Cost(),
 			},
 			{
-				Columns:  []sqlparser.ColIdent{sqlparser.NewColIdent("c2")},
+				Columns:  []sqlparser.IdentifierCI{sqlparser.NewIdentifierCI("c2")},
 				Type:     "stfu",
 				Name:     "stfu1",
 				Owned:    false,
@@ -1330,7 +1363,7 @@ func TestShardedVSchemaNotOwned(t *testing.T) {
 		t1.ColumnVindexes[0],
 	}
 	dual := &Table{
-		Name:     sqlparser.NewTableIdent("dual"),
+		Name:     sqlparser.NewIdentifierCS("dual"),
 		Keyspace: ks,
 		Type:     TypeReference,
 	}
@@ -1447,22 +1480,22 @@ func TestBuildVSchemaDupSeq(t *testing.T) {
 	}
 	got := BuildVSchema(&good)
 	t1a := &Table{
-		Name:     sqlparser.NewTableIdent("t1"),
+		Name:     sqlparser.NewIdentifierCS("t1"),
 		Keyspace: ksa,
 		Type:     "sequence",
 	}
 	t1b := &Table{
-		Name:     sqlparser.NewTableIdent("t1"),
+		Name:     sqlparser.NewIdentifierCS("t1"),
 		Keyspace: ksb,
 		Type:     "sequence",
 	}
 	duala := &Table{
-		Name:     sqlparser.NewTableIdent("dual"),
+		Name:     sqlparser.NewIdentifierCS("dual"),
 		Keyspace: ksa,
 		Type:     TypeReference,
 	}
 	dualb := &Table{
-		Name:     sqlparser.NewTableIdent("dual"),
+		Name:     sqlparser.NewIdentifierCS("dual"),
 		Keyspace: ksb,
 		Type:     TypeReference,
 	}
@@ -1519,23 +1552,23 @@ func TestBuildVSchemaDupTable(t *testing.T) {
 		Name: "ksa",
 	}
 	t1a := &Table{
-		Name:     sqlparser.NewTableIdent("t1"),
+		Name:     sqlparser.NewIdentifierCS("t1"),
 		Keyspace: ksa,
 	}
 	ksb := &Keyspace{
 		Name: "ksb",
 	}
 	t1b := &Table{
-		Name:     sqlparser.NewTableIdent("t1"),
+		Name:     sqlparser.NewIdentifierCS("t1"),
 		Keyspace: ksb,
 	}
 	duala := &Table{
-		Name:     sqlparser.NewTableIdent("dual"),
+		Name:     sqlparser.NewIdentifierCS("dual"),
 		Keyspace: ksa,
 		Type:     TypeReference,
 	}
 	dualb := &Table{
-		Name:     sqlparser.NewTableIdent("dual"),
+		Name:     sqlparser.NewIdentifierCS("dual"),
 		Keyspace: ksb,
 		Type:     TypeReference,
 	}
@@ -1632,11 +1665,11 @@ func TestBuildVSchemaDupVindex(t *testing.T) {
 	}
 	vindex1 := &stLU{name: "stlu1"}
 	t1 := &Table{
-		Name:     sqlparser.NewTableIdent("t1"),
+		Name:     sqlparser.NewIdentifierCS("t1"),
 		Keyspace: ksa,
 		ColumnVindexes: []*ColumnVindex{
 			{
-				Columns:  []sqlparser.ColIdent{sqlparser.NewColIdent("c1")},
+				Columns:  []sqlparser.IdentifierCI{sqlparser.NewIdentifierCI("c1")},
 				Type:     "stlu",
 				Name:     "stlu1",
 				Owned:    false,
@@ -1650,11 +1683,11 @@ func TestBuildVSchemaDupVindex(t *testing.T) {
 		t1.ColumnVindexes[0],
 	}
 	t2 := &Table{
-		Name:     sqlparser.NewTableIdent("t1"),
+		Name:     sqlparser.NewIdentifierCS("t1"),
 		Keyspace: ksb,
 		ColumnVindexes: []*ColumnVindex{
 			{
-				Columns:  []sqlparser.ColIdent{sqlparser.NewColIdent("c1")},
+				Columns:  []sqlparser.IdentifierCI{sqlparser.NewIdentifierCI("c1")},
 				Type:     "stlu",
 				Name:     "stlu1",
 				Owned:    false,
@@ -1668,12 +1701,12 @@ func TestBuildVSchemaDupVindex(t *testing.T) {
 		t2.ColumnVindexes[0],
 	}
 	duala := &Table{
-		Name:     sqlparser.NewTableIdent("dual"),
+		Name:     sqlparser.NewIdentifierCS("dual"),
 		Keyspace: ksa,
 		Type:     TypeReference,
 	}
 	dualb := &Table{
-		Name:     sqlparser.NewTableIdent("dual"),
+		Name:     sqlparser.NewIdentifierCS("dual"),
 		Keyspace: ksb,
 		Type:     TypeReference,
 	}
@@ -1936,7 +1969,7 @@ func TestSequence(t *testing.T) {
 		Sharded: true,
 	}
 	seq := &Table{
-		Name:     sqlparser.NewTableIdent("seq"),
+		Name:     sqlparser.NewIdentifierCS("seq"),
 		Keyspace: ksu,
 		Type:     "sequence",
 	}
@@ -1947,11 +1980,11 @@ func TestSequence(t *testing.T) {
 		},
 	}
 	t1 := &Table{
-		Name:     sqlparser.NewTableIdent("t1"),
+		Name:     sqlparser.NewIdentifierCS("t1"),
 		Keyspace: kss,
 		ColumnVindexes: []*ColumnVindex{
 			{
-				Columns:  []sqlparser.ColIdent{sqlparser.NewColIdent("c1")},
+				Columns:  []sqlparser.IdentifierCI{sqlparser.NewIdentifierCI("c1")},
 				Type:     "stfu",
 				Name:     "stfu1",
 				Vindex:   vindex1,
@@ -1960,7 +1993,7 @@ func TestSequence(t *testing.T) {
 			},
 		},
 		AutoIncrement: &AutoIncrement{
-			Column:   sqlparser.NewColIdent("c1"),
+			Column:   sqlparser.NewIdentifierCI("c1"),
 			Sequence: seq,
 		},
 	}
@@ -1968,11 +2001,11 @@ func TestSequence(t *testing.T) {
 		t1.ColumnVindexes[0],
 	}
 	t2 := &Table{
-		Name:     sqlparser.NewTableIdent("t2"),
+		Name:     sqlparser.NewIdentifierCS("t2"),
 		Keyspace: kss,
 		ColumnVindexes: []*ColumnVindex{
 			{
-				Columns:  []sqlparser.ColIdent{sqlparser.NewColIdent("c1")},
+				Columns:  []sqlparser.IdentifierCI{sqlparser.NewIdentifierCI("c1")},
 				Type:     "stfu",
 				Name:     "stfu1",
 				Vindex:   vindex1,
@@ -1981,7 +2014,7 @@ func TestSequence(t *testing.T) {
 			},
 		},
 		AutoIncrement: &AutoIncrement{
-			Column:   sqlparser.NewColIdent("c2"),
+			Column:   sqlparser.NewIdentifierCI("c2"),
 			Sequence: seq,
 		},
 	}
@@ -1989,12 +2022,12 @@ func TestSequence(t *testing.T) {
 		t2.ColumnVindexes[0],
 	}
 	duala := &Table{
-		Name:     sqlparser.NewTableIdent("dual"),
+		Name:     sqlparser.NewIdentifierCS("dual"),
 		Keyspace: ksu,
 		Type:     TypeReference,
 	}
 	dualb := &Table{
-		Name:     sqlparser.NewTableIdent("dual"),
+		Name:     sqlparser.NewIdentifierCS("dual"),
 		Keyspace: kss,
 		Type:     TypeReference,
 	}
@@ -2212,7 +2245,7 @@ func TestFindTable(t *testing.T) {
 	require.EqualError(t, err, "table none not found")
 
 	ta := &Table{
-		Name: sqlparser.NewTableIdent("ta"),
+		Name: sqlparser.NewIdentifierCS("ta"),
 		Keyspace: &Keyspace{
 			Name: "ksa",
 		},
@@ -2225,7 +2258,7 @@ func TestFindTable(t *testing.T) {
 	require.Equal(t, ta, got)
 
 	none := &Table{
-		Name: sqlparser.NewTableIdent("none"),
+		Name: sqlparser.NewIdentifierCS("none"),
 		Keyspace: &Keyspace{
 			Name: "ksa",
 		},
@@ -2412,11 +2445,11 @@ func TestBuildKeyspaceSchema(t *testing.T) {
 		Name: "ks",
 	}
 	t1 := &Table{
-		Name:     sqlparser.NewTableIdent("t1"),
+		Name:     sqlparser.NewIdentifierCS("t1"),
 		Keyspace: ks,
 	}
 	t2 := &Table{
-		Name:     sqlparser.NewTableIdent("t2"),
+		Name:     sqlparser.NewIdentifierCS("t2"),
 		Keyspace: ks,
 	}
 	want := &KeyspaceSchema{
@@ -2543,17 +2576,17 @@ func TestVSchemaJSON(t *testing.T) {
 			},
 			Tables: map[string]*Table{
 				"t1": {
-					Name: sqlparser.NewTableIdent("n1"),
+					Name: sqlparser.NewIdentifierCS("n1"),
 					Columns: []Column{{
-						Name: sqlparser.NewColIdent("c1"),
+						Name: sqlparser.NewIdentifierCI("c1"),
 					}, {
-						Name: sqlparser.NewColIdent("c2"),
+						Name: sqlparser.NewIdentifierCI("c2"),
 						Type: sqltypes.VarChar,
 					}},
 				},
 				"t2": {
 					Type: "sequence",
-					Name: sqlparser.NewTableIdent("n2"),
+					Name: sqlparser.NewIdentifierCS("n2"),
 				},
 			},
 		},
@@ -2564,9 +2597,9 @@ func TestVSchemaJSON(t *testing.T) {
 			},
 			Tables: map[string]*Table{
 				"t3": {
-					Name: sqlparser.NewTableIdent("n3"),
+					Name: sqlparser.NewIdentifierCS("n3"),
 					ColumnVindexes: []*ColumnVindex{{
-						Columns: []sqlparser.ColIdent{sqlparser.NewColIdent("aa")},
+						Columns: []sqlparser.IdentifierCI{sqlparser.NewIdentifierCI("aa")},
 						Type:    "vtype",
 						Name:    "vname",
 						Owned:   true,
@@ -2647,7 +2680,7 @@ func TestFindSingleKeyspace(t *testing.T) {
 	}
 	vschema := BuildVSchema(&input)
 	none := &Table{
-		Name: sqlparser.NewTableIdent("none"),
+		Name: sqlparser.NewIdentifierCS("none"),
 		Keyspace: &Keyspace{
 			Name: "ksa",
 		},

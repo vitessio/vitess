@@ -371,7 +371,6 @@ func removeTablets(t *testing.T, tablets []*cluster.Vttablet) {
 
 func initializeCluster(t *testing.T) {
 	clusterInstance = cluster.NewCluster(cell, hostname)
-	clusterInstance.VtctldExtraArgs = append(clusterInstance.VtctldExtraArgs, "--durability_policy=semi_sync")
 
 	// Start topo server
 	err := clusterInstance.StartTopo()
@@ -410,6 +409,9 @@ func initializeCluster(t *testing.T) {
 
 	err = clusterInstance.SetupCluster(keyspace, []cluster.Shard{*shard, *shard0, *shard1})
 	require.NoError(t, err)
+	vtctldClientProcess := cluster.VtctldClientProcessInstance("localhost", clusterInstance.VtctldProcess.GrpcPort, clusterInstance.TmpDirectory)
+	out, err := vtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=semi_sync")
+	require.NoError(t, err, out)
 	// Start MySql
 	var mysqlCtlProcessList []*exec.Cmd
 	for _, shard := range clusterInstance.Keyspaces[0].Shards {

@@ -11,9 +11,10 @@ jobs:
       uses: actions/checkout@v2
 
     - name: Check for changes in relevant files
-      uses: dorny/paths-filter@v2
+      uses: frouioui/paths-filter@main
       id: changes
       with:
+        token: ''
         filters: |
           end_to_end:
             - 'go/**/*.go'
@@ -25,12 +26,13 @@ jobs:
             - 'tools/**'
             - 'config/**'
             - 'bootstrap.sh'
+            - '.github/workflows/**'
 
     - name: Set up Go
       if: steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-go@v2
       with:
-        go-version: 1.18.1
+        go-version: 1.18.3
 
     - name: Tune the OS
       if: steps.changes.outputs.end_to_end == 'true'

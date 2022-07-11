@@ -59,6 +59,7 @@ func initializeAnalysisDaoPostConfiguration() {
 type clusterAnalysis struct {
 	hasClusterwideAction bool
 	primaryKey           *InstanceKey
+	durability           reparentutil.Durabler
 }
 
 // GetReplicationAnalysis will check for replication problems (dead primary; unreachable primary; etc)
@@ -74,6 +75,9 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		vitess_tablet.port,
 		vitess_tablet.tablet_type,
 		vitess_tablet.primary_timestamp,
+		vitess_keyspace.keyspace AS keyspace,
+		vitess_keyspace.keyspace_type AS keyspace_type,
+		vitess_keyspace.durability_policy AS durability_policy,
 		primary_instance.read_only AS read_only,
 		MIN(primary_instance.data_center) AS data_center,
 		MIN(primary_instance.region) AS region,
@@ -308,6 +312,9 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		) AS count_distinct_logging_major_versions
 	FROM
 		vitess_tablet
+		JOIN vitess_keyspace ON (
+			vitess_tablet.keyspace = vitess_keyspace.keyspace
+		)
 		JOIN database_instance primary_instance ON (
 			vitess_tablet.hostname = primary_instance.hostname
 			AND vitess_tablet.port = primary_instance.port
@@ -363,7 +370,7 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 	`
 
 	clusters := make(map[string]*clusterAnalysis)
-	err := db.QueryOrchestrator(query, args, func(m sqlutils.RowMap) error {
+	err := db.Db.QueryOrchestrator(query, args, func(m sqlutils.RowMap) error {
 		a := ReplicationAnalysis{
 			Analysis:               NoProblem,
 			ProcessingNodeHostname: process.ThisHostname,
@@ -385,7 +392,13 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		}
 
 		a.TabletType = tablet.Type
+		a.AnalyzedKeyspace = m.GetString("keyspace")
 		a.PrimaryTimeStamp = m.GetTime("primary_timestamp")
+
+		if keyspaceType := topodatapb.KeyspaceType(m.GetInt("keyspace_type")); keyspaceType == topodatapb.KeyspaceType_SNAPSHOT {
+			log.Errorf("keyspace %v is a snapshot keyspace. Skipping.", a.AnalyzedKeyspace)
+			return nil
+		}
 
 		a.IsPrimary = m.GetBool("is_primary")
 		countCoPrimaryReplicas := m.GetUint("count_co_primary_replicas")
@@ -468,11 +481,26 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 				a.IsClusterPrimary = true
 				clusters[a.SuggestedClusterAlias].primaryKey = &a.AnalyzedInstanceKey
 			}
+			durabilityPolicy := m.GetString("durability_policy")
+			if durabilityPolicy == "" {
+				log.Errorf("ignoring keyspace %v because no durability_policy is set. Please set it using SetKeyspaceDurabilityPolicy", a.AnalyzedKeyspace)
+				return nil
+			}
+			durability, err := reparentutil.GetDurabilityPolicy(durabilityPolicy)
+			if err != nil {
+				log.Errorf("can't get the durability policy %v - %v. Skipping keyspace - %v.", durabilityPolicy, err, a.AnalyzedKeyspace)
+				return nil
+			}
+			clusters[a.SuggestedClusterAlias].durability = durability
 		}
 		// ca has clusterwide info
 		ca := clusters[a.SuggestedClusterAlias]
 		if ca.hasClusterwideAction {
 			// We can only take one cluster level action at a time.
+			return nil
+		}
+		if ca.durability == nil {
+			// We failed to load the durability policy, so we shouldn't run any analysis
 			return nil
 		}
 		if a.IsClusterPrimary && !a.LastCheckValid && a.CountReplicas == 0 {
@@ -504,11 +532,11 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 			a.Analysis = PrimaryIsReadOnly
 			a.Description = "Primary is read-only"
 			//
-		} else if a.IsClusterPrimary && reparentutil.SemiSyncAckers(tablet) != 0 && !a.SemiSyncPrimaryEnabled {
+		} else if a.IsClusterPrimary && SemiSyncAckers(ca.durability, tablet) != 0 && !a.SemiSyncPrimaryEnabled {
 			a.Analysis = PrimarySemiSyncMustBeSet
 			a.Description = "Primary semi-sync must be set"
 			//
-		} else if a.IsClusterPrimary && reparentutil.SemiSyncAckers(tablet) == 0 && a.SemiSyncPrimaryEnabled {
+		} else if a.IsClusterPrimary && SemiSyncAckers(ca.durability, tablet) == 0 && a.SemiSyncPrimaryEnabled {
 			a.Analysis = PrimarySemiSyncMustNotBeSet
 			a.Description = "Primary semi-sync must not be set"
 			//
@@ -532,11 +560,11 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 			a.Analysis = ReplicationStopped
 			a.Description = "Replication is stopped"
 			//
-		} else if topo.IsReplicaType(a.TabletType) && !a.IsPrimary && reparentutil.IsReplicaSemiSync(primaryTablet, tablet) && !a.SemiSyncReplicaEnabled {
+		} else if topo.IsReplicaType(a.TabletType) && !a.IsPrimary && IsReplicaSemiSync(ca.durability, primaryTablet, tablet) && !a.SemiSyncReplicaEnabled {
 			a.Analysis = ReplicaSemiSyncMustBeSet
 			a.Description = "Replica semi-sync must be set"
 			//
-		} else if topo.IsReplicaType(a.TabletType) && !a.IsPrimary && !reparentutil.IsReplicaSemiSync(primaryTablet, tablet) && a.SemiSyncReplicaEnabled {
+		} else if topo.IsReplicaType(a.TabletType) && !a.IsPrimary && !IsReplicaSemiSync(ca.durability, primaryTablet, tablet) && a.SemiSyncReplicaEnabled {
 			a.Analysis = ReplicaSemiSyncMustNotBeSet
 			a.Description = "Replica semi-sync must not be set"
 			//
@@ -579,70 +607,9 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 			a.Analysis = AllPrimaryReplicasNotReplicatingOrDead
 			a.Description = "Primary is reachable but none of its replicas is replicating"
 			//
-		} else /* co-primary */ if a.IsCoPrimary && !a.LastCheckValid && a.CountReplicas > 0 && a.CountValidReplicas == a.CountReplicas && a.CountValidReplicatingReplicas == 0 {
-			a.Analysis = DeadCoPrimary
-			a.Description = "Co-primary cannot be reached by orchestrator and none of its replicas is replicating"
-			//
-		} else if a.IsCoPrimary && !a.LastCheckValid && a.CountReplicas > 0 && a.CountValidReplicas < a.CountReplicas && a.CountValidReplicas > 0 && a.CountValidReplicatingReplicas == 0 {
-			a.Analysis = DeadCoPrimaryAndSomeReplicas
-			a.Description = "Co-primary cannot be reached by orchestrator; some of its replicas are unreachable and none of its reachable replicas is replicating"
-			//
-		} else if a.IsCoPrimary && !a.LastCheckValid && !a.LastCheckPartialSuccess && a.CountValidReplicas > 0 && a.CountValidReplicatingReplicas > 0 {
-			a.Analysis = UnreachableCoPrimary
-			a.Description = "Co-primary cannot be reached by orchestrator but it has replicating replicas; possibly a network/host issue"
-			//
-		} else if a.IsCoPrimary && a.LastCheckValid && a.CountReplicas > 0 && a.CountValidReplicatingReplicas == 0 {
-			a.Analysis = AllCoPrimaryReplicasNotReplicating
-			a.Description = "Co-primary is reachable but none of its replicas is replicating"
-			//
-		} else /* intermediate-primary */ if !a.IsPrimary && !a.LastCheckValid && a.CountReplicas == 1 && a.CountValidReplicas == a.CountReplicas && a.CountReplicasFailingToConnectToPrimary == a.CountReplicas && a.CountValidReplicatingReplicas == 0 {
-			a.Analysis = DeadIntermediatePrimaryWithSingleReplicaFailingToConnect
-			a.Description = "Intermediate primary cannot be reached by orchestrator and its (single) replica is failing to connect"
-			//
-		} else if !a.IsPrimary && !a.LastCheckValid && a.CountReplicas == 1 && a.CountValidReplicas == a.CountReplicas && a.CountValidReplicatingReplicas == 0 {
-			a.Analysis = DeadIntermediatePrimaryWithSingleReplica
-			a.Description = "Intermediate primary cannot be reached by orchestrator and its (single) replica is not replicating"
-			//
-		} else if !a.IsPrimary && !a.LastCheckValid && a.CountReplicas > 1 && a.CountValidReplicas == a.CountReplicas && a.CountValidReplicatingReplicas == 0 {
-			a.Analysis = DeadIntermediatePrimary
-			a.Description = "Intermediate primary cannot be reached by orchestrator and none of its replicas is replicating"
-			//
-		} else if !a.IsPrimary && !a.LastCheckValid && a.CountValidReplicas < a.CountReplicas && a.CountValidReplicas > 0 && a.CountValidReplicatingReplicas == 0 {
-			a.Analysis = DeadIntermediatePrimaryAndSomeReplicas
-			a.Description = "Intermediate primary cannot be reached by orchestrator; some of its replicas are unreachable and none of its reachable replicas is replicating"
-			//
-		} else if !a.IsPrimary && !a.LastCheckValid && a.CountReplicas > 0 && a.CountValidReplicas == 0 {
-			a.Analysis = DeadIntermediatePrimaryAndReplicas
-			a.Description = "Intermediate primary cannot be reached by orchestrator and all of its replicas are unreachable"
-			//
-		} else if !a.IsPrimary && !a.LastCheckValid && a.CountLaggingReplicas == a.CountReplicas && a.CountDelayedReplicas < a.CountReplicas && a.CountValidReplicatingReplicas > 0 {
-			a.Analysis = UnreachableIntermediatePrimaryWithLaggingReplicas
-			a.Description = "Intermediate primary cannot be reached by orchestrator and all of its replicas are lagging"
-			//
-		} else if !a.IsPrimary && !a.LastCheckValid && !a.LastCheckPartialSuccess && a.CountValidReplicas > 0 && a.CountValidReplicatingReplicas > 0 {
-			a.Analysis = UnreachableIntermediatePrimary
-			a.Description = "Intermediate primary cannot be reached by orchestrator but it has replicating replicas; possibly a network/host issue"
-			//
-		} else if !a.IsPrimary && a.LastCheckValid && a.CountReplicas > 1 && a.CountValidReplicatingReplicas == 0 &&
-			a.CountReplicasFailingToConnectToPrimary > 0 && a.CountReplicasFailingToConnectToPrimary == a.CountValidReplicas {
-			// All replicas are either failing to connect to primary (and at least one of these have to exist)
-			// or completely dead.
-			// Must have at least two replicas to reach such conclusion -- do note that the intermediate primary is still
-			// reachable to orchestrator, so we base our conclusion on replicas only at this point.
-			a.Analysis = AllIntermediatePrimaryReplicasFailingToConnectOrDead
-			a.Description = "Intermediate primary is reachable but all of its replicas are failing to connect"
-			//
-		} else if !a.IsPrimary && a.LastCheckValid && a.CountReplicas > 0 && a.CountValidReplicatingReplicas == 0 {
-			a.Analysis = AllIntermediatePrimaryReplicasNotReplicating
-			a.Description = "Intermediate primary is reachable but none of its replicas is replicating"
-			//
 		} else if a.IsBinlogServer && a.IsFailingToConnectToPrimary {
 			a.Analysis = BinlogServerFailingToConnectToPrimary
 			a.Description = "Binlog server is unable to connect to its primary"
-			//
-		} else if a.ReplicationDepth == 1 && a.IsFailingToConnectToPrimary {
-			a.Analysis = FirstTierReplicaFailingToConnectToPrimary
-			a.Description = "1st tier replica (directly replicating from topology primary) is unable to connect to the primary"
 			//
 		}
 		//		 else if a.IsPrimary && a.CountReplicas == 0 {
@@ -666,14 +633,7 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 				switch a.Analysis {
 				case AllPrimaryReplicasNotReplicating,
 					AllPrimaryReplicasNotReplicatingOrDead,
-					PrimarySingleReplicaDead,
-					AllCoPrimaryReplicasNotReplicating,
-					DeadIntermediatePrimaryWithSingleReplica,
-					DeadIntermediatePrimaryWithSingleReplicaFailingToConnect,
-					DeadIntermediatePrimaryAndReplicas,
-					DeadIntermediatePrimaryAndSomeReplicas,
-					AllIntermediatePrimaryReplicasFailingToConnectOrDead,
-					AllIntermediatePrimaryReplicasNotReplicating:
+					PrimarySingleReplicaDead:
 					a.IsReplicasDowntimed = true
 					a.SkippableDueToDowntime = true
 				}

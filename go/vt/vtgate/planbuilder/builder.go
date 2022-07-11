@@ -193,6 +193,8 @@ func createInstructionFor(query string, stmt sqlparser.Statement, reservedVars *
 		return buildRevertMigrationPlan(query, stmt, vschema, enableOnlineDDL)
 	case *sqlparser.ShowMigrationLogs:
 		return buildShowMigrationLogsPlan(query, vschema, enableOnlineDDL)
+	case *sqlparser.ShowThrottledApps:
+		return buildShowThrottledAppsPlan(query, vschema)
 	case *sqlparser.AlterVschema:
 		return buildVSchemaDDLPlan(stmt, vschema)
 	case *sqlparser.Use:
@@ -226,6 +228,10 @@ func createInstructionFor(query string, stmt sqlparser.Statement, reservedVars *
 		return buildStreamPlan(stmt, vschema)
 	case *sqlparser.VStream:
 		return buildVStreamPlan(stmt, vschema)
+	case *sqlparser.CommentOnly:
+		// There is only a comment in the input.
+		// This is essentially a No-op
+		return engine.NewRowsPrimitive(nil, nil), nil
 	}
 
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unexpected statement type: %T", stmt)

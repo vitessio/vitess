@@ -18,8 +18,12 @@ package http
 
 import (
 	"context"
+	"fmt"
 
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
+	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtadmin/errors"
 )
 
 // FindSchema implements the http wrapper for the
@@ -93,4 +97,61 @@ func getTableSizeOpts(r Request) (*vtadminpb.GetSchemaTableSizeOptions, error) {
 		AggregateSizes:          aggregateSizes,
 		IncludeNonServingShards: includeNonServingShards,
 	}, nil
+}
+
+// ReloadSchemas implements the http wrapper for /schemas/reload
+func ReloadSchemas(ctx context.Context, r Request, api *API) *JSONResponse {
+	concurrency, err := r.ParseQueryParamAsUint32("concurrency", 0)
+	if err != nil {
+		return NewJSONResponse(nil, err)
+	}
+
+	includePrimary, err := r.ParseQueryParamAsBool("include_primary", false)
+	if err != nil {
+		return NewJSONResponse(nil, err)
+	}
+
+	q := r.URL.Query()
+
+	tabletAliasStrs := q["tablet"]
+	aliases := make([]*topodatapb.TabletAlias, len(tabletAliasStrs))
+	for i, s := range tabletAliasStrs {
+		alias, err := topoproto.ParseTabletAlias(s)
+		if err != nil {
+			return NewJSONResponse(nil, &errors.BadRequest{
+				Err:        err,
+				ErrDetails: fmt.Sprintf("could not parse element %d (= %v) of query param into tablet alias", i, s),
+			})
+		}
+
+		aliases[i] = alias
+	}
+
+	resp, err := api.server.ReloadSchemas(ctx, &vtadminpb.ReloadSchemasRequest{
+		Keyspaces:      q["keyspace"],
+		KeyspaceShards: q["keyspace_shard"],
+		Tablets:        aliases,
+		Concurrency:    concurrency,
+		IncludePrimary: includePrimary,
+		WaitPosition:   q.Get("wait_position"),
+		ClusterIds:     q["cluster"],
+	})
+	return NewJSONResponse(resp, err)
+}
+
+// ReloadTabletSchema implements the http wrapper for /tablets/{tablet}/reload_schema.
+//
+// Note that all query parameters that apply to ReloadSchemas, except for `cluster`,
+// are ignored.
+func ReloadTabletSchema(ctx context.Context, r Request, api *API) *JSONResponse {
+	alias, err := r.Vars().GetTabletAlias("tablet")
+	if err != nil {
+		return NewJSONResponse(nil, err)
+	}
+
+	resp, err := api.server.ReloadSchemas(ctx, &vtadminpb.ReloadSchemasRequest{
+		Tablets:    []*topodatapb.TabletAlias{alias},
+		ClusterIds: r.URL.Query()["cluster"],
+	})
+	return NewJSONResponse(resp, err)
 }

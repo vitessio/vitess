@@ -83,7 +83,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Scalar",
-    "Aggregates": "count(0)",
+    "Aggregates": "sum_count(0) AS count",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -106,7 +106,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Scalar",
-    "Aggregates": "sum(0) AS count(*)",
+    "Aggregates": "sum_count_star(0) AS count(*)",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -178,7 +178,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Scalar",
-    "Aggregates": "count(0)",
+    "Aggregates": "sum_count(0) AS count",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -201,7 +201,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Scalar",
-    "Aggregates": "sum(0) AS count(*)",
+    "Aggregates": "sum_count_star(0) AS count(*)",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -227,7 +227,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Scalar",
-    "Aggregates": "count(0)",
+    "Aggregates": "sum_count(0) AS count",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -250,7 +250,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Scalar",
-    "Aggregates": "sum(0) AS count(*)",
+    "Aggregates": "sum_count_star(0) AS count(*)",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -600,8 +600,8 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": false
     },
-    "FieldQuery": "select @@session.auto_increment_increment from dual where 1 != 1",
-    "Query": "select @@session.auto_increment_increment from dual",
+    "FieldQuery": "select @@auto_increment_increment from dual where 1 != 1",
+    "Query": "select @@auto_increment_increment from dual",
     "Table": "dual"
   }
 }
@@ -642,8 +642,8 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select @@session.auto_increment_increment from dual where 1 != 1",
-    "Query": "select @@session.auto_increment_increment from dual",
+    "FieldQuery": "select @@auto_increment_increment from dual where 1 != 1",
+    "Query": "select @@auto_increment_increment from dual",
     "Table": "dual"
   }
 }
@@ -1758,7 +1758,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "count(0)",
+        "Aggregates": "sum_count(0) AS count",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1802,7 +1802,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum(0) AS count(*)",
+        "Aggregates": "sum_count_star(0) AS count(*)",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1894,7 +1894,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "count(0)",
+        "Aggregates": "sum_count(0) AS count",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1940,7 +1940,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum(0) AS count(*)",
+        "Aggregates": "sum_count_star(0) AS count(*)",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -2979,7 +2979,7 @@ Gen4 plan same as above
       "Sharded": false
     },
     "FieldQuery": "select 1 from dual where 1 != 1",
-    "Query": "select 1 from dual where exists (select 1 from information_schema.`TABLES` where information_schema.`TABLES`.TABLE_NAME = :TABLES_TABLE_NAME and information_schema.`TABLES`.TABLE_SCHEMA = :__vtschemaname)",
+    "Query": "select 1 from dual where exists (select 1 from information_schema.`TABLES` where information_schema.`TABLES`.TABLE_NAME = :TABLES_TABLE_NAME and information_schema.`TABLES`.TABLE_SCHEMA = :__vtschemaname limit 1)",
     "SysTableTableName": "[TABLES_TABLE_NAME:VARCHAR(\"proc\")]",
     "SysTableTableSchema": "[VARCHAR(\"mysql\")]",
     "Table": "dual"
@@ -2996,7 +2996,7 @@ Gen4 plan same as above
       "Sharded": false
     },
     "FieldQuery": "select 1 from dual where 1 != 1",
-    "Query": "select 1 from dual where exists (select 1 from information_schema.`TABLES` where `TABLES`.TABLE_NAME = :TABLES_TABLE_NAME and `TABLES`.TABLE_SCHEMA = :__vtschemaname)",
+    "Query": "select 1 from dual where exists (select 1 from information_schema.`TABLES` where `TABLES`.TABLE_NAME = :TABLES_TABLE_NAME and `TABLES`.TABLE_SCHEMA = :__vtschemaname limit 1)",
     "SysTableTableName": "[TABLES_TABLE_NAME:VARCHAR(\"proc\")]",
     "SysTableTableSchema": "[VARCHAR(\"mysql\")]",
     "Table": "dual"
@@ -3132,7 +3132,7 @@ Gen4 plan same as above
           "Sharded": false
         },
         "FieldQuery": "select 1 from dual where 1 != 1",
-        "Query": "select 1 from dual",
+        "Query": "select 1 from dual limit 1",
         "Table": "dual"
       },
       {
@@ -3164,7 +3164,7 @@ Gen4 plan same as above
       "Sharded": true
     },
     "FieldQuery": "select exists (select 1 from dual where 1 != 1) from `user` where 1 != 1",
-    "Query": "select exists (select 1 from dual) from `user` where id = 5",
+    "Query": "select exists (select 1 from dual limit 1) from `user` where id = 5",
     "Table": "`user`",
     "Values": [
       "INT64(5)"
@@ -3280,8 +3280,8 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": false
     },
-    "FieldQuery": "select json_array_append('{\\\"a\\\": 1}', '$', 'z'), json_array_insert('[\\\"a\\\", {\\\"b\\\": [1, 2]}, [3, 4]]', '$[0]', 'x', '$[2][1]', 'y'), json_insert('{ \\\"a\\\": 1, \\\"b\\\": [2, 3]}', '$.a', 10, '$.c', convert('[true, false]', JSON)) from dual where 1 != 1",
-    "Query": "select json_array_append('{\\\"a\\\": 1}', '$', 'z'), json_array_insert('[\\\"a\\\", {\\\"b\\\": [1, 2]}, [3, 4]]', '$[0]', 'x', '$[2][1]', 'y'), json_insert('{ \\\"a\\\": 1, \\\"b\\\": [2, 3]}', '$.a', 10, '$.c', convert('[true, false]', JSON)) from dual",
+    "FieldQuery": "select json_array_append('{\\\"a\\\": 1}', '$', 'z'), json_array_insert('[\\\"a\\\", {\\\"b\\\": [1, 2]}, [3, 4]]', '$[0]', 'x', '$[2][1]', 'y'), json_insert('{ \\\"a\\\": 1, \\\"b\\\": [2, 3]}', '$.a', 10, '$.c', cast('[true, false]' as JSON)) from dual where 1 != 1",
+    "Query": "select json_array_append('{\\\"a\\\": 1}', '$', 'z'), json_array_insert('[\\\"a\\\", {\\\"b\\\": [1, 2]}, [3, 4]]', '$[0]', 'x', '$[2][1]', 'y'), json_insert('{ \\\"a\\\": 1, \\\"b\\\": [2, 3]}', '$.a', 10, '$.c', cast('[true, false]' as JSON)) from dual",
     "Table": "dual"
   }
 }
@@ -3324,3 +3324,209 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+
+# Reference with a subquery which can be merged
+"select exists(select id from user where id = 4)"
+{
+  "QueryType": "SELECT",
+  "Original": "select exists(select id from user where id = 4)",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutExists",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from `user` where 1 != 1",
+        "Query": "select 1 from `user` where id = 4 limit 1",
+        "Table": "`user`",
+        "Values": [
+          "INT64(4)"
+        ],
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "Reference",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select :__sq_has_values1 from dual where 1 != 1",
+        "Query": "select :__sq_has_values1 from dual",
+        "Table": "dual"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select exists(select id from user where id = 4)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select exists (select 1 from `user` where 1 != 1) from dual where 1 != 1",
+    "Query": "select exists (select 1 from `user` where id = 4 limit 1) from dual",
+    "Table": "dual",
+    "Values": [
+      "INT64(4)"
+    ],
+    "Vindex": "user_index"
+  }
+}
+
+# Reference with a subquery which cannot be merged
+"select exists(select * from user)"
+{
+  "QueryType": "SELECT",
+  "Original": "select exists(select * from user)",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutExists",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Limit",
+        "Count": "INT64(1)",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from `user` where 1 != 1",
+            "Query": "select 1 from `user` limit :__upper_limit",
+            "Table": "`user`"
+          }
+        ]
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "Reference",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select :__sq_has_values1 from dual where 1 != 1",
+        "Query": "select :__sq_has_values1 from dual",
+        "Table": "dual"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select exists(select * from user)",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutExists",
+    "PulloutVars": [
+      "__sq_has_values1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Limit",
+        "Count": "INT64(1)",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from `user` where 1 != 1",
+            "Query": "select 1 from `user` limit :__upper_limit",
+            "Table": "`user`"
+          }
+        ]
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "Reference",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select :__sq_has_values1 from dual where 1 != 1",
+        "Query": "select :__sq_has_values1 from dual",
+        "Table": "dual"
+      }
+    ]
+  }
+}
+
+# insert function not requiring any table
+"select insert('Quadratic', 3, 4, 'What')"
+{
+  "QueryType": "SELECT",
+  "Original": "select insert('Quadratic', 3, 4, 'What')",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Reference",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select insert('Quadratic', 3, 4, 'What') from dual where 1 != 1",
+    "Query": "select insert('Quadratic', 3, 4, 'What') from dual",
+    "Table": "dual"
+  }
+}
+Gen4 plan same as above
+
+# insert function using column names as arguments
+"select insert(tcol1, id, 3, tcol2) from user"
+{
+  "QueryType": "SELECT",
+  "Original": "select insert(tcol1, id, 3, tcol2) from user",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select insert(tcol1, id, 3, tcol2) from `user` where 1 != 1",
+    "Query": "select insert(tcol1, id, 3, tcol2) from `user`",
+    "Table": "`user`"
+  }
+}
+Gen4 plan same as above
+
+# gtid functions
+"select gtid_subset('3E11FA47-71CA-11E1-9E33-C80AA9429562:23','3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57'), gtid_subtract('3E11FA47-71CA-11E1-9E33-C80AA9429562:23','3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57')"
+{
+  "QueryType": "SELECT",
+  "Original": "select gtid_subset('3E11FA47-71CA-11E1-9E33-C80AA9429562:23','3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57'), gtid_subtract('3E11FA47-71CA-11E1-9E33-C80AA9429562:23','3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57')",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Reference",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select gtid_subset('3E11FA47-71CA-11E1-9E33-C80AA9429562:23', '3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57'), gtid_subtract('3E11FA47-71CA-11E1-9E33-C80AA9429562:23', '3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57') from dual where 1 != 1",
+    "Query": "select gtid_subset('3E11FA47-71CA-11E1-9E33-C80AA9429562:23', '3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57'), gtid_subtract('3E11FA47-71CA-11E1-9E33-C80AA9429562:23', '3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57') from dual",
+    "Table": "dual"
+  }
+}
+Gen4 plan same as above
+

@@ -20,22 +20,28 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
-
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/mysql"
-	tabletpb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
+
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	tmc "vitess.io/vitess/go/vt/vttablet/grpctmclient"
 )
 
 var (
-	tmClient = tmc.NewClient()
+	tmClient                 = tmc.NewClient()
+	dbCredentialFile         string
+	InsertTabletTemplateKsID = `insert into %s (id, msg) values (%d, '%s') /* id:%d */`
 )
 
 // Restart restarts vttablet and mysql.
@@ -84,6 +90,15 @@ func GetPrimaryPosition(t *testing.T, vttablet Vttablet, hostname string) (strin
 	require.Nil(t, err)
 	gtID := strings.SplitAfter(pos, "/")[1]
 	return pos, gtID
+}
+
+// GetReplicationStatus gets the replication status of given vttablet
+func GetReplicationStatus(t *testing.T, vttablet *Vttablet, hostname string) *replicationdatapb.Status {
+	ctx := context.Background()
+	vtablet := getTablet(vttablet.GrpcPort, hostname)
+	pos, err := tmClient.ReplicationStatus(ctx, vtablet)
+	require.NoError(t, err)
+	return pos
 }
 
 // VerifyRowsInTabletForTable verifies the total number of rows in a table.
@@ -172,10 +187,10 @@ func ResetTabletDirectory(tablet Vttablet) error {
 	return tablet.MysqlctlProcess.Start()
 }
 
-func getTablet(tabletGrpcPort int, hostname string) *tabletpb.Tablet {
+func getTablet(tabletGrpcPort int, hostname string) *topodatapb.Tablet {
 	portMap := make(map[string]int32)
 	portMap["grpc"] = int32(tabletGrpcPort)
-	return &tabletpb.Tablet{Hostname: hostname, PortMap: portMap}
+	return &topodatapb.Tablet{Hostname: hostname, PortMap: portMap}
 }
 
 func filterResultForWarning(input string) string {
@@ -280,4 +295,105 @@ func filterDoubleDashArgs(args []string, version int) (filtered []string) {
 	}
 
 	return filtered
+}
+
+// WriteDbCredentialToTmp writes JSON formatted db credentials to the
+// specified tmp directory.
+func WriteDbCredentialToTmp(tmpDir string) string {
+	data := []byte(`{
+        "vt_dba": ["VtDbaPass"],
+        "vt_app": ["VtAppPass"],
+        "vt_allprivs": ["VtAllprivsPass"],
+        "vt_repl": ["VtReplPass"],
+        "vt_filtered": ["VtFilteredPass"]
+	}`)
+	dbCredentialFile = path.Join(tmpDir, "db_credentials.json")
+	os.WriteFile(dbCredentialFile, data, 0666)
+	return dbCredentialFile
+}
+
+// GetPasswordUpdateSQL returns the SQL for updating the users' passwords
+// to the static creds used throughout tests.
+func GetPasswordUpdateSQL(localCluster *LocalProcessCluster) string {
+	pwdChangeCmd := `
+					# Set real passwords for all users.
+					UPDATE mysql.user SET %s = PASSWORD('RootPass')
+					  WHERE User = 'root' AND Host = 'localhost';
+					UPDATE mysql.user SET %s = PASSWORD('VtDbaPass')
+					  WHERE User = 'vt_dba' AND Host = 'localhost';
+					UPDATE mysql.user SET %s = PASSWORD('VtAppPass')
+					  WHERE User = 'vt_app' AND Host = 'localhost';
+					UPDATE mysql.user SET %s = PASSWORD('VtAllprivsPass')
+					  WHERE User = 'vt_allprivs' AND Host = 'localhost';
+					UPDATE mysql.user SET %s = PASSWORD('VtReplPass')
+					  WHERE User = 'vt_repl' AND Host = '%%';
+					UPDATE mysql.user SET %s = PASSWORD('VtFilteredPass')
+					  WHERE User = 'vt_filtered' AND Host = 'localhost';
+					FLUSH PRIVILEGES;
+					`
+	pwdCol, _ := getPasswordField(localCluster)
+	return fmt.Sprintf(pwdChangeCmd, pwdCol, pwdCol, pwdCol, pwdCol, pwdCol, pwdCol)
+}
+
+// getPasswordField determines which column is used for user passwords in this MySQL version.
+func getPasswordField(localCluster *LocalProcessCluster) (pwdCol string, err error) {
+	tablet := &Vttablet{
+		Type:            "relpica",
+		TabletUID:       100,
+		MySQLPort:       15000,
+		MysqlctlProcess: *MysqlCtlProcessInstance(100, 15000, localCluster.TmpDirectory),
+	}
+	if err = tablet.MysqlctlProcess.Start(); err != nil {
+		return "", err
+	}
+	tablet.VttabletProcess = VttabletProcessInstance(tablet.HTTPPort, tablet.GrpcPort, tablet.TabletUID, "", "", "", 0, tablet.Type, localCluster.TopoPort, "", "", nil, false, localCluster.DefaultCharset)
+	result, err := tablet.VttabletProcess.QueryTablet("select password from mysql.user limit 0", "", false)
+	if err == nil && len(result.Rows) > 0 {
+		return "password", nil
+	}
+	tablet.MysqlctlProcess.Stop()
+	os.RemoveAll(path.Join(tablet.VttabletProcess.Directory))
+	return "authentication_string", nil
+
+}
+
+// CheckSrvKeyspace confirms that the cell and keyspace contain the expected
+// shard mappings.
+func CheckSrvKeyspace(t *testing.T, cell string, ksname string, expectedPartition map[topodatapb.TabletType][]string, ci LocalProcessCluster) {
+	srvKeyspace := GetSrvKeyspace(t, cell, ksname, ci)
+
+	currentPartition := map[topodatapb.TabletType][]string{}
+
+	for _, partition := range srvKeyspace.Partitions {
+		currentPartition[partition.ServedType] = []string{}
+		for _, shardRef := range partition.ShardReferences {
+			currentPartition[partition.ServedType] = append(currentPartition[partition.ServedType], shardRef.Name)
+		}
+	}
+
+	assert.True(t, reflect.DeepEqual(currentPartition, expectedPartition))
+}
+
+// GetSrvKeyspace returns the SrvKeyspace structure for the cell and keyspace.
+func GetSrvKeyspace(t *testing.T, cell string, ksname string, ci LocalProcessCluster) *topodatapb.SrvKeyspace {
+	output, err := ci.VtctlclientProcess.ExecuteCommandWithOutput("GetSrvKeyspace", cell, ksname)
+	require.Nil(t, err)
+	var srvKeyspace topodatapb.SrvKeyspace
+
+	err = json2.Unmarshal([]byte(output), &srvKeyspace)
+	require.Nil(t, err)
+	return &srvKeyspace
+}
+
+// ExecuteOnTablet executes a query on the specified vttablet.
+// It should always be called with a primary tablet for a keyspace/shard.
+func ExecuteOnTablet(t *testing.T, query string, vttablet Vttablet, ks string, expectFail bool) {
+	_, _ = vttablet.VttabletProcess.QueryTablet("begin", ks, true)
+	_, err := vttablet.VttabletProcess.QueryTablet(query, ks, true)
+	if expectFail {
+		require.Error(t, err)
+	} else {
+		require.Nil(t, err)
+	}
+	_, _ = vttablet.VttabletProcess.QueryTablet("commit", ks, true)
 }

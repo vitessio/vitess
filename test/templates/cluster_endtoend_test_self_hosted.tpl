@@ -14,9 +14,10 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Check for changes in relevant files
-        uses: dorny/paths-filter@v2
+        uses: frouioui/paths-filter@main
         id: changes
         with:
+          token: ''
           filters: |
             end_to_end:
               - 'go/**/*.go'
@@ -29,6 +30,7 @@ jobs:
               - 'config/**'
               - '.github/docker/**'
               - 'bootstrap.sh'
+              - '.github/workflows/**'
 
       - name: Build Docker Image
         if: steps.changes.outputs.end_to_end == 'true'

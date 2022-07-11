@@ -25,36 +25,47 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/test/endtoend/utils"
-
-	cmp "vitess.io/vitess/go/test/utils"
-
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/utils"
+	cmp "vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/query"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 )
 
-var createMessage = `create table vitess_message(
-	id bigint,
-	priority bigint default 0,
-	time_next bigint default 0,
-	epoch bigint,
-	time_acked bigint,
-	message varchar(128),
+var testMessage = "{\"message\":\"hello world\"}"
+var testShardedMessagef = "{\"message\": \"hello world\", \"id\": %d}"
+
+var createMessage = `
+create table vitess_message(
+	# required columns
+	id bigint NOT NULL COMMENT 'often an event id, can also be auto-increment or a sequence',
+	priority tinyint NOT NULL DEFAULT '50' COMMENT 'lower number priorities process first',
+	epoch bigint NOT NULL DEFAULT '0' COMMENT 'Vitess increments this each time it sends a message, and is used for incremental backoff doubling',
+	time_next bigint DEFAULT 0 COMMENT 'the earliest time the message will be sent in epoch nanoseconds. Must be null if time_acked is set',
+	time_acked bigint DEFAULT NULL COMMENT 'the time the message was acked in epoch nanoseconds. Must be null if time_next is set',
+
+	# add as many custom fields here as required
+	# optional - these are suggestions
+	tenant_id bigint,
+	message json,
+
+	# required indexes
 	primary key(id),
-	index next_idx(priority, time_next desc),
-	index ack_idx(time_acked))
-comment 'vitess_message,vt_ack_wait=1,vt_purge_after=3,vt_batch_size=2,vt_cache_size=10,vt_poller_interval=1'`
+	index next_idx(time_next),
+	index poller_idx(time_acked, priority, time_next desc)
+
+	# add any secondary indexes or foreign keys - no restrictions
+) comment 'vitess_message,vt_ack_wait=1,vt_purge_after=3,vt_batch_size=2,vt_cache_size=10,vt_poller_interval=1'
+`
 
 func TestMessage(t *testing.T) {
 	ctx := context.Background()
@@ -85,8 +96,11 @@ func TestMessage(t *testing.T) {
 		Name: "id",
 		Type: sqltypes.Int64,
 	}, {
+		Name: "tenant_id",
+		Type: sqltypes.Int64,
+	}, {
 		Name: "message",
-		Type: sqltypes.VarChar,
+		Type: sqltypes.TypeJSON,
 	}}
 	gotFields, err := streamConn.Fields()
 	for i, field := range gotFields {
@@ -99,7 +113,7 @@ func TestMessage(t *testing.T) {
 	require.NoError(t, err)
 	cmp.MustMatch(t, wantFields, gotFields)
 
-	utils.Exec(t, conn, "insert into vitess_message(id, message) values(1, 'hello world')")
+	utils.Exec(t, conn, fmt.Sprintf("insert into vitess_message(id, tenant_id, message) values(1, 1, '%s')", testMessage))
 
 	// account for jitter in timings, maxJitter uses the current hardcoded value for jitter in message_manager.go
 	jitter := int64(0)
@@ -112,7 +126,8 @@ func TestMessage(t *testing.T) {
 
 	want := []sqltypes.Value{
 		sqltypes.NewInt64(1),
-		sqltypes.NewVarChar("hello world"),
+		sqltypes.NewInt64(1),
+		sqltypes.TestValue(sqltypes.TypeJSON, testMessage),
 	}
 	cmp.MustMatch(t, want, got)
 
@@ -163,18 +178,32 @@ func TestMessage(t *testing.T) {
 	assert.Equal(t, 0, len(qr.Rows))
 }
 
-var createThreeColMessage = `create table vitess_message3(
-	id bigint,
-	priority bigint default 0,
-	time_next bigint default 0,
-	epoch bigint,
-	time_acked bigint,
+var createThreeColMessage = `
+create table vitess_message3(
+	# required columns
+	id bigint NOT NULL COMMENT 'often an event id, can also be auto-increment or a sequence',
+	priority tinyint NOT NULL DEFAULT '50' COMMENT 'lower number priorities process first',
+	epoch bigint NOT NULL DEFAULT '0' COMMENT 'Vitess increments this each time it sends a message, and is used for incremental backoff doubling',
+	time_next bigint DEFAULT 0 COMMENT 'the earliest time the message will be sent in epoch nanoseconds. Must be null if time_acked is set',
+	time_acked bigint DEFAULT NULL COMMENT 'the time the message was acked in epoch nanoseconds. Must be null if time_next is set',
+
+	# add as many custom fields here as required
+	# optional - these are suggestions
+	tenant_id bigint,
+	message json,
+
+	# custom to this test
 	msg1 varchar(128),
 	msg2 bigint,
+
+	# required indexes
 	primary key(id),
-	index next_idx(priority, time_next desc),
-	index ack_idx(time_acked))
-comment 'vitess_message,vt_ack_wait=1,vt_purge_after=3,vt_batch_size=2,vt_cache_size=10,vt_poller_interval=1'`
+	index next_idx(time_next),
+	index poller_idx(time_acked, priority, time_next desc)
+
+	# add any secondary indexes or foreign keys - no restrictions
+) comment 'vitess_message,vt_ack_wait=1,vt_purge_after=3,vt_batch_size=2,vt_cache_size=10,vt_poller_interval=1'
+`
 
 func TestThreeColMessage(t *testing.T) {
 	ctx := context.Background()
@@ -203,6 +232,12 @@ func TestThreeColMessage(t *testing.T) {
 		Name: "id",
 		Type: sqltypes.Int64,
 	}, {
+		Name: "tenant_id",
+		Type: sqltypes.Int64,
+	}, {
+		Name: "message",
+		Type: sqltypes.TypeJSON,
+	}, {
 		Name: "msg1",
 		Type: sqltypes.VarChar,
 	}, {
@@ -220,12 +255,14 @@ func TestThreeColMessage(t *testing.T) {
 	require.NoError(t, err)
 	cmp.MustMatch(t, wantFields, gotFields)
 
-	utils.Exec(t, conn, "insert into vitess_message3(id, msg1, msg2) values(1, 'hello world', 3)")
+	utils.Exec(t, conn, fmt.Sprintf("insert into vitess_message3(id, tenant_id, message, msg1, msg2) values(1, 3, '%s', 'hello world', 3)", testMessage))
 
 	got, err := streamConn.FetchNext(nil)
 	require.NoError(t, err)
 	want := []sqltypes.Value{
 		sqltypes.NewInt64(1),
+		sqltypes.NewInt64(3),
+		sqltypes.TestValue(sqltypes.TypeJSON, testMessage),
 		sqltypes.NewVarChar("hello world"),
 		sqltypes.NewInt64(3),
 	}
@@ -233,6 +270,87 @@ func TestThreeColMessage(t *testing.T) {
 
 	// Verify Ack.
 	qr := utils.Exec(t, conn, "update vitess_message3 set time_acked = 123, time_next = null where id = 1 and time_acked is null")
+	assert.Equal(t, uint64(1), qr.RowsAffected)
+}
+
+var createSpecificStreamingColsMessage = `create table vitess_message4(
+	# required columns
+	id bigint NOT NULL COMMENT 'often an event id, can also be auto-increment or a sequence',
+	priority tinyint NOT NULL DEFAULT '50' COMMENT 'lower number priorities process first',
+	epoch bigint NOT NULL DEFAULT '0' COMMENT 'Vitess increments this each time it sends a message, and is used for incremental backoff doubling',
+	time_next bigint DEFAULT 0 COMMENT 'the earliest time the message will be sent in epoch nanoseconds. Must be null if time_acked is set',
+	time_acked bigint DEFAULT NULL COMMENT 'the time the message was acked in epoch nanoseconds. Must be null if time_next is set',
+
+	# add as many custom fields here as required
+	# optional - these are suggestions
+	tenant_id bigint,
+	message json,
+
+	# custom to this test
+	msg1 varchar(128),
+	msg2 bigint,
+
+	# required indexes
+	primary key(id),
+	index next_idx(time_next),
+	index poller_idx(time_acked, priority, time_next desc)
+
+	# add any secondary indexes or foreign keys - no restrictions
+) comment 'vitess_message,vt_message_cols=id|msg1,vt_ack_wait=1,vt_purge_after=3,vt_batch_size=2,vt_cache_size=10,vt_poller_interval=1'`
+
+func TestSpecificStreamingColsMessage(t *testing.T) {
+	ctx := context.Background()
+
+	vtParams := mysql.ConnParams{
+		Host: "localhost",
+		Port: clusterInstance.VtgateMySQLPort,
+	}
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	streamConn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer streamConn.Close()
+
+	utils.Exec(t, conn, fmt.Sprintf("use %s", lookupKeyspace))
+	utils.Exec(t, conn, createSpecificStreamingColsMessage)
+	defer utils.Exec(t, conn, "drop table vitess_message4")
+
+	utils.Exec(t, streamConn, "set workload = 'olap'")
+	err = streamConn.ExecuteStreamFetch("stream * from vitess_message4")
+	require.NoError(t, err)
+
+	wantFields := []*querypb.Field{{
+		Name: "id",
+		Type: sqltypes.Int64,
+	}, {
+		Name: "msg1",
+		Type: sqltypes.VarChar,
+	}}
+	gotFields, err := streamConn.Fields()
+	for i, field := range gotFields {
+		// Remove other artifacts.
+		gotFields[i] = &querypb.Field{
+			Name: field.Name,
+			Type: field.Type,
+		}
+	}
+	require.NoError(t, err)
+	cmp.MustMatch(t, wantFields, gotFields)
+
+	utils.Exec(t, conn, "insert into vitess_message4(id, msg1, msg2) values(1, 'hello world', 3)")
+
+	got, err := streamConn.FetchNext(nil)
+	require.NoError(t, err)
+	want := []sqltypes.Value{
+		sqltypes.NewInt64(1),
+		sqltypes.NewVarChar("hello world"),
+	}
+	cmp.MustMatch(t, want, got)
+
+	// Verify Ack.
+	qr := utils.Exec(t, conn, "update vitess_message4 set time_acked = 123, time_next = null where id = 1 and time_acked is null")
 	assert.Equal(t, uint64(1), qr.RowsAffected)
 }
 
@@ -292,7 +410,8 @@ func TestReparenting(t *testing.T) {
 	assertClientCount(t, 1, shard0Replica)
 	assertClientCount(t, 1, shard1Primary)
 	session := stream.Session("@primary", nil)
-	cluster.ExecuteQueriesUsingVtgate(t, session, "insert into sharded_message (id, message) values (3,'hello world 3')")
+	msg3 := fmt.Sprintf(testShardedMessagef, 3)
+	cluster.ExecuteQueriesUsingVtgate(t, session, fmt.Sprintf("insert into sharded_message (id, tenant_id, message) values (3,3,'%s')", msg3))
 
 	// validate that we have received inserted message
 	stream.Next()
@@ -353,8 +472,10 @@ func TestConnection(t *testing.T) {
 	// in message stream
 	session := stream.Session("@primary", nil)
 	// insert data in primary
-	cluster.ExecuteQueriesUsingVtgate(t, session, "insert into sharded_message (id, message) values (2,'hello world 2')")
-	cluster.ExecuteQueriesUsingVtgate(t, session, "insert into sharded_message (id, message) values (5,'hello world 5')")
+	msg2 := fmt.Sprintf(testShardedMessagef, 2)
+	msg5 := fmt.Sprintf(testShardedMessagef, 5)
+	cluster.ExecuteQueriesUsingVtgate(t, session, fmt.Sprintf("insert into sharded_message (id, tenant_id, message) values (2,2,'%s')", msg2))
+	cluster.ExecuteQueriesUsingVtgate(t, session, fmt.Sprintf("insert into sharded_message (id, tenant_id, message) values (5,5,'%s')", msg5))
 	// validate in msg stream
 	_, err = stream.Next()
 	require.Nil(t, err)
@@ -380,15 +501,18 @@ func testMessaging(t *testing.T, name, ks string) {
 	defer stream.Close()
 
 	session := stream.Session("@primary", nil)
-	cluster.ExecuteQueriesUsingVtgate(t, session, "insert into "+name+" (id, message) values (4,'hello world 4')")
-	cluster.ExecuteQueriesUsingVtgate(t, session, "insert into "+name+" (id, message) values (1,'hello world 1')")
+	msg4 := fmt.Sprintf(testShardedMessagef, 4)
+	msg1 := fmt.Sprintf(testShardedMessagef, 1)
+	cluster.ExecuteQueriesUsingVtgate(t, session, fmt.Sprintf("insert into "+name+" (id, tenant_id, message) values (4,4,'%s')", msg4))
+	cluster.ExecuteQueriesUsingVtgate(t, session, fmt.Sprintf("insert into "+name+" (id, tenant_id, message) values (1,1,'%s')", msg1))
 
 	// validate fields
 	res, err := stream.MessageStream(ks, "", nil, name)
 	require.Nil(t, err)
-	require.Equal(t, 2, len(res.Fields))
+	require.Equal(t, 3, len(res.Fields))
 	validateField(t, res.Fields[0], "id", query.Type_INT64)
-	validateField(t, res.Fields[1], "message", query.Type_VARCHAR)
+	validateField(t, res.Fields[1], "tenant_id", query.Type_INT64)
+	validateField(t, res.Fields[2], "message", query.Type_JSON)
 
 	// validate recieved msgs
 	resMap := make(map[string]string)
@@ -406,8 +530,8 @@ func testMessaging(t *testing.T, name, ks string) {
 		}
 	}
 
-	assert.Equal(t, "hello world 1", resMap["1"])
-	assert.Equal(t, "hello world 4", resMap["4"])
+	assert.Equal(t, "1", resMap["1"])
+	assert.Equal(t, "4", resMap["4"])
 
 	resMap = make(map[string]string)
 	stream.ClearMem()
@@ -422,7 +546,7 @@ func testMessaging(t *testing.T, name, ks string) {
 		}
 	}
 
-	assert.Equal(t, "hello world 1", resMap["1"])
+	assert.Equal(t, "1", resMap["1"])
 
 	// validate message ack with 1 and 4, only 1 should be ack
 	qr, err = session.Execute(context.Background(), "update "+name+" set time_acked = 1, time_next = null where id in (1, 4) and time_acked is null", nil)
@@ -519,18 +643,18 @@ func assertClientCount(t *testing.T, expected int, vttablet *cluster.Vttablet) {
 }
 
 func parseDebugVars(t *testing.T, output interface{}, vttablet *cluster.Vttablet) {
-	debugVarUrl := fmt.Sprintf("http://%s:%d/debug/vars", vttablet.VttabletProcess.TabletHostname, vttablet.HTTPPort)
-	resp, err := http.Get(debugVarUrl)
+	debugVarURL := fmt.Sprintf("http://%s:%d/debug/vars", vttablet.VttabletProcess.TabletHostname, vttablet.HTTPPort)
+	resp, err := http.Get(debugVarURL)
 	if err != nil {
-		t.Fatalf("failed to fetch %q: %v", debugVarUrl, err)
+		t.Fatalf("failed to fetch %q: %v", debugVarURL, err)
 	}
 
 	respByte, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != 200 {
-		t.Fatalf("status code %d while fetching %q:\n%s", resp.StatusCode, debugVarUrl, respByte)
+		t.Fatalf("status code %d while fetching %q:\n%s", resp.StatusCode, debugVarURL, respByte)
 	}
 
 	if err := json.Unmarshal(respByte, output); err != nil {
-		t.Fatalf("failed to unmarshal JSON from %q: %v", debugVarUrl, err)
+		t.Fatalf("failed to unmarshal JSON from %q: %v", debugVarURL, err)
 	}
 }

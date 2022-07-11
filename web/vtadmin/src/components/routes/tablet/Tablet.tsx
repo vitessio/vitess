@@ -32,6 +32,8 @@ import { TabContainer } from '../../tabs/TabContainer';
 import Advanced from './Advanced';
 import style from './Tablet.module.scss';
 import { TabletCharts } from './TabletCharts';
+import { TabletReplication } from './TabletReplication';
+import { env } from '../../../util/env';
 
 interface RouteParams {
     alias: string;
@@ -103,6 +105,7 @@ export const Tablet = () => {
             <ContentContainer>
                 <TabContainer>
                     <Tab text="QPS" to={`${url}/qps`} />
+                    <Tab text="Replication Status" to={`${url}/replication`} />
                     <Tab text="JSON" to={`${url}/json`} />
 
                     <ReadOnlyGate>
@@ -115,11 +118,15 @@ export const Tablet = () => {
                         <TabletCharts alias={alias} clusterID={clusterID} />
                     </Route>
 
+                    <Route path={`${path}/replication`}>
+                        <TabletReplication tablet={tablet} />
+                    </Route>
+
                     <Route path={`${path}/json`}>
                         <div>
                             <Code code={JSON.stringify(tablet, null, 2)} />
 
-                            {process.env.REACT_APP_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS && (
+                            {env().REACT_APP_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS && (
                                 <Code code={JSON.stringify(debugVars, null, 2)} />
                             )}
                         </div>
@@ -127,7 +134,7 @@ export const Tablet = () => {
 
                     {!isReadOnlyMode() && (
                         <Route path={`${path}/advanced`}>
-                            <Advanced tablet={tablet} />
+                            <Advanced alias={alias} clusterID={clusterID} tablet={tablet} />
                         </Route>
                     )}
 

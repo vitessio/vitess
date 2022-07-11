@@ -633,6 +633,20 @@ func (m *BinlogSource) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if len(m.TargetTimeZone) > 0 {
+		i -= len(m.TargetTimeZone)
+		copy(dAtA[i:], m.TargetTimeZone)
+		i = encodeVarint(dAtA, i, uint64(len(m.TargetTimeZone)))
+		i--
+		dAtA[i] = 0x62
+	}
+	if len(m.SourceTimeZone) > 0 {
+		i -= len(m.SourceTimeZone)
+		copy(dAtA[i:], m.SourceTimeZone)
+		i = encodeVarint(dAtA, i, uint64(len(m.SourceTimeZone)))
+		i--
+		dAtA[i] = 0x5a
+	}
 	if len(m.ExternalCluster) > 0 {
 		i -= len(m.ExternalCluster)
 		copy(dAtA[i:], m.ExternalCluster)
@@ -1178,6 +1192,18 @@ func (m *VEvent) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.Throttled {
+		i--
+		if m.Throttled {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x1
+		i--
+		dAtA[i] = 0xc0
+	}
 	if len(m.Shard) > 0 {
 		i -= len(m.Shard)
 		copy(dAtA[i:], m.Shard)
@@ -1653,6 +1679,26 @@ func (m *VStreamRowsResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.Heartbeat {
+		i--
+		if m.Heartbeat {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x38
+	}
+	if m.Throttled {
+		i--
+		if m.Throttled {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x30
 	}
 	if m.Lastpk != nil {
 		size, err := m.Lastpk.MarshalToSizedBufferVT(dAtA[:i])
@@ -2275,6 +2321,14 @@ func (m *BinlogSource) SizeVT() (n int) {
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
+	l = len(m.SourceTimeZone)
+	if l > 0 {
+		n += 1 + l + sov(uint64(l))
+	}
+	l = len(m.TargetTimeZone)
+	if l > 0 {
+		n += 1 + l + sov(uint64(l))
+	}
 	if m.unknownFields != nil {
 		n += len(m.unknownFields)
 	}
@@ -2530,6 +2584,9 @@ func (m *VEvent) SizeVT() (n int) {
 	if l > 0 {
 		n += 2 + l + sov(uint64(l))
 	}
+	if m.Throttled {
+		n += 3
+	}
 	if m.unknownFields != nil {
 		n += len(m.unknownFields)
 	}
@@ -2702,6 +2759,12 @@ func (m *VStreamRowsResponse) SizeVT() (n int) {
 	if m.Lastpk != nil {
 		l = m.Lastpk.SizeVT()
 		n += 1 + l + sov(uint64(l))
+	}
+	if m.Throttled {
+		n += 2
+	}
+	if m.Heartbeat {
+		n += 2
 	}
 	if m.unknownFields != nil {
 		n += len(m.unknownFields)
@@ -4715,6 +4778,70 @@ func (m *BinlogSource) UnmarshalVT(dAtA []byte) error {
 			}
 			m.ExternalCluster = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
+		case 11:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field SourceTimeZone", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.SourceTimeZone = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 12:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field TargetTimeZone", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.TargetTimeZone = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])
@@ -6282,6 +6409,26 @@ func (m *VEvent) UnmarshalVT(dAtA []byte) error {
 			}
 			m.Shard = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
+		case 24:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Throttled", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.Throttled = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])
@@ -7375,6 +7522,46 @@ func (m *VStreamRowsResponse) UnmarshalVT(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
+		case 6:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Throttled", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.Throttled = bool(v != 0)
+		case 7:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Heartbeat", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.Heartbeat = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])

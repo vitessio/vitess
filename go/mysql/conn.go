@@ -1133,7 +1133,7 @@ func (c *Conn) handleComPrepare(handler Handler, data []byte) (kontinue bool) {
 			return c.writeErrorPacketFromErrorAndLog(err)
 		}
 		if len(queries) != 1 {
-			log.Errorf("Conn %v: can not prepare multiple statements", c, err)
+			log.Errorf("Conn %v: can not prepare multiple statements", c)
 			return c.writeErrorPacketFromErrorAndLog(err)
 		}
 	} else {

@@ -66,7 +66,7 @@ func TestMain(m *testing.M) {
 		}
 
 		// List of users authorized to execute vschema ddl operations
-		clusterInstance.VtGateExtraArgs = []string{"--vschema_ddl_authorized_users=%"}
+		clusterInstance.VtGateExtraArgs = []string{"--vschema_ddl_authorized_users=%", "--schema_change_signal=false"}
 
 		// Start keyspace
 		keyspace := &cluster.Keyspace{

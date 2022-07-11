@@ -13,9 +13,10 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Check for changes in relevant files
-        uses: dorny/paths-filter@v2
+        uses: frouioui/paths-filter@main
         id: changes
         with:
+          token: ''
           filters: |
             unit_tests:
               - 'go/**'
@@ -27,6 +28,7 @@ jobs:
               - 'tools/**'
               - 'config/**'
               - 'bootstrap.sh'
+              - '.github/workflows/**'
 
       - name: Build Docker Image
         if: steps.changes.outputs.unit_tests == 'true'

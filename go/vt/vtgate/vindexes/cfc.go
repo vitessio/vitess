@@ -18,6 +18,7 @@ package vindexes
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -208,7 +209,7 @@ func (vind *CFC) computeKsid(v []byte, prefix bool) ([]byte, error) {
 }
 
 // Verify returns true if ids maps to ksids.
-func (vind *CFC) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
+func (vind *CFC) Verify(ctx context.Context, vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
 	out := make([]bool, len(ids))
 	for i := range ids {
 		idBytes, err := ids[i].ToBytes()
@@ -225,7 +226,7 @@ func (vind *CFC) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool
 }
 
 // Map can map ids to key.Destination objects.
-func (vind *CFC) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+func (vind *CFC) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	out := make([]key.Destination, len(ids))
 	for i, id := range ids {
 		idBytes, err := id.ToBytes()
@@ -301,7 +302,7 @@ func (vind *prefixCFC) IsUnique() bool {
 }
 
 // Map can map ids to key.Destination objects.
-func (vind *prefixCFC) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+func (vind *prefixCFC) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	out := make([]key.Destination, len(ids))
 	for i, id := range ids {
 		value, err := id.ToBytes()
