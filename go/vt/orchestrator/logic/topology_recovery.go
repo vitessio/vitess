@@ -1775,18 +1775,6 @@ func fixPrimary(ctx context.Context, analysisEntry inst.ReplicationAnalysis, can
 	defer func() {
 		resolveRecovery(topologyRecovery, nil)
 	}()
-	durability, err := inst.GetDurabilityPolicy(analysisEntry.AnalyzedInstanceKey)
-	if err != nil {
-		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("can't read durability policy - %v.", err))
-		return false, topologyRecovery, err
-	}
-	// TODO(sougou): this code pattern has reached DRY limits. Reuse.
-	count := inst.SemiSyncAckers(durability, analysisEntry.AnalyzedInstanceKey)
-	err = inst.SetSemiSyncPrimary(&analysisEntry.AnalyzedInstanceKey, count > 0)
-	//AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("- fixPrimary: applying semi-sync %v: success=%t", count > 0, (err == nil)))
-	if err != nil {
-		return false, topologyRecovery, err
-	}
 
 	if err := TabletUndoDemotePrimary(analysisEntry.AnalyzedInstanceKey); err != nil {
 		return false, topologyRecovery, err
