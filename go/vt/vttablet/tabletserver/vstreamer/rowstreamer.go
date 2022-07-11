@@ -65,12 +65,13 @@ type rowStreamer struct {
 	ctx    context.Context
 	cancel func()
 
-	cp      dbconfigs.Connector
-	se      *schema.Engine
-	query   string
-	lastpk  []sqltypes.Value
-	send    func(*binlogdatapb.VStreamRowsResponse) error
-	vschema *localVSchema
+	cp             dbconfigs.Connector
+	se             *schema.Engine
+	query          string
+	lastpk         []sqltypes.Value
+	send           func(*binlogdatapb.VStreamRowsResponse) error
+	vschema        *localVSchema
+	reportGTIDOnce sync.Once
 
 	plan          *Plan
 	pkColumns     []int
@@ -313,10 +314,9 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 		charsets[i] = collations.ID(fld.Charset)
 	}
 
-	var reportGTIDOnce sync.Once
 	reportGTID := func() error {
 		var err error
-		reportGTIDOnce.Do(func() {
+		rs.reportGTIDOnce.Do(func() {
 			err = safeSend(&binlogdatapb.VStreamRowsResponse{
 				Fields:   rs.plan.fields(),
 				Pkfields: pkfields,
