@@ -15,6 +15,7 @@ The following VTTablet flags were deprecated in 7.0. They have now been deleted
 
 #### vttablet startup flag deprecations
 - --enable-query-plan-field-caching is now deprecated. It will be removed in v16.
+- --enable_semi_sync is now deprecated. It will be removed in v16. Instead, set the correct durability policy using `SetKeyspaceDurabilityPolicy`
 
 ### New command line flags and behavior
 
