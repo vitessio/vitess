@@ -241,6 +241,7 @@ func (rs *rowStreamer) buildSelect() (string, error) {
 		}
 		prefix = ", "
 	}
+	buf.Myprintf(", @@global.gtid_executed as _vt_rowstreamer_gtid_executed")
 	buf.Myprintf(" from %v", sqlparser.NewIdentifierCS(rs.plan.Table.Name))
 	if len(rs.lastpk) != 0 {
 		if len(rs.lastpk) != len(rs.pkColumns) {
