@@ -47,8 +47,8 @@ func snapshotConnect(ctx context.Context, cp dbconfigs.Connector) (*snapshotConn
 // startSnapshot starts a streaming query with a snapshot view of the specified table.
 // It returns the gtid of the time when the snapshot was taken.
 func (conn *snapshotConn) streamWithSnapshot(ctx context.Context, table, query string) (gtid string, err error) {
-	gtid, err = conn.startSnapshot(ctx, table)
-	// gtid, err = conn.startSnapshotWithoutGTID(ctx)
+	// gtid, err = conn.startSnapshot(ctx, table)
+	gtid, err = conn.startSnapshotWithoutGTID(ctx)
 	if err != nil {
 		return "", err
 	}

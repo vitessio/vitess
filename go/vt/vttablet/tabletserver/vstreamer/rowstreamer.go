@@ -313,15 +313,28 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 		charsets[i] = collations.ID(fld.Charset)
 	}
 
-	err = safeSend(&binlogdatapb.VStreamRowsResponse{
-		Fields:   rs.plan.fields(),
-		Pkfields: pkfields,
-		Gtid:     gtid,
-	})
-	if err != nil {
-		return fmt.Errorf("stream send error: %v", err)
+	var reportGTIDOnce sync.Once
+	reportGTID := func() error {
+		var err error
+		reportGTIDOnce.Do(func() {
+			err = safeSend(&binlogdatapb.VStreamRowsResponse{
+				Fields:   rs.plan.fields(),
+				Pkfields: pkfields,
+				Gtid:     gtid,
+			})
+			log.Infof("======== ZZZ reported gtid! %v\n", gtid)
+		})
+		if err != nil {
+			return fmt.Errorf("stream send error: %v", err)
+		}
+		return nil
 	}
-
+	defer reportGTID()
+	if gtid != "" {
+		if err := reportGTID(); err != nil {
+			return err
+		}
+	}
 	// streamQuery sends heartbeats as long as it operates
 	heartbeatTicker := time.NewTicker(rowStreamertHeartbeatInterval)
 	defer heartbeatTicker.Stop()
@@ -363,6 +376,16 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 		if mysqlrow == nil {
 			break
 		}
+		if gtid == "" {
+			gtid = mysqlrow[len(mysqlrow)-1].ToString()
+			log.Infof("======== ZZZ got gtid from row: %v\n", gtid)
+			if err := reportGTID(); err != nil {
+				return err
+			}
+		}
+		// truncate the row -- remove @@gtid_executed
+		// mysqlrow = mysqlrow[0 : len(mysqlrow)-1]
+
 		// Compute lastpk here, because we'll need it
 		// at the end after the loop exits.
 		for i, pk := range rs.pkColumns {
