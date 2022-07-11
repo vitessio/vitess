@@ -1,9 +1,9 @@
 # DO NOT MODIFY: THIS FILE IS GENERATED USING "make generate_ci_workflows"
 
-name: Cluster (vreplication_migrate)
+name: Cluster (vreplication_migrate_vdiff2_convert_tz)
 on: [push, pull_request]
 concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (vreplication_migrate)')
+  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (vreplication_migrate_vdiff2_convert_tz)')
   cancel-in-progress: true
 
 env:
@@ -13,7 +13,7 @@ env:
 
 jobs:
   build:
-    name: Run endtoend tests on Cluster (vreplication_migrate)
+    name: Run endtoend tests on Cluster (vreplication_migrate_vdiff2_convert_tz)
     runs-on: ubuntu-18.04
 
     steps:
@@ -113,7 +113,7 @@ jobs:
         EOF
         
         # run the tests however you normally do, then produce a JUnit XML file
-        eatmydata -- go run test.go -docker=false -follow -shard vreplication_migrate | tee -a output.txt | go-junit-report -set-exit-code > report.xml
+        eatmydata -- go run test.go -docker=false -follow -shard vreplication_migrate_vdiff2_convert_tz | tee -a output.txt | go-junit-report -set-exit-code > report.xml
 
     - name: Print test output and Record test result in launchable
       if: steps.changes.outputs.end_to_end == 'true' && always()

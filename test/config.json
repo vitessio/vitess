@@ -1125,15 +1125,6 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
-		"vreplication_movetables_tz": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestMoveTablesTZ"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "vreplication_movetables_tz",
-			"RetryMax": 1,
-			"Tags": []
-		},
 		"vreplication_across_db_versions": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestV2WorkflowsAcrossDBVersions"],
@@ -1148,7 +1139,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestMigrate"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "vreplication_migrate",
+			"Shard": "vreplication_migrate_vdiff2_convert_tz",
 			"RetryMax": 1,
 			"Tags": []
 		},
@@ -1157,7 +1148,16 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestVDiff2"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "vreplication_migrate",
+			"Shard": "vreplication_migrate_vdiff2_convert_tz",
+			"RetryMax": 1,
+			"Tags": []
+		},
+		"vreplication_movetables_tz": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestMoveTablesTZ"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vreplication_migrate_vdiff2_convert_tz",
 			"RetryMax": 1,
 			"Tags": []
 		},

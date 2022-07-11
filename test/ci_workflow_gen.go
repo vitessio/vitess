@@ -89,7 +89,7 @@ var (
 		"onlineddl_vrepl_stress",
 		"onlineddl_vrepl_stress_suite",
 		"onlineddl_vrepl_suite",
-		"vreplication_migrate",
+		"vreplication_migrate_vdiff2_convert_tz",
 		"onlineddl_revert",
 		"onlineddl_declarative",
 		"onlineddl_singleton",
@@ -127,7 +127,6 @@ var (
 		"vtorc_8.0",
 		"schemadiff_vrepl",
 		"topo_connection_cache",
-		"vreplication_movetables_tz",
 	}
 
 	clusterSelfHostedList = []string{
