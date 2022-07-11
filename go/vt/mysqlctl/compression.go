@@ -39,15 +39,13 @@ import (
 var (
 	compressionLevel = flag.Int("compression-level", 1, "what level to pass to the compressor")
 	// switch which compressor/decompressor to use
-	BuiltinCompressor   = flag.String("builtin-compressor", "pgzip", "builtin compressor engine to use")
-	BuiltinDecompressor = flag.String("builtin-decompressor", "auto", "builtin decompressor engine to use")
+	BuiltinCompressor = flag.String("builtin-compressor", "pgzip", "builtin compressor engine to use")
 	// use and external command to decompress the backups
 	ExternalCompressorCmd   = flag.String("external-compressor", "", "command with arguments to use when compressing a backup")
 	ExternalCompressorExt   = flag.String("external-compressor-extension", "", "extension to use when using an external compressor")
 	ExternalDecompressorCmd = flag.String("external-decompressor", "", "command with arguments to use when decompressing a backup")
 
-	errUnsupportedCompressionEngine    = errors.New("unsupported engine")
-	errUnsupportedCompressionExtension = errors.New("unsupported extension")
+	errUnsupportedCompressionEngine = errors.New("unsupported engine")
 
 	// this is used by getEngineFromExtension() to figure out which engine to use in case the user didn't specify
 	engineExtensions = map[string][]string{
@@ -56,15 +54,6 @@ var (
 		".zst": {"zstd"},
 	}
 )
-
-func getEngineFromExtension(extension string) (string, error) {
-	for ext, eng := range engineExtensions {
-		if ext == extension {
-			return eng[0], nil // we select the first supported engine in auto mode
-		}
-	}
-	return "", fmt.Errorf("%w %q", errUnsupportedCompressionExtension, extension)
-}
 
 func getExtensionFromEngine(engine string) (string, error) {
 	for ext, eng := range engineExtensions {
@@ -85,7 +74,7 @@ func validateExternalCmd(cmd string) (string, error) {
 	return exec.LookPath(cmd)
 }
 
-func prepareExternalCompressionCmd(ctx context.Context, cmdStr string) (*exec.Cmd, error) {
+func prepareExternalCmd(ctx context.Context, cmdStr string) (*exec.Cmd, error) {
 	cmdArgs, err := shlex.Split(cmdStr)
 	if err != nil {
 		return nil, err
@@ -104,7 +93,7 @@ func prepareExternalCompressionCmd(ctx context.Context, cmdStr string) (*exec.Cm
 func newExternalCompressor(ctx context.Context, cmdStr string, writer io.Writer, logger logutil.Logger) (io.WriteCloser, error) {
 	logger.Infof("Compressing using external command: %q", cmdStr)
 
-	cmd, err := prepareExternalCompressionCmd(ctx, cmdStr)
+	cmd, err := prepareExternalCmd(ctx, cmdStr)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "unable to start external command")
 	}
@@ -134,7 +123,7 @@ func newExternalCompressor(ctx context.Context, cmdStr string, writer io.Writer,
 func newExternalDecompressor(ctx context.Context, cmdStr string, reader io.Reader, logger logutil.Logger) (io.ReadCloser, error) {
 	logger.Infof("Decompressing using external command: %q", cmdStr)
 
-	cmd, err := prepareExternalCompressionCmd(ctx, cmdStr)
+	cmd, err := prepareExternalCmd(ctx, cmdStr)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "unable to start external command")
 	}
@@ -157,21 +146,6 @@ func newExternalDecompressor(ctx context.Context, cmdStr string, reader io.Reade
 	decompressor.wg.Add(1) // we wait for the gorouting to finish when we call Close() on the reader
 	go scanLinesToLogger("decompressor stderr", cmdErr, logger, decompressor.wg.Done)
 	return decompressor, nil
-}
-
-// This is a wrapper to get the right decompressor (see below) based on the extension of the file.
-func newBuiltinDecompressorFromExtension(extension, engine string, reader io.Reader, logger logutil.Logger) (decompressor io.ReadCloser, err error) {
-	// we only infer the engine from the extension is set to "auto", otherwise we use whatever the user selected
-	if engine == "auto" {
-		logger.Infof("Builtin decompressor set to auto, checking which engine to decompress based on the extension")
-
-		eng, err := getEngineFromExtension(extension)
-		if err != nil {
-			return decompressor, err
-		}
-		engine = eng
-	}
-	return newBuiltinDecompressor(engine, reader, logger)
 }
 
 // This returns a reader that will decompress the underlying provided reader and will use the specified supported engine.

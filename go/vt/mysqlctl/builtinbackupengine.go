@@ -501,7 +501,6 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 	// Create the gzip compression pipe, if necessary.
 	var compressor io.WriteCloser
 	if *backupStorageCompress {
-
 		if *ExternalCompressorCmd != "" {
 			compressor, err = newExternalCompressor(ctx, *ExternalCompressorCmd, writer, params.Logger)
 		} else {
@@ -510,7 +509,6 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 		if err != nil {
 			return vterrors.Wrap(err, "can't create compressor")
 		}
-
 		writer = compressor
 	}
 
@@ -606,16 +604,7 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreP
 			// And restore the file.
 			name := fmt.Sprintf("%v", i)
 			params.Logger.Infof("Copying file %v: %v", name, fes[i].Name)
-			// For backward compatibility. Incase if Manifest is from N-1 binary
-			// then we assign the default value of compressionEngine.
-			if bm.CompressionEngine == "" {
-				bm.CompressionEngine = *BuiltinCompressor
-			}
-			var decompEngine = bm.CompressionEngine
-			if *BuiltinDecompressor != "auto" {
-				decompEngine = *BuiltinDecompressor
-			}
-			err := be.restoreFile(ctx, params, bh, &fes[i], bm.TransformHook, !bm.SkipCompress, decompEngine, name)
+			err := be.restoreFile(ctx, params, bh, &fes[i], bm.TransformHook, !bm.SkipCompress, bm.CompressionEngine, name)
 			if err != nil {
 				rec.RecordError(vterrors.Wrapf(err, "can't restore file %v to %v", name, fes[i].Name))
 			}
@@ -670,10 +659,21 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 	// Create the uncompresser if needed.
 	if compress {
 		var decompressor io.ReadCloser
-
 		if *ExternalDecompressorCmd != "" {
-			decompressor, err = newExternalDecompressor(ctx, *ExternalDecompressorCmd, reader, params.Logger)
+			if deCompressionEngine == "" {
+				// for backward compatibility
+				deCompressionEngine = "pgzip"
+			} else {
+				deCompressionEngine = *ExternalDecompressorCmd
+			}
+			decompressor, err = newExternalDecompressor(ctx, deCompressionEngine, reader, params.Logger)
 		} else {
+			// For backward compatibility. Incase if Manifest is from N-1 binary
+			// then we assign the default value of compressionEngine.
+			if deCompressionEngine == "" {
+				// for backward compatibility
+				deCompressionEngine = "pgzip"
+			}
 			decompressor, err = newBuiltinDecompressor(deCompressionEngine, reader, params.Logger)
 		}
 		if err != nil {

@@ -26,7 +26,6 @@ import (
 	"os"
 	"os/exec"
 	"path"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
@@ -80,7 +79,8 @@ const (
 type xtraBackupManifest struct {
 	// BackupManifest is an anonymous embedding of the base manifest struct.
 	BackupManifest
-
+	// CompressionEngine stores which compression engine was used to originally compress the files.
+	CompressionEngine string `json:",omitempty"`
 	// Name of the backup file
 	FileName string
 	// Params are the parameters that backup was run with
@@ -200,6 +200,8 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, params BackupPara
 		Params:          *xtrabackupBackupFlags,
 		NumStripes:      int32(numStripes),
 		StripeBlockSize: int32(*xtrabackupStripeBlockSize),
+		// builtin specific field
+		CompressionEngine: *BuiltinCompressor,
 	}
 
 	data, err := json.MarshalIndent(bm, "", "  ")
@@ -274,6 +276,8 @@ func (be *XtrabackupEngine) backupFiles(ctx context.Context, params BackupParams
 		}
 	}()
 
+	params.Logger.Infof("backup command: %s", backupProgram)
+	params.Logger.Infof("arguments: %s", flagsToExec)
 	backupCmd := exec.CommandContext(ctx, backupProgram, flagsToExec...)
 	backupOut, err := backupCmd.StdoutPipe()
 	if err != nil {
@@ -533,8 +537,6 @@ func (be *XtrabackupEngine) extractFiles(ctx context.Context, logger logutil.Log
 	}
 
 	logger.Infof("backup file name: %s", baseFileName)
-	extension := filepath.Ext(baseFileName)
-
 	// Open the source files for reading.
 	srcFiles, err := readStripeFiles(ctx, bh, baseFileName, int(bm.NumStripes), logger)
 	if err != nil {
@@ -554,11 +556,21 @@ func (be *XtrabackupEngine) extractFiles(ctx context.Context, logger logutil.Log
 		// Create the decompressor if needed.
 		if compressed {
 			var decompressor io.ReadCloser
-
+			var decompressionEngine = "pgzip"
 			if *ExternalDecompressorCmd != "" {
-				decompressor, err = newExternalDecompressor(ctx, *ExternalDecompressorCmd, reader, logger)
+				if bm.CompressionEngine != "" {
+					// for backward compatibility
+					decompressionEngine = bm.CompressionEngine
+				} else {
+					decompressionEngine = *ExternalDecompressorCmd
+				}
+				decompressor, err = newExternalDecompressor(ctx, decompressionEngine, reader, logger)
 			} else {
-				decompressor, err = newBuiltinDecompressorFromExtension(extension, *BuiltinDecompressor, reader, logger)
+				if bm.CompressionEngine != "" {
+					// for backward compatibility
+					decompressionEngine = bm.CompressionEngine
+				}
+				decompressor, err = newBuiltinDecompressor(decompressionEngine, reader, logger)
 			}
 			if err != nil {
 				return vterrors.Wrap(err, "can't create decompressor")
