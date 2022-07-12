@@ -271,7 +271,7 @@ func (vde *Engine) getVDiffByID(ctx context.Context, dbClient binlogplayer.DBCli
 		return nil, err
 	}
 	if len(qr.Rows) != 1 {
-		return nil, fmt.Errorf("unable to read vdiff record for vdiff id %d on tablet %v",
+		return nil, fmt.Errorf("no vdiff found for id %d on tablet %v",
 			id, vde.thisTablet.Alias)
 	}
 	return qr, nil

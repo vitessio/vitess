@@ -408,8 +408,8 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare *int64, debug, on
 	}
 	defer dbClient.Close()
 
-	// We need to continue were we left off when appropriate.
-	// This can be an auto-retry on error, or a manual retry (vs resume, which resets the state).
+	// We need to continue were we left off when appropriate. This can be an
+	// auto-retry on error, or a manual retry via the resume command.
 	// Otherwise the existing state will be empty and we start from scratch.
 	query := fmt.Sprintf(sqlGetVDiffTable, td.wd.ct.id, encodeString(td.table.Name))
 	cs, err := dbClient.ExecuteFetch(query, -1)

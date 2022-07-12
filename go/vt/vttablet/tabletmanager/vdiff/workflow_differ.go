@@ -159,8 +159,7 @@ func (wd *workflowDiffer) diff(ctx context.Context) error {
 			return vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
 		default:
 		}
-		var query string
-		query = fmt.Sprintf(sqlGetVDiffTable, wd.ct.id, encodeString(td.table.Name))
+		query := fmt.Sprintf(sqlGetVDiffTable, wd.ct.id, encodeString(td.table.Name))
 		qr, err := dbClient.ExecuteFetch(query, 1)
 		if err != nil {
 			return err

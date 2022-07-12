@@ -112,27 +112,6 @@ func (wd *WithDDL) ExecIgnore(ctx context.Context, query string, f any) (*sqltyp
 	return &sqltypes.Result{}, nil
 }
 
-// ExecDDL executes the DDLs without trying any query. This ensures that the DDL is always
-// run when e.g. used with sync.Once during component initialization/startup.
-func (wd *WithDDL) ExecDDL(ctx context.Context, fDDL any) error {
-	execDDL, err := wd.unify(ctx, fDDL)
-	if err != nil {
-		return err
-	}
-	for _, applyQuery := range wd.ddls {
-		_, err := execDDL(applyQuery)
-		if err == nil {
-			continue
-		}
-		if mysql.IsSchemaApplyError(err) {
-			continue
-		}
-		log.Warningf("DDL apply %v failed: %v", applyQuery, err)
-		return err
-	}
-	return nil
-}
-
 func (wd *WithDDL) unify(ctx context.Context, f any) (func(query string) (*sqltypes.Result, error), error) {
 	switch f := f.(type) {
 	case func(query string) (*sqltypes.Result, error):
