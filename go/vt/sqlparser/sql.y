@@ -1625,7 +1625,7 @@ text_literal
   }
 | BITNUM
   {
-  	$$ = NewBitNumLiteral($1)
+  	$$ = NewBitLiteral($1[2:])
   }
 | BIT_LITERAL
   {
@@ -1646,7 +1646,7 @@ text_literal
   }
 | underscore_charsets BITNUM %prec UNARY
   {
-  	$$ = &IntroducerExpr{CharacterSet: $1, Expr: NewBitNumLiteral($2)}
+  	$$ = &IntroducerExpr{CharacterSet: $1, Expr: NewBitLiteral($2[2:])}
   }
 | underscore_charsets HEX %prec UNARY
   {

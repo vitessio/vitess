@@ -10466,7 +10466,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:1627
 		{
-			yyLOCAL = NewBitNumLiteral(yyDollar[1].str)
+			yyLOCAL = NewBitLiteral(yyDollar[1].str[2:])
 		}
 		yyVAL.union = yyLOCAL
 	case 227:
@@ -10507,7 +10507,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:1648
 		{
-			yyLOCAL = &IntroducerExpr{CharacterSet: yyDollar[1].str, Expr: NewBitNumLiteral(yyDollar[2].str)}
+			yyLOCAL = &IntroducerExpr{CharacterSet: yyDollar[1].str, Expr: NewBitLiteral(yyDollar[2].str[2:])}
 		}
 		yyVAL.union = yyLOCAL
 	case 232:
