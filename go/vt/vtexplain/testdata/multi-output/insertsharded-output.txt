@@ -69,3 +69,28 @@ insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into music_extra (id, extra) values (1,
 1 ks_sharded/40-80: insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into music_extra(id, extra) values (3, 'c')
 
 ----------------------------------------------------------------------
+begin
+
+
+----------------------------------------------------------------------
+insert into member (lkp, more_id, id) values ("a", 1, 1), ("b", 1, 3), ("c", 1, 1) on duplicate key update more_id = 2
+
+1 ks_sharded/40-80: insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ ignore into lkp_idx(lkp, id) values ('b', 3), ('c', 1)
+1 ks_sharded/c0-: insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ ignore into lkp_idx(lkp, id) values ('a', 1)
+2 ks_sharded/c0-: select lkp from lkp_idx where lkp = 'a' and id = 1 limit 10001
+3 ks_sharded/40-80: select lkp from lkp_idx where lkp = 'b' and id = 3 limit 10001
+4 ks_sharded/40-80: select lkp from lkp_idx where lkp = 'c' and id = 1 limit 10001
+5 ks_sharded/-40: begin
+5 ks_sharded/-40: savepoint x1
+5 ks_sharded/-40: insert into `member`(lkp, more_id, id) values ('a', 1, 1), ('c', 1, 1) on duplicate key update more_id = 2
+5 ks_sharded/40-80: begin
+5 ks_sharded/40-80: savepoint x1
+5 ks_sharded/40-80: insert into `member`(lkp, more_id, id) values ('b', 1, 3) on duplicate key update more_id = 2
+
+----------------------------------------------------------------------
+commit
+
+6 ks_sharded/-40: commit
+7 ks_sharded/40-80: commit
+
+----------------------------------------------------------------------
