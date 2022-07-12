@@ -55,12 +55,11 @@ Please see the VDiff2 [documentation](https://vitess.io/docs/15.0/reference/vrep
 ### New command line flags and behavior
 
 #### Support for additional compressors and decompressors during backup & restore
-Backup/Restore now allow you many more options for compression and decompression instead of relying on the default compressor(pgzip).
+Backup/Restore now allow you many more options for compression and decompression instead of relying on the default compressor(`pgzip`).
 There are some built-in compressors which you can use out-of-the-box. Users will need to evaluate which option works best for their
 use-case. Here are the flags that control this feature
 
 - --builtin-compressor
-- --builtin-decompressor
 - --external-compressor
 - --external-decompressor
 - --external-compressor-extension
@@ -72,15 +71,20 @@ builtin compressor as of today supports the following options
 - lz4
 - zstd
 
-If you want to use any of the builtin compressors, simply set one of the above values for `--builtin-compressor`. You don't need to set
-the `--builtin-decompressor` flag in this case as we infer it automatically from the MANIFEST file. The default value for
-`--builtin-decompressor` is  `auto`.
+If you want to use any of the builtin compressors, simply set one of the above values for `--builtin-compressor`. During restore the system
+will read the MANIFEST file to get the compressor engine value and use that value for decompression.
 
 If you would like to use a custom command or external tool for compression/decompression then you need to provide the full command with
 arguments to the `--external-compressor` and `--external-decompressor` flags. `--external-compressor-extension` flag also needs to be provided
-so that compressed files are created with the correct extension. There is no need to override `--builtin-compressor` and `--builtin-decompressor`
-when using an external compressor/decompressor. Please note that if you want the current behavior then you don't need to change anything
-in these flags. You can read more about backup & restore [here] (https://vitess.io/docs/15.0/user-guides/operating-vitess/backup-and-restore/).
+so that compressed files are created with the correct extension. There is no need to override `--builtin-compressor` when using an external
+compressor/decompressor. Please note that if you want the current behavior then you don't need to change anything in these flags.
+You can read more about backup & restore [here] (https://vitess.io/docs/15.0/user-guides/operating-vitess/backup-and-restore/).
+
+Important Note: If you decided to switch from external compressor to built-in compressor at any point in the future. System won't be able to
+restore from current backups due to out-dated value of compression engine in MANIFEST file. The Backups taken with the new built-in values should
+work during restore. For example if you switch from external compressor `some-custom-tool` to built-in `pgzip`, and you try to restore from
+the older backups, then decompression from older backups (which were taken using `some-custom-tool`) will fail, until you have a new backup
+with `pgzip`. Please make sure you have thought out all possible scenarios for restore before transitioning from one compressor value to the others.
 
 ### Online DDL changes
 

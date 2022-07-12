@@ -342,6 +342,13 @@ func (be *BuiltinBackupEngine) backupFiles(ctx context.Context, params BackupPar
 		}
 	}()
 
+	// set the correct value of compression engine used.
+	// if an external compressor is used, empty engine value
+	// is saved in the MANIFEST
+	var compressionEngineValue = *BuiltinCompressor
+	if *ExternalCompressorCmd != "" {
+		compressionEngineValue = "no-value"
+	}
 	// JSON-encode and write the MANIFEST
 	bm := &builtinBackupManifest{
 		// Common base fields
@@ -356,7 +363,7 @@ func (be *BuiltinBackupEngine) backupFiles(ctx context.Context, params BackupPar
 		FileEntries:       fes,
 		TransformHook:     *backupStorageHook,
 		SkipCompress:      !*backupStorageCompress,
-		CompressionEngine: *BuiltinCompressor,
+		CompressionEngine: compressionEngineValue,
 	}
 	data, err := json.MarshalIndent(bm, "", "  ")
 	if err != nil {
@@ -661,19 +668,18 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 	// Create the uncompresser if needed.
 	if compress {
 		var decompressor io.ReadCloser
+		if deCompressionEngine == "" {
+			// for backward compatibility
+			deCompressionEngine = "pgzip"
+		}
 		if *ExternalDecompressorCmd != "" {
-			if deCompressionEngine == "" {
-				// For backward compatibility. In case if Manifest is from N-1 binary
-				// then we assign the default value of compressionEngine.
-				deCompressionEngine = "pgzip"
-			} else {
+			if deCompressionEngine == "no-value" {
 				deCompressionEngine = *ExternalDecompressorCmd
 			}
 			decompressor, err = newExternalDecompressor(ctx, deCompressionEngine, reader, params.Logger)
 		} else {
-			if deCompressionEngine == "" {
-				// for backward compatibility
-				deCompressionEngine = "pgzip"
+			if deCompressionEngine == "no-value" {
+				return fmt.Errorf("%w %q", errUnsupportedCompressionEngine, "no-value")
 			}
 			decompressor, err = newBuiltinDecompressor(deCompressionEngine, reader, params.Logger)
 		}

@@ -185,6 +185,13 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, params BackupPara
 	}
 	defer closeFile(mwc, backupManifestFileName, params.Logger, &finalErr)
 
+	// set the correct value of compression engine used.
+	// if an external compressor is used, empty engine value
+	// is saved in the MANIFEST
+	var compressionEngineValue = *BuiltinCompressor
+	if *ExternalCompressorCmd != "" {
+		compressionEngineValue = "no-value"
+	}
 	// JSON-encode and write the MANIFEST
 	bm := &xtraBackupManifest{
 		// Common base fields
@@ -203,7 +210,7 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, params BackupPara
 		NumStripes:      int32(numStripes),
 		StripeBlockSize: int32(*xtrabackupStripeBlockSize),
 		// builtin specific field
-		CompressionEngine: *BuiltinCompressor,
+		CompressionEngine: compressionEngineValue,
 	}
 
 	data, err := json.MarshalIndent(bm, "", "  ")
@@ -556,27 +563,26 @@ func (be *XtrabackupEngine) extractFiles(ctx context.Context, logger logutil.Log
 		// Create the decompressor if needed.
 		if compressed {
 			var decompressor io.ReadCloser
-			var decompressionEngine = bm.CompressionEngine
+			var deCompressionEngine = bm.CompressionEngine
+			if deCompressionEngine == "" {
+				// For backward compatibility. Incase if Manifest is from N-1 binary
+				// then we assign the default value of compressionEngine.
+				deCompressionEngine = "pgzip"
+			}
 			if *ExternalDecompressorCmd != "" {
-				if decompressionEngine == "" {
-					// For backward compatibility. Incase if Manifest is from N-1 binary
-					// then we assign the default value of compressionEngine.
-					decompressionEngine = "pgzip"
-				} else {
-					decompressionEngine = *ExternalDecompressorCmd
+				if deCompressionEngine == "no-value" {
+					deCompressionEngine = *ExternalDecompressorCmd
 				}
-				decompressor, err = newExternalDecompressor(ctx, decompressionEngine, reader, logger)
+				decompressor, err = newExternalDecompressor(ctx, deCompressionEngine, reader, logger)
 			} else {
-				if decompressionEngine == "" {
-					// for backward compatibility
-					decompressionEngine = "pgzip"
+				if deCompressionEngine == "no-value" {
+					return fmt.Errorf("%w %q", errUnsupportedCompressionEngine, "no-value")
 				}
-				decompressor, err = newBuiltinDecompressor(decompressionEngine, reader, logger)
+				decompressor, err = newBuiltinDecompressor(deCompressionEngine, reader, logger)
 			}
 			if err != nil {
 				return vterrors.Wrap(err, "can't create decompressor")
 			}
-
 			srcDecompressors = append(srcDecompressors, decompressor)
 			reader = decompressor
 		}
