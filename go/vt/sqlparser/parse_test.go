@@ -204,6 +204,12 @@ var (
 		input:  "select name, numbers from (select * from users) as x(name, numbers)",
 		output: "select `name`, numbers from (select * from users) as x(`name`, numbers)",
 	}, {
+		input:  "select 0b010, 0b0111, b'0111', b'011'",
+		output: "select 0b010, 0b0111, B'0111', B'011' from dual",
+	}, {
+		input:  "select 0x010, 0x0111, x'0111'",
+		output: "select 0x010, 0x0111, X'0111' from dual",
+	}, {
 		input:  "select * from information_schema.columns",
 		output: "select * from information_schema.`columns`",
 	}, {

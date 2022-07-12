@@ -159,6 +159,7 @@ const (
 	DecimalVal
 	FloatVal
 	HexNum
+	BitNum
 	HexVal
 	BitVal
 )
@@ -504,6 +505,11 @@ func NewFloatLiteral(in string) *Literal {
 // NewHexNumLiteral builds a new HexNum.
 func NewHexNumLiteral(in string) *Literal {
 	return &Literal{Type: HexNum, Val: in}
+}
+
+// NewBitNumLiteral builds a new BitNum.
+func NewBitNumLiteral(in string) *Literal {
+	return &Literal{Type: BitNum, Val: in}
 }
 
 // NewHexLiteral builds a new HexVal.
