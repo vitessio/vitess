@@ -59,8 +59,6 @@ Usage of vttablet:
 	PITR restore parameter: username of binlog server.
   --builtin-compressor string
 	builtin compressor engine to use (default pgzip)
-  --builtin-decompressor string
-	builtin decompressor engine to use (default auto)
   --builtinbackup_mysqld_timeout duration
 	how long to wait for mysqld to shutdown at the start of the backup (default 10m0s)
   --builtinbackup_progress duration
