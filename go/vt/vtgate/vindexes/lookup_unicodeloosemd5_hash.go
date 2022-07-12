@@ -66,7 +66,7 @@ type LookupUnicodeLooseMD5Hash struct {
 func NewLookupUnicodeLooseMD5Hash(name string, m map[string]string) (Vindex, error) {
 	lh := &LookupUnicodeLooseMD5Hash{name: name}
 
-	autocommit, err := boolFromMap(m, "autocommit")
+	cc, err := parseCommonConfig(m)
 	if err != nil {
 		return nil, err
 	}
@@ -76,7 +76,7 @@ func NewLookupUnicodeLooseMD5Hash(name string, m map[string]string) (Vindex, err
 	}
 
 	// if autocommit is on for non-unique lookup, upsert should also be on.
-	if err := lh.lkp.Init(m, autocommit, autocommit /* upsert */); err != nil {
+	if err := lh.lkp.Init(m, cc.autocommit, cc.autocommit || cc.multiShardAutocommit, cc.multiShardAutocommit); err != nil {
 		return nil, err
 	}
 	return lh, nil
@@ -241,7 +241,7 @@ type LookupUnicodeLooseMD5HashUnique struct {
 func NewLookupUnicodeLooseMD5HashUnique(name string, m map[string]string) (Vindex, error) {
 	lhu := &LookupUnicodeLooseMD5HashUnique{name: name}
 
-	autocommit, err := boolFromMap(m, "autocommit")
+	cc, err := parseCommonConfig(m)
 	if err != nil {
 		return nil, err
 	}
@@ -251,7 +251,7 @@ func NewLookupUnicodeLooseMD5HashUnique(name string, m map[string]string) (Vinde
 	}
 
 	// Don't allow upserts for unique vindexes.
-	if err := lhu.lkp.Init(m, autocommit, false /* upsert */); err != nil {
+	if err := lhu.lkp.Init(m, cc.autocommit, false, cc.multiShardAutocommit); err != nil {
 		return nil, err
 	}
 	return lhu, nil
