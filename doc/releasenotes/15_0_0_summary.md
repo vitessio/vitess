@@ -16,6 +16,12 @@ The following VTTablet flags were deprecated in 7.0. They have now been deleted
 #### vttablet startup flag deprecations
 - --enable-query-plan-field-caching is now deprecated. It will be removed in v16.
 
+### New command line flags and behavior
+
+#### vtctl GetSchema --table-schema-only
+
+The new flag `--table-schema-only` skips columns introspection. `GetSchema` only returns general schema analysis, and specifically it includes the `CREATE TABLE|VIEW` statement in `schema` field.
+
 ### New Syntax
 
 ### VDiff2
