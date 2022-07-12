@@ -621,7 +621,7 @@ func buildProgressReport(summary *vdiffSummary, rowsToCompare int64) {
 	runTime := curTime.Unix() - startTime.Unix()
 	var eta time.Time
 	if report.Percentage >= 1 {
-		// calculate how long 1% took and multiply that by the % left
+		// calculate how long 1% took, on avg, and multiply that by the % left
 		eta = time.Unix(((int64(runTime)/int64(report.Percentage))*int64(pctToGo))+curTime.Unix(), 1).UTC()
 	} else {
 		// we're making a complete guess here, so take runtime and multply it by 100
