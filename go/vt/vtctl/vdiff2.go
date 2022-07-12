@@ -218,7 +218,11 @@ const (
 	summaryTextTemplate = `
 VDiff Summary for {{.Keyspace}}.{{.Workflow}} ({{.UUID}})
 State:        {{.State}}
-{{if .Errors}}{{range $shard, $error := .Errors}}              Error: (shard {{$shard}}) {{$error}}{{end}}{{end}}
+{{if .Errors}}
+{{- range $shard, $error := .Errors}}
+              Error: (shard {{$shard}}) {{$error}}
+{{- end}}
+{{end}}
 RowsCompared: {{.RowsCompared}}
 HasMismatch:  {{.HasMismatch}}
 StartedAt:    {{.StartedAt}}
