@@ -22,6 +22,7 @@ import (
 	"net"
 	"os"
 	"path"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -37,7 +38,7 @@ import (
 )
 
 // assertSQLError makes sure we get the right error.
-func assertSQLError(t *testing.T, err error, code int, sqlState string, subtext string, query string) {
+func assertSQLError(t *testing.T, err error, code int, sqlState, subtext, query, pattern string) {
 	t.Helper()
 
 	require.Error(t, err, "was expecting SQLError %v / %v / %v but got no error.", code, sqlState, subtext)
@@ -45,7 +46,11 @@ func assertSQLError(t *testing.T, err error, code int, sqlState string, subtext 
 	require.True(t, ok, "was expecting SQLError %v / %v / %v but got: %v", code, sqlState, subtext, err)
 	require.Equal(t, code, serr.Num, "was expecting SQLError %v / %v / %v but got code %v", code, sqlState, subtext, serr.Num)
 	require.Equal(t, sqlState, serr.State, "was expecting SQLError %v / %v / %v but got state %v", code, sqlState, subtext, serr.State)
-	require.True(t, subtext == "" || strings.Contains(serr.Message, subtext), "was expecting SQLError %v / %v / %v but got message %v", code, sqlState, subtext, serr.Message)
+	if pattern != "" {
+		require.Regexp(t, regexp.MustCompile(pattern), serr.Message)
+	} else {
+		require.True(t, subtext == "" || strings.Contains(serr.Message, subtext), "was expecting SQLError %v / %v / %v but got message %v", code, sqlState, subtext, serr.Message)
+	}
 	require.Equal(t, query, serr.Query, "was expecting SQLError %v / %v / %v with Query '%v' but got query '%v'", code, sqlState, subtext, query, serr.Query)
 }
 
@@ -106,14 +111,14 @@ func TestConnectTimeout(t *testing.T) {
 	}()
 	ctx = context.Background()
 	_, err = Connect(ctx, params)
-	assertSQLError(t, err, CRServerLost, SSUnknownSQLState, "initial packet read failed", "")
+	assertSQLError(t, err, CRServerLost, SSUnknownSQLState, "initial packet read failed", "", "")
 
 	// Now close the listener. Connect should fail right away,
 	// check the error.
 	listener.Close()
 	wg.Wait()
 	_, err = Connect(ctx, params)
-	assertSQLError(t, err, CRConnHostError, SSUnknownSQLState, "connection refused", "")
+	assertSQLError(t, err, CRConnHostError, SSUnknownSQLState, "connection refused", "", "")
 
 	// Tests a connection where Dial to a unix socket fails
 	// properly returns the right error. To simulate exactly the
@@ -126,7 +131,8 @@ func TestConnectTimeout(t *testing.T) {
 	ctx = context.Background()
 	_, err = Connect(ctx, params)
 	os.Remove(name)
-	assertSQLError(t, err, CRConnectionError, SSUnknownSQLState, "connection refused", "")
+	t.Log(err)
+	assertSQLError(t, err, CRConnectionError, SSUnknownSQLState, "connection refused", "", "net\\.Dial\\(([a-z0-9A-Z_\\/]*)\\) to local server failed:")
 }
 
 // TestTLSClientDisabled creates a Server with TLS support, then connects
@@ -393,7 +399,7 @@ func TestTLSClientVerifyCA(t *testing.T) {
 
 	fmt.Printf("Error: %s", err)
 
-	assert.Contains(t, err.Error(), "certificate signed by unknown authority")
+	assert.Contains(t, err.Error(), "cannot send HandshakeResponse41: x509:")
 
 	// Now setup proper CA that is valid to verify
 	params.SslCa = path.Join(root, "ca-cert.pem")
@@ -478,7 +484,7 @@ func TestTLSClientVerifyIdentity(t *testing.T) {
 
 	fmt.Printf("Error: %s", err)
 
-	assert.Contains(t, err.Error(), "certificate signed by unknown authority")
+	assert.Contains(t, err.Error(), "cannot send HandshakeResponse41: x509:")
 
 	// Now setup proper CA that is valid to verify
 	params.SslCa = path.Join(root, "ca-cert.pem")
