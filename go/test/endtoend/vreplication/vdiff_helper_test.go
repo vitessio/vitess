@@ -105,12 +105,14 @@ func waitForVDiff2ToComplete(t *testing.T, ksWorkflow, cells, uuid string, compl
 				ch <- true
 				return
 			} else if info.State == "started" { // test the progress report
-				// The ETA should always be in the future and the progress percentage should
-				// only increase.
+				// The ETA should always be in the future -- when we're able to estimate
+				// it -- and the progress percentage should only increase.
 				// The timstamp format allows us to compare them lexicographically.
 				// We don't test that the ETA always increases as it can decrease based on how
 				// quickly we're doing work.
-				require.GreaterOrEqual(t, info.Progress.ETA, time.Now().Format(vdiff2.TimestampFormat))
+				if info.Progress.ETA != "" {
+					require.GreaterOrEqual(t, info.Progress.ETA, time.Now().Format(vdiff2.TimestampFormat))
+				}
 				// We can't guarantee that the progress will only increase with merges/consolidations
 				// done during Reshards due to how VDiff2 works today.
 				// TODO: revisit how we handle shard merges/consolidations generally for VDiffs.

@@ -213,9 +213,6 @@ func (ct *controller) start(ctx context.Context, dbClient binlogplayer.DBClient)
 	if err != nil {
 		return err
 	}
-	if err := wd.initVDiffTables(dbClient); err != nil {
-		return err
-	}
 	if err := ct.updateState(dbClient, StartedState, nil); err != nil {
 		return err
 	}

@@ -608,7 +608,7 @@ func displayVDiff2ActionStatusResponse(wr *wrangler.Wrangler, format string, act
 
 func buildProgressReport(summary *vdiffSummary, rowsToCompare int64) {
 	report := &vdiff.ProgressReport{}
-	if summary.RowsCompared >= 0 {
+	if summary.RowsCompared >= 1 {
 		// Round to 2 decimal points
 		report.Percentage = math.Round(math.Min((float64(summary.RowsCompared)/float64(rowsToCompare))*100, 100.00)*100) / 100
 	}
@@ -619,14 +619,13 @@ func buildProgressReport(summary *vdiffSummary, rowsToCompare int64) {
 	startTime, _ := time.Parse(vdiff.TimestampFormat, summary.StartedAt)
 	curTime := time.Now().UTC()
 	runTime := curTime.Unix() - startTime.Unix()
-	var eta time.Time
 	if report.Percentage >= 1 {
 		// calculate how long 1% took, on avg, and multiply that by the % left
-		eta = time.Unix(((int64(runTime)/int64(report.Percentage))*int64(pctToGo))+curTime.Unix(), 1).UTC()
-	} else {
-		// we're making a complete guess here, so take runtime and multply it by 100
-		eta = time.Unix((int64(runTime)*int64(pctToGo))+curTime.Unix(), 1).UTC()
+		eta := time.Unix(((int64(runTime)/int64(report.Percentage))*int64(pctToGo))+curTime.Unix(), 1).UTC()
+		// cap the ETA at 1 year out to prevent providing nonsensical ETAs
+		if eta.Before(time.Now().UTC().AddDate(1, 0, 0)) {
+			report.ETA = eta.Format(vdiff.TimestampFormat)
+		}
 	}
-	report.ETA = eta.Format(vdiff.TimestampFormat)
 	summary.Progress = report
 }

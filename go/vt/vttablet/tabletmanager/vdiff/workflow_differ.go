@@ -153,6 +153,9 @@ func (wd *workflowDiffer) diff(ctx context.Context) error {
 	if err = wd.buildPlan(dbClient, filter, schm); err != nil {
 		return vterrors.Wrap(err, "buildPlan")
 	}
+	if err := wd.initVDiffTables(dbClient); err != nil {
+		return err
+	}
 	for _, td := range wd.tableDiffers {
 		select {
 		case <-ctx.Done():
@@ -282,15 +285,16 @@ func (wd *workflowDiffer) getTableLastPK(dbClient binlogplayer.DBClient, tableNa
 }
 
 func (wd *workflowDiffer) initVDiffTables(dbClient binlogplayer.DBClient) error {
-	query := "select db_name as db_name from _vt.vreplication where workflow = %s limit 1"
-	query = fmt.Sprintf(query, encodeString(wd.ct.workflow))
-	qr, err := dbClient.ExecuteFetch(query, 1)
-	if err != nil {
-		return err
+	tableIn := strings.Builder{}
+	n := 0
+	for tableName := range wd.tableDiffers {
+		tableIn.WriteString(encodeString(tableName))
+		if n++; n < len(wd.tableDiffers) {
+			tableIn.WriteByte(',')
+		}
 	}
-	dbName, _ := qr.Named().Row().ToString("db_name")
-	query = fmt.Sprintf(sqlGetAllTableRows, encodeString(dbName))
-	qr, err = dbClient.ExecuteFetch(query, -1)
+	query := fmt.Sprintf(sqlGetAllTableRows, encodeString(wd.ct.vde.dbName), tableIn.String())
+	qr, err := dbClient.ExecuteFetch(query, -1)
 	if err != nil {
 		return err
 	}

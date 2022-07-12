@@ -50,7 +50,7 @@ type DiffReport struct {
 
 type ProgressReport struct {
 	Percentage float64
-	ETA        string // a formatted date
+	ETA        string `json:"ETA,omitempty"` // a formatted date
 }
 
 // DiffMismatch is a sample of row diffs between source and target.

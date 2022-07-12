@@ -26,19 +26,19 @@ func init() {
 	ddls = append(ddls, sqlCreateSidecarDB, sqlCreateVDiffTable, sqlCreateVDiffTableTable, sqlCreateVDiffLogTable)
 	// Changes to VDiff related schema over time
 	ddls = append(ddls,
-		`ALTER TABLE _vt.vdiff MODIFY COLUMN id bigint AUTO_INCREMENT,
-			CHANGE started_timestamp started_at timestamp NULL DEFAULT NULL,
-			CHANGE completed_timestamp completed_at timestamp NULL DEFAULT NULL,
-			MODIFY COLUMN state varbinary(64),
-			MODIFY COLUMN keyspace varbinary(256),
-			ADD COLUMN last_error varbinary(512),
-			ADD INDEX (state),
-			ADD INDEX ks_wf_idx (keyspace(64), workflow(64))`,
-		`ALTER TABLE _vt.vdiff_table MODIFY COLUMN table_name varbinary(128),
-			MODIFY COLUMN state varbinary(64),
-			MODIFY COLUMN lastpk varbinary(2000),
-			MODIFY COLUMN table_rows bigint not null default 0,
-			MODIFY COLUMN rows_compared bigint not null default 0`,
+		`ALTER TABLE _vt.vdiff MODIFY COLUMN id bigint AUTO_INCREMENT`,
+		`ALTER TABLE _vt.vdiff CHANGE started_timestamp started_at timestamp NULL DEFAULT NULL`,
+		`ALTER TABLE _vt.vdiff CHANGE completed_timestamp completed_at timestamp NULL DEFAULT NULL`,
+		`ALTER TABLE _vt.vdiff MODIFY COLUMN state varbinary(64)`,
+		`ALTER TABLE _vt.vdiff MODIFY COLUMN keyspace varbinary(256)`,
+		`ALTER TABLE _vt.vdiff ADD COLUMN last_error varbinary(512)`,
+		`ALTER TABLE _vt.vdiff ADD INDEX (state)`,
+		`ALTER TABLE _vt.vdiff ADD INDEX ks_wf_idx (keyspace(64), workflow(64))`,
+		`ALTER TABLE _vt.vdiff_table MODIFY COLUMN table_name varbinary(128)`,
+		`ALTER TABLE _vt.vdiff_table MODIFY COLUMN state varbinary(64)`,
+		`ALTER TABLE _vt.vdiff_table MODIFY COLUMN lastpk varbinary(2000)`,
+		`ALTER TABLE _vt.vdiff_table MODIFY COLUMN table_rows bigint not null default 0`,
+		`ALTER TABLE _vt.vdiff_table MODIFY COLUMN rows_compared bigint not null default 0`,
 	)
 	withDDL = withddl.New(ddls)
 }
@@ -82,8 +82,8 @@ const (
 		primary key (id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`
 
 	sqlNewVDiff    = "insert into _vt.vdiff(keyspace, workflow, state, options, shard, db_name, vdiff_uuid) values(%s, %s, '%s', %s, '%s', '%s', '%s')"
-	sqlResumeVDiff = `update _vt.vdiff as vd, _vt.vdiff_table as vdt set vd.options = %s, vd.started_at = NULL, vd.completed_at = NULL, vd.state = 'pending'
-					where vd.vdiff_uuid = %s and vd.id = vdt.vdiff_id and vd.state = 'completed' and vdt.state = 'completed'`
+	sqlResumeVDiff = `update _vt.vdiff as vd, _vt.vdiff_table as vdt set vd.options = %s, vd.started_at = NULL, vd.completed_at = NULL, vd.state = 'pending',
+					vdt.state = 'pending' where vd.vdiff_uuid = %s and vd.id = vdt.vdiff_id and vd.state = 'completed' and vdt.state = 'completed'`
 	sqlRetryVDiff = `update _vt.vdiff as vd, _vt.vdiff_table as vdt set vd.state = 'pending', vd.last_error = '', vdt.state = 'pending'
 					where vd.id = %d and vd.id = vdt.vdiff_id and vd.state = 'error' and vdt.state = 'error'`
 	sqlGetVDiffByKeyspaceWorkflowUUID = "select * from _vt.vdiff where keyspace = %s and workflow = %s and vdiff_uuid = %s"
@@ -108,7 +108,7 @@ const (
 	sqlGetVDiffID           = "select id as id from _vt.vdiff where vdiff_uuid = %s"
 	sqlGetAllVDiffs         = "select * from _vt.vdiff order by id desc"
 	sqlGetTableRows         = "select table_name as table_name, table_rows as table_rows from INFORMATION_SCHEMA.TABLES where table_schema = %s and table_name = %s"
-	sqlGetAllTableRows      = "select table_name as table_name, table_rows as table_rows from INFORMATION_SCHEMA.TABLES where table_schema = %s"
+	sqlGetAllTableRows      = "select table_name as table_name, table_rows as table_rows from INFORMATION_SCHEMA.TABLES where table_schema = %s and table_name in (%s)"
 
 	sqlNewVDiffTable = "insert into _vt.vdiff_table(vdiff_id, table_name, state, table_rows) values(%d, %s, 'pending', %d)"
 	sqlGetVDiffTable = `select vdt.lastpk as lastpk, vdt.mismatch as mismatch, vdt.report as report
