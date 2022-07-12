@@ -29,6 +29,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/test/endtoend/utils"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
@@ -478,6 +480,16 @@ func TestSchemaChange(t *testing.T) {
 	})
 	t.Run("online CREATE TABLE", func(t *testing.T) {
 		uuid := testOnlineDDLStatementForTable(t, createStatement, ddlStrategy, "vtgate", "just-created")
+		ctx := context.Background()
+		conn, err := mysql.Connect(ctx, &vtParams)
+		require.NoError(t, err)
+		defer conn.Close()
+		utils.AssertMatchesWithTimeout(t, conn,
+			"SHOW VSCHEMA TABLES",
+			`[[VARCHAR("dual")] [VARCHAR("stress_test")]]`,
+			100*time.Millisecond,
+			5*time.Second,
+			"initial table list not complete")
 		uuids = append(uuids, uuid)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		checkTable(t, tableName, true)
