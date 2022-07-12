@@ -236,3 +236,19 @@ func TestLogStatsRemoteAddrUsername(t *testing.T) {
 		t.Fatalf("expected to get username: %s, but got: %s", username, user)
 	}
 }
+
+func TestRedactSetVar(t *testing.T) {
+	defer func() { *streamlog.QueryLogFilterTag = "" }()
+
+	*streamlog.RedactDebugUIQueries = true
+	logStats := NewLogStats(context.Background(), "test", "select /*+ SET_VAR(sql_mode = ' ') */ 1 where name = :nameVal", "", map[string]*querypb.BindVariable{"nameVal": sqltypes.StringBindVariable("toto")})
+	logStats.StartTime = time.Date(2017, time.January, 1, 1, 2, 3, 0, time.UTC)
+	logStats.EndTime = time.Date(2017, time.January, 1, 1, 2, 4, 1234, time.UTC)
+	params := map[string][]string{"full": {}}
+
+	got := testFormat(logStats, url.Values(params))
+	want := "test\t\t\t''\t''\t2017-01-01 01:02:03.000000\t2017-01-01 01:02:04.000001\t1.000001\t0.000000\t0.000000\t0.000000\t\t\"sql1 /* LOG_THIS_QUERY */\"\tmap[intVal:type:INT64 value:\"1\"]\t0\t0\t\"\"\t\"\"\t\"\"\t\"\"\t\"\"\t\n"
+	if got != want {
+		t.Errorf("logstats format: got:\n%q\nwant:\n%q\n", got, want)
+	}
+}
