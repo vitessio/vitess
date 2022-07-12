@@ -120,6 +120,11 @@ func NewHexVal(v []byte) Value {
 	return MakeTrusted(HexVal, v)
 }
 
+// NewBitVal builds a Bit Value.
+func NewBitVal(v []byte) Value {
+	return MakeTrusted(Bit, v)
+}
+
 // NewInt64 builds an Int64 Value.
 func NewInt64(v int64) Value {
 	return MakeTrusted(Int64, strconv.AppendInt(nil, v, 10))

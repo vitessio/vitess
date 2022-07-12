@@ -161,13 +161,17 @@ func TestNormalize(t *testing.T) {
 	}, {
 		// Bin value does not convert
 		in:      "select * from t where v1 = b'11'",
-		outstmt: "select * from t where v1 = B'11'",
-		outbv:   map[string]*querypb.BindVariable{},
+		outstmt: "select * from t where v1 = :bv1",
+		outbv: map[string]*querypb.BindVariable{
+			"bv1": sqltypes.BitBindVariable([]byte("b'11'")),
+		},
 	}, {
 		// Bin value does not convert for DMLs
 		in:      "update a set v1 = b'11'",
-		outstmt: "update a set v1 = B'11'",
-		outbv:   map[string]*querypb.BindVariable{},
+		outstmt: "update a set v1 = :bv1",
+		outbv: map[string]*querypb.BindVariable{
+			"bv1": sqltypes.BitBindVariable([]byte("b'11'")),
+		},
 	}, {
 		// ORDER BY column_position
 		in:      "select a, b from t order by 1 asc",
@@ -244,6 +248,14 @@ func TestNormalize(t *testing.T) {
 			"bv1": sqltypes.Int64BindVariable(1),
 			"bv2": sqltypes.StringBindVariable("2"),
 			"bv3": sqltypes.Int64BindVariable(3),
+		},
+	}, {
+		// BitVal should also be normalized
+		in:      `select b'1', 0b01`,
+		outstmt: `select :bv1, :bv2 from dual`,
+		outbv: map[string]*querypb.BindVariable{
+			"bv1": sqltypes.BitBindVariable([]byte("b'1'")),
+			"bv2": sqltypes.BitBindVariable([]byte("b'01'")),
 		},
 	}}
 	for _, tc := range testcases {
