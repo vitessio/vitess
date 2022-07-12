@@ -193,8 +193,7 @@ func TestLogStatsContextHTML(t *testing.T) {
 	}
 	ctx := callinfo.NewContext(context.Background(), callInfo)
 	logStats := NewLogStats(ctx, "test", "sql1", "", map[string]*querypb.BindVariable{})
-	var tmp = string(logStats.ContextHTML())
-	if tmp != html {
+	if string(logStats.ContextHTML()) != html {
 		t.Fatalf("expect to get html: %s, but got: %s", html, string(logStats.ContextHTML()))
 	}
 }
