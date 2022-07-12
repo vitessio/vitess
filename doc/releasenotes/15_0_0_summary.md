@@ -116,3 +116,10 @@ $ curl -s http://127.0.0.1:15100/debug/vars | jq . | grep Throttler
   "ThrottlerProbesLatency": 355523,
   "ThrottlerProbesTotal": 74,
 ```
+
+### Mysql Compatibility
+
+#### Lookup Vindexes
+
+Added new parameter `multi_shard_autocommit` to lookup vindex definition in vschema, if enabled will send lookup vindex dml query as autocommit to all shards
+This is slighly different from `autocommit` parameter where the query is sent in its own transaction separate from the ongoing transaction if any i.e. begin -> lookup query execs -> commit/rollback
