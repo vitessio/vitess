@@ -31,10 +31,10 @@ type testCase struct {
 	tables                        string
 	workflow                      string
 	tabletBaseID                  int
-	resume                        bool // test resume functionality with this workflow
 	autoRetryError                bool // if true, test auto retry on error against this workflow
 	// If testing auto retry on error, what new rows should be diff'd. These rows must have a PK > all initial rows.
 	retryInsert string
+	resume      bool // test resume functionality with this workflow
 	// If testing resume, what new rows should be diff'd. These rows must have a PK > all initial rows and retry rows.
 	resumeInsert  string
 	testCLIErrors bool // test CLI errors against this workflow

@@ -115,7 +115,8 @@ func (ct *controller) run(ctx context.Context) {
 
 	qr, err := ct.vde.getVDiffByID(ctx, dbClient, ct.id)
 	if err != nil {
-		log.Errorf("Error getting vdiff record: %v", err)
+		log.Errorf("Error getting vdiff record on tablet %v: %v",
+			ct.vde.thisTablet.Alias, err)
 		return
 	}
 
