@@ -3455,6 +3455,15 @@ func TestInvalid(t *testing.T) {
 	}, {
 		input: "SELECT COUNT(DISTINCT *) FROM user",
 		err:   "syntax error at position 24",
+	}, {
+		input: "SELECT x'018' FROM user",
+		err:   "syntax error at position 14",
+	}, {
+		input: "SELECT b'012' FROM user",
+		err:   "syntax error at position 12",
+	}, {
+		input: "SELECT 0b2 FROM user",
+		err:   "syntax error at position 11",
 	},
 	}
 
