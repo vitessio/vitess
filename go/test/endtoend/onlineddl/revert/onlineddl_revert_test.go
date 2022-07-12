@@ -29,8 +29,6 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/test/endtoend/utils"
-
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
@@ -213,6 +211,7 @@ func TestMain(m *testing.M) {
 			"--heartbeat_interval", "250ms",
 			"--heartbeat_on_demand_duration", "5s",
 			"--migration_check_interval", "5s",
+			"--queryserver-config-schema-change-signal-interval", "0.1",
 		}
 		clusterInstance.VtGateExtraArgs = []string{
 			"--ddl_strategy", "online",
@@ -480,16 +479,6 @@ func TestSchemaChange(t *testing.T) {
 	})
 	t.Run("online CREATE TABLE", func(t *testing.T) {
 		uuid := testOnlineDDLStatementForTable(t, createStatement, ddlStrategy, "vtgate", "just-created")
-		ctx := context.Background()
-		conn, err := mysql.Connect(ctx, &vtParams)
-		require.NoError(t, err)
-		defer conn.Close()
-		utils.AssertMatchesWithTimeout(t, conn,
-			"SHOW VSCHEMA TABLES",
-			`[[VARCHAR("dual")] [VARCHAR("stress_test")]]`,
-			100*time.Millisecond,
-			5*time.Second,
-			"initial table list not complete")
 		uuids = append(uuids, uuid)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		checkTable(t, tableName, true)
@@ -1065,11 +1054,11 @@ func testSelectTableMetrics(t *testing.T) {
 
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	rs, err := conn.ExecuteFetch(selectCountRowsStatement, 1000, true)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	row := rs.Named().Row()
 	require.NotNil(t, row)
