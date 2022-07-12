@@ -79,7 +79,9 @@ const (
 type xtraBackupManifest struct {
 	// BackupManifest is an anonymous embedding of the base manifest struct.
 	BackupManifest
-	// CompressionEngine stores which compression engine was used to originally compress the files.
+	// CompressionEngine stores which compression engine was originally provided
+	// to compress the files. Please note that if user has provided externalCompressorCmd
+	// then this value will not be used during decompression.
 	CompressionEngine string `json:",omitempty"`
 	// Name of the backup file
 	FileName string
@@ -276,8 +278,6 @@ func (be *XtrabackupEngine) backupFiles(ctx context.Context, params BackupParams
 		}
 	}()
 
-	params.Logger.Infof("backup command: %s", backupProgram)
-	params.Logger.Infof("arguments: %s", flagsToExec)
 	backupCmd := exec.CommandContext(ctx, backupProgram, flagsToExec...)
 	backupOut, err := backupCmd.StdoutPipe()
 	if err != nil {
@@ -559,7 +559,8 @@ func (be *XtrabackupEngine) extractFiles(ctx context.Context, logger logutil.Log
 			var decompressionEngine = bm.CompressionEngine
 			if *ExternalDecompressorCmd != "" {
 				if decompressionEngine == "" {
-					// for backward compatibility
+					// For backward compatibility. Incase if Manifest is from N-1 binary
+					// then we assign the default value of compressionEngine.
 					decompressionEngine = "pgzip"
 				} else {
 					decompressionEngine = *ExternalDecompressorCmd

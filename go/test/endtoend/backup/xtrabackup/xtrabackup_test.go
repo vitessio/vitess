@@ -31,6 +31,7 @@ func TestXtrabackup(t *testing.T) {
 
 func TestXtrabackWithZstdCompression(t *testing.T) {
 	defer setDefaultCompressionFlag()
+	// BuiltinCompressor will be ignored in this case
 	cDetails := &backup.CompressionDetails{
 		ExternalCompressorCmd:   "zstd",
 		ExternalCompressorExt:   ".zst",

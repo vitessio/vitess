@@ -63,10 +63,7 @@ func TestBackupRestore(t *testing.T) {
 func TestBackupRestoreWithPargzip(t *testing.T) {
 	defer setDefaultCompressionFlag()
 	cDetails := &compressionDetails{
-		BuiltinCompressor:       "pargzip",
-		ExternalCompressorCmd:   "zstd",
-		ExternalCompressorExt:   ".zst",
-		ExternalDecompressorCmd: "zstd -d",
+		BuiltinCompressor: "pargzip",
 	}
 
 	err := testBackupRestore(t, cDetails)

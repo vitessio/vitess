@@ -75,7 +75,9 @@ type builtinBackupManifest struct {
 	// BackupManifest is an anonymous embedding of the base manifest struct.
 	BackupManifest
 
-	// CompressionEngine stores which compression engine was used to originally compress the files.
+	// CompressionEngine stores which compression engine was originally provided
+	// to compress the files. Please note that if user has provided externalCompressorCmd
+	// then this value will not be used during decompression.
 	CompressionEngine string `json:",omitempty"`
 
 	// FileEntries contains all the files in the backup
@@ -661,15 +663,14 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 		var decompressor io.ReadCloser
 		if *ExternalDecompressorCmd != "" {
 			if deCompressionEngine == "" {
-				// for backward compatibility
+				// For backward compatibility. In case if Manifest is from N-1 binary
+				// then we assign the default value of compressionEngine.
 				deCompressionEngine = "pgzip"
 			} else {
 				deCompressionEngine = *ExternalDecompressorCmd
 			}
 			decompressor, err = newExternalDecompressor(ctx, deCompressionEngine, reader, params.Logger)
 		} else {
-			// For backward compatibility. Incase if Manifest is from N-1 binary
-			// then we assign the default value of compressionEngine.
 			if deCompressionEngine == "" {
 				// for backward compatibility
 				deCompressionEngine = "pgzip"
