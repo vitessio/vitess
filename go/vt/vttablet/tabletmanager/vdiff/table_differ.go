@@ -646,6 +646,10 @@ func (td *tableDiffer) updateTableRows(ctx context.Context, dbClient binlogplaye
 	if err != nil {
 		return err
 	}
+	if len(qr.Rows) == 0 {
+		return fmt.Errorf("no information_schema status found for table %s on tablet %v",
+			td.table.Name, td.wd.ct.vde.thisTablet.Alias)
+	}
 	row := qr.Named().Row()
 	query = fmt.Sprintf(sqlUpdateTableRows, row.AsInt64("table_rows", 0), td.wd.ct.id, encodeString(td.table.Name))
 	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
@@ -664,7 +668,7 @@ func (td *tableDiffer) updateTableState(ctx context.Context, dbClient binlogplay
 	return nil
 }
 
-func (td *tableDiffer) updateTableStateAndReport(ctx context.Context, dbClient binlogplayer.DBClient, tableName string, state VDiffState, dr *DiffReport) error {
+func (td *tableDiffer) updateTableStateAndReport(ctx context.Context, dbClient binlogplayer.DBClient, state VDiffState, dr *DiffReport) error {
 	var report string
 	if dr != nil {
 		reportJSONBytes, err := json.Marshal(dr)
@@ -675,11 +679,11 @@ func (td *tableDiffer) updateTableStateAndReport(ctx context.Context, dbClient b
 	} else {
 		report = "{}"
 	}
-	query := fmt.Sprintf(sqlUpdateTableStateAndReport, encodeString(string(state)), dr.ProcessedRows, encodeString(report), td.wd.ct.id, encodeString(tableName))
+	query := fmt.Sprintf(sqlUpdateTableStateAndReport, encodeString(string(state)), dr.ProcessedRows, encodeString(report), td.wd.ct.id, encodeString(td.table.Name))
 	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
 		return err
 	}
-	insertVDiffLog(ctx, dbClient, td.wd.ct.id, fmt.Sprintf("%s: table %s", state, encodeString(tableName)))
+	insertVDiffLog(ctx, dbClient, td.wd.ct.id, fmt.Sprintf("%s: table %s", state, encodeString(td.table.Name)))
 
 	return nil
 }

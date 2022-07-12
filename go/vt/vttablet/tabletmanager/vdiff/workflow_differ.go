@@ -125,7 +125,7 @@ func (wd *workflowDiffer) diffTable(ctx context.Context, dbClient binlogplayer.D
 	}
 
 	log.Infof("td.diff after reconciliation for %s, with dr %+v", td.table.Name, dr)
-	if err := td.updateTableStateAndReport(ctx, dbClient, td.table.Name, CompletedState, dr); err != nil {
+	if err := td.updateTableStateAndReport(ctx, dbClient, CompletedState, dr); err != nil {
 		return err
 	}
 	return nil
@@ -301,10 +301,9 @@ func (wd *workflowDiffer) initVDiffTables(dbClient binlogplayer.DBClient) error 
 		} else if len(qr.Rows) == 1 {
 			query = fmt.Sprintf(sqlUpdateTableRows, tableRows, wd.ct.id, encodeString(tableName))
 		} else {
-			return fmt.Errorf("no state found for vdiff table %s for vdiff_id %d on tablet %s",
+			return fmt.Errorf("invalid state found for vdiff table %s for vdiff_id %d on tablet %s",
 				tableName, wd.ct.id, wd.ct.vde.thisTablet.Alias)
 		}
-
 		if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
 			return err
 		}

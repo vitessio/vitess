@@ -611,14 +611,22 @@ func buildProgressReport(summary *vdiffSummary, rowsToCompare int64) {
 	if summary.RowsCompared >= 0 {
 		// Round to 2 decimal points
 		report.Percentage = math.Round(math.Min((float64(summary.RowsCompared)/float64(rowsToCompare))*100, 100.00)*100) / 100
-	} else {
+	}
+	if math.IsNaN(report.Percentage) {
 		report.Percentage = 0
 	}
 	pctToGo := math.Abs(report.Percentage - 100.00)
 	startTime, _ := time.Parse(vdiff.TimestampFormat, summary.StartedAt)
 	curTime := time.Now().UTC()
 	runTime := curTime.Unix() - startTime.Unix()
-	eta := time.Unix((int64(runTime)*int64(pctToGo))+curTime.Unix(), 1).UTC()
+	var eta time.Time
+	if report.Percentage >= 1 {
+		// calculate how long 1% took and multiply that by the % left
+		eta = time.Unix(((int64(runTime)/int64(report.Percentage))*int64(pctToGo))+curTime.Unix(), 1).UTC()
+	} else {
+		// we're making a complete guess here, so take runtime and multply it by 100
+		eta = time.Unix((int64(runTime)*int64(pctToGo))+curTime.Unix(), 1).UTC()
+	}
 	report.ETA = eta.Format(vdiff.TimestampFormat)
 	summary.Progress = report
 }
