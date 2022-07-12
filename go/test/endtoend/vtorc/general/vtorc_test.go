@@ -426,9 +426,9 @@ func TestMultipleDurabilities(t *testing.T) {
 	assert.NotNil(t, primary, "should have elected a primary")
 }
 
-// TestDurabilityPolicySetLate tests that VTOrc works even if the durability policy of the keyspace is
+// TestDurabilityPolicySetLater tests that VTOrc works even if the durability policy of the keyspace is
 // set after VTOrc has been started.
-func TestDurabilityPolicySetLate(t *testing.T) {
+func TestDurabilityPolicySetLater(t *testing.T) {
 	// stop any vtorc instance running due to a previous test.
 	utils.StopVtorcs(t, clusterInfo)
 	newCluster := utils.SetupNewClusterSemiSync(t)
@@ -436,7 +436,7 @@ func TestDurabilityPolicySetLate(t *testing.T) {
 	shard0 := &keyspace.Shards[0]
 	// Before starting VTOrc we explicity want to set the durability policy of the keyspace to an empty string
 	func() {
-		ctx, unlock, lockErr := newCluster.Ts.LockKeyspace(context.Background(), keyspace.Name, "TestDurabilityPolicySetLate")
+		ctx, unlock, lockErr := newCluster.Ts.LockKeyspace(context.Background(), keyspace.Name, "TestDurabilityPolicySetLater")
 		require.NoError(t, lockErr)
 		defer unlock(&lockErr)
 		ki, err := newCluster.Ts.GetKeyspace(ctx, keyspace.Name)
