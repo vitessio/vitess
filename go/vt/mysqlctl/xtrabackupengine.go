@@ -556,19 +556,19 @@ func (be *XtrabackupEngine) extractFiles(ctx context.Context, logger logutil.Log
 		// Create the decompressor if needed.
 		if compressed {
 			var decompressor io.ReadCloser
-			var decompressionEngine = "pgzip"
+			var decompressionEngine = bm.CompressionEngine
 			if *ExternalDecompressorCmd != "" {
-				if bm.CompressionEngine != "" {
+				if decompressionEngine == "" {
 					// for backward compatibility
-					decompressionEngine = bm.CompressionEngine
+					decompressionEngine = "pgzip"
 				} else {
 					decompressionEngine = *ExternalDecompressorCmd
 				}
 				decompressor, err = newExternalDecompressor(ctx, decompressionEngine, reader, logger)
 			} else {
-				if bm.CompressionEngine != "" {
+				if decompressionEngine == "" {
 					// for backward compatibility
-					decompressionEngine = bm.CompressionEngine
+					decompressionEngine = "pgzip"
 				}
 				decompressor, err = newBuiltinDecompressor(decompressionEngine, reader, logger)
 			}

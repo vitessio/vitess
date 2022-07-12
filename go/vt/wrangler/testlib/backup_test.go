@@ -47,7 +47,6 @@ import (
 
 type compressionDetails struct {
 	BuiltinCompressor       string
-	BuiltinDecompressor     string
 	ExternalCompressorCmd   string
 	ExternalCompressorExt   string
 	ExternalDecompressorCmd string
@@ -59,18 +58,19 @@ func TestBackupRestore(t *testing.T) {
 	require.NoError(t, err)
 }
 
-// TODO: @rameez. I was expecting this test to fail but it turns out
-// we infer decompressor through compression engine in builtinEngine.
+// Given we infer decompressor through Manifest file.
 // It is only in xtrabackup where we infer decompressor through extension & BuiltinDecompressor param.
 func TestBackupRestoreWithPargzip(t *testing.T) {
 	defer setDefaultCompressionFlag()
 	cDetails := &compressionDetails{
-		BuiltinCompressor:   "pargzip",
-		BuiltinDecompressor: "lz4",
+		BuiltinCompressor:       "pargzip",
+		ExternalCompressorCmd:   "zstd",
+		ExternalCompressorExt:   ".zst",
+		ExternalDecompressorCmd: "zstd -d",
 	}
 
 	err := testBackupRestore(t, cDetails)
-	require.ErrorContains(t, err, "lz4: bad magic number")
+	require.NoError(t, err)
 }
 
 func setDefaultCompressionFlag() {
