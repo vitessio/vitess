@@ -54,10 +54,10 @@ public class GrpcClientTest extends RpcClientTest {
         new ProcessBuilder(
             Arrays.asList(
                 vtRoot + "/bin/vtgateclienttest",
-                "-logtostderr",
-                "-grpc_port",
+                "--logtostderr",
+                "--grpc_port",
                 Integer.toString(port),
-                "-service_map",
+                "--service_map",
                 "grpc-vtgateservice"))
             .inheritIO()
             .start();

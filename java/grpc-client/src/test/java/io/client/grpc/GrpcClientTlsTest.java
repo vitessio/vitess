@@ -153,7 +153,7 @@ public class GrpcClientTlsTest extends RpcClientTest {
     final String key = certDirectory.getCanonicalPath() + File.separatorChar + "server-key.pem";
 
     final String vtgate = String.format(
-        "%s -grpc_cert %s -grpc_key %s -logtostderr -grpc_port %s -service_map grpc-vtgateservice",
+        "%s --grpc_cert %s --grpc_key %s --logtostderr --grpc_port %s --service_map grpc-vtgateservice",
         vtRoot + "/bin/vtgateclienttest",
         cert,
         key,
