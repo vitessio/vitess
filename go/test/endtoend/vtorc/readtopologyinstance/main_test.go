@@ -166,6 +166,6 @@ func TestReadTopologyInstanceBufferable(t *testing.T) {
 	assert.False(t, replicaInstance.UsingMariaDBGTID)
 	assert.Equal(t, replicaInstance.SourceUUID, primaryInstance.ServerUUID)
 	assert.False(t, replicaInstance.HasReplicationFilters)
-	assert.EqualValues(t, 0, replicaInstance.SecondsBehindPrimary.Int64)
+	assert.LessOrEqual(t, int(replicaInstance.SecondsBehindPrimary.Int64), 1)
 	assert.False(t, replicaInstance.AllowTLS)
 }
