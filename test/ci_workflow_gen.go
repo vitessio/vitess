@@ -167,6 +167,8 @@ func clusterMySQLVersions(clusterName string) mysqlVersions {
 	switch {
 	case strings.HasPrefix(clusterName, "onlineddl_"):
 		return allMySQLVersions
+	case clusterName == "schemadiff_vrepl":
+		return allMySQLVersions
 	case clusterName == "tabletmanager_tablegc":
 		return allMySQLVersions
 	case clusterName == "mysql80":
