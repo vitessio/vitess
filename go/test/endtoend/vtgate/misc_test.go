@@ -72,7 +72,8 @@ func TestShowColumns(t *testing.T) {
 	utils.AssertMatchesOneOf(t, conn, "SHOW COLUMNS from `t5_null_vindex` in `ks`", expected57, expected80)
 	utils.AssertMatchesOneOf(t, conn, "SHOW columns FROM `t5_null_vindex` in `ks`", expected57, expected80)
 
-	expected57 = `[[VARCHAR("id") BLOB("bigint") VARCHAR("NO") BINARY("PRI") NULL VARCHAR("")]]`
+	expected57 = `[[VARCHAR("id") TEXT("bigint(20)") VARCHAR("NO") VARCHAR("PRI") NULL VARCHAR("")]]`
+	expected80 = `[[VARCHAR("id") BLOB("bigint") VARCHAR("NO") BINARY("PRI") NULL VARCHAR("")]]`
 	utils.AssertMatchesOneOf(t, conn, "SHOW columns FROM `t5_null_vindex` where Field = 'id'", expected57, expected80)
 }
 
