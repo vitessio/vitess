@@ -1,3 +1,4 @@
+---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -286,6 +287,7 @@ status:
     plural: ""
   conditions: []
   storedVersions: []
+
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
@@ -345,6 +347,7 @@ status:
     plural: ""
   conditions: []
   storedVersions: []
+
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
@@ -471,6 +474,8 @@ spec:
                           type: string
                         endpoint:
                           type: string
+                        forcePathStyle:
+                          type: boolean
                         keyPrefix:
                           maxLength: 256
                           pattern: ^[^\r\n]*$
@@ -515,6 +520,7 @@ status:
     plural: ""
   conditions: []
   storedVersions: []
+
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
@@ -770,6 +776,8 @@ spec:
                       type: string
                     mysqldExporter:
                       type: string
+                    vtadmin:
+                      type: string
                     vtbackup:
                       type: string
                     vtctld:
@@ -795,6 +803,8 @@ spec:
                   type: object
                 lockserver:
                   properties:
+                    cellInfoAddress:
+                      type: string
                     etcd:
                       properties:
                         advertisePeerURLs:
@@ -1120,6 +1130,7 @@ status:
     plural: ""
   conditions: []
   storedVersions: []
+
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
@@ -1254,6 +1265,8 @@ spec:
                                 type: string
                               endpoint:
                                 type: string
+                              forcePathStyle:
+                                type: boolean
                               keyPrefix:
                                 maxLength: 256
                                 pattern: ^[^\r\n]*$
@@ -1482,6 +1495,8 @@ spec:
                         type: object
                       lockserver:
                         properties:
+                          cellInfoAddress:
+                            type: string
                           etcd:
                             properties:
                               advertisePeerURLs:
@@ -1759,6 +1774,8 @@ spec:
                   type: object
                 globalLockserver:
                   properties:
+                    cellInfoAddress:
+                      type: string
                     etcd:
                       properties:
                         advertisePeerURLs:
@@ -2016,6 +2033,8 @@ spec:
                       type: string
                     mysqldExporter:
                       type: string
+                    vtadmin:
+                      type: string
                     vtbackup:
                       type: string
                     vtctld:
@@ -2049,6 +2068,8 @@ spec:
                       type: object
                     mysqldExporter:
                       type: string
+                    vtadmin:
+                      type: string
                     vtbackup:
                       type: string
                     vtctld:
@@ -2068,6 +2089,8 @@ spec:
                           type: string
                         type: object
                       databaseName:
+                        type: string
+                      durabilityPolicy:
                         type: string
                       name:
                         maxLength: 63
@@ -3104,6 +3127,184 @@ spec:
                     tolerations:
                       x-kubernetes-preserve-unknown-fields: true
                   type: object
+                vtadmin:
+                  properties:
+                    affinity:
+                      x-kubernetes-preserve-unknown-fields: true
+                    annotations:
+                      additionalProperties:
+                        type: string
+                      type: object
+                    apiAddresses:
+                      items:
+                        type: string
+                      type: array
+                    apiResources:
+                      properties:
+                        limits:
+                          additionalProperties:
+                            anyOf:
+                              - type: integer
+                              - type: string
+                            pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                            x-kubernetes-int-or-string: true
+                          type: object
+                        requests:
+                          additionalProperties:
+                            anyOf:
+                              - type: integer
+                              - type: string
+                            pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                            x-kubernetes-int-or-string: true
+                          type: object
+                      type: object
+                    cells:
+                      items:
+                        type: string
+                      type: array
+                    extraEnv:
+                      items:
+                        properties:
+                          name:
+                            type: string
+                          value:
+                            type: string
+                          valueFrom:
+                            properties:
+                              configMapKeyRef:
+                                properties:
+                                  key:
+                                    type: string
+                                  name:
+                                    type: string
+                                  optional:
+                                    type: boolean
+                                required:
+                                  - key
+                                type: object
+                              fieldRef:
+                                properties:
+                                  apiVersion:
+                                    type: string
+                                  fieldPath:
+                                    type: string
+                                required:
+                                  - fieldPath
+                                type: object
+                              resourceFieldRef:
+                                properties:
+                                  containerName:
+                                    type: string
+                                  divisor:
+                                    anyOf:
+                                      - type: integer
+                                      - type: string
+                                    pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                    x-kubernetes-int-or-string: true
+                                  resource:
+                                    type: string
+                                required:
+                                  - resource
+                                type: object
+                              secretKeyRef:
+                                properties:
+                                  key:
+                                    type: string
+                                  name:
+                                    type: string
+                                  optional:
+                                    type: boolean
+                                required:
+                                  - key
+                                type: object
+                            type: object
+                        required:
+                          - name
+                        type: object
+                      type: array
+                    extraFlags:
+                      additionalProperties:
+                        type: string
+                      type: object
+                    extraLabels:
+                      additionalProperties:
+                        type: string
+                      type: object
+                    extraVolumeMounts:
+                      items:
+                        properties:
+                          mountPath:
+                            type: string
+                          mountPropagation:
+                            type: string
+                          name:
+                            type: string
+                          readOnly:
+                            type: boolean
+                          subPath:
+                            type: string
+                          subPathExpr:
+                            type: string
+                        required:
+                          - mountPath
+                          - name
+                        type: object
+                      type: array
+                    extraVolumes:
+                      x-kubernetes-preserve-unknown-fields: true
+                    initContainers:
+                      x-kubernetes-preserve-unknown-fields: true
+                    rbac:
+                      properties:
+                        key:
+                          type: string
+                        name:
+                          type: string
+                        volumeName:
+                          type: string
+                      required:
+                        - key
+                      type: object
+                    readOnly:
+                      type: boolean
+                    replicas:
+                      format: int32
+                      type: integer
+                    service:
+                      properties:
+                        annotations:
+                          additionalProperties:
+                            type: string
+                          type: object
+                        clusterIP:
+                          type: string
+                      type: object
+                    sidecarContainers:
+                      x-kubernetes-preserve-unknown-fields: true
+                    tolerations:
+                      x-kubernetes-preserve-unknown-fields: true
+                    webResources:
+                      properties:
+                        limits:
+                          additionalProperties:
+                            anyOf:
+                              - type: integer
+                              - type: string
+                            pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                            x-kubernetes-int-or-string: true
+                          type: object
+                        requests:
+                          additionalProperties:
+                            anyOf:
+                              - type: integer
+                              - type: string
+                            pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                            x-kubernetes-int-or-string: true
+                          type: object
+                      type: object
+                  required:
+                    - apiAddresses
+                  type: object
               required:
                 - cells
               type: object
@@ -3202,6 +3403,13 @@ spec:
                     serviceName:
                       type: string
                   type: object
+                vtadmin:
+                  properties:
+                    available:
+                      type: string
+                    serviceName:
+                      type: string
+                  type: object
               type: object
           type: object
       served: true
@@ -3214,6 +3422,7 @@ status:
     plural: ""
   conditions: []
   storedVersions: []
+
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
@@ -3347,6 +3556,8 @@ spec:
                             type: string
                           endpoint:
                             type: string
+                          forcePathStyle:
+                            type: boolean
                           keyPrefix:
                             maxLength: 256
                             pattern: ^[^\r\n]*$
@@ -3365,6 +3576,8 @@ spec:
                     type: object
                   type: array
                 databaseName:
+                  type: string
+                durabilityPolicy:
                   type: string
                 extraVitessFlags:
                   additionalProperties:
@@ -3388,6 +3601,8 @@ spec:
                     mysqld:
                       type: string
                     mysqldExporter:
+                      type: string
+                    vtadmin:
                       type: string
                     vtbackup:
                       type: string
@@ -4450,6 +4665,7 @@ status:
     plural: ""
   conditions: []
   storedVersions: []
+
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
@@ -4583,6 +4799,8 @@ spec:
                             type: string
                           endpoint:
                             type: string
+                          forcePathStyle:
+                            type: boolean
                           keyPrefix:
                             maxLength: 256
                             pattern: ^[^\r\n]*$
@@ -4635,6 +4853,8 @@ spec:
                     mysqld:
                       type: string
                     mysqldExporter:
+                      type: string
+                    vtadmin:
                       type: string
                     vtbackup:
                       type: string
