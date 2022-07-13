@@ -456,3 +456,6 @@ generate_ci_workflows:
 
 release-notes:
 	go run ./go/tools/release-notes -from "$(FROM)" -to "$(TO)" -version "$(VERSION)" -summary "$(SUMMARY)"
+
+install_kubectl_kind:
+	./tools/get_kubectl_kind.sh
