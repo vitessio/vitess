@@ -35,10 +35,10 @@ func TestBitVals(t *testing.T) {
 
 	mcmp.Exec("insert into t1(id1, id2) values (0,0)")
 
-	mcmp.AssertMatches(`select b'1001', 0x9`, `[[VARBINARY("\t") VARBINARY("\t")]]`)
-	mcmp.AssertMatches(`select b'1001', 0x9 from t1`, `[[VARBINARY("\t") VARBINARY("\t")]]`)
-	mcmp.AssertMatchesNoCompare(`select 1 + b'1001', 2 + 0x9`, `[[INT64(10) UINT64(11)]]`, `[[UINT64(10) UINT64(11)]]`)
-	mcmp.AssertMatchesNoCompare(`select 1 + b'1001', 2 + 0x9 from t1`, `[[INT64(10) UINT64(11)]]`, `[[UINT64(10) UINT64(11)]]`)
+	mcmp.AssertMatches(`select b'1001', 0x9, B'010011011010'`, `[[VARBINARY("\t") VARBINARY("\t") VARBINARY("\x04\xda")]]`)
+	mcmp.AssertMatches(`select b'1001', 0x9, B'010011011010' from t1`, `[[VARBINARY("\t") VARBINARY("\t") VARBINARY("\x04\xda")]]`)
+	mcmp.AssertMatchesNoCompare(`select 1 + b'1001', 2 + 0x9, 3 + B'010011011010'`, `[[INT64(10) UINT64(11) INT64(1245)]]`, `[[UINT64(10) UINT64(11) UINT64(1245)]]`)
+	mcmp.AssertMatchesNoCompare(`select 1 + b'1001', 2 + 0x9, 3 + B'010011011010' from t1`, `[[INT64(10) UINT64(11) INT64(1245)]]`, `[[UINT64(10) UINT64(11) UINT64(1245)]]`)
 }
 
 func TestHexVals(t *testing.T) {
