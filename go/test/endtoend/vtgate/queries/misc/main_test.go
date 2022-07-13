@@ -14,13 +14,15 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package union
+package misc
 
 import (
 	"flag"
 	"fmt"
 	"os"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/endtoend/utils"
 
@@ -32,32 +34,12 @@ var (
 	clusterInstance *cluster.LocalProcessCluster
 	vtParams        mysql.ConnParams
 	mysqlParams     mysql.ConnParams
-	keyspaceName    = "ks_union"
-	cell            = "test_union"
+	keyspaceName    = "ks_misc"
+	cell            = "test_misc"
 	schemaSQL       = `create table t1(
 	id1 bigint,
 	id2 bigint,
 	primary key(id1)
-) Engine=InnoDB;
-
-create table t1_id2_idx(
-	id2 bigint,
-	keyspace_id varbinary(10),
-	primary key(id2)
-) Engine=InnoDB;
-
-create table t2(
-	id3 bigint,
-	id4 bigint,
-	primary key(id3)
-) Engine=InnoDB;
-
-create table t2_id4_idx(
-	id bigint not null auto_increment,
-	id4 bigint,
-	id3 bigint,
-	primary key(id),
-	key idx_id4(id4)
 ) Engine=InnoDB;
 `
 
@@ -67,25 +49,6 @@ create table t2_id4_idx(
   "vindexes": {
     "hash": {
       "type": "hash"
-    },
-    "t1_id2_vdx": {
-      "type": "consistent_lookup_unique",
-      "params": {
-        "table": "t1_id2_idx",
-        "from": "id2",
-        "to": "keyspace_id"
-      },
-      "owner": "t1"
-    },
-    "t2_id4_idx": {
-      "type": "lookup_hash",
-      "params": {
-        "table": "t2_id4_idx",
-        "from": "id4",
-        "to": "id3",
-        "autocommit": "true"
-      },
-      "owner": "t2"
     }
   },
   "tables": {
@@ -93,38 +56,6 @@ create table t2_id4_idx(
       "column_vindexes": [
         {
           "column": "id1",
-          "name": "hash"
-        },
-        {
-          "column": "id2",
-          "name": "t1_id2_vdx"
-        }
-      ]
-    },
-    "t1_id2_idx": {
-      "column_vindexes": [
-        {
-          "column": "id2",
-          "name": "hash"
-        }
-      ]
-    },
-    "t2": {
-      "column_vindexes": [
-        {
-          "column": "id3",
-          "name": "hash"
-        },
-        {
-          "column": "id4",
-          "name": "t2_id4_idx"
-        }
-      ]
-    },
-    "t2_id4_idx": {
-      "column_vindexes": [
-        {
-          "column": "id4",
           "name": "hash"
         }
       ]
@@ -183,4 +114,48 @@ func TestMain(m *testing.M) {
 		return m.Run()
 	}()
 	os.Exit(exitCode)
+}
+
+func start(t *testing.T) (utils.MySQLCompare, func()) {
+	mcmp, err := utils.NewMySQLCompare(t, vtParams, mysqlParams)
+	require.NoError(t, err)
+
+	deleteAll := func() {
+		tables := []string{"t1"}
+		for _, table := range tables {
+			_, _ = mcmp.ExecAndIgnore("delete from " + table)
+		}
+	}
+
+	deleteAll()
+
+	return mcmp, func() {
+		deleteAll()
+		mcmp.Close()
+		cluster.PanicHandler(t)
+	}
+}
+
+func TestBitVals(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec("insert into t1(id1, id2) values (0,0)")
+
+	mcmp.AssertMatches(`select b'1001', 0x9`, `[[VARBINARY("\t") VARBINARY("\t")]]`)
+	mcmp.AssertMatches(`select b'1001', 0x9 from t1`, `[[VARBINARY("\t") VARBINARY("\t")]]`)
+	mcmp.AssertMatches(`select 1 + b'1001', 2 + 0x9`, `[[INT64(10) UINT64(11)]]`)
+	mcmp.AssertMatches(`select 1 + b'1001', 2 + 0x9 from t1`, `[[INT64(10) UINT64(11)]]`)
+}
+
+func TestHexVals(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec("insert into t1(id1, id2) values (0,0)")
+
+	mcmp.AssertMatches(`select x'09', 0x9`, `[[VARBINARY("\t") VARBINARY("\t")]]`)
+	mcmp.AssertMatches(`select X'1001', 0x9 from t1`, `[[VARBINARY("\t") VARBINARY("\t")]]`)
+	mcmp.AssertMatches(`select 1 + x'09', 2 + 0x9`, `[[UINT64(10) UINT64(11)]]`)
+	mcmp.AssertMatches(`select 1 + X'09', 2 + 0x9 from t1`, `[[UINT64(10) UINT64(11)]]`)
 }
