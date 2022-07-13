@@ -299,6 +299,170 @@ function curlPostRequest() {
   fi
 }
 
+function move_tables() {
+  echo "Apply 201_customer_tablets.yaml"
+  kubectl apply -f 201_customer_tablets.yaml > /dev/null
+  checkPodStatusWithTimeout "example-vttablet-zone1(.*)3/3(.*)Running(.*)" 6
+
+  killall kubectl
+  ./pf.sh > /dev/null 2>&1 &
+
+  waitForKeyspaceToBeServing customer - 2
+
+  sleep 10
+
+  vtctlclient MoveTables -source commerce -tables 'customer,corder' Create customer.commerce2customer
+  if [ $? -ne 0 ]; then
+    echo "MoveTables failed"
+    printMysqlErrorFiles
+    exit 1
+  fi
+
+  sleep 10
+
+  vdiff_out=$(vtctlclient VDiff customer.commerce2customer)
+  echo "$vdiff_out" | grep "ProcessedRows: 5" | wc -l | grep "2" > /dev/null
+  if [ $? -ne 0 ]; then
+    echo -e "VDiff output is invalid, got:\n$vdiff_out"
+    printMysqlErrorFiles
+    exit 1
+  fi
+
+  vtctlclient MoveTables -tablet_types=rdonly,replica SwitchTraffic customer.commerce2customer
+  if [ $? -ne 0 ]; then
+    echo "SwitchTraffic for rdonly and replica failed"
+    printMysqlErrorFiles
+    exit 1
+  fi
+
+  vtctlclient MoveTables -tablet_types=primary SwitchTraffic customer.commerce2customer
+  if [ $? -ne 0 ]; then
+    echo "SwitchTraffic for primary failed"
+    printMysqlErrorFiles
+    exit 1
+  fi
+
+  vtctlclient MoveTables Complete customer.commerce2customer
+  if [ $? -ne 0 ]; then
+    echo "MoveTables Complete failed"
+    printMysqlErrorFiles
+    exit 1
+  fi
+
+  sleep 10
+}
+
+function resharding() {
+  echo "Create new schemas for new shards"
+  applySchemaWithRetry create_commerce_seq.sql commerce
+  sleep 4
+  vtctlclient ApplyVSchema -vschema="$(cat vschema_commerce_seq.json)" commerce
+  if [ $? -ne 0 ]; then
+    echo "ApplyVschema commerce_seq during resharding failed"
+    printMysqlErrorFiles
+    exit 1
+  fi
+  sleep 4
+  vtctlclient ApplyVSchema -vschema="$(cat vschema_customer_sharded.json)" customer
+  if [ $? -ne 0 ]; then
+    echo "ApplyVschema customer_sharded during resharding failed"
+    printMysqlErrorFiles
+    exit 1
+  fi
+  sleep 4
+  applySchemaWithRetry create_customer_sharded.sql customer
+  sleep 4
+
+  echo "Apply 302_new_shards.yaml"
+  kubectl apply -f 302_new_shards.yaml
+  checkPodStatusWithTimeout "example-vttablet-zone1(.*)3/3(.*)Running(.*)" 12
+
+  killall kubectl
+  ./pf.sh > /dev/null 2>&1 &
+  sleep 5
+
+  waitForKeyspaceToBeServing customer -80 2
+  waitForKeyspaceToBeServing customer 80- 2
+
+  echo "Ready to reshard ..."
+  sleep 15
+
+  vtctlclient Reshard -source_shards '-' -target_shards '-80,80-' Create customer.cust2cust
+  if [ $? -ne 0 ]; then
+    echo "Reshard Create failed"
+    printMysqlErrorFiles
+    exit 1
+  fi
+
+  sleep 15
+
+  vdiff_out=$(vtctlclient VDiff customer.cust2cust)
+  echo "$vdiff_out" | grep "ProcessedRows: 5" | wc -l | grep "2" > /dev/null
+  if [ $? -ne 0 ]; then
+    echo -e "VDiff output is invalid, got:\n$vdiff_out"
+    # Allow failure
+  fi
+
+  vtctlclient Reshard -tablet_types=rdonly,replica SwitchTraffic customer.cust2cust
+  if [ $? -ne 0 ]; then
+    echo "Reshard SwitchTraffic for replica,rdonly failed"
+    printMysqlErrorFiles
+    exit 1
+  fi
+  vtctlclient Reshard -tablet_types=primary SwitchTraffic customer.cust2cust
+  if [ $? -ne 0 ]; then
+    echo "Reshard SwitchTraffic for primary failed"
+    printMysqlErrorFiles
+    exit 1
+  fi
+
+  sleep 10
+
+  assertSelect ./select_customer-80_data.sql "customer/-80" << EOF
+Using customer/-80
+Customer
++-------------+--------------------+
+| customer_id | email              |
++-------------+--------------------+
+|           1 | alice@domain.com   |
+|           2 | bob@domain.com     |
+|           3 | charlie@domain.com |
+|           5 | eve@domain.com     |
++-------------+--------------------+
+COrder
++----------+-------------+----------+-------+
+| order_id | customer_id | sku      | price |
++----------+-------------+----------+-------+
+|        1 |           1 | SKU-1001 |   100 |
+|        2 |           2 | SKU-1002 |    30 |
+|        3 |           3 | SKU-1002 |    30 |
+|        5 |           5 | SKU-1002 |    30 |
++----------+-------------+----------+-------+
+EOF
+
+  assertSelect ./select_customer80-_data.sql "customer/80-" << EOF
+Using customer/80-
+Customer
++-------------+----------------+
+| customer_id | email          |
++-------------+----------------+
+|           4 | dan@domain.com |
++-------------+----------------+
+COrder
++----------+-------------+----------+-------+
+| order_id | customer_id | sku      | price |
++----------+-------------+----------+-------+
+|        4 |           4 | SKU-1002 |    30 |
++----------+-------------+----------+-------+
+EOF
+
+  kubectl apply -f 306_down_shard_0.yaml
+  checkPodStatusWithTimeout "example-vttablet-zone1(.*)3/3(.*)Running(.*)" 9
+  waitForKeyspaceToBeServing customer -80 2
+  waitForKeyspaceToBeServing customer 80- 2
+}
+
+
 # Build the docker image for vitess/lite using the local code
 docker build -f docker/lite/Dockerfile -t vitess/lite:latest .
 # Build the docker image for vitess/vtadmin using the local code
@@ -328,6 +492,8 @@ checkSemiSyncSetup
 verifyVtadminSetup
 # Next we check that VTOrc is running properly and is able to fix issues as they come up
 verifyVTOrcSetup
+move_tables
+resharding
 
 # Teardown
 echo "Deleting Kind cluster. This also deletes the volume associated with it"
