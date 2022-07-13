@@ -591,8 +591,6 @@ func terminatedRestore(t *testing.T) {
 //
 //
 func vtctlBackup(t *testing.T, tabletType string) {
-	// we always use replica2, reset its state when we're done
-	replica2.Type = tabletType
 	restoreWaitForBackup(t, tabletType)
 	verifyInitialReplication(t)
 
