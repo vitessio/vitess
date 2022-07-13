@@ -154,7 +154,7 @@ func TestFullStatus(t *testing.T) {
 	assert.Equal(t, "ON", primaryStatus.GtidMode)
 	assert.True(t, primaryStatus.LogReplicaUpdates)
 	assert.True(t, primaryStatus.LogBinEnabled)
-	assert.Contains(t, primaryStatus.Version, "5.7")
+	assert.Regexp(t, `[58]\.[07].*`, primaryStatus.Version)
 	assert.NotEmpty(t, primaryStatus.VersionComment)
 
 	// Check that full status gives the correct result for a replica tablet
@@ -174,7 +174,7 @@ func TestFullStatus(t *testing.T) {
 	assert.Empty(t, replicaStatus.ReplicationStatus.LastIoError)
 	assert.Empty(t, replicaStatus.ReplicationStatus.LastSqlError)
 	assert.Equal(t, replicaStatus.ReplicationStatus.SourceUuid, primaryStatus.ServerUuid)
-	assert.EqualValues(t, 0, replicaStatus.ReplicationStatus.ReplicationLagSeconds)
+	assert.LessOrEqual(t, int(replicaStatus.ReplicationStatus.ReplicationLagSeconds), 1)
 	assert.False(t, replicaStatus.ReplicationStatus.ReplicationLagUnknown)
 	assert.EqualValues(t, 0, replicaStatus.ReplicationStatus.SqlDelay)
 	assert.False(t, replicaStatus.ReplicationStatus.SslAllowed)
@@ -199,7 +199,7 @@ func TestFullStatus(t *testing.T) {
 	assert.Equal(t, "ON", replicaStatus.GtidMode)
 	assert.True(t, replicaStatus.LogReplicaUpdates)
 	assert.True(t, replicaStatus.LogBinEnabled)
-	assert.Contains(t, replicaStatus.Version, "5.7")
+	assert.Regexp(t, `[58]\.[07].*`, replicaStatus.Version)
 	assert.NotEmpty(t, replicaStatus.VersionComment)
 }
 
