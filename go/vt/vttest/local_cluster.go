@@ -512,6 +512,15 @@ func (db *LocalCluster) Execute(sql []string, dbname string) error {
 	}
 	defer conn.Close()
 
+	_, err = conn.ExecuteUnSetSuperReadOnly()
+	if err != nil {
+		return err
+	}
+
+	defer func() {
+		_, _ = conn.ExecuteSetSuperReadOnly()
+	}()
+
 	_, err = conn.ExecuteFetch("START TRANSACTION", 0, false)
 	if err != nil {
 		return err

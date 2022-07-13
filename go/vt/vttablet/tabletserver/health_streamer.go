@@ -391,7 +391,6 @@ func init() {
 }
 
 func InitSchema() error {
-	log.Infof("InitSchema for health stream: ")
 	f := func(conn *mysql.Conn) error {
 		for _, sql := range mysql.VTDatabaseInit {
 			if _, err := conn.ExecuteFetch(sql, 0, false); err != nil {

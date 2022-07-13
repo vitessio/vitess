@@ -250,7 +250,6 @@ func init() {
 }
 
 func InitDDLSchema() error {
-	log.Infof("init Schema for OnlineDDL ...")
 	f := func(conn *mysql.Conn) error {
 		for _, sql := range ApplyDDL {
 			if _, err := conn.ExecuteFetch(sql, 0, false); err != nil {

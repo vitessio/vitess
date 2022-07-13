@@ -428,7 +428,7 @@ func executeQuery(dbConn *mysql.Conn, query string) (*sqltypes.Result, error) {
 			// We only audit from 2nd attempt and onwards, otherwise this is just too verbose.
 			log.Infof("Executing query %s (attempt %d of %d)", query, (i + 1), retries)
 		}
-		result, err = dbConn.ExecuteFetch(query, 10000, true)
+		result, err = dbConn.ExecuteFetchWithReadOnlyHandling(query, 10000, true)
 		if err == nil {
 			break
 		}

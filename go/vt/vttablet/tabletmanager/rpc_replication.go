@@ -53,7 +53,6 @@ func init() {
 }
 
 func InitReparentJournal() error {
-	log.Infof("ensureReparentJournal for Tablet Manager")
 	f := func(conn *mysql.Conn) error {
 		for _, sql := range reparentQueries {
 			if _, err := conn.ExecuteFetch(sql, 0, false); err != nil {
