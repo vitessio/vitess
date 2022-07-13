@@ -83,7 +83,7 @@ jobs:
         sudo apt-get install -y gnupg2
         sudo dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
         sudo apt-get update
-        sudo apt-get install percona-xtrabackup-80
+        sudo apt-get install percona-xtrabackup-80 lz4
 
         {{end}}
 
