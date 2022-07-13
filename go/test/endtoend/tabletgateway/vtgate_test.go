@@ -74,7 +74,11 @@ func TestVtgateReplicationStatusCheck(t *testing.T) {
 	assert.Equal(t, 1, len(qr.Rows), "expected single row from `select max_repl_lag()`")
 
 	_ = utils.Exec(t, conn, "use @primary")
-	utils.AssertMatches(t, conn, `select max_repl_lag()`, `[[0]]`)
+	if is8plus, _ := conn.ServerVersionAtLeast(8, 0); is8plus {
+		utils.AssertMatches(t, conn, `select max_repl_lag()`, `[[INT64(0)]]`)
+	} else {
+		utils.AssertMatches(t, conn, `select max_repl_lag()`, `[[0]]`)
+	}
 }
 
 func verifyVtgateVariables(t *testing.T, url string) {
