@@ -21,7 +21,10 @@ import (
 	"errors"
 	"testing"
 
+	"vitess.io/vitess/go/mysql"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
@@ -358,6 +361,271 @@ func TestInsertShardedFail(t *testing.T) {
 	// The lookup will fail to map to a keyspace id.
 	_, err := ins.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	require.EqualError(t, err, `could not map [INT64(1)] to a keyspace id`)
+}
+
+func TestInsertShardedAggregateErrors(t *testing.T) {
+	invschema := &vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"sharded": {
+				Sharded: true,
+				Vindexes: map[string]*vschemapb.Vindex{
+					"hash": {
+						Type: "hash",
+					},
+				},
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{{
+							Name:    "hash",
+							Columns: []string{"id"},
+						}},
+					},
+				},
+			},
+		},
+	}
+	vs := vindexes.BuildVSchema(invschema)
+	ks := vs.Keyspaces["sharded"]
+
+	// Multiple rows are not autocommitted
+	ins := NewInsert(
+		InsertSharded,
+		false,
+		ks.Keyspace,
+		[][][]evalengine.Expr{{
+			// colVindex columns: id
+			// 3 rows.
+			{
+				evalengine.NewLiteralInt(1),
+				evalengine.NewLiteralInt(2),
+				evalengine.NewLiteralInt(3),
+			},
+		}},
+		ks.Tables["t1"],
+		"prefix",
+		[]string{" mid1", " mid2", " mid3"},
+		" suffix",
+	)
+	vc := newDMLTestVCursor("-20", "20-40", "40-")
+	vc.shardForKsid = []string{"20-", "-20", "20-40"}
+	vc.results = []*sqltypes.Result{
+		{InsertID: 1},
+	}
+	vc.multiShardErrs = []error{
+		nil,
+		vterrors.NewErrorf(vtrpcpb.Code_CANCELED, vterrors.QueryInterrupted, "query timeout -20"),
+		vterrors.NewErrorf(vtrpcpb.Code_CANCELED, vterrors.QueryInterrupted, "query timeout 20-40"),
+	}
+
+	ins.MultiShardAutocommit = false
+
+	_, err := ins.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+
+	if err == nil {
+		t.Fatal(err)
+	}
+
+	require.EqualError(t, err, "query timeout -20\nquery timeout 20-40")
+
+	vc.ExpectLog(t, []string{
+		// Based on shardForKsid, values returned will be 20-, -20, 20-.
+		`ResolveDestinations sharded [value:"0" value:"1" value:"2"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f),DestinationKeyspaceID(4eb190c9a2fa169c)`,
+		// Row 1 to 20-, 2 will go to -20, 3 will go to 20-40
+		`ExecuteMultiShard ` +
+			`sharded.20-: prefix mid1 suffix {_id_0: type:INT64 value:"1" _id_1: type:INT64 value:"2" _id_2: type:INT64 value:"3"} ` +
+			`sharded.-20: prefix mid2 suffix {_id_0: type:INT64 value:"1" _id_1: type:INT64 value:"2" _id_2: type:INT64 value:"3"} ` +
+			`sharded.20-40: prefix mid3 suffix {_id_0: type:INT64 value:"1" _id_1: type:INT64 value:"2" _id_2: type:INT64 value:"3"} ` +
+			`true false`,
+	})
+
+	// With multi shard autocommit enabled
+	ins = NewInsert(
+		InsertSharded,
+		false,
+		ks.Keyspace,
+		[][][]evalengine.Expr{{
+			// colVindex columns: id
+			// 3 rows.
+			{
+				evalengine.NewLiteralInt(1),
+				evalengine.NewLiteralInt(2),
+				evalengine.NewLiteralInt(3),
+			},
+		}},
+		ks.Tables["t1"],
+		"prefix",
+		[]string{" mid1", " mid2", " mid3"},
+		" suffix",
+	)
+
+	ins.MultiShardAutocommit = true
+
+	vc = newDMLTestVCursor("-20", "20-", "20-40")
+	vc.shardForKsid = []string{"20-", "-20", "20-40"}
+	vc.results = []*sqltypes.Result{
+		{InsertID: 1},
+	}
+	vc.multiShardErrs = []error{
+		nil,
+		vterrors.NewErrorf(vtrpcpb.Code_CANCELED, vterrors.QueryInterrupted, "query timeout -20"),
+		vterrors.NewErrorf(vtrpcpb.Code_CANCELED, vterrors.QueryInterrupted, "query timeout 20-40"),
+	}
+
+	_, err = ins.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+
+	// Errors are aggregated.
+	if err == nil {
+		t.Fatal(err)
+	}
+	require.EqualError(t, err, "query timeout -20\nquery timeout 20-40")
+
+	vc.ExpectLog(t, []string{
+		// Based on shardForKsid, values returned will be 20-, -20, 20-.
+		`ResolveDestinations sharded [value:"0" value:"1" value:"2"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f),DestinationKeyspaceID(4eb190c9a2fa169c)`,
+		// Row 2 will go to -20, rows 1 & 3 will go to 20-
+		`ExecuteMultiShard ` +
+			`sharded.20-: prefix mid1 suffix {_id_0: type:INT64 value:"1" _id_1: type:INT64 value:"2" _id_2: type:INT64 value:"3"} ` +
+			`sharded.-20: prefix mid2 suffix {_id_0: type:INT64 value:"1" _id_1: type:INT64 value:"2" _id_2: type:INT64 value:"3"} ` +
+			`sharded.20-40: prefix mid3 suffix {_id_0: type:INT64 value:"1" _id_1: type:INT64 value:"2" _id_2: type:INT64 value:"3"} ` +
+			`true true`,
+	})
+}
+
+func TestInsertShardedScatterErrorsAsWarnings(t *testing.T) {
+	invschema := &vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"sharded": {
+				Sharded: true,
+				Vindexes: map[string]*vschemapb.Vindex{
+					"hash": {
+						Type: "hash",
+					},
+				},
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{{
+							Name:    "hash",
+							Columns: []string{"id"},
+						}},
+					},
+				},
+			},
+		},
+	}
+	vs := vindexes.BuildVSchema(invschema)
+	ks := vs.Keyspaces["sharded"]
+
+	// Multiple rows are not autocommitted
+	ins := NewInsert(
+		InsertSharded,
+		false,
+		ks.Keyspace,
+		[][][]evalengine.Expr{{
+			// colVindex columns: id
+			// 3 rows.
+			{
+				evalengine.NewLiteralInt(1),
+				evalengine.NewLiteralInt(2),
+				evalengine.NewLiteralInt(3),
+			},
+		}},
+		ks.Tables["t1"],
+		"prefix",
+		[]string{" mid1", " mid2", " mid3"},
+		" suffix",
+	)
+	vc := newDMLTestVCursor("-20", "20-40", "40-")
+	vc.shardForKsid = []string{"20-", "-20", "20-40"}
+	vc.results = []*sqltypes.Result{
+		{InsertID: 1},
+	}
+	vc.multiShardErrs = []error{
+		nil,
+		vterrors.NewErrorf(vtrpcpb.Code_CANCELED, vterrors.QueryInterrupted, "query timeout -20"),
+		vterrors.NewErrorf(vtrpcpb.Code_CANCELED, vterrors.QueryInterrupted, "query timeout 20-40"),
+	}
+
+	ins.ErrorMode = ErrorModeAsWarningsIfResultElseAggregate
+	ins.MultiShardAutocommit = false
+
+	_, err := ins.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	vc.ExpectLog(t, []string{
+		// Based on shardForKsid, values returned will be 20-, -20, 20-.
+		`ResolveDestinations sharded [value:"0" value:"1" value:"2"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f),DestinationKeyspaceID(4eb190c9a2fa169c)`,
+		// Row 1 to 20-, 2 will go to -20, 3 will go to 20-40
+		`ExecuteMultiShard ` +
+			`sharded.20-: prefix mid1 suffix {_id_0: type:INT64 value:"1" _id_1: type:INT64 value:"2" _id_2: type:INT64 value:"3"} ` +
+			`sharded.-20: prefix mid2 suffix {_id_0: type:INT64 value:"1" _id_1: type:INT64 value:"2" _id_2: type:INT64 value:"3"} ` +
+			`sharded.20-40: prefix mid3 suffix {_id_0: type:INT64 value:"1" _id_1: type:INT64 value:"2" _id_2: type:INT64 value:"3"} ` +
+			`true false`,
+	})
+
+	vc.ExpectWarnings(t, []*querypb.QueryWarning{
+		{Code: mysql.ERQueryInterrupted, Message: "query timeout -20"},
+		{Code: mysql.ERQueryInterrupted, Message: "query timeout 20-40"},
+	})
+
+	// With multi shard autocommit enabled
+	ins = NewInsert(
+		InsertSharded,
+		false,
+		ks.Keyspace,
+		[][][]evalengine.Expr{{
+			// colVindex columns: id
+			// 3 rows.
+			{
+				evalengine.NewLiteralInt(1),
+				evalengine.NewLiteralInt(2),
+				evalengine.NewLiteralInt(3),
+			},
+		}},
+		ks.Tables["t1"],
+		"prefix",
+		[]string{" mid1", " mid2", " mid3"},
+		" suffix",
+	)
+
+	ins.ErrorMode = ErrorModeAsWarningsIfResultElseAggregate
+	ins.MultiShardAutocommit = true
+
+	vc = newDMLTestVCursor("-20", "20-", "20-40")
+	vc.shardForKsid = []string{"20-", "-20", "20-40"}
+	vc.results = []*sqltypes.Result{
+		{InsertID: 1},
+	}
+	vc.multiShardErrs = []error{
+		nil,
+		vterrors.NewErrorf(vtrpcpb.Code_CANCELED, vterrors.QueryInterrupted, "query timeout -20"),
+		vterrors.NewErrorf(vtrpcpb.Code_CANCELED, vterrors.QueryInterrupted, "query timeout 20-40"),
+	}
+
+	_, err = ins.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+
+	// Errors are recorded as warnings.
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	vc.ExpectLog(t, []string{
+		// Based on shardForKsid, values returned will be 20-, -20, 20-.
+		`ResolveDestinations sharded [value:"0" value:"1" value:"2"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f),DestinationKeyspaceID(4eb190c9a2fa169c)`,
+		// Row 2 will go to -20, rows 1 & 3 will go to 20-
+		`ExecuteMultiShard ` +
+			`sharded.20-: prefix mid1 suffix {_id_0: type:INT64 value:"1" _id_1: type:INT64 value:"2" _id_2: type:INT64 value:"3"} ` +
+			`sharded.-20: prefix mid2 suffix {_id_0: type:INT64 value:"1" _id_1: type:INT64 value:"2" _id_2: type:INT64 value:"3"} ` +
+			`sharded.20-40: prefix mid3 suffix {_id_0: type:INT64 value:"1" _id_1: type:INT64 value:"2" _id_2: type:INT64 value:"3"} ` +
+			`true true`,
+	})
+
+	vc.ExpectWarnings(t, []*querypb.QueryWarning{
+		{Code: mysql.ERQueryInterrupted, Message: "query timeout -20"},
+		{Code: mysql.ERQueryInterrupted, Message: "query timeout 20-40"},
+	})
 }
 
 func TestInsertShardedGenerate(t *testing.T) {

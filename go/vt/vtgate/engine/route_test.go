@@ -25,6 +25,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -35,7 +36,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -1370,11 +1370,12 @@ func TestExecFail(t *testing.T) {
 
 		vc.Rewind()
 		_, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
+		assert.Empty(t, vc.warnings)
 		require.EqualError(t, err, `query timeout`)
 	})
 
 	t.Run("normal route with no scatter errors as warnings", func(t *testing.T) {
-		// Scatter fails if one of N fails without ScatterErrorsAsWarnings
+		// Scatter fails if one of N fails without ErrorModeAsWarningsIfResultElseAggregate
 		sel := NewRoute(
 			Scatter,
 			&vindexes.Keyspace{
@@ -1401,8 +1402,8 @@ func TestExecFail(t *testing.T) {
 		})
 	})
 
-	t.Run("ScatterErrorsAsWarnings", func(t *testing.T) {
-		// Scatter succeeds if one of N fails with ScatterErrorsAsWarnings
+	t.Run("ScatterErrorsAsWarningsIfResultElseAggregate", func(t *testing.T) {
+		// Scatter succeeds if one of N fails with ErrorModeAsWarningsIfResultElseAggregate
 		sel := NewRoute(
 			Scatter,
 			&vindexes.Keyspace{
@@ -1412,7 +1413,7 @@ func TestExecFail(t *testing.T) {
 			"dummy_select",
 			"dummy_select_field",
 		)
-		sel.ScatterErrorsAsWarnings = true
+		sel.ErrorMode = ErrorModeAsWarningsIfResultElseAggregate
 
 		vc := &loggingVCursor{
 			shards:  []string{"-20", "20-"},
@@ -1423,7 +1424,7 @@ func TestExecFail(t *testing.T) {
 			},
 		}
 		result, err := sel.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
-		require.NoError(t, err, "unexpected ScatterErrorsAsWarnings error %v", err)
+		require.NoError(t, err, "unexpected ErrorModeAsWarningsIfResultElseAggregate error %v", err)
 		vc.ExpectLog(t, []string{
 			`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
 			`ExecuteMultiShard ks.-20: dummy_select {} ks.20-: dummy_select {} false false`,
@@ -1438,7 +1439,7 @@ func TestExecFail(t *testing.T) {
 			Col:             0,
 		}}
 		_, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
-		require.NoError(t, err, "unexpected ScatterErrorsAsWarnings error %v", err)
+		require.NoError(t, err, "unexpected ErrorModeAsWarningsIfResultElseAggregate error %v", err)
 		vc.ExpectWarnings(t, []*querypb.QueryWarning{{Code: mysql.ERQueryInterrupted, Message: "query timeout -20 (errno 1317) (sqlstate HY000)"}})
 	})
 }

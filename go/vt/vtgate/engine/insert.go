@@ -91,6 +91,11 @@ type (
 		// succeed in order to get the performance benefits of autocommit.
 		MultiShardAutocommit bool
 
+		// ErrorMode governs how errors collected from shards are returned to
+		// the client. The default mode aggregates errors into a single MySQL
+		// server error.
+		ErrorMode
+
 		// QueryTimeout contains the optional timeout (in milliseconds) to apply to this query
 		QueryTimeout int
 
@@ -378,9 +383,14 @@ func (ins *Insert) executeInsertQueries(
 	if err != nil {
 		return nil, err
 	}
+
 	result, errs := vcursor.ExecuteMultiShard(ctx, rss, queries, true /* rollbackOnError */, autocommit)
+
 	if errs != nil {
-		return nil, vterrors.Aggregate(errs)
+		ec := newErrorContext(errs, len(rss), vcursor.Session())
+		if err := ec.apply(ins.ErrorMode); err != nil {
+			return nil, err
+		}
 	}
 
 	if insertID != 0 {

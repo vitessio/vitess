@@ -21,8 +21,6 @@ import (
 	"context"
 	"io"
 
-	"vitess.io/vitess/go/mysql"
-
 	"vitess.io/vitess/go/sqltypes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -48,9 +46,9 @@ var _ Primitive = (*MergeSort)(nil)
 // be used like other Primitives in VTGate. However, it satisfies the Primitive API
 // so that vdiff can use it. In that situation, only StreamExecute is used.
 type MergeSort struct {
-	Primitives              []StreamExecutor
-	OrderBy                 []OrderByParams
-	ScatterErrorsAsWarnings bool
+	Primitives []StreamExecutor
+	OrderBy    []OrderByParams
+	ErrorMode
 	noInputs
 	noTxNeeded
 }
@@ -83,9 +81,12 @@ func (ms *MergeSort) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 	handles := make([]*streamHandle, len(ms.Primitives))
 	for i, input := range ms.Primitives {
 		handles[i] = runOneStream(ctx, vcursor, input, bindVars, gotFields)
-		if !ms.ScatterErrorsAsWarnings {
-			// we only need the fields from the first input, unless we allow ScatterErrorsAsWarnings.
-			// in that case, we need to ask all the inputs for fields - we don't know which will return anything
+		if !ms.ErrorMode.CanRecordWarnings() {
+			// We only need the fields from the first input, unless we allow
+			// returning errors as warnings to the client.
+			//
+			// In that case, we need to ask all the inputs for fields - we
+			// don't know which will return anything
 			gotFields = false
 		}
 	}
@@ -111,7 +112,7 @@ func (ms *MergeSort) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 		case row, ok := <-handle.row:
 			if !ok {
 				if handle.err != nil {
-					if ms.ScatterErrorsAsWarnings {
+					if ms.ErrorMode.CanRecordWarnings() {
 						errs = append(errs, handle.err)
 						break
 					}
@@ -163,21 +164,20 @@ func (ms *MergeSort) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 		}
 	}
 
-	err := vterrors.Aggregate(errs)
-	if err != nil && ms.ScatterErrorsAsWarnings && len(errs) < len(handles) {
-		// we got errors, but not all shards failed, so we can hide the error and just warn instead
-		partialSuccessScatterQueries.Add(1)
-		sErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
-		vcursor.Session().RecordWarning(&querypb.QueryWarning{Code: uint32(sErr.Num), Message: err.Error()})
-		return nil
+	if errs != nil {
+		ec := newErrorContext(errs, len(handles), vcursor.Session())
+		if err := ec.apply(ms.ErrorMode); err != nil {
+			return err
+		}
 	}
-	return err
+
+	return nil
 }
 
 func (ms *MergeSort) getStreamingFields(handles []*streamHandle, callback func(*sqltypes.Result) error) error {
 	var fields []*querypb.Field
 
-	if ms.ScatterErrorsAsWarnings {
+	if ms.ErrorMode.CanRecordWarnings() {
 		for _, handle := range handles {
 			// Fetch field info from just one stream.
 			fields = <-handle.fields
@@ -192,7 +192,7 @@ func (ms *MergeSort) getStreamingFields(handles []*streamHandle, callback func(*
 	}
 	if fields == nil {
 		// something went wrong. need to figure out where the error can be
-		if !ms.ScatterErrorsAsWarnings {
+		if !ms.ErrorMode.CanRecordWarnings() {
 			return handles[0].err
 		}
 

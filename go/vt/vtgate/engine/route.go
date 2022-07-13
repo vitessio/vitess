@@ -27,9 +27,7 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -70,8 +68,8 @@ type Route struct {
 	// QueryTimeout contains the optional timeout (in milliseconds) to apply to this query
 	QueryTimeout int
 
-	// ScatterErrorsAsWarnings is true if results should be returned even if some shards have an error
-	ScatterErrorsAsWarnings bool
+	// ErrorMode governs how errors are returned to the client. The default strategy aggregates them into a single MySQL server error.
+	ErrorMode
 
 	// RoutingParameters parameters required for query routing.
 	*RoutingParameters
@@ -146,10 +144,6 @@ func (obp OrderByParams) String() string {
 	}
 	return val
 }
-
-var (
-	partialSuccessScatterQueries = stats.NewCounter("PartialSuccessScatterQueries", "Count of partially successful scatter queries")
-)
 
 // RouteType returns a description of the query routing type used by the primitive
 func (route *Route) RouteType() string {
@@ -228,16 +222,9 @@ func (route *Route) executeInternal(ctx context.Context, vcursor VCursor, bindVa
 	result, errs := vcursor.ExecuteMultiShard(ctx, rss, queries, false /* rollbackOnError */, false /* canAutocommit */)
 
 	if errs != nil {
-		errs = filterOutNilErrors(errs)
-		if !route.ScatterErrorsAsWarnings || len(errs) == len(rss) {
-			return nil, vterrors.Aggregate(errs)
-		}
-
-		partialSuccessScatterQueries.Add(1)
-
-		for _, err := range errs {
-			serr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
-			vcursor.Session().RecordWarning(&querypb.QueryWarning{Code: uint32(serr.Num), Message: err.Error()})
+		ec := newErrorContext(errs, len(rss), vcursor.Session())
+		if err := ec.apply(route.ErrorMode); err != nil {
+			return nil, err
 		}
 	}
 
@@ -246,16 +233,6 @@ func (route *Route) executeInternal(ctx context.Context, vcursor VCursor, bindVa
 	}
 
 	return route.sort(result)
-}
-
-func filterOutNilErrors(errs []error) []error {
-	var errors []error
-	for _, err := range errs {
-		if err != nil {
-			errors = append(errors, err)
-		}
-	}
-	return errors
 }
 
 // TryStreamExecute performs a streaming exec.
@@ -301,13 +278,9 @@ func (route *Route) TryStreamExecute(ctx context.Context, vcursor VCursor, bindV
 			return callback(qr.Truncate(route.TruncateColumnCount))
 		})
 		if len(errs) > 0 {
-			if !route.ScatterErrorsAsWarnings || len(errs) == len(rss) {
-				return vterrors.Aggregate(errs)
-			}
-			partialSuccessScatterQueries.Add(1)
-			for _, err := range errs {
-				sErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
-				vcursor.Session().RecordWarning(&querypb.QueryWarning{Code: uint32(sErr.Num), Message: err.Error()})
+			sec := newErrorContext(errs, len(rss), vcursor.Session())
+			if err := sec.apply(route.ErrorMode); err != nil {
+				return err
 			}
 		}
 		return nil
@@ -327,9 +300,9 @@ func (route *Route) mergeSort(ctx context.Context, vcursor VCursor, bindVars map
 		})
 	}
 	ms := MergeSort{
-		Primitives:              prims,
-		OrderBy:                 route.OrderBy,
-		ScatterErrorsAsWarnings: route.ScatterErrorsAsWarnings,
+		Primitives: prims,
+		OrderBy:    route.OrderBy,
+		ErrorMode:  route.ErrorMode,
 	}
 	return vcursor.StreamExecutePrimitive(ctx, &ms, bindVars, wantfields, func(qr *sqltypes.Result) error {
 		return callback(qr.Truncate(route.TruncateColumnCount))
@@ -435,7 +408,7 @@ func (route *Route) description() PrimitiveDescription {
 	if route.TruncateColumnCount > 0 {
 		other["ResultColumns"] = route.TruncateColumnCount
 	}
-	if route.ScatterErrorsAsWarnings {
+	if route.ErrorMode.CanRecordWarnings() {
 		other["ScatterErrorsAsWarnings"] = true
 	}
 	if route.QueryTimeout > 0 {

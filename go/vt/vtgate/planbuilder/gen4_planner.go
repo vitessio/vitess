@@ -440,14 +440,14 @@ func pushCommentDirectivesOnPlan(plan logicalPlan, stmt sqlparser.Statement) (lo
 		directives = make(sqlparser.CommentDirectives)
 	}
 
-	scatterAsWarns := directives.IsSet(sqlparser.DirectiveScatterErrorsAsWarnings)
+	errorMode := scatterErrorsAsWarnings(directives)
 	queryTimeout := queryTimeout(directives)
 
-	if scatterAsWarns || queryTimeout > 0 {
+	if errorMode.CanRecordWarnings() || queryTimeout > 0 {
 		_, _ = visit(plan, func(logicalPlan logicalPlan) (bool, logicalPlan, error) {
 			switch plan := logicalPlan.(type) {
 			case *routeGen4:
-				plan.eroute.ScatterErrorsAsWarnings = scatterAsWarns
+				plan.eroute.ErrorMode = errorMode
 				plan.eroute.QueryTimeout = queryTimeout
 			}
 			return true, logicalPlan, nil

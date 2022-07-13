@@ -206,9 +206,7 @@ func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, reservedVars *s
 		if rb.eroute.TargetDestination != nil {
 			return errors.New("unsupported: SELECT with a target destination")
 		}
-		if directives.IsSet(sqlparser.DirectiveScatterErrorsAsWarnings) {
-			rb.eroute.ScatterErrorsAsWarnings = true
-		}
+		rb.eroute.ErrorMode = scatterErrorsAsWarnings(directives)
 	}
 
 	// Set the outer symtab after processing of FROM clause.

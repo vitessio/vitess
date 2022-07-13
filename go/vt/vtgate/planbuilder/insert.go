@@ -298,6 +298,7 @@ func applyCommentDirectives(ins *sqlparser.Insert, eins *engine.Insert) {
 	if directives.IsSet(sqlparser.DirectiveMultiShardAutocommit) {
 		eins.MultiShardAutocommit = true
 	}
+	eins.ErrorMode = scatterErrorsAsWarnings(directives)
 	eins.QueryTimeout = queryTimeout(directives)
 }
 
