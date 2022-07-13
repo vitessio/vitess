@@ -32,6 +32,17 @@ alias mysql="mysql -h 127.0.0.1 -P 15306 -u user"
 cd "$VTROOT"
 unset VTROOT # ensure that the examples can run without VTROOT now.
 
+function checkSemiSyncSetup() {
+  for vttablet in $(kubectl get pods --no-headers -o custom-columns=":metadata.name" | grep "vttablet") ; do
+    echo "Checking semi-sync in $vttablet"
+    kubectl exec "$vttablet" -c mysqld -- mysql -S "/vt/socket/mysql.sock" -u root -e "show variables like 'rpl_semi_sync_slave_enabled'" | grep "ON"
+    if [ $? -ne 0 ]; then
+      echo "Semi Sync not setup on $vttablet"
+      exit 1
+    fi
+  done
+}
+
 # checkPodStatusWithTimeout:
 # $1: regex used to match pod names
 # $2: number of pods to match (default: 1)
@@ -204,6 +215,89 @@ COrder
 EOF
 }
 
+# verifyVtadminSetup verifies that we can query the vtadmin api end point
+function verifyVtadminSetup() {
+  # Verify the debug/env page can be curled and it contains the kubernetes environment variables like HOSTNAME
+  curlGetRequestWithRetry "localhost:14001/debug/env" "HOSTNAME=example-zone1-vtadmin"
+  # Verify the api/keyspaces page can be curled and it contains the name of the keyspace created
+  curlGetRequestWithRetry "localhost:14001/api/keyspaces" "commerce"
+  # Verify the other APIs work as well
+  curlGetRequestWithRetry "localhost:14001/api/tablets" '"tablets":\[{"cluster":{"id":"example","name":"example"},"tablet":{"alias":{"cell":"zone1"'
+  curlGetRequestWithRetry "localhost:14001/api/schemas" '"keyspace":"commerce","table_definitions":\[{"name":"corder","schema":"CREATE TABLE `corder` (\\n  `order_id` bigint(20) NOT NULL AUTO_INCREMENT'
+  # Verify that we are able to create a keyspace
+  curlPostRequest "localhost:14001/api/keyspace/example" '{"name":"testKeyspace"}'
+  # List the keyspaces and check that we have them both
+  curlGetRequestWithRetry "localhost:14001/api/keyspaces" "commerce.*testKeyspace"
+  # Try and delete the keyspace but this should fail because of the rbac rules
+  curlDeleteRequest "localhost:14001/api/keyspace/example/testKeyspace" "unauthorized.*cannot.*delete.*keyspace"
+  # We should still have both the keyspaces
+  curlGetRequestWithRetry "localhost:14001/api/keyspaces" "commerce.*testKeyspace"
+  # Delete the keyspace by using the vtctlclient
+  vtctlclient DeleteKeyspace testKeyspace
+  # Verify we still have the commerce keyspace and no other keyspace
+  curlGetRequestWithRetry "localhost:14001/api/keyspaces" "commerce.*}}}}]"
+}
+
+# verifyVTOrcSetup verifies that VTOrc is running and repairing things that we mess up
+function verifyVTOrcSetup() {
+  # Stop replication using the vtctld and wait for VTOrc to repair
+  allReplicaTablets=$(getAllReplicaTablets)
+  for replica in $(echo "$allReplicaTablets") ; do
+    vtctlclient StopReplication "$replica"
+  done
+  # Now that we have stopped replication on both the tablets, we know that this will
+  # only succeed if VTOrc is able to fix it since we are running vttablet with disable active reparent
+  # and semi-sync durability policy
+  mysql -e "insert into customer(email) values('newemail@domain.com');"
+}
+
+# getAllReplicaTablets returns the list of all the replica tablets as a space separated list
+function getAllReplicaTablets() {
+  vtctlclient ListAllTablets | grep "replica" | awk '{print $1}' | tr '\n' ' '
+}
+
+function curlGetRequestWithRetry() {
+  url=$1
+  dataToAssert=$2
+  for i in {1..600} ; do
+    res=$(curl "$url")
+    if [ $? -eq 0 ]; then
+      echo "$res" | grep "$dataToAssert" > /dev/null 2>&1
+      if [ $? -ne 0 ]; then
+        echo -e "The data in $url is incorrect, got:\n$res"
+        exit 1
+      fi
+      return
+    fi
+    echo "failed to query url $url, retrying (attempt #$i) ..."
+    sleep 1
+  done
+}
+
+function curlDeleteRequest() {
+  url=$1
+  dataToAssert=$2
+  res=$(curl -X DELETE "$url")
+  if [ $? -ne 0 ]; then
+    echo -e "The DELETE request to $url failed\n"
+    exit 1
+  fi
+  echo "$res" | grep "$dataToAssert" > /dev/null 2>&1
+  if [ $? -ne 0 ]; then
+    echo -e "The data in delete request to $url is incorrect, got:\n$res"
+    exit 1
+  fi
+}
+
+function curlPostRequest() {
+  url=$1
+  data=$2
+  curl -X POST -d "$data" "$url"
+  if [ $? -ne 0 ]; then
+    echo -e "The POST request to $url with data $data failed\n"
+    exit 1
+  fi
+}
 
 # Build the docker image for vitess/lite using the local code
 docker build -f docker/lite/Dockerfile -t vitess/lite:latest .
@@ -226,6 +320,14 @@ killall kubectl
 
 # Start all the vitess components
 get_started
+checkSemiSyncSetup
+
+# Check Vtadmin is setup
+# In get_started we verify that the pod for vtadmin exists and is healthy
+# We now try and query the vtadmin api
+verifyVtadminSetup
+# Next we check that VTOrc is running properly and is able to fix issues as they come up
+verifyVTOrcSetup
 
 # Teardown
 echo "Deleting Kind cluster. This also deletes the volume associated with it"
