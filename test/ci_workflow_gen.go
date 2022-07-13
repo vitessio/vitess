@@ -178,7 +178,7 @@ func clusterMySQLVersions(clusterName string) mysqlVersions {
 	case clusterName == "vreplication_across_db_versions":
 		return []mysqlVersion{mysql80}
 	case clusterName == "xb_backup":
- 		return allMySQLVersions
+		return allMySQLVersions
 	default:
 		return defaultMySQLVersions
 	}
