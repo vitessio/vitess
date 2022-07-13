@@ -249,6 +249,8 @@ function verifyVTOrcSetup() {
   # only succeed if VTOrc is able to fix it since we are running vttablet with disable active reparent
   # and semi-sync durability policy
   mysql -e "insert into customer(email) values('newemail@domain.com');"
+  # We now delete the row because the move tables workflow assertions are not expecting this row to be present
+  mysql -e "delete from customer where email = 'newemail@domain.com';"
 }
 
 # getAllReplicaTablets returns the list of all the replica tablets as a space separated list
