@@ -312,6 +312,8 @@ var typeToMySQL = map[querypb.Type]struct {
 	Decimal:   {typ: 246},
 	Text:      {typ: 252},
 	Blob:      {typ: 252, flags: mysqlBinary},
+	HexNum:    {typ: 253, flags: mysqlBinary},
+	HexVal:    {typ: 253, flags: mysqlBinary},
 	VarChar:   {typ: 253},
 	VarBinary: {typ: 253, flags: mysqlBinary},
 	Char:      {typ: 254},
