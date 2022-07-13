@@ -690,8 +690,8 @@ func WriteDbCredentialToTmp(tmpDir string) string {
 	return dbCredentialFile
 }
 
-// GetPasswordUpdateSQL returns the sql for password update
-func GetPasswordUpdateSQL(localCluster *cluster.LocalProcessCluster) string {
+// GetPasswordUpdateSQL2 returns the sql for password update
+func GetPasswordUpdateSQL2(localCluster *cluster.LocalProcessCluster) string {
 	pwdChangeCmd := `
 					# Set real passwords for all users.
 					UPDATE mysql.user SET %s = PASSWORD('RootPass')
@@ -710,6 +710,21 @@ func GetPasswordUpdateSQL(localCluster *cluster.LocalProcessCluster) string {
 					`
 	pwdCol, _ := getPasswordField(localCluster)
 	return fmt.Sprintf(pwdChangeCmd, pwdCol, pwdCol, pwdCol, pwdCol, pwdCol, pwdCol)
+}
+
+// GetPasswordUpdateSQL returns the sql for password update
+func GetPasswordUpdateSQL(localCluster *cluster.LocalProcessCluster) string {
+	pwdChangeCmd := `
+					# Set real passwords for all users.
+					ALTER USER 'root'@'localhost' IDENTIFIED BY 'RootPass';
+					ALTER USER 'vt_dba'@'localhost' IDENTIFIED BY 'VtDbaPass';
+					ALTER USER 'vt_app'@'localhost' IDENTIFIED BY 'VtAppPass';
+					ALTER USER 'vt_allprivs'@'localhost' IDENTIFIED BY 'VtAllprivsPass';
+					ALTER USER 'vt_repl'@'%' IDENTIFIED BY 'VtReplPass';
+					ALTER USER 'vt_filtered'@'localhost' IDENTIFIED BY 'VtFilteredPass';
+					FLUSH PRIVILEGES;
+					`
+	return pwdChangeCmd
 }
 
 // getPasswordField Determines which column is used for user passwords in this MySQL version.
