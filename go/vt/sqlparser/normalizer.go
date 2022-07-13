@@ -17,6 +17,9 @@ limitations under the License.
 package sqlparser
 
 import (
+	"fmt"
+	"strconv"
+
 	"vitess.io/vitess/go/sqltypes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -213,14 +216,13 @@ func (nz *normalizer) sqlToBindvar(node SQLNode) *querypb.BindVariable {
 			}
 			v, err = sqltypes.NewValue(sqltypes.HexVal, vbytes)
 		case BitVal:
-			// We parse the `b'0101'` string literal into a binary encoded string of `0101` in the parser
-			// We need to re-encode it back to the original MySQL query format before passing it on as a bindvar value to MySQL
-			var vbytes []byte
-			vbytes, err = node.encodeHexOrBitValToMySQLQueryFormat()
+			// Convert bit value to hex number in parameterized query format
+			var ui uint64
+			ui, err = strconv.ParseUint(string(node.Bytes()), 2, 64)
 			if err != nil {
 				return nil
 			}
-			v, err = sqltypes.NewValue(sqltypes.Bit, vbytes)
+			v, err = sqltypes.NewValue(sqltypes.HexNum, []byte(fmt.Sprintf("0x%x", ui)))
 		default:
 			return nil
 		}
