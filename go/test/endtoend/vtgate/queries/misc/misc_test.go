@@ -37,8 +37,8 @@ func TestBitVals(t *testing.T) {
 
 	mcmp.AssertMatches(`select b'1001', 0x9`, `[[VARBINARY("\t") VARBINARY("\t")]]`)
 	mcmp.AssertMatches(`select b'1001', 0x9 from t1`, `[[VARBINARY("\t") VARBINARY("\t")]]`)
-	mcmp.AssertMatches(`select 1 + b'1001', 2 + 0x9`, `[[UINT64(10) UINT64(11)]]`)
-	mcmp.AssertMatches(`select 1 + b'1001', 2 + 0x9 from t1`, `[[UINT64(10) UINT64(11)]]`)
+	mcmp.AssertMatchesNoCompare(`select 1 + b'1001', 2 + 0x9`, `[[INT64(10) UINT64(11)]]`, `[[UINT64(10) UINT64(11)]]`)
+	mcmp.AssertMatchesNoCompare(`select 1 + b'1001', 2 + 0x9 from t1`, `[[INT64(10) UINT64(11)]]`, `[[UINT64(10) UINT64(11)]]`)
 }
 
 func TestHexVals(t *testing.T) {
