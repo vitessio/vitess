@@ -67,6 +67,8 @@ var (
 		"--lock_tables_timeout", "5s",
 		"--watch_replication_stream",
 		"--enable_replication_reporter",
+		"--enable_semi_sync",
+		"--restore_from_backup",
 		"--serving_state_grace_period", "1s",
 	}
 
@@ -89,13 +91,12 @@ type CompressionDetails struct {
 // LaunchCluster : starts the cluster as per given params.
 func LaunchCluster(t *testing.T, setupType int, streamMode string, stripes int, cDetails *CompressionDetails) {
 	localCluster = cluster.NewCluster(cell, hostname)
+	keyspace := cluster.Keyspace{Name: keyspaceName}
+	shards := []string{shardName}
 
 	// Start topo server
 	err := localCluster.StartTopo()
 	require.NoError(t, err)
-
-	keyspace := cluster.Keyspace{Name: keyspaceName}
-	shards := []string{shardName}
 
 	// Update arguments for xtrabackup
 	if setupType == XtraBackup {
@@ -131,6 +132,10 @@ func LaunchCluster(t *testing.T, setupType int, streamMode string, stripes int, 
 	require.NoError(t, err)
 	localCluster.VtgateProcess.WaitForStatusOfTabletInShard("primary", 1)
 	localCluster.VtgateProcess.WaitForStatusOfTabletInShard("replica", 2)
+
+	vtctldClientProcess := cluster.VtctldClientProcessInstance("localhost", localCluster.VtctldProcess.GrpcPort, localCluster.TmpDirectory)
+	_, err = vtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=semi_sync")
+	require.NoError(t, err)
 
 	primary = localCluster.Keyspaces[0].Shards[0].Vttablets[0]
 	replica1 = localCluster.Keyspaces[0].Shards[0].Vttablets[1]
