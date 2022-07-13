@@ -26,7 +26,7 @@ import (
 
 // TestBackupMysqlctld - tests the backup using mysqlctld.
 func TestBackupMysqlctld(t *testing.T) {
-	backup.TestBackup(t, backup.Mysqlctld, "", 0, nil, nil)
+	backup.TestBackup(t, backup.Mysqlctld, "xbstream", 0, nil, nil)
 }
 
 func TestBackupMysqlctldWithlz4Compression(t *testing.T) {

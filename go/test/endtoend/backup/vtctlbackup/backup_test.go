@@ -24,7 +24,7 @@ import (
 
 // TestBackupMain - main tests backup using vtctl commands
 func TestBackupMain(t *testing.T) {
-	TestBackup(t, Backup, "", 0, nil, nil)
+	TestBackup(t, Backup, "xbstream", 0, nil, nil)
 }
 
 func TestBackupMainWithZstdCompression(t *testing.T) {
