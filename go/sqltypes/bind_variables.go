@@ -77,9 +77,9 @@ func HexValBindVariable(v []byte) *querypb.BindVariable {
 	return ValueBindVariable(NewHexVal(v))
 }
 
-// BitBindVariable converts bytes representing a bit encoded string to a bind var.
-func BitBindVariable(v []byte) *querypb.BindVariable {
-	return ValueBindVariable(NewBitVal(v))
+// BitNumBindVariable converts bytes representing a bit encoded string to a bind var.
+func BitNumBindVariable(v []byte) *querypb.BindVariable {
+	return ValueBindVariable(NewBitNum(v))
 }
 
 // Int8BindVariable converts an int8 to a bind var.
