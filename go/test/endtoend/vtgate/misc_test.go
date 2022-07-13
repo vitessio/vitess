@@ -67,11 +67,14 @@ func TestShowColumns(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	expected := `[[VARCHAR("id") TEXT("bigint(20)") VARCHAR("NO") VARCHAR("PRI") NULL VARCHAR("")] [VARCHAR("idx") TEXT("varchar(50)") VARCHAR("YES") VARCHAR("") NULL VARCHAR("")]]`
-	utils.AssertMatches(t, conn, "show columns from `t5_null_vindex` in `ks`", expected)
-	utils.AssertMatches(t, conn, "SHOW COLUMNS from `t5_null_vindex` in `ks`", expected)
-	utils.AssertMatches(t, conn, "SHOW columns FROM `t5_null_vindex` in `ks`", expected)
-	utils.AssertMatches(t, conn, "SHOW columns FROM `t5_null_vindex` where Field = 'id'", `[[VARCHAR("id") TEXT("bigint(20)") VARCHAR("NO") VARCHAR("PRI") NULL VARCHAR("")]]`)
+	expected57 := `[[VARCHAR("id") TEXT("bigint(20)") VARCHAR("NO") VARCHAR("PRI") NULL VARCHAR("")] [VARCHAR("idx") TEXT("varchar(50)") VARCHAR("YES") VARCHAR("") NULL VARCHAR("")]]`
+	expected80 := `[[VARCHAR("id") BLOB("bigint") VARCHAR("NO") BINARY("PRI") NULL VARCHAR("")] [VARCHAR("idx") BLOB("varchar(50)") VARCHAR("YES") BINARY("") NULL VARCHAR("")]]`
+	utils.AssertMatchesOneOf(t, conn, "show columns from `t5_null_vindex` in `ks`", expected57, expected80)
+	utils.AssertMatchesOneOf(t, conn, "SHOW COLUMNS from `t5_null_vindex` in `ks`", expected57, expected80)
+	utils.AssertMatchesOneOf(t, conn, "SHOW columns FROM `t5_null_vindex` in `ks`", expected57, expected80)
+
+	expected57 = `[[VARCHAR("id") BLOB("bigint") VARCHAR("NO") BINARY("PRI") NULL VARCHAR("")]]`
+	utils.AssertMatchesOneOf(t, conn, "SHOW columns FROM `t5_null_vindex` where Field = 'id'", expected57, expected80)
 }
 
 func TestShowTables(t *testing.T) {
