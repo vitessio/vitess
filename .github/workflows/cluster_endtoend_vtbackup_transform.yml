@@ -15,6 +15,7 @@ jobs:
   build:
     name: Run endtoend tests on Cluster (vtbackup_transform)
     runs-on: ubuntu-20.04
+    timeout-minutes: 30
 
     steps:
     - name: Check out code
