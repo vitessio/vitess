@@ -114,7 +114,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/backup/vtbackup"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "19",
+			"Shard": "vtbackup_transform",
 			"RetryMax": 1,
 			"Tags": ["upgrade_downgrade_backups"]
 		},
@@ -123,7 +123,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/backup/transform"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "19",
+			"Shard": "vtbackup_transform",
 			"RetryMax": 1,
 			"Tags": ["upgrade_downgrade_backups"]
 		},
@@ -147,7 +147,16 @@
 		},
 		"backup_xtrabackup_xbstream": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/backup/xtrabackupstream"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/backup/xtrabackupstream", "-run", "XtrabackupStream"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "xb_backup",
+			"RetryMax": 1,
+			"Tags": []
+		},
+		"backup_xtrabackup_xbstream_lz4": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/backup/xtrabackupstream", "-run", "XtrabackupStreamWithlz4Compression"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "xb_backup",
