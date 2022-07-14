@@ -14,7 +14,7 @@ Map(ctx context.Context, vcursor VCursor, .... ) ....
 ```
 
 This only impacts the users who have added their own vindex implementation. 
-They would be required to change their implementation with these new interface method expectation.
+They would be required to change their implementation with these new interface method expectations.
 
 ### Command-line syntax deprecations
 
