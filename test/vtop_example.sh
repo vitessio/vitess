@@ -255,9 +255,20 @@ function verifyVTOrcSetup() {
 
   # Now that we have set the primary tablet to read only, we know that this will
   # only succeed if VTOrc is able to fix it
-  mysql -e "insert into customer(email) values('newemail@domain.com');"
+  tryInsert
   # We now delete the row because the move tables workflow assertions are not expecting this row to be present
   mysql -e "delete from customer where email = 'newemail@domain.com';"
+}
+
+function tryInsert() {
+  for i in {1..600} ; do
+    mysql -e "insert into customer(email) values('newemail@domain.com');"
+    if [ $? -eq 0 ]; then
+      return
+    fi
+    echo "failed to insert data, retrying (attempt #$i) ..."
+    sleep 1
+  done
 }
 
 # getPrimaryTablet returns the primary tablet
