@@ -1,5 +1,21 @@
 ## Major Changes
 
+### Breaking Change
+
+#### Vindex Implementation
+
+All the vindex interface methods are changed by adding context.Context as the input parameter.
+
+E.g:
+```go
+Map(vcursor VCursor, .... ) .... 
+	To
+Map(ctx context.Context, vcursor VCursor, .... ) ....
+```
+
+This only impact the users who have added their own vindex implementation. 
+They would be required to change their implementation with these new interface method expectation.
+
 ### Command-line syntax deprecations
 
 #### vttablet startup flag deletions
