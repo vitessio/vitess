@@ -15,7 +15,7 @@ jobs:
   build:
     name: Run endtoend tests on Cluster (onlineddl_vrepl_suite) mysql80
     runs-on: ubuntu-20.04
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     steps:
     - name: Check out code
