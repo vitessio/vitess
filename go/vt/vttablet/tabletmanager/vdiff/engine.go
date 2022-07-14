@@ -352,8 +352,6 @@ func (vde *Engine) activeControllerCount(uuid string) int {
 		if ct.uuid == uuid {
 			select {
 			case <-ct.done:
-			case <-time.After(5 * time.Microsecond):
-				cnt++
 			default:
 				cnt++
 			}
