@@ -122,7 +122,7 @@ function printMysqlErrorFiles() {
 
 function insertWithRetry() {
   for i in {1..600} ; do
-    mysql --table < ./delete_commerce_data.sql && mysql --table < ./insert_commerce_data.sql
+    mysql --table < ./delete_commerce_data.sql && mysql --table < ../common/insert_commerce_data.sql
     if [ $? -eq 0 ]; then
       return
     fi
@@ -192,7 +192,7 @@ function get_started() {
 
     insertWithRetry
 
-    assertSelect ./select_commerce_data.sql "commerce" <<EOF
+    assertSelect ../common/select_commerce_data.sql "commerce" <<EOF
 Using commerce
 Customer
 +-------------+--------------------+
@@ -429,7 +429,7 @@ function resharding() {
 
   sleep 10
 
-  assertSelect ./select_customer-80_data.sql "customer/-80" << EOF
+  assertSelect ../common/select_customer-80_data.sql "customer/-80" << EOF
 Using customer/-80
 Customer
 +-------------+--------------------+
@@ -451,7 +451,7 @@ COrder
 +----------+-------------+----------+-------+
 EOF
 
-  assertSelect ./select_customer80-_data.sql "customer/80-" << EOF
+  assertSelect ../common/select_customer80-_data.sql "customer/80-" << EOF
 Using customer/80-
 Customer
 +-------------+----------------+
