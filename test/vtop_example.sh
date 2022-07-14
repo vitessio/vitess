@@ -35,9 +35,9 @@ unset VTROOT # ensure that the examples can run without VTROOT now.
 function checkSemiSyncSetup() {
   for vttablet in $(kubectl get pods --no-headers -o custom-columns=":metadata.name" | grep "vttablet") ; do
     echo "Checking semi-sync in $vttablet"
-    kubectl exec "$vttablet" -c mysqld -- mysql -S "/vt/socket/mysql.sock" -u root -e "show variables like 'rpl_semi_sync_slave_enabled'" | grep "ON"
+    kubectl exec "$vttablet" -c mysqld -- mysql -S "/vt/socket/mysql.sock" -u root -e "show variables like 'rpl_semi_sync_slave_enabled'" | grep "OFF"
     if [ $? -ne 0 ]; then
-      echo "Semi Sync not setup on $vttablet"
+      echo "Semi Sync setup on $vttablet"
       exit 1
     fi
   done
@@ -154,7 +154,7 @@ function get_started() {
     checkPodStatusWithTimeout "example-zone1-vtctld(.*)1/1(.*)Running(.*)"
     checkPodStatusWithTimeout "example-zone1-vtgate(.*)1/1(.*)Running(.*)"
     checkPodStatusWithTimeout "example-etcd(.*)1/1(.*)Running(.*)" 3
-    checkPodStatusWithTimeout "example-vttablet-zone1(.*)3/3(.*)Running(.*)" 3
+    checkPodStatusWithTimeout "example-vttablet-zone1(.*)3/3(.*)Running(.*)" 2
     checkPodStatusWithTimeout "example-zone1-vtadmin(.*)2/2(.*)Running(.*)"
     checkPodStatusWithTimeout "example-commerce-x-x-zone1-vtorc(.*)1/1(.*)Running(.*)"
 
@@ -164,7 +164,7 @@ function get_started() {
     ./pf.sh > /dev/null 2>&1 &
     sleep 5
 
-    waitForKeyspaceToBeServing commerce - 2
+    waitForKeyspaceToBeServing commerce - 1
     sleep 5
 
     applySchemaWithRetry create_commerce_schema.sql commerce drop_all_commerce_tables.sql
@@ -249,22 +249,20 @@ function verifyVtadminSetup() {
 
 # verifyVTOrcSetup verifies that VTOrc is running and repairing things that we mess up
 function verifyVTOrcSetup() {
-  # Stop replication using the vtctld and wait for VTOrc to repair
-  allReplicaTablets=$(getAllReplicaTablets)
-  for replica in $(echo "$allReplicaTablets") ; do
-    vtctlclient StopReplication "$replica"
-  done
-  # Now that we have stopped replication on both the tablets, we know that this will
-  # only succeed if VTOrc is able to fix it since we are running vttablet with disable active reparent
-  # and semi-sync durability policy
+  # Set the primary tablet to readOnly using the vtctld and wait for VTOrc to repair
+  primaryTablet=$(getPrimaryTablet)
+  vtctlclient SetReadOnly "$primaryTablet"
+
+  # Now that we have set the primary tablet to read only, we know that this will
+  # only succeed if VTOrc is able to fix it
   mysql -e "insert into customer(email) values('newemail@domain.com');"
   # We now delete the row because the move tables workflow assertions are not expecting this row to be present
   mysql -e "delete from customer where email = 'newemail@domain.com';"
 }
 
-# getAllReplicaTablets returns the list of all the replica tablets as a space separated list
-function getAllReplicaTablets() {
-  vtctlclient ListAllTablets | grep "replica" | awk '{print $1}' | tr '\n' ' '
+# getPrimaryTablet returns the primary tablet
+function getPrimaryTablet() {
+  vtctlclient ListAllTablets | grep "primary" | awk '{print $1}'
 }
 
 function curlGetRequestWithRetry() {
@@ -313,12 +311,12 @@ function curlPostRequest() {
 function move_tables() {
   echo "Apply 201_customer_tablets.yaml"
   changeImageAndApply 201_customer_tablets.yaml
-  checkPodStatusWithTimeout "example-vttablet-zone1(.*)3/3(.*)Running(.*)" 6
+  checkPodStatusWithTimeout "example-vttablet-zone1(.*)3/3(.*)Running(.*)" 4
 
   killall kubectl
   ./pf.sh > /dev/null 2>&1 &
 
-  waitForKeyspaceToBeServing customer - 2
+  waitForKeyspaceToBeServing customer - 1
 
   sleep 10
 
@@ -386,14 +384,14 @@ function resharding() {
 
   echo "Apply 302_new_shards.yaml"
   changeImageAndApply 302_new_shards.yaml
-  checkPodStatusWithTimeout "example-vttablet-zone1(.*)3/3(.*)Running(.*)" 12
+  checkPodStatusWithTimeout "example-vttablet-zone1(.*)3/3(.*)Running(.*)" 8
 
   killall kubectl
   ./pf.sh > /dev/null 2>&1 &
   sleep 5
 
-  waitForKeyspaceToBeServing customer -80 2
-  waitForKeyspaceToBeServing customer 80- 2
+  waitForKeyspaceToBeServing customer -80 1
+  waitForKeyspaceToBeServing customer 80- 1
 
   echo "Ready to reshard ..."
   sleep 15
@@ -468,9 +466,9 @@ COrder
 EOF
 
   changeImageAndApply 306_down_shard_0.yaml
-  checkPodStatusWithTimeout "example-vttablet-zone1(.*)3/3(.*)Running(.*)" 9
-  waitForKeyspaceToBeServing customer -80 2
-  waitForKeyspaceToBeServing customer 80- 2
+  checkPodStatusWithTimeout "example-vttablet-zone1(.*)3/3(.*)Running(.*)" 6
+  waitForKeyspaceToBeServing customer -80 1
+  waitForKeyspaceToBeServing customer 80- 1
 }
 
 

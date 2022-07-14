@@ -65,7 +65,7 @@ spec:
 
   keyspaces:
   - name: commerce
-    durabilityPolicy: semi_sync
+    durabilityPolicy: none
     turndownPolicy: Immediate
     vitessOrchestrator:
       configSecret:
@@ -85,11 +85,11 @@ spec:
             name: example-cluster-config
             key: init_db.sql
           replication:
-            enforceSemiSync: true
+            enforceSemiSync: false
           tabletPools:
           - cell: zone1
             type: replica
-            replicas: 3
+            replicas: 2
             vttablet:
               extraFlags:
                 disable_active_reparents: "true"
@@ -113,7 +113,7 @@ spec:
                 requests:
                   storage: 10Gi
   - name: customer
-    durabilityPolicy: semi_sync
+    durabilityPolicy: none
     turndownPolicy: Immediate
     partitionings:
     - equal:
@@ -123,11 +123,11 @@ spec:
             name: example-cluster-config
             key: init_db.sql
           replication:
-            enforceSemiSync: true
+            enforceSemiSync: false
           tabletPools:
           - cell: zone1
             type: replica
-            replicas: 3
+            replicas: 2
             vttablet:
               extraFlags:
                 db_charset: utf8mb4
@@ -156,11 +156,11 @@ spec:
             name: example-cluster-config
             key: init_db.sql
           replication:
-            enforceSemiSync: true
+            enforceSemiSync: false
           tabletPools:
           - cell: zone1
             type: replica
-            replicas: 3
+            replicas: 2
             vttablet:
               extraFlags:
                 db_charset: utf8mb4
