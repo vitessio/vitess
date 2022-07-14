@@ -80,11 +80,14 @@ so that compressed files are created with the correct extension. There is no nee
 compressor/decompressor. Please note that if you want the current behavior then you don't need to change anything in these flags.
 You can read more about backup & restore [here] (https://vitess.io/docs/15.0/user-guides/operating-vitess/backup-and-restore/).
 
-Important Note: If you decided to switch from external compressor to built-in compressor at any point in the future. System won't be able to
-restore from current backups due to out-dated value of compression engine in MANIFEST file. The Backups taken with the new built-in values should
-work during restore. For example if you switch from external compressor `some-custom-tool` to built-in `pgzip`, and you try to restore from
-the older backups, then decompression from older backups (which were taken using `some-custom-tool`) will fail, until you have a new backup
-with `pgzip`. Please make sure you have thought out all possible scenarios for restore before transitioning from one compressor value to the others.
+Important Note: If you decided to switch from external compressor to built-in compressor at any point in the future. You might need to do it
+in two steps. 
+- step #1, set `--external-compressor` and `--external-compressor-extension` flag values to empty and change `--builtin-compressor` to desired value.
+- Step #2, after few cycles of backups now set `--external-decompressor` flag value to empty.
+
+The reason we recommend not to change all the values together is because builtin compressor have no way to find out which external decompressor
+being used during the previous backups. Please make sure you have thought out all possible scenarios for restore before transitioning from one
+compressor value to the others.
 
 ### Online DDL changes
 

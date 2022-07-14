@@ -36,6 +36,14 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
+const (
+	PgzipCompressor    = "pgzip"
+	PargzipCompressor  = "pargzip"
+	ZstdCompressor     = "zstd"
+	Lz4Compressor      = "lz4"
+	ExternalCompressor = "external"
+)
+
 var (
 	compressionLevel = flag.Int("compression-level", 1, "what level to pass to the compressor")
 	// switch which compressor/decompressor to use
@@ -49,9 +57,9 @@ var (
 
 	// this is used by getEngineFromExtension() to figure out which engine to use in case the user didn't specify
 	engineExtensions = map[string][]string{
-		".gz":  {"pgzip", "pargzip"},
-		".lz4": {"lz4"},
-		".zst": {"zstd"},
+		".gz":  {PgzipCompressor, PargzipCompressor},
+		".lz4": {Lz4Compressor},
+		".zst": {ZstdCompressor},
 	}
 )
 
@@ -150,21 +158,21 @@ func newExternalDecompressor(ctx context.Context, cmdStr string, reader io.Reade
 
 // This returns a reader that will decompress the underlying provided reader and will use the specified supported engine.
 func newBuiltinDecompressor(engine string, reader io.Reader, logger logutil.Logger) (decompressor io.ReadCloser, err error) {
-	if engine == "pargzip" {
+	if engine == PargzipCompressor {
 		logger.Warningf("engine \"pargzip\" doesn't support decompression, using \"pgzip\" instead")
-		engine = "pgzip"
+		engine = PgzipCompressor
 	}
 
 	switch engine {
-	case "pgzip":
+	case PgzipCompressor:
 		d, err := pgzip.NewReader(reader)
 		if err != nil {
 			return nil, err
 		}
 		decompressor = d
-	case "lz4":
+	case Lz4Compressor:
 		decompressor = ioutil.NopCloser(lz4.NewReader(reader))
-	case "zstd":
+	case ZstdCompressor:
 		d, err := zstd.NewReader(reader)
 		if err != nil {
 			return nil, err
@@ -182,26 +190,26 @@ func newBuiltinDecompressor(engine string, reader io.Reader, logger logutil.Logg
 // This returns a writer that will compress the data using the specified engine before writing to the underlying writer.
 func newBuiltinCompressor(engine string, writer io.Writer, logger logutil.Logger) (compressor io.WriteCloser, err error) {
 	switch engine {
-	case "pgzip":
+	case PgzipCompressor:
 		gzip, err := pgzip.NewWriterLevel(writer, *compressionLevel)
 		if err != nil {
 			return compressor, vterrors.Wrap(err, "cannot create gzip compressor")
 		}
 		gzip.SetConcurrency(*backupCompressBlockSize, *backupCompressBlocks)
 		compressor = gzip
-	case "pargzip":
+	case PargzipCompressor:
 		gzip := pargzip.NewWriter(writer)
 		gzip.ChunkSize = *backupCompressBlockSize
 		gzip.Parallel = *backupCompressBlocks
 		gzip.CompressionLevel = *compressionLevel
 		compressor = gzip
-	case "lz4":
+	case Lz4Compressor:
 		lz4Writer := lz4.NewWriter(writer).WithConcurrency(*backupCompressBlocks)
 		lz4Writer.Header = lz4.Header{
 			CompressionLevel: *compressionLevel,
 		}
 		compressor = lz4Writer
-	case "zstd":
+	case ZstdCompressor:
 		zst, err := zstd.NewWriter(writer, zstd.WithEncoderLevel(zstd.EncoderLevel(*compressionLevel)))
 		if err != nil {
 			return compressor, vterrors.Wrap(err, "cannot create zstd compressor")

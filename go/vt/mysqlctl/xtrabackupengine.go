@@ -190,7 +190,7 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, params BackupPara
 	// is saved in the MANIFEST
 	var compressionEngineValue = *BuiltinCompressor
 	if *ExternalCompressorCmd != "" {
-		compressionEngineValue = "no-value"
+		compressionEngineValue = ExternalCompressor
 	}
 	// JSON-encode and write the MANIFEST
 	bm := &xtraBackupManifest{
@@ -567,16 +567,16 @@ func (be *XtrabackupEngine) extractFiles(ctx context.Context, logger logutil.Log
 			if deCompressionEngine == "" {
 				// For backward compatibility. Incase if Manifest is from N-1 binary
 				// then we assign the default value of compressionEngine.
-				deCompressionEngine = "pgzip"
+				deCompressionEngine = PgzipCompressor
 			}
 			if *ExternalDecompressorCmd != "" {
-				if deCompressionEngine == "no-value" {
+				if deCompressionEngine == ExternalCompressor {
 					deCompressionEngine = *ExternalDecompressorCmd
 				}
 				decompressor, err = newExternalDecompressor(ctx, deCompressionEngine, reader, logger)
 			} else {
-				if deCompressionEngine == "no-value" {
-					return fmt.Errorf("%w %q", errUnsupportedCompressionEngine, "no-value")
+				if deCompressionEngine == ExternalCompressor {
+					return fmt.Errorf("%w %q", errUnsupportedCompressionEngine, ExternalCompressor)
 				}
 				decompressor, err = newBuiltinDecompressor(deCompressionEngine, reader, logger)
 			}
