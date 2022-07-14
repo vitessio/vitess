@@ -15,6 +15,7 @@ jobs:
   build:
     name: Run endtoend tests on Cluster (xb_backup) mysql80
     runs-on: ubuntu-20.04
+    timeout-minutes: 30
 
     steps:
     - name: Check out code
@@ -78,7 +79,7 @@ jobs:
         # install JUnit report formatter
         go install github.com/jstemmer/go-junit-report@latest
 
-        sudo apt-get install percona-server-server percona-xtrabackup-80 lz4
+        sudo apt-get install percona-xtrabackup-80 lz4
 
     - name: Setup launchable dependencies
       if: steps.changes.outputs.end_to_end == 'true'
