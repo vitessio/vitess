@@ -81,8 +81,8 @@ type MetadataManager struct{}
 // This function is semantically equivalent to calling updateMetadataTables
 // followed immediately by upsertLocalMetadata.
 func (m *MetadataManager) PopulateMetadataTables(mysqld MysqlDaemon, localMetadata map[string]string, dbName string) error {
-	log.Infof("Populating _vt.local_metadata table...")
-
+	log.Infof("Populating _vt.local_metadata table... %s", dbName)
+	log.Infof("localMetadata.len %d", len(localMetadata))
 	// Get a non-pooled DBA connection.
 	conn, err := mysqld.GetDbaConnection(context.TODO())
 	if err != nil {
@@ -100,7 +100,7 @@ func (m *MetadataManager) PopulateMetadataTables(mysqld MysqlDaemon, localMetada
 	if err := updateMetadataTables(conn, dbName); err != nil {
 		return err
 	}
-
+	log.Infof("upserting metadata...%d", len(localMetadata))
 	// Populate local_metadata from the passed list of values.
 	return upsertLocalMetadata(conn, localMetadata, dbName)
 }

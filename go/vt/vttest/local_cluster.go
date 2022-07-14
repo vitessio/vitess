@@ -512,6 +512,34 @@ func (db *LocalCluster) Execute(sql []string, dbname string) error {
 	}
 	defer conn.Close()
 
+	_, err = conn.ExecuteFetch("START TRANSACTION", 0, false)
+	if err != nil {
+		return err
+	}
+
+	for _, cmd := range sql {
+		log.Infof("Execute(%s): \"%s\"", dbname, cmd)
+		_, err := conn.ExecuteFetch(cmd, 0, false)
+		if err != nil {
+			return err
+		}
+	}
+
+	_, err = conn.ExecuteFetch("COMMIT", 0, false)
+	return err
+}
+
+// ExecuteWithReadOnlyHandling runs a series of SQL statements on the MySQL instance backing
+// this local cluster. This is provided for debug/introspection purposes;
+// normal cluster access should be performed through the Vitess GRPC interface.
+func (db *LocalCluster) ExecuteWithReadOnlyHandling(sql []string, dbname string) error {
+	params := db.mysql.Params(dbname)
+	conn, err := mysql.Connect(context.Background(), &params)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
 	_, err = conn.ExecuteUnSetSuperReadOnly()
 	if err != nil {
 		return err

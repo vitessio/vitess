@@ -368,9 +368,23 @@ func (vttablet *VttabletProcess) TearDownWithTimeout(timeout time.Duration) erro
 
 // CreateDB creates the database for keyspace
 func (vttablet *VttabletProcess) CreateDB(keyspace string) error {
-	_, _ = vttablet.QueryTablet(fmt.Sprintf("drop database IF EXISTS vt_%s", keyspace), keyspace, false)
-	_, err := vttablet.QueryTablet(fmt.Sprintf("create database IF NOT EXISTS vt_%s", keyspace), keyspace, false)
+	_, _ = vttablet.QueryTabletWithReadOnlyHandling(fmt.Sprintf("drop database IF EXISTS vt_%s", keyspace), keyspace, false)
+	_, err := vttablet.QueryTabletWithReadOnlyHandling(fmt.Sprintf("create database IF NOT EXISTS vt_%s", keyspace), keyspace, false)
 	return err
+}
+
+// QueryTablet lets you execute a query in this tablet and get the result
+func (vttablet *VttabletProcess) QueryTabletWithReadOnlyHandling(query string, keyspace string, useDb bool) (*sqltypes.Result, error) {
+	if !useDb {
+		keyspace = ""
+	}
+	dbParams := NewConnParams(vttablet.DbPort, vttablet.DbPassword, path.Join(vttablet.Directory, "mysql.sock"), keyspace)
+	conn, err := vttablet.conn(&dbParams)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+	return executeQueryWithReadOnlyHandling(conn, query)
 }
 
 // QueryTablet lets you execute a query in this tablet and get the result
@@ -417,6 +431,30 @@ func (vttablet *VttabletProcess) QueryTabletWithDB(query string, dbname string) 
 // executeQuery will retry the query up to 10 times with a small sleep in between each try.
 // This allows the tests to be more robust in the face of transient failures.
 func executeQuery(dbConn *mysql.Conn, query string) (*sqltypes.Result, error) {
+	var (
+		err    error
+		result *sqltypes.Result
+	)
+	retries := 10
+	retryDelay := 1 * time.Second
+	for i := 0; i < retries; i++ {
+		if i > 0 {
+			// We only audit from 2nd attempt and onwards, otherwise this is just too verbose.
+			log.Infof("Executing query %s (attempt %d of %d)", query, (i + 1), retries)
+		}
+		result, err = dbConn.ExecuteFetch(query, 10000, true)
+		if err == nil {
+			break
+		}
+		time.Sleep(retryDelay)
+	}
+
+	return result, err
+}
+
+// executeQuery will retry the query up to 10 times with a small sleep in between each try.
+// This allows the tests to be more robust in the face of transient failures.
+func executeQueryWithReadOnlyHandling(dbConn *mysql.Conn, query string) (*sqltypes.Result, error) {
 	var (
 		err    error
 		result *sqltypes.Result

@@ -299,13 +299,17 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 		// but we will just log them and move on.
 		params.Logger.Infof("initialize schema >> since no valid backup")
 		var schemaErrors []error
-		schemaErrors, _ = initSchema(ctx, params)
+		var metadataError error
+		schemaErrors, metadataError = initSchema(ctx, params)
 		if schemaErrors != nil {
 			log.Infof("Error in executing following schema changes")
 			// TODO: @rameez should we fail if we are not able to initialize schema
 			for err := range schemaErrors {
 				log.Infof("%v", err)
 			}
+		}
+		if metadataError != nil {
+			params.Logger.Errorf("error populating metadata tables: %v. Continuing", metadataError)
 		}
 		// Always return ErrNoBackup
 		return nil, ErrNoBackup

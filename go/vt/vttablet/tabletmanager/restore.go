@@ -147,6 +147,7 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 	// causing the process to be restarted and the restore retried.
 	// Record local metadata values based on the original type.
 	localMetadata := tm.getLocalMetadataValues(originalType)
+	log.Infof("localMetadata.len %d", len(localMetadata))
 
 	keyspace := tablet.Keyspace
 	keyspaceInfo, err := tm.TopoServer.GetKeyspace(ctx, keyspace)
