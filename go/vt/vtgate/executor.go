@@ -999,10 +999,8 @@ func (e *Executor) getPlan(ctx context.Context, vcursor *vcursorImpl, sql string
 		query = sqlparser.String(statement)
 	}
 
-	if logStats != nil {
-		logStats.SQL = comments.Leading + query + comments.Trailing
-		logStats.BindVariables = sqltypes.CopyBindVariables(bindVars)
-	}
+	logStats.SQL = comments.Leading + query + comments.Trailing
+	logStats.BindVariables = sqltypes.CopyBindVariables(bindVars)
 
 	planHash := sha256.New()
 	_, _ = planHash.Write([]byte(vcursor.planPrefixKey(ctx)))
@@ -1010,8 +1008,11 @@ func (e *Executor) getPlan(ctx context.Context, vcursor *vcursorImpl, sql string
 	_, _ = planHash.Write(hack.StringBytes(query))
 	planKey := hex.EncodeToString(planHash.Sum(nil))
 
-	if plan, ok := e.plans.Get(planKey); ok {
-		return plan.(*engine.Plan), nil
+	if sqlparser.CachePlan(statement) && qo.cachePlan() {
+		if plan, ok := e.plans.Get(planKey); ok {
+			logStats.CachedPlan = true
+			return plan.(*engine.Plan), nil
+		}
 	}
 
 	plan, err := planbuilder.BuildFromStmt(query, statement, reservedVars, vcursor, bindVarNeeds, *enableOnlineDDL, *enableDirectDDL)
