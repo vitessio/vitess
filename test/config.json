@@ -93,7 +93,7 @@
 		},
 		"backup": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/backup/vtctlbackup", "-timeout", "30m"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/backup/vtctlbackup", "-timeout", "45m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtctlbackup_sharded_clustertest_heavy",
@@ -111,7 +111,7 @@
 		},
 		"backup_only": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/backup/vtbackup", "-timeout", "15m"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/backup/vtbackup", "-timeout", "30m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtbackup_transform",
@@ -120,7 +120,7 @@
 		},
 		"backup_transform": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/backup/transform"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/backup/transform", "-timeout", "30m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtbackup_transform",
@@ -418,7 +418,7 @@
 		},
 		"sharded": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/sharded"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/sharded", "-timeout", "30m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtctlbackup_sharded_clustertest_heavy",
