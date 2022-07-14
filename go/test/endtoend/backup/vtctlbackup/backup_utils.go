@@ -47,6 +47,7 @@ const (
 	Mysqlctld
 	useXBStream = "--xtrabackup_stream_mode=xbstream"
 	useTar      = "--xtrabackup_stream_mode=tar"
+	timeout     = time.Duration(60 * time.Second)
 )
 
 var (
@@ -304,7 +305,7 @@ func primaryBackup(t *testing.T) {
 	require.NoError(t, err)
 
 	restoreWaitForBackup(t, "replica")
-	err = replica2.VttabletProcess.WaitForTabletStatusesForTimeout([]string{"SERVING"}, 25*time.Second)
+	err = replica2.VttabletProcess.WaitForTabletStatusesForTimeout([]string{"SERVING"}, timeout)
 	require.NoError(t, err)
 
 	// Verify that we have all the new data -- we should have 2 records now...
@@ -369,7 +370,7 @@ func primaryReplicaSameBackup(t *testing.T) {
 
 	// now bring up the other replica, letting it restore from backup.
 	restoreWaitForBackup(t, "replica")
-	err = replica2.VttabletProcess.WaitForTabletStatusesForTimeout([]string{"SERVING"}, 25*time.Second)
+	err = replica2.VttabletProcess.WaitForTabletStatusesForTimeout([]string{"SERVING"}, timeout)
 	require.NoError(t, err)
 
 	// check the new replica has the data
@@ -605,7 +606,7 @@ func vtctlBackup(t *testing.T, tabletType string) {
 	_, err = primary.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test2')", keyspaceName, true)
 	require.NoError(t, err)
 
-	err = replica2.VttabletProcess.WaitForTabletStatusesForTimeout([]string{"SERVING"}, 25*time.Second)
+	err = replica2.VttabletProcess.WaitForTabletStatusesForTimeout([]string{"SERVING"}, timeout)
 	require.NoError(t, err)
 	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 2)
 
@@ -667,7 +668,7 @@ func verifyRestoreTablet(t *testing.T, tablet *cluster.Vttablet, status string) 
 	err := tablet.VttabletProcess.Setup()
 	require.NoError(t, err)
 	if status != "" {
-		err = tablet.VttabletProcess.WaitForTabletStatusesForTimeout([]string{status}, 25*time.Second)
+		err = tablet.VttabletProcess.WaitForTabletStatusesForTimeout([]string{status}, timeout)
 		require.NoError(t, err)
 	}
 	// We restart replication here because semi-sync will not be set correctly on tablet startup since
