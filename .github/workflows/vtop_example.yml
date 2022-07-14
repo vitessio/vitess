@@ -79,4 +79,5 @@ jobs:
         if: steps.changes.outputs.examples == 'true'
         timeout-minutes: 60
         run: |
+          source build.env
           eatmydata -- go run test.go -docker=false -skip-build -print-log -follow -retry=1 vtop_example
