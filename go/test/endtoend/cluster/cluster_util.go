@@ -321,7 +321,7 @@ func GetPasswordUpdateSQL(localCluster *LocalProcessCluster) string {
 					SET PASSWORD FOR 'vt_dba'@'localhost' = 'VtDbaPass';
 					SET PASSWORD FOR 'vt_app'@'localhost' = 'VtAppPass';
 					SET PASSWORD FOR 'vt_allprivs'@'localhost' = 'VtAllprivsPass';
-					SET PASSWORD FOR 'vt_repl'@'localhost' = 'VtReplPass';
+					SET PASSWORD FOR 'vt_repl'@'%' = 'VtReplPass';
 					SET PASSWORD FOR 'vt_filtered'@'localhost' = 'VtFilteredPass';
 					FLUSH PRIVILEGES;
 					`
