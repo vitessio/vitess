@@ -74,7 +74,7 @@ var (
 		"ers_prs_newfeatures_heavy",
 		"15",
 		"vtgate_general_heavy",
-		"19",
+		"vtbackup_transform",
 		"xb_backup",
 		"21",
 		"22",
@@ -179,6 +179,10 @@ func clusterMySQLVersions(clusterName string) mysqlVersions {
 		return []mysqlVersion{mysql80}
 	case clusterName == "xb_backup":
 		return allMySQLVersions
+	case clusterName == "vtctlbackup_sharded_clustertest_heavy":
+		return []mysqlVersion{mysql80}
+	case clusterName == "vtbackup_transform":
+		return []mysqlVersion{mysql80}
 	default:
 		return defaultMySQLVersions
 	}
