@@ -104,6 +104,8 @@ type Insights struct {
 	ResponseTimeThreshold  uint
 	MaxQueriesPerInterval  uint
 	KafkaText              bool // use human-readable pb, for tests and debugging
+	SendRawQueries         bool
+	MaxRawQueryLength      uint
 
 	// state
 	KafkaWriter         *kafka.Writer
@@ -161,6 +163,12 @@ var (
 
 	// insightsKafkaText is true if we should send protobufs message in clear text, for unit tests and debugging
 	insightsKafkaText = flag.Bool("insights_kafka_text", false, "Send Insights messages as plain text")
+
+	// insightsRawQueries is true if we should send raw, unnormalized queries as part of Kafka "Query" messages
+	insightsRawQueries = flag.Bool("insights_raw_queries", false, "Send unnormalized SQL for individually reported queries")
+
+	// insightsRawQueriesMaxLength is the longest string, in bytes, we will send as the RawSql field in a Kafka message
+	insightsRawQueriesMaxLength = flag.Uint("insights_raw_queries_max_length", 8192, "Maximum size for unnormalized SQL")
 )
 
 func initInsights(logger *streamlog.StreamLogger) (*Insights, error) {
@@ -174,12 +182,19 @@ func initInsights(logger *streamlog.StreamLogger) (*Insights, error) {
 		*insightsRowsReadThreshold,
 		*insightsRTThreshold,
 		*insightsMaxQueriesPerInterval,
+		*insightsRawQueriesMaxLength,
 		time.Duration(*insightsFlushInterval)*time.Second,
 		*insightsKafkaText,
+		*insightsRawQueries,
 	)
 }
 
-func initInsightsInner(logger *streamlog.StreamLogger, brokers, publicID, username, password string, bufsize, patternLimit, rowsReadThreshold, responseTimeThreshold, maxQueriesPerInterval uint, interval time.Duration, kafkaText bool) (*Insights, error) {
+func initInsightsInner(logger *streamlog.StreamLogger,
+	brokers, publicID, username, password string,
+	bufsize, patternLimit, rowsReadThreshold, responseTimeThreshold, maxQueriesPerInterval, maxRawQueryLength uint,
+	interval time.Duration,
+	kafkaText, sendRawQueries bool) (*Insights, error) {
+
 	if brokers == "" {
 		return nil, nil
 	}
@@ -200,6 +215,8 @@ func initInsightsInner(logger *streamlog.StreamLogger, brokers, publicID, userna
 		ResponseTimeThreshold:  responseTimeThreshold,
 		MaxQueriesPerInterval:  maxQueriesPerInterval,
 		KafkaText:              kafkaText,
+		SendRawQueries:         sendRawQueries,
+		MaxRawQueryLength:      maxRawQueryLength,
 	}
 	insights.Sender = insights.sendToKafka
 	err := insights.logToKafka(logger)
@@ -583,6 +600,22 @@ func (ii *Insights) makeQueryMessage(ls *LogStats, sql string, tables []string, 
 		Error:                  stringOrNil(ls.ErrorStr()),
 		CommentTags:            tags,
 	}
+	if ii.SendRawQueries && ls.IsNormalized {
+		if ls.StmtType == "INSERT" {
+			if s, err := shortenRawSQL(ls.RawSQL, ii.MaxRawQueryLength); err == nil {
+				obj.RawSql = stringOrNil(s)
+				obj.RawSqlAbbreviation = pbvtgate.Query_SUMMARIZED
+			}
+		}
+		if obj.RawSql == nil { // not insert, or insert that couldn't be summarized
+			if len(ls.RawSQL) > int(ii.MaxRawQueryLength) {
+				obj.RawSql = stringOrNil(efficientlyTruncate(ls.RawSQL, int(ii.MaxRawQueryLength)))
+				obj.RawSqlAbbreviation = pbvtgate.Query_TRUNCATED
+			} else {
+				obj.RawSql = stringOrNil(ls.RawSQL)
+			}
+		}
+	}
 	if ls.Error != nil {
 		obj.Error = stringOrNil(errorsanitizer.NormalizeError(ls.Error.Error()))
 	}
@@ -598,6 +631,89 @@ func (ii *Insights) makeQueryMessage(ls *LogStats, sql string, tables []string, 
 		return nil, err
 	}
 	return ii.makeEnvelope(out, queryTopic)
+}
+
+// efficientlyTruncate truncates a UTF-8 string at a character boundary, <= maxLength bytes long.
+// This function is O(1), since it examines at most four bytes at the end of the string.
+// If the string isn't valid UTF-8, the cut point is undefined and possibly different from
+// safelyTruncate, cutting somewhere in the last four bytes of the string.
+func efficientlyTruncate(str string, maxLength int) string {
+	if len(str) <= maxLength {
+		// short enough already
+		return str
+	}
+
+	if str[maxLength]&0xc0 != 0x80 {
+		// character after the cut isn't a multibyte continuation, so a cut at maxLength is clean
+		return str[:maxLength]
+	}
+
+	str = str[:maxLength]
+	idx := len(str) - 1
+	left := math.MaxInt(maxLength-3, 0)
+
+	// rewind past any multibyte continuation
+	for idx >= left && str[idx]&0xc0 == 0x80 {
+		idx--
+	}
+
+	// rewind past the multibyte initiation
+	if idx >= left && str[idx]&0xc0 == 0xc0 {
+		return str[:idx]
+	}
+
+	// the sequence at the boundary wasn't a valid UTF-8 multibyte sequence, so cut at maxLength
+	return str[:maxLength]
+}
+
+// safelyTruncate truncates a UTF-8 string at a character boundary, <= maxLength bytes long.
+// This function is O(n) in the length of the string.
+func safelyTruncate(str string, maxLength int) string {
+	var lastIdx int
+	for i := range str {
+		if i > maxLength {
+			return str[:lastIdx]
+		}
+		lastIdx = i
+	}
+	if len(str) > maxLength {
+		return str[:lastIdx]
+	}
+	return str
+}
+
+// shortenRawSQL parses and reformulates the SQL statement to be shorter, while retaining more or less the
+// same performance and EXPLAIN plan.  That's better than simply truncating the string, because the result
+// should still be something we can pass to EXPLAIN.
+//
+// So far, the only technique we're using is to strip out all values
+// but the first from INSERT statements.
+func shortenRawSQL(rawSQL string, maxLength uint) (string, error) {
+	stmt, err := sqlparser.Parse(rawSQL)
+	if err != nil {
+		// should never happen since the SQL was already processed
+		return "", err
+	}
+
+	buf := sqlparser.NewTrackedBuffer(func(buf *sqlparser.TrackedBuffer, node sqlparser.SQLNode) {
+		switch node := node.(type) {
+		case sqlparser.Values:
+			if len(node) < 1 {
+				// unlikely, but just in case
+				node.Format(buf)
+			} else {
+				buf.WriteString("values ")
+				node[0].Format(buf)
+			}
+		default:
+			node.Format(buf)
+		}
+	})
+	ret := buf.WriteNode(stmt).String()
+	if len(ret) > int(maxLength) {
+		return "", errors.New("raw SQL string is still too long")
+	}
+	return ret, nil
 }
 
 func (ii *Insights) makeQueryPatternMessage(sql, keyspace string, pa *QueryPatternAggregation) ([]byte, error) {

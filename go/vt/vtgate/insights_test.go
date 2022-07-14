@@ -37,6 +37,7 @@ var (
 type setupOptions struct {
 	bufSize, patternLimit, rowsReadThreshold, responseTimeThreshold, maxPerInterval uint
 	tableString                                                                     string
+	maxRawQuerySize                                                                 uint
 }
 
 func setup(t *testing.T, brokers, publicID, username, password string, options setupOptions) (*Insights, error) {
@@ -53,7 +54,8 @@ func setup(t *testing.T, brokers, publicID, username, password string, options s
 		dfl(options.rowsReadThreshold, 1000),
 		dfl(options.responseTimeThreshold, 1000),
 		dfl(options.maxPerInterval, 100),
-		15*time.Second, true)
+		dfl(options.maxRawQuerySize, 64),
+		15*time.Second, true, true)
 	if insights != nil {
 		t.Cleanup(func() { insights.Drain() })
 	}
@@ -497,10 +499,133 @@ func TestNormalization(t *testing.T) {
 	}
 }
 
+func TestStringTruncation(t *testing.T) {
+	testCases := []struct {
+		in, out string
+	}{
+		{"", ""},
+		{"1234567890", "12345678"},
+		{"1234567😂", "1234567"},
+		{"123456😂", "123456"},
+		{"12345😂", "12345"},
+		{"1234😂", "1234😂"},
+		{"123😂", "123😂"},
+		{"12😂", "12😂"},
+		{"1😂", "1😂"},
+		{"😂", "😂"},
+		{"1234567😂8", "1234567"},
+		{"123456😂7", "123456"},
+		{"12345😂6", "12345"},
+		{"1234😂5", "1234😂"},
+		{"123😂4", "123😂4"},
+		{"12😂3", "12😂3"},
+		{"1😂2", "1😂2"},
+		{"😂1", "😂1"},
+		{"123456\xcf\xcf\xcf\xcf", "123456\xcf\xcf"}, // invalid UTF-8
+		{"123456\x8f\x8f\x8f\x8f", "123456\x8f\x8f"}, // invalid UTF-8
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.in, func(t *testing.T) {
+			op := safelyTruncate(tc.in, 8)
+			assert.Equal(t, tc.out, op)
+			assert.LessOrEqual(t, len(op), 8)
+
+			op = efficientlyTruncate(tc.in, 8)
+			assert.Equal(t, tc.out, op)
+			assert.LessOrEqual(t, len(op), 8)
+		})
+	}
+}
+
+func TestRawQueries(t *testing.T) {
+	insightsTestHelper(t, true, setupOptions{maxRawQuerySize: 32},
+		[]insightsQuery{
+			{sql: "select * from users where id = :vtg1", responseTime: 5 * time.Second,
+				rawSQL: "select * from users where id=7"}, // no change
+			{sql: "select * from users where id = :vtg1 and email = :vtg2", responseTime: 5 * time.Second,
+				rawSQL: "select * from users where id=8 and email='alice@sample.com'"}, // truncates after `id=8 a`
+			{sql: "insert into foo values (:v1,:v2),(:v3,:v4),(:v5,:v6)", responseTime: 5 * time.Second,
+				rawSQL: "insert into foo values (1, 2), (3, 4), (5, 6)"}, // cleanly summarizes
+			{sql: "insert into foo values (:v1,:v2)", responseTime: 5 * time.Second,
+				rawSQL: "insert into foo values ('😂', 'bob')"}, // truncates after `😂', `
+			{sql: "update foo set a = :vtg1 where id = :vtg2", responseTime: 5 * time.Second,
+				rawSQL: "update foo set a=1 where id=7"}, // no change
+			{sql: "update foo set a = :vtg1 where id = :vtg2", responseTime: 5 * time.Second,
+				rawSQL: "update foo set a=1 where id='6😂7890'"}, // trucates after `id='6` without splitting the 😂
+		},
+		[]insightsKafkaExpectation{
+			expect(queryTopic,
+				`normalized_sql:{value:\"select * from users where id = :vtg1\"}`,
+				`raw_sql:{value:\"select * from users where id=7\"}`).butNot("raw_sql_abbreviation"),
+			expect(queryTopic,
+				`normalized_sql:{value:\"select * from users where id = :vtg1 and email = :vtg2\"}`,
+				`raw_sql:{value:\"select * from users where id=8 a\"}`,
+				"raw_sql_abbreviation:TRUNCATED").butNot("alice"),
+			expect(queryTopic,
+				`normalized_sql:{value:\"insert into foo values <values>\"}`,
+				`raw_sql:{value:\"insert into foo values (1, 2)\"}`,
+				"raw_sql_abbreviation:SUMMARIZED").butNot("),", "(3, 4)", "(5, 6)"),
+			expect(queryTopic,
+				`normalized_sql:{value:\"insert into foo values <values>\"}`,
+				`raw_sql:{value:\"insert into foo values ('😂', \"}`,
+				"raw_sql_abbreviation:TRUNCATED").butNot("bob"),
+			expect(queryTopic,
+				`normalized_sql:{value:\"update foo set a = :vtg1 where id = :vtg2\"}`,
+				`raw_sql:{value:\"update foo set a=1 where id=7\"}`).butNot("raw_sql_abbreviation"),
+			expect(queryTopic,
+				`normalized_sql:{value:\"update foo set a = :vtg1 where id = :vtg2\"}`,
+				`raw_sql:{value:\"update foo set a=1 where id='6\"}`,
+				"raw_sql_abbreviation:TRUNCATED").butNot("67890"),
+			expect(queryStatsBundleTopic).count(4),
+		})
+}
+
+func TestRawQueryShortening(t *testing.T) {
+	testCases := []struct {
+		input, output, errStr string
+		limit                 uint
+	}{
+		{
+			input:  "select * from users",
+			output: "select * from users",
+			limit:  64,
+		},
+		{
+			input:  "select * from users",
+			errStr: "raw SQL string is still too long",
+			limit:  8,
+		},
+		{
+			input:  "insert into users values (1, 'Alice'), (2, 'Bob'), (3, 'Carol')",
+			output: "insert into users values (1, 'Alice')",
+			limit:  64,
+		},
+		{
+			input:  "insert into users values (1, 'Alice'), (2, 'Bob'), (3, 'Carol')",
+			errStr: "raw SQL string is still too long",
+			limit:  8,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.input, func(t *testing.T) {
+			op, err := shortenRawSQL(tc.input, tc.limit)
+			assert.Equal(t, tc.output, op)
+			if tc.errStr != "" {
+				require.Error(t, err)
+				assert.Equal(t, tc.errStr, err.Error())
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
 type insightsQuery struct {
-	sql, error   string
-	responseTime time.Duration
-	rowsRead     int
+	sql, error, rawSQL string
+	responseTime       time.Duration
+	rowsRead           int
 
 	// insightsTestHelper sets ls.IsNormalized to false.  Set normalizedError=true to override this, e.g., to
 	// simulate an error that occurs after query parsing has succeeded.
@@ -536,6 +661,9 @@ func insightsTestHelper(t *testing.T, mockTimer bool, options setupOptions, quer
 	t.Helper()
 	insights, err := setup(t, "localhost:1234", "mumblefoo", "", "", options)
 	require.NoError(t, err)
+	if options.maxRawQuerySize > 0 {
+		insights.MaxRawQueryLength = options.maxRawQuerySize
+	}
 	insights.Sender = func(buf []byte, topic, key string) error {
 		assert.Contains(t, string(buf), "mumblefoo", "database branch public ID not present in message body")
 		assert.True(t, strings.HasPrefix(key, "mumblefoo/"), "key has unexpected form %q", key)
@@ -564,6 +692,7 @@ func insightsTestHelper(t *testing.T, mockTimer bool, options setupOptions, quer
 	for _, q := range queries {
 		ls := &LogStats{
 			SQL:          q.sql,
+			RawSQL:       q.rawSQL,
 			IsNormalized: q.error == "" || q.normalizedError,
 			StartTime:    now.Add(-q.responseTime),
 			EndTime:      now,
