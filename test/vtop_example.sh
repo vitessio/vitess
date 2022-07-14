@@ -70,6 +70,15 @@ function checkPodStatusWithTimeout() {
   exit 1
 }
 
+# changeImageAndApply changes the vitess images in the yaml configuration
+# to the ones produced down below before applying them
+function changeImageAndApply() {
+  file=$1
+  sed 's/vitess\/lite:.*/vitess\/lite:pr/g' "$file" | sed 's/vitess\/vtadmin:.*/vitess\/vtadmin:pr/g' > temp.yaml
+  kubectl apply -f temp.yaml
+  rm temp.yaml
+}
+
 function waitForKeyspaceToBeServing() {
   ks=$1
   shard=$2
@@ -137,11 +146,11 @@ function assertSelect() {
 # get_started:
 function get_started() {
     echo "Apply operator.yaml"
-    kubectl apply -f "operator.yaml"
+    changeImageAndApply "operator.yaml"
     checkPodStatusWithTimeout "vitess-operator(.*)1/1(.*)Running(.*)"
 
     echo "Apply 101_initial_cluster.yaml"
-    kubectl apply -f "101_initial_cluster.yaml"
+    changeImageAndApply "101_initial_cluster.yaml"
     checkPodStatusWithTimeout "example-zone1-vtctld(.*)1/1(.*)Running(.*)"
     checkPodStatusWithTimeout "example-zone1-vtgate(.*)1/1(.*)Running(.*)"
     checkPodStatusWithTimeout "example-etcd(.*)1/1(.*)Running(.*)" 3
@@ -303,7 +312,7 @@ function curlPostRequest() {
 
 function move_tables() {
   echo "Apply 201_customer_tablets.yaml"
-  kubectl apply -f 201_customer_tablets.yaml > /dev/null
+  changeImageAndApply 201_customer_tablets.yaml
   checkPodStatusWithTimeout "example-vttablet-zone1(.*)3/3(.*)Running(.*)" 6
 
   killall kubectl
@@ -376,7 +385,7 @@ function resharding() {
   sleep 4
 
   echo "Apply 302_new_shards.yaml"
-  kubectl apply -f 302_new_shards.yaml
+  changeImageAndApply 302_new_shards.yaml
   checkPodStatusWithTimeout "example-vttablet-zone1(.*)3/3(.*)Running(.*)" 12
 
   killall kubectl
@@ -458,7 +467,7 @@ COrder
 +----------+-------------+----------+-------+
 EOF
 
-  kubectl apply -f 306_down_shard_0.yaml
+  changeImageAndApply 306_down_shard_0.yaml
   checkPodStatusWithTimeout "example-vttablet-zone1(.*)3/3(.*)Running(.*)" 9
   waitForKeyspaceToBeServing customer -80 2
   waitForKeyspaceToBeServing customer 80- 2
@@ -466,11 +475,11 @@ EOF
 
 
 # Build the docker image for vitess/lite using the local code
-docker build -f docker/lite/Dockerfile -t vitess/lite:latest .
+docker build -f docker/lite/Dockerfile -t vitess/lite:pr .
 # Build the docker image for vitess/vtadmin using the local code
-docker build -f docker/base/Dockerfile -t vitess/base:latest .
-docker build -f docker/k8s/Dockerfile -t vitess/k8s:latest .
-docker build -f docker/k8s/vtadmin/Dockerfile -t vitess/vtadmin:latest .
+docker build -f docker/base/Dockerfile -t vitess/base:pr .
+docker build -f docker/k8s/Dockerfile --build-arg VT_BASE_VER=pr -t vitess/k8s:pr .
+docker build -f docker/k8s/vtadmin/Dockerfile --build-arg VT_BASE_VER=pr -t vitess/vtadmin:pr .
 
 # Print the docker images available
 docker image ls
@@ -478,8 +487,8 @@ docker image ls
 echo "Creating Kind cluster"
 kind create cluster --wait 30s --name kind
 echo "Loading docker images into Kind cluster"
-kind load docker-image vitess/lite:latest --name kind
-kind load docker-image vitess/vtadmin:latest --name kind
+kind load docker-image vitess/lite:pr --name kind
+kind load docker-image vitess/vtadmin:pr --name kind
 
 cd "./examples/operator"
 killall kubectl

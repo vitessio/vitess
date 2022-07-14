@@ -17,14 +17,6 @@ spec:
     mysqld:
       mysql56Compatible: vitess/lite:latest
     mysqldExporter: prom/mysqld-exporter:v0.11.0
-  imagePullPolicies:
-    vtctld: IfNotPresent
-    vtadmin: IfNotPresent
-    vtgate: IfNotPresent
-    vttablet: IfNotPresent
-    vtbackup: IfNotPresent
-    vtorc: IfNotPresent
-    mysqld: IfNotPresent
   cells:
   - name: zone1
     gateway:
