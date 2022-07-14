@@ -13,6 +13,7 @@ jobs:
   build:
     name: Run endtoend tests on {{.Name}}
     {{if .Ubuntu20}}runs-on: ubuntu-20.04{{else}}runs-on: ubuntu-18.04{{end}}
+    timeout-minutes: 45
 
     steps:
     - name: Check out code
