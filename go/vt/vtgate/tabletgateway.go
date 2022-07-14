@@ -108,7 +108,7 @@ func NewTabletGateway(ctx context.Context, hc discovery.HealthCheck, serv srvtop
 		statusAggregators: make(map[string]*TabletStatusAggregator),
 	}
 	gw.setupBuffering(ctx)
-	gw.QueryService = queryservice.Wrap(queryservice.Wrap(nil, gw.withRetry), gw.withShardError)
+	gw.QueryService = queryservice.Wrap(nil, gw.withRetry)
 	return gw
 }
 
@@ -219,6 +219,9 @@ func (gw *TabletGateway) CacheStatus() TabletCacheStatusList {
 // the middle of a transaction. While returning the error check if it maybe a result of
 // a resharding event, and set the re-resolve bit and let the upper layers
 // re-resolve and retry.
+//
+// withRetry also adds shard information to errors returned from the inner QueryService, so
+// withShardError should not be combined with withRetry.
 func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, _ queryservice.QueryService,
 	_ string, inTransaction bool, inner func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService) (bool, error)) error {
 	// for transactions, we connect to a specific tablet instead of letting gateway choose one
@@ -326,7 +329,7 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 		}
 		break
 	}
-	return err
+	return NewShardError(err, target)
 }
 
 // withShardError adds shard information to errors returned from the inner QueryService.
