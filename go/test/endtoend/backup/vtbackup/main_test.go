@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path"
 	"testing"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -37,7 +38,7 @@ var (
 	hostname         = "localhost"
 	keyspaceName     = "ks"
 	shardName        = "0"
-	dbPassword       = ""
+	dbPassword       = "VtDbaPass"
 	shardKsName      = fmt.Sprintf("%s/%s", keyspaceName, shardName)
 	dbCredentialFile string
 	commonTabletArg  = []string{
@@ -83,6 +84,21 @@ func TestMain(m *testing.M) {
 			return 1, err
 		}
 
+		// Create a new init_db.sql file that sets up passwords for all users.
+		// Then we use a db-credentials-file with the passwords.
+		dbCredentialFile = cluster.WriteDbCredentialToTmp(localCluster.TmpDirectory)
+		initDb, _ := os.ReadFile(path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"))
+		sql := string(initDb)
+		newInitDBFile = path.Join(localCluster.TmpDirectory, "init_db_with_passwords.sql")
+		sql = sql + cluster.GetPasswordUpdateSQL(localCluster)
+		err = os.WriteFile(newInitDBFile, []byte(sql), 0666)
+		if err != nil {
+			return 1, err
+		}
+
+		extraArgs := []string{"--db-credentials-file", dbCredentialFile}
+		commonTabletArg = append(commonTabletArg, "--db-credentials-file", dbCredentialFile)
+
 		primary = localCluster.NewVttabletInstance("replica", 0, "")
 		replica1 = localCluster.NewVttabletInstance("replica", 0, "")
 		replica2 = localCluster.NewVttabletInstance("replica", 0, "")
@@ -99,6 +115,7 @@ func TestMain(m *testing.M) {
 
 			tablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, localCluster.TmpDirectory)
 			tablet.MysqlctlProcess.InitDBFile = newInitDBFile
+			tablet.MysqlctlProcess.ExtraArgs = extraArgs
 			proc, err := tablet.MysqlctlProcess.StartProcess()
 			if err != nil {
 				return 1, err
