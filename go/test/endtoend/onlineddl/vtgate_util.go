@@ -133,6 +133,17 @@ func CheckCompleteMigration(t *testing.T, vtParams *mysql.ConnParams, shards []c
 	}
 }
 
+// CheckCompleteAllMigrations completes all pending migrations and expect number of affected rows
+// A negative value for expectCount indicates "don't care, no need to check"
+func CheckCompleteAllMigrations(t *testing.T, vtParams *mysql.ConnParams, expectCount int) {
+	completeQuery := "alter vitess_migration complete all"
+	r := VtgateExecQuery(t, vtParams, completeQuery, "")
+
+	if expectCount >= 0 {
+		assert.Equal(t, expectCount, int(r.RowsAffected))
+	}
+}
+
 // CheckCancelAllMigrations cancels all pending migrations and expect number of affected rows
 // A negative value for expectCount indicates "don't care, no need to check"
 func CheckCancelAllMigrations(t *testing.T, vtParams *mysql.ConnParams, expectCount int) {
