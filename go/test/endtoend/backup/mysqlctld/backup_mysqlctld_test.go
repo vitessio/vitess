@@ -35,7 +35,7 @@ func TestBackupMysqlctldWithlz4Compression(t *testing.T) {
 		BuiltinCompressor: "lz4",
 	}
 
-	backup.TestBackup(t, backup.Mysqlctld, "", 0, cDetails, []string{"TestReplicaBackup", "TestPrimaryBackup"})
+	backup.TestBackup(t, backup.Mysqlctld, "xbstream", 0, cDetails, []string{"TestReplicaBackup", "TestPrimaryBackup"})
 }
 
 func setDefaultCompressionFlag() {

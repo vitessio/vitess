@@ -35,7 +35,7 @@ func TestBackupMainWithZstdCompression(t *testing.T) {
 		ExternalDecompressorCmd: "zstd -d",
 	}
 
-	TestBackup(t, Backup, "", 0, cDetails, []string{"TestReplicaBackup", "TestPrimaryBackup"})
+	TestBackup(t, Backup, "xbstream", 0, cDetails, []string{"TestReplicaBackup", "TestPrimaryBackup"})
 }
 
 func setDefaultCompressionFlag() {
