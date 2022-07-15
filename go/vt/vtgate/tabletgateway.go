@@ -160,7 +160,8 @@ func (gw *TabletGateway) setupBuffering(ctx context.Context) {
 
 // QueryServiceByAlias satisfies the Gateway interface
 func (gw *TabletGateway) QueryServiceByAlias(alias *topodatapb.TabletAlias, target *querypb.Target) (queryservice.QueryService, error) {
-	return gw.hc.TabletConnection(alias, target)
+	qs, err := gw.hc.TabletConnection(alias, target)
+	return queryservice.Wrap(qs, gw.withShardError), NewShardError(err, target)
 }
 
 // RegisterStats registers the stats to export the lag since the last refresh
@@ -227,6 +228,9 @@ func (gw *TabletGateway) CacheStatus() TabletCacheStatusList {
 // the middle of a transaction. While returning the error check if it maybe a result of
 // a resharding event, and set the re-resolve bit and let the upper layers
 // re-resolve and retry.
+//
+// withRetry also adds shard information to errors returned from the inner QueryService, so
+// withShardError should not be combined with withRetry.
 func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, _ queryservice.QueryService,
 	_ string, inTransaction bool, inner func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService) (bool, error)) error {
 	// for transactions, we connect to a specific tablet instead of letting gateway choose one
@@ -334,6 +338,13 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 		}
 		break
 	}
+	return NewShardError(err, target)
+}
+
+// withShardError adds shard information to errors returned from the inner QueryService.
+func (gw *TabletGateway) withShardError(ctx context.Context, target *querypb.Target, conn queryservice.QueryService,
+	_ string, _ bool, inner func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService) (bool, error)) error {
+	_, err := inner(ctx, target, conn)
 	return NewShardError(err, target)
 }
 
