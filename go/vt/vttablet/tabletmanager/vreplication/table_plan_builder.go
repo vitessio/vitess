@@ -776,9 +776,18 @@ func (tpb *tablePlanBuilder) generateUpdateStatement() *sqlparser.ParsedQuery {
 		switch cexpr.operation {
 		case opExpr:
 			bvf.mode = bvAfter
-			if cexpr.colType == querypb.Type_JSON {
+			switch cexpr.colType {
+			case querypb.Type_JSON:
 				buf.Myprintf("convert(%v using utf8mb4)", cexpr.expr)
-			} else {
+			case querypb.Type_DATETIME:
+				sourceTZ := tpb.source.SourceTimeZone
+				targetTZ := tpb.source.TargetTimeZone
+				if sourceTZ != "" && targetTZ != "" {
+					buf.Myprintf("convert_tz(%v, '%s', '%s')", cexpr.expr, sourceTZ, targetTZ)
+				} else {
+					buf.Myprintf("%v", cexpr.expr)
+				}
+			default:
 				buf.Myprintf("%v", cexpr.expr)
 			}
 		case opCount:

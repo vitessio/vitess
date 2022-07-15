@@ -50,6 +50,17 @@
 					"column_bytes": "1,7",
 					"column_vindex": "numeric,xxhash"
 				}
+			},
+			"lkp_msac_vdx": {
+				"type": "lookup_hash_unique",
+				"params": {
+					"table": "lkp_idx",
+					"from": "lkp",
+					"to": "id",
+					"multi_shard_autocommit": "true",
+					"batch_lookup": "true"
+				},
+				"owner": "member"
 			}
 		},
 		"tables": {
@@ -137,6 +148,26 @@
 					{
 						"columns": ["regionId","userId"],
 						"name": "multicol_vdx"
+					}
+				]
+			},
+			"member": {
+				"column_vindexes": [
+					{
+						"column": "id",
+						"name": "hash"
+					},
+					{
+						"column": "lkp",
+						"name": "lkp_msac_vdx"
+					}
+				]
+			},
+			"lkp_idx": {
+				"column_vindexes": [
+					{
+						"column": "lkp",
+						"name": "md5"
 					}
 				]
 			}

@@ -16,6 +16,12 @@ The following VTTablet flags were deprecated in 7.0. They have now been deleted
 #### vttablet startup flag deprecations
 - --enable-query-plan-field-caching is now deprecated. It will be removed in v16.
 
+### New command line flags and behavior
+
+#### vtctl GetSchema --table-schema-only
+
+The new flag `--table-schema-only` skips columns introspection. `GetSchema` only returns general schema analysis, and specifically it includes the `CREATE TABLE|VIEW` statement in `schema` field.
+
 ### New Syntax
 
 ### VDiff2
@@ -95,6 +101,16 @@ All Online DDL migrations using the `vitess` strategy are now eligible to run co
 
 The main use case is to run multiple concurrent migrations, all with `--postpone-completion`. All table-copy operations will run sequentially, but no migration will actually cut-over, and eventually all migration will be `ready_to_complete`, continuously tailing the binary logs and keeping up-to-date. A quick and iterative `ALTER VITESS_MIGRATION '...' COMPLETE` sequence of commands will cut-over all migrations _closely together_ (though not atomically together).
 
+#### New syntax
+
+The following is now supported:
+
+```sql
+ALTER VITESS_MIGRATION COMPLETE ALL
+```
+
+This works on all pending migrations (`queued`, `ready`, `running`) and internally issues a `ALTER VITESS_MIGRATION '<uuid>' COMPLETE` for each one. The command is useful for completing multiple concurrent migrations (see above) that are open ended (`--postpone-completion`).
+
 ### Tablet throttler
 
 #### API changes
@@ -116,3 +132,10 @@ $ curl -s http://127.0.0.1:15100/debug/vars | jq . | grep Throttler
   "ThrottlerProbesLatency": 355523,
   "ThrottlerProbesTotal": 74,
 ```
+
+### Mysql Compatibility
+
+#### Lookup Vindexes
+
+Added new parameter `multi_shard_autocommit` to lookup vindex definition in vschema, if enabled will send lookup vindex dml query as autocommit to all shards
+This is slighly different from `autocommit` parameter where the query is sent in its own transaction separate from the ongoing transaction if any i.e. begin -> lookup query execs -> commit/rollback
