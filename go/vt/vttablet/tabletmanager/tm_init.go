@@ -419,6 +419,7 @@ func (tm *TabletManager) initSchema(ctx context.Context,
 	localMetadata map[string]string,
 	dbName string,
 	metadataManager *mysqlctl.MetadataManager) ([]error, error) {
+
 	// get a dba connection
 	conn, err := mysqld.GetDbaConnection(ctx)
 	if err != nil {
@@ -437,8 +438,7 @@ func (tm *TabletManager) initSchema(ctx context.Context,
 		}
 	}()
 
-	// execute all the schema changes.
-	errors := mysql.SchemaInitializer.InitializeSchema(conn.Conn, false)
+	errors := mysql.SchemaInitializer.InitializeSchema(conn.Conn, false, true)
 
 	log.Infof("Restore: populating local_metadata")
 	// TODO: @rameez. Should I do change of introducing flag for InitPopulateMetadata in this PR.
@@ -833,12 +833,16 @@ func (tm *TabletManager) handleRestore(ctx context.Context) (bool, error) {
 	// but we will just log them and move on.
 	log.Infof("initialize schema >> handle restore loop end")
 	var schemaErrors []error
-	schemaErrors, _ = tm.initSchema(ctx, tm.MysqlDaemon, nil, topoproto.TabletDbName(tablet), nil)
+	var metadataError error
+	schemaErrors, metadataError = tm.initSchema(ctx, tm.MysqlDaemon, nil, topoproto.TabletDbName(tablet), nil)
 	if schemaErrors != nil {
 		log.Infof("Error in executing following schema changes")
 		for err := range schemaErrors {
 			log.Infof("%v", err)
 		}
+	}
+	if metadataError != nil {
+		return false, vterrors.Wrap(metadataError, "failed to -init_populate_metadata")
 	}
 	return false, nil
 }

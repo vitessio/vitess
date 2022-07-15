@@ -426,7 +426,7 @@ func initSchema(ctx context.Context, params RestoreParams) ([]error, error) {
 
 	metadataManager := &MetadataManager{}
 	// execute all the schema changes.
-	errors := mysql.SchemaInitializer.InitializeSchema(conn.Conn, false)
+	errors := mysql.SchemaInitializer.InitializeSchema(conn.Conn, false, true)
 
 	params.Logger.Infof("Restore: populating local_metadata")
 	// TODO: @rameez. Should I do change of introducing flag for InitPopulateMetadata in this PR.

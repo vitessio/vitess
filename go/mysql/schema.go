@@ -44,8 +44,7 @@ const (
 	CreateVTDatabase = `CREATE DATABASE IF NOT EXISTS _vt`
 
 	// CreateSchemaCopyTable query creates schemacopy table in _vt schema.
-	CreateSchemaCopyTable = `
-CREATE TABLE if not exists _vt.schemacopy (
+	CreateSchemaCopyTable = `CREATE TABLE if not exists _vt.schemacopy (
 	table_schema varchar(64) NOT NULL,
 	table_name varchar(64) NOT NULL,
 	column_name varchar(64) NOT NULL,

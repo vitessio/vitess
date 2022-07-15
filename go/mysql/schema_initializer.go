@@ -57,7 +57,7 @@ func (si *schemaInitializer) SetSuperReadOnlyUser(conn *Conn) error {
 	log.Infof("%s", setSuperUser)
 	// setting super_read_only to true, given it was set during tm_init.start()
 	if _, err = conn.ExecuteFetch(setSuperUser, 0, false); err != nil {
-		log.Warningf("SetSuperReadOnly(true) failed during revert: %v", err)
+		log.Warningf("SetSuperReadOnly(true) failed during schema initialization: %v", err)
 	}
 
 	return err
@@ -69,7 +69,7 @@ func (si *schemaInitializer) UnsetSuperReadOnlyUser(conn *Conn) error {
 	// setting super_read_only to true, given it was set during tm_init.start()
 	log.Infof("%s", unSetSuperUser)
 	if _, err = conn.ExecuteFetch(unSetSuperUser, 0, false); err != nil {
-		log.Warningf("SetSuperReadOnly(true) failed during revert: %v", err)
+		log.Warningf("SetSuperReadOnly(true) failed schema initialization: %v", err)
 	}
 	return err
 }
@@ -100,7 +100,7 @@ func (si *schemaInitializer) RegisterSchemaInitializer(name string, initFunc fun
 }
 
 // TODO do we need context here
-func (si *schemaInitializer) InitializeSchema(conn *Conn, disableSuperReadOnly bool) []error {
+func (si *schemaInitializer) InitializeSchema(conn *Conn, disableSuperReadOnly bool, disableReplication bool) []error {
 	log.Infof("run all mutation")
 	si.mu.Lock()
 	defer si.mu.Unlock()
@@ -117,9 +117,11 @@ func (si *schemaInitializer) InitializeSchema(conn *Conn, disableSuperReadOnly b
 		}()
 	}
 
-	if _, err := conn.ExecuteFetch(replicationDisable, 0, false); err != nil {
-		log.Infof("error in disabling replication %s", err)
-		return []error{err}
+	if disableReplication {
+		if _, err := conn.ExecuteFetch(replicationDisable, 0, false); err != nil {
+			log.Infof("error in disabling replication %s", err)
+			return []error{err}
+		}
 	}
 
 	var errors []error

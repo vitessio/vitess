@@ -498,7 +498,7 @@ func (db *LocalCluster) createDatabases() error {
 			sql = append(sql, fmt.Sprintf("create database `%s`", dbname))
 		}
 	}
-	return db.Execute(sql, "")
+	return db.ExecuteWithReadOnlyHandling(sql, "")
 }
 
 // Execute runs a series of SQL statements on the MySQL instance backing

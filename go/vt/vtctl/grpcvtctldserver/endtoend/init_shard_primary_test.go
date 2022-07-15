@@ -43,21 +43,16 @@ func TestInitShardPrimary(t *testing.T) {
 	tmc := tmclient.NewTabletManagerClient()
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmc)
 
-	primaryDb := fakesqldb.New(t)
-	primaryDb.AddQuery("create database if not exists `vt_test_keyspace`", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
+	primaryDb := createDb(t)
+	replicaDb1 := createDb(t)
+	replicaDb2 := createDb(t)
 
 	tablet1 := testlib.NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_PRIMARY, primaryDb)
-	tablet2 := testlib.NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, nil)
-	tablet3 := testlib.NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, nil)
+	tablet2 := testlib.NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, replicaDb1)
+	tablet3 := testlib.NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, replicaDb2)
 
 	tablet1.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"FAKE RESET ALL REPLICATION",
-		"CREATE DATABASE IF NOT EXISTS _vt",
-		"SUBCREATE TABLE IF NOT EXISTS _vt.reparent_journal",
-		"ALTER TABLE _vt.reparent_journal CHANGE COLUMN master_alias primary_alias VARBINARY(32) NOT NULL",
-		"CREATE DATABASE IF NOT EXISTS _vt",
-		"SUBCREATE TABLE IF NOT EXISTS _vt.reparent_journal",
-		"ALTER TABLE _vt.reparent_journal CHANGE COLUMN master_alias primary_alias VARBINARY(32) NOT NULL",
 		"SUBINSERT INTO _vt.reparent_journal (time_created_ns, action_name, primary_alias, replication_position) VALUES",
 	}
 
@@ -102,21 +97,16 @@ func TestInitShardPrimaryNoFormerPrimary(t *testing.T) {
 	tmc := tmclient.NewTabletManagerClient()
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmc)
 
-	primaryDb := fakesqldb.New(t)
-	primaryDb.AddQuery("create database if not exists `vt_test_keyspace`", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
+	primaryDb := createDb(t)
+	replicaDb1 := createDb(t)
+	replicaDb2 := createDb(t)
 
 	tablet1 := testlib.NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_REPLICA, primaryDb)
-	tablet2 := testlib.NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, nil)
-	tablet3 := testlib.NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, nil)
+	tablet2 := testlib.NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, replicaDb1)
+	tablet3 := testlib.NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, replicaDb2)
 
 	tablet1.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"FAKE RESET ALL REPLICATION",
-		"CREATE DATABASE IF NOT EXISTS _vt",
-		"SUBCREATE TABLE IF NOT EXISTS _vt.reparent_journal",
-		"ALTER TABLE _vt.reparent_journal CHANGE COLUMN master_alias primary_alias VARBINARY(32) NOT NULL",
-		"CREATE DATABASE IF NOT EXISTS _vt",
-		"SUBCREATE TABLE IF NOT EXISTS _vt.reparent_journal",
-		"ALTER TABLE _vt.reparent_journal CHANGE COLUMN master_alias primary_alias VARBINARY(32) NOT NULL",
 		"SUBINSERT INTO _vt.reparent_journal (time_created_ns, action_name, primary_alias, replication_position) VALUES",
 	}
 
@@ -163,4 +153,30 @@ func TestInitShardPrimaryNoFormerPrimary(t *testing.T) {
 	tablet1PostInit, err := ts.GetTablet(context.Background(), tablet1.Tablet.Alias)
 	require.NoError(t, err)
 	assert.Equal(t, topodatapb.TabletType_PRIMARY, tablet1PostInit.Type)
+}
+
+func createDb(t *testing.T) *fakesqldb.DB {
+	primaryDb := fakesqldb.New(t)
+	primaryDb.AddQuery("create database if not exists `vt_test_keyspace`", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
+	primaryDb.AddQuery("SET GLOBAL super_read_only='OFF'", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
+	primaryDb.AddQuery("SET @@session.sql_log_bin = 0", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
+	primaryDb.AddQuery("SET GLOBAL super_read_only='ON'", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
+	primaryDb.AddQuery("CREATE DATABASE IF NOT EXISTS _vt", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
+	primaryDb.AddQueryPattern("CREATE TABLE IF NOT EXISTS _vt.local_metadata.*", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
+	primaryDb.AddQueryPattern("ALTER TABLE _vt.vreplication .*", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
+	primaryDb.AddQueryPattern("ALTER TABLE _vt.local_metadata.*", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
+	primaryDb.AddQueryPattern("CREATE TABLE IF NOT EXISTS _vt.shard_metadata.*", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
+	primaryDb.AddQueryPattern("ALTER TABLE _vt.shard_metadata.*", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
+	primaryDb.AddQuery("DROP TABLE IF EXISTS _vt.blp_checkpoint", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
+	primaryDb.AddQueryPattern("CREATE TABLE IF NOT EXISTS _vt.vreplication.*", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
+	primaryDb.AddQueryPattern("create table if not exists _vt.resharding_journal.*", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
+	primaryDb.AddQueryPattern("create table if not exists _vt.copy_state.*", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
+	primaryDb.AddQueryPattern("CREATE TABLE IF NOT EXISTS _vt.schema_migrations.*", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
+	primaryDb.AddQueryPattern("SELECT.*", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
+	primaryDb.AddQueryPattern("ALTER TABLE _vt.schema_migrations.*", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
+	primaryDb.AddQueryPattern("CREATE TABLE IF NOT EXISTS _vt.reparent_journal.*", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
+	primaryDb.AddQueryPattern("CREATE TABLE if not exists _vt.schemacopy.*", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
+	primaryDb.AddQueryPattern("ALTER TABLE _vt.reparent_journal.*", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
+	primaryDb.AddQuery("USE `vt_test_keyspace`", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
+	return primaryDb
 }

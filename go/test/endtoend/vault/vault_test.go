@@ -269,17 +269,17 @@ func initializeClusterLate(t *testing.T) {
 	for _, tablet := range []*cluster.Vttablet{primary, replica} {
 		for _, user := range mysqlUsers {
 			query := fmt.Sprintf("ALTER USER '%s'@'%s' IDENTIFIED BY '%s';", user, hostname, mysqlPassword)
-			_, err = tablet.VttabletProcess.QueryTablet(query, keyspace.Name, false)
+			_, err = tablet.VttabletProcess.QueryTabletWithReadOnlyHandling(query, keyspace.Name, false)
 			// Reset after the first ALTER, or we lock ourselves out.
 			tablet.VttabletProcess.DbPassword = mysqlPassword
 			if err != nil {
 				query = fmt.Sprintf("ALTER USER '%s'@'%%' IDENTIFIED BY '%s';", user, mysqlPassword)
-				_, err = tablet.VttabletProcess.QueryTablet(query, keyspace.Name, false)
+				_, err = tablet.VttabletProcess.QueryTabletWithReadOnlyHandling(query, keyspace.Name, false)
 				require.NoError(t, err)
 			}
 		}
 		query := fmt.Sprintf("create database %s;", dbName)
-		_, err = tablet.VttabletProcess.QueryTablet(query, keyspace.Name, false)
+		_, err = tablet.VttabletProcess.QueryTabletWithReadOnlyHandling(query, keyspace.Name, false)
 		require.NoError(t, err)
 
 		tablet.VttabletProcess.EnableSemiSync = true
