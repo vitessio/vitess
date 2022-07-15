@@ -99,7 +99,7 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 	}
 
 	if vtgate.PlannerVersion > 0 {
-		args = append(args, "--planner-version", vtgate.PlannerVersion.String())
+		args = append(args, "--planner_version", vtgate.PlannerVersion.String())
 	}
 	if vtgate.SysVarSetEnabled {
 		args = append(args, "--enable_system_settings")
