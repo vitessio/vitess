@@ -204,7 +204,6 @@ func TestMain(m *testing.M) {
 		vtgateInstance.ExtraArgs = []string{
 			"--mysql_server_query_timeout", "1s",
 			"--mysql_auth_server_static_file", clusterInstance.TmpDirectory + "/" + mysqlAuthServerStatic,
-			"--mysql_server_version", "8.0.16-7",
 		}
 
 		// Start vtgate
