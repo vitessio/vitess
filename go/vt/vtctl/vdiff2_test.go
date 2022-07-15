@@ -107,20 +107,20 @@ func TestBuildProgressReport(t *testing.T) {
 			// We only check the ETA if there is one
 			if tt.want.ETA != "" {
 				// Let's check that we're within 1 second to avoid flakes
-				wt, err := time.Parse(vdiff.TimestampFormat, tt.want.ETA)
+				wantTime, err := time.Parse(vdiff.TimestampFormat, tt.want.ETA)
 				require.NoError(t, err)
 				var timeDiff float64
 				if tt.want.Percentage == 100 {
-					ct, err := time.Parse(vdiff.TimestampFormat, tt.args.summary.CompletedAt)
+					completedTime, err := time.Parse(vdiff.TimestampFormat, tt.args.summary.CompletedAt)
 					require.NoError(t, err)
-					timeDiff = math.Abs(ct.Sub(wt).Seconds())
+					timeDiff = math.Abs(completedTime.Sub(wantTime).Seconds())
 				} else {
-					st, err := time.Parse(vdiff.TimestampFormat, tt.args.summary.StartedAt)
+					startTime, err := time.Parse(vdiff.TimestampFormat, tt.args.summary.StartedAt)
 					require.NoError(t, err)
-					ct := float64(time.Now().UTC().Unix()-st.UTC().Unix()) * (100 / tt.want.Percentage)
-					et, err := time.Parse(vdiff.TimestampFormat, tt.want.ETA)
+					completedTimeUnix := float64(time.Now().UTC().Unix()-startTime.UTC().Unix()) * (100 / tt.want.Percentage)
+					estimatedTime, err := time.Parse(vdiff.TimestampFormat, tt.want.ETA)
 					require.NoError(t, err)
-					timeDiff = math.Abs(et.Sub(st).Seconds() - ct)
+					timeDiff = math.Abs(estimatedTime.Sub(startTime).Seconds() - completedTimeUnix)
 				}
 				require.LessOrEqual(t, timeDiff, 1.0)
 			}
