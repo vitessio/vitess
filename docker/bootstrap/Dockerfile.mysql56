@@ -1,7 +1,7 @@
 ARG bootstrap_version
 ARG image="vitess/bootstrap:${bootstrap_version}-common"
 
-FROM "${image}"
+FROM --platform=linux/amd64 "${image}"
 
 # Install MySQL 5.6. This version of MySQL is completely EOL by Oracle, and hence the upstream
 # APT repositories are no longer signed. We need to use `--allow-insecure-repositories` when updating
