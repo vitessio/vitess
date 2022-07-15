@@ -59,10 +59,10 @@ func TestBuildProgressReport(t *testing.T) {
 			name: "half way",
 			args: args{
 				summary: &vdiffSummary{
-					RowsCompared: 50,
+					RowsCompared: 5000000000,
 					StartedAt:    time.Now().Add(-10 * time.Hour).UTC().Format(vdiff.TimestampFormat),
 				},
-				rowsToCompare: 100,
+				rowsToCompare: 10000000000,
 			},
 			want: &vdiff.ProgressReport{
 				Percentage: 50,
