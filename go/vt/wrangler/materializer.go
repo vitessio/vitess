@@ -497,8 +497,8 @@ func (wr *Wrangler) prepareCreateLookup(ctx context.Context, keyspace string, sp
 	}
 
 	// Validate input table
-	if len(specs.Tables) != 1 {
-		return nil, nil, nil, fmt.Errorf("exactly one table must be specified in the specs: %v", specs.Tables)
+	if len(specs.Tables) < 1 || len(specs.Tables) > 2 {
+		return nil, nil, nil, fmt.Errorf("one or two table must be specified in the specs: %v", specs.Tables)
 	}
 	// Loop executes once.
 	for k, ti := range specs.Tables {
@@ -507,6 +507,7 @@ func (wr *Wrangler) prepareCreateLookup(ctx context.Context, keyspace string, sp
 		}
 		sourceTableName = k
 		sourceTable = ti
+		break
 	}
 
 	// Validate input table and vindex consistency
@@ -655,18 +656,36 @@ func (wr *Wrangler) prepareCreateLookup(ctx context.Context, keyspace string, sp
 		// Choose a primary vindex type for target table based on source specs
 		var targetVindexType string
 		var targetVindex *vschemapb.Vindex
-		for _, field := range tableSchema.TableDefinitions[0].Fields {
-			if sourceVindexColumns[0] == field.Name {
-				targetVindexType, err = vindexes.ChooseVindexForType(field.Type)
-				if err != nil {
-					return nil, nil, nil, err
+
+		if len(specs.Tables) == 1 {
+			for _, field := range tableSchema.TableDefinitions[0].Fields {
+				if sourceVindexColumns[0] == field.Name {
+					targetVindexType, err = vindexes.ChooseVindexForType(field.Type)
+					if err != nil {
+						return nil, nil, nil, err
+					}
+					targetVindex = &vschemapb.Vindex{
+						Type: targetVindexType,
+					}
+					break
 				}
-				targetVindex = &vschemapb.Vindex{
-					Type: targetVindexType,
-				}
-				break
 			}
+		} else {
+			for k, ti := range specs.Tables {
+				if k == targetTableName {
+					if len(ti.ColumnVindexes) != 1 {
+						return nil, nil, nil, fmt.Errorf("exactly one ColumnVindex must be specified for the vindex table: %v", specs.Tables)
+					}
+					targetVindexType = ti.ColumnVindexes[0].Name
+					targetVindex = &vschemapb.Vindex{
+						Type: targetVindexType,
+					}
+					break
+				}
+			}
+
 		}
+
 		if targetVindex == nil {
 			// Unreachable. We validated column names when generating the DDL.
 			return nil, nil, nil, fmt.Errorf("column %s not found in schema %v", sourceVindexColumns[0], tableSchema.TableDefinitions[0])
