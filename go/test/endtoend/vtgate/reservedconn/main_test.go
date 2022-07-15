@@ -124,7 +124,7 @@ func TestMain(m *testing.M) {
 		}
 
 		// Start vtgate
-		clusterInstance.VtGateExtraArgs = []string{"--lock_heartbeat_time", "2s", "--mysql_server_version", "5.7.0"}
+		clusterInstance.VtGateExtraArgs = []string{"--lock_heartbeat_time", "2s"}
 		if err := clusterInstance.StartVtgate(); err != nil {
 			return 1
 		}
