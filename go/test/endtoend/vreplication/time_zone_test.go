@@ -125,7 +125,7 @@ func TestMoveTablesTZ(t *testing.T) {
 	_, err = vtgateConn.ExecuteFetch("update datze set dt2 = '2022-01-01 10:20:30' where id = 12", 1, false) // standard time
 	require.NoError(t, err)
 
-	vdiff(t, ksWorkflow, "")
+	vdiff1(t, ksWorkflow, "")
 
 	query := "select * from datze"
 	qrSourceUSPacific, err := productTab.QueryTablet(query, sourceKs, true)

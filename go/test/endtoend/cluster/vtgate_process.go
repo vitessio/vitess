@@ -32,6 +32,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
@@ -69,6 +70,15 @@ const defaultVtGatePlannerVersion = planbuilder.Gen4CompareV3
 
 // Setup starts Vtgate process with required arguements
 func (vtgate *VtgateProcess) Setup() (err error) {
+	version, err := mysqlctl.GetVersionString()
+	if err != nil {
+		return err
+	}
+	_, vers, err := mysqlctl.ParseVersionString(version)
+	if err != nil {
+		return err
+	}
+	mysqlvers := fmt.Sprintf("%d.%d.%d-vitess", vers.Major, vers.Minor, vers.Patch)
 
 	args := []string{
 		"--topo_implementation", vtgate.CommonArg.TopoImplementation,
@@ -85,7 +95,9 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 		"--tablet_types_to_wait", vtgate.TabletTypesToWait,
 		"--service_map", vtgate.ServiceMap,
 		"--mysql_auth_server_impl", vtgate.MySQLAuthServerImpl,
+		"--mysql_server_version", mysqlvers,
 	}
+
 	if vtgate.PlannerVersion > 0 {
 		args = append(args, "--planner-version", vtgate.PlannerVersion.String())
 	}

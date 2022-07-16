@@ -1,11 +1,10 @@
-name: docker_test_cluster_10
-on: [push, pull_request]
+name: ensure_bootstrap_version
+on: [pull_request]
 jobs:
 
   build:
-    name: Docker Test Cluster 10
+    name: Check Bootstrap Updated
     runs-on: ubuntu-latest
-
     steps:
 
     - name: Set up Go
@@ -26,6 +25,8 @@ jobs:
     - name: Check out code
       uses: actions/checkout@v2
 
-    - name: Run tests which require docker - 1
+    - name: run ensure_bootstrap_version
       run: |
-        go run test.go -docker=true --follow -shard 10
+        make ensure_bootstrap_version
+        git status
+        test -z "$(git diff-index --name-only HEAD --)" || exit 1

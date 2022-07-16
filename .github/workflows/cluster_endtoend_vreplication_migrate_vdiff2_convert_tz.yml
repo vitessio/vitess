@@ -1,14 +1,14 @@
 # DO NOT MODIFY: THIS FILE IS GENERATED USING "make generate_ci_workflows"
 
-name: Cluster (vtgate_tablet_healthcheck_cache)
+name: Cluster (vreplication_migrate_vdiff2_convert_tz)
 on: [push]
 concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (vtgate_tablet_healthcheck_cache)')
+  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (vreplication_migrate_vdiff2_convert_tz)')
   cancel-in-progress: true
 
 jobs:
   build:
-    name: Run endtoend tests on Cluster (vtgate_tablet_healthcheck_cache)
+    name: Run endtoend tests on Cluster (vreplication_migrate_vdiff2_convert_tz)
     runs-on: ubuntu-20.04
 
     steps:
@@ -65,4 +65,4 @@ jobs:
 
         set -x
 
-        eatmydata -- go run test.go -docker=false -follow -shard vtgate_tablet_healthcheck_cache
+        eatmydata -- go run test.go -docker=false -follow -shard vreplication_migrate_vdiff2_convert_tz

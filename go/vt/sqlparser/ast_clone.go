@@ -3250,10 +3250,10 @@ func CloneExpr(in Expr) Expr {
 		return in
 	case *Literal:
 		return CloneRefOfLiteral(in)
-	case *LockingFunc:
-		return CloneRefOfLockingFunc(in)
 	case *LocateExpr:
 		return CloneRefOfLocateExpr(in)
+	case *LockingFunc:
+		return CloneRefOfLockingFunc(in)
 	case *MatchExpr:
 		return CloneRefOfMatchExpr(in)
 	case *MemberOfExpr:
@@ -3432,10 +3432,10 @@ func CloneJSONPathParam(in JSONPathParam) JSONPathParam {
 		return in
 	case *Literal:
 		return CloneRefOfLiteral(in)
-	case *LockingFunc:
-		return CloneRefOfLockingFunc(in)
 	case *LocateExpr:
 		return CloneRefOfLocateExpr(in)
+	case *LockingFunc:
+		return CloneRefOfLockingFunc(in)
 	case *MatchExpr:
 		return CloneRefOfMatchExpr(in)
 	case *MemberOfExpr:

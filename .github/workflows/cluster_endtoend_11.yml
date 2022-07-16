@@ -1,15 +1,15 @@
 # DO NOT MODIFY: THIS FILE IS GENERATED USING "make generate_ci_workflows"
 
-name: Cluster (vtgate_tablet_healthcheck_cache)
+name: Cluster (11)
 on: [push]
 concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (vtgate_tablet_healthcheck_cache)')
+  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (11)')
   cancel-in-progress: true
 
 jobs:
   build:
-    name: Run endtoend tests on Cluster (vtgate_tablet_healthcheck_cache)
-    runs-on: ubuntu-20.04
+    name: Run endtoend tests on Cluster (11)
+    runs-on: ubuntu-18.04
 
     steps:
     - name: Configure git private repo access
@@ -65,4 +65,10 @@ jobs:
 
         set -x
 
-        eatmydata -- go run test.go -docker=false -follow -shard vtgate_tablet_healthcheck_cache
+        eatmydata -- go run test.go -docker=false -follow -shard 11 | tee -a output.txt
+
+    - name: Print test output
+      run: |
+        # print test output
+        cat output.txt
+      if: always()

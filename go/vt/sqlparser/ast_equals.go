@@ -5126,18 +5126,18 @@ func EqualsExpr(inA, inB Expr) bool {
 			return false
 		}
 		return EqualsRefOfLiteral(a, b)
-	case *LockingFunc:
-		b, ok := inB.(*LockingFunc)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfLockingFunc(a, b)
 	case *LocateExpr:
 		b, ok := inB.(*LocateExpr)
 		if !ok {
 			return false
 		}
 		return EqualsRefOfLocateExpr(a, b)
+	case *LockingFunc:
+		b, ok := inB.(*LockingFunc)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfLockingFunc(a, b)
 	case *MatchExpr:
 		b, ok := inB.(*MatchExpr)
 		if !ok {
@@ -5630,18 +5630,18 @@ func EqualsJSONPathParam(inA, inB JSONPathParam) bool {
 			return false
 		}
 		return EqualsRefOfLiteral(a, b)
-	case *LockingFunc:
-		b, ok := inB.(*LockingFunc)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfLockingFunc(a, b)
 	case *LocateExpr:
 		b, ok := inB.(*LocateExpr)
 		if !ok {
 			return false
 		}
 		return EqualsRefOfLocateExpr(a, b)
+	case *LockingFunc:
+		b, ok := inB.(*LockingFunc)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfLockingFunc(a, b)
 	case *MatchExpr:
 		b, ok := inB.(*MatchExpr)
 		if !ok {

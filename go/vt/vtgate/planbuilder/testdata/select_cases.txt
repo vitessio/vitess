@@ -3480,10 +3480,16 @@ Gen4 plan same as above
 {
   "QueryType": "SELECT",
   "Original": "select @@foo from authoritative",
-      "FieldQuery": "select @@foo from authoritative where 1 != 1",
-      "Query": "select @@foo from authoritative",
-      "Table": "authoritative"
-    }
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select @@foo from authoritative where 1 != 1",
+    "Query": "select @@foo from authoritative",
+    "Table": "authoritative"
   }
 }
 # insert function not requiring any table

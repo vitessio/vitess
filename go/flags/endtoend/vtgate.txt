@@ -27,6 +27,8 @@ Usage of vtgate:
 	JSON File to read the topos/tokens from.
   --cpu_profile string
 	deprecated: use '-pprof=cpu' instead
+  --database_branch_public_id string
+	The public ID of the database branch this cluster hosts, used for Insights
   --datadog-agent-host string
 	host to send spans to. if empty, no tracing will be done
   --datadog-agent-port string
@@ -123,6 +125,30 @@ Usage of vtgate:
 	health check retry delay (default 2ms)
   --healthcheck_timeout duration
 	the health check timeout period (default 1m0s)
+  --insights_flush_interval uint
+	Send aggregated metrics for all query patterns every N seconds (default 15)
+  --insights_kafka_brokers string
+	Enable Kafka metrics to the given host:port endpoint
+  --insights_kafka_buffer uint
+	Maximum memory dedicated to unsent Kafka messages; above this threshold, messages will be dropped (default 5242880)
+  --insights_kafka_password string
+	Password for the Kafka endpoint
+  --insights_kafka_text
+	Send Insights messages as plain text
+  --insights_kafka_username string
+	Username for the Kafka endpoint
+  --insights_max_queries_per_interval uint
+	Limit on individual queries reported per flush interval (default 100)
+  --insights_pattern_limit uint
+	Maximum number of unique patterns to track in a flush interval (default 1000)
+  --insights_raw_queries
+	Send unnormalized SQL for individually reported queries
+  --insights_raw_queries_max_length uint
+	Maximum size for unnormalized SQL (default 8192)
+  --insights_rows_read_threshold uint
+	Report individual transactions that read (scan) at least this many rows (default 10000)
+  --insights_rt_threshold uint
+	Report individual queries that take at least this many milliseconds (default 1000)
   --jaeger-agent-host string
 	host and port to send spans to. if empty, no tracing will be done
   --keep_logs duration

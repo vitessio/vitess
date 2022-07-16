@@ -1,0 +1,36 @@
+# This workflow is triggered manually to copy a branch into main.
+name: Copy to main
+
+on:
+  workflow_dispatch:
+    inputs:
+      sourceBranch:
+        description: 'Source Branch'
+        required: true
+        default: 'latest'
+
+jobs:
+  copyToMain:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout planetscale/vitess-private
+        uses: actions/checkout@v2
+        with:
+          repository: planetscale/vitess-private
+          fetch-depth: 0
+          token: ${{ secrets.PLANETSCALE_ACTIONS_BOT_TOKEN }}
+
+      - name: Configure git
+        run: |
+          git config --global user.email "engineering+pull-upstream-workflow@planetscale.com"
+          git config --global user.name "Pull Upstream Workflow"
+
+          git remote add upstream https://github.com/vitessio/vitess
+          git remote set-url upstream --push disabled
+
+      - name: Copy to main
+        run: |
+          git checkout ${{ github.event.inputs.sourceBranch }}
+          git checkout main
+          git reset --hard ${{ github.event.inputs.sourceBranch }}
+          git push --force

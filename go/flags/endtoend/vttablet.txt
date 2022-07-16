@@ -621,6 +621,18 @@ Usage of vttablet:
 	port for the server
   --pprof string
 	enable profiling
+  --psdb.backup_arn string
+	ARN for the S3 bucket
+  --psdb.backup_bucket string
+	S3 bucket for backups
+  --psdb.backup_region string
+	The region for the backups
+  --psdb.gcs_backup.bucket string
+	GCS bucket to use for backups.
+  --psdb.gcs_backup.creds_path string
+	Credentials JSON for service account to use.
+  --psdb.gcs_backup.key_uri string
+	GCP KMS Keyring URI to use.
   --pt-osc-path string
 	override default pt-online-schema-change binary full path
   --publish_retry_interval duration

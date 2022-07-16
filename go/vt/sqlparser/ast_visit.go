@@ -4086,10 +4086,10 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitListArg(in, f)
 	case *Literal:
 		return VisitRefOfLiteral(in, f)
-	case *LockingFunc:
-		return VisitRefOfLockingFunc(in, f)
 	case *LocateExpr:
 		return VisitRefOfLocateExpr(in, f)
+	case *LockingFunc:
+		return VisitRefOfLockingFunc(in, f)
 	case *MatchExpr:
 		return VisitRefOfMatchExpr(in, f)
 	case *MemberOfExpr:
@@ -4264,10 +4264,10 @@ func VisitJSONPathParam(in JSONPathParam, f Visit) error {
 		return VisitListArg(in, f)
 	case *Literal:
 		return VisitRefOfLiteral(in, f)
-	case *LockingFunc:
-		return VisitRefOfLockingFunc(in, f)
 	case *LocateExpr:
 		return VisitRefOfLocateExpr(in, f)
+	case *LockingFunc:
+		return VisitRefOfLockingFunc(in, f)
 	case *MatchExpr:
 		return VisitRefOfMatchExpr(in, f)
 	case *MemberOfExpr:

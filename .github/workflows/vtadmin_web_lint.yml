@@ -7,19 +7,21 @@ on:
     paths:
       - '.github/workflows/vtadmin_web_lint.yml'
       - 'web/vtadmin/**'
-  pull_request:
-    paths:
-      - '.github/workflows/vtadmin_web_lint.yml'
-      - 'web/vtadmin/**'
 
-defaults:
-  run:
-    working-directory: ./web/vtadmin
+# defaults:
+#   run:
+#     working-directory: ./web/vtadmin
 
 jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
+      - name: Configure git private repo access
+        env:
+          GITHUB_TOKEN: ${{ secrets.PLANETSCALE_ACTIONS_BOT_TOKEN }}
+        run: |
+          git config --global --add url."https://${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/"
+
       - uses: actions/checkout@v2
 
       - uses: actions/setup-node@v2
@@ -28,7 +30,7 @@ jobs:
           node-version: '16.13.0'
 
       - name: Install dependencies
-        run: npm ci
+        run: cd web/vtadmin && npm ci
 
       # Using "if: always()" means each step will run, even if a previous
       # step fails. This is nice because, for example, we want stylelint and 
@@ -40,15 +42,15 @@ jobs:
       # trade-off of more complexity around sharing npm install artifacts. 
       - name: Run eslint
         if: always()
-        run: npm run lint:eslint
+        run: cd web/vtadmin && npm run lint:eslint
 
       - name: Run stylelint
         if: always()
-        run: npm run lint:stylelint -- -f verbose
+        run: cd web/vtadmin && npm run lint:stylelint -- -f verbose
         
       - name: Run prettier
         if: always()
-        run: npm run lint:prettier
+        run: cd web/vtadmin && npm run lint:prettier
 
     # Cancel pending and in-progress runs of this workflow if a newer ref is pushed to CI.
     concurrency: 

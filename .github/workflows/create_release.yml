@@ -47,3 +47,4 @@ jobs:
       with:
         github-token: ${{ secrets.GITHUB_TOKEN }}
         pattern: "releases/*.{tar.gz,rpm,deb}"
+

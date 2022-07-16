@@ -29,12 +29,9 @@ import (
 type mysqlVersion string
 
 const (
-	mysql57    mysqlVersion = "mysql57"
-	mysql80    mysqlVersion = "mysql80"
-	mariadb102 mysqlVersion = "mariadb102"
-	mariadb103 mysqlVersion = "mariadb103"
+	mysql80 mysqlVersion = "mysql80"
 
-	defaultMySQLVersion mysqlVersion = mysql57
+	defaultMySQLVersion = mysql80
 )
 
 type mysqlVersions []mysqlVersion
@@ -42,11 +39,11 @@ type mysqlVersions []mysqlVersion
 var (
 	defaultMySQLVersions = []mysqlVersion{defaultMySQLVersion}
 	mysql80OnlyVersions  = []mysqlVersion{mysql80}
-	allMySQLVersions     = []mysqlVersion{mysql57, mysql80}
+	allMySQLVersions     = []mysqlVersion{mysql80}
 )
 
 var (
-	unitTestDatabases = []mysqlVersion{mysql57, mysql80, mariadb102, mariadb103}
+	unitTestDatabases = []mysqlVersion{mysql80}
 )
 
 const (
@@ -91,7 +88,7 @@ var (
 		"onlineddl_vrepl_stress",
 		"onlineddl_vrepl_stress_suite",
 		"onlineddl_vrepl_suite",
-		"vreplication_migrate_vdiff2_convert_tz",
+		"vreplication_migrate",
 		"onlineddl_revert",
 		"onlineddl_declarative",
 		"onlineddl_singleton",
@@ -101,7 +98,6 @@ var (
 		"tabletmanager_throttler_custom_config",
 		"tabletmanager_tablegc",
 		"tabletmanager_consul",
-		"vtgate_buffer",
 		"vtgate_concurrentdml",
 		"vtgate_godriver",
 		"vtgate_gen4",
@@ -131,12 +127,11 @@ var (
 		"vtorc_8.0",
 		"schemadiff_vrepl",
 		"topo_connection_cache",
-	}
-
-	clusterSelfHostedList = []string{
 		"12",
 		"18",
 	}
+
+	clusterSelfHostedList       = []string{}
 	clusterDockerList           = []string{}
 	clustersRequiringXtraBackup = []string{
 		"xb_backup",
@@ -275,7 +270,7 @@ func generateSelfHostedClusterWorkflows() error {
 			test := &selfHostedTest{
 				Name:              fmt.Sprintf("Cluster (%s)", cluster),
 				ImageName:         fmt.Sprintf("cluster_test_%s", cluster),
-				Platform:          "mysql57",
+				Platform:          "mysql80",
 				directoryName:     directoryName,
 				Dockerfile:        fmt.Sprintf("./.github/docker/%s/Dockerfile", directoryName),
 				Shard:             cluster,

@@ -382,7 +382,7 @@ func TestVersions(t *testing.T) {
 	assert.Contains(t, fmt.Sprintf("%v", qr.Rows), "vitess")
 
 	qr = utils.Exec(t, conn, `select @@version_comment`)
-	assert.Contains(t, fmt.Sprintf("%v", qr.Rows), "Git revision")
+	assert.Equal(t, fmt.Sprintf("%v", qr.Rows), `[[VARCHAR("")]]`) // on private we null out the version string
 }
 
 func TestFlush(t *testing.T) {

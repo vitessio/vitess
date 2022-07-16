@@ -1,44 +1,30 @@
 name: e2e_race
-on: [push, pull_request]
+on: [push]
 jobs:
 
   build:
     name: End-to-End Test (Race)
     runs-on: ubuntu-latest
     steps:
-    - name: Check out code
-      uses: actions/checkout@v2
-
-    - name: Check for changes in relevant files
-      uses: frouioui/paths-filter@main
-      id: changes
-      with:
-        token: ''
-        filters: |
-          end_to_end:
-            - 'go/**/*.go'
-            - 'test.go'
-            - 'Makefile'
-            - 'build.env'
-            - 'go.[sumod]'
-            - 'proto/*.proto'
-            - 'tools/**'
-            - 'config/**'
-            - 'bootstrap.sh'
+    - name: Configure git private repo access
+      env:
+        GITHUB_TOKEN: ${{ secrets.PLANETSCALE_ACTIONS_BOT_TOKEN }}
+      run: |
+        git config --global --add url."https://${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/"
 
     - name: Set up Go
-      if: steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-go@v2
       with:
         go-version: 1.18.3
 
     - name: Tune the OS
-      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         echo '1024 65535' | sudo tee -a /proc/sys/net/ipv4/ip_local_port_range
 
+    - name: Check out code
+      uses: actions/checkout@v2
+
     - name: Get dependencies
-      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         # Setup MySQL 8.0
         sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 467B942D3A79BD29
@@ -56,12 +42,10 @@ jobs:
         go mod download
 
     - name: Run make minimaltools
-      if: steps.changes.outputs.end_to_end == 'true'
       run: |
         make minimaltools
 
     - name: e2e_race
-      if: steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 30
       run: |
         make e2e_test_race

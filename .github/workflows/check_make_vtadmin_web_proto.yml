@@ -6,6 +6,12 @@ jobs:
     name: Check Make VTAdmin Web Proto
     runs-on: ubuntu-latest
     steps:
+    - name: Configure git private repo access
+      env:
+        GITHUB_TOKEN: ${{"{{"}} secrets.PLANETSCALE_ACTIONS_BOT_TOKEN {{"}}"}}
+      run: |
+        git config --global --add url."https://${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/"
+
     - name: Check out code
       uses: actions/checkout@v2
 
