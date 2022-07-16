@@ -70,16 +70,6 @@ const defaultVtGatePlannerVersion = planbuilder.Gen4CompareV3
 
 // Setup starts Vtgate process with required arguements
 func (vtgate *VtgateProcess) Setup() (err error) {
-	version, err := mysqlctl.GetVersionString()
-	if err != nil {
-		return err
-	}
-	_, vers, err := mysqlctl.ParseVersionString(version)
-	if err != nil {
-		return err
-	}
-	mysqlvers := fmt.Sprintf("%d.%d.%d-vitess", vers.Major, vers.Minor, vers.Patch)
-
 	args := []string{
 		"--topo_implementation", vtgate.CommonArg.TopoImplementation,
 		"--topo_global_server_address", vtgate.CommonArg.TopoGlobalAddress,
@@ -95,7 +85,28 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 		"--tablet_types_to_wait", vtgate.TabletTypesToWait,
 		"--service_map", vtgate.ServiceMap,
 		"--mysql_auth_server_impl", vtgate.MySQLAuthServerImpl,
-		"--mysql_server_version", mysqlvers,
+	}
+	// If no explicit mysql_server_version has been specified then we autodetect
+	// the MySQL version that will be used for the test and base the vtgate's
+	// mysql server version on that.
+	msvflag := false
+	for _, f := range vtgate.ExtraArgs {
+		if strings.Contains(f, "mysql_server_version") {
+			msvflag = true
+			break
+		}
+	}
+	if !msvflag {
+		version, err := mysqlctl.GetVersionString()
+		if err != nil {
+			return err
+		}
+		_, vers, err := mysqlctl.ParseVersionString(version)
+		if err != nil {
+			return err
+		}
+		mysqlvers := fmt.Sprintf("%d.%d.%d-vitess", vers.Major, vers.Minor, vers.Patch)
+		args = append(args, "--mysql_server_version", mysqlvers)
 	}
 	if vtgate.PlannerVersion > 0 {
 		args = append(args, "--planner-version", vtgate.PlannerVersion.String())
