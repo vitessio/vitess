@@ -434,15 +434,6 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
-		"tabletgateway_cellalias": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/tabletgateway/cellalias"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "13",
-			"RetryMax": 1,
-			"Tags": []
-		},
 		"tabletgateway": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/tabletgateway"],
