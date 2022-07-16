@@ -113,8 +113,8 @@ func TestMain(m *testing.M) {
 			"--mysql_server_query_timeout", "1s",
 			"--mysql_auth_server_impl", "static",
 			"--mysql_auth_server_static_file", clusterInstance.TmpDirectory + mysqlAuthServerStatic,
-			"--warn_sharded_only=true",
 			"--mysql_server_version", "8.0.16-7",
+			"--warn_sharded_only=true",
 		}
 
 		clusterInstance.VtTabletExtraArgs = []string{
