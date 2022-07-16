@@ -20,7 +20,6 @@ package collations
 
 import (
 	"flag"
-	"strings"
 	"sync"
 
 	"vitess.io/vitess/go/vt/servenv"
@@ -42,7 +41,8 @@ func Local() *Environment {
 			//       for the vtgate mysql_server_version flag.
 			defaultEnv = fetchCacheEnvironment(collverMySQL57)
 		} else {
-			defaultEnv = NewEnvironment(strings.Clone(*servenv.MySQLServerVersion))
+			//defaultEnv = NewEnvironment(strings.Clone(*servenv.MySQLServerVersion))
+			defaultEnv = NewEnvironment(*servenv.MySQLServerVersion)
 		}
 	})
 	return defaultEnv
