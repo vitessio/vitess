@@ -25,7 +25,6 @@ import (
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/logutil"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -36,43 +35,29 @@ import (
 
 // TabletExecutor applies schema changes to all tablets.
 type TabletExecutor struct {
-	migrationContext     string
-	ts                   *topo.Server
-	tmc                  tmclient.TabletManagerClient
-	logger               logutil.Logger
-	tablets              []*topodatapb.Tablet
-	isClosed             bool
-	allowBigSchemaChange bool
-	keyspace             string
-	waitReplicasTimeout  time.Duration
-	ddlStrategySetting   *schema.DDLStrategySetting
-	uuids                []string
-	skipPreflight        bool
+	migrationContext    string
+	ts                  *topo.Server
+	tmc                 tmclient.TabletManagerClient
+	logger              logutil.Logger
+	tablets             []*topodatapb.Tablet
+	isClosed            bool
+	keyspace            string
+	waitReplicasTimeout time.Duration
+	ddlStrategySetting  *schema.DDLStrategySetting
+	uuids               []string
+	skipPreflight       bool
 }
 
 // NewTabletExecutor creates a new TabletExecutor instance
 func NewTabletExecutor(migrationContext string, ts *topo.Server, tmc tmclient.TabletManagerClient, logger logutil.Logger, waitReplicasTimeout time.Duration) *TabletExecutor {
 	return &TabletExecutor{
-		ts:                   ts,
-		tmc:                  tmc,
-		logger:               logger,
-		isClosed:             true,
-		allowBigSchemaChange: false,
-		waitReplicasTimeout:  waitReplicasTimeout,
-		migrationContext:     migrationContext,
+		ts:                  ts,
+		tmc:                 tmc,
+		logger:              logger,
+		isClosed:            true,
+		waitReplicasTimeout: waitReplicasTimeout,
+		migrationContext:    migrationContext,
 	}
-}
-
-// AllowBigSchemaChange changes TabletExecutor such that big schema changes
-// will no longer be rejected.
-func (exec *TabletExecutor) AllowBigSchemaChange() {
-	exec.allowBigSchemaChange = true
-}
-
-// DisallowBigSchemaChange enables the check for big schema changes such that
-// TabletExecutor will reject these.
-func (exec *TabletExecutor) DisallowBigSchemaChange() {
-	exec.allowBigSchemaChange = false
 }
 
 // SetDDLStrategy applies ddl_strategy from command line flags
@@ -149,20 +134,7 @@ func (exec *TabletExecutor) Validate(ctx context.Context, sqls []string) error {
 	if exec.isClosed {
 		return fmt.Errorf("executor is closed")
 	}
-
-	// We ignore DATABASE-level DDLs here because detectBigSchemaChanges doesn't
-	// look at them anyway.
-	parsedDDLs, _, _, _, err := exec.parseDDLs(sqls)
-	if err != nil {
-		return err
-	}
-
-	bigSchemaChange, err := exec.detectBigSchemaChanges(ctx, parsedDDLs)
-	if bigSchemaChange && exec.allowBigSchemaChange {
-		exec.logger.Warningf("Processing big schema change. This may cause visible MySQL downtime.")
-		return nil
-	}
-	return err
+	return nil
 }
 
 func (exec *TabletExecutor) parseDDLs(sqls []string) ([]sqlparser.DDLStatement, []sqlparser.DBDDLStatement, [](*sqlparser.RevertMigration), [](*sqlparser.AlterMigration), error) {
@@ -211,59 +183,6 @@ func (exec *TabletExecutor) isOnlineSchemaDDL(stmt sqlparser.Statement) (isOnlin
 		return true
 	}
 	return false
-}
-
-// a schema change that satisfies any following condition is considered
-// to be a big schema change and will be rejected.
-//   1. Alter more than 100,000 rows.
-//   2. Change a table with more than 2,000,000 rows (Drops are fine).
-func (exec *TabletExecutor) detectBigSchemaChanges(ctx context.Context, parsedDDLs []sqlparser.DDLStatement) (bool, error) {
-	// We want to avoid any overhead if possible. If all DDLs are online schema changes, then we want to
-	// skip GetSchema altogether.
-	foundAnyNonOnlineDDL := false
-	for _, ddl := range parsedDDLs {
-		if !exec.isOnlineSchemaDDL(ddl) {
-			foundAnyNonOnlineDDL = true
-		}
-	}
-	if !foundAnyNonOnlineDDL {
-		return false, nil
-	}
-	// exec.tablets is guaranteed to have at least one element;
-	// Otherwise, Open should fail and executor should fail.
-	primaryTabletInfo := exec.tablets[0]
-	// get database schema, excluding views.
-	req := &tabletmanagerdatapb.GetSchemaRequest{Tables: []string{}, ExcludeTables: []string{}, TableSchemaOnly: true}
-	dbSchema, err := exec.tmc.GetSchema(ctx, primaryTabletInfo, req)
-	if err != nil {
-		return false, fmt.Errorf("unable to get database schema, error: %v", err)
-	}
-	tableWithCount := make(map[string]uint64, len(dbSchema.TableDefinitions))
-	for _, tableSchema := range dbSchema.TableDefinitions {
-		tableWithCount[tableSchema.Name] = tableSchema.RowCount
-	}
-	for _, ddl := range parsedDDLs {
-		if exec.isOnlineSchemaDDL(ddl) {
-			// Since this is an online schema change, there is no need to worry about big changes
-			continue
-		}
-		switch ddl.GetAction() {
-		case sqlparser.DropDDLAction, sqlparser.CreateDDLAction, sqlparser.TruncateDDLAction, sqlparser.RenameDDLAction:
-			continue
-		}
-		tableName := ddl.GetTable().Name.String()
-		if rowCount, ok := tableWithCount[tableName]; ok {
-			if rowCount > 100000 && ddl.GetAction() == sqlparser.AlterDDLAction {
-				return true, fmt.Errorf(
-					"big schema change detected. Disable check with -allow_long_unavailability. ddl: %s alters a table with more than 100 thousand rows", sqlparser.String(ddl))
-			}
-			if rowCount > 2000000 {
-				return true, fmt.Errorf(
-					"big schema change detected. Disable check with -allow_long_unavailability. ddl: %s changes a table with more than 2 million rows", sqlparser.String(ddl))
-			}
-		}
-	}
-	return false, nil
 }
 
 func (exec *TabletExecutor) preflightSchemaChanges(ctx context.Context, sqls []string) error {

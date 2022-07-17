@@ -138,7 +138,7 @@ func commandApplySchema(cmd *cobra.Command, args []string) error {
 
 	resp, err := client.ApplySchema(commandCtx, &vtctldatapb.ApplySchemaRequest{
 		Keyspace:                ks,
-		AllowLongUnavailability: applySchemaOptions.AllowLongUnavailability,
+		AllowLongUnavailability: false,
 		DdlStrategy:             applySchemaOptions.DDLStrategy,
 		Sql:                     parts,
 		SkipPreflight:           applySchemaOptions.SkipPreflight,
