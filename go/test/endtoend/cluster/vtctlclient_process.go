@@ -42,7 +42,6 @@ type VtctlClientProcess struct {
 type VtctlClientParams struct {
 	DDLStrategy      string
 	MigrationContext string
-	SkipPreflight    bool
 	UUIDList         string
 	CallerID         string
 }
@@ -88,9 +87,6 @@ func (vtctlclient *VtctlClientProcess) ApplySchemaWithOutput(Keyspace string, SQ
 	if params.UUIDList != "" {
 		args = append(args, "--uuid_list", params.UUIDList)
 	}
-	if params.SkipPreflight {
-		args = append(args, "--skip_preflight")
-	}
 
 	if params.CallerID != "" {
 		args = append(args, "--caller_id", params.CallerID)
@@ -101,7 +97,7 @@ func (vtctlclient *VtctlClientProcess) ApplySchemaWithOutput(Keyspace string, SQ
 
 // ApplySchema applies SQL schema to the keyspace
 func (vtctlclient *VtctlClientProcess) ApplySchema(Keyspace string, SQL string) error {
-	message, err := vtctlclient.ApplySchemaWithOutput(Keyspace, SQL, VtctlClientParams{DDLStrategy: "direct -allow-zero-in-date", SkipPreflight: true})
+	message, err := vtctlclient.ApplySchemaWithOutput(Keyspace, SQL, VtctlClientParams{DDLStrategy: "direct -allow-zero-in-date"})
 
 	return vterrors.Wrap(err, message)
 }

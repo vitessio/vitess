@@ -326,7 +326,7 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 			}
 		}
 	} else {
-		output, err := clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, alterStatement, cluster.VtctlClientParams{DDLStrategy: ddlStrategy, SkipPreflight: true, MigrationContext: migrationContext})
+		output, err := clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, alterStatement, cluster.VtctlClientParams{DDLStrategy: ddlStrategy, MigrationContext: migrationContext})
 		if expectError == "" {
 			assert.NoError(t, err)
 			uuid = output
@@ -363,7 +363,7 @@ func testRevertMigration(t *testing.T, revertUUID string, executeStrategy string
 			}
 		}
 	} else {
-		output, err := clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, revertQuery, cluster.VtctlClientParams{DDLStrategy: ddlStrategy, SkipPreflight: true, MigrationContext: migrationContext})
+		output, err := clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, revertQuery, cluster.VtctlClientParams{DDLStrategy: ddlStrategy, MigrationContext: migrationContext})
 		if expectError == "" {
 			assert.NoError(t, err)
 			uuid = output

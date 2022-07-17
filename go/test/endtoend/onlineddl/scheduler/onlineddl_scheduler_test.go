@@ -526,7 +526,7 @@ func TestSchemaChange(t *testing.T) {
 
 	t.Run("Idempotent submission, retry failed migration", func(t *testing.T) {
 		uuid := "00000000_1111_2222_3333_444444444444"
-		overrideVtctlParams = &cluster.VtctlClientParams{DDLStrategy: ddlStrategy, SkipPreflight: true, UUIDList: uuid, MigrationContext: "idempotent:1111-2222-3333"}
+		overrideVtctlParams = &cluster.VtctlClientParams{DDLStrategy: ddlStrategy, UUIDList: uuid, MigrationContext: "idempotent:1111-2222-3333"}
 		defer func() { overrideVtctlParams = nil }()
 		// create a migration and cancel it. We don't let it complete. We want it in "failed" state
 		t.Run("start and fail migration", func(t *testing.T) {
@@ -579,7 +579,7 @@ func testOnlineDDLStatement(t *testing.T, ddlStatement string, ddlStrategy strin
 			}
 		}
 	} else {
-		params := &cluster.VtctlClientParams{DDLStrategy: ddlStrategy, SkipPreflight: true}
+		params := &cluster.VtctlClientParams{DDLStrategy: ddlStrategy}
 		if overrideVtctlParams != nil {
 			params = overrideVtctlParams
 		}
@@ -619,7 +619,7 @@ func testRevertMigration(t *testing.T, revertUUID string, ddlStrategy, executeSt
 			}
 		}
 	} else {
-		output, err := clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, revertQuery, cluster.VtctlClientParams{DDLStrategy: ddlStrategy, SkipPreflight: true})
+		output, err := clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, revertQuery, cluster.VtctlClientParams{DDLStrategy: ddlStrategy})
 		if expectError == "" {
 			assert.NoError(t, err)
 			uuid = output

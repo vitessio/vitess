@@ -141,7 +141,7 @@ func commandApplySchema(cmd *cobra.Command, args []string) error {
 		AllowLongUnavailability: applySchemaOptions.AllowLongUnavailability,
 		DdlStrategy:             applySchemaOptions.DDLStrategy,
 		Sql:                     parts,
-		SkipPreflight:           applySchemaOptions.SkipPreflight,
+		SkipPreflight:           true,
 		UuidList:                applySchemaOptions.UUIDList,
 		MigrationContext:        applySchemaOptions.MigrationContext,
 		WaitReplicasTimeout:     protoutil.DurationToProto(applySchemaOptions.WaitReplicasTimeout),
