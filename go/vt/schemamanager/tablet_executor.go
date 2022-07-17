@@ -394,6 +394,7 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 			wg.Add(1)
 			go func(result *ShardResult) {
 				defer wg.Done()
+				exec.logger.Infof("ReloadSchema on shard: %s", result.Shard)
 				schematools.ReloadShard(
 					reloadCtx,
 					exec.ts,
@@ -408,6 +409,8 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 			}(result)
 		}
 		wg.Wait()
+	} else {
+		exec.logger.Infof("Skipped ReloadSchema since all SQLs executed asynchronously")
 	}
 	return &execResult
 }
