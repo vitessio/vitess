@@ -164,6 +164,8 @@ func (vde *Engine) retry(ctx context.Context, err error) {
 	}
 }
 
+// addController creates a new controller using the given vdiff record and adds it to the engine.
+// You must already have the main engine mutex (mu) locked before calling this.
 func (vde *Engine) addController(row sqltypes.RowNamedValues, options *tabletmanagerdata.VDiffOptions) error {
 	ct, err := newController(vde.ctx, row, vde.dbClientFactoryDba, vde.ts, vde, options)
 	if err != nil {
@@ -278,6 +280,8 @@ func (vde *Engine) getVDiffByID(ctx context.Context, dbClient binlogplayer.DBCli
 }
 
 func (vde *Engine) retryVDiffs(ctx context.Context) error {
+	vde.mu.Lock()
+	defer vde.mu.Unlock()
 	dbClient := vde.dbClientFactoryFiltered()
 	if err := dbClient.Connect(); err != nil {
 		return err

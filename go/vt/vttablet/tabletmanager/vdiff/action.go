@@ -130,6 +130,8 @@ func (vde *Engine) PerformVDiffAction(ctx context.Context, req *tabletmanagerdat
 		if err != nil {
 			return nil, err
 		}
+		vde.mu.Lock()
+		defer vde.mu.Unlock()
 		if err := vde.addController(qr.Named().Row(), options); err != nil {
 			return nil, err
 		}
