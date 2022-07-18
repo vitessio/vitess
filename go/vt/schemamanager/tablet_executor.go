@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/sync2"
+	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/logutil"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -33,6 +34,10 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/schematools"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
+)
+
+var (
+	lockRenewTimeout = 10 * time.Second // has to be a fraction of Topo's defaultLockTimeout (30sec at this time)
 )
 
 // TabletExecutor applies schema changes to all tablets.
@@ -358,9 +363,12 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 	}
 	providedUUID := ""
 
+	rl := timer.NewRateLimiter(lockRenewTimeout)
+	defer rl.Stop()
+
 	syncOperationExecuted := false
 	for index, sql := range sqls {
-		if err := topo.CheckKeyspaceLocked(ctx, exec.keyspace); err != nil {
+		if err := rl.Do(func() error { return topo.CheckKeyspaceLockedAndRenew(ctx, exec.keyspace) }); err != nil {
 			// This renews the lock lease
 			execResult.ExecutorErr = vterrors.Wrapf(err, "CheckKeyspaceLocked in ApplySchemaKeyspace %v", exec.keyspace).Error()
 			return &execResult
