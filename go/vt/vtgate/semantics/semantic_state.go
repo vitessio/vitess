@@ -366,10 +366,12 @@ func (st *SemTable) ColumnLookup(col *sqlparser.ColName) (int, error) {
 }
 
 // SingleUnshardedKeyspace returns the single keyspace if all tables in the query are in the same, unsharded keyspace
-func (st *SemTable) SingleUnshardedKeyspace() *vindexes.Keyspace {
+func (st *SemTable) SingleUnshardedKeyspace() (*vindexes.Keyspace, []*vindexes.Table) {
 	var ks *vindexes.Keyspace
+	var tables []*vindexes.Table
 	for _, table := range st.Tables {
 		vindexTable := table.GetVindexTable()
+
 		if vindexTable == nil || vindexTable.Type != "" {
 			_, isDT := table.getExpr().Expr.(*sqlparser.DerivedTable)
 			if isDT {
@@ -377,27 +379,28 @@ func (st *SemTable) SingleUnshardedKeyspace() *vindexes.Keyspace {
 				// we check the real tables inside the derived table as well for same unsharded keyspace.
 				continue
 			}
-			return nil
+			return nil, nil
 		}
 		name, ok := table.getExpr().Expr.(sqlparser.TableName)
 		if !ok {
-			return nil
+			return nil, nil
 		}
 		if name.Name.String() != vindexTable.Name.String() {
 			// this points to a table alias. safer to not shortcut
-			return nil
+			return nil, nil
 		}
 		this := vindexTable.Keyspace
 		if this == nil || this.Sharded {
-			return nil
+			return nil, nil
 		}
 		if ks == nil {
 			ks = this
 		} else {
 			if ks != this {
-				return nil
+				return nil, nil
 			}
 		}
+		tables = append(tables, vindexTable)
 	}
-	return ks
+	return ks, tables
 }
