@@ -134,35 +134,31 @@ func (exec *TabletExecutor) Validate(ctx context.Context, sqls []string) error {
 	if exec.isClosed {
 		return fmt.Errorf("executor is closed")
 	}
+	if err := exec.parseDDLs(sqls); err != nil {
+		return err
+	}
+
 	return nil
 }
 
-func (exec *TabletExecutor) parseDDLs(sqls []string) ([]sqlparser.DDLStatement, []sqlparser.DBDDLStatement, [](*sqlparser.RevertMigration), [](*sqlparser.AlterMigration), error) {
-	parsedDDLs := make([]sqlparser.DDLStatement, 0)
-	parsedDBDDLs := make([]sqlparser.DBDDLStatement, 0)
-	revertStatements := make([](*sqlparser.RevertMigration), 0)
-	alterMigrationStatements := make([](*sqlparser.AlterMigration), 0)
+func (exec *TabletExecutor) parseDDLs(sqls []string) error {
 	for _, sql := range sqls {
 		stmt, err := sqlparser.Parse(sql)
 		if err != nil {
-			return nil, nil, nil, nil, fmt.Errorf("failed to parse sql: %s, got error: %v", sql, err)
+			return fmt.Errorf("failed to parse sql: %s, got error: %v", sql, err)
 		}
-		switch stmt := stmt.(type) {
+		switch stmt.(type) {
 		case sqlparser.DDLStatement:
-			parsedDDLs = append(parsedDDLs, stmt)
 		case sqlparser.DBDDLStatement:
-			parsedDBDDLs = append(parsedDBDDLs, stmt)
 		case *sqlparser.RevertMigration:
-			revertStatements = append(revertStatements, stmt)
 		case *sqlparser.AlterMigration:
-			alterMigrationStatements = append(alterMigrationStatements, stmt)
 		default:
 			if len(exec.tablets) != 1 {
-				return nil, nil, nil, nil, fmt.Errorf("non-ddl statements can only be executed for single shard keyspaces: %s", sql)
+				return fmt.Errorf("non-ddl statements can only be executed for single shard keyspaces: %s", sql)
 			}
 		}
 	}
-	return parsedDDLs, parsedDBDDLs, revertStatements, alterMigrationStatements, nil
+	return nil
 }
 
 // IsOnlineSchemaDDL returns true if we expect to run a online schema change DDL
