@@ -216,8 +216,7 @@ func (vx *vexec) exec() (map[*topo.TabletInfo]*querypb.QueryResult, error) {
 				// If we deleted a workflow then let's make a best effort attempt to clean
 				// up any related data.
 				if vx.query == sqlVReplicationDelete {
-					query := fmt.Sprintf(sqlDeleteVDiffs, encodeString(primary.Keyspace), encodeString(vx.workflow))
-					_, _ = vx.wr.tmc.ExecuteFetchAsDba(ctx, primary.Tablet, false, []byte(query), -1, false, false)
+					vx.wr.deleteWorkflowVDiffData(ctx, primary.Tablet, vx.workflow)
 				}
 				mu.Lock()
 				results[primary] = qr
