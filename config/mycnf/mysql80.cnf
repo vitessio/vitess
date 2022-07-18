@@ -29,3 +29,7 @@ plugin-load = rpl_semi_sync_master=semisync_master.so;rpl_semi_sync_slave=semisy
 loose_rpl_semi_sync_master_timeout = 1000000000000000000
 loose_rpl_semi_sync_master_wait_no_slave = 1
 
+# Allow the information_schema table stats to track reality
+# closer than the default of 24 hours.  MySQL 8.0 only variable
+information_schema_stats_expiry = 3600
+
