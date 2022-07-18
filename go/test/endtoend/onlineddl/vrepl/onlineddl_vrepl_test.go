@@ -669,6 +669,8 @@ func TestSchemaChange(t *testing.T) {
 		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
 	})
 
+	time.Sleep(10 * time.Second)
+
 	// Technically the next test should belong in onlineddl_revert suite. But we're tking advantage of setup and functionality existing in this tets:
 	// - two shards as opposed to one
 	// - tablet throttling
