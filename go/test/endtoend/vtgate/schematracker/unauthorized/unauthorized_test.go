@@ -26,6 +26,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/test/endtoend/utils"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
@@ -88,6 +90,8 @@ func TestMain(m *testing.M) {
 }
 
 func TestSchemaTrackingError(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 14, "vtgate")
+
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
@@ -95,7 +99,7 @@ func TestSchemaTrackingError(t *testing.T) {
 
 	logDir := clusterInstance.VtgateProcess.LogDir
 
-	timeout := time.After(5 * time.Minute)
+	timeout := time.After(1 * time.Minute)
 	var present bool
 	for {
 		select {
@@ -104,9 +108,7 @@ func TestSchemaTrackingError(t *testing.T) {
 		case <-time.After(1 * time.Second):
 			// check info logs
 			all, err := os.ReadFile(path.Join(logDir, "vtgate.WARNING"))
-			if err != nil {
-				continue
-			}
+			require.NoError(t, err)
 			if strings.Contains(string(all), "Table ACL might be enabled, --schema_change_signal_user needs to be passed to VTGate for schema tracking to work. Check 'schema tracking' docs on vitess.io") {
 				present = true
 			}
