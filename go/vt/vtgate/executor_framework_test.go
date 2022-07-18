@@ -23,6 +23,8 @@ import (
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/vt/vtgate/logstats"
+
 	"vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/vt/topo"
@@ -643,12 +645,12 @@ func testNonZeroDuration(t *testing.T, what, d string) {
 	}
 }
 
-func getQueryLog(logChan chan any) *LogStats {
+func getQueryLog(logChan chan any) *logstats.LogStats {
 	var log any
 
 	select {
 	case log = <-logChan:
-		return log.(*LogStats)
+		return log.(*logstats.LogStats)
 	default:
 		return nil
 	}
@@ -661,7 +663,7 @@ func getQueryLog(logChan chan any) *LogStats {
 // is a repeat query.
 var testPlannedQueries = map[string]bool{}
 
-func testQueryLog(t *testing.T, logChan chan any, method, stmtType, sql string, shardQueries int) *LogStats {
+func testQueryLog(t *testing.T, logChan chan any, method, stmtType, sql string, shardQueries int) *logstats.LogStats {
 	t.Helper()
 
 	logStats := getQueryLog(logChan)
