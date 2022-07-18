@@ -124,6 +124,8 @@ func TestMain(m *testing.M) {
 		}
 
 		// Start vtgate
+		// This test requires setting the mysql_server_version vtgate flag
+		// to 5.7 regardless of the actual MySQL version used for the tests.
 		clusterInstance.VtGateExtraArgs = []string{"--lock_heartbeat_time", "2s", "--mysql_server_version", "5.7.0"}
 		if err := clusterInstance.StartVtgate(); err != nil {
 			return 1
