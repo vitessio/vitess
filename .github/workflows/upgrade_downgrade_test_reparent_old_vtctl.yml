@@ -169,7 +169,6 @@ jobs:
 
     # Running a test with vtctl at version n-1 and vttablet at version n
     - name: Run reparent tests (vtctl=N-1, vttablet=N)
-     timeout-minutes: 30
       if: steps.changes.outputs.end_to_end == 'true'
       run: |
         rm -rf /tmp/vtdataroot
