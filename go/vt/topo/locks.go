@@ -196,16 +196,12 @@ func CheckKeyspaceLocked(ctx context.Context, keyspace string) error {
 	defer i.mu.Unlock()
 
 	// find the individual entry
-	_, ok = i.info[keyspace]
+	entry, ok := i.info[keyspace]
 	if !ok {
 		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "keyspace %v is not locked (no lockInfo in map)", keyspace)
 	}
-
-	// TODO(alainjobart): check the lock server implementation
-	// still holds the lock. Will need to look at the lockInfo struct.
-
-	// and we're good for now.
-	return nil
+	// try renewing lease:
+	return entry.lockDescriptor.Check(ctx)
 }
 
 // lockKeyspace will lock the keyspace in the topology server.
