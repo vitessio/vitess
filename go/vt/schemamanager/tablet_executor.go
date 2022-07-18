@@ -368,8 +368,8 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 
 	syncOperationExecuted := false
 	for index, sql := range sqls {
+		// Attempt to renew lease:
 		if err := rl.Do(func() error { return topo.CheckKeyspaceLockedAndRenew(ctx, exec.keyspace) }); err != nil {
-			// This renews the lock lease
 			execResult.ExecutorErr = vterrors.Wrapf(err, "CheckKeyspaceLocked in ApplySchemaKeyspace %v", exec.keyspace).Error()
 			return &execResult
 		}
