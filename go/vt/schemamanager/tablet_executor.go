@@ -31,6 +31,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtctl/schematools"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 )
 
@@ -332,7 +333,7 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 	// keyspace-wide operations like resharding migrations.
 	ctx, unlock, lockErr := exec.ts.LockKeyspace(ctx, exec.keyspace, "ApplySchemaKeyspace")
 	if lockErr != nil {
-		execResult.ExecutorErr = lockErr.Error()
+		execResult.ExecutorErr = vterrors.Wrapf(lockErr, "lockErr in ApplySchemaKeyspace %v", exec.keyspace).Error()
 		return &execResult
 	}
 	defer func() {
@@ -341,7 +342,7 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 		var unlockErr error
 		unlock(&unlockErr)
 		if execResult.ExecutorErr == "" && unlockErr != nil {
-			execResult.ExecutorErr = unlockErr.Error()
+			execResult.ExecutorErr = vterrors.Wrapf(unlockErr, "unlockErr in ApplySchemaKeyspace %v", exec.keyspace).Error()
 		}
 	}()
 
@@ -359,6 +360,11 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 
 	syncOperationExecuted := false
 	for index, sql := range sqls {
+		if err := topo.CheckKeyspaceLocked(ctx, exec.keyspace); err != nil {
+			// This renews the lock lease
+			execResult.ExecutorErr = vterrors.Wrapf(err, "CheckKeyspaceLocked in ApplySchemaKeyspace %v", exec.keyspace).Error()
+			return &execResult
+		}
 		execResult.CurSQLIndex = index
 		if exec.hasProvidedUUIDs() {
 			providedUUID = exec.uuids[index]
