@@ -648,7 +648,8 @@ func WaitForReplicationToStart(t *testing.T, clusterInstance *cluster.LocalProce
 				return
 			}
 		case <-time.After(replicationWaitTimeout):
-			require.FailNow(t, "replication did not catchup within %v", replicationWaitTimeout)
+			require.FailNow(t, fmt.Sprintf("replication did not start everywhere in %s/%s within the timeout of %v",
+				keyspaceName, shardName, replicationWaitTimeout))
 			return
 		}
 	}
