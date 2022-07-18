@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
@@ -208,6 +209,13 @@ func buildInsertSelectPlan(ins *sqlparser.Insert, table *vindexes.Table, reserve
 		return nil, err
 	}
 	eins.Input = plan
+
+	// When the table you are steaming data from and table you are inserting from are same.
+	// Then due to locking of the index range on the table we might not be able to insert into the table.
+	// Therefore, instead of streaming, this flag will ensure the records are first read and then inserted.
+	if strings.Contains(plan.GetTableName(), table.Name.String()) {
+		eins.ForceNonStreaming = true
+	}
 
 	// auto-increment column is added explicility if not provided.
 	if err := modifyForAutoinc(ins, eins); err != nil {

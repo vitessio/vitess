@@ -452,6 +452,19 @@ func (vc *vcursorImpl) StreamExecutePrimitive(primitive engine.Primitive, bindVa
 	return vterrors.New(vtrpcpb.Code_UNAVAILABLE, "upstream shards are not available")
 }
 
+func (vc *vcursorImpl) StreamExecutePrimitiveStandalone(primitive engine.Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(result *sqltypes.Result) error) error {
+	// clone the vcursorImpl with a new session.
+	newVC := vc.cloneWithAutocommitSession()
+	for try := 0; try < MaxBufferingRetries; try++ {
+		err := primitive.TryStreamExecute(newVC, bindVars, wantfields, callback)
+		if err != nil && vterrors.RootCause(err) == buffer.ShardMissingError {
+			continue
+		}
+		return err
+	}
+	return vterrors.New(vtrpcpb.Code_UNAVAILABLE, "upstream shards are not available")
+}
+
 // Execute is part of the engine.VCursor interface.
 func (vc *vcursorImpl) Execute(method string, query string, bindVars map[string]*querypb.BindVariable, rollbackOnError bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error) {
 	session := vc.safeSession
@@ -987,4 +1000,26 @@ func (vc *vcursorImpl) CanUseSetVar() bool {
 
 func (vc *vcursorImpl) ReleaseLock() error {
 	return vc.executor.ReleaseLock(vc.ctx, vc.safeSession)
+}
+
+func (vc *vcursorImpl) cloneWithAutocommitSession() *vcursorImpl {
+	safeSession := NewAutocommitSession(vc.safeSession.Session)
+	return &vcursorImpl{
+		ctx:             vc.ctx,
+		cancel:          vc.cancel,
+		safeSession:     safeSession,
+		keyspace:        vc.keyspace,
+		tabletType:      vc.tabletType,
+		destination:     vc.destination,
+		marginComments:  vc.marginComments,
+		executor:        vc.executor,
+		logStats:        vc.logStats,
+		collation:       vc.collation,
+		resolver:        vc.resolver,
+		vschema:         vc.vschema,
+		vm:              vc.vm,
+		topoServer:      vc.topoServer,
+		warnShardedOnly: vc.warnShardedOnly,
+		pv:              vc.pv,
+	}
 }
