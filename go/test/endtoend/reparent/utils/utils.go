@@ -648,7 +648,8 @@ func WaitForReplicationToStart(t *testing.T, clusterInstance *cluster.LocalProce
 				return
 			}
 		case <-time.After(replicationWaitTimeout):
-			t.Fatalf("replication did not catchup within %v", replicationWaitTimeout)
+			require.FailNow(t, "replication did not catchup within %v", replicationWaitTimeout)
+			return
 		}
 	}
 }
