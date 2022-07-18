@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/sync2"
+	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/logutil"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -30,7 +31,12 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtctl/schematools"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
+)
+
+var (
+	lockRenewTimeout = 10 * time.Second // has to be a fraction of Topo's defaultLockTimeout (30sec at this time)
 )
 
 // TabletExecutor applies schema changes to all tablets.
@@ -331,7 +337,7 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 	// keyspace-wide operations like resharding migrations.
 	ctx, unlock, lockErr := exec.ts.LockKeyspace(ctx, exec.keyspace, "ApplySchemaKeyspace")
 	if lockErr != nil {
-		execResult.ExecutorErr = lockErr.Error()
+		execResult.ExecutorErr = vterrors.Wrapf(lockErr, "lockErr in ApplySchemaKeyspace %v", exec.keyspace).Error()
 		return &execResult
 	}
 	defer func() {
@@ -340,7 +346,7 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 		var unlockErr error
 		unlock(&unlockErr)
 		if execResult.ExecutorErr == "" && unlockErr != nil {
-			execResult.ExecutorErr = unlockErr.Error()
+			execResult.ExecutorErr = vterrors.Wrapf(unlockErr, "unlockErr in ApplySchemaKeyspace %v", exec.keyspace).Error()
 		}
 	}()
 
@@ -356,8 +362,16 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 	}
 	providedUUID := ""
 
+	rl := timer.NewRateLimiter(lockRenewTimeout)
+	defer rl.Stop()
+
 	syncOperationExecuted := false
 	for index, sql := range sqls {
+		// Attempt to renew lease:
+		if err := rl.Do(func() error { return topo.CheckKeyspaceLockedAndRenew(ctx, exec.keyspace) }); err != nil {
+			execResult.ExecutorErr = vterrors.Wrapf(err, "CheckKeyspaceLocked in ApplySchemaKeyspace %v", exec.keyspace).Error()
+			return &execResult
+		}
 		execResult.CurSQLIndex = index
 		if exec.hasProvidedUUIDs() {
 			providedUUID = exec.uuids[index]
