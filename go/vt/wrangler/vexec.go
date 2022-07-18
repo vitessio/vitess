@@ -217,9 +217,7 @@ func (vx *vexec) exec() (map[*topo.TabletInfo]*querypb.QueryResult, error) {
 				// up any related data.
 				if vx.query == sqlVReplicationDelete {
 					query := fmt.Sprintf(sqlDeleteVDiffs, encodeString(primary.Keyspace), encodeString(vx.workflow))
-					if _, err := vx.wr.tmc.ExecuteFetchAsDba(ctx, primary.Tablet, false, []byte(query), -1, false, false); err != nil {
-						vx.wr.Logger().Infof("Error deleting vdiff data for %s.%s workflow: %v", primary.Keyspace, vx.workflow, err)
-					}
+					_, _ = vx.wr.tmc.ExecuteFetchAsDba(ctx, primary.Tablet, false, []byte(query), -1, false, false)
 				}
 				mu.Lock()
 				results[primary] = qr

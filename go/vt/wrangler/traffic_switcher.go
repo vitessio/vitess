@@ -1247,9 +1247,7 @@ func (ts *trafficSwitcher) deleteReverseVReplication(ctx context.Context) error 
 			return err
 		}
 		query = fmt.Sprintf(sqlDeleteVDiffs, encodeString(source.GetPrimary().Keyspace), encodeString(ts.reverseWorkflow))
-		if _, err := ts.wr.tmc.ExecuteFetchAsDba(ctx, source.GetPrimary().Tablet, false, []byte(query), -1, false, false); err != nil {
-			ts.Logger().Infof("Error deleting vdiff data for %s.%s workflow: %v", source.GetPrimary().Keyspace, ts.reverseWorkflow, err)
-		}
+		_, _ = ts.wr.tmc.ExecuteFetchAsDba(ctx, source.GetPrimary().Tablet, false, []byte(query), -1, false, false)
 		return nil
 	})
 }
@@ -1573,9 +1571,7 @@ func (ts *trafficSwitcher) dropTargetVReplicationStreams(ctx context.Context) er
 			return err
 		}
 		query = fmt.Sprintf(sqlDeleteVDiffs, encodeString(target.GetPrimary().Keyspace), encodeString(ts.WorkflowName()))
-		if _, err := ts.wr.tmc.ExecuteFetchAsDba(ctx, target.GetPrimary().Tablet, false, []byte(query), -1, false, false); err != nil {
-			ts.Logger().Infof("Error deleting vdiff data for %s.%s workflow: %v", target.GetPrimary().Keyspace, ts.WorkflowName(), err)
-		}
+		_, _ = ts.wr.tmc.ExecuteFetchAsDba(ctx, target.GetPrimary().Tablet, false, []byte(query), -1, false, false)
 		return nil
 	})
 }
@@ -1588,9 +1584,7 @@ func (ts *trafficSwitcher) dropSourceReverseVReplicationStreams(ctx context.Cont
 			return err
 		}
 		query = fmt.Sprintf(sqlDeleteVDiffs, encodeString(source.GetPrimary().Keyspace), encodeString(workflow.ReverseWorkflowName(ts.WorkflowName())))
-		if _, err := ts.wr.tmc.ExecuteFetchAsDba(ctx, source.GetPrimary().Tablet, false, []byte(query), -1, false, false); err != nil {
-			ts.Logger().Infof("Error deleting vdiff data for %s.%s workflow: %v", source.GetPrimary().Keyspace, workflow.ReverseWorkflowName(ts.WorkflowName()), err)
-		}
+		_, _ = ts.wr.tmc.ExecuteFetchAsDba(ctx, source.GetPrimary().Tablet, false, []byte(query), -1, false, false)
 		return nil
 	})
 }
