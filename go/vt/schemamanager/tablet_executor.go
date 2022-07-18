@@ -276,10 +276,10 @@ func (exec *TabletExecutor) preflightSchemaChanges(ctx context.Context, sqls []s
 
 // executeSQL executes a single SQL statement either as online DDL or synchronously on all tablets.
 // In online DDL case, the query may be exploded into multiple queries during
-func (exec *TabletExecutor) executeSQL(ctx context.Context, sql string, providedUUID string, execResult *ExecuteResult) error {
+func (exec *TabletExecutor) executeSQL(ctx context.Context, sql string, providedUUID string, execResult *ExecuteResult) (executedAsynchronously bool, err error) {
 	stmt, err := sqlparser.Parse(sql)
 	if err != nil {
-		return err
+		return false, err
 	}
 	switch stmt := stmt.(type) {
 	case sqlparser.DDLStatement:
@@ -287,7 +287,7 @@ func (exec *TabletExecutor) executeSQL(ctx context.Context, sql string, provided
 			onlineDDLs, err := schema.NewOnlineDDLs(exec.keyspace, sql, stmt, exec.ddlStrategySetting, exec.migrationContext, providedUUID)
 			if err != nil {
 				execResult.ExecutorErr = err.Error()
-				return err
+				return false, err
 			}
 			for _, onlineDDL := range onlineDDLs {
 				exec.executeOnAllTablets(ctx, execResult, onlineDDL.SQL, true)
@@ -296,25 +296,25 @@ func (exec *TabletExecutor) executeSQL(ctx context.Context, sql string, provided
 					exec.logger.Printf("%s\n", onlineDDL.UUID)
 				}
 			}
-			return nil
+			return true, nil
 		}
 	case *sqlparser.RevertMigration:
 		strategySetting := schema.NewDDLStrategySetting(schema.DDLStrategyOnline, exec.ddlStrategySetting.Options)
 		onlineDDL, err := schema.NewOnlineDDL(exec.keyspace, "", sqlparser.String(stmt), strategySetting, exec.migrationContext, providedUUID)
 		if err != nil {
 			execResult.ExecutorErr = err.Error()
-			return err
+			return false, err
 		}
 		exec.executeOnAllTablets(ctx, execResult, onlineDDL.SQL, true)
 		execResult.UUIDs = append(execResult.UUIDs, onlineDDL.UUID)
 		exec.logger.Printf("%s\n", onlineDDL.UUID)
-		return nil
+		return true, nil
 	case *sqlparser.AlterMigration:
 		exec.executeOnAllTablets(ctx, execResult, sql, true)
-		return nil
+		return true, nil
 	}
 	exec.executeOnAllTablets(ctx, execResult, sql, false)
-	return nil
+	return false, nil
 }
 
 // Execute applies schema changes
@@ -357,18 +357,60 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 	}
 	providedUUID := ""
 
+	syncOperationExecuted := false
 	for index, sql := range sqls {
 		execResult.CurSQLIndex = index
 		if exec.hasProvidedUUIDs() {
 			providedUUID = exec.uuids[index]
 		}
-		if err := exec.executeSQL(ctx, sql, providedUUID, &execResult); err != nil {
+		executedAsynchronously, err := exec.executeSQL(ctx, sql, providedUUID, &execResult)
+		if err != nil {
 			execResult.ExecutorErr = err.Error()
 			return &execResult
+		}
+		if !executedAsynchronously {
+			syncOperationExecuted = true
 		}
 		if len(execResult.FailedShards) > 0 {
 			break
 		}
+	}
+
+	if syncOperationExecuted {
+		// same shards will appear multiple times in execResult.SuccessShards when there are
+		// multiple SQLs
+		uniqueShards := map[string]*ShardResult{}
+		for _, result := range execResult.SuccessShards {
+			uniqueShards[result.Shard] = &result
+		}
+		var wg sync.WaitGroup
+		// If all shards succeeded, wait (up to waitReplicasTimeout) for replicas to
+		// execute the schema change via replication. This is best-effort, meaning
+		// we still return overall success if the timeout expires.
+		concurrency := sync2.NewSemaphore(10, 0)
+		reloadCtx, cancel := context.WithTimeout(ctx, exec.waitReplicasTimeout)
+		defer cancel()
+		for _, result := range uniqueShards {
+			wg.Add(1)
+			go func(result *ShardResult) {
+				defer wg.Done()
+				exec.logger.Infof("ReloadSchema on shard: %s", result.Shard)
+				schematools.ReloadShard(
+					reloadCtx,
+					exec.ts,
+					exec.tmc,
+					exec.logger,
+					exec.keyspace,
+					result.Shard,
+					result.Position,
+					concurrency,
+					false, /* includePrimary */
+				)
+			}(result)
+		}
+		wg.Wait()
+	} else {
+		exec.logger.Infof("Skipped ReloadSchema since all SQLs executed asynchronously")
 	}
 	return &execResult
 }
@@ -401,31 +443,6 @@ func (exec *TabletExecutor) executeOnAllTablets(ctx context.Context, execResult 
 	if len(execResult.FailedShards) > 0 {
 		return
 	}
-
-	// If all shards succeeded, wait (up to waitReplicasTimeout) for replicas to
-	// execute the schema change via replication. This is best-effort, meaning
-	// we still return overall success if the timeout expires.
-	concurrency := sync2.NewSemaphore(10, 0)
-	reloadCtx, cancel := context.WithTimeout(ctx, exec.waitReplicasTimeout)
-	defer cancel()
-	for _, result := range execResult.SuccessShards {
-		wg.Add(1)
-		go func(result ShardResult) {
-			defer wg.Done()
-			schematools.ReloadShard(
-				reloadCtx,
-				exec.ts,
-				exec.tmc,
-				exec.logger,
-				exec.keyspace,
-				result.Shard,
-				result.Position,
-				concurrency,
-				false, /* includePrimary */
-			)
-		}(result)
-	}
-	wg.Wait()
 }
 
 func (exec *TabletExecutor) executeOneTablet(
