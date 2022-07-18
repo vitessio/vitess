@@ -3989,6 +3989,30 @@ func (e *Executor) CompleteMigration(ctx context.Context, uuid string) (result *
 	return rs, nil
 }
 
+// CompletePendingMigrations completes all pending migrations (that are expected to run or are running)
+// for this keyspace
+func (e *Executor) CompletePendingMigrations(ctx context.Context) (result *sqltypes.Result, err error) {
+	if !e.isOpen {
+		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "online ddl is disabled")
+	}
+
+	uuids, err := e.readPendingMigrationsUUIDs(ctx)
+	if err != nil {
+		return result, err
+	}
+
+	result = &sqltypes.Result{}
+	for _, uuid := range uuids {
+		log.Infof("CompletePendingMigrations: completing %s", uuid)
+		res, err := e.CompleteMigration(ctx, uuid)
+		if err != nil {
+			return result, err
+		}
+		result.AppendResult(res)
+	}
+	return result, nil
+}
+
 func (e *Executor) submittedMigrationConflictsWithPendingMigrationInSingletonContext(
 	ctx context.Context, submittedMigration, pendingOnlineDDL *schema.OnlineDDL,
 ) bool {

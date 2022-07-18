@@ -3159,6 +3159,12 @@ alter_statement:
       UUID: string($4),
     }
   }
+| ALTER comment_opt VITESS_MIGRATION COMPLETE ALL
+  {
+    $$ = &AlterMigration{
+      Type: CompleteAllMigrationType,
+    }
+  }
 | ALTER comment_opt VITESS_MIGRATION STRING CANCEL
   {
     $$ = &AlterMigration{
