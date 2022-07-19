@@ -35,6 +35,7 @@ jobs:
     if: always() && (needs.get_previous_release.result == 'success')
     name: Run Upgrade Downgrade Test
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     needs:
       - get_previous_release
 
