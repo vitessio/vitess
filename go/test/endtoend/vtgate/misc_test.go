@@ -823,3 +823,15 @@ func TestDescribeVindex(t *testing.T) {
 
 	utils.AssertContainsError(t, conn, "describe hash", "'vt_ks.hash' doesn't exist")
 }
+
+func TestEmptyQuery(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	utils.AssertContainsError(t, conn, "", "Query was empty")
+	utils.AssertContainsError(t, conn, ";", "Query was empty")
+	utils.AssertIsEmpty(t, conn, "-- this is a comment")
+}

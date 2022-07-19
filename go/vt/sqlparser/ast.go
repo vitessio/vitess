@@ -682,6 +682,11 @@ type (
 	// It should be used only as an indicator. It does not contain
 	// the full AST for the statement.
 	OtherAdmin struct{}
+
+	// CommentOnly represents a query which only has comments
+	CommentOnly struct {
+		Comments []string
+	}
 )
 
 func (*Union) iStatement()             {}
@@ -705,6 +710,7 @@ func (*Savepoint) iStatement()         {}
 func (*Release) iStatement()           {}
 func (*OtherRead) iStatement()         {}
 func (*OtherAdmin) iStatement()        {}
+func (*CommentOnly) iStatement()       {}
 func (*Select) iSelectStatement()      {}
 func (*Union) iSelectStatement()       {}
 func (*Load) iStatement()              {}
