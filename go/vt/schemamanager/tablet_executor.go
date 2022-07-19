@@ -472,7 +472,7 @@ func (exec *TabletExecutor) executeOneTablet(
 				sql = sqlparser.String(ddlStmt)
 			}
 		}
-		result, err = exec.tmc.ExecuteFetchAsDba(ctx, tablet, false, []byte(sql), 10, false, true)
+		result, err = exec.tmc.ExecuteFetchAsDba(ctx, tablet, false, []byte(sql), 10, false, false /* do not ReloadSchema */)
 	}
 	if err != nil {
 		errChan <- ShardWithError{Shard: tablet.Shard, Err: err.Error()}
