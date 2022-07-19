@@ -316,6 +316,7 @@ func WaitForThrottledTimestamp(t *testing.T, vtParams *mysql.ConnParams, uuid st
 		}
 		time.Sleep(1 * time.Second)
 	}
-	require.Fail(t, fmt.Sprintf("failed to get a last_throttled_timestamp value before timeout of %v", timeout))
+	require.Fail(t, fmt.Sprintf("failed to get a last_throttled_timestamp value for migration %s before hitting the timeout of %v",
+		uuid, timeout))
 	return
 }

@@ -361,7 +361,7 @@ func TestSchemaChange(t *testing.T) {
 		defer onlineddl.UnthrottleAllMigrations(t, &vtParams)
 		onlineddl.CheckThrottledApps(t, &vtParams, onlineDDLThrottlerAppName, true)
 
-		uuid := testOnlineDDLStatement(t, alterTableTrivialStatement, "vitess", providedUUID, providedMigrationContext, "vtgate", "test_val", "throttled")
+		uuid := testOnlineDDLStatement(t, alterTableTrivialStatement, "vitess", providedUUID, providedMigrationContext, "vtgate", "test_val", "", schema.OnlineDDLStatusRunning)
 		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalMigrationWait, schema.OnlineDDLStatusRunning)
 		testRows(t)
 
@@ -811,9 +811,11 @@ func testWithInitialSchema(t *testing.T) {
 
 // testOnlineDDLStatement runs an online DDL, ALTER statement and waits for it as appropriate based
 // on the strategy and expectations.
-// If no expected statuses are provided then this waits for the migration to be completed. If you expect
-// something else, then you should specify. For example, if you expect the migration to be throttled
-// then you should expect schema.OnlineDDLStatusRunning.
+// If no expected statuses are provided then this waits for the migration to be:
+//   - 'completed' when no expected error is specified and the strategy does not include postponement
+//   - 'running' when no expected error is specified and the strategy includes postponement
+// If you expect some other status(es) then you should specify. For example, if you expect the migration
+// to be throttled then you should expect schema.OnlineDDLStatusRunning.
 func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy string, providedUUIDList string, providedMigrationContext string, executeStrategy string, expectColumn string, expectError string, expectStatuses ...schema.OnlineDDLStatus) (uuid string) {
 	tableName := fmt.Sprintf("vt_onlineddl_test_%02d", 3)
 	sqlQuery := fmt.Sprintf(alterStatement, tableName)
@@ -847,7 +849,8 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 	// tablet(s) directly.
 	if strategySetting.Strategy.IsDirect() {
 		waitFor = "tablet"
-	} else if strategySetting.IsPostponeCompletion() {
+	}
+	if strategySetting.IsPostponeCompletion() {
 		// We expect it to be running by default
 		if expectStatuses == nil || len(expectStatuses) == 0 {
 			expectStatuses = []schema.OnlineDDLStatus{schema.OnlineDDLStatusRunning}
@@ -930,6 +933,7 @@ func waitForTableOnTablets(t *testing.T, tableName, expectColumn string) {
 		case <-time.After(normalMigrationWait):
 			require.Fail(t, fmt.Sprintf("the %s table did not include the expected %s column before hitting the timeout of %v",
 				tableName, expectColumn, normalMigrationWait))
+			return
 		}
 	}
 }
