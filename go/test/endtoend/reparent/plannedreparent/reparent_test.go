@@ -34,7 +34,7 @@ import (
 
 func TestPrimaryToSpareStateChangeImpossible(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentClusterLegacy(t, true)
+	clusterInstance := utils.SetupReparentCluster(t, true)
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
@@ -46,7 +46,7 @@ func TestPrimaryToSpareStateChangeImpossible(t *testing.T) {
 
 func TestReparentCrossCell(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentClusterLegacy(t, true)
+	clusterInstance := utils.SetupReparentCluster(t, true)
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
@@ -60,14 +60,12 @@ func TestReparentCrossCell(t *testing.T) {
 
 func TestReparentGraceful(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentClusterLegacy(t, true)
+	clusterInstance := utils.SetupReparentCluster(t, true)
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
 	// Run this to make sure it succeeds.
-	strArray := utils.GetShardReplicationPositions(t, clusterInstance, utils.KeyspaceName, utils.ShardName, false)
-	assert.Equal(t, 4, len(strArray))          // one primary, three replicas
-	assert.Contains(t, strArray[0], "primary") // primary first
+	utils.WaitForReplicationToStart(t, clusterInstance, utils.KeyspaceName, utils.ShardName, len(tablets), true)
 
 	// Perform a graceful reparent operation
 	utils.Prs(t, clusterInstance, tablets[1])
@@ -85,7 +83,7 @@ func TestReparentGraceful(t *testing.T) {
 // TestPRSWithDrainedLaggingTablet tests that PRS succeeds even if we have a lagging drained tablet
 func TestPRSWithDrainedLaggingTablet(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentClusterLegacy(t, true)
+	clusterInstance := utils.SetupReparentCluster(t, true)
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
@@ -112,7 +110,7 @@ func TestPRSWithDrainedLaggingTablet(t *testing.T) {
 
 func TestReparentReplicaOffline(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentClusterLegacy(t, true)
+	clusterInstance := utils.SetupReparentCluster(t, true)
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
@@ -129,7 +127,7 @@ func TestReparentReplicaOffline(t *testing.T) {
 
 func TestReparentAvoid(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentClusterLegacy(t, true)
+	clusterInstance := utils.SetupReparentCluster(t, true)
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 	utils.DeleteTablet(t, clusterInstance, tablets[2])
@@ -161,14 +159,14 @@ func TestReparentAvoid(t *testing.T) {
 
 func TestReparentFromOutside(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentClusterLegacy(t, true)
+	clusterInstance := utils.SetupReparentCluster(t, true)
 	defer utils.TeardownCluster(clusterInstance)
 	reparentFromOutside(t, clusterInstance, false)
 }
 
 func TestReparentFromOutsideWithNoPrimary(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentClusterLegacy(t, true)
+	clusterInstance := utils.SetupReparentCluster(t, true)
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
@@ -257,7 +255,7 @@ func reparentFromOutside(t *testing.T, clusterInstance *cluster.LocalProcessClus
 
 func TestReparentWithDownReplica(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentClusterLegacy(t, true)
+	clusterInstance := utils.SetupReparentCluster(t, true)
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
@@ -300,7 +298,7 @@ func TestReparentWithDownReplica(t *testing.T) {
 
 func TestChangeTypeSemiSync(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentClusterLegacy(t, true)
+	clusterInstance := utils.SetupReparentCluster(t, true)
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
@@ -364,7 +362,7 @@ func TestChangeTypeSemiSync(t *testing.T) {
 
 func TestReparentDoesntHangIfPrimaryFails(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentClusterLegacy(t, true)
+	clusterInstance := utils.SetupReparentCluster(t, true)
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 

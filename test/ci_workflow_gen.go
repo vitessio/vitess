@@ -31,7 +31,6 @@ type mysqlVersion string
 const (
 	mysql57    mysqlVersion = "mysql57"
 	mysql80    mysqlVersion = "mysql80"
-	mariadb102 mysqlVersion = "mariadb102"
 	mariadb103 mysqlVersion = "mariadb103"
 
 	defaultMySQLVersion mysqlVersion = mysql57
@@ -46,7 +45,7 @@ var (
 )
 
 var (
-	unitTestDatabases = []mysqlVersion{mysql57, mysql80, mariadb102, mariadb103}
+	unitTestDatabases = []mysqlVersion{mysql57, mysql80, mariadb103}
 )
 
 const (
@@ -99,7 +98,6 @@ var (
 		"tabletmanager_throttler_custom_config",
 		"tabletmanager_tablegc",
 		"tabletmanager_consul",
-		"vtgate_buffer",
 		"vtgate_concurrentdml",
 		"vtgate_godriver",
 		"vtgate_gen4",
@@ -166,6 +164,8 @@ type selfHostedTest struct {
 func clusterMySQLVersions(clusterName string) mysqlVersions {
 	switch {
 	case strings.HasPrefix(clusterName, "onlineddl_"):
+		return allMySQLVersions
+	case clusterName == "schemadiff_vrepl":
 		return allMySQLVersions
 	case clusterName == "tabletmanager_tablegc":
 		return allMySQLVersions
