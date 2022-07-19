@@ -327,9 +327,7 @@ func (vde *Engine) retryVDiffs(ctx context.Context) error {
 
 func (vde *Engine) retryErroredVDiffs() {
 	tkr := time.NewTicker(time.Second * 30)
-	defer func() {
-		tkr.Stop()
-	}()
+	defer tkr.Stop()
 	for {
 		select {
 		case <-vde.ctx.Done():
