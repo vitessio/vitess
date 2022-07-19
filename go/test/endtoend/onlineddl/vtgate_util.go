@@ -92,6 +92,17 @@ func CheckRetryMigration(t *testing.T, vtParams *mysql.ConnParams, shards []clus
 	}
 }
 
+// CheckRetryPartialMigration attempts to retry a migration where a subset of shards failed
+func CheckRetryPartialMigration(t *testing.T, vtParams *mysql.ConnParams, uuid string) {
+	query, err := sqlparser.ParseAndBind("alter vitess_migration %a retry",
+		sqltypes.StringBindVariable(uuid),
+	)
+	require.NoError(t, err)
+	r := VtgateExecQuery(t, vtParams, query, "")
+
+	assert.GreaterOrEqual(t, int(1), int(r.RowsAffected))
+}
+
 // CheckCancelMigration attempts to cancel a migration, and expects success/failure by counting affected rows
 func CheckCancelMigration(t *testing.T, vtParams *mysql.ConnParams, shards []cluster.Shard, uuid string, expectCancelPossible bool) {
 	query, err := sqlparser.ParseAndBind("alter vitess_migration %a cancel",
@@ -217,6 +228,8 @@ func WaitForMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, shards []c
 		}
 		time.Sleep(1 * time.Second)
 	}
+	require.Fail(t, fmt.Sprintf("migration %s did not reach an expected status (%v) before hitting the timeout of %v, last known status: %v",
+		uuid, expectStatuses, timeout, lastKnownStatus))
 	return schema.OnlineDDLStatus(lastKnownStatus)
 }
 
@@ -303,6 +316,6 @@ func WaitForThrottledTimestamp(t *testing.T, vtParams *mysql.ConnParams, uuid st
 		}
 		time.Sleep(1 * time.Second)
 	}
-	t.Error("timeout waiting for last_throttled_timestamp to have nonempty value")
+	require.Fail(t, fmt.Sprintf("failed to get a last_throttled_timestamp value before timeout of %v", timeout))
 	return
 }
