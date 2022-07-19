@@ -104,7 +104,7 @@ func (pb *primitiveBuilder) checkAggregates(sel *sqlparser.Select) error {
 	// order by clauses.
 	if !isRoute {
 		if hasAggregates {
-			return vterrors.VT12001()
+			return vterrors.VT12001("cross-shard query with aggregates")
 		}
 		pb.plan = newDistinctV3(pb.plan)
 		return nil

@@ -17,6 +17,7 @@ limitations under the License.
 package planbuilder
 
 import (
+	"fmt"
 	"sort"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -255,24 +256,24 @@ func buildDBDDLPlan(stmt sqlparser.Statement, _ *sqlparser.ReservedVars, vschema
 			return engine.NewRowsPrimitive(make([][]sqltypes.Value, 0), make([]*querypb.Field, 0)), nil
 		}
 		if !ksExists {
-			return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.DbDropExists, "Can't drop database '%s'; database doesn't exists", ksName)
+			return nil, vterrors.VT05001(ksName)
 		}
 		return engine.NewDBDDL(ksName, false, queryTimeout(dbDDL.Comments.Directives())), nil
 	case *sqlparser.AlterDatabase:
 		if !ksExists {
-			return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.BadDb, "Can't alter database '%s'; unknown database", ksName)
+			return nil, vterrors.VT05002(ksName)
 		}
-		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "alter database is not supported")
+		return nil, vterrors.VT12001("alter database")
 	case *sqlparser.CreateDatabase:
 		if dbDDL.IfNotExists && ksExists {
 			return engine.NewRowsPrimitive(make([][]sqltypes.Value, 0), make([]*querypb.Field, 0)), nil
 		}
 		if !dbDDL.IfNotExists && ksExists {
-			return nil, vterrors.NewErrorf(vtrpcpb.Code_ALREADY_EXISTS, vterrors.DbCreateExists, "Can't create database '%s'; database exists", ksName)
+			return nil, vterrors.VT06001(ksName)
 		}
 		return engine.NewDBDDL(ksName, true, queryTimeout(dbDDL.Comments.Directives())), nil
 	}
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] database ddl not recognized: %s", sqlparser.String(dbDDLstmt))
+	return nil, vterrors.VT13001(fmt.Sprintf("database ddl not recognized: %s", sqlparser.String(dbDDLstmt)))
 }
 
 func buildSetTxPlan(_ sqlparser.Statement, _ *sqlparser.ReservedVars, _ plancontext.VSchema) (engine.Primitive, error) {

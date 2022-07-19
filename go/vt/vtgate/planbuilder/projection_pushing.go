@@ -202,7 +202,7 @@ func pushProjectionIntoJoin(
 		// for example an expression like count(*) will have dependencies on both sides, but we should not push it
 		// instead we should return an error
 		if hasAggregation {
-			return 0, false, vterrors.VT12001()
+			return 0, false, vterrors.VT12001("cross-shard query with aggregates")
 		}
 		// now we break the expression into left and right side dependencies and rewrite the left ones to bind variables
 		bvName, cols, rewrittenExpr, err := physical.BreakExpressionInLHSandRHS(ctx, expr.Expr, lhsSolves)
@@ -276,7 +276,7 @@ func pushProjectionIntoHashJoin(
 		// for example an expression like count(*) will have dependencies on both sides, but we should not push it
 		// instead we should return an error
 		if hasAggregation {
-			return 0, false, vterrors.VT12001()
+			return 0, false, vterrors.VT12001("cross-shard query with aggregates")
 		}
 		return 0, false, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: hash join with projection from both sides of the join")
 	}

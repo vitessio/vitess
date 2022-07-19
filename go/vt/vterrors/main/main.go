@@ -19,6 +19,7 @@ package main
 import (
 	"log"
 	"os"
+	"strings"
 	"text/template"
 
 	"vitess.io/vitess/go/mysql"
@@ -33,7 +34,7 @@ const (
 | --- | --- | --- | --- | --- |
 {{- range $err := . }}
 {{- $data := (call $err) }}
-| {{ $data.ID }} | {{ $data.Describe }} | {{ $data.Err.Error }} | {{ ConvertStateToMySQLErrorCode $data.State }} | {{ ConvertStateToMySQLState $data.State }} |
+| {{ $data.ID }} | {{ $data.Description }} | {{ FormatError $data.Err }} | {{ ConvertStateToMySQLErrorCode $data.State }} | {{ ConvertStateToMySQLState $data.State }} |
 {{- end }}
 `
 )
@@ -43,6 +44,10 @@ func main() {
 	t.Funcs(map[string]any{
 		"ConvertStateToMySQLErrorCode": mysql.ConvertStateToMySQLErrorCode,
 		"ConvertStateToMySQLState":     mysql.ConvertStateToMySQLState,
+		"FormatError": func(err error) string {
+			s := err.Error()
+			return strings.TrimSpace(strings.Join(strings.Split(s, ":")[1:], ":"))
+		},
 	})
 	parse, err := t.Parse(tmpl)
 	t = template.Must(parse, err)
