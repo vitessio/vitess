@@ -376,7 +376,7 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 		}
 	}
 
-	if syncOperationExecuted {
+	if true || syncOperationExecuted {
 		// same shards will appear multiple times in execResult.SuccessShards when there are
 		// multiple SQLs
 		uniqueShards := map[string]*ShardResult{}
