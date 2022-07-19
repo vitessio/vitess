@@ -362,31 +362,10 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 	rl := timer.NewRateLimiter(*topo.RemoteOperationTimeout / 4)
 	defer rl.Stop()
 
-	syncOperationExecuted := false
-	for index, sql := range sqls {
-		// Attempt to renew lease:
-		if err := rl.Do(func() error { return topo.CheckKeyspaceLockedAndRenew(ctx, exec.keyspace) }); err != nil {
-			execResult.ExecutorErr = vterrors.Wrapf(err, "CheckKeyspaceLocked in ApplySchemaKeyspace %v", exec.keyspace).Error()
-			return &execResult
-		}
-		execResult.CurSQLIndex = index
-		if exec.hasProvidedUUIDs() {
-			providedUUID = exec.uuids[index]
-		}
-		executedAsynchronously, err := exec.executeSQL(ctx, sql, providedUUID, &execResult)
-		if err != nil {
-			execResult.ExecutorErr = err.Error()
-			return &execResult
-		}
-		if !executedAsynchronously {
-			syncOperationExecuted = true
-		}
-		if len(execResult.FailedShards) > 0 {
-			break
-		}
-	}
-
-	if true || syncOperationExecuted {
+	// Schedule a reload schema to execute regardless of whether
+	// there will be any errors or not since we want to see updates
+	// also in case one of the operation fails.
+	defer func() {
 		// same shards will appear multiple times in execResult.SuccessShards when there are
 		// multiple SQLs
 		uniqueShards := map[string]*ShardResult{}
@@ -419,9 +398,28 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 			}(result)
 		}
 		wg.Wait()
-	} else {
-		exec.logger.Infof("Skipped ReloadSchema since all SQLs executed asynchronously")
+	}()
+
+	for index, sql := range sqls {
+		// Attempt to renew lease:
+		if err := rl.Do(func() error { return topo.CheckKeyspaceLockedAndRenew(ctx, exec.keyspace) }); err != nil {
+			execResult.ExecutorErr = vterrors.Wrapf(err, "CheckKeyspaceLocked in ApplySchemaKeyspace %v", exec.keyspace).Error()
+			return &execResult
+		}
+		execResult.CurSQLIndex = index
+		if exec.hasProvidedUUIDs() {
+			providedUUID = exec.uuids[index]
+		}
+		_, err := exec.executeSQL(ctx, sql, providedUUID, &execResult)
+		if err != nil {
+			execResult.ExecutorErr = err.Error()
+			return &execResult
+		}
+		if len(execResult.FailedShards) > 0 {
+			break
+		}
 	}
+
 	return &execResult
 }
 
