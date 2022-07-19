@@ -404,7 +404,7 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 					result.Shard,
 					result.Position,
 					concurrency,
-					false, /* includePrimary */
+					true, /* includePrimary */
 				)
 			}(result)
 		}
