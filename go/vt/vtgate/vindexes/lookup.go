@@ -150,7 +150,7 @@ func (ln *LookupNonUnique) MarshalJSON() ([]byte, error) {
 func NewLookup(name string, m map[string]string) (Vindex, error) {
 	lookup := &LookupNonUnique{name: name}
 
-	autocommit, err := boolFromMap(m, "autocommit")
+	cc, err := parseCommonConfig(m)
 	if err != nil {
 		return nil, err
 	}
@@ -160,7 +160,8 @@ func NewLookup(name string, m map[string]string) (Vindex, error) {
 	}
 
 	// if autocommit is on for non-unique lookup, upsert should also be on.
-	if err := lookup.lkp.Init(m, autocommit, autocommit /* upsert */); err != nil {
+	upsert := cc.autocommit || cc.multiShardAutocommit
+	if err := lookup.lkp.Init(m, cc.autocommit, upsert, cc.multiShardAutocommit); err != nil {
 		return nil, err
 	}
 	return lookup, nil
@@ -197,7 +198,7 @@ type LookupUnique struct {
 func NewLookupUnique(name string, m map[string]string) (Vindex, error) {
 	lu := &LookupUnique{name: name}
 
-	autocommit, err := boolFromMap(m, "autocommit")
+	cc, err := parseCommonConfig(m)
 	if err != nil {
 		return nil, err
 	}
@@ -207,7 +208,7 @@ func NewLookupUnique(name string, m map[string]string) (Vindex, error) {
 	}
 
 	// Don't allow upserts for unique vindexes.
-	if err := lu.lkp.Init(m, autocommit, false /* upsert */); err != nil {
+	if err := lu.lkp.Init(m, cc.autocommit, false /* upsert */, cc.multiShardAutocommit); err != nil {
 		return nil, err
 	}
 	return lu, nil

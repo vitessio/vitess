@@ -957,6 +957,16 @@ func TestInsertShardedAutocommitLookup(t *testing.T) {
 				"to": "user_id",
 				"autocommit": "true"
 			}
+		},
+		"music_user_map": {
+			"type": "lookup_hash",
+			"owner": "user",
+			"params": {
+				"table": "music_user_map",
+				"from": "music",
+				"to": "user_id",
+				"multi_shard_autocommit": "true"
+			}
 		}
 	},
 	"tables": {
@@ -969,6 +979,10 @@ func TestInsertShardedAutocommitLookup(t *testing.T) {
 				{
 					"column": "name",
 					"name": "name_user_map"
+				},
+				{
+					"column": "music",
+					"name": "music_user_map"
 				}
 			],
 			"auto_increment": {
@@ -987,14 +1001,15 @@ func TestInsertShardedAutocommitLookup(t *testing.T) {
 `
 	executor, sbc1, sbc2, sbclookup := createCustomExecutor(vschema)
 
-	_, err := executorExecSession(executor, "insert into user(id, v, name) values (1, 2, 'myname')", nil, &vtgatepb.Session{})
+	_, err := executorExecSession(executor, "insert into user(id, v, name, music) values (1, 2, 'myname', 'star')", nil, &vtgatepb.Session{})
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql: "insert into `user`(id, v, `name`) values (:_Id_0, 2, :_name_0)",
+		Sql: "insert into `user`(id, v, `name`, music) values (:_Id_0, 2, :_name_0, :_music_0)",
 		BindVariables: map[string]*querypb.BindVariable{
-			"_Id_0":   sqltypes.Int64BindVariable(1),
-			"_name_0": sqltypes.StringBindVariable("myname"),
-			"__seq0":  sqltypes.Int64BindVariable(1),
+			"_Id_0":    sqltypes.Int64BindVariable(1),
+			"_music_0": sqltypes.StringBindVariable("star"),
+			"_name_0":  sqltypes.StringBindVariable("myname"),
+			"__seq0":   sqltypes.Int64BindVariable(1),
 		},
 	}}
 	assertQueries(t, sbc1, wantQueries)
@@ -1003,6 +1018,12 @@ func TestInsertShardedAutocommitLookup(t *testing.T) {
 		Sql: "insert into name_user_map(`name`, user_id) values (:name_0, :user_id_0) on duplicate key update `name` = values(`name`), user_id = values(user_id)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"name_0":    sqltypes.StringBindVariable("myname"),
+			"user_id_0": sqltypes.Uint64BindVariable(1),
+		},
+	}, {
+		Sql: "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into music_user_map(music, user_id) values (:music_0, :user_id_0) on duplicate key update music = values(music), user_id = values(user_id)",
+		BindVariables: map[string]*querypb.BindVariable{
+			"music_0":   sqltypes.StringBindVariable("star"),
 			"user_id_0": sqltypes.Uint64BindVariable(1),
 		},
 	}}
