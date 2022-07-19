@@ -95,7 +95,7 @@ func checkHealth(t *testing.T, url string) bool {
 func waitForQueryToExecute(t *testing.T, conn *mysql.Conn, database string, query string, want string) {
 	done := false
 	ticker := time.NewTicker(10 * time.Millisecond)
-	ticker.Stop()
+	defer ticker.Stop()
 	for {
 		select {
 		case <-ticker.C:
