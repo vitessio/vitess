@@ -1,0 +1,8 @@
+{
+    "name": "@planetscale/vtadmin",
+    "version": "1.0.1",
+    "main": "index.js",
+    "typings": "index.d.ts",
+    "homepage": "./",
+    "description": "Planetscale's internal version of vtadmin-web, packaged as an npm module. For use with vtadmin-api."
+  }

@@ -23,3 +23,7 @@ yarn-debug.log*
 yarn-error.log*
 
 .eslintcache
+
+# @planetscale/vtadmin
+/planetscale-vtadmin
+scripts/createPlanetscaleVTAdmin.js

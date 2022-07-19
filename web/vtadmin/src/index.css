@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-@import './style/fonts.css';
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

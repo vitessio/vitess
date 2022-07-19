@@ -48,9 +48,8 @@ module.exports = {
             },
         },
         fontFamily: {
-            mono: ['NotoMono', 'source-code-pro', 'menlo', 'monaco', 'consolas', 'Courier New', 'monospace'],
+            mono: ['source-code-pro', 'menlo', 'monaco', 'consolas', 'Courier New', 'monospace'],
             sans: [
-                'NotoSans',
                 '-apple-system',
                 'blinkmacsystemfont',
                 'Segoe UI',

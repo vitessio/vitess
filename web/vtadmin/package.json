@@ -21,6 +21,7 @@
     "highcharts": "^9.1.0",
     "highcharts-react-official": "^3.0.0",
     "history": "^5.0.0",
+    "js-cookie": "^3.0.1",
     "lodash-es": "^4.17.20",
     "postcss-flexbugs-fixes": "^5.0.2",
     "postcss-preset-env": "^7.2.0",
@@ -51,7 +52,10 @@
     "lint:prettier:fix": "npm run lint:prettier -- --write",
     "lint:stylelint": "stylelint \"**/*.{css,scss}\"",
     "lint:stylelint:fix": "npm run lint:stylelint -- --fix",
-    "eject": "react-scripts eject"
+    "analyze": "source-map-explorer 'build/static/js/*.js'",
+    "eject": "react-scripts eject",
+    "build:planetscale-vtadmin": "tsc -p ./planetscale-vtadmin-template/tsconfig.json --outDir ./planetscale-vtadmin && cp ./planetscale-vtadmin-template/README.md ./planetscale-vtadmin && node ./scripts/verify-pscale-build.ts",
+    "build:planetscale": "node ./scripts/build-pscale-vtadmin.ts && tsc -p ./planetscale-vtadmin-template/tsconfig.json --outDir ./planetscale-vtadmin && cp ./planetscale-vtadmin-template/README.md ./planetscale-vtadmin && node ./scripts/verify-pscale-build.ts"
   },
   "eslintConfig": {
     "extends": [
@@ -80,13 +84,15 @@
     "@testing-library/jest-dom": "^5.11.9",
     "@testing-library/react": "^11.2.5",
     "@testing-library/react-hooks": "^5.0.3",
-    "@testing-library/user-event": "^14.2.0",
+    "@types/fs-extra": "^9.0.13",
+    "@types/js-cookie": "^3.0.1",
     "@types/lodash-es": "^4.17.4",
     "autoprefixer": "^10.4.2",
     "msw": "^0.36.8",
     "postcss": "^8.4.6",
     "prettier": "^2.2.1",
     "protobufjs": "^6.10.2",
+    "rewire": "^6.0.0",
     "stylelint": "^14.4.0",
     "stylelint-config-prettier": "^9.0.3",
     "stylelint-config-standard-scss": "^3.0.0",
