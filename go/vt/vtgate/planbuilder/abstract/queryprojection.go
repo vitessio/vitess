@@ -305,7 +305,7 @@ func checkForInvalidAggregations(exp *sqlparser.AliasedExpr) error {
 		if aggrFunc, isAggregate := node.(sqlparser.AggrFunc); isAggregate {
 			if aggrFunc.GetArgs() != nil &&
 				len(aggrFunc.GetArgs()) != 1 {
-				return false, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.SyntaxError, "aggregate functions take a single argument '%s'", sqlparser.String(node))
+				return false, vterrors.VT03001(sqlparser.String(node))
 			}
 			return true, nil
 		}

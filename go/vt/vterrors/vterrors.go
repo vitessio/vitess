@@ -128,8 +128,12 @@ func Errorf(code vtrpcpb.Code, format string, args ...any) error {
 // as a value that satisfies error.
 // NewErrorf also records the stack trace at the point it was called.
 func NewErrorf(code vtrpcpb.Code, state State, format string, args ...any) error {
+	msg := format
+	if args != nil {
+		msg = fmt.Sprintf(format, args...)
+	}
 	return &fundamental{
-		msg:   fmt.Sprintf(format, args...),
+		msg:   msg,
 		code:  code,
 		state: state,
 		stack: callers(),
