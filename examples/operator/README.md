@@ -12,15 +12,18 @@ kubectl apply -f operator.yaml
 # Example:
 #  images:
 #    vtctld: vitess/lite:mysql80
+#    vtadmin: vitess/vtadmin:latest
 #    vtgate: vitess/lite:mysql80
 #    vttablet: vitess/lite:mysql80
 #    vtbackup: vitess/lite:mysql80
+#    vtorc: vitess/lite:mysql80
 #    mysqld:
 #      mysql80Compatible: vitess/lite:mysql80
 
 kubectl apply -f 101_initial_cluster.yaml
 
-# Port-forward vtctld and vtgate and apply schema and vschema
+# Port-forward vtctld, vtgate and vtadmin and apply schema and vschema
+# VTAdmin's UI will be available at http://localhost:14000/
 ./pf.sh &
 alias mysql="mysql -h 127.0.0.1 -P 15306 -u user"
 alias vtctlclient="vtctlclient --server localhost:15999 --alsologtostderr"
