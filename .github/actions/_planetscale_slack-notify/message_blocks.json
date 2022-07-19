@@ -1,0 +1,99 @@
+{
+  "blocks": [
+    {
+      "type": "section",
+      "text": {
+        "type": "mrkdwn",
+        "text": "<https://github.com/planetscale/planetscale-operator|*planetscale/planetscale-operator*>\nfrom *4389/merge@bacaecad*"
+      }
+    },
+    {
+      "type": "section",
+      "text": {
+        "type": "mrkdwn",
+        "text": ":heavy_check_mark: *Monorepo* for <https://github.com/planetscale/planetscale-operator/pull/4389|#4389>\nWorkflow run <https://github.com/planetscale/planetscale-operator/actions/runs/75036791|#1174> succeeded in 2m0s"
+      }
+    },
+    {
+      "type": "divider"
+    },
+    {
+      "type": "section",
+      "fields": [
+        {
+          "type": "mrkdwn",
+          "text": "✓ <https://github.com/planetscale/planetscale-operator/runs/576171644|Maybe rebuild build image>\n  ↳ completed in 23s"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "✓ <https://github.com/planetscale/planetscale-operator/runs/576171660|Maybe rebuild node-build image>\n  ↳ completed in 17s"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "✓ <https://github.com/planetscale/planetscale-operator/runs/576171687|test-alert-index>\n  ↳ completed in 8s"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "✓ <https://github.com/planetscale/planetscale-operator/runs/576171699|test-kustomize-build>\n  ↳ completed in 5s"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "✓ <https://github.com/planetscale/planetscale-operator/runs/576171713|test-prom-rules>\n  ↳ completed in 5s"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "✓ <https://github.com/planetscale/planetscale-operator/runs/576171735|test-shellcheck>\n  ↳ completed in 1m38s"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "✓ <https://github.com/planetscale/planetscale-operator/runs/576171753|test-markdownfmt>\n  ↳ completed in 17s"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "✓ <https://github.com/planetscale/planetscale-operator/runs/576171781|test-shfmt>\n  ↳ completed in 13s"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "✓ <https://github.com/planetscale/planetscale-operator/runs/576171799|test-shunit2>\n  ↳ completed in 35s"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "✓ <https://github.com/planetscale/planetscale-operator/runs/576171822|test-tools-build>\n  ↳ completed in 5s"
+        }
+      ]
+    },
+    {
+      "type": "section",
+      "fields": [
+        {
+          "type": "mrkdwn",
+          "text": "✓ <https://github.com/planetscale/planetscale-operator/runs/576173412|test-web-ui>\n  ↳ completed in 18s"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "✓ <https://github.com/planetscale/planetscale-operator/runs/576173492|test-operator2>\n  ↳ completed in 17s"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "✓ <https://github.com/planetscale/planetscale-operator/runs/576173512|test-infra-presubmit>\n  ↳ completed in 16s"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "✓ <https://github.com/planetscale/planetscale-operator/runs/576173533|test-cluster-manager-presubmit>\n  ↳ completed in 23s"
+        }
+      ]
+    },
+    {
+      "type": "divider"
+    },
+    {
+      "type": "context",
+      "elements": [
+        {
+          "type": "mrkdwn",
+          "text": "14/14 successful checks"
+        }
+      ]
+    }
+  ]
+}

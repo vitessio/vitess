@@ -1,0 +1,23 @@
+{
+  "name": "slack-notify",
+  "version": "1.0.0",
+  "description": "Send Slack notification on workflow completion",
+  "main": "index.js",
+  "scripts": {
+    "lint": "eslint index.js",
+    "package": "ncc build index.js -o dist",
+    "prettier": "prettier --write index.js",
+    "test": "eslint index.js && jest"
+  },
+  "dependencies": {
+    "@actions/core": "^1.2.3",
+    "@actions/github": "^2.1.1",
+    "@slack/webhook": "^5.0.3"
+  },
+  "devDependencies": {
+    "@zeit/ncc": "^0.20.5",
+    "eslint": "^6.3.0",
+    "jest": "^24.9.0",
+    "prettier": "2.0.4"
+  }
+}

@@ -1,5 +1,3 @@
-# syntax = docker/dockerfile:1.2
-
 # Copyright 2019 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,7 +18,7 @@
 
 # Use a temporary layer for the build stage.
 ARG bootstrap_version=9
-ARG image="vitess/bootstrap:${bootstrap_version}-mariadb103"
+ARG image="vitess/bootstrap:${bootstrap_version}-percona"
 
 FROM "${image}" AS builder
 
@@ -32,26 +30,23 @@ COPY --chown=vitess:vitess . /vt/src/vitess.io/vitess
 
 # Build and install Vitess in a temporary output directory.
 USER vitess
-RUN --mount=type=secret,id=github_token,mode=0444 \
-    git config --global --add url."https://x-access-token:$(cat /run/secrets/github_token)@github.com/".insteadOf "https://github.com/"
 RUN make install PREFIX=/vt/install
 
 # Start over and build the final image.
-FROM alpine:3.8 
+FROM debian:buster-slim
 
 # Install dependencies
-RUN echo '@edge http://nl.alpinelinux.org/alpine/edge/main' >> /etc/apk/repositories && \
-    apk add --no-cache mariadb@edge mariadb-client@edge bzip2 bash
+COPY docker/lite/install_dependencies.sh /vt/dist/install_dependencies.sh
+RUN /vt/dist/install_dependencies.sh percona
 
 # Set up Vitess user and directory tree.
-RUN addgroup -S vitess && adduser -S -G vitess vitess
+RUN groupadd -r vitess && useradd -r -g vitess vitess
 RUN mkdir -p /vt/vtdataroot && chown -R vitess:vitess /vt
 
 # Set up Vitess environment (just enough to run pre-built Go binaries)
 ENV VTROOT /vt/src/vitess.io/vitess
 ENV VTDATAROOT /vt/vtdataroot
 ENV PATH $VTROOT/bin:$PATH
-ENV MYSQL_FLAVOR MariaDB103
 
 # Copy artifacts from builder layer.
 COPY --from=builder --chown=vitess:vitess /vt/install /vt

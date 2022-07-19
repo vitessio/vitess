@@ -66,6 +66,7 @@ ifndef NOBANNER
 	echo $$(date): Building source tree
 endif
 	bash ./build.env
+	go env -w GOPRIVATE=github.com/planetscale/*
 	# build all the binaries by default with CGO disabled
 	CGO_ENABLED=0 go install -trimpath $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) -ldflags "$(shell tools/build_version_flags.sh)" ./go/...
 	# embed local resources in the vttablet executable
@@ -99,6 +100,7 @@ ifndef NOBANNER
 	echo $$(date): Building source tree
 endif
 	bash ./build.env
+	go env -w GOPRIVATE=github.com/planetscale/*
 	go install -trimpath $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) -ldflags "$(shell tools/build_version_flags.sh)" -gcflags -'N -l' ./go/...
 
 # install copies the files needed to run Vitess into the given directory tree.

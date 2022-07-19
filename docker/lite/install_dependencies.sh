@@ -65,6 +65,15 @@ apt-get install -y --no-install-recommends "${BASE_PACKAGES[@]}"
 
 # Packages specific to certain flavors.
 case "${FLAVOR}" in
+mysql56)
+    PACKAGES=(
+        libmysqlclient18
+        mysql-client
+        mysql-server
+        libcurl3
+        percona-xtrabackup
+    )
+    ;;
 mysql57)
     mysql57_version=5.7.31
     do_fetch https://repo.mysql.com/apt/debian/pool/mysql-5.7/m/mysql-community/libmysqlclient20_${mysql57_version}-1debian10_amd64.deb /tmp/libmysqlclient20_${mysql57_version}-1debian10_amd64.deb
@@ -122,6 +131,7 @@ percona80)
         libperconaserverclient21
         percona-server-rocksdb
         percona-server-server
+        percona-server-tokudb
         percona-xtrabackup-80
     )
     ;;
@@ -143,7 +153,7 @@ esac
 
 # Get GPG keys for extra apt repositories.
 case "${FLAVOR}" in
-mysql57|mysql80)
+mysql56|mysql57|mysql80)
     # repo.mysql.com
     add_apt_key 8C718D3B5072E1F5
     add_apt_key 467B942D3A79BD29
@@ -159,6 +169,9 @@ add_apt_key 9334A25F8507EFA5
 
 # Add extra apt repositories for MySQL.
 case "${FLAVOR}" in
+mysql56)
+    echo 'deb http://repo.mysql.com/apt/debian/ stretch mysql-5.6' > /etc/apt/sources.list.d/mysql.list
+    ;;
 mysql57)
     echo 'deb http://repo.mysql.com/apt/debian/ buster mysql-5.7' > /etc/apt/sources.list.d/mysql.list
     ;;
@@ -175,6 +188,11 @@ esac
 
 # Add extra apt repositories for Percona Server and/or Percona XtraBackup.
 case "${FLAVOR}" in
+percona|mysql56)
+    # 5.6 is no longer supported on buster
+    echo 'deb http://deb.debian.org/debian stretch main' > /etc/apt/sources.list.d/stretch.list
+    echo 'deb http://repo.percona.com/apt stretch main' > /etc/apt/sources.list.d/percona.list
+    ;;
 mysql57|mysql80|percona57)
     echo 'deb http://repo.percona.com/apt buster main' > /etc/apt/sources.list.d/percona.list
     ;;
@@ -186,6 +204,13 @@ esac
 
 # Pre-fill values for installation prompts that are normally interactive.
 case "${FLAVOR}" in
+percona)
+    debconf-set-selections <<EOF
+debconf debconf/frontend select Noninteractive
+percona-server-server-5.6 percona-server-server/root_password password 'unused'
+percona-server-server-5.6 percona-server-server/root_password_again password 'unused'
+EOF
+    ;;
 percona57)
     debconf-set-selections <<EOF
 debconf debconf/frontend select Noninteractive
