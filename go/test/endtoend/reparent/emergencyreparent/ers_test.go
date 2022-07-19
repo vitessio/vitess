@@ -31,7 +31,7 @@ import (
 
 func TestTrivialERS(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentClusterLegacy(t, true)
+	clusterInstance := utils.SetupReparentCluster(t, true)
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
@@ -56,7 +56,7 @@ func TestTrivialERS(t *testing.T) {
 
 func TestReparentIgnoreReplicas(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentClusterLegacy(t, true)
+	clusterInstance := utils.SetupReparentCluster(t, true)
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 	var err error
@@ -98,7 +98,7 @@ func TestReparentIgnoreReplicas(t *testing.T) {
 
 func TestReparentDownPrimary(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentClusterLegacy(t, true)
+	clusterInstance := utils.SetupReparentCluster(t, true)
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
@@ -134,7 +134,7 @@ func TestReparentDownPrimary(t *testing.T) {
 
 func TestReparentNoChoiceDownPrimary(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentClusterLegacy(t, true)
+	clusterInstance := utils.SetupReparentCluster(t, true)
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 	var err error
@@ -170,7 +170,7 @@ func TestReparentNoChoiceDownPrimary(t *testing.T) {
 func TestSemiSyncSetupCorrectly(t *testing.T) {
 	t.Run("semi-sync enabled", func(t *testing.T) {
 		defer cluster.PanicHandler(t)
-		clusterInstance := utils.SetupReparentClusterLegacy(t, true)
+		clusterInstance := utils.SetupReparentCluster(t, true)
 		defer utils.TeardownCluster(clusterInstance)
 		tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
@@ -198,7 +198,7 @@ func TestSemiSyncSetupCorrectly(t *testing.T) {
 
 	t.Run("semi-sync disabled", func(t *testing.T) {
 		defer cluster.PanicHandler(t)
-		clusterInstance := utils.SetupReparentClusterLegacy(t, false)
+		clusterInstance := utils.SetupReparentCluster(t, false)
 		defer utils.TeardownCluster(clusterInstance)
 		tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
