@@ -36,10 +36,6 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 )
 
-var (
-	lockRenewTimeout = 10 * time.Second // has to be a fraction of Topo's defaultLockTimeout (30sec at this time)
-)
-
 // TabletExecutor applies schema changes to all tablets.
 type TabletExecutor struct {
 	migrationContext     string
@@ -363,7 +359,7 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 	}
 	providedUUID := ""
 
-	rl := timer.NewRateLimiter(lockRenewTimeout)
+	rl := timer.NewRateLimiter(*topo.RemoteOperationTimeout / 4)
 	defer rl.Stop()
 
 	syncOperationExecuted := false
