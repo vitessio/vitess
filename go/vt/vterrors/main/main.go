@@ -17,14 +17,38 @@ limitations under the License.
 package main
 
 import (
-	"fmt"
+	"log"
+	"os"
+	"text/template"
+
+	"vitess.io/vitess/go/mysql"
 
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
+const (
+	tmpl = `## Errors
+
+| ID | Description | Error | MySQL Error Code | SQL State |
+| --- | --- | --- | --- | --- |
+{{- range $err := . }}
+{{- $data := (call $err) }}
+| {{ $data.ID }} | {{ $data.Describe }} | {{ $data.Err.Error }} | {{ ConvertStateToMySQLErrorCode $data.State }} | {{ ConvertStateToMySQLState $data.State }} |
+{{- end }}
+`
+)
+
 func main() {
-	for _, f := range vterrors.Errors {
-		err := f()
-		fmt.Println("i am: ", err.ID, ", ", err.Describe, ", err: ", err.Err.Error())
+	t := template.New("template")
+	t.Funcs(map[string]any{
+		"ConvertStateToMySQLErrorCode": mysql.ConvertStateToMySQLErrorCode,
+		"ConvertStateToMySQLState":     mysql.ConvertStateToMySQLState,
+	})
+	parse, err := t.Parse(tmpl)
+	t = template.Must(parse, err)
+
+	err = t.ExecuteTemplate(os.Stdout, "template", vterrors.Errors)
+	if err != nil {
+		log.Fatal(err)
 	}
 }

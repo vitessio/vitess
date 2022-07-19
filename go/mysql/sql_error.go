@@ -198,6 +198,26 @@ var stateToMysqlCode = map[vterrors.State]struct {
 	vterrors.WrongValueCountOnRow:         {num: ERWrongValueCountOnRow, state: SSWrongValueCountOnRow},
 }
 
+// ConvertStateToMySQLErrorCode returns MySQL error code for the given vterrors.State
+// If the state is == 0, an empty string is returned
+func ConvertStateToMySQLErrorCode(state vterrors.State) string {
+	if state == 0 {
+		return ""
+	}
+	s := stateToMysqlCode[state]
+	return strconv.Itoa(s.num)
+}
+
+// ConvertStateToMySQLState returns MySQL state for the given vterrors.State
+// If the state is == 0, an empty string is returned
+func ConvertStateToMySQLState(state vterrors.State) string {
+	if state == 0 {
+		return ""
+	}
+	s := stateToMysqlCode[state]
+	return s.state
+}
+
 func init() {
 	if len(stateToMysqlCode) != int(vterrors.NumOfStates) {
 		panic("all vterrors states are not mapped to mysql errors")

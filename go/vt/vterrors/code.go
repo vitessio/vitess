@@ -23,8 +23,8 @@ import (
 )
 
 var (
-	VT03001 = c("VT03001", vtrpcpb.Code_INVALID_ARGUMENT, SyntaxError, "aggregate functions take a single argument '%s'", "AA")
-	VT12001 = b("VT12001", vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard query with aggregates", "Vitess currently is not able to split this aggregation into ultiple smaez.sdkaskdfas;lkdfjaslkdj")
+	VT03001 = c("VT03001", vtrpcpb.Code_INVALID_ARGUMENT, SyntaxError, "aggregate functions take a single argument '%s'", "The planner accepts aggregate functions that take a single argument only.")
+	VT12001 = b("VT12001", vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard query with aggregates", "Vitess currently is not able to split this aggregation into multiple routes.")
 
 	Errors = []func(args ...any) *OurError{
 		VT03001,
@@ -36,6 +36,7 @@ type OurError struct {
 	Err      error
 	Describe string
 	ID       string
+	State    State
 }
 
 func (o *OurError) Error() string {
@@ -46,16 +47,25 @@ var _ error = (*OurError)(nil)
 
 func b(id string, code vtrpcpb.Code, short, long string) func(args ...any) *OurError {
 	return func(args ...any) *OurError {
-		if args != nil {
+		if len(args) != 0 {
 			short = fmt.Sprintf(short, args...)
 		}
 
-		return &OurError{Err: New(code, short), Describe: long, ID: id}
+		return &OurError{
+			Err:      New(code, short),
+			Describe: long,
+			ID:       id,
+		}
 	}
 }
 
 func c(id string, code vtrpcpb.Code, state State, short, long string) func(args ...any) *OurError {
 	return func(args ...any) *OurError {
-		return &OurError{Err: NewErrorf(code, state, short, args...), Describe: long, ID: id}
+		return &OurError{
+			Err:      NewErrorf(code, state, short, args...),
+			Describe: long,
+			ID:       id,
+			State:    state,
+		}
 	}
 }
