@@ -185,6 +185,7 @@ func (check *ThrottlerCheck) MetricsHealth() map[string](*base.MetricHealth) {
 // This runs asynchronously, continuously, and independently of any user interaction
 func (check *ThrottlerCheck) SelfChecks(ctx context.Context) {
 	selfCheckTicker := time.NewTicker(selfCheckInterval)
+	defer selfCheckTicker.Stop()
 	go func() {
 		for range selfCheckTicker.C {
 			for metricName, metricResult := range check.AggregatedMetrics(ctx) {

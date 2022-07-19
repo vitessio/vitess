@@ -133,6 +133,7 @@ func testVStreamWithFailover(t *testing.T, failover bool) {
 
 	// run two PRS after one second each, wait for events to be received and exit test
 	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
 	tickCount := 0
 	// this for loop implements a mini state machine that does the two PRSs, waits a bit after the second PRS,
 	// stops the insertions, waits for a bit again for the vstream to catchup and signals the test to stop
@@ -358,6 +359,7 @@ func testVStreamStopOnReshardFlag(t *testing.T, stopOnReshard bool, baseTabletID
 	}()
 
 	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
 	tickCount := 0
 	for {
 		<-ticker.C

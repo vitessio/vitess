@@ -515,6 +515,7 @@ func GetShardReplicationPositions(t *testing.T, clusterInstance *cluster.LocalPr
 
 func WaitForReplicationToStart(t *testing.T, clusterInstance *cluster.LocalProcessCluster, keyspaceName, shardName string, tabletCnt int, doPrint bool) {
 	tck := time.NewTicker(500 * time.Millisecond)
+	defer tck.Stop()
 	for {
 		select {
 		case <-tck.C:

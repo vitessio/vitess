@@ -179,6 +179,7 @@ func validateTableDoesNotExist(t *testing.T, tableExpr string) {
 	defer cancel()
 
 	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
 	var foundTableName string
 	var exists bool
 	var err error
@@ -202,6 +203,7 @@ func validateTableExists(t *testing.T, tableExpr string) {
 	defer cancel()
 
 	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
 	var exists bool
 	var err error
 	for {

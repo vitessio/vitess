@@ -219,6 +219,7 @@ func execMulti(ctx context.Context, db *sql.DB, sql string) (*results, error) {
 			if isThrottled {
 				tickDuration := time.Second / time.Duration(*qps)
 				ticker = time.NewTicker(tickDuration)
+				defer ticker.Stop()
 			}
 
 			for j := 0; j < *count; j++ {

@@ -113,6 +113,7 @@ func PurgeLogs() {
 	logDir := f.Value.String()
 	program := filepath.Base(os.Args[0])
 	ticker := time.NewTicker(*purgeLogsInterval)
+	defer ticker.Stop()
 	for range ticker.C {
 		purgeLogsOnce(time.Now(), logDir, program, *keepLogsByCtime, *keepLogsByMtime)
 	}

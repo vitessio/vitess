@@ -105,6 +105,7 @@ func registerAggregator(a *TabletStatusAggregator) {
 // resetAggregators resets the next stats slot for all aggregators every second.
 func resetAggregators() {
 	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
 	for range ticker.C {
 		muAggr.Lock()
 		for _, a := range aggregators {

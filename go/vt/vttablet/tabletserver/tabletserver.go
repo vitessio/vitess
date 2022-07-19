@@ -349,6 +349,7 @@ func (tsv *TabletServer) InitACL(tableACLConfigFile string, enforceTableACLConfi
 
 	if reloadACLConfigFileInterval != 0 {
 		ticker := time.NewTicker(reloadACLConfigFileInterval)
+		defer ticker.Stop()
 		go func() {
 			for range ticker.C {
 				sigChan <- syscall.SIGHUP

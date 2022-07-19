@@ -423,6 +423,7 @@ func TestBackupRestoreLagged(t *testing.T) {
 	}(ctx, sourceTablet)
 
 	timer := time.NewTicker(1 * time.Second)
+	defer timer.Stop()
 	<-timer.C
 	sourceTablet.FakeMysqlDaemon.CurrentPrimaryPositionLocked(mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
@@ -435,6 +436,7 @@ func TestBackupRestoreLagged(t *testing.T) {
 	})
 
 	timer2 := time.NewTicker(5 * time.Second)
+	defer timer2.Stop()
 	select {
 	case err := <-errCh:
 		require.Nil(t, err)
@@ -493,6 +495,7 @@ func TestBackupRestoreLagged(t *testing.T) {
 	}(ctx, destTablet)
 
 	timer = time.NewTicker(1 * time.Second)
+	defer timer.Stop()
 	<-timer.C
 	destTablet.FakeMysqlDaemon.CurrentPrimaryPositionLocked(mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
@@ -505,6 +508,7 @@ func TestBackupRestoreLagged(t *testing.T) {
 	})
 
 	timer2 = time.NewTicker(5 * time.Second)
+	defer timer2.Stop()
 	select {
 	case err := <-errCh:
 		require.Nil(t, err)

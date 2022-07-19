@@ -442,6 +442,7 @@ func TestHealthCheckVerifiesTabletAlias(t *testing.T) {
 	}
 
 	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
 	select {
 	case err := <-fc.cbErrCh:
 		assert.Contains(t, err.Error(), "health stats mismatch", "wrong error")
