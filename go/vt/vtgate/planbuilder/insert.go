@@ -193,7 +193,7 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table, reserv
 	eins.VindexValues = routeValues
 	eins.Query = generateQuery(ins)
 	generateInsertShardedQuery(ins, eins, rows)
-	return newPlanResult(eins), nil
+	return newPlanResult(eins, tc.getTables()...), nil
 }
 
 // buildInsertSelectPlan builds an insert using select plan.

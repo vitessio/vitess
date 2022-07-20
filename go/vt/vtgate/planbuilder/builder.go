@@ -465,6 +465,7 @@ func (tc *tableCollector) addTable(ks, tbl string) {
 	}
 	tc.tables[fmt.Sprintf("%s.%s", ks, tbl)] = nil
 }
+
 func (tc *tableCollector) addASTTable(ks string, tbl sqlparser.TableName) {
 	tc.addTable(ks, tbl.Name.String())
 }

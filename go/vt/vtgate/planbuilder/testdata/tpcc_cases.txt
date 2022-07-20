@@ -155,7 +155,10 @@
     "VindexValues": {
       "hash": "INT64(99)"
     }
-  }
+  },
+  "TablesUsed": [
+    "main.orders1"
+  ]
 }
 Gen4 plan same as above
 
@@ -178,7 +181,10 @@ Gen4 plan same as above
     "VindexValues": {
       "hash": "INT64(48)"
     }
-  }
+  },
+  "TablesUsed": [
+    "main.new_orders1"
+  ]
 }
 Gen4 plan same as above
 
@@ -338,7 +344,10 @@ Gen4 plan same as above
     "VindexValues": {
       "hash": "INT64(3201)"
     }
-  }
+  },
+  "TablesUsed": [
+    "main.order_line1"
+  ]
 }
 Gen4 plan same as above
 
@@ -821,7 +830,10 @@ Gen4 plan same as above
     "VindexValues": {
       "hash": "INT64(8)"
     }
-  }
+  },
+  "TablesUsed": [
+    "main.history1"
+  ]
 }
 Gen4 plan same as above
 

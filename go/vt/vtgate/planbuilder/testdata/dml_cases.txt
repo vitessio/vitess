@@ -1226,7 +1226,10 @@ Gen4 plan same as above
       "music_user_map": "INT64(2)",
       "user_index": "INT64(1)"
     }
-  }
+  },
+  "TablesUsed": [
+    "user.music"
+  ]
 }
 Gen4 plan same as above
 
@@ -1251,7 +1254,10 @@ Gen4 plan same as above
       "music_user_map": "INT64(2), INT64(4)",
       "user_index": "INT64(1), INT64(3)"
     }
-  }
+  },
+  "TablesUsed": [
+    "user.music"
+  ]
 }
 Gen4 plan same as above
 
@@ -1498,7 +1504,10 @@ Gen4 plan same as above
       "name_user_map": "NULL",
       "user_index": ":__seq0"
     }
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 Gen4 plan same as above
 
@@ -1523,7 +1532,10 @@ Gen4 plan same as above
       "name_user_map": "NULL",
       "user_index": ":__seq0"
     }
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 Gen4 plan same as above
 
@@ -1551,7 +1563,10 @@ Gen4 plan same as above
     "VindexValues": {
       "user_index": "INT64(1)"
     }
-  }
+  },
+  "TablesUsed": [
+    "user.authoritative"
+  ]
 }
 Gen4 plan same as above
 
@@ -1576,7 +1591,10 @@ Gen4 plan same as above
       "name_user_map": "NULL",
       "user_index": ":__seq0"
     }
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 Gen4 plan same as above
 
@@ -1601,7 +1619,10 @@ Gen4 plan same as above
       "name_user_map": "NULL",
       "user_index": ":__seq0"
     }
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 Gen4 plan same as above
 
@@ -1627,7 +1648,10 @@ Gen4 plan same as above
       "name_user_map": "NULL",
       "user_index": ":__seq0"
     }
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 Gen4 plan same as above
 
@@ -1653,7 +1677,10 @@ Gen4 plan same as above
       "name_user_map": "NULL",
       "user_index": ":__seq0"
     }
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 Gen4 plan same as above
 
@@ -1678,7 +1705,10 @@ Gen4 plan same as above
       "name_user_map": "NULL",
       "user_index": ":__seq0"
     }
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 Gen4 plan same as above
 
@@ -1703,7 +1733,10 @@ Gen4 plan same as above
       "name_user_map": "NULL",
       "user_index": ":__seq0"
     }
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 Gen4 plan same as above
 
@@ -1728,7 +1761,10 @@ Gen4 plan same as above
       "name_user_map": "NULL",
       "user_index": ":__seq0"
     }
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 Gen4 plan same as above
 
@@ -1753,7 +1789,10 @@ Gen4 plan same as above
       "name_user_map": "NULL",
       "user_index": ":__seq0"
     }
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 Gen4 plan same as above
 
@@ -1778,7 +1817,10 @@ Gen4 plan same as above
       "name_user_map": "VARCHAR(\"foo\")",
       "user_index": ":__seq0"
     }
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 Gen4 plan same as above
 
@@ -1801,7 +1843,10 @@ Gen4 plan same as above
     "VindexValues": {
       "user_index": "NULL"
     }
-  }
+  },
+  "TablesUsed": [
+    "user.user_extra"
+  ]
 }
 Gen4 plan same as above
 
@@ -1824,7 +1869,10 @@ Gen4 plan same as above
     "VindexValues": {
       "user_index": "INT64(1)"
     }
-  }
+  },
+  "TablesUsed": [
+    "user.weird`name"
+  ]
 }
 Gen4 plan same as above
 
@@ -1889,7 +1937,10 @@ Gen4 plan same as above
     "VindexValues": {
       "user_index": "NULL"
     }
-  }
+  },
+  "TablesUsed": [
+    "user.user_extra"
+  ]
 }
 Gen4 plan same as above
 
@@ -1913,7 +1964,10 @@ Gen4 plan same as above
       "music_user_map": "INT64(1)",
       "user_index": "DECIMAL(18446744073709551616)"
     }
-  }
+  },
+  "TablesUsed": [
+    "user.music_extra"
+  ]
 }
 Gen4 plan same as above
 
@@ -1948,7 +2002,10 @@ Gen4 plan same as above
       "name_user_map": "NULL, NULL",
       "user_index": ":__seq0, :__seq1"
     }
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 Gen4 plan same as above
 
@@ -1974,7 +2031,10 @@ Gen4 plan same as above
       "name_user_map": "NULL, NULL",
       "user_index": ":__seq0, :__seq1"
     }
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 Gen4 plan same as above
 
@@ -1999,7 +2059,10 @@ Gen4 plan same as above
       "name_user_map": "NULL, NULL",
       "user_index": ":__seq0, :__seq1"
     }
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 Gen4 plan same as above
 
@@ -2191,7 +2254,10 @@ Gen4 plan same as above
       "colb_colc_map": "INT64(2), INT64(3)",
       "kid_index": "INT64(4)"
     }
-  }
+  },
+  "TablesUsed": [
+    "user.multicolvin"
+  ]
 }
 Gen4 plan same as above
 
@@ -2215,7 +2281,10 @@ Gen4 plan same as above
       "cola_kid_map": "INT64(2), INT64(1)",
       "kid_index": "INT64(1)"
     }
-  }
+  },
+  "TablesUsed": [
+    "user.overlap_vindex"
+  ]
 }
 Gen4 plan same as above
 
@@ -2240,7 +2309,10 @@ Gen4 plan same as above
       "colb_colc_map": "INT64(2), INT64(6), INT64(3), INT64(7)",
       "kid_index": "INT64(4), INT64(8)"
     }
-  }
+  },
+  "TablesUsed": [
+    "user.multicolvin"
+  ]
 }
 Gen4 plan same as above
 
@@ -5466,6 +5538,9 @@ Gen4 plan same as above
     "VindexValues": {
       "user_index": "NULL"
     }
-  }
+  },
+  "TablesUsed": [
+    "user.authoritative"
+  ]
 }
 Gen4 plan same as above
