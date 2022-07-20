@@ -32,7 +32,7 @@
     ]
   },
   "TablesUsed": [
-    "dual"
+    "main.dual"
   ]
 }
 
@@ -70,7 +70,7 @@
     ]
   },
   "TablesUsed": [
-    "dual"
+    "main.dual"
   ]
 }
 
@@ -108,7 +108,7 @@
     ]
   },
   "TablesUsed": [
-    "dual"
+    "main.dual"
   ]
 }
 
@@ -181,6 +181,6 @@ Gen4 plan same as above
     ]
   },
   "TablesUsed": [
-    "dual"
+    "main.dual"
   ]
 }

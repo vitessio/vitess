@@ -40,9 +40,7 @@ import (
 type LogStats struct {
 	Ctx           context.Context
 	Method        string
-	Keyspace      string
 	TabletType    string
-	Table         string
 	StmtType      string
 	SQL           string
 	BindVariables map[string]*querypb.BindVariable
@@ -58,6 +56,9 @@ type LogStats struct {
 	TablesUsed    []string
 	SessionUUID   string
 	CachedPlan    bool
+
+	Keyspace string
+	Table    string
 }
 
 // NewLogStats constructs a new LogStats with supplied Method and ctx

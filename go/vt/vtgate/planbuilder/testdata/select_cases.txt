@@ -846,7 +846,7 @@ Gen4 error: Column 'col' in field list is ambiguous
     ]
   },
   "TablesUsed": [
-    "dual"
+    "main.dual"
   ]
 }
 
@@ -2696,7 +2696,7 @@ Gen4 error: symbol t.col not found
     ]
   },
   "TablesUsed": [
-    "dual"
+    "main.dual"
   ]
 }
 
@@ -2768,7 +2768,7 @@ Gen4 error: symbol t.col not found
     ]
   },
   "TablesUsed": [
-    "dual"
+    "main.dual"
   ]
 }
 
@@ -3375,7 +3375,7 @@ Gen4 plan same as above
     ]
   },
   "TablesUsed": [
-    "dual"
+    "main.dual"
   ]
 }
 
@@ -3819,7 +3819,7 @@ Gen4 plan same as above
     ]
   },
   "TablesUsed": [
-    "dual"
+    "main.dual"
   ]
 }
 

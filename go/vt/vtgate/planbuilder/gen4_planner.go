@@ -66,8 +66,18 @@ func gen4SelectStmtPlanner(
 	if isSel {
 		// handle dual table for processing at vtgate.
 		p, err := handleDualSelects(sel, vschema)
-		if err != nil || p != nil {
-			return newPlanResult(p, "dual"), err
+		if err != nil {
+			return nil, err
+		}
+		if p != nil {
+			used := "dual"
+			keyspace, ksErr := vschema.DefaultKeyspace()
+			if ksErr == nil {
+				// we are just getting the ks to log the correct table use.
+				// no need to fail this if we can't find the default keyspace
+				used = keyspace.Name + ".dual"
+			}
+			return newPlanResult(p, used), nil
 		}
 
 		if sel.SQLCalcFoundRows && sel.Limit != nil {
