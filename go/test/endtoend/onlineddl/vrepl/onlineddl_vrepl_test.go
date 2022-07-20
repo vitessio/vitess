@@ -852,14 +852,14 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 	}
 	if strategySetting.IsPostponeCompletion() {
 		// We expect it to be running by default
-		if expectStatuses == nil || len(expectStatuses) == 0 {
+		if len(expectStatuses) == 0 {
 			expectStatuses = []schema.OnlineDDLStatus{schema.OnlineDDLStatusRunning}
 		}
 	}
 	if expectError == "" {
 		if waitFor == "migration" {
 			// Unless otherwise specified, the migration should be completed
-			if expectStatuses == nil || len(expectStatuses) == 0 {
+			if len(expectStatuses) == 0 {
 				expectStatuses = []schema.OnlineDDLStatus{schema.OnlineDDLStatusComplete}
 			}
 			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalMigrationWait, expectStatuses...)
