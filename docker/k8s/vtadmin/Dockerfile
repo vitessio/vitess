@@ -17,6 +17,9 @@ ARG DEBIAN_VER=bullseye-slim
 
 FROM vitess/k8s:${VT_BASE_VER} AS k8s
 
+COPY nginx.conf nginx.conf
+COPY entrypoint.sh /entrypoint.sh
+
 FROM node:16-${DEBIAN_VER} as node
 
 # Set up Vitess environment (just enough to run pre-built Go binaries)
@@ -36,6 +39,10 @@ COPY --from=k8s /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificate
 # copy web admin files
 COPY --from=k8s /vt/web/vtadmin /vt/web/vtadmin
 
+# copy nginx config
+COPY --from=k8s nginx.conf nginx.conf
+COPY --from=k8s entrypoint.sh /entrypoint.sh
+
 # install/build/clean web dependencies
 RUN npm --prefix /vt/web/vtadmin ci && \
     npm run --prefix /vt/web/vtadmin build
@@ -47,9 +54,21 @@ RUN deluser node && \
    chown -R vitess:vitess /vt && \
    chown -R vitess:vitess /vtdataroot
 
-USER vitess
+# USER vitess
 
-VOLUME /vt/web/vtadmin/build/config
+# VOLUME /vt/web/vtadmin/build/config
 
-CMD ["/bin/bash", "-c", "/vt/web/vtadmin/node_modules/.bin/serve --no-clipboard -l $VTADMIN_WEB_PORT -s /vt/web/vtadmin/build"]
+# CMD ["/bin/bash", "-c", "/vt/web/vtadmin/node_modules/.bin/serve --no-clipboard -l $VTADMIN_WEB_PORT -s /vt/web/vtadmin/build"]
+
+FROM nginx:latest AS nginx
+
+COPY --from=node /vt/web/vtadmin/build /var/www/
+COPY --from=node nginx.conf /etc/nginx/nginx.conf
+COPY --from=node entrypoint.sh /entrypoint.sh
+
+RUN ["chmod", "+x", "/entrypoint.sh"]
+
+ENTRYPOINT ["/entrypoint.sh"]
+
+
 
