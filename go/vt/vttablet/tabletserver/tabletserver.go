@@ -1480,7 +1480,7 @@ func convertErrorCode(err error) vtrpcpb.Code {
 		errCode = vtrpcpb.Code_CLUSTER_EVENT
 	case mysql.ERTableExists, mysql.ERDupEntry, mysql.ERFileExists, mysql.ERUDFExists:
 		errCode = vtrpcpb.Code_ALREADY_EXISTS
-	case mysql.ERGotSignal, mysql.ERForcingClose, mysql.ERAbortingConnection, mysql.ERLockDeadlock, mysql.ERVitessMaxRowsExceeded:
+	case mysql.ERGotSignal, mysql.ERForcingClose, mysql.ERAbortingConnection, mysql.ERLockDeadlock:
 		// For ERLockDeadlock, a deadlock rolls back the transaction.
 		errCode = vtrpcpb.Code_ABORTED
 	case mysql.ERUnknownComError, mysql.ERBadNullError, mysql.ERBadDb, mysql.ERBadTable, mysql.ERNonUniq, mysql.ERWrongFieldWithGroup, mysql.ERWrongGroupField,
