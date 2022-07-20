@@ -282,7 +282,7 @@ func TestSchemaChange(t *testing.T) {
 		uuid := testOnlineDDLStatement(t, alterTableTrivialStatement, "vitess --postpone-completion --singleton", "vtgate", "", "hint_col", "", true)
 		uuids = append(uuids, uuid)
 		_ = testOnlineDDLStatement(t, dropNonexistentTableStatement, "vitess --singleton", "vtgate", "", "hint_col", "rejected", true)
-		onlineddl.CheckCompleteMigration(t, &vtParams, shards, uuid, true)
+		onlineddl.CheckCompleteAllMigrations(t, &vtParams, len(shards))
 		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, 20*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 		fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)

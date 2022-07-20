@@ -46,6 +46,7 @@ func NewRateLimiter(d time.Duration) *RateLimiter {
 			select {
 			case <-ctx.Done():
 				ticker.Stop()
+				return
 			case <-ticker.C:
 				atomic.StoreInt64(&r.tickerValue, r.tickerValue+1)
 			}

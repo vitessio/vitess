@@ -1,5 +1,21 @@
 ## Major Changes
 
+### Breaking Change
+
+#### Vindex Implementation
+
+All the vindex interface methods are changed by adding context.Context as the input parameter.
+
+E.g:
+```go
+Map(vcursor VCursor, .... ) .... 
+	To
+Map(ctx context.Context, vcursor VCursor, .... ) ....
+```
+
+This only impacts the users who have added their own vindex implementation. 
+They would be required to change their implementation with these new interface method expectations.
+
 ### Command-line syntax deprecations
 
 #### vttablet startup flag deletions
@@ -100,6 +116,16 @@ All Online DDL migrations using the `vitess` strategy are now eligible to run co
 - A concurrent `ALTER` migration will not start if another `ALTER` is running and is not `ready_to_complete`
 
 The main use case is to run multiple concurrent migrations, all with `--postpone-completion`. All table-copy operations will run sequentially, but no migration will actually cut-over, and eventually all migration will be `ready_to_complete`, continuously tailing the binary logs and keeping up-to-date. A quick and iterative `ALTER VITESS_MIGRATION '...' COMPLETE` sequence of commands will cut-over all migrations _closely together_ (though not atomically together).
+
+#### New syntax
+
+The following is now supported:
+
+```sql
+ALTER VITESS_MIGRATION COMPLETE ALL
+```
+
+This works on all pending migrations (`queued`, `ready`, `running`) and internally issues a `ALTER VITESS_MIGRATION '<uuid>' COMPLETE` for each one. The command is useful for completing multiple concurrent migrations (see above) that are open ended (`--postpone-completion`).
 
 ### Tablet throttler
 

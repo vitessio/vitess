@@ -391,7 +391,7 @@
 		},
 		"emergencyreparent": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/reparent/emergencyreparent"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/reparent/emergencyreparent", "-timeout", "20m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "ers_prs_newfeatures_heavy",
@@ -400,7 +400,7 @@
 		},
 		"plannedreparent": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/reparent/plannedreparent"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/reparent/plannedreparent", "-timeout", "20m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "ers_prs_newfeatures_heavy",
@@ -437,15 +437,6 @@
 		"tabletgateway_buffer_reshard": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/tabletgateway/buffer/reshard"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "13",
-			"RetryMax": 1,
-			"Tags": []
-		},
-		"tabletgateway_cellalias": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/tabletgateway/cellalias"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "13",
@@ -587,7 +578,7 @@
 		},
 		"vtgate_queries_orderby": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/queries/orderby"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/queries/orderby", "-timeout", "20m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_queries",
@@ -596,7 +587,7 @@
 		},
 		"vtgate_queries_subquery": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/queries/subquery"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/queries/subquery", "-timeout", "20m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_queries",
@@ -605,7 +596,7 @@
 		},
 		"vtgate_queries_union": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/queries/union"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/queries/union", "-timeout", "20m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_queries",
@@ -621,15 +612,6 @@
 			"RetryMax": 2,
 			"Tags": []
 		},
-		"vtgate_buffer": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/buffer"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "vtgate_buffer",
-			"RetryMax": 1,
-			"Tags": []
-		},
 		"vtgate_concurrentdml": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/concurrentdml"],
@@ -641,7 +623,7 @@
 		},
 		"vtgate_schema": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/schema"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/schema", "-timeout", "20m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_schema",
@@ -668,7 +650,7 @@
 		},
 		"vtgate_schematracker_sharded": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/schematracker/sharded"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/schematracker/sharded", "-timeout", "20m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_schema_tracker",
@@ -677,7 +659,7 @@
 		},
 		"vtgate_schematracker_sharded_prs": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/schematracker/sharded_prs"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/schematracker/sharded_prs", "-timeout", "20m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_schema_tracker",
@@ -686,7 +668,7 @@
 		},
 		"vtgate_schematracker_unauthorized": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/schematracker/unauthorized"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/schematracker/unauthorized", "-timeout", "20m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_schema_tracker",
@@ -695,7 +677,7 @@
 		},
 		"vtgate_schematracker_unsharded": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/schematracker/unsharded"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/schematracker/unsharded", "-timeout", "20m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_schema_tracker",
@@ -830,7 +812,7 @@
 		},
 		"vtgate_vschema": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/vschema"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/vschema", "-timeout", "20m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_vschema",

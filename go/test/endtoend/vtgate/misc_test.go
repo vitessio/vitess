@@ -828,3 +828,25 @@ func TestEmptyQuery(t *testing.T) {
 	utils.AssertContainsError(t, conn, ";", "Query was empty")
 	utils.AssertIsEmpty(t, conn, "-- this is a comment")
 }
+
+// TestJoinWithMergedRouteWithPredicate checks the issue found in https://github.com/vitessio/vitess/issues/10713
+func TestJoinWithMergedRouteWithPredicate(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	utils.Exec(t, conn, "delete from t1")
+	defer utils.Exec(t, conn, "delete from t1")
+	utils.Exec(t, conn, "delete from t2")
+	defer utils.Exec(t, conn, "delete from t2")
+	utils.Exec(t, conn, "delete from t3")
+	defer utils.Exec(t, conn, "delete from t3")
+
+	utils.Exec(t, conn, "insert into t1 (id1,id2) values (1, 13)")
+	utils.Exec(t, conn, "insert into t2 (id3,id4) values (5, 10), (15, 20)")
+	utils.Exec(t, conn, "insert into t3 (id5,id6,id7) values (13, 5, 8)")
+
+	utils.AssertMatches(t, conn, "select t3.id7, t2.id3, t3.id6 from t1 join t3 on t1.id2 = t3.id5 join t2 on t3.id6 = t2.id3 where t1.id2 = 13", `[[INT64(8) INT64(5) INT64(5)]]`)
+}
