@@ -94,6 +94,7 @@ type OnlineDDL struct {
 	Status           OnlineDDLStatus `json:"status,omitempty"`
 	TabletAlias      string          `json:"tablet,omitempty"`
 	Retries          int64           `json:"retries,omitempty"`
+	ReadyToComplete  int64           `json:"ready_to_complete,omitempty"`
 }
 
 // FromJSON creates an OnlineDDL from json

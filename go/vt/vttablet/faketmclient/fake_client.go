@@ -88,8 +88,8 @@ func (client *FakeTabletManagerClient) ExecuteHook(ctx context.Context, tablet *
 }
 
 // GetSchema is part of the tmclient.TabletManagerClient interface.
-func (client *FakeTabletManagerClient) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
-	return client.tmc.GetSchema(ctx, tablet, tables, excludeTables, includeViews)
+func (client *FakeTabletManagerClient) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.GetSchemaRequest) (*tabletmanagerdatapb.SchemaDefinition, error) {
+	return client.tmc.GetSchema(ctx, tablet, request)
 }
 
 // GetPermissions is part of the tmclient.TabletManagerClient interface.
@@ -305,8 +305,8 @@ func (client *FakeTabletManagerClient) SetReplicationSource(ctx context.Context,
 }
 
 // StopReplicationAndGetStatus is part of the tmclient.TabletManagerClient interface.
-func (client *FakeTabletManagerClient) StopReplicationAndGetStatus(ctx context.Context, tablet *topodatapb.Tablet, stopReplicationMode replicationdatapb.StopReplicationMode) (*replicationdatapb.Status, *replicationdatapb.StopReplicationStatus, error) {
-	return &replicationdatapb.Status{}, &replicationdatapb.StopReplicationStatus{}, nil
+func (client *FakeTabletManagerClient) StopReplicationAndGetStatus(ctx context.Context, tablet *topodatapb.Tablet, stopReplicationMode replicationdatapb.StopReplicationMode) (*replicationdatapb.StopReplicationStatus, error) {
+	return &replicationdatapb.StopReplicationStatus{}, nil
 }
 
 // PromoteReplica is part of the tmclient.TabletManagerClient interface.

@@ -17,6 +17,7 @@ limitations under the License.
 package engine
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"time"
@@ -51,32 +52,15 @@ type Update struct {
 	noInputs
 }
 
-// RouteType returns a description of the query routing type used by the primitive
-func (upd *Update) RouteType() string {
-	return upd.Opcode.String()
-}
-
-// GetKeyspaceName specifies the Keyspace that this primitive routes to.
-func (upd *Update) GetKeyspaceName() string {
-	return upd.Keyspace.Name
-}
-
-// GetTableName specifies the table that this primitive routes to.
-func (upd *Update) GetTableName() string {
-	if upd.Table != nil {
-		return upd.Table.Name.String()
-	}
-	return ""
-}
-
 // TryExecute performs a non-streaming exec.
-func (upd *Update) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (upd *Update) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	if upd.QueryTimeout != 0 {
-		cancel := vcursor.SetContextTimeout(time.Duration(upd.QueryTimeout) * time.Millisecond)
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, time.Duration(upd.QueryTimeout)*time.Millisecond)
 		defer cancel()
 	}
 
-	rss, _, err := upd.findRoute(vcursor, bindVars)
+	rss, _, err := upd.findRoute(ctx, vcursor, bindVars)
 	if err != nil {
 		return nil, err
 	}
@@ -87,9 +71,9 @@ func (upd *Update) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bind
 
 	switch upd.Opcode {
 	case Unsharded:
-		return upd.execUnsharded(vcursor, bindVars, rss)
+		return upd.execUnsharded(ctx, vcursor, bindVars, rss)
 	case Equal, EqualUnique, IN, Scatter, ByDestination, SubShard:
-		return upd.execMultiDestination(vcursor, bindVars, rss, upd.updateVindexEntries)
+		return upd.execMultiDestination(ctx, vcursor, bindVars, rss, upd.updateVindexEntries)
 	default:
 		// Unreachable.
 		return nil, fmt.Errorf("unsupported opcode: %v", upd.Opcode)
@@ -97,8 +81,8 @@ func (upd *Update) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bind
 }
 
 // TryStreamExecute performs a streaming exec.
-func (upd *Update) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	res, err := upd.TryExecute(vcursor, bindVars, wantfields)
+func (upd *Update) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	res, err := upd.TryExecute(ctx, vcursor, bindVars, wantfields)
 	if err != nil {
 		return err
 	}
@@ -107,7 +91,7 @@ func (upd *Update) TryStreamExecute(vcursor VCursor, bindVars map[string]*queryp
 }
 
 // GetFields fetches the field info.
-func (upd *Update) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (upd *Update) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return nil, fmt.Errorf("BUG: unreachable code for %q", upd.Query)
 }
 
@@ -117,7 +101,7 @@ func (upd *Update) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindV
 // for DMLs to reuse existing transactions.
 // Note 2: While changes are being committed, the changing row could be
 // unreachable by either the new or old column values.
-func (upd *Update) updateVindexEntries(vcursor VCursor, bindVars map[string]*querypb.BindVariable, rss []*srvtopo.ResolvedShard) error {
+func (upd *Update) updateVindexEntries(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, rss []*srvtopo.ResolvedShard) error {
 	if len(upd.ChangedVindexValues) == 0 {
 		return nil
 	}
@@ -125,7 +109,7 @@ func (upd *Update) updateVindexEntries(vcursor VCursor, bindVars map[string]*que
 	for i := range rss {
 		queries[i] = &querypb.BoundQuery{Sql: upd.OwnedVindexQuery, BindVariables: bindVars}
 	}
-	subQueryResult, errors := vcursor.ExecuteMultiShard(rss, queries, false, false)
+	subQueryResult, errors := vcursor.ExecuteMultiShard(ctx, rss, queries, false /* rollbackOnError */, false /* canAutocommit */)
 	for _, err := range errors {
 		if err != nil {
 			return err
@@ -143,12 +127,16 @@ func (upd *Update) updateVindexEntries(vcursor VCursor, bindVars map[string]*que
 	env := evalengine.EnvWithBindVars(bindVars, vcursor.ConnCollation())
 
 	for _, row := range subQueryResult.Rows {
-		ksid, err := resolveKeyspaceID(vcursor, upd.KsidVindex, row[0:upd.KsidLength])
+		ksid, err := resolveKeyspaceID(ctx, vcursor, upd.KsidVindex, row[0:upd.KsidLength])
 		if err != nil {
 			return err
 		}
 
-		for _, colVindex := range upd.Table.ColumnVindexes {
+		vindexTable, err := upd.GetSingleTable()
+		if err != nil {
+			return err
+		}
+		for _, colVindex := range vindexTable.ColumnVindexes {
 			// Skip this vindex if no rows are being changed
 			updColValues, ok := upd.ChangedVindexValues[colVindex.Name]
 			if !ok {
@@ -185,7 +173,7 @@ func (upd *Update) updateVindexEntries(vcursor VCursor, bindVars map[string]*que
 			}
 
 			if colVindex.Owned {
-				if err := colVindex.Vindex.(vindexes.Lookup).Update(vcursor, fromIds, ksid, vindexColumnKeys); err != nil {
+				if err := colVindex.Vindex.(vindexes.Lookup).Update(ctx, vcursor, fromIds, ksid, vindexColumnKeys); err != nil {
 					return err
 				}
 			} else {
@@ -203,7 +191,7 @@ func (upd *Update) updateVindexEntries(vcursor VCursor, bindVars map[string]*que
 				}
 
 				// If values were supplied, we validate against keyspace id.
-				verified, err := vindexes.Verify(colVindex.Vindex, vcursor, [][]sqltypes.Value{vindexColumnKeys}, [][]byte{ksid})
+				verified, err := vindexes.Verify(ctx, colVindex.Vindex, vcursor, [][]sqltypes.Value{vindexColumnKeys}, [][]byte{ksid})
 				if err != nil {
 					return err
 				}

@@ -40,7 +40,6 @@ import (
 	"vitess.io/vitess/go/vt/orchestrator/config"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 	"vitess.io/vitess/go/vt/orchestrator/inst"
-	"vitess.io/vitess/go/vt/orchestrator/kv"
 	ometrics "vitess.io/vitess/go/vt/orchestrator/metrics"
 	"vitess.io/vitess/go/vt/orchestrator/os"
 	"vitess.io/vitess/go/vt/orchestrator/process"
@@ -642,7 +641,7 @@ func recoverPrimaryHasPrimary(ctx context.Context, analysisEntry inst.Replicatio
 	}()
 
 	// Reset replication on current primary.
-	_, err = inst.ResetReplicationOperation(&analysisEntry.AnalyzedInstanceKey)
+	err = inst.ResetReplicationParameters(analysisEntry.AnalyzedInstanceKey)
 	if err != nil {
 		return false, topologyRecovery, err
 	}
@@ -704,7 +703,7 @@ func recoverDeadPrimary(ctx context.Context, analysisEntry inst.ReplicationAnaly
 
 	// We should refresh the tablet information again to update our information.
 	RefreshTablets(true /* forceRefresh */)
-	if ev.NewPrimary != nil {
+	if ev != nil && ev.NewPrimary != nil {
 		promotedReplica, _, _ = inst.ReadInstance(&inst.InstanceKey{
 			Hostname: ev.NewPrimary.MysqlHostname,
 			Port:     int(ev.NewPrimary.MysqlPort),
@@ -725,17 +724,6 @@ func postErsCompletion(topologyRecovery *TopologyRecovery, analysisEntry inst.Re
 		// Success!
 		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("RecoverDeadPrimary: successfully promoted %+v", promotedReplica.Key))
 
-		kvPairs := inst.GetClusterPrimaryKVPairs(analysisEntry.ClusterDetails.ClusterAlias, &promotedReplica.Key)
-		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("Writing KV %+v", kvPairs))
-		for _, kvPair := range kvPairs {
-			err := kv.PutKVPair(kvPair)
-			log.Errore(err)
-		}
-		{
-			AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("Distributing KV %+v", kvPairs))
-			err := kv.DistributePairs(kvPairs)
-			log.Errore(err)
-		}
 		if config.Config.PrimaryFailoverDetachReplicaPrimaryHost {
 			postponedFunction := func() error {
 				AuditTopologyRecovery(topologyRecovery, "- RecoverDeadPrimary: detaching primary host on promoted primary")
@@ -1681,7 +1669,7 @@ func GracefulPrimaryTakeover(clusterName string, designatedKey *inst.InstanceKey
 	// For example, if we do not refresh the tablets forcefully and the new primary is found in the cache then its source key is not updated and this spawns off
 	// PrimaryHasPrimary analysis which runs ERS
 	RefreshTablets(true /* forceRefresh */)
-	if ev.NewPrimary != nil {
+	if ev != nil && ev.NewPrimary != nil {
 		promotedReplica, _, _ = inst.ReadInstance(&inst.InstanceKey{
 			Hostname: ev.NewPrimary.MysqlHostname,
 			Port:     int(ev.NewPrimary.MysqlPort),
@@ -1702,17 +1690,6 @@ func postPrsCompletion(topologyRecovery *TopologyRecovery, analysisEntry inst.Re
 		// Success!
 		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("%+v: successfully promoted %+v", analysisEntry.Analysis, promotedReplica.Key))
 
-		kvPairs := inst.GetClusterPrimaryKVPairs(analysisEntry.ClusterDetails.ClusterAlias, &promotedReplica.Key)
-		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("Writing KV %+v", kvPairs))
-		for _, kvPair := range kvPairs {
-			err := kv.PutKVPair(kvPair)
-			log.Errore(err)
-		}
-		{
-			AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("Distributing KV %+v", kvPairs))
-			err := kv.DistributePairs(kvPairs)
-			log.Errore(err)
-		}
 		func() error {
 			before := analysisEntry.AnalyzedInstanceKey.StringCode()
 			after := promotedReplica.Key.StringCode()
@@ -1775,7 +1752,7 @@ func electNewPrimary(ctx context.Context, analysisEntry inst.ReplicationAnalysis
 	// For example, if we do not refresh the tablets forcefully and the new primary is found in the cache then its source key is not updated and this spawns off
 	// PrimaryHasPrimary analysis which runs ERS
 	RefreshTablets(true /* forceRefresh */)
-	if ev.NewPrimary != nil {
+	if ev != nil && ev.NewPrimary != nil {
 		promotedReplica, _, _ = inst.ReadInstance(&inst.InstanceKey{
 			Hostname: ev.NewPrimary.MysqlHostname,
 			Port:     int(ev.NewPrimary.MysqlPort),
@@ -1798,21 +1775,20 @@ func fixPrimary(ctx context.Context, analysisEntry inst.ReplicationAnalysis, can
 	defer func() {
 		resolveRecovery(topologyRecovery, nil)
 	}()
-	durability, err := inst.GetDurabilityPolicy(analysisEntry.AnalyzedInstanceKey)
-	if err != nil {
-		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("can't read durability policy - %v.", err))
-		return false, topologyRecovery, err
-	}
-	// TODO(sougou): this code pattern has reached DRY limits. Reuse.
-	count := inst.SemiSyncAckers(durability, analysisEntry.AnalyzedInstanceKey)
-	err = inst.SetSemiSyncPrimary(&analysisEntry.AnalyzedInstanceKey, count > 0)
-	//AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("- fixPrimary: applying semi-sync %v: success=%t", count > 0, (err == nil)))
+
+	analyzedTablet, err := inst.ReadTablet(analysisEntry.AnalyzedInstanceKey)
 	if err != nil {
 		return false, topologyRecovery, err
 	}
 
-	if err := TabletUndoDemotePrimary(analysisEntry.AnalyzedInstanceKey); err != nil {
+	durabilityPolicy, err := inst.GetDurabilityPolicy(analyzedTablet)
+	if err != nil {
+		log.Info("Could not read the durability policy for %v/%v", analyzedTablet.Keyspace, analyzedTablet.Shard)
 		return false, topologyRecovery, err
+	}
+
+	if err := tabletUndoDemotePrimary(ctx, analyzedTablet, inst.SemiSyncAckers(durabilityPolicy, analyzedTablet) > 0); err != nil {
+		return true, topologyRecovery, err
 	}
 	return true, topologyRecovery, nil
 }
@@ -1831,17 +1807,29 @@ func fixReplica(ctx context.Context, analysisEntry inst.ReplicationAnalysis, can
 		resolveRecovery(topologyRecovery, nil)
 	}()
 
-	if _, err := inst.SetReadOnly(&analysisEntry.AnalyzedInstanceKey, true); err != nil {
+	analyzedTablet, err := inst.ReadTablet(analysisEntry.AnalyzedInstanceKey)
+	if err != nil {
 		return false, topologyRecovery, err
 	}
 
-	primaryKey, err := ShardPrimary(&analysisEntry.AnalyzedInstanceKey)
+	primaryTablet, err := shardPrimary(ctx, analyzedTablet.Keyspace, analyzedTablet.Shard)
 	if err != nil {
-		log.Info("Could not compute primary for %+v", analysisEntry.AnalyzedInstanceKey)
+		log.Info("Could not compute primary for %v/%v", analyzedTablet.Keyspace, analyzedTablet.Shard)
 		return false, topologyRecovery, err
 	}
-	if _, err := inst.MoveBelowGTID(&analysisEntry.AnalyzedInstanceKey, primaryKey); err != nil {
+
+	durabilityPolicy, err := inst.GetDurabilityPolicy(analyzedTablet)
+	if err != nil {
+		log.Info("Could not read the durability policy for %v/%v", analyzedTablet.Keyspace, analyzedTablet.Shard)
 		return false, topologyRecovery, err
 	}
-	return true, topologyRecovery, nil
+
+	err = setReadOnly(ctx, analyzedTablet)
+	if err != nil {
+		log.Info("Could not set the tablet %v to readonly - %v", topoproto.TabletAliasString(analyzedTablet.Alias), err)
+		return true, topologyRecovery, err
+	}
+
+	err = setReplicationSource(ctx, analyzedTablet, primaryTablet, inst.IsReplicaSemiSync(durabilityPolicy, primaryTablet, analyzedTablet))
+	return true, topologyRecovery, err
 }

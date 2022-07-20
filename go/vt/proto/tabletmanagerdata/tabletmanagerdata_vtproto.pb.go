@@ -732,6 +732,16 @@ func (m *GetSchemaRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.TableSchemaOnly {
+		i--
+		if m.TableSchemaOnly {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x20
+	}
 	if len(m.ExcludeTables) > 0 {
 		for iNdEx := len(m.ExcludeTables) - 1; iNdEx >= 0; iNdEx-- {
 			i -= len(m.ExcludeTables[iNdEx])
@@ -3326,13 +3336,6 @@ func (m *DemotePrimaryResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error)
 		i--
 		dAtA[i] = 0x12
 	}
-	if len(m.DeprecatedPosition) > 0 {
-		i -= len(m.DeprecatedPosition)
-		copy(dAtA[i:], m.DeprecatedPosition)
-		i = encodeVarint(dAtA, i, uint64(len(m.DeprecatedPosition)))
-		i--
-		dAtA[i] = 0xa
-	}
 	return len(dAtA) - i, nil
 }
 
@@ -3881,16 +3884,6 @@ func (m *StopReplicationAndGetStatusResponse) MarshalToSizedBufferVT(dAtA []byte
 		i = encodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0x12
-	}
-	if m.HybridStatus != nil {
-		size, err := m.HybridStatus.MarshalToSizedBufferVT(dAtA[:i])
-		if err != nil {
-			return 0, err
-		}
-		i -= size
-		i = encodeVarint(dAtA, i, uint64(size))
-		i--
-		dAtA[i] = 0xa
 	}
 	return len(dAtA) - i, nil
 }
@@ -4967,6 +4960,9 @@ func (m *GetSchemaRequest) SizeVT() (n int) {
 			n += 1 + l + sov(uint64(l))
 		}
 	}
+	if m.TableSchemaOnly {
+		n += 2
+	}
 	if m.unknownFields != nil {
 		n += len(m.unknownFields)
 	}
@@ -5946,10 +5942,6 @@ func (m *DemotePrimaryResponse) SizeVT() (n int) {
 	}
 	var l int
 	_ = l
-	l = len(m.DeprecatedPosition)
-	if l > 0 {
-		n += 1 + l + sov(uint64(l))
-	}
 	if m.PrimaryStatus != nil {
 		l = m.PrimaryStatus.SizeVT()
 		n += 1 + l + sov(uint64(l))
@@ -6153,10 +6145,6 @@ func (m *StopReplicationAndGetStatusResponse) SizeVT() (n int) {
 	}
 	var l int
 	_ = l
-	if m.HybridStatus != nil {
-		l = m.HybridStatus.SizeVT()
-		n += 1 + l + sov(uint64(l))
-	}
 	if m.Status != nil {
 		l = m.Status.SizeVT()
 		n += 1 + l + sov(uint64(l))
@@ -8458,6 +8446,26 @@ func (m *GetSchemaRequest) UnmarshalVT(dAtA []byte) error {
 			}
 			m.ExcludeTables = append(m.ExcludeTables, string(dAtA[iNdEx:postIndex]))
 			iNdEx = postIndex
+		case 4:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field TableSchemaOnly", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.TableSchemaOnly = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])
@@ -13395,38 +13403,6 @@ func (m *DemotePrimaryResponse) UnmarshalVT(dAtA []byte) error {
 			return fmt.Errorf("proto: DemotePrimaryResponse: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
-		case 1:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field DeprecatedPosition", wireType)
-			}
-			var stringLen uint64
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			intStringLen := int(stringLen)
-			if intStringLen < 0 {
-				return ErrInvalidLength
-			}
-			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return ErrInvalidLength
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.DeprecatedPosition = string(dAtA[iNdEx:postIndex])
-			iNdEx = postIndex
 		case 2:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field PrimaryStatus", wireType)
@@ -14415,42 +14391,6 @@ func (m *StopReplicationAndGetStatusResponse) UnmarshalVT(dAtA []byte) error {
 			return fmt.Errorf("proto: StopReplicationAndGetStatusResponse: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
-		case 1:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field HybridStatus", wireType)
-			}
-			var msglen int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				msglen |= int(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			if msglen < 0 {
-				return ErrInvalidLength
-			}
-			postIndex := iNdEx + msglen
-			if postIndex < 0 {
-				return ErrInvalidLength
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			if m.HybridStatus == nil {
-				m.HybridStatus = &replicationdata.Status{}
-			}
-			if err := m.HybridStatus.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-				return err
-			}
-			iNdEx = postIndex
 		case 2:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Status", wireType)

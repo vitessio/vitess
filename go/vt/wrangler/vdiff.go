@@ -226,7 +226,8 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflowName, sou
 		oneFilter = bls.Filter
 		break
 	}
-	schm, err := schematools.GetSchema(ctx, wr.ts, wr.tmc, oneTarget.GetPrimary().Alias, nil, nil, false)
+	req := &tabletmanagerdatapb.GetSchemaRequest{}
+	schm, err := schematools.GetSchema(ctx, wr.ts, wr.tmc, oneTarget.GetPrimary().Alias, req)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "GetSchema")
 	}
@@ -942,10 +943,10 @@ func newPrimitiveExecutor(ctx context.Context, prim engine.Primitive) *primitive
 		prim:     prim,
 		resultch: make(chan *sqltypes.Result, 1),
 	}
-	vcursor := &contextVCursor{ctx: ctx}
+	vcursor := &contextVCursor{}
 	go func() {
 		defer close(pe.resultch)
-		pe.err = vcursor.StreamExecutePrimitive(pe.prim, make(map[string]*querypb.BindVariable), true, func(qr *sqltypes.Result) error {
+		pe.err = vcursor.StreamExecutePrimitive(ctx, pe.prim, make(map[string]*querypb.BindVariable), true, func(qr *sqltypes.Result) error {
 			select {
 			case pe.resultch <- qr:
 			case <-ctx.Done():
@@ -988,7 +989,7 @@ func (pe *primitiveExecutor) drain(ctx context.Context) (int, error) {
 //-----------------------------------------------------------------
 // shardStreamer
 
-func (sm *shardStreamer) StreamExecute(vcursor engine.VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (sm *shardStreamer) StreamExecute(ctx context.Context, vcursor engine.VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	for result := range sm.result {
 		if err := callback(result); err != nil {
 			return err
@@ -1246,27 +1247,21 @@ func (td *tableDiffer) genDebugQueryDiff(sel *sqlparser.Select, row []sqltypes.V
 //-----------------------------------------------------------------
 // contextVCursor
 
-// contextVCursor satisfies VCursor, but only implements Context().
-// MergeSort only requires Context to be implemented.
+// contextVCursor satisfies VCursor interface
 type contextVCursor struct {
 	engine.VCursor
-	ctx context.Context
 }
 
 func (vc *contextVCursor) ConnCollation() collations.ID {
 	return collations.CollationBinaryID
 }
 
-func (vc *contextVCursor) ExecutePrimitive(primitive engine.Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	return primitive.TryExecute(vc, bindVars, wantfields)
+func (vc *contextVCursor) ExecutePrimitive(ctx context.Context, primitive engine.Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	return primitive.TryExecute(ctx, vc, bindVars, wantfields)
 }
 
-func (vc *contextVCursor) StreamExecutePrimitive(primitive engine.Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	return primitive.TryStreamExecute(vc, bindVars, wantfields, callback)
-}
-
-func (vc *contextVCursor) Context() context.Context {
-	return vc.ctx
+func (vc *contextVCursor) StreamExecutePrimitive(ctx context.Context, primitive engine.Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	return primitive.TryStreamExecute(ctx, vc, bindVars, wantfields, callback)
 }
 
 //-----------------------------------------------------------------

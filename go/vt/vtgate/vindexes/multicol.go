@@ -18,6 +18,7 @@ package vindexes
 
 import (
 	"bytes"
+	"context"
 	"math"
 	"strconv"
 	"strings"
@@ -85,7 +86,7 @@ func (m *MultiCol) NeedsVCursor() bool {
 	return false
 }
 
-func (m *MultiCol) Map(_ VCursor, rowsColValues [][]sqltypes.Value) ([]key.Destination, error) {
+func (m *MultiCol) Map(ctx context.Context, vcursor VCursor, rowsColValues [][]sqltypes.Value) ([]key.Destination, error) {
 	out := make([]key.Destination, 0, len(rowsColValues))
 	for _, colValues := range rowsColValues {
 		partial, ksid, err := m.mapKsid(colValues)
@@ -102,7 +103,7 @@ func (m *MultiCol) Map(_ VCursor, rowsColValues [][]sqltypes.Value) ([]key.Desti
 	return out, nil
 }
 
-func (m *MultiCol) Verify(_ VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte) ([]bool, error) {
+func (m *MultiCol) Verify(ctx context.Context, vcursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte) ([]bool, error) {
 	out := make([]bool, 0, len(rowsColValues))
 	for idx, colValues := range rowsColValues {
 		_, ksid, err := m.mapKsid(colValues)

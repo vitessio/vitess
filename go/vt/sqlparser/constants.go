@@ -378,6 +378,12 @@ const (
 	PsCurrentThreadIDStr = "ps_current_thread_id"
 	PsThreadIDStr        = "ps_thread_id"
 
+	// GTIDType strings
+	GTIDSubsetStr                   = "gtid_subset"
+	GTIDSubtractStr                 = "gtid_subtract"
+	WaitForExecutedGTIDSetStr       = "wait_for_executed_gtid_set"
+	WaitUntilSQLThreadAfterGTIDSStr = "wati_until_sql_thread_after_gtids"
+
 	// LockOptionType strings
 	NoneTypeStr      = "none"
 	SharedTypeStr    = "shared"
@@ -566,6 +572,14 @@ const (
 	FormatPicoTimeType
 	PsCurrentThreadIDType
 	PsThreadIDType
+)
+
+// Constants for Enum Type - GTIDType
+const (
+	GTIDSubsetType GTIDType = iota
+	GTIDSubtractType
+	WaitForExecutedGTIDSetType
+	WaitUntilSQLThreadAfterGTIDSType
 )
 
 // Constants for Enum Type - WhereType
@@ -812,6 +826,7 @@ const (
 const (
 	RetryMigrationType AlterMigrationType = iota
 	CompleteMigrationType
+	CompleteAllMigrationType
 	CancelMigrationType
 	CancelAllMigrationType
 	CleanupMigrationType

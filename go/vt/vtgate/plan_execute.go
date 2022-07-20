@@ -28,7 +28,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
-type planExec func(plan *engine.Plan, vc *vcursorImpl, bindVars map[string]*querypb.BindVariable, startTime time.Time) error
+type planExec func(ctx context.Context, plan *engine.Plan, vc *vcursorImpl, bindVars map[string]*querypb.BindVariable, startTime time.Time) error
 type txResult func(sqlparser.StatementType, *sqltypes.Result) error
 
 func (e *Executor) newExecute(
@@ -53,20 +53,13 @@ func (e *Executor) newExecute(
 	}
 
 	query, comments := sqlparser.SplitMarginComments(sql)
-	vcursor, err := newVCursorImpl(ctx, safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver, e.serv, e.warnShardedOnly, e.pv)
+	vcursor, err := newVCursorImpl(safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver, e.serv, e.warnShardedOnly, e.pv)
 	if err != nil {
 		return err
 	}
 
 	// 2: Create a plan for the query
-	plan, err := e.getPlan(
-		vcursor,
-		query,
-		comments,
-		bindVars,
-		safeSession,
-		logStats,
-	)
+	plan, err := e.getPlan(ctx, vcursor, query, comments, bindVars, safeSession, logStats)
 	execStart := e.logPlanningFinished(logStats, plan)
 
 	if err != nil {
@@ -101,11 +94,11 @@ func (e *Executor) newExecute(
 	if plan.Instructions.NeedsTransaction() {
 		return e.insideTransaction(ctx, safeSession, logStats,
 			func() error {
-				return execPlan(plan, vcursor, bindVars, execStart)
+				return execPlan(ctx, plan, vcursor, bindVars, execStart)
 			})
 	}
 
-	return execPlan(plan, vcursor, bindVars, execStart)
+	return execPlan(ctx, plan, vcursor, bindVars, execStart)
 }
 
 // handleTransactions deals with transactional queries: begin, commit, rollback and savepoint management
@@ -206,7 +199,7 @@ func (e *Executor) executePlan(
 ) (*sqltypes.Result, error) {
 
 	// 4: Execute!
-	qr, err := vcursor.ExecutePrimitive(plan.Instructions, bindVars, true)
+	qr, err := vcursor.ExecutePrimitive(ctx, plan.Instructions, bindVars, true)
 
 	// 5: Log and add statistics
 	e.setLogStats(logStats, plan, vcursor, execStart, err, qr)

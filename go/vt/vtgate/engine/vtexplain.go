@@ -17,6 +17,8 @@ limitations under the License.
 package engine
 
 import (
+	"context"
+
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -54,8 +56,8 @@ func (v *VTExplain) GetTableName() string {
 }
 
 // GetFields implements the Primitive interface
-func (v *VTExplain) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return v.Input.GetFields(vcursor, bindVars)
+func (v *VTExplain) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	return v.Input.GetFields(ctx, vcursor, bindVars)
 }
 
 // NeedsTransaction implements the Primitive interface
@@ -64,13 +66,13 @@ func (v *VTExplain) NeedsTransaction() bool {
 }
 
 // TryExecute implements the Primitive interface
-func (v *VTExplain) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (v *VTExplain) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	vcursor.Session().VtExplainLogging()
-	return vcursor.ExecutePrimitive(v.Input, bindVars, wantfields)
+	return vcursor.ExecutePrimitive(ctx, v.Input, bindVars, wantfields)
 }
 
 // TryStreamExecute implements the Primitive interface
-func (v *VTExplain) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (v *VTExplain) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	//TODO implement me
 	panic("implement me")
 }

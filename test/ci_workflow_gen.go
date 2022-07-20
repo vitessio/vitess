@@ -31,7 +31,6 @@ type mysqlVersion string
 const (
 	mysql57    mysqlVersion = "mysql57"
 	mysql80    mysqlVersion = "mysql80"
-	mariadb102 mysqlVersion = "mariadb102"
 	mariadb103 mysqlVersion = "mariadb103"
 
 	defaultMySQLVersion mysqlVersion = mysql57
@@ -46,7 +45,7 @@ var (
 )
 
 var (
-	unitTestDatabases = []mysqlVersion{mysql57, mysql80, mariadb102, mariadb103}
+	unitTestDatabases = []mysqlVersion{mysql57, mysql80, mariadb103}
 )
 
 const (
@@ -73,14 +72,12 @@ var (
 		"13",
 		"ers_prs_newfeatures_heavy",
 		"15",
-		"shardedrecovery_stress_verticalsplit_heavy",
 		"vtgate_general_heavy",
 		"19",
 		"xb_backup",
 		"21",
 		"22",
-		"worker_vault_heavy",
-		"24",
+		"mysql_server_vault",
 		"26",
 		"vstream_failover",
 		"vstream_stoponreshard_true",
@@ -91,7 +88,7 @@ var (
 		"onlineddl_vrepl_stress",
 		"onlineddl_vrepl_stress_suite",
 		"onlineddl_vrepl_suite",
-		"vreplication_migrate",
+		"vreplication_migrate_vdiff2_convert_tz",
 		"onlineddl_revert",
 		"onlineddl_declarative",
 		"onlineddl_singleton",
@@ -101,7 +98,6 @@ var (
 		"tabletmanager_throttler_custom_config",
 		"tabletmanager_tablegc",
 		"tabletmanager_consul",
-		"vtgate_buffer",
 		"vtgate_concurrentdml",
 		"vtgate_godriver",
 		"vtgate_gen4",
@@ -119,8 +115,6 @@ var (
 		"vtgate_queries",
 		"vtgate_schema_tracker",
 		"xb_recovery",
-		"resharding",
-		"resharding_bytes",
 		"mysql80",
 		"vreplication_across_db_versions",
 		"vreplication_multicell",
@@ -144,7 +138,7 @@ var (
 	}
 	clustersRequiringMakeTools = []string{
 		"18",
-		"24",
+		"mysql_server_vault",
 		"vtgate_topo_consul",
 		"tabletmanager_consul",
 	}
@@ -170,6 +164,8 @@ type selfHostedTest struct {
 func clusterMySQLVersions(clusterName string) mysqlVersions {
 	switch {
 	case strings.HasPrefix(clusterName, "onlineddl_"):
+		return allMySQLVersions
+	case clusterName == "schemadiff_vrepl":
 		return allMySQLVersions
 	case clusterName == "tabletmanager_tablegc":
 		return allMySQLVersions

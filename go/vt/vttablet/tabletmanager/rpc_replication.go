@@ -849,7 +849,6 @@ func (tm *TabletManager) StopReplicationAndGetStatus(ctx context.Context, stopRe
 	if stopReplicationMode == replicationdatapb.StopReplicationMode_IOTHREADONLY {
 		if !rs.IOHealthy() {
 			return StopReplicationAndGetStatusResponse{
-				HybridStatus: before,
 				Status: &replicationdatapb.StopReplicationStatus{
 					Before: before,
 					After:  before,
@@ -867,7 +866,6 @@ func (tm *TabletManager) StopReplicationAndGetStatus(ctx context.Context, stopRe
 		if !rs.Healthy() {
 			// no replication is running, just return what we got
 			return StopReplicationAndGetStatusResponse{
-				HybridStatus: before,
 				Status: &replicationdatapb.StopReplicationStatus{
 					Before: before,
 					After:  before,
@@ -900,7 +898,6 @@ func (tm *TabletManager) StopReplicationAndGetStatus(ctx context.Context, stopRe
 	rs.RelayLogSourceBinlogEquivalentPosition = rsAfter.RelayLogSourceBinlogEquivalentPosition
 
 	return StopReplicationAndGetStatusResponse{
-		HybridStatus: mysql.ReplicationStatusToProto(rs),
 		Status: &replicationdatapb.StopReplicationStatus{
 			Before: before,
 			After:  after,
@@ -911,11 +908,6 @@ func (tm *TabletManager) StopReplicationAndGetStatus(ctx context.Context, stopRe
 // StopReplicationAndGetStatusResponse holds the original hybrid Status struct, as well as a new Status field, which
 // hold the result of show replica status called before stopping replication, and after stopping replication.
 type StopReplicationAndGetStatusResponse struct {
-	// HybridStatus is deprecated. It currently represents a hybrid struct where all data represents the before state,
-	// except for all position related data which comes from the after state. Please use status instead, which holds
-	// discrete replication status calls before and after stopping the replica, or stopping the replica's io_thread.
-	HybridStatus *replicationdatapb.Status
-
 	// Status represents the replication status call right before, and right after telling the replica to stop.
 	Status *replicationdatapb.StopReplicationStatus
 }

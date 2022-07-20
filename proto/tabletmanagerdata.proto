@@ -135,6 +135,9 @@ message GetSchemaRequest {
   repeated string tables = 1;
   bool include_views = 2;
   repeated string exclude_tables = 3;
+  // TableSchemaOnly specifies whether to limit the results to just table/view
+  // schema definition (CREATE TABLE/VIEW statements) and skip column/field information
+  bool table_schema_only = 4;
 }
 
 message GetSchemaResponse {
@@ -391,7 +394,8 @@ message DemotePrimaryRequest {
 
 message DemotePrimaryResponse {
   // Position is deprecated, and is a string representation of a demoted primaries executed position.
-  string deprecated_position = 1 [deprecated = true];
+  //string deprecated_position = 1 [deprecated = true];
+  reserved 1;
 
   // PrimaryStatus represents the response from calling `SHOW MASTER STATUS` on a primary that has been demoted.
   replicationdata.PrimaryStatus primary_status = 2;
@@ -450,7 +454,8 @@ message StopReplicationAndGetStatusResponse {
   // HybridStatus is deprecated. It currently represents a hybrid struct where all data represents the before state,
   // except for all position related data which comes from the after state. Please use status instead, which holds
   // discrete replication status calls before and after stopping the replica, or stopping the replica's io_thread.
-  replicationdata.Status hybrid_status = 1 [deprecated = true];
+  //replicationdata.Status hybrid_status = 1 [deprecated = true];
+  reserved 1;
 
   // Status represents the replication status call right before, and right after telling the replica to stop.
   replicationdata.StopReplicationStatus status = 2;

@@ -222,12 +222,6 @@ type Configuration struct {
 	DiscoveryIgnoreReplicaHostnameFilters       []string          // Regexp filters to apply to prevent auto-discovering new replicas. Usage: unreachable servers due to firewalls, applications which trigger binlog dumps
 	DiscoveryIgnorePrimaryHostnameFilters       []string          // Regexp filters to apply to prevent auto-discovering a primary. Usage: pointing your primary temporarily to replicate seom data from external host
 	DiscoveryIgnoreHostnameFilters              []string          // Regexp filters to apply to prevent discovering instances of any kind
-	ConsulAddress                               string            // Address where Consul HTTP api is found. Example: 127.0.0.1:8500
-	ConsulScheme                                string            // Scheme (http or https) for Consul
-	ConsulACLToken                              string            // ACL token used to write to Consul KV
-	ConsulCrossDataCenterDistribution           bool              // should orchestrator automatically auto-deduce all consul DCs and write KVs in all DCs
-	ZkAddress                                   string            // UNSUPPERTED YET. Address where (single or multiple) ZooKeeper servers are found, in `srv1[:port1][,srv2[:port2]...]` format. Default port is 2181. Example: srv-a,srv-b:12181,srv-c
-	KVClusterPrimaryPrefix                      string            // Prefix to use for clusters' primary's entries in KV stores (internal, consul, ZK), default: "mysql/primary"
 	WebMessage                                  string            // If provided, will be shown on all web pages below the title bar
 	MaxConcurrentReplicaOperations              int               // Maximum number of concurrent operations on replicas
 	InstanceDBExecContextTimeoutSeconds         int               // Timeout on context used while calling ExecContext on instance database
@@ -379,17 +373,11 @@ func newConfiguration() *Configuration {
 		OSCIgnoreHostnameFilters:                    []string{},
 		URLPrefix:                                   "",
 		DiscoveryIgnoreReplicaHostnameFilters:       []string{},
-		ConsulAddress:                               "",
-		ConsulScheme:                                "http",
-		ConsulACLToken:                              "",
-		ConsulCrossDataCenterDistribution:           false,
-		ZkAddress:                                   "",
-		KVClusterPrimaryPrefix:                      "mysql/primary",
 		WebMessage:                                  "",
 		MaxConcurrentReplicaOperations:              5,
 		InstanceDBExecContextTimeoutSeconds:         30,
-		LockShardTimeoutSeconds:                     1,
-		WaitReplicasTimeoutSeconds:                  1,
+		LockShardTimeoutSeconds:                     30,
+		WaitReplicasTimeoutSeconds:                  30,
 	}
 }
 
@@ -475,13 +463,6 @@ func (config *Configuration) postReadAdjustments() error {
 	}
 	if config.RaftAdvertise == "" {
 		config.RaftAdvertise = config.RaftBind
-	}
-	if config.KVClusterPrimaryPrefix != "/" {
-		// "/" remains "/"
-		// "prefix" turns to "prefix/"
-		// "some/prefix///" turns to "some/prefix/"
-		config.KVClusterPrimaryPrefix = strings.TrimRight(config.KVClusterPrimaryPrefix, "/")
-		config.KVClusterPrimaryPrefix = fmt.Sprintf("%s/", config.KVClusterPrimaryPrefix)
 	}
 	if config.HTTPAdvertise != "" {
 		u, err := url.Parse(config.HTTPAdvertise)

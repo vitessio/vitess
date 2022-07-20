@@ -238,6 +238,8 @@ func TestWorkflowListStreams(t *testing.T) {
 					"TransactionTimestamp": 0,
 					"TimeUpdated": 1234,
 					"TimeHeartbeat": 1234,
+					"TimeThrottled": 0,
+					"ComponentThrottled": "",
 					"Message": "",
 					"Tags": "",
 					"CopyState": [
@@ -275,6 +277,8 @@ func TestWorkflowListStreams(t *testing.T) {
 					"TransactionTimestamp": 0,
 					"TimeUpdated": 1234,
 					"TimeHeartbeat": 1234,
+					"TimeThrottled": 0,
+					"ComponentThrottled": "",
 					"Message": "",
 					"Tags": "",
 					"CopyState": [

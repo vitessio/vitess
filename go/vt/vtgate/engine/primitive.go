@@ -22,8 +22,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"golang.org/x/sync/errgroup"
-
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -49,12 +47,6 @@ type (
 	// VCursor defines the interface the engine will use
 	// to execute routes.
 	VCursor interface {
-		// Context returns the context of the current request.
-		Context() context.Context
-
-		// CancelContext cancels the highest level context and its children.
-		CancelContext()
-
 		GetKeyspace() string
 		// MaxMemoryRows returns the maxMemoryRows flag value.
 		MaxMemoryRows() int
@@ -64,45 +56,35 @@ type (
 		// if the max memory rows override directive is set to true
 		ExceedsMaxMemoryRows(numRows int) bool
 
-		// SetContextTimeout updates the context and sets a timeout.
-		SetContextTimeout(timeout time.Duration) context.CancelFunc
-
-		// ErrorGroupCancellableContext updates context that can be cancelled.
-		ErrorGroupCancellableContext() (*errgroup.Group, func())
-
-		// SetContextWithValue updates context with key and value and
-		// provides back function to move back to original context.
-		SetContextWithValue(key, value interface{}) func()
-
 		// V3 functions.
-		Execute(method string, query string, bindvars map[string]*querypb.BindVariable, rollbackOnError bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error)
+		Execute(ctx context.Context, method string, query string, bindVars map[string]*querypb.BindVariable, rollbackOnError bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error)
 		AutocommitApproval() bool
 
 		// Primitive functions
-		ExecutePrimitive(primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error)
-		StreamExecutePrimitive(primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error
+		ExecutePrimitive(ctx context.Context, primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error)
+		StreamExecutePrimitive(ctx context.Context, primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error
 
 		// Shard-level functions.
-		ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, rollbackOnError, canAutocommit bool) (*sqltypes.Result, []error)
-		ExecuteStandalone(query string, bindvars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard) (*sqltypes.Result, error)
-		StreamExecuteMulti(query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, rollbackOnError bool, autocommit bool, callback func(reply *sqltypes.Result) error) []error
+		ExecuteMultiShard(ctx context.Context, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, rollbackOnError, canAutocommit bool) (*sqltypes.Result, []error)
+		ExecuteStandalone(ctx context.Context, query string, bindVars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard) (*sqltypes.Result, error)
+		StreamExecuteMulti(ctx context.Context, query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, rollbackOnError bool, autocommit bool, callback func(reply *sqltypes.Result) error) []error
 
 		// Keyspace ID level functions.
-		ExecuteKeyspaceID(keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, rollbackOnError, autocommit bool) (*sqltypes.Result, error)
+		ExecuteKeyspaceID(ctx context.Context, keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, rollbackOnError, autocommit bool) (*sqltypes.Result, error)
 
 		// Resolver methods, from key.Destination to srvtopo.ResolvedShard.
 		// Will replace all of the Topo functions.
-		ResolveDestinations(keyspace string, ids []*querypb.Value, destinations []key.Destination) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error)
+		ResolveDestinations(ctx context.Context, keyspace string, ids []*querypb.Value, destinations []key.Destination) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error)
 
-		ResolveDestinationsMultiCol(keyspace string, ids [][]sqltypes.Value, destinations []key.Destination) ([]*srvtopo.ResolvedShard, [][][]sqltypes.Value, error)
+		ResolveDestinationsMultiCol(ctx context.Context, keyspace string, ids [][]sqltypes.Value, destinations []key.Destination) ([]*srvtopo.ResolvedShard, [][][]sqltypes.Value, error)
 
-		ExecuteVSchema(keyspace string, vschemaDDL *sqlparser.AlterVschema) error
+		ExecuteVSchema(ctx context.Context, keyspace string, vschemaDDL *sqlparser.AlterVschema) error
 
 		Session() SessionActions
 
 		ConnCollation() collations.ID
 
-		ExecuteLock(rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, lockFuncType sqlparser.LockingFuncType) (*sqltypes.Result, error)
+		ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, lockFuncType sqlparser.LockingFuncType) (*sqltypes.Result, error)
 
 		InTransactionAndIsDML() bool
 
@@ -116,20 +98,23 @@ type (
 		// KeyspaceAvailable returns true when a keyspace is visible from vtgate
 		KeyspaceAvailable(ks string) bool
 
-		MessageStream(rss []*srvtopo.ResolvedShard, tableName string, callback func(*sqltypes.Result) error) error
+		MessageStream(ctx context.Context, rss []*srvtopo.ResolvedShard, tableName string, callback func(*sqltypes.Result) error) error
 
-		VStream(rss []*srvtopo.ResolvedShard, filter *binlogdatapb.Filter, gtid string, callback func(evs []*binlogdatapb.VEvent) error) error
+		VStream(ctx context.Context, rss []*srvtopo.ResolvedShard, filter *binlogdatapb.Filter, gtid string, callback func(evs []*binlogdatapb.VEvent) error) error
 
 		// ShowExec takes in show command and use executor to execute the query, they are used when topo access is involved.
-		ShowExec(command sqlparser.ShowCommandType, filter *sqlparser.ShowFilter) (*sqltypes.Result, error)
+		ShowExec(ctx context.Context, command sqlparser.ShowCommandType, filter *sqlparser.ShowFilter) (*sqltypes.Result, error)
 		// SetExec takes in k,v pair and use executor to set them in topo metadata.
-		SetExec(name string, value string) error
+		SetExec(ctx context.Context, name string, value string) error
 
 		// CanUseSetVar returns true if system_settings can use SET_VAR hint.
 		CanUseSetVar() bool
 
 		// ReleaseLock releases all the held advisory locks.
-		ReleaseLock() error
+		ReleaseLock(ctx context.Context) error
+
+		// StreamExecutePrimitiveStandalone executes the primitive in its own new autocommit session.
+		StreamExecutePrimitiveStandalone(ctx context.Context, primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(result *sqltypes.Result) error) error
 	}
 
 	//SessionActions gives primitives ability to interact with the session state
@@ -152,9 +137,9 @@ type (
 		// ShardSession returns shard info about open connections
 		ShardSession() []*srvtopo.ResolvedShard
 
-		SetAutocommit(bool) error
-		SetClientFoundRows(bool) error
-		SetSkipQueryPlanCache(bool) error
+		SetAutocommit(ctx context.Context, autocommit bool) error
+		SetClientFoundRows(context.Context, bool) error
+		SetSkipQueryPlanCache(context.Context, bool) error
 		SetSQLSelectLimit(int64) error
 		SetTransactionMode(vtgatepb.TransactionMode)
 		SetWorkload(querypb.ExecuteOptions_Workload)
@@ -166,7 +151,7 @@ type (
 
 		GetSessionUUID() string
 
-		SetSessionEnableSystemSettings(bool) error
+		SetSessionEnableSystemSettings(context.Context, bool) error
 		GetSessionEnableSystemSettings() bool
 
 		GetSystemVariables(func(k string, v string))
@@ -222,11 +207,11 @@ type (
 		RouteType() string
 		GetKeyspaceName() string
 		GetTableName() string
-		GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error)
+		GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error)
 		NeedsTransaction() bool
 
-		TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error)
-		TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error
+		TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error)
+		TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error
 
 		// Inputs is a slice containing the inputs to this Primitive
 		Inputs() []Primitive

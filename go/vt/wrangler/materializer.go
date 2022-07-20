@@ -51,6 +51,7 @@ import (
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
@@ -351,7 +352,8 @@ func (wr *Wrangler) getKeyspaceTables(ctx context.Context, ks string, ts *topo.S
 	if err != nil {
 		return nil, err
 	}
-	schema, err := wr.tmc.GetSchema(ctx, ti.Tablet, allTables, nil, false)
+	req := &tabletmanagerdatapb.GetSchemaRequest{Tables: allTables}
+	schema, err := wr.tmc.GetSchema(ctx, ti.Tablet, req)
 	if err != nil {
 		return nil, err
 	}
@@ -583,7 +585,8 @@ func (wr *Wrangler) prepareCreateLookup(ctx context.Context, keyspace string, sp
 	if onesource.PrimaryAlias == nil {
 		return nil, nil, nil, fmt.Errorf("source shard has no primary: %v", onesource.ShardName())
 	}
-	tableSchema, err := schematools.GetSchema(ctx, wr.ts, wr.tmc, onesource.PrimaryAlias, []string{sourceTableName}, nil, false)
+	req := &tabletmanagerdatapb.GetSchemaRequest{Tables: []string{sourceTableName}}
+	tableSchema, err := schematools.GetSchema(ctx, wr.ts, wr.tmc, onesource.PrimaryAlias, req)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -971,7 +974,8 @@ func (mz *materializer) getSourceTableDDLs(ctx context.Context) (map[string]stri
 	if err != nil {
 		return nil, err
 	}
-	sourceSchema, err := mz.wr.tmc.GetSchema(ctx, ti.Tablet, allTables, nil, false)
+	req := &tabletmanagerdatapb.GetSchemaRequest{Tables: allTables}
+	sourceSchema, err := mz.wr.tmc.GetSchema(ctx, ti.Tablet, req)
 	if err != nil {
 		return nil, err
 	}
@@ -990,7 +994,8 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 		allTables := []string{"/.*/"}
 
 		hasTargetTable := map[string]bool{}
-		targetSchema, err := schematools.GetSchema(ctx, mz.wr.ts, mz.wr.tmc, target.PrimaryAlias, allTables, nil, false)
+		req := &tabletmanagerdatapb.GetSchemaRequest{Tables: allTables}
+		targetSchema, err := schematools.GetSchema(ctx, mz.wr.ts, mz.wr.tmc, target.PrimaryAlias, req)
 		if err != nil {
 			return err
 		}

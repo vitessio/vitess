@@ -248,7 +248,7 @@ func stopReplicationAndBuildStatusMaps(
 
 		logger.Infof("getting replication position from %v", alias)
 
-		_, stopReplicationStatus, err := tmc.StopReplicationAndGetStatus(groupCtx, tabletInfo.Tablet, replicationdatapb.StopReplicationMode_IOTHREADONLY)
+		stopReplicationStatus, err := tmc.StopReplicationAndGetStatus(groupCtx, tabletInfo.Tablet, replicationdatapb.StopReplicationMode_IOTHREADONLY)
 		if err != nil {
 			sqlErr, isSQLErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
 			if isSQLErr && sqlErr != nil && sqlErr.Number() == mysql.ERNotReplica {

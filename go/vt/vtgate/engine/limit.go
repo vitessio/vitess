@@ -17,6 +17,7 @@ limitations under the License.
 package engine
 
 import (
+	"context"
 	"fmt"
 	"io"
 
@@ -52,7 +53,7 @@ func (l *Limit) GetTableName() string {
 }
 
 // TryExecute satisfies the Primitive interface.
-func (l *Limit) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (l *Limit) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	count, offset, err := l.getCountAndOffset(vcursor, bindVars)
 	if err != nil {
 		return nil, err
@@ -61,7 +62,7 @@ func (l *Limit) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVar
 	// the offset in memory from the result of the scatter query with count + offset.
 	bindVars["__upper_limit"] = sqltypes.Int64BindVariable(int64(count + offset))
 
-	result, err := vcursor.ExecutePrimitive(l.Input, bindVars, wantfields)
+	result, err := vcursor.ExecutePrimitive(ctx, l.Input, bindVars, wantfields)
 	if err != nil {
 		return nil, err
 	}
@@ -82,7 +83,7 @@ func (l *Limit) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVar
 }
 
 // TryStreamExecute satisfies the Primitive interface.
-func (l *Limit) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (l *Limit) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	count, offset, err := l.getCountAndOffset(vcursor, bindVars)
 	if err != nil {
 		return err
@@ -94,7 +95,7 @@ func (l *Limit) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.B
 	// the offset in memory from the result of the scatter query with count + offset.
 	bindVars["__upper_limit"] = sqltypes.Int64BindVariable(int64(count + offset))
 
-	err = vcursor.StreamExecutePrimitive(l.Input, bindVars, wantfields, func(qr *sqltypes.Result) error {
+	err = vcursor.StreamExecutePrimitive(ctx, l.Input, bindVars, wantfields, func(qr *sqltypes.Result) error {
 		if len(qr.Fields) != 0 {
 			if err := callback(&sqltypes.Result{Fields: qr.Fields}); err != nil {
 				return err
@@ -147,8 +148,8 @@ func (l *Limit) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.B
 }
 
 // GetFields implements the Primitive interface.
-func (l *Limit) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return l.Input.GetFields(vcursor, bindVars)
+func (l *Limit) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	return l.Input.GetFields(ctx, vcursor, bindVars)
 }
 
 // Inputs returns the input to limit

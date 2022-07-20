@@ -17,7 +17,6 @@ limitations under the License.
 package binlog
 
 import (
-	"flag"
 	"fmt"
 	"strings"
 
@@ -28,10 +27,6 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
-)
-
-var (
-	_ = flag.Bool("binlog_use_v3_resharding_mode", true, "(DEPRECATED) True if and only if the binlog streamer should use V3-style sharding, which doesn't require a preset sharding key column.")
 )
 
 // keyspaceIDResolver is constructed for a tableMap entry in RBR.  It
@@ -107,7 +102,7 @@ type keyspaceIDResolverFactoryV3 struct {
 }
 
 func (r *keyspaceIDResolverFactoryV3) keyspaceID(v sqltypes.Value) ([]byte, error) {
-	destinations, err := r.vindex.Map(nil, []sqltypes.Value{v})
+	destinations, err := r.vindex.Map(context.TODO(), nil, []sqltypes.Value{v})
 	if err != nil {
 		return nil, err
 	}
