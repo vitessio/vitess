@@ -478,6 +478,12 @@ func (tkn *Tokenizer) scanNumber() (int, string) {
 			tkn.scanMantissa(16)
 			goto exit
 		}
+		if tkn.cur() == 'b' || tkn.cur() == 'B' {
+			token = BITNUM
+			tkn.skip(1)
+			tkn.scanMantissa(2)
+			goto exit
+		}
 	}
 
 	tkn.scanMantissa(10)
