@@ -614,6 +614,7 @@ func (e *Executor) executeDirectly(ctx context.Context, onlineDDL *schema.Online
 	if err != nil {
 		return false, err
 	}
+	defer e.reloadSchema(ctx)
 	_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, progressPctFull, etaSecondsNow, rowsCopiedUnknown, emptyHint)
 
 	return acceptableErrorCodeFound, nil
@@ -1439,6 +1440,7 @@ exit $exit_code
 			return err
 		}
 		// Migration successful!
+		defer e.reloadSchema(ctx)
 		successfulMigrations.Add(1)
 		log.Infof("+ OK")
 		return nil
@@ -1663,6 +1665,7 @@ export MYSQL_PWD
 			return err
 		}
 		// Migration successful!
+		defer e.reloadSchema(ctx)
 		successfulMigrations.Add(1)
 		log.Infof("+ OK")
 		return nil
