@@ -46,7 +46,7 @@ func InitAuthServerClientCert() {
 }
 
 // AuthMethod is part of the AuthServer interface.
-func (ascc *AuthServerClientCert) AuthMethod(user string) (string, error) {
+func (ascc *AuthServerClientCert) AuthMethod(user, addr string) (string, error) {
 	return ascc.Method, nil
 }
 
