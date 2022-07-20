@@ -36,6 +36,25 @@ Gen4 plan same as above
 }
 Gen4 plan same as above
 
+# Null Safe Equality Operator is handled correctly
+"SELECT id from user where someColumn <=> null"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT id from user where someColumn \u003c=\u003e null",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from `user` where 1 != 1",
+    "Query": "select id from `user` where someColumn \u003c=\u003e null",
+    "Table": "`user`"
+  }
+}
+Gen4 plan same as above
+
 # Single table unique vindex route
 "select id from user where user.id = 5"
 {
