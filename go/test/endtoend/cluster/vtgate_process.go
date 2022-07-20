@@ -109,7 +109,15 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 		args = append(args, "--mysql_server_version", mysqlvers)
 	}
 	if vtgate.PlannerVersion > 0 {
-		args = append(args, "--planner-version", vtgate.PlannerVersion.String())
+		v, err := GetMajorVersion("vtgate")
+		if err != nil {
+			return err
+		}
+		plannerFlag := "--planner-version"
+		if v < 14 {
+			plannerFlag = "--planner_version"
+		}
+		args = append(args, plannerFlag, vtgate.PlannerVersion.String())
 	}
 	if vtgate.SysVarSetEnabled {
 		args = append(args, "--enable_system_settings")
