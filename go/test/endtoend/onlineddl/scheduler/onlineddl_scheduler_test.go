@@ -25,6 +25,8 @@ import (
 	"testing"
 	"time"
 
+	"go.uber.org/goleak"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -84,6 +86,7 @@ var (
 )
 
 func TestMain(m *testing.M) {
+	goleak.VerifyTestMain(m)
 	defer cluster.PanicHandler(nil)
 	flag.Parse()
 

@@ -24,6 +24,8 @@ import (
 	"testing"
 	"time"
 
+	"go.uber.org/goleak"
+
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -81,6 +83,7 @@ const (
 )
 
 func TestMain(m *testing.M) {
+	goleak.VerifyTestMain(m)
 	defer cluster.PanicHandler(nil)
 	flag.Parse()
 

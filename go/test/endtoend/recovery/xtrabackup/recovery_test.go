@@ -19,12 +19,15 @@ package xtrabackup
 import (
 	"testing"
 
+	"go.uber.org/goleak"
+
 	"vitess.io/vitess/go/test/endtoend/recovery"
 	"vitess.io/vitess/go/test/endtoend/recovery/unshardedrecovery"
 	_ "vitess.io/vitess/go/vt/vtgate/grpcvtgateconn"
 )
 
 func TestMain(m *testing.M) {
+	goleak.VerifyTestMain(m)
 	recovery.UseXb = true
 	unshardedrecovery.TestMainImpl(m)
 }

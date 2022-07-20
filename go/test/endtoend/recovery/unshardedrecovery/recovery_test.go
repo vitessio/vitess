@@ -19,10 +19,13 @@ package unshardedrecovery
 import (
 	"testing"
 
+	"go.uber.org/goleak"
+
 	_ "vitess.io/vitess/go/vt/vtgate/grpcvtgateconn"
 )
 
 func TestMain(m *testing.M) {
+	goleak.VerifyTestMain(m)
 	TestMainImpl(m)
 }
 

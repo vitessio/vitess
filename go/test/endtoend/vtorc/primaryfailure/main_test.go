@@ -21,6 +21,8 @@ import (
 	"os"
 	"testing"
 
+	"go.uber.org/goleak"
+
 	"vitess.io/vitess/go/test/endtoend/vtorc/utils"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -29,6 +31,7 @@ import (
 var clusterInfo *utils.VtOrcClusterInfo
 
 func TestMain(m *testing.M) {
+	goleak.VerifyTestMain(m)
 	// setup cellInfos before creating the cluster
 	var cellInfos []*utils.CellInfo
 	cellInfos = append(cellInfos, &utils.CellInfo{

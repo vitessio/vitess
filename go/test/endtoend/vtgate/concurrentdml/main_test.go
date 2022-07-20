@@ -26,6 +26,8 @@ import (
 	"testing"
 	"time"
 
+	"go.uber.org/goleak"
+
 	"vitess.io/vitess/go/test/endtoend/utils"
 
 	"github.com/stretchr/testify/assert"
@@ -66,6 +68,7 @@ INSERT INTO t1_seq (id, next_id, cache) values(0, 1, 1000);
 )
 
 func TestMain(m *testing.M) {
+	goleak.VerifyTestMain(m)
 	defer cluster.PanicHandler(nil)
 	flag.Parse()
 

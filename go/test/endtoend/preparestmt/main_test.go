@@ -27,6 +27,7 @@ import (
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/goleak"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
@@ -162,6 +163,7 @@ var (
 )
 
 func TestMain(m *testing.M) {
+	goleak.VerifyTestMain(m)
 	defer cluster.PanicHandler(nil)
 	flag.Parse()
 

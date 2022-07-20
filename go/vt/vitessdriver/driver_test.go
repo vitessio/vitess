@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/goleak"
 
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
@@ -48,6 +49,7 @@ var (
 // have to be. The main point here is to test the interactions against a
 // vtgate implementation (here: fakeVTGateService from fakeserver_test.go).
 func TestMain(m *testing.M) {
+	goleak.VerifyTestMain(m)
 	service := CreateFakeServer()
 
 	// listen on a random port.

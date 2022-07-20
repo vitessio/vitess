@@ -24,6 +24,8 @@ import (
 	"testing"
 	"time"
 
+	"go.uber.org/goleak"
+
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -123,6 +125,7 @@ create table t8(
 )
 
 func TestMain(m *testing.M) {
+	goleak.VerifyTestMain(m)
 	defer cluster.PanicHandler(nil)
 	flag.Parse()
 

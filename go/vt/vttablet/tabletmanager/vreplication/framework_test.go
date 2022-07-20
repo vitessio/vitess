@@ -27,6 +27,8 @@ import (
 	"testing"
 	"time"
 
+	"go.uber.org/goleak"
+
 	"vitess.io/vitess/go/vt/withddl"
 
 	"vitess.io/vitess/go/vt/log"
@@ -88,6 +90,7 @@ func init() {
 }
 
 func TestMain(m *testing.M) {
+	goleak.VerifyTestMain(m)
 	flag.Parse() // Do not remove this comment, import into google3 depends on it
 
 	exitCode := func() int {

@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"go.uber.org/goleak"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -38,6 +39,7 @@ var (
 )
 
 func TestMain(m *testing.M) {
+	goleak.VerifyTestMain(m)
 	flag.Parse() // Do not remove this comment, import into google3 depends on it
 	ignoreKeyspaceShardInFieldAndRowEvents = true
 	if testing.Short() {

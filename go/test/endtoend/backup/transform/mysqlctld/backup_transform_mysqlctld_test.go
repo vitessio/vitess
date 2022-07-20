@@ -19,10 +19,13 @@ package mysqlctld
 import (
 	"testing"
 
+	"go.uber.org/goleak"
+
 	"vitess.io/vitess/go/test/endtoend/backup/transform"
 )
 
 func TestMain(m *testing.M) {
+	goleak.VerifyTestMain(m)
 	transform.TestMainSetup(m, true)
 }
 

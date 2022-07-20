@@ -25,6 +25,8 @@ import (
 	"strings"
 	"testing"
 
+	"go.uber.org/goleak"
+
 	"vitess.io/vitess/go/mysql"
 	vtenv "vitess.io/vitess/go/vt/env"
 	"vitess.io/vitess/go/vt/mysqlctl"
@@ -169,6 +171,7 @@ func binaryPath(root, binary string) (string, error) {
 }
 
 func TestMain(m *testing.M) {
+	goleak.VerifyTestMain(m)
 	flag.Parse() // Do not remove this comment, import into google3 depends on it
 
 	exitCode := func() int {

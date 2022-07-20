@@ -29,6 +29,8 @@ import (
 	"os/exec"
 	"testing"
 
+	"go.uber.org/goleak"
+
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
@@ -97,6 +99,7 @@ Topology: We create a keyspace with two shards , having 3 tablets each. Primarie
 to 'zone1' and replicas/rdonly belongs to cell2.
 */
 func TestMain(m *testing.M) {
+	goleak.VerifyTestMain(m)
 	defer cluster.PanicHandler(nil)
 	flag.Parse()
 

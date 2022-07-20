@@ -25,6 +25,8 @@ import (
 	"strings"
 	"testing"
 
+	"go.uber.org/goleak"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/vttest"
 
@@ -55,6 +57,7 @@ func mysqlconn(t *testing.T) *mysql.Conn {
 }
 
 func TestMain(m *testing.M) {
+	goleak.VerifyTestMain(m)
 	flag.Parse()
 
 	exitCode := func() int {

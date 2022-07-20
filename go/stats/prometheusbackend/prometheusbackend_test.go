@@ -25,6 +25,8 @@ import (
 	"testing"
 	"time"
 
+	"go.uber.org/goleak"
+
 	"vitess.io/vitess/go/stats"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -358,6 +360,7 @@ func testMetricsHandler(t *testing.T) *httptest.ResponseRecorder {
 }
 
 func TestMain(m *testing.M) {
+	goleak.VerifyTestMain(m)
 	Init(namespace)
 	os.Exit(m.Run())
 }

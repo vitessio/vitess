@@ -23,6 +23,8 @@ import (
 	"testing"
 	"time"
 
+	"go.uber.org/goleak"
+
 	"vitess.io/vitess/go/test/endtoend/utils"
 
 	"github.com/stretchr/testify/require"
@@ -119,6 +121,7 @@ create table t8(
 )
 
 func TestMain(m *testing.M) {
+	goleak.VerifyTestMain(m)
 	defer cluster.PanicHandler(nil)
 	flag.Parse()
 

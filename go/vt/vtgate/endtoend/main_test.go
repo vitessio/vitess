@@ -23,6 +23,8 @@ import (
 	"os"
 	"testing"
 
+	"go.uber.org/goleak"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vttest"
@@ -197,6 +199,7 @@ create table t1_sharded(
 )
 
 func TestMain(m *testing.M) {
+	goleak.VerifyTestMain(m)
 	flag.Parse()
 
 	exitCode := func() int {

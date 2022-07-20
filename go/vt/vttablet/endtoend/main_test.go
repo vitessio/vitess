@@ -23,6 +23,8 @@ import (
 	"os"
 	"testing"
 
+	"go.uber.org/goleak"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/tableacl"
 	"vitess.io/vitess/go/vt/tableacl/simpleacl"
@@ -39,6 +41,7 @@ var (
 )
 
 func TestMain(m *testing.M) {
+	goleak.VerifyTestMain(m)
 	flag.Parse() // Do not remove this comment, import into google3 depends on it
 	tabletenv.Init()
 

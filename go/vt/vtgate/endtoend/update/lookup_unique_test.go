@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"go.uber.org/goleak"
 
 	"vitess.io/vitess/go/test/endtoend/utils"
 	"vitess.io/vitess/go/vt/log"
@@ -131,6 +132,7 @@ create table t2_id_idx(
 )
 
 func TestMain(m *testing.M) {
+	goleak.VerifyTestMain(m)
 	flag.Parse()
 
 	exitCode := func() int {

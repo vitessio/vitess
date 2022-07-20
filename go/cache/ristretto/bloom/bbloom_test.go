@@ -6,6 +6,8 @@ import (
 	"os"
 	"testing"
 
+	"go.uber.org/goleak"
+
 	"vitess.io/vitess/go/hack"
 )
 
@@ -16,6 +18,7 @@ var (
 )
 
 func TestMain(m *testing.M) {
+	goleak.VerifyTestMain(m)
 	wordlist1 = make([][]byte, n)
 	for i := range wordlist1 {
 		b := make([]byte, 32)

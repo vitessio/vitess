@@ -25,6 +25,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/goleak"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -275,6 +276,7 @@ func checkResult(t *testing.T, wantqr *sqltypes.Result, wanterr string, qr *sqlt
 }
 
 func TestMain(m *testing.M) {
+	goleak.VerifyTestMain(m)
 	flag.Parse() // Do not remove this comment, import into google3 depends on it
 	tabletenv.Init()
 

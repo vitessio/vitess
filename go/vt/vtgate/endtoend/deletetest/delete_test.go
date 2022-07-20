@@ -23,6 +23,8 @@ import (
 	"os"
 	"testing"
 
+	"go.uber.org/goleak"
+
 	"vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/mysql"
@@ -116,6 +118,7 @@ create table del_test_b(
 )
 
 func TestMain(m *testing.M) {
+	goleak.VerifyTestMain(m)
 	flag.Parse()
 
 	exitCode := func() int {

@@ -24,6 +24,8 @@ import (
 	"strings"
 	"testing"
 
+	"go.uber.org/goleak"
+
 	"vitess.io/vitess/go/test/endtoend/utils"
 
 	"github.com/stretchr/testify/require"
@@ -65,6 +67,7 @@ var (
 )
 
 func TestMain(m *testing.M) {
+	goleak.VerifyTestMain(m)
 	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
