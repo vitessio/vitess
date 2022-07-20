@@ -1361,26 +1361,36 @@ func TestSingleUnshardedKeyspace(t *testing.T) {
 	tests := []struct {
 		query     string
 		unsharded *vindexes.Keyspace
+		tables    []*vindexes.Table
 	}{
 		{
 			query:     "select 1 from t, t1",
 			unsharded: nil, // both tables are unsharded, but from different keyspaces
+			tables:    nil,
 		}, {
 			query:     "select 1 from t2",
 			unsharded: nil,
+			tables:    nil,
 		}, {
 			query:     "select 1 from t, t2",
 			unsharded: nil,
+			tables:    nil,
 		}, {
 			query:     "select 1 from t as A, t as B",
 			unsharded: ks1,
+			tables: []*vindexes.Table{
+				{Keyspace: ks1, Name: sqlparser.NewIdentifierCS("t")},
+				{Keyspace: ks1, Name: sqlparser.NewIdentifierCS("t")},
+			},
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.query, func(t *testing.T) {
 			_, semTable := parseAndAnalyze(t, test.query, "d")
-			assert.Equal(t, test.unsharded, semTable.SingleUnshardedKeyspace())
+			queryIsUnsharded, tables := semTable.SingleUnshardedKeyspace()
+			assert.Equal(t, test.unsharded, queryIsUnsharded)
+			assert.Equal(t, test.tables, tables)
 		})
 	}
 }
