@@ -358,25 +358,13 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 	providedUUID := ""
 
 	syncOperationExecuted := false
-	for index, sql := range sqls {
-		execResult.CurSQLIndex = index
-		if exec.hasProvidedUUIDs() {
-			providedUUID = exec.uuids[index]
-		}
-		executedAsynchronously, err := exec.executeSQL(ctx, sql, providedUUID, &execResult)
-		if err != nil {
-			execResult.ExecutorErr = err.Error()
-			return &execResult
-		}
-		if !executedAsynchronously {
-			syncOperationExecuted = true
-		}
-		if len(execResult.FailedShards) > 0 {
-			break
-		}
-	}
 
-	if true || syncOperationExecuted {
+	// ReloadSchema once. Do it even if we do an early return on error
+	defer func() {
+		if !syncOperationExecuted {
+			exec.logger.Infof("Skipped ReloadSchema since all SQLs executed asynchronously")
+			return
+		}
 		// same shards will appear multiple times in execResult.SuccessShards when there are
 		// multiple SQLs
 		uniqueShards := map[string]*ShardResult{}
@@ -413,9 +401,26 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 			}(result)
 		}
 		wg.Wait()
-	} else {
-		exec.logger.Infof("Skipped ReloadSchema since all SQLs executed asynchronously")
+	}()
+
+	for index, sql := range sqls {
+		execResult.CurSQLIndex = index
+		if exec.hasProvidedUUIDs() {
+			providedUUID = exec.uuids[index]
+		}
+		executedAsynchronously, err := exec.executeSQL(ctx, sql, providedUUID, &execResult)
+		if err != nil {
+			execResult.ExecutorErr = err.Error()
+			return &execResult
+		}
+		if !executedAsynchronously {
+			syncOperationExecuted = true
+		}
+		if len(execResult.FailedShards) > 0 {
+			break
+		}
 	}
+
 	return &execResult
 }
 
