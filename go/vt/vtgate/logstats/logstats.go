@@ -57,6 +57,7 @@ type LogStats struct {
 	SessionUUID   string
 	CachedPlan    bool
 
+	// These two fields are deprecated and will be removed in the Vitess V16 release
 	Keyspace string
 	Table    string
 }
