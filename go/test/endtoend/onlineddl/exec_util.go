@@ -22,11 +22,21 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/vt/schema"
+)
+
+var (
+	NormalMigrationWait   = 30 * time.Second
+	ExtendedMigrationWait = 60 * time.Second
 )
 
 // CreateTempScript creates a script in the temporary directory with given content
@@ -64,4 +74,122 @@ func MysqlClientExecFile(t *testing.T, mysqlParams *mysql.ConnParams, testDataPa
 
 	require.NoError(t, err)
 	return string(cmd)
+}
+
+// TestOnlineDDLStatement runs an online DDL, ALTER statement and waits for it as appropriate based
+// on the strategy and expectations.
+// If no expected statuses are provided then this waits for the migration to be:
+//   - 'completed' when no expected error is specified and the strategy does not include postponement
+//   - 'running' when no expected error is specified and the strategy includes postponement
+// If you expect some other status(es) then you should specify. For example, if you expect the migration
+// to be throttled then you should expect schema.OnlineDDLStatusRunning.
+func TestOnlineDDLStatement(t *testing.T, clusterInstance *cluster.LocalProcessCluster, alterStatement string, ddlStrategy string, providedUUIDList string, providedMigrationContext string, executeStrategy string, expectColumn string, expectError string, expectStatuses ...schema.OnlineDDLStatus) (uuid string) {
+	tableName := fmt.Sprintf("vt_onlineddl_test_%02d", 3)
+	sqlQuery := fmt.Sprintf(alterStatement, tableName)
+	vtParams := mysql.ConnParams{
+		Host: clusterInstance.Hostname,
+		Port: clusterInstance.VtgateMySQLPort,
+	}
+	if executeStrategy == "vtgate" {
+		row := VtgateExecDDL(t, &vtParams, ddlStrategy, sqlQuery, "").Named().Row()
+		if row != nil {
+			uuid = row.AsString("uuid", "")
+		}
+	} else {
+		params := cluster.VtctlClientParams{DDLStrategy: ddlStrategy, UUIDList: providedUUIDList, MigrationContext: providedMigrationContext}
+		output, err := clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(clusterInstance.Keyspaces[0].Name, sqlQuery, params)
+		if expectError == "" {
+			assert.NoError(t, err)
+			uuid = output
+		} else {
+			assert.Error(t, err)
+			assert.Contains(t, output, expectError)
+		}
+	}
+	uuid = strings.TrimSpace(uuid)
+	fmt.Println("# Generated UUID (for debug purposes):")
+	fmt.Printf("<%s>\n", uuid)
+
+	strategySetting, err := schema.ParseDDLStrategy(ddlStrategy)
+	assert.NoError(t, err)
+
+	waitFor := "migration"
+
+	// In the case of a direct DDL there's no migration context to wait for.
+	// We should instead wait for the table to be created by checking the
+	// tablet(s) directly.
+	if strategySetting.Strategy.IsDirect() {
+		waitFor = "tablet"
+	}
+	if strategySetting.IsPostponeCompletion() {
+		// We expect it to be running by default
+		if len(expectStatuses) == 0 {
+			expectStatuses = []schema.OnlineDDLStatus{schema.OnlineDDLStatusRunning}
+		}
+	}
+	if expectError == "" {
+		if waitFor == "migration" {
+			// Unless otherwise specified, the migration should be completed
+			if len(expectStatuses) == 0 {
+				expectStatuses = []schema.OnlineDDLStatus{schema.OnlineDDLStatusComplete}
+			}
+			status := WaitForMigrationStatus(t, &vtParams, clusterInstance.Keyspaces[0].Shards, uuid, NormalMigrationWait, expectStatuses...)
+			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+			if expectColumn != "" {
+				for _, expectedStatus := range expectStatuses {
+					if expectedStatus == schema.OnlineDDLStatusComplete {
+						CheckMigratedTable(t, clusterInstance, tableName, expectColumn)
+						break
+					}
+				}
+			}
+		} else if waitFor == "tablet" && expectColumn != "" {
+			WaitForTableOnTablets(t, clusterInstance, tableName, expectColumn)
+		}
+	}
+	return uuid
+}
+
+// CheckMigratedTables checks the CREATE STATEMENT of a table after migration
+func CheckMigratedTable(t *testing.T, cluster *cluster.LocalProcessCluster, tableName, expectColumn string) {
+	for i := range cluster.Keyspaces[0].Shards {
+		createStatement := GetCreateTableStatement(t, cluster.Keyspaces[0].Shards[i].Vttablets[0], tableName)
+		assert.Contains(t, createStatement, expectColumn)
+	}
+}
+
+// GetCreateTableStatement returns the CREATE TABLE statement for a given table
+func GetCreateTableStatement(t *testing.T, tablet *cluster.Vttablet, tableName string) (statement string) {
+	queryResult, err := tablet.VttabletProcess.QueryTablet(fmt.Sprintf("show create table %s;", tableName), tablet.VttabletProcess.Keyspace, true)
+	require.Nil(t, err)
+
+	assert.Equal(t, len(queryResult.Rows), 1)
+	assert.Equal(t, len(queryResult.Rows[0]), 2) // table name, create statement
+	statement = queryResult.Rows[0][1].ToString()
+	return statement
+}
+
+// WaitForTableOnTablets checks the CREATE STATEMENT of a table and waits for
+// it to appear until we hit the timeout.
+func WaitForTableOnTablets(t *testing.T, cluster *cluster.LocalProcessCluster, tableName, expectColumn string) {
+	tkr := time.NewTicker(time.Second)
+	defer tkr.Stop()
+	for {
+		select {
+		case <-tkr.C:
+			for i := range cluster.Keyspaces[0].Shards {
+				res, err := cluster.Keyspaces[0].Shards[i].Vttablets[0].VttabletProcess.QueryTablet(fmt.Sprintf("show create table %s;", tableName), cluster.Keyspaces[0].Name, true)
+				if err == nil && len(res.Rows) == 1 {
+					createTableStmt := res.Rows[0][1].ToString()
+					if strings.Contains(createTableStmt, expectColumn) {
+						return
+					}
+				}
+			}
+		case <-time.After(NormalMigrationWait):
+			require.Fail(t, fmt.Sprintf("the %s table did not include the expected %s column before hitting the timeout of %v",
+				tableName, expectColumn, NormalMigrationWait))
+			return
+		}
+	}
 }
