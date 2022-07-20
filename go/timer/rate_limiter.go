@@ -42,10 +42,10 @@ func NewRateLimiter(d time.Duration) *RateLimiter {
 	r.cancel = cancel
 	go func() {
 		ticker := time.NewTicker(d)
+		defer ticker.Stop()
 		for {
 			select {
 			case <-ctx.Done():
-				ticker.Stop()
 				return
 			case <-ticker.C:
 				atomic.StoreInt64(&r.tickerValue, r.tickerValue+1)
