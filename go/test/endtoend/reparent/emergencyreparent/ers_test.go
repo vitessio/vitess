@@ -22,7 +22,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -32,7 +31,7 @@ import (
 
 func TestTrivialERS(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentClusterLegacy(t, true)
+	clusterInstance := utils.SetupReparentCluster(t, true)
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
@@ -57,7 +56,7 @@ func TestTrivialERS(t *testing.T) {
 
 func TestReparentIgnoreReplicas(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentClusterLegacy(t, true)
+	clusterInstance := utils.SetupReparentCluster(t, true)
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 	var err error
@@ -99,7 +98,7 @@ func TestReparentIgnoreReplicas(t *testing.T) {
 
 func TestReparentDownPrimary(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentClusterLegacy(t, true)
+	clusterInstance := utils.SetupReparentCluster(t, true)
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
@@ -135,7 +134,7 @@ func TestReparentDownPrimary(t *testing.T) {
 
 func TestReparentNoChoiceDownPrimary(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentClusterLegacy(t, true)
+	clusterInstance := utils.SetupReparentCluster(t, true)
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 	var err error
@@ -171,7 +170,7 @@ func TestReparentNoChoiceDownPrimary(t *testing.T) {
 func TestSemiSyncSetupCorrectly(t *testing.T) {
 	t.Run("semi-sync enabled", func(t *testing.T) {
 		defer cluster.PanicHandler(t)
-		clusterInstance := utils.SetupReparentClusterLegacy(t, true)
+		clusterInstance := utils.SetupReparentCluster(t, true)
 		defer utils.TeardownCluster(clusterInstance)
 		tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
@@ -199,7 +198,7 @@ func TestSemiSyncSetupCorrectly(t *testing.T) {
 
 	t.Run("semi-sync disabled", func(t *testing.T) {
 		defer cluster.PanicHandler(t)
-		clusterInstance := utils.SetupReparentClusterLegacy(t, false)
+		clusterInstance := utils.SetupReparentCluster(t, false)
 		defer utils.TeardownCluster(clusterInstance)
 		tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
@@ -438,10 +437,7 @@ func TestERSForInitialization(t *testing.T) {
 	utils.RunSQL(context.Background(), t, "create table vt_insert_test (id bigint, msg varchar(64), primary key (id)) Engine=InnoDB", tablets[0])
 	utils.CheckPrimaryTablet(t, clusterInstance, tablets[0])
 	utils.ValidateTopology(t, clusterInstance, false)
-	time.Sleep(100 * time.Millisecond) // wait for replication to catchup
-	strArray := utils.GetShardReplicationPositions(t, clusterInstance, utils.KeyspaceName, utils.ShardName, true)
-	assert.Equal(t, len(tablets), len(strArray))
-	assert.Contains(t, strArray[0], "primary") // primary first
+	utils.WaitForReplicationToStart(t, clusterInstance, utils.KeyspaceName, utils.ShardName, len(tablets), true)
 	utils.ConfirmReplication(t, tablets[0], tablets[1:])
 }
 

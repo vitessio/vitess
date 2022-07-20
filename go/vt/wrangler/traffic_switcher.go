@@ -57,9 +57,6 @@ const (
 	renameTableTemplate = "_%.59s_old" // limit table name to 64 characters
 
 	sqlDeleteWorkflow = "delete from _vt.vreplication where db_name = %s and workflow = %s"
-	sqlDeleteVDiffs   = `delete from vd, vdt, vdl using _vt.vdiff as vd inner join _vt.vdiff_table as vdt on (vd.id = vdt.vdiff_id)
-						inner join _vt.vdiff_log as vdl on (vd.id = vdl.vdiff_id)
-						where vd.keyspace = %s and vd.workflow = %s`
 )
 
 // accessType specifies the type of access for a shard (allow/disallow writes).
@@ -1246,10 +1243,7 @@ func (ts *trafficSwitcher) deleteReverseVReplication(ctx context.Context) error 
 		if _, err := ts.TabletManagerClient().VReplicationExec(ctx, source.GetPrimary().Tablet, query); err != nil {
 			return err
 		}
-		query = fmt.Sprintf(sqlDeleteVDiffs, encodeString(source.GetPrimary().Keyspace), encodeString(ts.reverseWorkflow))
-		if _, err := ts.wr.tmc.ExecuteFetchAsDba(ctx, source.GetPrimary().Tablet, false, []byte(query), -1, false, false); err != nil {
-			ts.Logger().Infof("Error deleting vdiff data for %s.%s workflow: %v", source.GetPrimary().Keyspace, ts.reverseWorkflow, err)
-		}
+		ts.wr.deleteWorkflowVDiffData(ctx, source.GetPrimary().Tablet, ts.reverseWorkflow)
 		return nil
 	})
 }
@@ -1572,10 +1566,7 @@ func (ts *trafficSwitcher) dropTargetVReplicationStreams(ctx context.Context) er
 		if _, err := ts.TabletManagerClient().VReplicationExec(ctx, target.GetPrimary().Tablet, query); err != nil {
 			return err
 		}
-		query = fmt.Sprintf(sqlDeleteVDiffs, encodeString(target.GetPrimary().Keyspace), encodeString(ts.WorkflowName()))
-		if _, err := ts.wr.tmc.ExecuteFetchAsDba(ctx, target.GetPrimary().Tablet, false, []byte(query), -1, false, false); err != nil {
-			ts.Logger().Infof("Error deleting vdiff data for %s.%s workflow: %v", target.GetPrimary().Keyspace, ts.WorkflowName(), err)
-		}
+		ts.wr.deleteWorkflowVDiffData(ctx, target.GetPrimary().Tablet, ts.WorkflowName())
 		return nil
 	})
 }
@@ -1587,10 +1578,7 @@ func (ts *trafficSwitcher) dropSourceReverseVReplicationStreams(ctx context.Cont
 		if _, err := ts.TabletManagerClient().VReplicationExec(ctx, source.GetPrimary().Tablet, query); err != nil {
 			return err
 		}
-		query = fmt.Sprintf(sqlDeleteVDiffs, encodeString(source.GetPrimary().Keyspace), encodeString(workflow.ReverseWorkflowName(ts.WorkflowName())))
-		if _, err := ts.wr.tmc.ExecuteFetchAsDba(ctx, source.GetPrimary().Tablet, false, []byte(query), -1, false, false); err != nil {
-			ts.Logger().Infof("Error deleting vdiff data for %s.%s workflow: %v", source.GetPrimary().Keyspace, workflow.ReverseWorkflowName(ts.WorkflowName()), err)
-		}
+		ts.wr.deleteWorkflowVDiffData(ctx, source.GetPrimary().Tablet, workflow.ReverseWorkflowName(ts.WorkflowName()))
 		return nil
 	})
 }
