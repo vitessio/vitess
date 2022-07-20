@@ -83,9 +83,17 @@ func MysqlClientExecFile(t *testing.T, mysqlParams *mysql.ConnParams, testDataPa
 //   - 'running' when no expected error is specified and the strategy includes postponement
 // If you expect some other status(es) then you should specify. For example, if you expect the migration
 // to be throttled then you should expect schema.OnlineDDLStatusRunning.
-func TestOnlineDDLStatement(t *testing.T, clusterInstance *cluster.LocalProcessCluster, alterStatement string, ddlStrategy string, providedUUIDList string, providedMigrationContext string, executeStrategy string, expectColumn string, expectError string, expectStatuses ...schema.OnlineDDLStatus) (uuid string) {
-	tableName := fmt.Sprintf("vt_onlineddl_test_%02d", 3)
-	sqlQuery := fmt.Sprintf(alterStatement, tableName)
+func TestOnlineDDLStatement(t *testing.T, clusterInstance *cluster.LocalProcessCluster, DDL string, ddlStrategy string, providedUUIDList string, providedMigrationContext string, executeStrategy string, expectColumn string, expectError string, expectStatuses ...schema.OnlineDDLStatus) (uuid string) {
+	var tableName, sqlQuery string
+	if strings.Contains(DDL, `%s`) {
+		tableName = fmt.Sprintf("vt_onlineddl_test_%02d", 3)
+		sqlQuery = fmt.Sprintf(DDL, tableName)
+	} else {
+		words := strings.Fields(DDL)
+		// create/alter/drop table <foo>
+		tableName = words[2]
+		sqlQuery = DDL
+	}
 	vtParams := mysql.ConnParams{
 		Host: clusterInstance.Hostname,
 		Port: clusterInstance.VtgateMySQLPort,
@@ -96,7 +104,7 @@ func TestOnlineDDLStatement(t *testing.T, clusterInstance *cluster.LocalProcessC
 			uuid = row.AsString("uuid", "")
 		}
 	} else {
-		params := cluster.VtctlClientParams{DDLStrategy: ddlStrategy, UUIDList: providedUUIDList, MigrationContext: providedMigrationContext}
+		params := cluster.VtctlClientParams{DDLStrategy: ddlStrategy, SkipPreflight: true, UUIDList: providedUUIDList, MigrationContext: providedMigrationContext}
 		output, err := clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(clusterInstance.Keyspaces[0].Name, sqlQuery, params)
 		if expectError == "" {
 			assert.NoError(t, err)
@@ -192,4 +200,19 @@ func WaitForTableOnTablets(t *testing.T, cluster *cluster.LocalProcessCluster, t
 			return
 		}
 	}
+}
+
+// CheckTables checks the number of tables in the first two shards.
+func CheckTables(t *testing.T, cluster *cluster.LocalProcessCluster, showTableName string, expectCount int) {
+	for i := range cluster.Keyspaces[0].Shards {
+		CheckTablesCount(t, cluster.Keyspaces[0].Shards[i].Vttablets[0], showTableName, expectCount)
+	}
+}
+
+// checkTablesCount checks the number of tables in the given tablet
+func CheckTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName string, expectCount int) {
+	query := fmt.Sprintf(`show tables like '%%%s%%';`, showTableName)
+	queryResult, err := tablet.VttabletProcess.QueryTablet(query, tablet.VttabletProcess.Keyspace, true)
+	require.Nil(t, err)
+	assert.Equal(t, expectCount, len(queryResult.Rows))
 }

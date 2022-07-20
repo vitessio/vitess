@@ -610,7 +610,7 @@ func TestSchemaChange(t *testing.T) {
 		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
 		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
 		// this table existed
-		checkTables(t, schema.OnlineDDLToGCUUID(uuid), 1)
+		onlineddl.CheckTables(t, clusterInstance, schema.OnlineDDLToGCUUID(uuid), 1)
 	})
 	t.Run("Online CREATE, vtctl, extra flags", func(t *testing.T) {
 		// the flags are meaningless to this migration. The test just validates that they don't get in the way.
@@ -626,7 +626,7 @@ func TestSchemaChange(t *testing.T) {
 		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
 		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
 		// this table existed
-		checkTables(t, schema.OnlineDDLToGCUUID(uuid), 1)
+		onlineddl.CheckTables(t, clusterInstance, schema.OnlineDDLToGCUUID(uuid), 1)
 	})
 	t.Run("Online DROP TABLE IF EXISTS for nonexistent table, vtgate", func(t *testing.T) {
 		uuid := onlineddl.TestOnlineDDLStatement(t, clusterInstance, onlineDDLDropTableIfExistsStatement, "online", providedUUID, providedMigrationContext, "vtgate", "", "")
@@ -634,7 +634,7 @@ func TestSchemaChange(t *testing.T) {
 		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
 		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
 		// this table did not exist
-		checkTables(t, schema.OnlineDDLToGCUUID(uuid), 0)
+		onlineddl.CheckTables(t, clusterInstance, schema.OnlineDDLToGCUUID(uuid), 0)
 	})
 	t.Run("Online DROP TABLE IF EXISTS for nonexistent table, postponed", func(t *testing.T) {
 		uuid := onlineddl.TestOnlineDDLStatement(t, clusterInstance, onlineDDLDropTableIfExistsStatement, "vitess -postpone-completion", providedUUID, providedMigrationContext, "vtgate", "", "", schema.OnlineDDLStatusQueued)
@@ -649,7 +649,7 @@ func TestSchemaChange(t *testing.T) {
 		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
 		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
 		// this table did not exist
-		checkTables(t, schema.OnlineDDLToGCUUID(uuid), 0)
+		onlineddl.CheckTables(t, clusterInstance, schema.OnlineDDLToGCUUID(uuid), 0)
 	})
 	t.Run("Online DROP TABLE for nonexistent table, expect error, vtgate", func(t *testing.T) {
 		uuid := onlineddl.TestOnlineDDLStatement(t, clusterInstance, onlineDDLDropTableStatement, "online", providedUUID, providedMigrationContext, "vtgate", "", "", schema.OnlineDDLStatusFailed)
@@ -802,20 +802,5 @@ func testWithInitialSchema(t *testing.T) {
 	}
 
 	// Check if 4 tables are created
-	checkTables(t, "", totalTableCount)
-}
-
-// checkTables checks the number of tables in the first two shards.
-func checkTables(t *testing.T, showTableName string, expectCount int) {
-	for i := range clusterInstance.Keyspaces[0].Shards {
-		checkTablesCount(t, clusterInstance.Keyspaces[0].Shards[i].Vttablets[0], showTableName, expectCount)
-	}
-}
-
-// checkTablesCount checks the number of tables in the given tablet
-func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName string, expectCount int) {
-	query := fmt.Sprintf(`show tables like '%%%s%%';`, showTableName)
-	queryResult, err := tablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
-	require.Nil(t, err)
-	assert.Equal(t, expectCount, len(queryResult.Rows))
+	onlineddl.CheckTables(t, clusterInstance, "", totalTableCount)
 }
