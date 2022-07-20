@@ -14567,6 +14567,9 @@ export namespace tabletmanagerdata {
 
         /** GetSchemaRequest exclude_tables */
         exclude_tables?: (string[]|null);
+
+        /** GetSchemaRequest table_schema_only */
+        table_schema_only?: (boolean|null);
     }
 
     /** Represents a GetSchemaRequest. */
@@ -14586,6 +14589,9 @@ export namespace tabletmanagerdata {
 
         /** GetSchemaRequest exclude_tables. */
         public exclude_tables: string[];
+
+        /** GetSchemaRequest table_schema_only. */
+        public table_schema_only: boolean;
 
         /**
          * Creates a new GetSchemaRequest instance using the specified properties.
@@ -38370,6 +38376,9 @@ export namespace vtctldata {
 
         /** GetSchemaRequest table_sizes_only */
         table_sizes_only?: (boolean|null);
+
+        /** GetSchemaRequest table_schema_only */
+        table_schema_only?: (boolean|null);
     }
 
     /** Represents a GetSchemaRequest. */
@@ -38398,6 +38407,9 @@ export namespace vtctldata {
 
         /** GetSchemaRequest table_sizes_only. */
         public table_sizes_only: boolean;
+
+        /** GetSchemaRequest table_schema_only. */
+        public table_schema_only: boolean;
 
         /**
          * Creates a new GetSchemaRequest instance using the specified properties.

@@ -124,7 +124,6 @@ func TestMain(m *testing.M) {
 		}
 
 		// Start vtgate
-		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--planner-version", "Gen4Fallback")
 		if err := clusterInstance.StartVtgate(); err != nil {
 			return 1
 		}

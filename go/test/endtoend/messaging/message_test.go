@@ -341,7 +341,7 @@ func TestSpecificStreamingColsMessage(t *testing.T) {
 
 	utils.Exec(t, conn, "insert into vitess_message4(id, msg1, msg2) values(1, 'hello world', 3)")
 
-	got, err := streamConn.FetchNext(nil)
+	got, _, err := streamConn.FetchNext(nil)
 	require.NoError(t, err)
 	want := []sqltypes.Value{
 		sqltypes.NewInt64(1),
