@@ -3698,3 +3698,19 @@ func TestSelectAggregationData(t *testing.T) {
 		})
 	}
 }
+
+func TestSelectHexAndBit(t *testing.T) {
+	executor, _, _, _ := createExecutorEnv()
+	executor.normalize = true
+	session := NewAutocommitSession(&vtgatepb.Session{})
+
+	qr, err := executor.Execute(context.Background(), "TestSelectHexAndBit", session,
+		"select 0b1001, b'1001', 0x9, x'09'", nil)
+	require.NoError(t, err)
+	require.Equal(t, `[[VARBINARY("\t") VARBINARY("\t") VARBINARY("\t") VARBINARY("\t")]]`, fmt.Sprintf("%v", qr.Rows))
+
+	qr, err = executor.Execute(context.Background(), "TestSelectHexAndBit", session,
+		"select 1 + 0b1001, 1 + b'1001', 1 + 0x9, 1 + x'09'", nil)
+	require.NoError(t, err)
+	require.Equal(t, `[[UINT64(10) UINT64(10) UINT64(10) UINT64(10)]]`, fmt.Sprintf("%v", qr.Rows))
+}

@@ -25,17 +25,17 @@ import (
 
 func gen4CompareV3Planner(query string) func(sqlparser.Statement, *sqlparser.ReservedVars, plancontext.VSchema) (engine.Primitive, error) {
 	return func(statement sqlparser.Statement, vars *sqlparser.ReservedVars, ctxVSchema plancontext.VSchema) (engine.Primitive, error) {
+		// we will be switching the planner version to Gen4 and V3 in order to
+		// create instructions using them, thus we make sure to switch back to
+		// the Gen4CompareV3 planner before exiting this method.
+		defer ctxVSchema.SetPlannerVersion(Gen4CompareV3)
+
 		switch statement.(type) {
 		case *sqlparser.Select, *sqlparser.Union:
 		// These we can compare. Everything else we'll just use the Gen4 planner
 		default:
 			return planWithPlannerVersion(statement, vars, ctxVSchema, query, Gen4)
 		}
-
-		// we will be switching the planner version to Gen4 and V3 in order to
-		// create instructions using them, thus we make sure to switch back to
-		// the Gen4CompareV3 planner before exiting this method.
-		defer ctxVSchema.SetPlannerVersion(Gen4CompareV3)
 
 		// preliminary checks on the given statement
 		onlyGen4, hasOrderBy, err := preliminaryChecks(statement)

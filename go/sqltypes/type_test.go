@@ -126,6 +126,9 @@ func TestTypeValues(t *testing.T) {
 	}, {
 		defined:  HexVal,
 		expected: 33 | flagIsText,
+	}, {
+		defined:  BitNum,
+		expected: 34 | flagIsText,
 	}}
 	for _, tcase := range testcases {
 		if int(tcase.defined) != tcase.expected {
@@ -171,6 +174,7 @@ func TestCategory(t *testing.T) {
 		Expression,
 		HexNum,
 		HexVal,
+		BitNum,
 	}
 	for _, typ := range alltypes {
 		matched := false
@@ -201,7 +205,8 @@ func TestCategory(t *testing.T) {
 			}
 			matched = true
 		}
-		if typ == Null || typ == Decimal || typ == Expression || typ == Bit || typ == HexNum || typ == HexVal {
+		if typ == Null || typ == Decimal || typ == Expression || typ == Bit ||
+			typ == HexNum || typ == HexVal || typ == BitNum {
 			if matched {
 				t.Errorf("%v matched more than one category", typ)
 			}
@@ -494,6 +499,7 @@ func TestPrintTypeChecks(t *testing.T) {
 		HexNum,
 		HexVal,
 		Tuple,
+		BitNum,
 	}
 
 	for _, f := range funcs {

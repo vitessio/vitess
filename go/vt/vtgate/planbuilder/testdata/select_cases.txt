@@ -3530,3 +3530,105 @@ Gen4 plan same as above
 }
 Gen4 plan same as above
 
+# Predicate in apply join which is merged
+"select user.col, user_metadata.user_id from user join user_extra on user.col = user_extra.col join user_metadata on user_extra.user_id = user_metadata.user_id where user.textcol1 = 'alice@gmail.com'"
+{
+  "QueryType": "SELECT",
+  "Original": "select user.col, user_metadata.user_id from user join user_extra on user.col = user_extra.col join user_metadata on user_extra.user_id = user_metadata.user_id where user.textcol1 = 'alice@gmail.com'",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "L:0,R:0",
+    "JoinVars": {
+      "user_extra_user_id": 1
+    },
+    "TableName": "`user`_user_extra_user_metadata",
+    "Inputs": [
+      {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0,R:0",
+        "JoinVars": {
+          "user_col": 0
+        },
+        "TableName": "`user`_user_extra",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select `user`.col from `user` where 1 != 1",
+            "Query": "select `user`.col from `user` where `user`.textcol1 = 'alice@gmail.com'",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select user_extra.user_id from user_extra where 1 != 1",
+            "Query": "select user_extra.user_id from user_extra where user_extra.col = :user_col",
+            "Table": "user_extra"
+          }
+        ]
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user_metadata.user_id from user_metadata where 1 != 1",
+        "Query": "select user_metadata.user_id from user_metadata where user_metadata.user_id = :user_extra_user_id",
+        "Table": "user_metadata",
+        "Values": [
+          ":user_extra_user_id"
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select user.col, user_metadata.user_id from user join user_extra on user.col = user_extra.col join user_metadata on user_extra.user_id = user_metadata.user_id where user.textcol1 = 'alice@gmail.com'",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "L:0,R:0",
+    "JoinVars": {
+      "user_col": 0
+    },
+    "TableName": "`user`_user_extra, user_metadata",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `user`.col from `user` where 1 != 1",
+        "Query": "select `user`.col from `user` where `user`.textcol1 = 'alice@gmail.com'",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user_metadata.user_id from user_extra, user_metadata where 1 != 1",
+        "Query": "select user_metadata.user_id from user_extra, user_metadata where user_extra.col = :user_col and user_extra.user_id = user_metadata.user_id",
+        "Table": "user_extra, user_metadata"
+      }
+    ]
+  }
+}
