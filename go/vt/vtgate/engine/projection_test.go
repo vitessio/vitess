@@ -104,3 +104,19 @@ func TestEmptyInput(t *testing.T) {
 	//require.NoError(t, err)
 	//assert.Equal(t, "[[UINT64(6)] [UINT64(0)] [UINT64(2)]]", fmt.Sprintf("%v", qr.Rows))
 }
+
+func TestHexAndBinaryArgument(t *testing.T) {
+	hexExpr, err := evalengine.Translate(sqlparser.Argument("vtg1"), nil)
+	require.NoError(t, err)
+	proj := &Projection{
+		Cols:       []string{"hex"},
+		Exprs:      []evalengine.Expr{hexExpr},
+		Input:      &SingleRow{},
+		noTxNeeded: noTxNeeded{},
+	}
+	qr, err := proj.TryExecute(context.Background(), &noopVCursor{}, map[string]*querypb.BindVariable{
+		"vtg1": sqltypes.HexNumBindVariable([]byte("0x9")),
+	}, false)
+	require.NoError(t, err)
+	assert.Equal(t, `[[VARBINARY("\t")]]`, fmt.Sprintf("%v", qr.Rows))
+}
