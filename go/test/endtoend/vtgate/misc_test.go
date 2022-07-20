@@ -43,6 +43,7 @@ func TestSelectNull(t *testing.T) {
 	utils.AssertMatches(t, conn, "select id, idx from t5_null_vindex order by id", "[[INT64(1) VARCHAR(\"a\")] [INT64(2) VARCHAR(\"b\")] [INT64(3) NULL]]")
 	utils.AssertIsEmpty(t, conn, "select id, idx from t5_null_vindex where idx = null")
 	utils.AssertMatches(t, conn, "select id, idx from t5_null_vindex where idx is null", "[[INT64(3) NULL]]")
+	utils.AssertMatches(t, conn, "select id, idx from t5_null_vindex where idx <=> null", "[[INT64(3) NULL]]")
 	utils.AssertMatches(t, conn, "select id, idx from t5_null_vindex where idx is not null order by id", "[[INT64(1) VARCHAR(\"a\")] [INT64(2) VARCHAR(\"b\")]]")
 	utils.AssertIsEmpty(t, conn, "select id, idx from t5_null_vindex where id IN (null)")
 	utils.AssertMatches(t, conn, "select id, idx from t5_null_vindex where id IN (1,2,null) order by id", "[[INT64(1) VARCHAR(\"a\")] [INT64(2) VARCHAR(\"b\")]]")
