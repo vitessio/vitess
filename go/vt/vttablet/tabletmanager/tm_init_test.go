@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"
@@ -42,6 +43,12 @@ import (
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
 
+var (
+	dbServerVersion = "5.7.0"
+	charsetName     = "utf8mb4"
+	dbsvCollID      = collations.NewEnvironment(dbServerVersion).DefaultCollationForCharset(charsetName).ID()
+)
+
 func TestStartBuildTabletFromInput(t *testing.T) {
 	alias := &topodatapb.TabletAlias{
 		Cell: "cell",
@@ -49,7 +56,6 @@ func TestStartBuildTabletFromInput(t *testing.T) {
 	}
 	port := int32(12)
 	grpcport := int32(34)
-	dbServerVersion := "5.7.0"
 
 	// Hostname should be used as is.
 	*tabletHostname = "foo"
@@ -71,7 +77,7 @@ func TestStartBuildTabletFromInput(t *testing.T) {
 		Tags:                 map[string]string{},
 		DbNameOverride:       "aa",
 		DbServerVersion:      dbServerVersion,
-		DefaultConnCollation: 255,
+		DefaultConnCollation: uint32(dbsvCollID),
 	}
 
 	gotTablet, err := BuildTabletFromInput(alias, port, grpcport, dbServerVersion, nil)
@@ -131,7 +137,6 @@ func TestBuildTabletFromInputWithBuildTags(t *testing.T) {
 	}
 	port := int32(12)
 	grpcport := int32(34)
-	dbServerVersion := "5.7.0"
 
 	// Hostname should be used as is.
 	*tabletHostname = "foo"
@@ -154,8 +159,8 @@ func TestBuildTabletFromInputWithBuildTags(t *testing.T) {
 		Type:                 topodatapb.TabletType_REPLICA,
 		Tags:                 servenv.AppVersion.ToStringMap(),
 		DbNameOverride:       "aa",
-		DbServerVersion:      "5.7.0",
-		DefaultConnCollation: 255,
+		DbServerVersion:      dbServerVersion,
+		DefaultConnCollation: uint32(dbsvCollID),
 	}
 
 	gotTablet, err := BuildTabletFromInput(alias, port, grpcport, dbServerVersion, nil)
