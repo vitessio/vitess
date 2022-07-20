@@ -24,7 +24,6 @@ FROM node:16-${DEBIAN_VER} as node
 
 # Set up Vitess environment (just enough to run pre-built Go binaries)
 ENV VTROOT /vt
-ENV VTADMIN_WEB_PORT=14201
 
 # Prepare directory structure.
 RUN mkdir -p /vt/bin && \
@@ -53,12 +52,6 @@ RUN deluser node && \
    useradd -r -g vitess --uid 1000 vitess && \
    chown -R vitess:vitess /vt && \
    chown -R vitess:vitess /vtdataroot
-
-# USER vitess
-
-# VOLUME /vt/web/vtadmin/build/config
-
-# CMD ["/bin/bash", "-c", "/vt/web/vtadmin/node_modules/.bin/serve --no-clipboard -l $VTADMIN_WEB_PORT -s /vt/web/vtadmin/build"]
 
 FROM nginx:latest AS nginx
 
