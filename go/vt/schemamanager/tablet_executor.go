@@ -380,8 +380,12 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 		// same shards will appear multiple times in execResult.SuccessShards when there are
 		// multiple SQLs
 		uniqueShards := map[string]*ShardResult{}
-		for _, result := range execResult.SuccessShards {
-			uniqueShards[result.Shard] = &result
+		for i := range execResult.SuccessShards {
+			// Please do not change the above iteration to "for result := range ...".
+			// This is because we want to end up grabbing a pointer to the result. But golang's "for"
+			// implementation reuses the iteration parameter, and we end up reusing the same pointer.
+			result := &execResult.SuccessShards[i]
+			uniqueShards[result.Shard] = result
 		}
 		var wg sync.WaitGroup
 		// If all shards succeeded, wait (up to waitReplicasTimeout) for replicas to
