@@ -45,6 +45,8 @@ create table t1(
   setcol set('a', 'b', 'c'),
   jsoncol json,
   geocol geometry,
+  binvalcol varbinary(50),
+  binnumcol varbinary(50),
   primary key(id)
 ) Engine=InnoDB;
 `
