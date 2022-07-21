@@ -25,7 +25,12 @@
         "Query": "flush local tables `user`, user_extra with read lock"
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "main.unsharded_a",
+    "user.user",
+    "user.user_extra"
+  ]
 }
 Gen4 plan same as above
 
@@ -61,7 +66,11 @@ Gen4 plan same as above
         "Query": "flush local tables `user`"
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "main.unsharded",
+    "user.user"
+  ]
 }
 Gen4 plan same as above
 
@@ -83,7 +92,10 @@ Gen4 plan same as above
     },
     "TargetDestination": "AllShards()",
     "Query": "flush tables a with read lock"
-  }
+  },
+  "TablesUsed": [
+    "main.a"
+  ]
 }
 Gen4 plan same as above
 
@@ -123,6 +135,12 @@ Gen4 plan same as above
         "Query": "flush local tables `user`, user_extra with read lock"
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "main.unsharded_a",
+    "main_2.unsharded_tab",
+    "user.user",
+    "user.user_extra"
+  ]
 }
 Gen4 plan same as above

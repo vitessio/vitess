@@ -39,7 +39,7 @@ type testPlanner struct {
 
 var _ stmtPlanner = (*testPlanner)(nil).plan
 
-func (tp *testPlanner) plan(statement sqlparser.Statement, vars *sqlparser.ReservedVars, schema plancontext.VSchema) (engine.Primitive, error) {
+func (tp *testPlanner) plan(statement sqlparser.Statement, vars *sqlparser.ReservedVars, schema plancontext.VSchema) (*planResult, error) {
 	tp.called = true
 	if tp.panic != nil {
 		panic(tp.panic)
@@ -47,7 +47,7 @@ func (tp *testPlanner) plan(statement sqlparser.Statement, vars *sqlparser.Reser
 	if tp.messWithAST != nil {
 		tp.messWithAST(statement)
 	}
-	return tp.res, tp.err
+	return newPlanResult(tp.res), tp.err
 }
 
 func TestFallbackPlanner(t *testing.T) {
