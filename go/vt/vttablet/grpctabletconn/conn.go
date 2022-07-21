@@ -619,7 +619,7 @@ func (conn *gRPCQueryClient) StreamHealth(ctx context.Context, callback func(*qu
 }
 
 // VStream starts a VReplication stream.
-func (conn *gRPCQueryClient) VStream(ctx context.Context, target *querypb.Target, position string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
+func (conn *gRPCQueryClient) VStream(ctx context.Context, request *binlogdatapb.VStreamRequest, send func([]*binlogdatapb.VEvent) error) error {
 	stream, err := func() (queryservicepb.Query_VStreamClient, error) {
 		conn.mu.RLock()
 		defer conn.mu.RUnlock()
@@ -628,12 +628,12 @@ func (conn *gRPCQueryClient) VStream(ctx context.Context, target *querypb.Target
 		}
 
 		req := &binlogdatapb.VStreamRequest{
-			Target:            target,
+			Target:            request.Target,
 			EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
 			ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
-			Position:          position,
-			Filter:            filter,
-			TableLastPKs:      tablePKs,
+			Position:          request.Position,
+			Filter:            request.Filter,
+			TableLastPKs:      request.TableLastPKs,
 		}
 		stream, err := conn.c.VStream(ctx, req)
 		if err != nil {
@@ -664,7 +664,7 @@ func (conn *gRPCQueryClient) VStream(ctx context.Context, target *querypb.Target
 }
 
 // VStreamRows streams rows of a query from the specified starting point.
-func (conn *gRPCQueryClient) VStreamRows(ctx context.Context, target *querypb.Target, query string, lastpk *querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error {
+func (conn *gRPCQueryClient) VStreamRows(ctx context.Context, request *binlogdatapb.VStreamRowsRequest, send func(*binlogdatapb.VStreamRowsResponse) error) error {
 	stream, err := func() (queryservicepb.Query_VStreamRowsClient, error) {
 		conn.mu.RLock()
 		defer conn.mu.RUnlock()
@@ -673,11 +673,11 @@ func (conn *gRPCQueryClient) VStreamRows(ctx context.Context, target *querypb.Ta
 		}
 
 		req := &binlogdatapb.VStreamRowsRequest{
-			Target:            target,
+			Target:            request.Target,
 			EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
 			ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
-			Query:             query,
-			Lastpk:            lastpk,
+			Query:             request.Query,
+			Lastpk:            request.Lastpk,
 		}
 		stream, err := conn.c.VStreamRows(ctx, req)
 		if err != nil {
