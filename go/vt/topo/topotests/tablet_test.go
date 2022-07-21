@@ -17,10 +17,10 @@ limitations under the License.
 package topotests
 
 import (
+	"context"
 	"testing"
 
-	"github.com/golang/protobuf/proto"
-	"golang.org/x/net/context"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 

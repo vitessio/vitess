@@ -26,6 +26,6 @@ import (
 // To be notified when THIS tablet's record changes, even if it was changed
 // by a different process, listen for go/vt/tabletmanager/events.StateChange.
 type TabletChange struct {
-	Tablet topodatapb.Tablet
+	Tablet *topodatapb.Tablet
 	Status string
 }

@@ -19,7 +19,12 @@ package wrangler
 import (
 	"fmt"
 	"regexp"
+	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+
+	"vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/sqltypes"
 )
@@ -44,7 +49,8 @@ type dbResult struct {
 
 func (dbrs *dbResults) next(query string) (*sqltypes.Result, error) {
 	if dbrs.exhausted() {
-		return nil, fmt.Errorf("query results exhausted: %s", query)
+		log.Infof(fmt.Sprintf("Unexpected query >%s<", query))
+		return nil, fmt.Errorf("code executed this query, but the test did not expect it: %s", query)
 	}
 	i := dbrs.index
 	dbrs.index++
@@ -57,24 +63,32 @@ func (dbrs *dbResults) exhausted() bool {
 
 // fakeDBClient fakes a binlog_player.DBClient.
 type fakeDBClient struct {
+	name       string
 	queries    map[string]*dbResults
 	queriesRE  map[string]*dbResults
 	invariants map[string]*sqltypes.Result
 }
 
 // NewfakeDBClient returns a new DBClientMock.
-func newFakeDBClient() *fakeDBClient {
+func newFakeDBClient(name string) *fakeDBClient {
 	return &fakeDBClient{
+		name:      name,
 		queries:   make(map[string]*dbResults),
 		queriesRE: make(map[string]*dbResults),
 		invariants: map[string]*sqltypes.Result{
 			"use _vt": {},
-			"select * from _vt.vreplication where db_name='db'": {},
+			"select * from _vt.vreplication where db_name='db'":         {},
+			"select id, type, state, message from _vt.vreplication_log": {},
+			"insert into _vt.vreplication_log":                          {},
+			"SELECT db_name FROM _vt.vreplication LIMIT 0":              {},
 		},
 	}
 }
 
 func (dc *fakeDBClient) addQuery(query string, result *sqltypes.Result, err error) {
+	if testMode == "debug" {
+		log.Infof("%s::addQuery %s\n\n", dc.id(), query)
+	}
 	dbr := &dbResult{result: result, err: err}
 	if dbrs, ok := dc.queries[query]; ok {
 		dbrs.results = append(dbrs.results, dbr)
@@ -84,6 +98,9 @@ func (dc *fakeDBClient) addQuery(query string, result *sqltypes.Result, err erro
 }
 
 func (dc *fakeDBClient) addQueryRE(query string, result *sqltypes.Result, err error) {
+	if testMode == "debug" {
+		log.Infof("%s::addQueryRE %s\n\n", dc.id(), query)
+	}
 	dbr := &dbResult{result: result, err: err}
 	if dbrs, ok := dc.queriesRE[query]; ok {
 		dbrs.results = append(dbrs.results, dbr)
@@ -92,7 +109,15 @@ func (dc *fakeDBClient) addQueryRE(query string, result *sqltypes.Result, err er
 	dc.queriesRE[query] = &dbResults{results: []*dbResult{dbr}, err: err}
 }
 
+func (dc *fakeDBClient) getInvariant(query string) *sqltypes.Result {
+	return dc.invariants[query]
+}
+
+// note: addInvariant will replace a previous result for a query with the provided one: this is used in the tests
 func (dc *fakeDBClient) addInvariant(query string, result *sqltypes.Result) {
+	if testMode == "debug" {
+		log.Infof("%s::addInvariant %s\n\n", dc.id(), query)
+	}
 	dc.invariants[query] = result
 }
 
@@ -125,8 +150,21 @@ func (dc *fakeDBClient) Rollback() error {
 func (dc *fakeDBClient) Close() {
 }
 
+func (dc *fakeDBClient) id() string {
+	return fmt.Sprintf("FakeDBClient(%s)", dc.name)
+}
+
 // ExecuteFetch is part of the DBClient interface
-func (dc *fakeDBClient) ExecuteFetch(query string, maxrows int) (qr *sqltypes.Result, err error) {
+func (dc *fakeDBClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Result, error) {
+	qr, err := dc.executeFetch(query, maxrows)
+	if testMode == "debug" {
+		log.Infof("%s::ExecuteFetch for >>>%s<<< returns >>>%v<<< error >>>%+v<<< ", dc.id(), query, qr, err)
+	}
+	return qr, err
+}
+
+// ExecuteFetch is part of the DBClient interface
+func (dc *fakeDBClient) executeFetch(query string, maxrows int) (*sqltypes.Result, error) {
 	if dbrs := dc.queries[query]; dbrs != nil {
 		return dbrs.next(query)
 	}
@@ -138,6 +176,13 @@ func (dc *fakeDBClient) ExecuteFetch(query string, maxrows int) (qr *sqltypes.Re
 	if result := dc.invariants[query]; result != nil {
 		return result, nil
 	}
+	for q, result := range dc.invariants { //supports allowing just a prefix of an expected query
+		if strings.Contains(query, q) {
+			return result, nil
+		}
+	}
+
+	log.Infof("Missing query: >>>>>>>>>>>>>>>>>>%s<<<<<<<<<<<<<<<", query)
 	return nil, fmt.Errorf("unexpected query: %s", query)
 }
 
@@ -145,12 +190,12 @@ func (dc *fakeDBClient) verifyQueries(t *testing.T) {
 	t.Helper()
 	for query, dbrs := range dc.queries {
 		if !dbrs.exhausted() {
-			t.Errorf("query: %v has unreturned results", query)
+			assert.FailNowf(t, "expected query did not get executed during the test", query)
 		}
 	}
 	for query, dbrs := range dc.queriesRE {
 		if !dbrs.exhausted() {
-			t.Errorf("query: %v has unreturned results", query)
+			assert.FailNowf(t, "expected regex query did not get executed during the test", query)
 		}
 	}
 }

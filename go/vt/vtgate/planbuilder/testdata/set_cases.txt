@@ -19,6 +19,7 @@
     ]
   }
 }
+Gen4 plan same as above
 
 # set multi user defined variable
 "set @foo = 42, @bar = @foo"
@@ -46,6 +47,7 @@
     ]
   }
 }
+Gen4 plan same as above
 
 # set multi user defined variable with complex expression
 "set @foo = 42, @bar = @foo + 1"
@@ -73,6 +75,7 @@
     ]
   }
 }
+Gen4 plan same as above
 
 # set UDV to expression that can't be evaluated at vtgate
 "set @foo = CONCAT('Any','Expression','Is','Valid')"
@@ -85,7 +88,7 @@
       {
         "Type": "UserDefinedVariable",
         "Name": "foo",
-        "Expr": "column 0 from the input"
+        "Expr": "[COLUMN 0]"
       }
     ],
     "Inputs": [
@@ -96,17 +99,13 @@
           "Sharded": false
         },
         "TargetDestination": "AnyShard()",
-        "IsDML": false,
         "Query": "select CONCAT('Any', 'Expression', 'Is', 'Valid') from dual",
         "SingleShardOnly": true
       }
     ]
   }
 }
-
-# only allow whitelisted functions
-"set @foo = BAD_FUNC()"
-"expression not supported for SET: BAD_FUNC()"
+Gen4 plan same as above
 
 # single sysvar cases
 "SET sql_mode = 'STRICT_ALL_TABLES,NO_AUTO_VALUE_ON_ZERO'"
@@ -123,7 +122,8 @@
           "Name": "main",
           "Sharded": false
         },
-        "Expr": "'STRICT_ALL_TABLES,NO_AUTO_VALUE_ON_ZERO'"
+        "Expr": "'STRICT_ALL_TABLES,NO_AUTO_VALUE_ON_ZERO'",
+        "SupportSetVar": true
       }
     ],
     "Inputs": [
@@ -133,6 +133,7 @@
     ]
   }
 }
+Gen4 plan same as above
 
 # multiple sysvar cases
 "SET @@SESSION.sql_mode = CONCAT(CONCAT(@@sql_mode, ',STRICT_ALL_TABLES'), ',NO_AUTO_VALUE_ON_ZERO'), @@SESSION.sql_safe_updates = 0"
@@ -149,7 +150,8 @@
           "Name": "main",
           "Sharded": false
         },
-        "Expr": "CONCAT(CONCAT(@@sql_mode, ',STRICT_ALL_TABLES'), ',NO_AUTO_VALUE_ON_ZERO')"
+        "Expr": "CONCAT(CONCAT(@@sql_mode, ',STRICT_ALL_TABLES'), ',NO_AUTO_VALUE_ON_ZERO')",
+        "SupportSetVar": true
       },
       {
         "Type": "SysVarSet",
@@ -158,7 +160,8 @@
           "Name": "main",
           "Sharded": false
         },
-        "Expr": "0"
+        "Expr": "0",
+        "SupportSetVar": true
       }
     ],
     "Inputs": [
@@ -168,6 +171,7 @@
     ]
   }
 }
+Gen4 plan same as above
 
 # autocommit case
 "SET autocommit = 1, autocommit = on, autocommit = 'on', autocommit = @myudv, autocommit = `on`, autocommit = `off`"
@@ -215,6 +219,7 @@
     ]
   }
 }
+Gen4 plan same as above
 
 # set ignore plan
 "set @@default_storage_engine = 'DONOTCHANGEME'"
@@ -237,6 +242,7 @@
     ]
   }
 }
+Gen4 plan same as above
 
 # set check and ignore plan
 "set @@sql_mode = concat(@@sql_mode, ',NO_AUTO_CREATE_USER')"
@@ -253,7 +259,8 @@
           "Name": "main",
           "Sharded": false
         },
-        "Expr": "concat(@@sql_mode, ',NO_AUTO_CREATE_USER')"
+        "Expr": "concat(@@sql_mode, ',NO_AUTO_CREATE_USER')",
+        "SupportSetVar": true
       }
     ],
     "Inputs": [
@@ -263,6 +270,7 @@
     ]
   }
 }
+Gen4 plan same as above
 
 # set system settings
 "set @@sql_safe_updates = 1"
@@ -279,7 +287,8 @@
           "Name": "main",
           "Sharded": false
         },
-        "Expr": "1"
+        "Expr": "1",
+        "SupportSetVar": true
       }
     ],
     "Inputs": [
@@ -289,6 +298,7 @@
     ]
   }
 }
+Gen4 plan same as above
 
 # set plan building with ON/OFF enum
 "set @@innodb_strict_mode = OFF"
@@ -311,6 +321,7 @@
     ]
   }
 }
+Gen4 plan same as above
 
 # set plan building with string literal
 "set @@innodb_strict_mode = 'OFF'"
@@ -333,6 +344,7 @@
     ]
   }
 }
+Gen4 plan same as above
 
 # set plan building with string literal
 "set @@innodb_tmpdir = 'OFF'"
@@ -355,10 +367,12 @@
     ]
   }
 }
+Gen4 plan same as above
 
 # set system settings
 "set @@ndbinfo_max_bytes = 192"
 "ndbinfo_max_bytes: system setting is not supported"
+Gen4 plan same as above
 
 # set autocommit
 "set autocommit = 1"
@@ -381,6 +395,7 @@
     ]
   }
 }
+Gen4 plan same as above
 
 # set autocommit false
 "set autocommit = 0"
@@ -403,6 +418,7 @@
     ]
   }
 }
+Gen4 plan same as above
 
 # set autocommit with backticks
 "set @@session.`autocommit` = 0"
@@ -425,6 +441,7 @@
     ]
   }
 }
+Gen4 plan same as above
 
 # more vitess aware settings
 "set client_found_rows = off, skip_query_plan_cache = ON, sql_select_limit=20"
@@ -457,4 +474,93 @@
     ]
   }
 }
-                
+Gen4 plan same as above
+
+# set autocommit to default
+"set @@autocommit = default"
+{
+  "QueryType": "SET",
+  "Original": "set @@autocommit = default",
+  "Instructions": {
+    "OperatorType": "Set",
+    "Ops": [
+      {
+        "Type": "SysVarAware",
+        "Name": "autocommit",
+        "Expr": "INT64(1)"
+      }
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "SingleRow"
+      }
+    ]
+  }
+}
+Gen4 plan same as above
+
+# set global autocommit to default
+"set global autocommit = off"
+{
+  "QueryType": "SET",
+  "Original": "set global autocommit = off",
+  "Instructions": {
+    "OperatorType": "Set",
+    "Ops": [
+      {
+        "Type": "SysVarCheckAndIgnore",
+        "Name": "autocommit",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": {},
+        "Expr": "0"
+      }
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "SingleRow"
+      }
+    ]
+  }
+}
+Gen4 plan same as above
+
+# change read only variable
+"set socket = ''"
+"variable 'socket' is a read only variable"
+Gen4 plan same as above
+
+# set transaction
+"set transaction read only"
+{
+  "QueryType": "SET",
+  "Original": "set transaction read only",
+  "Instructions": {
+    "OperatorType": "Rows"
+  }
+}
+Gen4 plan same as above
+
+# set vitess_metadata
+"set @@vitess_metadata.app_v1= '1'"
+{
+  "QueryType": "SET",
+  "Original": "set @@vitess_metadata.app_v1= '1'",
+  "Instructions": {
+    "OperatorType": "Set",
+    "Ops": [
+      {
+        "Name": "app_v1",
+        "Value": "1"
+      }
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "SingleRow"
+      }
+    ]
+  }
+}
+Gen4 plan same as above

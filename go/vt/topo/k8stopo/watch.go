@@ -17,7 +17,8 @@ limitations under the License.
 package k8stopo
 
 import (
-	"golang.org/x/net/context"
+	"context"
+
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/client-go/tools/cache"
 
@@ -57,6 +58,7 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 	if err != nil {
 		// Per the topo.Conn interface:
 		// current.Err is set, and 'changes'/'cancel' are nil
+		watchCancel()
 		current.Err = err
 		return current, nil, nil
 	}
@@ -71,7 +73,7 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 
 	_, memberInformer := cache.NewIndexerInformer(listwatch, &vtv1beta1.VitessTopoNode{}, 0,
 		cache.ResourceEventHandlerFuncs{
-			AddFunc: func(obj interface{}) {
+			AddFunc: func(obj any) {
 				vtn := obj.(*vtv1beta1.VitessTopoNode)
 				out, err := unpackValue([]byte(vtn.Data.Value))
 				if err != nil {
@@ -84,7 +86,7 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 					}
 				}
 			},
-			UpdateFunc: func(oldObj, newObj interface{}) {
+			UpdateFunc: func(oldObj, newObj any) {
 				vtn := newObj.(*vtv1beta1.VitessTopoNode)
 				out, err := unpackValue([]byte(vtn.Data.Value))
 				if err != nil {
@@ -97,7 +99,7 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 					}
 				}
 			},
-			DeleteFunc: func(obj interface{}) {
+			DeleteFunc: func(obj any) {
 				vtn := obj.(*vtv1beta1.VitessTopoNode)
 				changes <- &topo.WatchData{Err: topo.NewError(topo.NoNode, vtn.Name)}
 				close(gracefulShutdown)

@@ -21,7 +21,8 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
+
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -118,7 +119,7 @@ func (cleaner *Cleaner) CleanUp(wr *Wrangler) error {
 	return rec.Error()
 }
 
-// RecordChangeTabletTypeAction records a new ChangeSlaveTypeAction
+// RecordChangeTabletTypeAction records a new ChangeTabletTypeAction
 // into the specified Cleaner
 func RecordChangeTabletTypeAction(cleaner *Cleaner, tabletAlias *topodatapb.TabletAlias, from topodatapb.TabletType, to topodatapb.TabletType) {
 	cleaner.Record(ChangeTabletTypeActionName, topoproto.TabletAliasString(tabletAlias), func(ctx context.Context, wr *Wrangler) error {
@@ -134,7 +135,7 @@ func RecordChangeTabletTypeAction(cleaner *Cleaner, tabletAlias *topodatapb.Tabl
 		}
 
 		// ask the tablet to make the change
-		return wr.tmc.ChangeType(ctx, ti.Tablet, to)
+		return wr.ChangeTabletType(ctx, ti.Tablet.Alias, to)
 	})
 }
 
@@ -142,7 +143,7 @@ func RecordChangeTabletTypeAction(cleaner *Cleaner, tabletAlias *topodatapb.Tabl
 // into the specified Cleaner
 func RecordStartReplicationAction(cleaner *Cleaner, tablet *topodatapb.Tablet) {
 	cleaner.Record(StartReplicationActionName, topoproto.TabletAliasString(tablet.Alias), func(ctx context.Context, wr *Wrangler) error {
-		return wr.TabletManagerClient().StartSlave(ctx, tablet)
+		return wr.StartReplication(ctx, tablet)
 	})
 }
 

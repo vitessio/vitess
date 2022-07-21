@@ -19,11 +19,11 @@ if ! cd go/vt/sqlparser/ ; then
 fi
 
 mv $CUR $TMP
-output=$(go run golang.org/x/tools/cmd/goyacc -o $CUR sql.y)
+output=$(go run ./goyacc -fast-append -o $CUR sql.y)
+expectedOutput=$'\nconflicts: 3 shift/reduce'
 
-if [ -n "$output" ]; then
-    echo "Expected empty output from goyacc, got:"
-    echo $output
+if [[ "$output" != "$expectedOutput" ]]; then
+    echo -e "Expected output from goyacc:$expectedOutput\ngot:$output"
     mv $TMP $CUR
     exit 1
 fi

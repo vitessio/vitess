@@ -13,7 +13,6 @@
       "Role": 0
     }
   ],
-  "FieldQuery": "select * from a where 1 != 1 union select * from b where 1 != 1",
   "FullQuery": "select * from a union select * from b limit :#maxLimit"
 }
 
@@ -32,7 +31,6 @@
       "Role": 0
     }
   ],
-  "FieldQuery": "select * from a where 1 != 1 union select * from b where 1 != 1",
   "FullQuery": "select * from a union select * from b limit 10"
 }
 
@@ -47,7 +45,6 @@
       "Role": 0
     }
   ],
-  "FieldQuery": "select * from a where 1 != 1",
   "FullQuery": "select * from a limit :#maxLimit"
 }
 
@@ -62,7 +59,6 @@
       "Role": 0
     }
   ],
-  "FieldQuery": "select * from a where 1 != 1",
   "FullQuery": "select * from a where id = 1 limit :#maxLimit"
 }
 
@@ -77,7 +73,6 @@
       "Role": 0
     }
   ],
-  "FieldQuery": "select * from a where 1 != 1",
   "FullQuery": "select * from a limit 5"
 }
 
@@ -92,7 +87,6 @@
       "Role": 0
     }
   ],
-  "FieldQuery": "select * from a where 1 != 1",
   "FullQuery": "select * from a limit 10, 5"
 }
 
@@ -107,7 +101,6 @@
       "Role": 0
     }
   ],
-  "FieldQuery": "select * from a where 1 != 1",
   "FullQuery": "select * from a where 1 != 1 limit :#maxLimit"
 }
 
@@ -150,7 +143,7 @@
       "Role": 0
     }
   ],
-  "NextCount": "1"
+  "NextCount": "INT64(1)"
 }
 
 # sequence with number
@@ -164,7 +157,7 @@
       "Role": 0
     }
   ],
-  "NextCount": "10"
+  "NextCount": "INT64(10)"
 }
 
 
@@ -179,12 +172,22 @@
       "Role": 0
     }
   ],
-  "NextCount": "\":a\""
+  "NextCount": ":a"
 }
 
 # squence with bad value
 "select next 12345667852342342342323423423 values from seq"
-"strconv.ParseUint: parsing "12345667852342342342323423423": value out of range"
+{
+  "PlanID": "Nextval",
+  "TableName": "seq",
+  "Permissions": [
+    {
+      "TableName": "seq",
+      "Role": 0
+    }
+  ],
+  "NextCount": "DECIMAL(12345667852342342342323423423)"
+}
 
 # nextval on non-sequence table
 "select next value from a"
@@ -197,7 +200,7 @@
 # for update
 "select eid from a for update"
 {
-  "PlanID": "SelectLock",
+  "PlanID": "Select",
   "TableName": "a",
   "Permissions": [
     {
@@ -205,14 +208,13 @@
       "Role": 0
     }
   ],
-  "FieldQuery": "select eid from a where 1 != 1",
   "FullQuery": "select eid from a limit :#maxLimit for update"
 }
 
 # lock in share mode
 "select eid from a lock in share mode"
 {
-  "PlanID": "SelectLock",
+  "PlanID": "Select",
   "TableName": "a",
   "Permissions": [
     {
@@ -220,7 +222,6 @@
       "Role": 0
     }
   ],
-  "FieldQuery": "select eid from a where 1 != 1",
   "FullQuery": "select eid from a limit :#maxLimit lock in share mode"
 }
 
@@ -295,7 +296,7 @@
       "Role": 1
     }
   ],
-  "FullQuery": "insert into a(eid, id) values (1, 2) on duplicate key update name = func(a)"
+  "FullQuery": "insert into a(eid, id) values (1, 2) on duplicate key update `name` = func(a)"
 }
 
 # replace
@@ -337,8 +338,8 @@
       "Role": 1
     }
   ],
-  "FullQuery": "update d set foo = 'foo' where name in ('a', 'b') limit :#maxLimit",
-  "WhereClause": "where name in ('a', 'b')"
+  "FullQuery": "update d set foo = 'foo' where `name` in ('a', 'b') limit :#maxLimit",
+  "WhereClause": "where `name` in ('a', 'b')"
 }
 
 # normal update
@@ -353,8 +354,8 @@ options:PassthroughDMLs
       "Role": 1
     }
   ],
-  "FullQuery": "update d set foo = 'foo' where name in ('a', 'b')",
-  "WhereClause": "where name in ('a', 'b')"
+  "FullQuery": "update d set foo = 'foo' where `name` in ('a', 'b')",
+  "WhereClause": "where `name` in ('a', 'b')"
 }
 
 # cross-db update
@@ -368,8 +369,8 @@ options:PassthroughDMLs
       "Role": 1
     }
   ],
-  "FullQuery": "update a.b set foo = 'foo' where name in ('a', 'b')",
-  "WhereClause": "where name in ('a', 'b')"
+  "FullQuery": "update a.b set foo = 'foo' where `name` in ('a', 'b')",
+  "WhereClause": "where `name` in ('a', 'b')"
 }
 
 # update unknown table
@@ -383,7 +384,7 @@ options:PassthroughDMLs
       "Role": 1
     }
   ],
-  "FullQuery": "update bogus set name = 'foo' where id = 1",
+  "FullQuery": "update bogus set `name` = 'foo' where id = 1",
   "WhereClause": "where id = 1"
 }
 
@@ -399,7 +400,7 @@ options:PassthroughDMLs
       "Role": 1
     }
   ],
-  "FullQuery": "update bogus set name = 'foo' where id = 1",
+  "FullQuery": "update bogus set `name` = 'foo' where id = 1",
   "WhereClause": "where id = 1"
 }
 
@@ -418,7 +419,7 @@ options:PassthroughDMLs
       "Role": 1
     }
   ],
-  "FullQuery": "update a, b set a.name = 'foo' where a.id = b.id and b.var = 'test'",
+  "FullQuery": "update a, b set a.`name` = 'foo' where a.id = b.id and b.var = 'test'",
   "WhereClause": "where a.id = b.id and b.var = 'test'"
 }
 
@@ -438,7 +439,7 @@ options:PassthroughDMLs
       "Role": 1
     }
   ],
-  "FullQuery": "update a join b on a.id = b.id set a.name = 'foo' where b.var = 'test'",
+  "FullQuery": "update a join b on a.id = b.id set a.`name` = 'foo' where b.var = 'test'",
   "WhereClause": "where b.var = 'test'"
 }
 
@@ -454,7 +455,7 @@ options:PassthroughDMLs
       "Role": 1
     }
   ],
-  "FullQuery": "update a set name = 'foo' limit 1"
+  "FullQuery": "update a set `name` = 'foo' limit 1"
 }
 
 # update with limit
@@ -469,7 +470,7 @@ options:PassthroughDMLs
       "Role": 1
     }
   ],
-  "FullQuery": "update a set name = 'foo' limit 1"
+  "FullQuery": "update a set `name` = 'foo' limit 1"
 }
 
 # delete with no where clause
@@ -497,8 +498,8 @@ options:PassthroughDMLs
       "Role": 1
     }
   ],
-  "FullQuery": "delete from d where name in ('a', 'b') limit :#maxLimit",
-  "WhereClause": "where name in ('a', 'b')"
+  "FullQuery": "delete from d where `name` in ('a', 'b') limit :#maxLimit",
+  "WhereClause": "where `name` in ('a', 'b')"
 }
 
 # normal delete
@@ -513,8 +514,8 @@ options:PassthroughDMLs
       "Role": 1
     }
   ],
-  "FullQuery": "delete from d where name in ('a', 'b')",
-  "WhereClause": "where name in ('a', 'b')"
+  "FullQuery": "delete from d where `name` in ('a', 'b')",
+  "WhereClause": "where `name` in ('a', 'b')"
 }
 
 # delete unknown table
@@ -595,38 +596,6 @@ options:PassthroughDMLs
   "FullQuery": "delete from a limit 10"
 }
 
-# int
-"set  a=1"
-{
-  "PlanID": "Set",
-  "TableName": "",
-  "FullQuery": "set a = 1"
-}
-
-# float
-"set  a=1.2"
-{
-  "PlanID": "Set",
-  "TableName": "",
-  "FullQuery": "set a = 1.2"
-}
-
-# string
-"set a='b'"
-{
-  "PlanID": "Set",
-  "TableName": "",
-  "FullQuery": "set a = 'b'"
-}
-
-# multi
-"set a=1, b=2"
-{
-  "PlanID": "Set",
-  "TableName": "",
-  "FullQuery": "set a = 1, b = 2"
-}
-
 # create
 "create table a(a int, b varchar(8))"
 {
@@ -637,7 +606,36 @@ options:PassthroughDMLs
       "TableName": "a",
       "Role": 2
     }
-  ]
+  ],
+  "FullQuery": "create table a (\n\ta int,\n\tb varchar(8)\n)"
+}
+
+# create index
+"create index a on b(id)"
+{
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "b",
+      "Role": 2
+    }
+  ],
+  "FullQuery":"alter table b add index a (id)"
+}
+
+# create view
+"create view a as select * from b"
+{
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 2
+    }
+  ],
+  "FullQuery":"create view a as select * from b"
 }
 
 # alter
@@ -650,7 +648,8 @@ options:PassthroughDMLs
       "TableName": "a",
       "Role": 2
     }
-  ]
+  ],
+  "FullQuery":"alter table a add column a int"
 }
 
 # alter rename
@@ -667,7 +666,8 @@ options:PassthroughDMLs
       "TableName": "b",
       "Role": 2
     }
-  ]
+  ],
+  "FullQuery":"alter table a rename b"
 }
 
 # rename
@@ -684,7 +684,8 @@ options:PassthroughDMLs
       "TableName": "b",
       "Role": 2
     }
-  ]
+  ],
+  "FullQuery":"rename table a to b"
 }
 
 # multi-rename
@@ -709,7 +710,8 @@ options:PassthroughDMLs
       "TableName": "a",
       "Role": 2
     }
-  ]
+  ],
+  "FullQuery":"rename table a to b, b to a"
 }
 
 # drop
@@ -722,7 +724,22 @@ options:PassthroughDMLs
       "TableName": "a",
       "Role": 2
     }
-  ]
+  ],
+  "FullQuery": "drop table a"
+}
+
+# drop
+"truncate table a"
+{
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 2
+    }
+  ],
+  "FullQuery": "truncate table a"
 }
 
 # multi-drop
@@ -739,7 +756,8 @@ options:PassthroughDMLs
       "TableName": "b",
       "Role": 2
     }
-  ]
+  ],
+  "FullQuery": "drop table a, b"
 }
 
 # analyze
@@ -791,7 +809,7 @@ options:PassthroughDMLs
 # show tables #1
 "show tables like 'key%'"
 {
-  "PlanID": "ShowTables",
+  "PlanID": "Show",
   "TableName":"",
   "FullQuery": "show tables like 'key%'"
 }
@@ -799,7 +817,140 @@ options:PassthroughDMLs
 # show tables #2
 "show tables where Tables_in_keyspace='apa'"
 {
-  "PlanID": "ShowTables",
+  "PlanID": "Show",
   "TableName":"",
   "FullQuery": "show tables where Tables_in_dbName = 'apa'"
+}
+
+# show table status #1
+"show table status like 'key%'"
+{
+  "PlanID": "Show",
+  "TableName":"",
+  "FullQuery": "show table status like 'key%'"
+}
+
+# show table status #2
+"show table status where Name='apa'"
+{
+  "PlanID": "Show",
+  "TableName":"",
+  "FullQuery": "show table status where `Name` = 'apa'"
+}
+
+# show create table
+"show create table t1"
+{
+  "PlanID": "Show",
+  "TableName": "",
+  "FullQuery": "show create table t1"
+}
+
+# show create database system_schema
+"show create database mysql"
+{
+  "PlanID": "Show",
+  "TableName": "",
+  "FullQuery": "show create database mysql"
+}
+
+# show create database
+"show create database anything"
+{
+  "PlanID": "Show",
+  "TableName": "",
+  "FullQuery": "show create database dbName"
+}
+
+# load data
+"load data infile 'x.txt' into table a"
+{
+    "PlanID":"Load",
+    "TableName":""
+}
+
+# alter view
+"alter view a as select * from b"
+{
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 2
+    }
+  ],
+  "FullQuery":"alter view a as select * from b"
+}
+
+# drop view
+"drop view a"
+{
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 2
+    }
+  ],
+  "FullQuery":"drop view a"
+}
+
+# multi-drop views
+"drop view a, b"
+{
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 2
+    },
+    {
+      "TableName": "b",
+      "Role": 2
+    }
+  ],
+  "FullQuery":"drop view a, b"
+}
+
+# flush statement
+"flush tables a,b"
+{
+  "PlanID": "Flush",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 2
+    },
+    {
+      "TableName": "b",
+      "Role": 2
+    }
+  ],
+  "FullQuery": "flush tables a, b"
+}
+
+# call proc
+"call getAllTheThings()"
+{
+  "PlanID": "CallProcedure",
+  "TableName": "",
+  "FullQuery": "call getAllTheThings()"
+}
+
+# create table with function as a default value
+"create table function_default (x varchar(25) DEFAULT (TRIM(' check ')))"
+{
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "function_default",
+      "Role": 2
+    }
+  ],
+  "FullQuery": "create table function_default (\n\tx varchar(25) default (trim(' check '))\n)"
 }

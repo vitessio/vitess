@@ -19,7 +19,8 @@ package test
 import (
 	"testing"
 
-	"golang.org/x/net/context"
+	"context"
+
 	"vitess.io/vitess/go/vt/topo"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -63,8 +64,6 @@ func checkKeyspace(t *testing.T, ts *topo.Server) {
 	}
 
 	k := &topodatapb.Keyspace{
-		ShardingColumnName: "user_id",
-		ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
 		ServedFroms: []*topodatapb.Keyspace_ServedFrom{
 			{
 				TabletType: topodatapb.TabletType_REPLICA,
@@ -72,7 +71,7 @@ func checkKeyspace(t *testing.T, ts *topo.Server) {
 				Keyspace:   "test_keyspace3",
 			},
 			{
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 				Cells:      nil,
 				Keyspace:   "test_keyspace3",
 			},
@@ -97,7 +96,6 @@ func checkKeyspace(t *testing.T, ts *topo.Server) {
 	if err != nil {
 		t.Fatalf("GetKeyspace: %v", err)
 	}
-	storedKI.Keyspace.ShardingColumnName = "other_id"
 	lockCtx, unlock, err := ts.LockKeyspace(ctx, "test_keyspace2", "fake-action")
 	if err != nil {
 		t.Fatalf("LockKeyspace: %v", err)
@@ -111,11 +109,8 @@ func checkKeyspace(t *testing.T, ts *topo.Server) {
 	}
 
 	// And read again to make sure it's good.
-	storedKI, err = ts.GetKeyspace(ctx, "test_keyspace2")
+	_, err = ts.GetKeyspace(ctx, "test_keyspace2")
 	if err != nil {
 		t.Fatalf("GetKeyspace: %v", err)
-	}
-	if storedKI.Keyspace.ShardingColumnName != "other_id" {
-		t.Errorf("UpdateKeyspace failed: got %v, want 'other_id'", storedKI.Keyspace.ShardingColumnName)
 	}
 }

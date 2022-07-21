@@ -25,7 +25,7 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -99,6 +99,25 @@ func TestTxSerializerRedactDebugUI(t *testing.T) {
 	// No transaction had to wait.
 	if got, want := txs.waits.Counts()["t1"], int64(0); got != want {
 		t.Errorf("wrong Waits variable: got = %v, want = %v", got, want)
+	}
+}
+
+func TestKeySanitization(t *testing.T) {
+	config := tabletenv.NewDefaultConfig()
+	txs := New(tabletenv.NewEnv(config, "TxSerializerTest"))
+	// with a where clause
+	key := "t1 where c1='foo'"
+	want := "t1 ... [REDACTED]"
+	got := txs.sanitizeKey(key)
+	if got != want {
+		t.Errorf("key sanitization error: got = %v, want = %v", got, want)
+	}
+	// without a where clause
+	key = "t1"
+	want = "t1"
+	got = txs.sanitizeKey(key)
+	if got != want {
+		t.Errorf("key sanitization error: got = %v, want = %v", got, want)
 	}
 }
 

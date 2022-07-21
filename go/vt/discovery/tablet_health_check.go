@@ -34,7 +34,8 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
+
 	"vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -57,11 +58,11 @@ type tabletHealthCheck struct {
 	Target *query.Target
 	// Serving describes if the tablet can be serving traffic.
 	Serving bool
-	// MasterTermStartTime is the last time at which
-	// this tablet was either elected the master, or received
+	// PrimaryTermStartTime is the last time at which
+	// this tablet was either elected the primary, or received
 	// a TabletExternallyReparented event. It is set to 0 if the
-	// tablet doesn't think it's a master.
-	MasterTermStartTime int64
+	// tablet doesn't think it's a primary.
+	PrimaryTermStartTime int64
 	// Stats is the current health status, as received by the
 	// StreamHealth RPC (replication lag, ...).
 	Stats *query.RealtimeStats
@@ -75,8 +76,8 @@ type tabletHealthCheck struct {
 
 // String is defined because we want to print a []*tabletHealthCheck array nicely.
 func (thc *tabletHealthCheck) String() string {
-	return fmt.Sprintf("tabletHealthCheck{Tablet: %v,Target: %v,Serving: %v, MasterTermStartTime: %v, Stats: %v, LastError: %v",
-		thc.Tablet, thc.Target, thc.Serving, thc.MasterTermStartTime, *thc.Stats, thc.LastError)
+	return fmt.Sprintf("tabletHealthCheck{Tablet: %v,Target: %v,Serving: %v, PrimaryTermStartTime: %v, Stats: %v, LastError: %v",
+		thc.Tablet, thc.Target, thc.Serving, thc.PrimaryTermStartTime, thc.Stats, thc.LastError)
 }
 
 // SimpleCopy returns a TabletHealth with all the necessary fields copied from tabletHealthCheck.
@@ -86,13 +87,13 @@ func (thc *tabletHealthCheck) SimpleCopy() *TabletHealth {
 	thc.connMu.Lock()
 	defer thc.connMu.Unlock()
 	return &TabletHealth{
-		Conn:                thc.Conn,
-		Tablet:              thc.Tablet,
-		Target:              thc.Target,
-		Stats:               thc.Stats,
-		LastError:           thc.LastError,
-		MasterTermStartTime: thc.MasterTermStartTime,
-		Serving:             thc.Serving,
+		Conn:                 thc.Conn,
+		Tablet:               thc.Tablet,
+		Target:               thc.Target,
+		Stats:                thc.Stats,
+		LastError:            thc.LastError,
+		PrimaryTermStartTime: thc.PrimaryTermStartTime,
+		Serving:              thc.Serving,
 	}
 }
 
@@ -183,15 +184,13 @@ func (thc *tabletHealthCheck) processResponse(hc *HealthCheckImpl, shr *query.St
 		return vterrors.New(vtrpc.Code_FAILED_PRECONDITION, fmt.Sprintf("health stats mismatch, tablet %+v alias does not match response alias %v", thc.Tablet, shr.TabletAlias))
 	}
 
-	currentTarget := thc.Target
+	prevTarget := thc.Target
 	// check whether this is a trivial update so as to update healthy map
-	trivialNonMasterUpdate := thc.LastError == nil && thc.Serving && shr.RealtimeStats.HealthError == "" && shr.Serving &&
-		currentTarget.TabletType != topodata.TabletType_MASTER && currentTarget.TabletType == shr.Target.TabletType && thc.isTrivialReplagChange(shr.RealtimeStats)
-	isMasterUpdate := shr.Target.TabletType == topodata.TabletType_MASTER
-	isMasterChange := thc.Target.TabletType != topodata.TabletType_MASTER && shr.Target.TabletType == topodata.TabletType_MASTER
+	trivialUpdate := thc.LastError == nil && thc.Serving && shr.RealtimeStats.HealthError == "" && shr.Serving &&
+		prevTarget.TabletType != topodata.TabletType_PRIMARY && prevTarget.TabletType == shr.Target.TabletType && thc.isTrivialReplagChange(shr.RealtimeStats)
 	thc.lastResponseTimestamp = time.Now()
 	thc.Target = shr.Target
-	thc.MasterTermStartTime = shr.TabletExternallyReparentedTimestamp
+	thc.PrimaryTermStartTime = shr.TabletExternallyReparentedTimestamp
 	thc.Stats = shr.RealtimeStats
 	thc.LastError = healthErr
 	reason := "healthCheck update"
@@ -200,8 +199,8 @@ func (thc *tabletHealthCheck) processResponse(hc *HealthCheckImpl, shr *query.St
 	}
 	thc.setServingState(serving, reason)
 
-	// notify downstream for master change
-	hc.updateHealth(thc.SimpleCopy(), shr, currentTarget, trivialNonMasterUpdate, isMasterUpdate, isMasterChange)
+	// notify downstream for primary change
+	hc.updateHealth(thc.SimpleCopy(), prevTarget, trivialUpdate, thc.Serving)
 	return nil
 }
 
@@ -215,8 +214,8 @@ func (thc *tabletHealthCheck) isTrivialReplagChange(newStats *query.RealtimeStat
 	// Skip replag filter when replag remains in the low rep lag range,
 	// which should be the case majority of the time.
 	lowRepLag := lowReplicationLag.Seconds()
-	oldRepLag := float64(thc.Stats.SecondsBehindMaster)
-	newRepLag := float64(newStats.SecondsBehindMaster)
+	oldRepLag := float64(thc.Stats.ReplicationLagSeconds)
+	newRepLag := float64(newStats.ReplicationLagSeconds)
 	if oldRepLag <= lowRepLag && newRepLag <= lowRepLag {
 		return true
 	}
@@ -239,6 +238,9 @@ func (thc *tabletHealthCheck) checkConn(hc *HealthCheckImpl) {
 		thc.finalizeConn()
 		hc.connsWG.Done()
 	}()
+
+	// Initialize error counter
+	hcErrorCounters.Add([]string{thc.Target.Keyspace, thc.Target.Shard, topoproto.TabletTypeLString(thc.Target.TabletType)}, 0)
 
 	retryDelay := hc.retryDelay
 	for {
@@ -286,12 +288,20 @@ func (thc *tabletHealthCheck) checkConn(hc *HealthCheckImpl) {
 		streamCancel()
 
 		if err != nil {
+			hcErrorCounters.Add([]string{thc.Target.Keyspace, thc.Target.Shard, topoproto.TabletTypeLString(thc.Target.TabletType)}, 1)
+			// This means that another tablet has taken over the host:port that we were connected to.
+			// So let's remove the tablet's data from the healthcheck, and if it is still a part of the
+			// cluster, the new tablet record will be fetched from the topology server and re-added to
+			// the healthcheck cache again via the topology watcher.
+			// WARNING: Under no other circumstances should we be deleting the tablet here.
 			if strings.Contains(err.Error(), "health stats mismatch") {
+				log.Warningf("deleting tablet %v from healthcheck due to health stats mismatch", thc.Tablet)
 				hc.deleteTablet(thc.Tablet)
 				return
 			}
-			res := thc.SimpleCopy()
-			hc.broadcast(res)
+			// trivialUpdate = false because this is an error
+			// up = false because we did not get a healthy response
+			hc.updateHealth(thc.SimpleCopy(), thc.Target, false, false)
 		}
 		// If there was a timeout send an error. We do this after stream has returned.
 		// This will ensure that this update prevails over any previous message that
@@ -300,7 +310,9 @@ func (thc *tabletHealthCheck) checkConn(hc *HealthCheckImpl) {
 			thc.LastError = fmt.Errorf("healthcheck timed out (latest %v)", thc.lastResponseTimestamp)
 			thc.setServingState(false, thc.LastError.Error())
 			hcErrorCounters.Add([]string{thc.Target.Keyspace, thc.Target.Shard, topoproto.TabletTypeLString(thc.Target.TabletType)}, 1)
-			hc.broadcast(thc.SimpleCopy())
+			// trivialUpdate = false because this is an error
+			// up = false because we did not get a healthy response within the timeout
+			hc.updateHealth(thc.SimpleCopy(), thc.Target, false, false)
 		}
 
 		// Streaming RPC failed e.g. because vttablet was restarted or took too long.
@@ -320,7 +332,7 @@ func (thc *tabletHealthCheck) checkConn(hc *HealthCheckImpl) {
 }
 
 func (thc *tabletHealthCheck) closeConnection(ctx context.Context, err error) {
-	log.Warningf("tablet %v healthcheck stream error: %v", thc.Tablet.Alias, err)
+	log.Warningf("tablet %v healthcheck stream error: %v", thc.Tablet, err)
 	thc.setServingState(false, err.Error())
 	thc.LastError = err
 	_ = thc.Conn.Close(ctx)

@@ -17,15 +17,15 @@ limitations under the License.
 package vtctl
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"strings"
 
-	"golang.org/x/net/context"
-
 	"vitess.io/vitess/go/vt/wrangler"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 // This file contains the CellsAliases command group for vtctl.
@@ -36,28 +36,32 @@ func init() {
 	addCommandGroup(cellsAliasesGroupName)
 
 	addCommand(cellsAliasesGroupName, command{
-		"AddCellsAlias",
-		commandAddCellsAlias,
-		"[-cells <cell,cell2...>] <alias>",
-		"Defines a group of cells within which replica/rdonly traffic can be routed across cells. Between cells that are not in the same group (alias), only master traffic can be routed."})
+		name:   "AddCellsAlias",
+		method: commandAddCellsAlias,
+		params: "[--cells <cell,cell2...>] <alias>",
+		help:   "Defines a group of cells within which replica/rdonly traffic can be routed across cells. Between cells that are not in the same group (alias), only primary traffic can be routed.",
+	})
 
 	addCommand(cellsAliasesGroupName, command{
-		"UpdateCellsAlias",
-		commandUpdateCellsAlias,
-		"[-cells <cell,cell2,...>] <alias>",
-		"Updates the content of a CellsAlias with the provided parameters. If a value is empty, it is not updated. The CellsAlias will be created if it doesn't exist."})
+		name:   "UpdateCellsAlias",
+		method: commandUpdateCellsAlias,
+		params: "[--cells <cell,cell2,...>] <alias>",
+		help:   "Updates the content of a CellsAlias with the provided parameters. If a value is empty, it is not updated. The CellsAlias will be created if it doesn't exist.",
+	})
 
 	addCommand(cellsAliasesGroupName, command{
-		"DeleteCellsAlias",
-		commandDeleteCellsAlias,
-		"<alias>",
-		"Deletes the CellsAlias for the provided alias."})
+		name:   "DeleteCellsAlias",
+		method: commandDeleteCellsAlias,
+		params: "<alias>",
+		help:   "Deletes the CellsAlias for the provided alias.",
+	})
 
 	addCommand(cellsAliasesGroupName, command{
-		"GetCellsAliases",
-		commandGetCellsAliases,
-		"",
-		"Lists all the cells for which we have a CellsAlias object."})
+		name:   "GetCellsAliases",
+		method: commandGetCellsAliases,
+		params: "",
+		help:   "Lists all the cells for which we have a CellsAlias object.",
+	})
 }
 
 func commandAddCellsAlias(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -75,10 +79,11 @@ func commandAddCellsAlias(ctx context.Context, wr *wrangler.Wrangler, subFlags *
 	}
 
 	alias := subFlags.Arg(0)
-
-	return wr.TopoServer().CreateCellsAlias(ctx, alias, &topodatapb.CellsAlias{
+	_, err := wr.VtctldServer().AddCellsAlias(ctx, &vtctldatapb.AddCellsAliasRequest{
+		Name:  alias,
 		Cells: cells,
 	})
+	return err
 }
 
 func commandUpdateCellsAlias(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -96,11 +101,13 @@ func commandUpdateCellsAlias(ctx context.Context, wr *wrangler.Wrangler, subFlag
 	}
 
 	alias := subFlags.Arg(0)
-
-	return wr.TopoServer().UpdateCellsAlias(ctx, alias, func(ca *topodatapb.CellsAlias) error {
-		ca.Cells = cells
-		return nil
+	_, err := wr.VtctldServer().UpdateCellsAlias(ctx, &vtctldatapb.UpdateCellsAliasRequest{
+		Name: alias,
+		CellsAlias: &topodatapb.CellsAlias{
+			Cells: cells,
+		},
 	})
+	return err
 }
 
 func commandDeleteCellsAlias(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -112,7 +119,10 @@ func commandDeleteCellsAlias(ctx context.Context, wr *wrangler.Wrangler, subFlag
 	}
 	alias := subFlags.Arg(0)
 
-	return wr.TopoServer().DeleteCellsAlias(ctx, alias)
+	_, err := wr.VtctldServer().DeleteCellsAlias(ctx, &vtctldatapb.DeleteCellsAliasRequest{
+		Name: alias,
+	})
+	return err
 }
 
 func commandGetCellsAliases(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

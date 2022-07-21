@@ -17,7 +17,6 @@ limitations under the License.
 package mysqlctl
 
 import (
-	"io/ioutil"
 	"os"
 	"path"
 	"reflect"
@@ -26,11 +25,7 @@ import (
 )
 
 func TestFindFilesToBackup(t *testing.T) {
-	root, err := ioutil.TempDir("", "backuptest")
-	if err != nil {
-		t.Fatalf("os.TempDir failed: %v", err)
-	}
-	defer os.RemoveAll(root)
+	root := t.TempDir()
 
 	// Initialize the fake mysql root directories
 	innodbDataDir := path.Join(root, "innodb_data")
@@ -46,28 +41,28 @@ func TestFindFilesToBackup(t *testing.T) {
 			t.Fatalf("failed to create directory %v: %v", s, err)
 		}
 	}
-	if err := ioutil.WriteFile(path.Join(innodbDataDir, "innodb_data_1"), []byte("innodb data 1 contents"), os.ModePerm); err != nil {
+	if err := os.WriteFile(path.Join(innodbDataDir, "innodb_data_1"), []byte("innodb data 1 contents"), os.ModePerm); err != nil {
 		t.Fatalf("failed to write file innodb_data_1: %v", err)
 	}
-	if err := ioutil.WriteFile(path.Join(innodbLogDir, "innodb_log_1"), []byte("innodb log 1 contents"), os.ModePerm); err != nil {
+	if err := os.WriteFile(path.Join(innodbLogDir, "innodb_log_1"), []byte("innodb log 1 contents"), os.ModePerm); err != nil {
 		t.Fatalf("failed to write file innodb_log_1: %v", err)
 	}
-	if err := ioutil.WriteFile(path.Join(dataDbDir, "db.opt"), []byte("db opt file"), os.ModePerm); err != nil {
+	if err := os.WriteFile(path.Join(dataDbDir, "db.opt"), []byte("db opt file"), os.ModePerm); err != nil {
 		t.Fatalf("failed to write file db.opt: %v", err)
 	}
-	if err := ioutil.WriteFile(path.Join(extraDir, "extra.stuff"), []byte("extra file"), os.ModePerm); err != nil {
+	if err := os.WriteFile(path.Join(extraDir, "extra.stuff"), []byte("extra file"), os.ModePerm); err != nil {
 		t.Fatalf("failed to write file extra.stuff: %v", err)
 	}
-	if err := ioutil.WriteFile(path.Join(outsideDbDir, "table1.frm"), []byte("frm file"), os.ModePerm); err != nil {
+	if err := os.WriteFile(path.Join(outsideDbDir, "table1.frm"), []byte("frm file"), os.ModePerm); err != nil {
 		t.Fatalf("failed to write file table1.opt: %v", err)
 	}
 	if err := os.Symlink(outsideDbDir, path.Join(dataDir, "vt_symlink")); err != nil {
 		t.Fatalf("failed to symlink vt_symlink: %v", err)
 	}
-	if err := ioutil.WriteFile(path.Join(rocksdbDir, "000011.sst"), []byte("rocksdb file"), os.ModePerm); err != nil {
+	if err := os.WriteFile(path.Join(rocksdbDir, "000011.sst"), []byte("rocksdb file"), os.ModePerm); err != nil {
 		t.Fatalf("failed to write file 000011.sst: %v", err)
 	}
-	if err := ioutil.WriteFile(path.Join(sdiOnlyDir, "table1.sdi"), []byte("sdi file"), os.ModePerm); err != nil {
+	if err := os.WriteFile(path.Join(sdiOnlyDir, "table1.sdi"), []byte("sdi file"), os.ModePerm); err != nil {
 		t.Fatalf("failed to write file table1.sdi: %v", err)
 	}
 

@@ -22,11 +22,6 @@ import (
 	"fmt"
 	"strings"
 	"unicode"
-
-	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/vterrors"
-
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // StatementType encodes the type of a SQL statement
@@ -56,6 +51,14 @@ const (
 	StmtSavepoint
 	StmtSRollback
 	StmtRelease
+	StmtVStream
+	StmtLockTables
+	StmtUnlockTables
+	StmtFlush
+	StmtCallProc
+	StmtRevert
+	StmtShowMigrationLogs
+	StmtCommentOnly
 )
 
 //ASTToStatementType returns a StatementType from an AST stmt
@@ -69,17 +72,21 @@ func ASTToStatementType(stmt Statement) StatementType {
 		return StmtUpdate
 	case *Delete:
 		return StmtDelete
-	case *Set:
+	case *Set, *SetTransaction:
 		return StmtSet
 	case *Show:
 		return StmtShow
-	case *DDL, *DBDDL:
+	case DDLStatement, DBDDLStatement, *AlterVschema:
 		return StmtDDL
+	case *RevertMigration:
+		return StmtRevert
+	case *ShowMigrationLogs:
+		return StmtShowMigrationLogs
 	case *Use:
 		return StmtUse
-	case *OtherRead, *OtherAdmin:
+	case *OtherRead, *OtherAdmin, *Load:
 		return StmtOther
-	case *Explain:
+	case Explain:
 		return StmtExplain
 	case *Begin:
 		return StmtBegin
@@ -93,6 +100,20 @@ func ASTToStatementType(stmt Statement) StatementType {
 		return StmtSRollback
 	case *Release:
 		return StmtRelease
+	case *LockTables:
+		return StmtLockTables
+	case *UnlockTables:
+		return StmtUnlockTables
+	case *Flush:
+		return StmtFlush
+	case *CallProc:
+		return StmtCallProc
+	case *Stream:
+		return StmtStream
+	case *VStream:
+		return StmtVStream
+	case *CommentOnly:
+		return StmtCommentOnly
 	default:
 		return StmtUnknown
 	}
@@ -101,17 +122,45 @@ func ASTToStatementType(stmt Statement) StatementType {
 //CanNormalize takes Statement and returns if the statement can be normalized.
 func CanNormalize(stmt Statement) bool {
 	switch stmt.(type) {
-	case *Select, *Union, *Insert, *Update, *Delete, *Set:
+	case *Select, *Union, *Insert, *Update, *Delete, *Set, *CallProc, *Stream: // TODO: we could merge this logic into ASTrewriter
 		return true
 	}
 	return false
 }
 
-//IsSetStatement takes Statement and returns if the statement is set statement.
-func IsSetStatement(stmt Statement) bool {
-	switch stmt.(type) {
+// CachePlan takes Statement and returns true if the query plan should be cached
+func CachePlan(stmt Statement) bool {
+	var comments *ParsedComments
+	switch stmt := stmt.(type) {
+	case *Select:
+		comments = stmt.Comments
+	case *Insert:
+		comments = stmt.Comments
+	case *Update:
+		comments = stmt.Comments
+	case *Delete:
+		comments = stmt.Comments
+	case *Union, *Stream:
+		return true
+	default:
+		return false
+	}
+	return !comments.Directives().IsSet(DirectiveSkipQueryPlanCache)
+}
+
+// MustRewriteAST takes Statement and returns true if RewriteAST must run on it for correct execution irrespective of user flags.
+func MustRewriteAST(stmt Statement, hasSelectLimit bool) bool {
+	switch node := stmt.(type) {
 	case *Set:
 		return true
+	case *Show:
+		switch node.Internal.(type) {
+		case *ShowBasic:
+			return true
+		}
+		return false
+	case SelectStatement:
+		return hasSelectLimit
 	}
 	return false
 }
@@ -138,6 +187,10 @@ func Preview(sql string) StatementType {
 		return StmtSelect
 	case "stream":
 		return StmtStream
+	case "vstream":
+		return StmtVStream
+	case "revert":
+		return StmtRevert
 	case "insert":
 		return StmtInsert
 	case "replace":
@@ -148,6 +201,10 @@ func Preview(sql string) StatementType {
 		return StmtDelete
 	case "savepoint":
 		return StmtSavepoint
+	case "lock":
+		return StmtLockTables
+	case "unlock":
+		return StmtUnlockTables
 	}
 	// For the following statements it is not sufficient to rely
 	// on loweredFirstWord. This is because they are not statements
@@ -164,8 +221,10 @@ func Preview(sql string) StatementType {
 		return StmtRollback
 	}
 	switch loweredFirstWord {
-	case "create", "alter", "rename", "drop", "truncate", "flush":
+	case "create", "alter", "rename", "drop", "truncate":
 		return StmtDDL
+	case "flush":
+		return StmtFlush
 	case "set":
 		return StmtSet
 	case "show":
@@ -192,6 +251,10 @@ func (s StatementType) String() string {
 		return "SELECT"
 	case StmtStream:
 		return "STREAM"
+	case StmtVStream:
+		return "VSTREAM"
+	case StmtRevert:
+		return "REVERT"
 	case StmtInsert:
 		return "INSERT"
 	case StmtReplace:
@@ -226,6 +289,16 @@ func (s StatementType) String() string {
 		return "SAVEPOINT_ROLLBACK"
 	case StmtRelease:
 		return "RELEASE"
+	case StmtLockTables:
+		return "LOCK_TABLES"
+	case StmtUnlockTables:
+		return "UNLOCK_TABLES"
+	case StmtFlush:
+		return "FLUSH"
+	case StmtCallProc:
+		return "CALL_PROC"
+	case StmtCommentOnly:
+		return "COMMENT_ONLY"
 	default:
 		return "UNKNOWN"
 	}
@@ -250,15 +323,6 @@ func IsDMLStatement(stmt Statement) bool {
 	return false
 }
 
-//IsVschemaDDL returns true if the query is an Vschema alter ddl.
-func IsVschemaDDL(ddl *DDL) bool {
-	switch ddl.Action {
-	case CreateVindexStr, DropVindexStr, AddVschemaTableStr, DropVschemaTableStr, AddColVindexStr, DropColVindexStr, AddSequenceStr, AddAutoIncStr:
-		return true
-	}
-	return false
-}
-
 // SplitAndExpression breaks up the Expr into AND-separated conditions
 // and appends them to filters. Outer parenthesis are removed. Precedence
 // should be taken into account if expressions are recombined.
@@ -272,6 +336,37 @@ func SplitAndExpression(filters []Expr, node Expr) []Expr {
 		return SplitAndExpression(filters, node.Right)
 	}
 	return append(filters, node)
+}
+
+// AndExpressions ands together two or more expressions, minimising the expr when possible
+func AndExpressions(exprs ...Expr) Expr {
+	switch len(exprs) {
+	case 0:
+		return nil
+	case 1:
+		return exprs[0]
+	default:
+		result := (Expr)(nil)
+	outer:
+		// we'll loop and remove any duplicates
+		for i, expr := range exprs {
+			if expr == nil {
+				continue
+			}
+			if result == nil {
+				result = expr
+				continue outer
+			}
+
+			for j := 0; j < i; j++ {
+				if EqualsExpr(expr, exprs[j]) {
+					continue outer
+				}
+			}
+			result = &AndExpr{Left: result, Right: expr}
+		}
+		return result
+	}
 }
 
 // TableFromStatement returns the qualified table name for the query.
@@ -301,12 +396,12 @@ func TableFromStatement(sql string) (TableName, error) {
 
 // GetTableName returns the table name from the SimpleTableExpr
 // only if it's a simple expression. Otherwise, it returns "".
-func GetTableName(node SimpleTableExpr) TableIdent {
+func GetTableName(node SimpleTableExpr) IdentifierCS {
 	if n, ok := node.(TableName); ok && n.Qualifier.IsEmpty() {
 		return n.Name
 	}
 	// sub-select or '.' expression
-	return NewTableIdent("")
+	return NewIdentifierCS("")
 }
 
 // IsColName returns true if the Expr is a *ColName.
@@ -319,9 +414,11 @@ func IsColName(node Expr) bool {
 // NULL is not considered to be a value.
 func IsValue(node Expr) bool {
 	switch v := node.(type) {
-	case *SQLVal:
+	case Argument:
+		return true
+	case *Literal:
 		switch v.Type {
-		case StrVal, HexVal, IntVal, ValArg:
+		case StrVal, HexVal, IntVal:
 			return true
 		}
 	}
@@ -355,72 +452,11 @@ func IsSimpleTuple(node Expr) bool {
 	return false
 }
 
-// NewPlanValue builds a sqltypes.PlanValue from an Expr.
-func NewPlanValue(node Expr) (sqltypes.PlanValue, error) {
-	switch node := node.(type) {
-	case *SQLVal:
-		switch node.Type {
-		case ValArg:
-			return sqltypes.PlanValue{Key: string(node.Val[1:])}, nil
-		case IntVal:
-			n, err := sqltypes.NewIntegral(string(node.Val))
-			if err != nil {
-				return sqltypes.PlanValue{}, err
-			}
-			return sqltypes.PlanValue{Value: n}, nil
-		case FloatVal:
-			return sqltypes.PlanValue{Value: sqltypes.MakeTrusted(sqltypes.Float64, node.Val)}, nil
-		case StrVal:
-			return sqltypes.PlanValue{Value: sqltypes.MakeTrusted(sqltypes.VarBinary, node.Val)}, nil
-		case HexVal:
-			v, err := node.HexDecode()
-			if err != nil {
-				return sqltypes.PlanValue{}, err
-			}
-			return sqltypes.PlanValue{Value: sqltypes.MakeTrusted(sqltypes.VarBinary, v)}, nil
-		}
-	case ListArg:
-		return sqltypes.PlanValue{ListKey: string(node[2:])}, nil
-	case ValTuple:
-		pv := sqltypes.PlanValue{
-			Values: make([]sqltypes.PlanValue, 0, len(node)),
-		}
-		for _, val := range node {
-			innerpv, err := NewPlanValue(val)
-			if err != nil {
-				return sqltypes.PlanValue{}, err
-			}
-			if innerpv.ListKey != "" || innerpv.Values != nil {
-				return sqltypes.PlanValue{}, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: nested lists")
-			}
-			pv.Values = append(pv.Values, innerpv)
-		}
-		return pv, nil
-	case *NullVal:
-		return sqltypes.PlanValue{}, nil
-	case *UnaryExpr:
-		switch node.Operator {
-		case UBinaryStr, Utf8mb4Str, Utf8Str, Latin1Str: // for some charset introducers, we can just ignore them
-			return NewPlanValue(node.Expr)
-		}
-	}
-	return sqltypes.PlanValue{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "expression is too complex '%v'", String(node))
-}
-
 //IsLockingFunc returns true for all functions that are used to work with mysql advisory locks
 func IsLockingFunc(node Expr) bool {
-	switch p := node.(type) {
-	case *FuncExpr:
-		_, found := lockingFunctions[p.Name.Lowered()]
-		return found
+	switch node.(type) {
+	case *LockingFunc:
+		return true
 	}
 	return false
-}
-
-var lockingFunctions = map[string]interface{}{
-	"get_lock":          nil,
-	"is_free_lock":      nil,
-	"is_used_lock":      nil,
-	"release_all_locks": nil,
-	"release_lock":      nil,
 }

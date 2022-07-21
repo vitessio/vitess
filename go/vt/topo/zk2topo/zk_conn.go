@@ -21,15 +21,16 @@ import (
 	"crypto/x509"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"math/rand"
 	"net"
+	"os"
 	"strings"
 	"sync"
 	"time"
 
+	"context"
+
 	"github.com/z-division/go-zookeeper/zk"
-	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/log"
@@ -290,7 +291,7 @@ func (c *ZkConn) maybeAddAuth(ctx context.Context) {
 	if *authFile == "" {
 		return
 	}
-	authInfoBytes, err := ioutil.ReadFile(*authFile)
+	authInfoBytes, err := os.ReadFile(*authFile)
 	if err != nil {
 		log.Errorf("failed to read topo_zk_auth_file: %v", err)
 		return
@@ -341,6 +342,8 @@ func (c *ZkConn) handleSessionEvents(conn *zk.Conn, session <-chan zk.Event) {
 func dialZk(ctx context.Context, addr string) (*zk.Conn, <-chan zk.Event, error) {
 	servers := strings.Split(addr, ",")
 	dialer := zk.WithDialer(net.DialTimeout)
+	ctx, cancel := context.WithTimeout(ctx, *baseTimeout)
+	defer cancel()
 	// If TLS is enabled use a TLS enabled dialer option
 	if *certPath != "" && *keyPath != "" {
 		if strings.Contains(addr, ",") {
@@ -355,7 +358,7 @@ func dialZk(ctx context.Context, addr string) (*zk.Conn, <-chan zk.Event, error)
 			log.Fatalf("Unable to load cert %v and key %v, err %v", *certPath, *keyPath, err)
 		}
 
-		clientCACert, err := ioutil.ReadFile(*caPath)
+		clientCACert, err := os.ReadFile(*caPath)
 		if err != nil {
 			log.Fatalf("Unable to open ca cert %v, err %v", *caPath, err)
 		}
@@ -368,8 +371,6 @@ func dialZk(ctx context.Context, addr string) (*zk.Conn, <-chan zk.Event, error)
 			RootCAs:      clientCertPool,
 			ServerName:   serverName,
 		}
-
-		tlsConfig.BuildNameToCertificate()
 
 		dialer = zk.WithDialer(func(network, address string, timeout time.Duration) (net.Conn, error) {
 			d := net.Dialer{Timeout: timeout}

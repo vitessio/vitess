@@ -21,9 +21,11 @@ import (
 	"fmt"
 	"path"
 
-	"github.com/coreos/etcd/clientv3"
-	"github.com/coreos/etcd/mvcc/mvccpb"
-	"golang.org/x/net/context"
+	"context"
+
+	"go.etcd.io/etcd/api/v3/mvccpb"
+	clientv3 "go.etcd.io/etcd/client/v3"
+
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -32,7 +34,7 @@ import (
 )
 
 var (
-	leaseTTL = flag.Int("topo_etcd_lease_ttl", 30, "Lease TTL for locks and master election. The client will use KeepAlive to keep the lease going.")
+	leaseTTL = flag.Int("topo_etcd_lease_ttl", 30, "Lease TTL for locks and leader election. The client will use KeepAlive to keep the lease going.")
 )
 
 // newUniqueEphemeralKV creates a new file in the provided directory.
@@ -134,7 +136,7 @@ func (s *Server) Lock(ctx context.Context, dirPath, contents string) (topo.LockD
 	return s.lock(ctx, dirPath, contents)
 }
 
-// lock is used by both Lock() and master election.
+// lock is used by both Lock() and primary election.
 func (s *Server) lock(ctx context.Context, nodePath, contents string) (topo.LockDescriptor, error) {
 	nodePath = path.Join(s.root, nodePath, locksPath)
 

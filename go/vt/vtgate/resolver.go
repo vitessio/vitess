@@ -17,7 +17,8 @@ limitations under the License.
 package vtgate
 
 import (
-	"golang.org/x/net/context"
+	"context"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -73,7 +74,7 @@ func (res *Resolver) Execute(
 		return nil, err
 	}
 	if logStats != nil {
-		logStats.ShardQueries = uint32(len(rss))
+		logStats.ShardQueries = uint64(len(rss))
 	}
 
 	autocommit := len(rss) == 1 && canAutocommit && session.AutocommitApproval()
@@ -117,36 +118,6 @@ func (res *Resolver) Execute(
 	}
 }
 
-// StreamExecute executes a streaming query on shards resolved by given func.
-// This function currently temporarily enforces the restriction of executing on
-// one shard since it cannot merge-sort the results to guarantee ordering of
-// response which is needed for checkpointing.
-// Note we guarantee the callback will not be called concurrently
-// by multiple go routines.
-func (res *Resolver) StreamExecute(
-	ctx context.Context,
-	sql string,
-	bindVars map[string]*querypb.BindVariable,
-	keyspace string,
-	tabletType topodatapb.TabletType,
-	destination key.Destination,
-	options *querypb.ExecuteOptions,
-	callback func(*sqltypes.Result) error,
-) error {
-	rss, err := res.resolver.ResolveDestination(ctx, keyspace, tabletType, destination)
-	if err != nil {
-		return err
-	}
-	err = res.scatterConn.StreamExecute(
-		ctx,
-		sql,
-		bindVars,
-		rss,
-		options,
-		callback)
-	return err
-}
-
 // MessageStream streams messages.
 func (res *Resolver) MessageStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, name string, callback func(*sqltypes.Result) error) error {
 	var destination key.Destination
@@ -160,7 +131,7 @@ func (res *Resolver) MessageStream(ctx context.Context, keyspace string, shard s
 		// the message streams.
 		destination = key.DestinationExactKeyRange{KeyRange: keyRange}
 	}
-	rss, err := res.resolver.ResolveDestination(ctx, keyspace, topodatapb.TabletType_MASTER, destination)
+	rss, err := res.resolver.ResolveDestination(ctx, keyspace, topodatapb.TabletType_PRIMARY, destination)
 	if err != nil {
 		return err
 	}

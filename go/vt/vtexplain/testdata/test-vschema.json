@@ -27,11 +27,40 @@
 					"to": "user_id"
 				}
 			},
+			"email_customer_map": {
+				"type": "lookup_hash_unique",
+				"owner": "customer",
+				"params": {
+					"table": "email_customer_map",
+					"from": "email",
+					"to": "user_id",
+					"batch_lookup": "true"
+				}
+			},
 			"hash": {
 				"type": "hash"
 			},
 			"md5": {
 				"type": "unicode_loose_md5"
+			},
+			"multicol_vdx": {
+				"type": "multicol",
+				"params": {
+					"column_count": "2",
+					"column_bytes": "1,7",
+					"column_vindex": "numeric,xxhash"
+				}
+			},
+			"lkp_msac_vdx": {
+				"type": "lookup_hash_unique",
+				"params": {
+					"table": "lkp_idx",
+					"from": "lkp",
+					"to": "id",
+					"multi_shard_autocommit": "true",
+					"batch_lookup": "true"
+				},
+				"owner": "member"
 			}
 		},
 		"tables": {
@@ -93,6 +122,54 @@
 						}
 				],
 					"column_list_authoritative": true
+			},
+			"customer": {
+				"column_vindexes": [
+					{
+						"column": "id",
+						"name": "hash"
+					},
+					{
+						"column": "email",
+						"name": "email_customer_map"
+					}
+				]
+			},
+			"email_customer_map": {
+				"column_vindexes": [
+					{
+						"column": "email",
+						"name": "md5"
+					}
+				]
+			},
+			"user_region": {
+				"column_vindexes": [
+					{
+						"columns": ["regionId","userId"],
+						"name": "multicol_vdx"
+					}
+				]
+			},
+			"member": {
+				"column_vindexes": [
+					{
+						"column": "id",
+						"name": "hash"
+					},
+					{
+						"column": "lkp",
+						"name": "lkp_msac_vdx"
+					}
+				]
+			},
+			"lkp_idx": {
+				"column_vindexes": [
+					{
+						"column": "lkp",
+						"name": "md5"
+					}
+				]
 			}
 		}
 	}

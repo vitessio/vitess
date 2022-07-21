@@ -47,7 +47,10 @@ import (
 	"fmt"
 	"sync"
 
-	"golang.org/x/net/context"
+	"vitess.io/vitess/go/vt/proto/topodata"
+
+	"context"
+
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/log"
@@ -75,6 +78,7 @@ const (
 	SrvVSchemaFile       = "SrvVSchema"
 	SrvKeyspaceFile      = "SrvKeyspace"
 	RoutingRulesFile     = "RoutingRules"
+	ExternalClustersFile = "ExternalClusters"
 )
 
 // Path for all object types.
@@ -85,6 +89,9 @@ const (
 	ShardsPath       = "shards"
 	TabletsPath      = "tablets"
 	MetadataPath     = "metadata"
+
+	ExternalClusterMySQL  = "mysql"
+	ExternalClusterVitess = "vitess"
 )
 
 // Factory is a factory interface to create Conn objects.
@@ -130,12 +137,17 @@ type Server struct {
 
 	// mu protects the following fields.
 	mu sync.Mutex
-	// cells contains clients configured to talk to a list of
+	// cellConns contains clients configured to talk to a list of
 	// topo instances representing local topo clusters. These
 	// should be accessed with the ConnForCell() method, which
 	// will read the list of addresses for that cell from the
 	// global cluster and create clients as needed.
-	cells map[string]Conn
+	cellConns map[string]cellConn
+}
+
+type cellConn struct {
+	cellInfo *topodata.CellInfo
+	conn     Conn
 }
 
 type cellsToAliasesMap struct {
@@ -198,7 +210,7 @@ func NewWithFactory(factory Factory, serverAddress, root string) (*Server, error
 		globalCell:         conn,
 		globalReadOnlyCell: connReadOnly,
 		factory:            factory,
-		cells:              make(map[string]Conn),
+		cellConns:          make(map[string]cellConn),
 	}, nil
 }
 
@@ -236,39 +248,39 @@ func (ts *Server) ConnForCell(ctx context.Context, cell string) (Conn, error) {
 		return ts.globalCell, nil
 	}
 
-	// Return a cached client if present.
-	ts.mu.Lock()
-	conn, ok := ts.cells[cell]
-	ts.mu.Unlock()
-	if ok {
-		return conn, nil
-	}
-
 	// Fetch cell cluster addresses from the global cluster.
-	// These can proceed concurrently (we've released the lock).
 	// We can use the GlobalReadOnlyCell for this call.
 	ci, err := ts.GetCellInfo(ctx, cell, false /*strongRead*/)
 	if err != nil {
 		return nil, err
 	}
 
-	// Connect to the cell topo server, while holding the lock.
-	// This ensures only one connection is established at any given time.
+	// Return a cached client if present.
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
-
-	// Check if another goroutine beat us to creating a client for
-	// this cell.
-	if conn, ok = ts.cells[cell]; ok {
-		return conn, nil
+	cc, ok := ts.cellConns[cell]
+	if ok {
+		// Client exists in cache.
+		// Let's verify that it is the same cell as we are looking for.
+		// The cell name can be re-used with a different ServerAddress and/or Root
+		// in which case we should get a new connection and update the cache
+		if ci.ServerAddress == cc.cellInfo.ServerAddress && ci.Root == cc.cellInfo.Root {
+			return cc.conn, nil
+		}
+		// Close the cached connection, we don't need it anymore
+		if cc.conn != nil {
+			cc.conn.Close()
+		}
 	}
 
-	// Create the connection.
-	conn, err = ts.factory.Create(cell, ci.ServerAddress, ci.Root)
+	// Connect to the cell topo server, while holding the lock.
+	// This ensures only one connection is established at any given time.
+	// Create the connection and cache it
+	conn, err := ts.factory.Create(cell, ci.ServerAddress, ci.Root)
 	switch {
 	case err == nil:
 		conn = NewStatsConn(cell, conn)
-		ts.cells[cell] = conn
+		ts.cellConns[cell] = cellConn{ci, conn}
 		return conn, nil
 	case IsErrType(err, NoNode):
 		err = vterrors.Wrap(err, fmt.Sprintf("failed to create topo connection to %v, %v", ci.ServerAddress, ci.Root))
@@ -317,14 +329,76 @@ func (ts *Server) Close() {
 	ts.globalReadOnlyCell = nil
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
-	for _, conn := range ts.cells {
-		conn.Close()
+	for _, cc := range ts.cellConns {
+		cc.conn.Close()
 	}
-	ts.cells = make(map[string]Conn)
+	ts.cellConns = make(map[string]cellConn)
 }
 
 func (ts *Server) clearCellAliasesCache() {
 	cellsAliases.mu.Lock()
 	defer cellsAliases.mu.Unlock()
 	cellsAliases.cellsToAliases = make(map[string]string)
+}
+
+// OpenExternalVitessClusterServer returns the topo server of the external cluster
+func (ts *Server) OpenExternalVitessClusterServer(ctx context.Context, clusterName string) (*Server, error) {
+	vc, err := ts.GetExternalVitessCluster(ctx, clusterName)
+	if err != nil {
+		return nil, err
+	}
+	if vc == nil {
+		return nil, fmt.Errorf("no vitess cluster found with name %s", clusterName)
+	}
+	var externalTopo *Server
+	externalTopo, err = OpenServer(vc.TopoConfig.TopoType, vc.TopoConfig.Server, vc.TopoConfig.Root)
+	if err != nil {
+		return nil, err
+	}
+	if externalTopo == nil {
+		return nil, fmt.Errorf("unable to open external topo for config %s", clusterName)
+	}
+	return externalTopo, nil
+}
+
+// SetReadOnly is initially ONLY implemented by StatsConn and used in ReadOnlyServer
+func (ts *Server) SetReadOnly(readOnly bool) error {
+	globalCellConn, ok := ts.globalCell.(*StatsConn)
+	if !ok {
+		return fmt.Errorf("invalid global cell connection type, expected StatsConn but found: %T", ts.globalCell)
+	}
+	globalCellConn.SetReadOnly(readOnly)
+
+	for _, cc := range ts.cellConns {
+		localCellConn, ok := cc.conn.(*StatsConn)
+		if !ok {
+			return fmt.Errorf("invalid local cell connection type, expected StatsConn but found: %T", cc.conn)
+		}
+		localCellConn.SetReadOnly(true)
+	}
+
+	return nil
+}
+
+// IsReadOnly is initially ONLY implemented by StatsConn and used in ReadOnlyServer
+func (ts *Server) IsReadOnly() (bool, error) {
+	globalCellConn, ok := ts.globalCell.(*StatsConn)
+	if !ok {
+		return false, fmt.Errorf("invalid global cell connection type, expected StatsConn but found: %T", ts.globalCell)
+	}
+	if !globalCellConn.IsReadOnly() {
+		return false, nil
+	}
+
+	for _, cc := range ts.cellConns {
+		localCellConn, ok := cc.conn.(*StatsConn)
+		if !ok {
+			return false, fmt.Errorf("invalid local cell connection type, expected StatsConn but found: %T", cc.conn)
+		}
+		if !localCellConn.IsReadOnly() {
+			return false, nil
+		}
+	}
+
+	return true, nil
 }

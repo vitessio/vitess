@@ -17,8 +17,9 @@ limitations under the License.
 package endtoend
 
 import (
-	"reflect"
 	"testing"
+
+	"vitess.io/vitess/go/test/utils"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
@@ -66,45 +67,36 @@ func TestMetadataSpecificExecOptions(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	want := sqltypes.Result{
-		Fields: []*querypb.Field{
-			{
-				Name:         "eid",
-				Type:         sqltypes.Int64,
-				Table:        "vitess_b",
-				OrgTable:     "vitess_b",
-				Database:     "vttest",
-				OrgName:      "eid",
-				ColumnLength: 20,
-				Charset:      63,
-				Flags:        49155,
-			},
-			{
-				Name:         "id",
-				Type:         sqltypes.Int32,
-				Table:        "vitess_b",
-				OrgTable:     "vitess_b",
-				Database:     "vttest",
-				OrgName:      "id",
-				ColumnLength: 11,
-				Charset:      63,
-				Flags:        49155,
-			},
-		},
-		RowsAffected: 1,
-		Rows: [][]sqltypes.Value{
-			{
-				sqltypes.NewInt64(-9223372036854775808),
-				sqltypes.NewInt32(-2147483648),
-			},
-		},
+	want := &sqltypes.Result{
+		Fields: []*querypb.Field{{
+			Name:         "eid",
+			Type:         sqltypes.Int64,
+			Table:        "vitess_b",
+			OrgTable:     "vitess_b",
+			Database:     "vttest",
+			OrgName:      "eid",
+			ColumnLength: 20,
+			Charset:      63,
+			Flags:        49155,
+		}, {
+			Name:         "id",
+			Type:         sqltypes.Int32,
+			Table:        "vitess_b",
+			OrgTable:     "vitess_b",
+			Database:     "vttest",
+			OrgName:      "id",
+			ColumnLength: 11,
+			Charset:      63,
+			Flags:        49155,
+		}},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt64(-9223372036854775808),
+			sqltypes.NewInt32(-2147483648),
+		}},
+		StatusFlags: sqltypes.ServerStatusAutocommit,
 	}
-	if !reflect.DeepEqual(*qr, want) {
-		t.Errorf("Execute: \n%#v, want \n%#v", prettyPrint(*qr), prettyPrint(want))
-	}
-	if !reflect.DeepEqual(*streamQr, want) {
-		t.Errorf("StreamExecute: \n%#v, want \n%#v", prettyPrint(*streamQr), prettyPrint(want))
-	}
+	utils.MustMatch(t, want, qr)
+	utils.MustMatch(t, want, streamQr)
 }
 
 // should return Name and Type, because we pass an empty ExecuteOptions and that is the default
@@ -121,31 +113,22 @@ func TestMetadataDefaultExecOptions(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	want := sqltypes.Result{
-		Fields: []*querypb.Field{
-			{
-				Name: "eid",
-				Type: sqltypes.Int64,
-			},
-			{
-				Name: "id",
-				Type: sqltypes.Int32,
-			},
-		},
-		RowsAffected: 1,
-		Rows: [][]sqltypes.Value{
-			{
-				sqltypes.NewInt64(-9223372036854775808),
-				sqltypes.NewInt32(-2147483648),
-			},
-		},
+	want := &sqltypes.Result{
+		Fields: []*querypb.Field{{
+			Name: "eid",
+			Type: sqltypes.Int64,
+		}, {
+			Name: "id",
+			Type: sqltypes.Int32,
+		}},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt64(-9223372036854775808),
+			sqltypes.NewInt32(-2147483648),
+		}},
+		StatusFlags: sqltypes.ServerStatusAutocommit,
 	}
-	if !reflect.DeepEqual(*qr, want) {
-		t.Errorf("Execute: \n%#v, want \n%#v", prettyPrint(*qr), prettyPrint(want))
-	}
-	if !reflect.DeepEqual(*streamQr, want) {
-		t.Errorf("StreamExecute: \n%#v, want \n%#v", prettyPrint(*streamQr), prettyPrint(want))
-	}
+	utils.MustMatch(t, want, qr)
+	utils.MustMatch(t, want, streamQr)
 }
 
 // should return Name and Type, because if nil ExecuteOptions are passed, we normalize to TYPE_AND_NAME
@@ -162,29 +145,20 @@ func TestMetadataNoExecOptions(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	want := sqltypes.Result{
-		Fields: []*querypb.Field{
-			{
-				Name: "eid",
-				Type: sqltypes.Int64,
-			},
-			{
-				Name: "id",
-				Type: sqltypes.Int32,
-			},
-		},
-		RowsAffected: 1,
-		Rows: [][]sqltypes.Value{
-			{
-				sqltypes.NewInt64(-9223372036854775808),
-				sqltypes.NewInt32(-2147483648),
-			},
-		},
+	want := &sqltypes.Result{
+		Fields: []*querypb.Field{{
+			Name: "eid",
+			Type: sqltypes.Int64,
+		}, {
+			Name: "id",
+			Type: sqltypes.Int32,
+		}},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt64(-9223372036854775808),
+			sqltypes.NewInt32(-2147483648),
+		}},
+		StatusFlags: sqltypes.ServerStatusAutocommit,
 	}
-	if !reflect.DeepEqual(*qr, want) {
-		t.Errorf("Execute: \n%#v, want \n%#v", prettyPrint(*qr), prettyPrint(want))
-	}
-	if !reflect.DeepEqual(*streamQr, want) {
-		t.Errorf("StreamExecute: \n%#v, want \n%#v", prettyPrint(*streamQr), prettyPrint(want))
-	}
+	utils.MustMatch(t, want, qr)
+	utils.MustMatch(t, want, streamQr)
 }

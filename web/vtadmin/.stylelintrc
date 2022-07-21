@@ -1,0 +1,17 @@
+{
+	"extends": [
+		"stylelint-config-standard-scss",
+		"stylelint-config-prettier"
+	],
+	"rules": {
+		"alpha-value-notation": "number",
+		"color-function-notation": "legacy",
+		"custom-property-pattern": null,
+		"declaration-block-no-redundant-longhand-properties": null,
+		"scss/at-import-partial-extension": null,
+		"scss/at-rule-no-unknown": null,
+		"scss/dollar-variable-pattern": null,
+		"selector-class-pattern": null,
+		"shorthand-property-no-redundant-values": null
+	}
+}

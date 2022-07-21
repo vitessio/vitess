@@ -21,18 +21,20 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/test/endtoend/utils"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sqltypes"
+
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
@@ -46,8 +48,25 @@ func TestVtgateHealthCheck(t *testing.T) {
 	require.Nil(t, err)
 	defer conn.Close()
 
-	qr := exec(t, conn, "show vitess_tablets", "")
+	qr := utils.Exec(t, conn, "show vitess_tablets")
 	assert.Equal(t, 3, len(qr.Rows), "wrong number of results from show")
+}
+
+func TestVtgateReplicationStatusCheck(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	// Healthcheck interval on tablet is set to 1s, so sleep for 2s
+	time.Sleep(2 * time.Second)
+	verifyVtgateVariables(t, clusterInstance.VtgateProcess.VerifyURL)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.Nil(t, err)
+	defer conn.Close()
+
+	// Only returns rows for REPLICA and RDONLY tablets -- so should be 2 of them
+	qr := utils.Exec(t, conn, "show vitess_replication_status like '%'")
+	expectNumRows := 2
+	numRows := len(qr.Rows)
+	assert.Equal(t, expectNumRows, numRows, fmt.Sprintf("wrong number of results from show vitess_replication_status. Expected %d, got %d", expectNumRows, numRows))
 }
 
 func verifyVtgateVariables(t *testing.T, url string) {
@@ -55,8 +74,8 @@ func verifyVtgateVariables(t *testing.T, url string) {
 	require.NoError(t, err)
 	require.Equal(t, 200, resp.StatusCode, "Vtgate api url response not found")
 
-	resultMap := make(map[string]interface{})
-	respByte, _ := ioutil.ReadAll(resp.Body)
+	resultMap := make(map[string]any)
+	respByte, _ := io.ReadAll(resp.Body)
 	err = json.Unmarshal(respByte, &resultMap)
 	require.NoError(t, err)
 	assert.Contains(t, resultMap, "VtgateVSchemaCounts", "Vschema count should be present in variables")
@@ -72,7 +91,7 @@ func verifyVtgateVariables(t *testing.T, url string) {
 
 	healthCheckConnection := getMapFromJSON(resultMap, "HealthcheckConnections")
 	assert.NotEmpty(t, healthCheckConnection, "Atleast one healthy tablet needs to be present")
-	assert.True(t, isMasterTabletPresent(healthCheckConnection), "Atleast one master tablet needs to be present")
+	assert.True(t, isPrimaryTabletPresent(healthCheckConnection), "Atleast one primary tablet needs to be present")
 }
 
 func retryNTimes(t *testing.T, maxRetries int, f func() bool) {
@@ -96,104 +115,109 @@ func TestReplicaTransactions(t *testing.T) {
 	// Healthcheck interval on tablet is set to 1s, so sleep for 2s
 	time.Sleep(2 * time.Second)
 	ctx := context.Background()
-	masterConn, err := mysql.Connect(ctx, &vtParams)
+	writeConn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
-	defer masterConn.Close()
+	defer writeConn.Close()
 
-	replicaConn, err := mysql.Connect(ctx, &vtParams)
+	readConn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
-	defer replicaConn.Close()
+	defer readConn.Close()
 
-	replicaConn2, err := mysql.Connect(ctx, &vtParams)
+	readConn2, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
-	defer replicaConn2.Close()
+	defer readConn2.Close()
 
 	fetchAllCustomers := "select id, email from customer"
 	checkCustomerRows := func(expectedRows int) func() bool {
 		return func() bool {
-			result := exec(t, replicaConn2, fetchAllCustomers, "")
+			result := utils.Exec(t, readConn2, fetchAllCustomers)
 			return len(result.Rows) == expectedRows
 		}
 	}
 
 	// point the replica connections to the replica target
-	exec(t, replicaConn, "use @replica", "")
-	exec(t, replicaConn2, "use @replica", "")
+	utils.Exec(t, readConn, "use @replica")
+	utils.Exec(t, readConn2, "use @replica")
 
-	// insert a row using master
-	exec(t, masterConn, "insert into customer(id, email) values(1,'email1')", "")
+	// insert a row using primary
+	utils.Exec(t, writeConn, "insert into customer(id, email) values(1,'email1')")
 
 	// we'll run this query a number of times, and then give up if the row count never reaches this value
 	retryNTimes(t, 10 /*maxRetries*/, checkCustomerRows(1))
 
 	// after a short pause, SELECT the data inside a tx on a replica
 	// begin transaction on replica
-	exec(t, replicaConn, "begin", "")
-	qr := exec(t, replicaConn, fetchAllCustomers, "")
+	utils.Exec(t, readConn, "begin")
+	qr := utils.Exec(t, readConn, fetchAllCustomers)
 	assert.Equal(t, `[[INT64(1) VARCHAR("email1")]]`, fmt.Sprintf("%v", qr.Rows), "select returned wrong result")
 
-	// insert more data on master using a transaction
-	exec(t, masterConn, "begin", "")
-	exec(t, masterConn, "insert into customer(id, email) values(2,'email2')", "")
-	exec(t, masterConn, "commit", "")
+	// insert more data on primary using a transaction
+	utils.Exec(t, writeConn, "begin")
+	utils.Exec(t, writeConn, "insert into customer(id, email) values(2,'email2')")
+	utils.Exec(t, writeConn, "commit")
 
 	retryNTimes(t, 10 /*maxRetries*/, checkCustomerRows(2))
 
 	// replica doesn't see new row because it is in a transaction
-	qr2 := exec(t, replicaConn, fetchAllCustomers, "")
+	qr2 := utils.Exec(t, readConn, fetchAllCustomers)
 	assert.Equal(t, qr.Rows, qr2.Rows)
 
 	// replica should see new row after closing the transaction
-	exec(t, replicaConn, "commit", "")
+	utils.Exec(t, readConn, "commit")
 
-	qr3 := exec(t, replicaConn, fetchAllCustomers, "")
+	qr3 := utils.Exec(t, readConn, fetchAllCustomers)
 	assert.Equal(t, `[[INT64(1) VARCHAR("email1")] [INT64(2) VARCHAR("email2")]]`, fmt.Sprintf("%v", qr3.Rows), "we are not seeing the updates after closing the replica transaction")
 
 	// begin transaction on replica
-	exec(t, replicaConn, "begin", "")
+	utils.Exec(t, readConn, "begin")
 	// try to delete a row, should fail
-	exec(t, replicaConn, "delete from customer where id=1", "supported only for master tablet type, current type: replica")
-	exec(t, replicaConn, "commit", "")
+	utils.AssertContainsError(t, readConn, "delete from customer where id=1", "supported only for primary tablet type, current type: replica")
+	utils.Exec(t, readConn, "commit")
 
 	// begin transaction on replica
-	exec(t, replicaConn, "begin", "")
+	utils.Exec(t, readConn, "begin")
 	// try to update a row, should fail
-	exec(t, replicaConn, "update customer set email='emailn' where id=1", "supported only for master tablet type, current type: replica")
-	exec(t, replicaConn, "commit", "")
+	utils.AssertContainsError(t, readConn, "update customer set email='emailn' where id=1", "supported only for primary tablet type, current type: replica")
+	utils.Exec(t, readConn, "commit")
 
 	// begin transaction on replica
-	exec(t, replicaConn, "begin", "")
+	utils.Exec(t, readConn, "begin")
 	// try to insert a row, should fail
-	exec(t, replicaConn, "insert into customer(id, email) values(1,'email1')", "supported only for master tablet type, current type: replica")
+	utils.AssertContainsError(t, readConn, "insert into customer(id, email) values(1,'email1')", "supported only for primary tablet type, current type: replica")
 	// call rollback just for fun
-	exec(t, replicaConn, "rollback", "")
+	utils.Exec(t, readConn, "rollback")
 
 	// start another transaction
-	exec(t, replicaConn, "begin", "")
-	exec(t, replicaConn, fetchAllCustomers, "")
+	utils.Exec(t, readConn, "begin")
+	utils.Exec(t, readConn, fetchAllCustomers)
 	// bring down the tablet and try to select again
 	replicaTablet := clusterInstance.Keyspaces[0].Shards[0].Replica()
 	// this gives us a "signal: killed" error, ignore it
 	_ = replicaTablet.VttabletProcess.TearDown()
 	// Healthcheck interval on tablet is set to 1s, so sleep for 2s
 	time.Sleep(2 * time.Second)
-	exec(t, replicaConn, fetchAllCustomers, "is either down or nonexistent")
+	utils.AssertContainsError(t, readConn, fetchAllCustomers, "is either down or nonexistent")
 
-	// bring up tablet again
-	// query using same transaction will fail
-	_ = replicaTablet.VttabletProcess.Setup()
-	exec(t, replicaConn, fetchAllCustomers, "not found")
-	exec(t, replicaConn, "commit", "")
+	// bring up the tablet again
+	// trying to use the same session/transaction should fail as the vtgate has
+	// been restarted and the session lost
+	replicaTablet.VttabletProcess.ServingStatus = "SERVING"
+	err = replicaTablet.VttabletProcess.Setup()
+	require.Nil(t, err)
+	serving := replicaTablet.VttabletProcess.WaitForStatus("SERVING", 60*time.Second)
+	assert.Equal(t, serving, true, "Tablet did not become ready within a reasonable time")
+	utils.AssertContainsError(t, readConn, fetchAllCustomers, "not found")
+
 	// create a new connection, should be able to query again
-	replicaConn, err = mysql.Connect(ctx, &vtParams)
+	readConn, err = mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
-	exec(t, replicaConn, "begin", "")
-	qr4 := exec(t, replicaConn, fetchAllCustomers, "")
+	utils.Exec(t, readConn, "begin")
+	qr4 := utils.Exec(t, readConn, fetchAllCustomers)
 	assert.Equal(t, `[[INT64(1) VARCHAR("email1")] [INT64(2) VARCHAR("email2")]]`, fmt.Sprintf("%v", qr4.Rows), "we are not able to reconnect after restart")
 }
 
-func getMapFromJSON(JSON map[string]interface{}, key string) map[string]interface{} {
-	result := make(map[string]interface{})
+func getMapFromJSON(JSON map[string]any, key string) map[string]any {
+	result := make(map[string]any)
 	object := reflect.ValueOf(JSON[key])
 	if object.Kind() == reflect.Map {
 		for _, key := range object.MapKeys() {
@@ -204,23 +228,11 @@ func getMapFromJSON(JSON map[string]interface{}, key string) map[string]interfac
 	return result
 }
 
-func isMasterTabletPresent(tablets map[string]interface{}) bool {
+func isPrimaryTabletPresent(tablets map[string]any) bool {
 	for key := range tablets {
-		if strings.Contains(key, "master") {
+		if strings.Contains(key, "primary") {
 			return true
 		}
 	}
 	return false
-}
-
-func exec(t *testing.T, conn *mysql.Conn, query string, expectError string) *sqltypes.Result {
-	t.Helper()
-	qr, err := conn.ExecuteFetch(query, 1000, true)
-	if expectError == "" {
-		require.NoError(t, err)
-	} else {
-		require.Error(t, err, "error should not be nil")
-		assert.Contains(t, err.Error(), expectError, "Unexpected error")
-	}
-	return qr
 }

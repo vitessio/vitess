@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -33,9 +34,9 @@ func readable(node Expr) string {
 	case *XorExpr:
 		return fmt.Sprintf("(%s xor %s)", readable(node.Left), readable(node.Right))
 	case *BinaryExpr:
-		return fmt.Sprintf("(%s %s %s)", readable(node.Left), node.Operator, readable(node.Right))
+		return fmt.Sprintf("(%s %s %s)", readable(node.Left), node.Operator.ToString(), readable(node.Right))
 	case *IsExpr:
-		return fmt.Sprintf("(%s %s)", readable(node.Expr), node.Operator)
+		return fmt.Sprintf("(%s %s)", readable(node.Left), node.Right.ToString())
 	default:
 		return String(node)
 	}
@@ -63,6 +64,49 @@ func TestAndOrPrecedence(t *testing.T) {
 			t.Errorf("Parse: \n%s, want: \n%s", expr, tcase.output)
 		}
 	}
+}
+
+func TestNotInSubqueryPrecedence(t *testing.T) {
+	tree, err := Parse("select * from a where not id in (select 42)")
+	require.NoError(t, err)
+	not := tree.(*Select).Where.Expr.(*NotExpr)
+	cmp := not.Expr.(*ComparisonExpr)
+	subq := cmp.Right.(*Subquery)
+
+	extracted := &ExtractedSubquery{
+		Original:  cmp,
+		OpCode:    1,
+		Subquery:  subq,
+		OtherSide: cmp.Left,
+	}
+	extracted.SetArgName("arg1")
+	extracted.SetHasValuesArg("has_values1")
+
+	not.Expr = extracted
+	output := readable(not)
+	assert.Equal(t, "not (:has_values1 = 1 and id in ::arg1)", output)
+}
+
+func TestSubqueryPrecedence(t *testing.T) {
+	tree, err := Parse("select * from a where id in (select 42) and false")
+	require.NoError(t, err)
+	where := tree.(*Select).Where
+	andExpr := where.Expr.(*AndExpr)
+	cmp := andExpr.Left.(*ComparisonExpr)
+	subq := cmp.Right.(*Subquery)
+
+	extracted := &ExtractedSubquery{
+		Original:  andExpr.Left,
+		OpCode:    1,
+		Subquery:  subq,
+		OtherSide: cmp.Left,
+	}
+	extracted.SetArgName("arg1")
+	extracted.SetHasValuesArg("has_values1")
+
+	andExpr.Left = extracted
+	output := readable(extracted)
+	assert.Equal(t, ":has_values1 = 1 and id in ::arg1", output)
 }
 
 func TestPlusStarPrecedence(t *testing.T) {
@@ -132,6 +176,7 @@ func TestParens(t *testing.T) {
 		{in: "(a & b) | c", expected: "a & b | c"},
 		{in: "not (a=b and c=d)", expected: "not (a = b and c = d)"},
 		{in: "not (a=b) and c=d", expected: "not a = b and c = d"},
+		{in: "(not (a=b)) and c=d", expected: "not a = b and c = d"},
 		{in: "-(12)", expected: "-12"},
 		{in: "-(12 + 12)", expected: "-(12 + 12)"},
 		{in: "(1 > 2) and (1 = b)", expected: "1 > 2 and 1 = b"},
@@ -142,6 +187,17 @@ func TestParens(t *testing.T) {
 		{in: "(a | b) between (5) and (7)", expected: "a | b between 5 and 7"},
 		{in: "(a and b) between (5) and (7)", expected: "(a and b) between 5 and 7"},
 		{in: "(true is true) is null", expected: "(true is true) is null"},
+		{in: "3 * (100 div 3)", expected: "3 * (100 div 3)"},
+		{in: "100 div 2 div 2", expected: "100 div 2 div 2"},
+		{in: "100 div (2 div 2)", expected: "100 div (2 div 2)"},
+		{in: "(100 div 2) div 2", expected: "100 div 2 div 2"},
+		{in: "((((((1000))))))", expected: "1000"},
+		{in: "100 - (50 + 10)", expected: "100 - (50 + 10)"},
+		{in: "100 - 50 + 10", expected: "100 - 50 + 10"},
+		{in: "true and (true and true)", expected: "true and (true and true)"},
+		{in: "10 - 2 - 1", expected: "10 - 2 - 1"},
+		{in: "(10 - 2) - 1", expected: "10 - 2 - 1"},
+		{in: "10 - (2 - 1)", expected: "10 - (2 - 1)"},
 	}
 
 	for _, tc := range tests {
@@ -158,7 +214,7 @@ func TestRandom(t *testing.T) {
 	// The purpose of this test is to find discrepancies between Format and parsing. If for example our precedence rules are not consistent between the two, this test should find it.
 	// The idea is to generate random queries, and pass them through the parser and then the unparser, and one more time. The result of the first unparse should be the same as the second result.
 	seed := time.Now().UnixNano()
-	fmt.Println(fmt.Sprintf("seed is %d", seed)) //nolint
+	fmt.Println(fmt.Sprintf("seed is %d", seed)) // nolint
 	g := newGenerator(seed, 5)
 	endBy := time.Now().Add(1 * time.Second)
 

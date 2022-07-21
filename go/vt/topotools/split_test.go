@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
 	"vitess.io/vitess/go/vt/topo"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -103,6 +104,18 @@ func TestValidateForReshard(t *testing.T) {
 	}{{
 		sources: []string{"-80", "80-"},
 		targets: []string{"-40", "40-"},
+		out:     "",
+	}, {
+		sources: []string{"52-53"},
+		targets: []string{"5200-5240", "5240-5280", "5280-52c0", "52c0-5300"},
+		out:     "",
+	}, {
+		sources: []string{"5200-5300"},
+		targets: []string{"520000-524000", "524000-528000", "528000-52c000", "52c000-530000"},
+		out:     "",
+	}, {
+		sources: []string{"-80", "80-"},
+		targets: []string{"-4000000000000000", "4000000000000000-8000000000000000", "8000000000000000-80c0000000000000", "80c0000000000000-"},
 		out:     "",
 	}, {
 		sources: []string{"80-", "-80"},

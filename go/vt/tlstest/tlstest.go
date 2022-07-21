@@ -19,83 +19,145 @@ limitations under the License.
 package tlstest
 
 import (
+	"bytes"
+	"crypto"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
+	"errors"
 	"fmt"
-	"io/ioutil"
+	"math/big"
+	"net"
 	"os"
-	"os/exec"
 	"path"
+	"strconv"
+	"time"
 
 	"vitess.io/vitess/go/vt/log"
 )
 
 const (
 	// CA is the name of the CA toplevel cert.
-	CA = "ca"
-
-	caConfig = `
-[ req ]
- default_bits           = 4096
- default_keyfile        = keyfile.pem
- distinguished_name     = req_distinguished_name
- attributes             = req_attributes
- x509_extensions       = req_ext
- prompt                 = no
- output_password        = mypass
-[ req_distinguished_name ]
- C                      = US
- ST                     = California
- L                      = Mountain View
- O                      = Vitessio
- OU                     = Vitess
- CN                     = CA
- emailAddress           = test@email.address
-[ req_attributes ]
- challengePassword      = A challenge password
-[ req_ext ]
- basicConstraints       = CA:TRUE
-
-`
-
-	certConfig = `
-[ req ]
- default_bits           = 4096
- default_keyfile        = keyfile.pem
- distinguished_name     = req_distinguished_name
- attributes             = req_attributes
- req_extensions        = req_ext
- prompt                 = no
- output_password        = mypass
-[ req_distinguished_name ]
- C                      = US
- ST                     = California
- L                      = Mountain View
- O                      = Vitessio
- OU                     = Vitess
- CN                     = %s
- emailAddress           = test@email.address
-[ req_attributes ]
- challengePassword      = A challenge password
-[ req_ext ]
- basicConstraints       = CA:TRUE
- subjectAltName         = @alternate_names
- extendedKeyUsage       =serverAuth,clientAuth
-[ alternate_names ]
- DNS.1                  = localhost
- DNS.2                  = 127.0.0.1
- DNS.3                  = %s
-`
+	CA          = "ca"
+	permissions = 0700
 )
 
-// openssl runs the openssl binary with the provided command.
-func openssl(argv ...string) {
-	cmd := exec.Command("openssl", argv...)
-	output, err := cmd.CombinedOutput()
+func loadCert(certPath string) (*x509.Certificate, error) {
+	certData, err := os.ReadFile(certPath)
 	if err != nil {
-		log.Fatalf("openssl %v failed: %v", argv, err)
+		return nil, err
 	}
-	if len(output) > 0 {
-		log.Infof("openssl %v returned:\n%v", argv, string(output))
+
+	block, _ := pem.Decode(certData)
+	if block == nil {
+		return nil, errors.New("failed to parse certificate PEM")
 	}
+	return x509.ParseCertificate(block.Bytes)
+}
+
+func saveCert(certificate *x509.Certificate, certPath string) error {
+	out := &bytes.Buffer{}
+	err := pem.Encode(out, &pem.Block{Type: "CERTIFICATE", Bytes: certificate.Raw})
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(certPath, out.Bytes(), permissions)
+}
+
+func generateKey() (crypto.PrivateKey, error) {
+	return ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+}
+
+func loadKey(keyPath string) (crypto.PrivateKey, error) {
+	keyData, err := os.ReadFile(keyPath)
+	if err != nil {
+		return nil, err
+	}
+
+	block, _ := pem.Decode(keyData)
+	if block == nil {
+		return nil, errors.New("failed to parse key PEM")
+	}
+
+	switch block.Type {
+	case "PRIVATE KEY":
+		return x509.ParsePKCS8PrivateKey(block.Bytes)
+	case "RSA PRIVATE KEY":
+		return x509.ParsePKCS1PrivateKey(block.Bytes)
+	case "EC PRIVATE KEY":
+		return x509.ParseECPrivateKey(block.Bytes)
+	default:
+		return nil, fmt.Errorf("unknown private key format: %+v", block.Type)
+	}
+}
+
+func saveKey(key crypto.PrivateKey, keyPath string) error {
+	keyData, err := x509.MarshalPKCS8PrivateKey(key)
+	if err != nil {
+		return err
+	}
+	out := &bytes.Buffer{}
+	err = pem.Encode(out, &pem.Block{Type: "PRIVATE KEY", Bytes: keyData})
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(keyPath, out.Bytes(), permissions)
+}
+
+// pubkey is an interface to get a public key from a private key
+// The Go specification for a private key defines that this always
+// exists, although there's no interface for it since it would break
+// backwards compatibility. See https://pkg.go.dev/crypto#PrivateKey
+type pubKey interface {
+	Public() crypto.PublicKey
+}
+
+func publicKey(priv crypto.PrivateKey) crypto.PublicKey {
+	return priv.(pubKey).Public()
+}
+
+func signCert(parent *x509.Certificate, parentPriv crypto.PrivateKey, certPub crypto.PublicKey, commonName string, serial int64, ca bool) (*x509.Certificate, error) {
+	keyUsage := x509.KeyUsageDigitalSignature
+	var extKeyUsage []x509.ExtKeyUsage
+	var dnsNames []string
+	var ipAddresses []net.IP
+
+	if ca {
+		keyUsage = keyUsage | x509.KeyUsageCRLSign | x509.KeyUsageCertSign
+	} else {
+		extKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth}
+		dnsNames = []string{"localhost", commonName}
+		ipAddresses = []net.IP{net.ParseIP("127.0.0.1"), net.ParseIP("::1")}
+	}
+
+	template := x509.Certificate{
+		SerialNumber: big.NewInt(serial),
+		Subject: pkix.Name{
+			CommonName: commonName,
+		},
+		NotBefore:             time.Now().Add(-30 * time.Second),
+		NotAfter:              time.Now().Add(24 * time.Hour),
+		KeyUsage:              keyUsage,
+		ExtKeyUsage:           extKeyUsage,
+		BasicConstraintsValid: true,
+		IsCA:                  ca,
+		DNSNames:              dnsNames,
+		IPAddresses:           ipAddresses,
+	}
+
+	// No parent defined means we create a self signed one.
+	if parent == nil {
+		parent = &template
+	}
+
+	certificate, err := x509.CreateCertificate(rand.Reader, &template, parent, certPub, parentPriv)
+	if err != nil {
+		return nil, err
+	}
+	return x509.ParseCertificate(certificate)
 }
 
 // CreateCA creates the toplevel 'ca' certificate and key, and places it
@@ -103,18 +165,68 @@ func openssl(argv ...string) {
 // directory.
 func CreateCA(root string) {
 	log.Infof("Creating test root CA in %v", root)
-	key := path.Join(root, "ca-key.pem")
-	cert := path.Join(root, "ca-cert.pem")
-	openssl("genrsa", "-out", key)
+	keyPath := path.Join(root, "ca-key.pem")
+	certPath := path.Join(root, "ca-cert.pem")
 
-	config := path.Join(root, "ca.config")
-	if err := ioutil.WriteFile(config, []byte(caConfig), os.ModePerm); err != nil {
-		log.Fatalf("cannot write file %v: %v", config, err)
+	priv, err := generateKey()
+	if err != nil {
+		log.Fatal(err)
 	}
-	openssl("req", "-new", "-x509", "-nodes", "-days", "3600", "-batch",
-		"-config", config,
-		"-key", key,
-		"-out", cert)
+
+	err = saveKey(priv, keyPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	ca, err := signCert(nil, priv, publicKey(priv), CA, 1, true)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = saveCert(ca, certPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+func CreateIntermediateCA(root, parent, serial, name, commonName string) {
+	caKeyPath := path.Join(root, parent+"-key.pem")
+	caCertPath := path.Join(root, parent+"-cert.pem")
+	keyPath := path.Join(root, name+"-key.pem")
+	certPath := path.Join(root, name+"-cert.pem")
+
+	caKey, err := loadKey(caKeyPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	caCert, err := loadCert(caCertPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	priv, err := generateKey()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = saveKey(priv, keyPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	serialNr, err := strconv.ParseInt(serial, 10, 64)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	intermediate, err := signCert(caCert, caKey, publicKey(priv), commonName, serialNr, true)
+	if err != nil {
+		log.Fatal(err)
+	}
+	err = saveCert(intermediate, certPath)
+	if err != nil {
+		log.Fatal(err)
+	}
 }
 
 // CreateSignedCert creates a new certificate signed by the provided parent,
@@ -122,76 +234,244 @@ func CreateCA(root string) {
 // name is the file name to use. Common Name is the certificate common name.
 func CreateSignedCert(root, parent, serial, name, commonName string) {
 	log.Infof("Creating signed cert and key %v", commonName)
-	caKey := path.Join(root, parent+"-key.pem")
-	caCert := path.Join(root, parent+"-cert.pem")
-	key := path.Join(root, name+"-key.pem")
-	cert := path.Join(root, name+"-cert.pem")
-	req := path.Join(root, name+"-req.pem")
 
-	config := path.Join(root, name+".config")
-	if err := ioutil.WriteFile(config, []byte(fmt.Sprintf(certConfig, commonName, commonName)), os.ModePerm); err != nil {
-		log.Fatalf("cannot write file %v: %v", config, err)
+	caKeyPath := path.Join(root, parent+"-key.pem")
+	caCertPath := path.Join(root, parent+"-cert.pem")
+	keyPath := path.Join(root, name+"-key.pem")
+	certPath := path.Join(root, name+"-cert.pem")
+
+	caKey, err := loadKey(caKeyPath)
+	if err != nil {
+		log.Fatal(err)
 	}
-	openssl("req", "-newkey", "rsa:2048", "-days", "3600", "-nodes",
-		"-batch",
-		"-config", config,
-		"-keyout", key, "-out", req)
-	openssl("rsa", "-in", key, "-out", key)
-	openssl("x509", "-req",
-		"-in", req,
-		"-days", "3600",
-		"-CA", caCert,
-		"-CAkey", caKey,
-		"-set_serial", serial,
-		"-extensions", "req_ext",
-		"-extfile", config,
-		"-out", cert)
+	caCert, err := loadCert(caCertPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	priv, err := generateKey()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = saveKey(priv, keyPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	serialNr, err := strconv.ParseInt(serial, 10, 64)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	leaf, err := signCert(caCert, caKey, publicKey(priv), commonName, serialNr, false)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = saveCert(leaf, certPath)
+	if err != nil {
+		log.Fatal(err)
+	}
 }
 
+// CreateCRL creates a new empty certificate revocation list
+// for the provided parent
+func CreateCRL(root, parent string) {
+	log.Infof("Creating CRL for root CA in %v", root)
+	caKeyPath := path.Join(root, parent+"-key.pem")
+	caCertPath := path.Join(root, parent+"-cert.pem")
+	crlPath := path.Join(root, parent+"-crl.pem")
+
+	caKey, err := loadKey(caKeyPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	caCert, err := loadCert(caCertPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	crlList, err := x509.CreateRevocationList(rand.Reader, &x509.RevocationList{
+		RevokedCertificates: nil,
+		Number:              big.NewInt(1),
+	}, caCert, caKey.(crypto.Signer))
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	out := &bytes.Buffer{}
+	err = pem.Encode(out, &pem.Block{Type: "X509 CRL", Bytes: crlList})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = os.WriteFile(crlPath, out.Bytes(), permissions)
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+// RevokeCertAndRegenerateCRL revokes a provided certificate under the
+// provided parent CA and regenerates the CRL file for that parent
+func RevokeCertAndRegenerateCRL(root, parent, name string) {
+	log.Infof("Revoking certificate %s", name)
+	caKeyPath := path.Join(root, parent+"-key.pem")
+	caCertPath := path.Join(root, parent+"-cert.pem")
+	crlPath := path.Join(root, parent+"-crl.pem")
+	certPath := path.Join(root, name+"-cert.pem")
+
+	certificate, err := loadCert(certPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Check if CRL already exists. If it doesn't,
+	// create an empty CRL to start with.
+	_, err = os.Stat(crlPath)
+	if errors.Is(err, os.ErrNotExist) {
+		CreateCRL(root, parent)
+	}
+
+	data, err := os.ReadFile(crlPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	crlList, err := x509.ParseCRL(data)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	revoked := crlList.TBSCertList.RevokedCertificates
+	revoked = append(revoked, pkix.RevokedCertificate{
+		SerialNumber:   certificate.SerialNumber,
+		RevocationTime: time.Now(),
+	})
+
+	caKey, err := loadKey(caKeyPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	caCert, err := loadCert(caCertPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	newCrl, err := x509.CreateRevocationList(rand.Reader, &x509.RevocationList{
+		RevokedCertificates: revoked,
+		Number:              big.NewInt(int64(crlList.TBSCertList.Version) + 1),
+	}, caCert, caKey.(crypto.Signer))
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	out := &bytes.Buffer{}
+	err = pem.Encode(out, &pem.Block{Type: "X509 CRL", Bytes: newCrl})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = os.WriteFile(crlPath, out.Bytes(), permissions)
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+// ClientServerKeyPairs is used in tests
 type ClientServerKeyPairs struct {
-	ServerCert string
-	ServerKey  string
-	ServerCA   string
-	ServerName string
-	ClientCert string
-	ClientKey  string
-	ClientCA   string
+	ServerCert        string
+	ServerKey         string
+	ServerCA          string
+	ServerName        string
+	ServerCRL         string
+	RevokedServerCert string
+	RevokedServerKey  string
+	RevokedServerName string
+	ClientCert        string
+	ClientKey         string
+	ClientCA          string
+	ClientCRL         string
+	RevokedClientCert string
+	RevokedClientKey  string
+	RevokedClientName string
+	CombinedCRL       string
 }
 
 var serialCounter = 0
 
+// CreateClientServerCertPairs creates certificate pairs for use in test
 func CreateClientServerCertPairs(root string) ClientServerKeyPairs {
 	// Create the certs and configs.
 	CreateCA(root)
 
-	serverSerial := fmt.Sprintf("%03d", serialCounter*2+1)
-	clientSerial := fmt.Sprintf("%03d", serialCounter*2+2)
+	serverCASerial := fmt.Sprintf("%03d", serialCounter*2+1)
+	serverSerial := fmt.Sprintf("%03d", serialCounter*2+3)
+	revokedServerSerial := fmt.Sprintf("%03d", serialCounter*2+5)
+	clientCASerial := fmt.Sprintf("%03d", serialCounter*2+2)
+	clientCertSerial := fmt.Sprintf("%03d", serialCounter*2+4)
+	revokedClientSerial := fmt.Sprintf("%03d", serialCounter*2+6)
 
-	serialCounter = serialCounter + 1
+	serialCounter = serialCounter + 3
 
-	serverName := fmt.Sprintf("server-%s", serverSerial)
-	serverCACommonName := fmt.Sprintf("Server %s CA", serverSerial)
+	serverCAName := fmt.Sprintf("servers-ca-%s", serverCASerial)
+	serverCACommonName := fmt.Sprintf("Servers %s CA", serverCASerial)
 	serverCertName := fmt.Sprintf("server-instance-%s", serverSerial)
 	serverCertCommonName := fmt.Sprintf("server%s.example.com", serverSerial)
+	revokedServerCertName := fmt.Sprintf("server-instance-%s", revokedServerSerial)
+	revokedServerCertCommonName := fmt.Sprintf("server%s.example.com", revokedServerSerial)
 
-	clientName := fmt.Sprintf("clients-%s", serverSerial)
-	clientCACommonName := fmt.Sprintf("Clients %s CA", serverSerial)
-	clientCertName := fmt.Sprintf("client-instance-%s", serverSerial)
-	clientCertCommonName := fmt.Sprintf("Client Instance %s", serverSerial)
+	clientCAName := fmt.Sprintf("clients-ca-%s", clientCASerial)
+	clientCACommonName := fmt.Sprintf("Clients %s CA", clientCASerial)
+	clientCertName := fmt.Sprintf("client-instance-%s", clientCertSerial)
+	clientCertCommonName := fmt.Sprintf("client%s.example.com", clientCertSerial)
+	revokedClientCertName := fmt.Sprintf("client-instance-%s", revokedClientSerial)
+	revokedClientCertCommonName := fmt.Sprintf("client%s.example.com", revokedClientSerial)
 
-	CreateSignedCert(root, CA, serverSerial, serverName, serverCACommonName)
-	CreateSignedCert(root, serverName, serverSerial, serverCertName, serverCertCommonName)
+	CreateIntermediateCA(root, CA, serverCASerial, serverCAName, serverCACommonName)
+	CreateSignedCert(root, serverCAName, serverSerial, serverCertName, serverCertCommonName)
+	CreateSignedCert(root, serverCAName, revokedServerSerial, revokedServerCertName, revokedServerCertCommonName)
+	RevokeCertAndRegenerateCRL(root, serverCAName, revokedServerCertName)
 
-	CreateSignedCert(root, CA, clientSerial, clientName, clientCACommonName)
-	CreateSignedCert(root, clientName, serverSerial, clientCertName, clientCertCommonName)
+	CreateIntermediateCA(root, CA, clientCASerial, clientCAName, clientCACommonName)
+	CreateSignedCert(root, clientCAName, clientCertSerial, clientCertName, clientCertCommonName)
+	CreateSignedCert(root, clientCAName, revokedClientSerial, revokedClientCertName, revokedClientCertCommonName)
+	RevokeCertAndRegenerateCRL(root, clientCAName, revokedClientCertName)
+
+	serverCRLPath := path.Join(root, fmt.Sprintf("%s-crl.pem", serverCAName))
+	clientCRLPath := path.Join(root, fmt.Sprintf("%s-crl.pem", clientCAName))
+	combinedCRLPath := path.Join(root, fmt.Sprintf("%s-%s-combined-crl.pem", serverCAName, clientCAName))
+
+	serverCRLBytes, err := os.ReadFile(serverCRLPath)
+	if err != nil {
+		log.Fatalf("Could not read server CRL file")
+	}
+
+	clientCRLBytes, err := os.ReadFile(clientCRLPath)
+	if err != nil {
+		log.Fatalf("Could not read client CRL file")
+	}
+
+	err = os.WriteFile(combinedCRLPath, append(serverCRLBytes, clientCRLBytes...), permissions)
+	if err != nil {
+		log.Fatalf("Could not write combined CRL file")
+	}
 
 	return ClientServerKeyPairs{
-		ServerCert: path.Join(root, fmt.Sprintf("%s-cert.pem", serverCertName)),
-		ServerKey:  path.Join(root, fmt.Sprintf("%s-key.pem", serverCertName)),
-		ServerCA:   path.Join(root, fmt.Sprintf("%s-cert.pem", serverName)),
-		ClientCert: path.Join(root, fmt.Sprintf("%s-cert.pem", clientCertName)),
-		ClientKey:  path.Join(root, fmt.Sprintf("%s-key.pem", clientCertName)),
-		ClientCA:   path.Join(root, fmt.Sprintf("%s-cert.pem", clientName)),
-		ServerName: serverCertCommonName,
+		ServerCert:        path.Join(root, fmt.Sprintf("%s-cert.pem", serverCertName)),
+		ServerKey:         path.Join(root, fmt.Sprintf("%s-key.pem", serverCertName)),
+		ServerCA:          path.Join(root, fmt.Sprintf("%s-cert.pem", serverCAName)),
+		ServerCRL:         serverCRLPath,
+		RevokedServerCert: path.Join(root, fmt.Sprintf("%s-cert.pem", revokedServerCertName)),
+		RevokedServerKey:  path.Join(root, fmt.Sprintf("%s-key.pem", revokedServerCertName)),
+		ClientCert:        path.Join(root, fmt.Sprintf("%s-cert.pem", clientCertName)),
+		ClientKey:         path.Join(root, fmt.Sprintf("%s-key.pem", clientCertName)),
+		ClientCA:          path.Join(root, fmt.Sprintf("%s-cert.pem", clientCAName)),
+		ClientCRL:         clientCRLPath,
+		RevokedClientCert: path.Join(root, fmt.Sprintf("%s-cert.pem", revokedClientCertName)),
+		RevokedClientKey:  path.Join(root, fmt.Sprintf("%s-key.pem", revokedClientCertName)),
+		CombinedCRL:       combinedCRLPath,
+		ServerName:        serverCertCommonName,
+		RevokedServerName: revokedServerCertCommonName,
+		RevokedClientName: revokedClientCertCommonName,
 	}
 }

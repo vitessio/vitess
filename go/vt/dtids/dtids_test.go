@@ -19,8 +19,8 @@ package dtids
 import (
 	"testing"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -32,7 +32,7 @@ func TestDTID(t *testing.T) {
 		Target: &querypb.Target{
 			Keyspace:   "aa",
 			Shard:      "0",
-			TabletType: topodatapb.TabletType_MASTER,
+			TabletType: topodatapb.TabletType_PRIMARY,
 		},
 		TransactionId: 1,
 	}

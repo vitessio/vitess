@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/proto/binlogdata"
@@ -39,7 +40,7 @@ VReplication state: Open</br>
     <th>State</th>
     <th>Stop Position</th>
     <th>Last Position</th>
-    <th>Seconds Behind Master</th>
+    <th>VReplication Lag</th>
     <th>Counts</th>
     <th>Rates</th>
     <th>Last Message</th>
@@ -78,7 +79,7 @@ func TestStatusHtml(t *testing.T) {
 
 	blpStats := binlogplayer.NewStats()
 	blpStats.SetLastPosition(pos)
-	blpStats.SecondsBehindMaster.Set(2)
+	blpStats.ReplicationLagSeconds.Set(2)
 	blpStats.History.Add(&binlogplayer.StatsHistoryRecord{Time: time.Now(), Message: "Test Message1"})
 	blpStats.History.Add(&binlogplayer.StatsHistoryRecord{Time: time.Now(), Message: "Test Message2"})
 
@@ -87,7 +88,7 @@ func TestStatusHtml(t *testing.T) {
 	testStats.controllers = map[int]*controller{
 		1: {
 			id: 1,
-			source: binlogdata.BinlogSource{
+			source: &binlogdata.BinlogSource{
 				Keyspace: "ks",
 				Shard:    "0",
 			},
@@ -97,7 +98,7 @@ func TestStatusHtml(t *testing.T) {
 		},
 		2: {
 			id: 2,
-			source: binlogdata.BinlogSource{
+			source: &binlogdata.BinlogSource{
 				Keyspace: "ks",
 				Shard:    "1",
 			},
@@ -126,7 +127,7 @@ func TestVReplicationStats(t *testing.T) {
 	testStats.controllers = map[int]*controller{
 		1: {
 			id: 1,
-			source: binlogdata.BinlogSource{
+			source: &binlogdata.BinlogSource{
 				Keyspace: "ks",
 				Shard:    "0",
 			},
@@ -159,4 +160,8 @@ func TestVReplicationStats(t *testing.T) {
 	blpStats.CopyRowCount.Add(200)
 	require.Equal(t, int64(100), testStats.status().Controllers[0].CopyLoopCount)
 	require.Equal(t, int64(200), testStats.status().Controllers[0].CopyRowCount)
+
+	var tm int64 = 1234567890
+	blpStats.RecordHeartbeat(tm)
+	require.Equal(t, tm, blpStats.Heartbeat())
 }

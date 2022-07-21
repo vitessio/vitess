@@ -28,7 +28,8 @@ import (
 
 	"google.golang.org/grpc"
 
-	"golang.org/x/net/context"
+	"context"
+
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
@@ -63,7 +64,7 @@ func NewVtctlPipe(t *testing.T, ts *topo.Server) *VtctlPipe {
 	})
 
 	// Listen on a random port
-	listener, err := net.Listen("tcp", ":0")
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("Cannot listen: %v", err)
 	}

@@ -19,7 +19,6 @@ package main
 import (
 	"bufio"
 	"bytes"
-	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -28,6 +27,9 @@ import (
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
+
+	// Include deprecation warnings for soon-to-be-unsupported flag invocations.
+	_flag "vitess.io/vitess/go/internal/flag"
 )
 
 var (
@@ -57,8 +59,8 @@ func (a stats) Less(i, j int) bool { return a[i].Count > a[j].Count }
 
 func main() {
 	defer exit.Recover()
-	flag.Parse()
-	for _, filename := range flag.Args() {
+	_flag.Parse()
+	for _, filename := range _flag.Args() {
 		fmt.Printf("processing: %s\n", filename)
 		if err := processFile(filename); err != nil {
 			log.Errorf("processFile error: %v", err)
@@ -113,14 +115,14 @@ func analyze(line []byte) {
 }
 
 func formatWithBind(buf *sqlparser.TrackedBuffer, node sqlparser.SQLNode) {
-	v, ok := node.(*sqlparser.SQLVal)
+	v, ok := node.(*sqlparser.Literal)
 	if !ok {
 		node.Format(buf)
 		return
 	}
 	switch v.Type {
 	case sqlparser.StrVal, sqlparser.HexVal, sqlparser.IntVal:
-		buf.WriteArg(fmt.Sprintf(":v%d", bindIndex))
+		buf.WriteArg(":", fmt.Sprintf("v%d", bindIndex))
 		bindIndex++
 	default:
 		node.Format(buf)

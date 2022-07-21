@@ -17,11 +17,13 @@ limitations under the License.
 package endtoend
 
 import (
-	"reflect"
 	"testing"
+
+	"vitess.io/vitess/go/test/utils"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
 
@@ -35,7 +37,6 @@ func TestSequence(t *testing.T) {
 			Name: "nextval",
 			Type: sqltypes.Int64,
 		}},
-		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt64(0),
 		}},
@@ -44,6 +45,7 @@ func TestSequence(t *testing.T) {
 		want.Rows[0][0] = sqltypes.NewInt64(wantval)
 		qr, err := framework.NewClient().Execute("select next 2 values from vitess_seq", nil)
 		require.NoError(t, err)
+		utils.MustMatch(t, want, qr)
 		assert.Equal(t, want, qr)
 	}
 
@@ -53,13 +55,13 @@ func TestSequence(t *testing.T) {
 	qr.Fields = nil
 
 	want = &sqltypes.Result{
-		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt64(13),
 			sqltypes.NewInt64(3),
 		}},
+		StatusFlags: sqltypes.ServerStatusNoIndexUsed | sqltypes.ServerStatusAutocommit,
 	}
-	assert.Equal(t, want, qr)
+	utils.MustMatch(t, want, qr)
 
 	// Mess up the sequence by reducing next_id
 	_, err = framework.NewClient().Execute("update vitess_seq set next_id=1", nil)
@@ -70,12 +72,11 @@ func TestSequence(t *testing.T) {
 
 	// Next value generated should be based on the LastVal
 	want = &sqltypes.Result{
-		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt64(13),
 		}},
 	}
-	assert.Equal(t, want, qr)
+	utils.MustMatch(t, want, qr)
 
 	// next_id should be reset to LastVal+cache
 	qr, err = framework.NewClient().Execute("select next_id, cache from vitess_seq", nil)
@@ -83,13 +84,13 @@ func TestSequence(t *testing.T) {
 	qr.Fields = nil
 
 	want = &sqltypes.Result{
-		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt64(16),
 			sqltypes.NewInt64(3),
 		}},
+		StatusFlags: sqltypes.ServerStatusNoIndexUsed | sqltypes.ServerStatusAutocommit,
 	}
-	assert.Equal(t, want, qr)
+	utils.MustMatch(t, want, qr)
 
 	// Change next_id to a very high value
 	_, err = framework.NewClient().Execute("update vitess_seq set next_id=100", nil)
@@ -100,12 +101,11 @@ func TestSequence(t *testing.T) {
 
 	// Next value should jump to the high value
 	want = &sqltypes.Result{
-		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt64(100),
 		}},
 	}
-	assert.Equal(t, want, qr)
+	utils.MustMatch(t, want, qr)
 }
 
 func TestResetSequence(t *testing.T) {
@@ -115,7 +115,6 @@ func TestResetSequence(t *testing.T) {
 			Name: "nextval",
 			Type: sqltypes.Int64,
 		}},
-		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt64(1),
 		}},
@@ -124,16 +123,14 @@ func TestResetSequence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(*qr, want) {
-		t.Errorf("Execute: \n%#v, want \n%#v", *qr, want)
-	}
+	utils.MustMatch(t, &want, qr)
 
-	// Reset mastership
+	// Reset primaryship
 	err = client.SetServingType(topodatapb.TabletType_REPLICA)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = client.SetServingType(topodatapb.TabletType_MASTER)
+	err = client.SetServingType(topodatapb.TabletType_PRIMARY)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,7 +141,5 @@ func TestResetSequence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(*qr, want) {
-		t.Errorf("Execute: \n%#v, want \n%#v", *qr, want)
-	}
+	utils.MustMatch(t, &want, qr)
 }

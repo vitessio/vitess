@@ -17,6 +17,8 @@ limitations under the License.
 package engine
 
 import (
+	"context"
+
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -39,27 +41,27 @@ type UpdateTarget struct {
 func (updTarget *UpdateTarget) description() PrimitiveDescription {
 	return PrimitiveDescription{
 		OperatorType: "UpdateTarget",
-		Other:        map[string]interface{}{"target": updTarget.Target},
+		Other:        map[string]any{"target": updTarget.Target},
 	}
 }
 
 // RouteType implements the Primitive interface
-func (updTarget UpdateTarget) RouteType() string {
+func (updTarget *UpdateTarget) RouteType() string {
 	return "UpdateTarget"
 }
 
 // GetKeyspaceName implements the Primitive interface
-func (updTarget UpdateTarget) GetKeyspaceName() string {
+func (updTarget *UpdateTarget) GetKeyspaceName() string {
 	return updTarget.Target
 }
 
 // GetTableName implements the Primitive interface
-func (updTarget UpdateTarget) GetTableName() string {
+func (updTarget *UpdateTarget) GetTableName() string {
 	return ""
 }
 
-// Execute implements the Primitive interface
-func (updTarget UpdateTarget) Execute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+// TryExecute implements the Primitive interface
+func (updTarget *UpdateTarget) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	err := vcursor.Session().SetTarget(updTarget.Target)
 	if err != nil {
 		return nil, err
@@ -67,12 +69,16 @@ func (updTarget UpdateTarget) Execute(vcursor VCursor, bindVars map[string]*quer
 	return &sqltypes.Result{}, nil
 }
 
-// StreamExecute implements the Primitive interface
-func (updTarget UpdateTarget) StreamExecute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "use cannot be used for streaming")
+// TryStreamExecute implements the Primitive interface
+func (updTarget *UpdateTarget) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	result, err := updTarget.TryExecute(ctx, vcursor, bindVars, wantfields)
+	if err != nil {
+		return err
+	}
+	return callback(result)
 }
 
 // GetFields implements the Primitive interface
-func (updTarget UpdateTarget) GetFields(vcursor VCursor, bindVars map[string]*query.BindVariable) (*sqltypes.Result, error) {
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "use cannot be used for get fields")
+func (updTarget *UpdateTarget) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*query.BindVariable) (*sqltypes.Result, error) {
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] GetFields not reachable for use statement")
 }

@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
@@ -151,7 +152,7 @@ func TestExternalConnectorPlay(t *testing.T) {
 		ExternalMysql: "exta",
 		Filter:        filter1,
 	}
-	pos := masterPosition(t)
+	pos := primaryPosition(t)
 	cancel1 := startExternalVReplication(t, bls1, pos)
 	defer cancel1()
 

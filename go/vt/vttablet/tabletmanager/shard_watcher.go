@@ -17,7 +17,7 @@ limitations under the License.
 package tabletmanager
 
 import (
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"

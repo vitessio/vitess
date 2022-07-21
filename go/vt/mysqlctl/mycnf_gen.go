@@ -64,7 +64,7 @@ var (
 // mysqldPort needs to be unique per instance per machine.
 func NewMycnf(tabletUID uint32, mysqlPort int32) *Mycnf {
 	cnf := new(Mycnf)
-	cnf.path = MycnfFile(tabletUID)
+	cnf.Path = MycnfFile(tabletUID)
 	tabletDir := TabletDir(tabletUID)
 	cnf.ServerID = tabletUID
 	cnf.MysqlPort = mysqlPort
@@ -84,6 +84,8 @@ func NewMycnf(tabletUID uint32, mysqlPort int32) *Mycnf {
 	cnf.MasterInfoFile = path.Join(tabletDir, "master.info")
 	cnf.PidFile = path.Join(tabletDir, "mysql.pid")
 	cnf.TmpDir = path.Join(tabletDir, "tmp")
+	// by default the secure-file-priv path is `tmp`
+	cnf.SecureFilePriv = cnf.TmpDir
 	return cnf
 }
 
@@ -92,7 +94,12 @@ func TabletDir(uid uint32) string {
 	if *tabletDir != "" {
 		return fmt.Sprintf("%s/%s", env.VtDataRoot(), *tabletDir)
 	}
-	return fmt.Sprintf("%s/vt_%010d", env.VtDataRoot(), uid)
+	return DefaultTabletDirAtRoot(env.VtDataRoot(), uid)
+}
+
+// DefaultTabletDirAtRoot returns the default directory for a tablet given a UID and a VtDataRoot variable
+func DefaultTabletDirAtRoot(dataRoot string, uid uint32) string {
+	return fmt.Sprintf("%s/vt_%010d", dataRoot, uid)
 }
 
 // MycnfFile returns the default location of the my.cnf file.

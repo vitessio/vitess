@@ -22,6 +22,8 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/log"
@@ -81,7 +83,7 @@ type stateManager struct {
 	wantState      servingState
 	wantTabletType topodatapb.TabletType
 	state          servingState
-	target         querypb.Target
+	target         *querypb.Target
 	terTimestamp   time.Time
 	retrying       bool
 	replHealthy    bool
@@ -91,6 +93,11 @@ type stateManager struct {
 	transitionErr  error
 
 	requests sync.WaitGroup
+
+	// QueryList does not have an Open or Close.
+	statelessql *QueryList
+	statefulql  *QueryList
+	olapql      *QueryList
 
 	// Open must be done in forward order.
 	// Close must be done in reverse order.
@@ -105,6 +112,9 @@ type stateManager struct {
 	txThrottler txThrottler
 	te          txEngine
 	messager    subComponent
+	ddle        onlineDDLExecutor
+	throttler   lagThrottler
+	tableGC     tableGarbageCollector
 
 	// hcticks starts on initialiazation and runs forever.
 	hcticks *timer.Timer
@@ -114,7 +124,8 @@ type stateManager struct {
 	checkMySQLThrottler *sync2.Semaphore
 
 	timebombDuration      time.Duration
-	unhealthyThreshold    time.Duration
+	unhealthyThreshold    sync2.AtomicDuration
+	shutdownGracePeriod   time.Duration
 	transitionGracePeriod time.Duration
 }
 
@@ -122,13 +133,13 @@ type (
 	schemaEngine interface {
 		EnsureConnectionAndDB(topodatapb.TabletType) error
 		Open() error
-		MakeNonMaster()
+		MakeNonPrimary()
 		Close()
 	}
 
 	replTracker interface {
-		MakeMaster()
-		MakeNonMaster()
+		MakePrimary()
+		MakeNonPrimary()
 		Close()
 		Status() (time.Duration, error)
 	}
@@ -136,13 +147,12 @@ type (
 	queryEngine interface {
 		Open() error
 		IsMySQLReachable() error
-		StopServing()
 		Close()
 	}
 
 	txEngine interface {
-		AcceptReadWrite() error
-		AcceptReadOnly() error
+		AcceptReadWrite()
+		AcceptReadOnly()
 		Close()
 	}
 
@@ -155,16 +165,32 @@ type (
 		Open() error
 		Close()
 	}
+
+	onlineDDLExecutor interface {
+		Open() error
+		Close()
+	}
+
+	lagThrottler interface {
+		Open() error
+		Close()
+	}
+
+	tableGarbageCollector interface {
+		Open() error
+		Close()
+	}
 )
 
 // Init performs the second phase of initialization.
-func (sm *stateManager) Init(env tabletenv.Env, target querypb.Target) {
-	sm.target = target
+func (sm *stateManager) Init(env tabletenv.Env, target *querypb.Target) {
+	sm.target = proto.Clone(target).(*querypb.Target)
 	sm.transitioning = sync2.NewSemaphore(1, 0)
 	sm.checkMySQLThrottler = sync2.NewSemaphore(1, 0)
 	sm.timebombDuration = env.Config().OltpReadPool.TimeoutSeconds.Get() * 10
 	sm.hcticks = timer.NewTimer(env.Config().Healthcheck.IntervalSeconds.Get())
-	sm.unhealthyThreshold = env.Config().Healthcheck.UnhealthyThresholdSeconds.Get()
+	sm.unhealthyThreshold = sync2.NewAtomicDuration(env.Config().Healthcheck.UnhealthyThresholdSeconds.Get())
+	sm.shutdownGracePeriod = env.Config().GracePeriods.ShutdownSeconds.Get()
 	sm.transitionGracePeriod = env.Config().GracePeriods.TransitionSeconds.Get()
 }
 
@@ -218,16 +244,16 @@ func (sm *stateManager) execTransition(tabletType topodatapb.TabletType, state s
 	var err error
 	switch state {
 	case StateServing:
-		if tabletType == topodatapb.TabletType_MASTER {
-			err = sm.serveMaster()
+		if tabletType == topodatapb.TabletType_PRIMARY {
+			err = sm.servePrimary()
 		} else {
-			err = sm.serveNonMaster(tabletType)
+			err = sm.serveNonPrimary(tabletType)
 		}
 	case StateNotServing:
-		if tabletType == topodatapb.TabletType_MASTER {
-			err = sm.unserveMaster()
+		if tabletType == topodatapb.TabletType_PRIMARY {
+			err = sm.unservePrimary()
 		} else {
-			err = sm.unserveNonMaster(tabletType)
+			err = sm.unserveNonPrimary(tabletType)
 		}
 	case StateNotConnected:
 		sm.closeAll()
@@ -324,36 +350,19 @@ func (sm *stateManager) StartRequest(ctx context.Context, target *querypb.Target
 
 	if sm.state != StateServing || !sm.replHealthy {
 		// This specific error string needs to be returned for vtgate buffering to work.
-		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "operation not allowed in state NOT_SERVING")
+		return vterrors.New(vtrpcpb.Code_CLUSTER_EVENT, vterrors.NotServing)
 	}
 
 	shuttingDown := sm.wantState != StateServing
 	if shuttingDown && !allowOnShutdown {
 		// This specific error string needs to be returned for vtgate buffering to work.
-		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "operation not allowed in state SHUTTING_DOWN")
+		return vterrors.New(vtrpcpb.Code_CLUSTER_EVENT, vterrors.ShuttingDown)
 	}
 
-	if target != nil {
-		switch {
-		case target.Keyspace != sm.target.Keyspace:
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid keyspace %v does not match expected %v", target.Keyspace, sm.target.Keyspace)
-		case target.Shard != sm.target.Shard:
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid shard %v does not match expected %v", target.Shard, sm.target.Shard)
-		case target.TabletType != sm.target.TabletType:
-			for _, otherType := range sm.alsoAllow {
-				if target.TabletType == otherType {
-					goto ok
-				}
-			}
-			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "invalid tablet type: %v, want: %v or %v", target.TabletType, sm.target.TabletType, sm.alsoAllow)
-		}
-	} else {
-		if !tabletenv.IsLocalContext(ctx) {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "No target")
-		}
+	err = sm.verifyTargetLocked(ctx, target)
+	if err != nil {
+		return err
 	}
-
-ok:
 	sm.requests.Add(1)
 	return nil
 }
@@ -368,6 +377,10 @@ func (sm *stateManager) EndRequest() {
 func (sm *stateManager) VerifyTarget(ctx context.Context, target *querypb.Target) error {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
+	return sm.verifyTargetLocked(ctx, target)
+}
+
+func (sm *stateManager) verifyTargetLocked(ctx context.Context, target *querypb.Target) error {
 	if target != nil {
 		switch {
 		case target.Keyspace != sm.target.Keyspace:
@@ -380,7 +393,7 @@ func (sm *stateManager) VerifyTarget(ctx context.Context, target *querypb.Target
 					return nil
 				}
 			}
-			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "invalid tablet type: %v, want: %v or %v", target.TabletType, sm.target.TabletType, sm.alsoAllow)
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s: %v, want: %v or %v", vterrors.WrongTablet, target.TabletType, sm.target.TabletType, sm.alsoAllow)
 		}
 	} else {
 		if !tabletenv.IsLocalContext(ctx) {
@@ -390,65 +403,76 @@ func (sm *stateManager) VerifyTarget(ctx context.Context, target *querypb.Target
 	return nil
 }
 
-func (sm *stateManager) serveMaster() error {
+func (sm *stateManager) servePrimary() error {
 	sm.watcher.Close()
 
-	if err := sm.connect(topodatapb.TabletType_MASTER); err != nil {
+	if err := sm.connect(topodatapb.TabletType_PRIMARY); err != nil {
 		return err
 	}
 
-	sm.rt.MakeMaster()
+	sm.rt.MakePrimary()
 	sm.tracker.Open()
-	if err := sm.te.AcceptReadWrite(); err != nil {
-		return err
-	}
+	// We instantly kill all stateful queries to allow for
+	// te to quickly transition into RW, but olap and stateless
+	// queries can continue serving.
+	sm.statefulql.TerminateAll()
+	sm.te.AcceptReadWrite()
 	sm.messager.Open()
-	sm.setState(topodatapb.TabletType_MASTER, StateServing)
+	sm.throttler.Open()
+	sm.tableGC.Open()
+	sm.ddle.Open()
+	sm.setState(topodatapb.TabletType_PRIMARY, StateServing)
 	return nil
 }
 
-func (sm *stateManager) unserveMaster() error {
+func (sm *stateManager) unservePrimary() error {
 	sm.unserveCommon()
 
 	sm.watcher.Close()
 
-	if err := sm.connect(topodatapb.TabletType_MASTER); err != nil {
+	if err := sm.connect(topodatapb.TabletType_PRIMARY); err != nil {
 		return err
 	}
 
-	sm.rt.MakeMaster()
-	sm.setState(topodatapb.TabletType_MASTER, StateNotServing)
+	sm.rt.MakePrimary()
+	sm.setState(topodatapb.TabletType_PRIMARY, StateNotServing)
 	return nil
 }
 
-func (sm *stateManager) serveNonMaster(wantTabletType topodatapb.TabletType) error {
+func (sm *stateManager) serveNonPrimary(wantTabletType topodatapb.TabletType) error {
+	// We are likely transitioning from primary. We have to honor
+	// the shutdown grace period.
+	cancel := sm.handleShutdownGracePeriod()
+	defer cancel()
+
+	sm.ddle.Close()
+	sm.tableGC.Close()
 	sm.messager.Close()
 	sm.tracker.Close()
-	sm.se.MakeNonMaster()
+	sm.se.MakeNonPrimary()
 
 	if err := sm.connect(wantTabletType); err != nil {
 		return err
 	}
 
-	if err := sm.te.AcceptReadOnly(); err != nil {
-		return err
-	}
-	sm.rt.MakeNonMaster()
+	sm.te.AcceptReadOnly()
+	sm.rt.MakeNonPrimary()
 	sm.watcher.Open()
+	sm.throttler.Open()
 	sm.setState(wantTabletType, StateServing)
 	return nil
 }
 
-func (sm *stateManager) unserveNonMaster(wantTabletType topodatapb.TabletType) error {
+func (sm *stateManager) unserveNonPrimary(wantTabletType topodatapb.TabletType) error {
 	sm.unserveCommon()
 
-	sm.se.MakeNonMaster()
+	sm.se.MakeNonPrimary()
 
 	if err := sm.connect(wantTabletType); err != nil {
 		return err
 	}
 
-	sm.rt.MakeNonMaster()
+	sm.rt.MakeNonPrimary()
 	sm.watcher.Open()
 	sm.setState(wantTabletType, StateNotServing)
 	return nil
@@ -469,11 +493,46 @@ func (sm *stateManager) connect(tabletType topodatapb.TabletType) error {
 }
 
 func (sm *stateManager) unserveCommon() {
+	log.Infof("Started execution of unserveCommon")
+	cancel := sm.handleShutdownGracePeriod()
+	log.Infof("Finished execution of handleShutdownGracePeriod")
+	defer cancel()
+
+	log.Infof("Started online ddl executor close")
+	sm.ddle.Close()
+	log.Infof("Finished online ddl executor close. Started table garbage collector close")
+	sm.tableGC.Close()
+	log.Infof("Finished table garbage collector close. Started lag throttler close")
+	sm.throttler.Close()
+	log.Infof("Finished lag throttler close. Started messager close")
 	sm.messager.Close()
+	log.Infof("Finished messager close. Started txEngine close")
 	sm.te.Close()
-	sm.qe.StopServing()
+	log.Infof("Finished txEngine close. Killing all OLAP queries")
+	sm.olapql.TerminateAll()
+	log.Info("Finished Killing all OLAP queries. Started tracker close")
 	sm.tracker.Close()
+	log.Infof("Finished tracker close. Started wait for requests")
 	sm.requests.Wait()
+	log.Infof("Finished wait for requests. Finished execution of unserveCommon")
+}
+
+func (sm *stateManager) handleShutdownGracePeriod() (cancel func()) {
+	if sm.shutdownGracePeriod == 0 {
+		return func() {}
+	}
+	ctx, cancel := context.WithCancel(context.TODO())
+	go func() {
+		if err := timer.SleepContext(ctx, sm.shutdownGracePeriod); err != nil {
+			return
+		}
+		log.Infof("Grace Period %v exceeded. Killing all OLTP queries.", sm.shutdownGracePeriod)
+		sm.statelessql.TerminateAll()
+		log.Infof("Killed all stateful OLTP queries.")
+		sm.statefulql.TerminateAll()
+		log.Infof("Killed all OLTP queries.")
+	}()
+	return cancel
 }
 
 func (sm *stateManager) closeAll() {
@@ -510,11 +569,12 @@ func (sm *stateManager) setTimeBomb() chan struct{} {
 func (sm *stateManager) setState(tabletType topodatapb.TabletType, state servingState) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
-
 	if tabletType == topodatapb.TabletType_UNKNOWN {
 		tabletType = sm.wantTabletType
 	}
-	log.Infof("TabletServer transition: %v -> %v", sm.stateStringLocked(sm.target.TabletType, sm.state), sm.stateStringLocked(tabletType, state))
+	log.Infof("TabletServer transition: %v -> %v for tablet %s:%s/%s",
+		sm.stateStringLocked(sm.target.TabletType, sm.state), sm.stateStringLocked(tabletType, state),
+		sm.target.Cell, sm.target.Keyspace, sm.target.Shard)
 	sm.handleGracePeriod(tabletType)
 	sm.target.TabletType = tabletType
 	if sm.state == StateNotConnected {
@@ -528,21 +588,21 @@ func (sm *stateManager) setState(tabletType topodatapb.TabletType, state serving
 }
 
 func (sm *stateManager) stateStringLocked(tabletType topodatapb.TabletType, state servingState) string {
-	if tabletType != topodatapb.TabletType_MASTER {
+	if tabletType != topodatapb.TabletType_PRIMARY {
 		return fmt.Sprintf("%v: %v", tabletType, state)
 	}
 	return fmt.Sprintf("%v: %v, %v", tabletType, state, sm.terTimestamp.Local().Format("Jan 2, 2006 at 15:04:05 (MST)"))
 }
 
 func (sm *stateManager) handleGracePeriod(tabletType topodatapb.TabletType) {
-	if tabletType != topodatapb.TabletType_MASTER {
-		// We allow serving of previous type only for a master transition.
+	if tabletType != topodatapb.TabletType_PRIMARY {
+		// We allow serving of previous type only for a primary transition.
 		sm.alsoAllow = nil
 		return
 	}
 
-	if tabletType == topodatapb.TabletType_MASTER &&
-		sm.target.TabletType != topodatapb.TabletType_MASTER &&
+	if tabletType == topodatapb.TabletType_PRIMARY &&
+		sm.target.TabletType != topodatapb.TabletType_PRIMARY &&
 		sm.transitionGracePeriod != 0 {
 
 		sm.alsoAllow = []topodatapb.TabletType{sm.target.TabletType}
@@ -570,7 +630,7 @@ func (sm *stateManager) Broadcast() {
 }
 
 func (sm *stateManager) refreshReplHealthLocked() (time.Duration, error) {
-	if sm.target.TabletType == topodatapb.TabletType_MASTER {
+	if sm.target.TabletType == topodatapb.TabletType_PRIMARY {
 		sm.replHealthy = true
 		return 0, nil
 	}
@@ -581,7 +641,7 @@ func (sm *stateManager) refreshReplHealthLocked() (time.Duration, error) {
 		}
 		sm.replHealthy = false
 	} else {
-		if lag > sm.unhealthyThreshold {
+		if lag > sm.unhealthyThreshold.Get() {
 			if sm.replHealthy {
 				log.Infof("Going unhealthy due to high replication lag: %v", lag)
 			}
@@ -626,7 +686,7 @@ func (sm *stateManager) isServingLocked() bool {
 	return sm.state == StateServing && sm.wantState == StateServing && sm.replHealthy && !sm.lameduck
 }
 
-func (sm *stateManager) ApppendDetails(details []*kv) []*kv {
+func (sm *stateManager) AppendDetails(details []*kv) []*kv {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 
@@ -695,11 +755,10 @@ func (sm *stateManager) State() servingState {
 	return sm.state
 }
 
-func (sm *stateManager) Target() querypb.Target {
+func (sm *stateManager) Target() *querypb.Target {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
-	target := sm.target
-	return target
+	return proto.Clone(sm.target).(*querypb.Target)
 }
 
 // IsServingString returns the name of the current TabletServer state.
@@ -708,4 +767,8 @@ func (sm *stateManager) IsServingString() string {
 		return "SERVING"
 	}
 	return "NOT_SERVING"
+}
+
+func (sm *stateManager) SetUnhealthyThreshold(v time.Duration) {
+	sm.unhealthyThreshold.Set(v)
 }

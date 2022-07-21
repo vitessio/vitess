@@ -25,9 +25,10 @@ import (
 
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
 
-	"github.com/golang/protobuf/proto"
+	"context"
+
 	"github.com/stretchr/testify/require"
-	"golang.org/x/net/context"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
@@ -308,11 +309,11 @@ func TestExecutorReadTransaction(t *testing.T) {
 		Participants: []*querypb.Target{{
 			Keyspace:   "test1",
 			Shard:      "0",
-			TabletType: topodatapb.TabletType_MASTER,
+			TabletType: topodatapb.TabletType_PRIMARY,
 		}, {
 			Keyspace:   "test2",
 			Shard:      "1",
-			TabletType: topodatapb.TabletType_MASTER,
+			TabletType: topodatapb.TabletType_PRIMARY,
 		}},
 	}
 	if !proto.Equal(got, want) {
@@ -500,7 +501,7 @@ func newTestTxExecutor(t *testing.T) (txe *TxExecutor, tsv *TabletServer, db *fa
 	db.AddQueryPattern("insert into _vt\\.redo_statement.*", &sqltypes.Result{})
 	db.AddQuery("delete from _vt.redo_state where dtid = 'aa'", &sqltypes.Result{})
 	db.AddQuery("delete from _vt.redo_statement where dtid = 'aa'", &sqltypes.Result{})
-	db.AddQuery("update test_table set name = 2 where pk = 1 limit 10001", &sqltypes.Result{})
+	db.AddQuery("update test_table set `name` = 2 where pk = 1 limit 10001", &sqltypes.Result{})
 	return &TxExecutor{
 		ctx:      ctx,
 		logStats: logStats,
@@ -517,7 +518,7 @@ func newShortAgeExecutor(t *testing.T) (txe *TxExecutor, tsv *TabletServer, db *
 	db.AddQueryPattern("insert into _vt\\.redo_statement.*", &sqltypes.Result{})
 	db.AddQuery("delete from _vt.redo_state where dtid = 'aa'", &sqltypes.Result{})
 	db.AddQuery("delete from _vt.redo_statement where dtid = 'aa'", &sqltypes.Result{})
-	db.AddQuery("update test_table set name = 2 where pk = 1 limit 10001", &sqltypes.Result{})
+	db.AddQuery("update test_table set `name` = 2 where pk = 1 limit 10001", &sqltypes.Result{})
 	return &TxExecutor{
 		ctx:      ctx,
 		logStats: logStats,
@@ -540,7 +541,7 @@ func newNoTwopcExecutor(t *testing.T) (txe *TxExecutor, tsv *TabletServer, db *f
 // newTxForPrep creates a non-empty transaction.
 func newTxForPrep(tsv *TabletServer) int64 {
 	txid := newTransaction(tsv, nil)
-	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	_, err := tsv.Execute(ctx, &target, "update test_table set name = 2 where pk = 1", nil, txid, 0, nil)
 	if err != nil {
 		panic(err)

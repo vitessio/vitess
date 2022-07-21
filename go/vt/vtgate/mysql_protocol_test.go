@@ -18,16 +18,18 @@ package vtgate
 
 import (
 	"net"
-	"reflect"
 	"strconv"
 	"testing"
+
+	"vitess.io/vitess/go/test/utils"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"golang.org/x/net/context"
+	"context"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/vttablet/sandboxconn"
 
@@ -38,7 +40,7 @@ import (
 func TestMySQLProtocolExecute(t *testing.T) {
 	createSandbox(KsTestUnsharded)
 	hcVTGateTest.Reset()
-	sbc := hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_MASTER, true, 1, nil)
+	sbc := hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
 
 	c, err := mysqlConnect(&mysql.ConnParams{})
 	if err != nil {
@@ -48,12 +50,11 @@ func TestMySQLProtocolExecute(t *testing.T) {
 
 	qr, err := c.ExecuteFetch("select id from t1", 10, true /* wantfields */)
 	require.NoError(t, err)
-	if !reflect.DeepEqual(sandboxconn.SingleRowResult, qr) {
-		t.Errorf("want \n%+v, got \n%+v", sandboxconn.SingleRowResult, qr)
-	}
+	utils.MustMatch(t, sandboxconn.SingleRowResult, qr, "mismatch in rows")
 
 	options := &querypb.ExecuteOptions{
 		IncludedFields: querypb.ExecuteOptions_ALL,
+		Workload:       querypb.ExecuteOptions_OLTP,
 	}
 	if !proto.Equal(sbc.Options[0], options) {
 		t.Errorf("got ExecuteOptions \n%+v, want \n%+v", sbc.Options[0], options)
@@ -63,7 +64,7 @@ func TestMySQLProtocolExecute(t *testing.T) {
 func TestMySQLProtocolStreamExecute(t *testing.T) {
 	createSandbox(KsTestUnsharded)
 	hcVTGateTest.Reset()
-	sbc := hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_MASTER, true, 1, nil)
+	sbc := hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
 
 	c, err := mysqlConnect(&mysql.ConnParams{})
 	if err != nil {
@@ -76,9 +77,7 @@ func TestMySQLProtocolStreamExecute(t *testing.T) {
 
 	qr, err := c.ExecuteFetch("select id from t1", 10, true /* wantfields */)
 	require.NoError(t, err)
-	if !reflect.DeepEqual(sandboxconn.SingleRowResult, qr) {
-		t.Errorf("want \n%+v, got \n%+v", sandboxconn.SingleRowResult, qr)
-	}
+	utils.MustMatch(t, sandboxconn.SingleRowResult, qr, "mismatch in rows")
 
 	options := &querypb.ExecuteOptions{
 		IncludedFields: querypb.ExecuteOptions_ALL,
@@ -92,9 +91,9 @@ func TestMySQLProtocolStreamExecute(t *testing.T) {
 func TestMySQLProtocolExecuteUseStatement(t *testing.T) {
 	createSandbox(KsTestUnsharded)
 	hcVTGateTest.Reset()
-	hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_MASTER, true, 1, nil)
+	hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
 
-	c, err := mysqlConnect(&mysql.ConnParams{DbName: "@master"})
+	c, err := mysqlConnect(&mysql.ConnParams{DbName: "@primary"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,23 +101,23 @@ func TestMySQLProtocolExecuteUseStatement(t *testing.T) {
 
 	qr, err := c.ExecuteFetch("select id from t1", 10, true /* wantfields */)
 	require.NoError(t, err)
-	require.Equal(t, sandboxconn.SingleRowResult, qr)
+	utils.MustMatch(t, sandboxconn.SingleRowResult, qr)
 
 	qr, err = c.ExecuteFetch("show vitess_target", 1, false)
 	require.NoError(t, err)
-	assert.Equal(t, "VARCHAR(\"@master\")", qr.Rows[0][0].String())
+	assert.Equal(t, "VARCHAR(\"@primary\")", qr.Rows[0][0].String())
 
 	_, err = c.ExecuteFetch("use TestUnsharded", 0, false)
 	require.NoError(t, err)
 
 	qr, err = c.ExecuteFetch("select id from t1", 10, true /* wantfields */)
 	require.NoError(t, err)
-	assert.Equal(t, sandboxconn.SingleRowResult, qr)
+	utils.MustMatch(t, sandboxconn.SingleRowResult, qr)
 
 	// No such keyspace this will fail
 	_, err = c.ExecuteFetch("use InvalidKeyspace", 0, false)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "Unknown database 'InvalidKeyspace' (errno 1049) (sqlstate 42000)")
+	assert.Contains(t, err.Error(), "unknown database 'InvalidKeyspace' (errno 1049) (sqlstate 42000)")
 
 	// That doesn't reset the vitess_target
 	qr, err = c.ExecuteFetch("show vitess_target", 1, false)
@@ -131,18 +130,18 @@ func TestMySQLProtocolExecuteUseStatement(t *testing.T) {
 	// No replica tablets, this should also fail
 	_, err = c.ExecuteFetch("select id from t1", 10, true /* wantfields */)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "no valid tablet")
+	assert.Contains(t, err.Error(), `no healthy tablet available for 'keyspace:"TestUnsharded" shard:"0" tablet_type:REPLICA`)
 }
 
 func TestMysqlProtocolInvalidDB(t *testing.T) {
 	_, err := mysqlConnect(&mysql.ConnParams{DbName: "invalidDB"})
-	require.EqualError(t, err, "vtgate: : Unknown database 'invalidDB' (errno 1049) (sqlstate 42000) (errno 1049) (sqlstate 42000)")
+	require.EqualError(t, err, "unknown database 'invalidDB' (errno 1049) (sqlstate 42000)")
 }
 
 func TestMySQLProtocolClientFoundRows(t *testing.T) {
 	createSandbox(KsTestUnsharded)
 	hcVTGateTest.Reset()
-	sbc := hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_MASTER, true, 1, nil)
+	sbc := hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
 
 	c, err := mysqlConnect(&mysql.ConnParams{Flags: mysql.CapabilityClientFoundRows})
 	if err != nil {
@@ -152,14 +151,14 @@ func TestMySQLProtocolClientFoundRows(t *testing.T) {
 
 	qr, err := c.ExecuteFetch("select id from t1", 10, true /* wantfields */)
 	require.NoError(t, err)
-	if !reflect.DeepEqual(sandboxconn.SingleRowResult, qr) {
-		t.Errorf("want \n%+v, got \n%+v", sandboxconn.SingleRowResult, qr)
-	}
+	utils.MustMatch(t, sandboxconn.SingleRowResult, qr)
 
 	options := &querypb.ExecuteOptions{
 		IncludedFields:  querypb.ExecuteOptions_ALL,
 		ClientFoundRows: true,
+		Workload:        querypb.ExecuteOptions_OLTP,
 	}
+
 	if !proto.Equal(sbc.Options[0], options) {
 		t.Errorf("got ExecuteOptions \n%+v, want \n%+v", sbc.Options[0], options)
 	}

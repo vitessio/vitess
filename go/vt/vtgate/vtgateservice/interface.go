@@ -19,7 +19,8 @@ limitations under the License.
 package vtgateservice
 
 import (
-	"golang.org/x/net/context"
+	"context"
+
 	"vitess.io/vitess/go/sqltypes"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -35,12 +36,19 @@ type VTGateService interface {
 	Execute(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable) (*vtgatepb.Session, *sqltypes.Result, error)
 	ExecuteBatch(ctx context.Context, session *vtgatepb.Session, sqlList []string, bindVariablesList []map[string]*querypb.BindVariable) (*vtgatepb.Session, []sqltypes.QueryResponse, error)
 	StreamExecute(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) error
+	// Prepare statement support
+	Prepare(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable) (*vtgatepb.Session, []*querypb.Field, error)
+
+	// CloseSession closes the session, rolling back any implicit transactions.
+	// This has the same effect as if a "rollback" statement was executed,
+	// but does not affect the query statistics.
+	CloseSession(ctx context.Context, session *vtgatepb.Session) error
 
 	// 2PC support
 	ResolveTransaction(ctx context.Context, dtid string) error
 
 	// Update Stream methods
-	VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error
+	VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter, flags *vtgatepb.VStreamFlags, send func([]*binlogdatapb.VEvent) error) error
 
 	// HandlePanic should be called with defer at the beginning of each
 	// RPC implementation method, before calling any of the previous methods

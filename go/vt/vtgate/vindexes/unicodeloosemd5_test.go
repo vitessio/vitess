@@ -17,10 +17,12 @@ limitations under the License.
 package vindexes
 
 import (
+	"context"
 	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 )
@@ -41,40 +43,44 @@ func TestUnicodeLooseMD5Info(t *testing.T) {
 
 func TestUnicodeLooseMD5Map(t *testing.T) {
 	tcases := []struct {
-		in, out string
+		in  sqltypes.Value
+		out string
 	}{{
-		in:  "Test",
+		in:  sqltypes.NewVarBinary("Test"),
 		out: "\v^۴\x01\xfdu$96\x90I\x1dd\xf1\xf5",
 	}, {
-		in:  "TEST",
+		in:  sqltypes.NewVarBinary("TEST"),
 		out: "\v^۴\x01\xfdu$96\x90I\x1dd\xf1\xf5",
 	}, {
-		in:  "Te\u0301st",
+		in:  sqltypes.NewVarBinary("Te\u0301st"),
 		out: "\v^۴\x01\xfdu$96\x90I\x1dd\xf1\xf5",
 	}, {
-		in:  "Tést",
+		in:  sqltypes.NewVarBinary("Tést"),
 		out: "\v^۴\x01\xfdu$96\x90I\x1dd\xf1\xf5",
 	}, {
-		in:  "Bést",
+		in:  sqltypes.NewVarBinary("Bést"),
 		out: "²3.Os\xd0\aA\x02bIpo/\xb6",
 	}, {
-		in:  "Test ",
+		in:  sqltypes.NewVarBinary("Test "),
 		out: "\v^۴\x01\xfdu$96\x90I\x1dd\xf1\xf5",
 	}, {
-		in:  " Test",
+		in:  sqltypes.NewVarBinary(" Test"),
 		out: "\xa2\xe3Q\\~\x8d\xf1\xff\xd2\xcc\xfc\x11Ʊ\x9d\xd1",
 	}, {
-		in:  "Test\t",
+		in:  sqltypes.NewVarBinary("Test\t"),
 		out: "\x82Em\xd8z\x9cz\x02\xb1\xc2\x05kZ\xba\xa2r",
 	}, {
-		in:  "TéstLooong",
+		in:  sqltypes.NewVarBinary("TéstLooong"),
 		out: "\x96\x83\xe1+\x80C\f\xd4S\xf5\xdfߺ\x81ɥ",
 	}, {
-		in:  "T",
+		in:  sqltypes.NewVarBinary("T"),
 		out: "\xac\x0f\x91y\xf5\x1d\xb8\u007f\xe8\xec\xc0\xcf@ʹz",
+	}, {
+		in:  sqltypes.NULL,
+		out: "\xd4\x1d\x8cُ\x00\xb2\x04\xe9\x80\t\x98\xec\xf8B~",
 	}}
 	for _, tcase := range tcases {
-		got, err := charVindexMD5.Map(nil, []sqltypes.Value{sqltypes.NewVarBinary(tcase.in)})
+		got, err := charVindexMD5.Map(context.Background(), nil, []sqltypes.Value{tcase.in})
 		if err != nil {
 			t.Error(err)
 		}
@@ -88,7 +94,7 @@ func TestUnicodeLooseMD5Map(t *testing.T) {
 func TestUnicodeLooseMD5Verify(t *testing.T) {
 	ids := []sqltypes.Value{sqltypes.NewVarBinary("Test"), sqltypes.NewVarBinary("TEst"), sqltypes.NewVarBinary("different")}
 	ksids := [][]byte{[]byte("\v^۴\x01\xfdu$96\x90I\x1dd\xf1\xf5"), []byte("\v^۴\x01\xfdu$96\x90I\x1dd\xf1\xf5"), []byte("\v^۴\x01\xfdu$96\x90I\x1dd\xf1\xf5")}
-	got, err := charVindexMD5.Verify(nil, ids, ksids)
+	got, err := charVindexMD5.Verify(context.Background(), nil, ids, ksids)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -29,6 +29,8 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
+const QueryToTriggerWithDDL = "SELECT _vt_no_such_column__init_schema FROM _vt.vreplication LIMIT 1"
+
 // WithDDL allows you to execute statements against
 // tables whose schema may not be up-to-date. If the tables
 // don't exist or result in a schema error, it can apply a series
@@ -45,19 +47,31 @@ func New(ddls []string) *WithDDL {
 	}
 }
 
+// DDLs returns a copy of the ddls
+func (wd *WithDDL) DDLs() []string {
+	return wd.ddls[:]
+}
+
 // Exec executes the query using the supplied function.
 // If there are any schema errors, it applies the DDLs and retries.
+// It takes 2 functions, one to run the query and the other to run the
+// DDL commands. This is generally needed so that different users can be used
+// to run the commands. i.e. AllPrivs user for DDLs and App user for query commands.
 // Funcs can be any of these types:
 // func(query string) (*sqltypes.Result, error)
 // func(query string, maxrows int) (*sqltypes.Result, error)
 // func(query string, maxrows int, wantfields bool) (*sqltypes.Result, error)
 // func(ctx context.Context, query string, maxrows int, wantfields bool) (*sqltypes.Result, error)
-func (wd *WithDDL) Exec(ctx context.Context, query string, f interface{}) (*sqltypes.Result, error) {
-	exec, err := wd.unify(ctx, f)
+func (wd *WithDDL) Exec(ctx context.Context, query string, fQuery any, fDDL any) (*sqltypes.Result, error) {
+	execQuery, err := wd.unify(ctx, fQuery)
 	if err != nil {
 		return nil, err
 	}
-	qr, err := exec(query)
+	execDDL, err := wd.unify(ctx, fDDL)
+	if err != nil {
+		return nil, err
+	}
+	qr, err := execQuery(query)
 	if err == nil {
 		return qr, nil
 	}
@@ -66,24 +80,24 @@ func (wd *WithDDL) Exec(ctx context.Context, query string, f interface{}) (*sqlt
 	}
 
 	log.Infof("Updating schema for %v and retrying: %v", sqlparser.TruncateForUI(err.Error()), err)
-	for _, query := range wd.ddls {
-		_, merr := exec(query)
+	for _, applyQuery := range wd.ddls {
+		_, merr := execDDL(applyQuery)
 		if merr == nil {
 			continue
 		}
-		if wd.isSchemaApplyError(merr) {
+		if mysql.IsSchemaApplyError(merr) {
 			continue
 		}
-		log.Warningf("DDL apply %v failed: %v", query, merr)
+		log.Warningf("DDL apply %v failed: %v", applyQuery, merr)
 		// Return the original error.
 		return nil, err
 	}
-	return exec(query)
+	return execQuery(query)
 }
 
 // ExecIgnore executes the query using the supplied function.
 // If there are any schema errors, it returns an empty result.
-func (wd *WithDDL) ExecIgnore(ctx context.Context, query string, f interface{}) (*sqltypes.Result, error) {
+func (wd *WithDDL) ExecIgnore(ctx context.Context, query string, f any) (*sqltypes.Result, error) {
 	exec, err := wd.unify(ctx, f)
 	if err != nil {
 		return nil, err
@@ -98,7 +112,7 @@ func (wd *WithDDL) ExecIgnore(ctx context.Context, query string, f interface{}) 
 	return &sqltypes.Result{}, nil
 }
 
-func (wd *WithDDL) unify(ctx context.Context, f interface{}) (func(query string) (*sqltypes.Result, error), error) {
+func (wd *WithDDL) unify(ctx context.Context, f any) (func(query string) (*sqltypes.Result, error), error) {
 	switch f := f.(type) {
 	case func(query string) (*sqltypes.Result, error):
 		return f, nil
@@ -125,18 +139,6 @@ func (wd *WithDDL) isSchemaError(err error) bool {
 	}
 	switch merr.Num {
 	case mysql.ERNoSuchTable, mysql.ERBadDb, mysql.ERWrongValueCountOnRow, mysql.ERBadFieldError:
-		return true
-	}
-	return false
-}
-
-func (wd *WithDDL) isSchemaApplyError(err error) bool {
-	merr, isSQLErr := err.(*mysql.SQLError)
-	if !isSQLErr {
-		return false
-	}
-	switch merr.Num {
-	case mysql.ERTableExists, mysql.ERDupFieldName:
 		return true
 	}
 	return false

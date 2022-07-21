@@ -33,7 +33,7 @@ func (pool *IDPool) want(want *IDPool, t *testing.T) {
 }
 
 func TestIDPoolFirstGet(t *testing.T) {
-	pool := NewIDPool()
+	pool := NewIDPool(0)
 
 	if got := pool.Get(); got != 1 {
 		t.Errorf("pool.Get() = %v, want 1", got)
@@ -43,7 +43,7 @@ func TestIDPoolFirstGet(t *testing.T) {
 }
 
 func TestIDPoolSecondGet(t *testing.T) {
-	pool := NewIDPool()
+	pool := NewIDPool(0)
 	pool.Get()
 
 	if got := pool.Get(); got != 2 {
@@ -54,7 +54,7 @@ func TestIDPoolSecondGet(t *testing.T) {
 }
 
 func TestIDPoolPutToUsedSet(t *testing.T) {
-	pool := NewIDPool()
+	pool := NewIDPool(0)
 	id1 := pool.Get()
 	pool.Get()
 	pool.Put(id1)
@@ -63,7 +63,7 @@ func TestIDPoolPutToUsedSet(t *testing.T) {
 }
 
 func TestIDPoolPutMaxUsed1(t *testing.T) {
-	pool := NewIDPool()
+	pool := NewIDPool(0)
 	id1 := pool.Get()
 	pool.Put(id1)
 
@@ -71,7 +71,7 @@ func TestIDPoolPutMaxUsed1(t *testing.T) {
 }
 
 func TestIDPoolPutMaxUsed2(t *testing.T) {
-	pool := NewIDPool()
+	pool := NewIDPool(0)
 	pool.Get()
 	id2 := pool.Get()
 	pool.Put(id2)
@@ -80,7 +80,7 @@ func TestIDPoolPutMaxUsed2(t *testing.T) {
 }
 
 func TestIDPoolGetFromUsedSet(t *testing.T) {
-	pool := NewIDPool()
+	pool := NewIDPool(0)
 	id1 := pool.Get()
 	pool.Get()
 	pool.Put(id1)
@@ -104,7 +104,7 @@ func wantError(want string, t *testing.T) {
 }
 
 func TestIDPoolPut0(t *testing.T) {
-	pool := NewIDPool()
+	pool := NewIDPool(0)
 	pool.Get()
 
 	defer wantError("invalid value", t)
@@ -112,7 +112,7 @@ func TestIDPoolPut0(t *testing.T) {
 }
 
 func TestIDPoolPutInvalid(t *testing.T) {
-	pool := NewIDPool()
+	pool := NewIDPool(0)
 	pool.Get()
 
 	defer wantError("invalid value", t)
@@ -120,7 +120,7 @@ func TestIDPoolPutInvalid(t *testing.T) {
 }
 
 func TestIDPoolPutDuplicate(t *testing.T) {
-	pool := NewIDPool()
+	pool := NewIDPool(0)
 	pool.Get()
 	pool.Get()
 	pool.Put(1)

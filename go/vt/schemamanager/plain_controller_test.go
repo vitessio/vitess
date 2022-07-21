@@ -20,12 +20,12 @@ import (
 	"fmt"
 	"testing"
 
-	"golang.org/x/net/context"
+	"context"
 )
 
 func TestPlainController(t *testing.T) {
 	sql := "CREATE TABLE test_table (pk int)"
-	controller := NewPlainController(sql, "test_keyspace")
+	controller := NewPlainController([]string{sql}, "test_keyspace")
 	ctx := context.Background()
 	err := controller.Open(ctx)
 	if err != nil {

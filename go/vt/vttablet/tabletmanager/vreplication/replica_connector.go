@@ -21,7 +21,8 @@ import (
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
-	"golang.org/x/net/context"
+	"context"
+
 	"vitess.io/vitess/go/sqltypes"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -36,7 +37,7 @@ import (
 // This is used by binlog server to make vstream connection
 // using the vstream connection, it will parse the events from binglog
 // to fetch the corresponding GTID for required recovery time
-func NewReplicaConnector(connParams *mysql.ConnParams) *replicaConnector {
+func NewReplicaConnector(connParams *mysql.ConnParams) *ReplicaConnector {
 
 	// Construct
 	config := tabletenv.NewDefaultConfig()
@@ -44,13 +45,13 @@ func NewReplicaConnector(connParams *mysql.ConnParams) *replicaConnector {
 		Host: connParams.Host,
 		Port: connParams.Port,
 	}
-	dbCfg.SetDbParams(*connParams, *connParams)
+	dbCfg.SetDbParams(*connParams, *connParams, *connParams)
 	config.DB = dbCfg
-	c := &replicaConnector{conn: connParams}
+	c := &ReplicaConnector{conn: connParams}
 	env := tabletenv.NewEnv(config, "source")
 	c.se = schema.NewEngine(env)
 	c.se.SkipMetaCheck = true
-	c.vstreamer = vstreamer.NewEngine(env, nil, c.se, "")
+	c.vstreamer = vstreamer.NewEngine(env, nil, c.se, nil, "")
 	c.se.InitDBConfig(dbconfigs.New(connParams))
 
 	// Open
@@ -62,32 +63,32 @@ func NewReplicaConnector(connParams *mysql.ConnParams) *replicaConnector {
 
 //-----------------------------------------------------------
 
-type replicaConnector struct {
+type ReplicaConnector struct {
 	conn      *mysql.ConnParams
 	se        *schema.Engine
 	vstreamer *vstreamer.Engine
 }
 
-func (c *replicaConnector) shutdown() {
+func (c *ReplicaConnector) shutdown() {
 	c.vstreamer.Close()
 	c.se.Close()
 }
 
-func (c *replicaConnector) Open(ctx context.Context) error {
+func (c *ReplicaConnector) Open(ctx context.Context) error {
 	return nil
 }
 
-func (c *replicaConnector) Close(ctx context.Context) error {
+func (c *ReplicaConnector) Close(ctx context.Context) error {
 	c.shutdown()
 	return nil
 }
 
-func (c *replicaConnector) VStream(ctx context.Context, startPos string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
+func (c *ReplicaConnector) VStream(ctx context.Context, startPos string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
 	return c.vstreamer.Stream(ctx, startPos, nil, filter, send)
 }
 
 // VStreamRows streams rows from query result
-func (c *replicaConnector) VStreamRows(ctx context.Context, query string, lastpk *querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error {
+func (c *ReplicaConnector) VStreamRows(ctx context.Context, query string, lastpk *querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error {
 	var row []sqltypes.Value
 	if lastpk != nil {
 		r := sqltypes.Proto3ToResult(lastpk)

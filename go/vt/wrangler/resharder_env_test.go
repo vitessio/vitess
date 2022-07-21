@@ -19,10 +19,17 @@ package wrangler
 import (
 	"fmt"
 	"regexp"
+	"runtime/debug"
+	"strings"
 	"sync"
 	"testing"
 
-	"golang.org/x/net/context"
+	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/vt/key"
+
+	"context"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/logutil"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -45,10 +52,43 @@ type testResharderEnv struct {
 	tmc      *testResharderTMClient
 }
 
+var (
+	testMode = "" //"debug"
+)
+
 //----------------------------------------------
 // testResharderEnv
 
-func newTestResharderEnv(sources, targets []string) *testResharderEnv {
+func getPartition(t *testing.T, shards []string) *topodatapb.SrvKeyspace_KeyspacePartition {
+	partition := &topodatapb.SrvKeyspace_KeyspacePartition{
+		ServedType:      topodatapb.TabletType_PRIMARY,
+		ShardReferences: []*topodatapb.ShardReference{},
+	}
+	for _, shard := range shards {
+		keyRange, err := key.ParseShardingSpec(shard)
+		require.NoError(t, err)
+		require.Equal(t, 1, len(keyRange))
+		partition.ShardReferences = append(partition.ShardReferences, &topodatapb.ShardReference{
+			Name:     shard,
+			KeyRange: keyRange[0],
+		})
+	}
+	return partition
+}
+func initTopo(t *testing.T, topo *topo.Server, keyspace string, sources, targets, cells []string) {
+	ctx := context.Background()
+	srvKeyspace := &topodatapb.SrvKeyspace{
+		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{},
+	}
+	srvKeyspace.Partitions = append(srvKeyspace.Partitions, getPartition(t, sources))
+	srvKeyspace.Partitions = append(srvKeyspace.Partitions, getPartition(t, targets))
+	for _, cell := range cells {
+		topo.UpdateSrvKeyspace(ctx, cell, keyspace, srvKeyspace)
+	}
+	topo.ValidateSrvKeyspace(ctx, keyspace, strings.Join(cells, ","))
+}
+
+func newTestResharderEnv(t *testing.T, sources, targets []string) *testResharderEnv {
 	env := &testResharderEnv{
 		keyspace: "ks",
 		workflow: "resharderTest",
@@ -60,15 +100,15 @@ func newTestResharderEnv(sources, targets []string) *testResharderEnv {
 		tmc:      newTestResharderTMClient(),
 	}
 	env.wr = New(logutil.NewConsoleLogger(), env.topoServ, env.tmc)
-
+	initTopo(t, env.topoServ, "ks", sources, targets, []string{"cell"})
 	tabletID := 100
 	for _, shard := range sources {
-		_ = env.addTablet(tabletID, env.keyspace, shard, topodatapb.TabletType_MASTER)
+		_ = env.addTablet(tabletID, env.keyspace, shard, topodatapb.TabletType_PRIMARY)
 		tabletID += 10
 	}
 	tabletID = 200
 	for _, shard := range targets {
-		_ = env.addTablet(tabletID, env.keyspace, shard, topodatapb.TabletType_MASTER)
+		_ = env.addTablet(tabletID, env.keyspace, shard, topodatapb.TabletType_PRIMARY)
 		tabletID += 10
 	}
 	return env
@@ -79,6 +119,7 @@ func (env *testResharderEnv) expectValidation() {
 		tabletID := int(tablet.Alias.Uid)
 		// wr.validateNewWorkflow
 		env.tmc.expectVRQuery(tabletID, fmt.Sprintf("select 1 from _vt.vreplication where db_name='vt_%s' and workflow='%s'", env.keyspace, env.workflow), &sqltypes.Result{})
+		env.tmc.expectVRQuery(tabletID, rsSelectFrozenQuery, &sqltypes.Result{})
 
 		if tabletID >= 200 {
 			// validateTargets
@@ -92,7 +133,7 @@ func (env *testResharderEnv) expectNoRefStream() {
 		tabletID := int(tablet.Alias.Uid)
 		if tabletID < 200 {
 			// readRefStreams
-			env.tmc.expectVRQuery(tabletID, fmt.Sprintf("select workflow, source, cell, tablet_types from _vt.vreplication where db_name='vt_%s'", env.keyspace), &sqltypes.Result{})
+			env.tmc.expectVRQuery(tabletID, fmt.Sprintf("select workflow, source, cell, tablet_types from _vt.vreplication where db_name='vt_%s' and message != 'FROZEN'", env.keyspace), &sqltypes.Result{})
 		}
 	}
 }
@@ -118,12 +159,12 @@ func (env *testResharderEnv) addTablet(id int, keyspace, shard string, tabletTyp
 		},
 	}
 	env.tablets[id] = tablet
-	if err := env.wr.InitTablet(context.Background(), tablet, false /* allowMasterOverride */, true /* createShardAndKeyspace */, false /* allowUpdate */); err != nil {
+	if err := env.wr.TopoServer().InitTablet(context.Background(), tablet, false /* allowPrimaryOverride */, true /* createShardAndKeyspace */, false /* allowUpdate */); err != nil {
 		panic(err)
 	}
-	if tabletType == topodatapb.TabletType_MASTER {
+	if tabletType == topodatapb.TabletType_PRIMARY {
 		_, err := env.wr.ts.UpdateShardFields(context.Background(), keyspace, shard, func(si *topo.ShardInfo) error {
-			si.MasterAlias = tablet.Alias
+			si.PrimaryAlias = tablet.Alias
 			return nil
 		})
 		if err != nil {
@@ -160,7 +201,7 @@ func newTestResharderTMClient() *testResharderTMClient {
 	}
 }
 
-func (tmc *testResharderTMClient) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
+func (tmc *testResharderTMClient) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.GetSchemaRequest) (*tabletmanagerdatapb.SchemaDefinition, error) {
 	return tmc.schema, nil
 }
 
@@ -177,9 +218,14 @@ func (tmc *testResharderTMClient) expectVRQuery(tabletID int, query string, resu
 func (tmc *testResharderTMClient) VReplicationExec(ctx context.Context, tablet *topodatapb.Tablet, query string) (*querypb.QueryResult, error) {
 	tmc.mu.Lock()
 	defer tmc.mu.Unlock()
-
+	if testMode == "debug" {
+		fmt.Printf("Got: %d:%s\n", tablet.Alias.Uid, query)
+	}
 	qrs := tmc.vrQueries[int(tablet.Alias.Uid)]
 	if len(qrs) == 0 {
+		if testMode == "debug" {
+			fmt.Printf("Want: %d:%s, Stack:\n%v\n", tablet.Alias.Uid, query, debug.Stack())
+		}
 		return nil, fmt.Errorf("tablet %v does not expect any more queries: %s", tablet, query)
 	}
 	matched := false
@@ -212,7 +258,7 @@ func (tmc *testResharderTMClient) verifyQueries(t *testing.T) {
 			for _, qr := range qrs {
 				list = append(list, qr.query)
 			}
-			t.Errorf("tablet %v: has unreturned results: %v", tabletID, list)
+			t.Errorf("tablet %v: following queries were not run during the test: \n%v", tabletID, strings.Join(list, "\n"))
 		}
 	}
 }

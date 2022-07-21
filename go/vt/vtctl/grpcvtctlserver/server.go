@@ -39,12 +39,13 @@ import (
 
 // VtctlServer is our RPC server
 type VtctlServer struct {
+	vtctlservicepb.UnimplementedVtctlServer
 	ts *topo.Server
 }
 
 // NewVtctlServer returns a new Vtctl Server for the topo server.
 func NewVtctlServer(ts *topo.Server) *VtctlServer {
-	return &VtctlServer{ts}
+	return &VtctlServer{ts: ts}
 }
 
 // ExecuteVtctlCommand is part of the vtctldatapb.VtctlServer interface

@@ -20,9 +20,10 @@ import (
 	"fmt"
 	"strings"
 
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
@@ -32,11 +33,15 @@ type expressionConverter struct {
 }
 
 func booleanValues(astExpr sqlparser.Expr) evalengine.Expr {
+	var (
+		ON  = evalengine.NewLiteralInt(1)
+		OFF = evalengine.NewLiteralInt(0)
+	)
 	switch node := astExpr.(type) {
-	case *sqlparser.SQLVal:
+	case *sqlparser.Literal:
 		//set autocommit = 'on'
 		if node.Type == sqlparser.StrVal {
-			switch strings.ToLower(string(node.Val)) {
+			switch strings.ToLower(node.Val) {
 			case "on":
 				return ON
 			case "off":
@@ -45,13 +50,11 @@ func booleanValues(astExpr sqlparser.Expr) evalengine.Expr {
 		}
 	case *sqlparser.ColName:
 		//set autocommit = on
-		if node.Name.AtCount() == sqlparser.NoAt {
-			switch node.Name.Lowered() {
-			case "on":
-				return ON
-			case "off":
-				return OFF
-			}
+		switch node.Name.Lowered() {
+		case "on":
+			return ON
+		case "off":
+			return OFF
 		}
 	}
 	return nil
@@ -60,7 +63,8 @@ func booleanValues(astExpr sqlparser.Expr) evalengine.Expr {
 func identifierAsStringValue(astExpr sqlparser.Expr) evalengine.Expr {
 	colName, isColName := astExpr.(*sqlparser.ColName)
 	if isColName {
-		return evalengine.NewLiteralString([]byte(colName.Name.Lowered()))
+		// TODO@collations: proper collation for column name
+		return evalengine.NewLiteralString([]byte(colName.Name.Lowered()), collations.TypedCollation{})
 	}
 	return nil
 }
@@ -78,15 +82,10 @@ func (ec *expressionConverter) convert(astExpr sqlparser.Expr, boolean, identifi
 			return evalExpr, nil
 		}
 	}
-	evalExpr, err := sqlparser.Convert(astExpr)
+	evalExpr, err := evalengine.Translate(astExpr, nil)
 	if err != nil {
-		if err != sqlparser.ErrExprNotSupported {
+		if !strings.Contains(err.Error(), evalengine.ErrTranslateExprNotSupported) {
 			return nil, err
-		}
-		// We have an expression that we can't handle at the vtgate level
-		if !expressionOkToDelegateToTablet(astExpr) {
-			// Uh-oh - this expression is not even safe to delegate to the tablet. Give up.
-			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "expression not supported for SET: %s", sqlparser.String(astExpr))
 		}
 		evalExpr = &evalengine.Column{Offset: len(ec.tabletExpressions)}
 		ec.tabletExpressions = append(ec.tabletExpressions, astExpr)
@@ -94,7 +93,7 @@ func (ec *expressionConverter) convert(astExpr sqlparser.Expr, boolean, identifi
 	return evalExpr, nil
 }
 
-func (ec *expressionConverter) source(vschema ContextVSchema) (engine.Primitive, error) {
+func (ec *expressionConverter) source(vschema plancontext.VSchema) (engine.Primitive, error) {
 	if len(ec.tabletExpressions) == 0 {
 		return &engine.SingleRow{}, nil
 	}

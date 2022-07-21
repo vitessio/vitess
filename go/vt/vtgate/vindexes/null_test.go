@@ -17,11 +17,13 @@ limitations under the License.
 package vindexes
 
 import (
+	"context"
 	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 )
@@ -44,7 +46,7 @@ func TestNullInfo(t *testing.T) {
 }
 
 func TestNullMap(t *testing.T) {
-	got, err := null.Map(nil, []sqltypes.Value{
+	got, err := null.Map(context.Background(), nil, []sqltypes.Value{
 		sqltypes.NewInt64(1),
 		sqltypes.NewInt64(2),
 		sqltypes.NewInt64(3),
@@ -52,9 +54,11 @@ func TestNullMap(t *testing.T) {
 		sqltypes.NewInt64(5),
 		sqltypes.NewInt64(6),
 		sqltypes.NewVarChar("1234567890123"),
+		sqltypes.NULL,
 	})
 	require.NoError(t, err)
 	want := []key.Destination{
+		key.DestinationKeyspaceID([]byte{0}),
 		key.DestinationKeyspaceID([]byte{0}),
 		key.DestinationKeyspaceID([]byte{0}),
 		key.DestinationKeyspaceID([]byte{0}),
@@ -71,7 +75,7 @@ func TestNullMap(t *testing.T) {
 func TestNullVerify(t *testing.T) {
 	ids := []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}
 	ksids := [][]byte{{0}, {1}}
-	got, err := null.Verify(nil, ids, ksids)
+	got, err := null.Verify(context.Background(), nil, ids, ksids)
 	if err != nil {
 		t.Fatal(err)
 	}

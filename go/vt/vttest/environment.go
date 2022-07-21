@@ -18,12 +18,13 @@ package vttest
 
 import (
 	"fmt"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"path"
 	"strings"
 	"time"
+
+	"vitess.io/vitess/go/vt/proto/vttest"
 
 	// we use gRPC everywhere, so import the vtgate client.
 	_ "vitess.io/vitess/go/vt/vtgate/grpcvtgateconn"
@@ -45,6 +46,12 @@ type Environment interface {
 	// and destructing the MySQL instance(s) that will be used by the cluster.
 	// See: vttest.MySQLManager for the interface the manager must implement
 	MySQLManager(mycnf []string, snapshot string) (MySQLManager, error)
+
+	// TopoManager is the constructor for the Topology manager that will
+	// be used by the cluster. It's only used when we run the local cluster with
+	// a remote topo server instead of in-memory topo server within vtcombo process
+	// See: vttest.TopoManager for the interface of topo manager
+	TopoManager(topoImplementation, topoServerAddress, topoRoot string, topology *vttest.VTTestTopology) TopoManager
 
 	// Directory is the path where the local cluster will store all its
 	// data and metadata. For local testing, this should probably be an
@@ -116,7 +123,7 @@ func GetMySQLOptions(flavor string) (string, []string, error) {
 	}
 
 	mycnf := []string{}
-	mycnf = append(mycnf, "config/mycnf/default-fast.cnf")
+	mycnf = append(mycnf, "config/mycnf/test-suite.cnf")
 
 	for i, cnf := range mycnf {
 		mycnf[i] = path.Join(os.Getenv("VTROOT"), cnf)
@@ -144,7 +151,18 @@ func (env *LocalTestEnv) MySQLManager(mycnf []string, snapshot string) (MySQLMan
 		Port:      env.PortForProtocol("mysql", ""),
 		MyCnf:     append(env.DefaultMyCnf, mycnf...),
 		Env:       env.EnvVars(),
+		UID:       1,
 	}, nil
+}
+
+// TopoManager implements TopoManager for LocalTestEnv
+func (env *LocalTestEnv) TopoManager(topoImplementation, topoServerAddress, topoRoot string, topology *vttest.VTTestTopology) TopoManager {
+	return &Topoctl{
+		TopoImplementation:      topoImplementation,
+		TopoGlobalServerAddress: topoServerAddress,
+		TopoGlobalRoot:          topoRoot,
+		Topology:                topology,
+	}
 }
 
 // DefaultProtocol implements DefaultProtocol for LocalTestEnv.
@@ -182,9 +200,11 @@ func (env *LocalTestEnv) ProcessHealthCheck(name string) HealthChecker {
 // VtcomboArguments implements VtcomboArguments for LocalTestEnv.
 func (env *LocalTestEnv) VtcomboArguments() []string {
 	return []string{
-		"-service_map", strings.Join(
-			[]string{"grpc-vtgateservice", "grpc-vtctl"}, ",",
-		)}
+		"--service_map", strings.Join(
+			[]string{"grpc-vtgateservice", "grpc-vtctl", "grpc-vtctld"}, ",",
+		),
+		"--enable_queries",
+	}
 }
 
 // LogDirectory implements LogDirectory for LocalTestEnv.
@@ -203,7 +223,7 @@ func (env *LocalTestEnv) TearDown() error {
 }
 
 func tmpdir(dataroot string) (dir string, err error) {
-	dir, err = ioutil.TempDir(dataroot, "vttest")
+	dir, err = os.MkdirTemp(dataroot, "vttest")
 	return
 }
 
@@ -239,9 +259,11 @@ func NewLocalTestEnv(flavor string, basePort int) (*LocalTestEnv, error) {
 // NewLocalTestEnvWithDirectory returns a new instance of the default test
 // environment with a directory explicitly specified.
 func NewLocalTestEnvWithDirectory(flavor string, basePort int, directory string) (*LocalTestEnv, error) {
-	err := os.Mkdir(path.Join(directory, "logs"), 0700)
-	if err != nil {
-		return nil, err
+	if _, err := os.Stat(path.Join(directory, "logs")); os.IsNotExist(err) {
+		err := os.Mkdir(path.Join(directory, "logs"), 0700)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	flavor, mycnf, err := GetMySQLOptions(flavor)

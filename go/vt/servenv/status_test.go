@@ -18,7 +18,7 @@ package servenv
 
 import (
 	"html/template"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"regexp"
@@ -34,7 +34,7 @@ func init() {
 			"github_com_vitessio_vitess_to_upper": strings.ToUpper,
 		})
 
-	AddStatusPart("test_part", `{{github_com_vitessio_vitess_to_upper . }}`, func() interface{} {
+	AddStatusPart("test_part", `{{github_com_vitessio_vitess_to_upper . }}`, func() any {
 		return "this should be uppercase"
 	})
 	AddStatusSection("test_section", func() string {
@@ -51,7 +51,7 @@ func TestStatus(t *testing.T) {
 
 	defer resp.Body.Close()
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 
 	cases := []string{
@@ -78,7 +78,7 @@ func TestNamedStatus(t *testing.T) {
 			"github_com_vitessio_vitess_to_upper": strings.ToUpper,
 		})
 
-	sp.addStatusPart("test_part", `{{github_com_vitessio_vitess_to_upper . }}`, func() interface{} {
+	sp.addStatusPart("test_part", `{{github_com_vitessio_vitess_to_upper . }}`, func() any {
 		return "this should be uppercase"
 	})
 	sp.addStatusSection("test_section", func() string {
@@ -90,7 +90,7 @@ func TestNamedStatus(t *testing.T) {
 
 	defer resp.Body.Close()
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 
 	cases := []string{

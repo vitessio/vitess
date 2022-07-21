@@ -5,11 +5,11 @@ This document contains the summary of the commands to be run.
 
 
 ```
+# Setup environment and aliases
+source env.sh
+
 # Bring up initial cluster and commerce keyspace
 ./101_initial_cluster.sh
-
-# Setup aliases
-source alias.source
 
 # Insert and verify data
 mysql < ../common/insert_commerce_data.sql
@@ -19,37 +19,35 @@ mysql --table < ../common/select_commerce_data.sql
 ./201_customer_tablets.sh
 
 # Initiate move tables
-vtctlclient MoveTables -workflow=commerce2customer commerce customer '{"customer":{}, "corder":{}}'
+vtctlclient MoveTables -- --source commerce --tables 'customer,corder' Create customer.commerce2customer
 
 # Validate
 vtctlclient VDiff customer.commerce2customer
 
 # Cut-over
-vtctlclient SwitchReads -tablet_type=rdonly customer.commerce2customer
-vtctlclient SwitchReads -tablet_type=replica customer.commerce2customer
-vtctlclient SwitchWrites customer.commerce2customer
+vtctlclient MoveTables -- --tablet_types=rdonly,replica SwitchTraffic customer.commerce2customer
+vtctlclient MoveTables -- --tablet_types=primary SwitchTraffic customer.commerce2customer
 
 # Clean-up
-vtctlclient DropSources customer.commerce2customer
+vtctlclient MoveTables Complete customer.commerce2customer
 
 # Prepare for resharding
 ./301_customer_sharded.sh
 ./302_new_shards.sh
 
 # Reshard
-vtctlclient Reshard customer.cust2cust '0' '-80,80-'
+vtctlclient Reshard -- --source_shards '0' --target_shards '-80,80-' Create customer.cust2cust
 
 # Validate
 vtctlclient VDiff customer.cust2cust
 
 # Cut-over
-vtctlclient SwitchReads -tablet_type=rdonly customer.cust2cust
-vtctlclient SwitchReads -tablet_type=replica customer.cust2cust
-vtctlclient SwitchWrites customer.cust2cust
+vtctlclient Reshard -- --tablet_types=rdonly,replica SwitchTraffic customer.cust2cust
+vtctlclient Reshard -- --tablet_types=primary SwitchTraffic customer.cust2cust
 
 # Down shard 0
 ./306_down_shard_0.sh
-vtctlclient DeleteShard -recursive customer/0
+vtctlclient DeleteShard -- --recursive customer/0
 
 # Down cluster
 ./401_teardown.sh

@@ -17,7 +17,9 @@ limitations under the License.
 package vtgate
 
 import (
-	"io/ioutil"
+	"context"
+	"crypto/tls"
+	"fmt"
 	"os"
 	"path"
 	"strings"
@@ -26,9 +28,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"vitess.io/vitess/go/trace"
 
-	"golang.org/x/net/context"
+	"vitess.io/vitess/go/trace"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -37,6 +38,7 @@ import (
 )
 
 type testHandler struct {
+	mysql.UnimplementedHandler
 	lastConn *mysql.Conn
 }
 
@@ -44,21 +46,24 @@ func (th *testHandler) NewConnection(c *mysql.Conn) {
 	th.lastConn = c
 }
 
-func (th *testHandler) ConnectionClosed(c *mysql.Conn) {
-}
-
 func (th *testHandler) ComQuery(c *mysql.Conn, q string, callback func(*sqltypes.Result) error) error {
-	return nil
+	// when creating a connection, we send a query to MySQL to set the connection's collation,
+	// this query usually returns us something. however, we use testHandler which is a fake
+	// implementation of MySQL that returns no results and no error for set queries, Vitess
+	// interprets this as an error, we do not want to fail if we see such error.
+	// for this reason, we send back an empty result to the caller.
+	return callback(&sqltypes.Result{Fields: []*querypb.Field{}, Rows: [][]sqltypes.Value{}})
 }
 
 func (th *testHandler) ComPrepare(c *mysql.Conn, q string, b map[string]*querypb.BindVariable) ([]*querypb.Field, error) {
 	return nil, nil
 }
 
-func (th *testHandler) ComResetConnection(c *mysql.Conn) {
+func (th *testHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareData, callback func(*sqltypes.Result) error) error {
+	return nil
 }
 
-func (th *testHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareData, callback func(*sqltypes.Result) error) error {
+func (th *testHandler) ComBinlogDumpGTID(c *mysql.Conn, gtidSet mysql.GTIDSet) error {
 	return nil
 }
 
@@ -73,7 +78,7 @@ func TestConnectionUnixSocket(t *testing.T) {
 
 	// Use tmp file to reserve a path, remove it immediately, we only care about
 	// name in this context
-	unixSocket, err := ioutil.TempFile("", "mysql_vitess_test.sock")
+	unixSocket, err := os.CreateTemp("", "mysql_vitess_test.sock")
 	if err != nil {
 		t.Fatalf("Failed to create temp file")
 	}
@@ -106,7 +111,7 @@ func TestConnectionStaleUnixSocket(t *testing.T) {
 
 	// First let's create a file. In this way, we simulate
 	// having a stale socket on disk that needs to be cleaned up.
-	unixSocket, err := ioutil.TempFile("", "mysql_vitess_test.sock")
+	unixSocket, err := os.CreateTemp("", "mysql_vitess_test.sock")
 	if err != nil {
 		t.Fatalf("Failed to create temp file")
 	}
@@ -136,7 +141,7 @@ func TestConnectionRespectsExistingUnixSocket(t *testing.T) {
 
 	authServer := newTestAuthServerStatic()
 
-	unixSocket, err := ioutil.TempFile("", "mysql_vitess_test.sock")
+	unixSocket, err := os.CreateTemp("", "mysql_vitess_test.sock")
 	if err != nil {
 		t.Fatalf("Failed to create temp file")
 	}
@@ -167,6 +172,12 @@ func newFromStringFail(t *testing.T) func(ctx context.Context, parentSpan string
 	return func(ctx context.Context, parentSpan string, label string) (trace.Span, context.Context, error) {
 		t.Fatalf("we didn't provide a parent span in the sql query. this should not have been called. got: %v", parentSpan)
 		return trace.NoopSpan{}, context.Background(), nil
+	}
+}
+
+func newFromStringError(t *testing.T) func(ctx context.Context, parentSpan string, label string) (trace.Span, context.Context, error) {
+	return func(ctx context.Context, parentSpan string, label string) (trace.Span, context.Context, error) {
+		return trace.NoopSpan{}, context.Background(), fmt.Errorf("")
 	}
 }
 
@@ -206,6 +217,18 @@ func TestSpanContextPassedInEvenAroundOtherComments(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestSpanContextNotParsable(t *testing.T) {
+	hasRun := false
+	_, _, err := startSpanTestable(context.Background(), "/*VT_SPAN_CONTEXT=123*/SQL QUERY", "someLabel",
+		func(c context.Context, s string) (trace.Span, context.Context) {
+			hasRun = true
+			return trace.NoopSpan{}, context.Background()
+		},
+		newFromStringError(t))
+	assert.NoError(t, err)
+	assert.True(t, hasRun, "Should have continued execution despite failure to parse VT_SPAN_CONTEXT")
+}
+
 func newTestAuthServerStatic() *mysql.AuthServerStatic {
 	jsonConfig := "{\"user1\":{\"Password\":\"password1\", \"UserData\":\"userData1\", \"SourceHost\":\"localhost\"}}"
 	return mysql.NewAuthServerStatic("", jsonConfig, 0)
@@ -214,8 +237,8 @@ func newTestAuthServerStatic() *mysql.AuthServerStatic {
 func TestDefaultWorkloadEmpty(t *testing.T) {
 	vh := &vtgateHandler{}
 	sess := vh.session(&mysql.Conn{})
-	if sess.Options.Workload != querypb.ExecuteOptions_UNSPECIFIED {
-		t.Fatalf("Expected default workload UNSPECIFIED")
+	if sess.Options.Workload != querypb.ExecuteOptions_OLTP {
+		t.Fatalf("Expected default workload OLTP")
 	}
 }
 
@@ -228,18 +251,28 @@ func TestDefaultWorkloadOLAP(t *testing.T) {
 	}
 }
 
-func TestInitTLSConfig(t *testing.T) {
+func TestInitTLSConfigWithoutServerCA(t *testing.T) {
+	testInitTLSConfig(t, false)
+}
+
+func TestInitTLSConfigWithServerCA(t *testing.T) {
+	testInitTLSConfig(t, true)
+}
+
+func testInitTLSConfig(t *testing.T, serverCA bool) {
 	// Create the certs.
-	root, err := ioutil.TempDir("", "TestInitTLSConfig")
-	if err != nil {
-		t.Fatalf("TempDir failed: %v", err)
-	}
-	defer os.RemoveAll(root)
+	root := t.TempDir()
 	tlstest.CreateCA(root)
+	tlstest.CreateCRL(root, tlstest.CA)
 	tlstest.CreateSignedCert(root, tlstest.CA, "01", "server", "server.example.com")
 
+	serverCACert := ""
+	if serverCA {
+		serverCACert = path.Join(root, "ca-cert.pem")
+	}
+
 	listener := &mysql.Listener{}
-	if err := initTLSConfig(listener, path.Join(root, "server-cert.pem"), path.Join(root, "server-key.pem"), path.Join(root, "ca-cert.pem"), true); err != nil {
+	if err := initTLSConfig(listener, path.Join(root, "server-cert.pem"), path.Join(root, "server-key.pem"), path.Join(root, "ca-cert.pem"), path.Join(root, "ca-crl.pem"), serverCACert, true, tls.VersionTLS12); err != nil {
 		t.Fatalf("init tls config failure due to: +%v", err)
 	}
 

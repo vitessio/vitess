@@ -17,7 +17,7 @@ limitations under the License.
 package tabletenv
 
 import (
-	"golang.org/x/net/context"
+	"context"
 )
 
 type localContextKey int

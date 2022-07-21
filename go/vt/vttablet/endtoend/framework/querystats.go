@@ -24,8 +24,8 @@ import (
 
 // QueryStat contains the stats for one query.
 type QueryStat struct {
-	Query, Table, Plan                                string
-	QueryCount, Time, MysqlTime, RowCount, ErrorCount int
+	Query, Table, Plan                                                  string
+	QueryCount, Time, MysqlTime, RowsAffected, RowsReturned, ErrorCount int
 }
 
 // QueryStats parses /debug/query_stats and returns

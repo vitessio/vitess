@@ -25,6 +25,8 @@ import (
 	"encoding/json"
 	"flag"
 
+	"vitess.io/vitess/go/vt/vttls"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -69,19 +71,22 @@ var (
 // The app must store the DBConfigs object internally, and use it to
 // build connection parameters as needed.
 type DBConfigs struct {
-	Socket                     string `json:"socket,omitempty"`
-	Host                       string `json:"host,omitempty"`
-	Port                       int    `json:"port,omitempty"`
-	Charset                    string `json:"charset,omitempty"`
-	Flags                      uint64 `json:"flags,omitempty"`
-	Flavor                     string `json:"flavor,omitempty"`
-	SslCa                      string `json:"sslCa,omitempty"`
-	SslCaPath                  string `json:"sslCaPath,omitempty"`
-	SslCert                    string `json:"sslCert,omitempty"`
-	SslKey                     string `json:"sslKey,omitempty"`
-	ServerName                 string `json:"serverName,omitempty"`
-	ConnectTimeoutMilliseconds int    `json:"connectTimeoutMilliseconds,omitempty"`
-	DBName                     string `json:"dbName,omitempty"`
+	Socket                     string        `json:"socket,omitempty"`
+	Host                       string        `json:"host,omitempty"`
+	Port                       int           `json:"port,omitempty"`
+	Charset                    string        `json:"charset,omitempty"`
+	Flags                      uint64        `json:"flags,omitempty"`
+	Flavor                     string        `json:"flavor,omitempty"`
+	SslMode                    vttls.SslMode `json:"sslMode,omitempty"`
+	SslCa                      string        `json:"sslCa,omitempty"`
+	SslCaPath                  string        `json:"sslCaPath,omitempty"`
+	SslCert                    string        `json:"sslCert,omitempty"`
+	SslKey                     string        `json:"sslKey,omitempty"`
+	TLSMinVersion              string        `json:"tlsMinVersion,omitempty"`
+	ServerName                 string        `json:"serverName,omitempty"`
+	ConnectTimeoutMilliseconds int           `json:"connectTimeoutMilliseconds,omitempty"`
+	DBName                     string        `json:"dbName,omitempty"`
+	EnableQueryInfo            bool          `json:"enableQueryInfo,omitempty"`
 
 	App          UserConfig `json:"app,omitempty"`
 	Dba          UserConfig `json:"dba,omitempty"`
@@ -123,15 +128,18 @@ func registerBaseFlags() {
 	flag.StringVar(&GlobalDBConfigs.Socket, "db_socket", "", "The unix socket to connect on. If this is specified, host and port will not be used.")
 	flag.StringVar(&GlobalDBConfigs.Host, "db_host", "", "The host name for the tcp connection.")
 	flag.IntVar(&GlobalDBConfigs.Port, "db_port", 0, "tcp port")
-	flag.StringVar(&GlobalDBConfigs.Charset, "db_charset", "", "Character set. Only utf8 or latin1 based character sets are supported.")
+	flag.StringVar(&GlobalDBConfigs.Charset, "db_charset", "utf8mb4", "Character set used for this tablet.")
 	flag.Uint64Var(&GlobalDBConfigs.Flags, "db_flags", 0, "Flag values as defined by MySQL.")
 	flag.StringVar(&GlobalDBConfigs.Flavor, "db_flavor", "", "Flavor overrid. Valid value is FilePos.")
+	flag.Var(&GlobalDBConfigs.SslMode, "db_ssl_mode", "SSL mode to connect with. One of disabled, preferred, required, verify_ca & verify_identity.")
 	flag.StringVar(&GlobalDBConfigs.SslCa, "db_ssl_ca", "", "connection ssl ca")
 	flag.StringVar(&GlobalDBConfigs.SslCaPath, "db_ssl_ca_path", "", "connection ssl ca path")
 	flag.StringVar(&GlobalDBConfigs.SslCert, "db_ssl_cert", "", "connection ssl certificate")
 	flag.StringVar(&GlobalDBConfigs.SslKey, "db_ssl_key", "", "connection ssl key")
+	flag.StringVar(&GlobalDBConfigs.TLSMinVersion, "db_tls_min_version", "", "Configures the minimal TLS version negotiated when SSL is enabled. Defaults to TLSv1.2. Options: TLSv1.0, TLSv1.1, TLSv1.2, TLSv1.3.")
 	flag.StringVar(&GlobalDBConfigs.ServerName, "db_server_name", "", "server name of the DB we are connecting to.")
 	flag.IntVar(&GlobalDBConfigs.ConnectTimeoutMilliseconds, "db_connect_timeout_ms", 0, "connection timeout to mysqld in milliseconds (0 for no timeout)")
+	flag.BoolVar(&GlobalDBConfigs.EnableQueryInfo, "db_conn_query_info", false, "enable parsing and processing of QUERY_OK info fields")
 }
 
 // The flags will change the global singleton
@@ -150,7 +158,7 @@ func registerPerUserFlags(userKey string, uc *UserConfig, cp *mysql.ConnParams) 
 	flag.StringVar(&cp.Host, "db-config-"+userKey+"-host", "", "deprecated: use db_host")
 	flag.IntVar(&cp.Port, "db-config-"+userKey+"-port", 0, "deprecated: use db_port")
 	flag.StringVar(&cp.UnixSocket, "db-config-"+userKey+"-unixsocket", "", "deprecated: use db_socket")
-	flag.StringVar(&cp.Charset, "db-config-"+userKey+"-charset", "utf8", "deprecated: use db_charset")
+	flag.StringVar(&cp.Charset, "db-config-"+userKey+"-charset", "utf8mb4", "deprecated: use db_charset")
 	flag.Uint64Var(&cp.Flags, "db-config-"+userKey+"-flags", 0, "deprecated: use db_flags")
 	flag.StringVar(&cp.SslCa, "db-config-"+userKey+"-ssl-ca", "", "deprecated: use db_ssl_ca")
 	flag.StringVar(&cp.SslCaPath, "db-config-"+userKey+"-ssl-ca-path", "", "deprecated: use db_ssl_ca_path")
@@ -178,7 +186,7 @@ func New(mcp *mysql.ConnParams) Connector {
 }
 
 // Connect will invoke the mysql.connect method and return a connection
-func (c Connector) Connect(ctx context.Context) (*mysql.Conn, error) {
+func (c *Connector) Connect(ctx context.Context) (*mysql.Conn, error) {
 	params, err := c.MysqlParams()
 	if err != nil {
 		return nil, err
@@ -349,9 +357,12 @@ func (dbcfgs *DBConfigs) InitWithSocket(defaultSocketFile string) {
 			cp.UnixSocket = defaultSocketFile
 		}
 
-		if dbcfgs.Charset != "" {
+		// If the connection params has a charset defined, it will not be overridden by the
+		// global configuration.
+		if dbcfgs.Charset != "" && cp.Charset == "" {
 			cp.Charset = dbcfgs.Charset
 		}
+
 		if dbcfgs.Flags != 0 {
 			cp.Flags = dbcfgs.Flags
 		}
@@ -359,14 +370,17 @@ func (dbcfgs *DBConfigs) InitWithSocket(defaultSocketFile string) {
 			cp.Flavor = dbcfgs.Flavor
 		}
 		cp.ConnectTimeoutMs = uint64(dbcfgs.ConnectTimeoutMilliseconds)
+		cp.EnableQueryInfo = dbcfgs.EnableQueryInfo
 
 		cp.Uname = uc.User
 		cp.Pass = uc.Password
 		if uc.UseSSL {
+			cp.SslMode = dbcfgs.SslMode
 			cp.SslCa = dbcfgs.SslCa
 			cp.SslCaPath = dbcfgs.SslCaPath
 			cp.SslCert = dbcfgs.SslCert
 			cp.SslKey = dbcfgs.SslKey
+			cp.TLSMinVersion = dbcfgs.TLSMinVersion
 			cp.ServerName = dbcfgs.ServerName
 		}
 	}
@@ -406,9 +420,10 @@ func (dbcfgs *DBConfigs) getParams(userKey string, dbc *DBConfigs) (*UserConfig,
 }
 
 // SetDbParams sets the dba and app params
-func (dbcfgs *DBConfigs) SetDbParams(dbaParams, appParams mysql.ConnParams) {
+func (dbcfgs *DBConfigs) SetDbParams(dbaParams, appParams, filteredParams mysql.ConnParams) {
 	dbcfgs.dbaParams = dbaParams
 	dbcfgs.appParams = appParams
+	dbcfgs.filteredParams = filteredParams
 }
 
 // NewTestDBConfigs returns a DBConfigs meant for testing.
@@ -422,5 +437,6 @@ func NewTestDBConfigs(genParams, appDebugParams mysql.ConnParams, dbname string)
 		replParams:         genParams,
 		externalReplParams: genParams,
 		DBName:             dbname,
+		Charset:            "utf8mb4_general_ci",
 	}
 }

@@ -10,11 +10,11 @@
       "Sharded": false
     },
     "TargetDestination": "AnyShard()",
-    "IsDML": false,
     "Query": "repair table t1,t2 quick",
     "SingleShardOnly": true
   }
 }
+Gen4 plan same as above
 
 # Optimize statement
 "optimize table t1"
@@ -28,11 +28,11 @@
       "Sharded": false
     },
     "TargetDestination": "AnyShard()",
-    "IsDML": false,
     "Query": "optimize table t1",
     "SingleShardOnly": true
   }
 }
+Gen4 plan same as above
 
 # DO statement
 "DO 1"
@@ -46,8 +46,8 @@
       "Sharded": false
     },
     "TargetDestination": "AnyShard()",
-    "IsDML": false,
     "Query": "DO 1",
     "SingleShardOnly": true
   }
 }
+Gen4 plan same as above

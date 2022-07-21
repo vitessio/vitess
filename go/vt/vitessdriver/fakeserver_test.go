@@ -17,20 +17,19 @@ limitations under the License.
 package vitessdriver
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"reflect"
 
-	"github.com/golang/protobuf/proto"
-	"golang.org/x/net/context"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
-
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
 )
 
 // fakeVTGateService has the server side of this fake
@@ -65,7 +64,8 @@ func (f *fakeVTGateService) Execute(ctx context.Context, session *vtgatepb.Sessi
 		return session, nil, fmt.Errorf("Execute request mismatch: got %+v, want %+v", query, execCase.execQuery)
 	}
 	if execCase.session != nil {
-		*session = *execCase.session
+		proto.Reset(session)
+		proto.Merge(session, execCase.session)
 	}
 	return session, execCase.result, nil
 }
@@ -89,7 +89,8 @@ func (f *fakeVTGateService) ExecuteBatch(ctx context.Context, session *vtgatepb.
 			return session, nil, fmt.Errorf("Execute request mismatch: got %+v, want %+v", query, execCase.execQuery)
 		}
 		if execCase.session != nil {
-			*session = *execCase.session
+			proto.Reset(session)
+			proto.Merge(session, execCase.session)
 		}
 		return session, []sqltypes.QueryResponse{
 			{QueryResult: execCase.result},
@@ -131,6 +132,31 @@ func (f *fakeVTGateService) StreamExecute(ctx context.Context, session *vtgatepb
 	return nil
 }
 
+// Prepare is part of the VTGateService interface
+func (f *fakeVTGateService) Prepare(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable) (*vtgatepb.Session, []*querypb.Field, error) {
+	execCase, ok := execMap[sql]
+	if !ok {
+		return session, nil, fmt.Errorf("no match for: %s", sql)
+	}
+	query := &queryExecute{
+		SQL:           sql,
+		BindVariables: bindVariables,
+		Session:       session,
+	}
+	if !query.Equal(execCase.execQuery) {
+		return session, nil, fmt.Errorf("Prepare request mismatch: got %+v, want %+v", query, execCase.execQuery)
+	}
+	if execCase.session != nil {
+		proto.Reset(session)
+		proto.Merge(session, execCase.session)
+	}
+	return session, execCase.result.Fields, nil
+}
+
+func (f *fakeVTGateService) CloseSession(ctx context.Context, session *vtgatepb.Session) error {
+	return nil
+}
+
 // ResolveTransaction is part of the VTGateService interface
 func (f *fakeVTGateService) ResolveTransaction(ctx context.Context, dtid string) error {
 	if dtid != dtid2 {
@@ -139,7 +165,7 @@ func (f *fakeVTGateService) ResolveTransaction(ctx context.Context, dtid string)
 	return nil
 }
 
-func (f *fakeVTGateService) VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
+func (f *fakeVTGateService) VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter, flags *vtgatepb.VStreamFlags, send func([]*binlogdatapb.VEvent) error) error {
 	return nil
 }
 
@@ -200,11 +226,35 @@ var execMap = map[string]struct {
 		result:  &sqltypes.Result{},
 		session: session2,
 	},
+	"distributedTxRequest": {
+		execQuery: &queryExecute{
+			SQL: "distributedTxRequest",
+			BindVariables: map[string]*querypb.BindVariable{
+				"v1": sqltypes.Int64BindVariable(1),
+			},
+			Session: &vtgatepb.Session{
+				InTransaction: true,
+				ShardSessions: []*vtgatepb.Session_ShardSession{
+					{
+						Target: &querypb.Target{
+							Keyspace:   "ks",
+							Shard:      "1",
+							TabletType: topodatapb.TabletType_PRIMARY,
+						},
+						TransactionId: 1,
+					},
+				},
+				TargetString: "@rdonly",
+			},
+		},
+		result:  &sqltypes.Result{},
+		session: session2,
+	},
 	"begin": {
 		execQuery: &queryExecute{
 			SQL: "begin",
 			Session: &vtgatepb.Session{
-				TargetString: "@master",
+				TargetString: "@primary",
 				Autocommit:   true,
 			},
 		},
@@ -218,7 +268,7 @@ var execMap = map[string]struct {
 		},
 		result: &sqltypes.Result{},
 		session: &vtgatepb.Session{
-			TargetString: "@master",
+			TargetString: "@primary",
 			Autocommit:   true,
 		},
 	},
@@ -229,7 +279,7 @@ var execMap = map[string]struct {
 		},
 		result: &sqltypes.Result{},
 		session: &vtgatepb.Session{
-			TargetString: "@master",
+			TargetString: "@primary",
 		},
 	},
 }
@@ -296,7 +346,7 @@ var session2 = &vtgatepb.Session{
 			Target: &querypb.Target{
 				Keyspace:   "ks",
 				Shard:      "1",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			TransactionId: 1,
 		},

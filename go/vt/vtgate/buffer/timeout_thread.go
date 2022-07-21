@@ -43,10 +43,10 @@ type timeoutThread struct {
 	queueNotEmpty chan struct{}
 }
 
-func newTimeoutThread(sb *shardBuffer) *timeoutThread {
+func newTimeoutThread(sb *shardBuffer, maxFailoverDuration time.Duration) *timeoutThread {
 	return &timeoutThread{
 		sb:            sb,
-		maxDuration:   time.NewTimer(*maxFailoverDuration),
+		maxDuration:   time.NewTimer(maxFailoverDuration),
 		stopChan:      make(chan struct{}),
 		queueNotEmpty: make(chan struct{}),
 	}

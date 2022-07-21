@@ -106,7 +106,7 @@ For #1 and #2, the Rollback workflow is initiated. For #3, the commit is resumed
 
 The following diagram illustrates the life-cycle of a Vitess transaction.
 
-![](https://raw.githubusercontent.com/vitessio/vitess/master/doc/TxLifecycle.png)
+![](https://raw.githubusercontent.com/vitessio/vitess/main/doc/TxLifecycle.png)
 
 A transaction generally starts off as a single DB transaction. It becomes a distributed transaction as soon as more than one VTTablet is affected. If the app issues a rollback, then all participants are simply rolled back. If a BEC is issued, then all transactions are individually committed. These actions are the same irrespective of single or distributed transactions.
 
@@ -132,7 +132,7 @@ In order to make 2PC work, the following pieces of functionality have to be buil
 
 The diagram below show how the various components interact.
 
-![](https://raw.githubusercontent.com/vitessio/vitess/master/doc/TxInteractions.png)
+![](https://raw.githubusercontent.com/vitessio/vitess/main/doc/TxInteractions.png)
 
 The detailed design explains all the functionalities and interactions.
 
@@ -193,9 +193,9 @@ This function will take a DTID and a VTID as input.
 * Get the tx conn for use, and move it to the prepared pool. If the prepared pool is full, rollback the transaction and return an error.
 * Save the metadata into the redo logs as a separate transaction. If this step fails, the main transaction is also rolled back and an error is returned.
 
-If VTTablet is asked to shut down or change state from master, the code that waits for tx pool must internally rollback the prepared transactions and return them to the tx pool. Note that the rollback must happen only after the currently pending (non-prepared) transactions are resolved. If a pending transaction is waiting on a lock held by a prepared transaction, it will eventually timeout and get rolled back.
+If VTTablet is asked to shut down or change state from primary, the code that waits for tx pool must internally rollback the prepared transactions and return them to the tx pool. Note that the rollback must happen only after the currently pending (non-prepared) transactions are resolved. If a pending transaction is waiting on a lock held by a prepared transaction, it will eventually timeout and get rolled back.
 
-Eventually, a different VTTablet will be transitioned to become the master. At that point, it will recreate the unresolved transactions from redo logs. If the replays fail, we’ll raise an alert and start the query service anyway.
+Eventually, a different VTTablet will be transitioned to become the primary. At that point, it will recreate the unresolved transactions from redo logs. If the replays fail, we’ll raise an alert and start the query service anyway.
 
 Typically, a replay is not expected to fail because vttablet does not allow writing to the database until the replays are done. Also, no external agent should be allowed to perform writes to MySQL, which is a loosely enforced Vitess requirement. Other vitess processes do write to MySQL directly, but they’re not the kind that interfere with the normal flow of transactions.
 
@@ -325,7 +325,7 @@ Rollback workflow:
 
 ## Watchdogs
 
-The stateless VTGates are considered ephemeral and can fail at any time, which means that transactions could be abandoned in the middle of a distributed commit. To mitigate this, every master vttablet will poll its dt_state table for distributed transactions that are lingering. If any such transaction is found, it invokes VTGate with that dtid for a Resolve to be retried.
+The stateless VTGates are considered ephemeral and can fail at any time, which means that transactions could be abandoned in the middle of a distributed commit. To mitigate this, every primary vttablet will poll its dt_state table for distributed transactions that are lingering. If any such transaction is found, it invokes VTGate with that dtid for a Resolve to be retried.
 
 _This is not a clean design because it introduces a backward dependency from VTTablet to VTGate. However, it saves us the need to create yet another server that will add to the overall complexity of the deployment. It was decided that this is a worthy trade-off._
 
@@ -366,7 +366,7 @@ For vttablet, a new URL, /twopcz, will display unresolved twopc transactions and
 
 # Data guarantees
 
-Although the above workflows are foolproof, they do rely on the data guarantees provided by the underlying systems and the fact that prepared transactions can get killed only together with vttablet. Of these, one failure mode has to be visited: It’s possible that there’s data loss when a master goes down and a new replica gets elected as the new master. This loss is highly mitigated with semi-sync turned on, but it’s still possible. In such situations, we have to describe how 2PC will behave.
+Although the above workflows are foolproof, they do rely on the data guarantees provided by the underlying systems and the fact that prepared transactions can get killed only together with vttablet. Of these, one failure mode has to be visited: It’s possible that there’s data loss when a primary goes down and a new replica gets elected as the new primary. This loss is highly mitigated with semi-sync turned on, but it’s still possible. In such situations, we have to describe how 2PC will behave.
 
 In all of the scenarios below, there is irrecoverable data loss. But the system needs to alert correctly, and we must be able to make best effort recovery and move on. For now, these scenarios require operator intervention, but the system could be made to automatically perform these as we gain confidence.
 
@@ -403,7 +403,7 @@ The main workflow of 2PC is fairly straightforward and easy to test. What makes 
 Some important failure scenarios that must be tested are:
 
 * Correct shutdown of vttablet when it has prepared transactions.
-* Resurrection of prepared transactions when a vttablet becomes a master.
+* Resurrection of prepared transactions when a vttablet becomes a primary.
 * A reparent of a VTTablet that has prepared transactions. This is effectively tested by the previous two steps, but it will be nice as an integration test. It will be even nicer if we could go a step further and see if VTGate can still complete a transaction if a reparent happened in the middle of a commit.
 
 # Innovation

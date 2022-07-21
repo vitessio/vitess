@@ -17,7 +17,7 @@ limitations under the License.
 package services
 
 import (
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
@@ -52,12 +52,20 @@ func (c fallbackClient) StreamExecute(ctx context.Context, session *vtgatepb.Ses
 	return c.fallback.StreamExecute(ctx, session, sql, bindVariables, callback)
 }
 
+func (c fallbackClient) Prepare(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable) (*vtgatepb.Session, []*querypb.Field, error) {
+	return c.fallback.Prepare(ctx, session, sql, bindVariables)
+}
+
+func (c fallbackClient) CloseSession(ctx context.Context, session *vtgatepb.Session) error {
+	return c.fallback.CloseSession(ctx, session)
+}
+
 func (c fallbackClient) ResolveTransaction(ctx context.Context, dtid string) error {
 	return c.fallback.ResolveTransaction(ctx, dtid)
 }
 
-func (c fallbackClient) VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
-	return c.fallback.VStream(ctx, tabletType, vgtid, filter, send)
+func (c fallbackClient) VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter, flags *vtgatepb.VStreamFlags, send func([]*binlogdatapb.VEvent) error) error {
+	return c.fallback.VStream(ctx, tabletType, vgtid, filter, flags, send)
 }
 
 func (c fallbackClient) HandlePanic(err *error) {

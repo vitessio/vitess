@@ -30,7 +30,7 @@ package k8stopo
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -49,7 +49,7 @@ import (
 
 var (
 	// kubeconfigPath is a string that gives the location of a valid kubeconfig file
-	kubeconfigPath = flag.String("topo_k8s_kubeconfig", "", "Path to a valid kubeconfig file.")
+	kubeconfigPath = flag.String("topo_k8s_kubeconfig", "", "Path to a valid kubeconfig file. When running as a k8s pod inside the same cluster you wish to use as the topo, you may omit this and the below arguments, and Vitess is capable of auto-discovering the correct values. https://kubernetes.io/docs/tasks/access-application-cluster/access-cluster/#accessing-the-api-from-a-pod")
 
 	// configContext is a string that can be used to override the default context
 	configContext = flag.String("topo_k8s_context", "", "The kubeconfig context to use, overrides the 'current-context' from the config")
@@ -114,7 +114,7 @@ func getKeyParents(key string) []string {
 	return parents
 }
 
-func indexByParent(obj interface{}) ([]string, error) {
+func indexByParent(obj any) ([]string, error) {
 	return getKeyParents(obj.(*vtv1beta1.VitessTopoNode).Data.Key), nil
 }
 
@@ -161,7 +161,7 @@ func NewServer(_, root string) (*Server, error) {
 		}
 
 		// When running in the cluster, use the namespace file to detect the current namespace
-		nsBytes, err := ioutil.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
+		nsBytes, err := os.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
 		if err != nil {
 			return nil, err
 		}

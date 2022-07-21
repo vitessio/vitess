@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"testing"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/sqltypes"
 
@@ -55,7 +55,7 @@ func init() {
 }
 
 func BenchmarkExecuteVarBinary(b *testing.B) {
-	db, tsv := setupTabletServerTest(nil)
+	db, tsv := setupTabletServerTest(nil, "")
 	defer db.Close()
 	defer tsv.StopService()
 
@@ -67,7 +67,7 @@ func BenchmarkExecuteVarBinary(b *testing.B) {
 		bv[fmt.Sprintf("vtg%d", i)] = sqltypes.BytesBindVariable(benchVarValue)
 	}
 
-	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	db.AllowAll = true
 	for i := 0; i < b.N; i++ {
 		if _, err := tsv.Execute(context.Background(), &target, benchQuery, bv, 0, 0, nil); err != nil {
@@ -77,7 +77,7 @@ func BenchmarkExecuteVarBinary(b *testing.B) {
 }
 
 func BenchmarkExecuteExpression(b *testing.B) {
-	db, tsv := setupTabletServerTest(nil)
+	db, tsv := setupTabletServerTest(nil, "")
 	defer db.Close()
 	defer tsv.StopService()
 
@@ -92,7 +92,7 @@ func BenchmarkExecuteExpression(b *testing.B) {
 		}
 	}
 
-	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	db.AllowAll = true
 	for i := 0; i < b.N; i++ {
 		if _, err := tsv.Execute(context.Background(), &target, benchQuery, bv, 0, 0, nil); err != nil {

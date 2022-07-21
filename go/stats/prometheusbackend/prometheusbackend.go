@@ -23,6 +23,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
 )
@@ -52,6 +53,8 @@ func (be PromBackend) publishPrometheusMetric(name string, v expvar.Var) {
 		newMetricFuncCollector(st, be.buildPromName(name), prometheus.CounterValue, func() float64 { return float64(st.F()) })
 	case *stats.Gauge:
 		newMetricFuncCollector(st, be.buildPromName(name), prometheus.GaugeValue, func() float64 { return float64(st.Get()) })
+	case *stats.GaugeFloat64:
+		newMetricFuncCollector(st, be.buildPromName(name), prometheus.GaugeValue, func() float64 { return st.Get() })
 	case *stats.GaugeFunc:
 		newMetricFuncCollector(st, be.buildPromName(name), prometheus.GaugeValue, func() float64 { return float64(st.F()) })
 	case stats.FloatFunc:

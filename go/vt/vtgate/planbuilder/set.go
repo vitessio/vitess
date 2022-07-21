@@ -18,7 +18,10 @@ package planbuilder
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
+
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
@@ -33,7 +36,7 @@ import (
 )
 
 type (
-	planFunc = func(expr *sqlparser.SetExpr, vschema ContextVSchema, ec *expressionConverter) (engine.SetOp, error)
+	planFunc = func(expr *sqlparser.SetExpr, vschema plancontext.VSchema, ec *expressionConverter) (engine.SetOp, error)
 
 	setting struct {
 		name         string
@@ -43,49 +46,62 @@ type (
 		// this allows identifiers (a.k.a. ColName) from the AST to be handled as if they are strings.
 		// SET transaction_mode = two_pc => SET transaction_mode = 'two_pc'
 		identifierAsString bool
+		supportSetVar      bool
 	}
 )
 
-var sysVarPlanningFunc = map[string]planFunc{}
-
-func buildSetPlan(stmt *sqlparser.Set, vschema ContextVSchema) (engine.Primitive, error) {
+func buildSetPlan(stmt *sqlparser.Set, vschema plancontext.VSchema) (engine.Primitive, error) {
 	var setOps []engine.SetOp
-	var setOp engine.SetOp
 	var err error
 
 	ec := new(expressionConverter)
 
 	for _, expr := range stmt.Exprs {
-		switch expr.Scope {
-		case sqlparser.GlobalStr:
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported global scope in set: %s", sqlparser.String(expr))
-			// AST struct has been prepared before getting here, so no scope here means that
-			// we have a UDV. If the original query didn't explicitly specify the scope, it
-			// would have been explictly set to sqlparser.SessionStr before reaching this
-			// phase of planning
-		case "":
+		// AST struct has been prepared before getting here, so no scope here means that
+		// we have a UDV. If the original query didn't explicitly specify the scope, it
+		// would have been explictly set to sqlparser.SessionStr before reaching this
+		// phase of planning
+		switch expr.Var.Scope {
+		case sqlparser.GlobalScope:
+			setOp, err := planSysVarCheckIgnore(expr, vschema, true)
+			if err != nil {
+				return nil, err
+			}
+			setOps = append(setOps, setOp)
+		case sqlparser.VariableScope:
 			evalExpr, err := ec.convert(expr.Expr /*boolean*/, false /*identifierAsString*/, false)
 			if err != nil {
 				return nil, err
 			}
-			setOp = &engine.UserDefinedVariable{
-				Name: expr.Name.Lowered(),
+			setOp := &engine.UserDefinedVariable{
+				Name: expr.Var.Name.Lowered(),
 				Expr: evalExpr,
 			}
-
 			setOps = append(setOps, setOp)
-		case sqlparser.SessionStr:
-			planFunc, ok := sysVarPlanningFunc[expr.Name.Lowered()]
-			if !ok {
-				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported construct in set: %s", sqlparser.String(expr))
+		case sqlparser.SessionScope:
+			planFunc, err := sysvarPlanningFuncs.Get(expr)
+			if err != nil {
+				return nil, err
 			}
-			setOp, err = planFunc(expr, vschema, ec)
+			setOp, err := planFunc(expr, vschema, ec)
 			if err != nil {
 				return nil, err
 			}
 			setOps = append(setOps, setOp)
+		case sqlparser.VitessMetadataScope:
+			value, err := getValueFor(expr)
+			if err != nil {
+				return nil, err
+			}
+			val, ok := value.(string)
+			if !ok {
+				return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValueForVar, "unexpected value type for '%s': %v", expr.Var.Name, value)
+			}
+
+			setOps = append(setOps,
+				&engine.VitessMetadata{Name: expr.Var.Name.Lowered(), Value: val})
 		default:
-			return nil, ErrPlanNotSupported
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: undefined set type: %v", expr.Var.Scope.ToString())
 		}
 	}
 
@@ -100,63 +116,57 @@ func buildSetPlan(stmt *sqlparser.Set, vschema ContextVSchema) (engine.Primitive
 	}, nil
 }
 
+func buildSetOpReadOnly(s setting) planFunc {
+	return func(expr *sqlparser.SetExpr, schema plancontext.VSchema, _ *expressionConverter) (engine.SetOp, error) {
+		return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.IncorrectGlobalLocalVar, "variable '%s' is a read only variable", expr.Var.Name)
+	}
+}
+
 func buildNotSupported(setting) planFunc {
-	return func(expr *sqlparser.SetExpr, schema ContextVSchema, _ *expressionConverter) (engine.SetOp, error) {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s: system setting is not supported", expr.Name)
+	return func(expr *sqlparser.SetExpr, schema plancontext.VSchema, _ *expressionConverter) (engine.SetOp, error) {
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%s: system setting is not supported", expr.Var.Name)
 	}
 }
 
 func buildSetOpIgnore(s setting) planFunc {
-	return func(expr *sqlparser.SetExpr, vschema ContextVSchema, _ *expressionConverter) (engine.SetOp, error) {
+	return func(expr *sqlparser.SetExpr, vschema plancontext.VSchema, _ *expressionConverter) (engine.SetOp, error) {
+		value, err := extractValue(expr, s.boolean)
+		if err != nil {
+			return nil, err
+		}
 		return &engine.SysVarIgnore{
-			Name: expr.Name.Lowered(),
-			Expr: extractValue(expr, s.boolean),
+			Name: expr.Var.Name.Lowered(),
+			Expr: value,
 		}, nil
 	}
 }
 
 func buildSetOpCheckAndIgnore(s setting) planFunc {
-	return func(expr *sqlparser.SetExpr, schema ContextVSchema, _ *expressionConverter) (engine.SetOp, error) {
+	return func(expr *sqlparser.SetExpr, schema plancontext.VSchema, _ *expressionConverter) (engine.SetOp, error) {
 		return planSysVarCheckIgnore(expr, schema, s.boolean)
 	}
 }
 
-func planSysVarCheckIgnore(expr *sqlparser.SetExpr, schema ContextVSchema, boolean bool) (engine.SetOp, error) {
+func planSysVarCheckIgnore(expr *sqlparser.SetExpr, schema plancontext.VSchema, boolean bool) (engine.SetOp, error) {
 	keyspace, dest, err := resolveDestination(schema)
+	if err != nil {
+		return nil, err
+	}
+	value, err := extractValue(expr, boolean)
 	if err != nil {
 		return nil, err
 	}
 
 	return &engine.SysVarCheckAndIgnore{
-		Name:              expr.Name.Lowered(),
+		Name:              expr.Var.Name.Lowered(),
 		Keyspace:          keyspace,
 		TargetDestination: dest,
-		Expr:              extractValue(expr, boolean),
+		Expr:              value,
 	}, nil
 }
 
-func expressionOkToDelegateToTablet(e sqlparser.Expr) bool {
-	valid := true
-	sqlparser.Rewrite(e, nil, func(cursor *sqlparser.Cursor) bool {
-		switch n := cursor.Node().(type) {
-		case *sqlparser.Subquery, *sqlparser.TimestampFuncExpr, *sqlparser.CurTimeFuncExpr:
-			valid = false
-			return false
-		case *sqlparser.FuncExpr:
-			_, ok := validFuncs[n.Name.Lowered()]
-			valid = ok
-			return ok
-		case *sqlparser.ColName:
-			valid = n.Name.AtCount() == 2
-			return false
-		}
-		return true
-	})
-	return valid
-}
-
-func buildSetOpVarSet(s setting) planFunc {
-	return func(expr *sqlparser.SetExpr, vschema ContextVSchema, _ *expressionConverter) (engine.SetOp, error) {
+func buildSetOpReservedConn(s setting) planFunc {
+	return func(expr *sqlparser.SetExpr, vschema plancontext.VSchema, _ *expressionConverter) (engine.SetOp, error) {
 		if !vschema.SysVarSetEnabled() {
 			return planSysVarCheckIgnore(expr, vschema, s.boolean)
 		}
@@ -164,25 +174,32 @@ func buildSetOpVarSet(s setting) planFunc {
 		if err != nil {
 			return nil, err
 		}
+		value, err := extractValue(expr, s.boolean)
+		if err != nil {
+			return nil, err
+		}
 
-		return &engine.SysVarSet{
-			Name:              expr.Name.Lowered(),
+		return &engine.SysVarReservedConn{
+			Name:              expr.Var.Name.Lowered(),
 			Keyspace:          ks,
 			TargetDestination: vschema.Destination(),
-			Expr:              extractValue(expr, s.boolean),
+			Expr:              value,
+			SupportSetVar:     s.supportSetVar,
 		}, nil
 	}
 }
 
+const defaultNotSupportedErrFmt = "DEFAULT not supported for @@%s"
+
 func buildSetOpVitessAware(s setting) planFunc {
-	return func(astExpr *sqlparser.SetExpr, vschema ContextVSchema, ec *expressionConverter) (engine.SetOp, error) {
+	return func(astExpr *sqlparser.SetExpr, vschema plancontext.VSchema, ec *expressionConverter) (engine.SetOp, error) {
 		var err error
 		var runtimeExpr evalengine.Expr
 
 		_, isDefault := astExpr.Expr.(*sqlparser.Default)
 		if isDefault {
 			if s.defaultValue == nil {
-				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "don't know default value for %s", astExpr.Name)
+				return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, defaultNotSupportedErrFmt, astExpr.Var.Name)
 			}
 			runtimeExpr = s.defaultValue
 		} else {
@@ -193,13 +210,13 @@ func buildSetOpVitessAware(s setting) planFunc {
 		}
 
 		return &engine.SysVarSetAware{
-			Name: astExpr.Name.Lowered(),
+			Name: astExpr.Var.Name.Lowered(),
 			Expr: runtimeExpr,
 		}, nil
 	}
 }
 
-func resolveDestination(vschema ContextVSchema) (*vindexes.Keyspace, key.Destination, error) {
+func resolveDestination(vschema plancontext.VSchema) (*vindexes.Keyspace, key.Destination, error) {
 	keyspace, err := vschema.AnyKeyspace()
 	if err != nil {
 		return nil, nil, err
@@ -212,164 +229,69 @@ func resolveDestination(vschema ContextVSchema) (*vindexes.Keyspace, key.Destina
 	return keyspace, dest, nil
 }
 
-func extractValue(expr *sqlparser.SetExpr, boolean bool) string {
+func extractValue(expr *sqlparser.SetExpr, boolean bool) (string, error) {
 	switch node := expr.Expr.(type) {
-	case *sqlparser.SQLVal:
+	case *sqlparser.Literal:
 		if node.Type == sqlparser.StrVal && boolean {
 			switch strings.ToLower(string(node.Val)) {
 			case "on":
-				return "1"
+				return "1", nil
 			case "off":
-				return "0"
+				return "0", nil
 			}
 		}
 	case *sqlparser.ColName:
 		// this is a little of a hack. it's used when the setting is not a normal expression, but rather
 		// an enumeration, such as utf8, utf8mb4, etc
-		if node.Name.AtCount() == sqlparser.NoAt {
-			switch node.Name.Lowered() {
-			case "on":
-				return "1"
-			case "off":
-				return "0"
-			}
-			return fmt.Sprintf("'%s'", sqlparser.String(expr.Expr))
+		switch node.Name.Lowered() {
+		case "on":
+			return "1", nil
+		case "off":
+			return "0", nil
 		}
+		return fmt.Sprintf("'%s'", sqlparser.String(expr.Expr)), nil
+
+	case *sqlparser.Default:
+		return "", vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, defaultNotSupportedErrFmt, expr.Var.Name)
 	}
 
-	return sqlparser.String(expr.Expr)
+	return sqlparser.String(expr.Expr), nil
 }
 
-// whitelist of functions knows to be safe to pass through to mysql for evaluation
-// this list tries to not include functions that might return different results on different tablets
-var validFuncs = map[string]interface{}{
-	"if":               nil,
-	"ifnull":           nil,
-	"nullif":           nil,
-	"abs":              nil,
-	"acos":             nil,
-	"asin":             nil,
-	"atan2":            nil,
-	"atan":             nil,
-	"ceil":             nil,
-	"ceiling":          nil,
-	"conv":             nil,
-	"cos":              nil,
-	"cot":              nil,
-	"crc32":            nil,
-	"degrees":          nil,
-	"div":              nil,
-	"exp":              nil,
-	"floor":            nil,
-	"ln":               nil,
-	"log":              nil,
-	"log10":            nil,
-	"log2":             nil,
-	"mod":              nil,
-	"pi":               nil,
-	"pow":              nil,
-	"power":            nil,
-	"radians":          nil,
-	"rand":             nil,
-	"round":            nil,
-	"sign":             nil,
-	"sin":              nil,
-	"sqrt":             nil,
-	"tan":              nil,
-	"truncate":         nil,
-	"adddate":          nil,
-	"addtime":          nil,
-	"convert_tz":       nil,
-	"date":             nil,
-	"date_add":         nil,
-	"date_format":      nil,
-	"date_sub":         nil,
-	"datediff":         nil,
-	"day":              nil,
-	"dayname":          nil,
-	"dayofmonth":       nil,
-	"dayofweek":        nil,
-	"dayofyear":        nil,
-	"extract":          nil,
-	"from_days":        nil,
-	"from_unixtime":    nil,
-	"get_format":       nil,
-	"hour":             nil,
-	"last_day":         nil,
-	"makedate":         nil,
-	"maketime":         nil,
-	"microsecond":      nil,
-	"minute":           nil,
-	"month":            nil,
-	"monthname":        nil,
-	"period_add":       nil,
-	"period_diff":      nil,
-	"quarter":          nil,
-	"sec_to_time":      nil,
-	"second":           nil,
-	"str_to_date":      nil,
-	"subdate":          nil,
-	"subtime":          nil,
-	"time_format":      nil,
-	"time_to_sec":      nil,
-	"timediff":         nil,
-	"timestampadd":     nil,
-	"timestampdiff":    nil,
-	"to_days":          nil,
-	"to_seconds":       nil,
-	"week":             nil,
-	"weekday":          nil,
-	"weekofyear":       nil,
-	"year":             nil,
-	"yearweek":         nil,
-	"ascii":            nil,
-	"bin":              nil,
-	"bit_length":       nil,
-	"char":             nil,
-	"char_length":      nil,
-	"character_length": nil,
-	"concat":           nil,
-	"concat_ws":        nil,
-	"elt":              nil,
-	"export_set":       nil,
-	"field":            nil,
-	"find_in_set":      nil,
-	"format":           nil,
-	"from_base64":      nil,
-	"hex":              nil,
-	"insert":           nil,
-	"instr":            nil,
-	"lcase":            nil,
-	"left":             nil,
-	"length":           nil,
-	"load_file":        nil,
-	"locate":           nil,
-	"lower":            nil,
-	"lpad":             nil,
-	"ltrim":            nil,
-	"make_set":         nil,
-	"mid":              nil,
-	"oct":              nil,
-	"octet_length":     nil,
-	"ord":              nil,
-	"position":         nil,
-	"quote":            nil,
-	"repeat":           nil,
-	"replace":          nil,
-	"reverse":          nil,
-	"right":            nil,
-	"rpad":             nil,
-	"rtrim":            nil,
-	"soundex":          nil,
-	"space":            nil,
-	"strcmp":           nil,
-	"substr":           nil,
-	"substring":        nil,
-	"substring_index":  nil,
-	"to_base64":        nil,
-	"trim":             nil,
-	"ucase":            nil,
-	"unhex":            nil,
-	"upper":            nil,
-	"weight_string":    nil,
+func getValueFor(expr *sqlparser.SetExpr) (any, error) {
+	switch expr := expr.Expr.(type) {
+	case *sqlparser.Literal:
+		switch expr.Type {
+		case sqlparser.StrVal:
+			return strings.ToLower(expr.Val), nil
+		case sqlparser.IntVal:
+			num, err := strconv.ParseInt(expr.Val, 0, 64)
+			if err != nil {
+				return nil, err
+			}
+			return num, nil
+		case sqlparser.FloatVal, sqlparser.DecimalVal:
+			num, err := strconv.ParseFloat(expr.Val, 64)
+			if err != nil {
+				return nil, err
+			}
+			return num, nil
+		default:
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid value type: %v", sqlparser.String(expr))
+		}
+	case sqlparser.BoolVal:
+		var val int64
+		if expr {
+			val = 1
+		}
+		return val, nil
+	case *sqlparser.NullVal:
+		return nil, nil
+	case *sqlparser.ColName:
+		return expr.Name.String(), nil
+	case *sqlparser.Default:
+		return "default", nil
+	default:
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid syntax: %s", sqlparser.String(expr))
+	}
 }

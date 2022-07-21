@@ -17,12 +17,17 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"flag"
 	"math/rand"
 	"strings"
 	"time"
 
-	"golang.org/x/net/context"
+	"vitess.io/vitess/go/vt/env"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/discovery"
@@ -37,16 +42,73 @@ import (
 )
 
 var (
-	cell              = flag.String("cell", "test_nj", "cell to use")
-	tabletTypesToWait = flag.String("tablet_types_to_wait", "", "wait till connected for specified tablet types during Gateway initialization")
+	cell                     = flag.String("cell", "test_nj", "cell to use")
+	tabletTypesToWait        = flag.String("tablet_types_to_wait", "", "wait till connected for specified tablet types during Gateway initialization")
+	plannerVersion           = flag.String("planner-version", "", "Sets the default planner to use when the session has not changed it. Valid values are: V3, Gen4, Gen4Greedy and Gen4Fallback. Gen4Fallback tries the gen4 planner and falls back to the V3 planner if the gen4 fails.")
+	plannerVersionDeprecated = flag.String("planner_version", "", "Deprecated flag. Use planner-version instead")
 )
 
 var resilientServer *srvtopo.ResilientServer
-var legacyHealthCheck discovery.LegacyHealthCheck
 
 func init() {
 	rand.Seed(time.Now().UnixNano())
 	servenv.RegisterDefaultFlags()
+}
+
+// CheckCellFlags will check validation of cell and cells_to_watch flag
+// it will help to avoid strange behaviors when vtgate runs but actually does not work
+func CheckCellFlags(ctx context.Context, serv srvtopo.Server, cell string, cellsToWatch string) error {
+	// topo check
+	var topoServer *topo.Server
+	if serv != nil {
+		var err error
+		topoServer, err = serv.GetTopoServer()
+		if err != nil {
+			log.Exitf("Unable to create gateway: %v", err)
+		}
+	} else {
+		log.Exitf("topo server cannot be nil")
+	}
+	cellsInTopo, err := topoServer.GetKnownCells(ctx)
+	if err != nil {
+		return err
+	}
+	if len(cellsInTopo) == 0 {
+		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "topo server should have at least one cell")
+	}
+
+	// cell valid check
+	if cell == "" {
+		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "cell flag must be set")
+	}
+	hasCell := false
+	for _, v := range cellsInTopo {
+		if v == cell {
+			hasCell = true
+			break
+		}
+	}
+	if !hasCell {
+		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "cell:[%v] does not exist in topo", cell)
+	}
+
+	// cells_to_watch valid check
+	cells := make([]string, 0, 1)
+	for _, c := range strings.Split(cellsToWatch, ",") {
+		if c == "" {
+			continue
+		}
+		// cell should contained in cellsInTopo
+		if exists := topo.InCellList(c, cellsInTopo); !exists {
+			return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "cell: [%v] is not valid. Available cells: [%v]", c, strings.Join(cellsInTopo, ","))
+		}
+		cells = append(cells, c)
+	}
+	if len(cells) == 0 {
+		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "cells_to_watch flag cannot be empty")
+	}
+
+	return nil
 }
 
 func main() {
@@ -68,21 +130,31 @@ func main() {
 				log.Errorf("unknown tablet type: %v", ttStr)
 				continue
 			}
-			tabletTypes = append(tabletTypes, tt)
+			if topoproto.IsServingType(tt) {
+				tabletTypes = append(tabletTypes, tt)
+			}
 		}
-	}
-
-	var vtg *vtgate.VTGate
-	if *vtgate.GatewayImplementation == vtgate.GatewayImplementationDiscovery {
-		// default value
-		legacyHealthCheck = discovery.NewLegacyHealthCheck(*vtgate.HealthCheckRetryDelay, *vtgate.HealthCheckTimeout)
-		legacyHealthCheck.RegisterStats()
-
-		vtg = vtgate.LegacyInit(context.Background(), legacyHealthCheck, resilientServer, *cell, *vtgate.RetryCount, tabletTypes)
 	} else {
-		// use new Init otherwise
-		vtg = vtgate.Init(context.Background(), resilientServer, *cell, tabletTypes)
+		log.Exitf("tablet_types_to_wait flag must be set")
 	}
+
+	if len(tabletTypes) == 0 {
+		log.Exitf("tablet_types_to_wait should contain at least one serving tablet type")
+	}
+
+	err := CheckCellFlags(context.Background(), resilientServer, *cell, *vtgate.CellsToWatch)
+	if err != nil {
+		log.Exitf("cells_to_watch validation failed: %v", err)
+	}
+
+	version, err := env.CheckPlannerVersionFlag(plannerVersion, plannerVersionDeprecated)
+	if err != nil {
+		log.Exitf("failed to get planner version from flags: %v", err)
+	}
+	plannerVersion, _ := plancontext.PlannerNameToVersion(version)
+
+	// pass nil for HealthCheck and it will be created
+	vtg := vtgate.Init(context.Background(), nil, resilientServer, *cell, tabletTypes, plannerVersion)
 
 	servenv.OnRun(func() {
 		// Flags are parsed now. Parse the template using the actual flag value and overwrite the current template.
@@ -91,9 +163,6 @@ func main() {
 	})
 	servenv.OnClose(func() {
 		_ = vtg.Gateway().Close(context.Background())
-		if legacyHealthCheck != nil {
-			_ = legacyHealthCheck.Close()
-		}
 	})
 	servenv.RunDefault()
 }

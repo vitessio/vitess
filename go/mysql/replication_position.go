@@ -37,7 +37,7 @@ const (
 
 // Position represents the information necessary to describe which
 // transactions a server has seen, so that it can request a replication stream
-// from a new master that picks up where it left off.
+// from a new source that picks up where it left off.
 //
 // This must be a concrete struct because custom Unmarshalers can't be
 // registered on an interface.
@@ -68,8 +68,18 @@ func (rp Position) Equal(other Position) bool {
 
 // AtLeast returns true if this position is equal to or after another.
 func (rp Position) AtLeast(other Position) bool {
+	// The underlying call to the Contains method of the GTIDSet interface
+	// does not guarantee handling the nil cases correctly.
+	// So, we have to do nil case handling here
+	if other.GTIDSet == nil {
+		// If the other GTIDSet is nil, then it is contained
+		// in all possible GTIDSets, even nil ones.
+		return true
+	}
 	if rp.GTIDSet == nil {
-		return other.GTIDSet == nil
+		// Here rp GTIDSet is nil but the other GTIDSet isn't.
+		// So it is not contained in the rp GTIDSet.
+		return false
 	}
 	return rp.GTIDSet.Contains(other.GTIDSet)
 }

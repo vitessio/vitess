@@ -17,16 +17,23 @@ limitations under the License.
 package wrangler
 
 import (
+	"strings"
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vtgate/engine"
+
+	"context"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/net/context"
+
 	"vitess.io/vitess/go/sqltypes"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
-	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
 func TestVDiffPlanSuccess(t *testing.T) {
@@ -56,13 +63,19 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			Columns:           []string{"c1", "c2", "c3", "c4"},
 			PrimaryKeyColumns: []string{"c1"},
 			Fields:            sqltypes.MakeTestFields("c1|c2|c3|c4", "int64|int64|int64|int64"),
+		}, {
+			Name:              "datze",
+			Columns:           []string{"id", "dt"},
+			PrimaryKeyColumns: []string{"id"},
+			Fields:            sqltypes.MakeTestFields("id|dt", "int64|datetime"),
 		}},
 	}
 
 	testcases := []struct {
-		input *binlogdatapb.Rule
-		table string
-		td    *tableDiffer
+		input          *binlogdatapb.Rule
+		table          string
+		td             *tableDiffer
+		sourceTimeZone string
 	}{{
 		input: &binlogdatapb.Rule{
 			Match: "t1",
@@ -72,10 +85,12 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			targetTable:      "t1",
 			sourceExpression: "select c1, c2 from t1 order by c1 asc",
 			targetExpression: "select c1, c2 from t1 order by c1 asc",
-			compareCols:      []int{-1, 1},
-			comparePKs:       []int{0},
-			sourcePrimitive:  newMergeSorter(nil, []int{0}),
-			targetPrimitive:  newMergeSorter(nil, []int{0}),
+			compareCols:      []compareColInfo{{0, collations.Collation(nil), true}, {1, collations.Collation(nil), false}},
+			comparePKs:       []compareColInfo{{0, collations.Collation(nil), true}},
+			pkCols:           []int{0},
+			selectPks:        []int{0},
+			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Collation(nil), true}}),
+			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Collation(nil), true}}),
 		},
 	}, {
 		input: &binlogdatapb.Rule{
@@ -87,10 +102,12 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			targetTable:      "t1",
 			sourceExpression: "select c1, c2 from t1 order by c1 asc",
 			targetExpression: "select c1, c2 from t1 order by c1 asc",
-			compareCols:      []int{-1, 1},
-			comparePKs:       []int{0},
-			sourcePrimitive:  newMergeSorter(nil, []int{0}),
-			targetPrimitive:  newMergeSorter(nil, []int{0}),
+			compareCols:      []compareColInfo{{0, collations.Collation(nil), true}, {1, collations.Collation(nil), false}},
+			comparePKs:       []compareColInfo{{0, collations.Collation(nil), true}},
+			pkCols:           []int{0},
+			selectPks:        []int{0},
+			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Collation(nil), true}}),
+			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Collation(nil), true}}),
 		},
 	}, {
 		input: &binlogdatapb.Rule{
@@ -102,10 +119,12 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			targetTable:      "t1",
 			sourceExpression: "select c1, c2 from t1 order by c1 asc",
 			targetExpression: "select c1, c2 from t1 order by c1 asc",
-			compareCols:      []int{-1, 1},
-			comparePKs:       []int{0},
-			sourcePrimitive:  newMergeSorter(nil, []int{0}),
-			targetPrimitive:  newMergeSorter(nil, []int{0}),
+			compareCols:      []compareColInfo{{0, collations.Collation(nil), true}, {1, collations.Collation(nil), false}},
+			comparePKs:       []compareColInfo{{0, collations.Collation(nil), true}},
+			pkCols:           []int{0},
+			selectPks:        []int{0},
+			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Collation(nil), true}}),
+			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Collation(nil), true}}),
 		},
 	}, {
 		input: &binlogdatapb.Rule{
@@ -117,10 +136,12 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			targetTable:      "t1",
 			sourceExpression: "select c2, c1 from t1 order by c1 asc",
 			targetExpression: "select c2, c1 from t1 order by c1 asc",
-			compareCols:      []int{0, -1},
-			comparePKs:       []int{1},
-			sourcePrimitive:  newMergeSorter(nil, []int{1}),
-			targetPrimitive:  newMergeSorter(nil, []int{1}),
+			compareCols:      []compareColInfo{{0, collations.Collation(nil), false}, {1, collations.Collation(nil), true}},
+			comparePKs:       []compareColInfo{{1, collations.Collation(nil), true}},
+			pkCols:           []int{1},
+			selectPks:        []int{1},
+			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{1, collations.Collation(nil), true}}),
+			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{1, collations.Collation(nil), true}}),
 		},
 	}, {
 		input: &binlogdatapb.Rule{
@@ -132,10 +153,12 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			targetTable:      "t1",
 			sourceExpression: "select c0 as c1, c2 from t2 order by c1 asc",
 			targetExpression: "select c1, c2 from t1 order by c1 asc",
-			compareCols:      []int{-1, 1},
-			comparePKs:       []int{0},
-			sourcePrimitive:  newMergeSorter(nil, []int{0}),
-			targetPrimitive:  newMergeSorter(nil, []int{0}),
+			compareCols:      []compareColInfo{{0, collations.Collation(nil), true}, {1, collations.Collation(nil), false}},
+			comparePKs:       []compareColInfo{{0, collations.Collation(nil), true}},
+			pkCols:           []int{0},
+			selectPks:        []int{0},
+			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Collation(nil), true}}),
+			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Collation(nil), true}}),
 		},
 	}, {
 		// non-pk text column.
@@ -146,12 +169,14 @@ func TestVDiffPlanSuccess(t *testing.T) {
 		table: "nonpktext",
 		td: &tableDiffer{
 			targetTable:      "nonpktext",
-			sourceExpression: "select c1, textcol, weight_string(textcol) from nonpktext order by c1 asc",
-			targetExpression: "select c1, textcol, weight_string(textcol) from nonpktext order by c1 asc",
-			compareCols:      []int{-1, 2},
-			comparePKs:       []int{0},
-			sourcePrimitive:  newMergeSorter(nil, []int{0}),
-			targetPrimitive:  newMergeSorter(nil, []int{0}),
+			sourceExpression: "select c1, textcol from nonpktext order by c1 asc",
+			targetExpression: "select c1, textcol from nonpktext order by c1 asc",
+			compareCols:      []compareColInfo{{0, collations.Collation(nil), true}, {1, collations.Collation(nil), false}},
+			comparePKs:       []compareColInfo{{0, collations.Collation(nil), true}},
+			pkCols:           []int{0},
+			selectPks:        []int{0},
+			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Collation(nil), true}}),
+			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Collation(nil), true}}),
 		},
 	}, {
 		// non-pk text column, different order.
@@ -162,12 +187,14 @@ func TestVDiffPlanSuccess(t *testing.T) {
 		table: "nonpktext",
 		td: &tableDiffer{
 			targetTable:      "nonpktext",
-			sourceExpression: "select textcol, c1, weight_string(textcol) from nonpktext order by c1 asc",
-			targetExpression: "select textcol, c1, weight_string(textcol) from nonpktext order by c1 asc",
-			compareCols:      []int{2, -1},
-			comparePKs:       []int{1},
-			sourcePrimitive:  newMergeSorter(nil, []int{1}),
-			targetPrimitive:  newMergeSorter(nil, []int{1}),
+			sourceExpression: "select textcol, c1 from nonpktext order by c1 asc",
+			targetExpression: "select textcol, c1 from nonpktext order by c1 asc",
+			compareCols:      []compareColInfo{{0, collations.Collation(nil), false}, {1, collations.Collation(nil), true}},
+			comparePKs:       []compareColInfo{{1, collations.Collation(nil), true}},
+			pkCols:           []int{1},
+			selectPks:        []int{1},
+			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{1, collations.Collation(nil), true}}),
+			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{1, collations.Collation(nil), true}}),
 		},
 	}, {
 		// pk text column.
@@ -178,12 +205,14 @@ func TestVDiffPlanSuccess(t *testing.T) {
 		table: "pktext",
 		td: &tableDiffer{
 			targetTable:      "pktext",
-			sourceExpression: "select textcol, c2, weight_string(textcol) from pktext order by textcol asc",
-			targetExpression: "select textcol, c2, weight_string(textcol) from pktext order by textcol asc",
-			compareCols:      []int{-1, 1},
-			comparePKs:       []int{2},
-			sourcePrimitive:  newMergeSorter(nil, []int{2}),
-			targetPrimitive:  newMergeSorter(nil, []int{2}),
+			sourceExpression: "select textcol, c2 from pktext order by textcol asc",
+			targetExpression: "select textcol, c2 from pktext order by textcol asc",
+			compareCols:      []compareColInfo{{0, collations.Collation(nil), true}, {1, collations.Collation(nil), false}},
+			comparePKs:       []compareColInfo{{0, collations.Collation(nil), true}},
+			pkCols:           []int{0},
+			selectPks:        []int{0},
+			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Collation(nil), false}}),
+			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Collation(nil), false}}),
 		},
 	}, {
 		// pk text column, different order.
@@ -194,12 +223,14 @@ func TestVDiffPlanSuccess(t *testing.T) {
 		table: "pktext",
 		td: &tableDiffer{
 			targetTable:      "pktext",
-			sourceExpression: "select c2, textcol, weight_string(textcol) from pktext order by textcol asc",
-			targetExpression: "select c2, textcol, weight_string(textcol) from pktext order by textcol asc",
-			compareCols:      []int{0, -1},
-			comparePKs:       []int{2},
-			sourcePrimitive:  newMergeSorter(nil, []int{2}),
-			targetPrimitive:  newMergeSorter(nil, []int{2}),
+			sourceExpression: "select c2, textcol from pktext order by textcol asc",
+			targetExpression: "select c2, textcol from pktext order by textcol asc",
+			compareCols:      []compareColInfo{{0, collations.Collation(nil), false}, {1, collations.Collation(nil), true}},
+			comparePKs:       []compareColInfo{{1, collations.Collation(nil), true}},
+			pkCols:           []int{1},
+			selectPks:        []int{1},
+			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{1, collations.Collation(nil), false}}),
+			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{1, collations.Collation(nil), false}}),
 		},
 	}, {
 		// text column as expression.
@@ -210,12 +241,14 @@ func TestVDiffPlanSuccess(t *testing.T) {
 		table: "pktext",
 		td: &tableDiffer{
 			targetTable:      "pktext",
-			sourceExpression: "select c2, a + b as textcol, weight_string(a + b) from pktext order by textcol asc",
-			targetExpression: "select c2, textcol, weight_string(textcol) from pktext order by textcol asc",
-			compareCols:      []int{0, -1},
-			comparePKs:       []int{2},
-			sourcePrimitive:  newMergeSorter(nil, []int{2}),
-			targetPrimitive:  newMergeSorter(nil, []int{2}),
+			sourceExpression: "select c2, a + b as textcol from pktext order by textcol asc",
+			targetExpression: "select c2, textcol from pktext order by textcol asc",
+			compareCols:      []compareColInfo{{0, collations.Collation(nil), false}, {1, collations.Collation(nil), true}},
+			comparePKs:       []compareColInfo{{1, collations.Collation(nil), true}},
+			pkCols:           []int{1},
+			selectPks:        []int{1},
+			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{1, collations.Collation(nil), false}}),
+			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{1, collations.Collation(nil), false}}),
 		},
 	}, {
 		input: &binlogdatapb.Rule{
@@ -226,10 +259,12 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			targetTable:      "multipk",
 			sourceExpression: "select c1, c2 from multipk order by c1 asc, c2 asc",
 			targetExpression: "select c1, c2 from multipk order by c1 asc, c2 asc",
-			compareCols:      []int{-1, -1},
-			comparePKs:       []int{0, 1},
-			sourcePrimitive:  newMergeSorter(nil, []int{0, 1}),
-			targetPrimitive:  newMergeSorter(nil, []int{0, 1}),
+			compareCols:      []compareColInfo{{0, collations.Collation(nil), true}, {1, collations.Collation(nil), true}},
+			comparePKs:       []compareColInfo{{0, collations.Collation(nil), true}, {1, collations.Collation(nil), true}},
+			pkCols:           []int{0, 1},
+			selectPks:        []int{0, 1},
+			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Collation(nil), true}, {1, collations.Collation(nil), true}}),
+			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Collation(nil), true}, {1, collations.Collation(nil), true}}),
 		},
 	}, {
 		// in_keyrange
@@ -242,10 +277,12 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			targetTable:      "t1",
 			sourceExpression: "select c1, c2 from t1 order by c1 asc",
 			targetExpression: "select c1, c2 from t1 order by c1 asc",
-			compareCols:      []int{-1, 1},
-			comparePKs:       []int{0},
-			sourcePrimitive:  newMergeSorter(nil, []int{0}),
-			targetPrimitive:  newMergeSorter(nil, []int{0}),
+			compareCols:      []compareColInfo{{0, collations.Collation(nil), true}, {1, collations.Collation(nil), false}},
+			comparePKs:       []compareColInfo{{0, collations.Collation(nil), true}},
+			pkCols:           []int{0},
+			selectPks:        []int{0},
+			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Collation(nil), true}}),
+			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Collation(nil), true}}),
 		},
 	}, {
 		// in_keyrange on RHS of AND.
@@ -259,10 +296,12 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			targetTable:      "t1",
 			sourceExpression: "select c1, c2 from t1 where c2 = 2 order by c1 asc",
 			targetExpression: "select c1, c2 from t1 order by c1 asc",
-			compareCols:      []int{-1, 1},
-			comparePKs:       []int{0},
-			sourcePrimitive:  newMergeSorter(nil, []int{0}),
-			targetPrimitive:  newMergeSorter(nil, []int{0}),
+			compareCols:      []compareColInfo{{0, collations.Collation(nil), true}, {1, collations.Collation(nil), false}},
+			comparePKs:       []compareColInfo{{0, collations.Collation(nil), true}},
+			pkCols:           []int{0},
+			selectPks:        []int{0},
+			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Collation(nil), true}}),
+			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Collation(nil), true}}),
 		},
 	}, {
 		// in_keyrange on LHS of AND.
@@ -276,10 +315,12 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			targetTable:      "t1",
 			sourceExpression: "select c1, c2 from t1 where c2 = 2 order by c1 asc",
 			targetExpression: "select c1, c2 from t1 order by c1 asc",
-			compareCols:      []int{-1, 1},
-			comparePKs:       []int{0},
-			sourcePrimitive:  newMergeSorter(nil, []int{0}),
-			targetPrimitive:  newMergeSorter(nil, []int{0}),
+			compareCols:      []compareColInfo{{0, collations.Collation(nil), true}, {1, collations.Collation(nil), false}},
+			comparePKs:       []compareColInfo{{0, collations.Collation(nil), true}},
+			pkCols:           []int{0},
+			selectPks:        []int{0},
+			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Collation(nil), true}}),
+			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Collation(nil), true}}),
 		},
 	}, {
 		// in_keyrange on cascaded AND expression
@@ -293,10 +334,12 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			targetTable:      "t1",
 			sourceExpression: "select c1, c2 from t1 where c2 = 2 and c1 = 1 order by c1 asc",
 			targetExpression: "select c1, c2 from t1 order by c1 asc",
-			compareCols:      []int{-1, 1},
-			comparePKs:       []int{0},
-			sourcePrimitive:  newMergeSorter(nil, []int{0}),
-			targetPrimitive:  newMergeSorter(nil, []int{0}),
+			compareCols:      []compareColInfo{{0, collations.Collation(nil), true}, {1, collations.Collation(nil), false}},
+			comparePKs:       []compareColInfo{{0, collations.Collation(nil), true}},
+			pkCols:           []int{0},
+			selectPks:        []int{0},
+			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Collation(nil), true}}),
+			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Collation(nil), true}}),
 		},
 	}, {
 		// in_keyrange parenthesized
@@ -310,10 +353,12 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			targetTable:      "t1",
 			sourceExpression: "select c1, c2 from t1 where c2 = 2 order by c1 asc",
 			targetExpression: "select c1, c2 from t1 order by c1 asc",
-			compareCols:      []int{-1, 1},
-			comparePKs:       []int{0},
-			sourcePrimitive:  newMergeSorter(nil, []int{0}),
-			targetPrimitive:  newMergeSorter(nil, []int{0}),
+			compareCols:      []compareColInfo{{0, collations.Collation(nil), true}, {1, collations.Collation(nil), false}},
+			comparePKs:       []compareColInfo{{0, collations.Collation(nil), true}},
+			pkCols:           []int{0},
+			selectPks:        []int{0},
+			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Collation(nil), true}}),
+			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Collation(nil), true}}),
 		},
 	}, {
 		// group by
@@ -326,10 +371,12 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			targetTable:      "t1",
 			sourceExpression: "select c1, c2 from t1 group by c1 order by c1 asc",
 			targetExpression: "select c1, c2 from t1 order by c1 asc",
-			compareCols:      []int{-1, 1},
-			comparePKs:       []int{0},
-			sourcePrimitive:  newMergeSorter(nil, []int{0}),
-			targetPrimitive:  newMergeSorter(nil, []int{0}),
+			compareCols:      []compareColInfo{{0, collations.Collation(nil), true}, {1, collations.Collation(nil), false}},
+			comparePKs:       []compareColInfo{{0, collations.Collation(nil), true}},
+			pkCols:           []int{0},
+			selectPks:        []int{0},
+			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Collation(nil), true}}),
+			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Collation(nil), true}}),
 		},
 	}, {
 		// aggregations
@@ -342,27 +389,47 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			targetTable:      "aggr",
 			sourceExpression: "select c1, c2, count(*) as c3, sum(c4) as c4 from t1 group by c1 order by c1 asc",
 			targetExpression: "select c1, c2, c3, c4 from aggr order by c1 asc",
-			compareCols:      []int{-1, 1, 2, 3},
-			comparePKs:       []int{0},
+			compareCols:      []compareColInfo{{0, collations.Collation(nil), true}, {1, collations.Collation(nil), false}, {2, collations.Collation(nil), false}, {3, collations.Collation(nil), false}},
+			comparePKs:       []compareColInfo{{0, collations.Collation(nil), true}},
+			pkCols:           []int{0},
+			selectPks:        []int{0},
 			sourcePrimitive: &engine.OrderedAggregate{
-				Aggregates: []engine.AggregateParams{{
-					Opcode: engine.AggregateCount,
+				Aggregates: []*engine.AggregateParams{{
+					Opcode: engine.AggregateSum,
 					Col:    2,
 				}, {
 					Opcode: engine.AggregateSum,
 					Col:    3,
 				}},
-				Keys:  []int{0},
-				Input: newMergeSorter(nil, []int{0}),
+				GroupByKeys: []*engine.GroupByParams{{KeyCol: 0, WeightStringCol: -1}},
+				Input:       newMergeSorter(nil, []compareColInfo{{0, collations.Collation(nil), true}}),
 			},
-			targetPrimitive: newMergeSorter(nil, []int{0}),
+			targetPrimitive: newMergeSorter(nil, []compareColInfo{{0, collations.Collation(nil), true}}),
+		},
+	}, {
+		input: &binlogdatapb.Rule{
+			Match: "datze",
+		},
+		sourceTimeZone: "US/Pacific",
+		table:          "datze",
+		td: &tableDiffer{
+			targetTable:      "datze",
+			sourceExpression: "select id, dt from datze order by id asc",
+			targetExpression: "select id, convert_tz(dt, 'UTC', 'US/Pacific') as dt from datze order by id asc",
+			compareCols:      []compareColInfo{{0, collations.Collation(nil), true}, {1, collations.Collation(nil), false}},
+			comparePKs:       []compareColInfo{{0, collations.Collation(nil), true}},
+			pkCols:           []int{0},
+			selectPks:        []int{0},
+			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Collation(nil), true}}),
+			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Collation(nil), true}}),
 		},
 	}}
+
 	for _, tcase := range testcases {
 		t.Run(tcase.input.Filter, func(t *testing.T) {
 			filter := &binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{tcase.input}}
-			df := &vdiff{}
-			err := df.buildVDiffPlan(context.Background(), filter, schm)
+			df := &vdiff{sourceTimeZone: tcase.sourceTimeZone, targetTimeZone: "UTC"}
+			err := df.buildVDiffPlan(context.Background(), filter, schm, nil)
 			require.NoError(t, err, tcase.input)
 			require.Equal(t, 1, len(df.differs), tcase.input)
 			assert.Equal(t, tcase.td, df.differs[tcase.table], tcase.input)
@@ -417,7 +484,7 @@ func TestVDiffPlanFailure(t *testing.T) {
 	for _, tcase := range testcases {
 		filter := &binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{tcase.input}}
 		df := &vdiff{}
-		err := df.buildVDiffPlan(context.Background(), filter, schm)
+		err := df.buildVDiffPlan(context.Background(), filter, schm, nil)
 		assert.EqualError(t, err, tcase.err, tcase.input)
 	}
 }
@@ -442,10 +509,12 @@ func TestVDiffUnsharded(t *testing.T) {
 	)
 
 	testcases := []struct {
-		id     string
-		source []*sqltypes.Result
-		target []*sqltypes.Result
-		dr     *DiffReport
+		id      string
+		source  []*sqltypes.Result
+		target  []*sqltypes.Result
+		dr      *DiffReport
+		onlyPks bool
+		debug   bool
 	}{{
 		id: "1",
 		source: sqltypes.MakeTestStreamingResults(fields,
@@ -463,6 +532,7 @@ func TestVDiffUnsharded(t *testing.T) {
 		dr: &DiffReport{
 			ProcessedRows: 3,
 			MatchingRows:  3,
+			TableName:     "t1",
 		},
 	}, {
 		id: "2",
@@ -479,6 +549,16 @@ func TestVDiffUnsharded(t *testing.T) {
 			ProcessedRows:   3,
 			MatchingRows:    1,
 			ExtraRowsTarget: 2,
+			TableName:       "t1",
+			ExtraRowsTargetDiffs: []*RowDiff{
+				{
+					Row: map[string]sqltypes.Value{
+						"c1": sqltypes.NewInt64(2),
+						"c2": sqltypes.NewInt64(4),
+					},
+					Query: "",
+				},
+			},
 		},
 	}, {
 		id: "3",
@@ -495,6 +575,16 @@ func TestVDiffUnsharded(t *testing.T) {
 			ProcessedRows:   3,
 			MatchingRows:    1,
 			ExtraRowsSource: 2,
+			TableName:       "t1",
+			ExtraRowsSourceDiffs: []*RowDiff{
+				{
+					Row: map[string]sqltypes.Value{
+						"c1": sqltypes.NewInt64(2),
+						"c2": sqltypes.NewInt64(4),
+					},
+					Query: "",
+				},
+			},
 		},
 	}, {
 		id: "4",
@@ -513,6 +603,16 @@ func TestVDiffUnsharded(t *testing.T) {
 			ProcessedRows:   3,
 			MatchingRows:    2,
 			ExtraRowsSource: 1,
+			TableName:       "t1",
+			ExtraRowsSourceDiffs: []*RowDiff{
+				{
+					Row: map[string]sqltypes.Value{
+						"c1": sqltypes.NewInt64(2),
+						"c2": sqltypes.NewInt64(4),
+					},
+					Query: "",
+				},
+			},
 		},
 	}, {
 		id: "5",
@@ -531,6 +631,16 @@ func TestVDiffUnsharded(t *testing.T) {
 			ProcessedRows:   3,
 			MatchingRows:    2,
 			ExtraRowsTarget: 1,
+			TableName:       "t1",
+			ExtraRowsTargetDiffs: []*RowDiff{
+				{
+					Row: map[string]sqltypes.Value{
+						"c1": sqltypes.NewInt64(2),
+						"c2": sqltypes.NewInt64(4),
+					},
+					Query: "",
+				},
+			},
 		},
 	}, {
 		id: "6",
@@ -550,16 +660,107 @@ func TestVDiffUnsharded(t *testing.T) {
 			ProcessedRows:  3,
 			MatchingRows:   2,
 			MismatchedRows: 1,
+			TableName:      "t1",
+			MismatchedRowsSample: []*DiffMismatch{
+				{
+					Source: &RowDiff{Row: map[string]sqltypes.Value{
+						"c1": sqltypes.NewInt64(2),
+						"c2": sqltypes.NewInt64(3),
+					},
+						Query: "",
+					},
+					Target: &RowDiff{Row: map[string]sqltypes.Value{
+						"c1": sqltypes.NewInt64(2),
+						"c2": sqltypes.NewInt64(4),
+					},
+						Query: "",
+					},
+				},
+			},
+		},
+	}, {
+		id:      "7",
+		onlyPks: true,
+		source: sqltypes.MakeTestStreamingResults(fields,
+			"1|3",
+			"---",
+			"2|3",
+			"3|1",
+		),
+		target: sqltypes.MakeTestStreamingResults(fields,
+			"1|3",
+			"---",
+			"2|4",
+			"3|1",
+		),
+		dr: &DiffReport{
+			ProcessedRows:  3,
+			MatchingRows:   2,
+			MismatchedRows: 1,
+			TableName:      "t1",
+			MismatchedRowsSample: []*DiffMismatch{
+				{
+					Source: &RowDiff{Row: map[string]sqltypes.Value{
+						"c1": sqltypes.NewInt64(2),
+					},
+						Query: "",
+					},
+					Target: &RowDiff{Row: map[string]sqltypes.Value{
+						"c1": sqltypes.NewInt64(2),
+					},
+						Query: "",
+					},
+				},
+			},
+		},
+	}, {
+		id:    "8",
+		debug: true,
+		source: sqltypes.MakeTestStreamingResults(fields,
+			"1|3",
+			"---",
+			"2|3",
+			"3|1",
+		),
+		target: sqltypes.MakeTestStreamingResults(fields,
+			"1|3",
+			"---",
+			"2|4",
+			"3|1",
+		),
+		dr: &DiffReport{
+			ProcessedRows:  3,
+			MatchingRows:   2,
+			MismatchedRows: 1,
+			TableName:      "t1",
+			MismatchedRowsSample: []*DiffMismatch{
+				{
+					Source: &RowDiff{Row: map[string]sqltypes.Value{
+						"c1": sqltypes.NewInt64(2),
+						"c2": sqltypes.NewInt64(3),
+					},
+						Query: "select c1, c2 from t1 where c1=2;",
+					},
+					Target: &RowDiff{Row: map[string]sqltypes.Value{
+						"c1": sqltypes.NewInt64(2),
+						"c2": sqltypes.NewInt64(4),
+					},
+						Query: "select c1, c2 from t1 where c1=2;",
+					},
+				},
+			},
 		},
 	}}
 
 	for _, tcase := range testcases {
-		env.tablets[101].setResults("select c1, c2 from t1 order by c1 asc", vdiffSourceGtid, tcase.source)
-		env.tablets[201].setResults("select c1, c2 from t1 order by c1 asc", vdiffTargetMasterPosition, tcase.target)
+		t.Run(tcase.id, func(t *testing.T) {
+			env.tablets[101].setResults("select c1, c2 from t1 order by c1 asc", vdiffSourceGtid, tcase.source)
+			env.tablets[201].setResults("select c1, c2 from t1 order by c1 asc", vdiffTargetPrimaryPosition, tcase.target)
 
-		dr, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 30*time.Second, "")
-		require.NoError(t, err)
-		assert.Equal(t, tcase.dr, dr["t1"], tcase.id)
+			dr, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 30*time.Second, "", 100, "", tcase.debug, tcase.onlyPks, 100)
+			require.NoError(t, err)
+			assert.Equal(t, tcase.dr, dr["t1"], tcase.id)
+		})
 	}
 }
 
@@ -578,8 +779,15 @@ func TestVDiffSharded(t *testing.T) {
 			Columns:           []string{"c1", "c2"},
 			PrimaryKeyColumns: []string{"c1"},
 			Fields:            sqltypes.MakeTestFields("c1|c2", "int64|int64"),
-		}},
+		},
+			{
+				Name:              "_t1_gho",
+				Columns:           []string{"c1", "c2", "c3"},
+				PrimaryKeyColumns: []string{"c2"},
+				Fields:            sqltypes.MakeTestFields("c1|c2|c3", "int64|int64|int64"),
+			}},
 	}
+
 	env.tmc.schema = schm
 
 	query := "select c1, c2 from t1 order by c1 asc"
@@ -605,25 +813,26 @@ func TestVDiffSharded(t *testing.T) {
 	)
 	env.tablets[201].setResults(
 		query,
-		vdiffTargetMasterPosition,
+		vdiffTargetPrimaryPosition,
 		sqltypes.MakeTestStreamingResults(fields,
 			"1|3",
 		),
 	)
 	env.tablets[211].setResults(
 		query,
-		vdiffTargetMasterPosition,
+		vdiffTargetPrimaryPosition,
 		sqltypes.MakeTestStreamingResults(fields,
 			"2|4",
 			"3|4",
 		),
 	)
 
-	dr, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 30*time.Second, "")
+	dr, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 30*time.Second, "", 100, "", false /*debug*/, false /*onlyPks*/, 100)
 	require.NoError(t, err)
 	wantdr := &DiffReport{
 		ProcessedRows: 3,
 		MatchingRows:  3,
+		TableName:     "t1",
 	}
 	assert.Equal(t, wantdr, dr["t1"])
 }
@@ -669,7 +878,7 @@ func TestVDiffAggregates(t *testing.T) {
 	targetQuery := "select c1, c2, c3 from t1 order by c1 asc"
 	env.tablets[201].setResults(
 		targetQuery,
-		vdiffTargetMasterPosition,
+		vdiffTargetPrimaryPosition,
 		sqltypes.MakeTestStreamingResults(fields,
 			"1|4|5",
 			"5|3|3",
@@ -677,7 +886,7 @@ func TestVDiffAggregates(t *testing.T) {
 	)
 	env.tablets[211].setResults(
 		targetQuery,
-		vdiffTargetMasterPosition,
+		vdiffTargetPrimaryPosition,
 		sqltypes.MakeTestStreamingResults(fields,
 			"2|4|5",
 			"3|2|2",
@@ -685,139 +894,12 @@ func TestVDiffAggregates(t *testing.T) {
 		),
 	)
 
-	dr, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 30*time.Second, "")
+	dr, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 30*time.Second, "", 100, "", false /*debug*/, false /*onlyPks*/, 100)
 	require.NoError(t, err)
 	wantdr := &DiffReport{
 		ProcessedRows: 5,
 		MatchingRows:  5,
-	}
-	assert.Equal(t, wantdr, dr["t1"])
-}
-
-func TestVDiffPKWeightString(t *testing.T) {
-	// Also test that highest position ""MariaDB/5-456-892" will be used
-	// if lower positions are found.
-	env := newTestVDiffEnv([]string{"-40", "40-"}, []string{"-80", "80-"}, "", nil)
-	defer env.close()
-
-	schm := &tabletmanagerdatapb.SchemaDefinition{
-		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
-			Name:              "t1",
-			Columns:           []string{"c1", "c2"},
-			PrimaryKeyColumns: []string{"c1"},
-			Fields:            sqltypes.MakeTestFields("c1|c2", "varchar|int64"),
-		}},
-	}
-	env.tmc.schema = schm
-
-	query := "select c1, c2, weight_string(c1) from t1 order by c1 asc"
-	fields := sqltypes.MakeTestFields(
-		"c1|c2|weight_string(c1)",
-		"varchar|int64|varbinary",
-	)
-
-	env.tablets[101].setResults(
-		query,
-		vdiffSourceGtid,
-		sqltypes.MakeTestStreamingResults(fields,
-			"a|3|A",
-			"b|4|B",
-		),
-	)
-	env.tablets[111].setResults(
-		query,
-		vdiffSourceGtid,
-		sqltypes.MakeTestStreamingResults(fields,
-			"C|5|C",
-			"D|6|D",
-		),
-	)
-	env.tablets[201].setResults(
-		query,
-		vdiffTargetMasterPosition,
-		sqltypes.MakeTestStreamingResults(fields,
-			"A|3|A",
-		),
-	)
-	env.tablets[211].setResults(
-		query,
-		vdiffTargetMasterPosition,
-		sqltypes.MakeTestStreamingResults(fields,
-			"b|4|B",
-			"c|5|C",
-			"D|6|D",
-		),
-	)
-
-	dr, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 30*time.Second, "")
-	require.NoError(t, err)
-	wantdr := &DiffReport{
-		ProcessedRows: 4,
-		MatchingRows:  4,
-	}
-	assert.Equal(t, wantdr, dr["t1"])
-}
-
-func TestVDiffNoPKWeightString(t *testing.T) {
-	// Also test that highest position ""MariaDB/5-456-892" will be used
-	// if lower positions are found.
-	env := newTestVDiffEnv([]string{"-40", "40-"}, []string{"-80", "80-"}, "", nil)
-	defer env.close()
-
-	schm := &tabletmanagerdatapb.SchemaDefinition{
-		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
-			Name:              "t1",
-			Columns:           []string{"c1", "c2"},
-			PrimaryKeyColumns: []string{"c1"},
-			Fields:            sqltypes.MakeTestFields("c1|c2", "int64|varchar"),
-		}},
-	}
-	env.tmc.schema = schm
-
-	query := "select c1, c2, weight_string(c2) from t1 order by c1 asc"
-	fields := sqltypes.MakeTestFields(
-		"c1|c2|weight_string(c2)",
-		"int64|varchar|varbinary",
-	)
-
-	env.tablets[101].setResults(
-		query,
-		vdiffSourceGtid,
-		sqltypes.MakeTestStreamingResults(fields,
-			"3|a|A",
-			"4|b|B",
-		),
-	)
-	env.tablets[111].setResults(
-		query,
-		vdiffSourceGtid,
-		sqltypes.MakeTestStreamingResults(fields,
-			"5|C|C",
-			"6|D|D",
-		),
-	)
-	env.tablets[201].setResults(
-		query,
-		vdiffTargetMasterPosition,
-		sqltypes.MakeTestStreamingResults(fields,
-			"3|A|A",
-		),
-	)
-	env.tablets[211].setResults(
-		query,
-		vdiffTargetMasterPosition,
-		sqltypes.MakeTestStreamingResults(fields,
-			"4|b|B",
-			"5|c|C",
-			"6|D|D",
-		),
-	)
-
-	dr, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 30*time.Second, "")
-	require.NoError(t, err)
-	wantdr := &DiffReport{
-		ProcessedRows: 4,
-		MatchingRows:  4,
+		TableName:     "t1",
 	}
 	assert.Equal(t, wantdr, dr["t1"])
 }
@@ -849,14 +931,30 @@ func TestVDiffDefaults(t *testing.T) {
 	)
 	target := source
 	env.tablets[101].setResults("select c1, c2 from t1 order by c1 asc", vdiffSourceGtid, source)
-	env.tablets[201].setResults("select c1, c2 from t1 order by c1 asc", vdiffTargetMasterPosition, target)
+	env.tablets[201].setResults("select c1, c2 from t1 order by c1 asc", vdiffTargetPrimaryPosition, target)
 
-	_, err := env.wr.VDiff(context.Background(), "target", env.workflow, "", "", "replica", 30*time.Second, "")
+	_, err := env.wr.VDiff(context.Background(), "target", env.workflow, "", "", "replica", 30*time.Second, "", 100, "", false /*debug*/, false /*onlyPks*/, 100)
 	require.NoError(t, err)
-	_, err = env.wr.VDiff(context.Background(), "target", env.workflow, "", env.cell, "replica", 30*time.Second, "")
+	_, err = env.wr.VDiff(context.Background(), "target", env.workflow, "", env.cell, "replica", 30*time.Second, "", 100, "", false /*debug*/, false /*onlyPks*/, 100)
 	require.NoError(t, err)
-	_, err = env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, "", "replica", 30*time.Second, "")
+
+	var df map[string]*DiffReport
+	df, err = env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, "", "replica", 30*time.Second, "", 100, "", false /*debug*/, false /*onlyPks*/, 100)
 	require.NoError(t, err)
+	require.Equal(t, df["t1"].ProcessedRows, 3)
+	df, err = env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, "", "replica", 30*time.Second, "", 1, "", false /*debug*/, false /*onlyPks*/, 100)
+	require.NoError(t, err)
+	require.Equal(t, df["t1"].ProcessedRows, 1)
+	df, err = env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, "", "replica", 30*time.Second, "", 0, "", false /*debug*/, false /*onlyPks*/, 100)
+	require.NoError(t, err)
+	require.Equal(t, df["t1"].ProcessedRows, 0)
+
+	_, err = env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, "", "replica", 1*time.Nanosecond, "", 100, "", false /*debug*/, false /*onlyPks*/, 100)
+	require.Error(t, err)
+	err = topo.CheckKeyspaceLocked(context.Background(), "target")
+	require.EqualErrorf(t, err, "keyspace target is not locked (no locksInfo)", "")
+	err = topo.CheckKeyspaceLocked(context.Background(), "source")
+	require.EqualErrorf(t, err, "keyspace source is not locked (no locksInfo)", "")
 }
 
 func TestVDiffReplicationWait(t *testing.T) {
@@ -886,8 +984,131 @@ func TestVDiffReplicationWait(t *testing.T) {
 	)
 	target := source
 	env.tablets[101].setResults("select c1, c2 from t1 order by c1 asc", vdiffSourceGtid, source)
-	env.tablets[201].setResults("select c1, c2 from t1 order by c1 asc", vdiffTargetMasterPosition, target)
+	env.tablets[201].setResults("select c1, c2 from t1 order by c1 asc", vdiffTargetPrimaryPosition, target)
 
-	_, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 0*time.Second, "")
-	require.EqualError(t, err, "startQueryStreams(sources): WaitForPosition for tablet cell-0000000101: context deadline exceeded")
+	_, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 0*time.Second, "", 100, "", false /*debug*/, false /*onlyPks*/, 100)
+	require.Error(t, err)
+	require.True(t, strings.Contains(err.Error(), "context deadline exceeded"))
+}
+
+func TestVDiffFindPKs(t *testing.T) {
+
+	testcases := []struct {
+		name         string
+		table        *tabletmanagerdatapb.TableDefinition
+		targetSelect *sqlparser.Select
+		tdIn         *tableDiffer
+		tdOut        *tableDiffer
+		errorString  string
+	}{
+		{
+			name: "",
+			table: &tabletmanagerdatapb.TableDefinition{
+				Name:              "t1",
+				Columns:           []string{"c1", "c2"},
+				PrimaryKeyColumns: []string{"c1"},
+				Fields:            sqltypes.MakeTestFields("c1|c2", "int64|int64"),
+			},
+			targetSelect: &sqlparser.Select{
+				SelectExprs: sqlparser.SelectExprs{
+					&sqlparser.AliasedExpr{Expr: &sqlparser.ColName{Name: sqlparser.NewIdentifierCI("c1")}},
+					&sqlparser.AliasedExpr{Expr: &sqlparser.ColName{Name: sqlparser.NewIdentifierCI("c2")}},
+				},
+			},
+			tdIn: &tableDiffer{
+				compareCols: []compareColInfo{{0, collations.Collation(nil), false}, {1, collations.Collation(nil), false}},
+				comparePKs:  []compareColInfo{},
+				pkCols:      []int{},
+			},
+			tdOut: &tableDiffer{
+				compareCols: []compareColInfo{{0, collations.Collation(nil), true}, {1, collations.Collation(nil), false}},
+				comparePKs:  []compareColInfo{{0, collations.Collation(nil), true}},
+				pkCols:      []int{0},
+				selectPks:   []int{0},
+			},
+		}, {
+			name: "",
+			table: &tabletmanagerdatapb.TableDefinition{
+				Name:              "t1",
+				Columns:           []string{"c1", "c2", "c3", "c4"},
+				PrimaryKeyColumns: []string{"c1", "c4"},
+				Fields:            sqltypes.MakeTestFields("c1|c2|c3|c4", "int64|int64|varchar|int64"),
+			},
+			targetSelect: &sqlparser.Select{
+				SelectExprs: sqlparser.SelectExprs{
+					&sqlparser.AliasedExpr{Expr: &sqlparser.ColName{Name: sqlparser.NewIdentifierCI("c1")}},
+					&sqlparser.AliasedExpr{Expr: &sqlparser.ColName{Name: sqlparser.NewIdentifierCI("c2")}},
+					&sqlparser.AliasedExpr{Expr: &sqlparser.FuncExpr{Name: sqlparser.NewIdentifierCI("c3")}},
+					&sqlparser.AliasedExpr{Expr: &sqlparser.ColName{Name: sqlparser.NewIdentifierCI("c4")}},
+				},
+			},
+			tdIn: &tableDiffer{
+				compareCols: []compareColInfo{{0, collations.Collation(nil), false}, {1, collations.Collation(nil), false}, {2, collations.Collation(nil), false}, {3, collations.Collation(nil), false}},
+				comparePKs:  []compareColInfo{},
+				pkCols:      []int{},
+			},
+			tdOut: &tableDiffer{
+				compareCols: []compareColInfo{{0, collations.Collation(nil), true}, {1, collations.Collation(nil), false}, {2, collations.Collation(nil), false}, {3, collations.Collation(nil), true}},
+				comparePKs:  []compareColInfo{{0, collations.Collation(nil), true}, {3, collations.Collation(nil), true}},
+				pkCols:      []int{0, 3},
+				selectPks:   []int{0, 3},
+			},
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := findPKs(tc.table, tc.targetSelect, tc.tdIn)
+			require.NoError(t, err)
+			require.EqualValues(t, tc.tdOut, tc.tdIn)
+		})
+	}
+
+}
+
+func TestVDiffPlanInclude(t *testing.T) {
+	schm := &tabletmanagerdatapb.SchemaDefinition{
+		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
+			Name:              "t1",
+			Columns:           []string{"c1", "c2"},
+			PrimaryKeyColumns: []string{"c1"},
+			Fields:            sqltypes.MakeTestFields("c1|c2", "int64|int64"),
+		}, {
+			Name:              "t2",
+			Columns:           []string{"c1", "c2"},
+			PrimaryKeyColumns: []string{"c1"},
+			Fields:            sqltypes.MakeTestFields("c1|c2", "int64|int64"),
+		}, {
+			Name:              "t3",
+			Columns:           []string{"c1", "c2"},
+			PrimaryKeyColumns: []string{"c1"},
+			Fields:            sqltypes.MakeTestFields("c1|c2", "int64|int64"),
+		}, {
+			Name:              "t4",
+			Columns:           []string{"c1", "c2"},
+			PrimaryKeyColumns: []string{"c1"},
+			Fields:            sqltypes.MakeTestFields("c1|c2", "int64|int64"),
+		}},
+	}
+
+	df := &vdiff{}
+	rule := &binlogdatapb.Rule{
+		Match: "/.*",
+	}
+	filter := &binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{rule}}
+	var err error
+	err = df.buildVDiffPlan(context.Background(), filter, schm, []string{"t2"})
+	require.NoError(t, err)
+	require.Equal(t, 1, len(df.differs))
+	err = df.buildVDiffPlan(context.Background(), filter, schm, []string{"t2", "t3"})
+	require.NoError(t, err)
+	require.Equal(t, 2, len(df.differs))
+	err = df.buildVDiffPlan(context.Background(), filter, schm, []string{"t1", "t2", "t3"})
+	require.NoError(t, err)
+	require.Equal(t, 3, len(df.differs))
+	err = df.buildVDiffPlan(context.Background(), filter, schm, []string{"t1", "t2", "t3", "t4"})
+	require.NoError(t, err)
+	require.Equal(t, 4, len(df.differs))
+	err = df.buildVDiffPlan(context.Background(), filter, schm, []string{"t1", "t2", "t3", "t5"})
+	require.Error(t, err)
 }

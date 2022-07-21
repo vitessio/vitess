@@ -26,7 +26,7 @@ import (
 
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/timer"
@@ -112,19 +112,18 @@ func (tp *TxPool) AdjustLastID(id int64) {
 	tp.scp.AdjustLastID(id)
 }
 
-// RollbackNonBusy rolls back all transactions that are not in use.
-// Transactions can be in use for situations like executing statements
-// or in prepared state.
-func (tp *TxPool) RollbackNonBusy(ctx context.Context) {
-	for _, v := range tp.scp.GetOutdated(time.Duration(0), "for transition") {
+// Shutdown immediately rolls back all transactions that are not in use.
+// In-use connections will be closed when they are unlocked (not in use).
+func (tp *TxPool) Shutdown(ctx context.Context) {
+	for _, v := range tp.scp.ShutdownAll() {
 		tp.RollbackAndRelease(ctx, v)
 	}
 }
 
 func (tp *TxPool) transactionKiller() {
 	defer tp.env.LogError()
-	for _, conn := range tp.scp.GetOutdated(tp.Timeout(), "for tx killer rollback") {
-		log.Warningf("killing transaction (exceeded timeout: %v): %s", tp.Timeout(), conn.String())
+	for _, conn := range tp.scp.GetOutdated(tp.Timeout(), vterrors.TxKillerRollback) {
+		log.Warningf("killing transaction (exceeded timeout: %v): %s", tp.Timeout(), conn.String(tp.env.Config().SanitizeLogMessages))
 		switch {
 		case conn.IsTainted():
 			conn.Close()
@@ -139,6 +138,9 @@ func (tp *TxPool) transactionKiller() {
 		// For logging, as transaction is killed as the connection is closed.
 		if conn.IsTainted() && conn.IsInTransaction() {
 			tp.env.Stats().KillCounters.Add("Transactions", 1)
+		}
+		if conn.IsInTransaction() {
+			tp.txComplete(conn, tx.TxKill)
 		}
 		conn.Releasef("exceeded timeout: %v", tp.Timeout())
 	}
@@ -229,6 +231,9 @@ func (tp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions, re
 	var err error
 	if reservedID != 0 {
 		conn, err = tp.scp.GetAndLock(reservedID, "start transaction on reserve conn")
+		if err != nil {
+			return nil, "", vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction %d: %v", reservedID, err)
+		}
 	} else {
 		immediateCaller := callerid.ImmediateCallerIDFromContext(ctx)
 		effectiveCaller := callerid.EffectiveCallerIDFromContext(ctx)
@@ -236,6 +241,13 @@ func (tp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions, re
 			return nil, "", vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "per-user transaction pool connection limit exceeded")
 		}
 		conn, err = tp.createConn(ctx, options)
+		defer func() {
+			if err != nil {
+				// The transaction limiter frees transactions on rollback or commit. If we fail to create the transaction,
+				// release immediately since there will be no rollback or commit.
+				tp.limiter.Release(immediateCaller, effectiveCaller)
+			}
+		}()
 	}
 	if err != nil {
 		return nil, "", err
@@ -265,13 +277,14 @@ func (tp *TxPool) begin(ctx context.Context, options *querypb.ExecuteOptions, re
 func (tp *TxPool) createConn(ctx context.Context, options *querypb.ExecuteOptions) (*StatefulConnection, error) {
 	conn, err := tp.scp.NewConn(ctx, options)
 	if err != nil {
+		errCode := vterrors.Code(err)
 		switch err {
 		case pools.ErrCtxTimeout:
 			tp.LogActive()
-			err = vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "transaction pool aborting request due to already expired context")
+			err = vterrors.Errorf(errCode, "transaction pool aborting request due to already expired context")
 		case pools.ErrTimeout:
 			tp.LogActive()
-			err = vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "transaction pool connection limit exceeded")
+			err = vterrors.Errorf(errCode, "transaction pool connection limit exceeded")
 		}
 		return nil, err
 	}
@@ -286,7 +299,7 @@ func createTransaction(ctx context.Context, options *querypb.ExecuteOptions, con
 		if queries.setIsolationLevel != "" {
 			txQuery := "set transaction isolation level " + queries.setIsolationLevel
 			if err := conn.execWithRetry(ctx, txQuery, 1, false); err != nil {
-				return "", false, vterrors.Wrap(err, txQuery)
+				return "", false, err
 			}
 			beginQueries = queries.setIsolationLevel + "; "
 		}
@@ -296,7 +309,7 @@ func createTransaction(ctx context.Context, options *querypb.ExecuteOptions, con
 			beginSQL = "start transaction read only"
 		}
 		if err := conn.execWithRetry(ctx, beginSQL, 1, false); err != nil {
-			return "", false, vterrors.Wrap(err, beginSQL)
+			return "", false, err
 		}
 		beginQueries = beginQueries + beginSQL
 	} else if options.GetTransactionIsolation() == querypb.ExecuteOptions_AUTOCOMMIT {
@@ -307,7 +320,7 @@ func createTransaction(ctx context.Context, options *querypb.ExecuteOptions, con
 
 	for _, preQuery := range preQueries {
 		if _, err := conn.Exec(ctx, preQuery, 1, false); err != nil {
-			return "", false, vterrors.Wrap(err, preQuery)
+			return "", false, err
 		}
 	}
 	return beginQueries, autocommitTransaction, nil

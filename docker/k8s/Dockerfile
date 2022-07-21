@@ -1,25 +1,28 @@
 # Copyright 2019 The Vitess Authors.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM vitess/base AS base
+ARG VT_BASE_VER=latest
+ARG DEBIAN_VER=stable-slim
 
-FROM debian:stretch-slim
+FROM vitess/base:${VT_BASE_VER} AS base
+
+FROM debian:${DEBIAN_VER}
 
 # TODO: remove when https://github.com/vitessio/vitess/issues/3553 is fixed
 RUN apt-get update && \
    apt-get upgrade -qq && \
-   apt-get install mysql-client -qq --no-install-recommends && \
+   apt-get install default-mysql-client -qq --no-install-recommends && \
    apt-get autoremove && \
    apt-get clean && \
    rm -rf /var/lib/apt/lists/*
@@ -40,13 +43,14 @@ COPY --from=base /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificat
 
 # Copy binaries
 COPY --from=base /vt/bin/mysqlctld /vt/bin/
+COPY --from=base /vt/bin/mysqlctl /vt/bin/
 COPY --from=base /vt/bin/vtctld /vt/bin/
 COPY --from=base /vt/bin/vtctl /vt/bin/
 COPY --from=base /vt/bin/vtctlclient /vt/bin/
 COPY --from=base /vt/bin/vtgate /vt/bin/
 COPY --from=base /vt/bin/vttablet /vt/bin/
-COPY --from=base /vt/bin/vtworker /vt/bin/
 COPY --from=base /vt/bin/vtbackup /vt/bin/
+COPY --from=base /vt/bin/vtadmin /vt/bin/
 
 # copy web admin files
 COPY --from=base $VTROOT/web /vt/web/

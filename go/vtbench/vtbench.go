@@ -231,7 +231,7 @@ func (bt *benchThread) clientLoop(ctx context.Context) {
 			log.Errorf("query error: %v", err)
 			break
 		} else {
-			b.Rows.Add(int64(result.RowsAffected))
+			b.Rows.Add(int64(len(result.Rows)))
 		}
 
 	}

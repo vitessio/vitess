@@ -257,7 +257,7 @@ public class FieldWithMetadata {
     String excludePattern = connectionProperties.getUtf8OutsideBmpExcludedColumnNamePattern();
 
     // When UseBlobToStoreUTF8OutsideBMP is set, we by default set blobs to UTF-8. So we first
-    // look for fields to exclude from that remapping (blacklist)
+    // look for fields to exclude from that remapping (denylist)
     if (excludePattern != null && !StringUtils.isNullOrEmptyWithoutWS(excludePattern)) {
       try {
         if (getOrgName().matches(excludePattern)) {

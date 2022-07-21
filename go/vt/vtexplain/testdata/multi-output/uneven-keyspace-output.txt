@@ -1,0 +1,16 @@
+----------------------------------------------------------------------
+select * from user
+
+1 ks_sharded/-80: select * from `user` limit 10001
+1 ks_sharded/80-90: select * from `user` limit 10001
+1 ks_sharded/90-a0: select * from `user` limit 10001
+1 ks_sharded/a0-e8: select * from `user` limit 10001
+1 ks_sharded/e8-: select * from `user` limit 10001
+
+----------------------------------------------------------------------
+select * from user where id in (10, 17, 42, 100000)
+
+1 ks_sharded/-80: select * from `user` where id in (10, 17, 42) limit 10001
+1 ks_sharded/80-90: select * from `user` where id in (100000) limit 10001
+
+----------------------------------------------------------------------

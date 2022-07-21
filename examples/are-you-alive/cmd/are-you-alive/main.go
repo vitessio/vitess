@@ -5,6 +5,12 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"math/rand"
+	"net/http"
+	"os"
+	"os/signal"
+	"sync"
+
 	"github.com/go-sql-driver/mysql"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
@@ -12,11 +18,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"go.uber.org/ratelimit"
 	"gopkg.in/yaml.v2"
-	"math/rand"
-	"net/http"
-	"os"
-	"os/signal"
-	"sync"
+
 	"vitess.io/vitess/examples/are-you-alive/pkg/client"
 )
 
@@ -48,8 +50,8 @@ func writeNextRecord(connectionString string) error {
 		// Check to see if this is a duplicate key error.  We've seen this
 		// sometimes happen, and when it does this client app gets stuck in an
 		// infinite loop of failure to write a duplicate key.  It's possible
-		// that happens because a write is succesful but something goes wrong
-		// before the client recieves a response, so the client thinks the write
+		// that happens because a write is successful but something goes wrong
+		// before the client receives a response, so the client thinks the write
 		// failed and does not increment the count.
 		//
 		// So when we specifically see a duplicate key error, assume that's what
@@ -96,7 +98,7 @@ func readRandomRecord(connectionString string) error {
 			// lag, so ignore the missing row if we are a replica.
 			// TODO: Should we attempt to roughly figure out replication lag in
 			// this client, at least to catch major failures?  We could probably
-			// multiply delay by the difference betwen maxCount and the page we
+			// multiply delay by the difference between maxCount and the page we
 			// are trying to read to figure out how long ago the row we were
 			// trying to write was written.
 			if client.ParseTabletType(connectionString) == "replica" ||
@@ -170,7 +172,7 @@ var (
 	prometheusMetricsAddress = flag.String(
 		"prometheus_metrics_address", ":8080", "Address on which to serve prometheus metrics")
 	debug                   = flag.Bool("debug", false, "Enable debug logging")
-	useVtgate               = flag.Bool("vtgate", false, "Using vtgate (for @master and @replica)")
+	useVtgate               = flag.Bool("vtgate", false, "Using vtgate (for @primary and @replica)")
 	initialize              = flag.Bool("initialize", false, "Initialize database (for testing)")
 	datasetSize             = flag.Int("dataset_size", 10, "Number of total records in database")
 	endpointsConfigFilename = flag.String("endpoints_config", "", "Endpoint and load configuration.")
@@ -317,14 +319,14 @@ func main() {
 			writer := runner{
 				connString:   endpoint.ConnectionString,
 				fn:           writeNextRecord,
-				errMessage:   "Recieved error writing next record",
+				errMessage:   "Received error writing next record",
 				opsPerSecond: endpoint.TargetWritesPerSecond,
 			}
 			go writer.run()
 			deleter := runner{
 				connString:   endpoint.ConnectionString,
 				fn:           deleteLastRecordIfNecessary,
-				errMessage:   "Recieved error deleting last record",
+				errMessage:   "Received error deleting last record",
 				opsPerSecond: 100, // This is based on target "dataset_size", and will not make a query if not needed.  TODO: Actually tune this in a reasonable way after redesigning the schema?
 			}
 			go deleter.run()
@@ -333,7 +335,7 @@ func main() {
 			reader := runner{
 				connString:   endpoint.ConnectionString,
 				fn:           readRandomRecord,
-				errMessage:   "Recieved error reading record",
+				errMessage:   "Received error reading record",
 				opsPerSecond: endpoint.TargetQueriesPerSecond,
 			}
 			go reader.run()
@@ -342,7 +344,7 @@ func main() {
 			counter := runner{
 				connString:   endpoint.ConnectionString,
 				fn:           runCount,
-				errMessage:   "Recieved error running count",
+				errMessage:   "Received error running count",
 				opsPerSecond: endpoint.TargetCountsPerSecond,
 			}
 			go counter.run()

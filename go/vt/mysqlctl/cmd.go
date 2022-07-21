@@ -35,8 +35,8 @@ func CreateMysqldAndMycnf(tabletUID uint32, mysqlSocket string, mysqlPort int32)
 	// because reusing server-ids is not safe.
 	//
 	// For example, if a tablet comes back with an empty data dir, it will restore
-	// from backup and then connect to the master. But if this tablet has the same
-	// server-id as before, and if this tablet was recently a master, then it can
+	// from backup and then connect to the primary. But if this tablet has the same
+	// server-id as before, and if this tablet was recently a primary, then it can
 	// lose data by skipping binlog events due to replicate-same-server-id=FALSE,
 	// which is the default setting.
 	if err := mycnf.RandomizeMysqlServerID(); err != nil {

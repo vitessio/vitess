@@ -3,11 +3,12 @@ package client
 import (
 	"database/sql"
 	"fmt"
+	"strings"
+
 	mysql "github.com/go-sql-driver/mysql"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/sirupsen/logrus"
-	"strings"
 )
 
 /*
@@ -104,8 +105,12 @@ func ParseDBName(connectionString string) string {
 // See https://vitess.io/docs/faq/queries/ for where these come from.
 func ParseTabletType(connectionString string) string {
 	databaseName := ParseDBName(connectionString)
+	// for backwards compatibility
+	// TODO(deepthi): delete after v13.0
 	if strings.HasSuffix(databaseName, "@master") {
-		return "master"
+		return "primary"
+	} else if strings.HasSuffix(databaseName, "@primary") {
+		return "primary"
 	} else if strings.HasSuffix(databaseName, "@replica") {
 		return "replica"
 	} else if strings.HasSuffix(databaseName, "@rdonly") {

@@ -20,9 +20,10 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"os"
 
-	"golang.org/x/net/context"
+	"context"
+
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -77,7 +78,7 @@ func staticAuthPluginInitializer() (Authenticator, error) {
 		return nil, err
 	}
 
-	data, err := ioutil.ReadFile(*credsFile)
+	data, err := os.ReadFile(*credsFile)
 	if err != nil {
 		err := fmt.Errorf("failed to load static auth plugin %v", err)
 		return nil, err

@@ -19,13 +19,14 @@ package servenv
 import (
 	"expvar"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net"
 	"net/http"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+
 	"vitess.io/vitess/go/stats"
 )
 
@@ -36,7 +37,7 @@ func TestURLPrefix(t *testing.T) {
 
 func TestHandleFunc(t *testing.T) {
 	// Listen on a random port
-	listener, err := net.Listen("tcp", ":0")
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("Cannot listen: %v", err)
 	}
@@ -90,7 +91,7 @@ func httpGet(t *testing.T, url string) string {
 	}
 	defer resp.Body.Close()
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -592,7 +593,7 @@ func TestHistogram(t *testing.T) {
 	ebd := NewExporter("", "")
 	g := ebd.NewHistogram("ghistogram", "", []int64{10})
 	g.Add(1)
-	assert.Contains(t, expvar.Get("ghistogram").String(), `{"10": 1, "inf": 1, "Count": 1, "Total": 1}`)
+	assert.Contains(t, expvar.Get("ghistogram").String(), `{"10": 1, "inf": 0, "Count": 1, "Total": 1}`)
 
 	ebd = NewExporter("i1", "label")
 
@@ -607,13 +608,13 @@ func TestHistogram(t *testing.T) {
 	g.Add(1)
 	g.Add(1)
 	assert.Contains(t, expvar.Get("lmtimings").String(), `i1`)
-	assert.Contains(t, expvar.Get("lhistogram").String(), `{"10": 2, "inf": 2, "Count": 2, "Total": 2}`)
+	assert.Contains(t, expvar.Get("lhistogram").String(), `{"10": 2, "inf": 0, "Count": 2, "Total": 2}`)
 
 	// Ensure var gets replaced.
 	g = ebd.NewHistogram("lhistogram", "", []int64{10})
 	g.Add(1)
 	assert.Contains(t, expvar.Get("lmtimings").String(), `i1`)
-	assert.Contains(t, expvar.Get("lhistogram").String(), `{"10": 1, "inf": 1, "Count": 1, "Total": 1}`)
+	assert.Contains(t, expvar.Get("lhistogram").String(), `{"10": 1, "inf": 0, "Count": 1, "Total": 1}`)
 }
 
 func TestPublish(t *testing.T) {

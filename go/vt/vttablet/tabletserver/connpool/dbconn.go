@@ -17,6 +17,7 @@ limitations under the License.
 package connpool
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"sync"
@@ -26,17 +27,17 @@ import (
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
 
-	"golang.org/x/net/context"
-
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // DBConn is a db connection for tabletserver.
@@ -51,6 +52,10 @@ type DBConn struct {
 	dbaPool *dbconnpool.ConnectionPool
 	stats   *tabletenv.Stats
 	current sync2.AtomicString
+
+	// err will be set if a query is killed through a Kill.
+	errmu sync.Mutex
+	err   error
 }
 
 // NewDBConn creates a new DBConn. It triggers a CheckMySQL if creation fails.
@@ -88,6 +93,14 @@ func NewDBConnNoPool(ctx context.Context, params dbconfigs.Connector, dbaPool *d
 	}, nil
 }
 
+// Err returns an error if there was a client initiated error
+// like a query kill.
+func (dbc *DBConn) Err() error {
+	dbc.errmu.Lock()
+	defer dbc.errmu.Unlock()
+	return dbc.err
+}
+
 // Exec executes the specified query. If there is a connection error, it will reconnect
 // and retry. A failed reconnect will trigger a CheckMySQL.
 func (dbc *DBConn) Exec(ctx context.Context, query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
@@ -100,6 +113,9 @@ func (dbc *DBConn) Exec(ctx context.Context, query string, maxrows int, wantfiel
 		case err == nil:
 			// Success.
 			return r, nil
+		case mysql.IsConnLostDuringQuery(err):
+			// Query probably killed. Don't retry.
+			return nil, err
 		case !mysql.IsConnErr(err):
 			// Not a connection error. Don't retry.
 			return nil, err
@@ -141,15 +157,16 @@ func (dbc *DBConn) execOnce(ctx context.Context, query string, maxrows int, want
 	defer dbc.stats.MySQLTimings.Record("Exec", time.Now())
 
 	done, wg := dbc.setDeadline(ctx)
+	qr, err := dbc.conn.ExecuteFetch(query, maxrows, wantfields)
+
 	if done != nil {
-		defer func() {
-			close(done)
-			wg.Wait()
-		}()
+		close(done)
+		wg.Wait()
 	}
-	// Uncomment this line for manual testing.
-	// defer time.Sleep(20 * time.Second)
-	return dbc.conn.ExecuteFetch(query, maxrows, wantfields)
+	if dbcerr := dbc.Err(); dbcerr != nil {
+		return nil, dbcerr
+	}
+	return qr, err
 }
 
 // ExecOnce executes the specified query, but does not retry on connection errors.
@@ -157,10 +174,27 @@ func (dbc *DBConn) ExecOnce(ctx context.Context, query string, maxrows int, want
 	return dbc.execOnce(ctx, query, maxrows, wantfields)
 }
 
+// FetchNext returns the next result set.
+func (dbc *DBConn) FetchNext(ctx context.Context, maxrows int, wantfields bool) (*sqltypes.Result, error) {
+	// Check if the context is already past its deadline before
+	// trying to fetch the next result.
+	select {
+	case <-ctx.Done():
+		return nil, fmt.Errorf("%v before reading next result set", ctx.Err())
+	default:
+	}
+	res, _, _, err := dbc.conn.ReadQueryResult(maxrows, wantfields)
+	if err != nil {
+		return nil, err
+	}
+	return res, err
+
+}
+
 // Stream executes the query and streams the results.
-func (dbc *DBConn) Stream(ctx context.Context, query string, callback func(*sqltypes.Result) error, streamBufferSize int, includedFields querypb.ExecuteOptions_IncludedFields) error {
+func (dbc *DBConn) Stream(ctx context.Context, query string, callback func(*sqltypes.Result) error, alloc func() *sqltypes.Result, streamBufferSize int, includedFields querypb.ExecuteOptions_IncludedFields) error {
 	span, ctx := trace.NewSpan(ctx, "DBConn.Stream")
-	trace.AnnotateSQL(span, query)
+	trace.AnnotateSQL(span, sqlparser.Preview(query))
 	defer span.Finish()
 
 	resultSent := false
@@ -175,12 +209,16 @@ func (dbc *DBConn) Stream(ctx context.Context, query string, callback func(*sqlt
 				}
 				return callback(r)
 			},
+			alloc,
 			streamBufferSize,
 		)
 		switch {
 		case err == nil:
 			// Success.
 			return nil
+		case mysql.IsConnLostDuringQuery(err):
+			// Query probably killed. Don't retry.
+			return err
 		case !mysql.IsConnErr(err):
 			// Not a connection error. Don't retry.
 			return err
@@ -207,20 +245,23 @@ func (dbc *DBConn) Stream(ctx context.Context, query string, callback func(*sqlt
 	panic("unreachable")
 }
 
-func (dbc *DBConn) streamOnce(ctx context.Context, query string, callback func(*sqltypes.Result) error, streamBufferSize int) error {
+func (dbc *DBConn) streamOnce(ctx context.Context, query string, callback func(*sqltypes.Result) error, alloc func() *sqltypes.Result, streamBufferSize int) error {
 	defer dbc.stats.MySQLTimings.Record("ExecStream", time.Now())
 
 	dbc.current.Set(query)
 	defer dbc.current.Set("")
 
 	done, wg := dbc.setDeadline(ctx)
+	err := dbc.conn.ExecuteStreamFetch(query, callback, alloc, streamBufferSize)
+
 	if done != nil {
-		defer func() {
-			close(done)
-			wg.Wait()
-		}()
+		close(done)
+		wg.Wait()
 	}
-	return dbc.conn.ExecuteStreamFetch(query, callback, streamBufferSize)
+	if dbcerr := dbc.Err(); dbcerr != nil {
+		return dbcerr
+	}
+	return err
 }
 
 var (
@@ -235,35 +276,35 @@ func (dbc *DBConn) VerifyMode(strictTransTables bool) error {
 	if strictTransTables {
 		qr, err := dbc.conn.ExecuteFetch(getModeSQL, 2, false)
 		if err != nil {
-			return vterrors.Wrap(err, "could not verify mode")
+			return err
 		}
 		if len(qr.Rows) != 1 {
-			return fmt.Errorf("incorrect rowcount received for %s: %d", getModeSQL, len(qr.Rows))
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "incorrect rowcount received for %s: %d", getModeSQL, len(qr.Rows))
 		}
 		sqlMode := qr.Rows[0][0].ToString()
 		if !(strings.Contains(sqlMode, "STRICT_TRANS_TABLES") || strings.Contains(sqlMode, "STRICT_ALL_TABLES")) {
-			return fmt.Errorf("require sql_mode to be STRICT_TRANS_TABLES or STRICT_ALL_TABLES: got '%s'", qr.Rows[0][0].ToString())
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "require sql_mode to be STRICT_TRANS_TABLES or STRICT_ALL_TABLES: got '%s'", qr.Rows[0][0].ToString())
 		}
 	}
 	qr, err := dbc.conn.ExecuteFetch(getAutocommit, 2, false)
 	if err != nil {
-		return vterrors.Wrap(err, "could not verify mode")
+		return err
 	}
 	if len(qr.Rows) != 1 {
-		return fmt.Errorf("incorrect rowcount received for %s: %d", getAutocommit, len(qr.Rows))
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "incorrect rowcount received for %s: %d", getAutocommit, len(qr.Rows))
 	}
 	if !strings.Contains(qr.Rows[0][0].ToString(), "1") {
-		return fmt.Errorf("require autocommit to be 1: got %s", qr.Rows[0][0].ToString())
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "require autocommit to be 1: got %s", qr.Rows[0][0].ToString())
 	}
 	qr, err = dbc.conn.ExecuteFetch(getAutoIsNull, 2, false)
 	if err != nil {
-		return vterrors.Wrap(err, "could not verify mode")
+		return err
 	}
 	if len(qr.Rows) != 1 {
-		return fmt.Errorf("incorrect rowcount received for %s: %d", getAutoIsNull, len(qr.Rows))
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "incorrect rowcount received for %s: %d", getAutoIsNull, len(qr.Rows))
 	}
 	if !strings.Contains(qr.Rows[0][0].ToString(), "0") {
-		return fmt.Errorf("require sql_auto_is_null to be 0: got %s", qr.Rows[0][0].ToString())
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "require sql_auto_is_null to be 0: got %s", qr.Rows[0][0].ToString())
 	}
 	return nil
 }
@@ -304,7 +345,15 @@ func (dbc *DBConn) Taint() {
 // Kill will also not kill a query more than once.
 func (dbc *DBConn) Kill(reason string, elapsed time.Duration) error {
 	dbc.stats.KillCounters.Add("Queries", 1)
-	log.Infof("Due to %s, elapsed time: %v, killing query ID %v %s", reason, elapsed, dbc.conn.ID(), dbc.Current())
+	log.Infof("Due to %s, elapsed time: %v, killing query ID %v %s", reason, elapsed, dbc.conn.ID(), dbc.CurrentForLogging())
+
+	// Client side action. Set error and close connection.
+	dbc.errmu.Lock()
+	dbc.err = vterrors.Errorf(vtrpcpb.Code_CANCELED, "(errno 2013) due to %s, elapsed time: %v, killing query ID %v", reason, elapsed, dbc.conn.ID())
+	dbc.errmu.Unlock()
+	dbc.conn.Close()
+
+	// Server side action. Kill the session.
 	killConn, err := dbc.dbaPool.Get(context.TODO())
 	if err != nil {
 		log.Warningf("Failed to get conn from dba pool: %v", err)
@@ -314,7 +363,8 @@ func (dbc *DBConn) Kill(reason string, elapsed time.Duration) error {
 	sql := fmt.Sprintf("kill %d", dbc.conn.ID())
 	_, err = killConn.ExecuteFetch(sql, 10000, false)
 	if err != nil {
-		log.Errorf("Could not kill query ID %v %s: %v", dbc.conn.ID(), dbc.Current(), err)
+		log.Errorf("Could not kill query ID %v %s: %v", dbc.conn.ID(),
+			dbc.CurrentForLogging(), err)
 		return err
 	}
 	return nil
@@ -330,6 +380,11 @@ func (dbc *DBConn) ID() int64 {
 	return dbc.conn.ID()
 }
 
+// BaseShowTables returns a query that shows tables and their sizes
+func (dbc *DBConn) BaseShowTables() string {
+	return dbc.conn.BaseShowTables()
+}
+
 func (dbc *DBConn) reconnect(ctx context.Context) error {
 	dbc.conn.Close()
 	// Reuse MySQLTimings from dbc.conn.
@@ -337,6 +392,9 @@ func (dbc *DBConn) reconnect(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	dbc.errmu.Lock()
+	dbc.err = nil
+	dbc.errmu.Unlock()
 	dbc.conn = newConn
 	return nil
 }
@@ -370,7 +428,7 @@ func (dbc *DBConn) setDeadline(ctx context.Context) (chan bool, *sync.WaitGroup)
 		select {
 		case <-tmr2.C:
 			dbc.stats.InternalErrors.Add("HungQuery", 1)
-			log.Warningf("Query may be hung: %s", dbc.Current())
+			log.Warningf("Query may be hung: %s", dbc.CurrentForLogging())
 		case <-done:
 			return
 		}
@@ -378,4 +436,17 @@ func (dbc *DBConn) setDeadline(ctx context.Context) (chan bool, *sync.WaitGroup)
 		log.Warningf("Hung query returned")
 	}()
 	return done, &wg
+}
+
+// CurrentForLogging applies transformations to the query making it suitable to log.
+// It applies sanitization rules based on tablet settings and limits the max length of
+// queries.
+func (dbc *DBConn) CurrentForLogging() string {
+	var queryToLog string
+	if dbc.pool != nil && dbc.pool.env != nil && dbc.pool.env.Config() != nil && !dbc.pool.env.Config().SanitizeLogMessages {
+		queryToLog = dbc.Current()
+	} else {
+		queryToLog, _ = sqlparser.RedactSQLQuery(dbc.Current())
+	}
+	return sqlparser.TruncateForLog(queryToLog)
 }

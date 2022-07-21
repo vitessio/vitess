@@ -17,12 +17,13 @@ limitations under the License.
 package vreplication
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"testing"
 	"time"
 
-	"golang.org/x/net/context"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"
@@ -36,16 +37,25 @@ import (
 
 var (
 	testSettingsResponse = &sqltypes.Result{
-		Fields:       nil,
-		RowsAffected: 1,
-		InsertID:     0,
+		Fields: []*querypb.Field{
+			{Name: "pos", Type: sqltypes.VarBinary},
+			{Name: "stop_pos", Type: sqltypes.VarBinary},
+			{Name: "max_tps", Type: sqltypes.Int64},
+			{Name: "max_replication_lag", Type: sqltypes.Int64},
+			{Name: "state", Type: sqltypes.VarBinary},
+			{Name: "workflow_type", Type: sqltypes.Int64},
+			{Name: "workflow", Type: sqltypes.VarChar},
+		},
+		InsertID: 0,
 		Rows: [][]sqltypes.Value{
 			{
 				sqltypes.NewVarBinary("MariaDB/0-1-1083"), // pos
-				sqltypes.NULL, // stop_pos
-				sqltypes.NewVarBinary("9223372036854775807"), // max_tps
-				sqltypes.NewVarBinary("9223372036854775807"), // max_replication_lag
-				sqltypes.NewVarBinary("Running"),             // state
+				sqltypes.NULL,                          // stop_pos
+				sqltypes.NewInt64(9223372036854775807), // max_tps
+				sqltypes.NewInt64(9223372036854775807), // max_replication_lag
+				sqltypes.NewVarBinary("Running"),       // state
+				sqltypes.NewInt64(1),                   // workflow_type
+				sqltypes.NewVarChar("wf"),              // workflow
 			},
 		},
 	}
@@ -59,16 +69,16 @@ func TestControllerKeyRange(t *testing.T) {
 	resetBinlogClient()
 	wantTablet := addTablet(100)
 	defer deleteTablet(wantTablet)
-
 	params := map[string]string{
 		"id":     "1",
 		"state":  binlogplayer.BlpRunning,
-		"source": fmt.Sprintf(`keyspace:"%s" shard:"0" key_range:<end:"\200" > `, env.KeyspaceName),
+		"source": fmt.Sprintf(`keyspace:"%s" shard:"0" key_range:{end:"\x80"}`, env.KeyspaceName),
 	}
 
 	dbClient := binlogplayer.NewMockDBClient(t)
+	dbClient.ExpectRequestRE("update _vt.vreplication set message='Picked source tablet.*", testDMLResponse, nil)
 	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
-	dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag, state from _vt.vreplication where id=1", testSettingsResponse, nil)
+	dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow from _vt.vreplication where id=1", testSettingsResponse, nil)
 	dbClient.ExpectRequest("begin", nil, nil)
 	dbClient.ExpectRequest("insert into t values(1)", testDMLResponse, nil)
 	dbClient.ExpectRequestRE("update _vt.vreplication set pos='MariaDB/0-1-1235', time_updated=.*", testDMLResponse, nil)
@@ -102,8 +112,9 @@ func TestControllerTables(t *testing.T) {
 	}
 
 	dbClient := binlogplayer.NewMockDBClient(t)
+	dbClient.ExpectRequestRE("update _vt.vreplication set message='Picked source tablet.*", testDMLResponse, nil)
 	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
-	dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag, state from _vt.vreplication where id=1", testSettingsResponse, nil)
+	dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow from _vt.vreplication where id=1", testSettingsResponse, nil)
 	dbClient.ExpectRequest("begin", nil, nil)
 	dbClient.ExpectRequest("insert into t values(1)", testDMLResponse, nil)
 	dbClient.ExpectRequestRE("update _vt.vreplication set pos='MariaDB/0-1-1235', time_updated=.*", testDMLResponse, nil)
@@ -188,14 +199,15 @@ func TestControllerOverrides(t *testing.T) {
 	params := map[string]string{
 		"id":           "1",
 		"state":        binlogplayer.BlpRunning,
-		"source":       fmt.Sprintf(`keyspace:"%s" shard:"0" key_range:<end:"\200" > `, env.KeyspaceName),
+		"source":       fmt.Sprintf(`keyspace:"%s" shard:"0" key_range:{end:"\x80"}`, env.KeyspaceName),
 		"cell":         env.Cells[0],
 		"tablet_types": "replica",
 	}
 
 	dbClient := binlogplayer.NewMockDBClient(t)
+	dbClient.ExpectRequestRE("update _vt.vreplication set message='Picked source tablet.*", testDMLResponse, nil)
 	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
-	dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag, state from _vt.vreplication where id=1", testSettingsResponse, nil)
+	dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow from _vt.vreplication where id=1", testSettingsResponse, nil)
 	dbClient.ExpectRequest("begin", nil, nil)
 	dbClient.ExpectRequest("insert into t values(1)", testDMLResponse, nil)
 	dbClient.ExpectRequestRE("update _vt.vreplication set pos='MariaDB/0-1-1235', time_updated=.*", testDMLResponse, nil)
@@ -223,7 +235,7 @@ func TestControllerCanceledContext(t *testing.T) {
 	params := map[string]string{
 		"id":     "1",
 		"state":  binlogplayer.BlpRunning,
-		"source": fmt.Sprintf(`keyspace:"%s" shard:"0" key_range:<end:"\200" > `, env.KeyspaceName),
+		"source": fmt.Sprintf(`keyspace:"%s" shard:"0" key_range:{end:"\x80"}`, env.KeyspaceName),
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -252,17 +264,19 @@ func TestControllerRetry(t *testing.T) {
 	params := map[string]string{
 		"id":           "1",
 		"state":        binlogplayer.BlpRunning,
-		"source":       fmt.Sprintf(`keyspace:"%s" shard:"0" key_range:<end:"\200" > `, env.KeyspaceName),
+		"source":       fmt.Sprintf(`keyspace:"%s" shard:"0" key_range:{end:"\x80"}`, env.KeyspaceName),
 		"cell":         env.Cells[0],
 		"tablet_types": "replica",
 	}
 
 	dbClient := binlogplayer.NewMockDBClient(t)
+	dbClient.ExpectRequestRE("update _vt.vreplication set message='Picked source tablet.*", testDMLResponse, nil)
 	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
-	dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag, state from _vt.vreplication where id=1", nil, errors.New("(expected error)"))
-	dbClient.ExpectRequest("update _vt.vreplication set state='Error', message='error (expected error) in selecting vreplication settings select pos, stop_pos, max_tps, max_replication_lag, state from _vt.vreplication where id=1' where id=1", testDMLResponse, nil)
+	dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow from _vt.vreplication where id=1", nil, errors.New("(expected error)"))
+	dbClient.ExpectRequest("update _vt.vreplication set state='Error', message='error (expected error) in selecting vreplication settings select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow from _vt.vreplication where id=1' where id=1", testDMLResponse, nil)
+	dbClient.ExpectRequestRE("update _vt.vreplication set message='Picked source tablet.*", testDMLResponse, nil)
 	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
-	dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag, state from _vt.vreplication where id=1", testSettingsResponse, nil)
+	dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow from _vt.vreplication where id=1", testSettingsResponse, nil)
 	dbClient.ExpectRequest("begin", nil, nil)
 	dbClient.ExpectRequest("insert into t values(1)", testDMLResponse, nil)
 	dbClient.ExpectRequestRE("update _vt.vreplication set pos='MariaDB/0-1-1235', time_updated=.*", testDMLResponse, nil)
@@ -287,26 +301,36 @@ func TestControllerStopPosition(t *testing.T) {
 	params := map[string]string{
 		"id":     "1",
 		"state":  binlogplayer.BlpRunning,
-		"source": fmt.Sprintf(`keyspace:"%s" shard:"0" key_range:<end:"\200" > `, env.KeyspaceName),
+		"source": fmt.Sprintf(`keyspace:"%s" shard:"0" key_range:{end:"\x80"}`, env.KeyspaceName),
 	}
 
 	dbClient := binlogplayer.NewMockDBClient(t)
+	dbClient.ExpectRequestRE("update _vt.vreplication set message='Picked source tablet.*", testDMLResponse, nil)
 	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
 	withStop := &sqltypes.Result{
-		Fields:       nil,
-		RowsAffected: 1,
-		InsertID:     0,
+		Fields: []*querypb.Field{
+			{Name: "pos", Type: sqltypes.VarBinary},
+			{Name: "stop_pos", Type: sqltypes.VarBinary},
+			{Name: "max_tps", Type: sqltypes.Int64},
+			{Name: "max_replication_lag", Type: sqltypes.Int64},
+			{Name: "state", Type: sqltypes.VarBinary},
+			{Name: "workflow_type", Type: sqltypes.Int64},
+			{Name: "workflow", Type: sqltypes.VarChar},
+		},
+		InsertID: 0,
 		Rows: [][]sqltypes.Value{
 			{
-				sqltypes.NewVarBinary("MariaDB/0-1-1083"),    // pos
-				sqltypes.NewVarBinary("MariaDB/0-1-1235"),    // stop_pos
-				sqltypes.NewVarBinary("9223372036854775807"), // max_tps
-				sqltypes.NewVarBinary("9223372036854775807"), // max_replication_lag
-				sqltypes.NewVarBinary("Running"),             // state
+				sqltypes.NewVarBinary("MariaDB/0-1-1083"), // pos
+				sqltypes.NewVarBinary("MariaDB/0-1-1235"), // stop_pos
+				sqltypes.NewInt64(9223372036854775807),    // max_tps
+				sqltypes.NewInt64(9223372036854775807),    // max_replication_lag
+				sqltypes.NewVarBinary("Running"),          // state
+				sqltypes.NewInt64(1),                      // workflow_type
+				sqltypes.NewVarChar("wf"),                 // workflow
 			},
 		},
 	}
-	dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag, state from _vt.vreplication where id=1", withStop, nil)
+	dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow from _vt.vreplication where id=1", withStop, nil)
 	dbClient.ExpectRequest("begin", nil, nil)
 	dbClient.ExpectRequest("insert into t values(1)", testDMLResponse, nil)
 	dbClient.ExpectRequestRE("update _vt.vreplication set pos='MariaDB/0-1-1235', time_updated=.*", testDMLResponse, nil)

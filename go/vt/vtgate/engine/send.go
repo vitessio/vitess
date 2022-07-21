@@ -17,9 +17,12 @@ limitations under the License.
 package engine
 
 import (
+	"context"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
@@ -45,8 +48,17 @@ type Send struct {
 	// SingleShardOnly specifies that the query must be send to only single shard
 	SingleShardOnly bool
 
+	// ShardNameNeeded specified that the shard name is added to the bind variables
+	ShardNameNeeded bool
+
+	// MultishardAutocommit specifies that a multishard transaction query can autocommit
+	MultishardAutocommit bool
+
 	noInputs
 }
+
+// ShardName as key for setting shard name in bind variables map
+const ShardName = "__vt_shard"
 
 //NeedsTransaction implements the Primitive interface
 func (s *Send) NeedsTransaction() bool {
@@ -72,11 +84,11 @@ func (s *Send) GetTableName() string {
 	return ""
 }
 
-// Execute implements Primitive interface
-func (s *Send) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	rss, _, err := vcursor.ResolveDestinations(s.Keyspace.Name, nil, []key.Destination{s.TargetDestination})
+// TryExecute implements Primitive interface
+func (s *Send) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	rss, _, err := vcursor.ResolveDestinations(ctx, s.Keyspace.Name, nil, []key.Destination{s.TargetDestination})
 	if err != nil {
-		return nil, vterrors.Wrap(err, "sendExecute")
+		return nil, err
 	}
 
 	if !s.Keyspace.Sharded && len(rss) != 1 {
@@ -88,20 +100,20 @@ func (s *Send) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariabl
 	}
 
 	queries := make([]*querypb.BoundQuery, len(rss))
-	for i := range rss {
+	for i, rs := range rss {
+		bv := bindVars
+		if s.ShardNameNeeded {
+			bv = copyBindVars(bindVars)
+			bv[ShardName] = sqltypes.StringBindVariable(rs.Target.Shard)
+		}
 		queries[i] = &querypb.BoundQuery{
 			Sql:           s.Query,
-			BindVariables: bindVars,
+			BindVariables: bv,
 		}
 	}
 
-	canAutocommit := false
-	if s.IsDML {
-		canAutocommit = len(rss) == 1 && vcursor.AutocommitApproval()
-	}
-
 	rollbackOnError := s.IsDML // for non-dml queries, there's no need to do a rollback
-	result, errs := vcursor.ExecuteMultiShard(rss, queries, rollbackOnError, canAutocommit)
+	result, errs := vcursor.ExecuteMultiShard(ctx, rss, queries, rollbackOnError, s.canAutoCommit(vcursor, rss))
 	err = vterrors.Aggregate(errs)
 	if err != nil {
 		return nil, err
@@ -109,11 +121,26 @@ func (s *Send) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariabl
 	return result, nil
 }
 
-// StreamExecute implements Primitive interface
-func (s *Send) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	rss, _, err := vcursor.ResolveDestinations(s.Keyspace.Name, nil, []key.Destination{s.TargetDestination})
+func (s *Send) canAutoCommit(vcursor VCursor, rss []*srvtopo.ResolvedShard) bool {
+	if s.IsDML {
+		return (len(rss) == 1 || s.MultishardAutocommit) && vcursor.AutocommitApproval()
+	}
+	return false
+}
+
+func copyBindVars(in map[string]*querypb.BindVariable) map[string]*querypb.BindVariable {
+	out := make(map[string]*querypb.BindVariable, len(in)+1)
+	for k, v := range in {
+		out[k] = v
+	}
+	return out
+}
+
+// TryStreamExecute implements Primitive interface
+func (s *Send) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	rss, _, err := vcursor.ResolveDestinations(ctx, s.Keyspace.Name, nil, []key.Destination{s.TargetDestination})
 	if err != nil {
-		return vterrors.Wrap(err, "sendStreamExecute")
+		return err
 	}
 
 	if !s.Keyspace.Sharded && len(rss) != 1 {
@@ -124,37 +151,45 @@ func (s *Send) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindV
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Unexpected error, DestinationKeyspaceID mapping to multiple shards: %s, got: %v", s.Query, s.TargetDestination)
 	}
 
-	queries := make([]*querypb.BoundQuery, len(rss))
-	for i := range rss {
-		queries[i] = &querypb.BoundQuery{
-			Sql:           s.Query,
-			BindVariables: bindVars,
-		}
-	}
-
 	multiBindVars := make([]map[string]*querypb.BindVariable, len(rss))
-	for i := range multiBindVars {
-		multiBindVars[i] = bindVars
+	for i, rs := range rss {
+		bv := bindVars
+		if s.ShardNameNeeded {
+			bv = copyBindVars(bindVars)
+			bv[ShardName] = sqltypes.StringBindVariable(rs.Target.Shard)
+		}
+		multiBindVars[i] = bv
 	}
-	return vcursor.StreamExecuteMulti(s.Query, rss, multiBindVars, callback)
+	errors := vcursor.StreamExecuteMulti(ctx, s.Query, rss, multiBindVars, s.IsDML, s.canAutoCommit(vcursor, rss), callback)
+	return vterrors.Aggregate(errors)
 }
 
 // GetFields implements Primitive interface
-func (s *Send) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	qr, err := s.Execute(vcursor, bindVars, false)
+func (s *Send) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	qr, err := vcursor.ExecutePrimitive(ctx, s, bindVars, false)
 	if err != nil {
-		return nil, vterrors.Wrap(err, "sendGetFields")
+		return nil, err
 	}
 	qr.Rows = nil
 	return qr, nil
 }
 
 func (s *Send) description() PrimitiveDescription {
-	other := map[string]interface{}{
-		"Query":           s.Query,
-		"Table":           s.GetTableName(),
-		"IsDML":           s.IsDML,
-		"SingleShardOnly": s.SingleShardOnly,
+	other := map[string]any{
+		"Query": s.Query,
+		"Table": s.GetTableName(),
+	}
+	if s.IsDML {
+		other["IsDML"] = true
+	}
+	if s.SingleShardOnly {
+		other["SingleShardOnly"] = true
+	}
+	if s.ShardNameNeeded {
+		other["ShardNameNeeded"] = true
+	}
+	if s.MultishardAutocommit {
+		other["MultishardAutocommit"] = true
 	}
 	return PrimitiveDescription{
 		OperatorType:      "Send",

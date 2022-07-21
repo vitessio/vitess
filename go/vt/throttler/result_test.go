@@ -40,7 +40,7 @@ var (
 		LowestBad:                    0,
 		LagRecordNow:                 lagRecord(sinceZero(1234*time.Millisecond), 101, 1),
 		LagRecordBefore:              replicationLagRecord{},
-		MasterRate:                   99,
+		PrimaryRate:                  99,
 		GuessedReplicationRate:       0,
 		GuessedReplicationBacklogOld: 0,
 		GuessedReplicationBacklogNew: 0,
@@ -62,7 +62,7 @@ var (
 		LowestBad:                    200,
 		LagRecordNow:                 lagRecord(sinceZero(5000*time.Millisecond), 101, 2),
 		LagRecordBefore:              lagRecord(sinceZero(1234*time.Millisecond), 101, 1),
-		MasterRate:                   200,
+		PrimaryRate:                  200,
 		GuessedReplicationRate:       150,
 		GuessedReplicationBacklogOld: 10,
 		GuessedReplicationBacklogNew: 20,
@@ -84,7 +84,7 @@ var (
 		LowestBad:                    100,
 		LagRecordNow:                 lagRecord(sinceZero(10123*time.Millisecond), 101, 23),
 		LagRecordBefore:              lagRecord(sinceZero(5000*time.Millisecond), 101, 2),
-		MasterRate:                   0,
+		PrimaryRate:                  0,
 		GuessedReplicationRate:       0,
 		GuessedReplicationBacklogOld: 0,
 		GuessedReplicationBacklogNew: 0,
@@ -102,7 +102,7 @@ func TestResultString(t *testing.T) {
 alias: cell1-0000000101 lag: 1s
 last change: 1.2s rate: 99 good/bad? good skipped b/c:  good/bad: 95/0
 state (old/tested/new): I/I/I 
-lag before: n/a (n/a ago) rates (master/replica): 99/0 backlog (old/new): 0/0
+lag before: n/a (n/a ago) rates (primary/replica): 99/0 backlog (old/new): 0/0
 reason: increased the rate`,
 		},
 		{
@@ -111,7 +111,7 @@ reason: increased the rate`,
 alias: cell1-0000000101 lag: 2s
 last change: 3.8s rate: 200 good/bad? bad skipped b/c:  good/bad: 95/200
 state (old/tested/new): I/D/D 
-lag before: 1s (3.8s ago) rates (master/replica): 200/150 backlog (old/new): 10/20
+lag before: 1s (3.8s ago) rates (primary/replica): 200/150 backlog (old/new): 10/20
 reason: decreased the rate`,
 		},
 		{
@@ -120,7 +120,7 @@ reason: decreased the rate`,
 alias: cell1-0000000101 lag: 23s
 last change: 5.1s rate: 100 good/bad? bad skipped b/c:  good/bad: 95/100
 state (old/tested/new): D/E/E 
-lag before: 2s (5.1s ago) rates (master/replica): 0/0 backlog (old/new): 0/0
+lag before: 2s (5.1s ago) rates (primary/replica): 0/0 backlog (old/new): 0/0
 reason: emergency state decreased the rate`,
 		},
 	}

@@ -17,13 +17,16 @@ limitations under the License.
 package vtgate
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
 	"vitess.io/vitess/go/test/utils"
 
+	"context"
+
 	"github.com/stretchr/testify/require"
-	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/key"
@@ -41,7 +44,7 @@ var queries = []*querypb.BoundQuery{{Sql: "query1"}}
 var twoQueries = []*querypb.BoundQuery{{Sql: "query1"}, {Sql: "query1"}}
 
 func TestTxConnBegin(t *testing.T) {
-	sc, sbc0, _, rss0, _, _ := newLegacyTestTxConnEnv(t, "TestTxConn")
+	sc, sbc0, _, rss0, _, _ := newTestTxConnEnv(t, "TestTxConn")
 	session := &vtgatepb.Session{}
 
 	// begin
@@ -60,8 +63,8 @@ func TestTxConnBegin(t *testing.T) {
 	assert.EqualValues(t, 1, sbc0.CommitCount.Get(), "sbc0.CommitCount")
 }
 
-func TestTxConnCommitSuccess(t *testing.T) {
-	sc, sbc0, sbc1, rss0, _, rss01 := newLegacyTestTxConnEnv(t, "TestTxConn")
+func TestTxConnCommitFailure(t *testing.T) {
+	sc, sbc0, sbc1, rss0, rss1, rss01 := newTestTxConnEnv(t, "TestTxConn")
 	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
 
 	// Sequence the executes to ensure commit order
@@ -73,7 +76,7 @@ func TestTxConnCommitSuccess(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   "TestTxConn",
 				Shard:      "0",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			TransactionId: 1,
 			TabletAlias:   sbc0.Tablet().Alias,
@@ -87,7 +90,7 @@ func TestTxConnCommitSuccess(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   "TestTxConn",
 				Shard:      "0",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			TransactionId: 1,
 			TabletAlias:   sbc0.Tablet().Alias,
@@ -95,10 +98,67 @@ func TestTxConnCommitSuccess(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   "TestTxConn",
 				Shard:      "1",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
+			},
+			TransactionId: 1,
+			TabletAlias:   sbc1.Tablet().Alias,
+		}},
+	}
+	utils.MustMatch(t, &wantSession, session.Session, "Session")
+
+	sbc1.MustFailCodes[vtrpcpb.Code_DEADLINE_EXCEEDED] = 1
+
+	expectErr := NewShardError(vterrors.New(
+		vtrpcpb.Code_DEADLINE_EXCEEDED,
+		fmt.Sprintf("%v error", vtrpcpb.Code_DEADLINE_EXCEEDED)),
+		rss1[0].Target)
+
+	require.ErrorContains(t, sc.txConn.Commit(ctx, session), expectErr.Error())
+	wantSession = vtgatepb.Session{}
+	utils.MustMatch(t, &wantSession, session.Session, "Session")
+	assert.EqualValues(t, 1, sbc0.CommitCount.Get(), "sbc0.CommitCount")
+	assert.EqualValues(t, 1, sbc1.CommitCount.Get(), "sbc1.CommitCount")
+}
+
+func TestTxConnCommitSuccess(t *testing.T) {
+	sc, sbc0, sbc1, rss0, _, rss01 := newTestTxConnEnv(t, "TestTxConn")
+	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
+
+	// Sequence the executes to ensure commit order
+	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
+	sc.ExecuteMultiShard(ctx, rss0, queries, session, false, false)
+	wantSession := vtgatepb.Session{
+		InTransaction: true,
+		ShardSessions: []*vtgatepb.Session_ShardSession{{
+			Target: &querypb.Target{
+				Keyspace:   "TestTxConn",
+				Shard:      "0",
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			TransactionId: 1,
 			TabletAlias:   sbc0.Tablet().Alias,
+		}},
+	}
+	utils.MustMatch(t, &wantSession, session.Session, "Session")
+	sc.ExecuteMultiShard(ctx, rss01, twoQueries, session, false, false)
+	wantSession = vtgatepb.Session{
+		InTransaction: true,
+		ShardSessions: []*vtgatepb.Session_ShardSession{{
+			Target: &querypb.Target{
+				Keyspace:   "TestTxConn",
+				Shard:      "0",
+				TabletType: topodatapb.TabletType_PRIMARY,
+			},
+			TransactionId: 1,
+			TabletAlias:   sbc0.Tablet().Alias,
+		}, {
+			Target: &querypb.Target{
+				Keyspace:   "TestTxConn",
+				Shard:      "1",
+				TabletType: topodatapb.TabletType_PRIMARY,
+			},
+			TransactionId: 1,
+			TabletAlias:   sbc1.Tablet().Alias,
 		}},
 	}
 	utils.MustMatch(t, &wantSession, session.Session, "Session")
@@ -125,7 +185,7 @@ func TestTxConnReservedCommitSuccess(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   "TestTxConn",
 				Shard:      "0",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			TransactionId: 1,
 			ReservedId:    1,
@@ -141,7 +201,7 @@ func TestTxConnReservedCommitSuccess(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   "TestTxConn",
 				Shard:      "0",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			TransactionId: 1,
 			ReservedId:    1,
@@ -150,7 +210,7 @@ func TestTxConnReservedCommitSuccess(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   "TestTxConn",
 				Shard:      "1",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			TransactionId: 1,
 			ReservedId:    1,
@@ -167,7 +227,7 @@ func TestTxConnReservedCommitSuccess(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   "TestTxConn",
 				Shard:      "0",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			ReservedId:  2,
 			TabletAlias: sbc0.Tablet().Alias,
@@ -175,7 +235,7 @@ func TestTxConnReservedCommitSuccess(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   "TestTxConn",
 				Shard:      "1",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			ReservedId:  2,
 			TabletAlias: sbc1.Tablet().Alias,
@@ -213,7 +273,7 @@ func TestTxConnReservedOn2ShardTxOn1ShardAndCommit(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   keyspace,
 				Shard:      "1",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			ReservedId:  1,
 			TabletAlias: sbc1.Tablet().Alias,
@@ -221,7 +281,7 @@ func TestTxConnReservedOn2ShardTxOn1ShardAndCommit(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   keyspace,
 				Shard:      "0",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			ReservedId:  1,
 			TabletAlias: sbc0.Tablet().Alias,
@@ -240,7 +300,7 @@ func TestTxConnReservedOn2ShardTxOn1ShardAndCommit(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   keyspace,
 				Shard:      "1",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			ReservedId:  1,
 			TabletAlias: sbc1.Tablet().Alias,
@@ -248,7 +308,7 @@ func TestTxConnReservedOn2ShardTxOn1ShardAndCommit(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   keyspace,
 				Shard:      "0",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			TransactionId: 1,
 			ReservedId:    1,
@@ -267,7 +327,7 @@ func TestTxConnReservedOn2ShardTxOn1ShardAndCommit(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   keyspace,
 				Shard:      "1",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			ReservedId:  1,
 			TabletAlias: sbc1.Tablet().Alias,
@@ -275,7 +335,7 @@ func TestTxConnReservedOn2ShardTxOn1ShardAndCommit(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   keyspace,
 				Shard:      "0",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			ReservedId:  2,
 			TabletAlias: sbc0.Tablet().Alias,
@@ -306,7 +366,7 @@ func TestTxConnReservedOn2ShardTxOn1ShardAndRollback(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   keyspace,
 				Shard:      "1",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			ReservedId:  1,
 			TabletAlias: sbc1.Tablet().Alias,
@@ -314,7 +374,7 @@ func TestTxConnReservedOn2ShardTxOn1ShardAndRollback(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   keyspace,
 				Shard:      "0",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			ReservedId:  1,
 			TabletAlias: sbc0.Tablet().Alias,
@@ -333,7 +393,7 @@ func TestTxConnReservedOn2ShardTxOn1ShardAndRollback(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   keyspace,
 				Shard:      "1",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			ReservedId:  1,
 			TabletAlias: sbc1.Tablet().Alias,
@@ -341,7 +401,7 @@ func TestTxConnReservedOn2ShardTxOn1ShardAndRollback(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   keyspace,
 				Shard:      "0",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			TransactionId: 1,
 			ReservedId:    1,
@@ -360,7 +420,7 @@ func TestTxConnReservedOn2ShardTxOn1ShardAndRollback(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   keyspace,
 				Shard:      "1",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			ReservedId:  1,
 			TabletAlias: sbc1.Tablet().Alias,
@@ -368,7 +428,7 @@ func TestTxConnReservedOn2ShardTxOn1ShardAndRollback(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   keyspace,
 				Shard:      "0",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			ReservedId:  2,
 			TabletAlias: sbc0.Tablet().Alias,
@@ -380,7 +440,7 @@ func TestTxConnReservedOn2ShardTxOn1ShardAndRollback(t *testing.T) {
 }
 
 func TestTxConnCommitOrderFailure1(t *testing.T) {
-	sc, sbc0, sbc1, rss0, rss1, _ := newLegacyTestTxConnEnv(t, "TestTxConn")
+	sc, sbc0, sbc1, rss0, rss1, _ := newTestTxConnEnv(t, "TestTxConn")
 	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
 
 	queries := []*querypb.BoundQuery{{Sql: "query1"}}
@@ -411,7 +471,7 @@ func TestTxConnCommitOrderFailure1(t *testing.T) {
 }
 
 func TestTxConnCommitOrderFailure2(t *testing.T) {
-	sc, sbc0, sbc1, rss0, rss1, _ := newLegacyTestTxConnEnv(t, "TestTxConn")
+	sc, sbc0, sbc1, rss0, rss1, _ := newTestTxConnEnv(t, "TestTxConn")
 	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
 
 	queries := []*querypb.BoundQuery{{
@@ -443,7 +503,7 @@ func TestTxConnCommitOrderFailure2(t *testing.T) {
 }
 
 func TestTxConnCommitOrderFailure3(t *testing.T) {
-	sc, sbc0, sbc1, rss0, rss1, _ := newLegacyTestTxConnEnv(t, "TestTxConn")
+	sc, sbc0, sbc1, rss0, rss1, _ := newTestTxConnEnv(t, "TestTxConn")
 	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
 
 	queries := []*querypb.BoundQuery{{
@@ -465,9 +525,14 @@ func TestTxConnCommitOrderFailure3(t *testing.T) {
 		sc.txConn.Commit(ctx, session))
 
 	// The last failed commit must generate a warning.
+	expectErr := NewShardError(vterrors.New(
+		vtrpcpb.Code_INVALID_ARGUMENT,
+		fmt.Sprintf("%v error", vtrpcpb.Code_INVALID_ARGUMENT)),
+		rss1[0].Target)
+
 	wantSession := vtgatepb.Session{
 		Warnings: []*querypb.QueryWarning{{
-			Message: "post-operation transaction had an error: Code: INVALID_ARGUMENT\nINVALID_ARGUMENT error\n\ntarget: TestTxConn.1.master, used tablet: aa-0 (1)",
+			Message: fmt.Sprintf("post-operation transaction had an error: %v", expectErr),
 		}},
 	}
 	utils.MustMatch(t, &wantSession, session.Session, "Session")
@@ -478,7 +543,7 @@ func TestTxConnCommitOrderFailure3(t *testing.T) {
 }
 
 func TestTxConnCommitOrderSuccess(t *testing.T) {
-	sc, sbc0, sbc1, rss0, rss1, _ := newLegacyTestTxConnEnv(t, "TestTxConn")
+	sc, sbc0, sbc1, rss0, rss1, _ := newTestTxConnEnv(t, "TestTxConn")
 	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
 
 	queries := []*querypb.BoundQuery{{
@@ -494,7 +559,7 @@ func TestTxConnCommitOrderSuccess(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   "TestTxConn",
 				Shard:      "0",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			TransactionId: 1,
 			TabletAlias:   sbc0.Tablet().Alias,
@@ -510,7 +575,7 @@ func TestTxConnCommitOrderSuccess(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   "TestTxConn",
 				Shard:      "0",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			TransactionId: 2,
 			TabletAlias:   sbc0.Tablet().Alias,
@@ -519,7 +584,7 @@ func TestTxConnCommitOrderSuccess(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   "TestTxConn",
 				Shard:      "0",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			TransactionId: 1,
 			TabletAlias:   sbc0.Tablet().Alias,
@@ -535,7 +600,7 @@ func TestTxConnCommitOrderSuccess(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   "TestTxConn",
 				Shard:      "0",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			TransactionId: 2,
 			TabletAlias:   sbc0.Tablet().Alias,
@@ -544,7 +609,7 @@ func TestTxConnCommitOrderSuccess(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   "TestTxConn",
 				Shard:      "0",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			TransactionId: 1,
 			TabletAlias:   sbc0.Tablet().Alias,
@@ -553,10 +618,10 @@ func TestTxConnCommitOrderSuccess(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   "TestTxConn",
 				Shard:      "1",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			TransactionId: 1,
-			TabletAlias:   sbc0.Tablet().Alias,
+			TabletAlias:   sbc1.Tablet().Alias,
 		}},
 	}
 	utils.MustMatch(t, &wantSession, session.Session, "Session")
@@ -591,7 +656,7 @@ func TestTxConnReservedCommitOrderSuccess(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   "TestTxConn",
 				Shard:      "0",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			TransactionId: 1,
 			ReservedId:    1,
@@ -609,7 +674,7 @@ func TestTxConnReservedCommitOrderSuccess(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   "TestTxConn",
 				Shard:      "0",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			TransactionId: 2,
 			ReservedId:    2,
@@ -619,7 +684,7 @@ func TestTxConnReservedCommitOrderSuccess(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   "TestTxConn",
 				Shard:      "0",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			TransactionId: 1,
 			ReservedId:    1,
@@ -637,7 +702,7 @@ func TestTxConnReservedCommitOrderSuccess(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   "TestTxConn",
 				Shard:      "0",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			TransactionId: 2,
 			ReservedId:    2,
@@ -647,7 +712,7 @@ func TestTxConnReservedCommitOrderSuccess(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   "TestTxConn",
 				Shard:      "0",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			TransactionId: 1,
 			ReservedId:    1,
@@ -657,7 +722,7 @@ func TestTxConnReservedCommitOrderSuccess(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   "TestTxConn",
 				Shard:      "1",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			TransactionId: 1,
 			ReservedId:    1,
@@ -678,7 +743,7 @@ func TestTxConnReservedCommitOrderSuccess(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   "TestTxConn",
 				Shard:      "0",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			ReservedId:  3,
 			TabletAlias: sbc0.Tablet().Alias,
@@ -687,7 +752,7 @@ func TestTxConnReservedCommitOrderSuccess(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   "TestTxConn",
 				Shard:      "0",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			ReservedId:  4,
 			TabletAlias: sbc0.Tablet().Alias,
@@ -696,7 +761,7 @@ func TestTxConnReservedCommitOrderSuccess(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   "TestTxConn",
 				Shard:      "1",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			ReservedId:  2,
 			TabletAlias: sbc1.Tablet().Alias,
@@ -715,7 +780,7 @@ func TestTxConnReservedCommitOrderSuccess(t *testing.T) {
 }
 
 func TestTxConnCommit2PC(t *testing.T) {
-	sc, sbc0, sbc1, rss0, _, rss01 := newLegacyTestTxConnEnv(t, "TestTxConnCommit2PC")
+	sc, sbc0, sbc1, rss0, _, rss01 := newTestTxConnEnv(t, "TestTxConnCommit2PC")
 
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
 	sc.ExecuteMultiShard(ctx, rss0, queries, session, false, false)
@@ -731,7 +796,7 @@ func TestTxConnCommit2PC(t *testing.T) {
 }
 
 func TestTxConnCommit2PCOneParticipant(t *testing.T) {
-	sc, sbc0, _, rss0, _, _ := newLegacyTestTxConnEnv(t, "TestTxConnCommit2PCOneParticipant")
+	sc, sbc0, _, rss0, _, _ := newTestTxConnEnv(t, "TestTxConnCommit2PCOneParticipant")
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
 	sc.ExecuteMultiShard(ctx, rss0, queries, session, false, false)
 	session.TransactionMode = vtgatepb.TransactionMode_TWOPC
@@ -741,7 +806,7 @@ func TestTxConnCommit2PCOneParticipant(t *testing.T) {
 }
 
 func TestTxConnCommit2PCCreateTransactionFail(t *testing.T) {
-	sc, sbc0, sbc1, rss0, rss1, _ := newLegacyTestTxConnEnv(t, "TestTxConnCommit2PCCreateTransactionFail")
+	sc, sbc0, sbc1, rss0, rss1, _ := newTestTxConnEnv(t, "TestTxConnCommit2PCCreateTransactionFail")
 
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
 	sc.ExecuteMultiShard(ctx, rss0, queries, session, false, false)
@@ -763,7 +828,7 @@ func TestTxConnCommit2PCCreateTransactionFail(t *testing.T) {
 }
 
 func TestTxConnCommit2PCPrepareFail(t *testing.T) {
-	sc, sbc0, sbc1, rss0, _, rss01 := newLegacyTestTxConnEnv(t, "TestTxConnCommit2PCPrepareFail")
+	sc, sbc0, sbc1, rss0, _, rss01 := newTestTxConnEnv(t, "TestTxConnCommit2PCPrepareFail")
 
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
 	sc.ExecuteMultiShard(ctx, rss0, queries, session, false, false)
@@ -783,7 +848,7 @@ func TestTxConnCommit2PCPrepareFail(t *testing.T) {
 }
 
 func TestTxConnCommit2PCStartCommitFail(t *testing.T) {
-	sc, sbc0, sbc1, rss0, _, rss01 := newLegacyTestTxConnEnv(t, "TestTxConnCommit2PCStartCommitFail")
+	sc, sbc0, sbc1, rss0, _, rss01 := newTestTxConnEnv(t, "TestTxConnCommit2PCStartCommitFail")
 
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
 	sc.ExecuteMultiShard(ctx, rss0, queries, session, false, false)
@@ -803,7 +868,7 @@ func TestTxConnCommit2PCStartCommitFail(t *testing.T) {
 }
 
 func TestTxConnCommit2PCCommitPreparedFail(t *testing.T) {
-	sc, sbc0, sbc1, rss0, _, rss01 := newLegacyTestTxConnEnv(t, "TestTxConnCommit2PCCommitPreparedFail")
+	sc, sbc0, sbc1, rss0, _, rss01 := newTestTxConnEnv(t, "TestTxConnCommit2PCCommitPreparedFail")
 
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
 	sc.ExecuteMultiShard(ctx, rss0, queries, session, false, false)
@@ -823,7 +888,7 @@ func TestTxConnCommit2PCCommitPreparedFail(t *testing.T) {
 }
 
 func TestTxConnCommit2PCConcludeTransactionFail(t *testing.T) {
-	sc, sbc0, sbc1, rss0, _, rss01 := newLegacyTestTxConnEnv(t, "TestTxConnCommit2PCConcludeTransactionFail")
+	sc, sbc0, sbc1, rss0, _, rss01 := newTestTxConnEnv(t, "TestTxConnCommit2PCConcludeTransactionFail")
 
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
 	sc.ExecuteMultiShard(ctx, rss0, queries, session, false, false)
@@ -843,7 +908,7 @@ func TestTxConnCommit2PCConcludeTransactionFail(t *testing.T) {
 }
 
 func TestTxConnRollback(t *testing.T) {
-	sc, sbc0, sbc1, rss0, _, rss01 := newLegacyTestTxConnEnv(t, "TxConnRollback")
+	sc, sbc0, sbc1, rss0, _, rss01 := newTestTxConnEnv(t, "TxConnRollback")
 
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
 	sc.ExecuteMultiShard(ctx, rss0, queries, session, false, false)
@@ -870,7 +935,7 @@ func TestTxConnReservedRollback(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   "TxConnReservedRollback",
 				Shard:      "0",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			ReservedId:  2,
 			TabletAlias: sbc0.Tablet().Alias,
@@ -878,7 +943,7 @@ func TestTxConnReservedRollback(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   "TxConnReservedRollback",
 				Shard:      "1",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			ReservedId:  2,
 			TabletAlias: sbc1.Tablet().Alias,
@@ -892,7 +957,7 @@ func TestTxConnReservedRollback(t *testing.T) {
 }
 
 func TestTxConnReservedRollbackFailure(t *testing.T) {
-	sc, sbc0, sbc1, rss0, _, rss01 := newTestTxConnEnv(t, "TxConnReservedRollback")
+	sc, sbc0, sbc1, rss0, rss1, rss01 := newTestTxConnEnv(t, "TxConnReservedRollback")
 
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true, InReservedConn: true})
 	sc.ExecuteMultiShard(ctx, rss0, queries, session, false, false)
@@ -901,10 +966,16 @@ func TestTxConnReservedRollbackFailure(t *testing.T) {
 	sbc1.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
 	assert.Error(t,
 		sc.txConn.Rollback(ctx, session))
+
+	expectErr := NewShardError(vterrors.New(
+		vtrpcpb.Code_INVALID_ARGUMENT,
+		fmt.Sprintf("%v error", vtrpcpb.Code_INVALID_ARGUMENT)),
+		rss1[0].Target)
+
 	wantSession := vtgatepb.Session{
 		InReservedConn: true,
 		Warnings: []*querypb.QueryWarning{{
-			Message: "rollback encountered an error and connection to all shard for this session is released: Code: INVALID_ARGUMENT\nINVALID_ARGUMENT error\n",
+			Message: fmt.Sprintf("rollback encountered an error and connection to all shard for this session is released: %v", expectErr),
 		}},
 	}
 	utils.MustMatch(t, &wantSession, session.Session, "Session")
@@ -915,7 +986,7 @@ func TestTxConnReservedRollbackFailure(t *testing.T) {
 }
 
 func TestTxConnResolveOnPrepare(t *testing.T) {
-	sc, sbc0, sbc1, _, _, _ := newLegacyTestTxConnEnv(t, "TestTxConn")
+	sc, sbc0, sbc1, _, _, _ := newTestTxConnEnv(t, "TestTxConn")
 
 	dtid := "TestTxConn:0:1234"
 	sbc0.ReadTransactionResults = []*querypb.TransactionMetadata{{
@@ -924,7 +995,7 @@ func TestTxConnResolveOnPrepare(t *testing.T) {
 		Participants: []*querypb.Target{{
 			Keyspace:   "TestTxConn",
 			Shard:      "1",
-			TabletType: topodatapb.TabletType_MASTER,
+			TabletType: topodatapb.TabletType_PRIMARY,
 		}},
 	}}
 	err := sc.txConn.Resolve(ctx, dtid)
@@ -936,7 +1007,7 @@ func TestTxConnResolveOnPrepare(t *testing.T) {
 }
 
 func TestTxConnResolveOnRollback(t *testing.T) {
-	sc, sbc0, sbc1, _, _, _ := newLegacyTestTxConnEnv(t, "TestTxConn")
+	sc, sbc0, sbc1, _, _, _ := newTestTxConnEnv(t, "TestTxConn")
 
 	dtid := "TestTxConn:0:1234"
 	sbc0.ReadTransactionResults = []*querypb.TransactionMetadata{{
@@ -945,7 +1016,7 @@ func TestTxConnResolveOnRollback(t *testing.T) {
 		Participants: []*querypb.Target{{
 			Keyspace:   "TestTxConn",
 			Shard:      "1",
-			TabletType: topodatapb.TabletType_MASTER,
+			TabletType: topodatapb.TabletType_PRIMARY,
 		}},
 	}}
 	require.NoError(t,
@@ -957,7 +1028,7 @@ func TestTxConnResolveOnRollback(t *testing.T) {
 }
 
 func TestTxConnResolveOnCommit(t *testing.T) {
-	sc, sbc0, sbc1, _, _, _ := newLegacyTestTxConnEnv(t, "TestTxConn")
+	sc, sbc0, sbc1, _, _, _ := newTestTxConnEnv(t, "TestTxConn")
 
 	dtid := "TestTxConn:0:1234"
 	sbc0.ReadTransactionResults = []*querypb.TransactionMetadata{{
@@ -966,7 +1037,7 @@ func TestTxConnResolveOnCommit(t *testing.T) {
 		Participants: []*querypb.Target{{
 			Keyspace:   "TestTxConn",
 			Shard:      "1",
-			TabletType: topodatapb.TabletType_MASTER,
+			TabletType: topodatapb.TabletType_PRIMARY,
 		}},
 	}}
 	require.NoError(t,
@@ -978,7 +1049,7 @@ func TestTxConnResolveOnCommit(t *testing.T) {
 }
 
 func TestTxConnResolveInvalidDTID(t *testing.T) {
-	sc, _, _, _, _, _ := newLegacyTestTxConnEnv(t, "TestTxConn")
+	sc, _, _, _, _, _ := newTestTxConnEnv(t, "TestTxConn")
 
 	err := sc.txConn.Resolve(ctx, "abcd")
 	want := "invalid parts in dtid: abcd"
@@ -986,7 +1057,7 @@ func TestTxConnResolveInvalidDTID(t *testing.T) {
 }
 
 func TestTxConnResolveReadTransactionFail(t *testing.T) {
-	sc, sbc0, _, _, _, _ := newLegacyTestTxConnEnv(t, "TestTxConn")
+	sc, sbc0, _, _, _, _ := newTestTxConnEnv(t, "TestTxConn")
 
 	dtid := "TestTxConn:0:1234"
 	sbc0.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
@@ -997,7 +1068,7 @@ func TestTxConnResolveReadTransactionFail(t *testing.T) {
 }
 
 func TestTxConnResolveInternalError(t *testing.T) {
-	sc, sbc0, _, _, _, _ := newLegacyTestTxConnEnv(t, "TestTxConn")
+	sc, sbc0, _, _, _, _ := newTestTxConnEnv(t, "TestTxConn")
 
 	dtid := "TestTxConn:0:1234"
 	sbc0.ReadTransactionResults = []*querypb.TransactionMetadata{{
@@ -1006,7 +1077,7 @@ func TestTxConnResolveInternalError(t *testing.T) {
 		Participants: []*querypb.Target{{
 			Keyspace:   "TestTxConn",
 			Shard:      "1",
-			TabletType: topodatapb.TabletType_MASTER,
+			TabletType: topodatapb.TabletType_PRIMARY,
 		}},
 	}}
 	err := sc.txConn.Resolve(ctx, dtid)
@@ -1016,7 +1087,7 @@ func TestTxConnResolveInternalError(t *testing.T) {
 }
 
 func TestTxConnResolveSetRollbackFail(t *testing.T) {
-	sc, sbc0, sbc1, _, _, _ := newLegacyTestTxConnEnv(t, "TestTxConn")
+	sc, sbc0, sbc1, _, _, _ := newTestTxConnEnv(t, "TestTxConn")
 
 	dtid := "TestTxConn:0:1234"
 	sbc0.ReadTransactionResults = []*querypb.TransactionMetadata{{
@@ -1025,7 +1096,7 @@ func TestTxConnResolveSetRollbackFail(t *testing.T) {
 		Participants: []*querypb.Target{{
 			Keyspace:   "TestTxConn",
 			Shard:      "1",
-			TabletType: topodatapb.TabletType_MASTER,
+			TabletType: topodatapb.TabletType_PRIMARY,
 		}},
 	}}
 	sbc0.MustFailSetRollback = 1
@@ -1040,7 +1111,7 @@ func TestTxConnResolveSetRollbackFail(t *testing.T) {
 }
 
 func TestTxConnResolveRollbackPreparedFail(t *testing.T) {
-	sc, sbc0, sbc1, _, _, _ := newLegacyTestTxConnEnv(t, "TestTxConn")
+	sc, sbc0, sbc1, _, _, _ := newTestTxConnEnv(t, "TestTxConn")
 
 	dtid := "TestTxConn:0:1234"
 	sbc0.ReadTransactionResults = []*querypb.TransactionMetadata{{
@@ -1049,7 +1120,7 @@ func TestTxConnResolveRollbackPreparedFail(t *testing.T) {
 		Participants: []*querypb.Target{{
 			Keyspace:   "TestTxConn",
 			Shard:      "1",
-			TabletType: topodatapb.TabletType_MASTER,
+			TabletType: topodatapb.TabletType_PRIMARY,
 		}},
 	}}
 	sbc1.MustFailRollbackPrepared = 1
@@ -1064,7 +1135,7 @@ func TestTxConnResolveRollbackPreparedFail(t *testing.T) {
 }
 
 func TestTxConnResolveCommitPreparedFail(t *testing.T) {
-	sc, sbc0, sbc1, _, _, _ := newLegacyTestTxConnEnv(t, "TestTxConn")
+	sc, sbc0, sbc1, _, _, _ := newTestTxConnEnv(t, "TestTxConn")
 
 	dtid := "TestTxConn:0:1234"
 	sbc0.ReadTransactionResults = []*querypb.TransactionMetadata{{
@@ -1073,7 +1144,7 @@ func TestTxConnResolveCommitPreparedFail(t *testing.T) {
 		Participants: []*querypb.Target{{
 			Keyspace:   "TestTxConn",
 			Shard:      "1",
-			TabletType: topodatapb.TabletType_MASTER,
+			TabletType: topodatapb.TabletType_PRIMARY,
 		}},
 	}}
 	sbc1.MustFailCommitPrepared = 1
@@ -1088,7 +1159,7 @@ func TestTxConnResolveCommitPreparedFail(t *testing.T) {
 }
 
 func TestTxConnResolveConcludeTransactionFail(t *testing.T) {
-	sc, sbc0, sbc1, _, _, _ := newLegacyTestTxConnEnv(t, "TestTxConn")
+	sc, sbc0, sbc1, _, _, _ := newTestTxConnEnv(t, "TestTxConn")
 
 	dtid := "TestTxConn:0:1234"
 	sbc0.ReadTransactionResults = []*querypb.TransactionMetadata{{
@@ -1097,7 +1168,7 @@ func TestTxConnResolveConcludeTransactionFail(t *testing.T) {
 		Participants: []*querypb.Target{{
 			Keyspace:   "TestTxConn",
 			Shard:      "1",
-			TabletType: topodatapb.TabletType_MASTER,
+			TabletType: topodatapb.TabletType_PRIMARY,
 		}},
 	}}
 	sbc0.MustFailConcludeTransaction = 1
@@ -1178,38 +1249,20 @@ func TestTxConnMultiGoTargets(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func newLegacyTestTxConnEnv(t *testing.T, name string) (sc *ScatterConn, sbc0, sbc1 *sandboxconn.SandboxConn, rss0, rss1, rss01 []*srvtopo.ResolvedShard) {
-	t.Helper()
-	createSandbox(name)
-	hc := discovery.NewFakeLegacyHealthCheck()
-	sc = newTestLegacyScatterConn(hc, new(sandboxTopo), "aa")
-	sbc0 = hc.AddTestTablet("aa", "0", 1, name, "0", topodatapb.TabletType_MASTER, true, 1, nil)
-	sbc1 = hc.AddTestTablet("aa", "1", 1, name, "1", topodatapb.TabletType_MASTER, true, 1, nil)
-	res := srvtopo.NewResolver(&sandboxTopo{}, sc.gateway, "aa")
-	var err error
-	rss0, err = res.ResolveDestination(ctx, name, topodatapb.TabletType_MASTER, key.DestinationShard("0"))
-	require.NoError(t, err)
-	rss1, err = res.ResolveDestination(ctx, name, topodatapb.TabletType_MASTER, key.DestinationShard("1"))
-	require.NoError(t, err)
-	rss01, err = res.ResolveDestination(ctx, name, topodatapb.TabletType_MASTER, key.DestinationShards([]string{"0", "1"}))
-	require.NoError(t, err)
-	return sc, sbc0, sbc1, rss0, rss1, rss01
-}
-
 func newTestTxConnEnv(t *testing.T, name string) (sc *ScatterConn, sbc0, sbc1 *sandboxconn.SandboxConn, rss0, rss1, rss01 []*srvtopo.ResolvedShard) {
 	t.Helper()
 	createSandbox(name)
-	hc := discovery.NewFakeHealthCheck()
+	hc := discovery.NewFakeHealthCheck(nil)
 	sc = newTestScatterConn(hc, new(sandboxTopo), "aa")
-	sbc0 = hc.AddTestTablet("aa", "0", 1, name, "0", topodatapb.TabletType_MASTER, true, 1, nil)
-	sbc1 = hc.AddTestTablet("aa", "1", 1, name, "1", topodatapb.TabletType_MASTER, true, 1, nil)
+	sbc0 = hc.AddTestTablet("aa", "0", 1, name, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
+	sbc1 = hc.AddTestTablet("aa", "1", 1, name, "1", topodatapb.TabletType_PRIMARY, true, 1, nil)
 	res := srvtopo.NewResolver(&sandboxTopo{}, sc.gateway, "aa")
 	var err error
-	rss0, err = res.ResolveDestination(ctx, name, topodatapb.TabletType_MASTER, key.DestinationShard("0"))
+	rss0, err = res.ResolveDestination(ctx, name, topodatapb.TabletType_PRIMARY, key.DestinationShard("0"))
 	require.NoError(t, err)
-	rss1, err = res.ResolveDestination(ctx, name, topodatapb.TabletType_MASTER, key.DestinationShard("1"))
+	rss1, err = res.ResolveDestination(ctx, name, topodatapb.TabletType_PRIMARY, key.DestinationShard("1"))
 	require.NoError(t, err)
-	rss01, err = res.ResolveDestination(ctx, name, topodatapb.TabletType_MASTER, key.DestinationShards([]string{"0", "1"}))
+	rss01, err = res.ResolveDestination(ctx, name, topodatapb.TabletType_PRIMARY, key.DestinationShards([]string{"0", "1"}))
 	require.NoError(t, err)
 	return sc, sbc0, sbc1, rss0, rss1, rss01
 }

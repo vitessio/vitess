@@ -17,7 +17,7 @@ limitations under the License.
 package vtgate
 
 import (
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"regexp"
@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 
@@ -36,29 +37,29 @@ func TestQueryzHandler(t *testing.T) {
 	resp := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/schemaz", nil)
 
-	executor, _, _, _ := createLegacyExecutorEnv()
+	executor, _, _, _ := createExecutorEnv()
 
 	// single shard query
 	sql := "select id from user where id = 1"
 	_, err := executorExec(executor, sql, nil)
 	require.NoError(t, err)
-	result, ok := executor.plans.Get("@master:" + sql)
+	executor.plans.Wait()
+	plan1, ok := executor.debugGetPlan("@primary:" + sql)
 	if !ok {
 		t.Fatalf("couldn't get plan from cache")
 	}
-	plan1 := result.(*engine.Plan)
-	plan1.ExecTime = time.Duration(1 * time.Millisecond)
+	plan1.ExecTime = uint64(1 * time.Millisecond)
 
 	// scatter
 	sql = "select id from user"
 	_, err = executorExec(executor, sql, nil)
 	require.NoError(t, err)
-	result, ok = executor.plans.Get("@master:" + sql)
+	executor.plans.Wait()
+	plan2, ok := executor.debugGetPlan("@primary:" + sql)
 	if !ok {
 		t.Fatalf("couldn't get plan from cache")
 	}
-	plan2 := result.(*engine.Plan)
-	plan2.ExecTime = time.Duration(1 * time.Second)
+	plan2.ExecTime = uint64(1 * time.Second)
 
 	sql = "insert into user (id, name) values (:id, :name)"
 	_, err = executorExec(executor, sql, map[string]*querypb.BindVariable{
@@ -66,17 +67,15 @@ func TestQueryzHandler(t *testing.T) {
 		"name": sqltypes.BytesBindVariable([]byte("myname")),
 	})
 	require.NoError(t, err)
-	result, ok = executor.plans.Get("@master:" + sql)
+	executor.plans.Wait()
+	plan3, ok := executor.debugGetPlan("@primary:" + sql)
 	if !ok {
 		t.Fatalf("couldn't get plan from cache")
 	}
-	plan3 := result.(*engine.Plan)
 
 	// vindex insert from above execution
-	result, ok = executor.plans.Get("@master:" + "insert into name_user_map(name, user_id) values(:name_0, :user_id_0)")
+	plan4, ok := executor.debugGetPlan("@primary:" + "insert into name_user_map(name, user_id) values(:name_0, :user_id_0)")
 	require.True(t, ok, "couldn't get plan from cache")
-
-	plan4 := result.(*engine.Plan)
 
 	// same query again should add query counts to existing plans
 	sql = "insert into user (id, name) values (:id, :name)"
@@ -87,21 +86,23 @@ func TestQueryzHandler(t *testing.T) {
 
 	require.NoError(t, err)
 
-	plan3.ExecTime = time.Duration(100 * time.Millisecond)
-	plan4.ExecTime = time.Duration(200 * time.Millisecond)
+	plan3.ExecTime = uint64(100 * time.Millisecond)
+	plan4.ExecTime = uint64(200 * time.Millisecond)
 
 	queryzHandler(executor, resp, req)
-	body, _ := ioutil.ReadAll(resp.Body)
+	body, _ := io.ReadAll(resp.Body)
 	planPattern1 := []string{
 		`<tr class="low">`,
 		`<td>select id from user where id = 1</td>`,
 		`<td>1</td>`,
 		`<td>0.001000</td>`,
 		`<td>1</td>`,
+		`<td>0</td>`,
 		`<td>1</td>`,
 		`<td>0</td>`,
 		`<td>0.001000</td>`,
 		`<td>1.000000</td>`,
+		`<td>0.000000</td>`,
 		`<td>1.000000</td>`,
 		`<td>0.000000</td>`,
 		`</tr>`,
@@ -113,10 +114,12 @@ func TestQueryzHandler(t *testing.T) {
 		`<td>1</td>`,
 		`<td>1.000000</td>`,
 		`<td>8</td>`,
+		`<td>0</td>`,
 		`<td>8</td>`,
 		`<td>0</td>`,
 		`<td>1.000000</td>`,
 		`<td>8.000000</td>`,
+		`<td>0.000000</td>`,
 		`<td>8.000000</td>`,
 		`<td>0.000000</td>`,
 		`</tr>`,
@@ -130,9 +133,11 @@ func TestQueryzHandler(t *testing.T) {
 		`<td>2</td>`,
 		`<td>2</td>`,
 		`<td>0</td>`,
+		`<td>0</td>`,
 		`<td>0.050000</td>`,
 		`<td>1.000000</td>`,
 		`<td>1.000000</td>`,
+		`<td>0.000000</td>`,
 		`<td>0.000000</td>`,
 		`</tr>`,
 	}
@@ -145,9 +150,11 @@ func TestQueryzHandler(t *testing.T) {
 		`<td>2</td>`,
 		`<td>2</td>`,
 		`<td>0</td>`,
+		`<td>0</td>`,
 		`<td>0.100000</td>`,
 		`<td>1.000000</td>`,
 		`<td>1.000000</td>`,
+		`<td>0.000000</td>`,
 		`<td>0.000000</td>`,
 		`</tr>`,
 	}

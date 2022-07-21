@@ -27,7 +27,6 @@ import (
 	"vitess.io/vitess/go/vt/orchestrator/inst"
 	"vitess.io/vitess/go/vt/orchestrator/os"
 	"vitess.io/vitess/go/vt/orchestrator/process"
-	orcraft "vitess.io/vitess/go/vt/orchestrator/raft"
 )
 
 func getProxyAuthUser(req *http.Request) string {
@@ -41,11 +40,6 @@ func getProxyAuthUser(req *http.Request) string {
 // This depends on configured authentication method.
 func isAuthorizedForAction(req *http.Request, user auth.User) bool {
 	if config.Config.ReadOnly {
-		return false
-	}
-
-	if orcraft.IsRaftEnabled() && !orcraft.IsLeader() {
-		// A raft member that is not a leader is unauthorized.
 		return false
 	}
 
@@ -106,8 +100,8 @@ func authenticateToken(publicToken string, resp http.ResponseWriter) error {
 	return nil
 }
 
-// getUserId returns the authenticated user id, if available, depending on authertication method.
-func getUserId(req *http.Request, user auth.User) string {
+// getUserID returns the authenticated user id, if available, depending on authentication method.
+func getUserID(req *http.Request, user auth.User) string {
 	if config.Config.ReadOnly {
 		return ""
 	}
@@ -161,9 +155,9 @@ func figureClusterName(hint string) (clusterName string, err error) {
 // getClusterNameIfExists returns a cluster name by params hint, or an empty cluster name
 // if no hint is given
 func getClusterNameIfExists(params map[string]string) (clusterName string, err error) {
-	if clusterHint := getClusterHint(params); clusterHint == "" {
+	clusterHint := getClusterHint(params)
+	if clusterHint == "" {
 		return "", nil
-	} else {
-		return figureClusterName(clusterHint)
 	}
+	return figureClusterName(clusterHint)
 }

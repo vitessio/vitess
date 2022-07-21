@@ -17,18 +17,26 @@ limitations under the License.
 package planbuilder
 
 import (
-	"errors"
 	"fmt"
 	"strconv"
+	"strings"
+
+	"vitess.io/vitess/go/mysql/collations"
 
 	"vitess.io/vitess/go/sqltypes"
+
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+
+	"vitess.io/vitess/go/vt/vtgate/semantics"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
-var _ builder = (*orderedAggregate)(nil)
+var _ logicalPlan = (*orderedAggregate)(nil)
 
-// orderedAggregate is the builder for engine.OrderedAggregate.
+// orderedAggregate is the logicalPlan for engine.OrderedAggregate.
 // This gets built if there are aggregations on a SelectScatter
 // route. The primitive requests the underlying route to order
 // the results by the grouping columns. This will allow the
@@ -56,7 +64,21 @@ var _ builder = (*orderedAggregate)(nil)
 type orderedAggregate struct {
 	resultsBuilder
 	extraDistinct *sqlparser.ColName
-	eaggr         *engine.OrderedAggregate
+
+	// preProcess is true if one of the aggregates needs preprocessing.
+	preProcess bool
+
+	aggrOnEngine bool
+
+	// aggregates specifies the aggregation parameters for each
+	// aggregation function: function opcode and input column number.
+	aggregates []*engine.AggregateParams
+
+	// groupByKeys specifies the input values that must be used for
+	// the aggregation key.
+	groupByKeys []*engine.GroupByParams
+
+	truncateColumnCount int
 }
 
 // checkAggregates analyzes the select expression for aggregates. If it determines
@@ -64,22 +86,16 @@ type orderedAggregate struct {
 // primitive and returns it. It returns a groupByHandler if there is aggregation it
 // can handle.
 func (pb *primitiveBuilder) checkAggregates(sel *sqlparser.Select) error {
-	rb, isRoute := pb.bldr.(*route)
+	rb, isRoute := pb.plan.(*route)
 	if isRoute && rb.isSingleShard() {
+		// since we can push down all of the aggregation to the route,
+		// we don't need to do anything else here
 		return nil
 	}
 
 	// Check if we can allow aggregates.
-	hasAggregates := false
-	if sel.Distinct {
-		hasAggregates = true
-	} else {
-		hasAggregates = nodeHasAggregates(sel.SelectExprs)
-	}
-	if len(sel.GroupBy) > 0 {
-		hasAggregates = true
-	}
-	if !hasAggregates {
+	hasAggregates := sqlparser.ContainsAggregation(sel.SelectExprs) || len(sel.GroupBy) > 0
+	if !hasAggregates && !sel.Distinct {
 		return nil
 	}
 
@@ -88,7 +104,11 @@ func (pb *primitiveBuilder) checkAggregates(sel *sqlparser.Select) error {
 	// we need the ability to push down group by and
 	// order by clauses.
 	if !isRoute {
-		return errors.New("unsupported: cross-shard query with aggregates")
+		if hasAggregates {
+			return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard query with aggregates")
+		}
+		pb.plan = newDistinctV3(pb.plan)
+		return nil
 	}
 
 	// If there is a distinct clause, we can check the select list
@@ -124,34 +144,11 @@ func (pb *primitiveBuilder) checkAggregates(sel *sqlparser.Select) error {
 	}
 
 	// We need an aggregator primitive.
-	eaggr := &engine.OrderedAggregate{}
-	pb.bldr = &orderedAggregate{
-		resultsBuilder: newResultsBuilder(rb, eaggr),
-		eaggr:          eaggr,
-	}
-	pb.bldr.Reorder(0)
+	oa := &orderedAggregate{}
+	oa.resultsBuilder = newResultsBuilder(rb, oa)
+	pb.plan = oa
+	pb.plan.Reorder(0)
 	return nil
-}
-
-func nodeHasAggregates(node sqlparser.SQLNode) bool {
-	hasAggregates := false
-	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-		switch node := node.(type) {
-		case *sqlparser.FuncExpr:
-			if node.IsAggregate() {
-				hasAggregates = true
-				return false, errors.New("unused error")
-			}
-		case *sqlparser.GroupConcatExpr:
-			hasAggregates = true
-			return false, errors.New("unused error")
-		case *sqlparser.Subquery:
-			// Subqueries are analyzed by themselves.
-			return false, nil
-		}
-		return true, nil
-	}, node)
-	return hasAggregates
 }
 
 // groupbyHasUniqueVindex looks ahead at the group by expression to see if
@@ -184,7 +181,7 @@ func (pb *primitiveBuilder) groupByHasUniqueVindex(sel *sqlparser.Select, rb *ro
 			} else {
 				matchedExpr = node
 			}
-		case *sqlparser.SQLVal:
+		case *sqlparser.Literal:
 			if node.Type != sqlparser.IntVal {
 				continue
 			}
@@ -229,97 +226,95 @@ func findAlias(colname *sqlparser.ColName, selects sqlparser.SelectExprs) sqlpar
 	return nil
 }
 
-// Primitive satisfies the builder interface.
+// Primitive implements the logicalPlan interface
 func (oa *orderedAggregate) Primitive() engine.Primitive {
-	oa.eaggr.Input = oa.input.Primitive()
-	return oa.eaggr
-}
-
-// PushLock satisfies the builder interface.
-func (oa *orderedAggregate) PushLock(lock string) error {
-	return oa.input.PushLock(lock)
-}
-
-// PushFilter satisfies the builder interface.
-func (oa *orderedAggregate) PushFilter(_ *primitiveBuilder, _ sqlparser.Expr, whereType string, _ builder) error {
-	return errors.New("unsupported: filtering on results of aggregates")
-}
-
-// PushSelect satisfies the builder interface.
-// oa can accept expressions that are normal (a+b), or aggregate (MAX(v)).
-// Normal expressions are pushed through to the underlying route. But aggregate
-// expressions require post-processing. In such cases, oa shares the work with
-// the underlying route: It asks the scatter route to perform the MAX operation
-// also, and only performs the final aggregation with what the route returns.
-// Since the results are expected to be ordered, this is something that can
-// be performed 'as they come'. In this respect, oa is the originator for
-// aggregate expressions like MAX, which will be added to symtab. The underlying
-// MAX sent to the route will not be added to symtab and will not be reachable by
-// others. This functionality depends on the PushOrderBy to request that
-// the rows be correctly ordered.
-func (oa *orderedAggregate) PushSelect(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colNumber int, err error) {
-	if inner, ok := expr.Expr.(*sqlparser.FuncExpr); ok {
-		if _, ok := engine.SupportedAggregates[inner.Name.Lowered()]; ok {
-			return oa.pushAggr(pb, expr, origin)
+	colls := map[int]collations.ID{}
+	for _, key := range oa.aggregates {
+		if key.CollationID != collations.Unknown {
+			colls[key.KeyCol] = key.CollationID
+		}
+	}
+	for _, key := range oa.groupByKeys {
+		if key.CollationID != collations.Unknown {
+			colls[key.KeyCol] = key.CollationID
 		}
 	}
 
-	// Ensure that there are no aggregates in the expression.
-	if nodeHasAggregates(expr.Expr) {
-		return nil, 0, errors.New("unsupported: in scatter query: complex aggregate expression")
+	input := oa.input.Primitive()
+	if len(oa.groupByKeys) == 0 {
+		return &engine.ScalarAggregate{
+			PreProcess:          oa.preProcess,
+			AggrOnEngine:        oa.aggrOnEngine,
+			Aggregates:          oa.aggregates,
+			TruncateColumnCount: oa.truncateColumnCount,
+			Collations:          colls,
+			Input:               input,
+		}
 	}
 
-	innerRC, _, _ := oa.input.PushSelect(pb, expr, origin)
-	oa.resultColumns = append(oa.resultColumns, innerRC)
-	return innerRC, len(oa.resultColumns) - 1, nil
+	return &engine.OrderedAggregate{
+		PreProcess:          oa.preProcess,
+		AggrOnEngine:        oa.aggrOnEngine,
+		Aggregates:          oa.aggregates,
+		GroupByKeys:         oa.groupByKeys,
+		TruncateColumnCount: oa.truncateColumnCount,
+		Collations:          colls,
+		Input:               input,
+	}
 }
 
-func (oa *orderedAggregate) pushAggr(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colNumber int, err error) {
-	funcExpr := expr.Expr.(*sqlparser.FuncExpr)
-	opcode := engine.SupportedAggregates[funcExpr.Name.Lowered()]
-	if len(funcExpr.Exprs) != 1 {
-		return nil, 0, fmt.Errorf("unsupported: only one expression allowed inside aggregates: %s", sqlparser.String(funcExpr))
+func (oa *orderedAggregate) pushAggr(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, origin logicalPlan) (rc *resultColumn, colNumber int, err error) {
+	aggrFunc, _ := expr.Expr.(sqlparser.AggrFunc)
+	origOpcode := engine.SupportedAggregates[strings.ToLower(aggrFunc.AggrName())]
+	opcode := origOpcode
+	if aggrFunc.GetArgs() != nil &&
+		len(aggrFunc.GetArgs()) != 1 {
+		return nil, 0, fmt.Errorf("unsupported: only one expression allowed inside aggregates: %s", sqlparser.String(expr))
 	}
-	var innerCol int
-	handleDistinct, innerAliased, err := oa.needDistinctHandling(pb, funcExpr, opcode)
+
+	handleDistinct, innerAliased, err := oa.needDistinctHandling(pb, expr, opcode)
 	if err != nil {
 		return nil, 0, err
 	}
 	if handleDistinct {
 		if oa.extraDistinct != nil {
-			return nil, 0, fmt.Errorf("unsupported: only one distinct aggregation allowed in a select: %s", sqlparser.String(funcExpr))
+			return nil, 0, fmt.Errorf("unsupported: only one distinct aggregation allowed in a select: %s", sqlparser.String(expr))
 		}
 		// Push the expression that's inside the aggregate.
 		// The column will eventually get added to the group by and order by clauses.
-		_, innerCol, _ = oa.input.PushSelect(pb, innerAliased, origin)
+		newBuilder, _, innerCol, err := planProjection(pb, oa.input, innerAliased, origin)
+		if err != nil {
+			return nil, 0, err
+		}
+		pb.plan = newBuilder
 		col, err := BuildColName(oa.input.ResultColumns(), innerCol)
 		if err != nil {
 			return nil, 0, err
 		}
 		oa.extraDistinct = col
-		oa.eaggr.HasDistinct = true
-		var alias string
-		if expr.As.IsEmpty() {
-			alias = sqlparser.String(expr.Expr)
-		} else {
-			alias = expr.As.String()
-		}
+		oa.preProcess = true
 		switch opcode {
 		case engine.AggregateCount:
 			opcode = engine.AggregateCountDistinct
 		case engine.AggregateSum:
 			opcode = engine.AggregateSumDistinct
 		}
-		oa.eaggr.Aggregates = append(oa.eaggr.Aggregates, engine.AggregateParams{
-			Opcode: opcode,
-			Col:    innerCol,
-			Alias:  alias,
+		oa.aggregates = append(oa.aggregates, &engine.AggregateParams{
+			Opcode:     opcode,
+			Col:        innerCol,
+			Alias:      expr.ColumnName(),
+			OrigOpcode: origOpcode,
 		})
 	} else {
-		_, innerCol, _ = oa.input.PushSelect(pb, expr, origin)
-		oa.eaggr.Aggregates = append(oa.eaggr.Aggregates, engine.AggregateParams{
-			Opcode: opcode,
-			Col:    innerCol,
+		newBuilder, _, innerCol, err := planProjection(pb, oa.input, expr, origin)
+		if err != nil {
+			return nil, 0, err
+		}
+		pb.plan = newBuilder
+		oa.aggregates = append(oa.aggregates, &engine.AggregateParams{
+			Opcode:     opcode,
+			Col:        innerCol,
+			OrigOpcode: origOpcode,
 		})
 	}
 
@@ -333,17 +328,23 @@ func (oa *orderedAggregate) pushAggr(pb *primitiveBuilder, expr *sqlparser.Alias
 // needDistinctHandling returns true if oa needs to handle the distinct clause.
 // If true, it will also return the aliased expression that needs to be pushed
 // down into the underlying route.
-func (oa *orderedAggregate) needDistinctHandling(pb *primitiveBuilder, funcExpr *sqlparser.FuncExpr, opcode engine.AggregateOpcode) (bool, *sqlparser.AliasedExpr, error) {
-	if !funcExpr.Distinct {
-		return false, nil, nil
-	}
-	if opcode != engine.AggregateCount && opcode != engine.AggregateSum {
-		return false, nil, nil
-	}
-	innerAliased, ok := funcExpr.Exprs[0].(*sqlparser.AliasedExpr)
+func (oa *orderedAggregate) needDistinctHandling(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, opcode engine.AggregateOpcode) (bool, *sqlparser.AliasedExpr, error) {
+	var innerAliased *sqlparser.AliasedExpr
+	aggr, ok := expr.Expr.(sqlparser.AggrFunc)
+
 	if !ok {
-		return false, nil, fmt.Errorf("syntax error: %s", sqlparser.String(funcExpr))
+		return false, nil, fmt.Errorf("syntax error: %s", sqlparser.String(expr))
 	}
+
+	if !aggr.IsDistinct() {
+		return false, nil, nil
+	}
+	if opcode != engine.AggregateCount && opcode != engine.AggregateSum && opcode != engine.AggregateCountStar {
+		return false, nil, nil
+	}
+
+	innerAliased = &sqlparser.AliasedExpr{Expr: aggr.GetArg()}
+
 	rb, ok := oa.input.(*route)
 	if !ok {
 		// Unreachable
@@ -356,181 +357,59 @@ func (oa *orderedAggregate) needDistinctHandling(pb *primitiveBuilder, funcExpr 
 	return true, innerAliased, nil
 }
 
-func (oa *orderedAggregate) MakeDistinct() error {
-	for i, rc := range oa.resultColumns {
-		// If the column origin is oa (and not the underlying route),
-		// it means that it's an aggregate function supplied by oa.
-		// So, the distinct 'operator' cannot be pushed down into the
-		// route.
-		if rc.column.Origin() == oa {
-			return errors.New("unsupported: distinct cannot be combined with aggregate functions")
-		}
-		oa.eaggr.Keys = append(oa.eaggr.Keys, i)
-	}
-	return oa.input.MakeDistinct()
-}
-
-// PushGroupBy satisfies the builder interface.
-func (oa *orderedAggregate) PushGroupBy(groupBy sqlparser.GroupBy) error {
-	colNumber := -1
-	for _, expr := range groupBy {
-		switch node := expr.(type) {
-		case *sqlparser.ColName:
-			c := node.Metadata.(*column)
-			if c.Origin() == oa {
-				return fmt.Errorf("group by expression cannot reference an aggregate function: %v", sqlparser.String(node))
-			}
-			for i, rc := range oa.resultColumns {
-				if rc.column == c {
-					colNumber = i
-					break
-				}
-			}
-			if colNumber == -1 {
-				return errors.New("unsupported: in scatter query: group by column must reference column in SELECT list")
-			}
-		case *sqlparser.SQLVal:
-			num, err := ResultFromNumber(oa.resultColumns, node)
-			if err != nil {
-				return err
-			}
-			colNumber = num
-		default:
-			return errors.New("unsupported: in scatter query: only simple references allowed")
-		}
-		oa.eaggr.Keys = append(oa.eaggr.Keys, colNumber)
-	}
-	// Append the distinct aggregate if any.
-	if oa.extraDistinct != nil {
-		groupBy = append(groupBy, oa.extraDistinct)
-	}
-
-	_ = oa.input.PushGroupBy(groupBy)
-
-	return nil
-}
-
-// PushOrderBy pushes the order by expression into the primitive.
-// The requested order must be such that the ordering can be done
-// before the group by, which will allow us to push it down to the
-// route. This is actually true in most use cases, except for situations
-// where ordering is requested on values of an aggregate result.
-// Such constructs will need to be handled by a separate 'Sorter'
-// primitive, after aggregation is done. For example, the following
-// constructs are allowed:
-// 'select a, b, count(*) from t group by a, b order by a desc, b asc'
-// 'select a, b, count(*) from t group by a, b order by b'
-// The following construct is not allowed:
-// 'select a, count(*) from t group by a order by count(*)'
-func (oa *orderedAggregate) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
-	// Treat order by null as nil order by.
-	if len(orderBy) == 1 {
-		if _, ok := orderBy[0].Expr.(*sqlparser.NullVal); ok {
-			orderBy = nil
-		}
-	}
-
-	// referenced tracks the keys referenced by the order by clause.
-	referenced := make([]bool, len(oa.eaggr.Keys))
-	postSort := false
-	selOrderBy := make(sqlparser.OrderBy, 0, len(orderBy))
-	for _, order := range orderBy {
-		// Identify the order by column.
-		var orderByCol *column
-		switch expr := order.Expr.(type) {
-		case *sqlparser.SQLVal:
-			num, err := ResultFromNumber(oa.resultColumns, expr)
-			if err != nil {
-				return nil, err
-			}
-			orderByCol = oa.resultColumns[num].column
-		case *sqlparser.ColName:
-			orderByCol = expr.Metadata.(*column)
-		default:
-			return nil, fmt.Errorf("unsupported: in scatter query: complex order by expression: %v", sqlparser.String(expr))
-		}
-
-		// Match orderByCol against the group by columns.
-		found := false
-		for j, key := range oa.eaggr.Keys {
-			if oa.resultColumns[key].column != orderByCol {
-				continue
-			}
-
-			found = true
-			referenced[j] = true
-			selOrderBy = append(selOrderBy, order)
-			break
-		}
-		if !found {
-			postSort = true
-		}
-	}
-
-	// Append any unreferenced keys at the end of the order by.
-	for i, key := range oa.eaggr.Keys {
-		if referenced[i] {
-			continue
-		}
-		// Build a brand new reference for the key.
-		col, err := BuildColName(oa.input.ResultColumns(), key)
-		if err != nil {
-			return nil, fmt.Errorf("generating order by clause: %v", err)
-		}
-		selOrderBy = append(selOrderBy, &sqlparser.Order{Expr: col, Direction: sqlparser.AscScr})
-	}
-
-	// Append the distinct aggregate if any.
-	if oa.extraDistinct != nil {
-		selOrderBy = append(selOrderBy, &sqlparser.Order{Expr: oa.extraDistinct, Direction: sqlparser.AscScr})
-	}
-
-	// Push down the order by.
-	// It's ok to push the original AST down because all references
-	// should point to the route. Only aggregate functions are originated
-	// by oa, and we currently don't allow the ORDER BY to reference them.
-	bldr, err := oa.input.PushOrderBy(selOrderBy)
-	if err != nil {
-		return nil, err
-	}
-	oa.input = bldr
-	if postSort {
-		return newMemorySort(oa, orderBy)
-	}
-	return oa, nil
-}
-
-// SetUpperLimit satisfies the builder interface.
-func (oa *orderedAggregate) SetUpperLimit(count *sqlparser.SQLVal) {
-	oa.input.SetUpperLimit(count)
-}
-
-// PushMisc satisfies the builder interface.
-func (oa *orderedAggregate) PushMisc(sel *sqlparser.Select) {
-	oa.input.PushMisc(sel)
-}
-
-// Wireup satisfies the builder interface.
+// Wireup implements the logicalPlan interface
 // If text columns are detected in the keys, then the function modifies
 // the primitive to pull a corresponding weight_string from mysql and
 // compare those instead. This is because we currently don't have the
 // ability to mimic mysql's collation behavior.
-func (oa *orderedAggregate) Wireup(bldr builder, jt *jointab) error {
-	for i, colNumber := range oa.eaggr.Keys {
-		rc := oa.resultColumns[colNumber]
+func (oa *orderedAggregate) Wireup(plan logicalPlan, jt *jointab) error {
+	for i, gbk := range oa.groupByKeys {
+		rc := oa.resultColumns[gbk.KeyCol]
 		if sqltypes.IsText(rc.column.typ) {
-			if weightcolNumber, ok := oa.weightStrings[rc]; ok {
-				oa.eaggr.Keys[i] = weightcolNumber
-				continue
-			}
-			weightcolNumber, err := oa.input.SupplyWeightString(colNumber)
+			weightcolNumber, err := oa.input.SupplyWeightString(gbk.KeyCol, gbk.FromGroupBy)
 			if err != nil {
+				_, isUnsupportedErr := err.(UnsupportedSupplyWeightString)
+				if isUnsupportedErr {
+					continue
+				}
 				return err
 			}
 			oa.weightStrings[rc] = weightcolNumber
-			oa.eaggr.Keys[i] = weightcolNumber
-			oa.eaggr.TruncateColumnCount = len(oa.resultColumns)
+			oa.groupByKeys[i].WeightStringCol = weightcolNumber
+			oa.groupByKeys[i].KeyCol = weightcolNumber
+			oa.truncateColumnCount = len(oa.resultColumns)
 		}
 	}
-	return oa.input.Wireup(bldr, jt)
+	for _, key := range oa.aggregates {
+		switch key.Opcode {
+		case engine.AggregateCount:
+			if key.Alias == "" {
+				key.Alias = key.Opcode.String()
+			}
+			key.Opcode = engine.AggregateSum
+		}
+	}
+
+	return oa.input.Wireup(plan, jt)
+}
+
+func (oa *orderedAggregate) WireupGen4(semTable *semantics.SemTable) error {
+	return oa.input.WireupGen4(semTable)
+}
+
+// OutputColumns implements the logicalPlan interface
+func (oa *orderedAggregate) OutputColumns() []sqlparser.SelectExpr {
+	outputCols := sqlparser.CloneSelectExprs(oa.input.OutputColumns())
+	for _, aggr := range oa.aggregates {
+		outputCols[aggr.Col] = &sqlparser.AliasedExpr{Expr: aggr.Expr, As: sqlparser.NewIdentifierCI(aggr.Alias)}
+	}
+	if oa.truncateColumnCount > 0 {
+		return outputCols[:oa.truncateColumnCount]
+	}
+	return outputCols
+}
+
+// SetTruncateColumnCount sets the truncate column count.
+func (oa *orderedAggregate) SetTruncateColumnCount(count int) {
+	oa.truncateColumnCount = count
 }

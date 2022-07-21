@@ -28,7 +28,7 @@ import (
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 )
 
-// FakeLoggerEventStreamingClient is the base for the fakes for the vtctlclient and vtworkerclient.
+// FakeLoggerEventStreamingClient is the base for the fakes for vtctlclient.
 // It allows to register a (multi-)line string for a given command and return the result as channel which streams it back.
 type FakeLoggerEventStreamingClient struct {
 	results map[string]*result

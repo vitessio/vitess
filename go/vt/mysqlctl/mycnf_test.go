@@ -18,7 +18,6 @@ package mysqlctl
 
 import (
 	"bytes"
-	"io/ioutil"
 	"os"
 	"strings"
 	"testing"
@@ -37,7 +36,7 @@ func TestMycnf(t *testing.T) {
 	// Assigning ServerID to be different from tablet UID to make sure that there are no
 	// assumptions in the code that those IDs are the same.
 	cnf.ServerID = 22222
-	f, _ := ioutil.ReadFile("../../../config/mycnf/default.cnf")
+	f, _ := os.ReadFile("../../../config/mycnf/default.cnf")
 	myTemplateSource.Write(f)
 	data, err := cnf.makeMycnf(myTemplateSource.String())
 	if err != nil {
@@ -45,17 +44,17 @@ func TestMycnf(t *testing.T) {
 	} else {
 		t.Logf("data: %v", data)
 	}
-	err = ioutil.WriteFile(MycnfPath, []byte(data), 0666)
+	err = os.WriteFile(MycnfPath, []byte(data), 0666)
 	if err != nil {
 		t.Errorf("failed creating my.cnf %v", err)
 	}
-	_, err = ioutil.ReadFile(MycnfPath)
+	_, err = os.ReadFile(MycnfPath)
 	if err != nil {
 		t.Errorf("failed reading, err %v", err)
 		return
 	}
 	mycnf := NewMycnf(uid, 0)
-	mycnf.path = MycnfPath
+	mycnf.Path = MycnfPath
 	mycnf, err = ReadMycnf(mycnf)
 	if err != nil {
 		t.Errorf("failed reading, err %v", err)
@@ -80,7 +79,7 @@ func TestMycnf(t *testing.T) {
 // 4. \rm $VTROOT/vthook/make_mycnf
 // 5. Add No Prefix back
 
-//nolint
+// nolint
 func NoTestMycnfHook(t *testing.T) {
 	uid := uint32(11111)
 	cnf := NewMycnf(uid, 6802)
@@ -91,7 +90,7 @@ func NoTestMycnfHook(t *testing.T) {
 	// expect these in the output my.cnf
 	os.Setenv("KEYSPACE", "test-messagedb")
 	os.Setenv("SHARD", "0")
-	os.Setenv("TABLET_TYPE", "MASTER")
+	os.Setenv("TABLET_TYPE", "PRIMARY")
 	os.Setenv("TABLET_ID", "11111")
 	os.Setenv("TABLET_DIR", TabletDir(uid))
 	os.Setenv("MYSQL_PORT", "15306")
@@ -106,13 +105,13 @@ func NoTestMycnfHook(t *testing.T) {
 	if err != nil {
 		t.Errorf("err: %v", err)
 	}
-	_, err = ioutil.ReadFile(cnf.path)
+	_, err = os.ReadFile(cnf.Path)
 	if err != nil {
 		t.Errorf("failed reading, err %v", err)
 		return
 	}
 	mycnf := NewMycnf(uid, 0)
-	mycnf.path = cnf.path
+	mycnf.Path = cnf.Path
 	mycnf, err = ReadMycnf(mycnf)
 	if err != nil {
 		t.Errorf("failed reading, err %v", err)
@@ -134,7 +133,7 @@ func NoTestMycnfHook(t *testing.T) {
 	if got, want := mycnf.lookup("SHARD"), "0"; got != want {
 		t.Errorf("Error passing env %v, got %v, want %v", "SHARD", got, want)
 	}
-	if got, want := mycnf.lookup("TABLET_TYPE"), "MASTER"; got != want {
+	if got, want := mycnf.lookup("TABLET_TYPE"), "PRIMARY"; got != want {
 		t.Errorf("Error passing env %v, got %v, want %v", "TABLET_TYPE", got, want)
 	}
 	if got, want := mycnf.lookup("TABLET_ID"), "11111"; got != want {

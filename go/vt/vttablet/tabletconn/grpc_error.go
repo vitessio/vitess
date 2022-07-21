@@ -21,6 +21,7 @@ import (
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
 	"vitess.io/vitess/go/vt/vterrors"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -46,9 +47,5 @@ func ErrorFromVTRPC(err *vtrpcpb.RPCError) error {
 	if err == nil {
 		return nil
 	}
-	code := err.Code
-	if code == vtrpcpb.Code_OK {
-		code = vterrors.LegacyErrorCodeToCode(err.LegacyCode)
-	}
-	return vterrors.Errorf(code, "vttablet: %s", err.Message)
+	return vterrors.Errorf(err.Code, "vttablet: %s", err.Message)
 }

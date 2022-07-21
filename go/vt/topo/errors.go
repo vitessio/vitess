@@ -17,6 +17,7 @@ limitations under the License.
 package topo
 
 import (
+	"errors"
 	"fmt"
 )
 
@@ -34,6 +35,7 @@ const (
 	PartialResult
 	NoUpdateNeeded
 	NoImplementation
+	NoReadOnlyImplementation
 )
 
 // Error represents a topo error.
@@ -64,6 +66,8 @@ func NewError(code ErrorCode, node string) error {
 		message = fmt.Sprintf("no update needed: %s", node)
 	case NoImplementation:
 		message = fmt.Sprintf("no such topology implementation %s", node)
+	case NoReadOnlyImplementation:
+		message = fmt.Sprintf("no read-only topology implementation %s", node)
 	default:
 		message = fmt.Sprintf("unknown code: %s", node)
 	}
@@ -80,8 +84,15 @@ func (e Error) Error() string {
 
 // IsErrType returns true if the error has the specified ErrorCode.
 func IsErrType(err error, code ErrorCode) bool {
+	var e Error
+
+	if errors.As(err, &e) {
+		return e.code == code
+	}
+
 	if e, ok := err.(Error); ok {
 		return e.code == code
 	}
+
 	return false
 }

@@ -17,6 +17,7 @@ limitations under the License.
 package netutil
 
 import (
+	"fmt"
 	"math/rand"
 	"net"
 	"reflect"
@@ -56,7 +57,7 @@ func testUniformity(t *testing.T, size int, margin float64) {
 	rand.Seed(1)
 	data := make([]*net.SRV, size)
 	for i := 0; i < size; i++ {
-		data[i] = &net.SRV{Target: string('a' + i), Weight: 1}
+		data[i] = &net.SRV{Target: fmt.Sprintf("%c", 'a'+i), Weight: 1}
 	}
 	checkDistribution(t, data, margin)
 }
@@ -168,5 +169,22 @@ func TestResolveIPv4Addrs(t *testing.T) {
 				t.Errorf("expected: %v, got: %v", c.expected, got)
 			}
 		})
+	}
+}
+
+func TestNormalizeIP(t *testing.T) {
+	table := map[string]string{
+		"1.2.3.4":   "1.2.3.4",
+		"127.0.0.1": "127.0.0.1",
+		"127.0.1.1": "127.0.0.1",
+		// IPv6 must be mapped to IPv4.
+		"::1": "127.0.0.1",
+		// An unparseable IP should be returned as is.
+		"127.": "127.",
+	}
+	for input, want := range table {
+		if got := NormalizeIP(input); got != want {
+			t.Errorf("NormalizeIP(%#v) = %#v, want %#v", input, got, want)
+		}
 	}
 }

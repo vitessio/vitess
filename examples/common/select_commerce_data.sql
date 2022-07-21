@@ -1,5 +1,5 @@
-\! echo 'Using commerce/0'
-use commerce/0;
+\! echo 'Using commerce'
+use commerce;
 \! echo 'Customer'
 select * from customer;
 \! echo 'Product'

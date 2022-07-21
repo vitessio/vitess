@@ -34,3 +34,22 @@ func TestEscapeID(t *testing.T) {
 		}
 	}
 }
+
+var scratch string
+
+func BenchmarkEscapeID(b *testing.B) {
+	testcases := []string{
+		"aa", "a`a", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+	}
+	for _, tc := range testcases {
+		name := tc
+		if len(name) > 10 {
+			name = "long"
+		}
+		b.Run(name, func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				scratch = EscapeID(tc)
+			}
+		})
+	}
+}

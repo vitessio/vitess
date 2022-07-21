@@ -16,6 +16,14 @@ limitations under the License.
 
 package mysql
 
+import (
+	"strings"
+
+	"golang.org/x/text/encoding"
+	"golang.org/x/text/encoding/charmap"
+	"golang.org/x/text/encoding/simplifiedchinese"
+)
+
 const (
 	// MaxPacketSize is the maximum payload length of a packet
 	// the server supports.
@@ -26,17 +34,24 @@ const (
 	protocolVersion = 10
 )
 
+// AuthMethodDescription is the type for different supported and
+// implemented authentication methods.
+type AuthMethodDescription string
+
 // Supported auth forms.
 const (
 	// MysqlNativePassword uses a salt and transmits a hash on the wire.
-	MysqlNativePassword = "mysql_native_password"
+	MysqlNativePassword = AuthMethodDescription("mysql_native_password")
 
 	// MysqlClearPassword transmits the password in the clear.
-	MysqlClearPassword = "mysql_clear_password"
+	MysqlClearPassword = AuthMethodDescription("mysql_clear_password")
+
+	// CachingSha2Password uses a salt and transmits a SHA256 hash on the wire.
+	CachingSha2Password = AuthMethodDescription("caching_sha2_password")
 
 	// MysqlDialog uses the dialog plugin on the client side.
 	// It transmits data in the clear.
-	MysqlDialog = "dialog"
+	MysqlDialog = AuthMethodDescription("dialog")
 )
 
 // Capability flags.
@@ -126,13 +141,55 @@ const (
 	// Not yet supported.
 
 	// CLIENT_SESSION_TRACK 1 << 23
-	// Can set SERVER_SESSION_STATE_CHANGED in the Status Flags
+	// Can set ServerSessionStateChanged in the Status Flags
 	// and send session-state change data after a OK packet.
 	// Not yet supported.
+	CapabilityClientSessionTrack = 1 << 23
 
 	// CapabilityClientDeprecateEOF is CLIENT_DEPRECATE_EOF
 	// Expects an OK (instead of EOF) after the resultset rows of a Text Resultset.
 	CapabilityClientDeprecateEOF = 1 << 24
+)
+
+// Status flags. They are returned by the server in a few cases.
+// Originally found in include/mysql/mysql_com.h
+// See http://dev.mysql.com/doc/internals/en/status-flags.html
+const (
+	// a transaction is active
+	ServerStatusInTrans   uint16 = 0x0001
+	NoServerStatusInTrans uint16 = 0xFFFE
+
+	// auto-commit is enabled
+	ServerStatusAutocommit   uint16 = 0x0002
+	NoServerStatusAutocommit uint16 = 0xFFFD
+
+	ServerMoreResultsExists     uint16 = 0x0008
+	ServerStatusNoGoodIndexUsed uint16 = 0x0010
+	ServerStatusNoIndexUsed     uint16 = 0x0020
+	// Used by Binary Protocol Resultset to signal that COM_STMT_FETCH must be used to fetch the row-data.
+	ServerStatusCursorExists       uint16 = 0x0040
+	ServerStatusLastRowSent        uint16 = 0x0080
+	ServerStatusDbDropped          uint16 = 0x0100
+	ServerStatusNoBackslashEscapes uint16 = 0x0200
+	ServerStatusMetadataChanged    uint16 = 0x0400
+	ServerQueryWasSlow             uint16 = 0x0800
+	ServerPsOutParams              uint16 = 0x1000
+	// in a read-only transaction
+	ServerStatusInTransReadonly uint16 = 0x2000
+	// connection state information has changed
+	ServerSessionStateChanged uint16 = 0x4000
+)
+
+// State Change Information
+const (
+	// one or more system variables changed.
+	SessionTrackSystemVariables uint8 = 0x00
+	// schema changed.
+	SessionTrackSchema uint8 = 0x01
+	// "track state change" changed.
+	SessionTrackStateChange uint8 = 0x02
+	// "track GTIDs" changed.
+	SessionTrackGtids uint8 = 0x03
 )
 
 // Packet types.
@@ -147,11 +204,17 @@ const (
 	// ComQuery is COM_QUERY.
 	ComQuery = 0x03
 
+	// ComFieldList is COM_Field_List.
+	ComFieldList = 0x04
+
 	// ComPing is COM_PING.
 	ComPing = 0x0e
 
 	// ComBinlogDump is COM_BINLOG_DUMP.
 	ComBinlogDump = 0x12
+
+	// ComSemiSyncAck is SEMI_SYNC_ACK.
+	ComSemiSyncAck = 0xef
 
 	// ComPrepare is COM_PREPARE.
 	ComPrepare = 0x16
@@ -186,14 +249,26 @@ const (
 	// EOFPacket is the header of the EOF packet.
 	EOFPacket = 0xfe
 
-	// AuthSwitchRequestPacket is used to switch auth method.
-	AuthSwitchRequestPacket = 0xfe
-
 	// ErrPacket is the header of the error packet.
 	ErrPacket = 0xff
 
 	// NullValue is the encoded value of NULL.
 	NullValue = 0xfb
+)
+
+// Auth packet types
+const (
+	// AuthMoreDataPacket is sent when server requires more data to authenticate
+	AuthMoreDataPacket = 0x01
+
+	// CachingSha2FastAuth is sent before OKPacket when server authenticates using cache
+	CachingSha2FastAuth = 0x03
+
+	// CachingSha2FullAuth is sent when server requests un-scrambled password to authenticate
+	CachingSha2FullAuth = 0x04
+
+	// AuthSwitchRequestPacket is used to switch auth method.
+	AuthSwitchRequestPacket = 0xfe
 )
 
 // Error codes for client-side errors.
@@ -227,6 +302,7 @@ const (
 	// - the client cannot write an initial auth packet.
 	// - the client cannot read an initial auth packet.
 	// - the client cannot read a response from the server.
+	//     This happens when a running query is killed.
 	CRServerLost = 2013
 
 	// CRCommandsOutOfSync is CR_COMMANDS_OUT_OF_SYNC
@@ -260,11 +336,18 @@ const (
 // The below are in sorted order by value, grouped by vterror code they should be bucketed into.
 // See above reference for more information on each code.
 const (
+	// Vitess specific errors, (100-999)
+	ERNotReplica = 100
+
 	// unknown
 	ERUnknownError = 1105
 
+	// internal
+	ERInternalError = 1815
+
 	// unimplemented
 	ERNotSupportedYet = 1235
+	ERUnsupportedPS   = 1295
 
 	// resource exhausted
 	ERDiskFull               = 1021
@@ -288,6 +371,7 @@ const (
 	ERServerShutdown = 1053
 
 	// not found
+	ERCantFindFile          = 1017
 	ERFormNotFound          = 1029
 	ERKeyNotFound           = 1032
 	ERBadFieldError         = 1054
@@ -298,6 +382,7 @@ const (
 	ERNoSuchTable           = 1146
 	ERNonExistingTableGrant = 1147
 	ERKeyDoesNotExist       = 1176
+	ERDbDropExists          = 1008
 
 	// permissions
 	ERDBAccessDenied            = 1044
@@ -332,14 +417,20 @@ const (
 	ERFeatureDisabled               = 1289
 	EROptionPreventsStatement       = 1290
 	ERDuplicatedValueInType         = 1291
+	ERSPDoesNotExist                = 1305
 	ERRowIsReferenced2              = 1451
 	ErNoReferencedRow2              = 1452
+	ErSPNotVarArg                   = 1414
+	ERInnodbReadOnly                = 1874
+	ERMasterFatalReadingBinlog      = 1236
+	ERNoDefaultForField             = 1364
 
 	// already exists
-	ERTableExists = 1050
-	ERDupEntry    = 1062
-	ERFileExists  = 1086
-	ERUDFExists   = 1125
+	ERTableExists    = 1050
+	ERDupEntry       = 1062
+	ERFileExists     = 1086
+	ERUDFExists      = 1125
+	ERDbCreateExists = 1007
 
 	// aborted
 	ERGotSignal          = 1078
@@ -408,6 +499,7 @@ const (
 	ERBlobKeyWithoutLength         = 1170
 	ERPrimaryCantHaveNull          = 1171
 	ERTooManyRows                  = 1172
+	ERLockOrActiveTransaction      = 1192
 	ERUnknownSystemVariable        = 1193
 	ERSetConstantsOnly             = 1204
 	ERWrongArguments               = 1210
@@ -438,14 +530,33 @@ const (
 	ERInvalidOnUpdate              = 1294
 	ERUnknownTimeZone              = 1298
 	ERInvalidCharacterString       = 1300
-	ERSavepointNotExist            = 1305
 	ERIllegalReference             = 1247
 	ERDerivedMustHaveAlias         = 1248
 	ERTableNameNotAllowedHere      = 1250
 	ERQueryInterrupted             = 1317
 	ERTruncatedWrongValueForField  = 1366
+	ERIllegalValueForType          = 1367
 	ERDataTooLong                  = 1406
+	ErrWrongValueForType           = 1411
+	ERWarnDataTruncated            = 1265
+	ERForbidSchemaChange           = 1450
 	ERDataOutOfRange               = 1690
+	ERInvalidJSONText              = 3140
+	ERInvalidJSONTextInParams      = 3141
+	ERInvalidJSONBinaryData        = 3142
+	ERInvalidJSONCharset           = 3144
+	ERInvalidCastToJSON            = 3147
+	ERJSONValueTooBig              = 3150
+	ERJSONDocumentTooDeep          = 3157
+
+	ErrCantCreateGeometryObject      = 1416
+	ErrGISDataWrongEndianess         = 3055
+	ErrNotImplementedForCartesianSRS = 3704
+	ErrNotImplementedForProjectedSRS = 3705
+	ErrNonPositiveRadius             = 3706
+
+	// server not available
+	ERServerIsntAvailable = 3168
 )
 
 // Sql states for errors.
@@ -457,14 +568,14 @@ const (
 	// in client.c. So using that one.
 	SSUnknownSQLState = "HY000"
 
-	// SSUnknownComError is ER_UNKNOWN_COM_ERROR
-	SSUnknownComError = "08S01"
+	// SSNetError is network related error
+	SSNetError = "08S01"
 
-	// SSHandshakeError is ER_HANDSHAKE_ERROR
-	SSHandshakeError = "08S01"
+	// SSWrongNumberOfColumns is related to columns error
+	SSWrongNumberOfColumns = "21000"
 
-	// SSServerShutdown is ER_SERVER_SHUTDOWN
-	SSServerShutdown = "08S01"
+	// SSWrongValueCountOnRow is related to columns count mismatch error
+	SSWrongValueCountOnRow = "21S01"
 
 	// SSDataTooLong is ER_DATA_TOO_LONG
 	SSDataTooLong = "22001"
@@ -472,14 +583,8 @@ const (
 	// SSDataOutOfRange is ER_DATA_OUT_OF_RANGE
 	SSDataOutOfRange = "22003"
 
-	// SSBadNullError is ER_BAD_NULL_ERROR
-	SSBadNullError = "23000"
-
-	// SSBadFieldError is ER_BAD_FIELD_ERROR
-	SSBadFieldError = "42S22"
-
-	// SSDupKey is ER_DUP_KEY
-	SSDupKey = "23000"
+	// SSConstraintViolation is constraint violation
+	SSConstraintViolation = "23000"
 
 	// SSCantDoThisDuringAnTransaction is
 	// ER_CANT_DO_THIS_DURING_AN_TRANSACTION
@@ -488,79 +593,53 @@ const (
 	// SSAccessDeniedError is ER_ACCESS_DENIED_ERROR
 	SSAccessDeniedError = "28000"
 
+	// SSNoDB is ER_NO_DB_ERROR
+	SSNoDB = "3D000"
+
 	// SSLockDeadlock is ER_LOCK_DEADLOCK
 	SSLockDeadlock = "40001"
+
+	// SSClientError is the state on client errors
+	SSClientError = "42000"
+
+	// SSDupFieldName is ER_DUP_FIELD_NAME
+	SSDupFieldName = "42S21"
+
+	// SSBadFieldError is ER_BAD_FIELD_ERROR
+	SSBadFieldError = "42S22"
+
+	// SSUnknownTable is ER_UNKNOWN_TABLE
+	SSUnknownTable = "42S02"
+
+	// SSQueryInterrupted is ER_QUERY_INTERRUPTED;
+	SSQueryInterrupted = "70100"
 )
 
-// Status flags. They are returned by the server in a few cases.
-// Originally found in include/mysql/mysql_com.h
-// See http://dev.mysql.com/doc/internals/en/status-flags.html
-const (
-	// ServerStatusInTransaction is SERVER_STATUS_IN_TRANS
-	ServerStatusInTransaction   = 0x0001
-	NoServerStatusInTransaction = 0xFFFE
-
-	// ServerStatusAutocommit is SERVER_STATUS_AUTOCOMMIT
-	ServerStatusAutocommit   = 0x0002
-	NoServerStatusAutocommit = 0xFFFD
-
-	// ServerMoreResultsExists is SERVER_MORE_RESULTS_EXISTS
-	ServerMoreResultsExists = 0x0008
-)
-
-// A few interesting character set values.
-// See http://dev.mysql.com/doc/internals/en/character-set.html#packet-Protocol::CharacterSet
-const (
-	// CharacterSetUtf8 is for UTF8. We use this by default.
-	CharacterSetUtf8 = 33
-
-	// CharacterSetBinary is for binary. Use by integer fields for instance.
-	CharacterSetBinary = 63
-)
-
-// CharacterSetMap maps the charset name (used in ConnParams) to the
-// integer value.  Interesting ones have their own constant above.
-var CharacterSetMap = map[string]uint8{
-	"big5":     1,
-	"dec8":     3,
-	"cp850":    4,
-	"hp8":      6,
-	"koi8r":    7,
-	"latin1":   8,
-	"latin2":   9,
-	"swe7":     10,
-	"ascii":    11,
-	"ujis":     12,
-	"sjis":     13,
-	"hebrew":   16,
-	"tis620":   18,
-	"euckr":    19,
-	"koi8u":    22,
-	"gb2312":   24,
-	"greek":    25,
-	"cp1250":   26,
-	"gbk":      28,
-	"latin5":   30,
-	"armscii8": 32,
-	"utf8":     CharacterSetUtf8,
-	"ucs2":     35,
-	"cp866":    36,
-	"keybcs2":  37,
-	"macce":    38,
-	"macroman": 39,
-	"cp852":    40,
-	"latin7":   41,
-	"utf8mb4":  45,
-	"cp1251":   51,
-	"utf16":    54,
-	"utf16le":  56,
-	"cp1256":   57,
-	"cp1257":   59,
-	"utf32":    60,
-	"binary":   CharacterSetBinary,
-	"geostd8":  92,
-	"cp932":    95,
-	"eucjpms":  97,
+// CharacterSetEncoding maps a charset name to a golang encoder.
+// golang does not support encoders for all MySQL charsets.
+// A charset not in this map is unsupported.
+// A trivial encoding (e.g. utf8) has a `nil` encoder
+var CharacterSetEncoding = map[string]encoding.Encoding{
+	"cp850":   charmap.CodePage850,
+	"koi8r":   charmap.KOI8R,
+	"latin1":  charmap.Windows1252,
+	"latin2":  charmap.ISO8859_2,
+	"ascii":   nil,
+	"hebrew":  charmap.ISO8859_8,
+	"greek":   charmap.ISO8859_7,
+	"cp1250":  charmap.Windows1250,
+	"gbk":     simplifiedchinese.GBK,
+	"latin5":  charmap.ISO8859_9,
+	"utf8":    nil,
+	"utf8mb3": nil,
+	"cp866":   charmap.CodePage866,
+	"cp852":   charmap.CodePage852,
+	"latin7":  charmap.ISO8859_13,
+	"utf8mb4": nil,
+	"cp1251":  charmap.Windows1251,
+	"cp1256":  charmap.Windows1256,
+	"cp1257":  charmap.Windows1257,
+	"binary":  nil,
 }
 
 // IsNum returns true if a MySQL type is a numeric value.
@@ -573,9 +652,79 @@ func IsNum(typ uint8) bool {
 
 // IsConnErr returns true if the error is a connection error.
 func IsConnErr(err error) bool {
+	if IsTooManyConnectionsErr(err) {
+		return false
+	}
 	if sqlErr, ok := err.(*SQLError); ok {
 		num := sqlErr.Number()
 		return (num >= CRUnknownError && num <= CRNamedPipeStateError) || num == ERQueryInterrupted
 	}
 	return false
+}
+
+// IsConnLostDuringQuery returns true if the error is a CRServerLost error.
+// Happens most commonly when a query is killed MySQL server-side.
+func IsConnLostDuringQuery(err error) bool {
+	if sqlErr, ok := err.(*SQLError); ok {
+		num := sqlErr.Number()
+		return (num == CRServerLost)
+	}
+	return false
+}
+
+// IsTooManyConnectionsErr returns true if the error is due to too many connections.
+func IsTooManyConnectionsErr(err error) bool {
+	if sqlErr, ok := err.(*SQLError); ok {
+		if sqlErr.Number() == CRServerHandshakeErr && strings.Contains(sqlErr.Message, "Too many connections") {
+			return true
+		}
+	}
+	return false
+}
+
+// IsSchemaApplyError returns true when given error is a MySQL error applying schema change
+func IsSchemaApplyError(err error) bool {
+	merr, isSQLErr := err.(*SQLError)
+	if !isSQLErr {
+		return false
+	}
+	switch merr.Num {
+	case
+		ERDupKeyName,
+		ERCantDropFieldOrKey,
+		ERTableExists,
+		ERDupFieldName:
+		return true
+	}
+	return false
+}
+
+type ReplicationState int
+
+const (
+	ReplicationStateUnknown ReplicationState = iota
+	ReplicationStateStopped
+	ReplicationStateConnecting
+	ReplicationStateRunning
+)
+
+// ReplicationStatusToState converts a value you have for the IO thread(s) or SQL
+// thread(s) or Group Replication applier thread(s) from MySQL or intermediate
+// layers to a mysql.ReplicationState.
+// on,yes,true == ReplicationStateRunning
+// off,no,false == ReplicationStateStopped
+// connecting == ReplicationStateConnecting
+// anything else == ReplicationStateUnknown
+func ReplicationStatusToState(s string) ReplicationState {
+	// Group Replication uses ON instead of Yes
+	switch strings.ToLower(s) {
+	case "yes", "on", "true":
+		return ReplicationStateRunning
+	case "no", "off", "false":
+		return ReplicationStateStopped
+	case "connecting":
+		return ReplicationStateConnecting
+	default:
+		return ReplicationStateUnknown
+	}
 }

@@ -1,0 +1,32 @@
+version: '3'
+services:
+  grafana:
+    image: grafana/grafana:${GRAFANA_VERSION?err}
+    ports:
+      - "3030:3000"
+  e2e:
+    build:
+      context: .
+      args:
+        CYPRESS_IMAGE: cypress/included:5.3.0
+    image: grafonnet-e2e-dev
+    entrypoint: cypress open --project .
+    depends_on:
+      - grafana
+    environment:
+      - CYPRESS_baseUrl=http://grafana:3000
+      - CYPRESS_video=false
+      - DISPLAY=${DISPLAY?err}
+    volumes:
+      - ./cypress:/e2e/cypress
+      - ./cypress.json:/e2e/cypress.json
+      - ../dashboards_out:/e2e/test
+      - /tmp/.X11-unix:/tmp/.X11-unix
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G
+volumes:
+  prometheus-data: {}

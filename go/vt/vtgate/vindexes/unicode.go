@@ -35,7 +35,11 @@ func unicodeHash(hashFunc func([]byte) []byte, key sqltypes.Value) ([]byte, erro
 	collator := collatorPool.Get().(*pooledCollator)
 	defer collatorPool.Put(collator)
 
-	norm, err := normalize(collator.col, collator.buf, key.ToBytes())
+	keyBytes, err := key.ToBytes()
+	if err != nil {
+		return nil, err
+	}
+	norm, err := normalize(collator.col, collator.buf, keyBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -71,7 +75,7 @@ type pooledCollator struct {
 
 var collatorPool = sync.Pool{New: newPooledCollator}
 
-func newPooledCollator() interface{} {
+func newPooledCollator() any {
 	// Ref: http://www.unicode.org/reports/tr10/#Introduction.
 	// Unicode seems to define a universal (or default) order.
 	// But various locales have conflicting order,

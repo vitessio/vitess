@@ -35,13 +35,13 @@ CELL=zone1 ./scripts/vtctld-up.sh
 CELL=zone1 TABLET_UID=100 ./scripts/mysqlctl-up.sh
 SHARD=0 CELL=zone1 KEYSPACE=main TABLET_UID=100 ./scripts/vttablet-up.sh
 
-vtctlclient InitShardMaster -force main/0 zone1-100
+vtctldclient InitShardPrimary --force main/0 zone1-100
 
 # create the schema
-vtctlclient ApplySchema -sql-file create_main_schema.sql main
+vtctldclient ApplySchema --sql-file create_main_schema.sql main
 
 # create the vschema
-vtctlclient ApplyVSchema -vschema_file main_vschema_initial.json main
+vtctldclient ApplyVSchema --vschema-file main_vschema_initial.json main
 
 # start vtgate
 CELL=zone1 ./scripts/vtgate-up.sh

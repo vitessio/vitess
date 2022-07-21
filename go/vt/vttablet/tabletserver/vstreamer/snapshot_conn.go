@@ -74,14 +74,14 @@ func (conn *snapshotConn) startSnapshot(ctx context.Context, table string) (gtid
 		lockConn.Close()
 	}()
 
-	tableIdent := sqlparser.String(sqlparser.NewTableIdent(table))
+	tableName := sqlparser.String(sqlparser.NewIdentifierCS(table))
 
 	log.Infof("Locking table %s for copying", table)
-	if _, err := lockConn.ExecuteFetch(fmt.Sprintf("lock tables %s read", tableIdent), 1, false); err != nil {
-		log.Infof("Error locking table %s to read", tableIdent)
+	if _, err := lockConn.ExecuteFetch(fmt.Sprintf("lock tables %s read", tableName), 1, false); err != nil {
+		log.Infof("Error locking table %s to read", tableName)
 		return "", err
 	}
-	mpos, err := lockConn.MasterPosition()
+	mpos, err := lockConn.PrimaryPosition()
 	if err != nil {
 		return "", err
 	}
@@ -92,6 +92,9 @@ func (conn *snapshotConn) startSnapshot(ctx context.Context, table string) (gtid
 		return "", err
 	}
 	if _, err := conn.ExecuteFetch("start transaction with consistent snapshot", 1, false); err != nil {
+		return "", err
+	}
+	if _, err := conn.ExecuteFetch("set @@session.time_zone = '+00:00'", 1, false); err != nil {
 		return "", err
 	}
 	return mysql.EncodePosition(mpos), nil

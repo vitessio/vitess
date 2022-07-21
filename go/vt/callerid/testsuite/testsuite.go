@@ -19,8 +19,9 @@ package testsuite
 import (
 	"testing"
 
-	"github.com/golang/protobuf/proto"
-	"golang.org/x/net/context"
+	"context"
+
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/vt/callerid"
 

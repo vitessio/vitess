@@ -1,0 +1,1 @@
+modify id int unsigned not null, drop primary key, add primary key (uu)

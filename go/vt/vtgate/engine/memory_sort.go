@@ -18,6 +18,7 @@ package engine
 
 import (
 	"container/heap"
+	"context"
 	"fmt"
 	"math"
 	"reflect"
@@ -34,8 +35,8 @@ var _ Primitive = (*MemorySort)(nil)
 
 // MemorySort is a primitive that performs in-memory sorting.
 type MemorySort struct {
-	UpperLimit sqltypes.PlanValue
-	OrderBy    []OrderbyParams
+	UpperLimit evalengine.Expr
+	OrderBy    []OrderByParams
 	Input      Primitive
 
 	// TruncateColumnCount specifies the number of columns to return
@@ -64,20 +65,20 @@ func (ms *MemorySort) SetTruncateColumnCount(count int) {
 	ms.TruncateColumnCount = count
 }
 
-// Execute satisfies the Primitive interface.
-func (ms *MemorySort) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	count, err := ms.fetchCount(bindVars)
+// TryExecute satisfies the Primitive interface.
+func (ms *MemorySort) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	count, err := ms.fetchCount(vcursor, bindVars)
 	if err != nil {
 		return nil, err
 	}
 
-	result, err := ms.Input.Execute(vcursor, bindVars, wantfields)
+	result, err := vcursor.ExecutePrimitive(ctx, ms.Input, bindVars, wantfields)
 	if err != nil {
 		return nil, err
 	}
 	sh := &sortHeap{
-		rows:    result.Rows,
-		orderBy: ms.OrderBy,
+		rows:      result.Rows,
+		comparers: extractSlices(ms.OrderBy),
 	}
 	sort.Sort(sh)
 	if sh.err != nil {
@@ -86,14 +87,13 @@ func (ms *MemorySort) Execute(vcursor VCursor, bindVars map[string]*querypb.Bind
 	result.Rows = sh.rows
 	if len(result.Rows) > count {
 		result.Rows = result.Rows[:count]
-		result.RowsAffected = uint64(count)
 	}
 	return result.Truncate(ms.TruncateColumnCount), nil
 }
 
-// StreamExecute satisfies the Primitive interface.
-func (ms *MemorySort) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	count, err := ms.fetchCount(bindVars)
+// TryStreamExecute satisfies the Primitive interface.
+func (ms *MemorySort) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	count, err := ms.fetchCount(vcursor, bindVars)
 	if err != nil {
 		return err
 	}
@@ -105,10 +105,10 @@ func (ms *MemorySort) StreamExecute(vcursor VCursor, bindVars map[string]*queryp
 	// You have to reverse the ordering because the highest values
 	// must be dropped once the upper limit is reached.
 	sh := &sortHeap{
-		orderBy: ms.OrderBy,
-		reverse: true,
+		comparers: extractSlices(ms.OrderBy),
+		reverse:   true,
 	}
-	err = ms.Input.StreamExecute(vcursor, bindVars, wantfields, func(qr *sqltypes.Result) error {
+	err = vcursor.StreamExecutePrimitive(ctx, ms.Input, bindVars, wantfields, func(qr *sqltypes.Result) error {
 		if len(qr.Fields) != 0 {
 			if err := cb(&sqltypes.Result{Fields: qr.Fields}); err != nil {
 				return err
@@ -116,9 +116,11 @@ func (ms *MemorySort) StreamExecute(vcursor VCursor, bindVars map[string]*queryp
 		}
 		for _, row := range qr.Rows {
 			heap.Push(sh, row)
-		}
-		for len(sh.rows) > count {
-			_ = heap.Pop(sh)
+			// Remove the highest element from the heap if the size is more than the count
+			// This optimization means that the maximum size of the heap is going to be (count + 1)
+			for len(sh.rows) > count {
+				_ = heap.Pop(sh)
+			}
 		}
 		if vcursor.ExceedsMaxMemoryRows(len(sh.rows)) {
 			return fmt.Errorf("in-memory row count exceeded allowed limit of %d", vcursor.MaxMemoryRows())
@@ -142,8 +144,8 @@ func (ms *MemorySort) StreamExecute(vcursor VCursor, bindVars map[string]*queryp
 }
 
 // GetFields satisfies the Primitive interface.
-func (ms *MemorySort) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return ms.Input.GetFields(vcursor, bindVars)
+func (ms *MemorySort) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	return ms.Input.GetFields(ctx, vcursor, bindVars)
 }
 
 // Inputs returns the input to memory sort
@@ -151,19 +153,21 @@ func (ms *MemorySort) Inputs() []Primitive {
 	return []Primitive{ms.Input}
 }
 
+// NeedsTransaction implements the Primitive interface
 func (ms *MemorySort) NeedsTransaction() bool {
 	return ms.Input.NeedsTransaction()
 }
 
-func (ms *MemorySort) fetchCount(bindVars map[string]*querypb.BindVariable) (int, error) {
-	resolved, err := ms.UpperLimit.ResolveValue(bindVars)
+func (ms *MemorySort) fetchCount(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (int, error) {
+	if ms.UpperLimit == nil {
+		return math.MaxInt64, nil
+	}
+	env := evalengine.EnvWithBindVars(bindVars, vcursor.ConnCollation())
+	resolved, err := env.Evaluate(ms.UpperLimit)
 	if err != nil {
 		return 0, err
 	}
-	if resolved.IsNull() {
-		return math.MaxInt64, nil
-	}
-	num, err := evalengine.ToUint64(resolved)
+	num, err := resolved.Value().ToUint64()
 	if err != nil {
 		return 0, err
 	}
@@ -176,10 +180,9 @@ func (ms *MemorySort) fetchCount(bindVars map[string]*querypb.BindVariable) (int
 
 func (ms *MemorySort) description() PrimitiveDescription {
 	orderByIndexes := GenericJoin(ms.OrderBy, orderByParamsToString)
-	value := ms.UpperLimit.Value
-	other := map[string]interface{}{"OrderBy": orderByIndexes}
-	if !value.IsNull() {
-		other["UpperLimit"] = value.String()
+	other := map[string]any{"OrderBy": orderByIndexes}
+	if ms.TruncateColumnCount > 0 {
+		other["ResultColumns"] = ms.TruncateColumnCount
 	}
 	return PrimitiveDescription{
 		OperatorType: "Sort",
@@ -188,13 +191,13 @@ func (ms *MemorySort) description() PrimitiveDescription {
 	}
 }
 
-func orderByParamsToString(i interface{}) string {
-	return i.(OrderbyParams).String()
+func orderByParamsToString(i any) string {
+	return i.(OrderByParams).String()
 }
 
-//GenericJoin will iterate over arrays, slices or maps, and executes the f function to get a
-//string representation of each element, and then uses strings.Join() join all the strings into a single one
-func GenericJoin(input interface{}, f func(interface{}) string) string {
+// GenericJoin will iterate over arrays, slices or maps, and executes the f function to get a
+// string representation of each element, and then uses strings.Join() join all the strings into a single one
+func GenericJoin(input any, f func(any) string) string {
 	sl := reflect.ValueOf(input)
 	var keys []string
 	switch sl.Kind() {
@@ -215,10 +218,10 @@ func GenericJoin(input interface{}, f func(interface{}) string) string {
 // sortHeap is sorted based on the orderBy params.
 // Implementation is similar to scatterHeap
 type sortHeap struct {
-	rows    [][]sqltypes.Value
-	orderBy []OrderbyParams
-	reverse bool
-	err     error
+	rows      [][]sqltypes.Value
+	comparers []*comparer
+	reverse   bool
+	err       error
 }
 
 // Len satisfies sort.Interface and heap.Interface.
@@ -228,11 +231,11 @@ func (sh *sortHeap) Len() int {
 
 // Less satisfies sort.Interface and heap.Interface.
 func (sh *sortHeap) Less(i, j int) bool {
-	for _, order := range sh.orderBy {
+	for _, c := range sh.comparers {
 		if sh.err != nil {
 			return true
 		}
-		cmp, err := evalengine.NullsafeCompare(sh.rows[i][order.Col], sh.rows[j][order.Col])
+		cmp, err := c.compare(sh.rows[i], sh.rows[j])
 		if err != nil {
 			sh.err = err
 			return true
@@ -240,17 +243,7 @@ func (sh *sortHeap) Less(i, j int) bool {
 		if cmp == 0 {
 			continue
 		}
-		// This is equivalent to:
-		//if !sh.reverse {
-		//	if order.Desc {
-		//		cmp = -cmp
-		//	}
-		//} else {
-		//	if !order.Desc {
-		//		cmp = -cmp
-		//	}
-		//}
-		if sh.reverse != order.Desc {
+		if sh.reverse {
 			cmp = -cmp
 		}
 		return cmp < 0
@@ -264,12 +257,12 @@ func (sh *sortHeap) Swap(i, j int) {
 }
 
 // Push satisfies heap.Interface.
-func (sh *sortHeap) Push(x interface{}) {
+func (sh *sortHeap) Push(x any) {
 	sh.rows = append(sh.rows, x.([]sqltypes.Value))
 }
 
 // Pop satisfies heap.Interface.
-func (sh *sortHeap) Pop() interface{} {
+func (sh *sortHeap) Pop() any {
 	n := len(sh.rows)
 	x := sh.rows[n-1]
 	sh.rows = sh.rows[:n-1]

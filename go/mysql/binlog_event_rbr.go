@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"math"
 	"strconv"
+	"strings"
 	"time"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -330,12 +331,14 @@ func printTimestamp(v uint32) *bytes.Buffer {
 }
 
 // CellValue returns the data for a cell as a sqltypes.Value, and how
-// many bytes it takes. It only uses the querypb.Type value for the
-// signed flag.
-func CellValue(data []byte, pos int, typ byte, metadata uint16, styp querypb.Type) (sqltypes.Value, int, error) {
+// many bytes it takes. It uses source type in querypb.Type and vitess type
+// byte to determine general shared aspects of types and the querypb.Field to
+// determine other info specifically about its underlying column (SQL column
+// type, column length, charset, etc)
+func CellValue(data []byte, pos int, typ byte, metadata uint16, field *querypb.Field) (sqltypes.Value, int, error) {
 	switch typ {
 	case TypeTiny:
-		if sqltypes.IsSigned(styp) {
+		if sqltypes.IsSigned(field.Type) {
 			return sqltypes.MakeTrusted(querypb.Type_INT8,
 				strconv.AppendInt(nil, int64(int8(data[pos])), 10)), 1, nil
 		}
@@ -351,14 +354,14 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, styp querypb.Typ
 			strconv.AppendUint(nil, uint64(data[pos])+1900, 10)), 1, nil
 	case TypeShort:
 		val := binary.LittleEndian.Uint16(data[pos : pos+2])
-		if sqltypes.IsSigned(styp) {
+		if sqltypes.IsSigned(field.Type) {
 			return sqltypes.MakeTrusted(querypb.Type_INT16,
 				strconv.AppendInt(nil, int64(int16(val)), 10)), 2, nil
 		}
 		return sqltypes.MakeTrusted(querypb.Type_UINT16,
 			strconv.AppendUint(nil, uint64(val), 10)), 2, nil
 	case TypeInt24:
-		if sqltypes.IsSigned(styp) && data[pos+2]&128 > 0 {
+		if sqltypes.IsSigned(field.Type) && data[pos+2]&128 > 0 {
 			// Negative number, have to extend the sign.
 			val := int32(uint32(data[pos]) +
 				uint32(data[pos+1])<<8 +
@@ -375,7 +378,7 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, styp querypb.Typ
 			strconv.AppendUint(nil, val, 10)), 3, nil
 	case TypeLong:
 		val := binary.LittleEndian.Uint32(data[pos : pos+4])
-		if sqltypes.IsSigned(styp) {
+		if sqltypes.IsSigned(field.Type) {
 			return sqltypes.MakeTrusted(querypb.Type_INT32,
 				strconv.AppendInt(nil, int64(int32(val)), 10)), 4, nil
 		}
@@ -398,7 +401,7 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, styp querypb.Typ
 			txt.Bytes()), 4, nil
 	case TypeLongLong:
 		val := binary.LittleEndian.Uint64(data[pos : pos+8])
-		if sqltypes.IsSigned(styp) {
+		if sqltypes.IsSigned(field.Type) {
 			return sqltypes.MakeTrusted(querypb.Type_INT64,
 				strconv.AppendInt(nil, int64(val), 10)), 8, nil
 		}
@@ -447,11 +450,11 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, styp querypb.Typ
 		return sqltypes.MakeTrusted(querypb.Type_DATETIME,
 			[]byte(fmt.Sprintf("%04d-%02d-%02d %02d:%02d:%02d", year, month, day, hour, minute, second))), 8, nil
 	case TypeVarchar, TypeVarString:
-		// We trust that styp is compatible with the column type
+		// We trust that typ is compatible with the field.Type
 		// Length is encoded in 1 or 2 bytes.
 		typeToUse := querypb.Type_VARCHAR
-		if styp == querypb.Type_VARBINARY || styp == querypb.Type_BINARY || styp == querypb.Type_BLOB {
-			typeToUse = styp
+		if field.Type == querypb.Type_VARBINARY || field.Type == querypb.Type_BINARY || field.Type == querypb.Type_BLOB {
+			typeToUse = field.Type
 		}
 		if metadata > 255 {
 			l := int(uint64(data[pos]) |
@@ -700,7 +703,7 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, styp querypb.Typ
 		// now the full digits, 32 bits each, 9 digits
 		for i := 0; i < intg0; i++ {
 			val = binary.BigEndian.Uint32(d[pos : pos+4])
-			fmt.Fprintf(txt, "%9d", val)
+			fmt.Fprintf(txt, "%09d", val)
 			pos += 4
 		}
 
@@ -764,8 +767,21 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, styp querypb.Typ
 			}
 		}
 
-		return sqltypes.MakeTrusted(querypb.Type_DECIMAL,
-			txt.Bytes()), l, nil
+		// remove preceding 0s from the integral part, otherwise we get "000000000001.23" instead of "1.23"
+		trimPrecedingZeroes := func(b []byte) []byte {
+			s := string(b)
+			isNegative := false
+			if s[0] == '-' {
+				isNegative = true
+				s = s[1:]
+			}
+			s = strings.TrimLeft(s, "0")
+			if isNegative {
+				s = fmt.Sprintf("-%s", s)
+			}
+			return []byte(s)
+		}
+		return sqltypes.MakeTrusted(querypb.Type_DECIMAL, trimPrecedingZeroes(txt.Bytes())), l, nil
 
 	case TypeEnum:
 		switch metadata & 0xff {
@@ -811,12 +827,21 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, styp querypb.Typ
 		}
 		pos += int(metadata)
 
+		var limitArray = func(data []byte, limit int) []byte {
+			if len(data) > limit {
+				return data[:limit]
+			}
+			return data
+		}
 		// For JSON, we parse the data, and emit SQL.
 		if typ == TypeJSON {
-			d, err := printJSONData(data[pos : pos+l])
+			var err error
+			jsonData := data[pos : pos+l]
+			s, err := getJSONValue(jsonData)
 			if err != nil {
-				return sqltypes.NULL, 0, vterrors.Wrapf(err, "error parsing JSON data %v", data[pos:pos+l])
+				return sqltypes.NULL, 0, vterrors.Wrapf(err, "error stringifying JSON data %v", limitArray(jsonData, 100))
 			}
+			d := []byte(s)
 			return sqltypes.MakeTrusted(sqltypes.Expression,
 				d), l + int(metadata), nil
 		}
@@ -871,13 +896,22 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, styp querypb.Typ
 		}
 		l := int(data[pos])
 		mdata := data[pos+1 : pos+1+l]
-		if sqltypes.IsBinary(styp) {
-			// Fixed length binaries have to be padded with zeroes
-			// up to the length of the field. Otherwise, equality checks
-			// fail against saved data. See https://github.com/vitessio/vitess/issues/3984.
-			ret := make([]byte, max)
-			copy(ret, mdata)
-			return sqltypes.MakeTrusted(querypb.Type_BINARY, ret), l + 1, nil
+		if sqltypes.IsBinary(field.Type) {
+			// For binary(n) column types, mysql pads the data on the right with nulls. However the binlog event contains
+			// the data without this padding. This causes several issues:
+			//    * if a binary(n) column is part of the sharding key, the keyspace_id() returned during the copy phase
+			//      (where the value is the result of a mysql query) is different from the one during replication
+			//      (where the value is the one from the binlogs)
+			//    * mysql where clause comparisons do not do the right thing without padding
+			// So for fixed length BINARY columns we right-pad it with nulls if necessary to match what MySQL returns.
+			// Because CHAR columns with a binary collation (e.g. utf8mb4_bin) have the same metadata as a BINARY column
+			// in binlog events, we also need to check for this case based on the underlying column type.
+			if l < max && strings.HasPrefix(strings.ToLower(field.ColumnType), "binary") {
+				paddedData := make([]byte, max)
+				copy(paddedData[:l], mdata)
+				mdata = paddedData
+			}
+			return sqltypes.MakeTrusted(querypb.Type_BINARY, mdata), l + 1, nil
 		}
 		return sqltypes.MakeTrusted(querypb.Type_VARCHAR, mdata), l + 1, nil
 
@@ -1064,7 +1098,7 @@ func (rs *Rows) StringValuesForTests(tm *TableMap, rowIndex int) ([]string, erro
 		}
 
 		// We have real data
-		value, l, err := CellValue(data, pos, tm.Types[c], tm.Metadata[c], querypb.Type_UINT64)
+		value, l, err := CellValue(data, pos, tm.Types[c], tm.Metadata[c], &querypb.Field{Type: querypb.Type_UINT64})
 		if err != nil {
 			return nil, err
 		}
@@ -1099,7 +1133,7 @@ func (rs *Rows) StringIdentifiesForTests(tm *TableMap, rowIndex int) ([]string, 
 		}
 
 		// We have real data
-		value, l, err := CellValue(data, pos, tm.Types[c], tm.Metadata[c], querypb.Type_UINT64)
+		value, l, err := CellValue(data, pos, tm.Types[c], tm.Metadata[c], &querypb.Field{Type: querypb.Type_UINT64})
 		if err != nil {
 			return nil, err
 		}

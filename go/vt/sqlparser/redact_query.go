@@ -23,13 +23,15 @@ func RedactSQLQuery(sql string) (string, error) {
 	bv := map[string]*querypb.BindVariable{}
 	sqlStripped, comments := SplitMarginComments(sql)
 
-	stmt, err := Parse(sqlStripped)
+	stmt, reservedVars, err := Parse2(sqlStripped)
 	if err != nil {
 		return "", err
 	}
 
-	prefix := "redacted"
-	Normalize(stmt, bv, prefix)
+	err = Normalize(stmt, NewReservedVars("redacted", reservedVars), bv)
+	if err != nil {
+		return "", err
+	}
 
 	return comments.Leading + String(stmt) + comments.Trailing, nil
 }

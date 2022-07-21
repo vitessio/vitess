@@ -28,7 +28,7 @@ import java.util.concurrent.Executor;
 /**
  * {@link CallCredentials} that applies plain username and password.
  */
-public class StaticAuthCredentials implements CallCredentials {
+public class StaticAuthCredentials extends CallCredentials {
 
   private static final Metadata.Key<String> USERNAME =
       Metadata.Key.of("username", Metadata.ASCII_STRING_MARSHALLER);
@@ -44,8 +44,8 @@ public class StaticAuthCredentials implements CallCredentials {
   }
 
   @Override
-  public void applyRequestMetadata(MethodDescriptor<?, ?> method, Attributes attrs,
-      Executor executor, MetadataApplier applier) {
+  public void applyRequestMetadata(RequestInfo requestInfo,
+                                   Executor executor, MetadataApplier applier) {
     executor.execute(() -> {
       try {
         Metadata headers = new Metadata();

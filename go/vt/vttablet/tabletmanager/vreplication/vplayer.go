@@ -21,10 +21,12 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"strconv"
 	"strings"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 
@@ -57,10 +59,15 @@ type vplayer struct {
 	lastTimestampNs int64
 	// timeOffsetNs keeps track of the clock difference with respect to source tablet.
 	timeOffsetNs int64
+	// numAccumulatedHeartbeats keeps track of how many heartbeats have been received since we updated the time_updated column of _vt.vreplication
+	numAccumulatedHeartbeats int
+
 	// canAcceptStmtEvents is set to true if the current player can accept events in statement mode. Only true for filters that are match all.
 	canAcceptStmtEvents bool
 
 	phase string
+
+	throttlerAppName string
 }
 
 // newVPlayer creates a new vplayer. Parameters:
@@ -79,15 +86,16 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 		saveStop = false
 	}
 	return &vplayer{
-		vr:            vr,
-		startPos:      settings.StartPos,
-		pos:           settings.StartPos,
-		stopPos:       settings.StopPos,
-		saveStop:      saveStop,
-		copyState:     copyState,
-		timeLastSaved: time.Now(),
-		tablePlans:    make(map[string]*TablePlan),
-		phase:         phase,
+		vr:               vr,
+		startPos:         settings.StartPos,
+		pos:              settings.StartPos,
+		stopPos:          settings.StopPos,
+		saveStop:         saveStop,
+		copyState:        copyState,
+		timeLastSaved:    time.Now(),
+		tablePlans:       make(map[string]*TablePlan),
+		phase:            phase,
+		throttlerAppName: vr.throttlerAppName(),
 	}
 }
 
@@ -101,8 +109,9 @@ func (vp *vplayer) play(ctx context.Context) error {
 		return nil
 	}
 
-	plan, err := buildReplicatorPlan(vp.vr.source.Filter, vp.vr.tableKeys, vp.copyState)
+	plan, err := buildReplicatorPlan(vp.vr.source, vp.vr.colInfoMap, vp.copyState, vp.vr.stats)
 	if err != nil {
+		vp.vr.stats.ErrorCounts.Add([]string{"Plan"}, 1)
 		return err
 	}
 	vp.replicatorPlan = plan
@@ -135,7 +144,7 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	relay := newRelayLog(ctx, relayLogMaxItems, relayLogMaxSize)
+	relay := newRelayLog(ctx, *relayLogMaxItems, *relayLogMaxSize)
 
 	streamErr := make(chan error, 1)
 	go func() {
@@ -186,6 +195,7 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 	}
 }
 
+// applyStmtEvent applies an actual DML statement received from the source, directly onto the backend database
 func (vp *vplayer) applyStmtEvent(ctx context.Context, event *binlogdatapb.VEvent) error {
 	sql := event.Statement
 	if sql == "" {
@@ -224,7 +234,8 @@ func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.Row
 }
 
 func (vp *vplayer) updatePos(ts int64) (posReached bool, err error) {
-	update := binlogplayer.GenerateUpdatePos(vp.vr.id, vp.pos, time.Now().Unix(), ts)
+	vp.numAccumulatedHeartbeats = 0
+	update := binlogplayer.GenerateUpdatePos(vp.vr.id, vp.pos, time.Now().Unix(), ts, vp.vr.stats.CopyRowCount.Get(), *vreplicationStoreCompressedGTID)
 	if _, err := vp.vr.dbClient.Execute(update); err != nil {
 		return false, fmt.Errorf("error %v updating position", err)
 	}
@@ -243,6 +254,21 @@ func (vp *vplayer) updatePos(ts int64) (posReached bool, err error) {
 	return posReached, nil
 }
 
+func (vp *vplayer) mustUpdateHeartbeat() bool {
+	return vp.numAccumulatedHeartbeats >= *vreplicationHeartbeatUpdateInterval ||
+		vp.numAccumulatedHeartbeats >= vreplicationMinimumHeartbeatUpdateInterval
+}
+
+func (vp *vplayer) recordHeartbeat() error {
+	tm := time.Now().Unix()
+	vp.vr.stats.RecordHeartbeat(tm)
+	if !vp.mustUpdateHeartbeat() {
+		return nil
+	}
+	vp.numAccumulatedHeartbeats = 0
+	return vp.vr.updateHeartbeatTime(tm)
+}
+
 // applyEvents is the main thread that applies the events. It has the following use
 // cases to take into account:
 // * Normal transaction that has row mutations. In this case, the transaction
@@ -251,7 +277,7 @@ func (vp *vplayer) updatePos(ts int64) (posReached bool, err error) {
 // * OTHER event: the current position of the event is saved.
 // * JOURNAL event: if the event is relevant to the current stream, invoke registerJournal
 //   of the engine, and terminate.
-// * HEARTBEAT: update SecondsBehindMaster.
+// * HEARTBEAT: update ReplicationLagSeconds.
 // * Empty transaction: The event is remembered as an unsavedEvent. If no commits
 //   happen for idleTimeout since timeLastSaved, the current position of the unsavedEvent
 //   is committed (updatePos).
@@ -294,12 +320,22 @@ func (vp *vplayer) updatePos(ts int64) (posReached bool, err error) {
 func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 	defer vp.vr.dbClient.Rollback()
 
-	// If we're not running, set SecondsBehindMaster to be very high.
+	// If we're not running, set ReplicationLagSeconds to be very high.
 	// TODO(sougou): if we also stored the time of the last event, we
 	// can estimate this value more accurately.
-	defer vp.vr.stats.SecondsBehindMaster.Set(math.MaxInt64)
+	defer vp.vr.stats.ReplicationLagSeconds.Set(math.MaxInt64)
+	defer vp.vr.stats.VReplicationLags.Add(strconv.Itoa(int(vp.vr.id)), math.MaxInt64)
 	var sbm int64 = -1
 	for {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		// check throttler.
+		if !vp.vr.vre.throttlerClient.ThrottleCheckOKOrWaitAppName(ctx, vp.throttlerAppName) {
+			_ = vp.vr.updateTimeThrottled(VPlayerComponentName)
+			continue
+		}
+
 		items, err := relay.Fetch()
 		if err != nil {
 			return err
@@ -308,7 +344,8 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 		// So, we should assume we're falling behind.
 		if len(items) == 0 {
 			behind := time.Now().UnixNano() - vp.lastTimestampNs - vp.timeOffsetNs
-			vp.vr.stats.SecondsBehindMaster.Set(behind / 1e9)
+			vp.vr.stats.ReplicationLagSeconds.Set(behind / 1e9)
+			vp.vr.stats.VReplicationLags.Add(strconv.Itoa(int(vp.vr.id)), time.Duration(behind/1e9)*time.Second)
 		}
 		// Empty transactions are saved at most once every idleTimeout.
 		// This covers two situations:
@@ -353,12 +390,18 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 					}
 				}
 				if err := vp.applyEvent(ctx, event, mustSave); err != nil {
+					if err != io.EOF {
+						vp.vr.stats.ErrorCounts.Add([]string{"Apply"}, 1)
+						log.Errorf("Error applying event: %s", err.Error())
+					}
 					return err
 				}
 			}
 		}
+
 		if sbm >= 0 {
-			vp.vr.stats.SecondsBehindMaster.Set(sbm)
+			vp.vr.stats.ReplicationLagSeconds.Set(sbm)
+			vp.vr.stats.VReplicationLags.Add(strconv.Itoa(int(vp.vr.id)), time.Duration(sbm)*time.Second)
 		}
 
 	}
@@ -386,7 +429,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 	stats := NewVrLogStats(event.Type.String())
 	switch event.Type {
 	case binlogdatapb.VEventType_GTID:
-		pos, err := mysql.DecodePosition(event.Gtid)
+		pos, err := binlogplayer.DecodePosition(event.Gtid)
 		if err != nil {
 			return err
 		}
@@ -438,8 +481,8 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		if sql == "" {
 			sql = event.Dml
 		}
-		// If the event is for one of the AWS RDS "special" tables, we skip
-		if !strings.Contains(sql, " mysql.rds_") {
+		// If the event is for one of the AWS RDS "special" or pt-table-checksum tables, we skip
+		if !strings.Contains(sql, " mysql.rds_") && !strings.Contains(sql, " percona.checksums") {
 			// This is a player using statement based replication
 			if err := vp.vr.dbClient.Begin(); err != nil {
 				return err
@@ -580,7 +623,18 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		stats.Send(fmt.Sprintf("%v", event.Journal))
 		return io.EOF
 	case binlogdatapb.VEventType_HEARTBEAT:
-		// No-op: heartbeat timings are calculated in outer loop.
+		if event.Throttled {
+			if err := vp.vr.updateTimeThrottled(VStreamerComponentName); err != nil {
+				return err
+			}
+		}
+		if !vp.vr.dbClient.InTransaction {
+			vp.numAccumulatedHeartbeats++
+			if err := vp.recordHeartbeat(); err != nil {
+				return err
+			}
+		}
 	}
+
 	return nil
 }

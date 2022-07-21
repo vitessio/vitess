@@ -25,7 +25,7 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/vt/log"
 	workflowpb "vitess.io/vitess/go/vt/proto/workflow"
@@ -163,7 +163,7 @@ type Action struct {
 // long-polling HTTP connection to the clients.
 type Update struct {
 	// Redirect is set to the URL to go to if we are not the
-	// master.  It is only set in the initial response, and if set
+	// primary.  It is only set in the initial response, and if set
 	// then no other field in this structure is set.
 	Redirect string `json:"redirect,omitempty"`
 

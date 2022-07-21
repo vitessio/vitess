@@ -22,12 +22,14 @@ import (
 	"net/http"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/yaml2"
 
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vterrors"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -42,7 +44,7 @@ import (
 
 var (
 	// Target is the target info for the server.
-	Target querypb.Target
+	Target *querypb.Target
 	// Server is the TabletServer for the framework.
 	Server *tabletserver.TabletServer
 	// ServerAddress is the http URL for the server.
@@ -68,14 +70,14 @@ func StartCustomServer(connParams, connAppDebugParams mysql.ConnParams, dbName s
 
 	dbcfgs := dbconfigs.NewTestDBConfigs(connParams, connAppDebugParams, dbName)
 
-	Target = querypb.Target{
+	Target = &querypb.Target{
 		Keyspace:   "vttest",
 		Shard:      "0",
-		TabletType: topodatapb.TabletType_MASTER,
+		TabletType: topodatapb.TabletType_PRIMARY,
 	}
 	TopoServer = memorytopo.NewServer("")
 
-	Server = tabletserver.NewTabletServer("", config, TopoServer, topodatapb.TabletAlias{})
+	Server = tabletserver.NewTabletServer("", config, TopoServer, &topodatapb.TabletAlias{})
 	Server.Register()
 	err := Server.StartService(Target, dbcfgs, nil /* mysqld */)
 	if err != nil {
@@ -83,7 +85,7 @@ func StartCustomServer(connParams, connAppDebugParams mysql.ConnParams, dbName s
 	}
 
 	// Start http service.
-	ln, err := net.Listen("tcp", ":0")
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		return vterrors.Wrap(err, "could not start listener")
 	}
@@ -111,6 +113,12 @@ func StartServer(connParams, connAppDebugParams mysql.ConnParams, dbName string)
 	config.TwoPCCoordinatorAddress = "fake"
 	config.HotRowProtection.Mode = tabletenv.Enable
 	config.TrackSchemaVersions = true
+	config.GracePeriods.ShutdownSeconds = 2
+	config.SignalSchemaChangeReloadIntervalSeconds = tabletenv.Seconds(2.1)
+	config.SignalWhenSchemaChange = true
+	config.Healthcheck.IntervalSeconds = 0.1
+	gotBytes, _ := yaml2.Marshal(config)
+	log.Infof("Config:\n%s", gotBytes)
 	return StartCustomServer(connParams, connAppDebugParams, dbName, config)
 }
 

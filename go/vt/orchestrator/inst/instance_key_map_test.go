@@ -63,7 +63,7 @@ func TestInstanceKeyMapToJSON(t *testing.T) {
 func TestInstanceKeyMapReadJSON(t *testing.T) {
 	json := `[{"Hostname":"host1","Port":3306},{"Hostname":"host2","Port":3306}]`
 	m := *NewInstanceKeyMap()
-	m.ReadJson(json)
+	m.ReadJSON(json)
 	test.S(t).ExpectEquals(len(m), 2)
 	test.S(t).ExpectTrue(m[key1])
 	test.S(t).ExpectTrue(m[key2])

@@ -19,7 +19,8 @@ limitations under the License.
 package grpcthrottlerserver
 
 import (
-	"golang.org/x/net/context"
+	"context"
+
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/vt/servenv"
@@ -31,12 +32,13 @@ import (
 
 // Server is the gRPC server implementation of the Throttler service.
 type Server struct {
+	throttlerservicepb.UnimplementedThrottlerServer
 	manager throttler.Manager
 }
 
 // NewServer creates a new RPC server for a given throttler manager.
 func NewServer(m throttler.Manager) *Server {
-	return &Server{m}
+	return &Server{manager: m}
 }
 
 // MaxRates implements the gRPC server interface. It returns the current max

@@ -21,8 +21,9 @@ import (
 	"fmt"
 	"path"
 
+	"context"
+
 	"github.com/z-division/go-zookeeper/zk"
-	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/vt/topo"
 )
@@ -85,6 +86,11 @@ func (zs *Server) Get(ctx context.Context, filePath string) ([]byte, topo.Versio
 		return nil, nil, convertError(err, zkPath)
 	}
 	return contents, ZKVersion(stat.Version), nil
+}
+
+// List is part of the topo.Conn interface.
+func (zs *Server) List(ctx context.Context, filePathPrefix string) ([]topo.KVInfo, error) {
+	return nil, topo.NewError(topo.NoImplementation, "List not supported in ZK2 topo")
 }
 
 // Delete is part of the topo.Conn interface.

@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+
 	"vitess.io/vitess/go/vt/mysqlctl/fakemysqldaemon"
 )
 
@@ -40,7 +41,7 @@ func TestPoller(t *testing.T) {
 	assert.Equal(t, "replication is not running", err.Error())
 
 	mysqld.Replicating = true
-	mysqld.SecondsBehindMaster = 1
+	mysqld.ReplicationLagSeconds = 1
 	lag, err := poller.Status()
 	assert.NoError(t, err)
 	assert.Equal(t, 1*time.Second, lag)

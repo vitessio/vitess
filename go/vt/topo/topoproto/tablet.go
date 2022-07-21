@@ -21,11 +21,13 @@ package topoproto
 import (
 	"fmt"
 	"net"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
+
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"vitess.io/vitess/go/netutil"
@@ -61,6 +63,16 @@ func TabletAliasEqual(left, right *topodatapb.TabletAlias) bool {
 	return proto.Equal(left, right)
 }
 
+// IsTabletInList returns true if the tablet is in the list of tablets given
+func IsTabletInList(tablet *topodatapb.Tablet, allTablets []*topodatapb.Tablet) bool {
+	for _, tab := range allTablets {
+		if TabletAliasEqual(tablet.Alias, tab.Alias) {
+			return true
+		}
+	}
+	return false
+}
+
 // TabletAliasString formats a TabletAlias
 func TabletAliasString(ta *topodatapb.TabletAlias) string {
 	if ta == nil {
@@ -74,19 +86,23 @@ func TabletAliasUIDStr(ta *topodatapb.TabletAlias) string {
 	return fmt.Sprintf("%010d", ta.Uid)
 }
 
+const tabletAliasFormat = "^(?P<cell>[-_.a-zA-Z0-9]+)-(?P<uid>[0-9]+)$"
+
+var tabletAliasRegexp = regexp.MustCompile(tabletAliasFormat)
+
 // ParseTabletAlias returns a TabletAlias for the input string,
 // of the form <cell>-<uid>
 func ParseTabletAlias(aliasStr string) (*topodatapb.TabletAlias, error) {
-	nameParts := strings.Split(aliasStr, "-")
-	if len(nameParts) != 2 {
-		return nil, fmt.Errorf("invalid tablet alias: '%s', expecting format: '<cell>-<uid>'", aliasStr)
+	nameParts := tabletAliasRegexp.FindStringSubmatch(aliasStr)
+	if len(nameParts) != 3 {
+		return nil, fmt.Errorf("invalid tablet alias: '%s', expecting format: '%s'", aliasStr, tabletAliasFormat)
 	}
-	uid, err := ParseUID(nameParts[1])
+	uid, err := ParseUID(nameParts[tabletAliasRegexp.SubexpIndex("uid")])
 	if err != nil {
 		return nil, vterrors.Wrapf(err, "invalid tablet uid in alias '%s'", aliasStr)
 	}
 	return &topodatapb.TabletAlias{
-		Cell: nameParts[0],
+		Cell: nameParts[tabletAliasRegexp.SubexpIndex("cell")],
 		Uid:  uid,
 	}, nil
 }
@@ -134,9 +150,21 @@ func (tal TabletAliasList) Swap(i, j int) {
 	tal[i], tal[j] = tal[j], tal[i]
 }
 
+// ToStringSlice returns a slice which is the result of mapping
+// TabletAliasString over a slice of TabletAliases.
+func (tal TabletAliasList) ToStringSlice() []string {
+	result := make([]string, len(tal))
+
+	for i, alias := range tal {
+		result[i] = TabletAliasString(alias)
+	}
+
+	return result
+}
+
 // AllTabletTypes lists all the possible tablet types
 var AllTabletTypes = []topodatapb.TabletType{
-	topodatapb.TabletType_MASTER,
+	topodatapb.TabletType_PRIMARY,
 	topodatapb.TabletType_REPLICA,
 	topodatapb.TabletType_RDONLY,
 	topodatapb.TabletType_BATCH,
@@ -205,7 +233,7 @@ func MysqlAddr(tablet *topodatapb.Tablet) string {
 	return netutil.JoinHostPort(tablet.MysqlHostname, tablet.MysqlPort)
 }
 
-// MySQLIP returns the MySQL server's IP by resolvign the host name.
+// MySQLIP returns the MySQL server's IP by resolving the hostname.
 func MySQLIP(tablet *topodatapb.Tablet) (string, error) {
 	ipAddrs, err := net.LookupHost(tablet.MysqlHostname)
 	if err != nil {
@@ -231,4 +259,15 @@ func TabletDbName(tablet *topodatapb.Tablet) string {
 // for serving.
 func TabletIsAssigned(tablet *topodatapb.Tablet) bool {
 	return tablet != nil && tablet.Keyspace != "" && tablet.Shard != ""
+}
+
+// IsServingType returns true if the tablet type is one that should be serving to be healthy, or false if the tablet type
+// should not be serving in it's healthy state.
+func IsServingType(tabletType topodatapb.TabletType) bool {
+	switch tabletType {
+	case topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA, topodatapb.TabletType_BATCH, topodatapb.TabletType_EXPERIMENTAL:
+		return true
+	default:
+		return false
+	}
 }

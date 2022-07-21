@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/mysqlctl/fakemysqldaemon"
@@ -41,11 +42,11 @@ func TestReplTracker(t *testing.T) {
 	cp := *params
 	config.DB = dbconfigs.NewTestDBConfigs(cp, cp, "")
 	env := tabletenv.NewEnv(config, "ReplTrackerTest")
-	alias := topodatapb.TabletAlias{
+	alias := &topodatapb.TabletAlias{
 		Cell: "cell",
 		Uid:  1,
 	}
-	target := querypb.Target{}
+	target := &querypb.Target{}
 	mysqld := fakemysqldaemon.NewFakeMysqlDaemon(nil)
 
 	rt := NewReplTracker(env, alias)
@@ -54,19 +55,19 @@ func TestReplTracker(t *testing.T) {
 	assert.True(t, rt.hw.enabled)
 	assert.True(t, rt.hr.enabled)
 
-	rt.MakeMaster()
+	rt.MakePrimary()
 	assert.True(t, rt.hw.isOpen)
 	assert.False(t, rt.hr.isOpen)
-	assert.True(t, rt.isMaster)
+	assert.True(t, rt.isPrimary)
 
 	lag, err := rt.Status()
 	assert.NoError(t, err)
 	assert.Equal(t, time.Duration(0), lag)
 
-	rt.MakeNonMaster()
+	rt.MakeNonPrimary()
 	assert.False(t, rt.hw.isOpen)
 	assert.True(t, rt.hr.isOpen)
-	assert.False(t, rt.isMaster)
+	assert.False(t, rt.isPrimary)
 
 	rt.hr.lastKnownLag = 1 * time.Second
 	lag, err = rt.Status()
@@ -85,10 +86,10 @@ func TestReplTracker(t *testing.T) {
 	assert.False(t, rt.hw.enabled)
 	assert.False(t, rt.hr.enabled)
 
-	rt.MakeNonMaster()
+	rt.MakeNonPrimary()
 	assert.False(t, rt.hw.isOpen)
 	assert.False(t, rt.hr.isOpen)
-	assert.False(t, rt.isMaster)
+	assert.False(t, rt.isPrimary)
 
 	mysqld.ReplicationStatusError = errors.New("err")
 	_, err = rt.Status()

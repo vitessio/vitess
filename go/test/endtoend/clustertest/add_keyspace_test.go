@@ -23,6 +23,8 @@ import (
 	"fmt"
 	"testing"
 
+	"vitess.io/vitess/go/test/endtoend/utils"
+
 	"vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/mysql"
@@ -60,7 +62,7 @@ primary key (id)
 
 func TestAddKeyspace(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	if err := clusterInstance.StartKeyspace(*testKeyspace, []string{"-80", "80-"}, 1, true); err != nil {
+	if err := clusterInstance.StartKeyspace(*testKeyspace, []string{"-80", "80-"}, 0, false); err != nil {
 		log.Errorf("failed to AddKeyspace %v: %v", *testKeyspace, err)
 		t.Fatal(err)
 	}
@@ -80,9 +82,9 @@ func TestAddKeyspace(t *testing.T) {
 	}
 	defer conn.Close()
 
-	exec(t, conn, "insert into vt_user(id, name) values(1,'name1')")
+	utils.Exec(t, conn, "insert into vt_user(id, name) values(1,'name1')")
 
-	qr := exec(t, conn, "select id, name from vt_user")
+	qr := utils.Exec(t, conn, "select id, name from vt_user")
 	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(1) VARCHAR("name1")]]`; got != want {
 		t.Errorf("select:\n%v want\n%v", got, want)
 	}

@@ -1,0 +1,397 @@
+/**
+ * Copyright 2021 The Vitess Authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+@import './style/fonts.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+    /* Greyscale */
+    --grey75: #f8fafd;
+    --grey200: #edf2f7;
+    --grey400: #cbd5e0;
+    --grey600: #718096;
+    --grey800: #2d3748;
+    --grey900: #1e2531;
+
+    /* Invariant colours common across all themes */
+    --colorSuccess: #00893e;
+    --colorSuccess50: #4cba6a;
+    --colorSuccess200: #005a13;
+    --colorInfo: #ffab40;
+    --colorInfo50: #ffdd71;
+    --colorInfo200: #c77c02;
+    --colorError: #d32f2f;
+    --colorError50: #ff6659;
+    --colorError200: #9a0007;
+
+    /* Fonts */
+    --fontFamilyPrimary: theme('fontFamily.sans');
+    --fontFamilyMonospace: theme('fontFamily.mono');
+
+    /* Body text */
+    --lineHeightBody: 1.36;
+
+    /* Headings */
+    --lineHeightHeading: 1.36;
+
+    /* Inputs + other form controls */
+    --inputHeightSmall: 2.4rem;
+    --inputHeightMedium: 3.7rem;
+    --inputHeightLarge: 4.6rem;
+
+    /* Tables */
+    --tableCellPadding: 1.6rem;
+
+    /* Layout variables, set to light theme by default */
+    --backgroundPrimary: #fff;
+    --backgroundPrimaryHighlight: rgba(61, 90, 254, 0.1);
+    --backgroundSecondary: var(--grey75);
+    --backgroundSecondaryHighlight: var(--grey200);
+    --boxShadowHover: 0 3px 3px #cbd5e0;
+    --colorDisabled: var(--grey400);
+    --colorPrimary: #3d5afe;
+    --colorPrimary50: #8187ff;
+    --colorPrimary200: #0031ca;
+    --colorScaffoldingHighlight: var(--grey400);
+    --colorScaffoldingForeground: var(--grey600);
+    --tableBorderColor: var(--grey400);
+    --textColorPrimary: theme('textColor.primary');
+    --textColorInverted: #fff;
+    --textColorSecondary: theme('textColor.secondary');
+    --textColorDisabled: #cbd5e0;
+
+    /* TODO(doeg, someday): add a mixin to apply opacity to hex vars to re-use var(--backgroundInverted) */
+    --tooltipBackground: rgba(0, 0, 0, 0.85);
+
+    /* Z-index */
+    --zIndexDefault: 0;
+    --zIndexLow: 10;
+    --zIndexMid: 100;
+    --zIndexHigh: 1000;
+}
+
+/* Dark theme */
+[data-vtadmin-theme='dark'] {
+    --backgroundPrimary: #17171b;
+    --backgroundPrimaryHighlight: rgba(129, 135, 255, 0.2);
+    --backgroundSecondary: var(--grey900);
+    --backgroundSecondaryHighlight: var(--grey800);
+    --boxShadowHover: 0 3px 3px #2d3748;
+    --colorDisabled: var(--grey600);
+    --colorPrimary: #8187ff;
+    --colorPrimary50: #b6b7ff;
+    --colorPrimary200: #4a5acb;
+    --colorScaffoldingHighlight: var(--grey600);
+    --colorScaffoldingForeground: var(--grey400);
+    --tableBorderColor: var(--grey800);
+    --textColorPrimary: #fff;
+    --textColorInverted: #17171b;
+    --textColorSecondary: #cbd5e0;
+    --textColorDisabled: #2d3748;
+    --tooltipBackground: rgba(255, 255, 255, 0.85);
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html {
+    /**
+   * Set a base font size of 1rem == 10px, based on the common browser default of 16px.
+   * This lets us use rem values everywhere for accessibility, while still
+   * "pinning" to reasonable defaults. For a really good article on this,
+   * see https://www.24a11y.com/2019/pixels-vs-relative-units-in-css-why-its-still-a-big-deal/
+   */
+    font-size: 62.5%;
+}
+
+body {
+    background: var(--backgroundPrimary);
+    color: var(--textColorPrimary);
+    font-size: theme('fontSize.base');
+    line-height: var(--lineHeightBody);
+    margin: 0;
+    font-family: var(--fontFamilyPrimary);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* Typography */
+h1 {
+    color: var(--textColorPrimary);
+    font-size: theme('fontSize.3xl');
+    font-weight: 700;
+    line-height: var(--lineHeightHeading);
+}
+
+h2 {
+    color: var(--textColorPrimary);
+    font-size: theme('fontSize.2xl');
+    font-weight: 700;
+    line-height: var(--lineHeightHeading);
+}
+
+h3 {
+    color: var(--textColorPrimary);
+    font-size: theme('fontSize.xl');
+    font-weight: 700;
+    line-height: var(--lineHeightHeading);
+}
+
+code {
+    display: inline-block;
+    font-family: var(--fontFamilyMonospace);
+    margin: 0 2px;
+}
+
+p {
+    margin: 1.2rem 0;
+}
+
+/* Links */
+a,
+a:visited,
+a:focus,
+a:active {
+    color: var(--colorPrimary);
+    cursor: pointer;
+    text-decoration: none;
+}
+
+/* Tables */
+table {
+    border-collapse: collapse;
+    margin: var(--tableCellPadding) 0;
+    width: 100%;
+}
+
+table caption {
+    background: var(--backgroundSecondary);
+    color: var(--textColorPrimary);
+    font-size: theme('fontSize.base');
+    font-weight: 500;
+    padding: 1.2rem var(--tableCellPadding) 0.8rem var(--tableCellPadding);
+    text-align: left;
+}
+
+table th {
+    background: var(--backgroundSecondary);
+    border: solid 1px var(--backgroundSecondary);
+    border-bottom-color: var(--tableBorderColor);
+    color: var(--textColorSecondary);
+    font-size: theme('fontSize.base');
+    font-weight: 500;
+    padding: 8px var(--tableCellPadding);
+    text-align: left;
+}
+
+table tbody tr {
+    border-bottom: solid 1px var(--tableBorderColor);
+    border-top: solid 1px var(--tableBorderColor);
+}
+
+table tbody td {
+    padding: var(--tableCellPadding);
+    vertical-align: top;
+}
+
+table tbody td[rowSpan] {
+    border-right: solid 1px var(--tableBorderColor);
+}
+
+.Toastify__toast {
+    padding: 0 !important;
+    min-height: auto !important;
+    background: none !important;
+}
+
+.Toastify__toast-body {
+    padding: 0 !important;
+    margin: 0 !important;
+}
+
+.Toastify__toast-theme--light,
+.Toastify__toast-theme--dark {
+    background: none !important;
+}
+
+/* See https://tailwindcss.com/docs/extracting-components */
+@layer components {
+    .btn,
+    .btn:visited {
+        @apply bg-vtblue;
+        @apply border-2 border-vtblue;
+        @apply cursor-pointer;
+        @apply font-sans font-semibold;
+        @apply inline-block;
+        @apply leading-relaxed;
+        @apply outline-none;
+        @apply px-6 py-2;
+        @apply rounded-lg;
+        @apply text-center;
+        @apply text-white;
+        @apply select-none;
+        @apply whitespace-nowrap;
+        @apply w-min;
+
+        @apply focus:ring-vtblue-50;
+        @apply focus:ring-offset-1;
+        @apply focus:ring-2;
+
+        height: fit-content;
+        appearance: button;
+    }
+
+    .btn:disabled {
+        @apply cursor-not-allowed;
+
+        background: var(--colorDisabled);
+        border-color: var(--colorDisabled);
+    }
+
+    /* Size variants */
+    .btn-lg {
+        @apply px-8;
+        @apply leading-loose;
+        @apply text-lg;
+    }
+
+    .btn-sm {
+        @apply border;
+        @apply leading-snug;
+        @apply px-4 py-1;
+        @apply text-sm;
+    }
+
+    /* Implicit icon styling */
+    .btn svg {
+        @apply align-middle;
+        @apply fill-current;
+        @apply h-8;
+        @apply inline-block;
+        @apply -ml-2 mr-1;
+    }
+
+    .btn-lg svg {
+        @apply h-10;
+        @apply -ml-2 mr-2;
+    }
+
+    .btn-sm svg {
+        @apply h-6;
+        @apply -ml-3 mr-0;
+    }
+
+    /* Visual priority variants */
+    .btn-secondary,
+    .btn-secondary:visited {
+        @apply bg-transparent !important;
+        @apply text-vtblue;
+    }
+
+    .btn-secondary:disabled {
+        @apply text-vtblue;
+
+        color: var(--colorDisabled);
+    }
+
+    /* Intents (colours) */
+    .btn-danger,
+    .btn-danger:visited {
+        @apply focus:ring-danger-50;
+        @apply bg-danger;
+        @apply border-danger;
+    }
+
+    .btn-danger.btn-secondary:enabled,
+    .btn-danger.btn-secondary:visited {
+        @apply text-danger;
+    }
+
+    .btn-success,
+    .btn-success:visited {
+        @apply focus:ring-success-50;
+        @apply bg-success;
+        @apply border-success;
+    }
+
+    .btn-success.btn-secondary:enabled,
+    .btn-success.btn-secondary:visited {
+        @apply text-success;
+    }
+
+    .btn-warning,
+    .btn-warning:visited {
+        @apply focus:ring-warning-50;
+        @apply bg-warning;
+        @apply border-warning;
+    }
+
+    .btn-warning.btn-secondary:enabled,
+    .btn-warning.btn-secondary:visited {
+        @apply text-warning;
+    }
+
+    .toggle {
+        height: 19px;
+        width: 37px;
+        @apply relative;
+        @apply inline-flex;
+        @apply flex-shrink-0;
+        @apply border-2;
+        @apply border-transparent;
+        @apply rounded-full;
+        @apply cursor-pointer;
+        @apply transition-colors;
+        @apply ease-in-out;
+        @apply duration-200;
+        @apply focus:outline-none;
+    }
+
+    .toggle.on {
+        @apply bg-vtblue;
+    }
+
+    .toggle.off {
+        @apply bg-gray-400;
+    }
+
+    .toggle-button {
+        height: 15px;
+        width: 15px;
+        @apply pointer-events-none;
+        @apply inline-block;
+        @apply rounded-full;
+        @apply bg-white;
+        @apply shadow-lg;
+        @apply transform;
+        @apply ring-0;
+        @apply transition;
+        @apply ease-in-out;
+        @apply duration-200;
+    }
+
+    .toggle-button.on {
+        @apply translate-x-7;
+    }
+
+    .toggle-button.off {
+        @apply translate-x-0;
+    }
+}

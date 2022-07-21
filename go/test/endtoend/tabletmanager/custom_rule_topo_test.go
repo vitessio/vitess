@@ -18,13 +18,16 @@ package tabletmanager
 import (
 	"context"
 	"encoding/json"
-	"io/ioutil"
+	"os"
 	"testing"
 	"time"
+
+	"vitess.io/vitess/go/test/endtoend/utils"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/stretchr/testify/assert"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
@@ -33,32 +36,32 @@ func TestTopoCustomRule(t *testing.T) {
 
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
-	masterConn, err := mysql.Connect(ctx, &masterTabletParams)
+	conn, err := mysql.Connect(ctx, &primaryTabletParams)
 	require.NoError(t, err)
-	defer masterConn.Close()
+	defer conn.Close()
 	replicaConn, err := mysql.Connect(ctx, &replicaTabletParams)
 	require.NoError(t, err)
 	defer replicaConn.Close()
 
 	// Insert data for sanity checks
-	exec(t, masterConn, "delete from t1")
-	exec(t, masterConn, "insert into t1(id, value) values(11,'r'), (12,'s')")
+	utils.Exec(t, conn, "delete from t1")
+	utils.Exec(t, conn, "insert into t1(id, value) values(11,'r'), (12,'s')")
 	checkDataOnReplica(t, replicaConn, `[[VARCHAR("r")] [VARCHAR("s")]]`)
 
 	// create empty topoCustomRuleFile.
 	topoCustomRuleFile := "/tmp/rules.json"
 	topoCustomRulePath := "/keyspaces/ks/configs/CustomRules"
 	data := []byte("[]\n")
-	err = ioutil.WriteFile(topoCustomRuleFile, data, 0777)
+	err = os.WriteFile(topoCustomRuleFile, data, 0777)
 	require.NoError(t, err)
 
 	// Copy config file into topo.
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("TopoCp", "-to_topo", topoCustomRuleFile, topoCustomRulePath)
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("TopoCp", "--", "--to_topo", topoCustomRuleFile, topoCustomRulePath)
 	require.Nil(t, err, "error should be Nil")
 
 	// Set extra tablet args for topo custom rule
 	clusterInstance.VtTabletExtraArgs = []string{
-		"-topocustomrule_path", topoCustomRulePath,
+		"--topocustomrule_path", topoCustomRulePath,
 	}
 
 	// Start a new Tablet
@@ -75,16 +78,24 @@ func TestTopoCustomRule(t *testing.T) {
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Validate")
 	require.Nil(t, err, "error should be Nil")
 
-	// Verify that query is working
-	result, err := vtctlExec("select id, value from t1", rTablet.Alias)
-	require.NoError(t, err)
-	resultMap := make(map[string]interface{})
-	err = json.Unmarshal([]byte(result), &resultMap)
-	require.NoError(t, err)
+	// And wait until the query is working.
+	// We need a wait here because the instance we have created is a replica
+	// It might take a while to replicate the two rows.
+	timeout := time.Now().Add(10 * time.Second)
+	for time.Now().Before(timeout) {
+		result, err := vtctlExec("select id, value from t1", rTablet.Alias)
+		if err == nil {
+			resultMap := make(map[string]any)
+			err = json.Unmarshal([]byte(result), &resultMap)
+			require.NoError(t, err)
 
-	rowsAffected := resultMap["rows_affected"]
-	want := float64(2)
-	assert.Equal(t, want, rowsAffected)
+			rowsAffected := resultMap["rows"].([]any)
+			if len(rowsAffected) == 2 {
+				break
+			}
+		}
+		time.Sleep(300 * time.Millisecond)
+	}
 
 	// Now update the topocustomrule file.
 	data = []byte(`[{
@@ -93,14 +104,14 @@ func TestTopoCustomRule(t *testing.T) {
 		"TableNames" : ["t1"],
 		"Query" : "(select)|(SELECT)"
 	  }]`)
-	err = ioutil.WriteFile(topoCustomRuleFile, data, 0777)
+	err = os.WriteFile(topoCustomRuleFile, data, 0777)
 	require.NoError(t, err)
 
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("TopoCp", "-to_topo", topoCustomRuleFile, topoCustomRulePath)
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("TopoCp", "--", "--to_topo", topoCustomRuleFile, topoCustomRulePath)
 	require.Nil(t, err, "error should be Nil")
 
 	// And wait until the query fails with the right error.
-	timeout := time.Now().Add(10 * time.Second)
+	timeout = time.Now().Add(10 * time.Second)
 	for time.Now().Before(timeout) {
 		result, err := vtctlExec("select id, value from t1", rTablet.Alias)
 		if err != nil {
@@ -111,7 +122,7 @@ func TestTopoCustomRule(t *testing.T) {
 	}
 
 	// Empty the table
-	exec(t, masterConn, "delete from t1")
+	utils.Exec(t, conn, "delete from t1")
 	// Reset the VtTabletExtraArgs
 	clusterInstance.VtTabletExtraArgs = []string{}
 	// Tear down custom processes
@@ -119,6 +130,6 @@ func TestTopoCustomRule(t *testing.T) {
 }
 
 func vtctlExec(sql string, tabletAlias string) (string, error) {
-	args := []string{"VtTabletExecute", "-json", tabletAlias, sql}
+	args := []string{"VtTabletExecute", "--", "--json", tabletAlias, sql}
 	return clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(args...)
 }

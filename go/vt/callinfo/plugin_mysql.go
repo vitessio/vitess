@@ -22,7 +22,8 @@ import (
 	"fmt"
 	"html/template"
 
-	"golang.org/x/net/context"
+	"context"
+
 	"vitess.io/vitess/go/mysql"
 )
 

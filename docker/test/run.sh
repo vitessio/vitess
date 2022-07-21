@@ -98,7 +98,8 @@ while true ; do
 done
 # Positional flags.
 flavor=$1
-cmd=$2
+version=${2:-0}
+cmd=$3
 args=
 
 if [[ -z "$flavor" ]]; then
@@ -115,14 +116,13 @@ if [[ ! -f bootstrap.sh ]]; then
   exit 1
 fi
 
-image=vitess/bootstrap:$flavor
+image=vitess/bootstrap:$version-$flavor
 if [[ -n "$existing_cache_image" ]]; then
   image=$existing_cache_image
 fi
 
-# To avoid AUFS permission issues, files must allow access by "other" (permissions rX required).
-# Mirror permissions to "other" from the owning group (for which we assume it has at least rX permissions).
-chmod -R o=g .
+# Fix permissions before copying files, to avoid AUFS bug other must have read/access permissions
+chmod -R o=rx *;
 
 # This is required by the vtctld_web_test.py test.
 # Otherwise, /usr/bin/chromium will crash with the error:

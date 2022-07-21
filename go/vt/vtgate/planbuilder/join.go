@@ -17,18 +17,20 @@ limitations under the License.
 package planbuilder
 
 import (
-	"errors"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
-var _ builder = (*join)(nil)
+var _ logicalPlan = (*join)(nil)
 
 // join is used to build a Join primitive.
 // It's used to build a normal join or a left join
 // operation.
 type join struct {
+	v3Plan
 	order         int
 	resultColumns []*resultColumn
 	weightStrings map[*resultColumn]int
@@ -61,7 +63,7 @@ type join struct {
 	leftOrder int
 
 	// Left and Right are the nodes for the join.
-	Left, Right builder
+	Left, Right logicalPlan
 
 	ejoin *engine.Join
 }
@@ -69,17 +71,17 @@ type join struct {
 // newJoin makes a new join using the two planBuilder. ajoin can be nil
 // if the join is on a ',' operator. lpb will contain the resulting join.
 // rpb will be discarded.
-func newJoin(lpb, rpb *primitiveBuilder, ajoin *sqlparser.JoinTableExpr) error {
+func newJoin(lpb, rpb *primitiveBuilder, ajoin *sqlparser.JoinTableExpr, reservedVars *sqlparser.ReservedVars) error {
 	// This function converts ON clauses to WHERE clauses. The WHERE clause
 	// scope can see all tables, whereas the ON clause can only see the
 	// participants of the JOIN. However, since the ON clause doesn't allow
 	// external references, and the FROM clause doesn't allow duplicates,
 	// it's safe to perform this conversion and still expect the same behavior.
 
-	opcode := engine.NormalJoin
+	opcode := engine.InnerJoin
 	if ajoin != nil {
 		switch {
-		case ajoin.Join == sqlparser.LeftJoinStr:
+		case ajoin.Join == sqlparser.LeftJoinType:
 			opcode = engine.LeftJoin
 
 			// For left joins, we have to push the ON clause into the RHS.
@@ -91,35 +93,35 @@ func newJoin(lpb, rpb *primitiveBuilder, ajoin *sqlparser.JoinTableExpr) error {
 			// At this point, the LHS symtab also contains symbols of the RHS.
 			// But the RHS will hide those, as intended.
 			rpb.st.Outer = lpb.st
-			if err := rpb.pushFilter(ajoin.Condition.On, sqlparser.WhereStr); err != nil {
+			if err := rpb.pushFilter(ajoin.Condition.On, sqlparser.WhereStr, reservedVars); err != nil {
 				return err
 			}
 		case ajoin.Condition.Using != nil:
-			return errors.New("unsupported: join with USING(column_list) clause")
+			return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: join with USING(column_list) clause for complex queries")
 		}
 	}
-	lpb.bldr = &join{
+	lpb.plan = &join{
 		weightStrings: make(map[*resultColumn]int),
-		Left:          lpb.bldr,
-		Right:         rpb.bldr,
+		Left:          lpb.plan,
+		Right:         rpb.plan,
 		ejoin: &engine.Join{
 			Opcode: opcode,
 			Vars:   make(map[string]int),
 		},
 	}
-	lpb.bldr.Reorder(0)
+	lpb.plan.Reorder(0)
 	if ajoin == nil || opcode == engine.LeftJoin {
 		return nil
 	}
-	return lpb.pushFilter(ajoin.Condition.On, sqlparser.WhereStr)
+	return lpb.pushFilter(ajoin.Condition.On, sqlparser.WhereStr, reservedVars)
 }
 
-// Order satisfies the builder interface.
+// Order implements the logicalPlan interface
 func (jb *join) Order() int {
 	return jb.order
 }
 
-// Reorder satisfies the builder interface.
+// Reorder implements the logicalPlan interface
 func (jb *join) Reorder(order int) {
 	jb.Left.Reorder(order)
 	jb.leftOrder = jb.Left.Order()
@@ -127,180 +129,28 @@ func (jb *join) Reorder(order int) {
 	jb.order = jb.Right.Order() + 1
 }
 
-// Primitive satisfies the builder interface.
+// Primitive implements the logicalPlan interface
 func (jb *join) Primitive() engine.Primitive {
 	jb.ejoin.Left = jb.Left.Primitive()
 	jb.ejoin.Right = jb.Right.Primitive()
 	return jb.ejoin
 }
 
-// PushLock satisfies the builder interface.
-func (jb *join) PushLock(lock string) error {
-	err := jb.Left.PushLock(lock)
-	if err != nil {
-		return err
-	}
-
-	return jb.Right.PushLock(lock)
-}
-
-// First satisfies the builder interface.
-func (jb *join) First() builder {
-	return jb.Left.First()
-}
-
-// ResultColumns satisfies the builder interface.
+// ResultColumns implements the logicalPlan interface
 func (jb *join) ResultColumns() []*resultColumn {
 	return jb.resultColumns
 }
 
-// PushFilter satisfies the builder interface.
-func (jb *join) PushFilter(pb *primitiveBuilder, filter sqlparser.Expr, whereType string, origin builder) error {
-	if jb.isOnLeft(origin.Order()) {
-		return jb.Left.PushFilter(pb, filter, whereType, origin)
-	}
-	if jb.ejoin.Opcode == engine.LeftJoin {
-		return errors.New("unsupported: cross-shard left join and where clause")
-	}
-	return jb.Right.PushFilter(pb, filter, whereType, origin)
-}
-
-// PushSelect satisfies the builder interface.
-func (jb *join) PushSelect(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colNumber int, err error) {
-	if jb.isOnLeft(origin.Order()) {
-		rc, colNumber, err = jb.Left.PushSelect(pb, expr, origin)
-		if err != nil {
-			return nil, 0, err
-		}
-		jb.ejoin.Cols = append(jb.ejoin.Cols, -colNumber-1)
-	} else {
-		// Pushing of non-trivial expressions not allowed for RHS of left joins.
-		if _, ok := expr.Expr.(*sqlparser.ColName); !ok && jb.ejoin.Opcode == engine.LeftJoin {
-			return nil, 0, errors.New("unsupported: cross-shard left join and column expressions")
-		}
-
-		rc, colNumber, err = jb.Right.PushSelect(pb, expr, origin)
-		if err != nil {
-			return nil, 0, err
-		}
-		jb.ejoin.Cols = append(jb.ejoin.Cols, colNumber+1)
-	}
-	jb.resultColumns = append(jb.resultColumns, rc)
-	return rc, len(jb.resultColumns) - 1, nil
-}
-
-// MakeDistinct satisfies the builder interface.
-func (jb *join) MakeDistinct() error {
-	return errors.New("unsupported: distinct on cross-shard join")
-}
-
-// PushGroupBy satisfies the builder interface.
-func (jb *join) PushGroupBy(groupBy sqlparser.GroupBy) error {
-	if (groupBy) == nil {
-		return nil
-	}
-	return errors.New("unupported: group by on cross-shard join")
-}
-
-// PushOrderBy satisfies the builder interface.
-func (jb *join) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
-	isSpecial := false
-	switch len(orderBy) {
-	case 0:
-		isSpecial = true
-	case 1:
-		if _, ok := orderBy[0].Expr.(*sqlparser.NullVal); ok {
-			isSpecial = true
-		} else if f, ok := orderBy[0].Expr.(*sqlparser.FuncExpr); ok {
-			if f.Name.Lowered() == "rand" {
-				isSpecial = true
-			}
-		}
-	}
-	if isSpecial {
-		l, err := jb.Left.PushOrderBy(orderBy)
-		if err != nil {
-			return nil, err
-		}
-		jb.Left = l
-		r, err := jb.Right.PushOrderBy(orderBy)
-		if err != nil {
-			return nil, err
-		}
-		jb.Right = r
-		return jb, nil
-	}
-
-	for _, order := range orderBy {
-		if node, ok := order.Expr.(*sqlparser.SQLVal); ok {
-			// This block handles constructs that use ordinals for 'ORDER BY'. For example:
-			// SELECT a, b, c FROM t1, t2 ORDER BY 1, 2, 3.
-			num, err := ResultFromNumber(jb.ResultColumns(), node)
-			if err != nil {
-				return nil, err
-			}
-			if jb.ResultColumns()[num].column.Origin().Order() > jb.Left.Order() {
-				return newMemorySort(jb, orderBy)
-			}
-		} else {
-			// Analyze column references within the expression to make sure they all
-			// go to the left.
-			err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-				switch node := node.(type) {
-				case *sqlparser.ColName:
-					if node.Metadata.(*column).Origin().Order() > jb.Left.Order() {
-						return false, errors.New("unsupported: order by spans across shards")
-					}
-				case *sqlparser.Subquery:
-					// Unreachable because ResolveSymbols perfoms this check up above.
-					return false, errors.New("unsupported: order by has subquery")
-				}
-				return true, nil
-			}, order.Expr)
-			if err != nil {
-				return newMemorySort(jb, orderBy)
-			}
-		}
-	}
-
-	// There were no errors. We can push the order by to the left-most route.
-	l, err := jb.Left.PushOrderBy(orderBy)
-	if err != nil {
-		return nil, err
-	}
-	jb.Left = l
-	// Still need to push an empty order by to the right.
-	r, err := jb.Right.PushOrderBy(nil)
-	if err != nil {
-		return nil, err
-	}
-	jb.Right = r
-	return jb, nil
-}
-
-// SetUpperLimit satisfies the builder interface.
-// The call is ignored because results get multiplied
-// as they join with others. So, it's hard to reliably
-// predict if a limit push down will work correctly.
-func (jb *join) SetUpperLimit(_ *sqlparser.SQLVal) {
-}
-
-// PushMisc satisfies the builder interface.
-func (jb *join) PushMisc(sel *sqlparser.Select) {
-	jb.Left.PushMisc(sel)
-	jb.Right.PushMisc(sel)
-}
-
-// Wireup satisfies the builder interface.
-func (jb *join) Wireup(bldr builder, jt *jointab) error {
-	err := jb.Right.Wireup(bldr, jt)
+// Wireup implements the logicalPlan interface
+func (jb *join) Wireup(plan logicalPlan, jt *jointab) error {
+	err := jb.Right.Wireup(plan, jt)
 	if err != nil {
 		return err
 	}
-	return jb.Left.Wireup(bldr, jt)
+	return jb.Left.Wireup(plan, jt)
 }
 
-// SupplyVar satisfies the builder interface.
+// SupplyVar implements the logicalPlan interface
 func (jb *join) SupplyVar(from, to int, col *sqlparser.ColName, varname string) {
 	if !jb.isOnLeft(from) {
 		jb.Right.SupplyVar(from, to, col, varname)
@@ -327,7 +177,7 @@ func (jb *join) SupplyVar(from, to int, col *sqlparser.ColName, varname string) 
 	_, jb.ejoin.Vars[varname] = jb.Left.SupplyCol(col)
 }
 
-// SupplyCol satisfies the builder interface.
+// SupplyCol implements the logicalPlan interface
 func (jb *join) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber int) {
 	c := col.Metadata.(*column)
 	for i, rc := range jb.resultColumns {
@@ -349,21 +199,21 @@ func (jb *join) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber i
 	return rc, len(jb.ejoin.Cols) - 1
 }
 
-// SupplyWeightString satisfies the builder interface.
-func (jb *join) SupplyWeightString(colNumber int) (weightcolNumber int, err error) {
+// SupplyWeightString implements the logicalPlan interface
+func (jb *join) SupplyWeightString(colNumber int, alsoAddToGroupBy bool) (weightcolNumber int, err error) {
 	rc := jb.resultColumns[colNumber]
 	if weightcolNumber, ok := jb.weightStrings[rc]; ok {
 		return weightcolNumber, nil
 	}
 	routeNumber := rc.column.Origin().Order()
 	if jb.isOnLeft(routeNumber) {
-		sourceCol, err := jb.Left.SupplyWeightString(-jb.ejoin.Cols[colNumber] - 1)
+		sourceCol, err := jb.Left.SupplyWeightString(-jb.ejoin.Cols[colNumber]-1, alsoAddToGroupBy)
 		if err != nil {
 			return 0, err
 		}
 		jb.ejoin.Cols = append(jb.ejoin.Cols, -sourceCol-1)
 	} else {
-		sourceCol, err := jb.Right.SupplyWeightString(jb.ejoin.Cols[colNumber] - 1)
+		sourceCol, err := jb.Right.SupplyWeightString(jb.ejoin.Cols[colNumber]-1, alsoAddToGroupBy)
 		if err != nil {
 			return 0, err
 		}
@@ -372,6 +222,21 @@ func (jb *join) SupplyWeightString(colNumber int) (weightcolNumber int, err erro
 	jb.resultColumns = append(jb.resultColumns, rc)
 	jb.weightStrings[rc] = len(jb.ejoin.Cols) - 1
 	return len(jb.ejoin.Cols) - 1, nil
+}
+
+// Rewrite implements the logicalPlan interface
+func (jb *join) Rewrite(inputs ...logicalPlan) error {
+	if len(inputs) != 2 {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "join: wrong number of inputs")
+	}
+	jb.Left = inputs[0]
+	jb.Right = inputs[1]
+	return nil
+}
+
+// Inputs implements the logicalPlan interface
+func (jb *join) Inputs() []logicalPlan {
+	return []logicalPlan{jb.Left, jb.Right}
 }
 
 // isOnLeft returns true if the specified route number

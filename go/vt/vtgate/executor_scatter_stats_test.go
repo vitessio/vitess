@@ -28,8 +28,8 @@ import (
 )
 
 func TestScatterStatsWithNoScatterQuery(t *testing.T) {
-	executor, _, _, _ := createLegacyExecutorEnv()
-	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master"})
+	executor, _, _, _ := createExecutorEnv()
+	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary"})
 
 	_, err := executor.Execute(context.Background(), "TestExecutorResultsExceeded", session, "select * from main1", nil)
 	require.NoError(t, err)
@@ -40,8 +40,8 @@ func TestScatterStatsWithNoScatterQuery(t *testing.T) {
 }
 
 func TestScatterStatsWithSingleScatterQuery(t *testing.T) {
-	executor, _, _, _ := createLegacyExecutorEnv()
-	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master"})
+	executor, _, _, _ := createExecutorEnv()
+	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary"})
 
 	_, err := executor.Execute(context.Background(), "TestExecutorResultsExceeded", session, "select * from user", nil)
 	require.NoError(t, err)
@@ -52,8 +52,8 @@ func TestScatterStatsWithSingleScatterQuery(t *testing.T) {
 }
 
 func TestScatterStatsHttpWriting(t *testing.T) {
-	executor, _, _, _ := createLegacyExecutorEnv()
-	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master"})
+	executor, _, _, _ := createExecutorEnv()
+	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary"})
 
 	_, err := executor.Execute(context.Background(), "TestExecutorResultsExceeded", session, "select * from user", nil)
 	require.NoError(t, err)
@@ -67,6 +67,8 @@ func TestScatterStatsHttpWriting(t *testing.T) {
 	query4 := "select * from user as u1 join  user as u2 on u1.Id = u2.Id"
 	_, err = executor.Execute(context.Background(), "TestExecutorResultsExceeded", session, query4, nil)
 	require.NoError(t, err)
+
+	executor.plans.Wait()
 
 	recorder := httptest.NewRecorder()
 	executor.WriteScatterStats(recorder)

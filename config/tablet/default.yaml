@@ -84,8 +84,8 @@ healthcheck:
   unhealthyThresholdSeconds: 7200 # unhealthy_threshold
 
 gracePeriods:
-  transactionShutdownSeconds: 0 # transaction_shutdown_grace_period
-  transitionSeconds: 0          # serving_state_grace_period
+  shutdownSeconds:   0 # shutdown_grace_period
+  transitionSeconds: 0 # serving_state_grace_period
 
 replicationTracker:
   mode: disable                    # enable_replication_reporter
@@ -98,7 +98,7 @@ hotRowProtection:
   maxGlobalQueueSize: 1000    # hot_row_protection_max_global_queue_size
   maxConcurrency: 5           # hot_row_protection_concurrent_transactions
 
-consolidator: enable|disable|notOnMaster # enable-consolidator, enable-consolidator-replicas
+consolidator: enable|disable|notOnPrimary # enable-consolidator, enable-consolidator-replicas
 passthroughDML: false                    # queryserver-config-passthrough-dmls
 streamBufferSize: 32768                  # queryserver-config-stream-buffer-size
 queryCacheSize: 5000                     # queryserver-config-query-cache-size

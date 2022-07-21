@@ -1,0 +1,61 @@
+global:
+  scrape_interval: 5s
+  scrape_timeout: 2s
+
+rule_files:
+  - prometheus_rules.yaml
+
+scrape_configs:
+  - job_name: vitess-vtctld
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - 'vtctld:8080'
+  - job_name: vitess-vtgate
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - 'vtgate:8080'
+  - job_name: vitess-vttablet
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - 'vttablet101:8080'
+          - 'vttablet102:8080'
+          - 'vttablet201:8080'
+          - 'vttablet202:8080'
+          - 'vttablet301:8080'
+          - 'vttablet302:8080'
+  # Mock mysql exporter for vttablet 
+  - job_name: mysql
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - 'mysqld_exporter:9104'
+    metric_relabel_configs:
+     - source_labels: [ instance ]
+       target_label: instance
+       action: replace
+       replacement: vttablet101:8080
+  # Mock node exporter for vtgate 
+  - job_name: node-exporter-vitess-vtgate
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - 'node-exporter:9100'
+    metric_relabel_configs:
+      - source_labels: [ instance ]
+        target_label: instance
+        action: replace
+        replacement: vtgate:8080
+  # Mock node exporter for vttablet 
+  - job_name: node-exporter-vitess-vttablet
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - 'node-exporter:9100'
+    metric_relabel_configs:
+     - source_labels: [ instance ]
+       target_label: instance
+       action: replace
+       replacement: vttablet101:8080

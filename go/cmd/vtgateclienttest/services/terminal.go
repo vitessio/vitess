@@ -20,7 +20,8 @@ import (
 	"errors"
 	"fmt"
 
-	"golang.org/x/net/context"
+	"context"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/tb"
 	"vitess.io/vitess/go/vt/log"
@@ -61,11 +62,19 @@ func (c *terminalClient) StreamExecute(ctx context.Context, session *vtgatepb.Se
 	return errTerminal
 }
 
+func (c *terminalClient) Prepare(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable) (*vtgatepb.Session, []*querypb.Field, error) {
+	return session, nil, errTerminal
+}
+
+func (c *terminalClient) CloseSession(ctx context.Context, session *vtgatepb.Session) error {
+	return errTerminal
+}
+
 func (c *terminalClient) ResolveTransaction(ctx context.Context, dtid string) error {
 	return errTerminal
 }
 
-func (c *terminalClient) VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
+func (c *terminalClient) VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter, flags *vtgatepb.VStreamFlags, send func([]*binlogdatapb.VEvent) error) error {
 	return errTerminal
 }
 

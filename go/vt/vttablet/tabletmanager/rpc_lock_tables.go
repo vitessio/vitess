@@ -27,7 +27,7 @@ import (
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
 
-	"golang.org/x/net/context"
+	"context"
 )
 
 var (

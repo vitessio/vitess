@@ -51,7 +51,7 @@ func TestMain(m *testing.M) {
 	service := CreateFakeServer()
 
 	// listen on a random port.
-	listener, err := net.Listen("tcp", ":0")
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		panic(fmt.Sprintf("Cannot listen: %v", err))
 	}
@@ -170,7 +170,7 @@ func TestOpen_InvalidJson(t *testing.T) {
 }
 
 func TestBeginIsolation(t *testing.T) {
-	db, err := Open(testAddress, "@master")
+	db, err := Open(testAddress, "@primary")
 	require.NoError(t, err)
 	defer db.Close()
 	_, err = db.BeginTx(context.Background(), &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
@@ -224,7 +224,7 @@ func TestConfigurationToJSON(t *testing.T) {
 		Streaming:       true,
 		DefaultLocation: "Local",
 	}
-	want := `{"Protocol":"some-invalid-protocol","Address":"","Target":"ks2","Streaming":true,"DefaultLocation":"Local"}`
+	want := `{"Protocol":"some-invalid-protocol","Address":"","Target":"ks2","Streaming":true,"DefaultLocation":"Local","SessionToken":""}`
 
 	json, err := config.toJSON()
 	if err != nil {
@@ -553,7 +553,7 @@ func TestTx(t *testing.T) {
 	c := Configuration{
 		Protocol: "grpc",
 		Address:  testAddress,
-		Target:   "@master",
+		Target:   "@primary",
 	}
 
 	db, err := OpenWithConfiguration(c)
@@ -623,5 +623,105 @@ func TestTxExecStreamingNotAllowed(t *testing.T) {
 	want := "Exec not allowed for streaming connection"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("err: %v, does not contain %s", err, want)
+	}
+}
+
+func TestSessionToken(t *testing.T) {
+	c := Configuration{
+		Protocol: "grpc",
+		Address:  testAddress,
+		Target:   "@primary",
+	}
+
+	ctx := context.Background()
+
+	db, err := OpenWithConfiguration(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	tx, err := db.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	s, err := tx.Prepare("txRequest")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = s.Exec(int64(0))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sessionToken, err := SessionTokenFromTx(ctx, tx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	distributedTxConfig := Configuration{
+		Address:      testAddress,
+		Target:       "@primary",
+		SessionToken: sessionToken,
+	}
+
+	sameTx, sameValidationFunc, err := DistributedTxFromSessionToken(ctx, distributedTxConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	newS, err := sameTx.Prepare("distributedTxRequest")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = newS.Exec(int64(1))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = sameValidationFunc()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// enforce that Rollback can't be called on the distributed tx
+	noRollbackTx, noRollbackValidationFunc, err := DistributedTxFromSessionToken(ctx, distributedTxConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = noRollbackValidationFunc()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = noRollbackTx.Rollback()
+	if err == nil || err.Error() != "calling Rollback from a distributed tx is not allowed" {
+		t.Fatal(err)
+	}
+
+	// enforce that Commit can't be called on the distributed tx
+	noCommitTx, noCommitValidationFunc, err := DistributedTxFromSessionToken(ctx, distributedTxConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = noCommitValidationFunc()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = noCommitTx.Commit()
+	if err == nil || err.Error() != "calling Commit from a distributed tx is not allowed" {
+		t.Fatal(err)
+	}
+
+	// finally commit the original tx
+	err = tx.Commit()
+	if err != nil {
+		t.Fatal(err)
 	}
 }

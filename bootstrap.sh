@@ -27,6 +27,9 @@ BUILD_JAVA=${BUILD_JAVA:-1}
 BUILD_CONSUL=${BUILD_CONSUL:-1}
 BUILD_CHROME=${BUILD_CHROME:-1}
 
+VITESS_RESOURCES_DOWNLOAD_BASE_URL="https://github.com/vitessio/vitess-resources/releases/download"
+VITESS_RESOURCES_RELEASE="v2.0"
+VITESS_RESOURCES_DOWNLOAD_URL="${VITESS_RESOURCES_DOWNLOAD_BASE_URL}/${VITESS_RESOURCES_RELEASE}"
 #
 # 0. Initialization and helper methods.
 #
@@ -38,7 +41,7 @@ BUILD_CHROME=${BUILD_CHROME:-1}
 # If the installation is successful, it puts the installed version string into
 # the $dist/.installed_version file. If the version has not changed, bootstrap
 # will skip future installations.
-function install_dep() {
+install_dep() {
   if [[ $# != 4 ]]; then
     fail "install_dep function requires exactly 4 parameters (and not $#). Parameters: $*"
   fi
@@ -53,7 +56,7 @@ function install_dep() {
     return
   fi
 
-  echo "installing $name $version"
+  echo "<<< Installing $name $version >>>"
 
   # shellcheck disable=SC2064
   trap "fail '$name build failed'; exit 1" ERR
@@ -85,75 +88,108 @@ function install_dep() {
 # We should not use the arch command, since it is not reliably
 # available on macOS or some linuxes:
 # https://www.gnu.org/software/coreutils/manual/html_node/arch-invocation.html
-function get_arch() {
+get_arch() {
   uname -m
 }
 
 # Install protoc.
-function install_protoc() {
+install_protoc() {
   local version="$1"
   local dist="$2"
 
   case $(uname) in
     Linux)  local platform=linux;;
     Darwin) local platform=osx;;
+    *) echo "ERROR: unsupported platform for protoc"; exit 1;;
   esac
 
   case $(get_arch) in
       aarch64)  local target=aarch_64;;
       x86_64)  local target=x86_64;;
-      *)   echo "ERROR: unsupported architecture"; exit 1;;
+      arm64) case "$platform" in
+          osx) local use_homebrew=1;;
+          *) echo "ERROR: unsupported architecture for protoc"; exit 1;;
+      esac;;
+      *)   echo "ERROR: unsupported architecture for protoc"; exit 1;;
   esac
 
-  wget https://github.com/protocolbuffers/protobuf/releases/download/v$version/protoc-$version-$platform-${target}.zip
-  unzip "protoc-$version-$platform-${target}.zip"
+  # TODO (ajm188): remove this branch after protoc includes signed protoc binaries for M1 Macs.
+  if [[ "$use_homebrew" -eq 1 ]]; then
+    cat >&2 <<WARNING
+WARN: Protobuf does not have a protoc binary for arm64 macos.
+Checking for homebrew installation. Altertatively, you may install the x86-64
+version if you have Rosetta installed; your mileage may vary.
+
+See https://github.com/protocolbuffers/protobuf/issues/9397.
+WARNING
+
+    if [[ -z "$(command -v brew)" ]]; then
+      echo "Could not find \`brew\` command. Please install homebrew and retry." >&2;
+      exit 1;
+    fi
+
+    brew install protobuf;
+    protobuf_base="$(brew list protobuf | grep -E 'LICENSE$' | sed 's:/LICENSE$::')"
+    if [[ -z "$protobuf_base" ]]; then
+      echo "Could not find \`protobuf\` directory after installing. Please verify the output of \`brew info protobuf\`" >&2;
+      exit 1;
+    fi
+
+    ln -snf "${protobuf_base}/bin" "${dist}/bin"
+    ln -snf "${protobuf_base}/include" "${dist}/include"
+  else
+    # This is how we'd download directly from source:
+    # wget https://github.com/protocolbuffers/protobuf/releases/download/v$version/protoc-$version-$platform-${target}.zip
+    $VTROOT/tools/wget-retry "${VITESS_RESOURCES_DOWNLOAD_URL}/protoc-$version-$platform-${target}.zip"
+    unzip "protoc-$version-$platform-${target}.zip"
+  fi
+
   ln -snf "$dist/bin/protoc" "$VTROOT/bin/protoc"
 }
-protoc_ver=3.6.1
-install_dep "protoc" "$protoc_ver" "$VTROOT/dist/vt-protoc-$protoc_ver" install_protoc
 
 
 # Install Zookeeper.
-function install_zookeeper() {
+install_zookeeper() {
   local version="$1"
   local dist="$2"
-
   zk="zookeeper-$version"
-  wget "https://apache.org/dist/zookeeper/$zk/$zk.tar.gz"
-  tar -xzf "$zk.tar.gz"
-  ant -f "$zk/build.xml" package
-  ant -f "$zk/zookeeper-contrib/zookeeper-contrib-fatjar/build.xml" jar
-  mkdir -p lib
-  cp "$zk/build/zookeeper-contrib/zookeeper-contrib-fatjar/zookeeper-dev-fatjar.jar" "lib/$zk-fatjar.jar"
-  zip -d "lib/$zk-fatjar.jar" 'META-INF/*.SF' 'META-INF/*.RSA' 'META-INF/*SF' || true # needed for >=3.4.10 <3.5
-  rm -rf "$zk" "$zk.tar.gz"
+  vtzk="vt-zookeeper-$version"
+  # This is how we'd download directly from source:
+  # wget "https://dlcdn.apache.org/zookeeper/$zk/apache-$zk.tar.gz"
+  $VTROOT/tools/wget-retry "${VITESS_RESOURCES_DOWNLOAD_URL}/apache-${zk}.tar.gz"
+  tar -xzf "$dist/apache-$zk.tar.gz"
+  mv $dist/apache-$zk $dist/$vtzk
+  mvn -f $dist/$vtzk/zookeeper-contrib/zookeeper-contrib-fatjar/pom.xml clean install -P fatjar -DskipTests
+  mkdir -p $dist/$vtzk/lib
+  cp "$dist/$vtzk/zookeeper-contrib/zookeeper-contrib-fatjar/target/$zk-fatjar.jar" "$dist/$vtzk/lib/$zk-fatjar.jar"
+  rm -rf "$zk.tar.gz"
 }
 
-zk_ver=${ZK_VERSION:-3.4.14}
-if [ "$BUILD_JAVA" == 1 ] ; then
-  install_dep "Zookeeper" "$zk_ver" "$VTROOT/dist/vt-zookeeper-$zk_ver" install_zookeeper
-fi
 
 # Download and install etcd, link etcd binary into our root.
-function install_etcd() {
+install_etcd() {
   local version="$1"
   local dist="$2"
 
   case $(uname) in
     Linux)  local platform=linux; local ext=tar.gz;;
     Darwin) local platform=darwin; local ext=zip;;
+    *)   echo "ERROR: unsupported platform for etcd"; exit 1;;
   esac
 
   case $(get_arch) in
       aarch64)  local target=arm64;;
       x86_64)  local target=amd64;;
-      *)   echo "ERROR: unsupported architecture"; exit 1;;
+      arm64)  local target=arm64;;
+      *)   echo "ERROR: unsupported architecture for etcd"; exit 1;;
   esac
 
-  download_url=https://github.com/coreos/etcd/releases/download
   file="etcd-${version}-${platform}-${target}.${ext}"
 
-  wget "$download_url/$version/$file"
+  # This is how we'd download directly from source:
+  # download_url=https://github.com/etcd-io/etcd/releases/download
+  # wget "$download_url/$version/$file"
+  $VTROOT/tools/wget-retry "${VITESS_RESOURCES_DOWNLOAD_URL}/${file}"
   if [ "$ext" = "tar.gz" ]; then
     tar xzf "$file"
   else
@@ -163,14 +199,12 @@ function install_etcd() {
   ln -snf "$dist/etcd-${version}-${platform}-${target}/etcd" "$VTROOT/bin/etcd"
   ln -snf "$dist/etcd-${version}-${platform}-${target}/etcdctl" "$VTROOT/bin/etcdctl"
 }
-command -v etcd && echo "etcd already installed" || install_dep "etcd" "v3.3.10" "$VTROOT/dist/etcd" install_etcd
 
 
 # Download and install k3s, link k3s binary into our root
-function install_k3s() {
+install_k3s() {
   local version="$1"
   local dist="$2"
-
   case $(uname) in
     Linux)  local platform=linux;;
     *)   echo "WARNING: unsupported platform. K3s only supports running on Linux, the k8s topology will not be available for local examples."; return;;
@@ -178,48 +212,52 @@ function install_k3s() {
 
   case $(get_arch) in
       aarch64)  local target="-arm64";;
-      x86_64)  local target="";;
+      x86_64) local target="";;
+      arm64)  local target="-arm64";;
       *)   echo "WARNING: unsupported architecture, the k8s topology will not be available for local examples."; return;;
   esac
 
-  download_url=https://github.com/rancher/k3s/releases/download
   file="k3s${target}"
 
   local dest="$dist/k3s${target}-${version}-${platform}"
-  wget -O  $dest "$download_url/$version/$file"
+  # This is how we'd download directly from source:
+  # download_url=https://github.com/rancher/k3s/releases/download
+  # wget -O  $dest "$download_url/$version/$file"
+  $VTROOT/tools/wget-retry -O $dest "${VITESS_RESOURCES_DOWNLOAD_URL}/$file-$version"
   chmod +x $dest
   ln -snf  $dest "$VTROOT/bin/k3s"
 }
-command -v  k3s || install_dep "k3s" "v1.0.0" "$VTROOT/dist/k3s" install_k3s
+
 
 # Download and install consul, link consul binary into our root.
-function install_consul() {
+install_consul() {
   local version="$1"
   local dist="$2"
 
   case $(uname) in
     Linux)  local platform=linux;;
     Darwin) local platform=darwin;;
+    *)   echo "ERROR: unsupported platform for consul"; exit 1;;
   esac
 
   case $(get_arch) in
-      aarch64)  local target=arm64;;
-      x86_64)  local target=amd64;;
-      *)   echo "ERROR: unsupported architecture"; exit 1;;
+    aarch64)  local target=arm64;;
+    x86_64)  local target=amd64;;
+    arm64)  local target=arm64;;
+    *)   echo "ERROR: unsupported architecture for consul"; exit 1;;
   esac
 
-  download_url=https://releases.hashicorp.com/consul
-  wget "${download_url}/${version}/consul_${version}_${platform}_${target}.zip"
+  # This is how we'd download directly from source:
+  # download_url=https://releases.hashicorp.com/consul
+  # wget "${download_url}/${version}/consul_${version}_${platform}_${target}.zip"
+  $VTROOT/tools/wget-retry "${VITESS_RESOURCES_DOWNLOAD_URL}/consul_${version}_${platform}_${target}.zip"
   unzip "consul_${version}_${platform}_${target}.zip"
   ln -snf "$dist/consul" "$VTROOT/bin/consul"
 }
 
-if [ "$BUILD_CONSUL" == 1 ] ; then
-  install_dep "Consul" "1.4.0" "$VTROOT/dist/consul" install_consul
-fi
 
 # Download chromedriver
-function install_chromedriver() {
+install_chromedriver() {
   local version="$1"
   local dist="$2"
 
@@ -231,27 +269,55 @@ function install_chromedriver() {
   if [ "$(arch)" == "aarch64" ] ; then
       os=$(cat /etc/*release | grep "^ID=" | cut -d '=' -f 2)
       case $os in
-          ubuntu|debian)
-              sudo apt-get update -y && sudo apt install -y --no-install-recommends unzip libglib2.0-0 libnss3 libx11-6
-	      ;;
-	  centos|fedora)
-	      sudo yum update -y && yum install -y libX11 unzip wget
-	      ;;
+        ubuntu|debian)
+          sudo apt-get update -y && sudo apt install -y --no-install-recommends unzip libglib2.0-0 libnss3 libx11-6
+        ;;
+        centos|fedora)
+          sudo yum update -y && yum install -y libX11 unzip wget
+        ;;
       esac
       echo "For Arm64, using prebuilt binary from electron (https://github.com/electron/electron/) of version 76.0.3809.126"
-      wget https://github.com/electron/electron/releases/download/v6.0.3/chromedriver-v6.0.3-linux-arm64.zip
+      $VTROOT/tools/wget-retry https://github.com/electron/electron/releases/download/v6.0.3/chromedriver-v6.0.3-linux-arm64.zip
       unzip -o -q chromedriver-v6.0.3-linux-arm64.zip -d "$dist"
       rm chromedriver-v6.0.3-linux-arm64.zip
   else
-      curl -sL "https://chromedriver.storage.googleapis.com/$version/chromedriver_linux64.zip" > chromedriver_linux64.zip
+      $VTROOT/tools/wget-retry "https://chromedriver.storage.googleapis.com/$version/chromedriver_linux64.zip"
       unzip -o -q chromedriver_linux64.zip -d "$dist"
       rm chromedriver_linux64.zip
   fi
 }
 
-if [ "$BUILD_CHROME" == 1 ] ; then
-	install_dep "chromedriver" "73.0.3683.20" "$VTROOT/dist/chromedriver" install_chromedriver
-fi
+install_all() {
+  echo "##local system details..."
+  echo "##platform: $(uname) target:$(get_arch) OS: $os"
+  # protoc
+  protoc_ver=3.19.4
+  install_dep "protoc" "$protoc_ver" "$VTROOT/dist/vt-protoc-$protoc_ver" install_protoc
 
-echo
-echo "bootstrap finished - run 'make build' to compile"
+  # zk
+  zk_ver=${ZK_VERSION:-3.8.0}
+  if [ "$BUILD_JAVA" == 1 ] ; then
+    install_dep "Zookeeper" "$zk_ver" "$VTROOT/dist" install_zookeeper
+  fi
+
+  # etcd
+  command -v etcd && echo "etcd already installed" || install_dep "etcd" "v3.5.3" "$VTROOT/dist/etcd" install_etcd
+
+  # k3s
+  command -v  k3s || install_dep "k3s" "v1.0.0" "$VTROOT/dist/k3s" install_k3s
+
+  # consul
+  if [ "$BUILD_CONSUL" == 1 ] ; then
+    install_dep "Consul" "1.11.4" "$VTROOT/dist/consul" install_consul
+  fi
+
+  # chromedriver
+  if [ "$BUILD_CHROME" == 1 ] ; then
+    install_dep "chromedriver" "90.0.4430.24" "$VTROOT/dist/chromedriver" install_chromedriver
+  fi
+
+  echo
+  echo "bootstrap finished - run 'make build' to compile"
+}
+
+install_all

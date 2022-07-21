@@ -17,16 +17,19 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
 
-	"golang.org/x/net/context"
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/helpers"
+
+	// Include deprecation warnings for soon-to-be-unsupported flag invocations.
+	_flag "vitess.io/vitess/go/internal/flag"
 )
 
 var (
@@ -50,8 +53,8 @@ func main() {
 	defer exit.RecoverAll()
 	defer logutil.Flush()
 
-	flag.Parse()
-	args := flag.Args()
+	_flag.Parse()
+	args := _flag.Args()
 	if len(args) != 0 {
 		flag.Usage()
 		log.Exitf("topo2topo doesn't take any parameter.")

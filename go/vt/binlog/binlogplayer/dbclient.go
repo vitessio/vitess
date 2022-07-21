@@ -74,7 +74,7 @@ func (dc *dbClientImpl) Connect() error {
 func (dc *dbClientImpl) Begin() error {
 	_, err := dc.dbConn.ExecuteFetch("begin", 1, false)
 	if err != nil {
-		log.Errorf("BEGIN failed w/ error %v", err)
+		LogError("BEGIN failed w/ error", err)
 		dc.handleError(err)
 	}
 	return err
@@ -83,7 +83,7 @@ func (dc *dbClientImpl) Begin() error {
 func (dc *dbClientImpl) Commit() error {
 	_, err := dc.dbConn.ExecuteFetch("commit", 1, false)
 	if err != nil {
-		log.Errorf("COMMIT failed w/ error %v", err)
+		LogError("COMMIT failed w/ error", err)
 		dc.dbConn.Close()
 	}
 	return err
@@ -92,7 +92,7 @@ func (dc *dbClientImpl) Commit() error {
 func (dc *dbClientImpl) Rollback() error {
 	_, err := dc.dbConn.ExecuteFetch("rollback", 1, false)
 	if err != nil {
-		log.Errorf("ROLLBACK failed w/ error %v", err)
+		LogError("ROLLBACK failed w/ error", err)
 		dc.dbConn.Close()
 	}
 	return err
@@ -102,10 +102,22 @@ func (dc *dbClientImpl) Close() {
 	dc.dbConn.Close()
 }
 
+// LogError logs a message after truncating it to avoid spamming logs
+func LogError(msg string, err error) {
+	log.Errorf("%s: %s", msg, MessageTruncate(err.Error()))
+}
+
+// LimitString truncates string to specified size
+func LimitString(s string, limit int) string {
+	if len(s) > limit {
+		return s[:limit]
+	}
+	return s
+}
+
 func (dc *dbClientImpl) ExecuteFetch(query string, maxrows int) (*sqltypes.Result, error) {
 	mqr, err := dc.dbConn.ExecuteFetch(query, maxrows, true)
 	if err != nil {
-		log.Errorf("ExecuteFetch failed w/ error %v", err)
 		dc.handleError(err)
 		return nil, err
 	}

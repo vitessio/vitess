@@ -23,7 +23,7 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -79,7 +79,7 @@ func TestCreateShardMultiUnsharded(t *testing.T) {
 	if si, err := ts.GetShard(ctx, keyspace, shard0); err != nil {
 		t.Fatalf("GetShard(shard0) failed: %v", err)
 	} else {
-		if !si.IsMasterServing {
+		if !si.IsPrimaryServing {
 			t.Fatalf("shard0 should have all 3 served types")
 		}
 	}
@@ -92,7 +92,7 @@ func TestCreateShardMultiUnsharded(t *testing.T) {
 	if si, err := ts.GetShard(ctx, keyspace, shard1); err != nil {
 		t.Fatalf("GetShard(shard1) failed: %v", err)
 	} else {
-		if si.IsMasterServing {
+		if si.IsPrimaryServing {
 			t.Fatalf("shard1 should have all 3 served types")
 		}
 	}

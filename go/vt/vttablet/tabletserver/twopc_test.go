@@ -24,7 +24,7 @@ import (
 
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/sqltypes"
 
@@ -391,7 +391,7 @@ func TestReadAllTransactions(t *testing.T) {
 	}
 }
 
-func jsonStr(v interface{}) string {
+func jsonStr(v any) string {
 	out, _ := json.Marshal(v)
 	return string(out)
 }

@@ -22,11 +22,10 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
@@ -113,7 +112,7 @@ type FileBackupStorage struct{}
 func (fbs *FileBackupStorage) ListBackups(ctx context.Context, dir string) ([]backupstorage.BackupHandle, error) {
 	// ReadDir already sorts the results
 	p := path.Join(*FileBackupStorageRoot, dir)
-	fi, err := ioutil.ReadDir(p)
+	fi, err := os.ReadDir(p)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, nil

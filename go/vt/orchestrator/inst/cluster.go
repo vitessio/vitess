@@ -17,50 +17,11 @@
 package inst
 
 import (
-	"fmt"
 	"regexp"
 	"strings"
 
 	"vitess.io/vitess/go/vt/orchestrator/config"
-	"vitess.io/vitess/go/vt/orchestrator/kv"
 )
-
-func GetClusterMasterKVKey(clusterAlias string) string {
-	return fmt.Sprintf("%s%s", config.Config.KVClusterMasterPrefix, clusterAlias)
-}
-
-func getClusterMasterKVPair(clusterAlias string, masterKey *InstanceKey) *kv.KVPair {
-	if clusterAlias == "" {
-		return nil
-	}
-	if masterKey == nil {
-		return nil
-	}
-	return kv.NewKVPair(GetClusterMasterKVKey(clusterAlias), masterKey.StringCode())
-}
-
-// GetClusterMasterKVPairs returns all KV pairs associated with a master. This includes the
-// full identity of the master as well as a breakdown by hostname, port, ipv4, ipv6
-func GetClusterMasterKVPairs(clusterAlias string, masterKey *InstanceKey) (kvPairs [](*kv.KVPair)) {
-	masterKVPair := getClusterMasterKVPair(clusterAlias, masterKey)
-	if masterKVPair == nil {
-		return kvPairs
-	}
-	kvPairs = append(kvPairs, masterKVPair)
-
-	addPair := func(keySuffix, value string) {
-		key := fmt.Sprintf("%s/%s", masterKVPair.Key, keySuffix)
-		kvPairs = append(kvPairs, kv.NewKVPair(key, value))
-	}
-
-	addPair("hostname", masterKey.Hostname)
-	addPair("port", fmt.Sprintf("%d", masterKey.Port))
-	if ipv4, ipv6, err := readHostnameIPs(masterKey.Hostname); err == nil {
-		addPair("ipv4", ipv4)
-		addPair("ipv6", ipv6)
-	}
-	return kvPairs
-}
 
 // mappedClusterNameToAlias attempts to match a cluster with an alias based on
 // configured ClusterNameToAlias map
@@ -79,45 +40,45 @@ func mappedClusterNameToAlias(clusterName string) string {
 
 // ClusterInfo makes for a cluster status/info summary
 type ClusterInfo struct {
-	ClusterName                            string
-	ClusterAlias                           string // Human friendly alias
-	ClusterDomain                          string // CNAME/VIP/A-record/whatever of the master of this cluster
-	CountInstances                         uint
-	HeuristicLag                           int64
-	HasAutomatedMasterRecovery             bool
-	HasAutomatedIntermediateMasterRecovery bool
+	ClusterName                             string
+	ClusterAlias                            string // Human friendly alias
+	ClusterDomain                           string // CNAME/VIP/A-record/whatever of the primary of this cluster
+	CountInstances                          uint
+	HeuristicLag                            int64
+	HasAutomatedPrimaryRecovery             bool
+	HasAutomatedIntermediatePrimaryRecovery bool
 }
 
 // ReadRecoveryInfo
-func (this *ClusterInfo) ReadRecoveryInfo() {
-	this.HasAutomatedMasterRecovery = this.filtersMatchCluster(config.Config.RecoverMasterClusterFilters)
-	this.HasAutomatedIntermediateMasterRecovery = this.filtersMatchCluster(config.Config.RecoverIntermediateMasterClusterFilters)
+func (clusterInfo *ClusterInfo) ReadRecoveryInfo() {
+	clusterInfo.HasAutomatedPrimaryRecovery = clusterInfo.filtersMatchCluster(config.Config.RecoverPrimaryClusterFilters)
+	clusterInfo.HasAutomatedIntermediatePrimaryRecovery = clusterInfo.filtersMatchCluster(config.Config.RecoverIntermediatePrimaryClusterFilters)
 }
 
 // filtersMatchCluster will see whether the given filters match the given cluster details
-func (this *ClusterInfo) filtersMatchCluster(filters []string) bool {
+func (clusterInfo *ClusterInfo) filtersMatchCluster(filters []string) bool {
 	for _, filter := range filters {
-		if filter == this.ClusterName {
+		if filter == clusterInfo.ClusterName {
 			return true
 		}
-		if filter == this.ClusterAlias {
+		if filter == clusterInfo.ClusterAlias {
 			return true
 		}
 		if strings.HasPrefix(filter, "alias=") {
 			// Match by exact cluster alias name
 			alias := strings.SplitN(filter, "=", 2)[1]
-			if alias == this.ClusterAlias {
+			if alias == clusterInfo.ClusterAlias {
 				return true
 			}
 		} else if strings.HasPrefix(filter, "alias~=") {
 			// Match by cluster alias regex
 			aliasPattern := strings.SplitN(filter, "~=", 2)[1]
-			if matched, _ := regexp.MatchString(aliasPattern, this.ClusterAlias); matched {
+			if matched, _ := regexp.MatchString(aliasPattern, clusterInfo.ClusterAlias); matched {
 				return true
 			}
 		} else if filter == "*" {
 			return true
-		} else if matched, _ := regexp.MatchString(filter, this.ClusterName); matched && filter != "" {
+		} else if matched, _ := regexp.MatchString(filter, clusterInfo.ClusterName); matched && filter != "" {
 			return true
 		}
 	}
@@ -125,12 +86,12 @@ func (this *ClusterInfo) filtersMatchCluster(filters []string) bool {
 }
 
 // ApplyClusterAlias updates the given clusterInfo's ClusterAlias property
-func (this *ClusterInfo) ApplyClusterAlias() {
-	if this.ClusterAlias != "" && this.ClusterAlias != this.ClusterName {
+func (clusterInfo *ClusterInfo) ApplyClusterAlias() {
+	if clusterInfo.ClusterAlias != "" && clusterInfo.ClusterAlias != clusterInfo.ClusterName {
 		// Already has an alias; abort
 		return
 	}
-	if alias := mappedClusterNameToAlias(this.ClusterName); alias != "" {
-		this.ClusterAlias = alias
+	if alias := mappedClusterNameToAlias(clusterInfo.ClusterName); alias != "" {
+		clusterInfo.ClusterAlias = alias
 	}
 }

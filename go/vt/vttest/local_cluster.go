@@ -21,8 +21,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
@@ -30,7 +30,12 @@ import (
 	"strings"
 	"unicode"
 
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/encoding/prototext"
+	"google.golang.org/protobuf/proto"
+
 	"vitess.io/vitess/go/vt/proto/logutil"
+
 	// we need to import the grpcvtctlclient library so the gRPC
 	// vtctl client is registered and can be used.
 	_ "vitess.io/vitess/go/vt/vtctl/grpcvtctlclient"
@@ -80,6 +85,13 @@ type Config struct {
 	// Charset is the default charset used by MySQL
 	Charset string
 
+	// PlannerVersion is the planner version to use for the vtgate.
+	// Choose between V3, Gen4, Gen4Greedy and Gen4Fallback
+	PlannerVersion string
+
+	// PlannerVersionDeprecated is deprecated and should not be used
+	PlannerVersionDeprecated string
+
 	// ExtraMyCnf are the extra .CNF files to be added to the MySQL config
 	ExtraMyCnf []string
 
@@ -88,6 +100,14 @@ type Config struct {
 	// not be started.
 	OnlyMySQL bool
 
+	// PersistentMode can be set so that MySQL data directory is not cleaned up
+	// when LocalCluster.TearDown() is called. This is useful for running
+	// vttestserver as a database container in local developer environments. Note
+	// that db and vschema migration files (-schema_dir option) and seeding of
+	// random data (-initialize_with_random_data option) will only run during
+	// cluster startup if the data directory does not already exist.
+	PersistentMode bool
+
 	// MySQL protocol bind address.
 	// vtcombo will bind to this address when exposing the mysql protocol socket
 	MySQLBindHost string
@@ -95,6 +115,9 @@ type Config struct {
 	// initialize the mysqld instance in the cluster. Note that some environments
 	// do not suppport initialization through snapshot files.
 	SnapshotFile string
+
+	// Enable system settings to be changed per session at the database connection level
+	EnableSystemSettings bool
 
 	// TransactionMode is SINGLE, MULTI or TWOPC
 	TransactionMode string
@@ -109,6 +132,22 @@ type Config struct {
 
 	// Authorize vschema ddl operations to a list of users
 	VSchemaDDLAuthorizedUsers string
+
+	// How to handle foreign key constraint in CREATE/ALTER TABLE.  Valid values are "allow", "disallow"
+	ForeignKeyMode string
+
+	// Allow users to submit, view, and control Online DDL
+	EnableOnlineDDL bool
+
+	// Allow users to submit direct DDL statements
+	EnableDirectDDL bool
+
+	// Allow users to start a local cluster using a remote topo server
+	ExternalTopoImplementation string
+
+	ExternalTopoGlobalServerAddress string
+
+	ExternalTopoGlobalRoot string
 }
 
 // InitSchemas is a shortcut for tests that just want to setup a single
@@ -122,7 +161,7 @@ func (cfg *Config) InitSchemas(keyspace, schema string, vschema *vschemapb.Keysp
 	}
 
 	// Create a base temporary directory.
-	tempSchemaDir, err := ioutil.TempDir("", "vttest")
+	tempSchemaDir, err := os.MkdirTemp("", "vttest")
 	if err != nil {
 		return err
 	}
@@ -135,7 +174,7 @@ func (cfg *Config) InitSchemas(keyspace, schema string, vschema *vschemapb.Keysp
 			return err
 		}
 		fileName := path.Join(ksDir, "schema.sql")
-		err = ioutil.WriteFile(fileName, []byte(schema), 0666)
+		err = os.WriteFile(fileName, []byte(schema), 0666)
 		if err != nil {
 			return err
 		}
@@ -148,7 +187,7 @@ func (cfg *Config) InitSchemas(keyspace, schema string, vschema *vschemapb.Keysp
 		if err != nil {
 			return err
 		}
-		if err := ioutil.WriteFile(vschemaFilePath, vschemaJSON, 0644); err != nil {
+		if err := os.WriteFile(vschemaFilePath, vschemaJSON, 0644); err != nil {
 			return err
 		}
 	}
@@ -165,6 +204,33 @@ func (cfg *Config) DbName() string {
 		return ns[0].Name
 	}
 	return ""
+}
+
+type TopoData struct {
+	vtTestTopology *vttestpb.VTTestTopology
+	unmarshal      func(b []byte, m proto.Message) error
+}
+
+func (td *TopoData) String() string {
+	return prototext.Format(td.vtTestTopology)
+}
+
+func (td *TopoData) Set(value string) error {
+	return td.unmarshal([]byte(value), td.vtTestTopology)
+}
+
+func TextTopoData(tpb *vttestpb.VTTestTopology) flag.Value {
+	return &TopoData{
+		vtTestTopology: tpb,
+		unmarshal:      prototext.Unmarshal,
+	}
+}
+
+func JSONTopoData(tpb *vttestpb.VTTestTopology) flag.Value {
+	return &TopoData{
+		vtTestTopology: tpb,
+		unmarshal:      protojson.Unmarshal,
+	}
 }
 
 // LocalCluster controls a local Vitess setup for testing, containing
@@ -184,6 +250,7 @@ type LocalCluster struct {
 	Env Environment
 
 	mysql MySQLManager
+	topo  TopoManager
 	vt    *VtProcess
 }
 
@@ -192,7 +259,9 @@ type LocalCluster struct {
 // This connection should be used for debug/introspection purposes; normal
 // cluster access should be performed through the vtgate port.
 func (db *LocalCluster) MySQLConnParams() mysql.ConnParams {
-	return db.mysql.Params(db.DbName())
+	connParams := db.mysql.Params(db.DbName())
+	connParams.Charset = db.Config.Charset
+	return connParams
 }
 
 // MySQLAppDebugConnParams returns a mysql.ConnParams struct that can be used
@@ -221,44 +290,78 @@ func (db *LocalCluster) Setup() error {
 
 	log.Infof("LocalCluster environment: %+v", db.Env)
 
+	// Set up topo manager if we are using a remote topo server
+	if db.ExternalTopoImplementation != "" {
+		db.topo = db.Env.TopoManager(db.ExternalTopoImplementation, db.ExternalTopoGlobalServerAddress, db.ExternalTopoGlobalRoot, db.Topology)
+		log.Infof("Initializing Topo Manager: %+v", db.topo)
+		if err := db.topo.Setup(); err != nil {
+			log.Errorf("Failed to set up Topo Manager: %v", err)
+			return err
+		}
+	}
+
 	db.mysql, err = db.Env.MySQLManager(db.ExtraMyCnf, db.SnapshotFile)
 	if err != nil {
 		return err
 	}
 
-	log.Infof("Initializing MySQL Manager (%T)...", db.mysql)
+	initializing := true
+	if db.PersistentMode && dirExist(db.mysql.TabletDir()) {
+		initializing = false
+	}
 
-	if err := db.mysql.Setup(); err != nil {
-		log.Errorf("Mysqlctl failed to start: %s", err)
-		if err, ok := err.(*exec.ExitError); ok {
-			log.Errorf("stderr: %s", err.Stderr)
+	if initializing {
+		log.Infof("Initializing MySQL Manager (%T)...", db.mysql)
+		if err := db.mysql.Setup(); err != nil {
+			log.Errorf("Mysqlctl failed to start: %s", err)
+			if err, ok := err.(*exec.ExitError); ok {
+				log.Errorf("stderr: %s", err.Stderr)
+			}
+			return err
 		}
-		return err
+
+		if err := db.createDatabases(); err != nil {
+			return err
+		}
+	} else {
+		log.Infof("Starting MySQL Manager (%T)...", db.mysql)
+		if err := db.mysql.Start(); err != nil {
+			log.Errorf("Mysqlctl failed to start: %s", err)
+			if err, ok := err.(*exec.ExitError); ok {
+				log.Errorf("stderr: %s", err.Stderr)
+			}
+			return err
+		}
 	}
 
 	mycfg, _ := json.Marshal(db.mysql.Params(""))
 	log.Infof("MySQL up: %s", mycfg)
 
-	if err := db.createDatabases(); err != nil {
-		return err
-	}
-
 	if !db.OnlyMySQL {
 		log.Infof("Starting vtcombo...")
-		db.vt = VtcomboProcess(db.Env, &db.Config, db.mysql)
+		db.vt, _ = VtcomboProcess(db.Env, &db.Config, db.mysql)
 		if err := db.vt.WaitStart(); err != nil {
 			return err
 		}
 		log.Infof("vtcombo up: %s", db.vt.Address())
 	}
 
-	// Load schema will apply db and vschema migrations. Running after vtcombo starts to be able to apply vschema migrations
-	if err := db.loadSchema(); err != nil {
-		return err
-	}
+	if initializing {
+		log.Info("Mysql data directory does not exist. Initializing cluster with database and vschema migrations...")
+		// Load schema will apply db and vschema migrations. Running after vtcombo starts to be able to apply vschema migrations
+		if err := db.loadSchema(true); err != nil {
+			return err
+		}
 
-	if db.Seed != nil {
-		if err := db.populateWithRandomData(); err != nil {
+		if db.Seed != nil {
+			log.Info("Populating database with random data...")
+			if err := db.populateWithRandomData(); err != nil {
+				return err
+			}
+		}
+	} else {
+		log.Info("Mysql data directory exists in persistent mode. Will only execute vschema migrations during startup")
+		if err := db.loadSchema(false); err != nil {
 			return err
 		}
 	}
@@ -288,8 +391,10 @@ func (db *LocalCluster) TearDown() error {
 		}
 	}
 
-	if err := db.Env.TearDown(); err != nil {
-		errors = append(errors, fmt.Sprintf("environment: %s", err))
+	if !db.PersistentMode {
+		if err := db.Env.TearDown(); err != nil {
+			errors = append(errors, fmt.Sprintf("environment: %s", err))
+		}
 	}
 
 	if len(errors) > 0 {
@@ -317,7 +422,7 @@ func isDir(path string) bool {
 }
 
 // loadSchema applies sql and vschema migrations respectively for each keyspace in the topology
-func (db *LocalCluster) loadSchema() error {
+func (db *LocalCluster) loadSchema(shouldRunDatabaseMigrations bool) error {
 	if db.SchemaDir == "" {
 		return nil
 	}
@@ -357,6 +462,10 @@ func (db *LocalCluster) loadSchema() error {
 				if err = db.applyVschema(keyspace, cmds[0]); err != nil {
 					return err
 				}
+				continue
+			}
+
+			if !shouldRunDatabaseMigrations {
 				continue
 			}
 
@@ -437,12 +546,12 @@ func (db *LocalCluster) Query(sql, dbname string, limit int) (*sqltypes.Result, 
 // JSONConfig returns a key/value object with the configuration
 // settings for the local cluster. It should be serialized with
 // `json.Marshal`
-func (db *LocalCluster) JSONConfig() interface{} {
+func (db *LocalCluster) JSONConfig() any {
 	if db.OnlyMySQL {
 		return db.mysql.Params("")
 	}
 
-	config := map[string]interface{}{
+	config := map[string]any{
 		"port":               db.vt.Port,
 		"socket":             db.mysql.UnixSocket(),
 		"vtcombo_mysql_port": db.Env.PortForProtocol("vtcombo_mysql_port", ""),
@@ -463,7 +572,7 @@ func (db *LocalCluster) GrpcPort() int {
 
 func (db *LocalCluster) applyVschema(keyspace string, migration string) error {
 	server := fmt.Sprintf("localhost:%v", db.vt.PortGrpc)
-	args := []string{"ApplyVSchema", "-sql", migration, keyspace}
+	args := []string{"ApplyVSchema", "--sql", migration, keyspace}
 	fmt.Printf("Applying vschema %v", args)
 	err := vtctlclient.RunCommandAndWait(context.Background(), server, args, func(e *logutil.Event) {
 		log.Info(e)
@@ -474,7 +583,7 @@ func (db *LocalCluster) applyVschema(keyspace string, migration string) error {
 
 func (db *LocalCluster) reloadSchemaKeyspace(keyspace string) error {
 	server := fmt.Sprintf("localhost:%v", db.vt.PortGrpc)
-	args := []string{"ReloadSchemaKeyspace", "-include_master=true", keyspace}
+	args := []string{"ReloadSchemaKeyspace", "--include_primary=true", keyspace}
 	fmt.Printf("Reloading keyspace schema %v", args)
 
 	err := vtctlclient.RunCommandAndWait(context.Background(), server, args, func(e *logutil.Event) {
@@ -482,6 +591,14 @@ func (db *LocalCluster) reloadSchemaKeyspace(keyspace string) error {
 	})
 
 	return err
+}
+
+func dirExist(dir string) bool {
+	exist := true
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		exist = false
+	}
+	return exist
 }
 
 // LoadSQLFile loads a parses a .sql file from disk, removing all the

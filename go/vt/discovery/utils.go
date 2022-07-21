@@ -16,24 +16,45 @@ limitations under the License.
 
 package discovery
 
+import (
+	"strings"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo/topoproto"
+)
+
 // This file contains helper filter methods to process the unfiltered list of
-// tablets returned by LegacyHealthCheck.GetTabletStatsFrom*.
-// See also legacy_replicationlag.go for a more sophisicated filter used by vtgate.
+// tablets returned by HealthCheckImpl.GetTabletHealth*.
+
+func TabletHealthReferenceListToValue(thl []*TabletHealth) []TabletHealth {
+	newTh := []TabletHealth{}
+	for _, th := range thl {
+		newTh = append(newTh, *th)
+	}
+	return newTh
+}
 
 // RemoveUnhealthyTablets filters all unhealthy tablets out.
 // NOTE: Non-serving tablets are considered healthy.
-func RemoveUnhealthyTablets(tabletStatsList []LegacyTabletStats) []LegacyTabletStats {
-	result := make([]LegacyTabletStats, 0, len(tabletStatsList))
+func RemoveUnhealthyTablets(tabletStatsList []TabletHealth) []TabletHealth {
+	result := make([]TabletHealth, 0, len(tabletStatsList))
 	for _, ts := range tabletStatsList {
 		// Note we do not check the 'Serving' flag here.
-		// This is mainly to avoid the case where we run a vtworker Diff between a
-		// source and destination, and the source is not serving (disabled by
-		// TabletControl). When we switch the tablet to 'worker', it will
-		// go back to serving state.
-		if ts.Stats == nil || ts.Stats.HealthError != "" || ts.LastError != nil || LegacyIsReplicationLagHigh(&ts) {
+		if ts.LastError != nil || ts.Stats != nil && (ts.Stats.HealthError != "" || IsReplicationLagHigh(&ts)) {
 			continue
 		}
 		result = append(result, ts)
 	}
 	return result
+}
+
+func ParseTabletTypesAndOrder(tabletTypesStr string) ([]topodatapb.TabletType, bool, error) {
+	inOrder := false
+	if strings.HasPrefix(tabletTypesStr, inOrderHint) {
+		inOrder = true
+		tabletTypesStr = tabletTypesStr[len(inOrderHint):]
+	}
+	tabletTypes, err := topoproto.ParseTabletTypes(tabletTypesStr)
+
+	return tabletTypes, inOrder, err
 }

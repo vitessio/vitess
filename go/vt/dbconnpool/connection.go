@@ -53,7 +53,7 @@ func (dbc *DBConnection) ExecuteFetch(query string, maxrows int, wantfields bool
 }
 
 // ExecuteStreamFetch overwrites mysql.Conn.ExecuteStreamFetch.
-func (dbc *DBConnection) ExecuteStreamFetch(query string, callback func(*sqltypes.Result) error, streamBufferSize int) error {
+func (dbc *DBConnection) ExecuteStreamFetch(query string, callback func(*sqltypes.Result) error, alloc func() *sqltypes.Result, streamBufferSize int) error {
 
 	err := dbc.Conn.ExecuteStreamFetch(query)
 	if err != nil {
@@ -74,10 +74,10 @@ func (dbc *DBConnection) ExecuteStreamFetch(query string, callback func(*sqltype
 
 	// then get all the rows, sending them as we reach a decent packet size
 	// start with a pre-allocated array of 256 rows capacity
-	qr := &sqltypes.Result{Rows: make([][]sqltypes.Value, 0, 256)}
+	qr := alloc()
 	byteCount := 0
 	for {
-		row, err := dbc.FetchNext()
+		row, err := dbc.FetchNext(nil)
 		if err != nil {
 			dbc.handleError(err)
 			return err
@@ -95,9 +95,8 @@ func (dbc *DBConnection) ExecuteStreamFetch(query string, callback func(*sqltype
 			if err != nil {
 				return err
 			}
-			// empty the rows so we start over, but we keep the
-			// same capacity
-			qr.Rows = qr.Rows[:0]
+
+			qr = alloc()
 			byteCount = 0
 		}
 	}

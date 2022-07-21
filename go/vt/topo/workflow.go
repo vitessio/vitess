@@ -19,8 +19,9 @@ package topo
 import (
 	"path"
 
-	"github.com/golang/protobuf/proto"
-	"golang.org/x/net/context"
+	"context"
+
+	"google.golang.org/protobuf/proto"
 
 	workflowpb "vitess.io/vitess/go/vt/proto/workflow"
 )

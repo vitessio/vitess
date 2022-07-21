@@ -1,0 +1,20 @@
+{
+    "ks1": {
+        "sharded": true,
+        "vindexes": {
+            "xxhash": {
+                "type": "xxhash"
+            }
+        },
+        "tables": {
+            "t1": {
+                "columnVindexes": [
+                    {
+                        "column": "c1",
+                        "name": "xxhash"
+                    }
+                ]
+            }
+        }
+    }
+}

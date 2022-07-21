@@ -20,7 +20,7 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
 )
 
 type testConn struct {
@@ -43,7 +43,7 @@ func (tc *testConn) IsKilled() bool {
 }
 
 func TestQueryList(t *testing.T) {
-	ql := NewQueryList()
+	ql := NewQueryList("test")
 	connID := int64(1)
 	qd := NewQueryDetail(context.Background(), &testConn{id: connID})
 	ql.Add(qd)
@@ -56,7 +56,7 @@ func TestQueryList(t *testing.T) {
 	qd2 := NewQueryDetail(context.Background(), &testConn{id: conn2ID})
 	ql.Add(qd2)
 
-	rows := ql.GetQueryzRows()
+	rows := ql.AppendQueryzRows(nil)
 	if len(rows) != 2 || rows[0].ConnID != 1 || rows[1].ConnID != 2 {
 		t.Errorf("wrong rows returned %v", rows)
 	}

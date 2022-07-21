@@ -5,17 +5,15 @@ This document contains the summary of the commands to be run.
 
 
 ```
-# Edit main_vschema.json and set region_map to full path of countries.json file
+# Edit main_vschema_sharded.json and set region_map to full path of countries.json file
 # Example:
 	    "region_map": "/home/user/vitess/examples/region_sharding/countries.json",
 
+# setup environment and aliases
+source env.sh
 
 # Bring up initial cluster and main keyspace (unsharded)
 ./101_initial_cluster.sh
-
-# setup aliases
-alias mysql="command mysql -h 127.0.0.1 -P 15306"
-alias vtctlclient="command vtctlclient -server localhost:15999 -log_dir ${VTDATAROOT}/tmp -alsologtostderr"
 
 # Insert and verify data
 mysql < insert_customers.sql

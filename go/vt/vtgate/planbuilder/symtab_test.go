@@ -16,9 +16,18 @@ limitations under the License.
 
 package planbuilder
 
+import (
+	"testing"
+
+	"github.com/stretchr/testify/require"
+
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/sqlparser"
+)
+
 /*
 func TestSymtabAddVSchemaTable(t *testing.T) {
-	tname := sqlparser.TableName{Name: sqlparser.NewTableIdent("t")}
+	tname := sqlparser.TableName{Name: sqlparser.NewIdentifierCS("t")}
 	rb := &route{}
 
 	null, _ := vindexes.CreateVindex("null", "null", nil)
@@ -32,9 +41,9 @@ func TestSymtabAddVSchemaTable(t *testing.T) {
 		// Single table.
 		in: &vindexes.Table{
 			Columns: []vindexes.Column{{
-				Name: sqlparser.NewColIdent("C1"),
+				Name: sqlparser.NewIdentifierCI("C1"),
 			}, {
-				Name: sqlparser.NewColIdent("C2"),
+				Name: sqlparser.NewIdentifierCI("C2"),
 			}},
 		},
 		authoritative: false,
@@ -43,13 +52,13 @@ func TestSymtabAddVSchemaTable(t *testing.T) {
 		// Column vindex specified.
 		in: &vindexes.Table{
 			ColumnVindexes: []*vindexes.ColumnVindex{{
-				Columns: []sqlparser.ColIdent{sqlparser.NewColIdent("C1")},
+				Columns: []sqlparser.IdentifierCI{sqlparser.NewIdentifierCI("C1")},
 				Vindex:  null,
 			}},
 			Columns: []vindexes.Column{{
-				Name: sqlparser.NewColIdent("C1"),
+				Name: sqlparser.NewIdentifierCI("C1"),
 			}, {
-				Name: sqlparser.NewColIdent("C2"),
+				Name: sqlparser.NewIdentifierCI("C2"),
 			}},
 		},
 		authoritative: false,
@@ -58,16 +67,16 @@ func TestSymtabAddVSchemaTable(t *testing.T) {
 		// Multi-column vindex.
 		in: &vindexes.Table{
 			ColumnVindexes: []*vindexes.ColumnVindex{{
-				Columns: []sqlparser.ColIdent{
-					sqlparser.NewColIdent("C1"),
-					sqlparser.NewColIdent("C2"),
+				Columns: []sqlparser.IdentifierCI{
+					sqlparser.NewIdentifierCI("C1"),
+					sqlparser.NewIdentifierCI("C2"),
 				},
 				Vindex: null,
 			}},
 			Columns: []vindexes.Column{{
-				Name: sqlparser.NewColIdent("C1"),
+				Name: sqlparser.NewIdentifierCI("C1"),
 			}, {
-				Name: sqlparser.NewColIdent("C2"),
+				Name: sqlparser.NewIdentifierCI("C2"),
 			}},
 		},
 		authoritative: false,
@@ -76,12 +85,12 @@ func TestSymtabAddVSchemaTable(t *testing.T) {
 		// AutoIncrement.
 		in: &vindexes.Table{
 			AutoIncrement: &vindexes.AutoIncrement{
-				Column: sqlparser.NewColIdent("C1"),
+				Column: sqlparser.NewIdentifierCI("C1"),
 			},
 			Columns: []vindexes.Column{{
-				Name: sqlparser.NewColIdent("C1"),
+				Name: sqlparser.NewIdentifierCI("C1"),
 			}, {
-				Name: sqlparser.NewColIdent("C2"),
+				Name: sqlparser.NewIdentifierCI("C2"),
 			}},
 		},
 		authoritative: false,
@@ -90,11 +99,11 @@ func TestSymtabAddVSchemaTable(t *testing.T) {
 		// Column vindex specifies a column not in list.
 		in: &vindexes.Table{
 			ColumnVindexes: []*vindexes.ColumnVindex{{
-				Columns: []sqlparser.ColIdent{sqlparser.NewColIdent("C1")},
+				Columns: []sqlparser.IdentifierCI{sqlparser.NewIdentifierCI("C1")},
 				Vindex:  null,
 			}},
 			Columns: []vindexes.Column{{
-				Name: sqlparser.NewColIdent("C2"),
+				Name: sqlparser.NewIdentifierCI("C2"),
 			}},
 		},
 		authoritative: false,
@@ -103,9 +112,9 @@ func TestSymtabAddVSchemaTable(t *testing.T) {
 		// Column vindex specifies columns with none in list.
 		in: &vindexes.Table{
 			ColumnVindexes: []*vindexes.ColumnVindex{{
-				Columns: []sqlparser.ColIdent{
-					sqlparser.NewColIdent("C1"),
-					sqlparser.NewColIdent("C2"),
+				Columns: []sqlparser.IdentifierCI{
+					sqlparser.NewIdentifierCI("C1"),
+					sqlparser.NewIdentifierCI("C2"),
 				},
 				Vindex: null,
 			}},
@@ -116,10 +125,10 @@ func TestSymtabAddVSchemaTable(t *testing.T) {
 		// AutoIncrement specifies a column not in list.
 		in: &vindexes.Table{
 			AutoIncrement: &vindexes.AutoIncrement{
-				Column: sqlparser.NewColIdent("C1"),
+				Column: sqlparser.NewIdentifierCI("C1"),
 			},
 			Columns: []vindexes.Column{{
-				Name: sqlparser.NewColIdent("C2"),
+				Name: sqlparser.NewIdentifierCI("C2"),
 			}},
 		},
 		authoritative: false,
@@ -128,13 +137,13 @@ func TestSymtabAddVSchemaTable(t *testing.T) {
 		// Two column vindexes.
 		in: &vindexes.Table{
 			ColumnVindexes: []*vindexes.ColumnVindex{{
-				Columns: []sqlparser.ColIdent{
-					sqlparser.NewColIdent("C1"),
+				Columns: []sqlparser.IdentifierCI{
+					sqlparser.NewIdentifierCI("C1"),
 				},
 				Vindex: null,
 			}, {
-				Columns: []sqlparser.ColIdent{
-					sqlparser.NewColIdent("C2"),
+				Columns: []sqlparser.IdentifierCI{
+					sqlparser.NewIdentifierCI("C2"),
 				},
 				Vindex: null,
 			}},
@@ -178,3 +187,41 @@ func TestSymtabAddVSchemaTable(t *testing.T) {
 	}
 }
 */
+
+func TestGetReturnType(t *testing.T) {
+	tests := []struct {
+		input       sqlparser.Expr
+		output      querypb.Type
+		expectedErr error
+	}{{
+		input: &sqlparser.FuncExpr{Name: sqlparser.NewIdentifierCI("Abs"), Exprs: sqlparser.SelectExprs{
+			&sqlparser.AliasedExpr{
+				Expr: &sqlparser.ColName{
+					Name: sqlparser.NewIdentifierCI("A"),
+					Metadata: &column{
+						typ: querypb.Type_DECIMAL,
+					},
+				},
+			},
+		}},
+		output: querypb.Type_DECIMAL,
+	}, {
+		input:  &sqlparser.Count{},
+		output: querypb.Type_INT64,
+	}, {
+		input:  &sqlparser.CountStar{},
+		output: querypb.Type_INT64,
+	}}
+
+	for _, test := range tests {
+		t.Run(sqlparser.String(test.input), func(t *testing.T) {
+			got, err := GetReturnType(test.input)
+			if test.expectedErr != nil {
+				require.EqualError(t, err, test.expectedErr.Error())
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, test.output, got)
+			}
+		})
+	}
+}

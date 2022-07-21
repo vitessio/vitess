@@ -22,7 +22,7 @@ import (
 
 // Maintenance indicates a maintenance entry (also in the database)
 type Maintenance struct {
-	MaintenanceId  uint
+	MaintenanceID  uint
 	Key            InstanceKey
 	BeginTimestamp string
 	SecondsElapsed uint
@@ -31,7 +31,7 @@ type Maintenance struct {
 	Reason         string
 }
 
-var maintenanceOwner string = ""
+var maintenanceOwner string
 
 func GetMaintenanceOwner() string {
 	if maintenanceOwner != "" {

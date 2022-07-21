@@ -27,9 +27,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"golang.org/x/net/context"
+	"context"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/grpcclient"
@@ -487,7 +488,7 @@ func testStreamExecute(t *testing.T, conn queryservice.QueryService, f *FakeQuer
 	ctx := context.Background()
 	ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
 	i := 0
-	err := conn.StreamExecute(ctx, TestTarget, StreamExecuteQuery, StreamExecuteBindVars, 0, TestExecuteOptions, func(qr *sqltypes.Result) error {
+	err := conn.StreamExecute(ctx, TestTarget, StreamExecuteQuery, StreamExecuteBindVars, 0, 0, TestExecuteOptions, func(qr *sqltypes.Result) error {
 		switch i {
 		case 0:
 			if len(qr.Rows) == 0 {
@@ -523,7 +524,7 @@ func testStreamExecuteError(t *testing.T, conn queryservice.QueryService, f *Fak
 	testErrorHelper(t, f, "StreamExecute", func(ctx context.Context) error {
 		f.ErrorWait = make(chan struct{})
 		ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
-		return conn.StreamExecute(ctx, TestTarget, StreamExecuteQuery, StreamExecuteBindVars, 0, TestExecuteOptions, func(qr *sqltypes.Result) error {
+		return conn.StreamExecute(ctx, TestTarget, StreamExecuteQuery, StreamExecuteBindVars, 0, 0, TestExecuteOptions, func(qr *sqltypes.Result) error {
 			// For some errors, the call can be retried.
 			select {
 			case <-f.ErrorWait:
@@ -552,7 +553,7 @@ func testStreamExecutePanics(t *testing.T, conn queryservice.QueryService, f *Fa
 	f.StreamExecutePanicsEarly = true
 	testPanicHelper(t, f, "StreamExecute.Early", func(ctx context.Context) error {
 		ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
-		return conn.StreamExecute(ctx, TestTarget, StreamExecuteQuery, StreamExecuteBindVars, 0, TestExecuteOptions, func(qr *sqltypes.Result) error {
+		return conn.StreamExecute(ctx, TestTarget, StreamExecuteQuery, StreamExecuteBindVars, 0, 0, TestExecuteOptions, func(qr *sqltypes.Result) error {
 			return nil
 		})
 	})
@@ -562,7 +563,7 @@ func testStreamExecutePanics(t *testing.T, conn queryservice.QueryService, f *Fa
 	testPanicHelper(t, f, "StreamExecute.Late", func(ctx context.Context) error {
 		f.PanicWait = make(chan struct{})
 		ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
-		return conn.StreamExecute(ctx, TestTarget, StreamExecuteQuery, StreamExecuteBindVars, 0, TestExecuteOptions, func(qr *sqltypes.Result) error {
+		return conn.StreamExecute(ctx, TestTarget, StreamExecuteQuery, StreamExecuteBindVars, 0, 0, TestExecuteOptions, func(qr *sqltypes.Result) error {
 			// For some errors, the call can be retried.
 			select {
 			case <-f.PanicWait:
@@ -579,91 +580,6 @@ func testStreamExecutePanics(t *testing.T, conn queryservice.QueryService, f *Fa
 			close(f.PanicWait)
 			return nil
 		})
-	})
-}
-
-func testExecuteBatch(t *testing.T, conn queryservice.QueryService, f *FakeQueryService) {
-	t.Log("testExecuteBatch")
-	f.ExpectedTransactionID = ExecuteBatchTransactionID
-	ctx := context.Background()
-	ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
-	qrl, err := conn.ExecuteBatch(ctx, TestTarget, ExecuteBatchQueries, TestAsTransaction, ExecuteBatchTransactionID, TestExecuteOptions)
-	if err != nil {
-		t.Fatalf("ExecuteBatch failed: %v", err)
-	}
-	if !sqltypes.ResultsEqual(qrl, ExecuteBatchQueryResultList) {
-		t.Errorf("Unexpected result from ExecuteBatch: got %v wanted %v", qrl, ExecuteBatchQueryResultList)
-	}
-}
-
-func testExecuteBatchError(t *testing.T, conn queryservice.QueryService, f *FakeQueryService) {
-	t.Log("testExecuteBatchError")
-	f.HasError = true
-	testErrorHelper(t, f, "ExecuteBatch", func(ctx context.Context) error {
-		_, err := conn.ExecuteBatch(ctx, TestTarget, ExecuteBatchQueries, TestAsTransaction, ExecuteBatchTransactionID, TestExecuteOptions)
-		return err
-	})
-	f.HasError = true
-}
-
-func testExecuteBatchPanics(t *testing.T, conn queryservice.QueryService, f *FakeQueryService) {
-	t.Log("testExecuteBatchPanics")
-	testPanicHelper(t, f, "ExecuteBatch", func(ctx context.Context) error {
-		_, err := conn.ExecuteBatch(ctx, TestTarget, ExecuteBatchQueries, TestAsTransaction, ExecuteBatchTransactionID, TestExecuteOptions)
-		return err
-	})
-}
-
-func testBeginExecuteBatch(t *testing.T, conn queryservice.QueryService, f *FakeQueryService) {
-	t.Log("testBeginExecuteBatch")
-	f.ExpectedTransactionID = beginTransactionID
-	ctx := context.Background()
-	ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
-	qrl, transactionID, alias, err := conn.BeginExecuteBatch(ctx, TestTarget, ExecuteBatchQueries, true, TestExecuteOptions)
-	if err != nil {
-		t.Fatalf("BeginExecuteBatch failed: %v", err)
-	}
-	if transactionID != beginTransactionID {
-		t.Errorf("Unexpected result from BeginExecuteBatch: got %v wanted %v", transactionID, beginTransactionID)
-	}
-	if !sqltypes.ResultsEqual(qrl, ExecuteBatchQueryResultList) {
-		t.Errorf("Unexpected result from ExecuteBatch: got %v wanted %v", qrl, ExecuteBatchQueryResultList)
-	}
-	assert.Equal(t, TestAlias, alias, "Unexpected tablet alias from Begin")
-}
-
-func testBeginExecuteBatchErrorInBegin(t *testing.T, conn queryservice.QueryService, f *FakeQueryService) {
-	t.Log("testBeginExecuteBatchErrorInBegin")
-	f.HasBeginError = true
-	testErrorHelper(t, f, "BeginExecuteBatch.Begin", func(ctx context.Context) error {
-		_, transactionID, _, err := conn.BeginExecuteBatch(ctx, TestTarget, ExecuteBatchQueries, true, TestExecuteOptions)
-		if transactionID != 0 {
-			t.Errorf("Unexpected transactionID from BeginExecuteBatch: got %v wanted 0", transactionID)
-		}
-		return err
-	})
-	f.HasBeginError = false
-}
-
-func testBeginExecuteBatchErrorInExecuteBatch(t *testing.T, conn queryservice.QueryService, f *FakeQueryService) {
-	t.Log("testBeginExecuteBatchErrorInExecuteBatch")
-	f.HasError = true
-	testErrorHelper(t, f, "BeginExecute.ExecuteBatch", func(ctx context.Context) error {
-		ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
-		_, transactionID, _, err := conn.BeginExecuteBatch(ctx, TestTarget, ExecuteBatchQueries, true, TestExecuteOptions)
-		if transactionID != beginTransactionID {
-			t.Errorf("Unexpected transactionID from BeginExecuteBatch: got %v wanted %v", transactionID, beginTransactionID)
-		}
-		return err
-	})
-	f.HasError = false
-}
-
-func testBeginExecuteBatchPanics(t *testing.T, conn queryservice.QueryService, f *FakeQueryService) {
-	t.Log("testBeginExecuteBatchPanics")
-	testPanicHelper(t, f, "BeginExecuteBatch", func(ctx context.Context) error {
-		_, _, _, err := conn.BeginExecuteBatch(ctx, TestTarget, ExecuteBatchQueries, true, TestExecuteOptions)
-		return err
 	})
 }
 
@@ -751,7 +667,7 @@ func testStreamHealth(t *testing.T, conn queryservice.QueryService, f *FakeQuery
 		t.Fatalf("StreamHealth failed: %v", err)
 	}
 	if !proto.Equal(health, TestStreamHealthStreamHealthResponse) {
-		t.Errorf("invalid StreamHealthResponse: got %v expected %v", *health, *TestStreamHealthStreamHealthResponse)
+		t.Errorf("invalid StreamHealthResponse: got %v expected %v", health, TestStreamHealthStreamHealthResponse)
 	}
 }
 
@@ -799,8 +715,6 @@ func TestSuite(t *testing.T, protocol string, tablet *topodatapb.Tablet, fake *F
 		testExecute,
 		testBeginExecute,
 		testStreamExecute,
-		testExecuteBatch,
-		testBeginExecuteBatch,
 		testMessageStream,
 		testMessageAck,
 
@@ -820,9 +734,6 @@ func TestSuite(t *testing.T, protocol string, tablet *topodatapb.Tablet, fake *F
 		testBeginExecuteErrorInBegin,
 		testBeginExecuteErrorInExecute,
 		testStreamExecuteError,
-		testExecuteBatchError,
-		testBeginExecuteBatchErrorInBegin,
-		testBeginExecuteBatchErrorInExecuteBatch,
 		testMessageStreamError,
 		testMessageAckError,
 
@@ -841,8 +752,6 @@ func TestSuite(t *testing.T, protocol string, tablet *topodatapb.Tablet, fake *F
 		testExecutePanics,
 		testBeginExecutePanics,
 		testStreamExecutePanics,
-		testExecuteBatchPanics,
-		testBeginExecuteBatchPanics,
 		testMessageStreamPanics,
 		testMessageAckPanics,
 	}

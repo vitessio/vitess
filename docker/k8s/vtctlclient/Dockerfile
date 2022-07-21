@@ -12,13 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM vitess/k8s AS k8s
+ARG VT_BASE_VER=latest
+ARG DEBIAN_VER=stable-slim
 
-FROM debian:stretch-slim
+FROM vitess/k8s:${VT_BASE_VER} AS k8s
+
+FROM debian:${DEBIAN_VER}
 
 RUN apt-get update && \
    apt-get upgrade -qq && \
-   apt-get install jq -qq --no-install-recommends && \
+   apt-get install jq curl -qq --no-install-recommends && \
    apt-get autoremove && \
    apt-get clean && \
    rm -rf /var/lib/apt/lists/*

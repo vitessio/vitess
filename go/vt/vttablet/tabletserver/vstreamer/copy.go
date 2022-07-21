@@ -37,6 +37,7 @@ func (uvs *uvstreamer) copy(ctx context.Context) error {
 		tableName := uvs.tablesToCopy[0]
 		log.V(2).Infof("Copystate not empty starting catchupAndCopy on table %s", tableName)
 		if err := uvs.catchupAndCopy(ctx, tableName); err != nil {
+			uvs.vse.errorCounts.Add("Copy", 1)
 			return err
 		}
 	}
@@ -50,6 +51,7 @@ func (uvs *uvstreamer) catchupAndCopy(ctx context.Context, tableName string) err
 	if !uvs.pos.IsZero() {
 		if err := uvs.catchup(ctx); err != nil {
 			log.Infof("catchupAndCopy: catchup returned %v", err)
+			uvs.vse.errorCounts.Add("Catchup", 1)
 			return err
 		}
 	}
@@ -61,7 +63,7 @@ func (uvs *uvstreamer) catchupAndCopy(ctx context.Context, tableName string) err
 // catchup on events for tables already fully or partially copied (upto last pk) until replication lag is small
 func (uvs *uvstreamer) catchup(ctx context.Context) error {
 	log.Infof("starting catchup ...")
-	uvs.setSecondsBehindMaster(math.MaxInt64)
+	uvs.setReplicationLagSeconds(math.MaxInt64)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	defer func() {
@@ -83,7 +85,7 @@ func (uvs *uvstreamer) catchup(ctx context.Context) error {
 	defer tkr.Stop()
 	seconds := int64(uvs.config.MaxReplicationLag / time.Second)
 	for {
-		sbm := uvs.getSecondsBehindMaster()
+		sbm := uvs.getReplicationLagSeconds()
 		if sbm <= seconds {
 			log.Infof("Canceling context because lag is %d:%d", sbm, seconds)
 			cancel()
@@ -129,9 +131,13 @@ func (uvs *uvstreamer) sendEventsForRows(ctx context.Context, tableName string, 
 	var evs []*binlogdatapb.VEvent
 	for _, row := range rows.Rows {
 		ev := &binlogdatapb.VEvent{
-			Type: binlogdatapb.VEventType_ROW,
+			Type:     binlogdatapb.VEventType_ROW,
+			Keyspace: uvs.vse.keyspace,
+			Shard:    uvs.vse.shard,
 			RowEvent: &binlogdatapb.RowEvent{
 				TableName: tableName,
+				Keyspace:  uvs.vse.keyspace,
+				Shard:     uvs.vse.shard,
 				RowChanges: []*binlogdatapb.RowChange{{
 					Before: nil,
 					After:  row,
@@ -150,11 +156,15 @@ func (uvs *uvstreamer) sendEventsForRows(ctx context.Context, tableName string, 
 
 	ev := &binlogdatapb.VEvent{
 		Type:        binlogdatapb.VEventType_LASTPK,
+		Keyspace:    uvs.vse.keyspace,
+		Shard:       uvs.vse.shard,
 		LastPKEvent: lastPKEvent,
 	}
 	evs = append(evs, ev)
 	evs = append(evs, &binlogdatapb.VEvent{
-		Type: binlogdatapb.VEventType_COMMIT,
+		Type:     binlogdatapb.VEventType_COMMIT,
+		Keyspace: uvs.vse.keyspace,
+		Shard:    uvs.vse.shard,
 	})
 
 	if err := uvs.send(evs); err != nil {
@@ -236,6 +246,8 @@ func (uvs *uvstreamer) copyTable(ctx context.Context, tableName string) error {
 			fieldEvent := &binlogdatapb.FieldEvent{
 				TableName: tableName,
 				Fields:    rows.Fields,
+				Keyspace:  uvs.vse.keyspace,
+				Shard:     uvs.vse.shard,
 			}
 			uvs.fields = rows.Fields
 			uvs.pkfields = rows.Pkfields
@@ -265,6 +277,7 @@ func (uvs *uvstreamer) copyTable(ctx context.Context, tableName string) error {
 		return nil
 	})
 	if err != nil {
+		uvs.vse.errorCounts.Add("StreamRows", 1)
 		return err
 	}
 

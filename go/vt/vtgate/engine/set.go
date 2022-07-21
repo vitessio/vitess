@@ -18,9 +18,12 @@ package engine
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"vitess.io/vitess/go/vt/sysvars"
 
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 
@@ -34,6 +37,7 @@ import (
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
@@ -49,7 +53,7 @@ type (
 
 	// SetOp is an interface that different type of set operations implements.
 	SetOp interface {
-		Execute(vcursor VCursor, env evalengine.ExpressionEnv) error
+		Execute(ctx context.Context, vcursor VCursor, env *evalengine.ExpressionEnv) error
 		VariableName() string
 	}
 
@@ -73,12 +77,13 @@ type (
 		Expr              string
 	}
 
-	// SysVarSet implements the SetOp interface and will write the changes variable into the session
-	SysVarSet struct {
+	// SysVarReservedConn implements the SetOp interface and will write the changes variable into the session
+	SysVarReservedConn struct {
 		Name              string
 		Keyspace          *vindexes.Keyspace
 		TargetDestination key.Destination `json:",omitempty"`
 		Expr              string
+		SupportSetVar     bool
 	}
 
 	// SysVarSetAware implements the SetOp interface and will write the changes variable into the session
@@ -87,40 +92,46 @@ type (
 		Name string
 		Expr evalengine.Expr
 	}
+
+	// VitessMetadata implements the SetOp interface and will write the changes variable into the topo server
+	VitessMetadata struct {
+		Name, Value string
+	}
 )
+
+var unsupportedSQLModes = []string{"ANSI_QUOTES", "NO_BACKSLASH_ESCAPES", "PIPES_AS_CONCAT", "REAL_AS_FLOAT"}
 
 var _ Primitive = (*Set)(nil)
 
-//RouteType implements the Primitive interface method.
+// RouteType implements the Primitive interface method.
 func (s *Set) RouteType() string {
 	return "Set"
 }
 
-//GetKeyspaceName implements the Primitive interface method.
+// GetKeyspaceName implements the Primitive interface method.
 func (s *Set) GetKeyspaceName() string {
 	return ""
 }
 
-//GetTableName implements the Primitive interface method.
+// GetTableName implements the Primitive interface method.
 func (s *Set) GetTableName() string {
 	return ""
 }
 
-//Execute implements the Primitive interface method.
-func (s *Set) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, _ bool) (*sqltypes.Result, error) {
-	input, err := s.Input.Execute(vcursor, bindVars, false)
+// TryExecute implements the Primitive interface method.
+func (s *Set) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	input, err := vcursor.ExecutePrimitive(ctx, s.Input, bindVars, false)
 	if err != nil {
 		return nil, err
 	}
 	if len(input.Rows) != 1 {
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "should get a single row")
 	}
-	env := evalengine.ExpressionEnv{
-		BindVars: bindVars,
-		Row:      input.Rows[0],
-	}
+	env := evalengine.EnvWithBindVars(bindVars, vcursor.ConnCollation())
+	env.Row = input.Rows[0]
+	env.Fields = input.Fields
 	for _, setOp := range s.Ops {
-		err := setOp.Execute(vcursor, env)
+		err := setOp.Execute(ctx, vcursor, env)
 		if err != nil {
 			return nil, err
 		}
@@ -128,27 +139,27 @@ func (s *Set) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable
 	return &sqltypes.Result{}, nil
 }
 
-//StreamExecute implements the Primitive interface method.
-func (s *Set) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantields bool, callback func(*sqltypes.Result) error) error {
-	result, err := s.Execute(vcursor, bindVars, wantields)
+// TryStreamExecute implements the Primitive interface method.
+func (s *Set) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	result, err := s.TryExecute(ctx, vcursor, bindVars, wantfields)
 	if err != nil {
 		return err
 	}
 	return callback(result)
 }
 
-//GetFields implements the Primitive interface method.
-func (s *Set) GetFields(VCursor, map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+// GetFields implements the Primitive interface method.
+func (s *Set) GetFields(context.Context, VCursor, map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return &sqltypes.Result{}, nil
 }
 
-//Inputs implements the Primitive interface
+// Inputs implements the Primitive interface
 func (s *Set) Inputs() []Primitive {
 	return []Primitive{s.Input}
 }
 
 func (s *Set) description() PrimitiveDescription {
-	other := map[string]interface{}{
+	other := map[string]any{
 		"Ops": s.Ops,
 	}
 	return PrimitiveDescription{
@@ -159,7 +170,7 @@ func (s *Set) description() PrimitiveDescription {
 
 var _ SetOp = (*UserDefinedVariable)(nil)
 
-//MarshalJSON provides the type to SetOp for plan json
+// MarshalJSON provides the type to SetOp for plan json
 func (u *UserDefinedVariable) MarshalJSON() ([]byte, error) {
 	return json.Marshal(struct {
 		Type string
@@ -168,19 +179,19 @@ func (u *UserDefinedVariable) MarshalJSON() ([]byte, error) {
 	}{
 		Type: "UserDefinedVariable",
 		Name: u.Name,
-		Expr: u.Expr.String(),
+		Expr: evalengine.FormatExpr(u.Expr),
 	})
 
 }
 
-//VariableName implements the SetOp interface method.
+// VariableName implements the SetOp interface method.
 func (u *UserDefinedVariable) VariableName() string {
 	return u.Name
 }
 
-//Execute implements the SetOp interface method.
-func (u *UserDefinedVariable) Execute(vcursor VCursor, env evalengine.ExpressionEnv) error {
-	value, err := u.Expr.Evaluate(env)
+// Execute implements the SetOp interface method.
+func (u *UserDefinedVariable) Execute(ctx context.Context, vcursor VCursor, env *evalengine.ExpressionEnv) error {
+	value, err := env.Evaluate(u.Expr)
 	if err != nil {
 		return err
 	}
@@ -189,7 +200,7 @@ func (u *UserDefinedVariable) Execute(vcursor VCursor, env evalengine.Expression
 
 var _ SetOp = (*SysVarIgnore)(nil)
 
-//MarshalJSON provides the type to SetOp for plan json
+// MarshalJSON provides the type to SetOp for plan json
 func (svi *SysVarIgnore) MarshalJSON() ([]byte, error) {
 	return json.Marshal(struct {
 		Type string
@@ -201,20 +212,20 @@ func (svi *SysVarIgnore) MarshalJSON() ([]byte, error) {
 
 }
 
-//VariableName implements the SetOp interface method.
+// VariableName implements the SetOp interface method.
 func (svi *SysVarIgnore) VariableName() string {
 	return svi.Name
 }
 
-//Execute implements the SetOp interface method.
-func (svi *SysVarIgnore) Execute(VCursor, evalengine.ExpressionEnv) error {
+// Execute implements the SetOp interface method.
+func (svi *SysVarIgnore) Execute(context.Context, VCursor, *evalengine.ExpressionEnv) error {
 	log.Infof("Ignored inapplicable SET %v = %v", svi.Name, svi.Expr)
 	return nil
 }
 
 var _ SetOp = (*SysVarCheckAndIgnore)(nil)
 
-//MarshalJSON provides the type to SetOp for plan json
+// MarshalJSON provides the type to SetOp for plan json
 func (svci *SysVarCheckAndIgnore) MarshalJSON() ([]byte, error) {
 	return json.Marshal(struct {
 		Type string
@@ -226,67 +237,71 @@ func (svci *SysVarCheckAndIgnore) MarshalJSON() ([]byte, error) {
 
 }
 
-//VariableName implements the SetOp interface method
+// VariableName implements the SetOp interface method
 func (svci *SysVarCheckAndIgnore) VariableName() string {
 	return svci.Name
 }
 
-//Execute implements the SetOp interface method
-func (svci *SysVarCheckAndIgnore) Execute(vcursor VCursor, env evalengine.ExpressionEnv) error {
-	rss, _, err := vcursor.ResolveDestinations(svci.Keyspace.Name, nil, []key.Destination{svci.TargetDestination})
+// Execute implements the SetOp interface method
+func (svci *SysVarCheckAndIgnore) Execute(ctx context.Context, vcursor VCursor, env *evalengine.ExpressionEnv) error {
+	rss, _, err := vcursor.ResolveDestinations(ctx, svci.Keyspace.Name, nil, []key.Destination{svci.TargetDestination})
 	if err != nil {
-		return vterrors.Wrap(err, "SysVarCheckAndIgnore")
+		return err
 	}
 
 	if len(rss) != 1 {
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Unexpected error, DestinationKeyspaceID mapping to multiple shards: %v", svci.TargetDestination)
 	}
 	checkSysVarQuery := fmt.Sprintf("select 1 from dual where @@%s = %s", svci.Name, svci.Expr)
-	result, err := execShard(vcursor, checkSysVarQuery, env.BindVars, rss[0], false /* rollbackOnError */, false /* canAutocommit */)
+	result, err := execShard(ctx, vcursor, checkSysVarQuery, env.BindVars, rss[0], false /* rollbackOnError */, false /* canAutocommit */)
 	if err != nil {
-		return err
+		// Rather than returning the error, we will just log the error
+		// as the intention for executing the query it to validate the current setting and eventually ignore it anyways.
+		// There is no benefit of returning the error back to client.
+		log.Warningf("unable to validate the current settings for '%s': %s", svci.Name, err.Error())
+		return nil
 	}
-	if result.RowsAffected == 0 {
+	if len(result.Rows) == 0 {
 		log.Infof("Ignored inapplicable SET %v = %v", svci.Name, svci.Expr)
 	}
 	return nil
 }
 
-var _ SetOp = (*SysVarSet)(nil)
+var _ SetOp = (*SysVarReservedConn)(nil)
 
-//MarshalJSON provides the type to SetOp for plan json
-func (svs *SysVarSet) MarshalJSON() ([]byte, error) {
+// MarshalJSON provides the type to SetOp for plan json
+func (svs *SysVarReservedConn) MarshalJSON() ([]byte, error) {
 	return json.Marshal(struct {
 		Type string
-		SysVarSet
+		SysVarReservedConn
 	}{
-		Type:      "SysVarSet",
-		SysVarSet: *svs,
+		Type:               "SysVarSet",
+		SysVarReservedConn: *svs,
 	})
 
 }
 
-//VariableName implements the SetOp interface method
-func (svs *SysVarSet) VariableName() string {
+// VariableName implements the SetOp interface method
+func (svs *SysVarReservedConn) VariableName() string {
 	return svs.Name
 }
 
-//Execute implements the SetOp interface method
-func (svs *SysVarSet) Execute(vcursor VCursor, env evalengine.ExpressionEnv) error {
+// Execute implements the SetOp interface method
+func (svs *SysVarReservedConn) Execute(ctx context.Context, vcursor VCursor, env *evalengine.ExpressionEnv) error {
 	// For those running on advanced vitess settings.
 	if svs.TargetDestination != nil {
-		rss, _, err := vcursor.ResolveDestinations(svs.Keyspace.Name, nil, []key.Destination{svs.TargetDestination})
+		rss, _, err := vcursor.ResolveDestinations(ctx, svs.Keyspace.Name, nil, []key.Destination{svs.TargetDestination})
 		if err != nil {
-			return vterrors.Wrap(err, "SysVarSet")
+			return err
 		}
 		vcursor.Session().NeedsReservedConn()
-		return svs.execSetStatement(vcursor, rss, env)
+		return svs.execSetStatement(ctx, vcursor, rss, env)
 	}
-	isSysVarModified, err := svs.checkAndUpdateSysVar(vcursor, env)
+	needReservedConn, err := svs.checkAndUpdateSysVar(ctx, vcursor, env)
 	if err != nil {
 		return err
 	}
-	if !isSysVarModified {
+	if !needReservedConn {
 		// setting ignored, same as underlying datastore
 		return nil
 	}
@@ -302,11 +317,11 @@ func (svs *SysVarSet) Execute(vcursor VCursor, env evalengine.ExpressionEnv) err
 			BindVariables: env.BindVars,
 		}
 	}
-	_, errs := vcursor.ExecuteMultiShard(rss, queries, false /* rollbackOnError */, false /* canAutocommit */)
+	_, errs := vcursor.ExecuteMultiShard(ctx, rss, queries, false /* rollbackOnError */, false /* canAutocommit */)
 	return vterrors.Aggregate(errs)
 }
 
-func (svs *SysVarSet) execSetStatement(vcursor VCursor, rss []*srvtopo.ResolvedShard, env evalengine.ExpressionEnv) error {
+func (svs *SysVarReservedConn) execSetStatement(ctx context.Context, vcursor VCursor, rss []*srvtopo.ResolvedShard, env *evalengine.ExpressionEnv) error {
 	queries := make([]*querypb.BoundQuery, len(rss))
 	for i := 0; i < len(rss); i++ {
 		queries[i] = &querypb.BoundQuery{
@@ -314,49 +329,109 @@ func (svs *SysVarSet) execSetStatement(vcursor VCursor, rss []*srvtopo.ResolvedS
 			BindVariables: env.BindVars,
 		}
 	}
-	_, errs := vcursor.ExecuteMultiShard(rss, queries, false /* rollbackOnError */, false /* canAutocommit */)
+	_, errs := vcursor.ExecuteMultiShard(ctx, rss, queries, false /* rollbackOnError */, false /* canAutocommit */)
 	return vterrors.Aggregate(errs)
 }
 
-func (svs *SysVarSet) checkAndUpdateSysVar(vcursor VCursor, res evalengine.ExpressionEnv) (bool, error) {
+func (svs *SysVarReservedConn) checkAndUpdateSysVar(ctx context.Context, vcursor VCursor, res *evalengine.ExpressionEnv) (bool, error) {
 	sysVarExprValidationQuery := fmt.Sprintf("select %s from dual where @@%s != %s", svs.Expr, svs.Name, svs.Expr)
-	rss, _, err := vcursor.ResolveDestinations(svs.Keyspace.Name, nil, []key.Destination{key.DestinationKeyspaceID{0}})
-	if err != nil {
-		return false, vterrors.Wrap(err, "SysVarSet")
+	if svs.Name == "sql_mode" {
+		sysVarExprValidationQuery = fmt.Sprintf("select @@%s orig, %s new", svs.Name, svs.Expr)
 	}
-	qr, err := execShard(vcursor, sysVarExprValidationQuery, res.BindVars, rss[0], false /* rollbackOnError */, false /* canAutocommit */)
+	rss, _, err := vcursor.ResolveDestinations(ctx, svs.Keyspace.Name, nil, []key.Destination{key.DestinationKeyspaceID{0}})
 	if err != nil {
 		return false, err
 	}
-	if len(qr.Rows) == 0 {
+	qr, err := execShard(ctx, vcursor, sysVarExprValidationQuery, res.BindVars, rss[0], false /* rollbackOnError */, false /* canAutocommit */)
+	if err != nil {
+		return false, err
+	}
+	changed := len(qr.Rows) > 0
+	if !changed {
 		return false, nil
 	}
-	// TODO : validate how value needs to be stored.
-	value := qr.Rows[0][0]
+
+	var value sqltypes.Value
+	if svs.Name == "sql_mode" {
+		changed, value, err = sqlModeChangedValue(qr)
+		if err != nil {
+			return false, err
+		}
+		if !changed {
+			return false, nil
+		}
+	} else {
+		value = qr.Rows[0][0]
+	}
 	buf := new(bytes.Buffer)
 	value.EncodeSQL(buf)
-	vcursor.Session().SetSysVar(svs.Name, buf.String())
-	vcursor.Session().NeedsReservedConn()
-	return true, nil
+	s := buf.String()
+	vcursor.Session().SetSysVar(svs.Name, s)
+
+	// If the condition below is true, we want to use reserved connection instead of SET_VAR query hint.
+	// MySQL supports SET_VAR only in MySQL80 and for a limited set of system variables.
+	if !svs.SupportSetVar || s == "''" || !vcursor.CanUseSetVar() {
+		vcursor.Session().NeedsReservedConn()
+		return true, nil
+	}
+	return false, nil
+}
+
+func sqlModeChangedValue(qr *sqltypes.Result) (bool, sqltypes.Value, error) {
+	if len(qr.Fields) != 2 {
+		return false, sqltypes.Value{}, nil
+	}
+	if len(qr.Rows[0]) != 2 {
+		return false, sqltypes.Value{}, nil
+	}
+	orig := qr.Rows[0][0].ToString()
+	newVal := qr.Rows[0][1].ToString()
+
+	origArr := strings.Split(orig, ",")
+	// Keep track of if the value is seen or not.
+	origMap := map[string]bool{}
+	for _, oVal := range origArr {
+		// Default is not seen.
+		origMap[strings.ToUpper(oVal)] = true
+	}
+	uniqOrigVal := len(origMap)
+	origValSeen := 0
+
+	changed := false
+	newValArr := strings.Split(newVal, ",")
+	unsupportedMode := ""
+	for _, nVal := range newValArr {
+		nVal = strings.ToUpper(nVal)
+		for _, mode := range unsupportedSQLModes {
+			if mode == nVal {
+				unsupportedMode = nVal
+				break
+			}
+		}
+		notSeen, exists := origMap[nVal]
+		if !exists {
+			changed = true
+			break
+		}
+		if exists && notSeen {
+			// Value seen. Turn it off
+			origMap[nVal] = false
+			origValSeen++
+		}
+	}
+	if !changed && uniqOrigVal != origValSeen {
+		changed = true
+	}
+	if changed && unsupportedMode != "" {
+		return false, sqltypes.Value{}, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "setting the %s sql_mode is unsupported", unsupportedMode)
+	}
+
+	return changed, qr.Rows[0][1], nil
 }
 
 var _ SetOp = (*SysVarSetAware)(nil)
 
-// System variables that needs special handling
-const (
-	Autocommit          = "autocommit"
-	ClientFoundRows     = "client_found_rows"
-	SkipQueryPlanCache  = "skip_query_plan_cache"
-	TxReadOnly          = "tx_read_only"
-	TransactionReadOnly = "transaction_read_only"
-	SQLSelectLimit      = "sql_select_limit"
-	TransactionMode     = "transaction_mode"
-	Workload            = "workload"
-	Charset             = "charset"
-	Names               = "names"
-)
-
-//MarshalJSON provides the type to SetOp for plan json
+// MarshalJSON marshals all the json
 func (svss *SysVarSetAware) MarshalJSON() ([]byte, error) {
 	return json.Marshal(struct {
 		Type string
@@ -365,93 +440,173 @@ func (svss *SysVarSetAware) MarshalJSON() ([]byte, error) {
 	}{
 		Type: "SysVarAware",
 		Name: svss.Name,
-		Expr: svss.Expr.String(),
+		Expr: evalengine.FormatExpr(svss.Expr),
 	})
 }
 
-//Execute implements the SetOp interface method
-func (svss *SysVarSetAware) Execute(vcursor VCursor, env evalengine.ExpressionEnv) error {
+// Execute implements the SetOp interface method
+func (svss *SysVarSetAware) Execute(ctx context.Context, vcursor VCursor, env *evalengine.ExpressionEnv) error {
+	var err error
 	switch svss.Name {
-	// These are all the boolean values we need to handle
-	case Autocommit, ClientFoundRows, SkipQueryPlanCache, TxReadOnly, TransactionReadOnly:
-		value, err := svss.Expr.Evaluate(env)
+	case sysvars.Autocommit.Name:
+		err = svss.setBoolSysVar(ctx, env, vcursor.Session().SetAutocommit)
+	case sysvars.ClientFoundRows.Name:
+		err = svss.setBoolSysVar(ctx, env, vcursor.Session().SetClientFoundRows)
+	case sysvars.SkipQueryPlanCache.Name:
+		err = svss.setBoolSysVar(ctx, env, vcursor.Session().SetSkipQueryPlanCache)
+	case sysvars.TxReadOnly.Name,
+		sysvars.TransactionReadOnly.Name:
+		// TODO (4127): This is a dangerous NOP.
+		noop := func(context.Context, bool) error { return nil }
+		err = svss.setBoolSysVar(ctx, env, noop)
+	case sysvars.SQLSelectLimit.Name:
+		intValue, err := svss.evalAsInt64(env)
 		if err != nil {
 			return err
 		}
-		boolValue, err := value.ToBooleanStrict()
-		if err != nil {
-			return vterrors.Wrapf(err, "System setting '%s' can't be set to this value", svss.Name)
-		}
-		switch svss.Name {
-		case Autocommit:
-			vcursor.Session().SetAutocommit(boolValue)
-		case ClientFoundRows:
-			vcursor.Session().SetClientFoundRows(boolValue)
-		case SkipQueryPlanCache:
-			vcursor.Session().SetSkipQueryPlanCache(boolValue)
-		case TxReadOnly, TransactionReadOnly:
-			// TODO (4127): This is a dangerous NOP.
-		}
-
-	case SQLSelectLimit:
-		value, err := svss.Expr.Evaluate(env)
+		vcursor.Session().SetSQLSelectLimit(intValue) // nolint:errcheck
+	case sysvars.TransactionMode.Name:
+		str, err := svss.evalAsString(env)
 		if err != nil {
 			return err
 		}
-
-		v := value.Value()
-		if !v.IsIntegral() {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for sql_select_limit: %T", value.Value().Type().String())
+		out, ok := vtgatepb.TransactionMode_value[strings.ToUpper(str)]
+		if !ok {
+			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValueForVar, "invalid transaction_mode: %s", str)
 		}
-		intValue, err := v.ToInt64()
+		vcursor.Session().SetTransactionMode(vtgatepb.TransactionMode(out))
+	case sysvars.Workload.Name:
+		str, err := svss.evalAsString(env)
 		if err != nil {
 			return err
 		}
-		vcursor.Session().SetSQLSelectLimit(intValue)
-
-		// String settings
-	case TransactionMode, Workload, Charset, Names:
-		value, err := svss.Expr.Evaluate(env)
+		out, ok := querypb.ExecuteOptions_Workload_value[strings.ToUpper(str)]
+		if !ok {
+			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValueForVar, "invalid workload: %s", str)
+		}
+		vcursor.Session().SetWorkload(querypb.ExecuteOptions_Workload(out))
+	case sysvars.DDLStrategy.Name:
+		str, err := svss.evalAsString(env)
 		if err != nil {
 			return err
 		}
-		v := value.Value()
-		if !v.IsText() && !v.IsBinary() {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for %s: %s", svss.Name, value.Value().Type().String())
+		if _, err := schema.ParseDDLStrategy(str); err != nil {
+			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValueForVar, "invalid DDL strategy: %s", str)
 		}
-
-		str := v.ToString()
-		switch svss.Name {
-		case TransactionMode:
-			out, ok := vtgatepb.TransactionMode_value[strings.ToUpper(str)]
-			if !ok {
-				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid transaction_mode: %s", str)
-			}
-			vcursor.Session().SetTransactionMode(vtgatepb.TransactionMode(out))
-		case Workload:
-			out, ok := querypb.ExecuteOptions_Workload_value[strings.ToUpper(str)]
-			if !ok {
-				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid workload: %s", str)
-			}
-			vcursor.Session().SetWorkload(querypb.ExecuteOptions_Workload(out))
-		case Charset, Names:
-			switch strings.ToLower(str) {
-			case "", "utf8", "utf8mb4", "latin1", "default":
-				// do nothing
-				break
-			default:
-				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value for charset/names: %v", str)
-			}
+		vcursor.Session().SetDDLStrategy(str)
+	case sysvars.SessionEnableSystemSettings.Name:
+		err = svss.setBoolSysVar(ctx, env, vcursor.Session().SetSessionEnableSystemSettings)
+	case sysvars.Charset.Name, sysvars.Names.Name:
+		str, err := svss.evalAsString(env)
+		if err != nil {
+			return err
 		}
-
+		switch strings.ToLower(str) {
+		case "", "utf8", "utf8mb4", "latin1", "default":
+			// do nothing
+			break
+		default:
+			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "charset/name %v is not supported", str)
+		}
+	case sysvars.ReadAfterWriteGTID.Name:
+		str, err := svss.evalAsString(env)
+		if err != nil {
+			return err
+		}
+		vcursor.Session().SetReadAfterWriteGTID(str)
+	case sysvars.ReadAfterWriteTimeOut.Name:
+		val, err := svss.evalAsFloat(env)
+		if err != nil {
+			return err
+		}
+		vcursor.Session().SetReadAfterWriteTimeout(val)
+	case sysvars.SessionTrackGTIDs.Name:
+		str, err := svss.evalAsString(env)
+		if err != nil {
+			return err
+		}
+		switch strings.ToLower(str) {
+		case "off":
+			vcursor.Session().SetSessionTrackGTIDs(false)
+		case "own_gtid":
+			vcursor.Session().SetSessionTrackGTIDs(true)
+		default:
+			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValueForVar, "variable 'session_track_gtids' can't be set to the value of '%s'", str)
+		}
 	default:
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unsupported construct")
+		return vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.UnknownSystemVariable, "unknown system variable '%s'", svss.Name)
 	}
 
-	return nil
+	return err
 }
 
-//VariableName implements the SetOp interface method
+func (svss *SysVarSetAware) evalAsInt64(env *evalengine.ExpressionEnv) (int64, error) {
+	value, err := env.Evaluate(svss.Expr)
+	if err != nil {
+		return 0, err
+	}
+
+	v := value.Value()
+	if !v.IsIntegral() {
+		return 0, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongTypeForVar, "incorrect argument type to variable '%s': %s", svss.Name, value.Value().Type().String())
+	}
+	intValue, err := v.ToInt64()
+	if err != nil {
+		return 0, err
+	}
+	return intValue, nil
+}
+
+func (svss *SysVarSetAware) evalAsFloat(env *evalengine.ExpressionEnv) (float64, error) {
+	value, err := env.Evaluate(svss.Expr)
+	if err != nil {
+		return 0, err
+	}
+
+	v := value.Value()
+	floatValue, err := v.ToFloat64()
+	if err != nil {
+		return 0, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongTypeForVar, "incorrect argument type to variable '%s': %s", svss.Name, value.Value().Type().String())
+	}
+	return floatValue, nil
+}
+
+func (svss *SysVarSetAware) evalAsString(env *evalengine.ExpressionEnv) (string, error) {
+	value, err := env.Evaluate(svss.Expr)
+	if err != nil {
+		return "", err
+	}
+	v := value.Value()
+	if !v.IsText() && !v.IsBinary() {
+		return "", vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongTypeForVar, "incorrect argument type to variable '%s': %s", svss.Name, value.Value().Type().String())
+	}
+
+	return v.ToString(), nil
+}
+
+func (svss *SysVarSetAware) setBoolSysVar(ctx context.Context, env *evalengine.ExpressionEnv, setter func(context.Context, bool) error) error {
+	value, err := env.Evaluate(svss.Expr)
+	if err != nil {
+		return err
+	}
+	boolValue, err := value.ToBooleanStrict()
+	if err != nil {
+		return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValueForVar, "variable '%s' can't be set to the value: %s", svss.Name, err.Error())
+	}
+	return setter(ctx, boolValue)
+}
+
+// VariableName implements the SetOp interface method
 func (svss *SysVarSetAware) VariableName() string {
 	return svss.Name
+}
+
+var _ SetOp = (*VitessMetadata)(nil)
+
+func (v *VitessMetadata) Execute(ctx context.Context, vcursor VCursor, env *evalengine.ExpressionEnv) error {
+	return vcursor.SetExec(ctx, v.Name, v.Value)
+}
+
+func (v *VitessMetadata) VariableName() string {
+	return v.Name
 }

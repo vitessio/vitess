@@ -24,7 +24,10 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
@@ -51,7 +54,7 @@ func TestDBConnExec(t *testing.T) {
 		Fields: []*querypb.Field{
 			{Type: sqltypes.VarChar},
 		},
-		RowsAffected: 1,
+		RowsAffected: 0,
 		Rows: [][]sqltypes.Value{
 			{sqltypes.NewVarChar("123")},
 		},
@@ -115,6 +118,64 @@ func TestDBConnExec(t *testing.T) {
 	compareTimingCounts(t, "PoolTest.Exec", 1, startCounts, mysqlTimings.Counts())
 }
 
+func TestDBConnExecLost(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+
+	sql := "select * from test_table limit 1000"
+	expectedResult := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Type: sqltypes.VarChar},
+		},
+		RowsAffected: 0,
+		Rows: [][]sqltypes.Value{
+			{sqltypes.NewVarChar("123")},
+		},
+	}
+	db.AddQuery(sql, expectedResult)
+	connPool := newPool()
+	mysqlTimings := connPool.env.Stats().MySQLTimings
+	startCounts := mysqlTimings.Counts()
+	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	defer connPool.Close()
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(10*time.Second))
+	defer cancel()
+	dbConn, err := NewDBConn(context.Background(), connPool, db.ConnParams())
+	if dbConn != nil {
+		defer dbConn.Close()
+	}
+	if err != nil {
+		t.Fatalf("should not get an error, err: %v", err)
+	}
+	// Exec succeed, not asking for fields.
+	result, err := dbConn.Exec(ctx, sql, 1, false)
+	if err != nil {
+		t.Fatalf("should not get an error, err: %v", err)
+	}
+	expectedResult.Fields = nil
+	if !reflect.DeepEqual(expectedResult, result) {
+		t.Errorf("Exec: %v, want %v", expectedResult, result)
+	}
+
+	compareTimingCounts(t, "PoolTest.Exec", 1, startCounts, mysqlTimings.Counts())
+
+	// Exec fail due to server side error (e.g. query kill)
+	startCounts = mysqlTimings.Counts()
+	db.AddRejectedQuery(sql, &mysql.SQLError{
+		Num:     2013,
+		Message: "Lost connection to MySQL server during query",
+		Query:   "",
+	})
+	_, err = dbConn.Exec(ctx, sql, 1, false)
+	want := "Lost connection to MySQL server during query"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("Exec: %v, want %s", err, want)
+	}
+
+	// Should *not* see a retry, so only increment by 1
+	compareTimingCounts(t, "PoolTest.Exec", 1, startCounts, mysqlTimings.Counts())
+}
+
 func TestDBConnDeadline(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
@@ -123,7 +184,7 @@ func TestDBConnDeadline(t *testing.T) {
 		Fields: []*querypb.Field{
 			{Type: sqltypes.VarChar},
 		},
-		RowsAffected: 1,
+		RowsAffected: 0,
 		Rows: [][]sqltypes.Value{
 			{sqltypes.NewVarChar("123")},
 		},
@@ -231,6 +292,34 @@ func TestDBConnKill(t *testing.T) {
 	}
 }
 
+// TestDBConnClose tests that an Exec returns immediately if a connection
+// is asynchronously killed (and closed) in the middle of an execution.
+func TestDBConnClose(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	connPool := newPool()
+	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	defer connPool.Close()
+	dbConn, err := NewDBConn(context.Background(), connPool, db.ConnParams())
+	require.NoError(t, err)
+	defer dbConn.Close()
+
+	query := "sleep"
+	db.AddQuery(query, &sqltypes.Result{})
+	db.SetBeforeFunc(query, func() {
+		time.Sleep(100 * time.Millisecond)
+	})
+
+	start := time.Now()
+	go func() {
+		time.Sleep(10 * time.Millisecond)
+		dbConn.Kill("test kill", 0)
+	}()
+	_, err = dbConn.Exec(context.Background(), query, 1, false)
+	assert.Contains(t, err.Error(), "(errno 2013) due to")
+	assert.True(t, time.Since(start) < 100*time.Millisecond, "%v %v", time.Since(start), 100*time.Millisecond)
+}
+
 func TestDBNoPoolConnKill(t *testing.T) {
 	db := fakesqldb.New(t)
 	connPool := newPool()
@@ -310,7 +399,10 @@ func TestDBConnStream(t *testing.T) {
 				result.Rows = append(result.Rows, r.Rows...)
 			}
 			return nil
-		}, 10, querypb.ExecuteOptions_ALL)
+		}, func() *sqltypes.Result {
+			return &sqltypes.Result{}
+		},
+		10, querypb.ExecuteOptions_ALL)
 	if err != nil {
 		t.Fatalf("should not get an error, err: %v", err)
 	}
@@ -323,10 +415,48 @@ func TestDBConnStream(t *testing.T) {
 	err = dbConn.Stream(
 		ctx, sql, func(r *sqltypes.Result) error {
 			return nil
-		}, 10, querypb.ExecuteOptions_ALL)
+		}, func() *sqltypes.Result {
+			return &sqltypes.Result{}
+		},
+		10, querypb.ExecuteOptions_ALL)
 	db.DisableConnFail()
 	want := "no such file or directory (errno 2002)"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("Error: '%v', must contain '%s'", err, want)
 	}
+}
+
+func TestDBConnStreamKill(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	sql := "select * from test_table limit 1000"
+	expectedResult := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Type: sqltypes.VarChar},
+		},
+	}
+	db.AddQuery(sql, expectedResult)
+	connPool := newPool()
+	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	defer connPool.Close()
+	dbConn, err := NewDBConn(context.Background(), connPool, db.ConnParams())
+	require.NoError(t, err)
+	defer dbConn.Close()
+
+	go func() {
+		time.Sleep(10 * time.Millisecond)
+		dbConn.Kill("test kill", 0)
+	}()
+
+	err = dbConn.Stream(context.Background(), sql,
+		func(r *sqltypes.Result) error {
+			time.Sleep(100 * time.Millisecond)
+			return nil
+		},
+		func() *sqltypes.Result {
+			return &sqltypes.Result{}
+		},
+		10, querypb.ExecuteOptions_ALL)
+
+	assert.Contains(t, err.Error(), "(errno 2013) due to")
 }

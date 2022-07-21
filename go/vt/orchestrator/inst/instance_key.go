@@ -55,12 +55,13 @@ func newInstanceKey(hostname string, port int, resolve bool) (instanceKey *Insta
 
 // newInstanceKeyStrings
 func newInstanceKeyStrings(hostname string, port string, resolve bool) (*InstanceKey, error) {
-	if portInt, err := strconv.Atoi(port); err != nil {
+	portInt, err := strconv.Atoi(port)
+	if err != nil {
 		return nil, fmt.Errorf("Invalid port: %s", port)
-	} else {
-		return newInstanceKey(hostname, portInt, resolve)
 	}
+	return newInstanceKey(hostname, portInt, resolve)
 }
+
 func parseRawInstanceKey(hostPort string, resolve bool) (instanceKey *InstanceKey, err error) {
 	hostname := ""
 	port := ""
@@ -106,86 +107,86 @@ func NewRawInstanceKeyStrings(hostname string, port string) (*InstanceKey, error
 }
 
 //
-func (this *InstanceKey) ResolveHostname() (*InstanceKey, error) {
-	if !this.IsValid() {
-		return this, nil
+func (instanceKey *InstanceKey) ResolveHostname() (*InstanceKey, error) {
+	if !instanceKey.IsValid() {
+		return instanceKey, nil
 	}
 
-	hostname, err := ResolveHostname(this.Hostname)
+	hostname, err := ResolveHostname(instanceKey.Hostname)
 	if err == nil {
-		this.Hostname = hostname
+		instanceKey.Hostname = hostname
 	}
-	return this, err
+	return instanceKey, err
 }
 
 // Equals tests equality between this key and another key
-func (this *InstanceKey) Equals(other *InstanceKey) bool {
+func (instanceKey *InstanceKey) Equals(other *InstanceKey) bool {
 	if other == nil {
 		return false
 	}
-	return this.Hostname == other.Hostname && this.Port == other.Port
+	return instanceKey.Hostname == other.Hostname && instanceKey.Port == other.Port
 }
 
 // SmallerThan returns true if this key is dictionary-smaller than another.
 // This is used for consistent sorting/ordering; there's nothing magical about it.
-func (this *InstanceKey) SmallerThan(other *InstanceKey) bool {
-	if this.Hostname < other.Hostname {
+func (instanceKey *InstanceKey) SmallerThan(other *InstanceKey) bool {
+	if instanceKey.Hostname < other.Hostname {
 		return true
 	}
-	if this.Hostname == other.Hostname && this.Port < other.Port {
+	if instanceKey.Hostname == other.Hostname && instanceKey.Port < other.Port {
 		return true
 	}
 	return false
 }
 
 // IsDetached returns 'true' when this hostname is logically "detached"
-func (this *InstanceKey) IsDetached() bool {
-	return strings.HasPrefix(this.Hostname, detachHint)
+func (instanceKey *InstanceKey) IsDetached() bool {
+	return strings.HasPrefix(instanceKey.Hostname, detachHint)
 }
 
 // IsValid uses simple heuristics to see whether this key represents an actual instance
-func (this *InstanceKey) IsValid() bool {
-	if this.Hostname == "_" {
+func (instanceKey *InstanceKey) IsValid() bool {
+	if instanceKey.Hostname == "_" {
 		return false
 	}
-	if this.IsDetached() {
+	if instanceKey.IsDetached() {
 		return false
 	}
-	return len(this.Hostname) > 0 && this.Port > 0
+	return len(instanceKey.Hostname) > 0 && instanceKey.Port > 0
 }
 
 // DetachedKey returns an instance key whose hostname is detahced: invalid, but recoverable
-func (this *InstanceKey) DetachedKey() *InstanceKey {
-	if this.IsDetached() {
-		return this
+func (instanceKey *InstanceKey) DetachedKey() *InstanceKey {
+	if instanceKey.IsDetached() {
+		return instanceKey
 	}
-	return &InstanceKey{Hostname: fmt.Sprintf("%s%s", detachHint, this.Hostname), Port: this.Port}
+	return &InstanceKey{Hostname: fmt.Sprintf("%s%s", detachHint, instanceKey.Hostname), Port: instanceKey.Port}
 }
 
 // ReattachedKey returns an instance key whose hostname is detahced: invalid, but recoverable
-func (this *InstanceKey) ReattachedKey() *InstanceKey {
-	if !this.IsDetached() {
-		return this
+func (instanceKey *InstanceKey) ReattachedKey() *InstanceKey {
+	if !instanceKey.IsDetached() {
+		return instanceKey
 	}
-	return &InstanceKey{Hostname: this.Hostname[len(detachHint):], Port: this.Port}
+	return &InstanceKey{Hostname: instanceKey.Hostname[len(detachHint):], Port: instanceKey.Port}
 }
 
 // StringCode returns an official string representation of this key
-func (this *InstanceKey) StringCode() string {
-	return fmt.Sprintf("%s:%d", this.Hostname, this.Port)
+func (instanceKey *InstanceKey) StringCode() string {
+	return fmt.Sprintf("%s:%d", instanceKey.Hostname, instanceKey.Port)
 }
 
 // DisplayString returns a user-friendly string representation of this key
-func (this *InstanceKey) DisplayString() string {
-	return this.StringCode()
+func (instanceKey *InstanceKey) DisplayString() string {
+	return instanceKey.StringCode()
 }
 
 // String returns a user-friendly string representation of this key
-func (this InstanceKey) String() string {
-	return this.StringCode()
+func (instanceKey InstanceKey) String() string {
+	return instanceKey.StringCode()
 }
 
 // IsValid uses simple heuristics to see whether this key represents an actual instance
-func (this *InstanceKey) IsIPv4() bool {
-	return ipv4Regexp.MatchString(this.Hostname)
+func (instanceKey *InstanceKey) IsIPv4() bool {
+	return ipv4Regexp.MatchString(instanceKey.Hostname)
 }

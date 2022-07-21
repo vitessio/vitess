@@ -17,16 +17,15 @@ limitations under the License.
 package vtctl
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"strings"
 
-	"golang.org/x/net/context"
-
-	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/wrangler"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 // This file contains the Cells command group for vtctl.
@@ -37,34 +36,39 @@ func init() {
 	addCommandGroup(cellsGroupName)
 
 	addCommand(cellsGroupName, command{
-		"AddCellInfo",
-		commandAddCellInfo,
-		"[-server_address <addr>] [-root <root>] <cell>",
-		"Registers a local topology service in a new cell by creating the CellInfo with the provided parameters. The address will be used to connect to the topology service, and we'll put Vitess data starting at the provided root."})
+		name:   "AddCellInfo",
+		method: commandAddCellInfo,
+		params: "[--server_address <addr>] [--root <root>] <cell>",
+		help:   "Registers a local topology service in a new cell by creating the CellInfo with the provided parameters. The address will be used to connect to the topology service, and we'll put Vitess data starting at the provided root.",
+	})
 
 	addCommand(cellsGroupName, command{
-		"UpdateCellInfo",
-		commandUpdateCellInfo,
-		"[-server_address <addr>] [-root <root>] <cell>",
-		"Updates the content of a CellInfo with the provided parameters. If a value is empty, it is not updated. The CellInfo will be created if it doesn't exist."})
+		name:   "UpdateCellInfo",
+		method: commandUpdateCellInfo,
+		params: "[--server_address <addr>] [--root <root>] <cell>",
+		help:   "Updates the content of a CellInfo with the provided parameters. If a value is empty, it is not updated. The CellInfo will be created if it doesn't exist.",
+	})
 
 	addCommand(cellsGroupName, command{
-		"DeleteCellInfo",
-		commandDeleteCellInfo,
-		"[-force] <cell>",
-		"Deletes the CellInfo for the provided cell. The cell cannot be referenced by any Shard record."})
+		name:   "DeleteCellInfo",
+		method: commandDeleteCellInfo,
+		params: "[--force] <cell>",
+		help:   "Deletes the CellInfo for the provided cell. The cell cannot be referenced by any Shard record.",
+	})
 
 	addCommand(cellsGroupName, command{
-		"GetCellInfoNames",
-		commandGetCellInfoNames,
-		"",
-		"Lists all the cells for which we have a CellInfo object, meaning we have a local topology service registered."})
+		name:   "GetCellInfoNames",
+		method: commandGetCellInfoNames,
+		params: "",
+		help:   "Lists all the cells for which we have a CellInfo object, meaning we have a local topology service registered.",
+	})
 
 	addCommand(cellsGroupName, command{
-		"GetCellInfo",
-		commandGetCellInfo,
-		"<cell>",
-		"Prints a JSON representation of the CellInfo for a cell."})
+		name:   "GetCellInfo",
+		method: commandGetCellInfo,
+		params: "<cell>",
+		help:   "Prints a JSON representation of the CellInfo for a cell.",
+	})
 }
 
 func commandAddCellInfo(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -73,18 +77,19 @@ func commandAddCellInfo(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
-	if *root == "" {
-		return fmt.Errorf("root must be non-empty")
-	}
 	if subFlags.NArg() != 1 {
 		return fmt.Errorf("the <cell> argument is required for the AddCellInfo command")
 	}
 	cell := subFlags.Arg(0)
 
-	return wr.TopoServer().CreateCellInfo(ctx, cell, &topodatapb.CellInfo{
-		ServerAddress: *serverAddress,
-		Root:          *root,
+	_, err := wr.VtctldServer().AddCellInfo(ctx, &vtctldatapb.AddCellInfoRequest{
+		Name: cell,
+		CellInfo: &topodatapb.CellInfo{
+			ServerAddress: *serverAddress,
+			Root:          *root,
+		},
 	})
+	return err
 }
 
 func commandUpdateCellInfo(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -98,19 +103,14 @@ func commandUpdateCellInfo(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	}
 	cell := subFlags.Arg(0)
 
-	return wr.TopoServer().UpdateCellInfoFields(ctx, cell, func(ci *topodatapb.CellInfo) error {
-		if (*serverAddress == "" || ci.ServerAddress == *serverAddress) &&
-			(*root == "" || ci.Root == *root) {
-			return topo.NewError(topo.NoUpdateNeeded, cell)
-		}
-		if *serverAddress != "" {
-			ci.ServerAddress = *serverAddress
-		}
-		if *root != "" {
-			ci.Root = *root
-		}
-		return nil
+	_, err := wr.VtctldServer().UpdateCellInfo(ctx, &vtctldatapb.UpdateCellInfoRequest{
+		Name: cell,
+		CellInfo: &topodatapb.CellInfo{
+			ServerAddress: *serverAddress,
+			Root:          *root,
+		},
 	})
+	return err
 }
 
 func commandDeleteCellInfo(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -123,7 +123,11 @@ func commandDeleteCellInfo(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	}
 	cell := subFlags.Arg(0)
 
-	return wr.TopoServer().DeleteCellInfo(ctx, cell, *force)
+	_, err := wr.VtctldServer().DeleteCellInfo(ctx, &vtctldatapb.DeleteCellInfoRequest{
+		Name:  cell,
+		Force: *force,
+	})
+	return err
 }
 
 func commandGetCellInfoNames(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

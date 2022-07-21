@@ -20,12 +20,12 @@ limitations under the License.
 package fakerpcvtgateconn
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"math/rand"
 	"reflect"
 
-	"golang.org/x/net/context"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 
@@ -99,7 +99,7 @@ func (conn *FakeVTGateConn) Execute(ctx context.Context, session *vtgatepb.Sessi
 			"Execute: %+v, want %+v", query, response.execQuery)
 	}
 	reply := *response.reply
-	s := newSession(true, "test_keyspace", []string{}, topodatapb.TabletType_MASTER)
+	s := newSession(true, "test_keyspace", []string{}, topodatapb.TabletType_PRIMARY)
 	return s, &reply, nil
 }
 
@@ -157,13 +157,40 @@ func (a *streamExecuteAdapter) Recv() (*sqltypes.Result, error) {
 	return r, nil
 }
 
+// Prepare please see vtgateconn.Impl.Prepare
+func (conn *FakeVTGateConn) Prepare(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]*querypb.BindVariable) (*vtgatepb.Session, []*querypb.Field, error) {
+	response, ok := conn.execMap[sql]
+	if !ok {
+		return nil, nil, fmt.Errorf("no match for: %s", sql)
+	}
+	query := &queryExecute{
+		SQL:           sql,
+		BindVariables: bindVars,
+		Session:       session,
+	}
+	if !reflect.DeepEqual(query, response.execQuery) {
+		return nil, nil, fmt.Errorf(
+			"Prepare: %+v, want %+v", query, response.execQuery)
+	}
+	reply := *response.reply
+	s := newSession(true, "test_keyspace", []string{}, topodatapb.TabletType_PRIMARY)
+	return s, reply.Fields, nil
+}
+
+// CloseSession please see vtgateconn.Impl.CloseSession
+func (conn *FakeVTGateConn) CloseSession(ctx context.Context, session *vtgatepb.Session) error {
+	panic("not implemented")
+}
+
 // ResolveTransaction please see vtgateconn.Impl.ResolveTransaction
 func (conn *FakeVTGateConn) ResolveTransaction(ctx context.Context, dtid string) error {
 	return nil
 }
 
 // VStream streams binlog events.
-func (conn *FakeVTGateConn) VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter) (vtgateconn.VStreamReader, error) {
+func (conn *FakeVTGateConn) VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid,
+	filter *binlogdatapb.Filter, flags *vtgatepb.VStreamFlags) (vtgateconn.VStreamReader, error) {
+
 	return nil, fmt.Errorf("NYI")
 }
 
@@ -194,4 +221,4 @@ func newSession(
 }
 
 // Make sure FakeVTGateConn implements vtgateconn.Impl
-var _ (vtgateconn.Impl) = (*FakeVTGateConn)(nil)
+var _ vtgateconn.Impl = (*FakeVTGateConn)(nil)

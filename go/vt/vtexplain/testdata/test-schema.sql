@@ -61,3 +61,36 @@ create table test_partitioned (
 	primary key(id)
 ) Engine=InnoDB
 ;
+
+create table customer (
+  id bigint,
+  email varchar(64),
+  primary key (id)
+) Engine=InnoDB;
+
+create table email_customer_map (
+   email varchar(64),
+   user_id bigint,
+   primary key (email, user_id)
+) Engine=InnoDB;
+
+create table user_region (
+   regionId bigint,
+   userId bigint,
+   name varchar(64),
+   email varchar(64),
+   primary key (regionId,userId)
+) Engine=InnoDB;
+
+create table member (
+    id bigint,
+    lkp binary(16) NOT NULL,
+    more_id int not null,
+    primary key (id)
+) Engine=InnoDB;
+
+create table lkp_idx (
+    lkp binary(16) NOT NULL,
+    id bigint,
+    primary key (lkp)
+) Engine=InnoDB;

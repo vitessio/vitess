@@ -17,15 +17,17 @@ limitations under the License.
 package mysql
 
 import (
+	"context"
+	"crypto/rsa"
 	"crypto/tls"
+	"crypto/x509"
+	"encoding/pem"
 	"fmt"
 	"net"
-	"strconv"
-	"strings"
 	"time"
 
-	"golang.org/x/net/context"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/mysql/collations"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttls"
 )
@@ -57,12 +59,6 @@ func Connect(ctx context.Context, params *ConnParams) (*Conn, error) {
 		addr = params.UnixSocket
 	} else {
 		addr = net.JoinHostPort(params.Host, fmt.Sprintf("%v", params.Port))
-	}
-
-	// Figure out the character set we want.
-	characterSet, err := parseCharacterSet(params.Charset)
-	if err != nil {
-		return nil, err
 	}
 
 	// Start a background connection routine.  It first
@@ -119,7 +115,7 @@ func Connect(ctx context.Context, params *ConnParams) (*Conn, error) {
 		// make any read or write just return with an error
 		// right away.
 		status <- connectResult{
-			err: c.clientHandshake(characterSet, params),
+			err: c.clientHandshake(params),
 		}
 	}()
 
@@ -170,6 +166,7 @@ func Connect(ctx context.Context, params *ConnParams) (*Conn, error) {
 			return nil, cr.err
 		}
 	}
+
 	return c, nil
 }
 
@@ -194,36 +191,19 @@ func (c *Conn) Ping() error {
 	case ErrPacket:
 		return ParseErrorPacket(data)
 	}
-	return vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected packet type: %d", data[0])
-}
-
-// parseCharacterSet parses the provided character set.
-// Returns SQLError(CRCantReadCharset) if it can't.
-func parseCharacterSet(cs string) (uint8, error) {
-	// Check if it's empty, return utf8. This is a reasonable default.
-	if cs == "" {
-		return CharacterSetUtf8, nil
-	}
-
-	// Check if it's in our map.
-	characterSet, ok := CharacterSetMap[strings.ToLower(cs)]
-	if ok {
-		return characterSet, nil
-	}
-
-	// As a fallback, try to parse a number. So we support more values.
-	if i, err := strconv.ParseInt(cs, 10, 8); err == nil {
-		return uint8(i), nil
-	}
-
-	// No luck.
-	return 0, NewSQLError(CRCantReadCharset, SSUnknownSQLState, "failed to interpret character set '%v'. Try using an integer value if needed", cs)
+	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected packet type: %d", data[0])
 }
 
 // clientHandshake handles the client side of the handshake.
 // Note the connection can be closed while this is running.
 // Returns a SQLError.
-func (c *Conn) clientHandshake(characterSet uint8, params *ConnParams) error {
+func (c *Conn) clientHandshake(params *ConnParams) error {
+	// if EnableQueryInfo is set, make sure that all queries starting with the handshake
+	// will actually process the INFO fields in QUERY_OK packets
+	if params.EnableQueryInfo {
+		c.enableQueryInfo = true
+	}
+
 	// Wait for the server initial handshake packet, and parse it.
 	data, err := c.readPacket()
 	if err != nil {
@@ -234,6 +214,7 @@ func (c *Conn) clientHandshake(characterSet uint8, params *ConnParams) error {
 		return err
 	}
 	c.fillFlavor(params)
+	c.salt = salt
 
 	// Sanity check.
 	if capabilities&CapabilityClientProtocol41 == 0 {
@@ -247,11 +228,16 @@ func (c *Conn) clientHandshake(characterSet uint8, params *ConnParams) error {
 		c.Capabilities = capabilities & (CapabilityClientDeprecateEOF)
 	}
 
+	charset, err := collations.Local().ParseConnectionCharset(params.Charset)
+	if err != nil {
+		return err
+	}
+
 	// Handle switch to SSL if necessary.
-	if params.Flags&CapabilityClientSSL > 0 {
+	if params.SslEnabled() {
 		// If client asked for SSL, but server doesn't support it,
 		// stop right here.
-		if capabilities&CapabilityClientSSL == 0 {
+		if params.SslRequired() && capabilities&CapabilityClientSSL == 0 {
 			return NewSQLError(CRSSLConnectionError, SSUnknownSQLState, "server doesn't support SSL but client asked for it")
 		}
 
@@ -271,14 +257,19 @@ func (c *Conn) clientHandshake(characterSet uint8, params *ConnParams) error {
 			}
 		}
 
+		tlsVersion, err := vttls.TLSVersionToNumber(params.TLSMinVersion)
+		if err != nil {
+			return NewSQLError(CRSSLConnectionError, SSUnknownSQLState, "error parsing minimal TLS version: %v", err)
+		}
+
 		// Build the TLS config.
-		clientConfig, err := vttls.ClientConfig(params.SslCert, params.SslKey, params.SslCa, serverName)
+		clientConfig, err := vttls.ClientConfig(params.EffectiveSslMode(), params.SslCert, params.SslKey, params.SslCa, params.SslCrl, serverName, tlsVersion)
 		if err != nil {
 			return NewSQLError(CRSSLConnectionError, SSUnknownSQLState, "error loading client cert and ca: %v", err)
 		}
 
 		// Send the SSLRequest packet.
-		if err := c.writeSSLRequest(capabilities, characterSet, params); err != nil {
+		if err := c.writeSSLRequest(capabilities, charset, params); err != nil {
 			return err
 		}
 
@@ -290,63 +281,32 @@ func (c *Conn) clientHandshake(characterSet uint8, params *ConnParams) error {
 	}
 
 	// Password encryption.
-	scrambledPassword := ScramblePassword(salt, []byte(params.Pass))
+	var scrambledPassword []byte
+	if c.authPluginName == CachingSha2Password {
+		scrambledPassword = ScrambleCachingSha2Password(salt, []byte(params.Pass))
+	} else {
+		scrambledPassword = ScrambleMysqlNativePassword(salt, []byte(params.Pass))
+	}
+
+	// Client Session Tracking Capability.
+	if params.Flags&CapabilityClientSessionTrack == CapabilityClientSessionTrack {
+		// If client asked for ClientSessionTrack, but server doesn't support it,
+		// stop right here.
+		if capabilities&CapabilityClientSessionTrack == 0 {
+			return NewSQLError(CRSSLConnectionError, SSUnknownSQLState, "server doesn't support ClientSessionTrack but client asked for it")
+		}
+		c.Capabilities |= CapabilityClientSessionTrack
+	}
 
 	// Build and send our handshake response 41.
 	// Note this one will never have SSL flag on.
-	if err := c.writeHandshakeResponse41(capabilities, scrambledPassword, characterSet, params); err != nil {
+	if err := c.writeHandshakeResponse41(capabilities, scrambledPassword, charset, params); err != nil {
 		return err
 	}
 
 	// Read the server response.
-	response, err := c.readPacket()
-	if err != nil {
-		return NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
-	}
-	switch response[0] {
-	case OKPacket:
-		// OK packet, we are authenticated. Save the user, keep going.
-		c.User = params.Uname
-	case AuthSwitchRequestPacket:
-		// Server is asking to use a different auth method. We
-		// only support cleartext plugin.
-		pluginName, salt, err := parseAuthSwitchRequest(response)
-		if err != nil {
-			return NewSQLError(CRServerHandshakeErr, SSUnknownSQLState, "cannot parse auth switch request: %v", err)
-		}
-
-		if pluginName == MysqlClearPassword {
-			// Write the cleartext password packet.
-			if err := c.writeClearTextPassword(params); err != nil {
-				return err
-			}
-		} else if pluginName == MysqlNativePassword {
-			// Write the mysql_native_password packet.
-			if err := c.writeMysqlNativePassword(params, salt); err != nil {
-				return err
-			}
-		} else {
-			return NewSQLError(CRServerHandshakeErr, SSUnknownSQLState, "server asked for unsupported auth method: %v", pluginName)
-		}
-
-		// Wait for OK packet.
-		response, err = c.readPacket()
-		if err != nil {
-			return NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
-		}
-		switch response[0] {
-		case OKPacket:
-			// OK packet, we are authenticated. Save the user, keep going.
-			c.User = params.Uname
-		case ErrPacket:
-			return ParseErrorPacket(response)
-		default:
-			return NewSQLError(CRServerHandshakeErr, SSUnknownSQLState, "initial server response cannot be parsed: %v", response)
-		}
-	case ErrPacket:
-		return ParseErrorPacket(response)
-	default:
-		return NewSQLError(CRServerHandshakeErr, SSUnknownSQLState, "initial server response cannot be parsed: %v", response)
+	if err := c.handleAuthResponse(params); err != nil {
+		return err
 	}
 
 	// If the server didn't support DbName in its handshake, set
@@ -442,7 +402,7 @@ func (c *Conn) parseInitialHandshakePacket(data []byte) (uint32, []byte, error) 
 	if !ok {
 		return 0, nil, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "parseInitialHandshakePacket: packet has no character set")
 	}
-	c.CharacterSet = characterSet
+	c.CharacterSet = collations.ID(characterSet)
 
 	// Status flags. Ignored.
 	_, pos, ok = readUint16(data, pos)
@@ -504,10 +464,7 @@ func (c *Conn) parseInitialHandshakePacket(data []byte) (uint32, []byte, error) 
 			// 5.6.2 that don't have a null terminated string.
 			authPluginName = string(data[pos : len(data)-1])
 		}
-
-		if authPluginName != MysqlNativePassword {
-			return 0, nil, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "parseInitialHandshakePacket: only support %v auth plugin name, but got %v", MysqlNativePassword, authPluginName)
-		}
+		c.authPluginName = AuthMethodDescription(authPluginName)
 	}
 
 	return capabilities, authPluginData, nil
@@ -517,16 +474,7 @@ func (c *Conn) parseInitialHandshakePacket(data []byte) (uint32, []byte, error) 
 // HandshakeResponse41.
 func (c *Conn) writeSSLRequest(capabilities uint32, characterSet uint8, params *ConnParams) error {
 	// Build our flags, with CapabilityClientSSL.
-	var flags uint32 = CapabilityClientLongPassword |
-		CapabilityClientLongFlag |
-		CapabilityClientProtocol41 |
-		CapabilityClientTransactions |
-		CapabilityClientSecureConnection |
-		CapabilityClientMultiStatements |
-		CapabilityClientMultiResults |
-		CapabilityClientPluginAuth |
-		CapabilityClientPluginAuthLenencClientData |
-		CapabilityClientSSL |
+	capabilityFlags := CapabilityFlagsSsl |
 		// If the server supported
 		// CapabilityClientDeprecateEOF, we also support it.
 		c.Capabilities&CapabilityClientDeprecateEOF |
@@ -541,13 +489,13 @@ func (c *Conn) writeSSLRequest(capabilities uint32, characterSet uint8, params *
 
 	// Add the DB name if the server supports it.
 	if params.DbName != "" && (capabilities&CapabilityClientConnectWithDB != 0) {
-		flags |= CapabilityClientConnectWithDB
+		capabilityFlags |= CapabilityClientConnectWithDB
 	}
 
 	data, pos := c.startEphemeralPacketWithHeader(length)
 
 	// Client capability flags.
-	pos = writeUint32(data, pos, flags)
+	pos = writeUint32(data, pos, capabilityFlags)
 
 	// Max-packet size, always 0. See doc.go.
 	pos = writeZeroes(data, pos, 4)
@@ -562,24 +510,34 @@ func (c *Conn) writeSSLRequest(capabilities uint32, characterSet uint8, params *
 	return nil
 }
 
+// CapabilityFlags are client capability flag sent to mysql on connect
+const CapabilityFlags uint32 = CapabilityClientLongPassword |
+	CapabilityClientLongFlag |
+	CapabilityClientProtocol41 |
+	CapabilityClientTransactions |
+	CapabilityClientSecureConnection |
+	CapabilityClientMultiStatements |
+	CapabilityClientMultiResults |
+	CapabilityClientPluginAuth |
+	CapabilityClientPluginAuthLenencClientData
+
+// CapabilityFlagsSsl signals that we can handle SSL as well
+const CapabilityFlagsSsl = CapabilityFlags |
+	CapabilityClientSSL
+
 // writeHandshakeResponse41 writes the handshake response.
 // Returns a SQLError.
 func (c *Conn) writeHandshakeResponse41(capabilities uint32, scrambledPassword []byte, characterSet uint8, params *ConnParams) error {
 	// Build our flags.
-	var flags uint32 = CapabilityClientLongPassword |
-		CapabilityClientLongFlag |
-		CapabilityClientProtocol41 |
-		CapabilityClientTransactions |
-		CapabilityClientSecureConnection |
-		CapabilityClientMultiStatements |
-		CapabilityClientMultiResults |
-		CapabilityClientPluginAuth |
-		CapabilityClientPluginAuthLenencClientData |
+	capabilityFlags := CapabilityFlags |
 		// If the server supported
 		// CapabilityClientDeprecateEOF, we also support it.
 		c.Capabilities&CapabilityClientDeprecateEOF |
 		// Pass-through ClientFoundRows flag.
-		CapabilityClientFoundRows&uint32(params.Flags)
+		CapabilityClientFoundRows&uint32(params.Flags) |
+		// If the server supported
+		// CapabilityClientSessionTrack, we also support it.
+		c.Capabilities&CapabilityClientSessionTrack
 
 	// FIXME(alainjobart) add multi statement.
 
@@ -591,12 +549,12 @@ func (c *Conn) writeHandshakeResponse41(capabilities uint32, scrambledPassword [
 			lenNullString(params.Uname) +
 			// length of scrambled password is handled below.
 			len(scrambledPassword) +
-			21 + // "mysql_native_password" string.
+			len(c.authPluginName) +
 			1 // terminating zero.
 
 	// Add the DB name if the server supports it.
 	if params.DbName != "" && (capabilities&CapabilityClientConnectWithDB != 0) {
-		flags |= CapabilityClientConnectWithDB
+		capabilityFlags |= CapabilityClientConnectWithDB
 		length += lenNullString(params.DbName)
 	}
 
@@ -609,7 +567,7 @@ func (c *Conn) writeHandshakeResponse41(capabilities uint32, scrambledPassword [
 	data, pos := c.startEphemeralPacketWithHeader(length)
 
 	// Client capability flags.
-	pos = writeUint32(data, pos, flags)
+	pos = writeUint32(data, pos, capabilityFlags)
 
 	// Max-packet size, always 0. See doc.go.
 	pos = writeZeroes(data, pos, 4)
@@ -640,7 +598,7 @@ func (c *Conn) writeHandshakeResponse41(capabilities uint32, scrambledPassword [
 	}
 
 	// Assume native client during response
-	pos = writeNullString(data, pos, MysqlNativePassword)
+	pos = writeNullString(data, pos, string(c.authPluginName))
 
 	// Sanity-check the length.
 	if pos != len(data) {
@@ -653,11 +611,115 @@ func (c *Conn) writeHandshakeResponse41(capabilities uint32, scrambledPassword [
 	return nil
 }
 
-func parseAuthSwitchRequest(data []byte) (string, []byte, error) {
+// handleAuthResponse parses server's response after client sends the password for authentication
+// and handles next steps for AuthSwitchRequestPacket and AuthMoreDataPacket.
+func (c *Conn) handleAuthResponse(params *ConnParams) error {
+	response, err := c.readPacket()
+	if err != nil {
+		return NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
+	}
+
+	switch response[0] {
+	case OKPacket:
+		// OK packet, we are authenticated. Save the user, keep going.
+		c.User = params.Uname
+	case AuthSwitchRequestPacket:
+		// Server is asking to use a different auth method
+		if err = c.handleAuthSwitchPacket(params, response); err != nil {
+			return err
+		}
+	case AuthMoreDataPacket:
+		// Server is requesting more data - maybe un-scrambled password
+		if err := c.handleAuthMoreDataPacket(response[1], params); err != nil {
+			return err
+		}
+	case ErrPacket:
+		return ParseErrorPacket(response)
+	default:
+		return NewSQLError(CRServerHandshakeErr, SSUnknownSQLState, "initial server response cannot be parsed: %v", response)
+	}
+
+	return nil
+}
+
+// handleAuthSwitchPacket scrambles password for the plugin requested by the server and retries authentication
+func (c *Conn) handleAuthSwitchPacket(params *ConnParams, response []byte) error {
+	var err error
+	var salt []byte
+	c.authPluginName, salt, err = parseAuthSwitchRequest(response)
+	if err != nil {
+		return NewSQLError(CRServerHandshakeErr, SSUnknownSQLState, "cannot parse auth switch request: %v", err)
+	}
+	if salt != nil {
+		c.salt = salt
+	}
+	switch c.authPluginName {
+	case MysqlClearPassword:
+		if err := c.writeClearTextPassword(params); err != nil {
+			return err
+		}
+	case MysqlNativePassword:
+		scrambledPassword := ScrambleMysqlNativePassword(c.salt, []byte(params.Pass))
+		if err := c.writeScrambledPassword(scrambledPassword); err != nil {
+			return err
+		}
+	case CachingSha2Password:
+		scrambledPassword := ScrambleCachingSha2Password(c.salt, []byte(params.Pass))
+		if err := c.writeScrambledPassword(scrambledPassword); err != nil {
+			return err
+		}
+	default:
+		return NewSQLError(CRServerHandshakeErr, SSUnknownSQLState, "server asked for unsupported auth method: %v", c.authPluginName)
+	}
+
+	// The response could be an OKPacket, AuthMoreDataPacket or ErrPacket
+	return c.handleAuthResponse(params)
+}
+
+// handleAuthMoreDataPacket handles response of CachingSha2Password authentication and sends full password to the
+// server if requested
+func (c *Conn) handleAuthMoreDataPacket(data byte, params *ConnParams) error {
+	switch data {
+	case CachingSha2FastAuth:
+		// User credentials are verified using the cache ("Fast" path).
+		// Next packet should be an OKPacket
+		return c.handleAuthResponse(params)
+	case CachingSha2FullAuth:
+		// User credentials are not cached, we have to exchange full password.
+		if c.Capabilities&CapabilityClientSSL > 0 || params.UnixSocket != "" {
+			// If we are using an SSL connection or Unix socket, write clear text password
+			if err := c.writeClearTextPassword(params); err != nil {
+				return err
+			}
+		} else {
+			// If we are not using an SSL connection or Unix socket, we have to fetch a public key
+			// from the server to encrypt password
+			pub, err := c.requestPublicKey()
+			if err != nil {
+				return err
+			}
+			// Encrypt password with public key
+			enc, err := EncryptPasswordWithPublicKey(c.salt, []byte(params.Pass), pub)
+			if err != nil {
+				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "error encrypting password with public key: %v", err)
+			}
+			// Write encrypted password
+			if err := c.writeScrambledPassword(enc); err != nil {
+				return err
+			}
+		}
+		// Next packet should either be an OKPacket or ErrPacket
+		return c.handleAuthResponse(params)
+	default:
+		return NewSQLError(CRServerHandshakeErr, SSUnknownSQLState, "cannot parse AuthMoreDataPacket: %v", data)
+	}
+}
+
+func parseAuthSwitchRequest(data []byte) (AuthMethodDescription, []byte, error) {
 	pos := 1
 	pluginName, pos, ok := readNullString(data, pos)
 	if !ok {
-		return "", nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "cannot get plugin name from AuthSwitchRequest: %v", data)
+		return "", nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "cannot get plugin name from AuthSwitchRequest: %v", data)
 	}
 
 	// If this was a request with a salt in it, max 20 bytes
@@ -665,7 +727,35 @@ func parseAuthSwitchRequest(data []byte) (string, []byte, error) {
 	if len(salt) > 20 {
 		salt = salt[:20]
 	}
-	return pluginName, salt, nil
+	return AuthMethodDescription(pluginName), salt, nil
+}
+
+// requestPublicKey requests a public key from the server
+func (c *Conn) requestPublicKey() (rsaKey *rsa.PublicKey, err error) {
+	// get public key from server
+	data, pos := c.startEphemeralPacketWithHeader(1)
+	data[pos] = 0x02
+	if err := c.writeEphemeralPacket(); err != nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "error sending public key request packet: %v", err)
+	}
+
+	response, err := c.readPacket()
+	if err != nil {
+		return nil, NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
+	}
+
+	// Server should respond with a AuthMoreDataPacket containing the public key
+	if response[0] != AuthMoreDataPacket {
+		return nil, ParseErrorPacket(response)
+	}
+
+	block, _ := pem.Decode(response[1:])
+	pub, err := x509.ParsePKIXPublicKey(block.Bytes)
+	if err != nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to parse public key from server: %v", err)
+	}
+
+	return pub.(*rsa.PublicKey), nil
 }
 
 // writeClearTextPassword writes the clear text password.
@@ -676,20 +766,19 @@ func (c *Conn) writeClearTextPassword(params *ConnParams) error {
 	pos = writeNullString(data, pos, params.Pass)
 	// Sanity check.
 	if pos != len(data) {
-		return vterrors.Errorf(vtrpc.Code_INTERNAL, "error building ClearTextPassword packet: got %v bytes expected %v", pos, len(data))
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "error building ClearTextPassword packet: got %v bytes expected %v", pos, len(data))
 	}
 	return c.writeEphemeralPacket()
 }
 
-// writeMysqlNativePassword writes the encrypted mysql_native_password format
+// writeScrambledPassword writes the encrypted mysql_native_password format
 // Returns a SQLError.
-func (c *Conn) writeMysqlNativePassword(params *ConnParams, salt []byte) error {
-	scrambledPassword := ScramblePassword(salt, []byte(params.Pass))
+func (c *Conn) writeScrambledPassword(scrambledPassword []byte) error {
 	data, pos := c.startEphemeralPacketWithHeader(len(scrambledPassword))
 	pos += copy(data[pos:], scrambledPassword)
 	// Sanity check.
 	if pos != len(data) {
-		return vterrors.Errorf(vtrpc.Code_INTERNAL, "error building MysqlNativePassword packet: got %v bytes expected %v", pos, len(data))
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "error building %v packet: got %v bytes expected %v", c.authPluginName, pos, len(data))
 	}
 	return c.writeEphemeralPacket()
 }

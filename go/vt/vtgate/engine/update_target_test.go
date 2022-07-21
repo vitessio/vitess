@@ -17,6 +17,7 @@ limitations under the License.
 package engine
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -51,23 +52,21 @@ func TestUpdateTargetTable(t *testing.T) {
 				Target: tc.targetString,
 			}
 			vc := &loggingVCursor{}
-			_, err := updateTarget.Execute(vc, map[string]*querypb.BindVariable{}, false)
+			_, err := updateTarget.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+			require.NoError(t, err)
+			vc.ExpectLog(t, tc.expectedQueryLog)
+
+			vc = &loggingVCursor{}
+			_, err = wrapStreamExecute(updateTarget, vc, map[string]*querypb.BindVariable{}, false)
 			require.NoError(t, err)
 			vc.ExpectLog(t, tc.expectedQueryLog)
 		})
 	}
 }
 
-func TestUpdateTargetStreamExecute(t *testing.T) {
-	updateTarget := &UpdateTarget{}
-	vc := &noopVCursor{}
-	err := updateTarget.StreamExecute(vc, map[string]*querypb.BindVariable{}, false, nil)
-	require.EqualError(t, err, "use cannot be used for streaming")
-}
-
 func TestUpdateTargetGetFields(t *testing.T) {
 	updateTarget := &UpdateTarget{}
 	vc := &noopVCursor{}
-	_, err := updateTarget.GetFields(vc, map[string]*querypb.BindVariable{})
-	require.EqualError(t, err, "use cannot be used for get fields")
+	_, err := updateTarget.GetFields(context.Background(), vc, map[string]*querypb.BindVariable{})
+	require.EqualError(t, err, "[BUG] GetFields not reachable for use statement")
 }

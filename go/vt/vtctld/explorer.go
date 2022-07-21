@@ -24,7 +24,7 @@ import (
 	"sort"
 	"strings"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -168,7 +168,7 @@ func handleExplorerRedirect(ctx context.Context, ts *topo.Server, r *http.Reques
 func initExplorer(ts *topo.Server) {
 	// Main backend explorer functions.
 	be := newBackendExplorer(ts)
-	handleCollection("topodata", func(r *http.Request) (interface{}, error) {
+	handleCollection("topodata", func(r *http.Request) (any, error) {
 		return be.HandlePath(path.Clean("/"+getItemPath(r.URL.Path)), r), nil
 	})
 

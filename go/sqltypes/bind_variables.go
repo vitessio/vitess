@@ -22,13 +22,23 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
-// NullBindVariable is a bindvar with NULL value.
-var NullBindVariable = &querypb.BindVariable{Type: querypb.Type_NULL_TYPE}
+type DecimalFloat float64
+
+var (
+	// BvSchemaName is bind variable to be sent down to vttablet for schema name.
+	BvSchemaName = "__vtschemaname"
+
+	// BvReplaceSchemaName is bind variable to be sent down to vttablet to replace schema name.
+	BvReplaceSchemaName = "__replacevtschemaname"
+
+	// NullBindVariable is a bindvar with NULL value.
+	NullBindVariable = &querypb.BindVariable{Type: querypb.Type_NULL_TYPE}
+)
 
 // ValueToProto converts Value to a *querypb.Value.
 func ValueToProto(v Value) *querypb.Value {
@@ -40,8 +50,8 @@ func ProtoToValue(v *querypb.Value) Value {
 	return MakeTrusted(v.Type, v.Value)
 }
 
-// BuildBindVariables builds a map[string]*querypb.BindVariable from a map[string]interface{}.
-func BuildBindVariables(in map[string]interface{}) (map[string]*querypb.BindVariable, error) {
+// BuildBindVariables builds a map[string]*querypb.BindVariable from a map[string]any
+func BuildBindVariables(in map[string]any) (map[string]*querypb.BindVariable, error) {
 	if len(in) == 0 {
 		return nil, nil
 	}
@@ -57,6 +67,21 @@ func BuildBindVariables(in map[string]interface{}) (map[string]*querypb.BindVari
 	return out, nil
 }
 
+// HexNumBindVariable converts bytes representing a hex number to a bind var.
+func HexNumBindVariable(v []byte) *querypb.BindVariable {
+	return ValueBindVariable(NewHexNum(v))
+}
+
+// HexValBindVariable converts bytes representing a hex encoded string to a bind var.
+func HexValBindVariable(v []byte) *querypb.BindVariable {
+	return ValueBindVariable(NewHexVal(v))
+}
+
+// BitNumBindVariable converts bytes representing a bit encoded string to a bind var.
+func BitNumBindVariable(v []byte) *querypb.BindVariable {
+	return ValueBindVariable(NewBitNum(v))
+}
+
 // Int8BindVariable converts an int8 to a bind var.
 func Int8BindVariable(v int8) *querypb.BindVariable {
 	return ValueBindVariable(NewInt8(v))
@@ -65,6 +90,19 @@ func Int8BindVariable(v int8) *querypb.BindVariable {
 // Int32BindVariable converts an int32 to a bind var.
 func Int32BindVariable(v int32) *querypb.BindVariable {
 	return ValueBindVariable(NewInt32(v))
+}
+
+// Uint32BindVariable converts a uint32 to a bind var.
+func Uint32BindVariable(v uint32) *querypb.BindVariable {
+	return ValueBindVariable(NewUint32(v))
+}
+
+// BoolBindVariable converts an bool to a int64 bind var.
+func BoolBindVariable(v bool) *querypb.BindVariable {
+	if v {
+		return Int64BindVariable(1)
+	}
+	return Int64BindVariable(0)
 }
 
 // Int64BindVariable converts an int64 to a bind var.
@@ -82,9 +120,14 @@ func Float64BindVariable(v float64) *querypb.BindVariable {
 	return ValueBindVariable(NewFloat64(v))
 }
 
+func DecimalBindVariable(v DecimalFloat) *querypb.BindVariable {
+	f := strconv.FormatFloat(float64(v), 'f', -1, 64)
+	return ValueBindVariable(NewDecimal(f))
+}
+
 // StringBindVariable converts a string to a bind var.
 func StringBindVariable(v string) *querypb.BindVariable {
-	return ValueBindVariable(NewVarBinary(v))
+	return ValueBindVariable(NewVarChar(v))
 }
 
 // BytesBindVariable converts a []byte to a bind var.
@@ -98,10 +141,10 @@ func ValueBindVariable(v Value) *querypb.BindVariable {
 }
 
 // BuildBindVariable builds a *querypb.BindVariable from a valid input type.
-func BuildBindVariable(v interface{}) (*querypb.BindVariable, error) {
+func BuildBindVariable(v any) (*querypb.BindVariable, error) {
 	switch v := v.(type) {
 	case string:
-		return BytesBindVariable([]byte(v)), nil
+		return StringBindVariable(v), nil
 	case []byte:
 		return BytesBindVariable(v), nil
 	case bool:
@@ -118,6 +161,8 @@ func BuildBindVariable(v interface{}) (*querypb.BindVariable, error) {
 		return Int64BindVariable(v), nil
 	case uint64:
 		return Uint64BindVariable(v), nil
+	case DecimalFloat:
+		return DecimalBindVariable(v), nil
 	case float64:
 		return Float64BindVariable(v), nil
 	case nil:
@@ -126,7 +171,7 @@ func BuildBindVariable(v interface{}) (*querypb.BindVariable, error) {
 		return ValueBindVariable(v), nil
 	case *querypb.BindVariable:
 		return v, nil
-	case []interface{}:
+	case []any:
 		bv := &querypb.BindVariable{
 			Type:   querypb.Type_TUPLE,
 			Values: make([]*querypb.Value, len(v)),
@@ -149,7 +194,7 @@ func BuildBindVariable(v interface{}) (*querypb.BindVariable, error) {
 		}
 		values := make([]querypb.Value, len(v))
 		for i, lv := range v {
-			values[i].Type = querypb.Type_VARBINARY
+			values[i].Type = querypb.Type_VARCHAR
 			values[i].Value = []byte(lv)
 			bv.Values[i] = &values[i]
 		}

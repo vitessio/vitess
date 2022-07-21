@@ -26,8 +26,9 @@ import (
 	"testing"
 	"time"
 
+	"context"
+
 	"github.com/stretchr/testify/require"
-	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
@@ -153,7 +154,7 @@ func NewFakeTablet(t *testing.T, wr *wrangler.Wrangler, cell string, uid uint32,
 	delete(tablet.PortMap, "start_http_server")
 	_, force := tablet.PortMap["force_init"]
 	delete(tablet.PortMap, "force_init")
-	if err := wr.InitTablet(context.Background(), tablet, force, true /* createShardAndKeyspace */, false /* allowUpdate */); err != nil {
+	if err := wr.TopoServer().InitTablet(context.Background(), tablet, force, true /* createShardAndKeyspace */, false /* allowUpdate */); err != nil {
 		t.Fatalf("cannot create tablet %v: %v", uid, err)
 	}
 
@@ -209,7 +210,7 @@ func (ft *FakeTablet) StartActionLoop(t *testing.T, wr *wrangler.Wrangler) {
 		MysqlDaemon:         ft.FakeMysqlDaemon,
 		DBConfigs:           &dbconfigs.DBConfigs{},
 		QueryServiceControl: tabletservermock.NewController(),
-		VREngine:            vreplication.NewTestEngine(wr.TopoServer(), ft.Tablet.Alias.Cell, ft.FakeMysqlDaemon, binlogplayer.NewFakeDBClient, topoproto.TabletDbName(ft.Tablet), nil),
+		VREngine:            vreplication.NewTestEngine(wr.TopoServer(), ft.Tablet.Alias.Cell, ft.FakeMysqlDaemon, binlogplayer.NewFakeDBClient, binlogplayer.NewFakeDBClient, topoproto.TabletDbName(ft.Tablet), nil),
 	}
 	if err := ft.TM.Start(ft.Tablet, 0); err != nil {
 		t.Fatal(err)
@@ -256,8 +257,8 @@ func (ft *FakeTablet) StopActionLoop(t *testing.T) {
 }
 
 // Target returns the keyspace/shard/type info of this tablet as Target.
-func (ft *FakeTablet) Target() querypb.Target {
-	return querypb.Target{
+func (ft *FakeTablet) Target() *querypb.Target {
+	return &querypb.Target{
 		Keyspace:   ft.Tablet.Keyspace,
 		Shard:      ft.Tablet.Shard,
 		TabletType: ft.Tablet.Type,

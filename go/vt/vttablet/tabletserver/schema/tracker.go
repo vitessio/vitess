@@ -23,11 +23,14 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
+	"vitess.io/vitess/go/vt/schema"
+
 	"vitess.io/vitess/go/mysql"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 
-	"github.com/golang/protobuf/proto"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -135,7 +138,7 @@ func (tr *Tracker) process(ctx context.Context) {
 	defer tr.env.LogError()
 	defer tr.wg.Done()
 	if err := tr.possiblyInsertInitialSchema(ctx); err != nil {
-		log.Errorf("possiblyInsertInitialSchema eror: %v", err)
+		log.Errorf("error inserting initial schema: %v", err)
 		return
 	}
 
@@ -152,10 +155,13 @@ func (tr *Tracker) process(ctx context.Context) {
 				if event.Type == binlogdatapb.VEventType_GTID {
 					gtid = event.Gtid
 				}
-				if event.Type == binlogdatapb.VEventType_DDL {
+				if event.Type == binlogdatapb.VEventType_DDL &&
+					MustReloadSchemaOnDDL(event.Statement, tr.engine.cp.DBName()) {
+
 					if err := tr.schemaUpdated(gtid, event.Statement, event.Timestamp); err != nil {
 						tr.env.Stats().ErrorCounters.Add(vtrpcpb.Code_INTERNAL.String(), 1)
-						log.Errorf("Error updating schema: %s", sqlparser.TruncateForLog(err.Error()))
+						log.Errorf("Error updating schema: %s for ddl %s, gtid %s",
+							sqlparser.TruncateForLog(err.Error()), event.Statement, gtid)
 					}
 				}
 			}
@@ -177,7 +183,7 @@ func (tr *Tracker) currentPosition(ctx context.Context) (mysql.Position, error) 
 		return mysql.Position{}, err
 	}
 	defer conn.Close()
-	return conn.MasterPosition()
+	return conn.PrimaryPosition()
 }
 
 func (tr *Tracker) isSchemaVersionTableEmpty(ctx context.Context) (bool, error) {
@@ -186,7 +192,7 @@ func (tr *Tracker) isSchemaVersionTableEmpty(ctx context.Context) (bool, error) 
 		return false, err
 	}
 	defer conn.Recycle()
-	result, err := withDDL.Exec(ctx, "select id from _vt.schema_version limit 1", conn.Exec)
+	result, err := withDDL.Exec(ctx, "select id from _vt.schema_version limit 1", conn.Exec, conn.Exec)
 	if err != nil {
 		return false, err
 	}
@@ -252,7 +258,7 @@ func (tr *Tracker) saveCurrentSchemaToDb(ctx context.Context, gtid, ddl string, 
 	query := fmt.Sprintf("insert into _vt.schema_version "+
 		"(pos, ddl, schemax, time_updated) "+
 		"values (%v, %v, %v, %d)", encodeString(gtid), encodeString(ddl), encodeString(string(blob)), timestamp)
-	_, err = withDDL.Exec(ctx, query, conn.Exec)
+	_, err = withDDL.Exec(ctx, query, conn.Exec, conn.Exec)
 	if err != nil {
 		return err
 	}
@@ -276,4 +282,33 @@ func encodeString(in string) string {
 	buf := bytes.NewBuffer(nil)
 	sqltypes.NewVarChar(in).EncodeSQL(buf)
 	return buf.String()
+}
+
+// MustReloadSchemaOnDDL returns true if the ddl is for the db which is part of the workflow and is not an online ddl artifact
+func MustReloadSchemaOnDDL(sql string, dbname string) bool {
+	ast, err := sqlparser.Parse(sql)
+	if err != nil {
+		return false
+	}
+	switch stmt := ast.(type) {
+	case sqlparser.DBDDLStatement:
+		return false
+	case sqlparser.DDLStatement:
+		tables := []sqlparser.TableName{stmt.GetTable()}
+		tables = append(tables, stmt.GetToTables()...)
+		for _, table := range tables {
+			if table.IsEmpty() {
+				continue
+			}
+			if !table.Qualifier.IsEmpty() && table.Qualifier.String() != dbname {
+				continue
+			}
+			tableName := table.Name.String()
+			if schema.IsOnlineDDLTableName(tableName) {
+				continue
+			}
+			return true
+		}
+	}
+	return false
 }

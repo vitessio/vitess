@@ -121,14 +121,14 @@ public abstract class RpcClientTest {
       .put("bytes", new byte[]{1, 2, 3})
       .build();
   private static final String BIND_VARS_ECHO =
-      "map[bytes:type:VARBINARY value:\"\\001\\002\\003\"  float:type:FLOAT64 value:\"2.5\"  int:type:INT64 value:\"123\" ]";
+      "map[bytes:type:VARBINARY value:\"\\x01\\x02\\x03\" float:type:FLOAT64 value:\"2.5\" int:type:INT64 value:\"123\"]";
 
-  private static final String NONTX_V3_SESSION_ECHO = "autocommit:true target_string:\"test_keyspace@REPLICA\" options:<included_fields:ALL > ";
+  private static final String NONTX_V3_SESSION_ECHO = "autocommit:true target_string:\"test_keyspace@REPLICA\" options:{included_fields:ALL}";
 
   private static final CallerID CALLER_ID = CallerID.newBuilder().setPrincipal("test_principal")
       .setComponent("test_component").setSubcomponent("test_subcomponent").build();
   private static final String CALLER_ID_ECHO =
-      "principal:\"test_principal\" component:\"test_component\" subcomponent:\"test_subcomponent\" ";
+      "principal:\"test_principal\" component:\"test_component\" subcomponent:\"test_subcomponent\"";
 
   private static Map<String, String> getEcho(Cursor cursor) throws Exception {
     Map<String, String> values = new HashMap<String, String>();

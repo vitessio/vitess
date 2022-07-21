@@ -17,10 +17,12 @@ limitations under the License.
 package endtoend
 
 import (
-	"strings"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 
 	"github.com/stretchr/testify/require"
 
@@ -30,24 +32,13 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
-// compareIntDiff returns an error if end[tag] != start[tag]+diff.
-func compareIntDiff(t *testing.T, end map[string]interface{}, tag string, start map[string]interface{}, diff int) {
-	t.Helper()
-	verifyIntValue(t, end, tag, framework.FetchInt(start, tag)+diff)
-}
-
-// verifyIntValue returns an error if values[tag] != want.
-func verifyIntValue(t *testing.T, values map[string]interface{}, tag string, want int) {
-	t.Helper()
-	require.Equal(t, want, framework.FetchInt(values, tag), tag)
-}
-
 func TestPoolSize(t *testing.T) {
-	defer framework.Server.SetPoolSize(framework.Server.PoolSize())
-	framework.Server.SetPoolSize(1)
+	revert := changeVar(t, "PoolSize", "1")
+	defer revert()
 
 	vstart := framework.DebugVars()
 	verifyIntValue(t, vstart, "ConnPoolCapacity", 1)
@@ -71,13 +62,27 @@ func TestPoolSize(t *testing.T) {
 	tag := "ConnPoolWaitCount"
 	got := framework.FetchInt(framework.DebugVars(), tag)
 	want := framework.FetchInt(vstart, tag)
-	if got <= want {
-		t.Errorf("%s: %d, must be greater than %d", tag, got, want)
-	}
+	assert.LessOrEqual(t, want, got)
+}
+
+func TestStreamPoolSize(t *testing.T) {
+	revert := changeVar(t, "StreamPoolSize", "1")
+	defer revert()
+
+	vstart := framework.DebugVars()
+	verifyIntValue(t, vstart, "StreamConnPoolCapacity", 1)
+}
+
+func TestQueryCacheCapacity(t *testing.T) {
+	revert := changeVar(t, "QueryCacheCapacity", "1")
+	defer revert()
+
+	vstart := framework.DebugVars()
+	verifyIntValue(t, vstart, "QueryCacheCapacity", 1)
 }
 
 func TestDisableConsolidator(t *testing.T) {
-	totalConsolidationsTag := "Waits/Histograms/Consolidations/inf"
+	totalConsolidationsTag := "Waits/Histograms/Consolidations/Count"
 	initial := framework.FetchInt(framework.DebugVars(), totalConsolidationsTag)
 	var wg sync.WaitGroup
 	wg.Add(2)
@@ -91,11 +96,10 @@ func TestDisableConsolidator(t *testing.T) {
 	}()
 	wg.Wait()
 	afterOne := framework.FetchInt(framework.DebugVars(), totalConsolidationsTag)
-	if initial+1 != afterOne {
-		t.Errorf("expected one consolidation, but got: before consolidation count: %v; after consolidation count: %v", initial, afterOne)
-	}
-	framework.Server.SetConsolidatorMode(tabletenv.Disable)
-	defer framework.Server.SetConsolidatorMode(tabletenv.Enable)
+	assert.Equal(t, initial+1, afterOne, "expected one consolidation")
+
+	revert := changeVar(t, "Consolidator", tabletenv.Disable)
+	defer revert()
 	var wg2 sync.WaitGroup
 	wg2.Add(2)
 	go func() {
@@ -108,13 +112,11 @@ func TestDisableConsolidator(t *testing.T) {
 	}()
 	wg2.Wait()
 	noNewConsolidations := framework.FetchInt(framework.DebugVars(), totalConsolidationsTag)
-	if afterOne != noNewConsolidations {
-		t.Errorf("expected no new consolidations, but got: before consolidation count: %v; after consolidation count: %v", afterOne, noNewConsolidations)
-	}
+	assert.Equal(t, afterOne, noNewConsolidations, "expected no new consolidations")
 }
 
 func TestConsolidatorReplicasOnly(t *testing.T) {
-	totalConsolidationsTag := "Waits/Histograms/Consolidations/inf"
+	totalConsolidationsTag := "Waits/Histograms/Consolidations/Count"
 	initial := framework.FetchInt(framework.DebugVars(), totalConsolidationsTag)
 	var wg sync.WaitGroup
 	wg.Add(2)
@@ -128,14 +130,12 @@ func TestConsolidatorReplicasOnly(t *testing.T) {
 	}()
 	wg.Wait()
 	afterOne := framework.FetchInt(framework.DebugVars(), totalConsolidationsTag)
-	if initial+1 != afterOne {
-		t.Errorf("expected one consolidation, but got: before consolidation count: %v; after consolidation count: %v", initial, afterOne)
-	}
+	assert.Equal(t, initial+1, afterOne, "expected one consolidation")
 
-	framework.Server.SetConsolidatorMode(tabletenv.NotOnMaster)
-	defer framework.Server.SetConsolidatorMode(tabletenv.Enable)
+	revert := changeVar(t, "Consolidator", tabletenv.NotOnPrimary)
+	defer revert()
 
-	// master should not do query consolidation
+	// primary should not do query consolidation
 	var wg2 sync.WaitGroup
 	wg2.Add(2)
 	go func() {
@@ -148,22 +148,16 @@ func TestConsolidatorReplicasOnly(t *testing.T) {
 	}()
 	wg2.Wait()
 	noNewConsolidations := framework.FetchInt(framework.DebugVars(), totalConsolidationsTag)
-	if afterOne != noNewConsolidations {
-		t.Errorf("expected no new consolidations, but got: before consolidation count: %v; after consolidation count: %v", afterOne, noNewConsolidations)
-	}
+	assert.Equal(t, afterOne, noNewConsolidations, "expected no new consolidations")
 
 	// become a replica, where query consolidation should happen
 	client := framework.NewClientWithTabletType(topodatapb.TabletType_REPLICA)
 
 	err := client.SetServingType(topodatapb.TabletType_REPLICA)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer func() {
-		err = client.SetServingType(topodatapb.TabletType_MASTER)
-		if err != nil {
-			t.Fatal(err)
-		}
+		err = client.SetServingType(topodatapb.TabletType_PRIMARY)
+		require.NoError(t, err)
 	}()
 
 	initial = framework.FetchInt(framework.DebugVars(), totalConsolidationsTag)
@@ -179,64 +173,67 @@ func TestConsolidatorReplicasOnly(t *testing.T) {
 	}()
 	wg3.Wait()
 	afterOne = framework.FetchInt(framework.DebugVars(), totalConsolidationsTag)
-	if initial+1 != afterOne {
-		t.Errorf("expected another consolidation, but got: before consolidation count: %v; after consolidation count: %v", initial, afterOne)
-	}
+	assert.Equal(t, initial+1, afterOne, "expected another consolidation")
 }
 
 func TestQueryPlanCache(t *testing.T) {
+	var cachedPlanSize = int((&tabletserver.TabletPlan{}).CachedSize(true))
+
 	//sleep to avoid race between SchemaChanged event clearing out the plans cache which breaks this test
-	time.Sleep(1 * time.Second)
+	framework.Server.WaitForSchemaReset(2 * time.Second)
 
 	defer framework.Server.SetQueryPlanCacheCap(framework.Server.QueryPlanCacheCap())
-	framework.Server.SetQueryPlanCacheCap(1)
 
 	bindVars := map[string]*querypb.BindVariable{
 		"ival1": sqltypes.Int64BindVariable(1),
 		"ival2": sqltypes.Int64BindVariable(1),
 	}
+
+	framework.Server.ClearQueryPlanCache()
+
 	client := framework.NewClient()
 	_, _ = client.Execute("select * from vitess_test where intval=:ival1", bindVars)
-	_, _ = client.Execute("select * from vitess_test where intval=:ival2", bindVars)
-	vend := framework.DebugVars()
-	verifyIntValue(t, vend, "QueryCacheLength", 1)
-	verifyIntValue(t, vend, "QueryCacheSize", 1)
-	verifyIntValue(t, vend, "QueryCacheCapacity", 1)
-
-	framework.Server.SetQueryPlanCacheCap(10)
 	_, _ = client.Execute("select * from vitess_test where intval=:ival1", bindVars)
+	assert.Equal(t, 1, framework.Server.QueryPlanCacheLen())
+
+	vend := framework.DebugVars()
+	assert.Equal(t, 1, framework.FetchInt(vend, "QueryCacheLength"))
+	assert.GreaterOrEqual(t, framework.FetchInt(vend, "QueryCacheSize"), cachedPlanSize)
+
+	_, _ = client.Execute("select * from vitess_test where intval=:ival2", bindVars)
+	require.Equal(t, 2, framework.Server.QueryPlanCacheLen())
+
 	vend = framework.DebugVars()
-	verifyIntValue(t, vend, "QueryCacheLength", 2)
-	verifyIntValue(t, vend, "QueryCacheSize", 2)
+	assert.Equal(t, 2, framework.FetchInt(vend, "QueryCacheLength"))
+	assert.GreaterOrEqual(t, framework.FetchInt(vend, "QueryCacheSize"), 2*cachedPlanSize)
+
 	_, _ = client.Execute("select * from vitess_test where intval=1", bindVars)
+	require.Equal(t, 3, framework.Server.QueryPlanCacheLen())
+
 	vend = framework.DebugVars()
-	verifyIntValue(t, vend, "QueryCacheLength", 3)
-	verifyIntValue(t, vend, "QueryCacheSize", 3)
+	assert.Equal(t, 3, framework.FetchInt(vend, "QueryCacheLength"))
+	assert.GreaterOrEqual(t, framework.FetchInt(vend, "QueryCacheSize"), 3*cachedPlanSize)
 }
 
 func TestMaxResultSize(t *testing.T) {
-	defer framework.Server.SetMaxResultSize(framework.Server.MaxResultSize())
-	framework.Server.SetMaxResultSize(2)
+	revert := changeVar(t, "MaxResultSize", "2")
+	defer revert()
 
 	client := framework.NewClient()
 	query := "select * from vitess_test"
 	_, err := client.Execute(query, nil)
+	assert.Error(t, err)
 	want := "Row count exceeded"
-	if err == nil || !strings.HasPrefix(err.Error(), want) {
-		t.Errorf("Error: %v, must start with %s", err, want)
-	}
+	assert.Contains(t, err.Error(), want, "Error: %v, must start with %s", err, want)
 	verifyIntValue(t, framework.DebugVars(), "MaxResultSize", 2)
 	framework.Server.SetMaxResultSize(10)
 	_, err = client.Execute(query, nil)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 }
 
 func TestWarnResultSize(t *testing.T) {
-	defer framework.Server.SetWarnResultSize(framework.Server.WarnResultSize())
-	framework.Server.SetWarnResultSize(2)
+	revert := changeVar(t, "WarnResultSize", "2")
+	defer revert()
 	client := framework.NewClient()
 
 	originalWarningsResultsExceededCount := framework.FetchInt(framework.DebugVars(), "Warnings/ResultsExceeded")
@@ -244,18 +241,14 @@ func TestWarnResultSize(t *testing.T) {
 	_, _ = client.Execute(query, nil)
 	newWarningsResultsExceededCount := framework.FetchInt(framework.DebugVars(), "Warnings/ResultsExceeded")
 	exceededCountDiff := newWarningsResultsExceededCount - originalWarningsResultsExceededCount
-	if exceededCountDiff != 1 {
-		t.Errorf("Warnings.ResultsExceeded counter should have increased by 1, instead got %v", exceededCountDiff)
-	}
+	assert.Equal(t, 1, exceededCountDiff, "Warnings.ResultsExceeded counter should have increased by 1")
 
 	verifyIntValue(t, framework.DebugVars(), "WarnResultSize", 2)
 	framework.Server.SetWarnResultSize(10)
 	_, _ = client.Execute(query, nil)
 	newerWarningsResultsExceededCount := framework.FetchInt(framework.DebugVars(), "Warnings/ResultsExceeded")
 	exceededCountDiff = newerWarningsResultsExceededCount - newWarningsResultsExceededCount
-	if exceededCountDiff != 0 {
-		t.Errorf("Warnings.ResultsExceeded counter should not have increased, instead got %v", exceededCountDiff)
-	}
+	assert.Equal(t, 0, exceededCountDiff, "Warnings.ResultsExceeded counter should not have increased")
 }
 
 func TestQueryTimeout(t *testing.T) {
@@ -265,19 +258,53 @@ func TestQueryTimeout(t *testing.T) {
 
 	client := framework.NewClient()
 	err := client.Begin(false)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	_, err = client.Execute("select sleep(1) from vitess_test", nil)
-	if code := vterrors.Code(err); code != vtrpcpb.Code_CANCELED {
-		t.Errorf("Error code: %v, want %v", code, vtrpcpb.Code_CANCELED)
-	}
+	assert.Equal(t, vtrpcpb.Code_CANCELED, vterrors.Code(err))
 	_, err = client.Execute("select 1 from dual", nil)
-	if code := vterrors.Code(err); code != vtrpcpb.Code_ABORTED {
-		t.Errorf("Error code: %v, want %v", code, vtrpcpb.Code_ABORTED)
-	}
+	assert.Equal(t, vtrpcpb.Code_ABORTED, vterrors.Code(err))
 	vend := framework.DebugVars()
 	verifyIntValue(t, vend, "QueryTimeout", int(100*time.Millisecond))
 	compareIntDiff(t, vend, "Kills/Queries", vstart, 1)
+}
+
+func changeVar(t *testing.T, name, value string) (revert func()) {
+	t.Helper()
+
+	vals := framework.FetchJSON("/debug/env?format=json")
+	initial, ok := vals[name]
+	if !ok {
+		t.Fatalf("%s not found in: %v", name, vals)
+	}
+	vals = framework.PostJSON("/debug/env?format=json", map[string]string{
+		"varname": name,
+		"value":   value,
+	})
+	verifyMapValue(t, vals, name, value)
+	return func() {
+		vals = framework.PostJSON("/debug/env?format=json", map[string]string{
+			"varname": name,
+			"value":   fmt.Sprintf("%v", initial),
+		})
+		verifyMapValue(t, vals, name, initial)
+	}
+}
+
+func verifyMapValue(t *testing.T, values map[string]any, tag string, want any) {
+	t.Helper()
+	val, ok := values[tag]
+	if !ok {
+		t.Fatalf("%s not found in: %v", tag, values)
+	}
+	assert.Equal(t, want, val)
+}
+
+func compareIntDiff(t *testing.T, end map[string]any, tag string, start map[string]any, diff int) {
+	t.Helper()
+	verifyIntValue(t, end, tag, framework.FetchInt(start, tag)+diff)
+}
+
+func verifyIntValue(t *testing.T, values map[string]any, tag string, want int) {
+	t.Helper()
+	require.Equal(t, want, framework.FetchInt(values, tag), tag)
 }

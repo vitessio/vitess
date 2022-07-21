@@ -68,10 +68,10 @@ func (dc *fakeDBClient) ExecuteFetch(query string, maxrows int) (qr *sqltypes.Re
 		if strings.Contains(query, "where") {
 			return sqltypes.MakeTestResult(
 				sqltypes.MakeTestFields(
-					"id|state|source",
-					"int64|varchar|varchar",
+					"id|state|source|message",
+					"int64|varchar|varchar|varchar",
 				),
-				`1|Running|keyspace:"ks" shard:"0" key_range:<end:"\200" > `,
+				`1|Running|keyspace:"ks" shard:"0" key_range:<end:"\200" > |`,
 			), nil
 		}
 		return &sqltypes.Result{}, nil

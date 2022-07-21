@@ -19,37 +19,43 @@ package cluster
 import (
 	"context"
 	"fmt"
+	"html/template"
 	"os"
 	"os/exec"
 	"path"
+	"strconv"
 	"strings"
+	"syscall"
+	"time"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/tlstest"
 )
 
 // MysqlctlProcess is a generic handle for a running mysqlctl command .
 // It can be spawned manually
 type MysqlctlProcess struct {
-	Name         string
-	Binary       string
-	LogDirectory string
-	TabletUID    int
-	MySQLPort    int
-	InitDBFile   string
-	ExtraArgs    []string
-	InitMysql    bool
+	Name            string
+	Binary          string
+	LogDirectory    string
+	TabletUID       int
+	MySQLPort       int
+	InitDBFile      string
+	ExtraArgs       []string
+	InitMysql       bool
+	SecureTransport bool
 }
 
 // InitDb executes mysqlctl command to add cell info
 func (mysqlctl *MysqlctlProcess) InitDb() (err error) {
-	args := []string{"-log_dir", mysqlctl.LogDirectory,
-		"-tablet_uid", fmt.Sprintf("%d", mysqlctl.TabletUID),
-		"-mysql_port", fmt.Sprintf("%d", mysqlctl.MySQLPort),
-		"init",
-		"-init_db_sql_file", mysqlctl.InitDBFile}
+	args := []string{"--log_dir", mysqlctl.LogDirectory,
+		"--tablet_uid", fmt.Sprintf("%d", mysqlctl.TabletUID),
+		"--mysql_port", fmt.Sprintf("%d", mysqlctl.MySQLPort),
+		"init", "--",
+		"--init_db_sql_file", mysqlctl.InitDBFile}
 	if *isCoverage {
-		args = append([]string{"-test.coverprofile=" + getCoveragePath("mysql-initdb.out"), "-test.v"}, args...)
+		args = append([]string{"--test.coverprofile=" + getCoveragePath("mysql-initdb.out"), "--test.v"}, args...)
 	}
 	tmpProcess := exec.Command(
 		mysqlctl.Binary,
@@ -70,27 +76,59 @@ func (mysqlctl *MysqlctlProcess) Start() (err error) {
 func (mysqlctl *MysqlctlProcess) StartProcess() (*exec.Cmd, error) {
 	tmpProcess := exec.Command(
 		mysqlctl.Binary,
-		"-log_dir", mysqlctl.LogDirectory,
-		"-tablet_uid", fmt.Sprintf("%d", mysqlctl.TabletUID),
-		"-mysql_port", fmt.Sprintf("%d", mysqlctl.MySQLPort),
+		"--log_dir", mysqlctl.LogDirectory,
+		"--tablet_uid", fmt.Sprintf("%d", mysqlctl.TabletUID),
+		"--mysql_port", fmt.Sprintf("%d", mysqlctl.MySQLPort),
 	)
 	if *isCoverage {
-		tmpProcess.Args = append(tmpProcess.Args, []string{"-test.coverprofile=" + getCoveragePath("mysql-start.out")}...)
+		tmpProcess.Args = append(tmpProcess.Args, []string{"--test.coverprofile=" + getCoveragePath("mysql-start.out")}...)
 	}
 
 	if len(mysqlctl.ExtraArgs) > 0 {
 		tmpProcess.Args = append(tmpProcess.Args, mysqlctl.ExtraArgs...)
 	}
 	if mysqlctl.InitMysql {
-		tmpProcess.Args = append(tmpProcess.Args, "init",
-			"-init_db_sql_file", mysqlctl.InitDBFile)
+		if mysqlctl.SecureTransport {
+			// Set up EXTRA_MY_CNF for ssl
+			sslPath := path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/ssl_%010d", mysqlctl.TabletUID))
+			sslPathData := struct {
+				Dir string
+			}{
+				Dir: sslPath,
+			}
+
+			os.MkdirAll(sslPath, 0755)
+			extraMyCNF := path.Join(sslPath, "ssl.cnf")
+			fout, err := os.Create(extraMyCNF)
+			if err != nil {
+				log.Error(err)
+				return nil, err
+			}
+
+			template.Must(template.New(fmt.Sprintf("%010d", mysqlctl.TabletUID)).Parse(`
+ssl_ca={{.Dir}}/ca-cert.pem
+ssl_cert={{.Dir}}/server-001-cert.pem
+ssl_key={{.Dir}}/server-001-key.pem
+`)).Execute(fout, sslPathData)
+			if err := fout.Close(); err != nil {
+				return nil, err
+			}
+
+			tlstest.CreateClientServerCertPairs(sslPath)
+
+			tmpProcess.Env = append(tmpProcess.Env, "EXTRA_MY_CNF="+extraMyCNF)
+			tmpProcess.Env = append(tmpProcess.Env, "VTDATAROOT="+os.Getenv("VTDATAROOT"))
+		}
+
+		tmpProcess.Args = append(tmpProcess.Args, "init", "--",
+			"--init_db_sql_file", mysqlctl.InitDBFile)
 	}
 	tmpProcess.Args = append(tmpProcess.Args, "start")
 	log.Infof("Starting mysqlctl with command: %v", tmpProcess.Args)
 	return tmpProcess, tmpProcess.Start()
 }
 
-// Stop executes mysqlctl command to stop mysql instance
+// Stop executes mysqlctl command to stop mysql instance and kills the mysql instance if it doesn't shutdown in 30 seconds.
 func (mysqlctl *MysqlctlProcess) Stop() (err error) {
 	log.Infof("Shutting down MySQL: %d", mysqlctl.TabletUID)
 	defer log.Infof("MySQL shutdown complete: %d", mysqlctl.TabletUID)
@@ -98,17 +136,46 @@ func (mysqlctl *MysqlctlProcess) Stop() (err error) {
 	if err != nil {
 		return err
 	}
-	return tmpProcess.Wait()
+	// On the CI it was noticed that MySQL shutdown hangs sometimes and
+	// on local investigation it was waiting on SEMI_SYNC acks for an internal command
+	// of Vitess even after closing the socket file.
+	// To prevent this process for hanging for 5 minutes, we will add a 30-second timeout.
+	exit := make(chan error)
+	go func() {
+		exit <- tmpProcess.Wait()
+	}()
+	select {
+	case <-time.After(30 * time.Second):
+		break
+	case err := <-exit:
+		if err == nil {
+			return nil
+		}
+		break
+	}
+	pidFile := path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/mysql.pid", mysqlctl.TabletUID))
+	pidBytes, err := os.ReadFile(pidFile)
+	if err != nil {
+		// We can't read the file which means the PID file does not exist
+		// The server must have stopped
+		return nil
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(pidBytes)))
+	if err != nil {
+		return err
+	}
+	return syscall.Kill(pid, syscall.SIGKILL)
 }
 
 // StopProcess executes mysqlctl command to stop mysql instance and returns process reference
 func (mysqlctl *MysqlctlProcess) StopProcess() (*exec.Cmd, error) {
 	tmpProcess := exec.Command(
 		mysqlctl.Binary,
-		"-tablet_uid", fmt.Sprintf("%d", mysqlctl.TabletUID),
+		"--log_dir", mysqlctl.LogDirectory,
+		"--tablet_uid", fmt.Sprintf("%d", mysqlctl.TabletUID),
 	)
 	if *isCoverage {
-		tmpProcess.Args = append(tmpProcess.Args, []string{"-test.coverprofile=" + getCoveragePath("mysql-stop.out")}...)
+		tmpProcess.Args = append(tmpProcess.Args, []string{"--test.coverprofile=" + getCoveragePath("mysql-stop.out")}...)
 	}
 	if len(mysqlctl.ExtraArgs) > 0 {
 		tmpProcess.Args = append(tmpProcess.Args, mysqlctl.ExtraArgs...)
@@ -126,9 +193,9 @@ func (mysqlctl *MysqlctlProcess) CleanupFiles(tabletUID int) {
 	os.RemoveAll(path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/innodb", tabletUID)))
 }
 
-// MysqlCtlProcessInstance returns a Mysqlctl handle for mysqlctl process
+// MysqlCtlProcessInstanceOptionalInit returns a Mysqlctl handle for mysqlctl process
 // configured with the given Config.
-func MysqlCtlProcessInstance(tabletUID int, mySQLPort int, tmpDirectory string) *MysqlctlProcess {
+func MysqlCtlProcessInstanceOptionalInit(tabletUID int, mySQLPort int, tmpDirectory string, initMySQL bool) *MysqlctlProcess {
 	mysqlctl := &MysqlctlProcess{
 		Name:         "mysqlctl",
 		Binary:       "mysqlctl",
@@ -137,8 +204,15 @@ func MysqlCtlProcessInstance(tabletUID int, mySQLPort int, tmpDirectory string) 
 	}
 	mysqlctl.MySQLPort = mySQLPort
 	mysqlctl.TabletUID = tabletUID
-	mysqlctl.InitMysql = true
+	mysqlctl.InitMysql = initMySQL
+	mysqlctl.SecureTransport = false
 	return mysqlctl
+}
+
+// MysqlCtlProcessInstance returns a Mysqlctl handle for mysqlctl process
+// configured with the given Config.
+func MysqlCtlProcessInstance(tabletUID int, mySQLPort int, tmpDirectory string) *MysqlctlProcess {
+	return MysqlCtlProcessInstanceOptionalInit(tabletUID, mySQLPort, tmpDirectory, true)
 }
 
 // StartMySQL starts mysqlctl process

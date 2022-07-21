@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"google.golang.org/grpc"
+
 	"vitess.io/vitess/go/vt/throttler"
 	"vitess.io/vitess/go/vt/throttler/grpcthrottlerserver"
 	"vitess.io/vitess/go/vt/throttler/throttlerclienttest"
@@ -61,7 +62,7 @@ func TestThrottlerServerPanics(t *testing.T) {
 
 func startGRPCServer(t *testing.T, m throttler.Manager) int {
 	// Listen on a random port.
-	listener, err := net.Listen("tcp", ":0")
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("Cannot listen: %v", err)
 	}

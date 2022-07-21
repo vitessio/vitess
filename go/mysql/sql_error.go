@@ -39,7 +39,7 @@ type SQLError struct {
 // NewSQLError creates a new SQLError.
 // If sqlState is left empty, it will default to "HY000" (general error).
 // TODO: Should be aligned with vterrors, stack traces and wrapping
-func NewSQLError(number int, sqlState string, format string, args ...interface{}) *SQLError {
+func NewSQLError(number int, sqlState string, format string, args ...any) *SQLError {
 	if sqlState == "" {
 		sqlState = SSUnknownSQLState
 	}
@@ -91,60 +91,21 @@ func NewSQLErrorFromError(err error) error {
 		return serr
 	}
 
-	msg := err.Error()
-	match := errExtract.FindStringSubmatch(msg)
-	if len(match) < 2 {
-		// Map vitess error codes into the mysql equivalent
-		code := vterrors.Code(err)
-		num := ERUnknownError
-		switch code {
-		case vtrpcpb.Code_CANCELED:
-			num = ERQueryInterrupted
-		case vtrpcpb.Code_UNKNOWN:
-			num = ERUnknownError
-		case vtrpcpb.Code_INVALID_ARGUMENT:
-			// TODO/demmer there are several more appropriate mysql error
-			// codes for the various invalid argument cases.
-			// it would be better to change the call sites to use
-			// the mysql style "(errno X) (sqlstate Y)" format rather than
-			// trying to add vitess error codes for all these cases
-			num = ERUnknownError
-		case vtrpcpb.Code_DEADLINE_EXCEEDED:
-			num = ERQueryInterrupted
-		case vtrpcpb.Code_NOT_FOUND:
-			num = ERUnknownError
-		case vtrpcpb.Code_ALREADY_EXISTS:
-			num = ERUnknownError
-		case vtrpcpb.Code_PERMISSION_DENIED:
-			num = ERAccessDeniedError
-		case vtrpcpb.Code_UNAUTHENTICATED:
-			num = ERAccessDeniedError
-		case vtrpcpb.Code_RESOURCE_EXHAUSTED:
-			num = ERTooManyUserConnections
-		case vtrpcpb.Code_FAILED_PRECONDITION:
-			num = ERUnknownError
-		case vtrpcpb.Code_ABORTED:
-			num = ERQueryInterrupted
-		case vtrpcpb.Code_OUT_OF_RANGE:
-			num = ERUnknownError
-		case vtrpcpb.Code_UNIMPLEMENTED:
-			num = ERNotSupportedYet
-		case vtrpcpb.Code_INTERNAL:
-			num = ERUnknownError
-		case vtrpcpb.Code_UNAVAILABLE:
-			num = ERUnknownError
-		case vtrpcpb.Code_DATA_LOSS:
-			num = ERUnknownError
-		}
-
-		// Not found, build a generic SQLError.
-		return &SQLError{
-			Num:     num,
-			State:   SSUnknownSQLState,
-			Message: msg,
-		}
+	sErr := convertToMysqlError(err)
+	if serr, ok := sErr.(*SQLError); ok {
+		return serr
 	}
 
+	msg := err.Error()
+	match := errExtract.FindStringSubmatch(msg)
+	if len(match) >= 2 {
+		return extractSQLErrorFromMessage(match, msg)
+	}
+
+	return mapToSQLErrorFromErrorCode(err, msg)
+}
+
+func extractSQLErrorFromMessage(match []string, msg string) *SQLError {
 	num, err := strconv.Atoi(match[1])
 	if err != nil {
 		return &SQLError{
@@ -154,10 +115,114 @@ func NewSQLErrorFromError(err error) error {
 		}
 	}
 
-	serr := &SQLError{
+	return &SQLError{
 		Num:     num,
 		State:   match[2],
 		Message: msg,
 	}
-	return serr
+}
+
+func mapToSQLErrorFromErrorCode(err error, msg string) *SQLError {
+	// Map vitess error codes into the mysql equivalent
+	num := ERUnknownError
+	ss := SSUnknownSQLState
+	switch vterrors.Code(err) {
+	case vtrpcpb.Code_CANCELED, vtrpcpb.Code_DEADLINE_EXCEEDED, vtrpcpb.Code_ABORTED:
+		num = ERQueryInterrupted
+		ss = SSQueryInterrupted
+	case vtrpcpb.Code_PERMISSION_DENIED, vtrpcpb.Code_UNAUTHENTICATED:
+		num = ERAccessDeniedError
+		ss = SSAccessDeniedError
+	case vtrpcpb.Code_RESOURCE_EXHAUSTED:
+		num = demuxResourceExhaustedErrors(err.Error())
+		ss = SSClientError
+	case vtrpcpb.Code_UNIMPLEMENTED:
+		num = ERNotSupportedYet
+		ss = SSClientError
+	case vtrpcpb.Code_INTERNAL:
+		num = ERInternalError
+		ss = SSUnknownSQLState
+	}
+
+	// Not found, build a generic SQLError.
+	return &SQLError{
+		Num:     num,
+		State:   ss,
+		Message: msg,
+	}
+}
+
+var stateToMysqlCode = map[vterrors.State]struct {
+	num   int
+	state string
+}{
+	vterrors.Undefined:                    {num: ERUnknownError, state: SSUnknownSQLState},
+	vterrors.AccessDeniedError:            {num: ERAccessDeniedError, state: SSAccessDeniedError},
+	vterrors.BadDb:                        {num: ERBadDb, state: SSClientError},
+	vterrors.BadFieldError:                {num: ERBadFieldError, state: SSBadFieldError},
+	vterrors.BadTableError:                {num: ERBadTable, state: SSUnknownTable},
+	vterrors.CantUseOptionHere:            {num: ERCantUseOptionHere, state: SSClientError},
+	vterrors.DataOutOfRange:               {num: ERDataOutOfRange, state: SSDataOutOfRange},
+	vterrors.DbCreateExists:               {num: ERDbCreateExists, state: SSUnknownSQLState},
+	vterrors.DbDropExists:                 {num: ERDbDropExists, state: SSUnknownSQLState},
+	vterrors.DupFieldName:                 {num: ERDupFieldName, state: SSDupFieldName},
+	vterrors.EmptyQuery:                   {num: EREmptyQuery, state: SSClientError},
+	vterrors.IncorrectGlobalLocalVar:      {num: ERIncorrectGlobalLocalVar, state: SSUnknownSQLState},
+	vterrors.InnodbReadOnly:               {num: ERInnodbReadOnly, state: SSUnknownSQLState},
+	vterrors.LockOrActiveTransaction:      {num: ERLockOrActiveTransaction, state: SSUnknownSQLState},
+	vterrors.NoDB:                         {num: ERNoDb, state: SSNoDB},
+	vterrors.NoSuchTable:                  {num: ERNoSuchTable, state: SSUnknownTable},
+	vterrors.NotSupportedYet:              {num: ERNotSupportedYet, state: SSClientError},
+	vterrors.ForbidSchemaChange:           {num: ERForbidSchemaChange, state: SSUnknownSQLState},
+	vterrors.MixOfGroupFuncAndFields:      {num: ERMixOfGroupFuncAndFields, state: SSClientError},
+	vterrors.NetPacketTooLarge:            {num: ERNetPacketTooLarge, state: SSNetError},
+	vterrors.NonUniqError:                 {num: ERNonUniq, state: SSConstraintViolation},
+	vterrors.NonUniqTable:                 {num: ERNonUniqTable, state: SSClientError},
+	vterrors.NonUpdateableTable:           {num: ERNonUpdateableTable, state: SSUnknownSQLState},
+	vterrors.QueryInterrupted:             {num: ERQueryInterrupted, state: SSQueryInterrupted},
+	vterrors.SPDoesNotExist:               {num: ERSPDoesNotExist, state: SSClientError},
+	vterrors.SyntaxError:                  {num: ERSyntaxError, state: SSClientError},
+	vterrors.UnsupportedPS:                {num: ERUnsupportedPS, state: SSUnknownSQLState},
+	vterrors.UnknownSystemVariable:        {num: ERUnknownSystemVariable, state: SSUnknownSQLState},
+	vterrors.UnknownTable:                 {num: ERUnknownTable, state: SSUnknownTable},
+	vterrors.WrongGroupField:              {num: ERWrongGroupField, state: SSClientError},
+	vterrors.WrongNumberOfColumnsInSelect: {num: ERWrongNumberOfColumnsInSelect, state: SSWrongNumberOfColumns},
+	vterrors.WrongTypeForVar:              {num: ERWrongTypeForVar, state: SSClientError},
+	vterrors.WrongValueForVar:             {num: ERWrongValueForVar, state: SSClientError},
+	vterrors.WrongFieldWithGroup:          {num: ERWrongFieldWithGroup, state: SSClientError},
+	vterrors.ServerNotAvailable:           {num: ERServerIsntAvailable, state: SSNetError},
+	vterrors.CantDoThisInTransaction:      {num: ERCantDoThisDuringAnTransaction, state: SSCantDoThisDuringAnTransaction},
+	vterrors.RequiresPrimaryKey:           {num: ERRequiresPrimaryKey, state: SSClientError},
+	vterrors.NoSuchSession:                {num: ERUnknownComError, state: SSNetError},
+	vterrors.OperandColumns:               {num: EROperandColumns, state: SSWrongNumberOfColumns},
+	vterrors.WrongValueCountOnRow:         {num: ERWrongValueCountOnRow, state: SSWrongValueCountOnRow},
+}
+
+func init() {
+	if len(stateToMysqlCode) != int(vterrors.NumOfStates) {
+		panic("all vterrors states are not mapped to mysql errors")
+	}
+}
+
+func convertToMysqlError(err error) error {
+	errState := vterrors.ErrState(err)
+	if errState == vterrors.Undefined {
+		return err
+	}
+	mysqlCode, ok := stateToMysqlCode[errState]
+	if !ok {
+		return err
+	}
+	return NewSQLError(mysqlCode.num, mysqlCode.state, err.Error())
+}
+
+var isGRPCOverflowRE = regexp.MustCompile(`.*?grpc: (received|trying to send) message larger than max \(\d+ vs. \d+\)`)
+
+func demuxResourceExhaustedErrors(msg string) int {
+	switch {
+	case isGRPCOverflowRE.Match([]byte(msg)):
+		return ERNetPacketTooLarge
+	default:
+		return ERTooManyUserConnections
+	}
 }

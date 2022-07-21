@@ -21,7 +21,7 @@ import (
 	"strings"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -68,11 +68,20 @@ func (mysqld *Mysqld) ExecuteSuperQueryList(ctx context.Context, queryList []str
 	return mysqld.executeSuperQueryListConn(ctx, conn, queryList)
 }
 
+func limitString(s string, limit int) string {
+	if len(s) > limit {
+		return s[:limit]
+	}
+	return s
+}
+
 func (mysqld *Mysqld) executeSuperQueryListConn(ctx context.Context, conn *dbconnpool.PooledDBConnection, queryList []string) error {
+	const LogQueryLengthLimit = 200
 	for _, query := range queryList {
-		log.Infof("exec %v", redactMasterPassword(query))
+		log.Infof("exec %s", limitString(redactPassword(query), LogQueryLengthLimit))
 		if _, err := mysqld.executeFetchContext(ctx, conn, query, 10000, false); err != nil {
-			return fmt.Errorf("ExecuteFetch(%v) failed: %v", redactMasterPassword(query), redactMasterPassword(err.Error()))
+			log.Errorf("ExecuteFetch(%v) failed: %v", redactPassword(query), redactPassword(err.Error()))
+			return fmt.Errorf("ExecuteFetch(%v) failed: %v", redactPassword(query), redactPassword(err.Error()))
 		}
 	}
 	return nil
@@ -201,19 +210,49 @@ func (mysqld *Mysqld) fetchVariables(ctx context.Context, pattern string) (map[s
 	return varMap, nil
 }
 
+// fetchStatuses returns a map from MySQL status names to status value
+// for variables that match the given pattern.
+func (mysqld *Mysqld) fetchStatuses(ctx context.Context, pattern string) (map[string]string, error) {
+	query := fmt.Sprintf("SHOW STATUS LIKE '%s'", pattern)
+	qr, err := mysqld.FetchSuperQuery(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	if len(qr.Fields) != 2 {
+		return nil, fmt.Errorf("query %#v returned %d columns, expected 2", query, len(qr.Fields))
+	}
+	varMap := make(map[string]string, len(qr.Rows))
+	for _, row := range qr.Rows {
+		varMap[row[0].ToString()] = row[1].ToString()
+	}
+	return varMap, nil
+}
+
 const (
 	masterPasswordStart = "  MASTER_PASSWORD = '"
 	masterPasswordEnd   = "',\n"
+	passwordStart       = " PASSWORD = '"
+	passwordEnd         = "'"
 )
 
-func redactMasterPassword(input string) string {
+func redactPassword(input string) string {
 	i := strings.Index(input, masterPasswordStart)
+	// We have primary password in the query, try to redact it
+	if i != -1 {
+		j := strings.Index(input[i+len(masterPasswordStart):], masterPasswordEnd)
+		if j == -1 {
+			return input
+		}
+		input = input[:i+len(masterPasswordStart)] + strings.Repeat("*", 4) + input[i+len(masterPasswordStart)+j:]
+	}
+	// We also check if we have any password keyword in the query
+	i = strings.Index(input, passwordStart)
 	if i == -1 {
 		return input
 	}
-	j := strings.Index(input[i+len(masterPasswordStart):], masterPasswordEnd)
+	j := strings.Index(input[i+len(passwordStart):], passwordEnd)
 	if j == -1 {
 		return input
 	}
-	return input[:i+len(masterPasswordStart)] + strings.Repeat("*", j) + input[i+len(masterPasswordStart)+j:]
+	return input[:i+len(passwordStart)] + strings.Repeat("*", 4) + input[i+len(passwordStart)+j:]
 }

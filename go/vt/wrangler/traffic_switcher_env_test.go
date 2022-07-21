@@ -21,9 +21,12 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/mysql/fakesqldb"
 
-	"golang.org/x/net/context"
+	"context"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -40,14 +43,28 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 )
 
-const vreplQueryks = "select id, source, message, cell, tablet_types from _vt.vreplication where workflow='test' and db_name='vt_ks'"
-const vreplQueryks2 = "select id, source, message, cell, tablet_types from _vt.vreplication where workflow='test' and db_name='vt_ks2'"
+const (
+	streamInfoQuery    = "select id, source, message, cell, tablet_types from _vt.vreplication where workflow='%s' and db_name='vt_%s'"
+	streamExtInfoQuery = "select id, source, pos, stop_pos, max_replication_lag, state, db_name, time_updated, transaction_timestamp, time_heartbeat, time_throttled, component_throttled, message, tags from _vt.vreplication where db_name = 'vt_%s' and workflow = '%s'"
+	copyStateQuery     = "select table_name, lastpk from _vt.copy_state where vrepl_id = %d"
+)
+
+var (
+	streamInfoKs         = fmt.Sprintf(streamInfoQuery, "test", "ks")
+	reverseStreamInfoKs1 = fmt.Sprintf(streamInfoQuery, "test_reverse", "ks1")
+	streamInfoKs2        = fmt.Sprintf(streamInfoQuery, "test", "ks2")
+
+	streamExtInfoKs2        = fmt.Sprintf(streamExtInfoQuery, "ks2", "test")
+	reverseStreamExtInfoKs2 = fmt.Sprintf(streamExtInfoQuery, "ks2", "test_reverse")
+	reverseStreamExtInfoKs1 = fmt.Sprintf(streamExtInfoQuery, "ks1", "test_reverse")
+	streamExtInfoKs         = fmt.Sprintf(streamExtInfoQuery, "ks", "test")
+)
 
 type testMigraterEnv struct {
 	ts              *topo.Server
 	wr              *Wrangler
-	sourceMasters   []*fakeTablet
-	targetMasters   []*fakeTablet
+	sourcePrimaries []*fakeTablet
+	targetPrimaries []*fakeTablet
 	dbSourceClients []*fakeDBClient
 	dbTargetClients []*fakeDBClient
 	allDBClients    []*fakeDBClient
@@ -93,7 +110,7 @@ func newTestTableMigraterCustom(ctx context.Context, t *testing.T, sourceShards,
 	tme.tmeDB = fakesqldb.New(t)
 	tabletID := 10
 	for _, shard := range sourceShards {
-		tme.sourceMasters = append(tme.sourceMasters, newFakeTablet(t, tme.wr, "cell1", uint32(tabletID), topodatapb.TabletType_MASTER, tme.tmeDB, TabletKeyspaceShard(t, "ks1", shard)))
+		tme.sourcePrimaries = append(tme.sourcePrimaries, newFakeTablet(t, tme.wr, "cell1", uint32(tabletID), topodatapb.TabletType_PRIMARY, tme.tmeDB, TabletKeyspaceShard(t, "ks1", shard)))
 		tabletID += 10
 
 		_, sourceKeyRange, err := topo.ValidateShardName(shard)
@@ -102,13 +119,13 @@ func newTestTableMigraterCustom(ctx context.Context, t *testing.T, sourceShards,
 		}
 		tme.sourceKeyRanges = append(tme.sourceKeyRanges, sourceKeyRange)
 	}
-	tpChoiceTablet := tme.sourceMasters[0].Tablet
+	tpChoiceTablet := tme.sourcePrimaries[0].Tablet
 	tpChoice = &testTabletPickerChoice{
 		keyspace: tpChoiceTablet.Keyspace,
 		shard:    tpChoiceTablet.Shard,
 	}
 	for _, shard := range targetShards {
-		tme.targetMasters = append(tme.targetMasters, newFakeTablet(t, tme.wr, "cell1", uint32(tabletID), topodatapb.TabletType_MASTER, tme.tmeDB, TabletKeyspaceShard(t, "ks2", shard)))
+		tme.targetPrimaries = append(tme.targetPrimaries, newFakeTablet(t, tme.wr, "cell1", uint32(tabletID), topodatapb.TabletType_PRIMARY, tme.tmeDB, TabletKeyspaceShard(t, "ks2", shard)))
 		tabletID += 10
 
 		_, targetKeyRange, err := topo.ValidateShardName(shard)
@@ -153,21 +170,22 @@ func newTestTableMigraterCustom(ctx context.Context, t *testing.T, sourceShards,
 	if err := tme.ts.RebuildSrvVSchema(ctx, nil); err != nil {
 		t.Fatal(err)
 	}
-	err := topotools.RebuildKeyspace(ctx, logutil.NewConsoleLogger(), tme.ts, "ks1", []string{"cell1"})
+	err := topotools.RebuildKeyspace(ctx, logutil.NewConsoleLogger(), tme.ts, "ks1", []string{"cell1"}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = topotools.RebuildKeyspace(ctx, logutil.NewConsoleLogger(), tme.ts, "ks2", []string{"cell1"})
+	err = topotools.RebuildKeyspace(ctx, logutil.NewConsoleLogger(), tme.ts, "ks2", []string{"cell1"}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	tme.startTablets(t)
 	tme.createDBClients(ctx, t)
-	tme.setMasterPositions()
-
+	tme.setPrimaryPositions()
+	now := time.Now().Unix()
 	for i, targetShard := range targetShards {
-		var rows []string
+		var streamInfoRows []string
+		var streamExtInfoRows []string
 		for j, sourceShard := range sourceShards {
 			bls := &binlogdatapb.BinlogSource{
 				Keyspace: "ks1",
@@ -182,16 +200,51 @@ func newTestTableMigraterCustom(ctx context.Context, t *testing.T, sourceShards,
 					}},
 				},
 			}
-			rows = append(rows, fmt.Sprintf("%d|%v|||", j+1, bls))
+			streamInfoRows = append(streamInfoRows, fmt.Sprintf("%d|%v|||", j+1, bls))
+			streamExtInfoRows = append(streamExtInfoRows, fmt.Sprintf("%d|||||Running|vt_ks1|%d|%d|0|0|||", j+1, now, now))
+			tme.dbTargetClients[i].addInvariant(fmt.Sprintf(copyStateQuery, j+1), noResult)
 		}
-		tme.dbTargetClients[i].addInvariant(vreplQueryks2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		tme.dbTargetClients[i].addInvariant(streamInfoKs2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 			"id|source|message|cell|tablet_types",
 			"int64|varchar|varchar|varchar|varchar"),
-			rows...),
+			streamInfoRows...))
+		tme.dbTargetClients[i].addInvariant(streamExtInfoKs2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+			"id|source|pos|stop_pos|max_replication_lag|state|db_name|time_updated|transaction_timestamp|time_heartbeat|time_throttled|component_throttled|message|tags",
+			"int64|varchar|int64|int64|int64|varchar|varchar|int64|int64|int64|int64|varchar|varchar|varchar"),
+			streamExtInfoRows...))
+		tme.dbTargetClients[i].addInvariant(reverseStreamExtInfoKs2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+			"id|source|pos|stop_pos|max_replication_lag|state|db_name|time_updated|transaction_timestamp|time_heartbeat|time_throttled|component_throttled|message|tags",
+			"int64|varchar|int64|int64|int64|varchar|varchar|int64|int64|int64|int64|varchar|varchar|varchar"),
+			streamExtInfoRows...))
+	}
+
+	for i, sourceShard := range sourceShards {
+		var streamInfoRows []string
+		for j, targetShard := range targetShards {
+			bls := &binlogdatapb.BinlogSource{
+				Keyspace: "ks2",
+				Shard:    targetShard,
+				Filter: &binlogdatapb.Filter{
+					Rules: []*binlogdatapb.Rule{{
+						Match:  "t1",
+						Filter: fmt.Sprintf(fmtQuery, fmt.Sprintf("from t1 where in_keyrange('%s')", sourceShard)),
+					}, {
+						Match:  "t2",
+						Filter: fmt.Sprintf(fmtQuery, fmt.Sprintf("from t2 where in_keyrange('%s')", sourceShard)),
+					}},
+				},
+			}
+			streamInfoRows = append(streamInfoRows, fmt.Sprintf("%d|%v|||", j+1, bls))
+			tme.dbTargetClients[i].addInvariant(fmt.Sprintf(copyStateQuery, j+1), noResult)
+		}
+		tme.dbSourceClients[i].addInvariant(reverseStreamInfoKs1, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+			"id|source|message|cell|tablet_types",
+			"int64|varchar|varchar|varchar|varchar"),
+			streamInfoRows...),
 		)
 	}
 
-	if err := tme.wr.saveRoutingRules(ctx, map[string][]string{
+	if err := topotools.SaveRoutingRules(ctx, tme.wr.ts, map[string][]string{
 		"t1":     {"ks1.t1"},
 		"ks2.t1": {"ks1.t1"},
 		"t2":     {"ks1.t2"},
@@ -213,10 +266,11 @@ func newTestShardMigrater(ctx context.Context, t *testing.T, sourceShards, targe
 	tme.wr = New(logutil.NewConsoleLogger(), tme.ts, tmclient.NewTabletManagerClient())
 	tme.sourceShards = sourceShards
 	tme.targetShards = targetShards
+	tme.tmeDB = fakesqldb.New(t)
 
 	tabletID := 10
 	for _, shard := range sourceShards {
-		tme.sourceMasters = append(tme.sourceMasters, newFakeTablet(t, tme.wr, "cell1", uint32(tabletID), topodatapb.TabletType_MASTER, nil, TabletKeyspaceShard(t, "ks", shard)))
+		tme.sourcePrimaries = append(tme.sourcePrimaries, newFakeTablet(t, tme.wr, "cell1", uint32(tabletID), topodatapb.TabletType_PRIMARY, tme.tmeDB, TabletKeyspaceShard(t, "ks", shard)))
 		tabletID += 10
 
 		_, sourceKeyRange, err := topo.ValidateShardName(shard)
@@ -225,14 +279,14 @@ func newTestShardMigrater(ctx context.Context, t *testing.T, sourceShards, targe
 		}
 		tme.sourceKeyRanges = append(tme.sourceKeyRanges, sourceKeyRange)
 	}
-	tpChoiceTablet := tme.sourceMasters[0].Tablet
+	tpChoiceTablet := tme.sourcePrimaries[0].Tablet
 	tpChoice = &testTabletPickerChoice{
 		keyspace: tpChoiceTablet.Keyspace,
 		shard:    tpChoiceTablet.Shard,
 	}
 
 	for _, shard := range targetShards {
-		tme.targetMasters = append(tme.targetMasters, newFakeTablet(t, tme.wr, "cell1", uint32(tabletID), topodatapb.TabletType_MASTER, nil, TabletKeyspaceShard(t, "ks", shard)))
+		tme.targetPrimaries = append(tme.targetPrimaries, newFakeTablet(t, tme.wr, "cell1", uint32(tabletID), topodatapb.TabletType_PRIMARY, tme.tmeDB, TabletKeyspaceShard(t, "ks", shard)))
 		tabletID += 10
 
 		_, targetKeyRange, err := topo.ValidateShardName(shard)
@@ -276,17 +330,18 @@ func newTestShardMigrater(ctx context.Context, t *testing.T, sourceShards, targe
 	if err := tme.ts.RebuildSrvVSchema(ctx, nil); err != nil {
 		t.Fatal(err)
 	}
-	err := topotools.RebuildKeyspace(ctx, logutil.NewConsoleLogger(), tme.ts, "ks", nil)
+	err := topotools.RebuildKeyspace(ctx, logutil.NewConsoleLogger(), tme.ts, "ks", nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	tme.startTablets(t)
 	tme.createDBClients(ctx, t)
-	tme.setMasterPositions()
-
+	tme.setPrimaryPositions()
+	now := time.Now().Unix()
 	for i, targetShard := range targetShards {
-		var rows []string
+		var rows, rowsRdOnly []string
+		var streamExtInfoRows []string
 		for j, sourceShard := range sourceShards {
 			if !key.KeyRangesIntersect(tme.targetKeyRanges[i], tme.sourceKeyRanges[j]) {
 				continue
@@ -302,78 +357,100 @@ func newTestShardMigrater(ctx context.Context, t *testing.T, sourceShards, targe
 				},
 			}
 			rows = append(rows, fmt.Sprintf("%d|%v|||", j+1, bls))
+			rowsRdOnly = append(rows, fmt.Sprintf("%d|%v|||RDONLY", j+1, bls))
+			streamExtInfoRows = append(streamExtInfoRows, fmt.Sprintf("%d|||||Running|vt_ks1|%d|%d|0|0|||", j+1, now, now))
+			tme.dbTargetClients[i].addInvariant(fmt.Sprintf(copyStateQuery, j+1), noResult)
 		}
-		tme.dbTargetClients[i].addInvariant(vreplQueryks, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		tme.dbTargetClients[i].addInvariant(streamInfoKs, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 			"id|source|message|cell|tablet_types",
 			"int64|varchar|varchar|varchar|varchar"),
 			rows...),
 		)
+		tme.dbTargetClients[i].addInvariant(streamInfoKs+"-rdonly", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+			"id|source|message|cell|tablet_types",
+			"int64|varchar|varchar|varchar|varchar"),
+			rowsRdOnly...),
+		)
+		tme.dbTargetClients[i].addInvariant(streamExtInfoKs, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+			"id|source|pos|stop_pos|max_replication_lag|state|db_name|time_updated|transaction_timestamp|time_heartbeat|time_throttled|component_throttled|message|tags",
+			"int64|varchar|int64|int64|int64|varchar|varchar|int64|int64|int64|int64|varchar|varchar|varchar"),
+			streamExtInfoRows...))
 	}
 
 	tme.targetKeyspace = "ks"
-	for _, dbclient := range tme.dbSourceClients {
-		dbclient.addInvariant(vreplQueryks, &sqltypes.Result{})
+	for i, dbclient := range tme.dbSourceClients {
+		var streamExtInfoRows []string
+		dbclient.addInvariant(streamInfoKs, &sqltypes.Result{})
+		for j := range targetShards {
+			streamExtInfoRows = append(streamExtInfoRows, fmt.Sprintf("%d|||||Running|vt_ks|%d|%d|0|0|||", j+1, now, now))
+			tme.dbSourceClients[i].addInvariant(fmt.Sprintf(copyStateQuery, j+1), noResult)
+		}
+		tme.dbSourceClients[i].addInvariant(streamExtInfoKs, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+			"id|source|pos|stop_pos|max_replication_lag|state|db_name|time_updated|transaction_timestamp|time_heartbeat|time_throttled|component_throttled|message|tags",
+			"int64|varchar|int64|int64|int64|varchar|varchar|int64|int64|int64|int64|varchar|varchar|varchar"),
+			streamExtInfoRows...))
 	}
 	return tme
 }
 
 func (tme *testMigraterEnv) startTablets(t *testing.T) {
-	allMasters := append(tme.sourceMasters, tme.targetMasters...)
-	for _, master := range allMasters {
-		master.StartActionLoop(t, tme.wr)
+	allPrimarys := append(tme.sourcePrimaries, tme.targetPrimaries...)
+	for _, primary := range allPrimarys {
+		primary.StartActionLoop(t, tme.wr)
 	}
-	// Wait for the shard record masters to be set.
-	for _, master := range allMasters {
-		masterFound := false
+	// Wait for the shard record primaries to be set.
+	for _, primary := range allPrimarys {
+		primaryFound := false
 		for i := 0; i < 10; i++ {
-			si, err := tme.wr.ts.GetShard(context.Background(), master.Tablet.Keyspace, master.Tablet.Shard)
+			si, err := tme.wr.ts.GetShard(context.Background(), primary.Tablet.Keyspace, primary.Tablet.Shard)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if si.MasterAlias != nil {
-				masterFound = true
+			if si.PrimaryAlias != nil {
+				primaryFound = true
 				break
 			}
 			time.Sleep(10 * time.Millisecond)
 		}
-		if !masterFound {
-			t.Fatalf("shard master did not get updated for tablet: %v", master)
+		if !primaryFound {
+			t.Fatalf("shard primary did not get updated for tablet: %v", primary)
 		}
 	}
 }
 
 func (tme *testMigraterEnv) stopTablets(t *testing.T) {
-	for _, master := range tme.sourceMasters {
-		master.StopActionLoop(t)
+	for _, primary := range tme.sourcePrimaries {
+		primary.StopActionLoop(t)
 	}
-	for _, master := range tme.targetMasters {
-		master.StopActionLoop(t)
+	for _, primary := range tme.targetPrimaries {
+		primary.StopActionLoop(t)
 	}
 }
 
 func (tme *testMigraterEnv) createDBClients(ctx context.Context, t *testing.T) {
-	for _, master := range tme.sourceMasters {
-		dbclient := newFakeDBClient()
+	for _, primary := range tme.sourcePrimaries {
+		dbclient := newFakeDBClient(primary.Tablet.Alias.String())
 		tme.dbSourceClients = append(tme.dbSourceClients, dbclient)
 		dbClientFactory := func() binlogplayer.DBClient { return dbclient }
 		// Replace existing engine with a new one
-		master.TM.VREngine = vreplication.NewTestEngine(tme.ts, "", master.FakeMysqlDaemon, dbClientFactory, dbclient.DBName(), nil)
-		master.TM.VREngine.Open(ctx)
+		primary.TM.VREngine = vreplication.NewTestEngine(tme.ts, "", primary.FakeMysqlDaemon, dbClientFactory, dbClientFactory, dbclient.DBName(), nil)
+		primary.TM.VREngine.Open(ctx)
 	}
-	for _, master := range tme.targetMasters {
-		dbclient := newFakeDBClient()
+	for _, primary := range tme.targetPrimaries {
+		log.Infof("Adding as targetPrimary %s", primary.Tablet.Alias)
+		dbclient := newFakeDBClient(primary.Tablet.Alias.String())
 		tme.dbTargetClients = append(tme.dbTargetClients, dbclient)
 		dbClientFactory := func() binlogplayer.DBClient { return dbclient }
 		// Replace existing engine with a new one
-		master.TM.VREngine = vreplication.NewTestEngine(tme.ts, "", master.FakeMysqlDaemon, dbClientFactory, dbclient.DBName(), nil)
-		master.TM.VREngine.Open(ctx)
+		primary.TM.VREngine = vreplication.NewTestEngine(tme.ts, "", primary.FakeMysqlDaemon, dbClientFactory, dbClientFactory, dbclient.DBName(), nil)
+		primary.TM.VREngine.Open(ctx)
 	}
 	tme.allDBClients = append(tme.dbSourceClients, tme.dbTargetClients...)
 }
 
-func (tme *testMigraterEnv) setMasterPositions() {
-	for _, master := range tme.sourceMasters {
-		master.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
+func (tme *testMigraterEnv) setPrimaryPositions() {
+	for _, primary := range tme.sourcePrimaries {
+		primary.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
 			GTIDSet: mysql.MariadbGTIDSet{
 				5: mysql.MariadbGTID{
 					Domain:   5,
@@ -383,8 +460,8 @@ func (tme *testMigraterEnv) setMasterPositions() {
 			},
 		}
 	}
-	for _, master := range tme.targetMasters {
-		master.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
+	for _, primary := range tme.targetPrimaries {
+		primary.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
 			GTIDSet: mysql.MariadbGTIDSet{
 				5: mysql.MariadbGTID{
 					Domain:   5,
@@ -393,6 +470,20 @@ func (tme *testMigraterEnv) setMasterPositions() {
 				},
 			},
 		}
+	}
+}
+
+func (tme *testMigraterEnv) expectNoPreviousJournals() {
+	// validate that no previous journals exist
+	for _, dbclient := range tme.dbSourceClients {
+		dbclient.addQueryRE(tsCheckJournals, &sqltypes.Result{}, nil)
+	}
+}
+
+func (tme *testMigraterEnv) expectNoPreviousReverseJournals() {
+	// validate that no previous journals exist
+	for _, dbclient := range tme.dbTargetClients {
+		dbclient.addQueryRE(tsCheckJournals, &sqltypes.Result{}, nil)
 	}
 }
 
@@ -493,4 +584,11 @@ func (tme *testShardMigraterEnv) expectCancelMigration() {
 		dbclient.addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow != 'test_reverse'", &sqltypes.Result{}, nil)
 	}
 	tme.expectDeleteReverseVReplication()
+}
+
+func (tme *testShardMigraterEnv) expectNoPreviousJournals() {
+	// validate that no previous journals exist
+	for _, dbclient := range tme.dbSourceClients {
+		dbclient.addQueryRE(tsCheckJournals, &sqltypes.Result{}, nil)
+	}
 }

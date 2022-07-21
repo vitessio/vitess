@@ -24,7 +24,7 @@ import (
 	"fmt"
 	"log"
 
-	"golang.org/x/net/context"
+	"context"
 
 	throttlerdatapb "vitess.io/vitess/go/vt/proto/throttlerdata"
 )

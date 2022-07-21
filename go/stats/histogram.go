@@ -27,6 +27,7 @@ import (
 // splitting the counts under different buckets
 // using specified cutoffs.
 type Histogram struct {
+	name       string
 	help       string
 	cutoffs    []int64
 	labels     []string
@@ -60,6 +61,7 @@ func NewGenericHistogram(name, help string, cutoffs []int64, labels []string, co
 		panic("mismatched cutoff and label lengths")
 	}
 	h := &Histogram{
+		name:       name,
 		help:       help,
 		cutoffs:    cutoffs,
 		labels:     labels,
@@ -85,6 +87,9 @@ func (h *Histogram) Add(value int64) {
 	if h.hook != nil {
 		h.hook(value)
 	}
+	if defaultStatsdHook.histogramHook != nil && h.name != "" {
+		defaultStatsdHook.histogramHook(h.name, value)
+	}
 }
 
 // String returns a string representation of the Histogram.
@@ -103,8 +108,9 @@ func (h *Histogram) MarshalJSON() ([]byte, error) {
 	fmt.Fprintf(b, "{")
 	totalCount := int64(0)
 	for i, label := range h.labels {
-		totalCount += h.buckets[i].Get()
-		fmt.Fprintf(b, "\"%v\": %v, ", label, totalCount)
+		count := h.buckets[i].Get()
+		totalCount += count
+		fmt.Fprintf(b, "\"%v\": %v, ", label, count)
 	}
 	fmt.Fprintf(b, "\"%s\": %v, ", h.countLabel, totalCount)
 	fmt.Fprintf(b, "\"%s\": %v", h.totalLabel, h.total.Get())

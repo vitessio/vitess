@@ -17,10 +17,10 @@ limitations under the License.
 package topotools
 
 import (
+	"context"
 	"fmt"
 	"sync"
 
-	"golang.org/x/net/context"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
@@ -30,14 +30,14 @@ import (
 )
 
 // RebuildKeyspace rebuilds the serving graph data while locking out other changes.
-func RebuildKeyspace(ctx context.Context, log logutil.Logger, ts *topo.Server, keyspace string, cells []string) (err error) {
+func RebuildKeyspace(ctx context.Context, log logutil.Logger, ts *topo.Server, keyspace string, cells []string, allowPartial bool) (err error) {
 	ctx, unlock, lockErr := ts.LockKeyspace(ctx, keyspace, "RebuildKeyspace")
 	if lockErr != nil {
 		return lockErr
 	}
 	defer unlock(&err)
 
-	return RebuildKeyspaceLocked(ctx, log, ts, keyspace, cells)
+	return RebuildKeyspaceLocked(ctx, log, ts, keyspace, cells, allowPartial)
 }
 
 // RebuildKeyspaceLocked should only be used with an action lock on the keyspace
@@ -46,7 +46,7 @@ func RebuildKeyspace(ctx context.Context, log logutil.Logger, ts *topo.Server, k
 //
 // Take data from the global keyspace and rebuild the local serving
 // copies in each cell.
-func RebuildKeyspaceLocked(ctx context.Context, log logutil.Logger, ts *topo.Server, keyspace string, cells []string) error {
+func RebuildKeyspaceLocked(ctx context.Context, log logutil.Logger, ts *topo.Server, keyspace string, cells []string, allowPartial bool) error {
 	if err := topo.CheckKeyspaceLocked(ctx, keyspace); err != nil {
 		return err
 	}
@@ -82,10 +82,11 @@ func RebuildKeyspaceLocked(ctx context.Context, log logutil.Logger, ts *topo.Ser
 		switch {
 		case err == nil:
 			for _, partition := range srvKeyspace.GetPartitions() {
-				if partition.GetShardTabletControls() != nil {
-					return fmt.Errorf("can't rebuild serving keyspace while a migration is on going. TabletControls is set for partition %v", partition)
+				for _, shardTabletControl := range partition.GetShardTabletControls() {
+					if shardTabletControl.QueryServiceDisabled {
+						return fmt.Errorf("can't rebuild serving keyspace while a migration is on going. TabletControls is set for partition %v", partition)
+					}
 				}
-
 			}
 		case topo.IsErrType(err, topo.NoNode):
 			// NOOP
@@ -93,13 +94,11 @@ func RebuildKeyspaceLocked(ctx context.Context, log logutil.Logger, ts *topo.Ser
 			return err
 		}
 		srvKeyspaceMap[cell] = &topodatapb.SrvKeyspace{
-			ShardingColumnName: ki.ShardingColumnName,
-			ShardingColumnType: ki.ShardingColumnType,
-			ServedFrom:         ki.ComputeCellServedFrom(cell),
+			ServedFrom: ki.ComputeCellServedFrom(cell),
 		}
 	}
 
-	servedTypes := []topodatapb.TabletType{topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY}
+	servedTypes := []topodatapb.TabletType{topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY}
 
 	// for each entry in the srvKeyspaceMap map, we do the following:
 	// - get the Shard structures for each shard / cell
@@ -108,10 +107,8 @@ func RebuildKeyspaceLocked(ctx context.Context, log logutil.Logger, ts *topo.Ser
 	// - check the ranges are compatible (no hole, covers everything)
 	for cell, srvKeyspace := range srvKeyspaceMap {
 		for _, si := range shards {
-			// We rebuild keyspace iff:
-			// 1) shard master is in a serving state.
-			// 2) shard has served type for master (this is for backwards compatibility).
-			if !(si.IsMasterServing || si.GetServedType(topodatapb.TabletType_MASTER) != nil) {
+			// We rebuild keyspace iff shard primary is in a serving state.
+			if !si.GetIsPrimaryServing() {
 				continue
 			}
 			// for each type this shard is supposed to serve,
@@ -131,8 +128,11 @@ func RebuildKeyspaceLocked(ctx context.Context, log logutil.Logger, ts *topo.Ser
 			}
 		}
 
-		if err := topo.OrderAndCheckPartitions(cell, srvKeyspace); err != nil {
-			return err
+		if !(ki.KeyspaceType == topodatapb.KeyspaceType_SNAPSHOT && allowPartial) {
+			// skip this check for SNAPSHOT keyspaces so that incomplete keyspaces can still serve
+			if err := topo.OrderAndCheckPartitions(cell, srvKeyspace); err != nil {
+				return err
+			}
 		}
 
 	}

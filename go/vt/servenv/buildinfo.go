@@ -52,6 +52,24 @@ type versionInfo struct {
 	goVersion          string
 	goOS               string
 	goArch             string
+	version            string
+}
+
+// ToStringMap returns the version info as a map[string]string, allowing version
+// info to be used in things like arbitrary string-tag maps (e.g. tablet tags
+// in the topo).
+func (v *versionInfo) ToStringMap() map[string]string {
+	return map[string]string{
+		"build_host":       v.buildHost,
+		"build_user":       v.buildUser,
+		"build_time":       v.buildTimePretty,
+		"build_git_rev":    v.buildGitRev,
+		"build_git_branch": v.buildGitBranch,
+		"go_version":       v.goVersion,
+		"goos":             v.goOS,
+		"goarch":           v.goArch,
+		"version":          v.version,
+	}
 }
 
 func (v *versionInfo) Print() {
@@ -59,11 +77,19 @@ func (v *versionInfo) Print() {
 }
 
 func (v *versionInfo) String() string {
-	version := fmt.Sprintf("Version: %s", v.buildGitRev)
+	jenkins := ""
 	if v.jenkinsBuildNumber != 0 {
-		version = fmt.Sprintf("Version: %s (Jenkins build %d)", v.buildGitRev, v.jenkinsBuildNumber)
+		jenkins = fmt.Sprintf(" (Jenkins build %d)", v.jenkinsBuildNumber)
 	}
-	return fmt.Sprintf("%s (Git branch '%s') built on %s by %s@%s using %s %s/%s\n", version, v.buildGitBranch, v.buildTimePretty, v.buildUser, v.buildHost, v.goVersion, v.goOS, v.goArch)
+	return fmt.Sprintf("Version: %s%s (Git revision %s branch '%s') built on %s by %s@%s using %s %s/%s",
+		v.version, jenkins, v.buildGitRev, v.buildGitBranch, v.buildTimePretty, v.buildUser, v.buildHost, v.goVersion, v.goOS, v.goArch)
+}
+
+func (v *versionInfo) MySQLVersion() string {
+	if *MySQLServerVersion != "" {
+		return *MySQLServerVersion
+	}
+	return "5.7.9-vitess-" + v.version
 }
 
 func init() {
@@ -88,8 +114,8 @@ func init() {
 		goVersion:          runtime.Version(),
 		goOS:               runtime.GOOS,
 		goArch:             runtime.GOARCH,
+		version:            versionName,
 	}
-
 	stats.NewString("BuildHost").Set(AppVersion.buildHost)
 	stats.NewString("BuildUser").Set(AppVersion.buildUser)
 	stats.NewGauge("BuildTimestamp", "build timestamp").Set(AppVersion.buildTime)

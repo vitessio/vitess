@@ -18,44 +18,46 @@ package evalengine
 
 import (
 	"fmt"
+	"math"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/sqltypes"
 )
 
 func TestEvalResultToBooleanStrict(t *testing.T) {
 	trueValues := []*EvalResult{{
-		typ:  sqltypes.Int64,
-		ival: 1,
+		type_:    int16(sqltypes.Int64),
+		numeric_: 1,
 	}, {
-		typ:  sqltypes.Uint64,
-		uval: 1,
+		type_:    int16(sqltypes.Uint64),
+		numeric_: 1,
 	}, {
-		typ:  sqltypes.Int8,
-		ival: 1,
+		type_:    int16(sqltypes.Int8),
+		numeric_: 1,
 	}}
 
 	falseValues := []*EvalResult{{
-		typ:  sqltypes.Int64,
-		ival: 0,
+		type_:    int16(sqltypes.Int64),
+		numeric_: 0,
 	}, {
-		typ:  sqltypes.Uint64,
-		uval: 0,
+		type_:    int16(sqltypes.Uint64),
+		numeric_: 0,
 	}, {
-		typ:  sqltypes.Int8,
-		uval: 0,
+		type_:    int16(sqltypes.Int8),
+		numeric_: 0,
 	}}
 
 	invalid := []*EvalResult{{
-		typ:   sqltypes.VarChar,
-		bytes: []byte("foobar"),
+		type_:  int16(sqltypes.VarChar),
+		bytes_: []byte("foobar"),
 	}, {
-		typ:  sqltypes.Float32,
-		fval: 1,
+		type_:    int16(sqltypes.Float32),
+		numeric_: math.Float64bits(1.0),
 	}, {
-		typ:  sqltypes.Int64,
-		ival: 12,
+		type_:    int16(sqltypes.Int64),
+		numeric_: 12,
 	}}
 
 	for _, res := range trueValues {
