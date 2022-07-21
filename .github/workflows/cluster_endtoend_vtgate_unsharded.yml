@@ -1,30 +1,27 @@
-name: {{.Name}}
+# DO NOT MODIFY: THIS FILE IS GENERATED USING "make generate_ci_workflows"
+
+name: Cluster (vtgate_unsharded)
 on: [push, pull_request]
 concurrency:
-  group: format('{0}-{1}', ${{"{{"}} github.ref {{"}}"}}, '{{.Name}}')
+  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (vtgate_unsharded)')
   cancel-in-progress: true
 
 env:
   LAUNCHABLE_ORGANIZATION: "vitess"
   LAUNCHABLE_WORKSPACE: "vitess-app"
-  GITHUB_PR_HEAD_SHA: "${{`{{ github.event.pull_request.head.sha }}`}}"
-{{if .InstallXtraBackup}}
-  # This is used if we need to pin the xtrabackup version used in tests.
-  # If this is NOT set then the latest version available will be used.
-  #XTRABACKUP_VERSION: "2.4.24-1"
-{{end}}
+  GITHUB_PR_HEAD_SHA: "${{ github.event.pull_request.head.sha }}"
 
 jobs:
   build:
-    name: Run endtoend tests on {{.Name}}
-    {{if .Ubuntu20}}runs-on: ubuntu-20.04{{else}}runs-on: ubuntu-18.04{{end}}
+    name: Run endtoend tests on Cluster (vtgate_unsharded)
+    runs-on: ubuntu-18.04
 
     steps:
     - name: Check if workflow needs to be skipped
       id: skip-workflow
       run: |
         skip=0
-        if [[ "{{"${{github.event.pull_request}}"}}" ==  "" ]] && [[ "{{"${{github.ref}}"}}" != "refs/heads/main" ]] && [[ "{{"${{github.ref}}"}}" != "refs/heads/release-"*".0" ]] && [[ "{{"${{github.ref}}"}}" != "refs/tags/"* ]]; then
+        if [[ "${{github.event.pull_request}}" ==  "" ]] && [[ "${{github.ref}}" != "refs/heads/main" ]] && [[ "${{github.ref}}" != "refs/heads/release-"*".0" ]] && [[ "${{github.ref}}" != "refs/tags/"* ]]; then
           skip=1
         fi
         echo Skip ${skip}
@@ -85,31 +82,6 @@ jobs:
         # install JUnit report formatter
         go install github.com/vitessio/go-junit-report@HEAD
 
-        {{if .InstallXtraBackup}}
-
-        wget "https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb"
-        sudo apt-get install -y gnupg2
-        sudo dpkg -i "percona-release_latest.$(lsb_release -sc)_all.deb"
-        sudo apt-get update
-        if [[ -n $XTRABACKUP_VERSION ]]; then
-          debfile="percona-xtrabackup-24_$XTRABACKUP_VERSION.$(lsb_release -sc)_amd64.deb"
-          wget "https://repo.percona.com/pxb-24/apt/pool/main/p/percona-xtrabackup-24/$debfile"
-          sudo apt install -y "./$debfile"
-        else
-          sudo apt-get install -y percona-xtrabackup-24
-        fi
-
-        {{end}}
-
-    {{if .MakeTools}}
-
-    - name: Installing zookeeper and consul
-      if: steps.skip-workflow.outputs.skip-workflow == 0 && steps.changes.outputs.end_to_end == 'true'
-      run: |
-          make tools
-
-    {{end}}
-
     - name: Setup launchable dependencies
       if: steps.skip-workflow.outputs.skip-workflow == 0 && steps.changes.outputs.end_to_end == 'true'
       run: |
@@ -133,29 +105,8 @@ jobs:
 
         set -x
 
-        {{if .LimitResourceUsage}}
-        # Increase our local ephemeral port range as we could exhaust this
-        sudo sysctl -w net.ipv4.ip_local_port_range="22768 61999"
-        # Increase our open file descriptor limit as we could hit this
-        ulimit -n 65536
-        cat <<-EOF>>./config/mycnf/mysql57.cnf
-        innodb_buffer_pool_dump_at_shutdown=OFF
-        innodb_buffer_pool_load_at_startup=OFF
-        innodb_buffer_pool_size=64M
-        innodb_doublewrite=OFF
-        innodb_flush_log_at_trx_commit=0
-        innodb_flush_method=O_DIRECT
-        innodb_numa_interleave=ON
-        innodb_adaptive_hash_index=OFF
-        sync_binlog=0
-        sync_relay_log=0
-        performance_schema=OFF
-        slow-query-log=OFF
-        EOF
-        {{end}}
-
         # run the tests however you normally do, then produce a JUnit XML file
-        eatmydata -- go run test.go -docker=false -follow -shard {{.Shard}} | tee -a output.txt | go-junit-report -set-exit-code > report.xml
+        eatmydata -- go run test.go -docker=false -follow -shard vtgate_unsharded | tee -a output.txt | go-junit-report -set-exit-code > report.xml
 
     - name: Print test output and Record test result in launchable
       if: steps.skip-workflow.outputs.skip-workflow == 0 && steps.changes.outputs.end_to_end == 'true' && always()

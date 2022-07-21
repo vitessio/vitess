@@ -1,11 +1,10 @@
-name: {{.Name}}
+name: endtoend
 on: [push, pull_request]
-
 jobs:
-  build:
-    name: Run endtoend tests on {{.Name}}
-    {{if .Ubuntu20}}runs-on: ubuntu-20.04{{else}}runs-on: ubuntu-latest{{end}}
 
+  build:
+    name: End-to-End Test
+    runs-on: ubuntu-18.04
     steps:
     - name: Check if workflow needs to be skipped
       id: skip-workflow
@@ -38,7 +37,6 @@ jobs:
             - 'tools/**'
             - 'config/**'
             - 'bootstrap.sh'
-            - '.github/workflows/**'
 
     - name: Set up Go
       if: steps.skip-workflow.outputs.skip-workflow == 0 && steps.changes.outputs.end_to_end == 'true'
@@ -51,8 +49,36 @@ jobs:
       run: |
         echo '1024 65535' | sudo tee -a /proc/sys/net/ipv4/ip_local_port_range
 
-    - name: Run cluster endtoend test
+    # TEMPORARY WHILE GITHUB FIXES THIS https://github.com/actions/virtual-environments/issues/3185
+    - name: Add the current IP address, long hostname and short hostname record to /etc/hosts file
+      if: steps.skip-workflow.outputs.skip-workflow == 0 && steps.changes.outputs.end_to_end == 'true'
+      run: |
+        echo -e "$(ip addr show eth0 | grep "inet\b" | awk '{print $2}' | cut -d/ -f1)\t$(hostname -f) $(hostname -s)" | sudo tee -a /etc/hosts
+    # DON'T FORGET TO REMOVE CODE ABOVE WHEN ISSUE IS ADRESSED!
+
+    - name: Get dependencies
+      if: steps.skip-workflow.outputs.skip-workflow == 0 && steps.changes.outputs.end_to_end == 'true'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd curl git wget
+        sudo service mysql stop
+        sudo service etcd stop
+        sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
+        sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
+        go mod download
+
+    - name: Run make minimaltools
+      if: steps.skip-workflow.outputs.skip-workflow == 0 && steps.changes.outputs.end_to_end == 'true'
+      run: |
+        make minimaltools
+
+    - name: Build
+      if: steps.skip-workflow.outputs.skip-workflow == 0 && steps.changes.outputs.end_to_end == 'true'
+      run: |
+        make build
+
+    - name: endtoend
       if: steps.skip-workflow.outputs.skip-workflow == 0 && steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 30
       run: |
-        go run test.go -docker=true --follow -shard {{.Shard}}
+        eatmydata -- tools/e2e_test_runner.sh

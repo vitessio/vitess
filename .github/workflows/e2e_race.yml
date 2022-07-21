@@ -1,11 +1,10 @@
-name: {{.Name}}
+name: e2e_race
 on: [push, pull_request]
-
 jobs:
-  build:
-    name: Run endtoend tests on {{.Name}}
-    {{if .Ubuntu20}}runs-on: ubuntu-20.04{{else}}runs-on: ubuntu-latest{{end}}
 
+  build:
+    name: End-to-End Test (Race)
+    runs-on: ubuntu-latest
     steps:
     - name: Check if workflow needs to be skipped
       id: skip-workflow
@@ -38,7 +37,6 @@ jobs:
             - 'tools/**'
             - 'config/**'
             - 'bootstrap.sh'
-            - '.github/workflows/**'
 
     - name: Set up Go
       if: steps.skip-workflow.outputs.skip-workflow == 0 && steps.changes.outputs.end_to_end == 'true'
@@ -51,8 +49,31 @@ jobs:
       run: |
         echo '1024 65535' | sudo tee -a /proc/sys/net/ipv4/ip_local_port_range
 
-    - name: Run cluster endtoend test
+    - name: Get dependencies
+      if: steps.skip-workflow.outputs.skip-workflow == 0 && steps.changes.outputs.end_to_end == 'true'
+      run: |
+        # Setup MySQL 8.0
+        sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 467B942D3A79BD29
+        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.20-1_all.deb
+        echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0 | sudo debconf-set-selections
+        sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
+        sudo apt-get update
+
+        # Install everything else we need, and configure
+        sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd curl git wget eatmydata
+        sudo service mysql stop
+        sudo service etcd stop
+        sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
+        sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
+        go mod download
+
+    - name: Run make minimaltools
+      if: steps.skip-workflow.outputs.skip-workflow == 0 && steps.changes.outputs.end_to_end == 'true'
+      run: |
+        make minimaltools
+
+    - name: e2e_race
       if: steps.skip-workflow.outputs.skip-workflow == 0 && steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 30
       run: |
-        go run test.go -docker=true --follow -shard {{.Shard}}
+        make e2e_test_race

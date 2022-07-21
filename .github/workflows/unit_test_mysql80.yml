@@ -1,7 +1,9 @@
-name: {{.Name}}
+# DO NOT MODIFY: THIS FILE IS GENERATED USING "make generate_ci_workflows"
+
+name: Unit Test (mysql80)
 on: [push, pull_request]
 concurrency:
-  group: format('{0}-{1}', ${{"{{"}} github.ref {{"}}"}}, '{{.Name}}')
+  group: format('{0}-{1}', ${{ github.ref }}, 'Unit Test (mysql80)')
   cancel-in-progress: true
 
 jobs:
@@ -13,7 +15,7 @@ jobs:
       id: skip-workflow
       run: |
         skip=0
-        if [[ "{{"${{github.event.pull_request}}"}}" ==  "" ]] && [[ "{{"${{github.ref}}"}}" != "refs/heads/main" ]] && [[ "{{"${{github.ref}}"}}" != "refs/heads/release-"*".0" ]] && [[ "{{"${{github.ref}}"}}" != "refs/tags/"* ]]; then
+        if [[ "${{github.event.pull_request}}" ==  "" ]] && [[ "${{github.ref}}" != "refs/heads/main" ]] && [[ "${{github.ref}}" != "refs/heads/release-"*".0" ]] && [[ "${{github.ref}}" != "refs/tags/"* ]]; then
           skip=1
         fi
         echo Skip ${skip}
@@ -62,13 +64,6 @@ jobs:
         export DEBIAN_FRONTEND="noninteractive"
         sudo apt-get update
 
-        {{if (eq .Platform "mysql57")}}
-
-        # mysql57
-        sudo apt-get install -y mysql-server mysql-client
-
-        {{else}}
-
         # !mysql57
 
         # Uninstall any previously installed MySQL first
@@ -80,7 +75,6 @@ jobs:
         sudo rm -rf /var/lib/mysql
         sudo rm -rf /etc/mysql
 
-        {{if (eq .Platform "mysql80")}}
         # Get key to latest MySQL repo
         sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 467B942D3A79BD29
 
@@ -90,43 +84,6 @@ jobs:
         sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
         sudo apt-get update
         sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y mysql-server mysql-client
-
-        {{end}}
-
-        {{if (eq .Platform "mariadb101")}}
-
-        # mariadb101
-        sudo apt-get install -y software-properties-common
-        sudo apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 0xF1656F24C74CD1D8
-        sudo add-apt-repository 'deb [arch=amd64,arm64,ppc64el] http://nyc2.mirrors.digitalocean.com/mariadb/repo/10.1/ubuntu bionic main'
-        sudo apt update
-        sudo DEBIAN_FRONTEND="noninteractive" apt install -y mariadb-server
-
-        {{end}}
-
-        {{if (eq .Platform "mariadb102")}}
-
-        # mariadb102
-        sudo apt-get install -y software-properties-common
-        sudo apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 0xF1656F24C74CD1D8
-        sudo add-apt-repository 'deb [arch=amd64,arm64,ppc64el] http://nyc2.mirrors.digitalocean.com/mariadb/repo/10.2/ubuntu bionic main'
-        sudo apt update
-        sudo DEBIAN_FRONTEND="noninteractive" apt install -y mariadb-server
-
-        {{end}}
-
-        {{if (eq .Platform "mariadb103")}}
-
-        # mariadb103
-        sudo apt-get install -y software-properties-common
-        sudo apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 0xF1656F24C74CD1D8
-        sudo add-apt-repository 'deb [arch=amd64,arm64,ppc64el] http://nyc2.mirrors.digitalocean.com/mariadb/repo/10.3/ubuntu bionic main'
-        sudo apt update
-        sudo DEBIAN_FRONTEND="noninteractive" apt install -y mariadb-server
-
-        {{end}}
-
-        {{end}} {{/*outer if*/}}
 
         sudo apt-get install -y make unzip g++ curl git wget ant openjdk-8-jdk eatmydata
         sudo service mysql stop
