@@ -518,7 +518,6 @@ func TestSelectNullLookup(t *testing.T) {
 	defer closer()
 
 	utils.Exec(t, conn, "insert into t6(id1, id2) values(1, 'a'), (2, 'b'), (3, null)")
-	defer utils.Exec(t, conn, "set workload = oltp;delete from t6")
 
 	for _, workload := range []string{"oltp", "olap"} {
 		t.Run(workload, func(t *testing.T) {

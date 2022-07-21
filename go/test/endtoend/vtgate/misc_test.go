@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"testing"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/utils"
 
 	"github.com/stretchr/testify/assert"
@@ -689,7 +690,12 @@ func TestDescribeVindex(t *testing.T) {
 	conn, closer := start(t)
 	defer closer()
 
-	utils.AssertContainsError(t, conn, "describe hash", "'vt_ks.hash' doesn't exist")
+	_, err := conn.ExecuteFetch("describe hash", 1000, false)
+	require.Error(t, err)
+	mysqlErr := err.(*mysql.SQLError)
+	assert.Equal(t, 1146, mysqlErr.Num)
+	assert.Equal(t, "42S02", mysqlErr.State)
+	assert.Contains(t, mysqlErr.Message, "NotFound desc")
 }
 
 func TestEmptyQuery(t *testing.T) {
