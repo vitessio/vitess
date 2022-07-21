@@ -41,6 +41,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
 
@@ -369,8 +370,9 @@ var (
 
 const (
 	maxTableRows                  = 4096
-	maxConcurrency                = 10
-	singleConnectionSleepInterval = 15 * time.Millisecond
+	maxConcurrency                = 15
+	singleConnectionSleepInterval = 5 * time.Millisecond
+	periodicSleepDuration         = 100 * time.Millisecond
 	waitForStatusTimeout          = 180 * time.Second
 )
 
@@ -681,6 +683,8 @@ func runSingleConnection(ctx context.Context, t *testing.T, autoIncInsert bool, 
 	_, err = conn.ExecuteFetch("set innodb_lock_wait_timeout=1", 1, false)
 	require.Nil(t, err)
 
+	periodicRest := timer.NewRateLimiter(time.Second)
+	defer periodicRest.Stop()
 	for {
 		if atomic.LoadInt64(done) == 1 {
 			log.Infof("Terminating single connection")
@@ -708,6 +712,10 @@ func runSingleConnection(ctx context.Context, t *testing.T, autoIncInsert bool, 
 		}
 		assert.Nil(t, err)
 		time.Sleep(singleConnectionSleepInterval)
+		periodicRest.Do(func() error {
+			time.Sleep(periodicSleepDuration)
+			return nil
+		})
 	}
 }
 
