@@ -17,9 +17,6 @@ ARG DEBIAN_VER=bullseye-slim
 
 FROM vitess/k8s:${VT_BASE_VER} AS k8s
 
-COPY nginx.conf nginx.conf
-COPY entrypoint.sh /entrypoint.sh
-
 FROM node:16-${DEBIAN_VER} as node
 
 # Set up Vitess environment (just enough to run pre-built Go binaries)
@@ -38,30 +35,33 @@ COPY --from=k8s /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificate
 # copy web admin files
 COPY --from=k8s /vt/web/vtadmin /vt/web/vtadmin
 
-# copy nginx config
-COPY --from=k8s nginx.conf nginx.conf
-COPY --from=k8s entrypoint.sh /entrypoint.sh
-
 # install/build/clean web dependencies
 RUN npm --prefix /vt/web/vtadmin ci && \
     npm run --prefix /vt/web/vtadmin build
 
-# add vitess user/group and add permissions
-RUN deluser node && \
-   groupadd -r --gid 2000 vitess && \
-   useradd -r -g vitess --uid 1000 vitess && \
-   chown -R vitess:vitess /vt && \
-   chown -R vitess:vitess /vtdataroot
 
-FROM nginx:latest AS nginx
+FROM nginx:1.23.1-alpine AS nginx
 
 COPY --from=node /vt/web/vtadmin/build /var/www/
-COPY --from=node nginx.conf /etc/nginx/nginx.conf
-COPY --from=node entrypoint.sh /entrypoint.sh
+COPY nginx.conf /etc/nginx/nginx.conf
+COPY entrypoint.sh /entrypoint.sh
+
+# add permissions to nginx user
+RUN chown -R nginx:nginx /var/www && \
+   chown -R nginx:nginx /var/cache/nginx && \
+   chown -R nginx:nginx /var/log/nginx && \
+   chown -R nginx:nginx /usr/sbin/nginx && \
+   chown nginx:nginx /etc/nginx/nginx.conf && \
+   chown nginx:nginx /entrypoint.sh
+
+RUN touch /var/run/nginx.pid && \
+   chown -R nginx:nginx /var/run/nginx.pid
+
+USER nginx
 
 RUN ["chmod", "+x", "/entrypoint.sh"]
 
-ENTRYPOINT ["/entrypoint.sh"]
+ENTRYPOINT ["sh", "/entrypoint.sh"]
 
 
 
