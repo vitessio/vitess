@@ -89,19 +89,23 @@ func (client *QueryClient) Begin(clientFoundRows bool) error {
 	if clientFoundRows {
 		options = &querypb.ExecuteOptions{ClientFoundRows: clientFoundRows}
 	}
-	transactionID, _, err := client.server.Begin(client.ctx, client.target, options)
+	response, err := client.server.Begin(client.ctx, client.target, options)
+	if response != nil {
+		client.transactionID = response.TransactionId
+	}
 	if err != nil {
 		return err
 	}
-	client.transactionID = transactionID
 	return nil
 }
 
 // Commit commits the current transaction.
 func (client *QueryClient) Commit() error {
 	defer func() { client.transactionID = 0 }()
-	rID, err := client.server.Commit(client.ctx, client.target, client.transactionID)
-	client.reservedID = rID
+	response, err := client.server.Commit(client.ctx, client.target, client.transactionID)
+	if response != nil {
+		client.reservedID = response.ReservedId
+	}
 	if err != nil {
 		return err
 	}
@@ -111,8 +115,10 @@ func (client *QueryClient) Commit() error {
 // Rollback rolls back the current transaction.
 func (client *QueryClient) Rollback() error {
 	defer func() { client.transactionID = 0 }()
-	rID, err := client.server.Rollback(client.ctx, client.target, client.transactionID)
-	client.reservedID = rID
+	response, err := client.server.Rollback(client.ctx, client.target, client.transactionID)
+	if response != nil {
+		client.reservedID = response.ReservedId
+	}
 	if err != nil {
 		return err
 	}
@@ -182,7 +188,7 @@ func (client *QueryClient) BeginExecute(query string, bindvars map[string]*query
 	if client.transactionID != 0 {
 		return nil, errors.New("already in transaction")
 	}
-	qr, transactionID, _, err := client.server.BeginExecute(
+	response, err := client.server.BeginExecute(
 		client.ctx,
 		client.target,
 		preQueries,
@@ -191,16 +197,18 @@ func (client *QueryClient) BeginExecute(query string, bindvars map[string]*query
 		client.reservedID,
 		&querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL},
 	)
-	client.transactionID = transactionID
+	if response != nil {
+		client.transactionID = response.TransactionId
+	}
 	if err != nil {
 		return nil, err
 	}
-	return qr, nil
+	return sqltypes.Proto3ToResult(response.Result), nil
 }
 
 // ExecuteWithOptions executes a query using 'options'.
 func (client *QueryClient) ExecuteWithOptions(query string, bindvars map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
-	return client.server.Execute(
+	response, err := client.server.Execute(
 		client.ctx,
 		client.target,
 		query,
@@ -209,6 +217,10 @@ func (client *QueryClient) ExecuteWithOptions(query string, bindvars map[string]
 		client.reservedID,
 		options,
 	)
+	if err != nil {
+		return nil, err
+	}
+	return sqltypes.Proto3ToResult(response.Result), nil
 }
 
 // StreamExecute executes a query & returns the results.
@@ -242,7 +254,7 @@ func (client *QueryClient) StreamExecuteWithOptions(query string, bindvars map[s
 // StreamBeginExecuteWithOptions starts a tx and executes a query using 'options', returning the results .
 func (client *QueryClient) StreamBeginExecuteWithOptions(query string, preQueries []string, bindvars map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
 	result := &sqltypes.Result{}
-	txID, _, err := client.server.BeginStreamExecute(
+	response, err := client.server.BeginStreamExecute(
 		client.ctx,
 		client.target,
 		preQueries,
@@ -258,7 +270,9 @@ func (client *QueryClient) StreamBeginExecuteWithOptions(query string, preQuerie
 			return nil
 		},
 	)
-	client.transactionID = txID
+	if response != nil {
+		client.transactionID = response.TransactionId
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -292,12 +306,14 @@ func (client *QueryClient) ReserveExecute(query string, preQueries []string, bin
 	if client.reservedID != 0 {
 		return nil, errors.New("already reserved a connection")
 	}
-	qr, reservedID, _, err := client.server.ReserveExecute(client.ctx, client.target, preQueries, query, bindvars, client.transactionID, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
-	client.reservedID = reservedID
+	response, err := client.server.ReserveExecute(client.ctx, client.target, preQueries, query, bindvars, client.transactionID, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
+	if response != nil {
+		client.reservedID = response.ReservedId
+	}
 	if err != nil {
 		return nil, err
 	}
-	return qr, nil
+	return sqltypes.Proto3ToResult(response.Result), nil
 }
 
 // ReserveBeginExecute performs a ReserveBeginExecute.
@@ -308,13 +324,15 @@ func (client *QueryClient) ReserveBeginExecute(query string, preQueries []string
 	if client.transactionID != 0 {
 		return nil, errors.New("already in transaction")
 	}
-	qr, transactionID, reservedID, _, err := client.server.ReserveBeginExecute(client.ctx, client.target, preQueries, postBeginQueries, query, bindvars, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
-	client.transactionID = transactionID
-	client.reservedID = reservedID
+	response, err := client.server.ReserveBeginExecute(client.ctx, client.target, preQueries, postBeginQueries, query, bindvars, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
+	if response != nil {
+		client.transactionID = response.TransactionId
+		client.reservedID = response.ReservedId
+	}
 	if err != nil {
 		return nil, err
 	}
-	return qr, nil
+	return sqltypes.Proto3ToResult(response.Result), nil
 }
 
 // Release performs a Release.

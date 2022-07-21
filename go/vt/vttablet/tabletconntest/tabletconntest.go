@@ -19,6 +19,7 @@ limitations under the License.
 package tabletconntest
 
 import (
+	"context"
 	"flag"
 	"io"
 	"os"
@@ -26,8 +27,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-
-	"context"
 
 	"google.golang.org/protobuf/proto"
 
@@ -46,6 +45,7 @@ import (
 // testErrorHelper will check one instance of each error type,
 // to make sure we propagate the errors properly.
 func testErrorHelper(t *testing.T, f *FakeQueryService, name string, ef func(context.Context) error) {
+	t.Helper()
 	errors := []error{
 		// A few generic errors
 		vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "generic error"),
@@ -101,21 +101,21 @@ func testBegin(t *testing.T, conn queryservice.QueryService, f *FakeQueryService
 	t.Log("testBegin")
 	ctx := context.Background()
 	ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
-	transactionID, alias, err := conn.Begin(ctx, TestTarget, TestExecuteOptions)
+	response, err := conn.Begin(ctx, TestTarget, TestExecuteOptions)
 	if err != nil {
 		t.Fatalf("Begin failed: %v", err)
 	}
-	if transactionID != beginTransactionID {
-		t.Errorf("Unexpected result from Begin: got %v wanted %v", transactionID, beginTransactionID)
+	if response.TransactionId != beginTransactionID {
+		t.Errorf("Unexpected result from Begin: got %v wanted %v", response.TransactionId, beginTransactionID)
 	}
-	assert.Equal(t, TestAlias, alias, "Unexpected tablet alias from Begin")
+	assert.Equal(t, TestAlias, response.TabletAlias, "Unexpected tablet alias from Begin")
 }
 
 func testBeginError(t *testing.T, conn queryservice.QueryService, f *FakeQueryService) {
 	t.Log("testBeginError")
 	f.HasBeginError = true
 	testErrorHelper(t, f, "Begin", func(ctx context.Context) error {
-		_, _, err := conn.Begin(ctx, TestTarget, nil)
+		_, err := conn.Begin(ctx, TestTarget, nil)
 		return err
 	})
 	f.HasBeginError = false
@@ -124,7 +124,7 @@ func testBeginError(t *testing.T, conn queryservice.QueryService, f *FakeQuerySe
 func testBeginPanics(t *testing.T, conn queryservice.QueryService, f *FakeQueryService) {
 	t.Log("testBeginPanics")
 	testPanicHelper(t, f, "Begin", func(ctx context.Context) error {
-		_, _, err := conn.Begin(ctx, TestTarget, nil)
+		_, err := conn.Begin(ctx, TestTarget, nil)
 		return err
 	})
 }
@@ -403,10 +403,11 @@ func testExecute(t *testing.T, conn queryservice.QueryService, f *FakeQueryServi
 	f.ExpectedTransactionID = ExecuteTransactionID
 	ctx := context.Background()
 	ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
-	qr, err := conn.Execute(ctx, TestTarget, ExecuteQuery, ExecuteBindVars, ExecuteTransactionID, ReserveConnectionID, TestExecuteOptions)
+	response, err := conn.Execute(ctx, TestTarget, ExecuteQuery, ExecuteBindVars, ExecuteTransactionID, ReserveConnectionID, TestExecuteOptions)
 	if err != nil {
 		t.Fatalf("Execute failed: %v", err)
 	}
+	qr := sqltypes.Proto3ToResult(response.Result)
 	if !qr.Equal(&ExecuteQueryResult) {
 		t.Errorf("Unexpected result from Execute: got %v wanted %v", qr, ExecuteQueryResult)
 	}
@@ -435,26 +436,27 @@ func testBeginExecute(t *testing.T, conn queryservice.QueryService, f *FakeQuery
 	f.ExpectedTransactionID = beginTransactionID
 	ctx := context.Background()
 	ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
-	qr, transactionID, alias, err := conn.BeginExecute(ctx, TestTarget, nil, ExecuteQuery, ExecuteBindVars, ReserveConnectionID, TestExecuteOptions)
+	response, err := conn.BeginExecute(ctx, TestTarget, nil, ExecuteQuery, ExecuteBindVars, ReserveConnectionID, TestExecuteOptions)
 	if err != nil {
 		t.Fatalf("BeginExecute failed: %v", err)
 	}
-	if transactionID != beginTransactionID {
-		t.Errorf("Unexpected result from BeginExecute: got %v wanted %v", transactionID, beginTransactionID)
+	if response.TransactionId != beginTransactionID {
+		t.Errorf("Unexpected result from BeginExecute: got %v wanted %v", response.TransactionId, beginTransactionID)
 	}
+	qr := sqltypes.Proto3ToResult(response.Result)
 	if !qr.Equal(&ExecuteQueryResult) {
 		t.Errorf("Unexpected result from BeginExecute: got %v wanted %v", qr, ExecuteQueryResult)
 	}
-	assert.Equal(t, TestAlias, alias, "Unexpected tablet alias from Begin")
+	assert.Equal(t, TestAlias, response.TabletAlias, "Unexpected tablet alias from Begin")
 }
 
 func testBeginExecuteErrorInBegin(t *testing.T, conn queryservice.QueryService, f *FakeQueryService) {
 	t.Log("testBeginExecuteErrorInBegin")
 	f.HasBeginError = true
 	testErrorHelper(t, f, "BeginExecute.Begin", func(ctx context.Context) error {
-		_, transactionID, _, err := conn.BeginExecute(ctx, TestTarget, nil, ExecuteQuery, ExecuteBindVars, ReserveConnectionID, TestExecuteOptions)
-		if transactionID != 0 {
-			t.Errorf("Unexpected transactionID from BeginExecute: got %v wanted 0", transactionID)
+		response, err := conn.BeginExecute(ctx, TestTarget, nil, ExecuteQuery, ExecuteBindVars, ReserveConnectionID, TestExecuteOptions)
+		if response != nil {
+			t.Errorf("Unexpected transactionID from BeginExecute: got %v wanted nil", response)
 		}
 		return err
 	})
@@ -466,9 +468,9 @@ func testBeginExecuteErrorInExecute(t *testing.T, conn queryservice.QueryService
 	f.HasError = true
 	testErrorHelper(t, f, "BeginExecute.Execute", func(ctx context.Context) error {
 		ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
-		_, transactionID, _, err := conn.BeginExecute(ctx, TestTarget, nil, ExecuteQuery, ExecuteBindVars, ReserveConnectionID, TestExecuteOptions)
-		if transactionID != beginTransactionID {
-			t.Errorf("Unexpected transactionID from BeginExecute: got %v wanted %v", transactionID, beginTransactionID)
+		response, err := conn.BeginExecute(ctx, TestTarget, nil, ExecuteQuery, ExecuteBindVars, ReserveConnectionID, TestExecuteOptions)
+		if response.TransactionId != beginTransactionID {
+			t.Errorf("Unexpected transactionID from BeginExecute: got %v wanted %v", response.TransactionId, beginTransactionID)
 		}
 		return err
 	})
@@ -478,7 +480,7 @@ func testBeginExecuteErrorInExecute(t *testing.T, conn queryservice.QueryService
 func testBeginExecutePanics(t *testing.T, conn queryservice.QueryService, f *FakeQueryService) {
 	t.Log("testBeginExecutePanics")
 	testPanicHelper(t, f, "BeginExecute", func(ctx context.Context) error {
-		_, _, _, err := conn.BeginExecute(ctx, TestTarget, nil, ExecuteQuery, ExecuteBindVars, ReserveConnectionID, TestExecuteOptions)
+		_, err := conn.BeginExecute(ctx, TestTarget, nil, ExecuteQuery, ExecuteBindVars, ReserveConnectionID, TestExecuteOptions)
 		return err
 	})
 }

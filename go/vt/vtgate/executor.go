@@ -870,17 +870,20 @@ func (e *Executor) showVitessReplicationStatus(ctx context.Context, filter *sqlp
 			replLastError := ""
 			replLag := int64(-1)
 			sql := "show slave status"
-			results, err := e.txConn.tabletGateway.Execute(ctx, ts.Target, sql, nil, 0, 0, nil)
-			if err != nil || results == nil {
+			response, err := e.txConn.tabletGateway.Execute(ctx, ts.Target, sql, nil, 0, 0, nil)
+			if err != nil || response == nil || response.Result == nil {
 				log.Warningf("Could not get replication status from %s: %v", tabletHostPort, err)
-			} else if row := results.Named().Row(); row != nil {
-				replSourceHost = row["Master_Host"].ToString()
-				replSourcePort, _ = row["Master_Port"].ToInt64()
-				replIOThreadHealth = row["Slave_IO_Running"].ToString()
-				replSQLThreadHealth = row["Slave_SQL_Running"].ToString()
-				replLastError = row["Last_Error"].ToString()
-				if ts.Stats != nil {
-					replLag = int64(ts.Stats.ReplicationLagSeconds)
+			} else {
+				results := sqltypes.Proto3ToResult(response.Result)
+				if row := results.Named().Row(); row != nil {
+					replSourceHost = row["Master_Host"].ToString()
+					replSourcePort, _ = row["Master_Port"].ToInt64()
+					replIOThreadHealth = row["Slave_IO_Running"].ToString()
+					replSQLThreadHealth = row["Slave_SQL_Running"].ToString()
+					replLastError = row["Last_Error"].ToString()
+					if ts.Stats != nil {
+						replLag = int64(ts.Stats.ReplicationLagSeconds)
+					}
 				}
 			}
 			replicationHealth := fmt.Sprintf("{\"EventStreamRunning\":\"%s\",\"EventApplierRunning\":\"%s\",\"LastError\":\"%s\"}", replIOThreadHealth, replSQLThreadHealth, replLastError)

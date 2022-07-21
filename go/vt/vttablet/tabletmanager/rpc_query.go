@@ -129,5 +129,8 @@ func (tm *TabletManager) ExecuteQuery(ctx context.Context, query []byte, dbName 
 	tablet := tm.Tablet()
 	target := &querypb.Target{Keyspace: tablet.Keyspace, Shard: tablet.Shard, TabletType: tablet.Type}
 	result, err := tm.QueryServiceControl.QueryService().Execute(ctx, target, string(query), nil, 0, 0, nil)
-	return sqltypes.ResultToProto3(result), err
+	if err != nil {
+		return nil, err
+	}
+	return result.Result, nil
 }

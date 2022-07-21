@@ -21,7 +21,6 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
@@ -58,13 +57,13 @@ func NewStreamHealthQueryService(target *querypb.Target) *StreamHealthQueryServi
 }
 
 // Begin implemented as a no op
-func (q *StreamHealthQueryService) Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (int64, *topodatapb.TabletAlias, error) {
-	return 0, nil, nil
+func (q *StreamHealthQueryService) Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (*querypb.BeginResponse, error) {
+	return &querypb.BeginResponse{}, nil
 }
 
 // Execute implemented as a no op
-func (q *StreamHealthQueryService) Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
-	return &sqltypes.Result{}, nil
+func (q *StreamHealthQueryService) Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID, reservedID int64, options *querypb.ExecuteOptions) (*querypb.ExecuteResponse, error) {
+	return &querypb.ExecuteResponse{Result: &querypb.QueryResult{}}, nil
 }
 
 // StreamHealth implements the QueryService interface.

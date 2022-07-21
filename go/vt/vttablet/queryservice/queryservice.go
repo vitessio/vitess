@@ -19,14 +19,9 @@ limitations under the License.
 package queryservice
 
 import (
-	"io"
-
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-
 	"context"
 
 	"vitess.io/vitess/go/sqltypes"
-
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -43,13 +38,13 @@ type QueryService interface {
 	// Transaction management
 
 	// Begin returns the transaction id to use for further operations
-	Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (int64, *topodatapb.TabletAlias, error)
+	Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (*querypb.BeginResponse, error)
 
 	// Commit commits the current transaction
-	Commit(ctx context.Context, target *querypb.Target, transactionID int64) (int64, error)
+	Commit(ctx context.Context, target *querypb.Target, transactionID int64) (*querypb.CommitResponse, error)
 
 	// Rollback aborts the current transaction
-	Rollback(ctx context.Context, target *querypb.Target, transactionID int64) (int64, error)
+	Rollback(ctx context.Context, target *querypb.Target, transactionID int64) (*querypb.RollbackResponse, error)
 
 	// Prepare prepares the specified transaction.
 	Prepare(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) (err error)
@@ -79,16 +74,15 @@ type QueryService interface {
 	ReadTransaction(ctx context.Context, target *querypb.Target, dtid string) (metadata *querypb.TransactionMetadata, err error)
 
 	// Execute for query execution
-	Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error)
+	Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID, reservedID int64, options *querypb.ExecuteOptions) (*querypb.ExecuteResponse, error)
 	// StreamExecute for query execution with streaming
 	StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, reservedID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error
 
-	// Combo methods, they also return the transactionID from the
-	// Begin part. If err != nil, the transactionID may still be
-	// non-zero, and needs to be propagated back (like for a DB
-	// Integrity Error)
-	BeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error)
-	BeginStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (int64, *topodatapb.TabletAlias, error)
+	// Combo methods, they also return the response from the
+	// Begin part. If err != nil, the response may still be
+	// non-nil, and needs to be propagated back (like for a DB Integrity Error)
+	BeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (*querypb.BeginExecuteResponse, error)
+	BeginStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (*querypb.BeginStreamExecuteResponse, error)
 
 	// Messaging methods.
 	MessageStream(ctx context.Context, target *querypb.Target, name string, callback func(*sqltypes.Result) error) error
@@ -109,78 +103,16 @@ type QueryService interface {
 	// HandlePanic will be called if any of the functions panic.
 	HandlePanic(err *error)
 
-	ReserveBeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, int64, *topodatapb.TabletAlias, error)
+	ReserveBeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*querypb.ReserveBeginExecuteResponse, error)
 
-	ReserveBeginStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (int64, int64, *topodatapb.TabletAlias, error)
+	ReserveBeginStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (*querypb.ReserveBeginStreamExecuteResponse, error)
 
-	ReserveExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error)
+	ReserveExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (*querypb.ReserveExecuteResponse, error)
 
-	ReserveStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (int64, *topodatapb.TabletAlias, error)
+	ReserveStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (*querypb.ReserveStreamExecuteResponse, error)
 
 	Release(ctx context.Context, target *querypb.Target, transactionID, reservedID int64) error
 
 	// Close must be called for releasing resources.
 	Close(ctx context.Context) error
-}
-
-type resultStreamer struct {
-	done chan struct{}
-	ch   chan *sqltypes.Result
-	err  error
-}
-
-func (rs *resultStreamer) Recv() (*sqltypes.Result, error) {
-	select {
-	case <-rs.done:
-		return nil, rs.err
-	case qr := <-rs.ch:
-		return qr, nil
-	}
-}
-
-// ExecuteWithStreamer performs a StreamExecute, but returns a *sqltypes.ResultStream to iterate on.
-// This function should only be used for legacy code. New usage should directly use StreamExecute.
-func ExecuteWithStreamer(ctx context.Context, conn QueryService, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) sqltypes.ResultStream {
-	rs := &resultStreamer{
-		done: make(chan struct{}),
-		ch:   make(chan *sqltypes.Result),
-	}
-	go func() {
-		defer close(rs.done)
-		rs.err = conn.StreamExecute(ctx, target, sql, bindVariables, 0, 0, options, func(qr *sqltypes.Result) error {
-			select {
-			case <-ctx.Done():
-				return io.EOF
-			case rs.ch <- qr:
-			}
-			return nil
-		})
-		if rs.err == nil {
-			rs.err = io.EOF
-		}
-	}()
-	return rs
-}
-
-// ExecuteWithTransactionalStreamer does the same thing as ExecuteWithStreamer, but inside a transaction
-func ExecuteWithTransactionalStreamer(ctx context.Context, conn QueryService, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) sqltypes.ResultStream {
-	rs := &resultStreamer{
-		done: make(chan struct{}),
-		ch:   make(chan *sqltypes.Result),
-	}
-	go func() {
-		defer close(rs.done)
-		rs.err = conn.StreamExecute(ctx, target, sql, bindVariables, transactionID, 0, options, func(qr *sqltypes.Result) error {
-			select {
-			case <-ctx.Done():
-				return io.EOF
-			case rs.ch <- qr:
-			}
-			return nil
-		})
-		if rs.err == nil {
-			rs.err = io.EOF
-		}
-	}()
-	return rs
 }

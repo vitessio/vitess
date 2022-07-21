@@ -95,9 +95,9 @@ func (t *Tracker) LoadKeyspace(conn queryservice.QueryService, target *querypb.T
 	// clearing out the previous schema we can end up with duplicate entries when the
 	// tablet is simply restarted or potentially when we elect a new primary.
 	t.clearKeyspaceTables(target.Keyspace)
-	t.updateTables(target.Keyspace, res)
+	t.updateTables(target.Keyspace, res.Result)
 	t.tracked[target.Keyspace].setLoaded(true)
-	log.Infof("finished loading schema for keyspace %s. Found %d columns in total across the tables", target.Keyspace, len(res.Rows))
+	log.Infof("finished loading schema for keyspace %s. Found %d columns in total across the tables", target.Keyspace, len(res.Result.Rows))
 	return nil
 }
 
@@ -206,11 +206,12 @@ func (t *Tracker) updateSchema(th *discovery.TabletHealth) bool {
 	for _, tbl := range tablesUpdated {
 		t.tables.delete(th.Target.Keyspace, tbl)
 	}
-	t.updateTables(th.Target.Keyspace, res)
+	t.updateTables(th.Target.Keyspace, res.Result)
 	return true
 }
 
-func (t *Tracker) updateTables(keyspace string, res *sqltypes.Result) {
+func (t *Tracker) updateTables(keyspace string, pres *querypb.QueryResult) {
+	res := sqltypes.Proto3ToResult(pres)
 	for _, row := range res.Rows {
 		tbl := row[0].ToString()
 		colName := row[1].ToString()

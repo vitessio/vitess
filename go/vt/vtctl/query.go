@@ -243,7 +243,7 @@ func commandVtTabletExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags
 	}
 
 	// We do not support reserve connection through vtctl commands, so reservedID is always 0.
-	qr, err := conn.Execute(ctx, &querypb.Target{
+	executeResponse, err := conn.Execute(ctx, &querypb.Target{
 		Keyspace:   tabletInfo.Tablet.Keyspace,
 		Shard:      tabletInfo.Tablet.Shard,
 		TabletType: tabletInfo.Tablet.Type,
@@ -251,6 +251,7 @@ func commandVtTabletExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags
 	if err != nil {
 		return fmt.Errorf("execute failed: %v", err)
 	}
+	qr := sqltypes.Proto3ToResult(executeResponse.Result)
 	if *json {
 		return printJSON(wr.Logger(), qr)
 	}
@@ -291,7 +292,7 @@ func commandVtTabletBegin(ctx context.Context, wr *wrangler.Wrangler, subFlags *
 	}
 	defer conn.Close(ctx)
 
-	transactionID, _, err := conn.Begin(ctx, &querypb.Target{
+	response, err := conn.Begin(ctx, &querypb.Target{
 		Keyspace:   tabletInfo.Tablet.Keyspace,
 		Shard:      tabletInfo.Tablet.Shard,
 		TabletType: tabletInfo.Tablet.Type,
@@ -300,7 +301,7 @@ func commandVtTabletBegin(ctx context.Context, wr *wrangler.Wrangler, subFlags *
 		return fmt.Errorf("begin failed: %v", err)
 	}
 	result := map[string]int64{
-		"transaction_id": transactionID,
+		"transaction_id": response.TransactionId,
 	}
 	return printJSON(wr.Logger(), result)
 }

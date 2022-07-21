@@ -211,27 +211,64 @@ func (stc *ScatterConn) ExecuteMultiShard(
 
 			switch info.actionNeeded {
 			case nothing:
-				innerqr, err = qs.Execute(ctx, rs.Target, queries[i].Sql, queries[i].BindVariables, info.transactionID, info.reservedID, opts)
+				var result *querypb.ExecuteResponse
+				result, err = qs.Execute(ctx, rs.Target, queries[i].Sql, queries[i].BindVariables, info.transactionID, info.reservedID, opts)
+				if result != nil {
+					innerqr = sqltypes.Proto3ToResult(result.Result)
+				}
 				if err != nil {
 					retryRequest(func() {
 						// we seem to have lost our connection. it was a reserved connection, let's try to recreate it
 						info.actionNeeded = reserve
-						innerqr, reservedID, alias, err = qs.ReserveExecute(ctx, rs.Target, session.SetPreQueries(), queries[i].Sql, queries[i].BindVariables, 0 /*transactionId*/, opts)
+						var result *querypb.ReserveExecuteResponse
+						result, err = qs.ReserveExecute(ctx, rs.Target, session.SetPreQueries(), queries[i].Sql, queries[i].BindVariables, 0 /*transactionId*/, opts)
+						if result != nil {
+							alias = result.TabletAlias
+							reservedID = result.ReservedId
+							innerqr = sqltypes.Proto3ToResult(result.Result)
+						}
 					})
 				}
+
 			case begin:
-				innerqr, transactionID, alias, err = qs.BeginExecute(ctx, rs.Target, session.SavePoints(), queries[i].Sql, queries[i].BindVariables, reservedID, opts)
+				var result *querypb.BeginExecuteResponse
+				result, err = qs.BeginExecute(ctx, rs.Target, session.SavePoints(), queries[i].Sql, queries[i].BindVariables, reservedID, opts)
+				if result != nil {
+					innerqr = sqltypes.Proto3ToResult(result.Result)
+					alias = result.TabletAlias
+					transactionID = result.TransactionId
+				}
 				if err != nil {
 					retryRequest(func() {
 						// we seem to have lost our connection. it was a reserved connection, let's try to recreate it
 						info.actionNeeded = reserveBegin
-						innerqr, transactionID, reservedID, alias, err = qs.ReserveBeginExecute(ctx, rs.Target, session.SetPreQueries(), session.SavePoints(), queries[i].Sql, queries[i].BindVariables, opts)
+						var result *querypb.ReserveBeginExecuteResponse
+						result, err = qs.ReserveBeginExecute(ctx, rs.Target, session.SetPreQueries(), session.SavePoints(), queries[i].Sql, queries[i].BindVariables, opts)
+						if result != nil {
+							alias = result.TabletAlias
+							transactionID = result.TransactionId
+							reservedID = result.ReservedId
+							innerqr = sqltypes.Proto3ToResult(result.Result)
+						}
 					})
 				}
 			case reserve:
-				innerqr, reservedID, alias, err = qs.ReserveExecute(ctx, rs.Target, session.SetPreQueries(), queries[i].Sql, queries[i].BindVariables, transactionID, opts)
+				var result *querypb.ReserveExecuteResponse
+				result, err = qs.ReserveExecute(ctx, rs.Target, session.SetPreQueries(), queries[i].Sql, queries[i].BindVariables, transactionID, opts)
+				if result != nil {
+					alias = result.TabletAlias
+					reservedID = result.ReservedId
+					innerqr = sqltypes.Proto3ToResult(result.Result)
+				}
 			case reserveBegin:
-				innerqr, transactionID, reservedID, alias, err = qs.ReserveBeginExecute(ctx, rs.Target, session.SetPreQueries(), session.SavePoints(), queries[i].Sql, queries[i].BindVariables, opts)
+				var result *querypb.ReserveBeginExecuteResponse
+				result, err = qs.ReserveBeginExecute(ctx, rs.Target, session.SetPreQueries(), session.SavePoints(), queries[i].Sql, queries[i].BindVariables, opts)
+				if result != nil {
+					alias = result.TabletAlias
+					transactionID = result.TransactionId
+					reservedID = result.ReservedId
+					innerqr = sqltypes.Proto3ToResult(result.Result)
+				}
 			default:
 				return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected actionNeeded on query execution: %v", info.actionNeeded)
 			}
@@ -394,22 +431,49 @@ func (stc *ScatterConn) StreamExecuteMulti(
 					retryRequest(func() {
 						// we seem to have lost our connection. it was a reserved connection, let's try to recreate it
 						info.actionNeeded = reserve
-						reservedID, alias, err = qs.ReserveStreamExecute(ctx, rs.Target, session.SetPreQueries(), query, bindVars[i], 0 /*transactionId*/, opts, callback)
+						var result *querypb.ReserveStreamExecuteResponse
+						result, err = qs.ReserveStreamExecute(ctx, rs.Target, session.SetPreQueries(), query, bindVars[i], 0 /*transactionId*/, opts, callback)
+						if result != nil {
+							alias = result.TabletAlias
+							reservedID = result.ReservedId
+						}
 					})
 				}
 			case begin:
-				transactionID, alias, err = qs.BeginStreamExecute(ctx, rs.Target, session.SavePoints(), query, bindVars[i], reservedID, opts, callback)
+				var result *querypb.BeginStreamExecuteResponse
+				result, err = qs.BeginStreamExecute(ctx, rs.Target, session.SavePoints(), query, bindVars[i], reservedID, opts, callback)
+				if result != nil {
+					alias = result.TabletAlias
+					transactionID = result.TransactionId
+				}
 				if err != nil {
 					retryRequest(func() {
 						// we seem to have lost our connection. it was a reserved connection, let's try to recreate it
 						info.actionNeeded = reserveBegin
-						transactionID, reservedID, alias, err = qs.ReserveBeginStreamExecute(ctx, rs.Target, session.SetPreQueries(), session.SavePoints(), query, bindVars[i], opts, callback)
+						var result *querypb.ReserveBeginStreamExecuteResponse
+						result, err = qs.ReserveBeginStreamExecute(ctx, rs.Target, session.SetPreQueries(), session.SavePoints(), query, bindVars[i], opts, callback)
+						if result != nil {
+							alias = result.TabletAlias
+							reservedID = result.ReservedId
+							transactionID = result.TransactionId
+						}
 					})
 				}
 			case reserve:
-				reservedID, alias, err = qs.ReserveStreamExecute(ctx, rs.Target, session.SetPreQueries(), query, bindVars[i], transactionID, opts, callback)
+				var result *querypb.ReserveStreamExecuteResponse
+				result, err = qs.ReserveStreamExecute(ctx, rs.Target, session.SetPreQueries(), query, bindVars[i], transactionID, opts, callback)
+				if result != nil {
+					alias = result.TabletAlias
+					reservedID = result.ReservedId
+				}
 			case reserveBegin:
-				transactionID, reservedID, alias, err = qs.ReserveBeginStreamExecute(ctx, rs.Target, session.SetPreQueries(), session.SavePoints(), query, bindVars[i], opts, callback)
+				var result *querypb.ReserveBeginStreamExecuteResponse
+				result, err = qs.ReserveBeginStreamExecute(ctx, rs.Target, session.SetPreQueries(), session.SavePoints(), query, bindVars[i], opts, callback)
+				if result != nil {
+					alias = result.TabletAlias
+					reservedID = result.ReservedId
+					transactionID = result.TransactionId
+				}
 			default:
 				return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected actionNeeded on query execution: %v", info.actionNeeded)
 			}
@@ -684,7 +748,11 @@ func (stc *ScatterConn) ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedSha
 
 	switch info.actionNeeded {
 	case nothing:
-		qr, err = qs.Execute(ctx, rs.Target, query.Sql, query.BindVariables, 0 /* transactionID */, reservedID, opts)
+		var result *querypb.ExecuteResponse
+		result, err = qs.Execute(ctx, rs.Target, query.Sql, query.BindVariables, 0 /* transactionID */, reservedID, opts)
+		if result != nil {
+			qr = sqltypes.Proto3ToResult(result.Result)
+		}
 		if err != nil && wasConnectionClosed(err) {
 			// TODO: try to acquire lock again.
 			session.ResetLock()
@@ -694,7 +762,13 @@ func (stc *ScatterConn) ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedSha
 			session.UpdateLockHeartbeat()
 		}
 	case reserve:
-		qr, reservedID, alias, err = qs.ReserveExecute(ctx, rs.Target, session.SetPreQueries(), query.Sql, query.BindVariables, 0 /* transactionID */, opts)
+		var result *querypb.ReserveExecuteResponse
+		result, err = qs.ReserveExecute(ctx, rs.Target, session.SetPreQueries(), query.Sql, query.BindVariables, 0 /* transactionID */, opts)
+		if result != nil {
+			qr = sqltypes.Proto3ToResult(result.Result)
+			reservedID = result.ReservedId
+			alias = result.TabletAlias
+		}
 		if err != nil && reservedID != 0 {
 			_ = stc.txConn.ReleaseLock(ctx, session)
 		}

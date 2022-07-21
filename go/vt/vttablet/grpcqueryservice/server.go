@@ -48,13 +48,8 @@ func (q *query) Execute(ctx context.Context, request *querypb.ExecuteRequest) (r
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	result, err := q.server.Execute(ctx, request.Target, request.Query.Sql, request.Query.BindVariables, request.TransactionId, request.ReservedId, request.Options)
-	if err != nil {
-		return nil, vterrors.ToGRPC(err)
-	}
-	return &querypb.ExecuteResponse{
-		Result: sqltypes.ResultToProto3(result),
-	}, nil
+	response, err = q.server.Execute(ctx, request.Target, request.Query.Sql, request.Query.BindVariables, request.TransactionId, request.ReservedId, request.Options)
+	return response, vterrors.ToGRPC(err)
 }
 
 // StreamExecute is part of the queryservice.QueryServer interface
@@ -79,15 +74,8 @@ func (q *query) Begin(ctx context.Context, request *querypb.BeginRequest) (respo
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	transactionID, alias, err := q.server.Begin(ctx, request.Target, request.Options)
-	if err != nil {
-		return nil, vterrors.ToGRPC(err)
-	}
-
-	return &querypb.BeginResponse{
-		TransactionId: transactionID,
-		TabletAlias:   alias,
-	}, nil
+	response, err = q.server.Begin(ctx, request.Target, request.Options)
+	return response, vterrors.ToGRPC(err)
 }
 
 // Commit is part of the queryservice.QueryServer interface
@@ -97,11 +85,8 @@ func (q *query) Commit(ctx context.Context, request *querypb.CommitRequest) (res
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	rID, err := q.server.Commit(ctx, request.Target, request.TransactionId)
-	if err != nil {
-		return nil, vterrors.ToGRPC(err)
-	}
-	return &querypb.CommitResponse{ReservedId: rID}, nil
+	response, err = q.server.Commit(ctx, request.Target, request.TransactionId)
+	return response, vterrors.ToGRPC(err)
 }
 
 // Rollback is part of the queryservice.QueryServer interface
@@ -111,12 +96,8 @@ func (q *query) Rollback(ctx context.Context, request *querypb.RollbackRequest) 
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	rID, err := q.server.Rollback(ctx, request.Target, request.TransactionId)
-	if err != nil {
-		return nil, vterrors.ToGRPC(err)
-	}
-
-	return &querypb.RollbackResponse{ReservedId: rID}, nil
+	response, err = q.server.Rollback(ctx, request.Target, request.TransactionId)
+	return response, vterrors.ToGRPC(err)
 }
 
 // Prepare is part of the queryservice.QueryServer interface
@@ -126,11 +107,8 @@ func (q *query) Prepare(ctx context.Context, request *querypb.PrepareRequest) (r
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	if err := q.server.Prepare(ctx, request.Target, request.TransactionId, request.Dtid); err != nil {
-		return nil, vterrors.ToGRPC(err)
-	}
-
-	return &querypb.PrepareResponse{}, nil
+	err = q.server.Prepare(ctx, request.Target, request.TransactionId, request.Dtid)
+	return &querypb.PrepareResponse{}, vterrors.ToGRPC(err)
 }
 
 // CommitPrepared is part of the queryservice.QueryServer interface
@@ -140,11 +118,8 @@ func (q *query) CommitPrepared(ctx context.Context, request *querypb.CommitPrepa
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	if err := q.server.CommitPrepared(ctx, request.Target, request.Dtid); err != nil {
-		return nil, vterrors.ToGRPC(err)
-	}
-
-	return &querypb.CommitPreparedResponse{}, nil
+	err = q.server.CommitPrepared(ctx, request.Target, request.Dtid)
+	return &querypb.CommitPreparedResponse{}, vterrors.ToGRPC(err)
 }
 
 // RollbackPrepared is part of the queryservice.QueryServer interface
@@ -154,11 +129,8 @@ func (q *query) RollbackPrepared(ctx context.Context, request *querypb.RollbackP
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	if err := q.server.RollbackPrepared(ctx, request.Target, request.Dtid, request.TransactionId); err != nil {
-		return nil, vterrors.ToGRPC(err)
-	}
-
-	return &querypb.RollbackPreparedResponse{}, nil
+	err = q.server.RollbackPrepared(ctx, request.Target, request.Dtid, request.TransactionId)
+	return &querypb.RollbackPreparedResponse{}, vterrors.ToGRPC(err)
 }
 
 // CreateTransaction is part of the queryservice.QueryServer interface
@@ -168,11 +140,8 @@ func (q *query) CreateTransaction(ctx context.Context, request *querypb.CreateTr
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	if err := q.server.CreateTransaction(ctx, request.Target, request.Dtid, request.Participants); err != nil {
-		return nil, vterrors.ToGRPC(err)
-	}
-
-	return &querypb.CreateTransactionResponse{}, nil
+	err = q.server.CreateTransaction(ctx, request.Target, request.Dtid, request.Participants)
+	return &querypb.CreateTransactionResponse{}, vterrors.ToGRPC(err)
 }
 
 // StartCommit is part of the queryservice.QueryServer interface
@@ -182,11 +151,8 @@ func (q *query) StartCommit(ctx context.Context, request *querypb.StartCommitReq
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	if err := q.server.StartCommit(ctx, request.Target, request.TransactionId, request.Dtid); err != nil {
-		return nil, vterrors.ToGRPC(err)
-	}
-
-	return &querypb.StartCommitResponse{}, nil
+	err = q.server.StartCommit(ctx, request.Target, request.TransactionId, request.Dtid)
+	return &querypb.StartCommitResponse{}, vterrors.ToGRPC(err)
 }
 
 // SetRollback is part of the queryservice.QueryServer interface
@@ -196,11 +162,8 @@ func (q *query) SetRollback(ctx context.Context, request *querypb.SetRollbackReq
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	if err := q.server.SetRollback(ctx, request.Target, request.Dtid, request.TransactionId); err != nil {
-		return nil, vterrors.ToGRPC(err)
-	}
-
-	return &querypb.SetRollbackResponse{}, nil
+	err = q.server.SetRollback(ctx, request.Target, request.Dtid, request.TransactionId)
+	return &querypb.SetRollbackResponse{}, vterrors.ToGRPC(err)
 }
 
 // ConcludeTransaction is part of the queryservice.QueryServer interface
@@ -210,11 +173,8 @@ func (q *query) ConcludeTransaction(ctx context.Context, request *querypb.Conclu
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	if err := q.server.ConcludeTransaction(ctx, request.Target, request.Dtid); err != nil {
-		return nil, vterrors.ToGRPC(err)
-	}
-
-	return &querypb.ConcludeTransactionResponse{}, nil
+	err = q.server.ConcludeTransaction(ctx, request.Target, request.Dtid)
+	return &querypb.ConcludeTransactionResponse{}, vterrors.ToGRPC(err)
 }
 
 // ReadTransaction is part of the queryservice.QueryServer interface
@@ -224,12 +184,9 @@ func (q *query) ReadTransaction(ctx context.Context, request *querypb.ReadTransa
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	result, err := q.server.ReadTransaction(ctx, request.Target, request.Dtid)
-	if err != nil {
-		return nil, vterrors.ToGRPC(err)
-	}
-
-	return &querypb.ReadTransactionResponse{Metadata: result}, nil
+	var metadata *querypb.TransactionMetadata
+	metadata, err = q.server.ReadTransaction(ctx, request.Target, request.Dtid)
+	return &querypb.ReadTransactionResponse{Metadata: metadata}, vterrors.ToGRPC(err)
 }
 
 // BeginExecute is part of the queryservice.QueryServer interface
@@ -239,23 +196,13 @@ func (q *query) BeginExecute(ctx context.Context, request *querypb.BeginExecuteR
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	result, transactionID, alias, err := q.server.BeginExecute(ctx, request.Target, request.PreQueries, request.Query.Sql, request.Query.BindVariables, request.ReservedId, request.Options)
-	if err != nil {
+	response, err = q.server.BeginExecute(ctx, request.Target, request.PreQueries, request.Query.Sql, request.Query.BindVariables, request.ReservedId, request.Options)
+	if err != nil && response != nil && response.TransactionId != 0 {
 		// if we have a valid transactionID, return the error in-band
-		if transactionID != 0 {
-			return &querypb.BeginExecuteResponse{
-				Error:         vterrors.ToVTRPC(err),
-				TransactionId: transactionID,
-				TabletAlias:   alias,
-			}, nil
-		}
-		return nil, vterrors.ToGRPC(err)
+		response.Error = vterrors.ToVTRPC(err)
+		return response, nil
 	}
-	return &querypb.BeginExecuteResponse{
-		Result:        sqltypes.ResultToProto3(result),
-		TransactionId: transactionID,
-		TabletAlias:   alias,
-	}, nil
+	return response, vterrors.ToGRPC(err)
 }
 
 // BeginStreamExecute is part of the queryservice.QueryServer interface
@@ -265,15 +212,18 @@ func (q *query) BeginStreamExecute(request *querypb.BeginStreamExecuteRequest, s
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	transactionID, alias, err := q.server.BeginStreamExecute(ctx, request.Target, request.PreQueries, request.Query.Sql, request.Query.BindVariables, request.ReservedId, request.Options, func(reply *sqltypes.Result) error {
+	var response *querypb.BeginStreamExecuteResponse
+	response, err = q.server.BeginStreamExecute(ctx, request.Target, request.PreQueries, request.Query.Sql, request.Query.BindVariables, request.ReservedId, request.Options, func(reply *sqltypes.Result) error {
 		return stream.Send(&querypb.BeginStreamExecuteResponse{
 			Result: sqltypes.ResultToProto3(reply),
 		})
 	})
-	errInLastPacket := stream.Send(&querypb.BeginStreamExecuteResponse{
-		TransactionId: transactionID,
-		TabletAlias:   alias,
-	})
+	lastPacketResponse := &querypb.BeginStreamExecuteResponse{}
+	if response != nil {
+		lastPacketResponse.TransactionId = response.TransactionId
+		lastPacketResponse.TabletAlias = response.TabletAlias
+	}
+	errInLastPacket := stream.Send(lastPacketResponse)
 	if err != nil {
 		return vterrors.ToGRPC(err)
 	}
@@ -303,7 +253,8 @@ func (q *query) MessageAck(ctx context.Context, request *querypb.MessageAckReque
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	count, err := q.server.MessageAck(ctx, request.Target, request.Name, request.Ids)
+	var count int64
+	count, err = q.server.MessageAck(ctx, request.Target, request.Name, request.Ids)
 	if err != nil {
 		return nil, vterrors.ToGRPC(err)
 	}
@@ -311,7 +262,7 @@ func (q *query) MessageAck(ctx context.Context, request *querypb.MessageAckReque
 		Result: &querypb.QueryResult{
 			RowsAffected: uint64(count),
 		},
-	}, nil
+	}, vterrors.ToGRPC(err)
 }
 
 // StreamHealth is part of the queryservice.QueryServer interface
@@ -365,23 +316,16 @@ func (q *query) ReserveExecute(ctx context.Context, request *querypb.ReserveExec
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	result, reservedID, alias, err := q.server.ReserveExecute(ctx, request.Target, request.PreQueries, request.Query.Sql, request.Query.BindVariables, request.TransactionId, request.Options)
+	response, err = q.server.ReserveExecute(ctx, request.Target, request.PreQueries, request.Query.Sql, request.Query.BindVariables, request.TransactionId, request.Options)
 	if err != nil {
 		// if we have a valid reservedID, return the error in-band
-		if reservedID != 0 {
-			return &querypb.ReserveExecuteResponse{
-				Error:       vterrors.ToVTRPC(err),
-				ReservedId:  reservedID,
-				TabletAlias: alias,
-			}, nil
+		if response != nil && response.ReservedId != 0 {
+			response.Error = vterrors.ToVTRPC(err)
+			return response, nil
 		}
 		return nil, vterrors.ToGRPC(err)
 	}
-	return &querypb.ReserveExecuteResponse{
-		Result:      sqltypes.ResultToProto3(result),
-		ReservedId:  reservedID,
-		TabletAlias: alias,
-	}, nil
+	return response, nil
 }
 
 // ReserveStreamExecute is part of the queryservice.QueryServer interface
@@ -391,15 +335,18 @@ func (q *query) ReserveStreamExecute(request *querypb.ReserveStreamExecuteReques
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	reservedID, alias, err := q.server.ReserveStreamExecute(ctx, request.Target, request.PreQueries, request.Query.Sql, request.Query.BindVariables, request.TransactionId, request.Options, func(reply *sqltypes.Result) error {
+	var response *querypb.ReserveStreamExecuteResponse
+	response, err = q.server.ReserveStreamExecute(ctx, request.Target, request.PreQueries, request.Query.Sql, request.Query.BindVariables, request.TransactionId, request.Options, func(reply *sqltypes.Result) error {
 		return stream.Send(&querypb.ReserveStreamExecuteResponse{
 			Result: sqltypes.ResultToProto3(reply),
 		})
 	})
-	errInLastPacket := stream.Send(&querypb.ReserveStreamExecuteResponse{
-		ReservedId:  reservedID,
-		TabletAlias: alias,
-	})
+	lastPacketResponse := &querypb.ReserveStreamExecuteResponse{}
+	if response != nil {
+		lastPacketResponse.ReservedId = response.ReservedId
+		lastPacketResponse.TabletAlias = response.TabletAlias
+	}
+	errInLastPacket := stream.Send(lastPacketResponse)
 	if err != nil {
 		return vterrors.ToGRPC(err)
 	}
@@ -414,25 +361,13 @@ func (q *query) ReserveBeginExecute(ctx context.Context, request *querypb.Reserv
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	result, transactionID, reservedID, alias, err := q.server.ReserveBeginExecute(ctx, request.Target, request.PreQueries, request.PostBeginQueries, request.Query.Sql, request.Query.BindVariables, request.Options)
-	if err != nil {
+	response, err = q.server.ReserveBeginExecute(ctx, request.Target, request.PreQueries, request.PostBeginQueries, request.Query.Sql, request.Query.BindVariables, request.Options)
+	if err != nil && response != nil && response.ReservedId != 0 {
 		// if we have a valid reservedID, return the error in-band
-		if reservedID != 0 {
-			return &querypb.ReserveBeginExecuteResponse{
-				Error:         vterrors.ToVTRPC(err),
-				TransactionId: transactionID,
-				ReservedId:    reservedID,
-				TabletAlias:   alias,
-			}, nil
-		}
-		return nil, vterrors.ToGRPC(err)
+		response.Error = vterrors.ToVTRPC(err)
+		return response, nil
 	}
-	return &querypb.ReserveBeginExecuteResponse{
-		Result:        sqltypes.ResultToProto3(result),
-		TransactionId: transactionID,
-		ReservedId:    reservedID,
-		TabletAlias:   alias,
-	}, nil
+	return response, vterrors.ToGRPC(err)
 }
 
 // ReserveBeginStreamExecute is part of the queryservice.QueryServer interface
@@ -442,16 +377,19 @@ func (q *query) ReserveBeginStreamExecute(request *querypb.ReserveBeginStreamExe
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	transactionID, reservedID, alias, err := q.server.ReserveBeginStreamExecute(ctx, request.Target, request.PreQueries, request.PostBeginQueries, request.Query.Sql, request.Query.BindVariables, request.Options, func(reply *sqltypes.Result) error {
+	var response *querypb.ReserveBeginStreamExecuteResponse
+	response, err = q.server.ReserveBeginStreamExecute(ctx, request.Target, request.PreQueries, request.PostBeginQueries, request.Query.Sql, request.Query.BindVariables, request.Options, func(reply *sqltypes.Result) error {
 		return stream.Send(&querypb.ReserveBeginStreamExecuteResponse{
 			Result: sqltypes.ResultToProto3(reply),
 		})
 	})
-	errInLastPacket := stream.Send(&querypb.ReserveBeginStreamExecuteResponse{
-		ReservedId:    reservedID,
-		TransactionId: transactionID,
-		TabletAlias:   alias,
-	})
+	lastPacketResponse := &querypb.ReserveBeginStreamExecuteResponse{}
+	if response != nil {
+		lastPacketResponse.ReservedId = response.ReservedId
+		lastPacketResponse.TransactionId = response.TransactionId
+		lastPacketResponse.TabletAlias = response.TabletAlias
+	}
+	errInLastPacket := stream.Send(lastPacketResponse)
 	if err != nil {
 		return vterrors.ToGRPC(err)
 	}
@@ -467,10 +405,7 @@ func (q *query) Release(ctx context.Context, request *querypb.ReleaseRequest) (r
 		request.ImmediateCallerId,
 	)
 	err = q.server.Release(ctx, request.Target, request.TransactionId, request.ReservedId)
-	if err != nil {
-		return nil, vterrors.ToGRPC(err)
-	}
-	return &querypb.ReleaseResponse{}, nil
+	return &querypb.ReleaseResponse{}, vterrors.ToGRPC(err)
 }
 
 // Register registers the implementation on the provide gRPC Server.

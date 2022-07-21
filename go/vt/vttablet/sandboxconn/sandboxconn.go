@@ -19,14 +19,13 @@ limitations under the License.
 package sandboxconn
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
-
-	"context"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"
@@ -156,7 +155,7 @@ func (sbc *SandboxConn) SetResults(r []*sqltypes.Result) {
 }
 
 // Execute is part of the QueryService interface.
-func (sbc *SandboxConn) Execute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
+func (sbc *SandboxConn) Execute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID, reservedID int64, options *querypb.ExecuteOptions) (*querypb.ExecuteResponse, error) {
 	sbc.execMu.Lock()
 	defer sbc.execMu.Unlock()
 	sbc.ExecCount.Add(1)
@@ -184,7 +183,7 @@ func (sbc *SandboxConn) Execute(ctx context.Context, target *querypb.Target, que
 		sbc.MustFailExecute[sqlparser.ASTToStatementType(stmt)] = sbc.MustFailExecute[sqlparser.ASTToStatementType(stmt)] - 1
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "failed query: %v", query)
 	}
-	return sbc.getNextResult(stmt), nil
+	return &querypb.ExecuteResponse{Result: sqltypes.ResultToProto3(sbc.getNextResult(stmt))}, nil
 }
 
 // StreamExecute is part of the QueryService interface.
@@ -228,15 +227,15 @@ func (sbc *SandboxConn) StreamExecute(ctx context.Context, target *querypb.Targe
 }
 
 // Begin is part of the QueryService interface.
-func (sbc *SandboxConn) Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (int64, *topodatapb.TabletAlias, error) {
+func (sbc *SandboxConn) Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (*querypb.BeginResponse, error) {
 	return sbc.begin(ctx, target, nil, 0, options)
 }
 
-func (sbc *SandboxConn) begin(ctx context.Context, target *querypb.Target, preQueries []string, reservedID int64, options *querypb.ExecuteOptions) (int64, *topodatapb.TabletAlias, error) {
+func (sbc *SandboxConn) begin(ctx context.Context, target *querypb.Target, preQueries []string, reservedID int64, options *querypb.ExecuteOptions) (*querypb.BeginResponse, error) {
 	sbc.BeginCount.Add(1)
 	err := sbc.getError()
 	if err != nil {
-		return 0, nil, err
+		return nil, err
 	}
 
 	transactionID := reservedID
@@ -246,30 +245,37 @@ func (sbc *SandboxConn) begin(ctx context.Context, target *querypb.Target, preQu
 	for _, preQuery := range preQueries {
 		_, err := sbc.Execute(ctx, target, preQuery, nil, transactionID, reservedID, options)
 		if err != nil {
-			return 0, nil, err
+			return nil, err
 		}
 	}
-	return transactionID, sbc.tablet.Alias, nil
+	return &querypb.BeginResponse{
+		TransactionId: transactionID,
+		TabletAlias:   sbc.tablet.Alias,
+	}, nil
 }
 
 // Commit is part of the QueryService interface.
-func (sbc *SandboxConn) Commit(ctx context.Context, target *querypb.Target, transactionID int64) (int64, error) {
+func (sbc *SandboxConn) Commit(ctx context.Context, target *querypb.Target, transactionID int64) (*querypb.CommitResponse, error) {
 	sbc.CommitCount.Add(1)
 	reservedID := sbc.getTxReservedID(transactionID)
 	if reservedID != 0 {
 		reservedID = sbc.ReserveID.Add(1)
 	}
-	return reservedID, sbc.getError()
+	return &querypb.CommitResponse{
+		ReservedId: reservedID,
+	}, sbc.getError()
 }
 
 // Rollback is part of the QueryService interface.
-func (sbc *SandboxConn) Rollback(ctx context.Context, target *querypb.Target, transactionID int64) (int64, error) {
+func (sbc *SandboxConn) Rollback(ctx context.Context, target *querypb.Target, transactionID int64) (*querypb.RollbackResponse, error) {
 	sbc.RollbackCount.Add(1)
 	reservedID := sbc.getTxReservedID(transactionID)
 	if reservedID != 0 {
 		reservedID = sbc.ReserveID.Add(1)
 	}
-	return reservedID, sbc.getError()
+	return &querypb.RollbackResponse{
+		ReservedId: reservedID,
+	}, sbc.getError()
 }
 
 // Prepare prepares the specified transaction.
@@ -360,29 +366,43 @@ func (sbc *SandboxConn) ReadTransaction(ctx context.Context, target *querypb.Tar
 }
 
 // BeginExecute is part of the QueryService interface.
-func (sbc *SandboxConn) BeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, query string, bindVars map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
-	transactionID, alias, err := sbc.begin(ctx, target, preQueries, reservedID, options)
-	if transactionID != 0 {
-		sbc.setTxReservedID(transactionID, reservedID)
+func (sbc *SandboxConn) BeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, query string, bindVars map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (*querypb.BeginExecuteResponse, error) {
+	beginResponse, err := sbc.begin(ctx, target, preQueries, reservedID, options)
+	response := &querypb.BeginExecuteResponse{}
+	if beginResponse != nil {
+		if beginResponse.TransactionId != 0 {
+			sbc.setTxReservedID(beginResponse.TransactionId, reservedID)
+		}
+		response.TransactionId = beginResponse.TransactionId
+		response.TabletAlias = beginResponse.TabletAlias
 	}
 	if err != nil {
-		return nil, 0, nil, err
+		return response, err
 	}
-	result, err := sbc.Execute(ctx, target, query, bindVars, transactionID, reservedID, options)
-	return result, transactionID, alias, err
+	result, err := sbc.Execute(ctx, target, query, bindVars, beginResponse.TransactionId, reservedID, options)
+	if err != nil {
+		return response, err
+	}
+	response.Result = result.Result
+	return response, nil
 }
 
 // BeginStreamExecute is part of the QueryService interface.
-func (sbc *SandboxConn) BeginStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (int64, *topodatapb.TabletAlias, error) {
-	transactionID, alias, err := sbc.begin(ctx, target, preQueries, reservedID, options)
-	if transactionID != 0 {
-		sbc.setTxReservedID(transactionID, reservedID)
+func (sbc *SandboxConn) BeginStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (*querypb.BeginStreamExecuteResponse, error) {
+	beginResponse, err := sbc.begin(ctx, target, preQueries, reservedID, options)
+	response := &querypb.BeginStreamExecuteResponse{}
+	if beginResponse != nil {
+		if beginResponse.TransactionId != 0 {
+			sbc.setTxReservedID(beginResponse.TransactionId, reservedID)
+		}
+		response.TransactionId = beginResponse.TransactionId
+		response.TabletAlias = beginResponse.TabletAlias
 	}
 	if err != nil {
-		return 0, nil, err
+		return response, err
 	}
-	err = sbc.StreamExecute(ctx, target, sql, bindVariables, transactionID, reservedID, options, callback)
-	return transactionID, alias, err
+	err = sbc.StreamExecute(ctx, target, sql, bindVariables, beginResponse.TransactionId, reservedID, options, callback)
+	return response, err
 }
 
 // MessageStream is part of the QueryService interface.
@@ -507,49 +527,72 @@ func (sbc *SandboxConn) HandlePanic(err *error) {
 }
 
 // ReserveBeginExecute implements the QueryService interface
-func (sbc *SandboxConn) ReserveBeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, int64, *topodatapb.TabletAlias, error) {
+func (sbc *SandboxConn) ReserveBeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*querypb.ReserveBeginExecuteResponse, error) {
 	reservedID := sbc.reserve(ctx, target, preQueries, bindVariables, 0, options)
-	result, transactionID, alias, err := sbc.BeginExecute(ctx, target, postBeginQueries, sql, bindVariables, reservedID, options)
-	if transactionID != 0 {
-		sbc.setTxReservedID(transactionID, reservedID)
+	result, err := sbc.BeginExecute(ctx, target, postBeginQueries, sql, bindVariables, reservedID, options)
+	response := &querypb.ReserveBeginExecuteResponse{
+		ReservedId: reservedID,
 	}
-	if err != nil {
-		return nil, transactionID, reservedID, alias, err
+	if result != nil {
+		if result.TransactionId != 0 {
+			sbc.setTxReservedID(result.TransactionId, reservedID)
+		}
+		response.TransactionId = result.TransactionId
+		response.TabletAlias = result.TabletAlias
+		response.Result = result.Result
+		response.Error = result.Error
 	}
-	return result, transactionID, reservedID, alias, nil
+
+	return response, err
 }
 
 // ReserveBeginStreamExecute is part of the QueryService interface.
-func (sbc *SandboxConn) ReserveBeginStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (int64, int64, *topodatapb.TabletAlias, error) {
+func (sbc *SandboxConn) ReserveBeginStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (*querypb.ReserveBeginStreamExecuteResponse, error) {
 	reservedID := sbc.reserve(ctx, target, preQueries, bindVariables, 0, options)
-	transactionID, alias, err := sbc.BeginStreamExecute(ctx, target, postBeginQueries, sql, bindVariables, reservedID, options, callback)
-	if transactionID != 0 {
-		sbc.setTxReservedID(transactionID, reservedID)
+	result, err := sbc.BeginStreamExecute(ctx, target, postBeginQueries, sql, bindVariables, reservedID, options, callback)
+	response := &querypb.ReserveBeginStreamExecuteResponse{
+		ReservedId: reservedID,
 	}
-	return transactionID, reservedID, alias, err
+	if result != nil {
+		if result.TransactionId != 0 {
+			sbc.setTxReservedID(result.TransactionId, reservedID)
+		}
+		response.TransactionId = result.TransactionId
+		response.TabletAlias = result.TabletAlias
+		response.Result = result.Result
+		response.Error = result.Error
+	}
+	return response, err
 }
 
 // ReserveExecute implements the QueryService interface
-func (sbc *SandboxConn) ReserveExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
+func (sbc *SandboxConn) ReserveExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (*querypb.ReserveExecuteResponse, error) {
 	reservedID := sbc.reserve(ctx, target, preQueries, bindVariables, transactionID, options)
 	result, err := sbc.Execute(ctx, target, sql, bindVariables, transactionID, reservedID, options)
 	if transactionID != 0 {
 		sbc.setTxReservedID(transactionID, reservedID)
 	}
-	if err != nil {
-		return nil, 0, nil, err
+	response := &querypb.ReserveExecuteResponse{
+		ReservedId:  reservedID,
+		TabletAlias: sbc.tablet.Alias,
 	}
-	return result, reservedID, sbc.tablet.Alias, nil
+	if result != nil {
+		response.Result = result.Result
+	}
+	return response, err
 }
 
 // ReserveStreamExecute is part of the QueryService interface.
-func (sbc *SandboxConn) ReserveStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (int64, *topodatapb.TabletAlias, error) {
+func (sbc *SandboxConn) ReserveStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (*querypb.ReserveStreamExecuteResponse, error) {
 	reservedID := sbc.reserve(ctx, target, preQueries, bindVariables, transactionID, options)
 	err := sbc.StreamExecute(ctx, target, sql, bindVariables, transactionID, reservedID, options, callback)
 	if transactionID != 0 {
 		sbc.setTxReservedID(transactionID, reservedID)
 	}
-	return reservedID, sbc.tablet.Alias, err
+	return &querypb.ReserveStreamExecuteResponse{
+		ReservedId:  reservedID,
+		TabletAlias: sbc.tablet.Alias,
+	}, err
 }
 
 func (sbc *SandboxConn) reserve(ctx context.Context, target *querypb.Target, preQueries []string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) int64 {

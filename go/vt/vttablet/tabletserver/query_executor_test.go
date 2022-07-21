@@ -17,6 +17,7 @@ limitations under the License.
 package tabletserver
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"math/rand"
@@ -25,8 +26,6 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
-
-	"context"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -295,13 +294,13 @@ func TestQueryExecutorPlans(t *testing.T) {
 
 			// Test inside a transaction.
 			target := tsv.sm.Target()
-			txid, alias, err := tsv.Begin(ctx, target, nil)
+			response, err := tsv.Begin(ctx, target, nil)
 			require.NoError(t, err)
-			require.NotNil(t, alias, "alias should not be nil")
-			assert.Equal(t, tsv.alias, alias, "Wrong alias returned by Begin")
-			defer tsv.Commit(ctx, target, txid)
+			require.NotNil(t, response.TabletAlias, "alias should not be nil")
+			assert.Equal(t, tsv.alias, response.TabletAlias, "Wrong alias returned by Begin")
+			defer tsv.Commit(ctx, target, response.TransactionId)
 
-			qre = newTestQueryExecutor(ctx, tsv, tcase.input, txid)
+			qre = newTestQueryExecutor(ctx, tsv, tcase.input, response.TransactionId)
 			got, err = qre.Execute()
 			require.NoError(t, err, tcase.input)
 			assert.Equal(t, tcase.resultWant, got, "in tx: %v", tcase.input)
@@ -384,13 +383,13 @@ func TestQueryExecutorQueryAnnotation(t *testing.T) {
 
 			// Test inside a transaction.
 			target := tsv.sm.Target()
-			txid, alias, err := tsv.Begin(ctx, target, nil)
+			response, err := tsv.Begin(ctx, target, nil)
 			require.NoError(t, err)
-			require.NotNil(t, alias, "alias should not be nil")
-			assert.Equal(t, tsv.alias, alias, "Wrong alias returned by Begin")
-			defer tsv.Commit(ctx, target, txid)
+			require.NotNil(t, response.TabletAlias, "alias should not be nil")
+			assert.Equal(t, tsv.alias, response.TabletAlias, "Wrong alias returned by Begin")
+			defer tsv.Commit(ctx, target, response.TransactionId)
 
-			qre = newTestQueryExecutor(ctx, tsv, tcase.input, txid)
+			qre = newTestQueryExecutor(ctx, tsv, tcase.input, response.TransactionId)
 			got, err = qre.Execute()
 			require.NoError(t, err, tcase.input)
 			assert.Equal(t, tcase.resultWant, got, "in tx: %v", tcase.input)
@@ -451,13 +450,13 @@ func TestQueryExecutorSelectImpossible(t *testing.T) {
 			assert.Equal(t, tcase.planWant, qre.logStats.PlanType, tcase.input)
 			assert.Equal(t, tcase.logWant, qre.logStats.RewrittenSQL(), tcase.input)
 			target := tsv.sm.Target()
-			txid, alias, err := tsv.Begin(ctx, target, nil)
+			response, err := tsv.Begin(ctx, target, nil)
 			require.NoError(t, err)
-			require.NotNil(t, alias, "alias should not be nil")
-			assert.Equal(t, tsv.alias, alias, "Wrong tablet alias from Begin")
-			defer tsv.Commit(ctx, target, txid)
+			require.NotNil(t, response.TabletAlias, "alias should not be nil")
+			assert.Equal(t, tsv.alias, response.TabletAlias, "Wrong tablet alias from Begin")
+			defer tsv.Commit(ctx, target, response.TransactionId)
 
-			qre = newTestQueryExecutor(ctx, tsv, tcase.input, txid)
+			qre = newTestQueryExecutor(ctx, tsv, tcase.input, response.TransactionId)
 			got, err = qre.Execute()
 			require.NoError(t, err, tcase.input)
 			assert.Equal(t, tcase.resultWant, got, "in tx: %v", tcase.input)
@@ -582,13 +581,13 @@ func TestQueryExecutorLimitFailure(t *testing.T) {
 
 			// Test inside a transaction.
 			target := tsv.sm.Target()
-			txid, alias, err := tsv.Begin(ctx, target, nil)
+			response, err := tsv.Begin(ctx, target, nil)
 			require.NoError(t, err)
-			require.NotNil(t, alias, "alias should not be nil")
-			assert.Equal(t, tsv.alias, alias, "Wrong tablet alias from Begin")
-			defer tsv.Commit(ctx, target, txid)
+			require.NotNil(t, response.TabletAlias, "alias should not be nil")
+			assert.Equal(t, tsv.alias, response.TabletAlias, "Wrong tablet alias from Begin")
+			defer tsv.Commit(ctx, target, response.TransactionId)
 
-			qre = newTestQueryExecutor(ctx, tsv, tcase.input, txid)
+			qre = newTestQueryExecutor(ctx, tsv, tcase.input, response.TransactionId)
 			_, err = qre.Execute()
 			assert.Error(t, err)
 			assert.Contains(t, err.Error(), tcase.err)
@@ -603,7 +602,7 @@ func TestQueryExecutorLimitFailure(t *testing.T) {
 				return
 			}
 			// Ensure transaction was rolled back.
-			conn, err := tsv.te.txPool.GetAndLock(txid, "")
+			conn, err := tsv.te.txPool.GetAndLock(response.TransactionId, "")
 			require.NoError(t, err)
 			defer conn.Release(tx.TxClose)
 
@@ -1264,11 +1263,11 @@ func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb
 
 func newTransaction(tsv *TabletServer, options *querypb.ExecuteOptions) int64 {
 	target := tsv.sm.Target()
-	transactionID, _, err := tsv.Begin(context.Background(), target, options)
+	response, err := tsv.Begin(context.Background(), target, options)
 	if err != nil {
 		panic(vterrors.Wrap(err, "failed to start a transaction"))
 	}
-	return transactionID
+	return response.TransactionId
 }
 
 func newTestQueryExecutor(ctx context.Context, tsv *TabletServer, sql string, txID int64) *QueryExecutor {
