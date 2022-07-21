@@ -21,6 +21,7 @@ FROM node:16-${DEBIAN_VER} as node
 
 # Set up Vitess environment (just enough to run pre-built Go binaries)
 ENV VTROOT /vt
+ENV VTADMIN_WEB_PORT=14201
 
 # Prepare directory structure.
 RUN mkdir -p /vt/bin && \
@@ -40,28 +41,12 @@ RUN npm --prefix /vt/web/vtadmin ci && \
     npm run --prefix /vt/web/vtadmin build
 
 
-FROM nginx:1.23.1-alpine AS nginx
+FROM nginxinc/nginx-unprivileged:1.22-alpine AS nginx
 
 COPY --from=node /vt/web/vtadmin/build /var/www/
-COPY nginx.conf /etc/nginx/nginx.conf
-COPY entrypoint.sh /entrypoint.sh
+COPY default.conf /etc/nginx/conf.d/default.conf
 
-# add permissions to nginx user
-RUN chown -R nginx:nginx /var/www && \
-   chown -R nginx:nginx /var/cache/nginx && \
-   chown -R nginx:nginx /var/log/nginx && \
-   chown -R nginx:nginx /usr/sbin/nginx && \
-   chown nginx:nginx /etc/nginx/nginx.conf && \
-   chown nginx:nginx /entrypoint.sh
-
-RUN touch /var/run/nginx.pid && \
-   chown -R nginx:nginx /var/run/nginx.pid
-
-USER nginx
-
-RUN ["chmod", "+x", "/entrypoint.sh"]
-
-ENTRYPOINT ["sh", "/entrypoint.sh"]
+CMD ["nginx", "-g", "daemon off;"]
 
 
 
