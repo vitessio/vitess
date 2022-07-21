@@ -234,5 +234,16 @@
         ]
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "main.unsharded",
+    "main.unsharded_a",
+    "main.unsharded_auto",
+    "main.unsharded_b",
+    "user.music",
+    "user.music_extra",
+    "user.user",
+    "user.user_extra",
+    "user.user_metadata"
+  ]
 }

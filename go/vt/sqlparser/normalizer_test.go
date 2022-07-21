@@ -25,6 +25,8 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -161,13 +163,17 @@ func TestNormalize(t *testing.T) {
 	}, {
 		// Bin value does not convert
 		in:      "select * from t where v1 = b'11'",
-		outstmt: "select * from t where v1 = B'11'",
-		outbv:   map[string]*querypb.BindVariable{},
+		outstmt: "select * from t where v1 = :bv1",
+		outbv: map[string]*querypb.BindVariable{
+			"bv1": sqltypes.HexNumBindVariable([]byte("0x3")),
+		},
 	}, {
 		// Bin value does not convert for DMLs
 		in:      "update a set v1 = b'11'",
-		outstmt: "update a set v1 = B'11'",
-		outbv:   map[string]*querypb.BindVariable{},
+		outstmt: "update a set v1 = :bv1",
+		outbv: map[string]*querypb.BindVariable{
+			"bv1": sqltypes.HexNumBindVariable([]byte("0x3")),
+		},
 	}, {
 		// ORDER BY column_position
 		in:      "select a, b from t order by 1 asc",
@@ -245,23 +251,27 @@ func TestNormalize(t *testing.T) {
 			"bv2": sqltypes.StringBindVariable("2"),
 			"bv3": sqltypes.Int64BindVariable(3),
 		},
+	}, {
+		// BitVal should also be normalized
+		in:      `select b'1', 0b01, b'1010', 0b1111111`,
+		outstmt: `select :bv1, :bv2, :bv3, :bv4 from dual`,
+		outbv: map[string]*querypb.BindVariable{
+			"bv1": sqltypes.HexNumBindVariable([]byte("0x1")),
+			"bv2": sqltypes.HexNumBindVariable([]byte("0x1")),
+			"bv3": sqltypes.HexNumBindVariable([]byte("0xa")),
+			"bv4": sqltypes.HexNumBindVariable([]byte("0x7f")),
+		},
 	}}
 	for _, tc := range testcases {
-		stmt, err := Parse(tc.in)
-		if err != nil {
-			t.Error(err)
-			continue
-		}
-		known := GetBindvars(stmt)
-		bv := make(map[string]*querypb.BindVariable)
-		require.NoError(t, Normalize(stmt, NewReservedVars(prefix, known), bv))
-		outstmt := String(stmt)
-		if outstmt != tc.outstmt {
-			t.Errorf("Query:\n%s:\n%s, want\n%s", tc.in, outstmt, tc.outstmt)
-		}
-		if !reflect.DeepEqual(tc.outbv, bv) {
-			t.Errorf("Query:\n%s:\n%v, want\n%v", tc.in, bv, tc.outbv)
-		}
+		t.Run(tc.in, func(t *testing.T) {
+			stmt, err := Parse(tc.in)
+			require.NoError(t, err)
+			known := GetBindvars(stmt)
+			bv := make(map[string]*querypb.BindVariable)
+			require.NoError(t, Normalize(stmt, NewReservedVars(prefix, known), bv))
+			assert.Equal(t, tc.outstmt, String(stmt))
+			assert.Equal(t, tc.outbv, bv)
+		})
 	}
 }
 

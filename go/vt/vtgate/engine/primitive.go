@@ -18,9 +18,6 @@ package engine
 
 import (
 	"context"
-	"encoding/json"
-	"sync/atomic"
-	"time"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
@@ -117,7 +114,7 @@ type (
 		StreamExecutePrimitiveStandalone(ctx context.Context, primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(result *sqltypes.Result) error) error
 	}
 
-	//SessionActions gives primitives ability to interact with the session state
+	// SessionActions gives primitives ability to interact with the session state
 	SessionActions interface {
 		// RecordWarning stores the given warning in the current session
 		RecordWarning(warning *querypb.QueryWarning)
@@ -174,26 +171,6 @@ type (
 		RemoveAdvisoryLock(name string)
 	}
 
-	// Plan represents the execution strategy for a given query.
-	// For now it's a simple wrapper around the real instructions.
-	// An instruction (aka Primitive) is typically a tree where
-	// each node does its part by combining the results of the
-	// sub-nodes.
-	Plan struct {
-		Type         sqlparser.StatementType // The type of query we have
-		Original     string                  // Original is the original query.
-		Instructions Primitive               // Instructions contains the instructions needed to fulfil the query.
-		BindVarNeeds *sqlparser.BindVarNeeds // Stores BindVars needed to be provided as part of expression rewriting
-		Warnings     []*querypb.QueryWarning // Warnings that need to be yielded every time this query runs
-
-		ExecCount    uint64 // Count of times this plan was executed
-		ExecTime     uint64 // Total execution time
-		ShardQueries uint64 // Total number of shard queries
-		RowsReturned uint64 // Total number of rows
-		RowsAffected uint64 // Total number of rows
-		Errors       uint64 // Total number of errors
-	}
-
 	// Match is used to check if a Primitive matches
 	Match func(node Primitive) bool
 
@@ -235,27 +212,6 @@ type (
 	}
 )
 
-// AddStats updates the plan execution statistics
-func (p *Plan) AddStats(execCount uint64, execTime time.Duration, shardQueries, rowsAffected, rowsReturned, errors uint64) {
-	atomic.AddUint64(&p.ExecCount, execCount)
-	atomic.AddUint64(&p.ExecTime, uint64(execTime))
-	atomic.AddUint64(&p.ShardQueries, shardQueries)
-	atomic.AddUint64(&p.RowsAffected, rowsAffected)
-	atomic.AddUint64(&p.RowsReturned, rowsReturned)
-	atomic.AddUint64(&p.Errors, errors)
-}
-
-// Stats returns a copy of the plan execution statistics
-func (p *Plan) Stats() (execCount uint64, execTime time.Duration, shardQueries, rowsAffected, rowsReturned, errors uint64) {
-	execCount = atomic.LoadUint64(&p.ExecCount)
-	execTime = time.Duration(atomic.LoadUint64(&p.ExecTime))
-	shardQueries = atomic.LoadUint64(&p.ShardQueries)
-	rowsAffected = atomic.LoadUint64(&p.RowsAffected)
-	rowsReturned = atomic.LoadUint64(&p.RowsReturned)
-	errors = atomic.LoadUint64(&p.Errors)
-	return
-}
-
 // Find will return the first Primitive that matches the evaluate function. If no match is found, nil will be returned
 func Find(isMatch Match, start Primitive) Primitive {
 	if isMatch(start) {
@@ -273,38 +229,6 @@ func Find(isMatch Match, start Primitive) Primitive {
 // Exists traverses recursively down the Primitive tree structure, and returns true when Match returns true
 func Exists(m Match, p Primitive) bool {
 	return Find(m, p) != nil
-}
-
-//MarshalJSON serializes the plan into a JSON representation.
-func (p *Plan) MarshalJSON() ([]byte, error) {
-	var instructions *PrimitiveDescription
-	if p.Instructions != nil {
-		description := PrimitiveToPlanDescription(p.Instructions)
-		instructions = &description
-	}
-
-	marshalPlan := struct {
-		QueryType    string
-		Original     string                `json:",omitempty"`
-		Instructions *PrimitiveDescription `json:",omitempty"`
-		ExecCount    uint64                `json:",omitempty"`
-		ExecTime     time.Duration         `json:",omitempty"`
-		ShardQueries uint64                `json:",omitempty"`
-		RowsAffected uint64                `json:",omitempty"`
-		RowsReturned uint64                `json:",omitempty"`
-		Errors       uint64                `json:",omitempty"`
-	}{
-		QueryType:    p.Type.String(),
-		Original:     p.Original,
-		Instructions: instructions,
-		ExecCount:    atomic.LoadUint64(&p.ExecCount),
-		ExecTime:     time.Duration(atomic.LoadUint64(&p.ExecTime)),
-		ShardQueries: atomic.LoadUint64(&p.ShardQueries),
-		RowsAffected: atomic.LoadUint64(&p.RowsAffected),
-		RowsReturned: atomic.LoadUint64(&p.RowsReturned),
-		Errors:       atomic.LoadUint64(&p.Errors),
-	}
-	return json.Marshal(marshalPlan)
 }
 
 // Inputs implements no inputs

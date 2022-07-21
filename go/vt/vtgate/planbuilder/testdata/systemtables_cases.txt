@@ -956,7 +956,10 @@ Gen4 plan same as above
         "Vindex": "user_index"
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 
 # join of information_schema queries with select stars exprs

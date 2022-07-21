@@ -187,7 +187,7 @@ func (r *Route) searchForNewVindexes(ctx *plancontext.PlanningContext, predicate
 }
 
 func (r *Route) planComparison(ctx *plancontext.PlanningContext, cmp *sqlparser.ComparisonExpr) (found bool, exitEarly bool, err error) {
-	if sqlparser.IsNull(cmp.Left) || sqlparser.IsNull(cmp.Right) {
+	if cmp.Operator != sqlparser.NullSafeEqualOp && (sqlparser.IsNull(cmp.Left) || sqlparser.IsNull(cmp.Right)) {
 		// we are looking at ANDed predicates in the WHERE clause.
 		// since we know that nothing returns true when compared to NULL,
 		// so we can safely bail out here

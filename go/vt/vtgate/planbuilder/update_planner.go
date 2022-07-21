@@ -30,20 +30,20 @@ import (
 )
 
 // buildUpdatePlan returns a stmtPlanner that builds the instructions for an UPDATE statement.
-func buildUpdatePlan(query string) stmtPlanner {
-	return func(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (engine.Primitive, error) {
+func buildUpdatePlan(string) stmtPlanner {
+	return func(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
 		upd := stmt.(*sqlparser.Update)
 		if upd.With != nil {
 			return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: with expression in update statement")
 		}
-		dml, ksidVindex, err := buildDMLPlan(vschema, "update", stmt, reservedVars, upd.TableExprs, upd.Where, upd.OrderBy, upd.Limit, upd.Comments, upd.Exprs)
+		dml, tables, ksidVindex, err := buildDMLPlan(vschema, "update", stmt, reservedVars, upd.TableExprs, upd.Where, upd.OrderBy, upd.Limit, upd.Comments, upd.Exprs)
 		if err != nil {
 			return nil, err
 		}
 		eupd := &engine.Update{DML: dml}
 
 		if dml.Opcode == engine.Unsharded {
-			return eupd, nil
+			return newPlanResult(eupd, tables...), nil
 		}
 		eupdTable, err := eupd.GetSingleTable()
 		if err != nil {
@@ -59,7 +59,7 @@ func buildUpdatePlan(query string) stmtPlanner {
 			eupd.KsidVindex = ksidVindex.Vindex
 			eupd.KsidLength = len(ksidVindex.Columns)
 		}
-		return eupd, nil
+		return newPlanResult(eupd, tables...), nil
 	}
 }
 

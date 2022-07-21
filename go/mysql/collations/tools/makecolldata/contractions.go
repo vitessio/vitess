@@ -52,13 +52,16 @@ func (wa *weightarray) print(g *codegen.Generator) {
 func printContraction1(g *codegen.Generator, wa *weightarray, incont []uca.Contraction, depth int) {
 	trie := make(map[rune][]uca.Contraction)
 	var leaf *uca.Contraction
-	for _, cont := range incont {
+	for i := range incont {
+		// Ensure local variable since we grab a pointer later
+		// potentially.
+		cont := incont[i]
 		if depth < len(cont.Path) {
 			r := cont.Path[depth]
 			trie[r] = append(trie[r], cont)
 		}
 		if depth == len(cont.Path) {
-			leaf = &cont
+			leaf = &cont // nolint:exportloopref
 		}
 	}
 

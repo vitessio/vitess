@@ -35,7 +35,7 @@ type Rows struct {
 }
 
 // NewRowsPrimitive returns a new Rows primitie
-func NewRowsPrimitive(rows [][]sqltypes.Value, fields []*querypb.Field) *Rows {
+func NewRowsPrimitive(rows [][]sqltypes.Value, fields []*querypb.Field) Primitive {
 	return &Rows{rows: rows, fields: fields}
 }
 
