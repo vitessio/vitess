@@ -47,6 +47,3 @@ COPY --from=node /vt/web/vtadmin/build /var/www/
 COPY default.conf /etc/nginx/conf.d/default.conf
 
 CMD ["nginx", "-g", "daemon off;"]
-
-
-
