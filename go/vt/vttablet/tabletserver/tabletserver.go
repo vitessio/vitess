@@ -1064,27 +1064,27 @@ func (tsv *TabletServer) execDML(ctx context.Context, target *querypb.Target, qu
 }
 
 // VStream streams VReplication events.
-func (tsv *TabletServer) VStream(ctx context.Context, target *querypb.Target, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
-	if err := tsv.sm.VerifyTarget(ctx, target); err != nil {
+func (tsv *TabletServer) VStream(ctx context.Context, request *binlogdatapb.VStreamRequest, send func([]*binlogdatapb.VEvent) error) error {
+	if err := tsv.sm.VerifyTarget(ctx, request.Target); err != nil {
 		return err
 	}
-	return tsv.vstreamer.Stream(ctx, startPos, tablePKs, filter, send)
+	return tsv.vstreamer.Stream(ctx, request.Position, request.TableLastPKs, request.Filter, send)
 }
 
 // VStreamRows streams rows from the specified starting point.
-func (tsv *TabletServer) VStreamRows(ctx context.Context, target *querypb.Target, query string, lastpk *querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error {
-	if err := tsv.sm.VerifyTarget(ctx, target); err != nil {
+func (tsv *TabletServer) VStreamRows(ctx context.Context, request *binlogdatapb.VStreamRowsRequest, send func(*binlogdatapb.VStreamRowsResponse) error) error {
+	if err := tsv.sm.VerifyTarget(ctx, request.Target); err != nil {
 		return err
 	}
 	var row []sqltypes.Value
-	if lastpk != nil {
-		r := sqltypes.Proto3ToResult(lastpk)
+	if request.Lastpk != nil {
+		r := sqltypes.Proto3ToResult(request.Lastpk)
 		if len(r.Rows) != 1 {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected lastpk input: %v", lastpk)
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected lastpk input: %v", request.Lastpk)
 		}
 		row = r.Rows[0]
 	}
-	return tsv.vstreamer.StreamRows(ctx, query, row, send)
+	return tsv.vstreamer.StreamRows(ctx, request.Query, row, send)
 }
 
 // VStreamResults streams rows from the specified starting point.

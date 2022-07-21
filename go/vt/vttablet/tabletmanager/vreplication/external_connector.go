@@ -171,9 +171,11 @@ func (tc *tabletConnector) Close(ctx context.Context) error {
 }
 
 func (tc *tabletConnector) VStream(ctx context.Context, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
-	return tc.qs.VStream(ctx, tc.target, startPos, tablePKs, filter, send)
+	req := &binlogdatapb.VStreamRequest{Target: tc.target, Position: startPos, TableLastPKs: tablePKs, Filter: filter}
+	return tc.qs.VStream(ctx, req, send)
 }
 
 func (tc *tabletConnector) VStreamRows(ctx context.Context, query string, lastpk *querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error {
-	return tc.qs.VStreamRows(ctx, tc.target, query, lastpk, send)
+	req := &binlogdatapb.VStreamRowsRequest{Target: tc.target, Query: query, Lastpk: lastpk}
+	return tc.qs.VStreamRows(ctx, req, send)
 }

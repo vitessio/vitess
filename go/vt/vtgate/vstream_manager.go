@@ -497,7 +497,13 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 
 		log.Infof("Starting to vstream from %s", tablet.Alias.String())
 		// Safe to access sgtid.Gtid here (because it can't change until streaming begins).
-		err = tabletConn.VStream(ctx, target, sgtid.Gtid, sgtid.TablePKs, vs.filter, func(events []*binlogdatapb.VEvent) error {
+		req := &binlogdatapb.VStreamRequest{
+			Target:       target,
+			Position:     sgtid.Gtid,
+			Filter:       vs.filter,
+			TableLastPKs: sgtid.TablePKs,
+		}
+		err = tabletConn.VStream(ctx, req, func(events []*binlogdatapb.VEvent) error {
 			// We received a valid event. Reset error count.
 			errCount = 0
 
