@@ -21,7 +21,6 @@ FROM node:16-${DEBIAN_VER} as node
 
 # Set up Vitess environment (just enough to run pre-built Go binaries)
 ENV VTROOT /vt
-ENV VTADMIN_WEB_PORT=14201
 
 # Prepare directory structure.
 RUN mkdir -p /vt/bin && \
@@ -43,7 +42,11 @@ RUN npm --prefix /vt/web/vtadmin ci && \
 
 FROM nginxinc/nginx-unprivileged:1.22-alpine AS nginx
 
+ENV VTADMIN_WEB_PORT=14201
+
 COPY --from=node /vt/web/vtadmin/build /var/www/
-COPY default.conf /etc/nginx/conf.d/default.conf
+COPY default.conf /etc/nginx/templates/default.conf.template
+
+USER nginx
 
 CMD ["nginx", "-g", "daemon off;"]
