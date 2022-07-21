@@ -132,7 +132,6 @@ func (ct *controller) run(ctx context.Context) {
 			}
 			return
 		}
-		ct.finalizeCompletedState(ctx, dbClient)
 	default:
 		log.Infof("VDiff %s was not marked as pending, doing nothing", state)
 	}
@@ -231,23 +230,4 @@ func newMigrationSource() *migrationSource {
 func (ct *controller) validate() error {
 	// TODO: check if vreplication workflow has errors, what else?
 	return nil
-}
-
-// finalizeCompletedState s double checks to make sure all the tables are marked as completed
-// before finally marking the vdiff as completed.
-func (ct *controller) finalizeCompletedState(ctx context.Context, dbClient binlogplayer.DBClient) {
-	query := fmt.Sprintf(sqlGetIncompleteTables, ct.id)
-	qr, err := dbClient.ExecuteFetch(query, -1)
-	if err != nil {
-		log.Errorf("Encountered an error getting incomplete tables for vdiff %s: %v", ct.uuid, err)
-		return
-	}
-
-	if len(qr.Rows) == 0 {
-		if err := ct.updateState(dbClient, CompletedState, nil); err != nil {
-			log.Errorf("Encountered an error marking vdiff %s as completed: %v", ct.uuid, err)
-			return
-		}
-	}
-	return
 }

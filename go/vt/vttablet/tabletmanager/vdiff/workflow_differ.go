@@ -100,20 +100,20 @@ func (wd *workflowDiffer) diffTable(ctx context.Context, dbClient binlogplayer.D
 	default:
 	}
 
-	log.Infof("Starting differ on table %s", td.table.Name)
+	log.Infof("Starting differ on table %s for vdiff %s", td.table.Name, wd.ct.uuid)
 	if err := td.updateTableState(ctx, dbClient, StartedState); err != nil {
 		return err
 	}
 	if err := td.initialize(ctx); err != nil {
 		return err
 	}
-	log.Infof("initialize done")
+	log.Infof("Table initialization done on table %s for vdiff %s", td.table.Name, wd.ct.uuid)
 	dr, err := td.diff(ctx, &wd.opts.CoreOptions.MaxRows, wd.opts.ReportOptions.DebugQuery, false, wd.opts.CoreOptions.MaxExtraRowsToCompare)
 	if err != nil {
-		log.Errorf("td.diff error %s", err.Error())
+		log.Errorf("Encountered an error diffing table %s for vdiff %s: %v", td.table.Name, wd.ct.uuid, err)
 		return err
 	}
-	log.Infof("td.diff done for %s, with dr %+v", td.table.Name, dr)
+	log.Infof("Table diff done on table %s for vdiff %s with report: %+v", td.table.Name, wd.ct.uuid, dr)
 	if dr.ExtraRowsSource > 0 || dr.ExtraRowsTarget > 0 {
 		wd.reconcileExtraRows(dr, wd.opts.CoreOptions.MaxExtraRowsToCompare)
 	}
@@ -124,7 +124,7 @@ func (wd *workflowDiffer) diffTable(ctx context.Context, dbClient binlogplayer.D
 		}
 	}
 
-	log.Infof("td.diff after reconciliation for %s, with dr %+v", td.table.Name, dr)
+	log.Infof("Completed reconciliation on table %s for vdiff %s with updated report: %+v", td.table.Name, wd.ct.uuid, dr)
 	if err := td.updateTableStateAndReport(ctx, dbClient, CompletedState, dr); err != nil {
 		return err
 	}
@@ -172,7 +172,7 @@ func (wd *workflowDiffer) diff(ctx context.Context) error {
 				td.table.Name, wd.ct.vde.thisTablet.Alias)
 		}
 
-		log.Infof("starting table %s", td.table.Name)
+		log.Infof("Starting diff of table %s for vdiff %s", td.table.Name, wd.ct.uuid)
 		if err := wd.diffTable(ctx, dbClient, td); err != nil {
 			if err := td.updateTableState(ctx, dbClient, ErrorState); err != nil {
 				return err
@@ -183,7 +183,27 @@ func (wd *workflowDiffer) diff(ctx context.Context) error {
 		if err := td.updateTableState(ctx, dbClient, CompletedState); err != nil {
 			return err
 		}
-		log.Infof("done table %s", td.table.Name)
+		log.Infof("Completed diff of table %s for vdiff %s", td.table.Name, wd.ct.uuid)
+	}
+	if err := wd.markIfCompleted(ctx, dbClient); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (wd *workflowDiffer) markIfCompleted(ctx context.Context, dbClient binlogplayer.DBClient) error {
+	query := fmt.Sprintf(sqlGetIncompleteTables, wd.ct.id)
+	qr, err := dbClient.ExecuteFetch(query, -1)
+	if err != nil {
+		return err
+	}
+
+	// Double check to be sure all of the individual table diffs completed without error
+	// before marking the vdiff as completed.
+	if len(qr.Rows) == 0 {
+		if err := wd.ct.updateState(dbClient, CompletedState, nil); err != nil {
+			return err
+		}
 	}
 	return nil
 }
