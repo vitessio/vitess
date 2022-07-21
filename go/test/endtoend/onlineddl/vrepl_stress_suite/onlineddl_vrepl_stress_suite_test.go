@@ -674,9 +674,11 @@ func runSingleConnection(ctx context.Context, t *testing.T, autoIncInsert bool, 
 	require.Nil(t, err)
 	defer conn.Close()
 
-	_, err = conn.ExecuteFetch("set autocommit=1", 1000, true)
+	_, err = conn.ExecuteFetch("set autocommit=1", 1, false)
 	require.Nil(t, err)
-	_, err = conn.ExecuteFetch("set transaction isolation level read committed", 1000, true)
+	_, err = conn.ExecuteFetch("set transaction isolation level read committed", 1, false)
+	require.Nil(t, err)
+	_, err = conn.ExecuteFetch("set innodb_lock_wait_timeout=1", 1, false)
 	require.Nil(t, err)
 
 	for {
@@ -698,8 +700,9 @@ func runSingleConnection(ctx context.Context, t *testing.T, autoIncInsert bool, 
 				err = nil
 			}
 			if sqlErr, ok := err.(*mysql.SQLError); ok {
-				if sqlErr.Number() == mysql.ERLockDeadlock {
-					_, err = conn.ExecuteFetch("rollback", 1, false)
+				switch sqlErr.Number() {
+				case mysql.ERLockDeadlock:
+					err = nil
 				}
 			}
 		}
