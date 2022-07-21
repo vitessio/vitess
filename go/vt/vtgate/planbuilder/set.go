@@ -50,7 +50,7 @@ type (
 	}
 )
 
-func buildSetPlan(stmt *sqlparser.Set, vschema plancontext.VSchema) (engine.Primitive, error) {
+func buildSetPlan(stmt *sqlparser.Set, vschema plancontext.VSchema) (*planResult, error) {
 	var setOps []engine.SetOp
 	var err error
 
@@ -110,13 +110,13 @@ func buildSetPlan(stmt *sqlparser.Set, vschema plancontext.VSchema) (engine.Prim
 		return nil, err
 	}
 
-	return &engine.Set{
+	return newPlanResult(&engine.Set{
 		Ops:   setOps,
 		Input: input,
-	}, nil
+	}), nil
 }
 
-func buildSetOpReadOnly(s setting) planFunc {
+func buildSetOpReadOnly(setting) planFunc {
 	return func(expr *sqlparser.SetExpr, schema plancontext.VSchema, _ *expressionConverter) (engine.SetOp, error) {
 		return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.IncorrectGlobalLocalVar, "variable '%s' is a read only variable", expr.Var.Name)
 	}
@@ -233,7 +233,7 @@ func extractValue(expr *sqlparser.SetExpr, boolean bool) (string, error) {
 	switch node := expr.Expr.(type) {
 	case *sqlparser.Literal:
 		if node.Type == sqlparser.StrVal && boolean {
-			switch strings.ToLower(string(node.Val)) {
+			switch strings.ToLower(node.Val) {
 			case "on":
 				return "1", nil
 			case "off":

@@ -10,7 +10,10 @@
       "Sharded": true
     },
     "Query": "create view a as select * from `user`"
-  }
+  },
+  "TablesUsed": [
+    "user.a"
+  ]
 }
 Gen4 plan same as above
 
@@ -26,7 +29,10 @@ Gen4 plan same as above
       "Sharded": true
     },
     "Query": "create view a as select * from `user`"
-  }
+  },
+  "TablesUsed": [
+    "user.a"
+  ]
 }
 Gen4 plan same as above
 
@@ -42,7 +48,10 @@ Gen4 plan same as above
       "Sharded": true
     },
     "Query": "create view view_a as select 1 from `user`"
-  }
+  },
+  "TablesUsed": [
+    "user.view_a"
+  ]
 }
 Gen4 plan same as above
 
@@ -58,7 +67,10 @@ Gen4 plan same as above
       "Sharded": true
     },
     "Query": "create view view_a as select `user`.* from `user`"
-  }
+  },
+  "TablesUsed": [
+    "user.view_a"
+  ]
 }
 Gen4 plan same as above
 
@@ -74,7 +86,10 @@ Gen4 plan same as above
       "Sharded": true
     },
     "Query": "create view view_a as select * from `user`"
-  }
+  },
+  "TablesUsed": [
+    "user.view_a"
+  ]
 }
 Gen4 plan same as above
 
@@ -90,7 +105,10 @@ Gen4 plan same as above
       "Sharded": true
     },
     "Query": "create view view_a as select `user`.* from `user`"
-  }
+  },
+  "TablesUsed": [
+    "user.view_a"
+  ]
 }
 Gen4 plan same as above
 
@@ -106,7 +124,10 @@ Gen4 plan same as above
       "Sharded": true
     },
     "Query": "create view view_a as select * from authoritative"
-  }
+  },
+  "TablesUsed": [
+    "user.view_a"
+  ]
 }
 {
   "QueryType": "DDL",
@@ -118,7 +139,10 @@ Gen4 plan same as above
       "Sharded": true
     },
     "Query": "create view view_a as select user_id, col1, col2 from authoritative"
-  }
+  },
+  "TablesUsed": [
+    "user.view_a"
+  ]
 }
 
 # create view with select * from join of authoritative tables
@@ -133,7 +157,10 @@ Gen4 plan same as above
       "Sharded": true
     },
     "Query": "create view view_a as select * from authoritative as a join authoritative as b on a.user_id = b.user_id"
-  }
+  },
+  "TablesUsed": [
+    "user.view_a"
+  ]
 }
 {
   "QueryType": "DDL",
@@ -145,7 +172,10 @@ Gen4 plan same as above
       "Sharded": true
     },
     "Query": "create view view_a as select a.user_id as user_id, a.col1 as col1, a.col2 as col2, b.user_id as user_id, b.col1 as col1, b.col2 as col2 from authoritative as a join authoritative as b on a.user_id = b.user_id"
-  }
+  },
+  "TablesUsed": [
+    "user.view_a"
+  ]
 }
 
 # create view with select * from qualified authoritative table
@@ -160,7 +190,10 @@ Gen4 plan same as above
       "Sharded": true
     },
     "Query": "create view view_a as select a.* from authoritative as a"
-  }
+  },
+  "TablesUsed": [
+    "user.view_a"
+  ]
 }
 {
   "QueryType": "DDL",
@@ -172,7 +205,10 @@ Gen4 plan same as above
       "Sharded": true
     },
     "Query": "create view view_a as select a.user_id, a.col1, a.col2 from authoritative as a"
-  }
+  },
+  "TablesUsed": [
+    "user.view_a"
+  ]
 }
 
 # create view with select * from intermixing of authoritative table with non-authoritative results in no expansion
@@ -187,7 +223,10 @@ Gen4 plan same as above
       "Sharded": true
     },
     "Query": "create view view_a as select * from authoritative join `user` on authoritative.user_id = `user`.id"
-  }
+  },
+  "TablesUsed": [
+    "user.view_a"
+  ]
 }
 Gen4 plan same as above
 
@@ -203,7 +242,10 @@ Gen4 plan same as above
       "Sharded": true
     },
     "Query": "create view view_a as select `user`.id, a.*, `user`.col1 from authoritative as a join `user` on a.user_id = `user`.id"
-  }
+  },
+  "TablesUsed": [
+    "user.view_a"
+  ]
 }
 {
   "QueryType": "DDL",
@@ -215,7 +257,10 @@ Gen4 plan same as above
       "Sharded": true
     },
     "Query": "create view view_a as select `user`.id, a.user_id as user_id, a.col1 as col1, a.col2 as col2, `user`.col1 from authoritative as a join `user` on a.user_id = `user`.id"
-  }
+  },
+  "TablesUsed": [
+    "user.view_a"
+  ]
 }
 
 # create view with auto-resolve anonymous columns for simple route
@@ -230,7 +275,10 @@ Gen4 plan same as above
       "Sharded": true
     },
     "Query": "create view view_a as select `user`.col from `user` join user_extra on `user`.id = user_extra.user_id"
-  }
+  },
+  "TablesUsed": [
+    "user.view_a"
+  ]
 }
 Gen4 plan same as above
 
@@ -246,7 +294,10 @@ Gen4 plan same as above
       "Sharded": true
     },
     "Query": "create view view_a as select `user`.id from `user` join user_extra on `user`.id = user_extra.user_id"
-  }
+  },
+  "TablesUsed": [
+    "user.view_a"
+  ]
 }
 Gen4 plan same as above
 
@@ -262,7 +313,10 @@ Gen4 plan same as above
       "Sharded": false
     },
     "Query": "create view view_a as select :__lastInsertId as x from unsharded"
-  }
+  },
+  "TablesUsed": [
+    "main.view_a"
+  ]
 }
 Gen4 plan same as above
 
@@ -278,7 +332,10 @@ Gen4 plan same as above
       "Sharded": true
     },
     "Query": "create view view_a as select * from pin_test"
-  }
+  },
+  "TablesUsed": [
+    "user.view_a"
+  ]
 }
 Gen4 plan same as above
 
@@ -294,7 +351,10 @@ Gen4 plan same as above
       "Sharded": true
     },
     "Query": "create view view_a as select `user`.col, user_extra.id + user_extra.col from `user` join user_extra on `user`.id = user_extra.user_id"
-  }
+  },
+  "TablesUsed": [
+    "user.view_a"
+  ]
 }
 Gen4 plan same as above
 
@@ -310,7 +370,10 @@ Gen4 plan same as above
       "Sharded": true
     },
     "Query": "create view view_a as select /* comment */ `user`.col from `user` join user_extra on `user`.id = user_extra.user_id"
-  }
+  },
+  "TablesUsed": [
+    "user.view_a"
+  ]
 }
 Gen4 plan same as above
 
@@ -326,7 +389,10 @@ Gen4 plan same as above
       "Sharded": true
     },
     "Query": "create view view_a as select `user`.col from `user` join user_extra on `user`.id = user_extra.user_id for update"
-  }
+  },
+  "TablesUsed": [
+    "user.view_a"
+  ]
 }
 Gen4 plan same as above
 
@@ -342,7 +408,10 @@ Gen4 plan same as above
       "Sharded": true
     },
     "Query": "create view view_a as select `user`.Col, user_extra.Id from `user` join user_extra on `user`.id = user_extra.user_id"
-  }
+  },
+  "TablesUsed": [
+    "user.view_a"
+  ]
 }
 Gen4 plan same as above
 
@@ -363,7 +432,10 @@ Gen4 plan same as above
       "Sharded": true
     },
     "Query": "create view view_a as select * from `user` where id = 0x04"
-  }
+  },
+  "TablesUsed": [
+    "user.view_a"
+  ]
 }
 Gen4 plan same as above
 
@@ -379,7 +451,10 @@ Gen4 plan same as above
       "Sharded": true
     },
     "Query": "create view view_a as select * from `user` where `name` = 'abc' and id = 4 limit 5"
-  }
+  },
+  "TablesUsed": [
+    "user.view_a"
+  ]
 }
 Gen4 plan same as above
 
@@ -395,7 +470,10 @@ Gen4 plan same as above
       "Sharded": true
     },
     "Query": "create view view_a as select * from `user` where id = 4 and `name` = 'abc' limit 5"
-  }
+  },
+  "TablesUsed": [
+    "user.view_a"
+  ]
 }
 Gen4 plan same as above
 
@@ -411,7 +489,10 @@ Gen4 plan same as above
       "Sharded": true
     },
     "Query": "create view view_a as select * from `user` where id = 4 and `name` = 'abc' limit 5"
-  }
+  },
+  "TablesUsed": [
+    "user.view_a"
+  ]
 }
 Gen4 plan same as above
 
@@ -427,7 +508,10 @@ Gen4 plan same as above
       "Sharded": true
     },
     "Query": "create view view_a as select user0_.col as col0_ from `user` as user0_ where id = 1 order by user0_.col asc"
-  }
+  },
+  "TablesUsed": [
+    "user.view_a"
+  ]
 }
 Gen4 plan same as above
 
@@ -443,7 +527,10 @@ Gen4 plan same as above
       "Sharded": true
     },
     "Query": "create view view_a as select user0_.col as col0_ from `user` as user0_ where id = 1 order by col0_ desc"
-  }
+  },
+  "TablesUsed": [
+    "user.view_a"
+  ]
 }
 Gen4 plan same as above
 
@@ -459,7 +546,10 @@ Gen4 plan same as above
       "Sharded": true
     },
     "Query": "create view view_a as select * from `user` where id = 1 and `name` = true"
-  }
+  },
+  "TablesUsed": [
+    "user.view_a"
+  ]
 }
 Gen4 plan same as above
 
@@ -475,7 +565,10 @@ Gen4 plan same as above
       "Sharded": true
     },
     "Query": "create view view_a as select * from music where user_id = 1 union select * from `user` where id = 1"
-  }
+  },
+  "TablesUsed": [
+    "user.view_a"
+  ]
 }
 Gen4 plan same as above
 
@@ -491,7 +584,10 @@ Gen4 plan same as above
       "Sharded": true
     },
     "Query": "create view view_a as select 42 from `user`"
-  }
+  },
+  "TablesUsed": [
+    "user.view_a"
+  ]
 }
 Gen4 plan same as above
 
@@ -507,7 +603,10 @@ Gen4 plan same as above
       "Sharded": true
     },
     "Query": "create view view_a as select * from music where user_id = 1"
-  }
+  },
+  "TablesUsed": [
+    "user.view_a"
+  ]
 }
 Gen4 plan same as above
 
@@ -523,7 +622,10 @@ Gen4 plan same as above
       "Sharded": true
     },
     "Query": "alter table `user` add index a (id)"
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 Gen4 plan same as above
 
@@ -539,7 +641,10 @@ Gen4 plan same as above
       "Sharded": true
     },
     "Query": "alter table `user` add column id int"
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 Gen4 plan same as above
 
@@ -555,7 +660,10 @@ Gen4 plan same as above
       "Sharded": true
     },
     "Query": "alter view user_extra as select * from `user`"
-  }
+  },
+  "TablesUsed": [
+    "user.user_extra"
+  ]
 }
 Gen4 plan same as above
 
@@ -576,7 +684,11 @@ Gen4 plan same as above
       "Sharded": true
     },
     "Query": "drop table `user`, user_extra"
-  }
+  },
+  "TablesUsed": [
+    "user.user",
+    "user.user_extra"
+  ]
 }
 Gen4 plan same as above
 
@@ -602,7 +714,11 @@ Gen4 plan same as above
       "Sharded": true
     },
     "Query": "drop view `user`, user_extra"
-  }
+  },
+  "TablesUsed": [
+    "user.user",
+    "user.user_extra"
+  ]
 }
 Gen4 plan same as above
 
@@ -628,7 +744,10 @@ Gen4 plan same as above
       "Sharded": true
     },
     "Query": "truncate table user_extra"
-  }
+  },
+  "TablesUsed": [
+    "user.user_extra"
+  ]
 }
 Gen4 plan same as above
 
@@ -644,7 +763,11 @@ Gen4 plan same as above
       "Sharded": true
     },
     "Query": "rename table user_extra to b"
-  }
+  },
+  "TablesUsed": [
+    "user.b",
+    "user.user_extra"
+  ]
 }
 Gen4 plan same as above
 

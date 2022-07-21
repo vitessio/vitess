@@ -41,6 +41,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
 
@@ -371,6 +372,7 @@ const (
 	maxTableRows                  = 4096
 	maxConcurrency                = 15
 	singleConnectionSleepInterval = 5 * time.Millisecond
+	periodicSleepPercent          = 10 // in the range (0,100). 10 means 10% sleep time throught the stress load.
 	waitForStatusTimeout          = 180 * time.Second
 )
 
@@ -674,11 +676,15 @@ func runSingleConnection(ctx context.Context, t *testing.T, autoIncInsert bool, 
 	require.Nil(t, err)
 	defer conn.Close()
 
-	_, err = conn.ExecuteFetch("set autocommit=1", 1000, true)
+	_, err = conn.ExecuteFetch("set autocommit=1", 1, false)
 	require.Nil(t, err)
-	_, err = conn.ExecuteFetch("set transaction isolation level read committed", 1000, true)
+	_, err = conn.ExecuteFetch("set transaction isolation level read committed", 1, false)
+	require.Nil(t, err)
+	_, err = conn.ExecuteFetch("set innodb_lock_wait_timeout=1", 1, false)
 	require.Nil(t, err)
 
+	periodicRest := timer.NewRateLimiter(time.Second)
+	defer periodicRest.Stop()
 	for {
 		if atomic.LoadInt64(done) == 1 {
 			log.Infof("Terminating single connection")
@@ -697,9 +703,27 @@ func runSingleConnection(ctx context.Context, t *testing.T, autoIncInsert bool, 
 				// Table renamed to _before, due to -vreplication-test-suite flag
 				err = nil
 			}
+			if sqlErr, ok := err.(*mysql.SQLError); ok {
+				switch sqlErr.Number() {
+				case mysql.ERLockDeadlock:
+					// That's fine. We create a lot of contention; some transactions will deadlock and
+					// rollback. It happens, and we can ignore those and keep on going.
+					err = nil
+				}
+			}
 		}
 		assert.Nil(t, err)
 		time.Sleep(singleConnectionSleepInterval)
+		// Most o fthe time, we want the load to be high, so as to create real stress and potentially
+		// expose bugs in vreplication (the objective of this test!).
+		// However, some platforms (GitHub CI) can suffocate from this load. We choose to keep the load
+		// high, when it runs, but then also take a periodic break and let the system recover.
+		// We prefer this over reducing the load in general. In our method here, we have full load 90% of
+		// the time, then relaxation 10% of the time.
+		periodicRest.Do(func() error {
+			time.Sleep(time.Second * periodicSleepPercent / 100)
+			return nil
+		})
 	}
 }
 

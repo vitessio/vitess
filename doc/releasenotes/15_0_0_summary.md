@@ -16,6 +16,12 @@ Map(ctx context.Context, vcursor VCursor, .... ) ....
 This only impacts the users who have added their own vindex implementation. 
 They would be required to change their implementation with these new interface method expectations.
 
+#### Logstats Table and Keyspace deprecated
+
+Information about which tables are used was being reported through the Keyspace/Table fields on LogStats.
+For multi-table queries, this output can be confusing, so we have added TablesUsed, that is a string array, listing all tables and which keyspace they are on.
+The Table/Keyspace fields are deprecated and will be removed in the V16 release of Vitess.
+
 ### Command-line syntax deprecations
 
 #### vttablet startup flag deletions

@@ -58,7 +58,10 @@
         "Table": "`user`"
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 
 # scatter aggregate order by references aggregate expression
@@ -125,7 +128,10 @@
         ]
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 
 "select a, b, count(*) k from user group by a order by b, a, k"
@@ -193,7 +199,10 @@
         ]
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 
 # scatter aggregate with memory sort and limit
@@ -272,7 +281,10 @@
         ]
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 
 # scatter aggregate with memory sort and order by number
@@ -341,7 +353,10 @@
         ]
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 
 # scatter aggregate with memory sort and order by number, reuse weight_string
@@ -410,7 +425,10 @@
         ]
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 
 # order by on a cross-shard derived table
@@ -514,7 +532,11 @@
         ]
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "user.user",
+    "user.user_extra"
+  ]
 }
 
 # order by on a cross-shard query. Note: this happens only when an order by column is from the second table
@@ -623,7 +645,11 @@
         ]
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "user.music",
+    "user.user"
+  ]
 }
 
 # Order by for join, with mixed cross-shard ordering
@@ -732,7 +758,11 @@
         ]
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "user.music",
+    "user.user"
+  ]
 }
 
 # Order by for join, on text column in LHS.
@@ -819,7 +849,11 @@
         ]
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "main.unsharded",
+    "user.user"
+  ]
 }
 
 # Order by for join, on text column in RHS.
@@ -906,7 +940,11 @@
         ]
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "main.unsharded",
+    "user.user"
+  ]
 }
 
 # order by for vindex func
@@ -940,7 +978,38 @@
     ]
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select id, keyspace_id, range_start, range_end from user_index where id = :id order by range_start",
+  "Instructions": {
+    "OperatorType": "Sort",
+    "Variant": "Memory",
+    "OrderBy": "2 ASC",
+    "Inputs": [
+      {
+        "OperatorType": "VindexFunc",
+        "Variant": "VindexMap",
+        "Columns": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "Fields": {
+          "id": "VARBINARY",
+          "keyspace_id": "VARBINARY",
+          "range_end": "VARBINARY",
+          "range_start": "VARBINARY"
+        },
+        "Value": ":id",
+        "Vindex": "user_index"
+      }
+    ]
+  },
+  "TablesUsed": [
+    "user_index"
+  ]
+}
 
 # unary expression
 "select a from user order by binary a desc"
@@ -960,7 +1029,10 @@ Gen4 plan same as above
     "Query": "select a, convert(a, binary), weight_string(convert(a, binary)) from `user` order by convert(a, binary) desc",
     "ResultColumns": 1,
     "Table": "`user`"
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 
 # unary expression in join query
@@ -1002,7 +1074,11 @@ Gen4 plan same as above
         "Table": "music"
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "user.music",
+    "user.user"
+  ]
 }
 
 # intcol order by
@@ -1023,7 +1099,25 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select id, intcol from user order by intcol",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id, intcol from `user` where 1 != 1",
+    "OrderBy": "1 ASC",
+    "Query": "select id, intcol from `user` order by intcol asc",
+    "Table": "`user`"
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
+}
 
 # scatter order by with order by column not present
 "select col from user order by id"
@@ -1043,5 +1137,8 @@ Gen4 plan same as above
     "Query": "select col, id, weight_string(id) from `user` order by id asc",
     "ResultColumns": 1,
     "Table": "`user`"
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
