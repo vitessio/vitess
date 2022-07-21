@@ -25,6 +25,7 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -86,6 +87,15 @@ const (
 	setSQLModeQueryf = `SET @@session.sql_mode='%s'`
 )
 
+type ComponentName string
+
+const (
+	VPlayerComponentName     ComponentName = "vplayer"
+	VCopierComponentName     ComponentName = "vcopier"
+	VStreamerComponentName   ComponentName = "vstreamer"
+	RowStreamerComponentName ComponentName = "rowstreamer"
+)
+
 // vreplicator provides the core logic to start vreplication streams
 type vreplicator struct {
 	vre      *Engine
@@ -105,6 +115,8 @@ type vreplicator struct {
 
 	WorkflowType int64
 	WorkflowName string
+
+	throttleUpdatesRateLimiter *timer.RateLimiter
 }
 
 // newVReplicator creates a new vreplicator. The valid fields from the source are:
@@ -141,6 +153,8 @@ func newVReplicator(id uint32, source *binlogdatapb.BinlogSource, sourceVStreame
 		stats:           stats,
 		dbClient:        newVDBClient(dbClient, stats),
 		mysqld:          mysqld,
+
+		throttleUpdatesRateLimiter: timer.NewRateLimiter(time.Second),
 	}
 }
 
@@ -498,6 +512,32 @@ func (vr *vreplicator) throttlerAppName() string {
 		names = append(names, throttlerOnlineDDLAppName)
 	}
 	return strings.Join(names, ":")
+}
+
+func (vr *vreplicator) updateTimeThrottled(componentThrottled ComponentName) error {
+	err := vr.throttleUpdatesRateLimiter.Do(func() error {
+		tm := time.Now().Unix()
+		update, err := binlogplayer.GenerateUpdateTimeThrottled(vr.id, tm, string(componentThrottled))
+		if err != nil {
+			return err
+		}
+		if _, err := withDDL.Exec(vr.vre.ctx, update, vr.dbClient.ExecuteFetch, vr.dbClient.ExecuteFetch); err != nil {
+			return fmt.Errorf("error %v updating time throttled", err)
+		}
+		return nil
+	})
+	return err
+}
+
+func (vr *vreplicator) updateHeartbeatTime(tm int64) error {
+	update, err := binlogplayer.GenerateUpdateHeartbeat(vr.id, tm)
+	if err != nil {
+		return err
+	}
+	if _, err := withDDL.Exec(vr.vre.ctx, update, vr.dbClient.ExecuteFetch, vr.dbClient.ExecuteFetch); err != nil {
+		return fmt.Errorf("error %v updating time", err)
+	}
+	return nil
 }
 
 func (vr *vreplicator) clearFKCheck() error {

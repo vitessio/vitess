@@ -477,9 +477,11 @@ func expectLogsAndUnsubscribe(t *testing.T, logs []LogExpectation, logCh chan an
 
 func shouldIgnoreQuery(query string) bool {
 	queriesToIgnore := []string{
-		"_vt.vreplication_log", // ignore all selects, updates and inserts into this table
-		"@@session.sql_mode",   // ignore all selects, and sets of this variable
-		", time_heartbeat=",    // update of last heartbeat time, can happen out-of-band, so can't test for it
+		"_vt.vreplication_log",   // ignore all selects, updates and inserts into this table
+		"@@session.sql_mode",     // ignore all selects, and sets of this variable
+		", time_heartbeat=",      // update of last heartbeat time, can happen out-of-band, so can't test for it
+		", time_throttled=",      // update of last throttle time, can happen out-of-band, so can't test for it
+		", component_throttled=", // update of last throttle time, can happen out-of-band, so can't test for it
 		"context cancel",
 	}
 	for _, q := range queriesToIgnore {
