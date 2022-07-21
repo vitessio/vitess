@@ -47,6 +47,4 @@ ENV VTADMIN_WEB_PORT=14201
 COPY --from=node /vt/web/vtadmin/build /var/www/
 COPY default.conf /etc/nginx/templates/default.conf.template
 
-USER nginx
-
 CMD ["nginx", "-g", "daemon off;"]
