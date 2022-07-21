@@ -372,7 +372,7 @@ const (
 	maxTableRows                  = 4096
 	maxConcurrency                = 15
 	singleConnectionSleepInterval = 5 * time.Millisecond
-	periodicSleepDuration         = 100 * time.Millisecond
+	periodicSleepPercent          = 10 // in the range (0,100). 10 means 10% sleep time throught the stress load.
 	waitForStatusTimeout          = 180 * time.Second
 )
 
@@ -713,7 +713,7 @@ func runSingleConnection(ctx context.Context, t *testing.T, autoIncInsert bool, 
 		assert.Nil(t, err)
 		time.Sleep(singleConnectionSleepInterval)
 		periodicRest.Do(func() error {
-			time.Sleep(periodicSleepDuration)
+			time.Sleep(periodicSleepPercent * time.Second / 100)
 			return nil
 		})
 	}
