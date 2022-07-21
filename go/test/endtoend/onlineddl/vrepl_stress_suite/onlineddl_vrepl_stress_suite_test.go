@@ -369,8 +369,8 @@ var (
 
 const (
 	maxTableRows                  = 4096
-	maxConcurrency                = 15
-	singleConnectionSleepInterval = 5 * time.Millisecond
+	maxConcurrency                = 10
+	singleConnectionSleepInterval = 15 * time.Millisecond
 	waitForStatusTimeout          = 180 * time.Second
 )
 
