@@ -675,12 +675,12 @@ func (f *FakeQueryService) StreamHealth(ctx context.Context, callback func(*quer
 }
 
 // VStream is part of the queryservice.QueryService interface
-func (f *FakeQueryService) VStream(ctx context.Context, target *querypb.Target, position string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
+func (f *FakeQueryService) VStream(ctx context.Context, request *binlogdatapb.VStreamRequest, send func([]*binlogdatapb.VEvent) error) error {
 	panic("not implemented")
 }
 
 // VStreamRows is part of the QueryService interface.
-func (f *FakeQueryService) VStreamRows(ctx context.Context, target *querypb.Target, query string, lastpk *querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error {
+func (f *FakeQueryService) VStreamRows(ctx context.Context, request *binlogdatapb.VStreamRowsRequest, send func(*binlogdatapb.VStreamRowsResponse) error) error {
 	panic("not implemented")
 }
 

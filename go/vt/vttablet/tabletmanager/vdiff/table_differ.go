@@ -334,7 +334,8 @@ func (td *tableDiffer) streamOneShard(ctx context.Context, participant *shardStr
 			TabletType: participant.tablet.Type,
 		}
 		var fields []*querypb.Field
-		return conn.VStreamRows(ctx, target, query, lastPK, func(vsrRaw *binlogdatapb.VStreamRowsResponse) error {
+		req := &binlogdatapb.VStreamRowsRequest{Target: target, Query: query, Lastpk: lastPK}
+		return conn.VStreamRows(ctx, req, func(vsrRaw *binlogdatapb.VStreamRowsResponse) error {
 			// We clone (deep copy) the VStreamRowsResponse -- which contains a vstream packet with N rows and
 			// their corresponding GTID position/snapshot along with the LastPK in the row set -- so that we
 			// can safely process it while the next VStreamRowsResponse message is getting prepared by the
