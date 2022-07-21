@@ -41,7 +41,7 @@ import (
 )
 
 // workflowDiffer has metadata and state for the vdiff of a single workflow on this tablet
-// only one vdiff can be running for a workflow at any time
+// only one vdiff can be running for a workflow at any time.
 type workflowDiffer struct {
 	ct *controller
 
@@ -185,27 +185,6 @@ func (wd *workflowDiffer) diff(ctx context.Context) error {
 		}
 		log.Infof("done table %s", td.table.Name)
 	}
-	if err := wd.markIfCompleted(ctx, dbClient); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (wd *workflowDiffer) markIfCompleted(ctx context.Context, dbClient binlogplayer.DBClient) error {
-	query := fmt.Sprintf(sqlGetIncompleteTables, wd.ct.id)
-	qr, err := dbClient.ExecuteFetch(query, -1)
-	if err != nil {
-		return err
-	}
-
-	// When consolidating/merging shards a target tablet will have > 1 source shard
-	// so we should only mark the vdiff as complete for the shard if all controllers
-	// have finished (we check for 1 here as the count includes this controller).
-	if len(qr.Rows) == 0 && wd.ct.vde.activeControllerCount(wd.ct.uuid) == 1 {
-		if err := wd.ct.updateState(dbClient, CompletedState, nil); err != nil {
-			return err
-		}
-	}
 	return nil
 }
 
@@ -261,7 +240,7 @@ func (wd *workflowDiffer) buildPlan(dbClient binlogplayer.DBClient, filter *binl
 	return nil
 }
 
-// getTableLastPK gets the lastPK protobuf message for a given vdiff table
+// getTableLastPK gets the lastPK protobuf message for a given vdiff table.
 func (wd *workflowDiffer) getTableLastPK(dbClient binlogplayer.DBClient, tableName string) (*querypb.QueryResult, error) {
 	query := fmt.Sprintf(sqlGetVDiffTable, wd.ct.id, encodeString(tableName))
 	qr, err := dbClient.ExecuteFetch(query, 1)

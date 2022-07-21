@@ -160,7 +160,7 @@ func (td *tableDiffer) buildTablePlan() (*tablePlan, error) {
 	return tp, err
 }
 
-// findPKs identifies PKs and removes them from the columns to do data comparison
+// findPKs identifies PKs and removes them from the columns to do data comparison.
 func (tp *tablePlan) findPKs(targetSelect *sqlparser.Select) error {
 	var orderby sqlparser.OrderBy
 	for _, pk := range tp.table.PrimaryKeyColumns {

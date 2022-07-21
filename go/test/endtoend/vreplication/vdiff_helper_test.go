@@ -113,10 +113,7 @@ func waitForVDiff2ToComplete(t *testing.T, ksWorkflow, cells, uuid string, compl
 				if info.Progress.ETA != "" {
 					require.GreaterOrEqual(t, info.Progress.ETA, time.Now().Format(vdiff2.TimestampFormat))
 				}
-				// We can't guarantee that the progress will only increase with merges/consolidations
-				// done during Reshards due to how VDiff2 works today.
-				// TODO: revisit how we handle shard merges/consolidations generally for VDiffs.
-				if !first && !strings.Contains(strings.ToLower(t.Name()), "merge") {
+				if !first {
 					require.GreaterOrEqual(t, info.Progress.Percentage, previousProgress.Percentage)
 				}
 				previousProgress.Percentage = info.Progress.Percentage

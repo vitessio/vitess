@@ -341,23 +341,3 @@ func (vde *Engine) retryErroredVDiffs() {
 		}
 	}
 }
-
-// activeControllerCount returns the number of active controllers
-// for a given UUID. This should only ever be > 1 when doing shard
-// consolidations/merges.
-func (vde *Engine) activeControllerCount(uuid string) int {
-	vde.mu.Lock()
-	defer vde.mu.Unlock()
-
-	cnt := 0
-	for _, ct := range vde.controllers {
-		if ct.uuid == uuid {
-			select {
-			case <-ct.done:
-			default:
-				cnt++
-			}
-		}
-	}
-	return cnt
-}

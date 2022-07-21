@@ -30,7 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
-// newMergeSorter creates an engine.MergeSort based on the shard streamers and pk columns.
+// newMergeSorter creates an engine.MergeSort based on the shard streamers and pk columns
 func newMergeSorter(participants map[string]*shardStreamer, comparePKs []compareColInfo) *engine.MergeSort {
 	prims := make([]engine.StreamExecutor, 0, len(participants))
 	for _, participant := range participants {

@@ -219,7 +219,7 @@ func (vde *Engine) getVDiffSummary(vdiffID int64, dbClient binlogplayer.DBClient
 
 }
 
-// Validate vdiff options. Also setup defaults where applicable
+// Validate vdiff options. Also setup defaults where applicable.
 func (vde *Engine) fixupOptions(options *tabletmanagerdatapb.VDiffOptions) (*tabletmanagerdatapb.VDiffOptions, error) {
 	// Assign defaults to sourceCell and targetCell if not specified.
 	sourceCell := options.PickerOptions.SourceCell

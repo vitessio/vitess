@@ -102,21 +102,20 @@ func (ct *controller) Stop() {
 
 func (ct *controller) run(ctx context.Context) {
 	defer func() {
-		log.Infof("vdiff stopped")
+		log.Infof("Run finished for vdiff %s", ct.uuid)
 		close(ct.done)
 	}()
 
 	dbClient := ct.vde.dbClientFactoryFiltered()
 	if err := dbClient.Connect(); err != nil {
-		log.Errorf("db connect error: %v", err)
+		log.Errorf("Encountered an error connecting to database for vdiff %s: %v", ct.uuid, err)
 		return
 	}
 	defer dbClient.Close()
 
 	qr, err := ct.vde.getVDiffByID(ctx, dbClient, ct.id)
 	if err != nil {
-		log.Errorf("Error getting vdiff record on tablet %v: %v",
-			ct.vde.thisTablet.Alias, err)
+		log.Errorf("Encountered an error getting vdiff record for %s: %v", ct.uuid, err)
 		return
 	}
 
@@ -124,19 +123,19 @@ func (ct *controller) run(ctx context.Context) {
 	state := VDiffState(strings.ToLower(row["state"].ToString()))
 	switch state {
 	case PendingState:
-		log.Infof("Starting vdiff")
+		log.Infof("Starting vdiff %s", ct.uuid)
 		if err := ct.start(ctx, dbClient); err != nil {
-			log.Errorf("run() failed: %s", err)
+			log.Errorf("Encountered an error for vdiff %s: %s", ct.uuid, err)
 			insertVDiffLog(ctx, dbClient, ct.id, fmt.Sprintf("Error: %s", err))
-			if err := ct.updateState(dbClient, ErrorState, err); err != nil {
-				return
+			if err = ct.updateState(dbClient, ErrorState, err); err != nil {
+				log.Errorf("Encountered an error marking vdiff %s as errored: %v", ct.uuid, err)
 			}
 			return
 		}
+		ct.finalizeCompletedState(ctx, dbClient)
 	default:
-		log.Infof("run() done, state is %s", state)
+		log.Infof("VDiff %s was not marked as pending, doing nothing", state)
 	}
-	log.Infof("run() has ended")
 }
 
 type migrationSource struct {
@@ -193,7 +192,7 @@ func (ct *controller) start(ctx context.Context, dbClient binlogplayer.DBClient)
 		}
 		var bls binlogdatapb.BinlogSource
 		if err := prototext.Unmarshal(sourceBytes, &bls); err != nil {
-			log.Errorf("Failed to unmarshal vdiff binlog source: %v", err)
+			log.Errorf("Encountered an error unmarshalling vdiff binlog source for %s: %v", ct.uuid, err)
 			return err
 		}
 		source.shard = bls.Shard
@@ -218,7 +217,7 @@ func (ct *controller) start(ctx context.Context, dbClient binlogplayer.DBClient)
 		return err
 	}
 	if err := wd.diff(ctx); err != nil {
-		log.Infof("wd.diff error %v", err)
+		log.Errorf("Encountered an error performing workflow diff for vdiff %s: %v", ct.uuid, err)
 		return err
 	}
 
@@ -230,6 +229,25 @@ func newMigrationSource() *migrationSource {
 }
 
 func (ct *controller) validate() error {
-	// todo: check if vreplication workflow has errors, what else?
+	// TODO: check if vreplication workflow has errors, what else?
 	return nil
+}
+
+// finalizeCompletedState s double checks to make sure all the tables are marked as completed
+// before finally marking the vdiff as completed.
+func (ct *controller) finalizeCompletedState(ctx context.Context, dbClient binlogplayer.DBClient) {
+	query := fmt.Sprintf(sqlGetIncompleteTables, ct.id)
+	qr, err := dbClient.ExecuteFetch(query, -1)
+	if err != nil {
+		log.Errorf("Encountered an error getting incomplete tables for vdiff %s: %v", ct.uuid, err)
+		return
+	}
+
+	if len(qr.Rows) == 0 {
+		if err := ct.updateState(dbClient, CompletedState, nil); err != nil {
+			log.Errorf("Encountered an error marking vdiff %s as completed: %v", ct.uuid, err)
+			return
+		}
+	}
+	return
 }
