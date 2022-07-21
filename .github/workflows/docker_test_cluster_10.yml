@@ -9,7 +9,10 @@ jobs:
     steps:
     - name: Check if workflow needs to be skipped
       id: skip-workflow
+      env:
+        GITHUB_CONTEXT: ${{ toJson(github) }}
       run: |
+        echo "$GITHUB_CONTEXT"
         skip=0
         echo "${{github.event}}" "${{github.event.data}}" "${{github.event.push}}" "${{github.event.pull_request}}"
         if [[ "${{github.event}}" !=  "" ]] && [[ "${{github.ref}}" != "refs/heads/main" ]] && [[ "${{github.ref}}" != "refs/heads/release-"*".0" ]] && [[ "${{github.ref}}" != "refs/tags/"* ]]; then
