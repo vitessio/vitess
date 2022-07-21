@@ -101,6 +101,14 @@ type (
 		Collation collations.ID
 
 		Warning string
+
+		// The key of this map is an expression that was inserted into an ORDER BY, replacing a literal.
+		// ORDER BY 1 -> ORDER BY user.num
+		// The key will be the inserted expression, and the value will be the select expression
+		LiteralRewrites map[sqlparser.Expr]sqlparser.Expr
+
+		// The key will be a ColName that references to an alias in the select list
+		ColNameReferencingSelAlias map[*sqlparser.ColName]bool
 	}
 
 	columnName struct {
@@ -124,6 +132,11 @@ var (
 func (st *SemTable) CopyDependencies(from, to sqlparser.Expr) {
 	st.Recursive[to] = st.RecursiveDeps(from)
 	st.Direct[to] = st.DirectDeps(from)
+}
+
+// CopyExprType copies the expression type from one expression into the other
+func (st *SemTable) CopyExprType(from, to sqlparser.Expr) {
+	st.ExprTypes[to] = st.ExprTypes[from]
 }
 
 // EmptySemTable creates a new empty SemTable

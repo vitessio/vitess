@@ -37,32 +37,33 @@ func TestSubqueryRewrite(t *testing.T) {
 		input:  "select (select 1) from t1",
 		output: "select :__sq1 from t1",
 	}, {
-		input:  "select 1 from t1 where exists (select 1)",
+		input:  "select 1 from t1 where exists (select id from music)",
 		output: "select 1 from t1 where :__sq_has_values1",
 	}, {
 		input:  "select id from t1 where id in (select 1)",
-		output: "select id from t1 where :__sq_has_values1 = 1 and id in ::__sq1",
+		output: "select t1.id as id from t1 where :__sq_has_values1 = 1 and t1.id in ::__sq1",
 	}, {
 		input:  "select id from t1 where id not in (select 1)",
-		output: "select id from t1 where :__sq_has_values1 = 0 or id not in ::__sq1",
+		output: "select t1.id as id from t1 where :__sq_has_values1 = 0 or t1.id not in ::__sq1",
 	}, {
 		input:  "select id from t1 where id = (select 1)",
-		output: "select id from t1 where id = :__sq1",
+		output: "select t1.id as id from t1 where t1.id = :__sq1",
 	}, {
 		input:  "select id from t1 where id >= (select 1)",
-		output: "select id from t1 where id >= :__sq1",
+		output: "select t1.id as id from t1 where t1.id >= :__sq1",
 	}, {
 		input:  "select id from t1 where t1.id = (select 1 from t2 where t2.id = t1.id)",
-		output: "select id from t1 where t1.id = :__sq1",
+		output: "select t1.id as id from t1 where t1.id = :__sq1",
 	}, {
+		// in the output, `id` is not replaced because it is ambiguous, we don't know if it is coming from t1 or t2
 		input:  "select id from t1 join t2 where t1.id = t2.id and exists (select 1)",
 		output: "select id from t1 join t2 where t1.id = t2.id and :__sq_has_values1",
 	}, {
 		input:  "select id from t1 where not exists (select 1)",
-		output: "select id from t1 where not :__sq_has_values1",
+		output: "select t1.id as id from t1 where not :__sq_has_values1",
 	}, {
 		input:  "select id from t1 where not exists (select 1) and exists (select 2)",
-		output: "select id from t1 where not :__sq_has_values1 and :__sq_has_values2",
+		output: "select t1.id as id from t1 where not :__sq_has_values1 and :__sq_has_values2",
 	}, {
 		input:  "select (select 1), (select 2) from t1 join t2 on t1.id = (select 1) where t1.id in (select 1)",
 		output: "select :__sq2, :__sq3 from t1 join t2 on t1.id = :__sq1 where :__sq_has_values4 = 1 and t1.id in ::__sq4",
@@ -90,46 +91,46 @@ func TestHavingRewrite(t *testing.T) {
 		sqs    map[string]string
 	}{{
 		input:  "select 1 from t1 having a = 1",
-		output: "select 1 from t1 where a = 1",
+		output: "select 1 from t1 where t1.a = 1",
 	}, {
 		input:  "select 1 from t1 where x = 1 and y = 2 having a = 1",
-		output: "select 1 from t1 where x = 1 and y = 2 and a = 1",
+		output: "select 1 from t1 where t1.x = 1 and t1.y = 2 and t1.a = 1",
 	}, {
 		input:  "select 1 from t1 where x = 1 or y = 2 having a = 1",
-		output: "select 1 from t1 where (x = 1 or y = 2) and a = 1",
+		output: "select 1 from t1 where (t1.x = 1 or t1.y = 2) and t1.a = 1",
 	}, {
 		input:  "select 1 from t1 where x = 1 having a = 1 and b = 2",
-		output: "select 1 from t1 where x = 1 and a = 1 and b = 2",
+		output: "select 1 from t1 where t1.x = 1 and t1.a = 1 and t1.b = 2",
 	}, {
 		input:  "select 1 from t1 where x = 1 having a = 1 or b = 2",
-		output: "select 1 from t1 where x = 1 and (a = 1 or b = 2)",
+		output: "select 1 from t1 where t1.x = 1 and (t1.a = 1 or t1.b = 2)",
 	}, {
 		input:  "select 1 from t1 where x = 1 and y = 2 having a = 1 and b = 2",
-		output: "select 1 from t1 where x = 1 and y = 2 and a = 1 and b = 2",
+		output: "select 1 from t1 where t1.x = 1 and t1.y = 2 and t1.a = 1 and t1.b = 2",
 	}, {
 		input:  "select 1 from t1 where x = 1 or y = 2 having a = 1 and b = 2",
-		output: "select 1 from t1 where (x = 1 or y = 2) and a = 1 and b = 2",
+		output: "select 1 from t1 where (t1.x = 1 or t1.y = 2) and t1.a = 1 and t1.b = 2",
 	}, {
 		input:  "select 1 from t1 where x = 1 and y = 2 having a = 1 or b = 2",
-		output: "select 1 from t1 where x = 1 and y = 2 and (a = 1 or b = 2)",
+		output: "select 1 from t1 where t1.x = 1 and t1.y = 2 and (t1.a = 1 or t1.b = 2)",
 	}, {
 		input:  "select 1 from t1 where x = 1 or y = 2 having a = 1 or b = 2",
-		output: "select 1 from t1 where (x = 1 or y = 2) and (a = 1 or b = 2)",
+		output: "select 1 from t1 where (t1.x = 1 or t1.y = 2) and (t1.a = 1 or t1.b = 2)",
 	}, {
 		input:  "select 1 from t1 where x = 1 or y = 2 having a = 1 and count(*) = 1",
-		output: "select 1 from t1 where (x = 1 or y = 2) and a = 1 having count(*) = 1",
+		output: "select 1 from t1 where (t1.x = 1 or t1.y = 2) and t1.a = 1 having count(*) = 1",
 	}, {
 		input:  "select count(*) k from t1 where x = 1 or y = 2 having a = 1 and k = 1",
-		output: "select count(*) as k from t1 where (x = 1 or y = 2) and a = 1 having k = 1",
+		output: "select count(*) as k from t1 where (t1.x = 1 or t1.y = 2) and t1.a = 1 having k = 1",
 	}, {
 		input:  "select count(*) k from t1 having k = 10",
 		output: "select count(*) as k from t1 having k = 10",
 	}, {
 		input:  "select 1 from t1 where x in (select 1 from t2 having a = 1)",
-		output: "select 1 from t1 where :__sq_has_values1 = 1 and x in ::__sq1",
-		sqs:    map[string]string{"__sq1": "select 1 from t2 where a = 1"},
+		output: "select 1 from t1 where :__sq_has_values1 = 1 and t1.x in ::__sq1",
+		sqs:    map[string]string{"__sq1": "select 1 from t2 where t2.a = 1"},
 	}, {input: "select 1 from t1 group by a having a = 1 and count(*) > 1",
-		output: "select 1 from t1 where a = 1 group by a having count(*) > 1",
+		output: "select 1 from t1 where t1.a = 1 group by t1.a having count(*) > 1",
 	}}
 	for _, tcase := range tcases {
 		t.Run(tcase.input, func(t *testing.T) {

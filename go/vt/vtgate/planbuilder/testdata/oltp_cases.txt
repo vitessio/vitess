@@ -29,8 +29,8 @@
       "Name": "main",
       "Sharded": true
     },
-    "FieldQuery": "select c from sbtest34 where 1 != 1",
-    "Query": "select c from sbtest34 where id = 15",
+    "FieldQuery": "select sbtest34.c as c from sbtest34 where 1 != 1",
+    "Query": "select sbtest34.c as c from sbtest34 where sbtest34.id = 15",
     "Table": "sbtest34",
     "Values": [
       "INT64(15)"
@@ -69,8 +69,8 @@
       "Name": "main",
       "Sharded": true
     },
-    "FieldQuery": "select c from sbtest12 where 1 != 1",
-    "Query": "select c from sbtest12 where id between 1 and 10",
+    "FieldQuery": "select sbtest12.c as c from sbtest12 where 1 != 1",
+    "Query": "select sbtest12.c as c from sbtest12 where sbtest12.id between 1 and 10",
     "Table": "sbtest12"
   },
   "TablesUsed": [
@@ -117,8 +117,8 @@
           "Name": "main",
           "Sharded": true
         },
-        "FieldQuery": "select sum(k) from sbtest43 where 1 != 1",
-        "Query": "select sum(k) from sbtest43 where id between 90 and 990",
+        "FieldQuery": "select sum(sbtest43.k) as `sum(k)` from sbtest43 where 1 != 1",
+        "Query": "select sum(sbtest43.k) as `sum(k)` from sbtest43 where sbtest43.id between 90 and 990",
         "Table": "sbtest43"
       }
     ]
@@ -157,9 +157,9 @@
       "Name": "main",
       "Sharded": true
     },
-    "FieldQuery": "select c from sbtest1 where 1 != 1",
+    "FieldQuery": "select sbtest1.c as c from sbtest1 where 1 != 1",
     "OrderBy": "0 ASC COLLATE latin1_swedish_ci",
-    "Query": "select c from sbtest1 where id between 50 and 235 order by c asc",
+    "Query": "select sbtest1.c as c from sbtest1 where sbtest1.id between 50 and 235 order by sbtest1.c asc",
     "Table": "sbtest1"
   },
   "TablesUsed": [
@@ -210,9 +210,9 @@
           "Name": "main",
           "Sharded": true
         },
-        "FieldQuery": "select c, weight_string(c) from sbtest30 where 1 != 1",
+        "FieldQuery": "select sbtest30.c as c, weight_string(sbtest30.c) from sbtest30 where 1 != 1",
         "OrderBy": "0 ASC COLLATE latin1_swedish_ci, 0 ASC COLLATE latin1_swedish_ci",
-        "Query": "select distinct c, weight_string(c) from sbtest30 where id between 1 and 10 order by c asc, c asc",
+        "Query": "select distinct sbtest30.c as c, weight_string(sbtest30.c) from sbtest30 where sbtest30.id between 1 and 10 order by sbtest30.c asc, c asc",
         "Table": "sbtest30"
       }
     ]
@@ -259,7 +259,7 @@
     },
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
-    "Query": "update sbtest6 set k = k + 1 where id = 5",
+    "Query": "update sbtest6 set sbtest6.k = sbtest6.k + 1 where sbtest6.id = 5",
     "Table": "sbtest6",
     "Values": [
       "INT64(5)"
@@ -308,7 +308,7 @@
     },
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
-    "Query": "update sbtest9 set c = 7 where id = 8",
+    "Query": "update sbtest9 set sbtest9.c = 7 where sbtest9.id = 8",
     "Table": "sbtest9",
     "Values": [
       "INT64(8)"

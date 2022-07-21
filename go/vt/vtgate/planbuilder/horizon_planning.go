@@ -977,8 +977,10 @@ func (hp *horizonPlanning) addDistinct(ctx *plancontext.PlanningContext, plan lo
 			// If we have an alias, we need to use the alias and not the original expression
 			// to make sure dependencies work correctly,
 			// we simply copy the dependencies of the original expression here
+			// We also make sure to copy the expression type.
 			inner = sqlparser.NewColName(aliasExpr.As.String())
 			ctx.SemTable.CopyDependencies(aliasExpr.Expr, inner)
+			ctx.SemTable.CopyExprType(aliasExpr.Expr, inner)
 		}
 		grpParam := &engine.GroupByParams{KeyCol: index, WeightStringCol: -1, CollationID: ctx.SemTable.CollationForExpr(inner), Expr: inner}
 		_, wOffset, err := wrapAndPushExpr(ctx, aliasExpr.Expr, aliasExpr.Expr, plan)

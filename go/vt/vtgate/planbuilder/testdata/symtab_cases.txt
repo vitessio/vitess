@@ -45,9 +45,9 @@
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "L:0,R:0",
+    "JoinColumnIndexes": "L:1,R:0",
     "JoinVars": {
-      "predef2": 0
+      "user_predef2": 0
     },
     "TableName": "`user`_unsharded",
     "Inputs": [
@@ -58,8 +58,8 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select predef2 from `user` where 1 != 1",
-        "Query": "select predef2 from `user`",
+        "FieldQuery": "select `user`.predef2, `user`.predef2 as predef2 from `user` where 1 != 1",
+        "Query": "select `user`.predef2, `user`.predef2 as predef2 from `user`",
         "Table": "`user`"
       },
       {
@@ -69,8 +69,8 @@
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "select predef3 from unsharded where 1 != 1",
-        "Query": "select predef3 from unsharded where predef3 = :predef2",
+        "FieldQuery": "select unsharded.predef3 as predef3 from unsharded where 1 != 1",
+        "Query": "select unsharded.predef3 as predef3 from unsharded where unsharded.predef3 = :user_predef2",
         "Table": "unsharded"
       }
     ]

@@ -97,8 +97,8 @@
       "Name": "main",
       "Sharded": false
     },
-    "FieldQuery": "select (select 1 from information_schema.schemata where 1 != 1) from dual where 1 != 1",
-    "Query": "select (select 1 from information_schema.schemata where schema_name = :__vtschemaname limit 1) from dual",
+    "FieldQuery": "select (select 1 from information_schema.schemata where 1 != 1) as `(select 1 from information_schema.schemata where schema_name = 'MyDatabase' limit 1)` from dual where 1 != 1",
+    "Query": "select (select 1 from information_schema.schemata where schema_name = :__vtschemaname limit 1) as `(select 1 from information_schema.schemata where schema_name = 'MyDatabase' limit 1)` from dual",
     "SysTableTableSchema": "[VARCHAR(\"MyDatabase\")]",
     "Table": "dual"
   },

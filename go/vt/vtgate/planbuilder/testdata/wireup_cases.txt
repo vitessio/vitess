@@ -1227,7 +1227,7 @@
           "Sharded": true
         },
         "FieldQuery": "select 1 from `user` where 1 != 1",
-        "Query": "select 1 from `user` where :__sq_has_values1 = 1 and id in ::__vals",
+        "Query": "select 1 from `user` where :__sq_has_values1 = 1 and `user`.id in ::__vals",
         "Table": "`user`",
         "Values": [
           ":__sq1"
@@ -1329,8 +1329,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select col from `user` where 1 != 1",
-            "Query": "select col from `user`",
+            "FieldQuery": "select `user`.col as col from `user` where 1 != 1",
+            "Query": "select `user`.col as col from `user`",
             "Table": "`user`"
           },
           {
@@ -1349,8 +1349,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select u.col, u.id, :__sq1 from `user` as u where 1 != 1",
-                "Query": "select u.col, u.id, :__sq1 from `user` as u",
+                "FieldQuery": "select u.col, u.id, :__sq1 as `(select col from ``user``)` from `user` as u where 1 != 1",
+                "Query": "select u.col, u.id, :__sq1 as `(select col from ``user``)` from `user` as u",
                 "Table": "`user`"
               },
               {
@@ -1407,8 +1407,8 @@
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from `user` where 1 != 1",
-    "Query": "select id from `user` where id in ::__vals",
+    "FieldQuery": "select `user`.id as id from `user` where 1 != 1",
+    "Query": "select `user`.id as id from `user` where `user`.id in ::__vals",
     "Table": "`user`",
     "Values": [
       "(DECIMAL(18446744073709551616), INT64(1))"

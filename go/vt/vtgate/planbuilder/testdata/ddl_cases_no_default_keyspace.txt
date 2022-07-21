@@ -138,7 +138,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "Query": "create view view_a as select user_id, col1, col2 from authoritative"
+    "Query": "create view view_a as select authoritative.user_id as user_id, authoritative.col1 as col1, authoritative.col2 as col2 from authoritative"
   },
   "TablesUsed": [
     "user.view_a"
@@ -437,7 +437,21 @@ Gen4 plan same as above
     "user.view_a"
   ]
 }
-Gen4 plan same as above
+{
+  "QueryType": "DDL",
+  "Original": "create view user.view_a as select * from user where id = 0x04",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "create view view_a as select * from `user` where `user`.id = 0x04"
+  },
+  "TablesUsed": [
+    "user.view_a"
+  ]
+}
 
 # create view with limit works if it can be dropped
 "create view user.view_a as select * from user where name ='abc' AND (id = 4) limit 5"
@@ -456,7 +470,21 @@ Gen4 plan same as above
     "user.view_a"
   ]
 }
-Gen4 plan same as above
+{
+  "QueryType": "DDL",
+  "Original": "create view user.view_a as select * from user where name ='abc' AND (id = 4) limit 5",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "create view view_a as select * from `user` where `user`.`name` = 'abc' and `user`.id = 4 limit 5"
+  },
+  "TablesUsed": [
+    "user.view_a"
+  ]
+}
 
 # create view with Multiple parenthesized expressions
 "create view user.view_a as select * from user where (id = 4) AND (name ='abc') limit 5"
@@ -475,7 +503,21 @@ Gen4 plan same as above
     "user.view_a"
   ]
 }
-Gen4 plan same as above
+{
+  "QueryType": "DDL",
+  "Original": "create view user.view_a as select * from user where (id = 4) AND (name ='abc') limit 5",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "create view view_a as select * from `user` where `user`.id = 4 and `user`.`name` = 'abc' limit 5"
+  },
+  "TablesUsed": [
+    "user.view_a"
+  ]
+}
 
 # create view with Multiple parenthesized expressions
 "create view user.view_a as select * from user where (id = 4 and name ='abc') limit 5"
@@ -494,7 +536,21 @@ Gen4 plan same as above
     "user.view_a"
   ]
 }
-Gen4 plan same as above
+{
+  "QueryType": "DDL",
+  "Original": "create view user.view_a as select * from user where (id = 4 and name ='abc') limit 5",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "create view view_a as select * from `user` where `user`.id = 4 and `user`.`name` = 'abc' limit 5"
+  },
+  "TablesUsed": [
+    "user.view_a"
+  ]
+}
 
 # create view with Column Aliasing with Table.Column
 "create view user.view_a as select user0_.col as col0_ from user user0_ where id = 1 order by user0_.col"
@@ -513,7 +569,21 @@ Gen4 plan same as above
     "user.view_a"
   ]
 }
-Gen4 plan same as above
+{
+  "QueryType": "DDL",
+  "Original": "create view user.view_a as select user0_.col as col0_ from user user0_ where id = 1 order by user0_.col",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "create view view_a as select user0_.col as col0_ from `user` as user0_ where user0_.id = 1 order by user0_.col asc"
+  },
+  "TablesUsed": [
+    "user.view_a"
+  ]
+}
 
 # create view with Column Aliasing with Column
 "create view user.view_a as select user0_.col as col0_ from user user0_ where id = 1 order by col0_ desc"
@@ -532,7 +602,21 @@ Gen4 plan same as above
     "user.view_a"
   ]
 }
-Gen4 plan same as above
+{
+  "QueryType": "DDL",
+  "Original": "create view user.view_a as select user0_.col as col0_ from user user0_ where id = 1 order by col0_ desc",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "create view view_a as select user0_.col as col0_ from `user` as user0_ where user0_.id = 1 order by col0_ desc"
+  },
+  "TablesUsed": [
+    "user.view_a"
+  ]
+}
 
 # create view with Booleans and parenthesis
 "create view user.view_a as select * from user where (id = 1) AND name = true"
@@ -551,7 +635,21 @@ Gen4 plan same as above
     "user.view_a"
   ]
 }
-Gen4 plan same as above
+{
+  "QueryType": "DDL",
+  "Original": "create view user.view_a as select * from user where (id = 1) AND name = true",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "create view view_a as select * from `user` where `user`.id = 1 and `user`.`name` = true"
+  },
+  "TablesUsed": [
+    "user.view_a"
+  ]
+}
 
 # create view with union with the same target shard
 "create view user.view_a as select * from music where user_id = 1 union select * from user where id = 1"
@@ -570,7 +668,21 @@ Gen4 plan same as above
     "user.view_a"
   ]
 }
-Gen4 plan same as above
+{
+  "QueryType": "DDL",
+  "Original": "create view user.view_a as select * from music where user_id = 1 union select * from user where id = 1",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "create view view_a as select * from music where music.user_id = 1 union select * from `user` where `user`.id = 1"
+  },
+  "TablesUsed": [
+    "user.view_a"
+  ]
+}
 
 # create view with testing SingleRow Projection
 "create view user.view_a as select 42 from user"
@@ -608,7 +720,21 @@ Gen4 plan same as above
     "user.view_a"
   ]
 }
-Gen4 plan same as above
+{
+  "QueryType": "DDL",
+  "Original": "create view user.view_a as select sql_calc_found_rows * from music where user_id = 1",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "create view view_a as select * from music where music.user_id = 1"
+  },
+  "TablesUsed": [
+    "user.view_a"
+  ]
+}
 
 # DDL
 "create index a on user(id)"

@@ -25,8 +25,8 @@
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select col from `user` where 1 != 1",
-    "Query": "select col from `user`",
+    "FieldQuery": "select `user`.col as col from `user` where 1 != 1",
+    "Query": "select `user`.col as col from `user`",
     "Table": "`user`"
   },
   "TablesUsed": [
@@ -3522,8 +3522,8 @@ Gen4 error: symbol id not found
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col from `user` where 1 != 1",
-        "Query": "select col from `user`",
+        "FieldQuery": "select `user`.col as col from `user` where 1 != 1",
+        "Query": "select `user`.col as col from `user`",
         "Table": "`user`"
       },
       {
@@ -3601,8 +3601,8 @@ Gen4 error: symbol id not found
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col from `user` where 1 != 1",
-        "Query": "select col from `user`",
+        "FieldQuery": "select `user`.col as col from `user` where 1 != 1",
+        "Query": "select `user`.col as col from `user`",
         "Table": "`user`"
       },
       {
@@ -3681,8 +3681,8 @@ Gen4 error: symbol id not found
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col from `user` where 1 != 1",
-        "Query": "select col from `user`",
+        "FieldQuery": "select `user`.col as col from `user` where 1 != 1",
+        "Query": "select `user`.col as col from `user`",
         "Table": "`user`"
       },
       {
@@ -3780,8 +3780,8 @@ Gen4 error: symbol id not found
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col from `user` where 1 != 1",
-        "Query": "select col from `user`",
+        "FieldQuery": "select `user`.col as col from `user` where 1 != 1",
+        "Query": "select `user`.col as col from `user`",
         "Table": "`user`"
       },
       {
@@ -3843,8 +3843,8 @@ Gen4 error: symbol id not found
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col from `user` where 1 != 1",
-        "Query": "select col from `user`",
+        "FieldQuery": "select `user`.col as col from `user` where 1 != 1",
+        "Query": "select `user`.col as col from `user`",
         "Table": "`user`"
       },
       {
@@ -3981,8 +3981,8 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col from `user` where 1 != 1",
-        "Query": "select col from `user`",
+        "FieldQuery": "select `user`.col as col from `user` where 1 != 1",
+        "Query": "select `user`.col as col from `user`",
         "Table": "`user`"
       },
       {
@@ -5186,8 +5186,8 @@ Gen4 plan same as above
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select user_id from user_extra where 1 != 1",
-            "Query": "select user_id from user_extra limit :__upper_limit",
+            "FieldQuery": "select user_extra.user_id as user_id from user_extra where 1 != 1",
+            "Query": "select user_extra.user_id as user_id from user_extra limit :__upper_limit",
             "Table": "user_extra"
           }
         ]
@@ -5207,8 +5207,8 @@ Gen4 plan same as above
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select id from user_extra where 1 != 1",
-            "Query": "select id from user_extra",
+            "FieldQuery": "select user_extra.id as id from user_extra where 1 != 1",
+            "Query": "select user_extra.id as id from user_extra",
             "Table": "user_extra"
           },
           {
@@ -5218,8 +5218,8 @@ Gen4 plan same as above
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user` where :__sq_has_values1 = 1 and id in ::__vals and col = :__sq2",
+            "FieldQuery": "select `user`.id as id from `user` where 1 != 1",
+            "Query": "select `user`.id as id from `user` where :__sq_has_values1 = 1 and `user`.id in ::__vals and `user`.col = :__sq2",
             "Table": "`user`",
             "Values": [
               ":__sq1"

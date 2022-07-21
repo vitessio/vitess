@@ -30,7 +30,7 @@
       "Sharded": true
     },
     "FieldQuery": "select c_discount, c_last, c_credit, w_tax from customer1 as c, warehouse1 as w where 1 != 1",
-    "Query": "select c_discount, c_last, c_credit, w_tax from customer1 as c, warehouse1 as w where c_d_id = 15 and c_id = 10 and w_id = 1 and c_w_id = w_id",
+    "Query": "select c_discount, c_last, c_credit, w_tax from customer1 as c, warehouse1 as w where c_d_id = 15 and c_id = 10 and w.w_id = 1 and c.c_w_id = w.w_id",
     "Table": "customer1, warehouse1",
     "Values": [
       "INT64(1)"
@@ -74,8 +74,8 @@
       "Name": "main",
       "Sharded": true
     },
-    "FieldQuery": "select d_next_o_id, d_tax from district1 where 1 != 1",
-    "Query": "select d_next_o_id, d_tax from district1 where d_w_id = 15 and d_id = 95 for update",
+    "FieldQuery": "select district1.d_next_o_id as d_next_o_id, district1.d_tax as d_tax from district1 where 1 != 1",
+    "Query": "select district1.d_next_o_id as d_next_o_id, district1.d_tax as d_tax from district1 where district1.d_w_id = 15 and district1.d_id = 95 for update",
     "Table": "district1",
     "Values": [
       "INT64(15)"
@@ -124,7 +124,7 @@
     },
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
-    "Query": "update district1 set d_next_o_id = 56 where d_id = 9842 and d_w_id = 8546",
+    "Query": "update district1 set district1.d_next_o_id = 56 where district1.d_id = 9842 and district1.d_w_id = 8546",
     "Table": "district1",
     "Values": [
       "INT64(8546)"
@@ -219,8 +219,8 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": true
     },
-    "FieldQuery": "select i_price, i_name, i_data from item1 where 1 != 1",
-    "Query": "select i_price, i_name, i_data from item1 where i_id = 9654",
+    "FieldQuery": "select item1.i_price as i_price, item1.i_name as i_name, item1.i_data as i_data from item1 where 1 != 1",
+    "Query": "select item1.i_price as i_price, item1.i_name as i_name, item1.i_data as i_data from item1 where item1.i_id = 9654",
     "Table": "item1",
     "Values": [
       "INT64(9654)"
@@ -263,8 +263,8 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": true
     },
-    "FieldQuery": "select s_quantity, s_data, s_dist_01 as s_dist from stock1 where 1 != 1",
-    "Query": "select s_quantity, s_data, s_dist_01 as s_dist from stock1 where s_i_id = 2198 and s_w_id = 89 for update",
+    "FieldQuery": "select stock1.s_quantity as s_quantity, stock1.s_data as s_data, stock1.s_dist_01 as s_dist from stock1 where 1 != 1",
+    "Query": "select stock1.s_quantity as s_quantity, stock1.s_data as s_data, stock1.s_dist_01 as s_dist from stock1 where stock1.s_i_id = 2198 and stock1.s_w_id = 89 for update",
     "Table": "stock1",
     "Values": [
       "INT64(89)"
@@ -313,7 +313,7 @@ Gen4 plan same as above
     },
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
-    "Query": "update stock1 set s_quantity = 894 where s_i_id = 156 and s_w_id = 6",
+    "Query": "update stock1 set stock1.s_quantity = 894 where stock1.s_i_id = 156 and stock1.s_w_id = 6",
     "Table": "stock1",
     "Values": [
       "INT64(6)"
@@ -388,7 +388,7 @@ Gen4 plan same as above
     },
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
-    "Query": "update warehouse1 set w_ytd = w_ytd + 946879 where w_id = 3",
+    "Query": "update warehouse1 set warehouse1.w_ytd = warehouse1.w_ytd + 946879 where warehouse1.w_id = 3",
     "Table": "warehouse1",
     "Values": [
       "INT64(3)"
@@ -431,8 +431,8 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": true
     },
-    "FieldQuery": "select w_street_1, w_street_2, w_city, w_state, w_zip, w_name from warehouse1 where 1 != 1",
-    "Query": "select w_street_1, w_street_2, w_city, w_state, w_zip, w_name from warehouse1 where w_id = 998",
+    "FieldQuery": "select warehouse1.w_street_1 as w_street_1, warehouse1.w_street_2 as w_street_2, warehouse1.w_city as w_city, warehouse1.w_state as w_state, warehouse1.w_zip as w_zip, warehouse1.w_name as w_name from warehouse1 where 1 != 1",
+    "Query": "select warehouse1.w_street_1 as w_street_1, warehouse1.w_street_2 as w_street_2, warehouse1.w_city as w_city, warehouse1.w_state as w_state, warehouse1.w_zip as w_zip, warehouse1.w_name as w_name from warehouse1 where warehouse1.w_id = 998",
     "Table": "warehouse1",
     "Values": [
       "INT64(998)"
@@ -481,7 +481,7 @@ Gen4 plan same as above
     },
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
-    "Query": "update district1 set d_ytd = d_ytd + 2 where d_w_id = 89 and d_id = 9",
+    "Query": "update district1 set district1.d_ytd = district1.d_ytd + 2 where district1.d_w_id = 89 and district1.d_id = 9",
     "Table": "district1",
     "Values": [
       "INT64(89)"
@@ -524,8 +524,8 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": true
     },
-    "FieldQuery": "select d_street_1, d_street_2, d_city, d_state, d_zip, d_name from district1 where 1 != 1",
-    "Query": "select d_street_1, d_street_2, d_city, d_state, d_zip, d_name from district1 where d_w_id = 896 and d_id = 9",
+    "FieldQuery": "select district1.d_street_1 as d_street_1, district1.d_street_2 as d_street_2, district1.d_city as d_city, district1.d_state as d_state, district1.d_zip as d_zip, district1.d_name as d_name from district1 where 1 != 1",
+    "Query": "select district1.d_street_1 as d_street_1, district1.d_street_2 as d_street_2, district1.d_city as d_city, district1.d_state as d_state, district1.d_zip as d_zip, district1.d_name as d_name from district1 where district1.d_w_id = 896 and district1.d_id = 9",
     "Table": "district1",
     "Values": [
       "INT64(896)"
@@ -568,8 +568,8 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": true
     },
-    "FieldQuery": "select count(c_id) as namecnt from customer1 where 1 != 1",
-    "Query": "select count(c_id) as namecnt from customer1 where c_w_id = 5 and c_d_id = 1 and c_last = 'last'",
+    "FieldQuery": "select count(customer1.c_id) as namecnt from customer1 where 1 != 1",
+    "Query": "select count(customer1.c_id) as namecnt from customer1 where customer1.c_w_id = 5 and customer1.c_d_id = 1 and customer1.c_last = 'last'",
     "Table": "customer1",
     "Values": [
       "INT64(5)"
@@ -612,8 +612,8 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": true
     },
-    "FieldQuery": "select c_id from customer1 where 1 != 1",
-    "Query": "select c_id from customer1 where c_w_id = 8 and c_d_id = 5 and c_last = 'item_last' order by c_first asc",
+    "FieldQuery": "select customer1.c_id as c_id from customer1 where 1 != 1",
+    "Query": "select customer1.c_id as c_id from customer1 where customer1.c_w_id = 8 and customer1.c_d_id = 5 and customer1.c_last = 'item_last' order by customer1.c_first asc",
     "Table": "customer1",
     "Values": [
       "INT64(8)"
@@ -656,8 +656,8 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": true
     },
-    "FieldQuery": "select c_first, c_middle, c_last, c_street_1, c_street_2, c_city, c_state, c_zip, c_phone, c_credit, c_credit_lim, c_discount, c_balance, c_ytd_payment, c_since from customer1 where 1 != 1",
-    "Query": "select c_first, c_middle, c_last, c_street_1, c_street_2, c_city, c_state, c_zip, c_phone, c_credit, c_credit_lim, c_discount, c_balance, c_ytd_payment, c_since from customer1 where c_w_id = 8965 and c_d_id = 1 and c_id = 9 for update",
+    "FieldQuery": "select customer1.c_first as c_first, customer1.c_middle as c_middle, customer1.c_last as c_last, customer1.c_street_1 as c_street_1, customer1.c_street_2 as c_street_2, customer1.c_city as c_city, customer1.c_state as c_state, customer1.c_zip as c_zip, customer1.c_phone as c_phone, customer1.c_credit as c_credit, customer1.c_credit_lim as c_credit_lim, customer1.c_discount as c_discount, customer1.c_balance as c_balance, customer1.c_ytd_payment as c_ytd_payment, customer1.c_since as c_since from customer1 where 1 != 1",
+    "Query": "select customer1.c_first as c_first, customer1.c_middle as c_middle, customer1.c_last as c_last, customer1.c_street_1 as c_street_1, customer1.c_street_2 as c_street_2, customer1.c_city as c_city, customer1.c_state as c_state, customer1.c_zip as c_zip, customer1.c_phone as c_phone, customer1.c_credit as c_credit, customer1.c_credit_lim as c_credit_lim, customer1.c_discount as c_discount, customer1.c_balance as c_balance, customer1.c_ytd_payment as c_ytd_payment, customer1.c_since as c_since from customer1 where customer1.c_w_id = 8965 and customer1.c_d_id = 1 and customer1.c_id = 9 for update",
     "Table": "customer1",
     "Values": [
       "INT64(8965)"
@@ -700,8 +700,8 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": true
     },
-    "FieldQuery": "select c_data from customer1 where 1 != 1",
-    "Query": "select c_data from customer1 where c_w_id = 32 and c_d_id = 68 and c_id = 5",
+    "FieldQuery": "select customer1.c_data as c_data from customer1 where 1 != 1",
+    "Query": "select customer1.c_data as c_data from customer1 where customer1.c_w_id = 32 and customer1.c_d_id = 68 and customer1.c_id = 5",
     "Table": "customer1",
     "Values": [
       "INT64(32)"
@@ -750,7 +750,7 @@ Gen4 plan same as above
     },
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
-    "Query": "update customer1 set c_balance = 508.98, c_ytd_payment = 48941.980301, c_data = 'i am data' where c_w_id = 20 and c_d_id = 387 and c_id = 98",
+    "Query": "update customer1 set customer1.c_balance = 508.98, customer1.c_ytd_payment = 48941.980301, customer1.c_data = 'i am data' where customer1.c_w_id = 20 and customer1.c_d_id = 387 and customer1.c_id = 98",
     "Table": "customer1",
     "Values": [
       "INT64(20)"
@@ -799,7 +799,7 @@ Gen4 plan same as above
     },
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
-    "Query": "update customer1 set c_balance = 508.98, c_ytd_payment = 48941.980301 where c_w_id = 20 and c_d_id = 387 and c_id = 98",
+    "Query": "update customer1 set customer1.c_balance = 508.98, customer1.c_ytd_payment = 48941.980301 where customer1.c_w_id = 20 and customer1.c_d_id = 387 and customer1.c_id = 98",
     "Table": "customer1",
     "Values": [
       "INT64(20)"
@@ -868,8 +868,8 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": true
     },
-    "FieldQuery": "select count(c_id) as namecnt from customer1 where 1 != 1",
-    "Query": "select count(c_id) as namecnt from customer1 where c_w_id = 870 and c_d_id = 780 and c_last = 'last'",
+    "FieldQuery": "select count(customer1.c_id) as namecnt from customer1 where 1 != 1",
+    "Query": "select count(customer1.c_id) as namecnt from customer1 where customer1.c_w_id = 870 and customer1.c_d_id = 780 and customer1.c_last = 'last'",
     "Table": "customer1",
     "Values": [
       "INT64(870)"
@@ -912,8 +912,8 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": true
     },
-    "FieldQuery": "select c_balance, c_first, c_middle, c_id from customer1 where 1 != 1",
-    "Query": "select c_balance, c_first, c_middle, c_id from customer1 where c_w_id = 840 and c_d_id = 1 and c_last = 'test' order by c_first asc",
+    "FieldQuery": "select customer1.c_balance as c_balance, customer1.c_first as c_first, customer1.c_middle as c_middle, customer1.c_id as c_id from customer1 where 1 != 1",
+    "Query": "select customer1.c_balance as c_balance, customer1.c_first as c_first, customer1.c_middle as c_middle, customer1.c_id as c_id from customer1 where customer1.c_w_id = 840 and customer1.c_d_id = 1 and customer1.c_last = 'test' order by customer1.c_first asc",
     "Table": "customer1",
     "Values": [
       "INT64(840)"
@@ -956,8 +956,8 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": true
     },
-    "FieldQuery": "select c_balance, c_first, c_middle, c_last from customer1 where 1 != 1",
-    "Query": "select c_balance, c_first, c_middle, c_last from customer1 where c_w_id = 15 and c_d_id = 5169 and c_id = 1",
+    "FieldQuery": "select customer1.c_balance as c_balance, customer1.c_first as c_first, customer1.c_middle as c_middle, customer1.c_last as c_last from customer1 where 1 != 1",
+    "Query": "select customer1.c_balance as c_balance, customer1.c_first as c_first, customer1.c_middle as c_middle, customer1.c_last as c_last from customer1 where customer1.c_w_id = 15 and customer1.c_d_id = 5169 and customer1.c_id = 1",
     "Table": "customer1",
     "Values": [
       "INT64(15)"
@@ -1000,8 +1000,8 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": true
     },
-    "FieldQuery": "select o_id, o_carrier_id, o_entry_d from orders1 where 1 != 1",
-    "Query": "select o_id, o_carrier_id, o_entry_d from orders1 where o_w_id = 9894 and o_d_id = 3 and o_c_id = 159 order by o_id desc",
+    "FieldQuery": "select orders1.o_id as o_id, orders1.o_carrier_id as o_carrier_id, orders1.o_entry_d as o_entry_d from orders1 where 1 != 1",
+    "Query": "select orders1.o_id as o_id, orders1.o_carrier_id as o_carrier_id, orders1.o_entry_d as o_entry_d from orders1 where orders1.o_w_id = 9894 and orders1.o_d_id = 3 and orders1.o_c_id = 159 order by orders1.o_id desc",
     "Table": "orders1",
     "Values": [
       "INT64(9894)"
@@ -1044,8 +1044,8 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": true
     },
-    "FieldQuery": "select ol_i_id, ol_supply_w_id, ol_quantity, ol_amount, ol_delivery_d from order_line1 where 1 != 1",
-    "Query": "select ol_i_id, ol_supply_w_id, ol_quantity, ol_amount, ol_delivery_d from order_line1 where ol_w_id = 92 and ol_d_id = 5 and ol_o_id = 1",
+    "FieldQuery": "select order_line1.ol_i_id as ol_i_id, order_line1.ol_supply_w_id as ol_supply_w_id, order_line1.ol_quantity as ol_quantity, order_line1.ol_amount as ol_amount, order_line1.ol_delivery_d as ol_delivery_d from order_line1 where 1 != 1",
+    "Query": "select order_line1.ol_i_id as ol_i_id, order_line1.ol_supply_w_id as ol_supply_w_id, order_line1.ol_quantity as ol_quantity, order_line1.ol_amount as ol_amount, order_line1.ol_delivery_d as ol_delivery_d from order_line1 where order_line1.ol_w_id = 92 and order_line1.ol_d_id = 5 and order_line1.ol_o_id = 1",
     "Table": "order_line1",
     "Values": [
       "INT64(92)"
@@ -1088,8 +1088,8 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": true
     },
-    "FieldQuery": "select no_o_id from new_orders1 where 1 != 1",
-    "Query": "select no_o_id from new_orders1 where no_d_id = 689 and no_w_id = 15 order by no_o_id asc limit 1 for update",
+    "FieldQuery": "select new_orders1.no_o_id as no_o_id from new_orders1 where 1 != 1",
+    "Query": "select new_orders1.no_o_id as no_o_id from new_orders1 where new_orders1.no_d_id = 689 and new_orders1.no_w_id = 15 order by new_orders1.no_o_id asc limit 1 for update",
     "Table": "new_orders1",
     "Values": [
       "INT64(15)"
@@ -1159,8 +1159,8 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": true
     },
-    "FieldQuery": "select o_c_id from orders1 where 1 != 1",
-    "Query": "select o_c_id from orders1 where o_id = 6 and o_d_id = 1983 and o_w_id = 894605",
+    "FieldQuery": "select orders1.o_c_id as o_c_id from orders1 where 1 != 1",
+    "Query": "select orders1.o_c_id as o_c_id from orders1 where orders1.o_id = 6 and orders1.o_d_id = 1983 and orders1.o_w_id = 894605",
     "Table": "orders1",
     "Values": [
       "INT64(894605)"
@@ -1209,7 +1209,7 @@ Gen4 plan same as above
     },
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
-    "Query": "update orders1 set o_carrier_id = 9 where o_id = 56 and o_d_id = 98 and o_w_id = 897",
+    "Query": "update orders1 set orders1.o_carrier_id = 9 where orders1.o_id = 56 and orders1.o_d_id = 98 and orders1.o_w_id = 897",
     "Table": "orders1",
     "Values": [
       "INT64(897)"
@@ -1258,7 +1258,7 @@ Gen4 plan same as above
     },
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
-    "Query": "update order_line1 set ol_delivery_d = now() where ol_o_id = 235 and ol_d_id = 315 and ol_w_id = 8",
+    "Query": "update order_line1 set order_line1.ol_delivery_d = now() where order_line1.ol_o_id = 235 and order_line1.ol_d_id = 315 and order_line1.ol_w_id = 8",
     "Table": "order_line1",
     "Values": [
       "INT64(8)"
@@ -1301,8 +1301,8 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": true
     },
-    "FieldQuery": "select sum(ol_amount) as sm from order_line1 where 1 != 1",
-    "Query": "select sum(ol_amount) as sm from order_line1 where ol_o_id = 680 and ol_d_id = 201 and ol_w_id = 87",
+    "FieldQuery": "select sum(order_line1.ol_amount) as sm from order_line1 where 1 != 1",
+    "Query": "select sum(order_line1.ol_amount) as sm from order_line1 where order_line1.ol_o_id = 680 and order_line1.ol_d_id = 201 and order_line1.ol_w_id = 87",
     "Table": "order_line1",
     "Values": [
       "INT64(87)"
@@ -1351,7 +1351,7 @@ Gen4 plan same as above
     },
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
-    "Query": "update customer1 set c_balance = c_balance + 988.01, c_delivery_cnt = c_delivery_cnt + 1 where c_id = 6 and c_d_id = 5 and c_w_id = 160",
+    "Query": "update customer1 set customer1.c_balance = customer1.c_balance + 988.01, customer1.c_delivery_cnt = customer1.c_delivery_cnt + 1 where customer1.c_id = 6 and customer1.c_d_id = 5 and customer1.c_w_id = 160",
     "Table": "customer1",
     "Values": [
       "INT64(160)"
@@ -1394,8 +1394,8 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": true
     },
-    "FieldQuery": "select d_next_o_id from district1 where 1 != 1",
-    "Query": "select d_next_o_id from district1 where d_id = 6 and d_w_id = 21",
+    "FieldQuery": "select district1.d_next_o_id as d_next_o_id from district1 where 1 != 1",
+    "Query": "select district1.d_next_o_id as d_next_o_id from district1 where district1.d_id = 6 and district1.d_w_id = 21",
     "Table": "district1",
     "Values": [
       "INT64(21)"
@@ -1483,8 +1483,8 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": true
     },
-    "FieldQuery": "select ol_i_id from order_line1 where 1 != 1",
-    "Query": "select distinct ol_i_id from order_line1 where ol_w_id = 1 and ol_d_id = 156 and ol_o_id \u003c 500 and ol_o_id \u003e= 56",
+    "FieldQuery": "select order_line1.ol_i_id as ol_i_id from order_line1 where 1 != 1",
+    "Query": "select distinct order_line1.ol_i_id as ol_i_id from order_line1 where order_line1.ol_w_id = 1 and order_line1.ol_d_id = 156 and order_line1.ol_o_id \u003c 500 and order_line1.ol_o_id \u003e= 56",
     "Table": "order_line1",
     "Values": [
       "INT64(1)"
@@ -1528,7 +1528,7 @@ Gen4 plan same as above
       "Sharded": true
     },
     "FieldQuery": "select count(*) from stock1 where 1 != 1",
-    "Query": "select count(*) from stock1 where s_w_id = 1 and s_i_id = 8 and s_quantity \u003c 1000",
+    "Query": "select count(*) from stock1 where stock1.s_w_id = 1 and stock1.s_i_id = 8 and stock1.s_quantity \u003c 1000",
     "Table": "stock1",
     "Values": [
       "INT64(1)"

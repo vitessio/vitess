@@ -25,8 +25,8 @@
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from `user` where 1 != 1",
-    "Query": "select id from `user`",
+    "FieldQuery": "select `user`.id as id from `user` where 1 != 1",
+    "Query": "select `user`.id as id from `user`",
     "Table": "`user`"
   },
   "TablesUsed": [
@@ -61,8 +61,8 @@
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from `user` where 1 != 1",
-    "Query": "select id from `user` where someColumn = null",
+    "FieldQuery": "select `user`.id as id from `user` where 1 != 1",
+    "Query": "select `user`.id as id from `user` where `user`.someColumn = null",
     "Table": "`user`"
   },
   "TablesUsed": [
@@ -97,8 +97,8 @@
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from `user` where 1 != 1",
-    "Query": "select id from `user` where someColumn \u003c=\u003e null",
+    "FieldQuery": "select `user`.id as id from `user` where 1 != 1",
+    "Query": "select `user`.id as id from `user` where `user`.someColumn \u003c=\u003e null",
     "Table": "`user`"
   },
   "TablesUsed": [
@@ -137,8 +137,8 @@
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from `user` where 1 != 1",
-    "Query": "select id from `user` where `user`.id = 5",
+    "FieldQuery": "select `user`.id as id from `user` where 1 != 1",
+    "Query": "select `user`.id as id from `user` where `user`.id = 5",
     "Table": "`user`",
     "Values": [
       "INT64(5)"
@@ -177,8 +177,8 @@
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from `user` where 1 != 1",
-    "Query": "select id from `user` where `user`.id = 5 + 5",
+    "FieldQuery": "select `user`.id as id from `user` where 1 != 1",
+    "Query": "select `user`.id as id from `user` where `user`.id = 5 + 5",
     "Table": "`user`",
     "Values": [
       "INT64(10)"
@@ -221,8 +221,8 @@
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from music where 1 != 1",
-    "Query": "select id from music where id = 5 and user_id = 4",
+    "FieldQuery": "select music.id as id from music where 1 != 1",
+    "Query": "select music.id as id from music where music.id = 5 and music.user_id = 4",
     "Table": "music",
     "Values": [
       "INT64(4)"
@@ -265,8 +265,8 @@
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from `user` where 1 != 1",
-    "Query": "select id from `user` where costly = 'aa' and `name` = 'bb'",
+    "FieldQuery": "select `user`.id as id from `user` where 1 != 1",
+    "Query": "select `user`.id as id from `user` where `user`.costly = 'aa' and `user`.`name` = 'bb'",
     "Table": "`user`",
     "Values": [
       "VARCHAR(\"bb\")"
@@ -309,8 +309,8 @@
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from `user` where 1 != 1",
-    "Query": "select id from `user` where costly in ('aa', 'bb') and `name` in ::__vals",
+    "FieldQuery": "select `user`.id as id from `user` where 1 != 1",
+    "Query": "select `user`.id as id from `user` where `user`.costly in ('aa', 'bb') and `user`.`name` in ::__vals",
     "Table": "`user`",
     "Values": [
       "(VARCHAR(\"aa\"), VARCHAR(\"bb\"))"
@@ -353,8 +353,8 @@
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from `user` where 1 != 1",
-    "Query": "select id from `user` where (`name`, col) in (('aa', 'bb'), ('cc', 'dd'))",
+    "FieldQuery": "select `user`.id as id from `user` where 1 != 1",
+    "Query": "select `user`.id as id from `user` where (`user`.`name`, `user`.col) in (('aa', 'bb'), ('cc', 'dd'))",
     "Table": "`user`",
     "Values": [
       "(VARCHAR(\"aa\"), VARCHAR(\"cc\"))"
@@ -397,8 +397,8 @@
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from `user` where 1 != 1",
-    "Query": "select id from `user` where (col, `name`) in (('aa', 'bb'), ('cc', 'dd'))",
+    "FieldQuery": "select `user`.id as id from `user` where 1 != 1",
+    "Query": "select `user`.id as id from `user` where (`user`.col, `user`.`name`) in (('aa', 'bb'), ('cc', 'dd'))",
     "Table": "`user`",
     "Values": [
       "(VARCHAR(\"bb\"), VARCHAR(\"dd\"))"
@@ -441,8 +441,8 @@
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from `user` where 1 != 1",
-    "Query": "select id from `user` where (costly, `name`) in (('aa', 'bb'), ('cc', 'dd'))",
+    "FieldQuery": "select `user`.id as id from `user` where 1 != 1",
+    "Query": "select `user`.id as id from `user` where (`user`.costly, `user`.`name`) in (('aa', 'bb'), ('cc', 'dd'))",
     "Table": "`user`",
     "Values": [
       "(VARCHAR(\"bb\"), VARCHAR(\"dd\"))"
@@ -485,8 +485,8 @@
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from `user` where 1 != 1",
-    "Query": "select id from `user` where (`name`, costly) in (('aa', 'bb'), ('cc', 'dd'))",
+    "FieldQuery": "select `user`.id as id from `user` where 1 != 1",
+    "Query": "select `user`.id as id from `user` where (`user`.`name`, `user`.costly) in (('aa', 'bb'), ('cc', 'dd'))",
     "Table": "`user`",
     "Values": [
       "(VARCHAR(\"aa\"), VARCHAR(\"cc\"))"
@@ -529,8 +529,8 @@
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from `user` where 1 != 1",
-    "Query": "select id from `user` where (col, costly) in (('aa', 'bb')) and (col, `name`) in (('cc', 'dd'))",
+    "FieldQuery": "select `user`.id as id from `user` where 1 != 1",
+    "Query": "select `user`.id as id from `user` where (`user`.col, `user`.costly) in (('aa', 'bb')) and (`user`.col, `user`.`name`) in (('cc', 'dd'))",
     "Table": "`user`",
     "Values": [
       "(VARCHAR(\"dd\"))"
@@ -573,8 +573,8 @@
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from `user` where 1 != 1",
-    "Query": "select id from `user` where (col, `name`) in (('aa', 'bb')) and id = 5",
+    "FieldQuery": "select `user`.id as id from `user` where 1 != 1",
+    "Query": "select `user`.id as id from `user` where (`user`.col, `user`.`name`) in (('aa', 'bb')) and `user`.id = 5",
     "Table": "`user`",
     "Values": [
       "INT64(5)"
@@ -617,8 +617,8 @@
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from `user` where 1 != 1",
-    "Query": "select id from `user` where (costly, `name`) in (('aa', 'bb'), ('cc', 'dd'))",
+    "FieldQuery": "select `user`.id as id from `user` where 1 != 1",
+    "Query": "select `user`.id as id from `user` where (`user`.costly, `user`.`name`) in (('aa', 'bb'), ('cc', 'dd'))",
     "Table": "`user`",
     "Values": [
       "(VARCHAR(\"bb\"), VARCHAR(\"dd\"))"
@@ -661,8 +661,8 @@
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from `user` where 1 != 1",
-    "Query": "select id from `user` where ((col1, `name`), col2) in ((('aa', 'bb'), 'cc'), (('dd', 'ee'), 'ff'))",
+    "FieldQuery": "select `user`.id as id from `user` where 1 != 1",
+    "Query": "select `user`.id as id from `user` where ((`user`.col1, `user`.`name`), `user`.col2) in ((('aa', 'bb'), 'cc'), (('dd', 'ee'), 'ff'))",
     "Table": "`user`",
     "Values": [
       "(VARCHAR(\"bb\"), VARCHAR(\"ee\"))"
@@ -705,8 +705,8 @@
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from `user` where 1 != 1",
-    "Query": "select id from `user` where (`name`, (col1, col2)) in (('aa', ('bb', 'cc')), ('dd', ('ee', 'ff')))",
+    "FieldQuery": "select `user`.id as id from `user` where 1 != 1",
+    "Query": "select `user`.id as id from `user` where (`user`.`name`, (`user`.col1, `user`.col2)) in (('aa', ('bb', 'cc')), ('dd', ('ee', 'ff')))",
     "Table": "`user`",
     "Values": [
       "(VARCHAR(\"aa\"), VARCHAR(\"dd\"))"
@@ -745,8 +745,8 @@
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from `user` where 1 != 1",
-    "Query": "select id from `user` where ((col1, `name`), col2) in (('aa', 'bb', 'cc'), (('dd', 'ee'), 'ff'))",
+    "FieldQuery": "select `user`.id as id from `user` where 1 != 1",
+    "Query": "select `user`.id as id from `user` where ((`user`.col1, `user`.`name`), `user`.col2) in (('aa', 'bb', 'cc'), (('dd', 'ee'), 'ff'))",
     "Table": "`user`"
   },
   "TablesUsed": [
@@ -781,8 +781,8 @@
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from `user` where 1 != 1",
-    "Query": "select id from `user` where (col1, `name`) in (select * from music where music.user_id = `user`.id)",
+    "FieldQuery": "select `user`.id as id from `user` where 1 != 1",
+    "Query": "select `user`.id as id from `user` where (`user`.col1, `user`.`name`) in (select * from music where music.user_id = `user`.id)",
     "Table": "`user`"
   },
   "TablesUsed": [
@@ -818,8 +818,8 @@
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from `user` where 1 != 1",
-    "Query": "select id from `user` where (col1, `name`) in (('aa', 1 + 1))",
+    "FieldQuery": "select `user`.id as id from `user` where 1 != 1",
+    "Query": "select `user`.id as id from `user` where (`user`.col1, `user`.`name`) in (('aa', 1 + 1))",
     "Table": "`user`",
     "Values": [
       "(INT64(2))"
@@ -858,8 +858,8 @@
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select Id from `user` where 1 != 1",
-    "Query": "select Id from `user` where 1 in ('aa', 'bb')",
+    "FieldQuery": "select `user`.Id as Id from `user` where 1 != 1",
+    "Query": "select `user`.Id as Id from `user` where 1 in ('aa', 'bb')",
     "Table": "`user`"
   },
   "TablesUsed": [
@@ -894,8 +894,8 @@
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from `user` where 1 != 1",
-    "Query": "select id from `user` where `name` in (col, 'bb')",
+    "FieldQuery": "select `user`.id as id from `user` where 1 != 1",
+    "Query": "select `user`.id as id from `user` where `user`.`name` in (`user`.col, 'bb')",
     "Table": "`user`"
   },
   "TablesUsed": [
@@ -934,8 +934,8 @@
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from `user` where 1 != 1",
-    "Query": "select id from `user` where `name` = :a",
+    "FieldQuery": "select `user`.id as id from `user` where 1 != 1",
+    "Query": "select `user`.id as id from `user` where `user`.`name` = :a",
     "Table": "`user`",
     "Values": [
       ":a"
@@ -978,8 +978,8 @@
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from `user` where 1 != 1",
-    "Query": "select id from `user` where `name` = 18446744073709551615",
+    "FieldQuery": "select `user`.id as id from `user` where 1 != 1",
+    "Query": "select `user`.id as id from `user` where `user`.`name` = 18446744073709551615",
     "Table": "`user`",
     "Values": [
       "UINT64(18446744073709551615)"
@@ -1022,8 +1022,8 @@
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from `user` where 1 != 1",
-    "Query": "select id from `user` where `name` in ::__vals",
+    "FieldQuery": "select `user`.id as id from `user` where 1 != 1",
+    "Query": "select `user`.id as id from `user` where `user`.`name` in ::__vals",
     "Table": "`user`",
     "Values": [
       ":list"
@@ -1540,8 +1540,8 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from `user` where 1 != 1",
-    "Query": "select id from `user` where `user`.col = 5 and `user`.id in ::__vals",
+    "FieldQuery": "select `user`.id as id from `user` where 1 != 1",
+    "Query": "select `user`.id as id from `user` where `user`.col = 5 and `user`.id in ::__vals",
     "Table": "`user`",
     "Values": [
       "(INT64(1), INT64(2))"
@@ -1584,8 +1584,8 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from `user` where 1 != 1",
-    "Query": "select id from `user` where `user`.col = case `user`.col when 'foo' then true else false end and `user`.id in ::__vals",
+    "FieldQuery": "select `user`.id as id from `user` where 1 != 1",
+    "Query": "select `user`.id as id from `user` where `user`.col = case `user`.col when 'foo' then true else false end and `user`.id in ::__vals",
     "Table": "`user`",
     "Values": [
       "(INT64(1), INT64(2))"
@@ -1628,8 +1628,8 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id or col as val from `user` where 1 != 1",
-    "Query": "select id or col as val from `user` where `user`.col = 5 and `user`.id in (1, 2) and `user`.`name` = 'aa'",
+    "FieldQuery": "select `user`.id or `user`.col as val from `user` where 1 != 1",
+    "Query": "select `user`.id or `user`.col as val from `user` where `user`.col = 5 and `user`.id in (1, 2) and `user`.`name` = 'aa'",
     "Table": "`user`",
     "Values": [
       "VARCHAR(\"aa\")"
@@ -1672,8 +1672,8 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from `user` where 1 != 1",
-    "Query": "select id from `user` where `user`.col = false and `user`.id in (1, 2) and `user`.`name` = 'aa'",
+    "FieldQuery": "select `user`.id as id from `user` where 1 != 1",
+    "Query": "select `user`.id as id from `user` where `user`.col = false and `user`.id in (1, 2) and `user`.`name` = 'aa'",
     "Table": "`user`",
     "Values": [
       "VARCHAR(\"aa\")"
@@ -1716,8 +1716,8 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from `user` where 1 != 1",
-    "Query": "select id from `user` where `user`.col = 5 and `user`.id in (1, 2) and `user`.`name` = 'aa' and `user`.id = 1",
+    "FieldQuery": "select `user`.id as id from `user` where 1 != 1",
+    "Query": "select `user`.id as id from `user` where `user`.col = 5 and `user`.id in (1, 2) and `user`.`name` = 'aa' and `user`.id = 1",
     "Table": "`user`",
     "Values": [
       "INT64(1)"
@@ -1760,8 +1760,8 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from `user` where 1 != 1",
-    "Query": "select id from `user` where `user`.id = 1 and `user`.`name` = 'aa' and `user`.id in (1, 2) and `user`.col = 5",
+    "FieldQuery": "select `user`.id as id from `user` where 1 != 1",
+    "Query": "select `user`.id as id from `user` where `user`.id = 1 and `user`.`name` = 'aa' and `user`.id in (1, 2) and `user`.col = 5",
     "Table": "`user`",
     "Values": [
       "INT64(1)"
@@ -1800,8 +1800,8 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from `user` where 1 != 1",
-    "Query": "select id from `user` where `user`.id = 1 or `user`.`name` = 'aa' and `user`.id in (1, 2)",
+    "FieldQuery": "select `user`.id as id from `user` where 1 != 1",
+    "Query": "select `user`.id as id from `user` where `user`.id = 1 or `user`.`name` = 'aa' and `user`.id in (1, 2)",
     "Table": "`user`"
   },
   "TablesUsed": [
@@ -1925,8 +1925,8 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select col from `user` as route1 where 1 != 1",
-    "Query": "select col from `user` as route1 where id = 1",
+    "FieldQuery": "select route1.col as col from `user` as route1 where 1 != 1",
+    "Query": "select route1.col as col from `user` as route1 where route1.id = 1",
     "Table": "`user`",
     "Values": [
       "INT64(1)"
@@ -2012,7 +2012,7 @@ Gen4 plan same as above
           "Sharded": true
         },
         "FieldQuery": "select u.m from `user` as u where 1 != 1",
-        "Query": "select u.m from `user` as u where u.id in (select m2 from `user` where `user`.id = u.id and `user`.col = :user_extra_col) and u.id in ::__vals",
+        "Query": "select u.m from `user` as u where u.id in (select `user`.m2 as m2 from `user` where `user`.id = u.id and `user`.col = :user_extra_col) and u.id in ::__vals",
         "Table": "`user`",
         "Values": [
           "(:user_extra_col, INT64(1))"
@@ -2101,7 +2101,7 @@ Gen4 plan same as above
           "Sharded": true
         },
         "FieldQuery": "select u.m from `user` as u where 1 != 1",
-        "Query": "select u.m from `user` as u where u.id in (select m2 from `user` where `user`.id = u.id) and u.id in ::__vals",
+        "Query": "select u.m from `user` as u where u.id in (select `user`.m2 as m2 from `user` where `user`.id = u.id) and u.id in ::__vals",
         "Table": "`user`",
         "Values": [
           "(:user_extra_col, INT64(1))"
@@ -2184,7 +2184,7 @@ Gen4 plan same as above
           "Sharded": true
         },
         "FieldQuery": "select u.m from `user` as u where 1 != 1",
-        "Query": "select u.m from `user` as u where u.id in (select m2 from `user` where `user`.id = 5) and u.id = 5",
+        "Query": "select u.m from `user` as u where u.id in (select `user`.m2 as m2 from `user` where `user`.id = 5) and u.id = 5",
         "Table": "`user`",
         "Values": [
           "INT64(5)"
@@ -2273,7 +2273,7 @@ Gen4 plan same as above
           "Sharded": true
         },
         "FieldQuery": "select u.m from `user` as u where 1 != 1",
-        "Query": "select u.m from `user` as u where u.id in (select m2 from `user` where `user`.id = u.id and `user`.col = :user_extra_col and `user`.id in (select m3 from user_extra where user_extra.user_id = `user`.id)) and u.id in ::__vals",
+        "Query": "select u.m from `user` as u where u.id in (select `user`.m2 as m2 from `user` where `user`.id = u.id and `user`.col = :user_extra_col and `user`.id in (select user_extra.m3 as m3 from user_extra where user_extra.user_id = `user`.id)) and u.id in ::__vals",
         "Table": "`user`",
         "Values": [
           "(:user_extra_col, INT64(1))"
@@ -2315,8 +2315,8 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from `user` where 1 != 1",
-    "Query": "select id from `user` where `user`.col in (select user_extra.col from user_extra where user_extra.user_id = `user`.id)",
+    "FieldQuery": "select `user`.id as id from `user` where 1 != 1",
+    "Query": "select `user`.id as id from `user` where `user`.col in (select user_extra.col from user_extra where user_extra.user_id = `user`.id)",
     "Table": "`user`"
   },
   "TablesUsed": [
@@ -2356,8 +2356,8 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from `user` where 1 != 1",
-    "Query": "select id from `user` where id = 5 and `user`.col in (select user_extra.col from user_extra where user_extra.user_id = 5)",
+    "FieldQuery": "select `user`.id as id from `user` where 1 != 1",
+    "Query": "select `user`.id as id from `user` where `user`.id = 5 and `user`.col in (select user_extra.col from user_extra where user_extra.user_id = 5)",
     "Table": "`user`",
     "Values": [
       "INT64(5)"
@@ -2401,8 +2401,8 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from `user` where 1 != 1",
-    "Query": "select id from `user` where id = 'aa' and `user`.col in (select user_extra.col from user_extra where user_extra.user_id = 'aa')",
+    "FieldQuery": "select `user`.id as id from `user` where 1 != 1",
+    "Query": "select `user`.id as id from `user` where `user`.id = 'aa' and `user`.col in (select user_extra.col from user_extra where user_extra.user_id = 'aa')",
     "Table": "`user`",
     "Values": [
       "VARCHAR(\"aa\")"
@@ -2446,8 +2446,8 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from `user` where 1 != 1",
-    "Query": "select id from `user` where id = :a and `user`.col in (select user_extra.col from user_extra where user_extra.user_id = :a)",
+    "FieldQuery": "select `user`.id as id from `user` where 1 != 1",
+    "Query": "select `user`.id as id from `user` where `user`.id = :a and `user`.col in (select user_extra.col from user_extra where user_extra.user_id = :a)",
     "Table": "`user`",
     "Values": [
       ":a"
@@ -2492,8 +2492,8 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id2 from `user` as uu where 1 != 1",
-    "Query": "select id2 from `user` as uu where id in (select id from `user` where id = uu.id and `user`.col in (select user_extra.col from user_extra where user_extra.user_id = uu.id))",
+    "FieldQuery": "select uu.id2 as id2 from `user` as uu where 1 != 1",
+    "Query": "select uu.id2 as id2 from `user` as uu where uu.id in (select `user`.id as id from `user` where `user`.id = uu.id and `user`.col in (select user_extra.col from user_extra where user_extra.user_id = uu.id))",
     "Table": "`user`"
   },
   "TablesUsed": [
@@ -2563,8 +2563,8 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col from `user` where 1 != 1",
-        "Query": "select col from `user`",
+        "FieldQuery": "select `user`.col as col from `user` where 1 != 1",
+        "Query": "select `user`.col as col from `user`",
         "Table": "`user`"
       },
       {
@@ -2574,8 +2574,8 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select id from `user` where 1 != 1",
-        "Query": "select id from `user` where :__sq_has_values1 = 1 and id in ::__vals",
+        "FieldQuery": "select `user`.id as id from `user` where 1 != 1",
+        "Query": "select `user`.id as id from `user` where :__sq_has_values1 = 1 and `user`.id in ::__vals",
         "Table": "`user`",
         "Values": [
           ":__sq1"
@@ -2645,8 +2645,8 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col from `user` where 1 != 1",
-        "Query": "select col from `user`",
+        "FieldQuery": "select `user`.col as col from `user` where 1 != 1",
+        "Query": "select `user`.col as col from `user`",
         "Table": "`user`"
       },
       {
@@ -2656,8 +2656,8 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select id from `user` where 1 != 1",
-        "Query": "select id from `user` where :__sq_has_values1 = 0 or id not in ::__sq1",
+        "FieldQuery": "select `user`.id as id from `user` where 1 != 1",
+        "Query": "select `user`.id as id from `user` where :__sq_has_values1 = 0 or `user`.id not in ::__sq1",
         "Table": "`user`"
       }
     ]
@@ -2745,8 +2745,8 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select id from `user` where 1 != 1",
-        "Query": "select id from `user` where :__sq_has_values1",
+        "FieldQuery": "select `user`.id as id from `user` where 1 != 1",
+        "Query": "select `user`.id as id from `user` where :__sq_has_values1",
         "Table": "`user`"
       }
     ]
@@ -2816,8 +2816,8 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col from `user` where 1 != 1",
-        "Query": "select col from `user`",
+        "FieldQuery": "select `user`.col as col from `user` where 1 != 1",
+        "Query": "select `user`.col as col from `user`",
         "Table": "`user`"
       },
       {
@@ -2827,8 +2827,8 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select id from `user` where 1 != 1",
-        "Query": "select id from `user` where id = :__sq1",
+        "FieldQuery": "select `user`.id as id from `user` where 1 != 1",
+        "Query": "select `user`.id as id from `user` where `user`.id = :__sq1",
         "Table": "`user`",
         "Values": [
           ":__sq1"
@@ -2931,8 +2931,8 @@ Gen4 plan same as above
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select id3 from `user` where 1 != 1",
-            "Query": "select id3 from `user`",
+            "FieldQuery": "select `user`.id3 as id3 from `user` where 1 != 1",
+            "Query": "select `user`.id3 as id3 from `user`",
             "Table": "`user`"
           },
           {
@@ -2942,8 +2942,8 @@ Gen4 plan same as above
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select id2 from `user` where 1 != 1",
-            "Query": "select id2 from `user` where :__sq_has_values2 = 1 and id2 in ::__sq2",
+            "FieldQuery": "select `user`.id2 as id2 from `user` where 1 != 1",
+            "Query": "select `user`.id2 as id2 from `user` where :__sq_has_values2 = 1 and `user`.id2 in ::__sq2",
             "Table": "`user`"
           }
         ]
@@ -2955,8 +2955,8 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select id1 from `user` where 1 != 1",
-        "Query": "select id1 from `user` where id = :__sq1",
+        "FieldQuery": "select `user`.id1 as id1 from `user` where 1 != 1",
+        "Query": "select `user`.id1 as id1 from `user` where `user`.id = :__sq1",
         "Table": "`user`",
         "Values": [
           ":__sq1"
@@ -2997,8 +2997,8 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select col from `user` where 1 != 1",
-    "Query": "select col from `user` where id = (select id from `user` as route1 where route1.id = `user`.id)",
+    "FieldQuery": "select `user`.col as col from `user` where 1 != 1",
+    "Query": "select `user`.col as col from `user` where `user`.id = (select route1.id as id from `user` as route1 where route1.id = `user`.id)",
     "Table": "`user`"
   },
   "TablesUsed": [
@@ -3066,8 +3066,8 @@ Gen4 plan same as above
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "select id from unsharded as route2 where 1 != 1",
-        "Query": "select id from unsharded as route2",
+        "FieldQuery": "select route2.id as id from unsharded as route2 where 1 != 1",
+        "Query": "select route2.id as id from unsharded as route2",
         "Table": "unsharded"
       },
       {
@@ -3077,8 +3077,8 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col from `user` where 1 != 1",
-        "Query": "select col from `user` where id = :__sq1",
+        "FieldQuery": "select `user`.col as col from `user` where 1 != 1",
+        "Query": "select `user`.col as col from `user` where `user`.id = :__sq1",
         "Table": "`user`",
         "Values": [
           ":__sq1"
@@ -3165,8 +3165,8 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from `user` where 1 != 1",
-    "Query": "select id from `user` where database()",
+    "FieldQuery": "select `user`.id as id from `user` where 1 != 1",
+    "Query": "select `user`.id as id from `user` where database()",
     "Table": "`user`"
   },
   "TablesUsed": [
@@ -3201,8 +3201,8 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from music where 1 != 1",
-    "Query": "select id from music where id = null",
+    "FieldQuery": "select music.id as id from music where 1 != 1",
+    "Query": "select music.id as id from music where music.id = null",
     "Table": "music"
   },
   "TablesUsed": [
@@ -3237,8 +3237,8 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from music where 1 != 1",
-    "Query": "select id from music where id is null",
+    "FieldQuery": "select music.id as id from music where 1 != 1",
+    "Query": "select music.id as id from music where music.id is null",
     "Table": "music"
   },
   "TablesUsed": [
@@ -3273,8 +3273,8 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from music where 1 != 1",
-    "Query": "select id from music where id is not null",
+    "FieldQuery": "select music.id as id from music where 1 != 1",
+    "Query": "select music.id as id from music where music.id is not null",
     "Table": "music"
   },
   "TablesUsed": [
@@ -3309,8 +3309,8 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from music where 1 != 1",
-    "Query": "select id from music where user_id = 4 and id = null",
+    "FieldQuery": "select music.id as id from music where 1 != 1",
+    "Query": "select music.id as id from music where music.user_id = 4 and music.id = null",
     "Table": "music"
   },
   "TablesUsed": [
@@ -3345,8 +3345,8 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from music where 1 != 1",
-    "Query": "select id from music where user_id = 4 and id in (null)",
+    "FieldQuery": "select music.id as id from music where 1 != 1",
+    "Query": "select music.id as id from music where music.user_id = 4 and music.id in (null)",
     "Table": "music"
   },
   "TablesUsed": [
@@ -3385,8 +3385,8 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from music where 1 != 1",
-    "Query": "select id from music where user_id = 4 and id in (null, 1, 2)",
+    "FieldQuery": "select music.id as id from music where 1 != 1",
+    "Query": "select music.id as id from music where music.user_id = 4 and music.id in (null, 1, 2)",
     "Table": "music",
     "Values": [
       "INT64(4)"
@@ -3425,8 +3425,8 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from music where 1 != 1",
-    "Query": "select id from music where user_id = 4 and id not in (null, 1, 2)",
+    "FieldQuery": "select music.id as id from music where 1 != 1",
+    "Query": "select music.id as id from music where music.user_id = 4 and music.id not in (null, 1, 2)",
     "Table": "music"
   },
   "TablesUsed": [
@@ -3461,8 +3461,8 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from music where 1 != 1",
-    "Query": "select id from music where id not in (null, 1, 2) and user_id = 4",
+    "FieldQuery": "select music.id as id from music where 1 != 1",
+    "Query": "select music.id as id from music where music.id not in (null, 1, 2) and music.user_id = 4",
     "Table": "music"
   },
   "TablesUsed": [
@@ -3597,8 +3597,8 @@ Gen4 plan same as above
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user` where (:__sq_has_values1 = 0 or id not in ::__sq1) and (:__sq_has_values2 = 1 and id in ::__vals)",
+            "FieldQuery": "select `user`.id as id from `user` where 1 != 1",
+            "Query": "select `user`.id as id from `user` where (:__sq_has_values1 = 0 or `user`.id not in ::__sq1) and (:__sq_has_values2 = 1 and `user`.id in ::__vals)",
             "Table": "`user`",
             "Values": [
               ":__sq2"
@@ -3646,8 +3646,8 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select c2 from cfc_vindex_col where 1 != 1",
-    "Query": "select c2 from cfc_vindex_col where c1 like 'A%'",
+    "FieldQuery": "select cfc_vindex_col.c2 as c2 from cfc_vindex_col where 1 != 1",
+    "Query": "select cfc_vindex_col.c2 as c2 from cfc_vindex_col where cfc_vindex_col.c1 like 'A%'",
     "Table": "cfc_vindex_col",
     "Values": [
       "VARCHAR(\"A%\")"
@@ -3689,8 +3689,8 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select col from samecolvin where 1 != 1",
-    "Query": "select col from samecolvin where col = :col",
+    "FieldQuery": "select samecolvin.col as col from samecolvin where 1 != 1",
+    "Query": "select samecolvin.col as col from samecolvin where samecolvin.col = :col",
     "Table": "samecolvin",
     "Values": [
       ":col"
@@ -3729,8 +3729,8 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from `user` where 1 != 1",
-    "Query": "select id from `user` where `user`.id \u003e 5",
+    "FieldQuery": "select `user`.id as id from `user` where 1 != 1",
+    "Query": "select `user`.id as id from `user` where `user`.id \u003e 5",
     "Table": "`user`"
   },
   "TablesUsed": [
@@ -3835,8 +3835,8 @@ Gen4 plan same as above
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "select col from unsharded where 1 != 1",
-        "Query": "select col from unsharded where col = id",
+        "FieldQuery": "select unsharded.col as col from unsharded where 1 != 1",
+        "Query": "select unsharded.col as col from unsharded where unsharded.col = unsharded.id",
         "Table": "unsharded"
       },
       {
@@ -3846,8 +3846,8 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select id from `user` where 1 != 1",
-        "Query": "select id from `user` where :__sq_has_values1 = 1 and id in ::__vals",
+        "FieldQuery": "select `user`.id as id from `user` where 1 != 1",
+        "Query": "select `user`.id as id from `user` where :__sq_has_values1 = 1 and `user`.id in ::__vals",
         "Table": "`user`",
         "Values": [
           ":__sq1"
@@ -4255,8 +4255,8 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select id from `user` where 1 != 1",
-        "Query": "select id from `user` where id = 5 and id not in (select user_extra.col from user_extra where user_extra.user_id = 5) and (:__sq_has_values2 = 1 and id in ::__sq2)",
+        "FieldQuery": "select `user`.id as id from `user` where 1 != 1",
+        "Query": "select `user`.id as id from `user` where `user`.id = 5 and `user`.id not in (select user_extra.col from user_extra where user_extra.user_id = 5) and (:__sq_has_values2 = 1 and `user`.id in ::__sq2)",
         "Table": "`user`",
         "Values": [
           "INT64(5)"
@@ -4350,8 +4350,8 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select id from `user` where 1 != 1",
-        "Query": "select id from `user` where id = 5 and (:__sq_has_values1 = 0 or id not in ::__sq1) and id in (select user_extra.col from user_extra where user_extra.user_id = 5)",
+        "FieldQuery": "select `user`.id as id from `user` where 1 != 1",
+        "Query": "select `user`.id as id from `user` where `user`.id = 5 and (:__sq_has_values1 = 0 or `user`.id not in ::__sq1) and `user`.id in (select user_extra.col from user_extra where user_extra.user_id = 5)",
         "Table": "`user`",
         "Values": [
           "INT64(5)"
@@ -4430,8 +4430,8 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from `user` where 1 != 1",
-    "Query": "select id from `user` where `user`.id = `user`.col and `user`.col = 5",
+    "FieldQuery": "select `user`.id as id from `user` where 1 != 1",
+    "Query": "select `user`.id as id from `user` where `user`.id = `user`.col and `user`.col = 5",
     "Table": "`user`",
     "Values": [
       "INT64(5)"
@@ -4492,8 +4492,8 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from `user`, user_extra where 1 != 1",
-    "Query": "select id from `user`, user_extra where user_extra.col = user_extra.user_id and `user`.id = user_extra.col",
+    "FieldQuery": "select `user`.id as id from `user`, user_extra where 1 != 1",
+    "Query": "select `user`.id as id from `user`, user_extra where user_extra.col = user_extra.user_id and `user`.id = user_extra.col",
     "Table": "`user`, user_extra"
   },
   "TablesUsed": [
@@ -4571,8 +4571,8 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select id from `user` where 1 != 1",
-        "Query": "select id from `user` where `user`.id = :user_extra_col",
+        "FieldQuery": "select `user`.id as id from `user` where 1 != 1",
+        "Query": "select `user`.id as id from `user` where `user`.id = :user_extra_col",
         "Table": "`user`",
         "Values": [
           ":user_extra_col"
@@ -4614,8 +4614,8 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select col from `user` where 1 != 1",
-    "Query": "select col from `user` where id = (select id from `user` as a where a.id = `user`.id)",
+    "FieldQuery": "select `user`.col as col from `user` where 1 != 1",
+    "Query": "select `user`.col as col from `user` where `user`.id = (select a.id as id from `user` as a where a.id = `user`.id)",
     "Table": "`user`"
   },
   "TablesUsed": [
@@ -4799,8 +4799,8 @@ Gen4 plan same as above
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select id from music where 1 != 1",
-            "Query": "select id from music where col2 = 'a'",
+            "FieldQuery": "select music.id as id from music where 1 != 1",
+            "Query": "select music.id as id from music where music.col2 = 'a'",
             "Table": "music"
           },
           {
@@ -4857,7 +4857,7 @@ Gen4 plan same as above
       "Sharded": true
     },
     "FieldQuery": "select * from multicolvin where 1 != 1",
-    "Query": "select * from multicolvin where column_b = 1",
+    "Query": "select * from multicolvin where multicolvin.column_b = 1",
     "Table": "multicolvin",
     "Values": [
       "INT64(1)"
@@ -4901,7 +4901,7 @@ Gen4 plan same as above
       "Sharded": true
     },
     "FieldQuery": "select * from multicolvin where 1 != 1",
-    "Query": "select * from multicolvin where column_b = 1 and column_c = 2",
+    "Query": "select * from multicolvin where multicolvin.column_b = 1 and multicolvin.column_c = 2",
     "Table": "multicolvin",
     "Values": [
       "INT64(1)"
@@ -4945,7 +4945,7 @@ Gen4 plan same as above
       "Sharded": true
     },
     "FieldQuery": "select * from multicolvin where 1 != 1",
-    "Query": "select * from multicolvin where column_b = 1 and column_c = 2 and column_a = 3",
+    "Query": "select * from multicolvin where multicolvin.column_b = 1 and multicolvin.column_c = 2 and multicolvin.column_a = 3",
     "Table": "multicolvin",
     "Values": [
       "INT64(1)"
@@ -4989,7 +4989,7 @@ Gen4 plan same as above
       "Sharded": true
     },
     "FieldQuery": "select * from multicolvin where 1 != 1",
-    "Query": "select * from multicolvin where column_a = 3 and column_b = 1",
+    "Query": "select * from multicolvin where multicolvin.column_a = 3 and multicolvin.column_b = 1",
     "Table": "multicolvin",
     "Values": [
       "INT64(1)"
@@ -5029,7 +5029,7 @@ Gen4 plan same as above
       "Sharded": true
     },
     "FieldQuery": "select * from multicol_tbl where 1 != 1",
-    "Query": "select * from multicol_tbl where cola = 1 and colb = 2",
+    "Query": "select * from multicol_tbl where multicol_tbl.cola = 1 and multicol_tbl.colb = 2",
     "Table": "multicol_tbl",
     "Values": [
       "INT64(1)",
@@ -5070,7 +5070,7 @@ Gen4 plan same as above
       "Sharded": true
     },
     "FieldQuery": "select * from multicol_tbl where 1 != 1",
-    "Query": "select * from multicol_tbl where colb = 2 and cola = 1",
+    "Query": "select * from multicol_tbl where multicol_tbl.colb = 2 and multicol_tbl.cola = 1",
     "Table": "multicol_tbl",
     "Values": [
       "INT64(1)",
@@ -5111,7 +5111,7 @@ Gen4 plan same as above
       "Sharded": true
     },
     "FieldQuery": "select * from multicol_tbl where 1 != 1",
-    "Query": "select * from multicol_tbl where cola in ::__vals0 and colb in ::__vals1",
+    "Query": "select * from multicol_tbl where multicol_tbl.cola in ::__vals0 and multicol_tbl.colb in ::__vals1",
     "Table": "multicol_tbl",
     "Values": [
       "(INT64(1), INT64(2))",
@@ -5152,7 +5152,7 @@ Gen4 plan same as above
       "Sharded": true
     },
     "FieldQuery": "select * from multicol_tbl where 1 != 1",
-    "Query": "select * from multicol_tbl where colb in ::__vals1 and cola in ::__vals0",
+    "Query": "select * from multicol_tbl where multicol_tbl.colb in ::__vals1 and multicol_tbl.cola in ::__vals0",
     "Table": "multicol_tbl",
     "Values": [
       "(INT64(1), INT64(2))",
@@ -5193,7 +5193,7 @@ Gen4 plan same as above
       "Sharded": true
     },
     "FieldQuery": "select * from multicol_tbl where 1 != 1",
-    "Query": "select * from multicol_tbl where colb = 1 and cola in ::__vals0",
+    "Query": "select * from multicol_tbl where multicol_tbl.colb = 1 and multicol_tbl.cola in ::__vals0",
     "Table": "multicol_tbl",
     "Values": [
       "(INT64(3), INT64(4))",
@@ -5234,7 +5234,7 @@ Gen4 plan same as above
       "Sharded": true
     },
     "FieldQuery": "select * from multicol_tbl where 1 != 1",
-    "Query": "select * from multicol_tbl where cola in (1, 10) and cola = 4 and colb in (5, 6) and colb = 7",
+    "Query": "select * from multicol_tbl where multicol_tbl.cola in (1, 10) and multicol_tbl.cola = 4 and multicol_tbl.colb in (5, 6) and multicol_tbl.colb = 7",
     "Table": "multicol_tbl",
     "Values": [
       "INT64(4)",
@@ -5275,7 +5275,7 @@ Gen4 plan same as above
       "Sharded": true
     },
     "FieldQuery": "select * from multicol_tbl where 1 != 1",
-    "Query": "select * from multicol_tbl where colb = 4 and colb in ::__vals1 and cola in ::__vals0",
+    "Query": "select * from multicol_tbl where multicol_tbl.colb = 4 and multicol_tbl.colb in ::__vals1 and multicol_tbl.cola in ::__vals0",
     "Table": "multicol_tbl",
     "Values": [
       "(INT64(5), INT64(6))",
@@ -5316,7 +5316,7 @@ Gen4 plan same as above
       "Sharded": true
     },
     "FieldQuery": "select * from multicol_tbl where 1 != 1",
-    "Query": "select * from multicol_tbl where colb in (1, 10) and colb = 4 and cola in ::__vals0",
+    "Query": "select * from multicol_tbl where multicol_tbl.colb in (1, 10) and multicol_tbl.colb = 4 and multicol_tbl.cola in ::__vals0",
     "Table": "multicol_tbl",
     "Values": [
       "(INT64(5), INT64(6))",
@@ -5357,7 +5357,7 @@ Gen4 plan same as above
       "Sharded": true
     },
     "FieldQuery": "select * from multicol_tbl where 1 != 1",
-    "Query": "select * from multicol_tbl where colb in (1, 2) and cola in (3, 4) and cola = 5 and colb = 6",
+    "Query": "select * from multicol_tbl where multicol_tbl.colb in (1, 2) and multicol_tbl.cola in (3, 4) and multicol_tbl.cola = 5 and multicol_tbl.colb = 6",
     "Table": "multicol_tbl",
     "Values": [
       "INT64(5)",
@@ -5398,7 +5398,7 @@ Gen4 plan same as above
       "Sharded": true
     },
     "FieldQuery": "select * from multicol_tbl where 1 != 1",
-    "Query": "select * from multicol_tbl where (cola, colb) in ((1, 2), (3, 4))",
+    "Query": "select * from multicol_tbl where (multicol_tbl.cola, multicol_tbl.colb) in ((1, 2), (3, 4))",
     "Table": "multicol_tbl",
     "Values": [
       "(INT64(1), INT64(3))",
@@ -5439,7 +5439,7 @@ Gen4 plan same as above
       "Sharded": true
     },
     "FieldQuery": "select * from multicol_tbl where 1 != 1",
-    "Query": "select * from multicol_tbl where cola = 1",
+    "Query": "select * from multicol_tbl where multicol_tbl.cola = 1",
     "Table": "multicol_tbl",
     "Values": [
       "INT64(1)"
@@ -5479,7 +5479,7 @@ Gen4 plan same as above
       "Sharded": true
     },
     "FieldQuery": "select * from multicol_tbl where 1 != 1",
-    "Query": "select * from multicol_tbl where cola = 1 and colb in ::__vals1",
+    "Query": "select * from multicol_tbl where multicol_tbl.cola = 1 and multicol_tbl.colb in ::__vals1",
     "Table": "multicol_tbl",
     "Values": [
       "INT64(1)",
@@ -5565,8 +5565,8 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select col from `user` where 1 != 1",
-    "Query": "select col from `user` where id = 1 or id = 2",
+    "FieldQuery": "select `user`.col as col from `user` where 1 != 1",
+    "Query": "select `user`.col as col from `user` where `user`.id = 1 or `user`.id = 2",
     "Table": "`user`",
     "Values": [
       "(INT64(1), INT64(2))"
@@ -5605,8 +5605,8 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select col from `user` where 1 != 1",
-    "Query": "select col from `user` where id = 1 or id = 2 or id = 3",
+    "FieldQuery": "select `user`.col as col from `user` where 1 != 1",
+    "Query": "select `user`.col as col from `user` where `user`.id = 1 or `user`.id = 2 or `user`.id = 3",
     "Table": "`user`",
     "Values": [
       "(INT64(1), INT64(2), INT64(3))"
@@ -5645,8 +5645,8 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select col from `user` where 1 != 1",
-    "Query": "select col from `user` where id = 1 or id = 2 or (id = 3 or id = 4)",
+    "FieldQuery": "select `user`.col as col from `user` where 1 != 1",
+    "Query": "select `user`.col as col from `user` where `user`.id = 1 or `user`.id = 2 or (`user`.id = 3 or `user`.id = 4)",
     "Table": "`user`",
     "Values": [
       "(INT64(1), INT64(2), INT64(3), INT64(4))"
@@ -5689,8 +5689,8 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from music where 1 != 1",
-    "Query": "select id from music where id is null and user_id in ::__vals",
+    "FieldQuery": "select music.id as id from music where 1 != 1",
+    "Query": "select music.id as id from music where music.id is null and music.user_id in ::__vals",
     "Table": "music",
     "Values": [
       "(INT64(1), INT64(2))"

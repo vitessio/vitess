@@ -71,7 +71,7 @@ Gen4 error: cannot use column offsets in group statement when using `*`
 # complex group by expression
 "select a from user group by a+1"
 "unsupported: in scatter query: only simple references allowed"
-Gen4 error: unsupported: in scatter query: complex order by expression: a + 1
+Gen4 error: unsupported: in scatter query: complex order by expression: `user`.a + 1
 
 # Complex aggregate expression on scatter
 "select 1+count(*) from user"
@@ -81,17 +81,17 @@ Gen4 plan same as above
 # Multi-value aggregates not supported
 "select count(a,b) from user"
 "unsupported: only one expression allowed inside aggregates: count(a, b)"
-Gen4 error: aggregate functions take a single argument 'count(a, b)'
+Gen4 error: aggregate functions take a single argument 'count(`user`.a, `user`.b)'
 
 # scatter aggregate complex order by
 "select id from user group by id order by id+1"
 "unsupported: in scatter query: complex order by expression: id + 1"
-Gen4 plan same as above
+Gen4 error: unsupported: in scatter query: complex order by expression: `user`.id + 1
 
 # Scatter order by is complex with aggregates in select
 "select col, count(*) from user group by col order by col+1"
 "unsupported: in scatter query: complex order by expression: col + 1"
-Gen4 plan same as above
+Gen4 error: unsupported: in scatter query: complex order by expression: `user`.col + 1
 
 # Aggregate detection (group_concat)
 "select group_concat(user.a) from user join user_extra"
@@ -106,7 +106,7 @@ Gen4 error: unsupported: subqueries disallowed in GROUP BY
 # Order by uses cross-shard expression
 "select id from user order by id+1"
 "unsupported: in scatter query: complex order by expression: id + 1"
-Gen4 plan same as above
+Gen4 error: unsupported: in scatter query: complex order by expression: `user`.id + 1
 
 # Order by column number with collate
 "select user.col1 as a from user order by 1 collate utf8_general_ci"
@@ -166,7 +166,7 @@ Gen4 plan same as above
 # update with complex set clause
 "update music set id = id + 1 where id = 1"
 "unsupported: Only values are supported. Invalid update on column: `id` with expr: [id + 1]"
-Gen4 plan same as above
+Gen4 error: unsupported: Only values are supported. Invalid update on column: `id` with expr: [music.id + 1]
 
 # update by primary keyspace id, changing one vindex column, limit without order clause
 "update user_metadata set email = 'juan@vitess.io' where user_id = 1 limit 10"
@@ -266,7 +266,7 @@ Gen4 plan same as above
 "unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (not a comparison)"
 Gen4 plan same as above
 
-"select keyspace_id from user_index where id > 1"
+"select keyspace_id from user_index where id \u003e 1"
 "unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (not equality)"
 Gen4 plan same as above
 
@@ -425,7 +425,7 @@ Gen4 plan same as above
 # scatter aggregate with complex select list (can't build order by)
 "select distinct a+1 from user"
 "generating order by clause: cannot reference a complex expression"
-Gen4 error: unsupported: in scatter query: complex order by expression: a + 1
+Gen4 error: unsupported: in scatter query: complex order by expression: `user`.a + 1
 
 # aggregation on union
 "select sum(col) from (select col from user union all select col from unsharded) t"

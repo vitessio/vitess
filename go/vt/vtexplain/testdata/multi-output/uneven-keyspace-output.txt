@@ -10,7 +10,7 @@ select * from user
 ----------------------------------------------------------------------
 select * from user where id in (10, 17, 42, 100000)
 
-1 ks_sharded/-80: select * from `user` where id in (10, 17, 42) limit 10001
-1 ks_sharded/80-90: select * from `user` where id in (100000) limit 10001
+1 ks_sharded/-80: select * from `user` where `user`.id in (10, 17, 42) limit 10001
+1 ks_sharded/80-90: select * from `user` where `user`.id in (100000) limit 10001
 
 ----------------------------------------------------------------------

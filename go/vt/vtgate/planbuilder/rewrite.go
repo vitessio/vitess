@@ -17,6 +17,8 @@ limitations under the License.
 package planbuilder
 
 import (
+	"strings"
+
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -25,10 +27,11 @@ import (
 )
 
 type rewriter struct {
-	semTable     *semantics.SemTable
-	reservedVars *sqlparser.ReservedVars
-	inSubquery   int
-	err          error
+	semTable        *semantics.SemTable
+	reservedVars    *sqlparser.ReservedVars
+	inSubquery      int
+	err             error
+	skipTablePrefix bool
 }
 
 func queryRewrite(semTable *semantics.SemTable, reservedVars *sqlparser.ReservedVars, statement sqlparser.Statement) error {
@@ -40,10 +43,60 @@ func queryRewrite(semTable *semantics.SemTable, reservedVars *sqlparser.Reserved
 	return nil
 }
 
+func (r *rewriter) fixCol(node *sqlparser.ColName, f func(sqlparser.TableName)) {
+	if r.skipTablePrefix {
+		return
+	}
+	if !node.Qualifier.IsEmpty() {
+		return
+	}
+	if _, found := r.semTable.ColNameReferencingSelAlias[node]; found {
+		return
+	}
+	ts := r.semTable.Direct[node]
+	tableInfo, err := r.semTable.TableInfoFor(ts)
+	if err != nil {
+		return
+	}
+	name, err := tableInfo.Name()
+	if err != nil {
+		return
+	}
+	f(name)
+}
+
 func (r *rewriter) rewriteDown(cursor *sqlparser.Cursor) bool {
 	switch node := cursor.Node().(type) {
 	case *sqlparser.Select:
 		rewriteHavingClause(node)
+	case sqlparser.SelectExprs:
+		if _, ok := cursor.Parent().(*sqlparser.Select); !ok {
+			break
+		}
+		for _, expr := range node {
+			ae, ok := expr.(*sqlparser.AliasedExpr)
+			if !ok || !ae.As.IsEmpty() {
+				continue
+			}
+
+			// we do this even though we are not sure
+			if r.willBeRewritten(ae) {
+				buf := sqlparser.NewTrackedBuffer(nil)
+				ae.Expr.Format(buf)
+				ae.As = sqlparser.NewIdentifierCI(buf.String())
+			}
+		}
+	case sqlparser.GroupBy:
+		for i, expr := range node {
+			newExpr := rewriteGroupOrderByLiteral(r, expr)
+			node[i] = newExpr
+		}
+	case *sqlparser.Order:
+		node.Expr = rewriteGroupOrderByLiteral(r, node.Expr)
+	case *sqlparser.ColName:
+		r.fixCol(node, func(name sqlparser.TableName) {
+			node.Qualifier = name
+		})
 	case *sqlparser.ComparisonExpr:
 		err := rewriteInSubquery(cursor, r, node)
 		if err != nil {
@@ -58,9 +111,19 @@ func (r *rewriter) rewriteDown(cursor *sqlparser.Cursor) bool {
 	case *sqlparser.AliasedTableExpr:
 		// rewrite names of the routed tables for the subquery
 		// We only need to do this for non-derived tables and if they are in a subquery
-		if _, isDerived := node.Expr.(*sqlparser.DerivedTable); isDerived || r.inSubquery == 0 {
+		if _, isDerived := node.Expr.(*sqlparser.DerivedTable); isDerived {
+			r.skipTablePrefix = true
 			break
 		}
+		tableName := node.Expr.(sqlparser.TableName) // safe because we know it's not a derived table
+		switch strings.ToLower(tableName.Qualifier.String()) {
+		case "sys", "mysql", "information_schema":
+			r.skipTablePrefix = true
+		}
+		if r.inSubquery == 0 {
+			break
+		}
+
 		// find the tableSet and tableInfo that this table points to
 		// tableInfo should contain the information for the original table that the routed table points to
 		tableSet := r.semTable.TableSetFor(node)
@@ -74,11 +137,11 @@ func (r *rewriter) rewriteDown(cursor *sqlparser.Cursor) bool {
 		if vindexTable == nil {
 			break
 		}
-		tableName := node.Expr.(sqlparser.TableName)
 		// if the table name matches what the original is, then we do not need to rewrite
 		if sqlparser.EqualsIdentifierCS(vindexTable.Name, tableName.Name) {
 			break
 		}
+
 		// if there is no as clause, then move the routed table to the as clause.
 		// i.e
 		// routed as x -> original as x
@@ -96,6 +159,33 @@ func (r *rewriter) rewriteDown(cursor *sqlparser.Cursor) bool {
 		}
 	}
 	return true
+}
+
+func (r *rewriter) willBeRewritten(ae *sqlparser.AliasedExpr) bool {
+	var res bool
+	sqlparser.Rewrite(ae.Expr, nil, func(cursor *sqlparser.Cursor) bool {
+		switch n := cursor.Node().(type) {
+		case *sqlparser.ColName:
+			r.fixCol(n, func(_ sqlparser.TableName) {
+				res = true
+			})
+
+		}
+		// if we know we will rewrite, we can abort the whole tree walking now
+		return !res
+	})
+	return res
+}
+
+func rewriteGroupOrderByLiteral(r *rewriter, expr sqlparser.Expr) sqlparser.Expr {
+	originaExpr, found := r.semTable.LiteralRewrites[expr]
+	if !found {
+		return expr
+	}
+	newExpr := semantics.RealCloneOfColNames(originaExpr, false)
+	r.semTable.Direct[newExpr] = r.semTable.Direct[originaExpr]
+	r.semTable.Recursive[newExpr] = r.semTable.Recursive[originaExpr]
+	return newExpr
 }
 
 func (r *rewriter) rewriteUp(cursor *sqlparser.Cursor) bool {

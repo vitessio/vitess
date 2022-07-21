@@ -56,7 +56,7 @@ func newAnalyzer(dbName string, si SchemaInformation) *analyzer {
 
 	b := newBinder(s, a, a.tables, a.typer)
 	a.binder = b
-	a.rewriter = &earlyRewriter{scoper: s, binder: b}
+	a.rewriter = &earlyRewriter{scoper: s, binder: b, literalRewrites: map[sqlparser.Expr]sqlparser.Expr{}}
 	s.binder = b
 	return a
 }
@@ -85,19 +85,21 @@ func (a analyzer) newSemTable(statement sqlparser.Statement, coll collations.ID)
 	}
 
 	return &SemTable{
-		Recursive:         a.binder.recursive,
-		Direct:            a.binder.direct,
-		ExprTypes:         a.typer.exprTypes,
-		Tables:            a.tables.Tables,
-		selectScope:       a.scoper.rScope,
-		NotSingleRouteErr: a.projErr,
-		NotUnshardedErr:   a.unshardedErr,
-		Warning:           a.warning,
-		Comments:          comments,
-		SubqueryMap:       a.binder.subqueryMap,
-		SubqueryRef:       a.binder.subqueryRef,
-		ColumnEqualities:  map[columnName][]sqlparser.Expr{},
-		Collation:         coll,
+		Recursive:                  a.binder.recursive,
+		Direct:                     a.binder.direct,
+		ExprTypes:                  a.typer.exprTypes,
+		Tables:                     a.tables.Tables,
+		selectScope:                a.scoper.rScope,
+		NotSingleRouteErr:          a.projErr,
+		NotUnshardedErr:            a.unshardedErr,
+		Warning:                    a.warning,
+		Comments:                   comments,
+		SubqueryMap:                a.binder.subqueryMap,
+		SubqueryRef:                a.binder.subqueryRef,
+		ColumnEqualities:           map[columnName][]sqlparser.Expr{},
+		Collation:                  coll,
+		LiteralRewrites:            a.rewriter.literalRewrites,
+		ColNameReferencingSelAlias: a.scoper.colNameReferencingSelAlias,
 	}
 }
 

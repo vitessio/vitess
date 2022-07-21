@@ -29,6 +29,9 @@ type earlyRewriter struct {
 	scoper  *scoper
 	clause  string
 	warning string
+
+	// this is used to get back
+	literalRewrites map[sqlparser.Expr]sqlparser.Expr
 }
 
 func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
@@ -72,7 +75,7 @@ func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
 		r.clause = "group statement"
 
 	case *sqlparser.Literal:
-		newNode, err := r.rewriteOrderByExpr(node)
+		newNode, err := r.rewriteOrderAndGroupByExpr(node)
 		if err != nil {
 			return err
 		}
@@ -84,7 +87,7 @@ func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
 		if !ok {
 			return nil
 		}
-		newNode, err := r.rewriteOrderByExpr(lit)
+		newNode, err := r.rewriteOrderAndGroupByExpr(lit)
 		if err != nil {
 			return err
 		}
@@ -95,7 +98,7 @@ func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
 	return nil
 }
 
-func (r *earlyRewriter) rewriteOrderByExpr(node *sqlparser.Literal) (sqlparser.Expr, error) {
+func (r *earlyRewriter) rewriteOrderAndGroupByExpr(node *sqlparser.Literal) (sqlparser.Expr, error) {
 	currScope, found := r.scoper.specialExprScopes[node]
 	if !found {
 		return nil, nil
@@ -130,13 +133,14 @@ func (r *earlyRewriter) rewriteOrderByExpr(node *sqlparser.Literal) (sqlparser.E
 		return sqlparser.NewColName(aliasedExpr.As.String()), nil
 	}
 
-	expr := realCloneOfColNames(aliasedExpr.Expr, currScope.isUnion)
+	expr := RealCloneOfColNames(aliasedExpr.Expr, currScope.isUnion)
+	r.literalRewrites[expr] = aliasedExpr.Expr
 	return expr, nil
 }
 
-// realCloneOfColNames clones all the expressions including ColName.
+// RealCloneOfColNames clones all the expressions including ColName.
 // Since sqlparser.CloneRefOfColName does not clone col names, this method is needed.
-func realCloneOfColNames(expr sqlparser.Expr, union bool) sqlparser.Expr {
+func RealCloneOfColNames(expr sqlparser.Expr, union bool) sqlparser.Expr {
 	return sqlparser.Rewrite(sqlparser.CloneExpr(expr), func(cursor *sqlparser.Cursor) bool {
 		switch exp := cursor.Node().(type) {
 		case *sqlparser.ColName:

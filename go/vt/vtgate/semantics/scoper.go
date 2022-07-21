@@ -37,7 +37,8 @@ type (
 		binder *binder
 
 		// These scopes are only used for rewriting ORDER BY 1 and GROUP BY 1
-		specialExprScopes map[*sqlparser.Literal]*scope
+		specialExprScopes          map[*sqlparser.Literal]*scope
+		colNameReferencingSelAlias map[*sqlparser.ColName]bool
 	}
 
 	scope struct {
@@ -51,15 +52,36 @@ type (
 
 func newScoper() *scoper {
 	return &scoper{
-		rScope:            map[*sqlparser.Select]*scope{},
-		wScope:            map[*sqlparser.Select]*scope{},
-		specialExprScopes: map[*sqlparser.Literal]*scope{},
+		rScope:                     map[*sqlparser.Select]*scope{},
+		wScope:                     map[*sqlparser.Select]*scope{},
+		specialExprScopes:          map[*sqlparser.Literal]*scope{},
+		colNameReferencingSelAlias: map[*sqlparser.ColName]bool{},
 	}
 }
 
 func (s *scoper) down(cursor *sqlparser.Cursor) error {
 	node := cursor.Node()
 	switch node := node.(type) {
+	case *sqlparser.ColName:
+		if !node.Qualifier.IsEmpty() {
+			break
+		}
+		switch cursor.Parent().(type) {
+		case *sqlparser.Order:
+		case *sqlparser.GroupBy:
+		default:
+			break
+		}
+		stmt, isSelectStmt := s.currentScope().stmt.(sqlparser.SelectStatement)
+		if !isSelectStmt {
+			break
+		}
+		sel := sqlparser.GetFirstSelect(stmt)
+		for _, expr := range sel.SelectExprs {
+			if alias, isAliased := expr.(*sqlparser.AliasedExpr); isAliased && alias.As.Equal(node.Name) {
+				s.colNameReferencingSelAlias[node] = true
+			}
+		}
 	case *sqlparser.Update:
 		currScope := newScope(s.currentScope())
 		s.push(currScope)
