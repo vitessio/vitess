@@ -706,14 +706,22 @@ func runSingleConnection(ctx context.Context, t *testing.T, autoIncInsert bool, 
 			if sqlErr, ok := err.(*mysql.SQLError); ok {
 				switch sqlErr.Number() {
 				case mysql.ERLockDeadlock:
+					// That's fine. We create a lot of contention; some transactions will deadlock and
+					// rollback. It happens, and we can ignore those and keep on going.
 					err = nil
 				}
 			}
 		}
 		assert.Nil(t, err)
 		time.Sleep(singleConnectionSleepInterval)
+		// Most o fthe time, we want the load to be high, so as to create real stress and potentially
+		// expose bugs in vreplication (the objective of this test!).
+		// However, some platforms (GitHub CI) can suffocate from this load. We choose to keep the load
+		// high, when it runs, but then also take a periodic break and let the system recover.
+		// We prefer this over reducing the load in general. In our method here, we have full load 90% of
+		// the time, then relaxation 10% of the time.
 		periodicRest.Do(func() error {
-			time.Sleep(periodicSleepPercent * time.Second / 100)
+			time.Sleep(time.Second * periodicSleepPercent / 100)
 			return nil
 		})
 	}
