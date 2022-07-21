@@ -7,7 +7,7 @@ source build.env
 # used as part of the vtop test environment,
 # and places them in vitess/bin/.
 #
-# The upgrade test framework expects kind binary to be found in the PATH.
+# The vtop example test expects kind binary to be found in the PATH.
 
 mkdir -p "$VTROOT/bin"
 cd "$VTROOT/bin"
