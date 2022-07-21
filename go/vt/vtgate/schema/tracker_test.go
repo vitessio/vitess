@@ -157,6 +157,7 @@ func TestTracking(t *testing.T) {
 						}
 					}
 					if same == false {
+						results[0].Fields = d.result.Fields
 						results[0].Rows = append(results[0].Rows, deltaRow)
 					}
 				}

@@ -1806,6 +1806,7 @@ func TestSelectScatterOrderByVarChar(t *testing.T) {
 			Fields: []*querypb.Field{
 				{Name: "col1", Type: sqltypes.Int32},
 				{Name: "textcol", Type: sqltypes.VarChar},
+				{Name: "weight_string(textcol)", Type: sqltypes.VarBinary},
 			},
 			InsertID: 0,
 			Rows: [][]sqltypes.Value{{

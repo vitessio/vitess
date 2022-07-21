@@ -282,6 +282,7 @@ func TestMaxMemoryRows(t *testing.T) {
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	tworows := &sqltypes.Result{
+		Fields: sqltypes.MakeTestFields("i|j", "int64|int64"),
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt64(1),
 		}, {

@@ -1271,6 +1271,7 @@ func TestInsertGeneratorSharded(t *testing.T) {
 	executor, sbc, _, sbclookup := createExecutorEnv()
 
 	sbclookup.SetResults([]*sqltypes.Result{{
+		Fields: sqltypes.MakeTestFields("n", "int64"),
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt64(1),
 		}},
@@ -1311,9 +1312,6 @@ func TestInsertAutoincSharded(t *testing.T) {
 
 	// Fake a mysql auto-inc response.
 	wantResult := &sqltypes.Result{
-		Rows: [][]sqltypes.Value{{
-			sqltypes.NewInt64(1),
-		}},
 		RowsAffected: 1,
 		InsertID:     2,
 	}
@@ -1363,9 +1361,6 @@ func TestInsertAutoincUnsharded(t *testing.T) {
 	// Fake a mysql auto-inc response.
 	query := "insert into `simple`(val) values ('val')"
 	wantResult := &sqltypes.Result{
-		Rows: [][]sqltypes.Value{{
-			sqltypes.NewInt64(1),
-		}},
 		RowsAffected: 1,
 		InsertID:     2,
 	}
@@ -1411,6 +1406,7 @@ func TestInsertLookupOwnedGenerator(t *testing.T) {
 	executor, sbc, _, sbclookup := createExecutorEnv()
 
 	sbclookup.SetResults([]*sqltypes.Result{{
+		Fields: sqltypes.MakeTestFields("n", "int64"),
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt64(4),
 		}},
@@ -1664,6 +1660,7 @@ func TestMultiInsertGenerator(t *testing.T) {
 	executor, sbc, _, sbclookup := createExecutorEnv()
 
 	sbclookup.SetResults([]*sqltypes.Result{{
+		Fields: sqltypes.MakeTestFields("n", "int64"),
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt64(1),
 		}},
@@ -1709,6 +1706,7 @@ func TestMultiInsertGeneratorSparse(t *testing.T) {
 	executor, sbc, _, sbclookup := createExecutorEnv()
 
 	sbclookup.SetResults([]*sqltypes.Result{{
+		Fields: sqltypes.MakeTestFields("n", "int64"),
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt64(1),
 		}},

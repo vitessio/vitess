@@ -76,7 +76,7 @@ func TestGatewayBufferingWhenPrimarySwitchesServingState(t *testing.T) {
 	// run a query that we indeed get the result added to the sandbox connection back
 	res, err := tg.Execute(context.Background(), target, "query", nil, 0, 0, nil)
 	require.NoError(t, err)
-	require.Equal(t, res, sqlResult1)
+	require.Equal(t, sqlResult1, sqltypes.Proto3ToResult(res.Result))
 
 	// get the primary tablet from the fake health check
 	primaryTablet := hc.GetPrimaryTablet()
@@ -107,7 +107,7 @@ func TestGatewayBufferingWhenPrimarySwitchesServingState(t *testing.T) {
 	select {
 	case <-queryChan:
 		require.NoError(t, err)
-		require.Equal(t, res, sqlResult1)
+		require.Equal(t, sqlResult1, sqltypes.Proto3ToResult(res.Result))
 	case <-time.After(15 * time.Second):
 		t.Fatalf("timed out waiting for query to execute")
 	}
@@ -164,7 +164,7 @@ func TestGatewayBufferingWhileReparenting(t *testing.T) {
 	// this also checks that the query reaches the primary tablet and not the replica
 	res, err := tg.Execute(context.Background(), target, "query", nil, 0, 0, nil)
 	require.NoError(t, err)
-	require.Equal(t, res, sqlResult1)
+	require.Equal(t, sqlResult1, sqltypes.Proto3ToResult(res.Result))
 
 	// get the primary and replica tablet from the fake health check
 	tablets := hc.GetAllTablets()
@@ -212,7 +212,7 @@ func TestGatewayBufferingWhileReparenting(t *testing.T) {
 	select {
 	case <-queryChan:
 		require.NoError(t, err)
-		require.Equal(t, res, sqlResult1)
+		require.Equal(t, sqlResult1, sqltypes.Proto3ToResult(res.Result))
 	case <-time.After(15 * time.Second):
 		t.Fatalf("timed out waiting for query to execute")
 	}
