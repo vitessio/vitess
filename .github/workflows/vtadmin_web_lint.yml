@@ -12,10 +12,6 @@ on:
       - '.github/workflows/vtadmin_web_lint.yml'
       - 'web/vtadmin/**'
 
-defaults:
-  run:
-    working-directory: ./web/vtadmin
-
 jobs:
   lint:
     runs-on: ubuntu-latest
@@ -41,7 +37,7 @@ jobs:
 
       - name: Install dependencies
         if: steps.skip-workflow.outputs.skip-workflow == 0
-        run: npm ci
+        run: cd ./web/vtadmin && npm ci
 
       # Using "if: always()" means each step will run, even if a previous
       # step fails. This is nice because, for example, we want stylelint and 
@@ -53,15 +49,15 @@ jobs:
       # trade-off of more complexity around sharing npm install artifacts. 
       - name: Run eslint
         if: steps.skip-workflow.outputs.skip-workflow == 0 && always()
-        run: npm run lint:eslint
+        run: cd ./web/vtadmin && npm run lint:eslint
 
       - name: Run stylelint
         if: steps.skip-workflow.outputs.skip-workflow == 0 && always()
-        run: npm run lint:stylelint -- -f verbose
+        run: cd ./web/vtadmin && npm run lint:stylelint -- -f verbose
         
       - name: Run prettier
         if: steps.skip-workflow.outputs.skip-workflow == 0 && always()
-        run: npm run lint:prettier
+        run: cd ./web/vtadmin && npm run lint:prettier
 
     # Cancel pending and in-progress runs of this workflow if a newer ref is pushed to CI.
     concurrency: 
