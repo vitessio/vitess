@@ -697,6 +697,11 @@ func runSingleConnection(ctx context.Context, t *testing.T, autoIncInsert bool, 
 				// Table renamed to _before, due to -vreplication-test-suite flag
 				err = nil
 			}
+			if sqlErr, ok := err.(*mysql.SQLError); ok {
+				if sqlErr.Number() == mysql.ERLockDeadlock {
+					_, err = conn.ExecuteFetch("rollback", 1, false)
+				}
+			}
 		}
 		assert.Nil(t, err)
 		time.Sleep(singleConnectionSleepInterval)
