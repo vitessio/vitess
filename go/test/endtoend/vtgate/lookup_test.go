@@ -92,7 +92,7 @@ func TestConsistentLookup(t *testing.T) {
 	mysqlErr := err.(*mysql.SQLError)
 	assert.Equal(t, 1062, mysqlErr.Num)
 	assert.Equal(t, "23000", mysqlErr.State)
-	assert.Contains(t, mysqlErr.Message, "Duplicate entry")
+	assert.Contains(t, mysqlErr.Message, "reverted partial DML execution")
 
 	// Simple delete.
 	utils.Exec(t, conn, "begin")
