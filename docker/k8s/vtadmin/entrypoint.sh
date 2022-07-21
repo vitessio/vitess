@@ -1,8 +1,6 @@
-#!/bin/bash
+#!/bin/sh
 
 set -x
-
-cat /etc/nginx/nginx.conf
 
 nginx -c /etc/nginx/nginx.conf -t
 
