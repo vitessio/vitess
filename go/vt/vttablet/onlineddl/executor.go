@@ -150,7 +150,6 @@ type Executor struct {
 	pool                  *connpool.Pool
 	tabletTypeFunc        func() topodatapb.TabletType
 	ts                    *topo.Server
-	tmClient              tmclient.TabletManagerClient
 	lagThrottler          *throttle.Throttler
 	toggleBufferTableFunc func(cancelCtx context.Context, tableName string, bufferQueries bool)
 	tabletAlias           *topodatapb.TabletAlias
@@ -306,7 +305,6 @@ func (e *Executor) Open() error {
 		// this validates vexecUpdateTemplates
 		return err
 	}
-	e.tmClient = tmclient.NewTabletManagerClient()
 
 	e.isOpen = true
 
@@ -321,10 +319,6 @@ func (e *Executor) Close() {
 	defer e.initMutex.Unlock()
 	if !e.isOpen {
 		return
-	}
-
-	if e.tmClient != nil {
-		e.tmClient.Close()
 	}
 
 	log.Infof("onlineDDL Executor - Stopping timer ticks")
@@ -661,6 +655,9 @@ func (e *Executor) primaryPosition(ctx context.Context) (pos mysql.Position, err
 
 // terminateVReplMigration stops vreplication, then removes the _vt.vreplication entry for the given migration
 func (e *Executor) terminateVReplMigration(ctx context.Context, uuid string) error {
+	tmClient := e.tabletManagerClient()
+	defer tmClient.Close()
+
 	tablet, err := e.ts.GetTablet(ctx, e.tabletAlias)
 	if err != nil {
 		return err
@@ -683,6 +680,9 @@ func (e *Executor) terminateVReplMigration(ctx context.Context, uuid string) err
 
 // cutOverVReplMigration stops vreplication, then removes the _vt.vreplication entry for the given migration
 func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) error {
+	tmClient := e.tabletManagerClient()
+	defer tmClient.Close()
+
 	// sanity checks:
 	vreplTable, err := getVreplTable(ctx, s)
 	if err != nil {
@@ -732,7 +732,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 			// unbuffer existing queries:
 			bufferingContextCancel()
 			// force re-read of tables
-			if err := e.tmClient.RefreshState(ctx, tablet.Tablet); err != nil {
+			if err := tmClient.RefreshState(ctx, tablet.Tablet); err != nil {
 				return err
 			}
 		}
@@ -803,7 +803,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		ctx, cancel := context.WithTimeout(ctx, 2*vreplicationCutOverThreshold)
 		defer cancel()
 		// Wait for target to reach the up-to-date pos
-		if err := e.tmClient.VReplicationWaitForPos(ctx, tablet.Tablet, int(s.id), mysql.EncodePosition(postWritesPos)); err != nil {
+		if err := tmClient.VReplicationWaitForPos(ctx, tablet.Tablet, int(s.id), mysql.EncodePosition(postWritesPos)); err != nil {
 			return err
 		}
 		// Target is now in sync with source!
@@ -3413,23 +3413,33 @@ func (e *Executor) retryTabletFailureMigrations(ctx context.Context) error {
 	return err
 }
 
+func (e *Executor) tabletManagerClient() tmclient.TabletManagerClient {
+	return tmclient.NewTabletManagerClient()
+}
+
 // vreplicationExec runs a vreplication query, and makes sure to initialize vreplication
 func (e *Executor) vreplicationExec(ctx context.Context, tablet *topodatapb.Tablet, query string) (*querypb.QueryResult, error) {
+	tmClient := e.tabletManagerClient()
+	defer tmClient.Close()
+
 	e.initVreplicationDDLOnce.Do(func() {
 		// Ensure vreplication schema is up-to-date by invoking a query with non-existing columns.
 		// This will make vreplication run through its WithDDL schema changes.
-		_, _ = e.tmClient.VReplicationExec(ctx, tablet, withddl.QueryToTriggerWithDDL)
+		_, _ = tmClient.VReplicationExec(ctx, tablet, withddl.QueryToTriggerWithDDL)
 	})
-	return e.tmClient.VReplicationExec(ctx, tablet, query)
+	return tmClient.VReplicationExec(ctx, tablet, query)
 }
 
 // reloadSchema issues a ReloadSchema on this tablet
 func (e *Executor) reloadSchema(ctx context.Context) error {
+	tmClient := e.tabletManagerClient()
+	defer tmClient.Close()
+
 	tablet, err := e.ts.GetTablet(ctx, e.tabletAlias)
 	if err != nil {
 		return err
 	}
-	return e.tmClient.ReloadSchema(ctx, tablet.Tablet, "")
+	return tmClient.ReloadSchema(ctx, tablet.Tablet, "")
 }
 
 // deleteVReplicationEntry cleans up a _vt.vreplication entry; this function is called as part of
