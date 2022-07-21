@@ -216,10 +216,11 @@ func encodeString(in string) string {
 // You should execute this if you leverage table information from e.g.
 // information_schema.tables in your test.
 func updateTableStats(t *testing.T, tablet *cluster.VttabletProcess, tables string) {
+	dbName := "vt_" + tablet.Keyspace
 	tableList := strings.Split(strings.TrimSpace(tables), ",")
 	if len(tableList) == 0 {
 		// we need to get all of the tables in the keyspace
-		res, err := tablet.QueryTabletWithDB("show tables", "vt_"+tablet.Keyspace)
+		res, err := tablet.QueryTabletWithDB("show tables", dbName)
 		require.NoError(t, err)
 		for _, row := range res.Rows {
 			tableList = append(tableList, row[0].String())
@@ -228,7 +229,7 @@ func updateTableStats(t *testing.T, tablet *cluster.VttabletProcess, tables stri
 	for _, table := range tableList {
 		table = strings.TrimSpace(table)
 		if table != "" {
-			res, err := tablet.QueryTabletWithDB(fmt.Sprintf(sqlAnalyzeTable, sqlescape.EscapeID(table)), "vt_"+tablet.Keyspace)
+			res, err := tablet.QueryTabletWithDB(fmt.Sprintf(sqlAnalyzeTable, sqlescape.EscapeID(table)), dbName)
 			require.NoError(t, err)
 			require.Equal(t, 1, len(res.Rows))
 		}

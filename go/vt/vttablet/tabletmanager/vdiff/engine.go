@@ -132,7 +132,7 @@ func (vde *Engine) openLocked(ctx context.Context) error {
 var openRetryInterval = sync2.NewAtomicDuration(1 * time.Second)
 
 func (vde *Engine) retry(ctx context.Context, err error) {
-	log.Errorf("Error starting VDiff engine: %v, will keep retrying.", err)
+	log.Errorf("Error starting vdiff engine: %v, will keep retrying.", err)
 	for {
 		timer := time.NewTimer(openRetryInterval.Get())
 		select {
@@ -310,7 +310,7 @@ func (vde *Engine) retryVDiffs(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		log.Infof("Retrying VDiff %s that had an ephemeral error of '%v'", uuid, lastError)
+		log.Infof("Retrying vdiff %s that had an ephemeral error of '%v'", uuid, lastError)
 		if _, err = dbClient.ExecuteFetch(fmt.Sprintf(sqlRetryVDiff, id), 1); err != nil {
 			return err
 		}
@@ -337,7 +337,7 @@ func (vde *Engine) retryErroredVDiffs() {
 		}
 
 		if err := vde.retryVDiffs(vde.ctx); err != nil {
-			log.Errorf("Error retrying VDiffs: %v", err)
+			log.Errorf("Error retrying vdiffs: %v", err)
 		}
 	}
 }
