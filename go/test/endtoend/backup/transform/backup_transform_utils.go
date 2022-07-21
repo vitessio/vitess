@@ -105,6 +105,7 @@ func TestMainSetup(m *testing.M, useMysqlctld bool) {
 			tablet.VttabletProcess.DbPassword = dbPassword
 			tablet.VttabletProcess.ExtraArgs = commonTabletArg
 			tablet.VttabletProcess.SupportsBackup = true
+			tablet.VttabletProcess.EnableSemiSync = true
 
 			if useMysqlctld {
 				tablet.MysqlctldProcess = *cluster.MysqlCtldProcessInstance(tablet.TabletUID, tablet.MySQLPort, localCluster.TmpDirectory)
