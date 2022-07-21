@@ -105,6 +105,7 @@ func ResultToProto3(qr *Result) *querypb.QueryResult {
 		InsertId:     qr.InsertID,
 		Rows:         RowsToProto3(qr.Rows),
 		Info:         qr.Info,
+		StatusFlags:  uint32(qr.StatusFlags),
 	}
 }
 
@@ -120,6 +121,7 @@ func Proto3ToResult(qr *querypb.QueryResult) *Result {
 		InsertID:     qr.InsertId,
 		Rows:         proto3ToRows(qr.Fields, qr.Rows),
 		Info:         qr.Info,
+		StatusFlags:  uint16(qr.StatusFlags),
 	}
 }
 
@@ -135,6 +137,8 @@ func CustomProto3ToResult(fields []*querypb.Field, qr *querypb.QueryResult) *Res
 		RowsAffected: qr.RowsAffected,
 		InsertID:     qr.InsertId,
 		Rows:         proto3ToRows(fields, qr.Rows),
+		Info:         qr.Info,
+		StatusFlags:  uint16(qr.StatusFlags),
 	}
 }
 
