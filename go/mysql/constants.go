@@ -672,6 +672,47 @@ func IsConnLostDuringQuery(err error) bool {
 	return false
 }
 
+// IsEphemeralError returns true if the error is ephemeral and the caller should
+// retry if possible. Note: non-SQL errors are always treated as ephemeral.
+func IsEphemeralError(err error) bool {
+	if sqlErr, ok := err.(*SQLError); ok {
+		en := sqlErr.Number()
+		switch en {
+		case
+			CRConnectionError,
+			CRConnHostError,
+			CRMalformedPacket,
+			CRNamedPipeStateError,
+			CRServerLost,
+			CRSSLConnectionError,
+			ERCantCreateThread,
+			ERDiskFull,
+			ERForcingClose,
+			ERGotSignal,
+			ERHostIsBlocked,
+			ERLockTableFull,
+			ERInnodbReadOnly,
+			ERInternalError,
+			ERLockDeadlock,
+			ERLockWaitTimeout,
+			EROutOfMemory,
+			EROutOfResources,
+			EROutOfSortMemory,
+			ERQueryInterrupted,
+			ERServerIsntAvailable,
+			ERServerShutdown,
+			ERTooManyUserConnections,
+			ERUnknownError,
+			ERUserLimitReached:
+			return true
+		default:
+			return false
+		}
+	}
+	// If it's not an sqlError then we assume it's ephemeral
+	return true
+}
+
 // IsTooManyConnectionsErr returns true if the error is due to too many connections.
 func IsTooManyConnectionsErr(err error) bool {
 	if sqlErr, ok := err.(*SQLError); ok {
