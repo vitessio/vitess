@@ -24026,6 +24026,9 @@ export namespace query {
 
         /** QueryResult info */
         info?: (string|null);
+
+        /** QueryResult status_flags */
+        status_flags?: (number|null);
     }
 
     /** Represents a QueryResult. */
@@ -24051,6 +24054,9 @@ export namespace query {
 
         /** QueryResult info. */
         public info: string;
+
+        /** QueryResult status_flags. */
+        public status_flags: number;
 
         /**
          * Creates a new QueryResult instance using the specified properties.
