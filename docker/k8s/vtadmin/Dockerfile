@@ -44,7 +44,8 @@ FROM nginxinc/nginx-unprivileged:1.22-alpine AS nginx
 
 ENV VTADMIN_WEB_PORT=14201
 
-COPY --from=node /vt/web/vtadmin/build /var/www/
-COPY default.conf /etc/nginx/templates/default.conf.template
+COPY --chown=nginx --from=node /vt/web/vtadmin/build /var/www/
+COPY --chown=nginx default.conf /etc/nginx/templates/default.conf.template
 
-CMD ["nginx", "-g", "daemon off;"]
+# command to run nginx is in the base image
+# https://github.com/nginxinc/docker-nginx-unprivileged/blob/main/stable/alpine/Dockerfile#L150
