@@ -195,8 +195,6 @@ func setupShard(ctx context.Context, t *testing.T, clusterInstance *cluster.Loca
 
 	ValidateTopology(t, clusterInstance, false)
 	WaitForReplicationToStart(t, clusterInstance, KeyspaceName, shardName, len(tablets), true)
-
-	clusterInstance.WaitForTabletsToHealthyInVtgate()
 }
 
 //endregion

@@ -400,7 +400,7 @@
 		},
 		"plannedreparent": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/reparent/plannedreparent", "-timeout", "30m"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/reparent/plannedreparent", "-timeout", "20m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "ers_prs_newfeatures_heavy",
