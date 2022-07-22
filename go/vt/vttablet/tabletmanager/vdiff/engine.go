@@ -246,7 +246,9 @@ func (vde *Engine) getPendingVDiffs(ctx context.Context) (*sqltypes.Result, erro
 	}
 	defer dbClient.Close()
 
-	qr, err := withDDL.Exec(ctx, sqlGetPendingVDiffs, dbClient.ExecuteFetch, dbClient.ExecuteFetch)
+	// We have to use ExecIgnore here so as not to block quick tablet state
+	// transitions from primary to non-primary when starting the engine
+	qr, err := withDDL.ExecIgnore(ctx, sqlGetPendingVDiffs, dbClient.ExecuteFetch)
 	if err != nil {
 		return nil, err
 	}
