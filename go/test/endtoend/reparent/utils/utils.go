@@ -514,10 +514,11 @@ func GetShardReplicationPositions(t *testing.T, clusterInstance *cluster.LocalPr
 }
 
 func WaitForReplicationToStart(t *testing.T, clusterInstance *cluster.LocalProcessCluster, keyspaceName, shardName string, tabletCnt int, doPrint bool) {
-	tck := time.NewTicker(500 * time.Millisecond)
+	tkr := time.NewTicker(500 * time.Millisecond)
+	defer tkr.Stop()
 	for {
 		select {
-		case <-tck.C:
+		case <-tkr.C:
 			strArray := GetShardReplicationPositions(t, clusterInstance, KeyspaceName, shardName, true)
 			if len(strArray) == tabletCnt && strings.Contains(strArray[0], "primary") { // primary first
 				return
@@ -575,13 +576,13 @@ func CheckReparentFromOutside(t *testing.T, clusterInstance *cluster.LocalProces
 // WaitForReplicationPosition waits for tablet B to catch up to the replication position of tablet A.
 func WaitForReplicationPosition(t *testing.T, tabletA *cluster.Vttablet, tabletB *cluster.Vttablet) error {
 	posA, _ := cluster.GetPrimaryPosition(t, *tabletA, Hostname)
-	timeout := time.Now().Add(5 * time.Second)
+	timeout := time.Now().Add(replicationWaitTimeout)
 	for time.Now().Before(timeout) {
 		posB, _ := cluster.GetPrimaryPosition(t, *tabletB, Hostname)
 		if positionAtLeast(t, tabletB, posA, posB) {
 			return nil
 		}
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(500 * time.Millisecond)
 	}
 	return fmt.Errorf("failed to catch up on replication position")
 }
