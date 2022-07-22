@@ -187,6 +187,10 @@ type TablePlan struct {
 	BulkInsertFront  *sqlparser.ParsedQuery
 	BulkInsertValues *sqlparser.ParsedQuery
 	BulkInsertOnDup  *sqlparser.ParsedQuery
+	// DeleteAfterLastPk is used by vcopier. vcopier may bulk insert rows and
+	// fail to commit lastpk to _vt.copy_state. During the next pass vcopier
+	// clears out those rows.
+	DeleteAfterLastpk *sqlparser.ParsedQuery
 	// Insert, Update and Delete are used by vplayer.
 	// If the plan is an insertIgnore type, then Insert
 	// and Update contain 'insert ignore' statements and
@@ -208,30 +212,32 @@ type TablePlan struct {
 // MarshalJSON performs a custom JSON Marshalling.
 func (tp *TablePlan) MarshalJSON() ([]byte, error) {
 	v := struct {
-		TargetName   string
-		SendRule     string
-		InsertFront  *sqlparser.ParsedQuery `json:",omitempty"`
-		InsertValues *sqlparser.ParsedQuery `json:",omitempty"`
-		InsertOnDup  *sqlparser.ParsedQuery `json:",omitempty"`
-		Insert       *sqlparser.ParsedQuery `json:",omitempty"`
-		Update       *sqlparser.ParsedQuery `json:",omitempty"`
-		Delete       *sqlparser.ParsedQuery `json:",omitempty"`
-		PKReferences []string               `json:",omitempty"`
+		TargetName        string
+		SendRule          string
+		InsertFront       *sqlparser.ParsedQuery `json:",omitempty"`
+		InsertValues      *sqlparser.ParsedQuery `json:",omitempty"`
+		InsertOnDup       *sqlparser.ParsedQuery `json:",omitempty"`
+		Insert            *sqlparser.ParsedQuery `json:",omitempty"`
+		Update            *sqlparser.ParsedQuery `json:",omitempty"`
+		Delete            *sqlparser.ParsedQuery `json:",omitempty"`
+		DeleteAfterLastpk *sqlparser.ParsedQuery `json:",omitempty"`
+		PKReferences      []string               `json:",omitempty"`
 	}{
-		TargetName:   tp.TargetName,
-		SendRule:     tp.SendRule.Match,
-		InsertFront:  tp.BulkInsertFront,
-		InsertValues: tp.BulkInsertValues,
-		InsertOnDup:  tp.BulkInsertOnDup,
-		Insert:       tp.Insert,
-		Update:       tp.Update,
-		Delete:       tp.Delete,
-		PKReferences: tp.PKReferences,
+		TargetName:        tp.TargetName,
+		SendRule:          tp.SendRule.Match,
+		InsertFront:       tp.BulkInsertFront,
+		InsertValues:      tp.BulkInsertValues,
+		InsertOnDup:       tp.BulkInsertOnDup,
+		Insert:            tp.Insert,
+		Update:            tp.Update,
+		Delete:            tp.Delete,
+		DeleteAfterLastpk: tp.DeleteAfterLastpk,
+		PKReferences:      tp.PKReferences,
 	}
 	return json.Marshal(&v)
 }
 
-func (tp *TablePlan) applyBulkInsert(sqlbuffer *bytes2.Buffer, rows *binlogdatapb.VStreamRowsResponse, executor func(string) (*sqltypes.Result, error)) (*sqltypes.Result, error) {
+func (tp *TablePlan) writeBulkInsert(sqlbuffer *bytes2.Buffer, rows *binlogdatapb.VStreamRowsResponse) error {
 	sqlbuffer.Reset()
 	sqlbuffer.WriteString(tp.BulkInsertFront.Query)
 	sqlbuffer.WriteString(" values ")
@@ -241,13 +247,14 @@ func (tp *TablePlan) applyBulkInsert(sqlbuffer *bytes2.Buffer, rows *binlogdatap
 			sqlbuffer.WriteString(", ")
 		}
 		if err := tp.BulkInsertValues.AppendFromRow(sqlbuffer, tp.Fields, row, tp.FieldsToSkip); err != nil {
-			return nil, err
+			return err
 		}
 	}
 	if tp.BulkInsertOnDup != nil {
 		sqlbuffer.WriteString(tp.BulkInsertOnDup.Query)
 	}
-	return executor(sqlbuffer.StringUnsafe())
+
+	return nil
 }
 
 // During the copy phase we run catchup and fastforward, which stream binlogs. While streaming we should only process

@@ -276,7 +276,7 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 		}
 		defer vsClient.Close(ctx)
 
-		vr := newVReplicator(ct.id, ct.source, vsClient, ct.blpStats, dbClient, ct.mysqld, ct.vre)
+		vr := newVReplicator(ct.id, ct.source, vsClient, ct.blpStats, dbClient, ct.dbClientFactory, ct.mysqld, ct.vre)
 		err = vr.Replicate(ctx)
 
 		ct.lastWorkflowError.record(err)

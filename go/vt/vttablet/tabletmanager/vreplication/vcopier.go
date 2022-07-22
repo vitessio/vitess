@@ -25,15 +25,16 @@ import (
 
 	"google.golang.org/protobuf/encoding/prototext"
 
-	"vitess.io/vitess/go/bytes2"
-
 	"context"
 
+	"vitess.io/vitess/go/bytes2"
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -192,9 +193,12 @@ func (vc *vcopier) catchup(ctx context.Context, copyState map[string]*sqltypes.R
 	}
 }
 
-// copyTable performs the synchronized copy of the next set of rows from
-// the current table being copied. Each packet received is transactionally
-// committed with the lastpk. This allows for consistent resumability.
+// copyTable performs the synchronized copy of the next set of rows from the
+// current table being copied. Each batch or rows received is
+// non-transactionally committed with the lastpk in that batch. If new rows are
+// inserted, but _vt.copy_state fails to update with the lastpk, those rows are
+// deleted in the next call to copyTable. This allows for consistent
+// resumability.
 func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState map[string]*sqltypes.Result) error {
 	defer vc.vr.dbClient.Rollback()
 	defer vc.vr.stats.PhaseTimings.Record("copy", time.Now())
@@ -202,7 +206,12 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 
 	log.Infof("Copying table %s, lastpk: %v", tableName, copyState[tableName])
 
-	plan, err := buildReplicatorPlan(vc.vr.source, vc.vr.colInfoMap, nil, vc.vr.stats)
+	var planCopyState map[string]*sqltypes.Result
+	if lastpk, ok := copyState[tableName]; ok && lastpk != nil {
+		planCopyState = copyState
+	}
+
+	plan, err := buildReplicatorPlan(vc.vr.source, vc.vr.colInfoMap, planCopyState, vc.vr.stats)
 	if err != nil {
 		return err
 	}
@@ -214,6 +223,41 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 
 	ctx, cancel := context.WithTimeout(ctx, *copyPhaseDuration)
 	defer cancel()
+
+	// Prepare a pool of db clients. These will be used by async goroutines to
+	// insert data into the target.
+	dbClientPool := pools.NewResourcePool(
+		/* resource factory */
+		func(ctx context.Context) (pools.Resource, error) {
+			dbClient := vc.vr.dbClientFactory()
+			if err := dbClient.Connect(); err != nil {
+				return nil, err
+			}
+			return dbClient, nil
+		},
+		/* capacity */
+		*copyInsertConcurrency,
+		/* max capacity */
+		*copyInsertConcurrency,
+		/* idle timeout */
+		0,
+		/* prefill parallelism */
+		*copyInsertConcurrency,
+		/* log wait */
+		nil,
+		/* refresh check */
+		nil,
+		/* refresh interval*/
+		0,
+	)
+	defer dbClientPool.Close()
+
+	// The async insertion goroutines will report errors back to this channel.
+	errorCh := make(chan error, 2**copyInsertConcurrency)
+
+	// The async insertion goroutines will enqueue SQL statements to update
+	// _vt.copy_state to this channel.
+	updateCopyStateChCh := make(chan chan string, 1000**copyInsertConcurrency)
 
 	var lastpkpb *querypb.QueryResult
 	if lastpkqr := copyState[tableName]; lastpkqr != nil {
@@ -228,9 +272,88 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 	var bv map[string]*querypb.BindVariable
 	var sqlbuffer bytes2.Buffer
 
-	err = vc.vr.sourceVStreamer.VStreamRows(ctx, initialPlan.SendRule.Filter, lastpkpb, func(rows *binlogdatapb.VStreamRowsResponse) error {
+	// Create a dedicated db client to asynchronously process SQL statements to
+	// update _vt.copy_state.
+	dbClient := vc.vr.dbClientFactory()
+	if err := dbClient.Connect(); err != nil {
+		return err
+	}
+	defer dbClient.Close()
+	// Launch async gorouting to process updates to _vt.copy_state.
+	go func(ctx context.Context, dbClient *vdbClient, updateCopyStateChCh chan chan string, isClosed func() bool) {
+		var updateCopyState string
+		var updateCopyStateCh chan string
+
+		idx := 0
+
+		// Before we exit, commit the last captured updateCopyState.
+		defer func() {
+			if updateCopyState != "" {
+				_, err := dbClient.Execute(updateCopyState)
+				if err != nil {
+					log.Infof("Got an error commiting copy state: %s", err.Error())
+					errorCh <- err
+					return
+				}
+			}
+		}()
+
+		// Read updateCopyStateCh until there aren't any left and the dbClientPool.IsClosed.
 		for {
 			select {
+			// Exit without processing all updates if we get a timeout.
+			case <-ctx.Done():
+				return
+			case updateCopyStateCh = <-updateCopyStateChCh:
+				break
+			default:
+				// If the dbClientPool is closed, and we aren't getting any more updateStateCh,
+				// we can shut down.
+				if isClosed() {
+					return
+				}
+			}
+
+			// Wait until we have an updateCopyState.
+			for updateCopyStateCh != nil {
+				select {
+				case updateCopyState = <-updateCopyStateCh:
+					updateCopyStateCh = nil
+				case <-ctx.Done():
+					return
+				}
+			}
+
+			// Commit initially and then once every 100 copy states.
+			if updateCopyState != "" && idx%100 == 0 {
+				_, err := dbClient.Execute(updateCopyState)
+				updateCopyState = ""
+				if err != nil {
+					log.Infof("Got an error commiting copy state: %s", err.Error())
+					errorCh <- err
+					return
+				}
+			}
+
+			idx++
+		}
+	}(ctx, dbClient, updateCopyStateChCh, dbClientPool.IsClosed)
+
+	// Stream rows from source and write asynchronously to target.
+	streamErr := vc.vr.sourceVStreamer.VStreamRows(ctx, initialPlan.SendRule.Filter, lastpkpb, func(rows *binlogdatapb.VStreamRowsResponse) error {
+		if dbClientPool.IsClosed() {
+			return io.EOF
+		}
+
+		for {
+			select {
+			// If any errors were collected from async goroutines since the
+			// last loop, return the next one. It might be better to collect
+			// and aggregate all queued errors.
+			case err := <-errorCh:
+				if err != nil {
+					return err
+				}
 			case <-rowsCopiedTicker.C:
 				update := binlogplayer.GenerateUpdateRowsCopied(vc.vr.id, vc.vr.stats.CopyRowCount.Get())
 				_, _ = vc.vr.dbClient.Execute(update)
@@ -253,6 +376,9 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 				_ = vc.vr.updateTimeThrottled(VCopierComponentName)
 			}
 		}
+		// This is the first batch of rows in this iteration of copyTable.
+		// Build the full table plan, fast forward, and clear out any inserted
+		// rows newer than lastpk.
 		if vc.tablePlan == nil {
 			if len(rows.Fields) == 0 {
 				return fmt.Errorf("expecting field event first, got: %v", rows)
@@ -269,6 +395,16 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 				return err
 			}
 			pkfields = append(pkfields, rows.Pkfields...)
+
+			log.Infof("Deleting any rows after the recorded lastpk: %s", vc.tablePlan.DeleteAfterLastpk.Query)
+			er, err := vc.vr.dbClient.Execute(vc.tablePlan.DeleteAfterLastpk.Query)
+			if err != nil {
+				return err
+			}
+			if er.RowsAffected > 0 {
+				log.Infof("Deleted %d rows after the recorded lastpk.", er.RowsAffected)
+			}
+
 			buf := sqlparser.NewTrackedBuffer(nil)
 			buf.Myprintf("update _vt.copy_state set lastpk=%a where vrepl_id=%s and table_name=%s", ":lastpk", strconv.Itoa(int(vc.vr.id)), encodeString(tableName))
 			updateCopyState = buf.ParsedQuery()
@@ -277,30 +413,13 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 			return nil
 		}
 
-		// The number of rows we receive depends on the packet size set
-		// for the row streamer. Since the packet size is roughly equivalent
-		// to data size, this should map to a uniform amount of pages affected
-		// per statement. A packet size of 30K will roughly translate to 8
-		// mysql pages of 4K each.
-		if err := vc.vr.dbClient.Begin(); err != nil {
+		// Build insert SQL statement.
+		if err := vc.tablePlan.writeBulkInsert(&sqlbuffer, rows); err != nil {
 			return err
 		}
-		_, err = vc.tablePlan.applyBulkInsert(&sqlbuffer, rows, func(sql string) (*sqltypes.Result, error) {
-			start := time.Now()
+		insertRows := sqlbuffer.String()
 
-			qr, err := vc.vr.dbClient.ExecuteWithRetry(ctx, sql)
-			if err != nil {
-				return nil, err
-			}
-			vc.vr.stats.QueryTimings.Record("copy", start)
-			vc.vr.stats.CopyRowCount.Add(int64(qr.RowsAffected))
-			vc.vr.stats.QueryCount.Add("copy", 1)
-			return qr, err
-		})
-		if err != nil {
-			return err
-		}
-
+		// Build update copy state SQL statement.
 		var buf []byte
 		buf, err = prototext.Marshal(&querypb.QueryResult{
 			Fields: pkfields,
@@ -319,15 +438,83 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 		if err != nil {
 			return err
 		}
-		if _, err := vc.vr.dbClient.Execute(updateState); err != nil {
+
+		// Acquire a db client from the pool.
+		poolResource, err := dbClientPool.Get(ctx)
+		if err != nil {
 			return err
 		}
 
-		if err := vc.vr.dbClient.Commit(); err != nil {
-			return err
-		}
+		dbClient := poolResource.(*vdbClient)
+
+		// Synchronously enqueue a channel which will contain the copy state
+		// update for this batch of rows.  This helps enforce that:
+		// - Updates to _vt.copy_state happen after rows are inserted.
+		// - Updates to _vt.copy_state happen in primary-key order.
+		updateCopyStateCh := make(chan string, 1)
+		updateCopyStateChCh <- updateCopyStateCh
+
+		// Asynchronously insert rows and enqueue copy state update.
+		go func(dbClient *vdbClient, insertRows, updateState string, errorCh chan error, _ chan string) {
+			defer dbClientPool.Put(dbClient)
+
+			var err error
+			var qr *sqltypes.Result
+			var start time.Time
+
+			if err = dbClient.Begin(); err != nil {
+				goto DONE
+			}
+
+			start = time.Now()
+
+			if qr, err = dbClient.ExecuteWithRetry(ctx, insertRows); err != nil {
+				goto DONE
+			}
+
+			vc.vr.stats.QueryTimings.Record("copy", start)
+			vc.vr.stats.CopyRowCount.Add(int64(qr.RowsAffected))
+			vc.vr.stats.QueryCount.Add("copy", 1)
+
+			if err = dbClient.Commit(); err != nil {
+				goto DONE
+			}
+
+			select {
+			case updateCopyStateCh <- updateState:
+			default:
+				// Enqueuing to updateCopyStateCh could become a bottleneck if
+				// updates to _vt.copy_state happen slower than inserts into
+				// the target table. This could be a good place for a new
+				// metric.
+				log.Infof("updatecopyStateCh is full, waiting until there's space")
+				updateCopyStateCh <- updateState
+			}
+		DONE:
+			// If we got an error, put it into the errorCh. It will be
+			// collected in a subsequent loop by the caller of this function.
+			if err != nil {
+				errorCh <- err
+			}
+		}(dbClient, insertRows, updateState, errorCh, updateCopyStateCh)
+
 		return nil
 	})
+
+	// Close client pool and collect any outstanding errors.
+	dbClientPool.Close()
+	asyncErrs := make([]error, 0)
+	for errorCh != nil {
+		select {
+		case err := <-errorCh:
+			if err != nil {
+				asyncErrs = append(asyncErrs, err)
+			}
+		default:
+			errorCh = nil
+		}
+	}
+
 	// If there was a timeout, return without an error.
 	select {
 	case <-ctx.Done():
@@ -335,10 +522,19 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 		return nil
 	default:
 	}
-	if err != nil {
-		return err
+
+	// If the streamer encountered an error, return it.
+	if streamErr != nil {
+		return streamErr
 	}
+
 	log.Infof("Copy of %v finished at lastpk: %v", tableName, bv)
+
+	// If the sender encountered an error, return it.
+	if len(asyncErrs) > 0 {
+		return vterrors.Aggregate(asyncErrs)
+	}
+
 	buf := sqlparser.NewTrackedBuffer(nil)
 	buf.Myprintf("delete from _vt.copy_state where vrepl_id=%s and table_name=%s", strconv.Itoa(int(vc.vr.id)), encodeString(tableName))
 	if _, err := vc.vr.dbClient.Execute(buf.String()); err != nil {

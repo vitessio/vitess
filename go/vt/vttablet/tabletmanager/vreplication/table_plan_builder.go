@@ -108,6 +108,36 @@ const (
 	insertIgnore
 )
 
+// compareOp is used to dynamically change how values are compared by on
+// the server-side. It is used, for example, to generate pk constraints.
+type compareOp int
+
+// The following values are the various comparison types.
+const (
+	compareLessThan = compareOp(iota)
+	compareLessThanOrEqualTo
+	compareEqualTo
+	compareGreaterThanOrEqualTo
+	compareGreaterThan
+)
+
+func (ct compareOp) String() string {
+	switch ct {
+	case compareLessThan:
+		return "<"
+	case compareLessThanOrEqualTo:
+		return "<="
+	case compareEqualTo:
+		return "="
+	case compareGreaterThanOrEqualTo:
+		return ">="
+	case compareGreaterThan:
+		return ">"
+	}
+
+	panic("invalid compare type")
+}
+
 // buildReplicatorPlan builds a ReplicatorPlan for the tables that match the filter.
 // The filter is matched against the target schema. For every table matched,
 // a table-specific rule is built to be sent to the source. We don't send the
@@ -347,14 +377,25 @@ func (tpb *tablePlanBuilder) generate() *TablePlan {
 	}
 
 	return &TablePlan{
-		TargetName:              tpb.name.String(),
-		Lastpk:                  tpb.lastpk,
-		BulkInsertFront:         tpb.generateInsertPart(sqlparser.NewTrackedBuffer(bvf.formatter)),
-		BulkInsertValues:        tpb.generateValuesPart(sqlparser.NewTrackedBuffer(bvf.formatter), bvf),
-		BulkInsertOnDup:         tpb.generateOnDupPart(sqlparser.NewTrackedBuffer(bvf.formatter)),
-		Insert:                  tpb.generateInsertStatement(),
-		Update:                  tpb.generateUpdateStatement(),
-		Delete:                  tpb.generateDeleteStatement(),
+		TargetName:       tpb.name.String(),
+		Lastpk:           tpb.lastpk,
+		BulkInsertFront:  tpb.generateInsertPart(sqlparser.NewTrackedBuffer(bvf.formatter)),
+		BulkInsertValues: tpb.generateValuesPart(sqlparser.NewTrackedBuffer(bvf.formatter), bvf),
+		BulkInsertOnDup:  tpb.generateOnDupPart(sqlparser.NewTrackedBuffer(bvf.formatter)),
+		Insert:           tpb.generateInsertStatement(),
+		Update:           tpb.generateUpdateStatement(),
+		Delete: tpb.generateDeleteStatement(
+			true,                     /*includePKCols*/
+			true,                     /*includeExtraSourcePKCols*/
+			compareLessThanOrEqualTo, /*lastpkCompareOp*/
+			true,                     /*lastpkCompareToLiteral*/
+		),
+		DeleteAfterLastpk: tpb.generateDeleteStatement(
+			false,              /*includePKCols*/
+			false,              /*includeExtraSourcePKCols*/
+			compareGreaterThan, /*lastpkCompareOp*/
+			false,              /*lastpkCompareToLiteral*/
+		),
 		PKReferences:            pkrefs,
 		Stats:                   tpb.stats,
 		FieldsToSkip:            fieldsToSkip,
@@ -717,7 +758,7 @@ func (tpb *tablePlanBuilder) generateSelectPart(buf *sqlparser.TrackedBuffer, bv
 		}
 	}
 	buf.WriteString(" from dual where ")
-	tpb.generatePKConstraint(buf, bvf)
+	tpb.generatePKConstraint(buf, compareLessThanOrEqualTo, true)
 	return buf.ParsedQuery()
 }
 
@@ -800,17 +841,17 @@ func (tpb *tablePlanBuilder) generateUpdateStatement() *sqlparser.ParsedQuery {
 			buf.Myprintf("+ifnull(%v, 0)", cexpr.expr)
 		}
 	}
-	tpb.generateWhere(buf, bvf)
+	tpb.generateWhere(buf, bvf, true, true, compareGreaterThanOrEqualTo, true)
 	return buf.ParsedQuery()
 }
 
-func (tpb *tablePlanBuilder) generateDeleteStatement() *sqlparser.ParsedQuery {
+func (tpb *tablePlanBuilder) generateDeleteStatement(includePKCols, includeExtraSourcePKCols bool, lastpkCompareOp compareOp, lastpkCompareToLiteral bool) *sqlparser.ParsedQuery {
 	bvf := &bindvarFormatter{}
 	buf := sqlparser.NewTrackedBuffer(bvf.formatter)
 	switch tpb.onInsert {
 	case insertNormal:
 		buf.Myprintf("delete from %v", tpb.name)
-		tpb.generateWhere(buf, bvf)
+		tpb.generateWhere(buf, bvf, includePKCols, includeExtraSourcePKCols, lastpkCompareOp, lastpkCompareToLiteral)
 	case insertOnDup:
 		bvf.mode = bvBefore
 		buf.Myprintf("update %v set ", tpb.name)
@@ -830,14 +871,18 @@ func (tpb *tablePlanBuilder) generateDeleteStatement() *sqlparser.ParsedQuery {
 				buf.Myprintf("%v-ifnull(%v, 0)", cexpr.colName, cexpr.expr)
 			}
 		}
-		tpb.generateWhere(buf, bvf)
+		tpb.generateWhere(buf, bvf, includePKCols, includeExtraSourcePKCols, lastpkCompareOp, lastpkCompareToLiteral)
 	case insertIgnore:
 		return nil
 	}
 	return buf.ParsedQuery()
 }
 
-func (tpb *tablePlanBuilder) generateWhere(buf *sqlparser.TrackedBuffer, bvf *bindvarFormatter) {
+func (tpb *tablePlanBuilder) generateWhere(buf *sqlparser.TrackedBuffer, bvf *bindvarFormatter, includePKCols, includeExtraSourcePKCols bool, lastpkCompareOp compareOp, lastpkCompareToLiteral bool) {
+	if !includePKCols && !includeExtraSourcePKCols && tpb.lastpk == nil {
+		return
+	}
+
 	buf.WriteString(" where ")
 	bvf.mode = bvBefore
 	separator := ""
@@ -856,11 +901,18 @@ func (tpb *tablePlanBuilder) generateWhere(buf *sqlparser.TrackedBuffer, bvf *bi
 			separator = " and "
 		}
 	}
-	addWhereColumns(tpb.pkCols)
-	addWhereColumns(tpb.extraSourcePkCols)
+
+	if includePKCols {
+		addWhereColumns(tpb.pkCols)
+	}
+	if includeExtraSourcePKCols {
+		addWhereColumns(tpb.extraSourcePkCols)
+	}
 	if tpb.lastpk != nil {
-		buf.WriteString(" and ")
-		tpb.generatePKConstraint(buf, bvf)
+		if includePKCols || includeExtraSourcePKCols {
+			buf.WriteString(" and ")
+		}
+		tpb.generatePKConstraint(buf, lastpkCompareOp, lastpkCompareToLiteral)
 	}
 }
 
@@ -878,7 +930,7 @@ func (tpb *tablePlanBuilder) getCharsetAndCollation(pkname string) (charSet stri
 	return charSet, collation
 }
 
-func (tpb *tablePlanBuilder) generatePKConstraint(buf *sqlparser.TrackedBuffer, bvf *bindvarFormatter) {
+func (tpb *tablePlanBuilder) generatePKConstraint(buf *sqlparser.TrackedBuffer, lastpkCompareOp compareOp, lastpkCompareToLiteral bool) {
 	type charSetCollation struct {
 		charSet   string
 		collation string
@@ -888,10 +940,14 @@ func (tpb *tablePlanBuilder) generatePKConstraint(buf *sqlparser.TrackedBuffer, 
 	for _, pkname := range tpb.lastpk.Fields {
 		charSet, collation := tpb.getCharsetAndCollation(pkname.Name)
 		charSetCollations = append(charSetCollations, &charSetCollation{charSet: charSet, collation: collation})
-		buf.Myprintf("%s%s%v%s", separator, charSet, &sqlparser.ColName{Name: sqlparser.NewIdentifierCI(pkname.Name)}, collation)
+		if lastpkCompareToLiteral {
+			buf.Myprintf("%s%s%v%s", separator, charSet, &sqlparser.ColName{Name: sqlparser.NewIdentifierCI(pkname.Name)}, collation)
+		} else { // compare to stored values.
+			buf.Myprintf("%s%v%s", separator, sqlparser.NewIdentifierCI(pkname.Name), collation)
+		}
 		separator = ","
 	}
-	separator = ") <= ("
+	separator = fmt.Sprintf(") %s (", lastpkCompareOp.String())
 	for i, val := range tpb.lastpk.Rows[0] {
 		buf.WriteString(separator)
 		buf.WriteString(charSetCollations[i].charSet)

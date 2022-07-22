@@ -276,7 +276,6 @@ func (rs *rowStreamer) buildSelect() (string, error) {
 }
 
 func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.VStreamRowsResponse) error) error {
-
 	var sendMu sync.Mutex
 	safeSend := func(r *binlogdatapb.VStreamRowsResponse) error {
 		sendMu.Lock()
@@ -340,7 +339,7 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 	byteCount := 0
 	for {
 		if rs.ctx.Err() != nil {
-			log.Infof("Stream ended because of ctx.Done")
+			log.Infof("Strem ended because of ctx.Done")
 			return fmt.Errorf("stream ended: %v", rs.ctx.Err())
 		}
 
