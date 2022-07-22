@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/test/endtoend/reparent/utils"
+	"vitess.io/vitess/go/vt/log"
 
 	"github.com/stretchr/testify/require"
 
@@ -39,7 +40,8 @@ func TestReparentGracefulRangeBased(t *testing.T) {
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
 	// Perform a graceful reparent operation
-	_, err := utils.Prs(t, clusterInstance, tablets[1])
+	out, err := utils.Prs(t, clusterInstance, tablets[1])
+	log.Infof("PRS output: %s (err: %v)", out, err)
 	require.NoError(t, err)
 	utils.ValidateTopology(t, clusterInstance, false)
 	utils.CheckPrimaryTablet(t, clusterInstance, tablets[1])
