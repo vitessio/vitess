@@ -115,6 +115,14 @@ func (vtctlclient *VtctlClientProcess) ApplyVSchema(Keyspace string, JSON string
 	)
 }
 
+// ReloadSchema reloads the schema on a given tablet
+func (vtctlclient *VtctlClientProcess) ReloadSchema(tablet *Vttablet) (err error) {
+	return vtctlclient.ExecuteCommand(
+		"ReloadSchema",
+		tablet.Alias,
+	)
+}
+
 // ApplyRoutingRules does it
 func (vtctlclient *VtctlClientProcess) ApplyRoutingRules(JSON string) (err error) {
 	return vtctlclient.ExecuteCommand("ApplyRoutingRules", "--", "--rules", JSON)

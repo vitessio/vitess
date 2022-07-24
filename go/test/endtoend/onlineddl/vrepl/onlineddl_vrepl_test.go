@@ -669,6 +669,14 @@ func TestSchemaChange(t *testing.T) {
 		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
 	})
 
+	t.Run("ReloadSchema", func(t *testing.T) {
+		for _, shard := range shards {
+			for _, tablet := range shard.Vttablets {
+				clusterInstance.VtctlclientProcess.ReloadSchema(tablet)
+			}
+		}
+	})
+
 	// Technically the next test should belong in onlineddl_revert suite. But we're tking advantage of setup and functionality existing in this tets:
 	// - two shards as opposed to one
 	// - tablet throttling
