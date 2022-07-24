@@ -34,25 +34,28 @@ and which run changeCallback.
 package tabletmanager
 
 import (
+	"context"
 	"encoding/hex"
 	"flag"
 	"fmt"
 	"math/rand"
+	"regexp"
+	"strings"
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vdiff"
+
+	"k8s.io/apimachinery/pkg/util/sets"
+
 	"vitess.io/vitess/go/flagutil"
-	"vitess.io/vitess/go/sync2"
-	"vitess.io/vitess/go/vt/vterrors"
-
-	"context"
-
-	"vitess.io/vitess/go/vt/dbconnpool"
-
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/binlog"
 	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -61,6 +64,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
 
@@ -78,6 +82,7 @@ var (
 	initShard          = flag.String("init_shard", "", "(init parameter) shard to use for this tablet")
 	initTabletType     = flag.String("init_tablet_type", "", "(init parameter) the tablet type to use for this tablet.")
 	initDbNameOverride = flag.String("init_db_name_override", "", "(init parameter) override the name of the db used by vttablet. Without this flag, the db name defaults to vt_<keyspacename>")
+	skipBuildInfoTags  = flag.String("vttablet_skip_buildinfo_tags", "/.*/", "comma-separated list of buildinfo tags to skip from merging with -init_tags. each tag is either an exact match or a regular expression of the form '/regexp/'.")
 	initTags           flagutil.StringMapValue
 
 	initPopulateMetadata = flag.Bool("init_populate_metadata", false, "(init parameter) populate metadata tables even if restore_from_backup is disabled. If restore_from_backup is enabled, metadata tables are always populated regardless of this flag.")
@@ -128,6 +133,7 @@ type TabletManager struct {
 	QueryServiceControl tabletserver.Controller
 	UpdateStream        binlog.UpdateStreamControl
 	VREngine            *vreplication.Engine
+	VDiffEngine         *vdiff.Engine
 
 	// MetadataManager manages the local metadata tables for a tablet. It
 	// exists, and is exported, to support swapping a nil pointer in test code,
@@ -192,7 +198,7 @@ type TabletManager struct {
 }
 
 // BuildTabletFromInput builds a tablet record from input parameters.
-func BuildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32) (*topodatapb.Tablet, error) {
+func BuildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32, dbServerVersion string, db *dbconfigs.DBConfigs) (*topodatapb.Tablet, error) {
 	hostname := *tabletHostname
 	if hostname == "" {
 		var err error
@@ -225,6 +231,21 @@ func BuildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32) (
 		return nil, fmt.Errorf("invalid init_tablet_type %v; can only be REPLICA, RDONLY or SPARE", tabletType)
 	}
 
+	buildTags, err := getBuildTags(servenv.AppVersion.ToStringMap(), *skipBuildInfoTags)
+	if err != nil {
+		return nil, err
+	}
+
+	var charset uint8
+	if db != nil && db.Charset != "" {
+		charset, err = collations.Local().ParseConnectionCharset(db.Charset)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		charset = collations.Local().DefaultConnectionCharset()
+	}
+
 	return &topodatapb.Tablet{
 		Alias:    alias,
 		Hostname: hostname,
@@ -232,13 +253,82 @@ func BuildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32) (
 			"vt":   port,
 			"grpc": grpcPort,
 		},
-		Keyspace:       *initKeyspace,
-		Shard:          shard,
-		KeyRange:       keyRange,
-		Type:           tabletType,
-		DbNameOverride: *initDbNameOverride,
-		Tags:           initTags,
+		Keyspace:             *initKeyspace,
+		Shard:                shard,
+		KeyRange:             keyRange,
+		Type:                 tabletType,
+		DbNameOverride:       *initDbNameOverride,
+		Tags:                 mergeTags(buildTags, initTags),
+		DbServerVersion:      dbServerVersion,
+		DefaultConnCollation: uint32(charset),
 	}, nil
+}
+
+func getBuildTags(buildTags map[string]string, skipTagsCSV string) (map[string]string, error) {
+	if skipTagsCSV == "" {
+		return buildTags, nil
+	}
+
+	skipTags := strings.Split(skipTagsCSV, ",")
+	skippers := make([]func(string) bool, len(skipTags))
+	for i, skipTag := range skipTags {
+		skipTag := skipTag // copy to preserve iteration scope in the closures below
+		if strings.HasPrefix(skipTag, "/") && strings.HasSuffix(skipTag, "/") && len(skipTag) > 1 {
+			// regexp mode
+			tagRegexp, err := regexp.Compile(skipTag[1 : len(skipTag)-1])
+			if err != nil {
+				return nil, err
+			}
+
+			skippers[i] = func(s string) bool {
+				return tagRegexp.MatchString(s)
+			}
+		} else {
+			skippers[i] = func(s string) bool {
+				log.Warningf(skipTag)
+				return s == skipTag
+			}
+		}
+	}
+
+	skippedTags := sets.NewString()
+	for tag := range buildTags {
+		for _, skipFn := range skippers {
+			if skipFn(tag) {
+				skippedTags.Insert(tag)
+				break
+			}
+		}
+	}
+
+	result := make(map[string]string, len(buildTags)-skippedTags.Len())
+	for tag, val := range buildTags {
+		if skippedTags.Has(tag) {
+			continue
+		}
+
+		result[tag] = val
+	}
+
+	return result, nil
+}
+
+func mergeTags(a, b map[string]string) map[string]string {
+	maxCap := len(a)
+	if x := len(b); x > maxCap {
+		maxCap = x
+	}
+
+	result := make(map[string]string, maxCap)
+	for k, v := range a {
+		result[k] = v
+	}
+
+	for k, v := range b {
+		result[k] = v
+	}
+
+	return result
 }
 
 // Start starts the TabletManager.
@@ -286,6 +376,11 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, healthCheckInterval ti
 	if tm.VREngine != nil {
 		tm.VREngine.InitDBConfig(tm.DBConfigs)
 		servenv.OnTerm(tm.VREngine.Close)
+	}
+
+	if tm.VDiffEngine != nil {
+		tm.VDiffEngine.InitDBConfig(tm.DBConfigs)
+		servenv.OnTerm(tm.VDiffEngine.Close)
 	}
 
 	// The following initializations don't need to be done
@@ -363,6 +458,10 @@ func (tm *TabletManager) Stop() {
 
 	if tm.VREngine != nil {
 		tm.VREngine.Close()
+	}
+
+	if tm.VDiffEngine != nil {
+		tm.VDiffEngine.Close()
 	}
 
 	tm.MysqlDaemon.Close()

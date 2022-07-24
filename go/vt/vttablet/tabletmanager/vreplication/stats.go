@@ -44,7 +44,7 @@ func StatusSummary() (maxReplicationLagSeconds int64, binlogPlayersCount int32) 
 
 // AddStatusPart adds the vreplication status to the status page.
 func AddStatusPart() {
-	servenv.AddStatusPart("VReplication", vreplicationTemplate, func() interface{} {
+	servenv.AddStatusPart("VReplication", vreplicationTemplate, func() any {
 		return globalStats.status()
 	})
 }
@@ -60,37 +60,6 @@ type vrStats struct {
 }
 
 func (st *vrStats) register() {
-	// DEPRECATED
-	//TODO(rohit) : remove this metric and related parameter in V13
-
-	stats.NewGaugeFunc("VReplicationSecondsBehindMasterMax", "Max vreplication seconds behind primary", st.maxReplicationLagSeconds)
-	stats.NewGaugesFuncWithMultiLabels(
-		"VReplicationSecondsBehindMaster",
-		"vreplication seconds behind primary per stream",
-		[]string{"source_keyspace", "source_shard", "workflow", "counts"},
-		func() map[string]int64 {
-			st.mu.Lock()
-			defer st.mu.Unlock()
-			result := make(map[string]int64, len(st.controllers))
-			for _, ct := range st.controllers {
-				result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+fmt.Sprintf("%v", ct.id)] = ct.blpStats.ReplicationLagSeconds.Get()
-			}
-			return result
-		})
-
-	stats.NewCounterFunc(
-		"VReplicationSecondsBehindMasterTotal",
-		"vreplication seconds behind primary aggregated across all streams",
-		func() int64 {
-			st.mu.Lock()
-			defer st.mu.Unlock()
-			result := int64(0)
-			for _, ct := range st.controllers {
-				result += ct.blpStats.ReplicationLagSeconds.Get()
-			}
-			return result
-		})
-
 	stats.NewGaugeFunc("VReplicationStreamCount", "Number of vreplication streams", st.numControllers)
 	stats.NewGaugeFunc("VReplicationLagSecondsMax", "Max vreplication seconds behind primary", st.maxReplicationLagSeconds)
 	stats.Publish("VReplicationStreamState", stats.StringMapFunc(func() map[string]string {
@@ -494,13 +463,13 @@ var vreplicationTemplate = `
       <td>{{range $key, $values := .Rates}}<b>{{$key}}</b>: {{range $values}}{{.}} {{end}}<br>{{end}}</td>
       <td>{{range $index, $value := .Messages}}{{$value}}<br>{{end}}</td>
     </tr>{{end}}
-<div id="vreplication_qps_chart">QPS All Streams </div>
+<div id="vreplication_qps_chart" style="height: 500px; width: 900px">QPS All Streams </div>
 
-<script type="text/javascript" src="https://www.google.com/jsapi"></script>
+<script src="https://www.gstatic.com/charts/loader.js"></script>
 <script type="text/javascript">
 
 function drawVReplicationQPSChart() {
-  var div = $('#vreplication_qps_chart').height(500).width(900).unwrap()[0]
+  var div = document.getElementById('vreplication_qps_chart')
   var chart = new google.visualization.LineChart(div);
 
   var options = {
@@ -519,9 +488,10 @@ function drawVReplicationQPSChart() {
     vars_url = window.location.pathname.substring(0, pos) + vars_url;
   }
 
-  var redraw = function() {
-    $.getJSON(vars_url, function(input_data) {
-      var now = new Date();
+  const redraw = () => fetch(vars_url)
+  .then(async (response) => {
+	const input_data = await response.json();
+	var now = new Date();
       var qps = input_data.VReplicationQPS;
       var planTypes = Object.keys(qps);
       if (planTypes.length === 0) {
@@ -550,8 +520,7 @@ function drawVReplicationQPSChart() {
         data.push(datum)
       }
       chart.draw(google.visualization.arrayToDataTable(data), options);
-    })
-  };
+  })
 
   redraw();
 

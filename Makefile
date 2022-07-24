@@ -49,9 +49,7 @@ export CGO_CFLAGS := -O1
 
 # regenerate rice-box.go when any of the .cnf files change
 embed_config:
-	cd go/vt/mysqlctl
-	go run github.com/GeertJohan/go.rice/rice embed-go
-	go build .
+	cd go/vt/mysqlctl && go run github.com/GeertJohan/go.rice/rice embed-go && go build .
 
 # build the vitess binaries with dynamic dependency on libc
 build-dyn:
@@ -88,7 +86,12 @@ endif
 	# For the specified GOOS + GOARCH, build all the binaries by default with CGO disabled
 	CGO_ENABLED=0 GOOS=${GOOS} GOARCH=${GOARCH} go install -trimpath $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) -ldflags "$(shell tools/build_version_flags.sh)" ./go/...
 	# unset GOOS and embed local resources in the vttablet executable
-	(cd go/cmd/vttablet && unset GOOS && go run github.com/GeertJohan/go.rice/rice --verbose append --exec=$${HOME}/go/bin/${GOOS}_${GOARCH}/vttablet)
+	if [ -d /go/bin ]; then
+		# Probably in the bootstrap container
+		(cd go/cmd/vttablet && go run github.com/GeertJohan/go.rice/rice --verbose append --exec=/go/bin/${GOOS}_${GOARCH}/vttablet)
+	else
+		(cd go/cmd/vttablet && unset GOOS && unset GOARCH && go run github.com/GeertJohan/go.rice/rice --verbose append --exec=$${HOME}/go/bin/${GOOS}_${GOARCH}/vttablet)
+	fi
 	# Cross-compiling w/ cgo isn't trivial and we don't need vtorc, so we can skip building it
 
 debug:
@@ -104,14 +107,21 @@ endif
 install: build
 	# binaries
 	mkdir -p "$${PREFIX}/bin"
-	cp "$${VTROOT}/bin/"{mysqlctl,mysqlctld,vtorc,vtctld,vtctlclient,vtctldclient,vtgate,vttablet,vtworker,vtbackup} "$${PREFIX}/bin/"
+	cp "$${VTROOT}/bin/"{mysqlctl,mysqlctld,vtorc,vtadmin,vtctld,vtctlclient,vtctldclient,vtgate,vttablet,vtbackup} "$${PREFIX}/bin/"
+
+# Will only work inside the docker bootstrap for now
+cross-install: cross-build
+	# binaries
+	mkdir -p "$${PREFIX}/bin"
+	# Still no vtorc for cross-compile
+	cp "/go/bin/${GOOS}_${GOARCH}/"{mysqlctl,mysqlctld,vtadmin,vtctld,vtctlclient,vtctldclient,vtgate,vttablet,vtbackup} "$${PREFIX}/bin/"
 
 # Install local install the binaries needed to run vitess locally
 # Usage: make install-local PREFIX=/path/to/install/root
 install-local: build
 	# binaries
 	mkdir -p "$${PREFIX}/bin"
-	cp "$${VTROOT}/bin/"{mysqlctl,mysqlctld,vtorc,vtctl,vtctld,vtctlclient,vtctldclient,vtgate,vttablet,vtworker,vtbackup} "$${PREFIX}/bin/"
+	cp "$${VTROOT}/bin/"{mysqlctl,mysqlctld,vtorc,vtadmin,vtctl,vtctld,vtctlclient,vtctldclient,vtgate,vttablet,vtbackup} "$${PREFIX}/bin/"
 
 
 # install copies the files needed to run test Vitess using vtcombo into the given directory tree.
@@ -131,6 +141,9 @@ vtctldclient: go/vt/proto/vtctlservice/vtctlservice.pb.go
 
 parser:
 	make -C go/vt/sqlparser
+
+demo:
+	go install ./examples/demo/demo.go
 
 codegen: asthelpergen sizegen parser astfmtgen
 
@@ -171,7 +184,7 @@ cleanall: clean
 	# Remind people to run bootstrap.sh again
 	echo "Please run 'make tools' again to setup your environment"
 
-unit_test: build dependency_check
+unit_test: build dependency_check demo
 	echo $$(date): Running unit tests
 	tools/unit_test_runner.sh
 
@@ -196,6 +209,7 @@ e2e_test_cluster: build
 
 .ONESHELL:
 SHELL = /bin/bash
+.SHELLFLAGS = -ec
 
 # Run the following tests after making worker changes.
 worker_test:
@@ -210,14 +224,13 @@ java_test:
 	VTROOT=${PWD} mvn -f java/pom.xml -B clean verify
 
 install_protoc-gen-go:
-	go install google.golang.org/protobuf/cmd/protoc-gen-go
-	go install google.golang.org/grpc/cmd/protoc-gen-go-grpc
-	go install github.com/planetscale/vtprotobuf/cmd/protoc-gen-go-vtproto
+	go install google.golang.org/protobuf/cmd/protoc-gen-go@$(shell go list -m -f '{{ .Version }}' google.golang.org/protobuf)
+	go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.2.0 # the GRPC compiler its own pinned version
+	go install github.com/planetscale/vtprotobuf/cmd/protoc-gen-go-vtproto@$(shell go list -m -f '{{ .Version }}' github.com/planetscale/vtprotobuf)
 
 PROTO_SRCS = $(wildcard proto/*.proto)
 PROTO_SRC_NAMES = $(basename $(notdir $(PROTO_SRCS)))
 PROTO_GO_OUTS = $(foreach name, $(PROTO_SRC_NAMES), go/vt/proto/$(name)/$(name).pb.go)
-
 # This rule rebuilds all the go files from the proto definitions for gRPC.
 proto: $(PROTO_GO_OUTS)
 
@@ -233,7 +246,7 @@ $(PROTO_GO_OUTS): minimaltools install_protoc-gen-go proto/*.proto
 		--go-vtproto_opt=features=marshal+unmarshal+size+pool \
 		--go-vtproto_opt=pool=vitess.io/vitess/go/vt/proto/query.Row \
 		--go-vtproto_opt=pool=vitess.io/vitess/go/vt/proto/binlogdata.VStreamRowsResponse \
-		-I${PWD}/dist/vt-protoc-3.6.1/include:proto $(PROTO_SRCS)
+		-I${PWD}/dist/vt-protoc-3.19.4/include:proto $(PROTO_SRCS)
 	cp -Rf vitess.io/vitess/go/vt/proto/* go/vt/proto
 	rm -rf vitess.io/vitess/go/vt/proto/
 
@@ -241,9 +254,9 @@ $(PROTO_GO_OUTS): minimaltools install_protoc-gen-go proto/*.proto
 # Please read docker/README.md to understand the different available images.
 
 # This rule builds the bootstrap images for all flavors.
-DOCKER_IMAGES_FOR_TEST = mariadb mariadb103 mysql56 mysql57 mysql80 percona percona57 percona80
+DOCKER_IMAGES_FOR_TEST = mariadb mariadb103 mysql57 mysql80 percona57 percona80
 DOCKER_IMAGES = common $(DOCKER_IMAGES_FOR_TEST)
-BOOTSTRAP_VERSION=3
+BOOTSTRAP_VERSION=9
 ensure_bootstrap_version:
 	find docker/ -type f -exec sed -i "s/^\(ARG bootstrap_version\)=.*/\1=${BOOTSTRAP_VERSION}/" {} \;
 	sed -i 's/\(^.*flag.String(\"bootstrap-version\",\) *\"[^\"]\+\"/\1 \"${BOOTSTRAP_VERSION}\"/' test.go
@@ -263,16 +276,23 @@ docker_bootstrap_pull:
 
 
 define build_docker_image
-	# Fix permissions before copying files, to avoid AUFS bug.
 	${info Building ${2}}
-	chmod -R o=g *;
-	docker build -f ${1} -t ${2} --build-arg bootstrap_version=${BOOTSTRAP_VERSION} .;
+	# Fix permissions before copying files, to avoid AUFS bug other must have read/access permissions
+	chmod -R o=rx *;
+
+	if grep -q arm64 <<< ${2}; then \
+		echo "Building docker using arm64 buildx"; \
+		docker buildx build --platform linux/arm64 -f ${1} -t ${2} --build-arg bootstrap_version=${BOOTSTRAP_VERSION} .; \
+	else \
+		echo "Building docker using straight docker build"; \
+		docker build -f ${1} -t ${2} --build-arg bootstrap_version=${BOOTSTRAP_VERSION} .; \
+	fi
 endef
 
 docker_base:
 	${call build_docker_image,docker/base/Dockerfile,vitess/base}
 
-DOCKER_BASE_SUFFIX = mysql56 mysql80 mariadb mariadb103 percona percona57 percona80
+DOCKER_BASE_SUFFIX = mysql80 mariadb mariadb103 percona57 percona80
 DOCKER_BASE_TARGETS = $(addprefix docker_base_, $(DOCKER_BASE_SUFFIX))
 $(DOCKER_BASE_TARGETS): docker_base_%:
 	${call build_docker_image,docker/base/Dockerfile.$*,vitess/base:$*}
@@ -282,7 +302,7 @@ docker_base_all: docker_base $(DOCKER_BASE_TARGETS)
 docker_lite:
 	${call build_docker_image,docker/lite/Dockerfile,vitess/lite}
 
-DOCKER_LITE_SUFFIX = mysql56 mysql57 ubi7.mysql57 mysql80 ubi7.mysql80 mariadb mariadb103 percona percona57 ubi7.percona57 percona80 ubi7.percona80 alpine testing
+DOCKER_LITE_SUFFIX = mysql57 ubi7.mysql57 mysql80 ubi7.mysql80 mariadb mariadb103 percona57 ubi7.percona57 percona80 ubi7.percona80 alpine testing ubi8.mysql80 ubi8.arm64.mysql80
 DOCKER_LITE_TARGETS = $(addprefix docker_lite_,$(DOCKER_LITE_SUFFIX))
 $(DOCKER_LITE_TARGETS): docker_lite_%:
 	${call build_docker_image,docker/lite/Dockerfile.$*,vitess/lite:$*}
@@ -291,6 +311,9 @@ docker_lite_all: docker_lite $(DOCKER_LITE_TARGETS)
 
 docker_local:
 	${call build_docker_image,docker/local/Dockerfile,vitess/local}
+
+docker_run_local:
+	./docker/local/run.sh
 
 docker_mini:
 	${call build_docker_image,docker/mini/Dockerfile,vitess/mini}
@@ -325,49 +348,7 @@ release: docker_base
 	echo "Also, don't forget the upload releases/v$(VERSION).tar.gz file to GitHub releases"
 
 do_release:
-ifndef RELEASE_VERSION
-		echo "Set the env var RELEASE_VERSION with the release version"
-		exit 1
-endif
-ifndef DEV_VERSION
-		echo "Set the env var DEV_VERSION with the version the dev branch should have after release"
-		exit 1
-endif
-ifeq ($(strip $(GIT_STATUS)),)
-	echo so much clean
-else
-	echo cannot do release with dirty git state
-	exit 1
-	echo so much win
-endif
-# Pre checks passed. Let's change the current version
-	cd java && mvn versions:set -DnewVersion=$(RELEASE_VERSION)
-	echo package servenv > go/vt/servenv/version.go
-	echo  >> go/vt/servenv/version.go
-	echo const versionName = \"$(RELEASE_VERSION)\" >> go/vt/servenv/version.go
-	echo -n Pausing so relase notes can be added. Press enter to continue
-	read line
-	git add --all
-	git commit -n -s -m "Release commit for $(RELEASE_VERSION)"
-	git tag -m Version\ $(RELEASE_VERSION) v$(RELEASE_VERSION)
-ifdef GODOC_RELEASE_VERSION
-	git tag -a v$(GODOC_RELEASE_VERSION) -m "Tagging $(RELEASE_VERSION) also as $(GODOC_RELEASE_VERSION) for godoc/go modules"
-endif
-	cd java && mvn versions:set -DnewVersion=$(DEV_VERSION)
-	echo package servenv > go/vt/servenv/version.go
-	echo  >> go/vt/servenv/version.go
-	echo const versionName = \"$(DEV_VERSION)\" >> go/vt/servenv/version.go
-	git add --all
-	git commit -n -s -m "Back to dev mode"
-	echo "Release preparations successful"
-ifdef GODOC_RELEASE_VERSION
-	echo "Two git tags were created, you can push them with:"
-	echo "   git push upstream v$(RELEASE_VERSION) && git push upstream v$(GODOC_RELEASE_VERSION)"
-else
-	echo "One git tag was created, you can push it with:"
-	echo "   git push upstream v$(RELEASE_VERSION)"
-endif
-	echo "The git branch has also been updated. You need to push it and get it merged"
+	./tools/do_release.sh
 
 tools:
 	echo $$(date): Installing dependencies
@@ -462,6 +443,10 @@ vtadmin_web_install:
 # While vtadmin-web is new and unstable, however, we can keep it out of the critical build path.
 vtadmin_web_proto_types: vtadmin_web_install
 	./web/vtadmin/bin/generate-proto-types.sh
+
+vtadmin_authz_testgen:
+	go generate ./go/vt/vtadmin/
+	go fmt ./go/vt/vtadmin/
 
 # Generate github CI actions workflow files for unit tests and cluster endtoend tests based on templates in the test/templates directory
 # Needs to be called if the templates change or if a new test "shard" is created. We do not need to rebuild tests if only the test/config.json

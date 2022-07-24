@@ -1,0 +1,1 @@
+../../../../mysql/collations/integration/main_test.go

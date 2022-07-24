@@ -130,22 +130,43 @@ func main() { // nolint:funlen
 		// github.com/golang/protobuf/grpc, although in vitess we currently
 		// always use the former.
 
+		// In the case of unary RPCs, the first result is a Pointer. In the case
+		// of streaming RPCs, it is a Named type whose underlying type is an
+		// Interface.
+		//
 		// The second result is always error.
 		result := sig.Results().At(0)
+		switch result.Type().(type) {
+		case *types.Pointer:
+			localType, localImport, pkgPath, err = extractLocalPointerType(result)
+		case *types.Named:
+			switch result.Type().Underlying().(type) {
+			case *types.Interface:
+				f.IsStreaming = true
+				localType, localImport, pkgPath, err = extractLocalNamedType(result)
+				if err == nil && *local {
+					// We need to get the pointer type returned by `stream.Recv()`
+					// in the local case for the stream adapter.
+					var recvType, recvImport, recvPkgPath string
+					recvType, recvImport, recvPkgPath, err = extractRecvType(result)
+					if err == nil {
+						f.StreamMessage = buildParam("stream", recvImport, recvType, true)
+						importNames = addImport(recvImport, recvPkgPath, importNames, imports)
+					}
+				}
+			default:
+				err = fmt.Errorf("expected either pointer (for unary) or named interface (for streaming) rpc result type, got %T", result.Type().Underlying())
+			}
+		default:
+			err = fmt.Errorf("expected either pointer (for unary) or named interface (for streaming) rpc result type, got %T", result.Type())
+		}
 
-		localType, localImport, pkgPath, err = extractLocalPointerType(result) // (TODO|@amason): does not work for streaming rpcs
 		if err != nil {
 			panic(err)
 		}
 
-		f.Result.Name = result.Name()
-		f.Result.Type = "*" + localImport + "." + localType
-
-		if _, ok := imports[localImport]; !ok {
-			importNames = append(importNames, localImport)
-		}
-
-		imports[localImport] = pkgPath
+		f.Result = buildParam(result.Name(), localImport, localType, !f.IsStreaming)
+		importNames = addImport(localImport, pkgPath, importNames, imports)
 	}
 
 	sort.Strings(importNames)
@@ -194,6 +215,23 @@ type ClientInterfaceDef struct {
 	ClientName  string
 }
 
+// NeedsGRPCShim returns true if the generated client code needs the internal
+// grpcshim imported. Currently this is true if the client is Local and has any
+// methods that are streaming RPCs.
+func (def *ClientInterfaceDef) NeedsGRPCShim() bool {
+	if !def.Local {
+		return false
+	}
+
+	for _, m := range def.Methods {
+		if m.IsStreaming {
+			return true
+		}
+	}
+
+	return false
+}
+
 // Import contains the meta information about a Go import.
 type Import struct {
 	Alias string
@@ -203,9 +241,11 @@ type Import struct {
 // Func is the variable part of a gRPC client interface method (i.e. not the
 // context or dialopts arguments, or the error part of the result tuple).
 type Func struct {
-	Name   string
-	Param  Param
-	Result Param
+	Name          string
+	Param         Param
+	Result        Param
+	IsStreaming   bool
+	StreamMessage Param
 }
 
 // Param represents an element of either a parameter list or result list. It
@@ -216,6 +256,28 @@ type Param struct {
 	Name string
 	// locally-qualified type, e.g. "grpc.CallOption", and not "google.golang.org/grpc.CallOption".
 	Type string
+}
+
+func buildParam(name string, localImport string, localType string, isPointer bool) Param {
+	p := Param{
+		Name: name,
+		Type: fmt.Sprintf("%s.%s", localImport, localType),
+	}
+
+	if isPointer {
+		p.Type = "*" + p.Type
+	}
+
+	return p
+}
+
+func addImport(localImport string, pkgPath string, importNames []string, imports map[string]string) []string {
+	if _, ok := imports[localImport]; !ok {
+		importNames = append(importNames, localImport)
+	}
+
+	imports[localImport] = pkgPath
+	return importNames
 }
 
 func loadPackage(source string) (*packages.Package, error) {
@@ -280,6 +342,19 @@ func rewriteProtoImports(pkg *types.Package) string {
 	return pkg.Name()
 }
 
+func extractLocalNamedType(v *types.Var) (name string, localImport string, pkgPath string, err error) {
+	named, ok := v.Type().(*types.Named)
+	if !ok {
+		return "", "", "", fmt.Errorf("expected a named type for %s, got %v", v.Name(), v.Type())
+	}
+
+	name = named.Obj().Name()
+	localImport = rewriteProtoImports(named.Obj().Pkg())
+	pkgPath = named.Obj().Pkg().Path()
+
+	return name, localImport, pkgPath, nil
+}
+
 func extractLocalPointerType(v *types.Var) (name string, localImport string, pkgPath string, err error) {
 	ptr, ok := v.Type().(*types.Pointer)
 	if !ok {
@@ -296,4 +371,36 @@ func extractLocalPointerType(v *types.Var) (name string, localImport string, pkg
 	pkgPath = typ.Obj().Pkg().Path()
 
 	return name, localImport, pkgPath, nil
+}
+
+func extractRecvType(v *types.Var) (name string, localImport string, pkgPath string, err error) {
+	named, ok := v.Type().(*types.Named)
+	if !ok {
+		return "", "", "", fmt.Errorf("expected a named type for %s, got %v", v.Name(), v.Type())
+	}
+
+	iface, ok := named.Underlying().(*types.Interface)
+	if !ok {
+		return "", "", "", fmt.Errorf("expected %s to name an interface type, got %v", v.Name(), named.Underlying())
+	}
+
+	for i := 0; i < iface.NumExplicitMethods(); i++ {
+		m := iface.ExplicitMethod(i)
+		if m.Name() != "Recv" {
+			continue
+		}
+
+		sig, ok := m.Type().(*types.Signature)
+		if !ok {
+			return "", "", "", fmt.Errorf("%s.Recv should have type Signature; got %v", v.Name(), m.Type())
+		}
+
+		if sig.Results().Len() != 2 {
+			return "", "", "", fmt.Errorf("%s.Recv should return two values, not %d", v.Name(), sig.Results().Len())
+		}
+
+		return extractLocalPointerType(sig.Results().At(0))
+	}
+
+	return "", "", "", fmt.Errorf("interface %s has no explicit method named Recv", named.Obj().Name())
 }

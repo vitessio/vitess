@@ -20,18 +20,22 @@ import (
 	"errors"
 	"fmt"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/mysql"
 
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
-func buildUnionPlan(string) func(sqlparser.Statement, *sqlparser.ReservedVars, ContextVSchema) (engine.Primitive, error) {
-	return func(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema ContextVSchema) (engine.Primitive, error) {
+func buildUnionPlan(string) stmtPlanner {
+	return func(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
 		union := stmt.(*sqlparser.Union)
+		if union.With != nil {
+			return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: with expression in union statement")
+		}
 		// For unions, create a pb with anonymous scope.
 		pb := newPrimitiveBuilder(vschema, newJointab(reservedVars))
 		if err := pb.processUnion(union, reservedVars, nil); err != nil {
@@ -40,7 +44,7 @@ func buildUnionPlan(string) func(sqlparser.Statement, *sqlparser.ReservedVars, C
 		if err := pb.plan.Wireup(pb.plan, pb.jt); err != nil {
 			return nil, err
 		}
-		return pb.plan.Primitive(), nil
+		return newPlanResult(pb.plan.Primitive()), nil
 	}
 }
 
@@ -73,7 +77,7 @@ func (pb *primitiveBuilder) processUnion(union *sqlparser.Union, reservedVars *s
 		}
 
 		if union.Distinct {
-			pb.plan = newDistinct(pb.plan)
+			pb.plan = newDistinctV3(pb.plan)
 		}
 	}
 	pb.st.Outer = outer

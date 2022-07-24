@@ -34,17 +34,18 @@ func TestInit(t *testing.T) {
 	dbConfigs := DBConfigs{
 		appParams: mysql.ConnParams{UnixSocket: "socket"},
 		dbaParams: mysql.ConnParams{Host: "host"},
+		Charset:   "utf8",
 	}
 	dbConfigs.InitWithSocket("default")
-	assert.Equal(t, mysql.ConnParams{UnixSocket: "socket"}, dbConfigs.appParams)
-	assert.Equal(t, mysql.ConnParams{Host: "host"}, dbConfigs.dbaParams)
-	assert.Equal(t, mysql.ConnParams{UnixSocket: "default"}, dbConfigs.appdebugParams)
+	assert.Equal(t, mysql.ConnParams{UnixSocket: "socket", Charset: "utf8"}, dbConfigs.appParams)
+	assert.Equal(t, mysql.ConnParams{Host: "host", Charset: "utf8"}, dbConfigs.dbaParams)
+	assert.Equal(t, mysql.ConnParams{UnixSocket: "default", Charset: "utf8"}, dbConfigs.appdebugParams)
 
 	dbConfigs = DBConfigs{
 		Host:                       "a",
 		Port:                       1,
 		Socket:                     "b",
-		Charset:                    "c",
+		Charset:                    "utf8mb4",
 		Flags:                      2,
 		Flavor:                     "flavor",
 		SslCa:                      "d",
@@ -79,7 +80,7 @@ func TestInit(t *testing.T) {
 		Uname:            "app",
 		Pass:             "apppass",
 		UnixSocket:       "b",
-		Charset:          "c",
+		Charset:          "utf8mb4",
 		Flags:            2,
 		Flavor:           "flavor",
 		ConnectTimeoutMs: 250,
@@ -90,7 +91,7 @@ func TestInit(t *testing.T) {
 		Host:             "a",
 		Port:             1,
 		UnixSocket:       "b",
-		Charset:          "c",
+		Charset:          "utf8mb4",
 		Flags:            2,
 		Flavor:           "flavor",
 		SslCa:            "d",
@@ -106,7 +107,7 @@ func TestInit(t *testing.T) {
 		Uname:            "dba",
 		Pass:             "dbapass",
 		UnixSocket:       "b",
-		Charset:          "c",
+		Charset:          "utf8mb4",
 		Flags:            2,
 		Flavor:           "flavor",
 		SslCa:            "d",
@@ -127,6 +128,7 @@ func TestInit(t *testing.T) {
 		SslCaPath: "e",
 		SslCert:   "f",
 		SslKey:    "g",
+		Charset:   "utf8",
 		App: UserConfig{
 			User:     "app",
 			Password: "apppass",
@@ -141,7 +143,7 @@ func TestInit(t *testing.T) {
 		},
 		appParams: mysql.ConnParams{
 			UnixSocket: "socket",
-			Charset:    "f",
+			Charset:    "utf8mb4",
 		},
 		dbaParams: mysql.ConnParams{
 			Host:  "host",
@@ -155,7 +157,7 @@ func TestInit(t *testing.T) {
 		Uname:      "app",
 		Pass:       "apppass",
 		UnixSocket: "b",
-		Charset:    "f",
+		Charset:    "utf8mb4",
 	}
 	assert.Equal(t, want, dbConfigs.appParams)
 	want = mysql.ConnParams{
@@ -166,6 +168,7 @@ func TestInit(t *testing.T) {
 		SslCaPath:  "e",
 		SslCert:    "f",
 		SslKey:     "g",
+		Charset:    "utf8",
 	}
 	assert.Equal(t, want, dbConfigs.appdebugParams)
 	want = mysql.ConnParams{
@@ -179,6 +182,7 @@ func TestInit(t *testing.T) {
 		SslCaPath:  "e",
 		SslCert:    "f",
 		SslKey:     "g",
+		Charset:    "utf8",
 	}
 	assert.Equal(t, want, dbConfigs.dbaParams)
 }
@@ -195,13 +199,15 @@ func TestUseTCP(t *testing.T) {
 		Dba: UserConfig{
 			User: "dba",
 		},
+		Charset: "utf8",
 	}
 	dbConfigs.InitWithSocket("default")
 
 	want := mysql.ConnParams{
-		Host:  "a",
-		Port:  1,
-		Uname: "app",
+		Host:    "a",
+		Port:    1,
+		Uname:   "app",
+		Charset: "utf8",
 	}
 	assert.Equal(t, want, dbConfigs.appParams)
 
@@ -210,6 +216,7 @@ func TestUseTCP(t *testing.T) {
 		Port:       1,
 		Uname:      "dba",
 		UnixSocket: "b",
+		Charset:    "utf8",
 	}
 	assert.Equal(t, want, dbConfigs.dbaParams)
 }
@@ -223,6 +230,7 @@ func TestAccessors(t *testing.T) {
 		filteredParams: mysql.ConnParams{},
 		replParams:     mysql.ConnParams{},
 		DBName:         "db",
+		Charset:        "utf8",
 	}
 	if got, want := dbc.AppWithDB().connParams.DbName, "db"; got != want {
 		t.Errorf("dbc.AppWithDB().DbName: %v, want %v", got, want)

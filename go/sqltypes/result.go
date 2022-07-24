@@ -31,9 +31,10 @@ type Result struct {
 	Fields              []*querypb.Field `json:"fields"`
 	RowsAffected        uint64           `json:"rows_affected"`
 	InsertID            uint64           `json:"insert_id"`
-	Rows                [][]Value        `json:"rows"`
+	Rows                []Row            `json:"rows"`
 	SessionStateChanges string           `json:"session_state_changes"`
 	StatusFlags         uint16           `json:"status_flags"`
+	Info                string           `json:"info"`
 }
 
 //goland:noinspection GoUnusedConst
@@ -221,9 +222,9 @@ func saveRowsAnalysis(r Result, allRows map[string]int, totalRows *int, incremen
 	for _, row := range r.Rows {
 		newHash := hashCodeForRow(row)
 		if increment {
-			allRows[newHash] += 1
+			allRows[newHash]++
 		} else {
-			allRows[newHash] -= 1
+			allRows[newHash]--
 		}
 	}
 	if increment {

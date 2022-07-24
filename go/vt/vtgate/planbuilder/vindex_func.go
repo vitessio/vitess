@@ -47,6 +47,15 @@ type vindexFunc struct {
 	eVindexFunc *engine.VindexFunc
 }
 
+var colnames = []string{
+	"id",
+	"keyspace_id",
+	"range_start",
+	"range_end",
+	"hex_keyspace_id",
+	"shard",
+}
+
 func newVindexFunc(alias sqlparser.TableName, vindex vindexes.SingleColumn) (*vindexFunc, *symtab) {
 	vf := &vindexFunc{
 		order: 1,
@@ -61,13 +70,9 @@ func newVindexFunc(alias sqlparser.TableName, vindex vindexes.SingleColumn) (*vi
 		origin: vf,
 	}
 
-	// Column names are hard-coded to id, keyspace_id
-	t.addColumn(sqlparser.NewColIdent("id"), &column{origin: vf})
-	t.addColumn(sqlparser.NewColIdent("keyspace_id"), &column{origin: vf})
-	t.addColumn(sqlparser.NewColIdent("range_start"), &column{origin: vf})
-	t.addColumn(sqlparser.NewColIdent("range_end"), &column{origin: vf})
-	t.addColumn(sqlparser.NewColIdent("hex_keyspace_id"), &column{origin: vf})
-	t.addColumn(sqlparser.NewColIdent("shard"), &column{origin: vf})
+	for _, colName := range colnames {
+		t.addColumn(sqlparser.NewIdentifierCI(colName), &column{origin: vf})
+	}
 	t.isAuthoritative = true
 
 	st := newSymtab()
@@ -156,15 +161,8 @@ func (vf *vindexFunc) SupplyProjection(expr *sqlparser.AliasedExpr, reuse bool) 
 		}
 	}
 
-	var name string
-	if expr.As.IsEmpty() {
-		name = sqlparser.String(colName)
-	} else {
-		name = expr.As.String()
-	}
-
 	vf.eVindexFunc.Fields = append(vf.eVindexFunc.Fields, &querypb.Field{
-		Name: name,
+		Name: expr.ColumnName(),
 		Type: querypb.Type_VARBINARY,
 	})
 	vf.eVindexFunc.Cols = append(vf.eVindexFunc.Cols, enum)
@@ -221,4 +219,13 @@ func vindexColumnToIndex(column *sqlparser.ColName) int {
 	default:
 		return -1
 	}
+}
+
+// OutputColumns implements the logicalPlan interface
+func (vf *vindexFunc) OutputColumns() []sqlparser.SelectExpr {
+	exprs := make([]sqlparser.SelectExpr, 0, len(colnames))
+	for _, field := range vf.eVindexFunc.Fields {
+		exprs = append(exprs, &sqlparser.AliasedExpr{Expr: sqlparser.NewColName(field.Name)})
+	}
+	return exprs
 }

@@ -31,7 +31,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 )
 
-func TestVExec2(t *testing.T) {
+func TestVExec(t *testing.T) {
 	ctx := context.Background()
 	workflow := "wrWorkflow"
 	keyspace := "target"
@@ -211,6 +211,8 @@ func TestWorkflowListStreams(t *testing.T) {
 		]
 	},
 	"MaxVReplicationLag": 0,
+	"MaxVReplicationTransactionLag": 0,
+	"Frozen": false,
 	"ShardStatuses": {
 		"-80/zone1-0000000200": {
 			"PrimaryReplicationStatuses": [
@@ -235,6 +237,9 @@ func TestWorkflowListStreams(t *testing.T) {
 					"DBName": "vt_target",
 					"TransactionTimestamp": 0,
 					"TimeUpdated": 1234,
+					"TimeHeartbeat": 1234,
+					"TimeThrottled": 0,
+					"ComponentThrottled": "",
 					"Message": "",
 					"Tags": "",
 					"CopyState": [
@@ -271,6 +276,9 @@ func TestWorkflowListStreams(t *testing.T) {
 					"DBName": "vt_target",
 					"TransactionTimestamp": 0,
 					"TimeUpdated": 1234,
+					"TimeHeartbeat": 1234,
+					"TimeThrottled": 0,
+					"ComponentThrottled": "",
 					"Message": "",
 					"Tags": "",
 					"CopyState": [
@@ -284,7 +292,9 @@ func TestWorkflowListStreams(t *testing.T) {
 			"TabletControls": null,
 			"PrimaryIsServing": true
 		}
-	}
+	},
+	"SourceTimeZone": "",
+	"TargetTimeZone": ""
 }
 
 `
@@ -292,6 +302,8 @@ func TestWorkflowListStreams(t *testing.T) {
 	// MaxVReplicationLag needs to be reset. This can't be determinable in this kind of a test because time.Now() is constantly shifting.
 	re := regexp.MustCompile(`"MaxVReplicationLag": \d+`)
 	got = re.ReplaceAllLiteralString(got, `"MaxVReplicationLag": 0`)
+	re = regexp.MustCompile(`"MaxVReplicationTransactionLag": \d+`)
+	got = re.ReplaceAllLiteralString(got, `"MaxVReplicationTransactionLag": 0`)
 	require.Equal(t, want, got)
 
 	results, err := wr.execWorkflowAction(ctx, workflow, keyspace, "stop", false)

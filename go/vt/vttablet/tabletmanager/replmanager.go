@@ -65,6 +65,8 @@ func newReplManager(ctx context.Context, tm *TabletManager, interval time.Durati
 	}
 }
 
+// SetTabletType starts/stops the replication manager ticks based on the tablet type provided.
+// It stops the ticks if the tablet type is not a replica type, starts the ticks otherwise.
 func (rm *replManager) SetTabletType(tabletType topodatapb.TabletType) {
 	if *mysqlctl.DisableActiveReparents {
 		return
@@ -109,7 +111,7 @@ func (rm *replManager) checkActionLocked() {
 	} else {
 		// If only one of the threads is stopped, it's probably
 		// intentional. So, we don't repair replication.
-		if status.SQLThreadRunning || status.IOThreadRunning {
+		if status.SQLHealthy() || status.IOHealthy() {
 			return
 		}
 	}
@@ -128,6 +130,23 @@ func (rm *replManager) checkActionLocked() {
 	}
 	log.Info("Successfully reconnected to primary.")
 	rm.failed = false
+}
+
+// reset the replication manager state and deleting the marker-file.
+// it does not start or stop the ticks. Use setReplicationStopped instead to change that.
+func (rm *replManager) reset() {
+	if *mysqlctl.DisableActiveReparents {
+		return
+	}
+
+	rm.mu.Lock()
+	defer rm.mu.Unlock()
+
+	rm.replStopped = nil
+	if rm.markerFile == "" {
+		return
+	}
+	os.Remove(rm.markerFile)
 }
 
 // setReplicationStopped performs a best effort attempt of

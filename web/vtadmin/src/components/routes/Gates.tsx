@@ -26,15 +26,16 @@ import { DataTable } from '../dataTable/DataTable';
 import { ContentContainer } from '../layout/ContentContainer';
 import { WorkspaceHeader } from '../layout/WorkspaceHeader';
 import { WorkspaceTitle } from '../layout/WorkspaceTitle';
+import { QueryLoadingPlaceholder } from '../placeholders/QueryLoadingPlaceholder';
 
 export const Gates = () => {
     useDocumentTitle('Gates');
 
-    const { data } = useGates();
+    const gatesQuery = useGates();
     const { value: filter, updateValue: updateFilter } = useSyncedURLParam('filter');
 
     const rows = React.useMemo(() => {
-        const mapped = (data || []).map((g) => ({
+        const mapped = (gatesQuery.data || []).map((g) => ({
             cell: g.cell,
             cluster: g.cluster?.name,
             hostname: g.hostname,
@@ -43,17 +44,17 @@ export const Gates = () => {
         }));
         const filtered = filterNouns(filter, mapped);
         return orderBy(filtered, ['cluster', 'pool', 'hostname', 'cell']);
-    }, [data, filter]);
+    }, [gatesQuery.data, filter]);
 
     const renderRows = (gates: typeof rows) =>
         gates.map((gate, idx) => (
             <tr key={idx}>
-                <DataCell className="white-space-nowrap">
+                <DataCell className="whitespace-nowrap">
                     <div>{gate.pool}</div>
-                    <div className="font-size-small text-color-secondary">{gate.cluster}</div>
+                    <div className="text-sm text-secondary">{gate.cluster}</div>
                 </DataCell>
-                <DataCell className="white-space-nowrap">{gate.hostname}</DataCell>
-                <DataCell className="white-space-nowrap">{gate.cell}</DataCell>
+                <DataCell className="whitespace-nowrap">{gate.hostname}</DataCell>
+                <DataCell className="whitespace-nowrap">{gate.cell}</DataCell>
                 <DataCell>{(gate.keyspaces || []).join(', ')}</DataCell>
             </tr>
         ));
@@ -72,6 +73,7 @@ export const Gates = () => {
                     value={filter || ''}
                 />
                 <DataTable columns={['Pool', 'Hostname', 'Cell', 'Keyspaces']} data={rows} renderRows={renderRows} />
+                <QueryLoadingPlaceholder query={gatesQuery} />
             </ContentContainer>
         </div>
     );

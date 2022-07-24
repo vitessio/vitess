@@ -26,6 +26,10 @@ import (
 
 type concatenateGen4 struct {
 	sources []logicalPlan
+
+	// These column offsets do not need to be typed checked - they usually contain weight_string()
+	// columns that are not going to be returned to the user
+	noNeedToTypeCheck []int
 }
 
 var _ logicalPlan = (*concatenateGen4)(nil)
@@ -82,9 +86,8 @@ func (c *concatenateGen4) Primitive() engine.Primitive {
 	for _, source := range c.sources {
 		sources = append(sources, source.Primitive())
 	}
-	return &engine.Concatenate{
-		Sources: sources,
-	}
+
+	return engine.NewConcatenate(sources, c.noNeedToTypeCheck)
 }
 
 // Rewrite implements the logicalPlan interface
@@ -108,4 +111,9 @@ func (c *concatenateGen4) ContainsTables() semantics.TableSet {
 // Inputs implements the logicalPlan interface
 func (c *concatenateGen4) Inputs() []logicalPlan {
 	return c.sources
+}
+
+// OutputColumns implements the logicalPlan interface
+func (c *concatenateGen4) OutputColumns() []sqlparser.SelectExpr {
+	return c.sources[0].OutputColumns()
 }

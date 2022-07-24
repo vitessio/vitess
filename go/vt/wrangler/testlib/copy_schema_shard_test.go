@@ -17,6 +17,7 @@ limitations under the License.
 package testlib
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -30,6 +31,7 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/wrangler"
 
@@ -58,10 +60,7 @@ func copySchema(t *testing.T, useShardAsSource bool) {
 	vp := NewVtctlPipe(t, ts)
 	defer vp.Close()
 
-	if err := ts.CreateKeyspace(context.Background(), "ks", &topodatapb.Keyspace{
-		ShardingColumnName: "keyspace_id",
-		ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
-	}); err != nil {
+	if err := ts.CreateKeyspace(context.Background(), "ks", &topodatapb.Keyspace{}); err != nil {
 		t.Fatalf("CreateKeyspace failed: %v", err)
 	}
 
@@ -107,6 +106,7 @@ func copySchema(t *testing.T, useShardAsSource bool) {
 	sourcePrimary.FakeMysqlDaemon.Schema = schema
 	sourceRdonly.FakeMysqlDaemon.Schema = schema
 
+	setSQLMode := fmt.Sprintf("SET @@session.sql_mode='%v'", vreplication.SQLMode)
 	changeToDb := "USE `vt_ks`"
 	createDb := "CREATE DATABASE `vt_ks` /*!40100 DEFAULT CHARACTER SET utf8 */"
 	createTable := "CREATE TABLE `vt_ks`.`table1` (\n" +
@@ -148,8 +148,9 @@ func copySchema(t *testing.T, useShardAsSource bool) {
 	sourceDb.AddQuery(selectShardMetadata, &sqltypes.Result{})
 
 	// The destination table is asked to create the new schema.
-	destinationPrimaryDb.AddQuery(changeToDb, &sqltypes.Result{})
+	destinationPrimaryDb.AddQuery(setSQLMode, &sqltypes.Result{})
 	destinationPrimaryDb.AddQuery(createDb, &sqltypes.Result{})
+	destinationPrimaryDb.AddQuery(changeToDb, &sqltypes.Result{})
 	destinationPrimaryDb.AddQuery(createTable, &sqltypes.Result{})
 	destinationPrimaryDb.AddQuery(createTableView, &sqltypes.Result{})
 

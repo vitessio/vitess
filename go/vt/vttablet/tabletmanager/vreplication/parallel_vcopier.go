@@ -42,9 +42,6 @@ import (
 
 const maxConcurrency = 6
 
-var _ = newParallelVCopier(nil) // TODO(shlomi): delete this; this was added to temporarily satisfy the linter
-var _ = newVCopier(nil)         // TODO(shlomi): delete this; this was added to temporarily satisfy the linter
-
 type tableCopyInfo struct {
 	tableName       string
 	initialPlan     *TablePlan
@@ -75,7 +72,7 @@ func newParallelVCopier(vr *vreplicator) *parallelVcopier {
 func (vc *parallelVcopier) initTablesForCopy(ctx context.Context) error {
 	defer vc.vr.dbClient.Rollback()
 
-	plan, err := buildReplicatorPlan(vc.vr.source.Filter, vc.vr.colInfoMap, nil, vc.vr.stats)
+	plan, err := buildReplicatorPlan(vc.vr.source, vc.vr.colInfoMap, nil, vc.vr.stats)
 	if err != nil {
 		return err
 	}
@@ -219,7 +216,7 @@ func (vc *parallelVcopier) copyTables(ctx context.Context, tableNames []string, 
 	for _, tableName := range tableNames {
 		log.Infof("Copying table %s, lastpk: %v", tableName, copyState[tableName])
 	}
-	plan, err := buildReplicatorPlan(vc.vr.source.Filter, vc.vr.colInfoMap, nil, vc.vr.stats)
+	plan, err := buildReplicatorPlan(vc.vr.source, vc.vr.colInfoMap, nil, vc.vr.stats)
 	if err != nil {
 		return err
 	}

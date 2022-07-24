@@ -34,7 +34,7 @@ func TestVttabletProcess(t *testing.T) {
 	firstTabletPort := clusterInstance.Keyspaces[0].Shards[0].Vttablets[0].HTTPPort
 	testURL(t, fmt.Sprintf("http://localhost:%d/debug/vars/", firstTabletPort), "tablet debug var url")
 	resp, _ := http.Get(fmt.Sprintf("http://localhost:%d/debug/vars", firstTabletPort))
-	resultMap := make(map[string]interface{})
+	resultMap := make(map[string]any)
 	respByte, _ := io.ReadAll(resp.Body)
 	err := json.Unmarshal(respByte, &resultMap)
 	if err != nil {
@@ -49,6 +49,6 @@ func TestDeleteTablet(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	primary := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet()
 	require.NotNil(t, primary)
-	_, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("DeleteTablet", "-allow_primary", primary.Alias)
+	_, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("DeleteTablet", "--", "--allow_primary", primary.Alias)
 	require.Nil(t, err, "Error: %v", err)
 }

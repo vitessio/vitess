@@ -17,7 +17,6 @@ limitations under the License.
 package abstract
 
 import (
-	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -32,7 +31,7 @@ type (
 		OpCode engine.VindexOpcode
 		Table  VindexTable
 		Vindex vindexes.Vindex
-		Value  sqltypes.PlanValue
+		Value  sqlparser.Expr
 	}
 
 	// VindexTable contains information about the vindex table we want to query
@@ -45,56 +44,59 @@ type (
 	}
 )
 
-var _ Operator = (*Vindex)(nil)
+var _ LogicalOperator = (*Vindex)(nil)
+
+func (*Vindex) iLogical() {}
 
 // TableID implements the Operator interface
 func (v *Vindex) TableID() semantics.TableSet {
 	return v.Table.TableID
 }
 
-const vindexUnsupported = "unsupported: where clause for vindex function must be of the form id = <val>"
+const vindexUnsupported = "unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...)"
 
 // PushPredicate implements the Operator interface
-func (v *Vindex) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error {
+func (v *Vindex) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) (LogicalOperator, error) {
 	for _, e := range sqlparser.SplitAndExpression(nil, expr) {
 		deps := semTable.RecursiveDeps(e)
 		if deps.NumberOfTables() > 1 {
-			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, vindexUnsupported+" (multiple tables involved)")
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, vindexUnsupported+" (multiple tables involved)")
 		}
 		// check if we already have a predicate
 		if v.OpCode != engine.VindexNone {
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, vindexUnsupported+" (multiple filters)")
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, vindexUnsupported+" (multiple filters)")
 		}
 
 		// check LHS
 		comparison, ok := e.(*sqlparser.ComparisonExpr)
 		if !ok {
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, vindexUnsupported+" (not a comparison)")
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, vindexUnsupported+" (not a comparison)")
 		}
-		if comparison.Operator != sqlparser.EqualOp {
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, vindexUnsupported+" (not equality)")
+		if comparison.Operator != sqlparser.EqualOp && comparison.Operator != sqlparser.InOp {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, vindexUnsupported+" (not equality)")
 		}
 		colname, ok := comparison.Left.(*sqlparser.ColName)
 		if !ok {
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, vindexUnsupported+" (lhs is not a column)")
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, vindexUnsupported+" (lhs is not a column)")
 		}
 		if !colname.Name.EqualString("id") {
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, vindexUnsupported+" (lhs is not id)")
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, vindexUnsupported+" (lhs is not id)")
 		}
 
 		// check RHS
-		if !sqlparser.IsValue(comparison.Right) {
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, vindexUnsupported+" (rhs is not a value)")
-		}
 		var err error
-		v.Value, err = sqlparser.NewPlanValue(comparison.Right)
+		if sqlparser.IsValue(comparison.Right) || sqlparser.IsSimpleTuple(comparison.Right) {
+			v.Value = comparison.Right
+		} else {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, vindexUnsupported+" (rhs is not a value)")
+		}
 		if err != nil {
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, vindexUnsupported+": %v", err)
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, vindexUnsupported+": %v", err)
 		}
 		v.OpCode = engine.VindexMap
 		v.Table.Predicates = append(v.Table.Predicates, e)
 	}
-	return nil
+	return v, nil
 }
 
 // UnsolvedPredicates implements the Operator interface
@@ -105,13 +107,13 @@ func (v *Vindex) UnsolvedPredicates(*semantics.SemTable) []sqlparser.Expr {
 // CheckValid implements the Operator interface
 func (v *Vindex) CheckValid() error {
 	if len(v.Table.Predicates) == 0 {
-		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: where clause for vindex function must be of the form id = <val> (where clause missing)")
+		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (where clause missing)")
 	}
 
 	return nil
 }
 
 // Compact implements the Operator interface
-func (v *Vindex) Compact(*semantics.SemTable) (Operator, error) {
+func (v *Vindex) Compact(*semantics.SemTable) (LogicalOperator, error) {
 	return v, nil
 }

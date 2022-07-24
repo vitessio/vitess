@@ -19,6 +19,8 @@ package semantics
 import (
 	"strings"
 
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -35,7 +37,7 @@ type RealTable struct {
 
 var _ TableInfo = (*RealTable)(nil)
 
-// Dependencies implements the TableInfo interface
+// dependencies implements the TableInfo interface
 func (r *RealTable) dependencies(colName string, org originable) (dependencies, error) {
 	ts := org.tableSetFor(r.ASTNode)
 	for _, info := range r.getColumns() {
@@ -99,12 +101,19 @@ func vindexTableToColumnInfo(tbl *vindexes.Table) []ColumnInfo {
 	if tbl == nil {
 		return nil
 	}
-	nameMap := map[string]interface{}{}
+	nameMap := map[string]any{}
 	cols := make([]ColumnInfo, 0, len(tbl.Columns))
 	for _, col := range tbl.Columns {
+		var collation collations.ID
+		if sqltypes.IsText(col.Type) {
+			collation, _ = collations.Local().LookupID(col.CollationName)
+		}
 		cols = append(cols, ColumnInfo{
 			Name: col.Name.String(),
-			Type: col.Type,
+			Type: Type{
+				Type:      col.Type,
+				Collation: collation,
+			},
 		})
 		nameMap[col.Name.String()] = nil
 	}

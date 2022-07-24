@@ -43,7 +43,7 @@ var (
 	clusterInstance         *cluster.LocalProcessCluster
 	vtParams                mysql.ConnParams
 	evaluatedMysqlParams    *mysql.ConnParams
-	ddlStrategy             = "online -vreplication-test-suite"
+	ddlStrategy             = "vitess -vreplication-test-suite"
 	waitForMigrationTimeout = 20 * time.Second
 
 	hostname              = "localhost"
@@ -76,18 +76,18 @@ func TestMain(m *testing.M) {
 		}
 
 		clusterInstance.VtctldExtraArgs = []string{
-			"-schema_change_dir", schemaChangeDirectory,
-			"-schema_change_controller", "local",
-			"-schema_change_check_interval", "1",
-			"-online_ddl_check_interval", "2s",
+			"--schema_change_dir", schemaChangeDirectory,
+			"--schema_change_controller", "local",
+			"--schema_change_check_interval", "1",
 		}
 
 		clusterInstance.VtTabletExtraArgs = []string{
-			"-enable-lag-throttler",
-			"-throttle_threshold", "1s",
-			"-heartbeat_enable",
-			"-heartbeat_interval", "250ms",
-			"-migration_check_interval", "5s",
+			"--enable-lag-throttler",
+			"--throttle_threshold", "1s",
+			"--heartbeat_enable",
+			"--heartbeat_interval", "250ms",
+			"--heartbeat_on_demand_duration", "5s",
+			"--migration_check_interval", "5s",
 		}
 
 		if err := clusterInstance.StartTopo(); err != nil {
@@ -105,8 +105,6 @@ func TestMain(m *testing.M) {
 		}
 
 		vtgateInstance := clusterInstance.NewVtgateInstance()
-		// set the gateway we want to use
-		vtgateInstance.GatewayImplementation = "tabletgateway"
 		// Start vtgate
 		if err := vtgateInstance.Setup(); err != nil {
 			return 1, err
@@ -213,6 +211,11 @@ func testSingle(t *testing.T, testName string) {
 		expectQueryFailure = content
 	}
 
+	singleDDLStrategy := ddlStrategy
+	if extra, exists := readTestFile(t, testName, "ddl_strategy"); exists {
+		singleDDLStrategy = fmt.Sprintf("%s %s", singleDDLStrategy, extra)
+	}
+
 	var migrationMessage string
 	var migrationStatus string
 	// Run test
@@ -222,7 +225,7 @@ func testSingle(t *testing.T, testName string) {
 	}
 	alterStatement := fmt.Sprintf("alter table %s %s", tableName, alterClause)
 	// Run the DDL!
-	uuid := testOnlineDDLStatement(t, alterStatement, ddlStrategy, expectQueryFailure)
+	uuid := testOnlineDDLStatement(t, alterStatement, singleDDLStrategy, expectQueryFailure)
 
 	if expectQueryFailure != "" {
 		// Nothing further to do. Migration isn't actually running
@@ -246,13 +249,13 @@ func testSingle(t *testing.T, testName string) {
 
 	if expectedErrorMessage, exists := readTestFile(t, testName, "expect_failure"); exists {
 		// Failure is expected!
-		assert.Equal(t, migrationStatus, string(schema.OnlineDDLStatusFailed))
+		assert.Equal(t, string(schema.OnlineDDLStatusFailed), migrationStatus)
 		require.Contains(t, migrationMessage, expectedErrorMessage, "expected error message (%s) to contain (%s)", migrationMessage, expectedErrorMessage)
 		// no need to proceed to checksum or anything further
 		return
 	}
 	// We do not expect failure.
-	require.Equal(t, string(schema.OnlineDDLStatusComplete), migrationStatus)
+	require.Equal(t, string(schema.OnlineDDLStatusComplete), migrationStatus, migrationMessage)
 
 	if content, exists := readTestFile(t, testName, "expect_table_structure"); exists {
 		createStatement := getCreateTableStatement(t, afterTableName)

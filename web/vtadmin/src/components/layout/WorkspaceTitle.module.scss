@@ -14,6 +14,6 @@
  * limitations under the License.
  */
 h1.title {
-  font-size: var(--fontSizeHeading2);
-  margin: 0;
+    font-size: theme('fontSize.2xl');
+    margin: 0;
 }

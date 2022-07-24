@@ -15,12 +15,10 @@
  */
 import cx from 'classnames';
 
-import style from './ContentContainer.module.scss';
-
 interface Props {
     className?: string;
 }
 
 export const ContentContainer: React.FunctionComponent<Props> = ({ children, className }) => {
-    return <div className={cx(className, style.container)}>{children}</div>;
+    return <div className={cx(className, 'max-w-screen-xl', 'mb-24', 'mx-10')}>{children}</div>;
 };

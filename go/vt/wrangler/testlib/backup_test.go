@@ -17,18 +17,17 @@ limitations under the License.
 package testlib
 
 import (
+	"context"
+	"fmt"
 	"os"
 	"path"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/stretchr/testify/assert"
-
 	"vitess.io/vitess/go/vt/discovery"
-
-	"context"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
@@ -46,7 +45,43 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
+type compressionDetails struct {
+	BuiltinCompressor       string
+	BuiltinDecompressor     string
+	ExternalCompressorCmd   string
+	ExternalCompressorExt   string
+	ExternalDecompressorCmd string
+}
+
 func TestBackupRestore(t *testing.T) {
+	defer setDefaultCompressionFlag()
+	err := testBackupRestore(t, nil)
+	require.NoError(t, err)
+}
+
+// TODO: @rameez. I was expecting this test to fail but it turns out
+// we infer decompressor through compression engine in builtinEngine.
+// It is only in xtrabackup where we infer decompressor through extension & BuiltinDecompressor param.
+func TestBackupRestoreWithPargzip(t *testing.T) {
+	defer setDefaultCompressionFlag()
+	cDetails := &compressionDetails{
+		BuiltinCompressor:   "pargzip",
+		BuiltinDecompressor: "lz4",
+	}
+
+	err := testBackupRestore(t, cDetails)
+	require.ErrorContains(t, err, "lz4: bad magic number")
+}
+
+func setDefaultCompressionFlag() {
+	*mysqlctl.BuiltinCompressor = "pgzip"
+	*mysqlctl.BuiltinDecompressor = "auto"
+	*mysqlctl.ExternalCompressorCmd = ""
+	*mysqlctl.ExternalCompressorExt = ""
+	*mysqlctl.ExternalDecompressorCmd = ""
+}
+
+func testBackupRestore(t *testing.T, cDetails *compressionDetails) error {
 	delay := discovery.GetTabletPickerRetryDelay()
 	defer func() {
 		discovery.SetTabletPickerRetryDelay(delay)
@@ -76,14 +111,29 @@ func TestBackupRestore(t *testing.T) {
 	db.AddQueryPattern(`INSERT INTO _vt\.local_metadata .*`, &sqltypes.Result{})
 
 	// Initialize our temp dirs
-	root, err := os.MkdirTemp("", "backuptest")
-	require.NoError(t, err)
-	defer os.RemoveAll(root)
+	root := t.TempDir()
 
 	// Initialize BackupStorage
 	fbsRoot := path.Join(root, "fbs")
 	*filebackupstorage.FileBackupStorageRoot = fbsRoot
 	*backupstorage.BackupStorageImplementation = "file"
+	if cDetails != nil {
+		if cDetails.BuiltinCompressor != "" {
+			*mysqlctl.BuiltinCompressor = cDetails.BuiltinCompressor
+		}
+		if cDetails.BuiltinDecompressor != "" {
+			*mysqlctl.BuiltinDecompressor = cDetails.BuiltinDecompressor
+		}
+		if cDetails.ExternalCompressorCmd != "" {
+			*mysqlctl.ExternalCompressorCmd = cDetails.ExternalCompressorCmd
+		}
+		if cDetails.ExternalCompressorExt != "" {
+			*mysqlctl.ExternalCompressorExt = cDetails.ExternalCompressorExt
+		}
+		if cDetails.ExternalDecompressorCmd != "" {
+			*mysqlctl.ExternalDecompressorCmd = cDetails.ExternalDecompressorCmd
+		}
+	}
 
 	// Initialize the fake mysql root directories
 	sourceInnodbDataDir := path.Join(root, "source_innodb_data")
@@ -120,6 +170,7 @@ func TestBackupRestore(t *testing.T) {
 	sourceTablet := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, db)
 	sourceTablet.FakeMysqlDaemon.ReadOnly = true
 	sourceTablet.FakeMysqlDaemon.Replicating = true
+	sourceTablet.FakeMysqlDaemon.SetReplicationSourceInputs = []string{fmt.Sprintf("%s:%d", primary.Tablet.MysqlHostname, primary.Tablet.MysqlPort)}
 	sourceTablet.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
 			2: mysql.MariadbGTID{
@@ -130,7 +181,15 @@ func TestBackupRestore(t *testing.T) {
 		},
 	}
 	sourceTablet.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		// This first set of STOP and START commands come from
+		// the builtinBackupEngine implementation which stops the replication
+		// while taking the backup
 		"STOP SLAVE",
+		"START SLAVE",
+		// These commands come from SetReplicationSource RPC called
+		// to set the correct primary and semi-sync after Backup has concluded
+		"STOP SLAVE",
+		"FAKE SET MASTER",
 		"START SLAVE",
 	}
 	sourceTablet.StartActionLoop(t, wr)
@@ -176,7 +235,7 @@ func TestBackupRestore(t *testing.T) {
 		"SHOW DATABASES": {},
 	}
 	destTablet.FakeMysqlDaemon.SetReplicationPositionPos = sourceTablet.FakeMysqlDaemon.CurrentPrimaryPosition
-	destTablet.FakeMysqlDaemon.SetReplicationSourceInput = topoproto.MysqlAddr(primary.Tablet)
+	destTablet.FakeMysqlDaemon.SetReplicationSourceInputs = append(destTablet.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(primary.Tablet))
 
 	destTablet.StartActionLoop(t, wr)
 	defer destTablet.StopActionLoop(t)
@@ -191,7 +250,10 @@ func TestBackupRestore(t *testing.T) {
 		RelayLogInfoPath:      path.Join(root, "relay-log.info"),
 	}
 
-	require.NoError(t, destTablet.TM.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */, time.Time{} /* backupTime */))
+	err := destTablet.TM.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */, time.Time{} /* backupTime */)
+	if err != nil {
+		return err
+	}
 	// verify the full status
 	require.NoError(t, destTablet.FakeMysqlDaemon.CheckSuperQueryList(), "destTablet.FakeMysqlDaemon.CheckSuperQueryList failed")
 	assert.True(t, destTablet.FakeMysqlDaemon.Replicating)
@@ -246,6 +308,7 @@ func TestBackupRestore(t *testing.T) {
 	assert.Equal(t, topodatapb.TabletType_PRIMARY, primary.Tablet.Type)
 	assert.False(t, primary.FakeMysqlDaemon.Replicating)
 	assert.True(t, primary.FakeMysqlDaemon.Running)
+	return nil
 }
 
 // TestBackupRestoreLagged tests the changes made in https://github.com/vitessio/vitess/pull/5000
@@ -281,9 +344,7 @@ func TestBackupRestoreLagged(t *testing.T) {
 	db.AddQueryPattern(`INSERT INTO _vt\.local_metadata .*`, &sqltypes.Result{})
 
 	// Initialize our temp dirs
-	root, err := os.MkdirTemp("", "backuptest")
-	require.NoError(t, err)
-	defer os.RemoveAll(root)
+	root := t.TempDir()
 
 	// Initialize BackupStorage
 	fbsRoot := path.Join(root, "fbs")
@@ -334,8 +395,17 @@ func TestBackupRestoreLagged(t *testing.T) {
 			},
 		},
 	}
+	sourceTablet.FakeMysqlDaemon.SetReplicationSourceInputs = []string{fmt.Sprintf("%s:%d", primary.Tablet.MysqlHostname, primary.Tablet.MysqlPort)}
 	sourceTablet.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		// This first set of STOP and START commands come from
+		// the builtinBackupEngine implementation which stops the replication
+		// while taking the backup
 		"STOP SLAVE",
+		"START SLAVE",
+		// These commands come from SetReplicationSource RPC called
+		// to set the correct primary and semi-sync after Backup has concluded
+		"STOP SLAVE",
+		"FAKE SET MASTER",
 		"START SLAVE",
 	}
 	sourceTablet.StartActionLoop(t, wr)
@@ -402,7 +472,7 @@ func TestBackupRestoreLagged(t *testing.T) {
 		"SHOW DATABASES": {},
 	}
 	destTablet.FakeMysqlDaemon.SetReplicationPositionPos = destTablet.FakeMysqlDaemon.CurrentPrimaryPosition
-	destTablet.FakeMysqlDaemon.SetReplicationSourceInput = topoproto.MysqlAddr(primary.Tablet)
+	destTablet.FakeMysqlDaemon.SetReplicationSourceInputs = append(destTablet.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(primary.Tablet))
 
 	destTablet.StartActionLoop(t, wr)
 	defer destTablet.StopActionLoop(t)
@@ -478,9 +548,7 @@ func TestRestoreUnreachablePrimary(t *testing.T) {
 	db.AddQueryPattern(`INSERT INTO _vt\.local_metadata .*`, &sqltypes.Result{})
 
 	// Initialize our temp dirs
-	root, err := os.MkdirTemp("", "backuptest")
-	require.NoError(t, err)
-	defer os.RemoveAll(root)
+	root := t.TempDir()
 
 	// Initialize BackupStorage
 	fbsRoot := path.Join(root, "fbs")
@@ -530,8 +598,17 @@ func TestRestoreUnreachablePrimary(t *testing.T) {
 			},
 		},
 	}
+	sourceTablet.FakeMysqlDaemon.SetReplicationSourceInputs = []string{fmt.Sprintf("%s:%d", primary.Tablet.MysqlHostname, primary.Tablet.MysqlPort)}
 	sourceTablet.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		// This first set of STOP and START commands come from
+		// the builtinBackupEngine implementation which stops the replication
+		// while taking the backup
 		"STOP SLAVE",
+		"START SLAVE",
+		// These commands come from SetReplicationSource RPC called
+		// to set the correct primary and semi-sync after Backup has concluded
+		"STOP SLAVE",
+		"FAKE SET MASTER",
 		"START SLAVE",
 	}
 	sourceTablet.StartActionLoop(t, wr)
@@ -570,7 +647,7 @@ func TestRestoreUnreachablePrimary(t *testing.T) {
 		"SHOW DATABASES": {},
 	}
 	destTablet.FakeMysqlDaemon.SetReplicationPositionPos = sourceTablet.FakeMysqlDaemon.CurrentPrimaryPosition
-	destTablet.FakeMysqlDaemon.SetReplicationSourceInput = topoproto.MysqlAddr(primary.Tablet)
+	destTablet.FakeMysqlDaemon.SetReplicationSourceInputs = append(destTablet.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(primary.Tablet))
 
 	destTablet.StartActionLoop(t, wr)
 	defer destTablet.StopActionLoop(t)
@@ -631,9 +708,7 @@ func TestDisableActiveReparents(t *testing.T) {
 	db.AddQueryPattern(`INSERT INTO _vt\.local_metadata .*`, &sqltypes.Result{})
 
 	// Initialize our temp dirs
-	root, err := os.MkdirTemp("", "backuptest")
-	require.NoError(t, err)
-	defer os.RemoveAll(root)
+	root := t.TempDir()
 
 	// Initialize BackupStorage
 	fbsRoot := path.Join(root, "fbs")
@@ -721,13 +796,12 @@ func TestDisableActiveReparents(t *testing.T) {
 		"STOP SLAVE",
 		"RESET SLAVE ALL",
 		"FAKE SET SLAVE POSITION",
-		"FAKE SET MASTER",
 	}
 	destTablet.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*sqltypes.Result{
 		"SHOW DATABASES": {},
 	}
 	destTablet.FakeMysqlDaemon.SetReplicationPositionPos = sourceTablet.FakeMysqlDaemon.CurrentPrimaryPosition
-	destTablet.FakeMysqlDaemon.SetReplicationSourceInput = topoproto.MysqlAddr(primary.Tablet)
+	destTablet.FakeMysqlDaemon.SetReplicationSourceInputs = append(destTablet.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(primary.Tablet))
 
 	destTablet.StartActionLoop(t, wr)
 	defer destTablet.StopActionLoop(t)

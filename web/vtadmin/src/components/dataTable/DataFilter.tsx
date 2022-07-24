@@ -15,7 +15,6 @@
  */
 import React from 'react';
 
-import { Button } from '../Button';
 import { Icons } from '../Icon';
 import { TextInput } from '../TextInput';
 import style from './DataFilter.module.scss';
@@ -38,9 +37,9 @@ export const DataFilter = ({ autoFocus, onChange, onClear, placeholder, value }:
                 placeholder={placeholder}
                 value={value || ''}
             />
-            <Button disabled={!value} onClick={onClear} secondary>
+            <button className="btn btn-secondary" disabled={!value} onClick={onClear} type="button">
                 Clear filters
-            </Button>
+            </button>
         </div>
     );
 };

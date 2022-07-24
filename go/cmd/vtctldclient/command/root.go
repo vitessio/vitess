@@ -42,6 +42,8 @@ var (
 
 	// Root is the main entrypoint to the vtctldclient CLI.
 	Root = &cobra.Command{
+		Use:   "vtctldclient",
+		Short: "Executes a cluster management command on the remote vtctld server.",
 		// We use PersistentPreRun to set up the tracer, grpc client, and
 		// command context for every command.
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) (err error) {
@@ -81,7 +83,7 @@ var (
 	}
 )
 
-var errNoServer = errors.New("please specify -server <vtctld_host:vtctld_port> to specify the vtctld server to connect to")
+var errNoServer = errors.New("please specify --server <vtctld_host:vtctld_port> to specify the vtctld server to connect to")
 
 // ensureServerArg validates that --server was passed to the CLI.
 func ensureServerArg() error {
@@ -93,6 +95,6 @@ func ensureServerArg() error {
 }
 
 func init() {
-	Root.PersistentFlags().StringVar(&server, "server", "", "server to use for connection")
+	Root.PersistentFlags().StringVar(&server, "server", "", "server to use for connection (required)")
 	Root.PersistentFlags().DurationVar(&actionTimeout, "action_timeout", time.Hour, "timeout for the total command")
 }

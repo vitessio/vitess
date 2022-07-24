@@ -230,7 +230,7 @@ func (dialer *cachedConnDialer) pollOnce(ctx context.Context, addr string) (clie
 // It returns the three-tuple of client-interface, closer, and error that the
 // main dial func returns.
 func (dialer *cachedConnDialer) newdial(ctx context.Context, addr string) (tabletmanagerservicepb.TabletManagerClient, io.Closer, error) {
-	opt, err := grpcclient.SecureDialOption(*cert, *key, *ca, *name)
+	opt, err := grpcclient.SecureDialOption(*cert, *key, *ca, *crl, *name)
 	if err != nil {
 		dialer.connWaitSema.Release()
 		return nil, nil, err

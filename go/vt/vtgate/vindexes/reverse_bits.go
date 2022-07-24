@@ -18,6 +18,7 @@ package vindexes
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
@@ -32,6 +33,7 @@ import (
 var (
 	_ SingleColumn = (*ReverseBits)(nil)
 	_ Reversible   = (*ReverseBits)(nil)
+	_ Hashing      = (*ReverseBits)(nil)
 )
 
 // ReverseBits defines vindex that reverses the bits of a number.
@@ -66,28 +68,28 @@ func (vind *ReverseBits) NeedsVCursor() bool {
 }
 
 // Map returns the corresponding KeyspaceId values for the given ids.
-func (vind *ReverseBits) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
-	out := make([]key.Destination, len(ids))
-	for i, id := range ids {
-		num, err := evalengine.ToUint64(id)
+func (vind *ReverseBits) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+	out := make([]key.Destination, 0, len(ids))
+	for _, id := range ids {
+		num, err := vind.Hash(id)
 		if err != nil {
-			out[i] = key.DestinationNone{}
+			out = append(out, key.DestinationNone{})
 			continue
 		}
-		out[i] = key.DestinationKeyspaceID(reverse(num))
+		out = append(out, key.DestinationKeyspaceID(num))
 	}
 	return out, nil
 }
 
 // Verify returns true if ids maps to ksids.
-func (vind *ReverseBits) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
-	out := make([]bool, len(ids))
-	for i := range ids {
-		num, err := evalengine.ToUint64(ids[i])
+func (vind *ReverseBits) Verify(ctx context.Context, vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
+	out := make([]bool, 0, len(ids))
+	for i, id := range ids {
+		num, err := vind.Hash(id)
 		if err != nil {
 			return nil, err
 		}
-		out[i] = bytes.Equal(reverse(num), ksids[i])
+		out = append(out, bytes.Equal(num, ksids[i]))
 	}
 	return out, nil
 }
@@ -103,6 +105,14 @@ func (vind *ReverseBits) ReverseMap(_ VCursor, ksids [][]byte) ([]sqltypes.Value
 		reverseIds = append(reverseIds, sqltypes.NewUint64(val))
 	}
 	return reverseIds, nil
+}
+
+func (vind *ReverseBits) Hash(id sqltypes.Value) ([]byte, error) {
+	num, err := evalengine.ToUint64(id)
+	if err != nil {
+		return nil, err
+	}
+	return reverse(num), nil
 }
 
 func init() {

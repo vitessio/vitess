@@ -28,7 +28,10 @@ import (
 	"vitess.io/vitess/go/vt/orchestrator/inst"
 )
 
-var AppVersion, GitCommit string
+var (
+	GitCommit  string
+	AppVersion string
+)
 
 // main is the application's entry point. It will either spawn a CLI or HTTP itnerfaces.
 func main() {
@@ -128,6 +131,6 @@ func main() {
 	case helpTopic != "":
 		app.HelpCommand(helpTopic)
 	default:
-		app.Http(*discovery)
+		app.HTTP(*discovery)
 	}
 }

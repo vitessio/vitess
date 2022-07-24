@@ -17,9 +17,11 @@ limitations under the License.
 package engine
 
 import (
+	"context"
 	"errors"
 	"testing"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/test/utils"
 
 	"github.com/stretchr/testify/require"
@@ -143,6 +145,68 @@ func TestMergeSortWeightString(t *testing.T) {
 		"7|g",
 		"---",
 		"8|h",
+	)
+	utils.MustMatch(t, wantResults, results)
+}
+
+func TestMergeSortCollation(t *testing.T) {
+	idColFields := sqltypes.MakeTestFields("normal", "varchar")
+	shardResults := []*shardResult{{
+		results: sqltypes.MakeTestStreamingResults(idColFields,
+			"c",
+			"---",
+			"d",
+		),
+	}, {
+		results: sqltypes.MakeTestStreamingResults(idColFields,
+			"cs",
+			"---",
+			"d",
+		),
+	}, {
+		results: sqltypes.MakeTestStreamingResults(idColFields,
+			"cs",
+			"---",
+			"lu",
+		),
+	}, {
+		results: sqltypes.MakeTestStreamingResults(idColFields,
+			"a",
+			"---",
+			"c",
+		),
+	}}
+
+	collationID, _ := collations.Local().LookupID("utf8mb4_hu_0900_ai_ci")
+	orderBy := []OrderByParams{{
+		Col:         0,
+		CollationID: collationID,
+	}}
+
+	var results []*sqltypes.Result
+	err := testMergeSort(shardResults, orderBy, func(qr *sqltypes.Result) error {
+		results = append(results, qr)
+		return nil
+	})
+	require.NoError(t, err)
+
+	// Results are returned one row at a time.
+	wantResults := sqltypes.MakeTestStreamingResults(idColFields,
+		"a",
+		"---",
+		"c",
+		"---",
+		"c",
+		"---",
+		"cs",
+		"---",
+		"cs",
+		"---",
+		"d",
+		"---",
+		"d",
+		"---",
+		"lu",
 	)
 	utils.MustMatch(t, wantResults, results)
 }
@@ -334,7 +398,7 @@ func testMergeSort(shardResults []*shardResult, orderBy []OrderByParams, callbac
 		Primitives: prims,
 		OrderBy:    orderBy,
 	}
-	return ms.TryStreamExecute(&noopVCursor{}, nil, true, callback)
+	return ms.TryStreamExecute(context.Background(), &noopVCursor{}, nil, true, callback)
 }
 
 type shardResult struct {
@@ -345,7 +409,7 @@ type shardResult struct {
 	sendErr error
 }
 
-func (sr *shardResult) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (sr *shardResult) StreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	for _, r := range sr.results {
 		if err := callback(r); err != nil {
 			return err

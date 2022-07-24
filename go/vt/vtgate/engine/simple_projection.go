@@ -17,6 +17,8 @@ limitations under the License.
 package engine
 
 import (
+	"context"
+
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -52,8 +54,8 @@ func (sc *SimpleProjection) GetTableName() string {
 }
 
 // TryExecute performs a non-streaming exec.
-func (sc *SimpleProjection) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	inner, err := vcursor.ExecutePrimitive(sc.Input, bindVars, wantfields)
+func (sc *SimpleProjection) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	inner, err := vcursor.ExecutePrimitive(ctx, sc.Input, bindVars, wantfields)
 	if err != nil {
 		return nil, err
 	}
@@ -61,15 +63,15 @@ func (sc *SimpleProjection) TryExecute(vcursor VCursor, bindVars map[string]*que
 }
 
 // TryStreamExecute performs a streaming exec.
-func (sc *SimpleProjection) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	return vcursor.StreamExecutePrimitive(sc.Input, bindVars, wantfields, func(inner *sqltypes.Result) error {
+func (sc *SimpleProjection) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	return vcursor.StreamExecutePrimitive(ctx, sc.Input, bindVars, wantfields, func(inner *sqltypes.Result) error {
 		return callback(sc.buildResult(inner))
 	})
 }
 
 // GetFields fetches the field info.
-func (sc *SimpleProjection) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	inner, err := sc.Input.GetFields(vcursor, bindVars)
+func (sc *SimpleProjection) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	inner, err := sc.Input.GetFields(ctx, vcursor, bindVars)
 	if err != nil {
 		return nil, err
 	}
@@ -109,7 +111,7 @@ func (sc *SimpleProjection) buildFields(inner *sqltypes.Result) []*querypb.Field
 }
 
 func (sc *SimpleProjection) description() PrimitiveDescription {
-	other := map[string]interface{}{
+	other := map[string]any{
 		"Columns": sc.Cols,
 	}
 	return PrimitiveDescription{

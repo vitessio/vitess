@@ -173,6 +173,7 @@ describe('useWorkflow', () => {
         );
 
         // Execute a useWorkflows query to populate the query cache.
+        // eslint-disable-next-line testing-library/render-result-naming-convention
         const useWorkflowsCall = renderHook(() => api.useWorkflows(), { wrapper });
         await useWorkflowsCall.waitFor(() => useWorkflowsCall.result.current.isSuccess);
 

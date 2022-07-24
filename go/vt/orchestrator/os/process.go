@@ -27,7 +27,7 @@ import (
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 )
 
-var EmptyEnv = []string{}
+var EmptyEnv []string
 
 // CommandRun executes some text as a command. This is assumed to be
 // text that will be run by a shell so we need to write out the

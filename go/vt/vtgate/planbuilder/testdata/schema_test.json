@@ -10,6 +10,9 @@
       "from_table": "second_user.user",
       "to_tables": ["user.user"]
     }, {
+      "from_table": "second_user.foo",
+      "to_tables": ["user.user"]
+    }, {
       "from_table": "primary_redirect@primary",
       "to_tables": ["user.user"]
     }, {
@@ -52,7 +55,7 @@
           "owner": "overlap_vindex"
         },
         "name_user_map": {
-          "type": "multi",
+          "type": "name_lkp_test",
           "owner": "user"
         },
         "email_user_map": {
@@ -81,6 +84,17 @@
         },
         "cfc": {
           "type": "cfc"
+        },
+        "multicolIdx": {
+          "type": "multiCol_test"
+        },
+        "colc_map": {
+          "type": "lookup_test",
+          "owner": "multicol_tbl"
+        },
+        "name_muticoltbl_map": {
+          "type": "name_lkp_test",
+          "owner": "multicol_tbl"
         }
       },
       "tables": {
@@ -104,6 +118,10 @@
             "sequence": "seq"
           },
           "columns": [
+            {
+              "name": "col",
+              "type": "INT16"
+            },
             {
               "name": "predef1"
             },
@@ -154,7 +172,13 @@
           "auto_increment": {
             "column": "extra_id",
             "sequence": "seq"
-          }
+          },
+          "columns": [
+            {
+              "name": "col",
+              "type": "INT16"
+            }
+          ]
         },
         "music": {
           "column_vindexes": [
@@ -276,6 +300,22 @@
             {
               "name": "c2",
               "type": "VARCHAR"
+            }
+          ]
+        },
+        "multicol_tbl": {
+          "column_vindexes": [
+            {
+              "columns": ["cola", "colb"],
+              "name": "multicolIdx"
+            },
+            {
+              "column": "colc",
+              "name": "colc_map"
+            },
+            {
+              "column": "name",
+              "name": "name_muticoltbl_map"
             }
           ]
         }

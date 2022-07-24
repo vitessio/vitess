@@ -47,7 +47,7 @@ func (tm *TabletManager) Backup(ctx context.Context, concurrency int, logger log
 	// It is not safe to take backups from tablet in this state
 	currentTablet := tm.Tablet()
 	if !allowPrimary && currentTablet.Type == topodatapb.TabletType_PRIMARY {
-		return fmt.Errorf("type PRIMARY cannot take backup. if you really need to do this, rerun the backup command with -allow_primary")
+		return fmt.Errorf("type PRIMARY cannot take backup. if you really need to do this, rerun the backup command with --allow_primary")
 	}
 	engine, err := mysqlctl.GetBackupEngine()
 	if err != nil {
@@ -59,7 +59,7 @@ func (tm *TabletManager) Backup(ctx context.Context, concurrency int, logger log
 		return err
 	}
 	if !allowPrimary && tablet.Type == topodatapb.TabletType_PRIMARY {
-		return fmt.Errorf("type PRIMARY cannot take backup. if you really need to do this, rerun the backup command with -allow_primary")
+		return fmt.Errorf("type PRIMARY cannot take backup. if you really need to do this, rerun the backup command with --allow_primary")
 	}
 
 	// prevent concurrent backups, and record stats
@@ -85,7 +85,7 @@ func (tm *TabletManager) Backup(ctx context.Context, concurrency int, logger log
 		}
 		originalType = tablet.Type
 		// update our type to BACKUP
-		if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_BACKUP, DBActionNone); err != nil {
+		if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_BACKUP, DBActionNone, SemiSyncActionUnset); err != nil {
 			return err
 		}
 		// Tell Orchestrator we're stopped on purpose for some Vitess task.
@@ -126,7 +126,7 @@ func (tm *TabletManager) Backup(ctx context.Context, concurrency int, logger log
 
 		// Change our type back to the original value.
 		// Original type could be primary so pass in a real value for PrimaryTermStartTime
-		if err := tm.changeTypeLocked(bgCtx, originalType, DBActionNone); err != nil {
+		if err := tm.changeTypeLocked(bgCtx, originalType, DBActionNone, SemiSyncActionNone); err != nil {
 			// failure in changing the topology type is probably worse,
 			// so returning that (we logged the snapshot error anyway)
 			if returnErr != nil {

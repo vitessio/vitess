@@ -61,7 +61,6 @@ func TestQueryExecutorPlans(t *testing.T) {
 		RowsAffected: 1,
 	}
 	fields := sqltypes.MakeTestFields("a|b", "int64|varchar")
-	fieldResult := sqltypes.MakeTestResult(fields)
 	selectResult := sqltypes.MakeTestResult(fields, "1|aaa")
 	emptyResult := &sqltypes.Result{}
 
@@ -85,33 +84,23 @@ func TestQueryExecutorPlans(t *testing.T) {
 	}{{
 		input: "select * from t",
 		dbResponses: []dbResponse{{
-			query:  "select * from t where 1 != 1",
-			result: fieldResult,
-		}, {
 			query:  "select * from t limit 10001",
 			result: selectResult,
 		}},
 		resultWant: selectResult,
 		planWant:   "Select",
-		logWant:    "select * from t where 1 != 1; select * from t limit 10001",
-		// Because the fields would have been cached before, the field query will
-		// not get re-executed.
-		inTxWant: "select * from t limit 10001",
+		logWant:    "select * from t limit 10001",
+		inTxWant:   "select * from t limit 10001",
 	}, {
 		input: "select * from t limit 1",
 		dbResponses: []dbResponse{{
-			query:  "select * from t where 1 != 1",
-			result: fieldResult,
-		}, {
 			query:  "select * from t limit 1",
 			result: selectResult,
 		}},
 		resultWant: selectResult,
 		planWant:   "Select",
-		logWant:    "select * from t where 1 != 1; select * from t limit 1",
-		// Because the fields would have been cached before, the field query will
-		// not get re-executed.
-		inTxWant: "select * from t limit 1",
+		logWant:    "select * from t limit 1",
+		inTxWant:   "select * from t limit 1",
 	}, {
 		input: "show engines",
 		dbResponses: []dbResponse{{
@@ -119,7 +108,7 @@ func TestQueryExecutorPlans(t *testing.T) {
 			result: dmlResult,
 		}},
 		resultWant: dmlResult,
-		planWant:   "OtherRead",
+		planWant:   "Show",
 		logWant:    "show engines",
 	}, {
 		input: "repair t",
@@ -333,7 +322,6 @@ func TestQueryExecutorQueryAnnotation(t *testing.T) {
 	}
 
 	fields := sqltypes.MakeTestFields("a|b", "int64|varchar")
-	fieldResult := sqltypes.MakeTestResult(fields)
 	selectResult := sqltypes.MakeTestResult(fields, "1|aaa")
 
 	testcases := []struct {
@@ -354,9 +342,6 @@ func TestQueryExecutorQueryAnnotation(t *testing.T) {
 	}{{
 		input: "select * from t",
 		dbResponses: []dbResponse{{
-			query:  "select * from t where 1 != 1",
-			result: fieldResult,
-		}, {
 			query:  "select * from t limit 10001",
 			result: selectResult,
 		}, {
@@ -365,10 +350,8 @@ func TestQueryExecutorQueryAnnotation(t *testing.T) {
 		}},
 		resultWant: selectResult,
 		planWant:   "Select",
-		logWant:    "select * from t where 1 != 1; /* u1@PRIMARY */ select * from t limit 10001",
-		// Because the fields would have been cached before, the field query will
-		// not get re-executed.
-		inTxWant: "/* u1@PRIMARY */ select * from t limit 10001",
+		logWant:    "/* u1@PRIMARY */ select * from t limit 10001",
+		inTxWant:   "/* u1@PRIMARY */ select * from t limit 10001",
 	}}
 	for _, tcase := range testcases {
 		t.Run(tcase.input, func(t *testing.T) {
@@ -442,13 +425,13 @@ func TestQueryExecutorSelectImpossible(t *testing.T) {
 	}{{
 		input: "select * from t where 1 != 1",
 		dbResponses: []dbResponse{{
-			query:  "select * from t where 1 != 1",
+			query:  "select * from t where 1 != 1 limit 10001",
 			result: fieldResult,
 		}},
 		resultWant: fieldResult,
 		planWant:   "SelectImpossible",
-		logWant:    "select * from t where 1 != 1",
-		inTxWant:   "",
+		logWant:    "select * from t where 1 != 1 limit 10001",
+		inTxWant:   "select * from t where 1 != 1 limit 10001",
 	}}
 	for _, tcase := range testcases {
 		func() {
@@ -490,7 +473,8 @@ func TestDisableOnlineDDL(t *testing.T) {
 	defer db.Close()
 	query := "ALTER VITESS_MIGRATION CANCEL ALL"
 
-	db.AddQueryPattern(".*", &sqltypes.Result{})
+	db.SetNeverFail(true)
+	defer db.SetNeverFail(false)
 
 	ctx := context.Background()
 	tsv := newTestTabletServer(ctx, noFlags, db)
@@ -538,10 +522,8 @@ func TestQueryExecutorLimitFailure(t *testing.T) {
 			query:  "select * from t limit 3",
 			result: selectResult,
 		}},
-		err:     "count exceeded",
-		logWant: "select * from t where 1 != 1; select * from t limit 3",
-		// Because the fields would have been cached before, the field query will
-		// not get re-executed.
+		err:      "count exceeded",
+		logWant:  "select * from t limit 3",
 		inTxWant: "select * from t limit 3",
 	}, {
 		input: "update test_table set a=1",
@@ -1291,7 +1273,7 @@ func newTransaction(tsv *TabletServer, options *querypb.ExecuteOptions) int64 {
 
 func newTestQueryExecutor(ctx context.Context, tsv *TabletServer, sql string, txID int64) *QueryExecutor {
 	logStats := tabletenv.NewLogStats(ctx, "TestQueryExecutor")
-	plan, err := tsv.qe.GetPlan(ctx, logStats, sql, false, false /* inReservedConn */)
+	plan, err := tsv.qe.GetPlan(ctx, logStats, sql, false, 0)
 	if err != nil {
 		panic(err)
 	}
@@ -1315,9 +1297,7 @@ func setUpQueryExecutorTest(t *testing.T) *fakesqldb.DB {
 const baseShowTablesPattern = `SELECT t\.table_name.*`
 
 func initQueryExecutorTestDB(db *fakesqldb.DB) {
-	for query, result := range getQueryExecutorSupportedQueries() {
-		db.AddQuery(query, result)
-	}
+	addQueryExecutorSupportedQueries(db)
 	db.AddQueryPattern(baseShowTablesPattern, &sqltypes.Result{
 		Fields: mysql.BaseShowTablesFields,
 		Rows: [][]sqltypes.Value{
@@ -1341,8 +1321,8 @@ func getTestTableFields() []*querypb.Field {
 	}
 }
 
-func getQueryExecutorSupportedQueries() map[string]*sqltypes.Result {
-	return map[string]*sqltypes.Result{
+func addQueryExecutorSupportedQueries(db *fakesqldb.DB) {
+	queryResultMap := map[string]*sqltypes.Result{
 		// queries for twopc
 		fmt.Sprintf(sqlCreateSidecarDB, "_vt"):          {},
 		fmt.Sprintf(sqlDropLegacy1, "_vt"):              {},
@@ -1411,6 +1391,14 @@ func getQueryExecutorSupportedQueries() map[string]*sqltypes.Result {
 			}},
 			Rows: [][]sqltypes.Value{},
 		},
+		"select * from t where 1 != 1 limit 10001": {
+			Fields: []*querypb.Field{{
+				Type: sqltypes.Uint64,
+			}, {
+				Type: sqltypes.VarChar,
+			}},
+			Rows: [][]sqltypes.Value{},
+		},
 		mysql.BaseShowPrimary: {
 			Fields: mysql.ShowPrimaryFields,
 			Rows: [][]sqltypes.Value{
@@ -1419,57 +1407,61 @@ func getQueryExecutorSupportedQueries() map[string]*sqltypes.Result {
 				mysql.ShowPrimaryRow("msg", "id"),
 			},
 		},
-		"select * from test_table where 1 != 1": {
-			Fields: []*querypb.Field{{
-				Name: "pk",
-				Type: sqltypes.Int32,
-			}, {
-				Name: "name",
-				Type: sqltypes.Int32,
-			}, {
-				Name: "addr",
-				Type: sqltypes.Int32,
-			}},
-		},
-		"select * from seq where 1 != 1": {
-			Fields: []*querypb.Field{{
-				Name: "id",
-				Type: sqltypes.Int32,
-			}, {
-				Name: "next_id",
-				Type: sqltypes.Int64,
-			}, {
-				Name: "cache",
-				Type: sqltypes.Int64,
-			}, {
-				Name: "increment",
-				Type: sqltypes.Int64,
-			}},
-		},
-		"select * from msg where 1 != 1": {
-			Fields: []*querypb.Field{{
-				Name: "id",
-				Type: sqltypes.Int64,
-			}, {
-				Name: "priority",
-				Type: sqltypes.Int64,
-			}, {
-				Name: "time_next",
-				Type: sqltypes.Int64,
-			}, {
-				Name: "epoch",
-				Type: sqltypes.Int64,
-			}, {
-				Name: "time_acked",
-				Type: sqltypes.Int64,
-			}, {
-				Name: "message",
-				Type: sqltypes.Int64,
-			}},
-		},
 		"begin":    {},
 		"commit":   {},
 		"rollback": {},
 		fmt.Sprintf(sqlReadAllRedo, "_vt", "_vt"): {},
 	}
+
+	for query, result := range queryResultMap {
+		db.AddQuery(query, result)
+	}
+	db.MockQueriesForTable("test_table", &sqltypes.Result{
+		Fields: []*querypb.Field{{
+			Name: "pk",
+			Type: sqltypes.Int32,
+		}, {
+			Name: "name",
+			Type: sqltypes.Int32,
+		}, {
+			Name: "addr",
+			Type: sqltypes.Int32,
+		}},
+	})
+	db.MockQueriesForTable("seq", &sqltypes.Result{
+		Fields: []*querypb.Field{{
+			Name: "id",
+			Type: sqltypes.Int32,
+		}, {
+			Name: "next_id",
+			Type: sqltypes.Int64,
+		}, {
+			Name: "cache",
+			Type: sqltypes.Int64,
+		}, {
+			Name: "increment",
+			Type: sqltypes.Int64,
+		}},
+	})
+	db.MockQueriesForTable("msg", &sqltypes.Result{
+		Fields: []*querypb.Field{{
+			Name: "id",
+			Type: sqltypes.Int64,
+		}, {
+			Name: "priority",
+			Type: sqltypes.Int64,
+		}, {
+			Name: "time_next",
+			Type: sqltypes.Int64,
+		}, {
+			Name: "epoch",
+			Type: sqltypes.Int64,
+		}, {
+			Name: "time_acked",
+			Type: sqltypes.Int64,
+		}, {
+			Name: "message",
+			Type: sqltypes.Int64,
+		}},
+	})
 }

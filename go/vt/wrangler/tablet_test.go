@@ -17,10 +17,9 @@ limitations under the License.
 package wrangler
 
 import (
+	"context"
 	"strings"
 	"testing"
-
-	"context"
 
 	"vitess.io/vitess/go/vt/logutil"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -44,7 +43,7 @@ func TestInitTabletShardConversion(t *testing.T) {
 		Shard: "80-C0",
 	}
 
-	if err := wr.InitTablet(context.Background(), tablet, false /*allowPrimaryOverride*/, true /*createShardAndKeyspace*/, false /*allowUpdate*/); err != nil {
+	if err := wr.TopoServer().InitTablet(context.Background(), tablet, false /*allowPrimaryOverride*/, true /*createShardAndKeyspace*/, false /*allowUpdate*/); err != nil {
 		t.Fatalf("InitTablet failed: %v", err)
 	}
 
@@ -74,7 +73,7 @@ func TestDeleteTabletBasic(t *testing.T) {
 		Shard: "0",
 	}
 
-	if err := wr.InitTablet(context.Background(), tablet, false /*allowPrimaryOverride*/, true /*createShardAndKeyspace*/, false /*allowUpdate*/); err != nil {
+	if err := wr.TopoServer().InitTablet(context.Background(), tablet, false /*allowPrimaryOverride*/, true /*createShardAndKeyspace*/, false /*allowUpdate*/); err != nil {
 		t.Fatalf("InitTablet failed: %v", err)
 	}
 
@@ -104,7 +103,7 @@ func TestDeleteTabletTruePrimary(t *testing.T) {
 		Type:     topodatapb.TabletType_PRIMARY,
 	}
 
-	if err := wr.InitTablet(context.Background(), tablet, false /*allowPrimaryOverride*/, true /*createShardAndKeyspace*/, false /*allowUpdate*/); err != nil {
+	if err := wr.TopoServer().InitTablet(context.Background(), tablet, false /*allowPrimaryOverride*/, true /*createShardAndKeyspace*/, false /*allowUpdate*/); err != nil {
 		t.Fatalf("InitTablet failed: %v", err)
 	}
 	if _, err := ts.GetTablet(context.Background(), tablet.Alias); err != nil {
@@ -148,7 +147,7 @@ func TestDeleteTabletFalsePrimary(t *testing.T) {
 		Type:     topodatapb.TabletType_PRIMARY,
 	}
 
-	if err := wr.InitTablet(context.Background(), tablet1, false /*allowPrimaryOverride*/, true /*createShardAndKeyspace*/, false /*allowUpdate*/); err != nil {
+	if err := wr.TopoServer().InitTablet(context.Background(), tablet1, false /*allowPrimaryOverride*/, true /*createShardAndKeyspace*/, false /*allowUpdate*/); err != nil {
 		t.Fatalf("InitTablet failed: %v", err)
 	}
 
@@ -161,7 +160,7 @@ func TestDeleteTabletFalsePrimary(t *testing.T) {
 		Shard:    "0",
 		Type:     topodatapb.TabletType_PRIMARY,
 	}
-	if err := wr.InitTablet(context.Background(), tablet2, true /*allowPrimaryOverride*/, false /*createShardAndKeyspace*/, false /*allowUpdate*/); err != nil {
+	if err := wr.TopoServer().InitTablet(context.Background(), tablet2, true /*allowPrimaryOverride*/, false /*createShardAndKeyspace*/, false /*allowUpdate*/); err != nil {
 		t.Fatalf("InitTablet failed: %v", err)
 	}
 
@@ -176,6 +175,50 @@ func TestDeleteTabletFalsePrimary(t *testing.T) {
 
 	// Should be able to delete old (false) primary with allowPrimary = false
 	if err := wr.DeleteTablet(context.Background(), tablet1.Alias, false); err != nil {
+		t.Fatalf("DeleteTablet failed: %v", err)
+	}
+}
+
+// TestDeleteTabletShardNonExisting tests that you can delete a true primary
+// tablet if a shard does not exists anymore.
+func TestDeleteTabletShardNonExisting(t *testing.T) {
+	cell := "cell1"
+	ts := memorytopo.NewServer(cell)
+	wr := New(logutil.NewConsoleLogger(), ts, nil)
+
+	tablet := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: cell,
+			Uid:  1,
+		},
+		Keyspace: "test",
+		Shard:    "0",
+		Type:     topodatapb.TabletType_PRIMARY,
+	}
+
+	if err := wr.TopoServer().InitTablet(context.Background(), tablet, false /*allowPrimaryOverride*/, true /*createShardAndKeyspace*/, false /*allowUpdate*/); err != nil {
+		t.Fatalf("InitTablet failed: %v", err)
+	}
+	if _, err := ts.GetTablet(context.Background(), tablet.Alias); err != nil {
+		t.Fatalf("GetTablet failed: %v", err)
+	}
+
+	// set PrimaryAlias and PrimaryTermStartTime on shard to match chosen primary tablet
+	if _, err := ts.UpdateShardFields(context.Background(), "test", "0", func(si *topo.ShardInfo) error {
+		si.PrimaryAlias = tablet.Alias
+		si.PrimaryTermStartTime = tablet.PrimaryTermStartTime
+		return nil
+	}); err != nil {
+		t.Fatalf("UpdateShardFields failed: %v", err)
+	}
+
+	// trigger a shard deletion
+	if err := ts.DeleteShard(context.Background(), "test", "0"); err != nil {
+		t.Fatalf("DeleteShard failed: %v", err)
+	}
+
+	// DeleteTablet should not fail if a shard no longer exist
+	if err := wr.DeleteTablet(context.Background(), tablet.Alias, true); err != nil {
 		t.Fatalf("DeleteTablet failed: %v", err)
 	}
 }

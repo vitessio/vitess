@@ -23,16 +23,18 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
-// Concatenate represents a UNION ALL.
+// Concatenate represents a UNION ALL/DISTINCT.
 type Concatenate struct {
 	Distinct    bool
 	SelectStmts []*sqlparser.Select
-	Sources     []Operator
+	Sources     []LogicalOperator
 	OrderBy     sqlparser.OrderBy
 	Limit       *sqlparser.Limit
 }
 
-var _ Operator = (*Concatenate)(nil)
+var _ LogicalOperator = (*Concatenate)(nil)
+
+func (*Concatenate) iLogical() {}
 
 // TableID implements the Operator interface
 func (c *Concatenate) TableID() semantics.TableSet {
@@ -44,13 +46,29 @@ func (c *Concatenate) TableID() semantics.TableSet {
 }
 
 // PushPredicate implements the Operator interface
-func (c *Concatenate) PushPredicate(sqlparser.Expr, *semantics.SemTable) error {
-	return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "can't push predicates on concatenate")
+func (c *Concatenate) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) (LogicalOperator, error) {
+	newSources := make([]LogicalOperator, 0, len(c.Sources))
+	for index, source := range c.Sources {
+		if len(c.SelectStmts[index].SelectExprs) != 1 {
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "can't push predicates on concatenate")
+		}
+		if _, isStarExpr := c.SelectStmts[index].SelectExprs[0].(*sqlparser.StarExpr); !isStarExpr {
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "can't push predicates on concatenate")
+		}
+
+		newSrc, err := source.PushPredicate(expr, semTable)
+		if err != nil {
+			return nil, err
+		}
+		newSources = append(newSources, newSrc)
+	}
+	c.Sources = newSources
+	return c, nil
 }
 
 // UnsolvedPredicates implements the Operator interface
 func (c *Concatenate) UnsolvedPredicates(*semantics.SemTable) []sqlparser.Expr {
-	panic("implement me")
+	return nil
 }
 
 // CheckValid implements the Operator interface
@@ -65,8 +83,8 @@ func (c *Concatenate) CheckValid() error {
 }
 
 // Compact implements the Operator interface
-func (c *Concatenate) Compact(*semantics.SemTable) (Operator, error) {
-	var newSources []Operator
+func (c *Concatenate) Compact(*semantics.SemTable) (LogicalOperator, error) {
+	var newSources []LogicalOperator
 	var newSels []*sqlparser.Select
 	for i, source := range c.Sources {
 		other, isConcat := source.(*Concatenate)

@@ -17,6 +17,7 @@
 import { Link, Redirect, Route, Switch, useParams, useRouteMatch } from 'react-router-dom';
 import { useExperimentalTabletDebugVars, useTablet } from '../../../hooks/api';
 import { useDocumentTitle } from '../../../hooks/useDocumentTitle';
+import { isReadOnlyMode } from '../../../util/env';
 import { formatDisplayType, formatState } from '../../../util/tablets';
 import { Code } from '../../Code';
 import { ContentContainer } from '../../layout/ContentContainer';
@@ -25,10 +26,14 @@ import { WorkspaceHeader } from '../../layout/WorkspaceHeader';
 import { WorkspaceTitle } from '../../layout/WorkspaceTitle';
 import { ExternalTabletLink } from '../../links/ExternalTabletLink';
 import { TabletServingPip } from '../../pips/TabletServingPip';
+import { ReadOnlyGate } from '../../ReadOnlyGate';
 import { Tab } from '../../tabs/Tab';
 import { TabContainer } from '../../tabs/TabContainer';
+import Advanced from './Advanced';
 import style from './Tablet.module.scss';
 import { TabletCharts } from './TabletCharts';
+import { TabletReplication } from './TabletReplication';
+import { env } from '../../../util/env';
 
 interface RouteParams {
     alias: string;
@@ -43,7 +48,6 @@ export const Tablet = () => {
 
     const { data: tablet, ...tq } = useTablet({ alias, clusterID });
     const { data: debugVars } = useExperimentalTabletDebugVars({ alias, clusterID });
-
     if (tq.error) {
         return (
             <div className={style.placeholder}>
@@ -76,7 +80,7 @@ export const Tablet = () => {
                     <Link to="/tablets">Tablets</Link>
                 </NavCrumbs>
 
-                <WorkspaceTitle className="font-family-monospace">{alias}</WorkspaceTitle>
+                <WorkspaceTitle className="font-mono">{alias}</WorkspaceTitle>
 
                 <div className={style.headingMeta}>
                     <span>
@@ -84,12 +88,12 @@ export const Tablet = () => {
                     </span>
                     {!!tablet && (
                         <>
-                            <span className="font-family-monospace">
+                            <span className="font-mono">
                                 <TabletServingPip state={tablet.state} /> {formatDisplayType(tablet)}
                             </span>
-                            <span className="font-family-monospace">{formatState(tablet)}</span>
+                            <span className="font-mono">{formatState(tablet)}</span>
                             <span>
-                                <ExternalTabletLink className="font-family-monospace" fqdn={tablet.FQDN}>
+                                <ExternalTabletLink className="font-mono" fqdn={tablet.FQDN}>
                                     {tablet.tablet?.hostname}
                                 </ExternalTabletLink>
                             </span>
@@ -101,7 +105,12 @@ export const Tablet = () => {
             <ContentContainer>
                 <TabContainer>
                     <Tab text="QPS" to={`${url}/qps`} />
+                    <Tab text="Replication Status" to={`${url}/replication`} />
                     <Tab text="JSON" to={`${url}/json`} />
+
+                    <ReadOnlyGate>
+                        <Tab text="Advanced" to={`${url}/advanced`} />
+                    </ReadOnlyGate>
                 </TabContainer>
 
                 <Switch>
@@ -109,16 +118,27 @@ export const Tablet = () => {
                         <TabletCharts alias={alias} clusterID={clusterID} />
                     </Route>
 
+                    <Route path={`${path}/replication`}>
+                        <TabletReplication tablet={tablet} />
+                    </Route>
+
                     <Route path={`${path}/json`}>
                         <div>
                             <Code code={JSON.stringify(tablet, null, 2)} />
 
-                            {process.env.REACT_APP_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS && (
+                            {env().REACT_APP_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS && (
                                 <Code code={JSON.stringify(debugVars, null, 2)} />
                             )}
                         </div>
                     </Route>
-                    <Redirect from={path} to={`${path}/qps`} />
+
+                    {!isReadOnlyMode() && (
+                        <Route path={`${path}/advanced`}>
+                            <Advanced alias={alias} clusterID={clusterID} tablet={tablet} />
+                        </Route>
+                    )}
+
+                    <Redirect to={`${path}/qps`} />
                 </Switch>
             </ContentContainer>
 

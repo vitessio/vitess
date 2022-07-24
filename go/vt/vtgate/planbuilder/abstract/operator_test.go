@@ -25,6 +25,8 @@ import (
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/vt/vtgate/engine"
+
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	"github.com/stretchr/testify/assert"
@@ -48,7 +50,7 @@ func (lcr *lineCountingReader) nextLine() (string, error) {
 func readTestCase(lcr *lineCountingReader) (testCase, error) {
 	query := ""
 	var err error
-	for query == "" || query == "\n" {
+	for query == "" || query == "\n" || strings.HasPrefix(query, "#") {
 		query, err = lcr.nextLine()
 		if err != nil {
 			return testCase{}, err
@@ -61,9 +63,9 @@ func readTestCase(lcr *lineCountingReader) (testCase, error) {
 		jsonPart, err := lcr.nextLine()
 		if err != nil {
 			if err == io.EOF {
-				return testCase{}, fmt.Errorf("test data is bad. expectation not finished")
+				return tc, fmt.Errorf("test data is bad. expectation not finished")
 			}
-			return testCase{}, err
+			return tc, err
 		}
 		if jsonPart == "}\n" {
 			tc.expected += "}"
@@ -93,12 +95,12 @@ func TestOperator(t *testing.T) {
 			break
 		}
 		t.Run(fmt.Sprintf("%d:%s", tc.line, tc.query), func(t *testing.T) {
-			tree, err := sqlparser.Parse(tc.query)
 			require.NoError(t, err)
-			stmt := tree.(sqlparser.SelectStatement)
+			stmt, err := sqlparser.Parse(tc.query)
+			require.NoError(t, err)
 			semTable, err := semantics.Analyze(stmt, "", si)
 			require.NoError(t, err)
-			optree, err := CreateOperatorFromAST(stmt, semTable)
+			optree, err := CreateLogicalOperatorFromAST(stmt, semTable)
 			require.NoError(t, err)
 			output := testString(optree)
 			if tc.expected != output {
@@ -130,9 +132,9 @@ func testString(op Operator) string {
 	case *SubQuery:
 		var inners []string
 		for _, sqOp := range op.Inner {
-			subquery := fmt.Sprintf("{\n\tType: %s", sqOp.Type.String())
-			if sqOp.ArgName != "" {
-				subquery += fmt.Sprintf("\n\tArgName: %s", sqOp.ArgName)
+			subquery := fmt.Sprintf("{\n\tType: %s", engine.PulloutOpcode(sqOp.ExtractedSubquery.OpCode).String())
+			if sqOp.ExtractedSubquery.GetArgName() != "" {
+				subquery += fmt.Sprintf("\n\tArgName: %s", sqOp.ExtractedSubquery.GetArgName())
 			}
 			subquery += fmt.Sprintf("\n\tQuery: %s\n}", indent(testString(sqOp.Inner)))
 			subquery = indent(subquery)
@@ -143,10 +145,7 @@ func testString(op Operator) string {
 		sprintf := fmt.Sprintf("SubQuery: {\n\tSubQueries: [\n%s]\n\tOuter: %s\n}", join, outer)
 		return sprintf
 	case *Vindex:
-		value := op.Value.Value.ToString()
-		if value == "" {
-			value = op.Value.Key
-		}
+		value := sqlparser.String(op.Value)
 		return fmt.Sprintf("Vindex: {\n\tName: %s\n\tValue: %s\n}", op.Vindex.String(), value)
 	case *Concatenate:
 		var inners []string
@@ -164,8 +163,21 @@ func testString(op Operator) string {
 			dist = "(distinct)"
 		}
 		return fmt.Sprintf("Concatenate%s {\n%s\n}", dist, strings.Join(inners, ",\n"))
+	case *Update:
+		tbl := "table: " + op.Table.testString()
+		var assignments []string
+		// sort to produce stable results, otherwise test is flaky
+		keys := make([]string, 0, len(op.Assignments))
+		for k := range op.Assignments {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			assignments = append(assignments, fmt.Sprintf("\t%s = %s", k, sqlparser.String(op.Assignments[k])))
+		}
+		return fmt.Sprintf("Update {\n\t%s\nassignments:\n%s\n}", tbl, strings.Join(assignments, "\n"))
 	}
-	return fmt.Sprintf("implement me: %T", op)
+	panic(fmt.Sprintf("%T", op))
 }
 
 func indent(s string) string {
@@ -192,7 +204,7 @@ func (qt *QueryTable) testString() string {
 		where = " where " + strings.Join(preds, " and ")
 	}
 
-	return fmt.Sprintf("\t%v:%s%s%s", qt.TableID, sqlparser.String(qt.Table), alias, where)
+	return fmt.Sprintf("\t%v:%s%s%s", qt.ID, sqlparser.String(qt.Table), alias, where)
 }
 
 func (qg *QueryGraph) testString() string {

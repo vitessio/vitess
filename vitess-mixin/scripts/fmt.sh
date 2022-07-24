@@ -22,7 +22,7 @@ fi
 
 CHECK="false"
 EXIT_STATUS=0
-FILES_CHANGED="$(git diff --name-only origin/master --diff-filter=d | grep -E '(jsonnet|TEMPLATE|libsonnet)$' || true)"
+FILES_CHANGED="$(git diff --name-only origin/main --diff-filter=d | grep -E '(jsonnet|TEMPLATE|libsonnet)$' || true)"
 
 while [ "$#" -gt 0 ]; do
     case "$1" in

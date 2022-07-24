@@ -17,6 +17,8 @@ limitations under the License.
 package engine
 
 import (
+	"context"
+
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -33,7 +35,7 @@ type Rows struct {
 }
 
 // NewRowsPrimitive returns a new Rows primitie
-func NewRowsPrimitive(rows [][]sqltypes.Value, fields []*querypb.Field) *Rows {
+func NewRowsPrimitive(rows [][]sqltypes.Value, fields []*querypb.Field) Primitive {
 	return &Rows{rows: rows, fields: fields}
 }
 
@@ -53,7 +55,7 @@ func (r *Rows) GetTableName() string {
 }
 
 // TryExecute implements the Primitive interface
-func (r *Rows) TryExecute(VCursor, map[string]*querypb.BindVariable, bool) (*sqltypes.Result, error) {
+func (r *Rows) TryExecute(context.Context, VCursor, map[string]*querypb.BindVariable, bool) (*sqltypes.Result, error) {
 	return &sqltypes.Result{
 		Fields:   r.fields,
 		InsertID: 0,
@@ -62,8 +64,8 @@ func (r *Rows) TryExecute(VCursor, map[string]*querypb.BindVariable, bool) (*sql
 }
 
 // TryStreamExecute implements the Primitive interface
-func (r *Rows) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantields bool, callback func(*sqltypes.Result) error) error {
-	result, err := r.TryExecute(vcursor, bindVars, wantields)
+func (r *Rows) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	result, err := r.TryExecute(ctx, vcursor, bindVars, wantfields)
 	if err != nil {
 		return err
 	}
@@ -71,7 +73,7 @@ func (r *Rows) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.Bi
 }
 
 // GetFields implements the Primitive interface
-func (r *Rows) GetFields(VCursor, map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (r *Rows) GetFields(context.Context, VCursor, map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return &sqltypes.Result{
 		Fields:   r.fields,
 		InsertID: 0,

@@ -25,16 +25,13 @@ import (
 	"path"
 	"testing"
 
-	"vitess.io/vitess/go/test/endtoend/recovery"
-	"vitess.io/vitess/go/test/endtoend/sharding/initialsharding"
-
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/recovery"
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 )
 
 var (
@@ -52,13 +49,13 @@ var (
 	dbCredentialFile string
 	shardName        = "0"
 	commonTabletArg  = []string{
-		"-vreplication_healthcheck_topology_refresh", "1s",
-		"-vreplication_healthcheck_retry_delay", "1s",
-		"-vreplication_retry_delay", "1s",
-		"-degraded_threshold", "5s",
-		"-lock_tables_timeout", "5s",
-		"-watch_replication_stream",
-		"-serving_state_grace_period", "1s"}
+		"--vreplication_healthcheck_topology_refresh", "1s",
+		"--vreplication_healthcheck_retry_delay", "1s",
+		"--vreplication_retry_delay", "1s",
+		"--degraded_threshold", "5s",
+		"--lock_tables_timeout", "5s",
+		"--watch_replication_stream",
+		"--serving_state_grace_period", "1s"}
 	recoveryKS1  = "recovery_ks1"
 	recoveryKS2  = "recovery_ks2"
 	vtInsertTest = `create table vt_insert_test (
@@ -94,11 +91,11 @@ func TestMainImpl(m *testing.M) {
 		}
 		localCluster.Keyspaces = append(localCluster.Keyspaces, *keyspace)
 
-		dbCredentialFile = initialsharding.WriteDbCredentialToTmp(localCluster.TmpDirectory)
+		dbCredentialFile = cluster.WriteDbCredentialToTmp(localCluster.TmpDirectory)
 		initDb, _ := os.ReadFile(path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"))
 		sql := string(initDb)
 		newInitDBFile = path.Join(localCluster.TmpDirectory, "init_db_with_passwords.sql")
-		sql = sql + initialsharding.GetPasswordUpdateSQL(localCluster)
+		sql = sql + cluster.GetPasswordUpdateSQL(localCluster)
 		// https://github.com/vitessio/vitess/issues/8315
 		oldAlterTableMode := `
 SET GLOBAL old_alter_table = ON;
@@ -106,8 +103,8 @@ SET GLOBAL old_alter_table = ON;
 		sql = sql + oldAlterTableMode
 		os.WriteFile(newInitDBFile, []byte(sql), 0666)
 
-		extraArgs := []string{"-db-credentials-file", dbCredentialFile}
-		commonTabletArg = append(commonTabletArg, "-db-credentials-file", dbCredentialFile)
+		extraArgs := []string{"--db-credentials-file", dbCredentialFile}
+		commonTabletArg = append(commonTabletArg, "--db-credentials-file", dbCredentialFile)
 
 		shard := cluster.Shard{
 			Name: shardName,
@@ -127,7 +124,6 @@ SET GLOBAL old_alter_table = ON;
 				tablet.VttabletProcess.ExtraArgs = append(tablet.VttabletProcess.ExtraArgs, recovery.XbArgs...)
 			}
 			tablet.VttabletProcess.SupportsBackup = true
-			tablet.VttabletProcess.EnableSemiSync = true
 
 			tablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, localCluster.TmpDirectory)
 			tablet.MysqlctlProcess.InitDBFile = newInitDBFile
@@ -156,7 +152,12 @@ SET GLOBAL old_alter_table = ON;
 			}
 		}
 
-		if err := localCluster.VtctlclientProcess.InitShardPrimary(keyspaceName, shard.Name, cell, primary.TabletUID); err != nil {
+		vtctldClientProcess := cluster.VtctldClientProcessInstance("localhost", localCluster.VtctldProcess.GrpcPort, localCluster.TmpDirectory)
+		_, err = vtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=semi_sync")
+		if err != nil {
+			return 1, err
+		}
+		if err := localCluster.VtctlclientProcess.InitializeShard(keyspaceName, shard.Name, cell, primary.TabletUID); err != nil {
 			return 1, err
 		}
 		return m.Run(), nil
@@ -233,12 +234,12 @@ func TestRecoveryImpl(t *testing.T) {
 	//verify that primary has new value
 	qr, err := primary.VttabletProcess.QueryTablet("select msg from vt_insert_test where id = 1", keyspaceName, true)
 	assert.NoError(t, err)
-	assert.Equal(t, "msgx1", fmt.Sprintf("%s", qr.Rows[0][0].ToBytes()))
+	assert.Equal(t, "msgx1", qr.Rows[0][0].ToString())
 
 	//verify that restored replica has old value
 	qr, err = replica2.VttabletProcess.QueryTablet("select msg from vt_insert_test where id = 1", keyspaceName, true)
 	assert.NoError(t, err)
-	assert.Equal(t, "test1", fmt.Sprintf("%s", qr.Rows[0][0].ToBytes()))
+	assert.Equal(t, "test1", qr.Rows[0][0].ToString())
 
 	err = localCluster.VtctlclientProcess.ExecuteCommand("Backup", replica1.Alias)
 	assert.NoError(t, err)
@@ -262,12 +263,12 @@ func TestRecoveryImpl(t *testing.T) {
 	//verify that primary has new value
 	qr, err = primary.VttabletProcess.QueryTablet("select msg from vt_insert_test where id = 1", keyspaceName, true)
 	assert.NoError(t, err)
-	assert.Equal(t, "msgx2", fmt.Sprintf("%s", qr.Rows[0][0].ToBytes()))
+	assert.Equal(t, "msgx2", qr.Rows[0][0].ToString())
 
 	//verify that restored replica has old value
 	qr, err = replica3.VttabletProcess.QueryTablet("select msg from vt_insert_test where id = 1", keyspaceName, true)
 	assert.NoError(t, err)
-	assert.Equal(t, "msgx1", fmt.Sprintf("%s", qr.Rows[0][0].ToBytes()))
+	assert.Equal(t, "msgx1", qr.Rows[0][0].ToString())
 
 	vtgateInstance := localCluster.NewVtgateInstance()
 	vtgateInstance.TabletTypesToWait = "REPLICA"

@@ -134,7 +134,7 @@ func (env *testMaterializerEnv) addTablet(id int, keyspace, shard string, tablet
 		},
 	}
 	env.tablets[id] = tablet
-	if err := env.wr.InitTablet(context.Background(), tablet, false /* allowPrimaryOverride */, true /* createShardAndKeyspace */, false /* allowUpdate */); err != nil {
+	if err := env.wr.TopoServer().InitTablet(context.Background(), tablet, false /* allowPrimaryOverride */, true /* createShardAndKeyspace */, false /* allowUpdate */); err != nil {
 		panic(err)
 	}
 	if tabletType == topodatapb.TabletType_PRIMARY {
@@ -194,10 +194,10 @@ func (tmc *testMaterializerTMClient) getSchemaRequestCount(uid uint32) int {
 	return tmc.getSchemaCounts[key]
 }
 
-func (tmc *testMaterializerTMClient) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
+func (tmc *testMaterializerTMClient) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.GetSchemaRequest) (*tabletmanagerdatapb.SchemaDefinition, error) {
 	tmc.schemaRequested(tablet.Alias.Uid)
 	schemaDefn := &tabletmanagerdatapb.SchemaDefinition{}
-	for _, table := range tables {
+	for _, table := range request.Tables {
 		// TODO: Add generalized regexps if needed for test purposes.
 		if table == "/.*/" {
 			// Special case of all tables in keyspace.

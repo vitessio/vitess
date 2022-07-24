@@ -14,28 +14,28 @@
  * limitations under the License.
  */
 .tabContainer {
-  display: flex;
-  flex-direction: row;
-  flex-wrap: nowrap;
-  margin-bottom: 0.4em;
-  overflow-x: auto;
-  min-width: 100%;
-  position: relative;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    margin-bottom: 0.4em;
+    overflow-x: auto;
+    min-width: 100%;
+    position: relative;
 
-  &.small {
-    font-size: var(--fontSizeSmall);
-  }
+    &.small {
+        font-size: theme('fontSize.sm');
+    }
 
-  &.large {
-    font-size: var(--fontSizeLarge);
-  }
+    &.large {
+        font-size: theme('fontSize.lg');
+    }
 
-  &::after {
-    background: var(--colorScaffoldingHighlight);
-    bottom: 0;
-    height: 1px;
-    content: '';
-    position: absolute;
-    width: 100%;
-  }
+    &::after {
+        background: var(--colorScaffoldingHighlight);
+        bottom: 0;
+        height: 1px;
+        content: '';
+        position: absolute;
+        width: 100%;
+    }
 }

@@ -17,313 +17,528 @@ limitations under the License.
 package evalengine
 
 import (
+	"encoding/hex"
 	"fmt"
+	"math"
 	"strconv"
+	"unicode/utf8"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine/internal/decimal"
 )
 
 type (
-	EvalResult struct {
-		typ   querypb.Type
-		ival  int64
-		uval  uint64
-		fval  float64
-		bytes []byte
-	}
-	//ExpressionEnv contains the environment that the expression
-	//evaluates in, such as the current row and bindvars
+	// ExpressionEnv contains the environment that the expression
+	// evaluates in, such as the current row and bindvars
 	ExpressionEnv struct {
-		BindVars map[string]*querypb.BindVariable
-		Row      []sqltypes.Value
+		BindVars         map[string]*querypb.BindVariable
+		DefaultCollation collations.ID
+
+		// Row and Fields should line up
+		Row    []sqltypes.Value
+		Fields []*querypb.Field
 	}
 
 	// Expr is the interface that all evaluating expressions must implement
 	Expr interface {
-		Evaluate(env ExpressionEnv) (EvalResult, error)
-		Type(env ExpressionEnv) (querypb.Type, error)
-		String() string
+		eval(env *ExpressionEnv, result *EvalResult)
+		typeof(env *ExpressionEnv) (sqltypes.Type, flag)
+		format(buf *formatter, depth int)
+		constant() bool
+		simplify(env *ExpressionEnv) error
 	}
 
-	//BinaryExpr allows binary expressions to not have to evaluate child expressions - this is done by the BinaryOp
-	BinaryExpr interface {
-		Evaluate(left, right EvalResult) (EvalResult, error)
-		Type(left querypb.Type) querypb.Type
-		String() string
+	Literal struct {
+		Val EvalResult
 	}
 
-	// Expressions
-	Literal      struct{ Val EvalResult }
-	BindVariable struct{ Key string }
-	Column       struct{ Offset int }
-	BinaryOp     struct {
-		Expr        BinaryExpr
+	BindVariable struct {
+		Key        string
+		coll       collations.TypedCollation
+		coerceType sqltypes.Type
+	}
+
+	Column struct {
+		Offset int
+		coll   collations.TypedCollation
+	}
+
+	TupleExpr []Expr
+
+	CollateExpr struct {
+		UnaryExpr
+		TypedCollation collations.TypedCollation
+	}
+
+	BinaryExpr struct {
 		Left, Right Expr
 	}
-
-	// Binary ops
-	Addition       struct{}
-	Subtraction    struct{}
-	Multiplication struct{}
-	Division       struct{}
 )
 
-//Value allows for retrieval of the value we expose for public consumption
-func (e EvalResult) Value() sqltypes.Value {
-	return e.toSQLValue(e.typ)
+var _ Expr = (*Literal)(nil)
+var _ Expr = (*BindVariable)(nil)
+var _ Expr = (*Column)(nil)
+var _ Expr = (*ArithmeticExpr)(nil)
+var _ Expr = (*ComparisonExpr)(nil)
+var _ Expr = (*InExpr)(nil)
+var _ Expr = (*IsExpr)(nil)
+var _ Expr = (*LikeExpr)(nil)
+var _ Expr = (TupleExpr)(nil)
+var _ Expr = (*CollateExpr)(nil)
+var _ Expr = (*LogicalExpr)(nil)
+var _ Expr = (*NotExpr)(nil)
+var _ Expr = (*CallExpr)(nil)
+var _ Expr = (*WeightStringCallExpr)(nil)
+var _ Expr = (*BitwiseExpr)(nil)
+var _ Expr = (*BitwiseNotExpr)(nil)
+var _ Expr = (*ConvertExpr)(nil)
+var _ Expr = (*ConvertUsingExpr)(nil)
+
+type evalError struct {
+	error
 }
 
-//NewLiteralIntFromBytes returns a literal expression
-func NewLiteralIntFromBytes(val []byte) (Expr, error) {
-	ival, err := strconv.ParseInt(string(val), 10, 64)
+func throwEvalError(err error) {
+	panic(evalError{err})
+}
+
+func throwCardinalityError(expected int) {
+	panic(evalError{
+		vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.OperandColumns, "Operand should contain %d column(s)", expected),
+	})
+}
+
+func (env *ExpressionEnv) cardinality(expr Expr) int {
+	switch expr := expr.(type) {
+	case *BindVariable:
+		tt, _ := expr.typeof(env)
+		if tt == sqltypes.Tuple {
+			return len(expr.bvar(env).Values)
+		}
+		return 1
+
+	case TupleExpr:
+		return len(expr)
+
+	default:
+		return 1
+	}
+}
+
+func (env *ExpressionEnv) ensureCardinality(expr Expr, expected int) {
+	if env.cardinality(expr) != expected {
+		throwCardinalityError(expected)
+	}
+}
+
+func (env *ExpressionEnv) subexpr(expr Expr, nth int) (Expr, int) {
+	switch expr := expr.(type) {
+	case *BindVariable:
+		tt, _ := expr.typeof(env)
+		if tt == sqltypes.Tuple {
+			return nil, 1
+		}
+	case TupleExpr:
+		return expr[nth], env.cardinality(expr[nth])
+	}
+	panic("subexpr called on non-tuple")
+}
+
+func (env *ExpressionEnv) typecheckComparison(expr1 Expr, card1 int, expr2 Expr, card2 int) {
+	switch {
+	case card1 == 1 && card2 == 1:
+		env.typecheck(expr1)
+		env.typecheck(expr2)
+	case card1 == card2:
+		for n := 0; n < card1; n++ {
+			left1, leftcard1 := env.subexpr(expr1, n)
+			right1, rightcard1 := env.subexpr(expr2, n)
+			env.typecheckComparison(left1, leftcard1, right1, rightcard1)
+		}
+	default:
+		env.typecheck(expr1)
+		env.typecheck(expr2)
+		throwCardinalityError(card1)
+	}
+}
+
+func (env *ExpressionEnv) typecheckBinary(left, right Expr) {
+	env.typecheck(left)
+	env.ensureCardinality(left, 1)
+
+	env.typecheck(right)
+	env.ensureCardinality(right, 1)
+}
+
+func (env *ExpressionEnv) typecheckUnary(inner Expr) {
+	env.typecheck(inner)
+	env.ensureCardinality(inner, 1)
+}
+
+func (env *ExpressionEnv) typecheck(expr Expr) {
+	if expr == nil {
+		return
+	}
+
+	switch expr := expr.(type) {
+	case *ConvertExpr:
+		env.typecheckUnary(expr.Inner)
+	case *ConvertUsingExpr:
+		env.typecheckUnary(expr.Inner)
+	case *NegateExpr:
+		env.typecheckUnary(expr.Inner)
+	case *CollateExpr:
+		env.typecheckUnary(expr.Inner)
+	case *IsExpr:
+		env.typecheckUnary(expr.Inner)
+	case *BitwiseNotExpr:
+		env.typecheckUnary(expr.Inner)
+	case *WeightStringCallExpr:
+		env.typecheckUnary(expr.String)
+	case *ArithmeticExpr:
+		env.typecheckBinary(expr.Left, expr.Right)
+	case *LogicalExpr:
+		env.typecheckBinary(expr.Left, expr.Right)
+	case *BitwiseExpr:
+		env.typecheckBinary(expr.Left, expr.Right)
+	case *LikeExpr:
+		env.typecheckBinary(expr.Left, expr.Right)
+	case *ComparisonExpr:
+		left := env.cardinality(expr.Left)
+		right := env.cardinality(expr.Right)
+		env.typecheckComparison(expr.Left, left, expr.Right, right)
+	case *InExpr:
+		env.typecheck(expr.Left)
+		left := env.cardinality(expr.Left)
+		right := env.cardinality(expr.Right)
+
+		tt, _ := expr.Right.typeof(env)
+		if tt != sqltypes.Tuple {
+			throwEvalError(vterrors.Errorf(vtrpcpb.Code_INTERNAL, "rhs of an In operation should be a tuple"))
+		}
+
+		for n := 0; n < right; n++ {
+			subexpr, subcard := env.subexpr(expr.Right, n)
+			env.typecheck(subexpr)
+			if left != subcard {
+				throwCardinalityError(left)
+			}
+		}
+	case TupleExpr:
+		for _, subexpr := range expr {
+			env.typecheck(subexpr)
+		}
+	case *CallExpr:
+		env.typecheck(expr.Arguments)
+	case *Literal, *Column, *BindVariable, *CaseExpr: // noop
+	default:
+		panic(fmt.Sprintf("unhandled cardinality: %T", expr))
+	}
+}
+
+func (env *ExpressionEnv) Evaluate(expr Expr) (er EvalResult, err error) {
+	if env == nil {
+		panic("ExpressionEnv == nil")
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			if ee, ok := r.(evalError); ok {
+				err = ee.error
+			} else {
+				panic(r)
+			}
+		}
+	}()
+	env.typecheck(expr)
+	expr.eval(env, &er)
+	return
+}
+
+func (env *ExpressionEnv) TypeOf(expr Expr) (ty sqltypes.Type, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			if ee, ok := r.(evalError); ok {
+				err = ee.error
+			} else {
+				panic(r)
+			}
+		}
+	}()
+	ty, _ = expr.typeof(env)
+	return
+}
+
+// EmptyExpressionEnv returns a new ExpressionEnv with no bind vars or row
+func EmptyExpressionEnv() *ExpressionEnv {
+	return EnvWithBindVars(map[string]*querypb.BindVariable{}, collations.Unknown)
+}
+
+// EnvWithBindVars returns an expression environment with no current row, but with bindvars
+func EnvWithBindVars(bindVars map[string]*querypb.BindVariable, coll collations.ID) *ExpressionEnv {
+	if coll == collations.Unknown {
+		coll = collations.Default()
+	}
+	return &ExpressionEnv{BindVars: bindVars, DefaultCollation: coll}
+}
+
+// NullExpr is just what you are lead to believe
+var NullExpr = &Literal{}
+
+func init() {
+	NullExpr.Val.setNull()
+	NullExpr.Val.replaceCollation(collationNull)
+}
+
+// NewLiteralIntegralFromBytes returns a literal expression.
+// It tries to return an int64, but if the value is too large, it tries with an uint64
+func NewLiteralIntegralFromBytes(val []byte) (*Literal, error) {
+	if val[0] == '-' {
+		panic("NewLiteralIntegralFromBytes: negative value")
+	}
+
+	uval, err := strconv.ParseUint(string(val), 10, 64)
 	if err != nil {
+		if numError, ok := err.(*strconv.NumError); ok && numError.Err == strconv.ErrRange {
+			return NewLiteralDecimalFromBytes(val)
+		}
 		return nil, err
 	}
-	return NewLiteralInt(ival), nil
+	if uval <= math.MaxInt64 {
+		return NewLiteralInt(int64(uval)), nil
+	}
+	return NewLiteralUint(uval), nil
 }
 
-//NewLiteralInt returns a literal expression
-func NewLiteralInt(i int64) Expr {
-	return &Literal{EvalResult{typ: sqltypes.Int64, ival: i}}
+// NewLiteralInt returns a literal expression
+func NewLiteralInt(i int64) *Literal {
+	lit := &Literal{}
+	lit.Val.setInt64(i)
+	return lit
 }
 
-//NewLiteralFloat returns a literal expression
-func NewLiteralFloat(val []byte) (Expr, error) {
+// NewLiteralUint returns a literal expression
+func NewLiteralUint(i uint64) *Literal {
+	lit := &Literal{}
+	lit.Val.setUint64(i)
+	return lit
+}
+
+// NewLiteralFloat returns a literal expression
+func NewLiteralFloat(val float64) *Literal {
+	lit := &Literal{}
+	lit.Val.setFloat(val)
+	return lit
+}
+
+// NewLiteralFloatFromBytes returns a float literal expression from a slice of bytes
+func NewLiteralFloatFromBytes(val []byte) (*Literal, error) {
+	lit := &Literal{}
 	fval, err := strconv.ParseFloat(string(val), 64)
 	if err != nil {
 		return nil, err
 	}
-	return &Literal{EvalResult{typ: sqltypes.Float64, fval: fval}}, nil
+	lit.Val.setFloat(fval)
+	return lit, nil
 }
 
-//NewLiteralFloat returns a literal expression
-func NewLiteralString(val []byte) Expr {
-	return &Literal{EvalResult{typ: sqltypes.VarBinary, bytes: val}}
+func NewLiteralDecimalFromBytes(val []byte) (*Literal, error) {
+	lit := &Literal{}
+	dec, err := decimal.NewFromMySQL(val)
+	if err != nil {
+		return nil, err
+	}
+	lit.Val.setDecimal(dec, -dec.Exponent())
+	return lit, nil
 }
 
-//NewBindVar returns a bind variable
-func NewBindVar(key string) Expr {
-	return &BindVariable{Key: key}
+// NewLiteralString returns a literal expression
+func NewLiteralString(val []byte, collation collations.TypedCollation) *Literal {
+	collation.Repertoire = collations.RepertoireASCII
+	for _, b := range val {
+		if b >= utf8.RuneSelf {
+			collation.Repertoire = collations.RepertoireUnicode
+			break
+		}
+	}
+	lit := &Literal{}
+	lit.Val.setRaw(sqltypes.VarChar, val, collation)
+	return lit
 }
 
-//NewColumn returns a bind variable
-func NewColumn(offset int) Expr {
+func parseHexLiteral(val []byte) ([]byte, error) {
+	raw := make([]byte, hex.DecodedLen(len(val)))
+	if _, err := hex.Decode(raw, val); err != nil {
+		return nil, err
+	}
+	return raw, nil
+}
+
+func parseHexNumber(val []byte) ([]byte, error) {
+	if val[0] != '0' || val[1] != 'x' {
+		panic("malformed hex literal from parser")
+	}
+	if len(val)%2 == 0 {
+		return parseHexLiteral(val[2:])
+	}
+	// If the hex literal doesn't have an even amount of hex digits, we need
+	// to pad it with a '0' in the left. Instead of allocating a new slice
+	// for padding pad in-place by replacing the 'x' in the original slice with
+	// a '0', and clean it up after parsing.
+	val[1] = '0'
+	defer func() {
+		val[1] = 'x'
+	}()
+	return parseHexLiteral(val[1:])
+}
+
+func NewLiteralBinary(val []byte) *Literal {
+	lit := &Literal{}
+	lit.Val.setRaw(sqltypes.VarBinary, val, collationBinary)
+	return lit
+}
+
+func NewLiteralBinaryFromHex(val []byte) (*Literal, error) {
+	raw, err := parseHexLiteral(val)
+	if err != nil {
+		return nil, err
+	}
+	lit := &Literal{}
+	lit.Val.setBinaryHex(raw)
+	return lit, nil
+}
+
+func NewLiteralBinaryFromHexNum(val []byte) (*Literal, error) {
+	raw, err := parseHexNumber(val)
+	if err != nil {
+		return nil, err
+	}
+	lit := &Literal{}
+	lit.Val.setBinaryHex(raw)
+	return lit, nil
+}
+
+// NewBindVar returns a bind variable
+func NewBindVar(key string, collation collations.TypedCollation) Expr {
+	return &BindVariable{
+		Key:        key,
+		coll:       collation,
+		coerceType: -1,
+	}
+}
+
+// NewColumn returns a column expression
+func NewColumn(offset int, collation collations.TypedCollation) Expr {
 	return &Column{
 		Offset: offset,
+		coll:   collation,
 	}
 }
 
-var _ Expr = (*Literal)(nil)
-var _ Expr = (*BindVariable)(nil)
-var _ Expr = (*BinaryOp)(nil)
-var _ Expr = (*Column)(nil)
-
-var _ BinaryExpr = (*Addition)(nil)
-var _ BinaryExpr = (*Subtraction)(nil)
-var _ BinaryExpr = (*Multiplication)(nil)
-var _ BinaryExpr = (*Division)(nil)
-
-//Evaluate implements the Expr interface
-func (b *BinaryOp) Evaluate(env ExpressionEnv) (EvalResult, error) {
-	lVal, err := b.Left.Evaluate(env)
-	if err != nil {
-		return EvalResult{}, err
+// NewTupleExpr returns a tuple expression
+func NewTupleExpr(exprs ...Expr) TupleExpr {
+	tupleExpr := make(TupleExpr, 0, len(exprs))
+	for _, f := range exprs {
+		tupleExpr = append(tupleExpr, f)
 	}
-	rVal, err := b.Right.Evaluate(env)
-	if err != nil {
-		return EvalResult{}, err
-	}
-	return b.Expr.Evaluate(lVal, rVal)
+	return tupleExpr
 }
 
-//Evaluate implements the Expr interface
-func (l *Literal) Evaluate(ExpressionEnv) (EvalResult, error) {
-	return l.Val, nil
+// eval implements the Expr interface
+func (l *Literal) eval(_ *ExpressionEnv, result *EvalResult) {
+	*result = l.Val
 }
 
-//Evaluate implements the Expr interface
-func (b *BindVariable) Evaluate(env ExpressionEnv) (EvalResult, error) {
-	val, ok := env.BindVars[b.Key]
+func (t TupleExpr) eval(env *ExpressionEnv, result *EvalResult) {
+	var tup = make([]EvalResult, len(t))
+	for i, expr := range t {
+		tup[i].init(env, expr)
+	}
+	result.setTuple(tup)
+}
+
+func (bv *BindVariable) bvar(env *ExpressionEnv) *querypb.BindVariable {
+	val, ok := env.BindVars[bv.Key]
 	if !ok {
-		return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Bind variable not found")
+		throwEvalError(vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "query arguments missing for %s", bv.Key))
 	}
-	return evaluateByType(val)
+	return val
 }
 
-//Evaluate implements the Expr interface
-func (c *Column) Evaluate(env ExpressionEnv) (EvalResult, error) {
-	value := env.Row[c.Offset]
-	numeric, err := newEvalResult(value)
-	return numeric, err
-}
-
-//Evaluate implements the BinaryOp interface
-func (a *Addition) Evaluate(left, right EvalResult) (EvalResult, error) {
-	return addNumericWithError(left, right)
-}
-
-//Evaluate implements the BinaryOp interface
-func (s *Subtraction) Evaluate(left, right EvalResult) (EvalResult, error) {
-	return subtractNumericWithError(left, right)
-}
-
-//Evaluate implements the BinaryOp interface
-func (m *Multiplication) Evaluate(left, right EvalResult) (EvalResult, error) {
-	return multiplyNumericWithError(left, right)
-}
-
-//Evaluate implements the BinaryOp interface
-func (d *Division) Evaluate(left, right EvalResult) (EvalResult, error) {
-	return divideNumericWithError(left, right)
-}
-
-//Type implements the BinaryExpr interface
-func (a *Addition) Type(left querypb.Type) querypb.Type {
-	return left
-}
-
-//Type implements the BinaryExpr interface
-func (m *Multiplication) Type(left querypb.Type) querypb.Type {
-	return left
-}
-
-//Type implements the BinaryExpr interface
-func (d *Division) Type(querypb.Type) querypb.Type {
-	return sqltypes.Float64
-}
-
-//Type implements the BinaryExpr interface
-func (s *Subtraction) Type(left querypb.Type) querypb.Type {
-	return left
-}
-
-//Type implements the Expr interface
-func (b *BinaryOp) Type(env ExpressionEnv) (querypb.Type, error) {
-	ltype, err := b.Left.Type(env)
-	if err != nil {
-		return 0, err
+// eval implements the Expr interface
+func (bv *BindVariable) eval(env *ExpressionEnv, result *EvalResult) {
+	bvar := bv.bvar(env)
+	typ := bvar.Type
+	if bv.coerceType >= 0 {
+		typ = bv.coerceType
 	}
-	rtype, err := b.Right.Type(env)
-	if err != nil {
-		return 0, err
-	}
-	typ := mergeNumericalTypes(ltype, rtype)
-	return b.Expr.Type(typ), nil
-}
 
-//Type implements the Expr interface
-func (b *BindVariable) Type(env ExpressionEnv) (querypb.Type, error) {
-	e := env.BindVars
-	v, found := e[b.Key]
-	if !found {
-		return querypb.Type_NULL_TYPE, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "query arguments missing for %s", b.Key)
-	}
-	return v.Type, nil
-}
-
-//Type implements the Expr interface
-func (l *Literal) Type(ExpressionEnv) (querypb.Type, error) {
-	return l.Val.typ, nil
-}
-
-//Type implements the Expr interface
-func (c *Column) Type(ExpressionEnv) (querypb.Type, error) {
-	return sqltypes.Float64, nil
-}
-
-//String implements the BinaryExpr interface
-func (d *Division) String() string {
-	return "/"
-}
-
-//String implements the BinaryExpr interface
-func (m *Multiplication) String() string {
-	return "*"
-}
-
-//String implements the BinaryExpr interface
-func (s *Subtraction) String() string {
-	return "-"
-}
-
-//String implements the BinaryExpr interface
-func (a *Addition) String() string {
-	return "+"
-}
-
-//String implements the Expr interface
-func (b *BinaryOp) String() string {
-	return b.Left.String() + " " + b.Expr.String() + " " + b.Right.String()
-}
-
-//String implements the Expr interface
-func (b *BindVariable) String() string {
-	return ":" + b.Key
-}
-
-//String implements the Expr interface
-func (l *Literal) String() string {
-	return l.Val.Value().String()
-}
-
-//String implements the Expr interface
-func (c *Column) String() string {
-	return fmt.Sprintf("column %d from the input", c.Offset)
-}
-
-func mergeNumericalTypes(ltype, rtype querypb.Type) querypb.Type {
-	switch ltype {
-	case sqltypes.Int64:
-		if rtype == sqltypes.Uint64 || rtype == sqltypes.Float64 {
-			return rtype
+	switch typ {
+	case sqltypes.Tuple:
+		tuple := make([]EvalResult, len(bvar.Values))
+		for i, value := range bvar.Values {
+			if err := tuple[i].setValue(sqltypes.MakeTrusted(value.Type, value.Value), collations.TypedCollation{}); err != nil {
+				throwEvalError(err)
+			}
 		}
-	case sqltypes.Uint64:
-		if rtype == sqltypes.Float64 {
-			return rtype
+		result.setTuple(tuple)
+
+	default:
+		if err := result.setValue(sqltypes.MakeTrusted(typ, bvar.Value), bv.coll); err != nil {
+			throwEvalError(err)
 		}
 	}
-	return ltype
 }
 
-func evaluateByType(val *querypb.BindVariable) (EvalResult, error) {
-	switch val.Type {
-	case sqltypes.Int64:
-		ival, err := strconv.ParseInt(string(val.Value), 10, 64)
-		if err != nil {
-			ival = 0
-		}
-		return EvalResult{typ: sqltypes.Int64, ival: ival}, nil
-	case sqltypes.Int32:
-		ival, err := strconv.ParseInt(string(val.Value), 10, 32)
-		if err != nil {
-			ival = 0
-		}
-		return EvalResult{typ: sqltypes.Int32, ival: ival}, nil
-	case sqltypes.Uint64:
-		uval, err := strconv.ParseUint(string(val.Value), 10, 64)
-		if err != nil {
-			uval = 0
-		}
-		return EvalResult{typ: sqltypes.Uint64, uval: uval}, nil
-	case sqltypes.Float64:
-		fval, err := strconv.ParseFloat(string(val.Value), 64)
-		if err != nil {
-			fval = 0
-		}
-		return EvalResult{typ: sqltypes.Float64, fval: fval}, nil
-	case sqltypes.VarChar, sqltypes.Text, sqltypes.VarBinary:
-		return EvalResult{typ: sqltypes.VarBinary, bytes: val.Value}, nil
+// typeof implements the Expr interface
+func (bv *BindVariable) typeof(env *ExpressionEnv) (sqltypes.Type, flag) {
+	bvar := bv.bvar(env)
+	switch bvar.Type {
 	case sqltypes.Null:
-		return EvalResult{typ: sqltypes.Null}, nil
+		return sqltypes.Null, flagNull | flagNullable
+	case sqltypes.HexNum, sqltypes.HexVal:
+		return sqltypes.VarBinary, flagHex
+	default:
+		if bv.coerceType >= 0 {
+			return bv.coerceType, 0
+		}
+		return bvar.Type, 0
 	}
-	return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Type is not supported: %s", val.Type.String())
 }
 
-// debugString is
-func (e *EvalResult) debugString() string {
-	return fmt.Sprintf("(%s) %d %d %f %s", querypb.Type_name[int32(e.typ)], e.ival, e.uval, e.fval, string(e.bytes))
+// eval implements the Expr interface
+func (c *Column) eval(env *ExpressionEnv, result *EvalResult) {
+	if err := result.setValue(env.Row[c.Offset], c.coll); err != nil {
+		throwEvalError(err)
+	}
+}
+
+// typeof implements the Expr interface
+func (l *Literal) typeof(*ExpressionEnv) (sqltypes.Type, flag) {
+	return l.Val.typeof(), l.Val.flags_
+}
+
+// typeof implements the Expr interface
+func (t TupleExpr) typeof(*ExpressionEnv) (sqltypes.Type, flag) {
+	return sqltypes.Tuple, flagNullable
+}
+
+func (c *Column) typeof(env *ExpressionEnv) (sqltypes.Type, flag) {
+	// we'll try to do the best possible with the information we have
+	if c.Offset < len(env.Row) {
+		value := env.Row[c.Offset]
+		if value.IsNull() {
+			return sqltypes.Null, flagNull | flagNullable
+		}
+		return value.Type(), flag(0)
+	}
+
+	if c.Offset < len(env.Fields) {
+		return env.Fields[c.Offset].Type, flagNullable
+	}
+
+	panic("Column missing both data and field")
 }

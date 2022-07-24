@@ -18,6 +18,7 @@ package planbuilder
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -28,14 +29,17 @@ import (
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/test/utils"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 
 	"github.com/google/go-cmp/cmp"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
-
-	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -54,10 +58,10 @@ func (v *hashIndex) String() string   { return v.name }
 func (*hashIndex) Cost() int          { return 1 }
 func (*hashIndex) IsUnique() bool     { return true }
 func (*hashIndex) NeedsVCursor() bool { return false }
-func (*hashIndex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
+func (*hashIndex) Verify(context.Context, vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
-func (*hashIndex) Map(cursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+func (*hashIndex) Map(ctx context.Context, vcursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	return nil, nil
 }
 
@@ -72,15 +76,19 @@ func (v *lookupIndex) String() string   { return v.name }
 func (*lookupIndex) Cost() int          { return 2 }
 func (*lookupIndex) IsUnique() bool     { return true }
 func (*lookupIndex) NeedsVCursor() bool { return false }
-func (*lookupIndex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
+func (*lookupIndex) Verify(context.Context, vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
-func (*lookupIndex) Map(cursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+func (*lookupIndex) Map(ctx context.Context, vcursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	return nil, nil
 }
-func (*lookupIndex) Create(vindexes.VCursor, [][]sqltypes.Value, [][]byte, bool) error { return nil }
-func (*lookupIndex) Delete(vindexes.VCursor, [][]sqltypes.Value, []byte) error         { return nil }
-func (*lookupIndex) Update(vindexes.VCursor, []sqltypes.Value, []byte, []sqltypes.Value) error {
+func (*lookupIndex) Create(context.Context, vindexes.VCursor, [][]sqltypes.Value, [][]byte, bool) error {
+	return nil
+}
+func (*lookupIndex) Delete(context.Context, vindexes.VCursor, [][]sqltypes.Value, []byte) error {
+	return nil
+}
+func (*lookupIndex) Update(context.Context, vindexes.VCursor, []sqltypes.Value, []byte, []sqltypes.Value) error {
 	return nil
 }
 
@@ -90,31 +98,35 @@ func newLookupIndex(name string, _ map[string]string) (vindexes.Vindex, error) {
 
 var _ vindexes.Lookup = (*lookupIndex)(nil)
 
-// multiIndex satisfies Lookup, NonUnique.
-type multiIndex struct{ name string }
+// nameLkpIndex satisfies Lookup, NonUnique.
+type nameLkpIndex struct{ name string }
 
-func (v *multiIndex) String() string   { return v.name }
-func (*multiIndex) Cost() int          { return 3 }
-func (*multiIndex) IsUnique() bool     { return false }
-func (*multiIndex) NeedsVCursor() bool { return false }
-func (*multiIndex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
+func (v *nameLkpIndex) String() string   { return v.name }
+func (*nameLkpIndex) Cost() int          { return 3 }
+func (*nameLkpIndex) IsUnique() bool     { return false }
+func (*nameLkpIndex) NeedsVCursor() bool { return false }
+func (*nameLkpIndex) Verify(context.Context, vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
-func (*multiIndex) Map(cursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+func (*nameLkpIndex) Map(ctx context.Context, vcursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	return nil, nil
 }
-func (*multiIndex) Create(vindexes.VCursor, [][]sqltypes.Value, [][]byte, bool) error { return nil }
-func (*multiIndex) Delete(vindexes.VCursor, [][]sqltypes.Value, []byte) error         { return nil }
-func (*multiIndex) Update(vindexes.VCursor, []sqltypes.Value, []byte, []sqltypes.Value) error {
+func (*nameLkpIndex) Create(context.Context, vindexes.VCursor, [][]sqltypes.Value, [][]byte, bool) error {
+	return nil
+}
+func (*nameLkpIndex) Delete(context.Context, vindexes.VCursor, [][]sqltypes.Value, []byte) error {
+	return nil
+}
+func (*nameLkpIndex) Update(context.Context, vindexes.VCursor, []sqltypes.Value, []byte, []sqltypes.Value) error {
 	return nil
 }
 
-func newMultiIndex(name string, _ map[string]string) (vindexes.Vindex, error) {
-	return &multiIndex{name: name}, nil
+func newNameLkpIndex(name string, _ map[string]string) (vindexes.Vindex, error) {
+	return &nameLkpIndex{name: name}, nil
 }
 
-var _ vindexes.Vindex = (*multiIndex)(nil)
-var _ vindexes.Lookup = (*multiIndex)(nil)
+var _ vindexes.Vindex = (*nameLkpIndex)(nil)
+var _ vindexes.Lookup = (*nameLkpIndex)(nil)
 
 // costlyIndex satisfies Lookup, NonUnique.
 type costlyIndex struct{ name string }
@@ -123,15 +135,19 @@ func (v *costlyIndex) String() string   { return v.name }
 func (*costlyIndex) Cost() int          { return 10 }
 func (*costlyIndex) IsUnique() bool     { return false }
 func (*costlyIndex) NeedsVCursor() bool { return false }
-func (*costlyIndex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
+func (*costlyIndex) Verify(context.Context, vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
-func (*costlyIndex) Map(cursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+func (*costlyIndex) Map(ctx context.Context, vcursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	return nil, nil
 }
-func (*costlyIndex) Create(vindexes.VCursor, [][]sqltypes.Value, [][]byte, bool) error { return nil }
-func (*costlyIndex) Delete(vindexes.VCursor, [][]sqltypes.Value, []byte) error         { return nil }
-func (*costlyIndex) Update(vindexes.VCursor, []sqltypes.Value, []byte, []sqltypes.Value) error {
+func (*costlyIndex) Create(context.Context, vindexes.VCursor, [][]sqltypes.Value, [][]byte, bool) error {
+	return nil
+}
+func (*costlyIndex) Delete(context.Context, vindexes.VCursor, [][]sqltypes.Value, []byte) error {
+	return nil
+}
+func (*costlyIndex) Update(context.Context, vindexes.VCursor, []sqltypes.Value, []byte, []sqltypes.Value) error {
 	return nil
 }
 
@@ -142,11 +158,43 @@ func newCostlyIndex(name string, _ map[string]string) (vindexes.Vindex, error) {
 var _ vindexes.Vindex = (*costlyIndex)(nil)
 var _ vindexes.Lookup = (*costlyIndex)(nil)
 
+// multiColIndex satisfies multi column vindex.
+type multiColIndex struct {
+	name string
+}
+
+func newMultiColIndex(name string, _ map[string]string) (vindexes.Vindex, error) {
+	return &multiColIndex{name: name}, nil
+}
+
+var _ vindexes.MultiColumn = (*multiColIndex)(nil)
+
+func (m *multiColIndex) String() string { return m.name }
+
+func (m *multiColIndex) Cost() int { return 1 }
+
+func (m *multiColIndex) IsUnique() bool { return true }
+
+func (m *multiColIndex) NeedsVCursor() bool { return false }
+
+func (m *multiColIndex) Map(ctx context.Context, vcursor vindexes.VCursor, rowsColValues [][]sqltypes.Value) ([]key.Destination, error) {
+	return nil, nil
+}
+
+func (m *multiColIndex) Verify(ctx context.Context, vcursor vindexes.VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte) ([]bool, error) {
+	return []bool{}, nil
+}
+
+func (m *multiColIndex) PartialVindex() bool {
+	return true
+}
+
 func init() {
 	vindexes.Register("hash_test", newHashIndex)
 	vindexes.Register("lookup_test", newLookupIndex)
-	vindexes.Register("multi", newMultiIndex)
+	vindexes.Register("name_lkp_test", newNameLkpIndex)
 	vindexes.Register("costly", newCostlyIndex)
+	vindexes.Register("multiCol_test", newMultiColIndex)
 }
 
 const (
@@ -154,19 +202,27 @@ const (
 	gen4ErrorPrefix = "Gen4 error: "
 )
 
+func makeTestOutput(t *testing.T) string {
+	testOutputTempDir := utils.MakeTestOutput(t, "testdata", "plan_test")
+
+	t.Cleanup(func() {
+		if !t.Failed() {
+			_ = os.RemoveAll(testOutputTempDir)
+		} else {
+			t.Logf("Errors found in plantests. If the output is correct, run `cp %s/* testdata/` to update test expectations", testOutputTempDir)
+		}
+	})
+
+	return testOutputTempDir
+}
+
 func TestPlan(t *testing.T) {
 	vschemaWrapper := &vschemaWrapper{
-		v:             loadSchema(t, "schema_test.json"),
+		v:             loadSchema(t, "schema_test.json", true),
 		sysVarEnabled: true,
 	}
+	testOutputTempDir := makeTestOutput(t)
 
-	testOutputTempDir, err := os.MkdirTemp("", "plan_test")
-	require.NoError(t, err)
-	defer func() {
-		if !t.Failed() {
-			os.RemoveAll(testOutputTempDir)
-		}
-	}()
 	// You will notice that some tests expect user.Id instead of user.id.
 	// This is because we now pre-create vindex columns in the symbol
 	// table, which come from vschema. In the test vschema,
@@ -199,19 +255,52 @@ func TestPlan(t *testing.T) {
 
 func TestSysVarSetDisabled(t *testing.T) {
 	vschemaWrapper := &vschemaWrapper{
-		v:             loadSchema(t, "schema_test.json"),
+		v:             loadSchema(t, "schema_test.json", true),
 		sysVarEnabled: false,
 	}
 
-	testOutputTempDir, err := os.MkdirTemp("", "plan_test")
-	require.NoError(t, err)
-	defer os.RemoveAll(testOutputTempDir)
-	testFile(t, "set_sysvar_disabled_cases.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "set_sysvar_disabled_cases.txt", makeTestOutput(t), vschemaWrapper)
 }
 
 func TestOne(t *testing.T) {
 	vschema := &vschemaWrapper{
-		v: loadSchema(t, "schema_test.json"),
+		v: loadSchema(t, "schema_test.json", true),
+	}
+
+	testFile(t, "onecase.txt", "", vschema)
+}
+
+func TestOneWithMainAsDefault(t *testing.T) {
+	vschema := &vschemaWrapper{
+		v: loadSchema(t, "schema_test.json", true),
+		keyspace: &vindexes.Keyspace{
+			Name:    "main",
+			Sharded: false,
+		},
+	}
+
+	testFile(t, "onecase.txt", "", vschema)
+}
+
+func TestOneWithSecondUserAsDefault(t *testing.T) {
+	vschema := &vschemaWrapper{
+		v: loadSchema(t, "schema_test.json", true),
+		keyspace: &vindexes.Keyspace{
+			Name:    "second_user",
+			Sharded: true,
+		},
+	}
+
+	testFile(t, "onecase.txt", "", vschema)
+}
+
+func TestOneWithUserAsDefault(t *testing.T) {
+	vschema := &vschemaWrapper{
+		v: loadSchema(t, "schema_test.json", true),
+		keyspace: &vindexes.Keyspace{
+			Name:    "user",
+			Sharded: true,
+		},
 	}
 
 	testFile(t, "onecase.txt", "", vschema)
@@ -219,70 +308,38 @@ func TestOne(t *testing.T) {
 
 func TestRubyOnRailsQueries(t *testing.T) {
 	vschemaWrapper := &vschemaWrapper{
-		v:             loadSchema(t, "rails_schema_test.json"),
+		v:             loadSchema(t, "rails_schema_test.json", true),
 		sysVarEnabled: true,
 	}
 
-	testOutputTempDir, err := os.MkdirTemp("", "plan_test")
-	require.NoError(t, err)
-	defer func() {
-		if !t.Failed() {
-			os.RemoveAll(testOutputTempDir)
-		}
-	}()
-
-	testFile(t, "rails_cases.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "rails_cases.txt", makeTestOutput(t), vschemaWrapper)
 }
 
 func TestOLTP(t *testing.T) {
 	vschemaWrapper := &vschemaWrapper{
-		v:             loadSchema(t, "oltp_schema_test.json"),
+		v:             loadSchema(t, "oltp_schema_test.json", true),
 		sysVarEnabled: true,
 	}
 
-	testOutputTempDir, err := os.MkdirTemp("", "plan_test")
-	require.NoError(t, err)
-	defer func() {
-		if !t.Failed() {
-			os.RemoveAll(testOutputTempDir)
-		}
-	}()
-
-	testFile(t, "oltp_cases.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "oltp_cases.txt", makeTestOutput(t), vschemaWrapper)
 }
 
 func TestTPCC(t *testing.T) {
 	vschemaWrapper := &vschemaWrapper{
-		v:             loadSchema(t, "tpcc_schema_test.json"),
+		v:             loadSchema(t, "tpcc_schema_test.json", true),
 		sysVarEnabled: true,
 	}
 
-	testOutputTempDir, err := os.MkdirTemp("", "plan_test")
-	require.NoError(t, err)
-	defer func() {
-		if !t.Failed() {
-			os.RemoveAll(testOutputTempDir)
-		}
-	}()
-
-	testFile(t, "tpcc_cases.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "tpcc_cases.txt", makeTestOutput(t), vschemaWrapper)
 }
 
 func TestTPCH(t *testing.T) {
 	vschemaWrapper := &vschemaWrapper{
-		v:             loadSchema(t, "tpch_schema_test.json"),
+		v:             loadSchema(t, "tpch_schema_test.json", true),
 		sysVarEnabled: true,
 	}
 
-	testOutputTempDir, err := os.MkdirTemp("", "plan_test")
-	require.NoError(t, err)
-	defer func() {
-		if !t.Failed() {
-			os.RemoveAll(testOutputTempDir)
-		}
-	}()
-
-	testFile(t, "tpch_cases.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "tpch_cases.txt", makeTestOutput(t), vschemaWrapper)
 }
 
 func BenchmarkOLTP(b *testing.B) {
@@ -299,7 +356,7 @@ func BenchmarkTPCH(b *testing.B) {
 
 func benchmarkWorkload(b *testing.B, name string) {
 	vschemaWrapper := &vschemaWrapper{
-		v:             loadSchema(b, name+"_schema_test.json"),
+		v:             loadSchema(b, name+"_schema_test.json", true),
 		sysVarEnabled: true,
 	}
 
@@ -316,12 +373,8 @@ func benchmarkWorkload(b *testing.B, name string) {
 }
 
 func TestBypassPlanningShardTargetFromFile(t *testing.T) {
-	testOutputTempDir, err := os.MkdirTemp("", "plan_test")
-	require.NoError(t, err)
-	defer os.RemoveAll(testOutputTempDir)
-
 	vschema := &vschemaWrapper{
-		v: loadSchema(t, "schema_test.json"),
+		v: loadSchema(t, "schema_test.json", true),
 		keyspace: &vindexes.Keyspace{
 			Name:    "main",
 			Sharded: false,
@@ -329,17 +382,13 @@ func TestBypassPlanningShardTargetFromFile(t *testing.T) {
 		tabletType: topodatapb.TabletType_PRIMARY,
 		dest:       key.DestinationShard("-80")}
 
-	testFile(t, "bypass_shard_cases.txt", testOutputTempDir, vschema)
+	testFile(t, "bypass_shard_cases.txt", makeTestOutput(t), vschema)
 }
 func TestBypassPlanningKeyrangeTargetFromFile(t *testing.T) {
-	testOutputTempDir, err := os.MkdirTemp("", "plan_test")
-	require.NoError(t, err)
-	defer os.RemoveAll(testOutputTempDir)
-
 	keyRange, _ := key.ParseShardingSpec("-")
 
 	vschema := &vschemaWrapper{
-		v: loadSchema(t, "schema_test.json"),
+		v: loadSchema(t, "schema_test.json", true),
 		keyspace: &vindexes.Keyspace{
 			Name:    "main",
 			Sharded: false,
@@ -348,20 +397,13 @@ func TestBypassPlanningKeyrangeTargetFromFile(t *testing.T) {
 		dest:       key.DestinationExactKeyRange{KeyRange: keyRange[0]},
 	}
 
-	testFile(t, "bypass_keyrange_cases.txt", testOutputTempDir, vschema)
+	testFile(t, "bypass_keyrange_cases.txt", makeTestOutput(t), vschema)
 }
 
 func TestWithDefaultKeyspaceFromFile(t *testing.T) {
 	// We are testing this separately so we can set a default keyspace
-	testOutputTempDir, err := os.MkdirTemp("", "plan_test")
-	require.NoError(t, err)
-	defer func() {
-		if !t.Failed() {
-			_ = os.RemoveAll(testOutputTempDir)
-		}
-	}()
 	vschema := &vschemaWrapper{
-		v: loadSchema(t, "schema_test.json"),
+		v: loadSchema(t, "schema_test.json", true),
 		keyspace: &vindexes.Keyspace{
 			Name:    "main",
 			Sharded: false,
@@ -369,6 +411,7 @@ func TestWithDefaultKeyspaceFromFile(t *testing.T) {
 		tabletType: topodatapb.TabletType_PRIMARY,
 	}
 
+	testOutputTempDir := makeTestOutput(t)
 	testFile(t, "alterVschema_cases.txt", testOutputTempDir, vschema)
 	testFile(t, "ddl_cases.txt", testOutputTempDir, vschema)
 	testFile(t, "migration_cases.txt", testOutputTempDir, vschema)
@@ -377,27 +420,51 @@ func TestWithDefaultKeyspaceFromFile(t *testing.T) {
 	testFile(t, "call_cases.txt", testOutputTempDir, vschema)
 }
 
+func TestWithDefaultKeyspaceFromFileSharded(t *testing.T) {
+	// We are testing this separately so we can set a default keyspace
+	vschema := &vschemaWrapper{
+		v: loadSchema(t, "schema_test.json", true),
+		keyspace: &vindexes.Keyspace{
+			Name:    "second_user",
+			Sharded: true,
+		},
+		tabletType: topodatapb.TabletType_PRIMARY,
+	}
+
+	testOutputTempDir := makeTestOutput(t)
+	testFile(t, "select_cases_with_default.txt", testOutputTempDir, vschema)
+}
+
+func TestWithUserDefaultKeyspaceFromFileSharded(t *testing.T) {
+	// We are testing this separately so we can set a default keyspace
+	vschema := &vschemaWrapper{
+		v: loadSchema(t, "schema_test.json", true),
+		keyspace: &vindexes.Keyspace{
+			Name:    "user",
+			Sharded: true,
+		},
+		tabletType: topodatapb.TabletType_PRIMARY,
+	}
+
+	testOutputTempDir := makeTestOutput(t)
+	testFile(t, "select_cases_with_user_as_default.txt", testOutputTempDir, vschema)
+}
+
 func TestWithSystemSchemaAsDefaultKeyspace(t *testing.T) {
 	// We are testing this separately so we can set a default keyspace
-	testOutputTempDir, err := os.MkdirTemp("", "plan_test")
-	require.NoError(t, err)
-	defer os.RemoveAll(testOutputTempDir)
 	vschema := &vschemaWrapper{
-		v:          loadSchema(t, "schema_test.json"),
+		v:          loadSchema(t, "schema_test.json", true),
 		keyspace:   &vindexes.Keyspace{Name: "information_schema"},
 		tabletType: topodatapb.TabletType_PRIMARY,
 	}
 
-	testFile(t, "sysschema_default.txt", testOutputTempDir, vschema)
+	testFile(t, "sysschema_default.txt", makeTestOutput(t), vschema)
 }
 
 func TestOtherPlanningFromFile(t *testing.T) {
 	// We are testing this separately so we can set a default keyspace
-	testOutputTempDir, err := os.MkdirTemp("", "plan_test")
-	defer os.RemoveAll(testOutputTempDir)
-	require.NoError(t, err)
 	vschema := &vschemaWrapper{
-		v: loadSchema(t, "schema_test.json"),
+		v: loadSchema(t, "schema_test.json", true),
 		keyspace: &vindexes.Keyspace{
 			Name:    "main",
 			Sharded: false,
@@ -405,11 +472,12 @@ func TestOtherPlanningFromFile(t *testing.T) {
 		tabletType: topodatapb.TabletType_PRIMARY,
 	}
 
+	testOutputTempDir := makeTestOutput(t)
 	testFile(t, "other_read_cases.txt", testOutputTempDir, vschema)
 	testFile(t, "other_admin_cases.txt", testOutputTempDir, vschema)
 }
 
-func loadSchema(t testing.TB, filename string) *vindexes.VSchema {
+func loadSchema(t testing.TB, filename string, setCollation bool) *vindexes.VSchema {
 	formal, err := vindexes.LoadFormal(locateFile(filename))
 	if err != nil {
 		t.Fatal(err)
@@ -422,11 +490,24 @@ func loadSchema(t testing.TB, filename string) *vindexes.VSchema {
 		if ks.Error != nil {
 			t.Fatal(ks.Error)
 		}
+
+		// setting a default value to all the text columns in the tables of this keyspace
+		// so that we can "simulate" a real case scenario where the vschema is aware of
+		// columns' collations.
+		if setCollation {
+			for _, table := range ks.Tables {
+				for i, col := range table.Columns {
+					if sqltypes.IsText(col.Type) {
+						table.Columns[i].CollationName = "latin1_swedish_ci"
+					}
+				}
+			}
+		}
 	}
 	return vschema
 }
 
-var _ ContextVSchema = (*vschemaWrapper)(nil)
+var _ plancontext.VSchema = (*vschemaWrapper)(nil)
 
 type vschemaWrapper struct {
 	v             *vindexes.VSchema
@@ -434,7 +515,32 @@ type vschemaWrapper struct {
 	tabletType    topodatapb.TabletType
 	dest          key.Destination
 	sysVarEnabled bool
-	version       PlannerVersion
+	version       plancontext.PlannerVersion
+}
+
+func (vw *vschemaWrapper) GetVSchema() *vindexes.VSchema {
+	return vw.v
+}
+
+func (vw *vschemaWrapper) GetSrvVschema() *vschemapb.SrvVSchema {
+	return &vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"user": {
+				Sharded:  true,
+				Vindexes: map[string]*vschemapb.Vindex{},
+				Tables: map[string]*vschemapb.Table{
+					"user": {},
+				},
+			},
+		},
+	}
+}
+
+func (vw *vschemaWrapper) ConnCollation() collations.ID {
+	return collations.Unknown
+}
+
+func (vw *vschemaWrapper) PlannerWarning(_ string) {
 }
 
 func (vw *vschemaWrapper) ForeignKeyMode() string {
@@ -448,12 +554,23 @@ func (vw *vschemaWrapper) AllKeyspace() ([]*vindexes.Keyspace, error) {
 	return []*vindexes.Keyspace{vw.keyspace}, nil
 }
 
-func (vw *vschemaWrapper) Planner() PlannerVersion {
+// FindKeyspace implements the VSchema interface
+func (vw *vschemaWrapper) FindKeyspace(keyspace string) (*vindexes.Keyspace, error) {
+	if vw.keyspace == nil {
+		return nil, errors.New("keyspace not available")
+	}
+	if vw.keyspace.Name == keyspace {
+		return vw.keyspace, nil
+	}
+	return nil, nil
+}
+
+func (vw *vschemaWrapper) Planner() plancontext.PlannerVersion {
 	return vw.version
 }
 
 // SetPlannerVersion implements the ContextVSchema interface
-func (vw *vschemaWrapper) SetPlannerVersion(v PlannerVersion) {
+func (vw *vschemaWrapper) SetPlannerVersion(v plancontext.PlannerVersion) {
 	vw.version = v
 }
 
@@ -556,11 +673,11 @@ func (vw *vschemaWrapper) TargetString() string {
 	return "targetString"
 }
 
-func (vw *vschemaWrapper) WarnUnshardedOnly(_ string, _ ...interface{}) {
+func (vw *vschemaWrapper) WarnUnshardedOnly(_ string, _ ...any) {
 
 }
 
-func (vw *vschemaWrapper) ErrorIfShardedF(keyspace *vindexes.Keyspace, _, errFmt string, params ...interface{}) error {
+func (vw *vschemaWrapper) ErrorIfShardedF(keyspace *vindexes.Keyspace, _, errFmt string, params ...any) error {
 	if keyspace.Sharded {
 		return fmt.Errorf(errFmt, params...)
 	}
@@ -573,10 +690,6 @@ func (vw *vschemaWrapper) currentDb() string {
 		ksName = vw.keyspace.Name
 	}
 	return ksName
-}
-
-func escapeNewLines(in string) string {
-	return strings.ReplaceAll(in, "\n", "\\n")
 }
 
 func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper) {
@@ -597,7 +710,10 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper) {
 				}
 				outFirstPlanner = out
 
-				expected.WriteString(fmt.Sprintf("%s\"%s\"\n%s\n", tcase.comments, escapeNewLines(tcase.input), out))
+				expected.WriteString(tcase.comments)
+				encoder := json.NewEncoder(expected)
+				encoder.Encode(tcase.input)
+				expected.WriteString(fmt.Sprintf("%s\n", out))
 			})
 
 			vschema.version = Gen4
@@ -617,7 +733,7 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper) {
 			testName := fmt.Sprintf("%d Gen4: %s", tcase.lineno, tcase.comments)
 			t.Run(testName, func(t *testing.T) {
 				if out != tcase.output2ndPlanner {
-					t.Errorf("Gen4 - %s:%d\nDiff:\n%s\n[%s] \n[%s]", filename, tcase.lineno, cmp.Diff(tcase.output2ndPlanner, out), tcase.output, out)
+					t.Errorf("Gen4 - %s:%d\nDiff:\n%s\n[%s] \n[%s]", filename, tcase.lineno, cmp.Diff(tcase.output2ndPlanner, out), tcase.output2ndPlanner, out)
 				}
 				if err != nil {
 					out = `"` + out + `"`
@@ -640,7 +756,6 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper) {
 		if tempDir != "" {
 			gotFile := fmt.Sprintf("%s/%s", tempDir, filename)
 			_ = os.WriteFile(gotFile, []byte(strings.TrimSpace(expected.String())+"\n"), 0644)
-			fmt.Println(fmt.Sprintf("Errors found in plantests. If the output is correct, run `cp %s/* testdata/` to update test expectations", tempDir)) // nolint
 		}
 	})
 }
@@ -779,7 +894,7 @@ var benchMarkFiles = []string{"from_cases.txt", "filter_cases.txt", "large_cases
 
 func BenchmarkPlanner(b *testing.B) {
 	vschema := &vschemaWrapper{
-		v:             loadSchema(b, "schema_test.json"),
+		v:             loadSchema(b, "schema_test.json", true),
 		sysVarEnabled: true,
 	}
 	for _, filename := range benchMarkFiles {
@@ -801,7 +916,7 @@ func BenchmarkPlanner(b *testing.B) {
 
 func BenchmarkSemAnalysis(b *testing.B) {
 	vschema := &vschemaWrapper{
-		v:             loadSchema(b, "schema_test.json"),
+		v:             loadSchema(b, "schema_test.json", true),
 		sysVarEnabled: true,
 	}
 
@@ -834,7 +949,7 @@ func exerciseAnalyzer(query, database string, s semantics.SchemaInformation) {
 
 func BenchmarkSelectVsDML(b *testing.B) {
 	vschema := &vschemaWrapper{
-		v:             loadSchema(b, "schema_test.json"),
+		v:             loadSchema(b, "schema_test.json", true),
 		sysVarEnabled: true,
 		version:       V3,
 	}
@@ -869,7 +984,7 @@ func BenchmarkSelectVsDML(b *testing.B) {
 	})
 }
 
-func benchmarkPlanner(b *testing.B, version PlannerVersion, testCases []testCase, vschema *vschemaWrapper) {
+func benchmarkPlanner(b *testing.B, version plancontext.PlannerVersion, testCases []testCase, vschema *vschemaWrapper) {
 	b.ReportAllocs()
 	for n := 0; n < b.N; n++ {
 		for _, tcase := range testCases {

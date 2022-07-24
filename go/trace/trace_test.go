@@ -17,12 +17,11 @@ limitations under the License.
 package trace
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"strings"
 	"testing"
-
-	"context"
 
 	"google.golang.org/grpc"
 )
@@ -62,31 +61,6 @@ func TestRegisterService(t *testing.T) {
 	if tracer.name != serviceName {
 		t.Fatalf("expected the name to be `%v` but it was `%v`", serviceName, tracer.name)
 	}
-}
-
-func TestProtectPII(t *testing.T) {
-	// set up fake tracer that we can assert on
-	fakeName := "test"
-	var tracer *fakeTracer
-	tracingBackendFactories[fakeName] = func(serviceName string) (tracingService, io.Closer, error) {
-		tracer = &fakeTracer{name: serviceName}
-		return tracer, tracer, nil
-	}
-
-	tracingServer = &fakeName
-
-	serviceName := "vtservice"
-	closer := StartTracing(serviceName)
-	_, ok := closer.(*fakeTracer)
-	if !ok {
-		t.Fatalf("did not get the expected tracer")
-	}
-
-	span, _ := NewSpan(context.Background(), "span-name")
-	AnnotateSQL(span, "SELECT * FROM Tabble WHERE name = 'SECRET_INFORMATION'")
-	span.Finish()
-
-	tracer.assertNoSpanWith(t, "SECRET_INFORMATION")
 }
 
 type fakeTracer struct {
@@ -141,6 +115,6 @@ func (m *mockSpan) Finish() {
 	m.tracer.log = append(m.tracer.log, "span finished")
 }
 
-func (m *mockSpan) Annotate(key string, value interface{}) {
+func (m *mockSpan) Annotate(key string, value any) {
 	m.tracer.log = append(m.tracer.log, fmt.Sprintf("key: %v values:%v", key, value))
 }

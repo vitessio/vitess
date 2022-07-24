@@ -153,6 +153,21 @@ func (ts *Server) DeleteCellInfo(ctx context.Context, cell string, force bool) e
 		if !force {
 			return vterrors.Wrap(err, "can't list SrvKeyspace entries in the cell; use -force flag to continue anyway (e.g. if cell-local topo was already permanently shut down)")
 		}
+
+		select {
+		case <-ctx.Done():
+			// If our context has expired and we got an error back from
+			// GetSrvKeyspaceNames, we assume that call failed because the
+			// local cell topo was down. If force=true, then we make a new
+			// background context to cleanup from the global topo. Otherwise a
+			// local-down-topo scenario would mean we never can delete it.
+			// (see https://github.com/vitessio/vitess/issues/8220).
+			var cancel context.CancelFunc
+			ctx, cancel = context.WithTimeout(context.Background(), *RemoteOperationTimeout)
+			defer cancel()
+		default:
+			// Context still has some time left, no need to make a new one.
+		}
 	}
 
 	filePath := pathForCellInfo(cell)

@@ -24,7 +24,7 @@ import (
 // VTGRConfig is the config for VTGR
 type VTGRConfig struct {
 	DisableReadOnlyProtection   bool
-	GroupSize                   int
+	BootstrapGroupSize          int
 	MinNumReplica               int
 	BackoffErrorWaitTimeSeconds int
 	BootstrapWaitTimeSeconds    int
@@ -35,7 +35,7 @@ var vtgrCfg = newVTGRConfig()
 func newVTGRConfig() *VTGRConfig {
 	config := &VTGRConfig{
 		DisableReadOnlyProtection:   false,
-		GroupSize:                   5,
+		BootstrapGroupSize:          5,
 		MinNumReplica:               3,
 		BackoffErrorWaitTimeSeconds: 10,
 		BootstrapWaitTimeSeconds:    10 * 60,

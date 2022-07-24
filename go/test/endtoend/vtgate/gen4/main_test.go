@@ -17,9 +17,15 @@ limitations under the License.
 package vtgate
 
 import (
+	_ "embed"
 	"flag"
+	"fmt"
 	"os"
 	"testing"
+
+	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/test/endtoend/utils"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder"
 
@@ -28,100 +34,24 @@ import (
 )
 
 var (
-	clusterInstance  *cluster.LocalProcessCluster
-	vtParams         mysql.ConnParams
-	shardedKs        = "ks"
-	unshardedKs      = "uks"
-	Cell             = "test"
-	shardedSchemaSQL = `create table t1(
-	id bigint,
-	col bigint,
-	primary key(id)
-) Engine=InnoDB;
+	clusterInstance *cluster.LocalProcessCluster
+	vtParams        mysql.ConnParams
+	mysqlParams     mysql.ConnParams
+	shardedKs       = "ks"
+	unshardedKs     = "uks"
+	shardedKsShards = []string{"-19a0", "19a0-20", "20-20c0", "20c0-"}
+	Cell            = "test"
+	//go:embed sharded_schema.sql
+	shardedSchemaSQL string
 
-create table t2(
-	id bigint,
-	tcol1 varchar(50),
-	tcol2 varchar(50),
-	primary key(id)
-) Engine=InnoDB;
+	//go:embed unsharded_schema.sql
+	unshardedSchemaSQL string
 
-create table t3(
-	id bigint,
-	tcol1 varchar(50),
-	tcol2 varchar(50),
-	primary key(id)
-) Engine=InnoDB;
-`
-	unshardedSchemaSQL = `create table u_a(
-	id bigint,
-	a bigint,
-	primary key(id)
-) Engine=InnoDB;
+	//go:embed sharded_vschema.json
+	shardedVSchema string
 
-create table u_b(
-	id bigint,
-	b varchar(50),
-	primary key(id)
-) Engine=InnoDB;
-`
-
-	shardedVSchema = `
-{
-  "sharded": true,
-  "vindexes": {
-    "xxhash": {
-      "type": "xxhash"
-    }
-  },
-  "tables": {
-    "t1": {
-      "column_vindexes": [
-        {
-          "column": "id",
-          "name": "xxhash"
-        }
-      ]
-    },
-    "t2": {
-      "column_vindexes": [
-        {
-          "column": "id",
-          "name": "xxhash"
-        }
-      ],
-      "columns": [
-        {
-          "name": "tcol1",
-          "type": "VARCHAR"
-        }
-      ]
-    },
-    "t3": {
-      "column_vindexes": [
-        {
-          "column": "id",
-          "name": "xxhash"
-        }
-      ],
-      "columns": [
-        {
-          "name": "tcol1",
-          "type": "VARCHAR"
-        }
-      ]
-    }
-  }
-}`
-
-	unshardedVSchema = `
-{
-  "sharded": false,
-  "tables": {
-    "u_a": {},
-    "u_b": {}
-  }
-}`
+	//go:embed unsharded_vschema.json
+	unshardedVSchema string
 
 	routingRules = `
 {"rules": [
@@ -153,7 +83,10 @@ func TestMain(m *testing.M) {
 			SchemaSQL: shardedSchemaSQL,
 			VSchema:   shardedVSchema,
 		}
-		err = clusterInstance.StartKeyspace(*sKs, []string{"-80", "80-"}, 0, false)
+
+		clusterInstance.VtGateExtraArgs = []string{"--schema_change_signal"}
+		clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-schema-change-signal", "--queryserver-config-schema-change-signal-interval", "0.1"}
+		err = clusterInstance.StartKeyspace(*sKs, shardedKsShards, 0, false)
 		if err != nil {
 			return 1
 		}
@@ -189,7 +122,36 @@ func TestMain(m *testing.M) {
 			Host: clusterInstance.Hostname,
 			Port: clusterInstance.VtgateMySQLPort,
 		}
+
+		conn, closer, err := utils.NewMySQL(clusterInstance, shardedKs, shardedSchemaSQL)
+		if err != nil {
+			fmt.Println(err)
+			return 1
+		}
+		defer closer()
+		mysqlParams = conn
 		return m.Run()
 	}()
 	os.Exit(exitCode)
+}
+
+func start(t *testing.T) (utils.MySQLCompare, func()) {
+	mcmp, err := utils.NewMySQLCompare(t, vtParams, mysqlParams)
+	require.NoError(t, err)
+	deleteAll := func() {
+		_, _ = utils.ExecAllowError(t, mcmp.VtConn, "set workload = oltp")
+
+		tables := []string{"t1", "t2", "t3", "user_region", "region_tbl", "multicol_tbl", "t1_id2_idx", "t2_id4_idx", "u_a", "u_b"}
+		for _, table := range tables {
+			_, _ = mcmp.ExecAndIgnore("delete from " + table)
+		}
+	}
+
+	deleteAll()
+
+	return mcmp, func() {
+		deleteAll()
+		mcmp.Close()
+		cluster.PanicHandler(t)
+	}
 }

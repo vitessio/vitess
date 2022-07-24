@@ -18,6 +18,7 @@ package vindexes
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 
 	"github.com/cespare/xxhash/v2"
@@ -28,6 +29,7 @@ import (
 
 var (
 	_ SingleColumn = (*XXHash)(nil)
+	_ Hashing      = (*XXHash)(nil)
 )
 
 // XXHash defines vindex that hashes any sql types to a KeyspaceId
@@ -37,7 +39,7 @@ type XXHash struct {
 }
 
 // NewXXHash creates a new XXHash.
-func NewXXHash(name string, m map[string]string) (Vindex, error) {
+func NewXXHash(name string, _ map[string]string) (Vindex, error) {
 	return &XXHash{name: name}, nil
 }
 
@@ -62,23 +64,37 @@ func (vind *XXHash) NeedsVCursor() bool {
 }
 
 // Map can map ids to key.Destination objects.
-func (vind *XXHash) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
-	out := make([]key.Destination, len(ids))
-	for i := range ids {
-		id := ids[i].ToBytes()
-		out[i] = key.DestinationKeyspaceID(vXXHash(id))
+func (vind *XXHash) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+	out := make([]key.Destination, 0, len(ids))
+	for _, id := range ids {
+		ksid, err := vind.Hash(id)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, key.DestinationKeyspaceID(ksid))
 	}
 	return out, nil
 }
 
 // Verify returns true if ids maps to ksids.
-func (vind *XXHash) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
-	out := make([]bool, len(ids))
-	for i := range ids {
-		id := ids[i].ToBytes()
-		out[i] = bytes.Equal(vXXHash(id), ksids[i])
+func (vind *XXHash) Verify(ctx context.Context, vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
+	out := make([]bool, 0, len(ids))
+	for i, id := range ids {
+		ksid, err := vind.Hash(id)
+		if err != nil {
+			return out, err
+		}
+		out = append(out, bytes.Equal(ksid, ksids[i]))
 	}
 	return out, nil
+}
+
+func (vind *XXHash) Hash(id sqltypes.Value) ([]byte, error) {
+	idBytes, err := id.ToBytes()
+	if err != nil {
+		return nil, err
+	}
+	return vXXHash(idBytes), nil
 }
 
 func init() {

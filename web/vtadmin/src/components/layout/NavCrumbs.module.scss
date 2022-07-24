@@ -14,16 +14,16 @@
  * limitations under the License.
  */
 .container > a {
-  font-family: var(--fontFamilyMonospace);
-  line-height: 4rem;
+    font-family: var(--fontFamilyMonospace);
+    line-height: 4rem;
 
-  &::after {
-    color: var(--colorScaffoldingHighlight);
-    content: "/";
-    display: inline-block;
-    font-size: 2rem;
-    line-height: 2rem;
-    margin: 0 1rem;
-    vertical-align: middle;
-  }
+    &::after {
+        color: var(--colorScaffoldingHighlight);
+        content: '/';
+        display: inline-block;
+        font-size: 2rem;
+        line-height: 2rem;
+        margin: 0 1rem;
+        vertical-align: middle;
+    }
 }

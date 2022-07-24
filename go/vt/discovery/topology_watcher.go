@@ -66,7 +66,7 @@ type tabletInfo struct {
 type TopologyWatcher struct {
 	// set at construction time
 	topoServer          *topo.Server
-	tabletRecorder      TabletRecorder
+	healthcheck         HealthCheck
 	tabletFilter        TabletFilter
 	cell                string
 	refreshInterval     time.Duration
@@ -94,10 +94,10 @@ type TopologyWatcher struct {
 
 // NewTopologyWatcher returns a TopologyWatcher that monitors all
 // the tablets in a cell, and starts refreshing.
-func NewTopologyWatcher(ctx context.Context, topoServer *topo.Server, tr TabletRecorder, filter TabletFilter, cell string, refreshInterval time.Duration, refreshKnownTablets bool, topoReadConcurrency int, getTablets func(tw *TopologyWatcher) ([]*topodata.TabletAlias, error)) *TopologyWatcher {
+func NewTopologyWatcher(ctx context.Context, topoServer *topo.Server, hc HealthCheck, filter TabletFilter, cell string, refreshInterval time.Duration, refreshKnownTablets bool, topoReadConcurrency int, getTablets func(tw *TopologyWatcher) ([]*topodata.TabletAlias, error)) *TopologyWatcher {
 	tw := &TopologyWatcher{
 		topoServer:          topoServer,
-		tabletRecorder:      tr,
+		healthcheck:         hc,
 		tabletFilter:        filter,
 		cell:                cell,
 		refreshInterval:     refreshInterval,
@@ -116,26 +116,28 @@ func NewTopologyWatcher(ctx context.Context, topoServer *topo.Server, tr TabletR
 
 // NewCellTabletsWatcher returns a TopologyWatcher that monitors all
 // the tablets in a cell, and starts refreshing.
-func NewCellTabletsWatcher(ctx context.Context, topoServer *topo.Server, tr TabletRecorder, f TabletFilter, cell string, refreshInterval time.Duration, refreshKnownTablets bool, topoReadConcurrency int) *TopologyWatcher {
-	return NewTopologyWatcher(ctx, topoServer, tr, f, cell, refreshInterval, refreshKnownTablets, topoReadConcurrency, func(tw *TopologyWatcher) ([]*topodata.TabletAlias, error) {
-		return tw.topoServer.GetTabletsByCell(ctx, tw.cell)
+func NewCellTabletsWatcher(ctx context.Context, topoServer *topo.Server, hc HealthCheck, f TabletFilter, cell string, refreshInterval time.Duration, refreshKnownTablets bool, topoReadConcurrency int) *TopologyWatcher {
+	return NewTopologyWatcher(ctx, topoServer, hc, f, cell, refreshInterval, refreshKnownTablets, topoReadConcurrency, func(tw *TopologyWatcher) ([]*topodata.TabletAlias, error) {
+		return tw.topoServer.GetTabletAliasesByCell(ctx, tw.cell)
 	})
 }
 
 // Start starts the topology watcher
 func (tw *TopologyWatcher) Start() {
 	tw.wg.Add(1)
-	defer tw.wg.Done()
-	ticker := time.NewTicker(tw.refreshInterval)
-	defer ticker.Stop()
-	for {
-		tw.loadTablets()
-		select {
-		case <-tw.ctx.Done():
-			return
-		case <-ticker.C:
+	go func(t *TopologyWatcher) {
+		defer t.wg.Done()
+		ticker := time.NewTicker(t.refreshInterval)
+		defer ticker.Stop()
+		for {
+			t.loadTablets()
+			select {
+			case <-t.ctx.Done():
+				return
+			case <-ticker.C:
+			}
 		}
-	}
+	}(tw)
 }
 
 // Stop stops the watcher. It does not clean up the tablets added to LegacyTabletRecorder.
@@ -216,25 +218,26 @@ func (tw *TopologyWatcher) loadTablets() {
 
 	for alias, newVal := range newTablets {
 		// trust the alias from topo and add it if it doesn't exist
-		if val, ok := tw.tablets[alias]; !ok {
-			tw.tabletRecorder.AddTablet(newVal.tablet)
-			topologyWatcherOperations.Add(topologyWatcherOpAddTablet, 1)
-		} else {
-			// check if the host and port have changed. If yes, replace tablet
+		if val, ok := tw.tablets[alias]; ok {
+			// check if the host and port have changed. If yes, replace tablet.
 			oldKey := TabletToMapKey(val.tablet)
 			newKey := TabletToMapKey(newVal.tablet)
 			if oldKey != newKey {
 				// This is the case where the same tablet alias is now reporting
-				// a different address key.
-				tw.tabletRecorder.ReplaceTablet(val.tablet, newVal.tablet)
+				// a different address (host:port) key.
+				tw.healthcheck.ReplaceTablet(val.tablet, newVal.tablet)
 				topologyWatcherOperations.Add(topologyWatcherOpReplaceTablet, 1)
 			}
+		} else {
+			// This is a new tablet record, let's add it to the healthcheck
+			tw.healthcheck.AddTablet(newVal.tablet)
+			topologyWatcherOperations.Add(topologyWatcherOpAddTablet, 1)
 		}
 	}
 
 	for _, val := range tw.tablets {
 		if _, ok := newTablets[val.alias]; !ok {
-			tw.tabletRecorder.RemoveTablet(val.tablet)
+			tw.healthcheck.RemoveTablet(val.tablet)
 			topologyWatcherOperations.Add(topologyWatcherOpRemoveTablet, 1)
 		}
 	}

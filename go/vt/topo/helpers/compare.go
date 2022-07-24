@@ -119,7 +119,7 @@ func CompareTablets(ctx context.Context, fromTS, toTS *topo.Server) error {
 	}
 
 	for _, cell := range cells {
-		tabletAliases, err := fromTS.GetTabletsByCell(ctx, cell)
+		tabletAliases, err := fromTS.GetTabletAliasesByCell(ctx, cell)
 		if err != nil {
 			return vterrors.Wrapf(err, "GetTabletsByCell(%v)", cell)
 		}

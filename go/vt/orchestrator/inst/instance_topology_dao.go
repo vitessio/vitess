@@ -47,7 +47,7 @@ const (
 )
 
 // ExecInstance executes a given query on the given MySQL topology instance
-func ExecInstance(instanceKey *InstanceKey, query string, args ...interface{}) (sql.Result, error) {
+func ExecInstance(instanceKey *InstanceKey, query string, args ...any) (sql.Result, error) {
 	db, err := db.OpenTopology(instanceKey.Hostname, instanceKey.Port)
 	if err != nil {
 		return nil, err
@@ -64,7 +64,7 @@ func ExecuteOnTopology(f func()) {
 }
 
 // ScanInstanceRow executes a read-a-single-row query on a given MySQL topology instance
-func ScanInstanceRow(instanceKey *InstanceKey, query string, dest ...interface{}) error {
+func ScanInstanceRow(instanceKey *InstanceKey, query string, dest ...any) error {
 	db, err := db.OpenTopology(instanceKey.Hostname, instanceKey.Port)
 	if err != nil {
 		return err
@@ -159,7 +159,7 @@ func GetReplicationRestartPreserveStatements(instanceKey *InstanceKey, injectedS
 // FlushBinaryLogs attempts a 'FLUSH BINARY LOGS' statement on the given instance.
 func FlushBinaryLogs(instanceKey *InstanceKey, count int) (*Instance, error) {
 	if *config.RuntimeCLIFlags.Noop {
-		return nil, fmt.Errorf("noop: aborting flush-binary-logs operation on %+v; signalling error but nothing went wrong.", *instanceKey)
+		return nil, fmt.Errorf("noop: aborting flush-binary-logs operation on %+v; signalling error but nothing went wrong", *instanceKey)
 	}
 
 	for i := 0; i < count; i++ {
@@ -192,7 +192,7 @@ func FlushBinaryLogsTo(instanceKey *InstanceKey, logFile string) (*Instance, err
 // purgeBinaryLogsTo attempts to 'PURGE BINARY LOGS' until given binary log is reached
 func purgeBinaryLogsTo(instanceKey *InstanceKey, logFile string) (*Instance, error) {
 	if *config.RuntimeCLIFlags.Noop {
-		return nil, fmt.Errorf("noop: aborting purge-binary-logs operation on %+v; signalling error but nothing went wrong.", *instanceKey)
+		return nil, fmt.Errorf("noop: aborting purge-binary-logs operation on %+v; signalling error but nothing went wrong", *instanceKey)
 	}
 
 	_, err := ExecInstance(instanceKey, "purge binary logs to ?", logFile)
@@ -231,9 +231,8 @@ func RestartReplicationQuick(instanceKey *InstanceKey) error {
 	for _, cmd := range []string{`stop slave sql_thread`, `stop slave io_thread`, `start slave io_thread`, `start slave sql_thread`} {
 		if _, err := ExecInstance(instanceKey, cmd); err != nil {
 			return log.Errorf("%+v: RestartReplicationQuick: '%q' failed: %+v", *instanceKey, cmd, err)
-		} else {
-			log.Infof("%s on %+v as part of RestartReplicationQuick", cmd, *instanceKey)
 		}
+		log.Infof("%s on %+v as part of RestartReplicationQuick", cmd, *instanceKey)
 	}
 	return nil
 }
@@ -360,7 +359,12 @@ func StopReplicas(replicas [](*Instance), stopReplicationMethod StopReplicationM
 
 // StopReplicasNicely will attemt to stop all given replicas nicely, up to timeout
 func StopReplicasNicely(replicas [](*Instance), timeout time.Duration) [](*Instance) {
-	return StopReplicas(replicas, StopReplicationNice, timeout)
+	stoppedReplicas := StopReplicas(replicas, StopReplicationNice, timeout)
+	// We remove nil instances because StopReplicas might introduce nils in the array that it returns in case of
+	// failures while reading the tablet from the backend. This could happen when the tablet is forgotten while we are
+	// trying to stop the replication on the tablets.
+	stoppedReplicas = RemoveNilInstances(stoppedReplicas)
+	return stoppedReplicas
 }
 
 // StopReplication stops replication on a given instance
@@ -426,7 +430,7 @@ func StartReplication(instanceKey *InstanceKey) (*Instance, error) {
 		return instance, log.Errore(err)
 	}
 	if !instance.ReplicaRunning() {
-		return instance, ReplicationNotRunningError
+		return instance, ErrReplicationNotRunning
 	}
 	return instance, nil
 }
@@ -536,7 +540,7 @@ func EnablePrimarySSL(instanceKey *InstanceKey) (*Instance, error) {
 	log.Debugf("EnablePrimarySSL: Will attempt enabling SSL replication on %+v", *instanceKey)
 
 	if *config.RuntimeCLIFlags.Noop {
-		return instance, fmt.Errorf("noop: aborting CHANGE MASTER TO MASTER_SSL=1 operation on %+v; signaling error but nothing went wrong.", *instanceKey)
+		return instance, fmt.Errorf("noop: aborting CHANGE MASTER TO MASTER_SSL=1 operation on %+v; signaling error but nothing went wrong", *instanceKey)
 	}
 	_, err = ExecInstance(instanceKey, "change master to master_ssl=1")
 
@@ -593,7 +597,7 @@ func ChangePrimaryTo(instanceKey *InstanceKey, primaryKey *InstanceKey, primaryB
 	}
 
 	if *config.RuntimeCLIFlags.Noop {
-		return instance, fmt.Errorf("noop: aborting CHANGE MASTER TO operation on %+v; signalling error but nothing went wrong.", *instanceKey)
+		return instance, fmt.Errorf("noop: aborting CHANGE MASTER TO operation on %+v; signalling error but nothing went wrong", *instanceKey)
 	}
 
 	var changePrimaryFunc func() error
@@ -671,7 +675,11 @@ func ChangePrimaryTo(instanceKey *InstanceKey, primaryKey *InstanceKey, primaryB
 		return instance, log.Errore(err)
 	}
 
-	semiSync := ReplicaSemiSync(*primaryKey, *instanceKey)
+	durability, err := GetDurabilityPolicy(*primaryKey)
+	if err != nil {
+		return instance, log.Errore(err)
+	}
+	semiSync := IsReplicaSemiSync(durability, *primaryKey, *instanceKey)
 	if _, err := ExecInstance(instanceKey, `set global rpl_semi_sync_master_enabled = ?, global rpl_semi_sync_slave_enabled = ?`, false, semiSync); err != nil {
 		return instance, log.Errore(err)
 	}
@@ -720,7 +728,7 @@ func ResetReplication(instanceKey *InstanceKey) (*Instance, error) {
 	}
 
 	if *config.RuntimeCLIFlags.Noop {
-		return instance, fmt.Errorf("noop: aborting reset-replication operation on %+v; signalling error but nothing went wrong.", *instanceKey)
+		return instance, fmt.Errorf("noop: aborting reset-replication operation on %+v; signalling error but nothing went wrong", *instanceKey)
 	}
 
 	// MySQL's RESET SLAVE is done correctly; however SHOW SLAVE STATUS still returns old hostnames etc
@@ -758,7 +766,7 @@ func ResetPrimary(instanceKey *InstanceKey) (*Instance, error) {
 	}
 
 	if *config.RuntimeCLIFlags.Noop {
-		return instance, fmt.Errorf("noop: aborting reset-primary operation on %+v; signalling error but nothing went wrong.", *instanceKey)
+		return instance, fmt.Errorf("noop: aborting reset-primary operation on %+v; signalling error but nothing went wrong", *instanceKey)
 	}
 
 	_, err = ExecInstance(instanceKey, `reset master`)
@@ -774,7 +782,7 @@ func ResetPrimary(instanceKey *InstanceKey) (*Instance, error) {
 // skipQueryClassic skips a query in normal binlog file:pos replication
 func setGTIDPurged(instance *Instance, gtidPurged string) error {
 	if *config.RuntimeCLIFlags.Noop {
-		return fmt.Errorf("noop: aborting set-gtid-purged operation on %+v; signalling error but nothing went wrong.", instance.Key)
+		return fmt.Errorf("noop: aborting set-gtid-purged operation on %+v; signalling error but nothing went wrong", instance.Key)
 	}
 
 	_, err := ExecInstance(&instance.Key, `set global gtid_purged := ?`, gtidPurged)
@@ -856,7 +864,7 @@ func SkipQuery(instanceKey *InstanceKey) (*Instance, error) {
 	}
 
 	if *config.RuntimeCLIFlags.Noop {
-		return instance, fmt.Errorf("noop: aborting skip-query operation on %+v; signalling error but nothing went wrong.", *instanceKey)
+		return instance, fmt.Errorf("noop: aborting skip-query operation on %+v; signalling error but nothing went wrong", *instanceKey)
 	}
 
 	log.Debugf("Skipping one query on %+v", instanceKey)
@@ -899,7 +907,7 @@ func SetReadOnly(instanceKey *InstanceKey, readOnly bool) (*Instance, error) {
 	}
 
 	if *config.RuntimeCLIFlags.Noop {
-		return instance, fmt.Errorf("noop: aborting set-read-only operation on %+v; signalling error but nothing went wrong.", *instanceKey)
+		return instance, fmt.Errorf("noop: aborting set-read-only operation on %+v; signalling error but nothing went wrong", *instanceKey)
 	}
 
 	if _, err := ExecInstance(instanceKey, "set global read_only = ?", readOnly); err != nil {
@@ -930,7 +938,7 @@ func KillQuery(instanceKey *InstanceKey, process int64) (*Instance, error) {
 	}
 
 	if *config.RuntimeCLIFlags.Noop {
-		return instance, fmt.Errorf("noop: aborting kill-query operation on %+v; signalling error but nothing went wrong.", *instanceKey)
+		return instance, fmt.Errorf("noop: aborting kill-query operation on %+v; signalling error but nothing went wrong", *instanceKey)
 	}
 
 	_, err = ExecInstance(instanceKey, `kill query ?`, process)

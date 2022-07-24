@@ -271,15 +271,15 @@ func testPassthrough1(t *testing.T, fail failover) {
 	}
 }
 
-// TestLastReparentTooRecent_BufferingSkipped tests that buffering is skipped if
+// TestLastReparentTooRecentBufferingSkipped tests that buffering is skipped if
 // we see the reparent (end) *before* any request failures due to it.
 // We must not start buffering because we already observed the trigger for
 // stopping buffering (the reparent) and may not see it again.
-func TestLastReparentTooRecent_BufferingSkipped(t *testing.T) {
-	testAllImplementations(t, testLastReparentTooRecent_BufferingSkipped1)
+func TestLastReparentTooRecentBufferingSkipped(t *testing.T) {
+	testAllImplementations(t, testLastReparentTooRecentBufferingSkipped1)
 }
 
-func testLastReparentTooRecent_BufferingSkipped1(t *testing.T, fail failover) {
+func testLastReparentTooRecentBufferingSkipped1(t *testing.T, fail failover) {
 	resetVariables()
 
 	now := time.Now()
@@ -312,14 +312,14 @@ func testLastReparentTooRecent_BufferingSkipped1(t *testing.T, fail failover) {
 	}
 }
 
-// TestLastReparentTooRecent_Buffering explicitly tests that the "too recent"
+// TestLastReparentTooRecentBuffering explicitly tests that the "too recent"
 // skipping of the buffering does NOT get triggered because enough time has
 // elapsed since the last seen reparent.
-func TestLastReparentTooRecent_Buffering(t *testing.T) {
-	testAllImplementations(t, testLastReparentTooRecent_Buffering1)
+func TestLastReparentTooRecentBuffering(t *testing.T) {
+	testAllImplementations(t, testLastReparentTooRecentBuffering1)
 }
 
-func testLastReparentTooRecent_Buffering1(t *testing.T, fail failover) {
+func testLastReparentTooRecentBuffering1(t *testing.T, fail failover) {
 	resetVariables()
 
 	now := time.Now()

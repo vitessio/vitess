@@ -18,6 +18,7 @@ package vindexes
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"fmt"
 
@@ -30,6 +31,7 @@ import (
 var (
 	_ SingleColumn = (*Numeric)(nil)
 	_ Reversible   = (*Numeric)(nil)
+	_ Hashing      = (*Numeric)(nil)
 )
 
 // Numeric defines a bit-pattern mapping of a uint64 to the KeyspaceId.
@@ -64,32 +66,28 @@ func (*Numeric) NeedsVCursor() bool {
 }
 
 // Verify returns true if ids and ksids match.
-func (*Numeric) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
-	out := make([]bool, len(ids))
-	for i := range ids {
-		var keybytes [8]byte
-		num, err := evalengine.ToUint64(ids[i])
+func (vind *Numeric) Verify(ctx context.Context, vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
+	out := make([]bool, 0, len(ids))
+	for i, id := range ids {
+		ksid, err := vind.Hash(id)
 		if err != nil {
 			return nil, err
 		}
-		binary.BigEndian.PutUint64(keybytes[:], num)
-		out[i] = bytes.Equal(keybytes[:], ksids[i])
+		out = append(out, bytes.Equal(ksid, ksids[i]))
 	}
 	return out, nil
 }
 
 // Map can map ids to key.Destination objects.
-func (*Numeric) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+func (vind *Numeric) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	out := make([]key.Destination, 0, len(ids))
 	for _, id := range ids {
-		num, err := evalengine.ToUint64(id)
+		ksid, err := vind.Hash(id)
 		if err != nil {
 			out = append(out, key.DestinationNone{})
 			continue
 		}
-		var keybytes [8]byte
-		binary.BigEndian.PutUint64(keybytes[:], num)
-		out = append(out, key.DestinationKeyspaceID(keybytes[:]))
+		out = append(out, key.DestinationKeyspaceID(ksid))
 	}
 	return out, nil
 }
@@ -101,10 +99,20 @@ func (*Numeric) ReverseMap(_ VCursor, ksids [][]byte) ([]sqltypes.Value, error) 
 		if len(keyspaceID) != 8 {
 			return nil, fmt.Errorf("Numeric.ReverseMap: length of keyspaceId is not 8: %d", len(keyspaceID))
 		}
-		val := binary.BigEndian.Uint64([]byte(keyspaceID))
+		val := binary.BigEndian.Uint64(keyspaceID)
 		reverseIds[i] = sqltypes.NewUint64(val)
 	}
 	return reverseIds, nil
+}
+
+func (*Numeric) Hash(id sqltypes.Value) ([]byte, error) {
+	num, err := evalengine.ToUint64(id)
+	if err != nil {
+		return nil, err
+	}
+	var keybytes [8]byte
+	binary.BigEndian.PutUint64(keybytes[:], num)
+	return keybytes[:], nil
 }
 
 func init() {

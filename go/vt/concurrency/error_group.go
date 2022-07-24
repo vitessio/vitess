@@ -19,11 +19,12 @@ package concurrency
 import "context"
 
 // ErrorGroup provides a function for waiting for N goroutines to complete with
-// at least X successes and no more than Y failures, and cancelling the rest.
+// at least Z successes which we wanted to wait for and
+// at least X overall successes and no more than Y failures, and cancelling the rest.
 //
 // It should be used as follows:
 //
-//		errCh := make(chan error)
+//		errCh := make(chan concurrency.Error)
 //		errgroupCtx, errgroupCancel := context.WithCancel(ctx)
 //
 //		for _, arg := range args {
@@ -31,7 +32,10 @@ import "context"
 //
 //			go func() {
 //				err := doWork(errGroupCtx, arg)
-//				errCh <- err
+//				errCh <- concurrency.Error{
+//					Err: err,
+//					MustWaitFor: <boolean>,
+//				}
 //			}()
 //		}
 //
@@ -39,40 +43,56 @@ import "context"
 //			NumGoroutines: len(args),
 //			NumRequiredSuccess: 5, // need at least 5 to respond with nil error before cancelling the rest
 //			NumAllowedErrors: 1, // if more than 1 responds with non-nil error, cancel the rest
+// 			NumErrorsToWaitFor: 1, // if there is 1 response that we must wait for, before cancelling the rest
 //		}
 //		errRec := errgroup.Wait(errgroupCancel, errCh)
 //
 //		if errRec.HasErrors() {
 //			// ...
 //		}
+//
+//	The NumErrorsToWaitFor should be equal to the number of
+//	Errors that are received on the channel which have MustWaitFor set
 type ErrorGroup struct {
 	NumGoroutines        int
 	NumRequiredSuccesses int
 	NumAllowedErrors     int
+	NumErrorsToWaitFor   int
+}
+
+// Error is used in ErrGroup.Wait function
+// It contains the error that was received along
+// with the information of whether the received error
+// originated from a tablet that we must wait for
+type Error struct {
+	Err         error
+	MustWaitFor bool
 }
 
 // Wait waits for a group of goroutines that are sending errors to the given
-// error channel, and are cancellable by the given cancel function.
+// Error channel, and are cancellable by the given cancel function.
 //
-// Wait will cancel any outstanding goroutines under the following conditions:
+// Wait will cancel any outstanding goroutines when the following condition is met:
+// 	* At least NumErrorsToWaitFor results with MustWaitFor set have been consumed
+//	on the error channel AND one of the following two -
+// 		(1) More than NumAllowedErrors non-nil results have been consumed on the
+// 		error channel.
 //
-// (1) More than NumAllowedErrors non-nil results have been consumed on the
-// error channel.
-//
-// (2) At least NumRequiredSuccesses nil results have been consumed on the error
-// channel.
+// 		(2) At least NumRequiredSuccesses nil results have been consumed on the error
+// 		channel.
 //
 // After the cancellation condition is triggered, Wait will continue to consume
-// results off the error channel so as to not permanently block any of those
+// results off the Error channel so as to not permanently block any of those
 // cancelled goroutines.
 //
 // When finished consuming results from all goroutines, cancelled or otherwise,
 // Wait returns an AllErrorRecorder that contains all errors returned by any of
-// those goroutines. It does not close the error channel.
-func (eg ErrorGroup) Wait(cancel context.CancelFunc, errors chan error) *AllErrorRecorder {
+// those goroutines. It does not close the Error channel.
+func (eg ErrorGroup) Wait(cancel context.CancelFunc, errors chan Error) *AllErrorRecorder {
 	errCounter := 0
 	successCounter := 0
 	responseCounter := 0
+	mustWaitForCounter := 0
 	rec := &AllErrorRecorder{}
 
 	if eg.NumGoroutines < 1 {
@@ -81,13 +101,16 @@ func (eg ErrorGroup) Wait(cancel context.CancelFunc, errors chan error) *AllErro
 
 	for err := range errors {
 		responseCounter++
+		if err.MustWaitFor {
+			mustWaitForCounter++
+		}
 
-		switch err {
+		switch err.Err {
 		case nil:
 			successCounter++
 		default:
 			errCounter++
-			rec.RecordError(err)
+			rec.RecordError(err.Err)
 		}
 
 		// Even though we cancel in the next conditional, we need to keep
@@ -97,7 +120,7 @@ func (eg ErrorGroup) Wait(cancel context.CancelFunc, errors chan error) *AllErro
 			break
 		}
 
-		if errCounter > eg.NumAllowedErrors || successCounter >= eg.NumRequiredSuccesses {
+		if mustWaitForCounter >= eg.NumErrorsToWaitFor && (errCounter > eg.NumAllowedErrors || successCounter >= eg.NumRequiredSuccesses) {
 			cancel()
 		}
 	}

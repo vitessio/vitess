@@ -18,4 +18,4 @@
 
 source ./env.sh
 
-vtctlclient DeleteShard -recursive customer/0
+vtctldclient DeleteShards --recursive customer/0

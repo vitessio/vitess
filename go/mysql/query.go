@@ -365,6 +365,7 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (*sqltypes.Result, 
 			InsertID:            packetOk.lastInsertID,
 			SessionStateChanges: packetOk.sessionStateData,
 			StatusFlags:         packetOk.statusFlags,
+			Info:                packetOk.info,
 		}, more, warnings, nil
 	}
 
@@ -448,6 +449,7 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (*sqltypes.Result, 
 				more = (packetOk.statusFlags & ServerMoreResultsExists) != 0
 				result.SessionStateChanges = packetOk.sessionStateData
 				result.StatusFlags = packetOk.statusFlags
+				result.Info = packetOk.info
 			}
 			return result, more, warnings, nil
 
@@ -463,7 +465,7 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (*sqltypes.Result, 
 			if err := c.drainResults(); err != nil {
 				return nil, false, 0, err
 			}
-			return nil, false, 0, NewSQLError(ERVitessMaxRowsExceeded, SSUnknownSQLState, "Row count exceeded %d", maxrows)
+			return nil, false, 0, vterrors.Errorf(vtrpc.Code_ABORTED, "Row count exceeded %d", maxrows)
 		}
 
 		// Regular row.

@@ -28,7 +28,8 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/test/endtoend/sharding/initialsharding"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/proto/topodata"
@@ -44,6 +45,7 @@ const (
 	XtraBackup = iota
 	Backup
 	Mysqlctld
+	timeout = time.Duration(60 * time.Second)
 )
 
 var (
@@ -62,14 +64,14 @@ var (
 	dbCredentialFile string
 	shardName        = "0"
 	commonTabletArg  = []string{
-		"-vreplication_healthcheck_topology_refresh", "1s",
-		"-vreplication_healthcheck_retry_delay", "1s",
-		"-vreplication_retry_delay", "1s",
-		"-degraded_threshold", "5s",
-		"-lock_tables_timeout", "5s",
-		"-watch_replication_stream",
-		"-enable_replication_reporter",
-		"-serving_state_grace_period", "1s",
+		"--vreplication_healthcheck_topology_refresh", "1s",
+		"--vreplication_healthcheck_retry_delay", "1s",
+		"--vreplication_retry_delay", "1s",
+		"--degraded_threshold", "5s",
+		"--lock_tables_timeout", "5s",
+		"--watch_replication_stream",
+		"--enable_replication_reporter",
+		"--serving_state_grace_period", "1s",
 	}
 
 	vtInsertTest = `
@@ -80,8 +82,16 @@ var (
 					  ) Engine=InnoDB`
 )
 
+type CompressionDetails struct {
+	BuiltinCompressor       string
+	BuiltinDecompressor     string
+	ExternalCompressorCmd   string
+	ExternalCompressorExt   string
+	ExternalDecompressorCmd string
+}
+
 // LaunchCluster : starts the cluster as per given params.
-func LaunchCluster(setupType int, streamMode string, stripes int) (int, error) {
+func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *CompressionDetails) (int, error) {
 	localCluster = cluster.NewCluster(cell, hostname)
 
 	// Start topo server
@@ -103,38 +113,40 @@ func LaunchCluster(setupType int, streamMode string, stripes int) (int, error) {
 	}
 	shard := &localCluster.Keyspaces[0].Shards[0]
 
-	dbCredentialFile = initialsharding.WriteDbCredentialToTmp(localCluster.TmpDirectory)
+	dbCredentialFile = cluster.WriteDbCredentialToTmp(localCluster.TmpDirectory)
 	initDb, _ := os.ReadFile(path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"))
 	sql := string(initDb)
 	newInitDBFile = path.Join(localCluster.TmpDirectory, "init_db_with_passwords.sql")
-	sql = sql + initialsharding.GetPasswordUpdateSQL(localCluster)
+	sql = sql + cluster.GetPasswordUpdateSQL(localCluster)
 	err = os.WriteFile(newInitDBFile, []byte(sql), 0666)
 	if err != nil {
 		return 1, err
 	}
 
-	extraArgs := []string{"-db-credentials-file", dbCredentialFile}
-	commonTabletArg = append(commonTabletArg, "-db-credentials-file", dbCredentialFile)
+	extraArgs := []string{"--db-credentials-file", dbCredentialFile}
+	commonTabletArg = append(commonTabletArg, "--db-credentials-file", dbCredentialFile)
 
 	// Update arguments for xtrabackup
 	if setupType == XtraBackup {
 		useXtrabackup = true
 
 		xtrabackupArgs := []string{
-			"-backup_engine_implementation", "xtrabackup",
-			fmt.Sprintf("-xtrabackup_stream_mode=%s", streamMode),
-			"-xtrabackup_user=vt_dba",
-			fmt.Sprintf("-xtrabackup_stripes=%d", stripes),
-			"-xtrabackup_backup_flags", fmt.Sprintf("--password=%s", dbPassword),
+			"--backup_engine_implementation", "xtrabackup",
+			fmt.Sprintf("--xtrabackup_stream_mode=%s", streamMode),
+			"--xtrabackup_user=vt_dba",
+			fmt.Sprintf("--xtrabackup_stripes=%d", stripes),
+			"--xtrabackup_backup_flags", fmt.Sprintf("--password=%s", dbPassword),
 		}
 
 		// if streamMode is xbstream, add some additional args to test other xtrabackup flags
 		if streamMode == "xbstream" {
-			xtrabackupArgs = append(xtrabackupArgs, "-xtrabackup_prepare_flags", fmt.Sprintf("--use-memory=100M")) //nolint
+			xtrabackupArgs = append(xtrabackupArgs, "--xtrabackup_prepare_flags", fmt.Sprintf("--use-memory=100M")) //nolint
 		}
 
 		commonTabletArg = append(commonTabletArg, xtrabackupArgs...)
 	}
+
+	commonTabletArg = append(commonTabletArg, getCompressorArgs(cDetails)...)
 
 	var mysqlProcs []*exec.Cmd
 	for i := 0; i < 3; i++ {
@@ -147,7 +159,6 @@ func LaunchCluster(setupType int, streamMode string, stripes int) (int, error) {
 		tablet.VttabletProcess.DbPassword = dbPassword
 		tablet.VttabletProcess.ExtraArgs = commonTabletArg
 		tablet.VttabletProcess.SupportsBackup = true
-		tablet.VttabletProcess.EnableSemiSync = true
 
 		if setupType == Mysqlctld {
 			tablet.MysqlctldProcess = *cluster.MysqlCtldProcessInstance(tablet.TabletUID, tablet.MySQLPort, localCluster.TmpDirectory)
@@ -187,6 +198,11 @@ func LaunchCluster(setupType int, streamMode string, stripes int) (int, error) {
 	if err := localCluster.VtctlclientProcess.InitTablet(replica1, cell, keyspaceName, hostname, shard.Name); err != nil {
 		return 1, err
 	}
+	vtctldClientProcess := cluster.VtctldClientProcessInstance("localhost", localCluster.VtctldProcess.GrpcPort, localCluster.TmpDirectory)
+	_, err = vtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=semi_sync")
+	if err != nil {
+		return 1, err
+	}
 
 	for _, tablet := range []cluster.Vttablet{*primary, *replica1} {
 		if err := tablet.VttabletProcess.CreateDB(keyspaceName); err != nil {
@@ -203,13 +219,61 @@ func LaunchCluster(setupType int, streamMode string, stripes int) (int, error) {
 	return 0, nil
 }
 
+func getCompressorArgs(cDetails *CompressionDetails) []string {
+	var args []string
+
+	if cDetails == nil {
+		return args
+	}
+
+	if cDetails.BuiltinCompressor != "" {
+		args = append(args, fmt.Sprintf("--builtin-compressor=%s", cDetails.BuiltinCompressor))
+	}
+	if cDetails.BuiltinDecompressor != "" {
+		args = append(args, fmt.Sprintf("--builtin-decompressor=%s", cDetails.BuiltinDecompressor))
+	}
+	if cDetails.ExternalCompressorCmd != "" {
+		args = append(args, fmt.Sprintf("--external-compressor=%s", cDetails.ExternalCompressorCmd))
+	}
+	if cDetails.ExternalCompressorExt != "" {
+		args = append(args, fmt.Sprintf("--external-compressor-extension=%s", cDetails.ExternalCompressorExt))
+	}
+	if cDetails.ExternalDecompressorCmd != "" {
+		args = append(args, fmt.Sprintf("--external-decompressor=%s", cDetails.ExternalDecompressorCmd))
+	}
+
+	return args
+
+}
+
 // TearDownCluster shuts down all cluster processes
 func TearDownCluster() {
 	localCluster.Teardown()
 }
 
 // TestBackup runs all the backup tests
-func TestBackup(t *testing.T, setupType int, streamMode string, stripes int) {
+func TestBackup(t *testing.T, setupType int, streamMode string, stripes int, cDetails *CompressionDetails, runSpecific []string) error {
+	verStr, err := mysqlctl.GetVersionString()
+	require.NoError(t, err)
+	_, vers, err := mysqlctl.ParseVersionString(verStr)
+	require.NoError(t, err)
+	switch streamMode {
+	case "xbstream":
+		if vers.Major < 8 {
+			t.Logf("Skipping xtrabackup tests with --xtrabackup_stream_mode=xbstream as those are only tested on XtraBackup/MySQL 8.0+")
+			return nil
+		}
+	case "", "tar": // streaming method of tar is the default for the vttablet --xtrabackup_stream_mode flag
+		// XtraBackup 8.0 must be used with MySQL 8.0 and it no longer supports tar as a stream method:
+		//    https://docs.percona.com/percona-xtrabackup/2.4/innobackupex/streaming_backups_innobackupex.html
+		//    https://docs.percona.com/percona-xtrabackup/8.0/xtrabackup_bin/backup.streaming.html
+		if vers.Major > 5 {
+			t.Logf("Skipping xtrabackup tests with --xtrabackup_stream_mode=tar as tar is no longer a streaming option in XtraBackup 8.0")
+			return nil
+		}
+	default:
+		require.FailNow(t, fmt.Sprintf("Unsupported xtrabackup stream mode: %s", streamMode))
+	}
 
 	testMethods := []struct {
 		name   string
@@ -230,7 +294,7 @@ func TestBackup(t *testing.T, setupType int, streamMode string, stripes int) {
 		{
 			name:   "TestPrimaryBackup",
 			method: primaryBackup,
-		}, //
+		},
 		{
 			name:   "TestPrimaryReplicaSameBackup",
 			method: primaryReplicaSameBackup,
@@ -250,9 +314,8 @@ func TestBackup(t *testing.T, setupType int, streamMode string, stripes int) {
 	}
 
 	defer cluster.PanicHandler(t)
-
 	// setup cluster for the testing
-	code, err := LaunchCluster(setupType, streamMode, stripes)
+	code, err := LaunchCluster(setupType, streamMode, stripes, cDetails)
 	require.Nilf(t, err, "setup failed with status code %d", code)
 
 	// Teardown the cluster
@@ -261,9 +324,23 @@ func TestBackup(t *testing.T, setupType int, streamMode string, stripes int) {
 	// Run all the backup tests
 
 	for _, test := range testMethods {
-		t.Run(test.name, test.method)
+		if len(runSpecific) > 0 && !isRegistered(test.name, runSpecific) {
+			continue
+		}
+		if retVal := t.Run(test.name, test.method); !retVal {
+			return vterrors.Errorf(vtrpc.Code_UNKNOWN, "test failure: %s", test.name)
+		}
 	}
+	return nil
+}
 
+func isRegistered(name string, runlist []string) bool {
+	for _, f := range runlist {
+		if f == name {
+			return true
+		}
+	}
+	return false
 }
 
 type restoreMethod func(t *testing.T, tablet *cluster.Vttablet)
@@ -288,15 +365,15 @@ func primaryBackup(t *testing.T) {
 
 	output, err := localCluster.VtctlclientProcess.ExecuteCommandWithOutput("Backup", primary.Alias)
 	require.Error(t, err)
-	assert.Contains(t, output, "type PRIMARY cannot take backup. if you really need to do this, rerun the backup command with -allow_primary")
+	assert.Contains(t, output, "type PRIMARY cannot take backup. if you really need to do this, rerun the backup command with --allow_primary")
 
 	localCluster.VerifyBackupCount(t, shardKsName, 0)
 
-	err = localCluster.VtctlclientProcess.ExecuteCommand("Backup", "-allow_primary=true", primary.Alias)
+	err = localCluster.VtctlclientProcess.ExecuteCommand("Backup", "--", "--allow_primary=true", primary.Alias)
 	require.Nil(t, err)
 
 	// We'll restore this on the primary later to test restores using a backup timestamp
-	firstBackupTimestamp := time.Now().Format(mysqlctl.BackupTimestampFormat)
+	firstBackupTimestamp := time.Now().UTC().Format(mysqlctl.BackupTimestampFormat)
 
 	backups := localCluster.VerifyBackupCount(t, shardKsName, 1)
 	assert.Contains(t, backups[0], primary.Alias)
@@ -305,7 +382,7 @@ func primaryBackup(t *testing.T) {
 	require.Nil(t, err)
 
 	restoreWaitForBackup(t, "replica")
-	err = replica2.VttabletProcess.WaitForTabletStatusesForTimeout([]string{"SERVING"}, 25*time.Second)
+	err = replica2.VttabletProcess.WaitForTabletStatusesForTimeout([]string{"SERVING"}, timeout)
 	require.Nil(t, err)
 
 	// Verify that we have all the new data -- we should have 2 records now...
@@ -313,7 +390,7 @@ func primaryBackup(t *testing.T) {
 	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 2)
 	cluster.VerifyLocalMetadata(t, replica2, keyspaceName, shardName, cell)
 
-	err = localCluster.VtctlclientProcess.ExecuteCommand("Backup", "-allow_primary=true", primary.Alias)
+	err = localCluster.VtctlclientProcess.ExecuteCommand("Backup", "--", "--allow_primary=true", primary.Alias)
 	require.Nil(t, err)
 
 	backups = localCluster.VerifyBackupCount(t, shardKsName, 2)
@@ -321,20 +398,20 @@ func primaryBackup(t *testing.T) {
 
 	// Perform PRS to demote the primary tablet (primary) so that we can do a restore there and verify we don't have the
 	// data from after the older/first backup
-	err = localCluster.VtctlclientProcess.ExecuteCommand("PlannedReparentShard",
-		"-keyspace_shard", shardKsName,
-		"-new_primary", replica2.Alias)
+	err = localCluster.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "--",
+		"--keyspace_shard", shardKsName,
+		"--new_primary", replica2.Alias)
 	require.Nil(t, err)
 
 	// Delete the current primary tablet (replica2) so that the original primary tablet (primary) can be restored from the
 	// older/first backup w/o it replicating the subsequent insert done after the first backup was taken
-	err = localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", "-allow_primary=true", replica2.Alias)
+	err = localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", "--", "--allow_primary=true", replica2.Alias)
 	require.Nil(t, err)
 	err = replica2.VttabletProcess.TearDown()
 	require.Nil(t, err)
 
 	// Restore the older/first backup -- using the timestamp we saved -- on the original primary tablet (primary)
-	err = localCluster.VtctlclientProcess.ExecuteCommand("RestoreFromBackup", "-backup_timestamp", firstBackupTimestamp, primary.Alias)
+	err = localCluster.VtctlclientProcess.ExecuteCommand("RestoreFromBackup", "--", "--backup_timestamp", firstBackupTimestamp, primary.Alias)
 	require.Nil(t, err)
 
 	// Re-init the shard -- making the original primary tablet (primary) primary again -- for subsequent tests
@@ -370,16 +447,16 @@ func primaryReplicaSameBackup(t *testing.T) {
 
 	// now bring up the other replica, letting it restore from backup.
 	restoreWaitForBackup(t, "replica")
-	err = replica2.VttabletProcess.WaitForTabletStatusesForTimeout([]string{"SERVING"}, 25*time.Second)
+	err = replica2.VttabletProcess.WaitForTabletStatusesForTimeout([]string{"SERVING"}, timeout)
 	require.Nil(t, err)
 
 	// check the new replica has the data
 	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 2)
 
 	// Promote replica2 to primary
-	err = localCluster.VtctlclientProcess.ExecuteCommand("PlannedReparentShard",
-		"-keyspace_shard", shardKsName,
-		"-new_primary", replica2.Alias)
+	err = localCluster.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "--",
+		"--keyspace_shard", shardKsName,
+		"--new_primary", replica2.Alias)
 	require.Nil(t, err)
 
 	// insert more data on replica2 (current primary)
@@ -449,9 +526,9 @@ func testRestoreOldPrimary(t *testing.T, method restoreMethod) {
 	require.Nil(t, err)
 
 	// reparent to replica1
-	err = localCluster.VtctlclientProcess.ExecuteCommand("PlannedReparentShard",
-		"-keyspace_shard", shardKsName,
-		"-new_primary", replica1.Alias)
+	err = localCluster.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "--",
+		"--keyspace_shard", shardKsName,
+		"--new_primary", replica1.Alias)
 	require.Nil(t, err)
 
 	// insert more data to new primary
@@ -517,12 +594,12 @@ func stopAllTablets() {
 		tablet.VttabletProcess.TearDown()
 		if tablet.MysqlctldProcess.TabletUID > 0 {
 			tablet.MysqlctldProcess.Stop()
-			localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", "-allow_primary", tablet.Alias)
+			localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", "--", "--allow_primary", tablet.Alias)
 			continue
 		}
 		proc, _ := tablet.MysqlctlProcess.StopProcess()
 		mysqlProcs = append(mysqlProcs, proc)
-		localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", "-allow_primary", tablet.Alias)
+		localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", "--", "--allow_primary", tablet.Alias)
 	}
 	for _, proc := range mysqlProcs {
 		proc.Wait()
@@ -550,9 +627,9 @@ func terminatedRestore(t *testing.T) {
 	require.Nil(t, err)
 
 	// reparent to replica1
-	err = localCluster.VtctlclientProcess.ExecuteCommand("PlannedReparentShard",
-		"-keyspace_shard", shardKsName,
-		"-new_primary", replica1.Alias)
+	err = localCluster.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "--",
+		"--keyspace_shard", shardKsName,
+		"--new_primary", replica1.Alias)
 	require.Nil(t, err)
 
 	// insert more data to new primary
@@ -642,9 +719,9 @@ func restoreWaitForBackup(t *testing.T, tabletType string) {
 	replica2.Type = tabletType
 	replica2.ValidateTabletRestart(t)
 	replicaTabletArgs := commonTabletArg
-	replicaTabletArgs = append(replicaTabletArgs, "-backup_engine_implementation", "fake_implementation")
-	replicaTabletArgs = append(replicaTabletArgs, "-wait_for_backup_interval", "1s")
-	replicaTabletArgs = append(replicaTabletArgs, "-init_tablet_type", tabletType)
+	replicaTabletArgs = append(replicaTabletArgs, "--backup_engine_implementation", "fake_implementation")
+	replicaTabletArgs = append(replicaTabletArgs, "--wait_for_backup_interval", "1s")
+	replicaTabletArgs = append(replicaTabletArgs, "--init_tablet_type", tabletType)
 	replica2.VttabletProcess.ExtraArgs = replicaTabletArgs
 	replica2.VttabletProcess.ServingStatus = ""
 	err := replica2.VttabletProcess.Setup()
@@ -672,15 +749,22 @@ func verifyRestoreTablet(t *testing.T, tablet *cluster.Vttablet, status string) 
 		err = tablet.VttabletProcess.WaitForTabletStatusesForTimeout([]string{status}, 25*time.Second)
 		require.Nil(t, err)
 	}
+	// We restart replication here because semi-sync will not be set correctly on tablet startup since
+	// we deprecated enable_semi_sync. StartReplication RPC fixes the semi-sync settings by consulting the
+	// durability policies set.
+	err = localCluster.VtctlclientProcess.ExecuteCommand("StopReplication", tablet.Alias)
+	require.NoError(t, err)
+	err = localCluster.VtctlclientProcess.ExecuteCommand("StartReplication", tablet.Alias)
+	require.NoError(t, err)
 
 	if tablet.Type == "replica" {
-		verifyReplicationStatus(t, tablet, "ON")
+		verifySemiSyncStatus(t, tablet, "ON")
 	} else if tablet.Type == "rdonly" {
-		verifyReplicationStatus(t, tablet, "OFF")
+		verifySemiSyncStatus(t, tablet, "OFF")
 	}
 }
 
-func verifyReplicationStatus(t *testing.T, vttablet *cluster.Vttablet, expectedStatus string) {
+func verifySemiSyncStatus(t *testing.T, vttablet *cluster.Vttablet, expectedStatus string) {
 	status, err := vttablet.VttabletProcess.GetDBVar("rpl_semi_sync_slave_enabled", keyspaceName)
 	require.Nil(t, err)
 	assert.Equal(t, status, expectedStatus)
@@ -696,7 +780,7 @@ func terminateRestore(t *testing.T) {
 		useXtrabackup = false
 	}
 
-	args := append([]string{"-server", localCluster.VtctlclientProcess.Server, "-alsologtostderr"}, "RestoreFromBackup", primary.Alias)
+	args := append([]string{"--server", localCluster.VtctlclientProcess.Server, "--alsologtostderr"}, "RestoreFromBackup", "--", primary.Alias)
 	tmpProcess := exec.Command(
 		"vtctlclient",
 		args...,

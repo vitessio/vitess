@@ -100,7 +100,11 @@ func (s *Server) CheckReshardingJournalExistsOnTablet(ctx context.Context, table
 
 	if len(p3qr.Rows) != 0 {
 		qr := sqltypes.Proto3ToResult(p3qr)
-		if err := prototext.Unmarshal(qr.Rows[0][0].ToBytes(), &journal); err != nil {
+		qrBytes, err := qr.Rows[0][0].ToBytes()
+		if err != nil {
+			return nil, false, err
+		}
+		if err := prototext.Unmarshal(qrBytes, &journal); err != nil {
 			return nil, false, err
 		}
 
@@ -334,7 +338,11 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 		}
 
 		var bls binlogdatapb.BinlogSource
-		if err := prototext.Unmarshal(row[2].ToBytes(), &bls); err != nil {
+		rowBytes, err := row[2].ToBytes()
+		if err != nil {
+			return err
+		}
+		if err := prototext.Unmarshal(rowBytes, &bls); err != nil {
 			return err
 		}
 

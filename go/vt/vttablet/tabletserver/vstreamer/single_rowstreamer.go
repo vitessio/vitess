@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"time"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/log"
@@ -65,9 +66,8 @@ func (si *singleRowStreamer) tableName() string {
 // analyzeCommentDirectives reads any special directives from parsed query comments
 // specifically, we're looking for a unique key directive, which indicates the unique key column names
 // we should use instead of PK columns
-func (si *singleRowStreamer) analyzeCommentDirectives(comments sqlparser.Comments) (err error) {
-	directives := sqlparser.ExtractCommentDirectives(comments)
-	if s := directives.GetString("ukColumns", ""); s != "" {
+func (si *singleRowStreamer) analyzeCommentDirectives(comments *sqlparser.ParsedComments) (err error) {
+	if s := comments.Directives().GetString("ukColumns", ""); s != "" {
 		si.ukColumnNames, err = textutil.SplitUnescape(s, ",")
 		if err != nil {
 			return err
@@ -82,7 +82,7 @@ func (si *singleRowStreamer) buildPKColumnsFromUniqueKey() error {
 	// We wish to utilize a UNIQUE KEY which is not the PRIMARY KEY
 
 	for _, colName := range si.ukColumnNames {
-		index := si.plan.Table.FindColumn(sqlparser.NewColIdent(colName))
+		index := si.plan.Table.FindColumn(sqlparser.NewIdentifierCI(colName))
 		if index < 0 {
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "column %v is listed as unique key, but not present in table %v", colName, si.tableName())
 		}
@@ -121,13 +121,13 @@ func (si *singleRowStreamer) buildSelect() error {
 	prefix := ""
 	for _, col := range si.plan.Table.Fields {
 		if si.plan.isConvertColumnUsingUTF8(col.Name) {
-			buf.Myprintf("%sconvert(%v using utf8mb4) as %v", prefix, sqlparser.NewColIdent(col.Name), sqlparser.NewColIdent(col.Name))
+			buf.Myprintf("%sconvert(%v using utf8mb4) as %v", prefix, sqlparser.NewIdentifierCI(col.Name), sqlparser.NewIdentifierCI(col.Name))
 		} else {
-			buf.Myprintf("%s%v", prefix, sqlparser.NewColIdent(col.Name))
+			buf.Myprintf("%s%v", prefix, sqlparser.NewIdentifierCI(col.Name))
 		}
 		prefix = ", "
 	}
-	buf.Myprintf(" from %v", sqlparser.NewTableIdent(si.tableName()))
+	buf.Myprintf(" from %v", sqlparser.NewIdentifierCI(si.tableName()))
 	if len(si.lastpk) != 0 {
 		if len(si.lastpk) != len(si.pkColumns) {
 			return fmt.Errorf("primary key values don't match length: %v vs %v", si.lastpk, si.pkColumns)
@@ -143,19 +143,19 @@ func (si *singleRowStreamer) buildSelect() error {
 			buf.Myprintf("%s(", prefix)
 			prefix = " or "
 			for i, pk := range si.pkColumns[:lastcol] {
-				buf.Myprintf("%v = ", sqlparser.NewColIdent(si.plan.Table.Fields[pk].Name))
+				buf.Myprintf("%v = ", sqlparser.NewIdentifierCI(si.plan.Table.Fields[pk].Name))
 				si.lastpk[i].EncodeSQL(buf)
 				buf.Myprintf(" and ")
 			}
-			buf.Myprintf("%v > ", sqlparser.NewColIdent(si.plan.Table.Fields[si.pkColumns[lastcol]].Name))
+			buf.Myprintf("%v > ", sqlparser.NewIdentifierCI(si.plan.Table.Fields[si.pkColumns[lastcol]].Name))
 			si.lastpk[lastcol].EncodeSQL(buf)
 			buf.Myprintf(")")
 		}
 	}
-	buf.Myprintf(" order by ", sqlparser.NewTableIdent(si.tableName()))
+	buf.Myprintf(" order by ", sqlparser.NewIdentifierCI(si.tableName()))
 	prefix = ""
 	for _, pk := range si.pkColumns {
-		buf.Myprintf("%s%v", prefix, sqlparser.NewColIdent(si.plan.Table.Fields[pk].Name))
+		buf.Myprintf("%s%v", prefix, sqlparser.NewIdentifierCI(si.plan.Table.Fields[pk].Name))
 		prefix = ", "
 	}
 	si.sendQuery = buf.String()
@@ -179,6 +179,10 @@ func (si *singleRowStreamer) streamQuery(ctx context.Context, gtid string) error
 			Name: flds[pk].Name,
 			Type: flds[pk].Type,
 		}
+	}
+	charsets := make([]collations.ID, len(flds))
+	for i, fld := range flds {
+		charsets[i] = collations.ID(fld.Charset)
 	}
 
 	err = si.pstreamer.sendResponse(&binlogdatapb.VStreamRowsResponse{
@@ -229,7 +233,7 @@ func (si *singleRowStreamer) streamQuery(ctx context.Context, gtid string) error
 			lastpk[i] = mysqlrow[pk]
 		}
 		// Reuse the vstreamer's filter.
-		ok, err := si.plan.filter(mysqlrow, filtered)
+		ok, err := si.plan.filter(mysqlrow, filtered, charsets)
 		if err != nil {
 			return err
 		}

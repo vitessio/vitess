@@ -37,9 +37,11 @@ const (
 	TimestampColumnType
 	DateTimeColumnType
 	EnumColumnType
+	SetColumnType
 	MediumIntColumnType
 	JSONColumnType
 	FloatColumnType
+	DoubleColumnType
 	BinaryColumnType
 	StringColumnType
 	IntegerColumnType
@@ -54,6 +56,15 @@ type Column struct {
 	Type                 ColumnType
 	EnumValues           string
 	EnumToTextConversion bool
+	DataType             string // from COLUMN_TYPE column
+
+	IsNullable    bool
+	IsDefaultNull bool
+
+	CharacterMaximumLength int64
+	NumericPrecision       int64
+	NumericScale           int64
+	DateTimePrecision      int64
 
 	// add Octet length for binary type, fix bytes with suffix "00" get clipped in mysql binlog.
 	// https://github.com/github/gh-ost/issues/909
@@ -65,6 +76,30 @@ func (c *Column) SetTypeIfUnknown(t ColumnType) {
 	if c.Type == UnknownColumnType {
 		c.Type = t
 	}
+}
+
+// HasDefault returns true if the column at all has a default value (possibly NULL)
+func (c *Column) HasDefault() bool {
+	if c.IsDefaultNull && !c.IsNullable {
+		// based on INFORMATION_SCHEMA.COLUMNS, this is the indicator for a 'NOT NULL' column with no default value.
+		return false
+	}
+	return true
+}
+
+// IsNumeric returns true if the column is of a numeric type
+func (c *Column) IsNumeric() bool {
+	return c.NumericPrecision > 0
+}
+
+// IsFloatingPoint returns true if the column is of a floating point numeric type
+func (c *Column) IsFloatingPoint() bool {
+	return c.Type == FloatColumnType || c.Type == DoubleColumnType
+}
+
+// IsFloatingPoint returns true if the column is of a temporal type
+func (c *Column) IsTemporal() bool {
+	return c.DateTimePrecision >= 0
 }
 
 // NewColumns creates a new column array from non empty names
@@ -226,6 +261,7 @@ type UniqueKey struct {
 	Name            string
 	Columns         ColumnList
 	HasNullable     bool
+	HasFloat        bool
 	IsAutoIncrement bool
 }
 

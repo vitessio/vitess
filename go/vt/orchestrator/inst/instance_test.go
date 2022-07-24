@@ -58,9 +58,9 @@ func TestIsVersion(t *testing.T) {
 }
 
 func TestIsSmallerBinlogFormat(t *testing.T) {
-	iStatement := &Instance{Key: key1, Binlog_format: "STATEMENT"}
-	iRow := &Instance{Key: key2, Binlog_format: "ROW"}
-	iMixed := &Instance{Key: key3, Binlog_format: "MIXED"}
+	iStatement := &Instance{Key: key1, BinlogFormat: "STATEMENT"}
+	iRow := &Instance{Key: key2, BinlogFormat: "ROW"}
+	iMixed := &Instance{Key: key3, BinlogFormat: "MIXED"}
 	test.S(t).ExpectTrue(iStatement.IsSmallerBinlogFormat(iRow))
 	test.S(t).ExpectFalse(iStatement.IsSmallerBinlogFormat(iStatement))
 	test.S(t).ExpectFalse(iRow.IsSmallerBinlogFormat(iStatement))
@@ -134,8 +134,8 @@ func TestCanReplicateFrom(t *testing.T) {
 	canReplicate, _ = i55.CanReplicateFrom(&i56)
 	test.S(t).ExpectFalse(canReplicate)
 
-	iStatement := Instance{Key: key1, Binlog_format: "STATEMENT", ServerID: 1, Version: "5.5", LogBinEnabled: true, LogReplicationUpdatesEnabled: true}
-	iRow := Instance{Key: key2, Binlog_format: "ROW", ServerID: 2, Version: "5.5", LogBinEnabled: true, LogReplicationUpdatesEnabled: true}
+	iStatement := Instance{Key: key1, BinlogFormat: "STATEMENT", ServerID: 1, Version: "5.5", LogBinEnabled: true, LogReplicationUpdatesEnabled: true}
+	iRow := Instance{Key: key2, BinlogFormat: "ROW", ServerID: 2, Version: "5.5", LogBinEnabled: true, LogReplicationUpdatesEnabled: true}
 	canReplicate, err = iRow.CanReplicateFrom(&iStatement)
 	test.S(t).ExpectNil(err)
 	test.S(t).ExpectTrue(canReplicate)
@@ -200,7 +200,7 @@ func TestHumanReadableDescription(t *testing.T) {
 	{
 		i57.UsingOracleGTID = true
 		i57.LogBinEnabled = true
-		i57.Binlog_format = "ROW"
+		i57.BinlogFormat = "ROW"
 		i57.LogReplicationUpdatesEnabled = true
 		desc := i57.HumanReadableDescription()
 		test.S(t).ExpectEquals(desc, "[unknown,invalid,5.7.8-log,rw,ROW,>>,GTID]")
@@ -216,7 +216,7 @@ func TestTabulatedDescription(t *testing.T) {
 	{
 		i57.UsingOracleGTID = true
 		i57.LogBinEnabled = true
-		i57.Binlog_format = "ROW"
+		i57.BinlogFormat = "ROW"
 		i57.LogReplicationUpdatesEnabled = true
 		desc := i57.TabulatedDescription("|")
 		test.S(t).ExpectEquals(desc, "unknown|invalid|5.7.8-log|rw|ROW|>>,GTID")

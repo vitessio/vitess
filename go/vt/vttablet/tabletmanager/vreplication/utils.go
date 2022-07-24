@@ -22,6 +22,9 @@ import (
 	"fmt"
 	"strconv"
 
+	"vitess.io/vitess/go/vt/log"
+
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -74,7 +77,7 @@ const (
 func getLastLog(dbClient *vdbClient, vreplID uint32) (id int64, typ, state, message string, err error) {
 	var qr *sqltypes.Result
 	query := fmt.Sprintf("select id, type, state, message from _vt.vreplication_log where vrepl_id = %d order by id desc limit 1", vreplID)
-	if qr, err = withDDL.Exec(context.Background(), query, dbClient.ExecuteFetch); err != nil {
+	if qr, err = withDDL.Exec(context.Background(), query, dbClient.ExecuteFetch, dbClient.ExecuteFetch); err != nil {
 		return 0, "", "", "", err
 	}
 	if len(qr.Rows) != 1 {
@@ -108,7 +111,7 @@ func insertLog(dbClient *vdbClient, typ string, vreplID uint32, state, message s
 			strconv.Itoa(int(vreplID)), encodeString(typ), encodeString(state), encodeString(message))
 		query = buf.ParsedQuery().Query
 	}
-	if _, err = withDDL.Exec(context.Background(), query, dbClient.ExecuteFetch); err != nil {
+	if _, err = withDDL.Exec(context.Background(), query, dbClient.ExecuteFetch, dbClient.ExecuteFetch); err != nil {
 		return fmt.Errorf("could not insert into log table: %v: %v", query, err)
 	}
 	return nil
@@ -125,4 +128,43 @@ func insertLogWithParams(dbClient *vdbClient, action string, vreplID uint32, par
 		return err
 	}
 	return nil
+}
+
+// isUnrecoverableError returns true if vreplication cannot recover from the given error and should completely terminate
+func isUnrecoverableError(err error) bool {
+	if err == nil {
+		return false
+	}
+	sqlErr, isSQLErr := err.(*mysql.SQLError)
+	if !isSQLErr {
+		return false
+	}
+	switch sqlErr.Num {
+	case
+		mysql.ERWarnDataOutOfRange,
+		mysql.ERDataTooLong,
+		mysql.ERWarnDataTruncated,
+		mysql.ERTruncatedWrongValue,
+		mysql.ERTruncatedWrongValueForField,
+		mysql.ERIllegalValueForType,
+		mysql.ErrWrongValueForType,
+		mysql.ErrCantCreateGeometryObject,
+		mysql.ErrGISDataWrongEndianess,
+		mysql.ErrNotImplementedForCartesianSRS,
+		mysql.ErrNotImplementedForProjectedSRS,
+		mysql.ErrNonPositiveRadius,
+		mysql.ERBadNullError,
+		mysql.ERDupEntry,
+		mysql.ERNoDefaultForField,
+		mysql.ERInvalidJSONText,
+		mysql.ERInvalidJSONTextInParams,
+		mysql.ERInvalidJSONBinaryData,
+		mysql.ERInvalidJSONCharset,
+		mysql.ERInvalidCastToJSON,
+		mysql.ERJSONValueTooBig,
+		mysql.ERJSONDocumentTooDeep:
+		log.Errorf("Got unrecoverable error: %v", sqlErr)
+		return true
+	}
+	return false
 }

@@ -60,6 +60,7 @@ func WithTestServer(
 
 	client, err := vtctldclient.New("grpc", lis.Addr().String())
 	require.NoError(t, err, "cannot create vtctld client")
+	defer client.Close()
 
 	test(t, client)
 }
@@ -175,7 +176,7 @@ func AddTablet(ctx context.Context, t *testing.T, ts *topo.Server, tablet *topod
 			if tablet.Type == topodatapb.TabletType_PRIMARY && opts.AlsoSetShardPrimary {
 				_, err := ts.UpdateShardFields(ctx, tablet.Keyspace, tablet.Shard, func(si *topo.ShardInfo) error {
 					if si.IsPrimaryServing && si.PrimaryAlias != nil {
-						msg := fmt.Sprintf("shard %v/%v already has a serving master (%v)", tablet.Keyspace, tablet.Shard, topoproto.TabletAliasString(si.PrimaryAlias))
+						msg := fmt.Sprintf("shard %v/%v already has a serving primary (%v)", tablet.Keyspace, tablet.Shard, topoproto.TabletAliasString(si.PrimaryAlias))
 
 						if !opts.ForceSetShardPrimary {
 							return errors.New(msg)
@@ -251,5 +252,11 @@ func UpdateSrvKeyspaces(ctx context.Context, t *testing.T, ts *topo.Server, srvk
 			err := ts.UpdateSrvKeyspace(ctx, cell, keyspace, srvKeyspace)
 			require.NoError(t, err, "UpdateSrvKeyspace(%v, %v, %v)", cell, keyspace, srvKeyspace)
 		}
+	}
+}
+
+func MockGetVersionFromTablet(addrVersionMap map[string]string) func(ta string) (string, error) {
+	return func(tabletAddr string) (string, error) {
+		return addrVersionMap[tabletAddr], nil
 	}
 }

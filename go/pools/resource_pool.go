@@ -41,7 +41,7 @@ var (
 	ErrClosed = errors.New("resource pool is closed")
 
 	// ErrTimeout is returned if a resource get times out.
-	ErrTimeout = vterrors.New(vtrpcpb.Code_DEADLINE_EXCEEDED, "resource pool timed out")
+	ErrTimeout = vterrors.New(vtrpcpb.Code_RESOURCE_EXHAUSTED, "resource pool timed out")
 
 	// ErrCtxTimeout is returned if a ctx is already expired by the time the resource pool is used
 	ErrCtxTimeout = vterrors.New(vtrpcpb.Code_DEADLINE_EXCEEDED, "resource pool context already expired")

@@ -25,28 +25,33 @@ import (
 
 // Join represents a join. If we have a predicate, this is an inner join. If no predicate exists, it is a cross join
 type Join struct {
-	LHS, RHS  Operator
+	LHS, RHS  LogicalOperator
 	Predicate sqlparser.Expr
 	LeftJoin  bool
 }
 
-var _ Operator = (*Join)(nil)
+var _ LogicalOperator = (*Join)(nil)
+
+// iLogical implements the LogicalOperator interface
+func (*Join) iLogical() {}
 
 // PushPredicate implements the Operator interface
-func (j *Join) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error {
+func (j *Join) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) (LogicalOperator, error) {
 	deps := semTable.RecursiveDeps(expr)
 	switch {
 	case deps.IsSolvedBy(j.LHS.TableID()):
-		return j.LHS.PushPredicate(expr, semTable)
-	case deps.IsSolvedBy(j.RHS.TableID()):
-		if !j.LeftJoin {
-			return j.RHS.PushPredicate(expr, semTable)
+		lhs, err := j.LHS.PushPredicate(expr, semTable)
+		if err != nil {
+			return nil, err
 		}
+		j.LHS = lhs
+		return j, nil
+	case deps.IsSolvedBy(j.RHS.TableID()):
 		// we are looking for predicates like `tbl.col = <>` or `<> = tbl.col`,
 		// where tbl is on the rhs of the left outer join
 		if cmp, isCmp := expr.(*sqlparser.ComparisonExpr); isCmp && cmp.Operator != sqlparser.NullSafeEqualOp &&
-			sqlparser.IsColName(cmp.Left) && semTable.RecursiveDeps(cmp.Left).IsSolvedBy(j.RHS.TableID()) ||
-			sqlparser.IsColName(cmp.Right) && semTable.RecursiveDeps(cmp.Right).IsSolvedBy(j.RHS.TableID()) {
+			(sqlparser.IsColName(cmp.Left) && semTable.RecursiveDeps(cmp.Left).IsSolvedBy(j.RHS.TableID()) ||
+				sqlparser.IsColName(cmp.Right) && semTable.RecursiveDeps(cmp.Right).IsSolvedBy(j.RHS.TableID())) {
 			// When the predicate we are pushing is using information from an outer table, we can
 			// check whether the predicate is "null-intolerant" or not. Null-intolerant in this context means that
 			// the predicate will not return true if the table columns are null.
@@ -56,16 +61,26 @@ func (j *Join) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) 
 
 			// This is based on the paper "Canonical Abstraction for Outerjoin Optimization" by J Rao et al
 			j.LeftJoin = false
-			return j.RHS.PushPredicate(expr, semTable)
 		}
-		// TODO - we should do this on the vtgate level once we have a Filter primitive
-		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard left join and where clause")
+		if !j.LeftJoin {
+			rhs, err := j.RHS.PushPredicate(expr, semTable)
+			if err != nil {
+				return nil, err
+			}
+			j.RHS = rhs
+			return j, err
+		}
+		op := &Filter{
+			Source:     j,
+			Predicates: []sqlparser.Expr{expr},
+		}
+		return op, nil
 	case deps.IsSolvedBy(j.LHS.TableID().Merge(j.RHS.TableID())):
 		j.Predicate = sqlparser.AndExpressions(j.Predicate, expr)
-		return nil
+		return j, nil
 	}
 
-	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Cannot push predicate: %s", sqlparser.String(expr))
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Cannot push predicate: %s", sqlparser.String(expr))
 }
 
 // TableID implements the Operator interface
@@ -103,7 +118,7 @@ func (j *Join) CheckValid() error {
 }
 
 // Compact implements the Operator interface
-func (j *Join) Compact(semTable *semantics.SemTable) (Operator, error) {
+func (j *Join) Compact(semTable *semantics.SemTable) (LogicalOperator, error) {
 	if j.LeftJoin {
 		// we can't merge outer joins into a single QG
 		return j, nil

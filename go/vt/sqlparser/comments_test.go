@@ -268,26 +268,26 @@ func TestExtractCommentDirectives(t *testing.T) {
 		vals:  nil,
 	}, {
 		input: "/* not a vt comment */",
-		vals:  nil,
+		vals:  CommentDirectives{},
 	}, {
 		input: "/*vt+ */",
 		vals:  CommentDirectives{},
 	}, {
 		input: "/*vt+ SINGLE_OPTION */",
 		vals: CommentDirectives{
-			"SINGLE_OPTION": true,
+			"SINGLE_OPTION": "true",
 		},
 	}, {
 		input: "/*vt+ ONE_OPT TWO_OPT */",
 		vals: CommentDirectives{
-			"ONE_OPT": true,
-			"TWO_OPT": true,
+			"ONE_OPT": "true",
+			"TWO_OPT": "true",
 		},
 	}, {
 		input: "/*vt+ ONE_OPT */ /* other comment */ /*vt+ TWO_OPT */",
 		vals: CommentDirectives{
-			"ONE_OPT": true,
-			"TWO_OPT": true,
+			"ONE_OPT": "true",
+			"TWO_OPT": "true",
 		},
 	}, {
 		input: "/*vt+ ONE_OPT=abc TWO_OPT=def */",
@@ -298,20 +298,20 @@ func TestExtractCommentDirectives(t *testing.T) {
 	}, {
 		input: "/*vt+ ONE_OPT=true TWO_OPT=false */",
 		vals: CommentDirectives{
-			"ONE_OPT": true,
-			"TWO_OPT": false,
+			"ONE_OPT": "true",
+			"TWO_OPT": "false",
 		},
 	}, {
 		input: "/*vt+ ONE_OPT=true TWO_OPT=\"false\" */",
 		vals: CommentDirectives{
-			"ONE_OPT": true,
+			"ONE_OPT": "true",
 			"TWO_OPT": "\"false\"",
 		},
 	}, {
 		input: "/*vt+ RANGE_OPT=[a:b] ANOTHER ANOTHER_WITH_VALEQ=val= AND_ONE_WITH_EQ== */",
 		vals: CommentDirectives{
 			"RANGE_OPT":          "[a:b]",
-			"ANOTHER":            true,
+			"ANOTHER":            "true",
 			"ANOTHER_WITH_VALEQ": "val=",
 			"AND_ONE_WITH_EQ":    "=",
 		},
@@ -326,10 +326,14 @@ func TestExtractCommentDirectives(t *testing.T) {
 				"drop " + testCase.input + " table t",
 				"create " + testCase.input + " table if not exists t (id int primary key)",
 				"alter " + testCase.input + " table t add column c int not null",
+				"create " + testCase.input + " view v as select * from t",
+				"create " + testCase.input + " or replace view v as select * from t",
+				"alter " + testCase.input + " view v as select * from t",
+				"drop " + testCase.input + " view v",
 			}
 			for _, sql := range sqls {
 				t.Run(sql, func(t *testing.T) {
-					var comments Comments
+					var comments *ParsedComments
 					stmt, _ := Parse(sql)
 					switch s := stmt.(type) {
 					case *Select:
@@ -344,13 +348,19 @@ func TestExtractCommentDirectives(t *testing.T) {
 						comments = s.Comments
 					case *CreateTable:
 						comments = s.Comments
+					case *CreateView:
+						comments = s.Comments
+					case *AlterView:
+						comments = s.Comments
+					case *DropView:
+						comments = s.Comments
 					default:
 						t.Errorf("Unexpected statement type %+v", s)
 					}
-					vals := ExtractCommentDirectives(comments)
 
+					vals := comments.Directives()
 					if !reflect.DeepEqual(vals, testCase.vals) {
-						t.Errorf("test input: '%v', got vals:\n%+v, want\n%+v", testCase.input, vals, testCase.vals)
+						t.Errorf("test input: '%v', got vals %T:\n%+v, want %T\n%+v", testCase.input, vals, vals, testCase.vals, testCase.vals)
 					}
 				})
 			}
@@ -358,11 +368,11 @@ func TestExtractCommentDirectives(t *testing.T) {
 	}
 
 	d := CommentDirectives{
-		"ONE_OPT": true,
-		"TWO_OPT": false,
-		"three":   1,
-		"four":    2,
-		"five":    0,
+		"ONE_OPT": "true",
+		"TWO_OPT": "false",
+		"three":   "1",
+		"four":    "2",
+		"five":    "0",
 		"six":     "true",
 	}
 
@@ -386,7 +396,7 @@ func TestExtractCommentDirectives(t *testing.T) {
 		t.Errorf("d.IsSet(five) should be false")
 	}
 
-	if d.IsSet("six") {
+	if !d.IsSet("six") {
 		t.Errorf("d.IsSet(six) should be false")
 	}
 }

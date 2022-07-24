@@ -27,7 +27,7 @@ import (
 // and also COMMIT transaction IDs (different values on different servers).
 // So these need to be removed from the event entry if we're to compare and validate matching
 // entries.
-var eventInfoTransformations map[*regexp.Regexp]string = map[*regexp.Regexp]string{
+var eventInfoTransformations = map[*regexp.Regexp]string{
 	regexp.MustCompile(`(.*) [/][*].*?[*][/](.*$)`):  "$1 $2",         // strip comments
 	regexp.MustCompile(`(COMMIT) .*$`):               "$1",            // commit number varies cross servers
 	regexp.MustCompile(`(table_id:) [0-9]+ (.*$)`):   "$1 ### $2",     // table ids change cross servers
@@ -44,26 +44,26 @@ type BinlogEvent struct {
 }
 
 //
-func (this *BinlogEvent) NextBinlogCoordinates() BinlogCoordinates {
-	return BinlogCoordinates{LogFile: this.Coordinates.LogFile, LogPos: this.NextEventPos, Type: this.Coordinates.Type}
+func (binlogEvent *BinlogEvent) NextBinlogCoordinates() BinlogCoordinates {
+	return BinlogCoordinates{LogFile: binlogEvent.Coordinates.LogFile, LogPos: binlogEvent.NextEventPos, Type: binlogEvent.Coordinates.Type}
 }
 
 //
-func (this *BinlogEvent) NormalizeInfo() {
+func (binlogEvent *BinlogEvent) NormalizeInfo() {
 	for reg, replace := range eventInfoTransformations {
-		this.Info = reg.ReplaceAllString(this.Info, replace)
+		binlogEvent.Info = reg.ReplaceAllString(binlogEvent.Info, replace)
 	}
 }
 
-func (this *BinlogEvent) Equals(other *BinlogEvent) bool {
-	return this.Coordinates.Equals(&other.Coordinates) &&
-		this.NextEventPos == other.NextEventPos &&
-		this.EventType == other.EventType && this.Info == other.Info
+func (binlogEvent *BinlogEvent) Equals(other *BinlogEvent) bool {
+	return binlogEvent.Coordinates.Equals(&other.Coordinates) &&
+		binlogEvent.NextEventPos == other.NextEventPos &&
+		binlogEvent.EventType == other.EventType && binlogEvent.Info == other.Info
 }
 
-func (this *BinlogEvent) EqualsIgnoreCoordinates(other *BinlogEvent) bool {
-	return this.NextEventPos == other.NextEventPos &&
-		this.EventType == other.EventType && this.Info == other.Info
+func (binlogEvent *BinlogEvent) EqualsIgnoreCoordinates(other *BinlogEvent) bool {
+	return binlogEvent.NextEventPos == other.NextEventPos &&
+		binlogEvent.EventType == other.EventType && binlogEvent.Info == other.Info
 }
 
 const maxEmptyEventsEvents int = 10
@@ -98,46 +98,45 @@ func NewBinlogEventCursor(startCoordinates BinlogCoordinates, fetchNextEventsFun
 // binary log if need be.
 // Internally, it uses the cachedEvents array, so that it does not go to the MySQL server upon each call.
 // Returns nil upon reaching end of binary logs.
-func (this *BinlogEventCursor) nextEvent(numEmptyEventsEvents int) (*BinlogEvent, error) {
+func (binlogEventCursor *BinlogEventCursor) nextEvent(numEmptyEventsEvents int) (*BinlogEvent, error) {
 	if numEmptyEventsEvents > maxEmptyEventsEvents {
-		log.Debugf("End of logs. currentEventIndex: %d, nextCoordinates: %+v", this.currentEventIndex, this.nextCoordinates)
+		log.Debugf("End of logs. currentEventIndex: %d, nextCoordinates: %+v", binlogEventCursor.currentEventIndex, binlogEventCursor.nextCoordinates)
 		// End of logs
 		return nil, nil
 	}
-	if len(this.cachedEvents) == 0 {
+	if len(binlogEventCursor.cachedEvents) == 0 {
 		// Cache exhausted; get next bulk of entries and return the next entry
-		nextFileCoordinates, err := this.nextCoordinates.NextFileCoordinates()
+		nextFileCoordinates, err := binlogEventCursor.nextCoordinates.NextFileCoordinates()
 		if err != nil {
 			return nil, err
 		}
 		log.Debugf("zero cached events, next file: %+v", nextFileCoordinates)
-		this.cachedEvents, err = this.fetchNextEvents(nextFileCoordinates)
+		binlogEventCursor.cachedEvents, err = binlogEventCursor.fetchNextEvents(nextFileCoordinates)
 		if err != nil {
 			return nil, err
 		}
-		this.currentEventIndex = -1
+		binlogEventCursor.currentEventIndex = -1
 		// While this seems recursive do note that recursion level is at most 1, since we either have
 		// entries in the next binlog (no further recursion) or we don't (immediate termination)
-		return this.nextEvent(numEmptyEventsEvents + 1)
+		return binlogEventCursor.nextEvent(numEmptyEventsEvents + 1)
 	}
-	if this.currentEventIndex+1 < len(this.cachedEvents) {
+	if binlogEventCursor.currentEventIndex+1 < len(binlogEventCursor.cachedEvents) {
 		// We have enough cache to go by
-		this.currentEventIndex++
-		event := &this.cachedEvents[this.currentEventIndex]
-		this.nextCoordinates = event.NextBinlogCoordinates()
+		binlogEventCursor.currentEventIndex++
+		event := &binlogEventCursor.cachedEvents[binlogEventCursor.currentEventIndex]
+		binlogEventCursor.nextCoordinates = event.NextBinlogCoordinates()
 		return event, nil
-	} else {
-		// Cache exhausted; get next bulk of entries and return the next entry
-		var err error
-		this.cachedEvents, err = this.fetchNextEvents(this.cachedEvents[len(this.cachedEvents)-1].NextBinlogCoordinates())
-		if err != nil {
-			return nil, err
-		}
-		this.currentEventIndex = -1
-		// While this seems recursive do note that recursion level is at most 1, since we either have
-		// entries in the next binlog (no further recursion) or we don't (immediate termination)
-		return this.nextEvent(numEmptyEventsEvents + 1)
 	}
+	// Cache exhausted; get next bulk of entries and return the next entry
+	var err error
+	binlogEventCursor.cachedEvents, err = binlogEventCursor.fetchNextEvents(binlogEventCursor.cachedEvents[len(binlogEventCursor.cachedEvents)-1].NextBinlogCoordinates())
+	if err != nil {
+		return nil, err
+	}
+	binlogEventCursor.currentEventIndex = -1
+	// While this seems recursive do note that recursion level is at most 1, since we either have
+	// entries in the next binlog (no further recursion) or we don't (immediate termination)
+	return binlogEventCursor.nextEvent(numEmptyEventsEvents + 1)
 }
 
 // NextCoordinates return the binlog coordinates of the next entry as yet unprocessed by the cursor.
@@ -145,9 +144,9 @@ func (this *BinlogEventCursor) nextEvent(numEmptyEventsEvents int) (*BinlogEvent
 // coordinates of the next binlog entry.
 // The value of this function is used by match-below to move a replica behind another, after exhausting the shared binlog
 // entries of both.
-func (this *BinlogEventCursor) getNextCoordinates() (BinlogCoordinates, error) {
-	if this.nextCoordinates.LogPos == 0 {
-		return this.nextCoordinates, errors.New("Next coordinates unfound")
+func (binlogEventCursor *BinlogEventCursor) getNextCoordinates() (BinlogCoordinates, error) {
+	if binlogEventCursor.nextCoordinates.LogPos == 0 {
+		return binlogEventCursor.nextCoordinates, errors.New("Next coordinates unfound")
 	}
-	return this.nextCoordinates, nil
+	return binlogEventCursor.nextCoordinates, nil
 }

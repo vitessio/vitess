@@ -802,14 +802,6 @@ var generateSQLBase = []string{
 		) ENGINE=InnoDB DEFAULT CHARSET=ascii
 	`,
 	`
-		CREATE TABLE IF NOT EXISTS kv_store (
-			store_key varchar(255) CHARACTER SET ascii NOT NULL,
-			store_value text CHARACTER SET utf8 not null,
-			last_updated timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			PRIMARY KEY (store_key)
-		) ENGINE=InnoDB DEFAULT CHARSET=ascii
-	`,
-	`
 		CREATE TABLE IF NOT EXISTS cluster_injected_pseudo_gtid (
 			cluster_name varchar(128) NOT NULL,
 			time_injected timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -869,5 +861,13 @@ var generateSQLBase = []string{
 	`,
 	`
 		CREATE INDEX ks_idx_vitess_tablet ON vitess_tablet (keyspace, shard)
+	`,
+	`
+		CREATE TABLE IF NOT EXISTS vitess_keyspace (
+			keyspace varchar(128) CHARACTER SET ascii NOT NULL,
+			keyspace_type smallint(5) NOT NULL,
+			durability_policy varchar(512) CHARACTER SET ascii NOT NULL,
+			PRIMARY KEY (keyspace)
+		) ENGINE=InnoDB DEFAULT CHARSET=ascii
 	`,
 }

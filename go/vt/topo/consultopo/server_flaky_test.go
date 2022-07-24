@@ -17,6 +17,7 @@ limitations under the License.
 package consultopo
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -26,8 +27,6 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/vt/log"
-
-	"context"
 
 	"github.com/hashicorp/consul/api"
 
@@ -45,11 +44,7 @@ func startConsul(t *testing.T, authToken string) (*exec.Cmd, string, string) {
 	// Create a temporary config file, as ports cannot all be set
 	// via command line. The file name has to end with '.json' so
 	// we're not using TempFile.
-	configDir, err := os.MkdirTemp("", "consul")
-	if err != nil {
-		t.Fatalf("cannot create temp dir: %v", err)
-	}
-	defer os.RemoveAll(configDir)
+	configDir := t.TempDir()
 
 	configFilename := path.Join(configDir, "consul.json")
 	configFile, err := os.OpenFile(configFilename, os.O_RDWR|os.O_CREATE, 0600)
@@ -59,7 +54,7 @@ func startConsul(t *testing.T, authToken string) (*exec.Cmd, string, string) {
 
 	// Create the JSON config, save it.
 	port := testfiles.GoVtTopoConsultopoPort
-	config := map[string]interface{}{
+	config := map[string]any{
 		"ports": map[string]int{
 			"dns":      port,
 			"http":     port + 1,
@@ -68,6 +63,9 @@ func startConsul(t *testing.T, authToken string) (*exec.Cmd, string, string) {
 		},
 	}
 
+	// TODO(deepthi): this is the legacy ACL format. We run v1.4.0 by default in which this has been deprecated.
+	// We should start using the new format
+	// https://learn.hashicorp.com/tutorials/consul/access-control-replication-multiple-datacenters?in=consul/security-operations
 	if authToken != "" {
 		config["datacenter"] = "vitess"
 		config["acl_datacenter"] = "vitess"

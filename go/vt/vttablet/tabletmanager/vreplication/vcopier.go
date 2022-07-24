@@ -40,14 +40,9 @@ import (
 )
 
 type vcopier struct {
-	vr        *vreplicator
-	tablePlan *TablePlan
-}
-
-func newVCopier(vr *vreplicator) *vcopier {
-	return &vcopier{
-		vr: vr,
-	}
+	vr               *vreplicator
+	tablePlan        *TablePlan
+	throttlerAppName string
 }
 
 // initTablesForCopy (phase 1) identifies the list of tables to be copied and inserts
@@ -57,7 +52,7 @@ func newVCopier(vr *vreplicator) *vcopier {
 func (vc *vcopier) initTablesForCopy(ctx context.Context) error {
 	defer vc.vr.dbClient.Rollback()
 
-	plan, err := buildReplicatorPlan(vc.vr.source.Filter, vc.vr.colInfoMap, nil, vc.vr.stats)
+	plan, err := buildReplicatorPlan(vc.vr.source, vc.vr.colInfoMap, nil, vc.vr.stats)
 	if err != nil {
 		return err
 	}
@@ -200,7 +195,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 
 	log.Infof("Copying table %s, lastpk: %v", tableName, copyState[tableName])
 
-	plan, err := buildReplicatorPlan(vc.vr.source.Filter, vc.vr.colInfoMap, nil, vc.vr.stats)
+	plan, err := buildReplicatorPlan(vc.vr.source, vc.vr.colInfoMap, nil, vc.vr.stats)
 	if err != nil {
 		return err
 	}
@@ -225,6 +220,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 	var updateCopyState *sqlparser.ParsedQuery
 	var bv map[string]*querypb.BindVariable
 	var sqlbuffer bytes2.Buffer
+
 	err = vc.vr.sourceVStreamer.VStreamRows(ctx, initialPlan.SendRule.Filter, lastpkpb, func(rows *binlogdatapb.VStreamRowsResponse) error {
 		for {
 			select {
@@ -235,9 +231,19 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 				return io.EOF
 			default:
 			}
+			if rows.Throttled {
+				_ = vc.vr.updateTimeThrottled(RowStreamerComponentName)
+				return nil
+			}
+			if rows.Heartbeat {
+				_ = vc.vr.updateHeartbeatTime(time.Now().Unix())
+				return nil
+			}
 			// verify throttler is happy, otherwise keep looping
-			if vc.vr.vre.throttlerClient.ThrottleCheckOKOrWait(ctx) {
-				break
+			if vc.vr.vre.throttlerClient.ThrottleCheckOKOrWaitAppName(ctx, vc.throttlerAppName) {
+				break // out of 'for' loop
+			} else { // we're throttled
+				_ = vc.vr.updateTimeThrottled(VCopierComponentName)
 			}
 		}
 		if vc.tablePlan == nil {

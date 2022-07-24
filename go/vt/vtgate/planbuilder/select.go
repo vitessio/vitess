@@ -20,6 +20,8 @@ import (
 	"errors"
 	"fmt"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 
 	"vitess.io/vitess/go/vt/key"
@@ -33,16 +35,19 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
-func buildSelectPlan(query string) func(sqlparser.Statement, *sqlparser.ReservedVars, ContextVSchema) (engine.Primitive, error) {
-	return func(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema ContextVSchema) (engine.Primitive, error) {
+func buildSelectPlan(query string) stmtPlanner {
+	return func(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
 		sel := stmt.(*sqlparser.Select)
+		if sel.With != nil {
+			return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: with expression in select statement")
+		}
 
 		p, err := handleDualSelects(sel, vschema)
 		if err != nil {
 			return nil, err
 		}
 		if p != nil {
-			return p, nil
+			return newPlanResult(p), nil
 		}
 
 		getPlan := func(sel *sqlparser.Select) (logicalPlan, error) {
@@ -65,10 +70,21 @@ func buildSelectPlan(query string) func(sqlparser.Statement, *sqlparser.Reserved
 			// by transforming the predicates to CNF, the planner will sometimes find better plans
 			primitive := rewriteToCNFAndReplan(stmt, getPlan)
 			if primitive != nil {
-				return primitive, nil
+				return newPlanResult(primitive), nil
 			}
 		}
-		return plan.Primitive(), nil
+		primitive := plan.Primitive()
+		if rb, ok := primitive.(*engine.Route); ok {
+			// this is done because engine.Route doesn't handle the empty result well
+			// if it doesn't find a shard to send the query to.
+			// All other engine primitives can handle this, so we only need it when
+			// Route is the last (and only) instruction before the user sees a result
+			if isOnlyDual(sel) || (len(sel.GroupBy) == 0 && sel.SelectExprs.AllAggregation()) {
+				rb.NoRoutesSpecialHandling = true
+			}
+		}
+
+		return newPlanResult(primitive), nil
 	}
 }
 
@@ -87,15 +103,27 @@ func rewriteToCNFAndReplan(stmt sqlparser.Statement, getPlan func(sel *sqlparser
 }
 
 func shouldRetryWithCNFRewriting(plan logicalPlan) bool {
-	routePlan, isRoute := plan.(*route)
-	if !isRoute {
+	// if we have a I_S query, but have not found table_schema or table_name, let's try CNF
+	var opcode engine.Opcode
+	var sysTableTableName map[string]evalengine.Expr
+	var sysTableTableSchema []evalengine.Expr
+
+	switch routePlan := plan.(type) {
+	case *routeGen4:
+		opcode = routePlan.eroute.Opcode
+		sysTableTableName = routePlan.eroute.SysTableTableName
+		sysTableTableSchema = routePlan.eroute.SysTableTableSchema
+	case *route:
+		opcode = routePlan.eroute.Opcode
+		sysTableTableName = routePlan.eroute.SysTableTableName
+		sysTableTableSchema = routePlan.eroute.SysTableTableSchema
+	default:
 		return false
 	}
-	// if we have a I_S query, but have not found table_schema or table_name, let's try CNF
-	return routePlan.eroute.Opcode == engine.SelectDBA &&
-		len(routePlan.eroute.SysTableTableName) == 0 &&
-		len(routePlan.eroute.SysTableTableSchema) == 0
 
+	return opcode == engine.DBA &&
+		len(sysTableTableName) == 0 &&
+		len(sysTableTableSchema) == 0
 }
 
 var errSQLCalcFoundRows = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.CantUseOptionHere, "Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'")
@@ -173,12 +201,11 @@ func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, reservedVars *s
 
 	if rb, ok := pb.plan.(*route); ok {
 		// TODO(sougou): this can probably be improved.
-		directives := sqlparser.ExtractCommentDirectives(sel.Comments)
+		directives := sel.Comments.Directives()
 		rb.eroute.QueryTimeout = queryTimeout(directives)
 		if rb.eroute.TargetDestination != nil {
 			return errors.New("unsupported: SELECT with a target destination")
 		}
-
 		if directives.IsSet(sqlparser.DirectiveScatterErrorsAsWarnings) {
 			rb.eroute.ScatterErrorsAsWarnings = true
 		}
@@ -217,14 +244,15 @@ func setMiscFunc(in logicalPlan, sel *sqlparser.Select) error {
 	_, err := visit(in, func(plan logicalPlan) (bool, logicalPlan, error) {
 		switch node := plan.(type) {
 		case *route:
-			query := sqlparser.GetFirstSelect(node.Select)
-			query.Comments = sel.Comments
-			query.Lock = sel.Lock
-			if sel.Into != nil {
-				if node.eroute.Opcode != engine.SelectUnsharded {
-					return false, nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "INTO is not supported on sharded keyspace")
-				}
-				query.Into = sel.Into
+			err := copyCommentsAndLocks(node.Select, sel, node.eroute.Opcode)
+			if err != nil {
+				return false, nil, err
+			}
+			return true, node, nil
+		case *routeGen4:
+			err := copyCommentsAndLocks(node.Select, sel, node.eroute.Opcode)
+			if err != nil {
+				return false, nil, err
 			}
 			return true, node, nil
 		}
@@ -237,12 +265,25 @@ func setMiscFunc(in logicalPlan, sel *sqlparser.Select) error {
 	return nil
 }
 
+func copyCommentsAndLocks(statement sqlparser.SelectStatement, sel *sqlparser.Select, opcode engine.Opcode) error {
+	query := sqlparser.GetFirstSelect(statement)
+	query.Comments = sel.Comments
+	query.Lock = sel.Lock
+	if sel.Into != nil {
+		if opcode != engine.Unsharded {
+			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "INTO is not supported on sharded keyspace")
+		}
+		query.Into = sel.Into
+	}
+	return nil
+}
+
 func buildSQLCalcFoundRowsPlan(
 	originalQuery string,
 	sel *sqlparser.Select,
 	reservedVars *sqlparser.ReservedVars,
-	vschema ContextVSchema,
-	planSelect func(reservedVars *sqlparser.ReservedVars, vschema ContextVSchema, sel *sqlparser.Select) (*jointab, logicalPlan, error),
+	vschema plancontext.VSchema,
+	planSelect func(reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, sel *sqlparser.Select) (*jointab, logicalPlan, error),
 ) (logicalPlan, error) {
 	ljt, limitPlan, err := planSelect(reservedVars, vschema, sel)
 	if err != nil {
@@ -260,10 +301,7 @@ func buildSQLCalcFoundRowsPlan(
 	sel2.Limit = nil
 
 	countStartExpr := []sqlparser.SelectExpr{&sqlparser.AliasedExpr{
-		Expr: &sqlparser.FuncExpr{
-			Name:  sqlparser.NewColIdent("count"),
-			Exprs: []sqlparser.SelectExpr{&sqlparser.StarExpr{}},
-		},
+		Expr: &sqlparser.CountStar{},
 	}}
 	if sel2.GroupBy == nil && sel2.Having == nil {
 		// if there is no grouping, we can use the same query and
@@ -278,7 +316,7 @@ func buildSQLCalcFoundRowsPlan(
 			From: []sqlparser.TableExpr{
 				&sqlparser.AliasedTableExpr{
 					Expr: &sqlparser.DerivedTable{Select: sel2},
-					As:   sqlparser.NewTableIdent("t"),
+					As:   sqlparser.NewIdentifierCS("t"),
 				},
 			},
 		}
@@ -294,32 +332,44 @@ func buildSQLCalcFoundRowsPlan(
 	return &sqlCalcFoundRows{LimitQuery: limitPlan, CountQuery: countPlan, ljt: ljt, cjt: cjt}, nil
 }
 
-func planSelectV3(reservedVars *sqlparser.ReservedVars, vschema ContextVSchema, sel *sqlparser.Select) (*jointab, logicalPlan, error) {
+func planSelectV3(reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, sel *sqlparser.Select) (*jointab, logicalPlan, error) {
 	ljt := newJointab(reservedVars)
 	frpb := newPrimitiveBuilder(vschema, ljt)
 	err := frpb.processSelect(sel, reservedVars, nil, "")
 	return ljt, frpb.plan, err
 }
 
-func handleDualSelects(sel *sqlparser.Select, vschema ContextVSchema) (engine.Primitive, error) {
+func handleDualSelects(sel *sqlparser.Select, vschema plancontext.VSchema) (engine.Primitive, error) {
 	if !isOnlyDual(sel) {
 		return nil, nil
 	}
 
 	exprs := make([]evalengine.Expr, len(sel.SelectExprs))
 	cols := make([]string, len(sel.SelectExprs))
+	var lockFunctions []*engine.LockFunc
 	for i, e := range sel.SelectExprs {
 		expr, ok := e.(*sqlparser.AliasedExpr)
 		if !ok {
 			return nil, nil
 		}
 		var err error
-		if sqlparser.IsLockingFunc(expr.Expr) {
-			// if we are using any locking functions, we bail out here and send the whole query to a single destination
-			return buildLockingPrimitive(sel, vschema)
-
+		lFunc, isLFunc := expr.Expr.(*sqlparser.LockingFunc)
+		if isLFunc {
+			elem := &engine.LockFunc{Typ: expr.Expr.(*sqlparser.LockingFunc)}
+			if lFunc.Name != nil {
+				n, err := evalengine.Translate(lFunc.Name, nil)
+				if err != nil {
+					return nil, err
+				}
+				elem.Name = n
+			}
+			lockFunctions = append(lockFunctions, elem)
+			continue
 		}
-		exprs[i], err = sqlparser.Convert(expr.Expr)
+		if len(lockFunctions) > 0 {
+			return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: lock function and other expression in same select query")
+		}
+		exprs[i], err = evalengine.Translate(expr.Expr, evalengine.LookupDefaultCollation(vschema.ConnCollation()))
 		if err != nil {
 			return nil, nil
 		}
@@ -328,6 +378,9 @@ func handleDualSelects(sel *sqlparser.Select, vschema ContextVSchema) (engine.Pr
 			cols[i] = sqlparser.String(expr.Expr)
 		}
 	}
+	if len(lockFunctions) > 0 {
+		return buildLockingPrimitive(sel, vschema, lockFunctions)
+	}
 	return &engine.Projection{
 		Exprs: exprs,
 		Cols:  cols,
@@ -335,15 +388,17 @@ func handleDualSelects(sel *sqlparser.Select, vschema ContextVSchema) (engine.Pr
 	}, nil
 }
 
-func buildLockingPrimitive(sel *sqlparser.Select, vschema ContextVSchema) (engine.Primitive, error) {
+func buildLockingPrimitive(sel *sqlparser.Select, vschema plancontext.VSchema, lockFunctions []*engine.LockFunc) (engine.Primitive, error) {
 	ks, err := vschema.FirstSortedKeyspace()
 	if err != nil {
 		return nil, err
 	}
+	buf := sqlparser.NewTrackedBuffer(sqlparser.FormatImpossibleQuery).WriteNode(sel)
 	return &engine.Lock{
 		Keyspace:          ks,
 		TargetDestination: key.DestinationKeyspaceID{0},
-		Query:             sqlparser.String(sel),
+		FieldQuery:        buf.String(),
+		LockFunctions:     lockFunctions,
 	}, nil
 }
 
@@ -377,7 +432,7 @@ func (pb *primitiveBuilder) pushFilter(in sqlparser.Expr, whereType string, rese
 			return err
 		}
 		rut, isRoute := origin.(*route)
-		if isRoute && rut.eroute.Opcode == engine.SelectDBA {
+		if isRoute && rut.eroute.Opcode == engine.DBA {
 			err := pb.findSysInfoRoutingPredicates(expr, rut, reservedVars)
 			if err != nil {
 				return err
@@ -482,10 +537,10 @@ func (pb *primitiveBuilder) pushSelectRoutes(selectExprs sqlparser.SelectExprs, 
 				// This code is unreachable because the parser doesn't allow joins for next val statements.
 				return nil, errors.New("unsupported: SELECT NEXT query in cross-shard query")
 			}
-			if rb.eroute.Opcode != engine.SelectNext {
+			if rb.eroute.Opcode != engine.Next {
 				return nil, errors.New("NEXT used on a non-sequence table")
 			}
-			rb.eroute.Opcode = engine.SelectNext
+			rb.eroute.Opcode = engine.Next
 			resultColumns = append(resultColumns, rb.PushAnonymous(node))
 		default:
 			return nil, fmt.Errorf("BUG: unexpected select expression type: %T", node)

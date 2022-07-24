@@ -29,10 +29,10 @@ import { DataTable } from '../dataTable/DataTable';
 import { ContentContainer } from '../layout/ContentContainer';
 import { WorkspaceHeader } from '../layout/WorkspaceHeader';
 import { WorkspaceTitle } from '../layout/WorkspaceTitle';
-import { KeyspaceLink } from '../links/KeyspaceLink';
 import { TabletLink } from '../links/TabletLink';
 import { BackupStatusPip } from '../pips/BackupStatusPip';
 import { filterNouns } from '../../util/filterNouns';
+import { ShardLink } from '../links/ShardLink';
 
 const COLUMNS = ['Started at', 'Directory', 'Backup', 'Tablet', 'Status'];
 
@@ -70,13 +70,13 @@ export const Backups = () => {
                 <tr key={`${row.clusterID}-${row.directory}-${row.name}`}>
                     <DataCell>
                         {formatDateTime(row.time)}
-                        <div className="font-size-small text-color-secondary">{formatRelativeTime(row.time)}</div>
+                        <div className="text-sm text-secondary">{formatRelativeTime(row.time)}</div>
                     </DataCell>
                     <DataCell>
-                        <KeyspaceLink clusterID={row.clusterID} name={row.keyspace} shard={row.shard}>
+                        <ShardLink clusterID={row.clusterID} keyspace={row.keyspace} shard={row.shard}>
                             {row.directory}
-                        </KeyspaceLink>
-                        <div className="font-size-small text-color-secondary">{row.clusterName}</div>
+                        </ShardLink>
+                        <div className="text-sm text-secondary">{row.clusterName}</div>
                     </DataCell>
                     <DataCell>{row.name}</DataCell>
                     <DataCell>
@@ -84,7 +84,7 @@ export const Backups = () => {
                             {row.tablet}
                         </TabletLink>
                     </DataCell>
-                    <DataCell className="white-space-nowrap">
+                    <DataCell className="whitespace-nowrap">
                         <BackupStatusPip status={row._status} /> {row.status}
                     </DataCell>
                 </tr>

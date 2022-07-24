@@ -114,10 +114,10 @@ func (tm *TabletManager) shardSyncLoop(ctx context.Context, notifyChan <-chan st
 			}
 			if shouldDemote {
 				// Someone updated the PrimaryTermStartTime while we still think we're primary.
-				// This means that we should abort our term, since someone else must have claimed primaryship
+				// This means that we should end our term, since someone else must have claimed primaryship
 				// and wrote to the shard record
 				if err := tm.endPrimaryTerm(ctx, primaryAlias); err != nil {
-					log.Errorf("Failed to abort primary term: %v", err)
+					log.Errorf("Failed to end primary term: %v", err)
 					// Start retry timer and go back to sleep.
 					retryChan = time.After(*shardSyncRetryDelay)
 					continue
@@ -213,7 +213,7 @@ func (tm *TabletManager) endPrimaryTerm(ctx context.Context, primaryAlias *topod
 		log.Infof("Active reparents are disabled; updating tablet state only.")
 		changeTypeCtx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
 		defer cancel()
-		if err := tm.ChangeType(changeTypeCtx, tm.baseTabletType); err != nil {
+		if err := tm.tmState.ChangeTabletType(changeTypeCtx, tm.baseTabletType, DBActionNone); err != nil {
 			return vterrors.Wrapf(err, "failed to change type to %v", tm.baseTabletType)
 		}
 		return nil
@@ -238,7 +238,7 @@ func (tm *TabletManager) endPrimaryTerm(ctx context.Context, primaryAlias *topod
 			return err
 		}
 	} else {
-		if err := tm.SetReplicationSource(setPrimaryCtx, primaryAlias, 0, "", true); err != nil {
+		if err := tm.setReplicationSourceSemiSyncNoAction(setPrimaryCtx, primaryAlias, 0, "", true); err != nil {
 			return vterrors.Wrap(err, "failed to reparent self to new primary")
 		}
 	}

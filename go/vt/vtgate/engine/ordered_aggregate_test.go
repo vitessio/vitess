@@ -17,6 +17,7 @@ limitations under the License.
 package engine
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"testing"
@@ -24,12 +25,23 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/servenv"
 )
+
+var collationEnv *collations.Environment
+
+func init() {
+	// We require MySQL 8.0 collations for the comparisons in the tests
+	mySQLVersion := "8.0.0"
+	servenv.MySQLServerVersion = &mySQLVersion
+	collationEnv = collations.NewEnvironment(mySQLVersion)
+}
 
 func TestOrderedAggregateExecute(t *testing.T) {
 	assert := assert.New(t)
@@ -50,14 +62,14 @@ func TestOrderedAggregateExecute(t *testing.T) {
 
 	oa := &OrderedAggregate{
 		Aggregates: []*AggregateParams{{
-			Opcode: AggregateCount,
+			Opcode: AggregateSum,
 			Col:    1,
 		}},
 		GroupByKeys: []*GroupByParams{{KeyCol: 0}},
 		Input:       fp,
 	}
 
-	result, err := oa.TryExecute(&noopVCursor{}, nil, false)
+	result, err := oa.TryExecute(context.Background(), &noopVCursor{}, nil, false)
 	assert.NoError(err)
 
 	wantResult := sqltypes.MakeTestResult(
@@ -87,7 +99,7 @@ func TestOrderedAggregateExecuteTruncate(t *testing.T) {
 
 	oa := &OrderedAggregate{
 		Aggregates: []*AggregateParams{{
-			Opcode: AggregateCount,
+			Opcode: AggregateSum,
 			Col:    1,
 		}},
 		GroupByKeys:         []*GroupByParams{{KeyCol: 2}},
@@ -95,7 +107,7 @@ func TestOrderedAggregateExecuteTruncate(t *testing.T) {
 		Input:               fp,
 	}
 
-	result, err := oa.TryExecute(&noopVCursor{}, nil, false)
+	result, err := oa.TryExecute(context.Background(), &noopVCursor{}, nil, false)
 	assert.NoError(err)
 
 	wantResult := sqltypes.MakeTestResult(
@@ -129,7 +141,7 @@ func TestOrderedAggregateStreamExecute(t *testing.T) {
 
 	oa := &OrderedAggregate{
 		Aggregates: []*AggregateParams{{
-			Opcode: AggregateCount,
+			Opcode: AggregateSum,
 			Col:    1,
 		}},
 		GroupByKeys: []*GroupByParams{{KeyCol: 0}},
@@ -137,7 +149,7 @@ func TestOrderedAggregateStreamExecute(t *testing.T) {
 	}
 
 	var results []*sqltypes.Result
-	err := oa.TryStreamExecute(&noopVCursor{}, nil, false, func(qr *sqltypes.Result) error {
+	err := oa.TryStreamExecute(context.Background(), &noopVCursor{}, nil, true, func(qr *sqltypes.Result) error {
 		results = append(results, qr)
 		return nil
 	})
@@ -172,7 +184,7 @@ func TestOrderedAggregateStreamExecuteTruncate(t *testing.T) {
 
 	oa := &OrderedAggregate{
 		Aggregates: []*AggregateParams{{
-			Opcode: AggregateCount,
+			Opcode: AggregateSum,
 			Col:    1,
 		}},
 		GroupByKeys:         []*GroupByParams{{KeyCol: 2}},
@@ -181,7 +193,7 @@ func TestOrderedAggregateStreamExecuteTruncate(t *testing.T) {
 	}
 
 	var results []*sqltypes.Result
-	err := oa.TryStreamExecute(&noopVCursor{}, nil, false, func(qr *sqltypes.Result) error {
+	err := oa.TryStreamExecute(context.Background(), &noopVCursor{}, nil, true, func(qr *sqltypes.Result) error {
 		results = append(results, qr)
 		return nil
 	})
@@ -213,7 +225,7 @@ func TestOrderedAggregateGetFields(t *testing.T) {
 
 	oa := &OrderedAggregate{Input: fp}
 
-	got, err := oa.GetFields(nil, nil)
+	got, err := oa.GetFields(context.Background(), nil, nil)
 	assert.NoError(err)
 	assert.Equal(got, input)
 }
@@ -233,7 +245,7 @@ func TestOrderedAggregateGetFieldsTruncate(t *testing.T) {
 		Input:               fp,
 	}
 
-	got, err := oa.GetFields(nil, nil)
+	got, err := oa.GetFields(context.Background(), nil, nil)
 	assert.NoError(err)
 	wantResult := sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
@@ -250,17 +262,17 @@ func TestOrderedAggregateInputFail(t *testing.T) {
 	oa := &OrderedAggregate{Input: fp}
 
 	want := "input fail"
-	if _, err := oa.TryExecute(&noopVCursor{}, nil, false); err == nil || err.Error() != want {
+	if _, err := oa.TryExecute(context.Background(), &noopVCursor{}, nil, false); err == nil || err.Error() != want {
 		t.Errorf("oa.Execute(): %v, want %s", err, want)
 	}
 
 	fp.rewind()
-	if err := oa.TryStreamExecute(&noopVCursor{}, nil, false, func(_ *sqltypes.Result) error { return nil }); err == nil || err.Error() != want {
+	if err := oa.TryStreamExecute(context.Background(), &noopVCursor{}, nil, false, func(_ *sqltypes.Result) error { return nil }); err == nil || err.Error() != want {
 		t.Errorf("oa.StreamExecute(): %v, want %s", err, want)
 	}
 
 	fp.rewind()
-	if _, err := oa.GetFields(nil, nil); err == nil || err.Error() != want {
+	if _, err := oa.GetFields(context.Background(), nil, nil); err == nil || err.Error() != want {
 		t.Errorf("oa.GetFields(): %v, want %s", err, want)
 	}
 }
@@ -313,14 +325,14 @@ func TestOrderedAggregateExecuteCountDistinct(t *testing.T) {
 			Alias:  "count(distinct col2)",
 		}, {
 			// Also add a count(*)
-			Opcode: AggregateCount,
+			Opcode: AggregateSum,
 			Col:    2,
 		}},
 		GroupByKeys: []*GroupByParams{{KeyCol: 0}},
 		Input:       fp,
 	}
 
-	result, err := oa.TryExecute(&noopVCursor{}, nil, false)
+	result, err := oa.TryExecute(context.Background(), &noopVCursor{}, nil, false)
 	assert.NoError(err)
 
 	wantResult := sqltypes.MakeTestResult(
@@ -389,7 +401,7 @@ func TestOrderedAggregateStreamCountDistinct(t *testing.T) {
 			Alias:  "count(distinct col2)",
 		}, {
 			// Also add a count(*)
-			Opcode: AggregateCount,
+			Opcode: AggregateSum,
 			Col:    2,
 		}},
 		GroupByKeys: []*GroupByParams{{KeyCol: 0}},
@@ -397,7 +409,7 @@ func TestOrderedAggregateStreamCountDistinct(t *testing.T) {
 	}
 
 	var results []*sqltypes.Result
-	err := oa.TryStreamExecute(&noopVCursor{}, nil, false, func(qr *sqltypes.Result) error {
+	err := oa.TryStreamExecute(context.Background(), &noopVCursor{}, nil, true, func(qr *sqltypes.Result) error {
 		results = append(results, qr)
 		return nil
 	})
@@ -447,6 +459,7 @@ func TestOrderedAggregateSumDistinctGood(t *testing.T) {
 			"c|4|1",
 			// Single null
 			"d|null|1",
+			"d|1|1",
 			// Start with null
 			"e|null|1",
 			"e|1|1",
@@ -484,7 +497,7 @@ func TestOrderedAggregateSumDistinctGood(t *testing.T) {
 		Input:       fp,
 	}
 
-	result, err := oa.TryExecute(&noopVCursor{}, nil, false)
+	result, err := oa.TryExecute(context.Background(), &noopVCursor{}, nil, false)
 	assert.NoError(err)
 
 	wantResult := sqltypes.MakeTestResult(
@@ -495,14 +508,16 @@ func TestOrderedAggregateSumDistinctGood(t *testing.T) {
 		"a|1|3",
 		"b|1|1",
 		"c|7|2",
-		"d|null|1",
+		"d|1|2",
 		"e|1|2",
 		"f|1|2",
 		"g|6|4",
 		"h|6|4",
 		"i|7|2",
 	)
-	assert.Equal(wantResult, result)
+	want := fmt.Sprintf("%v", wantResult.Rows)
+	got := fmt.Sprintf("%v", result.Rows)
+	assert.Equal(want, got)
 }
 
 func TestOrderedAggregateSumDistinctTolerateError(t *testing.T) {
@@ -529,7 +544,7 @@ func TestOrderedAggregateSumDistinctTolerateError(t *testing.T) {
 		Input:       fp,
 	}
 
-	result, err := oa.TryExecute(&noopVCursor{}, nil, false)
+	result, err := oa.TryExecute(context.Background(), &noopVCursor{}, nil, false)
 	assert.NoError(t, err)
 
 	wantResult := sqltypes.MakeTestResult(
@@ -557,20 +572,20 @@ func TestOrderedAggregateKeysFail(t *testing.T) {
 
 	oa := &OrderedAggregate{
 		Aggregates: []*AggregateParams{{
-			Opcode: AggregateCount,
+			Opcode: AggregateSum,
 			Col:    1,
 		}},
 		GroupByKeys: []*GroupByParams{{KeyCol: 0}},
 		Input:       fp,
 	}
 
-	want := "types are not comparable: VARCHAR vs VARCHAR"
-	if _, err := oa.TryExecute(&noopVCursor{}, nil, false); err == nil || err.Error() != want {
+	want := "cannot compare strings, collation is unknown or unsupported (collation ID: 0)"
+	if _, err := oa.TryExecute(context.Background(), &noopVCursor{}, nil, false); err == nil || err.Error() != want {
 		t.Errorf("oa.Execute(): %v, want %s", err, want)
 	}
 
 	fp.rewind()
-	if err := oa.TryStreamExecute(&noopVCursor{}, nil, false, func(_ *sqltypes.Result) error { return nil }); err == nil || err.Error() != want {
+	if err := oa.TryStreamExecute(context.Background(), &noopVCursor{}, nil, false, func(_ *sqltypes.Result) error { return nil }); err == nil || err.Error() != want {
 		t.Errorf("oa.StreamExecute(): %v, want %s", err, want)
 	}
 }
@@ -590,7 +605,7 @@ func TestOrderedAggregateMergeFail(t *testing.T) {
 
 	oa := &OrderedAggregate{
 		Aggregates: []*AggregateParams{{
-			Opcode: AggregateCount,
+			Opcode: AggregateSum,
 			Col:    1,
 		}},
 		GroupByKeys: []*GroupByParams{{KeyCol: 0}},
@@ -616,13 +631,13 @@ func TestOrderedAggregateMergeFail(t *testing.T) {
 		},
 	}
 
-	res, err := oa.TryExecute(&noopVCursor{}, nil, false)
+	res, err := oa.TryExecute(context.Background(), &noopVCursor{}, nil, false)
 	require.NoError(t, err)
 
 	utils.MustMatch(t, result, res, "Found mismatched values")
 
 	fp.rewind()
-	err = oa.TryStreamExecute(&noopVCursor{}, nil, false, func(_ *sqltypes.Result) error { return nil })
+	err = oa.TryStreamExecute(context.Background(), &noopVCursor{}, nil, true, func(_ *sqltypes.Result) error { return nil })
 	require.NoError(t, err)
 }
 
@@ -630,7 +645,7 @@ func TestMerge(t *testing.T) {
 	assert := assert.New(t)
 	oa := &OrderedAggregate{
 		Aggregates: []*AggregateParams{{
-			Opcode: AggregateCount,
+			Opcode: AggregateSum,
 			Col:    1,
 		}, {
 			Opcode: AggregateSum,
@@ -652,92 +667,15 @@ func TestMerge(t *testing.T) {
 		"1|3|2.8|2|bc",
 	)
 
-	merged, _, err := oa.merge(fields, r.Rows[0], r.Rows[1], nil)
+	merged, _, err := merge(fields, r.Rows[0], r.Rows[1], nil, nil, oa.Aggregates)
 	assert.NoError(err)
-	want := sqltypes.MakeTestResult(fields, "1|5|6|2|bc").Rows[0]
+	want := sqltypes.MakeTestResult(fields, "1|5|6.0|2|bc").Rows[0]
 	assert.Equal(want, merged)
 
 	// swap and retry
-	merged, _, err = oa.merge(fields, r.Rows[1], r.Rows[0], nil)
+	merged, _, err = merge(fields, r.Rows[1], r.Rows[0], nil, nil, oa.Aggregates)
 	assert.NoError(err)
 	assert.Equal(want, merged)
-}
-
-func TestNoInputAndNoGroupingKeys(outer *testing.T) {
-	testCases := []struct {
-		name        string
-		opcode      AggregateOpcode
-		expectedVal string
-		expectedTyp string
-	}{{
-		"count(distinct col1)",
-		AggregateCountDistinct,
-		"0",
-		"int64",
-	}, {
-		"col1",
-		AggregateCount,
-		"0",
-		"int64",
-	}, {
-		"sum(distinct col1)",
-		AggregateSumDistinct,
-		"null",
-		"decimal",
-	}, {
-		"col1",
-		AggregateSum,
-		"null",
-		"int64",
-	}, {
-		"col1",
-		AggregateMax,
-		"null",
-		"int64",
-	}, {
-		"col1",
-		AggregateMin,
-		"null",
-		"int64",
-	}}
-
-	for _, test := range testCases {
-		outer.Run(test.name, func(t *testing.T) {
-			assert := assert.New(t)
-			fp := &fakePrimitive{
-				results: []*sqltypes.Result{sqltypes.MakeTestResult(
-					sqltypes.MakeTestFields(
-						"col1",
-						"int64",
-					),
-					// Empty input table
-				)},
-			}
-
-			oa := &OrderedAggregate{
-				PreProcess: true,
-				Aggregates: []*AggregateParams{{
-					Opcode: test.opcode,
-					Col:    0,
-					Alias:  test.name,
-				}},
-				GroupByKeys: []*GroupByParams{},
-				Input:       fp,
-			}
-
-			result, err := oa.TryExecute(&noopVCursor{}, nil, false)
-			assert.NoError(err)
-
-			wantResult := sqltypes.MakeTestResult(
-				sqltypes.MakeTestFields(
-					test.name,
-					test.expectedTyp,
-				),
-				test.expectedVal,
-			)
-			assert.Equal(wantResult, result)
-		})
-	}
 }
 
 func TestOrderedAggregateExecuteGtid(t *testing.T) {
@@ -752,7 +690,6 @@ func TestOrderedAggregateExecuteGtid(t *testing.T) {
 		Shard:    "80-",
 		Gtid:     "b",
 	})
-	fmt.Println(vgtid.String())
 
 	fp := &fakePrimitive{
 		results: []*sqltypes.Result{sqltypes.MakeTestResult(
@@ -778,7 +715,7 @@ func TestOrderedAggregateExecuteGtid(t *testing.T) {
 		Input:               fp,
 	}
 
-	result, err := oa.TryExecute(&noopVCursor{}, nil, false)
+	result, err := oa.TryExecute(context.Background(), &noopVCursor{}, nil, false)
 	require.NoError(t, err)
 
 	wantResult := sqltypes.MakeTestResult(
@@ -829,13 +766,13 @@ func TestCountDistinctOnVarchar(t *testing.T) {
 		`20|1`,
 	)
 
-	qr, err := oa.TryExecute(&noopVCursor{}, nil, false)
+	qr, err := oa.TryExecute(context.Background(), &noopVCursor{}, nil, false)
 	require.NoError(t, err)
 	assert.Equal(t, want, qr)
 
 	fp.rewind()
 	results := &sqltypes.Result{}
-	err = oa.TryStreamExecute(&noopVCursor{}, nil, false, func(qr *sqltypes.Result) error {
+	err = oa.TryStreamExecute(context.Background(), &noopVCursor{}, nil, true, func(qr *sqltypes.Result) error {
 		if qr.Fields != nil {
 			results.Fields = qr.Fields
 		}
@@ -896,13 +833,13 @@ func TestCountDistinctOnVarcharWithNulls(t *testing.T) {
 		`30|0`,
 	)
 
-	qr, err := oa.TryExecute(&noopVCursor{}, nil, false)
+	qr, err := oa.TryExecute(context.Background(), &noopVCursor{}, nil, false)
 	require.NoError(t, err)
 	assert.Equal(t, want, qr)
 
 	fp.rewind()
 	results := &sqltypes.Result{}
-	err = oa.TryStreamExecute(&noopVCursor{}, nil, false, func(qr *sqltypes.Result) error {
+	err = oa.TryStreamExecute(context.Background(), &noopVCursor{}, nil, true, func(qr *sqltypes.Result) error {
 		if qr.Fields != nil {
 			results.Fields = qr.Fields
 		}
@@ -963,13 +900,13 @@ func TestSumDistinctOnVarcharWithNulls(t *testing.T) {
 		`30|null`,
 	)
 
-	qr, err := oa.TryExecute(&noopVCursor{}, nil, false)
+	qr, err := oa.TryExecute(context.Background(), &noopVCursor{}, nil, false)
 	require.NoError(t, err)
 	assert.Equal(t, want, qr)
 
 	fp.rewind()
 	results := &sqltypes.Result{}
-	err = oa.TryStreamExecute(&noopVCursor{}, nil, false, func(qr *sqltypes.Result) error {
+	err = oa.TryStreamExecute(context.Background(), &noopVCursor{}, nil, true, func(qr *sqltypes.Result) error {
 		if qr.Fields != nil {
 			results.Fields = qr.Fields
 		}
@@ -1034,13 +971,13 @@ func TestMultiDistinct(t *testing.T) {
 		`40|3|1`,
 	)
 
-	qr, err := oa.TryExecute(&noopVCursor{}, nil, false)
+	qr, err := oa.TryExecute(context.Background(), &noopVCursor{}, nil, false)
 	require.NoError(t, err)
 	assert.Equal(t, want, qr)
 
 	fp.rewind()
 	results := &sqltypes.Result{}
-	err = oa.TryStreamExecute(&noopVCursor{}, nil, false, func(qr *sqltypes.Result) error {
+	err = oa.TryStreamExecute(context.Background(), &noopVCursor{}, nil, true, func(qr *sqltypes.Result) error {
 		if qr.Fields != nil {
 			results.Fields = qr.Fields
 		}
@@ -1049,4 +986,140 @@ func TestMultiDistinct(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Equal(t, want, results)
+}
+
+func TestOrderedAggregateCollate(t *testing.T) {
+	assert := assert.New(t)
+	fields := sqltypes.MakeTestFields(
+		"col|count(*)",
+		"varchar|decimal",
+	)
+	fp := &fakePrimitive{
+		results: []*sqltypes.Result{sqltypes.MakeTestResult(
+			fields,
+			"a|1",
+			"A|1",
+			"Ǎ|1",
+			"b|2",
+			"B|-1",
+			"c|3",
+			"c|4",
+			"ß|11",
+			"ss|2",
+		)},
+	}
+
+	collationID, _ := collationEnv.LookupID("utf8mb4_0900_ai_ci")
+	oa := &OrderedAggregate{
+		Aggregates: []*AggregateParams{{
+			Opcode: AggregateSum,
+			Col:    1,
+		}},
+		GroupByKeys: []*GroupByParams{{KeyCol: 0, CollationID: collationID}},
+		Input:       fp,
+		Collations:  map[int]collations.ID{0: collationID},
+	}
+
+	result, err := oa.TryExecute(context.Background(), &noopVCursor{}, nil, false)
+	assert.NoError(err)
+
+	wantResult := sqltypes.MakeTestResult(
+		fields,
+		"a|3",
+		"b|1",
+		"c|7",
+		"ß|13",
+	)
+	assert.Equal(wantResult, result)
+}
+
+func TestOrderedAggregateCollateAS(t *testing.T) {
+	assert := assert.New(t)
+	fields := sqltypes.MakeTestFields(
+		"col|count(*)",
+		"varchar|decimal",
+	)
+	fp := &fakePrimitive{
+		results: []*sqltypes.Result{sqltypes.MakeTestResult(
+			fields,
+			"a|1",
+			"A|1",
+			"Ǎ|1",
+			"b|2",
+			"c|3",
+			"c|4",
+			"Ç|4",
+		)},
+	}
+
+	collationID, _ := collationEnv.LookupID("utf8mb4_0900_as_ci")
+	oa := &OrderedAggregate{
+		Aggregates: []*AggregateParams{{
+			Opcode: AggregateSum,
+			Col:    1,
+		}},
+		GroupByKeys: []*GroupByParams{{KeyCol: 0, CollationID: collationID}},
+		Collations:  map[int]collations.ID{0: collationID},
+		Input:       fp,
+	}
+
+	result, err := oa.TryExecute(context.Background(), &noopVCursor{}, nil, false)
+	assert.NoError(err)
+
+	wantResult := sqltypes.MakeTestResult(
+		fields,
+		"a|2",
+		"Ǎ|1",
+		"b|2",
+		"c|7",
+		"Ç|4",
+	)
+	assert.Equal(wantResult, result)
+}
+
+func TestOrderedAggregateCollateKS(t *testing.T) {
+	assert := assert.New(t)
+	fields := sqltypes.MakeTestFields(
+		"col|count(*)",
+		"varchar|decimal",
+	)
+	fp := &fakePrimitive{
+		results: []*sqltypes.Result{sqltypes.MakeTestResult(
+			fields,
+			"a|1",
+			"A|1",
+			"Ǎ|1",
+			"b|2",
+			"c|3",
+			"c|4",
+			"\xE3\x83\x8F\xE3\x81\xAF|2",
+			"\xE3\x83\x8F\xE3\x83\x8F|1",
+		)},
+	}
+
+	collationID, _ := collationEnv.LookupID("utf8mb4_ja_0900_as_cs_ks")
+	oa := &OrderedAggregate{
+		Aggregates: []*AggregateParams{{
+			Opcode: AggregateSum,
+			Col:    1,
+		}},
+		GroupByKeys: []*GroupByParams{{KeyCol: 0, CollationID: collationID}},
+		Collations:  map[int]collations.ID{0: collationID},
+		Input:       fp,
+	}
+
+	result, err := oa.TryExecute(context.Background(), &noopVCursor{}, nil, false)
+	assert.NoError(err)
+
+	wantResult := sqltypes.MakeTestResult(
+		fields,
+		"a|1",
+		"A|1",
+		"Ǎ|1",
+		"b|2",
+		"c|7",
+		"\xE3\x83\x8F\xE3\x81\xAF|2",
+		"\xE3\x83\x8F\xE3\x83\x8F|1",
+	)
+	assert.Equal(wantResult, result)
 }

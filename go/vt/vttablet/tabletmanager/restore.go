@@ -327,7 +327,7 @@ func (tm *TabletManager) getGTIDFromTimestamp(ctx context.Context, pos mysql.Pos
 		Host: connParams.Host,
 		Port: connParams.Port,
 	}
-	dbCfgs.SetDbParams(*connParams, *connParams)
+	dbCfgs.SetDbParams(*connParams, *connParams, *connParams)
 	vsClient := vreplication.NewReplicaConnector(connParams)
 
 	filter := &binlogdatapb.Filter{
@@ -417,17 +417,17 @@ func (tm *TabletManager) catchupToGTID(ctx context.Context, afterGTIDPos string,
 
 	if *binlogSslCa != "" || *binlogSslCert != "" {
 		// We need to use TLS
-		changeMasterCmd := fmt.Sprintf("CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d, MASTER_USER='%s', MASTER_PASSWORD='%s', MASTER_AUTO_POSITION=1, MASTER_SSL=1", *binlogHost, *binlogPort, *binlogUser, *binlogPwd)
+		cmd := fmt.Sprintf("CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d, MASTER_USER='%s', MASTER_PASSWORD='%s', MASTER_AUTO_POSITION=1, MASTER_SSL=1", *binlogHost, *binlogPort, *binlogUser, *binlogPwd)
 		if *binlogSslCa != "" {
-			changeMasterCmd += fmt.Sprintf(", MASTER_SSL_CA='%s'", *binlogSslCa)
+			cmd += fmt.Sprintf(", MASTER_SSL_CA='%s'", *binlogSslCa)
 		}
 		if *binlogSslCert != "" {
-			changeMasterCmd += fmt.Sprintf(", MASTER_SSL_CERT='%s'", *binlogSslCert)
+			cmd += fmt.Sprintf(", MASTER_SSL_CERT='%s'", *binlogSslCert)
 		}
 		if *binlogSslKey != "" {
-			changeMasterCmd += fmt.Sprintf(", MASTER_SSL_KEY='%s'", *binlogSslKey)
+			cmd += fmt.Sprintf(", MASTER_SSL_KEY='%s'", *binlogSslKey)
 		}
-		cmds = append(cmds, changeMasterCmd+";")
+		cmds = append(cmds, cmd+";")
 	} else {
 		// No TLS
 		cmds = append(cmds, fmt.Sprintf("CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d, MASTER_USER='%s', MASTER_PASSWORD='%s', MASTER_AUTO_POSITION=1;", *binlogHost, *binlogPort, *binlogUser, *binlogPwd))
@@ -499,6 +499,15 @@ func (tm *TabletManager) startReplication(ctx context.Context, pos mysql.Positio
 		return vterrors.Wrap(err, "failed to set replication position")
 	}
 
+	// At this point we've restored the data from the backup _and_ we've saved the
+	// replication state metadata that is consistent with the snapshot of the data
+	// contained in the backup. This means that we have everything needed to start
+	// replication at a later time, and since with active parents disabled we do
+	// not ever start replication automatically, we can now safely return.
+	if *mysqlctl.DisableActiveReparents {
+		return nil
+	}
+
 	// Read the shard to find the current primary, and its location.
 	tablet := tm.Tablet()
 	si, err := tm.TopoServer.GetShard(ctx, tablet.Keyspace, tablet.Shard)
@@ -527,7 +536,7 @@ func (tm *TabletManager) startReplication(ctx context.Context, pos mysql.Positio
 	}
 
 	// If using semi-sync, we need to enable it before connecting to primary.
-	if err := tm.fixSemiSync(tabletType); err != nil {
+	if err := tm.fixSemiSync(tabletType, SemiSyncActionNone); err != nil {
 		return err
 	}
 
@@ -536,11 +545,6 @@ func (tm *TabletManager) startReplication(ctx context.Context, pos mysql.Positio
 		return vterrors.Wrap(err, "MysqlDaemon.SetReplicationSource failed")
 	}
 
-	// If active reparents are disabled, we don't restart replication. So it makes no sense to wait for an update on the replica.
-	// Return immediately.
-	if *mysqlctl.DisableActiveReparents {
-		return nil
-	}
 	// wait for reliable replication_lag_seconds
 	// we have pos where we want to resume from
 	// if PrimaryPosition is the same, that means no writes
@@ -551,7 +555,7 @@ func (tm *TabletManager) startReplication(ctx context.Context, pos mysql.Positio
 	defer tmc.Close()
 	remoteCtx, remoteCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
 	defer remoteCancel()
-	posStr, err := tmc.MasterPosition(remoteCtx, ti.Tablet)
+	posStr, err := tmc.PrimaryPosition(remoteCtx, ti.Tablet)
 	if err != nil {
 		// It is possible that though PrimaryAlias is set, the primary tablet is unreachable
 		// Log a warning and let tablet restore in that case

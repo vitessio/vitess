@@ -20,7 +20,7 @@ package inst
 type Process struct {
 	InstanceHostname string
 	InstancePort     int
-	Id               int64
+	ID               int64
 	User             string
 	Host             string
 	Db               string

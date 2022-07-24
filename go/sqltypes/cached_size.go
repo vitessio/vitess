@@ -19,36 +19,13 @@ package sqltypes
 
 import hack "vitess.io/vitess/go/hack"
 
-func (cached *PlanValue) CachedSize(alloc bool) int64 {
-	if cached == nil {
-		return int64(0)
-	}
-	size := int64(0)
-	if alloc {
-		size += int64(96)
-	}
-	// field Key string
-	size += hack.RuntimeAllocSize(int64(len(cached.Key)))
-	// field Value vitess.io/vitess/go/sqltypes.Value
-	size += cached.Value.CachedSize(false)
-	// field ListKey string
-	size += hack.RuntimeAllocSize(int64(len(cached.ListKey)))
-	// field Values []vitess.io/vitess/go/sqltypes.PlanValue
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Values)) * int64(88))
-		for _, elem := range cached.Values {
-			size += elem.CachedSize(false)
-		}
-	}
-	return size
-}
 func (cached *Result) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(96)
+		size += int64(112)
 	}
 	// field Fields []*vitess.io/vitess/go/vt/proto/query.Field
 	{
@@ -71,6 +48,8 @@ func (cached *Result) CachedSize(alloc bool) int64 {
 	}
 	// field SessionStateChanges string
 	size += hack.RuntimeAllocSize(int64(len(cached.SessionStateChanges)))
+	// field Info string
+	size += hack.RuntimeAllocSize(int64(len(cached.Info)))
 	return size
 }
 func (cached *Value) CachedSize(alloc bool) int64 {
@@ -82,6 +61,8 @@ func (cached *Value) CachedSize(alloc bool) int64 {
 		size += int64(32)
 	}
 	// field val []byte
-	size += hack.RuntimeAllocSize(int64(cap(cached.val)))
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.val)))
+	}
 	return size
 }

@@ -26,7 +26,7 @@ type largeTableSet struct {
 }
 
 func (ts *largeTableSet) overlapsSmall(small uint64) bool {
-	return ts.tables[0]&uint64(small) != 0
+	return ts.tables[0]&small != 0
 }
 
 func minlen(a, b []uint64) int {
@@ -171,6 +171,7 @@ type TableSet struct {
 	large *largeTableSet
 }
 
+// Format formats the TableSet.
 func (ts TableSet) Format(f fmt.State, verb rune) {
 	first := true
 	fmt.Fprintf(f, "TableSet{")
@@ -214,6 +215,11 @@ func (ts TableSet) IsSolvedBy(other TableSet) bool {
 	}
 }
 
+// Equals returns true if `ts` and `other` contain the same tables
+func (ts TableSet) Equals(other TableSet) bool {
+	return ts.IsSolvedBy(other) && other.IsSolvedBy(ts)
+}
+
 // NumberOfTables returns the number of bits set
 func (ts TableSet) NumberOfTables() int {
 	if ts.large == nil {
@@ -248,9 +254,9 @@ func (ts TableSet) ForEachTable(callback func(int)) {
 }
 
 // Constituents returns a slice with the indices for all tables in this TableSet
-func (ts TableSet) Constituents() (result []int) {
+func (ts TableSet) Constituents() (result []TableSet) {
 	ts.ForEachTable(func(t int) {
-		result = append(result, t)
+		result = append(result, SingleTableSet(t))
 	})
 	return
 }
@@ -283,6 +289,46 @@ func (ts *TableSet) MergeInPlace(other TableSet) {
 	}
 }
 
+// RemoveInPlace removes all the tables in `other` from this TableSet
+func (ts *TableSet) RemoveInPlace(other TableSet) {
+	switch {
+	case ts.large == nil && other.large == nil:
+		ts.small &= ^other.small
+	case ts.large == nil:
+		ts.small &= ^other.large.tables[0]
+	case other.large == nil:
+		ts.large.tables[0] &= ^other.small
+	default:
+		for idx := range ts.large.tables {
+			if len(other.large.tables) <= idx {
+				break
+			}
+			ts.large.tables[idx] &= ^other.large.tables[idx]
+		}
+	}
+}
+
+// KeepOnly removes all the tables not in `other` from this TableSet
+func (ts *TableSet) KeepOnly(other TableSet) {
+	switch {
+	case ts.large == nil && other.large == nil:
+		ts.small &= other.small
+	case ts.large == nil:
+		ts.small &= other.large.tables[0]
+	case other.large == nil:
+		ts.small = ts.large.tables[0] & other.small
+		ts.large = nil
+	default:
+		for idx := range ts.large.tables {
+			if len(other.large.tables) <= idx {
+				ts.large.tables = ts.large.tables[0:idx]
+				break
+			}
+			ts.large.tables[idx] &= other.large.tables[idx]
+		}
+	}
+}
+
 // AddTable adds the given table to this set
 func (ts *TableSet) AddTable(tableidx int) {
 	switch {
@@ -303,6 +349,11 @@ func SingleTableSet(tableidx int) TableSet {
 	return TableSet{large: newLargeTableSet(0x0, tableidx)}
 }
 
+// EmptyTableSet creates an empty TableSet
+func EmptyTableSet() TableSet {
+	return TableSet{small: 0}
+}
+
 // MergeTableSets merges all the given TableSet into a single one
 func MergeTableSets(tss ...TableSet) (result TableSet) {
 	for _, t := range tss {
@@ -311,6 +362,7 @@ func MergeTableSets(tss ...TableSet) (result TableSet) {
 	return
 }
 
+// TableSetFromIds returns TableSet for all the id passed in argument.
 func TableSetFromIds(tids ...int) (ts TableSet) {
 	for _, tid := range tids {
 		ts.AddTable(tid)

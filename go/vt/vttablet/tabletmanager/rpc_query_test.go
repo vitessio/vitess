@@ -18,6 +18,7 @@ package tabletmanager
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -48,5 +49,12 @@ func TestTabletManager_ExecuteFetchAsDba(t *testing.T) {
 
 	_, err := tm.ExecuteFetchAsDba(ctx, []byte("select 42"), dbName, 10, false, false)
 	require.NoError(t, err)
-	require.Equal(t, "use ` escap``e me `;select 42", db.QueryLog())
+	want := []string{
+		"use ` escap``e me `",
+		"select 42",
+	}
+	got := strings.Split(db.QueryLog(), ";")
+	for _, w := range want {
+		require.Contains(t, got, w)
+	}
 }

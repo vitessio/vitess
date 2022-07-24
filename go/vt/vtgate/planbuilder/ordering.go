@@ -16,6 +16,7 @@ package planbuilder
 import (
 	"fmt"
 
+	"vitess.io/vitess/go/mysql/collations"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -85,7 +86,7 @@ func planOAOrdering(pb *primitiveBuilder, orderBy v3OrderBy, oa *orderedAggregat
 	}
 
 	// referenced tracks the keys referenced by the order by clause.
-	referenced := make([]bool, len(oa.eaggr.GroupByKeys))
+	referenced := make([]bool, len(oa.groupByKeys))
 	postSort := false
 	selOrderBy := make(v3OrderBy, 0, len(orderBy))
 	for _, order := range orderBy {
@@ -100,7 +101,13 @@ func planOAOrdering(pb *primitiveBuilder, orderBy v3OrderBy, oa *orderedAggregat
 			orderByCol = oa.resultColumns[num].column
 		case *sqlparser.ColName:
 			orderByCol = expr.Metadata.(*column)
-		case *sqlparser.UnaryExpr:
+		case *sqlparser.CastExpr:
+			col, ok := expr.Expr.(*sqlparser.ColName)
+			if !ok {
+				return nil, fmt.Errorf("unsupported: in scatter query: complex order by expression: %s", sqlparser.String(expr))
+			}
+			orderByCol = col.Metadata.(*column)
+		case *sqlparser.ConvertExpr:
 			col, ok := expr.Expr.(*sqlparser.ColName)
 			if !ok {
 				return nil, fmt.Errorf("unsupported: in scatter query: complex order by expression: %s", sqlparser.String(expr))
@@ -112,7 +119,7 @@ func planOAOrdering(pb *primitiveBuilder, orderBy v3OrderBy, oa *orderedAggregat
 
 		// Match orderByCol against the group by columns.
 		found := false
-		for j, groupBy := range oa.eaggr.GroupByKeys {
+		for j, groupBy := range oa.groupByKeys {
 			if oa.resultColumns[groupBy.KeyCol].column != orderByCol {
 				continue
 			}
@@ -129,7 +136,7 @@ func planOAOrdering(pb *primitiveBuilder, orderBy v3OrderBy, oa *orderedAggregat
 	}
 
 	// Append any unreferenced keys at the end of the order by.
-	for i, groupByKey := range oa.eaggr.GroupByKeys {
+	for i, groupByKey := range oa.groupByKeys {
 		if referenced[i] {
 			continue
 		}
@@ -329,12 +336,14 @@ func planRouteOrdering(orderBy v3OrderBy, node *route) (logicalPlan, error) {
 			}
 		}
 
+		// TODO(king-11) pass in collation here
 		ob := engine.OrderByParams{
 			Col:               colNumber,
 			WeightStringCol:   -1,
 			Desc:              order.Direction == sqlparser.DescOrder,
 			StarColFixedIndex: starColFixedIndex,
 			FromGroupBy:       order.fromGroupBy,
+			CollationID:       collations.Unknown,
 		}
 		node.eroute.OrderBy = append(node.eroute.OrderBy, ob)
 

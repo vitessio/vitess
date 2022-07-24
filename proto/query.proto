@@ -206,6 +206,15 @@ enum Type {
   // This type is for internal use only.
   // Properties: 31, None.
   EXPRESSION = 31;
+  // HEXNUM specifies a HEXNUM type (unquoted varbinary).
+  // Properties: 32, IsText.
+  HEXNUM = 4128;
+  // HEXVAL specifies a HEXVAL type (unquoted varbinary).
+  // Properties: 33, IsText.
+  HEXVAL = 4129;
+  // BITNUM specifies a base 2 binary type (unquoted varbinary).
+  // Properties: 34, IsText.
+  BITNUM = 4130;
 }
 
 // Value represents a typed value.
@@ -378,6 +387,7 @@ message QueryResult {
   uint64 rows_affected = 2;
   uint64 insert_id = 3;
   repeated Row rows = 4;
+  string info = 6;
 }
 
 // QueryWarning is used to convey out of band query execution warnings
@@ -445,22 +455,6 @@ message ResultWithError {
   query.QueryResult result = 2;
 }
 
-// ExecuteBatchRequest is the payload to ExecuteBatch
-message ExecuteBatchRequest {
-  vtrpc.CallerID effective_caller_id = 1;
-  VTGateCallerID immediate_caller_id = 2;
-  Target target = 3;
-  repeated BoundQuery queries = 4;
-  bool as_transaction = 5;
-  int64 transaction_id = 6;
-  ExecuteOptions options = 7;
-}
-
-// ExecuteBatchResponse is the returned value from ExecuteBatch
-message ExecuteBatchResponse {
-  repeated QueryResult results = 1;
-}
-
 // StreamExecuteRequest is the payload to StreamExecute
 message StreamExecuteRequest {
   vtrpc.CallerID effective_caller_id = 1;
@@ -469,6 +463,7 @@ message StreamExecuteRequest {
   BoundQuery query = 4;
   ExecuteOptions options = 5;
   int64 transaction_id = 6;
+  int64 reserved_id = 7;
 }
 
 // StreamExecuteResponse is the returned value from StreamExecute
@@ -636,24 +631,25 @@ message BeginExecuteResponse {
   topodata.TabletAlias tablet_alias = 4;
 }
 
-// BeginExecuteBatchRequest is the payload to BeginExecuteBatch
-message BeginExecuteBatchRequest {
+// BeginStreamExecuteRequest is the payload to BeginStreamExecute
+message BeginStreamExecuteRequest {
   vtrpc.CallerID effective_caller_id = 1;
   VTGateCallerID immediate_caller_id = 2;
   Target target = 3;
-  repeated BoundQuery queries = 4;
-  bool as_transaction = 5;
-  ExecuteOptions options = 6;
+  BoundQuery query = 4;
+  ExecuteOptions options = 5;
+  repeated string pre_queries = 6;
+  int64 reserved_id = 7;
 }
 
-// BeginExecuteBatchResponse is the returned value from BeginExecuteBatch
-message BeginExecuteBatchResponse {
+// BeginStreamExecuteResponse is the returned value from BeginStreamExecute
+message BeginStreamExecuteResponse {
   // error contains an application level error if necessary. Note the
   // transaction_id may be set, even when an error is returned, if the begin
-  // worked but the execute failed.
+  // worked but the stream execute failed.
   vtrpc.RPCError error = 1;
 
-  repeated QueryResult results = 2;
+  QueryResult result = 2;
 
   // transaction_id might be non-zero even if an error is present.
   int64 transaction_id = 3;
@@ -713,6 +709,28 @@ message ReserveExecuteResponse {
   topodata.TabletAlias tablet_alias = 4;
 }
 
+// ReserveStreamExecuteRequest is the payload to ReserveStreamExecute
+message ReserveStreamExecuteRequest {
+  vtrpc.CallerID effective_caller_id = 1;
+  VTGateCallerID immediate_caller_id = 2;
+  Target target = 3;
+  BoundQuery query = 4;
+  ExecuteOptions options = 5;
+  int64 transaction_id = 6;
+  repeated string pre_queries = 7;
+}
+
+// ReserveStreamExecuteResponse is the returned value from ReserveStreamExecute
+message ReserveStreamExecuteResponse {
+  vtrpc.RPCError error = 1;
+  QueryResult result = 2;
+
+  // The following fields might be non-zero even if an error is present.
+  int64 reserved_id = 3;
+  topodata.TabletAlias tablet_alias = 4;
+}
+
+
 // ReserveBeginExecuteRequest is the payload to ReserveBeginExecute
 message ReserveBeginExecuteRequest {
   vtrpc.CallerID effective_caller_id = 1;
@@ -721,6 +739,7 @@ message ReserveBeginExecuteRequest {
   BoundQuery query = 4;
   ExecuteOptions options = 5;
   repeated string pre_queries = 6;
+  repeated string post_begin_queries = 7;
 }
 
 // ReserveBeginExecuteResponse is the returned value from ReserveBeginExecute
@@ -730,6 +749,32 @@ message ReserveBeginExecuteResponse {
   // worked but the execute failed.
   vtrpc.RPCError error = 1;
   QueryResult result = 2;
+  // The following fields might be non-zero even if an error is present.
+  int64 transaction_id = 3;
+  int64 reserved_id = 4;
+  topodata.TabletAlias tablet_alias = 5;
+}
+
+// ReserveBeginStreamExecuteRequest is the payload to ReserveBeginStreamExecute
+message ReserveBeginStreamExecuteRequest {
+  vtrpc.CallerID effective_caller_id = 1;
+  VTGateCallerID immediate_caller_id = 2;
+  Target target = 3;
+  BoundQuery query = 4;
+  ExecuteOptions options = 5;
+  repeated string pre_queries = 6;
+  repeated string post_begin_queries = 7;
+}
+
+// ReserveBeginStreamExecuteResponse is the returned value from ReserveBeginStreamExecute
+message ReserveBeginStreamExecuteResponse {
+  // error contains an application level error if necessary. Note the
+  // transaction_id may be set, even when an error is returned, if the begin
+  // worked but the stream execute failed.
+  vtrpc.RPCError error = 1;
+
+  QueryResult result = 2;
+
   // The following fields might be non-zero even if an error is present.
   int64 transaction_id = 3;
   int64 reserved_id = 4;

@@ -28,10 +28,16 @@ func (cached *KeyRange) CachedSize(alloc bool) int64 {
 		size += int64(96)
 	}
 	// field unknownFields []byte
-	size += hack.RuntimeAllocSize(int64(cap(cached.unknownFields)))
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.unknownFields)))
+	}
 	// field Start []byte
-	size += hack.RuntimeAllocSize(int64(cap(cached.Start)))
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Start)))
+	}
 	// field End []byte
-	size += hack.RuntimeAllocSize(int64(cap(cached.End)))
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.End)))
+	}
 	return size
 }

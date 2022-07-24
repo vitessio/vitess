@@ -18,28 +18,28 @@ set -ex
 
 VTCTLD_SERVER=${VTCTLD_SERVER:-'vtctld:15999'}
 
-# Wait until source and destination masters are available
-until (/vt/bin/vtctlclient --server $VTCTLD_SERVER ListAllTablets | grep "ext_" | grep "master" ); do
-  echo 'waiting for external master..';
+# Wait until source and destination primaries are available
+until (/vt/bin/vtctlclient --server $VTCTLD_SERVER ListAllTablets | grep "ext_" | grep "primary" ); do
+  echo 'waiting for external primary..';
   sleep 1;
 done
 
-until (/vt/bin/vtctlclient --server $VTCTLD_SERVER ListAllTablets | grep -v "ext_" | grep "master" ); do
-  echo 'waiting for managed master..';
+until (/vt/bin/vtctlclient --server $VTCTLD_SERVER ListAllTablets | grep -v "ext_" | grep "primary" ); do
+  echo 'waiting for managed primary..';
   sleep 1;
 done
 
 
 # Get source and destination tablet and shard information
 TABLET_INFO=$(/vt/bin/vtctlclient --server $VTCTLD_SERVER ListAllTablets)
-source_alias=$(echo "$TABLET_INFO "| grep "ext_" | grep "master" | awk '{ print $1 }')
-dest_alias=$(echo "$TABLET_INFO "| grep -v "ext_" | grep "master" | awk '{ print $1 }')
-source_keyspace=$(echo "$TABLET_INFO "| grep "ext_" | grep "master" | awk '{ print $2 }')
-dest_keyspace=$(echo "$TABLET_INFO "| grep -v "ext_" | grep "master" | awk '{ print $2 }')
-source_shard=$(echo "$TABLET_INFO "| grep "ext_" | grep "master" | awk '{ print $3 }')
-dest_shard=$(echo "$TABLET_INFO "| grep -v "ext_" | grep "master" | awk '{ print $3 }')
-source_tablet=$(echo "$TABLET_INFO "| grep "ext_" | grep "master" | awk '{ print $2 "/" $3}')
-dest_tablet=$(echo "$TABLET_INFO "| grep -v "ext_" | grep "master" | awk '{ print $2 "/" $3}')
+source_alias=$(echo "$TABLET_INFO "| grep "ext_" | grep "primary" | awk '{ print $1 }')
+dest_alias=$(echo "$TABLET_INFO "| grep -v "ext_" | grep "primary" | awk '{ print $1 }')
+source_keyspace=$(echo "$TABLET_INFO "| grep "ext_" | grep "primary" | awk '{ print $2 }')
+dest_keyspace=$(echo "$TABLET_INFO "| grep -v "ext_" | grep "primary" | awk '{ print $2 }')
+source_shard=$(echo "$TABLET_INFO "| grep "ext_" | grep "primary" | awk '{ print $3 }')
+dest_shard=$(echo "$TABLET_INFO "| grep -v "ext_" | grep "primary" | awk '{ print $3 }')
+source_tablet=$(echo "$TABLET_INFO "| grep "ext_" | grep "primary" | awk '{ print $2 "/" $3}')
+dest_tablet=$(echo "$TABLET_INFO "| grep -v "ext_" | grep "primary" | awk '{ print $2 "/" $3}')
 
 
 # Disable foreign_key checks on destination
@@ -68,7 +68,7 @@ done
 /vt/bin/vtctlclient --server $VTCTLD_SERVER GetSchema $dest_alias
 
 # Start vreplication
-/vt/bin/vtctlclient --server $VTCTLD_SERVER VReplicationExec $dest_alias 'insert into _vt.vreplication (db_name, source, pos, max_tps, max_replication_lag, tablet_types, time_updated, transaction_timestamp, state) values('"'"''"$dest_keyspace"''"'"', '"'"'keyspace:\"'"$source_keyspace"'\" shard:\"'"$source_shard"'\" filter:<rules:<match:\"/.*\" > > on_ddl:EXEC_IGNORE '"'"', '"'"''"'"', 9999, 9999, '"'"'master'"'"', 0, 0, '"'"'Running'"'"')'
+/vt/bin/vtctlclient --server $VTCTLD_SERVER VReplicationExec $dest_alias 'insert into _vt.vreplication (db_name, source, pos, max_tps, max_replication_lag, tablet_types, time_updated, transaction_timestamp, state) values('"'"''"$dest_keyspace"''"'"', '"'"'keyspace:\"'"$source_keyspace"'\" shard:\"'"$source_shard"'\" filter:<rules:<match:\"/.*\" > > on_ddl:EXEC_IGNORE '"'"', '"'"''"'"', 9999, 9999, '"'"'primary'"'"', 0, 0, '"'"'Running'"'"')'
 
 # Check vreplication status
 /vt/bin/vtctlclient --server $VTCTLD_SERVER VReplicationExec $dest_alias 'select * from _vt.vreplication'

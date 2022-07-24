@@ -17,17 +17,13 @@ limitations under the License.
 package vtgate
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
-	"vitess.io/vitess/go/vt/vterrors"
-
 	"github.com/stretchr/testify/assert"
-
-	"context"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/discovery"
@@ -35,6 +31,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 func TestTabletGatewayExecute(t *testing.T) {
@@ -48,22 +45,9 @@ func TestTabletGatewayExecute(t *testing.T) {
 	})
 }
 
-func TestTabletGatewayExecuteBatch(t *testing.T) {
-	testTabletGatewayGeneric(t, func(tg *TabletGateway, target *querypb.Target) error {
-		queries := []*querypb.BoundQuery{{Sql: "query", BindVariables: nil}}
-		_, err := tg.ExecuteBatch(context.Background(), target, queries, false, 0, nil)
-		return err
-	})
-	testTabletGatewayTransact(t, func(tg *TabletGateway, target *querypb.Target) error {
-		queries := []*querypb.BoundQuery{{Sql: "query", BindVariables: nil}}
-		_, err := tg.ExecuteBatch(context.Background(), target, queries, false, 1, nil)
-		return err
-	})
-}
-
 func TestTabletGatewayExecuteStream(t *testing.T) {
 	testTabletGatewayGeneric(t, func(tg *TabletGateway, target *querypb.Target) error {
-		err := tg.StreamExecute(context.Background(), target, "query", nil, 0, nil, func(qr *sqltypes.Result) error {
+		err := tg.StreamExecute(context.Background(), target, "query", nil, 0, 0, nil, func(qr *sqltypes.Result) error {
 			return nil
 		})
 		return err
@@ -98,16 +82,9 @@ func TestTabletGatewayBeginExecute(t *testing.T) {
 	})
 }
 
-func TestTabletGatewayBeginExecuteBatch(t *testing.T) {
-	testTabletGatewayGeneric(t, func(tg *TabletGateway, target *querypb.Target) error {
-		queries := []*querypb.BoundQuery{{Sql: "query", BindVariables: nil}}
-		_, _, _, err := tg.BeginExecuteBatch(context.Background(), target, queries, false, nil)
-		return err
-	})
-}
-
 func TestTabletGatewayShuffleTablets(t *testing.T) {
-	tg := NewTabletGateway(context.Background(), nil, nil, "local")
+	hc := discovery.NewFakeHealthCheck(nil)
+	tg := NewTabletGateway(context.Background(), hc, nil, "local")
 
 	ts1 := &discovery.TabletHealth{
 		Tablet:  topo.NewTablet(1, "cell1", "host1"),
@@ -176,7 +153,7 @@ func TestTabletGatewayReplicaTransactionError(t *testing.T) {
 		Shard:      shard,
 		TabletType: tabletType,
 	}
-	hc := discovery.NewFakeHealthCheck()
+	hc := discovery.NewFakeHealthCheck(nil)
 	tg := NewTabletGateway(context.Background(), hc, nil, "cell")
 
 	_ = hc.AddTestTablet("cell", host, port, keyspace, shard, tabletType, true, 10, nil)
@@ -196,7 +173,7 @@ func testTabletGatewayGeneric(t *testing.T, f func(tg *TabletGateway, target *qu
 		Shard:      shard,
 		TabletType: tabletType,
 	}
-	hc := discovery.NewFakeHealthCheck()
+	hc := discovery.NewFakeHealthCheck(nil)
 	tg := NewTabletGateway(context.Background(), hc, nil, "cell")
 
 	// no tablet
@@ -263,7 +240,7 @@ func testTabletGatewayTransact(t *testing.T, f func(tg *TabletGateway, target *q
 		Shard:      shard,
 		TabletType: tabletType,
 	}
-	hc := discovery.NewFakeHealthCheck()
+	hc := discovery.NewFakeHealthCheck(nil)
 	tg := NewTabletGateway(context.Background(), hc, nil, "cell")
 
 	// retry error - no retry

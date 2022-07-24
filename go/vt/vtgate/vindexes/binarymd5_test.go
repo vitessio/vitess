@@ -17,6 +17,8 @@ limitations under the License.
 package vindexes
 
 import (
+	"context"
+	"encoding/hex"
 	"fmt"
 	"reflect"
 	"testing"
@@ -60,7 +62,7 @@ func TestBinaryMD5Map(t *testing.T) {
 		out: "\f\xbcf\x11\xf5T\vЀ\x9a8\x8d\xc9Za[",
 	}}
 	for _, tcase := range tcases {
-		got, err := binVindex.Map(nil, []sqltypes.Value{tcase.in})
+		got, err := binVindex.Map(context.Background(), nil, []sqltypes.Value{tcase.in})
 		if err != nil {
 			t.Error(err)
 		}
@@ -72,13 +74,17 @@ func TestBinaryMD5Map(t *testing.T) {
 }
 
 func TestBinaryMD5Verify(t *testing.T) {
-	ids := []sqltypes.Value{sqltypes.NewVarBinary("Test"), sqltypes.NewVarBinary("TEst")}
-	ksids := [][]byte{[]byte("\f\xbcf\x11\xf5T\vЀ\x9a8\x8d\xc9Za["), []byte("\f\xbcf\x11\xf5T\vЀ\x9a8\x8d\xc9Za[")}
-	got, err := binVindex.Verify(nil, ids, ksids)
+	hexValStr := "21cf"
+	hexValStrSQL := fmt.Sprintf("x'%s'", hexValStr)
+	hexNumStrSQL := fmt.Sprintf("0x%s", hexValStr)
+	hexBytes, _ := hex.DecodeString(hexValStr)
+	ids := []sqltypes.Value{sqltypes.NewVarBinary("Test"), sqltypes.NewVarBinary("TEst"), sqltypes.NewHexVal([]byte(hexValStrSQL)), sqltypes.NewHexNum([]byte(hexNumStrSQL))}
+	ksids := [][]byte{[]byte("\f\xbcf\x11\xf5T\vЀ\x9a8\x8d\xc9Za["), []byte("\f\xbcf\x11\xf5T\vЀ\x9a8\x8d\xc9Za["), vMD5Hash(hexBytes), vMD5Hash(hexBytes)}
+	got, err := binVindex.Verify(context.Background(), nil, ids, ksids)
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []bool{true, false}
+	want := []bool{true, false, true, true}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("binaryMD5.Verify: %v, want %v", got, want)
 	}
@@ -86,7 +92,7 @@ func TestBinaryMD5Verify(t *testing.T) {
 
 func TestSQLValue(t *testing.T) {
 	val := sqltypes.NewVarBinary("Test")
-	got, err := binVindex.Map(nil, []sqltypes.Value{val})
+	got, err := binVindex.Map(context.Background(), nil, []sqltypes.Value{val})
 	require.NoError(t, err)
 	out := string(got[0].(key.DestinationKeyspaceID))
 	want := "\f\xbcf\x11\xf5T\vЀ\x9a8\x8d\xc9Za["

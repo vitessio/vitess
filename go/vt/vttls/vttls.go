@@ -27,37 +27,6 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-// Updated list of acceptable cipher suits to address
-// Fixed upstream in https://github.com/golang/go/issues/13385
-// This removed CBC mode ciphers that are suseptiable to Lucky13 style attacks
-func newTLSConfig(minVersion uint16) *tls.Config {
-
-	ciphers := []uint16{
-		tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-		tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-		tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-		tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-		tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
-		tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
-	}
-
-	if minVersion < tls.VersionTLS12 {
-		ciphers = append(ciphers, []uint16{
-			tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
-			tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
-			tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
-			tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
-			tls.TLS_RSA_WITH_AES_128_CBC_SHA,
-			tls.TLS_RSA_WITH_AES_256_CBC_SHA,
-		}...)
-	}
-
-	return &tls.Config{
-		MinVersion:   minVersion,
-		CipherSuites: ciphers,
-	}
-}
-
 // SslMode indicates the type of SSL mode to use. This matches
 // the MySQL SSL modes as mentioned at:
 // https://dev.mysql.com/doc/refman/8.0/en/connection-options.html#option_general_ssl-mode
@@ -128,8 +97,10 @@ var onceByKeys = sync.Map{}
 
 // ClientConfig returns the TLS config to use for a client to
 // connect to a server with the provided parameters.
-func ClientConfig(mode SslMode, cert, key, ca, name string, minTLSVersion uint16) (*tls.Config, error) {
-	config := newTLSConfig(minTLSVersion)
+func ClientConfig(mode SslMode, cert, key, ca, crl, name string, minTLSVersion uint16) (*tls.Config, error) {
+	config := &tls.Config{
+		MinVersion: minTLSVersion,
+	}
 
 	// Load the client-side cert & key if any.
 	if cert != "" && key != "" {
@@ -190,13 +161,23 @@ func ClientConfig(mode SslMode, cert, key, ca, name string, minTLSVersion uint16
 		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "invalid mode: %s", mode)
 	}
 
+	if crl != "" {
+		crlFunc, err := verifyPeerCertificateAgainstCRL(crl)
+		if err != nil {
+			return nil, err
+		}
+		config.VerifyPeerCertificate = crlFunc
+	}
+
 	return config, nil
 }
 
 // ServerConfig returns the TLS config to use for a server to
 // accept client connections.
-func ServerConfig(cert, key, ca, serverCA string, minTLSVersion uint16) (*tls.Config, error) {
-	config := newTLSConfig(minTLSVersion)
+func ServerConfig(cert, key, ca, crl, serverCA string, minTLSVersion uint16) (*tls.Config, error) {
+	config := &tls.Config{
+		MinVersion: minTLSVersion,
+	}
 
 	var certificates *[]tls.Certificate
 	var err error
@@ -223,6 +204,14 @@ func ServerConfig(cert, key, ca, serverCA string, minTLSVersion uint16) (*tls.Co
 
 		config.ClientCAs = certificatePool
 		config.ClientAuth = tls.RequireAndVerifyClientCert
+	}
+
+	if crl != "" {
+		crlFunc, err := verifyPeerCertificateAgainstCRL(crl)
+		if err != nil {
+			return nil, err
+		}
+		config.VerifyPeerCertificate = crlFunc
 	}
 
 	return config, nil

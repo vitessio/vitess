@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -39,6 +40,16 @@ type memorySort struct {
 	eMemorySort *engine.MemorySort
 }
 
+func findColNumber(ms *memorySort, expr *sqlparser.ColName) int {
+	c := expr.Metadata.(*column)
+	for i, rc := range ms.ResultColumns() {
+		if rc.column == c {
+			return i
+		}
+	}
+	return -1
+}
+
 // newMemorySort builds a new memorySort.
 func newMemorySort(plan logicalPlan, orderBy v3OrderBy) (*memorySort, error) {
 	eMemorySort := &engine.MemorySort{}
@@ -47,7 +58,7 @@ func newMemorySort(plan logicalPlan, orderBy v3OrderBy) (*memorySort, error) {
 		eMemorySort:    eMemorySort,
 	}
 	for _, order := range orderBy {
-		colNumber := -1
+		var colNumber int
 		switch expr := order.Expr.(type) {
 		case *sqlparser.Literal:
 			var err error
@@ -55,25 +66,19 @@ func newMemorySort(plan logicalPlan, orderBy v3OrderBy) (*memorySort, error) {
 				return nil, err
 			}
 		case *sqlparser.ColName:
-			c := expr.Metadata.(*column)
-			for i, rc := range ms.ResultColumns() {
-				if rc.column == c {
-					colNumber = i
-					break
-				}
-			}
-		case *sqlparser.UnaryExpr:
+			colNumber = findColNumber(ms, expr)
+		case *sqlparser.CastExpr:
 			colName, ok := expr.Expr.(*sqlparser.ColName)
 			if !ok {
 				return nil, fmt.Errorf("unsupported: memory sort: complex order by expression: %s", sqlparser.String(expr))
 			}
-			c := colName.Metadata.(*column)
-			for i, rc := range ms.ResultColumns() {
-				if rc.column == c {
-					colNumber = i
-					break
-				}
+			colNumber = findColNumber(ms, colName)
+		case *sqlparser.ConvertExpr:
+			colName, ok := expr.Expr.(*sqlparser.ColName)
+			if !ok {
+				return nil, fmt.Errorf("unsupported: memory sort: complex order by expression: %s", sqlparser.String(expr))
 			}
+			colNumber = findColNumber(ms, colName)
 		default:
 			return nil, fmt.Errorf("unsupported: memory sort: complex order by expression: %s", sqlparser.String(expr))
 		}
@@ -82,13 +87,14 @@ func newMemorySort(plan logicalPlan, orderBy v3OrderBy) (*memorySort, error) {
 		if colNumber == -1 {
 			return nil, fmt.Errorf("unsupported: memory sort: order by must reference a column in the select list: %s", sqlparser.String(order))
 		}
-
+		// TODO(king-11) need to pass in collation here
 		ob := engine.OrderByParams{
 			Col:               colNumber,
 			WeightStringCol:   -1,
 			Desc:              order.Direction == sqlparser.DescOrder,
 			StarColFixedIndex: colNumber,
 			FromGroupBy:       order.fromGroupBy,
+			CollationID:       collations.Unknown,
 		}
 		ms.eMemorySort.OrderBy = append(ms.eMemorySort.OrderBy, ob)
 	}

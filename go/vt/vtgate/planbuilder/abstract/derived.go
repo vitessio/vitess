@@ -26,12 +26,14 @@ import (
 // Derived represents a derived table in the query
 type Derived struct {
 	Sel           sqlparser.SelectStatement
-	Inner         Operator
+	Inner         LogicalOperator
 	Alias         string
 	ColumnAliases sqlparser.Columns
 }
 
-var _ Operator = (*Derived)(nil)
+var _ LogicalOperator = (*Derived)(nil)
+
+func (*Derived) iLogical() {}
 
 // TableID implements the Operator interface
 func (d *Derived) TableID() semantics.TableSet {
@@ -39,20 +41,22 @@ func (d *Derived) TableID() semantics.TableSet {
 }
 
 // PushPredicate implements the Operator interface
-func (d *Derived) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error {
+func (d *Derived) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) (LogicalOperator, error) {
 	tableInfo, err := semTable.TableInfoForExpr(expr)
 	if err != nil {
 		if err == semantics.ErrMultipleTables {
-			return semantics.ProjError{Inner: vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: unable to split predicates to derived table: %s", sqlparser.String(expr))}
+			return nil, semantics.ProjError{Inner: vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: unable to split predicates to derived table: %s", sqlparser.String(expr))}
 		}
-		return err
+		return nil, err
 	}
 
 	newExpr, err := semantics.RewriteDerivedExpression(expr, tableInfo)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return d.Inner.PushPredicate(newExpr, semTable)
+	newSrc, err := d.Inner.PushPredicate(newExpr, semTable)
+	d.Inner = newSrc
+	return d, err
 }
 
 // UnsolvedPredicates implements the Operator interface
@@ -66,6 +70,6 @@ func (d *Derived) CheckValid() error {
 }
 
 // Compact implements the Operator interface
-func (d *Derived) Compact(*semantics.SemTable) (Operator, error) {
+func (d *Derived) Compact(*semantics.SemTable) (LogicalOperator, error) {
 	return d, nil
 }

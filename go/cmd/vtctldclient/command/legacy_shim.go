@@ -37,9 +37,10 @@ var (
 	// RPCs. This allows users to use a single binary to make RPCs against both
 	// the new and old vtctld gRPC APIs.
 	LegacyVtctlCommand = &cobra.Command{
-		Use:   "LegacyVtctlCommand -- <command> [flags ...] [args ...]",
-		Short: "Invoke a legacy vtctlclient command. Flag parsing is best effort.",
-		Args:  cobra.ArbitraryArgs,
+		Use:                   "LegacyVtctlCommand -- <command> [flags ...] [args ...]",
+		Short:                 "Invoke a legacy vtctlclient command. Flag parsing is best effort.",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cli.FinishedParsing(cmd)
 			return runLegacyCommand(args)
@@ -70,8 +71,8 @@ LegacyVtctlCommand -- help # displays help for supported legacy vtctl commands
 # before the first flag argument, like in the first example. The double dash may
 # be used, however, at any point after the "LegacyVtctlCommand" string, as in
 # the second example.
-LegacyVtctlCommand AddCellInfo -- -server_address "localhost:1234" -root "/vitess/cell1"
-LegacyVtctlCommand -- AddCellInfo -server_address "localhost:5678" -root "/vitess/cell1"`),
+LegacyVtctlCommand AddCellInfo -- --server_address "localhost:1234" --root "/vitess/cell1"
+LegacyVtctlCommand -- AddCellInfo --server_address "localhost:5678" --root "/vitess/cell1"`),
 	}
 )
 

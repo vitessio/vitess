@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 	"sync"
 	"time"
 
@@ -46,6 +47,9 @@ type vstreamManager struct {
 	cell     string
 }
 
+// maxSkewTimeoutSeconds is the maximum allowed skew between two streams when the MinimizeSkew flag is set
+const maxSkewTimeoutSeconds = 10 * 60
+
 // vstream contains the metadata for one VStream request.
 type vstream struct {
 	// mu protects parts of vgtid, the semantics of a send, and journaler.
@@ -69,6 +73,7 @@ type vstream struct {
 	tabletType topodatapb.TabletType
 	filter     *binlogdatapb.Filter
 	resolver   *srvtopo.Resolver
+	optCells   string
 
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
@@ -97,8 +102,6 @@ type vstream struct {
 	timestamps map[string]int64
 
 	vsm *vstreamManager
-
-	rss []*srvtopo.ResolvedShard
 
 	eventCh           chan []*binlogdatapb.VEvent
 	heartbeatInterval uint32
@@ -136,13 +139,14 @@ func (vsm *vstreamManager) VStream(ctx context.Context, tabletType topodatapb.Ta
 	vs := &vstream{
 		vgtid:              vgtid,
 		tabletType:         tabletType,
+		optCells:           flags.Cells,
 		filter:             filter,
 		send:               send,
 		resolver:           vsm.resolver,
 		journaler:          make(map[int64]*journalEvent),
 		minimizeSkew:       flags.GetMinimizeSkew(),
 		stopOnReshard:      flags.GetStopOnReshard(),
-		skewTimeoutSeconds: 10 * 60,
+		skewTimeoutSeconds: maxSkewTimeoutSeconds,
 		timestamps:         make(map[string]int64),
 		vsm:                vsm,
 		eventCh:            make(chan []*binlogdatapb.VEvent),
@@ -407,6 +411,21 @@ func (vs *vstream) alignStreams(ctx context.Context, event *binlogdatapb.VEvent,
 	}
 }
 
+func (vs *vstream) getCells() []string {
+	var cells []string
+	if vs.optCells != "" {
+		for _, cell := range strings.Split(strings.TrimSpace(vs.optCells), ",") {
+			cells = append(cells, strings.TrimSpace(cell))
+		}
+	}
+
+	if len(cells) == 0 {
+		// use the vtgate's cell by default
+		cells = append(cells, vs.vsm.cell)
+	}
+	return cells
+}
+
 // streamFromTablet streams from one shard. If transactions come in separate chunks, they are grouped and sent.
 func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.ShardGtid) error {
 	// journalDone is assigned a channel when a journal event is encountered.
@@ -428,7 +447,8 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 
 		var eventss [][]*binlogdatapb.VEvent
 		var err error
-		tp, err := discovery.NewTabletPicker(vs.ts, []string{vs.vsm.cell}, sgtid.Keyspace, sgtid.Shard, vs.tabletType.String())
+		cells := vs.getCells()
+		tp, err := discovery.NewTabletPicker(vs.ts, cells, sgtid.Keyspace, sgtid.Shard, vs.tabletType.String())
 		if err != nil {
 			log.Errorf(err.Error())
 			return err
@@ -438,7 +458,8 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 			log.Errorf(err.Error())
 			return err
 		}
-		log.Infof("Picked tablet %s for for %s/%s/%s/%s", tablet.Alias.String(), vs.vsm.cell, sgtid.Keyspace, sgtid.Shard, vs.tabletType.String())
+		log.Infof("Picked tablet %s for for %s/%s/%s/%s", tablet.Alias.String(), strings.Join(cells, ","),
+			sgtid.Keyspace, sgtid.Shard, vs.tabletType.String())
 		target := &querypb.Target{
 			Keyspace:   sgtid.Keyspace,
 			Shard:      sgtid.Shard,
@@ -468,6 +489,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 				}
 				if err != nil {
 					errCh <- err
+					return err
 				}
 				return nil
 			})
@@ -475,7 +497,13 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 
 		log.Infof("Starting to vstream from %s", tablet.Alias.String())
 		// Safe to access sgtid.Gtid here (because it can't change until streaming begins).
-		err = tabletConn.VStream(ctx, target, sgtid.Gtid, sgtid.TablePKs, vs.filter, func(events []*binlogdatapb.VEvent) error {
+		req := &binlogdatapb.VStreamRequest{
+			Target:       target,
+			Position:     sgtid.Gtid,
+			Filter:       vs.filter,
+			TableLastPKs: sgtid.TablePKs,
+		}
+		err = tabletConn.VStream(ctx, req, func(events []*binlogdatapb.VEvent) error {
 			// We received a valid event. Reset error count.
 			errCount = 0
 
@@ -516,7 +544,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 						return err
 					}
 
-					if err := vs.sendAll(sgtid, eventss); err != nil {
+					if err := vs.sendAll(ctx, sgtid, eventss); err != nil {
 						return err
 					}
 					eventss = nil
@@ -535,7 +563,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 					if vs.stopOnReshard && journal.MigrationType == binlogdatapb.MigrationType_SHARDS {
 						sendevents = append(sendevents, event)
 						eventss = append(eventss, sendevents)
-						if err := vs.sendAll(sgtid, eventss); err != nil {
+						if err := vs.sendAll(ctx, sgtid, eventss); err != nil {
 							return err
 						}
 						eventss = nil
@@ -588,7 +616,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 }
 
 // sendAll sends a group of events together while holding the lock.
-func (vs *vstream) sendAll(sgtid *binlogdatapb.ShardGtid, eventss [][]*binlogdatapb.VEvent) error {
+func (vs *vstream) sendAll(ctx context.Context, sgtid *binlogdatapb.ShardGtid, eventss [][]*binlogdatapb.VEvent) error {
 	vs.mu.Lock()
 	defer vs.mu.Unlock()
 
@@ -603,8 +631,10 @@ func (vs *vstream) sendAll(sgtid *binlogdatapb.ShardGtid, eventss [][]*binlogdat
 				// Update the VGtid and send that instead.
 				sgtid.Gtid = event.Gtid
 				events[j] = &binlogdatapb.VEvent{
-					Type:  binlogdatapb.VEventType_VGTID,
-					Vgtid: proto.Clone(vs.vgtid).(*binlogdatapb.VGtid),
+					Type:     binlogdatapb.VEventType_VGTID,
+					Vgtid:    proto.Clone(vs.vgtid).(*binlogdatapb.VGtid),
+					Keyspace: event.Keyspace,
+					Shard:    event.Shard,
 				}
 			} else if event.Type == binlogdatapb.VEventType_LASTPK {
 				var foundIndex = -1
@@ -630,12 +660,18 @@ func (vs *vstream) sendAll(sgtid *binlogdatapb.ShardGtid, eventss [][]*binlogdat
 					}
 				}
 				events[j] = &binlogdatapb.VEvent{
-					Type:  binlogdatapb.VEventType_VGTID,
-					Vgtid: proto.Clone(vs.vgtid).(*binlogdatapb.VGtid),
+					Type:     binlogdatapb.VEventType_VGTID,
+					Vgtid:    proto.Clone(vs.vgtid).(*binlogdatapb.VGtid),
+					Keyspace: event.Keyspace,
+					Shard:    event.Shard,
 				}
 			}
 		}
-		vs.eventCh <- events
+		select {
+		case <-ctx.Done():
+			return nil
+		case vs.eventCh <- events:
+		}
 	}
 	return nil
 }

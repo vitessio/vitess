@@ -22,6 +22,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
+	"github.com/stretchr/testify/require"
+
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
@@ -259,7 +263,7 @@ func TestIntegralValue(t *testing.T) {
 
 func TestInterfaceValue(t *testing.T) {
 	testcases := []struct {
-		in  interface{}
+		in  any
 		out Value
 	}{{
 		in:  nil,
@@ -403,7 +407,9 @@ func TestToBytesAndString(t *testing.T) {
 		TestValue(Int64, "1"),
 		TestValue(Int64, "12"),
 	} {
-		if b := v.ToBytes(); !bytes.Equal(b, v.Raw()) {
+		vBytes, err := v.ToBytes()
+		require.NoError(t, err)
+		if b := vBytes; !bytes.Equal(b, v.Raw()) {
 			t.Errorf("%v.ToBytes: %s, want %s", v, b, v.Raw())
 		}
 		if s := v.ToString(); s != string(v.Raw()) {
@@ -412,7 +418,9 @@ func TestToBytesAndString(t *testing.T) {
 	}
 
 	tv := TestValue(Expression, "aa")
-	if b := tv.ToBytes(); b != nil {
+	tvBytes, err := tv.ToBytes()
+	require.EqualError(t, err, "expression cannot be converted to bytes")
+	if b := tvBytes; b != nil {
 		t.Errorf("%v.ToBytes: %s, want nil", tv, b)
 	}
 	if s := tv.ToString(); s != "" {
@@ -467,5 +475,29 @@ func TestEncodeMap(t *testing.T) {
 	}
 	if SQLDecodeMap[DontEscape] != DontEscape {
 		t.Errorf("SQLDecodeMap[DontEscape] = %v, want %v", SQLEncodeMap[DontEscape], DontEscape)
+	}
+}
+
+func TestHexAndBitToBytes(t *testing.T) {
+	tcases := []struct {
+		in  Value
+		out []byte
+	}{{
+		in:  MakeTrusted(HexNum, []byte("0x1234")),
+		out: []byte{0x12, 0x34},
+	}, {
+		in:  MakeTrusted(HexVal, []byte("X'1234'")),
+		out: []byte{0x12, 0x34},
+	}, {
+		in:  MakeTrusted(BitNum, []byte("0b1001000110100")),
+		out: []byte{0x12, 0x34},
+	}}
+
+	for _, tcase := range tcases {
+		t.Run(tcase.in.String(), func(t *testing.T) {
+			out, err := tcase.in.ToBytes()
+			require.NoError(t, err)
+			assert.Equal(t, tcase.out, out)
+		})
 	}
 }

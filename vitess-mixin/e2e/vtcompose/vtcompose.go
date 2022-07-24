@@ -372,7 +372,7 @@ func addLookupDataToVschema(
 		lookupTableOwner := ""
 
 		// Find owner of lookup table
-		for primaryTableName, _ := range primaryTableColumns {
+		for primaryTableName := range primaryTableColumns {
 			if strings.HasPrefix(tableName, primaryTableName) && len(primaryTableName) > len(lookupTableOwner) {
 				lookupTableOwner = primaryTableName
 			}
@@ -421,22 +421,22 @@ func applyKeyspaceDependentPatches(
 	}
 	tabAlias := 0 + tabletsUsed*100
 	shard := "-"
-	var masterTablets []string
+	var primaryTablets []string
 	if tabletsUsed == 0 {
-		masterTablets = append(masterTablets, "101")
+		primaryTablets = append(primaryTablets, "101")
 	} else {
-		masterTablets = append(masterTablets, strconv.Itoa((tabletsUsed+1)*100+1))
+		primaryTablets = append(primaryTablets, strconv.Itoa((tabletsUsed+1)*100+1))
 	}
 	interval := int(math.Floor(256 / float64(keyspaceData.shards)))
 
 	for i := 1; i < keyspaceData.shards; i++ {
-		masterTablets = append(masterTablets, strconv.Itoa((i+1)*100+1))
+		primaryTablets = append(primaryTablets, strconv.Itoa((i+1)*100+1))
 	}
 
-	schemaLoad := generateSchemaload(masterTablets, "", keyspaceData.keyspace, externalDbInfo, opts)
+	schemaLoad := generateSchemaload(primaryTablets, "", keyspaceData.keyspace, externalDbInfo, opts)
 	dockerComposeFile = applyInMemoryPatch(dockerComposeFile, schemaLoad)
 
-	// Append Master and Replica Tablets
+	// Append Primary and Replica Tablets
 	if keyspaceData.shards < 2 {
 		tabAlias = tabAlias + 100
 		dockerComposeFile = applyTabletPatches(dockerComposeFile, tabAlias, shard, keyspaceData, externalDbInfoMap, opts)
@@ -457,7 +457,7 @@ func applyKeyspaceDependentPatches(
 		}
 	}
 
-	tabletsUsed += len(masterTablets)
+	tabletsUsed += len(primaryTablets)
 	return dockerComposeFile
 }
 
@@ -478,7 +478,6 @@ func applyDefaultDockerPatches(
 
 	dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateVtctld(opts))
 	dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateVtgate(opts))
-	dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateVtwork(opts))
 	dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateVreplication(dbInfo, opts))
 	dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateVtorc(dbInfo, opts))
 	return dockerComposeFile
@@ -511,12 +510,12 @@ func applyShardPatches(
 	if val, ok := externalDbInfoMap[keyspaceData.keyspace]; ok {
 		dbInfo = val
 	}
-	dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateExternalmaster(tabAlias, shard, keyspaceData, dbInfo, opts))
+	dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateExternalPrimary(tabAlias, shard, keyspaceData, dbInfo, opts))
 	return dockerComposeFile
 }
 
 func generateDefaultShard(tabAlias int, shard string, keyspaceData keyspaceInfo, opts vtOptions) string {
-	aliases := []int{tabAlias + 1} // master alias, e.g. 201
+	aliases := []int{tabAlias + 1} // primary alias, e.g. 201
 	for i := 0; i < keyspaceData.replicaTablets; i++ {
 		aliases = append(aliases, tabAlias+2+i) // replica aliases, e.g. 202, 203, ...
 	}
@@ -529,15 +528,15 @@ func generateDefaultShard(tabAlias int, shard string, keyspaceData keyspaceInfo,
 
 	return fmt.Sprintf(`
 - op: add
-  path: /services/init_shard_master%[2]d
+  path: /services/init_shard_primary%[2]d
   value:
     image: vitess/lite:${VITESS_TAG:-latest}
-    command: ["sh", "-c", "/vt/bin/vtctlclient %[5]s InitShardMaster -force %[4]s/%[3]s %[6]s-%[2]d "]
+    command: ["sh", "-c", "/vt/bin/vtctlclient %[5]s InitShardPrimary -force %[4]s/%[3]s %[6]s-%[2]d "]
     %[1]s
 `, dependsOn, aliases[0], shard, keyspaceData.keyspace, opts.topologyFlags, opts.cell)
 }
 
-func generateExternalmaster(
+func generateExternalPrimary(
 	tabAlias int,
 	shard string,
 	keyspaceData keyspaceInfo,
@@ -545,12 +544,12 @@ func generateExternalmaster(
 	opts vtOptions,
 ) string {
 
-	aliases := []int{tabAlias + 1} // master alias, e.g. 201
+	aliases := []int{tabAlias + 1} // primary alias, e.g. 201
 	for i := 0; i < keyspaceData.replicaTablets; i++ {
 		aliases = append(aliases, tabAlias+2+i) // replica aliases, e.g. 202, 203, ...
 	}
 
-	externalmasterTab := tabAlias
+	externalPrimaryTab := tabAlias
 	externalDb := "0"
 
 	if dbInfo.dbName != "" {
@@ -577,7 +576,7 @@ func generateExternalmaster(
       - CELL=%[5]s
       - SHARD=%[6]s
       - KEYSPACE=%[7]s
-      - ROLE=master
+      - ROLE=primary
       - VTHOST=vttablet%[1]d
       - EXTERNAL_DB=%[8]s
       - DB_PORT=%[9]s
@@ -593,7 +592,7 @@ func generateExternalmaster(
         interval: 30s
         timeout: 10s
         retries: 15
-`, externalmasterTab, opts.topologyFlags, opts.webPort, opts.gRpcPort, opts.cell, shard, keyspaceData.keyspace, externalDb, dbInfo.dbPort, dbInfo.dbHost, dbInfo.dbUser, dbInfo.dbPass, dbInfo.dbCharset)
+`, externalPrimaryTab, opts.topologyFlags, opts.webPort, opts.gRpcPort, opts.cell, shard, keyspaceData.keyspace, externalDb, dbInfo.dbPort, dbInfo.dbHost, dbInfo.dbUser, dbInfo.dbPass, dbInfo.dbCharset)
 }
 
 func applyTabletPatches(
@@ -608,7 +607,7 @@ func applyTabletPatches(
 	if val, ok := externalDbInfoMap[keyspaceData.keyspace]; ok {
 		dbInfo = val
 	}
-	dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateDefaultTablet(tabAlias+1, shard, "master", keyspaceData.keyspace, dbInfo, opts))
+	dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateDefaultTablet(tabAlias+1, shard, "primary", keyspaceData.keyspace, dbInfo, opts))
 	for i := 0; i < keyspaceData.replicaTablets; i++ {
 		dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateDefaultTablet(tabAlias+2+i, shard, "replica", keyspaceData.keyspace, dbInfo, opts))
 	}
@@ -710,7 +709,7 @@ func generateVtgate(opts vtOptions) string {
         -mysql_auth_server_impl none \
         -cell %[5]s \
         -cells_to_watch %[5]s \
-        -tablet_types_to_wait MASTER,REPLICA,RDONLY \
+        -tablet_types_to_wait PRIMARY,REPLICA,RDONLY \
         -service_map 'grpc-vtgateservice' \
         -normalize_queries=true \
         "]
@@ -719,29 +718,6 @@ func generateVtgate(opts vtOptions) string {
     depends_on:
       - vtctld
 `, opts.webPort, opts.gRpcPort, opts.mySqlPort, opts.topologyFlags, opts.cell)
-}
-
-func generateVtwork(opts vtOptions) string {
-	return fmt.Sprintf(`
-- op: add
-  path: /services/vtwork
-  value:
-    image: vitess/lite:${VITESS_TAG:-latest}
-    ports:
-      - "%[1]d"
-      - "%[2]d"
-    command: ["sh", "-c", "/vt/bin/vtworker \
-        %[3]s \
-        -cell %[4]s \
-        -logtostderr=true \
-        -service_map 'grpc-vtworker' \
-        -port %[1]d \
-        -grpc_port %[2]d \
-        -use_v3_resharding_mode=true \
-        "]
-    depends_on:
-      - vtctld
-`, opts.webPort, opts.gRpcPort, opts.topologyFlags, opts.cell)
 }
 
 func generateVtorc(dbInfo externalDbInfo, opts vtOptions) string {

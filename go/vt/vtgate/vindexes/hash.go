@@ -18,6 +18,7 @@ package vindexes
 
 import (
 	"bytes"
+	"context"
 	"crypto/cipher"
 	"crypto/des"
 	"encoding/binary"
@@ -34,6 +35,7 @@ import (
 var (
 	_ SingleColumn = (*Hash)(nil)
 	_ Reversible   = (*Hash)(nil)
+	_ Hashing      = (*Hash)(nil)
 )
 
 // Hash defines vindex that hashes an int64 to a KeyspaceId
@@ -46,7 +48,7 @@ type Hash struct {
 }
 
 // NewHash creates a new Hash.
-func NewHash(name string, m map[string]string) (Vindex, error) {
+func NewHash(name string, _ map[string]string) (Vindex, error) {
 	return &Hash{name: name}, nil
 }
 
@@ -71,33 +73,21 @@ func (vind *Hash) NeedsVCursor() bool {
 }
 
 // Map can map ids to key.Destination objects.
-func (vind *Hash) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+func (vind *Hash) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	out := make([]key.Destination, len(ids))
 	for i, id := range ids {
-		var num uint64
-		var err error
-
-		if id.IsSigned() {
-			// This is ToUint64 with no check on negative values.
-			str := id.ToString()
-			var ival int64
-			ival, err = strconv.ParseInt(str, 10, 64)
-			num = uint64(ival)
-		} else {
-			num, err = evalengine.ToUint64(id)
-		}
-
+		ksid, err := vind.Hash(id)
 		if err != nil {
 			out[i] = key.DestinationNone{}
 			continue
 		}
-		out[i] = key.DestinationKeyspaceID(vhash(num))
+		out[i] = key.DestinationKeyspaceID(ksid)
 	}
 	return out, nil
 }
 
 // Verify returns true if ids maps to ksids.
-func (vind *Hash) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
+func (vind *Hash) Verify(ctx context.Context, vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
 	out := make([]bool, len(ids))
 	for i := range ids {
 		num, err := evalengine.ToUint64(ids[i])
@@ -122,6 +112,26 @@ func (vind *Hash) ReverseMap(_ VCursor, ksids [][]byte) ([]sqltypes.Value, error
 	return reverseIds, nil
 }
 
+func (vind *Hash) Hash(id sqltypes.Value) ([]byte, error) {
+	var num uint64
+	var err error
+
+	if id.IsSigned() {
+		// This is ToUint64 with no check on negative values.
+		str := id.ToString()
+		var ival int64
+		ival, err = strconv.ParseInt(str, 10, 64)
+		num = uint64(ival)
+	} else {
+		num, err = evalengine.ToUint64(id)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+	return vhash(num), nil
+}
+
 var blockDES cipher.Block
 
 func init() {
@@ -137,7 +147,7 @@ func vhash(shardKey uint64) []byte {
 	var keybytes, hashed [8]byte
 	binary.BigEndian.PutUint64(keybytes[:], shardKey)
 	blockDES.Encrypt(hashed[:], keybytes[:])
-	return []byte(hashed[:])
+	return hashed[:]
 }
 
 func vunhash(k []byte) (uint64, error) {

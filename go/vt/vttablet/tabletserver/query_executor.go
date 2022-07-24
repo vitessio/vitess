@@ -17,15 +17,15 @@ limitations under the License.
 package tabletserver
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"strings"
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
-	"context"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -61,9 +61,12 @@ type QueryExecutor struct {
 	tabletType     topodatapb.TabletType
 }
 
-const streamRowsSize = 256
+const (
+	streamRowsSize         = 256
+	maxQueryBufferDuration = 10 * time.Second
+)
 
-var streamResultPool = sync.Pool{New: func() interface{} {
+var streamResultPool = sync.Pool{New: func() any {
 	return &sqltypes.Result{
 		Rows: make([][]sqltypes.Value, 0, streamRowsSize),
 	}
@@ -93,7 +96,7 @@ var sequenceFields = []*querypb.Field{
 
 func (qre *QueryExecutor) shouldConsolidate() bool {
 	cm := qre.tsv.qe.consolidatorMode.Get()
-	return cm == tabletenv.Enable || ((cm == tabletenv.NotOnMaster || cm == tabletenv.NotOnPrimary) && qre.tabletType != topodatapb.TabletType_PRIMARY)
+	return cm == tabletenv.Enable || (cm == tabletenv.NotOnPrimary && qre.tabletType != topodatapb.TabletType_PRIMARY)
 }
 
 // Execute performs a non-streaming query execution.
@@ -112,11 +115,11 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		}
 
 		if reply == nil {
-			qre.tsv.qe.AddStats(planName, tableName, 1, duration, mysqlTime, 0, 1)
+			qre.tsv.qe.AddStats(qre.plan.PlanID, tableName, 1, duration, mysqlTime, 0, 0, 1)
 			qre.plan.AddStats(1, duration, mysqlTime, 0, 0, 1)
 			return
 		}
-		qre.tsv.qe.AddStats(planName, tableName, 1, duration, mysqlTime, int64(reply.RowsAffected), 0)
+		qre.tsv.qe.AddStats(qre.plan.PlanID, tableName, 1, duration, mysqlTime, int64(reply.RowsAffected), int64(len(reply.Rows)), 0)
 		qre.plan.AddStats(1, duration, mysqlTime, reply.RowsAffected, uint64(len(reply.Rows)), 0)
 		qre.logStats.RowsAffected = int(reply.RowsAffected)
 		qre.logStats.Rows = reply.Rows
@@ -127,17 +130,8 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		return nil, err
 	}
 
-	switch qre.plan.PlanID {
-	case p.PlanNextval:
+	if qre.plan.PlanID == p.PlanNextval {
 		return qre.execNextval()
-	case p.PlanSelectImpossible:
-		// If the fields did not get cached, we have send the query
-		// to mysql, which you can see below.
-		if qre.plan.Fields != nil {
-			return &sqltypes.Result{
-				Fields: qre.plan.Fields,
-			}, nil
-		}
 	}
 
 	if qre.connID != 0 {
@@ -181,6 +175,8 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		return qre.execRevertMigration()
 	case p.PlanShowMigrationLogs:
 		return qre.execShowMigrationLogs()
+	case p.PlanShowThrottledApps:
+		return qre.execShowThrottledApps()
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] %s unexpected plan type", qre.plan.PlanID.String())
 }
@@ -298,7 +294,7 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 						return err
 					}
 					defer dbConn.Recycle()
-					return qre.execStreamSQL(dbConn, sql, func(result *sqltypes.Result) error {
+					return qre.execStreamSQL(dbConn, qre.connID != 0, sql, func(result *sqltypes.Result) error {
 						// this stream result is potentially used by more than one client, so
 						// the consolidator will return it to the pool once it knows it's no longer
 						// being shared
@@ -330,7 +326,7 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 		conn = dbConn
 	}
 
-	return qre.execStreamSQL(conn, sql, func(result *sqltypes.Result) error {
+	return qre.execStreamSQL(conn, qre.connID != 0, sql, func(result *sqltypes.Result) error {
 		// this stream result is only used by the calling client, so it can be
 		// returned to the pool once the callback has fully returned
 		defer returnStreamResult(result)
@@ -387,21 +383,37 @@ func (qre *QueryExecutor) checkPermissions() error {
 		remoteAddr = ci.RemoteAddr()
 		username = ci.Username()
 	}
-	action, desc := qre.plan.Rules.GetAction(remoteAddr, username, qre.bindVars, qre.marginComments)
+
+	bufferingTimeoutCtx, cancel := context.WithTimeout(qre.ctx, maxQueryBufferDuration)
+	defer cancel()
+
+	action, ruleCancelCtx, desc := qre.plan.Rules.GetAction(remoteAddr, username, qre.bindVars, qre.marginComments)
 	switch action {
 	case rules.QRFail:
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "disallowed due to rule: %s", desc)
 	case rules.QRFailRetry:
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "disallowed due to rule: %s", desc)
+	case rules.QRBuffer:
+		if ruleCancelCtx != nil {
+			// We buffer up to some timeout. The timeout is determined by ctx.Done().
+			// If we're not at timeout yet, we fail the query
+			select {
+			case <-ruleCancelCtx.Done():
+				// good! We have buffered the query, and buffering is completed
+			case <-bufferingTimeoutCtx.Done():
+				// Sorry, timeout while waiting for buffering to complete
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "buffer timeout in rule: %s", desc)
+			}
+		}
+	default:
+		// no rules against this query. Good to proceed
 	}
-
 	// Skip ACL check for queries against the dummy dual table
 	if qre.plan.TableName().String() == "dual" {
 		return nil
 	}
 
 	// Skip the ACL check if the connecting user is an exempted superuser.
-	// Necessary to whitelist e.g. direct vtworker access.
 	if qre.tsv.qe.exemptACL != nil && qre.tsv.qe.exemptACL.IsMember(&querypb.VTGateCallerID{Username: username}) {
 		qre.tsv.qe.tableaclExemptCount.Add(1)
 		return nil
@@ -524,13 +536,16 @@ func (*QueryExecutor) BeginAgain(ctx context.Context, dc *StatefulConnection) er
 }
 
 func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
-	inc, err := resolveNumber(qre.plan.NextCount, qre.bindVars)
+	env := evalengine.EnvWithBindVars(qre.bindVars, collations.Unknown)
+	result, err := env.Evaluate(qre.plan.NextCount)
 	if err != nil {
 		return nil, err
 	}
 	tableName := qre.plan.TableName()
-	if inc < 1 {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid increment for sequence %s: %d", tableName, inc)
+	v := result.Value()
+	inc, err := v.ToInt64()
+	if err != nil || inc < 1 {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid increment for sequence %s: %s", tableName, v.String())
 	}
 
 	t := qre.plan.Table
@@ -598,27 +613,44 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 // execSelect sends a query to mysql only if another identical query is not running. Otherwise, it waits and
 // reuses the result. If the plan is missing field info, it sends the query to mysql requesting full info.
 func (qre *QueryExecutor) execSelect() (*sqltypes.Result, error) {
-	if qre.tsv.qe.enableQueryPlanFieldCaching && qre.plan.Fields != nil {
-		result, err := qre.qFetch(qre.logStats, qre.plan.FullQuery, qre.bindVars)
-		if err != nil {
-			return nil, err
+	sql, sqlWithoutComments, err := qre.generateFinalSQL(qre.plan.FullQuery, qre.bindVars)
+	if err != nil {
+		return nil, err
+	}
+	// Check tablet type.
+	if qre.shouldConsolidate() {
+		q, original := qre.tsv.qe.consolidator.Create(sqlWithoutComments)
+		if original {
+			defer q.Broadcast()
+			conn, err := qre.getConn()
+
+			if err != nil {
+				q.Err = err
+			} else {
+				defer conn.Recycle()
+				q.Result, q.Err = qre.execDBConn(conn, sql, true)
+			}
+		} else {
+			qre.logStats.QuerySources |= tabletenv.QuerySourceConsolidator
+			startTime := time.Now()
+			q.Wait()
+			qre.tsv.stats.WaitTimings.Record("Consolidations", startTime)
 		}
-		// result is read-only. So, let's copy it before modifying.
-		newResult := *result
-		newResult.Fields = qre.plan.Fields
-		return &newResult, nil
+		if q.Err != nil {
+			return nil, q.Err
+		}
+		return q.Result.(*sqltypes.Result), nil
 	}
 	conn, err := qre.getConn()
 	if err != nil {
 		return nil, err
 	}
 	defer conn.Recycle()
-
-	sql, _, err := qre.generateFinalSQL(qre.plan.FullQuery, qre.bindVars)
+	res, err := qre.execDBConn(conn, sql, true)
 	if err != nil {
 		return nil, err
 	}
-	return qre.execDBConn(conn, sql, true)
+	return res, nil
 }
 
 func (qre *QueryExecutor) execDMLLimit(conn *StatefulConnection) (*sqltypes.Result, error) {
@@ -639,13 +671,13 @@ func (qre *QueryExecutor) execDMLLimit(conn *StatefulConnection) (*sqltypes.Resu
 func (qre *QueryExecutor) verifyRowCount(count, maxrows int64) error {
 	if count > maxrows {
 		callerID := callerid.ImmediateCallerIDFromContext(qre.ctx)
-		return mysql.NewSQLError(mysql.ERVitessMaxRowsExceeded, mysql.SSUnknownSQLState, "caller id: %s: row count exceeded %d", callerID.Username, maxrows)
+		return vterrors.Errorf(vtrpcpb.Code_ABORTED, "caller id: %s: row count exceeded %d", callerID.Username, maxrows)
 	}
 	warnThreshold := qre.tsv.qe.warnResultSize.Get()
 	if warnThreshold > 0 && count > warnThreshold {
 		callerID := callerid.ImmediateCallerIDFromContext(qre.ctx)
 		qre.tsv.Stats().Warnings.Add("ResultsExceeded", 1)
-		log.Warningf("caller id: %s row count %v exceeds warning threshold %v: %q", callerID.Username, count, warnThreshold, queryAsString(qre.plan.FullQuery.Query, qre.bindVars))
+		log.Warningf("caller id: %s row count %v exceeds warning threshold %v: %q", callerID.Username, count, warnThreshold, queryAsString(qre.plan.FullQuery.Query, qre.bindVars, qre.tsv.Config().SanitizeLogMessages))
 	}
 	return nil
 }
@@ -665,6 +697,7 @@ func (qre *QueryExecutor) getConn() (*connpool.DBConn, error) {
 
 	start := time.Now()
 	conn, err := qre.tsv.qe.conns.Get(ctx)
+
 	switch err {
 	case nil:
 		qre.logStats.WaitingForConnection += time.Since(start)
@@ -691,47 +724,6 @@ func (qre *QueryExecutor) getStreamConn() (*connpool.DBConn, error) {
 	return nil, err
 }
 
-func (qre *QueryExecutor) qFetch(logStats *tabletenv.LogStats, parsedQuery *sqlparser.ParsedQuery, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	sql, sqlWithoutComments, err := qre.generateFinalSQL(parsedQuery, bindVars)
-	if err != nil {
-		return nil, err
-	}
-	// Check tablet type.
-	if qre.shouldConsolidate() {
-		q, original := qre.tsv.qe.consolidator.Create(sqlWithoutComments)
-		if original {
-			defer q.Broadcast()
-			conn, err := qre.getConn()
-
-			if err != nil {
-				q.Err = err
-			} else {
-				defer conn.Recycle()
-				q.Result, q.Err = qre.execDBConn(conn, sql, false)
-			}
-		} else {
-			logStats.QuerySources |= tabletenv.QuerySourceConsolidator
-			startTime := time.Now()
-			q.Wait()
-			qre.tsv.stats.WaitTimings.Record("Consolidations", startTime)
-		}
-		if q.Err != nil {
-			return nil, q.Err
-		}
-		return q.Result.(*sqltypes.Result), nil
-	}
-	conn, err := qre.getConn()
-	if err != nil {
-		return nil, err
-	}
-	defer conn.Recycle()
-	res, err := qre.execDBConn(conn, sql, false)
-	if err != nil {
-		return nil, err
-	}
-	return res, nil
-}
-
 // txFetch fetches from a TxConnection.
 func (qre *QueryExecutor) txFetch(conn *StatefulConnection, record bool) (*sqltypes.Result, error) {
 	sql, _, err := qre.generateFinalSQL(qre.plan.FullQuery, qre.bindVars)
@@ -754,7 +746,6 @@ func (qre *QueryExecutor) generateFinalSQL(parsedQuery *sqlparser.ParsedQuery, b
 	if err != nil {
 		return "", "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s", err)
 	}
-
 	if qre.tsv.config.AnnotateQueries {
 		username := callerid.GetPrincipal(callerid.EffectiveCallerIDFromContext(qre.ctx))
 		if username == "" {
@@ -854,15 +845,33 @@ func (qre *QueryExecutor) execAlterMigration() (*sqltypes.Result, error) {
 	if !ok {
 		return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "Expecting ALTER VITESS_MIGRATION plan")
 	}
+
+	// Make sure schema exists
+	if err := qre.tsv.onlineDDLExecutor.PrepareForQueryExecutor(qre.ctx); err != nil {
+		return nil, err
+	}
+
 	switch alterMigration.Type {
 	case sqlparser.RetryMigrationType:
 		return qre.tsv.onlineDDLExecutor.RetryMigration(qre.ctx, alterMigration.UUID)
+	case sqlparser.CleanupMigrationType:
+		return qre.tsv.onlineDDLExecutor.CleanupMigration(qre.ctx, alterMigration.UUID)
 	case sqlparser.CompleteMigrationType:
-		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "ALTER VITESS_MIGRATION COMPLETE is not implemented yet")
+		return qre.tsv.onlineDDLExecutor.CompleteMigration(qre.ctx, alterMigration.UUID)
+	case sqlparser.CompleteAllMigrationType:
+		return qre.tsv.onlineDDLExecutor.CompletePendingMigrations(qre.ctx)
 	case sqlparser.CancelMigrationType:
 		return qre.tsv.onlineDDLExecutor.CancelMigration(qre.ctx, alterMigration.UUID, "CANCEL issued by user")
 	case sqlparser.CancelAllMigrationType:
 		return qre.tsv.onlineDDLExecutor.CancelPendingMigrations(qre.ctx, "CANCEL ALL issued by user")
+	case sqlparser.ThrottleMigrationType:
+		return qre.tsv.onlineDDLExecutor.ThrottleMigration(qre.ctx, alterMigration.UUID, alterMigration.Expire, alterMigration.Ratio)
+	case sqlparser.ThrottleAllMigrationType:
+		return qre.tsv.onlineDDLExecutor.ThrottleAllMigrations(qre.ctx, alterMigration.Expire, alterMigration.Ratio)
+	case sqlparser.UnthrottleMigrationType:
+		return qre.tsv.onlineDDLExecutor.UnthrottleMigration(qre.ctx, alterMigration.UUID)
+	case sqlparser.UnthrottleAllMigrationType:
+		return qre.tsv.onlineDDLExecutor.UnthrottleAllMigrations(qre.ctx)
 	}
 	return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "ALTER VITESS_MIGRATION not implemented")
 }
@@ -879,6 +888,41 @@ func (qre *QueryExecutor) execShowMigrationLogs() (*sqltypes.Result, error) {
 		return qre.tsv.onlineDDLExecutor.ShowMigrationLogs(qre.ctx, showMigrationLogsStmt)
 	}
 	return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "Expecting SHOW VITESS_MIGRATION plan")
+}
+
+func (qre *QueryExecutor) execShowThrottledApps() (*sqltypes.Result, error) {
+	if err := qre.tsv.lagThrottler.CheckIsReady(); err != nil {
+		return nil, err
+	}
+	if _, ok := qre.plan.FullStmt.(*sqlparser.ShowThrottledApps); !ok {
+		return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "Expecting SHOW VITESS_THROTTLED_APPS plan")
+	}
+	result := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{
+				Name: "app",
+				Type: sqltypes.VarChar,
+			},
+			{
+				Name: "expire_at",
+				Type: sqltypes.Timestamp,
+			},
+			{
+				Name: "ratio",
+				Type: sqltypes.Decimal,
+			},
+		},
+		Rows: [][]sqltypes.Value{},
+	}
+	for _, t := range qre.tsv.lagThrottler.ThrottledApps() {
+		result.Rows = append(result.Rows,
+			[]sqltypes.Value{
+				sqltypes.NewVarChar(t.AppName),
+				sqltypes.NewTimestamp(t.ExpireAt.Format(sqltypes.TimestampFormat)),
+				sqltypes.NewDecimal(fmt.Sprintf("%v", t.Ratio)),
+			})
+	}
+	return result, nil
 }
 
 func (qre *QueryExecutor) drainResultSetOnConn(conn *connpool.DBConn) error {
@@ -923,17 +967,28 @@ func (qre *QueryExecutor) execStatefulConn(conn *StatefulConnection, sql string,
 	return conn.Exec(ctx, sql, int(qre.tsv.qe.maxResultSize.Get()), wantfields)
 }
 
-func (qre *QueryExecutor) execStreamSQL(conn *connpool.DBConn, sql string, callback func(*sqltypes.Result) error) error {
+func (qre *QueryExecutor) execStreamSQL(conn *connpool.DBConn, isTransaction bool, sql string, callback func(*sqltypes.Result) error) error {
 	span, ctx := trace.NewSpan(qre.ctx, "QueryExecutor.execStreamSQL")
-	trace.AnnotateSQL(span, sql)
+	trace.AnnotateSQL(span, sqlparser.Preview(sql))
 	callBackClosingSpan := func(result *sqltypes.Result) error {
 		defer span.Finish()
 		return callback(result)
 	}
 
 	qd := NewQueryDetail(qre.logStats.Ctx, conn)
-	qre.tsv.olapql.Add(qd)
-	defer qre.tsv.olapql.Remove(qd)
+
+	// Add query detail object into QueryExecutor TableServer list w.r.t if it is a transactional or not. Previously we were adding it
+	// to olapql list regardless but that resulted in problems, where long-running stream queries which can be stateful (or transactional)
+	// weren't getting cleaned up during unserveCommon>handleShutdownGracePeriod in state_manager.go.
+	// This change will ensure that long-running streaming stateful queries get gracefully shutdown during ServingTypeChange
+	// once their grace period is over.
+	if isTransaction {
+		qre.tsv.statefulql.Add(qd)
+		defer qre.tsv.statefulql.Remove(qd)
+	} else {
+		qre.tsv.olapql.Add(qd)
+		defer qre.tsv.olapql.Remove(qd)
+	}
 
 	start := time.Now()
 	err := conn.Stream(ctx, sql, callBackClosingSpan, allocStreamResult, int(qre.tsv.qe.streamBufferSize.Get()), sqltypes.IncludeFieldsOrDefault(qre.options))
@@ -953,13 +1008,4 @@ func (qre *QueryExecutor) recordUserQuery(queryType string, duration int64) {
 	tableName := qre.plan.TableName().String()
 	qre.tsv.Stats().UserTableQueryCount.Add([]string{tableName, username, queryType}, 1)
 	qre.tsv.Stats().UserTableQueryTimesNs.Add([]string{tableName, username, queryType}, duration)
-}
-
-// resolveNumber extracts a number from a bind variable or sql value.
-func resolveNumber(pv sqltypes.PlanValue, bindVars map[string]*querypb.BindVariable) (int64, error) {
-	v, err := pv.ResolveValue(bindVars)
-	if err != nil {
-		return 0, err
-	}
-	return evalengine.ToInt64(v)
 }

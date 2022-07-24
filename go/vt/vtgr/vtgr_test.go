@@ -31,7 +31,7 @@ func TestSighupHandle(t *testing.T) {
 	var shards []*controller.GRShard
 	config := &config.VTGRConfig{
 		DisableReadOnlyProtection:   false,
-		GroupSize:                   5,
+		BootstrapGroupSize:          5,
 		MinNumReplica:               3,
 		BackoffErrorWaitTimeSeconds: 10,
 		BootstrapWaitTimeSeconds:    10 * 60,

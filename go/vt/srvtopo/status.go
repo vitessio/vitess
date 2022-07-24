@@ -138,11 +138,6 @@ func (st *SrvKeyspaceCacheStatus) StatusAsHTML() template.HTML {
 		result += "<br>"
 	}
 
-	if st.Value.ShardingColumnName != "" {
-		result += "<b>ShardingColumnName:</b>&nbsp;" + st.Value.ShardingColumnName + "<br>"
-		result += "<b>ShardingColumnType:</b>&nbsp;" + st.Value.ShardingColumnType.String() + "<br>"
-	}
-
 	if len(st.Value.ServedFrom) > 0 {
 		result += "<b>ServedFrom:</b><br>"
 		for _, sf := range st.Value.ServedFrom {

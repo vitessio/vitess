@@ -13,13 +13,13 @@
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "count(2)",
+        "Aggregates": "sum_count(2) AS count",
         "GroupBy": "0",
         "ResultColumns": 4,
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectScatter",
+            "Variant": "Scatter",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -35,7 +35,34 @@
     ]
   }
 }
-Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column 'b' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
+{
+  "QueryType": "SELECT",
+  "Original": "select a, b, count(*) from user group by a order by b",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "random(1) AS b, sum_count_star(2) AS count(*)",
+    "GroupBy": "(0|3)",
+    "ResultColumns": 3,
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select a, b, count(*), weight_string(a), weight_string(b) from `user` where 1 != 1 group by a, weight_string(a)",
+        "OrderBy": "(1|4) ASC, (0|3) ASC",
+        "Query": "select a, b, count(*), weight_string(a), weight_string(b) from `user` group by a, weight_string(a) order by b asc, a asc",
+        "Table": "`user`"
+      }
+    ]
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
+}
 
 # scatter aggregate order by references aggregate expression
 "select a, b, count(*) k from user group by a order by k"
@@ -50,12 +77,12 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "count(2)",
+        "Aggregates": "sum_count(2) AS count",
         "GroupBy": "0",
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectScatter",
+            "Variant": "Scatter",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -71,9 +98,42 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
     ]
   }
 }
-Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column 'b' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
+{
+  "QueryType": "SELECT",
+  "Original": "select a, b, count(*) k from user group by a order by k",
+  "Instructions": {
+    "OperatorType": "Sort",
+    "Variant": "Memory",
+    "OrderBy": "2 ASC",
+    "ResultColumns": 3,
+    "Inputs": [
+      {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "random(1) AS b, sum_count_star(2) AS k",
+        "GroupBy": "(0|3)",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select a, b, count(*) as k, weight_string(a) from `user` where 1 != 1 group by a, weight_string(a)",
+            "OrderBy": "(0|3) ASC",
+            "Query": "select a, b, count(*) as k, weight_string(a) from `user` group by a, weight_string(a) order by a asc",
+            "Table": "`user`"
+          }
+        ]
+      }
+    ]
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
+}
 
-# scatter aggregate order by references multiple non-group-by expressions
 "select a, b, count(*) k from user group by a order by b, a, k"
 {
   "QueryType": "SELECT",
@@ -87,20 +147,20 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "count(2)",
+        "Aggregates": "sum_count(2) AS count",
         "GroupBy": "0",
         "ResultColumns": 5,
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectScatter",
+            "Variant": "Scatter",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select a, b, count(*) as k, weight_string(b), weight_string(a) from `user` where 1 != 1 group by a, weight_string(a), weight_string(a)",
+            "FieldQuery": "select a, b, count(*) as k, weight_string(b), weight_string(a) from `user` where 1 != 1 group by a, weight_string(a)",
             "OrderBy": "(0|4) ASC",
-            "Query": "select a, b, count(*) as k, weight_string(b), weight_string(a) from `user` group by a, weight_string(a), weight_string(a) order by a asc",
+            "Query": "select a, b, count(*) as k, weight_string(b), weight_string(a) from `user` group by a, weight_string(a) order by a asc",
             "ResultColumns": 5,
             "Table": "`user`"
           }
@@ -109,7 +169,41 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
     ]
   }
 }
-Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column 'b' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
+{
+  "QueryType": "SELECT",
+  "Original": "select a, b, count(*) k from user group by a order by b, a, k",
+  "Instructions": {
+    "OperatorType": "Sort",
+    "Variant": "Memory",
+    "OrderBy": "1 ASC, (0|3) ASC, 2 ASC",
+    "ResultColumns": 3,
+    "Inputs": [
+      {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "random(1) AS b, sum_count_star(2) AS k",
+        "GroupBy": "(0|3)",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select a, b, count(*) as k, weight_string(a) from `user` where 1 != 1 group by a, weight_string(a)",
+            "OrderBy": "(0|3) ASC",
+            "Query": "select a, b, count(*) as k, weight_string(a) from `user` group by a, weight_string(a) order by a asc",
+            "Table": "`user`"
+          }
+        ]
+      }
+    ]
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
+}
 
 # scatter aggregate with memory sort and limit
 "select a, b, count(*) k from user group by a order by k desc limit 10"
@@ -118,7 +212,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
   "Original": "select a, b, count(*) k from user group by a order by k desc limit 10",
   "Instructions": {
     "OperatorType": "Limit",
-    "Count": 10,
+    "Count": "INT64(10)",
     "Inputs": [
       {
         "OperatorType": "Sort",
@@ -128,12 +222,12 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
           {
             "OperatorType": "Aggregate",
             "Variant": "Ordered",
-            "Aggregates": "count(2)",
+            "Aggregates": "sum_count(2) AS count",
             "GroupBy": "0",
             "Inputs": [
               {
                 "OperatorType": "Route",
-                "Variant": "SelectScatter",
+                "Variant": "Scatter",
                 "Keyspace": {
                   "Name": "user",
                   "Sharded": true
@@ -151,7 +245,47 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
     ]
   }
 }
-Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column 'b' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
+{
+  "QueryType": "SELECT",
+  "Original": "select a, b, count(*) k from user group by a order by k desc limit 10",
+  "Instructions": {
+    "OperatorType": "Limit",
+    "Count": "INT64(10)",
+    "Inputs": [
+      {
+        "OperatorType": "Sort",
+        "Variant": "Memory",
+        "OrderBy": "2 DESC",
+        "ResultColumns": 3,
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Ordered",
+            "Aggregates": "random(1) AS b, sum_count_star(2) AS k",
+            "GroupBy": "(0|3)",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select a, b, count(*) as k, weight_string(a) from `user` where 1 != 1 group by a, weight_string(a)",
+                "OrderBy": "(0|3) ASC",
+                "Query": "select a, b, count(*) as k, weight_string(a) from `user` group by a, weight_string(a) order by a asc",
+                "Table": "`user`"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
+}
 
 # scatter aggregate with memory sort and order by number
 "select a, b, count(*) k from user group by a order by 1,3"
@@ -167,20 +301,20 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "count(2)",
+        "Aggregates": "sum_count(2) AS count",
         "GroupBy": "0",
         "ResultColumns": 4,
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectScatter",
+            "Variant": "Scatter",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select a, b, count(*) as k, weight_string(a) from `user` where 1 != 1 group by a, weight_string(a), weight_string(a)",
+            "FieldQuery": "select a, b, count(*) as k, weight_string(a) from `user` where 1 != 1 group by a, weight_string(a)",
             "OrderBy": "(0|3) ASC",
-            "Query": "select a, b, count(*) as k, weight_string(a) from `user` group by a, weight_string(a), weight_string(a) order by 1 asc",
+            "Query": "select a, b, count(*) as k, weight_string(a) from `user` group by a, weight_string(a) order by 1 asc",
             "ResultColumns": 4,
             "Table": "`user`"
           }
@@ -189,7 +323,41 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
     ]
   }
 }
-Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column 'b' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
+{
+  "QueryType": "SELECT",
+  "Original": "select a, b, count(*) k from user group by a order by 1,3",
+  "Instructions": {
+    "OperatorType": "Sort",
+    "Variant": "Memory",
+    "OrderBy": "(0|3) ASC, 2 ASC",
+    "ResultColumns": 3,
+    "Inputs": [
+      {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "random(1) AS b, sum_count_star(2) AS k",
+        "GroupBy": "(0|3)",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select a, b, count(*) as k, weight_string(a) from `user` where 1 != 1 group by a, weight_string(a)",
+            "OrderBy": "(0|3) ASC",
+            "Query": "select a, b, count(*) as k, weight_string(a) from `user` group by a, weight_string(a) order by a asc",
+            "Table": "`user`"
+          }
+        ]
+      }
+    ]
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
+}
 
 # scatter aggregate with memory sort and order by number, reuse weight_string
 # we have to use a meaningless construct to test this. TODO: improve to do ordering once for textcol1
@@ -206,20 +374,20 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "count(1)",
+        "Aggregates": "sum_count(1) AS count",
         "GroupBy": "2",
         "ResultColumns": 3,
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectScatter",
+            "Variant": "Scatter",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select textcol1 as t, count(*) as k, weight_string(textcol1) from `user` where 1 != 1 group by textcol1, weight_string(textcol1), weight_string(textcol1), weight_string(textcol1), weight_string(textcol1), weight_string(textcol1)",
+            "FieldQuery": "select textcol1 as t, count(*) as k, weight_string(textcol1) from `user` where 1 != 1 group by textcol1, weight_string(textcol1)",
             "OrderBy": "(0|2) ASC, (0|2) ASC",
-            "Query": "select textcol1 as t, count(*) as k, weight_string(textcol1) from `user` group by textcol1, weight_string(textcol1), weight_string(textcol1), weight_string(textcol1), weight_string(textcol1), weight_string(textcol1) order by textcol1 asc, textcol1 asc",
+            "Query": "select textcol1 as t, count(*) as k, weight_string(textcol1) from `user` group by textcol1, weight_string(textcol1) order by textcol1 asc, textcol1 asc",
             "ResultColumns": 3,
             "Table": "`user`"
           }
@@ -234,31 +402,33 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
   "Instructions": {
     "OperatorType": "Sort",
     "Variant": "Memory",
-    "OrderBy": "(2|3) ASC, 1 ASC, (2|3) ASC",
-    "ResultColumns": 2,
+    "OrderBy": "0 ASC COLLATE latin1_swedish_ci, 1 ASC, 0 ASC COLLATE latin1_swedish_ci",
     "Inputs": [
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "count(1) AS k",
-        "GroupBy": "(2|3)",
+        "Aggregates": "sum_count_star(1) AS k",
+        "GroupBy": "0 COLLATE latin1_swedish_ci",
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectScatter",
+            "Variant": "Scatter",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select textcol1 as t, count(*) as k, textcol1, weight_string(textcol1) from `user` where 1 != 1 group by textcol1, weight_string(textcol1)",
-            "OrderBy": "(2|3) ASC",
-            "Query": "select textcol1 as t, count(*) as k, textcol1, weight_string(textcol1) from `user` group by textcol1, weight_string(textcol1) order by textcol1 asc",
+            "FieldQuery": "select textcol1 as t, count(*) as k from `user` where 1 != 1 group by textcol1",
+            "OrderBy": "0 ASC COLLATE latin1_swedish_ci",
+            "Query": "select textcol1 as t, count(*) as k from `user` group by textcol1 order by textcol1 asc",
             "Table": "`user`"
           }
         ]
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 
 # order by on a cross-shard derived table
@@ -281,12 +451,12 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinColumnIndexes": "-1,-2,-3",
+            "JoinColumnIndexes": "L:0,L:1,L:2",
             "TableName": "`user`_user_extra",
             "Inputs": [
               {
                 "OperatorType": "Route",
-                "Variant": "SelectScatter",
+                "Variant": "Scatter",
                 "Keyspace": {
                   "Name": "user",
                   "Sharded": true
@@ -297,7 +467,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
               },
               {
                 "OperatorType": "Route",
-                "Variant": "SelectScatter",
+                "Variant": "Scatter",
                 "Keyspace": {
                   "Name": "user",
                   "Sharded": true
@@ -312,6 +482,61 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
       }
     ]
   }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select id from (select user.id, user.col from user join user_extra) as t order by id",
+  "Instructions": {
+    "OperatorType": "Sort",
+    "Variant": "Memory",
+    "OrderBy": "(0|1) ASC",
+    "ResultColumns": 1,
+    "Inputs": [
+      {
+        "OperatorType": "SimpleProjection",
+        "Columns": [
+          0,
+          2
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "L:0,L:1,L:2",
+            "TableName": "`user`_user_extra",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select `user`.id, `user`.col, weight_string(`user`.id) from `user` where 1 != 1",
+                "Query": "select `user`.id, `user`.col, weight_string(`user`.id) from `user`",
+                "Table": "`user`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1 from user_extra where 1 != 1",
+                "Query": "select 1 from user_extra",
+                "Table": "user_extra"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "TablesUsed": [
+    "user.user",
+    "user.user_extra"
+  ]
 }
 
 # order by on a cross-shard query. Note: this happens only when an order by column is from the second table
@@ -328,7 +553,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
       {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "-1,-2,1,2",
+        "JoinColumnIndexes": "L:0,L:1,R:0,R:1",
         "JoinVars": {
           "user_id": 2
         },
@@ -336,7 +561,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectEqualUnique",
+            "Variant": "EqualUnique",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -345,13 +570,13 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
             "Query": "select `user`.col1 as a, `user`.col2 as b, `user`.id from `user` where `user`.id = 1",
             "Table": "`user`",
             "Values": [
-              1
+              "INT64(1)"
             ],
             "Vindex": "user_index"
           },
           {
             "OperatorType": "Route",
-            "Variant": "SelectEqualUnique",
+            "Variant": "EqualUnique",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -381,7 +606,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
       {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "-2,-3,1,2",
+        "JoinColumnIndexes": "L:1,L:2,R:0,R:1",
         "JoinVars": {
           "user_id": 0
         },
@@ -389,7 +614,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectEqualUnique",
+            "Variant": "EqualUnique",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -398,13 +623,13 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
             "Query": "select `user`.id, `user`.col1 as a, `user`.col2 as b from `user` where `user`.id = 1",
             "Table": "`user`",
             "Values": [
-              1
+              "INT64(1)"
             ],
             "Vindex": "user_index"
           },
           {
             "OperatorType": "Route",
-            "Variant": "SelectEqualUnique",
+            "Variant": "EqualUnique",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -420,7 +645,11 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
         ]
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "user.music",
+    "user.user"
+  ]
 }
 
 # Order by for join, with mixed cross-shard ordering
@@ -437,7 +666,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
       {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "-1,-2,1,-3,2,-4",
+        "JoinColumnIndexes": "L:0,L:1,R:0,L:2,R:1,L:3",
         "JoinVars": {
           "user_id": 4
         },
@@ -445,7 +674,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectEqualUnique",
+            "Variant": "EqualUnique",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -454,13 +683,13 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
             "Query": "select `user`.col1 as a, `user`.col2, weight_string(`user`.col1), weight_string(`user`.col2), `user`.id from `user` where `user`.id = 1",
             "Table": "`user`",
             "Values": [
-              1
+              "INT64(1)"
             ],
             "Vindex": "user_index"
           },
           {
             "OperatorType": "Route",
-            "Variant": "SelectEqualUnique",
+            "Variant": "EqualUnique",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -490,7 +719,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
       {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "-2,-3,1,-4,2,-5",
+        "JoinColumnIndexes": "L:1,L:2,R:0,L:3,R:1,L:4",
         "JoinVars": {
           "user_id": 0
         },
@@ -498,7 +727,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectEqualUnique",
+            "Variant": "EqualUnique",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -507,13 +736,13 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
             "Query": "select `user`.id, `user`.col1 as a, `user`.col2, weight_string(`user`.col1), weight_string(`user`.col2) from `user` where `user`.id = 1",
             "Table": "`user`",
             "Values": [
-              1
+              "INT64(1)"
             ],
             "Vindex": "user_index"
           },
           {
             "OperatorType": "Route",
-            "Variant": "SelectEqualUnique",
+            "Variant": "EqualUnique",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -529,7 +758,11 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
         ]
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "user.music",
+    "user.user"
+  ]
 }
 
 # Order by for join, on text column in LHS.
@@ -546,12 +779,12 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
       {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "-1,-2,1,-3,2",
+        "JoinColumnIndexes": "L:0,L:1,R:0,L:2,R:1",
         "TableName": "`user`_unsharded",
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectScatter",
+            "Variant": "Scatter",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -562,7 +795,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
           },
           {
             "OperatorType": "Route",
-            "Variant": "SelectUnsharded",
+            "Variant": "Unsharded",
             "Keyspace": {
               "Name": "main",
               "Sharded": false
@@ -576,7 +809,52 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
     ]
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select u.a, u.textcol1, un.col2 from user u join unsharded un order by u.textcol1, un.col2",
+  "Instructions": {
+    "OperatorType": "Sort",
+    "Variant": "Memory",
+    "OrderBy": "(1|3) ASC COLLATE latin1_swedish_ci, (2|4) ASC",
+    "ResultColumns": 3,
+    "Inputs": [
+      {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0,L:1,R:0,L:2,R:1",
+        "TableName": "`user`_unsharded",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select u.a, u.textcol1, weight_string(u.textcol1) from `user` as u where 1 != 1",
+            "Query": "select u.a, u.textcol1, weight_string(u.textcol1) from `user` as u",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select un.col2, weight_string(un.col2) from unsharded as un where 1 != 1",
+            "Query": "select un.col2, weight_string(un.col2) from unsharded as un",
+            "Table": "unsharded"
+          }
+        ]
+      }
+    ]
+  },
+  "TablesUsed": [
+    "main.unsharded",
+    "user.user"
+  ]
+}
 
 # Order by for join, on text column in RHS.
 "select u.a, u.textcol1, un.col2 from unsharded un join user u order by u.textcol1, un.col2"
@@ -592,12 +870,12 @@ Gen4 plan same as above
       {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "1,2,-1,3,-2",
+        "JoinColumnIndexes": "R:0,R:1,L:0,R:2,L:1",
         "TableName": "unsharded_`user`",
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "SelectUnsharded",
+            "Variant": "Unsharded",
             "Keyspace": {
               "Name": "main",
               "Sharded": false
@@ -608,7 +886,7 @@ Gen4 plan same as above
           },
           {
             "OperatorType": "Route",
-            "Variant": "SelectScatter",
+            "Variant": "Scatter",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
@@ -622,7 +900,52 @@ Gen4 plan same as above
     ]
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select u.a, u.textcol1, un.col2 from unsharded un join user u order by u.textcol1, un.col2",
+  "Instructions": {
+    "OperatorType": "Sort",
+    "Variant": "Memory",
+    "OrderBy": "(1|3) ASC COLLATE latin1_swedish_ci, (2|4) ASC",
+    "ResultColumns": 3,
+    "Inputs": [
+      {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "R:0,R:1,L:0,R:2,L:1",
+        "TableName": "unsharded_`user`",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select un.col2, weight_string(un.col2) from unsharded as un where 1 != 1",
+            "Query": "select un.col2, weight_string(un.col2) from unsharded as un",
+            "Table": "unsharded"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select u.a, u.textcol1, weight_string(u.textcol1) from `user` as u where 1 != 1",
+            "Query": "select u.a, u.textcol1, weight_string(u.textcol1) from `user` as u",
+            "Table": "`user`"
+          }
+        ]
+      }
+    ]
+  },
+  "TablesUsed": [
+    "main.unsharded",
+    "user.user"
+  ]
+}
 
 # order by for vindex func
 "select id, keyspace_id, range_start, range_end from user_index where id = :id order by range_start"
@@ -655,53 +978,73 @@ Gen4 plan same as above
     ]
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select id, keyspace_id, range_start, range_end from user_index where id = :id order by range_start",
+  "Instructions": {
+    "OperatorType": "Sort",
+    "Variant": "Memory",
+    "OrderBy": "2 ASC",
+    "Inputs": [
+      {
+        "OperatorType": "VindexFunc",
+        "Variant": "VindexMap",
+        "Columns": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "Fields": {
+          "id": "VARBINARY",
+          "keyspace_id": "VARBINARY",
+          "range_end": "VARBINARY",
+          "range_start": "VARBINARY"
+        },
+        "Value": ":id",
+        "Vindex": "user_index"
+      }
+    ]
+  },
+  "TablesUsed": [
+    "user_index"
+  ]
+}
 
 # unary expression
 "select a from user order by binary a desc"
+"unsupported: in scatter query: complex order by expression: convert(a, binary)"
 {
   "QueryType": "SELECT",
   "Original": "select a from user order by binary a desc",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select a, weight_string(a) from `user` where 1 != 1",
-    "OrderBy": "(0|1) DESC",
-    "Query": "select a, weight_string(a) from `user` order by binary a desc",
-    "ResultColumns": 1,
-    "Table": "`user`"
-  }
-}
-{
-  "QueryType": "SELECT",
-  "Original": "select a from user order by binary a desc",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectScatter",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select a, binary a, weight_string(binary a) from `user` where 1 != 1",
+    "FieldQuery": "select a, convert(a, binary), weight_string(convert(a, binary)) from `user` where 1 != 1",
     "OrderBy": "(1|2) DESC",
-    "Query": "select a, binary a, weight_string(binary a) from `user` order by binary a desc",
+    "Query": "select a, convert(a, binary), weight_string(convert(a, binary)) from `user` order by convert(a, binary) desc",
     "ResultColumns": 1,
     "Table": "`user`"
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 
 # unary expression in join query
 "select u.a from user u join music m on u.a = m.a order by binary a desc"
+"unsupported: in scatter query: complex order by expression: convert(a, binary)"
 {
   "QueryType": "SELECT",
   "Original": "select u.a from user u join music m on u.a = m.a order by binary a desc",
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-1",
+    "JoinColumnIndexes": "L:0",
     "JoinVars": {
       "u_a": 0
     },
@@ -709,58 +1052,19 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select u.a, weight_string(u.a) from `user` as u where 1 != 1",
-        "OrderBy": "(0|1) DESC",
-        "Query": "select u.a, weight_string(u.a) from `user` as u order by binary a desc",
-        "ResultColumns": 1,
-        "Table": "`user`"
-      },
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectScatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select 1 from music as m where 1 != 1",
-        "Query": "select 1 from music as m where m.a = :u_a",
-        "Table": "music"
-      }
-    ]
-  }
-}
-{
-  "QueryType": "SELECT",
-  "Original": "select u.a from user u join music m on u.a = m.a order by binary a desc",
-  "Instructions": {
-    "OperatorType": "Join",
-    "Variant": "Join",
-    "JoinColumnIndexes": "-1",
-    "JoinVars": {
-      "u_a": 0
-    },
-    "TableName": "`user`_music",
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectScatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select u.a, binary a, weight_string(binary a) from `user` as u where 1 != 1",
+        "FieldQuery": "select u.a, convert(a, binary), weight_string(convert(a, binary)) from `user` as u where 1 != 1",
         "OrderBy": "(1|2) DESC",
-        "Query": "select u.a, binary a, weight_string(binary a) from `user` as u order by binary a desc",
+        "Query": "select u.a, convert(a, binary), weight_string(convert(a, binary)) from `user` as u order by convert(a, binary) desc",
         "Table": "`user`"
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -770,7 +1074,11 @@ Gen4 plan same as above
         "Table": "music"
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "user.music",
+    "user.user"
+  ]
 }
 
 # intcol order by
@@ -780,7 +1088,7 @@ Gen4 plan same as above
   "Original": "select id, intcol from user order by intcol",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -791,7 +1099,25 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select id, intcol from user order by intcol",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id, intcol from `user` where 1 != 1",
+    "OrderBy": "1 ASC",
+    "Query": "select id, intcol from `user` order by intcol asc",
+    "Table": "`user`"
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
+}
 
 # scatter order by with order by column not present
 "select col from user order by id"
@@ -801,7 +1127,7 @@ Gen4 plan same as above
   "Original": "select col from user order by id",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
@@ -811,5 +1137,8 @@ Gen4 plan same as above
     "Query": "select col, id, weight_string(id) from `user` order by id asc",
     "ResultColumns": 1,
     "Table": "`user`"
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }

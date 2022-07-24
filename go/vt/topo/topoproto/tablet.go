@@ -63,6 +63,16 @@ func TabletAliasEqual(left, right *topodatapb.TabletAlias) bool {
 	return proto.Equal(left, right)
 }
 
+// IsTabletInList returns true if the tablet is in the list of tablets given
+func IsTabletInList(tablet *topodatapb.Tablet, allTablets []*topodatapb.Tablet) bool {
+	for _, tab := range allTablets {
+		if TabletAliasEqual(tablet.Alias, tab.Alias) {
+			return true
+		}
+	}
+	return false
+}
+
 // TabletAliasString formats a TabletAlias
 func TabletAliasString(ta *topodatapb.TabletAlias) string {
 	if ta == nil {
@@ -167,9 +177,6 @@ var AllTabletTypes = []topodatapb.TabletType{
 
 // ParseTabletType parses the tablet type into the enum.
 func ParseTabletType(param string) (topodatapb.TabletType, error) {
-	if strings.ToUpper(param) == "MASTER" {
-		param = "PRIMARY"
-	}
 	value, ok := topodatapb.TabletType_value[strings.ToUpper(param)]
 	if !ok {
 		return topodatapb.TabletType_UNKNOWN, fmt.Errorf("unknown TabletType %v", param)
@@ -252,4 +259,15 @@ func TabletDbName(tablet *topodatapb.Tablet) string {
 // for serving.
 func TabletIsAssigned(tablet *topodatapb.Tablet) bool {
 	return tablet != nil && tablet.Keyspace != "" && tablet.Shard != ""
+}
+
+// IsServingType returns true if the tablet type is one that should be serving to be healthy, or false if the tablet type
+// should not be serving in it's healthy state.
+func IsServingType(tabletType topodatapb.TabletType) bool {
+	switch tabletType {
+	case topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA, topodatapb.TabletType_BATCH, topodatapb.TabletType_EXPERIMENTAL:
+		return true
+	default:
+		return false
+	}
 }

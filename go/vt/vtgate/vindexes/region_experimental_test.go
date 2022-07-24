@@ -17,8 +17,11 @@ limitations under the License.
 package vindexes
 
 import (
+	"context"
 	"strconv"
 	"testing"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -40,14 +43,14 @@ func TestRegionExperimentalMap(t *testing.T) {
 	vindex, err := createRegionVindex(t, "region_experimental", "f1,f2", 1)
 	assert.NoError(t, err)
 	ge := vindex.(MultiColumn)
-	got, err := ge.Map(nil, [][]sqltypes.Value{{
+	got, err := ge.Map(context.Background(), nil, [][]sqltypes.Value{{
 		sqltypes.NewInt64(1), sqltypes.NewInt64(1),
 	}, {
 		sqltypes.NewInt64(255), sqltypes.NewInt64(1),
 	}, {
 		sqltypes.NewInt64(256), sqltypes.NewInt64(1),
 	}, {
-		// Invalid length.
+		// only region id provided, partial column for key range mapping.
 		sqltypes.NewInt64(1),
 	}, {
 		// Invalid region.
@@ -62,7 +65,7 @@ func TestRegionExperimentalMap(t *testing.T) {
 		key.DestinationKeyspaceID([]byte("\x01\x16k@\xb4J\xbaK\xd6")),
 		key.DestinationKeyspaceID([]byte("\xff\x16k@\xb4J\xbaK\xd6")),
 		key.DestinationKeyspaceID([]byte("\x00\x16k@\xb4J\xbaK\xd6")),
-		key.DestinationNone{},
+		key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{Start: []byte("\x01"), End: []byte("\x02")}},
 		key.DestinationNone{},
 		key.DestinationNone{},
 	}
@@ -73,7 +76,7 @@ func TestRegionExperimentalMapMulti2(t *testing.T) {
 	vindex, err := createRegionVindex(t, "region_experimental", "f1,f2", 2)
 	assert.NoError(t, err)
 	ge := vindex.(MultiColumn)
-	got, err := ge.Map(nil, [][]sqltypes.Value{{
+	got, err := ge.Map(context.Background(), nil, [][]sqltypes.Value{{
 		sqltypes.NewInt64(1), sqltypes.NewInt64(1),
 	}, {
 		sqltypes.NewInt64(255), sqltypes.NewInt64(1),
@@ -114,7 +117,7 @@ func TestRegionExperimentalVerifyMulti(t *testing.T) {
 	}
 
 	want := []bool{true, false, false}
-	got, err := ge.Verify(nil, vals, ksids)
+	got, err := ge.Verify(context.Background(), nil, vals, ksids)
 	assert.NoError(t, err)
 	assert.Equal(t, want, got)
 }

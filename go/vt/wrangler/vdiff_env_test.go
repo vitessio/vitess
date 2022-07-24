@@ -197,7 +197,7 @@ func (env *testVDiffEnv) addTablet(id int, keyspace, shard string, tabletType to
 		},
 	}
 	env.tablets[id] = newTestVDiffTablet(tablet)
-	if err := env.wr.InitTablet(context.Background(), tablet, false /* allowPrimaryOverride */, true /* createShardAndKeyspace */, false /* allowUpdate */); err != nil {
+	if err := env.wr.TopoServer().InitTablet(context.Background(), tablet, false /* allowPrimaryOverride */, true /* createShardAndKeyspace */, false /* allowUpdate */); err != nil {
 		panic(err)
 	}
 	if tabletType == topodatapb.TabletType_PRIMARY {
@@ -290,7 +290,7 @@ func newTestVDiffTMClient() *testVDiffTMClient {
 	}
 }
 
-func (tmc *testVDiffTMClient) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
+func (tmc *testVDiffTMClient) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.GetSchemaRequest) (*tabletmanagerdatapb.SchemaDefinition, error) {
 	return tmc.schema, nil
 }
 
@@ -335,8 +335,7 @@ func (tmc *testVDiffTMClient) VReplicationWaitForPos(ctx context.Context, tablet
 	return nil
 }
 
-// TODO(deepthi): rename this to PrimaryPosition after v12.0
-func (tmc *testVDiffTMClient) MasterPosition(ctx context.Context, tablet *topodatapb.Tablet) (string, error) {
+func (tmc *testVDiffTMClient) PrimaryPosition(ctx context.Context, tablet *topodatapb.Tablet) (string, error) {
 	pos, ok := tmc.pos[int(tablet.Alias.Uid)]
 	if !ok {
 		return "", fmt.Errorf("no primary position for %d", tablet.Alias.Uid)

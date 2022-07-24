@@ -17,11 +17,13 @@ limitations under the License.
 package mysql
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"net"
 	"os"
 	"path"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -32,33 +34,23 @@ import (
 
 	"vitess.io/vitess/go/vt/tlstest"
 	"vitess.io/vitess/go/vt/vttls"
-
-	"context"
 )
 
 // assertSQLError makes sure we get the right error.
-func assertSQLError(t *testing.T, err error, code int, sqlState string, subtext string, query string) {
+func assertSQLError(t *testing.T, err error, code int, sqlState, subtext, query, pattern string) {
 	t.Helper()
 
-	if err == nil {
-		t.Fatalf("was expecting SQLError %v / %v / %v but got no error.", code, sqlState, subtext)
-	}
+	require.Error(t, err, "was expecting SQLError %v / %v / %v but got no error.", code, sqlState, subtext)
 	serr, ok := err.(*SQLError)
-	if !ok {
-		t.Fatalf("was expecting SQLError %v / %v / %v but got: %v", code, sqlState, subtext, err)
+	require.True(t, ok, "was expecting SQLError %v / %v / %v but got: %v", code, sqlState, subtext, err)
+	require.Equal(t, code, serr.Num, "was expecting SQLError %v / %v / %v but got code %v", code, sqlState, subtext, serr.Num)
+	require.Equal(t, sqlState, serr.State, "was expecting SQLError %v / %v / %v but got state %v", code, sqlState, subtext, serr.State)
+	if pattern != "" {
+		require.Regexp(t, regexp.MustCompile(pattern), serr.Message)
+	} else {
+		require.True(t, subtext == "" || strings.Contains(serr.Message, subtext), "was expecting SQLError %v / %v / %v but got message %v", code, sqlState, subtext, serr.Message)
 	}
-	if serr.Num != code {
-		t.Fatalf("was expecting SQLError %v / %v / %v but got code %v", code, sqlState, subtext, serr.Num)
-	}
-	if serr.State != sqlState {
-		t.Fatalf("was expecting SQLError %v / %v / %v but got state %v", code, sqlState, subtext, serr.State)
-	}
-	if subtext != "" && !strings.Contains(serr.Message, subtext) {
-		t.Fatalf("was expecting SQLError %v / %v / %v but got message %v", code, sqlState, subtext, serr.Message)
-	}
-	if serr.Query != query {
-		t.Fatalf("was expecting SQLError %v / %v / %v with Query '%v' but got query '%v'", code, sqlState, subtext, query, serr.Query)
-	}
+	require.Equal(t, query, serr.Query, "was expecting SQLError %v / %v / %v with Query '%v' but got query '%v'", code, sqlState, subtext, query, serr.Query)
 }
 
 // TestConnectTimeout runs connection failure scenarios against a
@@ -68,9 +60,7 @@ func TestConnectTimeout(t *testing.T) {
 	// Create a socket, but it's not accepting. So all Dial
 	// attempts will timeout.
 	listener, err := net.Listen("tcp", "127.0.0.1:")
-	if err != nil {
-		t.Fatalf("cannot listen: %v", err)
-	}
+	require.NoError(t, err, "cannot listen: %v", err)
 	host, port := getHostPort(t, listener.Addr())
 	params := &ConnParams{
 		Host: host,
@@ -83,9 +73,7 @@ func TestConnectTimeout(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		_, err := Connect(ctx, params)
-		if err != context.Canceled {
-			t.Errorf("Was expecting context.Canceled but got: %v", err)
-		}
+		assert.Equal(t, context.Canceled, err, "Was expecting context.Canceled but got: %v", err)
 		close(done)
 	}()
 	time.Sleep(100 * time.Millisecond)
@@ -96,9 +84,7 @@ func TestConnectTimeout(t *testing.T) {
 	ctx, cancel = context.WithTimeout(context.Background(), 100*time.Millisecond)
 	_, err = Connect(ctx, params)
 	cancel()
-	if err != context.DeadlineExceeded {
-		t.Errorf("Was expecting context.DeadlineExceeded but got: %v", err)
-	}
+	assert.Equal(t, context.DeadlineExceeded, err, "Was expecting context.DeadlineExceeded but got: %v", err)
 
 	// Tests a connection timeout through params
 	ctx = context.Background()
@@ -106,9 +92,7 @@ func TestConnectTimeout(t *testing.T) {
 	paramsWithTimeout.ConnectTimeoutMs = 1
 	_, err = Connect(ctx, &paramsWithTimeout)
 	cancel()
-	if err != context.DeadlineExceeded {
-		t.Errorf("Was expecting context.DeadlineExceeded but got: %v", err)
-	}
+	assert.Equal(t, context.DeadlineExceeded, err, "Was expecting context.DeadlineExceeded but got: %v", err)
 
 	// Now the server will listen, but close all connections on accept.
 	wg := sync.WaitGroup{}
@@ -126,29 +110,28 @@ func TestConnectTimeout(t *testing.T) {
 	}()
 	ctx = context.Background()
 	_, err = Connect(ctx, params)
-	assertSQLError(t, err, CRServerLost, SSUnknownSQLState, "initial packet read failed", "")
+	assertSQLError(t, err, CRServerLost, SSUnknownSQLState, "initial packet read failed", "", "")
 
 	// Now close the listener. Connect should fail right away,
 	// check the error.
 	listener.Close()
 	wg.Wait()
 	_, err = Connect(ctx, params)
-	assertSQLError(t, err, CRConnHostError, SSUnknownSQLState, "connection refused", "")
+	assertSQLError(t, err, CRConnHostError, SSUnknownSQLState, "connection refused", "", "")
 
 	// Tests a connection where Dial to a unix socket fails
 	// properly returns the right error. To simulate exactly the
 	// right failure, try to dial a Unix socket that's just a temp file.
 	fd, err := os.CreateTemp("", "mysql")
-	if err != nil {
-		t.Fatalf("cannot create TemFile: %v", err)
-	}
+	require.NoError(t, err, "cannot create TempFile: %v", err)
 	name := fd.Name()
 	fd.Close()
 	params.UnixSocket = name
 	ctx = context.Background()
 	_, err = Connect(ctx, params)
 	os.Remove(name)
-	assertSQLError(t, err, CRConnectionError, SSUnknownSQLState, "connection refused", "")
+	t.Log(err)
+	assertSQLError(t, err, CRConnectionError, SSUnknownSQLState, "connection refused", "", "net\\.Dial\\(([a-z0-9A-Z_\\/]*)\\) to local server failed:")
 }
 
 // TestTLSClientDisabled creates a Server with TLS support, then connects
@@ -174,9 +157,7 @@ func TestTLSClientDisabled(t *testing.T) {
 	port := l.Addr().(*net.TCPAddr).Port
 
 	// Create the certs.
-	root, err := os.MkdirTemp("", "TestTLSServer")
-	require.NoError(t, err)
-	defer os.RemoveAll(root)
+	root := t.TempDir()
 	tlstest.CreateCA(root)
 	tlstest.CreateSignedCert(root, tlstest.CA, "01", "server", host)
 	tlstest.CreateSignedCert(root, tlstest.CA, "02", "client", "Client Cert")
@@ -185,6 +166,7 @@ func TestTLSClientDisabled(t *testing.T) {
 	serverConfig, err := vttls.ServerConfig(
 		path.Join(root, "server-cert.pem"),
 		path.Join(root, "server-key.pem"),
+		"",
 		"",
 		"",
 		tls.VersionTLS12)
@@ -247,9 +229,7 @@ func TestTLSClientPreferredDefault(t *testing.T) {
 	port := l.Addr().(*net.TCPAddr).Port
 
 	// Create the certs.
-	root, err := os.MkdirTemp("", "TestTLSServer")
-	require.NoError(t, err)
-	defer os.RemoveAll(root)
+	root := t.TempDir()
 	tlstest.CreateCA(root)
 	tlstest.CreateSignedCert(root, tlstest.CA, "01", "server", "server.example.com")
 	tlstest.CreateSignedCert(root, tlstest.CA, "02", "client", "Client Cert")
@@ -258,6 +238,7 @@ func TestTLSClientPreferredDefault(t *testing.T) {
 	serverConfig, err := vttls.ServerConfig(
 		path.Join(root, "server-cert.pem"),
 		path.Join(root, "server-key.pem"),
+		"",
 		"",
 		"",
 		tls.VersionTLS12)
@@ -368,9 +349,7 @@ func TestTLSClientVerifyCA(t *testing.T) {
 	port := l.Addr().(*net.TCPAddr).Port
 
 	// Create the certs.
-	root, err := os.MkdirTemp("", "TestTLSServer")
-	require.NoError(t, err)
-	defer os.RemoveAll(root)
+	root := t.TempDir()
 	tlstest.CreateCA(root)
 	tlstest.CreateSignedCert(root, tlstest.CA, "01", "server", "server.example.com")
 	tlstest.CreateSignedCert(root, tlstest.CA, "02", "client", "Client Cert")
@@ -379,6 +358,7 @@ func TestTLSClientVerifyCA(t *testing.T) {
 	serverConfig, err := vttls.ServerConfig(
 		path.Join(root, "server-cert.pem"),
 		path.Join(root, "server-key.pem"),
+		"",
 		"",
 		"",
 		tls.VersionTLS12)
@@ -412,7 +392,7 @@ func TestTLSClientVerifyCA(t *testing.T) {
 
 	fmt.Printf("Error: %s", err)
 
-	assert.Contains(t, err.Error(), "certificate signed by unknown authority")
+	assert.Contains(t, err.Error(), "cannot send HandshakeResponse41: x509:")
 
 	// Now setup proper CA that is valid to verify
 	params.SslCa = path.Join(root, "ca-cert.pem")
@@ -452,9 +432,7 @@ func TestTLSClientVerifyIdentity(t *testing.T) {
 	port := l.Addr().(*net.TCPAddr).Port
 
 	// Create the certs.
-	root, err := os.MkdirTemp("", "TestTLSServer")
-	require.NoError(t, err)
-	defer os.RemoveAll(root)
+	root := t.TempDir()
 	tlstest.CreateCA(root)
 	tlstest.CreateSignedCert(root, tlstest.CA, "01", "server", "server.example.com")
 	tlstest.CreateSignedCert(root, tlstest.CA, "02", "client", "Client Cert")
@@ -463,6 +441,7 @@ func TestTLSClientVerifyIdentity(t *testing.T) {
 	serverConfig, err := vttls.ServerConfig(
 		path.Join(root, "server-cert.pem"),
 		path.Join(root, "server-key.pem"),
+		"",
 		"",
 		"",
 		tls.VersionTLS12)
@@ -496,7 +475,7 @@ func TestTLSClientVerifyIdentity(t *testing.T) {
 
 	fmt.Printf("Error: %s", err)
 
-	assert.Contains(t, err.Error(), "certificate signed by unknown authority")
+	assert.Contains(t, err.Error(), "cannot send HandshakeResponse41: x509:")
 
 	// Now setup proper CA that is valid to verify
 	params.SslCa = path.Join(root, "ca-cert.pem")
@@ -511,4 +490,12 @@ func TestTLSClientVerifyIdentity(t *testing.T) {
 	if conn != nil {
 		conn.Close()
 	}
+
+	// Now revoke the server certificate and make sure we can't connect
+	tlstest.RevokeCertAndRegenerateCRL(root, tlstest.CA, "server")
+
+	params.SslCrl = path.Join(root, "ca-crl.pem")
+	_, err = Connect(context.Background(), params)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Certificate revoked: CommonName=server.example.com")
 }

@@ -17,6 +17,7 @@ limitations under the License.
 package vtgate
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"os"
@@ -30,8 +31,6 @@ import (
 
 	"vitess.io/vitess/go/trace"
 
-	"context"
-
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -39,6 +38,7 @@ import (
 )
 
 type testHandler struct {
+	mysql.UnimplementedHandler
 	lastConn *mysql.Conn
 }
 
@@ -46,21 +46,24 @@ func (th *testHandler) NewConnection(c *mysql.Conn) {
 	th.lastConn = c
 }
 
-func (th *testHandler) ConnectionClosed(c *mysql.Conn) {
-}
-
 func (th *testHandler) ComQuery(c *mysql.Conn, q string, callback func(*sqltypes.Result) error) error {
-	return nil
+	// when creating a connection, we send a query to MySQL to set the connection's collation,
+	// this query usually returns us something. however, we use testHandler which is a fake
+	// implementation of MySQL that returns no results and no error for set queries, Vitess
+	// interprets this as an error, we do not want to fail if we see such error.
+	// for this reason, we send back an empty result to the caller.
+	return callback(&sqltypes.Result{Fields: []*querypb.Field{}, Rows: [][]sqltypes.Value{}})
 }
 
 func (th *testHandler) ComPrepare(c *mysql.Conn, q string, b map[string]*querypb.BindVariable) ([]*querypb.Field, error) {
 	return nil, nil
 }
 
-func (th *testHandler) ComResetConnection(c *mysql.Conn) {
+func (th *testHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareData, callback func(*sqltypes.Result) error) error {
+	return nil
 }
 
-func (th *testHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareData, callback func(*sqltypes.Result) error) error {
+func (th *testHandler) ComBinlogDumpGTID(c *mysql.Conn, gtidSet mysql.GTIDSet) error {
 	return nil
 }
 
@@ -258,12 +261,9 @@ func TestInitTLSConfigWithServerCA(t *testing.T) {
 
 func testInitTLSConfig(t *testing.T, serverCA bool) {
 	// Create the certs.
-	root, err := os.MkdirTemp("", "TestInitTLSConfig")
-	if err != nil {
-		t.Fatalf("TempDir failed: %v", err)
-	}
-	defer os.RemoveAll(root)
+	root := t.TempDir()
 	tlstest.CreateCA(root)
+	tlstest.CreateCRL(root, tlstest.CA)
 	tlstest.CreateSignedCert(root, tlstest.CA, "01", "server", "server.example.com")
 
 	serverCACert := ""
@@ -272,7 +272,7 @@ func testInitTLSConfig(t *testing.T, serverCA bool) {
 	}
 
 	listener := &mysql.Listener{}
-	if err := initTLSConfig(listener, path.Join(root, "server-cert.pem"), path.Join(root, "server-key.pem"), path.Join(root, "ca-cert.pem"), serverCACert, true, tls.VersionTLS12); err != nil {
+	if err := initTLSConfig(listener, path.Join(root, "server-cert.pem"), path.Join(root, "server-key.pem"), path.Join(root, "ca-cert.pem"), path.Join(root, "ca-crl.pem"), serverCACert, true, tls.VersionTLS12); err != nil {
 		t.Fatalf("init tls config failure due to: +%v", err)
 	}
 

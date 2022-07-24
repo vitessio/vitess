@@ -26,6 +26,11 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 )
 
+// testSetLegacyReplicationLagAlgorithm is a test helper function, if this is used by a production code path, something is wrong.
+func testSetLegacyReplicationLagAlgorithm(newLegacy bool) {
+	*legacyReplicationLagAlgorithm = newLegacy
+}
+
 // testSetMinNumTablets is a test helper function, if this is used by a production code path, something is wrong.
 func testSetMinNumTablets(newMin int) {
 	*minNumTablets = newMin

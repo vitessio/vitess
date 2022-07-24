@@ -24,6 +24,8 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/vt/proto/vttest"
+
 	// we use gRPC everywhere, so import the vtgate client.
 	_ "vitess.io/vitess/go/vt/vtgate/grpcvtgateconn"
 )
@@ -44,6 +46,12 @@ type Environment interface {
 	// and destructing the MySQL instance(s) that will be used by the cluster.
 	// See: vttest.MySQLManager for the interface the manager must implement
 	MySQLManager(mycnf []string, snapshot string) (MySQLManager, error)
+
+	// TopoManager is the constructor for the Topology manager that will
+	// be used by the cluster. It's only used when we run the local cluster with
+	// a remote topo server instead of in-memory topo server within vtcombo process
+	// See: vttest.TopoManager for the interface of topo manager
+	TopoManager(topoImplementation, topoServerAddress, topoRoot string, topology *vttest.VTTestTopology) TopoManager
 
 	// Directory is the path where the local cluster will store all its
 	// data and metadata. For local testing, this should probably be an
@@ -147,6 +155,16 @@ func (env *LocalTestEnv) MySQLManager(mycnf []string, snapshot string) (MySQLMan
 	}, nil
 }
 
+// TopoManager implements TopoManager for LocalTestEnv
+func (env *LocalTestEnv) TopoManager(topoImplementation, topoServerAddress, topoRoot string, topology *vttest.VTTestTopology) TopoManager {
+	return &Topoctl{
+		TopoImplementation:      topoImplementation,
+		TopoGlobalServerAddress: topoServerAddress,
+		TopoGlobalRoot:          topoRoot,
+		Topology:                topology,
+	}
+}
+
 // DefaultProtocol implements DefaultProtocol for LocalTestEnv.
 // It is always GRPC.
 func (env *LocalTestEnv) DefaultProtocol() string {
@@ -182,10 +200,10 @@ func (env *LocalTestEnv) ProcessHealthCheck(name string) HealthChecker {
 // VtcomboArguments implements VtcomboArguments for LocalTestEnv.
 func (env *LocalTestEnv) VtcomboArguments() []string {
 	return []string{
-		"-service_map", strings.Join(
+		"--service_map", strings.Join(
 			[]string{"grpc-vtgateservice", "grpc-vtctl", "grpc-vtctld"}, ",",
 		),
-		"-enable_queries",
+		"--enable_queries",
 	}
 }
 

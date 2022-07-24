@@ -19,7 +19,7 @@ func init() {
 
 func TestKnownPaths(t *testing.T) {
 	m := martini.Classic()
-	api := HttpAPI{}
+	api := API{}
 
 	api.RegisterRequests(m)
 

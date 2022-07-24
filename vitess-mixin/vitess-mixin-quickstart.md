@@ -186,7 +186,7 @@ The vitess mixin supports DEV/PROD configurations (Currently it is possible to e
           executionErrorState: 'keep_state',
           message: |||
             The number of tablets with MySQL replication lag > 300s is above the threshold.
-            This usually indicate that replicas are not able to keep up with the write loads on the master. Please take a look.
+            This usually indicate that replicas are not able to keep up with the write loads on the primary. Please take a look.
           |||,
 
           prod+: {
@@ -239,17 +239,17 @@ These tests attempt to assert truth to the following:
 - Does this mixin generate valid recording rules YAML?
 - Do the configured elements do what they are expected to do?
 
-This make target will format, lint, build all generated dashboards and recording rules using `origin/master` and diff with them your `local branch`. Printing a report to the `stdout`.
+This make target will format, lint, build all generated dashboards and recording rules using `origin/main` and diff with them your `local branch`. Printing a report to the `stdout`.
 
 ```shell
   $ pwd
   /manfontan/vitess-mixin
   $ ENV='prod' make all
-  #### Building origin/master
+  #### Building origin/main
 
   Done!
 
-  #### Diff origin/master with master:
+  #### Diff origin/main with main:
 
   # Checking prometheus_rules.yaml... OK
   # Checking cluster_overview.json... OK
@@ -258,10 +258,10 @@ This make target will format, lint, build all generated dashboards and recording
   # Checking vttablet_host_view.json... OK
 
   EXIT STATUS:
-  ✅ Your dashboards local version matches the origin/master version
+  ✅ Your dashboards local version matches the origin/main version
 ```
 
-The above execution shows the report for a `local branch` matching `origin/master`. Any changes will be reported as **NOK**  along with the diff report. This doesn't mean something is wrong it just points that there are changes in your local branch compared to `origin/master` which is expected. Review the diff report and once you are happy with your changes create a PR.
+The above execution shows the report for a `local branch` matching `origin/main`. Any changes will be reported as **NOK**  along with the diff report. This doesn't mean something is wrong it just points that there are changes in your local branch compared to `origin/main` which is expected. Review the diff report and once you are happy with your changes create a PR.
 
 ### Local e2e tests using Cypress (Alpha)
 
@@ -307,12 +307,12 @@ In order to generate some metrics we can use the following commands:
 ## INSERT TEST DATA
 mysql --port=15306 --host=127.0.0.1 < load_test.sql
 ## SIMULATED QUERIES
-mysqlslap -c 5 --port=15306 --host=127.0.0.1 --iterations=1000 --create-schema=test_keyspace:80-@master --query="SELECT * FROM messages;"
+mysqlslap -c 5 --port=15306 --host=127.0.0.1 --iterations=1000 --create-schema=test_keyspace:80-@primary --query="SELECT * FROM messages;"
 mysqlslap -c 5 --port=15306 --host=127.0.0.1 --iterations=1000 --create-schema=test_keyspace:80-@replica --query="SELECT * FROM messages;"
-mysqlslap -c 5 --port=15306 --host=127.0.0.1 --iterations=1000 --create-schema=lookup_keyspace:-@master --query="SELECT * FROM messages_message_lookup;"
+mysqlslap -c 5 --port=15306 --host=127.0.0.1 --iterations=1000 --create-schema=lookup_keyspace:-@primary --query="SELECT * FROM messages_message_lookup;"
 mysqlslap -c 5 --port=15306 --host=127.0.0.1 --iterations=1000 --create-schema=lookup_keyspace:-@replica --query="SELECT * FROM messages_message_lookup;"
 ## SIMULATED ERRORS
-mysqlslap --port=15306 --host=127.0.0.1 --iterations=10000 --create-schema=test_keyspace:80-@master --query="SELECT name FROM messages;"
+mysqlslap --port=15306 --host=127.0.0.1 --iterations=10000 --create-schema=test_keyspace:80-@primary --query="SELECT name FROM messages;"
 mysqlslap --port=15306 --host=127.0.0.1 --iterations=10000 --create-schema=lookup_keyspace:-@replica --query="SELECT name FROM messages_message_lookup;"
 ```
 

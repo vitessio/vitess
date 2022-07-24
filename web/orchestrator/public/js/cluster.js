@@ -23,8 +23,8 @@ function Cluster() {
       apiCommand("/api/recover-lite/" + _instancesMap[e.draggedNodeId].Key.Hostname + "/" + _instancesMap[e.draggedNodeId].Key.Port);
       return true;
     },
-    "force-master-failover": function(e) {
-      apiCommand("/api/force-master-failover/" + _instancesMap[e.draggedNodeId].Key.Hostname + "/" + _instancesMap[e.draggedNodeId].Key.Port);
+    "force-primary-failover": function(e) {
+      apiCommand("/api/force-primary-failover/" + _instancesMap[e.draggedNodeId].Key.Hostname + "/" + _instancesMap[e.draggedNodeId].Key.Port);
       return true;
     },
     "recover-suggested-successor": function(e) {
@@ -222,7 +222,7 @@ function Cluster() {
 
     renderInstanceElement(instanceEl, node, "cluster");
 
-    var masterSectionEl = $('<div class="instance-master-section" data-nodeid="' + node.id + '"></div>').appendTo(instanceEl);
+    var primarySectionEl = $('<div class="instance-primary-section" data-nodeid="' + node.id + '"></div>').appendTo(instanceEl);
     var normalSectionEl = $('<div class="instance-normal-section" data-nodeid="' + node.id + '"></div>').appendTo(instanceEl);
     if (node.children) {
       var trailerEl = $('<div class="instance-trailer" data-nodeid="' + node.id + '"><div><span class="glyphicon glyphicon-chevron-left" title="Drag and drop replicas of this instance"></span></div></div>').appendTo(instanceEl);
@@ -254,7 +254,7 @@ function Cluster() {
 
     activateInstanceDraggable(instanceEl);
     prepareInstanceDroppable(normalSectionEl);
-    prepareInstanceMasterSectionDroppable(masterSectionEl);
+    prepareInstancePrimarySectionDroppable(primarySectionEl);
   }
 
   function instanceEl_getTrailerEl(instanceEl) {
@@ -350,20 +350,20 @@ function Cluster() {
 
   }
 
-  function prepareInstanceMasterSectionDroppable(instanceMasterSectionEl) {
+  function prepareInstancePrimarySectionDroppable(instancePrimarySectionEl) {
     var nodesMap = _instancesMap;
-    instanceMasterSectionEl.droppable({
+    instancePrimarySectionEl.droppable({
       accept: function(draggable) {
         // Find the objects that accept a draggable (i.e. valid droppables)
         if (!droppableIsActive) {
           return false
         }
-        if (instanceMasterSectionEl[0] == draggable[0])
+        if (instancePrimarySectionEl[0] == draggable[0])
           return false;
         var draggedNodeId = draggable.attr("data-nodeid");
         var draggedNode = nodesMap[draggedNodeId];
-        var targetNode = nodesMap[instanceMasterSectionEl.attr("data-nodeid")];
-        var action = _isDraggingTrailer ? moveChildren : moveInstanceOnMaster;
+        var targetNode = nodesMap[instancePrimarySectionEl.attr("data-nodeid")];
+        var action = _isDraggingTrailer ? moveChildren : moveInstanceOnPrimary;
         var acceptDrop = action(draggedNode, targetNode, false);
         var instanceDiv = $(this).closest(".instance");
         instanceDiv.addClass("accept_drop_check");
@@ -402,7 +402,7 @@ function Cluster() {
       drop: function(e, ui) {
         var draggedNodeId = ui.draggable.attr("data-nodeid");
         var duplicate = ui.helper;
-        var action = _isDraggingTrailer ? moveChildren : moveInstanceOnMaster;
+        var action = _isDraggingTrailer ? moveChildren : moveInstanceOnPrimary;
         action(nodesMap[draggedNodeId], nodesMap[$(this).attr("data-nodeid")], true);
         clearDroppable();
       }
@@ -412,7 +412,7 @@ function Cluster() {
 
   // moveInstance checks whether an instance (node) can be dropped on another (droppableNode).
   // The function consults with the current moveInstanceMethod; the type of action taken is based on that.
-  // For example, actions can be repoint, match-below, relocate, move-up, take-master etc.
+  // For example, actions can be repoint, match-below, relocate, move-up, take-primary etc.
   // When shouldApply is false nothing gets executed, and the function merely serves as a predictive
   // to the possibility of the drop.
   function moveInstance(node, droppableNode, shouldApply) {
@@ -431,15 +431,15 @@ function Cluster() {
           accept: false
         };
       }
-      if (droppableNode.MasterKey.Hostname && droppableNode.MasterKey.Hostname != "_") {
-        // droppableNode has master
+      if (droppableNode.SourceKey.Hostname && droppableNode.SourceKey.Hostname != "_") {
+        // droppableNode has primary
         if (!droppableNode.LogReplicationUpdatesEnabled) {
           // Obviously can't handle.
           return {
             accept: false
           };
         }
-        // It's OK for the master itself to not have log_slave_updates
+        // It's OK for the primary itself to not have log_slave_updates
       }
 
       if (node.id == droppableNode.id) {
@@ -447,18 +447,18 @@ function Cluster() {
           accept: false
         };
       }
-      if (instanceIsChild(droppableNode, node) && node.isMaster && !node.isCoMaster) {
+      if (instanceIsChild(droppableNode, node) && node.isPrimary && !node.isCoPrimary) {
         if (node.hasProblem) {
           return {
             accept: false
           };
         }
         if (shouldApply) {
-          makeCoMaster(node, droppableNode);
+          makeCoPrimary(node, droppableNode);
         }
         return {
           accept: "ok",
-          type: '<span class="glyphicon glyphicon-exclamation-sign text-warning"></span> <strong>MAKE CO MASTER</strong> with ' + droppableTitle,
+          type: '<span class="glyphicon glyphicon-exclamation-sign text-warning"></span> <strong>MAKE CO PRIMARY</strong> with ' + droppableTitle,
         };
       }
       if (instanceIsDescendant(droppableNode, node)) {
@@ -469,7 +469,7 @@ function Cluster() {
       }
       if (node.isAggregate) {
         if (shouldApply) {
-          relocateReplicas(node.masterNode, droppableNode, node.aggregatedInstancesPattern);
+          relocateReplicas(node.primaryNode, droppableNode, node.aggregatedInstancesPattern);
         }
         return {
           accept: "warning",
@@ -504,15 +504,15 @@ function Cluster() {
           accept: false
         };
       }
-      if (droppableNode.MasterKey.Hostname && droppableNode.MasterKey.Hostname != "_") {
-        // droppableNode has master
+      if (droppableNode.SourceKey.Hostname && droppableNode.SourceKey.Hostname != "_") {
+        // droppableNode has primary
         if (!droppableNode.LogReplicationUpdatesEnabled) {
           // Obviously can't handle.
           return {
             accept: false
           };
         }
-        // It's OK for the master itself to not have log_slave_updates
+        // It's OK for the primary itself to not have log_slave_updates
       }
 
       if (node.id == droppableNode.id) {
@@ -520,18 +520,18 @@ function Cluster() {
           accept: false
         };
       }
-      if (instanceIsChild(droppableNode, node) && node.isMaster && !node.isCoMaster) {
+      if (instanceIsChild(droppableNode, node) && node.isPrimary && !node.isCoPrimary) {
         if (node.hasProblem) {
           return {
             accept: false
           };
         }
         if (shouldApply) {
-          makeCoMaster(node, droppableNode);
+          makeCoPrimary(node, droppableNode);
         }
         return {
           accept: "ok",
-          type: '<span class="glyphicon glyphicon-exclamation-sign text-warning"></span> <strong>MAKE CO MASTER</strong> with ' + droppableTitle,
+          type: '<span class="glyphicon glyphicon-exclamation-sign text-warning"></span> <strong>MAKE CO PRIMARY</strong> with ' + droppableTitle,
         };
       }
       if (instanceIsDescendant(droppableNode, node)) {
@@ -582,31 +582,31 @@ function Cluster() {
           accept: false
         };
       }
-      if (instanceIsChild(droppableNode, node) && node.isCoMaster) {
-        // We may allow a co-master to change its other co-master under some conditions,
-        // see MakeCoMaster() in instance_topology.go
+      if (instanceIsChild(droppableNode, node) && node.isCoPrimary) {
+        // We may allow a co-primary to change its other co-primary under some conditions,
+        // see MakeCoPrimary() in instance_topology.go
         if (!droppableNode.ReadOnly) {
           return {
             accept: false
           };
         }
-        var coMaster = node.masterNode;
-        if (coMaster.id == droppableNode.id) {
+        var coPrimary = node.primaryNode;
+        if (coPrimary.id == droppableNode.id) {
           return {
             accept: false
           };
         }
-        if (coMaster.lastCheckInvalidProblem() || coMaster.notRecentlyCheckedProblem() || coMaster.ReadOnly) {
+        if (coPrimary.lastCheckInvalidProblem() || coPrimary.notRecentlyCheckedProblem() || coPrimary.ReadOnly) {
           if (shouldApply) {
-            makeCoMaster(node, droppableNode);
+            makeCoPrimary(node, droppableNode);
           }
           return {
             accept: "ok",
-            type: '<span class="glyphicon glyphicon-exclamation-sign text-warning"></span> <strong>MAKE CO MASTER</strong> with ' + droppableTitle,
+            type: '<span class="glyphicon glyphicon-exclamation-sign text-warning"></span> <strong>MAKE CO PRIMARY</strong> with ' + droppableTitle,
           };
         }
       }
-      if (node.isCoMaster) {
+      if (node.isCoPrimary) {
         return {
           accept: false
         };
@@ -630,8 +630,8 @@ function Cluster() {
           // Typically, when a node has a problem we do not allow moving it up.
           // But there's a special situation when allowing is desired: when the parent has personal issues,
           // (say disk issue or otherwise something heavyweight running which slows down replication)
-          // and you want to move up the replica which is only delayed by its master.
-          // So to help out, if the instance is identically at its master's trail, it is allowed to move up.
+          // and you want to move up the replica which is only delayed by its primary.
+          // So to help out, if the instance is identically at its primary's trail, it is allowed to move up.
           if (!node.isSQLThreadCaughtUpWithIOThread) {
             return {
               accept: false
@@ -646,7 +646,7 @@ function Cluster() {
           type: "moveUp under " + droppableTitle
         };
       }
-      if (instanceIsChild(node, droppableNode) && !droppableNode.isMaster) {
+      if (instanceIsChild(node, droppableNode) && !droppableNode.isPrimary) {
         if (node.hasProblem) {
           // Typically, when a node has a problem we do not allow moving it up.
           // But there's a special situation when allowing is desired: when
@@ -658,25 +658,25 @@ function Cluster() {
           }
         }
         if (shouldApply) {
-          takeMaster(node, droppableNode);
+          takePrimary(node, droppableNode);
         }
         return {
           accept: "ok",
-          type: "takeMaster " + droppableTitle
+          type: "takePrimary " + droppableTitle
         };
       }
-      if (instanceIsChild(droppableNode, node) && node.isMaster && !node.isCoMaster) {
+      if (instanceIsChild(droppableNode, node) && node.isPrimary && !node.isCoPrimary) {
         if (node.hasProblem) {
           return {
             accept: false
           };
         }
         if (shouldApply) {
-          makeCoMaster(node, droppableNode);
+          makeCoPrimary(node, droppableNode);
         }
         return {
           accept: "ok",
-          type: '<span class="glyphicon glyphicon-exclamation-sign text-warning"></span> <strong>MAKE CO MASTER</strong> with ' + droppableTitle,
+          type: '<span class="glyphicon glyphicon-exclamation-sign text-warning"></span> <strong>MAKE CO PRIMARY</strong> with ' + droppableTitle,
         };
       }
       return {
@@ -699,7 +699,7 @@ function Cluster() {
   }
 
 
-  function moveInstanceOnMaster(node, droppableNode, shouldApply) {
+  function moveInstanceOnPrimary(node, droppableNode, shouldApply) {
     var unaccepted = {
       accept: false
     };
@@ -713,7 +713,7 @@ function Cluster() {
       // Obviously can't handle.
       return unaccepted;
     }
-    if (instanceIsChild(node, droppableNode) && !droppableNode.isMaster && !droppableNode.isCoMaster) {
+    if (instanceIsChild(node, droppableNode) && !droppableNode.isPrimary && !droppableNode.isCoPrimary) {
       if (node.hasProblem) {
         // Typically, when a node has a problem we do not allow moving it up.
         // But there's a special situation when allowing is desired: when
@@ -725,16 +725,16 @@ function Cluster() {
         }
       }
       if (shouldApply) {
-        takeMaster(node, droppableNode);
+        takePrimary(node, droppableNode);
       }
       return {
         accept: "ok",
-        type: '<span class="glyphicon glyphicon-exclamation-sign text-warning"></span> <strong>take master</strong> ' + droppableTitle
+        type: '<span class="glyphicon glyphicon-exclamation-sign text-warning"></span> <strong>take primary</strong> ' + droppableTitle
       };
     }
     if (instanceIsChild(node, droppableNode) &&
-      droppableNode.isMaster &&
-      !node.isCoMaster
+      droppableNode.isPrimary &&
+      !node.isCoPrimary
     ) {
       if (node.hasProblem) {
         return {
@@ -742,11 +742,11 @@ function Cluster() {
         };
       }
       if (shouldApply) {
-        gracefulMasterTakeover(node, droppableNode);
+        gracefulPrimaryTakeover(node, droppableNode);
       }
       return {
         accept: "ok",
-        type: '<span class="glyphicon glyphicon-exclamation-sign text-warning"></span> <strong>PROMOTE AS MASTER</strong> '
+        type: '<span class="glyphicon glyphicon-exclamation-sign text-warning"></span> <strong>PROMOTE AS PRIMARY</strong> '
       };
     }
     return moveInstance(node, droppableNode, shouldApply);
@@ -773,15 +773,15 @@ function Cluster() {
           accept: false
         };
       }
-      if (droppableNode.MasterKey.Hostname && droppableNode.MasterKey.Hostname != "_") {
-        // droppableNode has master
+      if (droppableNode.SourceKey.Hostname && droppableNode.SourceKey.Hostname != "_") {
+        // droppableNode has primary
         if (!droppableNode.LogReplicationUpdatesEnabled) {
           // Obviously can't handle.
           return {
             accept: false
           };
         }
-        // It's OK for the master itself to not have log_slave_updates
+        // It's OK for the primary itself to not have log_slave_updates
       }
 
       if (node.id == droppableNode.id) {
@@ -824,15 +824,15 @@ function Cluster() {
           accept: false
         };
       }
-      if (droppableNode.MasterKey.Hostname && droppableNode.MasterKey.Hostname != "_") {
-        // droppableNode has master
+      if (droppableNode.SourceKey.Hostname && droppableNode.SourceKey.Hostname != "_") {
+        // droppableNode has primary
         if (!droppableNode.LogReplicationUpdatesEnabled) {
           // Obviously can't handle.
           return {
             accept: false
           };
         }
-        // It's OK for the master itself to not have log_slave_updates
+        // It's OK for the primary itself to not have log_slave_updates
       }
       if (node.id == droppableNode.id) {
         if (shouldApply) {
@@ -962,11 +962,11 @@ function Cluster() {
     return executeMoveOperation(message, apiUrl);
   }
 
-  function moveUpReplicas(node, masterNode) {
+  function moveUpReplicas(node, primaryNode) {
     var message = "<h4>move-up-replicas</h4>Are you sure you wish to move up replicas of <code><strong>" +
       node.Key.Hostname + ":" + node.Key.Port +
       "</strong></code> below <code><strong>" +
-      masterNode.Key.Hostname + ":" + masterNode.Key.Port +
+      primaryNode.Key.Hostname + ":" + primaryNode.Key.Port +
       "</strong></code>?";
     var apiUrl = "/api/move-up-replicas/" + node.Key.Hostname + "/" + node.Key.Port;
     return executeMoveOperation(message, apiUrl);
@@ -1002,13 +1002,13 @@ function Cluster() {
     return executeMoveOperation(message, apiUrl);
   }
 
-  function takeMaster(node, masterNode) {
-    var message = "<h4>take-master</h4>Are you sure you wish to make <code><strong>" +
+  function takePrimary(node, primaryNode) {
+    var message = "<h4>take-primary</h4>Are you sure you wish to make <code><strong>" +
       node.Key.Hostname + ":" + node.Key.Port +
-      "</strong></code> master of <code><strong>" +
-      masterNode.Key.Hostname + ":" + masterNode.Key.Port +
+      "</strong></code> primary of <code><strong>" +
+      primaryNode.Key.Hostname + ":" + primaryNode.Key.Port +
       "</strong></code>?";
-    var apiUrl = "/api/take-master/" + node.Key.Hostname + "/" + node.Key.Port;
+    var apiUrl = "/api/take-primary/" + node.Key.Hostname + "/" + node.Key.Port;
     return executeMoveOperation(message, apiUrl);
   }
 
@@ -1032,15 +1032,15 @@ function Cluster() {
     return executeMoveOperation(message, apiUrl);
   }
 
-  function makeCoMaster(node, childNode) {
-    var message = "<h4>make-co-master</h4>Are you sure you wish to make <code><strong>" +
+  function makeCoPrimary(node, childNode) {
+    var message = "<h4>make-co-primary</h4>Are you sure you wish to make <code><strong>" +
       node.Key.Hostname + ":" + node.Key.Port +
       "</strong></code> and <code><strong>" +
       childNode.Key.Hostname + ":" + childNode.Key.Port +
-      "</strong></code> co-masters?";
+      "</strong></code> co-primaries?";
     bootbox.confirm(anonymizeIfNeedBe(message), function(confirm) {
       if (confirm) {
-        apiCommand("/api/make-co-master/" + childNode.Key.Hostname + "/" + childNode.Key.Port);
+        apiCommand("/api/make-co-primary/" + childNode.Key.Hostname + "/" + childNode.Key.Port);
         return true;
       }
     });
@@ -1048,13 +1048,13 @@ function Cluster() {
   }
 
 
-  function gracefulMasterTakeover(newMasterNode, existingMasterNode) {
-    var message = '<h1><span class="glyphicon glyphicon-exclamation-sign text-warning"></span> DANGER ZONE</h1><h4>Graceful-master-takeover</h4>Are you sure you wish to promote <code><strong>' +
-      newMasterNode.Key.Hostname + ':' + newMasterNode.Key.Port +
-      '</strong></code> as master?';
+  function gracefulPrimaryTakeover(newPrimaryNode, existingPrimaryNode) {
+    var message = '<h1><span class="glyphicon glyphicon-exclamation-sign text-warning"></span> DANGER ZONE</h1><h4>Graceful-primary-takeover</h4>Are you sure you wish to promote <code><strong>' +
+      newPrimaryNode.Key.Hostname + ':' + newPrimaryNode.Key.Port +
+      '</strong></code> as primary?';
     bootbox.confirm(anonymizeIfNeedBe(message), function(confirm) {
       if (confirm) {
-        apiCommand("/api/graceful-master-takeover/" + existingMasterNode.Key.Hostname + "/" + existingMasterNode.Key.Port + "/" + newMasterNode.Key.Hostname + "/" + newMasterNode.Key.Port);
+        apiCommand("/api/graceful-primary-takeover/" + existingPrimaryNode.Key.Hostname + "/" + existingPrimaryNode.Key.Port + "/" + newPrimaryNode.Key.Hostname + "/" + newPrimaryNode.Key.Port);
         return true;
       }
     });
@@ -1063,18 +1063,18 @@ function Cluster() {
 
   function instancesAreSiblings(node1, node2) {
     if (node1.id == node2.id) return false;
-    if (node1.masterNode == null) return false;
-    if (node2.masterNode == null) return false;
-    if (node1.masterNode.id != node2.masterNode.id) return false;
+    if (node1.primaryNode == null) return false;
+    if (node2.primaryNode == null) return false;
+    if (node1.primaryNode.id != node2.primaryNode.id) return false;
     return true;
   }
 
 
   function instanceIsChild(node, parentNode) {
-    if (!node.hasMaster) {
+    if (!node.hasPrimary) {
       return false;
     }
-    if (node.masterNode.id != parentNode.id) {
+    if (node.primaryNode.id != parentNode.id) {
       return false;
     }
     if (node.id == parentNode.id) {
@@ -1085,14 +1085,14 @@ function Cluster() {
 
 
   function instanceIsGrandchild(node, grandparentNode) {
-    if (!node.hasMaster) {
+    if (!node.hasPrimary) {
       return false;
     }
-    var masterNode = node.masterNode;
-    if (!masterNode.hasMaster) {
+    var primaryNode = node.primaryNode;
+    if (!primaryNode.hasPrimary) {
       return false;
     }
-    if (masterNode.masterNode.id != grandparentNode.id) {
+    if (primaryNode.primaryNode.id != grandparentNode.id) {
       return false;
     }
     if (node.id == grandparentNode.id) {
@@ -1104,7 +1104,7 @@ function Cluster() {
   function instanceIsDescendant(node, nodeAtQuestion, depth) {
     depth = depth || 0;
     if (depth > node.ReplicationDepth + 1) {
-      // Safety check for master-master topologies: avoid infinite loop
+      // Safety check for primary-primary topologies: avoid infinite loop
       return false;
     }
     if (nodeAtQuestion == null) {
@@ -1113,18 +1113,18 @@ function Cluster() {
     if (node.id == nodeAtQuestion.id) {
       return false;
     }
-    if (!node.hasMaster) {
+    if (!node.hasPrimary) {
       return false;
     }
-    if (node.masterNode.id == nodeAtQuestion.id) {
+    if (node.primaryNode.id == nodeAtQuestion.id) {
       return true;
     }
-    return instanceIsDescendant(node.masterNode, nodeAtQuestion, depth + 1)
+    return instanceIsDescendant(node.primaryNode, nodeAtQuestion, depth + 1)
   }
 
   // Returns true when the two instances are siblings, and 'node' is behind or at same position
-  // (in reltation to shared master) as its 'sibling'.
-  // i.e. 'sibling' is same as, or more up to date by master than 'node'.
+  // (in reltation to shared primary) as its 'sibling'.
+  // i.e. 'sibling' is same as, or more up to date by primary than 'node'.
   function isReplicationBehindSibling(node, sibling) {
     if (!instancesAreSiblings(node, sibling)) {
       return false;
@@ -1141,7 +1141,7 @@ function Cluster() {
 
   function compareInstancesExecBinlogCoordinates(i0, i1) {
     if (i0.ExecBinlogCoordinates.LogFile == i1.ExecBinlogCoordinates.LogFile) {
-      // executing from same master log file
+      // executing from same primary log file
       return i0.ExecBinlogCoordinates.LogPos - i1.ExecBinlogCoordinates.LogPos;
     }
     return (getLogFileNumber(i0.ExecBinlogCoordinates.LogFile) - getLogFileNumber(i1.ExecBinlogCoordinates.LogFile));
@@ -1242,7 +1242,7 @@ function Cluster() {
       if (!instance.hasConnectivityProblem)
         return;
       // The instance has a connectivity problem! Do a client-side recommendation of most advanced replica:
-      // a direct child of the master, with largest exec binlog coordinates.
+      // a direct child of the primary, with largest exec binlog coordinates.
       var sortedChildren = instance.children.slice();
       sortedChildren.sort(compareInstancesExecBinlogCoordinates)
 
@@ -1250,10 +1250,10 @@ function Cluster() {
         if (!child.hasConnectivityProblem) {
           if (compareInstancesExecBinlogCoordinates(child, sortedChildren[sortedChildren.length - 1]) == 0) {
             child.isMostAdvancedOfSiblings = true;
-            if (instance.isMaster && !instance.isCoMaster) {
-              // Moreover, the instance is the (only) master!
-              // Therefore its most advanced replicas are candidate masters
-              child.isCandidateMaster = true;
+            if (instance.isPrimary && !instance.isCoPrimary) {
+              // Moreover, the instance is the (only) primary!
+              // Therefore its most advanced replicas are candidate primaries
+              child.isCandidatePrimary = true;
             }
           }
         }
@@ -1497,8 +1497,8 @@ function Cluster() {
     popoverElement.find(".popover-footer .dropdown").append('<ul class="dropdown-menu" aria-labelledby="recover_dropdown_' + instance.id + '"></ul>');
     var recoveryListing = popoverElement.find(".dropdown ul");
 
-    if (instance.isMaster) {
-      recoveryListing.append('<li><a href="#" data-btn="force-master-failover" data-command="force-master-failover"><div class="glyphicon glyphicon-exclamation-sign text-danger"></div> <span class="text-danger">Force fail over <strong>now</strong> (even if normal handling would not fail over)</span></a></li>');
+    if (instance.isPrimary) {
+      recoveryListing.append('<li><a href="#" data-btn="force-primary-failover" data-command="force-primary-failover"><div class="glyphicon glyphicon-exclamation-sign text-danger"></div> <span class="text-danger">Force fail over <strong>now</strong> (even if normal handling would not fail over)</span></a></li>');
       recoveryListing.append('<li role="separator" class="divider"></li>');
 
       // Suggest successor
@@ -1522,14 +1522,14 @@ function Cluster() {
           '<li><a href="#" data-btn="recover-suggested-successor" data-command="recover-suggested-successor" data-successor-host="' + replica.Key.Hostname + '" data-successor-port="' + replica.Key.Port + '">Recover, try to promote <code>' + replica.title + '</code></a></li>');
       });
     }
-    if (!instance.isMaster) {
+    if (!instance.isPrimary) {
       recoveryListing.append('<li><a href="#" data-btn="auto" data-command="recover-auto">Auto (implies running external hooks/processes)</a></li>');
       recoveryListing.append('<li role="separator" class="divider"></li>');
-      recoveryListing.append('<li><a href="#" data-btn="relocate-replicas" data-command="relocate-replicas" data-successor-host="' + instance.MasterKey.Hostname + '" data-successor-port="' + instance.MasterKey.Port + '">Relocate replicas to <code>' + instance.masterTitle + '</code></a></li>');
+      recoveryListing.append('<li><a href="#" data-btn="relocate-replicas" data-command="relocate-replicas" data-successor-host="' + instance.SourceKey.Hostname + '" data-successor-port="' + instance.SourceKey.Port + '">Relocate replicas to <code>' + instance.primaryTitle + '</code></a></li>');
     }
-    if (instance.masterNode) {
-      // Intermediate master; suggest successor
-      instance.masterNode.children.forEach(function(sibling) {
+    if (instance.primaryNode) {
+      // Intermediate primary; suggest successor
+      instance.primaryNode.children.forEach(function(sibling) {
         if (sibling.id == instance.id) {
           return
         }
@@ -1630,7 +1630,7 @@ function Cluster() {
     reviewReplicationAnalysis(replicationAnalysis);
 
     instances.forEach(function(instance) {
-      if (instance.isMaster) {
+      if (instance.isPrimary) {
         getData("/api/recently-active-instance-recovery/" + instance.Key.Hostname + "/" + instance.Key.Port, function(recoveries) {
           if (!recoveries) {
             return
@@ -1676,15 +1676,15 @@ function Cluster() {
       if (!isAnonymized()) {
         $("#cluster_name").text(visualAlias);
         var clusterSubtitle = '';
-        if (clusterInfo.HasAutomatedMasterRecovery === true) {
-          clusterSubtitle += '<span class="glyphicon glyphicon-heart text-info" title="Automated master recovery for this cluster ENABLED"></span>';
+        if (clusterInfo.HasAutomatedPrimaryRecovery === true) {
+          clusterSubtitle += '<span class="glyphicon glyphicon-heart text-info" title="Automated primary recovery for this cluster ENABLED"></span>';
         } else {
-          clusterSubtitle += '<span class="glyphicon glyphicon-heart text-muted pull-right" title="Automated master recovery for this cluster DISABLED"></span>';
+          clusterSubtitle += '<span class="glyphicon glyphicon-heart text-muted pull-right" title="Automated primary recovery for this cluster DISABLED"></span>';
         }
-        if (clusterInfo.HasAutomatedIntermediateMasterRecovery === true) {
-          clusterSubtitle += '<span class="glyphicon glyphicon-heart-empty text-info" title="Automated intermediate master recovery for this cluster ENABLED"></span>';
+        if (clusterInfo.HasAutomatedIntermediatePrimaryRecovery === true) {
+          clusterSubtitle += '<span class="glyphicon glyphicon-heart-empty text-info" title="Automated intermediate primary recovery for this cluster ENABLED"></span>';
         } else {
-          clusterSubtitle += '<span class="glyphicon glyphicon-heart-empty text-muted pull-right" title="Automated intermediate master recovery for this cluster DISABLED"></span>';
+          clusterSubtitle += '<span class="glyphicon glyphicon-heart-empty text-muted pull-right" title="Automated intermediate primary recovery for this cluster DISABLED"></span>';
         }
         $("#cluster_subtitle").append(clusterSubtitle)
 

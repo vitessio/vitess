@@ -17,10 +17,10 @@ limitations under the License.
 package vtgateconn
 
 import (
+	"context"
 	"flag"
 	"fmt"
-
-	"context"
+	"sync"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
@@ -52,6 +52,19 @@ func (conn *VTGateConn) Session(targetString string, options *querypb.ExecuteOpt
 			Autocommit:   true,
 		},
 		impl: conn.impl,
+	}
+}
+
+// SessionPb returns the underlying proto session.
+func (sn *VTGateSession) SessionPb() *vtgatepb.Session {
+	return sn.session
+}
+
+// SessionFromPb returns a VTGateSession based on the provided proto session.
+func (conn *VTGateConn) SessionFromPb(sn *vtgatepb.Session) *VTGateSession {
+	return &VTGateSession{
+		session: sn,
+		impl:    conn.impl,
 	}
 }
 
@@ -158,11 +171,17 @@ type Impl interface {
 // object that can communicate with a VTGate.
 type DialerFunc func(ctx context.Context, address string) (Impl, error)
 
-var dialers = make(map[string]DialerFunc)
+var (
+	dialers  = make(map[string]DialerFunc)
+	dialersM sync.Mutex
+)
 
 // RegisterDialer is meant to be used by Dialer implementations
 // to self register.
 func RegisterDialer(name string, dialer DialerFunc) {
+	dialersM.Lock()
+	defer dialersM.Unlock()
+
 	if _, ok := dialers[name]; ok {
 		log.Warningf("Dialer %s already exists, overwriting it", name)
 	}
@@ -171,7 +190,10 @@ func RegisterDialer(name string, dialer DialerFunc) {
 
 // DialProtocol dials a specific protocol, and returns the *VTGateConn
 func DialProtocol(ctx context.Context, protocol string, address string) (*VTGateConn, error) {
+	dialersM.Lock()
 	dialer, ok := dialers[protocol]
+	dialersM.Unlock()
+
 	if !ok {
 		return nil, fmt.Errorf("no dialer registered for VTGate protocol %s", protocol)
 	}

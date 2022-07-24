@@ -340,6 +340,11 @@ func TestVStreamSharded(t *testing.T) {
 		switch err {
 		case nil:
 			for _, event := range events {
+				// check for Keyspace/Shard values first and then reset them so that we don't have to add them to each expected event proto string
+				require.Equal(t, "ks", event.Keyspace, "event has an incorrect keyspace attribute: %s", event.Keyspace)
+				require.True(t, event.Shard == "-80" || event.Shard == "80-", "event has an incorrect shard attribute: %s", event.Shard)
+				event.Keyspace = ""
+				event.Shard = ""
 				switch event.Type {
 				case binlogdatapb.VEventType_ROW, binlogdatapb.VEventType_FIELD:
 					evs = append(evs, event)

@@ -269,3 +269,53 @@ func TestExtractMySQLComment(t *testing.T) {
 		})
 	}
 }
+
+func TestIntegerAndID(t *testing.T) {
+	testcases := []struct {
+		in  string
+		id  int
+		out string
+	}{{
+		in: "334",
+		id: INTEGRAL,
+	}, {
+		in: "33.4",
+		id: DECIMAL,
+	}, {
+		in: "0x33",
+		id: HEXNUM,
+	}, {
+		in: "33e4",
+		id: FLOAT,
+	}, {
+		in: "33.4e-3",
+		id: FLOAT,
+	}, {
+		in: "33t4",
+		id: ID,
+	}, {
+		in: "0x2et3",
+		id: ID,
+	}, {
+		in:  "3e2t3",
+		id:  LEX_ERROR,
+		out: "3e2",
+	}, {
+		in:  "3.2t",
+		id:  LEX_ERROR,
+		out: "3.2",
+	}}
+
+	for _, tcase := range testcases {
+		t.Run(tcase.in, func(t *testing.T) {
+			tkn := NewStringTokenizer(tcase.in)
+			id, out := tkn.Scan()
+			require.Equal(t, tcase.id, id)
+			expectedOut := tcase.out
+			if expectedOut == "" {
+				expectedOut = tcase.in
+			}
+			require.Equal(t, expectedOut, out)
+		})
+	}
+}

@@ -37,15 +37,15 @@ import (
 
 // TxConn is used for executing transactional requests.
 type TxConn struct {
-	gateway Gateway
-	mode    vtgatepb.TransactionMode
+	tabletGateway *TabletGateway
+	mode          vtgatepb.TransactionMode
 }
 
 // NewTxConn builds a new TxConn.
-func NewTxConn(gw Gateway, txMode vtgatepb.TransactionMode) *TxConn {
+func NewTxConn(gw *TabletGateway, txMode vtgatepb.TransactionMode) *TxConn {
 	return &TxConn{
-		gateway: gw,
-		mode:    txMode,
+		tabletGateway: gw,
+		mode:          txMode,
 	}
 }
 
@@ -83,11 +83,10 @@ func (txc *TxConn) Commit(ctx context.Context, session *SafeSession) error {
 }
 
 func (txc *TxConn) queryService(alias *topodatapb.TabletAlias) (queryservice.QueryService, error) {
-	qs, _ := txc.gateway.(*DiscoveryGateway)
-	if qs != nil {
-		return qs, nil
+	if alias == nil {
+		return txc.tabletGateway, nil
 	}
-	return txc.gateway.QueryServiceByAlias(alias, nil)
+	return txc.tabletGateway.QueryServiceByAlias(alias, nil)
 }
 
 func (txc *TxConn) commitShard(ctx context.Context, s *vtgatepb.Session_ShardSession) error {
@@ -152,7 +151,7 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) error {
 	}
 	mmShard := session.ShardSessions[0]
 	dtid := dtids.New(mmShard)
-	err := txc.gateway.CreateTransaction(ctx, mmShard.Target, dtid, participants)
+	err := txc.tabletGateway.CreateTransaction(ctx, mmShard.Target, dtid, participants)
 	if err != nil {
 		// Normal rollback is safe because nothing was prepared yet.
 		_ = txc.Rollback(ctx, session)
@@ -160,7 +159,7 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) error {
 	}
 
 	err = txc.runSessions(ctx, session.ShardSessions[1:], func(ctx context.Context, s *vtgatepb.Session_ShardSession) error {
-		return txc.gateway.Prepare(ctx, s.Target, s.TransactionId, dtid)
+		return txc.tabletGateway.Prepare(ctx, s.Target, s.TransactionId, dtid)
 	})
 	if err != nil {
 		// TODO(sougou): Perform a more fine-grained cleanup
@@ -172,19 +171,19 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) error {
 		return err
 	}
 
-	err = txc.gateway.StartCommit(ctx, mmShard.Target, mmShard.TransactionId, dtid)
+	err = txc.tabletGateway.StartCommit(ctx, mmShard.Target, mmShard.TransactionId, dtid)
 	if err != nil {
 		return err
 	}
 
 	err = txc.runSessions(ctx, session.ShardSessions[1:], func(ctx context.Context, s *vtgatepb.Session_ShardSession) error {
-		return txc.gateway.CommitPrepared(ctx, s.Target, dtid)
+		return txc.tabletGateway.CommitPrepared(ctx, s.Target, dtid)
 	})
 	if err != nil {
 		return err
 	}
 
-	return txc.gateway.ConcludeTransaction(ctx, mmShard.Target, dtid)
+	return txc.tabletGateway.ConcludeTransaction(ctx, mmShard.Target, dtid)
 }
 
 // Rollback rolls back the current transaction. There are no retries on this operation.
@@ -222,7 +221,7 @@ func (txc *TxConn) Rollback(ctx context.Context, session *SafeSession) error {
 	return err
 }
 
-//Release releases the reserved connection and/or rollbacks the transaction
+// Release releases the reserved connection and/or rollbacks the transaction
 func (txc *TxConn) Release(ctx context.Context, session *SafeSession) error {
 	if !session.InTransaction() && !session.InReservedConn() {
 		return nil
@@ -250,13 +249,14 @@ func (txc *TxConn) Release(ctx context.Context, session *SafeSession) error {
 	})
 }
 
-//ReleaseLock releases the reserved connection used for locking.
+// ReleaseLock releases the reserved connection used for locking.
 func (txc *TxConn) ReleaseLock(ctx context.Context, session *SafeSession) error {
 	if !session.InLockSession() {
 		return nil
 	}
 	defer session.ResetLock()
 
+	session.ClearAdvisoryLock()
 	ls := session.LockSession
 	if ls.ReservedId == 0 {
 		return nil
@@ -265,16 +265,10 @@ func (txc *TxConn) ReleaseLock(ctx context.Context, session *SafeSession) error 
 	if err != nil {
 		return err
 	}
-	err = qs.Release(ctx, ls.Target, 0, ls.ReservedId)
-	if err != nil {
-		return err
-	}
-	ls.ReservedId = 0
-	return nil
-
+	return qs.Release(ctx, ls.Target, 0, ls.ReservedId)
 }
 
-//ReleaseAll releases all the shard sessions and lock session.
+// ReleaseAll releases all the shard sessions and lock session.
 func (txc *TxConn) ReleaseAll(ctx context.Context, session *SafeSession) error {
 	if !session.InTransaction() && !session.InReservedConn() && !session.InLockSession() {
 		return nil
@@ -312,7 +306,7 @@ func (txc *TxConn) Resolve(ctx context.Context, dtid string) error {
 		return err
 	}
 
-	transaction, err := txc.gateway.ReadTransaction(ctx, mmShard.Target, dtid)
+	transaction, err := txc.tabletGateway.ReadTransaction(ctx, mmShard.Target, dtid)
 	if err != nil {
 		return err
 	}
@@ -349,22 +343,22 @@ func (txc *TxConn) Resolve(ctx context.Context, dtid string) error {
 
 func (txc *TxConn) resumeRollback(ctx context.Context, target *querypb.Target, transaction *querypb.TransactionMetadata) error {
 	err := txc.runTargets(transaction.Participants, func(t *querypb.Target) error {
-		return txc.gateway.RollbackPrepared(ctx, t, transaction.Dtid, 0)
+		return txc.tabletGateway.RollbackPrepared(ctx, t, transaction.Dtid, 0)
 	})
 	if err != nil {
 		return err
 	}
-	return txc.gateway.ConcludeTransaction(ctx, target, transaction.Dtid)
+	return txc.tabletGateway.ConcludeTransaction(ctx, target, transaction.Dtid)
 }
 
 func (txc *TxConn) resumeCommit(ctx context.Context, target *querypb.Target, transaction *querypb.TransactionMetadata) error {
 	err := txc.runTargets(transaction.Participants, func(t *querypb.Target) error {
-		return txc.gateway.CommitPrepared(ctx, t, transaction.Dtid)
+		return txc.tabletGateway.CommitPrepared(ctx, t, transaction.Dtid)
 	})
 	if err != nil {
 		return err
 	}
-	return txc.gateway.ConcludeTransaction(ctx, target, transaction.Dtid)
+	return txc.tabletGateway.ConcludeTransaction(ctx, target, transaction.Dtid)
 }
 
 // runSessions executes the action for all shardSessions in parallel and returns a consolildated error.

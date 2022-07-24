@@ -131,7 +131,7 @@ func (h *historian) RegisterVersionEvent() error {
 }
 
 // GetTableForPos returns a best-effort schema for a specific gtid
-func (h *historian) GetTableForPos(tableName sqlparser.TableIdent, gtid string) (*binlogdatapb.MinimalTable, error) {
+func (h *historian) GetTableForPos(tableName sqlparser.IdentifierCS, gtid string) (*binlogdatapb.MinimalTable, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if !h.isOpen {
@@ -184,17 +184,29 @@ func (h *historian) loadFromDB(ctx context.Context) error {
 // readRow converts a row from the schema_version table to a trackedSchema
 func (h *historian) readRow(row []sqltypes.Value) (*trackedSchema, int64, error) {
 	id, _ := evalengine.ToInt64(row[0])
-	pos, err := mysql.DecodePosition(string(row[1].ToBytes()))
+	rowBytes, err := row[1].ToBytes()
 	if err != nil {
 		return nil, 0, err
 	}
-	ddl := string(row[2].ToBytes())
+	pos, err := mysql.DecodePosition(string(rowBytes))
+	if err != nil {
+		return nil, 0, err
+	}
+	rowBytes, err = row[2].ToBytes()
+	if err != nil {
+		return nil, 0, err
+	}
+	ddl := string(rowBytes)
 	timeUpdated, err := evalengine.ToInt64(row[3])
 	if err != nil {
 		return nil, 0, err
 	}
 	sch := &binlogdatapb.MinimalSchema{}
-	if err := proto.Unmarshal(row[4].ToBytes(), sch); err != nil {
+	rowBytes, err = row[4].ToBytes()
+	if err != nil {
+		return nil, 0, err
+	}
+	if err := proto.Unmarshal(rowBytes, sch); err != nil {
 		return nil, 0, err
 	}
 	log.V(vl).Infof("Read tracked schema from db: id %d, pos %v, ddl %s, schema len %d, time_updated %d \n",
@@ -220,7 +232,7 @@ func (h *historian) sortSchemas() {
 }
 
 // getTableFromHistoryForPos looks in the cache for a schema for a specific gtid
-func (h *historian) getTableFromHistoryForPos(tableName sqlparser.TableIdent, pos mysql.Position) *binlogdatapb.MinimalTable {
+func (h *historian) getTableFromHistoryForPos(tableName sqlparser.IdentifierCS, pos mysql.Position) *binlogdatapb.MinimalTable {
 	idx := sort.Search(len(h.schemas), func(i int) bool {
 		return pos.Equal(h.schemas[i].pos) || !pos.AtLeast(h.schemas[i].pos)
 	})

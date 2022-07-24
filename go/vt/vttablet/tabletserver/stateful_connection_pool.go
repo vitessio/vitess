@@ -93,7 +93,7 @@ func (sf *StatefulConnectionPool) Close() {
 		if conn.IsInTransaction() {
 			thing = "transaction"
 		}
-		log.Warningf("killing %s for shutdown: %s", thing, conn.String())
+		log.Warningf("killing %s for shutdown: %s", thing, conn.String(sf.env.Config().SanitizeLogMessages))
 		sf.env.Stats().InternalErrors.Add("StrayTransactions", 1)
 		conn.Close()
 		conn.Releasef("pool closed")
@@ -107,7 +107,7 @@ func (sf *StatefulConnectionPool) Close() {
 // InUse connections will be killed as they are returned.
 func (sf *StatefulConnectionPool) ShutdownNonTx() {
 	sf.state.Set(scpKillingNonTx)
-	conns := mapToTxConn(sf.active.GetByFilter("kill non-tx", func(sc interface{}) bool {
+	conns := mapToTxConn(sf.active.GetByFilter("kill non-tx", func(sc any) bool {
 		return !sc.(*StatefulConnection).IsInTransaction()
 	}))
 	for _, sc := range conns {
@@ -120,7 +120,7 @@ func (sf *StatefulConnectionPool) ShutdownNonTx() {
 // by the caller (TxPool). InUse connections will be killed as they are returned.
 func (sf *StatefulConnectionPool) ShutdownAll() []*StatefulConnection {
 	sf.state.Set(scpKillingAll)
-	return mapToTxConn(sf.active.GetByFilter("kill non-tx", func(sc interface{}) bool {
+	return mapToTxConn(sf.active.GetByFilter("kill non-tx", func(sc any) bool {
 		return true
 	}))
 }
@@ -142,7 +142,7 @@ func (sf *StatefulConnectionPool) GetOutdated(age time.Duration, purpose string)
 	return mapToTxConn(sf.active.GetOutdated(age, purpose))
 }
 
-func mapToTxConn(outdated []interface{}) []*StatefulConnection {
+func mapToTxConn(outdated []any) []*StatefulConnection {
 	result := make([]*StatefulConnection, len(outdated))
 	for i, el := range outdated {
 		result[i] = el.(*StatefulConnection)

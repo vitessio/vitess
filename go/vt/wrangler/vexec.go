@@ -20,9 +20,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"strings"
 	"sync"
 	"time"
+
+	workflow2 "vitess.io/vitess/go/vt/vtctl/workflow"
 
 	"google.golang.org/protobuf/encoding/prototext"
 
@@ -32,20 +35,19 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	vtctldvexec "vitess.io/vitess/go/vt/vtctl/workflow/vexec" // renamed to avoid a collision with the vexec struct in this package
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 const (
 	vexecTableQualifier   = "_vt"
 	vreplicationTableName = "vreplication"
+	sqlVReplicationDelete = "delete from _vt.vreplication"
 )
 
 // vexec is the construct by which we run a query against backend shards. vexec is created by user-facing
@@ -157,7 +159,7 @@ func (wr *Wrangler) VExec(ctx context.Context, workflow, keyspace, query string,
 	return retResults, err
 }
 
-// runVexec is th emain function that runs a dry or wet execution of 'query` on backend shards.
+// runVexec is the main function that runs a dry or wet execution of 'query' on backend shards.
 func (wr *Wrangler) runVexec(ctx context.Context, workflow, keyspace, query string, dryRun bool) (map[*topo.TabletInfo]*querypb.QueryResult, error) {
 	vx := newVExec(ctx, workflow, keyspace, query, wr)
 
@@ -211,6 +213,11 @@ func (vx *vexec) exec() (map[*topo.TabletInfo]*querypb.QueryResult, error) {
 			if err != nil {
 				allErrors.RecordError(err)
 			} else {
+				// If we deleted a workflow then let's make a best effort attempt to clean
+				// up any related data.
+				if vx.query == sqlVReplicationDelete {
+					vx.wr.deleteWorkflowVDiffData(ctx, primary.Tablet, vx.workflow)
+				}
 				mu.Lock()
 				results[primary] = qr
 				mu.Unlock()
@@ -314,7 +321,7 @@ func (wr *Wrangler) getWorkflowActionQuery(action string) (string, error) {
 	case "start":
 		query = fmt.Sprintf(updateSQL, encodeString("Running"))
 	case "delete":
-		query = "delete from _vt.vreplication"
+		query = sqlVReplicationDelete
 	default:
 		return "", fmt.Errorf("invalid action found: %s", action)
 	}
@@ -344,11 +351,23 @@ type ReplicationStatusResult struct {
 	SourceLocation ReplicationLocation
 	// TargetLocation represents the keyspace and shards that we are vreplicating into.
 	TargetLocation ReplicationLocation
-	// MaxVReplicationLag represents the maximum vreplication lag seen across all shards.
+	// MaxVReplicationLag represents the lag between the current time and the last time an event was seen from the
+	// source shards. This defines the "liveness" of the source streams. This will be high only if one of the source streams
+	// is no longer running (say, due to a network partition , primary not being available, or a vstreamer failure)
+	// MaxVReplicationTransactionLag (see below) represents the "mysql" replication lag, i.e. how far behind we are in
+	// terms of data replication from the source to the target.
 	MaxVReplicationLag int64
-
+	// MaxVReplicationTransactionLag represents the lag across all shards, between the current time and the timestamp
+	// of the last transaction OR heartbeat timestamp (if there have been no writes to replicate from the source).
+	MaxVReplicationTransactionLag int64
+	// Frozen is true if this workflow has been deemed complete and is in a limbo "frozen" state (Message=="FROZEN")
+	Frozen bool
 	// Statuses is a map of <shard>/<primary tablet alias> : ShardReplicationStatus (for the given shard).
 	ShardStatuses map[string]*ShardReplicationStatus
+	// SourceTimeZone represents the time zone provided to the workflow, only set if not UTC
+	SourceTimeZone string
+	// TargetTimeZone is set to the original SourceTimeZone, in reverse streams, if it was provided to the workflow
+	TargetTimeZone string
 }
 
 // ReplicationLocation represents a location that data is either replicating from, or replicating into.
@@ -394,32 +413,48 @@ type ReplicationStatus struct {
 	TransactionTimestamp int64
 	// TimeUpdated represents the time_updated column from the _vt.vreplication table.
 	TimeUpdated int64
+	// TimeHeartbeat represents the time_heartbeat column from the _vt.vreplication table.
+	TimeHeartbeat int64
+	// TimeThrottled represents the time_throttled column from the _vt.vreplication table.
+	TimeThrottled int64
+	// ComponentThrottled represents the component_throttled column from the _vt.vreplication table.
+	ComponentThrottled string
 	// Message represents the message column from the _vt.vreplication table.
 	Message string
 	// Tags contain the tags specified for this stream
 	Tags string
-
 	// CopyState represents the rows from the _vt.copy_state table.
 	CopyState []copyState
+	// sourceTimeZone represents the time zone of each stream, only set if not UTC
+	sourceTimeZone string
+	// targetTimeZone is set to the sourceTimeZone of the forward stream, if it was provided in the workflow
+	targetTimeZone string
 }
 
-func (wr *Wrangler) getReplicationStatusFromRow(ctx context.Context, row []sqltypes.Value, primary *topo.TabletInfo) (*ReplicationStatus, string, error) {
+func (wr *Wrangler) getReplicationStatusFromRow(ctx context.Context, row sqltypes.RowNamedValues, primary *topo.TabletInfo) (*ReplicationStatus, string, error) {
 	var err error
-	var id, timeUpdated, transactionTimestamp int64
-	var state, dbName, pos, stopPos, message, tags string
+	var id, timeUpdated, transactionTimestamp, timeHeartbeat, timeThrottled int64
+	var state, dbName, pos, stopPos, message, tags, componentThrottled string
 	var bls binlogdatapb.BinlogSource
 	var mpos mysql.Position
 
-	id, err = evalengine.ToInt64(row[0])
+	id, err = row.ToInt64("id")
 	if err != nil {
 		return nil, "", err
 	}
-	if err := prototext.Unmarshal(row[1].ToBytes(), &bls); err != nil {
+	rowBytes, err := row.ToBytes("source")
+	if err != nil {
+		return nil, "", err
+	}
+	if err := prototext.Unmarshal(rowBytes, &bls); err != nil {
 		return nil, "", err
 	}
 
 	// gtid in the pos column can be compressed, so check and possibly uncompress
-	pos = row[2].ToString()
+	pos, err = row.ToString("pos")
+	if err != nil {
+		return nil, "", err
+	}
 	if pos != "" {
 		mpos, err = binlogplayer.DecodePosition(pos)
 		if err != nil {
@@ -427,19 +462,46 @@ func (wr *Wrangler) getReplicationStatusFromRow(ctx context.Context, row []sqlty
 		}
 		pos = mpos.String()
 	}
-	stopPos = row[3].ToString()
-	state = row[5].ToString()
-	dbName = row[6].ToString()
-	timeUpdated, err = evalengine.ToInt64(row[7])
+	stopPos, err = row.ToString("stop_pos")
 	if err != nil {
 		return nil, "", err
 	}
-	transactionTimestamp, err = evalengine.ToInt64(row[8])
+	state, err = row.ToString("state")
 	if err != nil {
 		return nil, "", err
 	}
-	message = row[9].ToString()
-	tags = row[10].ToString()
+	dbName, err = row.ToString("db_name")
+	if err != nil {
+		return nil, "", err
+	}
+	timeUpdated, err = row.ToInt64("time_updated")
+	if err != nil {
+		return nil, "", err
+	}
+	transactionTimestamp, err = row.ToInt64("transaction_timestamp")
+	if err != nil {
+		return nil, "", err
+	}
+	timeHeartbeat, err = row.ToInt64("time_heartbeat")
+	if err != nil {
+		return nil, "", err
+	}
+	timeThrottled, err = row.ToInt64("time_throttled")
+	if err != nil {
+		return nil, "", err
+	}
+	componentThrottled, err = row.ToString("component_throttled")
+	if err != nil {
+		return nil, "", err
+	}
+	message, err = row.ToString("message")
+	if err != nil {
+		return nil, "", err
+	}
+	tags, err = row.ToString("tags")
+	if err != nil {
+		return nil, "", err
+	}
 	status := &ReplicationStatus{
 		Shard:                primary.Shard,
 		Tablet:               primary.AliasString(),
@@ -451,8 +513,13 @@ func (wr *Wrangler) getReplicationStatusFromRow(ctx context.Context, row []sqlty
 		DBName:               dbName,
 		TransactionTimestamp: transactionTimestamp,
 		TimeUpdated:          timeUpdated,
+		TimeHeartbeat:        timeHeartbeat,
+		TimeThrottled:        timeThrottled,
+		ComponentThrottled:   componentThrottled,
 		Message:              message,
 		Tags:                 tags,
+		sourceTimeZone:       bls.SourceTimeZone,
+		targetTimeZone:       bls.TargetTimeZone,
 	}
 	status.CopyState, err = wr.getCopyState(ctx, primary, id)
 	if err != nil {
@@ -468,7 +535,22 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (
 	rsr.ShardStatuses = make(map[string]*ShardReplicationStatus)
 	rsr.Workflow = workflow
 	var results map[*topo.TabletInfo]*querypb.QueryResult
-	query := "select id, source, pos, stop_pos, max_replication_lag, state, db_name, time_updated, transaction_timestamp, message, tags from _vt.vreplication"
+	query := `select 
+		id,
+		source,
+		pos,
+		stop_pos,
+		max_replication_lag,
+		state,
+		db_name,
+		time_updated,
+		transaction_timestamp,
+		time_heartbeat,
+		time_throttled,
+		component_throttled,
+		message,
+		tags
+	from _vt.vreplication`
 	results, err := wr.runVexec(ctx, workflow, keyspace, query, false)
 	if err != nil {
 		return nil, err
@@ -482,23 +564,55 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (
 	targetShards := sets.NewString()
 	for primary, result := range results {
 		var rsrStatus []*ReplicationStatus
-		qr := sqltypes.Proto3ToResult(result)
-		if len(qr.Rows) == 0 {
+		nqr := sqltypes.Proto3ToResult(result).Named()
+		if len(nqr.Rows) == 0 {
 			continue
 		}
-		for _, row := range qr.Rows {
+		for _, row := range nqr.Rows {
 			status, sk, err := wr.getReplicationStatusFromRow(ctx, row, primary)
 			if err != nil {
 				return nil, err
 			}
+			rsr.SourceTimeZone = status.sourceTimeZone
+			rsr.TargetTimeZone = status.targetTimeZone
 			sourceKeyspace = sk
 			sourceShards.Insert(status.Bls.Shard)
 			rsrStatus = append(rsrStatus, status)
 
+			if status.Message == workflow2.Frozen {
+				rsr.Frozen = true
+			}
+
+			// MaxVReplicationLag is the time since the last event was processed from the source
+			// The last event can be an actual binlog event or a heartbeat in case no binlog events occur within (default) 1 second
 			timeUpdated := time.Unix(status.TimeUpdated, 0)
 			replicationLag := time.Since(timeUpdated)
 			if replicationLag.Seconds() > float64(rsr.MaxVReplicationLag) {
 				rsr.MaxVReplicationLag = int64(replicationLag.Seconds())
+			}
+
+			// MaxVReplicationTransactionLag estimates the actual lag between the source and the target
+			// If we are still processing source events it is the difference b/w current time and the timestamp of the last event
+			// If heartbeats are more recent than the last event, then the lag is the time since the last heartbeat as
+			// there can be an actual event immediately after the heartbeat, but which has not yet
+			// been processed on the target
+			// We don't allow switching during the copy phase, so in that case we just return a large lag.
+			// All timestamps are in seconds since epoch
+			lastTransactionTimestamp := status.TransactionTimestamp
+			lastHeartbeatTime := status.TimeHeartbeat
+			if status.State == "Copying" {
+				rsr.MaxVReplicationTransactionLag = math.MaxInt64
+			} else {
+				if lastTransactionTimestamp == 0 /* no new events after copy */ ||
+					lastHeartbeatTime > lastTransactionTimestamp /* no recent transactions, so all caught up */ {
+
+					lastTransactionTimestamp = lastHeartbeatTime
+				}
+				now := time.Now().Unix() /*seconds since epoch*/
+				transactionReplicationLag := now - lastTransactionTimestamp
+				if transactionReplicationLag > rsr.MaxVReplicationTransactionLag {
+					rsr.MaxVReplicationTransactionLag = transactionReplicationLag
+				}
 			}
 		}
 		si, err := wr.ts.GetShard(ctx, keyspace, primary.Shard)

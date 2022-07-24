@@ -30,6 +30,10 @@ import (
 
 // Create is part of topo.Conn interface.
 func (c *Conn) Create(ctx context.Context, filePath string, contents []byte) (topo.Version, error) {
+	if err := c.dial(ctx); err != nil {
+		return nil, err
+	}
+
 	if contents == nil {
 		contents = []byte{}
 	}
@@ -61,6 +65,10 @@ func (c *Conn) Create(ctx context.Context, filePath string, contents []byte) (to
 
 // Update is part of topo.Conn interface.
 func (c *Conn) Update(ctx context.Context, filePath string, contents []byte, version topo.Version) (topo.Version, error) {
+	if err := c.dial(ctx); err != nil {
+		return nil, err
+	}
+
 	if contents == nil {
 		contents = []byte{}
 	}
@@ -125,6 +133,10 @@ func (c *Conn) Update(ctx context.Context, filePath string, contents []byte, ver
 
 // Get is part of topo.Conn interface.
 func (c *Conn) Get(ctx context.Context, filePath string) ([]byte, topo.Version, error) {
+	if err := c.dial(ctx); err != nil {
+		return nil, nil, err
+	}
+
 	c.factory.mu.Lock()
 	defer c.factory.mu.Unlock()
 
@@ -144,8 +156,17 @@ func (c *Conn) Get(ctx context.Context, filePath string) ([]byte, topo.Version, 
 	return n.contents, NodeVersion(n.version), nil
 }
 
+// List is part of the topo.Conn interface.
+func (c *Conn) List(ctx context.Context, filePathPrefix string) ([]topo.KVInfo, error) {
+	return nil, topo.NewError(topo.NoImplementation, "List not supported in memory topo")
+}
+
 // Delete is part of topo.Conn interface.
 func (c *Conn) Delete(ctx context.Context, filePath string, version topo.Version) error {
+	if err := c.dial(ctx); err != nil {
+		return err
+	}
+
 	c.factory.mu.Lock()
 	defer c.factory.mu.Unlock()
 

@@ -17,9 +17,13 @@ limitations under the License.
 package subquery
 
 import (
+	_ "embed"
 	"flag"
+	"fmt"
 	"os"
 	"testing"
+
+	"vitess.io/vitess/go/test/endtoend/utils"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -28,105 +32,15 @@ import (
 var (
 	clusterInstance *cluster.LocalProcessCluster
 	vtParams        mysql.ConnParams
-	KeyspaceName    = "ks_union"
-	Cell            = "test_union"
-	SchemaSQL       = `create table t1(
-	id1 bigint,
-	id2 bigint,
-	primary key(id1)
-) Engine=InnoDB;
+	mysqlParams     mysql.ConnParams
+	keyspaceName    = "ks_union"
+	cell            = "test_union"
 
-create table t1_id2_idx(
-	id2 bigint,
-	keyspace_id varbinary(10),
-	primary key(id2)
-) Engine=InnoDB;
+	//go:embed schema.sql
+	schemaSQL string
 
-create table t2(
-	id3 bigint,
-	id4 bigint,
-	primary key(id3)
-) Engine=InnoDB;
-
-create table t2_id4_idx(
-	id bigint not null auto_increment,
-	id4 bigint,
-	id3 bigint,
-	primary key(id),
-	key idx_id4(id4)
-) Engine=InnoDB;
-`
-
-	VSchema = `
-{
-  "sharded": true,
-  "vindexes": {
-    "hash": {
-      "type": "hash"
-    },
-    "t1_id2_vdx": {
-      "type": "consistent_lookup_unique",
-      "params": {
-        "table": "t1_id2_idx",
-        "from": "id2",
-        "to": "keyspace_id"
-      },
-      "owner": "t1"
-    },
-    "t2_id4_idx": {
-      "type": "lookup_hash",
-      "params": {
-        "table": "t2_id4_idx",
-        "from": "id4",
-        "to": "id3",
-        "autocommit": "true"
-      },
-      "owner": "t2"
-    }
-  },
-  "tables": {
-    "t1": {
-      "column_vindexes": [
-        {
-          "column": "id1",
-          "name": "hash"
-        },
-        {
-          "column": "id2",
-          "name": "t1_id2_vdx"
-        }
-      ]
-    },
-    "t1_id2_idx": {
-      "column_vindexes": [
-        {
-          "column": "id2",
-          "name": "hash"
-        }
-      ]
-    },
-    "t2": {
-      "column_vindexes": [
-        {
-          "column": "id3",
-          "name": "hash"
-        },
-        {
-          "column": "id4",
-          "name": "t2_id4_idx"
-        }
-      ]
-    },
-    "t2_id4_idx": {
-      "column_vindexes": [
-        {
-          "column": "id4",
-          "name": "hash"
-        }
-      ]
-    }
-  }
-}`
+	//go:embed vschema.json
+	VSchema string
 )
 
 func TestMain(m *testing.M) {
@@ -134,7 +48,7 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitCode := func() int {
-		clusterInstance = cluster.NewCluster(Cell, "localhost")
+		clusterInstance = cluster.NewCluster(cell, "localhost")
 		defer clusterInstance.Teardown()
 
 		// Start topo server
@@ -145,18 +59,18 @@ func TestMain(m *testing.M) {
 
 		// Start keyspace
 		keyspace := &cluster.Keyspace{
-			Name:      KeyspaceName,
-			SchemaSQL: SchemaSQL,
+			Name:      keyspaceName,
+			SchemaSQL: schemaSQL,
 			VSchema:   VSchema,
 		}
-		clusterInstance.VtGateExtraArgs = []string{"-schema_change_signal"}
-		clusterInstance.VtTabletExtraArgs = []string{"-queryserver-config-schema-change-signal", "-queryserver-config-schema-change-signal-interval", "0.1"}
-		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 1, true)
+		clusterInstance.VtGateExtraArgs = []string{"--schema_change_signal"}
+		clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-schema-change-signal", "--queryserver-config-schema-change-signal-interval", "0.1"}
+		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 0, false)
 		if err != nil {
 			return 1
 		}
 
-		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "-enable_system_settings=true")
+		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--enable_system_settings=true")
 		// Start vtgate
 		err = clusterInstance.StartVtgate()
 		if err != nil {
@@ -167,6 +81,15 @@ func TestMain(m *testing.M) {
 			Host: clusterInstance.Hostname,
 			Port: clusterInstance.VtgateMySQLPort,
 		}
+
+		// create mysql instance and connection parameters
+		conn, closer, err := utils.NewMySQL(clusterInstance, keyspaceName, schemaSQL)
+		if err != nil {
+			fmt.Println(err)
+			return 1
+		}
+		defer closer()
+		mysqlParams = conn
 		return m.Run()
 	}()
 	os.Exit(exitCode)

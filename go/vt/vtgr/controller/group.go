@@ -17,7 +17,9 @@ limitations under the License.
 package controller
 
 import (
+	"flag"
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 	"sync"
@@ -31,22 +33,35 @@ import (
 var (
 	groupOnlineSize = stats.NewGaugesWithMultiLabels("MysqlGroupOnlineSize", "Online MySQL server in the group", []string{"Keyspace", "Shard"})
 	isLostQuorum    = stats.NewGaugesWithMultiLabels("MysqlGroupLostQuorum", "If MySQL group lost quorum", []string{"Keyspace", "Shard"})
+
+	heartbeatThreshold = flag.Int("group_heartbeat_threshold", 0, "VTGR will trigger backoff on inconsistent state if the group heartbeat staleness exceeds this threshold (in seconds). Should be used along with -enable_heartbeat_check")
 )
 
 // SQLGroup contains views from all the nodes within the shard
 type SQLGroup struct {
-	views         []*db.GroupView
-	resolvedView  *ResolvedView
-	logger        *log.Logger
-	size          int
-	singlePrimary bool
-	statsTags     []string
+	views                 []*db.GroupView
+	resolvedView          *ResolvedView
+	logger                *log.Logger
+	expectedBootstrapSize int
+	// rebootstrapSize is init to 0
+	// when it is not 0, we allow some nodes to be unhealthy during a rebootstrap
+	rebootstrapSize    int
+	singlePrimary      bool
+	heartbeatThreshold int
+	statsTags          []string
 	sync.Mutex
 }
 
 // NewSQLGroup creates a new SQLGroup
 func NewSQLGroup(size int, singlePrimary bool, keyspace, shard string) *SQLGroup {
-	return &SQLGroup{size: size, singlePrimary: singlePrimary, statsTags: []string{keyspace, shard}, logger: log.NewVTGRLogger(keyspace, shard)}
+	return &SQLGroup{
+		expectedBootstrapSize: size,
+		rebootstrapSize:       0,
+		singlePrimary:         singlePrimary,
+		statsTags:             []string{keyspace, shard},
+		logger:                log.NewVTGRLogger(keyspace, shard),
+		heartbeatThreshold:    *heartbeatThreshold,
+	}
 }
 
 // ResolvedView is the resolved view
@@ -165,10 +180,25 @@ func (group *SQLGroup) IsSafeToBootstrap() bool {
 	defer group.Unlock()
 	// for bootstrap we require group at least has quorum number of views
 	// this is to make sure we don't bootstrap a group improperly
-	if len(group.views) < group.size {
-		group.logger.Errorf("[sql_group] cannot bootstrap because we only have %v views | expected %v", len(group.views), group.size)
+	if len(group.views) < group.expectedBootstrapSize {
+		group.logger.Errorf("[sql_group] cannot bootstrap because we only have %v views | expected %v", len(group.views), group.expectedBootstrapSize)
 		return false
 	}
+	return group.isSafeToRebootstrapLocked()
+}
+
+// IsSafeToRebootstrap checks if it is safe to rebootstrap a group
+// It does not check group size as IsSafeToBootstrap, since when we
+// reach here it means VTGR already checked there were group expectedBootstrapSize
+// number of nodes in topo server, therefore we just rebootstrap
+// as long as we can reach all the nodes in topo server
+func (group *SQLGroup) IsSafeToRebootstrap() bool {
+	group.Lock()
+	defer group.Unlock()
+	return group.isSafeToRebootstrapLocked()
+}
+
+func (group *SQLGroup) isSafeToRebootstrapLocked() bool {
 	// we think it is safe to bootstrap a group if all the views don't have a primary host
 	host, port, _ := group.getPrimaryLocked()
 	if host != "" || port != 0 {
@@ -205,6 +235,14 @@ func (group *SQLGroup) Resolve() error {
 func (group *SQLGroup) resolveLocked() error {
 	rv := &ResolvedView{logger: group.logger}
 	group.resolvedView = rv
+	// a node that is not in the group might be outlier with big lag
+	// iterate over all views to get global minStalenessResult first
+	minStalenessResult := math.MaxInt32
+	for _, view := range group.views {
+		if view.HeartbeatStaleness < minStalenessResult {
+			minStalenessResult = view.HeartbeatStaleness
+		}
+	}
 	m := make(map[inst.InstanceKey]db.GroupMember)
 	for _, view := range group.views {
 		if rv.groupName == "" && view.GroupName != "" {
@@ -232,6 +270,30 @@ func (group *SQLGroup) resolveLocked() error {
 			}
 			if st.State == memberState && st.Role == memberRole && st.ReadOnly == isReadOnly {
 				continue
+			}
+			// Members in a group should eventually converge on a state
+			// if there is a partition, then a node should be removed from
+			// a group. If a node is reported as ONLINE together with
+			// some other state, we back off if we see a node with diverged state
+			if memberState != db.UNKNOWNSTATE &&
+				st.State != db.UNKNOWNSTATE &&
+				st.State != memberState &&
+				(st.State == db.ONLINE || memberState == db.ONLINE) {
+				group.logger.Warningf("found inconsistent member state for %v: %v vs %v", instance.Hostname, st.State, memberState)
+				if group.heartbeatThreshold != 0 &&
+					// Check minStalenessResult among the group is not math.MaxInt32
+					// which means at least one node returns the lag from _vt.heartbeat table
+					// otherwise we don't trigger backoff on inconsistent state
+					minStalenessResult != math.MaxInt32 &&
+					minStalenessResult >= group.heartbeatThreshold {
+					group.logger.Warningf("ErrGroupBackoffError by staled heartbeat check %v", minStalenessResult)
+					var sb strings.Builder
+					for _, view := range group.views {
+						sb.WriteString(fmt.Sprintf("%v staleness=%v\n", view.MySQLHost, view.HeartbeatStaleness))
+					}
+					group.logger.Warningf("%v", sb.String())
+					return db.ErrGroupBackoffError
+				}
 			}
 			m[instance] = db.GroupMember{
 				HostName: instance.Hostname,
@@ -370,8 +432,4 @@ func (group *SQLGroup) ToString() string {
 		}
 	}
 	return sb.String()
-}
-
-func (group *SQLGroup) quorum() int {
-	return group.size/2 + 1
 }

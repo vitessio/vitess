@@ -53,22 +53,22 @@ func NewOracleGtidSetEntry(gtidRangeString string) (*OracleGtidSetEntry, error) 
 }
 
 // String returns a user-friendly string representation of this entry
-func (this *OracleGtidSetEntry) String() string {
-	return fmt.Sprintf("%s:%s", this.UUID, this.Ranges)
+func (oracleGTIDSetEntry *OracleGtidSetEntry) String() string {
+	return fmt.Sprintf("%s:%s", oracleGTIDSetEntry.UUID, oracleGTIDSetEntry.Ranges)
 }
 
 // String returns a user-friendly string representation of this entry
-func (this *OracleGtidSetEntry) Explode() (result [](*OracleGtidSetEntry)) {
-	intervals := strings.Split(this.Ranges, ":")
+func (oracleGTIDSetEntry *OracleGtidSetEntry) Explode() (result [](*OracleGtidSetEntry)) {
+	intervals := strings.Split(oracleGTIDSetEntry.Ranges, ":")
 	for _, interval := range intervals {
 		if submatch := multiValueInterval.FindStringSubmatch(interval); submatch != nil {
 			intervalStart, _ := strconv.Atoi(submatch[1])
 			intervalEnd, _ := strconv.Atoi(submatch[2])
 			for i := intervalStart; i <= intervalEnd; i++ {
-				result = append(result, &OracleGtidSetEntry{UUID: this.UUID, Ranges: fmt.Sprintf("%d", i)})
+				result = append(result, &OracleGtidSetEntry{UUID: oracleGTIDSetEntry.UUID, Ranges: fmt.Sprintf("%d", i)})
 			}
 		} else if submatch := singleValueInterval.FindStringSubmatch(interval); submatch != nil {
-			result = append(result, &OracleGtidSetEntry{UUID: this.UUID, Ranges: interval})
+			result = append(result, &OracleGtidSetEntry{UUID: oracleGTIDSetEntry.UUID, Ranges: interval})
 		}
 	}
 	return result

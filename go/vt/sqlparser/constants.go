@@ -47,12 +47,11 @@ const (
 	GlobalStr         = "global"
 	VitessMetadataStr = "vitess_metadata"
 	VariableStr       = "variable"
-	LocalStr          = "local"
-	ImplicitStr       = ""
 
 	// DDL strings.
 	CreateStr           = "create"
 	AlterStr            = "alter"
+	DeallocateStr       = "deallocate"
 	DropStr             = "drop"
 	RenameStr           = "rename"
 	TruncateStr         = "truncate"
@@ -65,6 +64,16 @@ const (
 	DropColVindexStr    = "on table drop vindex"
 	AddSequenceStr      = "add sequence"
 	AddAutoIncStr       = "add auto_increment"
+
+	// Partition and subpartition type strings
+	HashTypeStr  = "hash"
+	KeyTypeStr   = "key"
+	RangeTypeStr = "range"
+	ListTypeStr  = "list"
+
+	// Partition value range type strings
+	LessThanTypeStr = "less than"
+	InTypeStr       = "in"
 
 	// Online DDL hint
 	OnlineStr = "online"
@@ -103,6 +112,11 @@ const (
 	IgnoreStr = "ignore "
 	ForceStr  = "force "
 
+	// Index hints For types.
+	JoinForStr    = "join"
+	GroupByForStr = "group by"
+	OrderByForStr = "order by"
+
 	// Where.Type
 	WhereStr  = "where"
 	HavingStr = "having"
@@ -121,10 +135,6 @@ const (
 	NotLikeStr       = "not like"
 	RegexpStr        = "regexp"
 	NotRegexpStr     = "not regexp"
-
-	// RangeCond.Operator
-	BetweenStr    = "between"
-	NotBetweenStr = "not between"
 
 	// IsExpr.Operator
 	IsNullStr     = "is null"
@@ -150,22 +160,57 @@ const (
 	JSONUnquoteExtractOpStr = "->>"
 
 	// UnaryExpr.Operator
-	UPlusStr   = "+"
-	UMinusStr  = "-"
-	TildaStr   = "~"
-	BangStr    = "!"
-	BinaryStr  = "binary "
-	UBinaryStr = "_binary "
-	Utf8mb4Str = "_utf8mb4 "
-	Utf8Str    = "_utf8 "
-	Latin1Str  = "_latin1 "
+	UPlusStr    = "+"
+	UMinusStr   = "-"
+	TildaStr    = "~"
+	BangStr     = "!"
+	Armscii8Str = "_armscii8"
+	ASCIIStr    = "_ascii"
+	Big5Str     = "_big5"
+	UBinaryStr  = "_binary"
+	Cp1250Str   = "_cp1250"
+	Cp1251Str   = "_cp1251"
+	Cp1256Str   = "_cp1256"
+	Cp1257Str   = "_cp1257"
+	Cp850Str    = "_cp850"
+	Cp852Str    = "_cp852"
+	Cp866Str    = "_cp866"
+	Cp932Str    = "_cp932"
+	Dec8Str     = "_dec8"
+	EucjpmsStr  = "_eucjpms"
+	EuckrStr    = "_euckr"
+	Gb18030Str  = "_gb18030"
+	Gb2312Str   = "_gb2312"
+	GbkStr      = "_gbk"
+	Geostd8Str  = "_geostd8"
+	GreekStr    = "_greek"
+	HebrewStr   = "_hebrew"
+	Hp8Str      = "_hp8"
+	Keybcs2Str  = "_keybcs2"
+	Koi8rStr    = "_koi8r"
+	Koi8uStr    = "_koi8u"
+	Latin1Str   = "_latin1"
+	Latin2Str   = "_latin2"
+	Latin5Str   = "_latin5"
+	Latin7Str   = "_latin7"
+	MacceStr    = "_macce"
+	MacromanStr = "_macroman"
+	SjisStr     = "_sjis"
+	Swe7Str     = "_swe7"
+	Tis620Str   = "_tis620"
+	Ucs2Str     = "_ucs2"
+	UjisStr     = "_ujis"
+	Utf16Str    = "_utf16"
+	Utf16leStr  = "_utf16le"
+	Utf32Str    = "_utf32"
+	Utf8Str     = "_utf8"
+	Utf8mb4Str  = "_utf8mb4"
+	NStringStr  = "N"
 
-	// ConvertType.Operator
+	// DatabaseOption.Type
 	CharacterSetStr = " character set"
-	NoOperatorStr   = ""
-
-	// CollateAndCharset.Type
-	CollateStr = " collate"
+	CollateStr      = " collate"
+	EncryptionStr   = " encryption"
 
 	// MatchExpr.Option
 	NoOptionStr                              = ""
@@ -211,47 +256,160 @@ const (
 	LowPriorityWriteStr = "low_priority write"
 
 	// ShowCommand Types
-	CharsetStr          = " charset"
-	CollationStr        = " collation"
-	ColumnStr           = " columns"
-	CreateDbStr         = " create database"
-	CreateEStr          = " create event"
-	CreateFStr          = " create function"
-	CreateProcStr       = " create procedure"
-	CreateTblStr        = " create table"
-	CreateTrStr         = " create trigger"
-	CreateVStr          = " create view"
-	DatabaseStr         = " databases"
-	FunctionCStr        = " function code"
-	FunctionStr         = " function status"
-	GtidExecGlobalStr   = " global gtid_executed"
-	IndexStr            = " indexes"
-	OpenTableStr        = " open tables"
-	PrivilegeStr        = " privileges"
-	ProcedureCStr       = " procedure code"
-	ProcedureStr        = " procedure status"
-	StatusGlobalStr     = " global status"
-	StatusSessionStr    = " status"
-	TableStr            = " tables"
-	TableStatusStr      = " table status"
-	TriggerStr          = " triggers"
-	VariableGlobalStr   = " global variables"
-	VariableSessionStr  = " variables"
-	VGtidExecGlobalStr  = " global vgtid_executed"
-	KeyspaceStr         = " keyspaces"
-	VitessMigrationsStr = " vitess_migrations"
-	WarningsStr         = " warnings"
+	CharsetStr                 = " charset"
+	CollationStr               = " collation"
+	ColumnStr                  = " columns"
+	CreateDbStr                = " create database"
+	CreateEStr                 = " create event"
+	CreateFStr                 = " create function"
+	CreateProcStr              = " create procedure"
+	CreateTblStr               = " create table"
+	CreateTrStr                = " create trigger"
+	CreateVStr                 = " create view"
+	DatabaseStr                = " databases"
+	EnginesStr                 = " engines"
+	FunctionCStr               = " function code"
+	FunctionStr                = " function status"
+	GtidExecGlobalStr          = " global gtid_executed"
+	IndexStr                   = " indexes"
+	OpenTableStr               = " open tables"
+	PluginsStr                 = " plugins"
+	PrivilegeStr               = " privileges"
+	ProcedureCStr              = " procedure code"
+	ProcedureStr               = " procedure status"
+	StatusGlobalStr            = " global status"
+	StatusSessionStr           = " status"
+	TableStr                   = " tables"
+	TableStatusStr             = " table status"
+	TriggerStr                 = " triggers"
+	VariableGlobalStr          = " global variables"
+	VariableSessionStr         = " variables"
+	VGtidExecGlobalStr         = " global vgtid_executed"
+	KeyspaceStr                = " keyspaces"
+	VitessMigrationsStr        = " vitess_migrations"
+	VitessReplicationStatusStr = " vitess_replication_status"
+	VitessShardsStr            = " vitess_shards"
+	VitessTabletsStr           = " vitess_tablets"
+	VitessTargetStr            = " vitess_target"
+	VitessVariablesStr         = " vitess_metadata variables"
+	VschemaTablesStr           = " vschema tables"
+	VschemaVindexesStr         = " vschema vindexes"
+	WarningsStr                = " warnings"
 
 	// DropKeyType strings
 	PrimaryKeyTypeStr = "primary key"
 	ForeignKeyTypeStr = "foreign key"
 	NormalKeyTypeStr  = "key"
+	CheckKeyTypeStr   = "check"
+
+	// TrimType strings
+	BothTrimStr     = "both"
+	LeadingTrimStr  = "leading"
+	TrailingTrimStr = "trailing"
+
+	// FrameUnitType strings
+	FrameRowsStr  = "rows"
+	FrameRangeStr = "range"
+
+	// FramePointType strings
+	CurrentRowStr         = "current row"
+	UnboundedPrecedingStr = "unbounded preceding"
+	UnboundedFollowingStr = "unbounded following"
+	ExprPrecedingStr      = "preceding"
+	ExprFollowingStr      = "following"
+
+	// ArgumentLessWindowExprType strings
+	CumeDistExprStr    = "cume_dist"
+	DenseRankExprStr   = "dense_rank"
+	PercentRankExprStr = "percent_rank"
+	RankExprStr        = "rank"
+	RowNumberExprStr   = "row_number"
+
+	// NullTreatmentType strings
+	RespectNullsStr = "respect nulls"
+	IgnoreNullsStr  = "ignore nulls"
+
+	// FromFirstLastType strings
+	FromFirstStr = "respect nulls"
+	FromLastStr  = "ignore nulls"
+
+	// FirstOrLastValueExprType strings
+	FirstValueExprStr = "first_value"
+	LastValueExprStr  = "last_value"
+
+	// FirstOrLastValueExprType strings
+	LagExprStr  = "lag"
+	LeadExprStr = "lead"
+
+	// TrimFuncType strings
+	NormalTrimStr = "trim"
+	LTrimStr      = "ltrim"
+	RTrimStr      = "rtrim"
+
+	// JSONAttributeType strings
+	DepthAttributeStr  = "json_depth"
+	ValidAttributeStr  = "json_valid"
+	TypeAttributeStr   = "json_type"
+	LengthAttributeStr = "json_length"
+
+	// JSONValueModifierType strings
+	JSONArrayAppendStr = "json_array_append"
+	JSONArrayInsertStr = "json_array_insert"
+	JSONInsertStr      = "json_insert"
+	JSONReplaceStr     = "json_replace"
+	JSONSetStr         = "json_set"
+
+	// JSONValueMergeType strings
+	JSONMergeStr         = "json_merge"
+	JSONMergePatchStr    = "json_merge_patch"
+	JSONMergePreserveStr = "json_merge_preserve"
+
+	// LockingFuncType strings
+	GetLockStr         = "get_lock"
+	IsFreeLockStr      = "is_free_lock"
+	IsUsedLockStr      = "is_used_lock"
+	ReleaseAllLocksStr = "release_all_locks"
+	ReleaseLockStr     = "release_lock"
+
+	// PerformanceSchemaType strings
+	FormatBytesStr       = "format_bytes"
+	FormatPicoTimeStr    = "format_pico_time"
+	PsCurrentThreadIDStr = "ps_current_thread_id"
+	PsThreadIDStr        = "ps_thread_id"
+
+	// GTIDType strings
+	GTIDSubsetStr                   = "gtid_subset"
+	GTIDSubtractStr                 = "gtid_subtract"
+	WaitForExecutedGTIDSetStr       = "wait_for_executed_gtid_set"
+	WaitUntilSQLThreadAfterGTIDSStr = "wati_until_sql_thread_after_gtids"
 
 	// LockOptionType strings
 	NoneTypeStr      = "none"
 	SharedTypeStr    = "shared"
 	DefaultTypeStr   = "default"
 	ExclusiveTypeStr = "exclusive"
+
+	// IntervalTypes strings
+	DayStr               = "day"
+	WeekStr              = "week"
+	MonthStr             = "month"
+	YearStr              = "year"
+	DayHourStr           = "day_hour"
+	DayMicrosecondStr    = "day_microsecond"
+	DayMinuteStr         = "day_minute"
+	DaySecondStr         = "day_second"
+	HourStr              = "hour"
+	HourMicrosecondStr   = "hour_microsecond"
+	HourMinuteStr        = "hour_minute"
+	HourSecondStr        = "hour_second"
+	MicrosecondStr       = "microsecond"
+	MinuteStr            = "minute"
+	MinuteMicrosecondStr = "minute_microsecond"
+	MinuteSecondStr      = "minute_second"
+	QuarterStr           = "quarter"
+	SecondStr            = "second"
+	SecondMicrosecondStr = "second_microsecond"
+	YearMonthStr         = "year_month"
 )
 
 // Constants for Enum type - AccessMode
@@ -260,7 +418,7 @@ const (
 	ReadWrite
 )
 
-//Constants for Enum type - IsolationLevel
+// Constants for Enum type - IsolationLevel
 const (
 	ReadUncommitted IsolationLevel = iota
 	ReadCommitted
@@ -292,14 +450,16 @@ const (
 	RevertDDLAction
 )
 
-// Constants for Enum Type - Scope
+// Constants for scope of variables
+// See https://dev.mysql.com/doc/refman/8.0/en/set-variable.html
 const (
-	ImplicitScope Scope = iota
-	SessionScope
-	GlobalScope
-	VitessMetadataScope
-	VariableScope
-	LocalScope
+	NoScope             Scope = iota // This is only used for SET ISOLATION LEVEL
+	SessionScope                     // [SESSION | @@SESSION.| @@LOCAL. | @@] This is the default if no scope is given
+	GlobalScope                      // {GLOBAL | @@GLOBAL.} system_var_name
+	VitessMetadataScope              // @@vitess_metadata.system_var_name
+	PersistSysScope                  // {PERSIST_ONLY | @@PERSIST_ONLY.} system_var_name
+	PersistOnlySysScope              // {PERSIST_ONLY | @@PERSIST_ONLY.} system_var_name
+	VariableScope                    // @var_name   This is used for user defined variables.
 )
 
 // Constants for Enum Type - Lock
@@ -307,6 +467,118 @@ const (
 	NoLock Lock = iota
 	ForUpdateLock
 	ShareModeLock
+)
+
+// Constants for Enum Type - TrimType
+const (
+	NoTrimType TrimType = iota
+	BothTrimType
+	LeadingTrimType
+	TrailingTrimType
+)
+
+// Constants for Enum Type - TrimFuncType
+const (
+	NormalTrimType TrimFuncType = iota
+	LTrimType
+	RTrimType
+)
+
+// Constants for Enum Type - FrameUnitType
+const (
+	FrameRowsType FrameUnitType = iota
+	FrameRangeType
+)
+
+// Constants for Enum Type - FramePointType
+const (
+	CurrentRowType FramePointType = iota
+	UnboundedPrecedingType
+	UnboundedFollowingType
+	ExprPrecedingType
+	ExprFollowingType
+)
+
+// Constants for Enum Type - ArgumentLessWindowExprType
+const (
+	CumeDistExprType ArgumentLessWindowExprType = iota
+	DenseRankExprType
+	PercentRankExprType
+	RankExprType
+	RowNumberExprType
+)
+
+// Constants for Enum Type - NullTreatmentType
+const (
+	RespectNullsType NullTreatmentType = iota
+	IgnoreNullsType
+)
+
+// Constants for Enum Type - FromFirstLastType
+const (
+	FromFirstType FromFirstLastType = iota
+	FromLastType
+)
+
+// Constants for Enum Type - FirstOrLastValueExprType
+const (
+	FirstValueExprType FirstOrLastValueExprType = iota
+	LastValueExprType
+)
+
+// Constants for Enum Type - FirstOrLastValueExprType
+const (
+	LagExprType LagLeadExprType = iota
+	LeadExprType
+)
+
+// Constants for Enum Type - JSONAttributeType
+const (
+	DepthAttributeType JSONAttributeType = iota
+	ValidAttributeType
+	TypeAttributeType
+	LengthAttributeType
+)
+
+// Constants for Enum Type - JSONValueModifierType
+const (
+	JSONArrayAppendType JSONValueModifierType = iota
+	JSONArrayInsertType
+	JSONInsertType
+	JSONReplaceType
+	JSONSetType
+)
+
+// Constants for Enum Type - JSONValueMergeType
+const (
+	JSONMergeType JSONValueMergeType = iota
+	JSONMergePatchType
+	JSONMergePreserveType
+)
+
+// Constants for Enum Type - LockingFuncType
+const (
+	GetLock LockingFuncType = iota
+	IsFreeLock
+	IsUsedLock
+	ReleaseAllLocks
+	ReleaseLock
+)
+
+// Constants for Enum Type - PerformanceSchemaType
+const (
+	FormatBytesType PerformanceSchemaType = iota
+	FormatPicoTimeType
+	PsCurrentThreadIDType
+	PsThreadIDType
+)
+
+// Constants for Enum Type - GTIDType
+const (
+	GTIDSubsetType GTIDType = iota
+	GTIDSubtractType
+	WaitForExecutedGTIDSetType
+	WaitUntilSQLThreadAfterGTIDSType
 )
 
 // Constants for Enum Type - WhereType
@@ -343,12 +615,6 @@ const (
 	NotRegexpOp
 )
 
-// Constant for Enum Type - RangeCondOperator
-const (
-	BetweenOp RangeCondOperator = iota
-	NotBetweenOp
-)
-
 // Constant for Enum Type - IsExprOperator
 const (
 	IsNullOp IsExprOperator = iota
@@ -382,11 +648,7 @@ const (
 	UMinusOp
 	TildaOp
 	BangOp
-	BinaryOp
-	UBinaryOp
-	Utf8mb4Op
-	Utf8Op
-	Latin1Op
+	NStringOp
 )
 
 // Constant for Enum Type - MatchExprOption
@@ -404,17 +666,19 @@ const (
 	DescOrder
 )
 
-// Constant for Enum Type - ConvertTypeOperator
+// Constant for Enum Type - IndexHintType
 const (
-	NoOperator ConvertTypeOperator = iota
-	CharacterSetOp
-)
-
-// Constant for Enum Type - IndexHintsType
-const (
-	UseOp IndexHintsType = iota
+	UseOp IndexHintType = iota
 	IgnoreOp
 	ForceOp
+)
+
+// Constant for Enum Type - IndexHintForType
+const (
+	NoForType IndexHintForType = iota
+	JoinForType
+	GroupByForType
+	OrderByForType
 )
 
 // Constant for Enum Type - PartitionSpecAction
@@ -436,6 +700,20 @@ const (
 	UpgradeAction
 )
 
+// Constant for Enum Type - PartitionByType
+const (
+	HashType PartitionByType = iota
+	KeyType
+	RangeType
+	ListType
+)
+
+// Constant for Enum Type - PartitionValueRangeType
+const (
+	LessThanType PartitionValueRangeType = iota
+	InType
+)
+
 // Constant for Enum Type - ExplainType
 const (
 	EmptyType ExplainType = iota
@@ -453,10 +731,24 @@ const (
 	IntoDumpfile
 )
 
-// Constant for Enum Type - CollateAndCharsetType
+// Constant for Enum Type - DeallocateStmtType
 const (
-	CollateType CollateAndCharsetType = iota
+	DeallocateType DeallocateStmtType = iota
+	DropType
+)
+
+// Constant for Enum Type - JtOnResponseType
+const (
+	ErrorJSONType JtOnResponseType = iota
+	NullJSONType
+	DefaultJSONType
+)
+
+// Constant for Enum Type - DatabaseOptionType
+const (
+	CollateType DatabaseOptionType = iota
 	CharacterSetType
+	EncryptionType
 )
 
 // LockType constants
@@ -482,11 +774,13 @@ const (
 	CreateTr
 	CreateV
 	Database
+	Engines
 	FunctionC
 	Function
 	GtidExecGlobal
 	Index
 	OpenTable
+	Plugins
 	Privilege
 	ProcedureC
 	Procedure
@@ -499,6 +793,13 @@ const (
 	VariableSession
 	VGtidExecGlobal
 	VitessMigrations
+	VitessReplicationStatus
+	VitessShards
+	VitessTablets
+	VitessTarget
+	VitessVariables
+	VschemaTables
+	VschemaVindexes
 	Warnings
 	Keyspace
 )
@@ -508,6 +809,7 @@ const (
 	PrimaryKeyType DropKeyType = iota
 	ForeignKeyType
 	NormalKeyType
+	CheckKeyType
 )
 
 // LockOptionType constants
@@ -522,12 +824,50 @@ const (
 const (
 	RetryMigrationType AlterMigrationType = iota
 	CompleteMigrationType
+	CompleteAllMigrationType
 	CancelMigrationType
 	CancelAllMigrationType
+	CleanupMigrationType
+	ThrottleMigrationType
+	ThrottleAllMigrationType
+	UnthrottleMigrationType
+	UnthrottleAllMigrationType
 )
 
 // ColumnStorage constants
 const (
 	VirtualStorage ColumnStorage = iota
 	StoredStorage
+)
+
+// ColumnFormat constants
+const (
+	UnspecifiedFormat ColumnFormat = iota
+	FixedFormat
+	DynamicFormat
+	DefaultFormat
+)
+
+// IntervalTypes constants
+const (
+	IntervalYear IntervalTypes = iota
+	IntervalQuarter
+	IntervalMonth
+	IntervalWeek
+	IntervalDay
+	IntervalHour
+	IntervalMinute
+	IntervalSecond
+	IntervalMicrosecond
+	IntervalYearMonth
+	IntervalDayHour
+	IntervalDayMinute
+	IntervalDaySecond
+	IntervalHourMinute
+	IntervalHourSecond
+	IntervalMinuteSecond
+	IntervalDayMicrosecond
+	IntervalHourMicrosecond
+	IntervalMinuteMicrosecond
+	IntervalSecondMicrosecond
 )

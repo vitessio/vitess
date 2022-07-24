@@ -159,7 +159,7 @@ func (env *testResharderEnv) addTablet(id int, keyspace, shard string, tabletTyp
 		},
 	}
 	env.tablets[id] = tablet
-	if err := env.wr.InitTablet(context.Background(), tablet, false /* allowPrimaryOverride */, true /* createShardAndKeyspace */, false /* allowUpdate */); err != nil {
+	if err := env.wr.TopoServer().InitTablet(context.Background(), tablet, false /* allowPrimaryOverride */, true /* createShardAndKeyspace */, false /* allowUpdate */); err != nil {
 		panic(err)
 	}
 	if tabletType == topodatapb.TabletType_PRIMARY {
@@ -201,7 +201,7 @@ func newTestResharderTMClient() *testResharderTMClient {
 	}
 }
 
-func (tmc *testResharderTMClient) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
+func (tmc *testResharderTMClient) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.GetSchemaRequest) (*tabletmanagerdatapb.SchemaDefinition, error) {
 	return tmc.schema, nil
 }
 

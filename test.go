@@ -1,4 +1,4 @@
-///bin/true; exec /usr/bin/env go run "$0" "$@"
+// /bin/true; exec /usr/bin/env go run "$0" "$@"
 
 /*
  * Copyright 2019 The Vitess Authors.
@@ -74,7 +74,7 @@ For example:
 // Flags
 var (
 	flavor           = flag.String("flavor", "mysql57", "comma-separated bootstrap flavor(s) to run against (when using Docker mode). Available flavors: all,"+flavors)
-	bootstrapVersion = flag.String("bootstrap-version", "3", "the version identifier to use for the docker images")
+	bootstrapVersion = flag.String("bootstrap-version", "9", "the version identifier to use for the docker images")
 	runCount         = flag.Int("runs", 1, "run each test this many times")
 	retryMax         = flag.Int("retry", 3, "max number of retries, to detect flaky tests")
 	logPass          = flag.Bool("log-pass", false, "log test output even if it passes")
@@ -243,7 +243,7 @@ func (t *Test) run(dir, dataDir string) ([]byte, error) {
 	return buf.Bytes(), runErr
 }
 
-func (t *Test) logf(format string, v ...interface{}) {
+func (t *Test) logf(format string, v ...any) {
 	if *runCount > 1 {
 		log.Printf("%v.%v[%v/%v]: %v", t.flavor, t.name, t.runIndex+1, *runCount, fmt.Sprintf(format, v...))
 	} else {

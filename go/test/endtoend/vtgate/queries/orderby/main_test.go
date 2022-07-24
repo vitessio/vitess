@@ -17,9 +17,13 @@ limitations under the License.
 package orderby
 
 import (
+	_ "embed"
 	"flag"
+	"fmt"
 	"os"
 	"testing"
+
+	"vitess.io/vitess/go/test/endtoend/utils"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -28,106 +32,15 @@ import (
 var (
 	clusterInstance *cluster.LocalProcessCluster
 	vtParams        mysql.ConnParams
-	KeyspaceName    = "ks_orderby"
-	Cell            = "test_orderby"
-	SchemaSQL       = `create table t1(
-	id1 bigint,
-	id2 bigint,
-	primary key(id1)
-) Engine=InnoDB;
+	mysqlParams     mysql.ConnParams
+	keyspaceName    = "ks_orderby"
+	cell            = "test_orderby"
 
-create table t1_id2_idx(
-	id2 bigint,
-	keyspace_id varbinary(10),
-	primary key(id2)
-) Engine=InnoDB;
+	//go:embed schema.sql
+	schemaSQL string
 
-create table t4(
-	id1 bigint,
-	id2 varchar(10),
-	primary key(id1)
-) ENGINE=InnoDB DEFAULT charset=utf8mb4 COLLATE=utf8mb4_general_ci;
-
-create table t4_id2_idx(
-	id2 varchar(10),
-	id1 bigint,
-	keyspace_id varbinary(50),
-    primary key(id2, id1)
-) Engine=InnoDB DEFAULT charset=utf8mb4 COLLATE=utf8mb4_general_ci;
-`
-
-	VSchema = `
-{
-  "sharded": true,
-  "vindexes": {
-    "hash": {
-      "type": "hash"
-    },
-    "unicode_loose_md5" : {
-	  "type": "unicode_loose_md5"
-    },
-    "t1_id2_vdx": {
-      "type": "consistent_lookup_unique",
-      "params": {
-        "table": "t1_id2_idx",
-        "from": "id2",
-        "to": "keyspace_id"
-      },
-      "owner": "t1"
-    },
-     "t4_id2_vdx": {
-      "type": "consistent_lookup",
-      "params": {
-        "table": "t4_id2_idx",
-        "from": "id2,id1",
-        "to": "keyspace_id"
-      },
-      "owner": "t4"
-    }
-  },
-  "tables": {
-    "t1": {
-      "column_vindexes": [
-        {
-          "column": "id1",
-          "name": "hash"
-        },
-        {
-          "column": "id2",
-          "name": "t1_id2_vdx"
-        }
-      ]
-    },
-    "t1_id2_idx": {
-      "column_vindexes": [
-        {
-          "column": "id2",
-          "name": "hash"
-        }
-      ]
-    },
-	"t4": {
-      "column_vindexes": [
-        {
-          "column": "id1",
-          "name": "hash"
-        },
-        {
-          "columns": ["id2", "id1"],
-          "name": "t4_id2_vdx"
-        }
-      ]
-    },
-    "t4_id2_idx": {
-      "column_vindexes": [
-        {
-          "column": "id2",
-          "name": "unicode_loose_md5"
-        }
-      ]
-    }
-  }
-}`
+	//go:embed vschema.json
+	vschema string
 )
 
 func TestMain(m *testing.M) {
@@ -135,7 +48,7 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitCode := func() int {
-		clusterInstance = cluster.NewCluster(Cell, "localhost")
+		clusterInstance = cluster.NewCluster(cell, "localhost")
 		defer clusterInstance.Teardown()
 
 		// Start topo server
@@ -146,18 +59,18 @@ func TestMain(m *testing.M) {
 
 		// Start keyspace
 		keyspace := &cluster.Keyspace{
-			Name:      KeyspaceName,
-			SchemaSQL: SchemaSQL,
-			VSchema:   VSchema,
+			Name:      keyspaceName,
+			SchemaSQL: schemaSQL,
+			VSchema:   vschema,
 		}
-		clusterInstance.VtGateExtraArgs = []string{"-schema_change_signal"}
-		clusterInstance.VtTabletExtraArgs = []string{"-queryserver-config-schema-change-signal", "-queryserver-config-schema-change-signal-interval", "0.1"}
-		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 1, true)
+		clusterInstance.VtGateExtraArgs = []string{"--schema_change_signal"}
+		clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-schema-change-signal", "--queryserver-config-schema-change-signal-interval", "0.1"}
+		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 0, false)
 		if err != nil {
 			return 1
 		}
 
-		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "-enable_system_settings=true")
+		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--enable_system_settings=true")
 		// Start vtgate
 		err = clusterInstance.StartVtgate()
 		if err != nil {
@@ -168,6 +81,15 @@ func TestMain(m *testing.M) {
 			Host: clusterInstance.Hostname,
 			Port: clusterInstance.VtgateMySQLPort,
 		}
+
+		// create mysql instance and connection parameters
+		conn, closer, err := utils.NewMySQL(clusterInstance, keyspaceName, schemaSQL)
+		if err != nil {
+			fmt.Println(err)
+			return 1
+		}
+		defer closer()
+		mysqlParams = conn
 		return m.Run()
 	}()
 	os.Exit(exitCode)

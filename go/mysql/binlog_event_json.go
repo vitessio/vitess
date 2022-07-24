@@ -23,8 +23,6 @@ import (
 
 	"vitess.io/vitess/go/vt/log"
 
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
 	"github.com/spyzhov/ajson"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -50,7 +48,7 @@ https://github.com/noplay/python-mysql-replication/blob/175df28cc8b536a68522ff9b
 //TODO remove once the json refactor is tested live
 var jsonDebug = false
 
-func jlog(tpl string, vals ...interface{}) {
+func jlog(tpl string, vals ...any) {
 	if !jsonDebug {
 		return
 	}
@@ -470,11 +468,11 @@ func (oh opaquePlugin) getNode(typ jsonDataType, data []byte, pos int) (node *aj
 		precision := decimalData[0]
 		scale := decimalData[1]
 		metadata := (uint16(precision) << 8) + uint16(scale)
-		val, _, err := CellValue(decimalData, 2, TypeNewDecimal, metadata, querypb.Type_DECIMAL)
+		val, _, err := CellValue(decimalData, 2, TypeNewDecimal, metadata, &querypb.Field{Type: querypb.Type_DECIMAL})
 		if err != nil {
 			return nil, err
 		}
-		float, err := evalengine.ToFloat64(val)
+		float, err := val.ToFloat64()
 		if err != nil {
 			return nil, err
 		}

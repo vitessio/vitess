@@ -25,6 +25,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/servenv"
 
 	"vitess.io/vitess/go/sqlescape"
@@ -94,6 +95,10 @@ type Handler interface {
 	// In particular, ServerStatusAutocommit might be set.
 	NewConnection(c *Conn)
 
+	// ConnectionReady is called after the connection handshake, but
+	// before we begin to process commands.
+	ConnectionReady(c *Conn)
+
 	// ConnectionClosed is called when a connection is closed.
 	ConnectionClosed(c *Conn)
 
@@ -111,6 +116,9 @@ type Handler interface {
 	// execute query.
 	ComStmtExecute(c *Conn, prepare *PrepareData, callback func(*sqltypes.Result) error) error
 
+	// ComBinlogDumpGTID is called when a connection receives a ComBinlogDumpGTID request
+	ComBinlogDumpGTID(c *Conn, gtidSet GTIDSet) error
+
 	// WarningCount is called at the end of each query to obtain
 	// the value to be returned to the client in the EOF packet.
 	// Note that this will be called either in the context of the
@@ -120,6 +128,17 @@ type Handler interface {
 
 	ComResetConnection(c *Conn)
 }
+
+// UnimplementedHandler implemnts all of the optional callbacks so as to satisy
+// the Handler interface. Intended to be embedded into your custom Handler
+// implementation without needing to define every callback and to help be forwards
+// compatible when new functions are added.
+type UnimplementedHandler struct{}
+
+func (UnimplementedHandler) NewConnection(*Conn)      {}
+func (UnimplementedHandler) ConnectionReady(*Conn)    {}
+func (UnimplementedHandler) ConnectionClosed(*Conn)   {}
+func (UnimplementedHandler) ComResetConnection(*Conn) {}
 
 // Listener is the MySQL server protocol listener.
 type Listener struct {
@@ -470,6 +489,10 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 		log.Warningf("Slow connection from %s: %v", c, connectTime)
 	}
 
+	// Tell our handler that we're finished handshake and are ready to
+	// process commands.
+	l.handler.ConnectionReady(c)
+
 	for {
 		kontinue := c.handleNextCommand(l.handler)
 		if !kontinue {
@@ -572,7 +595,7 @@ func (c *Conn) writeHandshakeV10(serverVersion string, authServer AuthServer, en
 	pos = writeUint16(data, pos, uint16(capabilities))
 
 	// Character set.
-	pos = writeByte(data, pos, CharacterSetUtf8)
+	pos = writeByte(data, pos, collations.Local().DefaultConnectionCharset())
 
 	// Status flag.
 	pos = writeUint16(data, pos, c.StatusFlags)
@@ -651,7 +674,7 @@ func (l *Listener) parseClientHandshakePacket(c *Conn, firstTime bool, data []by
 	if !ok {
 		return "", "", nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "parseClientHandshakePacket: can't read characterSet")
 	}
-	c.CharacterSet = characterSet
+	c.CharacterSet = collations.ID(characterSet)
 
 	// 23x reserved zero bytes.
 	pos += 23

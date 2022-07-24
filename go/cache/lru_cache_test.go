@@ -24,13 +24,13 @@ type CacheValue struct {
 	size int64
 }
 
-func cacheValueSize(val interface{}) int64 {
+func cacheValueSize(val any) int64 {
 	return val.(*CacheValue).size
 }
 
 func TestInitialState(t *testing.T) {
 	cache := NewLRUCache(5, cacheValueSize)
-	l, sz, c, e := cache.Len(), cache.UsedCapacity(), cache.MaxCapacity(), cache.Evictions()
+	l, sz, c, e, h, m := cache.Len(), cache.UsedCapacity(), cache.MaxCapacity(), cache.Evictions(), cache.Hits(), cache.Misses()
 	if l != 0 {
 		t.Errorf("length = %v, want 0", l)
 	}
@@ -42,6 +42,12 @@ func TestInitialState(t *testing.T) {
 	}
 	if e != 0 {
 		t.Errorf("evictions = %v, want 0", c)
+	}
+	if h != 0 {
+		t.Errorf("hits = %v, want 0", c)
+	}
+	if m != 0 {
+		t.Errorf("misses = %v, want 0", c)
 	}
 }
 
@@ -199,6 +205,12 @@ func TestCapacityIsObeyed(t *testing.T) {
 	if c := cache.MaxCapacity(); c != size {
 		t.Errorf("cache.UsedCapacity() returned bad length: %v", c)
 	}
+	if c := cache.Hits(); c != 0 {
+		t.Errorf("cache.Hits() returned hits when there should be none: %v", c)
+	}
+	if c := cache.Misses(); c != 0 {
+		t.Errorf("cache.Misses() returned misses when there should be none: %v", c)
+	}
 }
 
 func TestLRUIsEvicted(t *testing.T) {
@@ -226,5 +238,13 @@ func TestLRUIsEvicted(t *testing.T) {
 
 	if e, want := cache.Evictions(), int64(1); e != want {
 		t.Errorf("evictions: %d, want: %d", e, want)
+	}
+
+	if h, want := cache.Hits(), int64(3); h != want {
+		t.Errorf("hits: %d, want: %d", h, want)
+	}
+
+	if m, want := cache.Misses(), int64(1); m != want {
+		t.Errorf("misses: %d, want: %d", m, want)
 	}
 }

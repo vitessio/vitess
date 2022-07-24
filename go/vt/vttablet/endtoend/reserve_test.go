@@ -91,7 +91,7 @@ func TestReserveBeginExecuteRelease(t *testing.T) {
 
 	insQuery := "insert into vitess_test (intval, floatval, charval, binval) values (4, null, null, null)"
 	selQuery := "select intval from vitess_test where intval = 4"
-	_, err := client.ReserveBeginExecute(insQuery, nil, nil)
+	_, err := client.ReserveBeginExecute(insQuery, nil, nil, nil)
 	require.NoError(t, err)
 
 	qr, err := client.Execute(selQuery, nil)
@@ -112,10 +112,10 @@ func TestMultipleReserveBeginHaveDifferentConnection(t *testing.T) {
 
 	query := "select connection_id()"
 
-	qrc1_1, err := client1.ReserveBeginExecute(query, nil, nil)
+	qrc1_1, err := client1.ReserveBeginExecute(query, nil, nil, nil)
 	require.NoError(t, err)
 	defer client1.Release()
-	qrc2_1, err := client2.ReserveBeginExecute(query, nil, nil)
+	qrc2_1, err := client2.ReserveBeginExecute(query, nil, nil, nil)
 	require.NoError(t, err)
 	defer client2.Release()
 	require.NotEqual(t, qrc1_1.Rows, qrc2_1.Rows)
@@ -133,7 +133,7 @@ func TestCommitOnReserveBeginConn(t *testing.T) {
 
 	query := "select connection_id()"
 
-	qr1, err := client.ReserveBeginExecute(query, nil, nil)
+	qr1, err := client.ReserveBeginExecute(query, nil, nil, nil)
 	require.NoError(t, err)
 	defer client.Release()
 
@@ -153,7 +153,7 @@ func TestRollbackOnReserveBeginConn(t *testing.T) {
 
 	query := "select connection_id()"
 
-	qr1, err := client.ReserveBeginExecute(query, nil, nil)
+	qr1, err := client.ReserveBeginExecute(query, nil, nil, nil)
 	require.NoError(t, err)
 	defer client.Release()
 
@@ -173,7 +173,7 @@ func TestReserveBeginRollbackAndBeginCommitAgain(t *testing.T) {
 
 	query := "select connection_id()"
 
-	qr1, err := client.ReserveBeginExecute(query, nil, nil)
+	qr1, err := client.ReserveBeginExecute(query, nil, nil, nil)
 	require.NoError(t, err)
 	defer client.Release()
 
@@ -207,7 +207,7 @@ func TestReserveBeginCommitFailToReuseTxID(t *testing.T) {
 
 	query := "select connection_id()"
 
-	_, err := client.ReserveBeginExecute(query, nil, nil)
+	_, err := client.ReserveBeginExecute(query, nil, nil, nil)
 	require.NoError(t, err)
 	defer client.Release()
 
@@ -229,7 +229,7 @@ func TestReserveBeginRollbackFailToReuseTxID(t *testing.T) {
 
 	query := "select connection_id()"
 
-	_, err := client.ReserveBeginExecute(query, nil, nil)
+	_, err := client.ReserveBeginExecute(query, nil, nil, nil)
 	require.NoError(t, err)
 	defer client.Release()
 
@@ -251,7 +251,7 @@ func TestReserveBeginCommitFailToReuseOldReservedID(t *testing.T) {
 
 	query := "select connection_id()"
 
-	_, err := client.ReserveBeginExecute(query, nil, nil)
+	_, err := client.ReserveBeginExecute(query, nil, nil, nil)
 	require.NoError(t, err)
 
 	oldRID := client.ReservedID()
@@ -275,7 +275,7 @@ func TestReserveBeginRollbackFailToReuseOldReservedID(t *testing.T) {
 
 	query := "select connection_id()"
 
-	_, err := client.ReserveBeginExecute(query, nil, nil)
+	_, err := client.ReserveBeginExecute(query, nil, nil, nil)
 	require.NoError(t, err)
 
 	oldRID := client.ReservedID()
@@ -487,7 +487,7 @@ func TestReserveAndExecuteWithFailingQueryAndReserveConnectionRemainsOpen(t *tes
 func TestReserveBeginExecuteWithFailingQueryAndReserveConnAndTxRemainsOpen(t *testing.T) {
 	client := framework.NewClient()
 
-	_, err := client.ReserveBeginExecute("select foo", nil, nil)
+	_, err := client.ReserveBeginExecute("select foo", nil, nil, nil)
 	require.Error(t, err)
 
 	// Save the connection id to check in the end that everything got executed on same connection.
@@ -582,6 +582,71 @@ func TestReserveExecuteWithPreQueriesAndCheckConnectionState(t *testing.T) {
 	assert.Equal(t, `[[VARCHAR("Warning") UINT32(1411) VARCHAR("Incorrect datetime value: '00/00/0000' for function str_to_date")]]`, fmt.Sprintf("%v", qr2.Rows))
 }
 
+func TestReserveExecuteWithPreQueriesAndSavepoint(t *testing.T) {
+	client := framework.NewClient()
+	defer client.Release()
+
+	insQuery := "insert into vitess_test (intval) values (5)"
+	selQuery := "select intval from vitess_test where intval = 5"
+	preQueries := []string{
+		"set sql_mode = ''",
+	}
+
+	postBeginQueries1 := []string{
+		"savepoint a",
+	}
+	// savepoint there after begin.
+	_, err := client.ReserveBeginExecute(insQuery, preQueries, postBeginQueries1, nil)
+	require.NoError(t, err)
+
+	qr, err := client.Execute(selQuery, nil)
+	require.NoError(t, err)
+	assert.Equal(t, `[[INT32(5)]]`, fmt.Sprintf("%v", qr.Rows))
+
+	_, err = client.Execute("rollback to a", nil)
+	require.NoError(t, err)
+
+	qr, err = client.Execute(selQuery, nil)
+	require.NoError(t, err)
+	assert.Equal(t, `[]`, fmt.Sprintf("%v", qr.Rows))
+
+	err = client.Release()
+	require.NoError(t, err)
+
+	postBeginQueries2 := []string{
+		"savepoint a",
+		"release savepoint a",
+		"savepoint b",
+	}
+	// no savepoint after begin
+	_, err = client.ReserveBeginExecute(insQuery, preQueries, postBeginQueries2, nil)
+	require.NoError(t, err)
+
+	qr, err = client.Execute(selQuery, nil)
+	require.NoError(t, err)
+	assert.Equal(t, `[[INT32(5)]]`, fmt.Sprintf("%v", qr.Rows))
+
+	// no savepoint a
+	_, err = client.Execute("rollback to a", nil)
+	require.Error(t, err)
+
+	// no savepoint a.
+	_, err = client.Execute("release a", nil)
+	require.Error(t, err)
+
+	// record still exists.
+	qr, err = client.Execute(selQuery, nil)
+	require.NoError(t, err)
+	assert.Equal(t, `[[INT32(5)]]`, fmt.Sprintf("%v", qr.Rows))
+
+	_, err = client.Execute("rollback to b", nil)
+	require.NoError(t, err)
+
+	qr, err = client.Execute(selQuery, nil)
+	require.NoError(t, err)
+	assert.Equal(t, `[]`, fmt.Sprintf("%v", qr.Rows))
+}
+
 func TestReserveBeginExecuteWithPreQueriesAndCheckConnectionState(t *testing.T) {
 	rcClient := framework.NewClient()
 	rucClient := framework.NewClient()
@@ -597,11 +662,11 @@ func TestReserveBeginExecuteWithPreQueriesAndCheckConnectionState(t *testing.T) 
 		"set session transaction isolation level read uncommitted",
 	}
 
-	_, err := rcClient.ReserveBeginExecute(insRcQuery, rcQuery, nil)
+	_, err := rcClient.ReserveBeginExecute(insRcQuery, rcQuery, nil, nil)
 	require.NoError(t, err)
 	defer rcClient.Release()
 
-	_, err = rucClient.ReserveBeginExecute(insRucQuery, rucQuery, nil)
+	_, err = rucClient.ReserveBeginExecute(insRucQuery, rucQuery, nil, nil)
 	require.NoError(t, err)
 	defer rucClient.Release()
 
@@ -671,7 +736,7 @@ func TestReserveBeginExecuteWithFailingPreQueriesAndCheckConnectionState(t *test
 		"set @@no_sys_var = 42",
 	}
 
-	_, err := client.ReserveBeginExecute(selQuery, preQueries, nil)
+	_, err := client.ReserveBeginExecute(selQuery, preQueries, nil, nil)
 	require.Error(t, err)
 
 	err = client.Commit()
@@ -709,7 +774,7 @@ func TestReserveBeginExecuteWithCommitFailureAndCheckConnectionAndDBState(t *tes
 	insQuery := "insert into vitess_test (intval, floatval, charval, binval) values (4, null, null, null)"
 	selQuery := "select intval from vitess_test where intval = 4"
 
-	connQr, err := client.ReserveBeginExecute(connQuery, nil, nil)
+	connQr, err := client.ReserveBeginExecute(connQuery, nil, nil, nil)
 	require.NoError(t, err)
 
 	_, err = client.Execute(insQuery, nil)
@@ -739,7 +804,7 @@ func TestReserveBeginExecuteWithRollbackFailureAndCheckConnectionAndDBState(t *t
 	insQuery := "insert into vitess_test (intval, floatval, charval, binval) values (4, null, null, null)"
 	selQuery := "select intval from vitess_test where intval = 4"
 
-	connQr, err := client.ReserveBeginExecute(connQuery, nil, nil)
+	connQr, err := client.ReserveBeginExecute(connQuery, nil, nil, nil)
 	require.NoError(t, err)
 
 	_, err = client.Execute(insQuery, nil)
@@ -835,7 +900,7 @@ func TestReserveExecuteDDLWithTx(t *testing.T) {
 	dropQuery := "drop table vitess_test_ddl"
 	descQuery := "describe vitess_test_ddl"
 
-	qr1, err := client.ReserveBeginExecute(connQuery, nil, nil)
+	qr1, err := client.ReserveBeginExecute(connQuery, nil, nil, nil)
 	require.NoError(t, err)
 
 	_, err = client.Execute(createQuery, nil)

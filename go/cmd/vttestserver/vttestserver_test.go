@@ -22,26 +22,26 @@ import (
 	"io"
 	"math/rand"
 	"os"
+	"os/exec"
 	"path"
 	"strings"
 	"testing"
 	"time"
 
-	"google.golang.org/protobuf/encoding/protojson"
-
-	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/tlstest"
-
+	"github.com/hashicorp/consul/api"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/encoding/protojson"
 
 	"vitess.io/vitess/go/mysql"
-
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/tlstest"
+	"vitess.io/vitess/go/vt/vtctl/vtctlclient"
 	"vitess.io/vitess/go/vt/vttest"
 
-	"vitess.io/vitess/go/vt/proto/logutil"
-	"vitess.io/vitess/go/vt/proto/vschema"
-	"vitess.io/vitess/go/vt/vtctl/vtctlclient"
+	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
 
 type columnVindex struct {
@@ -75,9 +75,7 @@ func TestPersistentMode(t *testing.T) {
 	conf := config
 	defer resetFlags(args, conf)
 
-	dir, err := os.MkdirTemp("/tmp", "vttestserver_persistent_mode_")
-	assert.NoError(t, err)
-	defer os.RemoveAll(dir)
+	dir := t.TempDir()
 
 	cluster, err := startPersistentCluster(dir)
 	assert.NoError(t, err)
@@ -130,7 +128,7 @@ func TestForeignKeysAndDDLModes(t *testing.T) {
 	conf := config
 	defer resetFlags(args, conf)
 
-	cluster, err := startCluster("-foreign_key_mode=allow", "-enable_online_ddl=true", "-enable_direct_ddl=true")
+	cluster, err := startCluster("--foreign_key_mode=allow", "--enable_online_ddl=true", "--enable_direct_ddl=true")
 	assert.NoError(t, err)
 	defer cluster.TearDown()
 
@@ -156,7 +154,7 @@ func TestForeignKeysAndDDLModes(t *testing.T) {
 	assert.NoError(t, err)
 
 	cluster.TearDown()
-	cluster, err = startCluster("-foreign_key_mode=disallow", "-enable_online_ddl=false", "-enable_direct_ddl=false")
+	cluster, err = startCluster("--foreign_key_mode=disallow", "--enable_online_ddl=false", "--enable_direct_ddl=false")
 	assert.NoError(t, err)
 	defer cluster.TearDown()
 
@@ -189,38 +187,33 @@ func TestCanVtGateExecute(t *testing.T) {
 	assert.NoError(t, err)
 	defer cluster.TearDown()
 
-	client, err := vtctlclient.New(fmt.Sprintf("localhost:%v", cluster.GrpcPort()))
-	assert.NoError(t, err)
-	defer client.Close()
-	stream, err := client.ExecuteVtctlCommand(
-		context.Background(),
-		[]string{
-			"VtGateExecute",
-			"-server",
-			fmt.Sprintf("localhost:%v", cluster.GrpcPort()),
-			"select 'success';",
-		},
-		30*time.Second,
-	)
-	assert.NoError(t, err)
+	assertVtGateExecute(t, cluster)
+}
 
-	var b strings.Builder
-	b.Grow(1024)
+func TestExternalTopoServerConsul(t *testing.T) {
+	args := os.Args
+	conf := config
+	defer resetFlags(args, conf)
 
-Out:
-	for {
-		e, err := stream.Recv()
-		switch err {
-		case nil:
-			b.WriteString(e.Value)
-		case io.EOF:
-			break Out
-		default:
-			assert.FailNow(t, err.Error())
+	// Start a single consul in the background.
+	cmd, serverAddr := startConsul(t)
+	defer func() {
+		// Alerts command did not run successful
+		if err := cmd.Process.Kill(); err != nil {
+			log.Errorf("cmd process kill has an error: %v", err)
 		}
-	}
+		// Alerts command did not run successful
+		if err := cmd.Wait(); err != nil {
+			log.Errorf("cmd process wait has an error: %v", err)
+		}
+	}()
 
-	assert.Contains(t, b.String(), "success")
+	cluster, err := startCluster("--external_topo_implementation=consul",
+		fmt.Sprintf("--external_topo_global_server_address=%s", serverAddr), "--external_topo_global_root=consul_test/global")
+	assert.NoError(t, err)
+	defer cluster.TearDown()
+
+	assertVtGateExecute(t, cluster)
 }
 
 func TestMtlsAuth(t *testing.T) {
@@ -229,11 +222,7 @@ func TestMtlsAuth(t *testing.T) {
 	defer resetFlags(args, conf)
 
 	// Our test root.
-	root, err := os.MkdirTemp("", "tlstest")
-	if err != nil {
-		t.Fatalf("TempDir failed: %v", err)
-	}
-	defer os.RemoveAll(root)
+	root := t.TempDir()
 
 	// Create the certs and configs.
 	tlstest.CreateCA(root)
@@ -250,14 +239,14 @@ func TestMtlsAuth(t *testing.T) {
 	// When cluster starts it will apply SQL and VSchema migrations in the configured schema_dir folder
 	// With mtls authorization enabled, the authorized CN must match the certificate's CN
 	cluster, err := startCluster(
-		"-grpc_auth_mode=mtls",
-		fmt.Sprintf("-grpc_key=%s", key),
-		fmt.Sprintf("-grpc_cert=%s", cert),
-		fmt.Sprintf("-grpc_ca=%s", caCert),
-		fmt.Sprintf("-vtctld_grpc_key=%s", clientKey),
-		fmt.Sprintf("-vtctld_grpc_cert=%s", clientCert),
-		fmt.Sprintf("-vtctld_grpc_ca=%s", caCert),
-		fmt.Sprintf("-grpc_auth_mtls_allowed_substrings=%s", "CN=ClientApp"))
+		"--grpc_auth_mode=mtls",
+		fmt.Sprintf("--grpc_key=%s", key),
+		fmt.Sprintf("--grpc_cert=%s", cert),
+		fmt.Sprintf("--grpc_ca=%s", caCert),
+		fmt.Sprintf("--vtctld_grpc_key=%s", clientKey),
+		fmt.Sprintf("--vtctld_grpc_cert=%s", clientCert),
+		fmt.Sprintf("--vtctld_grpc_ca=%s", caCert),
+		fmt.Sprintf("--grpc_auth_mtls_allowed_substrings=%s", "CN=ClientApp"))
 	assert.NoError(t, err)
 	defer cluster.TearDown()
 
@@ -272,11 +261,7 @@ func TestMtlsAuthUnauthorizedFails(t *testing.T) {
 	defer resetFlags(args, conf)
 
 	// Our test root.
-	root, err := os.MkdirTemp("", "tlstest")
-	if err != nil {
-		t.Fatalf("TempDir failed: %v", err)
-	}
-	defer os.RemoveAll(root)
+	root := t.TempDir()
 
 	// Create the certs and configs.
 	tlstest.CreateCA(root)
@@ -294,14 +279,14 @@ func TestMtlsAuthUnauthorizedFails(t *testing.T) {
 	// For mtls authorization failure by providing a client certificate with different CN thant the
 	// authorized in the configuration
 	cluster, err := startCluster(
-		"-grpc_auth_mode=mtls",
-		fmt.Sprintf("-grpc_key=%s", key),
-		fmt.Sprintf("-grpc_cert=%s", cert),
-		fmt.Sprintf("-grpc_ca=%s", caCert),
-		fmt.Sprintf("-vtctld_grpc_key=%s", clientKey),
-		fmt.Sprintf("-vtctld_grpc_cert=%s", clientCert),
-		fmt.Sprintf("-vtctld_grpc_ca=%s", caCert),
-		fmt.Sprintf("-grpc_auth_mtls_allowed_substrings=%s", "CN=ClientApp"))
+		"--grpc_auth_mode=mtls",
+		fmt.Sprintf("--grpc_key=%s", key),
+		fmt.Sprintf("--grpc_cert=%s", cert),
+		fmt.Sprintf("--grpc_ca=%s", caCert),
+		fmt.Sprintf("--vtctld_grpc_key=%s", clientKey),
+		fmt.Sprintf("--vtctld_grpc_cert=%s", clientCert),
+		fmt.Sprintf("--vtctld_grpc_ca=%s", caCert),
+		fmt.Sprintf("--grpc_auth_mtls_allowed_substrings=%s", "CN=ClientApp"))
 	defer cluster.TearDown()
 
 	assert.Error(t, err)
@@ -310,20 +295,20 @@ func TestMtlsAuthUnauthorizedFails(t *testing.T) {
 
 func startPersistentCluster(dir string, flags ...string) (vttest.LocalCluster, error) {
 	flags = append(flags, []string{
-		"-persistent_mode",
+		"--persistent_mode",
 		// FIXME: if port is not provided, data_dir is not respected
-		fmt.Sprintf("-port=%d", randomPort()),
-		fmt.Sprintf("-data_dir=%s", dir),
+		fmt.Sprintf("--port=%d", randomPort()),
+		fmt.Sprintf("--data_dir=%s", dir),
 	}...)
 	return startCluster(flags...)
 }
 
 func startCluster(flags ...string) (vttest.LocalCluster, error) {
-	schemaDirArg := "-schema_dir=data/schema"
-	tabletHostname := "-tablet_hostname=localhost"
-	keyspaceArg := "-keyspaces=test_keyspace,app_customer"
-	numShardsArg := "-num_shards=2,2"
-	vschemaDDLAuthorizedUsers := "-vschema_ddl_authorized_users=%"
+	schemaDirArg := "--schema_dir=data/schema"
+	tabletHostname := "--tablet_hostname=localhost"
+	keyspaceArg := "--keyspaces=test_keyspace,app_customer"
+	numShardsArg := "--num_shards=2,2"
+	vschemaDDLAuthorizedUsers := "--vschema_ddl_authorized_users=%"
 	os.Args = append(os.Args, []string{schemaDirArg, keyspaceArg, numShardsArg, tabletHostname, vschemaDDLAuthorizedUsers}...)
 	os.Args = append(os.Args, flags...)
 	return runCluster()
@@ -357,8 +342,8 @@ func assertColumnVindex(t *testing.T, cluster vttest.LocalCluster, expected colu
 	args := []string{"GetVSchema", expected.keyspace}
 	ctx := context.Background()
 
-	err := vtctlclient.RunCommandAndWait(ctx, server, args, func(e *logutil.Event) {
-		var keyspace vschema.Keyspace
+	err := vtctlclient.RunCommandAndWait(ctx, server, args, func(e *logutilpb.Event) {
+		var keyspace vschemapb.Keyspace
 		if err := protojson.Unmarshal([]byte(e.Value), &keyspace); err != nil {
 			t.Error(err)
 		}
@@ -386,4 +371,80 @@ func resetFlags(args []string, conf vttest.Config) {
 func randomPort() int {
 	v := rand.Int31n(20000)
 	return int(v + 10000)
+}
+
+func assertVtGateExecute(t *testing.T, cluster vttest.LocalCluster) {
+	client, err := vtctlclient.New(fmt.Sprintf("localhost:%v", cluster.GrpcPort()))
+	assert.NoError(t, err)
+	defer client.Close()
+	stream, err := client.ExecuteVtctlCommand(
+		context.Background(),
+		[]string{
+			"VtGateExecute",
+			"--server",
+			fmt.Sprintf("localhost:%v", cluster.GrpcPort()),
+			"select 'success';",
+		},
+		30*time.Second,
+	)
+	assert.NoError(t, err)
+
+	var b strings.Builder
+	b.Grow(1024)
+
+Out:
+	for {
+		e, err := stream.Recv()
+		switch err {
+		case nil:
+			b.WriteString(e.Value)
+		case io.EOF:
+			break Out
+		default:
+			assert.FailNow(t, err.Error())
+		}
+	}
+
+	assert.Contains(t, b.String(), "success")
+}
+
+// startConsul starts a consul subprocess, and waits for it to be ready.
+// Returns the exec.Cmd forked, and the server address to RPC-connect to.
+func startConsul(t *testing.T) (*exec.Cmd, string) {
+	// pick a random port to make sure things work with non-default port
+	port := randomPort()
+
+	cmd := exec.Command("consul",
+		"agent",
+		"-dev",
+		"-http-port", fmt.Sprintf("%d", port))
+	err := cmd.Start()
+	if err != nil {
+		t.Fatalf("failed to start consul: %v", err)
+	}
+
+	// Create a client to connect to the created consul.
+	serverAddr := fmt.Sprintf("localhost:%v", port)
+	cfg := api.DefaultConfig()
+	cfg.Address = serverAddr
+	c, err := api.NewClient(cfg)
+	if err != nil {
+		t.Fatalf("api.NewClient(%v) failed: %v", serverAddr, err)
+	}
+
+	// Wait until we can list "/", or timeout.
+	start := time.Now()
+	kv := c.KV()
+	for {
+		_, _, err := kv.List("/", nil)
+		if err == nil {
+			break
+		}
+		if time.Since(start) > 10*time.Second {
+			t.Fatalf("Failed to start consul daemon in time. Consul is returning error: %v", err)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	return cmd, serverAddr
 }

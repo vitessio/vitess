@@ -160,6 +160,7 @@ func TestMustReloadSchemaOnDDL(t *testing.T) {
 		{"create table x(i int);", db1, true},
 		{"bad", db2, false},
 		{"create table db2.x(i int);", db2, true},
+		{"rename table db2.x to db2.y;", db2, true},
 		{"create table db1.x(i int);", db2, false},
 		{"create table _vt.x(i int);", db1, false},
 		{"DROP VIEW IF EXISTS `pseudo_gtid`.`_pseudo_gtid_hint__asc:55B364E3:0000000000056EE2:6DD57B85`", db2, false},

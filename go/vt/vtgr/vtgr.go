@@ -26,6 +26,8 @@ import (
 	"syscall"
 	"time"
 
+	"vitess.io/vitess/go/vt/concurrency"
+
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/sync2"
@@ -189,6 +191,18 @@ func (vtgr *VTGR) GetCurrentShardStatuses() []controller.ShardStatus {
 		result = append(result, status)
 	}
 	return result
+}
+
+// OverrideRebootstrapGroupSize forces an override the group size used in safety check for rebootstrap
+func (vtgr *VTGR) OverrideRebootstrapGroupSize(groupSize int) error {
+	errorRecord := concurrency.AllErrorRecorder{}
+	for _, shard := range vtgr.Shards {
+		err := shard.OverrideRebootstrapGroupSize(groupSize)
+		if err != nil {
+			errorRecord.RecordError(err)
+		}
+	}
+	return errorRecord.Error()
 }
 
 func (vtgr *VTGR) handleSignal(action func(int)) {

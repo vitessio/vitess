@@ -22,9 +22,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/google/go-cmp/cmp"
-
-	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/endtoend/utils"
 
 	"vitess.io/vitess/go/mysql"
 
@@ -63,12 +61,10 @@ func TestUnsharded(t *testing.T) {
 			conn, err := mysql.Connect(ctx, &vttestParams)
 			require.NoError(t, err)
 			defer conn.Close()
-			assertMatches(t, conn, "show databases", `[[VARCHAR("unsharded_ks")] [VARCHAR("information_schema")] [VARCHAR("mysql")] [VARCHAR("sys")] [VARCHAR("performance_schema")]]`)
-			_, err = execute(t, conn, "create table unsharded_ks.t1(id int)")
-			require.NoError(t, err)
-			_, err = execute(t, conn, "insert into unsharded_ks.t1(id) values (10),(20),(30)")
-			require.NoError(t, err)
-			assertMatches(t, conn, "select * from unsharded_ks.t1", `[[INT32(10)] [INT32(20)] [INT32(30)]]`)
+			utils.AssertMatches(t, conn, "show databases", `[[VARCHAR("unsharded_ks")] [VARCHAR("information_schema")] [VARCHAR("mysql")] [VARCHAR("sys")] [VARCHAR("performance_schema")]]`)
+			utils.Exec(t, conn, "create table unsharded_ks.t1(id int)")
+			utils.Exec(t, conn, "insert into unsharded_ks.t1(id) values (10),(20),(30)")
+			utils.AssertMatches(t, conn, "select * from unsharded_ks.t1", `[[INT32(10)] [INT32(20)] [INT32(30)]]`)
 		})
 	}
 }
@@ -94,14 +90,11 @@ func TestSharded(t *testing.T) {
 			conn, err := mysql.Connect(ctx, &vttestParams)
 			require.NoError(t, err)
 			defer conn.Close()
-			assertMatches(t, conn, "show databases", `[[VARCHAR("ks")] [VARCHAR("information_schema")] [VARCHAR("mysql")] [VARCHAR("sys")] [VARCHAR("performance_schema")]]`)
-			_, err = execute(t, conn, "create table ks.t1(id int)")
-			require.NoError(t, err)
-			_, err = execute(t, conn, "alter vschema on ks.t1 add vindex `binary_md5`(id) using `binary_md5`")
-			require.NoError(t, err)
-			_, err = execute(t, conn, "insert into ks.t1(id) values (10),(20),(30)")
-			require.NoError(t, err)
-			assertMatches(t, conn, "select id from ks.t1 order by id", `[[INT32(10)] [INT32(20)] [INT32(30)]]`)
+			utils.AssertMatches(t, conn, "show databases", `[[VARCHAR("ks")] [VARCHAR("information_schema")] [VARCHAR("mysql")] [VARCHAR("sys")] [VARCHAR("performance_schema")]]`)
+			utils.Exec(t, conn, "create table ks.t1(id int)")
+			utils.Exec(t, conn, "alter vschema on ks.t1 add vindex `binary_md5`(id) using `binary_md5`")
+			utils.Exec(t, conn, "insert into ks.t1(id) values (10),(20),(30)")
+			utils.AssertMatches(t, conn, "select id from ks.t1 order by id", `[[INT32(10)] [INT32(20)] [INT32(30)]]`)
 		})
 	}
 }
@@ -127,7 +120,7 @@ func TestMysqlMaxCons(t *testing.T) {
 			conn, err := mysql.Connect(ctx, &vttestParams)
 			require.NoError(t, err)
 			defer conn.Close()
-			assertMatches(t, conn, "select @@max_connections", `[[UINT64(100000)]]`)
+			utils.AssertMatches(t, conn, "select @@max_connections", `[[UINT64(100000)]]`)
 		})
 	}
 }
@@ -163,34 +156,10 @@ func TestLargeNumberOfKeyspaces(t *testing.T) {
 
 			// assert that all the keyspaces are correctly setup
 			for _, keyspace := range keyspaces {
-				_, err = execute(t, conn, "create table "+keyspace+".t1(id int)")
-				require.NoError(t, err)
-				_, err = execute(t, conn, "insert into "+keyspace+".t1(id) values (10),(20),(30)")
-				require.NoError(t, err)
-				assertMatches(t, conn, "select * from "+keyspace+".t1", `[[INT32(10)] [INT32(20)] [INT32(30)]]`)
+				utils.Exec(t, conn, "create table "+keyspace+".t1(id int)")
+				utils.Exec(t, conn, "insert into "+keyspace+".t1(id) values (10),(20),(30)")
+				utils.AssertMatches(t, conn, "select * from "+keyspace+".t1", `[[INT32(10)] [INT32(20)] [INT32(30)]]`)
 			}
 		})
-	}
-}
-
-func execute(t *testing.T, conn *mysql.Conn, query string) (*sqltypes.Result, error) {
-	t.Helper()
-	return conn.ExecuteFetch(query, 1000, true)
-}
-
-func checkedExec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
-	t.Helper()
-	qr, err := conn.ExecuteFetch(query, 1000, true)
-	require.NoError(t, err)
-	return qr
-}
-
-func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
-	t.Helper()
-	qr := checkedExec(t, conn, query)
-	got := fmt.Sprintf("%v", qr.Rows)
-	diff := cmp.Diff(expected, got)
-	if diff != "" {
-		t.Errorf("Query: %s (-want +got):\n%s", query, diff)
 	}
 }

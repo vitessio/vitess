@@ -18,6 +18,7 @@ package vindexes
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"fmt"
 
@@ -88,10 +89,10 @@ func (ge *RegionExperimental) NeedsVCursor() bool {
 }
 
 // Map satisfies MultiColumn.
-func (ge *RegionExperimental) Map(vcursor VCursor, rowsColValues [][]sqltypes.Value) ([]key.Destination, error) {
+func (ge *RegionExperimental) Map(ctx context.Context, vcursor VCursor, rowsColValues [][]sqltypes.Value) ([]key.Destination, error) {
 	destinations := make([]key.Destination, 0, len(rowsColValues))
 	for _, row := range rowsColValues {
-		if len(row) != 2 {
+		if len(row) > 2 {
 			destinations = append(destinations, key.DestinationNone{})
 			continue
 		}
@@ -104,28 +105,33 @@ func (ge *RegionExperimental) Map(vcursor VCursor, rowsColValues [][]sqltypes.Va
 		r := make([]byte, 2, 2+8)
 		binary.BigEndian.PutUint16(r, uint16(rn))
 
-		// Compute hash.
-		hn, err := evalengine.ToUint64(row[1])
-		if err != nil {
-			destinations = append(destinations, key.DestinationNone{})
-			continue
-		}
-		h := vhash(hn)
-
 		// Concatenate and add to destinations.
 		if ge.regionBytes == 1 {
 			r = r[1:]
 		}
-		dest := append(r, h...)
-		destinations = append(destinations, key.DestinationKeyspaceID(dest))
+
+		dest := r
+		if len(row) == 2 {
+			// Compute hash.
+			hn, err := evalengine.ToUint64(row[1])
+			if err != nil {
+				destinations = append(destinations, key.DestinationNone{})
+				continue
+			}
+			h := vhash(hn)
+			dest = append(dest, h...)
+			destinations = append(destinations, key.DestinationKeyspaceID(dest))
+		} else {
+			destinations = append(destinations, NewKeyRangeFromPrefix(dest))
+		}
 	}
 	return destinations, nil
 }
 
 // Verify satisfies MultiColumn.
-func (ge *RegionExperimental) Verify(vcursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte) ([]bool, error) {
+func (ge *RegionExperimental) Verify(ctx context.Context, vcursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte) ([]bool, error) {
 	result := make([]bool, len(rowsColValues))
-	destinations, _ := ge.Map(vcursor, rowsColValues)
+	destinations, _ := ge.Map(ctx, vcursor, rowsColValues)
 	for i, dest := range destinations {
 		destksid, ok := dest.(key.DestinationKeyspaceID)
 		if !ok {
@@ -134,4 +140,8 @@ func (ge *RegionExperimental) Verify(vcursor VCursor, rowsColValues [][]sqltypes
 		result[i] = bytes.Equal([]byte(destksid), ksids[i])
 	}
 	return result, nil
+}
+
+func (ge *RegionExperimental) PartialVindex() bool {
+	return true
 }

@@ -85,7 +85,7 @@ func NewBackgroundClient(throttler *Throttler, appName string, checkType Throttl
 // The function caches results for a brief amount of time, hence it's safe and efficient to
 // be called very frequenty.
 // The function is not thread safe.
-func (c *Client) ThrottleCheckOK(ctx context.Context) (throttleCheckOK bool) {
+func (c *Client) ThrottleCheckOK(ctx context.Context, overrideAppName string) (throttleCheckOK bool) {
 	if c == nil {
 		// no client
 		return true
@@ -99,7 +99,11 @@ func (c *Client) ThrottleCheckOK(ctx context.Context) (throttleCheckOK bool) {
 		return true
 	}
 	// It's time to run a throttler check
-	checkResult := c.throttler.CheckByType(ctx, c.appName, "", &c.flags, c.checkType)
+	checkApp := c.appName
+	if overrideAppName != "" {
+		checkApp = overrideAppName
+	}
+	checkResult := c.throttler.CheckByType(ctx, checkApp, "", &c.flags, c.checkType)
 	if checkResult.StatusCode != http.StatusOK {
 		return false
 	}
@@ -110,13 +114,21 @@ func (c *Client) ThrottleCheckOK(ctx context.Context) (throttleCheckOK bool) {
 
 // ThrottleCheckOKOrWait checks the throttler; if throttler is satisfied, the function returns 'true' mmediately,
 // otherwise it briefly sleeps and returns 'false'.
+// Non-empty appName overrides the default appName.
 // The function is not thread safe.
-func (c *Client) ThrottleCheckOKOrWait(ctx context.Context) bool {
-	ok := c.ThrottleCheckOK(ctx)
+func (c *Client) ThrottleCheckOKOrWaitAppName(ctx context.Context, appName string) bool {
+	ok := c.ThrottleCheckOK(ctx, appName)
 	if !ok {
 		time.Sleep(throttleCheckDuration)
 	}
 	return ok
+}
+
+// ThrottleCheckOKOrWait checks the throttler; if throttler is satisfied, the function returns 'true' mmediately,
+// otherwise it briefly sleeps and returns 'false'.
+// The function is not thread safe.
+func (c *Client) ThrottleCheckOKOrWait(ctx context.Context) bool {
+	return c.ThrottleCheckOKOrWaitAppName(ctx, "")
 }
 
 // Throttle throttles until the throttler is satisfied, or until context is cancelled.

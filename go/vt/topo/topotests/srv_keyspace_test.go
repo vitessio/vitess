@@ -17,6 +17,7 @@ limitations under the License.
 package topotests
 
 import (
+	"context"
 	"reflect"
 	"sort"
 	"strings"
@@ -24,9 +25,6 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-
-	"context"
-
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/json2"
@@ -91,28 +89,6 @@ func TestWatchSrvKeyspace(t *testing.T) {
 	current, changes, cancel := waitForInitialSrvKeyspace(t, ts, cell, keyspace)
 	if !proto.Equal(current.Value, wanted) {
 		t.Fatalf("got bad data: %v expected: %v", current.Value, wanted)
-	}
-
-	// Update the value with good data, wait until we see it
-	wanted.ShardingColumnName = "scn1"
-	if err := ts.UpdateSrvKeyspace(ctx, cell, keyspace, wanted); err != nil {
-		t.Fatalf("Update(/keyspaces/ks1/SrvKeyspace) failed: %v", err)
-	}
-	for {
-		wd, ok := <-changes
-		if !ok {
-			t.Fatalf("watch channel unexpectedly closed")
-		}
-		if wd.Err != nil {
-			t.Fatalf("watch channel unexpectedly got error: %v", wd.Err)
-		}
-		if proto.Equal(wd.Value, wanted) {
-			break
-		}
-		if proto.Equal(wd.Value, &topodatapb.SrvKeyspace{}) {
-			t.Log("got duplicate empty value, skipping.")
-		}
-		t.Fatalf("got bad data: %v expected: %v", wd.Value, wanted)
 	}
 
 	// Update the value with bad data, wait until error.
@@ -208,9 +184,7 @@ func TestWatchSrvKeyspaceCancel(t *testing.T) {
 	}
 
 	// Create initial value
-	wanted := &topodatapb.SrvKeyspace{
-		ShardingColumnName: "scn2",
-	}
+	wanted := &topodatapb.SrvKeyspace{}
 	if err := ts.UpdateSrvKeyspace(ctx, cell, keyspace, wanted); err != nil {
 		t.Fatalf("UpdateSrvKeyspace() failed: %v", err)
 	}

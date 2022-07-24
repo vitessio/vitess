@@ -8,17 +8,20 @@
 <!-- if this PR is Work in Progress please create it as a Draft Pull Request -->
 
 ## Description
+
 <!-- A few sentences describing the overall goals of the pull request's commits. -->
 <!-- If this is a bug fix and you think the fix should be backported, please write so. -->
 
 ## Related Issue(s)
+
 <!-- List related issues and pull requests. If this PR fixes an issue, please add it using Fixes #????  -->
 
-
 ## Checklist
-- [ ] Should this PR be backported?
-- [ ] Tests were added or are not required
-- [ ] Documentation was added or is not required
+
+-   [ ] "Backport me!" label has been added if this change should be backported
+-   [ ] Tests were added or are not required
+-   [ ] Documentation was added or is not required
 
 ## Deployment Notes
+
 <!-- Notes regarding deployment of the contained body of work. These should note any db migrations, etc. -->

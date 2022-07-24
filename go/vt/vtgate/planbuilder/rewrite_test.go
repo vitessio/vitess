@@ -120,7 +120,10 @@ func TestHavingRewrite(t *testing.T) {
 		output: "select 1 from t1 where (x = 1 or y = 2) and a = 1 having count(*) = 1",
 	}, {
 		input:  "select count(*) k from t1 where x = 1 or y = 2 having a = 1 and k = 1",
-		output: "select count(*) as k from t1 where (x = 1 or y = 2) and a = 1 having count(*) = 1",
+		output: "select count(*) as k from t1 where (x = 1 or y = 2) and a = 1 having k = 1",
+	}, {
+		input:  "select count(*) k from t1 having k = 10",
+		output: "select count(*) as k from t1 having k = 10",
 	}, {
 		input:  "select 1 from t1 where x in (select 1 from t2 having a = 1)",
 		output: "select 1 from t1 where :__sq_has_values1 = 1 and x in ::__sq1",
@@ -140,7 +143,7 @@ func TestHavingRewrite(t *testing.T) {
 				assert.Equal(t, len(tcase.sqs), len(squeries), "number of subqueries not matched")
 			}
 			for _, sq := range squeries {
-				assert.Equal(t, tcase.sqs[sq.ArgName], sqlparser.String(sq.SubQuery.Select))
+				assert.Equal(t, tcase.sqs[sq.GetArgName()], sqlparser.String(sq.Subquery.Select))
 			}
 		})
 	}

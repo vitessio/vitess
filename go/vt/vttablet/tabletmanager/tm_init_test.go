@@ -17,29 +17,36 @@ limitations under the License.
 package tabletmanager
 
 import (
+	"context"
 	"testing"
 	"time"
-
-	"vitess.io/vitess/go/test/utils"
-
-	"context"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"
+	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/fakemysqldaemon"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+)
+
+var (
+	dbServerVersion = "5.7.0"
+	charsetName     = "utf8mb4"
+	dbsvCollID      = collations.NewEnvironment(dbServerVersion).DefaultCollationForCharset(charsetName).ID()
 )
 
 func TestStartBuildTabletFromInput(t *testing.T) {
@@ -63,20 +70,23 @@ func TestStartBuildTabletFromInput(t *testing.T) {
 			"vt":   port,
 			"grpc": grpcport,
 		},
-		Keyspace:       "test_keyspace",
-		Shard:          "0",
-		KeyRange:       nil,
-		Type:           topodatapb.TabletType_REPLICA,
-		DbNameOverride: "aa",
+		Keyspace:             "test_keyspace",
+		Shard:                "0",
+		KeyRange:             nil,
+		Type:                 topodatapb.TabletType_REPLICA,
+		Tags:                 map[string]string{},
+		DbNameOverride:       "aa",
+		DbServerVersion:      dbServerVersion,
+		DefaultConnCollation: uint32(dbsvCollID),
 	}
 
-	gotTablet, err := BuildTabletFromInput(alias, port, grpcport)
+	gotTablet, err := BuildTabletFromInput(alias, port, grpcport, dbServerVersion, nil)
 	require.NoError(t, err)
 
 	// Hostname should be resolved.
 	assert.Equal(t, wantTablet, gotTablet)
 	*tabletHostname = ""
-	gotTablet, err = BuildTabletFromInput(alias, port, grpcport)
+	gotTablet, err = BuildTabletFromInput(alias, port, grpcport, dbServerVersion, nil)
 	require.NoError(t, err)
 	assert.NotEqual(t, "", gotTablet.Hostname)
 
@@ -88,7 +98,7 @@ func TestStartBuildTabletFromInput(t *testing.T) {
 		Start: []byte(""),
 		End:   []byte("\xc0"),
 	}
-	gotTablet, err = BuildTabletFromInput(alias, port, grpcport)
+	gotTablet, err = BuildTabletFromInput(alias, port, grpcport, dbServerVersion, nil)
 	require.NoError(t, err)
 	// KeyRange check is explicit because the next comparison doesn't
 	// show the diff well enough.
@@ -98,26 +108,64 @@ func TestStartBuildTabletFromInput(t *testing.T) {
 	// Invalid inputs.
 	*initKeyspace = ""
 	*initShard = "0"
-	_, err = BuildTabletFromInput(alias, port, grpcport)
+	_, err = BuildTabletFromInput(alias, port, grpcport, dbServerVersion, nil)
 	assert.Contains(t, err.Error(), "init_keyspace and init_shard must be specified")
 
 	*initKeyspace = "test_keyspace"
 	*initShard = ""
-	_, err = BuildTabletFromInput(alias, port, grpcport)
+	_, err = BuildTabletFromInput(alias, port, grpcport, dbServerVersion, nil)
 	assert.Contains(t, err.Error(), "init_keyspace and init_shard must be specified")
 
 	*initShard = "x-y"
-	_, err = BuildTabletFromInput(alias, port, grpcport)
+	_, err = BuildTabletFromInput(alias, port, grpcport, dbServerVersion, nil)
 	assert.Contains(t, err.Error(), "cannot validate shard name")
 
 	*initShard = "0"
 	*initTabletType = "bad"
-	_, err = BuildTabletFromInput(alias, port, grpcport)
+	_, err = BuildTabletFromInput(alias, port, grpcport, dbServerVersion, nil)
 	assert.Contains(t, err.Error(), "unknown TabletType bad")
 
 	*initTabletType = "primary"
-	_, err = BuildTabletFromInput(alias, port, grpcport)
+	_, err = BuildTabletFromInput(alias, port, grpcport, dbServerVersion, nil)
 	assert.Contains(t, err.Error(), "invalid init_tablet_type PRIMARY")
+}
+
+func TestBuildTabletFromInputWithBuildTags(t *testing.T) {
+	alias := &topodatapb.TabletAlias{
+		Cell: "cell",
+		Uid:  1,
+	}
+	port := int32(12)
+	grpcport := int32(34)
+
+	// Hostname should be used as is.
+	*tabletHostname = "foo"
+	*initKeyspace = "test_keyspace"
+	*initShard = "0"
+	*initTabletType = "replica"
+	*initDbNameOverride = "aa"
+	*skipBuildInfoTags = ""
+	defer func() { *skipBuildInfoTags = "/.*/" }()
+	wantTablet := &topodatapb.Tablet{
+		Alias:    alias,
+		Hostname: "foo",
+		PortMap: map[string]int32{
+			"vt":   port,
+			"grpc": grpcport,
+		},
+		Keyspace:             "test_keyspace",
+		Shard:                "0",
+		KeyRange:             nil,
+		Type:                 topodatapb.TabletType_REPLICA,
+		Tags:                 servenv.AppVersion.ToStringMap(),
+		DbNameOverride:       "aa",
+		DbServerVersion:      dbServerVersion,
+		DefaultConnCollation: uint32(dbsvCollID),
+	}
+
+	gotTablet, err := BuildTabletFromInput(alias, port, grpcport, dbServerVersion, nil)
+	require.NoError(t, err)
+	assert.Equal(t, wantTablet, gotTablet)
 }
 
 func TestStartCreateKeyspaceShard(t *testing.T) {
@@ -509,6 +557,67 @@ func TestCheckTabletTypeResets(t *testing.T) {
 	tm.Stop()
 }
 
+func TestGetBuildTags(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		in      map[string]string
+		skipCSV string
+		want    map[string]string
+		wantErr bool
+	}{
+		{
+			in: map[string]string{
+				"a": "a",
+				"b": "b",
+				"c": "c",
+			},
+			skipCSV: "a,c",
+			want: map[string]string{
+				"b": "b",
+			},
+		},
+		{
+			in: map[string]string{
+				"hello": "world",
+				"help":  "me",
+				"good":  "bye",
+				"a":     "b",
+			},
+			skipCSV: "a,/hel.*/",
+			want: map[string]string{
+				"good": "bye",
+			},
+		},
+		{
+			in: map[string]string{
+				"a":      "a",
+				"/hello": "/hello",
+			},
+			skipCSV: "/,a", // len(skipTag) <= 1, so not a regexp
+			want: map[string]string{
+				"/hello": "/hello",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.skipCSV, func(t *testing.T) {
+			t.Parallel()
+
+			out, err := getBuildTags(tt.in, tt.skipCSV)
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, out)
+		})
+	}
+}
+
 func newTestMysqlDaemon(t *testing.T, port int32) *fakemysqldaemon.FakeMysqlDaemon {
 	t.Helper()
 
@@ -550,18 +659,29 @@ func newTestTM(t *testing.T, ts *topo.Server, uid int, keyspace, shard string) *
 	err := tm.Start(tablet, 0)
 	require.NoError(t, err)
 
-	// Wait for SrvKeyspace to be rebuilt.
-	for i := 0; i < 9; i++ {
-		if _, err := tm.TopoServer.GetSrvKeyspace(ctx, tm.tabletAlias.Cell, "ks"); err != nil {
-			if i == 9 {
-				require.NoError(t, err)
+	// Wait for SrvKeyspace to be rebuilt. We know that it has been built
+	// when isShardServing or tabletControls maps is non-empty.
+	timeout := time.After(1 * time.Second)
+	for {
+		select {
+		case <-timeout:
+			t.Logf("servingKeyspace not initialized for tablet uid - %d", uid)
+			return tm
+		default:
+			isNonEmpty := false
+			func() {
+				tm.tmState.mu.Lock()
+				defer tm.tmState.mu.Unlock()
+				if tm.tmState.isShardServing != nil || tm.tmState.tabletControls != nil {
+					isNonEmpty = true
+				}
+			}()
+			if isNonEmpty {
+				return tm
 			}
-			time.Sleep(10 * time.Millisecond)
-			continue
+			time.Sleep(100 * time.Millisecond)
 		}
-		break
 	}
-	return tm
 }
 
 func newTestTablet(t *testing.T, uid int, keyspace, shard string) *topodatapb.Tablet {

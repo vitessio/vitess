@@ -2,32 +2,44 @@
    Copyright 2016 GitHub Inc.
 	 See https://github.com/github/gh-ost/blob/master/LICENSE
 */
+/*
+Copyright 2021 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 
 package vrepl
 
 import (
-	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
 func TestParseAlterStatement(t *testing.T) {
-	statement := "add column t int, engine=innodb"
+	statement := "alter table t add column t int, engine=innodb"
 	parser := NewAlterTableParser()
 	err := parser.ParseAlterStatement(statement)
 	assert.NoError(t, err)
-	assert.Equal(t, parser.alterStatementOptions, statement)
 	assert.False(t, parser.HasNonTrivialRenames())
 	assert.False(t, parser.IsAutoIncrementDefined())
 }
 
 func TestParseAlterStatementTrivialRename(t *testing.T) {
-	statement := "add column t int, change ts ts timestamp, engine=innodb"
+	statement := "alter table t add column t int, change ts ts timestamp, engine=innodb"
 	parser := NewAlterTableParser()
 	err := parser.ParseAlterStatement(statement)
 	assert.NoError(t, err)
-	assert.Equal(t, parser.alterStatementOptions, statement)
 	assert.False(t, parser.HasNonTrivialRenames())
 	assert.False(t, parser.IsAutoIncrementDefined())
 	assert.Equal(t, len(parser.columnRenameMap), 1)
@@ -53,19 +65,18 @@ func TestParseAlterStatementWithAutoIncrement(t *testing.T) {
 	}
 	for _, statement := range statements {
 		parser := NewAlterTableParser()
+		statement := "alter table t " + statement
 		err := parser.ParseAlterStatement(statement)
 		assert.NoError(t, err)
-		assert.Equal(t, parser.alterStatementOptions, statement)
 		assert.True(t, parser.IsAutoIncrementDefined())
 	}
 }
 
 func TestParseAlterStatementTrivialRenames(t *testing.T) {
-	statement := "add column t int, change ts ts timestamp, CHANGE f `f` float, engine=innodb"
+	statement := "alter table t  add column t int, change ts ts timestamp, CHANGE f `f` float, engine=innodb"
 	parser := NewAlterTableParser()
 	err := parser.ParseAlterStatement(statement)
 	assert.NoError(t, err)
-	assert.Equal(t, parser.alterStatementOptions, statement)
 	assert.False(t, parser.HasNonTrivialRenames())
 	assert.False(t, parser.IsAutoIncrementDefined())
 	assert.Equal(t, len(parser.columnRenameMap), 2)
@@ -85,11 +96,11 @@ func TestParseAlterStatementNonTrivial(t *testing.T) {
 	}
 
 	for _, statement := range statements {
+		statement := "alter table t " + statement
 		parser := NewAlterTableParser()
 		err := parser.ParseAlterStatement(statement)
 		assert.NoError(t, err)
 		assert.False(t, parser.IsAutoIncrementDefined())
-		assert.Equal(t, parser.alterStatementOptions, statement)
 		renames := parser.GetNonTrivialRenames()
 		assert.Equal(t, len(renames), 2)
 		assert.Equal(t, renames["i"], "count")
@@ -97,64 +108,11 @@ func TestParseAlterStatementNonTrivial(t *testing.T) {
 	}
 }
 
-func TestTokenizeAlterStatement(t *testing.T) {
-	parser := NewAlterTableParser()
-	{
-		alterStatement := "add column t int"
-		tokens, _ := parser.tokenizeAlterStatement(alterStatement)
-		assert.True(t, reflect.DeepEqual(tokens, []string{"add column t int"}))
-	}
-	{
-		alterStatement := "add column t int, change column i int"
-		tokens, _ := parser.tokenizeAlterStatement(alterStatement)
-		assert.True(t, reflect.DeepEqual(tokens, []string{"add column t int", "change column i int"}))
-	}
-	{
-		alterStatement := "add column t int, change column i int 'some comment'"
-		tokens, _ := parser.tokenizeAlterStatement(alterStatement)
-		assert.True(t, reflect.DeepEqual(tokens, []string{"add column t int", "change column i int 'some comment'"}))
-	}
-	{
-		alterStatement := "add column t int, change column i int 'some comment, with comma'"
-		tokens, _ := parser.tokenizeAlterStatement(alterStatement)
-		assert.True(t, reflect.DeepEqual(tokens, []string{"add column t int", "change column i int 'some comment, with comma'"}))
-	}
-	{
-		alterStatement := "add column t int, add column d decimal(10,2)"
-		tokens, _ := parser.tokenizeAlterStatement(alterStatement)
-		assert.True(t, reflect.DeepEqual(tokens, []string{"add column t int", "add column d decimal(10,2)"}))
-	}
-	{
-		alterStatement := "add column t int, add column e enum('a','b','c')"
-		tokens, _ := parser.tokenizeAlterStatement(alterStatement)
-		assert.True(t, reflect.DeepEqual(tokens, []string{"add column t int", "add column e enum('a','b','c')"}))
-	}
-	{
-		alterStatement := "add column t int(11), add column e enum('a','b','c')"
-		tokens, _ := parser.tokenizeAlterStatement(alterStatement)
-		assert.True(t, reflect.DeepEqual(tokens, []string{"add column t int(11)", "add column e enum('a','b','c')"}))
-	}
-}
-
-func TestSanitizeQuotesFromAlterStatement(t *testing.T) {
-	parser := NewAlterTableParser()
-	{
-		alterStatement := "add column e enum('a','b','c')"
-		strippedStatement := parser.sanitizeQuotesFromAlterStatement(alterStatement)
-		assert.Equal(t, strippedStatement, "add column e enum('','','')")
-	}
-	{
-		alterStatement := "change column i int 'some comment, with comma'"
-		strippedStatement := parser.sanitizeQuotesFromAlterStatement(alterStatement)
-		assert.Equal(t, strippedStatement, "change column i int ''")
-	}
-}
-
 func TestParseAlterStatementDroppedColumns(t *testing.T) {
 
 	{
 		parser := NewAlterTableParser()
-		statement := "drop column b"
+		statement := "alter table t drop column b"
 		err := parser.ParseAlterStatement(statement)
 		assert.NoError(t, err)
 		assert.Equal(t, len(parser.droppedColumns), 1)
@@ -162,17 +120,16 @@ func TestParseAlterStatementDroppedColumns(t *testing.T) {
 	}
 	{
 		parser := NewAlterTableParser()
-		statement := "drop column b, drop key c_idx, drop column `d`"
+		statement := "alter table t drop column b, drop key c_idx, drop column `d`"
 		err := parser.ParseAlterStatement(statement)
 		assert.NoError(t, err)
-		assert.Equal(t, parser.alterStatementOptions, statement)
 		assert.Equal(t, len(parser.droppedColumns), 2)
 		assert.True(t, parser.droppedColumns["b"])
 		assert.True(t, parser.droppedColumns["d"])
 	}
 	{
 		parser := NewAlterTableParser()
-		statement := "drop column b, drop key c_idx, drop column `d`, drop `e`, drop primary key, drop foreign key fk_1"
+		statement := "alter table t drop column b, drop key c_idx, drop column `d`, drop `e`, drop primary key, drop foreign key fk_1"
 		err := parser.ParseAlterStatement(statement)
 		assert.NoError(t, err)
 		assert.Equal(t, len(parser.droppedColumns), 3)
@@ -182,144 +139,47 @@ func TestParseAlterStatementDroppedColumns(t *testing.T) {
 	}
 	{
 		parser := NewAlterTableParser()
-		statement := "drop column b, drop bad statement, add column i int"
+		statement := "alter table t drop column b, drop bad statement, add column i int"
 		err := parser.ParseAlterStatement(statement)
-		assert.NoError(t, err)
-		assert.Equal(t, len(parser.droppedColumns), 1)
-		assert.True(t, parser.droppedColumns["b"])
+		assert.Error(t, err)
 	}
 }
 
 func TestParseAlterStatementRenameTable(t *testing.T) {
-
-	{
-		parser := NewAlterTableParser()
-		statement := "drop column b"
-		err := parser.ParseAlterStatement(statement)
-		assert.NoError(t, err)
-		assert.False(t, parser.isRenameTable)
+	tt := []struct {
+		alter    string
+		isRename bool
+	}{
+		{
+			alter: "alter table t drop column b",
+		},
+		{
+			alter:    "alter table t rename as something_else",
+			isRename: true,
+		},
+		{
+			alter:    "alter table t rename to something_else",
+			isRename: true,
+		},
+		{
+			alter:    "alter table t drop column b, rename as something_else",
+			isRename: true,
+		},
+		{
+			alter:    "alter table t engine=innodb, rename as something_else",
+			isRename: true,
+		},
+		{
+			alter:    "alter table t rename as something_else, engine=innodb",
+			isRename: true,
+		},
 	}
-	{
-		parser := NewAlterTableParser()
-		statement := "rename as something_else"
-		err := parser.ParseAlterStatement(statement)
-		assert.NoError(t, err)
-		assert.True(t, parser.isRenameTable)
-	}
-	{
-		parser := NewAlterTableParser()
-		statement := "drop column b, rename as something_else"
-		err := parser.ParseAlterStatement(statement)
-		assert.NoError(t, err)
-		assert.Equal(t, parser.alterStatementOptions, statement)
-		assert.True(t, parser.isRenameTable)
-	}
-	{
-		parser := NewAlterTableParser()
-		statement := "engine=innodb rename as something_else"
-		err := parser.ParseAlterStatement(statement)
-		assert.NoError(t, err)
-		assert.True(t, parser.isRenameTable)
-	}
-	{
-		parser := NewAlterTableParser()
-		statement := "rename as something_else, engine=innodb"
-		err := parser.ParseAlterStatement(statement)
-		assert.NoError(t, err)
-		assert.True(t, parser.isRenameTable)
-	}
-}
-
-func TestParseAlterStatementExplicitTable(t *testing.T) {
-
-	{
-		parser := NewAlterTableParser()
-		statement := "drop column b"
-		err := parser.ParseAlterStatement(statement)
-		assert.NoError(t, err)
-		assert.Equal(t, parser.explicitSchema, "")
-		assert.Equal(t, parser.explicitTable, "")
-		assert.Equal(t, parser.alterStatementOptions, "drop column b")
-		assert.True(t, reflect.DeepEqual(parser.alterTokens, []string{"drop column b"}))
-	}
-	{
-		parser := NewAlterTableParser()
-		statement := "alter table tbl drop column b"
-		err := parser.ParseAlterStatement(statement)
-		assert.NoError(t, err)
-		assert.Equal(t, parser.explicitSchema, "")
-		assert.Equal(t, parser.explicitTable, "tbl")
-		assert.Equal(t, parser.alterStatementOptions, "drop column b")
-		assert.True(t, reflect.DeepEqual(parser.alterTokens, []string{"drop column b"}))
-	}
-	{
-		parser := NewAlterTableParser()
-		statement := "alter table `tbl` drop column b"
-		err := parser.ParseAlterStatement(statement)
-		assert.NoError(t, err)
-		assert.Equal(t, parser.explicitSchema, "")
-		assert.Equal(t, parser.explicitTable, "tbl")
-		assert.Equal(t, parser.alterStatementOptions, "drop column b")
-		assert.True(t, reflect.DeepEqual(parser.alterTokens, []string{"drop column b"}))
-	}
-	{
-		parser := NewAlterTableParser()
-		statement := "alter table `scm with spaces`.`tbl` drop column b"
-		err := parser.ParseAlterStatement(statement)
-		assert.NoError(t, err)
-		assert.Equal(t, parser.explicitSchema, "scm with spaces")
-		assert.Equal(t, parser.explicitTable, "tbl")
-		assert.Equal(t, parser.alterStatementOptions, "drop column b")
-		assert.True(t, reflect.DeepEqual(parser.alterTokens, []string{"drop column b"}))
-	}
-	{
-		parser := NewAlterTableParser()
-		statement := "alter table `scm`.`tbl with spaces` drop column b"
-		err := parser.ParseAlterStatement(statement)
-		assert.NoError(t, err)
-		assert.Equal(t, parser.explicitSchema, "scm")
-		assert.Equal(t, parser.explicitTable, "tbl with spaces")
-		assert.Equal(t, parser.alterStatementOptions, "drop column b")
-		assert.True(t, reflect.DeepEqual(parser.alterTokens, []string{"drop column b"}))
-	}
-	{
-		parser := NewAlterTableParser()
-		statement := "alter table `scm`.tbl drop column b"
-		err := parser.ParseAlterStatement(statement)
-		assert.NoError(t, err)
-		assert.Equal(t, parser.explicitSchema, "scm")
-		assert.Equal(t, parser.explicitTable, "tbl")
-		assert.Equal(t, parser.alterStatementOptions, "drop column b")
-		assert.True(t, reflect.DeepEqual(parser.alterTokens, []string{"drop column b"}))
-	}
-	{
-		parser := NewAlterTableParser()
-		statement := "alter table scm.`tbl` drop column b"
-		err := parser.ParseAlterStatement(statement)
-		assert.NoError(t, err)
-		assert.Equal(t, parser.explicitSchema, "scm")
-		assert.Equal(t, parser.explicitTable, "tbl")
-		assert.Equal(t, parser.alterStatementOptions, "drop column b")
-		assert.True(t, reflect.DeepEqual(parser.alterTokens, []string{"drop column b"}))
-	}
-	{
-		parser := NewAlterTableParser()
-		statement := "alter table scm.tbl drop column b"
-		err := parser.ParseAlterStatement(statement)
-		assert.NoError(t, err)
-		assert.Equal(t, parser.explicitSchema, "scm")
-		assert.Equal(t, parser.explicitTable, "tbl")
-		assert.Equal(t, parser.alterStatementOptions, "drop column b")
-		assert.True(t, reflect.DeepEqual(parser.alterTokens, []string{"drop column b"}))
-	}
-	{
-		parser := NewAlterTableParser()
-		statement := "alter table scm.tbl drop column b, add index idx(i)"
-		err := parser.ParseAlterStatement(statement)
-		assert.NoError(t, err)
-		assert.Equal(t, parser.explicitSchema, "scm")
-		assert.Equal(t, parser.explicitTable, "tbl")
-		assert.Equal(t, parser.alterStatementOptions, "drop column b, add index idx(i)")
-		assert.True(t, reflect.DeepEqual(parser.alterTokens, []string{"drop column b", "add index idx(i)"}))
+	for _, tc := range tt {
+		t.Run(tc.alter, func(t *testing.T) {
+			parser := NewAlterTableParser()
+			err := parser.ParseAlterStatement(tc.alter)
+			assert.NoError(t, err)
+			assert.Equal(t, tc.isRename, parser.isRenameTable)
+		})
 	}
 }

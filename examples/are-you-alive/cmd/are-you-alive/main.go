@@ -172,7 +172,7 @@ var (
 	prometheusMetricsAddress = flag.String(
 		"prometheus_metrics_address", ":8080", "Address on which to serve prometheus metrics")
 	debug                   = flag.Bool("debug", false, "Enable debug logging")
-	useVtgate               = flag.Bool("vtgate", false, "Using vtgate (for @master and @replica)")
+	useVtgate               = flag.Bool("vtgate", false, "Using vtgate (for @primary and @replica)")
 	initialize              = flag.Bool("initialize", false, "Initialize database (for testing)")
 	datasetSize             = flag.Int("dataset_size", 10, "Number of total records in database")
 	endpointsConfigFilename = flag.String("endpoints_config", "", "Endpoint and load configuration.")
@@ -319,14 +319,14 @@ func main() {
 			writer := runner{
 				connString:   endpoint.ConnectionString,
 				fn:           writeNextRecord,
-				errMessage:   "Recieved error writing next record",
+				errMessage:   "Received error writing next record",
 				opsPerSecond: endpoint.TargetWritesPerSecond,
 			}
 			go writer.run()
 			deleter := runner{
 				connString:   endpoint.ConnectionString,
 				fn:           deleteLastRecordIfNecessary,
-				errMessage:   "Recieved error deleting last record",
+				errMessage:   "Received error deleting last record",
 				opsPerSecond: 100, // This is based on target "dataset_size", and will not make a query if not needed.  TODO: Actually tune this in a reasonable way after redesigning the schema?
 			}
 			go deleter.run()
@@ -335,7 +335,7 @@ func main() {
 			reader := runner{
 				connString:   endpoint.ConnectionString,
 				fn:           readRandomRecord,
-				errMessage:   "Recieved error reading record",
+				errMessage:   "Received error reading record",
 				opsPerSecond: endpoint.TargetQueriesPerSecond,
 			}
 			go reader.run()
@@ -344,7 +344,7 @@ func main() {
 			counter := runner{
 				connString:   endpoint.ConnectionString,
 				fn:           runCount,
-				errMessage:   "Recieved error running count",
+				errMessage:   "Received error running count",
 				opsPerSecond: endpoint.TargetCountsPerSecond,
 			}
 			go counter.run()

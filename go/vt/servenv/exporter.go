@@ -175,7 +175,7 @@ func (e *Exporter) HandleFunc(url string, f func(w http.ResponseWriter, r *http.
 
 // AddStatusPart adds a status part to the status page. If Exporter has a name,
 // the part is added to a url named /name/debug/status. Otherwise, it's /debug/status.
-func (e *Exporter) AddStatusPart(banner, frag string, f func() interface{}) {
+func (e *Exporter) AddStatusPart(banner, frag string, f func() any) {
 	if e.name == "" {
 		AddStatusPart(banner, frag, f)
 		return
@@ -305,6 +305,13 @@ func (e *Exporter) NewGauge(name string, help string) *stats.Gauge {
 		return exists.(*stats.Gauge)
 	}
 	return lvar
+}
+
+// NewGaugeFloat64
+// exporter assumes all counters/gauges are int64 based; I haven't found a good solution for exporting
+// a float64 gauge yet. (Shlomi)
+func (e *Exporter) NewGaugeFloat64(name string, help string) *stats.GaugeFloat64 {
+	return nil
 }
 
 // NewCounterFunc creates a name-spaced equivalent for stats.NewCounterFunc.

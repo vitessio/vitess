@@ -15,7 +15,7 @@
  */
 import { act } from '@testing-library/react';
 import { renderHook } from '@testing-library/react-hooks';
-import { createMemoryHistory, To } from 'history';
+import { createMemoryHistory } from 'history';
 import { Router } from 'react-router-dom';
 
 import { useSyncedURLParam } from './useSyncedURLParam';

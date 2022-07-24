@@ -23,6 +23,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtgate/errorsanitizer"
+
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -283,7 +285,7 @@ func (sb *shardBuffer) startBufferingLocked(err error) {
 		sb.buf.config.Window,
 		sb.buf.config.Size,
 		sb.buf.config.MaxFailoverDuration,
-		err,
+		errorsanitizer.NormalizeError(err.Error()),
 	)
 }
 

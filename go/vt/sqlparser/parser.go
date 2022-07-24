@@ -25,20 +25,17 @@ import (
 	"sync"
 
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-// MySQLServerVersion is what Vitess will present as it's version during the connection handshake,
-// and as the value to the @@version system variable. If nothing is provided, Vitess will report itself as
-// a specific MySQL version with the vitess version appended to it
-var MySQLServerVersion = flag.String("mysql_server_version", "", "MySQL server version to advertise.")
 var versionFlagSync sync.Once
 
 // parserPool is a pool for parser objects.
 var parserPool = sync.Pool{
-	New: func() interface{} {
+	New: func() any {
 		return &yyParserImpl{}
 	},
 }
@@ -110,8 +107,8 @@ func Parse2(sql string) (Statement, BindVars, error) {
 func checkParserVersionFlag() {
 	if flag.Parsed() {
 		versionFlagSync.Do(func() {
-			if *MySQLServerVersion != "" {
-				convVersion, err := convertMySQLVersionToCommentVersion(*MySQLServerVersion)
+			if *servenv.MySQLServerVersion != "" {
+				convVersion, err := convertMySQLVersionToCommentVersion(*servenv.MySQLServerVersion)
 				if err != nil {
 					log.Error(err)
 				} else {
@@ -158,6 +155,16 @@ func convertMySQLVersionToCommentVersion(version string) (string, error) {
 	}
 
 	return fmt.Sprintf("%01d%02d%02d", res[0], res[1], res[2]), nil
+}
+
+// ParseExpr parses an expression and transforms it to an AST
+func ParseExpr(sql string) (Expr, error) {
+	stmt, err := Parse("select " + sql)
+	if err != nil {
+		return nil, err
+	}
+	aliasedExpr := stmt.(*Select).SelectExprs[0].(*AliasedExpr)
+	return aliasedExpr.Expr, err
 }
 
 // Parse behaves like Parse2 but does not return a set of bind variables
@@ -218,14 +225,15 @@ func parseNext(tokenizer *Tokenizer, strict bool) (Statement, error) {
 		}
 		return nil, tokenizer.LastError
 	}
-	if tokenizer.ParseTree == nil {
+	_, isCommentOnly := tokenizer.ParseTree.(*CommentOnly)
+	if tokenizer.ParseTree == nil || isCommentOnly {
 		return ParseNext(tokenizer)
 	}
 	return tokenizer.ParseTree, nil
 }
 
 // ErrEmpty is a sentinel error returned when parsing empty statements.
-var ErrEmpty = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.EmptyQuery, "query was empty")
+var ErrEmpty = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.EmptyQuery, "Query was empty")
 
 // SplitStatement returns the first sql statement up to either a ; or EOF
 // and the remainder from the given buffer
@@ -297,13 +305,6 @@ loop:
 	return
 }
 
-// String returns a string representation of an SQLNode.
-func String(node SQLNode) string {
-	if node == nil {
-		return "<nil>"
-	}
-
-	buf := NewTrackedBuffer(nil)
-	node.formatFast(buf)
-	return buf.String()
+func IsMySQL80AndAbove() bool {
+	return MySQLVersion >= "80000"
 }

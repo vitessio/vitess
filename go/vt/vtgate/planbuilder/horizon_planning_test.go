@@ -43,7 +43,7 @@ func TestCheckIfAlreadyExists(t *testing.T) {
 			name: "Aliased expression and ColName",
 			want: 0,
 			expr: &sqlparser.AliasedExpr{Expr: sqlparser.NewColName("user_id")},
-			sel:  &sqlparser.Select{SelectExprs: []sqlparser.SelectExpr{&sqlparser.AliasedExpr{As: sqlparser.NewColIdent("user_id"), Expr: sqlparser.NewColName("id")}}},
+			sel:  &sqlparser.Select{SelectExprs: []sqlparser.SelectExpr{&sqlparser.AliasedExpr{As: sqlparser.NewIdentifierCI("user_id"), Expr: sqlparser.NewColName("id")}}},
 		},
 		{
 			name: "Non-ColName expressions",
@@ -67,11 +67,11 @@ func TestCheckIfAlreadyExists(t *testing.T) {
 			name: "No AliasedExpr in projection",
 			want: -1,
 			expr: &sqlparser.AliasedExpr{Expr: sqlparser.NewColName("id")},
-			sel:  &sqlparser.Select{SelectExprs: []sqlparser.SelectExpr{&sqlparser.StarExpr{TableName: sqlparser.TableName{Name: sqlparser.NewTableIdent("user")}}, &sqlparser.StarExpr{TableName: sqlparser.TableName{Name: sqlparser.NewTableIdent("people")}}}},
+			sel:  &sqlparser.Select{SelectExprs: []sqlparser.SelectExpr{&sqlparser.StarExpr{TableName: sqlparser.TableName{Name: sqlparser.NewIdentifierCS("user")}}, &sqlparser.StarExpr{TableName: sqlparser.TableName{Name: sqlparser.NewIdentifierCS("people")}}}},
 		},
 	}
 	for _, tt := range tests {
-		semTable := semantics.NewSemTable()
+		semTable := semantics.EmptySemTable()
 		t.Run(tt.name, func(t *testing.T) {
 			got := checkIfAlreadyExists(tt.expr, tt.sel, semTable)
 			assert.Equal(t, tt.want, got)

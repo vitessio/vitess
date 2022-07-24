@@ -14,41 +14,41 @@
  * limitations under the License.
  */
 .headingMeta {
-  display: flex;
+    display: flex;
 }
 
 .headingMeta span {
-  display: inline-block;
-  line-height: 2;
-
-  &::after {
-    color: var(--colorScaffoldingHighlight);
-    content: '/';
     display: inline-block;
-    margin: 0 1.2rem;
-  }
+    line-height: 2;
 
-  &:last-child::after {
-    content: none;
-  }
+    &::after {
+        color: var(--colorScaffoldingHighlight);
+        content: '/';
+        display: inline-block;
+        margin: 0 1.2rem;
+    }
+
+    &:last-child::after {
+        content: none;
+    }
 }
 
 .placeholder {
-  align-items: center;
-  display: flex;
-  flex-direction: column;
-  font-size: var(--fontSizeLarge);
-  justify-content: center;
-  margin: 25vh auto;
-  max-width: 720px;
-  text-align: center;
+    align-items: center;
+    display: flex;
+    flex-direction: column;
+    font-size: theme('fontSize.lg');
+    justify-content: center;
+    margin: 25vh auto;
+    max-width: 720px;
+    text-align: center;
 
-  h1 {
-    margin: 1.6rem 0;
-  }
+    h1 {
+        margin: 1.6rem 0;
+    }
 }
 
 .errorEmoji {
-  display: block;
-  font-size: 5.6rem;
+    display: block;
+    font-size: 5.6rem;
 }

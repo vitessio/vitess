@@ -50,7 +50,10 @@ func TestTracking(t *testing.T) {
 		Shard:    target.Shard,
 		Type:     target.TabletType,
 	}
-	fields := sqltypes.MakeTestFields("table_name|col_name|col_type", "varchar|varchar|varchar")
+	fields := sqltypes.MakeTestFields(
+		"table_name|col_name|col_type|collation_name",
+		"varchar|varchar|varchar|varchar",
+	)
 
 	type delta struct {
 		result *sqltypes.Result
@@ -60,7 +63,7 @@ func TestTracking(t *testing.T) {
 		d0 = delta{
 			result: sqltypes.MakeTestResult(
 				fields,
-				"prior|id|int",
+				"prior|id|int|",
 			),
 			updTbl: []string{"prior"},
 		}
@@ -68,9 +71,9 @@ func TestTracking(t *testing.T) {
 		d1 = delta{
 			result: sqltypes.MakeTestResult(
 				fields,
-				"t1|id|int",
-				"t1|name|varchar",
-				"t2|id|varchar",
+				"t1|id|int|",
+				"t1|name|varchar|utf8_bin",
+				"t2|id|varchar|utf8_bin",
 			),
 			updTbl: []string{"t1", "t2"},
 		}
@@ -78,9 +81,9 @@ func TestTracking(t *testing.T) {
 		d2 = delta{
 			result: sqltypes.MakeTestResult(
 				fields,
-				"t2|id|varchar",
-				"t2|name|varchar",
-				"t3|id|datetime",
+				"t2|id|varchar|utf8_bin",
+				"t2|name|varchar|utf8_bin",
+				"t3|id|datetime|",
 			),
 			updTbl: []string{"prior", "t1", "t2", "t3"},
 		}
@@ -88,7 +91,7 @@ func TestTracking(t *testing.T) {
 		d3 = delta{
 			result: sqltypes.MakeTestResult(
 				fields,
-				"t4|name|varchar",
+				"t4|name|varchar|utf8_bin",
 			),
 			updTbl: []string{"t4"},
 		}
@@ -103,34 +106,34 @@ func TestTracking(t *testing.T) {
 		deltas: []delta{d0, d1},
 		exp: map[string][]vindexes.Column{
 			"t1": {
-				{Name: sqlparser.NewColIdent("id"), Type: querypb.Type_INT32},
-				{Name: sqlparser.NewColIdent("name"), Type: querypb.Type_VARCHAR}},
+				{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_INT32},
+				{Name: sqlparser.NewIdentifierCI("name"), Type: querypb.Type_VARCHAR, CollationName: "utf8_bin"}},
 			"t2": {
-				{Name: sqlparser.NewColIdent("id"), Type: querypb.Type_VARCHAR}},
+				{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_VARCHAR, CollationName: "utf8_bin"}},
 			"prior": {
-				{Name: sqlparser.NewColIdent("id"), Type: querypb.Type_INT32}},
+				{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_INT32}},
 		},
 	}, {
 		tName:  "delete t1 and prior, updated t2 and new t3",
 		deltas: []delta{d0, d1, d2},
 		exp: map[string][]vindexes.Column{
 			"t2": {
-				{Name: sqlparser.NewColIdent("id"), Type: querypb.Type_VARCHAR},
-				{Name: sqlparser.NewColIdent("name"), Type: querypb.Type_VARCHAR}},
+				{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_VARCHAR, CollationName: "utf8_bin"},
+				{Name: sqlparser.NewIdentifierCI("name"), Type: querypb.Type_VARCHAR, CollationName: "utf8_bin"}},
 			"t3": {
-				{Name: sqlparser.NewColIdent("id"), Type: querypb.Type_DATETIME}},
+				{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_DATETIME}},
 		},
 	}, {
 		tName:  "new t4",
 		deltas: []delta{d0, d1, d2, d3},
 		exp: map[string][]vindexes.Column{
 			"t2": {
-				{Name: sqlparser.NewColIdent("id"), Type: querypb.Type_VARCHAR},
-				{Name: sqlparser.NewColIdent("name"), Type: querypb.Type_VARCHAR}},
+				{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_VARCHAR, CollationName: "utf8_bin"},
+				{Name: sqlparser.NewIdentifierCI("name"), Type: querypb.Type_VARCHAR, CollationName: "utf8_bin"}},
 			"t3": {
-				{Name: sqlparser.NewColIdent("id"), Type: querypb.Type_DATETIME}},
+				{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_DATETIME}},
 			"t4": {
-				{Name: sqlparser.NewColIdent("name"), Type: querypb.Type_VARCHAR}},
+				{Name: sqlparser.NewIdentifierCI("name"), Type: querypb.Type_VARCHAR, CollationName: "utf8_bin"}},
 		},
 	},
 	}

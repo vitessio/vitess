@@ -131,7 +131,9 @@ func (uvs *uvstreamer) sendEventsForRows(ctx context.Context, tableName string, 
 	var evs []*binlogdatapb.VEvent
 	for _, row := range rows.Rows {
 		ev := &binlogdatapb.VEvent{
-			Type: binlogdatapb.VEventType_ROW,
+			Type:     binlogdatapb.VEventType_ROW,
+			Keyspace: uvs.vse.keyspace,
+			Shard:    uvs.vse.shard,
 			RowEvent: &binlogdatapb.RowEvent{
 				TableName: tableName,
 				Keyspace:  uvs.vse.keyspace,
@@ -154,11 +156,15 @@ func (uvs *uvstreamer) sendEventsForRows(ctx context.Context, tableName string, 
 
 	ev := &binlogdatapb.VEvent{
 		Type:        binlogdatapb.VEventType_LASTPK,
+		Keyspace:    uvs.vse.keyspace,
+		Shard:       uvs.vse.shard,
 		LastPKEvent: lastPKEvent,
 	}
 	evs = append(evs, ev)
 	evs = append(evs, &binlogdatapb.VEvent{
-		Type: binlogdatapb.VEventType_COMMIT,
+		Type:     binlogdatapb.VEventType_COMMIT,
+		Keyspace: uvs.vse.keyspace,
+		Shard:    uvs.vse.shard,
 	})
 
 	if err := uvs.send(evs); err != nil {

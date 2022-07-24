@@ -32,6 +32,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
@@ -140,7 +141,7 @@ func TestMigration(t *testing.T) {
 	defer clusterInstance.Teardown()
 
 	tabletConfig := func(vt *cluster.VttabletProcess) {
-		vt.ExtraArgs = append(vt.ExtraArgs, "-tablet_config", yamlFile)
+		vt.ExtraArgs = append(vt.ExtraArgs, "--tablet_config", yamlFile)
 	}
 	createKeyspace(t, commerce, []string{"0"}, tabletConfig)
 	err := clusterInstance.VtctlclientProcess.ExecuteCommand("RebuildKeyspaceGraph", "commerce")
@@ -250,7 +251,7 @@ func startCluster(t *testing.T) string {
 	return yamlFile
 }
 
-func createKeyspace(t *testing.T, ks cluster.Keyspace, shards []string, customizers ...interface{}) {
+func createKeyspace(t *testing.T, ks cluster.Keyspace, shards []string, customizers ...any) {
 	t.Helper()
 
 	err := clusterInstance.StartKeyspace(ks, shards, 1, false, customizers...)

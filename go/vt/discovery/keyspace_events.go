@@ -436,3 +436,29 @@ func (kew *KeyspaceEventWatcher) TargetIsBeingResharded(target *query.Target) bo
 	}
 	return ks.beingResharded(target.Shard)
 }
+
+// PrimaryIsNotServing checks if the reason why the given target is not accessible right now is
+// that the primary tablet for that shard is not serving. This is possible during a Planned Reparent Shard
+// operation. Just as the operation completes, a new primary will be elected, and it will send its own healthcheck
+// stating that it is serving. We should buffer requests until that point.
+// There are use cases where people do not run with a Primary server at all, so we must verify that
+// we only start buffering when a primary was present, and it went not serving.
+// The shard state keeps track of the current primary and the last externally reparented time, which we can use
+// to determine that there was a serving primary which now became non serving. This is only possible in a DemotePrimary
+// RPC which are only called from ERS and PRS. So buffering will stop when these operations succeed.
+func (kew *KeyspaceEventWatcher) PrimaryIsNotServing(target *query.Target) bool {
+	if target.TabletType != topodatapb.TabletType_PRIMARY {
+		return false
+	}
+	ks := kew.getKeyspaceStatus(target.Keyspace)
+	if ks == nil {
+		return false
+	}
+	ks.mu.Lock()
+	defer ks.mu.Unlock()
+	if state, ok := ks.shards[target.Shard]; ok {
+		// If the primary tablet was present then externallyReparented will be non-zero and currentPrimary will be not nil
+		return !state.serving && !ks.consistent && state.externallyReparented != 0 && state.currentPrimary != nil
+	}
+	return false
+}

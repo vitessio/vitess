@@ -17,12 +17,14 @@ limitations under the License.
 package semantics
 
 import (
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -60,7 +62,7 @@ type (
 	// ColumnInfo contains information about columns
 	ColumnInfo struct {
 		Name string
-		Type querypb.Type
+		Type Type
 	}
 
 	// ExprDependencies stores the tables that an expression depends on as a map
@@ -69,9 +71,11 @@ type (
 	// SemTable contains semantic analysis information about the query.
 	SemTable struct {
 		Tables []TableInfo
-		// ProjectionErr stores the error that we got during the semantic analysis of the SelectExprs.
-		// This is only a real error if we are unable to plan the query as a single route
-		ProjectionErr error
+
+		// NotSingleRouteErr stores any errors that have to be generated if the query cannot be planned as a single route.
+		NotSingleRouteErr error
+		// NotUnshardedErr stores any errors that have to be generated if the query is not unsharded.
+		NotUnshardedErr error
 
 		// Recursive contains the dependencies from the expression to the actual tables
 		// in the query (i.e. not including derived tables). If an expression is a column on a derived table,
@@ -82,15 +86,21 @@ type (
 		// It does not recurse inside derived tables and the like to find the original dependencies
 		Direct ExprDependencies
 
-		exprTypes   map[sqlparser.Expr]querypb.Type
+		ExprTypes   map[sqlparser.Expr]Type
 		selectScope map[*sqlparser.Select]*scope
-		Comments    sqlparser.Comments
-		SubqueryMap map[*sqlparser.Select][]*subquery
-		SubqueryRef map[*sqlparser.Subquery]*subquery
+		Comments    *sqlparser.ParsedComments
+		SubqueryMap map[sqlparser.Statement][]*sqlparser.ExtractedSubquery
+		SubqueryRef map[*sqlparser.Subquery]*sqlparser.ExtractedSubquery
 
 		// ColumnEqualities is used to enable transitive closures
 		// if a == b and b == c then a == c
 		ColumnEqualities map[columnName][]sqlparser.Expr
+
+		// DefaultCollation is the default collation for this query, which is usually
+		// inherited from the connection's default collation.
+		Collation collations.ID
+
+		Warning string
 	}
 
 	columnName struct {
@@ -98,21 +108,10 @@ type (
 		ColumnName string
 	}
 
-	subquery struct {
-		ArgName   string
-		HasValues string
-		SubQuery  *sqlparser.Subquery
-		OpCode    engine.PulloutOpcode
-
-		// ExprsNeedReplace list all the expressions that, if the subquery is later rewritten, need to
-		// be removed and replaced by ReplaceBy.
-		ExprsNeedReplace []sqlparser.Expr
-		ReplaceBy        sqlparser.Expr
-	}
-
 	// SchemaInformation is used tp provide table information from Vschema.
 	SchemaInformation interface {
 		FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error)
+		ConnCollation() collations.ID
 	}
 )
 
@@ -127,9 +126,13 @@ func (st *SemTable) CopyDependencies(from, to sqlparser.Expr) {
 	st.Direct[to] = st.DirectDeps(from)
 }
 
-// NewSemTable creates a new empty SemTable
-func NewSemTable() *SemTable {
-	return &SemTable{Recursive: map[sqlparser.Expr]TableSet{}, ColumnEqualities: map[columnName][]sqlparser.Expr{}}
+// EmptySemTable creates a new empty SemTable
+func EmptySemTable() *SemTable {
+	return &SemTable{
+		Recursive:        map[sqlparser.Expr]TableSet{},
+		Direct:           map[sqlparser.Expr]TableSet{},
+		ColumnEqualities: map[columnName][]sqlparser.Expr{},
+	}
 }
 
 // TableSetFor returns the bitmask for this particular table
@@ -140,6 +143,26 @@ func (st *SemTable) TableSetFor(t *sqlparser.AliasedTableExpr) TableSet {
 		}
 	}
 	return TableSet{}
+}
+
+// ReplaceTableSetFor replaces the given single TabletSet with the new *sqlparser.AliasedTableExpr
+func (st *SemTable) ReplaceTableSetFor(id TableSet, t *sqlparser.AliasedTableExpr) error {
+	if id.NumberOfTables() != 1 {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: tablet identifier should represent single table: %v", id)
+	}
+	tblOffset := id.TableOffset()
+	if tblOffset > len(st.Tables) {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: tablet identifier greater than number of tables: %v, %d", id, len(st.Tables))
+	}
+	switch tbl := st.Tables[id.TableOffset()].(type) {
+	case *RealTable:
+		tbl.ASTNode = t
+	case *DerivedTable:
+		tbl.ASTNode = t
+	default:
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: replacement not expected for : %T", tbl)
+	}
+	return nil
 }
 
 // TableInfoFor returns the table info for the table set. It should contains only single table.
@@ -153,17 +176,17 @@ func (st *SemTable) TableInfoFor(id TableSet) (TableInfo, error) {
 
 // RecursiveDeps return the table dependencies of the expression.
 func (st *SemTable) RecursiveDeps(expr sqlparser.Expr) TableSet {
-	return st.Recursive.Dependencies(expr)
+	return st.Recursive.dependencies(expr)
 }
 
 // DirectDeps return the table dependencies of the expression.
 func (st *SemTable) DirectDeps(expr sqlparser.Expr) TableSet {
-	return st.Direct.Dependencies(expr)
+	return st.Direct.dependencies(expr)
 }
 
 // AddColumnEquality adds a relation of the given colName to the ColumnEqualities map
 func (st *SemTable) AddColumnEquality(colName *sqlparser.ColName, expr sqlparser.Expr) {
-	ts := st.Direct.Dependencies(colName)
+	ts := st.Direct.dependencies(colName)
 	columnName := columnName{
 		Table:      ts,
 		ColumnName: colName.Name.String(),
@@ -188,7 +211,7 @@ func (st *SemTable) GetExprAndEqualities(expr sqlparser.Expr) []sqlparser.Expr {
 // TableInfoForExpr returns the table info of the table that this expression depends on.
 // Careful: this only works for expressions that have a single table dependency
 func (st *SemTable) TableInfoForExpr(expr sqlparser.Expr) (TableInfo, error) {
-	return st.TableInfoFor(st.Direct.Dependencies(expr))
+	return st.TableInfoFor(st.Direct.dependencies(expr))
 }
 
 // GetSelectTables returns the table in the select.
@@ -207,41 +230,74 @@ func (st *SemTable) AddExprs(tbl *sqlparser.AliasedTableExpr, cols sqlparser.Sel
 
 // TypeFor returns the type of expressions in the query
 func (st *SemTable) TypeFor(e sqlparser.Expr) *querypb.Type {
-	typ, found := st.exprTypes[e]
+	typ, found := st.ExprTypes[e]
 	if found {
-		return &typ
+		return &typ.Type
 	}
 	return nil
 }
 
-// Dependencies return the table dependencies of the expression. This method finds table dependencies recursively
-func (d ExprDependencies) Dependencies(expr sqlparser.Expr) TableSet {
-	deps, found := d[expr]
+// CollationForExpr returns the collation name of expressions in the query
+func (st *SemTable) CollationForExpr(e sqlparser.Expr) collations.ID {
+	typ, found := st.ExprTypes[e]
 	if found {
-		return deps
+		return typ.Collation
+	}
+	return collations.Unknown
+}
+
+// NeedsWeightString returns true if the given expression needs weight_string to do safe comparisons
+func (st *SemTable) NeedsWeightString(e sqlparser.Expr) bool {
+	typ, found := st.ExprTypes[e]
+	if !found {
+		return true
+	}
+	return typ.Collation == collations.Unknown && !sqltypes.IsNumber(typ.Type)
+}
+
+func (st *SemTable) DefaultCollation() collations.ID {
+	return st.Collation
+}
+
+// dependencies return the table dependencies of the expression. This method finds table dependencies recursively
+func (d ExprDependencies) dependencies(expr sqlparser.Expr) (deps TableSet) {
+	if ValidAsMapKey(expr) {
+		// we have something that could live in the cache
+		var found bool
+		deps, found = d[expr]
+		if found {
+			return deps
+		}
+		defer func() {
+			d[expr] = deps
+		}()
 	}
 
-	// During the original semantic analysis, all ColName:s were found and bound the the corresponding tables
-	// Here, we'll walk the expression tree and look to see if we can found any sub-expressions
+	// During the original semantic analysis, all ColNames were found and bound to the corresponding tables
+	// Here, we'll walk the expression tree and look to see if we can find any sub-expressions
 	// that have already set dependencies.
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		expr, ok := node.(sqlparser.Expr)
-		if !ok || !validAsMapKey(expr) {
+		if !ok || !ValidAsMapKey(expr) {
 			// if this is not an expression, or it is an expression we can't use as a map-key,
 			// just carry on down the tree
 			return true, nil
 		}
 
-		set, found := d[expr]
-		if found {
-			deps.MergeInPlace(set)
+		if extracted, ok := expr.(*sqlparser.ExtractedSubquery); ok {
+			if extracted.OtherSide != nil {
+				set := d.dependencies(extracted.OtherSide)
+				deps.MergeInPlace(set)
+			}
+			return false, nil
 		}
+		set, found := d[expr]
+		deps.MergeInPlace(set)
 
 		// if we found a cached value, there is no need to continue down to visit children
 		return !found, nil
 	}, expr)
 
-	d[expr] = deps
 	return deps
 }
 
@@ -255,13 +311,96 @@ func RewriteDerivedExpression(expr sqlparser.Expr, vt TableInfo) (sqlparser.Expr
 		switch node := cursor.Node().(type) {
 		case *sqlparser.ColName:
 			exp, err := vt.getExprFor(node.Name.String())
-			if err != nil {
-				return false
+			if err == nil {
+				cursor.Replace(exp)
+			} else {
+				// cloning the expression and removing the qualifier
+				col := *node
+				col.Qualifier = sqlparser.TableName{}
+				cursor.Replace(&col)
 			}
-			cursor.Replace(exp)
 			return false
 		}
 		return true
 	}, nil)
 	return newExpr, nil
+}
+
+// FindSubqueryReference goes over the sub queries and searches for it by value equality instead of reference equality
+func (st *SemTable) FindSubqueryReference(subquery *sqlparser.Subquery) *sqlparser.ExtractedSubquery {
+	for foundSubq, extractedSubquery := range st.SubqueryRef {
+		if sqlparser.EqualsRefOfSubquery(subquery, foundSubq) {
+			return extractedSubquery
+		}
+	}
+	return nil
+}
+
+// GetSubqueryNeedingRewrite returns a list of sub-queries that need to be rewritten
+func (st *SemTable) GetSubqueryNeedingRewrite() []*sqlparser.ExtractedSubquery {
+	var res []*sqlparser.ExtractedSubquery
+	for _, extractedSubquery := range st.SubqueryRef {
+		if extractedSubquery.NeedsRewrite {
+			res = append(res, extractedSubquery)
+		}
+	}
+	return res
+}
+
+// CopyExprInfo lookups src in the ExprTypes map and, if a key is found, assign
+// the corresponding Type value of src to dest.
+func (st *SemTable) CopyExprInfo(src, dest sqlparser.Expr) {
+	srcType, found := st.ExprTypes[src]
+	if found {
+		st.ExprTypes[dest] = srcType
+	}
+}
+
+var _ evalengine.TranslationLookup = (*SemTable)(nil)
+
+var columnNotSupportedErr = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "column access not supported here")
+
+// ColumnLookup implements the TranslationLookup interface
+func (st *SemTable) ColumnLookup(col *sqlparser.ColName) (int, error) {
+	return 0, columnNotSupportedErr
+}
+
+// SingleUnshardedKeyspace returns the single keyspace if all tables in the query are in the same, unsharded keyspace
+func (st *SemTable) SingleUnshardedKeyspace() (*vindexes.Keyspace, []*vindexes.Table) {
+	var ks *vindexes.Keyspace
+	var tables []*vindexes.Table
+	for _, table := range st.Tables {
+		vindexTable := table.GetVindexTable()
+
+		if vindexTable == nil || vindexTable.Type != "" {
+			_, isDT := table.getExpr().Expr.(*sqlparser.DerivedTable)
+			if isDT {
+				// derived tables are ok, as long as all real tables are from the same unsharded keyspace
+				// we check the real tables inside the derived table as well for same unsharded keyspace.
+				continue
+			}
+			return nil, nil
+		}
+		name, ok := table.getExpr().Expr.(sqlparser.TableName)
+		if !ok {
+			return nil, nil
+		}
+		if name.Name.String() != vindexTable.Name.String() {
+			// this points to a table alias. safer to not shortcut
+			return nil, nil
+		}
+		this := vindexTable.Keyspace
+		if this == nil || this.Sharded {
+			return nil, nil
+		}
+		if ks == nil {
+			ks = this
+		} else {
+			if ks != this {
+				return nil, nil
+			}
+		}
+		tables = append(tables, vindexTable)
+	}
+	return ks, tables
 }

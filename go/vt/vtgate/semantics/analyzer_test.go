@@ -17,7 +17,10 @@ limitations under the License.
 package semantics
 
 import (
+	"fmt"
 	"testing"
+
+	"vitess.io/vitess/go/vt/vtgate/engine"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -31,11 +34,12 @@ var T0 TableSet
 
 var (
 	// Just here to make outputs more readable
-	T1 = SingleTableSet(0)
-	T2 = SingleTableSet(1)
-	T3 = SingleTableSet(2)
-	T4 = SingleTableSet(3)
-	T5 = SingleTableSet(4)
+	None = EmptyTableSet()
+	T1   = SingleTableSet(0)
+	T2   = SingleTableSet(1)
+	T3   = SingleTableSet(2)
+	T4   = SingleTableSet(3)
+	T5   = SingleTableSet(4)
 )
 
 func extract(in *sqlparser.Select, idx int) sqlparser.Expr {
@@ -131,7 +135,7 @@ func TestBindingSingleAliasedTableNegative(t *testing.T) {
 			require.NoError(t, err)
 			_, err = Analyze(parse.(sqlparser.SelectStatement), "", &FakeSI{
 				Tables: map[string]*vindexes.Table{
-					"t": {Name: sqlparser.NewTableIdent("t")},
+					"t": {Name: sqlparser.NewIdentifierCS("t")},
 				},
 			})
 			require.Error(t, err)
@@ -236,8 +240,8 @@ func TestBindingMultiTableNegative(t *testing.T) {
 			require.NoError(t, err)
 			_, err = Analyze(parse.(sqlparser.SelectStatement), "d", &FakeSI{
 				Tables: map[string]*vindexes.Table{
-					"tabl": {Name: sqlparser.NewTableIdent("tabl")},
-					"foo":  {Name: sqlparser.NewTableIdent("foo")},
+					"tabl": {Name: sqlparser.NewIdentifierCS("tabl")},
+					"foo":  {Name: sqlparser.NewIdentifierCS("foo")},
 				},
 			})
 			require.Error(t, err)
@@ -260,8 +264,8 @@ func TestBindingMultiAliasedTableNegative(t *testing.T) {
 			require.NoError(t, err)
 			_, err = Analyze(parse.(sqlparser.SelectStatement), "d", &FakeSI{
 				Tables: map[string]*vindexes.Table{
-					"tabl": {Name: sqlparser.NewTableIdent("tabl")},
-					"foo":  {Name: sqlparser.NewTableIdent("foo")},
+					"tabl": {Name: sqlparser.NewIdentifierCS("tabl")},
+					"foo":  {Name: sqlparser.NewIdentifierCS("foo")},
 				},
 			})
 			require.Error(t, err)
@@ -307,17 +311,17 @@ func TestUnknownColumnMap2(t *testing.T) {
 	int := querypb.Type_INT32
 
 	authoritativeTblA := vindexes.Table{
-		Name: sqlparser.NewTableIdent("a"),
+		Name: sqlparser.NewIdentifierCS("a"),
 		Columns: []vindexes.Column{{
-			Name: sqlparser.NewColIdent("col2"),
+			Name: sqlparser.NewIdentifierCI("col2"),
 			Type: varchar,
 		}},
 		ColumnListAuthoritative: true,
 	}
 	authoritativeTblB := vindexes.Table{
-		Name: sqlparser.NewTableIdent("b"),
+		Name: sqlparser.NewIdentifierCS("b"),
 		Columns: []vindexes.Column{{
-			Name: sqlparser.NewColIdent("col"),
+			Name: sqlparser.NewIdentifierCI("col"),
 			Type: varchar,
 		}},
 		ColumnListAuthoritative: true,
@@ -327,17 +331,17 @@ func TestUnknownColumnMap2(t *testing.T) {
 	nonAuthoritativeTblB := authoritativeTblB
 	nonAuthoritativeTblB.ColumnListAuthoritative = false
 	authoritativeTblAWithConflict := vindexes.Table{
-		Name: sqlparser.NewTableIdent("a"),
+		Name: sqlparser.NewIdentifierCS("a"),
 		Columns: []vindexes.Column{{
-			Name: sqlparser.NewColIdent("col"),
+			Name: sqlparser.NewIdentifierCI("col"),
 			Type: int,
 		}},
 		ColumnListAuthoritative: true,
 	}
 	authoritativeTblBWithInt := vindexes.Table{
-		Name: sqlparser.NewTableIdent("b"),
+		Name: sqlparser.NewIdentifierCS("b"),
 		Columns: []vindexes.Column{{
-			Name: sqlparser.NewColIdent("col"),
+			Name: sqlparser.NewIdentifierCI("col"),
 			Type: int,
 		}},
 		ColumnListAuthoritative: true,
@@ -393,10 +397,10 @@ func TestUnknownColumnMap2(t *testing.T) {
 					si := &FakeSI{Tables: test.schema}
 					tbl, err := Analyze(parse.(sqlparser.SelectStatement), "", si)
 					if test.err {
-						require.True(t, err != nil || tbl.ProjectionErr != nil)
+						require.True(t, err != nil || tbl.NotSingleRouteErr != nil)
 					} else {
 						require.NoError(t, err)
-						require.NoError(t, tbl.ProjectionErr)
+						require.NoError(t, tbl.NotSingleRouteErr)
 						typ := tbl.TypeFor(expr)
 						assert.Equal(t, test.typ, typ)
 					}
@@ -409,10 +413,10 @@ func TestUnknownColumnMap2(t *testing.T) {
 func TestUnknownPredicate(t *testing.T) {
 	query := "select 1 from a, b where col = 1"
 	authoritativeTblA := &vindexes.Table{
-		Name: sqlparser.NewTableIdent("a"),
+		Name: sqlparser.NewIdentifierCS("a"),
 	}
 	authoritativeTblB := &vindexes.Table{
-		Name: sqlparser.NewTableIdent("b"),
+		Name: sqlparser.NewIdentifierCS("b"),
 	}
 
 	parse, _ := sqlparser.Parse(query)
@@ -457,7 +461,7 @@ func TestScoping(t *testing.T) {
 			require.NoError(t, err)
 			_, err = Analyze(parse.(sqlparser.SelectStatement), "user", &FakeSI{
 				Tables: map[string]*vindexes.Table{
-					"t": {Name: sqlparser.NewTableIdent("t")},
+					"t": {Name: sqlparser.NewIdentifierCS("t")},
 				},
 			})
 			if query.errorMessage == "" {
@@ -485,10 +489,10 @@ func TestScopeForSubqueries(t *testing.T) {
 			deps: T2,
 		}, {
 			sql:  `select t.col1, (select (select y.col2 from y) from z) from x as t`,
-			deps: T3,
+			deps: None,
 		}, {
 			sql:  `select t.col1, (select (select (select (select w.col2 from w) from x) from y) from z) from x as t`,
-			deps: T5,
+			deps: None,
 		}, {
 			sql:  `select t.col1, (select id from t) from x as t`,
 			deps: T2,
@@ -503,9 +507,97 @@ func TestScopeForSubqueries(t *testing.T) {
 			sel2 := sel.SelectExprs[1].(*sqlparser.AliasedExpr).Expr.(*sqlparser.Subquery).Select.(*sqlparser.Select)
 			exp := extract(sel2, 0)
 			s1 := semTable.RecursiveDeps(exp)
-			require.NoError(t, semTable.ProjectionErr)
+			require.NoError(t, semTable.NotSingleRouteErr)
 			// if scoping works as expected, we should be able to see the inner table being used by the inner expression
 			assert.Equal(t, tc.deps, s1)
+		})
+	}
+}
+
+func TestSubqueriesMappingWhereClause(t *testing.T) {
+	tcs := []struct {
+		sql           string
+		opCode        engine.PulloutOpcode
+		otherSideName string
+	}{
+		{
+			sql:           "select id from t1 where id in (select uid from t2)",
+			opCode:        engine.PulloutIn,
+			otherSideName: "id",
+		},
+		{
+			sql:           "select id from t1 where id not in (select uid from t2)",
+			opCode:        engine.PulloutNotIn,
+			otherSideName: "id",
+		},
+		{
+			sql:           "select id from t where col1 = (select uid from t2 order by uid desc limit 1)",
+			opCode:        engine.PulloutValue,
+			otherSideName: "col1",
+		},
+		{
+			sql:           "select id from t where exists (select uid from t2 where uid = 42)",
+			opCode:        engine.PulloutExists,
+			otherSideName: "",
+		},
+		{
+			sql:           "select id from t where col1 >= (select uid from t2 where uid = 42)",
+			opCode:        engine.PulloutValue,
+			otherSideName: "col1",
+		},
+	}
+
+	for i, tc := range tcs {
+		t.Run(fmt.Sprintf("%d_%s", i+1, tc.sql), func(t *testing.T) {
+			stmt, semTable := parseAndAnalyze(t, tc.sql, "d")
+			sel, _ := stmt.(*sqlparser.Select)
+
+			var subq *sqlparser.Subquery
+			switch whereExpr := sel.Where.Expr.(type) {
+			case *sqlparser.ComparisonExpr:
+				subq = whereExpr.Right.(*sqlparser.Subquery)
+			case *sqlparser.ExistsExpr:
+				subq = whereExpr.Subquery
+			}
+
+			extractedSubq := semTable.SubqueryRef[subq]
+			assert.True(t, sqlparser.EqualsExpr(extractedSubq.Subquery, subq))
+			assert.True(t, sqlparser.EqualsExpr(extractedSubq.Original, sel.Where.Expr))
+			assert.EqualValues(t, tc.opCode, extractedSubq.OpCode)
+			if tc.otherSideName == "" {
+				assert.Nil(t, extractedSubq.OtherSide)
+			} else {
+				assert.True(t, sqlparser.EqualsExpr(extractedSubq.OtherSide, sqlparser.NewColName(tc.otherSideName)))
+			}
+		})
+	}
+}
+
+func TestSubqueriesMappingSelectExprs(t *testing.T) {
+	tcs := []struct {
+		sql        string
+		selExprIdx int
+	}{
+		{
+			sql:        "select (select id from t1)",
+			selExprIdx: 0,
+		},
+		{
+			sql:        "select id, (select id from t1) from t1",
+			selExprIdx: 1,
+		},
+	}
+
+	for i, tc := range tcs {
+		t.Run(fmt.Sprintf("%d_%s", i+1, tc.sql), func(t *testing.T) {
+			stmt, semTable := parseAndAnalyze(t, tc.sql, "d")
+			sel, _ := stmt.(*sqlparser.Select)
+
+			subq := sel.SelectExprs[tc.selExprIdx].(*sqlparser.AliasedExpr).Expr.(*sqlparser.Subquery)
+			extractedSubq := semTable.SubqueryRef[subq]
+			assert.True(t, sqlparser.EqualsExpr(extractedSubq.Subquery, subq))
+			assert.True(t, sqlparser.EqualsExpr(extractedSubq.Original, subq))
+			assert.EqualValues(t, engine.PulloutValue, extractedSubq.OpCode)
 		})
 	}
 }
@@ -912,7 +1004,7 @@ func TestScopingWDerivedTables(t *testing.T) {
 			require.NoError(t, err)
 			st, err := Analyze(parse.(sqlparser.SelectStatement), "user", &FakeSI{
 				Tables: map[string]*vindexes.Table{
-					"t": {Name: sqlparser.NewTableIdent("t")},
+					"t": {Name: sqlparser.NewIdentifierCS("t")},
 				},
 			})
 			if query.errorMessage != "" {
@@ -923,6 +1015,65 @@ func TestScopingWDerivedTables(t *testing.T) {
 				assert.Equal(t, query.recursiveExpectation, st.RecursiveDeps(extract(sel, 0)), "RecursiveDeps")
 				assert.Equal(t, query.expectation, st.DirectDeps(extract(sel, 0)), "DirectDeps")
 			}
+		})
+	}
+}
+
+func TestDerivedTablesOrderClause(t *testing.T) {
+	queries := []struct {
+		query                string
+		recursiveExpectation TableSet
+		expectation          TableSet
+	}{{
+		query:                "select 1 from (select id from user) as t order by id",
+		recursiveExpectation: T1,
+		expectation:          T2,
+	}, {
+		query:                "select id from (select id from user) as t order by id",
+		recursiveExpectation: T1,
+		expectation:          T2,
+	}, {
+		query:                "select id from (select id from user) as t order by t.id",
+		recursiveExpectation: T1,
+		expectation:          T2,
+	}, {
+		query:                "select id as foo from (select id from user) as t order by foo",
+		recursiveExpectation: T1,
+		expectation:          T2,
+	}, {
+		query:                "select bar from (select id as bar from user) as t order by bar",
+		recursiveExpectation: T1,
+		expectation:          T2,
+	}, {
+		query:                "select bar as foo from (select id as bar from user) as t order by bar",
+		recursiveExpectation: T1,
+		expectation:          T2,
+	}, {
+		query:                "select bar as foo from (select id as bar from user) as t order by foo",
+		recursiveExpectation: T1,
+		expectation:          T2,
+	}, {
+		query:                "select bar as foo from (select id as bar, oo from user) as t order by oo",
+		recursiveExpectation: T1,
+		expectation:          T2,
+	}, {
+		query:                "select bar as foo from (select id, oo from user) as t(bar,oo) order by bar",
+		recursiveExpectation: T1,
+		expectation:          T2,
+	}}
+	si := &FakeSI{Tables: map[string]*vindexes.Table{"t": {Name: sqlparser.NewIdentifierCS("t")}}}
+	for _, query := range queries {
+		t.Run(query.query, func(t *testing.T) {
+			parse, err := sqlparser.Parse(query.query)
+			require.NoError(t, err)
+
+			st, err := Analyze(parse.(sqlparser.SelectStatement), "user", si)
+			require.NoError(t, err)
+
+			sel := parse.(*sqlparser.Select)
+			assert.Equal(t, query.recursiveExpectation, st.RecursiveDeps(sel.OrderBy[0].Expr), "RecursiveDeps")
+			assert.Equal(t, query.expectation, st.DirectDeps(sel.OrderBy[0].Expr), "DirectDeps")
+
 		})
 	}
 }
@@ -951,7 +1102,7 @@ func TestScopingWComplexDerivedTables(t *testing.T) {
 			require.NoError(t, err)
 			st, err := Analyze(parse.(sqlparser.SelectStatement), "user", &FakeSI{
 				Tables: map[string]*vindexes.Table{
-					"t": {Name: sqlparser.NewTableIdent("t")},
+					"t": {Name: sqlparser.NewIdentifierCS("t")},
 				},
 			})
 			if query.errorMessage != "" {
@@ -993,7 +1144,7 @@ func TestScopingWVindexTables(t *testing.T) {
 			hash, _ := vindexes.NewHash("user_index", nil)
 			st, err := Analyze(parse.(sqlparser.SelectStatement), "user", &FakeSI{
 				Tables: map[string]*vindexes.Table{
-					"t": {Name: sqlparser.NewTableIdent("t")},
+					"t": {Name: sqlparser.NewIdentifierCS("t")},
 				},
 				VindexTables: map[string]vindexes.Vindex{
 					"user_index": hash,
@@ -1201,29 +1352,80 @@ func parseAndAnalyze(t *testing.T, query, dbName string) (sqlparser.Statement, *
 	parse, err := sqlparser.Parse(query)
 	require.NoError(t, err)
 
-	semTable, err := Analyze(parse.(sqlparser.SelectStatement), dbName, fakeSchemaInfo())
+	semTable, err := Analyze(parse, dbName, fakeSchemaInfo())
 	require.NoError(t, err)
 	return parse, semTable
 }
 
+func TestSingleUnshardedKeyspace(t *testing.T) {
+	tests := []struct {
+		query     string
+		unsharded *vindexes.Keyspace
+		tables    []*vindexes.Table
+	}{
+		{
+			query:     "select 1 from t, t1",
+			unsharded: nil, // both tables are unsharded, but from different keyspaces
+			tables:    nil,
+		}, {
+			query:     "select 1 from t2",
+			unsharded: nil,
+			tables:    nil,
+		}, {
+			query:     "select 1 from t, t2",
+			unsharded: nil,
+			tables:    nil,
+		}, {
+			query:     "select 1 from t as A, t as B",
+			unsharded: ks1,
+			tables: []*vindexes.Table{
+				{Keyspace: ks1, Name: sqlparser.NewIdentifierCS("t")},
+				{Keyspace: ks1, Name: sqlparser.NewIdentifierCS("t")},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.query, func(t *testing.T) {
+			_, semTable := parseAndAnalyze(t, test.query, "d")
+			queryIsUnsharded, tables := semTable.SingleUnshardedKeyspace()
+			assert.Equal(t, test.unsharded, queryIsUnsharded)
+			assert.Equal(t, test.tables, tables)
+		})
+	}
+}
+
+var ks1 = &vindexes.Keyspace{
+	Name:    "ks1",
+	Sharded: false,
+}
+var ks2 = &vindexes.Keyspace{
+	Name:    "ks2",
+	Sharded: false,
+}
+var ks3 = &vindexes.Keyspace{
+	Name:    "ks3",
+	Sharded: true,
+}
+
 func fakeSchemaInfo() *FakeSI {
 	cols1 := []vindexes.Column{{
-		Name: sqlparser.NewColIdent("id"),
+		Name: sqlparser.NewIdentifierCI("id"),
 		Type: querypb.Type_INT64,
 	}}
 	cols2 := []vindexes.Column{{
-		Name: sqlparser.NewColIdent("uid"),
+		Name: sqlparser.NewIdentifierCI("uid"),
 		Type: querypb.Type_INT64,
 	}, {
-		Name: sqlparser.NewColIdent("name"),
+		Name: sqlparser.NewIdentifierCI("name"),
 		Type: querypb.Type_VARCHAR,
 	}}
 
 	si := &FakeSI{
 		Tables: map[string]*vindexes.Table{
-			"t":  {Name: sqlparser.NewTableIdent("t")},
-			"t1": {Name: sqlparser.NewTableIdent("t1"), Columns: cols1, ColumnListAuthoritative: true},
-			"t2": {Name: sqlparser.NewTableIdent("t2"), Columns: cols2, ColumnListAuthoritative: true},
+			"t":  {Name: sqlparser.NewIdentifierCS("t"), Keyspace: ks1},
+			"t1": {Name: sqlparser.NewIdentifierCS("t1"), Columns: cols1, ColumnListAuthoritative: true, Keyspace: ks2},
+			"t2": {Name: sqlparser.NewIdentifierCS("t2"), Columns: cols2, ColumnListAuthoritative: true, Keyspace: ks3},
 		},
 	}
 	return si

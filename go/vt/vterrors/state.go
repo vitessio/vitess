@@ -42,6 +42,7 @@ const (
 	LockOrActiveTransaction
 	MixOfGroupFuncAndFields
 	DupFieldName
+	WrongValueCountOnRow
 
 	// failed precondition
 	NoDB
@@ -49,6 +50,7 @@ const (
 	WrongNumberOfColumnsInSelect
 	CantDoThisInTransaction
 	RequiresPrimaryKey
+	OperandColumns
 
 	// not found
 	BadDb

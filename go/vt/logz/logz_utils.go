@@ -64,29 +64,51 @@ func StartHTMLTable(w http.ResponseWriter) {
 			padding: 4px;
 			border-style: solid;
 		}
-                table.gridtable th {
-                  padding-left: 2em;
-                  padding-right: 2em;
-                }
+    table.gridtable th {
+      padding-left: 2em;
+      padding-right: 2em;
+    }
+    table.gridtable thead th {
+      cursor: pointer;
+    }
 
-                table.gridtable th.descending:before {
-                  content: "▲";
-                  float: left;
-                }
-                table.gridtable th.ascending:before {
-                  content: "▼";
-                  float: left;
-                }
+    table.gridtable th.descending:before {
+      content: "▲";
+      float: left;
+    }
+    table.gridtable th.ascending:before {
+      content: "▼";
+      float: left;
+    }
 </style>
 
-<script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.0/jquery.min.js"></script>
+<table class="gridtable">
+`))
+}
 
+// EndHTMLTable writes the end of a logz-style table to an HTTP response.
+func EndHTMLTable(w http.ResponseWriter) {
+	w.Write([]byte(`
+</table>
 <script type="text/javascript">
-$.fn.sortableByColumn = function() {
-  var body = this.find('tbody');
-  var header = this.find('thead');
-  var contents = function(el, i) {
-    var data = $(el).children('td').eq(i).text().toLowerCase();
+function wrapInner(parent, element, style) {
+
+  const wrapper = document.createElement(element);
+  wrapper.style = style
+
+  const div = parent.appendChild(wrapper);
+
+  while(parent.firstChild !== wrapper) {
+      wrapper.appendChild(parent.firstChild);
+  }
+}
+
+function sortableByColumn(element) {
+  const body = element.querySelector('tbody')
+  const header = element.querySelector('thead')
+
+  const contents = (element, i) => {
+    const data = element.querySelectorAll("td")[i].innerText.toLowerCase();
     if (data == "n/a") {
       return -1;
     }
@@ -97,19 +119,22 @@ $.fn.sortableByColumn = function() {
       return asNumber;
     }
     return data == asNumber ? asNumber : data;
-  };
+  }
 
-  this.find('thead tr th').each(function(index, th) {
-    $(th).wrapInner('<div width="5em;"></div>');
+  element.querySelectorAll('thead tr th').forEach((th, index) => {
+    wrapInner(th, "div", "overflow: auto; display: inline-block;");
+    let direction = -1;
 
-    var direction = -1;
-    $(th).click(function() {
+    th.onclick=() => {
       direction *= -1;
+      const headerCells = header.querySelectorAll('th');
+      headerCells.forEach((hc) => {
+        hc.classList.remove('ascending', 'descending');
+      })
+      th.classList.add(direction > 0? 'ascending' : 'descending');
+      const rows = body.querySelectorAll('tr');
 
-      header.find('th').removeClass('ascending descending');
-      $(th).addClass(direction > 0? 'ascending' : 'descending');
-      var rows = body.find('tr').detach();
-      rows.sort(function(left, right) {
+      const sortedRows = Array.from(rows).sort(function(left, right) {
         var cl = contents(left, index);
         var cr = contents(right, index);
         if (cl === cr) {
@@ -119,24 +144,23 @@ $.fn.sortableByColumn = function() {
         }
       });
 
-      body.append(rows);
-    });
-  });
+      // Remove original rows
+      rows.forEach(row => row.remove());
+
+      // Add new sorted rows
+      sortedRows.forEach(row => {
+        body.appendChild(row);
+      });
+    }
+  })
 }
 
-$(function() {
-  $('table').sortableByColumn();
-});
+// Execute the function when the DOM loads
+(function() {
+  const table = document.querySelector('table');
+  sortableByColumn(table)
+})();
 </script>
-
-<table class="gridtable">
-`))
-}
-
-// EndHTMLTable writes the end of a logz-style table to an HTTP response.
-func EndHTMLTable(w http.ResponseWriter) {
-	w.Write([]byte(`
-</table>
 `))
 }
 

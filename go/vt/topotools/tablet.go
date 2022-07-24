@@ -34,10 +34,9 @@ package topotools
 // This file contains utility functions for tablets
 
 import (
+	"context"
 	"errors"
 	"fmt"
-
-	"context"
 
 	"google.golang.org/protobuf/proto"
 
@@ -45,9 +44,11 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/proto/vttime"
 )
 
@@ -101,6 +102,76 @@ func CheckOwnership(oldTablet, newTablet *topodatapb.Tablet) error {
 			oldTablet.Hostname, oldTablet.PortMap["vt"], newTablet.Hostname, newTablet.PortMap["vt"])
 	}
 	return nil
+}
+
+// DoCellsHaveRdonlyTablets returns true if any of the cells has at least one
+// tablet with type RDONLY. If the slice of cells to search over is empty, it
+// checks all cells in the topo.
+func DoCellsHaveRdonlyTablets(ctx context.Context, ts *topo.Server, cells []string) (bool, error) {
+	areAnyRdonly := func(tablets []*topo.TabletInfo) bool {
+		for _, tablet := range tablets {
+			if tablet.Type == topodatapb.TabletType_RDONLY {
+				return true
+			}
+		}
+
+		return false
+	}
+
+	if len(cells) == 0 {
+		tablets, err := GetAllTabletsAcrossCells(ctx, ts)
+		if err != nil {
+			return false, err
+		}
+
+		return areAnyRdonly(tablets), nil
+	}
+
+	for _, cell := range cells {
+		tablets, err := ts.GetTabletsByCell(ctx, cell)
+		if err != nil {
+			return false, err
+		}
+
+		if areAnyRdonly(tablets) {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+// GetShardPrimaryForTablet returns the TabletInfo of the given tablet's shard's primary.
+//
+// It returns an error if:
+// - The shard does not exist in the topo.
+// - The shard has no primary in the topo.
+// - The shard primary does not think it is PRIMARY.
+// - The shard primary tablet record does not match the keyspace and shard of the replica.
+func GetShardPrimaryForTablet(ctx context.Context, ts *topo.Server, tablet *topodatapb.Tablet) (*topo.TabletInfo, error) {
+	shard, err := ts.GetShard(ctx, tablet.Keyspace, tablet.Shard)
+	if err != nil {
+		return nil, err
+	}
+
+	if !shard.HasPrimary() {
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no primary tablet for shard %v/%v", tablet.Keyspace, tablet.Shard)
+	}
+
+	shardPrimary, err := ts.GetTablet(ctx, shard.PrimaryAlias)
+	if err != nil {
+		return nil, fmt.Errorf("cannot lookup primary tablet %v for shard %v/%v: %w", topoproto.TabletAliasString(shard.PrimaryAlias), tablet.Keyspace, tablet.Shard, err)
+	}
+
+	if shardPrimary.Type != topodatapb.TabletType_PRIMARY {
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "TopologyServer has inconsistent state for shard primary %v", topoproto.TabletAliasString(shard.PrimaryAlias))
+	}
+
+	if shardPrimary.Keyspace != tablet.Keyspace || shardPrimary.Shard != tablet.Shard {
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "primary %v and potential replica %v not in same keyspace shard (%v/%v)", topoproto.TabletAliasString(shard.PrimaryAlias), topoproto.TabletAliasString(tablet.Alias), tablet.Keyspace, tablet.Shard)
+	}
+
+	return shardPrimary, nil
 }
 
 // IsPrimaryTablet is a helper function to determine whether the current tablet

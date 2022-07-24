@@ -19,18 +19,25 @@ package testutil
 import (
 	"context"
 	"fmt"
+	"path"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 
+	"vitess.io/vitess/go/timer"
+	hk "vitess.io/vitess/go/vt/hook"
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
+	"vitess.io/vitess/go/vt/vtctl/internal/grpcshim"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
+	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -78,7 +85,7 @@ var (
 //			...
 //		}, func(ts *topo.Server) vtctlservicepb.VtctldServer { return NewVtctldServer(ts) })
 //
-func NewVtctldServerWithTabletManagerClient(t *testing.T, ts *topo.Server, tmc tmclient.TabletManagerClient, newVtctldServerFn func(ts *topo.Server) vtctlservicepb.VtctldServer) vtctlservicepb.VtctldServer {
+func NewVtctldServerWithTabletManagerClient(t testing.TB, ts *topo.Server, tmc tmclient.TabletManagerClient, newVtctldServerFn func(ts *topo.Server) vtctlservicepb.VtctldServer) vtctlservicepb.VtctldServer {
 	tmclientFactoryLock.Lock()
 	defer tmclientFactoryLock.Unlock()
 
@@ -127,12 +134,48 @@ type TabletManagerClient struct {
 	// information, e.g. ChangeType. To force an error result for those rpcs in
 	// a test, set tmc.TopoServer = nil.
 	TopoServer *topo.Server
+	Backups    map[string]struct {
+		Events        []*logutilpb.Event
+		EventInterval time.Duration
+		EventJitter   time.Duration
+		ErrorAfter    time.Duration
+	}
 	// keyed by tablet alias.
-	DemoteMasterDelays map[string]time.Duration
+	ChangeTabletTypeResult map[string]error
 	// keyed by tablet alias.
-	DemoteMasterResults map[string]struct {
+	DemotePrimaryDelays map[string]time.Duration
+	// keyed by tablet alias.
+	DemotePrimaryResults map[string]struct {
 		Status *replicationdatapb.PrimaryStatus
 		Error  error
+	}
+	// keyed by tablet alias.
+	ExecuteFetchAsAppDelays map[string]time.Duration
+	// keyed by tablet alias.
+	ExecuteFetchAsAppResults map[string]struct {
+		Response *querypb.QueryResult
+		Error    error
+	}
+	// keyed by tablet alias.
+	ExecuteFetchAsDbaDelays map[string]time.Duration
+	// keyed by tablet alias.
+	ExecuteFetchAsDbaResults map[string]struct {
+		Response *querypb.QueryResult
+		Error    error
+	}
+	// keyed by tablet alias.
+	ExecuteHookDelays map[string]time.Duration
+	// keyed by tablet alias.
+	ExecuteHookResults map[string]struct {
+		Response *hk.HookResult
+		Error    error
+	}
+	// keyed by tablet alias.
+	GetPermissionsDelays map[string]time.Duration
+	// keyed by tablet alias.
+	GetPermissionsResults map[string]struct {
+		Permissions *tabletmanagerdatapb.Permissions
+		Error       error
 	}
 	// keyed by tablet alias.
 	GetReplicasResults map[string]struct {
@@ -147,9 +190,19 @@ type TabletManagerClient struct {
 		Error  error
 	}
 	// keyed by tablet alias.
-	MasterPositionDelays map[string]time.Duration
+	InitPrimaryDelays map[string]time.Duration
+	// keyed by tablet alias. injects a sleep to the end of the function
+	// regardless of parent context timeout or error result.
+	InitPrimaryPostDelays map[string]time.Duration
 	// keyed by tablet alias.
-	MasterPositionResults map[string]struct {
+	InitPrimaryResults map[string]struct {
+		Result string
+		Error  error
+	}
+	// keyed by tablet alias.
+	PrimaryPositionDelays map[string]time.Duration
+	// keyed by tablet alias.
+	PrimaryPositionResults map[string]struct {
 		Position string
 		Error    error
 	}
@@ -172,21 +225,32 @@ type TabletManagerClient struct {
 		Error  error
 	}
 	// keyed by tablet alias.
-	RefreshStateResults      map[string]error
+	RefreshStateResults map[string]error
+	// keyed by `<tablet_alias>/<wait_pos>`.
+	ReloadSchemaDelays map[string]time.Duration
+	// keyed by `<tablet_alias>/<wait_pos>`.
+	ReloadSchemaResults      map[string]error
 	ReplicationStatusDelays  map[string]time.Duration
 	ReplicationStatusResults map[string]struct {
 		Position *replicationdatapb.Status
 		Error    error
+	}
+	RestoreFromBackupResults map[string]struct {
+		Events        []*logutilpb.Event
+		EventInterval time.Duration
+		EventJitter   time.Duration
+		ErrorAfter    time.Duration
 	}
 	// keyed by tablet alias
 	RunHealthCheckDelays map[string]time.Duration
 	// keyed by tablet alias
 	RunHealthCheckResults map[string]error
 	// keyed by tablet alias.
-	SetMasterDelays map[string]time.Duration
+	SetReplicationSourceDelays map[string]time.Duration
 	// keyed by tablet alias.
-	// TODO(deepthi): fix after v12.0
-	SetMasterResults map[string]error
+	SetReplicationSourceResults map[string]error
+	// keyed by tablet alias.
+	SetReplicationSourceSemiSync map[string]bool
 	// keyed by tablet alias
 	SetReadOnlyDelays map[string]time.Duration
 	// keyed by tablet alias
@@ -211,14 +275,13 @@ type TabletManagerClient struct {
 	StopReplicationAndGetStatusDelays map[string]time.Duration
 	// keyed by tablet alias.
 	StopReplicationAndGetStatusResults map[string]struct {
-		Status     *replicationdatapb.Status
 		StopStatus *replicationdatapb.StopReplicationStatus
 		Error      error
 	}
 	// keyed by tablet alias.
-	UndoDemoteMasterDelays map[string]time.Duration
+	UndoDemotePrimaryDelays map[string]time.Duration
 	// keyed by tablet alias
-	UndoDemoteMasterResults map[string]error
+	UndoDemotePrimaryResults map[string]error
 	// tablet alias => duration
 	VReplicationExecDelays map[string]time.Duration
 	// tablet alias => query string => result
@@ -236,8 +299,110 @@ type TabletManagerClient struct {
 	WaitForPositionResults map[string]map[string]error
 }
 
+type backupStreamAdapter struct {
+	*grpcshim.BidiStream
+	ch chan *logutilpb.Event
+}
+
+func (stream *backupStreamAdapter) Recv() (*logutilpb.Event, error) {
+	select {
+	case <-stream.Context().Done():
+		return nil, stream.Context().Err()
+	case err := <-stream.ErrCh:
+		return nil, err
+	case msg := <-stream.ch:
+		return msg, nil
+	case <-stream.Closed():
+		return nil, stream.CloseErr()
+	}
+}
+
+func (stream *backupStreamAdapter) Send(msg *logutilpb.Event) error {
+	select {
+	case <-stream.Context().Done():
+		return stream.Context().Err()
+	case <-stream.Closed():
+		return grpcshim.ErrStreamClosed
+	case stream.ch <- msg:
+		return nil
+	}
+}
+
+// Backup is part of the tmclient.TabletManagerClient interface.
+func (fake *TabletManagerClient) Backup(ctx context.Context, tablet *topodatapb.Tablet, concurrency int, allowPrimary bool) (logutil.EventStream, error) {
+	if tablet.Type == topodatapb.TabletType_PRIMARY && !allowPrimary {
+		return nil, fmt.Errorf("cannot backup primary with allowPrimary=false")
+	}
+
+	key := topoproto.TabletAliasString(tablet.Alias)
+	testdata, ok := fake.Backups[key]
+	if !ok {
+		return nil, fmt.Errorf("no Backup fake result set for %s", key)
+	}
+
+	stream := &backupStreamAdapter{
+		BidiStream: grpcshim.NewBidiStream(ctx),
+		ch:         make(chan *logutilpb.Event, len(testdata.Events)),
+	}
+	go func() {
+		if testdata.EventInterval == 0 {
+			testdata.EventInterval = 10 * time.Millisecond
+			log.Warningf("testutil.TabletManagerClient.Backup faked with no event interval for %s, defaulting to %s", key, testdata.EventInterval)
+		}
+
+		if testdata.EventJitter == 0 {
+			testdata.EventJitter = time.Millisecond
+			log.Warningf("testutil.TabletManagerClient.Backup faked with no event jitter for %s, defaulting to %s", key, testdata.EventJitter)
+		}
+
+		errCtx, errCancel := context.WithCancel(context.Background())
+		switch testdata.ErrorAfter {
+		case 0:
+			// no error to send, cancel the error context immediately
+			errCancel()
+		default:
+			go func() {
+				timer := time.NewTimer(testdata.ErrorAfter)
+				defer func() { // Stop the timer and drain the channel.
+					if !timer.Stop() {
+						<-timer.C
+					}
+				}()
+				defer errCancel()
+
+				<-timer.C
+				stream.ErrCh <- fmt.Errorf("error triggered after %s", testdata.ErrorAfter)
+			}()
+		}
+
+		ticker := timer.NewRandTicker(testdata.EventInterval, testdata.EventJitter)
+
+		defer ticker.Stop()
+		defer stream.CloseWithError(nil)
+
+		for _, event := range testdata.Events {
+			stream.ch <- event
+			<-ticker.C
+		}
+
+		// Wait for the error goroutine to finish. Note that if ErrorAfter
+		// is zero, we never start the goroutine and cancel this context
+		// immediately.
+		//
+		// The reason for this select is so that the error goroutine does
+		// not attempt to send to stream.errCh after the call to CloseSend().
+		<-errCtx.Done()
+	}()
+
+	return stream, nil
+}
+
 // ChangeType is part of the tmclient.TabletManagerClient interface.
-func (fake *TabletManagerClient) ChangeType(ctx context.Context, tablet *topodatapb.Tablet, newType topodatapb.TabletType) error {
+func (fake *TabletManagerClient) ChangeType(ctx context.Context, tablet *topodatapb.Tablet, newType topodatapb.TabletType, semiSync bool) error {
+	if result, ok := fake.ChangeTabletTypeResult[topoproto.TabletAliasString(tablet.Alias)]; ok {
+		return result
+	}
+
 	if fake.TopoServer == nil {
 		return assert.AnError
 	}
@@ -246,9 +411,9 @@ func (fake *TabletManagerClient) ChangeType(ctx context.Context, tablet *topodat
 	return err
 }
 
-// DemoteMaster is part of the tmclient.TabletManagerClient interface.
-func (fake *TabletManagerClient) DemoteMaster(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
-	if fake.DemoteMasterResults == nil {
+// DemotePrimary is part of the tmclient.TabletManagerClient interface.
+func (fake *TabletManagerClient) DemotePrimary(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
+	if fake.DemotePrimaryResults == nil {
 		return nil, assert.AnError
 	}
 
@@ -258,8 +423,8 @@ func (fake *TabletManagerClient) DemoteMaster(ctx context.Context, tablet *topod
 
 	key := topoproto.TabletAliasString(tablet.Alias)
 
-	if fake.DemoteMasterDelays != nil {
-		if delay, ok := fake.DemoteMasterDelays[key]; ok {
+	if fake.DemotePrimaryDelays != nil {
+		if delay, ok := fake.DemotePrimaryDelays[key]; ok {
 			select {
 			case <-ctx.Done():
 				return nil, ctx.Err()
@@ -269,11 +434,113 @@ func (fake *TabletManagerClient) DemoteMaster(ctx context.Context, tablet *topod
 		}
 	}
 
-	if result, ok := fake.DemoteMasterResults[key]; ok {
+	if result, ok := fake.DemotePrimaryResults[key]; ok {
 		return result.Status, result.Error
 	}
 
 	return nil, assert.AnError
+}
+
+// ExecuteFetchAsApp is part of the tmclient.TabletManagerClient interface.
+func (fake *TabletManagerClient) ExecuteFetchAsApp(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, query []byte, maxRows int) (*querypb.QueryResult, error) {
+	if fake.ExecuteFetchAsAppResults == nil {
+		return nil, fmt.Errorf("%w: no ExecuteFetchAsApp results on fake TabletManagerClient", assert.AnError)
+	}
+
+	key := topoproto.TabletAliasString(tablet.Alias)
+	if fake.ExecuteFetchAsAppDelays != nil {
+		if delay, ok := fake.ExecuteFetchAsAppDelays[key]; ok {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(delay):
+				// proceed to results
+			}
+		}
+	}
+	if result, ok := fake.ExecuteFetchAsAppResults[key]; ok {
+		return result.Response, result.Error
+	}
+
+	return nil, fmt.Errorf("%w: no ExecuteFetchAsApp result set for tablet %s", assert.AnError, key)
+}
+
+// ExecuteFetchAsDba is part of the tmclient.TabletManagerClient interface.
+func (fake *TabletManagerClient) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, query []byte, maxRows int, disableBinlogs bool, reloadSchema bool) (*querypb.QueryResult, error) {
+	if fake.ExecuteFetchAsDbaResults == nil {
+		return nil, fmt.Errorf("%w: no ExecuteFetchAsDba results on fake TabletManagerClient", assert.AnError)
+	}
+
+	key := topoproto.TabletAliasString(tablet.Alias)
+	if fake.ExecuteFetchAsDbaDelays != nil {
+		if delay, ok := fake.ExecuteFetchAsDbaDelays[key]; ok {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(delay):
+				// proceed to results
+			}
+		}
+	}
+	if result, ok := fake.ExecuteFetchAsDbaResults[key]; ok {
+		return result.Response, result.Error
+	}
+
+	return nil, fmt.Errorf("%w: no ExecuteFetchAsDba result set for tablet %s", assert.AnError, key)
+}
+
+// ExecuteHook is part of the tmclient.TabletManagerClient interface.
+func (fake *TabletManagerClient) ExecuteHook(ctx context.Context, tablet *topodatapb.Tablet, hook *hk.Hook) (*hk.HookResult, error) {
+	if fake.ExecuteHookResults == nil {
+		return nil, fmt.Errorf("%w: no ExecuteHook results on fake TabletManagerClient", assert.AnError)
+	}
+
+	key := topoproto.TabletAliasString(tablet.Alias)
+	if fake.ExecuteHookDelays != nil {
+		if delay, ok := fake.ExecuteHookDelays[key]; ok {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(delay):
+				// proceed to results
+			}
+		}
+	}
+	if result, ok := fake.ExecuteHookResults[key]; ok {
+		return result.Response, result.Error
+	}
+
+	return nil, fmt.Errorf("%w: no ExecuteHook result set for tablet %s", assert.AnError, key)
+}
+
+// GetPermission is part of the tmclient.TabletManagerClient interface.
+func (fake *TabletManagerClient) GetPermissions(ctx context.Context, tablet *topodatapb.Tablet) (*tabletmanagerdatapb.Permissions, error) {
+	if fake.GetPermissionsResults == nil {
+		return nil, assert.AnError
+	}
+
+	if tablet.Alias == nil {
+		return nil, assert.AnError
+	}
+
+	key := topoproto.TabletAliasString(tablet.Alias)
+
+	if fake.GetPermissionsDelays != nil {
+		if delay, ok := fake.GetPermissionsDelays[key]; ok {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(delay):
+				// proceed to results
+			}
+		}
+	}
+
+	if result, ok := fake.GetPermissionsResults[key]; ok {
+		return result.Permissions, result.Error
+	}
+
+	return nil, fmt.Errorf("%w: no permissions for %s", assert.AnError, key)
 }
 
 // GetReplicas is part of the tmclient.TabletManagerClient interface.
@@ -291,7 +558,7 @@ func (fake *TabletManagerClient) GetReplicas(ctx context.Context, tablet *topoda
 }
 
 // GetSchema is part of the tmclient.TabletManagerClient interface.
-func (fake *TabletManagerClient) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, tablets []string, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
+func (fake *TabletManagerClient) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.GetSchemaRequest) (*tabletmanagerdatapb.SchemaDefinition, error) {
 	if fake.GetSchemaResults == nil {
 		return nil, assert.AnError
 	}
@@ -320,20 +587,26 @@ func (fake *TabletManagerClient) GetSchema(ctx context.Context, tablet *topodata
 	return nil, fmt.Errorf("%w: no schemas for %s", assert.AnError, key)
 }
 
-// MasterPosition is part of the tmclient.TabletManagerClient interface.
-func (fake *TabletManagerClient) MasterPosition(ctx context.Context, tablet *topodatapb.Tablet) (string, error) {
-	if fake.MasterPositionResults == nil {
-		return "", assert.AnError
-	}
-
-	if tablet.Alias == nil {
+// InitPrimary is part of the tmclient.TabletManagerClient interface.
+func (fake *TabletManagerClient) InitPrimary(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) (string, error) {
+	if fake.InitPrimaryResults == nil {
 		return "", assert.AnError
 	}
 
 	key := topoproto.TabletAliasString(tablet.Alias)
 
-	if fake.MasterPositionDelays != nil {
-		if delay, ok := fake.MasterPositionDelays[key]; ok {
+	defer func() {
+		if fake.InitPrimaryPostDelays == nil {
+			return
+		}
+
+		if delay, ok := fake.InitPrimaryPostDelays[key]; ok {
+			time.Sleep(delay)
+		}
+	}()
+
+	if fake.InitPrimaryDelays != nil {
+		if delay, ok := fake.InitPrimaryDelays[key]; ok {
 			select {
 			case <-ctx.Done():
 				return "", ctx.Err()
@@ -343,7 +616,37 @@ func (fake *TabletManagerClient) MasterPosition(ctx context.Context, tablet *top
 		}
 	}
 
-	if result, ok := fake.MasterPositionResults[key]; ok {
+	if result, ok := fake.InitPrimaryResults[key]; ok {
+		return result.Result, result.Error
+	}
+
+	return "", assert.AnError
+}
+
+// PrimaryPosition is part of the tmclient.TabletManagerClient interface.
+func (fake *TabletManagerClient) PrimaryPosition(ctx context.Context, tablet *topodatapb.Tablet) (string, error) {
+	if fake.PrimaryPositionResults == nil {
+		return "", assert.AnError
+	}
+
+	if tablet.Alias == nil {
+		return "", assert.AnError
+	}
+
+	key := topoproto.TabletAliasString(tablet.Alias)
+
+	if fake.PrimaryPositionDelays != nil {
+		if delay, ok := fake.PrimaryPositionDelays[key]; ok {
+			select {
+			case <-ctx.Done():
+				return "", ctx.Err()
+			case <-time.After(delay):
+				// proceed to results
+			}
+		}
+	}
+
+	if result, ok := fake.PrimaryPositionResults[key]; ok {
 		return result.Position, result.Error
 	}
 
@@ -407,7 +710,7 @@ func (fake *TabletManagerClient) PopulateReparentJournal(ctx context.Context, ta
 }
 
 // PromoteReplica is part of the tmclient.TabletManagerClient interface.
-func (fake *TabletManagerClient) PromoteReplica(ctx context.Context, tablet *topodatapb.Tablet) (string, error) {
+func (fake *TabletManagerClient) PromoteReplica(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) (string, error) {
 	if fake.PromoteReplicaResults == nil {
 		return "", assert.AnError
 	}
@@ -456,6 +759,32 @@ func (fake *TabletManagerClient) RefreshState(ctx context.Context, tablet *topod
 	return fmt.Errorf("%w: no RefreshState result set for tablet %s", assert.AnError, key)
 }
 
+// ReloadSchema is part of the tmclient.TabletManagerClient interface.
+func (fake *TabletManagerClient) ReloadSchema(ctx context.Context, tablet *topodatapb.Tablet, waitPosition string) error {
+	if fake.ReloadSchemaResults == nil {
+		return fmt.Errorf("%w: no ReloadSchema results on fake TabletManagerClient", assert.AnError)
+	}
+
+	key := path.Join(topoproto.TabletAliasString(tablet.Alias), waitPosition)
+
+	if fake.ReloadSchemaDelays != nil {
+		if delay, ok := fake.ReloadSchemaDelays[key]; ok {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(delay):
+				// proceed to results
+			}
+		}
+	}
+
+	if err, ok := fake.ReloadSchemaResults[key]; ok {
+		return err
+	}
+
+	return fmt.Errorf("%w: no ReloadSchema result set for tablet %s", assert.AnError, key)
+}
+
 // ReplicationStatus is part of the tmclient.TabletManagerClient interface.
 func (fake *TabletManagerClient) ReplicationStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.Status, error) {
 	if fake.ReplicationStatusResults == nil {
@@ -480,6 +809,100 @@ func (fake *TabletManagerClient) ReplicationStatus(ctx context.Context, tablet *
 	}
 
 	return nil, assert.AnError
+}
+
+type backupRestoreStreamAdapter struct {
+	*grpcshim.BidiStream
+	ch chan *logutilpb.Event
+}
+
+func (stream *backupRestoreStreamAdapter) Recv() (*logutilpb.Event, error) {
+	select {
+	case <-stream.Context().Done():
+		return nil, stream.Context().Err()
+	case err := <-stream.ErrCh:
+		return nil, err
+	case msg := <-stream.ch:
+		return msg, nil
+	case <-stream.Closed():
+		return nil, stream.CloseErr()
+	}
+}
+
+func (stream *backupRestoreStreamAdapter) Send(msg *logutilpb.Event) error {
+	select {
+	case <-stream.Context().Done():
+		return stream.Context().Err()
+	case <-stream.Closed():
+		return grpcshim.ErrStreamClosed
+	case stream.ch <- msg:
+		return nil
+	}
+}
+
+// RestoreFromBackup is part of the tmclient.TabletManagerClient interface.
+func (fake *TabletManagerClient) RestoreFromBackup(ctx context.Context, tablet *topodatapb.Tablet, backupTime time.Time) (logutil.EventStream, error) {
+	key := topoproto.TabletAliasString(tablet.Alias)
+	testdata, ok := fake.RestoreFromBackupResults[key]
+	if !ok {
+		return nil, fmt.Errorf("no RestoreFromBackup fake result set for %s", key)
+	}
+
+	stream := &backupRestoreStreamAdapter{
+		BidiStream: grpcshim.NewBidiStream(ctx),
+		ch:         make(chan *logutilpb.Event, len(testdata.Events)),
+	}
+	go func() {
+		if testdata.EventInterval == 0 {
+			testdata.EventInterval = 10 * time.Millisecond
+			log.Warningf("testutil.TabletManagerClient.RestoreFromBackup faked with no event interval for %s, defaulting to %s", key, testdata.EventInterval)
+		}
+
+		if testdata.EventJitter == 0 {
+			testdata.EventJitter = time.Millisecond
+			log.Warningf("testutil.TabletManagerClient.RestoreFromBackup faked with no event jitter for %s, defaulting to %s", key, testdata.EventJitter)
+		}
+
+		errCtx, errCancel := context.WithCancel(context.Background())
+		switch testdata.ErrorAfter {
+		case 0:
+			// no error to send, cancel the error context immediately
+			errCancel()
+		default:
+			go func() {
+				timer := time.NewTimer(testdata.ErrorAfter)
+				defer func() { // Stop the timer and drain the channel.
+					if !timer.Stop() {
+						<-timer.C
+					}
+				}()
+				defer errCancel()
+
+				<-timer.C
+				stream.ErrCh <- fmt.Errorf("error triggered after %s", testdata.ErrorAfter)
+			}()
+		}
+
+		ticker := timer.NewRandTicker(testdata.EventInterval, testdata.EventJitter)
+
+		defer ticker.Stop()
+		defer stream.CloseWithError(nil)
+
+		for _, event := range testdata.Events {
+			stream.ch <- event
+			<-ticker.C
+		}
+
+		// Wait for the error goroutine to finish. Note that if ErrorAfter
+		// is zero, we never start the goroutine and cancel this context
+		// immediately.
+		//
+		// The reason for this select is so that the error goroutine does
+		// not attempt to send to stream.errCh after the call to CloseSend().
+		<-errCtx.Done()
+	}()
+
+	return stream, nil
 }
 
 // RunHealthCheck is part of the tmclient.TabletManagerClient interface.
@@ -512,16 +935,16 @@ func (fake *TabletManagerClient) RunHealthCheck(ctx context.Context, tablet *top
 	return fmt.Errorf("%w: no result for key %s", assert.AnError, key)
 }
 
-// SetMaster is part of the tmclient.TabletManagerClient interface.
-func (fake *TabletManagerClient) SetMaster(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool) error {
-	if fake.SetMasterResults == nil {
+// SetReplicationSource is part of the tmclient.TabletManagerClient interface.
+func (fake *TabletManagerClient) SetReplicationSource(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool, semiSync bool) error {
+	if fake.SetReplicationSourceResults == nil {
 		return assert.AnError
 	}
 
 	key := topoproto.TabletAliasString(tablet.Alias)
 
-	if fake.SetMasterDelays != nil {
-		if delay, ok := fake.SetMasterDelays[key]; ok {
+	if fake.SetReplicationSourceDelays != nil {
+		if delay, ok := fake.SetReplicationSourceDelays[key]; ok {
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
@@ -531,7 +954,15 @@ func (fake *TabletManagerClient) SetMaster(ctx context.Context, tablet *topodata
 		}
 	}
 
-	if result, ok := fake.SetMasterResults[key]; ok {
+	if fake.SetReplicationSourceSemiSync != nil {
+		if semiSyncRequirement, ok := fake.SetReplicationSourceSemiSync[key]; ok {
+			if semiSyncRequirement != semiSync {
+				return fmt.Errorf("semi-sync settings incorrect")
+			}
+		}
+	}
+
+	if result, ok := fake.SetReplicationSourceResults[key]; ok {
 		return result
 	}
 
@@ -630,7 +1061,7 @@ func (fake *TabletManagerClient) Sleep(ctx context.Context, tablet *topodatapb.T
 }
 
 // StartReplication is part of the tmclient.TabletManagerClient interface.
-func (fake *TabletManagerClient) StartReplication(ctx context.Context, tablet *topodatapb.Tablet) error {
+func (fake *TabletManagerClient) StartReplication(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) error {
 	if fake.StartReplicationResults == nil {
 		return assert.AnError
 	}
@@ -691,13 +1122,13 @@ func (fake *TabletManagerClient) StopReplication(ctx context.Context, tablet *to
 
 // StopReplicationAndGetStatus is part of the tmclient.TabletManagerClient
 // interface.
-func (fake *TabletManagerClient) StopReplicationAndGetStatus(ctx context.Context, tablet *topodatapb.Tablet, mode replicationdatapb.StopReplicationMode) (*replicationdatapb.Status, *replicationdatapb.StopReplicationStatus, error) {
+func (fake *TabletManagerClient) StopReplicationAndGetStatus(ctx context.Context, tablet *topodatapb.Tablet, mode replicationdatapb.StopReplicationMode) (*replicationdatapb.StopReplicationStatus, error) {
 	if fake.StopReplicationAndGetStatusResults == nil {
-		return nil, nil, assert.AnError
+		return nil, assert.AnError
 	}
 
 	if tablet.Alias == nil {
-		return nil, nil, assert.AnError
+		return nil, assert.AnError
 	}
 
 	key := topoproto.TabletAliasString(tablet.Alias)
@@ -706,7 +1137,7 @@ func (fake *TabletManagerClient) StopReplicationAndGetStatus(ctx context.Context
 		if delay, ok := fake.StopReplicationAndGetStatusDelays[key]; ok {
 			select {
 			case <-ctx.Done():
-				return nil, nil, ctx.Err()
+				return nil, ctx.Err()
 			case <-time.After(delay):
 				// proceed to results
 			}
@@ -714,10 +1145,10 @@ func (fake *TabletManagerClient) StopReplicationAndGetStatus(ctx context.Context
 	}
 
 	if result, ok := fake.StopReplicationAndGetStatusResults[key]; ok {
-		return result.Status, result.StopStatus, result.Error
+		return result.StopStatus, result.Error
 	}
 
-	return nil, nil, assert.AnError
+	return nil, assert.AnError
 }
 
 // WaitForPosition is part of the tmclient.TabletManagerClient interface.
@@ -762,9 +1193,9 @@ func (fake *TabletManagerClient) WaitForPosition(ctx context.Context, tablet *to
 	return result
 }
 
-// UndoDemoteMaster is part of the tmclient.TabletManagerClient interface.
-func (fake *TabletManagerClient) UndoDemoteMaster(ctx context.Context, tablet *topodatapb.Tablet) error {
-	if fake.UndoDemoteMasterResults == nil {
+// UndoDemotePrimary is part of the tmclient.TabletManagerClient interface.
+func (fake *TabletManagerClient) UndoDemotePrimary(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) error {
+	if fake.UndoDemotePrimaryResults == nil {
 		return assert.AnError
 	}
 
@@ -774,8 +1205,8 @@ func (fake *TabletManagerClient) UndoDemoteMaster(ctx context.Context, tablet *t
 
 	key := topoproto.TabletAliasString(tablet.Alias)
 
-	if fake.UndoDemoteMasterDelays != nil {
-		if delay, ok := fake.UndoDemoteMasterDelays[key]; ok {
+	if fake.UndoDemotePrimaryDelays != nil {
+		if delay, ok := fake.UndoDemotePrimaryDelays[key]; ok {
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
@@ -785,7 +1216,7 @@ func (fake *TabletManagerClient) UndoDemoteMaster(ctx context.Context, tablet *t
 		}
 	}
 
-	if result, ok := fake.UndoDemoteMasterResults[key]; ok {
+	if result, ok := fake.UndoDemotePrimaryResults[key]; ok {
 		return result
 	}
 

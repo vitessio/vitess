@@ -64,10 +64,10 @@ func initSchema() {
 			}
 			ctx := context.Background()
 			wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
-			err = schemamanager.Run(
+			_, err = schemamanager.Run(
 				ctx,
 				controller,
-				schemamanager.NewTabletExecutor("vtctld/schema", wr, *schemaChangeReplicasTimeout),
+				schemamanager.NewTabletExecutor("vtctld/schema", wr.TopoServer(), wr.TabletManagerClient(), wr.Logger(), *schemaChangeReplicasTimeout),
 			)
 			if err != nil {
 				log.Errorf("Schema change failed, error: %v", err)

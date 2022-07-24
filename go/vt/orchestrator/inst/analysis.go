@@ -30,46 +30,33 @@ type AnalysisCode string
 type StructureAnalysisCode string
 
 const (
-	NoProblem                                                AnalysisCode = "NoProblem"
-	ClusterHasNoPrimary                                      AnalysisCode = "ClusterHasNoPrimary"
-	DeadPrimaryWithoutReplicas                               AnalysisCode = "DeadPrimaryWithoutReplicas"
-	DeadPrimary                                              AnalysisCode = "DeadPrimary"
-	DeadPrimaryAndReplicas                                   AnalysisCode = "DeadPrimaryAndReplicas"
-	DeadPrimaryAndSomeReplicas                               AnalysisCode = "DeadPrimaryAndSomeReplicas"
-	PrimaryHasPrimary                                        AnalysisCode = "PrimaryHasPrimary"
-	PrimaryIsReadOnly                                        AnalysisCode = "PrimaryIsReadOnly"
-	PrimarySemiSyncMustBeSet                                 AnalysisCode = "PrimarySemiSyncMustBeSet"
-	PrimarySemiSyncMustNotBeSet                              AnalysisCode = "PrimarySemiSyncMustNotBeSet"
-	ReplicaIsWritable                                        AnalysisCode = "ReplicaIsWritable"
-	NotConnectedToPrimary                                    AnalysisCode = "NotConnectedToPrimary"
-	ConnectedToWrongPrimary                                  AnalysisCode = "ConnectedToWrongPrimary"
-	ReplicationStopped                                       AnalysisCode = "ReplicationStopped"
-	ReplicaSemiSyncMustBeSet                                 AnalysisCode = "ReplicaSemiSyncMustBeSet"
-	ReplicaSemiSyncMustNotBeSet                              AnalysisCode = "ReplicaSemiSyncMustNotBeSet"
-	UnreachablePrimaryWithLaggingReplicas                    AnalysisCode = "UnreachablePrimaryWithLaggingReplicas"
-	UnreachablePrimary                                       AnalysisCode = "UnreachablePrimary"
-	PrimarySingleReplicaNotReplicating                       AnalysisCode = "PrimarySingleReplicaNotReplicating"
-	PrimarySingleReplicaDead                                 AnalysisCode = "PrimarySingleReplicaDead"
-	AllPrimaryReplicasNotReplicating                         AnalysisCode = "AllPrimaryReplicasNotReplicating"
-	AllPrimaryReplicasNotReplicatingOrDead                   AnalysisCode = "AllPrimaryReplicasNotReplicatingOrDead"
-	LockedSemiSyncPrimaryHypothesis                          AnalysisCode = "LockedSemiSyncPrimaryHypothesis"
-	LockedSemiSyncPrimary                                    AnalysisCode = "LockedSemiSyncPrimary"
-	PrimaryWithoutReplicas                                   AnalysisCode = "PrimaryWithoutReplicas"
-	DeadCoPrimary                                            AnalysisCode = "DeadCoPrimary"
-	DeadCoPrimaryAndSomeReplicas                             AnalysisCode = "DeadCoPrimaryAndSomeReplicas"
-	UnreachableCoPrimary                                     AnalysisCode = "UnreachableCoPrimary"
-	AllCoPrimaryReplicasNotReplicating                       AnalysisCode = "AllCoPrimaryReplicasNotReplicating"
-	DeadIntermediatePrimary                                  AnalysisCode = "DeadIntermediatePrimary"
-	DeadIntermediatePrimaryWithSingleReplica                 AnalysisCode = "DeadIntermediatePrimaryWithSingleReplica"
-	DeadIntermediatePrimaryWithSingleReplicaFailingToConnect AnalysisCode = "DeadIntermediatePrimaryWithSingleReplicaFailingToConnect"
-	DeadIntermediatePrimaryAndSomeReplicas                   AnalysisCode = "DeadIntermediatePrimaryAndSomeReplicas"
-	DeadIntermediatePrimaryAndReplicas                       AnalysisCode = "DeadIntermediatePrimaryAndReplicas"
-	UnreachableIntermediatePrimaryWithLaggingReplicas        AnalysisCode = "UnreachableIntermediatePrimaryWithLaggingReplicas"
-	UnreachableIntermediatePrimary                           AnalysisCode = "UnreachableIntermediatePrimary"
-	AllIntermediatePrimaryReplicasFailingToConnectOrDead     AnalysisCode = "AllIntermediatePrimaryReplicasFailingToConnectOrDead"
-	AllIntermediatePrimaryReplicasNotReplicating             AnalysisCode = "AllIntermediatePrimaryReplicasNotReplicating"
-	FirstTierReplicaFailingToConnectToPrimary                AnalysisCode = "FirstTierReplicaFailingToConnectToPrimary"
-	BinlogServerFailingToConnectToPrimary                    AnalysisCode = "BinlogServerFailingToConnectToPrimary"
+	NoProblem                              AnalysisCode = "NoProblem"
+	ClusterHasNoPrimary                    AnalysisCode = "ClusterHasNoPrimary"
+	DeadPrimaryWithoutReplicas             AnalysisCode = "DeadPrimaryWithoutReplicas"
+	DeadPrimary                            AnalysisCode = "DeadPrimary"
+	DeadPrimaryAndReplicas                 AnalysisCode = "DeadPrimaryAndReplicas"
+	DeadPrimaryAndSomeReplicas             AnalysisCode = "DeadPrimaryAndSomeReplicas"
+	PrimaryHasPrimary                      AnalysisCode = "PrimaryHasPrimary"
+	PrimaryIsReadOnly                      AnalysisCode = "PrimaryIsReadOnly"
+	PrimarySemiSyncMustBeSet               AnalysisCode = "PrimarySemiSyncMustBeSet"
+	PrimarySemiSyncMustNotBeSet            AnalysisCode = "PrimarySemiSyncMustNotBeSet"
+	ReplicaIsWritable                      AnalysisCode = "ReplicaIsWritable"
+	NotConnectedToPrimary                  AnalysisCode = "NotConnectedToPrimary"
+	ConnectedToWrongPrimary                AnalysisCode = "ConnectedToWrongPrimary"
+	ReplicationStopped                     AnalysisCode = "ReplicationStopped"
+	ReplicaSemiSyncMustBeSet               AnalysisCode = "ReplicaSemiSyncMustBeSet"
+	ReplicaSemiSyncMustNotBeSet            AnalysisCode = "ReplicaSemiSyncMustNotBeSet"
+	UnreachablePrimaryWithLaggingReplicas  AnalysisCode = "UnreachablePrimaryWithLaggingReplicas"
+	UnreachablePrimary                     AnalysisCode = "UnreachablePrimary"
+	PrimarySingleReplicaNotReplicating     AnalysisCode = "PrimarySingleReplicaNotReplicating"
+	PrimarySingleReplicaDead               AnalysisCode = "PrimarySingleReplicaDead"
+	AllPrimaryReplicasNotReplicating       AnalysisCode = "AllPrimaryReplicasNotReplicating"
+	AllPrimaryReplicasNotReplicatingOrDead AnalysisCode = "AllPrimaryReplicasNotReplicatingOrDead"
+	LockedSemiSyncPrimaryHypothesis        AnalysisCode = "LockedSemiSyncPrimaryHypothesis"
+	LockedSemiSyncPrimary                  AnalysisCode = "LockedSemiSyncPrimary"
+	PrimaryWithoutReplicas                 AnalysisCode = "PrimaryWithoutReplicas"
+	BinlogServerFailingToConnectToPrimary  AnalysisCode = "BinlogServerFailingToConnectToPrimary"
+	GraceFulPrimaryTakeover                AnalysisCode = "GracefulPrimaryTakeover"
 )
 
 const (
@@ -135,6 +122,7 @@ type ReplicationAnalysis struct {
 	ClusterDetails                            ClusterInfo
 	AnalyzedInstanceDataCenter                string
 	AnalyzedInstanceRegion                    string
+	AnalyzedKeyspace                          string
 	AnalyzedInstancePhysicalEnvironment       string
 	AnalyzedInstanceBinlogCoordinates         BinlogCoordinates
 	IsPrimary                                 bool
@@ -196,39 +184,40 @@ type ReplicationAnalysisChangelog struct {
 	Changelog           []string
 }
 
-func (this *ReplicationAnalysis) MarshalJSON() ([]byte, error) {
+func (replicationAnalysis *ReplicationAnalysis) MarshalJSON() ([]byte, error) {
 	i := struct {
 		ReplicationAnalysis
 	}{}
-	i.ReplicationAnalysis = *this
+	i.ReplicationAnalysis = *replicationAnalysis
 
 	return json.Marshal(i)
 }
 
 // ReadReplicaHostsFromString parses and reads replica keys from comma delimited string
-func (this *ReplicationAnalysis) ReadReplicaHostsFromString(replicaHostsString string) error {
-	this.Replicas = *NewInstanceKeyMap()
-	return this.Replicas.ReadCommaDelimitedList(replicaHostsString)
+func (replicationAnalysis *ReplicationAnalysis) ReadReplicaHostsFromString(replicaHostsString string) error {
+	replicationAnalysis.Replicas = *NewInstanceKeyMap()
+	return replicationAnalysis.Replicas.ReadCommaDelimitedList(replicaHostsString)
 }
 
 // AnalysisString returns a human friendly description of all analysis issues
-func (this *ReplicationAnalysis) AnalysisString() string {
+func (replicationAnalysis *ReplicationAnalysis) AnalysisString() string {
 	result := []string{}
-	if this.Analysis != NoProblem {
-		result = append(result, string(this.Analysis))
+	if replicationAnalysis.Analysis != NoProblem {
+		result = append(result, string(replicationAnalysis.Analysis))
 	}
-	for _, structureAnalysis := range this.StructureAnalysis {
+	for _, structureAnalysis := range replicationAnalysis.StructureAnalysis {
 		result = append(result, string(structureAnalysis))
 	}
 	return strings.Join(result, ", ")
 }
 
 // Get a string description of the analyzed instance type (primary? co-primary? intermediate-primary?)
-func (this *ReplicationAnalysis) GetAnalysisInstanceType() AnalysisInstanceType {
-	if this.IsCoPrimary {
+func (replicationAnalysis *ReplicationAnalysis) GetAnalysisInstanceType() AnalysisInstanceType {
+	if replicationAnalysis.IsCoPrimary {
 		return AnalysisInstanceTypeCoPrimary
 	}
-	if this.IsPrimary {
+
+	if replicationAnalysis.IsPrimary {
 		return AnalysisInstanceTypePrimary
 	}
 	return AnalysisInstanceTypeIntermediatePrimary

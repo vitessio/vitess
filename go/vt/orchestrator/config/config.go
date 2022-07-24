@@ -38,7 +38,7 @@ const (
 	DefaultStatusAPIEndpoint          = "/api/status"
 )
 
-var configurationLoaded chan bool = make(chan bool)
+var configurationLoaded = make(chan bool)
 
 const (
 	HealthPollSeconds                     = 1
@@ -51,7 +51,7 @@ const (
 	MaintenancePurgeDays                  = 7
 	MySQLTopologyMaxPoolConnections       = 3
 	MaintenanceExpireMinutes              = 10
-	AgentHttpTimeoutSeconds               = 60
+	AgentHTTPTimeoutSeconds               = 60
 	DebugMetricsIntervalSeconds           = 10
 	StaleInstanceCoordinatesExpireSeconds = 60
 	SelectTrueQuery                       = "select 1"
@@ -62,18 +62,16 @@ const (
 // strictly expected from user.
 // TODO(sougou): change this to yaml parsing, and possible merge with tabletenv.
 type Configuration struct {
-	Debug                                       bool              // set debug mode (similar to --debug option)
-	EnableSyslog                                bool              // Should logs be directed (in addition) to syslog daemon?
-	ListenAddress                               string            // Where orchestrator HTTP should listen for TCP
-	ListenSocket                                string            // Where orchestrator HTTP should listen for unix socket (default: empty; when given, TCP is disabled)
-	HTTPAdvertise                               string            // optional, for raft setups, what is the HTTP address this node will advertise to its peers (potentially use where behind NAT or when rerouting ports; example: "http://11.22.33.44:3030")
-	AgentsServerPort                            string            // port orchestrator agents talk back to
-	Durability                                  string            // The type of durability to enforce. Default is "none". Other values are dictated by registered plugins
-	DurabilityParams                            map[string]string // map for specifying additional parameters for durability plugins. Used by durability mode "specified"
-	MySQLTopologyUser                           string
-	MySQLTopologyPassword                       string
-	MySQLReplicaUser                            string // If set, use this credential instead of discovering from mysql. TODO(sougou): deprecate this in favor of fetching from vttablet
-	MySQLReplicaPassword                        string
+	Debug                                       bool   // set debug mode (similar to --debug option)
+	EnableSyslog                                bool   // Should logs be directed (in addition) to syslog daemon?
+	ListenAddress                               string // Where orchestrator HTTP should listen for TCP
+	ListenSocket                                string // Where orchestrator HTTP should listen for unix socket (default: empty; when given, TCP is disabled)
+	HTTPAdvertise                               string // optional, for raft setups, what is the HTTP address this node will advertise to its peers (potentially use where behind NAT or when rerouting ports; example: "http://11.22.33.44:3030")
+	AgentsServerPort                            string // port orchestrator agents talk back to
+	MySQLTopologyUser                           string // The user VTOrc will use to connect to MySQL instances
+	MySQLTopologyPassword                       string // The password VTOrc will use to connect to MySQL instances
+	MySQLReplicaUser                            string // User to set on replica MySQL instances while configuring replication settings on them. If set, use this credential instead of discovering from mysql. TODO(sougou): deprecate this in favor of fetching from vttablet
+	MySQLReplicaPassword                        string // Password to set on replica MySQL instances while configuring replication settings on them.
 	MySQLTopologyCredentialsConfigFile          string // my.cnf style configuration file from where to pick credentials. Expecting `user`, `password` under `[client]` section
 	MySQLTopologySSLPrivateKeyFile              string // Private key file used to authenticate with a Topology mysql instance with TLS
 	MySQLTopologySSLCertFile                    string // Certificate PEM file used to authenticate with a Topology mysql instance with TLS
@@ -145,7 +143,7 @@ type Configuration struct {
 	RemoveTextFromHostnameDisplay               string   // Text to strip off the hostname on cluster/clusters pages
 	ReadOnly                                    bool
 	AuthenticationMethod                        string // Type of autherntication to use, if any. "" for none, "basic" for BasicAuth, "multi" for advanced BasicAuth, "proxy" for forwarded credentials via reverse proxy, "token" for token based access
-	OAuthClientId                               string
+	OAuthClientID                               string
 	OAuthClientSecret                           string
 	OAuthScopes                                 []string
 	HTTPAuthUser                                string            // Username for HTTP Basic authentication (blank disables authentication)
@@ -170,7 +168,7 @@ type Configuration struct {
 	SupportFuzzyPoolHostnames                   bool              // Should "submit-pool-instances" command be able to pass list of fuzzy instances (fuzzy means non-fqdn, but unique enough to recognize). Defaults 'true', implies more queries on backend db
 	InstancePoolExpiryMinutes                   uint              // Time after which entries in database_instance_pool are expired (resubmit via `submit-pool-instances`)
 	PromotionIgnoreHostnameFilters              []string          // Orchestrator will not promote replicas with hostname matching pattern (via -c recovery; for example, avoid promoting dev-dedicated machines)
-	ServeAgentsHttp                             bool              // Spawn another HTTP interface dedicated for orchestrator-agent
+	ServeAgentsHTTP                             bool              // Spawn another HTTP interface dedicated for orchestrator-agent
 	AgentsUseSSL                                bool              // When "true" orchestrator will listen on agents port with SSL as well as connect to agents via SSL
 	AgentsUseMutualTLS                          bool              // When "true" Use mutual TLS for the server to agent communication
 	AgentSSLSkipVerify                          bool              // When using SSL for the Agent, should we ignore SSL certification error
@@ -202,13 +200,11 @@ type Configuration struct {
 	RecoverIntermediatePrimaryClusterFilters    []string          // Only do IM recovery on clusters matching these regexp patterns (of course the ".*" pattern matches everything)
 	ProcessesShellCommand                       string            // Shell that executes command scripts
 	OnFailureDetectionProcesses                 []string          // Processes to execute when detecting a failover scenario (before making a decision whether to failover or not). May and should use some of these placeholders: {failureType}, {instanceType}, {isPrimary}, {isCoPrimary}, {failureDescription}, {command}, {failedHost}, {failureCluster}, {failureClusterAlias}, {failureClusterDomain}, {failedPort}, {successorHost}, {successorPort}, {successorAlias}, {countReplicas}, {replicaHosts}, {isDowntimed}, {autoPrimaryRecovery}, {autoIntermediatePrimaryRecovery}
-	PreGracefulTakeoverProcesses                []string          // Processes to execute before doing a failover (aborting operation should any once of them exits with non-zero code; order of execution undefined). May and should use some of these placeholders: {failureType}, {instanceType}, {isPrimary}, {isCoPrimary}, {failureDescription}, {command}, {failedHost}, {failureCluster}, {failureClusterAlias}, {failureClusterDomain}, {failedPort}, {successorHost}, {successorPort}, {countReplicas}, {replicaHosts}, {isDowntimed}
 	PreFailoverProcesses                        []string          // Processes to execute before doing a failover (aborting operation should any once of them exits with non-zero code; order of execution undefined). May and should use some of these placeholders: {failureType}, {instanceType}, {isPrimary}, {isCoPrimary}, {failureDescription}, {command}, {failedHost}, {failureCluster}, {failureClusterAlias}, {failureClusterDomain}, {failedPort}, {countReplicas}, {replicaHosts}, {isDowntimed}
 	PostFailoverProcesses                       []string          // Processes to execute after doing a failover (order of execution undefined). May and should use some of these placeholders: {failureType}, {instanceType}, {isPrimary}, {isCoPrimary}, {failureDescription}, {command}, {failedHost}, {failureCluster}, {failureClusterAlias}, {failureClusterDomain}, {failedPort}, {successorHost}, {successorPort}, {successorAlias}, {countReplicas}, {replicaHosts}, {isDowntimed}, {isSuccessful}, {lostReplicas}, {countLostReplicas}
 	PostUnsuccessfulFailoverProcesses           []string          // Processes to execute after a not-completely-successful failover (order of execution undefined). May and should use some of these placeholders: {failureType}, {instanceType}, {isPrimary}, {isCoPrimary}, {failureDescription}, {command}, {failedHost}, {failureCluster}, {failureClusterAlias}, {failureClusterDomain}, {failedPort}, {successorHost}, {successorPort}, {successorAlias}, {countReplicas}, {replicaHosts}, {isDowntimed}, {isSuccessful}, {lostReplicas}, {countLostReplicas}
 	PostPrimaryFailoverProcesses                []string          // Processes to execute after doing a primary failover (order of execution undefined). Uses same placeholders as PostFailoverProcesses
 	PostIntermediatePrimaryFailoverProcesses    []string          // Processes to execute after doing a primary failover (order of execution undefined). Uses same placeholders as PostFailoverProcesses
-	PostGracefulTakeoverProcesses               []string          // Processes to execute after running a graceful primary takeover. Uses same placeholders as PostFailoverProcesses
 	PostTakePrimaryProcesses                    []string          // Processes to execute after a successful Take-Primary event has taken place
 	CoPrimaryRecoveryMustPromoteOtherCoPrimary  bool              // When 'false', anything can get promoted (and candidates are prefered over others). When 'true', orchestrator will promote the other co-primary or else fail
 	DetachLostReplicasAfterPrimaryFailover      bool              // Should replicas that are not to be lost in primary recovery (i.e. were more up-to-date than promoted replica) be forcibly detached
@@ -226,21 +222,16 @@ type Configuration struct {
 	DiscoveryIgnoreReplicaHostnameFilters       []string          // Regexp filters to apply to prevent auto-discovering new replicas. Usage: unreachable servers due to firewalls, applications which trigger binlog dumps
 	DiscoveryIgnorePrimaryHostnameFilters       []string          // Regexp filters to apply to prevent auto-discovering a primary. Usage: pointing your primary temporarily to replicate seom data from external host
 	DiscoveryIgnoreHostnameFilters              []string          // Regexp filters to apply to prevent discovering instances of any kind
-	ConsulAddress                               string            // Address where Consul HTTP api is found. Example: 127.0.0.1:8500
-	ConsulScheme                                string            // Scheme (http or https) for Consul
-	ConsulAclToken                              string            // ACL token used to write to Consul KV
-	ConsulCrossDataCenterDistribution           bool              // should orchestrator automatically auto-deduce all consul DCs and write KVs in all DCs
-	ZkAddress                                   string            // UNSUPPERTED YET. Address where (single or multiple) ZooKeeper servers are found, in `srv1[:port1][,srv2[:port2]...]` format. Default port is 2181. Example: srv-a,srv-b:12181,srv-c
-	KVClusterPrimaryPrefix                      string            // Prefix to use for clusters' primary's entries in KV stores (internal, consul, ZK), default: "mysql/primary"
 	WebMessage                                  string            // If provided, will be shown on all web pages below the title bar
 	MaxConcurrentReplicaOperations              int               // Maximum number of concurrent operations on replicas
 	InstanceDBExecContextTimeoutSeconds         int               // Timeout on context used while calling ExecContext on instance database
 	LockShardTimeoutSeconds                     int               // Timeout on context used to lock shard. Should be a small value because we should fail-fast
+	WaitReplicasTimeoutSeconds                  int               // Timeout on amount of time to wait for the replicas in case of ERS. Should be a small value because we should fail-fast. Should not be larger than LockShardTimeoutSeconds since that is the total time we use for an ERS.
 }
 
 // ToJSONString will marshal this configuration as JSON
-func (this *Configuration) ToJSONString() string {
-	b, _ := json.Marshal(this)
+func (config *Configuration) ToJSONString() string {
+	b, _ := json.Marshal(config)
 	return string(b)
 }
 
@@ -256,8 +247,6 @@ func newConfiguration() *Configuration {
 		ListenSocket:                                "",
 		HTTPAdvertise:                               "",
 		AgentsServerPort:                            ":3001",
-		Durability:                                  "none",
-		DurabilityParams:                            make(map[string]string),
 		StatusEndpoint:                              DefaultStatusAPIEndpoint,
 		StatusOUVerify:                              false,
 		BackendDB:                                   "sqlite",
@@ -334,7 +323,7 @@ func newConfiguration() *Configuration {
 		SupportFuzzyPoolHostnames:                   true,
 		InstancePoolExpiryMinutes:                   60,
 		PromotionIgnoreHostnameFilters:              []string{},
-		ServeAgentsHttp:                             false,
+		ServeAgentsHTTP:                             false,
 		AgentsUseSSL:                                false,
 		AgentsUseMutualTLS:                          false,
 		AgentSSLValidOUs:                            []string{},
@@ -364,13 +353,11 @@ func newConfiguration() *Configuration {
 		RecoverIntermediatePrimaryClusterFilters:    []string{},
 		ProcessesShellCommand:                       "bash",
 		OnFailureDetectionProcesses:                 []string{},
-		PreGracefulTakeoverProcesses:                []string{},
 		PreFailoverProcesses:                        []string{},
 		PostPrimaryFailoverProcesses:                []string{},
 		PostIntermediatePrimaryFailoverProcesses:    []string{},
 		PostFailoverProcesses:                       []string{},
 		PostUnsuccessfulFailoverProcesses:           []string{},
-		PostGracefulTakeoverProcesses:               []string{},
 		PostTakePrimaryProcesses:                    []string{},
 		CoPrimaryRecoveryMustPromoteOtherCoPrimary:  true,
 		DetachLostReplicasAfterPrimaryFailover:      true,
@@ -386,113 +373,101 @@ func newConfiguration() *Configuration {
 		OSCIgnoreHostnameFilters:                    []string{},
 		URLPrefix:                                   "",
 		DiscoveryIgnoreReplicaHostnameFilters:       []string{},
-		ConsulAddress:                               "",
-		ConsulScheme:                                "http",
-		ConsulAclToken:                              "",
-		ConsulCrossDataCenterDistribution:           false,
-		ZkAddress:                                   "",
-		KVClusterPrimaryPrefix:                      "mysql/primary",
 		WebMessage:                                  "",
 		MaxConcurrentReplicaOperations:              5,
 		InstanceDBExecContextTimeoutSeconds:         30,
-		LockShardTimeoutSeconds:                     1,
+		LockShardTimeoutSeconds:                     30,
+		WaitReplicasTimeoutSeconds:                  30,
 	}
 }
 
-func (this *Configuration) postReadAdjustments() error {
-	if this.MySQLOrchestratorCredentialsConfigFile != "" {
+func (config *Configuration) postReadAdjustments() error {
+	if config.MySQLOrchestratorCredentialsConfigFile != "" {
 		mySQLConfig := struct {
 			Client struct {
 				User     string
 				Password string
 			}
 		}{}
-		err := gcfg.ReadFileInto(&mySQLConfig, this.MySQLOrchestratorCredentialsConfigFile)
+		err := gcfg.ReadFileInto(&mySQLConfig, config.MySQLOrchestratorCredentialsConfigFile)
 		if err != nil {
 			log.Fatalf("Failed to parse gcfg data from file: %+v", err)
 		} else {
-			log.Debugf("Parsed orchestrator credentials from %s", this.MySQLOrchestratorCredentialsConfigFile)
-			this.MySQLOrchestratorUser = mySQLConfig.Client.User
-			this.MySQLOrchestratorPassword = mySQLConfig.Client.Password
+			log.Debugf("Parsed orchestrator credentials from %s", config.MySQLOrchestratorCredentialsConfigFile)
+			config.MySQLOrchestratorUser = mySQLConfig.Client.User
+			config.MySQLOrchestratorPassword = mySQLConfig.Client.Password
 		}
 	}
 	{
 		// We accept password in the form "${SOME_ENV_VARIABLE}" in which case we pull
 		// the given variable from os env
-		submatch := envVariableRegexp.FindStringSubmatch(this.MySQLOrchestratorPassword)
+		submatch := envVariableRegexp.FindStringSubmatch(config.MySQLOrchestratorPassword)
 		if len(submatch) > 1 {
-			this.MySQLOrchestratorPassword = os.Getenv(submatch[1])
+			config.MySQLOrchestratorPassword = os.Getenv(submatch[1])
 		}
 	}
-	if this.MySQLTopologyCredentialsConfigFile != "" {
+	if config.MySQLTopologyCredentialsConfigFile != "" {
 		mySQLConfig := struct {
 			Client struct {
 				User     string
 				Password string
 			}
 		}{}
-		err := gcfg.ReadFileInto(&mySQLConfig, this.MySQLTopologyCredentialsConfigFile)
+		err := gcfg.ReadFileInto(&mySQLConfig, config.MySQLTopologyCredentialsConfigFile)
 		if err != nil {
 			log.Fatalf("Failed to parse gcfg data from file: %+v", err)
 		} else {
-			log.Debugf("Parsed topology credentials from %s", this.MySQLTopologyCredentialsConfigFile)
-			this.MySQLTopologyUser = mySQLConfig.Client.User
-			this.MySQLTopologyPassword = mySQLConfig.Client.Password
+			log.Debugf("Parsed topology credentials from %s", config.MySQLTopologyCredentialsConfigFile)
+			config.MySQLTopologyUser = mySQLConfig.Client.User
+			config.MySQLTopologyPassword = mySQLConfig.Client.Password
 		}
 	}
 	{
 		// We accept password in the form "${SOME_ENV_VARIABLE}" in which case we pull
 		// the given variable from os env
-		submatch := envVariableRegexp.FindStringSubmatch(this.MySQLTopologyPassword)
+		submatch := envVariableRegexp.FindStringSubmatch(config.MySQLTopologyPassword)
 		if len(submatch) > 1 {
-			this.MySQLTopologyPassword = os.Getenv(submatch[1])
+			config.MySQLTopologyPassword = os.Getenv(submatch[1])
 		}
 	}
 
-	if this.RecoveryPeriodBlockSeconds == 0 && this.RecoveryPeriodBlockMinutes > 0 {
+	if config.RecoveryPeriodBlockSeconds == 0 && config.RecoveryPeriodBlockMinutes > 0 {
 		// RecoveryPeriodBlockSeconds is a newer addition that overrides RecoveryPeriodBlockMinutes
 		// The code does not consider RecoveryPeriodBlockMinutes anymore, but RecoveryPeriodBlockMinutes
 		// still supported in config file for backwards compatibility
-		this.RecoveryPeriodBlockSeconds = this.RecoveryPeriodBlockMinutes * 60
+		config.RecoveryPeriodBlockSeconds = config.RecoveryPeriodBlockMinutes * 60
 	}
 
-	if this.FailPrimaryPromotionIfSQLThreadNotUpToDate && this.DelayPrimaryPromotionIfSQLThreadNotUpToDate {
+	if config.FailPrimaryPromotionIfSQLThreadNotUpToDate && config.DelayPrimaryPromotionIfSQLThreadNotUpToDate {
 		return fmt.Errorf("Cannot have both FailPrimaryPromotionIfSQLThreadNotUpToDate and DelayPrimaryPromotionIfSQLThreadNotUpToDate enabled")
 	}
-	if this.FailPrimaryPromotionOnLagMinutes > 0 && this.ReplicationLagQuery == "" {
+	if config.FailPrimaryPromotionOnLagMinutes > 0 && config.ReplicationLagQuery == "" {
 		return fmt.Errorf("nonzero FailPrimaryPromotionOnLagMinutes requires ReplicationLagQuery to be set")
 	}
 
-	if this.URLPrefix != "" {
+	if config.URLPrefix != "" {
 		// Ensure the prefix starts with "/" and has no trailing one.
-		this.URLPrefix = strings.TrimLeft(this.URLPrefix, "/")
-		this.URLPrefix = strings.TrimRight(this.URLPrefix, "/")
-		this.URLPrefix = "/" + this.URLPrefix
+		config.URLPrefix = strings.TrimLeft(config.URLPrefix, "/")
+		config.URLPrefix = strings.TrimRight(config.URLPrefix, "/")
+		config.URLPrefix = "/" + config.URLPrefix
 	}
 
-	if this.IsSQLite() && this.SQLite3DataFile == "" {
+	if config.IsSQLite() && config.SQLite3DataFile == "" {
 		return fmt.Errorf("SQLite3DataFile must be set when BackendDB is sqlite3")
 	}
-	if this.RaftEnabled && this.RaftDataDir == "" {
+	if config.RaftEnabled && config.RaftDataDir == "" {
 		return fmt.Errorf("RaftDataDir must be defined since raft is enabled (RaftEnabled)")
 	}
-	if this.RaftEnabled && this.RaftBind == "" {
+	if config.RaftEnabled && config.RaftBind == "" {
 		return fmt.Errorf("RaftBind must be defined since raft is enabled (RaftEnabled)")
 	}
-	if this.RaftAdvertise == "" {
-		this.RaftAdvertise = this.RaftBind
+	if config.RaftAdvertise == "" {
+		config.RaftAdvertise = config.RaftBind
 	}
-	if this.KVClusterPrimaryPrefix != "/" {
-		// "/" remains "/"
-		// "prefix" turns to "prefix/"
-		// "some/prefix///" turns to "some/prefix/"
-		this.KVClusterPrimaryPrefix = strings.TrimRight(this.KVClusterPrimaryPrefix, "/")
-		this.KVClusterPrimaryPrefix = fmt.Sprintf("%s/", this.KVClusterPrimaryPrefix)
-	}
-	if this.HTTPAdvertise != "" {
-		u, err := url.Parse(this.HTTPAdvertise)
+	if config.HTTPAdvertise != "" {
+		u, err := url.Parse(config.HTTPAdvertise)
 		if err != nil {
-			return fmt.Errorf("Failed parsing HTTPAdvertise %s: %s", this.HTTPAdvertise, err.Error())
+			return fmt.Errorf("Failed parsing HTTPAdvertise %s: %s", config.HTTPAdvertise, err.Error())
 		}
 		if u.Scheme == "" {
 			return fmt.Errorf("If specified, HTTPAdvertise must include scheme (http:// or https://)")
@@ -506,19 +481,19 @@ func (this *Configuration) postReadAdjustments() error {
 		if u.Path != "" {
 			return fmt.Errorf("If specified, HTTPAdvertise must not specify a path")
 		}
-		if this.InstanceWriteBufferSize <= 0 {
-			this.BufferInstanceWrites = false
+		if config.InstanceWriteBufferSize <= 0 {
+			config.BufferInstanceWrites = false
 		}
 	}
 	return nil
 }
 
-func (this *Configuration) IsSQLite() bool {
-	return strings.Contains(this.BackendDB, "sqlite")
+func (config *Configuration) IsSQLite() bool {
+	return strings.Contains(config.BackendDB, "sqlite")
 }
 
-func (this *Configuration) IsMySQL() bool {
-	return this.BackendDB == "mysql" || this.BackendDB == ""
+func (config *Configuration) IsMySQL() bool {
+	return config.BackendDB == "mysql" || config.BackendDB == ""
 }
 
 // read reads configuration from given file, or silently skips if the file does not exist.

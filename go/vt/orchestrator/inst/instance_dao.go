@@ -29,6 +29,9 @@ import (
 	"sync"
 	"time"
 
+	vitessmysql "vitess.io/vitess/go/mysql"
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
+
 	"github.com/go-sql-driver/mysql"
 
 	"github.com/patrickmn/go-cache"
@@ -39,6 +42,7 @@ import (
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/math"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/sqlutils"
+
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 
@@ -46,9 +50,10 @@ import (
 	"vitess.io/vitess/go/vt/orchestrator/collection"
 	"vitess.io/vitess/go/vt/orchestrator/config"
 	"vitess.io/vitess/go/vt/orchestrator/db"
-	"vitess.io/vitess/go/vt/orchestrator/kv"
 	"vitess.io/vitess/go/vt/orchestrator/metrics/query"
 	"vitess.io/vitess/go/vt/orchestrator/util"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/promotionrule"
 )
 
 const (
@@ -63,10 +68,14 @@ var instanceWriteChan = make(chan bool, backendDBConcurrency)
 // InstancesByCountReplicas is a sortable type for Instance
 type InstancesByCountReplicas [](*Instance)
 
-func (this InstancesByCountReplicas) Len() int      { return len(this) }
-func (this InstancesByCountReplicas) Swap(i, j int) { this[i], this[j] = this[j], this[i] }
-func (this InstancesByCountReplicas) Less(i, j int) bool {
-	return len(this[i].Replicas) < len(this[j].Replicas)
+func (instancesByCountReplicas InstancesByCountReplicas) Len() int {
+	return len(instancesByCountReplicas)
+}
+func (instancesByCountReplicas InstancesByCountReplicas) Swap(i, j int) {
+	instancesByCountReplicas[i], instancesByCountReplicas[j] = instancesByCountReplicas[j], instancesByCountReplicas[i]
+}
+func (instancesByCountReplicas InstancesByCountReplicas) Less(i, j int) bool {
+	return len(instancesByCountReplicas[i].Replicas) < len(instancesByCountReplicas[j].Replicas)
 }
 
 // Constant strings for Group Replication information
@@ -245,8 +254,9 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 	}()
 
 	var waitGroup sync.WaitGroup
-	var serverUuidWaitGroup sync.WaitGroup
 	var tablet *topodatapb.Tablet
+	var durability reparentutil.Durabler
+	var fullStatus *replicationdatapb.FullStatus
 	readingStartTime := time.Now()
 	instance := NewInstance()
 	instanceFound := false
@@ -286,130 +296,67 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 		goto Cleanup
 	}
 
+	durability, err = GetDurabilityPolicy(tablet)
+	if err != nil {
+		goto Cleanup
+	}
+
+	fullStatus, err = FullStatus(*instanceKey)
+	if err != nil {
+		goto Cleanup
+	}
+	partialSuccess = true // We at least managed to read something from the server.
+
 	instance.Key = *instanceKey
 	{
 		// We begin with a few operations we can run concurrently, and which do not depend on anything
-		{
-			waitGroup.Add(1)
-			go func() {
-				defer waitGroup.Done()
-				var dummy string
-				// show global status works just as well with 5.6 & 5.7 (5.7 moves variables to performance_schema)
-				err := db.QueryRow("show global status like 'Uptime'").Scan(&dummy, &instance.Uptime)
+		instance.ServerID = uint(fullStatus.ServerId)
+		instance.Version = fullStatus.Version
+		instance.ReadOnly = fullStatus.ReadOnly
+		instance.LogBinEnabled = fullStatus.LogBinEnabled
+		instance.BinlogFormat = fullStatus.BinlogFormat
+		instance.LogReplicationUpdatesEnabled = fullStatus.LogReplicaUpdates
+		instance.VersionComment = fullStatus.VersionComment
+		resolvedHostname = instance.Key.Hostname
 
-				if err != nil {
-					logReadTopologyInstanceError(instanceKey, "show global status like 'Uptime'", err)
-
-					// We do not "goto Cleanup" here, although it should be the correct flow.
-					// Reason is 5.7's new security feature that requires GRANTs on performance_schema.global_variables.
-					// There is a wrong decisionmaking in this design and the migration path to 5.7 will be difficult.
-					// I don't want orchestrator to put even more burden on this. The 'Uptime' variable is not that important
-					// so as to completely fail reading a 5.7 instance.
-					// This is supposed to be fixed in 5.7.9
-				}
-				errorChan <- err
-			}()
+		if instance.LogBinEnabled && fullStatus.PrimaryStatus != nil {
+			binlogPos, err := getBinlogCoordinatesFromPositionString(fullStatus.PrimaryStatus.FilePosition)
+			instance.SelfBinlogCoordinates = binlogPos
+			errorChan <- err
 		}
 
-		var mysqlHostname, mysqlReportHost string
-		err = db.QueryRow("select @@global.hostname, ifnull(@@global.report_host, ''), @@global.server_id, @@global.version, @@global.version_comment, @@global.read_only, @@global.binlog_format, @@global.log_bin, @@global.log_slave_updates").Scan(
-			&mysqlHostname, &mysqlReportHost, &instance.ServerID, &instance.Version, &instance.VersionComment, &instance.ReadOnly, &instance.Binlog_format, &instance.LogBinEnabled, &instance.LogReplicationUpdatesEnabled)
-		if err != nil {
-			goto Cleanup
-		}
-		partialSuccess = true // We at least managed to read something from the server.
-		switch strings.ToLower(config.Config.MySQLHostnameResolveMethod) {
-		case "none":
-			resolvedHostname = instance.Key.Hostname
-		case "default", "hostname", "@@hostname":
-			resolvedHostname = mysqlHostname
-		case "report_host", "@@report_host":
-			if mysqlReportHost == "" {
-				err = fmt.Errorf("MySQLHostnameResolveMethod configured to use @@report_host but %+v has NULL/empty @@report_host", instanceKey)
-				goto Cleanup
-			}
-			resolvedHostname = mysqlReportHost
-		default:
-			resolvedHostname = instance.Key.Hostname
-		}
+		instance.SemiSyncPrimaryEnabled = fullStatus.SemiSyncPrimaryEnabled
+		instance.SemiSyncReplicaEnabled = fullStatus.SemiSyncReplicaEnabled
+		instance.SemiSyncPrimaryWaitForReplicaCount = uint(fullStatus.SemiSyncWaitForReplicaCount)
+		instance.SemiSyncPrimaryTimeout = fullStatus.SemiSyncPrimaryTimeout
 
-		if instance.LogBinEnabled {
-			waitGroup.Add(1)
-			go func() {
-				defer waitGroup.Done()
-				err := sqlutils.QueryRowsMap(db, "show master status", func(m sqlutils.RowMap) error {
-					var err error
-					instance.SelfBinlogCoordinates.LogFile = m.GetString("File")
-					instance.SelfBinlogCoordinates.LogPos = m.GetInt64("Position")
-					return err
-				})
-				errorChan <- err
-			}()
-		}
+		instance.SemiSyncPrimaryClients = uint(fullStatus.SemiSyncPrimaryClients)
+		instance.SemiSyncPrimaryStatus = fullStatus.SemiSyncPrimaryStatus
+		instance.SemiSyncReplicaStatus = fullStatus.SemiSyncReplicaStatus
 
-		{
-			waitGroup.Add(1)
-			go func() {
-				defer waitGroup.Done()
-				semiSyncPrimaryPluginLoaded := false
-				semiSyncReplicaPluginLoaded := false
-				err := sqlutils.QueryRowsMap(db, "show global variables like 'rpl_semi_sync_%'", func(m sqlutils.RowMap) error {
-					if m.GetString("Variable_name") == "rpl_semi_sync_master_enabled" {
-						instance.SemiSyncPrimaryEnabled = (m.GetString("Value") == "ON")
-						semiSyncPrimaryPluginLoaded = true
-					} else if m.GetString("Variable_name") == "rpl_semi_sync_master_timeout" {
-						instance.SemiSyncPrimaryTimeout = m.GetUint64("Value")
-					} else if m.GetString("Variable_name") == "rpl_semi_sync_master_wait_for_slave_count" {
-						instance.SemiSyncPrimaryWaitForReplicaCount = m.GetUint("Value")
-					} else if m.GetString("Variable_name") == "rpl_semi_sync_slave_enabled" {
-						instance.SemiSyncReplicaEnabled = (m.GetString("Value") == "ON")
-						semiSyncReplicaPluginLoaded = true
-					}
-					return nil
-				})
-				instance.SemiSyncAvailable = (semiSyncPrimaryPluginLoaded && semiSyncReplicaPluginLoaded)
-				errorChan <- err
-			}()
-		}
-		{
-			waitGroup.Add(1)
-			go func() {
-				defer waitGroup.Done()
-				err := sqlutils.QueryRowsMap(db, "show global status like 'rpl_semi_sync_%'", func(m sqlutils.RowMap) error {
-					if m.GetString("Variable_name") == "Rpl_semi_sync_master_status" {
-						instance.SemiSyncPrimaryStatus = (m.GetString("Value") == "ON")
-					} else if m.GetString("Variable_name") == "Rpl_semi_sync_master_clients" {
-						instance.SemiSyncPrimaryClients = m.GetUint("Value")
-					} else if m.GetString("Variable_name") == "Rpl_semi_sync_slave_status" {
-						instance.SemiSyncReplicaStatus = (m.GetString("Value") == "ON")
-					}
-
-					return nil
-				})
-				errorChan <- err
-			}()
-		}
 		if (instance.IsOracleMySQL() || instance.IsPercona()) && !instance.IsSmallerMajorVersionByString("5.6") {
-			waitGroup.Add(1)
-			serverUuidWaitGroup.Add(1)
-			go func() {
-				defer waitGroup.Done()
-				defer serverUuidWaitGroup.Done()
-				var primaryInfoRepositoryOnTable bool
-				// Stuff only supported on Oracle MySQL >= 5.6
-				// ...
-				// @@gtid_mode only available in Orcale MySQL >= 5.6
-				// Previous version just issued this query brute-force, but I don't like errors being issued where they shouldn't.
-				_ = db.QueryRow("select @@global.gtid_mode, @@global.server_uuid, @@global.gtid_executed, @@global.gtid_purged, @@global.master_info_repository = 'TABLE', @@global.binlog_row_image").Scan(&instance.GTIDMode, &instance.ServerUUID, &instance.ExecutedGtidSet, &instance.GtidPurged, &primaryInfoRepositoryOnTable, &instance.BinlogRowImage)
-				if instance.GTIDMode != "" && instance.GTIDMode != "OFF" {
-					instance.SupportsOracleGTID = true
+			// Stuff only supported on Oracle MySQL >= 5.6
+			// ...
+			// @@gtid_mode only available in Orcale MySQL >= 5.6
+			instance.GTIDMode = fullStatus.GtidMode
+			instance.ServerUUID = fullStatus.ServerUuid
+			if fullStatus.PrimaryStatus != nil {
+				GtidExecutedPos, err := vitessmysql.DecodePosition(fullStatus.PrimaryStatus.Position)
+				errorChan <- err
+				if err == nil && GtidExecutedPos.GTIDSet != nil {
+					instance.ExecutedGtidSet = GtidExecutedPos.GTIDSet.String()
 				}
-				if config.Config.ReplicationCredentialsQuery != "" {
-					instance.ReplicationCredentialsAvailable = true
-				} else if primaryInfoRepositoryOnTable {
-					_ = db.QueryRow("select count(*) > 0 and MAX(User_name) != '' from mysql.slave_master_info").Scan(&instance.ReplicationCredentialsAvailable)
-				}
-			}()
+			}
+			GtidPurgedPos, err := vitessmysql.DecodePosition(fullStatus.GtidPurged)
+			errorChan <- err
+			if err == nil && GtidPurgedPos.GTIDSet != nil {
+				instance.GtidPurged = GtidPurgedPos.GTIDSet.String()
+			}
+			instance.BinlogRowImage = fullStatus.BinlogRowImage
+
+			if instance.GTIDMode != "" && instance.GTIDMode != "OFF" {
+				instance.SupportsOracleGTID = true
+			}
 		}
 	}
 	if resolvedHostname != instance.Key.Hostname {
@@ -455,30 +402,39 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 
 	instance.ReplicationIOThreadState = ReplicationThreadStateNoThread
 	instance.ReplicationSQLThreadState = ReplicationThreadStateNoThread
-	err = sqlutils.QueryRowsMap(db, "show slave status", func(m sqlutils.RowMap) error {
-		instance.HasReplicationCredentials = (m.GetString("Master_User") != "")
-		instance.ReplicationIOThreadState = ReplicationThreadStateFromStatus(m.GetString("Slave_IO_Running"))
-		instance.ReplicationSQLThreadState = ReplicationThreadStateFromStatus(m.GetString("Slave_SQL_Running"))
+	if fullStatus.ReplicationStatus != nil {
+		instance.HasReplicationCredentials = fullStatus.ReplicationStatus.SourceUser != ""
+
+		instance.ReplicationIOThreadState = ReplicationThreadStateFromReplicationState(vitessmysql.ReplicationState(fullStatus.ReplicationStatus.IoState))
+		instance.ReplicationSQLThreadState = ReplicationThreadStateFromReplicationState(vitessmysql.ReplicationState(fullStatus.ReplicationStatus.SqlState))
 		instance.ReplicationIOThreadRuning = instance.ReplicationIOThreadState.IsRunning()
 		instance.ReplicationSQLThreadRuning = instance.ReplicationSQLThreadState.IsRunning()
-		instance.ReadBinlogCoordinates.LogFile = m.GetString("Master_Log_File")
-		instance.ReadBinlogCoordinates.LogPos = m.GetInt64("Read_Master_Log_Pos")
-		instance.ExecBinlogCoordinates.LogFile = m.GetString("Relay_Master_Log_File")
-		instance.ExecBinlogCoordinates.LogPos = m.GetInt64("Exec_Master_Log_Pos")
-		instance.IsDetached, _ = instance.ExecBinlogCoordinates.ExtractDetachedCoordinates()
-		instance.RelaylogCoordinates.LogFile = m.GetString("Relay_Log_File")
-		instance.RelaylogCoordinates.LogPos = m.GetInt64("Relay_Log_Pos")
-		instance.RelaylogCoordinates.Type = RelayLog
-		instance.LastSQLError = emptyQuotesRegexp.ReplaceAllString(strconv.QuoteToASCII(m.GetString("Last_SQL_Error")), "")
-		instance.LastIOError = emptyQuotesRegexp.ReplaceAllString(strconv.QuoteToASCII(m.GetString("Last_IO_Error")), "")
-		instance.SQLDelay = m.GetUintD("SQL_Delay", 0)
-		instance.UsingOracleGTID = (m.GetIntD("Auto_Position", 0) == 1)
-		instance.UsingMariaDBGTID = (m.GetStringD("Using_Gtid", "No") != "No")
-		instance.SourceUUID = m.GetStringD("Master_UUID", "No")
-		instance.HasReplicationFilters = ((m.GetStringD("Replicate_Do_DB", "") != "") || (m.GetStringD("Replicate_Ignore_DB", "") != "") || (m.GetStringD("Replicate_Do_Table", "") != "") || (m.GetStringD("Replicate_Ignore_Table", "") != "") || (m.GetStringD("Replicate_Wild_Do_Table", "") != "") || (m.GetStringD("Replicate_Wild_Ignore_Table", "") != ""))
 
-		primaryHostname := m.GetString("Master_Host")
-		primaryKey, err := NewResolveInstanceKey(primaryHostname, m.GetInt("Master_Port"))
+		binlogPos, err := getBinlogCoordinatesFromPositionString(fullStatus.ReplicationStatus.RelayLogSourceBinlogEquivalentPosition)
+		instance.ReadBinlogCoordinates = binlogPos
+		errorChan <- err
+
+		binlogPos, err = getBinlogCoordinatesFromPositionString(fullStatus.ReplicationStatus.FilePosition)
+		instance.ExecBinlogCoordinates = binlogPos
+		errorChan <- err
+		instance.IsDetached, _ = instance.ExecBinlogCoordinates.ExtractDetachedCoordinates()
+
+		binlogPos, err = getBinlogCoordinatesFromPositionString(fullStatus.ReplicationStatus.RelayLogFilePosition)
+		instance.RelaylogCoordinates = binlogPos
+		instance.RelaylogCoordinates.Type = RelayLog
+		errorChan <- err
+
+		instance.LastSQLError = emptyQuotesRegexp.ReplaceAllString(strconv.QuoteToASCII(fullStatus.ReplicationStatus.LastSqlError), "")
+		instance.LastIOError = emptyQuotesRegexp.ReplaceAllString(strconv.QuoteToASCII(fullStatus.ReplicationStatus.LastIoError), "")
+
+		instance.SQLDelay = uint(fullStatus.ReplicationStatus.SqlDelay)
+		instance.UsingOracleGTID = fullStatus.ReplicationStatus.AutoPosition
+		instance.UsingMariaDBGTID = fullStatus.ReplicationStatus.UsingGtid
+		instance.SourceUUID = fullStatus.ReplicationStatus.SourceUuid
+		instance.HasReplicationFilters = fullStatus.ReplicationStatus.HasReplicationFilters
+
+		primaryHostname := fullStatus.ReplicationStatus.SourceHost
+		primaryKey, err := NewResolveInstanceKey(primaryHostname, int(fullStatus.ReplicationStatus.SourcePort))
 		if err != nil {
 			logReadTopologyInstanceError(instanceKey, "NewResolveInstanceKey", err)
 		}
@@ -488,7 +444,13 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 		}
 		instance.SourceKey = *primaryKey
 		instance.IsDetachedPrimary = instance.SourceKey.IsDetached()
-		instance.SecondsBehindPrimary = m.GetNullInt64("Seconds_Behind_Master")
+
+		if fullStatus.ReplicationStatus.ReplicationLagUnknown {
+			instance.SecondsBehindPrimary.Valid = false
+		} else {
+			instance.SecondsBehindPrimary.Valid = true
+			instance.SecondsBehindPrimary.Int64 = int64(fullStatus.ReplicationStatus.ReplicationLagSeconds)
+		}
 		if instance.SecondsBehindPrimary.Valid && instance.SecondsBehindPrimary.Int64 < 0 {
 			log.Warningf("Host: %+v, instance.ReplicationLagSeconds < 0 [%+v], correcting to 0", instanceKey, instance.SecondsBehindPrimary.Int64)
 			instance.SecondsBehindPrimary.Int64 = 0
@@ -496,18 +458,10 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 		// And until told otherwise:
 		instance.ReplicationLagSeconds = instance.SecondsBehindPrimary
 
-		instance.AllowTLS = (m.GetString("Master_SSL_Allowed") == "Yes")
-		// Not breaking the flow even on error
-		return nil
-	})
-	if err != nil {
-		goto Cleanup
+		instance.AllowTLS = fullStatus.ReplicationStatus.SslAllowed
 	}
-	// Populate GR information for the instance in Oracle MySQL 8.0+. To do this we need to wait for the Server UUID to
-	// be populated to be able to find this instance's information in performance_schema.replication_group_members by
-	// comparing UUIDs. We could instead resolve the MEMBER_HOST and MEMBER_PORT columns into an InstanceKey and compare
-	// those instead, but this could require external calls for name resolving, whereas comparing UUIDs does not.
-	serverUuidWaitGroup.Wait()
+
+	// Populate GR information for the instance in Oracle MySQL 8.0+.
 	if instance.IsOracleMySQL() && !instance.IsSmallerMajorVersionByString("8.0") {
 		err := PopulateGroupReplicationInformation(instance, db)
 		if err != nil {
@@ -679,7 +633,7 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 	// We need to update candidate_database_instance.
 	// We register the rule even if it hasn't changed,
 	// to bump the last_suggested time.
-	instance.PromotionRule = PromotionRule(tablet)
+	instance.PromotionRule = PromotionRule(durability, tablet)
 	err = RegisterCandidateInstance(NewCandidateDatabaseInstance(instanceKey, instance.PromotionRule).WithCurrentTime())
 	logReadTopologyInstanceError(instanceKey, "RegisterCandidateInstance", err)
 
@@ -782,6 +736,18 @@ Cleanup:
 	return nil, err
 }
 
+func getBinlogCoordinatesFromPositionString(position string) (BinlogCoordinates, error) {
+	pos, err := vitessmysql.DecodePosition(position)
+	if err != nil || pos.GTIDSet == nil {
+		return BinlogCoordinates{}, err
+	}
+	binLogCoordinates, err := ParseBinlogCoordinates(pos.String())
+	if err != nil {
+		return BinlogCoordinates{}, err
+	}
+	return *binLogCoordinates, nil
+}
+
 func ReadReplicationGroupPrimary(instance *Instance) (err error) {
 	query := `
 	SELECT
@@ -855,7 +821,7 @@ func ReadInstanceClusterAttributes(instance *Instance) (err error) {
 		return log.Errore(err)
 	}
 
-	var replicationDepth uint = 0
+	var replicationDepth uint
 	var clusterName string
 	if primaryOrGroupPrimaryDataFound {
 		replicationDepth = primaryOrGroupPrimaryReplicationDepth + 1
@@ -893,11 +859,11 @@ func ReadInstanceClusterAttributes(instance *Instance) (err error) {
 
 type byNamePort [](*InstanceKey)
 
-func (this byNamePort) Len() int      { return len(this) }
-func (this byNamePort) Swap(i, j int) { this[i], this[j] = this[j], this[i] }
-func (this byNamePort) Less(i, j int) bool {
-	return (this[i].Hostname < this[j].Hostname) ||
-		(this[i].Hostname == this[j].Hostname && this[i].Port < this[j].Port)
+func (byName byNamePort) Len() int      { return len(byName) }
+func (byName byNamePort) Swap(i, j int) { byName[i], byName[j] = byName[j], byName[i] }
+func (byName byNamePort) Less(i, j int) bool {
+	return (byName[i].Hostname < byName[j].Hostname) ||
+		(byName[i].Hostname == byName[j].Hostname && byName[i].Port < byName[j].Port)
 }
 
 // BulkReadInstance returns a list of all instances from the database
@@ -932,7 +898,7 @@ func BulkReadInstance() ([](*InstanceKey), error) {
 }
 
 func ReadInstancePromotionRule(instance *Instance) (err error) {
-	var promotionRule CandidatePromotionRule = NeutralPromoteRule
+	var promotionRule promotionrule.CandidatePromotionRule = promotionrule.Neutral
 	query := `
 			select
 				ifnull(nullif(promotion_rule, ''), 'neutral') as promotion_rule
@@ -942,7 +908,7 @@ func ReadInstancePromotionRule(instance *Instance) (err error) {
 	args := sqlutils.Args(instance.Key.Hostname, instance.Key.Port)
 
 	err = db.QueryOrchestrator(query, args, func(m sqlutils.RowMap) error {
-		promotionRule = CandidatePromotionRule(m.GetString("promotion_rule"))
+		promotionRule = promotionrule.CandidatePromotionRule(m.GetString("promotion_rule"))
 		return nil
 	})
 	instance.PromotionRule = promotionRule
@@ -955,13 +921,12 @@ func readInstanceRow(m sqlutils.RowMap) *Instance {
 
 	instance.Key.Hostname = m.GetString("hostname")
 	instance.Key.Port = m.GetInt("port")
-	instance.Uptime = m.GetUint("uptime")
 	instance.ServerID = m.GetUint("server_id")
 	instance.ServerUUID = m.GetString("server_uuid")
 	instance.Version = m.GetString("version")
 	instance.VersionComment = m.GetString("version_comment")
 	instance.ReadOnly = m.GetBool("read_only")
-	instance.Binlog_format = m.GetString("binlog_format")
+	instance.BinlogFormat = m.GetString("binlog_format")
 	instance.BinlogRowImage = m.GetString("binlog_row_image")
 	instance.LogBinEnabled = m.GetBool("log_bin")
 	instance.LogReplicationUpdatesEnabled = m.GetBool("log_replica_updates")
@@ -1004,7 +969,6 @@ func readInstanceRow(m sqlutils.RowMap) *Instance {
 	instance.Region = m.GetString("region")
 	instance.PhysicalEnvironment = m.GetString("physical_environment")
 	instance.SemiSyncEnforced = m.GetBool("semi_sync_enforced")
-	instance.SemiSyncAvailable = m.GetBool("semi_sync_available")
 	instance.SemiSyncPrimaryEnabled = m.GetBool("semi_sync_primary_enabled")
 	instance.SemiSyncPrimaryTimeout = m.GetUint64("semi_sync_primary_timeout")
 	instance.SemiSyncPrimaryWaitForReplicaCount = m.GetUint("semi_sync_primary_wait_for_replica_count")
@@ -1014,7 +978,6 @@ func readInstanceRow(m sqlutils.RowMap) *Instance {
 	instance.SemiSyncReplicaStatus = m.GetBool("semi_sync_replica_status")
 	instance.ReplicationDepth = m.GetUint("replication_depth")
 	instance.IsCoPrimary = m.GetBool("is_co_primary")
-	instance.ReplicationCredentialsAvailable = m.GetBool("replication_credentials_available")
 	instance.HasReplicationCredentials = m.GetBool("has_replication_credentials")
 	instance.IsUpToDate = (m.GetUint("seconds_since_last_checked") <= config.Config.InstancePollSeconds)
 	instance.IsRecentlyChecked = (m.GetUint("seconds_since_last_checked") <= config.Config.InstancePollSeconds*5)
@@ -1022,7 +985,7 @@ func readInstanceRow(m sqlutils.RowMap) *Instance {
 	instance.IsLastCheckValid = m.GetBool("is_last_check_valid")
 	instance.SecondsSinceLastSeen = m.GetNullInt64("seconds_since_last_seen")
 	instance.IsCandidate = m.GetBool("is_candidate")
-	instance.PromotionRule = CandidatePromotionRule(m.GetString("promotion_rule"))
+	instance.PromotionRule = promotionrule.CandidatePromotionRule(m.GetString("promotion_rule"))
 	instance.IsDowntimed = m.GetBool("is_downtimed")
 	instance.DowntimeReason = m.GetString("downtime_reason")
 	instance.DowntimeOwner = m.GetString("downtime_owner")
@@ -1033,7 +996,7 @@ func readInstanceRow(m sqlutils.RowMap) *Instance {
 	instance.InstanceAlias = m.GetString("instance_alias")
 	instance.LastDiscoveryLatency = time.Duration(m.GetInt64("last_discovery_latency")) * time.Nanosecond
 
-	instance.Replicas.ReadJson(replicasJSON)
+	instance.Replicas.ReadJSON(replicasJSON)
 	instance.applyFlavorName()
 
 	/* Read Group Replication variables below */
@@ -1043,7 +1006,7 @@ func readInstanceRow(m sqlutils.RowMap) *Instance {
 	instance.ReplicationGroupMemberRole = m.GetString("replication_group_member_role")
 	instance.ReplicationGroupPrimaryInstanceKey = InstanceKey{Hostname: m.GetString("replication_group_primary_host"),
 		Port: m.GetInt("replication_group_primary_port")}
-	instance.ReplicationGroupMembers.ReadJson(m.GetString("replication_group_members"))
+	instance.ReplicationGroupMembers.ReadJSON(m.GetString("replication_group_members"))
 	//instance.ReplicationGroup = m.GetString("replication_group_")
 
 	// problems
@@ -1068,7 +1031,7 @@ func readInstanceRow(m sqlutils.RowMap) *Instance {
 }
 
 // readInstancesByCondition is a generic function to read instances from the backend database
-func readInstancesByCondition(condition string, args []interface{}, sort string) ([](*Instance), error) {
+func readInstancesByCondition(condition string, args []any, sort string) ([](*Instance), error) {
 	readFunc := func() ([](*Instance), error) {
 		instances := [](*Instance){}
 
@@ -1426,7 +1389,7 @@ func ReadClusterNeutralPromotionRuleInstances(clusterName string) (neutralInstan
 		return neutralInstances, err
 	}
 	for _, instance := range instances {
-		if instance.PromotionRule == NeutralPromoteRule {
+		if instance.PromotionRule == promotionrule.Neutral {
 			neutralInstances = append(neutralInstances, instance)
 		}
 	}
@@ -1833,7 +1796,7 @@ func ForgetUnseenInstancesDifferentlyResolved() error {
 		keys.AddKey(key)
 		return nil
 	})
-	var rowsAffected int64 = 0
+	var rowsAffected int64
 	for _, key := range keys.GetInstanceKeys() {
 		sqlResult, err := db.ExecOrchestrator(`
 			delete from
@@ -1906,7 +1869,7 @@ func ResolveUnknownPrimaryHostnameResolves() error {
 // ReadCountMySQLSnapshots is a utility method to return registered number of snapshots for a given list of hosts
 func ReadCountMySQLSnapshots(hostnames []string) (map[string]int, error) {
 	res := make(map[string]int)
-	if !config.Config.ServeAgentsHttp {
+	if !config.Config.ServeAgentsHTTP {
 		return res, nil
 	}
 	query := fmt.Sprintf(`
@@ -2045,30 +2008,6 @@ func ReadClustersInfo(clusterName string) ([]ClusterInfo, error) {
 	return clusters, err
 }
 
-// Get a listing of KVPair for clusters primaries, for all clusters or for a specific cluster.
-func GetPrimariesKVPairs(clusterName string) (kvPairs [](*kv.KVPair), err error) {
-
-	clusterAliasMap := make(map[string]string)
-	if clustersInfo, err := ReadClustersInfo(clusterName); err != nil {
-		return kvPairs, err
-	} else {
-		for _, clusterInfo := range clustersInfo {
-			clusterAliasMap[clusterInfo.ClusterName] = clusterInfo.ClusterAlias
-		}
-	}
-
-	primaries, err := ReadWriteableClustersPrimaries()
-	if err != nil {
-		return kvPairs, err
-	}
-	for _, primary := range primaries {
-		clusterPairs := GetClusterPrimaryKVPairs(clusterAliasMap[primary.ClusterName], &primary.Key)
-		kvPairs = append(kvPairs, clusterPairs...)
-	}
-
-	return kvPairs, err
-}
-
 // HeuristicallyApplyClusterDomainInstanceAttribute writes down the cluster-domain
 // to primary-hostname as a general attribute, by reading current topology and **trusting** it to be correct
 func HeuristicallyApplyClusterDomainInstanceAttribute(clusterName string) (instanceKey *InstanceKey, err error) {
@@ -2164,24 +2103,37 @@ func ReadAllMinimalInstances() ([]MinimalInstance, error) {
 }
 
 // ReadOutdatedInstanceKeys reads and returns keys for all instances that are not up to date (i.e.
-// pre-configured time has passed since they were last checked)
-// But we also check for the case where an attempt at instance checking has been made, that hasn't
+// pre-configured time has passed since they were last checked) or the ones whose tablet information was read
+// but not the mysql information. This could happen if the durability policy of the keyspace wasn't
+// available at the time it was discovered. This would lead to not having the record of the tablet in the
+// database_instance table.
+// We also check for the case where an attempt at instance checking has been made, that hasn't
 // resulted in an actual check! This can happen when TCP/IP connections are hung, in which case the "check"
 // never returns. In such case we multiply interval by a factor, so as not to open too many connections on
 // the instance.
 func ReadOutdatedInstanceKeys() ([]InstanceKey, error) {
 	res := []InstanceKey{}
 	query := `
-		select
+		SELECT
 			hostname, port
-		from
+		FROM
 			database_instance
-		where
-			case
-				when last_attempted_check <= last_checked
-				then last_checked < now() - interval ? second
-				else last_checked < now() - interval ? second
-			end
+		WHERE
+			CASE
+				WHEN last_attempted_check <= last_checked
+				THEN last_checked < now() - interval ? second
+				ELSE last_checked < now() - interval ? second
+			END
+		UNION
+		SELECT
+			vitess_tablet.hostname, vitess_tablet.port
+		FROM
+			vitess_tablet LEFT JOIN database_instance ON (
+			vitess_tablet.hostname = database_instance.hostname
+			AND vitess_tablet.port = database_instance.port
+		)
+		WHERE
+			database_instance.hostname IS NULL
 			`
 	args := sqlutils.Args(config.Config.InstancePollSeconds, 2*config.Config.InstancePollSeconds)
 
@@ -2216,11 +2168,11 @@ func mkInsertOdku(table string, columns []string, values []string, nrRows int, i
 	}
 
 	var q bytes.Buffer
-	var ignore string = ""
+	var ignore string
 	if insertIgnore {
 		ignore = "ignore"
 	}
-	var valRow string = fmt.Sprintf("(%s)", strings.Join(values, ", "))
+	var valRow = fmt.Sprintf("(%s)", strings.Join(values, ", "))
 	var val bytes.Buffer
 	val.WriteString(valRow)
 	for i := 1; i < nrRows; i++ {
@@ -2228,7 +2180,7 @@ func mkInsertOdku(table string, columns []string, values []string, nrRows int, i
 		val.WriteString(valRow)
 	}
 
-	var col string = strings.Join(columns, ", ")
+	var col = strings.Join(columns, ", ")
 	var odku bytes.Buffer
 	odku.WriteString(fmt.Sprintf("%s=VALUES(%s)", columns[0], columns[0]))
 	for _, c := range columns[1:] {
@@ -2248,7 +2200,7 @@ func mkInsertOdku(table string, columns []string, values []string, nrRows int, i
 	return q.String(), nil
 }
 
-func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bool, updateLastSeen bool) (string, []interface{}, error) {
+func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bool, updateLastSeen bool) (string, []any, error) {
 	if len(instances) == 0 {
 		return "", nil, nil
 	}
@@ -2263,7 +2215,6 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 		"last_checked",
 		"last_attempted_check",
 		"last_check_partial_success",
-		"uptime",
 		"server_id",
 		"server_uuid",
 		"version",
@@ -2314,11 +2265,9 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 		"physical_environment",
 		"replication_depth",
 		"is_co_primary",
-		"replication_credentials_available",
 		"has_replication_credentials",
 		"allow_tls",
 		"semi_sync_enforced",
-		"semi_sync_available",
 		"semi_sync_primary_enabled",
 		"semi_sync_primary_timeout",
 		"semi_sync_primary_wait_for_replica_count",
@@ -2337,7 +2286,7 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 		"replication_group_primary_port",
 	}
 
-	var values []string = make([]string, len(columns))
+	var values = make([]string, len(columns))
 	for i := range columns {
 		values[i] = "?"
 	}
@@ -2350,13 +2299,12 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 		values = append(values, "NOW()")
 	}
 
-	var args []interface{}
+	var args []any
 	for _, instance := range instances {
 		// number of columns minus 2 as last_checked and last_attempted_check
 		// updated with NOW()
 		args = append(args, instance.Key.Hostname)
 		args = append(args, instance.Key.Port)
-		args = append(args, instance.Uptime)
 		args = append(args, instance.ServerID)
 		args = append(args, instance.ServerUUID)
 		args = append(args, instance.Version)
@@ -2364,7 +2312,7 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 		args = append(args, instance.VersionComment)
 		args = append(args, instance.IsBinlogServer())
 		args = append(args, instance.ReadOnly)
-		args = append(args, instance.Binlog_format)
+		args = append(args, instance.BinlogFormat)
 		args = append(args, instance.BinlogRowImage)
 		args = append(args, instance.LogBinEnabled)
 		args = append(args, instance.LogReplicationUpdatesEnabled)
@@ -2407,11 +2355,9 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 		args = append(args, instance.PhysicalEnvironment)
 		args = append(args, instance.ReplicationDepth)
 		args = append(args, instance.IsCoPrimary)
-		args = append(args, instance.ReplicationCredentialsAvailable)
 		args = append(args, instance.HasReplicationCredentials)
 		args = append(args, instance.AllowTLS)
 		args = append(args, instance.SemiSyncEnforced)
-		args = append(args, instance.SemiSyncAvailable)
 		args = append(args, instance.SemiSyncPrimaryEnabled)
 		args = append(args, instance.SemiSyncPrimaryTimeout)
 		args = append(args, instance.SemiSyncPrimaryWaitForReplicaCount)
@@ -2928,12 +2874,11 @@ func PopulateGroupReplicationInformation(instance *Instance, db *sql.DB) error {
 		_, grNotSupported := GroupReplicationNotSupportedErrors[err.(*mysql.MySQLError).Number]
 		if grNotSupported {
 			return nil // If GR is not supported by the instance, just exit
-		} else {
-			// If we got here, the query failed but not because the server does not support group replication. Let's
-			// log the error
-			return log.Error("There was an error trying to check group replication information for instance "+
-				"%+v: %+v", instance.Key, err)
 		}
+		// If we got here, the query failed but not because the server does not support group replication. Let's
+		// log the error
+		return log.Error("There was an error trying to check group replication information for instance "+
+			"%+v: %+v", instance.Key, err)
 	}
 	defer rows.Close()
 	foundGroupPrimary := false

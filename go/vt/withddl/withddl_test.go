@@ -155,7 +155,7 @@ func TestExec(t *testing.T) {
 
 	funcs := []struct {
 		name string
-		f    interface{}
+		f    any
 	}{{
 		name: "f1",
 		f: func(query string) (*sqltypes.Result, error) {
@@ -185,7 +185,7 @@ func TestExec(t *testing.T) {
 				}
 
 				wd := New(test.ddls)
-				qr, err := wd.Exec(ctx, test.query, fun.f)
+				qr, err := wd.Exec(ctx, test.query, fun.f, fun.f)
 				if test.qr != nil {
 					test.qr.StatusFlags = sqltypes.ServerStatusAutocommit
 				}
@@ -230,6 +230,34 @@ func TestExecIgnore(t *testing.T) {
 	qr, err = wd.ExecIgnore(ctx, "select * from a", execconn.ExecuteFetch)
 	require.NoError(t, err)
 	assert.Equal(t, 1, len(qr.Rows))
+}
+
+func TestDifferentExecFunctions(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &connParams)
+	require.NoError(t, err)
+	defer conn.Close()
+	defer conn.ExecuteFetch("drop database t", 10000, true) // nolint:errcheck
+
+	execconn, err := mysql.Connect(ctx, &connParams)
+	require.NoError(t, err)
+	defer execconn.Close()
+
+	wd := New([]string{"create database t"})
+	_, err = wd.Exec(ctx, "select * from a", func(query string) (*sqltypes.Result, error) {
+		return nil, mysql.NewSQLError(mysql.ERNoSuchTable, mysql.SSUnknownSQLState, "error in execution")
+	}, execconn.ExecuteFetch)
+	require.EqualError(t, err, "error in execution (errno 1146) (sqlstate HY000)")
+
+	res, err := execconn.ExecuteFetch("show databases", 10000, false)
+	require.NoError(t, err)
+	foundDatabase := false
+	for _, row := range res.Rows {
+		if row[0].ToString() == "t" {
+			foundDatabase = true
+		}
+	}
+	require.True(t, foundDatabase, "database should be created since DDL should have executed")
 }
 
 func checkResult(t *testing.T, wantqr *sqltypes.Result, wanterr string, qr *sqltypes.Result, err error) {

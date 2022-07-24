@@ -85,9 +85,63 @@ type logicalPlan interface {
 	// ContainsTables keeps track which query tables are being solved by this logical plan
 	// This is only applicable for plans that have been built with the Gen4 planner
 	ContainsTables() semantics.TableSet
+
+	// OutputColumns shows the columns that this plan will produce
+	OutputColumns() []sqlparser.SelectExpr
 }
 
-//-------------------------------------------------------------------------
+// gen4Plan implements a few methods from logicalPlan that are unused by Gen4.
+type gen4Plan struct{}
+
+// Order implements the logicalPlan interface
+func (*gen4Plan) Order() int {
+	panic("[BUG]: should not be called. This is a Gen4 primitive")
+}
+
+// ResultColumns implements the logicalPlan interface
+func (*gen4Plan) ResultColumns() []*resultColumn {
+	panic("[BUG]: should not be called. This is a Gen4 primitive")
+}
+
+// Reorder implements the logicalPlan interface
+func (*gen4Plan) Reorder(int) {
+	panic("[BUG]: should not be called. This is a Gen4 primitive")
+}
+
+// Wireup implements the logicalPlan interface
+func (*gen4Plan) Wireup(logicalPlan, *jointab) error {
+	panic("[BUG]: should not be called. This is a Gen4 primitive")
+}
+
+// SupplyVar implements the logicalPlan interface
+func (*gen4Plan) SupplyVar(int, int, *sqlparser.ColName, string) {
+	panic("[BUG]: should not be called. This is a Gen4 primitive")
+}
+
+// SupplyCol implements the logicalPlan interface
+func (*gen4Plan) SupplyCol(*sqlparser.ColName) (rc *resultColumn, colNumber int) {
+	panic("[BUG]: should not be called. This is a Gen4 primitive")
+}
+
+// SupplyWeightString implements the logicalPlan interface
+func (*gen4Plan) SupplyWeightString(int, bool) (weightcolNumber int, err error) {
+	panic("[BUG]: should not be called. This is a Gen4 primitive")
+}
+
+// v3Plan implements methods that are only used by gen4
+type v3Plan struct{}
+
+func (*v3Plan) WireupGen4(*semantics.SemTable) error {
+	panic("[BUG]: should not be called. This is a V3 primitive")
+}
+
+func (*v3Plan) ContainsTables() semantics.TableSet {
+	panic("[BUG]: should not be called. This is a V3 primitive")
+}
+
+func (*v3Plan) OutputColumns() []sqlparser.SelectExpr {
+	panic("[BUG]: should not be called. This is a V3 primitive")
+}
 
 type planVisitor func(logicalPlan) (bool, logicalPlan, error)
 
@@ -103,16 +157,22 @@ func visit(node logicalPlan, visitor planVisitor) (logicalPlan, error) {
 		node = newNode
 	}
 	inputs := node.Inputs()
+	rewrite := false
 	for i, input := range inputs {
 		newInput, err := visit(input, visitor)
 		if err != nil {
 			return nil, err
 		}
+		if newInput != input {
+			rewrite = true
+		}
 		inputs[i] = newInput
 	}
-	err := node.Rewrite(inputs...)
-	if err != nil {
-		return nil, err
+	if rewrite {
+		err := node.Rewrite(inputs...)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return node, nil
@@ -128,7 +188,7 @@ func first(input logicalPlan) logicalPlan {
 	return first(inputs[0])
 }
 
-//-------------------------------------------------------------------------
+// -------------------------------------------------------------------------
 
 // logicalPlanCommon implements some common functionality of builders.
 // Make sure to override in case behavior needs to be changed.
@@ -188,12 +248,17 @@ func (bc *logicalPlanCommon) Inputs() []logicalPlan {
 	return []logicalPlan{bc.input}
 }
 
-// Solves implements the logicalPlan interface
+// ContainsTables implements the logicalPlan interface
 func (bc *logicalPlanCommon) ContainsTables() semantics.TableSet {
 	return bc.input.ContainsTables()
 }
 
-//-------------------------------------------------------------------------
+// OutputColumns implements the logicalPlan interface
+func (bc *logicalPlanCommon) OutputColumns() []sqlparser.SelectExpr {
+	return bc.input.OutputColumns()
+}
+
+// -------------------------------------------------------------------------
 
 // resultsBuilder is a superset of logicalPlanCommon. It also handles
 // resultsColumn functionality.
@@ -262,4 +327,4 @@ func (rsb *resultsBuilder) SupplyWeightString(colNumber int, alsoAddToGroupBy bo
 	return weightcolNumber, nil
 }
 
-//-------------------------------------------------------------------------
+// -------------------------------------------------------------------------

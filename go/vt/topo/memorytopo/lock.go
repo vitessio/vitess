@@ -44,6 +44,10 @@ type memoryTopoLockDescriptor struct {
 // Lock is part of the topo.Conn interface.
 func (c *Conn) Lock(ctx context.Context, dirPath, contents string) (topo.LockDescriptor, error) {
 	for {
+		if err := c.dial(ctx); err != nil {
+			return nil, err
+		}
+
 		c.factory.mu.Lock()
 
 		if c.factory.err != nil {

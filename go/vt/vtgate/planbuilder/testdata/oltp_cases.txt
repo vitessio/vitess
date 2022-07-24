@@ -5,7 +5,7 @@
   "Original": "SELECT c FROM sbtest34 WHERE id=15",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "EqualUnique",
     "Keyspace": {
       "Name": "main",
       "Sharded": true
@@ -14,12 +14,33 @@
     "Query": "select c from sbtest34 where id = 15",
     "Table": "sbtest34",
     "Values": [
-      15
+      "INT64(15)"
     ],
     "Vindex": "hash"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT c FROM sbtest34 WHERE id=15",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": true
+    },
+    "FieldQuery": "select c from sbtest34 where 1 != 1",
+    "Query": "select c from sbtest34 where id = 15",
+    "Table": "sbtest34",
+    "Values": [
+      "INT64(15)"
+    ],
+    "Vindex": "hash"
+  },
+  "TablesUsed": [
+    "main.sbtest34"
+  ]
+}
 
 # OLTP simple range select
 "SELECT c FROM sbtest12 WHERE id BETWEEN 1 AND 10"
@@ -28,7 +49,7 @@ Gen4 plan same as above
   "Original": "SELECT c FROM sbtest12 WHERE id BETWEEN 1 AND 10",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "main",
       "Sharded": true
@@ -38,7 +59,24 @@ Gen4 plan same as above
     "Table": "sbtest12"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT c FROM sbtest12 WHERE id BETWEEN 1 AND 10",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": true
+    },
+    "FieldQuery": "select c from sbtest12 where 1 != 1",
+    "Query": "select c from sbtest12 where id between 1 and 10",
+    "Table": "sbtest12"
+  },
+  "TablesUsed": [
+    "main.sbtest12"
+  ]
+}
 
 # OLTP sum range select
 "SELECT SUM(k) FROM sbtest43 WHERE id BETWEEN 90 AND 990"
@@ -47,18 +85,18 @@ Gen4 plan same as above
   "Original": "SELECT SUM(k) FROM sbtest43 WHERE id BETWEEN 90 AND 990",
   "Instructions": {
     "OperatorType": "Aggregate",
-    "Variant": "Ordered",
+    "Variant": "Scalar",
     "Aggregates": "sum(0)",
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "main",
           "Sharded": true
         },
-        "FieldQuery": "select SUM(k) from sbtest43 where 1 != 1",
-        "Query": "select SUM(k) from sbtest43 where id between 90 and 990",
+        "FieldQuery": "select sum(k) from sbtest43 where 1 != 1",
+        "Query": "select sum(k) from sbtest43 where id between 90 and 990",
         "Table": "sbtest43"
       }
     ]
@@ -69,22 +107,25 @@ Gen4 plan same as above
   "Original": "SELECT SUM(k) FROM sbtest43 WHERE id BETWEEN 90 AND 990",
   "Instructions": {
     "OperatorType": "Aggregate",
-    "Variant": "Ordered",
-    "Aggregates": "sum(0) AS SUM(k)",
+    "Variant": "Scalar",
+    "Aggregates": "sum(0) AS sum(k)",
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "main",
           "Sharded": true
         },
-        "FieldQuery": "select SUM(k) from sbtest43 where 1 != 1",
-        "Query": "select SUM(k) from sbtest43 where id between 90 and 990",
+        "FieldQuery": "select sum(k) from sbtest43 where 1 != 1",
+        "Query": "select sum(k) from sbtest43 where id between 90 and 990",
         "Table": "sbtest43"
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "main.sbtest43"
+  ]
 }
 
 # OLTP order range select
@@ -94,7 +135,7 @@ Gen4 plan same as above
   "Original": "SELECT c FROM sbtest1 WHERE id BETWEEN 50 AND 235 ORDER BY c",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectScatter",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "main",
       "Sharded": true
@@ -106,7 +147,25 @@ Gen4 plan same as above
     "Table": "sbtest1"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT c FROM sbtest1 WHERE id BETWEEN 50 AND 235 ORDER BY c",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": true
+    },
+    "FieldQuery": "select c from sbtest1 where 1 != 1",
+    "OrderBy": "0 ASC COLLATE latin1_swedish_ci",
+    "Query": "select c from sbtest1 where id between 50 and 235 order by c asc",
+    "Table": "sbtest1"
+  },
+  "TablesUsed": [
+    "main.sbtest1"
+  ]
+}
 
 # OLTP distinct range select
 "SELECT DISTINCT c FROM sbtest30 WHERE id BETWEEN 1 AND 10 ORDER BY c"
@@ -121,7 +180,7 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "main",
           "Sharded": true
@@ -141,23 +200,26 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "GroupBy": "(0|1)",
+    "GroupBy": "(0|1) COLLATE latin1_swedish_ci",
     "ResultColumns": 1,
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "Scatter",
         "Keyspace": {
           "Name": "main",
           "Sharded": true
         },
         "FieldQuery": "select c, weight_string(c) from sbtest30 where 1 != 1",
-        "OrderBy": "(0|1) ASC, (0|1) ASC",
+        "OrderBy": "0 ASC COLLATE latin1_swedish_ci, 0 ASC COLLATE latin1_swedish_ci",
         "Query": "select distinct c, weight_string(c) from sbtest30 where id between 1 and 10 order by c asc, c asc",
         "Table": "sbtest30"
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "main.sbtest30"
+  ]
 }
 
 # OLTP index udpate
@@ -177,12 +239,37 @@ Gen4 plan same as above
     "Query": "update sbtest6 set k = k + 1 where id = 5",
     "Table": "sbtest6",
     "Values": [
-      5
+      "INT64(5)"
     ],
     "Vindex": "hash"
-  }
+  },
+  "TablesUsed": [
+    "main.sbtest6"
+  ]
 }
-Gen4 plan same as above
+{
+  "QueryType": "UPDATE",
+  "Original": "UPDATE sbtest6 SET k=k+1 WHERE id=5",
+  "Instructions": {
+    "OperatorType": "Update",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "MultiShardAutocommit": false,
+    "Query": "update sbtest6 set k = k + 1 where id = 5",
+    "Table": "sbtest6",
+    "Values": [
+      "INT64(5)"
+    ],
+    "Vindex": "hash"
+  },
+  "TablesUsed": [
+    "main.sbtest6"
+  ]
+}
 
 # OLTP non index update
 "UPDATE sbtest9 SET c=7 WHERE id=8"
@@ -201,12 +288,37 @@ Gen4 plan same as above
     "Query": "update sbtest9 set c = 7 where id = 8",
     "Table": "sbtest9",
     "Values": [
-      8
+      "INT64(8)"
     ],
     "Vindex": "hash"
-  }
+  },
+  "TablesUsed": [
+    "main.sbtest9"
+  ]
 }
-Gen4 plan same as above
+{
+  "QueryType": "UPDATE",
+  "Original": "UPDATE sbtest9 SET c=7 WHERE id=8",
+  "Instructions": {
+    "OperatorType": "Update",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "MultiShardAutocommit": false,
+    "Query": "update sbtest9 set c = 7 where id = 8",
+    "Table": "sbtest9",
+    "Values": [
+      "INT64(8)"
+    ],
+    "Vindex": "hash"
+  },
+  "TablesUsed": [
+    "main.sbtest9"
+  ]
+}
 
 # OLTP delete
 "DELETE FROM sbtest15 WHERE id=7525"
@@ -225,10 +337,13 @@ Gen4 plan same as above
     "Query": "delete from sbtest15 where id = 7525",
     "Table": "sbtest15",
     "Values": [
-      7525
+      "INT64(7525)"
     ],
     "Vindex": "hash"
-  }
+  },
+  "TablesUsed": [
+    "main.sbtest15"
+  ]
 }
 Gen4 plan same as above
 
@@ -247,7 +362,13 @@ Gen4 plan same as above
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "insert into sbtest16(id, k, c, pad) values (:_id_0, 1, 2, 50)",
-    "TableName": "sbtest16"
-  }
+    "TableName": "sbtest16",
+    "VindexValues": {
+      "hash": "INT64(42)"
+    }
+  },
+  "TablesUsed": [
+    "main.sbtest16"
+  ]
 }
 Gen4 plan same as above

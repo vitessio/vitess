@@ -17,10 +17,9 @@ limitations under the License.
 package vtctl
 
 import (
+	"context"
 	"flag"
 	"fmt"
-
-	"context"
 
 	"vitess.io/vitess/go/vt/workflow"
 	"vitess.io/vitess/go/vt/wrangler"
@@ -40,41 +39,48 @@ func init() {
 	addCommandGroup(workflowsGroupName)
 
 	addCommand(workflowsGroupName, command{
-		"WorkflowCreate",
-		commandWorkflowCreate,
-		"[-skip_start] <factoryName> [parameters...]",
-		"Creates the workflow with the provided parameters. The workflow is also started, unless -skip_start is specified."})
+		name:   "WorkflowCreate",
+		method: commandWorkflowCreate,
+		params: "[--skip_start] <factoryName> [parameters...]",
+		help:   "Creates the workflow with the provided parameters. The workflow is also started, unless -skip_start is specified.",
+	})
 	addCommand(workflowsGroupName, command{
-		"WorkflowStart",
-		commandWorkflowStart,
-		"<uuid>",
-		"Starts the workflow."})
+		name:   "WorkflowStart",
+		method: commandWorkflowStart,
+		params: "<uuid>",
+		help:   "Starts the workflow.",
+	})
 	addCommand(workflowsGroupName, command{
-		"WorkflowStop",
-		commandWorkflowStop,
-		"<uuid>",
-		"Stops the workflow."})
+		name:   "WorkflowStop",
+		method: commandWorkflowStop,
+		params: "<uuid>",
+		help:   "Stops the workflow.",
+	})
 	addCommand(workflowsGroupName, command{
-		"WorkflowDelete",
-		commandWorkflowDelete,
-		"<uuid>",
-		"Deletes the finished or not started workflow."})
+		name:   "WorkflowDelete",
+		method: commandWorkflowDelete,
+		params: "<uuid>",
+		help:   "Deletes the finished or not started workflow.",
+	})
 	addCommand(workflowsGroupName, command{
-		"WorkflowWait",
-		commandWorkflowWait,
-		"<uuid>",
-		"Waits for the workflow to finish."})
+		name:   "WorkflowWait",
+		method: commandWorkflowWait,
+		params: "<uuid>",
+		help:   "Waits for the workflow to finish.",
+	})
 
 	addCommand(workflowsGroupName, command{
-		"WorkflowTree",
-		commandWorkflowTree,
-		"",
-		"Displays a JSON representation of the workflow tree."})
+		name:   "WorkflowTree",
+		method: commandWorkflowTree,
+		params: "",
+		help:   "Displays a JSON representation of the workflow tree.",
+	})
 	addCommand(workflowsGroupName, command{
-		"WorkflowAction",
-		commandWorkflowAction,
-		"<path> <name>",
-		"Sends the provided action name on the specified path."})
+		name:   "WorkflowAction",
+		method: commandWorkflowAction,
+		params: "<path> <name>",
+		help:   "Sends the provided action name on the specified path.",
+	})
 }
 
 func commandWorkflowCreate(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

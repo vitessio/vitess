@@ -82,12 +82,8 @@ func createFuzzingSocketPair() (net.Listener, *Conn, *Conn) {
 	return listener, sConn, cConn
 }
 
-type fuzztestRun struct{}
-
-func (t fuzztestRun) NewConnection(c *Conn) {
-}
-
-func (t fuzztestRun) ConnectionClosed(c *Conn) {
+type fuzztestRun struct {
+	UnimplementedHandler
 }
 
 func (t fuzztestRun) ComQuery(c *Conn, query string, callback func(*sqltypes.Result) error) error {
@@ -104,9 +100,6 @@ func (t fuzztestRun) ComStmtExecute(c *Conn, prepare *PrepareData, callback func
 
 func (t fuzztestRun) WarningCount(c *Conn) uint16 {
 	return 0
-}
-
-func (t fuzztestRun) ComResetConnection(c *Conn) {
 }
 
 var _ Handler = (*fuzztestRun)(nil)
@@ -232,6 +225,8 @@ func FuzzReadQueryResults(data []byte) int {
 }
 
 type fuzzTestHandler struct {
+	UnimplementedHandler
+
 	mu       sync.Mutex
 	lastConn *Conn
 	result   *sqltypes.Result
@@ -273,9 +268,6 @@ func (th *fuzzTestHandler) NewConnection(c *Conn) {
 	th.mu.Lock()
 	defer th.mu.Unlock()
 	th.lastConn = c
-}
-
-func (th *fuzzTestHandler) ConnectionClosed(_ *Conn) {
 }
 
 func (th *fuzzTestHandler) ComQuery(c *Conn, query string, callback func(*sqltypes.Result) error) error {
@@ -356,6 +348,7 @@ func FuzzTLSServer(data []byte) int {
 		path.Join(root, "server-cert.pem"),
 		path.Join(root, "server-key.pem"),
 		path.Join(root, "ca-cert.pem"),
+		"",
 		"",
 		tls.VersionTLS12)
 	if err != nil {

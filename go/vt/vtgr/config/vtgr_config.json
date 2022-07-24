@@ -1,4 +1,4 @@
 {
   "BackoffErrorWaitTimeSeconds": 5,
-  "GroupSize": 3
+  "BootstrapGroupSize": 3
 }

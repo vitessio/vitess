@@ -36,16 +36,6 @@ func (cached *MessageInfo) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
-func (cached *SequenceInfo) CachedSize(alloc bool) int64 {
-	if cached == nil {
-		return int64(0)
-	}
-	size := int64(0)
-	if alloc {
-		size += int64(24)
-	}
-	return size
-}
 func (cached *Table) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -54,7 +44,7 @@ func (cached *Table) CachedSize(alloc bool) int64 {
 	if alloc {
 		size += int64(112)
 	}
-	// field Name vitess.io/vitess/go/vt/sqlparser.TableIdent
+	// field Name vitess.io/vitess/go/vt/sqlparser.IdentifierCS
 	size += cached.Name.CachedSize(false)
 	// field Fields []*vitess.io/vitess/go/vt/proto/query.Field
 	{
@@ -68,7 +58,9 @@ func (cached *Table) CachedSize(alloc bool) int64 {
 		size += hack.RuntimeAllocSize(int64(cap(cached.PKColumns)) * int64(8))
 	}
 	// field SequenceInfo *vitess.io/vitess/go/vt/vttablet/tabletserver/schema.SequenceInfo
-	size += cached.SequenceInfo.CachedSize(true)
+	if cached.SequenceInfo != nil {
+		size += hack.RuntimeAllocSize(int64(24))
+	}
 	// field MessageInfo *vitess.io/vitess/go/vt/vttablet/tabletserver/schema.MessageInfo
 	size += cached.MessageInfo.CachedSize(true)
 	return size
