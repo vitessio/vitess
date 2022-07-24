@@ -31,3 +31,18 @@ func CheckCancelAllMigrationsViaVtctl(t *testing.T, vtctlclient *cluster.VtctlCl
 	_, err := vtctlclient.ApplySchemaWithOutput(keyspace, cancelQuery, cluster.VtctlClientParams{SkipPreflight: true})
 	assert.NoError(t, err)
 }
+
+func ReloadSchema(t *testing.T, clusterInstance *cluster.LocalProcessCluster, includePrimary bool) {
+	for _, keyspace := range clusterInstance.Keyspaces {
+		for _, shard := range keyspace.Shards {
+			for _, tablet := range shard.Vttablets {
+				if tablet.Type == "primary" && !includePrimary {
+					continue
+				}
+				// reload schema on replicas:
+				err := clusterInstance.VtctlclientProcess.ReloadSchema(tablet)
+				assert.NoError(t, err)
+			}
+		}
+	}
+}
