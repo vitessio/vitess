@@ -463,22 +463,6 @@ func TestFloatValueDefault(t *testing.T) {
 	utils.AssertMatches(t, conn, "select table_name, column_name, column_default from information_schema.columns where table_name = 'test_float_default' order by column_default desc", `[[VARCHAR("test_float_default") VARCHAR("pos_f") TEXT("2.1")] [VARCHAR("test_float_default") VARCHAR("neg_f") TEXT("-2.1")]]`)
 }
 
-// TestRowCountExceeded tests the error message received when a query exceeds the row count specified
-func TestRowCountExceeded(t *testing.T) {
-	vtParams := mysql.ConnParams{
-		Host: "localhost",
-		Port: clusterInstance.VtgateMySQLPort,
-	}
-	conn, err := mysql.Connect(context.Background(), &vtParams)
-	require.NoError(t, err)
-	defer conn.Close()
-
-	defer utils.Exec(t, conn, `delete from t1`)
-	execMulti(t, conn, `insert into t1(c1, c2, c3, c4) values (300,100,300,'abc'), (301,101,301,'abcd'), (1,1,1,'a'), (31,11,31,'ad');`)
-
-	utils.AssertContainsError(t, conn, "select * from t1, t1 t2, t1 t3", `Aborted desc = Row count exceeded 30 (errno 10001) (sqlstate HY000)`)
-}
-
 func execMulti(t *testing.T, conn *mysql.Conn, query string) []*sqltypes.Result {
 	t.Helper()
 	var res []*sqltypes.Result

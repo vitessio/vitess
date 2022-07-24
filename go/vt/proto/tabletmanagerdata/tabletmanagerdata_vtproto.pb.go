@@ -4552,9 +4552,9 @@ func (m *VDiffCoreOptions) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i--
 		dAtA[i] = 0x18
 	}
-	if m.Resumable {
+	if m.AutoRetry {
 		i--
-		if m.Resumable {
+		if m.AutoRetry {
 			dAtA[i] = 1
 		} else {
 			dAtA[i] = 0
@@ -6407,7 +6407,7 @@ func (m *VDiffCoreOptions) SizeVT() (n int) {
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
-	if m.Resumable {
+	if m.AutoRetry {
 		n += 2
 	}
 	if m.MaxRows != 0 {
@@ -15906,7 +15906,7 @@ func (m *VDiffCoreOptions) UnmarshalVT(dAtA []byte) error {
 			iNdEx = postIndex
 		case 2:
 			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Resumable", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field AutoRetry", wireType)
 			}
 			var v int
 			for shift := uint(0); ; shift += 7 {
@@ -15923,7 +15923,7 @@ func (m *VDiffCoreOptions) UnmarshalVT(dAtA []byte) error {
 					break
 				}
 			}
-			m.Resumable = bool(v != 0)
+			m.AutoRetry = bool(v != 0)
 		case 3:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field MaxRows", wireType)

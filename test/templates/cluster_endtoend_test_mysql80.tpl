@@ -13,6 +13,7 @@ jobs:
   build:
     name: Run endtoend tests on {{.Name}}
     {{if .Ubuntu20}}runs-on: ubuntu-20.04{{else}}runs-on: ubuntu-18.04{{end}}
+    timeout-minutes: 45
 
     steps:
     - name: Check out code
@@ -57,17 +58,16 @@ jobs:
     - name: Get dependencies
       if: steps.changes.outputs.end_to_end == 'true'
       run: |
-        # Get key to latest MySQL repo
-        sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 467B942D3A79BD29
-
-        # Setup MySQL 8.0
-        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.20-1_all.deb
-        echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0 | sudo debconf-set-selections
-        sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
+        # Setup Percona Server for MySQL 8.0
+        sudo apt-get update
+        sudo apt-get install -y lsb-release gnupg2 curl
+        wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
+        sudo DEBIAN_FRONTEND="noninteractive" dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
+        sudo percona-release setup ps80
         sudo apt-get update
 
         # Install everything else we need, and configure
-        sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd curl git wget eatmydata xz-utils
+        sudo apt-get install -y percona-server-server percona-server-client make unzip g++ etcd git wget eatmydata xz-utils
         sudo service mysql stop
         sudo service etcd stop
         sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
@@ -79,11 +79,7 @@ jobs:
 
         {{if .InstallXtraBackup}}
 
-        wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
-        sudo apt-get install -y gnupg2
-        sudo dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
-        sudo apt-get update
-        sudo apt-get install percona-xtrabackup-24
+        sudo apt-get install percona-xtrabackup-80 lz4
 
         {{end}}
 

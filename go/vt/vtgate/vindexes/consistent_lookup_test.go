@@ -29,12 +29,15 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 func TestConsistentLookupInit(t *testing.T) {
@@ -236,7 +239,7 @@ func TestConsistentLookupCreateSimple(t *testing.T) {
 func TestConsistentLookupCreateThenRecreate(t *testing.T) {
 	lookup := createConsistentLookup(t, "consistent_lookup", false)
 	vc := &loggingVCursor{}
-	vc.AddResult(nil, errors.New("Duplicate entry"))
+	vc.AddResult(nil, mysql.NewSQLError(mysql.ERDupEntry, mysql.SSConstraintViolation, "Duplicate entry"))
 	vc.AddResult(&sqltypes.Result{}, nil)
 	vc.AddResult(&sqltypes.Result{}, nil)
 
@@ -256,7 +259,7 @@ func TestConsistentLookupCreateThenRecreate(t *testing.T) {
 func TestConsistentLookupCreateThenUpdate(t *testing.T) {
 	lookup := createConsistentLookup(t, "consistent_lookup", false)
 	vc := &loggingVCursor{}
-	vc.AddResult(nil, errors.New("Duplicate entry"))
+	vc.AddResult(nil, vterrors.New(vtrpcpb.Code_ALREADY_EXISTS, "(errno 1062) (sqlstate 23000) Duplicate entry"))
 	vc.AddResult(makeTestResult(1), nil)
 	vc.AddResult(&sqltypes.Result{}, nil)
 	vc.AddResult(&sqltypes.Result{}, nil)
@@ -278,7 +281,7 @@ func TestConsistentLookupCreateThenUpdate(t *testing.T) {
 func TestConsistentLookupCreateThenSkipUpdate(t *testing.T) {
 	lookup := createConsistentLookup(t, "consistent_lookup", false)
 	vc := &loggingVCursor{}
-	vc.AddResult(nil, errors.New("Duplicate entry"))
+	vc.AddResult(nil, vterrors.New(vtrpcpb.Code_ALREADY_EXISTS, "(errno 1062) (sqlstate 23000) Duplicate entry"))
 	vc.AddResult(makeTestResult(1), nil)
 	vc.AddResult(&sqltypes.Result{}, nil)
 	vc.AddResult(&sqltypes.Result{}, nil)
@@ -299,7 +302,7 @@ func TestConsistentLookupCreateThenSkipUpdate(t *testing.T) {
 func TestConsistentLookupCreateThenDupkey(t *testing.T) {
 	lookup := createConsistentLookup(t, "consistent_lookup", false)
 	vc := &loggingVCursor{}
-	vc.AddResult(nil, errors.New("Duplicate entry, pass mysql error as it is"))
+	vc.AddResult(nil, vterrors.New(vtrpcpb.Code_ALREADY_EXISTS, "(errno 1062) (sqlstate 23000) Duplicate entry, pass mysql error as it is"))
 	vc.AddResult(makeTestResult(1), nil)
 	vc.AddResult(makeTestResult(1), nil)
 	vc.AddResult(&sqltypes.Result{}, nil)
@@ -338,7 +341,7 @@ func TestConsistentLookupCreateNonDupError(t *testing.T) {
 func TestConsistentLookupCreateThenBadRows(t *testing.T) {
 	lookup := createConsistentLookup(t, "consistent_lookup", false)
 	vc := &loggingVCursor{}
-	vc.AddResult(nil, errors.New("Duplicate entry"))
+	vc.AddResult(nil, vterrors.New(vtrpcpb.Code_ALREADY_EXISTS, "(errno 1062) (sqlstate 23000) Duplicate entry"))
 	vc.AddResult(makeTestResult(2), nil)
 
 	err := lookup.(Lookup).Create(context.Background(), vc, [][]sqltypes.Value{{
