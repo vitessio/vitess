@@ -319,10 +319,9 @@ func testAutoRetryError(t *testing.T, tc *testCase, cells string) {
 
 func testCLICreateWait(t *testing.T, ksWorkflow string, cells string) {
 	t.Run("vtctl create and wait", func(t *testing.T) {
-		finished := make(chan bool)
-
+		chCompleted := make(chan bool)
 		go func() {
-			_, output := performVDiff2Action(t, ksWorkflow, cells, "create", "", false, "--wait")
+			_, output := performVDiff2Action(t, ksWorkflow, cells, "create", "", false, "--wait", "--wait-update-interval=5s")
 			completed := false
 			// We don't try to parse the JSON output as it may contain a series of outputs
 			// that together do not form a valid JSON document. We can change this in the
@@ -330,18 +329,17 @@ func testCLICreateWait(t *testing.T, ksWorkflow string, cells string) {
 			if strings.Contains(output, `"State": "completed"`) {
 				completed = true
 			}
-			finished <- completed
+			chCompleted <- completed
 		}()
 
 		tmr := time.NewTimer(vdiffTimeout)
 		defer tmr.Stop()
 		select {
-		case completed := <-finished:
+		case completed := <-chCompleted:
 			require.Equal(t, true, completed)
-			return
 		case <-tmr.C:
 			require.Fail(t, "timeout waiting for vdiff to complete")
-			return
 		}
+		return
 	})
 }
