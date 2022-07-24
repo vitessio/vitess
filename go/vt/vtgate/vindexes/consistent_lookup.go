@@ -21,8 +21,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
@@ -265,7 +265,11 @@ func (lu *clCommon) Create(ctx context.Context, vcursor VCursor, rowsColValues [
 	if origErr == nil {
 		return nil
 	}
-	if !strings.Contains(origErr.Error(), "Duplicate entry") {
+	// Try and convert the error to a MySQL error
+	sqlErr, isSQLErr := mysql.NewSQLErrorFromError(origErr).(*mysql.SQLError)
+	// If it is a MySQL error and its code is of duplicate entry, then we would like to continue
+	// Otherwise, we return the error
+	if !(isSQLErr && sqlErr != nil && sqlErr.Number() == mysql.ERDupEntry) {
 		return origErr
 	}
 	for i, row := range rowsColValues {

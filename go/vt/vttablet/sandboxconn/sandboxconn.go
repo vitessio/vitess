@@ -424,10 +424,10 @@ func (sbc *SandboxConn) AddVStreamEvents(events []*binlogdatapb.VEvent, err erro
 }
 
 // VStream is part of the QueryService interface.
-func (sbc *SandboxConn) VStream(ctx context.Context, target *querypb.Target, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
-	if sbc.StartPos != "" && sbc.StartPos != startPos {
-		log.Errorf("startPos(%v): %v, want %v", target, startPos, sbc.StartPos)
-		return fmt.Errorf("startPos(%v): %v, want %v", target, startPos, sbc.StartPos)
+func (sbc *SandboxConn) VStream(ctx context.Context, request *binlogdatapb.VStreamRequest, send func([]*binlogdatapb.VEvent) error) error {
+	if sbc.StartPos != "" && sbc.StartPos != request.Position {
+		log.Errorf("startPos(%v): %v, want %v", request.Target, request.Position, sbc.StartPos)
+		return fmt.Errorf("startPos(%v): %v, want %v", request.Target, request.Position, sbc.StartPos)
 	}
 	done := false
 	// for testing the minimize stream skew feature (TestStreamSkew) we need the ability to send events in specific sequences from
@@ -488,7 +488,7 @@ func (sbc *SandboxConn) VStream(ctx context.Context, target *querypb.Target, sta
 }
 
 // VStreamRows is part of the QueryService interface.
-func (sbc *SandboxConn) VStreamRows(ctx context.Context, target *querypb.Target, query string, lastpk *querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error {
+func (sbc *SandboxConn) VStreamRows(ctx context.Context, request *binlogdatapb.VStreamRowsRequest, send func(*binlogdatapb.VStreamRowsResponse) error) error {
 	return fmt.Errorf("not implemented in test")
 }
 

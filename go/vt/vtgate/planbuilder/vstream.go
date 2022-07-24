@@ -32,7 +32,7 @@ import (
 
 const defaultLimit = 100
 
-func buildVStreamPlan(stmt *sqlparser.VStream, vschema plancontext.VSchema) (engine.Primitive, error) {
+func buildVStreamPlan(stmt *sqlparser.VStream, vschema plancontext.VSchema) (*planResult, error) {
 	table, _, destTabletType, dest, err := vschema.FindTable(stmt.Table)
 	if err != nil {
 		return nil, err
@@ -59,13 +59,13 @@ func buildVStreamPlan(stmt *sqlparser.VStream, vschema plancontext.VSchema) (eng
 		}
 	}
 
-	return &engine.VStream{
+	return newPlanResult(&engine.VStream{
 		Keyspace:          table.Keyspace,
 		TargetDestination: dest,
 		TableName:         table.Name.CompliantName(),
 		Position:          pos,
 		Limit:             limit,
-	}, nil
+	}), nil
 }
 
 const errWhereFormat = "where clause can only be of the type 'pos > <value>'"

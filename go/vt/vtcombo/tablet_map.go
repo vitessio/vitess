@@ -685,25 +685,20 @@ func (itc *internalTabletConn) StreamHealth(ctx context.Context, callback func(*
 // VStream is part of queryservice.QueryService.
 func (itc *internalTabletConn) VStream(
 	ctx context.Context,
-	target *querypb.Target,
-	startPos string,
-	tableLastPKs []*binlogdatapb.TableLastPK,
-	filter *binlogdatapb.Filter,
+	request *binlogdatapb.VStreamRequest,
 	send func([]*binlogdatapb.VEvent) error,
 ) error {
-	err := itc.tablet.qsc.QueryService().VStream(ctx, target, startPos, tableLastPKs, filter, send)
+	err := itc.tablet.qsc.QueryService().VStream(ctx, request, send)
 	return tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
 }
 
 // VStreamRows is part of the QueryService interface.
 func (itc *internalTabletConn) VStreamRows(
 	ctx context.Context,
-	target *querypb.Target,
-	query string,
-	lastpk *querypb.QueryResult,
+	request *binlogdatapb.VStreamRowsRequest,
 	send func(*binlogdatapb.VStreamRowsResponse) error,
 ) error {
-	err := itc.tablet.qsc.QueryService().VStreamRows(ctx, target, query, lastpk, send)
+	err := itc.tablet.qsc.QueryService().VStreamRows(ctx, request, send)
 	return tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
 }
 

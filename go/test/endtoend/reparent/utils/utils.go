@@ -68,13 +68,13 @@ var (
 //region cluster setup/teardown
 
 // SetupReparentCluster is used to setup the reparent cluster
-func SetupReparentCluster(t *testing.T, enableSemiSync bool) *cluster.LocalProcessCluster {
-	return setupCluster(context.Background(), t, ShardName, []string{cell1, cell2}, []int{3, 1}, enableSemiSync)
+func SetupReparentCluster(t *testing.T, durability string) *cluster.LocalProcessCluster {
+	return setupCluster(context.Background(), t, ShardName, []string{cell1, cell2}, []int{3, 1}, durability)
 }
 
 // SetupRangeBasedCluster sets up the range based cluster
 func SetupRangeBasedCluster(ctx context.Context, t *testing.T) *cluster.LocalProcessCluster {
-	return setupCluster(ctx, t, ShardName, []string{cell1}, []int{2}, true)
+	return setupCluster(ctx, t, ShardName, []string{cell1}, []int{2}, "semi_sync")
 }
 
 // TeardownCluster is used to teardown the reparent cluster
@@ -82,15 +82,13 @@ func TeardownCluster(clusterInstance *cluster.LocalProcessCluster) {
 	clusterInstance.Teardown()
 }
 
-func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []string, numTablets []int, enableSemiSync bool) *cluster.LocalProcessCluster {
+func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []string, numTablets []int, durability string) *cluster.LocalProcessCluster {
 	var tablets []*cluster.Vttablet
 	clusterInstance := cluster.NewCluster(cells[0], Hostname)
 	keyspace := &cluster.Keyspace{Name: KeyspaceName}
 
-	durability := "none"
-	if enableSemiSync {
+	if durability == "semi_sync" {
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--enable_semi_sync")
-		durability = "semi_sync"
 	}
 
 	// Start topo server
@@ -514,10 +512,11 @@ func GetShardReplicationPositions(t *testing.T, clusterInstance *cluster.LocalPr
 }
 
 func WaitForReplicationToStart(t *testing.T, clusterInstance *cluster.LocalProcessCluster, keyspaceName, shardName string, tabletCnt int, doPrint bool) {
-	tck := time.NewTicker(500 * time.Millisecond)
+	tkr := time.NewTicker(500 * time.Millisecond)
+	defer tkr.Stop()
 	for {
 		select {
-		case <-tck.C:
+		case <-tkr.C:
 			strArray := GetShardReplicationPositions(t, clusterInstance, KeyspaceName, shardName, true)
 			if len(strArray) == tabletCnt && strings.Contains(strArray[0], "primary") { // primary first
 				return
@@ -575,13 +574,13 @@ func CheckReparentFromOutside(t *testing.T, clusterInstance *cluster.LocalProces
 // WaitForReplicationPosition waits for tablet B to catch up to the replication position of tablet A.
 func WaitForReplicationPosition(t *testing.T, tabletA *cluster.Vttablet, tabletB *cluster.Vttablet) error {
 	posA, _ := cluster.GetPrimaryPosition(t, *tabletA, Hostname)
-	timeout := time.Now().Add(5 * time.Second)
+	timeout := time.Now().Add(replicationWaitTimeout)
 	for time.Now().Before(timeout) {
 		posB, _ := cluster.GetPrimaryPosition(t, *tabletB, Hostname)
 		if positionAtLeast(t, tabletB, posA, posB) {
 			return nil
 		}
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(500 * time.Millisecond)
 	}
 	return fmt.Errorf("failed to catch up on replication position")
 }
