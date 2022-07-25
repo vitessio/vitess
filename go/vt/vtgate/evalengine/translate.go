@@ -75,7 +75,7 @@ func translateComparisonExpr2(op sqlparser.ComparisonExprOperator, left, right E
 	case sqlparser.LessEqualOp:
 		return &ComparisonExpr{binaryExpr, compareLE{}}, nil
 	case sqlparser.GreaterThanOp:
-		return &ComparisonExpr{binaryExpr, compareGT{}}, nil
+		return &ComparisonExpr{binaryExpr, CompareGT{}}, nil
 	case sqlparser.GreaterEqualOp:
 		return &ComparisonExpr{binaryExpr, compareGE{}}, nil
 	case sqlparser.NullSafeEqualOp:
