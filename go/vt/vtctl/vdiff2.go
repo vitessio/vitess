@@ -65,7 +65,7 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 	samplePct := subFlags.Int64("sample_pct", 100, "How many rows to sample, not yet implemented")
 	verbose := subFlags.Bool("verbose", false, "Show verbose vdiff output in summaries")
 	wait := subFlags.Bool("wait", false, "When creating or resuming a vdiff, wait for it to finish before exiting")
-	waitUpdateInterval := subFlags.Duration("wait-update-interval", time.Duration(1*time.Minute), "When waiting on a vdiff to finish, display the current status output this often")
+	waitUpdateInterval := subFlags.Duration("wait-update-interval", time.Duration(1*time.Minute), "When waiting on a vdiff to finish, check and display the current status this often")
 
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -182,8 +182,7 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 				case <-ctx.Done():
 					return vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
 				case <-tkr.C:
-					output, err = wr.VDiff2(ctx, keyspace, workflowName, vdiff.ShowAction, vdiffUUID.String(), vdiffUUID.String(), options)
-					if err != nil {
+					if output, err = wr.VDiff2(ctx, keyspace, workflowName, vdiff.ShowAction, vdiffUUID.String(), vdiffUUID.String(), options); err != nil {
 						return err
 					}
 					if state, err = displayVDiff2ShowSingleSummary(wr, format, keyspace, workflowName, vdiffUUID.String(), output, *verbose); err != nil {

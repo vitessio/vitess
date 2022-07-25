@@ -321,7 +321,7 @@ func testCLICreateWait(t *testing.T, ksWorkflow string, cells string) {
 	t.Run("vtctl create and wait", func(t *testing.T) {
 		chCompleted := make(chan bool)
 		go func() {
-			_, output := performVDiff2Action(t, ksWorkflow, cells, "create", "", false, "--wait", "--wait-update-interval=5s")
+			_, output := performVDiff2Action(t, ksWorkflow, cells, "create", "", false, "--wait", "--wait-update-interval=1s")
 			completed := false
 			// We don't try to parse the JSON output as it may contain a series of outputs
 			// that together do not form a valid JSON document. We can change this in the
