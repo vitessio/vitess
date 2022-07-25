@@ -18,7 +18,6 @@ package vault
 
 import (
 	"crypto/subtle"
-	"flag"
 	"fmt"
 	"net"
 	"os"
@@ -29,22 +28,38 @@ import (
 	"time"
 
 	vaultapi "github.com/aquarapid/vaultlib"
+	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/servenv"
 )
 
 var (
-	vaultAddr             = flag.String("mysql_auth_vault_addr", "", "URL to Vault server")
-	vaultTimeout          = flag.Duration("mysql_auth_vault_timeout", 10*time.Second, "Timeout for vault API operations")
-	vaultCACert           = flag.String("mysql_auth_vault_tls_ca", "", "Path to CA PEM for validating Vault server certificate")
-	vaultPath             = flag.String("mysql_auth_vault_path", "", "Vault path to vtgate credentials JSON blob, e.g.: secret/data/prod/vtgatecreds")
-	vaultCacheTTL         = flag.Duration("mysql_auth_vault_ttl", 30*time.Minute, "How long to cache vtgate credentials from the Vault server")
-	vaultTokenFile        = flag.String("mysql_auth_vault_tokenfile", "", "Path to file containing Vault auth token; token can also be passed using VAULT_TOKEN environment variable")
-	vaultRoleID           = flag.String("mysql_auth_vault_roleid", "", "Vault AppRole id; can also be passed using VAULT_ROLEID environment variable")
-	vaultRoleSecretIDFile = flag.String("mysql_auth_vault_role_secretidfile", "", "Path to file containing Vault AppRole secret_id; can also be passed using VAULT_SECRETID environment variable")
-	vaultRoleMountPoint   = flag.String("mysql_auth_vault_role_mountpoint", "approle", "Vault AppRole mountpoint; can also be passed using VAULT_MOUNTPOINT environment variable")
+	vaultAddr             string
+	vaultTimeout          time.Duration
+	vaultCACert           string
+	vaultPath             string
+	vaultCacheTTL         time.Duration
+	vaultTokenFile        string
+	vaultRoleID           string
+	vaultRoleSecretIDFile string
+	vaultRoleMountPoint   string
 )
+
+func init() {
+	servenv.OnParseFor("vtgate", func(fs *pflag.FlagSet) {
+		fs.StringVar(&vaultAddr, "mysql_auth_vault_addr", "", "URL to Vault server")
+		fs.DurationVar(&vaultTimeout, "mysql_auth_vault_timeout", 10*time.Second, "Timeout for vault API operations")
+		fs.StringVar(&vaultCACert, "mysql_auth_vault_tls_ca", "", "Path to CA PEM for validating Vault server certificate")
+		fs.StringVar(&vaultPath, "mysql_auth_vault_path", "", "Vault path to vtgate credentials JSON blob, e.g.: secret/data/prod/vtgatecreds")
+		fs.DurationVar(&vaultCacheTTL, "mysql_auth_vault_ttl", 30*time.Minute, "How long to cache vtgate credentials from the Vault server")
+		fs.StringVar(&vaultTokenFile, "mysql_auth_vault_tokenfile", "", "Path to file containing Vault auth token; token can also be passed using VAULT_TOKEN environment variable")
+		fs.StringVar(&vaultRoleID, "mysql_auth_vault_roleid", "", "Vault AppRole id; can also be passed using VAULT_ROLEID environment variable")
+		fs.StringVar(&vaultRoleSecretIDFile, "mysql_auth_vault_role_secretidfile", "", "Path to file containing Vault AppRole secret_id; can also be passed using VAULT_SECRETID environment variable")
+		fs.StringVar(&vaultRoleMountPoint, "mysql_auth_vault_role_mountpoint", "approle", "Vault AppRole mountpoint; can also be passed using VAULT_MOUNTPOINT environment variable")
+	})
+}
 
 // AuthServerVault implements AuthServer with a config loaded from Vault.
 type AuthServerVault struct {
@@ -65,15 +80,15 @@ type AuthServerVault struct {
 // InitAuthServerVault - entrypoint for initialization of Vault AuthServer implementation
 func InitAuthServerVault() {
 	// Check critical parameters.
-	if *vaultAddr == "" {
+	if vaultAddr == "" {
 		log.Infof("Not configuring AuthServerVault, as --mysql_auth_vault_addr is empty.")
 		return
 	}
-	if *vaultPath == "" {
+	if vaultPath == "" {
 		log.Exitf("If using Vault auth server, --mysql_auth_vault_path is required.")
 	}
 
-	registerAuthServerVault(*vaultAddr, *vaultTimeout, *vaultCACert, *vaultPath, *vaultCacheTTL, *vaultTokenFile, *vaultRoleID, *vaultRoleSecretIDFile, *vaultRoleMountPoint)
+	registerAuthServerVault(vaultAddr, vaultTimeout, vaultCACert, vaultPath, vaultCacheTTL, vaultTokenFile, vaultRoleID, vaultRoleSecretIDFile, vaultRoleMountPoint)
 }
 
 func registerAuthServerVault(addr string, timeout time.Duration, caCertPath string, path string, ttl time.Duration, tokenFilePath string, roleID string, secretIDPath string, roleMountPoint string) {
