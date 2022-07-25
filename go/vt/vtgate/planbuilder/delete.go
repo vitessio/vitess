@@ -25,7 +25,7 @@ import (
 )
 
 // buildDeletePlan builds the instructions for a DELETE statement.
-func buildDeletePlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (engine.Primitive, error) {
+func buildDeletePlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
 	del := stmt.(*sqlparser.Delete)
 	if del.With != nil {
 		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: with expression in delete statement")
@@ -37,36 +37,39 @@ func buildDeletePlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedV
 			return nil, err
 		}
 	}
-	dml, ksidVindex, err := buildDMLPlan(vschema, "delete", del, reservedVars, del.TableExprs, del.Where, del.OrderBy, del.Limit, del.Comments, del.Targets)
+	dml, tables, ksidVindex, err := buildDMLPlan(vschema, "delete", del, reservedVars, del.TableExprs, del.Where, del.OrderBy, del.Limit, del.Comments, del.Targets)
 	if err != nil {
 		return nil, err
 	}
 	edel := &engine.Delete{DML: dml}
-
 	if dml.Opcode == engine.Unsharded {
-		return edel, nil
+		return newPlanResult(edel, tables...), nil
 	}
 
 	if len(del.Targets) > 1 {
 		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "multi-table delete statement in not supported in sharded database")
 	}
 
-	if len(del.Targets) == 1 && del.Targets[0].Name != edel.Table.Name {
+	edelTable, err := edel.GetSingleTable()
+	if err != nil {
+		return nil, err
+	}
+	if len(del.Targets) == 1 && del.Targets[0].Name != edelTable.Name {
 		return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.UnknownTable, "Unknown table '%s' in MULTI DELETE", del.Targets[0].Name.String())
 	}
 
-	if len(edel.Table.Owned) > 0 {
+	if len(edelTable.Owned) > 0 {
 		aTblExpr, ok := del.TableExprs[0].(*sqlparser.AliasedTableExpr)
 		if !ok {
 			return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: delete on complex table expression")
 		}
-		tblExpr := &sqlparser.AliasedTableExpr{Expr: sqlparser.TableName{Name: edel.Table.Name}, As: aTblExpr.As}
-		edel.OwnedVindexQuery = generateDMLSubquery(tblExpr, del.Where, del.OrderBy, del.Limit, edel.Table, ksidVindex.Columns)
+		tblExpr := &sqlparser.AliasedTableExpr{Expr: sqlparser.TableName{Name: edelTable.Name}, As: aTblExpr.As}
+		edel.OwnedVindexQuery = generateDMLSubquery(tblExpr, del.Where, del.OrderBy, del.Limit, edelTable, ksidVindex.Columns)
 		edel.KsidVindex = ksidVindex.Vindex
 		edel.KsidLength = len(ksidVindex.Columns)
 	}
 
-	return edel, nil
+	return newPlanResult(edel, tables...), nil
 }
 
 func rewriteSingleTbl(del *sqlparser.Delete) (*sqlparser.Delete, error) {

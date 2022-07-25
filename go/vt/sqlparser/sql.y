@@ -240,7 +240,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %left <str> ON USING INPLACE COPY INSTANT ALGORITHM NONE SHARED EXCLUSIVE
 %left <str> SUBQUERY_AS_EXPR
 %left <str> '(' ',' ')'
-%token <str> ID AT_ID AT_AT_ID HEX STRING NCHAR_STRING INTEGRAL FLOAT DECIMAL HEXNUM VALUE_ARG LIST_ARG COMMENT COMMENT_KEYWORD BIT_LITERAL COMPRESSION
+%token <str> ID AT_ID AT_AT_ID HEX STRING NCHAR_STRING INTEGRAL FLOAT DECIMAL HEXNUM VALUE_ARG LIST_ARG COMMENT COMMENT_KEYWORD BITNUM BIT_LITERAL COMPRESSION
 %token <str> JSON_PRETTY JSON_STORAGE_SIZE JSON_STORAGE_FREE JSON_CONTAINS JSON_CONTAINS_PATH JSON_EXTRACT JSON_KEYS JSON_OVERLAPS JSON_SEARCH JSON_VALUE
 %token <str> EXTRACT
 %token <str> NULL TRUE FALSE OFF
@@ -1623,6 +1623,10 @@ text_literal
   {
   	$$ = NewHexNumLiteral($1)
   }
+| BITNUM
+  {
+  	$$ = NewBitLiteral($1[2:])
+  }
 | BIT_LITERAL
   {
 	$$ = NewBitLiteral($1)
@@ -1632,13 +1636,17 @@ text_literal
     $$ = NewArgument($1[1:])
     bindVariable(yylex, $1[1:])
   }
-| underscore_charsets  BIT_LITERAL %prec UNARY
+| underscore_charsets BIT_LITERAL %prec UNARY
   {
   	$$ = &IntroducerExpr{CharacterSet: $1, Expr: NewBitLiteral($2)}
   }
 | underscore_charsets HEXNUM %prec UNARY
   {
   	$$ = &IntroducerExpr{CharacterSet: $1, Expr: NewHexNumLiteral($2)}
+  }
+| underscore_charsets BITNUM %prec UNARY
+  {
+  	$$ = &IntroducerExpr{CharacterSet: $1, Expr: NewBitLiteral($2[2:])}
   }
 | underscore_charsets HEX %prec UNARY
   {
@@ -3172,6 +3180,12 @@ alter_statement:
     $$ = &AlterMigration{
       Type: CompleteMigrationType,
       UUID: string($4),
+    }
+  }
+| ALTER comment_opt VITESS_MIGRATION COMPLETE ALL
+  {
+    $$ = &AlterMigration{
+      Type: CompleteAllMigrationType,
     }
   }
 | ALTER comment_opt VITESS_MIGRATION STRING CANCEL
