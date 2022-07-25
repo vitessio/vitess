@@ -44,11 +44,11 @@ var (
 // Multiple go routines can use the same Wrangler at the same time,
 // provided they want to share the same logger / topo server / lock timeout.
 type Wrangler struct {
-	logger    logutil.Logger
-	ts        *topo.Server
-	tmc       tmclient.TabletManagerClient
-	vtctld    vtctlservicepb.VtctldServer
-	sourceTs  *topo.Server
+	logger   logutil.Logger
+	ts       *topo.Server
+	tmc      tmclient.TabletManagerClient
+	vtctld   vtctlservicepb.VtctldServer
+	sourceTs *topo.Server
 	// VExecFunc is a test-only fixture that allows us to short circuit vexec commands.
 	// DO NOT USE in production code.
 	VExecFunc func(ctx context.Context, workflow, keyspace, query string, dryRun bool) (map[*topo.TabletInfo]*sqltypes.Result, error)
