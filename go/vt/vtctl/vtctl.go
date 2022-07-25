@@ -3900,6 +3900,22 @@ func printJSON(logger logutil.Logger, val any) error {
 	return nil
 }
 
+// loggerWriter turns a Logger into a Writer by decorating it with a Write()
+// method that sends everything to Logger.Printf().
+type loggerWriter struct {
+	logutil.Logger
+}
+
+func (lw loggerWriter) Write(p []byte) (int, error) {
+	lw.Logger.Printf("%s", p)
+	return len(p), nil
+}
+
+// printQueryResult will pretty-print a QueryResult to the logger.
+func printQueryResult(writer io.Writer, qr *sqltypes.Result) {
+	cli.WriteQueryResultTable(writer, qr)
+}
+
 // MarshalJSON marshals "obj" to a JSON string. It uses the "jsonpb" marshaler
 // or Go's standard one.
 //
