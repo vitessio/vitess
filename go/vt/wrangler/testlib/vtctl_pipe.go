@@ -58,8 +58,6 @@ func NewVtctlPipe(t *testing.T, ts *topo.Server) *VtctlPipe {
 		// make sure we use the right protocol
 		flag.Set("vtctl_client_protocol", "grpc")
 
-		// Enable all query groups
-		flag.Set("enable_queries", "true")
 		servenv.FireRunHooks()
 	})
 
