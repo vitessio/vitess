@@ -49,6 +49,8 @@ type Wrangler struct {
 	tmc       tmclient.TabletManagerClient
 	vtctld    vtctlservicepb.VtctldServer
 	sourceTs  *topo.Server
+	// VExecFunc is a test-only fixture that allows us to short circuit vexec commands.
+	// DO NOT USE in production code.
 	VExecFunc func(ctx context.Context, workflow, keyspace, query string, dryRun bool) (map[*topo.TabletInfo]*sqltypes.Result, error)
 }
 
