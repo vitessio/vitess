@@ -761,7 +761,6 @@ func SetupNewClusterSemiSync(t *testing.T) *VtOrcClusterInfo {
 	clusterInstance.VtTabletExtraArgs = []string{
 		"--lock_tables_timeout", "5s",
 		"--disable_active_reparents",
-		"--enable_semi_sync",
 	}
 
 	// Initialize Cluster
@@ -805,9 +804,12 @@ func SetupNewClusterSemiSync(t *testing.T) *VtOrcClusterInfo {
 	out, err := vtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=semi_sync")
 	require.NoError(t, err, out)
 
+	// create topo server connection
+	ts, err := topo.OpenServer(*clusterInstance.TopoFlavorString(), clusterInstance.VtctlProcess.TopoGlobalAddress, clusterInstance.VtctlProcess.TopoGlobalRoot)
+	require.NoError(t, err)
 	clusterInfo := &VtOrcClusterInfo{
 		ClusterInstance:     clusterInstance,
-		Ts:                  nil,
+		Ts:                  ts,
 		CellInfos:           nil,
 		lastUsedValue:       100,
 		VtctldClientProcess: vtctldClientProcess,
@@ -837,7 +839,6 @@ func AddSemiSyncKeyspace(t *testing.T, clusterInfo *VtOrcClusterInfo) {
 	clusterInfo.ClusterInstance.VtTabletExtraArgs = []string{
 		"--lock_tables_timeout", "5s",
 		"--disable_active_reparents",
-		"--enable_semi_sync",
 	}
 
 	// Initialize Cluster

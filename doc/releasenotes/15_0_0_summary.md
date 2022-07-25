@@ -1,5 +1,27 @@
 ## Major Changes
 
+### Breaking Change
+
+#### Vindex Implementation
+
+All the vindex interface methods are changed by adding context.Context as the input parameter.
+
+E.g:
+```go
+Map(vcursor VCursor, .... ) .... 
+	To
+Map(ctx context.Context, vcursor VCursor, .... ) ....
+```
+
+This only impacts the users who have added their own vindex implementation. 
+They would be required to change their implementation with these new interface method expectations.
+
+#### Logstats Table and Keyspace deprecated
+
+Information about which tables are used was being reported through the Keyspace/Table fields on LogStats.
+For multi-table queries, this output can be confusing, so we have added TablesUsed, that is a string array, listing all tables and which keyspace they are on.
+The Table/Keyspace fields are deprecated and will be removed in the V16 release of Vitess.
+
 ### Command-line syntax deprecations
 
 #### vttablet startup flag deletions
@@ -15,6 +37,13 @@ The following VTTablet flags were deprecated in 7.0. They have now been deleted
 
 #### vttablet startup flag deprecations
 - --enable-query-plan-field-caching is now deprecated. It will be removed in v16.
+- --enable_semi_sync is now deprecated. It will be removed in v16. Instead, set the correct durability policy using `SetKeyspaceDurabilityPolicy`
+
+### New command line flags and behavior
+
+#### vtctl GetSchema --table-schema-only
+
+The new flag `--table-schema-only` skips columns introspection. `GetSchema` only returns general schema analysis, and specifically it includes the `CREATE TABLE|VIEW` statement in `schema` field.
 
 ### New Syntax
 
@@ -100,6 +129,17 @@ All `online DDL show` commands can now be run with a few additional parameters
 - `--order` , order migrations in the output by either ascending or descending order of their `id` fields.
 - `--skip`  , skip specified number of migrations in the output.
 - `--limit` , limit results to a specified number of migrations in the output.
+
+#### New syntax
+
+The following is now supported:
+
+```sql
+ALTER VITESS_MIGRATION COMPLETE ALL
+```
+
+This works on all pending migrations (`queued`, `ready`, `running`) and internally issues a `ALTER VITESS_MIGRATION '<uuid>' COMPLETE` for each one. The command is useful for completing multiple concurrent migrations (see above) that are open ended (`--postpone-completion`).
+
 ### Tablet throttler
 
 #### API changes
@@ -121,3 +161,17 @@ $ curl -s http://127.0.0.1:15100/debug/vars | jq . | grep Throttler
   "ThrottlerProbesLatency": 355523,
   "ThrottlerProbesTotal": 74,
 ```
+
+### Mysql Compatibility
+
+#### Lookup Vindexes
+
+Added new parameter `multi_shard_autocommit` to lookup vindex definition in vschema, if enabled will send lookup vindex dml query as autocommit to all shards
+This is slighly different from `autocommit` parameter where the query is sent in its own transaction separate from the ongoing transaction if any i.e. begin -> lookup query execs -> commit/rollback
+
+### Durability Policy
+
+#### Cross Cell
+
+A new durabilty policy `cross_cell` is now supported. `cross_cell` durability policy only allows replica tablets from a different cell than the current primary to
+send semi sync ACKs. This ensures that any committed write exists in atleast 2 tablets belonging to different cells.

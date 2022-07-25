@@ -50,7 +50,6 @@ import (
 	"vitess.io/vitess/go/vt/orchestrator/collection"
 	"vitess.io/vitess/go/vt/orchestrator/config"
 	"vitess.io/vitess/go/vt/orchestrator/db"
-	"vitess.io/vitess/go/vt/orchestrator/kv"
 	"vitess.io/vitess/go/vt/orchestrator/metrics/query"
 	"vitess.io/vitess/go/vt/orchestrator/util"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil"
@@ -2009,30 +2008,6 @@ func ReadClustersInfo(clusterName string) ([]ClusterInfo, error) {
 	return clusters, err
 }
 
-// Get a listing of KeyValuePair for clusters primaries, for all clusters or for a specific cluster.
-func GetPrimariesKVPairs(clusterName string) (kvPairs [](*kv.KeyValuePair), err error) {
-
-	clusterAliasMap := make(map[string]string)
-	clustersInfo, err := ReadClustersInfo(clusterName)
-	if err != nil {
-		return kvPairs, err
-	}
-	for _, clusterInfo := range clustersInfo {
-		clusterAliasMap[clusterInfo.ClusterName] = clusterInfo.ClusterAlias
-	}
-
-	primaries, err := ReadWriteableClustersPrimaries()
-	if err != nil {
-		return kvPairs, err
-	}
-	for _, primary := range primaries {
-		clusterPairs := GetClusterPrimaryKVPairs(clusterAliasMap[primary.ClusterName], &primary.Key)
-		kvPairs = append(kvPairs, clusterPairs...)
-	}
-
-	return kvPairs, err
-}
-
 // HeuristicallyApplyClusterDomainInstanceAttribute writes down the cluster-domain
 // to primary-hostname as a general attribute, by reading current topology and **trusting** it to be correct
 func HeuristicallyApplyClusterDomainInstanceAttribute(clusterName string) (instanceKey *InstanceKey, err error) {
@@ -2128,24 +2103,37 @@ func ReadAllMinimalInstances() ([]MinimalInstance, error) {
 }
 
 // ReadOutdatedInstanceKeys reads and returns keys for all instances that are not up to date (i.e.
-// pre-configured time has passed since they were last checked)
-// But we also check for the case where an attempt at instance checking has been made, that hasn't
+// pre-configured time has passed since they were last checked) or the ones whose tablet information was read
+// but not the mysql information. This could happen if the durability policy of the keyspace wasn't
+// available at the time it was discovered. This would lead to not having the record of the tablet in the
+// database_instance table.
+// We also check for the case where an attempt at instance checking has been made, that hasn't
 // resulted in an actual check! This can happen when TCP/IP connections are hung, in which case the "check"
 // never returns. In such case we multiply interval by a factor, so as not to open too many connections on
 // the instance.
 func ReadOutdatedInstanceKeys() ([]InstanceKey, error) {
 	res := []InstanceKey{}
 	query := `
-		select
+		SELECT
 			hostname, port
-		from
+		FROM
 			database_instance
-		where
-			case
-				when last_attempted_check <= last_checked
-				then last_checked < now() - interval ? second
-				else last_checked < now() - interval ? second
-			end
+		WHERE
+			CASE
+				WHEN last_attempted_check <= last_checked
+				THEN last_checked < now() - interval ? second
+				ELSE last_checked < now() - interval ? second
+			END
+		UNION
+		SELECT
+			vitess_tablet.hostname, vitess_tablet.port
+		FROM
+			vitess_tablet LEFT JOIN database_instance ON (
+			vitess_tablet.hostname = database_instance.hostname
+			AND vitess_tablet.port = database_instance.port
+		)
+		WHERE
+			database_instance.hostname IS NULL
 			`
 	args := sqlutils.Args(config.Config.InstancePollSeconds, 2*config.Config.InstancePollSeconds)
 

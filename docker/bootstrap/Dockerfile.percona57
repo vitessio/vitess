@@ -1,7 +1,7 @@
 ARG bootstrap_version
 ARG image="vitess/bootstrap:${bootstrap_version}-common"
 
-FROM "${image}"
+FROM --platform=linux/amd64 "${image}"
 
 # Install Percona 5.7
 RUN for i in $(seq 1 10); do apt-key adv --no-tty --keyserver keyserver.ubuntu.com --recv-keys 9334A25F8507EFA5 && break; done && \

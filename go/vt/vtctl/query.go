@@ -291,7 +291,7 @@ func commandVtTabletBegin(ctx context.Context, wr *wrangler.Wrangler, subFlags *
 	}
 	defer conn.Close(ctx)
 
-	transactionID, _, err := conn.Begin(ctx, &querypb.Target{
+	state, err := conn.Begin(ctx, &querypb.Target{
 		Keyspace:   tabletInfo.Tablet.Keyspace,
 		Shard:      tabletInfo.Tablet.Shard,
 		TabletType: tabletInfo.Tablet.Type,
@@ -300,7 +300,7 @@ func commandVtTabletBegin(ctx context.Context, wr *wrangler.Wrangler, subFlags *
 		return fmt.Errorf("begin failed: %v", err)
 	}
 	result := map[string]int64{
-		"transaction_id": transactionID,
+		"transaction_id": state.TransactionID,
 	}
 	return printJSON(wr.Logger(), result)
 }

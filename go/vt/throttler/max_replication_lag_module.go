@@ -54,7 +54,7 @@ const (
 // i.e. we'll ignore lag records with lower lag from other replicas while we're
 // waiting for the next record of this replica under test.
 type replicaUnderTest struct {
-	// key holds the discovery.LegacyTabletStats.Key value for the replica.
+	// key holds the key value for the replica.
 	key        string
 	alias      string
 	tabletType topodatapb.TabletType
@@ -114,8 +114,8 @@ type MaxReplicationLagModule struct {
 	// max rate calculation has changed. The field is immutable (set in Start().)
 	rateUpdateChan chan<- struct{}
 
-	// lagRecords buffers the replication lag records received by the LegacyHealthCheck
-	// listener. ProcessRecords() will process them.
+	// lagRecords buffers the replication lag records received by the HealthCheck
+	// subscriber. ProcessRecords() will process them.
 	lagRecords chan replicationLagRecord
 	wg         sync.WaitGroup
 
@@ -238,7 +238,7 @@ func (m *MaxReplicationLagModule) resetConfiguration() {
 }
 
 // RecordReplicationLag records the current replication lag for processing.
-func (m *MaxReplicationLagModule) RecordReplicationLag(t time.Time, ts *discovery.LegacyTabletStats) {
+func (m *MaxReplicationLagModule) RecordReplicationLag(t time.Time, th *discovery.TabletHealth) {
 	m.mutableConfigMu.Lock()
 	if m.mutableConfig.MaxReplicationLagSec == ReplicationLagModuleDisabled {
 		m.mutableConfigMu.Unlock()
@@ -246,9 +246,9 @@ func (m *MaxReplicationLagModule) RecordReplicationLag(t time.Time, ts *discover
 	}
 	m.mutableConfigMu.Unlock()
 
-	// Buffer data point for now to unblock the LegacyHealthCheck listener and process
+	// Buffer data point for now to unblock the HealthCheck subscriber and process
 	// it asynchronously in ProcessRecords().
-	m.lagRecords <- replicationLagRecord{t, *ts}
+	m.lagRecords <- replicationLagRecord{t, *th}
 }
 
 // ProcessRecords is the main loop, run in a separate Go routine, which
@@ -331,7 +331,7 @@ func (m *MaxReplicationLagModule) recalculateRate(lagRecordNow replicationLagRec
 	var clear bool
 	var clearReason string
 
-	if m.lagCache(lagRecordNow).ignoreSlowReplica(lagRecordNow.Key) {
+	if m.lagCache(lagRecordNow).ignoreSlowReplica(discovery.TabletToMapKey(lagRecordNow.Tablet)) {
 		r.Reason = fmt.Sprintf("skipping this replica because it's among the %d slowest %v tablets", m.getNSlowestReplicasConfig(lagRecordNow), lagRecordNow.Target.TabletType.String())
 		goto logResult
 	}
@@ -394,7 +394,7 @@ func (m *MaxReplicationLagModule) clearReplicaUnderTest(now time.Time, testedSta
 
 	// Verify that the current replica under test is not in an error state.
 	lr := lagRecordNow
-	if m.replicaUnderTest.key != lr.Key {
+	if m.replicaUnderTest.key != discovery.TabletToMapKey(lr.Tablet) {
 		lr = m.lagCacheByType(m.replicaUnderTest.tabletType).latest(m.replicaUnderTest.key)
 	}
 	if lr.isZero() {
@@ -402,7 +402,7 @@ func (m *MaxReplicationLagModule) clearReplicaUnderTest(now time.Time, testedSta
 		return true, "it is no longer actively tracked"
 	}
 	if lr.LastError != nil {
-		// LastError is set i.e. LegacyHealthCheck module cannot connect and the cached
+		// LastError is set i.e. HealthCheck module cannot connect and the cached
 		// data for the replica might be outdated.
 		return true, "it has LastError set i.e. is no longer correctly tracked"
 	}
@@ -445,7 +445,7 @@ func (m *MaxReplicationLagModule) isReplicaUnderTest(r *result, now time.Time, t
 		return true
 	}
 
-	if m.replicaUnderTest.key != lagRecordNow.Key {
+	if m.replicaUnderTest.key != discovery.TabletToMapKey(lagRecordNow.Tablet) {
 		r.Reason = fmt.Sprintf("skipping this replica because we're waiting for the next lag record from the 'replica under test': %v", m.replicaUnderTest.alias)
 		return false
 	}
@@ -557,7 +557,7 @@ func (m *MaxReplicationLagModule) minTestDurationUntilNextIncrease(increase floa
 func (m *MaxReplicationLagModule) decreaseAndGuessRate(r *result, now time.Time, lagRecordNow replicationLagRecord) {
 	// Guess replication rate based on the difference in the replication lag of this
 	// particular replica.
-	lagRecordBefore := m.lagCache(lagRecordNow).atOrAfter(lagRecordNow.Key, m.lastRateChange)
+	lagRecordBefore := m.lagCache(lagRecordNow).atOrAfter(discovery.TabletToMapKey(lagRecordNow.Tablet), m.lastRateChange)
 	if lagRecordBefore.isZero() {
 		// We should see at least "lagRecordNow" here because we did just insert it
 		// in processRecord().
@@ -592,7 +592,7 @@ func (m *MaxReplicationLagModule) decreaseAndGuessRate(r *result, now time.Time,
 
 	if replicationLagChange == equal {
 		// The replication lag did not change. Keep going at the current rate.
-		r.Reason = fmt.Sprintf("did not decrease the rate because the lag did not change (assuming a 1s error margin)") //nolint
+		r.Reason = fmt.Sprintf("did not decrease the rate because the lag did not change (assuming a 1s error margin)") // nolint
 		return
 	}
 
@@ -705,7 +705,7 @@ func (m *MaxReplicationLagModule) updateRate(r *result, newState state, rate int
 	}
 
 	m.lastRateChange = now
-	m.replicaUnderTest = &replicaUnderTest{lagRecordNow.Key, topoproto.TabletAliasString(lagRecordNow.Tablet.Alias), lagRecordNow.Target.TabletType, newState, now.Add(testDuration)}
+	m.replicaUnderTest = &replicaUnderTest{discovery.TabletToMapKey(lagRecordNow.Tablet), topoproto.TabletAliasString(lagRecordNow.Tablet.Alias), lagRecordNow.Target.TabletType, newState, now.Add(testDuration)}
 
 	if rate == oldRate {
 		return

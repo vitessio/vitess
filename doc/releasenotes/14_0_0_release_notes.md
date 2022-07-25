@@ -15,6 +15,10 @@
 - [Advisory locking optimizations](#advisory-locking-optimizations)
 - [Pre-Legacy Resharding is now deprecated](#pre-legacy-resharding-is-now-deprecated)
 
+## Known Issues
+
+- [VTOrc doesn't discover the tablets](https://github.com/vitessio/vitess/issues/10650) of a keyspace if the durability policy doesn't exist in the topo server when it comes up. This can be resolved by restarting VTOrc.
+
 ## Major Changes
 
 ### Gen4 is now the default planner

@@ -225,7 +225,7 @@ func TestMaxReplicationLagModule_ReplicaUnderTest_LastErrorOrNotUp(t *testing.T)
 
 	// r2 @  75s, 0s lag, LastError set
 	rError := lagRecord(sinceZero(75*time.Second), r2, 0)
-	rError.LastError = errors.New("LegacyHealthCheck reporting broken")
+	rError.LastError = errors.New("HealthCheck reporting broken")
 	tf.m.replicaLagCache.add(rError)
 
 	// r1 @ 110s, 0s lag
@@ -244,7 +244,7 @@ func TestMaxReplicationLagModule_ReplicaUnderTest_LastErrorOrNotUp(t *testing.T)
 	tf.ratesHistory.add(sinceZero(110*time.Second), 200)
 	tf.ratesHistory.add(sinceZero(114*time.Second), 400)
 	rNotUp := lagRecord(sinceZero(115*time.Second), r1, 0)
-	rNotUp.Up = false
+	rNotUp.Serving = false
 	tf.m.replicaLagCache.add(rNotUp)
 
 	// r2 @ 150s, 0s lag (lastError no longer set)
@@ -453,7 +453,7 @@ func TestMaxReplicationLagModule_Increase_BadRateUpperBound(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	//Assume that a bad value of 150 was set @ 30s and log error
+	// Assume that a bad value of 150 was set @ 30s and log error
 	if err := tf.m.memory.markBad(150, sinceZero(30*time.Second)); err != nil {
 		log.Errorf("tf.m.memory.markBad(150, sinceZero(30*time.Second)) falied : %v", err)
 	}
@@ -955,7 +955,7 @@ func lagRecord(t time.Time, uid, lag uint32) replicationLagRecord {
 }
 
 // tabletStats creates fake tablet health data.
-func tabletStats(uid, lag uint32) discovery.LegacyTabletStats {
+func tabletStats(uid, lag uint32) discovery.TabletHealth {
 	typ := topodatapb.TabletType_REPLICA
 	if uid == rdonly1 || uid == rdonly2 {
 		typ = topodatapb.TabletType_RDONLY
@@ -967,21 +967,19 @@ func tabletStats(uid, lag uint32) discovery.LegacyTabletStats {
 		Type:     typ,
 		PortMap:  map[string]int32{"vt": int32(uid)},
 	}
-	return discovery.LegacyTabletStats{
+	return discovery.TabletHealth{
 		Tablet: tablet,
-		Key:    discovery.TabletToMapKey(tablet),
 		Target: &querypb.Target{
 			Keyspace:   "ks1",
 			Shard:      "-80",
 			TabletType: typ,
 		},
-		Up:      true,
 		Serving: true,
 		Stats: &querypb.RealtimeStats{
 			ReplicationLagSeconds: lag,
 		},
-		TabletExternallyReparentedTimestamp: 22,
-		LastError:                           nil,
+		PrimaryTermStartTime: 22,
+		LastError:            nil,
 	}
 }
 
