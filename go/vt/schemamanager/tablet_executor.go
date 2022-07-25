@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/sync2"
+	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/logutil"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -30,6 +31,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtctl/schematools"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 )
 
@@ -275,10 +277,10 @@ func (exec *TabletExecutor) preflightSchemaChanges(ctx context.Context, sqls []s
 
 // executeSQL executes a single SQL statement either as online DDL or synchronously on all tablets.
 // In online DDL case, the query may be exploded into multiple queries during
-func (exec *TabletExecutor) executeSQL(ctx context.Context, sql string, providedUUID string, execResult *ExecuteResult) error {
+func (exec *TabletExecutor) executeSQL(ctx context.Context, sql string, providedUUID string, execResult *ExecuteResult) (executedAsynchronously bool, err error) {
 	stmt, err := sqlparser.Parse(sql)
 	if err != nil {
-		return err
+		return false, err
 	}
 	switch stmt := stmt.(type) {
 	case sqlparser.DDLStatement:
@@ -286,7 +288,7 @@ func (exec *TabletExecutor) executeSQL(ctx context.Context, sql string, provided
 			onlineDDLs, err := schema.NewOnlineDDLs(exec.keyspace, sql, stmt, exec.ddlStrategySetting, exec.migrationContext, providedUUID)
 			if err != nil {
 				execResult.ExecutorErr = err.Error()
-				return err
+				return false, err
 			}
 			for _, onlineDDL := range onlineDDLs {
 				exec.executeOnAllTablets(ctx, execResult, onlineDDL.SQL, true)
@@ -295,25 +297,25 @@ func (exec *TabletExecutor) executeSQL(ctx context.Context, sql string, provided
 					exec.logger.Printf("%s\n", onlineDDL.UUID)
 				}
 			}
-			return nil
+			return true, nil
 		}
 	case *sqlparser.RevertMigration:
 		strategySetting := schema.NewDDLStrategySetting(schema.DDLStrategyOnline, exec.ddlStrategySetting.Options)
 		onlineDDL, err := schema.NewOnlineDDL(exec.keyspace, "", sqlparser.String(stmt), strategySetting, exec.migrationContext, providedUUID)
 		if err != nil {
 			execResult.ExecutorErr = err.Error()
-			return err
+			return false, err
 		}
 		exec.executeOnAllTablets(ctx, execResult, onlineDDL.SQL, true)
 		execResult.UUIDs = append(execResult.UUIDs, onlineDDL.UUID)
 		exec.logger.Printf("%s\n", onlineDDL.UUID)
-		return nil
+		return true, nil
 	case *sqlparser.AlterMigration:
 		exec.executeOnAllTablets(ctx, execResult, sql, true)
-		return nil
+		return true, nil
 	}
 	exec.executeOnAllTablets(ctx, execResult, sql, false)
-	return nil
+	return false, nil
 }
 
 // Execute applies schema changes
@@ -331,7 +333,7 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 	// keyspace-wide operations like resharding migrations.
 	ctx, unlock, lockErr := exec.ts.LockKeyspace(ctx, exec.keyspace, "ApplySchemaKeyspace")
 	if lockErr != nil {
-		execResult.ExecutorErr = lockErr.Error()
+		execResult.ExecutorErr = vterrors.Wrapf(lockErr, "lockErr in ApplySchemaKeyspace %v", exec.keyspace).Error()
 		return &execResult
 	}
 	defer func() {
@@ -340,7 +342,7 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 		var unlockErr error
 		unlock(&unlockErr)
 		if execResult.ExecutorErr == "" && unlockErr != nil {
-			execResult.ExecutorErr = unlockErr.Error()
+			execResult.ExecutorErr = vterrors.Wrapf(unlockErr, "unlockErr in ApplySchemaKeyspace %v", exec.keyspace).Error()
 		}
 	}()
 
@@ -356,19 +358,78 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 	}
 	providedUUID := ""
 
+	rl := timer.NewRateLimiter(*topo.RemoteOperationTimeout / 4)
+	defer rl.Stop()
+
+	syncOperationExecuted := false
+
+	// ReloadSchema once. Do it even if we do an early return on error
+	defer func() {
+		if !syncOperationExecuted {
+			exec.logger.Infof("Skipped ReloadSchema since all SQLs executed asynchronously")
+			return
+		}
+		// same shards will appear multiple times in execResult.SuccessShards when there are
+		// multiple SQLs
+		uniqueShards := map[string]*ShardResult{}
+		for i := range execResult.SuccessShards {
+			// Please do not change the above iteration to "for result := range ...".
+			// This is because we want to end up grabbing a pointer to the result. But golang's "for"
+			// implementation reuses the iteration parameter, and we end up reusing the same pointer.
+			result := &execResult.SuccessShards[i]
+			uniqueShards[result.Shard] = result
+		}
+		var wg sync.WaitGroup
+		// If all shards succeeded, wait (up to waitReplicasTimeout) for replicas to
+		// execute the schema change via replication. This is best-effort, meaning
+		// we still return overall success if the timeout expires.
+		concurrency := sync2.NewSemaphore(10, 0)
+		reloadCtx, cancel := context.WithTimeout(ctx, exec.waitReplicasTimeout)
+		defer cancel()
+		for _, result := range uniqueShards {
+			wg.Add(1)
+			go func(result *ShardResult) {
+				defer wg.Done()
+				exec.logger.Infof("ReloadSchema on shard: %s", result.Shard)
+				schematools.ReloadShard(
+					reloadCtx,
+					exec.ts,
+					exec.tmc,
+					exec.logger,
+					exec.keyspace,
+					result.Shard,
+					result.Position,
+					concurrency,
+					true, /* includePrimary */
+				)
+			}(result)
+		}
+		wg.Wait()
+	}()
+
 	for index, sql := range sqls {
+		// Attempt to renew lease:
+		if err := rl.Do(func() error { return topo.CheckKeyspaceLockedAndRenew(ctx, exec.keyspace) }); err != nil {
+			execResult.ExecutorErr = vterrors.Wrapf(err, "CheckKeyspaceLocked in ApplySchemaKeyspace %v", exec.keyspace).Error()
+			return &execResult
+		}
 		execResult.CurSQLIndex = index
 		if exec.hasProvidedUUIDs() {
 			providedUUID = exec.uuids[index]
 		}
-		if err := exec.executeSQL(ctx, sql, providedUUID, &execResult); err != nil {
+		executedAsynchronously, err := exec.executeSQL(ctx, sql, providedUUID, &execResult)
+		if err != nil {
 			execResult.ExecutorErr = err.Error()
 			return &execResult
+		}
+		if !executedAsynchronously {
+			syncOperationExecuted = true
 		}
 		if len(execResult.FailedShards) > 0 {
 			break
 		}
 	}
+
 	return &execResult
 }
 
@@ -400,31 +461,6 @@ func (exec *TabletExecutor) executeOnAllTablets(ctx context.Context, execResult 
 	if len(execResult.FailedShards) > 0 {
 		return
 	}
-
-	// If all shards succeeded, wait (up to waitReplicasTimeout) for replicas to
-	// execute the schema change via replication. This is best-effort, meaning
-	// we still return overall success if the timeout expires.
-	concurrency := sync2.NewSemaphore(10, 0)
-	reloadCtx, cancel := context.WithTimeout(ctx, exec.waitReplicasTimeout)
-	defer cancel()
-	for _, result := range execResult.SuccessShards {
-		wg.Add(1)
-		go func(result ShardResult) {
-			defer wg.Done()
-			schematools.ReloadShard(
-				reloadCtx,
-				exec.ts,
-				exec.tmc,
-				exec.logger,
-				exec.keyspace,
-				result.Shard,
-				result.Position,
-				concurrency,
-				false, /* includePrimary */
-			)
-		}(result)
-	}
-	wg.Wait()
 }
 
 func (exec *TabletExecutor) executeOneTablet(
@@ -454,7 +490,7 @@ func (exec *TabletExecutor) executeOneTablet(
 				sql = sqlparser.String(ddlStmt)
 			}
 		}
-		result, err = exec.tmc.ExecuteFetchAsDba(ctx, tablet, false, []byte(sql), 10, false, true)
+		result, err = exec.tmc.ExecuteFetchAsDba(ctx, tablet, false, []byte(sql), 10, false, false /* do not ReloadSchema */)
 	}
 	if err != nil {
 		errChan <- ShardWithError{Shard: tablet.Shard, Err: err.Error()}
