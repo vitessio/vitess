@@ -1,0 +1,52 @@
+name: docker_test_cluster_25
+on: [push, pull_request]
+jobs:
+
+  build:
+    name: Docker Test Cluster 25
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v2
+
+    - name: Check for changes in relevant files
+      uses: frouioui/paths-filter@main
+      id: changes
+      with:
+        token: ''
+        filters: |
+          end_to_end:
+            - 'go/**/*.go'
+            - 'test.go'
+            - 'Makefile'
+            - 'build.env'
+            - 'go.[sumod]'
+            - 'proto/*.proto'
+            - 'tools/**'
+            - 'config/**'
+            - 'bootstrap.sh'
+            - 'docker/**'
+
+    - name: Set up Go
+      if: steps.changes.outputs.end_to_end == 'true'
+      uses: actions/setup-go@v2
+      with:
+        go-version: 1.18.3
+
+    - name: Tune the OS
+      if: steps.changes.outputs.end_to_end == 'true'
+      run: |
+        echo '1024 65535' | sudo tee -a /proc/sys/net/ipv4/ip_local_port_range
+
+    # TEMPORARY WHILE GITHUB FIXES THIS https://github.com/actions/virtual-environments/issues/3185
+    - name: Add the current IP address, long hostname and short hostname record to /etc/hosts file
+      if: steps.changes.outputs.end_to_end == 'true'
+      run: |
+        echo -e "$(ip addr show eth0 | grep "inet\b" | awk '{print $2}' | cut -d/ -f1)\t$(hostname -f) $(hostname -s)" | sudo tee -a /etc/hosts
+    # DON'T FORGET TO REMOVE CODE ABOVE WHEN ISSUE IS ADRESSED!
+
+    - name: Run tests which require docker - 2
+      if: steps.changes.outputs.end_to_end == 'true'
+      run: |
+        go run test.go -docker=true --follow -shard 25

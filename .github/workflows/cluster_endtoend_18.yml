@@ -1,0 +1,64 @@
+# DO NOT MODIFY: THIS FILE IS GENERATED USING "make generate_ci_workflows"
+
+name: Cluster (18)
+on: [push, pull_request]
+concurrency:
+  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (18)')
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Run endtoend tests on Cluster (18)
+    runs-on: self-hosted
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v2
+
+      - name: Check for changes in relevant files
+        uses: frouioui/paths-filter@main
+        id: changes
+        with:
+          token: ''
+          filters: |
+            end_to_end:
+              - 'go/**/*.go'
+              - 'test.go'
+              - 'Makefile'
+              - 'build.env'
+              - 'go.[sumod]'
+              - 'proto/*.proto'
+              - 'tools/**'
+              - 'config/**'
+              - '.github/docker/**'
+              - 'bootstrap.sh'
+              - '.github/workflows/**'
+
+      - name: Build Docker Image
+        if: steps.changes.outputs.end_to_end == 'true'
+        run: docker build -f ./.github/docker/cluster_test_18/Dockerfile -t cluster_test_18:$GITHUB_SHA  .
+
+      - name: Run test
+        if: steps.changes.outputs.end_to_end == 'true'
+        timeout-minutes: 30
+        run: docker run --name "cluster_test_18_$GITHUB_SHA" cluster_test_18:$GITHUB_SHA /bin/bash -c 'source build.env && go run test.go -keep-data=true -docker=false -print-log -follow -shard 18 -- -- --keep-data=true'
+
+      - name: Print Volume Used
+        if: always() && steps.changes.outputs.end_to_end == 'true'
+        run: |
+          docker inspect -f '{{ (index .Mounts 0).Name }}' cluster_test_18_$GITHUB_SHA
+
+      - name: Cleanup Docker Volume
+        if: steps.changes.outputs.end_to_end == 'true'
+        run: |
+          docker rm -v cluster_test_18_$GITHUB_SHA
+
+      - name: Cleanup Docker Container
+        if: always() && steps.changes.outputs.end_to_end == 'true'
+        run: |
+          docker rm -f cluster_test_18_$GITHUB_SHA
+
+      - name: Cleanup Docker Image
+        if: steps.changes.outputs.end_to_end == 'true'
+        run: |
+          docker image rm cluster_test_18:$GITHUB_SHA
