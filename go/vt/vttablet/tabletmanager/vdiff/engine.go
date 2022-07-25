@@ -39,9 +39,9 @@ import (
 )
 
 type Engine struct {
-	mu     sync.Mutex
 	isOpen bool
 
+	mu          sync.Mutex // guards controllers
 	controllers map[int64]*controller
 
 	// ctx is the root context for all controllers

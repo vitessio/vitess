@@ -37,6 +37,8 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vdiff"
 	"vitess.io/vitess/go/vt/wrangler"
 )
@@ -62,6 +64,8 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 	checksum := subFlags.Bool("checksum", false, "Use row-level checksums to compare, not yet implemented")
 	samplePct := subFlags.Int64("sample_pct", 100, "How many rows to sample, not yet implemented")
 	verbose := subFlags.Bool("verbose", false, "Show verbose vdiff output in summaries")
+	wait := subFlags.Bool("wait", false, "When creating or resuming a vdiff, wait for it to finish before exiting")
+	waitUpdateInterval := subFlags.Duration("wait-update-interval", time.Duration(1*time.Minute), "When waiting on a vdiff to finish, check and display the current status this often")
 
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -168,7 +172,30 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 
 	switch action {
 	case vdiff.CreateAction, vdiff.ResumeAction:
-		displayVDiff2ScheduledResponse(wr, format, vdiffUUID.String(), action)
+		if *wait {
+			tkr := time.NewTicker(*waitUpdateInterval)
+			defer tkr.Stop()
+			var err error
+			var state vdiff.VDiffState
+			for {
+				select {
+				case <-ctx.Done():
+					return vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
+				case <-tkr.C:
+					if output, err = wr.VDiff2(ctx, keyspace, workflowName, vdiff.ShowAction, vdiffUUID.String(), vdiffUUID.String(), options); err != nil {
+						return err
+					}
+					if state, err = displayVDiff2ShowSingleSummary(wr, format, keyspace, workflowName, vdiffUUID.String(), output, *verbose); err != nil {
+						return err
+					}
+					if state == vdiff.CompletedState {
+						return nil
+					}
+				}
+			}
+		} else {
+			displayVDiff2ScheduledResponse(wr, format, vdiffUUID.String(), action)
+		}
 	case vdiff.ShowAction:
 		if output == nil {
 			// should not happen
@@ -317,7 +344,8 @@ func displayVDiff2ShowResponse(wr *wrangler.Wrangler, format, keyspace, workflow
 		if len(output.Responses) == 0 {
 			return fmt.Errorf("no response received for vdiff show of %s.%s(%s)", keyspace, workflowName, vdiffUUID.String())
 		}
-		return displayVDiff2ShowSingleSummary(wr, format, keyspace, workflowName, vdiffUUID.String(), output, verbose)
+		_, err := displayVDiff2ShowSingleSummary(wr, format, keyspace, workflowName, vdiffUUID.String(), output, verbose)
+		return err
 	}
 }
 
@@ -365,27 +393,29 @@ func buildVDiff2Recent(output *wrangler.VDiffOutput) ([]*VDiffListing, error) {
 	return listings, nil
 }
 
-func displayVDiff2ShowSingleSummary(wr *wrangler.Wrangler, format, keyspace, workflowName, uuid string, output *wrangler.VDiffOutput, verbose bool) error {
+func displayVDiff2ShowSingleSummary(wr *wrangler.Wrangler, format, keyspace, workflowName, uuid string, output *wrangler.VDiffOutput, verbose bool) (vdiff.VDiffState, error) {
+	state := vdiff.UnknownState
 	str := ""
 	summary, err := buildVDiff2SingleSummary(wr, keyspace, workflowName, uuid, output, verbose)
 	if err != nil {
-		return err
+		return state, err
 	}
+	state = summary.State
 	if format == "json" {
 		jsonText, err := json.MarshalIndent(summary, "", "\t")
 		if err != nil {
-			return err
+			return state, err
 		}
 		str = string(jsonText)
 	} else {
 		tmpl, err := template.New("test").Parse(summaryTextTemplate)
 		if err != nil {
-			return err
+			return state, err
 		}
 		sb := new(strings.Builder)
 		err = tmpl.Execute(sb, summary)
 		if err != nil {
-			return err
+			return state, err
 		}
 		str = sb.String()
 		for {
@@ -397,7 +427,7 @@ func displayVDiff2ShowSingleSummary(wr *wrangler.Wrangler, format, keyspace, wor
 		}
 	}
 	wr.Logger().Printf(str + "\n")
-	return nil
+	return state, nil
 }
 func buildVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid string, output *wrangler.VDiffOutput, verbose bool) (*vdiffSummary, error) {
 	summary := &vdiffSummary{
