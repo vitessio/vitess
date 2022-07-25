@@ -18,6 +18,7 @@ package worker
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
@@ -33,8 +34,6 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/wrangler"
-
-	"context"
 
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
@@ -640,7 +639,7 @@ func createTransactions(ctx context.Context, numberOfScanners int, wr *wrangler.
 	scanners := make([]int64, numberOfScanners)
 	for i := 0; i < numberOfScanners; i++ {
 
-		tx, _, err := queryService.Begin(ctx, target, &query.ExecuteOptions{
+		state, err := queryService.Begin(ctx, target, &query.ExecuteOptions{
 			// Make sure our tx is not killed by tx sniper
 			Workload:             query.ExecuteOptions_DBA,
 			TransactionIsolation: query.ExecuteOptions_CONSISTENT_SNAPSHOT_READ_ONLY,
@@ -655,11 +654,11 @@ func createTransactions(ctx context.Context, numberOfScanners int, wr *wrangler.
 			if err != nil {
 				return err
 			}
-			_, err = queryService.Rollback(ctx, target, tx)
+			_, err = queryService.Rollback(ctx, target, state.TransactionID)
 			return err
 		})
 
-		scanners[i] = tx
+		scanners[i] = state.TransactionID
 	}
 
 	return scanners, nil

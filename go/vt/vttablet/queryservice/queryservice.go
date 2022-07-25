@@ -19,11 +19,10 @@ limitations under the License.
 package queryservice
 
 import (
+	"context"
 	"io"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-
-	"context"
 
 	"vitess.io/vitess/go/sqltypes"
 
@@ -43,7 +42,7 @@ type QueryService interface {
 	// Transaction management
 
 	// Begin returns the transaction id to use for further operations
-	Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (int64, *topodatapb.TabletAlias, error)
+	Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (TransactionState, error)
 
 	// Commit commits the current transaction
 	Commit(ctx context.Context, target *querypb.Target, transactionID int64) (int64, error)
@@ -87,8 +86,8 @@ type QueryService interface {
 	// Begin part. If err != nil, the transactionID may still be
 	// non-zero, and needs to be propagated back (like for a DB
 	// Integrity Error)
-	BeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error)
-	BeginStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (int64, *topodatapb.TabletAlias, error)
+	BeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (TransactionState, *sqltypes.Result, error)
+	BeginStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (TransactionState, error)
 
 	// Messaging methods.
 	MessageStream(ctx context.Context, target *querypb.Target, name string, callback func(*sqltypes.Result) error) error
@@ -109,18 +108,34 @@ type QueryService interface {
 	// HandlePanic will be called if any of the functions panic.
 	HandlePanic(err *error)
 
-	ReserveBeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, int64, *topodatapb.TabletAlias, error)
+	ReserveBeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (ReservedTransactionState, *sqltypes.Result, error)
 
-	ReserveBeginStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (int64, int64, *topodatapb.TabletAlias, error)
+	ReserveBeginStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (ReservedTransactionState, error)
 
-	ReserveExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error)
+	ReserveExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (ReservedState, *sqltypes.Result, error)
 
-	ReserveStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (int64, *topodatapb.TabletAlias, error)
+	ReserveStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (ReservedState, error)
 
 	Release(ctx context.Context, target *querypb.Target, transactionID, reservedID int64) error
 
 	// Close must be called for releasing resources.
 	Close(ctx context.Context) error
+}
+
+type TransactionState struct {
+	TransactionID int64
+	TabletAlias   *topodatapb.TabletAlias
+}
+
+type ReservedState struct {
+	ReservedID  int64
+	TabletAlias *topodatapb.TabletAlias
+}
+
+type ReservedTransactionState struct {
+	ReservedID    int64
+	TransactionID int64
+	TabletAlias   *topodatapb.TabletAlias
 }
 
 type resultStreamer struct {
