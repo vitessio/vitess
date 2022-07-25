@@ -162,12 +162,12 @@ func doVdiff2(t *testing.T, keyspace, workflow, cells string, want *expectedVDif
 
 func performVDiff2Action(t *testing.T, ksWorkflow, cells, action, actionArg string, expectError bool, extraFlags ...string) (uuid string, output string) {
 	var err error
+	args := []string{"VDiff", "--", "--v2", "--tablet_types=primary", "--source_cell=" + cells, "--format=json"}
 	if len(extraFlags) > 0 {
-		output, err = vc.VtctlClient.ExecuteCommandWithOutput("VDiff", "--", "--v2", "--tablet_types=primary", "--source_cell="+cells, "--format=json",
-			strings.Join(extraFlags, " "), ksWorkflow, action, actionArg)
-	} else {
-		output, err = vc.VtctlClient.ExecuteCommandWithOutput("VDiff", "--", "--v2", "--tablet_types=primary", "--source_cell="+cells, "--format=json", ksWorkflow, action, actionArg)
+		args = append(args, extraFlags...)
 	}
+	args = append(args, ksWorkflow, action, actionArg)
+	output, err = vc.VtctlClient.ExecuteCommandWithOutput(args...)
 	log.Infof("vdiff2 output: %+v (err: %+v)", output, err)
 	if !expectError {
 		require.Nil(t, err)
