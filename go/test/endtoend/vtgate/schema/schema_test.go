@@ -229,8 +229,8 @@ func testDropNonExistentTables(t *testing.T) {
 // we test with different 'direct' strategy options
 func testCreateInvalidView(t *testing.T) {
 	for _, ddlStrategy := range []string{"direct", "direct -allow-zero-in-date"} {
-		createInvalidView := "CREATE OR REPLACE VIEW invalid_view AS SELECT * FROM nonexistent_table;"
-		output, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ApplySchema", "--", "-skip_preflight", "-ddl_strategy", ddlStrategy, "--sql", createInvalidView, keyspaceName)
+		createInvalidView := "CREATE OR REPLACE VIEW invalid_view AS SELECT * FROM nonexistent_table"
+		output, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ApplySchema", "--", "-ddl_strategy", ddlStrategy, "--sql", createInvalidView, keyspaceName)
 		require.Error(t, err)
 		assert.Contains(t, output, "doesn't exist (errno 1146)")
 	}

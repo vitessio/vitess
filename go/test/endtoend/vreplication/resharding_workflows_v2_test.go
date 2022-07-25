@@ -775,7 +775,7 @@ func createAdditionalCustomerShards(t *testing.T, shards string) {
 }
 
 func tstApplySchemaOnlineDDL(t *testing.T, sql string, keyspace string) {
-	err := vc.VtctlClient.ExecuteCommand("ApplySchema", "--", "--skip_preflight", "--ddl_strategy=online",
+	err := vc.VtctlClient.ExecuteCommand("ApplySchema", "--", "--ddl_strategy=online",
 		"--sql", sql, keyspace)
 	require.NoError(t, err, fmt.Sprintf("ApplySchema Error: %s", err))
 }
