@@ -18,7 +18,6 @@ package vtgate
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"math/rand"
 	"sort"
@@ -26,9 +25,12 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/spf13/pflag"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -44,14 +46,24 @@ import (
 var (
 	_ discovery.HealthCheck = (*discovery.HealthCheckImpl)(nil)
 	// CellsToWatch is the list of cells the healthcheck operates over. If it is empty, only the local cell is watched
-	CellsToWatch = flag.String("cells_to_watch", "", "comma-separated list of cells for watching tablets")
+	CellsToWatch string
 
-	bufferImplementation = flag.String("buffer_implementation", "keyspace_events", "Allowed values: healthcheck (legacy implementation), keyspace_events (default)")
-	initialTabletTimeout = flag.Duration("gateway_initial_tablet_timeout", 30*time.Second, "At startup, the tabletGateway will wait up to this duration to get at least one tablet per keyspace/shard/tablet type")
+	bufferImplementation = "keyspace_events"
+	initialTabletTimeout = 30 * time.Second
 	// retryCount is the number of times a query will be retried on error
-	retryCount           = flag.Int("retry-count", 2, "retry count")
-	routeReplicaToRdonly = flag.Bool("gateway_route_replica_to_rdonly", false, "route REPLICA queries to RDONLY tablets as well as REPLICA tablets")
+	retryCount           = 2
+	routeReplicaToRdonly bool
 )
+
+func init() {
+	servenv.OnParseFor("vtgate", func(fs *pflag.FlagSet) {
+		fs.StringVar(&CellsToWatch, "cells_to_watch", "", "comma-separated list of cells for watching tablets")
+		fs.StringVar(&bufferImplementation, "buffer_implementation", "keyspace_events", "Allowed values: healthcheck (legacy implementation), keyspace_events (default)")
+		fs.DurationVar(&initialTabletTimeout, "gateway_initial_tablet_timeout", 30*time.Second, "At startup, the tabletGateway will wait up to this duration to get at least one tablet per keyspace/shard/tablet type")
+		fs.IntVar(&retryCount, "retry-count", 2, "retry count")
+		fs.BoolVar(&routeReplicaToRdonly, "gateway_route_replica_to_rdonly", false, "route REPLICA queries to RDONLY tablets as well as REPLICA tablets")
+	})
+}
 
 // TabletGateway implements the Gateway interface.
 // This implementation uses the new healthcheck module.
@@ -90,13 +102,13 @@ func NewTabletGateway(ctx context.Context, hc discovery.HealthCheck, serv srvtop
 				log.Exitf("Unable to create new TabletGateway: %v", err)
 			}
 		}
-		hc = createHealthCheck(ctx, *HealthCheckRetryDelay, *HealthCheckTimeout, topoServer, localCell, *CellsToWatch)
+		hc = createHealthCheck(ctx, *HealthCheckRetryDelay, *HealthCheckTimeout, topoServer, localCell, CellsToWatch)
 	}
 	gw := &TabletGateway{
 		hc:                hc,
 		srvTopoServer:     serv,
 		localCell:         localCell,
-		retryCount:        *retryCount,
+		retryCount:        retryCount,
 		statusAggregators: make(map[string]*TabletStatusAggregator),
 	}
 	gw.setupBuffering(ctx)
@@ -108,7 +120,7 @@ func (gw *TabletGateway) setupBuffering(ctx context.Context) {
 	cfg := buffer.NewConfigFromFlags()
 	gw.buffer = buffer.New(cfg)
 
-	switch *bufferImplementation {
+	switch bufferImplementation {
 	case "healthcheck":
 		// subscribe to healthcheck updates so that buffer can be notified if needed
 		// we run this in a separate goroutine so that normal processing doesn't need to block
@@ -155,7 +167,7 @@ func (gw *TabletGateway) setupBuffering(ctx context.Context) {
 		}(bufferCtx, ksChan, gw.buffer)
 
 	default:
-		log.Exitf("unknown buffering implementation for TabletGateway: %q", *bufferImplementation)
+		log.Exitf("unknown buffering implementation for TabletGateway: %q", bufferImplementation)
 	}
 }
 
@@ -173,7 +185,7 @@ func (gw *TabletGateway) RegisterStats() {
 // WaitForTablets is part of the Gateway interface.
 func (gw *TabletGateway) WaitForTablets(tabletTypesToWait []topodatapb.TabletType) (err error) {
 	log.Infof("Gateway waiting for serving tablets of types %v ...", tabletTypesToWait)
-	ctx, cancel := context.WithTimeout(context.Background(), *initialTabletTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), initialTabletTimeout)
 	defer cancel()
 
 	defer func() {
@@ -283,7 +295,7 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 		// temporary hack to enable REPLICA type queries to address both REPLICA tablets and RDONLY tablets
 		// original commit - https://github.com/tinyspeck/vitess/pull/166/commits/2552b4ce25a9fdb41ff07fa69f2ccf485fea83ac
 		// discoverygateway patch - https://github.com/slackhq/vitess/commit/47adb7c8fc720cb4cb7a090530b3e88d310ff6d3
-		if *routeReplicaToRdonly && target.TabletType == topodatapb.TabletType_REPLICA {
+		if routeReplicaToRdonly && target.TabletType == topodatapb.TabletType_REPLICA {
 			// Create a new target for the same original keyspace/shard, but RDONLY tablet type.
 			rdonlyTarget := &querypb.Target{
 				Keyspace:   target.Keyspace,
@@ -341,7 +353,7 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 
 		startTime := time.Now()
 		var canRetry bool
-		if *routeReplicaToRdonly && target.TabletType == topodatapb.TabletType_REPLICA {
+		if routeReplicaToRdonly && target.TabletType == topodatapb.TabletType_REPLICA {
 			canRetry, err = inner(ctx, th.Target, th.Conn)
 		} else {
 			canRetry, err = inner(ctx, target, th.Conn)

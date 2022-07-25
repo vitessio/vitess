@@ -142,7 +142,7 @@ func main() {
 		log.Exitf("tablet_types_to_wait should contain at least one serving tablet type")
 	}
 
-	err := CheckCellFlags(context.Background(), resilientServer, *cell, *vtgate.CellsToWatch)
+	err := CheckCellFlags(context.Background(), resilientServer, *cell, vtgate.CellsToWatch)
 	if err != nil {
 		log.Exitf("cells_to_watch validation failed: %v", err)
 	}
