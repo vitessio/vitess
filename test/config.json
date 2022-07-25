@@ -1127,7 +1127,7 @@
 		},
 		"vreplication_across_db_versions": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestV2WorkflowsAcrossDBVersions", "-timeout", "20m"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestV2WorkflowsAcrossDBVersions", "-timeout", "25m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_across_db_versions",
