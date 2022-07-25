@@ -614,7 +614,7 @@ func (cached *Plan) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(128)
+		size += int64(144)
 	}
 	// field Original string
 	size += hack.RuntimeAllocSize(int64(len(cached.Original)))
@@ -629,6 +629,13 @@ func (cached *Plan) CachedSize(alloc bool) int64 {
 		size += hack.RuntimeAllocSize(int64(cap(cached.Warnings)) * int64(8))
 		for _, elem := range cached.Warnings {
 			size += elem.CachedSize(true)
+		}
+	}
+	// field TablesUsed []string
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.TablesUsed)) * int64(16))
+		for _, elem := range cached.TablesUsed {
+			size += hack.RuntimeAllocSize(int64(len(elem)))
 		}
 	}
 	return size

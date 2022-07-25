@@ -22691,8 +22691,8 @@ export namespace tabletmanagerdata {
         /** VDiffCoreOptions tables */
         tables?: (string|null);
 
-        /** VDiffCoreOptions resumable */
-        resumable?: (boolean|null);
+        /** VDiffCoreOptions auto_retry */
+        auto_retry?: (boolean|null);
 
         /** VDiffCoreOptions max_rows */
         max_rows?: (number|Long|null);
@@ -22722,8 +22722,8 @@ export namespace tabletmanagerdata {
         /** VDiffCoreOptions tables. */
         public tables: string;
 
-        /** VDiffCoreOptions resumable. */
-        public resumable: boolean;
+        /** VDiffCoreOptions auto_retry. */
+        public auto_retry: boolean;
 
         /** VDiffCoreOptions max_rows. */
         public max_rows: (number|Long);

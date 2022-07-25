@@ -761,7 +761,6 @@ func SetupNewClusterSemiSync(t *testing.T) *VtOrcClusterInfo {
 	clusterInstance.VtTabletExtraArgs = []string{
 		"--lock_tables_timeout", "5s",
 		"--disable_active_reparents",
-		"--enable_semi_sync",
 	}
 
 	// Initialize Cluster
@@ -840,7 +839,6 @@ func AddSemiSyncKeyspace(t *testing.T, clusterInfo *VtOrcClusterInfo) {
 	clusterInfo.ClusterInstance.VtTabletExtraArgs = []string{
 		"--lock_tables_timeout", "5s",
 		"--disable_active_reparents",
-		"--enable_semi_sync",
 	}
 
 	// Initialize Cluster

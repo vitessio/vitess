@@ -74,7 +74,6 @@ spec:
               extraFlags:
                 db_charset: utf8mb4
                 disable_active_reparents: "true"
-                enable_semi_sync: "false"
               resources:
                 requests:
                   cpu: 100m

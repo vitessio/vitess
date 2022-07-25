@@ -159,7 +159,6 @@ func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *Comp
 		tablet.VttabletProcess.DbPassword = dbPassword
 		tablet.VttabletProcess.ExtraArgs = commonTabletArg
 		tablet.VttabletProcess.SupportsBackup = true
-		tablet.VttabletProcess.EnableSemiSync = true
 
 		if setupType == Mysqlctld {
 			tablet.MysqlctldProcess = *cluster.MysqlCtldProcessInstance(tablet.TabletUID, tablet.MySQLPort, localCluster.TmpDirectory)
