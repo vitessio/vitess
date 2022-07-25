@@ -627,9 +627,9 @@ var commands = []commandGroup{
 				help: "Operates on online DDL (migrations). Examples:" +
 					" \nvtctl OnlineDDL test_keyspace show 82fa54ac_e83e_11ea_96b7_f875a4d24e90" +
 					" \nvtctl OnlineDDL test_keyspace show all" +
-					" \nvtctl OnlineDDL test_keyspace show all --order descending" +
-					" \nvtctl OnlineDDL test_keyspace show all --limit 10" +
-					" \nvtctl OnlineDDL test_keyspace show all --skip 5 --limit 10" +
+					" \nvtctl OnlineDDL  --order descending test_keyspace show all" +
+					" \nvtctl OnlineDDL  --limit 10 test_keyspace show all" +
+					" \nvtctl OnlineDDL  --skip 5 --limit 10 test_keyspace show all" +
 					" \nvtctl OnlineDDL test_keyspace show running" +
 					" \nvtctl OnlineDDL test_keyspace show complete" +
 					" \nvtctl OnlineDDL test_keyspace show failed" +
@@ -3129,7 +3129,7 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 
 func commandOnlineDDL(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	json := subFlags.Bool("json", false, "Output JSON instead of human-readable table")
-	orderBy := subFlags.String("order", "ascending", "Sort the results by `added_at` timestamp of the Schema migration (default is ascending. Allowed values are `ascending` or `descending`.")
+	orderBy := subFlags.String("order", "ascending", "Sort the results by `id` property of the Schema migration (default is ascending. Allowed values are `ascending` or `descending`.")
 	limit := subFlags.Int64("limit", 0, "Limit number of rows returned in output")
 	skip := subFlags.Int64("skip", 0, "Skip specified number of rows returned in output")
 	if err := subFlags.Parse(args); err != nil {
@@ -3147,6 +3147,7 @@ func commandOnlineDDL(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag
 	if subFlags.NArg() >= 3 {
 		arg = subFlags.Args()[2]
 	}
+
 	query := ""
 	uuid := ""
 	var bindErr error
@@ -3174,14 +3175,14 @@ func commandOnlineDDL(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag
 				condition, bindErr = sqlparser.ParseAndBind("migration_context=%a", sqltypes.StringBindVariable(arg))
 			}
 		}
-		order := " order by added_timestamp ascending"
+		order := " order by `id` ASC"
 		if *orderBy == "descending" {
-			order = " order by added_timestamp descending"
+			order = " order by `id` DESC"
 		}
 
 		skipLimit := ""
 		if *limit > 0 {
-			skipLimit = fmt.Sprintf(" LIMIT %v, %v", *skip, *limit)
+			skipLimit = fmt.Sprintf("LIMIT %v,%v", *skip, *limit)
 		}
 
 		query = fmt.Sprintf(`select
@@ -3216,7 +3217,6 @@ func commandOnlineDDL(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag
 	if bindErr != nil {
 		return fmt.Errorf("Error generating OnlineDDL query: %+v", bindErr)
 	}
-
 	qr, err := wr.VExecResult(ctx, uuid, keyspace, query, false)
 	if err != nil {
 		return err

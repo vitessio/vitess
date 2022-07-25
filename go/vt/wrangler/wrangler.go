@@ -19,6 +19,8 @@ limitations under the License.
 package wrangler
 
 import (
+	"context"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver"
@@ -42,11 +44,12 @@ var (
 // Multiple go routines can use the same Wrangler at the same time,
 // provided they want to share the same logger / topo server / lock timeout.
 type Wrangler struct {
-	logger   logutil.Logger
-	ts       *topo.Server
-	tmc      tmclient.TabletManagerClient
-	vtctld   vtctlservicepb.VtctldServer
-	sourceTs *topo.Server
+	logger    logutil.Logger
+	ts        *topo.Server
+	tmc       tmclient.TabletManagerClient
+	vtctld    vtctlservicepb.VtctldServer
+	sourceTs  *topo.Server
+	VExecFunc func(ctx context.Context, workflow, keyspace, query string, dryRun bool) (map[*topo.TabletInfo]*sqltypes.Result, error)
 }
 
 // New creates a new Wrangler object.
