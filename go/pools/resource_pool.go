@@ -19,18 +19,16 @@ limitations under the License.
 package pools
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/vt/log"
-
-	"context"
-
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/trace"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -39,6 +37,7 @@ import (
 type (
 	IResourcePool interface {
 		Close()
+		Name() string
 		Get(ctx context.Context) (resource Resource, err error)
 		Put(resource Resource)
 		SetCapacity(capacity int) error
@@ -71,10 +70,6 @@ type (
 		timeUsed time.Time
 	}
 
-	// RefreshCheck is a function used to determine if a resource pool should be
-	// refreshed (i.e. closed and reopened)
-	RefreshCheck func() (bool, error)
-
 	// ResourcePool allows you to use a pool of resources.
 	ResourcePool struct {
 		// stats. Atomic fields must remain at the top in order to prevent panics on certain architectures.
@@ -94,12 +89,8 @@ type (
 		idleTimer *timer.Timer
 		logWait   func(time.Time)
 
-		refreshCheck    RefreshCheck
-		refreshInterval time.Duration
-		refreshStop     chan struct{}
-		refreshTicker   *time.Ticker
-		refreshWg       sync.WaitGroup
-		reopenMutex     sync.Mutex
+		reopenMutex sync.Mutex
+		refresh     *poolRefresh
 	}
 )
 
@@ -179,37 +170,14 @@ func NewResourcePool(factory Factory, capacity, maxCap int, idleTimeout time.Dur
 		rp.idleTimer.Start(rp.closeIdleResources)
 	}
 
-	if refreshCheck != nil && refreshInterval > 0 {
-		rp.refreshInterval = refreshInterval
-		rp.refreshCheck = refreshCheck
-		rp.startRefreshTicker()
-	}
+	rp.refresh = newPoolRefresh(rp, refreshCheck, refreshInterval)
+	rp.refresh.startRefreshTicker()
 
 	return rp
 }
 
-func (rp *ResourcePool) startRefreshTicker() {
-	rp.refreshTicker = time.NewTicker(rp.refreshInterval)
-	rp.refreshStop = make(chan struct{})
-	rp.refreshWg.Add(1)
-	go func() {
-		defer rp.refreshWg.Done()
-		for {
-			select {
-			case <-rp.refreshTicker.C:
-				val, err := rp.refreshCheck()
-				if err != nil {
-					log.Info(err)
-				}
-				if val {
-					go rp.reopen()
-					return
-				}
-			case <-rp.refreshStop:
-				return
-			}
-		}
-	}()
+func (rp *ResourcePool) Name() string {
+	return "ResourcePool"
 }
 
 // Close empties the pool calling Close on all its resources.
@@ -220,11 +188,7 @@ func (rp *ResourcePool) Close() {
 	if rp.idleTimer != nil {
 		rp.idleTimer.Stop()
 	}
-	if rp.refreshTicker != nil {
-		rp.refreshTicker.Stop()
-		close(rp.refreshStop)
-		rp.refreshWg.Wait()
-	}
+	rp.refresh.stop()
 	_ = rp.SetCapacity(0)
 }
 
@@ -266,9 +230,7 @@ func (rp *ResourcePool) reopen() {
 	if rp.idleTimer != nil {
 		rp.idleTimer.Start(rp.closeIdleResources)
 	}
-	if rp.refreshCheck != nil {
-		rp.startRefreshTicker()
-	}
+	rp.refresh.startRefreshTicker()
 }
 
 // Get will return the next available resource. If capacity
