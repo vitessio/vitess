@@ -17,10 +17,15 @@ limitations under the License.
 package vtgate
 
 import (
+	"context"
 	_ "embed"
 	"flag"
 	"os"
 	"testing"
+
+	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/test/endtoend/utils"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -69,7 +74,7 @@ func TestMain(m *testing.M) {
 			VSchema:   VSchema,
 		}
 		clusterInstance.VtGateExtraArgs = []string{"--schema_change_signal"}
-		clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-schema-change-signal", "--queryserver-config-schema-change-signal-interval", "0.1"}
+		clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-schema-change-signal", "--queryserver-config-schema-change-signal-interval", "0.1", "--queryserver-config-max-result-size", "100", "--queryserver-config-terse-errors"}
 		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 0, false)
 		if err != nil {
 			return 1
@@ -99,4 +104,27 @@ func TestMain(m *testing.M) {
 		return m.Run()
 	}()
 	os.Exit(exitCode)
+}
+
+func start(t *testing.T) (*mysql.Conn, func()) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+
+	deleteAll := func() {
+		utils.Exec(t, conn, "use ks")
+		tables := []string{"t1", "t2", "vstream_test", "t3", "t4", "t6", "t7_xxhash", "t7_xxhash_idx", "t7_fk", "t8", "t9", "t9_id_to_keyspace_id_idx", "t1_id2_idx", "t2_id4_idx", "t3_id7_idx", "t4_id2_idx", "t5_null_vindex", "t6_id2_idx"}
+		for _, table := range tables {
+			_, _ = utils.ExecAllowError(t, conn, "delete from "+table)
+		}
+		utils.Exec(t, conn, "set workload = oltp")
+	}
+
+	deleteAll()
+
+	return conn, func() {
+		deleteAll()
+		conn.Close()
+		cluster.PanicHandler(t)
+	}
 }

@@ -282,7 +282,6 @@ func initializeClusterLate(t *testing.T) {
 		_, err = tablet.VttabletProcess.QueryTablet(query, keyspace.Name, false)
 		require.NoError(t, err)
 
-		tablet.VttabletProcess.EnableSemiSync = true
 		err = tablet.VttabletProcess.Setup()
 		require.NoError(t, err)
 
