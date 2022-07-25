@@ -20,6 +20,7 @@ package wrangler
 
 import (
 	"context"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
