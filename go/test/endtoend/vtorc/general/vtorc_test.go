@@ -155,10 +155,6 @@ func TestStopReplication(t *testing.T) {
 	curPrimary := utils.ShardPrimaryTablet(t, clusterInfo, keyspace, shard0)
 	assert.NotNil(t, curPrimary, "should have elected a primary")
 
-	// TODO(deepthi): we should not need to do this, the DB should be created automatically
-	_, err := curPrimary.VttabletProcess.QueryTablet(fmt.Sprintf("create database IF NOT EXISTS vt_%s", keyspace.Name), keyspace.Name, false)
-	require.NoError(t, err)
-
 	var replica *cluster.Vttablet
 	for _, tablet := range shard0.Vttablets {
 		// we know we have only two tablets, so the "other" one must be the new primary
@@ -169,7 +165,21 @@ func TestStopReplication(t *testing.T) {
 	}
 	require.NotNil(t, replica, "should be able to find a replica")
 	// use vtctlclient to stop replication
-	_, err = clusterInfo.ClusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("StopReplication", replica.Alias)
+	_, err := clusterInfo.ClusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("StopReplication", replica.Alias)
+	require.NoError(t, err)
+
+	// check replication is setup correctly
+	utils.CheckReplication(t, clusterInfo, curPrimary, []*cluster.Vttablet{replica}, 15*time.Second)
+
+	// Stop just the IO thread on the replica
+	_, err = utils.RunSQL(t, "STOP SLAVE IO_THREAD", replica, "")
+	require.NoError(t, err)
+
+	// check replication is setup correctly
+	utils.CheckReplication(t, clusterInfo, curPrimary, []*cluster.Vttablet{replica}, 15*time.Second)
+
+	// Stop just the SQL thread on the replica
+	_, err = utils.RunSQL(t, "STOP SLAVE SQL_THREAD", replica, "")
 	require.NoError(t, err)
 
 	// check replication is setup correctly
