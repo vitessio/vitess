@@ -202,5 +202,13 @@
         ]
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "user.author5s",
+    "user.book6s",
+    "user.book6s_order2s",
+    "user.customer2s",
+    "user.order2s",
+    "user.supplier5s"
+  ]
 }

@@ -16,6 +16,12 @@ Map(ctx context.Context, vcursor VCursor, .... ) ....
 This only impacts the users who have added their own vindex implementation. 
 They would be required to change their implementation with these new interface method expectations.
 
+#### Logstats Table and Keyspace deprecated
+
+Information about which tables are used was being reported through the Keyspace/Table fields on LogStats.
+For multi-table queries, this output can be confusing, so we have added TablesUsed, that is a string array, listing all tables and which keyspace they are on.
+The Table/Keyspace fields are deprecated and will be removed in the V16 release of Vitess.
+
 ### Command-line syntax deprecations
 
 #### vttablet startup flag deletions
@@ -31,6 +37,7 @@ The following VTTablet flags were deprecated in 7.0. They have now been deleted
 
 #### vttablet startup flag deprecations
 - --enable-query-plan-field-caching is now deprecated. It will be removed in v16.
+- --enable_semi_sync is now deprecated. It will be removed in v16. Instead, set the correct durability policy using `SetKeyspaceDurabilityPolicy`
 
 ### New command line flags and behavior
 
@@ -155,3 +162,10 @@ $ curl -s http://127.0.0.1:15100/debug/vars | jq . | grep Throttler
 
 Added new parameter `multi_shard_autocommit` to lookup vindex definition in vschema, if enabled will send lookup vindex dml query as autocommit to all shards
 This is slighly different from `autocommit` parameter where the query is sent in its own transaction separate from the ongoing transaction if any i.e. begin -> lookup query execs -> commit/rollback
+
+### Durability Policy
+
+#### Cross Cell
+
+A new durabilty policy `cross_cell` is now supported. `cross_cell` durability policy only allows replica tablets from a different cell than the current primary to
+send semi sync ACKs. This ensures that any committed write exists in atleast 2 tablets belonging to different cells.

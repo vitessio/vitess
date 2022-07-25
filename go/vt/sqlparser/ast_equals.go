@@ -4771,6 +4771,12 @@ func EqualsCallable(inA, inB Callable) bool {
 			return false
 		}
 		return EqualsRefOfArgumentLessWindowExpr(a, b)
+	case *Avg:
+		b, ok := inB.(*Avg)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfAvg(a, b)
 	case *CharExpr:
 		b, ok := inB.(*CharExpr)
 		if !ok {
@@ -4789,6 +4795,18 @@ func EqualsCallable(inA, inB Callable) bool {
 			return false
 		}
 		return EqualsRefOfConvertUsingExpr(a, b)
+	case *Count:
+		b, ok := inB.(*Count)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfCount(a, b)
+	case *CountStar:
+		b, ok := inB.(*CountStar)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfCountStar(a, b)
 	case *CurTimeFuncExpr:
 		b, ok := inB.(*CurTimeFuncExpr)
 		if !ok {
@@ -4981,12 +4999,24 @@ func EqualsCallable(inA, inB Callable) bool {
 			return false
 		}
 		return EqualsRefOfMatchExpr(a, b)
+	case *Max:
+		b, ok := inB.(*Max)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfMax(a, b)
 	case *MemberOfExpr:
 		b, ok := inB.(*MemberOfExpr)
 		if !ok {
 			return false
 		}
 		return EqualsRefOfMemberOfExpr(a, b)
+	case *Min:
+		b, ok := inB.(*Min)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfMin(a, b)
 	case *NTHValueExpr:
 		b, ok := inB.(*NTHValueExpr)
 		if !ok {
@@ -5041,6 +5071,12 @@ func EqualsCallable(inA, inB Callable) bool {
 			return false
 		}
 		return EqualsRefOfSubstrExpr(a, b)
+	case *Sum:
+		b, ok := inB.(*Sum)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfSum(a, b)
 	case *TimestampFuncExpr:
 		b, ok := inB.(*TimestampFuncExpr)
 		if !ok {

@@ -3059,6 +3059,13 @@ func (*UpdateXMLExpr) iCallable()                      {}
 func (*PerformanceSchemaFuncExpr) iCallable()          {}
 func (*GTIDFuncExpr) iCallable()                       {}
 
+func (*Sum) iCallable()       {}
+func (*Min) iCallable()       {}
+func (*Max) iCallable()       {}
+func (*Avg) iCallable()       {}
+func (*CountStar) iCallable() {}
+func (*Count) iCallable()     {}
+
 func (sum *Sum) GetArg() Expr                   { return sum.Arg }
 func (min *Min) GetArg() Expr                   { return min.Arg }
 func (max *Max) GetArg() Expr                   { return max.Arg }

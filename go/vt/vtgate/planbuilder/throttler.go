@@ -25,7 +25,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
-func buildShowThrottledAppsPlan(query string, vschema plancontext.VSchema) (engine.Primitive, error) {
+func buildShowThrottledAppsPlan(query string, vschema plancontext.VSchema) (*planResult, error) {
 	dest, ks, tabletType, err := vschema.TargetDestination("")
 	if err != nil {
 		return nil, err
@@ -42,9 +42,9 @@ func buildShowThrottledAppsPlan(query string, vschema plancontext.VSchema) (engi
 		dest = key.DestinationAllShards{}
 	}
 
-	return &engine.Send{
+	return newPlanResult(&engine.Send{
 		Keyspace:          ks,
 		TargetDestination: dest,
 		Query:             query,
-	}, nil
+	}), nil
 }

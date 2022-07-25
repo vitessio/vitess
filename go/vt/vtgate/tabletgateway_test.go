@@ -56,7 +56,7 @@ func TestTabletGatewayExecuteStream(t *testing.T) {
 
 func TestTabletGatewayBegin(t *testing.T) {
 	testTabletGatewayGeneric(t, func(tg *TabletGateway, target *querypb.Target) error {
-		_, _, err := tg.Begin(context.Background(), target, nil)
+		_, err := tg.Begin(context.Background(), target, nil)
 		return err
 	})
 }
@@ -77,7 +77,7 @@ func TestTabletGatewayRollback(t *testing.T) {
 
 func TestTabletGatewayBeginExecute(t *testing.T) {
 	testTabletGatewayGeneric(t, func(tg *TabletGateway, target *querypb.Target) error {
-		_, _, _, err := tg.BeginExecute(context.Background(), target, nil, "query", nil, 0, nil)
+		_, _, err := tg.BeginExecute(context.Background(), target, nil, "query", nil, 0, nil)
 		return err
 	})
 }

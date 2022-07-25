@@ -10,7 +10,10 @@
       "Sharded": false
     },
     "query": "alter vschema create vindex hash_vdx using `hash`"
-  }
+  },
+  "TablesUsed": [
+    "main.hash_vdx"
+  ]
 }
 Gen4 plan same as above
 
@@ -26,7 +29,10 @@ Gen4 plan same as above
       "Sharded": true
     },
     "query": "alter vschema create vindex `user`.hash_vdx using `hash`"
-  }
+  },
+  "TablesUsed": [
+    "user.hash_vdx"
+  ]
 }
 Gen4 plan same as above
 
@@ -42,7 +48,10 @@ Gen4 plan same as above
       "Sharded": false
     },
     "query": "alter vschema drop vindex hash_vdx"
-  }
+  },
+  "TablesUsed": [
+    "main.hash_vdx"
+  ]
 }
 Gen4 plan same as above
 
@@ -58,7 +67,10 @@ Gen4 plan same as above
       "Sharded": false
     },
     "query": "alter vschema add table a"
-  }
+  },
+  "TablesUsed": [
+    "main.a"
+  ]
 }
 Gen4 plan same as above
 
@@ -74,7 +86,10 @@ Gen4 plan same as above
       "Sharded": false
     },
     "query": "alter vschema add sequence a_seq"
-  }
+  },
+  "TablesUsed": [
+    "main.a_seq"
+  ]
 }
 Gen4 plan same as above
 
@@ -90,7 +105,10 @@ Gen4 plan same as above
       "Sharded": true
     },
     "query": "alter vschema on `user`.a add auto_increment id using a_seq"
-  }
+  },
+  "TablesUsed": [
+    "user.a"
+  ]
 }
 Gen4 plan same as above
 
@@ -106,7 +124,10 @@ Gen4 plan same as above
       "Sharded": false
     },
     "query": "alter vschema drop table a"
-  }
+  },
+  "TablesUsed": [
+    "main.a"
+  ]
 }
 Gen4 plan same as above
 
@@ -122,7 +143,10 @@ Gen4 plan same as above
       "Sharded": false
     },
     "query": "alter vschema on a add vindex `hash` (id)"
-  }
+  },
+  "TablesUsed": [
+    "main.a"
+  ]
 }
 Gen4 plan same as above
 
@@ -138,6 +162,9 @@ Gen4 plan same as above
       "Sharded": false
     },
     "query": "alter vschema on a drop vindex `hash`"
-  }
+  },
+  "TablesUsed": [
+    "main.a"
+  ]
 }
 Gen4 plan same as above
