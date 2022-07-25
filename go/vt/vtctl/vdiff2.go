@@ -426,7 +426,7 @@ func displayVDiff2ShowSingleSummary(wr *wrangler.Wrangler, format, keyspace, wor
 			str = str2
 		}
 	}
-	wr.Logger().Printf(fmt.Sprintf("\r%s\n", str))
+	wr.Logger().Printf(str + "\n")
 	return state, nil
 }
 func buildVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid string, output *wrangler.VDiffOutput, verbose bool) (*vdiffSummary, error) {
