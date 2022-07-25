@@ -17,6 +17,7 @@ limitations under the License.
 package vtgate
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -60,6 +61,63 @@ func TestTxConnBegin(t *testing.T) {
 		sc.txConn.Begin(ctx, safeSession))
 	utils.MustMatch(t, &wantSession, session, "Session")
 	assert.EqualValues(t, 1, sbc0.CommitCount.Get(), "sbc0.CommitCount")
+}
+
+func TestTxConnCommitFailure(t *testing.T) {
+	sc, sbc0, sbc1, rss0, rss1, rss01 := newTestTxConnEnv(t, "TestTxConn")
+	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
+
+	// Sequence the executes to ensure commit order
+	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
+	sc.ExecuteMultiShard(ctx, rss0, queries, session, false, false)
+	wantSession := vtgatepb.Session{
+		InTransaction: true,
+		ShardSessions: []*vtgatepb.Session_ShardSession{{
+			Target: &querypb.Target{
+				Keyspace:   "TestTxConn",
+				Shard:      "0",
+				TabletType: topodatapb.TabletType_PRIMARY,
+			},
+			TransactionId: 1,
+			TabletAlias:   sbc0.Tablet().Alias,
+		}},
+	}
+	utils.MustMatch(t, &wantSession, session.Session, "Session")
+	sc.ExecuteMultiShard(ctx, rss01, twoQueries, session, false, false)
+	wantSession = vtgatepb.Session{
+		InTransaction: true,
+		ShardSessions: []*vtgatepb.Session_ShardSession{{
+			Target: &querypb.Target{
+				Keyspace:   "TestTxConn",
+				Shard:      "0",
+				TabletType: topodatapb.TabletType_PRIMARY,
+			},
+			TransactionId: 1,
+			TabletAlias:   sbc0.Tablet().Alias,
+		}, {
+			Target: &querypb.Target{
+				Keyspace:   "TestTxConn",
+				Shard:      "1",
+				TabletType: topodatapb.TabletType_PRIMARY,
+			},
+			TransactionId: 1,
+			TabletAlias:   sbc1.Tablet().Alias,
+		}},
+	}
+	utils.MustMatch(t, &wantSession, session.Session, "Session")
+
+	sbc1.MustFailCodes[vtrpcpb.Code_DEADLINE_EXCEEDED] = 1
+
+	expectErr := NewShardError(vterrors.New(
+		vtrpcpb.Code_DEADLINE_EXCEEDED,
+		fmt.Sprintf("%v error", vtrpcpb.Code_DEADLINE_EXCEEDED)),
+		rss1[0].Target)
+
+	require.ErrorContains(t, sc.txConn.Commit(ctx, session), expectErr.Error())
+	wantSession = vtgatepb.Session{}
+	utils.MustMatch(t, &wantSession, session.Session, "Session")
+	assert.EqualValues(t, 1, sbc0.CommitCount.Get(), "sbc0.CommitCount")
+	assert.EqualValues(t, 1, sbc1.CommitCount.Get(), "sbc1.CommitCount")
 }
 
 func TestTxConnCommitSuccess(t *testing.T) {
@@ -467,9 +525,14 @@ func TestTxConnCommitOrderFailure3(t *testing.T) {
 		sc.txConn.Commit(ctx, session))
 
 	// The last failed commit must generate a warning.
+	expectErr := NewShardError(vterrors.New(
+		vtrpcpb.Code_INVALID_ARGUMENT,
+		fmt.Sprintf("%v error", vtrpcpb.Code_INVALID_ARGUMENT)),
+		rss1[0].Target)
+
 	wantSession := vtgatepb.Session{
 		Warnings: []*querypb.QueryWarning{{
-			Message: "post-operation transaction had an error: Code: INVALID_ARGUMENT\nINVALID_ARGUMENT error\n",
+			Message: fmt.Sprintf("post-operation transaction had an error: %v", expectErr),
 		}},
 	}
 	utils.MustMatch(t, &wantSession, session.Session, "Session")
@@ -894,7 +957,7 @@ func TestTxConnReservedRollback(t *testing.T) {
 }
 
 func TestTxConnReservedRollbackFailure(t *testing.T) {
-	sc, sbc0, sbc1, rss0, _, rss01 := newTestTxConnEnv(t, "TxConnReservedRollback")
+	sc, sbc0, sbc1, rss0, rss1, rss01 := newTestTxConnEnv(t, "TxConnReservedRollback")
 
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true, InReservedConn: true})
 	sc.ExecuteMultiShard(ctx, rss0, queries, session, false, false)
@@ -903,10 +966,16 @@ func TestTxConnReservedRollbackFailure(t *testing.T) {
 	sbc1.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
 	assert.Error(t,
 		sc.txConn.Rollback(ctx, session))
+
+	expectErr := NewShardError(vterrors.New(
+		vtrpcpb.Code_INVALID_ARGUMENT,
+		fmt.Sprintf("%v error", vtrpcpb.Code_INVALID_ARGUMENT)),
+		rss1[0].Target)
+
 	wantSession := vtgatepb.Session{
 		InReservedConn: true,
 		Warnings: []*querypb.QueryWarning{{
-			Message: "rollback encountered an error and connection to all shard for this session is released: Code: INVALID_ARGUMENT\nINVALID_ARGUMENT error\n",
+			Message: fmt.Sprintf("rollback encountered an error and connection to all shard for this session is released: %v", expectErr),
 		}},
 	}
 	utils.MustMatch(t, &wantSession, session.Session, "Session")

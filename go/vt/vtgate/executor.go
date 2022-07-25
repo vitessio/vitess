@@ -30,6 +30,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtgate/logstats"
+
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -186,7 +188,7 @@ func (e *Executor) Execute(ctx context.Context, method string, safeSession *Safe
 	trace.AnnotateSQL(span, sqlparser.Preview(sql))
 	defer span.Finish()
 
-	logStats := NewLogStats(ctx, method, sql, safeSession.GetSessionUUID(), bindVars)
+	logStats := logstats.NewLogStats(ctx, method, sql, safeSession.GetSessionUUID(), bindVars)
 	stmtType, result, err := e.execute(ctx, safeSession, sql, bindVars, logStats)
 	logStats.Error = err
 	if result == nil {
@@ -203,7 +205,8 @@ func (e *Executor) Execute(ctx context.Context, method string, safeSession *Safe
 		log.Warningf("%q exceeds warning threshold of max memory rows: %v", piiSafeSQL, *warnMemoryRows)
 	}
 
-	logStats.Send()
+	logStats.SaveEndTime()
+	QueryLogger.Send(logStats)
 	return result, err
 }
 
@@ -242,7 +245,7 @@ func (e *Executor) StreamExecute(
 	trace.AnnotateSQL(span, sqlparser.Preview(sql))
 	defer span.Finish()
 
-	logStats := NewLogStats(ctx, method, sql, safeSession.GetSessionUUID(), bindVars)
+	logStats := logstats.NewLogStats(ctx, method, sql, safeSession.GetSessionUUID(), bindVars)
 	srr := &streaminResultReceiver{callback: callback}
 	var err error
 
@@ -314,6 +317,7 @@ func (e *Executor) StreamExecute(
 		// 5: Log and add statistics
 		logStats.Keyspace = plan.Instructions.GetKeyspaceName()
 		logStats.Table = plan.Instructions.GetTableName()
+		logStats.TablesUsed = plan.TablesUsed
 		logStats.TabletType = vc.TabletType().String()
 		logStats.ExecuteTime = time.Since(execStart)
 
@@ -335,7 +339,8 @@ func (e *Executor) StreamExecute(
 		log.Warningf("%q exceeds warning threshold of max memory rows: %v", piiSafeSQL, *warnMemoryRows)
 	}
 
-	logStats.Send()
+	logStats.SaveEndTime()
+	QueryLogger.Send(logStats)
 	return err
 
 }
@@ -368,7 +373,7 @@ func saveSessionStats(safeSession *SafeSession, stmtType sqlparser.StatementType
 	}
 }
 
-func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *LogStats) (sqlparser.StatementType, *sqltypes.Result, error) {
+func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *logstats.LogStats) (sqlparser.StatementType, *sqltypes.Result, error) {
 	var err error
 	var qr *sqltypes.Result
 	var stmtType sqlparser.StatementType
@@ -512,11 +517,11 @@ func ifReadAfterWriteExist(session *SafeSession, f func(*vtgatepb.ReadAfterWrite
 	}
 }
 
-func (e *Executor) destinationExec(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, dest key.Destination, destKeyspace string, destTabletType topodatapb.TabletType, logStats *LogStats, ignoreMaxMemoryRows bool) (*sqltypes.Result, error) {
+func (e *Executor) destinationExec(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, dest key.Destination, destKeyspace string, destTabletType topodatapb.TabletType, logStats *logstats.LogStats, ignoreMaxMemoryRows bool) (*sqltypes.Result, error) {
 	return e.resolver.Execute(ctx, sql, bindVars, destKeyspace, destTabletType, dest, safeSession, safeSession.Options, logStats, false /* canAutocommit */, ignoreMaxMemoryRows)
 }
 
-func (e *Executor) handleBegin(ctx context.Context, safeSession *SafeSession, logStats *LogStats) (*sqltypes.Result, error) {
+func (e *Executor) handleBegin(ctx context.Context, safeSession *SafeSession, logStats *logstats.LogStats) (*sqltypes.Result, error) {
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 	err := e.txConn.Begin(ctx, safeSession)
@@ -527,7 +532,7 @@ func (e *Executor) handleBegin(ctx context.Context, safeSession *SafeSession, lo
 	return &sqltypes.Result{}, err
 }
 
-func (e *Executor) handleCommit(ctx context.Context, safeSession *SafeSession, logStats *LogStats) (*sqltypes.Result, error) {
+func (e *Executor) handleCommit(ctx context.Context, safeSession *SafeSession, logStats *logstats.LogStats) (*sqltypes.Result, error) {
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 	logStats.ShardQueries = uint64(len(safeSession.ShardSessions))
@@ -543,7 +548,7 @@ func (e *Executor) Commit(ctx context.Context, safeSession *SafeSession) error {
 	return e.txConn.Commit(ctx, safeSession)
 }
 
-func (e *Executor) handleRollback(ctx context.Context, safeSession *SafeSession, logStats *LogStats) (*sqltypes.Result, error) {
+func (e *Executor) handleRollback(ctx context.Context, safeSession *SafeSession, logStats *logstats.LogStats) (*sqltypes.Result, error) {
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 	logStats.ShardQueries = uint64(len(safeSession.ShardSessions))
@@ -553,7 +558,7 @@ func (e *Executor) handleRollback(ctx context.Context, safeSession *SafeSession,
 	return &sqltypes.Result{}, err
 }
 
-func (e *Executor) handleSavepoint(ctx context.Context, safeSession *SafeSession, sql string, planType string, logStats *LogStats, nonTxResponse func(query string) (*sqltypes.Result, error), ignoreMaxMemoryRows bool) (*sqltypes.Result, error) {
+func (e *Executor) handleSavepoint(ctx context.Context, safeSession *SafeSession, sql string, planType string, logStats *logstats.LogStats, nonTxResponse func(query string) (*sqltypes.Result, error), ignoreMaxMemoryRows bool) (*sqltypes.Result, error) {
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 	logStats.ShardQueries = uint64(len(safeSession.ShardSessions))
@@ -955,7 +960,7 @@ type iQueryOption interface {
 
 // getPlan computes the plan for the given query. If one is in
 // the cache, it reuses it.
-func (e *Executor) getPlan(ctx context.Context, vcursor *vcursorImpl, sql string, comments sqlparser.MarginComments, bindVars map[string]*querypb.BindVariable, qo iQueryOption, logStats *LogStats) (*engine.Plan, error) {
+func (e *Executor) getPlan(ctx context.Context, vcursor *vcursorImpl, sql string, comments sqlparser.MarginComments, bindVars map[string]*querypb.BindVariable, qo iQueryOption, logStats *logstats.LogStats) (*engine.Plan, error) {
 	if e.VSchema() == nil {
 		return nil, errors.New("vschema not initialized")
 	}
@@ -999,10 +1004,8 @@ func (e *Executor) getPlan(ctx context.Context, vcursor *vcursorImpl, sql string
 		query = sqlparser.String(statement)
 	}
 
-	if logStats != nil {
-		logStats.SQL = comments.Leading + query + comments.Trailing
-		logStats.BindVariables = sqltypes.CopyBindVariables(bindVars)
-	}
+	logStats.SQL = comments.Leading + query + comments.Trailing
+	logStats.BindVariables = sqltypes.CopyBindVariables(bindVars)
 
 	planHash := sha256.New()
 	_, _ = planHash.Write([]byte(vcursor.planPrefixKey(ctx)))
@@ -1010,8 +1013,11 @@ func (e *Executor) getPlan(ctx context.Context, vcursor *vcursorImpl, sql string
 	_, _ = planHash.Write(hack.StringBytes(query))
 	planKey := hex.EncodeToString(planHash.Sum(nil))
 
-	if plan, ok := e.plans.Get(planKey); ok {
-		return plan.(*engine.Plan), nil
+	if sqlparser.CachePlan(statement) && qo.cachePlan() {
+		if plan, ok := e.plans.Get(planKey); ok {
+			logStats.CachedPlan = true
+			return plan.(*engine.Plan), nil
+		}
 	}
 
 	plan, err := planbuilder.BuildFromStmt(query, statement, reservedVars, vcursor, bindVarNeeds, *enableOnlineDDL, *enableDirectDDL)
@@ -1184,7 +1190,7 @@ func isValidPayloadSize(query string) bool {
 
 // Prepare executes a prepare statements.
 func (e *Executor) Prepare(ctx context.Context, method string, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable) (fld []*querypb.Field, err error) {
-	logStats := NewLogStats(ctx, method, sql, safeSession.GetSessionUUID(), bindVars)
+	logStats := logstats.NewLogStats(ctx, method, sql, safeSession.GetSessionUUID(), bindVars)
 	fld, err = e.prepare(ctx, safeSession, sql, bindVars, logStats)
 	logStats.Error = err
 
@@ -1192,12 +1198,13 @@ func (e *Executor) Prepare(ctx context.Context, method string, safeSession *Safe
 	// To avoid spamming the log with no-op rollback records, ignore it if
 	// it was a no-op record (i.e. didn't issue any queries)
 	if !(logStats.StmtType == "ROLLBACK" && logStats.ShardQueries == 0) {
-		logStats.Send()
+		logStats.SaveEndTime()
+		QueryLogger.Send(logStats)
 	}
 	return fld, err
 }
 
-func (e *Executor) prepare(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *LogStats) ([]*querypb.Field, error) {
+func (e *Executor) prepare(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *logstats.LogStats) ([]*querypb.Field, error) {
 	// Start an implicit transaction if necessary.
 	if !safeSession.Autocommit && !safeSession.InTransaction() {
 		if err := e.txConn.Begin(ctx, safeSession); err != nil {
@@ -1233,7 +1240,7 @@ func (e *Executor) prepare(ctx context.Context, safeSession *SafeSession, sql st
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unrecognized prepare statement: %s", sql)
 }
 
-func (e *Executor) handlePrepare(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *LogStats) ([]*querypb.Field, error) {
+func (e *Executor) handlePrepare(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *logstats.LogStats) ([]*querypb.Field, error) {
 	// V3 mode.
 	query, comments := sqlparser.SplitMarginComments(sql)
 	vcursor, _ := newVCursorImpl(safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver, e.serv, e.warnShardedOnly, e.pv)

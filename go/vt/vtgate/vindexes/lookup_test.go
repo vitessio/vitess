@@ -552,6 +552,38 @@ func TestLookupNonUniqueUpdate(t *testing.T) {
 	}
 }
 
+func TestLookupNonUniqueCreateMultiShardAutocommit(t *testing.T) {
+	lookupNonUnique, err := CreateVindex("lookup", "lookup", map[string]string{
+		"table":                  "t",
+		"from":                   "from1,from2",
+		"to":                     "toc",
+		"multi_shard_autocommit": "true",
+	})
+	require.NoError(t, err)
+
+	vc := &vcursor{}
+	err = lookupNonUnique.(Lookup).Create(context.Background(), vc, [][]sqltypes.Value{{
+		sqltypes.NewInt64(1), sqltypes.NewInt64(2),
+	}, {
+		sqltypes.NewInt64(3), sqltypes.NewInt64(4),
+	}}, [][]byte{[]byte("test1"), []byte("test2")}, false /* ignoreMode */)
+	require.NoError(t, err)
+
+	wantqueries := []*querypb.BoundQuery{{
+		Sql: "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into t(from1, from2, toc) values(:from1_0, :from2_0, :toc_0), (:from1_1, :from2_1, :toc_1) on duplicate key update from1=values(from1), from2=values(from2), toc=values(toc)",
+		BindVariables: map[string]*querypb.BindVariable{
+			"from1_0": sqltypes.Int64BindVariable(1),
+			"from2_0": sqltypes.Int64BindVariable(2),
+			"toc_0":   sqltypes.BytesBindVariable([]byte("test1")),
+			"from1_1": sqltypes.Int64BindVariable(3),
+			"from2_1": sqltypes.Int64BindVariable(4),
+			"toc_1":   sqltypes.BytesBindVariable([]byte("test2")),
+		},
+	}}
+	utils.MustMatch(t, vc.queries, wantqueries)
+	require.Equal(t, 1, vc.autocommits, "Create(autocommit) count")
+}
+
 func createLookup(t *testing.T, name string, writeOnly bool) SingleColumn {
 	t.Helper()
 	write := "false"

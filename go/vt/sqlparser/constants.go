@@ -824,6 +824,7 @@ const (
 const (
 	RetryMigrationType AlterMigrationType = iota
 	CompleteMigrationType
+	CompleteAllMigrationType
 	CancelMigrationType
 	CancelAllMigrationType
 	CleanupMigrationType

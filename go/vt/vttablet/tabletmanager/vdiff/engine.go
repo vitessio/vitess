@@ -19,10 +19,12 @@ package vdiff
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	"vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
@@ -59,7 +61,8 @@ type Engine struct {
 
 	// snapshotMu is used to ensure that only one vdiff snapshot cycle is active at a time,
 	// because we stop/start vreplication workflows during this process
-	snapshotMu            sync.Mutex
+	snapshotMu sync.Mutex
+
 	vdiffSchemaCreateOnce sync.Once
 }
 
@@ -92,7 +95,8 @@ func (vde *Engine) Open(ctx context.Context, vre *vreplication.Engine) {
 	if vde.ts == nil || vde.isOpen {
 		return
 	}
-	log.Infof("VDiff Engine: opening")
+	log.Infof("VDiff Engine: opening...")
+
 	if vde.cancelRetry != nil {
 		vde.cancelRetry()
 		vde.cancelRetry = nil
@@ -107,16 +111,21 @@ func (vde *Engine) Open(ctx context.Context, vre *vreplication.Engine) {
 }
 
 func (vde *Engine) openLocked(ctx context.Context) error {
+	// Start any pending VDiffs
 	rows, err := vde.getPendingVDiffs(ctx)
 	if err != nil {
 		return err
 	}
-
 	vde.ctx, vde.cancel = context.WithCancel(ctx)
-	vde.isOpen = true
+	vde.isOpen = true // now we are open and have things to close
 	if err := vde.initControllers(rows); err != nil {
 		return err
 	}
+
+	// At this point we've fully and succesfully opened so begin
+	// retrying error'd VDiffs until the engine is closed.
+	go vde.retryErroredVDiffs()
+
 	return nil
 }
 
@@ -144,7 +153,7 @@ func (vde *Engine) retry(ctx context.Context, err error) {
 		default:
 		}
 		if err := vde.openLocked(ctx); err == nil {
-			log.Infof("VDiff engine opened successfully")
+			log.Infof("VDiff engine: opened successfully")
 			// Don't invoke cancelRetry because openLocked
 			// will hold on to this context for later cancelation.
 			vde.cancelRetry = nil
@@ -155,10 +164,13 @@ func (vde *Engine) retry(ctx context.Context, err error) {
 	}
 }
 
+// addController creates a new controller using the given vdiff record and adds it to the engine.
+// You must already have the main engine mutex (mu) locked before calling this.
 func (vde *Engine) addController(row sqltypes.RowNamedValues, options *tabletmanagerdata.VDiffOptions) error {
 	ct, err := newController(vde.ctx, row, vde.dbClientFactoryDba, vde.ts, vde, options)
 	if err != nil {
-		return fmt.Errorf("controller could not be initialized for stream: %+v", row)
+		return fmt.Errorf("controller could not be initialized for stream %+v on tablet %v",
+			row, vde.thisTablet.Alias)
 	}
 	vde.controllers[ct.id] = ct
 	return nil
@@ -170,7 +182,7 @@ func (vde *Engine) initControllers(qr *sqltypes.Result) error {
 	}
 	for _, row := range qr.Named().Rows {
 		options := &tabletmanagerdata.VDiffOptions{}
-		if err := json.Unmarshal([]byte(row.AsString("options", "{}")), options); err != nil {
+		if err := json.Unmarshal(row.AsBytes("options", []byte("{}")), options); err != nil {
 			return err
 		}
 		if err := vde.addController(row, options); err != nil {
@@ -205,6 +217,7 @@ func (vde *Engine) Close() {
 	}
 
 	vde.cancel()
+
 	// We still have to wait for all controllers to stop.
 	for _, ct := range vde.controllers {
 		ct.Stop()
@@ -225,12 +238,16 @@ func (vde *Engine) getDBClient(isAdmin bool) binlogplayer.DBClient {
 	}
 	return vde.dbClientFactoryFiltered()
 }
+
 func (vde *Engine) getPendingVDiffs(ctx context.Context) (*sqltypes.Result, error) {
 	dbClient := vde.dbClientFactoryFiltered()
 	if err := dbClient.Connect(); err != nil {
 		return nil, err
 	}
 	defer dbClient.Close()
+
+	// We have to use ExecIgnore here so as not to block quick tablet state
+	// transitions from primary to non-primary when starting the engine
 	qr, err := withDDL.ExecIgnore(ctx, sqlGetPendingVDiffs, dbClient.ExecuteFetch)
 	if err != nil {
 		return nil, err
@@ -241,18 +258,88 @@ func (vde *Engine) getPendingVDiffs(ctx context.Context) (*sqltypes.Result, erro
 	return qr, nil
 }
 
-func (vde *Engine) getVDiffByID(ctx context.Context, id int64) (*sqltypes.Result, error) {
-	dbClient := vde.dbClientFactoryFiltered()
-	if err := dbClient.Connect(); err != nil {
+func (vde *Engine) getVDiffsToRetry(ctx context.Context, dbClient binlogplayer.DBClient) (*sqltypes.Result, error) {
+	qr, err := withDDL.Exec(ctx, sqlGetVDiffsToRetry, dbClient.ExecuteFetch, dbClient.ExecuteFetch)
+	if err != nil {
 		return nil, err
 	}
-	defer dbClient.Close()
-	qr, err := withDDL.Exec(ctx, fmt.Sprintf(sqlGetVDiffByID, id), dbClient.ExecuteFetch, dbClient.ExecuteFetch)
+	if len(qr.Rows) == 0 {
+		return nil, nil
+	}
+	return qr, nil
+}
+
+func (vde *Engine) getVDiffByID(ctx context.Context, dbClient binlogplayer.DBClient, id int64) (*sqltypes.Result, error) {
+	qr, err := dbClient.ExecuteFetch(fmt.Sprintf(sqlGetVDiffByID, id), -1)
 	if err != nil {
 		return nil, err
 	}
 	if len(qr.Rows) != 1 {
-		return nil, fmt.Errorf("unable to read vdiff table for %d", id)
+		return nil, fmt.Errorf("no vdiff found for id %d on tablet %v",
+			id, vde.thisTablet.Alias)
 	}
 	return qr, nil
+}
+
+func (vde *Engine) retryVDiffs(ctx context.Context) error {
+	vde.mu.Lock()
+	defer vde.mu.Unlock()
+	dbClient := vde.dbClientFactoryFiltered()
+	if err := dbClient.Connect(); err != nil {
+		return err
+	}
+	defer dbClient.Close()
+
+	qr, err := vde.getVDiffsToRetry(ctx, dbClient)
+	if err != nil {
+		return err
+	}
+	if qr == nil || len(qr.Rows) == 0 {
+		return nil
+	}
+	for _, row := range qr.Named().Rows {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+		lastError := mysql.NewSQLErrorFromError(errors.New(row.AsString("last_error", "")))
+		if !mysql.IsEphemeralError(lastError) {
+			continue
+		}
+		uuid := row.AsString("vdiff_uuid", "")
+		id, err := row.ToInt64("id")
+		if err != nil {
+			return err
+		}
+		log.Infof("Retrying vdiff %s that had an ephemeral error of '%v'", uuid, lastError)
+		if _, err = dbClient.ExecuteFetch(fmt.Sprintf(sqlRetryVDiff, id), 1); err != nil {
+			return err
+		}
+		options := &tabletmanagerdata.VDiffOptions{}
+		if err := json.Unmarshal(row.AsBytes("options", []byte("{}")), options); err != nil {
+			return err
+		}
+		if err := vde.addController(row, options); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (vde *Engine) retryErroredVDiffs() {
+	tkr := time.NewTicker(time.Second * 30)
+	defer tkr.Stop()
+	for {
+		select {
+		case <-vde.ctx.Done():
+			log.Info("VDiff engine: closing...")
+			return
+		case <-tkr.C:
+		}
+
+		if err := vde.retryVDiffs(vde.ctx); err != nil {
+			log.Errorf("Error retrying vdiffs: %v", err)
+		}
+	}
 }

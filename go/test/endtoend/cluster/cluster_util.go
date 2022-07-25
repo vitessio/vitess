@@ -317,44 +317,15 @@ func WriteDbCredentialToTmp(tmpDir string) string {
 func GetPasswordUpdateSQL(localCluster *LocalProcessCluster) string {
 	pwdChangeCmd := `
 					# Set real passwords for all users.
-					UPDATE mysql.user SET %s = PASSWORD('RootPass')
-					  WHERE User = 'root' AND Host = 'localhost';
-					UPDATE mysql.user SET %s = PASSWORD('VtDbaPass')
-					  WHERE User = 'vt_dba' AND Host = 'localhost';
-					UPDATE mysql.user SET %s = PASSWORD('VtAppPass')
-					  WHERE User = 'vt_app' AND Host = 'localhost';
-					UPDATE mysql.user SET %s = PASSWORD('VtAllprivsPass')
-					  WHERE User = 'vt_allprivs' AND Host = 'localhost';
-					UPDATE mysql.user SET %s = PASSWORD('VtReplPass')
-					  WHERE User = 'vt_repl' AND Host = '%%';
-					UPDATE mysql.user SET %s = PASSWORD('VtFilteredPass')
-					  WHERE User = 'vt_filtered' AND Host = 'localhost';
+					SET PASSWORD FOR 'root'@'localhost' = 'RootPass';
+					SET PASSWORD FOR 'vt_dba'@'localhost' = 'VtDbaPass';
+					SET PASSWORD FOR 'vt_app'@'localhost' = 'VtAppPass';
+					SET PASSWORD FOR 'vt_allprivs'@'localhost' = 'VtAllprivsPass';
+					SET PASSWORD FOR 'vt_repl'@'%' = 'VtReplPass';
+					SET PASSWORD FOR 'vt_filtered'@'localhost' = 'VtFilteredPass';
 					FLUSH PRIVILEGES;
 					`
-	pwdCol, _ := getPasswordField(localCluster)
-	return fmt.Sprintf(pwdChangeCmd, pwdCol, pwdCol, pwdCol, pwdCol, pwdCol, pwdCol)
-}
-
-// getPasswordField determines which column is used for user passwords in this MySQL version.
-func getPasswordField(localCluster *LocalProcessCluster) (pwdCol string, err error) {
-	tablet := &Vttablet{
-		Type:            "relpica",
-		TabletUID:       100,
-		MySQLPort:       15000,
-		MysqlctlProcess: *MysqlCtlProcessInstance(100, 15000, localCluster.TmpDirectory),
-	}
-	if err = tablet.MysqlctlProcess.Start(); err != nil {
-		return "", err
-	}
-	tablet.VttabletProcess = VttabletProcessInstance(tablet.HTTPPort, tablet.GrpcPort, tablet.TabletUID, "", "", "", 0, tablet.Type, localCluster.TopoPort, "", "", nil, false, localCluster.DefaultCharset)
-	result, err := tablet.VttabletProcess.QueryTablet("select password from mysql.user limit 0", "", false)
-	if err == nil && len(result.Rows) > 0 {
-		return "password", nil
-	}
-	tablet.MysqlctlProcess.Stop()
-	os.RemoveAll(path.Join(tablet.VttabletProcess.Directory))
-	return "authentication_string", nil
-
+	return pwdChangeCmd
 }
 
 // CheckSrvKeyspace confirms that the cell and keyspace contain the expected

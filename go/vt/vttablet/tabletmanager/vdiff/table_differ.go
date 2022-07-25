@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/topo"
 
 	"google.golang.org/protobuf/encoding/prototext"
@@ -140,7 +141,7 @@ func (td *tableDiffer) stopTargetVReplicationStreams(ctx context.Context, dbClie
 
 	// update position of all source streams
 	query = fmt.Sprintf("select id, source, pos from _vt.vreplication %s", ct.workflowFilter)
-	qr, err := withDDL.Exec(ctx, query, dbClient.ExecuteFetch, dbClient.ExecuteFetch)
+	qr, err := dbClient.ExecuteFetch(query, -1)
 	if err != nil {
 		return err
 	}
@@ -152,7 +153,8 @@ func (td *tableDiffer) stopTargetVReplicationStreams(ctx context.Context, dbClie
 			return err
 		}
 		if mpos.IsZero() {
-			return fmt.Errorf("stream %d has not started", id)
+			return fmt.Errorf("stream %d has not started on tablet %v",
+				id, td.wd.ct.vde.thisTablet.Alias)
 		}
 		sourceBytes, err := row["source"].ToBytes()
 		if err != nil {
@@ -334,7 +336,8 @@ func (td *tableDiffer) streamOneShard(ctx context.Context, participant *shardStr
 			TabletType: participant.tablet.Type,
 		}
 		var fields []*querypb.Field
-		return conn.VStreamRows(ctx, target, query, lastPK, func(vsrRaw *binlogdatapb.VStreamRowsResponse) error {
+		req := &binlogdatapb.VStreamRowsRequest{Target: target, Query: query, Lastpk: lastPK}
+		return conn.VStreamRows(ctx, req, func(vsrRaw *binlogdatapb.VStreamRowsResponse) error {
 			// We clone (deep copy) the VStreamRowsResponse -- which contains a vstream packet with N rows and
 			// their corresponding GTID position/snapshot along with the LastPK in the row set -- so that we
 			// can safely process it while the next VStreamRowsResponse message is getting prepared by the
@@ -346,7 +349,8 @@ func (td *tableDiffer) streamOneShard(ctx context.Context, participant *shardStr
 
 			if len(fields) == 0 {
 				if len(vsr.Fields) == 0 {
-					return fmt.Errorf("did not received expected fields in response %+v", vsr)
+					return fmt.Errorf("did not received expected fields in response %+v on tablet %v",
+						vsr, td.wd.ct.vde.thisTablet.Alias)
 				}
 				fields = vsr.Fields
 				gtidch <- vsr.Gtid
@@ -405,24 +409,52 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare *int64, debug, on
 	}
 	defer dbClient.Close()
 
+	// We need to continue were we left off when appropriate. This can be an
+	// auto-retry on error, or a manual retry via the resume command.
+	// Otherwise the existing state will be empty and we start from scratch.
+	query := fmt.Sprintf(sqlGetVDiffTable, td.wd.ct.id, encodeString(td.table.Name))
+	cs, err := dbClient.ExecuteFetch(query, -1)
+	if err != nil {
+		return nil, err
+	}
+	if len(cs.Rows) == 0 {
+		return nil, fmt.Errorf("no state found for vdiff table %s for vdiff_id %d on tablet %v",
+			td.table.Name, td.wd.ct.id, td.wd.ct.vde.thisTablet.Alias)
+	} else if len(cs.Rows) > 1 {
+		return nil, fmt.Errorf("invalid state found for vdiff table %s (multiple records) for vdiff_id %d on tablet %v",
+			td.table.Name, td.wd.ct.id, td.wd.ct.vde.thisTablet.Alias)
+	}
+	curState := cs.Named().Row()
+	mismatch := curState.AsBool("mismatch", false)
+	dr := &DiffReport{}
+	if rpt := curState.AsBytes("report", []byte("{}")); json.Valid(rpt) {
+		if err = json.Unmarshal(rpt, dr); err != nil {
+			return nil, err
+		}
+	}
+	dr.TableName = td.table.Name
+
 	sourceExecutor := newPrimitiveExecutor(ctx, td.sourcePrimitive, "source")
 	targetExecutor := newPrimitiveExecutor(ctx, td.targetPrimitive, "target")
-	dr := &DiffReport{TableName: td.table.Name}
 	var sourceRow, lastProcessedRow, targetRow []sqltypes.Value
-	var err error
 	advanceSource := true
 	advanceTarget := true
-	mismatch := false
 
 	// Save our progress when we finish the run
 	defer func() {
-		if err := td.updateTableProgress(dbClient, dr.ProcessedRows, lastProcessedRow); err != nil {
+		if err := td.updateTableProgress(dbClient, dr, lastProcessedRow); err != nil {
 			log.Errorf("Failed to update vdiff progress on %s table: %v", td.table.Name, err)
 		}
 	}()
 
 	for {
 		lastProcessedRow = sourceRow
+
+		select {
+		case <-ctx.Done():
+			return nil, vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
+		default:
+		}
 
 		if !mismatch && dr.MismatchedRows > 0 {
 			mismatch = true
@@ -549,7 +581,7 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare *int64, debug, on
 		// approximate progress information but without too much overhead for when it's not
 		// needed or even desired.
 		if dr.ProcessedRows%1e4 == 0 {
-			if err := td.updateTableProgress(dbClient, dr.ProcessedRows, sourceRow); err != nil {
+			if err := td.updateTableProgress(dbClient, dr, sourceRow); err != nil {
 				return nil, err
 			}
 		}
@@ -582,23 +614,26 @@ func (td *tableDiffer) compare(sourceRow, targetRow []sqltypes.Value, cols []com
 	return 0, nil
 }
 
-func (td *tableDiffer) updateTableProgress(dbClient binlogplayer.DBClient, numRows int64, lastRow []sqltypes.Value) error {
+func (td *tableDiffer) updateTableProgress(dbClient binlogplayer.DBClient, dr *DiffReport, lastRow []sqltypes.Value) error {
+	if dr == nil {
+		return fmt.Errorf("cannot update progress with a nil diff report")
+	}
 	var lastPK []byte
 	var err error
 	var query string
+	rpt, err := json.Marshal(dr)
+	if err != nil {
+		return err
+	}
 	if lastRow != nil {
 		lastPK, err = td.lastPKFromRow(lastRow)
 		if err != nil {
 			return err
 		}
-		query = fmt.Sprintf(sqlUpdateTableProgress, numRows, encodeString(string(lastPK)), td.wd.ct.id, encodeString(td.table.Name))
-	} else if numRows != 0 {
-		// This should never happen
-		return fmt.Errorf("invalid vdiff state detected, %d row(s) were processed but the row data is missing", numRows)
+
+		query = fmt.Sprintf(sqlUpdateTableProgress, dr.ProcessedRows, encodeString(string(lastPK)), encodeString(string(rpt)), td.wd.ct.id, encodeString(td.table.Name))
 	} else {
-		// We didn't process any rows this time around so reflect that and keep any
-		// lastpk from a previous run. This is only relevant for RESUMEd vdiffs.
-		query = fmt.Sprintf(sqlUpdateTableNoProgress, numRows, td.wd.ct.id, encodeString(td.table.Name))
+		query = fmt.Sprintf(sqlUpdateTableNoProgress, dr.ProcessedRows, encodeString(string(rpt)), td.wd.ct.id, encodeString(td.table.Name))
 	}
 	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
 		return err
@@ -606,20 +641,50 @@ func (td *tableDiffer) updateTableProgress(dbClient binlogplayer.DBClient, numRo
 	return nil
 }
 
-func (td *tableDiffer) updateTableState(ctx context.Context, dbClient binlogplayer.DBClient, tableName string, state VDiffState, dr *DiffReport) error {
-	reportJSON := "{}"
+func (td *tableDiffer) updateTableRows(ctx context.Context, dbClient binlogplayer.DBClient) error {
+	query := fmt.Sprintf(sqlGetTableRows, encodeString(td.wd.ct.vde.dbName), encodeString(td.table.Name))
+	qr, err := dbClient.ExecuteFetch(query, 1)
+	if err != nil {
+		return err
+	}
+	if len(qr.Rows) == 0 {
+		return fmt.Errorf("no information_schema status found for table %s on tablet %v",
+			td.table.Name, td.wd.ct.vde.thisTablet.Alias)
+	}
+	row := qr.Named().Row()
+	query = fmt.Sprintf(sqlUpdateTableRows, row.AsInt64("table_rows", 0), td.wd.ct.id, encodeString(td.table.Name))
+	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (td *tableDiffer) updateTableState(ctx context.Context, dbClient binlogplayer.DBClient, state VDiffState) error {
+	query := fmt.Sprintf(sqlUpdateTableState, encodeString(string(state)), td.wd.ct.id, encodeString(td.table.Name))
+	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
+		return err
+	}
+	insertVDiffLog(ctx, dbClient, td.wd.ct.id, fmt.Sprintf("%s: table %s", state, encodeString(td.table.Name)))
+
+	return nil
+}
+
+func (td *tableDiffer) updateTableStateAndReport(ctx context.Context, dbClient binlogplayer.DBClient, state VDiffState, dr *DiffReport) error {
+	var report string
 	if dr != nil {
 		reportJSONBytes, err := json.Marshal(dr)
 		if err != nil {
 			return err
 		}
-		reportJSON = string(reportJSONBytes)
+		report = string(reportJSONBytes)
+	} else {
+		report = "{}"
 	}
-	query := fmt.Sprintf(sqlUpdateTableState, encodeString(string(state)), encodeString(reportJSON), td.wd.ct.id, encodeString(tableName))
-	if _, err := withDDL.Exec(ctx, query, dbClient.ExecuteFetch, dbClient.ExecuteFetch); err != nil {
+	query := fmt.Sprintf(sqlUpdateTableStateAndReport, encodeString(string(state)), dr.ProcessedRows, encodeString(report), td.wd.ct.id, encodeString(td.table.Name))
+	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
 		return err
 	}
-	insertVDiffLog(ctx, dbClient, td.wd.ct.id, fmt.Sprintf("%s: table %s", state, encodeString(tableName)))
+	insertVDiffLog(ctx, dbClient, td.wd.ct.id, fmt.Sprintf("%s: table %s", state, encodeString(td.table.Name)))
 
 	return nil
 }

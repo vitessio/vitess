@@ -31,6 +31,10 @@ import (
 
 // TestMoveTablesTZ tests the conversion of datetime based on the source timezone passed to the MoveTables workflow
 func TestMoveTablesTZ(t *testing.T) {
+	runVDiffsSideBySide = false
+	defer func() {
+		runVDiffsSideBySide = true
+	}()
 	allCellNames = "zone1"
 	defaultCellName := "zone1"
 	workflow := "tz"
@@ -111,10 +115,18 @@ func TestMoveTablesTZ(t *testing.T) {
 
 	catchup(t, customerTab, workflow, "MoveTables")
 
-	// inserts to test date conversions in replication (vplayer) mode
+	// inserts to test date conversions in replication (vplayer) mode (insert statements)
 	_, err = vtgateConn.ExecuteFetch("insert into datze(id, dt2) values (11, '2022-01-01 10:20:30')", 1, false) // standard time
 	require.NoError(t, err)
 	_, err = vtgateConn.ExecuteFetch("insert into datze(id, dt2) values (12, '2022-04-01 5:06:07')", 1, false) // dst
+	require.NoError(t, err)
+
+	vdiff1(t, ksWorkflow, "")
+
+	// update to test date conversions in replication (vplayer) mode (update statements)
+	_, err = vtgateConn.ExecuteFetch("update datze set dt2 = '2022-04-01 5:06:07' where id = 11", 1, false) // dst
+	require.NoError(t, err)
+	_, err = vtgateConn.ExecuteFetch("update datze set dt2 = '2022-01-01 10:20:30' where id = 12", 1, false) // standard time
 	require.NoError(t, err)
 
 	vdiff1(t, ksWorkflow, "")
@@ -179,7 +191,6 @@ func TestMoveTablesTZ(t *testing.T) {
 		require.Equal(t, row.AsString("dt2", ""), qrTargetUSPacific.Named().Rows[i].AsString("dt2", ""))
 		require.Equal(t, row.AsString("ts1", ""), qrTargetUSPacific.Named().Rows[i].AsString("ts1", ""))
 	}
-
 	output, err = vc.VtctlClient.ExecuteCommandWithOutput("MoveTables", "--", "SwitchTraffic", ksWorkflow)
 	require.NoError(t, err, output)
 

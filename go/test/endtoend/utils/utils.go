@@ -44,6 +44,20 @@ func AssertMatches(t testing.TB, conn *mysql.Conn, query, expected string) {
 	}
 }
 
+// AssertMatchesAny ensures the given query produces any one of the expected results.
+func AssertMatchesAny(t testing.TB, conn *mysql.Conn, query string, expected ...string) {
+	t.Helper()
+	qr := Exec(t, conn, query)
+	got := fmt.Sprintf("%v", qr.Rows)
+	for _, e := range expected {
+		diff := cmp.Diff(e, got)
+		if diff == "" {
+			return
+		}
+	}
+	t.Errorf("Query: %s (-want +got):\n%v\nGot:%s", query, expected, got)
+}
+
 // AssertMatchesCompareMySQL executes the given query on both Vitess and MySQL and make sure
 // they have the same result set. The result set of Vitess is then matched with the given expectation.
 func AssertMatchesCompareMySQL(t *testing.T, vtConn, mysqlConn *mysql.Conn, query, expected string) {

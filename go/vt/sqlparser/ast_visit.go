@@ -4102,12 +4102,18 @@ func VisitCallable(in Callable, f Visit) error {
 	switch in := in.(type) {
 	case *ArgumentLessWindowExpr:
 		return VisitRefOfArgumentLessWindowExpr(in, f)
+	case *Avg:
+		return VisitRefOfAvg(in, f)
 	case *CharExpr:
 		return VisitRefOfCharExpr(in, f)
 	case *ConvertExpr:
 		return VisitRefOfConvertExpr(in, f)
 	case *ConvertUsingExpr:
 		return VisitRefOfConvertUsingExpr(in, f)
+	case *Count:
+		return VisitRefOfCount(in, f)
+	case *CountStar:
+		return VisitRefOfCountStar(in, f)
 	case *CurTimeFuncExpr:
 		return VisitRefOfCurTimeFuncExpr(in, f)
 	case *ExtractFuncExpr:
@@ -4172,8 +4178,12 @@ func VisitCallable(in Callable, f Visit) error {
 		return VisitRefOfLocateExpr(in, f)
 	case *MatchExpr:
 		return VisitRefOfMatchExpr(in, f)
+	case *Max:
+		return VisitRefOfMax(in, f)
 	case *MemberOfExpr:
 		return VisitRefOfMemberOfExpr(in, f)
+	case *Min:
+		return VisitRefOfMin(in, f)
 	case *NTHValueExpr:
 		return VisitRefOfNTHValueExpr(in, f)
 	case *NamedWindow:
@@ -4192,6 +4202,8 @@ func VisitCallable(in Callable, f Visit) error {
 		return VisitRefOfRegexpSubstrExpr(in, f)
 	case *SubstrExpr:
 		return VisitRefOfSubstrExpr(in, f)
+	case *Sum:
+		return VisitRefOfSum(in, f)
 	case *TimestampFuncExpr:
 		return VisitRefOfTimestampFuncExpr(in, f)
 	case *TrimFuncExpr:

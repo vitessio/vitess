@@ -25,6 +25,8 @@ import (
 	"text/template"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtgate/logstats"
+
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logz"
@@ -104,9 +106,9 @@ func querylogzHandler(ch chan any, w http.ResponseWriter, r *http.Request) {
 				return
 			default:
 			}
-			stats, ok := out.(*LogStats)
+			stats, ok := out.(*logstats.LogStats)
 			if !ok {
-				err := fmt.Errorf("unexpected value in %s: %#v (expecting value of type %T)", QueryLogger.Name(), out, &LogStats{})
+				err := fmt.Errorf("unexpected value in %s: %#v (expecting value of type %T)", QueryLogger.Name(), out, &logstats.LogStats{})
 				_, _ = io.WriteString(w, `<tr class="error">`)
 				_, _ = io.WriteString(w, err.Error())
 				_, _ = io.WriteString(w, "</tr>")
@@ -122,7 +124,7 @@ func querylogzHandler(ch chan any, w http.ResponseWriter, r *http.Request) {
 				level = "high"
 			}
 			tmplData := struct {
-				*LogStats
+				*logstats.LogStats
 				ColorLevel string
 			}{stats, level}
 			if err := querylogzTmpl.Execute(w, tmplData); err != nil {
