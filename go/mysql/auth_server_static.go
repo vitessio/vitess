@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"crypto/subtle"
 	"encoding/json"
-	"flag"
 	"net"
 	"os"
 	"os/signal"
@@ -28,17 +27,29 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/spf13/pflag"
+
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
 )
 
 var (
-	mysqlAuthServerStaticFile           = flag.String("mysql_auth_server_static_file", "", "JSON File to read the users/passwords from.")
-	mysqlAuthServerStaticString         = flag.String("mysql_auth_server_static_string", "", "JSON representation of the users/passwords config.")
-	mysqlAuthServerStaticReloadInterval = flag.Duration("mysql_auth_static_reload_interval", 0, "Ticker to reload credentials")
+	mysqlAuthServerStaticFile           string
+	mysqlAuthServerStaticString         string
+	mysqlAuthServerStaticReloadInterval time.Duration
 )
+
+func init() {
+	servenv.OnParseFor("vtgate", func(fs *pflag.FlagSet) {
+		fs.StringVar(&mysqlAuthServerStaticFile, "mysql_auth_server_static_file", "", "JSON File to read the users/passwords from.")
+		fs.StringVar(&mysqlAuthServerStaticString, "mysql_auth_server_static_string", "", "JSON representation of the users/passwords config.")
+		fs.DurationVar(&mysqlAuthServerStaticReloadInterval, "mysql_auth_static_reload_interval", 0, "Ticker to reload credentials")
+	})
+}
 
 const (
 	localhostName = "localhost"
@@ -81,18 +92,18 @@ type AuthServerStaticEntry struct {
 // InitAuthServerStatic Handles initializing the AuthServerStatic if necessary.
 func InitAuthServerStatic() {
 	// Check parameters.
-	if *mysqlAuthServerStaticFile == "" && *mysqlAuthServerStaticString == "" {
+	if mysqlAuthServerStaticFile == "" && mysqlAuthServerStaticString == "" {
 		// Not configured, nothing to do.
 		log.Infof("Not configuring AuthServerStatic, as mysql_auth_server_static_file and mysql_auth_server_static_string are empty")
 		return
 	}
-	if *mysqlAuthServerStaticFile != "" && *mysqlAuthServerStaticString != "" {
+	if mysqlAuthServerStaticFile != "" && mysqlAuthServerStaticString != "" {
 		// Both parameters specified, can only use one.
 		log.Exitf("Both mysql_auth_server_static_file and mysql_auth_server_static_string specified, can only use one.")
 	}
 
 	// Create and register auth server.
-	RegisterAuthServerStaticFromParams(*mysqlAuthServerStaticFile, *mysqlAuthServerStaticString, *mysqlAuthServerStaticReloadInterval)
+	RegisterAuthServerStaticFromParams(mysqlAuthServerStaticFile, mysqlAuthServerStaticString, mysqlAuthServerStaticReloadInterval)
 }
 
 // RegisterAuthServerStaticFromParams creates and registers a new
