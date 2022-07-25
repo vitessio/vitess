@@ -91,7 +91,7 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 		return usage
 	}
 	if action == "" {
-		return fmt.Errorf("invalid action %s; %s", subFlags.Arg(1), usage)
+		return fmt.Errorf("invalid action '%s'; %s", subFlags.Arg(1), usage)
 	}
 	keyspace, workflowName, err := splitKeyspaceWorkflow(subFlags.Arg(0))
 	if err != nil {
@@ -144,22 +144,22 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 				return fmt.Errorf("can only show a specific vdiff, please provide a valid UUID; view all with: VDiff -- --v2 %s.%s show all", keyspace, workflowName)
 			}
 		}
-	case vdiff.ResumeAction:
+	case vdiff.StopAction, vdiff.ResumeAction:
 		vdiffUUID, err = uuid.Parse(actionArg)
-		if err != nil {
-			return fmt.Errorf("can only resume a specific vdiff, please provide a valid UUID; view all with: VDiff -- --v2 %s.%s show all", keyspace, workflowName)
+		if actionArg == "" || err != nil {
+			return fmt.Errorf("can only %s a specific vdiff, please provide a valid UUID; view all with: VDiff -- --v2 %s.%s show all", action, keyspace, workflowName)
 		}
 	case vdiff.DeleteAction:
 		switch actionArg {
 		case vdiff.AllActionArg:
 		default:
 			vdiffUUID, err = uuid.Parse(actionArg)
-			if err != nil {
+			if actionArg == "" || err != nil {
 				return fmt.Errorf("can only delete a specific vdiff, please provide a valid UUID; view all with: VDiff -- --v2 %s.%s show all", keyspace, workflowName)
 			}
 		}
 	default:
-		return fmt.Errorf("invalid action %s; %s", action, usage)
+		return fmt.Errorf("invalid action '%s'; %s", action, usage)
 	}
 	type ErrorResponse struct {
 		Error string
