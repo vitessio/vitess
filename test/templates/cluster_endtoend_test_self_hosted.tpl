@@ -10,30 +10,45 @@ jobs:
     runs-on: self-hosted
 
     steps:
+      - name: Check if workflow needs to be skipped
+        id: skip-workflow
+        run: |
+          skip='false'
+          if [[ "{{"${{github.event.pull_request}}"}}" ==  "" ]] && [[ "{{"${{github.ref}}"}}" != "refs/heads/main" ]] && [[ ! "{{"${{github.ref}}"}}" =~ ^refs/heads/release-[0-9]+\.[0-9]$ ]] && [[ ! "{{"${{github.ref}}"}}" =~ "refs/tags/.*" ]]; then
+            skip='true'
+          fi
+          echo Skip ${skip}
+          echo "::set-output name=skip-workflow::${skip}"
+
       - name: Check out code
+        if: steps.skip-workflow.outputs.skip-workflow == 'false'
         uses: actions/checkout@v2
 
       - name: Build Docker Image
+        if: steps.skip-workflow.outputs.skip-workflow == 'false'
         run: docker build -f {{.Dockerfile}} -t {{.ImageName}}:$GITHUB_SHA  .
 
       - name: Run test
+        if: steps.skip-workflow.outputs.skip-workflow == 'false'
         timeout-minutes: 30
         run: docker run --name "{{.ImageName}}_$GITHUB_SHA" {{.ImageName}}:$GITHUB_SHA /bin/bash -c 'source build.env && go run test.go -keep-data=true -docker=false -print-log -follow -shard {{.Shard}} -- -- --keep-data=true'
 
       - name: Print Volume Used
-        if: ${{"{{ always() }}"}}
+        if: steps.skip-workflow.outputs.skip-workflow == 'false' && always()
         run: |
           docker inspect -f '{{"{{ (index .Mounts 0).Name }}"}}' {{.ImageName}}_$GITHUB_SHA
 
       - name: Cleanup Docker Volume
+        if: steps.skip-workflow.outputs.skip-workflow == 'false'
         run: |
           docker rm -v {{.ImageName}}_$GITHUB_SHA
 
       - name: Cleanup Docker Container
-        if: ${{"{{ always() }}"}}
+        if: steps.skip-workflow.outputs.skip-workflow == 'false' && always()
         run: |
           docker rm -f {{.ImageName}}_$GITHUB_SHA
 
       - name: Cleanup Docker Image
+        if: steps.skip-workflow.outputs.skip-workflow == 'false'
         run: |
           docker image rm {{.ImageName}}:$GITHUB_SHA
