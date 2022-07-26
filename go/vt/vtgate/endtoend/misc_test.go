@@ -51,19 +51,19 @@ func TestSysNumericPrecisionScale(t *testing.T) {
 
 func TestCreateAndDropDatabase(t *testing.T) {
 	// note that this is testing vttest and not vtgate
-	conn, err := mysql.Connect(ctx, &vtParams)
+	conn, err := mysql.Connect(ctx, &mysqlParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
 	// run it 3 times.
 	for count := 0; count < 3; count++ {
 		t.Run(fmt.Sprintf("exec:%d", count), func(t *testing.T) {
-			_ = exec(t, conn, "create database testitest")
+			_ = execWithReadOnly(t, conn, "create database testitest")
 			_ = exec(t, conn, "use testitest")
 			qr := exec(t, conn, "select round(1.58)")
 			assert.Equal(t, `[[DECIMAL(2)]]`, fmt.Sprintf("%v", qr.Rows))
 
-			_ = exec(t, conn, "drop database testitest")
+			_ = execWithReadOnly(t, conn, "drop database testitest")
 			_, err = conn.ExecuteFetch("use testitest", 1000, true)
 			require.Error(t, err)
 		})

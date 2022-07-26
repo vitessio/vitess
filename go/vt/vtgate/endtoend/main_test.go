@@ -229,7 +229,6 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 		defer cluster.TearDown()
-
 		vtParams = mysql.ConnParams{
 			Host: "localhost",
 			Port: cluster.Env.PortForProtocol("vtcombo_mysql_port", ""),
@@ -237,8 +236,8 @@ func TestMain(m *testing.M) {
 		mysqlParams = cluster.MySQLConnParams()
 		grpcAddress = fmt.Sprintf("localhost:%d", cluster.Env.PortForProtocol("vtcombo", "grpc"))
 
+		cluster.UnsetReadOnly("")
 		insertStartValue()
-
 		return m.Run()
 	}()
 	os.Exit(exitCode)
@@ -253,7 +252,7 @@ func insertStartValue() {
 	defer conn.Close()
 
 	// lets insert a single starting value for tests
-	_, err = conn.ExecuteFetch("insert into t1_last_insert_id(id1) values(42)", 1000, true)
+	_, err = conn.ExecuteFetchWithReadOnlyHandling("insert into t1_last_insert_id(id1) values(42)", 1000, true)
 	if err != nil {
 		panic(err)
 	}

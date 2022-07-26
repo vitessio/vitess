@@ -470,7 +470,7 @@ func (db *LocalCluster) loadSchema(shouldRunDatabaseMigrations bool) error {
 			}
 
 			for _, dbname := range db.shardNames(kpb) {
-				if err := db.Execute(cmds, dbname); err != nil {
+				if err := db.ExecuteWithReadOnlyHandling(cmds, dbname); err != nil {
 					return err
 				}
 			}
@@ -721,4 +721,16 @@ func LoadSQLFile(filename, sourceroot string) ([]string, error) {
 	}
 
 	return sql, nil
+}
+
+func (db *LocalCluster) UnsetReadOnly(dbname string) error {
+	params := db.mysql.Params(dbname)
+	conn, err := mysql.Connect(context.Background(), &params)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	_, err = conn.ExecuteUnSetSuperReadOnly()
+	return err
 }

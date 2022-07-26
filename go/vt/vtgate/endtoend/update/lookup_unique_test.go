@@ -171,7 +171,7 @@ func TestMain(m *testing.M) {
 		}
 		mysqlParams = cluster.MySQLConnParams()
 		grpcAddress = fmt.Sprintf("localhost:%d", cluster.Env.PortForProtocol("vtcombo", "grpc"))
-
+		cluster.UnsetReadOnly("")
 		return m.Run()
 	}()
 	os.Exit(exitCode)
