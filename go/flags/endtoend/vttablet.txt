@@ -211,8 +211,8 @@ Usage of vttablet:
       --filecustomrules_watch                                            set up a watch on the target file and reload query rules when it changes
       --gc_check_interval duration                                       Interval between garbage collection checks (default 1h0m0s)
       --gc_purge_check_interval duration                                 Interval between purge discovery checks (default 1m0s)
-      --gcs_backup_storage_bucket string                                 Google Cloud Storage bucket to use for backups
-      --gcs_backup_storage_root string                                   root prefix for all backup-related object names
+      --gcs_backup_storage_bucket string                                 Google Cloud Storage bucket to use for backups.
+      --gcs_backup_storage_root string                                   Root prefix for all backup-related object names.
       --gh-ost-path string                                               override default gh-ost binary full path
       --grpc_auth_mode string                                            Which auth plugin implementation to use (eg: static)
       --grpc_auth_mtls_allowed_substrings string                         List of substrings of at least one of the client certificate names (separated by colon).
