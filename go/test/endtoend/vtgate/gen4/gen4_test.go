@@ -454,3 +454,27 @@ func TestUsingJoin(t *testing.T) {
 	mcmp.AssertMatchesNoOrderInclColumnNames(`select * from t2 join t3 using (tcol1) having tcol1 = 12`,
 		`[[VARCHAR("12") INT64(1) VARCHAR("12") INT64(1) VARCHAR("12")]]`)
 }
+
+func TestFilterOnLeftOuterJoin(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	// insert some data.
+	utils.Exec(t, mcmp.VtConn, `insert into team (id, name) values (11, 'Acme'), (22, 'B'), (33, 'C')`)
+	utils.Exec(t, mcmp.VtConn, `insert into team_fact (id, team, fact) values (1, 11, 'A'), (2, 22, 'A'), (3, 33, 'A')`)
+
+	// Gen4 only supported query.
+	query := `select team.id
+				from team_fact
+				  join team on team.id = team_fact.team
+				  left outer join team_member on team_member.team = team.id
+				where (
+				  team_fact.fact = 'A'
+				  and team_member.user is null
+				  and team_fact.team >= 22
+				)`
+
+	// Ideally we should get `[[INT32(22)] [INT32(33)]]`
+	// Change the expectation when we support better conversion handling in numeric comparison.
+	utils.AssertContainsError(t, mcmp.VtConn, query, `unsupported: cannot compare INT32 and INT64`)
+}
