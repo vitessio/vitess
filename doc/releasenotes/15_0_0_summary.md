@@ -174,4 +174,4 @@ This is slighly different from `autocommit` parameter where the query is sent in
 #### Cross Cell
 
 A new durabilty policy `cross_cell` is now supported. `cross_cell` durability policy only allows replica tablets from a different cell than the current primary to
-send semi sync ACKs. This ensures that any committed write exists in atleast 2 tablets belonging to different cells.
+send semi sync ACKs. This ensures that any committed write exists in at least 2 tablets belonging to different cells.
