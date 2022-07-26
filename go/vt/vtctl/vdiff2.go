@@ -146,7 +146,7 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 		}
 	case vdiff.StopAction, vdiff.ResumeAction:
 		vdiffUUID, err = uuid.Parse(actionArg)
-		if actionArg == "" || err != nil {
+		if err != nil {
 			return fmt.Errorf("can only %s a specific vdiff, please provide a valid UUID; view all with: VDiff -- --v2 %s.%s show all", action, keyspace, workflowName)
 		}
 	case vdiff.DeleteAction:
@@ -154,7 +154,7 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 		case vdiff.AllActionArg:
 		default:
 			vdiffUUID, err = uuid.Parse(actionArg)
-			if actionArg == "" || err != nil {
+			if err != nil {
 				return fmt.Errorf("can only delete a specific vdiff, please provide a valid UUID; view all with: VDiff -- --v2 %s.%s show all", keyspace, workflowName)
 			}
 		}
