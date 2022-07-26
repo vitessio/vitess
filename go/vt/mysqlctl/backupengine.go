@@ -403,12 +403,11 @@ func findFilesToBackup(cnf *Mycnf) ([]FileEntry, int64, error) {
 		if err != nil {
 			return nil, 0, err
 		}
-		// Starting with MySQL 8.0.30, by default the InnoDB redo logs are stored in a sub-directory of the
-		// datadir called "#innodb_redo". See:
+		// Starting with MySQL 8.0.30, the InnoDB redo logs are stored in a sub-directory of the
+		// <innodb_log_group_home_dir> (<datadir>/. by default) called "#innodb_redo". See:
 		//   https://dev.mysql.com/doc/refman/8.0/en/innodb-redo-log.html#innodb-modifying-redo-log-capacity
 		redoLogSubDir := ""
-		if (flavor == FlavorMySQL || flavor == FlavorPercona) && (version.atLeast(ServerVersion{8, 0, 30})) &&
-			(cnf.InnodbDataHomeDir == "") {
+		if (flavor == FlavorMySQL || flavor == FlavorPercona) && (version.atLeast(ServerVersion{8, 0, 30})) {
 			redoLogSubDir = "#innodb_redo"
 		}
 		result, size, err = addDirectory(result, backupInnodbLogGroupHomeDir, cnf.InnodbLogGroupHomeDir, redoLogSubDir)
