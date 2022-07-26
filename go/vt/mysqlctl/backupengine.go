@@ -384,6 +384,7 @@ func findFilesToBackup(cnf *Mycnf) ([]FileEntry, int64, error) {
 	var size, totalSize int64
 	var flavor MySQLFlavor
 	var version ServerVersion
+	var features capabilitySet
 
 	// get the flavor and version to deal with any behavioral differences
 	{
@@ -395,6 +396,7 @@ func findFilesToBackup(cnf *Mycnf) ([]FileEntry, int64, error) {
 		if err != nil {
 			return nil, 0, err
 		}
+		features = newCapabilitySet(flavor, version)
 	}
 
 	// first add innodb files
@@ -407,7 +409,7 @@ func findFilesToBackup(cnf *Mycnf) ([]FileEntry, int64, error) {
 		// <innodb_log_group_home_dir> (<datadir>/. by default) called "#innodb_redo". See:
 		//   https://dev.mysql.com/doc/refman/8.0/en/innodb-redo-log.html#innodb-modifying-redo-log-capacity
 		redoLogSubDir := ""
-		if (flavor == FlavorMySQL || flavor == FlavorPercona) && (version.atLeast(ServerVersion{8, 0, 30})) {
+		if features.hasInnoDBRedoLogSubDir() {
 			redoLogSubDir = "#innodb_redo"
 		}
 		result, size, err = addDirectory(result, backupInnodbLogGroupHomeDir, cnf.InnodbLogGroupHomeDir, redoLogSubDir)

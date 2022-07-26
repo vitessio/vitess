@@ -22,10 +22,19 @@ import (
 	"reflect"
 	"sort"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestFindFilesToBackup(t *testing.T) {
 	root := t.TempDir()
+
+	// get the flavor and version to deal with any behavioral differences
+	versionStr, err := GetVersionString()
+	require.NoError(t, err)
+	flavor, version, err := ParseVersionString(versionStr)
+	require.NoError(t, err)
+	features := newCapabilitySet(flavor, version)
 
 	// Initialize the fake mysql root directories
 	innodbDataDir := path.Join(root, "innodb_data")
@@ -41,10 +50,22 @@ func TestFindFilesToBackup(t *testing.T) {
 			t.Fatalf("failed to create directory %v: %v", s, err)
 		}
 	}
+
+	// Starting with MySQL 8.0.30, the InnoDB redo logs are stored in a sub-directory of the
+	// <innodb_log_group_home_dir> (<datadir>/. by default) called "#innodb_redo". See:
+	//   https://dev.mysql.com/doc/refman/8.0/en/innodb-redo-log.html#innodb-modifying-redo-log-capacity
+	innodbLogFile := "innodb_log_1"
+	innodbLogSubDir := ""
+	if features.hasInnoDBRedoLogSubDir() {
+		innodbLogSubDir = "#innodb_redo"
+		os.Mkdir(path.Join(innodbLogDir, innodbLogSubDir), os.ModePerm)
+		innodbLogFile = "#ib_redo1"
+	}
+
 	if err := os.WriteFile(path.Join(innodbDataDir, "innodb_data_1"), []byte("innodb data 1 contents"), os.ModePerm); err != nil {
 		t.Fatalf("failed to write file innodb_data_1: %v", err)
 	}
-	if err := os.WriteFile(path.Join(innodbLogDir, "innodb_log_1"), []byte("innodb log 1 contents"), os.ModePerm); err != nil {
+	if err := os.WriteFile(path.Join(innodbLogDir, innodbLogSubDir, innodbLogFile), []byte("innodb log 1 contents"), os.ModePerm); err != nil {
 		t.Fatalf("failed to write file innodb_log_1: %v", err)
 	}
 	if err := os.WriteFile(path.Join(dataDbDir, "db.opt"), []byte("db opt file"), os.ModePerm); err != nil {
@@ -101,7 +122,7 @@ func TestFindFilesToBackup(t *testing.T) {
 		},
 		{
 			Base: "InnoDBLog",
-			Name: "innodb_log_1",
+			Name: path.Join(innodbLogSubDir, innodbLogFile),
 		},
 	}
 	if !reflect.DeepEqual(result, expected) {

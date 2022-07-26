@@ -50,6 +50,9 @@ func (c *capabilitySet) hasInitializeInServer() bool {
 func (c *capabilitySet) hasMaria104InstallDb() bool {
 	return c.isMariaDB() && c.version.atLeast(ServerVersion{Major: 10, Minor: 4, Patch: 0})
 }
+func (c *capabilitySet) hasInnoDBRedoLogSubDir() bool {
+	return c.isMySQLLike() && c.version.atLeast(ServerVersion{Major: 8, Minor: 0, Patch: 30})
+}
 
 // IsMySQLLike tests if the server is either MySQL
 // or Percona Server. At least currently, Vitess doesn't
