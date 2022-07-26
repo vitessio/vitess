@@ -405,12 +405,13 @@ func findFilesToBackup(cnf *Mycnf) ([]FileEntry, int64, error) {
 		if err != nil {
 			return nil, 0, err
 		}
-		redoLogSubDir := features.innodbRedoLogSubDir()
-		result, size, err = addDirectory(result, backupInnodbLogGroupHomeDir, cnf.InnodbLogGroupHomeDir, redoLogSubDir)
-		if err != nil {
-			return nil, 0, err
+		if redoLogSubDir := features.innodbRedoLogSubDir(); redoLogSubDir != "" {
+			result, size, err = addDirectory(result, backupInnodbLogGroupHomeDir, cnf.InnodbLogGroupHomeDir, redoLogSubDir)
+			if err != nil {
+				return nil, 0, err
+			}
+			totalSize = totalSize + size
 		}
-		totalSize = totalSize + size
 		// then add the transactional data dictionary if it exists
 		result, size, err = addMySQL8DataDictionary(result, backupData, cnf.DataDir)
 		if err != nil {

@@ -52,16 +52,15 @@ func TestFindFilesToBackup(t *testing.T) {
 	}
 
 	innodbLogFile := "innodb_log_1"
-	innodbLogSubDir := features.innodbRedoLogSubDir()
-	if innodbLogSubDir != "" {
+	if innodbLogSubDir := features.innodbRedoLogSubDir(); innodbLogSubDir != "" {
 		os.Mkdir(path.Join(innodbLogDir, innodbLogSubDir), os.ModePerm)
-		innodbLogFile = "#ib_redo1"
+		innodbLogFile = path.Join(innodbLogSubDir, "#ib_redo1")
 	}
 
 	if err := os.WriteFile(path.Join(innodbDataDir, "innodb_data_1"), []byte("innodb data 1 contents"), os.ModePerm); err != nil {
 		t.Fatalf("failed to write file innodb_data_1: %v", err)
 	}
-	if err := os.WriteFile(path.Join(innodbLogDir, innodbLogSubDir, innodbLogFile), []byte("innodb log 1 contents"), os.ModePerm); err != nil {
+	if err := os.WriteFile(path.Join(innodbLogDir, innodbLogFile), []byte("innodb log 1 contents"), os.ModePerm); err != nil {
 		t.Fatalf("failed to write file innodb_log_1: %v", err)
 	}
 	if err := os.WriteFile(path.Join(dataDbDir, "db.opt"), []byte("db opt file"), os.ModePerm); err != nil {
@@ -118,7 +117,7 @@ func TestFindFilesToBackup(t *testing.T) {
 		},
 		{
 			Base: "InnoDBLog",
-			Name: path.Join(innodbLogSubDir, innodbLogFile),
+			Name: innodbLogFile,
 		},
 	}
 	if !reflect.DeepEqual(result, expected) {
