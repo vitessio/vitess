@@ -206,7 +206,7 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 			return err
 		}
 	case vdiff.StopAction, vdiff.DeleteAction:
-		displayVDiff2ActionStatusResponse(wr, format, action, vdiff.CompletedState)
+		displayVDiff2ActionStatusResponse(wr, format, vdiffUUID.String(), action, vdiff.CompletedState)
 	default:
 		return fmt.Errorf("invalid action %s; %s", action, usage)
 	}
@@ -616,7 +616,7 @@ func buildVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid st
 
 //endregion
 
-func displayVDiff2ScheduledResponse(wr *wrangler.Wrangler, format string, uuid string, typ vdiff.VDiffAction) {
+func displayVDiff2ScheduledResponse(wr *wrangler.Wrangler, format, uuid string, typ vdiff.VDiffAction) {
 	if format == "json" {
 		type ScheduledResponse struct {
 			UUID string
@@ -634,17 +634,18 @@ func displayVDiff2ScheduledResponse(wr *wrangler.Wrangler, format string, uuid s
 	}
 }
 
-func displayVDiff2ActionStatusResponse(wr *wrangler.Wrangler, format string, action vdiff.VDiffAction, status vdiff.VDiffState) {
+func displayVDiff2ActionStatusResponse(wr *wrangler.Wrangler, format, uuid string, action vdiff.VDiffAction, status vdiff.VDiffState) {
 	if format == "json" {
 		type ActionStatusResponse struct {
+			UUID   string
 			Action vdiff.VDiffAction
 			Status vdiff.VDiffState
 		}
-		resp := &ActionStatusResponse{Action: action, Status: status}
+		resp := &ActionStatusResponse{UUID: uuid, Action: action, Status: status}
 		jsonText, _ := json.MarshalIndent(resp, "", "\t")
 		wr.Logger().Printf(string(jsonText) + "\n")
 	} else {
-		msg := fmt.Sprintf("VDiff %s status is %s on target shards\n", action, status)
+		msg := fmt.Sprintf("The %s action for vdiff %s is %s on target shards\n", action, uuid, status)
 		wr.Logger().Printf(msg)
 	}
 }

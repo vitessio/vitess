@@ -38,8 +38,8 @@ import (
 )
 
 /*
-  vdiff operation states: pending/started/completed/error/unknown
-  vdiff table states: pending/started/completed/error/unknown
+  vdiff operation states: pending/started/stopped/completed/error/unknown
+  vdiff table states: pending/started/stopped/completed/error/unknown
 */
 type VDiffState string //nolint
 const (
