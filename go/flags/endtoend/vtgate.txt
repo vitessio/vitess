@@ -85,7 +85,7 @@ Usage of vtgate:
       --mysql_auth_server_impl string                                    Which auth server implementation to use. Options: none, ldap, clientcert, static, vault. (default "static")
       --mysql_auth_server_static_file string                             JSON File to read the users/passwords from.
       --mysql_auth_server_static_string string                           JSON representation of the users/passwords config.
-      --mysql_auth_static_reload_interval duration                       Ticker to reload credentials
+      --mysql_auth_static_reload_interval duration                       Ticker to reload credentials (default 0s)
       --mysql_auth_vault_addr string                                     URL to Vault server
       --mysql_auth_vault_path string                                     Vault path to vtgate credentials JSON blob, e.g.: secret/data/prod/vtgatecreds
       --mysql_auth_vault_role_mountpoint string                          Vault AppRole mountpoint; can also be passed using VAULT_MOUNTPOINT environment variable (default "approle")
