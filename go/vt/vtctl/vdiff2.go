@@ -206,7 +206,11 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 			return err
 		}
 	case vdiff.StopAction, vdiff.DeleteAction:
-		displayVDiff2ActionStatusResponse(wr, format, vdiffUUID.String(), action, vdiff.CompletedState)
+		uuidToDisplay := ""
+		if actionArg != vdiff.AllActionArg {
+			uuidToDisplay = vdiffUUID.String()
+		}
+		displayVDiff2ActionStatusResponse(wr, format, uuidToDisplay, action, vdiff.CompletedState)
 	default:
 		return fmt.Errorf("invalid action %s; %s", action, usage)
 	}
@@ -637,7 +641,7 @@ func displayVDiff2ScheduledResponse(wr *wrangler.Wrangler, format, uuid string, 
 func displayVDiff2ActionStatusResponse(wr *wrangler.Wrangler, format, uuid string, action vdiff.VDiffAction, status vdiff.VDiffState) {
 	if format == "json" {
 		type ActionStatusResponse struct {
-			UUID   string
+			UUID   string `json:"UUID,omitempty"`
 			Action vdiff.VDiffAction
 			Status vdiff.VDiffState
 		}

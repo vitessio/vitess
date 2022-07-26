@@ -265,7 +265,9 @@ func (vde *Engine) handleStopAction(ctx context.Context, dbClient binlogplayer.D
 	for _, controller := range vde.controllers {
 		if controller.uuid == req.VdiffUuid {
 			controller.Stop()
-			controller.markStoppedByRequest()
+			if err := controller.markStoppedByRequest(); err != nil {
+				return err
+			}
 			break
 		}
 	}
