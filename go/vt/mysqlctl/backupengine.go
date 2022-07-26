@@ -381,40 +381,67 @@ func addMySQL8DataDictionary(fes []FileEntry, base string, baseDir string) ([]Fi
 func findFilesToBackup(cnf *Mycnf) ([]FileEntry, int64, error) {
 	var err error
 	var result []FileEntry
-	var totalSize int64
+	var size, totalSize int64
+	var flavor MySQLFlavor
+	var version ServerVersion
 
-	// first add inno db files
-	result, totalSize, err = addDirectory(result, backupInnodbDataHomeDir, cnf.InnodbDataHomeDir, "")
-	if err != nil {
-		return nil, 0, err
-	}
-	result, size, err := addDirectory(result, backupInnodbLogGroupHomeDir, cnf.InnodbLogGroupHomeDir, "")
-	if err != nil {
-		return nil, 0, err
-	}
-	totalSize = totalSize + size
-	// then add the transactional data dictionary if it exists
-	result, size, err = addMySQL8DataDictionary(result, backupData, cnf.DataDir)
-	if err != nil {
-		return nil, 0, err
-	}
-	totalSize = totalSize + size
-
-	// then add DB directories
-	fis, err := os.ReadDir(cnf.DataDir)
-	if err != nil {
-		return nil, 0, err
-	}
-
-	for _, fi := range fis {
-		p := path.Join(cnf.DataDir, fi.Name())
-		if isDbDir(p) {
-			result, size, err = addDirectory(result, backupData, cnf.DataDir, fi.Name())
-			if err != nil {
-				return nil, 0, err
-			}
-			totalSize = totalSize + size
+	// get the flavor and version to deal with any behavioral differences
+	{
+		versionStr, err := GetVersionString()
+		if err != nil {
+			return nil, 0, err
+		}
+		flavor, version, err = ParseVersionString(versionStr)
+		if err != nil {
+			return nil, 0, err
 		}
 	}
+
+	// first add innodb files
+	{
+		result, totalSize, err = addDirectory(result, backupInnodbDataHomeDir, cnf.InnodbDataHomeDir, "")
+		if err != nil {
+			return nil, 0, err
+		}
+		// Starting with MySQL 8.0.30, by default the InnoDB redo logs are stored in a sub-directory of the
+		// datadir called "#innodb_redo". See:
+		//   https://dev.mysql.com/doc/refman/8.0/en/innodb-redo-log.html#innodb-modifying-redo-log-capacity
+		redoLogSubDir := ""
+		if (flavor == FlavorMySQL || flavor == FlavorPercona) && (version.atLeast(ServerVersion{8, 0, 30})) &&
+			(cnf.InnodbDataHomeDir == "") {
+			redoLogSubDir = "#innodb_redo"
+		}
+		result, size, err = addDirectory(result, backupInnodbLogGroupHomeDir, cnf.InnodbLogGroupHomeDir, redoLogSubDir)
+		if err != nil {
+			return nil, 0, err
+		}
+		totalSize = totalSize + size
+		// then add the transactional data dictionary if it exists
+		result, size, err = addMySQL8DataDictionary(result, backupData, cnf.DataDir)
+		if err != nil {
+			return nil, 0, err
+		}
+		totalSize = totalSize + size
+	}
+
+	// then add DB directories
+	{
+		fis, err := os.ReadDir(cnf.DataDir)
+		if err != nil {
+			return nil, 0, err
+		}
+
+		for _, fi := range fis {
+			p := path.Join(cnf.DataDir, fi.Name())
+			if isDbDir(p) {
+				result, size, err = addDirectory(result, backupData, cnf.DataDir, fi.Name())
+				if err != nil {
+					return nil, 0, err
+				}
+				totalSize = totalSize + size
+			}
+		}
+	}
+
 	return result, totalSize, nil
 }
