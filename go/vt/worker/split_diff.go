@@ -403,8 +403,9 @@ func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 	go func() {
 		var err error
 		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+		req := &tabletmanagerdatapb.GetSchemaRequest{ExcludeTables: sdw.excludeTables}
 		sdw.destinationSchemaDefinition, err = schematools.GetSchema(
-			shortCtx, sdw.wr.TopoServer(), sdw.wr.TabletManagerClient(), sdw.destinationAlias, nil /* tables */, sdw.excludeTables, false /* includeViews */, false)
+			shortCtx, sdw.wr.TopoServer(), sdw.wr.TabletManagerClient(), sdw.destinationAlias, req)
 		cancel()
 		if err != nil {
 			sdw.markAsWillFail(rec, err)
@@ -416,8 +417,9 @@ func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 	go func() {
 		var err error
 		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+		req := &tabletmanagerdatapb.GetSchemaRequest{ExcludeTables: sdw.excludeTables}
 		sdw.sourceSchemaDefinition, err = schematools.GetSchema(
-			shortCtx, sdw.wr.TopoServer(), sdw.wr.TabletManagerClient(), sdw.sourceAlias, nil /* tables */, sdw.excludeTables, false /* includeViews */, false)
+			shortCtx, sdw.wr.TopoServer(), sdw.wr.TabletManagerClient(), sdw.sourceAlias, req)
 		cancel()
 		if err != nil {
 			sdw.markAsWillFail(rec, err)

@@ -26,6 +26,7 @@ import (
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/logutil"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -234,8 +235,8 @@ func (exec *TabletExecutor) detectBigSchemaChanges(ctx context.Context, parsedDD
 	// Otherwise, Open should fail and executor should fail.
 	primaryTabletInfo := exec.tablets[0]
 	// get database schema, excluding views.
-	dbSchema, err := exec.tmc.GetSchema(
-		ctx, primaryTabletInfo, []string{}, []string{}, false, true /* skip column introspection */)
+	req := &tabletmanagerdatapb.GetSchemaRequest{Tables: []string{}, ExcludeTables: []string{}, TableSchemaOnly: true}
+	dbSchema, err := exec.tmc.GetSchema(ctx, primaryTabletInfo, req)
 	if err != nil {
 		return false, fmt.Errorf("unable to get database schema, error: %v", err)
 	}

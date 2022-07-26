@@ -157,7 +157,8 @@ func (wd *workflowDiffer) diff(ctx context.Context) error {
 	defer dbClient.Close()
 
 	filter := wd.ct.filter
-	schm, err := schematools.GetSchema(ctx, wd.ct.ts, wd.ct.tmc, wd.ct.vde.thisTablet.Alias, nil, nil, false, false)
+	req := &tabletmanagerdatapb.GetSchemaRequest{}
+	schm, err := schematools.GetSchema(ctx, wd.ct.ts, wd.ct.tmc, wd.ct.vde.thisTablet.Alias, req)
 	if err != nil {
 		return vterrors.Wrap(err, "GetSchema")
 	}

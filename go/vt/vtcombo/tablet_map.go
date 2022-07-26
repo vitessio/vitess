@@ -755,15 +755,13 @@ func (itmc *internalTabletManagerClient) Ping(ctx context.Context, tablet *topod
 func (itmc *internalTabletManagerClient) GetSchema(
 	ctx context.Context,
 	tablet *topodatapb.Tablet,
-	tables, excludeTables []string,
-	includeViews bool,
-	tableSchemaOnly bool,
+	request *tabletmanagerdatapb.GetSchemaRequest,
 ) (*tabletmanagerdatapb.SchemaDefinition, error) {
 	t, ok := tabletMap[tablet.Alias.Uid]
 	if !ok {
 		return nil, fmt.Errorf("tmclient: cannot find tablet %v", tablet.Alias.Uid)
 	}
-	return t.tm.GetSchema(ctx, tables, excludeTables, includeViews, tableSchemaOnly)
+	return t.tm.GetSchema(ctx, request)
 }
 
 func (itmc *internalTabletManagerClient) GetPermissions(ctx context.Context, tablet *topodatapb.Tablet) (*tabletmanagerdatapb.Permissions, error) {

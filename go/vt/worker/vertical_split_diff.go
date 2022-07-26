@@ -365,8 +365,9 @@ func (vsdw *VerticalSplitDiffWorker) diff(ctx context.Context) error {
 	go func() {
 		var err error
 		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+		req := &tabletmanagerdatapb.GetSchemaRequest{Tables: vsdw.shardInfo.SourceShards[0].Tables}
 		vsdw.destinationSchemaDefinition, err = schematools.GetSchema(
-			shortCtx, vsdw.wr.TopoServer(), vsdw.wr.TabletManagerClient(), vsdw.destinationAlias, vsdw.shardInfo.SourceShards[0].Tables, nil /* excludeTables */, false /* includeViews */, false /* tableSchemaOnly */)
+			shortCtx, vsdw.wr.TopoServer(), vsdw.wr.TabletManagerClient(), vsdw.destinationAlias, req)
 		cancel()
 		if err != nil {
 			vsdw.markAsWillFail(rec, err)
@@ -378,8 +379,9 @@ func (vsdw *VerticalSplitDiffWorker) diff(ctx context.Context) error {
 	go func() {
 		var err error
 		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
+		req := &tabletmanagerdatapb.GetSchemaRequest{Tables: vsdw.shardInfo.SourceShards[0].Tables}
 		vsdw.sourceSchemaDefinition, err = schematools.GetSchema(
-			shortCtx, vsdw.wr.TopoServer(), vsdw.wr.TabletManagerClient(), vsdw.sourceAlias, vsdw.shardInfo.SourceShards[0].Tables, nil /* excludeTables */, false /* includeViews */, false /* tableSchemaOnly */)
+			shortCtx, vsdw.wr.TopoServer(), vsdw.wr.TabletManagerClient(), vsdw.sourceAlias, req)
 		cancel()
 		if err != nil {
 			vsdw.markAsWillFail(rec, err)
