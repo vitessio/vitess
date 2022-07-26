@@ -17,11 +17,10 @@ limitations under the License.
 package tabletmanager
 
 import (
-	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -78,16 +77,12 @@ func TestTabletReshuffle(t *testing.T) {
 	require.NoError(t, err)
 
 	sql := "select value from t1"
-	args := []string{
-		"VtTabletExecute", "--",
-		"--options", "included_fields:TYPE_ONLY",
-		"--json",
-		rTablet.Alias,
-		sql,
-	}
-	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(args...)
+	qr, err := clusterInstance.ExecOnTablet(ctx, rTablet, sql, nil, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_TYPE_ONLY})
 	require.NoError(t, err)
-	assertExcludeFields(t, result)
+
+	result, err := json.Marshal(qr)
+	require.NoError(t, err)
+	assertExcludeFields(t, string(result))
 
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Backup", rTablet.Alias)
 	assert.Error(t, err, "cannot perform backup without my.cnf")
@@ -134,9 +129,11 @@ func TestHealthCheck(t *testing.T) {
 	require.NoError(t, err)
 
 	// make sure the health stream is updated
-	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "--", "--count", "1", rTablet.Alias)
+	shrs, err := clusterInstance.StreamTabletHealth(ctx, rTablet, 1)
 	require.NoError(t, err)
-	verifyStreamHealth(t, result, true)
+	for _, shr := range shrs {
+		verifyStreamHealth(t, shr, true)
+	}
 
 	// then restart replication, make sure we stay healthy
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("StartReplication", rTablet.Alias)
@@ -145,12 +142,11 @@ func TestHealthCheck(t *testing.T) {
 	require.NoError(t, err)
 	checkHealth(t, rTablet.HTTPPort, false)
 
-	// now test VtTabletStreamHealth returns the right thing
-	result, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "--", "--count", "2", rTablet.Alias)
+	// now test the health stream returns the right thing
+	shrs, err = clusterInstance.StreamTabletHealth(ctx, rTablet, 2)
 	require.NoError(t, err)
-	scanner := bufio.NewScanner(strings.NewReader(result))
-	for scanner.Scan() {
-		verifyStreamHealth(t, scanner.Text(), true)
+	for _, shr := range shrs {
+		verifyStreamHealth(t, shr, true)
 	}
 
 	// stop the replica's source mysqld instance to break replication
@@ -161,12 +157,11 @@ func TestHealthCheck(t *testing.T) {
 
 	time.Sleep(tabletUnhealthyThreshold + tabletHealthcheckRefreshInterval)
 
-	// now the replica's VtTabletStreamHealth should show it as unhealthy
-	result, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "--", "--count", "1", rTablet.Alias)
+	// now the replica's health stream should show it as unhealthy
+	shrs, err = clusterInstance.StreamTabletHealth(ctx, rTablet, 1)
 	require.NoError(t, err)
-	scanner = bufio.NewScanner(strings.NewReader(result))
-	for scanner.Scan() {
-		verifyStreamHealth(t, scanner.Text(), false)
+	for _, shr := range shrs {
+		verifyStreamHealth(t, shr, false)
 	}
 
 	// start the primary tablet's mysqld back up
@@ -192,12 +187,11 @@ func TestHealthCheck(t *testing.T) {
 
 	time.Sleep(tabletHealthcheckRefreshInterval)
 
-	// now the replica's VtTabletStreamHealth should show it as healthy again
-	result, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "--", "--count", "1", rTablet.Alias)
+	// now the replica's health stream should show it as healthy again
+	shrs, err = clusterInstance.StreamTabletHealth(ctx, rTablet, 1)
 	require.NoError(t, err)
-	scanner = bufio.NewScanner(strings.NewReader(result))
-	for scanner.Scan() {
-		verifyStreamHealth(t, scanner.Text(), true)
+	for _, shr := range shrs {
+		verifyStreamHealth(t, shr, true)
 	}
 
 	// Manual cleanup of processes
@@ -232,10 +226,7 @@ func checkTabletType(t *testing.T, tabletAlias string, typeWant string) {
 	assert.Equal(t, want, got)
 }
 
-func verifyStreamHealth(t *testing.T, result string, expectHealthy bool) {
-	var streamHealthResponse querypb.StreamHealthResponse
-	err := json2.Unmarshal([]byte(result), &streamHealthResponse)
-	require.NoError(t, err)
+func verifyStreamHealth(t *testing.T, streamHealthResponse *querypb.StreamHealthResponse, expectHealthy bool) {
 	serving := streamHealthResponse.GetServing()
 	UID := streamHealthResponse.GetTabletAlias().GetUid()
 	realTimeStats := streamHealthResponse.GetRealtimeStats()

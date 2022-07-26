@@ -29,6 +29,8 @@ import (
 	"reflect"
 	"strings"
 
+	flag "github.com/spf13/pflag"
+
 	"vitess.io/vitess/go/vt/log"
 )
 
@@ -40,17 +42,28 @@ import (
 // the default Usage formatting unchanged.
 //
 // See VEP-4, phase 1 for details: https://github.com/vitessio/enhancements/blob/c766ea905e55409cddeb666d6073cd2ac4c9783e/veps/vep-4.md#phase-1-preparation
-func Parse() {
-	// First, override the Usage func to make flags show in their double-dash
-	// forms to the user.
-	SetUsage(goflag.CommandLine, UsageOptions{})
+func Parse(fs *flag.FlagSet) {
+	fs.AddGoFlagSet(goflag.CommandLine)
 
-	// Then, parse as normal.
-	goflag.Parse()
+	if fs.Lookup("help") == nil {
+		var help bool
 
-	// Finally, warn on deprecated flag usage.
-	warnOnSingleDashLongFlags(goflag.CommandLine, os.Args, log.Warningf)
-	warnOnMixedPositionalAndFlagArguments(goflag.Args(), log.Warningf)
+		if fs.ShorthandLookup("h") == nil {
+			fs.BoolVarP(&help, "help", "h", false, "display usage and exit")
+		} else {
+			fs.BoolVar(&help, "help", false, "display usage and exit")
+		}
+
+		defer func() {
+			if help {
+				flag.Usage()
+				os.Exit(0)
+			}
+		}()
+	}
+
+	flag.CommandLine = fs
+	flag.Parse()
 }
 
 // Args returns the positional arguments with the first double-dash ("--")
@@ -58,7 +71,7 @@ func Parse() {
 // equivalent to flag.Args() from the standard library flag package.
 func Args() (args []string) {
 	doubleDashIdx := -1
-	for i, arg := range goflag.Args() {
+	for i, arg := range flag.Args() {
 		if arg == "--" {
 			doubleDashIdx = i
 			break
@@ -68,7 +81,7 @@ func Args() (args []string) {
 	}
 
 	if doubleDashIdx != -1 {
-		args = append(args, goflag.Args()[doubleDashIdx+1:]...)
+		args = append(args, flag.Args()[doubleDashIdx+1:]...)
 	}
 
 	return args
@@ -95,6 +108,7 @@ const (
 )
 
 // Check and warn on any single-dash flags.
+// nolint:deadcode
 func warnOnSingleDashLongFlags(fs *goflag.FlagSet, argv []string, warningf func(msg string, args ...any)) {
 	fs.Visit(func(f *goflag.Flag) {
 		// Boolean flags with single-character names are okay to use the
@@ -113,6 +127,7 @@ func warnOnSingleDashLongFlags(fs *goflag.FlagSet, argv []string, warningf func(
 }
 
 // Check and warn for any mixed posarg / dashed-arg on the CLI.
+// nolint:deadcode
 func warnOnMixedPositionalAndFlagArguments(posargs []string, warningf func(msg string, args ...any)) {
 	for _, arg := range posargs {
 		if arg == "--" {
