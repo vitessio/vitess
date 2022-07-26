@@ -37,6 +37,7 @@ type testCase struct {
 	resume      bool // test resume functionality with this workflow
 	// If testing resume, what new rows should be diff'd. These rows must have a PK > all initial rows and retry rows.
 	resumeInsert      string
+	stop              bool // test stop functionality with this workflow
 	testCLIErrors     bool // test CLI errors against this workflow (only needs to be done once)
 	testCLICreateWait bool // test CLI create and wait until done against this workflow (only needs to be done once)
 }
@@ -79,6 +80,7 @@ var testCases = []*testCase{
 		retryInsert:    `insert into customer(cid, name, typ) values(93234, 'Testy McTester Jr', 'enterprise'), (94234, 'Testy McTester II', 'enterprise')`,
 		resume:         true,
 		resumeInsert:   `insert into customer(cid, name, typ) values(95234, 'Testy McTester III', 'enterprise')`,
+		stop:           true,
 	},
 	{
 		name:           "Reshard/merge 3 to 1",
@@ -93,6 +95,7 @@ var testCases = []*testCase{
 		retryInsert:    `insert into customer(cid, name, typ) values(96234, 'Testy McTester IV', 'enterprise')`,
 		resume:         true,
 		resumeInsert:   `insert into customer(cid, name, typ) values(97234, 'Testy McTester V', 'enterprise'), (98234, 'Testy McTester VI', 'enterprise')`,
+		stop:           true,
 	},
 }
 
@@ -185,6 +188,9 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, cells []*Cell) 
 	}
 
 	// These are done here so that we have a valid workflow to test the commands against
+	if tc.stop {
+		testStop(t, ksWorkflow, allCellNames)
+	}
 	if tc.testCLICreateWait {
 		testCLICreateWait(t, ksWorkflow, allCellNames)
 	}
@@ -276,6 +282,20 @@ func testResume(t *testing.T, tc *testCase, cells string) {
 		info := waitForVDiff2ToComplete(t, ksWorkflow, cells, uuid, ogTime)
 		require.False(t, info.HasMismatch)
 		require.Equal(t, expectedRows, info.RowsCompared)
+	})
+}
+
+func testStop(t *testing.T, ksWorkflow, cells string) {
+	t.Run("Stop", func(t *testing.T) {
+		// create a new VDiff and immediately stop it
+		uuid, _ := performVDiff2Action(t, ksWorkflow, cells, "create", "", false)
+		_, _ = performVDiff2Action(t, ksWorkflow, cells, "stop", uuid, false)
+		// confirm the VDiff is in the expected stopped state
+		_, output := performVDiff2Action(t, ksWorkflow, cells, "show", uuid, false)
+		jsonOutput := getVDiffInfo(output)
+		require.Equal(t, "stopped", jsonOutput.State)
+		// confirm that the context cancelled error was also cleared
+		require.False(t, strings.Contains(output, `"Errors":`))
 	})
 }
 
