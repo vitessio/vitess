@@ -33,7 +33,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/spf13/pflag"
 	"github.com/z-division/go-zookeeper/zk"
 	"golang.org/x/term"
 
@@ -141,11 +140,10 @@ func main() {
 	defer exit.Recover()
 	defer logutil.Flush()
 
-	fs := pflag.NewFlagSet("zkcmd", pflag.ExitOnError)
-	_flag.SetUsage(flag.CommandLine, _flag.UsageOptions{ // TODO: hmmm
+	_flag.SetUsage(flag.CommandLine, _flag.UsageOptions{
 		Epilogue: func(w io.Writer) { fmt.Fprint(w, doc) },
 	})
-	_flag.Parse(fs)
+	_flag.Parse()
 	args := _flag.Args()
 	if len(args) == 0 {
 		flag.Usage()

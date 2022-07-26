@@ -25,8 +25,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/spf13/pflag"
-
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/log"
@@ -72,7 +70,7 @@ func checkDeprecations(args []string) {
 func main() {
 	defer exit.Recover()
 
-	_flag.Parse(pflag.NewFlagSet("vtctlclient", pflag.ExitOnError))
+	_flag.Parse()
 
 	closer := trace.StartTracing("vtctlclient")
 	defer trace.LogErrorsWhenClosing(closer)
