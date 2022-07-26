@@ -51,13 +51,9 @@ func TestFindFilesToBackup(t *testing.T) {
 		}
 	}
 
-	// Starting with MySQL 8.0.30, the InnoDB redo logs are stored in a sub-directory of the
-	// <innodb_log_group_home_dir> (<datadir>/. by default) called "#innodb_redo". See:
-	//   https://dev.mysql.com/doc/refman/8.0/en/innodb-redo-log.html#innodb-modifying-redo-log-capacity
 	innodbLogFile := "innodb_log_1"
-	innodbLogSubDir := ""
-	if features.hasInnoDBRedoLogSubDir() {
-		innodbLogSubDir = "#innodb_redo"
+	innodbLogSubDir := features.innodbRedoLogSubDir()
+	if innodbLogSubDir != "" {
 		os.Mkdir(path.Join(innodbLogDir, innodbLogSubDir), os.ModePerm)
 		innodbLogFile = "#ib_redo1"
 	}
