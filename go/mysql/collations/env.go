@@ -125,13 +125,17 @@ func fetchCacheEnvironment(version collver) *Environment {
 // The version string must be in the format that is sent by the server as the version packet
 // when opening a new MySQL connection
 func NewEnvironment(serverVersion string) *Environment {
-	var version collver = collverMySQL56
+	// 5.7 is the oldest version we support today, so use that as
+	// the default.
+	// NOTE: this should be changed when we EOL MySQL 5.7 support
+	var version collver = collverMySQL57
+	serverVersion = strings.TrimSpace(strings.ToLower(serverVersion))
 	switch {
 	case strings.HasSuffix(serverVersion, "-ripple"):
 		// the ripple binlog server can mask the actual version of mysqld;
 		// assume we have the highest
 		version = collverMySQL80
-	case strings.Contains(serverVersion, "MariaDB"):
+	case strings.Contains(serverVersion, "mariadb"):
 		switch {
 		case strings.Contains(serverVersion, "10.0."):
 			version = collverMariaDB100

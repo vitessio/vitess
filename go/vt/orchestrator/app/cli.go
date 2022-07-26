@@ -30,7 +30,6 @@ import (
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/util"
 	"vitess.io/vitess/go/vt/orchestrator/inst"
-	"vitess.io/vitess/go/vt/orchestrator/kv"
 	"vitess.io/vitess/go/vt/orchestrator/logic"
 	"vitess.io/vitess/go/vt/orchestrator/process"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/promotionrule"
@@ -183,7 +182,6 @@ func Cli(command string, strict bool, instance string, destination string, owner
 	if !skipDatabaseCommands && !*config.RuntimeCLIFlags.SkipContinuousRegistration {
 		process.ContinuousRegistration(string(process.OrchestratorExecutionCliMode), command)
 	}
-	kv.InitKVStores()
 
 	// begin commands
 	switch command {
@@ -949,20 +947,6 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			}
 			fmt.Println(lag)
 		}
-	case registerCliCommand("submit-primaries-to-kv-stores", "Key-value", `Submit primary of a specific cluster, or all primaries of all clusters to key-value stores`):
-		{
-			clusterName := getClusterName(clusterAlias, instanceKey)
-			log.Debugf("cluster name is <%s>", clusterName)
-
-			kvPairs, _, err := logic.SubmitPrimariesToKvStores(clusterName, true)
-			if err != nil {
-				log.Fatale(err)
-			}
-			for _, kvPair := range kvPairs {
-				fmt.Printf("%s:%s\n", kvPair.Key, kvPair.Value)
-			}
-		}
-
 	case registerCliCommand("tags", "tags", `List tags for a given instance`):
 		{
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)

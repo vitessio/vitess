@@ -154,7 +154,9 @@ func (cached *DML) CachedSize(alloc bool) int64 {
 		size += cc.CachedSize(true)
 	}
 	// field Table *vitess.io/vitess/go/vt/vtgate/vindexes.Table
-	size += cached.Table.CachedSize(true)
+	for _, table := range cached.Table {
+		size += table.CachedSize(true)
+	}
 	// field OwnedVindexQuery string
 	size += hack.RuntimeAllocSize(int64(len(cached.OwnedVindexQuery)))
 	// field RoutingParameters *vitess.io/vitess/go/vt/vtgate/engine.RoutingParameters

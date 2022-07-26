@@ -17,18 +17,17 @@ limitations under the License.
 package general
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
-
-	"vitess.io/vitess/go/vt/log"
-
-	"vitess.io/vitess/go/test/endtoend/vtorc/utils"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/vtorc/utils"
+	"vitess.io/vitess/go/vt/log"
 )
 
 // Cases to test:
@@ -425,4 +424,52 @@ func TestMultipleDurabilities(t *testing.T) {
 	// find primary from topo
 	primary := utils.ShardPrimaryTablet(t, clusterInfo, keyspaceSemiSync, shardSemiSync)
 	assert.NotNil(t, primary, "should have elected a primary")
+}
+
+// TestDurabilityPolicySetLater tests that VTOrc works even if the durability policy of the keyspace is
+// set after VTOrc has been started.
+func TestDurabilityPolicySetLater(t *testing.T) {
+	// stop any vtorc instance running due to a previous test.
+	utils.StopVtorcs(t, clusterInfo)
+	newCluster := utils.SetupNewClusterSemiSync(t)
+	keyspace := &newCluster.ClusterInstance.Keyspaces[0]
+	shard0 := &keyspace.Shards[0]
+	// Before starting VTOrc we explicity want to set the durability policy of the keyspace to an empty string
+	func() {
+		ctx, unlock, lockErr := newCluster.Ts.LockKeyspace(context.Background(), keyspace.Name, "TestDurabilityPolicySetLater")
+		require.NoError(t, lockErr)
+		defer unlock(&lockErr)
+		ki, err := newCluster.Ts.GetKeyspace(ctx, keyspace.Name)
+		require.NoError(t, err)
+		ki.DurabilityPolicy = ""
+		err = newCluster.Ts.UpdateKeyspace(ctx, ki)
+		require.NoError(t, err)
+	}()
+
+	// Verify that the durability policy is indeed empty
+	ki, err := newCluster.Ts.GetKeyspace(context.Background(), keyspace.Name)
+	require.NoError(t, err)
+	require.Empty(t, ki.DurabilityPolicy)
+
+	// Now start the vtorc instances
+	utils.StartVtorcs(t, newCluster, nil, cluster.VtorcConfiguration{
+		PreventCrossDataCenterPrimaryFailover: true,
+	}, 1)
+	defer func() {
+		utils.StopVtorcs(t, newCluster)
+		newCluster.ClusterInstance.Teardown()
+	}()
+
+	// Wait for some time to be sure that VTOrc has started.
+	// TODO(GuptaManan100): Once we have a debug page for VTOrc, use that instead
+	time.Sleep(30 * time.Second)
+
+	// Now set the correct durability policy
+	out, err := newCluster.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspace.Name, "--durability-policy=semi_sync")
+	require.NoError(t, err, out)
+
+	// VTOrc should promote a new primary after seeing the durability policy change
+	primary := utils.ShardPrimaryTablet(t, newCluster, keyspace, shard0)
+	assert.NotNil(t, primary, "should have elected a primary")
+	utils.CheckReplication(t, newCluster, primary, shard0.Vttablets, 10*time.Second)
 }

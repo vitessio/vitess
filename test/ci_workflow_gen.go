@@ -89,7 +89,7 @@ var (
 		"onlineddl_vrepl_stress",
 		"onlineddl_vrepl_stress_suite",
 		"onlineddl_vrepl_suite",
-		"vreplication_migrate",
+		"vreplication_migrate_vdiff2_convert_tz",
 		"onlineddl_revert",
 		"onlineddl_declarative",
 		"onlineddl_singleton",
@@ -99,7 +99,6 @@ var (
 		"tabletmanager_throttler_custom_config",
 		"tabletmanager_tablegc",
 		"tabletmanager_consul",
-		"vtgate_buffer",
 		"vtgate_concurrentdml",
 		"vtgate_godriver",
 		"vtgate_gen4",
@@ -166,6 +165,8 @@ type selfHostedTest struct {
 func clusterMySQLVersions(clusterName string) mysqlVersions {
 	switch {
 	case strings.HasPrefix(clusterName, "onlineddl_"):
+		return allMySQLVersions
+	case clusterName == "schemadiff_vrepl":
 		return allMySQLVersions
 	case clusterName == "tabletmanager_tablegc":
 		return allMySQLVersions

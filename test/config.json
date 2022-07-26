@@ -434,15 +434,6 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
-		"tabletgateway_cellalias": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/tabletgateway/cellalias"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "13",
-			"RetryMax": 1,
-			"Tags": []
-		},
 		"tabletgateway": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/tabletgateway"],
@@ -610,15 +601,6 @@
 			"Manual": false,
 			"Shard": "vtgate_queries",
 			"RetryMax": 2,
-			"Tags": []
-		},
-		"vtgate_buffer": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/buffer"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "vtgate_buffer",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"vtgate_concurrentdml": {
@@ -1139,7 +1121,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestMigrate"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "vreplication_migrate",
+			"Shard": "vreplication_migrate_vdiff2_convert_tz",
 			"RetryMax": 1,
 			"Tags": []
 		},
@@ -1148,7 +1130,16 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestVDiff2"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "vreplication_migrate",
+			"Shard": "vreplication_migrate_vdiff2_convert_tz",
+			"RetryMax": 1,
+			"Tags": []
+		},
+		"vreplication_movetables_tz": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestMoveTablesTZ"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vreplication_migrate_vdiff2_convert_tz",
 			"RetryMax": 1,
 			"Tags": []
 		},
