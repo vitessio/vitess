@@ -531,7 +531,6 @@ func (vc *VitessCluster) AddShards(t testing.TB, cells []*Cell, keyspace *Keyspa
 				}
 			}
 			for ind, tablet := range tablets {
-				fmt.Printf("Running Setup() for vttablet %s \n", tablets[ind].Name)
 				log.Infof("Running Setup() for vttablet %s", tablets[ind].Name)
 				if err := tablet.Vttablet.Setup(); err != nil {
 					t.Fatalf(err.Error())

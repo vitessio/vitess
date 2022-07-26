@@ -175,11 +175,6 @@ func initializeCluster(t *testing.T) {
 	}
 
 	for _, tablet := range []*cluster.Vttablet{primary, replica, shard0Primary, shard0Replica, shard1Primary, shard1Replica} {
-		for _, query := range queryCmds {
-			_, err = tablet.VttabletProcess.QueryTabletWithReadOnlyHandling(query, keyspace.Name, false)
-			require.NoError(t, err)
-		}
-
 		err = tablet.VttabletProcess.Setup()
 		require.NoError(t, err)
 	}
@@ -190,6 +185,13 @@ func initializeCluster(t *testing.T) {
 	// Start vtgate
 	err = clusterInstance.StartVtgate()
 	require.NoError(t, err)
+
+	for _, tablet := range []*cluster.Vttablet{primary, shard0Primary, shard1Primary} {
+		for _, query := range queryCmds {
+			_, err = tablet.VttabletProcess.QueryTablet(query, keyspace.Name, false)
+			require.NoError(t, err)
+		}
+	}
 }
 
 func insertRow(t *testing.T, id int, productName string, isSlow bool) {

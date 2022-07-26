@@ -206,7 +206,6 @@ func (vtctlclient *VtctlClientProcess) ExecuteCommandWithOutput(args ...string) 
 			vtctlclient.Binary,
 			filterDoubleDashArgs(pArgs, vtctlclient.VtctlClientMajorVersion)...,
 		)
-		fmt.Printf("Executing vtctlclient with command: %v (attempt %d of %d) \n", strings.Join(tmpProcess.Args, " "), i, retries)
 		log.Infof("Executing vtctlclient with command: %v (attempt %d of %d)", strings.Join(tmpProcess.Args, " "), i, retries)
 		resultByte, err = tmpProcess.CombinedOutput()
 		resultStr = string(resultByte)

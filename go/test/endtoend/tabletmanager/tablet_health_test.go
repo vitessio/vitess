@@ -105,7 +105,6 @@ func TestHealthCheck(t *testing.T) {
 	// Start Mysql Processes and return connection
 	replicaConn, err := cluster.StartMySQLAndGetConnection(ctx, rTablet, username, clusterInstance.TmpDirectory)
 	require.NoError(t, err)
-
 	defer replicaConn.Close()
 
 	// Create database in mysql
