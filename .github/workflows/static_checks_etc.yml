@@ -10,15 +10,28 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Check if workflow needs to be skipped
+        id: skip-workflow
+        run: |
+          skip='false'
+          if [[ "${{github.event.pull_request}}" ==  "" ]] && [[ "${{github.ref}}" != "refs/heads/main" ]] && [[ ! "${{github.ref}}" =~ ^refs/heads/release-[0-9]+\.[0-9]$ ]] && [[ ! "${{github.ref}}" =~ "refs/tags/.*" ]]; then
+            skip='true'
+          fi
+          echo Skip ${skip}
+          echo "::set-output name=skip-workflow::${skip}"  
+
       - name: Checkout code
+        if: steps.skip-workflow.outputs.skip-workflow == 'false'
         uses: actions/checkout@v2
 
       - name: Run FOSSA scan and upload build data
+        if: steps.skip-workflow.outputs.skip-workflow == 'false'
         uses: fossa-contrib/fossa-action@v1
         with:
           fossa-api-key: 76d7483ea206d530d9452e44bffe7ba8
 
       - name: Check for changes in Go files
+        if: steps.skip-workflow.outputs.skip-workflow == 'false'
         uses: frouioui/paths-filter@main
         id: changes
         with:
@@ -67,11 +80,13 @@ jobs:
 
       ## Setup and install
       - name: Set up Go
+        if: steps.skip-workflow.outputs.skip-workflow == 'false'
         uses: actions/setup-go@v2
         with:
           go-version: 1.18.4
 
       - name: Get dependencies
+        if: steps.skip-workflow.outputs.skip-workflow == 'false'
         run: |
           sudo apt-get update
           sudo apt-get install -y make unzip g++ etcd curl git wget
@@ -79,46 +94,46 @@ jobs:
           go mod download
 
       - name: Run make minimaltools
-        if: steps.changes.outputs.parser_changes == 'true' || steps.changes.outputs.proto_changes == 'true'
+        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.parser_changes == 'true' || steps.changes.outputs.proto_changes == 'true'
         run: |
           make minimaltools
 
       - name: Install golangci-lint
-        if: steps.changes.outputs.go_files == 'true'
+        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.go_files == 'true'
         run: |
           go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.45.2
 
       - name: Install goimports
-        if: steps.changes.outputs.go_files == 'true' || steps.changes.outputs.visitor == 'true'
+        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.go_files == 'true' || steps.changes.outputs.visitor == 'true'
         run: |
           go install golang.org/x/tools/cmd/goimports@latest
 
       ## Go files
       - name: Run go fmt
-        if: steps.changes.outputs.go_files == 'true'
+        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.go_files == 'true'
         run: |
           gofmt -l . | grep -vF vendor/ && exit 1 || echo "All files formatted correctly"
 
       - name: Run goimports
-        if: steps.changes.outputs.go_files == 'true'
+        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.go_files == 'true'
         run: |
           out=$(goimports -local vitess.io/vitess -l -w $(find . -name "*.go" | grep -v ".pb.go"))
           echo $out | grep go > /dev/null && echo -e "The following files are malformatted:\n$out" && exit 1 || echo "All the files are formatted correctly"
 
       - name: Clean Env
-        if: steps.changes.outputs.go_files == 'true'
+        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.go_files == 'true'
         run: $(go env GOPATH)/bin/golangci-lint cache clean
 
       - name: Print linter version
-        if: steps.changes.outputs.go_files == 'true'
+        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.go_files == 'true'
         run: $(go env GOPATH)/bin/golangci-lint --version
 
       - name: Run golangci-lint
-        if: steps.changes.outputs.go_files == 'true'
+        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.go_files == 'true'
         run: $(go env GOPATH)/bin/golangci-lint run go/...
 
       - name: Run go mod tidy
-        if: steps.changes.outputs.go_files == 'true'
+        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.go_files == 'true'
         run: |
           set -e
           go mod tidy
@@ -133,25 +148,25 @@ jobs:
 
       ## Parser
       - name: check_make_parser
-        if: steps.changes.outputs.parser_changes == 'true'
+        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.parser_changes == 'true'
         run: |
           tools/check_make_parser.sh
 
       ## Sizegen
       - name: check_make_sizegen
-        if: steps.changes.outputs.sizegen == 'true'
+        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.sizegen == 'true'
         run: |
           tools/check_make_sizegen.sh
 
       ## Visitor
       - name: check_make_visitor
-        if: steps.changes.outputs.visitor == 'true'
+        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.visitor == 'true'
         run: |
           misc/git/hooks/asthelpers
 
       ## Docker
       - name: run ensure_bootstrap_version
-        if: steps.changes.outputs.docker == 'true'
+        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.docker == 'true'
         run: |
           make ensure_bootstrap_version
           git status
@@ -159,6 +174,6 @@ jobs:
 
       ## Proto
       - name: check_make_proto
-        if: steps.changes.outputs.proto_changes == 'true'
+        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.proto_changes == 'true'
         run: |
           tools/check_make_proto.sh
