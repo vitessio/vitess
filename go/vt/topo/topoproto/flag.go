@@ -20,13 +20,15 @@ import (
 	"flag"
 	"strings"
 
+	"github.com/spf13/pflag"
+
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // TabletTypeListVar defines a []TabletType flag with the specified name and usage
 // string. The argument 'p' points to a []TabletType in which to store the value of the flag.
 func TabletTypeListVar(p *[]topodatapb.TabletType, name string, usage string) {
-	flag.Var((*TabletTypeListValue)(p), name, usage)
+	pflag.Var((*TabletTypeListValue)(p), name, usage)
 }
 
 // TabletTypeVar defines a TabletType flag with the specified name, default value and usage
@@ -51,9 +53,14 @@ func (ttlv *TabletTypeListValue) Set(v string) (err error) {
 	return err
 }
 
-// Get is for satisflying the internal flag interface.
+// Get is for satisfying the internal flag interface.
 func (ttlv *TabletTypeListValue) Get() any {
 	return *ttlv
+}
+
+// Type is for satisfying the pflag.Value interface.
+func (ttlv *TabletTypeListValue) Type() string {
+	return "[]topodatapb.TabletType"
 }
 
 // TabletTypeFlag implements the flag.Value interface, for parsing a command-line value into a TabletType.
