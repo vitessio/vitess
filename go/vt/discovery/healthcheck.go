@@ -35,7 +35,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"hash/crc32"
 	"html/template"
@@ -45,13 +44,15 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/flagutil"
+	"github.com/spf13/pflag"
+
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -65,27 +66,35 @@ var (
 	healthcheckOnce           sync.Once
 
 	// TabletURLTemplateString is a flag to generate URLs for the tablets that vtgate discovers.
-	TabletURLTemplateString = flag.String("tablet_url_template", "http://{{.GetTabletHostPort}}", "format string describing debug tablet url formatting. See the Go code for getTabletDebugURL() how to customize this.")
+	TabletURLTemplateString string
 	tabletURLTemplate       *template.Template
 
-	// AllowedTabletTypes is the list of allowed tablet types. e.g. {PRIMARY, REPLICA}
+	// AllowedTabletTypes is the list of allowed tablet types. e.g. {PRIMARY, REPLICA}.
 	AllowedTabletTypes []topodata.TabletType
+
 	// KeyspacesToWatch - if provided this specifies which keyspaces should be
 	// visible to the healthcheck. By default the healthcheck will watch all keyspaces.
-	KeyspacesToWatch flagutil.StringListValue
+	KeyspacesToWatch []string
 
-	// tabletFilters are the keyspace|shard or keyrange filters to apply to the full set of tablets
-	tabletFilters flagutil.StringListValue
-	// refreshInterval is the interval at which healthcheck refreshes its list of tablets from topo
-	refreshInterval = flag.Duration("tablet_refresh_interval", 1*time.Minute, "tablet refresh interval")
-	// refreshKnownTablets tells us whether to process all tablets or only new tablets
-	refreshKnownTablets = flag.Bool("tablet_refresh_known_tablets", true, "tablet refresh reloads the tablet address/port map from topo in case it changes")
-	// topoReadConcurrency tells us how many topo reads are allowed in parallel
-	topoReadConcurrency = flag.Int("topo_read_concurrency", 32, "concurrent topo reads")
+	// tabletFilters are the keyspace|shard or keyrange filters to apply to the full set of tablets.
+	tabletFilters []string
+
+	// refreshInterval is the interval at which healthcheck refreshes its list of tablets from topo.
+	// We need to initialize this for tests to pass.
+	refreshInterval = time.Minute
+
+	// refreshKnownTablets tells us whether to process all tablets or only new tablets.
+	refreshKnownTablets bool
+
+	// topoReadConcurrency tells us how many topo reads are allowed in parallel.
+	topoReadConcurrency int
 
 	// How much to sleep between each check.
 	waitAvailableTabletInterval = 100 * time.Millisecond
 )
+
+func init() {
+}
 
 // See the documentation for NewHealthCheck below for an explanation of these parameters.
 const (
@@ -135,18 +144,26 @@ const (
 // ParseTabletURLTemplateFromFlag loads or reloads the URL template.
 func ParseTabletURLTemplateFromFlag() {
 	tabletURLTemplate = template.New("")
-	_, err := tabletURLTemplate.Parse(*TabletURLTemplateString)
+	_, err := tabletURLTemplate.Parse(TabletURLTemplateString)
 	if err != nil {
 		log.Exitf("error parsing template: %v", err)
 	}
 }
 
 func init() {
-	// Flags are not parsed at this point and the default value of the flag (just the hostname) will be used.
-	ParseTabletURLTemplateFromFlag()
-	flag.Var(&tabletFilters, "tablet_filters", "Specifies a comma-separated list of 'keyspace|shard_name or keyrange' values to filter the tablets to watch")
+	servenv.OnParseFor("vtgate", registerDiscoveryFlags)
+	servenv.OnParseFor("vtcombo", registerDiscoveryFlags)
+}
+
+func registerDiscoveryFlags(fs *pflag.FlagSet) {
+	fs.StringVar(&TabletURLTemplateString, "tablet_url_template", "http://{{.GetTabletHostPort}}", "format string describing debug tablet url formatting. See the Go code for getTabletDebugURL() how to customize this.")
+	fs.DurationVar(&refreshInterval, "tablet_refresh_interval", 1*time.Minute, "tablet refresh interval")
+	fs.BoolVar(&refreshKnownTablets, "tablet_refresh_known_tablets", true, "tablet refresh reloads the tablet address/port map from topo in case it changes")
+	fs.IntVar(&topoReadConcurrency, "topo_read_concurrency", 32, "concurrent topo reads")
+	fs.StringSliceVar(&tabletFilters, "tablet_filters", []string{}, "Specifies a comma-separated list of 'keyspace|shard_name or keyrange' values to filter the tablets to watch")
 	topoproto.TabletTypeListVar(&AllowedTabletTypes, "allowed_tablet_types", "Specifies the tablet types this vtgate is allowed to route queries to")
-	flag.Var(&KeyspacesToWatch, "keyspaces_to_watch", "Specifies which keyspaces this vtgate should have access to while routing queries or accessing the vschema")
+	fs.StringSliceVar(&KeyspacesToWatch, "keyspaces_to_watch", []string{}, "Specifies which keyspaces this vtgate should have access to while routing queries or accessing the vschema")
+	ParseTabletURLTemplateFromFlag()
 }
 
 // FilteringKeyspaces returns true if any keyspaces have been configured to be filtered.
@@ -317,7 +334,7 @@ func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Dur
 		} else if len(KeyspacesToWatch) > 0 {
 			filter = NewFilterByKeyspace(KeyspacesToWatch)
 		}
-		topoWatchers = append(topoWatchers, NewCellTabletsWatcher(ctx, topoServer, hc, filter, c, *refreshInterval, *refreshKnownTablets, *topoReadConcurrency))
+		topoWatchers = append(topoWatchers, NewCellTabletsWatcher(ctx, topoServer, hc, filter, c, refreshInterval, refreshKnownTablets, topoReadConcurrency))
 	}
 
 	hc.topoWatchers = topoWatchers
