@@ -5,6 +5,8 @@ import (
 	"errors"
 	"io"
 	"path"
+	"strconv"
+	"sync/atomic"
 
 	"cloud.google.com/go/storage"
 
@@ -23,6 +25,7 @@ type handle struct {
 	id     string
 	dir    string
 	rw     bool
+	size   int64 // total backup size
 	concurrency.AllErrorRecorder
 }
 
@@ -35,6 +38,7 @@ func newHandle(bucket *storage.BucketHandle, kms *kms, id, dir, name string) *ha
 		dir:    dir,
 		name:   name,
 		rw:     true,
+		size:   0,
 	}
 }
 
@@ -60,6 +64,8 @@ func (h *handle) AddFile(ctx context.Context, filename string, size int64) (io.W
 		return nil, errReadonly
 	}
 
+	atomic.AddInt64(&h.size, size)
+
 	dst := h.object(filename).NewWriter(ctx)
 
 	enc, err := newEncoder(ctx, h.kms, dst)
@@ -75,6 +81,25 @@ func (h *handle) EndBackup(ctx context.Context) error {
 	if !h.rw {
 		return errReadonly
 	}
+	return h.uploadSizeFile(ctx)
+}
+
+// uploadSizeFile creates the SIZE file, writes the size to it, and then uploads it.
+// we convert the size to a string instead of something more efficient to make
+// debugging and working with the file easier
+func (h *handle) uploadSizeFile(ctx context.Context) error {
+	object := h.object("SIZE").NewWriter(ctx)
+	size := atomic.LoadInt64(&h.size)
+	sizeAsString := strconv.FormatInt(size, 10)
+
+	if _, err := object.Write([]byte(sizeAsString)); err != nil {
+		return err
+	}
+
+	if err := object.Close(); err != nil {
+		return err
+	}
+
 	return nil
 }
 

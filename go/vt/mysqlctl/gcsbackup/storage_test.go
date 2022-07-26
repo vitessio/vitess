@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
+	"strconv"
 	"testing"
 	"time"
 
@@ -126,6 +127,26 @@ func TestStorage(t *testing.T) {
 		all, err := storage.ListBackups(ctx, "dir")
 		assert.NoError(err)
 		assert.Equal(0, len(all))
+	})
+
+	t.Run("size", func(t *testing.T) {
+		ctx := context.Background()
+		assert := require.New(t)
+		storage := setupStorage(t)
+
+		makeBackup(t, storage, "dir", "backup")
+
+		obj := storage.bucket.Object("backup-id/dir/backup/SIZE")
+		r, err := obj.NewReader(ctx)
+		assert.NoError(err)
+
+		buf, err := ioutil.ReadAll(r)
+		assert.NoError(err)
+
+		size, err := strconv.Atoi(string(buf))
+		assert.NoError(err)
+
+		assert.Equal(4, size)
 	})
 }
 
