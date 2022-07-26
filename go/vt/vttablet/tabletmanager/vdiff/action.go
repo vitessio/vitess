@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"github.com/google/uuid"
 
@@ -66,7 +65,7 @@ func (vde *Engine) PerformVDiffAction(ctx context.Context, req *tabletmanagerdat
 		_, _ = withDDL.Exec(ctx, withddl.QueryToTriggerWithDDL, dbClient.ExecuteFetch, dbClient.ExecuteFetch)
 	})
 
-	action := VDiffAction(strings.ToLower(req.Action))
+	action := VDiffAction(req.Action)
 	switch action {
 	case CreateAction, ResumeAction:
 		if err := vde.handleCreateResumeAction(ctx, dbClient, action, req, resp); err != nil {
@@ -179,7 +178,7 @@ func (vde *Engine) handleCreateResumeAction(ctx context.Context, dbClient binlog
 			return err
 		}
 		if qr.RowsAffected == 0 {
-			msg := fmt.Sprintf("no completed vdiff found for UUID %s on tablet %v",
+			msg := fmt.Sprintf("no completed or stopped vdiff found for UUID %s on tablet %v",
 				req.VdiffUuid, vde.thisTablet.Alias)
 			if err != nil {
 				msg = fmt.Sprintf("%s (%v)", msg, err)
@@ -261,6 +260,15 @@ func (vde *Engine) handleShowAction(ctx context.Context, dbClient binlogplayer.D
 }
 
 func (vde *Engine) handleStopAction(ctx context.Context, dbClient binlogplayer.DBClient, action VDiffAction, req *tabletmanagerdatapb.VDiffRequest, resp *tabletmanagerdatapb.VDiffResponse) error {
+	vde.mu.Lock()
+	defer vde.mu.Unlock()
+	for _, controller := range vde.controllers {
+		if controller.uuid == req.VdiffUuid {
+			controller.Stop()
+			controller.recordStoppedByRequest()
+			break
+		}
+	}
 	return nil
 }
 
