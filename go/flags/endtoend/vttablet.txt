@@ -357,15 +357,15 @@ Usage of vttablet:
       --restore_from_backup                                              (init restore parameter) will check BackupStorage for a recent backup at startup and start there
       --restore_from_backup_ts string                                    (init restore parameter) if set, restore the latest backup taken at or before this timestamp. Example: '2021-04-29.133050'
       --retain_online_ddl_tables duration                                How long should vttablet keep an old migrated table before purging it (default 24h0m0s)
-      --s3_backup_aws_endpoint string                                    endpoint of the S3 backend (region must be provided)
-      --s3_backup_aws_region string                                      AWS region to use (default "us-east-1")
-      --s3_backup_aws_retries int                                        AWS request retries (default -1)
-      --s3_backup_force_path_style                                       force the s3 path style
-      --s3_backup_log_level string                                       determine the S3 loglevel to use from LogOff, LogDebug, LogDebugWithSigning, LogDebugWithHTTPBody, LogDebugWithRequestRetries, LogDebugWithRequestErrors (default "LogOff")
-      --s3_backup_server_side_encryption string                          server-side encryption algorithm (e.g., AES256, aws:kms, sse_c:/path/to/key/file)
-      --s3_backup_storage_bucket string                                  S3 bucket to use for backups
-      --s3_backup_storage_root string                                    root prefix for all backup-related object names
-      --s3_backup_tls_skip_verify_cert                                   skip the 'certificate is valid' check for SSL connections
+      --s3_backup_aws_endpoint string                                    endpoint of the S3 backend (region must be provided).
+      --s3_backup_aws_region string                                      AWS region to use. (default "us-east-1")
+      --s3_backup_aws_retries int                                        AWS request retries. (default -1)
+      --s3_backup_force_path_style                                       force the s3 path style.
+      --s3_backup_log_level string                                       determine the S3 loglevel to use from LogOff, LogDebug, LogDebugWithSigning, LogDebugWithHTTPBody, LogDebugWithRequestRetries, LogDebugWithRequestErrors. (default "LogOff")
+      --s3_backup_server_side_encryption string                          server-side encryption algorithm (e.g., AES256, aws:kms, sse_c:/path/to/key/file).
+      --s3_backup_storage_bucket string                                  S3 bucket to use for backups.
+      --s3_backup_storage_root string                                    root prefix for all backup-related object names.
+      --s3_backup_tls_skip_verify_cert                                   skip the 'certificate is valid' check for SSL connections.
       --sanitize_log_messages                                            Remove potentially sensitive information in tablet INFO, WARNING, and ERROR log messages such as query parameters.
       --security_policy string                                           the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
       --service_map StringList                                           comma separated list of services to enable (or disable if prefixed with '-') Example: grpc-queryservice
