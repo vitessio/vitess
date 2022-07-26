@@ -15,7 +15,25 @@
     "Table": "`user`"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user union all select id from music",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from `user` where 1 != 1 union all select id from music where 1 != 1",
+    "Query": "select id from `user` union all select id from music",
+    "Table": "`user`"
+  },
+  "TablesUsed": [
+    "user.music",
+    "user.user"
+  ]
+}
 
 # union distinct between two scatter selects
 "select id from user union select id from music"
@@ -77,7 +95,11 @@ Gen4 plan same as above
         "Table": "`user`"
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "user.music",
+    "user.user"
+  ]
 }
 
 # union all between two SelectEqualUnique
@@ -121,7 +143,48 @@ Gen4 plan same as above
     ]
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user where id = 1 union all select id from user where id = 5",
+  "Instructions": {
+    "OperatorType": "Concatenate",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from `user` where 1 != 1",
+        "Query": "select id from `user` where id = 1",
+        "Table": "`user`",
+        "Values": [
+          "INT64(1)"
+        ],
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from `user` where 1 != 1",
+        "Query": "select id from `user` where id = 5",
+        "Table": "`user`",
+        "Values": [
+          "INT64(5)"
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
+}
 
 #almost dereks query - two queries with order by and limit being scattered to two different sets of tablets
 "(SELECT id FROM user ORDER BY id DESC LIMIT 1) UNION ALL (SELECT id FROM music ORDER BY id DESC LIMIT 1)"
@@ -172,7 +235,57 @@ Gen4 plan same as above
     ]
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "(SELECT id FROM user ORDER BY id DESC LIMIT 1) UNION ALL (SELECT id FROM music ORDER BY id DESC LIMIT 1)",
+  "Instructions": {
+    "OperatorType": "Concatenate",
+    "Inputs": [
+      {
+        "OperatorType": "Limit",
+        "Count": "INT64(1)",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
+            "OrderBy": "(0|1) DESC",
+            "Query": "select id, weight_string(id) from `user` order by id desc limit :__upper_limit",
+            "ResultColumns": 1,
+            "Table": "`user`"
+          }
+        ]
+      },
+      {
+        "OperatorType": "Limit",
+        "Count": "INT64(1)",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id, weight_string(id) from music where 1 != 1",
+            "OrderBy": "(0|1) DESC",
+            "Query": "select id, weight_string(id) from music order by id desc limit :__upper_limit",
+            "ResultColumns": 1,
+            "Table": "music"
+          }
+        ]
+      }
+    ]
+  },
+  "TablesUsed": [
+    "user.music",
+    "user.user"
+  ]
+}
 
 # Union all
 "select col1, col2 from user union all select col1, col2 from user_extra"
@@ -191,7 +304,25 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select col1, col2 from user union all select col1, col2 from user_extra",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select col1, col2 from `user` where 1 != 1 union all select col1, col2 from user_extra where 1 != 1",
+    "Query": "select col1, col2 from `user` union all select col1, col2 from user_extra",
+    "Table": "`user`"
+  },
+  "TablesUsed": [
+    "user.user",
+    "user.user_extra"
+  ]
+}
 
 # union operations in subqueries (FROM)
 "select * from (select * from user union all select * from user_extra) as t"
@@ -210,7 +341,25 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select * from (select * from user union all select * from user_extra) as t",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from (select * from `user` where 1 != 1 union all select * from user_extra where 1 != 1) as t where 1 != 1",
+    "Query": "select * from (select * from `user` union all select * from user_extra) as t",
+    "Table": "`user`"
+  },
+  "TablesUsed": [
+    "user.user",
+    "user.user_extra"
+  ]
+}
 
 # union operations in derived table, without star expression (FROM)¡
 "select col1,col2 from (select col1, col2 from user union all select col1, col2 from user_extra) as t"
@@ -229,7 +378,25 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select col1,col2 from (select col1, col2 from user union all select col1, col2 from user_extra) as t",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select col1, col2 from (select col1, col2 from `user` where 1 != 1 union all select col1, col2 from user_extra where 1 != 1) as t where 1 != 1",
+    "Query": "select col1, col2 from (select col1, col2 from `user` union all select col1, col2 from user_extra) as t",
+    "Table": "`user`"
+  },
+  "TablesUsed": [
+    "user.user",
+    "user.user_extra"
+  ]
+}
 
 # union all between two scatter selects, with order by
 "(select id from user order by id limit 5) union all (select id from music order by id desc limit 5)"
@@ -280,7 +447,57 @@ Gen4 plan same as above
     ]
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "(select id from user order by id limit 5) union all (select id from music order by id desc limit 5)",
+  "Instructions": {
+    "OperatorType": "Concatenate",
+    "Inputs": [
+      {
+        "OperatorType": "Limit",
+        "Count": "INT64(5)",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
+            "OrderBy": "(0|1) ASC",
+            "Query": "select id, weight_string(id) from `user` order by id asc limit :__upper_limit",
+            "ResultColumns": 1,
+            "Table": "`user`"
+          }
+        ]
+      },
+      {
+        "OperatorType": "Limit",
+        "Count": "INT64(5)",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id, weight_string(id) from music where 1 != 1",
+            "OrderBy": "(0|1) DESC",
+            "Query": "select id, weight_string(id) from music order by id desc limit :__upper_limit",
+            "ResultColumns": 1,
+            "Table": "music"
+          }
+        ]
+      }
+    ]
+  },
+  "TablesUsed": [
+    "user.music",
+    "user.user"
+  ]
+}
 
 # union all on scatter and single route
 "select id from user where id = 1 union select id from user where id = 1  union all select id from user"
@@ -319,7 +536,44 @@ Gen4 plan same as above
     ]
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user where id = 1 union select id from user where id = 1  union all select id from user",
+  "Instructions": {
+    "OperatorType": "Concatenate",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from `user` where 1 != 1 union select id from `user` where 1 != 1",
+        "Query": "select id from `user` where id = 1 union select id from `user` where id = 1",
+        "Table": "`user`",
+        "Values": [
+          "INT64(1)"
+        ],
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from `user` where 1 != 1",
+        "Query": "select id from `user`",
+        "Table": "`user`"
+      }
+    ]
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
+}
 
 # union of information_schema with normal table
 "select * from information_schema.a union select * from unsharded"
@@ -393,7 +647,10 @@ Gen4 plan same as above
         ]
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "main.unsharded"
+  ]
 }
 
 # union of information_schema with normal table
@@ -468,7 +725,10 @@ Gen4 plan same as above
         ]
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "main.unsharded"
+  ]
 }
 
 # multi-shard union
@@ -568,7 +828,12 @@ Gen4 plan same as above
         ]
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "main.dual",
+    "user.music",
+    "user.user"
+  ]
 }
 
 # multi-shard union
@@ -776,7 +1041,11 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
         ]
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "user.music",
+    "user.user"
+  ]
 }
 
 # union with different target shards
@@ -870,7 +1139,10 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
         ]
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "user.music"
+  ]
 }
 
 # multiple select statement have inner order by with union - TODO (systay) no need to send down ORDER BY if we are going to loose it with UNION DISTINCT
@@ -939,7 +1211,10 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
         "Table": "`user`"
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 
 # multiple unions
@@ -1017,7 +1292,11 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
         ]
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "main.dual",
+    "user.user"
+  ]
 }
 
 # union distinct between a scatter query and a join (other side)
@@ -1135,7 +1414,11 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
         ]
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "user.user",
+    "user.user_extra"
+  ]
 }
 
 # union distinct between a scatter query and a join (other side)
@@ -1253,7 +1536,11 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
         ]
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "user.user",
+    "user.user_extra"
+  ]
 }
 
 # unmergable because we are using aggregation
@@ -1359,7 +1646,11 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
         ]
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "user.music",
+    "user.user"
+  ]
 }
 
 # Union in derived table with first SELECT being an UNION
@@ -1458,7 +1749,11 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
         ]
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "user.user",
+    "user.user_extra"
+  ]
 }
 
 # gen4 optimises away ORDER BY when it's safe to do
@@ -1502,7 +1797,12 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
         ]
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "main.unsharded",
+    "user.music",
+    "user.user"
+  ]
 }
 
 # push down the ::upper_limit to the sources, since we are doing DISTINCT on them, it's safe
@@ -1593,7 +1893,11 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
         ]
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "main.dual",
+    "user.user"
+  ]
 }
 
 # silly query that should be collapsed into a single unsharded UNION route
@@ -1613,7 +1917,24 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
     "Table": "unsharded"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "(select 1 from unsharded union select 1 from unsharded union all select 1 from unsharded order by 1) union select 1 from unsharded union all select 1 from unsharded order by 1",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Unsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "(select 1 from unsharded where 1 != 1 union select 1 from unsharded where 1 != 1 union all select 1 from unsharded where 1 != 1) union select 1 from unsharded where 1 != 1 union all select 1 from unsharded where 1 != 1",
+    "Query": "(select 1 from unsharded union select 1 from unsharded union all select 1 from unsharded order by 1 asc) union select 1 from unsharded union all select 1 from unsharded order by 1 asc",
+    "Table": "unsharded"
+  },
+  "TablesUsed": [
+    "main.unsharded"
+  ]
+}
 
 # UNION that needs to be reordered to be merged more aggressively. Gen4 is able to get it down to 2 routes
 "select col from unsharded union select id from user union select col2 from unsharded union select col from user_extra"
@@ -1733,7 +2054,12 @@ Gen4 plan same as above
         ]
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "main.unsharded",
+    "user.user",
+    "user.user_extra"
+  ]
 }
 
 # derived table with union
@@ -1819,7 +2145,90 @@ Gen4 plan same as above
     ]
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select tbl2.id FROM ((select id from user order by id limit 5) union all (select id from user order by id desc limit 5)) as tbl1 INNER JOIN user as tbl2  ON tbl1.id = tbl2.id",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "R:0",
+    "JoinVars": {
+      "tbl1_id": 0
+    },
+    "TableName": "`user`_`user`",
+    "Inputs": [
+      {
+        "OperatorType": "SimpleProjection",
+        "Columns": [
+          0
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Concatenate",
+            "Inputs": [
+              {
+                "OperatorType": "Limit",
+                "Count": "INT64(5)",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
+                    "OrderBy": "(0|1) ASC",
+                    "Query": "select id, weight_string(id) from `user` order by id asc limit :__upper_limit",
+                    "ResultColumns": 1,
+                    "Table": "`user`"
+                  }
+                ]
+              },
+              {
+                "OperatorType": "Limit",
+                "Count": "INT64(5)",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
+                    "OrderBy": "(0|1) DESC",
+                    "Query": "select id, weight_string(id) from `user` order by id desc limit :__upper_limit",
+                    "ResultColumns": 1,
+                    "Table": "`user`"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select tbl2.id from `user` as tbl2 where 1 != 1",
+        "Query": "select tbl2.id from `user` as tbl2 where tbl2.id = :tbl1_id",
+        "Table": "`user`",
+        "Values": [
+          ":tbl1_id"
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
+}
 
 # ambiguous LIMIT
 "select id from user limit 1 union all select id from music limit 1"
@@ -1893,5 +2302,9 @@ Gen4 plan same as above
         ]
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "main.unsharded",
+    "user.user"
+  ]
 }

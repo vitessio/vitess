@@ -36,7 +36,7 @@ RUN apt-get update && \
 ARG bootstrap_version
 ARG image="vitess/bootstrap:${bootstrap_version}-common"
 
-FROM "${image}"
+FROM --platform=linux/arm64/v8 "${image}"
 
 # Install MySQL 5.7
 RUN add-apt-repository 'deb http://ftp.debian.org/debian sid main' && \

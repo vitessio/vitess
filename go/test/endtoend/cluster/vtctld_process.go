@@ -54,7 +54,6 @@ func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error)
 	_ = createDirectory(path.Join(vtctld.Directory, "backups"), 0700)
 	vtctld.proc = exec.Command(
 		vtctld.Binary,
-		"--enable_queries",
 		"--topo_implementation", vtctld.CommonArg.TopoImplementation,
 		"--topo_global_server_address", vtctld.CommonArg.TopoGlobalAddress,
 		"--topo_global_root", vtctld.CommonArg.TopoGlobalRoot,

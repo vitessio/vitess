@@ -46,21 +46,28 @@ const (
 	charset = "charset"
 )
 
-func buildShowPlan(sql string, stmt *sqlparser.Show, _ *sqlparser.ReservedVars, vschema plancontext.VSchema) (engine.Primitive, error) {
+func buildShowPlan(sql string, stmt *sqlparser.Show, _ *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
 	if vschema.Destination() != nil {
 		return buildByPassDDLPlan(sql, vschema)
 	}
 
+	var prim engine.Primitive
+	var err error
 	switch show := stmt.Internal.(type) {
 	case *sqlparser.ShowBasic:
-		return buildShowBasicPlan(show, vschema)
+		prim, err = buildShowBasicPlan(show, vschema)
 	case *sqlparser.ShowCreate:
-		return buildShowCreatePlan(show, vschema)
+		prim, err = buildShowCreatePlan(show, vschema)
 	case *sqlparser.ShowOther:
-		return buildShowOtherPlan(sql, vschema)
+		prim, err = buildShowOtherPlan(sql, vschema)
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: undefined show type: %T", stmt.Internal)
 	}
+	if err != nil {
+		return nil, err
+	}
+
+	return newPlanResult(prim), nil
 }
 
 func buildShowOtherPlan(sql string, vschema plancontext.VSchema) (engine.Primitive, error) {

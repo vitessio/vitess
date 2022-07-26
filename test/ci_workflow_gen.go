@@ -31,7 +31,6 @@ type mysqlVersion string
 const (
 	mysql57    mysqlVersion = "mysql57"
 	mysql80    mysqlVersion = "mysql80"
-	mariadb102 mysqlVersion = "mariadb102"
 	mariadb103 mysqlVersion = "mariadb103"
 
 	defaultMySQLVersion mysqlVersion = mysql57
@@ -46,7 +45,7 @@ var (
 )
 
 var (
-	unitTestDatabases = []mysqlVersion{mysql57, mysql80, mariadb102, mariadb103}
+	unitTestDatabases = []mysqlVersion{mysql57, mysql80, mariadb103}
 )
 
 const (
@@ -74,7 +73,7 @@ var (
 		"ers_prs_newfeatures_heavy",
 		"15",
 		"vtgate_general_heavy",
-		"19",
+		"vtbackup_transform",
 		"xb_backup",
 		"21",
 		"22",
@@ -175,6 +174,12 @@ func clusterMySQLVersions(clusterName string) mysqlVersions {
 	case clusterName == "vtorc_8.0":
 		return []mysqlVersion{mysql80}
 	case clusterName == "vreplication_across_db_versions":
+		return []mysqlVersion{mysql80}
+	case clusterName == "xb_backup":
+		return allMySQLVersions
+	case clusterName == "vtctlbackup_sharded_clustertest_heavy":
+		return []mysqlVersion{mysql80}
+	case clusterName == "vtbackup_transform":
 		return []mysqlVersion{mysql80}
 	default:
 		return defaultMySQLVersions

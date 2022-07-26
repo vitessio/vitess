@@ -541,16 +541,22 @@ func (node *Literal) HexDecode() ([]byte, error) {
 	return hex.DecodeString(node.Val)
 }
 
-// encodeHexValToMySQLQueryFormat encodes the hexval back into the query format
+// encodeHexOrBitValToMySQLQueryFormat encodes the hexval or bitval back into the query format
 // for passing on to MySQL as a bind var
-func (node *Literal) encodeHexValToMySQLQueryFormat() ([]byte, error) {
+func (node *Literal) encodeHexOrBitValToMySQLQueryFormat() ([]byte, error) {
 	nb := node.Bytes()
-	if node.Type != HexVal {
+	if node.Type != HexVal && node.Type != BitVal {
 		return nb, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Literal value is not a HexVal")
 	}
 
+	prefix := 'x'
+	regex := "^x'.*'$"
+	if node.Type == BitVal {
+		prefix = 'b'
+		regex = "^b'.*'$"
+	}
 	// Let's make this idempotent in case it's called more than once
-	match, err := regexp.Match("^x'.*'$", nb)
+	match, err := regexp.Match(regex, nb)
 	if err != nil {
 		return nb, err
 	}
@@ -559,7 +565,7 @@ func (node *Literal) encodeHexValToMySQLQueryFormat() ([]byte, error) {
 	}
 
 	var bb bytes.Buffer
-	bb.WriteByte('x')
+	bb.WriteByte(byte(prefix))
 	bb.WriteByte('\'')
 	bb.WriteString(string(nb))
 	bb.WriteByte('\'')
