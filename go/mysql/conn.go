@@ -678,6 +678,7 @@ func (c *Conn) String() string {
 // routine to interrupt the current connection.
 func (c *Conn) Close() {
 	if c.closed.CompareAndSwap(false, true) {
+		c.writeComQuit()
 		c.conn.Close()
 	}
 }
