@@ -118,10 +118,8 @@ func (vtctld *VtctldProcess) IsHealthy() bool {
 	if err != nil {
 		return false
 	}
-	if resp.StatusCode == 200 {
-		return true
-	}
-	return false
+	defer resp.Body.Close()
+	return resp.StatusCode == 200
 }
 
 // TearDown shutdowns the running vtctld service

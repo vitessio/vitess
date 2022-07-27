@@ -172,10 +172,9 @@ func (vtgate *VtgateProcess) WaitForStatus() bool {
 	if err != nil {
 		return false
 	}
-	if resp.StatusCode == 200 {
-		return true
-	}
-	return false
+	defer resp.Body.Close()
+
+	return resp.StatusCode == 200
 }
 
 // GetStatusForTabletOfShard function gets status for a specific tablet of a shard in keyspace
@@ -185,6 +184,8 @@ func (vtgate *VtgateProcess) GetStatusForTabletOfShard(name string, endPointsCou
 	if err != nil {
 		return false
 	}
+	defer resp.Body.Close()
+
 	if resp.StatusCode == 200 {
 		resultMap := make(map[string]any)
 		respByte, _ := io.ReadAll(resp.Body)
@@ -294,6 +295,8 @@ func (vtgate *VtgateProcess) GetVars() (map[string]any, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error getting response from %s", vtgate.VerifyURL)
 	}
+	defer resp.Body.Close()
+
 	if resp.StatusCode == 200 {
 		respByte, _ := io.ReadAll(resp.Body)
 		err := json.Unmarshal(respByte, &resultMap)
@@ -313,6 +316,7 @@ func (vtgate *VtgateProcess) ReadVSchema() (*interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer resp.Body.Close()
 	res, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
