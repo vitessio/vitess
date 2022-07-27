@@ -405,18 +405,15 @@ func findFilesToBackup(cnf *Mycnf) ([]FileEntry, int64, error) {
 		if err != nil {
 			return nil, 0, err
 		}
-		result, size, err = addDirectory(result, backupInnodbLogGroupHomeDir, cnf.InnodbLogGroupHomeDir, "")
+		if features.hasDynamicRedoLogCapacity() {
+			result, size, err = addDirectory(result, backupInnodbLogGroupHomeDir, cnf.InnodbLogGroupHomeDir, mysql.DynamicRedoLogSubdir)
+		} else {
+			result, size, err = addDirectory(result, backupInnodbLogGroupHomeDir, cnf.InnodbLogGroupHomeDir, "")
+		}
 		if err != nil {
 			return nil, 0, err
 		}
 		totalSize = totalSize + size
-		if features.hasDynamicRedoLogCapacity() {
-			result, size, err = addDirectory(result, backupInnodbLogGroupHomeDir, cnf.InnodbLogGroupHomeDir, mysql.DynamicRedoLogSubdir)
-			if err != nil {
-				return nil, 0, err
-			}
-			totalSize = totalSize + size
-		}
 		// then add the transactional data dictionary if it exists
 		result, size, err = addMySQL8DataDictionary(result, backupData, cnf.DataDir)
 		if err != nil {

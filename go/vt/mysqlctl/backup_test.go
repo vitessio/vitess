@@ -117,19 +117,11 @@ func TestFindFilesToBackup(t *testing.T) {
 			Base: "InnoDBData",
 			Name: "innodb_data_1",
 		},
-	}
-	// We'll have a direntry for the subdir itself in the list
-	if features.hasDynamicRedoLogCapacity() {
-		expected = append(expected, FileEntry{
+		{
 			Base: "InnoDBLog",
-			Name: mysql.DynamicRedoLogSubdir,
-		})
+			Name: innodbLogFile,
+		},
 	}
-	// Order matters for the DeepEqual
-	expected = append(expected, FileEntry{
-		Base: "InnoDBLog",
-		Name: innodbLogFile,
-	})
 	if !reflect.DeepEqual(result, expected) {
 		t.Fatalf("got wrong list of FileEntry %v, expected %v", result, expected)
 	}
