@@ -60,6 +60,7 @@ func TestFindFilesToBackup(t *testing.T) {
 	if err := os.WriteFile(path.Join(innodbDataDir, "innodb_data_1"), []byte("innodb data 1 contents"), os.ModePerm); err != nil {
 		t.Fatalf("failed to write file innodb_data_1: %v", err)
 	}
+	t.Logf("Writing file: %s", path.Join(innodbLogDir, innodbLogFile))
 	if err := os.WriteFile(path.Join(innodbLogDir, innodbLogFile), []byte("innodb log 1 contents"), os.ModePerm); err != nil {
 		t.Fatalf("failed to write file innodb_log_1: %v", err)
 	}
