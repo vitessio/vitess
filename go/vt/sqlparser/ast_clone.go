@@ -3215,12 +3215,18 @@ func CloneCallable(in Callable) Callable {
 	switch in := in.(type) {
 	case *ArgumentLessWindowExpr:
 		return CloneRefOfArgumentLessWindowExpr(in)
+	case *Avg:
+		return CloneRefOfAvg(in)
 	case *CharExpr:
 		return CloneRefOfCharExpr(in)
 	case *ConvertExpr:
 		return CloneRefOfConvertExpr(in)
 	case *ConvertUsingExpr:
 		return CloneRefOfConvertUsingExpr(in)
+	case *Count:
+		return CloneRefOfCount(in)
+	case *CountStar:
+		return CloneRefOfCountStar(in)
 	case *CurTimeFuncExpr:
 		return CloneRefOfCurTimeFuncExpr(in)
 	case *ExtractFuncExpr:
@@ -3285,8 +3291,12 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfLocateExpr(in)
 	case *MatchExpr:
 		return CloneRefOfMatchExpr(in)
+	case *Max:
+		return CloneRefOfMax(in)
 	case *MemberOfExpr:
 		return CloneRefOfMemberOfExpr(in)
+	case *Min:
+		return CloneRefOfMin(in)
 	case *NTHValueExpr:
 		return CloneRefOfNTHValueExpr(in)
 	case *NamedWindow:
@@ -3305,6 +3315,8 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfRegexpSubstrExpr(in)
 	case *SubstrExpr:
 		return CloneRefOfSubstrExpr(in)
+	case *Sum:
+		return CloneRefOfSum(in)
 	case *TimestampFuncExpr:
 		return CloneRefOfTimestampFuncExpr(in)
 	case *TrimFuncExpr:

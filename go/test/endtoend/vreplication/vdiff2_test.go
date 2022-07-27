@@ -36,8 +36,10 @@ type testCase struct {
 	retryInsert string
 	resume      bool // test resume functionality with this workflow
 	// If testing resume, what new rows should be diff'd. These rows must have a PK > all initial rows and retry rows.
-	resumeInsert  string
-	testCLIErrors bool // test CLI errors against this workflow
+	resumeInsert      string
+	stop              bool // test stop functionality with this workflow
+	testCLIErrors     bool // test CLI errors against this workflow (only needs to be done once)
+	testCLICreateWait bool // test CLI create and wait until done against this workflow (only needs to be done once)
 }
 
 const (
@@ -49,20 +51,21 @@ const (
 
 var testCases = []*testCase{
 	{
-		name:           "MoveTables/unsharded to two shards",
-		workflow:       "p1c2",
-		typ:            "MoveTables",
-		sourceKs:       "product",
-		targetKs:       "customer",
-		sourceShards:   "0",
-		targetShards:   "-80,80-",
-		tabletBaseID:   200,
-		tables:         "customer,Lead,Lead-1",
-		autoRetryError: true,
-		retryInsert:    `insert into customer(cid, name, typ) values(91234, 'Testy McTester', 'soho')`,
-		resume:         true,
-		resumeInsert:   `insert into customer(cid, name, typ) values(92234, 'Testy McTester (redux)', 'enterprise')`,
-		testCLIErrors:  true, // test for errors in the simplest workflow
+		name:              "MoveTables/unsharded to two shards",
+		workflow:          "p1c2",
+		typ:               "MoveTables",
+		sourceKs:          "product",
+		targetKs:          "customer",
+		sourceShards:      "0",
+		targetShards:      "-80,80-",
+		tabletBaseID:      200,
+		tables:            "customer,Lead,Lead-1",
+		autoRetryError:    true,
+		retryInsert:       `insert into customer(cid, name, typ) values(91234, 'Testy McTester', 'soho')`,
+		resume:            true,
+		resumeInsert:      `insert into customer(cid, name, typ) values(92234, 'Testy McTester (redux)', 'enterprise')`,
+		testCLIErrors:     true, // test for errors in the simplest workflow
+		testCLICreateWait: true, // test wait on create feature against simplest workflow
 	},
 	{
 		name:           "Reshard Merge/split 2 to 3",
@@ -77,6 +80,7 @@ var testCases = []*testCase{
 		retryInsert:    `insert into customer(cid, name, typ) values(93234, 'Testy McTester Jr', 'enterprise'), (94234, 'Testy McTester II', 'enterprise')`,
 		resume:         true,
 		resumeInsert:   `insert into customer(cid, name, typ) values(95234, 'Testy McTester III', 'enterprise')`,
+		stop:           true,
 	},
 	{
 		name:           "Reshard/merge 3 to 1",
@@ -91,6 +95,7 @@ var testCases = []*testCase{
 		retryInsert:    `insert into customer(cid, name, typ) values(96234, 'Testy McTester IV', 'enterprise')`,
 		resume:         true,
 		resumeInsert:   `insert into customer(cid, name, typ) values(97234, 'Testy McTester V', 'enterprise'), (98234, 'Testy McTester VI', 'enterprise')`,
+		stop:           true,
 	},
 }
 
@@ -182,7 +187,13 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, cells []*Cell) 
 		testResume(t, tc, cells[0].Name)
 	}
 
-	// This is done here so that we have a valid workflow to test the commands against
+	// These are done here so that we have a valid workflow to test the commands against
+	if tc.stop {
+		testStop(t, ksWorkflow, allCellNames)
+	}
+	if tc.testCLICreateWait {
+		testCLICreateWait(t, ksWorkflow, allCellNames)
+	}
 	if tc.testCLIErrors {
 		testCLIErrors(t, ksWorkflow, allCellNames)
 	}
@@ -274,6 +285,20 @@ func testResume(t *testing.T, tc *testCase, cells string) {
 	})
 }
 
+func testStop(t *testing.T, ksWorkflow, cells string) {
+	t.Run("Stop", func(t *testing.T) {
+		// create a new VDiff and immediately stop it
+		uuid, _ := performVDiff2Action(t, ksWorkflow, cells, "create", "", false)
+		_, _ = performVDiff2Action(t, ksWorkflow, cells, "stop", uuid, false)
+		// confirm the VDiff is in the expected stopped state
+		_, output := performVDiff2Action(t, ksWorkflow, cells, "show", uuid, false)
+		jsonOutput := getVDiffInfo(output)
+		require.Equal(t, "stopped", jsonOutput.State)
+		// confirm that the context cancelled error was also cleared
+		require.False(t, strings.Contains(output, `"Errors":`))
+	})
+}
+
 func testAutoRetryError(t *testing.T, tc *testCase, cells string) {
 	t.Run("Auto retry on error", func(t *testing.T) {
 		ksWorkflow := fmt.Sprintf("%s.%s", tc.targetKs, tc.workflow)
@@ -309,5 +334,31 @@ func testAutoRetryError(t *testing.T, tc *testCase, cells string) {
 		info := waitForVDiff2ToComplete(t, ksWorkflow, cells, uuid, ogTime)
 		require.False(t, info.HasMismatch)
 		require.Equal(t, expectedRows, info.RowsCompared)
+	})
+}
+
+func testCLICreateWait(t *testing.T, ksWorkflow string, cells string) {
+	t.Run("vtctl create and wait", func(t *testing.T) {
+		chCompleted := make(chan bool)
+		go func() {
+			_, output := performVDiff2Action(t, ksWorkflow, cells, "create", "", false, "--wait", "--wait-update-interval=1s")
+			completed := false
+			// We don't try to parse the JSON output as it may contain a series of outputs
+			// that together do not form a valid JSON document. We can change this in the
+			// future if we want to by printing them out as an array of JSON objects.
+			if strings.Contains(output, `"State": "completed"`) {
+				completed = true
+			}
+			chCompleted <- completed
+		}()
+
+		tmr := time.NewTimer(vdiffTimeout)
+		defer tmr.Stop()
+		select {
+		case completed := <-chCompleted:
+			require.Equal(t, true, completed)
+		case <-tmr.C:
+			require.Fail(t, "timeout waiting for vdiff to complete")
+		}
 	})
 }

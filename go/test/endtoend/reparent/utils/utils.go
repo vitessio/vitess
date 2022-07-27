@@ -28,20 +28,18 @@ import (
 	"testing"
 	"time"
 
-	tmc "vitess.io/vitess/go/vt/vttablet/grpctmclient"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/json2"
-	"vitess.io/vitess/go/vt/log"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/vt/log"
+	tmc "vitess.io/vitess/go/vt/vttablet/grpctmclient"
+
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 var (
@@ -347,12 +345,9 @@ func CheckPrimaryTablet(t *testing.T, clusterInstance *cluster.LocalProcessClust
 	assert.Equal(t, topodatapb.TabletType_PRIMARY, tabletInfo.GetType())
 
 	// make sure the health stream is updated
-	result, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "--", "--count", "1", tablet.Alias)
+	shrs, err := clusterInstance.StreamTabletHealth(context.Background(), tablet, 1)
 	require.NoError(t, err)
-	var streamHealthResponse querypb.StreamHealthResponse
-
-	err = json2.Unmarshal([]byte(result), &streamHealthResponse)
-	require.NoError(t, err)
+	streamHealthResponse := shrs[0]
 
 	assert.True(t, streamHealthResponse.GetServing())
 	tabletType := streamHealthResponse.GetTarget().GetTabletType()
@@ -371,12 +366,9 @@ func isHealthyPrimaryTablet(t *testing.T, clusterInstance *cluster.LocalProcessC
 	}
 
 	// make sure the health stream is updated
-	result, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "--", "--count", "1", tablet.Alias)
-	require.Nil(t, err)
-	var streamHealthResponse querypb.StreamHealthResponse
-
-	err = json2.Unmarshal([]byte(result), &streamHealthResponse)
-	require.Nil(t, err)
+	shrs, err := clusterInstance.StreamTabletHealth(context.Background(), tablet, 1)
+	require.NoError(t, err)
+	streamHealthResponse := shrs[0]
 
 	assert.True(t, streamHealthResponse.GetServing())
 	tabletType := streamHealthResponse.GetTarget().GetTabletType()
@@ -559,14 +551,10 @@ func CheckReparentFromOutside(t *testing.T, clusterInstance *cluster.LocalProces
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RunHealthCheck", tablet.Alias)
 	require.NoError(t, err)
 
-	streamHealth, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
-		"VtTabletStreamHealth", "--",
-		"--count", "1", tablet.Alias)
+	shrs, err := clusterInstance.StreamTabletHealth(context.Background(), tablet, 1)
 	require.NoError(t, err)
+	streamHealthResponse := shrs[0]
 
-	var streamHealthResponse querypb.StreamHealthResponse
-	err = json.Unmarshal([]byte(streamHealth), &streamHealthResponse)
-	require.NoError(t, err)
 	assert.Equal(t, streamHealthResponse.Target.TabletType, topodatapb.TabletType_PRIMARY)
 	assert.True(t, streamHealthResponse.TabletExternallyReparentedTimestamp >= baseTime)
 }
