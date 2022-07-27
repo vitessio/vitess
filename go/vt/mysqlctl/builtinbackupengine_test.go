@@ -151,15 +151,15 @@ func TestExecuteBackup(t *testing.T) {
 // <innodb_log_group_home_dir> (<datadir>/. by default) called "#innodb_redo". See:
 //   https://dev.mysql.com/doc/refman/8.0/en/innodb-redo-log.html#innodb-modifying-redo-log-capacity
 func needInnoDBRedoLogSubDir() (needIt bool, dir string, err error) {
-	mysqlVersionStr, err := mysqlctl.GetVersionString()
+	mysqldVersionStr, err := mysqlctl.GetVersionString()
 	if err != nil {
 		return needIt, dir, err
 	}
-	_, version, err := mysqlctl.ParseVersionString(mysqlVersionStr)
+	_, sv, err := mysqlctl.ParseVersionString(mysqldVersionStr)
 	if err != nil {
 		return needIt, dir, err
 	}
-	versionStr := fmt.Sprintf("%d.%d.%d", version.Major, version.Minor, version.Patch)
+	versionStr := fmt.Sprintf("%d.%d.%d", sv.Major, sv.Minor, sv.Patch)
 	_, capableOf, _ := mysql.GetFlavor(versionStr, nil)
 	if capableOf == nil {
 		return needIt, dir, fmt.Errorf("cannot determine database flavor details for version %v", versionStr)
@@ -168,10 +168,8 @@ func needInnoDBRedoLogSubDir() (needIt bool, dir string, err error) {
 	if err != nil {
 		return needIt, dir, err
 	}
-
 	if needIt {
 		dir = "#innodb_redo"
 	}
-
 	return needIt, dir, nil
 }
