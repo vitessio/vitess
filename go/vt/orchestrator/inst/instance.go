@@ -36,7 +36,6 @@ const ReasonableDiscoveryLatency = 500 * time.Millisecond
 type Instance struct {
 	Key                          InstanceKey
 	InstanceAlias                string
-	Uptime                       uint
 	ServerID                     uint
 	ServerUUID                   string
 	Version                      string
@@ -88,8 +87,6 @@ type Instance struct {
 	ReplicationDepth                   uint
 	IsCoPrimary                        bool
 	HasReplicationCredentials          bool
-	ReplicationCredentialsAvailable    bool
-	SemiSyncAvailable                  bool // when both semi sync plugins (primary & replica) are loaded
 	SemiSyncEnforced                   bool
 	SemiSyncPrimaryEnabled             bool
 	SemiSyncReplicaEnabled             bool

@@ -16,6 +16,8 @@
 
 package inst
 
+import "vitess.io/vitess/go/mysql"
+
 type ReplicationThreadState int
 
 const (
@@ -34,6 +36,22 @@ func ReplicationThreadStateFromStatus(status string) ReplicationThreadState {
 	}
 	return ReplicationThreadStateOther
 }
+
+// ReplicationThreadStateFromReplicationState gets the replication thread state from replication state
+// TODO: Merge these two into one
+func ReplicationThreadStateFromReplicationState(state mysql.ReplicationState) ReplicationThreadState {
+	switch state {
+	case mysql.ReplicationStateStopped:
+		return ReplicationThreadStateStopped
+	case mysql.ReplicationStateRunning:
+		return ReplicationThreadStateRunning
+	case mysql.ReplicationStateConnecting:
+		return ReplicationThreadStateOther
+	default:
+		return ReplicationThreadStateNoThread
+	}
+}
+
 func (replicationThreadState *ReplicationThreadState) IsRunning() bool {
 	return *replicationThreadState == ReplicationThreadStateRunning
 }
