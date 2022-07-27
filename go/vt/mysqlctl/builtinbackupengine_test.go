@@ -6,6 +6,7 @@ package mysqlctl_test
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path"
 	"testing"
@@ -14,6 +15,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
@@ -53,19 +55,10 @@ func TestExecuteBackup(t *testing.T) {
 
 	ctx := context.Background()
 
-	// get the flavor and version to deal with any behavioral differences
-	versionStr, err := mysqlctl.GetVersionString()
+	needIt, subDir, err := needInnoDBRedoLogSubDir()
 	require.NoError(t, err)
-	flavor, version, err := mysqlctl.ParseVersionString(versionStr)
-	require.NoError(t, err)
-
-	// innodbRedoLogSubDir provides the InnoDB redo log subdirectory if the server has one.
-	// Starting with MySQL 8.0.30, the InnoDB redo logs are stored in a subdirectory of the
-	// <innodb_log_group_home_dir> (<datadir>/. by default) called "#innodb_redo". See:
-	//   https://dev.mysql.com/doc/refman/8.0/en/innodb-redo-log.html#innodb-modifying-redo-log-capacity
-	if (flavor == mysqlctl.FlavorMySQL || flavor == mysqlctl.FlavorPercona) &&
-		((version.Major == 8 && version.Patch >= 30) || version.Major >= 9) {
-		fpath := path.Join("log", "#innodb_redo")
+	if needIt {
+		fpath := path.Join("log", subDir)
 		if err := createBackupDir(backupRoot, fpath); err != nil {
 			t.Fatalf("failed to create directory %s: %v", fpath, err)
 		}
@@ -151,4 +144,29 @@ func TestExecuteBackup(t *testing.T) {
 
 	assert.Error(t, err)
 	assert.False(t, ok)
+}
+
+// needInnoDBRedoLogSubDir provides the InnoDB redo log subdirectory if the server has one.
+// Starting with MySQL 8.0.30, the InnoDB redo logs are stored in a subdirectory of the
+// <innodb_log_group_home_dir> (<datadir>/. by default) called "#innodb_redo". See:
+//   https://dev.mysql.com/doc/refman/8.0/en/innodb-redo-log.html#innodb-modifying-redo-log-capacity
+func needInnoDBRedoLogSubDir() (needIt bool, dir string, err error) {
+	mysqlVersion, err := mysqlctl.GetVersionString()
+	if err != nil {
+		return needIt, dir, err
+	}
+	_, capableOf, _ := mysql.GetFlavor(mysqlVersion, nil)
+	if capableOf == nil {
+		return needIt, dir, fmt.Errorf("cannot determine database flavor details for version %v", mysqlVersion)
+	}
+	needIt, err = capableOf(mysql.DynamicRedoLogCapacityFlavorCapability)
+	if err != nil {
+		return needIt, dir, err
+	}
+
+	if needIt {
+		dir = "#innodb_redo"
+	}
+
+	return needIt, dir, nil
 }
