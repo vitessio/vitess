@@ -387,57 +387,51 @@ func findFilesToBackup(cnf *Mycnf) ([]FileEntry, int64, error) {
 	var features capabilitySet
 
 	// get the flavor and version to deal with any behavioral differences
-	{
-		versionStr, err := GetVersionString()
-		if err != nil {
-			return nil, 0, err
-		}
-		flavor, version, err = ParseVersionString(versionStr)
-		if err != nil {
-			return nil, 0, err
-		}
-		features = newCapabilitySet(flavor, version)
+	versionStr, err := GetVersionString()
+	if err != nil {
+		return nil, 0, err
 	}
+	flavor, version, err = ParseVersionString(versionStr)
+	if err != nil {
+		return nil, 0, err
+	}
+	features = newCapabilitySet(flavor, version)
 
 	// first add innodb files
-	{
-		result, totalSize, err = addDirectory(result, backupInnodbDataHomeDir, cnf.InnodbDataHomeDir, "")
-		if err != nil {
-			return nil, 0, err
-		}
-		if features.hasDynamicRedoLogCapacity() {
-			result, size, err = addDirectory(result, backupInnodbLogGroupHomeDir, cnf.InnodbLogGroupHomeDir, mysql.DynamicRedoLogSubdir)
-		} else {
-			result, size, err = addDirectory(result, backupInnodbLogGroupHomeDir, cnf.InnodbLogGroupHomeDir, "")
-		}
-		if err != nil {
-			return nil, 0, err
-		}
-		totalSize = totalSize + size
-		// then add the transactional data dictionary if it exists
-		result, size, err = addMySQL8DataDictionary(result, backupData, cnf.DataDir)
-		if err != nil {
-			return nil, 0, err
-		}
-		totalSize = totalSize + size
+	result, totalSize, err = addDirectory(result, backupInnodbDataHomeDir, cnf.InnodbDataHomeDir, "")
+	if err != nil {
+		return nil, 0, err
 	}
+	if features.hasDynamicRedoLogCapacity() {
+		result, size, err = addDirectory(result, backupInnodbLogGroupHomeDir, cnf.InnodbLogGroupHomeDir, mysql.DynamicRedoLogSubdir)
+	} else {
+		result, size, err = addDirectory(result, backupInnodbLogGroupHomeDir, cnf.InnodbLogGroupHomeDir, "")
+	}
+	if err != nil {
+		return nil, 0, err
+	}
+	totalSize = totalSize + size
+	// then add the transactional data dictionary if it exists
+	result, size, err = addMySQL8DataDictionary(result, backupData, cnf.DataDir)
+	if err != nil {
+		return nil, 0, err
+	}
+	totalSize = totalSize + size
 
 	// then add DB directories
-	{
-		fis, err := os.ReadDir(cnf.DataDir)
-		if err != nil {
-			return nil, 0, err
-		}
+	fis, err := os.ReadDir(cnf.DataDir)
+	if err != nil {
+		return nil, 0, err
+	}
 
-		for _, fi := range fis {
-			p := path.Join(cnf.DataDir, fi.Name())
-			if isDbDir(p) {
-				result, size, err = addDirectory(result, backupData, cnf.DataDir, fi.Name())
-				if err != nil {
-					return nil, 0, err
-				}
-				totalSize = totalSize + size
+	for _, fi := range fis {
+		p := path.Join(cnf.DataDir, fi.Name())
+		if isDbDir(p) {
+			result, size, err = addDirectory(result, backupData, cnf.DataDir, fi.Name())
+			if err != nil {
+				return nil, 0, err
 			}
+			totalSize = totalSize + size
 		}
 	}
 
