@@ -54,7 +54,7 @@ func TestFindFilesToBackup(t *testing.T) {
 	}
 
 	innodbLogFile := "innodb_log_1"
-	if features.hasInnoDBRedoLogSubDir() {
+	if features.hasDynamicRedoLogCapacity() {
 		os.Mkdir(path.Join(innodbLogDir, mysql.DynamicRedoLogSubdir), os.ModePerm)
 		innodbLogFile = path.Join(mysql.DynamicRedoLogSubdir, "#ib_redo1")
 	}
@@ -119,7 +119,7 @@ func TestFindFilesToBackup(t *testing.T) {
 		},
 	}
 	// We'll have a direntry for the subdir itself in the list
-	if features.hasInnoDBRedoLogSubDir() {
+	if features.hasDynamicRedoLogCapacity() {
 		expected = append(expected, FileEntry{
 			Base: "InnoDBLog",
 			Name: mysql.DynamicRedoLogSubdir,
