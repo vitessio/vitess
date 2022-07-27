@@ -410,7 +410,7 @@ func findFilesToBackup(cnf *Mycnf) ([]FileEntry, int64, error) {
 			return nil, 0, err
 		}
 		totalSize = totalSize + size
-		if redoLogSubDir := features.innodbRedoLogSubDir(); redoLogSubDir != "" {
+		if redoLogSubDir := features.hasInnoDBRedoLogSubDir(); redoLogSubDir != "" {
 			result, size, err = addDirectory(result, backupInnodbLogGroupHomeDir, cnf.InnodbLogGroupHomeDir, redoLogSubDir)
 			if err != nil {
 				return nil, 0, err

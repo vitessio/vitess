@@ -52,7 +52,7 @@ func TestFindFilesToBackup(t *testing.T) {
 	}
 
 	innodbLogFile := "innodb_log_1"
-	if innodbLogSubDir := features.innodbRedoLogSubDir(); innodbLogSubDir != "" {
+	if innodbLogSubDir := features.hasInnoDBRedoLogSubDir(); innodbLogSubDir != "" {
 		os.Mkdir(path.Join(innodbLogDir, innodbLogSubDir), os.ModePerm)
 		innodbLogFile = path.Join(innodbLogSubDir, "#ib_redo1")
 	}
@@ -117,7 +117,7 @@ func TestFindFilesToBackup(t *testing.T) {
 		},
 	}
 	// We'll have a direntry for the subdir itself in the list
-	if innodbLogSubDir := features.innodbRedoLogSubDir(); innodbLogSubDir != "" {
+	if innodbLogSubDir := features.hasInnoDBRedoLogSubDir(); innodbLogSubDir != "" {
 		expected = append(expected, FileEntry{
 			Base: "InnoDBLog",
 			Name: innodbLogSubDir,
