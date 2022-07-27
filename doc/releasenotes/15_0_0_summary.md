@@ -16,6 +16,12 @@ Map(ctx context.Context, vcursor VCursor, .... ) ....
 This only impacts the users who have added their own vindex implementation. 
 They would be required to change their implementation with these new interface method expectations.
 
+#### Logstats Table and Keyspace deprecated
+
+Information about which tables are used was being reported through the Keyspace/Table fields on LogStats.
+For multi-table queries, this output can be confusing, so we have added TablesUsed, that is a string array, listing all tables and which keyspace they are on.
+The Table/Keyspace fields are deprecated and will be removed in the V16 release of Vitess.
+
 ### Command-line syntax deprecations
 
 #### vttablet startup flag deletions
@@ -31,6 +37,7 @@ The following VTTablet flags were deprecated in 7.0. They have now been deleted
 
 #### vttablet startup flag deprecations
 - --enable-query-plan-field-caching is now deprecated. It will be removed in v16.
+- --enable_semi_sync is now deprecated. It will be removed in v16. Instead, set the correct durability policy using `SetKeyspaceDurabilityPolicy`
 
 ### New command line flags and behavior
 
@@ -117,6 +124,12 @@ All Online DDL migrations using the `vitess` strategy are now eligible to run co
 
 The main use case is to run multiple concurrent migrations, all with `--postpone-completion`. All table-copy operations will run sequentially, but no migration will actually cut-over, and eventually all migration will be `ready_to_complete`, continuously tailing the binary logs and keeping up-to-date. A quick and iterative `ALTER VITESS_MIGRATION '...' COMPLETE` sequence of commands will cut-over all migrations _closely together_ (though not atomically together).
 
+#### vtctl command changes. 
+All `online DDL show` commands can now be run with a few additional parameters
+- `--order` , order migrations in the output by either ascending or descending order of their `id` fields.
+- `--skip`  , skip specified number of migrations in the output.
+- `--limit` , limit results to a specified number of migrations in the output.
+
 #### New syntax
 
 The following is now supported:
@@ -155,3 +168,10 @@ $ curl -s http://127.0.0.1:15100/debug/vars | jq . | grep Throttler
 
 Added new parameter `multi_shard_autocommit` to lookup vindex definition in vschema, if enabled will send lookup vindex dml query as autocommit to all shards
 This is slighly different from `autocommit` parameter where the query is sent in its own transaction separate from the ongoing transaction if any i.e. begin -> lookup query execs -> commit/rollback
+
+### Durability Policy
+
+#### Cross Cell
+
+A new durabilty policy `cross_cell` is now supported. `cross_cell` durability policy only allows replica tablets from a different cell than the current primary to
+send semi sync ACKs. This ensures that any committed write exists in atleast 2 tablets belonging to different cells.

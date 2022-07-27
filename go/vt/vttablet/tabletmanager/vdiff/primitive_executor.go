@@ -76,7 +76,7 @@ func newPrimitiveExecutor(ctx context.Context, prim vtgateEngine.Primitive, name
 }
 
 // next gets the next row in the stream for this shard, if there's currently no rows to process in the stream then wait on the
-// result channel for the shard streamer to produce them
+// result channel for the shard streamer to produce them.
 func (pe *primitiveExecutor) next() ([]sqltypes.Value, error) {
 	for len(pe.rows) == 0 {
 		qr, ok := <-pe.resultch
@@ -92,7 +92,7 @@ func (pe *primitiveExecutor) next() ([]sqltypes.Value, error) {
 }
 
 // drain fastforward's a shard to process (and ignore) everything from its results stream and return a count of the
-// discarded rows
+// discarded rows.
 func (pe *primitiveExecutor) drain(ctx context.Context) (int64, error) {
 	var count int64
 	for {

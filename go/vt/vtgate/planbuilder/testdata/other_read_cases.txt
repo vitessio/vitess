@@ -102,4 +102,26 @@ Gen4 plan same as above
     ]
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "EXPLAIN",
+  "Original": "explain format=vtexplain select * from user",
+  "Instructions": {
+    "OperatorType": "VTEXPLAIN",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select * from `user` where 1 != 1",
+        "Query": "select * from `user`",
+        "Table": "`user`"
+      }
+    ]
+  },
+  "TablesUsed": [
+    "main.user"
+  ]
+}

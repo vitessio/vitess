@@ -150,7 +150,6 @@ exec $VTROOT/bin/vttablet \
   --tablet-path $alias \
   --tablet_hostname "$vthost" \
   --health_check_interval 5s \
-  --enable_semi_sync=false \
   --disable_active_reparents=true \
   --port $web_port \
   --grpc_port $grpc_port \

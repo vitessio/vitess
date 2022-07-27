@@ -142,7 +142,7 @@ func initializeCluster(t *testing.T) {
 	shard1.Vttablets = []*cluster.Vttablet{shard1Primary, shard1Replica}
 
 	clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, commonTabletArg...)
-	clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--restore_from_backup", "--enable_semi_sync")
+	clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--restore_from_backup")
 
 	err = clusterInstance.SetupCluster(keyspace, []cluster.Shard{*shard, *shard0, *shard1})
 	require.NoError(t, err)
@@ -495,7 +495,6 @@ func tlsLaunchRecoveryTablet(t *testing.T, tablet *cluster.Vttablet, tabletForBi
 	tablet.Alias = tablet.VttabletProcess.TabletPath
 	tablet.VttabletProcess.SupportsBackup = true
 	tablet.VttabletProcess.Keyspace = restoreKeyspaceName
-	tablet.VttabletProcess.EnableSemiSync = true
 
 	certDir := path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/ssl_%010d", tablet.MysqlctlProcess.TabletUID))
 	tablet.VttabletProcess.ExtraArgs = []string{
