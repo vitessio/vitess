@@ -47,8 +47,16 @@ func (vtctlclient *VtctlClientProcess) InitShardPrimary(Keyspace string, Shard s
 	// version_upgrade test depends on using older binaries
 	// which means we cannot use the new InitShardPrimary command here
 	// TODO(deepthi): fix after v12.0
+	version, err := GetMajorVersion("vttablet")
+	if err != nil {
+		return err
+	}
+	cmd := "InitShardMaster"
+	if version > 12 {
+		cmd = "InitShardPrimary"
+	}
 	output, err := vtctlclient.ExecuteCommandWithOutput(
-		"InitShardMaster",
+		cmd,
 		"-force", "-wait_replicas_timeout", "31s",
 		fmt.Sprintf("%s/%s", Keyspace, Shard),
 		fmt.Sprintf("%s-%d", Cell, TabletUID))
