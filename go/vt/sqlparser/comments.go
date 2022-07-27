@@ -42,6 +42,8 @@ const (
 	DirectiveAllowHashJoin = "ALLOW_HASH_JOIN"
 	// DirectiveQueryPlanner lets the user specify per query which planner should be used
 	DirectiveQueryPlanner = "PLANNER"
+	// DirectiveActuallyRunQueries tells explain format = vtexplain that it is okay to also run the query.
+	DirectiveActuallyRunQueries = "ACTUALLY_RUN_QUERIES"
 )
 
 func isNonSpace(r rune) bool {
@@ -258,8 +260,16 @@ func (d CommentDirectives) IsSet(key string) bool {
 	if d == nil {
 		return false
 	}
-	val, ok := d[key]
-	if !ok {
+	var val string
+	exists := false
+	for commentDirective, value := range d {
+		if strings.EqualFold(commentDirective, key) {
+			val = value
+			exists = true
+			break
+		}
+	}
+	if !exists {
 		return false
 	}
 	// ParseBool handles "0", "1", "true", "false" and all similars

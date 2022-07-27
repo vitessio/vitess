@@ -633,6 +633,7 @@ type (
 	ExplainStmt struct {
 		Type      ExplainType
 		Statement Statement
+		Comments  *ParsedComments
 	}
 
 	// ExplainTab represents the Explain table
@@ -1273,6 +1274,11 @@ func (node *AlterTable) SetComments(comments Comments) {
 }
 
 // SetComments implements DDLStatement.
+func (node *ExplainStmt) SetComments(comments Comments) {
+	node.Comments = comments.Parsed()
+}
+
+// SetComments implements DDLStatement.
 func (node *CreateTable) SetComments(comments Comments) {
 	node.Comments = comments.Parsed()
 }
@@ -1341,6 +1347,11 @@ func (node *TruncateTable) GetParsedComments() *ParsedComments {
 
 // GetParsedComments implements DDLStatement.
 func (node *AlterTable) GetParsedComments() *ParsedComments {
+	return node.Comments
+}
+
+// GetParsedComments implements DDLStatement.
+func (node *ExplainStmt) GetParsedComments() *ParsedComments {
 	return node.Comments
 }
 

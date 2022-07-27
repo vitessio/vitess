@@ -4293,13 +4293,13 @@ wild_opt:
   }
 
 explain_statement:
-  explain_synonyms table_name wild_opt
+  explain_synonyms comment_opt table_name wild_opt
   {
-    $$ = &ExplainTab{Table: $2, Wild: $3}
+    $$ = &ExplainTab{Table: $3, Wild: $4}
   }
-| explain_synonyms explain_format_opt explainable_statement
+| explain_synonyms comment_opt explain_format_opt explainable_statement
   {
-    $$ = &ExplainStmt{Type: $2, Statement: $3}
+    $$ = &ExplainStmt{Type: $3, Statement: $4, Comments: Comments($2).Parsed()}
   }
 
 other_statement:

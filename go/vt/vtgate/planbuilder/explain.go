@@ -120,6 +120,15 @@ func buildVTExplainTypePlan(explain *sqlparser.ExplainStmt, reservedVars *sqlpar
 	if err != nil {
 		return nil, err
 	}
+	switch input.primitive.(type) {
+	case *engine.Insert, *engine.Delete, *engine.Update:
+		directives := explain.GetParsedComments().Directives()
+		if directives.IsSet(sqlparser.DirectiveActuallyRunQueries) {
+			break
+		}
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "explain format = vtexplain will actually run queries. `/*vt+ %s */` must be set be added to run DML queries in vtexplain. Example: `explain /*vt+ %s */ format = vtexplain delete from t1`", sqlparser.DirectiveActuallyRunQueries, sqlparser.DirectiveActuallyRunQueries)
+	}
+
 	return &planResult{primitive: &engine.VTExplain{Input: input.primitive}, tables: input.tables}, nil
 }
 
