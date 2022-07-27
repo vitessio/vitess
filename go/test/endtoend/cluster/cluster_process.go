@@ -26,6 +26,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path"
+	"regexp"
 	"strconv"
 	"sync"
 	"syscall"
@@ -85,10 +86,10 @@ type LocalProcessCluster struct {
 
 	nextPortForProcess int
 
-	//Extra arguments for vtTablet
+	// Extra arguments for vtTablet
 	VtTabletExtraArgs []string
 
-	//Extra arguments for vtGate
+	// Extra arguments for vtGate
 	VtGateExtraArgs      []string
 	VtGatePlannerVersion planbuilder.PlannerVersion
 
@@ -363,7 +364,7 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 		}
 	}
 
-	//Apply VSchema
+	// Apply VSchema
 	if keyspace.VSchema != "" {
 		if err = cluster.VtctlclientProcess.ApplyVSchema(keyspace.Name, keyspace.VSchema); err != nil {
 			log.Errorf("error applying vschema: %v, %v", keyspace.VSchema, err)
@@ -805,4 +806,20 @@ func getCoveragePath(fileName string) string {
 		covDir = os.TempDir()
 	}
 	return path.Join(covDir, fileName)
+}
+
+func GetMajorVersion(binaryName string) (int, error) {
+	version, err := exec.Command(binaryName, "--version").Output()
+	if err != nil {
+		return 0, err
+	}
+	versionRegex := regexp.MustCompile(`Version: ([0-9]+)\.([0-9]+)\.([0-9]+)`)
+	v := versionRegex.FindStringSubmatch(string(version))
+	if len(v) != 4 {
+		return 0, fmt.Errorf("could not parse server version from: %s", version)
+	}
+	if err != nil {
+		return 0, fmt.Errorf("could not parse server version from: %s", version)
+	}
+	return strconv.Atoi(v[1])
 }

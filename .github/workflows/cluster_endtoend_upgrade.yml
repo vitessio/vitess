@@ -94,9 +94,6 @@ jobs:
         mkdir -p /tmp/vitess-build-${{ matrix.project }}/
         cp -R bin /tmp/vitess-build-${{ matrix.project }}/
 
-    - name: Check out HEAD
-      uses: actions/checkout@v2
-
     - name: Run cluster endtoend test ${{ matrix.project }} (create cluster)
       timeout-minutes: 5
       run: |
