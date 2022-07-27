@@ -162,7 +162,7 @@ func needInnoDBRedoLogSubdir() (needIt bool, err error) {
 	versionStr := fmt.Sprintf("%d.%d.%d", sv.Major, sv.Minor, sv.Patch)
 	_, capableOf, _ := mysql.GetFlavor(versionStr, nil)
 	if capableOf == nil {
-		return needIt, fmt.Errorf("cannot determine database flavor details for version %v", versionStr)
+		return needIt, fmt.Errorf("cannot determine database flavor details for version %s", versionStr)
 	}
 	return capableOf(mysql.DynamicRedoLogCapacityFlavorCapability)
 }
