@@ -51,6 +51,7 @@ const (
 	InstantChangeColumnDefaultFlavorCapability
 	MySQLJSONFlavorCapability
 	MySQLUpgradeInServerFlavorCapability
+	DynamicRedoLogCapacityFlavorCapability
 )
 
 const (
