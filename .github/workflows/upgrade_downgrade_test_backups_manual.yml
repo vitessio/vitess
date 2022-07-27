@@ -111,7 +111,8 @@ jobs:
         ####
         ## Temporarily pin the MySQL version at 8.0.29 as Vitess 14.0 does not have the fix to support
         ## backups of 8.0.30+. See: https://github.com/vitessio/vitess/pull/10847
-        ## TODO: remove this pin once Vitess 16.0.0-SNAPSHOT becomes the dev version on vitessio/main
+        ## TODO: remove this pin once the above fixes are backported to release-14.0 OR
+        ##       Vitess 16.0.0-SNAPSHOT becomes the dev version on vitessio/main
         #sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 467B942D3A79BD29
         #wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.20-1_all.deb
         #echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0 | sudo debconf-set-selections
