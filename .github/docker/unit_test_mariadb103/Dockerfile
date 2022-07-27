@@ -1,6 +1,6 @@
 # DO NOT MODIFY: THIS FILE IS GENERATED USING "make generate_ci_workflows"
 
-ARG bootstrap_version=3
+ARG bootstrap_version=3.1
 ARG image="vitess/bootstrap:${bootstrap_version}-mariadb103"
 
 FROM "${image}"
