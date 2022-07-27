@@ -914,24 +914,29 @@ func getCreateTableStatement(t *testing.T, tablet *cluster.Vttablet, tableName s
 }
 
 // waitForTableOnTablets checks the CREATE STATEMENT of a table and waits for
-// it to appear until we hit the timeout.
+// it to appear on the primary tablet in each shard, until we hit the timeout.
 func waitForTableOnTablets(t *testing.T, tableName, expectColumn string) {
 	tkr := time.NewTicker(time.Second)
 	defer tkr.Stop()
 	for {
 		select {
 		case <-tkr.C:
+			shardsWithIt := 0
 			for i := range clusterInstance.Keyspaces[0].Shards {
-				res, err := clusterInstance.Keyspaces[0].Shards[i].Vttablets[0].VttabletProcess.QueryTablet(fmt.Sprintf("show create table %s;", tableName), keyspaceName, true)
+				primary := clusterInstance.Keyspaces[0].Shards[i].PrimaryTablet()
+				res, err := primary.VttabletProcess.QueryTablet(fmt.Sprintf("show create table %s;", tableName), keyspaceName, true)
 				if err == nil && len(res.Rows) == 1 {
 					createTableStmt := res.Rows[0][1].ToString()
 					if strings.Contains(createTableStmt, expectColumn) {
-						return
+						shardsWithIt++
 					}
 				}
 			}
+			if shardsWithIt == len(clusterInstance.Keyspaces[0].Shards) {
+				return
+			}
 		case <-time.After(normalMigrationWait):
-			require.Fail(t, fmt.Sprintf("the %s table did not include the expected %s column before hitting the timeout of %v",
+			require.Fail(t, fmt.Sprintf("the %s table did not include the expected %s column on all shards before hitting the timeout of %v",
 				tableName, expectColumn, normalMigrationWait))
 			return
 		}
