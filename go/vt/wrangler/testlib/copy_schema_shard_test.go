@@ -64,17 +64,17 @@ func copySchema(t *testing.T, useShardAsSource bool) {
 		t.Fatalf("CreateKeyspace failed: %v", err)
 	}
 
-	sourcePrimaryDb := fakesqldb.New(t).SetName("sourcePrimaryDb")
+	sourcePrimaryDb := fakesqldb.NewWithExpectedQueries(t).SetName("sourcePrimaryDb")
 	defer sourcePrimaryDb.Close()
 	sourcePrimary := NewFakeTablet(t, wr, "cell1", 0,
 		topodatapb.TabletType_PRIMARY, sourcePrimaryDb, TabletKeyspaceShard(t, "ks", "-80"))
 
-	sourceRdonlyDb := fakesqldb.New(t).SetName("sourceRdonlyDb")
+	sourceRdonlyDb := fakesqldb.NewWithExpectedQueries(t).SetName("sourceRdonlyDb")
 	defer sourceRdonlyDb.Close()
 	sourceRdonly := NewFakeTablet(t, wr, "cell1", 1,
 		topodatapb.TabletType_RDONLY, sourceRdonlyDb, TabletKeyspaceShard(t, "ks", "-80"))
 
-	destinationPrimaryDb := fakesqldb.New(t).SetName("destinationPrimaryDb")
+	destinationPrimaryDb := fakesqldb.NewWithExpectedQueries(t).SetName("destinationPrimaryDb")
 	defer destinationPrimaryDb.Close()
 	destinationPrimary := NewFakeTablet(t, wr, "cell1", 10,
 		topodatapb.TabletType_PRIMARY, destinationPrimaryDb, TabletKeyspaceShard(t, "ks", "-40"))

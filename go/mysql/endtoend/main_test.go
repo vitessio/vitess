@@ -243,7 +243,7 @@ ssl-key=%v/server-key.pem
 		// fmt.Printf("Connect to MySQL using parameters:\n")
 		// json.NewEncoder(os.Stdout).Encode(connParams)
 		// time.Sleep(10 * time.Minute)
-
+		cluster.UnsetReadOnly("")
 		return m.Run()
 	}()
 	os.Exit(exitCode)

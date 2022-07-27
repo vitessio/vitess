@@ -364,7 +364,6 @@ func (c *Conn) ExecuteUnSetSuperReadOnly() (result *sqltypes.Result, err error) 
 		if err == nil && len(res.Rows) == 1 {
 			sro := res.Rows[0][0].ToString()
 			if sro == "1" || sro == "ON" {
-				// defer c.WriteComQuery("SET GLOBAL super_read_only='ON'")
 				if err = c.WriteComQuery("SET GLOBAL super_read_only='OFF'"); err != nil {
 					return nil, err
 				}
@@ -385,7 +384,6 @@ func (c *Conn) ExecuteSetSuperReadOnly() (result *sqltypes.Result, err error) {
 		if err == nil && len(res.Rows) == 1 {
 			sro := res.Rows[0][0].ToString()
 			if sro == "0" || sro == "OFF" {
-				// defer c.WriteComQuery("SET GLOBAL super_read_only='OFF'")
 				if err = c.WriteComQuery("SET GLOBAL super_read_only='ON'"); err != nil {
 					return nil, err
 				}

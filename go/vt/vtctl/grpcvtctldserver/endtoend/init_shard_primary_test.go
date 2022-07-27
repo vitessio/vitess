@@ -21,11 +21,11 @@ import (
 	"fmt"
 	"testing"
 
+	"vitess.io/vitess/go/mysql/fakesqldb"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/mysql/fakesqldb"
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver"
@@ -43,9 +43,9 @@ func TestInitShardPrimary(t *testing.T) {
 	tmc := tmclient.NewTabletManagerClient()
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmc)
 
-	primaryDb := createDb(t)
-	replicaDb1 := createDb(t)
-	replicaDb2 := createDb(t)
+	primaryDb := fakesqldb.NewWithExpectedQueries(t)
+	replicaDb1 := fakesqldb.NewWithExpectedQueries(t)
+	replicaDb2 := fakesqldb.NewWithExpectedQueries(t)
 
 	tablet1 := testlib.NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_PRIMARY, primaryDb)
 	tablet2 := testlib.NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, replicaDb1)
@@ -97,9 +97,9 @@ func TestInitShardPrimaryNoFormerPrimary(t *testing.T) {
 	tmc := tmclient.NewTabletManagerClient()
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmc)
 
-	primaryDb := createDb(t)
-	replicaDb1 := createDb(t)
-	replicaDb2 := createDb(t)
+	primaryDb := fakesqldb.NewWithExpectedQueries(t)
+	replicaDb1 := fakesqldb.NewWithExpectedQueries(t)
+	replicaDb2 := fakesqldb.NewWithExpectedQueries(t)
 
 	tablet1 := testlib.NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_REPLICA, primaryDb)
 	tablet2 := testlib.NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, replicaDb1)
@@ -153,30 +153,4 @@ func TestInitShardPrimaryNoFormerPrimary(t *testing.T) {
 	tablet1PostInit, err := ts.GetTablet(context.Background(), tablet1.Tablet.Alias)
 	require.NoError(t, err)
 	assert.Equal(t, topodatapb.TabletType_PRIMARY, tablet1PostInit.Type)
-}
-
-func createDb(t *testing.T) *fakesqldb.DB {
-	primaryDb := fakesqldb.New(t)
-	primaryDb.AddQuery("create database if not exists `vt_test_keyspace`", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
-	primaryDb.AddQuery("SET GLOBAL super_read_only='OFF'", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
-	primaryDb.AddQuery("SET @@session.sql_log_bin = 0", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
-	primaryDb.AddQuery("SET GLOBAL super_read_only='ON'", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
-	primaryDb.AddQuery("CREATE DATABASE IF NOT EXISTS _vt", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
-	primaryDb.AddQueryPattern("CREATE TABLE IF NOT EXISTS _vt.local_metadata.*", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
-	primaryDb.AddQueryPattern("ALTER TABLE _vt.vreplication .*", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
-	primaryDb.AddQueryPattern("ALTER TABLE _vt.local_metadata.*", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
-	primaryDb.AddQueryPattern("CREATE TABLE IF NOT EXISTS _vt.shard_metadata.*", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
-	primaryDb.AddQueryPattern("ALTER TABLE _vt.shard_metadata.*", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
-	primaryDb.AddQuery("DROP TABLE IF EXISTS _vt.blp_checkpoint", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
-	primaryDb.AddQueryPattern("CREATE TABLE IF NOT EXISTS _vt.vreplication.*", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
-	primaryDb.AddQueryPattern("create table if not exists _vt.resharding_journal.*", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
-	primaryDb.AddQueryPattern("create table if not exists _vt.copy_state.*", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
-	primaryDb.AddQueryPattern("CREATE TABLE IF NOT EXISTS _vt.schema_migrations.*", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
-	primaryDb.AddQueryPattern("SELECT.*", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
-	primaryDb.AddQueryPattern("ALTER TABLE _vt.schema_migrations.*", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
-	primaryDb.AddQueryPattern("CREATE TABLE IF NOT EXISTS _vt.reparent_journal.*", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
-	primaryDb.AddQueryPattern("CREATE TABLE if not exists _vt.schemacopy.*", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
-	primaryDb.AddQueryPattern("ALTER TABLE _vt.reparent_journal.*", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
-	primaryDb.AddQuery("USE `vt_test_keyspace`", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
-	return primaryDb
 }

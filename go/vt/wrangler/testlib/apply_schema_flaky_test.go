@@ -49,7 +49,7 @@ func TestApplySchema_AllowLongUnavailability(t *testing.T) {
 	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
 
 	cell := "cell1"
-	db := fakesqldb.New(t)
+	db := fakesqldb.NewWithExpectedQueries(t)
 	defer db.Close()
 	ts := memorytopo.NewServer(cell)
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())

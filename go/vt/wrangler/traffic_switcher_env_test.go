@@ -107,7 +107,7 @@ func newTestTableMigraterCustom(ctx context.Context, t *testing.T, sourceShards,
 	tme.wr = New(logutil.NewConsoleLogger(), tme.ts, tmclient.NewTabletManagerClient())
 	tme.sourceShards = sourceShards
 	tme.targetShards = targetShards
-	tme.tmeDB = fakesqldb.New(t)
+	tme.tmeDB = fakesqldb.NewWithExpectedQueries(t)
 	tabletID := 10
 	for _, shard := range sourceShards {
 		tme.sourcePrimaries = append(tme.sourcePrimaries, newFakeTablet(t, tme.wr, "cell1", uint32(tabletID), topodatapb.TabletType_PRIMARY, tme.tmeDB, TabletKeyspaceShard(t, "ks1", shard)))
@@ -266,7 +266,7 @@ func newTestShardMigrater(ctx context.Context, t *testing.T, sourceShards, targe
 	tme.wr = New(logutil.NewConsoleLogger(), tme.ts, tmclient.NewTabletManagerClient())
 	tme.sourceShards = sourceShards
 	tme.targetShards = targetShards
-	tme.tmeDB = fakesqldb.New(t)
+	tme.tmeDB = fakesqldb.NewWithExpectedQueries(t)
 
 	tabletID := 10
 	for _, shard := range sourceShards {

@@ -311,12 +311,3 @@ func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 	}
 	return qr
 }
-
-func execWithReadOnly(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
-	t.Helper()
-	qr, err := conn.ExecuteFetchWithReadOnlyHandling(query, 1000, true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return qr
-}

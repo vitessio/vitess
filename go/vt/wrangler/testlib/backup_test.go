@@ -90,7 +90,7 @@ func testBackupRestore(t *testing.T, cDetails *compressionDetails) error {
 
 	// Initialize our environment
 	ctx := context.Background()
-	db := fakesqldb.New(t)
+	db := fakesqldb.NewWithExpectedQueries(t)
 	defer db.Close()
 	ts := memorytopo.NewServer("cell1", "cell2")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
@@ -323,7 +323,7 @@ func TestBackupRestoreLagged(t *testing.T) {
 
 	// Initialize our environment
 	ctx := context.Background()
-	db := fakesqldb.New(t)
+	db := fakesqldb.NewWithExpectedQueries(t)
 	defer db.Close()
 	ts := memorytopo.NewServer("cell1", "cell2")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
@@ -527,7 +527,7 @@ func TestRestoreUnreachablePrimary(t *testing.T) {
 
 	// Initialize our environment
 	ctx := context.Background()
-	db := fakesqldb.New(t)
+	db := fakesqldb.NewWithExpectedQueries(t)
 	defer db.Close()
 	ts := memorytopo.NewServer("cell1")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
@@ -687,7 +687,7 @@ func TestDisableActiveReparents(t *testing.T) {
 
 	// Initialize our environment
 	ctx := context.Background()
-	db := fakesqldb.New(t)
+	db := fakesqldb.NewWithExpectedQueries(t)
 	defer db.Close()
 	ts := memorytopo.NewServer("cell1", "cell2")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
