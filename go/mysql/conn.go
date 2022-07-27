@@ -692,7 +692,11 @@ func (c *Conn) String() string {
 // routine to interrupt the current connection.
 func (c *Conn) Close() {
 	if c.closed.CompareAndSwap(false, true) {
-		c.writeComQuit()
+		// The connection is on the client side.
+		if c.listener == nil {
+			// Send a ComQuit to avoid the error message on the server side.
+			c.writeComQuit()
+		}
 		c.conn.Close()
 	}
 }
