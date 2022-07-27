@@ -1615,23 +1615,6 @@ func (httpAPI *API) UntagAll(params martini.Params, r render.Render, req *http.R
 	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("%s removed from %+v instances", tag.TagName, len(*untagged)), Details: untagged.GetInstanceKeys()})
 }
 
-// SubmitPrimariesToKvStores writes a cluster's primary (or all clusters primaries) to kv stores.
-// This should generally only happen once in a lifetime of a cluster. Otherwise KV
-// stores are updated via failovers.
-func (httpAPI *API) SubmitPrimariesToKvStores(params martini.Params, r render.Render, req *http.Request) {
-	clusterName, err := getClusterNameIfExists(params)
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
-		return
-	}
-	kvPairs, submittedCount, err := logic.SubmitPrimariesToKvStores(clusterName, true)
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
-		return
-	}
-	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Submitted %d primaries", submittedCount), Details: kvPairs})
-}
-
 // Clusters provides list of known primaries
 func (httpAPI *API) Primaries(params martini.Params, r render.Render, req *http.Request) {
 	instances, err := inst.ReadWriteableClustersPrimaries()
@@ -2883,10 +2866,6 @@ func (httpAPI *API) RegisterRequests(m *martini.ClassicMartini) {
 	httpAPI.registerAPIRequest(m, "topology-tags/:clusterHint", httpAPI.ASCIITopologyTags)
 	httpAPI.registerAPIRequest(m, "topology-tags/:host/:port", httpAPI.ASCIITopologyTags)
 	httpAPI.registerAPIRequest(m, "snapshot-topologies", httpAPI.SnapshotTopologies)
-
-	// Key-value:
-	httpAPI.registerAPIRequest(m, "submit-primaries-to-kv-stores", httpAPI.SubmitPrimariesToKvStores)
-	httpAPI.registerAPIRequest(m, "submit-primaries-to-kv-stores/:clusterHint", httpAPI.SubmitPrimariesToKvStores)
 
 	// Tags:
 	httpAPI.registerAPIRequest(m, "tagged", httpAPI.Tagged)

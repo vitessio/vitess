@@ -50,7 +50,6 @@ import (
 	"vitess.io/vitess/go/vt/orchestrator/collection"
 	"vitess.io/vitess/go/vt/orchestrator/config"
 	"vitess.io/vitess/go/vt/orchestrator/db"
-	"vitess.io/vitess/go/vt/orchestrator/kv"
 	"vitess.io/vitess/go/vt/orchestrator/metrics/query"
 	"vitess.io/vitess/go/vt/orchestrator/util"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil"
@@ -2007,30 +2006,6 @@ func ReadClustersInfo(clusterName string) ([]ClusterInfo, error) {
 	})
 
 	return clusters, err
-}
-
-// Get a listing of KeyValuePair for clusters primaries, for all clusters or for a specific cluster.
-func GetPrimariesKVPairs(clusterName string) (kvPairs [](*kv.KeyValuePair), err error) {
-
-	clusterAliasMap := make(map[string]string)
-	clustersInfo, err := ReadClustersInfo(clusterName)
-	if err != nil {
-		return kvPairs, err
-	}
-	for _, clusterInfo := range clustersInfo {
-		clusterAliasMap[clusterInfo.ClusterName] = clusterInfo.ClusterAlias
-	}
-
-	primaries, err := ReadWriteableClustersPrimaries()
-	if err != nil {
-		return kvPairs, err
-	}
-	for _, primary := range primaries {
-		clusterPairs := GetClusterPrimaryKVPairs(clusterAliasMap[primary.ClusterName], &primary.Key)
-		kvPairs = append(kvPairs, clusterPairs...)
-	}
-
-	return kvPairs, err
 }
 
 // HeuristicallyApplyClusterDomainInstanceAttribute writes down the cluster-domain

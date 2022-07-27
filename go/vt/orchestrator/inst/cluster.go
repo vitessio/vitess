@@ -17,50 +17,11 @@
 package inst
 
 import (
-	"fmt"
 	"regexp"
 	"strings"
 
 	"vitess.io/vitess/go/vt/orchestrator/config"
-	"vitess.io/vitess/go/vt/orchestrator/kv"
 )
-
-func GetClusterPrimaryKVKey(clusterAlias string) string {
-	return fmt.Sprintf("%s%s", config.Config.KVClusterPrimaryPrefix, clusterAlias)
-}
-
-func getClusterPrimaryKVPair(clusterAlias string, primaryKey *InstanceKey) *kv.KeyValuePair {
-	if clusterAlias == "" {
-		return nil
-	}
-	if primaryKey == nil {
-		return nil
-	}
-	return kv.NewKVPair(GetClusterPrimaryKVKey(clusterAlias), primaryKey.StringCode())
-}
-
-// GetClusterPrimaryKVPairs returns all KV pairs associated with a primary. This includes the
-// full identity of the primary as well as a breakdown by hostname, port, ipv4, ipv6
-func GetClusterPrimaryKVPairs(clusterAlias string, primaryKey *InstanceKey) (kvPairs [](*kv.KeyValuePair)) {
-	primaryKVPair := getClusterPrimaryKVPair(clusterAlias, primaryKey)
-	if primaryKVPair == nil {
-		return kvPairs
-	}
-	kvPairs = append(kvPairs, primaryKVPair)
-
-	addPair := func(keySuffix, value string) {
-		key := fmt.Sprintf("%s/%s", primaryKVPair.Key, keySuffix)
-		kvPairs = append(kvPairs, kv.NewKVPair(key, value))
-	}
-
-	addPair("hostname", primaryKey.Hostname)
-	addPair("port", fmt.Sprintf("%d", primaryKey.Port))
-	if ipv4, ipv6, err := readHostnameIPs(primaryKey.Hostname); err == nil {
-		addPair("ipv4", ipv4)
-		addPair("ipv6", ipv6)
-	}
-	return kvPairs
-}
 
 // mappedClusterNameToAlias attempts to match a cluster with an alias based on
 // configured ClusterNameToAlias map
