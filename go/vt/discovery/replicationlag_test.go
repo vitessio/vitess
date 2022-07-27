@@ -19,12 +19,20 @@ package discovery
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"vitess.io/vitess/go/test/utils"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/topo"
 )
+
+func init() {
+	lowReplicationLag = 30 * time.Second
+	highReplicationLagMinServing = 2 * time.Hour
+	minNumTablets = 2
+	legacyReplicationLagAlgorithm = true
+}
 
 // testSetLegacyReplicationLagAlgorithm is a test helper function, if this is used by a production code path, something is wrong.
 func testSetLegacyReplicationLagAlgorithm(newLegacy bool) {
