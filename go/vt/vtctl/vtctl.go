@@ -3074,7 +3074,7 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		return fmt.Errorf("the <keyspace> argument is required for the commandApplySchema command")
 	}
 	if *allowLongUnavailability {
-		log.Warningf("--allow_long_unavailability flag is deprecated. We recomment using Online DDL for schema changes, big or small.")
+		log.Warningf("--allow_long_unavailability flag is deprecated. We recommend using Online DDL for schema changes, big or small.")
 	}
 
 	// v14 deprecates `--skip-topo` flag. This check will be removed in v15
