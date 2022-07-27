@@ -144,10 +144,10 @@ func testBackupRestore(t *testing.T, cDetails *compressionDetails) error {
 		require.NoError(t, os.MkdirAll(s, os.ModePerm))
 	}
 
-	needIt, subDir, err := needInnoDBRedoLogSubDir()
+	needIt, err := needInnoDBRedoLogSubdir()
 	require.NoError(t, err)
 	if needIt {
-		newPath := path.Join(sourceInnodbLogDir, subDir)
+		newPath := path.Join(sourceInnodbLogDir, mysql.DynamicRedoLogSubdir)
 		require.NoError(t, os.Mkdir(newPath, os.ModePerm))
 		require.NoError(t, os.WriteFile(path.Join(newPath, "#ib_redo1"), []byte("innodb log 1 contents"), os.ModePerm))
 	} else {
@@ -371,10 +371,10 @@ func TestBackupRestoreLagged(t *testing.T) {
 	}
 	require.NoError(t, os.WriteFile(path.Join(sourceInnodbDataDir, "innodb_data_1"), []byte("innodb data 1 contents"), os.ModePerm))
 
-	needIt, subDir, err := needInnoDBRedoLogSubDir()
+	needIt, err := needInnoDBRedoLogSubdir()
 	require.NoError(t, err)
 	if needIt {
-		newPath := path.Join(sourceInnodbLogDir, subDir)
+		newPath := path.Join(sourceInnodbLogDir, mysql.DynamicRedoLogSubdir)
 		require.NoError(t, os.Mkdir(newPath, os.ModePerm))
 	} else {
 		require.NoError(t, os.WriteFile(path.Join(sourceInnodbLogDir, "innodb_log_1"), []byte("innodb log 1 contents"), os.ModePerm))
@@ -584,10 +584,10 @@ func TestRestoreUnreachablePrimary(t *testing.T) {
 	}
 	require.NoError(t, os.WriteFile(path.Join(sourceInnodbDataDir, "innodb_data_1"), []byte("innodb data 1 contents"), os.ModePerm))
 
-	needIt, subDir, err := needInnoDBRedoLogSubDir()
+	needIt, err := needInnoDBRedoLogSubdir()
 	require.NoError(t, err)
 	if needIt {
-		newPath := path.Join(sourceInnodbLogDir, subDir)
+		newPath := path.Join(sourceInnodbLogDir, mysql.DynamicRedoLogSubdir)
 		require.NoError(t, os.Mkdir(newPath, os.ModePerm))
 		require.NoError(t, os.WriteFile(path.Join(newPath, "#ib_redo1"), []byte("innodb log 1 contents"), os.ModePerm))
 	} else {
@@ -754,10 +754,10 @@ func TestDisableActiveReparents(t *testing.T) {
 	}
 	require.NoError(t, os.WriteFile(path.Join(sourceInnodbDataDir, "innodb_data_1"), []byte("innodb data 1 contents"), os.ModePerm))
 
-	needIt, subDir, err := needInnoDBRedoLogSubDir()
+	needIt, err := needInnoDBRedoLogSubdir()
 	require.NoError(t, err)
 	if needIt {
-		newPath := path.Join(sourceInnodbLogDir, subDir)
+		newPath := path.Join(sourceInnodbLogDir, mysql.DynamicRedoLogSubdir)
 		require.NoError(t, os.Mkdir(newPath, os.ModePerm))
 		require.NoError(t, os.WriteFile(path.Join(newPath, "#ib_redo1"), []byte("innodb log 1 contents"), os.ModePerm))
 	} else {
@@ -862,30 +862,23 @@ func TestDisableActiveReparents(t *testing.T) {
 	assert.True(t, destTablet.FakeMysqlDaemon.Running)
 }
 
-// needInnoDBRedoLogSubDir provides the InnoDB redo log subdirectory if the server has one.
+// needInnoDBRedoLogSubdir provides the InnoDB redo log subdirectory if the server has one.
 // Starting with MySQL 8.0.30, the InnoDB redo logs are stored in a subdirectory of the
 // <innodb_log_group_home_dir> (<datadir>/. by default) called "#innodb_redo". See:
 //   https://dev.mysql.com/doc/refman/8.0/en/innodb-redo-log.html#innodb-modifying-redo-log-capacity
-func needInnoDBRedoLogSubDir() (needIt bool, dir string, err error) {
+func needInnoDBRedoLogSubdir() (needIt bool, err error) {
 	mysqldVersionStr, err := mysqlctl.GetVersionString()
 	if err != nil {
-		return needIt, dir, err
+		return needIt, err
 	}
 	_, sv, err := mysqlctl.ParseVersionString(mysqldVersionStr)
 	if err != nil {
-		return needIt, dir, err
+		return needIt, err
 	}
 	versionStr := fmt.Sprintf("%d.%d.%d", sv.Major, sv.Minor, sv.Patch)
 	_, capableOf, _ := mysql.GetFlavor(versionStr, nil)
 	if capableOf == nil {
-		return needIt, dir, fmt.Errorf("cannot determine database flavor details for version %v", versionStr)
+		return needIt, fmt.Errorf("cannot determine database flavor details for version %v", versionStr)
 	}
-	needIt, err = capableOf(mysql.DynamicRedoLogCapacityFlavorCapability)
-	if err != nil {
-		return needIt, dir, err
-	}
-	if needIt {
-		dir = "#innodb_redo"
-	}
-	return needIt, dir, nil
+	return capableOf(mysql.DynamicRedoLogCapacityFlavorCapability)
 }

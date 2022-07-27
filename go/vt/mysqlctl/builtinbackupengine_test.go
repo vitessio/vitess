@@ -55,10 +55,10 @@ func TestExecuteBackup(t *testing.T) {
 
 	ctx := context.Background()
 
-	needIt, subDir, err := needInnoDBRedoLogSubDir()
+	needIt, err := needInnoDBRedoLogSubdir()
 	require.NoError(t, err)
 	if needIt {
-		fpath := path.Join("log", subDir)
+		fpath := path.Join("log", mysql.DynamicRedoLogSubdir)
 		if err := createBackupDir(backupRoot, fpath); err != nil {
 			t.Fatalf("failed to create directory %s: %v", fpath, err)
 		}
@@ -146,30 +146,23 @@ func TestExecuteBackup(t *testing.T) {
 	assert.False(t, ok)
 }
 
-// needInnoDBRedoLogSubDir provides the InnoDB redo log subdirectory if the server has one.
+// needInnoDBRedoLogSubdir provides the InnoDB redo log subdirectory if the server has one.
 // Starting with MySQL 8.0.30, the InnoDB redo logs are stored in a subdirectory of the
 // <innodb_log_group_home_dir> (<datadir>/. by default) called "#innodb_redo". See:
 //   https://dev.mysql.com/doc/refman/8.0/en/innodb-redo-log.html#innodb-modifying-redo-log-capacity
-func needInnoDBRedoLogSubDir() (needIt bool, dir string, err error) {
+func needInnoDBRedoLogSubdir() (needIt bool, err error) {
 	mysqldVersionStr, err := mysqlctl.GetVersionString()
 	if err != nil {
-		return needIt, dir, err
+		return needIt, err
 	}
 	_, sv, err := mysqlctl.ParseVersionString(mysqldVersionStr)
 	if err != nil {
-		return needIt, dir, err
+		return needIt, err
 	}
 	versionStr := fmt.Sprintf("%d.%d.%d", sv.Major, sv.Minor, sv.Patch)
 	_, capableOf, _ := mysql.GetFlavor(versionStr, nil)
 	if capableOf == nil {
-		return needIt, dir, fmt.Errorf("cannot determine database flavor details for version %v", versionStr)
+		return needIt, fmt.Errorf("cannot determine database flavor details for version %v", versionStr)
 	}
-	needIt, err = capableOf(mysql.DynamicRedoLogCapacityFlavorCapability)
-	if err != nil {
-		return needIt, dir, err
-	}
-	if needIt {
-		dir = "#innodb_redo"
-	}
-	return needIt, dir, nil
+	return capableOf(mysql.DynamicRedoLogCapacityFlavorCapability)
 }
