@@ -53,6 +53,24 @@ func TestExecuteBackup(t *testing.T) {
 
 	ctx := context.Background()
 
+	// get the flavor and version to deal with any behavioral differences
+	versionStr, err := mysqlctl.GetVersionString()
+	require.NoError(t, err)
+	flavor, version, err := mysqlctl.ParseVersionString(versionStr)
+	require.NoError(t, err)
+
+	// innodbRedoLogSubDir provides the InnoDB redo log subdirectory if the server has one.
+	// Starting with MySQL 8.0.30, the InnoDB redo logs are stored in a subdirectory of the
+	// <innodb_log_group_home_dir> (<datadir>/. by default) called "#innodb_redo". See:
+	//   https://dev.mysql.com/doc/refman/8.0/en/innodb-redo-log.html#innodb-modifying-redo-log-capacity
+	if (flavor == mysqlctl.FlavorMySQL || flavor == mysqlctl.FlavorPercona) &&
+		((version.Major == 8 && version.Patch >= 30) || version.Major >= 9) {
+		fpath := path.Join("log", "#innodb_redo")
+		if err := createBackupDir(backupRoot, fpath); err != nil {
+			t.Fatalf("failed to create directory %s: %v", fpath, err)
+		}
+	}
+
 	// Set up topo
 	keyspace, shard := "mykeyspace", "-80"
 	ts := memorytopo.NewServer("cell1")
@@ -67,7 +85,7 @@ func TestExecuteBackup(t *testing.T) {
 
 	require.NoError(t, ts.CreateTablet(ctx, tablet))
 
-	_, err := ts.UpdateShardFields(ctx, keyspace, shard, func(si *topo.ShardInfo) error {
+	_, err = ts.UpdateShardFields(ctx, keyspace, shard, func(si *topo.ShardInfo) error {
 		si.PrimaryAlias = &topodata.TabletAlias{Uid: 100, Cell: "cell1"}
 
 		now := time.Now()
