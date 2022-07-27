@@ -65,9 +65,7 @@ func TestReparentGraceful(t *testing.T) {
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
 	// Run this to make sure it succeeds.
-	strArray := utils.GetShardReplicationPositions(t, clusterInstance, utils.KeyspaceName, utils.ShardName, false)
-	assert.Equal(t, 4, len(strArray))          // one primary, three replicas
-	assert.Contains(t, strArray[0], "primary") // primary first
+	utils.WaitForReplicationToStart(t, clusterInstance, utils.KeyspaceName, utils.ShardName, len(tablets), true)
 
 	// Perform a graceful reparent operation
 	utils.Prs(t, clusterInstance, tablets[1])
