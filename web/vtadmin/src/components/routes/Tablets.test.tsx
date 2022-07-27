@@ -61,7 +61,7 @@ describe('Tablets', () => {
                                 cell: 'cell1',
                                 uid: 3,
                             },
-                            type: topodata.TabletType.MASTER,
+                            type: topodata.TabletType.PRIMARY,
                         },
                     }),
                     pb.Tablet.create({
@@ -86,7 +86,7 @@ describe('Tablets', () => {
         test.each(tests.map(Object.values))(
             '%s',
             (name: string, filter: string, tablets: pb.Tablet[], expected: { [k: string]: unknown }[]) => {
-                const result = formatRows(tablets, filter);
+                const result = formatRows(tablets, [], filter);
                 expect(result).toMatchObject(expected);
             }
         );

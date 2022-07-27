@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
@@ -31,13 +30,12 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/test/endtoend/sharding/initialsharding"
 	"vitess.io/vitess/go/vt/log"
 )
 
 // test main part of the testcase
 var (
-	master           *cluster.Vttablet
+	primary          *cluster.Vttablet
 	replica1         *cluster.Vttablet
 	replica2         *cluster.Vttablet
 	localCluster     *cluster.LocalProcessCluster
@@ -50,14 +48,14 @@ var (
 	dbCredentialFile string
 	shardName        = "0"
 	commonTabletArg  = []string{
-		"-vreplication_healthcheck_topology_refresh", "1s",
-		"-vreplication_healthcheck_retry_delay", "1s",
-		"-vreplication_retry_delay", "1s",
-		"-degraded_threshold", "5s",
-		"-lock_tables_timeout", "5s",
-		"-watch_replication_stream",
-		"-enable_replication_reporter",
-		"-serving_state_grace_period", "1s"}
+		"--vreplication_healthcheck_topology_refresh", "1s",
+		"--vreplication_healthcheck_retry_delay", "1s",
+		"--vreplication_retry_delay", "1s",
+		"--degraded_threshold", "5s",
+		"--lock_tables_timeout", "5s",
+		"--watch_replication_stream",
+		"--enable_replication_reporter",
+		"--serving_state_grace_period", "1s"}
 )
 
 // TestMainSetup sets up the basic test cluster
@@ -88,17 +86,17 @@ func TestMainSetup(m *testing.M, useMysqlctld bool) {
 		}
 		shard := &localCluster.Keyspaces[0].Shards[0]
 		// changing password for mysql user
-		dbCredentialFile = initialsharding.WriteDbCredentialToTmp(localCluster.TmpDirectory)
-		initDb, _ := ioutil.ReadFile(path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"))
+		dbCredentialFile = cluster.WriteDbCredentialToTmp(localCluster.TmpDirectory)
+		initDb, _ := os.ReadFile(path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"))
 		sql := string(initDb)
 		newInitDBFile = path.Join(localCluster.TmpDirectory, "init_db_with_passwords.sql")
-		sql = sql + initialsharding.GetPasswordUpdateSQL(localCluster)
-		ioutil.WriteFile(newInitDBFile, []byte(sql), 0666)
+		sql = sql + cluster.GetPasswordUpdateSQL(localCluster)
+		os.WriteFile(newInitDBFile, []byte(sql), 0666)
 
-		extraArgs := []string{"-db-credentials-file", dbCredentialFile}
-		commonTabletArg = append(commonTabletArg, "-db-credentials-file", dbCredentialFile)
+		extraArgs := []string{"--db-credentials-file", dbCredentialFile}
+		commonTabletArg = append(commonTabletArg, "--db-credentials-file", dbCredentialFile)
 
-		// start mysql process for all replicas and master
+		// start mysql process for all replicas and primary
 		var mysqlProcs []*exec.Cmd
 		for i := 0; i < 3; i++ {
 			tabletType := "replica"
@@ -141,18 +139,23 @@ func TestMainSetup(m *testing.M, useMysqlctld bool) {
 		}
 
 		// initialize tablets
-		master = shard.Vttablets[0]
+		primary = shard.Vttablets[0]
 		replica1 = shard.Vttablets[1]
 		replica2 = shard.Vttablets[2]
 
-		for _, tablet := range []*cluster.Vttablet{master, replica1} {
+		for _, tablet := range []*cluster.Vttablet{primary, replica1} {
 			if err := localCluster.VtctlclientProcess.InitTablet(tablet, cell, keyspaceName, hostname, shard.Name); err != nil {
 				return 1, err
 			}
 		}
+		vtctldClientProcess := cluster.VtctldClientProcessInstance("localhost", localCluster.VtctldProcess.GrpcPort, localCluster.TmpDirectory)
+		_, err = vtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=semi_sync")
+		if err != nil {
+			return 1, err
+		}
 
-		// create database for master and replica
-		for _, tablet := range []cluster.Vttablet{*master, *replica1} {
+		// create database for primary and replica
+		for _, tablet := range []cluster.Vttablet{*primary, *replica1} {
 			if err := tablet.VttabletProcess.CreateDB(keyspaceName); err != nil {
 				return 1, err
 			}
@@ -161,8 +164,8 @@ func TestMainSetup(m *testing.M, useMysqlctld bool) {
 			}
 		}
 
-		// initialize master and start replication
-		if err := localCluster.VtctlclientProcess.InitShardMaster(keyspaceName, shard.Name, cell, master.TabletUID); err != nil {
+		// initialize primary and start replication
+		if err := localCluster.VtctlclientProcess.InitShardPrimary(keyspaceName, shard.Name, cell, primary.TabletUID); err != nil {
 			return 1, err
 		}
 		return m.Run(), nil
@@ -186,19 +189,19 @@ var vtInsertTest = `create table vt_insert_test (
 
 // TestBackupTransformImpl tests backups with transform hooks
 func TestBackupTransformImpl(t *testing.T) {
-	// insert data in master, validate same in replica
+	// insert data in primary, validate same in replica
 	defer cluster.PanicHandler(t)
 	verifyInitialReplication(t)
 
 	// restart the replica with transform hook parameter
 	replica1.VttabletProcess.TearDown()
 	replica1.VttabletProcess.ExtraArgs = []string{
-		"-db-credentials-file", dbCredentialFile,
-		"-backup_storage_hook", "test_backup_transform",
-		"-backup_storage_compress=false",
-		"-restore_from_backup",
-		"-backup_storage_implementation", "file",
-		"-file_backup_storage_root", localCluster.VtctldProcess.FileBackupStorageRoot}
+		"--db-credentials-file", dbCredentialFile,
+		"--backup_storage_hook", "test_backup_transform",
+		"--backup_storage_compress=false",
+		"--restore_from_backup",
+		"--backup_storage_implementation", "file",
+		"--file_backup_storage_root", localCluster.VtctldProcess.FileBackupStorageRoot}
 	replica1.VttabletProcess.ServingStatus = "SERVING"
 	err := replica1.VttabletProcess.Setup()
 	require.Nil(t, err)
@@ -207,8 +210,8 @@ func TestBackupTransformImpl(t *testing.T) {
 	err = localCluster.VtctlclientProcess.ExecuteCommand("Backup", replica1.Alias)
 	require.Nil(t, err)
 
-	// insert data in master
-	_, err = master.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test2')", keyspaceName, true)
+	// insert data in primary
+	_, err = primary.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test2')", keyspaceName, true)
 	require.Nil(t, err)
 
 	// validate backup_list, expecting 1 backup available
@@ -243,22 +246,29 @@ func TestBackupTransformImpl(t *testing.T) {
 	require.Nil(t, err)
 	replica2.VttabletProcess.CreateDB(keyspaceName)
 	replica2.VttabletProcess.ExtraArgs = []string{
-		"-db-credentials-file", dbCredentialFile,
-		"-restore_from_backup",
-		"-backup_storage_implementation", "file",
-		"-file_backup_storage_root", localCluster.VtctldProcess.FileBackupStorageRoot}
+		"--db-credentials-file", dbCredentialFile,
+		"--restore_from_backup",
+		"--backup_storage_implementation", "file",
+		"--file_backup_storage_root", localCluster.VtctldProcess.FileBackupStorageRoot}
 	replica2.VttabletProcess.ServingStatus = ""
 	err = replica2.VttabletProcess.Setup()
 	require.Nil(t, err)
-	err = replica2.VttabletProcess.WaitForTabletTypesForTimeout([]string{"SERVING"}, 25*time.Second)
+	err = replica2.VttabletProcess.WaitForTabletStatusesForTimeout([]string{"SERVING"}, 25*time.Second)
 	require.Nil(t, err)
 	defer replica2.VttabletProcess.TearDown()
+	// We restart replication here because semi-sync will not be set correctly on tablet startup since
+	// we deprecated enable_semi_sync. StartReplication RPC fixes the semi-sync settings by consulting the
+	// durability policies set.
+	err = localCluster.VtctlclientProcess.ExecuteCommand("StopReplication", replica2.Alias)
+	require.NoError(t, err)
+	err = localCluster.VtctlclientProcess.ExecuteCommand("StartReplication", replica2.Alias)
+	require.NoError(t, err)
 
 	// validate that semi-sync is enabled for replica, disable for rdOnly
 	if replica2.Type == "replica" {
-		verifyReplicationStatus(t, replica2, "ON")
+		verifySemiSyncStatus(t, replica2, "ON")
 	} else if replica2.Type == "rdonly" {
-		verifyReplicationStatus(t, replica2, "OFF")
+		verifySemiSyncStatus(t, replica2, "OFF")
 	}
 
 	// validate that new replica has all the data
@@ -278,11 +288,11 @@ func TestBackupTransformErrorImpl(t *testing.T) {
 	require.Nil(t, err)
 
 	replica1.VttabletProcess.ExtraArgs = []string{
-		"-db-credentials-file", dbCredentialFile,
-		"-backup_storage_hook", "test_backup_error",
-		"-restore_from_backup",
-		"-backup_storage_implementation", "file",
-		"-file_backup_storage_root", localCluster.VtctldProcess.FileBackupStorageRoot}
+		"--db-credentials-file", dbCredentialFile,
+		"--backup_storage_hook", "test_backup_error",
+		"--restore_from_backup",
+		"--backup_storage_implementation", "file",
+		"--file_backup_storage_root", localCluster.VtctldProcess.FileBackupStorageRoot}
 	replica1.VttabletProcess.ServingStatus = "SERVING"
 	err = replica1.VttabletProcess.Setup()
 	require.Nil(t, err)
@@ -303,9 +313,9 @@ func TestBackupTransformErrorImpl(t *testing.T) {
 func validateManifestFile(t *testing.T, backupLocation string) {
 
 	// reading manifest
-	data, err := ioutil.ReadFile(backupLocation + "/MANIFEST")
+	data, err := os.ReadFile(backupLocation + "/MANIFEST")
 	require.Nilf(t, err, "error while reading MANIFEST %v", err)
-	manifest := make(map[string]interface{})
+	manifest := make(map[string]any)
 
 	// parsing manifest
 	err = json.Unmarshal(data, &manifest)
@@ -319,7 +329,7 @@ func validateManifestFile(t *testing.T, backupLocation string) {
 
 	// validate backup files
 	fielEntries := manifest["FileEntries"]
-	fileArr, ok := fielEntries.([]interface{})
+	fileArr, ok := fielEntries.([]any)
 	require.True(t, ok)
 	for i := range fileArr {
 		f, err := os.Open(fmt.Sprintf("%s/%d", backupLocation, i))
@@ -334,8 +344,8 @@ func validateManifestFile(t *testing.T, backupLocation string) {
 
 }
 
-// verifyReplicationStatus validates the replication status in tablet.
-func verifyReplicationStatus(t *testing.T, vttablet *cluster.Vttablet, expectedStatus string) {
+// verifySemiSyncStatus validates the replication status in tablet.
+func verifySemiSyncStatus(t *testing.T, vttablet *cluster.Vttablet, expectedStatus string) {
 	status, err := vttablet.VttabletProcess.GetDBVar("rpl_semi_sync_slave_enabled", keyspaceName)
 	require.Nil(t, err)
 	assert.Equal(t, expectedStatus, status)
@@ -344,11 +354,11 @@ func verifyReplicationStatus(t *testing.T, vttablet *cluster.Vttablet, expectedS
 	assert.Equal(t, expectedStatus, status)
 }
 
-// verifyInitialReplication creates schema in master, insert some data to master and verify the same data in replica
+// verifyInitialReplication creates schema in primary, insert some data to primary and verify the same data in replica
 func verifyInitialReplication(t *testing.T) {
-	_, err := master.VttabletProcess.QueryTablet(vtInsertTest, keyspaceName, true)
+	_, err := primary.VttabletProcess.QueryTablet(vtInsertTest, keyspaceName, true)
 	require.Nil(t, err)
-	_, err = master.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test1')", keyspaceName, true)
+	_, err = primary.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test1')", keyspaceName, true)
 	require.Nil(t, err)
 	cluster.VerifyRowsInTablet(t, replica1, keyspaceName, 1)
 }

@@ -21,15 +21,13 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/vt/log"
-
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/vt/log"
 )
 
 var (
@@ -107,20 +105,20 @@ func TestShardedKeyspace(t *testing.T) {
 	shard1 := clusterInstance.Keyspaces[0].Shards[0]
 	shard2 := clusterInstance.Keyspaces[0].Shards[1]
 
-	shard1Master := shard1.Vttablets[0]
-	shard2Master := shard2.Vttablets[0]
+	shard1Primary := shard1.Vttablets[0]
+	shard2Primary := shard2.Vttablets[0]
+	err := clusterInstance.VtctlclientProcess.InitializeShard(keyspaceName, shard1.Name, cell, shard1Primary.TabletUID)
+	require.Nil(t, err)
+	err = clusterInstance.VtctlclientProcess.InitializeShard(keyspaceName, shard2.Name, cell, shard2Primary.TabletUID)
+	require.Nil(t, err)
 
 	// apply the schema on the first shard through vtctl, so all tablets
 	// are the same.
-	_, err := shard1Master.VttabletProcess.QueryTablet(sqlSchema, keyspaceName, true)
-	require.Nil(t, err)
-	_, err = shard1.Vttablets[1].VttabletProcess.QueryTablet(sqlSchema, keyspaceName, true)
+	//apply the schema on the second shard.
+	_, err = shard1Primary.VttabletProcess.QueryTablet(sqlSchema, keyspaceName, true)
 	require.Nil(t, err)
 
-	//apply the schema on the second shard.
-	_, err = shard2Master.VttabletProcess.QueryTablet(sqlSchemaReverse, keyspaceName, true)
-	require.Nil(t, err)
-	_, err = shard2.Vttablets[1].VttabletProcess.QueryTablet(sqlSchemaReverse, keyspaceName, true)
+	_, err = shard2Primary.VttabletProcess.QueryTablet(sqlSchemaReverse, keyspaceName, true)
 	require.Nil(t, err)
 
 	if err = clusterInstance.VtctlclientProcess.ApplyVSchema(keyspaceName, vSchema); err != nil {
@@ -129,26 +127,21 @@ func TestShardedKeyspace(t *testing.T) {
 	}
 
 	reloadSchemas(t,
-		shard1Master.Alias,
+		shard1Primary.Alias,
 		shard1.Vttablets[1].Alias,
-		shard2Master.Alias,
+		shard2Primary.Alias,
 		shard2.Vttablets[1].Alias)
 
-	err = clusterInstance.VtctlclientProcess.InitShardMaster(keyspaceName, shard1.Name, cell, shard1Master.TabletUID)
-	require.Nil(t, err)
-	err = clusterInstance.VtctlclientProcess.InitShardMaster(keyspaceName, shard2.Name, cell, shard2Master.TabletUID)
-	require.Nil(t, err)
+	_ = clusterInstance.VtctlclientProcess.ExecuteCommand("SetReadWrite", shard1Primary.Alias)
+	_ = clusterInstance.VtctlclientProcess.ExecuteCommand("SetReadWrite", shard2Primary.Alias)
 
-	_ = clusterInstance.VtctlclientProcess.ExecuteCommand("SetReadWrite", shard1Master.Alias)
-	_ = clusterInstance.VtctlclientProcess.ExecuteCommand("SetReadWrite", shard2Master.Alias)
+	_, _ = shard1Primary.VttabletProcess.QueryTablet("insert into vt_select_test (id, msg) values (1, 'test 1')", keyspaceName, true)
+	_, _ = shard2Primary.VttabletProcess.QueryTablet("insert into vt_select_test (id, msg) values (10, 'test 10')", keyspaceName, true)
 
-	_, _ = shard1Master.VttabletProcess.QueryTablet("insert into vt_select_test (id, msg) values (1, 'test 1')", keyspaceName, true)
-	_, _ = shard2Master.VttabletProcess.QueryTablet("insert into vt_select_test (id, msg) values (10, 'test 10')", keyspaceName, true)
-
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Validate", "-ping-tablets")
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Validate", "--", "--ping-tablets")
 	require.Nil(t, err)
 
-	rows, err := shard1Master.VttabletProcess.QueryTablet("select id, msg from vt_select_test order by id", keyspaceName, true)
+	rows, err := shard1Primary.VttabletProcess.QueryTablet("select id, msg from vt_select_test order by id", keyspaceName, true)
 	require.Nil(t, err)
 	assert.Equal(t, `[[INT64(1) VARCHAR("test 1")]]`, fmt.Sprintf("%v", rows.Rows))
 
@@ -160,8 +153,12 @@ func TestShardedKeyspace(t *testing.T) {
 
 	output, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ValidateSchemaKeyspace", keyspaceName)
 	require.Error(t, err)
-	assert.True(t, strings.Contains(output, "schemas differ on table vt_select_test:\n"+shard1Master.Alias+": CREATE TABLE"))
-	//log.Info(output)
+	// We should assert that there is a schema difference and that both the shard primaries are involved in it.
+	// However, we cannot assert in which order the two primaries will occur since the underlying function does not guarantee that
+	// We could have an output here like `schemas differ ... shard1Primary ... differs from: shard2Primary ...` or `schemas differ ... shard2Primary ... differs from: shard1Primary ...`
+	assert.Contains(t, output, "schemas differ on table vt_select_test:")
+	assert.Contains(t, output, shard1Primary.Alias+": CREATE TABLE")
+	assert.Contains(t, output, shard2Primary.Alias+": CREATE TABLE")
 
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ValidateVersionShard", fmt.Sprintf("%s/%s", keyspaceName, shard1.Name))
 	require.Nil(t, err)
@@ -172,11 +169,11 @@ func TestShardedKeyspace(t *testing.T) {
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ValidatePermissionsKeyspace", keyspaceName)
 	require.Nil(t, err)
 
-	rows, err = shard1Master.VttabletProcess.QueryTablet("select id, msg from vt_select_test order by id", keyspaceName, true)
+	rows, err = shard1Primary.VttabletProcess.QueryTablet("select id, msg from vt_select_test order by id", keyspaceName, true)
 	require.Nil(t, err)
 	assert.Equal(t, `[[INT64(1) VARCHAR("test 1")]]`, fmt.Sprintf("%v", rows.Rows))
 
-	rows, err = shard2Master.VttabletProcess.QueryTablet("select id, msg from vt_select_test order by id", keyspaceName, true)
+	rows, err = shard2Primary.VttabletProcess.QueryTablet("select id, msg from vt_select_test order by id", keyspaceName, true)
 	require.Nil(t, err)
 	assert.Equal(t, `[[INT64(10) VARCHAR("test 10")]]`, fmt.Sprintf("%v", rows.Rows))
 }
@@ -211,19 +208,20 @@ func initCluster(shardNames []string, totalTabletsRequired int) {
 				MySQLPort: clusterInstance.GetAndReservePort(),
 				Alias:     fmt.Sprintf("%s-%010d", clusterInstance.Cell, tabletUID),
 			}
-			if i == 0 { // Make the first one as master
-				tablet.Type = "master"
+			if i == 0 { // Make the first one as primary
+				tablet.Type = "primary"
 			}
 			// Start Mysqlctl process
 			tablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory)
-			if proc, err := tablet.MysqlctlProcess.StartProcess(); err != nil {
+			proc, err := tablet.MysqlctlProcess.StartProcess()
+			if err != nil {
 				return
-			} else {
-				mysqlCtlProcessList = append(mysqlCtlProcessList, proc)
 			}
+			mysqlCtlProcessList = append(mysqlCtlProcessList, proc)
 
 			// start vttablet process
-			tablet.VttabletProcess = cluster.VttabletProcessInstance(tablet.HTTPPort,
+			tablet.VttabletProcess = cluster.VttabletProcessInstance(
+				tablet.HTTPPort,
 				tablet.GrpcPort,
 				tablet.TabletUID,
 				clusterInstance.Cell,
@@ -235,7 +233,8 @@ func initCluster(shardNames []string, totalTabletsRequired int) {
 				clusterInstance.Hostname,
 				clusterInstance.TmpDirectory,
 				clusterInstance.VtTabletExtraArgs,
-				clusterInstance.EnableSemiSync)
+				clusterInstance.EnableSemiSync,
+				clusterInstance.DefaultCharset)
 			tablet.Alias = tablet.VttabletProcess.TabletPath
 
 			shard.Vttablets = append(shard.Vttablets, tablet)
@@ -247,11 +246,6 @@ func initCluster(shardNames []string, totalTabletsRequired int) {
 		}
 
 		for _, tablet := range shard.Vttablets {
-			if _, err := tablet.VttabletProcess.QueryTablet(fmt.Sprintf("create database vt_%s", keyspace.Name), keyspace.Name, false); err != nil {
-				log.Error(err.Error())
-				return
-			}
-
 			log.Info(fmt.Sprintf("Starting vttablet for tablet uid %d, grpc port %d", tablet.TabletUID, tablet.GrpcPort))
 
 			if err := tablet.VttabletProcess.Setup(); err != nil {

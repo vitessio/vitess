@@ -63,16 +63,16 @@ func TestDoubleInterceptor(t *testing.T) {
 
 type FakeInterceptor struct {
 	name       string
-	streamSeen interface{}
-	unarySeen  interface{}
+	streamSeen any
+	unarySeen  any
 }
 
-func (fake *FakeInterceptor) StreamServerInterceptor(value interface{}, stream grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+func (fake *FakeInterceptor) StreamServerInterceptor(value any, stream grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 	fake.streamSeen = value
 	return handler(value, stream)
 }
 
-func (fake *FakeInterceptor) UnaryServerInterceptor(ctx context.Context, value interface{}, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
+func (fake *FakeInterceptor) UnaryServerInterceptor(ctx context.Context, value any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp any, err error) {
 	fake.unarySeen = value
 	return handler(ctx, value)
 }

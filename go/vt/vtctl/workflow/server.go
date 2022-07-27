@@ -100,7 +100,11 @@ func (s *Server) CheckReshardingJournalExistsOnTablet(ctx context.Context, table
 
 	if len(p3qr.Rows) != 0 {
 		qr := sqltypes.Proto3ToResult(p3qr)
-		if err := prototext.Unmarshal(qr.Rows[0][0].ToBytes(), &journal); err != nil {
+		qrBytes, err := qr.Rows[0][0].ToBytes()
+		if err != nil {
+			return nil, false, err
+		}
+		if err := prototext.Unmarshal(qrBytes, &journal); err != nil {
 			return nil, false, err
 		}
 
@@ -289,7 +293,8 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 			db_name,
 			time_updated,
 			transaction_timestamp,
-			message
+			message,
+			tags
 		FROM
 			_vt.vreplication
 		%s`,
@@ -333,7 +338,11 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 		}
 
 		var bls binlogdatapb.BinlogSource
-		if err := prototext.Unmarshal(row[2].ToBytes(), &bls); err != nil {
+		rowBytes, err := row[2].ToBytes()
+		if err != nil {
+			return err
+		}
+		if err := prototext.Unmarshal(rowBytes, &bls); err != nil {
 			return err
 		}
 
@@ -354,6 +363,11 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 
 		message := row[10].ToString()
 
+		tags := row[11].ToString()
+		var tagArray []string
+		if tags != "" {
+			tagArray = strings.Split(tags, ",")
+		}
 		stream := &vtctldatapb.Workflow_Stream{
 			Id:           id,
 			Shard:        tablet.Shard,
@@ -370,6 +384,7 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 				Seconds: timeUpdatedSeconds,
 			},
 			Message: message,
+			Tags:    tagArray,
 		}
 
 		stream.CopyStates, err = s.getWorkflowCopyStates(ctx, tablet, id)
@@ -411,7 +426,7 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 			shardStream = &vtctldatapb.Workflow_ShardStream{
 				Streams:          nil,
 				TabletControls:   si.TabletControls,
-				IsPrimaryServing: si.IsMasterServing,
+				IsPrimaryServing: si.IsPrimaryServing,
 			}
 
 			workflow.ShardStreams[shardStreamKey] = shardStream

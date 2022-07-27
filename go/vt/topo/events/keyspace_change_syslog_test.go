@@ -24,13 +24,11 @@ import (
 )
 
 func TestKeyspaceChangeSyslog(t *testing.T) {
-	wantSev, wantMsg := syslog.LOG_INFO, "keyspace-123 [keyspace] status value: sharding_column_name:\"sharded_by_me\""
+	wantSev, wantMsg := syslog.LOG_INFO, "keyspace-123 [keyspace] status value: "
 	kc := &KeyspaceChange{
 		KeyspaceName: "keyspace-123",
-		Keyspace: &topodatapb.Keyspace{
-			ShardingColumnName: "sharded_by_me",
-		},
-		Status: "status",
+		Keyspace:     &topodatapb.Keyspace{},
+		Status:       "status",
 	}
 	gotSev, gotMsg := kc.Syslog()
 

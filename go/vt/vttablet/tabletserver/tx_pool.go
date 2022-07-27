@@ -122,8 +122,8 @@ func (tp *TxPool) Shutdown(ctx context.Context) {
 
 func (tp *TxPool) transactionKiller() {
 	defer tp.env.LogError()
-	for _, conn := range tp.scp.GetOutdated(tp.Timeout(), "for tx killer rollback") {
-		log.Warningf("killing transaction (exceeded timeout: %v): %s", tp.Timeout(), conn.String())
+	for _, conn := range tp.scp.GetOutdated(tp.Timeout(), vterrors.TxKillerRollback) {
+		log.Warningf("killing transaction (exceeded timeout: %v): %s", tp.Timeout(), conn.String(tp.env.Config().SanitizeLogMessages))
 		switch {
 		case conn.IsTainted():
 			conn.Close()
@@ -277,13 +277,14 @@ func (tp *TxPool) begin(ctx context.Context, options *querypb.ExecuteOptions, re
 func (tp *TxPool) createConn(ctx context.Context, options *querypb.ExecuteOptions) (*StatefulConnection, error) {
 	conn, err := tp.scp.NewConn(ctx, options)
 	if err != nil {
+		errCode := vterrors.Code(err)
 		switch err {
 		case pools.ErrCtxTimeout:
 			tp.LogActive()
-			err = vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "transaction pool aborting request due to already expired context")
+			err = vterrors.Errorf(errCode, "transaction pool aborting request due to already expired context")
 		case pools.ErrTimeout:
 			tp.LogActive()
-			err = vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "transaction pool connection limit exceeded")
+			err = vterrors.Errorf(errCode, "transaction pool connection limit exceeded")
 		}
 		return nil, err
 	}

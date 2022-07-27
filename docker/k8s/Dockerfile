@@ -13,10 +13,11 @@
 # limitations under the License.
 
 ARG VT_BASE_VER=latest
+ARG DEBIAN_VER=stable-slim
 
 FROM vitess/base:${VT_BASE_VER} AS base
 
-FROM debian:buster-slim
+FROM debian:${DEBIAN_VER}
 
 # TODO: remove when https://github.com/vitessio/vitess/issues/3553 is fixed
 RUN apt-get update && \
@@ -48,8 +49,8 @@ COPY --from=base /vt/bin/vtctl /vt/bin/
 COPY --from=base /vt/bin/vtctlclient /vt/bin/
 COPY --from=base /vt/bin/vtgate /vt/bin/
 COPY --from=base /vt/bin/vttablet /vt/bin/
-COPY --from=base /vt/bin/vtworker /vt/bin/
 COPY --from=base /vt/bin/vtbackup /vt/bin/
+COPY --from=base /vt/bin/vtadmin /vt/bin/
 
 # copy web admin files
 COPY --from=base $VTROOT/web /vt/web/

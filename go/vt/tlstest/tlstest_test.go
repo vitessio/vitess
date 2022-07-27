@@ -21,9 +21,7 @@ import (
 	"crypto/x509"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
-	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -49,11 +47,7 @@ func TestClientServerWithCombineCerts(t *testing.T) {
 // And then performs a few tests on them.
 func testClientServer(t *testing.T, combineCerts bool) {
 	// Our test root.
-	root, err := ioutil.TempDir("", "tlstest")
-	if err != nil {
-		t.Fatalf("TempDir failed: %v", err)
-	}
-	defer os.RemoveAll(root)
+	root := t.TempDir()
 
 	clientServerKeyPairs := CreateClientServerCertPairs(root)
 	serverCA := ""
@@ -66,21 +60,26 @@ func testClientServer(t *testing.T, combineCerts bool) {
 		clientServerKeyPairs.ServerCert,
 		clientServerKeyPairs.ServerKey,
 		clientServerKeyPairs.ClientCA,
-		serverCA)
+		clientServerKeyPairs.ClientCRL,
+		serverCA,
+		tls.VersionTLS12)
 	if err != nil {
 		t.Fatalf("TLSServerConfig failed: %v", err)
 	}
 	clientConfig, err := vttls.ClientConfig(
+		vttls.VerifyIdentity,
 		clientServerKeyPairs.ClientCert,
 		clientServerKeyPairs.ClientKey,
 		clientServerKeyPairs.ServerCA,
-		clientServerKeyPairs.ServerName)
+		clientServerKeyPairs.ServerCRL,
+		clientServerKeyPairs.ServerName,
+		tls.VersionTLS12)
 	if err != nil {
 		t.Fatalf("TLSClientConfig failed: %v", err)
 	}
 
 	// Create a TLS server listener.
-	listener, err := tls.Listen("tcp", ":0", serverConfig)
+	listener, err := tls.Listen("tcp", "127.0.0.1:0", serverConfig)
 	if err != nil {
 		t.Fatalf("Listen failed: %v", err)
 	}
@@ -101,15 +100,12 @@ func testClientServer(t *testing.T, combineCerts bool) {
 		defer wg.Done()
 		clientConn, clientErr := tls.DialWithDialer(dialer, "tcp", addr, clientConfig)
 		if clientErr == nil {
-			clientConn.Write([]byte{42})
+			_, _ = clientConn.Write([]byte{42})
 			clientConn.Close()
 		}
 	}()
 
 	serverConn, err := listener.Accept()
-	if clientErr != nil {
-		t.Fatalf("Dial failed: %v", clientErr)
-	}
 	if err != nil {
 		t.Fatalf("Accept failed: %v", err)
 	}
@@ -125,16 +121,23 @@ func testClientServer(t *testing.T, combineCerts bool) {
 
 	wg.Wait()
 
+	if clientErr != nil {
+		t.Fatalf("Dial failed: %v", clientErr)
+	}
+
 	//
 	// Negative case: connect a client with wrong cert (using the
 	// server cert on the client side).
 	//
 
 	badClientConfig, err := vttls.ClientConfig(
+		vttls.VerifyIdentity,
 		clientServerKeyPairs.ServerCert,
 		clientServerKeyPairs.ServerKey,
 		clientServerKeyPairs.ServerCA,
-		clientServerKeyPairs.ServerName)
+		clientServerKeyPairs.ServerCRL,
+		clientServerKeyPairs.ServerName,
+		tls.VersionTLS12)
 	if err != nil {
 		t.Fatalf("TLSClientConfig failed: %v", err)
 	}
@@ -184,7 +187,9 @@ func getServerConfigWithoutCombinedCerts(keypairs ClientServerKeyPairs) (*tls.Co
 		keypairs.ServerCert,
 		keypairs.ServerKey,
 		keypairs.ClientCA,
-		"")
+		keypairs.ClientCRL,
+		"",
+		tls.VersionTLS12)
 }
 
 func getServerConfigWithCombinedCerts(keypairs ClientServerKeyPairs) (*tls.Config, error) {
@@ -192,15 +197,20 @@ func getServerConfigWithCombinedCerts(keypairs ClientServerKeyPairs) (*tls.Confi
 		keypairs.ServerCert,
 		keypairs.ServerKey,
 		keypairs.ClientCA,
-		keypairs.ServerCA)
+		keypairs.ClientCRL,
+		keypairs.ServerCA,
+		tls.VersionTLS12)
 }
 
 func getClientConfig(keypairs ClientServerKeyPairs) (*tls.Config, error) {
 	return vttls.ClientConfig(
+		vttls.VerifyIdentity,
 		keypairs.ClientCert,
 		keypairs.ClientKey,
 		keypairs.ServerCA,
-		keypairs.ServerName)
+		keypairs.ServerCRL,
+		keypairs.ServerName,
+		tls.VersionTLS12)
 }
 
 func testServerTLSConfigCaching(t *testing.T, getServerConfig func(ClientServerKeyPairs) (*tls.Config, error)) {
@@ -225,11 +235,7 @@ func TestClientTLSConfigCaching(t *testing.T) {
 
 func testConfigGeneration(t *testing.T, rootPrefix string, generateConfig func(ClientServerKeyPairs) (*tls.Config, error), getCertPool func(tlsConfig *tls.Config) *x509.CertPool) {
 	// Our test root.
-	root, err := ioutil.TempDir("", rootPrefix)
-	if err != nil {
-		t.Fatalf("TempDir failed: %v", err)
-	}
-	defer os.RemoveAll(root)
+	root := t.TempDir()
 
 	const configsToGenerate = 1
 
@@ -272,11 +278,7 @@ func testConfigGeneration(t *testing.T, rootPrefix string, generateConfig func(C
 
 func testNumberOfCertsWithOrWithoutCombining(t *testing.T, numCertsExpected int, combine bool) {
 	// Our test root.
-	root, err := ioutil.TempDir("", "tlstest")
-	if err != nil {
-		t.Fatalf("TempDir failed: %v", err)
-	}
-	defer os.RemoveAll(root)
+	root := t.TempDir()
 
 	clientServerKeyPairs := CreateClientServerCertPairs(root)
 	serverCA := ""
@@ -288,7 +290,9 @@ func testNumberOfCertsWithOrWithoutCombining(t *testing.T, numCertsExpected int,
 		clientServerKeyPairs.ServerCert,
 		clientServerKeyPairs.ServerKey,
 		clientServerKeyPairs.ClientCA,
-		serverCA)
+		clientServerKeyPairs.ClientCRL,
+		serverCA,
+		tls.VersionTLS12)
 
 	if err != nil {
 		t.Fatalf("TLSServerConfig failed: %v", err)
@@ -302,4 +306,164 @@ func TestNumberOfCertsWithoutCombining(t *testing.T) {
 
 func TestNumberOfCertsWithCombining(t *testing.T) {
 	testNumberOfCertsWithOrWithoutCombining(t, 2, true)
+}
+
+func assertTLSHandshakeFails(t *testing.T, serverConfig, clientConfig *tls.Config) {
+	// Create a TLS server listener.
+	listener, err := tls.Listen("tcp", "127.0.0.1:0", serverConfig)
+	if err != nil {
+		t.Fatalf("Listen failed: %v", err)
+	}
+	addr := listener.Addr().String()
+	defer listener.Close()
+	// create a dialer with timeout
+	dialer := new(net.Dialer)
+	dialer.Timeout = 10 * time.Second
+
+	wg := sync.WaitGroup{}
+
+	var clientErr error
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		var clientConn *tls.Conn
+		clientConn, clientErr = tls.DialWithDialer(dialer, "tcp", addr, clientConfig)
+		if clientErr == nil {
+			clientConn.Close()
+		}
+	}()
+
+	serverConn, err := listener.Accept()
+	if err != nil {
+		// We should always be able to accept on the socket
+		t.Fatalf("Accept failed: %v", err)
+	}
+
+	err = serverConn.(*tls.Conn).Handshake()
+	if err != nil {
+		if !(strings.Contains(err.Error(), "Certificate revoked: CommonName=") ||
+			strings.Contains(err.Error(), "remote error: tls: bad certificate")) {
+			t.Fatalf("Wrong error returned: %v", err)
+		}
+	} else {
+		t.Fatal("Server should have failed the TLS handshake but it did not")
+	}
+	serverConn.Close()
+	wg.Wait()
+}
+
+func TestClientServerWithRevokedServerCert(t *testing.T) {
+	root := t.TempDir()
+
+	clientServerKeyPairs := CreateClientServerCertPairs(root)
+
+	serverConfig, err := vttls.ServerConfig(
+		clientServerKeyPairs.RevokedServerCert,
+		clientServerKeyPairs.RevokedServerKey,
+		clientServerKeyPairs.ClientCA,
+		clientServerKeyPairs.ClientCRL,
+		"",
+		tls.VersionTLS12)
+	if err != nil {
+		t.Fatalf("TLSServerConfig failed: %v", err)
+	}
+
+	clientConfig, err := vttls.ClientConfig(
+		vttls.VerifyIdentity,
+		clientServerKeyPairs.ClientCert,
+		clientServerKeyPairs.ClientKey,
+		clientServerKeyPairs.ServerCA,
+		clientServerKeyPairs.ServerCRL,
+		clientServerKeyPairs.RevokedServerName,
+		tls.VersionTLS12)
+	if err != nil {
+		t.Fatalf("TLSClientConfig failed: %v", err)
+	}
+
+	assertTLSHandshakeFails(t, serverConfig, clientConfig)
+
+	serverConfig, err = vttls.ServerConfig(
+		clientServerKeyPairs.RevokedServerCert,
+		clientServerKeyPairs.RevokedServerKey,
+		clientServerKeyPairs.ClientCA,
+		clientServerKeyPairs.CombinedCRL,
+		"",
+		tls.VersionTLS12)
+	if err != nil {
+		t.Fatalf("TLSServerConfig failed: %v", err)
+	}
+
+	clientConfig, err = vttls.ClientConfig(
+		vttls.VerifyIdentity,
+		clientServerKeyPairs.ClientCert,
+		clientServerKeyPairs.ClientKey,
+		clientServerKeyPairs.ServerCA,
+		clientServerKeyPairs.CombinedCRL,
+		clientServerKeyPairs.RevokedServerName,
+		tls.VersionTLS12)
+	if err != nil {
+		t.Fatalf("TLSClientConfig failed: %v", err)
+	}
+
+	assertTLSHandshakeFails(t, serverConfig, clientConfig)
+}
+
+func TestClientServerWithRevokedClientCert(t *testing.T) {
+	root := t.TempDir()
+
+	clientServerKeyPairs := CreateClientServerCertPairs(root)
+
+	// Single CRL
+
+	serverConfig, err := vttls.ServerConfig(
+		clientServerKeyPairs.ServerCert,
+		clientServerKeyPairs.ServerKey,
+		clientServerKeyPairs.ClientCA,
+		clientServerKeyPairs.ClientCRL,
+		"",
+		tls.VersionTLS12)
+	if err != nil {
+		t.Fatalf("TLSServerConfig failed: %v", err)
+	}
+
+	clientConfig, err := vttls.ClientConfig(
+		vttls.VerifyIdentity,
+		clientServerKeyPairs.RevokedClientCert,
+		clientServerKeyPairs.RevokedClientKey,
+		clientServerKeyPairs.ServerCA,
+		clientServerKeyPairs.ServerCRL,
+		clientServerKeyPairs.ServerName,
+		tls.VersionTLS12)
+	if err != nil {
+		t.Fatalf("TLSClientConfig failed: %v", err)
+	}
+
+	assertTLSHandshakeFails(t, serverConfig, clientConfig)
+
+	// CombinedCRL
+
+	serverConfig, err = vttls.ServerConfig(
+		clientServerKeyPairs.ServerCert,
+		clientServerKeyPairs.ServerKey,
+		clientServerKeyPairs.ClientCA,
+		clientServerKeyPairs.CombinedCRL,
+		"",
+		tls.VersionTLS12)
+	if err != nil {
+		t.Fatalf("TLSServerConfig failed: %v", err)
+	}
+
+	clientConfig, err = vttls.ClientConfig(
+		vttls.VerifyIdentity,
+		clientServerKeyPairs.RevokedClientCert,
+		clientServerKeyPairs.RevokedClientKey,
+		clientServerKeyPairs.ServerCA,
+		clientServerKeyPairs.CombinedCRL,
+		clientServerKeyPairs.ServerName,
+		tls.VersionTLS12)
+	if err != nil {
+		t.Fatalf("TLSClientConfig failed: %v", err)
+	}
+
+	assertTLSHandshakeFails(t, serverConfig, clientConfig)
 }

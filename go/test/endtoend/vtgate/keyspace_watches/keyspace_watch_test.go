@@ -47,6 +47,9 @@ var (
 		msg VARCHAR(64) NOT NULL,
 		PRIMARY KEY (id)
 	) Engine=InnoDB;`
+	vschemaDDL      = "alter vschema create vindex test_vdx using hash"
+	vschemaDDLError = fmt.Sprintf("Error 1105: cannot perform Update on keyspaces/%s/VSchema as the topology server connection is read-only",
+		keyspaceUnshardedName)
 )
 
 // createConfig creates a config file in TmpDir in vtdataroot and writes the given data.
@@ -66,7 +69,7 @@ func createConfig(clusterInstance *cluster.LocalProcessCluster, name, data strin
 	return err
 }
 
-func createCluster() (*cluster.LocalProcessCluster, int) {
+func createCluster(extraVTGateArgs []string) (*cluster.LocalProcessCluster, int) {
 	clusterInstance := cluster.NewCluster(cell, hostname)
 
 	// Start topo server
@@ -94,10 +97,15 @@ func createCluster() (*cluster.LocalProcessCluster, int) {
 		return nil, 1
 	}
 
-	clusterInstance.VtGateExtraArgs = []string{
-		"-mysql_auth_server_static_file", clusterInstance.TmpDirectory + "/" + mysqlAuthServerStatic,
-		"-keyspaces_to_watch", "ks1",
+	vtGateArgs := []string{
+		"--mysql_auth_server_static_file", clusterInstance.TmpDirectory + "/" + mysqlAuthServerStatic,
+		"--keyspaces_to_watch", keyspaceUnshardedName,
 	}
+
+	if extraVTGateArgs != nil {
+		vtGateArgs = append(vtGateArgs, extraVTGateArgs...)
+	}
+	clusterInstance.VtGateExtraArgs = vtGateArgs
 
 	// Start vtgate
 	if err := clusterInstance.StartVtgate(); err != nil {
@@ -114,7 +122,7 @@ func createCluster() (*cluster.LocalProcessCluster, int) {
 func TestRoutingWithKeyspacesToWatch(t *testing.T) {
 	defer cluster.PanicHandler(t)
 
-	clusterInstance, exitCode := createCluster()
+	clusterInstance, exitCode := createCluster(nil)
 	defer clusterInstance.Teardown()
 
 	if exitCode != 0 {
@@ -133,4 +141,32 @@ func TestRoutingWithKeyspacesToWatch(t *testing.T) {
 	// if this returns w/o failing the test we're good to go
 	_, err = db.Exec("select * from keyspaces_to_watch_test")
 	require.Nil(t, err)
+}
+
+func TestVSchemaDDLWithKeyspacesToWatch(t *testing.T) {
+	defer cluster.PanicHandler(t)
+
+	extraVTGateArgs := []string{
+		"--vschema_ddl_authorized_users", "%",
+	}
+	clusterInstance, exitCode := createCluster(extraVTGateArgs)
+	defer clusterInstance.Teardown()
+
+	if exitCode != 0 {
+		os.Exit(exitCode)
+	}
+
+	dsn := fmt.Sprintf(
+		"testuser1:testpassword1@tcp(%s:%v)/",
+		clusterInstance.Hostname,
+		clusterInstance.VtgateMySQLPort,
+	)
+	db, err := sql.Open("mysql", dsn)
+	require.Nil(t, err)
+	defer db.Close()
+
+	// The topo server must be read-only when using keyspaces_to_watch in order to prevent
+	// potentially corrupting the VSchema based on this vtgates limited view of the world
+	_, err = db.Exec(vschemaDDL)
+	require.EqualError(t, err, vschemaDDLError)
 }

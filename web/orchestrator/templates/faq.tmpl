@@ -8,7 +8,7 @@
         <strong>Who should use orchestrator?</strong>
       </p>
       <p>
-        DBAs and ops who have more than a mere master-replica replication topology.
+        DBAs and ops who have more than a mere primary-replica replication topology.
       </p>
       <p>
         <strong>Is this yet another monitoring tool?</strong>
@@ -30,19 +30,19 @@
         Yes. Statement Based Replication and Row Based Replication are both supported (and are in fact irrelevant)
       </p>
       <p>
-        <strong>Does orchestrator support Master-Master (ring) Replication?</strong>
+        <strong>Does orchestrator support Primary-Primary (ring) Replication?</strong>
       </p>
       <p>
-        Yes, for a ring of two masters (active-active, active-passive). Do note that the tree visualization cannot present the circular replication, and will pick an arbitrary master as the root of the tree.
+        Yes, for a ring of two primaries (active-active, active-passive). Do note that the tree visualization cannot present the circular replication, and will pick an arbitrary primary as the root of the tree.
       </p>
       <p>
-        Master-Master-Master[-Master...] topologies, where the ring is composed of 3 or more masters are not supported and not tested. And are discouraged. And are an abomination.
+        Primary-Primary-Primary[-Primary...] topologies, where the ring is composed of 3 or more primaries are not supported and not tested. And are discouraged. And are an abomination.
       </p>
       <p>
         <strong>Does orchestrator support Galera Replication?</strong>
       </p>
       <p>
-        Yes and no. <i>Orchestrator</i> is unaware of Galera replication. If you have three Galera masters and different replica topologies under each master, then <i>orchestrator</i> sees these as three different topologies.
+        Yes and no. <i>Orchestrator</i> is unaware of Galera replication. If you have three Galera primaries and different replica topologies under each primary, then <i>orchestrator</i> sees these as three different topologies.
       </p>
       <p>
         <strong>Does orchestrator support GTID Replication?</strong>
@@ -58,10 +58,10 @@
         <code>SHOW SLAVE STATUS</code> is incomplete. There is no expected work on this.
       </p>
       <p>
-        <strong>Does orchestrator support Multi-Master Replication?</strong>
+        <strong>Does orchestrator support Multi-Primary Replication?</strong>
       </p>
       <p>
-        No. Multi Master Replication (e.g. as in MariaDB 10.0) is not supported.
+        No. Multi Primary Replication (e.g. as in MariaDB 10.0) is not supported.
       </p>
       <p>
         <strong>Does orchestrator support Tungsten Replication?</strong>

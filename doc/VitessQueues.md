@@ -41,7 +41,7 @@ follows the same sharding as the Keyspace it is in, meaning it is present on all
 shards. However, instead of having consumers query the table directly, we
 introduce the Queue Manager:
 
-* When a tablet becomes the master of a shard (at startup, or at reparent time),
+* When a tablet becomes the primary of a shard (at startup, or at reparent time),
   it creates a Queue Manager routine for each Queue Table in the schema.
 * The Queue Manager is responsible for managing the data in the Queue Table.
 * The Queue Manager dispatches events that are firing to a pool of
@@ -63,7 +63,7 @@ nanosecond granularity:
 * Some sharding key: user-defined, specified at creation time, with vindex.
 * Other columns: user-defined, specified at creation time.
 
-A Queue is linked to a Queue Manager on the master vttablet, on each shard. The
+A Queue is linked to a Queue Manager on the primary vttablet, on each shard. The
 Queue Manager is responsible for dispatching events to the Receivers. The Queue
 Manager can impose the following limits:
 
@@ -72,7 +72,7 @@ Manager can impose the following limits:
 
 *Note*: we still use the database to store the items, so any state change is
 persisted. We'll explore scalability below, but the QPS for Queues will still be
-limited by the insert / update QPS of each shard master. To increase Queue
+limited by the insert / update QPS of each shard primary. To increase Queue
 capabilities, the usual horizontal sharding process can be used.
 
 ## Implementation Details
@@ -81,7 +81,7 @@ Queue Tables are marked in the schema by a comment, in a similar way we detect
 Sequence Tables
 [now](https://github.com/vitessio/vitess/blob/0b3de7c4a2de8daec545f040639b55a835361685/go/vt/vttablet/tabletserver/tabletserver.go#L138).
 
-When a tablet becomes a master, and there are Queue tables, it creates a
+When a tablet becomes a primary, and there are Queue tables, it creates a
 QueueManager for each of them.
 
 The Queue Manager has a window of ‘current or soon’ events (let’s say the next
@@ -205,8 +205,8 @@ seconds. Everything else is point updates.
 This approach scales with the number of shards too. Resharding will multiply the
 queue processing power.
 
-Since we have a process on the master, we piggy-back on our regular tablet
-master election.
+Since we have a process on the primary, we piggy-back on our regular tablet
+primary election.
 
 *Event creation*: each creation is one INSERT into the database. Creation of
 events that are supposed to execute as soon as possible may create a hotspot in
@@ -227,7 +227,7 @@ that query and only consider the next N seconds, or the period that has 10k
 events (value TBD), whichever is smaller.
 
 *Event Processing*: a pool of Receivers is consuming the events. Scale that up
-to as many as is needed, with any desired redundancy. The shard master will send
+to as many as is needed, with any desired redundancy. The shard primary will send
 the event to one receiver only, until it is acked, or times out.
 
 *Hot Spots in the Queue table*: with very high QPS, we will end up having a hot
@@ -248,9 +248,9 @@ any filtering. Queues have a database cost.
 Events can be fired multiple times, in corner cases. However, we always do a
 database access before firing the event. So in case of reparent / resharding,
 that database access should fail. So we should stop dispatching events as soon
-as the master is read-only. Also, if we receive an ack when the database is
-read-only, we can’t store it. With the Master Buffering feature, vtgate may be
-able to retry later on the new master.
+as the primary is read-only. Also, if we receive an ack when the database is
+read-only, we can’t store it. With the Query Buffering feature, vtgate may be
+able to retry later on the new primary.
 
 
 ## Extensions

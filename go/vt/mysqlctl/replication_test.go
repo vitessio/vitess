@@ -70,7 +70,7 @@ func TestRedactPassword(t *testing.T) {
 	testRedacted(t, `START xxx USER = 'vt_repl', PASSWORD = 'AAA`,
 		`START xxx USER = 'vt_repl', PASSWORD = 'AAA`)
 
-	// both master password and password
+	// both primary password and password
 	testRedacted(t, `START xxx
   MASTER_PASSWORD = 'AAA',
   PASSWORD = 'BBB'

@@ -40,10 +40,10 @@ func TestReplManagerSetTabletType(t *testing.T) {
 	tm.replManager.SetTabletType(topodatapb.TabletType_REPLICA)
 	assert.False(t, tm.replManager.ticks.Running())
 
-	// Master should stop the manager
+	// primary should stop the manager
 	*mysqlctl.DisableActiveReparents = false
 	tm.replManager.ticks.Start(nil)
-	tm.replManager.SetTabletType(topodatapb.TabletType_MASTER)
+	tm.replManager.SetTabletType(topodatapb.TabletType_PRIMARY)
 	assert.False(t, tm.replManager.ticks.Running())
 
 	// If replcation is stopped, the manager should not start
@@ -79,4 +79,33 @@ func TestReplManagerSetReplicationStopped(t *testing.T) {
 	assert.True(t, tm.replManager.ticks.Running())
 	tm.replManager.setReplicationStopped(true)
 	assert.False(t, tm.replManager.ticks.Running())
+}
+
+func TestReplManagerReset(t *testing.T) {
+	defer func(saved bool) { *mysqlctl.DisableActiveReparents = saved }(*mysqlctl.DisableActiveReparents)
+
+	tm := &TabletManager{}
+	tm.replManager = newReplManager(context.Background(), tm, 100*time.Millisecond)
+
+	*mysqlctl.DisableActiveReparents = false
+	tm.replManager.setReplicationStopped(false)
+	assert.True(t, tm.replManager.ticks.Running())
+	// reset should not affect the ticks, but the replication stopped should be false
+	tm.replManager.reset()
+	assert.True(t, tm.replManager.ticks.Running())
+	assert.False(t, tm.replManager.replicationStopped())
+
+	tm.replManager.setReplicationStopped(true)
+	assert.False(t, tm.replManager.ticks.Running())
+	tm.replManager.reset()
+	// reset should not affect the ticks, but the replication stopped should be false
+	assert.False(t, tm.replManager.ticks.Running())
+	assert.False(t, tm.replManager.replicationStopped())
+
+	tm.replManager.setReplicationStopped(true)
+	assert.True(t, tm.replManager.replicationStopped())
+	// DisableActiveReparents == true should result in no-op
+	*mysqlctl.DisableActiveReparents = true
+	tm.replManager.reset()
+	assert.True(t, tm.replManager.replicationStopped())
 }

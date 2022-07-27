@@ -23,7 +23,7 @@ import (
 var RaftNotRunning error = fmt.Errorf("raft is not configured/running")
 
 // PublishCommand will distribute a command across the group
-func PublishCommand(op string, value interface{}) (response interface{}, err error) {
+func PublishCommand(op string, value any) (response any, err error) {
 	return nil, RaftNotRunning
 }
 

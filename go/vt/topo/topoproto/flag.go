@@ -52,7 +52,7 @@ func (ttlv *TabletTypeListValue) Set(v string) (err error) {
 }
 
 // Get is for satisflying the internal flag interface.
-func (ttlv *TabletTypeListValue) Get() interface{} {
+func (ttlv *TabletTypeListValue) Get() any {
 	return *ttlv
 }
 
@@ -72,6 +72,6 @@ func (ttf *TabletTypeFlag) Set(v string) error {
 }
 
 // Get is for satisflying the internal flag interface.
-func (ttf *TabletTypeFlag) Get() interface{} {
+func (ttf *TabletTypeFlag) Get() any {
 	return *ttf
 }

@@ -6,8 +6,8 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	nethttp "net/http"
+	"os"
 	"strings"
 
 	"github.com/go-martini/martini"
@@ -16,19 +16,6 @@ import (
 	"vitess.io/vitess/go/vt/orchestrator/config"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 )
-
-var cipherSuites = []uint16{
-	tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-	tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-	tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-	tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-	tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,
-	tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA,
-	tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
-	tls.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,
-	tls.TLS_RSA_WITH_AES_128_CBC_SHA,
-	tls.TLS_RSA_WITH_AES_256_CBC_SHA,
-}
 
 // Determine if a string element is in a string array
 func HasString(elem string, arr []string) bool {
@@ -47,9 +34,6 @@ func NewTLSConfig(caFile string, verifyCert bool) (*tls.Config, error) {
 
 	// Set to TLS 1.2 as a minimum.  This is overridden for mysql communication
 	c.MinVersion = tls.VersionTLS12
-	// Remove insecure ciphers from the list
-	c.CipherSuites = cipherSuites
-	c.PreferServerCipherSuites = true
 
 	if verifyCert {
 		log.Info("verifyCert requested, client certificates will be verified")
@@ -60,7 +44,6 @@ func NewTLSConfig(caFile string, verifyCert bool) (*tls.Config, error) {
 		return &c, err
 	}
 	c.ClientCAs = caPool
-	c.BuildNameToCertificate() //nolint SA1019: c.BuildNameToCertificate is deprecated
 	return &c, nil
 }
 
@@ -68,7 +51,7 @@ func NewTLSConfig(caFile string, verifyCert bool) (*tls.Config, error) {
 func ReadCAFile(caFile string) (*x509.CertPool, error) {
 	var caCertPool *x509.CertPool
 	if caFile != "" {
-		data, err := ioutil.ReadFile(caFile)
+		data, err := os.ReadFile(caFile)
 		if err != nil {
 			return nil, err
 		}
@@ -149,7 +132,7 @@ func AppendKeyPairWithPassword(tlsConfig *tls.Config, certFile string, keyFile s
 
 // Read a PEM file and ask for a password to decrypt it if needed
 func ReadPEMData(pemFile string, pemPass []byte) ([]byte, error) {
-	pemData, err := ioutil.ReadFile(pemFile)
+	pemData, err := os.ReadFile(pemFile)
 	if err != nil {
 		return pemData, err
 	}
@@ -161,14 +144,13 @@ func ReadPEMData(pemFile string, pemPass []byte) ([]byte, error) {
 		log.Warning("Didn't parse all of", pemFile)
 	}
 
-	if x509.IsEncryptedPEMBlock(pemBlock) {
+	if x509.IsEncryptedPEMBlock(pemBlock) { //nolint SA1019
 		// Decrypt and get the ASN.1 DER bytes here
-		pemData, err = x509.DecryptPEMBlock(pemBlock, pemPass)
+		pemData, err = x509.DecryptPEMBlock(pemBlock, pemPass) //nolint SA1019
 		if err != nil {
 			return pemData, err
-		} else {
-			log.Infof("Decrypted %v successfully", pemFile)
 		}
+		log.Infof("Decrypted %v successfully", pemFile)
 		// Shove the decrypted DER bytes into a new pem Block with blank headers
 		var newBlock pem.Block
 		newBlock.Type = pemBlock.Type
@@ -193,7 +175,7 @@ func GetPEMPassword(pemFile string) []byte {
 
 // Determine if PEM file is encrypted
 func IsEncryptedPEM(pemFile string) bool {
-	pemData, err := ioutil.ReadFile(pemFile)
+	pemData, err := os.ReadFile(pemFile)
 	if err != nil {
 		return false
 	}
@@ -201,7 +183,7 @@ func IsEncryptedPEM(pemFile string) bool {
 	if len(pemBlock.Bytes) == 0 {
 		return false
 	}
-	return x509.IsEncryptedPEMBlock(pemBlock)
+	return x509.IsEncryptedPEMBlock(pemBlock) //nolint SA1019
 }
 
 // ListenAndServeTLS acts identically to http.ListenAndServeTLS, except that it

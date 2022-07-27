@@ -56,7 +56,7 @@ func TestFindAllTargets(t *testing.T) {
 	rs := NewResilientServer(ts, "TestFindAllKeyspaceShards")
 
 	// No keyspace / shards.
-	ks, err := FindAllTargets(ctx, rs, "cell1", []topodatapb.TabletType{topodatapb.TabletType_MASTER})
+	ks, err := FindAllTargets(ctx, rs, "cell1", []topodatapb.TabletType{topodatapb.TabletType_PRIMARY})
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -68,7 +68,7 @@ func TestFindAllTargets(t *testing.T) {
 	if err := ts.UpdateSrvKeyspace(ctx, "cell1", "test_keyspace", &topodatapb.SrvKeyspace{
 		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
 			{
-				ServedType: topodatapb.TabletType_MASTER,
+				ServedType: topodatapb.TabletType_PRIMARY,
 				ShardReferences: []*topodatapb.ShardReference{
 					{
 						Name: "test_shard0",
@@ -81,7 +81,7 @@ func TestFindAllTargets(t *testing.T) {
 	}
 
 	// Get it.
-	ks, err = FindAllTargets(ctx, rs, "cell1", []topodatapb.TabletType{topodatapb.TabletType_MASTER})
+	ks, err = FindAllTargets(ctx, rs, "cell1", []topodatapb.TabletType{topodatapb.TabletType_PRIMARY})
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -90,7 +90,7 @@ func TestFindAllTargets(t *testing.T) {
 			Cell:       "cell1",
 			Keyspace:   "test_keyspace",
 			Shard:      "test_shard0",
-			TabletType: topodatapb.TabletType_MASTER,
+			TabletType: topodatapb.TabletType_PRIMARY,
 		},
 	}) {
 		t.Errorf("got wrong value: %v", ks)
@@ -100,7 +100,7 @@ func TestFindAllTargets(t *testing.T) {
 	if err := ts.UpdateSrvKeyspace(ctx, "cell1", "test_keyspace2", &topodatapb.SrvKeyspace{
 		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
 			{
-				ServedType: topodatapb.TabletType_MASTER,
+				ServedType: topodatapb.TabletType_PRIMARY,
 				ShardReferences: []*topodatapb.ShardReference{
 					{
 						Name: "test_shard1",
@@ -121,7 +121,7 @@ func TestFindAllTargets(t *testing.T) {
 	}
 
 	// Get it for all types.
-	ks, err = FindAllTargets(ctx, rs, "cell1", []topodatapb.TabletType{topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA})
+	ks, err = FindAllTargets(ctx, rs, "cell1", []topodatapb.TabletType{topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA})
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -131,13 +131,13 @@ func TestFindAllTargets(t *testing.T) {
 			Cell:       "cell1",
 			Keyspace:   "test_keyspace",
 			Shard:      "test_shard0",
-			TabletType: topodatapb.TabletType_MASTER,
+			TabletType: topodatapb.TabletType_PRIMARY,
 		},
 		{
 			Cell:       "cell1",
 			Keyspace:   "test_keyspace2",
 			Shard:      "test_shard1",
-			TabletType: topodatapb.TabletType_MASTER,
+			TabletType: topodatapb.TabletType_PRIMARY,
 		},
 		{
 			Cell:       "cell1",

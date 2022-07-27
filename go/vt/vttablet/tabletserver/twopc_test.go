@@ -391,7 +391,7 @@ func TestReadAllTransactions(t *testing.T) {
 	}
 }
 
-func jsonStr(v interface{}) string {
+func jsonStr(v any) string {
 	out, _ := json.Marshal(v)
 	return string(out)
 }

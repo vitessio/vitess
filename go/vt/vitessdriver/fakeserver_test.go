@@ -17,21 +17,19 @@ limitations under the License.
 package vitessdriver
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"reflect"
 
-	"context"
-
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
-
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
 )
 
 // fakeVTGateService has the server side of this fake
@@ -228,11 +226,35 @@ var execMap = map[string]struct {
 		result:  &sqltypes.Result{},
 		session: session2,
 	},
+	"distributedTxRequest": {
+		execQuery: &queryExecute{
+			SQL: "distributedTxRequest",
+			BindVariables: map[string]*querypb.BindVariable{
+				"v1": sqltypes.Int64BindVariable(1),
+			},
+			Session: &vtgatepb.Session{
+				InTransaction: true,
+				ShardSessions: []*vtgatepb.Session_ShardSession{
+					{
+						Target: &querypb.Target{
+							Keyspace:   "ks",
+							Shard:      "1",
+							TabletType: topodatapb.TabletType_PRIMARY,
+						},
+						TransactionId: 1,
+					},
+				},
+				TargetString: "@rdonly",
+			},
+		},
+		result:  &sqltypes.Result{},
+		session: session2,
+	},
 	"begin": {
 		execQuery: &queryExecute{
 			SQL: "begin",
 			Session: &vtgatepb.Session{
-				TargetString: "@master",
+				TargetString: "@primary",
 				Autocommit:   true,
 			},
 		},
@@ -246,7 +268,7 @@ var execMap = map[string]struct {
 		},
 		result: &sqltypes.Result{},
 		session: &vtgatepb.Session{
-			TargetString: "@master",
+			TargetString: "@primary",
 			Autocommit:   true,
 		},
 	},
@@ -257,7 +279,7 @@ var execMap = map[string]struct {
 		},
 		result: &sqltypes.Result{},
 		session: &vtgatepb.Session{
-			TargetString: "@master",
+			TargetString: "@primary",
 		},
 	},
 }
@@ -324,7 +346,7 @@ var session2 = &vtgatepb.Session{
 			Target: &querypb.Target{
 				Keyspace:   "ks",
 				Shard:      "1",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			TransactionId: 1,
 		},

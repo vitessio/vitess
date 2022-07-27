@@ -17,6 +17,8 @@ limitations under the License.
 package engine
 
 import (
+	"context"
+
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -26,34 +28,34 @@ import (
 
 var _ Primitive = (*SQLCalcFoundRows)(nil)
 
-//SQLCalcFoundRows is a primitive to execute limit and count query as per their individual plan.
+// SQLCalcFoundRows is a primitive to execute limit and count query as per their individual plan.
 type SQLCalcFoundRows struct {
 	LimitPrimitive Primitive
 	CountPrimitive Primitive
 }
 
-//RouteType implements the Primitive interface
+// RouteType implements the Primitive interface
 func (s SQLCalcFoundRows) RouteType() string {
 	return "SQLCalcFoundRows"
 }
 
-//GetKeyspaceName implements the Primitive interface
+// GetKeyspaceName implements the Primitive interface
 func (s SQLCalcFoundRows) GetKeyspaceName() string {
 	return s.LimitPrimitive.GetKeyspaceName()
 }
 
-//GetTableName implements the Primitive interface
+// GetTableName implements the Primitive interface
 func (s SQLCalcFoundRows) GetTableName() string {
 	return s.LimitPrimitive.GetTableName()
 }
 
-//Execute implements the Primitive interface
-func (s SQLCalcFoundRows) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	limitQr, err := s.LimitPrimitive.Execute(vcursor, bindVars, wantfields)
+// TryExecute implements the Primitive interface
+func (s SQLCalcFoundRows) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	limitQr, err := vcursor.ExecutePrimitive(ctx, s.LimitPrimitive, bindVars, wantfields)
 	if err != nil {
 		return nil, err
 	}
-	countQr, err := s.CountPrimitive.Execute(vcursor, bindVars, false)
+	countQr, err := vcursor.ExecutePrimitive(ctx, s.CountPrimitive, bindVars, false)
 	if err != nil {
 		return nil, err
 	}
@@ -68,16 +70,16 @@ func (s SQLCalcFoundRows) Execute(vcursor VCursor, bindVars map[string]*querypb.
 	return limitQr, nil
 }
 
-//StreamExecute implements the Primitive interface
-func (s SQLCalcFoundRows) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	err := s.LimitPrimitive.StreamExecute(vcursor, bindVars, wantfields, callback)
+// TryStreamExecute implements the Primitive interface
+func (s SQLCalcFoundRows) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	err := vcursor.StreamExecutePrimitive(ctx, s.LimitPrimitive, bindVars, wantfields, callback)
 	if err != nil {
 		return err
 	}
 
 	var fr *uint64
 
-	err = s.CountPrimitive.StreamExecute(vcursor, bindVars, wantfields, func(countQr *sqltypes.Result) error {
+	err = vcursor.StreamExecutePrimitive(ctx, s.CountPrimitive, bindVars, wantfields, func(countQr *sqltypes.Result) error {
 		if len(countQr.Rows) == 0 && countQr.Fields != nil {
 			// this is the fields, which we can ignore
 			return nil
@@ -102,17 +104,17 @@ func (s SQLCalcFoundRows) StreamExecute(vcursor VCursor, bindVars map[string]*qu
 	return nil
 }
 
-//GetFields implements the Primitive interface
-func (s SQLCalcFoundRows) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return s.LimitPrimitive.GetFields(vcursor, bindVars)
+// GetFields implements the Primitive interface
+func (s SQLCalcFoundRows) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	return s.LimitPrimitive.GetFields(ctx, vcursor, bindVars)
 }
 
-//NeedsTransaction implements the Primitive interface
+// NeedsTransaction implements the Primitive interface
 func (s SQLCalcFoundRows) NeedsTransaction() bool {
 	return s.LimitPrimitive.NeedsTransaction()
 }
 
-//Inputs implements the Primitive interface
+// Inputs implements the Primitive interface
 func (s SQLCalcFoundRows) Inputs() []Primitive {
 	return []Primitive{s.LimitPrimitive, s.CountPrimitive}
 }

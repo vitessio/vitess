@@ -19,7 +19,7 @@ interface Props extends NativeInputProps {
 }
 
 export const TextInput = ({ className, iconLeft, iconRight, size, ...props }: Props) => {
-    const inputClass = cx(style.input, {
+    const inputClass = cx(style.input, className, {
         [style.large]: size === 'large',
         [style.withIconLeft]: !!iconLeft,
         [style.withIconRight]: !!iconRight,

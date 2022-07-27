@@ -17,6 +17,7 @@ limitations under the License.
 package testutil
 
 import (
+	"encoding/json"
 	"fmt"
 	"sort"
 	"testing"
@@ -34,7 +35,7 @@ import (
 // AssertEmergencyReparentShardResponsesEqual asserts that two
 // vtctldatapb.EmergencyReparentShardResponse objects are equal, ignoring their
 // respective Events field in the comparison.
-func AssertEmergencyReparentShardResponsesEqual(t *testing.T, expected *vtctldatapb.EmergencyReparentShardResponse, actual *vtctldatapb.EmergencyReparentShardResponse, msgAndArgs ...interface{}) {
+func AssertEmergencyReparentShardResponsesEqual(t *testing.T, expected *vtctldatapb.EmergencyReparentShardResponse, actual *vtctldatapb.EmergencyReparentShardResponse, msgAndArgs ...any) {
 	t.Helper()
 
 	expected = proto.Clone(expected).(*vtctldatapb.EmergencyReparentShardResponse)
@@ -44,6 +45,58 @@ func AssertEmergencyReparentShardResponsesEqual(t *testing.T, expected *vtctldat
 	actual.Events = nil
 
 	utils.MustMatch(t, expected, actual)
+}
+
+// AssertLogutilEventsMatch asserts that two slices of Events match, by their
+// .Value fields. In the expected slice, .Value is treated as a regular
+// expression; that is, it is passed as a regexp-like string to assert.Regexp.
+//
+// NOTE: To match events independent of ordering, callers should run both their
+// expected and actual event slices through the EventValueSorter before calling
+// this function. This will mutate the slices, so make a copy first if that is
+// an issue for your use case.
+func AssertLogutilEventsMatch(t testing.TB, expected []*logutilpb.Event, actual []*logutilpb.Event) {
+	t.Helper()
+
+	f := func(e *logutilpb.Event) *logutilpb.Event {
+		return &logutilpb.Event{
+			Value: e.Value,
+		}
+	}
+	expected = clearEvents(expected, f)
+	actual = clearEvents(actual, f)
+
+	expectedBytes, err := json.Marshal(expected)
+	if !assert.NoError(t, err, "could not marshal expected events as json, assertion messages will be impacted") {
+		expectedBytes = nil
+	}
+
+	actualBytes, err := json.Marshal(actual)
+	if !assert.NoError(t, err, "could not marshal actual events as json, assertion messages will be impacted") {
+		actualBytes = nil
+	}
+
+	if !assert.Equal(t, len(expected), len(actual), "differing number of events; expected %d, have %d\nexpected bytes: %s\nactual bytes: %s\n", len(expected), len(actual), expectedBytes, actualBytes) {
+		return
+	}
+
+	for i, expectedEvent := range expected {
+		actualEvent := actual[i]
+		assert.Regexp(t, expectedEvent.Value, actualEvent.Value, "event %d mismatch", i)
+	}
+}
+
+func clearEvents(events []*logutilpb.Event, f func(*logutilpb.Event) *logutilpb.Event) []*logutilpb.Event {
+	if events == nil {
+		return nil
+	}
+
+	result := make([]*logutilpb.Event, len(events))
+	for i, event := range events {
+		result[i] = f(event)
+	}
+
+	return result
 }
 
 // AssertPlannedReparentShardResponsesEqual asserts that two
@@ -74,7 +127,7 @@ func AssertSameTablets(t *testing.T, expected, actual []*topodatapb.Tablet) {
 // AssertKeyspacesEqual is a convenience function to assert that two
 // vtctldatapb.Keyspace objects are equal, after clearing out any reserved
 // proto XXX_ fields.
-func AssertKeyspacesEqual(t *testing.T, expected *vtctldatapb.Keyspace, actual *vtctldatapb.Keyspace, msgAndArgs ...interface{}) {
+func AssertKeyspacesEqual(t *testing.T, expected *vtctldatapb.Keyspace, actual *vtctldatapb.Keyspace, msgAndArgs ...any) {
 	t.Helper()
 	utils.MustMatch(t, expected, actual)
 }
@@ -87,7 +140,7 @@ func AssertKeyspacesEqual(t *testing.T, expected *vtctldatapb.Keyspace, actual *
 // protobuf type containing a slice of logutilpb.Event elements called Events,
 // which is the convention in protobuf types in the Vitess codebase, already
 // implements.
-func AssertLogutilEventsOccurred(t *testing.T, container interface{ GetEvents() []*logutilpb.Event }, msgAndArgs ...interface{}) {
+func AssertLogutilEventsOccurred(t *testing.T, container interface{ GetEvents() []*logutilpb.Event }, msgAndArgs ...any) {
 	t.Helper()
 
 	if container == nil {
@@ -107,7 +160,7 @@ func AssertLogutilEventsOccurred(t *testing.T, container interface{ GetEvents() 
 // protobuf type containing a slice of logutilpb.Event elements called Events,
 // which is the convention in protobuf types in the Vitess codebase, already
 // implements.
-func AssertNoLogutilEventsOccurred(t *testing.T, container interface{ GetEvents() []*logutilpb.Event }, msgAndArgs ...interface{}) {
+func AssertNoLogutilEventsOccurred(t *testing.T, container interface{ GetEvents() []*logutilpb.Event }, msgAndArgs ...any) {
 	t.Helper()
 
 	if container == nil {
@@ -116,3 +169,11 @@ func AssertNoLogutilEventsOccurred(t *testing.T, container interface{ GetEvents(
 
 	assert.Equal(t, len(container.GetEvents()), 0, msgAndArgs...)
 }
+
+// EventValueSorter implements sort.Interface for slices of logutil.Event,
+// ordering by .Value lexicographically.
+type EventValueSorter []*logutilpb.Event
+
+func (events EventValueSorter) Len() int           { return len(events) }
+func (events EventValueSorter) Swap(i, j int)      { events[i], events[j] = events[j], events[i] }
+func (events EventValueSorter) Less(i, j int) bool { return events[i].Value < events[j].Value }

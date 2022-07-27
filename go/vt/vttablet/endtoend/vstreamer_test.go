@@ -69,11 +69,11 @@ func TestSchemaVersioning(t *testing.T) {
 	defer cancel()
 	tsv.EnableHistorian(true)
 	tsv.SetTracking(true)
-
+	time.Sleep(100 * time.Millisecond) // wait for _vt tables to be created
 	target := &querypb.Target{
 		Keyspace:   "vttest",
 		Shard:      "0",
-		TabletType: tabletpb.TabletType_MASTER,
+		TabletType: tabletpb.TabletType_PRIMARY,
 		Cell:       "",
 	}
 	filter := &binlogdatapb.Filter{
@@ -98,7 +98,7 @@ func TestSchemaVersioning(t *testing.T) {
 		{
 			query: "insert into vitess_version values(1, 10)",
 			output: []string{
-				`type:FIELD field_event:{table_name:"vitess_version" fields:{name:"id1" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id1" column_length:11 charset:63} fields:{name:"id2" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id2" column_length:11 charset:63}}`,
+				`type:FIELD field_event:{table_name:"vitess_version" fields:{name:"id1" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id1" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"id2" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id2" column_length:11 charset:63 column_type:"int(11)"}}`,
 				`type:ROW row_event:{table_name:"vitess_version" row_changes:{after:{lengths:1 lengths:2 values:"110"}}}`,
 				`gtid`,
 			},
@@ -113,7 +113,7 @@ func TestSchemaVersioning(t *testing.T) {
 		}, {
 			query: "insert into vitess_version values(2, 20, 200)",
 			output: []string{
-				`type:FIELD field_event:{table_name:"vitess_version" fields:{name:"id1" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id1" column_length:11 charset:63} fields:{name:"id2" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id2" column_length:11 charset:63} fields:{name:"id3" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id3" column_length:11 charset:63}}`,
+				`type:FIELD field_event:{table_name:"vitess_version" fields:{name:"id1" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id1" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"id2" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id2" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"id3" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id3" column_length:11 charset:63 column_type:"int(11)"}}`,
 				`type:ROW row_event:{table_name:"vitess_version" row_changes:{after:{lengths:1 lengths:2 lengths:3 values:"220200"}}}`,
 				`gtid`,
 			},
@@ -128,7 +128,7 @@ func TestSchemaVersioning(t *testing.T) {
 		}, {
 			query: "insert into vitess_version values(3, 30, 'TTT')",
 			output: []string{
-				`type:FIELD field_event:{table_name:"vitess_version" fields:{name:"id1" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id1" column_length:11 charset:63} fields:{name:"id2" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id2" column_length:11 charset:63} fields:{name:"id3" type:VARBINARY table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id3" column_length:16 charset:63}}`,
+				`type:FIELD field_event:{table_name:"vitess_version" fields:{name:"id1" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id1" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"id2" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id2" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"id3" type:VARBINARY table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id3" column_length:16 charset:63 column_type:"varbinary(16)"}}`,
 				`type:ROW row_event:{table_name:"vitess_version" row_changes:{after:{lengths:1 lengths:2 lengths:3 values:"330TTT"}}}`,
 				`gtid`,
 			},
@@ -159,7 +159,8 @@ func TestSchemaVersioning(t *testing.T) {
 	}
 	go func() {
 		defer close(eventCh)
-		if err := tsv.VStream(ctx, target, "current", nil, filter, send); err != nil {
+		req := &binlogdatapb.VStreamRequest{Target: target, Position: "current", TableLastPKs: nil, Filter: filter}
+		if err := tsv.VStream(ctx, req, send); err != nil {
 			fmt.Printf("Error in tsv.VStream: %v", err)
 			t.Error(err)
 		}
@@ -179,7 +180,7 @@ func TestSchemaVersioning(t *testing.T) {
 		}, {
 			query: "insert into vitess_version values(4, 40, 'FFF', 'GGGG' )",
 			output: []string{
-				`type:FIELD field_event:{table_name:"vitess_version" fields:{name:"id1" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id1" column_length:11 charset:63} fields:{name:"id2" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id2" column_length:11 charset:63} fields:{name:"id3" type:VARBINARY table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id3" column_length:16 charset:63} fields:{name:"id4" type:VARBINARY table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id4" column_length:16 charset:63}}`,
+				`type:FIELD field_event:{table_name:"vitess_version" fields:{name:"id1" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id1" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"id2" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id2" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"id3" type:VARBINARY table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id3" column_length:16 charset:63 column_type:"varbinary(16)"} fields:{name:"id4" type:VARBINARY table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id4" column_length:16 charset:63 column_type:"varbinary(16)"}}`,
 				`type:ROW row_event:{table_name:"vitess_version" row_changes:{after:{lengths:1 lengths:2 lengths:3 lengths:4 values:"440FFFGGGG"}}}`,
 				`gtid`,
 			},
@@ -210,7 +211,8 @@ func TestSchemaVersioning(t *testing.T) {
 	}
 	go func() {
 		defer close(eventCh)
-		if err := tsv.VStream(ctx, target, startPos, nil, filter, send); err != nil {
+		req := &binlogdatapb.VStreamRequest{Target: target, Position: startPos, TableLastPKs: nil, Filter: filter}
+		if err := tsv.VStream(ctx, req, send); err != nil {
 			fmt.Printf("Error in tsv.VStream: %v", err)
 			t.Error(err)
 		}
@@ -223,26 +225,26 @@ func TestSchemaVersioning(t *testing.T) {
 		getSchemaVersionTableCreationEvents()...),
 		`version`,
 		`gtid`,
-		`type:FIELD field_event:{table_name:"vitess_version" fields:{name:"id1" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id1" column_length:11 charset:63} fields:{name:"id2" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id2" column_length:11 charset:63}}`,
+		`type:FIELD field_event:{table_name:"vitess_version" fields:{name:"id1" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id1" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"id2" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id2" column_length:11 charset:63 column_type:"int(11)"}}`,
 		`type:ROW row_event:{table_name:"vitess_version" row_changes:{after:{lengths:1 lengths:2 values:"110"}}}`,
 		`gtid`,
 		`gtid`,
 		`type:DDL statement:"alter table vitess_version add column id3 int"`,
 		`version`,
 		`gtid`,
-		`type:FIELD field_event:{table_name:"vitess_version" fields:{name:"id1" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id1" column_length:11 charset:63} fields:{name:"id2" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id2" column_length:11 charset:63} fields:{name:"id3" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id3" column_length:11 charset:63}}`,
+		`type:FIELD field_event:{table_name:"vitess_version" fields:{name:"id1" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id1" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"id2" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id2" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"id3" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id3" column_length:11 charset:63 column_type:"varbinary(16)"}}`,
 		`type:ROW row_event:{table_name:"vitess_version" row_changes:{after:{lengths:1 lengths:2 lengths:3 values:"220200"}}}`,
 		`gtid`,
 		`gtid`,
 		`type:DDL statement:"alter table vitess_version modify column id3 varbinary(16)"`,
 		`version`,
 		`gtid`,
-		`type:FIELD field_event:{table_name:"vitess_version" fields:{name:"id1" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id1" column_length:11 charset:63} fields:{name:"id2" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id2" column_length:11 charset:63} fields:{name:"id3" type:VARBINARY table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id3" column_length:16 charset:63}}`,
+		`type:FIELD field_event:{table_name:"vitess_version" fields:{name:"id1" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id1" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"id2" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id2" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"id3" type:VARBINARY table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id3" column_length:16 charset:63 column_type:"varbinary(16)"}}`,
 		`type:ROW row_event:{table_name:"vitess_version" row_changes:{after:{lengths:1 lengths:2 lengths:3 values:"330TTT"}}}`,
 		`gtid`,
 		`gtid`,
 		`type:DDL statement:"/**/alter table vitess_version add column id4 varbinary(16)"`,
-		`type:FIELD field_event:{table_name:"vitess_version" fields:{name:"id1" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id1" column_length:11 charset:63} fields:{name:"id2" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id2" column_length:11 charset:63} fields:{name:"id3" type:VARBINARY table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id3" column_length:16 charset:63} fields:{name:"id4" type:VARBINARY table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id4" column_length:16 charset:63}}`,
+		`type:FIELD field_event:{table_name:"vitess_version" fields:{name:"id1" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id1" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"id2" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id2" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"id3" type:VARBINARY table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id3" column_length:16 charset:63 column_type:"varbinary(16)"} fields:{name:"id4" type:VARBINARY table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id4" column_length:16 charset:63 column_type:"varbinary(16)"}}`,
 		`type:ROW row_event:{table_name:"vitess_version" row_changes:{after:{lengths:1 lengths:2 lengths:3 lengths:4 values:"440FFFGGGG"}}}`,
 		`gtid`,
 	)
@@ -274,7 +276,8 @@ func TestSchemaVersioning(t *testing.T) {
 	}
 	go func() {
 		defer close(eventCh)
-		if err := tsv.VStream(ctx, target, startPos, nil, filter, send); err != nil {
+		req := &binlogdatapb.VStreamRequest{Target: target, Position: startPos, TableLastPKs: nil, Filter: filter}
+		if err := tsv.VStream(ctx, req, send); err != nil {
 			fmt.Printf("Error in tsv.VStream: %v", err)
 			t.Error(err)
 		}
@@ -287,7 +290,7 @@ func TestSchemaVersioning(t *testing.T) {
 		getSchemaVersionTableCreationEvents()...),
 		`version`,
 		`gtid`,
-		`type:FIELD field_event:{table_name:"vitess_version" fields:{name:"id1" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id1" column_length:11 charset:63} fields:{name:"id2" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id2" column_length:11 charset:63}}`,
+		`type:FIELD field_event:{table_name:"vitess_version" fields:{name:"id1" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id1" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"id2" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id2" column_length:11 charset:63 column_type:"int(11)"}}`,
 		`type:ROW row_event:{table_name:"vitess_version" row_changes:{after:{lengths:1 lengths:2 values:"110"}}}`,
 		`gtid`,
 		`gtid`,
@@ -304,12 +307,12 @@ func TestSchemaVersioning(t *testing.T) {
 		`gtid`,
 		/*at this point we only have latest schema so we have types (int32, int32, varbinary, varbinary),
 		  but the three fields below match the first three types in the latest, so the field names are correct*/
-		`type:FIELD field_event:{table_name:"vitess_version" fields:{name:"id1" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id1" column_length:11 charset:63} fields:{name:"id2" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id2" column_length:11 charset:63} fields:{name:"id3" type:VARBINARY table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id3" column_length:16 charset:63}}`,
+		`type:FIELD field_event:{table_name:"vitess_version" fields:{name:"id1" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id1" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"id2" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id2" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"id3" type:VARBINARY table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id3" column_length:16 charset:63 column_type:"varbinary(16)"}}`,
 		`type:ROW row_event:{table_name:"vitess_version" row_changes:{after:{lengths:1 lengths:2 lengths:3 values:"330TTT"}}}`,
 		`gtid`,
 		`gtid`,
 		`type:DDL statement:"/**/alter table vitess_version add column id4 varbinary(16)"`,
-		`type:FIELD field_event:{table_name:"vitess_version" fields:{name:"id1" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id1" column_length:11 charset:63} fields:{name:"id2" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id2" column_length:11 charset:63} fields:{name:"id3" type:VARBINARY table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id3" column_length:16 charset:63} fields:{name:"id4" type:VARBINARY table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id4" column_length:16 charset:63}}`,
+		`type:FIELD field_event:{table_name:"vitess_version" fields:{name:"id1" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id1" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"id2" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id2" column_length:11 charset:63 column_type:"int(11)"} fields:{name:"id3" type:VARBINARY table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id3" column_length:16 charset:63 column_type:"varbinary(16)"} fields:{name:"id4" type:VARBINARY table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id4" column_length:16 charset:63 column_type:"varbinary(16)"}}`,
 		`type:ROW row_event:{table_name:"vitess_version" row_changes:{after:{lengths:1 lengths:2 lengths:3 lengths:4 values:"440FFFGGGG"}}}`,
 		`gtid`,
 	)
@@ -369,6 +372,9 @@ func expectLogs(ctx context.Context, t *testing.T, query string, eventCh chan []
 				if ev.Type == binlogdatapb.VEventType_HEARTBEAT {
 					continue
 				}
+				if ev.Throttled {
+					continue
+				}
 				// Also ignore begin/commit to reduce list of events to expect, for readability ...
 				if ev.Type == binlogdatapb.VEventType_BEGIN {
 					continue
@@ -418,10 +424,18 @@ func expectLogs(ctx context.Context, t *testing.T, query string, eventCh chan []
 			}
 		default:
 			evs[i].Timestamp = 0
+			evs[i].Keyspace = ""
+			evs[i].Shard = ""
 			if evs[i].Type == binlogdatapb.VEventType_FIELD {
 				for j := range evs[i].FieldEvent.Fields {
 					evs[i].FieldEvent.Fields[j].Flags = 0
 				}
+				evs[i].FieldEvent.Keyspace = ""
+				evs[i].FieldEvent.Shard = ""
+			}
+			if evs[i].Type == binlogdatapb.VEventType_ROW {
+				evs[i].RowEvent.Keyspace = ""
+				evs[i].RowEvent.Shard = ""
 			}
 			if got := fmt.Sprintf("%v", evs[i]); got != want {
 				t.Fatalf("%v (%d): event:\n%q, want\n%q", query, i, got, want)
@@ -436,28 +450,27 @@ func encodeString(in string) string {
 	return buf.String()
 }
 
-func validateSchemaInserted(client *framework.QueryClient, ddl string) (bool, error) {
+func validateSchemaInserted(client *framework.QueryClient, ddl string) bool {
 	qr, _ := client.Execute(fmt.Sprintf("select * from _vt.schema_version where ddl = %s", encodeString(ddl)), nil)
 	if len(qr.Rows) == 1 {
 		log.Infof("Found ddl in schema_version: %s", ddl)
-		return true, nil
+		return true
 	}
-	return false, fmt.Errorf("Found %d rows for gtid %s", len(qr.Rows), ddl)
+	return false
 }
 
 // To avoid races between ddls and the historian refreshing its cache explicitly wait for tracker's insert to be visible
 func waitForVersionInsert(client *framework.QueryClient, ddl string) (bool, error) {
-	timeout := time.After(1000 * time.Millisecond)
+	timeout := time.After(3000 * time.Millisecond)
 	tick := time.Tick(100 * time.Millisecond)
 	for {
 		select {
 		case <-timeout:
+			log.Infof("waitForVersionInsert timed out")
 			return false, errors.New("waitForVersionInsert timed out")
 		case <-tick:
-			ok, err := validateSchemaInserted(client, ddl)
-			if err != nil {
-				return false, err
-			} else if ok {
+			ok := validateSchemaInserted(client, ddl)
+			if ok {
 				log.Infof("Found version insert for %s", ddl)
 				return true, nil
 			}

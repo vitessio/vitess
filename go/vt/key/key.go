@@ -50,32 +50,6 @@ func (i Uint64Key) Bytes() []byte {
 }
 
 //
-// KeyspaceIdType helper methods
-//
-
-// ParseKeyspaceIDType parses the keyspace id type into the enum
-func ParseKeyspaceIDType(param string) (topodatapb.KeyspaceIdType, error) {
-	if param == "" {
-		return topodatapb.KeyspaceIdType_UNSET, nil
-	}
-	value, ok := topodatapb.KeyspaceIdType_value[strings.ToUpper(param)]
-	if !ok {
-		return topodatapb.KeyspaceIdType_UNSET, fmt.Errorf("unknown KeyspaceIdType %v", param)
-	}
-	return topodatapb.KeyspaceIdType(value), nil
-}
-
-// KeyspaceIDTypeString returns the string representation of a keyspace id type.
-func KeyspaceIDTypeString(id topodatapb.KeyspaceIdType) string {
-	s, ok := topodatapb.KeyspaceIdType_name[int32(id)]
-	if !ok {
-		return KeyspaceIDTypeString(topodatapb.KeyspaceIdType_UNSET)
-	}
-
-	return s
-}
-
-//
 // KeyRange helper methods
 //
 
@@ -240,6 +214,18 @@ func KeyRangeStartEqual(left, right *topodatapb.KeyRange) bool {
 		return len(left.Start) == 0
 	}
 	return bytes.Equal(addPadding(left.Start), addPadding(right.Start))
+}
+
+// KeyRangeContiguous returns true if the end of the left key range exactly
+// matches the start of the right key range (i.e they are contigious)
+func KeyRangeContiguous(left, right *topodatapb.KeyRange) bool {
+	if left == nil {
+		return right == nil || (len(right.Start) == 0 && len(right.End) == 0)
+	}
+	if right == nil {
+		return len(left.Start) == 0 && len(left.End) == 0
+	}
+	return bytes.Equal(addPadding(left.End), addPadding(right.Start))
 }
 
 // KeyRangeEndEqual returns true if both key ranges have the same end

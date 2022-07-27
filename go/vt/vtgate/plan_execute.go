@@ -20,22 +20,34 @@ import (
 	"context"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtgate/logstats"
+
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder"
 )
 
-func (e *Executor) newExecute(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *LogStats) (sqlparser.StatementType, *sqltypes.Result, error) {
+type planExec func(ctx context.Context, plan *engine.Plan, vc *vcursorImpl, bindVars map[string]*querypb.BindVariable, startTime time.Time) error
+type txResult func(sqlparser.StatementType, *sqltypes.Result) error
+
+func (e *Executor) newExecute(
+	ctx context.Context,
+	safeSession *SafeSession,
+	sql string,
+	bindVars map[string]*querypb.BindVariable,
+	logStats *logstats.LogStats,
+	execPlan planExec, // used when there is a plan to execute
+	recResult txResult, // used when it's something simple like begin/commit/rollback/savepoint
+) error {
 	// 1: Prepare before planning and execution
 
 	// Start an implicit transaction if necessary.
 	err := e.startTxIfNecessary(ctx, safeSession)
 	if err != nil {
-		return 0, nil, err
+		return err
 	}
 
 	if bindVars == nil {
@@ -43,28 +55,18 @@ func (e *Executor) newExecute(ctx context.Context, safeSession *SafeSession, sql
 	}
 
 	query, comments := sqlparser.SplitMarginComments(sql)
-	vcursor, err := newVCursorImpl(ctx, safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver, e.serv, e.warnShardedOnly)
+	vcursor, err := newVCursorImpl(safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver, e.serv, e.warnShardedOnly, e.pv)
 	if err != nil {
-		return 0, nil, err
+		return err
 	}
 
 	// 2: Create a plan for the query
-	plan, err := e.getPlan(
-		vcursor,
-		query,
-		comments,
-		bindVars,
-		skipQueryPlanCache(safeSession),
-		logStats,
-	)
-	if err == planbuilder.ErrPlanNotSupported {
-		return 0, nil, err
-	}
+	plan, err := e.getPlan(ctx, vcursor, query, comments, bindVars, safeSession, logStats)
 	execStart := e.logPlanningFinished(logStats, plan)
 
 	if err != nil {
 		safeSession.ClearWarnings()
-		return 0, nil, err
+		return err
 	}
 
 	if plan.Type != sqlparser.StmtShow {
@@ -76,51 +78,65 @@ func (e *Executor) newExecute(ctx context.Context, safeSession *SafeSession, sql
 		safeSession.RecordWarning(warning)
 	}
 
-	// We need to explicitly handle errors, and begin/commit/rollback, since these control transactions. Everything else
-	// will fall through and be handled through planning
-	switch plan.Type {
-	case sqlparser.StmtBegin:
-		qr, err := e.handleBegin(ctx, safeSession, logStats)
-		return sqlparser.StmtBegin, qr, err
-	case sqlparser.StmtCommit:
-		qr, err := e.handleCommit(ctx, safeSession, logStats)
-		return sqlparser.StmtCommit, qr, err
-	case sqlparser.StmtRollback:
-		qr, err := e.handleRollback(ctx, safeSession, logStats)
-		return sqlparser.StmtRollback, qr, err
-	case sqlparser.StmtSavepoint:
-		qr, err := e.handleSavepoint(ctx, safeSession, plan.Original, "Savepoint", logStats, func(_ string) (*sqltypes.Result, error) {
-			// Safely to ignore as there is no transaction.
-			return &sqltypes.Result{}, nil
-		}, vcursor.ignoreMaxMemoryRows)
-		return sqlparser.StmtSavepoint, qr, err
-	case sqlparser.StmtSRollback:
-		qr, err := e.handleSavepoint(ctx, safeSession, plan.Original, "Rollback Savepoint", logStats, func(query string) (*sqltypes.Result, error) {
-			// Error as there is no transaction, so there is no savepoint that exists.
-			return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.SPDoesNotExist, "SAVEPOINT does not exist: %s", query)
-		}, vcursor.ignoreMaxMemoryRows)
-		return sqlparser.StmtSRollback, qr, err
-	case sqlparser.StmtRelease:
-		qr, err := e.handleSavepoint(ctx, safeSession, plan.Original, "Release Savepoint", logStats, func(query string) (*sqltypes.Result, error) {
-			// Error as there is no transaction, so there is no savepoint that exists.
-			return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.SPDoesNotExist, "SAVEPOINT does not exist: %s", query)
-		}, vcursor.ignoreMaxMemoryRows)
-		return sqlparser.StmtRelease, qr, err
+	result, err := e.handleTransactions(ctx, safeSession, plan, logStats, vcursor)
+	if err != nil {
+		return err
+	}
+	if result != nil {
+		return recResult(plan.Type, result)
 	}
 
 	// 3: Prepare for execution
 	err = e.addNeededBindVars(plan.BindVarNeeds, bindVars, safeSession)
 	if err != nil {
 		logStats.Error = err
-		return 0, nil, err
+		return err
 	}
 
 	if plan.Instructions.NeedsTransaction() {
 		return e.insideTransaction(ctx, safeSession, logStats,
-			e.executePlan(ctx, plan, vcursor, bindVars, execStart))
+			func() error {
+				return execPlan(ctx, plan, vcursor, bindVars, execStart)
+			})
 	}
 
-	return e.executePlan(ctx, plan, vcursor, bindVars, execStart)(logStats, safeSession)
+	return execPlan(ctx, plan, vcursor, bindVars, execStart)
+}
+
+// handleTransactions deals with transactional queries: begin, commit, rollback and savepoint management
+func (e *Executor) handleTransactions(ctx context.Context, safeSession *SafeSession, plan *engine.Plan, logStats *logstats.LogStats, vcursor *vcursorImpl) (*sqltypes.Result, error) {
+	// We need to explicitly handle errors, and begin/commit/rollback, since these control transactions. Everything else
+	// will fall through and be handled through planning
+	switch plan.Type {
+	case sqlparser.StmtBegin:
+		qr, err := e.handleBegin(ctx, safeSession, logStats)
+		return qr, err
+	case sqlparser.StmtCommit:
+		qr, err := e.handleCommit(ctx, safeSession, logStats)
+		return qr, err
+	case sqlparser.StmtRollback:
+		qr, err := e.handleRollback(ctx, safeSession, logStats)
+		return qr, err
+	case sqlparser.StmtSavepoint:
+		qr, err := e.handleSavepoint(ctx, safeSession, plan.Original, "Savepoint", logStats, func(_ string) (*sqltypes.Result, error) {
+			// Safely to ignore as there is no transaction.
+			return &sqltypes.Result{}, nil
+		}, vcursor.ignoreMaxMemoryRows)
+		return qr, err
+	case sqlparser.StmtSRollback:
+		qr, err := e.handleSavepoint(ctx, safeSession, plan.Original, "Rollback Savepoint", logStats, func(query string) (*sqltypes.Result, error) {
+			// Error as there is no transaction, so there is no savepoint that exists.
+			return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.SPDoesNotExist, "SAVEPOINT does not exist: %s", query)
+		}, vcursor.ignoreMaxMemoryRows)
+		return qr, err
+	case sqlparser.StmtRelease:
+		qr, err := e.handleSavepoint(ctx, safeSession, plan.Original, "Release Savepoint", logStats, func(query string) (*sqltypes.Result, error) {
+			// Error as there is no transaction, so there is no savepoint that exists.
+			return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.SPDoesNotExist, "SAVEPOINT does not exist: %s", query)
+		}, vcursor.ignoreMaxMemoryRows)
+		return qr, err
+	}
+	return nil, nil
 }
 
 func (e *Executor) startTxIfNecessary(ctx context.Context, safeSession *SafeSession) error {
@@ -132,16 +148,16 @@ func (e *Executor) startTxIfNecessary(ctx context.Context, safeSession *SafeSess
 	return nil
 }
 
-func (e *Executor) insideTransaction(ctx context.Context, safeSession *SafeSession, logStats *LogStats, f currFunc) (sqlparser.StatementType, *sqltypes.Result, error) {
+func (e *Executor) insideTransaction(ctx context.Context, safeSession *SafeSession, logStats *logstats.LogStats, execPlan func() error) error {
 	mustCommit := false
 	if safeSession.Autocommit && !safeSession.InTransaction() {
 		mustCommit = true
 		if err := e.txConn.Begin(ctx, safeSession); err != nil {
-			return 0, nil, err
+			return err
 		}
 		// The defer acts as a failsafe. If commit was successful,
 		// the rollback will be a no-op.
-		defer e.txConn.Rollback(ctx, safeSession)
+		defer e.txConn.Rollback(ctx, safeSession) // nolint:errcheck
 	}
 
 	// The SetAutocommitable flag should be same as mustCommit.
@@ -154,46 +170,95 @@ func (e *Executor) insideTransaction(ctx context.Context, safeSession *SafeSessi
 	// at the beginning, but never after.
 	safeSession.SetAutocommittable(mustCommit)
 
+	// If we want to instantly commit the query, then there is no need to add savepoints.
+	// Any partial failure of the query will be taken care by rollback.
+	safeSession.SetSavepointState(!mustCommit)
+
 	// Execute!
-	stmtType, result, err := f(logStats, safeSession)
+	err := execPlan()
 	if err != nil {
-		return 0, nil, err
+		return err
 	}
 
 	if mustCommit {
 		commitStart := time.Now()
 		if err := e.txConn.Commit(ctx, safeSession); err != nil {
-			return 0, nil, err
+			return err
 		}
 		logStats.CommitTime = time.Since(commitStart)
 	}
-	return stmtType, result, nil
+	return nil
 }
 
-type currFunc func(*LogStats, *SafeSession) (sqlparser.StatementType, *sqltypes.Result, error)
+func (e *Executor) executePlan(
+	ctx context.Context,
+	safeSession *SafeSession,
+	plan *engine.Plan,
+	vcursor *vcursorImpl,
+	bindVars map[string]*querypb.BindVariable,
+	logStats *logstats.LogStats,
+	execStart time.Time,
+) (*sqltypes.Result, error) {
 
-func (e *Executor) executePlan(ctx context.Context, plan *engine.Plan, vcursor *vcursorImpl, bindVars map[string]*querypb.BindVariable, execStart time.Time) currFunc {
-	return func(logStats *LogStats, safeSession *SafeSession) (sqlparser.StatementType, *sqltypes.Result, error) {
-		// 4: Execute!
-		qr, err := plan.Instructions.Execute(vcursor, bindVars, true)
+	// 4: Execute!
+	qr, err := vcursor.ExecutePrimitive(ctx, plan.Instructions, bindVars, true)
 
-		// 5: Log and add statistics
-		logStats.Keyspace = plan.Instructions.GetKeyspaceName()
-		logStats.Table = plan.Instructions.GetTableName()
-		logStats.TabletType = vcursor.TabletType().String()
-		errCount := e.logExecutionEnd(logStats, execStart, plan, err, qr)
-		plan.AddStats(1, time.Since(logStats.StartTime), uint64(logStats.ShardQueries), logStats.RowsAffected, logStats.RowsReturned, errCount)
+	// 5: Log and add statistics
+	e.setLogStats(logStats, plan, vcursor, execStart, err, qr)
 
-		// Check if there was partial DML execution. If so, rollback the transaction.
-		if err != nil && safeSession.InTransaction() && vcursor.rollbackOnPartialExec {
-			_ = e.txConn.Rollback(ctx, safeSession)
-			err = vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction rolled back due to partial DML execution: %v", err)
-		}
-		return plan.Type, qr, err
+	// Check if there was partial DML execution. If so, rollback the effect of the partially executed query.
+	if err != nil {
+		return nil, e.rollbackExecIfNeeded(ctx, safeSession, bindVars, logStats, err)
 	}
+	return qr, nil
 }
 
-func (e *Executor) logExecutionEnd(logStats *LogStats, execStart time.Time, plan *engine.Plan, err error, qr *sqltypes.Result) uint64 {
+// rollbackExecIfNeeded rollbacks the partial execution if earlier it was detected that it needs partial query execution to be rolled back.
+func (e *Executor) rollbackExecIfNeeded(ctx context.Context, safeSession *SafeSession, bindVars map[string]*querypb.BindVariable, logStats *logstats.LogStats, err error) error {
+	if safeSession.InTransaction() && safeSession.IsRollbackSet() {
+		rErr := e.rollbackPartialExec(ctx, safeSession, bindVars, logStats)
+		return vterrors.Wrap(err, rErr.Error())
+	}
+	return err
+}
+
+// rollbackPartialExec rollbacks to the savepoint or rollbacks transaction based on the value set on SafeSession.rollbackOnPartialExec.
+// Once, it is used the variable is reset.
+// If it fails to rollback to the previous savepoint then, the transaction is forced to be rolled back.
+func (e *Executor) rollbackPartialExec(ctx context.Context, safeSession *SafeSession, bindVars map[string]*querypb.BindVariable, logStats *logstats.LogStats) error {
+	var err error
+
+	// needs to rollback only once.
+	rQuery := safeSession.rollbackOnPartialExec
+	if rQuery != txRollback {
+		safeSession.SavepointRollback()
+		_, _, err := e.execute(ctx, safeSession, rQuery, bindVars, logStats)
+		if err == nil {
+			return vterrors.New(vtrpcpb.Code_ABORTED, "reverted partial DML execution failure")
+		}
+		// not able to rollback changes of the failed query, so have to abort the complete transaction.
+	}
+
+	// abort the transaction.
+	_ = e.txConn.Rollback(ctx, safeSession)
+	var errMsg = "transaction rolled back to reverse changes of partial DML execution"
+	if err != nil {
+		return vterrors.Wrap(err, errMsg)
+	}
+	return vterrors.New(vtrpcpb.Code_ABORTED, errMsg)
+}
+
+func (e *Executor) setLogStats(logStats *logstats.LogStats, plan *engine.Plan, vcursor *vcursorImpl, execStart time.Time, err error, qr *sqltypes.Result) {
+	logStats.StmtType = plan.Type.String()
+	logStats.Keyspace = plan.Instructions.GetKeyspaceName()
+	logStats.Table = plan.Instructions.GetTableName()
+	logStats.TablesUsed = plan.TablesUsed
+	logStats.TabletType = vcursor.TabletType().String()
+	errCount := e.logExecutionEnd(logStats, execStart, plan, err, qr)
+	plan.AddStats(1, time.Since(logStats.StartTime), logStats.ShardQueries, logStats.RowsAffected, logStats.RowsReturned, errCount)
+}
+
+func (e *Executor) logExecutionEnd(logStats *logstats.LogStats, execStart time.Time, plan *engine.Plan, err error, qr *sqltypes.Result) uint64 {
 	logStats.ExecuteTime = time.Since(execStart)
 
 	e.updateQueryCounts(plan.Instructions.RouteType(), plan.Instructions.GetKeyspaceName(), plan.Instructions.GetTableName(), int64(logStats.ShardQueries))
@@ -209,7 +274,7 @@ func (e *Executor) logExecutionEnd(logStats *LogStats, execStart time.Time, plan
 	return errCount
 }
 
-func (e *Executor) logPlanningFinished(logStats *LogStats, plan *engine.Plan) time.Time {
+func (e *Executor) logPlanningFinished(logStats *logstats.LogStats, plan *engine.Plan) time.Time {
 	execStart := time.Now()
 	if plan != nil {
 		logStats.StmtType = plan.Type.String()

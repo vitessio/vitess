@@ -49,21 +49,21 @@ func createSetup(ctx context.Context, t *testing.T) (*topo.Server, *topo.Server)
 			Cell: "test_cell",
 			Uid:  123,
 		},
-		Hostname:      "masterhost",
-		MysqlHostname: "masterhost",
+		Hostname:      "primaryhost",
+		MysqlHostname: "primaryhost",
 		PortMap: map[string]int32{
 			"vt":   8101,
 			"gprc": 8102,
 		},
 		Keyspace:       "test_keyspace",
 		Shard:          "0",
-		Type:           topodatapb.TabletType_MASTER,
+		Type:           topodatapb.TabletType_PRIMARY,
 		DbNameOverride: "",
 		KeyRange:       nil,
 	}
 	tablet1.MysqlPort = 3306
 	if err := fromTS.CreateTablet(ctx, tablet1); err != nil {
-		t.Fatalf("cannot create master tablet: %v", err)
+		t.Fatalf("cannot create primary tablet: %v", err)
 	}
 	tablet2 := &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
@@ -140,9 +140,19 @@ func TestBasic(t *testing.T) {
 		t.Fatalf("unexpected ShardReplication: %v", sr)
 	}
 
+	// check ShardReplications is idempotent
+	CopyShardReplications(ctx, fromTS, toTS)
+	sr, err = toTS.GetShardReplication(ctx, "test_cell", "test_keyspace", "0")
+	if err != nil {
+		t.Fatalf("toTS.GetShardReplication failed: %v", err)
+	}
+	if len(sr.Nodes) != 2 {
+		t.Fatalf("unexpected ShardReplication after second copy: %v", sr)
+	}
+
 	// check tablet copy
 	CopyTablets(ctx, fromTS, toTS)
-	tablets, err := toTS.GetTabletsByCell(ctx, "test_cell")
+	tablets, err := toTS.GetTabletAliasesByCell(ctx, "test_cell")
 	if err != nil {
 		t.Fatalf("toTS.GetTabletsByCell failed: %v", err)
 	}

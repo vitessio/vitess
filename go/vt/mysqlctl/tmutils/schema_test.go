@@ -72,14 +72,14 @@ func TestToSQLStrings(t *testing.T) {
 					view1,
 				},
 			},
-			want: []string{"CREATE DATABASE {{.DatabaseName}}", basicTable1.Schema, view1.Schema},
+			want: []string{"CREATE DATABASE `{{.DatabaseName}}`", basicTable1.Schema, view1.Schema},
 		},
 		{
 			// SchemaDefinition doesn't need any tables or views
 			input: &tabletmanagerdatapb.SchemaDefinition{
 				DatabaseSchema: "CREATE DATABASE {{.DatabaseName}}",
 			},
-			want: []string{"CREATE DATABASE {{.DatabaseName}}"},
+			want: []string{"CREATE DATABASE `{{.DatabaseName}}`"},
 		},
 		{
 			// and can even have an empty DatabaseSchema
@@ -95,7 +95,7 @@ func TestToSQLStrings(t *testing.T) {
 					basicTable2,
 				},
 			},
-			want: []string{"CREATE DATABASE {{.DatabaseName}}", basicTable1.Schema, basicTable2.Schema},
+			want: []string{"CREATE DATABASE `{{.DatabaseName}}`", basicTable1.Schema, basicTable2.Schema},
 		},
 		{
 			// multiple tables and views should be ordered with all tables before views
@@ -109,7 +109,7 @@ func TestToSQLStrings(t *testing.T) {
 				},
 			},
 			want: []string{
-				"CREATE DATABASE {{.DatabaseName}}",
+				"CREATE DATABASE `{{.DatabaseName}}`",
 				basicTable1.Schema, basicTable2.Schema,
 				view1.Schema, view2.Schema,
 			},
@@ -124,7 +124,7 @@ func TestToSQLStrings(t *testing.T) {
 				},
 			},
 			want: []string{
-				"CREATE DATABASE {{.DatabaseName}}",
+				"CREATE DATABASE `{{.DatabaseName}}`",
 				basicTable1.Schema,
 				"CREATE TABLE `{{.DatabaseName}}`.`table3` (\n" +
 					"id bigint not null,\n" +
@@ -492,7 +492,7 @@ func TestFilterTables(t *testing.T) {
 			},
 		},
 		{
-			desc: "filter based on excludeTables (blacklist)",
+			desc: "filter based on excludeTables (denylist)",
 			input: &tabletmanagerdatapb.SchemaDefinition{
 				TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
 					basicTable1,

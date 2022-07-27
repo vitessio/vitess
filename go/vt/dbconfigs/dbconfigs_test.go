@@ -18,7 +18,6 @@ package dbconfigs
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"syscall"
 	"testing"
@@ -35,17 +34,18 @@ func TestInit(t *testing.T) {
 	dbConfigs := DBConfigs{
 		appParams: mysql.ConnParams{UnixSocket: "socket"},
 		dbaParams: mysql.ConnParams{Host: "host"},
+		Charset:   "utf8",
 	}
 	dbConfigs.InitWithSocket("default")
-	assert.Equal(t, mysql.ConnParams{UnixSocket: "socket"}, dbConfigs.appParams)
-	assert.Equal(t, mysql.ConnParams{Host: "host"}, dbConfigs.dbaParams)
-	assert.Equal(t, mysql.ConnParams{UnixSocket: "default"}, dbConfigs.appdebugParams)
+	assert.Equal(t, mysql.ConnParams{UnixSocket: "socket", Charset: "utf8"}, dbConfigs.appParams)
+	assert.Equal(t, mysql.ConnParams{Host: "host", Charset: "utf8"}, dbConfigs.dbaParams)
+	assert.Equal(t, mysql.ConnParams{UnixSocket: "default", Charset: "utf8"}, dbConfigs.appdebugParams)
 
 	dbConfigs = DBConfigs{
 		Host:                       "a",
 		Port:                       1,
 		Socket:                     "b",
-		Charset:                    "c",
+		Charset:                    "utf8mb4",
 		Flags:                      2,
 		Flavor:                     "flavor",
 		SslCa:                      "d",
@@ -80,7 +80,7 @@ func TestInit(t *testing.T) {
 		Uname:            "app",
 		Pass:             "apppass",
 		UnixSocket:       "b",
-		Charset:          "c",
+		Charset:          "utf8mb4",
 		Flags:            2,
 		Flavor:           "flavor",
 		ConnectTimeoutMs: 250,
@@ -91,7 +91,7 @@ func TestInit(t *testing.T) {
 		Host:             "a",
 		Port:             1,
 		UnixSocket:       "b",
-		Charset:          "c",
+		Charset:          "utf8mb4",
 		Flags:            2,
 		Flavor:           "flavor",
 		SslCa:            "d",
@@ -107,7 +107,7 @@ func TestInit(t *testing.T) {
 		Uname:            "dba",
 		Pass:             "dbapass",
 		UnixSocket:       "b",
-		Charset:          "c",
+		Charset:          "utf8mb4",
 		Flags:            2,
 		Flavor:           "flavor",
 		SslCa:            "d",
@@ -128,6 +128,7 @@ func TestInit(t *testing.T) {
 		SslCaPath: "e",
 		SslCert:   "f",
 		SslKey:    "g",
+		Charset:   "utf8",
 		App: UserConfig{
 			User:     "app",
 			Password: "apppass",
@@ -142,7 +143,7 @@ func TestInit(t *testing.T) {
 		},
 		appParams: mysql.ConnParams{
 			UnixSocket: "socket",
-			Charset:    "f",
+			Charset:    "utf8mb4",
 		},
 		dbaParams: mysql.ConnParams{
 			Host:  "host",
@@ -156,7 +157,7 @@ func TestInit(t *testing.T) {
 		Uname:      "app",
 		Pass:       "apppass",
 		UnixSocket: "b",
-		Charset:    "f",
+		Charset:    "utf8mb4",
 	}
 	assert.Equal(t, want, dbConfigs.appParams)
 	want = mysql.ConnParams{
@@ -167,6 +168,7 @@ func TestInit(t *testing.T) {
 		SslCaPath:  "e",
 		SslCert:    "f",
 		SslKey:     "g",
+		Charset:    "utf8",
 	}
 	assert.Equal(t, want, dbConfigs.appdebugParams)
 	want = mysql.ConnParams{
@@ -180,6 +182,7 @@ func TestInit(t *testing.T) {
 		SslCaPath:  "e",
 		SslCert:    "f",
 		SslKey:     "g",
+		Charset:    "utf8",
 	}
 	assert.Equal(t, want, dbConfigs.dbaParams)
 }
@@ -196,13 +199,15 @@ func TestUseTCP(t *testing.T) {
 		Dba: UserConfig{
 			User: "dba",
 		},
+		Charset: "utf8",
 	}
 	dbConfigs.InitWithSocket("default")
 
 	want := mysql.ConnParams{
-		Host:  "a",
-		Port:  1,
-		Uname: "app",
+		Host:    "a",
+		Port:    1,
+		Uname:   "app",
+		Charset: "utf8",
 	}
 	assert.Equal(t, want, dbConfigs.appParams)
 
@@ -211,6 +216,7 @@ func TestUseTCP(t *testing.T) {
 		Port:       1,
 		Uname:      "dba",
 		UnixSocket: "b",
+		Charset:    "utf8",
 	}
 	assert.Equal(t, want, dbConfigs.dbaParams)
 }
@@ -224,6 +230,7 @@ func TestAccessors(t *testing.T) {
 		filteredParams: mysql.ConnParams{},
 		replParams:     mysql.ConnParams{},
 		DBName:         "db",
+		Charset:        "utf8",
 	}
 	if got, want := dbc.AppWithDB().connParams.DbName, "db"; got != want {
 		t.Errorf("dbc.AppWithDB().DbName: %v, want %v", got, want)
@@ -252,7 +259,7 @@ func TestAccessors(t *testing.T) {
 }
 
 func TestCredentialsFileHUP(t *testing.T) {
-	tmpFile, err := ioutil.TempFile("", "credentials.json")
+	tmpFile, err := os.CreateTemp("", "credentials.json")
 	if err != nil {
 		t.Fatalf("couldn't create temp file: %v", err)
 	}
@@ -261,7 +268,7 @@ func TestCredentialsFileHUP(t *testing.T) {
 	*dbCredentialsServer = "file"
 	oldStr := "str1"
 	jsonConfig := fmt.Sprintf("{\"%s\": [\"%s\"]}", oldStr, oldStr)
-	if err := ioutil.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {
+	if err := os.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {
 		t.Fatalf("couldn't write temp file: %v", err)
 	}
 	cs := GetCredentialsServer()
@@ -276,14 +283,14 @@ func TestCredentialsFileHUP(t *testing.T) {
 func hupTest(t *testing.T, tmpFile *os.File, oldStr, newStr string) {
 	cs := GetCredentialsServer()
 	jsonConfig := fmt.Sprintf("{\"%s\": [\"%s\"]}", newStr, newStr)
-	if err := ioutil.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {
+	if err := os.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {
 		t.Fatalf("couldn't overwrite temp file: %v", err)
 	}
 	_, pass, _ := cs.GetUserAndPassword(oldStr)
 	if pass != oldStr {
 		t.Fatalf("%s's Password should still be '%s'", oldStr, oldStr)
 	}
-	syscall.Kill(syscall.Getpid(), syscall.SIGHUP)
+	_ = syscall.Kill(syscall.Getpid(), syscall.SIGHUP)
 	time.Sleep(100 * time.Millisecond) // wait for signal handler
 	_, _, err := cs.GetUserAndPassword(oldStr)
 	if err != ErrUnknownUser {

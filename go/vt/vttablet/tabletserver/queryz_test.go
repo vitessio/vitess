@@ -18,7 +18,7 @@ package tabletserver
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"regexp"
@@ -41,7 +41,7 @@ func TestQueryzHandler(t *testing.T) {
 	plan1 := &TabletPlan{
 		Original: query1,
 		Plan: &planbuilder.Plan{
-			Table:  &schema.Table{Name: sqlparser.NewTableIdent("test_table")},
+			Table:  &schema.Table{Name: sqlparser.NewIdentifierCS("test_table")},
 			PlanID: planbuilder.PlanSelect,
 		},
 	}
@@ -52,7 +52,7 @@ func TestQueryzHandler(t *testing.T) {
 	plan2 := &TabletPlan{
 		Original: query2,
 		Plan: &planbuilder.Plan{
-			Table:  &schema.Table{Name: sqlparser.NewTableIdent("test_table")},
+			Table:  &schema.Table{Name: sqlparser.NewIdentifierCS("test_table")},
 			PlanID: planbuilder.PlanDDL,
 		},
 	}
@@ -63,7 +63,7 @@ func TestQueryzHandler(t *testing.T) {
 	plan3 := &TabletPlan{
 		Original: query3,
 		Plan: &planbuilder.Plan{
-			Table:  &schema.Table{Name: sqlparser.NewTableIdent("")},
+			Table:  &schema.Table{Name: sqlparser.NewIdentifierCS("")},
 			PlanID: planbuilder.PlanOtherRead,
 		},
 	}
@@ -78,7 +78,7 @@ func TestQueryzHandler(t *testing.T) {
 	plan4 := &TabletPlan{
 		Original: hugeInsert,
 		Plan: &planbuilder.Plan{
-			Table:  &schema.Table{Name: sqlparser.NewTableIdent("")},
+			Table:  &schema.Table{Name: sqlparser.NewIdentifierCS("")},
 			PlanID: planbuilder.PlanOtherRead,
 		},
 	}
@@ -90,7 +90,7 @@ func TestQueryzHandler(t *testing.T) {
 	qe.plans.Wait()
 
 	queryzHandler(qe, resp, req)
-	body, _ := ioutil.ReadAll(resp.Body)
+	body, _ := io.ReadAll(resp.Body)
 	planPattern1 := []string{
 		`<tr class="high">`,
 		`<td>select name from test_table</td>`,

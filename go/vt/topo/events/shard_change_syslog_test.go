@@ -30,12 +30,12 @@ func init() {
 }
 
 func TestShardChangeSyslog(t *testing.T) {
-	wantSev, wantMsg := syslog.LOG_INFO, "keyspace-123/shard-123 [shard] status value: master_alias:{cell:\"test\" uid:123}"
+	wantSev, wantMsg := syslog.LOG_INFO, "keyspace-123/shard-123 [shard] status value: primary_alias:{cell:\"test\" uid:123}"
 	sc := &ShardChange{
 		KeyspaceName: "keyspace-123",
 		ShardName:    "shard-123",
 		Shard: &topodatapb.Shard{
-			MasterAlias: &topodatapb.TabletAlias{
+			PrimaryAlias: &topodatapb.TabletAlias{
 				Cell: "test",
 				Uid:  123,
 			},

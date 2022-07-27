@@ -178,7 +178,21 @@ func (r *rewriteGen) sliceMethod(t types.Type, slice *types.Slice, spi generator
 	stmts := []jen.Code{
 		jen.If(jen.Id("node == nil").Block(returnTrue())),
 	}
-	stmts = append(stmts, executePre())
+
+	typeString := types.TypeString(t, noQualifier)
+
+	preStmts := setupCursor()
+	preStmts = append(preStmts,
+		jen.Id("kontinue").Op(":=").Id("!a.pre(&a.cur)"),
+		jen.If(jen.Id("a.cur.revisit").Block(
+			jen.Id("node").Op("=").Id("a.cur.node.("+typeString+")"),
+			jen.Id("a.cur.revisit").Op("=").False(),
+			jen.Return(jen.Id("a.rewrite"+typeString+"(parent, node, replacer)")),
+		)),
+		jen.If(jen.Id("kontinue").Block(jen.Return(jen.True()))),
+	)
+
+	stmts = append(stmts, jen.If(jen.Id("a.pre!= nil").Block(preStmts...)))
 
 	haveChildren := false
 	if shouldAdd(slice.Elem(), spi.iface()) {

@@ -27,10 +27,23 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
+
+const (
+	charsetName = "utf8mb4"
+)
+
+func columnSize(cs collations.ID, size uint32) uint32 {
+	// utf8_general_ci results in smaller max column sizes because MySQL 5.7 is silly
+	if collations.Local().LookupByID(cs).Charset().Name() == "utf8mb3" {
+		return size * 3 / 4
+	}
+	return size
+}
 
 // Test the SQL query part of the API.
 func TestQueries(t *testing.T) {
@@ -69,6 +82,7 @@ func TestQueries(t *testing.T) {
 	if err != nil {
 		t.Fatalf("insert failed: %v", err)
 	}
+	collID := getDefaultCollationID()
 	expectedResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{
@@ -79,7 +93,7 @@ func TestQueries(t *testing.T) {
 				Database:     "vttest",
 				OrgName:      "id",
 				ColumnLength: 11,
-				Charset:      mysql.CharacterSetBinary,
+				Charset:      collations.CollationBinaryID,
 				Flags: uint32(querypb.MySqlFlag_NOT_NULL_FLAG |
 					querypb.MySqlFlag_PRI_KEY_FLAG |
 					querypb.MySqlFlag_PART_KEY_FLAG |
@@ -92,8 +106,8 @@ func TestQueries(t *testing.T) {
 				OrgTable:     "a",
 				Database:     "vttest",
 				OrgName:      "name",
-				ColumnLength: 384,
-				Charset:      mysql.CharacterSetUtf8,
+				ColumnLength: columnSize(collID, 512),
+				Charset:      uint32(collID),
 			},
 		},
 		Rows: [][]sqltypes.Value{
@@ -179,6 +193,7 @@ func readRowsUsingStream(t *testing.T, conn *mysql.Conn, expectedCount int) {
 	}
 
 	// Check the fields.
+	collID := getDefaultCollationID()
 	expectedFields := []*querypb.Field{
 		{
 			Name:         "id",
@@ -188,7 +203,7 @@ func readRowsUsingStream(t *testing.T, conn *mysql.Conn, expectedCount int) {
 			Database:     "vttest",
 			OrgName:      "id",
 			ColumnLength: 11,
-			Charset:      mysql.CharacterSetBinary,
+			Charset:      collations.CollationBinaryID,
 			Flags: uint32(querypb.MySqlFlag_NOT_NULL_FLAG |
 				querypb.MySqlFlag_PRI_KEY_FLAG |
 				querypb.MySqlFlag_PART_KEY_FLAG |
@@ -201,8 +216,8 @@ func readRowsUsingStream(t *testing.T, conn *mysql.Conn, expectedCount int) {
 			OrgTable:     "a",
 			Database:     "vttest",
 			OrgName:      "name",
-			ColumnLength: 384,
-			Charset:      mysql.CharacterSetUtf8,
+			ColumnLength: columnSize(collID, 512),
+			Charset:      uint32(collID),
 		},
 	}
 	fields, err := conn.Fields()
@@ -297,7 +312,8 @@ func TestSysInfo(t *testing.T) {
 	_, err = conn.ExecuteFetch("drop table if exists `a`", 1000, true)
 	require.NoError(t, err)
 
-	_, err = conn.ExecuteFetch("CREATE TABLE `a` (`one` int NOT NULL,`two` int NOT NULL,PRIMARY KEY (`one`,`two`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4", 1000, true)
+	_, err = conn.ExecuteFetch(fmt.Sprintf("CREATE TABLE `a` (`one` int NOT NULL,`two` int NOT NULL,PRIMARY KEY (`one`,`two`)) ENGINE=InnoDB DEFAULT CHARSET=%s",
+		charsetName), 1000, true)
 	require.NoError(t, err)
 	defer conn.ExecuteFetch("drop table `a`", 1000, true)
 
@@ -329,4 +345,10 @@ func TestSysInfo(t *testing.T) {
 
 	assert.EqualValues(t, sqltypes.Uint64, qr.Fields[4].Type)
 	assert.EqualValues(t, querypb.Type_UINT64, qr.Rows[0][4].Type())
+}
+
+func getDefaultCollationID() collations.ID {
+	collationHandler := collations.Local()
+	collation := collationHandler.DefaultCollationForCharset(charsetName)
+	return collation.ID()
 }

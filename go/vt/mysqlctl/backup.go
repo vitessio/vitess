@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -332,6 +333,21 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 	err = params.Mysqld.Start(context.Background(), params.Cnf, "--skip-grant-tables", "--skip-networking")
 	if err != nil {
 		return nil, err
+	}
+
+	// We disable super_read_only, in case it is in the default MySQL startup
+	// parameters and will be blocking the writes we need to do in
+	// PopulateMetadataTables().  We do it blindly, since
+	// this will fail on MariaDB, which doesn't have super_read_only
+	// This is safe, since we're restarting MySQL after the restore anyway
+	params.Logger.Infof("Restore: disabling super_read_only")
+	if err := params.Mysqld.SetSuperReadOnly(false); err != nil {
+		if strings.Contains(err.Error(), strconv.Itoa(mysql.ERUnknownSystemVariable)) {
+			params.Logger.Warningf("Restore: server does not know about super_read_only, continuing anyway...")
+		} else {
+			params.Logger.Errorf("Restore: unexpected error while trying to set super_read_only: %v", err)
+			return nil, err
+		}
 	}
 
 	params.Logger.Infof("Restore: running mysql_upgrade")

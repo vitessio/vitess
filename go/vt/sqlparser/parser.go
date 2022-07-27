@@ -17,20 +17,25 @@ limitations under the License.
 package sqlparser
 
 import (
+	"flag"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 	"sync"
 
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
+var versionFlagSync sync.Once
+
 // parserPool is a pool for parser objects.
 var parserPool = sync.Pool{
-	New: func() interface{} {
+	New: func() any {
 		return &yyParserImpl{}
 	},
 }
@@ -39,7 +44,7 @@ var parserPool = sync.Pool{
 var zeroParser yyParserImpl
 
 // MySQLVersion is the version of MySQL that the parser would emulate
-var MySQLVersion string = "50709"
+var MySQLVersion = "50709" // default version if nothing else is stated
 
 // yyParsePooled is a wrapper around yyParse that pools the parser objects. There isn't a
 // particularly good reason to use yyParse directly, since it immediately discards its parser.
@@ -97,6 +102,69 @@ func Parse2(sql string) (Statement, BindVars, error) {
 		return nil, nil, ErrEmpty
 	}
 	return tokenizer.ParseTree, tokenizer.BindVars, nil
+}
+
+func checkParserVersionFlag() {
+	if flag.Parsed() {
+		versionFlagSync.Do(func() {
+			if *servenv.MySQLServerVersion != "" {
+				convVersion, err := convertMySQLVersionToCommentVersion(*servenv.MySQLServerVersion)
+				if err != nil {
+					log.Error(err)
+				} else {
+					MySQLVersion = convVersion
+				}
+			}
+		})
+	}
+}
+
+// convertMySQLVersionToCommentVersion converts the MySQL version into comment version format.
+func convertMySQLVersionToCommentVersion(version string) (string, error) {
+	var res = make([]int, 3)
+	idx := 0
+	val := ""
+	for _, c := range version {
+		if c <= '9' && c >= '0' {
+			val += string(c)
+		} else if c == '.' {
+			v, err := strconv.Atoi(val)
+			if err != nil {
+				return "", err
+			}
+			val = ""
+			res[idx] = v
+			idx++
+			if idx == 3 {
+				break
+			}
+		} else {
+			break
+		}
+	}
+	if val != "" {
+		v, err := strconv.Atoi(val)
+		if err != nil {
+			return "", err
+		}
+		res[idx] = v
+		idx++
+	}
+	if idx == 0 {
+		return "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "MySQL version not correctly setup - %s.", version)
+	}
+
+	return fmt.Sprintf("%01d%02d%02d", res[0], res[1], res[2]), nil
+}
+
+// ParseExpr parses an expression and transforms it to an AST
+func ParseExpr(sql string) (Expr, error) {
+	stmt, err := Parse("select " + sql)
+	if err != nil {
+		return nil, err
+	}
+	aliasedExpr := stmt.(*Select).SelectExprs[0].(*AliasedExpr)
+	return aliasedExpr.Expr, err
 }
 
 // Parse behaves like Parse2 but does not return a set of bind variables
@@ -157,14 +225,15 @@ func parseNext(tokenizer *Tokenizer, strict bool) (Statement, error) {
 		}
 		return nil, tokenizer.LastError
 	}
-	if tokenizer.ParseTree == nil {
+	_, isCommentOnly := tokenizer.ParseTree.(*CommentOnly)
+	if tokenizer.ParseTree == nil || isCommentOnly {
 		return ParseNext(tokenizer)
 	}
 	return tokenizer.ParseTree, nil
 }
 
 // ErrEmpty is a sentinel error returned when parsing empty statements.
-var ErrEmpty = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.EmptyQuery, "query was empty")
+var ErrEmpty = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.EmptyQuery, "Query was empty")
 
 // SplitStatement returns the first sql statement up to either a ; or EOF
 // and the remainder from the given buffer
@@ -236,13 +305,6 @@ loop:
 	return
 }
 
-// String returns a string representation of an SQLNode.
-func String(node SQLNode) string {
-	if node == nil {
-		return "<nil>"
-	}
-
-	buf := NewTrackedBuffer(nil)
-	node.formatFast(buf)
-	return buf.String()
+func IsMySQL80AndAbove() bool {
+	return MySQLVersion >= "80000"
 }

@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"os/exec"
@@ -44,8 +43,8 @@ const (
 	vaultSetupScript    = "vault-setup.sh"
 )
 
-// VaultServer : Basic parameters for the running the Vault server
-type VaultServer struct {
+// Server : Basic parameters for the running the Vault server
+type Server struct {
 	address  string
 	port1    int
 	port2    int
@@ -57,7 +56,7 @@ type VaultServer struct {
 }
 
 // Start the Vault server in dev mode
-func (vs *VaultServer) start() error {
+func (vs *Server) start() error {
 	// Download and unpack vault binary
 	vs.execPath = path.Join(os.Getenv("EXTRA_BIN"), vaultExecutableName)
 	fileStat, err := os.Stat(vs.execPath)
@@ -83,14 +82,14 @@ func (vs *VaultServer) start() error {
 	}
 
 	hclFile := path.Join(os.Getenv("PWD"), vaultConfigFileName)
-	hcl, _ := ioutil.ReadFile(hclFile)
+	hcl, _ := os.ReadFile(hclFile)
 	// Replace variable parts in Vault config file
 	hcl = bytes.Replace(hcl, []byte("$server"), []byte(vs.address), 1)
 	hcl = bytes.Replace(hcl, []byte("$port"), []byte(fmt.Sprintf("%d", vs.port1)), 1)
 	hcl = bytes.Replace(hcl, []byte("$cert"), []byte(path.Join(os.Getenv("PWD"), vaultCertFileName)), 1)
 	hcl = bytes.Replace(hcl, []byte("$key"), []byte(path.Join(os.Getenv("PWD"), vaultKeyFileName)), 1)
 	newHclFile := path.Join(vs.logDir, vaultConfigFileName)
-	err = ioutil.WriteFile(newHclFile, hcl, 0700)
+	err = os.WriteFile(newHclFile, hcl, 0700)
 	if err != nil {
 		log.Error(err)
 		return err
@@ -127,7 +126,7 @@ func (vs *VaultServer) start() error {
 	return nil
 }
 
-func (vs *VaultServer) stop() error {
+func (vs *Server) stop() error {
 	if vs.proc == nil || vs.exit == nil {
 		return nil
 	}
@@ -154,7 +153,7 @@ func downloadExecFile(path string, url string) error {
 	}
 	defer resp.Body.Close()
 
-	err = ioutil.WriteFile(path, []byte(""), 0700)
+	err = os.WriteFile(path, []byte(""), 0700)
 	if err != nil {
 		return err
 	}

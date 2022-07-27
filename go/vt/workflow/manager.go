@@ -17,15 +17,14 @@ limitations under the License.
 package workflow
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/url"
 	"sync"
 	"time"
 
-	"context"
-
-	gouuid "github.com/pborman/uuid"
+	gouuid "github.com/google/uuid"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
@@ -87,7 +86,7 @@ type Manager struct {
 	// set if the manager is inside the Run() method. Outside of
 	// the Run method, ctx will be nil. It means the Manager is
 	// shut down, either at startup or shutdown, or is not the
-	// elected master.
+	// elected primary.
 	ctx context.Context
 	// started is used to signal that the manager is running i.e. Run() has been
 	// successfully called and the manager can start workflows.
@@ -95,6 +94,8 @@ type Manager struct {
 	started chan struct{}
 	// workflows is a map from job UUID to runningWorkflow.
 	workflows map[string]*runningWorkflow
+	// sanitizeHTTPHeaders toggles sanitizeRequestHeader() behavior
+	sanitizeHTTPHeaders bool
 }
 
 // runningWorkflow holds information about a running workflow.
@@ -132,6 +133,11 @@ func NewManager(ts *topo.Server) *Manager {
 		started:     make(chan struct{}),
 		workflows:   make(map[string]*runningWorkflow),
 	}
+}
+
+// SetSanitizeHTTPHeaders - toggles m.sanitizeHTTPHeaders on/off
+func (m *Manager) SetSanitizeHTTPHeaders(to bool) {
+	m.sanitizeHTTPHeaders = to
 }
 
 // SetRedirectFunc sets the redirect function to use.
@@ -254,9 +260,14 @@ func (m *Manager) Create(ctx context.Context, factoryName string, args []string)
 		return "", fmt.Errorf("no factory named %v is registered", factoryName)
 	}
 
+	uuid, err := gouuid.NewUUID()
+	if err != nil {
+		return "", err
+	}
+
 	// Create the initial workflowpb.Workflow object.
 	w := &workflowpb.Workflow{
-		Uuid:        gouuid.NewUUID().String(),
+		Uuid:        uuid.String(),
 		CreateTime:  time.Now().UnixNano(),
 		FactoryName: factoryName,
 		State:       workflowpb.WorkflowState_NotStarted,
@@ -515,7 +526,7 @@ func (m *Manager) isRunning() bool {
 
 // getAndWatchFullTree returns the initial tree and a channel to watch
 // the changes.
-// If this manager is not the master, and we have a redirectFunc
+// If this manager is not the primary, and we have a redirectFunc
 // defined, the initial bytes will be set, but the channel will be nil,
 // and the index is undefined.
 // So return can have one of three combinations:

@@ -114,7 +114,7 @@ func NewMycnfFromFlags(uid uint32) (mycnf *Mycnf, err error) {
 			// This is probably not going to be used by anybody,
 			// but fill in a default value. (Note it's used by
 			// mysqld.Start, in which case it is correct).
-			path: MycnfFile(uint32(*flagServerID)),
+			Path: MycnfFile(uint32(*flagServerID)),
 		}, nil
 	}
 
@@ -125,6 +125,6 @@ func NewMycnfFromFlags(uid uint32) (mycnf *Mycnf, err error) {
 		log.Infof("No mycnf_server_id specified, using mycnf-file file %v", *flagMycnfFile)
 	}
 	mycnf = NewMycnf(uid, 0)
-	mycnf.path = *flagMycnfFile
+	mycnf.Path = *flagMycnfFile
 	return ReadMycnf(mycnf)
 }

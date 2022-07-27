@@ -17,185 +17,85 @@ limitations under the License.
 package engine
 
 import (
+	"context"
 	"fmt"
 	"time"
+
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/srvtopo"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 var _ Primitive = (*Delete)(nil)
 
 // Delete represents the instructions to perform a delete.
 type Delete struct {
-	DML
+	*DML
 
 	// Delete does not take inputs
 	noInputs
 }
 
-var delName = map[DMLOpcode]string{
-	Unsharded:     "DeleteUnsharded",
-	Equal:         "DeleteEqual",
-	In:            "DeleteIn",
-	Scatter:       "DeleteScatter",
-	ByDestination: "DeleteByDestination",
-}
-
-// RouteType returns a description of the query routing type used by the primitive
-func (del *Delete) RouteType() string {
-	return delName[del.Opcode]
-}
-
-// GetKeyspaceName specifies the Keyspace that this primitive routes to.
-func (del *Delete) GetKeyspaceName() string {
-	return del.Keyspace.Name
-}
-
-// GetTableName specifies the table that this primitive routes to.
-func (del *Delete) GetTableName() string {
-	if del.Table != nil {
-		return del.Table.Name.String()
-	}
-	return ""
-}
-
-// Execute performs a non-streaming exec.
-func (del *Delete) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, _ bool) (*sqltypes.Result, error) {
+// TryExecute performs a non-streaming exec.
+func (del *Delete) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, _ bool) (*sqltypes.Result, error) {
 	if del.QueryTimeout != 0 {
-		cancel := vcursor.SetContextTimeout(time.Duration(del.QueryTimeout) * time.Millisecond)
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, time.Duration(del.QueryTimeout)*time.Millisecond)
 		defer cancel()
+	}
+
+	rss, _, err := del.findRoute(ctx, vcursor, bindVars)
+	if err != nil {
+		return nil, err
+	}
+	err = allowOnlyPrimary(rss...)
+	if err != nil {
+		return nil, err
 	}
 
 	switch del.Opcode {
 	case Unsharded:
-		return del.execDeleteUnsharded(vcursor, bindVars)
-	case Equal:
-		return del.execDeleteEqual(vcursor, bindVars)
-	case In:
-		return del.execDeleteIn(vcursor, bindVars)
-	case Scatter:
-		return del.execDeleteByDestination(vcursor, bindVars, key.DestinationAllShards{})
-	case ByDestination:
-		return del.execDeleteByDestination(vcursor, bindVars, del.TargetDestination)
+		return del.execUnsharded(ctx, vcursor, bindVars, rss)
+	case Equal, IN, Scatter, ByDestination, SubShard:
+		return del.execMultiDestination(ctx, vcursor, bindVars, rss, del.deleteVindexEntries)
 	default:
 		// Unreachable.
-		return nil, fmt.Errorf("unsupported opcode: %v", del)
+		return nil, fmt.Errorf("unsupported opcode: %v", del.Opcode)
 	}
 }
 
-// StreamExecute performs a streaming exec.
-func (del *Delete) StreamExecute(VCursor, map[string]*querypb.BindVariable, bool, func(*sqltypes.Result) error) error {
-	return fmt.Errorf("query %q cannot be used for streaming", del.Query)
+// TryStreamExecute performs a streaming exec.
+func (del *Delete) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	res, err := del.TryExecute(ctx, vcursor, bindVars, wantfields)
+	if err != nil {
+		return err
+	}
+	return callback(res)
 }
 
 // GetFields fetches the field info.
-func (del *Delete) GetFields(VCursor, map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (del *Delete) GetFields(context.Context, VCursor, map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return nil, fmt.Errorf("BUG: unreachable code for %q", del.Query)
-}
-
-func (del *Delete) execDeleteUnsharded(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	rss, _, err := vcursor.ResolveDestinations(del.Keyspace.Name, nil, []key.Destination{key.DestinationAllShards{}})
-	if err != nil {
-		return nil, err
-	}
-	if len(rss) != 1 {
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot send query to multiple shards for un-sharded database: %v", rss)
-	}
-	err = allowOnlyMaster(rss...)
-	if err != nil {
-		return nil, err
-	}
-	return execShard(vcursor, del.Query, bindVars, rss[0], true, true /* canAutocommit */)
-}
-
-func (del *Delete) execDeleteEqual(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	key, err := del.Values[0].ResolveValue(bindVars)
-	if err != nil {
-		return nil, err
-	}
-	rs, ksid, err := resolveSingleShard(vcursor, del.Vindex, del.Keyspace, key)
-	if err != nil {
-		return nil, err
-	}
-	err = allowOnlyMaster(rs)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(ksid) == 0 {
-		return &sqltypes.Result{}, nil
-	}
-	if del.OwnedVindexQuery != "" {
-		err = del.deleteVindexEntries(vcursor, bindVars, []*srvtopo.ResolvedShard{rs})
-		if err != nil {
-			return nil, err
-		}
-	}
-	return execShard(vcursor, del.Query, bindVars, rs, true /* rollbackOnError */, true /* canAutocommit */)
-}
-
-func (del *Delete) execDeleteIn(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	rss, queries, err := resolveMultiValueShards(vcursor, del.Keyspace, del.Query, bindVars, del.Values[0], del.Vindex)
-	if err != nil {
-		return nil, err
-	}
-	err = allowOnlyMaster(rss...)
-	if err != nil {
-		return nil, err
-	}
-
-	if del.OwnedVindexQuery != "" {
-		if err := del.deleteVindexEntries(vcursor, bindVars, rss); err != nil {
-			return nil, err
-		}
-	}
-	return execMultiShard(vcursor, rss, queries, del.MultiShardAutocommit)
-}
-
-func (del *Delete) execDeleteByDestination(vcursor VCursor, bindVars map[string]*querypb.BindVariable, dest key.Destination) (*sqltypes.Result, error) {
-	rss, _, err := vcursor.ResolveDestinations(del.Keyspace.Name, nil, []key.Destination{dest})
-	if err != nil {
-		return nil, err
-	}
-	err = allowOnlyMaster(rss...)
-	if err != nil {
-		return nil, err
-	}
-
-	queries := make([]*querypb.BoundQuery, len(rss))
-	for i := range rss {
-		queries[i] = &querypb.BoundQuery{
-			Sql:           del.Query,
-			BindVariables: bindVars,
-		}
-	}
-	if len(del.Table.Owned) > 0 {
-		err = del.deleteVindexEntries(vcursor, bindVars, rss)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return execMultiShard(vcursor, rss, queries, del.MultiShardAutocommit)
 }
 
 // deleteVindexEntries performs an delete if table owns vindex.
 // Note: the commit order may be different from the DML order because it's possible
 // for DMLs to reuse existing transactions.
-func (del *Delete) deleteVindexEntries(vcursor VCursor, bindVars map[string]*querypb.BindVariable, rss []*srvtopo.ResolvedShard) error {
+func (del *Delete) deleteVindexEntries(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, rss []*srvtopo.ResolvedShard) error {
+	if del.OwnedVindexQuery == "" {
+		return nil
+	}
 	queries := make([]*querypb.BoundQuery, len(rss))
 	for i := range rss {
 		queries[i] = &querypb.BoundQuery{Sql: del.OwnedVindexQuery, BindVariables: bindVars}
 	}
-	subQueryResults, errors := vcursor.ExecuteMultiShard(rss, queries, false, false)
+	subQueryResults, errors := vcursor.ExecuteMultiShard(ctx, rss, queries, false /* rollbackOnError */, false /* canAutocommit */)
 	for _, err := range errors {
 		if err != nil {
 			return err
@@ -207,30 +107,33 @@ func (del *Delete) deleteVindexEntries(vcursor VCursor, bindVars map[string]*que
 	}
 
 	for _, row := range subQueryResults.Rows {
-		colnum := 1
-		ksid, err := resolveKeyspaceID(vcursor, del.KsidVindex, row[0])
+		ksid, err := resolveKeyspaceID(ctx, vcursor, del.KsidVindex, row[0:del.KsidLength])
 		if err != nil {
 			return err
 		}
-		for _, colVindex := range del.Table.Owned {
+		colnum := del.KsidLength
+		vindexTable, err := del.GetSingleTable()
+		if err != nil {
+			return err
+		}
+		for _, colVindex := range vindexTable.Owned {
 			// Fetch the column values. colnum must keep incrementing.
 			fromIds := make([]sqltypes.Value, 0, len(colVindex.Columns))
 			for range colVindex.Columns {
 				fromIds = append(fromIds, row[colnum])
 				colnum++
 			}
-			if err := colVindex.Vindex.(vindexes.Lookup).Delete(vcursor, [][]sqltypes.Value{fromIds}, ksid); err != nil {
+			if err := colVindex.Vindex.(vindexes.Lookup).Delete(ctx, vcursor, [][]sqltypes.Value{fromIds}, ksid); err != nil {
 				return err
 			}
 		}
-
 	}
 
 	return nil
 }
 
 func (del *Delete) description() PrimitiveDescription {
-	other := map[string]interface{}{
+	other := map[string]any{
 		"Query":                del.Query,
 		"Table":                del.GetTableName(),
 		"OwnedVindexQuery":     del.OwnedVindexQuery,
@@ -244,19 +147,24 @@ func (del *Delete) description() PrimitiveDescription {
 		OperatorType:     "Delete",
 		Keyspace:         del.Keyspace,
 		Variant:          del.Opcode.String(),
-		TargetTabletType: topodatapb.TabletType_MASTER,
+		TargetTabletType: topodatapb.TabletType_PRIMARY,
 		Other:            other,
 	}
 }
 
-func addFieldsIfNotEmpty(dml DML, other map[string]interface{}) {
+func addFieldsIfNotEmpty(dml *DML, other map[string]any) {
 	if dml.Vindex != nil {
 		other["Vindex"] = dml.Vindex.String()
 	}
 	if dml.KsidVindex != nil {
 		other["KsidVindex"] = dml.KsidVindex.String()
+		other["KsidLength"] = dml.KsidLength
 	}
 	if len(dml.Values) > 0 {
-		other["Values"] = dml.Values
+		s := []string{}
+		for _, value := range dml.Values {
+			s = append(s, evalengine.FormatExpr(value))
+		}
+		other["Values"] = s
 	}
 }

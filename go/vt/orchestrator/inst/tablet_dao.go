@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/vt/orchestrator/db"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/sqlutils"
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -40,39 +41,43 @@ var TopoServ *topo.Server
 // ErrTabletAliasNil is a fixed error message.
 var ErrTabletAliasNil = errors.New("tablet alias is nil")
 
-// SwitchMaster makes the new tablet the master and proactively performs
-// the necessary propagation to the old master. The propagation is best
+// SwitchPrimary makes the new tablet the primary and proactively performs
+// the necessary propagation to the old primary. The propagation is best
 // effort. If it fails, the tablet's shard sync will eventually converge.
 // The proactive propagation allows a competing Orchestrator from discovering
 // the successful action of a previous one, which reduces churn.
-func SwitchMaster(newMasterKey, oldMasterKey InstanceKey) error {
-	newMasterTablet, err := ChangeTabletType(newMasterKey, topodatapb.TabletType_MASTER)
+func SwitchPrimary(newPrimaryKey, oldPrimaryKey InstanceKey) error {
+	durability, err := GetDurabilityPolicy(newPrimaryKey)
+	if err != nil {
+		return err
+	}
+	newPrimaryTablet, err := ChangeTabletType(newPrimaryKey, topodatapb.TabletType_PRIMARY, SemiSyncAckers(durability, newPrimaryKey) > 0)
 	if err != nil {
 		return err
 	}
 	// The following operations are best effort.
-	if newMasterTablet.Type != topodatapb.TabletType_MASTER {
-		log.Errorf("Unexpected: tablet type did not change to master: %v", newMasterTablet.Type)
+	if newPrimaryTablet.Type != topodatapb.TabletType_PRIMARY {
+		log.Errorf("Unexpected: tablet type did not change to primary: %v", newPrimaryTablet.Type)
 		return nil
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
 	defer cancel()
-	_, err = TopoServ.UpdateShardFields(ctx, newMasterTablet.Keyspace, newMasterTablet.Shard, func(si *topo.ShardInfo) error {
-		if proto.Equal(si.MasterAlias, newMasterTablet.Alias) && proto.Equal(si.MasterTermStartTime, newMasterTablet.MasterTermStartTime) {
+	_, err = TopoServ.UpdateShardFields(ctx, newPrimaryTablet.Keyspace, newPrimaryTablet.Shard, func(si *topo.ShardInfo) error {
+		if proto.Equal(si.PrimaryAlias, newPrimaryTablet.Alias) && proto.Equal(si.PrimaryTermStartTime, newPrimaryTablet.PrimaryTermStartTime) {
 			return topo.NewError(topo.NoUpdateNeeded, "")
 		}
 
 		// We just successfully reparented. We should check timestamps, but always overwrite.
-		lastTerm := si.GetMasterTermStartTime()
-		newTerm := logutil.ProtoToTime(newMasterTablet.MasterTermStartTime)
+		lastTerm := si.GetPrimaryTermStartTime()
+		newTerm := logutil.ProtoToTime(newPrimaryTablet.PrimaryTermStartTime)
 		if !newTerm.After(lastTerm) {
-			log.Errorf("Possible clock skew. New master start time is before previous one: %v vs %v", newTerm, lastTerm)
+			log.Errorf("Possible clock skew. New primary start time is before previous one: %v vs %v", newTerm, lastTerm)
 		}
 
-		aliasStr := topoproto.TabletAliasString(newMasterTablet.Alias)
-		log.Infof("Updating shard record: master_alias=%v, master_term_start_time=%v", aliasStr, newTerm)
-		si.MasterAlias = newMasterTablet.Alias
-		si.MasterTermStartTime = newMasterTablet.MasterTermStartTime
+		aliasStr := topoproto.TabletAliasString(newPrimaryTablet.Alias)
+		log.Infof("Updating shard record: primary_alias=%v, primary_term_start_time=%v", aliasStr, newTerm)
+		si.PrimaryAlias = newPrimaryTablet.Alias
+		si.PrimaryTermStartTime = newPrimaryTablet.PrimaryTermStartTime
 		return nil
 	})
 	// Don't proceed if shard record could not be updated.
@@ -80,17 +85,17 @@ func SwitchMaster(newMasterKey, oldMasterKey InstanceKey) error {
 		log.Errore(err)
 		return nil
 	}
-	if _, err := ChangeTabletType(oldMasterKey, topodatapb.TabletType_REPLICA); err != nil {
+	if _, err := ChangeTabletType(oldPrimaryKey, topodatapb.TabletType_REPLICA, IsReplicaSemiSync(durability, newPrimaryKey, oldPrimaryKey)); err != nil {
 		// This is best effort.
 		log.Errore(err)
 	}
 	return nil
 }
 
-// ChangeTabletType designates the tablet that owns an instance as the master.
-func ChangeTabletType(instanceKey InstanceKey, tabletType topodatapb.TabletType) (*topodatapb.Tablet, error) {
+// ChangeTabletType designates the tablet that owns an instance as the primary.
+func ChangeTabletType(instanceKey InstanceKey, tabletType topodatapb.TabletType, semiSync bool) (*topodatapb.Tablet, error) {
 	if instanceKey.Hostname == "" {
-		return nil, errors.New("can't set tablet to master: instance is unspecified")
+		return nil, errors.New("can't set tablet to primary: instance is unspecified")
 	}
 	tablet, err := ReadTablet(instanceKey)
 	if err != nil {
@@ -99,7 +104,7 @@ func ChangeTabletType(instanceKey InstanceKey, tabletType topodatapb.TabletType)
 	tmc := tmclient.NewTabletManagerClient()
 	tmcCtx, tmcCancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
 	defer tmcCancel()
-	if err := tmc.ChangeType(tmcCtx, tablet, tabletType); err != nil {
+	if err := tmc.ChangeType(tmcCtx, tablet, tabletType, semiSync); err != nil {
 		return nil, err
 	}
 	tsCtx, tsCancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
@@ -112,6 +117,33 @@ func ChangeTabletType(instanceKey InstanceKey, tabletType topodatapb.TabletType)
 		log.Errore(err)
 	}
 	return ti.Tablet, nil
+}
+
+// ResetReplicationParameters resets the replication parameters on the given tablet.
+func ResetReplicationParameters(instanceKey InstanceKey) error {
+	tablet, err := ReadTablet(instanceKey)
+	if err != nil {
+		return err
+	}
+	tmc := tmclient.NewTabletManagerClient()
+	tmcCtx, tmcCancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
+	defer tmcCancel()
+	if err := tmc.ResetReplicationParameters(tmcCtx, tablet); err != nil {
+		return err
+	}
+	return nil
+}
+
+// FullStatus gets the full status of the MySQL running in vttablet.
+func FullStatus(instanceKey InstanceKey) (*replicationdatapb.FullStatus, error) {
+	tablet, err := ReadTablet(instanceKey)
+	if err != nil {
+		return nil, err
+	}
+	tmc := tmclient.NewTabletManagerClient()
+	tmcCtx, tmcCancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
+	defer tmcCancel()
+	return tmc.FullStatus(tmcCtx, tablet)
 }
 
 // ReadTablet reads the vitess tablet record.
@@ -146,7 +178,7 @@ func SaveTablet(tablet *topodatapb.Tablet) error {
 	_, err = db.ExecOrchestrator(`
 		replace
 			into vitess_tablet (
-				hostname, port, cell, keyspace, shard, tablet_type, master_timestamp, info
+				hostname, port, cell, keyspace, shard, tablet_type, primary_timestamp, info
 			) values (
 				?, ?, ?, ?, ?, ?, ?, ?
 			)
@@ -157,7 +189,7 @@ func SaveTablet(tablet *topodatapb.Tablet) error {
 		tablet.Keyspace,
 		tablet.Shard,
 		int(tablet.Type),
-		logutil.ProtoToTime(tablet.MasterTermStartTime),
+		logutil.ProtoToTime(tablet.PrimaryTermStartTime),
 		tabletp,
 	)
 	return err

@@ -1,0 +1,54 @@
+{
+	"sharded": true,
+	"tables": {
+		"messages": {
+			"column_vindexes": [
+				{
+					"column": "page",
+					"name": "hash"
+				},
+				{
+					"column": "message",
+					"name": "messages_message_lookup"
+				}
+			]
+		},
+		"tokens": {
+			"column_vindexes": [
+				{
+					"column": "page",
+					"name": "hash"
+				},
+				{
+					"column": "token",
+					"name": "tokens_token_lookup"
+				}
+			]
+		}
+	},
+	"vindexes": {
+		"hash": {
+			"type": "hash"
+		},
+		"messages_message_lookup": {
+			"type": "lookup_hash",
+			"params": {
+				"table": "lookup_keyspace.messages_message_lookup",
+				"from": "message",
+				"to": "page",
+				"autocommit": "true"
+			},
+			"owner": "messages"
+		},
+		"tokens_token_lookup": {
+			"type": "lookup_hash",
+			"params": {
+				"table": "lookup_keyspace.tokens_token_lookup",
+				"from": "token",
+				"to": "page",
+				"autocommit": "true"
+			},
+			"owner": "tokens"
+		}
+	}
+}

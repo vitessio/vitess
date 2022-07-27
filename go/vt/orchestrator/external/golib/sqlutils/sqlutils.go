@@ -74,8 +74,8 @@ func (this *RowData) MarshalJSON() ([]byte, error) {
 	return json.Marshal(cells)
 }
 
-func (this *RowData) Args() []interface{} {
-	result := make([]interface{}, len(*this))
+func (this *RowData) Args() []any {
+	result := make([]any, len(*this))
 	for i := range *this {
 		result[i] = (*(*this)[i].NullString())
 	}
@@ -205,7 +205,7 @@ func GetSQLiteDB(dbFile string) (*sql.DB, bool, error) {
 // RowToArray is a convenience function, typically not called directly, which maps a
 // single read database row into a NullString
 func RowToArray(rows *sql.Rows, columns []string) []CellData {
-	buff := make([]interface{}, len(columns))
+	buff := make([]any, len(columns))
 	data := make([]CellData, len(columns))
 	for i := range buff {
 		buff[i] = data[i].NullString()
@@ -253,7 +253,7 @@ func ScanRowsToMaps(rows *sql.Rows, on_row func(RowMap) error) error {
 
 // QueryRowsMap is a convenience function allowing querying a result set while poviding a callback
 // function activated per read row.
-func QueryRowsMap(db *sql.DB, query string, on_row func(RowMap) error, args ...interface{}) (err error) {
+func QueryRowsMap(db *sql.DB, query string, on_row func(RowMap) error, args ...any) (err error) {
 	defer func() {
 		if derr := recover(); derr != nil {
 			err = fmt.Errorf("QueryRowsMap unexpected error: %+v", derr)
@@ -273,7 +273,7 @@ func QueryRowsMap(db *sql.DB, query string, on_row func(RowMap) error, args ...i
 }
 
 // queryResultData returns a raw array of rows for a given query, optionally reading and returning column names
-func queryResultData(db *sql.DB, query string, retrieveColumns bool, args ...interface{}) (resultData ResultData, columns []string, err error) {
+func queryResultData(db *sql.DB, query string, retrieveColumns bool, args ...any) (resultData ResultData, columns []string, err error) {
 	defer func() {
 		if derr := recover(); derr != nil {
 			err = fmt.Errorf("QueryRowsMap unexpected error: %+v", derr)
@@ -300,13 +300,13 @@ func queryResultData(db *sql.DB, query string, retrieveColumns bool, args ...int
 }
 
 // QueryResultData returns a raw array of rows
-func QueryResultData(db *sql.DB, query string, args ...interface{}) (ResultData, error) {
+func QueryResultData(db *sql.DB, query string, args ...any) (ResultData, error) {
 	resultData, _, err := queryResultData(db, query, false, args...)
 	return resultData, err
 }
 
 // QueryResultDataNamed returns a raw array of rows, with column names
-func QueryNamedResultData(db *sql.DB, query string, args ...interface{}) (NamedResultData, error) {
+func QueryNamedResultData(db *sql.DB, query string, args ...any) (NamedResultData, error) {
 	resultData, columns, err := queryResultData(db, query, true, args...)
 	return NamedResultData{Columns: columns, Data: resultData}, err
 }
@@ -314,7 +314,7 @@ func QueryNamedResultData(db *sql.DB, query string, args ...interface{}) (NamedR
 // QueryRowsMapBuffered reads data from the database into a buffer, and only then applies the given function per row.
 // This allows the application to take its time with processing the data, albeit consuming as much memory as required by
 // the result set.
-func QueryRowsMapBuffered(db *sql.DB, query string, on_row func(RowMap) error, args ...interface{}) error {
+func QueryRowsMapBuffered(db *sql.DB, query string, on_row func(RowMap) error, args ...any) error {
 	resultData, columns, err := queryResultData(db, query, true, args...)
 	if err != nil {
 		// Already logged
@@ -330,7 +330,7 @@ func QueryRowsMapBuffered(db *sql.DB, query string, on_row func(RowMap) error, a
 }
 
 // ExecNoPrepare executes given query using given args on given DB, without using prepared statements.
-func ExecNoPrepare(db *sql.DB, query string, args ...interface{}) (res sql.Result, err error) {
+func ExecNoPrepare(db *sql.DB, query string, args ...any) (res sql.Result, err error) {
 	defer func() {
 		if derr := recover(); derr != nil {
 			err = fmt.Errorf("ExecNoPrepare unexpected error: %+v", derr)
@@ -346,7 +346,7 @@ func ExecNoPrepare(db *sql.DB, query string, args ...interface{}) (res sql.Resul
 
 // ExecQuery executes given query using given args on given DB. It will safele prepare, execute and close
 // the statement.
-func execInternal(silent bool, db *sql.DB, query string, args ...interface{}) (res sql.Result, err error) {
+func execInternal(silent bool, db *sql.DB, query string, args ...any) (res sql.Result, err error) {
 	defer func() {
 		if derr := recover(); derr != nil {
 			err = fmt.Errorf("execInternal unexpected error: %+v", derr)
@@ -367,12 +367,12 @@ func execInternal(silent bool, db *sql.DB, query string, args ...interface{}) (r
 
 // Exec executes given query using given args on given DB. It will safele prepare, execute and close
 // the statement.
-func Exec(db *sql.DB, query string, args ...interface{}) (sql.Result, error) {
+func Exec(db *sql.DB, query string, args ...any) (sql.Result, error) {
 	return execInternal(false, db, query, args...)
 }
 
 // ExecSilently acts like Exec but does not report any error
-func ExecSilently(db *sql.DB, query string, args ...interface{}) (sql.Result, error) {
+func ExecSilently(db *sql.DB, query string, args ...any) (sql.Result, error) {
 	return execInternal(true, db, query, args...)
 }
 
@@ -385,11 +385,11 @@ func InClauseStringValues(terms []string) string {
 }
 
 // Convert variable length arguments into arguments array
-func Args(args ...interface{}) []interface{} {
+func Args(args ...any) []any {
 	return args
 }
 
-func NilIfZero(i int64) interface{} {
+func NilIfZero(i int64) any {
 	if i == 0 {
 		return nil
 	}

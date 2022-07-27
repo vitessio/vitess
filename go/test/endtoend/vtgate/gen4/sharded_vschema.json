@@ -1,0 +1,118 @@
+{
+  "sharded": true,
+  "vindexes": {
+    "xxhash": {
+      "type": "xxhash"
+    },
+    "regional_vdx": {
+      "type": "region_experimental",
+      "params": {
+        "region_bytes": "1"
+      }
+    },
+    "multicol_vdx": {
+      "type": "multicol",
+      "params": {
+        "column_count": "3",
+        "column_bytes": "1,3,4",
+        "column_vindex": "hash,binary,unicode_loose_xxhash"
+      }
+    }
+  },
+  "tables": {
+    "t1": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "xxhash"
+        }
+      ]
+    },
+    "t2": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "xxhash"
+        }
+      ],
+      "columns": [
+        {
+          "name": "tcol1",
+          "type": "VARCHAR"
+        }
+      ]
+    },
+    "t3": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "xxhash"
+        }
+      ],
+      "columns": [
+        {
+          "name": "tcol1",
+          "type": "VARCHAR"
+        }
+      ]
+    },
+    "user_region": {
+      "column_vindexes": [
+        {
+          "columns": [
+            "cola",
+            "colb"
+          ],
+          "name": "regional_vdx"
+        }
+      ]
+    },
+    "region_tbl": {
+      "column_vindexes": [
+        {
+          "columns": [
+            "rg",
+            "uid"
+          ],
+          "name": "regional_vdx"
+        }
+      ]
+    },
+    "multicol_tbl": {
+      "column_vindexes": [
+        {
+          "columns": [
+            "cola",
+            "colb",
+            "colc"
+          ],
+          "name": "multicol_vdx"
+        }
+      ]
+    },
+    "team": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "xxhash"
+        }
+      ]
+    },
+    "team_fact": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "xxhash"
+        }
+      ]
+    },
+    "team_member": {
+      "column_vindexes": [
+        {
+          "column": "team",
+          "name": "xxhash"
+        }
+      ]
+    }
+  }
+}

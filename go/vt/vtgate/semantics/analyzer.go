@@ -17,209 +17,234 @@ limitations under the License.
 package semantics
 
 import (
-	"fmt"
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-type (
-	// analyzer is a struct to work with analyzing the query.
-	analyzer struct {
-		si SchemaInformation
+// analyzer controls the flow of the analysis.
+// It starts the tree walking and controls which part of the analysis sees which parts of the tree
+type analyzer struct {
+	scoper   *scoper
+	tables   *tableCollector
+	binder   *binder
+	typer    *typer
+	rewriter *earlyRewriter
 
-		Tables    []*TableInfo
-		scopes    []*scope
-		exprDeps  map[sqlparser.Expr]TableSet
-		err       error
-		currentDb string
-	}
-)
+	err          error
+	inProjection int
+
+	projErr      error
+	unshardedErr error
+	warning      string
+}
 
 // newAnalyzer create the semantic analyzer
 func newAnalyzer(dbName string, si SchemaInformation) *analyzer {
-	return &analyzer{
-		exprDeps:  map[sqlparser.Expr]TableSet{},
-		currentDb: dbName,
-		si:        si,
+	// TODO  dependencies between these components are a little tangled. We should try to clean up
+	s := newScoper()
+	a := &analyzer{
+		scoper: s,
+		tables: newTableCollector(s, si, dbName),
+		typer:  newTyper(),
 	}
+	s.org = a
+	a.tables.org = a
+
+	b := newBinder(s, a, a.tables, a.typer)
+	a.binder = b
+	a.rewriter = &earlyRewriter{scoper: s, binder: b}
+	s.binder = b
+	return a
 }
 
 // Analyze analyzes the parsed query.
 func Analyze(statement sqlparser.Statement, currentDb string, si SchemaInformation) (*SemTable, error) {
 	analyzer := newAnalyzer(currentDb, si)
-	// Initial scope
+
+	// Analysis for initial scope
 	err := analyzer.analyze(statement)
 	if err != nil {
 		return nil, err
 	}
-	return &SemTable{exprDependencies: analyzer.exprDeps, Tables: analyzer.Tables}, nil
+
+	// Creation of the semantic table
+	semTable := analyzer.newSemTable(statement, si.ConnCollation())
+
+	return semTable, nil
 }
 
-// analyzeDown pushes new scopes when we encounter sub queries,
-// and resolves the table a column is using
-func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
-	current := a.currentScope()
-	n := cursor.Node()
-	switch node := n.(type) {
-	case *sqlparser.Select:
-		a.push(newScope(current))
-		if err := a.analyzeTableExprs(node.From); err != nil {
-			a.err = err
-			return false
-		}
-	case *sqlparser.DerivedTable:
-		a.err = Gen4NotSupportedF("derived tables")
-	case *sqlparser.TableExprs:
-		// this has already been visited when we encountered the SELECT struct
-		return false
+func (a analyzer) newSemTable(statement sqlparser.Statement, coll collations.ID) *SemTable {
+	var comments *sqlparser.ParsedComments
+	commentedStmt, isCommented := statement.(sqlparser.Commented)
+	if isCommented {
+		comments = commentedStmt.GetParsedComments()
+	}
 
-	// we don't need to push new scope for sub queries since we do that for SELECT and UNION
+	return &SemTable{
+		Recursive:         a.binder.recursive,
+		Direct:            a.binder.direct,
+		ExprTypes:         a.typer.exprTypes,
+		Tables:            a.tables.Tables,
+		selectScope:       a.scoper.rScope,
+		NotSingleRouteErr: a.projErr,
+		NotUnshardedErr:   a.unshardedErr,
+		Warning:           a.warning,
+		Comments:          comments,
+		SubqueryMap:       a.binder.subqueryMap,
+		SubqueryRef:       a.binder.subqueryRef,
+		ColumnEqualities:  map[columnName][]sqlparser.Expr{},
+		Collation:         coll,
+	}
+}
 
-	case *sqlparser.Union:
-		a.push(newScope(current))
-	case *sqlparser.ColName:
-		t, err := a.resolveColumn(node, current)
-		if err != nil {
-			a.err = err
+func (a *analyzer) setError(err error) {
+	switch err := err.(type) {
+	case ProjError:
+		a.projErr = err.Inner
+	case UnshardedError:
+		a.unshardedErr = err.Inner
+	default:
+		if a.inProjection > 0 && vterrors.ErrState(err) == vterrors.NonUniqError {
+			a.projErr = err
 		} else {
-			a.exprDeps[node] = t
+			a.err = err
 		}
 	}
+}
+
+func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
+	// If we have an error we keep on going down the tree without checking for anything else
+	// this way we can abort when we come back up.
+	if !a.shouldContinue() {
+		return true
+	}
+
+	if err := a.scoper.down(cursor); err != nil {
+		a.setError(err)
+		return true
+	}
+	if err := a.checkForInvalidConstructs(cursor); err != nil {
+		a.setError(err)
+		return true
+	}
+	if err := a.rewriter.down(cursor); err != nil {
+		a.setError(err)
+		return true
+	}
+	// log any warn in rewriting.
+	a.warning = a.rewriter.warning
+
+	a.enterProjection(cursor)
 	// this is the visitor going down the tree. Returning false here would just not visit the children
 	// to the current node, but that is not what we want if we have encountered an error.
 	// In order to abort the whole visitation, we have to return true here and then return false in the `analyzeUp` method
 	return true
 }
 
-func (a *analyzer) resolveColumn(colName *sqlparser.ColName, current *scope) (TableSet, error) {
-	var t *TableInfo
-	var err error
-	if colName.Qualifier.IsEmpty() {
-		t, err = a.resolveUnQualifiedColumn(current, colName)
-	} else {
-		t, err = a.resolveQualifiedColumn(current, colName)
+func (a *analyzer) analyzeUp(cursor *sqlparser.Cursor) bool {
+	if !a.shouldContinue() {
+		return false
 	}
-	if err != nil {
-		return 0, err
+
+	if err := a.binder.up(cursor); err != nil {
+		a.setError(err)
+		return true
 	}
-	return a.tableSetFor(t.ASTNode), nil
+
+	if err := a.scoper.up(cursor); err != nil {
+		a.setError(err)
+		return false
+	}
+	if err := a.tables.up(cursor); err != nil {
+		a.setError(err)
+		return false
+	}
+	if err := a.typer.up(cursor); err != nil {
+		a.setError(err)
+		return false
+	}
+
+	a.leaveProjection(cursor)
+	return a.shouldContinue()
 }
 
-func (a *analyzer) analyzeTableExprs(tablExprs sqlparser.TableExprs) error {
-	for _, tableExpr := range tablExprs {
-		if err := a.analyzeTableExpr(tableExpr); err != nil {
-			return err
+func containsStar(s sqlparser.SelectExprs) bool {
+	for _, expr := range s {
+		_, isStar := expr.(*sqlparser.StarExpr)
+		if isStar {
+			return true
 		}
 	}
+	return false
+}
+
+func checkUnionColumns(union *sqlparser.Union) error {
+	firstProj := sqlparser.GetFirstSelect(union).SelectExprs
+	if containsStar(firstProj) {
+		// if we still have *, we can't figure out if the query is invalid or not
+		// we'll fail it at run time instead
+		return nil
+	}
+	count := len(firstProj)
+
+	secondProj := sqlparser.GetFirstSelect(union.Right).SelectExprs
+	if containsStar(secondProj) {
+		return nil
+	}
+
+	if len(secondProj) != count {
+		return vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.WrongNumberOfColumnsInSelect, "The used SELECT statements have a different number of columns")
+	}
+
 	return nil
 }
 
-func (a *analyzer) analyzeTableExpr(tableExpr sqlparser.TableExpr) error {
-	switch table := tableExpr.(type) {
-	case *sqlparser.AliasedTableExpr:
-		return a.bindTable(table, table.Expr)
-	case *sqlparser.JoinTableExpr:
-		if table.Join != sqlparser.NormalJoinType {
-			return Gen4NotSupportedF("join type %s", table.Join.ToString())
-		}
-		if err := a.analyzeTableExpr(table.LeftExpr); err != nil {
-			return err
-		}
-		if err := a.analyzeTableExpr(table.RightExpr); err != nil {
-			return err
-		}
-	case *sqlparser.ParenTableExpr:
-		return a.analyzeTableExprs(table.Exprs)
+/*
+	errors that happen when we are evaluating SELECT expressions are saved until we know
+	if we can merge everything into a single route or not
+*/
+func (a *analyzer) enterProjection(cursor *sqlparser.Cursor) {
+	_, ok := cursor.Node().(sqlparser.SelectExprs)
+	if ok && isParentSelect(cursor) {
+		a.inProjection++
 	}
-	return nil
 }
 
-// resolveQualifiedColumn handles `tabl.col` expressions
-func (a *analyzer) resolveQualifiedColumn(current *scope, expr *sqlparser.ColName) (*TableInfo, error) {
-	// search up the scope stack until we find a match
-	for current != nil {
-		dbName := expr.Qualifier.Qualifier.String()
-		tableName := expr.Qualifier.Name.String()
-		for _, table := range current.tables {
-			if tableName == table.tableName &&
-				(dbName == table.dbName || (dbName == "" && (table.dbName == a.currentDb || a.currentDb == ""))) {
-				return table, nil
-			}
-		}
-		current = current.parent
+func (a *analyzer) leaveProjection(cursor *sqlparser.Cursor) {
+	_, ok := cursor.Node().(sqlparser.SelectExprs)
+	if ok && isParentSelect(cursor) {
+		a.inProjection--
 	}
-	return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "Unknown table referenced by '%s'", sqlparser.String(expr))
 }
 
-// resolveUnQualifiedColumn
-func (a *analyzer) resolveUnQualifiedColumn(current *scope, expr *sqlparser.ColName) (*TableInfo, error) {
-	if len(current.tables) == 1 {
-		for _, tableExpr := range current.tables {
-			return tableExpr, nil
-		}
-	}
-
-	var tblInfo *TableInfo
-	for _, tbl := range current.tables {
-		if !tbl.Table.ColumnListAuthoritative {
-			return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqError, fmt.Sprintf("Column '%s' in field list is ambiguous", sqlparser.String(expr)))
-		}
-		for _, col := range tbl.Table.Columns {
-			if expr.Name.Equal(col.Name) {
-				if tblInfo != nil {
-					return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqError, fmt.Sprintf("Column '%s' in field list is ambiguous", sqlparser.String(expr)))
-				}
-				tblInfo = tbl
-			}
-		}
-	}
-	return tblInfo, nil
+func isParentSelect(cursor *sqlparser.Cursor) bool {
+	_, isSelect := cursor.Parent().(*sqlparser.Select)
+	return isSelect
 }
 
-func (a *analyzer) tableSetFor(t *sqlparser.AliasedTableExpr) TableSet {
-	for i, t2 := range a.Tables {
-		if t == t2.ASTNode {
-			return TableSet(1 << i)
-		}
-	}
-	panic("unknown table")
+func isParentSelectStatement(cursor *sqlparser.Cursor) bool {
+	_, isSelect := cursor.Parent().(sqlparser.SelectStatement)
+	return isSelect
 }
 
-func (a *analyzer) bindTable(alias *sqlparser.AliasedTableExpr, expr sqlparser.SimpleTableExpr) error {
-	switch t := expr.(type) {
-	case *sqlparser.DerivedTable:
-		return Gen4NotSupportedF("derived table")
-	case sqlparser.TableName:
-		tbl, vdx, _, _, _, err := a.si.FindTableOrVindex(t)
-		if err != nil {
-			return err
-		}
-		if tbl == nil && vdx != nil {
-			return Gen4NotSupportedF("vindex in FROM")
-		}
-		scope := a.currentScope()
-		dbName := t.Qualifier.String()
-		if dbName == "" {
-			dbName = a.currentDb
-		}
-		var tableName string
-		if alias.As.IsEmpty() {
-			tableName = t.Name.String()
-		} else {
-			tableName = alias.As.String()
-		}
-		table := &TableInfo{
-			dbName:    dbName,
-			tableName: tableName,
-			ASTNode:   alias,
-			Table:     tbl,
-		}
-		a.Tables = append(a.Tables, table)
-		return scope.addTable(table)
+type originable interface {
+	tableSetFor(t *sqlparser.AliasedTableExpr) TableSet
+	depsForExpr(expr sqlparser.Expr) (direct, recursive TableSet, typ *Type)
+}
+
+func (a *analyzer) depsForExpr(expr sqlparser.Expr) (direct, recursive TableSet, typ *Type) {
+	recursive = a.binder.recursive.dependencies(expr)
+	direct = a.binder.direct.dependencies(expr)
+	qt, isFound := a.typer.exprTypes[expr]
+	if !isFound {
+		return
 	}
-	return nil
+	typ = &qt
+	return
 }
 
 func (a *analyzer) analyze(statement sqlparser.Statement) error {
@@ -227,36 +252,113 @@ func (a *analyzer) analyze(statement sqlparser.Statement) error {
 	return a.err
 }
 
-func (a *analyzer) analyzeUp(cursor *sqlparser.Cursor) bool {
-	switch cursor.Node().(type) {
-	case *sqlparser.Union, *sqlparser.Select:
-		a.popScope()
+func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
+	switch node := cursor.Node().(type) {
+	case *sqlparser.Update:
+		if len(node.TableExprs) != 1 {
+			return UnshardedError{Inner: vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: multiple tables in update")}
+		}
+		alias, isAlias := node.TableExprs[0].(*sqlparser.AliasedTableExpr)
+		if !isAlias {
+			return UnshardedError{Inner: vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: multiple tables in update")}
+		}
+		_, isDerived := alias.Expr.(*sqlparser.DerivedTable)
+		if isDerived {
+			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUpdateableTable, "The target table %s of the UPDATE is not updatable", alias.As.String())
+		}
+	case *sqlparser.Select:
+		parent := cursor.Parent()
+		if _, isUnion := parent.(*sqlparser.Union); isUnion && node.SQLCalcFoundRows {
+			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "SQL_CALC_FOUND_ROWS not supported with union")
+		}
+		if _, isRoot := parent.(*sqlparser.RootNode); !isRoot && node.SQLCalcFoundRows {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'")
+		}
+		errMsg := "INTO"
+		nextVal := false
+		if len(node.SelectExprs) == 1 {
+			if _, isNextVal := node.SelectExprs[0].(*sqlparser.Nextval); isNextVal {
+				nextVal = true
+				errMsg = "NEXT"
+			}
+		}
+		if !nextVal && node.Into == nil {
+			return nil
+		}
+		if a.scoper.currentScope().parent != nil {
+			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.CantUseOptionHere, "Incorrect usage/placement of '%s'", errMsg)
+		}
+	case *sqlparser.Nextval:
+		currScope := a.scoper.currentScope()
+		if currScope.parent != nil {
+			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.CantUseOptionHere, "Incorrect usage/placement of 'INTO'")
+		}
+		if len(currScope.tables) != 1 {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] Next statement should not contain multiple tables")
+		}
+		vindexTbl := currScope.tables[0].GetVindexTable()
+		if vindexTbl == nil {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Table information is not provided in vschema")
+		}
+		if vindexTbl.Type != vindexes.TypeSequence {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "NEXT used on a non-sequence table")
+		}
+	case *sqlparser.JoinTableExpr:
+		if node.Join == sqlparser.NaturalJoinType || node.Join == sqlparser.NaturalRightJoinType || node.Join == sqlparser.NaturalLeftJoinType {
+			return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: "+node.Join.ToString())
+		}
+	case *sqlparser.LockingFunc:
+		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%v allowed only with dual", sqlparser.String(node))
+	case *sqlparser.Union:
+		err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+			switch node := node.(type) {
+			case *sqlparser.ColName:
+				if !node.Qualifier.IsEmpty() {
+					return false, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Table '%s' from one of the SELECTs cannot be used in global ORDER clause", node.Qualifier.Name)
+				}
+			case *sqlparser.Subquery:
+				return false, nil
+			}
+			return true, nil
+		}, node.OrderBy)
+		if err != nil {
+			return err
+		}
+		err = checkUnionColumns(node)
+		if err != nil {
+			return err
+		}
+	case *sqlparser.JSONTableExpr:
+		return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: json_table expressions")
 	}
-	return a.shouldContinue()
+
+	return nil
 }
 
 func (a *analyzer) shouldContinue() bool {
 	return a.err == nil
 }
 
-func (a *analyzer) push(s *scope) {
-	a.scopes = append(a.scopes, s)
+func (a *analyzer) tableSetFor(t *sqlparser.AliasedTableExpr) TableSet {
+	return a.tables.tableSetFor(t)
 }
 
-func (a *analyzer) popScope() {
-	l := len(a.scopes) - 1
-	a.scopes = a.scopes[:l]
+// ProjError is used to mark an error as something that should only be returned
+// if the planner fails to merge everything down to a single route
+type ProjError struct {
+	Inner error
 }
 
-func (a *analyzer) currentScope() *scope {
-	size := len(a.scopes)
-	if size == 0 {
-		return nil
-	}
-	return a.scopes[size-1]
+func (p ProjError) Error() string {
+	return p.Inner.Error()
 }
 
-// Gen4NotSupportedF returns a common error for shortcomings in the gen4 planner
-func Gen4NotSupportedF(format string, args ...interface{}) error {
-	return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "gen4 does not yet support: "+format, args...)
+// UnshardedError is used to mark an error as something that should only be returned
+// if the query is not unsharded
+type UnshardedError struct {
+	Inner error
+}
+
+func (p UnshardedError) Error() string {
+	return p.Inner.Error()
 }

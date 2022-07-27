@@ -1,10 +1,12 @@
 # union operations in subqueries (expressions)
 "select * from user where id in (select * from user union select * from user_extra)"
 "unsupported: '*' expression in cross-shard query"
+Gen4 plan same as above
 
 # TODO: Implement support for select with a target destination
 "select * from `user[-]`.user_metadata"
 "unsupported: SELECT with a target destination"
+Gen4 plan same as above
 
 # Unsupported INSERT statement with a target destination
 "insert into `user[-]`.user_metadata (a, b) values (1,2)"
@@ -24,70 +26,52 @@ Gen4 plan same as above
 # scatter order by with * expression
 "select * from user order by id"
 "unsupported: in scatter query: order by must reference a column in the select list: id asc"
+Gen4 error: unsupported: '*' expression in cross-shard query
 
 # order by rand on a cross-shard subquery
 "select id from (select user.id, user.col from user join user_extra) as t order by rand()"
 "unsupported: memory sort: complex order by expression: rand()"
-
-# filtering on a cross-shard subquery
-"select id from (select user.id, user.col from user join user_extra) as t where id=5"
-"unsupported: filtering on results of cross-shard subquery"
-
-# expression on a cross-shard subquery
-"select id+1 from (select user.id, user.col from user join user_extra) as t"
-"unsupported: expression on results of a cross-shard subquery"
+Gen4 error: unsupported: in scatter query: complex order by expression: rand()
 
 # natural join
 "select * from user natural join user_extra"
 "unsupported: natural join"
+Gen4 plan same as above
 
 # join with USING construct
 "select * from user join user_extra using(id)"
 "unsupported: join with USING(column_list) clause for complex queries"
+Gen4 error: can't handle JOIN USING without authoritative tables
 
 # join with USING construct with 3 tables
 "select user.id from user join user_extra using(id) join music using(id2)"
 "unsupported: join with USING(column_list) clause for complex queries"
+Gen4 error: can't handle JOIN USING without authoritative tables
 
 # natural left join
 "select * from user natural left join user_extra"
 "unsupported: natural left join"
+Gen4 plan same as above
 
 # natural right join
 "select * from user natural right join user_extra"
 "unsupported: natural right join"
-
-# left join with expressions
-"select user.id, user_extra.col+1 from user left join user_extra on user.col = user_extra.col"
-"unsupported: cross-shard left join and column expressions"
-
-# left join with expressions, with three-way join (different code path)
-"select user.id, user_extra.col+1 from user left join user_extra on user.col = user_extra.col join user_extra e"
-"unsupported: cross-shard left join and column expressions"
-
-# left join where clauses
-"select user.id from user left join user_extra on user.col = user_extra.col where user_extra.col = 5"
-"unsupported: cross-shard left join and where clause"
+Gen4 plan same as above
 
 # * expresson not allowed for cross-shard joins
 "select * from user join user_extra"
 "unsupported: '*' expression in cross-shard query"
+Gen4 plan same as above
 
 # Group by column number, used with non-aliased expression (duplicated code)
 "select * from user group by 1"
 "unsupported: '*' expression in cross-shard query"
-
-# Filtering on scatter aggregates
-"select count(*) a from user having a >10"
-"unsupported: filtering on results of aggregates"
-
-# group by must reference select list
-"select a from user group by b"
-"unsupported: in scatter query: group by column must reference column in SELECT list"
+Gen4 error: cannot use column offsets in group statement when using `*`
 
 # complex group by expression
 "select a from user group by a+1"
 "unsupported: in scatter query: only simple references allowed"
+Gen4 error: unsupported: in scatter query: complex order by expression: a + 1
 
 # Complex aggregate expression on scatter
 "select 1+count(*) from user"
@@ -97,89 +81,37 @@ Gen4 plan same as above
 # Multi-value aggregates not supported
 "select count(a,b) from user"
 "unsupported: only one expression allowed inside aggregates: count(a, b)"
-
-# Cannot have more than one aggr(distinct...
-"select count(distinct a), count(distinct b) from user"
-"unsupported: only one distinct aggregation allowed in a select: count(distinct b)"
-
-# scatter aggregate group by doesn't reference select list
-"select id from user group by col"
-"unsupported: in scatter query: group by column must reference column in SELECT list"
-
-# scatter aggregate symtab lookup error
-"select id, b as id, count(*) from user order by id"
-"ambiguous symbol reference: id"
-
-# order by with ambiguous column reference ; valid in MySQL
-"select id, id from user order by id"
-"ambiguous symbol reference: id"
-
-# scatter aggregate with ambiguous aliases
-"select distinct a, b as a from user"
-"generating order by clause: ambiguous symbol reference: a"
+Gen4 error: aggregate functions take a single argument 'count(a, b)'
 
 # scatter aggregate complex order by
 "select id from user group by id order by id+1"
 "unsupported: in scatter query: complex order by expression: id + 1"
+Gen4 plan same as above
 
 # Scatter order by is complex with aggregates in select
 "select col, count(*) from user group by col order by col+1"
 "unsupported: in scatter query: complex order by expression: col + 1"
-
-# Scatter order by and aggregation: order by column must reference column from select list
-"select col, count(*) from user group by col order by c1"
-"unsupported: memory sort: order by must reference a column in the select list: c1 asc"
-
-# Aggregates and joins
-"select count(*) from user join user_extra"
-"unsupported: cross-shard query with aggregates"
+Gen4 plan same as above
 
 # Aggregate detection (group_concat)
 "select group_concat(user.a) from user join user_extra"
 "unsupported: cross-shard query with aggregates"
-
-# Aggregate detection (group by)
-"select user.a from user join user_extra group by user.a"
-"unsupported: cross-shard query with aggregates"
-
-# group by and ',' joins
-"select user.id from user, user_extra group by id"
-"unsupported: cross-shard query with aggregates"
-
-# if subquery scatter and ordering, then we don't allow outer constructs to be pushed down.
-"select count(*) from (select col, user_extra.extra from user join user_extra on user.id = user_extra.user_id order by user_extra.extra) a"
-"unsupported: cross-shard query with aggregates"
+Gen4 error: unsupported: in scatter query: aggregation function 'group_concat'
 
 # subqueries not supported in group by
 "select id from user group by id, (select id from user_extra)"
 "unsupported: subqueries disallowed in GROUP or ORDER BY"
+Gen4 error: unsupported: subqueries disallowed in GROUP BY
 
 # Order by uses cross-shard expression
 "select id from user order by id+1"
 "unsupported: in scatter query: complex order by expression: id + 1"
+Gen4 plan same as above
 
 # Order by column number with collate
 "select user.col1 as a from user order by 1 collate utf8_general_ci"
 "unsupported: in scatter query: complex order by expression: 1 collate utf8_general_ci"
-
-# Order by has subqueries
-"select id from unsharded order by (select id from unsharded)"
-"unsupported: subqueries disallowed in GROUP or ORDER BY"
-
-# subqueries in update
-"update user set col = (select id from unsharded)"
-"unsupported: subqueries in sharded DML"
-Gen4 plan same as above
-
-# sharded subqueries in unsharded update
-"update unsharded set col = (select id from user)"
-"unsupported: sharded subqueries in DML"
-Gen4 plan same as above
-
-# sharded join unsharded subqueries in unsharded update
-"update unsharded set col = (select id from unsharded join user on unsharded.id = user.id)"
-"unsupported: sharded subqueries in DML"
-Gen4 plan same as above
+Gen4 error: unsupported: in scatter query: complex order by expression: a collate utf8_general_ci
 
 # subqueries in delete
 "delete from user where col = (select id from unsharded)"
@@ -221,9 +153,9 @@ Gen4 plan same as above
 "unsupported: You can't update primary vindex columns. Invalid update on vindex: user_index"
 Gen4 plan same as above
 
-# update changes non owned vindex column
-"update music_extra set music_id = 1 where user_id = 1"
-"unsupported: You can only update owned vindexes. Invalid update on vindex: music_user_map"
+# update change in multicol vindex column
+"update multicol_tbl set colc = 5, colb = 4 where cola = 1 and colb = 2"
+"unsupported: You can't update primary vindex columns. Invalid update on vindex: multicolIdx"
 Gen4 plan same as above
 
 # update changes non lookup vindex column
@@ -233,7 +165,7 @@ Gen4 plan same as above
 
 # update with complex set clause
 "update music set id = id + 1 where id = 1"
-"unsupported: Only values are supported. Invalid update on column: id"
+"unsupported: Only values are supported. Invalid update on column: `id` with expr: [id + 1]"
 Gen4 plan same as above
 
 # update by primary keyspace id, changing one vindex column, limit without order clause
@@ -241,39 +173,24 @@ Gen4 plan same as above
 "unsupported: Need to provide order by clause when using limit. Invalid update on vindex: email_user_map"
 Gen4 plan same as above
 
-# cross-shard update tables
+# update with derived table
 "update (select id from user) as u set id = 4"
 "unsupported: subqueries in sharded DML"
-Gen4 plan same as above
+Gen4 error: The target table u of the UPDATE is not updatable
 
 # join in update tables
 "update user join user_extra on user.id = user_extra.id set user.name = 'foo'"
 "unsupported: multi-shard or vindex write statement"
-Gen4 plan same as above
+Gen4 error: unsupported: multiple tables in update
 
 # multiple tables in update
 "update user as u, user_extra as ue set u.name = 'foo' where u.id = ue.id"
 "unsupported: multi-shard or vindex write statement"
-Gen4 plan same as above
-
-# unsharded insert with cross-shard join"
-"insert into unsharded select u.col from user u join user u1"
-"unsupported: sharded subquery in insert values"
-Gen4 plan same as above
-
-# unsharded insert with mismatched keyspaces"
-"insert into unsharded select col from user where id=1"
-"unsupported: sharded subquery in insert values"
-Gen4 plan same as above
+Gen4 error: unsupported: multiple tables in update
 
 # unsharded insert, unqualified names and auto-inc combined
 "insert into unsharded_auto select col from unsharded"
 "unsupported: auto-inc and select in insert"
-Gen4 plan same as above
-
-# unsharded insert, with sharded subquery in insert value
-"insert into unsharded values((select 1 from user), 1)"
-"unsupported: sharded subquery in insert values"
 Gen4 plan same as above
 
 # unsharded insert, no col list with auto-inc
@@ -294,11 +211,6 @@ Gen4 plan same as above
 # sharded upsert can't change vindex using values function
 "insert into music(user_id, id) values(1, 2) on duplicate key update user_id = values(id)"
 "unsupported: DML cannot change vindex column"
-Gen4 plan same as above
-
-# sharded insert from select
-"insert into user(id) select 1 from dual"
-"unsupported: insert into select"
 Gen4 plan same as above
 
 # sharded replace no vindex
@@ -347,32 +259,41 @@ Gen4 plan same as above
 Gen4 plan same as above
 
 "select keyspace_id from user_index where id = 1 and id = 2"
-"unsupported: where clause for vindex function must be of the form id = <val> (multiple filters)"
+"unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (multiple filters)"
+Gen4 plan same as above
 
 "select keyspace_id from user_index where func(id)"
-"unsupported: where clause for vindex function must be of the form id = <val> (not a comparison)"
+"unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (not a comparison)"
+Gen4 plan same as above
 
 "select keyspace_id from user_index where id > 1"
-"unsupported: where clause for vindex function must be of the form id = <val> (not equality)"
+"unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (not equality)"
+Gen4 plan same as above
 
 "select keyspace_id from user_index where 1 = id"
-"unsupported: where clause for vindex function must be of the form id = <val> (lhs is not a column)"
+"unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (lhs is not a column)"
+Gen4 plan same as above
 
 "select keyspace_id from user_index where keyspace_id = 1"
-"unsupported: where clause for vindex function must be of the form id = <val> (lhs is not id)"
+"unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (lhs is not id)"
+Gen4 plan same as above
 
 "select keyspace_id from user_index where id = id+1"
-"unsupported: where clause for vindex function must be of the form id = <val> (rhs is not a value)"
+"unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (rhs is not a value)"
+Gen4 plan same as above
 
+# vindex func without where condition
 "select keyspace_id from user_index"
-"unsupported: where clause for vindex function must be of the form id = <val> (where clause missing)"
+"unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (where clause missing)"
+Gen4 plan same as above
+
+# vindex func in subquery without where
+"select id from user where exists(select keyspace_id from user_index)"
+"unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (where clause missing)"
+Gen4 plan same as above
 
 "select func(keyspace_id) from user_index where id = :id"
 "unsupported: expression on results of a vindex function"
-
-# delete with unknown reference
-"delete music from user where id = 1"
-"Unknown table 'music' in MULTI DELETE"
 Gen4 plan same as above
 
 # delete with multi-table targets
@@ -380,30 +301,17 @@ Gen4 plan same as above
 "unsupported: multi-shard or vindex write statement"
 Gen4 plan same as above
 
-# order by inside and outside parenthesis select
-"(select 1 from user order by 1 desc) order by 1 asc limit 2"
-"can't do ORDER BY on top of ORDER BY"
-Gen4 plan same as above
-
-# ambiguous ORDER BY
-"select id from user order by id union all select id from music order by id desc"
-"Incorrect usage of UNION and ORDER BY - add parens to disambiguate your query (errno 1221) (sqlstate 21000)"
-Gen4 plan same as above
-
 # select get_lock with non-dual table
 "select get_lock('xyz', 10) from user"
 "get_lock('xyz', 10) allowed only with dual"
+Gen4 plan same as above
 
 # select is_free_lock with non-dual table
 "select is_free_lock('xyz') from user"
 "is_free_lock('xyz') allowed only with dual"
-
-# insert using select get_lock from table
-"insert into user(pattern) SELECT GET_LOCK('xyz1', 10)"
-"unsupported: insert into select"
 Gen4 plan same as above
 
-# union with SQL_CALC_FOUND_ROWS 
+# union with SQL_CALC_FOUND_ROWS
 "(select sql_calc_found_rows id from user where id = 1 limit 1) union select id from user where id = 1"
 "SQL_CALC_FOUND_ROWS not supported with union"
 Gen4 plan same as above
@@ -421,29 +329,12 @@ Gen4 plan same as above
 # Multi shard query using into outfile s3
 "select * from user into outfile s3 'out_file_name'"
 "INTO is not supported on sharded keyspace"
-
-# unsupported two predicates specifying the database for the same table if they are different
-# will fail on run time but will pass on the planbuilder
-"SELECT cc.constraint_name AS 'name' FROM information_schema.check_constraints cc  WHERE cc.constraint_schema = 'constraint_schema' AND cc.table_schema = 'a'"
-{
-  "QueryType": "SELECT",
-  "Original": "SELECT cc.constraint_name AS 'name' FROM information_schema.check_constraints cc  WHERE cc.constraint_schema = 'constraint_schema' AND cc.table_schema = 'a'",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectDBA",
-    "Keyspace": {
-      "Name": "main",
-      "Sharded": false
-    },
-    "FieldQuery": "select cc.constraint_name as `name` from information_schema.check_constraints as cc where 1 != 1",
-    "Query": "select cc.constraint_name as `name` from information_schema.check_constraints as cc where cc.constraint_schema = :__vtschemaname and cc.table_schema = :__vtschemaname",
-    "SysTableTableSchema": "[VARBINARY(\"constraint_schema\"), VARBINARY(\"a\")]"
-  }
-}
+Gen4 plan same as above
 
 # create view with Cannot auto-resolve for cross-shard joins
 "create view user.view_a as select col from user join user_extra"
 "symbol col not found"
+Gen4 error: Column 'col' in field list is ambiguous
 
 # create view with join that cannot be served in each shard separately
 "create view user.view_a as select user_extra.id from user join user_extra"
@@ -458,15 +349,110 @@ Gen4 plan same as above
 # create view with top level subquery in select
 "create view user.view_a as select a, (select col from user) from unsharded"
 "Complex select queries are not supported in create or alter view statements"
+Gen4 plan same as above
 
 # create view with sql_calc_found_rows with limit
 "create view user.view_a as select sql_calc_found_rows * from music limit 100"
 "Complex select queries are not supported in create or alter view statements"
+Gen4 plan same as above
 
 # create view with sql_calc_found_rows with group by and having
 "create view user.view_a as select sql_calc_found_rows user_id, count(id) from music group by user_id having count(user_id) = 1 order by user_id limit 2"
 "Complex select queries are not supported in create or alter view statements"
+Gen4 plan same as above
 
 # create view with incompatible keyspaces
 "create view main.view_a as select * from user.user_extra"
 "Select query does not belong to the same keyspace as the view statement"
+Gen4 plan same as above
+
+# avg function on scatter query
+"select avg(id) from user"
+"unsupported: in scatter query: complex aggregate expression"
+Gen4 error: unsupported: in scatter query: aggregation function 'avg'
+
+# scatter aggregate with ambiguous aliases
+"select distinct a, b as a from user"
+"generating order by clause: ambiguous symbol reference: a"
+Gen4 plan same as above
+
+# subquery of information_schema with itself and star expression in outer select
+"select a.*, u.id from information_schema.a a, user u where a.id in (select * from information_schema.b)"
+"unsupported: '*' expression in cross-shard query"
+Gen4 plan same as above
+
+# outer and inner subquery route reference the same "uu.id" name
+# but they refer to different things. The first reference is to the outermost query,
+# and the second reference is to the innermost 'from' subquery.
+# This query will never work as the inner derived table is only selecting one of the column
+"select id2 from user uu where id in (select id from user where id = uu.id and user.col in (select col from (select id from user_extra where user_id = 5) uu where uu.user_id = uu.id))"
+"unsupported: cross-shard correlated subquery"
+Gen4 error: unsupported: unable to split predicates to derived table: uu.user_id = uu.id
+
+# outer and inner subquery route reference the same "uu.id" name
+# but they refer to different things. The first reference is to the outermost query,
+# and the second reference is to the innermost 'from' subquery.
+# changed to project all the columns from the derived tables.
+"select id2 from user uu where id in (select id from user where id = uu.id and user.col in (select col from (select col, id, user_id from user_extra where user_id = 5) uu where uu.user_id = uu.id))"
+"unsupported: cross-shard correlated subquery"
+Gen4 plan same as above
+
+# Gen4 does a rewrite of 'order by 2' that becomes 'order by id', leading to ambiguous binding.
+"select a.id, b.id from user as a, user_extra as b union select 1, 2 order by 2"
+"can't do ORDER BY on top of UNION"
+Gen4 error: Column 'id' in field list is ambiguous
+
+# unsupported with clause in delete statement
+"with x as (select * from user) delete from x"
+"unsupported: with expression in delete statement"
+Gen4 plan same as above
+
+# unsupported with clause in update statement
+"with x as (select * from user) update x set name = 'f'"
+"unsupported: with expression in update statement"
+Gen4 plan same as above
+
+# unsupported with clause in select statement
+"with x as (select * from user) select * from x"
+"unsupported: with expression in select statement"
+Gen4 plan same as above
+
+# unsupported with clause in union statement
+"with x as (select * from user) select * from x union select * from x"
+"unsupported: with expression in union statement"
+Gen4 plan same as above
+
+# scatter aggregate with complex select list (can't build order by)
+"select distinct a+1 from user"
+"generating order by clause: cannot reference a complex expression"
+Gen4 error: unsupported: in scatter query: complex order by expression: a + 1
+
+# aggregation on union
+"select sum(col) from (select col from user union all select col from unsharded) t"
+"unsupported: cross-shard query with aggregates"
+Gen4 error: using aggregation on top of a *planbuilder.concatenateGen4 plan is not yet supported
+
+# systable union query in derived table with constraint on outside (without star projection)
+"select id from (select id from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'user_extra' union select id from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'music') `kcu` where `id` = 'primary'"
+"unsupported: filtering on results of cross-shard subquery"
+Gen4 error: can't push predicates on concatenate
+
+# insert having subquery in row values
+"insert into user(id, name) values ((select 1 from user where id = 1), 'A')"
+"expr cannot be translated, not supported: (select 1 from `user` where id = 1)"
+Gen4 plan same as above
+
+# lateral derived tables
+"select * from user, lateral (select * from user_extra where user_id = user.id) t"
+"unsupported: lateral derived tables"
+Gen4 plan same as above
+
+# json_table expressions
+"SELECT * FROM JSON_TABLE('[ {\"c1\": null} ]','$[*]' COLUMNS( c1 INT PATH '$.c1' ERROR ON ERROR )) as jt"
+"unsupported: json_table expressions"
+Gen4 plan same as above
+
+# mix lock with other expr
+"select get_lock('xyz', 10), 1 from dual"
+"unsupported: lock function and other expression in same select query"
+Gen4 plan same as above

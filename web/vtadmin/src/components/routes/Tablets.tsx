@@ -33,17 +33,31 @@ import { DataFilter } from '../dataTable/DataFilter';
 import { KeyspaceLink } from '../links/KeyspaceLink';
 import { TabletLink } from '../links/TabletLink';
 import { ExternalTabletLink } from '../links/ExternalTabletLink';
+import { ShardLink } from '../links/ShardLink';
+import InfoDropdown from './tablets/InfoDropdown';
+import { isReadOnlyMode } from '../../util/env';
+import { ReadOnlyGate } from '../ReadOnlyGate';
+import { QueryLoadingPlaceholder } from '../placeholders/QueryLoadingPlaceholder';
+
+const COLUMNS = ['Keyspace', 'Shard', 'Alias', 'Type', 'Tablet State', 'Hostname'];
+if (!isReadOnlyMode()) {
+    COLUMNS.push('Actions');
+}
 
 export const Tablets = () => {
     useDocumentTitle('Tablets');
 
     const { value: filter, updateValue: updateFilter } = useSyncedURLParam('filter');
-    const { data = [] } = useTablets();
-    const { data: keyspaces = [], ...ksQuery } = useKeyspaces();
+
+    const tabletsQuery = useTablets();
+    const keyspacesQuery = useKeyspaces();
+    const queries = [tabletsQuery, keyspacesQuery];
+
+    const { data: keyspaces = [], ...ksQuery } = keyspacesQuery;
 
     const filteredData = React.useMemo(() => {
-        return formatRows(data, keyspaces, filter);
-    }, [data, filter, keyspaces]);
+        return formatRows(tabletsQuery.data, keyspaces, filter);
+    }, [tabletsQuery.data, filter, keyspaces]);
 
     const renderRows = React.useCallback(
         (rows: typeof filteredData) => {
@@ -52,30 +66,30 @@ export const Tablets = () => {
                     <DataCell>
                         <KeyspaceLink clusterID={t._raw.cluster?.id} name={t.keyspace}>
                             <div>{t.keyspace}</div>
-                            <div className="font-size-small text-color-secondary">{t.cluster}</div>
+                            <div className="text-sm text-secondary">{t.cluster}</div>
                         </KeyspaceLink>
                     </DataCell>
                     <DataCell>
-                        <KeyspaceLink
-                            className="white-space-nowrap"
+                        <ShardLink
+                            className="whitespace-nowrap"
                             clusterID={t._raw.cluster?.id}
-                            name={t.keyspace}
+                            keyspace={t.keyspace}
                             shard={t.shard}
                         >
                             <ShardServingPip isLoading={ksQuery.isLoading} isServing={t.isShardServing} /> {t.shard}
                             {ksQuery.isSuccess && (
-                                <div className="font-size-small text-color-secondary white-space-nowrap">
+                                <div className="text-sm text-secondary whitespace-nowrap">
                                     {!t.isShardServing && 'NOT SERVING'}
                                 </div>
                             )}
-                        </KeyspaceLink>
+                        </ShardLink>
                     </DataCell>
                     <DataCell>
-                        <TabletLink alias={t.alias} className="font-weight-bold" clusterID={t._raw.cluster?.id}>
+                        <TabletLink alias={t.alias} className="font-bold" clusterID={t._raw.cluster?.id}>
                             {t.alias}
                         </TabletLink>
                     </DataCell>
-                    <DataCell className="white-space-nowrap">{t.type}</DataCell>
+                    <DataCell className="whitespace-nowrap">{t.type}</DataCell>
 
                     <DataCell>
                         <TabletServingPip state={t._raw.state} /> {t.state}
@@ -84,6 +98,12 @@ export const Tablets = () => {
                     <DataCell>
                         <ExternalTabletLink fqdn={`//${t._raw.FQDN}`}>{t.hostname}</ExternalTabletLink>
                     </DataCell>
+
+                    <ReadOnlyGate>
+                        <DataCell>
+                            <InfoDropdown alias={t.alias as string} clusterID={t._raw.cluster?.id as string} />
+                        </DataCell>
+                    </ReadOnlyGate>
                 </tr>
             ));
         },
@@ -103,11 +123,8 @@ export const Tablets = () => {
                     placeholder="Filter tablets"
                     value={filter || ''}
                 />
-                <DataTable
-                    columns={['Keyspace', 'Shard', 'Alias', 'Type', 'Tablet State', 'Hostname']}
-                    data={filteredData}
-                    renderRows={renderRows}
-                />
+                <DataTable columns={COLUMNS} data={filteredData} renderRows={renderRows} />
+                <QueryLoadingPlaceholder queries={queries} />
             </ContentContainer>
         </div>
     );
@@ -136,14 +153,14 @@ export const formatRows = (
             alias: formatAlias(t.tablet?.alias),
             cluster: t.cluster?.name,
             hostname: t.tablet?.hostname,
-            isShardServing: shard?.shard?.is_master_serving,
+            isShardServing: shard?.shard?.is_primary_serving,
             keyspace: t.tablet?.keyspace,
             shard: shardName,
             state: formatState(t),
             type: formatDisplayType(t),
             _raw: t,
             _keyspaceShard: `${t.tablet?.keyspace}/${t.tablet?.shard}`,
-            // Include the unformatted type so (string) filtering by "master" works
+            // Include the unformatted type so (string) filtering by "primary" works
             // even if "primary" is what we display, and what we use for key:value searches.
             _rawType: formatType(t),
             // Always sort primary tablets first, then sort alphabetically by type, etc.

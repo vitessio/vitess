@@ -18,9 +18,13 @@ package grpcvtctldserver
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -30,26 +34,39 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"vitess.io/vitess/go/event"
+	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqlescape"
+	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/trace"
+	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/concurrency"
+	hk "vitess.io/vitess/go/vt/hook"
+	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/schema"
+
+	"vitess.io/vitess/go/vt/schemamanager"
+
+	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/mysqlctl/mysqlctlproto"
+	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/topotools/events"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil"
+	"vitess.io/vitess/go/vt/vtctl/schematools"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -60,7 +77,7 @@ import (
 )
 
 const (
-	initShardMasterOperation = "InitShardMaster" // (TODO:@amason) Can I rename this to Primary?
+	initShardPrimaryOperation = "InitShardPrimary"
 )
 
 // VtctldServer implements the Vtctld RPC service protocol.
@@ -149,6 +166,84 @@ func (s *VtctldServer) ApplyRoutingRules(ctx context.Context, req *vtctldatapb.A
 	return resp, nil
 }
 
+// ApplySchema is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) ApplySchema(ctx context.Context, req *vtctldatapb.ApplySchemaRequest) (resp *vtctldatapb.ApplySchemaResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.ApplySchema")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("skip_preflight", req.SkipPreflight)
+	span.Annotate("ddl_strategy", req.DdlStrategy)
+
+	if len(req.Sql) == 0 {
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "Sql must be a non-empty array")
+	}
+
+	// Attach the callerID as the EffectiveCallerID.
+	if req.CallerId != nil {
+		span.Annotate("caller_id", req.CallerId.Principal)
+		ctx = callerid.NewContext(ctx, req.CallerId, &querypb.VTGateCallerID{Username: req.CallerId.Principal})
+	}
+
+	executionUUID, err := schema.CreateUUID()
+	if err != nil {
+		return resp, vterrors.Wrapf(err, "unable to create execution UUID")
+	}
+
+	migrationContext := req.MigrationContext
+	if migrationContext == "" {
+		migrationContext = fmt.Sprintf("vtctl:%s", executionUUID)
+	}
+
+	waitReplicasTimeout, ok, err := protoutil.DurationFromProto(req.WaitReplicasTimeout)
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "unable to parse WaitReplicasTimeout into a valid duration")
+	} else if !ok {
+		waitReplicasTimeout = time.Second * 30
+	}
+
+	m := sync.RWMutex{}
+	logstream := []*logutilpb.Event{}
+	logger := logutil.NewCallbackLogger(func(e *logutilpb.Event) {
+		m.Lock()
+		defer m.Unlock()
+
+		logstream = append(logstream, e)
+	})
+
+	executor := schemamanager.NewTabletExecutor(migrationContext, s.ts, s.tmc, logger, waitReplicasTimeout)
+	if req.AllowLongUnavailability {
+		executor.AllowBigSchemaChange()
+	}
+	if req.SkipPreflight {
+		executor.SkipPreflight()
+	}
+
+	if err := executor.SetDDLStrategy(req.DdlStrategy); err != nil {
+		return resp, vterrors.Wrapf(err, "invalid DdlStrategy: %s", req.DdlStrategy)
+	}
+
+	if len(req.UuidList) > 0 {
+		if err := executor.SetUUIDList(req.UuidList); err != nil {
+			return resp, vterrors.Wrapf(err, "invalid UuidList: %s", req.UuidList)
+		}
+	}
+
+	execResult, err := schemamanager.Run(
+		ctx,
+		schemamanager.NewPlainController(req.Sql, req.Keyspace),
+		executor,
+	)
+
+	if err != nil {
+		return &vtctldatapb.ApplySchemaResponse{}, err
+	}
+
+	return &vtctldatapb.ApplySchemaResponse{
+		UuidList: execResult.UUIDs,
+	}, err
+}
+
 // ApplyVSchema is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) ApplyVSchema(ctx context.Context, req *vtctldatapb.ApplyVSchemaRequest) (*vtctldatapb.ApplyVSchemaResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.ApplyVSchema")
@@ -221,6 +316,123 @@ func (s *VtctldServer) ApplyVSchema(ctx context.Context, req *vtctldatapb.ApplyV
 	return &vtctldatapb.ApplyVSchemaResponse{VSchema: updatedVS}, nil
 }
 
+// Backup is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) Backup(req *vtctldatapb.BackupRequest, stream vtctlservicepb.Vtctld_BackupServer) error {
+	span, ctx := trace.NewSpan(stream.Context(), "VtctldServer.Backup")
+	defer span.Finish()
+
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(req.TabletAlias))
+	span.Annotate("allow_primary", req.AllowPrimary)
+	span.Annotate("concurrency", req.Concurrency)
+
+	ti, err := s.ts.GetTablet(ctx, req.TabletAlias)
+	if err != nil {
+		return err
+	}
+
+	span.Annotate("keyspace", ti.Keyspace)
+	span.Annotate("shard", ti.Shard)
+
+	return s.backupTablet(ctx, ti.Tablet, int(req.Concurrency), req.AllowPrimary, stream)
+}
+
+// BackupShard is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) BackupShard(req *vtctldatapb.BackupShardRequest, stream vtctlservicepb.Vtctld_BackupShardServer) error {
+	span, ctx := trace.NewSpan(stream.Context(), "VtctldServer.BackupShard")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("shard", req.Shard)
+	span.Annotate("allow_primary", req.AllowPrimary)
+	span.Annotate("concurrency", req.Concurrency)
+
+	tablets, stats, err := reparentutil.ShardReplicationStatuses(ctx, s.ts, s.tmc, req.Keyspace, req.Shard)
+	if err != nil {
+		return err
+	}
+
+	var (
+		backupTablet    *topodatapb.Tablet
+		backupTabletLag uint32
+	)
+
+	for i, tablet := range tablets {
+		switch tablet.Type {
+		case topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY, topodatapb.TabletType_SPARE:
+		default:
+			continue
+		}
+
+		if lag := stats[i].ReplicationLagSeconds; backupTablet == nil || lag < backupTabletLag {
+			backupTablet = tablet.Tablet
+			backupTabletLag = lag
+		}
+	}
+
+	if backupTablet == nil && req.AllowPrimary {
+		for _, tablet := range tablets {
+			if tablet.Type != topodatapb.TabletType_PRIMARY {
+				continue
+			}
+
+			backupTablet = tablet.Tablet
+			break
+		}
+	}
+
+	if backupTablet == nil {
+		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no tablet available for backup")
+	}
+
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(backupTablet.Alias))
+
+	return s.backupTablet(ctx, backupTablet, int(req.Concurrency), req.AllowPrimary, stream)
+}
+
+func (s *VtctldServer) backupTablet(ctx context.Context, tablet *topodatapb.Tablet, concurrency int, allowPrimary bool, stream interface {
+	Send(resp *vtctldatapb.BackupResponse) error
+}) error {
+	logStream, err := s.tmc.Backup(ctx, tablet, concurrency, allowPrimary)
+	if err != nil {
+		return err
+	}
+
+	logger := logutil.NewConsoleLogger()
+	for {
+		event, err := logStream.Recv()
+		switch err {
+		case nil:
+			logutil.LogEvent(logger, event)
+			resp := &vtctldatapb.BackupResponse{
+				TabletAlias: tablet.Alias,
+				Keyspace:    tablet.Keyspace,
+				Shard:       tablet.Shard,
+				Event:       event,
+			}
+			if err := stream.Send(resp); err != nil {
+				logger.Errorf("failed to send stream response %+v: %v", resp, err)
+			}
+		case io.EOF:
+			// Do not do anything for primary tablets and when active reparenting is disabled
+			if *mysqlctl.DisableActiveReparents || tablet.Type == topodatapb.TabletType_PRIMARY {
+				return nil
+			}
+
+			// Otherwise we find the correct primary tablet and set the replication source,
+			// since the primary could have changed while we executed the backup which can
+			// also affect whether we want to send semi sync acks or not.
+			tabletInfo, err := s.ts.GetTablet(ctx, tablet.Alias)
+			if err != nil {
+				return err
+			}
+
+			return reparentutil.SetReplicationSource(ctx, s.ts, s.tmc, tabletInfo.Tablet)
+		default:
+			return err
+		}
+	}
+}
+
 // ChangeTabletType is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) ChangeTabletType(ctx context.Context, req *vtctldatapb.ChangeTabletTypeRequest) (*vtctldatapb.ChangeTabletTypeResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.ChangeTabletType")
@@ -255,7 +467,43 @@ func (s *VtctldServer) ChangeTabletType(ctx context.Context, req *vtctldatapb.Ch
 		}, nil
 	}
 
-	err = s.tmc.ChangeType(ctx, tablet.Tablet, req.DbType)
+	shard, err := s.ts.GetShard(ctx, tablet.Keyspace, tablet.Shard)
+	if err != nil {
+		return nil, err
+	}
+
+	durabilityName, err := s.ts.GetKeyspaceDurability(ctx, tablet.Keyspace)
+	if err != nil {
+		return nil, err
+	}
+	log.Infof("Getting a new durability policy for %v", durabilityName)
+	durability, err := reparentutil.GetDurabilityPolicy(durabilityName)
+	if err != nil {
+		return nil, err
+	}
+
+	if !shard.HasPrimary() {
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no primary tablet for shard %v/%v", tablet.Keyspace, tablet.Shard)
+	}
+
+	shardPrimary, err := s.ts.GetTablet(ctx, shard.PrimaryAlias)
+	if err != nil {
+		return nil, fmt.Errorf("cannot lookup primary tablet %v for shard %v/%v: %w", topoproto.TabletAliasString(shard.PrimaryAlias), tablet.Keyspace, tablet.Shard, err)
+	}
+
+	if shardPrimary.Type != topodatapb.TabletType_PRIMARY {
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "TopologyServer has incosistent state for shard primary %v", topoproto.TabletAliasString(shard.PrimaryAlias))
+	}
+
+	if shardPrimary.Keyspace != tablet.Keyspace || shardPrimary.Shard != tablet.Shard {
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "primary %v and potential replica %v not in same keypace shard (%v/%v)", topoproto.TabletAliasString(shard.PrimaryAlias), req.TabletAlias, tablet.Keyspace, tablet.Shard)
+	}
+
+	// We should clone the tablet and change its type to the expected type before checking the durability rules
+	// Since we want to check the durability rules for the desired state and not before we make that change
+	expectedTablet := proto.Clone(tablet.Tablet).(*topodatapb.Tablet)
+	expectedTablet.Type = req.DbType
+	err = s.tmc.ChangeType(ctx, tablet.Tablet, req.DbType, reparentutil.IsReplicaSemiSync(durability, shardPrimary.Tablet, expectedTablet))
 	if err != nil {
 		return nil, err
 	}
@@ -283,10 +531,9 @@ func (s *VtctldServer) CreateKeyspace(ctx context.Context, req *vtctldatapb.Crea
 
 	span.Annotate("keyspace", req.Name)
 	span.Annotate("keyspace_type", topoproto.KeyspaceTypeLString(req.Type))
-	span.Annotate("sharding_column_name", req.ShardingColumnName)
-	span.Annotate("sharding_column_type", topoproto.KeyspaceIDTypeLString(req.ShardingColumnType))
 	span.Annotate("force", req.Force)
 	span.Annotate("allow_empty_vschema", req.AllowEmptyVSchema)
+	span.Annotate("durability_policy", req.DurabilityPolicy)
 
 	switch req.Type {
 	case topodatapb.KeyspaceType_NORMAL:
@@ -306,14 +553,11 @@ func (s *VtctldServer) CreateKeyspace(ctx context.Context, req *vtctldatapb.Crea
 	}
 
 	ki := &topodatapb.Keyspace{
-		KeyspaceType:       req.Type,
-		ShardingColumnName: req.ShardingColumnName,
-		ShardingColumnType: req.ShardingColumnType,
-
-		ServedFroms: req.ServedFroms,
-
-		BaseKeyspace: req.BaseKeyspace,
-		SnapshotTime: req.SnapshotTime,
+		KeyspaceType:     req.Type,
+		ServedFroms:      req.ServedFroms,
+		BaseKeyspace:     req.BaseKeyspace,
+		SnapshotTime:     req.SnapshotTime,
+		DurabilityPolicy: req.DurabilityPolicy,
 	}
 
 	err := s.ts.CreateKeyspace(ctx, req.Name, ki)
@@ -478,6 +722,34 @@ func (s *VtctldServer) DeleteKeyspace(ctx context.Context, req *vtctldatapb.Dele
 
 	span.Annotate("keyspace", req.Keyspace)
 	span.Annotate("recursive", req.Recursive)
+	span.Annotate("force", req.Force)
+
+	lctx, unlock, lerr := s.ts.LockKeyspace(ctx, req.Keyspace, "DeleteKeyspace")
+	switch {
+	case lerr == nil:
+		ctx = lctx
+	case !req.Force:
+		return nil, fmt.Errorf("failed to lock %s; if you really want to delete this keyspace, re-run with Force=true: %w", req.Keyspace, lerr)
+	default:
+		log.Warningf("%s: failed to lock keyspace %s for deletion, but force=true, proceeding anyway ...", lerr, req.Keyspace)
+	}
+
+	var err error
+	if unlock != nil {
+		defer func() {
+			// Attempting to unlock a keyspace we successfully deleted results
+			// in ts.unlockKeyspace returning an error, which can make the
+			// overall RPC _seem_ like it failed.
+			//
+			// So, we do this extra checking to allow for specifically this
+			// scenario to result in "success."
+			origErr := err
+			unlock(&err)
+			if origErr == nil && topo.IsErrType(err, topo.NoNode) {
+				err = nil
+			}
+		}()
+	}
 
 	shards, err := s.ts.GetShardNames(ctx, req.Keyspace)
 	if err != nil {
@@ -492,10 +764,12 @@ func (s *VtctldServer) DeleteKeyspace(ctx context.Context, req *vtctldatapb.Dele
 		log.Infof("Deleting all %d shards (and their tablets) in keyspace %v", len(shards), req.Keyspace)
 		recursive := true
 		evenIfServing := true
+		force := req.Force
 
 		for _, shard := range shards {
 			log.Infof("Recursively deleting shard %v/%v", req.Keyspace, shard)
-			if err := deleteShard(ctx, s.ts, req.Keyspace, shard, recursive, evenIfServing); err != nil {
+			err = deleteShard(ctx, s.ts, req.Keyspace, shard, recursive, evenIfServing, force)
+			if err != nil {
 				return nil, fmt.Errorf("cannot delete shard %v/%v: %w", req.Keyspace, shard, err)
 			}
 		}
@@ -516,7 +790,8 @@ func (s *VtctldServer) DeleteKeyspace(ctx context.Context, req *vtctldatapb.Dele
 		}
 	}
 
-	if err := s.ts.DeleteKeyspace(ctx, req.Keyspace); err != nil {
+	err = s.ts.DeleteKeyspace(ctx, req.Keyspace)
+	if err != nil {
 		return nil, err
 	}
 
@@ -531,14 +806,31 @@ func (s *VtctldServer) DeleteShards(ctx context.Context, req *vtctldatapb.Delete
 	span.Annotate("num_shards", len(req.Shards))
 	span.Annotate("even_if_serving", req.EvenIfServing)
 	span.Annotate("recursive", req.Recursive)
+	span.Annotate("force", req.Force)
 
 	for _, shard := range req.Shards {
-		if err := deleteShard(ctx, s.ts, shard.Keyspace, shard.Name, req.Recursive, req.EvenIfServing); err != nil {
+		if err := deleteShard(ctx, s.ts, shard.Keyspace, shard.Name, req.Recursive, req.EvenIfServing, req.Force); err != nil {
 			return nil, err
 		}
 	}
 
 	return &vtctldatapb.DeleteShardsResponse{}, nil
+}
+
+// DeleteSrvVSchema is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) DeleteSrvVSchema(ctx context.Context, req *vtctldatapb.DeleteSrvVSchemaRequest) (*vtctldatapb.DeleteSrvVSchemaResponse, error) {
+	if req.Cell == "" {
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "cell must be non-empty")
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	defer cancel()
+
+	if err := s.ts.DeleteSrvVSchema(ctx, req.Cell); err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.DeleteSrvVSchemaResponse{}, nil
 }
 
 // DeleteTablets is part of the vtctlservicepb.VtctldServer interface.
@@ -578,6 +870,7 @@ func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldat
 	}
 
 	span.Annotate("wait_replicas_timeout_sec", waitReplicasTimeout.Seconds())
+	span.Annotate("prevent_cross_cell_promotion", req.PreventCrossCellPromotion)
 
 	m := sync.RWMutex{}
 	logstream := []*logutilpb.Event{}
@@ -592,9 +885,10 @@ func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldat
 		req.Keyspace,
 		req.Shard,
 		reparentutil.EmergencyReparentOptions{
-			NewPrimaryAlias:     req.NewPrimary,
-			IgnoreReplicas:      sets.NewString(ignoreReplicaAliases...),
-			WaitReplicasTimeout: waitReplicasTimeout,
+			NewPrimaryAlias:           req.NewPrimary,
+			IgnoreReplicas:            sets.NewString(ignoreReplicaAliases...),
+			WaitReplicasTimeout:       waitReplicasTimeout,
+			PreventCrossCellPromotion: req.PreventCrossCellPromotion,
 		},
 	)
 
@@ -607,8 +901,8 @@ func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldat
 		resp.Keyspace = ev.ShardInfo.Keyspace()
 		resp.Shard = ev.ShardInfo.ShardName()
 
-		if ev.NewMaster != nil && !topoproto.TabletAliasIsZero(ev.NewMaster.Alias) {
-			resp.PromotedPrimary = ev.NewMaster.Alias
+		if ev.NewPrimary != nil && !topoproto.TabletAliasIsZero(ev.NewPrimary.Alias) {
+			resp.PromotedPrimary = ev.NewPrimary.Alias
 		}
 	}
 
@@ -619,6 +913,86 @@ func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldat
 	copy(resp.Events, logstream)
 
 	return resp, err
+}
+
+// ExecuteFetchAsApp is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) ExecuteFetchAsApp(ctx context.Context, req *vtctldatapb.ExecuteFetchAsAppRequest) (*vtctldatapb.ExecuteFetchAsAppResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.ExecuteFetchAsApp")
+	defer span.Finish()
+
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(req.TabletAlias))
+	span.Annotate("max_rows", req.MaxRows)
+	span.Annotate("use_pool", req.UsePool)
+
+	ti, err := s.ts.GetTablet(ctx, req.TabletAlias)
+	if err != nil {
+		return nil, err
+	}
+
+	qr, err := s.tmc.ExecuteFetchAsApp(ctx, ti.Tablet, req.UsePool, []byte(req.Query), int(req.MaxRows))
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.ExecuteFetchAsAppResponse{Result: qr}, nil
+}
+
+// ExecuteFetchAsDBA is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) ExecuteFetchAsDBA(ctx context.Context, req *vtctldatapb.ExecuteFetchAsDBARequest) (*vtctldatapb.ExecuteFetchAsDBAResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.ExecuteFetchAsDBA")
+	defer span.Finish()
+
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(req.TabletAlias))
+	span.Annotate("max_rows", req.MaxRows)
+	span.Annotate("disable_binlogs", req.DisableBinlogs)
+	span.Annotate("reload_schema", req.ReloadSchema)
+
+	ti, err := s.ts.GetTablet(ctx, req.TabletAlias)
+	if err != nil {
+		return nil, err
+	}
+
+	qr, err := s.tmc.ExecuteFetchAsDba(ctx, ti.Tablet, false, []byte(req.Query), int(req.MaxRows), req.DisableBinlogs, req.ReloadSchema)
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.ExecuteFetchAsDBAResponse{Result: qr}, nil
+}
+
+// ExecuteHook is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) ExecuteHook(ctx context.Context, req *vtctldatapb.ExecuteHookRequest) (*vtctldatapb.ExecuteHookResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.ExecuteHook")
+	defer span.Finish()
+
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(req.TabletAlias))
+
+	if req.TabletHookRequest == nil {
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "TabletHookRequest cannot be nil")
+	}
+
+	span.Annotate("hook_name", req.TabletHookRequest.Name)
+
+	if strings.Contains(req.TabletHookRequest.Name, "/") {
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "hook name cannot contain a '/'; was %v", req.TabletHookRequest.Name)
+	}
+
+	ti, err := s.ts.GetTablet(ctx, req.TabletAlias)
+	if err != nil {
+		return nil, err
+	}
+
+	hook := hk.NewHookWithEnv(req.TabletHookRequest.Name, req.TabletHookRequest.Parameters, req.TabletHookRequest.ExtraEnv)
+	hr, err := s.tmc.ExecuteHook(ctx, ti.Tablet, hook)
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.ExecuteHookResponse{HookResult: &tabletmanagerdatapb.ExecuteHookResponse{
+		ExitStatus: int64(hr.ExitStatus),
+		Stdout:     hr.Stdout,
+		Stderr:     hr.Stderr,
+	}}, nil
 }
 
 // FindAllShardsInKeyspace is part of the vtctlservicepb.VtctldServer interface.
@@ -684,7 +1058,7 @@ func (s *VtctldServer) GetBackups(ctx context.Context, req *vtctldatapb.GetBacku
 
 	backups := make([]*mysqlctlpb.BackupInfo, 0, totalBackups)
 	backupsToSkip := len(bhs) - totalBackups
-	backupsToSkipDetails := totalBackups - totalDetailedBackups
+	backupsToSkipDetails := len(bhs) - totalDetailedBackups
 
 	for i, bh := range bhs {
 		if i < backupsToSkip {
@@ -803,6 +1177,27 @@ func (s *VtctldServer) GetKeyspaces(ctx context.Context, req *vtctldatapb.GetKey
 	return &vtctldatapb.GetKeyspacesResponse{Keyspaces: keyspaces}, nil
 }
 
+// GetPermissions is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) GetPermissions(ctx context.Context, req *vtctldatapb.GetPermissionsRequest) (*vtctldatapb.GetPermissionsResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.GetPermissions")
+	defer span.Finish()
+
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(req.TabletAlias))
+	ti, err := s.ts.GetTablet(ctx, req.TabletAlias)
+	if err != nil {
+		return nil, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "Failed to get tablet %v: %v", req.TabletAlias, err)
+	}
+
+	p, err := s.tmc.GetPermissions(ctx, ti.Tablet)
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.GetPermissionsResponse{
+		Permissions: p,
+	}, nil
+}
+
 // GetRoutingRules is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) GetRoutingRules(ctx context.Context, req *vtctldatapb.GetRoutingRulesRequest) (*vtctldatapb.GetRoutingRulesResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.GetRoutingRules")
@@ -824,21 +1219,17 @@ func (s *VtctldServer) GetSchema(ctx context.Context, req *vtctldatapb.GetSchema
 	defer span.Finish()
 
 	span.Annotate("tablet_alias", topoproto.TabletAliasString(req.TabletAlias))
-
-	tablet, err := s.ts.GetTablet(ctx, req.TabletAlias)
-	if err != nil {
-		return nil, fmt.Errorf("GetTablet(%v) failed: %w", req.TabletAlias, err)
-	}
-
 	span.Annotate("tables", strings.Join(req.Tables, ","))
 	span.Annotate("exclude_tables", strings.Join(req.ExcludeTables, ","))
 	span.Annotate("include_views", req.IncludeViews)
 	span.Annotate("table_names_only", req.TableNamesOnly)
 	span.Annotate("table_sizes_only", req.TableSizesOnly)
+	span.Annotate("table_schema_only", req.TableSchemaOnly)
 
-	sd, err := s.tmc.GetSchema(ctx, tablet.Tablet, req.Tables, req.ExcludeTables, req.IncludeViews)
+	r := &tabletmanagerdatapb.GetSchemaRequest{Tables: req.Tables, ExcludeTables: req.ExcludeTables, IncludeViews: req.IncludeViews, TableSchemaOnly: req.TableSchemaOnly}
+	sd, err := schematools.GetSchema(ctx, s.ts, s.tmc, req.TabletAlias, r)
 	if err != nil {
-		return nil, fmt.Errorf("GetSchema(%v, %v, %v, %v) failed: %w", tablet.Tablet, req.Tables, req.ExcludeTables, req.IncludeViews, err)
+		return nil, err
 	}
 
 	if req.TableNamesOnly {
@@ -890,6 +1281,41 @@ func (s *VtctldServer) GetShard(ctx context.Context, req *vtctldatapb.GetShardRe
 			Name:     req.ShardName,
 			Shard:    shard.Shard,
 		},
+	}, nil
+}
+
+// GetSrvKeyspaceNames is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) GetSrvKeyspaceNames(ctx context.Context, req *vtctldatapb.GetSrvKeyspaceNamesRequest) (*vtctldatapb.GetSrvKeyspaceNamesResponse, error) {
+	cells := req.Cells
+	if len(cells) == 0 {
+		ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+		defer cancel()
+
+		var err error
+		cells, err = s.ts.GetCellInfoNames(ctx)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	namesByCell := make(map[string]*vtctldatapb.GetSrvKeyspaceNamesResponse_NameList, len(cells))
+
+	// Contact each cell sequentially, each cell is bounded by *topo.RemoteOperationTimeout.
+	// Total runtime is O(len(cells) * topo.RemoteOperationTimeout).
+	for _, cell := range cells {
+		ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+		names, err := s.ts.GetSrvKeyspaceNames(ctx, cell)
+		if err != nil {
+			cancel()
+			return nil, err
+		}
+
+		cancel()
+		namesByCell[cell] = &vtctldatapb.GetSrvKeyspaceNamesResponse_NameList{Names: names}
+	}
+
+	return &vtctldatapb.GetSrvKeyspaceNamesResponse{
+		Names: namesByCell,
 	}, nil
 }
 
@@ -1017,13 +1443,16 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 	defer span.Finish()
 
 	span.Annotate("cells", strings.Join(req.Cells, ","))
+	if req.TabletType != topodatapb.TabletType_UNKNOWN {
+		span.Annotate("tablet_type", topodatapb.TabletType_name[int32(req.TabletType)])
+	}
 	span.Annotate("strict", req.Strict)
 
 	// It is possible that an old primary has not yet updated its type in the
-	// topo. In that case, report its type as UNKNOWN. It used to be MASTER but
+	// topo. In that case, report its type as UNKNOWN. It used to be PRIMARY but
 	// is no longer the serving primary.
 	adjustTypeForStalePrimary := func(ti *topo.TabletInfo, mtst time.Time) {
-		if ti.Type == topodatapb.TabletType_MASTER && ti.GetMasterTermStartTime().Before(mtst) {
+		if ti.Type == topodatapb.TabletType_PRIMARY && ti.GetPrimaryTermStartTime().Before(mtst) {
 			ti.Tablet.Type = topodatapb.TabletType_UNKNOWN
 		}
 	}
@@ -1076,19 +1505,19 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 	}
 
 	if tabletMap != nil {
-		var trueMasterTimestamp time.Time
+		var truePrimaryTimestamp time.Time
 		for _, ti := range tabletMap {
-			if ti.Type == topodatapb.TabletType_MASTER {
-				masterTimestamp := ti.GetMasterTermStartTime()
-				if masterTimestamp.After(trueMasterTimestamp) {
-					trueMasterTimestamp = masterTimestamp
+			if ti.Type == topodatapb.TabletType_PRIMARY {
+				primaryTimestamp := ti.GetPrimaryTermStartTime()
+				if primaryTimestamp.After(truePrimaryTimestamp) {
+					truePrimaryTimestamp = primaryTimestamp
 				}
 			}
 		}
 
 		tablets := make([]*topodatapb.Tablet, 0, len(tabletMap))
 		for _, ti := range tabletMap {
-			adjustTypeForStalePrimary(ti, trueMasterTimestamp)
+			adjustTypeForStalePrimary(ti, truePrimaryTimestamp)
 			tablets = append(tablets, ti.Tablet)
 		}
 
@@ -1118,15 +1547,13 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 		go func(cell string) {
 			defer wg.Done()
 
-			tablets, err := topotools.GetAllTablets(ctx, s.ts, cell)
+			tablets, err := s.ts.GetTabletsByCell(ctx, cell)
 			if err != nil {
 				if req.Strict {
 					log.Infof("GetTablets got an error from cell %s: %s. Running in strict mode, so canceling other cell RPCs", cell, err)
 					cancel()
 				}
-
-				rec.RecordError(fmt.Errorf("GetAllTablets(cell = %s) failed: %w", cell, err))
-
+				rec.RecordError(fmt.Errorf("GetTabletsByCell(%s) failed: %w", cell, err))
 				return
 			}
 
@@ -1144,23 +1571,26 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 		}
 	}
 
-	// Collect true master term start times, and optionally filter out any
+	// Collect true primary term start times, and optionally filter out any
 	// tablets by keyspace according to the request.
-	masterTermStartTimes := map[string]time.Time{}
+	PrimaryTermStartTimes := map[string]time.Time{}
 	filteredTablets := make([]*topo.TabletInfo, 0, len(allTablets))
 
 	for _, tablet := range allTablets {
 		if req.Keyspace != "" && tablet.Keyspace != req.Keyspace {
 			continue
 		}
+		if req.TabletType != 0 && tablet.Type != req.TabletType {
+			continue
+		}
 
 		key := tablet.Keyspace + "." + tablet.Shard
-		if v, ok := masterTermStartTimes[key]; ok {
-			if tablet.GetMasterTermStartTime().After(v) {
-				masterTermStartTimes[key] = tablet.GetMasterTermStartTime()
+		if v, ok := PrimaryTermStartTimes[key]; ok {
+			if tablet.GetPrimaryTermStartTime().After(v) {
+				PrimaryTermStartTimes[key] = tablet.GetPrimaryTermStartTime()
 			}
 		} else {
-			masterTermStartTimes[key] = tablet.GetMasterTermStartTime()
+			PrimaryTermStartTimes[key] = tablet.GetPrimaryTermStartTime()
 		}
 
 		filteredTablets = append(filteredTablets, tablet)
@@ -1168,12 +1598,12 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 
 	adjustedTablets := make([]*topodatapb.Tablet, len(filteredTablets))
 
-	// collect the tablets with adjusted master term start times. they've
+	// collect the tablets with adjusted primary term start times. they've
 	// already been filtered by the above loop, so no keyspace filtering
 	// here.
 	for i, ti := range filteredTablets {
 		key := ti.Keyspace + "." + ti.Shard
-		adjustTypeForStalePrimary(ti, masterTermStartTimes[key])
+		adjustTypeForStalePrimary(ti, PrimaryTermStartTimes[key])
 
 		adjustedTablets[i] = ti.Tablet
 	}
@@ -1181,6 +1611,22 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 	return &vtctldatapb.GetTabletsResponse{
 		Tablets: adjustedTablets,
 	}, nil
+}
+
+// GetVersion returns the version of a tablet from its debug vars
+func (s *VtctldServer) GetVersion(ctx context.Context, req *vtctldatapb.GetVersionRequest) (*vtctldatapb.GetVersionResponse, error) {
+	tabletAlias := req.TabletAlias
+	tablet, err := s.ts.GetTablet(ctx, tabletAlias)
+	if err != nil {
+		return nil, err
+	}
+
+	version, err := getVersionFromTablet(tablet.Addr())
+	if err != nil {
+		return nil, err
+	}
+	log.Infof("Tablet %v is running version '%v'", topoproto.TabletAliasString(tabletAlias), version)
+	return &vtctldatapb.GetVersionResponse{Version: version}, err
 }
 
 // GetVSchema is part of the vtctlservicepb.VtctldServer interface.
@@ -1297,46 +1743,56 @@ func (s *VtctldServer) InitShardPrimaryLocked(
 	}
 	ev.ShardInfo = *shardInfo
 
+	durabilityName, err := s.ts.GetKeyspaceDurability(ctx, req.Keyspace)
+	if err != nil {
+		return err
+	}
+	log.Infof("Getting a new durability policy for %v", durabilityName)
+	durability, err := reparentutil.GetDurabilityPolicy(durabilityName)
+	if err != nil {
+		return err
+	}
+
 	event.DispatchUpdate(ev, "reading tablet map")
 	tabletMap, err := s.ts.GetTabletMapForShard(ctx, req.Keyspace, req.Shard)
 	if err != nil {
 		return err
 	}
 
-	// Check the master elect is in tabletMap.
-	masterElectTabletAliasStr := topoproto.TabletAliasString(req.PrimaryElectTabletAlias)
-	masterElectTabletInfo, ok := tabletMap[masterElectTabletAliasStr]
+	// Check the primary elect is in tabletMap.
+	primaryElectTabletAliasStr := topoproto.TabletAliasString(req.PrimaryElectTabletAlias)
+	primaryElectTabletInfo, ok := tabletMap[primaryElectTabletAliasStr]
 	if !ok {
-		return fmt.Errorf("master-elect tablet %v is not in the shard", topoproto.TabletAliasString(req.PrimaryElectTabletAlias))
+		return fmt.Errorf("primary-elect tablet %v is not in the shard", topoproto.TabletAliasString(req.PrimaryElectTabletAlias))
 	}
-	ev.NewMaster = proto.Clone(masterElectTabletInfo.Tablet).(*topodatapb.Tablet)
+	ev.NewPrimary = proto.Clone(primaryElectTabletInfo.Tablet).(*topodatapb.Tablet)
 
-	// Check the master is the only master is the shard, or -force was used.
-	_, masterTabletMap := topotools.SortedTabletMap(tabletMap)
-	if !topoproto.TabletAliasEqual(shardInfo.MasterAlias, req.PrimaryElectTabletAlias) {
+	// Check the primary is the only primary is the shard, or -force was used.
+	_, primaryTabletMap := topotools.SortedTabletMap(tabletMap)
+	if !topoproto.TabletAliasEqual(shardInfo.PrimaryAlias, req.PrimaryElectTabletAlias) {
 		if !req.Force {
-			return fmt.Errorf("master-elect tablet %v is not the shard master, use -force to proceed anyway", topoproto.TabletAliasString(req.PrimaryElectTabletAlias))
+			return fmt.Errorf("primary-elect tablet %v is not the shard primary, use -force to proceed anyway", topoproto.TabletAliasString(req.PrimaryElectTabletAlias))
 		}
 
-		logger.Warningf("master-elect tablet %v is not the shard master, proceeding anyway as -force was used", topoproto.TabletAliasString(req.PrimaryElectTabletAlias))
+		logger.Warningf("primary-elect tablet %v is not the shard primary, proceeding anyway as -force was used", topoproto.TabletAliasString(req.PrimaryElectTabletAlias))
 	}
-	if _, ok := masterTabletMap[masterElectTabletAliasStr]; !ok {
+	if _, ok := primaryTabletMap[primaryElectTabletAliasStr]; !ok {
 		if !req.Force {
-			return fmt.Errorf("master-elect tablet %v is not a master in the shard, use -force to proceed anyway", topoproto.TabletAliasString(req.PrimaryElectTabletAlias))
+			return fmt.Errorf("primary-elect tablet %v is not a primary in the shard, use -force to proceed anyway", topoproto.TabletAliasString(req.PrimaryElectTabletAlias))
 		}
-		logger.Warningf("master-elect tablet %v is not a master in the shard, proceeding anyway as -force was used", topoproto.TabletAliasString(req.PrimaryElectTabletAlias))
+		logger.Warningf("primary-elect tablet %v is not a primary in the shard, proceeding anyway as -force was used", topoproto.TabletAliasString(req.PrimaryElectTabletAlias))
 	}
-	haveOtherMaster := false
-	for alias := range masterTabletMap {
-		if masterElectTabletAliasStr != alias {
-			haveOtherMaster = true
+	haveOtherPrimary := false
+	for alias := range primaryTabletMap {
+		if primaryElectTabletAliasStr != alias {
+			haveOtherPrimary = true
 		}
 	}
-	if haveOtherMaster {
+	if haveOtherPrimary {
 		if !req.Force {
-			return fmt.Errorf("master-elect tablet %v is not the only master in the shard, use -force to proceed anyway", topoproto.TabletAliasString(req.PrimaryElectTabletAlias))
+			return fmt.Errorf("primary-elect tablet %v is not the only primary in the shard, use -force to proceed anyway", topoproto.TabletAliasString(req.PrimaryElectTabletAlias))
 		}
-		logger.Warningf("master-elect tablet %v is not the only master in the shard, proceeding anyway as -force was used", topoproto.TabletAliasString(req.PrimaryElectTabletAlias))
+		logger.Warningf("primary-elect tablet %v is not the only primary in the shard, proceeding anyway as -force was used", topoproto.TabletAliasString(req.PrimaryElectTabletAlias))
 	}
 
 	// First phase: reset replication on all tablets. If anyone fails,
@@ -1372,11 +1828,11 @@ func (s *VtctldServer) InitShardPrimaryLocked(
 		return fmt.Errorf("lost topology lock, aborting: %v", err)
 	}
 
-	// Tell the new master to break its replicas, return its replication
+	// Tell the new primary to break its replicas, return its replication
 	// position
-	logger.Infof("initializing master on %v", topoproto.TabletAliasString(req.PrimaryElectTabletAlias))
-	event.DispatchUpdate(ev, "initializing master")
-	rp, err := tmc.InitMaster(ctx, masterElectTabletInfo.Tablet)
+	logger.Infof("initializing primary on %v", topoproto.TabletAliasString(req.PrimaryElectTabletAlias))
+	event.DispatchUpdate(ev, "initializing primary")
+	rp, err := tmc.InitPrimary(ctx, primaryElectTabletInfo.Tablet, reparentutil.SemiSyncAckers(durability, primaryElectTabletInfo.Tablet) > 0)
 	if err != nil {
 		return err
 	}
@@ -1391,25 +1847,25 @@ func (s *VtctldServer) InitShardPrimaryLocked(
 	replCtx, replCancel := context.WithTimeout(ctx, waitReplicasTimeout)
 	defer replCancel()
 
-	// Now tell the new master to insert the reparent_journal row,
-	// and tell everybody else to become a replica of the new master,
+	// Now tell the new primary to insert the reparent_journal row,
+	// and tell everybody else to become a replica of the new primary,
 	// and wait for the row in the reparent_journal table.
 	// We start all these in parallel, to handle the semi-sync
-	// case: for the master to be able to commit its row in the
+	// case: for the primary to be able to commit its row in the
 	// reparent_journal table, it needs connected replicas.
 	event.DispatchUpdate(ev, "reparenting all tablets")
 	now := time.Now().UnixNano()
-	wgMaster := sync.WaitGroup{}
+	wgPrimary := sync.WaitGroup{}
 	wgReplicas := sync.WaitGroup{}
-	var masterErr error
+	var primaryErr error
 	for alias, tabletInfo := range tabletMap {
-		if alias == masterElectTabletAliasStr {
-			wgMaster.Add(1)
+		if alias == primaryElectTabletAliasStr {
+			wgPrimary.Add(1)
 			go func(alias string, tabletInfo *topo.TabletInfo) {
-				defer wgMaster.Done()
-				logger.Infof("populating reparent journal on new master %v", alias)
-				masterErr = tmc.PopulateReparentJournal(replCtx, tabletInfo.Tablet, now,
-					initShardMasterOperation,
+				defer wgPrimary.Done()
+				logger.Infof("populating reparent journal on new primary %v", alias)
+				primaryErr = tmc.PopulateReparentJournal(replCtx, tabletInfo.Tablet, now,
+					initShardPrimaryOperation,
 					req.PrimaryElectTabletAlias, rp)
 			}(alias, tabletInfo)
 		} else {
@@ -1417,31 +1873,31 @@ func (s *VtctldServer) InitShardPrimaryLocked(
 			go func(alias string, tabletInfo *topo.TabletInfo) {
 				defer wgReplicas.Done()
 				logger.Infof("initializing replica %v", alias)
-				if err := tmc.InitReplica(replCtx, tabletInfo.Tablet, req.PrimaryElectTabletAlias, rp, now); err != nil {
+				if err := tmc.InitReplica(replCtx, tabletInfo.Tablet, req.PrimaryElectTabletAlias, rp, now, reparentutil.IsReplicaSemiSync(durability, primaryElectTabletInfo.Tablet, tabletInfo.Tablet)); err != nil {
 					rec.RecordError(fmt.Errorf("tablet %v InitReplica failed: %v", alias, err))
 				}
 			}(alias, tabletInfo)
 		}
 	}
 
-	// After the master is done, we can update the shard record
+	// After the primary is done, we can update the shard record
 	// (note with semi-sync, it also means at least one replica is done).
-	wgMaster.Wait()
-	if masterErr != nil {
-		// The master failed, there is no way the
+	wgPrimary.Wait()
+	if primaryErr != nil {
+		// The primary failed, there is no way the
 		// replicas will work.  So we cancel them all.
-		logger.Warningf("master failed to PopulateReparentJournal, canceling replicas")
+		logger.Warningf("primary failed to PopulateReparentJournal, canceling replicas")
 		replCancel()
 		wgReplicas.Wait()
-		return fmt.Errorf("failed to PopulateReparentJournal on master: %v", masterErr)
+		return fmt.Errorf("failed to PopulateReparentJournal on primary: %v", primaryErr)
 	}
-	if !topoproto.TabletAliasEqual(shardInfo.MasterAlias, req.PrimaryElectTabletAlias) {
+	if !topoproto.TabletAliasEqual(shardInfo.PrimaryAlias, req.PrimaryElectTabletAlias) {
 		if _, err := s.ts.UpdateShardFields(ctx, req.Keyspace, req.Shard, func(si *topo.ShardInfo) error {
-			si.MasterAlias = req.PrimaryElectTabletAlias
+			si.PrimaryAlias = req.PrimaryElectTabletAlias
 			return nil
 		}); err != nil {
 			wgReplicas.Wait()
-			return fmt.Errorf("failed to update shard master record: %v", err)
+			return fmt.Errorf("failed to update shard primary record: %v", err)
 		}
 	}
 
@@ -1454,21 +1910,41 @@ func (s *VtctldServer) InitShardPrimaryLocked(
 		return err
 	}
 
-	// Create database if necessary on the master. replicas will get it too through
-	// replication. Since the user called InitShardMaster, they've told us to
+	// Create database if necessary on the primary. replicas will get it too through
+	// replication. Since the user called InitShardPrimary, they've told us to
 	// assume that whatever data is on all the replicas is what they intended.
 	// If the database doesn't exist, it means the user intends for these tablets
 	// to begin serving with no data (i.e. first time initialization).
-	createDB := fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s", sqlescape.EscapeID(topoproto.TabletDbName(masterElectTabletInfo.Tablet)))
-	if _, err := tmc.ExecuteFetchAsDba(ctx, masterElectTabletInfo.Tablet, false, []byte(createDB), 1, false, true); err != nil {
+	createDB := fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s", sqlescape.EscapeID(topoproto.TabletDbName(primaryElectTabletInfo.Tablet)))
+	if _, err := tmc.ExecuteFetchAsDba(ctx, primaryElectTabletInfo.Tablet, false, []byte(createDB), 1, false, true); err != nil {
 		return fmt.Errorf("failed to create database: %v", err)
 	}
 	// Refresh the state to force the tabletserver to reconnect after db has been created.
-	if err := tmc.RefreshState(ctx, masterElectTabletInfo.Tablet); err != nil {
+	if err := tmc.RefreshState(ctx, primaryElectTabletInfo.Tablet); err != nil {
 		log.Warningf("RefreshState failed: %v", err)
 	}
 
 	return nil
+}
+
+// PingTablet is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) PingTablet(ctx context.Context, req *vtctldatapb.PingTabletRequest) (*vtctldatapb.PingTabletResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.PingTablet")
+	defer span.Finish()
+
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(req.TabletAlias))
+
+	tablet, err := s.ts.GetTablet(ctx, req.TabletAlias)
+	if err != nil {
+		return nil, err
+	}
+
+	err = s.tmc.Ping(ctx, tablet.Tablet)
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.PingTabletResponse{}, nil
 }
 
 // PlannedReparentShard is part of the vtctldservicepb.VtctldServer interface.
@@ -1523,8 +1999,8 @@ func (s *VtctldServer) PlannedReparentShard(ctx context.Context, req *vtctldatap
 		resp.Keyspace = ev.ShardInfo.Keyspace()
 		resp.Shard = ev.ShardInfo.ShardName()
 
-		if !topoproto.TabletAliasIsZero(ev.NewMaster.Alias) {
-			resp.PromotedPrimary = ev.NewMaster.Alias
+		if !topoproto.TabletAliasIsZero(ev.NewPrimary.Alias) {
+			resp.PromotedPrimary = ev.NewPrimary.Alias
 		}
 	}
 
@@ -1535,6 +2011,22 @@ func (s *VtctldServer) PlannedReparentShard(ctx context.Context, req *vtctldatap
 	copy(resp.Events, logstream)
 
 	return resp, err
+}
+
+// RebuildKeyspaceGraph is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) RebuildKeyspaceGraph(ctx context.Context, req *vtctldatapb.RebuildKeyspaceGraphRequest) (*vtctldatapb.RebuildKeyspaceGraphResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.RebuildKeyspaceGraph")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("cells", strings.Join(req.Cells, ","))
+	span.Annotate("allow_partial", req.AllowPartial)
+
+	if err := topotools.RebuildKeyspace(ctx, logutil.NewCallbackLogger(func(e *logutilpb.Event) {}), s.ts, req.Keyspace, req.Cells, req.AllowPartial); err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.RebuildKeyspaceGraphResponse{}, nil
 }
 
 // RebuildVSchemaGraph is part of the vtctlservicepb.VtctldServer interface.
@@ -1590,7 +2082,7 @@ func (s *VtctldServer) RefreshStateByShard(ctx context.Context, req *vtctldatapb
 		return nil, fmt.Errorf("Failed to get shard %s/%s/: %w", req.Keyspace, req.Shard, err)
 	}
 
-	isPartial, err := topotools.RefreshTabletsByShard(ctx, s.ts, s.tmc, si, req.Cells, logutil.NewCallbackLogger(func(e *logutilpb.Event) {
+	isPartial, partialDetails, err := topotools.RefreshTabletsByShard(ctx, s.ts, s.tmc, si, req.Cells, logutil.NewCallbackLogger(func(e *logutilpb.Event) {
 		switch e.Level {
 		case logutilpb.Level_WARNING:
 			log.Warningf(e.Value)
@@ -1605,8 +2097,133 @@ func (s *VtctldServer) RefreshStateByShard(ctx context.Context, req *vtctldatapb
 	}
 
 	return &vtctldatapb.RefreshStateByShardResponse{
-		IsPartialRefresh: isPartial,
+		IsPartialRefresh:      isPartial,
+		PartialRefreshDetails: partialDetails,
 	}, nil
+}
+
+// ReloadSchema is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) ReloadSchema(ctx context.Context, req *vtctldatapb.ReloadSchemaRequest) (*vtctldatapb.ReloadSchemaResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.ReloadSchema")
+	defer span.Finish()
+
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(req.TabletAlias))
+
+	ti, err := s.ts.GetTablet(ctx, req.TabletAlias)
+	if err != nil {
+		return nil, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "GetTablet(%v) failed: %v", req.TabletAlias, err)
+	}
+
+	err = s.tmc.ReloadSchema(ctx, ti.Tablet, "")
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.ReloadSchemaResponse{}, nil
+}
+
+// ReloadSchemaShard is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) ReloadSchemaShard(ctx context.Context, req *vtctldatapb.ReloadSchemaShardRequest) (*vtctldatapb.ReloadSchemaShardResponse, error) {
+	logger, getEvents := eventStreamLogger()
+
+	var sema *sync2.Semaphore
+	if req.Concurrency > 0 {
+		sema = sync2.NewSemaphore(int(req.Concurrency), 0)
+	}
+
+	s.reloadSchemaShard(ctx, req, sema, logger)
+
+	return &vtctldatapb.ReloadSchemaShardResponse{
+		Events: getEvents(),
+	}, nil
+}
+
+func (s *VtctldServer) reloadSchemaShard(ctx context.Context, req *vtctldatapb.ReloadSchemaShardRequest, sema *sync2.Semaphore, logger logutil.Logger) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.ReloadSchemaShard")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("shard", req.Shard)
+	span.Annotate("concurrency", req.Concurrency)
+	span.Annotate("include_primary", req.IncludePrimary)
+	span.Annotate("wait_position", req.WaitPosition)
+
+	isPartial, ok := schematools.ReloadShard(ctx, s.ts, s.tmc, logger, req.Keyspace, req.Shard, req.WaitPosition, sema, req.IncludePrimary)
+	if !ok {
+		return
+	}
+
+	span.Annotate("is_partial_result", isPartial)
+}
+
+// ReloadSchemaKeyspace is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) ReloadSchemaKeyspace(ctx context.Context, req *vtctldatapb.ReloadSchemaKeyspaceRequest) (*vtctldatapb.ReloadSchemaKeyspaceResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.ReloadSchemaKeyspace")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("concurrency", req.Concurrency)
+	span.Annotate("include_primary", req.IncludePrimary)
+	span.Annotate("wait_position", req.WaitPosition)
+
+	shards, err := s.ts.GetShardNames(ctx, req.Keyspace)
+	if err != nil {
+		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "GetShardNames(%v) failed: %v", req.Keyspace, err)
+	}
+
+	var (
+		wg                sync.WaitGroup
+		sema              *sync2.Semaphore
+		logger, getEvents = eventStreamLogger()
+	)
+
+	if req.Concurrency > 0 {
+		sema = sync2.NewSemaphore(int(req.Concurrency), 0)
+	}
+
+	for _, shard := range shards {
+		wg.Add(1)
+		go func(shard string) {
+			defer wg.Done()
+			s.reloadSchemaShard(ctx, &vtctldatapb.ReloadSchemaShardRequest{
+				Keyspace:       req.Keyspace,
+				Shard:          shard,
+				IncludePrimary: req.IncludePrimary,
+				WaitPosition:   req.WaitPosition,
+			}, sema, logger)
+		}(shard)
+	}
+
+	wg.Wait()
+
+	return &vtctldatapb.ReloadSchemaKeyspaceResponse{
+		Events: getEvents(),
+	}, nil
+}
+
+// RemoveBackup is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) RemoveBackup(ctx context.Context, req *vtctldatapb.RemoveBackupRequest) (*vtctldatapb.RemoveBackupResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.RemoveBackup")
+	defer span.Finish()
+
+	bucket := fmt.Sprintf("%v/%v", req.Keyspace, req.Shard)
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("shard", req.Shard)
+	span.Annotate("bucket", bucket)
+	span.Annotate("backup_name", req.Name)
+
+	bs, err := backupstorage.GetBackupStorage()
+	if err != nil {
+		return nil, err
+	}
+	defer bs.Close()
+
+	if err := bs.RemoveBackup(ctx, bucket, req.Name); err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.RemoveBackupResponse{}, nil
 }
 
 // RemoveKeyspaceCell is part of the vtctlservicepb.VtctldServer interface.
@@ -1680,35 +2297,359 @@ func (s *VtctldServer) ReparentTablet(ctx context.Context, req *vtctldatapb.Repa
 		return nil, err
 	}
 
-	if !shard.HasMaster() {
+	if !shard.HasPrimary() {
 		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no primary tablet for shard %v/%v", tablet.Keyspace, tablet.Shard)
 	}
 
-	shardPrimary, err := s.ts.GetTablet(ctx, shard.MasterAlias)
+	shardPrimary, err := s.ts.GetTablet(ctx, shard.PrimaryAlias)
 	if err != nil {
-		return nil, fmt.Errorf("cannot lookup primary tablet %v for shard %v/%v: %w", topoproto.TabletAliasString(shard.MasterAlias), tablet.Keyspace, tablet.Shard, err)
+		return nil, fmt.Errorf("cannot lookup primary tablet %v for shard %v/%v: %w", topoproto.TabletAliasString(shard.PrimaryAlias), tablet.Keyspace, tablet.Shard, err)
 	}
 
-	if shardPrimary.Type != topodatapb.TabletType_MASTER {
-		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "TopologyServer has incosistent state for shard master %v", topoproto.TabletAliasString(shard.MasterAlias))
+	if shardPrimary.Type != topodatapb.TabletType_PRIMARY {
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "TopologyServer has incosistent state for shard primary %v", topoproto.TabletAliasString(shard.PrimaryAlias))
 	}
 
 	if shardPrimary.Keyspace != tablet.Keyspace || shardPrimary.Shard != tablet.Shard {
-		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "primary %v and potential replica %v not in same keypace shard (%v/%v)", topoproto.TabletAliasString(shard.MasterAlias), topoproto.TabletAliasString(req.Tablet), tablet.Keyspace, tablet.Shard)
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "primary %v and potential replica %v not in same keypace shard (%v/%v)", topoproto.TabletAliasString(shard.PrimaryAlias), topoproto.TabletAliasString(req.Tablet), tablet.Keyspace, tablet.Shard)
 	}
 
 	if topoproto.TabletAliasEqual(req.Tablet, shardPrimary.Alias) {
 		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot ReparentTablet current shard primary (%v) onto itself", topoproto.TabletAliasString(req.Tablet))
 	}
 
-	if err := s.tmc.SetMaster(ctx, tablet.Tablet, shard.MasterAlias, 0, "", false); err != nil {
+	durabilityName, err := s.ts.GetKeyspaceDurability(ctx, tablet.Keyspace)
+	if err != nil {
+		return nil, err
+	}
+	log.Infof("Getting a new durability policy for %v", durabilityName)
+	durability, err := reparentutil.GetDurabilityPolicy(durabilityName)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := s.tmc.SetReplicationSource(ctx, tablet.Tablet, shard.PrimaryAlias, 0, "", false, reparentutil.IsReplicaSemiSync(durability, shardPrimary.Tablet, tablet.Tablet)); err != nil {
 		return nil, err
 	}
 
 	return &vtctldatapb.ReparentTabletResponse{
 		Keyspace: tablet.Keyspace,
 		Shard:    tablet.Shard,
-		Primary:  shard.MasterAlias,
+		Primary:  shard.PrimaryAlias,
+	}, nil
+}
+
+func (s *VtctldServer) RestoreFromBackup(req *vtctldatapb.RestoreFromBackupRequest, stream vtctlservicepb.Vtctld_RestoreFromBackupServer) error {
+	span, ctx := trace.NewSpan(stream.Context(), "VtctldServer.RestoreFromBackup")
+	defer span.Finish()
+
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(req.TabletAlias))
+	backupTime := protoutil.TimeFromProto(req.BackupTime)
+	if !backupTime.IsZero() {
+		span.Annotate("backup_timestamp", backupTime.Format(mysqlctl.BackupTimestampFormat))
+	}
+
+	ti, err := s.ts.GetTablet(ctx, req.TabletAlias)
+	if err != nil {
+		return err
+	}
+
+	span.Annotate("keyspace", ti.Keyspace)
+	span.Annotate("shard", ti.Shard)
+
+	logStream, err := s.tmc.RestoreFromBackup(ctx, ti.Tablet, protoutil.TimeFromProto(req.BackupTime))
+	if err != nil {
+		return err
+	}
+
+	logger := logutil.NewConsoleLogger()
+
+	for {
+		event, err := logStream.Recv()
+		switch err {
+		case nil:
+			logutil.LogEvent(logger, event)
+			resp := &vtctldatapb.RestoreFromBackupResponse{
+				TabletAlias: req.TabletAlias,
+				Keyspace:    ti.Keyspace,
+				Shard:       ti.Shard,
+				Event:       event,
+			}
+			if err := stream.Send(resp); err != nil {
+				logger.Errorf("failed to send stream response %+v: %v", resp, err)
+			}
+		case io.EOF:
+			// Do not do anything when active reparenting is disabled.
+			if *mysqlctl.DisableActiveReparents {
+				return nil
+			}
+
+			// Otherwise, we find the correct primary tablet and set the
+			// replication source on the freshly-restored tablet, since the
+			// shard primary may have changed while it was restoring.
+			//
+			// This also affects whether or not we want to send semi-sync ACKs.
+			ti, err := s.ts.GetTablet(ctx, req.TabletAlias)
+			if err != nil {
+				return err
+			}
+
+			return reparentutil.SetReplicationSource(ctx, s.ts, s.tmc, ti.Tablet)
+		default:
+			return err
+		}
+	}
+}
+
+// RunHealthCheck is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) RunHealthCheck(ctx context.Context, req *vtctldatapb.RunHealthCheckRequest) (*vtctldatapb.RunHealthCheckResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.RunHealthCheck")
+	defer span.Finish()
+
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(req.TabletAlias))
+
+	ti, err := s.ts.GetTablet(ctx, req.TabletAlias)
+	if err != nil {
+		return nil, err
+	}
+
+	err = s.tmc.RunHealthCheck(ctx, ti.Tablet)
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.RunHealthCheckResponse{}, nil
+}
+
+// SetKeyspaceDurabilityPolicy is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) SetKeyspaceDurabilityPolicy(ctx context.Context, req *vtctldatapb.SetKeyspaceDurabilityPolicyRequest) (*vtctldatapb.SetKeyspaceDurabilityPolicyResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.SetKeyspaceDurabilityPolicy")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("durability_policy", req.DurabilityPolicy)
+
+	ctx, unlock, lockErr := s.ts.LockKeyspace(ctx, req.Keyspace, "SetKeyspaceDurabilityPolicy")
+	if lockErr != nil {
+		return nil, lockErr
+	}
+
+	var err error
+	defer unlock(&err)
+
+	ki, err := s.ts.GetKeyspace(ctx, req.Keyspace)
+	if err != nil {
+		return nil, err
+	}
+
+	policyValid := reparentutil.CheckDurabilityPolicyExists(req.DurabilityPolicy)
+	if !policyValid {
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "durability policy <%v> is not a valid policy. Please register it as a policy first", req.DurabilityPolicy)
+	}
+
+	ki.DurabilityPolicy = req.DurabilityPolicy
+
+	err = s.ts.UpdateKeyspace(ctx, ki)
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.SetKeyspaceDurabilityPolicyResponse{
+		Keyspace: ki.Keyspace,
+	}, nil
+}
+
+// SetKeyspaceServedFrom is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) SetKeyspaceServedFrom(ctx context.Context, req *vtctldatapb.SetKeyspaceServedFromRequest) (*vtctldatapb.SetKeyspaceServedFromResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.SetKeyspaceServedFrom")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("tablet_type", topoproto.TabletTypeLString(req.TabletType))
+	span.Annotate("cells", strings.Join(req.Cells, ","))
+	span.Annotate("remove", req.Remove)
+	span.Annotate("source_keyspace", req.SourceKeyspace)
+
+	ctx, unlock, lockErr := s.ts.LockKeyspace(ctx, req.Keyspace, "SetKeyspaceServedFrom")
+	if lockErr != nil {
+		return nil, lockErr
+	}
+
+	var err error
+	defer unlock(&err)
+
+	ki, err := s.ts.GetKeyspace(ctx, req.Keyspace)
+	if err != nil {
+		return nil, err
+	}
+
+	err = ki.UpdateServedFromMap(req.TabletType, req.Cells, req.SourceKeyspace, req.Remove, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	err = s.ts.UpdateKeyspace(ctx, ki)
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.SetKeyspaceServedFromResponse{
+		Keyspace: ki.Keyspace,
+	}, nil
+}
+
+// SetShardIsPrimaryServing is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) SetShardIsPrimaryServing(ctx context.Context, req *vtctldatapb.SetShardIsPrimaryServingRequest) (*vtctldatapb.SetShardIsPrimaryServingResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.SetShardIsPrimaryServing")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("shard", req.Shard)
+	span.Annotate("is_serving", req.IsServing)
+
+	ctx, unlock, lockErr := s.ts.LockKeyspace(ctx, req.Keyspace, fmt.Sprintf("SetShardIsPrimaryServing(%v,%v,%v)", req.Keyspace, req.Shard, req.IsServing))
+	if lockErr != nil {
+		return nil, lockErr
+	}
+
+	var err error
+	defer unlock(&err)
+
+	si, err := s.ts.UpdateShardFields(ctx, req.Keyspace, req.Shard, func(si *topo.ShardInfo) error {
+		si.IsPrimaryServing = req.IsServing
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.SetShardIsPrimaryServingResponse{
+		Shard: si.Shard,
+	}, nil
+}
+
+// SetShardTabletControl is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) SetShardTabletControl(ctx context.Context, req *vtctldatapb.SetShardTabletControlRequest) (*vtctldatapb.SetShardTabletControlResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.SetShardTabletControl")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("shard", req.Shard)
+	span.Annotate("tablet_type", topoproto.TabletTypeLString(req.TabletType))
+	span.Annotate("cells", strings.Join(req.Cells, ","))
+	span.Annotate("denied_tables", strings.Join(req.DeniedTables, ","))
+	span.Annotate("disable_query_service", req.DisableQueryService)
+	span.Annotate("remove", req.Remove)
+
+	ctx, unlock, lockErr := s.ts.LockKeyspace(ctx, req.Keyspace, "SetShardTabletControl")
+	if lockErr != nil {
+		return nil, lockErr
+	}
+
+	var err error
+	defer unlock(&err)
+
+	si, err := s.ts.UpdateShardFields(ctx, req.Keyspace, req.Shard, func(si *topo.ShardInfo) error {
+		return si.UpdateSourceDeniedTables(ctx, req.TabletType, req.Cells, req.Remove, req.DeniedTables)
+	})
+
+	switch {
+	case topo.IsErrType(err, topo.NoUpdateNeeded):
+		// ok, fallthrough to DisableQueryService
+	case err != nil:
+		return nil, err
+	}
+
+	if si == nil { // occurs only when UpdateShardFields above returns NoUpdateNeeded
+		si, err = s.ts.GetShard(ctx, req.Keyspace, req.Shard)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if !req.Remove && len(req.DeniedTables) == 0 {
+		err = s.ts.UpdateDisableQueryService(ctx, req.Keyspace, []*topo.ShardInfo{si}, req.TabletType, req.Cells, req.DisableQueryService)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return &vtctldatapb.SetShardTabletControlResponse{
+		Shard: si.Shard,
+	}, nil
+}
+
+// SetWritable is part of the vtctldservicepb.VtctldServer interface.
+func (s *VtctldServer) SetWritable(ctx context.Context, req *vtctldatapb.SetWritableRequest) (*vtctldatapb.SetWritableResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.SetWritable")
+	defer span.Finish()
+
+	if req.TabletAlias == nil {
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "SetWritable.TabletAlias is required")
+	}
+
+	alias := topoproto.TabletAliasString(req.TabletAlias)
+	span.Annotate("tablet_alias", alias)
+	span.Annotate("writable", req.Writable)
+
+	tablet, err := s.ts.GetTablet(ctx, req.TabletAlias)
+	if err != nil {
+		log.Errorf("SetWritable: failed to read tablet record for %v: %v", alias, err)
+		return nil, err
+	}
+
+	var f func(context.Context, *topodatapb.Tablet) error
+	switch req.Writable {
+	case true:
+		f = s.tmc.SetReadWrite
+	case false:
+		f = s.tmc.SetReadOnly
+	}
+
+	if err := f(ctx, tablet.Tablet); err != nil {
+		log.Errorf("SetWritable: failed to set writable=%v on %v: %v", req.Writable, alias, err)
+		return nil, err
+	}
+
+	return &vtctldatapb.SetWritableResponse{}, nil
+}
+
+// ShardReplicationAdd is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) ShardReplicationAdd(ctx context.Context, req *vtctldatapb.ShardReplicationAddRequest) (*vtctldatapb.ShardReplicationAddResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.ShardReplicationAdd")
+	defer span.Finish()
+
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(req.TabletAlias))
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("shard", req.Shard)
+
+	if err := topo.UpdateShardReplicationRecord(ctx, s.ts, req.Keyspace, req.Shard, req.TabletAlias); err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.ShardReplicationAddResponse{}, nil
+}
+
+// ShardReplicationFix is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) ShardReplicationFix(ctx context.Context, req *vtctldatapb.ShardReplicationFixRequest) (*vtctldatapb.ShardReplicationFixResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.ShardReplicationFix")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("shard", req.Shard)
+	span.Annotate("cell", req.Cell)
+
+	problem, err := topo.FixShardReplication(ctx, s.ts, logutil.NewConsoleLogger(), req.Cell, req.Keyspace, req.Shard)
+	if err != nil {
+		return nil, err
+	}
+
+	if problem != nil {
+		span.Annotate("problem_tablet", topoproto.TabletAliasString(problem.TabletAlias))
+		span.Annotate("problem_type", strings.ToLower(topoproto.ShardReplicationErrorTypeString(problem.Type)))
+	}
+
+	return &vtctldatapb.ShardReplicationFixResponse{
+		Error: problem,
 	}, nil
 }
 
@@ -1745,7 +2686,7 @@ func (s *VtctldServer) ShardReplicationPositions(ctx context.Context, req *vtctl
 
 	for alias, tabletInfo := range tabletInfoMap {
 		switch {
-		case tabletInfo.Type == topodatapb.TabletType_MASTER:
+		case tabletInfo.Type == topodatapb.TabletType_PRIMARY:
 			wg.Add(1)
 
 			go func(ctx context.Context, alias string, tablet *topodatapb.Tablet) {
@@ -1761,17 +2702,17 @@ func (s *VtctldServer) ShardReplicationPositions(ctx context.Context, req *vtctl
 
 				var status *replicationdatapb.Status
 
-				pos, err := s.tmc.MasterPosition(ctx, tablet)
+				pos, err := s.tmc.PrimaryPosition(ctx, tablet)
 				if err != nil {
 					switch ctx.Err() {
 					case context.Canceled:
-						log.Warningf("context canceled before obtaining master position from %s: %s", alias, err)
+						log.Warningf("context canceled before obtaining primary position from %s: %s", alias, err)
 					case context.DeadlineExceeded:
-						log.Warningf("context deadline exceeded before obtaining master position from %s: %s", alias, err)
+						log.Warningf("context deadline exceeded before obtaining primary position from %s: %s", alias, err)
 					default:
 						// The RPC was not timed out or canceled. We treat this
 						// as a fatal error for the overall request.
-						rec.RecordError(fmt.Errorf("MasterPosition(%s) failed: %w", alias, err))
+						rec.RecordError(fmt.Errorf("PrimaryPosition(%s) failed: %w", alias, err))
 						return
 					}
 				} else {
@@ -1839,6 +2780,242 @@ func (s *VtctldServer) ShardReplicationPositions(ctx context.Context, req *vtctl
 	}, nil
 }
 
+// ShardReplicationRemove is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) ShardReplicationRemove(ctx context.Context, req *vtctldatapb.ShardReplicationRemoveRequest) (*vtctldatapb.ShardReplicationRemoveResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.ShardReplicationRemove")
+	defer span.Finish()
+
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(req.TabletAlias))
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("shard", req.Shard)
+
+	if err := topo.RemoveShardReplicationRecord(ctx, s.ts, req.TabletAlias.Cell, req.Keyspace, req.Shard, req.TabletAlias); err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.ShardReplicationRemoveResponse{}, nil
+}
+
+// SleepTablet is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) SleepTablet(ctx context.Context, req *vtctldatapb.SleepTabletRequest) (*vtctldatapb.SleepTabletResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.SleepTablet")
+	defer span.Finish()
+
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(req.TabletAlias))
+
+	dur, ok, err := protoutil.DurationFromProto(req.Duration)
+	if err != nil {
+		return nil, err
+	} else if !ok {
+		dur = *topo.RemoteOperationTimeout
+	}
+
+	span.Annotate("sleep_duration", dur.String())
+
+	tablet, err := s.ts.GetTablet(ctx, req.TabletAlias)
+	if err != nil {
+		return nil, err
+	}
+
+	err = s.tmc.Sleep(ctx, tablet.Tablet, dur)
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.SleepTabletResponse{}, nil
+}
+
+// SourceShardAdd is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) SourceShardAdd(ctx context.Context, req *vtctldatapb.SourceShardAddRequest) (*vtctldatapb.SourceShardAddResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.SourceShardAdd")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("shard", req.Shard)
+	span.Annotate("uid", req.Uid)
+	span.Annotate("source_keyspace", req.SourceKeyspace)
+	span.Annotate("source_shard", req.SourceShard)
+	span.Annotate("keyrange", key.KeyRangeString(req.KeyRange))
+	span.Annotate("tables", strings.Join(req.Tables, ","))
+
+	var (
+		si  *topo.ShardInfo
+		err error
+	)
+
+	ctx, unlock, lockErr := s.ts.LockKeyspace(ctx, req.Keyspace, fmt.Sprintf("SourceShardAdd(%v)", req.Uid))
+	if lockErr != nil {
+		return nil, lockErr
+	}
+	defer unlock(&err)
+
+	si, err = s.ts.UpdateShardFields(ctx, req.Keyspace, req.Shard, func(si *topo.ShardInfo) error {
+		for _, ss := range si.SourceShards {
+			if ss.Uid == req.Uid {
+				return fmt.Errorf("%w: uid %v is already in use", topo.NewError(topo.NoUpdateNeeded, fmt.Sprintf("%s/%s", req.Keyspace, req.Shard)), req.Uid)
+			}
+		}
+
+		si.SourceShards = append(si.SourceShards, &topodatapb.Shard_SourceShard{
+			Keyspace: req.SourceKeyspace,
+			Shard:    req.SourceShard,
+			Uid:      req.Uid,
+			KeyRange: req.KeyRange,
+			Tables:   req.Tables,
+		})
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &vtctldatapb.SourceShardAddResponse{}
+	switch si {
+	case nil:
+		// If we return NoUpdateNeeded from ts.UpdateShardFields, then we don't
+		// get a ShardInfo back.
+	default:
+		resp.Shard = si.Shard
+	}
+
+	return resp, err
+}
+
+// SourceShardDelete is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) SourceShardDelete(ctx context.Context, req *vtctldatapb.SourceShardDeleteRequest) (*vtctldatapb.SourceShardDeleteResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.SourceShardDelete")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("shard", req.Shard)
+	span.Annotate("uid", req.Uid)
+
+	var (
+		si  *topo.ShardInfo
+		err error
+	)
+
+	ctx, unlock, lockErr := s.ts.LockKeyspace(ctx, req.Keyspace, fmt.Sprintf("SourceShardDelete(%v)", req.Uid))
+	if lockErr != nil {
+		return nil, lockErr
+	}
+	defer unlock(&err)
+
+	si, err = s.ts.UpdateShardFields(ctx, req.Keyspace, req.Shard, func(si *topo.ShardInfo) error {
+		var newSourceShards []*topodatapb.Shard_SourceShard
+		for _, ss := range si.SourceShards {
+			if ss.Uid != req.Uid {
+				newSourceShards = append(newSourceShards, ss)
+			}
+		}
+
+		if len(newSourceShards) == len(si.SourceShards) {
+			return fmt.Errorf("%w: no SourceShard with uid %v", topo.NewError(topo.NoUpdateNeeded, fmt.Sprintf("%s/%s", req.Keyspace, req.Shard)), req.Uid)
+		}
+
+		si.SourceShards = newSourceShards
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &vtctldatapb.SourceShardDeleteResponse{}
+	switch si {
+	case nil:
+		// If we return NoUpdateNeeded from ts.UpdateShardFields, then we don't
+		// get a ShardInfo back.
+	default:
+		resp.Shard = si.Shard
+	}
+
+	return resp, err
+}
+
+// StartReplication is part of the vtctldservicepb.VtctldServer interface.
+func (s *VtctldServer) StartReplication(ctx context.Context, req *vtctldatapb.StartReplicationRequest) (*vtctldatapb.StartReplicationResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.StartReplication")
+	defer span.Finish()
+
+	if req.TabletAlias == nil {
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "StartReplication.TabletAlias is required")
+	}
+
+	alias := topoproto.TabletAliasString(req.TabletAlias)
+	span.Annotate("tablet_alias", alias)
+
+	tablet, err := s.ts.GetTablet(ctx, req.TabletAlias)
+	if err != nil {
+		log.Errorf("StartReplication: failed to read tablet record for %v: %v", alias, err)
+		return nil, err
+	}
+
+	shard, err := s.ts.GetShard(ctx, tablet.Keyspace, tablet.Shard)
+	if err != nil {
+		return nil, err
+	}
+
+	if !shard.HasPrimary() {
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no primary tablet for shard %v/%v", tablet.Keyspace, tablet.Shard)
+	}
+
+	shardPrimary, err := s.ts.GetTablet(ctx, shard.PrimaryAlias)
+	if err != nil {
+		return nil, fmt.Errorf("cannot lookup primary tablet %v for shard %v/%v: %w", topoproto.TabletAliasString(shard.PrimaryAlias), tablet.Keyspace, tablet.Shard, err)
+	}
+
+	if shardPrimary.Type != topodatapb.TabletType_PRIMARY {
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "TopologyServer has incosistent state for shard primary %v", topoproto.TabletAliasString(shard.PrimaryAlias))
+	}
+
+	if shardPrimary.Keyspace != tablet.Keyspace || shardPrimary.Shard != tablet.Shard {
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "primary %v and replica %v not in same keypace shard (%v/%v)", topoproto.TabletAliasString(shard.PrimaryAlias), topoproto.TabletAliasString(tablet.Alias), tablet.Keyspace, tablet.Shard)
+	}
+
+	durabilityName, err := s.ts.GetKeyspaceDurability(ctx, tablet.Keyspace)
+	if err != nil {
+		return nil, err
+	}
+	log.Infof("Getting a new durability policy for %v", durabilityName)
+	durability, err := reparentutil.GetDurabilityPolicy(durabilityName)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := s.tmc.StartReplication(ctx, tablet.Tablet, reparentutil.IsReplicaSemiSync(durability, shardPrimary.Tablet, tablet.Tablet)); err != nil {
+		log.Errorf("StartReplication: failed to start replication on %v: %v", alias, err)
+		return nil, err
+	}
+
+	return &vtctldatapb.StartReplicationResponse{}, nil
+}
+
+// StopReplication is part of the vtctldservicepb.VtctldServer interface.
+func (s *VtctldServer) StopReplication(ctx context.Context, req *vtctldatapb.StopReplicationRequest) (*vtctldatapb.StopReplicationResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.StopReplication")
+	defer span.Finish()
+
+	if req.TabletAlias == nil {
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "StopReplication.TabletAlias is required")
+	}
+
+	alias := topoproto.TabletAliasString(req.TabletAlias)
+	span.Annotate("tablet_alias", alias)
+
+	tablet, err := s.ts.GetTablet(ctx, req.TabletAlias)
+	if err != nil {
+		log.Errorf("StopReplication: failed to read tablet record for %v: %v", alias, err)
+		return nil, err
+	}
+
+	if err := s.tmc.StopReplication(ctx, tablet.Tablet); err != nil {
+		log.Errorf("StopReplication: failed to stop replication on %v: %v", alias, err)
+		return nil, err
+	}
+
+	return &vtctldatapb.StopReplicationResponse{}, nil
+}
+
 // TabletExternallyReparented is part of the vtctldservicepb.VtctldServer interface.
 func (s *VtctldServer) TabletExternallyReparented(ctx context.Context, req *vtctldatapb.TabletExternallyReparentedRequest) (*vtctldatapb.TabletExternallyReparentedResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.TabletExternallyReparented")
@@ -1866,22 +3043,22 @@ func (s *VtctldServer) TabletExternallyReparented(ctx context.Context, req *vtct
 		Keyspace:   shard.Keyspace(),
 		Shard:      shard.ShardName(),
 		NewPrimary: req.Tablet,
-		OldPrimary: shard.MasterAlias,
+		OldPrimary: shard.PrimaryAlias,
 	}
 
-	// If the externally reparented (new primary) tablet is already MASTER in
+	// If the externally reparented (new primary) tablet is already PRIMARY in
 	// the topo, this is a no-op.
-	if tablet.Type == topodatapb.TabletType_MASTER {
+	if tablet.Type == topodatapb.TabletType_PRIMARY {
 		return resp, nil
 	}
 
-	log.Infof("TabletExternallyReparented: executing tablet type change %v -> MASTER on %v", tablet.Type, topoproto.TabletAliasString(req.Tablet))
+	log.Infof("TabletExternallyReparented: executing tablet type change %v -> PRIMARY on %v", tablet.Type, topoproto.TabletAliasString(req.Tablet))
 	ev := &events.Reparent{
-		ShardInfo: *shard,
-		NewMaster: proto.Clone(tablet.Tablet).(*topodatapb.Tablet),
-		OldMaster: &topodatapb.Tablet{
-			Alias: shard.MasterAlias,
-			Type:  topodatapb.TabletType_MASTER,
+		ShardInfo:  *shard,
+		NewPrimary: proto.Clone(tablet.Tablet).(*topodatapb.Tablet),
+		OldPrimary: &topodatapb.Tablet{
+			Alias: shard.PrimaryAlias,
+			Type:  topodatapb.TabletType_PRIMARY,
 		},
 	}
 
@@ -1894,8 +3071,18 @@ func (s *VtctldServer) TabletExternallyReparented(ctx context.Context, req *vtct
 
 	event.DispatchUpdate(ev, "starting external reparent")
 
-	if err := s.tmc.ChangeType(ctx, tablet.Tablet, topodatapb.TabletType_MASTER); err != nil {
-		log.Warningf("ChangeType(%v, MASTER): %v", topoproto.TabletAliasString(req.Tablet), err)
+	durabilityName, err := s.ts.GetKeyspaceDurability(ctx, tablet.Keyspace)
+	if err != nil {
+		return nil, err
+	}
+	log.Infof("Getting a new durability policy for %v", durabilityName)
+	durability, err := reparentutil.GetDurabilityPolicy(durabilityName)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := s.tmc.ChangeType(ctx, tablet.Tablet, topodatapb.TabletType_PRIMARY, reparentutil.SemiSyncAckers(durability, tablet.Tablet) > 0); err != nil {
+		log.Warningf("ChangeType(%v, PRIMARY): %v", topoproto.TabletAliasString(req.Tablet), err)
 		return nil, err
 	}
 
@@ -1982,7 +3169,708 @@ func (s *VtctldServer) UpdateCellsAlias(ctx context.Context, req *vtctldatapb.Up
 	}, nil
 }
 
+// Validate is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) Validate(ctx context.Context, req *vtctldatapb.ValidateRequest) (*vtctldatapb.ValidateResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.Validate")
+	defer span.Finish()
+
+	span.Annotate("ping_tablets", req.PingTablets)
+
+	resp := vtctldatapb.ValidateResponse{}
+	getKeyspacesCtx, getKeyspacesCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	defer getKeyspacesCancel()
+
+	keyspaces, err := s.ts.GetKeyspaces(getKeyspacesCtx)
+	if err != nil {
+		resp.Results = append(resp.Results, fmt.Sprintf("GetKeyspaces failed: %v", err))
+		return &resp, nil
+	}
+
+	var (
+		m  sync.Mutex
+		wg sync.WaitGroup
+	)
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		validateAllTablets := func(ctx context.Context, keyspaces []string) {
+			span, ctx := trace.NewSpan(ctx, "VtctldServer.validateAllTablets")
+			defer span.Finish()
+
+			cellSet := sets.NewString()
+			for _, keyspace := range keyspaces {
+				getShardNamesCtx, getShardNamesCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+				shards, err := s.ts.GetShardNames(getShardNamesCtx, keyspace)
+				getShardNamesCancel() // don't defer in a loop
+
+				if err != nil {
+					m.Lock()
+					resp.Results = append(resp.Results, fmt.Sprintf("TopologyServer.GetShardNames(%v) failed: %v", keyspace, err))
+					m.Unlock()
+					continue
+				}
+
+				for _, shard := range shards {
+					findAllTabletAliasesCtx, findAllTabletAliasesCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+					aliases, err := s.ts.FindAllTabletAliasesInShard(findAllTabletAliasesCtx, keyspace, shard)
+					findAllTabletAliasesCancel() // don't defer in a loop
+
+					if err != nil {
+						m.Lock()
+						resp.Results = append(resp.Results, fmt.Sprintf("TopologyServer.FindAllTabletAliasesInShard(%v/%v) failed: %v", keyspace, shard, err))
+						m.Unlock()
+						continue
+					}
+
+					for _, alias := range aliases {
+						cellSet.Insert(alias.Cell)
+					}
+				}
+			}
+
+			for _, cell := range cellSet.List() {
+				getTabletsByCellCtx, getTabletsByCellCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+				aliases, err := s.ts.GetTabletAliasesByCell(getTabletsByCellCtx, cell)
+				getTabletsByCellCancel() // don't defer in a loop
+
+				if err != nil {
+					m.Lock()
+					resp.Results = append(resp.Results, fmt.Sprintf("TopologyServer.GetTabletsByCell(%v) failed: %v", cell, err))
+					m.Unlock()
+					continue
+				}
+
+				for _, alias := range aliases {
+					wg.Add(1)
+					go func(alias *topodatapb.TabletAlias) {
+						defer wg.Done()
+
+						span, ctx := trace.NewSpan(ctx, "VtctldServer.validateTablet")
+						defer span.Finish()
+
+						key := topoproto.TabletAliasString(alias)
+						span.Annotate("tablet_alias", key)
+
+						ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+						defer cancel()
+
+						if err := topo.Validate(ctx, s.ts, alias); err != nil {
+							m.Lock()
+							defer m.Unlock()
+
+							resp.Results = append(resp.Results, fmt.Sprintf("topo.Validate(%v) failed: %v", key, err))
+							return
+						}
+
+						log.Infof("tablet %v is valid", key)
+					}(alias)
+				}
+			}
+		}
+
+		validateAllTablets(ctx, keyspaces)
+	}()
+
+	resp.ResultsByKeyspace = make(map[string]*vtctldatapb.ValidateKeyspaceResponse, len(keyspaces))
+
+	for _, keyspace := range keyspaces {
+		wg.Add(1)
+		go func(keyspace string) {
+			defer wg.Done()
+			keyspaceResp, err := s.ValidateKeyspace(ctx, &vtctldatapb.ValidateKeyspaceRequest{
+				Keyspace:    keyspace,
+				PingTablets: req.PingTablets,
+			})
+
+			m.Lock()
+			defer m.Unlock()
+
+			if err != nil {
+				resp.ResultsByKeyspace[keyspace] = &vtctldatapb.ValidateKeyspaceResponse{
+					Results: []string{fmt.Sprintf("failed to validate: %v", err)},
+				}
+				return
+			}
+
+			resp.ResultsByKeyspace[keyspace] = keyspaceResp
+		}(keyspace)
+	}
+
+	wg.Wait()
+	return &resp, nil
+}
+
+// ValidateKeyspace is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) ValidateKeyspace(ctx context.Context, req *vtctldatapb.ValidateKeyspaceRequest) (*vtctldatapb.ValidateKeyspaceResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.ValidateKeyspace")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("ping_tablets", req.PingTablets)
+
+	resp := vtctldatapb.ValidateKeyspaceResponse{}
+	getShardNamesCtx, getShardNamesCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	defer getShardNamesCancel()
+
+	shards, err := s.ts.GetShardNames(getShardNamesCtx, req.Keyspace)
+	if err != nil {
+		resp.Results = append(resp.Results, fmt.Sprintf("TopologyServer.GetShardNames(%v) failed: %v", req.Keyspace, err))
+		return &resp, nil
+	}
+
+	resp.ResultsByShard = make(map[string]*vtctldatapb.ValidateShardResponse, len(shards))
+
+	var (
+		m  sync.Mutex
+		wg sync.WaitGroup
+	)
+	for _, shard := range shards {
+		wg.Add(1)
+		go func(shard string) {
+			defer wg.Done()
+			shardResp, err := s.ValidateShard(ctx, &vtctldatapb.ValidateShardRequest{
+				Keyspace:    req.Keyspace,
+				Shard:       shard,
+				PingTablets: req.PingTablets,
+			})
+
+			m.Lock()
+			defer m.Unlock()
+
+			if err != nil {
+				resp.Results = append(resp.Results, fmt.Sprintf("error validating shard %v/%v: %v", req.Keyspace, shard, err))
+				return
+			}
+
+			resp.ResultsByShard[shard] = shardResp
+		}(shard)
+	}
+
+	wg.Wait()
+	return &resp, nil
+}
+
+// ValidateSchemaKeyspace is a part of the vtctlservicepb.VtctldServer interface.
+// It will diff the schema from all the tablets in the keyspace.
+func (s *VtctldServer) ValidateSchemaKeyspace(ctx context.Context, req *vtctldatapb.ValidateSchemaKeyspaceRequest) (*vtctldatapb.ValidateSchemaKeyspaceResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.ValidateSchemaKeyspace")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.Keyspace)
+	keyspace := req.Keyspace
+
+	resp := vtctldatapb.ValidateSchemaKeyspaceResponse{
+		Results: []string{},
+	}
+
+	shards, err := s.ts.GetShardNames(ctx, keyspace)
+	if err != nil {
+		resp.Results = append(resp.Results, fmt.Sprintf("TopologyServer.GetShardNames(%v) failed: %v", req.Keyspace, err))
+		return &resp, nil
+	}
+
+	resp.ResultsByShard = make(map[string]*vtctldatapb.ValidateShardResponse, len(shards))
+
+	// Initiate individual shard results first
+	for _, shard := range shards {
+		resp.ResultsByShard[shard] = &vtctldatapb.ValidateShardResponse{
+			Results: []string{},
+		}
+	}
+
+	if req.IncludeVschema {
+		results, err := s.ValidateVSchema(ctx, &vtctldatapb.ValidateVSchemaRequest{
+			Keyspace:      keyspace,
+			Shards:        shards,
+			ExcludeTables: req.ExcludeTables,
+			IncludeViews:  req.IncludeViews,
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		if len(results.Results) > 0 {
+			resp.Results = append(resp.Results, results.Results...)
+			for shard, shardResults := range resp.ResultsByShard {
+				resp.ResultsByShard[shard].Results = append(resp.ResultsByShard[shard].Results, shardResults.Results...)
+			}
+			return &resp, nil
+		}
+	}
+
+	sort.Strings(shards)
+
+	var (
+		referenceSchema *tabletmanagerdatapb.SchemaDefinition
+		referenceAlias  *topodatapb.TabletAlias
+		m               sync.Mutex
+		wg              sync.WaitGroup
+	)
+
+	r := &tabletmanagerdatapb.GetSchemaRequest{ExcludeTables: req.ExcludeTables, IncludeViews: req.IncludeViews}
+	for _, shard := range shards[0:] {
+		wg.Add(1)
+		go func(shard string) {
+			defer wg.Done()
+
+			si, err := s.ts.GetShard(ctx, keyspace, shard)
+
+			m.Lock()
+			defer m.Unlock()
+
+			if err != nil {
+				errMessage := fmt.Sprintf("GetShard(%v, %v) failed: %v", keyspace, shard, err)
+				resp.ResultsByShard[shard].Results = append(resp.ResultsByShard[shard].Results, errMessage)
+				resp.Results = append(resp.Results, errMessage)
+				return
+			}
+
+			if !si.HasPrimary() {
+				if !req.SkipNoPrimary {
+					errMessage := fmt.Sprintf("no primary in shard %v/%v", keyspace, shard)
+					resp.ResultsByShard[shard].Results = append(resp.ResultsByShard[shard].Results, errMessage)
+					resp.Results = append(resp.Results, errMessage)
+				}
+				return
+			}
+
+			if referenceSchema == nil {
+				referenceAlias = si.PrimaryAlias
+				referenceSchema, err = schematools.GetSchema(ctx, s.ts, s.tmc, referenceAlias, r)
+				if err != nil {
+					return
+				}
+			}
+
+			aliases, err := s.ts.FindAllTabletAliasesInShard(ctx, keyspace, shard)
+			if err != nil {
+				errMessage := fmt.Sprintf("FindAllTabletAliasesInShard(%v, %v) failed: %v", keyspace, shard, err)
+				resp.ResultsByShard[shard].Results = append(resp.ResultsByShard[shard].Results, errMessage)
+				resp.Results = append(resp.Results, errMessage)
+				return
+			}
+
+			aliasWg := sync.WaitGroup{}
+			aliasErrs := concurrency.AllErrorRecorder{}
+
+			for _, alias := range aliases {
+				if referenceAlias == alias {
+					continue
+				}
+				aliasWg.Add(1)
+				go func(alias *topodatapb.TabletAlias) {
+					defer aliasWg.Done()
+					replicaSchema, err := schematools.GetSchema(ctx, s.ts, s.tmc, alias, r)
+					if err != nil {
+						aliasErrs.RecordError(fmt.Errorf("GetSchema(%v, nil, %v, %v) failed: %v", alias, req.ExcludeTables, req.IncludeViews, err))
+						return
+					}
+
+					tmutils.DiffSchema(topoproto.TabletAliasString(referenceAlias), referenceSchema, topoproto.TabletAliasString(alias), replicaSchema, &aliasErrs)
+				}(alias)
+			}
+			aliasWg.Wait()
+
+			if aliasErrs.HasErrors() {
+				for _, err := range aliasErrs.Errors {
+					errMessage := err.Error()
+					resp.ResultsByShard[shard].Results = append(resp.ResultsByShard[shard].Results, errMessage)
+					resp.Results = append(resp.Results, errMessage)
+				}
+			}
+		}(shard)
+	}
+
+	wg.Wait()
+
+	return &resp, nil
+}
+
+// ValidateShard is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) ValidateShard(ctx context.Context, req *vtctldatapb.ValidateShardRequest) (*vtctldatapb.ValidateShardResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.ValidateShard")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("shard", req.Shard)
+	span.Annotate("ping_tablets", req.PingTablets)
+
+	resp := vtctldatapb.ValidateShardResponse{}
+	getShardCtx, getShardCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	defer getShardCancel()
+
+	si, err := s.ts.GetShard(getShardCtx, req.Keyspace, req.Shard)
+	if err != nil {
+		resp.Results = append(resp.Results, fmt.Sprintf("TopologyServer.GetShard(%v, %v) failed: %v", req.Keyspace, req.Shard, err))
+		return &resp, nil
+	}
+
+	findAllTabletAliasesCtx, findAllTabletAliasesCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	defer findAllTabletAliasesCancel()
+
+	aliases, err := s.ts.FindAllTabletAliasesInShard(findAllTabletAliasesCtx, req.Keyspace, req.Shard)
+	if err != nil {
+		resp.Results = append(resp.Results, fmt.Sprintf("TopologyServer.FindAllTabletAliasesInShard(%v, %v) failed: %v", req.Keyspace, req.Shard, err))
+		return &resp, nil
+	}
+
+	getTabletMapCtx, getTabletMapCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	defer getTabletMapCancel()
+	tabletMap, _ := s.ts.GetTabletMap(getTabletMapCtx, aliases)
+
+	var primaryAlias *topodatapb.TabletAlias
+	for _, alias := range aliases {
+		key := topoproto.TabletAliasString(alias)
+		ti, ok := tabletMap[key]
+		if !ok {
+			resp.Results = append(resp.Results, fmt.Sprintf("tablet %v not found in map", key))
+			continue
+		}
+
+		if ti.Type == topodatapb.TabletType_PRIMARY {
+			switch primaryAlias {
+			case nil:
+				primaryAlias = alias
+			default:
+				resp.Results = append(resp.Results, fmt.Sprintf("shard %v/%v already has primary %v but found other primary %v", req.Keyspace, req.Shard, topoproto.TabletAliasString(primaryAlias), key))
+			}
+		}
+	}
+
+	if primaryAlias == nil {
+		resp.Results = append(resp.Results, fmt.Sprintf("no primary for shard %v/%v", req.Keyspace, req.Shard))
+	} else if !topoproto.TabletAliasEqual(si.PrimaryAlias, primaryAlias) {
+		resp.Results = append(resp.Results, fmt.Sprintf("primary mismatch for shard %v/%v: found %v, expected %v", si.Keyspace(), si.ShardName(), topoproto.TabletAliasString(primaryAlias), topoproto.TabletAliasString(si.PrimaryAlias)))
+	}
+
+	var (
+		wg      sync.WaitGroup
+		results = make(chan string, len(aliases))
+	)
+
+	for _, alias := range aliases {
+		wg.Add(1)
+		go func(alias *topodatapb.TabletAlias) {
+			defer wg.Done()
+
+			ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+			defer cancel()
+
+			if err := topo.Validate(ctx, s.ts, alias); err != nil {
+				results <- fmt.Sprintf("topo.Validate(%v) failed: %v", topoproto.TabletAliasString(alias), err)
+				return
+			}
+
+			log.Infof("tablet %v is valid", topoproto.TabletAliasString(alias))
+		}(alias)
+	}
+
+	if req.PingTablets {
+		validateReplication := func(ctx context.Context, si *topo.ShardInfo, tabletMap map[string]*topo.TabletInfo, results chan<- string) {
+			if si.PrimaryAlias == nil {
+				results <- fmt.Sprintf("no primary in shard record %v/%v", si.Keyspace(), si.ShardName())
+				return
+			}
+
+			shardPrimaryAliasStr := topoproto.TabletAliasString(si.PrimaryAlias)
+			primaryTabletInfo, ok := tabletMap[shardPrimaryAliasStr]
+			if !ok {
+				results <- fmt.Sprintf("primary %v not in tablet map", shardPrimaryAliasStr)
+				return
+			}
+
+			ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+			defer cancel()
+
+			replicaList, err := s.tmc.GetReplicas(ctx, primaryTabletInfo.Tablet)
+			if err != nil {
+				results <- fmt.Sprintf("GetReplicas(%v) failed: %v", primaryTabletInfo, err)
+				return
+			}
+
+			if len(replicaList) == 0 {
+				results <- fmt.Sprintf("no replicas of tablet %v found", shardPrimaryAliasStr)
+				return
+			}
+
+			tabletIPMap := make(map[string]*topodatapb.Tablet)
+			replicaIPMap := make(map[string]bool)
+			for _, tablet := range tabletMap {
+				ip, err := topoproto.MySQLIP(tablet.Tablet)
+				if err != nil {
+					results <- fmt.Sprintf("could not resolve IP for tablet %s: %v", tablet.Tablet.MysqlHostname, err)
+					continue
+				}
+
+				tabletIPMap[netutil.NormalizeIP(ip)] = tablet.Tablet
+			}
+
+			// See if every replica is in the replication graph.
+			for _, replicaAddr := range replicaList {
+				if tabletIPMap[netutil.NormalizeIP(replicaAddr)] == nil {
+					results <- fmt.Sprintf("replica %v not in replication graph for shard %v/%v (mysql instance without vttablet?)", replicaAddr, si.Keyspace(), si.ShardName())
+				}
+
+				replicaIPMap[netutil.NormalizeIP(replicaAddr)] = true
+			}
+
+			// See if every entry in the replication graph is connected to the primary.
+			for _, tablet := range tabletMap {
+				if !tablet.IsReplicaType() {
+					continue
+				}
+
+				ip, err := topoproto.MySQLIP(tablet.Tablet)
+				if err != nil {
+					results <- fmt.Sprintf("could not resolve IP for tablet %s: %v", tablet.Tablet.MysqlHostname, err)
+					continue
+				}
+
+				if !replicaIPMap[netutil.NormalizeIP(ip)] {
+					results <- fmt.Sprintf("replica %v not replicating: %v replica list: %q", topoproto.TabletAliasString(tablet.Alias), ip, replicaList)
+				}
+			}
+		}
+		pingTablets := func(ctx context.Context, tabletMap map[string]*topo.TabletInfo, results chan<- string) {
+			for alias, ti := range tabletMap {
+				wg.Add(1)
+				go func(alias string, ti *topo.TabletInfo) {
+					defer wg.Done()
+
+					ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+					defer cancel()
+
+					if err := s.tmc.Ping(ctx, ti.Tablet); err != nil {
+						results <- fmt.Sprintf("Ping(%v) failed: %v tablet hostname: %v", alias, err, ti.Hostname)
+					}
+				}(alias, ti)
+			}
+		}
+
+		validateReplication(ctx, si, tabletMap, results) // done synchronously
+		pingTablets(ctx, tabletMap, results)             // done async, using the waitgroup declared above in the main method body.
+	}
+
+	done := make(chan bool)
+	go func() {
+		for result := range results {
+			resp.Results = append(resp.Results, result)
+		}
+		done <- true
+	}()
+
+	wg.Wait()
+	close(results)
+	<-done
+
+	return &resp, nil
+}
+
+// ValidateVersionKeyspace validates all versions are the same in all
+// tablets in a keyspace
+func (s *VtctldServer) ValidateVersionKeyspace(ctx context.Context, req *vtctldatapb.ValidateVersionKeyspaceRequest) (*vtctldatapb.ValidateVersionKeyspaceResponse, error) {
+	keyspace := req.Keyspace
+	shards, err := s.ts.GetShardNames(ctx, keyspace)
+	resp := vtctldatapb.ValidateVersionKeyspaceResponse{
+		Results:        []string{},
+		ResultsByShard: make(map[string]*vtctldatapb.ValidateShardResponse, len(shards)),
+	}
+
+	if err != nil {
+		resp.Results = append(resp.Results, fmt.Sprintf("TopologyServer.GetShardNames(%v) failed: %v", keyspace, err))
+		return &resp, nil
+	}
+
+	if len(shards) == 0 {
+		resp.Results = append(resp.Results, fmt.Sprintf("no shards in keyspace %v", keyspace))
+		return &resp, nil
+	}
+
+	si, err := s.ts.GetShard(ctx, keyspace, shards[0])
+	if err != nil {
+		resp.Results = append(resp.Results, fmt.Sprintf("unable to find primary shard %v/%v", keyspace, shards[0]))
+		return &resp, nil
+	}
+	if !si.HasPrimary() {
+		resp.Results = append(resp.Results, fmt.Sprintf("no primary in shard %v/%v", keyspace, shards[0]))
+		return &resp, nil
+	}
+
+	referenceAlias := si.PrimaryAlias
+	referenceVersion, err := s.GetVersion(ctx, &vtctldatapb.GetVersionRequest{TabletAlias: referenceAlias})
+	if err != nil {
+		resp.Results = append(resp.Results, fmt.Sprintf("unable to get reference version of first shard's primary tablet: %v", err))
+		return &resp, nil
+	}
+
+	var validateVersionKeyspaceResponseMutex sync.Mutex
+
+	for _, shard := range shards {
+		shardResp := vtctldatapb.ValidateShardResponse{
+			Results: []string{},
+		}
+
+		var (
+			validateShardResponseMutex sync.Mutex
+			tabletWaitGroup            sync.WaitGroup
+		)
+
+		aliases, err := s.ts.FindAllTabletAliasesInShard(ctx, keyspace, shard)
+		if err != nil {
+			errMessage := fmt.Sprintf("unable to find tablet aliases in shard %v: %v", shard, err)
+			shardResp.Results = append(shardResp.Results, errMessage)
+			validateVersionKeyspaceResponseMutex.Lock()
+			resp.Results = append(resp.Results, errMessage)
+			resp.ResultsByShard[shard] = &shardResp
+			validateVersionKeyspaceResponseMutex.Unlock()
+			continue
+		}
+
+		for _, alias := range aliases {
+			if topoproto.TabletAliasEqual(alias, si.PrimaryAlias) {
+				continue
+			}
+
+			tabletWaitGroup.Add(1)
+			go func(alias *topodatapb.TabletAlias, m *sync.Mutex, ctx context.Context) {
+				defer tabletWaitGroup.Done()
+				replicaVersion, err := s.GetVersion(ctx, &vtctldatapb.GetVersionRequest{TabletAlias: alias})
+				if err != nil {
+					validateShardResponseMutex.Lock()
+					shardResp.Results = append(shardResp.Results, fmt.Sprintf("unable to get version for tablet %v: %v", alias, err))
+					validateShardResponseMutex.Unlock()
+					return
+				}
+
+				if referenceVersion.Version != replicaVersion.Version {
+					validateShardResponseMutex.Lock()
+					shardResp.Results = append(shardResp.Results, fmt.Sprintf("primary %v version %v is different than replica %v version %v", topoproto.TabletAliasString(referenceAlias), referenceVersion, topoproto.TabletAliasString(alias), replicaVersion))
+					validateShardResponseMutex.Unlock()
+				}
+			}(alias, &validateShardResponseMutex, ctx)
+		}
+
+		tabletWaitGroup.Wait()
+		validateVersionKeyspaceResponseMutex.Lock()
+		resp.Results = append(resp.Results, shardResp.Results...)
+		resp.ResultsByShard[shard] = &shardResp
+		validateVersionKeyspaceResponseMutex.Unlock()
+	}
+
+	return &resp, nil
+}
+
+// ValidateVSchema compares the schema of each primary tablet in "keyspace/shards..." to the vschema and errs if there are differences
+func (s *VtctldServer) ValidateVSchema(ctx context.Context, req *vtctldatapb.ValidateVSchemaRequest) (*vtctldatapb.ValidateVSchemaResponse, error) {
+	keyspace := req.Keyspace
+	shards := req.Shards
+	excludeTables := req.ExcludeTables
+	includeViews := req.IncludeViews
+
+	vschm, err := s.ts.GetVSchema(ctx, keyspace)
+	if err != nil {
+		return nil, fmt.Errorf("GetVSchema(%s) failed: %v", keyspace, err)
+	}
+
+	resp := vtctldatapb.ValidateVSchemaResponse{
+		Results:        []string{},
+		ResultsByShard: make(map[string]*vtctldatapb.ValidateShardResponse, len(shards)),
+	}
+
+	var (
+		wg sync.WaitGroup
+		m  sync.Mutex
+	)
+
+	wg.Add(len(shards))
+
+	for _, shard := range shards {
+		go func(shard string) {
+			defer wg.Done()
+
+			shardResult := vtctldatapb.ValidateShardResponse{
+				Results: []string{},
+			}
+
+			notFoundTables := []string{}
+			si, err := s.ts.GetShard(ctx, keyspace, shard)
+			if err != nil {
+				errorMessage := fmt.Sprintf("GetShard(%v, %v) failed: %v", keyspace, shard, err)
+				shardResult.Results = append(shardResult.Results, errorMessage)
+				m.Lock()
+				resp.Results = append(resp.Results, errorMessage)
+				resp.ResultsByShard[shard] = &shardResult
+				m.Unlock()
+				return
+			}
+			r := &tabletmanagerdatapb.GetSchemaRequest{ExcludeTables: req.ExcludeTables, IncludeViews: req.IncludeViews}
+			primarySchema, err := schematools.GetSchema(ctx, s.ts, s.tmc, si.PrimaryAlias, r)
+			if err != nil {
+				errorMessage := fmt.Sprintf("GetSchema(%s, nil, %v, %v) (%v/%v) failed: %v", si.PrimaryAlias.String(),
+					excludeTables, includeViews, keyspace, shard, err,
+				)
+				shardResult.Results = append(shardResult.Results, errorMessage)
+				m.Lock()
+				resp.Results = append(resp.Results, errorMessage)
+				resp.ResultsByShard[shard] = &shardResult
+				m.Unlock()
+				return
+			}
+			for _, tableDef := range primarySchema.TableDefinitions {
+				if _, ok := vschm.Tables[tableDef.Name]; !ok {
+					if !schema.IsInternalOperationTableName(tableDef.Name) {
+						notFoundTables = append(notFoundTables, tableDef.Name)
+					}
+				}
+			}
+			if len(notFoundTables) > 0 {
+				errorMessage := fmt.Sprintf("%v/%v has tables that are not in the vschema: %v", keyspace, shard, notFoundTables)
+				shardResult.Results = append(shardResult.Results, errorMessage)
+				m.Lock()
+				resp.Results = append(resp.Results, errorMessage)
+				resp.ResultsByShard[shard] = &shardResult
+				m.Unlock()
+			}
+			m.Lock()
+			resp.ResultsByShard[shard] = &shardResult
+			m.Unlock()
+		}(shard)
+	}
+	wg.Wait()
+	return &resp, nil
+}
+
 // StartServer registers a VtctldServer for RPCs on the given gRPC server.
 func StartServer(s *grpc.Server, ts *topo.Server) {
 	vtctlservicepb.RegisterVtctldServer(s, NewVtctldServer(ts))
 }
+
+// Helper function to get version of a tablet from its debug vars
+var getVersionFromTabletDebugVars = func(tabletAddr string) (string, error) {
+	resp, err := http.Get("http://" + tabletAddr + "/debug/vars")
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	var vars struct {
+		BuildHost      string
+		BuildUser      string
+		BuildTimestamp int64
+		BuildGitRev    string
+	}
+	err = json.Unmarshal(body, &vars)
+	if err != nil {
+		return "", err
+	}
+
+	version := fmt.Sprintf("%v", vars)
+	return version, nil
+}
+
+var getVersionFromTablet = getVersionFromTabletDebugVars

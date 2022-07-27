@@ -17,11 +17,10 @@ limitations under the License.
 package grpctabletconn
 
 import (
+	"context"
 	"flag"
 	"io"
 	"sync"
-
-	"context"
 
 	"google.golang.org/grpc"
 
@@ -44,6 +43,7 @@ var (
 	cert = flag.String("tablet_grpc_cert", "", "the cert to use to connect")
 	key  = flag.String("tablet_grpc_key", "", "the key to use to connect")
 	ca   = flag.String("tablet_grpc_ca", "", "the server ca to use to validate servers when connecting")
+	crl  = flag.String("tablet_grpc_crl", "", "the server crl to use to validate server certificates when connecting")
 	name = flag.String("tablet_grpc_server_name", "", "the server name to use to validate server certificate")
 )
 
@@ -73,7 +73,7 @@ func DialTablet(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (querys
 	} else {
 		addr = tablet.Hostname
 	}
-	opt, err := grpcclient.SecureDialOption(*cert, *key, *ca, *name)
+	opt, err := grpcclient.SecureDialOption(*cert, *key, *ca, *crl, *name)
 	if err != nil {
 		return nil, err
 	}
@@ -119,32 +119,8 @@ func (conn *gRPCQueryClient) Execute(ctx context.Context, target *querypb.Target
 	return sqltypes.Proto3ToResult(er.Result), nil
 }
 
-// ExecuteBatch sends a batch query to VTTablet.
-func (conn *gRPCQueryClient) ExecuteBatch(ctx context.Context, target *querypb.Target, queries []*querypb.BoundQuery, asTransaction bool, transactionID int64, options *querypb.ExecuteOptions) ([]sqltypes.Result, error) {
-	conn.mu.RLock()
-	defer conn.mu.RUnlock()
-	if conn.cc == nil {
-		return nil, tabletconn.ConnClosed
-	}
-
-	req := &querypb.ExecuteBatchRequest{
-		Target:            target,
-		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
-		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
-		Queries:           queries,
-		AsTransaction:     asTransaction,
-		TransactionId:     transactionID,
-		Options:           options,
-	}
-	ebr, err := conn.c.ExecuteBatch(ctx, req)
-	if err != nil {
-		return nil, tabletconn.ErrorFromGRPC(err)
-	}
-	return sqltypes.Proto3ToResults(ebr.Results), nil
-}
-
 // StreamExecute executes the query and streams results back through callback.
-func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
+func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID int64, reservedID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
 	// All streaming clients should follow the code pattern below.
 	// The first part of the function starts the stream while holding
 	// a lock on conn.mu. The second part receives the data and calls
@@ -173,6 +149,7 @@ func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, target *querypb.
 			},
 			Options:       options,
 			TransactionId: transactionID,
+			ReservedId:    reservedID,
 		}
 		stream, err := conn.c.StreamExecute(ctx, req)
 		if err != nil {
@@ -202,11 +179,11 @@ func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, target *querypb.
 }
 
 // Begin starts a transaction.
-func (conn *gRPCQueryClient) Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (transactionID int64, alias *topodatapb.TabletAlias, err error) {
+func (conn *gRPCQueryClient) Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (state queryservice.TransactionState, err error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.cc == nil {
-		return 0, nil, tabletconn.ConnClosed
+		return state, tabletconn.ConnClosed
 	}
 
 	req := &querypb.BeginRequest{
@@ -217,13 +194,11 @@ func (conn *gRPCQueryClient) Begin(ctx context.Context, target *querypb.Target, 
 	}
 	br, err := conn.c.Begin(ctx, req)
 	if err != nil {
-		return 0, nil, tabletconn.ErrorFromGRPC(err)
+		return state, tabletconn.ErrorFromGRPC(err)
 	}
-	// For backwards compatibility, we don't require tablet alias to be present in the response
-	// TODO(deepthi): After 7.0 change this
-	//	return br.TransactionId, br.TabletAlias, nil
-	// also assert that br.TabletAlias == conn.tablet.Alias
-	return br.TransactionId, conn.tablet.Alias, nil
+	state.TransactionID = br.TransactionId
+	state.TabletAlias = br.TabletAlias
+	return state, nil
 }
 
 // Commit commits the ongoing transaction.
@@ -445,11 +420,11 @@ func (conn *gRPCQueryClient) ReadTransaction(ctx context.Context, target *queryp
 }
 
 // BeginExecute starts a transaction and runs an Execute.
-func (conn *gRPCQueryClient) BeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, query string, bindVars map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (result *sqltypes.Result, transactionID int64, alias *topodatapb.TabletAlias, err error) {
+func (conn *gRPCQueryClient) BeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, query string, bindVars map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (state queryservice.TransactionState, result *sqltypes.Result, err error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.cc == nil {
-		return nil, 0, nil, tabletconn.ConnClosed
+		return state, nil, tabletconn.ConnClosed
 	}
 
 	req := &querypb.BeginExecuteRequest{
@@ -466,39 +441,81 @@ func (conn *gRPCQueryClient) BeginExecute(ctx context.Context, target *querypb.T
 	}
 	reply, err := conn.c.BeginExecute(ctx, req)
 	if err != nil {
-		return nil, 0, nil, tabletconn.ErrorFromGRPC(err)
+		return state, nil, tabletconn.ErrorFromGRPC(err)
 	}
+	state.TransactionID = reply.TransactionId
+	state.TabletAlias = conn.tablet.Alias
 	if reply.Error != nil {
-		return nil, reply.TransactionId, conn.tablet.Alias, tabletconn.ErrorFromVTRPC(reply.Error)
+		return state, nil, tabletconn.ErrorFromVTRPC(reply.Error)
 	}
-	return sqltypes.Proto3ToResult(reply.Result), reply.TransactionId, conn.tablet.Alias, nil
+	return state, sqltypes.Proto3ToResult(reply.Result), nil
 }
 
-// BeginExecuteBatch starts a transaction and runs an ExecuteBatch.
-func (conn *gRPCQueryClient) BeginExecuteBatch(ctx context.Context, target *querypb.Target, queries []*querypb.BoundQuery, asTransaction bool, options *querypb.ExecuteOptions) (results []sqltypes.Result, transactionID int64, alias *topodatapb.TabletAlias, err error) {
+// BeginStreamExecute starts a transaction and runs an Execute.
+func (conn *gRPCQueryClient) BeginStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, query string, bindVars map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (state queryservice.TransactionState, err error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.cc == nil {
-		return nil, 0, nil, tabletconn.ConnClosed
+		return state, tabletconn.ConnClosed
 	}
 
-	req := &querypb.BeginExecuteBatchRequest{
-		Target:            target,
-		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
-		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
-		Queries:           queries,
-		AsTransaction:     asTransaction,
-		Options:           options,
-	}
+	stream, err := func() (queryservicepb.Query_BeginStreamExecuteClient, error) {
+		conn.mu.RLock()
+		defer conn.mu.RUnlock()
+		if conn.cc == nil {
+			return nil, tabletconn.ConnClosed
+		}
 
-	reply, err := conn.c.BeginExecuteBatch(ctx, req)
+		req := &querypb.BeginStreamExecuteRequest{
+			Target:            target,
+			EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
+			ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
+			PreQueries:        preQueries,
+			Query: &querypb.BoundQuery{
+				Sql:           query,
+				BindVariables: bindVars,
+			},
+			ReservedId: reservedID,
+			Options:    options,
+		}
+		stream, err := conn.c.BeginStreamExecute(ctx, req)
+		if err != nil {
+			return nil, tabletconn.ErrorFromGRPC(err)
+		}
+		return stream, nil
+	}()
 	if err != nil {
-		return nil, 0, nil, tabletconn.ErrorFromGRPC(err)
+		return state, err
 	}
-	if reply.Error != nil {
-		return nil, reply.TransactionId, conn.tablet.Alias, tabletconn.ErrorFromVTRPC(reply.Error)
+	var fields []*querypb.Field
+	for {
+		ser, err := stream.Recv()
+		if state.TransactionID == 0 && ser.GetTransactionId() != 0 {
+			state.TransactionID = ser.GetTransactionId()
+		}
+		if state.TabletAlias == nil && ser.GetTabletAlias() != nil {
+			state.TabletAlias = ser.GetTabletAlias()
+		}
+
+		if err != nil {
+			return state, tabletconn.ErrorFromGRPC(err)
+		}
+
+		// The last stream receive will not have a result, so callback will not be called for it.
+		if ser.Result == nil {
+			return state, nil
+		}
+
+		if fields == nil {
+			fields = ser.Result.Fields
+		}
+		if err := callback(sqltypes.CustomProto3ToResult(fields, ser.Result)); err != nil {
+			if err == nil || err == io.EOF {
+				return state, nil
+			}
+			return state, err
+		}
 	}
-	return sqltypes.Proto3ToResults(reply.Results), reply.TransactionId, conn.tablet.Alias, nil
 }
 
 // MessageStream streams messages.
@@ -605,7 +622,7 @@ func (conn *gRPCQueryClient) StreamHealth(ctx context.Context, callback func(*qu
 }
 
 // VStream starts a VReplication stream.
-func (conn *gRPCQueryClient) VStream(ctx context.Context, target *querypb.Target, position string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
+func (conn *gRPCQueryClient) VStream(ctx context.Context, request *binlogdatapb.VStreamRequest, send func([]*binlogdatapb.VEvent) error) error {
 	stream, err := func() (queryservicepb.Query_VStreamClient, error) {
 		conn.mu.RLock()
 		defer conn.mu.RUnlock()
@@ -614,12 +631,12 @@ func (conn *gRPCQueryClient) VStream(ctx context.Context, target *querypb.Target
 		}
 
 		req := &binlogdatapb.VStreamRequest{
-			Target:            target,
+			Target:            request.Target,
 			EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
 			ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
-			Position:          position,
-			Filter:            filter,
-			TableLastPKs:      tablePKs,
+			Position:          request.Position,
+			Filter:            request.Filter,
+			TableLastPKs:      request.TableLastPKs,
 		}
 		stream, err := conn.c.VStream(ctx, req)
 		if err != nil {
@@ -650,7 +667,7 @@ func (conn *gRPCQueryClient) VStream(ctx context.Context, target *querypb.Target
 }
 
 // VStreamRows streams rows of a query from the specified starting point.
-func (conn *gRPCQueryClient) VStreamRows(ctx context.Context, target *querypb.Target, query string, lastpk *querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error {
+func (conn *gRPCQueryClient) VStreamRows(ctx context.Context, request *binlogdatapb.VStreamRowsRequest, send func(*binlogdatapb.VStreamRowsResponse) error) error {
 	stream, err := func() (queryservicepb.Query_VStreamRowsClient, error) {
 		conn.mu.RLock()
 		defer conn.mu.RUnlock()
@@ -659,11 +676,11 @@ func (conn *gRPCQueryClient) VStreamRows(ctx context.Context, target *querypb.Ta
 		}
 
 		req := &binlogdatapb.VStreamRowsRequest{
-			Target:            target,
+			Target:            request.Target,
 			EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
 			ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
-			Query:             query,
-			Lastpk:            lastpk,
+			Query:             request.Query,
+			Lastpk:            request.Lastpk,
 		}
 		stream, err := conn.c.VStreamRows(ctx, req)
 		if err != nil {
@@ -674,8 +691,9 @@ func (conn *gRPCQueryClient) VStreamRows(ctx context.Context, target *querypb.Ta
 	if err != nil {
 		return err
 	}
+	r := binlogdatapb.VStreamRowsResponseFromVTPool()
+	defer r.ReturnToVTPool()
 	for {
-		r := binlogdatapb.VStreamRowsResponseFromVTPool()
 		err := stream.RecvMsg(r)
 		if err != nil {
 			return tabletconn.ErrorFromGRPC(err)
@@ -686,7 +704,7 @@ func (conn *gRPCQueryClient) VStreamRows(ctx context.Context, target *querypb.Ta
 		if err := send(r); err != nil {
 			return err
 		}
-		r.ReturnToVTPool()
+		r.ResetVT()
 	}
 }
 
@@ -734,12 +752,12 @@ func (conn *gRPCQueryClient) VStreamResults(ctx context.Context, target *querypb
 func (conn *gRPCQueryClient) HandlePanic(err *error) {
 }
 
-//ReserveBeginExecute implements the queryservice interface
-func (conn *gRPCQueryClient) ReserveBeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, int64, *topodatapb.TabletAlias, error) {
+// ReserveBeginExecute implements the queryservice interface
+func (conn *gRPCQueryClient) ReserveBeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (state queryservice.ReservedTransactionState, result *sqltypes.Result, err error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.cc == nil {
-		return nil, 0, 0, nil, tabletconn.ConnClosed
+		return state, nil, tabletconn.ConnClosed
 	}
 
 	req := &querypb.ReserveBeginExecuteRequest{
@@ -748,6 +766,7 @@ func (conn *gRPCQueryClient) ReserveBeginExecute(ctx context.Context, target *qu
 		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
 		Options:           options,
 		PreQueries:        preQueries,
+		PostBeginQueries:  postBeginQueries,
 		Query: &querypb.BoundQuery{
 			Sql:           sql,
 			BindVariables: bindVariables,
@@ -755,21 +774,95 @@ func (conn *gRPCQueryClient) ReserveBeginExecute(ctx context.Context, target *qu
 	}
 	reply, err := conn.c.ReserveBeginExecute(ctx, req)
 	if err != nil {
-		return nil, 0, 0, nil, tabletconn.ErrorFromGRPC(err)
+		return state, nil, tabletconn.ErrorFromGRPC(err)
 	}
+	state.ReservedID = reply.ReservedId
+	state.TransactionID = reply.TransactionId
+	state.TabletAlias = conn.tablet.Alias
 	if reply.Error != nil {
-		return nil, reply.TransactionId, reply.ReservedId, conn.tablet.Alias, tabletconn.ErrorFromVTRPC(reply.Error)
+		return state, nil, tabletconn.ErrorFromVTRPC(reply.Error)
 	}
 
-	return sqltypes.Proto3ToResult(reply.Result), reply.TransactionId, reply.ReservedId, conn.tablet.Alias, nil
+	return state, sqltypes.Proto3ToResult(reply.Result), nil
 }
 
-//ReserveBeginExecute implements the queryservice interface
-func (conn *gRPCQueryClient) ReserveExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
+// ReserveBeginStreamExecute implements the queryservice interface
+func (conn *gRPCQueryClient) ReserveBeginStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (state queryservice.ReservedTransactionState, err error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.cc == nil {
-		return nil, 0, nil, tabletconn.ConnClosed
+		return state, tabletconn.ConnClosed
+	}
+
+	stream, err := func() (queryservicepb.Query_ReserveBeginStreamExecuteClient, error) {
+		conn.mu.RLock()
+		defer conn.mu.RUnlock()
+		if conn.cc == nil {
+			return nil, tabletconn.ConnClosed
+		}
+
+		req := &querypb.ReserveBeginStreamExecuteRequest{
+			Target:            target,
+			EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
+			ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
+			Options:           options,
+			PreQueries:        preQueries,
+			PostBeginQueries:  postBeginQueries,
+			Query: &querypb.BoundQuery{
+				Sql:           sql,
+				BindVariables: bindVariables,
+			},
+		}
+		stream, err := conn.c.ReserveBeginStreamExecute(ctx, req)
+		if err != nil {
+			return nil, tabletconn.ErrorFromGRPC(err)
+		}
+		return stream, nil
+	}()
+	if err != nil {
+		return state, tabletconn.ErrorFromGRPC(err)
+	}
+
+	var fields []*querypb.Field
+	for {
+		ser, err := stream.Recv()
+		if state.TransactionID == 0 && ser.GetTransactionId() != 0 {
+			state.TransactionID = ser.GetTransactionId()
+		}
+		if state.ReservedID == 0 && ser.GetReservedId() != 0 {
+			state.ReservedID = ser.GetReservedId()
+		}
+		if state.TabletAlias == nil && ser.GetTabletAlias() != nil {
+			state.TabletAlias = ser.GetTabletAlias()
+		}
+
+		if err != nil {
+			return state, tabletconn.ErrorFromGRPC(err)
+		}
+
+		// The last stream receive will not have a result, so callback will not be called for it.
+		if ser.Result == nil {
+			return state, nil
+		}
+
+		if fields == nil {
+			fields = ser.Result.Fields
+		}
+		if err := callback(sqltypes.CustomProto3ToResult(fields, ser.Result)); err != nil {
+			if err == nil || err == io.EOF {
+				return state, nil
+			}
+			return state, err
+		}
+	}
+}
+
+// ReserveExecute implements the queryservice interface
+func (conn *gRPCQueryClient) ReserveExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (state queryservice.ReservedState, result *sqltypes.Result, err error) {
+	conn.mu.RLock()
+	defer conn.mu.RUnlock()
+	if conn.cc == nil {
+		return state, nil, tabletconn.ConnClosed
 	}
 
 	req := &querypb.ReserveExecuteRequest{
@@ -786,13 +879,83 @@ func (conn *gRPCQueryClient) ReserveExecute(ctx context.Context, target *querypb
 	}
 	reply, err := conn.c.ReserveExecute(ctx, req)
 	if err != nil {
-		return nil, 0, nil, tabletconn.ErrorFromGRPC(err)
+		return state, nil, tabletconn.ErrorFromGRPC(err)
 	}
+	state.ReservedID = reply.ReservedId
+	state.TabletAlias = reply.TabletAlias
 	if reply.Error != nil {
-		return nil, reply.ReservedId, conn.tablet.Alias, tabletconn.ErrorFromVTRPC(reply.Error)
+		return state, nil, tabletconn.ErrorFromVTRPC(reply.Error)
 	}
 
-	return sqltypes.Proto3ToResult(reply.Result), reply.ReservedId, conn.tablet.Alias, nil
+	return state, sqltypes.Proto3ToResult(reply.Result), nil
+}
+
+// ReserveStreamExecute implements the queryservice interface
+func (conn *gRPCQueryClient) ReserveStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (state queryservice.ReservedState, err error) {
+	conn.mu.RLock()
+	defer conn.mu.RUnlock()
+	if conn.cc == nil {
+		return state, tabletconn.ConnClosed
+	}
+
+	stream, err := func() (queryservicepb.Query_ReserveStreamExecuteClient, error) {
+		conn.mu.RLock()
+		defer conn.mu.RUnlock()
+		if conn.cc == nil {
+			return nil, tabletconn.ConnClosed
+		}
+
+		req := &querypb.ReserveStreamExecuteRequest{
+			Target:            target,
+			EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
+			ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
+			Options:           options,
+			PreQueries:        preQueries,
+			Query: &querypb.BoundQuery{
+				Sql:           sql,
+				BindVariables: bindVariables,
+			},
+			TransactionId: transactionID,
+		}
+		stream, err := conn.c.ReserveStreamExecute(ctx, req)
+		if err != nil {
+			return nil, tabletconn.ErrorFromGRPC(err)
+		}
+		return stream, nil
+	}()
+	if err != nil {
+		return state, tabletconn.ErrorFromGRPC(err)
+	}
+
+	var fields []*querypb.Field
+	for {
+		ser, err := stream.Recv()
+		if state.ReservedID == 0 && ser.GetReservedId() != 0 {
+			state.ReservedID = ser.GetReservedId()
+		}
+		if state.TabletAlias == nil && ser.GetTabletAlias() != nil {
+			state.TabletAlias = ser.GetTabletAlias()
+		}
+
+		if err != nil {
+			return state, tabletconn.ErrorFromGRPC(err)
+		}
+
+		// The last stream receive will not have a result, so callback will not be called for it.
+		if ser.Result == nil {
+			return state, nil
+		}
+
+		if fields == nil {
+			fields = ser.Result.Fields
+		}
+		if err := callback(sqltypes.CustomProto3ToResult(fields, ser.Result)); err != nil {
+			if err == nil || err == io.EOF {
+				return state, nil
+			}
+			return state, err
+		}
+	}
 }
 
 func (conn *gRPCQueryClient) Release(ctx context.Context, target *querypb.Target, transactionID, reservedID int64) error {

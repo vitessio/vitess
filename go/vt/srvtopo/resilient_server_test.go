@@ -18,6 +18,7 @@ package srvtopo
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"html/template"
 	"reflect"
@@ -25,8 +26,12 @@ import (
 	"testing"
 	"time"
 
-	"context"
+	"vitess.io/vitess/go/vt/key"
 
+	"vitess.io/vitess/go/sync2"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/vt/status"
@@ -59,11 +64,9 @@ func TestGetSrvKeyspace(t *testing.T) {
 	time.Sleep(*srvTopoCacheRefresh + 10*time.Millisecond)
 
 	// Set SrvKeyspace with value
-	want := &topodatapb.SrvKeyspace{
-		ShardingColumnName: "id",
-		ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
-	}
-	ts.UpdateSrvKeyspace(context.Background(), "test_cell", "test_ks", want)
+	want := &topodatapb.SrvKeyspace{}
+	err = ts.UpdateSrvKeyspace(context.Background(), "test_cell", "test_ks", want)
+	require.NoError(t, err, "UpdateSrvKeyspace(test_cell, test_ks, %s) failed", want)
 
 	// wait until we get the right value
 	var got *topodatapb.SrvKeyspace
@@ -84,7 +87,7 @@ func TestGetSrvKeyspace(t *testing.T) {
 	}
 
 	// make sure the HTML template works
-	funcs := map[string]interface{}{}
+	funcs := map[string]any{}
 	for k, v := range status.StatusFuncs {
 		funcs[k] = v
 	}
@@ -118,12 +121,27 @@ func TestGetSrvKeyspace(t *testing.T) {
 	}
 
 	// Now send an updated real value, see it come through.
-	want = &topodatapb.SrvKeyspace{
-		ShardingColumnName: "id2",
-		ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
+	keyRange, err := key.ParseShardingSpec("-")
+	if err != nil || len(keyRange) != 1 {
+		t.Fatalf("ParseShardingSpec failed. Expected non error and only one element. Got err: %v, len(%v)", err, len(keyRange))
 	}
 
-	ts.UpdateSrvKeyspace(context.Background(), "test_cell", "test_ks", want)
+	want = &topodatapb.SrvKeyspace{
+		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
+			{
+				ServedType: topodatapb.TabletType_PRIMARY,
+				ShardReferences: []*topodatapb.ShardReference{
+					{
+						Name:     "-",
+						KeyRange: keyRange[0],
+					},
+				},
+			},
+		},
+	}
+
+	err = ts.UpdateSrvKeyspace(context.Background(), "test_cell", "test_ks", want)
+	require.NoError(t, err, "UpdateSrvKeyspace(test_cell, test_ks, %s) failed", want)
 	expiry = time.Now().Add(5 * time.Second)
 	updateTime := time.Now()
 	for {
@@ -141,7 +159,7 @@ func TestGetSrvKeyspace(t *testing.T) {
 	// cached for at least half of the expected ttl.
 	errorTestStart := time.Now()
 	errorReqsBefore := rs.counts.Counts()[errorCategory]
-	forceErr := fmt.Errorf("test topo error")
+	forceErr := topo.NewError(topo.Timeout, "test topo error")
 	factory.SetError(forceErr)
 
 	expiry = time.Now().Add(*srvTopoCacheTTL / 2)
@@ -200,14 +218,14 @@ func TestGetSrvKeyspace(t *testing.T) {
 	// that even when there is no activity on the key, it is still cached
 	// for the full configured TTL.
 	time.Sleep(*srvTopoCacheTTL)
-	forceErr = fmt.Errorf("another test topo error")
+	forceErr = topo.NewError(topo.Interrupted, "another test topo error")
 	factory.SetError(forceErr)
 
 	expiry = time.Now().Add(*srvTopoCacheTTL / 2)
 	for {
 		_, err = rs.GetSrvKeyspace(context.Background(), "test_cell", "test_ks")
 		if err != nil {
-			t.Fatalf("value should have been cached for the full ttl")
+			t.Fatalf("value should have been cached for the full ttl, error %v", err)
 		}
 		if time.Now().After(expiry) {
 			break
@@ -243,11 +261,9 @@ func TestGetSrvKeyspace(t *testing.T) {
 	}
 
 	// Check that the watch now works to update the value
-	want = &topodatapb.SrvKeyspace{
-		ShardingColumnName: "id3",
-		ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
-	}
-	ts.UpdateSrvKeyspace(context.Background(), "test_cell", "test_ks", want)
+	want = &topodatapb.SrvKeyspace{}
+	err = ts.UpdateSrvKeyspace(context.Background(), "test_cell", "test_ks", want)
+	require.NoError(t, err, "UpdateSrvKeyspace(test_cell, test_ks, %s) failed", want)
 	expiry = time.Now().Add(5 * time.Second)
 	for {
 		got, err = rs.GetSrvKeyspace(context.Background(), "test_cell", "test_ks")
@@ -343,7 +359,7 @@ func TestSrvKeyspaceCachedError(t *testing.T) {
 	if err == nil {
 		t.Fatalf("First GetSrvKeyspace didn't return an error")
 	}
-	entry := rs.getSrvKeyspaceEntry("test_cell", "unknown_ks")
+	entry := rs.SrvKeyspaceWatcher.rw.getEntry(&srvKeyspaceKey{"test_cell", "unknown_ks"})
 	if err != entry.lastError {
 		t.Errorf("Error wasn't saved properly")
 	}
@@ -375,11 +391,9 @@ func TestGetSrvKeyspaceCreated(t *testing.T) {
 	rs := NewResilientServer(ts, "TestGetSrvKeyspaceCreated")
 
 	// Set SrvKeyspace with value.
-	want := &topodatapb.SrvKeyspace{
-		ShardingColumnName: "id",
-		ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
-	}
-	ts.UpdateSrvKeyspace(context.Background(), "test_cell", "test_ks", want)
+	want := &topodatapb.SrvKeyspace{}
+	err := ts.UpdateSrvKeyspace(context.Background(), "test_cell", "test_ks", want)
+	require.NoError(t, err, "UpdateSrvKeyspace(test_cell, test_ks, %s) failed", want)
 
 	// Wait until we get the right value.
 	expiry := time.Now().Add(5 * time.Second)
@@ -404,7 +418,7 @@ func TestGetSrvKeyspaceCreated(t *testing.T) {
 }
 
 func TestWatchSrvVSchema(t *testing.T) {
-	watchSrvVSchemaSleepTime = 10 * time.Millisecond
+	*srvTopoCacheRefresh = 10 * time.Millisecond
 	ctx := context.Background()
 	ts := memorytopo.NewServer("test_cell")
 	rs := NewResilientServer(ts, "TestWatchSrvVSchema")
@@ -413,11 +427,12 @@ func TestWatchSrvVSchema(t *testing.T) {
 	mu := sync.Mutex{}
 	var watchValue *vschemapb.SrvVSchema
 	var watchErr error
-	rs.WatchSrvVSchema(ctx, "test_cell", func(v *vschemapb.SrvVSchema, e error) {
+	rs.WatchSrvVSchema(ctx, "test_cell", func(v *vschemapb.SrvVSchema, e error) bool {
 		mu.Lock()
 		defer mu.Unlock()
 		watchValue = v
 		watchErr = e
+		return true
 	})
 	get := func() (*vschemapb.SrvVSchema, error) {
 		mu.Lock()
@@ -498,12 +513,12 @@ func TestGetSrvKeyspaceNames(t *testing.T) {
 	rs := NewResilientServer(ts, "TestGetSrvKeyspaceNames")
 
 	// Set SrvKeyspace with value
-	want := &topodatapb.SrvKeyspace{
-		ShardingColumnName: "id",
-		ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
-	}
-	ts.UpdateSrvKeyspace(context.Background(), "test_cell", "test_ks", want)
-	ts.UpdateSrvKeyspace(context.Background(), "test_cell", "test_ks2", want)
+	want := &topodatapb.SrvKeyspace{}
+	err := ts.UpdateSrvKeyspace(context.Background(), "test_cell", "test_ks", want)
+	require.NoError(t, err, "UpdateSrvKeyspace(test_cell, test_ks, %s) failed", want)
+
+	err = ts.UpdateSrvKeyspace(context.Background(), "test_cell", "test_ks2", want)
+	require.NoError(t, err, "UpdateSrvKeyspace(test_cell, test_ks2, %s) failed", want)
 
 	ctx := context.Background()
 	names, err := rs.GetSrvKeyspaceNames(ctx, "test_cell", false)
@@ -623,9 +638,189 @@ func TestGetSrvKeyspaceNames(t *testing.T) {
 	timeoutCtx, cancel := context.WithTimeout(context.Background(), *srvTopoCacheRefresh*2) //nolint
 	defer cancel()
 	_, err = rs.GetSrvKeyspaceNames(timeoutCtx, "test_cell", false)
-	wantErr := "timed out waiting for keyspace names"
-	if err == nil || err.Error() != wantErr {
-		t.Errorf("expected error '%v', got '%v'", wantErr, err.Error())
+	if err != context.DeadlineExceeded {
+		t.Errorf("expected error '%v', got '%v'", context.DeadlineExceeded, err.Error())
 	}
 	factory.Unlock()
+}
+
+type watched struct {
+	keyspace *topodatapb.SrvKeyspace
+	err      error
+}
+
+func (w *watched) equals(other *watched) bool {
+	if w.keyspace != nil {
+		return other.keyspace != nil && proto.Equal(w.keyspace, other.keyspace)
+	}
+	return w.err == other.err
+}
+
+func TestSrvKeyspaceWatcher(t *testing.T) {
+	ts, factory := memorytopo.NewServerAndFactory("test_cell")
+	*srvTopoCacheTTL = time.Duration(100 * time.Millisecond)
+	*srvTopoCacheRefresh = time.Duration(40 * time.Millisecond)
+	defer func() {
+		*srvTopoCacheTTL = 1 * time.Second
+		*srvTopoCacheRefresh = 1 * time.Second
+	}()
+
+	rs := NewResilientServer(ts, "TestGetSrvKeyspaceWatcher")
+
+	var wmu sync.Mutex
+	var wseen []watched
+
+	allSeen := func() []watched {
+		wmu.Lock()
+		defer wmu.Unlock()
+
+		var result []watched
+		for _, w := range wseen {
+			if len(result) == 0 || !result[len(result)-1].equals(&w) {
+				result = append(result, w)
+			}
+		}
+		return result
+	}
+
+	waitForEntries := func(entryCount int) []watched {
+		var current []watched
+		var expire = time.Now().Add(5 * time.Second)
+
+		for time.Now().Before(expire) {
+			current = allSeen()
+			if len(current) >= entryCount {
+				return current
+			}
+			time.Sleep(2 * time.Millisecond)
+		}
+		t.Fatalf("Failed to receive %d entries after 5s (got %d entries so far)", entryCount, len(current))
+		return nil
+	}
+
+	rs.WatchSrvKeyspace(context.Background(), "test_cell", "test_ks", func(keyspace *topodatapb.SrvKeyspace, err error) bool {
+		wmu.Lock()
+		defer wmu.Unlock()
+		wseen = append(wseen, watched{keyspace: keyspace, err: err})
+		return true
+	})
+
+	seen1 := allSeen()
+	assert.Len(t, seen1, 1)
+	assert.Nil(t, seen1[0].keyspace)
+	assert.True(t, topo.IsErrType(seen1[0].err, topo.NoNode))
+
+	// Set SrvKeyspace with no values
+	want := &topodatapb.SrvKeyspace{}
+	err := ts.UpdateSrvKeyspace(context.Background(), "test_cell", "test_ks", want)
+	require.NoError(t, err)
+
+	seen2 := waitForEntries(2)
+	assert.Len(t, seen2, 2)
+	assert.NotNil(t, seen2[1].keyspace)
+	assert.Nil(t, seen2[1].err)
+	assert.True(t, proto.Equal(want, seen2[1].keyspace))
+
+	// Now delete the SrvKeyspace, wait until we get the error.
+	err = ts.DeleteSrvKeyspace(context.Background(), "test_cell", "test_ks")
+	require.NoError(t, err)
+
+	seen3 := waitForEntries(3)
+	assert.Len(t, seen3, 3)
+	assert.Nil(t, seen3[2].keyspace)
+	assert.True(t, topo.IsErrType(seen3[2].err, topo.NoNode))
+
+	keyRange, err := key.ParseShardingSpec("-")
+	if err != nil || len(keyRange) != 1 {
+		t.Fatalf("ParseShardingSpec failed. Expected non error and only one element. Got err: %v, len(%v)", err, len(keyRange))
+	}
+
+	for i := 0; i < 5; i++ {
+		want = &topodatapb.SrvKeyspace{
+			Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
+				{
+					ServedType: topodatapb.TabletType_PRIMARY,
+					ShardReferences: []*topodatapb.ShardReference{
+						{
+							// This may not be a valid shard spec, but is fine for unit test purposes
+							Name:     fmt.Sprintf("%d", i),
+							KeyRange: keyRange[0],
+						},
+					},
+				},
+			},
+		}
+		err = ts.UpdateSrvKeyspace(context.Background(), "test_cell", "test_ks", want)
+		require.NoError(t, err)
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	seen4 := waitForEntries(8)
+	assert.Len(t, seen4, 8)
+
+	for i := 0; i < 5; i++ {
+		w := seen4[3+i]
+		assert.Nil(t, w.err)
+	}
+
+	// Now simulate a topo service error
+	forceErr := topo.NewError(topo.Timeout, "test topo error")
+	factory.SetError(forceErr)
+
+	seen5 := waitForEntries(9)
+	assert.Len(t, seen5, 9)
+	assert.Nil(t, seen5[8].keyspace)
+	assert.True(t, topo.IsErrType(seen5[8].err, topo.Timeout))
+
+	factory.SetError(nil)
+
+	seen6 := waitForEntries(10)
+	assert.Len(t, seen6, 10)
+	assert.Nil(t, seen6[9].err)
+	assert.NotNil(t, seen6[9].keyspace)
+}
+
+func TestSrvKeyspaceListener(t *testing.T) {
+	ts, _ := memorytopo.NewServerAndFactory("test_cell")
+	*srvTopoCacheTTL = time.Duration(100 * time.Millisecond)
+	*srvTopoCacheRefresh = time.Duration(40 * time.Millisecond)
+	defer func() {
+		*srvTopoCacheTTL = 1 * time.Second
+		*srvTopoCacheRefresh = 1 * time.Second
+	}()
+
+	rs := NewResilientServer(ts, "TestGetSrvKeyspaceWatcher")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	var callbackCount sync2.AtomicInt32
+
+	// adding listener will perform callback.
+	rs.WatchSrvKeyspace(context.Background(), "test_cell", "test_ks", func(srvKs *topodatapb.SrvKeyspace, err error) bool {
+		callbackCount.Add(1)
+		select {
+		case <-ctx.Done():
+			return false
+		default:
+			return true
+		}
+	})
+
+	// First update (callback - 2)
+	want := &topodatapb.SrvKeyspace{}
+	err := ts.UpdateSrvKeyspace(context.Background(), "test_cell", "test_ks", want)
+	require.NoError(t, err)
+
+	// Next callback to remove from listener
+	cancel()
+
+	// multi updates thereafter
+	for i := 0; i < 5; i++ {
+		want = &topodatapb.SrvKeyspace{}
+		err = ts.UpdateSrvKeyspace(context.Background(), "test_cell", "test_ks", want)
+		require.NoError(t, err)
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	// only 3 times the callback called for the listener
+	assert.EqualValues(t, 3, callbackCount.Get())
 }

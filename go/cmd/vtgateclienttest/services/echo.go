@@ -70,7 +70,7 @@ func printSortedMap(val reflect.Value) []byte {
 	return buf.Bytes()
 }
 
-func echoQueryResult(vals map[string]interface{}) *sqltypes.Result {
+func echoQueryResult(vals map[string]any) *sqltypes.Result {
 	qr := &sqltypes.Result{}
 
 	var row []sqltypes.Value
@@ -100,7 +100,7 @@ func echoQueryResult(vals map[string]interface{}) *sqltypes.Result {
 
 func (c *echoClient) Execute(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable) (*vtgatepb.Session, *sqltypes.Result, error) {
 	if strings.HasPrefix(sql, EchoPrefix) {
-		return session, echoQueryResult(map[string]interface{}{
+		return session, echoQueryResult(map[string]any{
 			"callerId": callerid.EffectiveCallerIDFromContext(ctx),
 			"query":    sql,
 			"bindVars": bindVariables,
@@ -112,7 +112,7 @@ func (c *echoClient) Execute(ctx context.Context, session *vtgatepb.Session, sql
 
 func (c *echoClient) StreamExecute(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) error {
 	if strings.HasPrefix(sql, EchoPrefix) {
-		callback(echoQueryResult(map[string]interface{}{
+		callback(echoQueryResult(map[string]any{
 			"callerId": callerid.EffectiveCallerIDFromContext(ctx),
 			"query":    sql,
 			"bindVars": bindVariables,
@@ -130,7 +130,7 @@ func (c *echoClient) ExecuteBatch(ctx context.Context, session *vtgatepb.Session
 			bindVariablesList = make([]map[string]*querypb.BindVariable, len(sqlList))
 		}
 		for queryNum, query := range sqlList {
-			result := echoQueryResult(map[string]interface{}{
+			result := echoQueryResult(map[string]any{
 				"callerId": callerid.EffectiveCallerIDFromContext(ctx),
 				"query":    query,
 				"bindVars": bindVariablesList[queryNum],
@@ -175,7 +175,7 @@ func (c *echoClient) VStream(ctx context.Context, tabletType topodatapb.TabletTy
 
 func (c *echoClient) Prepare(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable) (*vtgatepb.Session, []*querypb.Field, error) {
 	if strings.HasPrefix(sql, EchoPrefix) {
-		return session, echoQueryResult(map[string]interface{}{
+		return session, echoQueryResult(map[string]any{
 			"callerId": callerid.EffectiveCallerIDFromContext(ctx),
 			"query":    sql,
 			"bindVars": bindVariables,

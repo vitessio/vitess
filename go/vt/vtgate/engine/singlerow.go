@@ -17,8 +17,10 @@ limitations under the License.
 package engine
 
 import (
+	"context"
+
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/proto/query"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 var _ Primitive = (*SingleRow)(nil)
@@ -44,8 +46,8 @@ func (s *SingleRow) GetTableName() string {
 	return ""
 }
 
-// Execute performs a non-streaming exec.
-func (s *SingleRow) Execute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+// TryExecute performs a non-streaming exec.
+func (s *SingleRow) TryExecute(context.Context, VCursor, map[string]*querypb.BindVariable, bool) (*sqltypes.Result, error) {
 	result := sqltypes.Result{
 		Rows: [][]sqltypes.Value{
 			{},
@@ -54,18 +56,17 @@ func (s *SingleRow) Execute(vcursor VCursor, bindVars map[string]*query.BindVari
 	return &result, nil
 }
 
-// StreamExecute performs a streaming exec.
-func (s *SingleRow) StreamExecute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantields bool, callback func(*sqltypes.Result) error) error {
-	result := sqltypes.Result{
-		Rows: [][]sqltypes.Value{
-			{},
-		},
+// TryStreamExecute performs a streaming exec.
+func (s *SingleRow) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	res, err := s.TryExecute(ctx, vcursor, bindVars, wantfields)
+	if err != nil {
+		return err
 	}
-	return callback(&result)
+	return callback(res)
 }
 
 // GetFields fetches the field info.
-func (s *SingleRow) GetFields(vcursor VCursor, bindVars map[string]*query.BindVariable) (*sqltypes.Result, error) {
+func (s *SingleRow) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return &sqltypes.Result{}, nil
 }
 

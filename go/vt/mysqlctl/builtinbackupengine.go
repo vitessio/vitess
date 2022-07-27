@@ -19,23 +19,25 @@ package mysqlctl
 import (
 	"bufio"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
+	"hash"
+	"hash/crc32"
 	"io"
 	"os"
 	"path"
 	"sync"
+	"sync/atomic"
 	"time"
-
-	"github.com/klauspost/pgzip"
-	"github.com/planetscale/pargzip"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/topo"
@@ -55,6 +57,8 @@ var (
 	// It can later be extended for other calls to mysqld during backup functions.
 	// Exported for testing.
 	BuiltinBackupMysqldTimeout = flag.Duration("builtinbackup_mysqld_timeout", 10*time.Minute, "how long to wait for mysqld to shutdown at the start of the backup")
+
+	builtinBackupProgress = flag.Duration("builtinbackup_progress", 5*time.Second, "how often to send progress updates when backing up large files")
 )
 
 // BuiltinBackupEngine encapsulates the logic of the builtin engine
@@ -70,6 +74,9 @@ type BuiltinBackupEngine struct {
 type builtinBackupManifest struct {
 	// BackupManifest is an anonymous embedding of the base manifest struct.
 	BackupManifest
+
+	// CompressionEngine stores which compression engine was used to originally compress the files.
+	CompressionEngine string `json:",omitempty"`
 
 	// FileEntries contains all the files in the backup
 	FileEntries []FileEntry
@@ -152,7 +159,7 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 	replicaStatus, err := params.Mysqld.ReplicationStatus()
 	switch err {
 	case nil:
-		replicaStartRequired = replicaStatus.ReplicationRunning() && !*DisableActiveReparents
+		replicaStartRequired = replicaStatus.Healthy() && !*DisableActiveReparents
 	case mysql.ErrNotReplica:
 		// keep going if we're the primary, might be a degenerate case
 		sourceIsPrimary = true
@@ -219,7 +226,7 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 	if semiSyncSource || semiSyncReplica {
 		// Only do this if one of them was on, since both being off could mean
 		// the plugin isn't even loaded, and the server variables don't exist.
-		params.Logger.Infof("restoring semi-sync settings from before backup: master=%v, replica=%v",
+		params.Logger.Infof("restoring semi-sync settings from before backup: primary=%v, replica=%v",
 			semiSyncSource, semiSyncReplica)
 		err := params.Mysqld.SetSemiSyncEnabled(semiSyncSource, semiSyncReplica)
 		if err != nil {
@@ -237,7 +244,7 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 			return usable, vterrors.Wrap(err, "replica is not restarting")
 		}
 
-		// Wait for a reliable value for SecondsBehindMaster from ReplicationStatus()
+		// Wait for a reliable value for ReplicationLagSeconds from ReplicationStatus()
 
 		// We know that we stopped at replicationPosition.
 		// If PrimaryPosition is the same, that means no writes
@@ -344,9 +351,10 @@ func (be *BuiltinBackupEngine) backupFiles(ctx context.Context, params BackupPar
 		},
 
 		// Builtin-specific fields
-		FileEntries:   fes,
-		TransformHook: *backupStorageHook,
-		SkipCompress:  !*backupStorageCompress,
+		FileEntries:       fes,
+		TransformHook:     *backupStorageHook,
+		SkipCompress:      !*backupStorageCompress,
+		CompressionEngine: *BuiltinCompressor,
 	}
 	data, err := json.MarshalIndent(bm, "", "  ")
 	if err != nil {
@@ -357,6 +365,88 @@ func (be *BuiltinBackupEngine) backupFiles(ctx context.Context, params BackupPar
 	}
 
 	return nil
+}
+
+type backupPipe struct {
+	filename string
+	maxSize  int64
+
+	r io.Reader
+	w *bufio.Writer
+
+	crc32  hash.Hash32
+	nn     int64
+	done   chan struct{}
+	closed int32
+}
+
+func newBackupWriter(filename string, maxSize int64, w io.Writer) *backupPipe {
+	return &backupPipe{
+		crc32:    crc32.NewIEEE(),
+		w:        bufio.NewWriterSize(w, writerBufferSize),
+		filename: filename,
+		maxSize:  maxSize,
+		done:     make(chan struct{}),
+	}
+}
+
+func newBackupReader(filename string, r io.Reader) *backupPipe {
+	return &backupPipe{
+		crc32:    crc32.NewIEEE(),
+		r:        r,
+		filename: filename,
+		done:     make(chan struct{}),
+	}
+}
+
+func (bp *backupPipe) Read(p []byte) (int, error) {
+	nn, err := bp.r.Read(p)
+	_, _ = bp.crc32.Write(p[:nn])
+	atomic.AddInt64(&bp.nn, int64(nn))
+	return nn, err
+}
+
+func (bp *backupPipe) Write(p []byte) (int, error) {
+	nn, err := bp.w.Write(p)
+	_, _ = bp.crc32.Write(p[:nn])
+	atomic.AddInt64(&bp.nn, int64(nn))
+	return nn, err
+}
+
+func (bp *backupPipe) Close() error {
+	if atomic.CompareAndSwapInt32(&bp.closed, 0, 1) {
+		close(bp.done)
+		if bp.w != nil {
+			if err := bp.w.Flush(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (bp *backupPipe) HashString() string {
+	return hex.EncodeToString(bp.crc32.Sum(nil))
+}
+
+func (bp *backupPipe) ReportProgress(period time.Duration, logger logutil.Logger) {
+	tick := time.NewTicker(period)
+	defer tick.Stop()
+
+	for {
+		select {
+		case <-bp.done:
+			return
+		case <-tick.C:
+			written := float64(atomic.LoadInt64(&bp.nn))
+			if bp.maxSize == 0 {
+				logger.Infof("Backup %q: %.02fkb", bp.filename, written/1024.0)
+			} else {
+				maxSize := float64(bp.maxSize)
+				logger.Infof("Backup %q: %.02f%% (%.02f/%.02fkb)", bp.filename, 100.0*written/maxSize, written/1024.0, maxSize/1024.0)
+			}
+		}
+	}
 }
 
 // backupFile backs up an individual file.
@@ -389,11 +479,11 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 			}
 		}
 	}(name, fe.Name)
-	dst := bufio.NewWriterSize(wc, writerBufferSize)
 
-	// Create the hasher and the tee on top.
-	hasher := newHasher()
-	writer := io.MultiWriter(dst, hasher)
+	bw := newBackupWriter(fe.Name, fi.Size(), wc)
+	go bw.ReportProgress(*builtinBackupProgress, params.Logger)
+
+	var writer io.Writer = bw
 
 	// Create the external write pipe, if any.
 	var pipe io.WriteCloser
@@ -409,13 +499,19 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 	}
 
 	// Create the gzip compression pipe, if necessary.
-	var gzip *pargzip.Writer
+	var compressor io.WriteCloser
 	if *backupStorageCompress {
-		gzip = pargzip.NewWriter(writer)
-		gzip.ChunkSize = *backupCompressBlockSize
-		gzip.Parallel = *backupCompressBlocks
-		gzip.CompressionLevel = pargzip.BestSpeed
-		writer = gzip
+
+		if *ExternalCompressorCmd != "" {
+			compressor, err = newExternalCompressor(ctx, *ExternalCompressorCmd, writer, params.Logger)
+		} else {
+			compressor, err = newBuiltinCompressor(*BuiltinCompressor, writer, params.Logger)
+		}
+		if err != nil {
+			return vterrors.Wrap(err, "can't create compressor")
+		}
+
+		writer = compressor
 	}
 
 	// Copy from the source file to writer (optional gzip,
@@ -426,9 +522,9 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 	}
 
 	// Close gzip to flush it, after that all data is sent to writer.
-	if gzip != nil {
-		if err = gzip.Close(); err != nil {
-			return vterrors.Wrap(err, "cannot close gzip")
+	if compressor != nil {
+		if err = compressor.Close(); err != nil {
+			return vterrors.Wrap(err, "cannot close compressor")
 		}
 	}
 
@@ -446,13 +542,13 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 		}
 	}
 
-	// Flush the buffer to finish writing on destination.
-	if err = dst.Flush(); err != nil {
+	// Close the backupPipe to finish writing on destination.
+	if err = bw.Close(); err != nil {
 		return vterrors.Wrapf(err, "cannot flush destination: %v", name)
 	}
 
 	// Save the hash.
-	fe.Hash = hasher.HashString()
+	fe.Hash = bw.HashString()
 	return nil
 }
 
@@ -510,7 +606,16 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreP
 			// And restore the file.
 			name := fmt.Sprintf("%v", i)
 			params.Logger.Infof("Copying file %v: %v", name, fes[i].Name)
-			err := be.restoreFile(ctx, params, bh, &fes[i], bm.TransformHook, !bm.SkipCompress, name)
+			// For backward compatibility. Incase if Manifest is from N-1 binary
+			// then we assign the default value of compressionEngine.
+			if bm.CompressionEngine == "" {
+				bm.CompressionEngine = *BuiltinCompressor
+			}
+			var decompEngine = bm.CompressionEngine
+			if *BuiltinDecompressor != "auto" {
+				decompEngine = *BuiltinDecompressor
+			}
+			err := be.restoreFile(ctx, params, bh, &fes[i], bm.TransformHook, !bm.SkipCompress, decompEngine, name)
 			if err != nil {
 				rec.RecordError(vterrors.Wrapf(err, "can't restore file %v to %v", name, fes[i].Name))
 			}
@@ -521,7 +626,7 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreP
 }
 
 // restoreFile restores an individual file.
-func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle, fe *FileEntry, transformHook string, compress bool, name string) (finalErr error) {
+func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle, fe *FileEntry, transformHook string, compress bool, deCompressionEngine string, name string) (finalErr error) {
 	// Open the source file for reading.
 	source, err := bh.ReadFile(ctx, name)
 	if err != nil {
@@ -545,15 +650,11 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 		}
 	}()
 
-	// Create a buffering output.
-	dst := bufio.NewWriterSize(dstFile, 2*1024*1024)
+	bp := newBackupReader(name, source)
+	go bp.ReportProgress(*builtinBackupProgress, params.Logger)
 
-	// Create hash to write the compressed data to.
-	hasher := newHasher()
-
-	// Create a Tee: we split the input into the hasher
-	// and into the gunziper.
-	reader := io.TeeReader(source, hasher)
+	dst := bufio.NewWriterSize(dstFile, writerBufferSize)
+	var reader io.Reader = bp
 
 	// Create the external read pipe, if any.
 	var wait hook.WaitFunc
@@ -568,21 +669,29 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 
 	// Create the uncompresser if needed.
 	if compress {
-		gz, err := pgzip.NewReader(reader)
-		if err != nil {
-			return vterrors.Wrap(err, "can't open gzip decompressor")
+		var decompressor io.ReadCloser
+
+		if *ExternalDecompressorCmd != "" {
+			decompressor, err = newExternalDecompressor(ctx, *ExternalDecompressorCmd, reader, params.Logger)
+		} else {
+			decompressor, err = newBuiltinDecompressor(deCompressionEngine, reader, params.Logger)
 		}
+		if err != nil {
+			return vterrors.Wrap(err, "can't create decompressor")
+		}
+
 		defer func() {
-			if cerr := gz.Close(); cerr != nil {
+			if cerr := decompressor.Close(); cerr != nil {
+				params.Logger.Errorf("failed to close decompressor: %v", cerr)
 				if finalErr != nil {
 					// We already have an error, just log this one.
-					log.Errorf("failed to close gzip decompressor %v: %v", name, cerr)
+					log.Errorf("failed to close decompressor %v: %v", name, cerr)
 				} else {
-					finalErr = vterrors.Wrap(err, "failed to close gzip decompressor")
+					finalErr = vterrors.Wrap(cerr, "failed to close decompressor")
 				}
 			}
 		}()
-		reader = gz
+		reader = decompressor
 	}
 
 	// Copy the data. Will also write to the hasher.
@@ -602,7 +711,7 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 	}
 
 	// Check the hash.
-	hash := hasher.HashString()
+	hash := bp.HashString()
 	if hash != fe.Hash {
 		return vterrors.Errorf(vtrpc.Code_INTERNAL, "hash mismatch for %v, got %v expected %v", fe.Name, hash, fe.Hash)
 	}
@@ -610,6 +719,10 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 	// Flush the buffer.
 	if err := dst.Flush(); err != nil {
 		return vterrors.Wrap(err, "failed to flush destination buffer")
+	}
+
+	if err := bp.Close(); err != nil {
+		return vterrors.Wrap(err, "failed to close the source reader")
 	}
 
 	return nil
@@ -626,20 +739,20 @@ func getPrimaryPosition(ctx context.Context, tmc tmclient.TabletManagerClient, t
 	if err != nil {
 		return mysql.Position{}, vterrors.Wrap(err, "can't read shard")
 	}
-	if topoproto.TabletAliasIsZero(si.MasterAlias) {
-		return mysql.Position{}, fmt.Errorf("shard %v/%v has no master", keyspace, shard)
+	if topoproto.TabletAliasIsZero(si.PrimaryAlias) {
+		return mysql.Position{}, fmt.Errorf("shard %v/%v has no primary", keyspace, shard)
 	}
-	ti, err := ts.GetTablet(ctx, si.MasterAlias)
+	ti, err := ts.GetTablet(ctx, si.PrimaryAlias)
 	if err != nil {
-		return mysql.Position{}, fmt.Errorf("can't get master tablet record %v: %v", topoproto.TabletAliasString(si.MasterAlias), err)
+		return mysql.Position{}, fmt.Errorf("can't get primary tablet record %v: %v", topoproto.TabletAliasString(si.PrimaryAlias), err)
 	}
-	posStr, err := tmc.MasterPosition(ctx, ti.Tablet)
+	posStr, err := tmc.PrimaryPosition(ctx, ti.Tablet)
 	if err != nil {
-		return mysql.Position{}, fmt.Errorf("can't get master replication position: %v", err)
+		return mysql.Position{}, fmt.Errorf("can't get primary replication position: %v", err)
 	}
 	pos, err := mysql.DecodePosition(posStr)
 	if err != nil {
-		return mysql.Position{}, fmt.Errorf("can't decode master replication position %q: %v", posStr, err)
+		return mysql.Position{}, fmt.Errorf("can't decode primary replication position %q: %v", posStr, err)
 	}
 	return pos, nil
 }

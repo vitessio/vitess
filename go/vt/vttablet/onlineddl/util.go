@@ -22,7 +22,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"io/ioutil"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -66,16 +66,16 @@ func execCmd(name string, args, env []string, dir string, input io.Reader, outpu
 // createTempDir creates a temporary directory and returns its name
 func createTempDir(hint string) (dirName string, err error) {
 	if hint != "" {
-		return ioutil.TempDir("", fmt.Sprintf("online-ddl-%s-*", hint))
+		return os.MkdirTemp("", fmt.Sprintf("online-ddl-%s-*", hint))
 	}
-	return ioutil.TempDir("", "online-ddl-*")
+	return os.MkdirTemp("", "online-ddl-*")
 }
 
 // createTempScript creates an executable file in given directory and with given text as content.
 func createTempScript(dirName, fileName, text string) (fullName string, err error) {
 	fullName = filepath.Join(dirName, fileName)
 	bytes := []byte(text)
-	err = ioutil.WriteFile(fullName, bytes, 0755)
+	err = os.WriteFile(fullName, bytes, 0755)
 	return fullName, err
 }
 

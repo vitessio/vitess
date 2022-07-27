@@ -1,0 +1,20 @@
+version: '3'
+services:
+  grafana:
+    image: grafana/grafana:${GRAFANA_VERSION?err}
+  e2e:
+    build:
+      context: .
+      args:
+        CYPRESS_IMAGE: cypress/base:12
+    image: grafonnet-e2e
+    command: npx cypress run
+    depends_on:
+      - grafana
+    environment:
+      - CYPRESS_baseUrl=http://grafana:3000
+      - CYPRESS_video=false
+    volumes:
+      - ./cypress:/e2e/cypress
+      - ./cypress.json:/e2e/cypress.json
+      - ../dashboards_out:/e2e/test

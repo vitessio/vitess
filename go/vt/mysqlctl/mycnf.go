@@ -93,7 +93,11 @@ type Mycnf struct {
 	BinLogPath string
 
 	// MasterInfoFile is the master.info file location.
-	// (unused by vt software for now)
+	// Unused when vitess manages mysql config because we set
+	// master_info_repository = TABLE and
+	// relay_log_info_repository = TABLE
+	// However it is possible to use custom cnf files with vitess
+	// and to generate them using command-line flags, so we allow a way to set this property
 	MasterInfoFile string
 
 	// PidFile is the mysql.pid file location
@@ -105,7 +109,7 @@ type Mycnf struct {
 	TmpDir string
 
 	mycnfMap map[string]string
-	path     string // the actual path that represents this mycnf
+	Path     string // the actual path that represents this mycnf
 }
 
 // TabletDir returns the tablet directory.
@@ -150,7 +154,7 @@ func normKey(bkey []byte) string {
 // ReadMycnf will read an existing my.cnf from disk, and update the passed in Mycnf object
 // with values from the my.cnf on disk.
 func ReadMycnf(mycnf *Mycnf) (*Mycnf, error) {
-	f, err := os.Open(mycnf.path)
+	f, err := os.Open(mycnf.Path)
 	if err != nil {
 		return nil, err
 	}

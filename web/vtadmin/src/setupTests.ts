@@ -1,5 +1,11 @@
-// jest-dom adds custom jest matchers for asserting on DOM nodes.
-// allows you to do things like:
-// expect(element).toHaveTextContent(/react/i)
-// learn more: https://github.com/testing-library/jest-dom
 import '@testing-library/jest-dom';
+import { setLogger } from 'react-query';
+
+// Suppress network (and "network", i.e., localhost) errors
+// from being logged to the console during testing.
+// See https://react-query.tanstack.com/guides/testing
+setLogger({
+    log: console.log,
+    warn: console.warn,
+    error: () => {},
+});

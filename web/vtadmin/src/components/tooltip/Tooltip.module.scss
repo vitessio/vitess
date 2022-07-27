@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 .tooltip {
-  background: var(--tooltipBackground);
-  border-radius: 4px;
-  color: var(--textColorInverted);
-  font-family: var(--fontFamilyPrimary);
-  font-size: var(--fontSizeSmall);
-  margin: 8px;
-  max-width: 24rem;
-  padding: 8px 12px;
-  text-align: center;
+    background: var(--tooltipBackground);
+    border-radius: 4px;
+    color: var(--textColorInverted);
+    font-family: var(--fontFamilyPrimary);
+    font-size: theme('fontSize.sm');
+    margin: 8px;
+    max-width: 24rem;
+    padding: 8px 12px;
+    text-align: center;
 }

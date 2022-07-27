@@ -128,11 +128,10 @@ var (
   <dd>will not serve traffic.</dd>
 </dl>
 <!-- The div in the next line will be overwritten by the JavaScript graph. -->
-<div id="qps_chart">QPS: {{.CurrentQPS}}</div>
-<script type="text/javascript" src="https://www.google.com/jsapi"></script>
+<div id="qps_chart" style="height: 500px; width: 900px">QPS: {{.CurrentQPS}}</div>
+<script src="https://www.gstatic.com/charts/loader.js"></script>
 <script type="text/javascript">
 
-google.load("jquery", "1.4.0");
 google.load("visualization", "1", {packages:["corechart"]});
 
 function sampleDate(d, i) {
@@ -142,7 +141,7 @@ function sampleDate(d, i) {
 }
 
 function drawQPSChart() {
-  var div = $('#qps_chart').height(500).width(900).unwrap()[0]
+  var div = document.getElementById("qps_chart")
   var chart = new google.visualization.LineChart(div);
 
   var options = {
@@ -161,8 +160,9 @@ function drawQPSChart() {
     vars_url = window.location.pathname.substring(0, pos) + vars_url;
   }
 
-  var redraw = function() {
-    $.getJSON(vars_url, function(input_data) {
+  const redraw = () => fetch(vars_url)
+  .then(async (response) => {
+      const input_data = await response.json();
       var now = new Date();
       var qps = input_data.QPS;
       var planTypes = Object.keys(qps);
@@ -170,9 +170,7 @@ function drawQPSChart() {
         planTypes = ["All"];
         qps["All"] = [];
       }
-
       var data = [["Time"].concat(planTypes)];
-
       // Create data points, starting with the most recent timestamp.
       // (On the graph this means going from right to left.)
       // Time span: 15 minutes in 5 second intervals.
@@ -192,8 +190,7 @@ function drawQPSChart() {
         data.push(datum)
       }
       chart.draw(google.visualization.arrayToDataTable(data), options);
-    })
-  };
+  })
 
   redraw();
 
@@ -202,14 +199,13 @@ function drawQPSChart() {
 }
 google.setOnLoadCallback(drawQPSChart);
 </script>
-
 `
 )
 
 type queryserviceStatus struct {
 	Latest     *historyRecord
 	Details    []*kv
-	History    []interface{}
+	History    []any
 	CurrentQPS float64
 }
 
@@ -221,8 +217,8 @@ type kv struct {
 
 // AddStatusHeader registers a standlone header for the status page.
 func (tsv *TabletServer) AddStatusHeader() {
-	tsv.exporter.AddStatusPart("Tablet Server", headerTemplate, func() interface{} {
-		return map[string]interface{}{
+	tsv.exporter.AddStatusPart("Tablet Server", headerTemplate, func() any {
+		return map[string]any{
 			"Alias":  tsv.exporter.Name(),
 			"Prefix": tsv.exporter.URLPrefix(),
 			"Target": tsv.sm.Target(),
@@ -236,7 +232,7 @@ func (tsv *TabletServer) AddStatusPart() {
 	degradedThreshold.Set(tsv.config.Healthcheck.DegradedThresholdSeconds.Get())
 	unhealthyThreshold.Set(tsv.config.Healthcheck.UnhealthyThresholdSeconds.Get())
 
-	tsv.exporter.AddStatusPart("Health", queryserviceStatusTemplate, func() interface{} {
+	tsv.exporter.AddStatusPart("Health", queryserviceStatusTemplate, func() any {
 		status := queryserviceStatus{
 			History: tsv.hs.history.Records(),
 		}
@@ -312,7 +308,7 @@ func (r *historyRecord) TabletType() string {
 }
 
 // IsDuplicate implements history.Deduplicable
-func (r *historyRecord) IsDuplicate(other interface{}) bool {
+func (r *historyRecord) IsDuplicate(other any) bool {
 	rother, ok := other.(*historyRecord)
 	if !ok {
 		return false

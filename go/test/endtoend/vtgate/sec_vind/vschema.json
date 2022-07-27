@@ -1,0 +1,39 @@
+{
+  "sharded": true,
+  "vindexes": {
+    "lookup_idx": {
+      "type": "lookup",
+      "params": {
+        "from": "c2",
+        "to": "keyspace_id",
+        "table": "lookup_t1"
+      },
+      "owner": "t1"
+    },
+    "xxhash": {
+      "type": "xxhash"
+    }
+  },
+  "tables": {
+    "t1": {
+      "columnVindexes": [
+        {
+          "column": "c1",
+          "name": "xxhash"
+        },
+        {
+          "column": "c2",
+          "name": "lookup_idx"
+        }
+      ]
+    },
+    "lookup_t1": {
+      "columnVindexes": [
+        {
+          "column": "c2",
+          "name": "xxhash"
+        }
+      ]
+    }
+  }
+}

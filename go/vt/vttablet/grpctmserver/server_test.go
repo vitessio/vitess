@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package grpctmserver
+package grpctmserver_test
 
 import (
 	"net"
@@ -23,9 +23,9 @@ import (
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/vt/vttablet/grpctmclient"
+	"vitess.io/vitess/go/vt/vttablet/grpctmserver"
 	"vitess.io/vitess/go/vt/vttablet/tmrpctest"
 
-	tabletmanagerservicepb "vitess.io/vitess/go/vt/proto/tabletmanagerservice"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -33,7 +33,7 @@ import (
 // implementation, and runs the test suite against the setup.
 func TestGRPCTMServer(t *testing.T) {
 	// Listen on a random port
-	listener, err := net.Listen("tcp", ":0")
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("Cannot listen: %v", err)
 	}
@@ -43,7 +43,7 @@ func TestGRPCTMServer(t *testing.T) {
 	// Create a gRPC server and listen on the port.
 	s := grpc.NewServer()
 	fakeTM := tmrpctest.NewFakeRPCTM(t)
-	tabletmanagerservicepb.RegisterTabletManagerServer(s, &server{tm: fakeTM})
+	grpctmserver.RegisterForTest(s, fakeTM)
 	go s.Serve(listener)
 
 	// Create a gRPC client to talk to the fake tablet.

@@ -124,7 +124,7 @@ func TestPositionZeroAtLeast(t *testing.T) {
 
 func TestPositionAtLeastZero(t *testing.T) {
 	input1 := Position{GTIDSet: MariadbGTIDSet{3: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}}
-	input2 := Position{GTIDSet: MariadbGTIDSet(nil)}
+	input2 := Position{GTIDSet: nil}
 	want := true
 
 	if got := input1.AtLeast(input2); got != want {

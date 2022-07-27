@@ -2898,7 +2898,7 @@ Object {
 }
 `;
 
-exports[`formatTimeseriesMap timespan < 15 minutes: timespan < 15 minutes 1`] = `
+exports[`formatTimeseriesMap timespan < max span: timespan < max span 1`] = `
 Object {
   "All": Array [
     Object {

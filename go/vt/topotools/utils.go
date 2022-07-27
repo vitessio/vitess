@@ -18,14 +18,11 @@ package topotools
 
 import (
 	"reflect"
-	"sort"
 	"sync"
 
 	"context"
 
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -40,37 +37,9 @@ func FindTabletByHostAndPort(tabletMap map[string]*topo.TabletInfo, addr, portNa
 	return nil, topo.NewError(topo.NoNode, addr+":"+portName)
 }
 
-// GetAllTablets returns a sorted list of tablets.
-func GetAllTablets(ctx context.Context, ts *topo.Server, cell string) ([]*topo.TabletInfo, error) {
-	aliases, err := ts.GetTabletsByCell(ctx, cell)
-	if err != nil {
-		return nil, err
-	}
-	sort.Sort(topoproto.TabletAliasList(aliases))
-
-	tabletMap, err := ts.GetTabletMap(ctx, aliases)
-	if err != nil {
-		// we got another error than topo.ErrNoNode
-		return nil, err
-	}
-	tablets := make([]*topo.TabletInfo, 0, len(aliases))
-	for _, tabletAlias := range aliases {
-		tabletInfo, ok := tabletMap[topoproto.TabletAliasString(tabletAlias)]
-		if !ok {
-			// tablet disappeared on us (GetTabletMap ignores
-			// topo.ErrNoNode), just echo a warning
-			log.Warningf("failed to load tablet %v", tabletAlias)
-		} else {
-			tablets = append(tablets, tabletInfo)
-		}
-	}
-
-	return tablets, nil
-}
-
 // GetTabletMapForCell returns a map of TabletInfo keyed by alias as string
 func GetTabletMapForCell(ctx context.Context, ts *topo.Server, cell string) (map[string]*topo.TabletInfo, error) {
-	aliases, err := ts.GetTabletsByCell(ctx, cell)
+	aliases, err := ts.GetTabletAliasesByCell(ctx, cell)
 	if err != nil {
 		return nil, err
 	}
@@ -96,7 +65,7 @@ func GetAllTabletsAcrossCells(ctx context.Context, ts *topo.Server) ([]*topo.Tab
 	wg.Add(len(cells))
 	for i, cell := range cells {
 		go func(i int, cell string) {
-			results[i], errors[i] = GetAllTablets(ctx, ts, cell)
+			results[i], errors[i] = ts.GetTabletsByCell(ctx, cell)
 			wg.Done()
 		}(i, cell)
 	}
@@ -115,28 +84,28 @@ func GetAllTabletsAcrossCells(ctx context.Context, ts *topo.Server) ([]*topo.Tab
 }
 
 // SortedTabletMap returns two maps:
-// - The replicaMap contains all the non-master non-scrapped hosts.
+// - The replicaMap contains all the non-primary non-scrapped hosts.
 //   This can be used as a list of replicas to fix up for reparenting
-// - The masterMap contains all the tablets without parents
+// - The primaryMap contains all the tablets without parents
 //   (scrapped or not). This can be used to special case
-//   the old master, and any tablet in a weird state, left over, ...
+//   the old primary, and any tablet in a weird state, left over, ...
 func SortedTabletMap(tabletMap map[string]*topo.TabletInfo) (map[string]*topo.TabletInfo, map[string]*topo.TabletInfo) {
 	replicaMap := make(map[string]*topo.TabletInfo)
-	masterMap := make(map[string]*topo.TabletInfo)
+	primaryMap := make(map[string]*topo.TabletInfo)
 	for alias, ti := range tabletMap {
-		if ti.Type == topodatapb.TabletType_MASTER {
-			masterMap[alias] = ti
+		if ti.Type == topodatapb.TabletType_PRIMARY {
+			primaryMap[alias] = ti
 		} else {
 			replicaMap[alias] = ti
 		}
 	}
-	return replicaMap, masterMap
+	return replicaMap, primaryMap
 }
 
 // CopyMapKeys copies keys from map m into a new slice with the
 // type specified by typeHint.  Reflection can't make a new slice type
 // just based on the key type AFAICT.
-func CopyMapKeys(m interface{}, typeHint interface{}) interface{} {
+func CopyMapKeys(m any, typeHint any) any {
 	mapVal := reflect.ValueOf(m)
 	keys := reflect.MakeSlice(reflect.TypeOf(typeHint), 0, mapVal.Len())
 	for _, k := range mapVal.MapKeys() {
@@ -148,7 +117,7 @@ func CopyMapKeys(m interface{}, typeHint interface{}) interface{} {
 // CopyMapValues copies values from map m into a new slice with the
 // type specified by typeHint.  Reflection can't make a new slice type
 // just based on the key type AFAICT.
-func CopyMapValues(m interface{}, typeHint interface{}) interface{} {
+func CopyMapValues(m any, typeHint any) any {
 	mapVal := reflect.ValueOf(m)
 	vals := reflect.MakeSlice(reflect.TypeOf(typeHint), 0, mapVal.Len())
 	for _, k := range mapVal.MapKeys() {
@@ -158,8 +127,8 @@ func CopyMapValues(m interface{}, typeHint interface{}) interface{} {
 }
 
 // MapKeys returns an array with th provided map keys.
-func MapKeys(m interface{}) []interface{} {
-	keys := make([]interface{}, 0, 16)
+func MapKeys(m any) []any {
+	keys := make([]any, 0, 16)
 	mapVal := reflect.ValueOf(m)
 	for _, kv := range mapVal.MapKeys() {
 		keys = append(keys, kv.Interface())

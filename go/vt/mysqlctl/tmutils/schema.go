@@ -25,7 +25,10 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/sqlescape"
+
 	"vitess.io/vitess/go/vt/concurrency"
+	"vitess.io/vitess/go/vt/schema"
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
@@ -78,7 +81,7 @@ type TableFilter struct {
 }
 
 // NewTableFilter creates a TableFilter for whitelisted tables
-// (tables), no blacklisted tables (excludeTables) and optionally
+// (tables), no denied tables (excludeTables) and optionally
 // views (includeViews).
 func NewTableFilter(tables, excludeTables []string, includeViews bool) (*TableFilter, error) {
 	f := &TableFilter{
@@ -173,7 +176,7 @@ func (f *TableFilter) Includes(tableName string, tableType string) bool {
 }
 
 // FilterTables returns a copy which includes only whitelisted tables
-// (tables), no blacklisted tables (excludeTables) and optionally
+// (tables), no denied tables (excludeTables) and optionally
 // views (includeViews).
 func FilterTables(sd *tabletmanagerdatapb.SchemaDefinition, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
 	copy := proto.Clone(sd).(*tabletmanagerdatapb.SchemaDefinition)
@@ -227,9 +230,16 @@ func SchemaDefinitionToSQLStrings(sd *tabletmanagerdatapb.SchemaDefinition) []st
 	sqlStrings := make([]string, 0, len(sd.TableDefinitions)+1)
 	createViewSQL := make([]string, 0, len(sd.TableDefinitions))
 
-	sqlStrings = append(sqlStrings, sd.DatabaseSchema)
+	// Backtick database name since keyspace names appear in the routing rules, and they might need to be escaped.
+	// We unescape() them first in case we have an explicitly escaped string was specified.
+	createDatabaseSQL := strings.Replace(sd.DatabaseSchema, "`{{.DatabaseName}}`", "{{.DatabaseName}}", -1)
+	createDatabaseSQL = strings.Replace(createDatabaseSQL, "{{.DatabaseName}}", sqlescape.EscapeID("{{.DatabaseName}}"), -1)
+	sqlStrings = append(sqlStrings, createDatabaseSQL)
 
 	for _, td := range sd.TableDefinitions {
+		if schema.IsInternalOperationTableName(td.Name) {
+			continue
+		}
 		if td.Type == TableView {
 			createViewSQL = append(createViewSQL, td.Schema)
 		} else {
@@ -247,7 +257,7 @@ func SchemaDefinitionToSQLStrings(sd *tabletmanagerdatapb.SchemaDefinition) []st
 }
 
 // DiffSchema generates a report on what's different between two SchemaDefinitions
-// including views.
+// including views, but Vitess internal tables are ignored.
 func DiffSchema(leftName string, left *tabletmanagerdatapb.SchemaDefinition, rightName string, right *tabletmanagerdatapb.SchemaDefinition, er concurrency.ErrorRecorder) {
 	if left == nil && right == nil {
 		return
@@ -265,25 +275,33 @@ func DiffSchema(leftName string, left *tabletmanagerdatapb.SchemaDefinition, rig
 	for leftIndex < len(left.TableDefinitions) && rightIndex < len(right.TableDefinitions) {
 		// extra table on the left side
 		if left.TableDefinitions[leftIndex].Name < right.TableDefinitions[rightIndex].Name {
-			er.RecordError(fmt.Errorf("%v has an extra table named %v", leftName, left.TableDefinitions[leftIndex].Name))
+			if !schema.IsInternalOperationTableName(left.TableDefinitions[leftIndex].Name) {
+				er.RecordError(fmt.Errorf("%v has an extra table named %v", leftName, left.TableDefinitions[leftIndex].Name))
+			}
 			leftIndex++
 			continue
 		}
 
 		// extra table on the right side
 		if left.TableDefinitions[leftIndex].Name > right.TableDefinitions[rightIndex].Name {
-			er.RecordError(fmt.Errorf("%v has an extra table named %v", rightName, right.TableDefinitions[rightIndex].Name))
+			if !schema.IsInternalOperationTableName(right.TableDefinitions[rightIndex].Name) {
+				er.RecordError(fmt.Errorf("%v has an extra table named %v", rightName, right.TableDefinitions[rightIndex].Name))
+			}
 			rightIndex++
 			continue
 		}
 
 		// same name, let's see content
 		if left.TableDefinitions[leftIndex].Schema != right.TableDefinitions[rightIndex].Schema {
-			er.RecordError(fmt.Errorf("schemas differ on table %v:\n%s: %v\n differs from:\n%s: %v", left.TableDefinitions[leftIndex].Name, leftName, left.TableDefinitions[leftIndex].Schema, rightName, right.TableDefinitions[rightIndex].Schema))
+			if !schema.IsInternalOperationTableName(left.TableDefinitions[leftIndex].Name) {
+				er.RecordError(fmt.Errorf("schemas differ on table %v:\n%s: %v\n differs from:\n%s: %v", left.TableDefinitions[leftIndex].Name, leftName, left.TableDefinitions[leftIndex].Schema, rightName, right.TableDefinitions[rightIndex].Schema))
+			}
 		}
 
 		if left.TableDefinitions[leftIndex].Type != right.TableDefinitions[rightIndex].Type {
-			er.RecordError(fmt.Errorf("schemas differ on table type for table %v:\n%s: %v\n differs from:\n%s: %v", left.TableDefinitions[leftIndex].Name, leftName, left.TableDefinitions[leftIndex].Type, rightName, right.TableDefinitions[rightIndex].Type))
+			if !schema.IsInternalOperationTableName(right.TableDefinitions[rightIndex].Name) {
+				er.RecordError(fmt.Errorf("schemas differ on table type for table %v:\n%s: %v\n differs from:\n%s: %v", left.TableDefinitions[leftIndex].Name, leftName, left.TableDefinitions[leftIndex].Type, rightName, right.TableDefinitions[rightIndex].Type))
+			}
 		}
 
 		leftIndex++
@@ -292,7 +310,9 @@ func DiffSchema(leftName string, left *tabletmanagerdatapb.SchemaDefinition, rig
 
 	for leftIndex < len(left.TableDefinitions) {
 		if left.TableDefinitions[leftIndex].Type == TableBaseTable {
-			er.RecordError(fmt.Errorf("%v has an extra table named %v", leftName, left.TableDefinitions[leftIndex].Name))
+			if !schema.IsInternalOperationTableName(left.TableDefinitions[leftIndex].Name) {
+				er.RecordError(fmt.Errorf("%v has an extra table named %v", leftName, left.TableDefinitions[leftIndex].Name))
+			}
 		}
 		if left.TableDefinitions[leftIndex].Type == TableView {
 			er.RecordError(fmt.Errorf("%v has an extra view named %v", leftName, left.TableDefinitions[leftIndex].Name))
@@ -301,7 +321,9 @@ func DiffSchema(leftName string, left *tabletmanagerdatapb.SchemaDefinition, rig
 	}
 	for rightIndex < len(right.TableDefinitions) {
 		if right.TableDefinitions[rightIndex].Type == TableBaseTable {
-			er.RecordError(fmt.Errorf("%v has an extra table named %v", rightName, right.TableDefinitions[rightIndex].Name))
+			if !schema.IsInternalOperationTableName(right.TableDefinitions[rightIndex].Name) {
+				er.RecordError(fmt.Errorf("%v has an extra table named %v", rightName, right.TableDefinitions[rightIndex].Name))
+			}
 		}
 		if right.TableDefinitions[rightIndex].Type == TableView {
 			er.RecordError(fmt.Errorf("%v has an extra view named %v", rightName, right.TableDefinitions[rightIndex].Name))
@@ -328,6 +350,7 @@ type SchemaChange struct {
 	AllowReplication bool
 	BeforeSchema     *tabletmanagerdatapb.SchemaDefinition
 	AfterSchema      *tabletmanagerdatapb.SchemaDefinition
+	SQLMode          string
 }
 
 // Equal compares two SchemaChange objects.

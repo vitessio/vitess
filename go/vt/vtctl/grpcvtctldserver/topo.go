@@ -19,6 +19,7 @@ package grpcvtctldserver
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/log"
@@ -31,7 +32,7 @@ import (
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-func deleteShard(ctx context.Context, ts *topo.Server, keyspace string, shard string, recursive bool, evenIfServing bool) error {
+func deleteShard(ctx context.Context, ts *topo.Server, keyspace string, shard string, recursive bool, evenIfServing bool, force bool) (err error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.deleteShard")
 	defer span.Finish()
 
@@ -39,6 +40,35 @@ func deleteShard(ctx context.Context, ts *topo.Server, keyspace string, shard st
 	span.Annotate("shard", shard)
 	span.Annotate("recursive", recursive)
 	span.Annotate("even_if_serving", evenIfServing)
+	span.Annotate("force", force)
+
+	lctx, unlock, lerr := ts.LockShard(ctx, keyspace, shard, "DeleteShard")
+	switch {
+	case lerr == nil:
+		// We locked the shard, all good
+		ctx = lctx
+	case !force:
+		return fmt.Errorf("failed to lock %s/%s; if you really want to delete this shard, re-run with Force=true: %w", keyspace, shard, lerr)
+	default:
+		// Failed to lock, but force=true. Warn and continue
+		log.Warningf("%s: failed to lock shard %s/%s for deletion, but force=true, proceeding anyway ...", lerr, keyspace, shard)
+	}
+
+	if unlock != nil {
+		defer func() {
+			// Attempting to unlock a shard we successfully deleted results in
+			// ts.unlockShard returning an error, which can make the overall
+			// RPC _seem_ like it failed.
+			//
+			// So, we do this extra checking to allow for specifically this
+			// scenario to result in "success."
+			origErr := err
+			unlock(&err)
+			if origErr == nil && topo.IsErrType(err, topo.NoNode) {
+				err = nil
+			}
+		}()
+	}
 
 	// Read the Shard object. If it's not in the topo, try to clean up the topo
 	// anyway.
@@ -47,7 +77,8 @@ func deleteShard(ctx context.Context, ts *topo.Server, keyspace string, shard st
 		if topo.IsErrType(err, topo.NoNode) {
 			log.Infof("Shard %v/%v doesn't seem to exist; cleaning up any potential leftover topo data", keyspace, shard)
 
-			return ts.DeleteShard(ctx, keyspace, shard)
+			_ = ts.DeleteShard(ctx, keyspace, shard)
+			return nil
 		}
 
 		return err
@@ -70,7 +101,8 @@ func deleteShard(ctx context.Context, ts *topo.Server, keyspace string, shard st
 	}
 
 	for _, cell := range cells {
-		if err := deleteShardCell(ctx, ts, keyspace, shard, cell, recursive); err != nil {
+		err = deleteShardCell(ctx, ts, keyspace, shard, cell, recursive)
+		if err != nil {
 			return err
 		}
 	}
@@ -83,7 +115,8 @@ func deleteShard(ctx context.Context, ts *topo.Server, keyspace string, shard st
 		}
 	}
 
-	return ts.DeleteShard(ctx, keyspace, shard)
+	err = ts.DeleteShard(ctx, keyspace, shard)
+	return err
 }
 
 // deleteShardCell is the per-cell helper function for deleteShard, and is
@@ -109,9 +142,9 @@ func deleteShardCell(ctx context.Context, ts *topo.Server, keyspace string, shar
 		// Therefore we read all the tablets for that cell, and if we find any
 		// in our shard, we'll either abort or try to delete them, depending on
 		// whether recursive=true.
-		aliases, err = ts.GetTabletsByCell(ctx, cell)
+		aliases, err = ts.GetTabletAliasesByCell(ctx, cell)
 		if err != nil {
-			return fmt.Errorf("GetTabletsByCell(%v) failed: %w", cell, err)
+			return fmt.Errorf("GetTabletAliasesByCell(%v) failed: %w", cell, err)
 		}
 	case err == nil:
 		// If a ShardReplication object exists, we trust it to have all the
@@ -192,10 +225,10 @@ func deleteTablet(ctx context.Context, ts *topo.Server, alias *topodatapb.Tablet
 	span.Annotate("is_primary", isPrimary)
 
 	if isPrimary && !allowPrimary {
-		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot delete tablet %v as it is a master, pass AllowPrimary = true", topoproto.TabletAliasString(alias))
+		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot delete tablet %v as it is a primary, pass AllowPrimary = true", topoproto.TabletAliasString(alias))
 	}
 
-	// Update the Shard object if the master was scrapped. We do this before
+	// Update the Shard object if the primary was scrapped. We do this before
 	// calling DeleteTablet so that the operation can be retried in case of
 	// failure.
 	if isPrimary {
@@ -207,17 +240,16 @@ func deleteTablet(ctx context.Context, ts *topo.Server, alias *topodatapb.Tablet
 		defer unlock(&err)
 
 		if _, err := ts.UpdateShardFields(lockCtx, tablet.Keyspace, tablet.Shard, func(si *topo.ShardInfo) error {
-			if !topoproto.TabletAliasEqual(si.MasterAlias, alias) {
+			if !topoproto.TabletAliasEqual(si.PrimaryAlias, alias) {
 				log.Warningf(
-					"Deleting master %v from shard %v/%v but master in Shard object was %v",
-					topoproto.TabletAliasString(alias), tablet.Keyspace, tablet.Shard, topoproto.TabletAliasString(si.MasterAlias),
+					"Deleting primary %v from shard %v/%v but primary in Shard object was %v",
+					topoproto.TabletAliasString(alias), tablet.Keyspace, tablet.Shard, topoproto.TabletAliasString(si.PrimaryAlias),
 				)
 
 				return topo.NewError(topo.NoUpdateNeeded, si.Keyspace()+"/"+si.ShardName())
 			}
-
-			si.MasterAlias = nil
-
+			si.PrimaryAlias = nil
+			si.SetPrimaryTermStartTime(time.Now())
 			return nil
 		}); err != nil {
 			return err
@@ -257,8 +289,8 @@ func removeShardCell(ctx context.Context, ts *topo.Server, cell string, keyspace
 		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "shard %v/%v does not have serving cell %v", keyspace, shardName, cell)
 	}
 
-	if shard.MasterAlias != nil && shard.MasterAlias.Cell == cell {
-		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot remove cell %v; shard master %v is in cell", cell, topoproto.TabletAliasString(shard.MasterAlias))
+	if shard.PrimaryAlias != nil && shard.PrimaryAlias.Cell == cell {
+		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot remove cell %v; shard primary %v is in cell", cell, topoproto.TabletAliasString(shard.PrimaryAlias))
 	}
 
 	replication, err := ts.GetShardReplication(ctx, cell, keyspace, shardName)
@@ -318,7 +350,7 @@ func removeShardCell(ctx context.Context, ts *topo.Server, cell string, keyspace
 		return err
 	}
 
-	if err := ts.DeleteSrvKeyspacePartitions(ctx, keyspace, []*topo.ShardInfo{shard}, topodatapb.TabletType_MASTER, []string{cell}); err != nil {
+	if err := ts.DeleteSrvKeyspacePartitions(ctx, keyspace, []*topo.ShardInfo{shard}, topodatapb.TabletType_PRIMARY, []string{cell}); err != nil {
 		return err
 	}
 

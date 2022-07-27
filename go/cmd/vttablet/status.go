@@ -56,8 +56,8 @@ var (
       Keyspace: {{github_com_vitessio_vitess_vtctld_keyspace .Tablet.Keyspace}} Shard: {{github_com_vitessio_vitess_vtctld_shard .Tablet.Keyspace .Tablet.Shard}} Tablet Type: {{.Tablet.Type}}<br>
       SrvKeyspace: {{github_com_vitessio_vitess_vtctld_srv_keyspace .Tablet.Alias.Cell .Tablet.Keyspace}}<br>
       Replication graph: {{github_com_vitessio_vitess_vtctld_replication .Tablet.Alias.Cell .Tablet.Keyspace .Tablet.Shard}}<br>
-      {{if .BlacklistedTables}}
-        BlacklistedTables: {{range .BlacklistedTables}}{{.}} {{end}}<br>
+      {{if .DeniedTables}}
+        DeniedTables: {{range .DeniedTables}}{{.}} {{end}}<br>
       {{end}}
     </td>
     <td width="25%" border="">
@@ -85,10 +85,10 @@ var (
 )
 
 func addStatusParts(qsc tabletserver.Controller) {
-	servenv.AddStatusPart("Tablet", tabletTemplate, func() interface{} {
-		return map[string]interface{}{
-			"Tablet":            topo.NewTabletInfo(tm.Tablet(), nil),
-			"BlacklistedTables": tm.BlacklistedTables(),
+	servenv.AddStatusPart("Tablet", tabletTemplate, func() any {
+		return map[string]any{
+			"Tablet":       topo.NewTabletInfo(tm.Tablet(), nil),
+			"DeniedTables": tm.DeniedTables(),
 		}
 	})
 	qsc.AddStatusPart()

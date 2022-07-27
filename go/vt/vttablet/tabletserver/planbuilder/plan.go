@@ -20,7 +20,8 @@ import (
 	"encoding/json"
 	"strings"
 
-	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/tableacl"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -74,6 +75,8 @@ const (
 	PlanCallProc
 	PlanAlterMigration
 	PlanRevertMigration
+	PlanShowMigrationLogs
+	PlanShowThrottledApps
 	NumPlans
 )
 
@@ -105,6 +108,8 @@ var planName = []string{
 	"CallProcedure",
 	"AlterMigration",
 	"RevertMigration",
+	"ShowMigrationLogs",
+	"ShowThrottledApps",
 }
 
 func (pt PlanType) String() string {
@@ -149,19 +154,19 @@ func (pt PlanType) MarshalJSON() ([]byte, error) {
 // Plan contains the parameters for executing a request.
 type Plan struct {
 	PlanID PlanType
-	Table  *schema.Table
+	// When the query indicates a single table
+	Table *schema.Table
+	// SELECT, UPDATE, DELETE statements may list multiple tables
+	AllTables []*schema.Table
 
 	// Permissions stores the permissions for the tables accessed in the query.
 	Permissions []Permission
-
-	// FieldQuery is used to fetch field info
-	FieldQuery *sqlparser.ParsedQuery
 
 	// FullQuery will be set for all plans.
 	FullQuery *sqlparser.ParsedQuery
 
 	// NextCount stores the count for "select next".
-	NextCount sqltypes.PlanValue
+	NextCount evalengine.Expr
 
 	// WhereClause is set for DMLs. It is used by the hot row protection
 	// to serialize e.g. UPDATEs going to the same row.
@@ -172,32 +177,45 @@ type Plan struct {
 }
 
 // TableName returns the table name for the plan.
-func (plan *Plan) TableName() sqlparser.TableIdent {
-	var tableName sqlparser.TableIdent
+func (plan *Plan) TableName() sqlparser.IdentifierCS {
+	var tableName sqlparser.IdentifierCS
 	if plan.Table != nil {
 		tableName = plan.Table.Name
 	}
 	return tableName
 }
 
+// TableNames returns the table names for all tables in the plan.
+func (plan *Plan) TableNames() (names []string) {
+	if len(plan.AllTables) == 0 {
+		tableName := plan.TableName()
+		return []string{tableName.String()}
+	}
+	for _, table := range plan.AllTables {
+		names = append(names, table.Name.String())
+	}
+	return names
+}
+
 // Build builds a plan based on the schema.
 func Build(statement sqlparser.Statement, tables map[string]*schema.Table, isReservedConn bool, dbName string) (plan *Plan, err error) {
-	if !isReservedConn {
-		err = checkForPoolingUnsafeConstructs(statement)
-		if err != nil {
-			return nil, err
-		}
-	}
-
 	switch stmt := statement.(type) {
 	case *sqlparser.Union:
 		plan, err = &Plan{
-			PlanID:     PlanSelect,
-			FieldQuery: GenerateFieldQuery(stmt),
-			FullQuery:  GenerateLimitQuery(stmt),
+			PlanID:    PlanSelect,
+			FullQuery: GenerateLimitQuery(stmt),
 		}, nil
 	case *sqlparser.Select:
 		plan, err = analyzeSelect(stmt, tables)
+		if err != nil {
+			return nil, err
+		}
+		if plan != nil && plan.PlanID != PlanSelectImpossible && !isReservedConn {
+			err = checkForPoolingUnsafeConstructs(statement)
+			if err != nil {
+				return nil, err
+			}
+		}
 	case *sqlparser.Insert:
 		plan, err = analyzeInsert(stmt, tables)
 	case *sqlparser.Update:
@@ -205,6 +223,9 @@ func Build(statement sqlparser.Statement, tables map[string]*schema.Table, isRes
 	case *sqlparser.Delete:
 		plan, err = analyzeDelete(stmt, tables)
 	case *sqlparser.Set:
+		if !isReservedConn {
+			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s not allowed without a reserved connections", sqlparser.String(stmt))
+		}
 		plan, err = analyzeSet(stmt), nil
 	case sqlparser.DDLStatement:
 		// DDLs and some other statements below don't get fully parsed.
@@ -220,6 +241,10 @@ func Build(statement sqlparser.Statement, tables map[string]*schema.Table, isRes
 		plan, err = &Plan{PlanID: PlanAlterMigration, FullStmt: stmt}, nil
 	case *sqlparser.RevertMigration:
 		plan, err = &Plan{PlanID: PlanRevertMigration, FullStmt: stmt}, nil
+	case *sqlparser.ShowMigrationLogs:
+		plan, err = &Plan{PlanID: PlanShowMigrationLogs, FullStmt: stmt}, nil
+	case *sqlparser.ShowThrottledApps:
+		plan, err = &Plan{PlanID: PlanShowThrottledApps, FullStmt: stmt}, nil
 	case *sqlparser.Show:
 		plan, err = analyzeShow(stmt, dbName)
 	case *sqlparser.OtherRead, sqlparser.Explain:
@@ -270,10 +295,7 @@ func BuildStreaming(sql string, tables map[string]*schema.Table, isReservedConn 
 
 	switch stmt := statement.(type) {
 	case *sqlparser.Select:
-		if stmt.Lock != sqlparser.NoLock {
-			return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "select with lock not allowed for streaming")
-		}
-		plan.Table = lookupTable(stmt.From, tables)
+		plan.Table, plan.AllTables = lookupTables(stmt.From, tables)
 	case *sqlparser.OtherRead, *sqlparser.Show, *sqlparser.Union, *sqlparser.CallProc, sqlparser.Explain:
 		// pass
 	default:
@@ -311,18 +333,22 @@ func checkForPoolingUnsafeConstructs(expr sqlparser.SQLNode) error {
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s not allowed without a reserved connections", sqlparser.String(node))
 	}
 
-	return sqlparser.Walk(func(in sqlparser.SQLNode) (kontinue bool, err error) {
-		switch node := in.(type) {
-		case *sqlparser.Set:
-			return false, genError(node)
-		case *sqlparser.FuncExpr:
-			if sqlparser.IsLockingFunc(node) {
-				return false, genError(node)
-			}
-		}
+	if _, isSetStmt := expr.(*sqlparser.Set); isSetStmt {
+		return genError(expr)
+	}
 
-		// TODO: This could be smarter about not walking down parts of the AST that can't contain
-		// function calls.
+	sel, isSel := expr.(*sqlparser.Select)
+	if !isSel {
+		return nil
+	}
+	return sqlparser.Walk(func(in sqlparser.SQLNode) (kontinue bool, err error) {
+		lFunc, isLFunc := in.(*sqlparser.LockingFunc)
+		if !isLFunc {
+			return true, nil
+		}
+		if lFunc.Type == sqlparser.GetLock {
+			return false, genError(lFunc)
+		}
 		return true, nil
-	}, expr)
+	}, sel.SelectExprs)
 }

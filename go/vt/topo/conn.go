@@ -73,6 +73,12 @@ type Conn interface {
 	// Can return ErrNoNode if the file doesn't exist.
 	Get(ctx context.Context, filePath string) ([]byte, Version, error)
 
+	// List returns KV pairs, along with metadata like the version, for
+	// entries where the key contains the specified prefix.
+	// filePathPrefix is a path relative to the root directory of the cell.
+	// Can return ErrNoNode if there are no matches.
+	List(ctx context.Context, filePathPrefix string) ([]KVInfo, error)
+
 	// Delete deletes the provided file.
 	// If version is nil, it is an unconditional delete.
 	// If the last entry of a directory is deleted, using ListDir
@@ -155,21 +161,21 @@ type Conn interface {
 	Watch(ctx context.Context, filePath string) (current *WatchData, changes <-chan *WatchData, cancel CancelFunc)
 
 	//
-	// Master election methods. This is meant to have a small
-	// number of processes elect a master within a group. The
+	// Leader election methods. This is meant to have a small
+	// number of processes elect a primary within a group. The
 	// backend storage for this can either be the global topo
 	// server, or a resilient quorum of individual cells, to
 	// reduce the load / dependency on the global topo server.
 	//
 
-	// NewMasterParticipation creates a MasterParticipation
-	// object, used to become the Master in an election for the
+	// NewLeaderParticipation creates a LeaderParticipation
+	// object, used to become the Leader in an election for the
 	// provided group name.  Id is the name of the local process,
 	// passing in the hostname:port of the current process as id
 	// is the common usage. Id must be unique for each process
 	// calling this, for a given name. Calling this function does
 	// not make the current process a candidate for the election.
-	NewMasterParticipation(name, id string) (MasterParticipation, error)
+	NewLeaderParticipation(name, id string) (LeaderParticipation, error)
 
 	// Close closes the connection to the server.
 	Close()
@@ -198,7 +204,7 @@ type DirEntry struct {
 
 	// Ephemeral is set if the directory / file only contains
 	// data that was not set by the file API, like lock files
-	// or master-election related files.
+	// or primary-election related files.
 	// Only filled in if full is true.
 	Ephemeral bool
 }
@@ -270,21 +276,33 @@ type WatchData struct {
 	Err error
 }
 
-// MasterParticipation is the object returned by NewMasterParticipation.
+// KVInfo is a structure that contains a generic key/value pair from
+// the topo server, along with important metadata about it.
+// This should be used to provide multiple entries in List like calls
+// that return N KVs based on a key prefix, so that you don't lose
+// information or context you would otherwise have when using Get for
+// a single key.
+type KVInfo struct {
+	Key     []byte
+	Value   []byte
+	Version Version // version - used to prevent stomping concurrent writes
+}
+
+// LeaderParticipation is the object returned by NewLeaderParticipation.
 // Sample usage:
 //
-// mp := server.NewMasterParticipation("vtctld", "hostname:8080")
+// mp := server.NewLeaderParticipation("vtctld", "hostname:8080")
 // job := NewJob()
 // go func() {
 //   for {
-//     ctx, err := mp.WaitForMastership()
+//     ctx, err := mp.WaitForLeadership()
 //     switch err {
 //     case nil:
 //       job.RunUntilContextDone(ctx)
 //     case topo.ErrInterrupted:
 //       return
 //     default:
-//       log.Errorf("Got error while waiting for master, will retry in 5s: %v", err)
+//       log.Errorf("Got error while waiting for primary, will retry in 5s: %v", err)
 //       time.Sleep(5 * time.Second)
 //     }
 //   }
@@ -294,34 +312,34 @@ type WatchData struct {
 //   if job.Running() {
 //     job.WriteStatus(w, r)
 //   } else {
-//     http.Redirect(w, r, mp.GetCurrentMasterID(context.Background()), http.StatusFound)
+//     http.Redirect(w, r, mp.GetCurrentLeaderID(context.Background()), http.StatusFound)
 //   }
 // })
 //
 // servenv.OnTermSync(func() {
 //   mp.Stop()
 // })
-type MasterParticipation interface {
-	// WaitForMastership makes the current process a candidate
-	// for election, and waits until this process is the master.
-	// After we become the master, we may lose mastership. In that case,
+type LeaderParticipation interface {
+	// WaitForLeadership makes the current process a candidate
+	// for election, and waits until this process is the primary.
+	// After we become the primary, we may lose primaryship. In that case,
 	// the returned context will be canceled. If Stop was called,
-	// WaitForMastership will return nil, ErrInterrupted.
-	WaitForMastership() (context.Context, error)
+	// WaitForLeadership will return nil, ErrInterrupted.
+	WaitForLeadership() (context.Context, error)
 
 	// Stop is called when we don't want to participate in the
-	// master election any more. Typically, that is when the
+	// primary election any more. Typically, that is when the
 	// hosting process is terminating.  We will relinquish
-	// mastership at that point, if we had it. Stop should
+	// primaryship at that point, if we had it. Stop should
 	// not return until everything has been done.
-	// The MasterParticipation object should be discarded
-	// after Stop has been called. Any call to WaitForMastership
+	// The LeaderParticipation object should be discarded
+	// after Stop has been called. Any call to WaitForLeadership
 	// after Stop() will return nil, ErrInterrupted.
-	// If WaitForMastership() was running, it will return
+	// If WaitForLeadership() was running, it will return
 	// nil, ErrInterrupted as soon as possible.
 	Stop()
 
-	// GetCurrentMasterID returns the current master id.
+	// GetCurrentLeaderID returns the current primary id.
 	// This may not work after Stop has been called.
-	GetCurrentMasterID(ctx context.Context) (string, error)
+	GetCurrentLeaderID(ctx context.Context) (string, error)
 }

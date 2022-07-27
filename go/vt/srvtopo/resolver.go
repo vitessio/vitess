@@ -19,6 +19,8 @@ package srvtopo
 import (
 	"sort"
 
+	"vitess.io/vitess/go/sqltypes"
+
 	"context"
 
 	"google.golang.org/protobuf/proto"
@@ -165,6 +167,83 @@ func (r *Resolver) GetAllKeyspaces(ctx context.Context) ([]string, error) {
 	// But the tests depend on this behavior now.
 	sort.Strings(keyspaces)
 	return keyspaces, nil
+}
+
+// ResolveDestinationsMultiCol resolves values and their destinations into their
+// respective shards for multi col vindex.
+//
+// If ids is nil, the returned [][][]sqltypes.Value is also nil.
+// Otherwise, len(ids) has to match len(destinations), and then the returned
+// [][][]sqltypes.Value is populated with all the values that go in each shard,
+// and len([]*ResolvedShard) matches len([][][]sqltypes.Value).
+//
+// Sample input / output:
+// - destinations: dst1, 			dst2, 		dst3
+// - ids:          [id1a,id1b],  [id2a,id2b],  [id3a,id3b]
+// If dst1 is in shard1, and dst2 and dst3 are in shard2, the output will be:
+// - []*ResolvedShard:   shard1, 			shard2
+// - [][][]sqltypes.Value: [[id1a,id1b]],  [[id2a,id2b], [id3a,id3b]]
+func (r *Resolver) ResolveDestinationsMultiCol(ctx context.Context, keyspace string, tabletType topodatapb.TabletType, ids [][]sqltypes.Value, destinations []key.Destination) ([]*ResolvedShard, [][][]sqltypes.Value, error) {
+	keyspace, _, allShards, err := r.GetKeyspaceShards(ctx, keyspace, tabletType)
+	if err != nil {
+		return nil, nil, err
+	}
+	accumulator := &resultAcc{
+		resolved:   make(map[string]int),
+		resolver:   r,
+		ids:        ids,
+		keyspace:   keyspace,
+		tabletType: tabletType,
+	}
+
+	for i, destination := range destinations {
+		if err := destination.Resolve(allShards, accumulator.resolveShard(i)); err != nil {
+			return nil, nil, err
+		}
+	}
+	return accumulator.shards, accumulator.values, nil
+}
+
+type resultAcc struct {
+	shards     []*ResolvedShard
+	values     [][][]sqltypes.Value
+	resolved   map[string]int
+	resolver   *Resolver
+	ids        [][]sqltypes.Value
+	keyspace   string
+	tabletType topodatapb.TabletType
+}
+
+// resolveShard is called once per shard that is resolved. It will keep track of which shards that are
+// the destinations resolved, and the values that are bound to each shard
+func (acc *resultAcc) resolveShard(idx int) func(shard string) error {
+	return func(shard string) error {
+		offsetInValues, ok := acc.resolved[shard]
+		if !ok {
+			target := &querypb.Target{
+				Keyspace:   acc.keyspace,
+				Shard:      shard,
+				TabletType: acc.tabletType,
+			}
+			// Right now we always set the Cell to ""
+			// Later we can fallback to another cell if needed.
+			// We would then need to read the SrvKeyspace there too.
+			target.Cell = ""
+			offsetInValues = len(acc.shards)
+			acc.shards = append(acc.shards, &ResolvedShard{
+				Target:  target,
+				Gateway: acc.resolver.gateway,
+			})
+			if acc.ids != nil {
+				acc.values = append(acc.values, nil)
+			}
+			acc.resolved[shard] = offsetInValues
+		}
+		if acc.ids != nil {
+			acc.values[offsetInValues] = append(acc.values[offsetInValues], acc.ids[idx])
+		}
+		return nil
+	}
 }
 
 // ResolveDestinations resolves values and their destinations into their

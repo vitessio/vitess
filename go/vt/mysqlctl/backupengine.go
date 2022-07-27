@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -57,7 +56,7 @@ type BackupParams struct {
 	Concurrency int
 	// Extra env variables for pre-backup and post-backup transform hooks
 	HookExtraEnv map[string]string
-	// TopoServer, Keyspace and Shard are used to discover master tablet
+	// TopoServer, Keyspace and Shard are used to discover primary tablet
 	TopoServer *topo.Server
 	// Keyspace and Shard are used to infer the directory where backups should be stored
 	Keyspace string
@@ -155,7 +154,7 @@ func GetBackupManifest(ctx context.Context, backup backupstorage.BackupHandle) (
 }
 
 // getBackupManifestInto fetches and decodes a MANIFEST file into the specified object.
-func getBackupManifestInto(ctx context.Context, backup backupstorage.BackupHandle, outManifest interface{}) error {
+func getBackupManifestInto(ctx context.Context, backup backupstorage.BackupHandle, outManifest any) error {
 	file, err := backup.ReadFile(ctx, backupManifestFileName)
 	if err != nil {
 		return vterrors.Wrap(err, "can't read MANIFEST")
@@ -217,8 +216,12 @@ func FindBackupToRestore(ctx context.Context, params RestoreParams, bhs []backup
 				continue
 			}
 		}
-		if !checkBackupTime /* not snapshot */ || backupTime.Equal(params.StartTime) || backupTime.Before(params.StartTime) {
-			params.Logger.Infof("Restore: found backup %v %v to restore", bh.Directory(), bh.Name())
+		if !checkBackupTime || backupTime.Equal(params.StartTime) || backupTime.Before(params.StartTime) {
+			if !checkBackupTime {
+				params.Logger.Infof("Restore: found latest backup %v %v to restore", bh.Directory(), bh.Name())
+			} else {
+				params.Logger.Infof("Restore: found backup %v %v to restore using the specified timestamp of '%v'", bh.Directory(), bh.Name(), params.StartTime.Format(BackupTimestampFormat))
+			}
 			break
 		}
 	}
@@ -303,7 +306,7 @@ func isDbDir(p string) bool {
 	}
 
 	// Look for at least one database file
-	fis, err := ioutil.ReadDir(p)
+	fis, err := os.ReadDir(p)
 	if err != nil {
 		return false
 	}
@@ -336,11 +339,16 @@ func addDirectory(fes []FileEntry, base string, baseDir string, subDir string) (
 	p := path.Join(baseDir, subDir)
 	var size int64
 
-	fis, err := ioutil.ReadDir(p)
+	entries, err := os.ReadDir(p)
 	if err != nil {
 		return nil, 0, err
 	}
-	for _, fi := range fis {
+	for _, entry := range entries {
+		fi, err := entry.Info()
+		if err != nil {
+			return nil, 0, err
+		}
+
 		fes = append(fes, FileEntry{
 			Base: base,
 			Name: path.Join(subDir, fi.Name()),
@@ -393,7 +401,7 @@ func findFilesToBackup(cnf *Mycnf) ([]FileEntry, int64, error) {
 	totalSize = totalSize + size
 
 	// then add DB directories
-	fis, err := ioutil.ReadDir(cnf.DataDir)
+	fis, err := os.ReadDir(cnf.DataDir)
 	if err != nil {
 		return nil, 0, err
 	}

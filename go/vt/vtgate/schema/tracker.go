@@ -21,6 +21,11 @@ import (
 	"sync"
 	"time"
 
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+
+	"vitess.io/vitess/go/vt/callerid"
+
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 
 	"vitess.io/vitess/go/mysql"
@@ -56,10 +61,20 @@ type (
 // defaultConsumeDelay is the default time, the updateController will wait before checking the schema fetch request queue.
 const defaultConsumeDelay = 1 * time.Second
 
+// aclErrorMessageLog is for logging a warning when an acl error message is received for querying schema tracking table.
+const aclErrorMessageLog = "Table ACL might be enabled, --schema_change_signal_user needs to be passed to VTGate for schema tracking to work. Check 'schema tracking' docs on vitess.io"
+
 // NewTracker creates the tracker object.
-func NewTracker(ch chan *discovery.TabletHealth) *Tracker {
+func NewTracker(ch chan *discovery.TabletHealth, user *string) *Tracker {
+	ctx := context.Background()
+	// Set the caller on the context if the user is provided.
+	// This user that will be sent down to vttablet calls.
+	if user != nil && *user != "" {
+		ctx = callerid.NewContext(ctx, nil, callerid.NewImmediateCallerID(*user))
+	}
+
 	return &Tracker{
-		ctx:          context.Background(),
+		ctx:          ctx,
 		ch:           ch,
 		tables:       &tableMap{m: map[keyspaceStr]map[tableNameStr][]vindexes.Column{}},
 		tracked:      map[keyspaceStr]*updateController{},
@@ -69,22 +84,27 @@ func NewTracker(ch chan *discovery.TabletHealth) *Tracker {
 
 // LoadKeyspace loads the keyspace schema.
 func (t *Tracker) LoadKeyspace(conn queryservice.QueryService, target *querypb.Target) error {
-	res, err := conn.Execute(context.Background(), target, mysql.FetchTables, nil, 0, 0, nil)
+	res, err := conn.Execute(t.ctx, target, mysql.FetchTables, nil, 0, 0, nil)
 	if err != nil {
 		return err
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	// We must clear out any previous schema before loading it here as this is called
+	// whenever a shard's primary tablet starts and sends the initial signal. Without
+	// clearing out the previous schema we can end up with duplicate entries when the
+	// tablet is simply restarted or potentially when we elect a new primary.
+	t.clearKeyspaceTables(target.Keyspace)
 	t.updateTables(target.Keyspace, res)
 	t.tracked[target.Keyspace].setLoaded(true)
-	log.Infof("finished loading schema for keyspace %s. Found %d tables", target.Keyspace, len(res.Rows))
+	log.Infof("finished loading schema for keyspace %s. Found %d columns in total across the tables", target.Keyspace, len(res.Rows))
 	return nil
 }
 
 // Start starts the schema tracking.
 func (t *Tracker) Start() {
 	log.Info("Starting schema tracking")
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.ctx)
 	t.cancel = cancel
 	go func(ctx context.Context, t *Tracker) {
 		for {
@@ -118,13 +138,17 @@ func (t *Tracker) newUpdateController() *updateController {
 	return &updateController{update: t.updateSchema, reloadKeyspace: t.initKeyspace, signal: t.signal, consumeDelay: t.consumeDelay}
 }
 
-func (t *Tracker) initKeyspace(th *discovery.TabletHealth) bool {
+func (t *Tracker) initKeyspace(th *discovery.TabletHealth) error {
 	err := t.LoadKeyspace(th.Conn, th.Target)
 	if err != nil {
-		log.Warningf("Unable to add keyspace to tracker: %v", err)
-		return false
+		log.Warningf("Unable to add the %s keyspace to the schema tracker: %v", th.Target.Keyspace, err)
+		code := vterrors.Code(err)
+		if code == vtrpcpb.Code_UNAUTHENTICATED || code == vtrpcpb.Code_PERMISSION_DENIED {
+			log.Warning(aclErrorMessageLog)
+		}
+		return err
 	}
-	return true
+	return nil
 }
 
 // Stop stops the schema tracking
@@ -167,6 +191,10 @@ func (t *Tracker) updateSchema(th *discovery.TabletHealth) bool {
 		t.tracked[th.Target.Keyspace].setLoaded(false)
 		// TODO: optimize for the tables that got errored out.
 		log.Warningf("error fetching new schema for %v, making them non-authoritative: %v", tablesUpdated, err)
+		code := vterrors.Code(err)
+		if code == vtrpcpb.Code_UNAUTHENTICATED || code == vtrpcpb.Code_PERMISSION_DENIED {
+			log.Warning(aclErrorMessageLog)
+		}
 		return false
 	}
 
@@ -187,9 +215,10 @@ func (t *Tracker) updateTables(keyspace string, res *sqltypes.Result) {
 		tbl := row[0].ToString()
 		colName := row[1].ToString()
 		colType := row[2].ToString()
+		collation := row[3].ToString()
 
 		cType := sqlparser.ColumnType{Type: colType}
-		col := vindexes.Column{Name: sqlparser.NewColIdent(colName), Type: cType.SQLType()}
+		col := vindexes.Column{Name: sqlparser.NewIdentifierCI(colName), Type: cType.SQLType(), CollationName: collation}
 		cols := t.tables.get(keyspace, tbl)
 
 		t.tables.set(keyspace, tbl, append(cols, col))
@@ -208,8 +237,13 @@ func (t *Tracker) RegisterSignalReceiver(f func()) {
 
 // AddNewKeyspace adds keyspace to the tracker.
 func (t *Tracker) AddNewKeyspace(conn queryservice.QueryService, target *querypb.Target) error {
-	t.tracked[target.Keyspace] = t.newUpdateController()
-	return t.LoadKeyspace(conn, target)
+	updateController := t.newUpdateController()
+	t.tracked[target.Keyspace] = updateController
+	err := t.LoadKeyspace(conn, target)
+	if err != nil {
+		updateController.setIgnore(checkIfWeShouldIgnoreKeyspace(err))
+	}
+	return err
 }
 
 type tableMap struct {
@@ -239,4 +273,13 @@ func (tm *tableMap) delete(ks, tbl string) {
 		return
 	}
 	delete(m, tbl)
+}
+
+// This empties out any previous schema for for all tables in a keyspace.
+// You should call this before initializing/loading a keyspace of the same
+// name in the cache.
+func (t *Tracker) clearKeyspaceTables(ks string) {
+	if t.tables != nil && t.tables.m != nil {
+		delete(t.tables.m, ks)
+	}
 }

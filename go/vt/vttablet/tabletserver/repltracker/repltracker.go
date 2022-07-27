@@ -25,6 +25,7 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/heartbeat"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
@@ -53,8 +54,8 @@ type ReplTracker struct {
 	mode           string
 	forceHeartbeat bool
 
-	mu       sync.Mutex
-	isMaster bool
+	mu        sync.Mutex
+	isPrimary bool
 
 	hw     *heartbeatWriter
 	hr     *heartbeatReader
@@ -72,6 +73,11 @@ func NewReplTracker(env tabletenv.Env, alias *topodatapb.TabletAlias) *ReplTrack
 	}
 }
 
+// HeartbeatWriter returns the heartbeat writer used by this tracker
+func (rt *ReplTracker) HeartbeatWriter() heartbeat.HeartbeatWriter {
+	return rt.hw
+}
+
 // InitDBConfig initializes the target name.
 func (rt *ReplTracker) InitDBConfig(target *querypb.Target, mysqld mysqlctl.MysqlDaemon) {
 	rt.hw.InitDBConfig(target)
@@ -79,13 +85,13 @@ func (rt *ReplTracker) InitDBConfig(target *querypb.Target, mysqld mysqlctl.Mysq
 	rt.poller.InitDBConfig(mysqld)
 }
 
-// MakeMaster must be called if the tablet type becomes MASTER.
-func (rt *ReplTracker) MakeMaster() {
+// MakePrimary must be called if the tablet type becomes PRIMARY.
+func (rt *ReplTracker) MakePrimary() {
 	rt.mu.Lock()
 	defer rt.mu.Unlock()
-	log.Info("Replication Tracker: going into master mode")
+	log.Info("Replication Tracker: going into primary mode")
 
-	rt.isMaster = true
+	rt.isPrimary = true
 	if rt.mode == tabletenv.Heartbeat {
 		rt.hr.Close()
 		rt.hw.Open()
@@ -95,13 +101,13 @@ func (rt *ReplTracker) MakeMaster() {
 	}
 }
 
-// MakeNonMaster must be called if the tablet type becomes non-MASTER.
-func (rt *ReplTracker) MakeNonMaster() {
+// MakeNonPrimary must be called if the tablet type becomes non-PRIMARY.
+func (rt *ReplTracker) MakeNonPrimary() {
 	rt.mu.Lock()
 	defer rt.mu.Unlock()
-	log.Info("Replication Tracker: going into non-master mode")
+	log.Info("Replication Tracker: going into non-primary mode")
 
-	rt.isMaster = false
+	rt.isPrimary = false
 	switch rt.mode {
 	case tabletenv.Heartbeat:
 		rt.hw.Close()
@@ -128,7 +134,7 @@ func (rt *ReplTracker) Status() (time.Duration, error) {
 	defer rt.mu.Unlock()
 
 	switch {
-	case rt.isMaster || rt.mode == tabletenv.Disable:
+	case rt.isPrimary || rt.mode == tabletenv.Disable:
 		return 0, nil
 	case rt.mode == tabletenv.Heartbeat:
 		return rt.hr.Status()

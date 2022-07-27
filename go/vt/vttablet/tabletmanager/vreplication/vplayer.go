@@ -66,6 +66,8 @@ type vplayer struct {
 	canAcceptStmtEvents bool
 
 	phase string
+
+	throttlerAppName string
 }
 
 // newVPlayer creates a new vplayer. Parameters:
@@ -84,15 +86,16 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 		saveStop = false
 	}
 	return &vplayer{
-		vr:            vr,
-		startPos:      settings.StartPos,
-		pos:           settings.StartPos,
-		stopPos:       settings.StopPos,
-		saveStop:      saveStop,
-		copyState:     copyState,
-		timeLastSaved: time.Now(),
-		tablePlans:    make(map[string]*TablePlan),
-		phase:         phase,
+		vr:               vr,
+		startPos:         settings.StartPos,
+		pos:              settings.StartPos,
+		stopPos:          settings.StopPos,
+		saveStop:         saveStop,
+		copyState:        copyState,
+		timeLastSaved:    time.Now(),
+		tablePlans:       make(map[string]*TablePlan),
+		phase:            phase,
+		throttlerAppName: vr.throttlerAppName(),
 	}
 }
 
@@ -106,7 +109,7 @@ func (vp *vplayer) play(ctx context.Context) error {
 		return nil
 	}
 
-	plan, err := buildReplicatorPlan(vp.vr.source.Filter, vp.vr.colInfoMap, vp.copyState, vp.vr.stats)
+	plan, err := buildReplicatorPlan(vp.vr.source, vp.vr.colInfoMap, vp.copyState, vp.vr.stats)
 	if err != nil {
 		vp.vr.stats.ErrorCounts.Add([]string{"Plan"}, 1)
 		return err
@@ -251,18 +254,7 @@ func (vp *vplayer) updatePos(ts int64) (posReached bool, err error) {
 	return posReached, nil
 }
 
-func (vp *vplayer) updateCurrentTime(tm int64) error {
-	update, err := binlogplayer.GenerateUpdateTime(vp.vr.id, tm)
-	if err != nil {
-		return err
-	}
-	if _, err := vp.vr.dbClient.Execute(update); err != nil {
-		return fmt.Errorf("error %v updating time", err)
-	}
-	return nil
-}
-
-func (vp *vplayer) mustUpdateCurrentTime() bool {
+func (vp *vplayer) mustUpdateHeartbeat() bool {
 	return vp.numAccumulatedHeartbeats >= *vreplicationHeartbeatUpdateInterval ||
 		vp.numAccumulatedHeartbeats >= vreplicationMinimumHeartbeatUpdateInterval
 }
@@ -270,11 +262,11 @@ func (vp *vplayer) mustUpdateCurrentTime() bool {
 func (vp *vplayer) recordHeartbeat() error {
 	tm := time.Now().Unix()
 	vp.vr.stats.RecordHeartbeat(tm)
-	if !vp.mustUpdateCurrentTime() {
+	if !vp.mustUpdateHeartbeat() {
 		return nil
 	}
 	vp.numAccumulatedHeartbeats = 0
-	return vp.updateCurrentTime(tm)
+	return vp.vr.updateHeartbeatTime(tm)
 }
 
 // applyEvents is the main thread that applies the events. It has the following use
@@ -285,7 +277,7 @@ func (vp *vplayer) recordHeartbeat() error {
 // * OTHER event: the current position of the event is saved.
 // * JOURNAL event: if the event is relevant to the current stream, invoke registerJournal
 //   of the engine, and terminate.
-// * HEARTBEAT: update SecondsBehindMaster.
+// * HEARTBEAT: update ReplicationLagSeconds.
 // * Empty transaction: The event is remembered as an unsavedEvent. If no commits
 //   happen for idleTimeout since timeLastSaved, the current position of the unsavedEvent
 //   is committed (updatePos).
@@ -328,15 +320,19 @@ func (vp *vplayer) recordHeartbeat() error {
 func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 	defer vp.vr.dbClient.Rollback()
 
-	// If we're not running, set SecondsBehindMaster to be very high.
+	// If we're not running, set ReplicationLagSeconds to be very high.
 	// TODO(sougou): if we also stored the time of the last event, we
 	// can estimate this value more accurately.
-	defer vp.vr.stats.SecondsBehindMaster.Set(math.MaxInt64)
+	defer vp.vr.stats.ReplicationLagSeconds.Set(math.MaxInt64)
 	defer vp.vr.stats.VReplicationLags.Add(strconv.Itoa(int(vp.vr.id)), math.MaxInt64)
 	var sbm int64 = -1
 	for {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
 		// check throttler.
-		if !vp.vr.vre.throttlerClient.ThrottleCheckOKOrWait(ctx) {
+		if !vp.vr.vre.throttlerClient.ThrottleCheckOKOrWaitAppName(ctx, vp.throttlerAppName) {
+			_ = vp.vr.updateTimeThrottled(VPlayerComponentName)
 			continue
 		}
 
@@ -348,7 +344,7 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 		// So, we should assume we're falling behind.
 		if len(items) == 0 {
 			behind := time.Now().UnixNano() - vp.lastTimestampNs - vp.timeOffsetNs
-			vp.vr.stats.SecondsBehindMaster.Set(behind / 1e9)
+			vp.vr.stats.ReplicationLagSeconds.Set(behind / 1e9)
 			vp.vr.stats.VReplicationLags.Add(strconv.Itoa(int(vp.vr.id)), time.Duration(behind/1e9)*time.Second)
 		}
 		// Empty transactions are saved at most once every idleTimeout.
@@ -402,8 +398,9 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 				}
 			}
 		}
+
 		if sbm >= 0 {
-			vp.vr.stats.SecondsBehindMaster.Set(sbm)
+			vp.vr.stats.ReplicationLagSeconds.Set(sbm)
 			vp.vr.stats.VReplicationLags.Add(strconv.Itoa(int(vp.vr.id)), time.Duration(sbm)*time.Second)
 		}
 
@@ -484,8 +481,8 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		if sql == "" {
 			sql = event.Dml
 		}
-		// If the event is for one of the AWS RDS "special" tables, we skip
-		if !strings.Contains(sql, " mysql.rds_") {
+		// If the event is for one of the AWS RDS "special" or pt-table-checksum tables, we skip
+		if !strings.Contains(sql, " mysql.rds_") && !strings.Contains(sql, " percona.checksums") {
 			// This is a player using statement based replication
 			if err := vp.vr.dbClient.Begin(); err != nil {
 				return err
@@ -626,10 +623,14 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		stats.Send(fmt.Sprintf("%v", event.Journal))
 		return io.EOF
 	case binlogdatapb.VEventType_HEARTBEAT:
+		if event.Throttled {
+			if err := vp.vr.updateTimeThrottled(VStreamerComponentName); err != nil {
+				return err
+			}
+		}
 		if !vp.vr.dbClient.InTransaction {
 			vp.numAccumulatedHeartbeats++
-			err := vp.recordHeartbeat()
-			if err != nil {
+			if err := vp.recordHeartbeat(); err != nil {
 				return err
 			}
 		}

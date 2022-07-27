@@ -17,25 +17,26 @@ limitations under the License.
 package cluster
 
 import (
+	"io/ioutil"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gopkg.in/yaml.v2"
 )
 
-func TestFileConfigUnmarshalYAML(t *testing.T) {
+func TestFileConfigFromViper(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
 		name   string
-		yaml   string
+		data   string
 		config FileConfig
 		err    error
 	}{
 		{
-			name: "simple",
-			yaml: `defaults:
+			name: "clusters.yaml",
+			data: `defaults:
     discovery: consul
     discovery-consul-vtctld-datacenter-tmpl: "dev-{{ .Cluster.Name }}"
     discovery-consul-vtctld-service-name: vtctld-svc
@@ -91,29 +92,147 @@ clusters:
 			},
 			err: nil,
 		},
+		{
+			name: "clusters.json",
+			data: `{
+	"defaults": {
+		"discovery": "consul",
+		"discovery-consul-vtctld-datacenter-tmpl": "dev-{{ .Cluster.Name }}",
+		"discovery-consul-vtctld-service-name": "vtctld-svc",
+		"discovery-consul-vtctld-addr-tmpl": "{{ .Hostname }}.example.com:15000",
+		"discovery-consul-vtgate-datacenter-tmpl": "dev-{{ .Cluster.Name }}",
+		"discovery-consul-vtgate-service-name": "vtgate-svc",
+		"discovery-consul-vtgate-pool-tag": "type",
+		"discovery-consul-vtgate-cell-tag": "zone",
+		"discovery-consul-vtgate-addr-tmpl": "{{ .Hostname }}.example.com:15999"
+	},
+	"clusters": {
+		"c1": {
+			"name": "testcluster1",
+			"discovery-consul-vtgate-datacenter-tmpl": "dev-{{ .Cluster.Name }}-test"
+		},
+		"c2": {
+			"name": "devcluster"
+		}
+	}
+}`,
+			config: FileConfig{
+				Defaults: Config{
+					DiscoveryImpl: "consul",
+					DiscoveryFlagsByImpl: map[string]map[string]string{
+						"consul": {
+							"vtctld-datacenter-tmpl": "dev-{{ .Cluster.Name }}",
+							"vtctld-service-name":    "vtctld-svc",
+							"vtctld-addr-tmpl":       "{{ .Hostname }}.example.com:15000",
+							"vtgate-datacenter-tmpl": "dev-{{ .Cluster.Name }}",
+							"vtgate-service-name":    "vtgate-svc",
+							"vtgate-pool-tag":        "type",
+							"vtgate-cell-tag":        "zone",
+							"vtgate-addr-tmpl":       "{{ .Hostname }}.example.com:15999",
+						},
+					},
+				},
+				Clusters: map[string]Config{
+					"c1": {
+						ID:   "c1",
+						Name: "testcluster1",
+						DiscoveryFlagsByImpl: map[string]map[string]string{
+							"consul": {
+								"vtgate-datacenter-tmpl": "dev-{{ .Cluster.Name }}-test",
+							},
+						},
+						VtSQLFlags:  map[string]string{},
+						VtctldFlags: map[string]string{},
+					},
+					"c2": {
+						ID:                   "c2",
+						Name:                 "devcluster",
+						DiscoveryFlagsByImpl: map[string]map[string]string{},
+						VtSQLFlags:           map[string]string{},
+						VtctldFlags:          map[string]string{},
+					},
+				},
+			},
+			err: nil,
+		},
+		{
+			name: "clusters.toml",
+			data: `[defaults]
+discovery="consul"
+discovery-consul-vtctld-datacenter-tmpl="dev-{{ .Cluster.Name }}"
+discovery-consul-vtctld-service-name="vtctld-svc"
+discovery-consul-vtctld-addr-tmpl="{{ .Hostname }}.example.com:15000"
+discovery-consul-vtgate-datacenter-tmpl="dev-{{ .Cluster.Name }}"
+discovery-consul-vtgate-service-name="vtgate-svc"
+discovery-consul-vtgate-pool-tag="type"
+discovery-consul-vtgate-cell-tag="zone"
+discovery-consul-vtgate-addr-tmpl="{{ .Hostname }}.example.com:15999"
+
+[clusters]
+[clusters.c1]
+name="testcluster1"
+discovery-consul-vtgate-datacenter-tmpl="dev-{{ .Cluster.Name }}-test"
+[clusters.c2]
+name="devcluster"`,
+			config: FileConfig{
+				Defaults: Config{
+					DiscoveryImpl: "consul",
+					DiscoveryFlagsByImpl: map[string]map[string]string{
+						"consul": {
+							"vtctld-datacenter-tmpl": "dev-{{ .Cluster.Name }}",
+							"vtctld-service-name":    "vtctld-svc",
+							"vtctld-addr-tmpl":       "{{ .Hostname }}.example.com:15000",
+							"vtgate-datacenter-tmpl": "dev-{{ .Cluster.Name }}",
+							"vtgate-service-name":    "vtgate-svc",
+							"vtgate-pool-tag":        "type",
+							"vtgate-cell-tag":        "zone",
+							"vtgate-addr-tmpl":       "{{ .Hostname }}.example.com:15999",
+						},
+					},
+				},
+				Clusters: map[string]Config{
+					"c1": {
+						ID:   "c1",
+						Name: "testcluster1",
+						DiscoveryFlagsByImpl: map[string]map[string]string{
+							"consul": {
+								"vtgate-datacenter-tmpl": "dev-{{ .Cluster.Name }}-test",
+							},
+						},
+						VtSQLFlags:  map[string]string{},
+						VtctldFlags: map[string]string{},
+					},
+					"c2": {
+						ID:                   "c2",
+						Name:                 "devcluster",
+						DiscoveryFlagsByImpl: map[string]map[string]string{},
+						VtSQLFlags:           map[string]string{},
+						VtctldFlags:          map[string]string{},
+					},
+				},
+			},
+			err: nil,
+		},
 	}
 
 	for _, tt := range tests {
 		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			cfg := FileConfig{
-				Defaults: Config{
-					DiscoveryFlagsByImpl: map[string]map[string]string{},
-				},
-				Clusters: map[string]Config{},
-			}
-
-			err := yaml.Unmarshal([]byte(tt.yaml), &cfg)
-			if tt.err != nil {
-				assert.Error(t, err)
-				return
-			}
-
+			f, err := os.CreateTemp(t.TempDir(), "*"+tt.name)
 			require.NoError(t, err)
-			assert.Equal(t, tt.config, cfg)
+
+			t.Cleanup(func() { os.Remove(f.Name()) })
+
+			err = ioutil.WriteFile(f.Name(), []byte(tt.data), 0777)
+			require.NoError(t, err)
+
+			fc := FileConfig{}
+			err = fc.Set(f.Name())
+			require.NoError(t, err)
+
+			assert.Equal(t, tt.config, fc)
 		})
 	}
 }

@@ -17,10 +17,9 @@ limitations under the License.
 package messager
 
 import (
+	"context"
 	"reflect"
 	"testing"
-
-	"context"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
@@ -146,26 +145,13 @@ func TestEngineGenerate(t *testing.T) {
 	engine.schemaChanged(map[string]*schema.Table{
 		"t1": meTable,
 	}, []string{"t1"}, nil, nil)
-	if _, _, err := engine.GenerateAckQuery("t1", []string{"1"}); err != nil {
+
+	if _, err := engine.GetGenerator("t1"); err != nil {
 		t.Error(err)
 	}
 	want := "message table t2 not found in schema"
-	if _, _, err := engine.GenerateAckQuery("t2", []string{"1"}); err == nil || err.Error() != want {
+	if _, err := engine.GetGenerator("t2"); err == nil || err.Error() != want {
 		t.Errorf("engine.GenerateAckQuery(invalid): %v, want %s", err, want)
-	}
-
-	if _, _, err := engine.GeneratePostponeQuery("t1", []string{"1"}); err != nil {
-		t.Error(err)
-	}
-	if _, _, err := engine.GeneratePostponeQuery("t2", []string{"1"}); err == nil || err.Error() != want {
-		t.Errorf("engine.GeneratePostponeQuery(invalid): %v, want %s", err, want)
-	}
-
-	if _, _, err := engine.GeneratePurgeQuery("t1", 0); err != nil {
-		t.Error(err)
-	}
-	if _, _, err := engine.GeneratePurgeQuery("t2", 0); err == nil || err.Error() != want {
-		t.Errorf("engine.GeneratePurgeQuery(invalid): %v, want %s", err, want)
 	}
 }
 

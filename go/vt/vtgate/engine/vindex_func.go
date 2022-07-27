@@ -17,9 +17,11 @@ limitations under the License.
 package engine
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -28,6 +30,7 @@ import (
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 var _ Primitive = (*VindexFunc)(nil)
@@ -41,7 +44,7 @@ type VindexFunc struct {
 	Cols []int
 	// TODO(sougou): add support for MultiColumn.
 	Vindex vindexes.SingleColumn
-	Value  sqltypes.PlanValue
+	Value  evalengine.Expr
 
 	// VindexFunc does not take inputs
 	noInputs
@@ -85,14 +88,14 @@ func (vf *VindexFunc) GetTableName() string {
 	return ""
 }
 
-// Execute performs a non-streaming exec.
-func (vf *VindexFunc) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	return vf.mapVindex(vcursor, bindVars)
+// TryExecute performs a non-streaming exec.
+func (vf *VindexFunc) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	return vf.mapVindex(ctx, vcursor, bindVars)
 }
 
-// StreamExecute performs a streaming exec.
-func (vf *VindexFunc) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	r, err := vf.mapVindex(vcursor, bindVars)
+// TryStreamExecute performs a streaming exec.
+func (vf *VindexFunc) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	r, err := vf.mapVindex(ctx, vcursor, bindVars)
 	if err != nil {
 		return err
 	}
@@ -103,65 +106,88 @@ func (vf *VindexFunc) StreamExecute(vcursor VCursor, bindVars map[string]*queryp
 }
 
 // GetFields fetches the field info.
-func (vf *VindexFunc) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (vf *VindexFunc) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return &sqltypes.Result{Fields: vf.Fields}, nil
 }
 
-func (vf *VindexFunc) mapVindex(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	k, err := vf.Value.ResolveValue(bindVars)
+func (vf *VindexFunc) mapVindex(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	env := evalengine.EnvWithBindVars(bindVars, vcursor.ConnCollation())
+	k, err := env.Evaluate(vf.Value)
 	if err != nil {
 		return nil, err
 	}
-	vkey, err := evalengine.Cast(k, sqltypes.VarBinary)
-	if err != nil {
-		return nil, err
+	var values []sqltypes.Value
+	if k.Value().Type() == querypb.Type_TUPLE {
+		values = k.TupleValues()
+	} else {
+		values = append(values, k.Value())
 	}
 	result := &sqltypes.Result{
 		Fields: vf.Fields,
 	}
-
-	destinations, err := vf.Vindex.Map(vcursor, []sqltypes.Value{k})
-	if err != nil {
-		return nil, err
-	}
-	switch d := destinations[0].(type) {
-	case key.DestinationKeyRange:
-		if d.KeyRange != nil {
-			result.Rows = append(result.Rows, vf.buildRow(vkey, nil, d.KeyRange))
+	for _, value := range values {
+		vkey, err := evalengine.Cast(value, sqltypes.VarBinary)
+		if err != nil {
+			return nil, err
 		}
-	case key.DestinationKeyspaceID:
-		if len(d) > 0 {
-			if vcursor != nil {
-				resolvedShards, _, err := vcursor.ResolveDestinations(vcursor.GetKeyspace(), nil, []key.Destination{d})
+		destinations, err := vf.Vindex.Map(ctx, vcursor, []sqltypes.Value{value})
+		if err != nil {
+			return nil, err
+		}
+		switch d := destinations[0].(type) {
+		case key.DestinationKeyRange:
+			if d.KeyRange != nil {
+				row, err := vf.buildRow(vkey, nil, d.KeyRange)
 				if err != nil {
-					return nil, err
+					return result, err
 				}
-				kr, err := key.ParseShardingSpec(resolvedShards[0].Target.Shard)
-				if err != nil {
-					return nil, err
-				}
-				result.Rows = [][]sqltypes.Value{
-					vf.buildRow(vkey, d, kr[0]),
-				}
-			} else {
-				result.Rows = [][]sqltypes.Value{
-					vf.buildRow(vkey, d, nil),
-				}
+				result.Rows = append(result.Rows, row)
 			}
+		case key.DestinationKeyspaceID:
+			if len(d) > 0 {
+				if vcursor != nil {
+					resolvedShards, _, err := vcursor.ResolveDestinations(ctx, vcursor.GetKeyspace(), nil, []key.Destination{d})
+					if err != nil {
+						return nil, err
+					}
+					if len(resolvedShards) > 0 {
+						kr, err := key.ParseShardingSpec(resolvedShards[0].Target.Shard)
+						if err != nil {
+							return nil, err
+						}
+						row, err := vf.buildRow(vkey, d, kr[0])
+						if err != nil {
+							return result, err
+						}
+						result.Rows = append(result.Rows, row)
+						break
+					}
+				}
+
+				row, err := vf.buildRow(vkey, d, nil)
+				if err != nil {
+					return result, err
+				}
+				result.Rows = append(result.Rows, row)
+			}
+		case key.DestinationKeyspaceIDs:
+			for _, ksid := range d {
+				row, err := vf.buildRow(vkey, ksid, nil)
+				if err != nil {
+					return result, err
+				}
+				result.Rows = append(result.Rows, row)
+			}
+		case key.DestinationNone:
+			// Nothing to do.
+		default:
+			return result, vterrors.NewErrorf(vtrpcpb.Code_INTERNAL, vterrors.WrongTypeForVar, "unexpected destination type: %T", d)
 		}
-	case key.DestinationKeyspaceIDs:
-		for _, ksid := range d {
-			result.Rows = append(result.Rows, vf.buildRow(vkey, ksid, nil))
-		}
-	case key.DestinationNone:
-		// Nothing to do.
-	default:
-		panic("unexpected")
 	}
 	return result, nil
 }
 
-func (vf *VindexFunc) buildRow(id sqltypes.Value, ksid []byte, kr *topodatapb.KeyRange) []sqltypes.Value {
+func (vf *VindexFunc) buildRow(id sqltypes.Value, ksid []byte, kr *topodatapb.KeyRange) ([]sqltypes.Value, error) {
 	row := make([]sqltypes.Value, 0, len(vf.Fields))
 	for _, col := range vf.Cols {
 		switch col {
@@ -198,10 +224,10 @@ func (vf *VindexFunc) buildRow(id sqltypes.Value, ksid []byte, kr *topodatapb.Ke
 				row = append(row, sqltypes.NULL)
 			}
 		default:
-			panic("BUG: unexpected column number")
+			return row, vterrors.NewErrorf(vtrpcpb.Code_OUT_OF_RANGE, vterrors.BadFieldError, "column %v out of range", col)
 		}
 	}
-	return row
+	return row, nil
 }
 
 func (vf *VindexFunc) description() PrimitiveDescription {
@@ -210,10 +236,10 @@ func (vf *VindexFunc) description() PrimitiveDescription {
 		fields[field.Name] = field.Type.String()
 	}
 
-	other := map[string]interface{}{
+	other := map[string]any{
 		"Fields":  fields,
 		"Columns": vf.Cols,
-		"Value":   vf.Value,
+		"Value":   evalengine.FormatExpr(vf.Value),
 	}
 	if vf.Vindex != nil {
 		other["Vindex"] = vf.Vindex.String()

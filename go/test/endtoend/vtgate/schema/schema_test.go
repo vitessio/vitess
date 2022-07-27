@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"reflect"
@@ -70,9 +69,9 @@ func TestMain(m *testing.M) {
 		}
 
 		clusterInstance.VtctldExtraArgs = []string{
-			"-schema_change_dir", schemaChangeDirectory,
-			"-schema_change_controller", "local",
-			"-schema_change_check_interval", "1"}
+			"--schema_change_dir", schemaChangeDirectory,
+			"--schema_change_controller", "local",
+			"--schema_change_check_interval", "1"}
 
 		if err := clusterInstance.StartTopo(); err != nil {
 			return 1, err
@@ -108,6 +107,7 @@ func TestSchemaChange(t *testing.T) {
 	testWithDropCreateSchema(t)
 	testSchemaChangePreflightErrorPartially(t)
 	testDropNonExistentTables(t)
+	testCreateInvalidView(t)
 	testCopySchemaShards(t, clusterInstance.Keyspaces[0].Shards[0].Vttablets[0].VttabletProcess.TabletPath, 2)
 	testCopySchemaShards(t, fmt.Sprintf("%s/0", keyspaceName), 3)
 	testCopySchemaShardWithDifferentDB(t, 4)
@@ -116,7 +116,7 @@ func TestSchemaChange(t *testing.T) {
 
 func testWithInitialSchema(t *testing.T) {
 	// Create 4 tables
-	var sqlQuery = "" //nolint
+	var sqlQuery = "" // nolint
 	for i := 0; i < totalTableCount; i++ {
 		sqlQuery = fmt.Sprintf(createTable, fmt.Sprintf("vt_select_test_%02d", i))
 		err := clusterInstance.VtctlclientProcess.ApplySchema(keyspaceName, sqlQuery)
@@ -148,13 +148,13 @@ func testWithAlterDatabase(t *testing.T) {
 }
 
 // testWithDropCreateSchema , we should be able to drop and create same schema
-//Tests that a DROP and CREATE table will pass PreflightSchema check.
+// Tests that a DROP and CREATE table will pass PreflightSchema check.
 //
-//PreflightSchema checks each SQL statement separately. When doing so, it must
-//consider previous statements within the same ApplySchema command. For
-//example, a CREATE after DROP must not fail: When CREATE is checked, DROP
-//must have been executed first.
-//See: https://github.com/vitessio/vitess/issues/1731#issuecomment-222914389
+// PreflightSchema checks each SQL statement separately. When doing so, it must
+// consider previous statements within the same ApplySchema command. For
+// example, a CREATE after DROP must not fail: When CREATE is checked, DROP
+// must have been executed first.
+// See: https://github.com/vitessio/vitess/issues/1731#issuecomment-222914389
 func testWithDropCreateSchema(t *testing.T) {
 	dropCreateTable := fmt.Sprintf("DROP TABLE vt_select_test_%02d ;", 2) + fmt.Sprintf(createTable, fmt.Sprintf("vt_select_test_%02d", 2))
 	err := clusterInstance.VtctlclientProcess.ApplySchema(keyspaceName, dropCreateTable)
@@ -167,7 +167,7 @@ func testWithAutoSchemaFromChangeDir(t *testing.T) {
 	_ = os.Mkdir(path.Join(schemaChangeDirectory, keyspaceName), 0700)
 	_ = os.Mkdir(path.Join(schemaChangeDirectory, keyspaceName, "input"), 0700)
 	sqlFile := path.Join(schemaChangeDirectory, keyspaceName, "input/create_test_table_x.sql")
-	err := ioutil.WriteFile(sqlFile, []byte("create table test_table_x (id int)"), 0644)
+	err := os.WriteFile(sqlFile, []byte("create table test_table_x (id int)"), 0644)
 	require.Nil(t, err)
 	timeout := time.Now().Add(10 * time.Second)
 	matchFoundAfterAutoSchemaApply := false
@@ -199,7 +199,7 @@ func matchSchema(t *testing.T, firstTablet string, secondTablet string) {
 // Tests that some SQL statements fail properly during PreflightSchema.
 func testSchemaChangePreflightErrorPartially(t *testing.T) {
 	createNewTable := fmt.Sprintf(createTable, fmt.Sprintf("vt_select_test_%02d", 5)) + fmt.Sprintf(createTable, fmt.Sprintf("vt_select_test_%02d", 2))
-	output, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ApplySchema", "-sql", createNewTable, keyspaceName)
+	output, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ApplySchema", "--", "--sql", createNewTable, keyspaceName)
 	require.Error(t, err)
 	assert.True(t, strings.Contains(output, "already exists"))
 
@@ -207,14 +207,14 @@ func testSchemaChangePreflightErrorPartially(t *testing.T) {
 }
 
 // testDropNonExistentTables applying same schema + new schema should throw error for existing one and also add the new schema
-//If a table does not exist, DROP TABLE should error during preflight
-//because the statement does not change the schema as there is
-//nothing to drop.
-//In case of DROP TABLE IF EXISTS though, it should not error as this
-//is the MySQL behavior the user expects.
+// If a table does not exist, DROP TABLE should error during preflight
+// because the statement does not change the schema as there is
+// nothing to drop.
+// In case of DROP TABLE IF EXISTS though, it should not error as this
+// is the MySQL behavior the user expects.
 func testDropNonExistentTables(t *testing.T) {
 	dropNonExistentTable := "DROP TABLE nonexistent_table;"
-	output, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ApplySchema", "-sql", dropNonExistentTable, keyspaceName)
+	output, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ApplySchema", "--", "--sql", dropNonExistentTable, keyspaceName)
 	require.Error(t, err)
 	assert.True(t, strings.Contains(output, "Unknown table"))
 
@@ -223,6 +223,17 @@ func testDropNonExistentTables(t *testing.T) {
 	require.Nil(t, err)
 
 	checkTables(t, totalTableCount)
+}
+
+// testCreateInvalidView attempts to create a view that depends on non-existent table. We expect an error
+// we test with different 'direct' strategy options
+func testCreateInvalidView(t *testing.T) {
+	for _, ddlStrategy := range []string{"direct", "direct -allow-zero-in-date"} {
+		createInvalidView := "CREATE OR REPLACE VIEW invalid_view AS SELECT * FROM nonexistent_table;"
+		output, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ApplySchema", "--", "-skip_preflight", "-ddl_strategy", ddlStrategy, "--sql", createInvalidView, keyspaceName)
+		require.Error(t, err)
+		assert.Contains(t, output, "doesn't exist (errno 1146)")
+	}
 }
 
 // checkTables checks the number of tables in the first two shards.
@@ -241,7 +252,7 @@ func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, count int) {
 // testCopySchemaShards tests that schema from source is correctly applied to destination
 func testCopySchemaShards(t *testing.T, source string, shard int) {
 	addNewShard(t, shard)
-	// InitShardMaster creates the db, but there shouldn't be any tables yet.
+	// InitShardPrimary creates the db, but there shouldn't be any tables yet.
 	checkTablesCount(t, clusterInstance.Keyspaces[0].Shards[shard].Vttablets[0], 0)
 	checkTablesCount(t, clusterInstance.Keyspaces[0].Shards[shard].Vttablets[1], 0)
 	// Run the command twice to make sure it's idempotent.
@@ -249,7 +260,7 @@ func testCopySchemaShards(t *testing.T, source string, shard int) {
 		err := clusterInstance.VtctlclientProcess.ExecuteCommand("CopySchemaShard", source, fmt.Sprintf("%s/%d", keyspaceName, shard))
 		require.Nil(t, err)
 	}
-	// shard_2_master should look the same as the replica we copied from
+	// shard2 primary should look the same as the replica we copied from
 	checkTablesCount(t, clusterInstance.Keyspaces[0].Shards[shard].Vttablets[0], totalTableCount)
 	checkTablesCount(t, clusterInstance.Keyspaces[0].Shards[shard].Vttablets[1], totalTableCount)
 
@@ -263,11 +274,11 @@ func testCopySchemaShardWithDifferentDB(t *testing.T, shard int) {
 	checkTablesCount(t, clusterInstance.Keyspaces[0].Shards[shard].Vttablets[1], 0)
 	source := fmt.Sprintf("%s/0", keyspaceName)
 
-	masterTabletAlias := clusterInstance.Keyspaces[0].Shards[shard].Vttablets[0].VttabletProcess.TabletPath
-	schema, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetSchema", masterTabletAlias)
+	tabletAlias := clusterInstance.Keyspaces[0].Shards[shard].Vttablets[0].VttabletProcess.TabletPath
+	schema, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetSchema", tabletAlias)
 	require.Nil(t, err)
 
-	resultMap := make(map[string]interface{})
+	resultMap := make(map[string]any)
 	err = json.Unmarshal([]byte(schema), &resultMap)
 	require.Nil(t, err)
 	dbSchema := reflect.ValueOf(resultMap["database_schema"])
@@ -278,14 +289,14 @@ func testCopySchemaShardWithDifferentDB(t *testing.T, shard int) {
 	// (The different charset won't be corrected on the destination shard
 	//  because we use "CREATE DATABASE IF NOT EXISTS" and this doesn't fail if
 	//  there are differences in the options e.g. the character set.)
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ExecuteFetchAsDba", "-json", masterTabletAlias, "ALTER DATABASE vt_ks CHARACTER SET latin1")
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ExecuteFetchAsDba", "--", "--json", tabletAlias, "ALTER DATABASE vt_ks CHARACTER SET latin1")
 	require.Nil(t, err)
 
 	output, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("CopySchemaShard", source, fmt.Sprintf("%s/%d", keyspaceName, shard))
 	require.Error(t, err)
 	assert.True(t, strings.Contains(output, "schemas are different"))
 
-	// shard_2_master should have the same number of tables. Only the db
+	// shard2 primary should have the same number of tables. Only the db
 	// character set is different.
 	checkTablesCount(t, clusterInstance.Keyspaces[0].Shards[shard].Vttablets[0], totalTableCount)
 }

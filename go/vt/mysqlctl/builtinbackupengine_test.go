@@ -47,7 +47,7 @@ func createBackupDir(root string, dirs ...string) error {
 func TestExecuteBackup(t *testing.T) {
 	// Set up local backup directory
 	backupRoot := "testdata/builtinbackup_test"
-	*filebackupstorage.FileBackupStorageRoot = backupRoot
+	filebackupstorage.FileBackupStorageRoot = backupRoot
 	require.NoError(t, createBackupDir(backupRoot, "innodb", "log", "datadir"))
 	defer os.RemoveAll(backupRoot)
 
@@ -68,10 +68,10 @@ func TestExecuteBackup(t *testing.T) {
 	require.NoError(t, ts.CreateTablet(ctx, tablet))
 
 	_, err := ts.UpdateShardFields(ctx, keyspace, shard, func(si *topo.ShardInfo) error {
-		si.MasterAlias = &topodata.TabletAlias{Uid: 100, Cell: "cell1"}
+		si.PrimaryAlias = &topodata.TabletAlias{Uid: 100, Cell: "cell1"}
 
 		now := time.Now()
-		si.MasterTermStartTime = &vttime.Time{Seconds: int64(now.Second()), Nanoseconds: int32(now.Nanosecond())}
+		si.PrimaryTermStartTime = &vttime.Time{Seconds: int64(now.Second()), Nanoseconds: int32(now.Nanosecond())}
 
 		return nil
 	})

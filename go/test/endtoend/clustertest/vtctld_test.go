@@ -20,7 +20,7 @@ package clustertest
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"reflect"
 	"strings"
@@ -65,8 +65,8 @@ func testTopoDataAPI(t *testing.T, url string) {
 	require.Nil(t, err)
 	assert.Equal(t, resp.StatusCode, 200)
 
-	resultMap := make(map[string]interface{})
-	respByte, _ := ioutil.ReadAll(resp.Body)
+	resultMap := make(map[string]any)
+	respByte, _ := io.ReadAll(resp.Body)
 	err = json.Unmarshal(respByte, &resultMap)
 	require.Nil(t, err)
 
@@ -81,6 +81,7 @@ func testTopoDataAPI(t *testing.T, url string) {
 }
 
 func testListAllTablets(t *testing.T) {
+	// first w/o any filters, aside from cell
 	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ListAllTablets", clusterInstance.Cell)
 	require.Nil(t, err)
 
@@ -96,12 +97,26 @@ func testListAllTablets(t *testing.T) {
 		}
 	}
 	assert.Equal(t, tabletCountFromCMD, len(tablets))
+
+	// now filtering with the first keyspace and tablet type of primary, in
+	// addition to the cell
+	result, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
+		"ListAllTablets", "--", "--keyspace", clusterInstance.Keyspaces[0].Name,
+		"--tablet_type", "primary",
+		clusterInstance.Cell)
+	require.Nil(t, err)
+
+	// We should only return a single primary tablet per shard in the first keyspace
+	tabletsFromCMD = strings.Split(result, "\n")
+	// We don't count the final newline with nothing after it (it becomes an empty
+	// line at the end of the slice)
+	assert.Equal(t, len(clusterInstance.Keyspaces[0].Shards), len(tabletsFromCMD)-1)
 }
 
 func testTabletStatus(t *testing.T) {
 	resp, err := http.Get(fmt.Sprintf("http://%s:%d", clusterInstance.Hostname, clusterInstance.Keyspaces[0].Shards[0].Vttablets[0].HTTPPort))
 	require.Nil(t, err)
-	respByte, err := ioutil.ReadAll(resp.Body)
+	respByte, err := io.ReadAll(resp.Body)
 	require.Nil(t, err)
 	result := string(respByte)
 	log.Infof("Tablet status response: %v", result)

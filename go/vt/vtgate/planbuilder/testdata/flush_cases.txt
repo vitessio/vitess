@@ -11,8 +11,13 @@
     },
     "TargetDestination": "AllShards()",
     "Query": "flush tables unsharded, music"
-  }
+  },
+  "TablesUsed": [
+    "main.music",
+    "main.unsharded"
+  ]
 }
+Gen4 plan same as above
 
 # Flush statement with no tables
 "flush local tables with read lock"
@@ -29,6 +34,7 @@
     "Query": "flush local tables with read lock"
   }
 }
+Gen4 plan same as above
 
 # Flush statement with flush options
 "flush no_write_to_binlog hosts, logs"
@@ -45,3 +51,4 @@
     "Query": "flush local hosts, logs"
   }
 }
+Gen4 plan same as above

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 import { vtadmin as pb } from '../proto/vtadmin';
-import { getStreams, getStreamTablets } from './workflows';
+import { getStream, getStreams, getStreamTablets } from './workflows';
 
 describe('getStreams', () => {
     const tests: {
@@ -67,6 +67,129 @@ describe('getStreams', () => {
         '%s',
         (name: string, input: Parameters<typeof getStreams>, expected: ReturnType<typeof getStreams>) => {
             expect(getStreams(...input)).toEqual(expected);
+        }
+    );
+});
+
+describe('getStream', () => {
+    const tests: {
+        name: string;
+        input: Parameters<typeof getStream>;
+        expected: ReturnType<typeof getStream>;
+    }[] = [
+        {
+            name: 'should return the stream for the streamKey',
+            input: [
+                pb.Workflow.create({
+                    workflow: {
+                        shard_streams: {
+                            '-80/us_east_1a-123456': {
+                                streams: [
+                                    {
+                                        id: 1,
+                                        shard: '-80',
+                                        tablet: {
+                                            cell: 'us_east_1a',
+                                            uid: 123456,
+                                        },
+                                    },
+                                    {
+                                        id: 2,
+                                        shard: '-80',
+                                        tablet: {
+                                            cell: 'us_east_1a',
+                                            uid: 123456,
+                                        },
+                                    },
+                                ],
+                            },
+                            '-80/us_east_1a-789012': {
+                                streams: [
+                                    {
+                                        id: 1,
+                                        shard: '-80',
+                                        tablet: {
+                                            cell: 'us_east_1a',
+                                            uid: 789012,
+                                        },
+                                    },
+                                ],
+                            },
+                        },
+                    },
+                }),
+                'us_east_1a-123456/2',
+            ],
+            expected: {
+                id: 2,
+                shard: '-80',
+                tablet: {
+                    cell: 'us_east_1a',
+                    uid: 123456,
+                },
+            },
+        },
+        {
+            name: 'should handle no matching stream in workflow',
+            input: [
+                pb.Workflow.create({
+                    workflow: {
+                        shard_streams: {
+                            '-80/us_east_1a-123456': {
+                                streams: [
+                                    {
+                                        id: 1,
+                                        shard: '-80',
+                                        tablet: {
+                                            cell: 'us_east_1a',
+                                            uid: 123456,
+                                        },
+                                    },
+                                ],
+                            },
+                        },
+                    },
+                }),
+                'us_east_1a-123456/2',
+            ],
+            expected: undefined,
+        },
+        {
+            name: 'should handle undefined streamKey',
+            input: [
+                pb.Workflow.create({
+                    workflow: {
+                        shard_streams: {
+                            '-80/us_east_1a-123456': {
+                                streams: [
+                                    {
+                                        id: 1,
+                                        shard: '-80',
+                                        tablet: {
+                                            cell: 'us_east_1a',
+                                            uid: 123456,
+                                        },
+                                    },
+                                ],
+                            },
+                        },
+                    },
+                }),
+                undefined,
+            ],
+            expected: undefined,
+        },
+        {
+            name: 'should handle undefined workflow',
+            input: [undefined, 'us_east_1a-123456/1'],
+            expected: undefined,
+        },
+    ];
+
+    test.each(tests.map(Object.values))(
+        '%s',
+        (name: string, input: Parameters<typeof getStream>, expected: ReturnType<typeof getStream>) => {
+            expect(getStream(...input)).toEqual(expected);
         }
     );
 });

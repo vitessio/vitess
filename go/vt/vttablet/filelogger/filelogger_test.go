@@ -18,7 +18,6 @@ package filelogger
 
 import (
 	"context"
-	"io/ioutil"
 	"os"
 	"path"
 	"testing"
@@ -30,11 +29,7 @@ import (
 
 // TestFileLog sends a stream of five query records to the plugin, and verifies that they are logged.
 func TestFileLog(t *testing.T) {
-	dir, err := ioutil.TempDir("", "filelogger_test")
-	if err != nil {
-		t.Fatalf("error getting tempdir: %v", err)
-	}
-	defer os.RemoveAll(dir)
+	dir := t.TempDir()
 
 	logPath := path.Join(dir, "test.log")
 	logger, err := Init(logPath)
@@ -66,7 +61,7 @@ func TestFileLog(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 
 		want := "\t\t\t''\t''\t0001-01-01 00:00:00.000000\t0001-01-01 00:00:00.000000\t0.000000\t\t\"test 1\"\tmap[]\t1\t\"test 1 PII\"\tmysql\t0.000000\t0.000000\t0\t0\t0\t\"\"\t\n\t\t\t''\t''\t0001-01-01 00:00:00.000000\t0001-01-01 00:00:00.000000\t0.000000\t\t\"test 2\"\tmap[]\t1\t\"test 2 PII\"\tmysql\t0.000000\t0.000000\t0\t0\t0\t\"\"\t\n"
-		contents, _ := ioutil.ReadFile(logPath)
+		contents, _ := os.ReadFile(logPath)
 		got := string(contents)
 		if want == got {
 			return
@@ -85,11 +80,7 @@ func TestFileLogRedacted(t *testing.T) {
 		*streamlog.RedactDebugUIQueries = false
 	}()
 
-	dir, err := ioutil.TempDir("", "filelogger_test")
-	if err != nil {
-		t.Fatalf("error getting tempdir: %v", err)
-	}
-	defer os.RemoveAll(dir)
+	dir := t.TempDir()
 
 	logPath := path.Join(dir, "test.log")
 	logger, err := Init(logPath)
@@ -120,7 +111,7 @@ func TestFileLogRedacted(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	want := "\t\t\t''\t''\t0001-01-01 00:00:00.000000\t0001-01-01 00:00:00.000000\t0.000000\t\t\"test 1\"\t\"[REDACTED]\"\t1\t\"[REDACTED]\"\tmysql\t0.000000\t0.000000\t0\t0\t0\t\"\"\t\n\t\t\t''\t''\t0001-01-01 00:00:00.000000\t0001-01-01 00:00:00.000000\t0.000000\t\t\"test 2\"\t\"[REDACTED]\"\t1\t\"[REDACTED]\"\tmysql\t0.000000\t0.000000\t0\t0\t0\t\"\"\t\n"
-	contents, _ := ioutil.ReadFile(logPath)
+	contents, _ := os.ReadFile(logPath)
 	got := string(contents)
 	if want != string(got) {
 		t.Errorf("streamlog file: want %q got %q", want, got)

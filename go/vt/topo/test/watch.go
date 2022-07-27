@@ -20,6 +20,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/key"
+
 	"google.golang.org/protobuf/proto"
 
 	"context"
@@ -79,8 +81,23 @@ func checkWatch(t *testing.T, ts *topo.Server) {
 	}
 
 	// create some data
+	keyRange, err := key.ParseShardingSpec("-")
+	if err != nil || len(keyRange) != 1 {
+		t.Fatalf("ParseShardingSpec failed. Expected non error and only one element. Got err: %v, len(%v)", err, len(keyRange))
+	}
+
 	srvKeyspace := &topodatapb.SrvKeyspace{
-		ShardingColumnName: "user_id",
+		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
+			{
+				ServedType: topodatapb.TabletType_PRIMARY,
+				ShardReferences: []*topodatapb.ShardReference{
+					{
+						Name:     "name",
+						KeyRange: keyRange[0],
+					},
+				},
+			},
+		},
 	}
 	if err := ts.UpdateSrvKeyspace(ctx, LocalCellName, "test_keyspace", srvKeyspace); err != nil {
 		t.Fatalf("UpdateSrvKeyspace(1): %v", err)
@@ -91,7 +108,7 @@ func checkWatch(t *testing.T, ts *topo.Server) {
 	defer cancel()
 
 	// change the data
-	srvKeyspace.ShardingColumnName = "new_user_id"
+	srvKeyspace.Partitions[0].ShardReferences[0].Name = "new_name"
 	if err := ts.UpdateSrvKeyspace(ctx, LocalCellName, "test_keyspace", srvKeyspace); err != nil {
 		t.Fatalf("UpdateSrvKeyspace(2): %v", err)
 	}
@@ -112,11 +129,11 @@ func checkWatch(t *testing.T, ts *topo.Server) {
 			t.Fatalf("cannot proto-unmarshal data: %v", err)
 		}
 
-		if got.ShardingColumnName == "user_id" {
+		if got.Partitions[0].ShardReferences[0].Name == "name" {
 			// extra first value, still good
 			continue
 		}
-		if got.ShardingColumnName == "new_user_id" {
+		if got.Partitions[0].ShardReferences[0].Name == "new_name" {
 			// watch worked, good
 			break
 		}
@@ -148,7 +165,7 @@ func checkWatch(t *testing.T, ts *topo.Server) {
 		if err := proto.Unmarshal(wd.Contents, got); err != nil {
 			t.Fatalf("cannot proto-unmarshal data: %v", err)
 		}
-		if got.ShardingColumnName == "new_user_id" {
+		if got.Partitions[0].ShardReferences[0].Name == "new_name" {
 			// good value
 			continue
 		}
@@ -170,8 +187,23 @@ func checkWatchInterrupt(t *testing.T, ts *topo.Server) {
 	}
 
 	// create some data
+	keyRange, err := key.ParseShardingSpec("-")
+	if err != nil || len(keyRange) != 1 {
+		t.Fatalf("ParseShardingSpec failed. Expected non error and only one element. Got err: %v, len(%v)", err, len(keyRange))
+	}
+
 	srvKeyspace := &topodatapb.SrvKeyspace{
-		ShardingColumnName: "user_id",
+		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
+			{
+				ServedType: topodatapb.TabletType_PRIMARY,
+				ShardReferences: []*topodatapb.ShardReference{
+					{
+						Name:     "name",
+						KeyRange: keyRange[0],
+					},
+				},
+			},
+		},
 	}
 	if err := ts.UpdateSrvKeyspace(ctx, LocalCellName, "test_keyspace", srvKeyspace); err != nil {
 		t.Fatalf("UpdateSrvKeyspace(1): %v", err)
@@ -201,7 +233,7 @@ func checkWatchInterrupt(t *testing.T, ts *topo.Server) {
 		if err := proto.Unmarshal(wd.Contents, got); err != nil {
 			t.Fatalf("cannot proto-unmarshal data: %v", err)
 		}
-		if got.ShardingColumnName == "user_id" {
+		if got.Partitions[0].ShardReferences[0].Name == "name" {
 			// good value
 			continue
 		}

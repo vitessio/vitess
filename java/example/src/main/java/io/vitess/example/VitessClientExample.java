@@ -52,9 +52,9 @@ public class VitessClientExample {
     try (RpcClient client = new GrpcClientFactory()
         .create(ctx, args[0]); VTGateBlockingConnection conn = new VTGateBlockingConnection(
         client)) {
-      VTSession session = new VTSession("@master", ExecuteOptions.getDefaultInstance());
+      VTSession session = new VTSession("@primary", ExecuteOptions.getDefaultInstance());
       // Insert some messages on random pages.
-      System.out.println("Inserting into master...");
+      System.out.println("Inserting into primary...");
       Random rand = new Random();
       for (int i = 0; i < 3; i++) {
         Instant timeCreated = Instant.now();
@@ -71,8 +71,8 @@ public class VitessClientExample {
         conn.execute(ctx, "commit", null, session);
       }
 
-      // Read it back from the master.
-      System.out.println("Reading from master...");
+      // Read it back from the primary.
+      System.out.println("Reading from primary...");
       try (Cursor cursor = conn
           .execute(ctx, "SELECT page, time_created_ns, message FROM messages", null, session)) {
         Row row;

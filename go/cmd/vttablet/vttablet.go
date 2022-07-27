@@ -19,16 +19,18 @@ package main
 
 import (
 	"bytes"
-	"flag"
-	"io/ioutil"
-
 	"context"
+	"flag"
+	"os"
+
+	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vdiff"
+
+	rice "github.com/GeertJohan/go.rice"
 
 	"vitess.io/vitess/go/vt/binlog"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/tableacl"
 	"vitess.io/vitess/go/vt/tableacl/simpleacl"
@@ -41,7 +43,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/yaml2"
 
-	rice "github.com/GeertJohan/go.rice"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 var (
@@ -66,11 +68,11 @@ func main() {
 	servenv.Init()
 
 	if *tabletPath == "" {
-		log.Exit("-tablet-path required")
+		log.Exit("--tablet-path required")
 	}
 	tabletAlias, err := topoproto.ParseTabletAlias(*tabletPath)
 	if err != nil {
-		log.Exitf("failed to parse -tablet-path: %v", err)
+		log.Exitf("failed to parse --tablet-path: %v", err)
 	}
 
 	// config and mycnf initializations are intertwined.
@@ -91,9 +93,9 @@ func main() {
 	if servenv.GRPCPort != nil {
 		gRPCPort = int32(*servenv.GRPCPort)
 	}
-	tablet, err := tabletmanager.BuildTabletFromInput(tabletAlias, int32(*servenv.Port), gRPCPort)
+	tablet, err := tabletmanager.BuildTabletFromInput(tabletAlias, int32(*servenv.Port), gRPCPort, mysqld.GetVersionString(), config.DB)
 	if err != nil {
-		log.Exitf("failed to parse -tablet-path: %v", err)
+		log.Exitf("failed to parse --tablet-path: %v", err)
 	}
 	tm = &tabletmanager.TabletManager{
 		BatchCtx:            context.Background(),
@@ -104,10 +106,11 @@ func main() {
 		QueryServiceControl: qsc,
 		UpdateStream:        binlog.NewUpdateStream(ts, tablet.Keyspace, tabletAlias.Cell, qsc.SchemaEngine()),
 		VREngine:            vreplication.NewEngine(config, ts, tabletAlias.Cell, mysqld, qsc.LagThrottler()),
+		VDiffEngine:         vdiff.NewEngine(config, ts, tablet),
 		MetadataManager:     &mysqlctl.MetadataManager{},
 	}
 	if err := tm.Start(tablet, config.Healthcheck.IntervalSeconds.Get()); err != nil {
-		log.Exitf("failed to parse -tablet-path or initialize DB credentials: %v", err)
+		log.Exitf("failed to parse --tablet-path or initialize DB credentials: %v", err)
 	}
 	servenv.OnClose(func() {
 		// Close the tm so that our topo entry gets pruned properly and any
@@ -130,7 +133,7 @@ func initConfig(tabletAlias *topodatapb.TabletAlias) (*tabletenv.TabletConfig, *
 	}
 
 	if *tabletConfig != "" {
-		bytes, err := ioutil.ReadFile(*tabletConfig)
+		bytes, err := os.ReadFile(*tabletConfig)
 		if err != nil {
 			log.Exitf("error reading config file %s: %v", *tabletConfig, err)
 		}
@@ -170,21 +173,21 @@ func initConfig(tabletAlias *topodatapb.TabletAlias) (*tabletenv.TabletConfig, *
 // extractOnlineDDL extracts the gh-ost binary from this executable. gh-ost is appended
 // to vttablet executable by `make build` and via ricebox
 func extractOnlineDDL() error {
-	riceBox, err := rice.FindBox("../../../resources/bin")
-	if err != nil {
-		return err
-	}
-
 	if binaryFileName, isOverride := onlineddl.GhostBinaryFileName(); !isOverride {
+		riceBox, err := rice.FindBox("../../../resources/bin")
+		if err != nil {
+			return err
+		}
+
 		// there is no path override for gh-ost. We're expected to auto-extract gh-ost.
 		ghostBinary, err := riceBox.Bytes("gh-ost")
 		if err != nil {
 			return err
 		}
-		if err := ioutil.WriteFile(binaryFileName, ghostBinary, 0755); err != nil {
+		if err := os.WriteFile(binaryFileName, ghostBinary, 0755); err != nil {
 			// One possibility of failure is that gh-ost is up and running. In that case,
 			// let's pause and check if the running gh-ost is exact same binary as the one we wish to extract.
-			foundBytes, _ := ioutil.ReadFile(binaryFileName)
+			foundBytes, _ := os.ReadFile(binaryFileName)
 			if bytes.Equal(ghostBinary, foundBytes) {
 				// OK, it's the same binary, there is no need to extract the file anyway
 				return nil

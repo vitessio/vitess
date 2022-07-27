@@ -151,7 +151,7 @@ func queryzHandler(qe *QueryEngine, w http.ResponseWriter, r *http.Request) {
 			return row1.timePQ() > row2.timePQ()
 		},
 	}
-	qe.plans.ForEach(func(value interface{}) bool {
+	qe.plans.ForEach(func(value any) bool {
 		plan := value.(*TabletPlan)
 		if plan == nil {
 			return true

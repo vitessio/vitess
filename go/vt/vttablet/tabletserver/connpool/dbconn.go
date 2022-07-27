@@ -17,6 +17,7 @@ limitations under the License.
 package connpool
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"sync"
@@ -25,8 +26,6 @@ import (
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
-
-	"context"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -114,6 +113,9 @@ func (dbc *DBConn) Exec(ctx context.Context, query string, maxrows int, wantfiel
 		case err == nil:
 			// Success.
 			return r, nil
+		case mysql.IsConnLostDuringQuery(err):
+			// Query probably killed. Don't retry.
+			return nil, err
 		case !mysql.IsConnErr(err):
 			// Not a connection error. Don't retry.
 			return nil, err
@@ -192,7 +194,7 @@ func (dbc *DBConn) FetchNext(ctx context.Context, maxrows int, wantfields bool) 
 // Stream executes the query and streams the results.
 func (dbc *DBConn) Stream(ctx context.Context, query string, callback func(*sqltypes.Result) error, alloc func() *sqltypes.Result, streamBufferSize int, includedFields querypb.ExecuteOptions_IncludedFields) error {
 	span, ctx := trace.NewSpan(ctx, "DBConn.Stream")
-	trace.AnnotateSQL(span, query)
+	trace.AnnotateSQL(span, sqlparser.Preview(query))
 	defer span.Finish()
 
 	resultSent := false
@@ -214,6 +216,9 @@ func (dbc *DBConn) Stream(ctx context.Context, query string, callback func(*sqlt
 		case err == nil:
 			// Success.
 			return nil
+		case mysql.IsConnLostDuringQuery(err):
+			// Query probably killed. Don't retry.
+			return err
 		case !mysql.IsConnErr(err):
 			// Not a connection error. Don't retry.
 			return err
@@ -340,7 +345,7 @@ func (dbc *DBConn) Taint() {
 // Kill will also not kill a query more than once.
 func (dbc *DBConn) Kill(reason string, elapsed time.Duration) error {
 	dbc.stats.KillCounters.Add("Queries", 1)
-	log.Infof("Due to %s, elapsed time: %v, killing query ID %v %s", reason, elapsed, dbc.conn.ID(), dbc.Current())
+	log.Infof("Due to %s, elapsed time: %v, killing query ID %v %s", reason, elapsed, dbc.conn.ID(), dbc.CurrentForLogging())
 
 	// Client side action. Set error and close connection.
 	dbc.errmu.Lock()
@@ -359,7 +364,7 @@ func (dbc *DBConn) Kill(reason string, elapsed time.Duration) error {
 	_, err = killConn.ExecuteFetch(sql, 10000, false)
 	if err != nil {
 		log.Errorf("Could not kill query ID %v %s: %v", dbc.conn.ID(),
-			sqlparser.TruncateForLog(dbc.Current()), err)
+			dbc.CurrentForLogging(), err)
 		return err
 	}
 	return nil
@@ -423,7 +428,7 @@ func (dbc *DBConn) setDeadline(ctx context.Context) (chan bool, *sync.WaitGroup)
 		select {
 		case <-tmr2.C:
 			dbc.stats.InternalErrors.Add("HungQuery", 1)
-			log.Warningf("Query may be hung: %s", sqlparser.TruncateForLog(dbc.Current()))
+			log.Warningf("Query may be hung: %s", dbc.CurrentForLogging())
 		case <-done:
 			return
 		}
@@ -431,4 +436,17 @@ func (dbc *DBConn) setDeadline(ctx context.Context) (chan bool, *sync.WaitGroup)
 		log.Warningf("Hung query returned")
 	}()
 	return done, &wg
+}
+
+// CurrentForLogging applies transformations to the query making it suitable to log.
+// It applies sanitization rules based on tablet settings and limits the max length of
+// queries.
+func (dbc *DBConn) CurrentForLogging() string {
+	var queryToLog string
+	if dbc.pool != nil && dbc.pool.env != nil && dbc.pool.env.Config() != nil && !dbc.pool.env.Config().SanitizeLogMessages {
+		queryToLog = dbc.Current()
+	} else {
+		queryToLog, _ = sqlparser.RedactSQLQuery(dbc.Current())
+	}
+	return sqlparser.TruncateForLog(queryToLog)
 }

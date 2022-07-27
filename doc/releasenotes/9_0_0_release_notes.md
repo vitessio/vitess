@@ -100,7 +100,7 @@ Vitess 9.0 is not compatible with the previous release of the Vitess Kubernetes 
 
 ### Set Statement Support 
 
-Set statement support has been added in Vitess. There are [some system variables](https://github.com/vitessio/vitess/blob/master/go/vt/sysvars/sysvars.go#L147,L190) which are disabled by default and can be enabled using flag `-enable_system_settings` on VTGate. These system variables are set on the mysql server. Because they change the mysql session, using them leads to the Vitess connection no longer using the connection pool and forcing dedicated connections.
+Set statement support has been added in Vitess. There are [some system variables](https://github.com/vitessio/vitess/blob/main/go/vt/sysvars/sysvars.go#L147,L190) which are disabled by default and can be enabled using flag `-enable_system_settings` on VTGate. These system variables are set on the mysql server. Because they change the mysql session, using them leads to the Vitess connection no longer using the connection pool and forcing dedicated connections.
 
 
 ### VReplication

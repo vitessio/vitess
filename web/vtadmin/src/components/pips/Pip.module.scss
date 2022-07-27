@@ -14,25 +14,25 @@
  * limitations under the License.
  */
 .pip {
-  background: var(--colorDisabled);
-  border-radius: 100rem;
-  display: inline-block;
-  height: 1rem;
-  width: 1rem;
+    background: var(--colorDisabled);
+    border-radius: 100rem;
+    display: inline-block;
+    height: 1rem;
+    width: 1rem;
 
-  &.success {
-    background: var(--colorSuccess50);
-  }
+    &.success {
+        background: var(--colorSuccess50);
+    }
 
-  &.primary {
-    background: var(--colorPrimary50);
-  }
+    &.primary {
+        background: var(--colorPrimary50);
+    }
 
-  &.warning {
-    background: var(--colorInfo50);
-  }
+    &.warning {
+        background: var(--colorInfo50);
+    }
 
-  &.danger {
-    background: var(--colorError50);
-  }
+    &.danger {
+        background: var(--colorError50);
+    }
 }

@@ -16,6 +16,7 @@
 
 import { pick } from 'lodash';
 import { getHandlers } from './errorHandlers';
+import { env } from '../util/env';
 
 /**
  * Initializes error handling for both unhandled and handled exceptions.
@@ -63,7 +64,7 @@ export const notify = (error: Error, metadata?: object) => {
  * leaking sensitive environment variables, like API keys.
  */
 const sanitizeEnv = () =>
-    pick(process.env, [
+    pick(env(), [
         'REACT_APP_BUILD_BRANCH',
         'REACT_APP_BUILD_SHA',
         'REACT_APP_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS',

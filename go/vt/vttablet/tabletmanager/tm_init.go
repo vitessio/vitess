@@ -34,25 +34,28 @@ and which run changeCallback.
 package tabletmanager
 
 import (
+	"context"
 	"encoding/hex"
 	"flag"
 	"fmt"
 	"math/rand"
+	"regexp"
+	"strings"
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vdiff"
+
+	"k8s.io/apimachinery/pkg/util/sets"
+
 	"vitess.io/vitess/go/flagutil"
-	"vitess.io/vitess/go/sync2"
-	"vitess.io/vitess/go/vt/vterrors"
-
-	"context"
-
-	"vitess.io/vitess/go/vt/dbconnpool"
-
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/binlog"
 	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -61,6 +64,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
 
@@ -68,8 +72,8 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-// Query rules from blacklist
-const blacklistQueryRules string = "BlacklistQueryRules"
+// Query rules from denylist
+const denyListQueryList string = "DenyListQueryRules"
 
 var (
 	// The following flags initialize the tablet record.
@@ -78,6 +82,7 @@ var (
 	initShard          = flag.String("init_shard", "", "(init parameter) shard to use for this tablet")
 	initTabletType     = flag.String("init_tablet_type", "", "(init parameter) the tablet type to use for this tablet.")
 	initDbNameOverride = flag.String("init_db_name_override", "", "(init parameter) override the name of the db used by vttablet. Without this flag, the db name defaults to vt_<keyspacename>")
+	skipBuildInfoTags  = flag.String("vttablet_skip_buildinfo_tags", "/.*/", "comma-separated list of buildinfo tags to skip from merging with -init_tags. each tag is either an exact match or a regular expression of the form '/regexp/'.")
 	initTags           flagutil.StringMapValue
 
 	initPopulateMetadata = flag.Bool("init_populate_metadata", false, "(init parameter) populate metadata tables even if restore_from_backup is disabled. If restore_from_backup is enabled, metadata tables are always populated regardless of this flag.")
@@ -106,10 +111,6 @@ var (
 	// The following variables can be changed to speed up tests.
 	mysqlPortRetryInterval       = 1 * time.Second
 	rebuildKeyspaceRetryInterval = 1 * time.Second
-
-	// demoteMasterType is deprecated.
-	// TODO(sougou); remove after release 7.0.
-	demoteMasterType = flag.String("demote_master_type", "REPLICA", "DEPRECATED: the tablet type a demoted master will transition to")
 )
 
 func init() {
@@ -132,6 +133,7 @@ type TabletManager struct {
 	QueryServiceControl tabletserver.Controller
 	UpdateStream        binlog.UpdateStreamControl
 	VREngine            *vreplication.Engine
+	VDiffEngine         *vdiff.Engine
 
 	// MetadataManager manages the local metadata tables for a tablet. It
 	// exists, and is exported, to support swapping a nil pointer in test code,
@@ -148,7 +150,7 @@ type TabletManager struct {
 	tabletAlias *topodatapb.TabletAlias
 
 	// baseTabletType is the tablet type we revert back to
-	// when we transition back from something like MASTER.
+	// when we transition back from something like PRIMARY.
 	baseTabletType topodatapb.TabletType
 
 	// actionSema is there to run only one action at a time.
@@ -196,7 +198,7 @@ type TabletManager struct {
 }
 
 // BuildTabletFromInput builds a tablet record from input parameters.
-func BuildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32) (*topodatapb.Tablet, error) {
+func BuildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32, dbServerVersion string, db *dbconfigs.DBConfigs) (*topodatapb.Tablet, error) {
 	hostname := *tabletHostname
 	if hostname == "" {
 		var err error
@@ -229,6 +231,21 @@ func BuildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32) (
 		return nil, fmt.Errorf("invalid init_tablet_type %v; can only be REPLICA, RDONLY or SPARE", tabletType)
 	}
 
+	buildTags, err := getBuildTags(servenv.AppVersion.ToStringMap(), *skipBuildInfoTags)
+	if err != nil {
+		return nil, err
+	}
+
+	var charset uint8
+	if db != nil && db.Charset != "" {
+		charset, err = collations.Local().ParseConnectionCharset(db.Charset)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		charset = collations.Local().DefaultConnectionCharset()
+	}
+
 	return &topodatapb.Tablet{
 		Alias:    alias,
 		Hostname: hostname,
@@ -236,13 +253,82 @@ func BuildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32) (
 			"vt":   port,
 			"grpc": grpcPort,
 		},
-		Keyspace:       *initKeyspace,
-		Shard:          shard,
-		KeyRange:       keyRange,
-		Type:           tabletType,
-		DbNameOverride: *initDbNameOverride,
-		Tags:           initTags,
+		Keyspace:             *initKeyspace,
+		Shard:                shard,
+		KeyRange:             keyRange,
+		Type:                 tabletType,
+		DbNameOverride:       *initDbNameOverride,
+		Tags:                 mergeTags(buildTags, initTags),
+		DbServerVersion:      dbServerVersion,
+		DefaultConnCollation: uint32(charset),
 	}, nil
+}
+
+func getBuildTags(buildTags map[string]string, skipTagsCSV string) (map[string]string, error) {
+	if skipTagsCSV == "" {
+		return buildTags, nil
+	}
+
+	skipTags := strings.Split(skipTagsCSV, ",")
+	skippers := make([]func(string) bool, len(skipTags))
+	for i, skipTag := range skipTags {
+		skipTag := skipTag // copy to preserve iteration scope in the closures below
+		if strings.HasPrefix(skipTag, "/") && strings.HasSuffix(skipTag, "/") && len(skipTag) > 1 {
+			// regexp mode
+			tagRegexp, err := regexp.Compile(skipTag[1 : len(skipTag)-1])
+			if err != nil {
+				return nil, err
+			}
+
+			skippers[i] = func(s string) bool {
+				return tagRegexp.MatchString(s)
+			}
+		} else {
+			skippers[i] = func(s string) bool {
+				log.Warningf(skipTag)
+				return s == skipTag
+			}
+		}
+	}
+
+	skippedTags := sets.NewString()
+	for tag := range buildTags {
+		for _, skipFn := range skippers {
+			if skipFn(tag) {
+				skippedTags.Insert(tag)
+				break
+			}
+		}
+	}
+
+	result := make(map[string]string, len(buildTags)-skippedTags.Len())
+	for tag, val := range buildTags {
+		if skippedTags.Has(tag) {
+			continue
+		}
+
+		result[tag] = val
+	}
+
+	return result, nil
+}
+
+func mergeTags(a, b map[string]string) map[string]string {
+	maxCap := len(a)
+	if x := len(b); x > maxCap {
+		maxCap = x
+	}
+
+	result := make(map[string]string, maxCap)
+	for k, v := range a {
+		result[k] = v
+	}
+
+	for k, v := range b {
+		result[k] = v
+	}
+
+	return result
 }
 
 // Start starts the TabletManager.
@@ -253,13 +339,6 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, healthCheckInterval ti
 	tm.tmState = newTMState(tm, tablet)
 	tm.actionSema = sync2.NewSemaphore(1, 0)
 
-	demoteType, err := topoproto.ParseTabletType(*demoteMasterType)
-	if err != nil {
-		return err
-	}
-	if demoteType != tablet.Type {
-		log.Warningf("deprecated demote_master_type %v must match init_tablet_type %v", demoteType, tablet.Type)
-	}
 	tm.baseTabletType = tablet.Type
 
 	ctx, cancel := context.WithTimeout(tm.BatchCtx, *initTimeout)
@@ -268,7 +347,7 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, healthCheckInterval ti
 	if err != nil {
 		return err
 	}
-	if err := tm.checkMastership(ctx, si); err != nil {
+	if err := tm.checkPrimaryShip(ctx, si); err != nil {
 		return err
 	}
 	if err := tm.checkMysql(ctx); err != nil {
@@ -286,7 +365,7 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, healthCheckInterval ti
 	if err != nil {
 		return vterrors.Wrap(err, "failed to InitDBConfig")
 	}
-	tm.QueryServiceControl.RegisterQueryRuleSource(blacklistQueryRules)
+	tm.QueryServiceControl.RegisterQueryRuleSource(denyListQueryList)
 
 	if tm.UpdateStream != nil {
 		tm.UpdateStream.InitDBConfig(tm.DBConfigs)
@@ -297,6 +376,11 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, healthCheckInterval ti
 	if tm.VREngine != nil {
 		tm.VREngine.InitDBConfig(tm.DBConfigs)
 		servenv.OnTerm(tm.VREngine.Close)
+	}
+
+	if tm.VDiffEngine != nil {
+		tm.VDiffEngine.InitDBConfig(tm.DBConfigs)
+		servenv.OnTerm(tm.VDiffEngine.Close)
 	}
 
 	// The following initializations don't need to be done
@@ -374,6 +458,10 @@ func (tm *TabletManager) Stop() {
 
 	if tm.VREngine != nil {
 		tm.VREngine.Close()
+	}
+
+	if tm.VDiffEngine != nil {
+		tm.VDiffEngine.Close()
 	}
 
 	tm.MysqlDaemon.Close()
@@ -489,39 +577,39 @@ func (tm *TabletManager) rebuildKeyspace(ctx context.Context, done chan<- struct
 	}
 }
 
-func (tm *TabletManager) checkMastership(ctx context.Context, si *topo.ShardInfo) error {
-	if si.MasterAlias != nil && topoproto.TabletAliasEqual(si.MasterAlias, tm.tabletAlias) {
-		// We're marked as master in the shard record, which could mean the master
+func (tm *TabletManager) checkPrimaryShip(ctx context.Context, si *topo.ShardInfo) error {
+	if si.PrimaryAlias != nil && topoproto.TabletAliasEqual(si.PrimaryAlias, tm.tabletAlias) {
+		// We're marked as primary in the shard record, which could mean the primary
 		// tablet process was just restarted. However, we need to check if a new
-		// master is in the process of taking over. In that case, it will let us
-		// know by forcibly updating the old master's tablet record.
+		// primary is in the process of taking over. In that case, it will let us
+		// know by forcibly updating the old primary's tablet record.
 		oldTablet, err := tm.TopoServer.GetTablet(ctx, tm.tabletAlias)
 		switch {
 		case topo.IsErrType(err, topo.NoNode):
 			// There's no existing tablet record, so we can assume
 			// no one has left us a message to step down.
-			log.Infof("Shard master alias matches, but there is no existing tablet record. Switching to master with 'Now' as time")
+			log.Infof("Shard primary alias matches, but there is no existing tablet record. Switching to primary with 'Now' as time")
 			tm.tmState.UpdateTablet(func(tablet *topodatapb.Tablet) {
-				tablet.Type = topodatapb.TabletType_MASTER
-				// Update the master term start time (current value is 0) because we
-				// assume that we are actually the MASTER and in case of a tiebreak,
+				tablet.Type = topodatapb.TabletType_PRIMARY
+				// Update the primary term start time (current value is 0) because we
+				// assume that we are actually the PRIMARY and in case of a tiebreak,
 				// vtgate should prefer us.
-				tablet.MasterTermStartTime = logutil.TimeToProto(time.Now())
+				tablet.PrimaryTermStartTime = logutil.TimeToProto(time.Now())
 			})
 		case err == nil:
-			if oldTablet.Type == topodatapb.TabletType_MASTER {
-				log.Infof("Shard master alias matches, and existing tablet agrees. Switching to master with tablet's master term start time: %v", oldTablet.MasterTermStartTime)
-				// We're marked as master in the shard record,
+			if oldTablet.Type == topodatapb.TabletType_PRIMARY {
+				log.Infof("Shard primary alias matches, and existing tablet agrees. Switching to primary with tablet's primary term start time: %v", oldTablet.PrimaryTermStartTime)
+				// We're marked as primary in the shard record,
 				// and our existing tablet record agrees.
 				tm.tmState.UpdateTablet(func(tablet *topodatapb.Tablet) {
-					tablet.Type = topodatapb.TabletType_MASTER
-					tablet.MasterTermStartTime = oldTablet.MasterTermStartTime
+					tablet.Type = topodatapb.TabletType_PRIMARY
+					tablet.PrimaryTermStartTime = oldTablet.PrimaryTermStartTime
 				})
 			} else {
-				log.Warningf("Shard master alias matches, but existing tablet is not master. Switching from %v to master with the shard's master term start time: %v", oldTablet.Type, si.MasterTermStartTime)
+				log.Warningf("Shard primary alias matches, but existing tablet is not primary. Switching from %v to primary with the shard's primary term start time: %v", oldTablet.Type, si.PrimaryTermStartTime)
 				tm.tmState.UpdateTablet(func(tablet *topodatapb.Tablet) {
-					tablet.Type = topodatapb.TabletType_MASTER
-					tablet.MasterTermStartTime = si.MasterTermStartTime
+					tablet.Type = topodatapb.TabletType_PRIMARY
+					tablet.PrimaryTermStartTime = si.PrimaryTermStartTime
 				})
 			}
 		default:
@@ -533,19 +621,19 @@ func (tm *TabletManager) checkMastership(ctx context.Context, si *topo.ShardInfo
 		case topo.IsErrType(err, topo.NoNode):
 			// There's no existing tablet record, so there is nothing to do
 		case err == nil:
-			if oldTablet.Type == topodatapb.TabletType_MASTER {
-				// Our existing tablet type is master, but the shard record does not agree.
-				// Only take over if our master_term_start_time is after what is in the shard record
-				oldMasterTermStartTime := oldTablet.GetMasterTermStartTime()
-				currentShardTime := si.GetMasterTermStartTime()
-				if oldMasterTermStartTime.After(currentShardTime) {
-					log.Infof("Shard master alias does not match, but the tablet's master term start time is newer. Switching to master with tablet's master term start time: %v", oldTablet.MasterTermStartTime)
+			if oldTablet.Type == topodatapb.TabletType_PRIMARY {
+				// Our existing tablet type is primary, but the shard record does not agree.
+				// Only take over if our primary_term_start_time is after what is in the shard record
+				oldPrimaryTermStartTime := oldTablet.GetPrimaryTermStartTime()
+				currentShardTime := si.GetPrimaryTermStartTime()
+				if oldPrimaryTermStartTime.After(currentShardTime) {
+					log.Infof("Shard primary alias does not match, but the tablet's primary term start time is newer. Switching to primary with tablet's primary term start time: %v", oldTablet.PrimaryTermStartTime)
 					tm.tmState.UpdateTablet(func(tablet *topodatapb.Tablet) {
-						tablet.Type = topodatapb.TabletType_MASTER
-						tablet.MasterTermStartTime = oldTablet.MasterTermStartTime
+						tablet.Type = topodatapb.TabletType_PRIMARY
+						tablet.PrimaryTermStartTime = oldTablet.PrimaryTermStartTime
 					})
 				} else {
-					log.Infof("Existing tablet type is master, but the shard record has a different master with a newer timestamp. Remaining a replica")
+					log.Infof("Existing tablet type is primary, but the shard record has a different primary with a newer timestamp. Remaining a replica")
 				}
 			}
 		default:
@@ -647,9 +735,21 @@ func (tm *TabletManager) handleRestore(ctx context.Context) (bool, error) {
 			// Open the state manager after restore is done.
 			defer tm.tmState.Open()
 
+			// Zero date will cause us to use the latest, which is the default
+			backupTime := time.Time{}
+
+			// Or if a backup timestamp was specified then we use the last backup taken at or before that time
+			if *restoreFromBackupTsStr != "" {
+				var err error
+				backupTime, err = time.Parse(mysqlctl.BackupTimestampFormat, *restoreFromBackupTsStr)
+				if err != nil {
+					log.Exitf(fmt.Sprintf("RestoreFromBackup failed: unable to parse the backup timestamp value provided of '%s'", *restoreFromBackupTsStr))
+				}
+			}
+
 			// restoreFromBackup will just be a regular action
 			// (same as if it was triggered remotely)
-			if err := tm.RestoreData(ctx, logutil.NewConsoleLogger(), *waitForBackupInterval, false /* deleteBeforeRestore */); err != nil {
+			if err := tm.RestoreData(ctx, logutil.NewConsoleLogger(), *waitForBackupInterval, false /* deleteBeforeRestore */, backupTime); err != nil {
 				log.Exitf("RestoreFromBackup failed: %v", err)
 			}
 		}()
@@ -724,9 +824,9 @@ func (tm *TabletManager) Tablet() *topodatapb.Tablet {
 	return tm.tmState.Tablet()
 }
 
-// BlacklistedTables returns the list of currently blacklisted tables.
-func (tm *TabletManager) BlacklistedTables() []string {
-	return tm.tmState.BlacklistedTables()
+// DeniedTables returns the list of currently denied tables.
+func (tm *TabletManager) DeniedTables() []string {
+	return tm.tmState.DeniedTables()
 }
 
 // hookExtraEnv returns the map to pass to local hooks

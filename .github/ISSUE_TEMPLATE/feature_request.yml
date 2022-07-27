@@ -1,0 +1,25 @@
+name: Feature Request
+description: If you have something you think Vitess could improve or add support for.
+title: "Feature Request: "
+labels: ["Type: Feature Request", "Needs Triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please search the existing issues for relevant feature requests, and use the [reaction feature](https://blog.github.com/2016-03-10-add-reactions-to-pull-requests-issues-and-comments/) to add upvotes to pre-existing requests.
+
+  - type: textarea
+    id: feature-description
+    attributes:
+      label: Feature Description
+      description: A written overview of the feature
+    validations:
+      required: true
+
+  - type: textarea
+    id: use-cases
+    attributes:
+      label: Use Case(s)
+      description: Any relevant use-cases that you see.
+    validations:
+      required: true

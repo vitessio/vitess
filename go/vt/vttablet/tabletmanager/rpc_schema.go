@@ -30,8 +30,8 @@ import (
 )
 
 // GetSchema returns the schema.
-func (tm *TabletManager) GetSchema(ctx context.Context, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
-	return tm.MysqlDaemon.GetSchema(ctx, topoproto.TabletDbName(tm.Tablet()), tables, excludeTables, includeViews)
+func (tm *TabletManager) GetSchema(ctx context.Context, request *tabletmanagerdatapb.GetSchemaRequest) (*tabletmanagerdatapb.SchemaDefinition, error) {
+	return tm.MysqlDaemon.GetSchema(ctx, topoproto.TabletDbName(tm.Tablet()), request)
 }
 
 // ReloadSchema will reload the schema
@@ -89,6 +89,6 @@ func (tm *TabletManager) ApplySchema(ctx context.Context, change *tmutils.Schema
 	}
 
 	// and if it worked, reload the schema
-	tm.ReloadSchema(ctx, "")
+	tm.ReloadSchema(ctx, "") // nolint:errcheck
 	return scr, nil
 }

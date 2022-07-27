@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-interface Token {
+export interface Token {
     matches: string[];
     token: string;
     type: string;

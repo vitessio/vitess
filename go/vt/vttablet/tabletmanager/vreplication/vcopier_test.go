@@ -18,9 +18,13 @@ package vreplication
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 	"time"
+
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/mysqlctl"
 
 	"context"
 
@@ -447,7 +451,7 @@ func TestPlayerCopyTables(t *testing.T) {
 	execStatements(t, []string{
 		"create table src1(id int, val varbinary(128), primary key(id))",
 		"insert into src1 values(2, 'bbb'), (1, 'aaa')",
-		fmt.Sprintf("create table %s.dst1(id int, val varbinary(128), primary key(id))", vrepldb),
+		fmt.Sprintf("create table %s.dst1(id int, val varbinary(128), val2 varbinary(128), primary key(id))", vrepldb),
 		"create table yes(id int, val varbinary(128), primary key(id))",
 		fmt.Sprintf("create table %s.yes(id int, val varbinary(128), primary key(id))", vrepldb),
 		"create table no(id int, val varbinary(128), primary key(id))",
@@ -464,7 +468,7 @@ func TestPlayerCopyTables(t *testing.T) {
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
 			Match:  "dst1",
-			Filter: "select * from src1",
+			Filter: "select id, val, val as val2 from src1",
 		}, {
 			Match: "/yes",
 		}},
@@ -500,7 +504,7 @@ func TestPlayerCopyTables(t *testing.T) {
 		// The first fast-forward has no starting point. So, it just saves the current position.
 		"/update _vt.vreplication set pos=",
 		"begin",
-		"insert into dst1(id,val) values (1,'aaa'), (2,'bbb')",
+		"insert into dst1(id,val,val2) values (1,'aaa','aaa'), (2,'bbb','bbb')",
 		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"2\\"}' where vrepl_id=.*`,
 		"commit",
 		// copy of dst1 is done: delete from copy_state.
@@ -515,8 +519,8 @@ func TestPlayerCopyTables(t *testing.T) {
 		"/update _vt.vreplication set state='Running'",
 	})
 	expectData(t, "dst1", [][]string{
-		{"1", "aaa"},
-		{"2", "bbb"},
+		{"1", "aaa", "aaa"},
+		{"2", "bbb", "bbb"},
 	})
 	expectData(t, "yes", [][]string{})
 	validateCopyRowCountStat(t, 2)
@@ -556,7 +560,7 @@ func TestPlayerCopyBigTable(t *testing.T) {
 	defer func() { *copyPhaseDuration = savedCopyPhaseDuration }()
 
 	savedWaitRetryTime := waitRetryTime
-	// waitRetry time shoulw be very low to cause the wait loop to execute multipel times.
+	// waitRetry time should be very low to cause the wait loop to execute multiple times.
 	waitRetryTime = 10 * time.Millisecond
 	defer func() { waitRetryTime = savedWaitRetryTime }()
 
@@ -672,7 +676,7 @@ func TestPlayerCopyWildcardRule(t *testing.T) {
 	defer func() { *copyPhaseDuration = savedCopyPhaseDuration }()
 
 	savedWaitRetryTime := waitRetryTime
-	// waitRetry time shoulw be very low to cause the wait loop to execute multipel times.
+	// waitRetry time should be very low to cause the wait loop to execute multipel times.
 	waitRetryTime = 10 * time.Millisecond
 	defer func() { waitRetryTime = savedWaitRetryTime }()
 
@@ -808,7 +812,7 @@ func TestPlayerCopyTableContinuation(t *testing.T) {
 			Filter: "select * from not_copied",
 		}},
 	}
-	pos := masterPosition(t)
+	pos := primaryPosition(t)
 	execStatements(t, []string{
 		// insert inside and outside current range.
 		"insert into src1 values(1,1,'insert in'), (7,7,'insert out')",
@@ -951,7 +955,7 @@ func TestPlayerCopyWildcardTableContinuation(t *testing.T) {
 			Filter: "select * from src",
 		}},
 	}
-	pos := masterPosition(t)
+	pos := primaryPosition(t)
 	execStatements(t, []string{
 		"insert into src values(4,'new')",
 	})
@@ -1038,7 +1042,7 @@ func TestPlayerCopyWildcardTableContinuationWithOptimizeInserts(t *testing.T) {
 			Filter: "select * from src",
 		}},
 	}
-	pos := masterPosition(t)
+	pos := primaryPosition(t)
 	execStatements(t, []string{
 		"insert into src values(4,'new')",
 	})
@@ -1283,7 +1287,7 @@ func TestPlayerCopyTableCancel(t *testing.T) {
 
 func TestPlayerCopyTablesWithGeneratedColumn(t *testing.T) {
 	flavor := strings.ToLower(env.Flavor)
-	// Disable tests on percona (which identifies as mysql56) and mariadb platforms in CI since they
+	// Disable tests on percona and mariadb platforms in CI since
 	// generated columns support was added in 5.7 and mariadb added mysql compatible generated columns in 10.2
 	if !strings.Contains(flavor, "mysql57") && !strings.Contains(flavor, "mysql80") {
 		return
@@ -1359,5 +1363,159 @@ func TestPlayerCopyTablesWithGeneratedColumn(t *testing.T) {
 	expectData(t, "dst2", [][]string{
 		{"aaa1", "aaa", "10"},
 		{"bbb2", "bbb", "20"},
+	})
+}
+
+func TestCopyTablesWithInvalidDates(t *testing.T) {
+	defer deleteTablet(addTablet(100))
+
+	execStatements(t, []string{
+		"create table src1(id int, dt date, primary key(id))",
+		fmt.Sprintf("create table %s.dst1(id int, dt date, primary key(id))", vrepldb),
+		"insert into src1 values(1, '2020-01-12'), (2, '0000-00-00');",
+	})
+
+	// default mysql flavor allows invalid dates: so disallow explicitly for this test
+	if err := env.Mysqld.ExecuteSuperQuery(context.Background(), "SET @@global.sql_mode=REPLACE(REPLACE(@@session.sql_mode, 'NO_ZERO_DATE', ''), 'NO_ZERO_IN_DATE', '')"); err != nil {
+		fmt.Fprintf(os.Stderr, "%v", err)
+	}
+	defer func() {
+		if err := env.Mysqld.ExecuteSuperQuery(context.Background(), "SET @@global.sql_mode=REPLACE(@@global.sql_mode, ',NO_ZERO_DATE,NO_ZERO_IN_DATE','')"); err != nil {
+			fmt.Fprintf(os.Stderr, "%v", err)
+		}
+	}()
+	defer execStatements(t, []string{
+		"drop table src1",
+		fmt.Sprintf("drop table %s.dst1", vrepldb),
+	})
+	env.SchemaEngine.Reload(context.Background())
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "dst1",
+			Filter: "select * from src1",
+		}},
+	}
+
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogplayer.VReplicationInit, playerEngine.dbName)
+	qr, err := playerEngine.Exec(query)
+	require.NoError(t, err)
+
+	expectDBClientQueries(t, []string{
+		"/insert into _vt.vreplication",
+		"/update _vt.vreplication set message='Picked source tablet.*",
+		// Create the list of tables to copy and transition to Copying state.
+		"begin",
+		"/insert into _vt.copy_state",
+		"/update _vt.vreplication set state='Copying'",
+		"commit",
+		// The first fast-forward has no starting point. So, it just saves the current position.
+		"/update _vt.vreplication set pos=",
+		"begin",
+		"insert into dst1(id,dt) values (1,'2020-01-12'), (2,'0000-00-00')",
+		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"2\\"}' where vrepl_id=.*`,
+		"commit",
+		// copy of dst1 is done: delete from copy_state.
+		"/delete from _vt.copy_state.*dst1",
+		// All tables copied. Final catch up followed by Running state.
+		"/update _vt.vreplication set state='Running'",
+	})
+
+	expectData(t, "dst1", [][]string{
+		{"1", "2020-01-12"},
+		{"2", "0000-00-00"},
+	})
+
+	query = fmt.Sprintf("delete from _vt.vreplication where id = %d", qr.InsertID)
+	if _, err := playerEngine.Exec(query); err != nil {
+		t.Fatal(err)
+	}
+	expectDBClientQueries(t, []string{
+		"begin",
+		"/delete from _vt.vreplication",
+		"/delete from _vt.copy_state",
+		"commit",
+	})
+}
+
+func supportsInvisibleColumns() bool {
+	if env.DBType == string(mysqlctl.FlavorMySQL) && env.DBMajorVersion >= 8 &&
+		(env.DBMinorVersion > 0 || env.DBPatchVersion >= 23) {
+		return true
+	}
+	log.Infof("invisible columns not supported in %d.%d.%d", env.DBMajorVersion, env.DBMinorVersion, env.DBPatchVersion)
+	return false
+}
+
+func TestCopyInvisibleColumns(t *testing.T) {
+	if !supportsInvisibleColumns() {
+		t.Skip()
+	}
+
+	defer deleteTablet(addTablet(100))
+
+	execStatements(t, []string{
+		"create table src1(id int, id2 int, inv1 int invisible, inv2 int invisible, primary key(id, inv1))",
+		"insert into src1(id, id2, inv1, inv2) values(2, 20, 200, 2000), (1, 10, 100, 1000)",
+		fmt.Sprintf("create table %s.dst1(id int, id2 int, inv1 int invisible, inv2 int invisible, primary key(id, inv1))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table src1",
+		fmt.Sprintf("drop table %s.dst1", vrepldb),
+	})
+	env.SchemaEngine.Reload(context.Background())
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "dst1",
+			Filter: "select * from src1",
+		}},
+	}
+
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogplayer.VReplicationInit, playerEngine.dbName)
+	qr, err := playerEngine.Exec(query)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		query := fmt.Sprintf("delete from _vt.vreplication where id = %d", qr.InsertID)
+		if _, err := playerEngine.Exec(query); err != nil {
+			t.Fatal(err)
+		}
+		expectDeleteQueries(t)
+	}()
+
+	expectNontxQueries(t, []string{
+		// Create the list of tables to copy and transition to Copying state.
+		"/insert into _vt.vreplication",
+		"/update _vt.vreplication set message=",
+		"/insert into _vt.copy_state",
+		"/update _vt.vreplication set state",
+		// The first fast-forward has no starting point. So, it just saves the current position.
+		"insert into dst1(id,id2,inv1,inv2) values (1,10,100,1000), (2,20,200,2000)",
+		`/update _vt.copy_state set lastpk='fields:{name:\\"id\\" type:INT32} fields:{name:\\"inv1\\" type:INT32} rows:{lengths:1 lengths:3 values:\\"2200\\"}' where vrepl_id=.*`,
+		// copy of dst1 is done: delete from copy_state.
+		"/delete from _vt.copy_state.*dst1",
+		"/update _vt.vreplication set state",
+	})
+	expectData(t, "dst1", [][]string{
+		{"1", "10"},
+		{"2", "20"},
+	})
+	expectQueryResult(t, "select id,id2,inv1,inv2 from vrepl.dst1", [][]string{
+		{"1", "10", "100", "1000"},
+		{"2", "20", "200", "2000"},
 	})
 }

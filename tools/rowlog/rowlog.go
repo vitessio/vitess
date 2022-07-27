@@ -158,7 +158,7 @@ func startStreaming(ctx context.Context, vtgate, vtctld, keyspace, tablet, table
 		log.Fatal(err)
 	}
 	defer conn.Close()
-	reader, _ := conn.VStream(ctx, topodatapb.TabletType_MASTER, vgtid, filter, &vtgatepb.VStreamFlags{})
+	reader, _ := conn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, &vtgatepb.VStreamFlags{})
 	var fields []*query.Field
 	var gtid string
 	var plan *TablePlan
@@ -372,7 +372,7 @@ func getFlavor(ctx context.Context, server, keyspace string) string {
 }
 
 func getTablet(ctx context.Context, ts *topo.Server, cells []string, keyspace string) string {
-	picker, err := discovery.NewTabletPicker(ts, cells, keyspace, "0", "master")
+	picker, err := discovery.NewTabletPicker(ts, cells, keyspace, "0", "primary")
 	if err != nil {
 		return ""
 	}
@@ -424,7 +424,7 @@ func processPositionResult(gtidset string) (string, string) {
 
 // hack, should read json in a structured manner
 func parseExecOutput(result string) string {
-	resultMap := make(map[string]interface{})
+	resultMap := make(map[string]any)
 	err := json.Unmarshal([]byte(result), &resultMap)
 	if err != nil {
 		fmt.Errorf("error parsing result json %s", result)

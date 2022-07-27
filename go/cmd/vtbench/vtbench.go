@@ -23,6 +23,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/spf13/pflag"
+
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
@@ -33,6 +35,9 @@ import (
 	_ "vitess.io/vitess/go/vt/vtgate/grpcvtgateconn"
 	// Import and register the gRPC tabletconn client
 	_ "vitess.io/vitess/go/vt/vttablet/grpctabletconn"
+
+	// Include deprecation warnings for soon-to-be-unsupported flag invocations.
+	_flag "vitess.io/vitess/go/internal/flag"
 )
 
 /*
@@ -45,36 +50,36 @@ import (
 
   Mysql protocol to vtgate:
   vtbench \
-        -protocol mysql \
-        -host vtgate-host.my.domain \
-        -port 15306 \
-        -user db_username \
-        -db-credentials-file ./vtbench_db_creds.json \
-        -db @replica \
-        -sql "select * from loadtest_table where id=123456789" \
-        -threads 10 \
-        -count 10
+        --protocol mysql \
+        --host vtgate-host.my.domain \
+        --port 15306 \
+        --user db_username \
+        --db-credentials-file ./vtbench_db_creds.json \
+        --db @replica \
+        --sql "select * from loadtest_table where id=123456789" \
+        --threads 10 \
+        --count 10
 
   GRPC to vtgate:
   vtbench \
-        -protocol grpc-vtgate \
-        -host vtgate-host.my.domain \
-        -port 15999 \
-        -db @replica  \
+        --protocol grpc-vtgate \
+        --host vtgate-host.my.domain \
+        --port 15999 \
+        --db @replica  \
         $VTTABLET_GRPC_ARGS \
-        -sql "select * from loadtest_table where id=123456789" \
-        -threads 10 \
-        -count 10
+        --sql "select * from loadtest_table where id=123456789" \
+        --threads 10 \
+        --count 10
 
   GRPC to vttablet:
   vtbench \
-        -protocol grpc-vttablet \
-        -host tablet-loadtest-00-80.my.domain \
-        -port 15999 \
-        -db loadtest/00-80@replica  \
-        -sql "select * from loadtest_table where id=123456789" \
-        -threads 10 \
-        -count 10
+        --protocol grpc-vttablet \
+        --host tablet-loadtest-00-80.my.domain \
+        --port 15999 \
+        --db loadtest/00-80@replica  \
+        --sql "select * from loadtest_table where id=123456789" \
+        --threads 10 \
+        --count 10
 
 */
 
@@ -101,7 +106,7 @@ func main() {
 	defer exit.Recover()
 
 	flag.Lookup("logtostderr").Value.Set("true")
-	flag.Parse()
+	_flag.Parse(pflag.NewFlagSet("vtbench", pflag.ExitOnError))
 
 	clientProto := vtbench.MySQL
 	switch *protocol {

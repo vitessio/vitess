@@ -40,7 +40,7 @@ func (s *Server) Lock(ctx context.Context, dirPath, contents string) (topo.LockD
 	return s.lock(ctx, dirPath, contents, false)
 }
 
-// lock is used by both Lock() and master election.
+// lock is used by both Lock() and primary election.
 // it blocks until the lock is taken, interrupted, or times out
 func (s *Server) lock(ctx context.Context, nodePath, contents string, createMissing bool) (topo.LockDescriptor, error) {
 	// Satisfy the topo.Conn interface
@@ -65,7 +65,7 @@ func (s *Server) lock(ctx context.Context, nodePath, contents string, createMiss
 
 	for {
 		// Try and and create the resource. The kube api will handle the actual atomic lock creation
-		final, err = s.resourceClient.Create(resource)
+		final, err = s.resourceClient.Create(ctx, resource, metav1.CreateOptions{})
 		if errors.IsAlreadyExists(err) {
 			select {
 			case <-time.After(10 * time.Millisecond):
@@ -96,7 +96,7 @@ func (s *Server) lock(ctx context.Context, nodePath, contents string, createMiss
 // Check is part of the topo.LockDescriptor interface.
 func (ld *kubernetesLockDescriptor) Check(ctx context.Context) error {
 	// Get the object and ensure the leaseid
-	_, err := ld.s.resourceClient.Get(ld.leaseID, metav1.GetOptions{}) // TODO namespacing
+	_, err := ld.s.resourceClient.Get(ctx, ld.leaseID, metav1.GetOptions{}) // TODO namespacing
 	if err != nil {
 		return convertError(err, ld.leasePath)
 
@@ -107,7 +107,7 @@ func (ld *kubernetesLockDescriptor) Check(ctx context.Context) error {
 
 // Unlock is part of the topo.LockDescriptor interface.
 func (ld *kubernetesLockDescriptor) Unlock(ctx context.Context) error {
-	err := ld.s.resourceClient.Delete(ld.leaseID, &metav1.DeleteOptions{}) // TODO namespacing
+	err := ld.s.resourceClient.Delete(ctx, ld.leaseID, metav1.DeleteOptions{}) // TODO namespacing
 	if err != nil {
 		return convertError(err, ld.leasePath)
 	}

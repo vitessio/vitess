@@ -1,0 +1,7 @@
+{
+  "sharded": false,
+  "tables": {
+    "u_a": {},
+    "u_b": {}
+  }
+}

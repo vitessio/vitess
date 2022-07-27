@@ -17,11 +17,10 @@ limitations under the License.
 package vtgate
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"sync"
-
-	"context"
 
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/vt/grpcclient"
@@ -41,7 +40,7 @@ import (
 // sandbox_test.go provides a sandbox for unit testing VTGate.
 
 const (
-	KsTestSharded             = "TestSharded"
+	KsTestSharded             = "TestExecutor"
 	KsTestUnsharded           = "TestUnsharded"
 	KsTestUnshardedServedFrom = "TestUnshardedServedFrom"
 	KsTestBadVSchema          = "TestXBadVSchema"
@@ -157,11 +156,9 @@ func createShardedSrvKeyspace(shardSpec, servedFromKeyspace string) (*topodatapb
 		shards = append(shards, shard)
 	}
 	shardedSrvKeyspace := &topodatapb.SrvKeyspace{
-		ShardingColumnName: "user_id", // exact value is ignored
-		ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
 		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
 			{
-				ServedType:      topodatapb.TabletType_MASTER,
+				ServedType:      topodatapb.TabletType_PRIMARY,
 				ShardReferences: shards,
 			},
 			{
@@ -181,7 +178,7 @@ func createShardedSrvKeyspace(shardSpec, servedFromKeyspace string) (*topodatapb
 				Keyspace:   servedFromKeyspace,
 			},
 			{
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 				Keyspace:   servedFromKeyspace,
 			},
 		}
@@ -197,7 +194,7 @@ func createUnshardedKeyspace() (*topodatapb.SrvKeyspace, error) {
 	unshardedSrvKeyspace := &topodatapb.SrvKeyspace{
 		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
 			{
-				ServedType:      topodatapb.TabletType_MASTER,
+				ServedType:      topodatapb.TabletType_PRIMARY,
 				ShardReferences: []*topodatapb.ShardReference{shard},
 			},
 			{
@@ -272,7 +269,7 @@ func (sct *sandboxTopo) GetSrvKeyspace(ctx context.Context, cell, keyspace strin
 				Keyspace:   KsTestUnsharded,
 			},
 			{
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 				Keyspace:   KsTestUnsharded,
 			},
 		}
@@ -284,12 +281,16 @@ func (sct *sandboxTopo) GetSrvKeyspace(ctx context.Context, cell, keyspace strin
 	return createShardedSrvKeyspace(sand.ShardSpec, sand.KeyspaceServedFrom)
 }
 
+func (sct *sandboxTopo) WatchSrvKeyspace(ctx context.Context, cell, keyspace string, callback func(*topodatapb.SrvKeyspace, error) bool) {
+	// panic("not supported: WatchSrvKeyspace")
+}
+
 // WatchSrvVSchema is part of the srvtopo.Server interface.
 //
 // If the sandbox was created with a backing topo service, piggy back on it
 // to properly simulate watches, otherwise just immediately call back the
 // caller.
-func (sct *sandboxTopo) WatchSrvVSchema(ctx context.Context, cell string, callback func(*vschemapb.SrvVSchema, error)) {
+func (sct *sandboxTopo) WatchSrvVSchema(ctx context.Context, cell string, callback func(*vschemapb.SrvVSchema, error) bool) {
 	srvVSchema := getSandboxSrvVSchema()
 
 	if sct.topoServer == nil {
@@ -299,11 +300,15 @@ func (sct *sandboxTopo) WatchSrvVSchema(ctx context.Context, cell string, callba
 
 	sct.topoServer.UpdateSrvVSchema(ctx, cell, srvVSchema)
 	current, updateChan, _ := sct.topoServer.WatchSrvVSchema(ctx, cell)
-	callback(current.Value, nil)
+	if !callback(current.Value, nil) {
+		panic("sandboxTopo callback returned false")
+	}
 	go func() {
 		for {
 			update := <-updateChan
-			callback(update.Value, update.Err)
+			if !callback(update.Value, update.Err) {
+				panic("sandboxTopo callback returned false")
+			}
 		}
 	}()
 }

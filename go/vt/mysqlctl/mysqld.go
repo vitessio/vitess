@@ -26,11 +26,11 @@ package mysqlctl
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
@@ -42,8 +42,6 @@ import (
 	"time"
 
 	rice "github.com/GeertJohan/go.rice"
-
-	"context"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -61,22 +59,24 @@ var (
 	// 2. in vtctld so it can be exported to the UI (different
 	// package, that's why it's exported). That way we can disable
 	// menu items there, using features.
-	// 3. prevents the vtworker from updating replication topology
-	// after restarting replication after a split clone/diff.
 	DisableActiveReparents = flag.Bool("disable_active_reparents", false, "if set, do not allow active reparents. Use this to protect a cluster using external reparents.")
 
-	dbaPoolSize    = flag.Int("dba_pool_size", 20, "Size of the connection pool for dba connections")
-	dbaIdleTimeout = flag.Duration("dba_idle_timeout", time.Minute, "Idle timeout for dba connections")
+	dbaPoolSize = flag.Int("dba_pool_size", 20, "Size of the connection pool for dba connections")
+	// DbaIdleTimeout is how often we will refresh the DBA connpool connections
+	DbaIdleTimeout = flag.Duration("dba_idle_timeout", time.Minute, "Idle timeout for dba connections")
 	appPoolSize    = flag.Int("app_pool_size", 40, "Size of the connection pool for app connections")
 	appIdleTimeout = flag.Duration("app_idle_timeout", time.Minute, "Idle timeout for app connections")
 
-	poolDynamicHostnameResolution = flag.Duration("pool_hostname_resolve_interval", 0, "if set force an update to all hostnames and reconnect if changed, defaults to 0 (disabled)")
+	// PoolDynamicHostnameResolution is whether we should retry DNS resolution of hostname targets
+	// and reconnect if necessary
+	PoolDynamicHostnameResolution = flag.Duration("pool_hostname_resolve_interval", 0, "if set force an update to all hostnames and reconnect if changed, defaults to 0 (disabled)")
 
 	mycnfTemplateFile = flag.String("mysqlctl_mycnf_template", "", "template file to use for generating the my.cnf file during server init")
 	socketFile        = flag.String("mysqlctl_socket", "", "socket file to use for remote mysqlctl actions (empty for local actions)")
 
-	// masterConnectRetry is used in 'SET MASTER' commands
-	masterConnectRetry = flag.Duration("master_connect_retry", 10*time.Second, "how long to wait in between replica reconnect attempts. Only precise to the second.")
+	// Deprecated
+	masterConnectRetry      = flag.Duration("master_connect_retry", 10*time.Second, "Deprecated, use -replication_connect_retry")
+	replicationConnectRetry = flag.Duration("replication_connect_retry", 10*time.Second, "how long to wait in between replica reconnect attempts. Only precise to the second.")
 
 	versionRegex = regexp.MustCompile(`Ver ([0-9]+)\.([0-9]+)\.([0-9]+)`)
 )
@@ -106,11 +106,11 @@ func NewMysqld(dbcfgs *dbconfigs.DBConfigs) *Mysqld {
 	}
 
 	// Create and open the connection pool for dba access.
-	result.dbaPool = dbconnpool.NewConnectionPool("DbaConnPool", *dbaPoolSize, *dbaIdleTimeout, *poolDynamicHostnameResolution)
+	result.dbaPool = dbconnpool.NewConnectionPool("DbaConnPool", *dbaPoolSize, *DbaIdleTimeout, *PoolDynamicHostnameResolution)
 	result.dbaPool.Open(dbcfgs.DbaWithDB())
 
 	// Create and open the connection pool for app access.
-	result.appPool = dbconnpool.NewConnectionPool("AppConnPool", *appPoolSize, *appIdleTimeout, *poolDynamicHostnameResolution)
+	result.appPool = dbconnpool.NewConnectionPool("AppConnPool", *appPoolSize, *appIdleTimeout, *PoolDynamicHostnameResolution)
 	result.appPool.Open(dbcfgs.AppWithDB())
 
 	/*
@@ -182,17 +182,17 @@ versions should only matter if Vitess is managing the lifecycle of mysqld, in wh
 case we should have a local copy of the mysqld binary from which we can fetch
 the accurate version instead of falling back to this function (see GetVersionString).
 */
-func GetVersionFromEnv() (flavor mysqlFlavor, ver serverVersion, err error) {
+func GetVersionFromEnv() (flavor MySQLFlavor, ver ServerVersion, err error) {
 	env := os.Getenv("MYSQL_FLAVOR")
 	switch env {
 	case "MariaDB":
-		return FlavorMariaDB, serverVersion{10, 0, 10}, nil
+		return FlavorMariaDB, ServerVersion{10, 0, 10}, nil
 	case "MariaDB103":
-		return FlavorMariaDB, serverVersion{10, 3, 7}, nil
+		return FlavorMariaDB, ServerVersion{10, 3, 7}, nil
 	case "MySQL80":
-		return FlavorMySQL, serverVersion{8, 0, 11}, nil
+		return FlavorMySQL, ServerVersion{8, 0, 11}, nil
 	case "MySQL56":
-		return FlavorMySQL, serverVersion{5, 7, 10}, nil
+		return FlavorMySQL, ServerVersion{5, 7, 10}, nil
 	}
 	return flavor, ver, fmt.Errorf("could not determine version from MYSQL_FLAVOR: %s", env)
 }
@@ -215,7 +215,7 @@ func GetVersionString() (string, error) {
 }
 
 // ParseVersionString parses the output of mysqld --version into a flavor and version
-func ParseVersionString(version string) (flavor mysqlFlavor, ver serverVersion, err error) {
+func ParseVersionString(version string) (flavor MySQLFlavor, ver ServerVersion, err error) {
 	if strings.Contains(version, "Percona") {
 		flavor = FlavorPercona
 	} else if strings.Contains(version, "MariaDB") {
@@ -345,7 +345,7 @@ func (mysqld *Mysqld) startNoWait(ctx context.Context, cnf *Mycnf, mysqldArgs ..
 	switch hr := hook.NewHook("mysqld_start", mysqldArgs).Execute(); hr.ExitStatus {
 	case hook.HOOK_SUCCESS:
 		// hook exists and worked, we can keep going
-		name = "mysqld_start hook" //nolint
+		name = "mysqld_start hook" // nolint
 	case hook.HOOK_DOES_NOT_EXIST:
 		// hook doesn't exist, run mysqld_safe ourselves
 		log.Infof("%v: No mysqld_start hook, running mysqld_safe directly", ts)
@@ -369,7 +369,7 @@ func (mysqld *Mysqld) startNoWait(ctx context.Context, cnf *Mycnf, mysqldArgs ..
 			return err
 		}
 		args := []string{
-			"--defaults-file=" + cnf.path,
+			"--defaults-file=" + cnf.Path,
 			"--basedir=" + mysqlBaseDir,
 		}
 		args = append(args, mysqldArgs...)
@@ -627,8 +627,8 @@ func (mysqld *Mysqld) InitConfig(cnf *Mycnf) error {
 		return err
 	}
 	// Set up config files.
-	if err = mysqld.initConfig(cnf, cnf.path); err != nil {
-		log.Errorf("failed creating %v: %v", cnf.path, err)
+	if err = mysqld.initConfig(cnf, cnf.Path); err != nil {
+		log.Errorf("failed creating %v: %v", cnf.Path, err)
 		return err
 	}
 	return nil
@@ -660,7 +660,6 @@ func (mysqld *Mysqld) Init(ctx context.Context, cnf *Mycnf, initDBSQLFile string
 	// user is created yet.
 	params := &mysql.ConnParams{
 		Uname:      "root",
-		Charset:    "utf8",
 		UnixSocket: cnf.SocketFile,
 	}
 	if err = mysqld.wait(ctx, cnf, params); err != nil {
@@ -739,7 +738,7 @@ func (mysqld *Mysqld) installDataDir(cnf *Mycnf) error {
 	if mysqld.capabilities.hasInitializeInServer() {
 		log.Infof("Installing data dir with mysqld --initialize-insecure")
 		args := []string{
-			"--defaults-file=" + cnf.path,
+			"--defaults-file=" + cnf.Path,
 			"--basedir=" + mysqlBaseDir,
 			"--initialize-insecure", // Use empty 'root'@'localhost' password.
 		}
@@ -752,7 +751,7 @@ func (mysqld *Mysqld) installDataDir(cnf *Mycnf) error {
 
 	log.Infof("Installing data dir with mysql_install_db")
 	args := []string{
-		"--defaults-file=" + cnf.path,
+		"--defaults-file=" + cnf.Path,
 		"--basedir=" + mysqlBaseDir,
 	}
 	if mysqld.capabilities.hasMaria104InstallDb() {
@@ -792,12 +791,12 @@ func (mysqld *Mysqld) initConfig(cnf *Mycnf, outFile string) error {
 		return err
 	}
 
-	return ioutil.WriteFile(outFile, []byte(configData), 0664)
+	return os.WriteFile(outFile, []byte(configData), 0664)
 }
 
 func (mysqld *Mysqld) getMycnfTemplate() string {
 	if *mycnfTemplateFile != "" {
-		data, err := ioutil.ReadFile(*mycnfTemplateFile)
+		data, err := os.ReadFile(*mycnfTemplateFile)
 		if err != nil {
 			log.Fatalf("template file specified by -mysqlctl_mycnf_template could not be read: %v", *mycnfTemplateFile)
 		}
@@ -813,13 +812,13 @@ func (mysqld *Mysqld) getMycnfTemplate() string {
 	}
 	myTemplateSource.Write(b)
 
-	// mysql version specific file.
-	// master_{flavor}{major}{minor}.cnf
+	// database flavor + version specific file.
+	// {flavor}{major}{minor}.cnf
 	f := FlavorMariaDB
 	if mysqld.capabilities.isMySQLLike() {
 		f = FlavorMySQL
 	}
-	fn := fmt.Sprintf("mycnf/master_%s%d%d.cnf", f, mysqld.capabilities.version.Major, mysqld.capabilities.version.Minor)
+	fn := fmt.Sprintf("mycnf/%s%d%d.cnf", f, mysqld.capabilities.version.Major, mysqld.capabilities.version.Minor)
 	b, err = riceBox.Bytes(fn)
 	if err != nil {
 		log.Infof("this version of Vitess does not include built-in support for %v %v", mysqld.capabilities.flavor, mysqld.capabilities.version)
@@ -829,7 +828,7 @@ func (mysqld *Mysqld) getMycnfTemplate() string {
 	if extraCnf := os.Getenv("EXTRA_MY_CNF"); extraCnf != "" {
 		parts := strings.Split(extraCnf, ":")
 		for _, path := range parts {
-			data, dataErr := ioutil.ReadFile(path)
+			data, dataErr := os.ReadFile(path)
 			if dataErr != nil {
 				log.Infof("could not open config file for mycnf: %v", path)
 				continue
@@ -857,7 +856,7 @@ func (mysqld *Mysqld) RefreshConfig(ctx context.Context, cnf *Mycnf) error {
 	}
 
 	log.Info("Checking for updates to my.cnf")
-	f, err := ioutil.TempFile(path.Dir(cnf.path), "my.cnf")
+	f, err := os.CreateTemp(path.Dir(cnf.Path), "my.cnf")
 	if err != nil {
 		return fmt.Errorf("could not create temp file: %v", err)
 	}
@@ -868,11 +867,11 @@ func (mysqld *Mysqld) RefreshConfig(ctx context.Context, cnf *Mycnf) error {
 		return fmt.Errorf("could not initConfig in %v: %v", f.Name(), err)
 	}
 
-	existing, err := ioutil.ReadFile(cnf.path)
+	existing, err := os.ReadFile(cnf.Path)
 	if err != nil {
-		return fmt.Errorf("could not read existing file %v: %v", cnf.path, err)
+		return fmt.Errorf("could not read existing file %v: %v", cnf.Path, err)
 	}
-	updated, err := ioutil.ReadFile(f.Name())
+	updated, err := os.ReadFile(f.Name())
 	if err != nil {
 		return fmt.Errorf("could not read updated file %v: %v", f.Name(), err)
 	}
@@ -882,14 +881,14 @@ func (mysqld *Mysqld) RefreshConfig(ctx context.Context, cnf *Mycnf) error {
 		return nil
 	}
 
-	backupPath := cnf.path + ".previous"
-	err = os.Rename(cnf.path, backupPath)
+	backupPath := cnf.Path + ".previous"
+	err = os.Rename(cnf.Path, backupPath)
 	if err != nil {
-		return fmt.Errorf("could not back up existing %v: %v", cnf.path, err)
+		return fmt.Errorf("could not back up existing %v: %v", cnf.Path, err)
 	}
-	err = os.Rename(f.Name(), cnf.path)
+	err = os.Rename(f.Name(), cnf.Path)
 	if err != nil {
-		return fmt.Errorf("could not move %v to %v: %v", f.Name(), cnf.path, err)
+		return fmt.Errorf("could not move %v to %v: %v", f.Name(), cnf.Path, err)
 	}
 	log.Infof("Updated my.cnf. Backup of previous version available in %v", backupPath)
 
@@ -917,7 +916,7 @@ func (mysqld *Mysqld) ReinitConfig(ctx context.Context, cnf *Mycnf) error {
 	if err := cnf.RandomizeMysqlServerID(); err != nil {
 		return err
 	}
-	return mysqld.initConfig(cnf, cnf.path)
+	return mysqld.initConfig(cnf, cnf.Path)
 }
 
 func (mysqld *Mysqld) createDirs(cnf *Mycnf) error {
@@ -1050,7 +1049,7 @@ func (mysqld *Mysqld) executeMysqlScript(connParams *mysql.ConnParams, sql io.Re
 // defaultsExtraFile returns the filename for a temporary config file
 // that contains the user, password and socket file to connect to
 // mysqld.  We write a temporary config file so the password is never
-// passed as a command line parameter.  Note ioutil.TempFile uses 0600
+// passed as a command line parameter.  Note os.CreateTemp uses 0600
 // as permissions, so only the local user can read the file.  The
 // returned temporary file should be removed after use, typically in a
 // 'defer os.Remove()' statement.
@@ -1074,7 +1073,7 @@ socket=%v
 `, connParams.Uname, connParams.Pass, connParams.UnixSocket)
 	}
 
-	tmpfile, err := ioutil.TempFile("", "example")
+	tmpfile, err := os.CreateTemp("", "example")
 	if err != nil {
 		return "", err
 	}
@@ -1139,4 +1138,23 @@ func buildLdPaths() ([]string, error) {
 	}
 
 	return ldPaths, nil
+}
+
+// GetVersionString is part of the MysqlDeamon interface.
+func (mysqld *Mysqld) GetVersionString() string {
+	return fmt.Sprintf("%d.%d.%d", mysqld.capabilities.version.Major, mysqld.capabilities.version.Minor, mysqld.capabilities.version.Patch)
+}
+
+// GetVersionComment gets the version comment.
+func (mysqld *Mysqld) GetVersionComment(ctx context.Context) string {
+	qr, err := mysqld.FetchSuperQuery(ctx, "select @@global.version_comment")
+	if err != nil {
+		return ""
+	}
+	if len(qr.Rows) != 1 {
+		return ""
+	}
+	res := qr.Named().Row()
+	versionComment, _ := res.ToString("@@global.version_comment")
+	return versionComment
 }

@@ -38,13 +38,13 @@ func init() {
 }
 
 // StatusSummary returns the summary status of vreplication.
-func StatusSummary() (maxSecondsBehindMaster int64, binlogPlayersCount int32) {
-	return globalStats.maxSecondsBehindMaster(), int32(globalStats.numControllers())
+func StatusSummary() (maxReplicationLagSeconds int64, binlogPlayersCount int32) {
+	return globalStats.maxReplicationLagSeconds(), int32(globalStats.numControllers())
 }
 
 // AddStatusPart adds the vreplication status to the status page.
 func AddStatusPart() {
-	servenv.AddStatusPart("VReplication", vreplicationTemplate, func() interface{} {
+	servenv.AddStatusPart("VReplication", vreplicationTemplate, func() any {
 		return globalStats.status()
 	})
 }
@@ -61,7 +61,7 @@ type vrStats struct {
 
 func (st *vrStats) register() {
 	stats.NewGaugeFunc("VReplicationStreamCount", "Number of vreplication streams", st.numControllers)
-	stats.NewGaugeFunc("VReplicationSecondsBehindMasterMax", "Max vreplication seconds behind master", st.maxSecondsBehindMaster)
+	stats.NewGaugeFunc("VReplicationLagSecondsMax", "Max vreplication seconds behind primary", st.maxReplicationLagSeconds)
 	stats.Publish("VReplicationStreamState", stats.StringMapFunc(func() map[string]string {
 		st.mu.Lock()
 		defer st.mu.Unlock()
@@ -72,28 +72,28 @@ func (st *vrStats) register() {
 		return result
 	}))
 	stats.NewGaugesFuncWithMultiLabels(
-		"VReplicationSecondsBehindMaster",
-		"vreplication seconds behind master per stream",
+		"VReplicationLagSeconds",
+		"vreplication seconds behind primary per stream",
 		[]string{"source_keyspace", "source_shard", "workflow", "counts"},
 		func() map[string]int64 {
 			st.mu.Lock()
 			defer st.mu.Unlock()
 			result := make(map[string]int64, len(st.controllers))
 			for _, ct := range st.controllers {
-				result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+fmt.Sprintf("%v", ct.id)] = ct.blpStats.SecondsBehindMaster.Get()
+				result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+fmt.Sprintf("%v", ct.id)] = ct.blpStats.ReplicationLagSeconds.Get()
 			}
 			return result
 		})
 
 	stats.NewCounterFunc(
-		"VReplicationSecondsBehindMasterTotal",
-		"vreplication seconds behind master aggregated across all streams",
+		"VReplicationLagSecondsTotal",
+		"vreplication seconds behind primary aggregated across all streams",
 		func() int64 {
 			st.mu.Lock()
 			defer st.mu.Unlock()
 			result := int64(0)
 			for _, ct := range st.controllers {
-				result += ct.blpStats.SecondsBehindMaster.Get()
+				result += ct.blpStats.ReplicationLagSeconds.Get()
 			}
 			return result
 		})
@@ -329,7 +329,7 @@ func (st *vrStats) register() {
 	stats.NewCountersFuncWithMultiLabels(
 		"VReplicationErrors",
 		"Errors during vreplication",
-		[]string{"workflow", "type"},
+		[]string{"workflow", "id", "type"},
 		func() map[string]int64 {
 			st.mu.Lock()
 			defer st.mu.Unlock()
@@ -363,12 +363,12 @@ func (st *vrStats) numControllers() int64 {
 	return int64(len(st.controllers))
 }
 
-func (st *vrStats) maxSecondsBehindMaster() int64 {
+func (st *vrStats) maxReplicationLagSeconds() int64 {
 	st.mu.Lock()
 	defer st.mu.Unlock()
 	max := int64(0)
 	for _, ct := range st.controllers {
-		if cur := ct.blpStats.SecondsBehindMaster.Get(); cur > max {
+		if cur := ct.blpStats.ReplicationLagSeconds.Get(); cur > max {
 			max = cur
 		}
 	}
@@ -386,22 +386,22 @@ func (st *vrStats) status() *EngineStatus {
 	i := 0
 	for _, ct := range st.controllers {
 		status.Controllers[i] = &ControllerStatus{
-			Index:               ct.id,
-			Source:              ct.source.String(),
-			StopPosition:        ct.stopPos,
-			LastPosition:        ct.blpStats.LastPosition().String(),
-			Heartbeat:           ct.blpStats.Heartbeat(),
-			SecondsBehindMaster: ct.blpStats.SecondsBehindMaster.Get(),
-			Counts:              ct.blpStats.Timings.Counts(),
-			Rates:               ct.blpStats.Rates.Get(),
-			State:               ct.blpStats.State.Get(),
-			SourceTablet:        ct.sourceTablet.Get(),
-			Messages:            ct.blpStats.MessageHistory(),
-			QueryCounts:         ct.blpStats.QueryCount.Counts(),
-			PhaseTimings:        ct.blpStats.PhaseTimings.Counts(),
-			CopyRowCount:        ct.blpStats.CopyRowCount.Get(),
-			CopyLoopCount:       ct.blpStats.CopyLoopCount.Get(),
-			NoopQueryCounts:     ct.blpStats.NoopQueryCount.Counts(),
+			Index:                 ct.id,
+			Source:                ct.source.String(),
+			StopPosition:          ct.stopPos,
+			LastPosition:          ct.blpStats.LastPosition().String(),
+			Heartbeat:             ct.blpStats.Heartbeat(),
+			ReplicationLagSeconds: ct.blpStats.ReplicationLagSeconds.Get(),
+			Counts:                ct.blpStats.Timings.Counts(),
+			Rates:                 ct.blpStats.Rates.Get(),
+			State:                 ct.blpStats.State.Get(),
+			SourceTablet:          ct.sourceTablet.Get(),
+			Messages:              ct.blpStats.MessageHistory(),
+			QueryCounts:           ct.blpStats.QueryCount.Counts(),
+			PhaseTimings:          ct.blpStats.PhaseTimings.Counts(),
+			CopyRowCount:          ct.blpStats.CopyRowCount.Get(),
+			CopyLoopCount:         ct.blpStats.CopyLoopCount.Get(),
+			NoopQueryCounts:       ct.blpStats.NoopQueryCount.Counts(),
 		}
 		i++
 	}
@@ -417,23 +417,23 @@ type EngineStatus struct {
 
 // ControllerStatus contains a renderable status of a controller.
 type ControllerStatus struct {
-	Index               uint32
-	Source              string
-	SourceShard         string
-	StopPosition        string
-	LastPosition        string
-	Heartbeat           int64
-	SecondsBehindMaster int64
-	Counts              map[string]int64
-	Rates               map[string][]float64
-	State               string
-	SourceTablet        string
-	Messages            []string
-	QueryCounts         map[string]int64
-	PhaseTimings        map[string]int64
-	CopyRowCount        int64
-	CopyLoopCount       int64
-	NoopQueryCounts     map[string]int64
+	Index                 uint32
+	Source                string
+	SourceShard           string
+	StopPosition          string
+	LastPosition          string
+	Heartbeat             int64
+	ReplicationLagSeconds int64
+	Counts                map[string]int64
+	Rates                 map[string][]float64
+	State                 string
+	SourceTablet          string
+	Messages              []string
+	QueryCounts           map[string]int64
+	PhaseTimings          map[string]int64
+	CopyRowCount          int64
+	CopyLoopCount         int64
+	NoopQueryCounts       map[string]int64
 }
 
 var vreplicationTemplate = `
@@ -446,7 +446,7 @@ var vreplicationTemplate = `
     <th>State</th>
     <th>Stop Position</th>
     <th>Last Position</th>
-    <th>Seconds Behind Master</th>
+    <th>VReplication Lag</th>
     <th>Counts</th>
     <th>Rates</th>
     <th>Last Message</th>
@@ -458,18 +458,18 @@ var vreplicationTemplate = `
       <td>{{.State}}</td>
       <td>{{.StopPosition}}</td>
       <td>{{.LastPosition}}</td>
-      <td>{{.SecondsBehindMaster}}</td>
+      <td>{{.ReplicationLagSeconds}}</td>
       <td>{{range $key, $value := .Counts}}<b>{{$key}}</b>: {{$value}}<br>{{end}}</td>
       <td>{{range $key, $values := .Rates}}<b>{{$key}}</b>: {{range $values}}{{.}} {{end}}<br>{{end}}</td>
       <td>{{range $index, $value := .Messages}}{{$value}}<br>{{end}}</td>
     </tr>{{end}}
-<div id="vreplication_qps_chart">QPS All Streams </div>
+<div id="vreplication_qps_chart" style="height: 500px; width: 900px">QPS All Streams </div>
 
-<script type="text/javascript" src="https://www.google.com/jsapi"></script>
+<script src="https://www.gstatic.com/charts/loader.js"></script>
 <script type="text/javascript">
 
 function drawVReplicationQPSChart() {
-  var div = $('#vreplication_qps_chart').height(500).width(900).unwrap()[0]
+  var div = document.getElementById('vreplication_qps_chart')
   var chart = new google.visualization.LineChart(div);
 
   var options = {
@@ -488,9 +488,10 @@ function drawVReplicationQPSChart() {
     vars_url = window.location.pathname.substring(0, pos) + vars_url;
   }
 
-  var redraw = function() {
-    $.getJSON(vars_url, function(input_data) {
-      var now = new Date();
+  const redraw = () => fetch(vars_url)
+  .then(async (response) => {
+	const input_data = await response.json();
+	var now = new Date();
       var qps = input_data.VReplicationQPS;
       var planTypes = Object.keys(qps);
       if (planTypes.length === 0) {
@@ -519,8 +520,7 @@ function drawVReplicationQPSChart() {
         data.push(datum)
       }
       chart.draw(google.visualization.arrayToDataTable(data), options);
-    })
-  };
+  })
 
   redraw();
 

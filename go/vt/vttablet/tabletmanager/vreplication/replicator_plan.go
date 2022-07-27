@@ -26,6 +26,7 @@ import (
 
 	"vitess.io/vitess/go/bytes2"
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -55,6 +56,7 @@ type ReplicatorPlan struct {
 	TablePlans    map[string]*TablePlan
 	ColInfoMap    map[string][]*ColumnInfo
 	stats         *binlogplayer.Stats
+	Source        *binlogdatapb.BinlogSource
 }
 
 // buildExecution plan uses the field info as input and the partially built
@@ -94,13 +96,14 @@ func (rp *ReplicatorPlan) buildExecutionPlan(fieldEvent *binlogdatapb.FieldEvent
 // requires us to wait for the field info sent by the source.
 func (rp *ReplicatorPlan) buildFromFields(tableName string, lastpk *sqltypes.Result, fields []*querypb.Field) (*TablePlan, error) {
 	tpb := &tablePlanBuilder{
-		name:     sqlparser.NewTableIdent(tableName),
+		name:     sqlparser.NewIdentifierCS(tableName),
 		lastpk:   lastpk,
 		colInfos: rp.ColInfoMap[tableName],
 		stats:    rp.stats,
+		source:   rp.Source,
 	}
 	for _, field := range fields {
-		colName := sqlparser.NewColIdent(field.Name)
+		colName := sqlparser.NewIdentifierCI(field.Name)
 		isGenerated := false
 		for _, colInfo := range tpb.colInfos {
 			if !strings.EqualFold(colInfo.Name, field.Name) {
@@ -127,7 +130,7 @@ func (rp *ReplicatorPlan) buildFromFields(tableName string, lastpk *sqltypes.Res
 		tpb.colExprs = append(tpb.colExprs, cexpr)
 	}
 	// The following actions are a subset of buildTablePlan.
-	if err := tpb.analyzePK(rp.ColInfoMap); err != nil {
+	if err := tpb.analyzePK(rp.ColInfoMap[tableName]); err != nil {
 		return nil, err
 	}
 	return tpb.generate(), nil
@@ -195,10 +198,11 @@ type TablePlan struct {
 	EnumValuesMap map[string](map[string]string)
 	// PKReferences is used to check if an event changed
 	// a primary key column (row move).
-	PKReferences   []string
-	Stats          *binlogplayer.Stats
-	FieldsToSkip   map[string]bool
-	ConvertCharset map[string](*binlogdatapb.CharsetConversion)
+	PKReferences            []string
+	Stats                   *binlogplayer.Stats
+	FieldsToSkip            map[string]bool
+	ConvertCharset          map[string](*binlogdatapb.CharsetConversion)
+	HasExtraSourcePkColumns bool
 }
 
 // MarshalJSON performs a custom JSON Marshalling.
@@ -280,7 +284,8 @@ func (tp *TablePlan) isOutsidePKRange(bindvars map[string]*querypb.BindVariable,
 		}
 
 		rowVal, _ := sqltypes.BindVariableToValue(bindvar)
-		result, err := evalengine.NullsafeCompare(rowVal, tp.Lastpk.Rows[0][0])
+		// TODO(king-11) make collation aware
+		result, err := evalengine.NullsafeCompare(rowVal, tp.Lastpk.Rows[0][0], collations.Unknown)
 		// If rowVal is > last pk, transaction will be a noop, so don't apply this statement
 		if err == nil && result > 0 {
 			tp.Stats.NoopQueryCount.Add(stmtType, 1)
@@ -315,7 +320,7 @@ func (tp *TablePlan) bindFieldVal(field *querypb.Field, val *sqltypes.Value) (*q
 		return sqltypes.StringBindVariable(valString), nil
 	}
 	if enumValues, ok := tp.EnumValuesMap[field.Name]; ok && !val.IsNull() {
-		// The fact that this fielkd has a EnumValuesMap entry, means we must
+		// The fact that this field has a EnumValuesMap entry, means we must
 		// use the enum's text value as opposed to the enum's numerical value.
 		// Once known use case is with Online DDL, when a column is converted from
 		// ENUM to a VARCHAR/TEXT.
@@ -323,8 +328,19 @@ func (tp *TablePlan) bindFieldVal(field *querypb.Field, val *sqltypes.Value) (*q
 		if !enumValueOK {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Invalid enum value: %v for field %s", val, field.Name)
 		}
-		// get the enum text fir this val
+		// get the enum text for this val
 		return sqltypes.StringBindVariable(enumValue), nil
+	}
+	if field.Type == querypb.Type_ENUM {
+		// This is an ENUM w/o a values map, which means that we are most likely using
+		// the index value -- what is stored and binlogged vs. the list of strings
+		// defined in the table schema -- and we must use an int bindvar or we'll have
+		// invalid/incorrect predicates like WHERE enumcol='2'.
+		// This will be the case when applying binlog events.
+		enumIndexVal := sqltypes.MakeTrusted(querypb.Type_UINT64, val.Raw())
+		if enumIndex, err := enumIndexVal.ToUint64(); err == nil {
+			return sqltypes.Uint64BindVariable(enumIndex), nil
+		}
 	}
 	return sqltypes.ValueBindVariable(*val), nil
 }
@@ -368,14 +384,16 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 		}
 		return execParsedQuery(tp.Delete, bindvars, executor)
 	case before && after:
-		if !tp.pkChanged(bindvars) {
+		if !tp.pkChanged(bindvars) && !tp.HasExtraSourcePkColumns {
 			return execParsedQuery(tp.Update, bindvars, executor)
 		}
 		if tp.Delete != nil {
 			if _, err := execParsedQuery(tp.Delete, bindvars, executor); err != nil {
 				return nil, err
 			}
-
+		}
+		if tp.isOutsidePKRange(bindvars, before, after, "insert") {
+			return nil, nil
 		}
 		return execParsedQuery(tp.Insert, bindvars, executor)
 	}

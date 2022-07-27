@@ -17,7 +17,13 @@ import { rest } from 'msw';
 import { setupServer } from 'msw/node';
 
 import * as api from './http';
-import { HTTP_RESPONSE_NOT_OK_ERROR, MALFORMED_HTTP_RESPONSE_ERROR } from '../errors/errorTypes';
+import {
+    HttpFetchError,
+    HttpResponseNotOkError,
+    HTTP_RESPONSE_NOT_OK_ERROR,
+    MalformedHttpResponseError,
+    MALFORMED_HTTP_RESPONSE_ERROR,
+} from '../errors/errorTypes';
 import * as errorHandler from '../errors/errorHandler';
 
 jest.mock('../errors/errorHandler');
@@ -111,7 +117,8 @@ describe('api/http', () => {
 
             try {
                 await api.fetchTablets();
-            } catch (e) {
+            } catch (error) {
+                let e: HttpResponseNotOkError = error as HttpResponseNotOkError;
                 /* eslint-disable jest/no-conditional-expect */
                 expect(e.name).toEqual(HTTP_RESPONSE_NOT_OK_ERROR);
                 expect(e.message).toEqual('[status 500] /api/tablets: oh_no something went wrong');
@@ -135,7 +142,8 @@ describe('api/http', () => {
 
             try {
                 await api.vtfetch(endpoint);
-            } catch (e) {
+            } catch (error) {
+                let e: MalformedHttpResponseError = error as MalformedHttpResponseError;
                 /* eslint-disable jest/no-conditional-expect */
                 expect(e.name).toEqual(MALFORMED_HTTP_RESPONSE_ERROR);
                 expect(e.message).toEqual('[status 504] /api/tablets: Unexpected token < in JSON at position 0');
@@ -154,7 +162,8 @@ describe('api/http', () => {
 
             try {
                 await api.vtfetch(endpoint);
-            } catch (e) {
+            } catch (error) {
+                let e: MalformedHttpResponseError = error as MalformedHttpResponseError;
                 /* eslint-disable jest/no-conditional-expect */
                 expect(e.name).toEqual(MALFORMED_HTTP_RESPONSE_ERROR);
                 /* eslint-enable jest/no-conditional-expect */
@@ -207,7 +216,8 @@ describe('api/http', () => {
 
                 try {
                     await api.vtfetch(endpoint);
-                } catch (e) {
+                } catch (error) {
+                    let e: HttpFetchError = error as HttpFetchError;
                     /* eslint-disable jest/no-conditional-expect */
                     expect(e.message).toEqual(
                         'Invalid fetch credentials property: nope. Must be undefined or one of omit, same-origin, include'
@@ -221,6 +231,51 @@ describe('api/http', () => {
 
                 jest.restoreAllMocks();
             });
+        });
+
+        it('allows GET requests when in read only mode', async () => {
+            (process as any).env.REACT_APP_READONLY_MODE = 'true';
+
+            const endpoint = `/api/tablets`;
+            const response = { ok: true, result: null };
+            mockServerJson(endpoint, response);
+
+            const result1 = await api.vtfetch(endpoint);
+            expect(result1).toEqual(response);
+
+            const result2 = await api.vtfetch(endpoint, { method: 'get' });
+            expect(result2).toEqual(response);
+        });
+
+        it('throws an error when executing a write request in read only mode', async () => {
+            (process as any).env.REACT_APP_READONLY_MODE = 'true';
+
+            jest.spyOn(global, 'fetch');
+
+            // Endpoint doesn't really matter here since the point is that we don't hit it
+            const endpoint = `/api/fake`;
+            const response = { ok: true, result: null };
+            mockServerJson(endpoint, response);
+
+            const blockedMethods = ['post', 'POST', 'put', 'PUT', 'delete', 'DELETE'];
+            for (let i = 0; i < blockedMethods.length; i++) {
+                const method = blockedMethods[i];
+                try {
+                    await api.vtfetch(endpoint, { method });
+                } catch (e: any) {
+                    /* eslint-disable jest/no-conditional-expect */
+                    expect(e.message).toEqual(`Cannot execute write request in read-only mode: ${method} ${endpoint}`);
+                    expect(global.fetch).toHaveBeenCalledTimes(0);
+
+                    expect(errorHandler.notify).toHaveBeenCalledTimes(1);
+                    expect(errorHandler.notify).toHaveBeenCalledWith(e);
+                    /* eslint-enable jest/no-conditional-expect */
+                }
+
+                jest.clearAllMocks();
+            }
+
+            jest.restoreAllMocks();
         });
     });
 
@@ -237,7 +292,8 @@ describe('api/http', () => {
                     extract: (res) => res.result.foos,
                     transform: (e) => null, // doesn't matter
                 });
-            } catch (e) {
+            } catch (error) {
+                let e: HttpFetchError = error as HttpFetchError;
                 /* eslint-disable jest/no-conditional-expect */
                 expect(e.message).toMatch('expected entities to be an array, got null');
 

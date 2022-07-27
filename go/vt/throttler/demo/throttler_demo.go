@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"flag"
 	"math/rand"
 	"net/http"
@@ -25,9 +26,11 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/vt/discovery"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/throttler"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vttablet/grpcqueryservice"
 	"vitess.io/vitess/go/vt/vttablet/queryservice/fakes"
@@ -37,24 +40,22 @@ import (
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-
-	"vitess.io/vitess/go/vt/log"
 )
 
 // This file contains a demo binary that demonstrates how the resharding
 // throttler adapts its throttling rate to the replication lag.
 //
 // The throttler is necessary because replicas apply transactions at a slower
-// rate than masters and fall behind at high write throughput.
+// rate than primaries and fall behind at high write throughput.
 // (Mostly they fall behind because MySQL replication is single threaded but
-//  the write throughput on the master does not have to.)
+//  the write throughput on the primary does not have to.)
 //
-// This demo simulates a client (writer), a master and a replica.
-// The client writes to the master which in turn replicas everything to the
+// This demo simulates a client (writer), a primary and a replica.
+// The client writes to the primary which in turn replicas everything to the
 // replica.
 // The replica measures its replication lag via the timestamp which is part of
 // each message.
-// While the master has no rate limit, the replica is limited to
+// While the primary has no rate limit, the replica is limited to
 // --rate (see below) transactions/second. The client runs the resharding
 // throttler which tries to throttle the client based on the observed
 // replication lag.
@@ -67,25 +68,25 @@ var (
 	replicaDegrationDuration = flag.Duration("replica_degration_duration", 10*time.Second, "duration a simulated degration should take")
 )
 
-// master simulates an *unthrottled* MySQL master which replicates every
+// primary simulates an *unthrottled* MySQL primary which replicates every
 // received "execute" call to a known "replica".
-type master struct {
+type primary struct {
 	replica *replica
 }
 
 // execute is the simulated RPC which is called by the client.
-func (m *master) execute(msg time.Time) {
+func (m *primary) execute(msg time.Time) {
 	m.replica.replicate(msg)
 }
 
 // replica simulates a *throttled* MySQL replica.
-// If it cannot keep up with applying the master writes, it will report a
+// If it cannot keep up with applying the primary writes, it will report a
 // replication lag > 0 seconds.
 type replica struct {
 	fakeTablet *testlib.FakeTablet
 	qs         *fakes.StreamHealthQueryService
 
-	// replicationStream is the incoming stream of messages from the master.
+	// replicationStream is the incoming stream of messages from the primary.
 	replicationStream chan time.Time
 
 	// throttler is used to enforce the maximum rate at which replica applies
@@ -103,9 +104,8 @@ type replica struct {
 	wg       sync.WaitGroup
 }
 
-func newReplica(lagUpdateInterval, degrationInterval, degrationDuration time.Duration) *replica {
+func newReplica(lagUpdateInterval, degrationInterval, degrationDuration time.Duration, ts *topo.Server) *replica {
 	t := &testing.T{}
-	ts := memorytopo.NewServer("cell1")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	fakeTablet := testlib.NewFakeTablet(t, wr, "cell1", 0,
 		topodatapb.TabletType_REPLICA, nil, testlib.TabletKeyspaceShard(t, "ks", "-80"))
@@ -172,7 +172,7 @@ func (r *replica) processReplicationStream() {
 			// Display lag with a higher precision as well.
 			lag := now.Sub(msg).Seconds()
 			log.Infof("current lag: %1ds (%1.1fs) replica rate: % 7.1f chan len: % 6d", lagTruncated, lag, float64(actualRate)/r.lagUpdateInterval.Seconds(), len(r.replicationStream))
-			r.qs.AddHealthResponseWithSecondsBehindMaster(lagTruncated)
+			r.qs.AddHealthResponseWithReplicationLag(lagTruncated)
 			r.lastHealthUpdate = now
 			actualRate = 0
 		}
@@ -211,30 +211,32 @@ func (r *replica) stop() {
 // client simulates a client which should throttle itself based on the
 // replication lag of all replicas.
 type client struct {
-	master *master
+	primary *primary
 
-	healthCheck discovery.LegacyHealthCheck
+	healthCheck discovery.HealthCheck
 	throttler   *throttler.Throttler
 
-	stopChan chan struct{}
-	wg       sync.WaitGroup
+	stopChan      chan struct{}
+	wg            sync.WaitGroup
+	healthcheckCh chan *discovery.TabletHealth
 }
 
-func newClient(master *master, replica *replica) *client {
+func newClient(primary *primary, replica *replica, ts *topo.Server) *client {
 	t, err := throttler.NewThrottler("client", "TPS", 1, throttler.MaxRateModuleDisabled, 5 /* seconds */)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	healthCheck := discovery.NewLegacyHealthCheck(5*time.Second, 1*time.Minute)
+	healthCheck := discovery.NewHealthCheck(context.Background(), 5*time.Second, 1*time.Minute, ts, "cell1", "")
 	c := &client{
-		master:      master,
+		primary:     primary,
 		healthCheck: healthCheck,
 		throttler:   t,
 		stopChan:    make(chan struct{}),
 	}
-	c.healthCheck.SetListener(c, false /* sendDownEvents */)
-	c.healthCheck.AddTablet(replica.fakeTablet.Tablet, "name")
+	healthcheckCh := c.healthCheck.Subscribe()
+	c.healthcheckCh = healthcheckCh
+	c.healthCheck.AddTablet(replica.fakeTablet.Tablet)
 	return c
 }
 
@@ -250,6 +252,8 @@ func (c *client) loop() {
 		select {
 		case <-c.stopChan:
 			return
+		case th := <-c.healthcheckCh:
+			c.StatsUpdate(th)
 		default:
 		}
 
@@ -261,7 +265,7 @@ func (c *client) loop() {
 			time.Sleep(backoff)
 		}
 
-		c.master.execute(time.Now())
+		c.primary.execute(time.Now())
 	}
 }
 
@@ -273,10 +277,9 @@ func (c *client) stop() {
 	c.throttler.Close()
 }
 
-// StatsUpdate implements discovery.LegacyHealthCheckStatsListener.
-// It gets called by the healthCheck instance every time a tablet broadcasts
+// StatsUpdate gets called by the healthCheck instance every time a tablet broadcasts
 // a health update.
-func (c *client) StatsUpdate(ts *discovery.LegacyTabletStats) {
+func (c *client) StatsUpdate(ts *discovery.TabletHealth) {
 	// Ignore unless REPLICA or RDONLY.
 	if ts.Target.TabletType != topodatapb.TabletType_REPLICA && ts.Target.TabletType != topodatapb.TabletType_RDONLY {
 		return
@@ -294,9 +297,10 @@ func main() {
 	})
 
 	log.Infof("start rate set to: %v", *rate)
-	replica := newReplica(*lagUpdateInterval, *replicaDegrationInterval, *replicaDegrationDuration)
-	master := &master{replica: replica}
-	client := newClient(master, replica)
+	ts := memorytopo.NewServer("cell1")
+	replica := newReplica(*lagUpdateInterval, *replicaDegrationInterval, *replicaDegrationDuration, ts)
+	primary := &primary{replica: replica}
+	client := newClient(primary, replica, ts)
 	client.run()
 
 	time.Sleep(*duration)

@@ -17,147 +17,67 @@ limitations under the License.
 package inst
 
 import (
-	"fmt"
-
-	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/promotionrule"
 )
 
-//=======================================================================
-
-var (
-	durabilityPolicies  = make(map[string]durabler)
-	curDurabilityPolicy durabler
-)
-
-func init() {
-	registerDurability("none", &durabilityNone{})
-	registerDurability("semi_sync", &durabilitySemiSync{})
-	registerDurability("cross_cell", &durabilityCrossCell{})
-}
-
-type durabler interface {
-	promotionRule(*topodatapb.Tablet) CandidatePromotionRule
-	masterSemiSync(InstanceKey) int
-	replicaSemiSync(master, replica *topodatapb.Tablet) bool
-}
-
-func registerDurability(name string, d durabler) {
-	if durabilityPolicies[name] != nil {
-		log.Fatalf("durability policy %v already registered", name)
+// IsReplicaSemiSync returns the replica semi-sync setting for the instance.
+func IsReplicaSemiSync[V InstanceKey | *topodatapb.Tablet](durabilityPolicy reparentutil.Durabler, primaryInstance V, replicaInstance V) bool {
+	primary, err := getTablet(primaryInstance)
+	if err != nil {
+		return false
 	}
-	durabilityPolicies[name] = d
+	replica, err := getTablet(replicaInstance)
+	if err != nil {
+		return false
+	}
+	return reparentutil.IsReplicaSemiSync(durabilityPolicy, primary, replica)
 }
 
-//=======================================================================
-
-func SetDurabilityPolicy(name string) error {
-	curDurabilityPolicy = durabilityPolicies[name]
-	if curDurabilityPolicy == nil {
-		return fmt.Errorf("durability policy %v not found", name)
+// SemiSyncAckers returns the primary semi-sync setting for the instance.
+// 0 means none. Non-zero specifies the number of required ackers.
+func SemiSyncAckers[V InstanceKey | *topodatapb.Tablet](durabilityPolicy reparentutil.Durabler, instance V) int {
+	primary, err := getTablet(instance)
+	if err != nil {
+		return 0
 	}
-	log.Infof("Durability setting: %v", name)
-	return nil
+	return reparentutil.SemiSyncAckers(durabilityPolicy, primary)
 }
 
 // PromotionRule returns the promotion rule for the instance.
-func PromotionRule(tablet *topodatapb.Tablet) CandidatePromotionRule {
-	return curDurabilityPolicy.promotionRule(tablet)
-}
-
-// MasterSemiSync returns the master semi-sync setting for the instance.
-// 0 means none. Non-zero specifies the number of required ackers.
-func MasterSemiSync(instanceKey InstanceKey) int {
-	return curDurabilityPolicy.masterSemiSync(instanceKey)
-}
-
-// ReplicaSemiSync returns the replica semi-sync setting for the instance.
-func ReplicaSemiSync(masterKey, replicaKey InstanceKey) bool {
-	master, err := ReadTablet(masterKey)
+func PromotionRule[V InstanceKey | *topodatapb.Tablet](durabilityPolicy reparentutil.Durabler, instance V) promotionrule.CandidatePromotionRule {
+	tablet, err := getTablet(instance)
 	if err != nil {
-		return false
+		return promotionrule.MustNot
 	}
-	replica, err := ReadTablet(replicaKey)
+	return reparentutil.PromotionRule(durabilityPolicy, tablet)
+}
+
+func getTablet[V InstanceKey | *topodatapb.Tablet](instance V) (*topodatapb.Tablet, error) {
+	var instanceTablet *topodatapb.Tablet
+	var err error
+	switch node := any(instance).(type) {
+	case InstanceKey:
+		instanceTablet, err = ReadTablet(node)
+		if err != nil {
+			return nil, err
+		}
+	case *topodatapb.Tablet:
+		instanceTablet = node
+	}
+	return instanceTablet, nil
+}
+
+// GetDurabilityPolicy gets the durability policy for the keyspace of the given instance
+func GetDurabilityPolicy[V InstanceKey | *topodatapb.Tablet](instance V) (reparentutil.Durabler, error) {
+	tablet, err := getTablet(instance)
 	if err != nil {
-		return false
+		return nil, err
 	}
-	return curDurabilityPolicy.replicaSemiSync(master, replica)
-}
-
-// ReplicaSemiSyncFromTablet returns the replica semi-sync setting from the tablet record.
-// Prefer using this function if tablet record is available.
-func ReplicaSemiSyncFromTablet(master, replica *topodatapb.Tablet) bool {
-	return curDurabilityPolicy.replicaSemiSync(master, replica)
-}
-
-//=======================================================================
-
-type durabilityNone struct{}
-
-func (d *durabilityNone) promotionRule(tablet *topodatapb.Tablet) CandidatePromotionRule {
-	switch tablet.Type {
-	case topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA:
-		return NeutralPromoteRule
+	ki, err := ReadKeyspace(tablet.Keyspace)
+	if err != nil {
+		return nil, err
 	}
-	return MustNotPromoteRule
-}
-
-func (d *durabilityNone) masterSemiSync(instanceKey InstanceKey) int {
-	return 0
-}
-
-func (d *durabilityNone) replicaSemiSync(master, replica *topodatapb.Tablet) bool {
-	return false
-}
-
-//=======================================================================
-
-type durabilitySemiSync struct{}
-
-func (d *durabilitySemiSync) promotionRule(tablet *topodatapb.Tablet) CandidatePromotionRule {
-	switch tablet.Type {
-	case topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA:
-		return NeutralPromoteRule
-	}
-	return MustNotPromoteRule
-}
-
-func (d *durabilitySemiSync) masterSemiSync(instanceKey InstanceKey) int {
-	return 1
-}
-
-func (d *durabilitySemiSync) replicaSemiSync(master, replica *topodatapb.Tablet) bool {
-	switch replica.Type {
-	case topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA:
-		return true
-	}
-	return false
-}
-
-//=======================================================================
-
-type durabilityCrossCell struct{}
-
-func (d *durabilityCrossCell) promotionRule(tablet *topodatapb.Tablet) CandidatePromotionRule {
-	switch tablet.Type {
-	case topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA:
-		return NeutralPromoteRule
-	}
-	return MustNotPromoteRule
-}
-
-func (d *durabilityCrossCell) masterSemiSync(instanceKey InstanceKey) int {
-	return 1
-}
-
-func (d *durabilityCrossCell) replicaSemiSync(master, replica *topodatapb.Tablet) bool {
-	// Prevent panics.
-	if master.Alias == nil || replica.Alias == nil {
-		return false
-	}
-	switch replica.Type {
-	case topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA:
-		return master.Alias.Cell != replica.Alias.Cell
-	}
-	return false
+	return reparentutil.GetDurabilityPolicy(ki.DurabilityPolicy)
 }

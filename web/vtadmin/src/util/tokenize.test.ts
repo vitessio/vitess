@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { Token, tokenizeSearch, SearchToken } from './tokenize';
+import { Token, tokenizeSearch, SearchToken, SearchTokenTypes } from './tokenize';
 
 describe('tokenize', () => {
     describe('tokenizeSearch', () => {
@@ -25,34 +25,34 @@ describe('tokenize', () => {
             {
                 name: 'parses fuzzy strings',
                 input: 'hello',
-                expected: [{ type: 'fuzzy', value: 'hello' }],
+                expected: [{ type: SearchTokenTypes.FUZZY, value: 'hello' }],
             },
             {
                 name: 'parses exact strings',
                 input: '"hello"',
-                expected: [{ type: 'exact', value: 'hello' }],
+                expected: [{ type: SearchTokenTypes.EXACT, value: 'hello' }],
             },
             {
                 name: 'parses key/values',
                 input: 'hello:moon',
-                expected: [{ type: 'keyValue', key: 'hello', value: 'moon' }],
+                expected: [{ type: SearchTokenTypes.KEY_VALUE, key: 'hello', value: 'moon' }],
             },
             {
                 name: 'parses multiple tokens',
                 input: 'hello "moon" goodbye:world',
                 expected: [
-                    { type: 'fuzzy', value: 'hello' },
-                    { type: 'exact', value: 'moon' },
-                    { type: 'keyValue', key: 'goodbye', value: 'world' },
+                    { type: SearchTokenTypes.FUZZY, value: 'hello' },
+                    { type: SearchTokenTypes.EXACT, value: 'moon' },
+                    { type: SearchTokenTypes.KEY_VALUE, key: 'goodbye', value: 'world' },
                 ],
             },
             {
                 name: 'parses numbers and symbols',
                 input: 'hello-123 "moon-456" goodbye:world-789',
                 expected: [
-                    { type: 'fuzzy', value: 'hello-123' },
-                    { type: 'exact', value: 'moon-456' },
-                    { type: 'keyValue', key: 'goodbye', value: 'world-789' },
+                    { type: SearchTokenTypes.FUZZY, value: 'hello-123' },
+                    { type: SearchTokenTypes.EXACT, value: 'moon-456' },
+                    { type: SearchTokenTypes.KEY_VALUE, key: 'goodbye', value: 'world-789' },
                 ],
             },
         ];

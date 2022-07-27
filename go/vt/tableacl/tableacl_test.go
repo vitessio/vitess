@@ -19,7 +19,6 @@ package tableacl
 import (
 	"errors"
 	"io"
-	"io/ioutil"
 	"os"
 	"reflect"
 	"testing"
@@ -59,7 +58,7 @@ var aclJSON = `{
 
 func TestInitWithValidConfig(t *testing.T) {
 	tacl := tableACL{factory: &simpleacl.Factory{}}
-	f, err := ioutil.TempFile("", "tableacl")
+	f, err := os.CreateTemp("", "tableacl")
 	if err != nil {
 		t.Fatal(err)
 	}

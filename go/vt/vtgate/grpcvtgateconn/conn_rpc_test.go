@@ -19,7 +19,6 @@ package grpcvtgateconn
 import (
 	"flag"
 	"io"
-	"io/ioutil"
 	"net"
 	"os"
 	"testing"
@@ -39,7 +38,7 @@ func TestGRPCVTGateConn(t *testing.T) {
 	service := CreateFakeServer(t)
 
 	// listen on a random port
-	listener, err := net.Listen("tcp", ":0")
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("Cannot listen: %v", err)
 	}
@@ -72,7 +71,7 @@ func TestGRPCVTGateConnAuth(t *testing.T) {
 	service := CreateFakeServer(t)
 
 	// listen on a random port
-	listener, err := net.Listen("tcp", ":0")
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("Cannot listen: %v", err)
 	}
@@ -91,7 +90,7 @@ func TestGRPCVTGateConnAuth(t *testing.T) {
          "Password": "valid"
         }`
 
-	f, err := ioutil.TempFile("", "static_auth_creds.json")
+	f, err := os.CreateTemp("", "static_auth_creds.json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,7 +123,7 @@ func TestGRPCVTGateConnAuth(t *testing.T) {
 	 "Password": "valid"
 	}`
 
-	f, err = ioutil.TempFile("", "static_auth_creds.json")
+	f, err = os.CreateTemp("", "static_auth_creds.json")
 	if err != nil {
 		t.Fatal(err)
 	}

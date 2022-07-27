@@ -83,17 +83,25 @@ deletesAttempts=%d, deletesFailures=%d, deletesNoops=%d, deletes=%d,
 
 var (
 	clusterInstance *cluster.LocalProcessCluster
+	shards          []cluster.Shard
 	vtParams        mysql.ConnParams
 
+	opOrder               int64
+	opOrderMutex          sync.Mutex
+	onlineDDLStrategy     = "vitess"
 	hostname              = "localhost"
 	keyspaceName          = "ks"
 	cell                  = "zone1"
 	schemaChangeDirectory = ""
 	tableName             = `stress_test`
-	createStatement       = `
+	cleanupStatements     = []string{
+		`DROP TABLE IF EXISTS stress_test`,
+	}
+	createStatement = `
 		CREATE TABLE stress_test (
 			id bigint(20) not null,
 			rand_val varchar(32) null default '',
+			op_order bigint unsigned not null default 0,
 			hint_col varchar(64) not null default '',
 			created_timestamp timestamp not null default current_timestamp,
 			updates int unsigned not null default 0,
@@ -106,13 +114,16 @@ var (
 		ALTER TABLE stress_test modify hint_col varchar(64) not null default '%s'
 	`
 	insertRowStatement = `
-		INSERT IGNORE INTO stress_test (id, rand_val) VALUES (%d, left(md5(rand()), 8))
+		INSERT IGNORE INTO stress_test (id, rand_val, op_order) VALUES (%d, left(md5(rand()), 8), %d)
 	`
 	updateRowStatement = `
-		UPDATE stress_test SET updates=updates+1 WHERE id=%d
+		UPDATE stress_test SET op_order=%d, updates=updates+1 WHERE id=%d
 	`
 	deleteRowStatement = `
 		DELETE FROM stress_test WHERE id=%d AND updates=1
+	`
+	selectMaxOpOrder = `
+		SELECT MAX(op_order) as m FROM stress_test
 	`
 	// We use CAST(SUM(updates) AS SIGNED) because SUM() returns a DECIMAL datatype, and we want to read a SIGNED INTEGER type
 	selectCountRowsStatement = `
@@ -125,10 +136,24 @@ var (
 )
 
 const (
-	maxTableRows    = 4096
-	maxConcurrency  = 5
-	countIterations = 5
+	maxTableRows                  = 4096
+	maxConcurrency                = 20
+	singleConnectionSleepInterval = 2 * time.Millisecond
+	countIterations               = 5
 )
+
+func resetOpOrder() {
+	opOrderMutex.Lock()
+	defer opOrderMutex.Unlock()
+	opOrder = 0
+}
+
+func nextOpOrder() int64 {
+	opOrderMutex.Lock()
+	defer opOrderMutex.Unlock()
+	opOrder++
+	return opOrder
+}
 
 func TestMain(m *testing.M) {
 	defer cluster.PanicHandler(nil)
@@ -145,21 +170,22 @@ func TestMain(m *testing.M) {
 		}
 
 		clusterInstance.VtctldExtraArgs = []string{
-			"-schema_change_dir", schemaChangeDirectory,
-			"-schema_change_controller", "local",
-			"-schema_change_check_interval", "1",
-			"-online_ddl_check_interval", "3s",
+			"--schema_change_dir", schemaChangeDirectory,
+			"--schema_change_controller", "local",
+			"--schema_change_check_interval", "1",
 		}
 
 		clusterInstance.VtTabletExtraArgs = []string{
-			"-enable-lag-throttler",
-			"-throttle_threshold", "1s",
-			"-heartbeat_enable",
-			"-heartbeat_interval", "250ms",
-			"-migration_check_interval", "5s",
+			"--enable-lag-throttler",
+			"--throttle_threshold", "1s",
+			"--heartbeat_enable",
+			"--heartbeat_interval", "250ms",
+			"--heartbeat_on_demand_duration", "5s",
+			"--migration_check_interval", "5s",
+			"--watch_replication_stream",
 		}
 		clusterInstance.VtGateExtraArgs = []string{
-			"-ddl_strategy", "online",
+			"--ddl_strategy", "online",
 		}
 
 		if err := clusterInstance.StartTopo(); err != nil {
@@ -177,8 +203,6 @@ func TestMain(m *testing.M) {
 		}
 
 		vtgateInstance := clusterInstance.NewVtgateInstance()
-		// set the gateway we want to use
-		vtgateInstance.GatewayImplementation = "tabletgateway"
 		// Start vtgate
 		if err := vtgateInstance.Setup(); err != nil {
 			return 1, err
@@ -204,7 +228,7 @@ func TestMain(m *testing.M) {
 func TestSchemaChange(t *testing.T) {
 	defer cluster.PanicHandler(t)
 
-	shards := clusterInstance.Keyspaces[0].Shards
+	shards = clusterInstance.Keyspaces[0].Shards
 	require.Equal(t, 1, len(shards))
 
 	t.Run("create schema", func(t *testing.T) {
@@ -243,9 +267,10 @@ func TestSchemaChange(t *testing.T) {
 	t.Run("ALTER TABLE without workload", func(t *testing.T) {
 		// A single ALTER TABLE. Generally this is covered in endtoend/onlineddl_vrepl,
 		// but we wish to verify the ALTER statement used in these tests is sound
+		testWithInitialSchema(t)
 		initTable(t)
 		hint := "hint-alter-without-workload"
-		uuid := testOnlineDDLStatement(t, fmt.Sprintf(alterHintStatement, hint), "online", "vtgate", hint)
+		uuid := testOnlineDDLStatement(t, fmt.Sprintf(alterHintStatement, hint), onlineDDLStrategy, "vtgate", hint)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		testSelectTableMetrics(t)
 	})
@@ -260,24 +285,37 @@ func TestSchemaChange(t *testing.T) {
 		testName := fmt.Sprintf("ALTER TABLE with workload %d/%d", (i + 1), countIterations)
 		t.Run(testName, func(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
-			initTable(t)
-			var wg sync.WaitGroup
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				runMultipleConnections(ctx, t)
-			}()
-			hint := fmt.Sprintf("hint-alter-with-workload-%d", i)
-			uuid := testOnlineDDLStatement(t, fmt.Sprintf(alterHintStatement, hint), "online", "vtgate", hint)
-			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
-			cancel() // will cause runMultipleConnections() to terminate
-			wg.Wait()
-			testSelectTableMetrics(t)
+			t.Run("create schema", func(t *testing.T) {
+				testWithInitialSchema(t)
+			})
+			t.Run("init table", func(t *testing.T) {
+				initTable(t)
+			})
+			t.Run("migrate", func(t *testing.T) {
+				var wg sync.WaitGroup
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					runMultipleConnections(ctx, t)
+				}()
+				hint := fmt.Sprintf("hint-alter-with-workload-%d", i)
+				uuid := testOnlineDDLStatement(t, fmt.Sprintf(alterHintStatement, hint), onlineDDLStrategy, "vtgate", hint)
+				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+				cancel() // will cause runMultipleConnections() to terminate
+				wg.Wait()
+			})
+			t.Run("validate metrics", func(t *testing.T) {
+				testSelectTableMetrics(t)
+			})
 		})
 	}
 }
 
 func testWithInitialSchema(t *testing.T) {
+	for _, statement := range cleanupStatements {
+		err := clusterInstance.VtctlclientProcess.ApplySchema(keyspaceName, statement)
+		require.Nil(t, err)
+	}
 	// Create the stress table
 	err := clusterInstance.VtctlclientProcess.ApplySchema(keyspaceName, createStatement)
 	require.Nil(t, err)
@@ -306,7 +344,8 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 	assert.NoError(t, err)
 
 	if !strategySetting.Strategy.IsDirect() {
-		time.Sleep(time.Second * 20)
+		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, 30*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+		fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 	}
 
 	if expectHint != "" {
@@ -325,9 +364,24 @@ func checkTable(t *testing.T, showTableName string) {
 // checkTablesCount checks the number of tables in the given tablet
 func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName string, expectCount int) {
 	query := fmt.Sprintf(`show tables like '%%%s%%';`, showTableName)
-	queryResult, err := tablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
-	require.Nil(t, err)
-	assert.Equal(t, expectCount, len(queryResult.Rows))
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	rowcount := 0
+	for {
+		queryResult, err := tablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
+		require.Nil(t, err)
+		rowcount = len(queryResult.Rows)
+		if rowcount > 0 {
+			break
+		}
+
+		select {
+		case <-time.After(time.Second):
+		case <-ctx.Done():
+			break
+		}
+	}
+	assert.Equal(t, expectCount, rowcount)
 }
 
 // checkMigratedTables checks the CREATE STATEMENT of a table after migration
@@ -351,7 +405,7 @@ func getCreateTableStatement(t *testing.T, tablet *cluster.Vttablet, tableName s
 
 func generateInsert(t *testing.T, conn *mysql.Conn) error {
 	id := rand.Int31n(int32(maxTableRows))
-	query := fmt.Sprintf(insertRowStatement, id)
+	query := fmt.Sprintf(insertRowStatement, id, nextOpOrder())
 	qr, err := conn.ExecuteFetch(query, 1000, true)
 
 	func() {
@@ -375,7 +429,7 @@ func generateInsert(t *testing.T, conn *mysql.Conn) error {
 
 func generateUpdate(t *testing.T, conn *mysql.Conn) error {
 	id := rand.Int31n(int32(maxTableRows))
-	query := fmt.Sprintf(updateRowStatement, id)
+	query := fmt.Sprintf(updateRowStatement, nextOpOrder(), id)
 	qr, err := conn.ExecuteFetch(query, 1000, true)
 
 	func() {
@@ -445,13 +499,8 @@ func runSingleConnection(ctx context.Context, t *testing.T, done *int64) {
 		case 2:
 			err = generateDelete(t, conn)
 		}
-		if err != nil {
-			if strings.Contains(err.Error(), "disallowed due to rule: enforce blacklisted tables") {
-				err = nil
-			}
-		}
 		assert.Nil(t, err)
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(singleConnectionSleepInterval)
 	}
 }
 
@@ -477,11 +526,20 @@ func initTable(t *testing.T) {
 	log.Infof("initTable begin")
 	defer log.Infof("initTable complete")
 
+	t.Run("cancel pending migrations", func(t *testing.T) {
+		cancelQuery := "alter vitess_migration cancel all"
+		r := onlineddl.VtgateExecQuery(t, &vtParams, cancelQuery, "")
+		if r.RowsAffected > 0 {
+			fmt.Printf("# Cancelled migrations (for debug purposes): %d\n", r.RowsAffected)
+		}
+	})
+
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn.Close()
 
+	resetOpOrder()
 	writeMetrics.Clear()
 	_, err = conn.ExecuteFetch(truncateStatement, 1000, true)
 	require.Nil(t, err)
@@ -501,6 +559,15 @@ func testSelectTableMetrics(t *testing.T) {
 	writeMetrics.mu.Lock()
 	defer writeMetrics.mu.Unlock()
 
+	{
+		rs := onlineddl.VtgateExecQuery(t, &vtParams, selectMaxOpOrder, "")
+		row := rs.Named().Row()
+		require.NotNil(t, row)
+
+		maxOpOrder := row.AsInt64("m", 0)
+		fmt.Printf("# max op_order in table: %d\n", maxOpOrder)
+	}
+
 	log.Infof("%s", writeMetrics.String())
 
 	ctx := context.Background()
@@ -516,7 +583,6 @@ func testSelectTableMetrics(t *testing.T) {
 	log.Infof("testSelectTableMetrics, row: %v", row)
 	numRows := row.AsInt64("num_rows", 0)
 	sumUpdates := row.AsInt64("sum_updates", 0)
-
 	assert.NotZero(t, numRows)
 	assert.NotZero(t, sumUpdates)
 	assert.NotZero(t, writeMetrics.inserts)

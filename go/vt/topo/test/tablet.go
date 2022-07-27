@@ -45,7 +45,7 @@ func checkTablet(t *testing.T, ts *topo.Server) {
 
 		Tags:     map[string]string{"tag": "value"},
 		Keyspace: "test_keyspace",
-		Type:     topodatapb.TabletType_MASTER,
+		Type:     topodatapb.TabletType_PRIMARY,
 		KeyRange: newKeyRange("-10"),
 	}
 	tablet.MysqlPort = 3334
@@ -71,11 +71,11 @@ func checkTablet(t *testing.T, ts *topo.Server) {
 		t.Errorf("put and got tablets are not identical:\n%#v\n%#v", tablet, t)
 	}
 
-	if _, err := ts.GetTabletsByCell(ctx, "666"); !topo.IsErrType(err, topo.NoNode) {
+	if _, err := ts.GetTabletAliasesByCell(ctx, "666"); !topo.IsErrType(err, topo.NoNode) {
 		t.Errorf("GetTabletsByCell(666): %v", err)
 	}
 
-	inCell, err := ts.GetTabletsByCell(ctx, LocalCellName)
+	inCell, err := ts.GetTabletAliasesByCell(ctx, LocalCellName)
 	if err != nil {
 		t.Fatalf("GetTabletsByCell: %v", err)
 	}

@@ -38,7 +38,7 @@ public interface RpcClient extends Closeable {
    * Sends a single query using the VTGate V3 API.
    *
    * <p>See the
-   * <a href="https://github.com/vitessio/vitess/blob/master/proto/vtgateservice.proto">proto</a>
+   * <a href="https://github.com/vitessio/vitess/blob/main/proto/vtgateservice.proto">proto</a>
    * definition for canonical documentation on this VTGate API.
    */
   ListenableFuture<ExecuteResponse> execute(Context ctx, ExecuteRequest request)
@@ -48,7 +48,7 @@ public interface RpcClient extends Closeable {
    * Sends a list of queries using the VTGate V3 API.
    *
    * <p>See the
-   * <a href="https://github.com/vitessio/vitess/blob/master/proto/vtgateservice.proto">proto</a>
+   * <a href="https://github.com/vitessio/vitess/blob/main/proto/vtgateservice.proto">proto</a>
    * definition for canonical documentation on this VTGate API.
    */
   ListenableFuture<Vtgate.ExecuteBatchResponse> executeBatch(Context ctx,
@@ -64,7 +64,7 @@ public interface RpcClient extends Closeable {
    * received from the server.
    *
    * <p>See the
-   * <a href="https://github.com/vitessio/vitess/blob/master/proto/vtgateservice.proto">proto</a>
+   * <a href="https://github.com/vitessio/vitess/blob/main/proto/vtgateservice.proto">proto</a>
    * definition for canonical documentation on this VTGate API.
    */
   StreamIterator<QueryResult> streamExecute(Context ctx, StreamExecuteRequest request)
@@ -76,7 +76,7 @@ public interface RpcClient extends Closeable {
    * Stream begins at the specified VGTID.
    *
    * <p>See the
-   * <a href="https://github.com/vitessio/vitess/blob/master/proto/vtgateservice.proto">proto</a>
+   * <a href="https://github.com/vitessio/vitess/blob/main/proto/vtgateservice.proto">proto</a>
    * definition for canonical documentation on this VTGate API.
    */
   StreamIterator<VStreamResponse> getVStream(

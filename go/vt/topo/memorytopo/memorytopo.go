@@ -38,6 +38,15 @@ const (
 	electionsPath = "elections"
 )
 
+const (
+	// UnreachableServerAddr is a sentinel value for CellInfo.ServerAddr.
+	// If a memorytopo topo.Conn is created with this serverAddr then every
+	// method on that Conn which takes a context will simply block until the
+	// context finishes, and return ctx.Err(), in order to simulate an
+	// unreachable local cell for testing.
+	UnreachableServerAddr = "unreachable"
+)
+
 var (
 	nextWatchIndex = 0
 )
@@ -79,8 +88,9 @@ func (f *Factory) Create(cell, serverAddr, root string) (topo.Conn, error) {
 		return nil, topo.NewError(topo.NoNode, cell)
 	}
 	return &Conn{
-		factory: f,
-		cell:    cell,
+		factory:    f,
+		cell:       cell,
+		serverAddr: serverAddr,
 	}, nil
 }
 
@@ -110,11 +120,24 @@ func (f *Factory) Unlock() {
 	f.mu.Unlock()
 }
 
-// Conn implements the topo.Conn interface. It remembers the cell, and
-// points at the Factory that has all the data.
+// Conn implements the topo.Conn interface. It remembers the cell and serverAddr,
+// and points at the Factory that has all the data.
 type Conn struct {
-	factory *Factory
-	cell    string
+	factory    *Factory
+	cell       string
+	serverAddr string
+}
+
+// dial returns immediately, unless the Conn points to the sentinel
+// UnreachableServerAddr, in which case it will block until the context expires
+// and return the context's error.
+func (c *Conn) dial(ctx context.Context) error {
+	if c.serverAddr == UnreachableServerAddr {
+		<-ctx.Done()
+		return ctx.Err()
+	}
+
+	return nil
 }
 
 // Close is part of the topo.Conn interface.
@@ -144,7 +167,7 @@ type node struct {
 
 	// lockContents is the contents of the locks.
 	// For regular locks, it has the contents that was passed in.
-	// For master election, it has the id of the election leader.
+	// For primary election, it has the id of the election leader.
 	lockContents string
 }
 

@@ -34,6 +34,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/cache"
@@ -53,9 +54,7 @@ import (
 func TestStrictMode(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
-	for query, result := range schematest.Queries() {
-		db.AddQuery(query, result)
-	}
+	schematest.AddDefaultQueries(db)
 
 	// Test default behavior.
 	config := tabletenv.NewDefaultConfig()
@@ -98,9 +97,7 @@ func TestStrictMode(t *testing.T) {
 func TestGetPlanPanicDuetoEmptyQuery(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
-	for query, result := range schematest.Queries() {
-		db.AddQuery(query, result)
-	}
+	schematest.AddDefaultQueries(db)
 	qe := newTestQueryEngine(10*time.Second, true, newDBConfigs(db))
 	qe.se.Open()
 	qe.Open()
@@ -108,8 +105,8 @@ func TestGetPlanPanicDuetoEmptyQuery(t *testing.T) {
 
 	ctx := context.Background()
 	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats")
-	_, err := qe.GetPlan(ctx, logStats, "", false, false /* inReservedConn */)
-	require.EqualError(t, err, "query was empty")
+	_, err := qe.GetPlan(ctx, logStats, "", false, 0)
+	require.EqualError(t, err, "Query was empty")
 }
 
 func addSchemaEngineQueries(db *fakesqldb.DB) {
@@ -132,9 +129,7 @@ func addSchemaEngineQueries(db *fakesqldb.DB) {
 func TestGetMessageStreamPlan(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
-	for query, result := range schematest.Queries() {
-		db.AddQuery(query, result)
-	}
+	schematest.AddDefaultQueries(db)
 
 	addSchemaEngineQueries(db)
 
@@ -165,7 +160,8 @@ func TestGetMessageStreamPlan(t *testing.T) {
 
 func assertPlanCacheSize(t *testing.T, qe *QueryEngine, expected int) {
 	var size int
-	qe.plans.ForEach(func(_ interface{}) bool {
+	qe.plans.Wait()
+	qe.plans.ForEach(func(_ any) bool {
 		size++
 		return true
 	})
@@ -177,9 +173,7 @@ func assertPlanCacheSize(t *testing.T, qe *QueryEngine, expected int) {
 func TestQueryPlanCache(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
-	for query, result := range schematest.Queries() {
-		db.AddQuery(query, result)
-	}
+	schematest.AddDefaultQueries(db)
 
 	firstQuery := "select * from test_table_01"
 	secondQuery := "select * from test_table_02"
@@ -194,18 +188,20 @@ func TestQueryPlanCache(t *testing.T) {
 	ctx := context.Background()
 	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats")
 	if cache.DefaultConfig.LFU {
-		qe.SetQueryPlanCacheCap(1024)
+		// this cache capacity is in bytes
+		qe.SetQueryPlanCacheCap(512)
 	} else {
+		// this cache capacity is in number of elements
 		qe.SetQueryPlanCacheCap(1)
 	}
-	firstPlan, err := qe.GetPlan(ctx, logStats, firstQuery, false, false /* inReservedConn */)
+	firstPlan, err := qe.GetPlan(ctx, logStats, firstQuery, false, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if firstPlan == nil {
 		t.Fatalf("plan should not be nil")
 	}
-	secondPlan, err := qe.GetPlan(ctx, logStats, secondQuery, false, false /* inReservedConn */)
+	secondPlan, err := qe.GetPlan(ctx, logStats, secondQuery, false, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -222,9 +218,7 @@ func TestQueryPlanCache(t *testing.T) {
 func TestNoQueryPlanCache(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
-	for query, result := range schematest.Queries() {
-		db.AddQuery(query, result)
-	}
+	schematest.AddDefaultQueries(db)
 
 	firstQuery := "select * from test_table_01"
 	db.AddQuery("select * from test_table_01 where 1 != 1", &sqltypes.Result{})
@@ -238,7 +232,7 @@ func TestNoQueryPlanCache(t *testing.T) {
 	ctx := context.Background()
 	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats")
 	qe.SetQueryPlanCacheCap(1024)
-	firstPlan, err := qe.GetPlan(ctx, logStats, firstQuery, true, false /* inReservedConn */)
+	firstPlan, err := qe.GetPlan(ctx, logStats, firstQuery, true, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -252,11 +246,10 @@ func TestNoQueryPlanCache(t *testing.T) {
 func TestNoQueryPlanCacheDirective(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
-	for query, result := range schematest.Queries() {
-		db.AddQuery(query, result)
-	}
+	schematest.AddDefaultQueries(db)
 
 	firstQuery := "select /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ * from test_table_01"
+	db.AddQuery("select * from test_table_01 where 1 != 1", &sqltypes.Result{})
 	db.AddQuery("select /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ * from test_table_01 where 1 != 1", &sqltypes.Result{})
 	db.AddQuery("select /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ * from test_table_02 where 1 != 1", &sqltypes.Result{})
 
@@ -268,7 +261,7 @@ func TestNoQueryPlanCacheDirective(t *testing.T) {
 	ctx := context.Background()
 	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats")
 	qe.SetQueryPlanCacheCap(1024)
-	firstPlan, err := qe.GetPlan(ctx, logStats, firstQuery, false, false /* inReservedConn */)
+	firstPlan, err := qe.GetPlan(ctx, logStats, firstQuery, false, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -282,9 +275,7 @@ func TestNoQueryPlanCacheDirective(t *testing.T) {
 func TestStatsURL(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
-	for query, result := range schematest.Queries() {
-		db.AddQuery(query, result)
-	}
+	schematest.AddDefaultQueries(db)
 	query := "select * from test_table_01"
 	db.AddQuery("select * from test_table_01 where 1 != 1", &sqltypes.Result{})
 	qe := newTestQueryEngine(1*time.Second, true, newDBConfigs(db))
@@ -294,7 +285,7 @@ func TestStatsURL(t *testing.T) {
 	// warm up cache
 	ctx := context.Background()
 	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats")
-	qe.GetPlan(ctx, logStats, query, false, false /* inReservedConn */)
+	qe.GetPlan(ctx, logStats, query, false, 0)
 
 	request, _ := http.NewRequest("GET", "/debug/tablet_plans", nil)
 	response := httptest.NewRecorder()
@@ -385,9 +376,7 @@ func BenchmarkPlanCacheThroughput(b *testing.B) {
 	db := fakesqldb.New(b)
 	defer db.Close()
 
-	for query, result := range schematest.Queries() {
-		db.AddQuery(query, result)
-	}
+	schematest.AddDefaultQueries(db)
 
 	db.AddQueryPattern(".*", &sqltypes.Result{})
 
@@ -401,7 +390,7 @@ func BenchmarkPlanCacheThroughput(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		query := fmt.Sprintf("SELECT (a, b, c) FROM test_table_%d", rand.Intn(500))
-		_, err := qe.GetPlan(ctx, logStats, query, false, false /* inReservedConn */)
+		_, err := qe.GetPlan(ctx, logStats, query, false, 0)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -432,7 +421,7 @@ func benchmarkPlanCache(b *testing.B, db *fakesqldb.DB, lfu bool, par int) {
 
 		for pb.Next() {
 			query := fmt.Sprintf("SELECT (a, b, c) FROM test_table_%d", rand.Intn(500))
-			_, err := qe.GetPlan(ctx, logStats, query, false, false /* inReservedConn */)
+			_, err := qe.GetPlan(ctx, logStats, query, false, 0)
 			require.NoErrorf(b, err, "bad query: %s", query)
 		}
 	})
@@ -442,9 +431,7 @@ func BenchmarkPlanCacheContention(b *testing.B) {
 	db := fakesqldb.New(b)
 	defer db.Close()
 
-	for query, result := range schematest.Queries() {
-		db.AddQuery(query, result)
-	}
+	schematest.AddDefaultQueries(db)
 
 	db.AddQueryPattern(".*", &sqltypes.Result{})
 
@@ -471,9 +458,7 @@ func TestPlanCachePollution(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 
-	for query, result := range schematest.Queries() {
-		db.AddQuery(query, result)
-	}
+	schematest.AddDefaultQueries(db)
 
 	db.AddQueryPattern(".*", &sqltypes.Result{})
 
@@ -562,7 +547,7 @@ func TestPlanCachePollution(t *testing.T) {
 			query := sample()
 
 			start := time.Now()
-			_, err := qe.GetPlan(ctx, logStats, query, false, false /* inReservedConn */)
+			_, err := qe.GetPlan(ctx, logStats, query, false, 0)
 			require.NoErrorf(t, err, "bad query: %s", query)
 			stats.interval += time.Since(start)
 
@@ -591,4 +576,104 @@ func TestPlanCachePollution(t *testing.T) {
 	}()
 
 	wg.Wait()
+}
+
+func TestAddQueryStats(t *testing.T) {
+	testcases := []struct {
+		name                      string
+		planType                  planbuilder.PlanType
+		tableName                 string
+		queryCount                int64
+		duration                  time.Duration
+		mysqlTime                 time.Duration
+		rowsAffected              int64
+		rowsReturned              int64
+		errorCount                int64
+		expectedQueryCounts       string
+		expectedQueryTimes        string
+		expectedQueryRowsAffected string
+		expectedQueryRowsReturned string
+		expectedQueryRowCounts    string
+		expectedQueryErrorCounts  string
+	}{
+		{
+			name:                      "select query",
+			planType:                  planbuilder.PlanSelect,
+			tableName:                 "A",
+			queryCount:                1,
+			duration:                  10,
+			rowsAffected:              0,
+			rowsReturned:              15,
+			errorCount:                0,
+			expectedQueryCounts:       `{"A.Select": 1}`,
+			expectedQueryTimes:        `{"A.Select": 10}`,
+			expectedQueryRowsAffected: `{}`,
+			expectedQueryRowsReturned: `{"A.Select": 15}`,
+			expectedQueryRowCounts:    `{"A.Select": 0}`,
+			expectedQueryErrorCounts:  `{"A.Select": 0}`,
+		}, {
+			name:                      "select into query",
+			planType:                  planbuilder.PlanSelect,
+			tableName:                 "A",
+			queryCount:                1,
+			duration:                  10,
+			rowsAffected:              15,
+			rowsReturned:              0,
+			errorCount:                0,
+			expectedQueryCounts:       `{"A.Select": 1}`,
+			expectedQueryTimes:        `{"A.Select": 10}`,
+			expectedQueryRowsAffected: `{"A.Select": 15}`,
+			expectedQueryRowsReturned: `{"A.Select": 0}`,
+			expectedQueryRowCounts:    `{"A.Select": 15}`,
+			expectedQueryErrorCounts:  `{"A.Select": 0}`,
+		}, {
+			name:                      "error",
+			planType:                  planbuilder.PlanSelect,
+			tableName:                 "A",
+			queryCount:                1,
+			duration:                  10,
+			rowsAffected:              0,
+			rowsReturned:              0,
+			errorCount:                1,
+			expectedQueryCounts:       `{"A.Select": 1}`,
+			expectedQueryTimes:        `{"A.Select": 10}`,
+			expectedQueryRowsAffected: `{}`,
+			expectedQueryRowsReturned: `{"A.Select": 0}`,
+			expectedQueryRowCounts:    `{"A.Select": 0}`,
+			expectedQueryErrorCounts:  `{"A.Select": 1}`,
+		}, {
+			name:                      "insert query",
+			planType:                  planbuilder.PlanInsert,
+			tableName:                 "A",
+			queryCount:                1,
+			duration:                  10,
+			rowsAffected:              15,
+			rowsReturned:              0,
+			errorCount:                0,
+			expectedQueryCounts:       `{"A.Insert": 1}`,
+			expectedQueryTimes:        `{"A.Insert": 10}`,
+			expectedQueryRowsAffected: `{"A.Insert": 15}`,
+			expectedQueryRowsReturned: `{}`,
+			expectedQueryRowCounts:    `{"A.Insert": 15}`,
+			expectedQueryErrorCounts:  `{"A.Insert": 0}`,
+		},
+	}
+
+	t.Parallel()
+	for _, testcase := range testcases {
+		t.Run(testcase.name, func(t *testing.T) {
+			config := tabletenv.NewDefaultConfig()
+			config.DB = newDBConfigs(fakesqldb.New(t))
+			env := tabletenv.NewEnv(config, "TestAddQueryStats_"+testcase.name)
+			se := schema.NewEngine(env)
+			qe := NewQueryEngine(env, se)
+			qe.AddStats(testcase.planType, testcase.tableName, testcase.queryCount, testcase.duration, testcase.mysqlTime, testcase.rowsAffected, testcase.rowsReturned, testcase.errorCount)
+			assert.Equal(t, testcase.expectedQueryCounts, qe.queryCounts.String())
+			assert.Equal(t, testcase.expectedQueryTimes, qe.queryTimes.String())
+			assert.Equal(t, testcase.expectedQueryRowsAffected, qe.queryRowsAffected.String())
+			assert.Equal(t, testcase.expectedQueryRowsReturned, qe.queryRowsReturned.String())
+			assert.Equal(t, testcase.expectedQueryRowCounts, qe.queryRowCounts.String())
+			assert.Equal(t, testcase.expectedQueryErrorCounts, qe.queryErrorCounts.String())
+		})
+	}
 }

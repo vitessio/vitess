@@ -10,7 +10,10 @@
       "from_table": "second_user.user",
       "to_tables": ["user.user"]
     }, {
-      "from_table": "master_redirect@master",
+      "from_table": "second_user.foo",
+      "to_tables": ["user.user"]
+    }, {
+      "from_table": "primary_redirect@primary",
       "to_tables": ["user.user"]
     }, {
       "from_table": "bad_table",
@@ -52,7 +55,7 @@
           "owner": "overlap_vindex"
         },
         "name_user_map": {
-          "type": "multi",
+          "type": "name_lkp_test",
           "owner": "user"
         },
         "email_user_map": {
@@ -81,6 +84,17 @@
         },
         "cfc": {
           "type": "cfc"
+        },
+        "multicolIdx": {
+          "type": "multiCol_test"
+        },
+        "colc_map": {
+          "type": "lookup_test",
+          "owner": "multicol_tbl"
+        },
+        "name_muticoltbl_map": {
+          "type": "name_lkp_test",
+          "owner": "multicol_tbl"
         }
       },
       "tables": {
@@ -104,6 +118,10 @@
             "sequence": "seq"
           },
           "columns": [
+            {
+              "name": "col",
+              "type": "INT16"
+            },
             {
               "name": "predef1"
             },
@@ -154,7 +172,13 @@
           "auto_increment": {
             "column": "extra_id",
             "sequence": "seq"
-          }
+          },
+          "columns": [
+            {
+              "name": "col",
+              "type": "INT16"
+            }
+          ]
         },
         "music": {
           "column_vindexes": [
@@ -278,6 +302,22 @@
               "type": "VARCHAR"
             }
           ]
+        },
+        "multicol_tbl": {
+          "column_vindexes": [
+            {
+              "columns": ["cola", "colb"],
+              "name": "multicolIdx"
+            },
+            {
+              "column": "colc",
+              "name": "colc_map"
+            },
+            {
+              "column": "name",
+              "name": "name_muticoltbl_map"
+            }
+          ]
         }
       }
     },
@@ -290,6 +330,54 @@
         }
       },
       "tables": {
+      }
+    },
+    "zlookup_unique": {
+      "sharded": true,
+      "vindexes": {
+        "hash": {
+          "type": "hash"
+        },
+        "xxhash": {
+          "type": "xxhash"
+        },
+        "lookup_t1": {
+          "type": "lookup_unique",
+          "params": {
+            "from": "c2",
+            "table": "targetkeyspace.lookup_t1_backing",
+            "to": "keyspace_id",
+            "write_only": "true"
+          },
+          "owner": "t1"
+        },
+        "lookup_t1_2": {
+          "type": "lookup_unique",
+          "params": {
+            "from": "c3",
+            "table": "targetkeyspace.lookup_t1_2_backing",
+            "to": "keyspace_id"
+          },
+          "owner": "t1"
+        }
+      },
+      "tables": {
+        "t1": {
+          "columnVindexes": [
+            {
+              "column": "c1",
+              "name": "xxhash"
+            },
+            {
+              "column": "c2",
+              "name": "lookup_t1"
+            },
+            {
+              "column": "c3",
+              "name": "lookup_t1_2"
+            }
+          ]
+        }
       }
     },
     "main": {

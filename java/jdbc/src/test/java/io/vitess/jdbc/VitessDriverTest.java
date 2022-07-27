@@ -37,7 +37,7 @@ public class VitessDriverTest {
   private static VitessDriver driver = new VitessDriver();
 
   String dbURL =
-      "jdbc:vitess://localhost:9000/shipment/vt_shipment?tabletType=master&executeType=stream"
+      "jdbc:vitess://localhost:9000/shipment/vt_shipment?tabletType=primary&executeType=stream"
           + "&userName"
           + "=user";
 
@@ -65,7 +65,7 @@ public class VitessDriverTest {
 
   @Test
   public void testAcceptsMalformedURL() {
-    String url = "jdbc:MalfromdedUrl://localhost:9000/shipment/vt_shipment?tabletType=master";
+    String url = "jdbc:MalfromdedUrl://localhost:9000/shipment/vt_shipment?tabletType=primary";
     assertEquals(false, driver.acceptsURL(url));
   }
 

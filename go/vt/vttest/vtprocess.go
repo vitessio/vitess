@@ -19,13 +19,15 @@ package vttest
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
 	"strings"
 	"syscall"
 	"time"
+
+	"vitess.io/vitess/go/vt/env"
 
 	"google.golang.org/protobuf/encoding/prototext"
 
@@ -66,7 +68,7 @@ func getVars(addr string) ([]byte, error) {
 		return nil, err
 	}
 	defer resp.Body.Close()
-	return ioutil.ReadAll(resp.Body)
+	return io.ReadAll(resp.Body)
 }
 
 // defaultHealthCheck checks the health of the Vitess process using getVars.
@@ -125,26 +127,22 @@ func (vtp *VtProcess) WaitTerminate() error {
 func (vtp *VtProcess) WaitStart() (err error) {
 	vtp.proc = exec.Command(
 		vtp.Binary,
-		"-port", fmt.Sprintf("%d", vtp.Port),
-		"-log_dir", vtp.LogDirectory,
-		"-alsologtostderr",
+		"--port", fmt.Sprintf("%d", vtp.Port),
+		"--log_dir", vtp.LogDirectory,
+		"--alsologtostderr",
 	)
 
 	if vtp.PortGrpc != 0 {
-		vtp.proc.Args = append(vtp.proc.Args, "-grpc_port")
+		vtp.proc.Args = append(vtp.proc.Args, "--grpc_port")
 		vtp.proc.Args = append(vtp.proc.Args, fmt.Sprintf("%d", vtp.PortGrpc))
 	}
 
 	vtp.proc.Args = append(vtp.proc.Args, vtp.ExtraArgs...)
-
-	vtp.proc.Stderr = os.Stderr
-	vtp.proc.Stdout = os.Stdout
-
 	vtp.proc.Env = append(vtp.proc.Env, os.Environ()...)
 	vtp.proc.Env = append(vtp.proc.Env, vtp.Env...)
 
 	vtp.proc.Stderr = os.Stderr
-	vtp.proc.Stderr = os.Stdout
+	vtp.proc.Stdout = os.Stdout
 
 	log.Infof("%v %v", strings.Join(vtp.proc.Args, " "))
 	err = vtp.proc.Start()
@@ -175,33 +173,35 @@ func (vtp *VtProcess) WaitStart() (err error) {
 	return fmt.Errorf("process '%s' timed out after 60s (err: %s)", vtp.Name, <-vtp.exit)
 }
 
-// DefaultCharset is the default charset used by MySQL instances
-const DefaultCharset = "utf8"
+const (
+	// DefaultCharset is the default charset used by MySQL instances
+	DefaultCharset = "utf8mb4"
+)
 
 // QueryServerArgs are the default arguments passed to all Vitess query servers
 var QueryServerArgs = []string{
-	"-queryserver-config-pool-size", "4",
-	"-queryserver-config-query-timeout", "300",
-	"-queryserver-config-schema-reload-time", "60",
-	"-queryserver-config-stream-pool-size", "4",
-	"-queryserver-config-transaction-cap", "4",
-	"-queryserver-config-transaction-timeout", "300",
-	"-queryserver-config-txpool-timeout", "300",
+	"--queryserver-config-pool-size", "4",
+	"--queryserver-config-query-timeout", "300",
+	"--queryserver-config-schema-reload-time", "60",
+	"--queryserver-config-stream-pool-size", "4",
+	"--queryserver-config-transaction-cap", "4",
+	"--queryserver-config-transaction-timeout", "300",
+	"--queryserver-config-txpool-timeout", "300",
 }
 
 // VtcomboProcess returns a VtProcess handle for a local `vtcombo` service,
 // configured with the given Config.
 // The process must be manually started by calling WaitStart()
-func VtcomboProcess(env Environment, args *Config, mysql MySQLManager) *VtProcess {
+func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (*VtProcess, error) {
 	vt := &VtProcess{
 		Name:         "vtcombo",
-		Directory:    env.Directory(),
-		LogDirectory: env.LogDirectory(),
-		Binary:       env.BinaryPath("vtcombo"),
-		Port:         env.PortForProtocol("vtcombo", ""),
-		PortGrpc:     env.PortForProtocol("vtcombo", "grpc"),
-		HealthCheck:  env.ProcessHealthCheck("vtcombo"),
-		Env:          env.EnvVars(),
+		Directory:    environment.Directory(),
+		LogDirectory: environment.LogDirectory(),
+		Binary:       environment.BinaryPath("vtcombo"),
+		Port:         environment.PortForProtocol("vtcombo", ""),
+		PortGrpc:     environment.PortForProtocol("vtcombo", "grpc"),
+		HealthCheck:  environment.ProcessHealthCheck("vtcombo"),
+		Env:          environment.EnvVars(),
 	}
 
 	user, pass := mysql.Auth()
@@ -210,78 +210,93 @@ func VtcomboProcess(env Environment, args *Config, mysql MySQLManager) *VtProces
 	if charset == "" {
 		charset = DefaultCharset
 	}
+	verStr, err := env.CheckPlannerVersionFlag(&args.PlannerVersion, &args.PlannerVersionDeprecated)
+	if err != nil {
+		return nil, err
+	}
 
 	protoTopo, _ := prototext.Marshal(args.Topology)
 	vt.ExtraArgs = append(vt.ExtraArgs, []string{
-		"-db_charset", charset,
-		"-db_app_user", user,
-		"-db_app_password", pass,
-		"-db_dba_user", user,
-		"-db_dba_password", pass,
-		"-proto_topo", string(protoTopo),
-		"-mycnf_server_id", "1",
-		"-mycnf_socket_file", socket,
-		"-normalize_queries",
-		"-enable_query_plan_field_caching=false",
-		"-dbddl_plugin", "vttest",
-		"-foreign_key_mode", args.ForeignKeyMode,
-		fmt.Sprintf("-enable_online_ddl=%t", args.EnableOnlineDDL),
-		fmt.Sprintf("-enable_direct_ddl=%t", args.EnableDirectDDL),
+		"--db_charset", charset,
+		"--db_app_user", user,
+		"--db_app_password", pass,
+		"--db_dba_user", user,
+		"--db_dba_password", pass,
+		"--proto_topo", string(protoTopo),
+		"--mycnf_server_id", "1",
+		"--mycnf_socket_file", socket,
+		"--normalize_queries",
+		"--enable_query_plan_field_caching=false",
+		"--dbddl_plugin", "vttest",
+		"--foreign_key_mode", args.ForeignKeyMode,
+		"--planner-version", verStr,
+		fmt.Sprintf("--enable_online_ddl=%t", args.EnableOnlineDDL),
+		fmt.Sprintf("--enable_direct_ddl=%t", args.EnableDirectDDL),
+		fmt.Sprintf("--enable_system_settings=%t", args.EnableSystemSettings),
 	}...)
 
 	vt.ExtraArgs = append(vt.ExtraArgs, QueryServerArgs...)
-	vt.ExtraArgs = append(vt.ExtraArgs, env.VtcomboArguments()...)
+	vt.ExtraArgs = append(vt.ExtraArgs, environment.VtcomboArguments()...)
 
 	if args.SchemaDir != "" {
-		vt.ExtraArgs = append(vt.ExtraArgs, []string{"-schema_dir", args.SchemaDir}...)
+		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--schema_dir", args.SchemaDir}...)
 	}
 	if args.TransactionMode != "" {
-		vt.ExtraArgs = append(vt.ExtraArgs, []string{"-transaction_mode", args.TransactionMode}...)
+		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--transaction_mode", args.TransactionMode}...)
 	}
 	if args.TransactionTimeout != 0 {
-		vt.ExtraArgs = append(vt.ExtraArgs, "-queryserver-config-transaction-timeout", fmt.Sprintf("%f", args.TransactionTimeout))
+		vt.ExtraArgs = append(vt.ExtraArgs, "--queryserver-config-transaction-timeout", fmt.Sprintf("%f", args.TransactionTimeout))
 	}
 	if args.TabletHostName != "" {
-		vt.ExtraArgs = append(vt.ExtraArgs, []string{"-tablet_hostname", args.TabletHostName}...)
+		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--tablet_hostname", args.TabletHostName}...)
 	}
 	if *servenv.GRPCAuth == "mtls" {
-		vt.ExtraArgs = append(vt.ExtraArgs, []string{"-grpc_auth_mode", *servenv.GRPCAuth, "-grpc_key", *servenv.GRPCKey, "-grpc_cert", *servenv.GRPCCert, "-grpc_ca", *servenv.GRPCCA, "-grpc_auth_mtls_allowed_substrings", *servenv.ClientCertSubstrings}...)
+		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--grpc_auth_mode", *servenv.GRPCAuth, "--grpc_key", *servenv.GRPCKey, "--grpc_cert", *servenv.GRPCCert, "--grpc_ca", *servenv.GRPCCA, "--grpc_auth_mtls_allowed_substrings", *servenv.ClientCertSubstrings}...)
 	}
 	if args.InitWorkflowManager {
-		vt.ExtraArgs = append(vt.ExtraArgs, []string{"-workflow_manager_init"}...)
+		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--workflow_manager_init"}...)
 	}
 	if args.VSchemaDDLAuthorizedUsers != "" {
-		vt.ExtraArgs = append(vt.ExtraArgs, []string{"-vschema_ddl_authorized_users", args.VSchemaDDLAuthorizedUsers}...)
+		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--vschema_ddl_authorized_users", args.VSchemaDDLAuthorizedUsers}...)
 	}
 	if *servenv.MySQLServerVersion != "" {
-		vt.ExtraArgs = append(vt.ExtraArgs, "-mysql_server_version", *servenv.MySQLServerVersion)
+		vt.ExtraArgs = append(vt.ExtraArgs, "--mysql_server_version", *servenv.MySQLServerVersion)
 	}
 
 	if socket != "" {
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{
-			"-db_socket", socket,
+			"--db_socket", socket,
 		}...)
 	} else {
 		hostname, p := mysql.Address()
 		port := fmt.Sprintf("%d", p)
 
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{
-			"-db_host", hostname,
-			"-db_port", port,
+			"--db_host", hostname,
+			"--db_port", port,
 		}...)
 	}
 
-	vtcomboMysqlPort := env.PortForProtocol("vtcombo_mysql_port", "")
+	vtcomboMysqlPort := environment.PortForProtocol("vtcombo_mysql_port", "")
 	vtcomboMysqlBindAddress := "localhost"
 	if args.MySQLBindHost != "" {
 		vtcomboMysqlBindAddress = args.MySQLBindHost
 	}
 
 	vt.ExtraArgs = append(vt.ExtraArgs, []string{
-		"-mysql_auth_server_impl", "none",
-		"-mysql_server_port", fmt.Sprintf("%d", vtcomboMysqlPort),
-		"-mysql_server_bind_address", vtcomboMysqlBindAddress,
+		"--mysql_auth_server_impl", "none",
+		"--mysql_server_port", fmt.Sprintf("%d", vtcomboMysqlPort),
+		"--mysql_server_bind_address", vtcomboMysqlBindAddress,
 	}...)
 
-	return vt
+	if args.ExternalTopoImplementation != "" {
+		vt.ExtraArgs = append(vt.ExtraArgs, []string{
+			"--external_topo_server",
+			"--topo_implementation", args.ExternalTopoImplementation,
+			"--topo_global_server_address", args.ExternalTopoGlobalServerAddress,
+			"--topo_global_root", args.ExternalTopoGlobalRoot,
+		}...)
+	}
+
+	return vt, nil
 }

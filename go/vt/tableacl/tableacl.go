@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -107,7 +107,7 @@ func (tacl *tableACL) init(configFile string, aclCB func()) error {
 	if configFile == "" {
 		return nil
 	}
-	data, err := ioutil.ReadFile(configFile)
+	data, err := os.ReadFile(configFile)
 	if err != nil {
 		log.Infof("unable to read tableACL config file: %v  Error: %v", configFile, err)
 		return err

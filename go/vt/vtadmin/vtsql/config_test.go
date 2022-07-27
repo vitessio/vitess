@@ -18,7 +18,6 @@ package vtsql
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -27,8 +26,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc/backoff"
 
 	"vitess.io/vitess/go/vt/grpcclient"
+	"vitess.io/vitess/go/vt/vtadmin/cluster/resolver"
 
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 )
@@ -46,7 +47,7 @@ func TestConfigParse(t *testing.T) {
 	t.Run("", func(t *testing.T) {
 		t.Parallel()
 
-		f, err := ioutil.TempFile("", "vtsql-config-test-testcluster-*") // testcluster is going to appear in the template
+		f, err := os.CreateTemp("", "vtsql-config-test-testcluster-*") // testcluster is going to appear in the template
 		require.NoError(t, err)
 
 		_, err = f.Write([]byte(`{
@@ -93,14 +94,14 @@ func TestConfigParse(t *testing.T) {
 
 		err = cfg.Parse(args)
 		assert.NoError(t, err)
-		assert.Equal(t, expectedTags, cfg.DiscoveryTags)
+		assert.Equal(t, expectedTags, cfg.ResolverOptions.DiscoveryTags)
 		assert.Equal(t, expectedCreds, cfg.Credentials)
 	})
 
 	t.Run("", func(t *testing.T) {
 		t.Parallel()
 
-		f, err := ioutil.TempFile("", "vtsql-config-test-testcluster-*") // testcluster is going to appear in the template
+		f, err := os.CreateTemp("", "vtsql-config-test-testcluster-*") // testcluster is going to appear in the template
 		require.NoError(t, err)
 
 		_, err = f.Write([]byte(`{
@@ -144,8 +145,12 @@ func TestConfigParse(t *testing.T) {
 				Id:   "cid",
 				Name: "testcluster",
 			},
-			DialPingTimeout: time.Millisecond * 500,
-			DiscoveryTags:   expectedTags,
+			ResolverOptions: &resolver.Options{
+				DiscoveryTags:        expectedTags,
+				DiscoveryTimeout:     100 * time.Millisecond,
+				MinDiscoveryInterval: time.Second * 30,
+				BackoffConfig:        backoff.DefaultConfig,
+			},
 			Credentials:     expectedCreds,
 			CredentialsPath: path,
 		}

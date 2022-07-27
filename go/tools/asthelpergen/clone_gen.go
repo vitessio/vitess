@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"go/types"
 	"log"
+	"strings"
 
 	"github.com/dave/jennifer/jen"
 )
@@ -62,7 +63,7 @@ func (c *cloneGen) readValueOfType(t types.Type, expr jen.Code, spi generatorSPI
 	case *types.Basic:
 		return expr
 	case *types.Interface:
-		if types.TypeString(t, noQualifier) == "interface{}" {
+		if types.TypeString(t, noQualifier) == "any" {
 			// these fields have to be taken care of manually
 			return expr
 		}
@@ -89,9 +90,11 @@ func (c *cloneGen) sliceMethod(t types.Type, slice *types.Slice, spi generatorSP
 	c.addFunc(funcName,
 		//func (n Bytes) Clone() Bytes {
 		jen.Func().Id(funcName).Call(jen.Id("n").Id(typeString)).Id(typeString).Block(
+			// if n == nil { return nil }
+			ifNilReturnNil("n"),
 			//	res := make(Bytes, len(n))
 			jen.Id("res").Op(":=").Id("make").Call(jen.Id(typeString), jen.Lit(0), jen.Id("len").Call(jen.Id("n"))),
-			c.copySliceElement(slice.Elem(), spi),
+			c.copySliceElement(t, slice.Elem(), spi),
 			//	return res
 			jen.Return(jen.Id("res")),
 		))
@@ -102,8 +105,8 @@ func (c *cloneGen) basicMethod(t types.Type, basic *types.Basic, spi generatorSP
 	return nil
 }
 
-func (c *cloneGen) copySliceElement(elType types.Type, spi generatorSPI) jen.Code {
-	if isBasic(elType) {
+func (c *cloneGen) copySliceElement(t types.Type, elType types.Type, spi generatorSPI) jen.Code {
+	if !isNamed(t) && isBasic(elType) {
 		//	copy(res, n)
 		return jen.Id("copy").Call(jen.Id("res"), jen.Id("n"))
 	}
@@ -202,6 +205,11 @@ func ifNilReturnNil(id string) *jen.Statement {
 	return jen.If(jen.Id(id).Op("==").Nil()).Block(jen.Return(jen.Nil()))
 }
 
+func isNamed(t types.Type) bool {
+	_, x := t.(*types.Named)
+	return x
+}
+
 func isBasic(t types.Type) bool {
 	_, x := t.Underlying().(*types.Basic)
 	return x
@@ -224,7 +232,7 @@ func (c *cloneGen) ptrToStructMethod(t types.Type, strct *types.Struct, spi gene
 	var fields []jen.Code
 	for i := 0; i < strct.NumFields(); i++ {
 		field := strct.Field(i)
-		if isBasic(field.Type()) || field.Name() == "_" {
+		if isBasic(field.Type()) || strings.HasPrefix(field.Name(), "_") {
 			continue
 		}
 		// out.Field = CloneType(n.Field)

@@ -44,7 +44,7 @@ const (
 
 // heartbeatReader reads the heartbeat table at a configured interval in order
 // to calculate replication lag. It is meant to be run on a replica, and paired
-// with a heartbeatWriter on a master.
+// with a heartbeatWriter on a primary.
 // Lag is calculated by comparing the most recent timestamp in the heartbeat
 // table against the current time at read time.
 type heartbeatReader struct {

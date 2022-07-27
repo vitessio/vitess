@@ -94,8 +94,8 @@ func (c *DBDDL) GetTableName() string {
 	return ""
 }
 
-// Execute implements the Primitive interface
-func (c *DBDDL) Execute(vcursor VCursor, _ map[string]*querypb.BindVariable, _ bool) (*sqltypes.Result, error) {
+// TryExecute implements the Primitive interface
+func (c *DBDDL) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	name := vcursor.GetDBDDLPluginName()
 	plugin, ok := databaseCreatorPlugins[name]
 	if !ok {
@@ -103,19 +103,19 @@ func (c *DBDDL) Execute(vcursor VCursor, _ map[string]*querypb.BindVariable, _ b
 		plugin = databaseCreatorPlugins[defaultDBDDLPlugin]
 	}
 	if c.queryTimeout != 0 {
-		cancel := vcursor.SetContextTimeout(time.Duration(c.queryTimeout) * time.Millisecond)
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, time.Duration(c.queryTimeout)*time.Millisecond)
 		defer cancel()
 	}
 
 	if c.create {
-		return c.createDatabase(vcursor, plugin)
+		return c.createDatabase(ctx, vcursor, plugin)
 	}
 
-	return c.dropDatabase(vcursor, plugin)
+	return c.dropDatabase(ctx, vcursor, plugin)
 }
 
-func (c *DBDDL) createDatabase(vcursor VCursor, plugin DBDDLPlugin) (*sqltypes.Result, error) {
-	ctx := vcursor.Context()
+func (c *DBDDL) createDatabase(ctx context.Context, vcursor VCursor, plugin DBDDLPlugin) (*sqltypes.Result, error) {
 	err := plugin.CreateDatabase(ctx, c.name)
 	if err != nil {
 		return nil, err
@@ -123,7 +123,7 @@ func (c *DBDDL) createDatabase(vcursor VCursor, plugin DBDDLPlugin) (*sqltypes.R
 	var destinations []*srvtopo.ResolvedShard
 	for {
 		// loop until we have found a valid shard
-		destinations, _, err = vcursor.ResolveDestinations(c.name, nil, []key.Destination{key.DestinationAllShards{}})
+		destinations, _, err = vcursor.ResolveDestinations(ctx, c.name, nil, []key.Destination{key.DestinationAllShards{}})
 		if err == nil {
 			break
 		}
@@ -142,7 +142,7 @@ func (c *DBDDL) createDatabase(vcursor VCursor, plugin DBDDLPlugin) (*sqltypes.R
 	}
 
 	for {
-		_, errors := vcursor.ExecuteMultiShard(destinations, queries, false, true)
+		_, errors := vcursor.ExecuteMultiShard(ctx, destinations, queries, false, true)
 
 		noErr := true
 		for _, err := range errors {
@@ -163,8 +163,7 @@ func (c *DBDDL) createDatabase(vcursor VCursor, plugin DBDDLPlugin) (*sqltypes.R
 	return &sqltypes.Result{RowsAffected: 1}, nil
 }
 
-func (c *DBDDL) dropDatabase(vcursor VCursor, plugin DBDDLPlugin) (*sqltypes.Result, error) {
-	ctx := vcursor.Context()
+func (c *DBDDL) dropDatabase(ctx context.Context, vcursor VCursor, plugin DBDDLPlugin) (*sqltypes.Result, error) {
 	err := plugin.DropDatabase(ctx, c.name)
 	if err != nil {
 		return nil, err
@@ -180,9 +179,9 @@ func (c *DBDDL) dropDatabase(vcursor VCursor, plugin DBDDLPlugin) (*sqltypes.Res
 	return &sqltypes.Result{StatusFlags: sqltypes.ServerStatusDbDropped}, nil
 }
 
-// StreamExecute implements the Primitive interface
-func (c *DBDDL) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	res, err := c.Execute(vcursor, bindVars, wantfields)
+// TryStreamExecute implements the Primitive interface
+func (c *DBDDL) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	res, err := c.TryExecute(ctx, vcursor, bindVars, wantfields)
 	if err != nil {
 		return err
 	}
@@ -190,7 +189,7 @@ func (c *DBDDL) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.Bind
 }
 
 // GetFields implements the Primitive interface
-func (c *DBDDL) GetFields(VCursor, map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (c *DBDDL) GetFields(context.Context, VCursor, map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return &sqltypes.Result{}, nil
 }
 

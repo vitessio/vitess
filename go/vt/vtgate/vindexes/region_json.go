@@ -18,10 +18,11 @@ package vindexes
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"strconv"
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -60,7 +61,7 @@ type RegionJSON struct {
 func NewRegionJSON(name string, m map[string]string) (Vindex, error) {
 	rmPath := m["region_map"]
 	rmap := make(map[string]uint64)
-	data, err := ioutil.ReadFile(rmPath)
+	data, err := os.ReadFile(rmPath)
 	if err != nil {
 		return nil, err
 	}
@@ -101,8 +102,13 @@ func (rv *RegionJSON) IsUnique() bool {
 	return true
 }
 
+// NeedsVCursor satisfies the Vindex interface.
+func (rv *RegionJSON) NeedsVCursor() bool {
+	return false
+}
+
 // Map satisfies MultiColumn.
-func (rv *RegionJSON) Map(vcursor VCursor, rowsColValues [][]sqltypes.Value) ([]key.Destination, error) {
+func (rv *RegionJSON) Map(ctx context.Context, vcursor VCursor, rowsColValues [][]sqltypes.Value) ([]key.Destination, error) {
 	destinations := make([]key.Destination, 0, len(rowsColValues))
 	for _, row := range rowsColValues {
 		if len(row) != 2 {
@@ -136,9 +142,9 @@ func (rv *RegionJSON) Map(vcursor VCursor, rowsColValues [][]sqltypes.Value) ([]
 }
 
 // Verify satisfies MultiColumn
-func (rv *RegionJSON) Verify(vcursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte) ([]bool, error) {
+func (rv *RegionJSON) Verify(ctx context.Context, vcursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte) ([]bool, error) {
 	result := make([]bool, len(rowsColValues))
-	destinations, _ := rv.Map(vcursor, rowsColValues)
+	destinations, _ := rv.Map(ctx, vcursor, rowsColValues)
 	for i, dest := range destinations {
 		destksid, ok := dest.(key.DestinationKeyspaceID)
 		if !ok {
@@ -149,7 +155,6 @@ func (rv *RegionJSON) Verify(vcursor VCursor, rowsColValues [][]sqltypes.Value, 
 	return result, nil
 }
 
-// NeedsVCursor satisfies the Vindex interface.
-func (rv *RegionJSON) NeedsVCursor() bool {
+func (rv *RegionJSON) PartialVindex() bool {
 	return false
 }

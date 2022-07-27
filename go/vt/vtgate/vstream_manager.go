@@ -20,14 +20,18 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 	"sync"
 	"time"
+
+	"vitess.io/vitess/go/vt/discovery"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/topo"
 
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 
 	"google.golang.org/protobuf/proto"
 
-	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -43,6 +47,9 @@ type vstreamManager struct {
 	cell     string
 }
 
+// maxSkewTimeoutSeconds is the maximum allowed skew between two streams when the MinimizeSkew flag is set
+const maxSkewTimeoutSeconds = 10 * 60
+
 // vstream contains the metadata for one VStream request.
 type vstream struct {
 	// mu protects parts of vgtid, the semantics of a send, and journaler.
@@ -57,13 +64,16 @@ type vstream struct {
 	journaler map[int64]*journalEvent
 
 	// err can only be set once.
-	once sync.Once
-	err  error
+	// errMu protects err by ensuring its value is read or written by only one goroutine at a time.
+	once  sync.Once
+	err   error
+	errMu sync.Mutex
 
 	// Other input parameters
 	tabletType topodatapb.TabletType
 	filter     *binlogdatapb.Filter
 	resolver   *srvtopo.Resolver
+	optCells   string
 
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
@@ -72,6 +82,11 @@ type vstream struct {
 	// if true skew detection is enabled and we align the streams so that they receive events from
 	// about the same time as each other. Note that there is no exact ordering of events across shards
 	minimizeSkew bool
+
+	// this flag is set by the client, default false
+	// if true when a reshard is detected the client will send the corresponding journal event to the client
+	// default behavior is to automatically migrate the resharded streams from the old to the new shards
+	stopOnReshard bool
 
 	// mutex used to synchronize access to skew detection parameters
 	skewMu sync.Mutex
@@ -88,7 +103,9 @@ type vstream struct {
 
 	vsm *vstreamManager
 
-	rss []*srvtopo.ResolvedShard
+	eventCh           chan []*binlogdatapb.VEvent
+	heartbeatInterval uint32
+	ts                *topo.Server
 }
 
 type journalEvent struct {
@@ -111,18 +128,30 @@ func (vsm *vstreamManager) VStream(ctx context.Context, tabletType topodatapb.Ta
 	if err != nil {
 		return err
 	}
+	ts, err := vsm.toposerv.GetTopoServer()
+	if err != nil {
+		return err
+	}
+	if ts == nil {
+		log.Errorf("unable to get topo server in VStream()")
+		return fmt.Errorf("unable to get topo server")
+	}
 	vs := &vstream{
-		vgtid:      vgtid,
-		tabletType: tabletType,
-		filter:     filter,
-		send:       send,
-		resolver:   vsm.resolver,
-		journaler:  make(map[int64]*journalEvent),
-
-		minimizeSkew:       flags.MinimizeSkew,
-		skewTimeoutSeconds: 10 * 60,
+		vgtid:              vgtid,
+		tabletType:         tabletType,
+		optCells:           flags.Cells,
+		filter:             filter,
+		send:               send,
+		resolver:           vsm.resolver,
+		journaler:          make(map[int64]*journalEvent),
+		minimizeSkew:       flags.GetMinimizeSkew(),
+		stopOnReshard:      flags.GetStopOnReshard(),
+		skewTimeoutSeconds: maxSkewTimeoutSeconds,
 		timestamps:         make(map[string]int64),
 		vsm:                vsm,
+		eventCh:            make(chan []*binlogdatapb.VEvent),
+		heartbeatInterval:  flags.GetHeartbeatInterval(),
+		ts:                 ts,
 	}
 	return vs.stream(ctx)
 }
@@ -201,9 +230,12 @@ func (vsm *vstreamManager) RecordStreamDelay() {
 func (vsm *vstreamManager) GetTotalStreamDelay() int64 {
 	return vstreamSkewDelayCount.Get()
 }
+
 func (vs *vstream) stream(ctx context.Context) error {
 	ctx, vs.cancel = context.WithCancel(ctx)
 	defer vs.cancel()
+
+	go vs.sendEvents(ctx)
 
 	// Make a copy first, because the ShardGtids list can change once streaming starts.
 	copylist := append(([]*binlogdatapb.ShardGtid)(nil), vs.vgtid.ShardGtids...)
@@ -211,7 +243,65 @@ func (vs *vstream) stream(ctx context.Context) error {
 		vs.startOneStream(ctx, sgtid)
 	}
 	vs.wg.Wait()
-	return vs.err
+
+	return vs.getError()
+}
+
+func (vs *vstream) sendEvents(ctx context.Context) {
+	var heartbeat <-chan time.Time
+	var resetHeartbeat func()
+
+	if vs.heartbeatInterval == 0 {
+		heartbeat = make(chan time.Time)
+		resetHeartbeat = func() {}
+	} else {
+		d := time.Duration(vs.heartbeatInterval) * time.Second
+		timer := time.NewTicker(d)
+		defer timer.Stop()
+
+		heartbeat = timer.C
+		resetHeartbeat = func() { timer.Reset(d) }
+	}
+
+	send := func(evs []*binlogdatapb.VEvent) error {
+		if err := vs.send(evs); err != nil {
+			vs.once.Do(func() {
+				vs.setError(err)
+			})
+			return err
+		}
+		return nil
+	}
+	for {
+		select {
+		case <-ctx.Done():
+			vs.once.Do(func() {
+				vs.setError(fmt.Errorf("context canceled"))
+			})
+			return
+		case evs := <-vs.eventCh:
+			if err := send(evs); err != nil {
+				vs.once.Do(func() {
+					vs.setError(err)
+				})
+				return
+			}
+			resetHeartbeat()
+		case t := <-heartbeat:
+			now := t.UnixNano()
+			evs := []*binlogdatapb.VEvent{{
+				Type:        binlogdatapb.VEventType_HEARTBEAT,
+				Timestamp:   now / 1e9,
+				CurrentTime: now,
+			}}
+			if err := send(evs); err != nil {
+				vs.once.Do(func() {
+					vs.setError(err)
+				})
+				return
+			}
+		}
+	}
 }
 
 // startOneStream sets up one shard stream.
@@ -223,8 +313,9 @@ func (vs *vstream) startOneStream(ctx context.Context, sgtid *binlogdatapb.Shard
 
 		// Set the error on exit. First one wins.
 		if err != nil {
+			log.Errorf("Error in vstream for %+v: %s", sgtid, err)
 			vs.once.Do(func() {
-				vs.err = err
+				vs.setError(err)
 				vs.cancel()
 			})
 		}
@@ -320,6 +411,21 @@ func (vs *vstream) alignStreams(ctx context.Context, event *binlogdatapb.VEvent,
 	}
 }
 
+func (vs *vstream) getCells() []string {
+	var cells []string
+	if vs.optCells != "" {
+		for _, cell := range strings.Split(strings.TrimSpace(vs.optCells), ",") {
+			cells = append(cells, strings.TrimSpace(cell))
+		}
+	}
+
+	if len(cells) == 0 {
+		// use the vtgate's cell by default
+		cells = append(cells, vs.vsm.cell)
+	}
+	return cells
+}
+
 // streamFromTablet streams from one shard. If transactions come in separate chunks, they are grouped and sent.
 func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.ShardGtid) error {
 	// journalDone is assigned a channel when a journal event is encountered.
@@ -341,25 +447,72 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 
 		var eventss [][]*binlogdatapb.VEvent
 		var err error
-		rss := vs.rss
-		if vs.resolver != nil {
-			rss, err = vs.resolver.ResolveDestination(ctx, sgtid.Keyspace, vs.tabletType, key.DestinationShard(sgtid.Shard))
-			if err != nil {
-				return err
-			}
+		cells := vs.getCells()
+		tp, err := discovery.NewTabletPicker(vs.ts, cells, sgtid.Keyspace, sgtid.Shard, vs.tabletType.String())
+		if err != nil {
+			log.Errorf(err.Error())
+			return err
 		}
-		if len(rss) != 1 {
-			// Unreachable.
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected number or shards: %v", rss)
+		tablet, err := tp.PickForStreaming(ctx)
+		if err != nil {
+			log.Errorf(err.Error())
+			return err
 		}
+		log.Infof("Picked tablet %s for for %s/%s/%s/%s", tablet.Alias.String(), strings.Join(cells, ","),
+			sgtid.Keyspace, sgtid.Shard, vs.tabletType.String())
+		target := &querypb.Target{
+			Keyspace:   sgtid.Keyspace,
+			Shard:      sgtid.Shard,
+			TabletType: vs.tabletType,
+			Cell:       vs.vsm.cell,
+		}
+		tabletConn, err := vs.vsm.resolver.GetGateway().QueryServiceByAlias(tablet.Alias, target)
+		if err != nil {
+			log.Errorf(err.Error())
+			return err
+		}
+
+		errCh := make(chan error, 1)
+		go func() {
+			_ = tabletConn.StreamHealth(ctx, func(shr *querypb.StreamHealthResponse) error {
+				var err error
+				if ctx.Err() != nil {
+					err = fmt.Errorf("context has ended")
+				} else if shr == nil || shr.RealtimeStats == nil || shr.Target == nil {
+					err = fmt.Errorf("health check failed")
+				} else if vs.tabletType != shr.Target.TabletType {
+					err = fmt.Errorf("tablet type has changed from %s to %s, restarting vstream",
+						vs.tabletType, shr.Target.TabletType)
+				} else if shr.RealtimeStats.HealthError != "" {
+					err = fmt.Errorf("tablet %s is no longer healthy: %s, restarting vstream",
+						tablet.Alias, shr.RealtimeStats.HealthError)
+				}
+				if err != nil {
+					errCh <- err
+					return err
+				}
+				return nil
+			})
+		}()
+
+		log.Infof("Starting to vstream from %s", tablet.Alias.String())
 		// Safe to access sgtid.Gtid here (because it can't change until streaming begins).
-		err = rss[0].Gateway.VStream(ctx, rss[0].Target, sgtid.Gtid, sgtid.TablePKs, vs.filter, func(events []*binlogdatapb.VEvent) error {
+		req := &binlogdatapb.VStreamRequest{
+			Target:       target,
+			Position:     sgtid.Gtid,
+			Filter:       vs.filter,
+			TableLastPKs: sgtid.TablePKs,
+		}
+		err = tabletConn.VStream(ctx, req, func(events []*binlogdatapb.VEvent) error {
 			// We received a valid event. Reset error count.
 			errCount = 0
 
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
+			case streamErr := <-errCh:
+				log.Warningf("Tablet state changed: %s, attempting to restart", streamErr)
+				return vterrors.New(vtrpcpb.Code_UNAVAILABLE, streamErr.Error())
 			case <-journalDone:
 				// Unreachable.
 				// This can happen if a server misbehaves and does not end
@@ -391,7 +544,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 						return err
 					}
 
-					if err := vs.sendAll(sgtid, eventss); err != nil {
+					if err := vs.sendAll(ctx, sgtid, eventss); err != nil {
 						return err
 					}
 					eventss = nil
@@ -406,7 +559,16 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 
 				case binlogdatapb.VEventType_JOURNAL:
 					journal := event.Journal
-					// Journal events are not sent to clients.
+					// Journal events are not sent to clients by default, but only when StopOnReshard is set
+					if vs.stopOnReshard && journal.MigrationType == binlogdatapb.MigrationType_SHARDS {
+						sendevents = append(sendevents, event)
+						eventss = append(eventss, sendevents)
+						if err := vs.sendAll(ctx, sgtid, eventss); err != nil {
+							return err
+						}
+						eventss = nil
+						sendevents = nil
+					}
 					je, err := vs.getJournalEvent(ctx, sgtid, journal)
 					if err != nil {
 						return err
@@ -454,20 +616,25 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 }
 
 // sendAll sends a group of events together while holding the lock.
-func (vs *vstream) sendAll(sgtid *binlogdatapb.ShardGtid, eventss [][]*binlogdatapb.VEvent) error {
+func (vs *vstream) sendAll(ctx context.Context, sgtid *binlogdatapb.ShardGtid, eventss [][]*binlogdatapb.VEvent) error {
 	vs.mu.Lock()
 	defer vs.mu.Unlock()
 
 	// Send all chunks while holding the lock.
 	for _, events := range eventss {
+		if err := vs.getError(); err != nil {
+			return err
+		}
 		// convert all gtids to vgtids. This should be done here while holding the lock.
 		for j, event := range events {
 			if event.Type == binlogdatapb.VEventType_GTID {
 				// Update the VGtid and send that instead.
 				sgtid.Gtid = event.Gtid
 				events[j] = &binlogdatapb.VEvent{
-					Type:  binlogdatapb.VEventType_VGTID,
-					Vgtid: proto.Clone(vs.vgtid).(*binlogdatapb.VGtid),
+					Type:     binlogdatapb.VEventType_VGTID,
+					Vgtid:    proto.Clone(vs.vgtid).(*binlogdatapb.VGtid),
+					Keyspace: event.Keyspace,
+					Shard:    event.Shard,
 				}
 			} else if event.Type == binlogdatapb.VEventType_LASTPK {
 				var foundIndex = -1
@@ -493,16 +660,32 @@ func (vs *vstream) sendAll(sgtid *binlogdatapb.ShardGtid, eventss [][]*binlogdat
 					}
 				}
 				events[j] = &binlogdatapb.VEvent{
-					Type:  binlogdatapb.VEventType_VGTID,
-					Vgtid: proto.Clone(vs.vgtid).(*binlogdatapb.VGtid),
+					Type:     binlogdatapb.VEventType_VGTID,
+					Vgtid:    proto.Clone(vs.vgtid).(*binlogdatapb.VGtid),
+					Keyspace: event.Keyspace,
+					Shard:    event.Shard,
 				}
 			}
 		}
-		if err := vs.send(events); err != nil {
-			return err
+		select {
+		case <-ctx.Done():
+			return nil
+		case vs.eventCh <- events:
 		}
 	}
 	return nil
+}
+
+func (vs *vstream) getError() error {
+	vs.errMu.Lock()
+	defer vs.errMu.Unlock()
+	return vs.err
+}
+
+func (vs *vstream) setError(err error) {
+	vs.errMu.Lock()
+	defer vs.errMu.Unlock()
+	vs.err = err
 }
 
 // getJournalEvent returns a journalEvent. The caller has to wait on its done channel.
@@ -527,7 +710,7 @@ func (vs *vstream) getJournalEvent(ctx context.Context, sgtid *binlogdatapb.Shar
 
 	je, ok := vs.journaler[journal.Id]
 	if !ok {
-		log.Infof("Journal encountered: %v", journal)
+		log.Infof("Journal event received: %v", journal)
 		// Identify the list of ShardGtids that match the participants of the journal.
 		je = &journalEvent{
 			journal:      journal,
@@ -583,24 +766,27 @@ func (vs *vstream) getJournalEvent(ctx context.Context, sgtid *binlogdatapb.Shar
 			return je, nil
 		}
 	}
-	// All participants are waiting. Replace old shard gtids with new ones.
-	newsgtids := make([]*binlogdatapb.ShardGtid, 0, len(vs.vgtid.ShardGtids)-len(je.participants)+len(je.journal.ShardGtids))
-	log.Infof("Removing shard gtids: %v", je.participants)
-	for _, cursgtid := range vs.vgtid.ShardGtids {
-		if je.participants[cursgtid] {
-			continue
-		}
-		newsgtids = append(newsgtids, cursgtid)
-	}
 
-	log.Infof("Adding shard gtids: %v", je.journal.ShardGtids)
-	for _, sgtid := range je.journal.ShardGtids {
-		newsgtids = append(newsgtids, sgtid)
-		// It's ok to start the streams eventhough ShardGtids is not updated yet.
-		// This is because we're still holding the lock.
-		vs.startOneStream(ctx, sgtid)
+	if !vs.stopOnReshard { // stop streaming from current shards and start streaming the new shards
+		// All participants are waiting. Replace old shard gtids with new ones.
+		newsgtids := make([]*binlogdatapb.ShardGtid, 0, len(vs.vgtid.ShardGtids)-len(je.participants)+len(je.journal.ShardGtids))
+		log.Infof("Removing shard gtids: %v", je.participants)
+		for _, cursgtid := range vs.vgtid.ShardGtids {
+			if je.participants[cursgtid] {
+				continue
+			}
+			newsgtids = append(newsgtids, cursgtid)
+		}
+
+		log.Infof("Adding shard gtids: %v", je.journal.ShardGtids)
+		for _, sgtid := range je.journal.ShardGtids {
+			newsgtids = append(newsgtids, sgtid)
+			// It's ok to start the streams even though ShardGtids are not updated yet.
+			// This is because we're still holding the lock.
+			vs.startOneStream(ctx, sgtid)
+		}
+		vs.vgtid.ShardGtids = newsgtids
 	}
-	vs.vgtid.ShardGtids = newsgtids
 	close(je.done)
 	return je, nil
 }

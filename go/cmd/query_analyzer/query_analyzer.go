@@ -19,15 +19,19 @@ package main
 import (
 	"bufio"
 	"bytes"
-	"flag"
 	"fmt"
 	"io"
 	"os"
 	"sort"
 
+	"github.com/spf13/pflag"
+
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
+
+	// Include deprecation warnings for soon-to-be-unsupported flag invocations.
+	_flag "vitess.io/vitess/go/internal/flag"
 )
 
 var (
@@ -57,8 +61,8 @@ func (a stats) Less(i, j int) bool { return a[i].Count > a[j].Count }
 
 func main() {
 	defer exit.Recover()
-	flag.Parse()
-	for _, filename := range flag.Args() {
+	_flag.Parse(pflag.NewFlagSet("query_analyzer", pflag.ExitOnError))
+	for _, filename := range _flag.Args() {
 		fmt.Printf("processing: %s\n", filename)
 		if err := processFile(filename); err != nil {
 			log.Errorf("processFile error: %v", err)

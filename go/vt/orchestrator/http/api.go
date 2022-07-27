@@ -40,6 +40,7 @@ import (
 	"vitess.io/vitess/go/vt/orchestrator/metrics/query"
 	"vitess.io/vitess/go/vt/orchestrator/process"
 	orcraft "vitess.io/vitess/go/vt/orchestrator/raft"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/promotionrule"
 )
 
 // APIResponseCode is an OK/ERROR response code
@@ -50,38 +51,15 @@ const (
 	OK
 )
 
-var apiSynonyms = map[string]string{
-	"relocate-slaves":            "relocate-replicas",
-	"regroup-slaves":             "regroup-replicas",
-	"move-up-slaves":             "move-up-replicas",
-	"repoint-slaves":             "repoint-replicas",
-	"enslave-siblings":           "take-siblings",
-	"enslave-master":             "take-master",
-	"regroup-slaves-bls":         "regroup-replicas-bls",
-	"move-slaves-gtid":           "move-replicas-gtid",
-	"regroup-slaves-gtid":        "regroup-replicas-gtid",
-	"detach-slave":               "detach-replica",
-	"reattach-slave":             "reattach-replica",
-	"detach-slave-master-host":   "detach-replica-master-host",
-	"reattach-slave-master-host": "reattach-replica-master-host",
-	"cluster-osc-slaves":         "cluster-osc-replicas",
-	"start-slave":                "start-replica",
-	"restart-slave":              "restart-replica",
-	"stop-slave":                 "stop-replica",
-	"stop-slave-nice":            "stop-replica-nice",
-	"reset-slave":                "reset-replica",
-	"restart-slave-statements":   "restart-replica-statements",
-}
-
 var registeredPaths = []string{}
 var emptyInstanceKey inst.InstanceKey
 
-func (this *APIResponseCode) MarshalJSON() ([]byte, error) {
-	return json.Marshal(this.String())
+func (apiResponseCode *APIResponseCode) MarshalJSON() ([]byte, error) {
+	return json.Marshal(apiResponseCode.String())
 }
 
-func (this *APIResponseCode) String() string {
-	switch *this {
+func (apiResponseCode *APIResponseCode) String() string {
+	switch *apiResponseCode {
 	case ERROR:
 		return "ERROR"
 	case OK:
@@ -90,9 +68,9 @@ func (this *APIResponseCode) String() string {
 	return "unknown"
 }
 
-// HttpStatus returns the respective HTTP status for this response
-func (this *APIResponseCode) HttpStatus() int {
-	switch *this {
+// HTTPStatus returns the respective HTTP status for this response
+func (apiResponseCode *APIResponseCode) HTTPStatus() int {
+	switch *apiResponseCode {
 	case ERROR:
 		return http.StatusInternalServerError
 	case OK:
@@ -105,23 +83,23 @@ func (this *APIResponseCode) HttpStatus() int {
 type APIResponse struct {
 	Code    APIResponseCode
 	Message string
-	Details interface{}
+	Details any
 }
 
 func Respond(r render.Render, apiResponse *APIResponse) {
-	r.JSON(apiResponse.Code.HttpStatus(), apiResponse)
+	r.JSON(apiResponse.Code.HTTPStatus(), apiResponse)
 }
 
-type HttpAPI struct {
+type API struct {
 	URLPrefix string
 }
 
-var API HttpAPI = HttpAPI{}
+var HTTPapi = API{}
 var discoveryMetrics = collection.CreateOrReturnCollection("DISCOVERY_METRICS")
 var queryMetrics = collection.CreateOrReturnCollection("BACKEND_WRITES")
 var writeBufferMetrics = collection.CreateOrReturnCollection("WRITE_BUFFER")
 
-func (this *HttpAPI) getInstanceKeyInternal(host string, port string, resolve bool) (inst.InstanceKey, error) {
+func (httpAPI *API) getInstanceKeyInternal(host string, port string, resolve bool) (inst.InstanceKey, error) {
 	var instanceKey *inst.InstanceKey
 	var err error
 	if resolve {
@@ -142,12 +120,12 @@ func (this *HttpAPI) getInstanceKeyInternal(host string, port string, resolve bo
 	return *instanceKey, nil
 }
 
-func (this *HttpAPI) getInstanceKey(host string, port string) (inst.InstanceKey, error) {
-	return this.getInstanceKeyInternal(host, port, true)
+func (httpAPI *API) getInstanceKey(host string, port string) (inst.InstanceKey, error) {
+	return httpAPI.getInstanceKeyInternal(host, port, true)
 }
 
-func (this *HttpAPI) getNoResolveInstanceKey(host string, port string) (inst.InstanceKey, error) {
-	return this.getInstanceKeyInternal(host, port, false)
+func (httpAPI *API) getNoResolveInstanceKey(host string, port string) (inst.InstanceKey, error) {
+	return httpAPI.getInstanceKeyInternal(host, port, false)
 }
 
 func getTag(params martini.Params, req *http.Request) (tag *inst.Tag, err error) {
@@ -158,7 +136,7 @@ func getTag(params martini.Params, req *http.Request) (tag *inst.Tag, err error)
 	return inst.NewTag(params["tagName"], params["tagValue"])
 }
 
-func (this *HttpAPI) getBinlogCoordinates(logFile string, logPos string) (inst.BinlogCoordinates, error) {
+func (httpAPI *API) getBinlogCoordinates(logFile string, logPos string) (inst.BinlogCoordinates, error) {
 	coordinates := inst.BinlogCoordinates{LogFile: logFile}
 	var err error
 	if coordinates.LogPos, err = strconv.ParseInt(logPos, 10, 0); err != nil {
@@ -169,8 +147,8 @@ func (this *HttpAPI) getBinlogCoordinates(logFile string, logPos string) (inst.B
 }
 
 // InstanceReplicas lists all replicas of given instance
-func (this *HttpAPI) InstanceReplicas(params martini.Params, r render.Render, req *http.Request) {
-	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
+func (httpAPI *API) InstanceReplicas(params martini.Params, r render.Render, req *http.Request) {
+	instanceKey, err := httpAPI.getInstanceKey(params["host"], params["port"])
 
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
@@ -186,8 +164,8 @@ func (this *HttpAPI) InstanceReplicas(params martini.Params, r render.Render, re
 }
 
 // Instance reads and returns an instance's details.
-func (this *HttpAPI) Instance(params martini.Params, r render.Render, req *http.Request) {
-	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
+func (httpAPI *API) Instance(params martini.Params, r render.Render, req *http.Request) {
+	instanceKey, err := httpAPI.getInstanceKey(params["host"], params["port"])
 
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
@@ -204,28 +182,28 @@ func (this *HttpAPI) Instance(params martini.Params, r render.Render, req *http.
 // AsyncDiscover issues an asynchronous read on an instance. This is
 // useful for bulk loads of a new set of instances and will not block
 // if the instance is slow to respond or not reachable.
-func (this *HttpAPI) AsyncDiscover(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (httpAPI *API) AsyncDiscover(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
 	}
-	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
+	instanceKey, err := httpAPI.getInstanceKey(params["host"], params["port"])
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
-	go this.Discover(params, r, req, user)
+	go httpAPI.Discover(params, r, req, user)
 
 	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Asynchronous discovery initiated for Instance: %+v", instanceKey)})
 }
 
 // Discover issues a synchronous read on an instance
-func (this *HttpAPI) Discover(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (httpAPI *API) Discover(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
 	}
-	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
+	instanceKey, err := httpAPI.getInstanceKey(params["host"], params["port"])
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
@@ -239,19 +217,19 @@ func (this *HttpAPI) Discover(params martini.Params, r render.Render, req *http.
 	if orcraft.IsRaftEnabled() {
 		orcraft.PublishCommand("discover", instanceKey)
 	} else {
-		logic.DiscoverInstance(instanceKey)
+		logic.DiscoverInstance(instanceKey, false /* forceDiscovery */)
 	}
 
 	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Instance discovered: %+v", instance.Key), Details: instance})
 }
 
 // Refresh synchronuously re-reads a topology instance
-func (this *HttpAPI) Refresh(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (httpAPI *API) Refresh(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
 	}
-	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
+	instanceKey, err := httpAPI.getInstanceKey(params["host"], params["port"])
 
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
@@ -268,12 +246,12 @@ func (this *HttpAPI) Refresh(params martini.Params, r render.Render, req *http.R
 }
 
 // Forget removes an instance entry fro backend database
-func (this *HttpAPI) Forget(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (httpAPI *API) Forget(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
 	}
-	instanceKey, err := this.getNoResolveInstanceKey(params["host"], params["port"])
+	instanceKey, err := httpAPI.getNoResolveInstanceKey(params["host"], params["port"])
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
@@ -292,7 +270,7 @@ func (this *HttpAPI) Forget(params martini.Params, r render.Render, req *http.Re
 }
 
 // ForgetCluster forgets all instacnes of a cluster
-func (this *HttpAPI) ForgetCluster(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (httpAPI *API) ForgetCluster(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
@@ -312,8 +290,8 @@ func (this *HttpAPI) ForgetCluster(params martini.Params, r render.Render, req *
 }
 
 // Resolve tries to resolve hostname and then checks to see if port is open on that host.
-func (this *HttpAPI) Resolve(params martini.Params, r render.Render, req *http.Request) {
-	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
+func (httpAPI *API) Resolve(params martini.Params, r render.Render, req *http.Request) {
+	instanceKey, err := httpAPI.getInstanceKey(params["host"], params["port"])
 
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
@@ -331,12 +309,12 @@ func (this *HttpAPI) Resolve(params martini.Params, r render.Render, req *http.R
 }
 
 // BeginMaintenance begins maintenance mode for given instance
-func (this *HttpAPI) BeginMaintenance(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (httpAPI *API) BeginMaintenance(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
 	}
-	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
+	instanceKey, err := httpAPI.getInstanceKey(params["host"], params["port"])
 
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
@@ -352,7 +330,7 @@ func (this *HttpAPI) BeginMaintenance(params martini.Params, r render.Render, re
 }
 
 // EndMaintenance terminates maintenance mode
-func (this *HttpAPI) EndMaintenance(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (httpAPI *API) EndMaintenance(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
@@ -372,12 +350,12 @@ func (this *HttpAPI) EndMaintenance(params martini.Params, r render.Render, req 
 }
 
 // EndMaintenanceByInstanceKey terminates maintenance mode for given instance
-func (this *HttpAPI) EndMaintenanceByInstanceKey(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (httpAPI *API) EndMaintenanceByInstanceKey(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
 	}
-	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
+	instanceKey, err := httpAPI.getInstanceKey(params["host"], params["port"])
 
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
@@ -393,8 +371,8 @@ func (this *HttpAPI) EndMaintenanceByInstanceKey(params martini.Params, r render
 }
 
 // EndMaintenanceByInstanceKey terminates maintenance mode for given instance
-func (this *HttpAPI) InMaintenance(params martini.Params, r render.Render, req *http.Request, user auth.User) {
-	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
+func (httpAPI *API) InMaintenance(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+	instanceKey, err := httpAPI.getInstanceKey(params["host"], params["port"])
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
@@ -412,7 +390,7 @@ func (this *HttpAPI) InMaintenance(params martini.Params, r render.Render, req *
 }
 
 // Maintenance provides list of instance under active maintenance
-func (this *HttpAPI) Maintenance(params martini.Params, r render.Render, req *http.Request) {
+func (httpAPI *API) Maintenance(params martini.Params, r render.Render, req *http.Request) {
 	maintenanceList, err := inst.ReadActiveMaintenance()
 
 	if err != nil {
@@ -424,19 +402,19 @@ func (this *HttpAPI) Maintenance(params martini.Params, r render.Render, req *ht
 }
 
 // BeginDowntime sets a downtime flag with default duration
-func (this *HttpAPI) BeginDowntime(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (httpAPI *API) BeginDowntime(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
 	}
-	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
+	instanceKey, err := httpAPI.getInstanceKey(params["host"], params["port"])
 
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
 
-	var durationSeconds int = 0
+	var durationSeconds int
 	if params["duration"] != "" {
 		durationSeconds, err = util.SimpleTimeToSeconds(params["duration"])
 		if durationSeconds < 0 {
@@ -464,12 +442,12 @@ func (this *HttpAPI) BeginDowntime(params martini.Params, r render.Render, req *
 }
 
 // EndDowntime terminates downtime (removes downtime flag) for an instance
-func (this *HttpAPI) EndDowntime(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (httpAPI *API) EndDowntime(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
 	}
-	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
+	instanceKey, err := httpAPI.getInstanceKey(params["host"], params["port"])
 
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
@@ -489,12 +467,12 @@ func (this *HttpAPI) EndDowntime(params martini.Params, r render.Render, req *ht
 }
 
 // MoveUp attempts to move an instance up the topology
-func (this *HttpAPI) MoveUp(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (httpAPI *API) MoveUp(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
 	}
-	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
+	instanceKey, err := httpAPI.getInstanceKey(params["host"], params["port"])
 
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
@@ -510,39 +488,39 @@ func (this *HttpAPI) MoveUp(params martini.Params, r render.Render, req *http.Re
 }
 
 // MoveUpReplicas attempts to move up all replicas of an instance
-func (this *HttpAPI) MoveUpReplicas(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (httpAPI *API) MoveUpReplicas(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
 	}
-	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
+	instanceKey, err := httpAPI.getInstanceKey(params["host"], params["port"])
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
 
-	replicas, newMaster, err, errs := inst.MoveUpReplicas(&instanceKey, req.URL.Query().Get("pattern"))
+	replicas, newPrimary, errs, err := inst.MoveUpReplicas(&instanceKey, req.URL.Query().Get("pattern"))
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
 
-	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Moved up %d replicas of %+v below %+v; %d errors: %+v", len(replicas), instanceKey, newMaster.Key, len(errs), errs), Details: replicas})
+	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Moved up %d replicas of %+v below %+v; %d errors: %+v", len(replicas), instanceKey, newPrimary.Key, len(errs), errs), Details: replicas})
 }
 
-// Repoint positiones a replica under another (or same) master with exact same coordinates.
+// Repoint positiones a replica under another (or same) primary with exact same coordinates.
 // Useful for binlog servers
-func (this *HttpAPI) Repoint(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (httpAPI *API) Repoint(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
 	}
-	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
+	instanceKey, err := httpAPI.getInstanceKey(params["host"], params["port"])
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
-	belowKey, err := this.getInstanceKey(params["belowHost"], params["belowPort"])
+	belowKey, err := httpAPI.getInstanceKey(params["belowHost"], params["belowPort"])
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
@@ -558,18 +536,18 @@ func (this *HttpAPI) Repoint(params martini.Params, r render.Render, req *http.R
 }
 
 // MoveUpReplicas attempts to move up all replicas of an instance
-func (this *HttpAPI) RepointReplicas(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (httpAPI *API) RepointReplicas(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
 	}
-	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
+	instanceKey, err := httpAPI.getInstanceKey(params["host"], params["port"])
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
 
-	replicas, err, _ := inst.RepointReplicas(&instanceKey, req.URL.Query().Get("pattern"))
+	replicas, _, err := inst.RepointReplicas(&instanceKey, req.URL.Query().Get("pattern"))
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
@@ -578,34 +556,34 @@ func (this *HttpAPI) RepointReplicas(params martini.Params, r render.Render, req
 	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Repointed %d replicas of %+v", len(replicas), instanceKey), Details: replicas})
 }
 
-// MakeCoMaster attempts to make an instance co-master with its own master
-func (this *HttpAPI) MakeCoMaster(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+// MakeCoPrimary attempts to make an instance co-primary with its own primary
+func (httpAPI *API) MakeCoPrimary(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
 	}
-	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
+	instanceKey, err := httpAPI.getInstanceKey(params["host"], params["port"])
 
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
-	instance, err := inst.MakeCoMaster(&instanceKey)
+	instance, err := inst.MakeCoPrimary(&instanceKey)
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
 
-	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Instance made co-master: %+v", instance.Key), Details: instance})
+	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Instance made co-primary: %+v", instance.Key), Details: instance})
 }
 
-// ResetReplication makes a replica forget about its master, effectively breaking the replication
-func (this *HttpAPI) ResetReplication(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+// ResetReplication makes a replica forget about its primary, effectively breaking the replication
+func (httpAPI *API) ResetReplication(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
 	}
-	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
+	instanceKey, err := httpAPI.getInstanceKey(params["host"], params["port"])
 
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
@@ -620,20 +598,20 @@ func (this *HttpAPI) ResetReplication(params martini.Params, r render.Render, re
 	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Replica reset on %+v", instance.Key), Details: instance})
 }
 
-// DetachReplicaMasterHost detaches a replica from its master by setting an invalid
+// DetachReplicaPrimaryHost detaches a replica from its primary by setting an invalid
 // (yet revertible) host name
-func (this *HttpAPI) DetachReplicaMasterHost(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (httpAPI *API) DetachReplicaPrimaryHost(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
 	}
-	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
+	instanceKey, err := httpAPI.getInstanceKey(params["host"], params["port"])
 
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
-	instance, err := inst.DetachReplicaMasterHost(&instanceKey)
+	instance, err := inst.DetachReplicaPrimaryHost(&instanceKey)
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
@@ -642,20 +620,20 @@ func (this *HttpAPI) DetachReplicaMasterHost(params martini.Params, r render.Ren
 	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Replica detached: %+v", instance.Key), Details: instance})
 }
 
-// ReattachReplicaMasterHost reverts a detachReplicaMasterHost command
-// by resoting the original master hostname in CHANGE MASTER TO
-func (this *HttpAPI) ReattachReplicaMasterHost(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+// ReattachReplicaPrimaryHost reverts a detachReplicaPrimaryHost command
+// by resetting the original primary hostname in CHANGE MASTER TO
+func (httpAPI *API) ReattachReplicaPrimaryHost(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
 	}
-	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
+	instanceKey, err := httpAPI.getInstanceKey(params["host"], params["port"])
 
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
-	instance, err := inst.ReattachReplicaMasterHost(&instanceKey)
+	instance, err := inst.ReattachReplicaPrimaryHost(&instanceKey)
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
@@ -665,12 +643,12 @@ func (this *HttpAPI) ReattachReplicaMasterHost(params martini.Params, r render.R
 }
 
 // EnableGTID attempts to enable GTID on a replica
-func (this *HttpAPI) EnableGTID(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (httpAPI *API) EnableGTID(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
 	}
-	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
+	instanceKey, err := httpAPI.getInstanceKey(params["host"], params["port"])
 
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
@@ -686,12 +664,12 @@ func (this *HttpAPI) EnableGTID(params martini.Params, r render.Render, req *htt
 }
 
 // DisableGTID attempts to disable GTID on a replica, and revert to binlog file:pos
-func (this *HttpAPI) DisableGTID(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (httpAPI *API) DisableGTID(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
 	}
-	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
+	instanceKey, err := httpAPI.getInstanceKey(params["host"], params["port"])
 
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
@@ -707,8 +685,8 @@ func (this *HttpAPI) DisableGTID(params martini.Params, r render.Render, req *ht
 }
 
 // LocateErrantGTID identifies the binlog positions for errant GTIDs on an instance
-func (this *HttpAPI) LocateErrantGTID(params martini.Params, r render.Render, req *http.Request, user auth.User) {
-	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
+func (httpAPI *API) LocateErrantGTID(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+	instanceKey, err := httpAPI.getInstanceKey(params["host"], params["port"])
 
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
@@ -722,19 +700,19 @@ func (this *HttpAPI) LocateErrantGTID(params martini.Params, r render.Render, re
 	Respond(r, &APIResponse{Code: OK, Message: "located errant GTID", Details: errantBinlogs})
 }
 
-// ErrantGTIDResetMaster removes errant transactions on a server by way of RESET MASTER
-func (this *HttpAPI) ErrantGTIDResetMaster(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+// ErrantGTIDResetPrimary removes errant transactions on a server by way of RESET MASTER
+func (httpAPI *API) ErrantGTIDResetPrimary(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
 	}
-	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
+	instanceKey, err := httpAPI.getInstanceKey(params["host"], params["port"])
 
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
-	instance, err := inst.ErrantGTIDResetMaster(&instanceKey)
+	instance, err := inst.ErrantGTIDResetPrimary(&instanceKey)
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
@@ -743,39 +721,39 @@ func (this *HttpAPI) ErrantGTIDResetMaster(params martini.Params, r render.Rende
 	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Removed errant GTID on %+v and issued a RESET MASTER", instance.Key), Details: instance})
 }
 
-// ErrantGTIDInjectEmpty removes errant transactions by injecting and empty transaction on the cluster's master
-func (this *HttpAPI) ErrantGTIDInjectEmpty(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+// ErrantGTIDInjectEmpty removes errant transactions by injecting and empty transaction on the cluster's primary
+func (httpAPI *API) ErrantGTIDInjectEmpty(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
 	}
-	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
+	instanceKey, err := httpAPI.getInstanceKey(params["host"], params["port"])
 
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
-	instance, clusterMaster, countInjectedTransactions, err := inst.ErrantGTIDInjectEmpty(&instanceKey)
+	instance, clusterPrimary, countInjectedTransactions, err := inst.ErrantGTIDInjectEmpty(&instanceKey)
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
 
-	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Have injected %+v transactions on cluster master %+v", countInjectedTransactions, clusterMaster.Key), Details: instance})
+	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Have injected %+v transactions on cluster primary %+v", countInjectedTransactions, clusterPrimary.Key), Details: instance})
 }
 
 // MoveBelow attempts to move an instance below its supposed sibling
-func (this *HttpAPI) MoveBelow(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (httpAPI *API) MoveBelow(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
 	}
-	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
+	instanceKey, err := httpAPI.getInstanceKey(params["host"], params["port"])
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
-	siblingKey, err := this.getInstanceKey(params["siblingHost"], params["siblingPort"])
+	siblingKey, err := httpAPI.getInstanceKey(params["siblingHost"], params["siblingPort"])
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
@@ -791,17 +769,17 @@ func (this *HttpAPI) MoveBelow(params martini.Params, r render.Render, req *http
 }
 
 // MoveBelowGTID attempts to move an instance below another, via GTID
-func (this *HttpAPI) MoveBelowGTID(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (httpAPI *API) MoveBelowGTID(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
 	}
-	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
+	instanceKey, err := httpAPI.getInstanceKey(params["host"], params["port"])
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
-	belowKey, err := this.getInstanceKey(params["belowHost"], params["belowPort"])
+	belowKey, err := httpAPI.getInstanceKey(params["belowHost"], params["belowPort"])
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
@@ -817,23 +795,23 @@ func (this *HttpAPI) MoveBelowGTID(params martini.Params, r render.Render, req *
 }
 
 // MoveReplicasGTID attempts to move an instance below another, via GTID
-func (this *HttpAPI) MoveReplicasGTID(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (httpAPI *API) MoveReplicasGTID(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
 	}
-	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
+	instanceKey, err := httpAPI.getInstanceKey(params["host"], params["port"])
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
-	belowKey, err := this.getInstanceKey(params["belowHost"], params["belowPort"])
+	belowKey, err := httpAPI.getInstanceKey(params["belowHost"], params["belowPort"])
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
 
-	movedReplicas, _, err, errs := inst.MoveReplicasGTID(&instanceKey, &belowKey, req.URL.Query().Get("pattern"))
+	movedReplicas, _, errs, err := inst.MoveReplicasGTID(&instanceKey, &belowKey, req.URL.Query().Get("pattern"))
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
@@ -843,12 +821,12 @@ func (this *HttpAPI) MoveReplicasGTID(params martini.Params, r render.Render, re
 }
 
 // TakeSiblings
-func (this *HttpAPI) TakeSiblings(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (httpAPI *API) TakeSiblings(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
 	}
-	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
+	instanceKey, err := httpAPI.getInstanceKey(params["host"], params["port"])
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
@@ -863,40 +841,40 @@ func (this *HttpAPI) TakeSiblings(params martini.Params, r render.Render, req *h
 	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Took %d siblings of %+v", count, instanceKey), Details: instance})
 }
 
-// TakeMaster
-func (this *HttpAPI) TakeMaster(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+// TakePrimary
+func (httpAPI *API) TakePrimary(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
 	}
-	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
+	instanceKey, err := httpAPI.getInstanceKey(params["host"], params["port"])
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
 
-	instance, err := inst.TakeMaster(&instanceKey, false)
+	instance, err := inst.TakePrimary(&instanceKey, false)
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
 
-	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("%+v took its master", instanceKey), Details: instance})
+	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("%+v took its primary", instanceKey), Details: instance})
 }
 
 // RelocateBelow attempts to move an instance below another, orchestrator choosing the best (potentially multi-step)
 // relocation method
-func (this *HttpAPI) RelocateBelow(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (httpAPI *API) RelocateBelow(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
 	}
-	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
+	instanceKey, err := httpAPI.getInstanceKey(params["host"], params["port"])
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
-	belowKey, err := this.getInstanceKey(params["belowHost"], params["belowPort"])
+	belowKey, err := httpAPI.getInstanceKey(params["belowHost"], params["belowPort"])
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
@@ -912,23 +890,23 @@ func (this *HttpAPI) RelocateBelow(params martini.Params, r render.Render, req *
 }
 
 // Relocates attempts to smartly relocate replicas of a given instance below another
-func (this *HttpAPI) RelocateReplicas(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (httpAPI *API) RelocateReplicas(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
 	}
-	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
+	instanceKey, err := httpAPI.getInstanceKey(params["host"], params["port"])
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
-	belowKey, err := this.getInstanceKey(params["belowHost"], params["belowPort"])
+	belowKey, err := httpAPI.getInstanceKey(params["belowHost"], params["belowPort"])
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
 
-	replicas, _, err, errs := inst.RelocateReplicas(&instanceKey, &belowKey, req.URL.Query().Get("pattern"))
+	replicas, _, errs, err := inst.RelocateReplicas(&instanceKey, &belowKey, req.URL.Query().Get("pattern"))
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
@@ -939,12 +917,12 @@ func (this *HttpAPI) RelocateReplicas(params martini.Params, r render.Render, re
 
 // RegroupReplicas attempts to pick a replica of a given instance and make it take its siblings, using any
 // method possible (GTID, binlog servers)
-func (this *HttpAPI) RegroupReplicas(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (httpAPI *API) RegroupReplicas(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
 	}
-	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
+	instanceKey, err := httpAPI.getInstanceKey(params["host"], params["port"])
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
@@ -962,12 +940,12 @@ func (this *HttpAPI) RegroupReplicas(params martini.Params, r render.Render, req
 }
 
 // RegroupReplicasGTID attempts to pick a replica of a given instance and make it take its siblings, efficiently, using GTID
-func (this *HttpAPI) RegroupReplicasGTID(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (httpAPI *API) RegroupReplicasGTID(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
 	}
-	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
+	instanceKey, err := httpAPI.getInstanceKey(params["host"], params["port"])
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
@@ -986,12 +964,12 @@ func (this *HttpAPI) RegroupReplicasGTID(params martini.Params, r render.Render,
 }
 
 // RegroupReplicasBinlogServers attempts to pick a replica of a given instance and make it take its siblings, efficiently, using GTID
-func (this *HttpAPI) RegroupReplicasBinlogServers(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (httpAPI *API) RegroupReplicasBinlogServers(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
 	}
-	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
+	instanceKey, err := httpAPI.getInstanceKey(params["host"], params["port"])
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
@@ -1009,12 +987,12 @@ func (this *HttpAPI) RegroupReplicasBinlogServers(params martini.Params, r rende
 }
 
 // SkipQuery skips a single query on a failed replication instance
-func (this *HttpAPI) SkipQuery(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (httpAPI *API) SkipQuery(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
 	}
-	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
+	instanceKey, err := httpAPI.getInstanceKey(params["host"], params["port"])
 
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
@@ -1030,12 +1008,12 @@ func (this *HttpAPI) SkipQuery(params martini.Params, r render.Render, req *http
 }
 
 // StartReplication starts replication on given instance
-func (this *HttpAPI) StartReplication(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (httpAPI *API) StartReplication(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
 	}
-	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
+	instanceKey, err := httpAPI.getInstanceKey(params["host"], params["port"])
 
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
@@ -1051,12 +1029,12 @@ func (this *HttpAPI) StartReplication(params martini.Params, r render.Render, re
 }
 
 // RestartReplication stops & starts replication on given instance
-func (this *HttpAPI) RestartReplication(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (httpAPI *API) RestartReplication(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
 	}
-	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
+	instanceKey, err := httpAPI.getInstanceKey(params["host"], params["port"])
 
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
@@ -1072,12 +1050,12 @@ func (this *HttpAPI) RestartReplication(params martini.Params, r render.Render, 
 }
 
 // StopReplication stops replication on given instance
-func (this *HttpAPI) StopReplication(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (httpAPI *API) StopReplication(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
 	}
-	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
+	instanceKey, err := httpAPI.getInstanceKey(params["host"], params["port"])
 
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
@@ -1093,12 +1071,12 @@ func (this *HttpAPI) StopReplication(params martini.Params, r render.Render, req
 }
 
 // StopReplicationNicely stops replication on given instance, such that sql thead is aligned with IO thread
-func (this *HttpAPI) StopReplicationNicely(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (httpAPI *API) StopReplicationNicely(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
 	}
-	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
+	instanceKey, err := httpAPI.getInstanceKey(params["host"], params["port"])
 
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
@@ -1114,12 +1092,12 @@ func (this *HttpAPI) StopReplicationNicely(params martini.Params, r render.Rende
 }
 
 // FlushBinaryLogs runs a single FLUSH BINARY LOGS
-func (this *HttpAPI) FlushBinaryLogs(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (httpAPI *API) FlushBinaryLogs(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
 	}
-	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
+	instanceKey, err := httpAPI.getInstanceKey(params["host"], params["port"])
 
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
@@ -1135,12 +1113,12 @@ func (this *HttpAPI) FlushBinaryLogs(params martini.Params, r render.Render, req
 }
 
 // PurgeBinaryLogs purges binary logs up to given binlog file
-func (this *HttpAPI) PurgeBinaryLogs(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (httpAPI *API) PurgeBinaryLogs(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
 	}
-	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
+	instanceKey, err := httpAPI.getInstanceKey(params["host"], params["port"])
 
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
@@ -1169,12 +1147,12 @@ func (this *HttpAPI) PurgeBinaryLogs(params martini.Params, r render.Render, req
 // RestartReplicationStatements receives a query to execute that requires a replication restart to apply.
 // As an example, this may be `set global rpl_semi_sync_slave_enabled=1`. orchestrator will check
 // replication status on given host and will wrap with appropriate stop/start statements, if need be.
-func (this *HttpAPI) RestartReplicationStatements(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (httpAPI *API) RestartReplicationStatements(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
 	}
-	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
+	instanceKey, err := httpAPI.getInstanceKey(params["host"], params["port"])
 
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
@@ -1193,8 +1171,8 @@ func (this *HttpAPI) RestartReplicationStatements(params martini.Params, r rende
 }
 
 // CanReplicateFrom attempts to move an instance below another via pseudo GTID matching of binlog entries
-func (this *HttpAPI) CanReplicateFrom(params martini.Params, r render.Render, req *http.Request, user auth.User) {
-	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
+func (httpAPI *API) CanReplicateFrom(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+	instanceKey, err := httpAPI.getInstanceKey(params["host"], params["port"])
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
@@ -1204,7 +1182,7 @@ func (this *HttpAPI) CanReplicateFrom(params martini.Params, r render.Render, re
 		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("Cannot read instance: %+v", instanceKey)})
 		return
 	}
-	belowKey, err := this.getInstanceKey(params["belowHost"], params["belowPort"])
+	belowKey, err := httpAPI.getInstanceKey(params["belowHost"], params["belowPort"])
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
@@ -1225,8 +1203,8 @@ func (this *HttpAPI) CanReplicateFrom(params martini.Params, r render.Render, re
 }
 
 // CanReplicateFromGTID attempts to move an instance below another via GTID.
-func (this *HttpAPI) CanReplicateFromGTID(params martini.Params, r render.Render, req *http.Request, user auth.User) {
-	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
+func (httpAPI *API) CanReplicateFromGTID(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+	instanceKey, err := httpAPI.getInstanceKey(params["host"], params["port"])
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
@@ -1236,7 +1214,7 @@ func (this *HttpAPI) CanReplicateFromGTID(params martini.Params, r render.Render
 		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("Cannot read instance: %+v", instanceKey)})
 		return
 	}
-	belowKey, err := this.getInstanceKey(params["belowHost"], params["belowPort"])
+	belowKey, err := httpAPI.getInstanceKey(params["belowHost"], params["belowPort"])
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
@@ -1267,12 +1245,12 @@ func (this *HttpAPI) CanReplicateFromGTID(params martini.Params, r render.Render
 }
 
 // SetReadOnly sets the global read_only variable
-func (this *HttpAPI) SetReadOnly(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (httpAPI *API) SetReadOnly(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
 	}
-	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
+	instanceKey, err := httpAPI.getInstanceKey(params["host"], params["port"])
 
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
@@ -1288,12 +1266,12 @@ func (this *HttpAPI) SetReadOnly(params martini.Params, r render.Render, req *ht
 }
 
 // SetWriteable clear the global read_only variable
-func (this *HttpAPI) SetWriteable(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (httpAPI *API) SetWriteable(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
 	}
-	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
+	instanceKey, err := httpAPI.getInstanceKey(params["host"], params["port"])
 
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
@@ -1309,13 +1287,13 @@ func (this *HttpAPI) SetWriteable(params martini.Params, r render.Render, req *h
 }
 
 // KillQuery kills a query running on a server
-func (this *HttpAPI) KillQuery(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (httpAPI *API) KillQuery(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
 	}
-	instanceKey, _ := this.getInstanceKey(params["host"], params["port"])
-	processId, err := strconv.ParseInt(params["process"], 10, 0)
+	instanceKey, _ := httpAPI.getInstanceKey(params["host"], params["port"])
+	processID, err := strconv.ParseInt(params["process"], 10, 0)
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
@@ -1325,7 +1303,7 @@ func (this *HttpAPI) KillQuery(params martini.Params, r render.Render, req *http
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
-	instance, err := inst.KillQuery(&instanceKey, processId)
+	instance, err := inst.KillQuery(&instanceKey, processID)
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
@@ -1334,8 +1312,8 @@ func (this *HttpAPI) KillQuery(params martini.Params, r render.Render, req *http
 	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Query killed on : %+v", instance.Key), Details: instance})
 }
 
-// AsciiTopology returns an ascii graph of cluster's instances
-func (this *HttpAPI) asciiTopology(params martini.Params, r render.Render, req *http.Request, tabulated bool, printTags bool) {
+// ASCIITopology returns an ascii graph of cluster's instances
+func (httpAPI *API) asciiTopology(params martini.Params, r render.Render, req *http.Request, tabulated bool, printTags bool) {
 	clusterName, err := figureClusterName(getClusterHint(params))
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
@@ -1351,8 +1329,8 @@ func (this *HttpAPI) asciiTopology(params martini.Params, r render.Render, req *
 	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Topology for cluster %s", clusterName), Details: asciiOutput})
 }
 
-// SnapshotTopologies triggers orchestrator to record a snapshot of host/master for all known hosts.
-func (this *HttpAPI) SnapshotTopologies(params martini.Params, r render.Render, req *http.Request) {
+// SnapshotTopologies triggers orchestrator to record a snapshot of host/primary for all known hosts.
+func (httpAPI *API) SnapshotTopologies(params martini.Params, r render.Render, req *http.Request) {
 	start := time.Now()
 	if err := inst.SnapshotTopologies(); err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err), Details: fmt.Sprintf("Took %v", time.Since(start))})
@@ -1362,23 +1340,23 @@ func (this *HttpAPI) SnapshotTopologies(params martini.Params, r render.Render, 
 	Respond(r, &APIResponse{Code: OK, Message: "Topology Snapshot completed", Details: fmt.Sprintf("Took %v", time.Since(start))})
 }
 
-// AsciiTopology returns an ascii graph of cluster's instances
-func (this *HttpAPI) AsciiTopology(params martini.Params, r render.Render, req *http.Request) {
-	this.asciiTopology(params, r, req, false, false)
+// ASCIITopology returns an ascii graph of cluster's instances
+func (httpAPI *API) ASCIITopology(params martini.Params, r render.Render, req *http.Request) {
+	httpAPI.asciiTopology(params, r, req, false, false)
 }
 
-// AsciiTopology returns an ascii graph of cluster's instances
-func (this *HttpAPI) AsciiTopologyTabulated(params martini.Params, r render.Render, req *http.Request) {
-	this.asciiTopology(params, r, req, true, false)
+// ASCIITopologyTabulated returns an ascii graph of cluster's instances
+func (httpAPI *API) ASCIITopologyTabulated(params martini.Params, r render.Render, req *http.Request) {
+	httpAPI.asciiTopology(params, r, req, true, false)
 }
 
-// AsciiTopologyTags returns an ascii graph of cluster's instances and instance tags
-func (this *HttpAPI) AsciiTopologyTags(params martini.Params, r render.Render, req *http.Request) {
-	this.asciiTopology(params, r, req, false, true)
+// ASCIITopologyTags returns an ascii graph of cluster's instances and instance tags
+func (httpAPI *API) ASCIITopologyTags(params martini.Params, r render.Render, req *http.Request) {
+	httpAPI.asciiTopology(params, r, req, false, true)
 }
 
 // Cluster provides list of instances in given cluster
-func (this *HttpAPI) Cluster(params martini.Params, r render.Render, req *http.Request) {
+func (httpAPI *API) Cluster(params martini.Params, r render.Render, req *http.Request) {
 	clusterName, err := figureClusterName(getClusterHint(params))
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
@@ -1396,7 +1374,7 @@ func (this *HttpAPI) Cluster(params martini.Params, r render.Render, req *http.R
 }
 
 // ClusterByAlias provides list of instances in given cluster
-func (this *HttpAPI) ClusterByAlias(params martini.Params, r render.Render, req *http.Request) {
+func (httpAPI *API) ClusterByAlias(params martini.Params, r render.Render, req *http.Request) {
 	clusterName, err := inst.GetClusterByAlias(params["clusterAlias"])
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
@@ -1404,12 +1382,12 @@ func (this *HttpAPI) ClusterByAlias(params martini.Params, r render.Render, req 
 	}
 
 	params["clusterName"] = clusterName
-	this.Cluster(params, r, req)
+	httpAPI.Cluster(params, r, req)
 }
 
 // ClusterByInstance provides list of instances in cluster an instance belongs to
-func (this *HttpAPI) ClusterByInstance(params martini.Params, r render.Render, req *http.Request) {
-	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
+func (httpAPI *API) ClusterByInstance(params martini.Params, r render.Render, req *http.Request) {
+	instanceKey, err := httpAPI.getInstanceKey(params["host"], params["port"])
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
@@ -1421,11 +1399,11 @@ func (this *HttpAPI) ClusterByInstance(params martini.Params, r render.Render, r
 	}
 
 	params["clusterName"] = instance.ClusterName
-	this.Cluster(params, r, req)
+	httpAPI.Cluster(params, r, req)
 }
 
 // ClusterInfo provides details of a given cluster
-func (this *HttpAPI) ClusterInfo(params martini.Params, r render.Render, req *http.Request) {
+func (httpAPI *API) ClusterInfo(params martini.Params, r render.Render, req *http.Request) {
 	clusterName, err := figureClusterName(getClusterHint(params))
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
@@ -1442,7 +1420,7 @@ func (this *HttpAPI) ClusterInfo(params martini.Params, r render.Render, req *ht
 }
 
 // Cluster provides list of instances in given cluster
-func (this *HttpAPI) ClusterInfoByAlias(params martini.Params, r render.Render, req *http.Request) {
+func (httpAPI *API) ClusterInfoByAlias(params martini.Params, r render.Render, req *http.Request) {
 	clusterName, err := inst.GetClusterByAlias(params["clusterAlias"])
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
@@ -1450,11 +1428,11 @@ func (this *HttpAPI) ClusterInfoByAlias(params martini.Params, r render.Render, 
 	}
 
 	params["clusterName"] = clusterName
-	this.ClusterInfo(params, r, req)
+	httpAPI.ClusterInfo(params, r, req)
 }
 
 // ClusterOSCReplicas returns heuristic list of OSC replicas
-func (this *HttpAPI) ClusterOSCReplicas(params martini.Params, r render.Render, req *http.Request) {
+func (httpAPI *API) ClusterOSCReplicas(params martini.Params, r render.Render, req *http.Request) {
 	clusterName, err := figureClusterName(getClusterHint(params))
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
@@ -1471,7 +1449,7 @@ func (this *HttpAPI) ClusterOSCReplicas(params martini.Params, r render.Render, 
 }
 
 // SetClusterAlias will change an alias for a given clustername
-func (this *HttpAPI) SetClusterAliasManualOverride(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (httpAPI *API) SetClusterAliasManualOverride(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
@@ -1494,7 +1472,7 @@ func (this *HttpAPI) SetClusterAliasManualOverride(params martini.Params, r rend
 }
 
 // Clusters provides list of known clusters
-func (this *HttpAPI) Clusters(params martini.Params, r render.Render, req *http.Request) {
+func (httpAPI *API) Clusters(params martini.Params, r render.Render, req *http.Request) {
 	clusterNames, err := inst.ReadClusters()
 
 	if err != nil {
@@ -1506,7 +1484,7 @@ func (this *HttpAPI) Clusters(params martini.Params, r render.Render, req *http.
 }
 
 // ClustersInfo provides list of known clusters, along with some added metadata per cluster
-func (this *HttpAPI) ClustersInfo(params martini.Params, r render.Render, req *http.Request) {
+func (httpAPI *API) ClustersInfo(params martini.Params, r render.Render, req *http.Request) {
 	clustersInfo, err := inst.ReadClustersInfo("")
 
 	if err != nil {
@@ -1518,8 +1496,8 @@ func (this *HttpAPI) ClustersInfo(params martini.Params, r render.Render, req *h
 }
 
 // Tags lists existing tags for a given instance
-func (this *HttpAPI) Tags(params martini.Params, r render.Render, req *http.Request) {
-	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
+func (httpAPI *API) Tags(params martini.Params, r render.Render, req *http.Request) {
+	instanceKey, err := httpAPI.getInstanceKey(params["host"], params["port"])
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
@@ -1538,8 +1516,8 @@ func (this *HttpAPI) Tags(params martini.Params, r render.Render, req *http.Requ
 }
 
 // TagValue returns a given tag's value for a specific instance
-func (this *HttpAPI) TagValue(params martini.Params, r render.Render, req *http.Request) {
-	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
+func (httpAPI *API) TagValue(params martini.Params, r render.Render, req *http.Request) {
+	instanceKey, err := httpAPI.getInstanceKey(params["host"], params["port"])
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
@@ -1562,7 +1540,7 @@ func (this *HttpAPI) TagValue(params martini.Params, r render.Render, req *http.
 }
 
 // Tagged return instance keys tagged by "tag" query param
-func (this *HttpAPI) Tagged(params martini.Params, r render.Render, req *http.Request) {
+func (httpAPI *API) Tagged(params martini.Params, r render.Render, req *http.Request) {
 	tagsString := req.URL.Query().Get("tag")
 	instanceKeyMap, err := inst.GetInstanceKeysByTags(tagsString)
 	if err != nil {
@@ -1574,8 +1552,8 @@ func (this *HttpAPI) Tagged(params martini.Params, r render.Render, req *http.Re
 }
 
 // Tags adds a tag to a given instance
-func (this *HttpAPI) Tag(params martini.Params, r render.Render, req *http.Request) {
-	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
+func (httpAPI *API) Tag(params martini.Params, r render.Render, req *http.Request) {
+	instanceKey, err := httpAPI.getInstanceKey(params["host"], params["port"])
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
@@ -1600,8 +1578,8 @@ func (this *HttpAPI) Tag(params martini.Params, r render.Render, req *http.Reque
 }
 
 // Untag removes a tag from an instance
-func (this *HttpAPI) Untag(params martini.Params, r render.Render, req *http.Request) {
-	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
+func (httpAPI *API) Untag(params martini.Params, r render.Render, req *http.Request) {
+	instanceKey, err := httpAPI.getInstanceKey(params["host"], params["port"])
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
@@ -1622,7 +1600,7 @@ func (this *HttpAPI) Untag(params martini.Params, r render.Render, req *http.Req
 }
 
 // UntagAll removes a tag from all matching instances
-func (this *HttpAPI) UntagAll(params martini.Params, r render.Render, req *http.Request) {
+func (httpAPI *API) UntagAll(params martini.Params, r render.Render, req *http.Request) {
 	tag, err := getTag(params, req)
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
@@ -1637,26 +1615,9 @@ func (this *HttpAPI) UntagAll(params martini.Params, r render.Render, req *http.
 	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("%s removed from %+v instances", tag.TagName, len(*untagged)), Details: untagged.GetInstanceKeys()})
 }
 
-// Write a cluster's master (or all clusters masters) to kv stores.
-// This should generally only happen once in a lifetime of a cluster. Otherwise KV
-// stores are updated via failovers.
-func (this *HttpAPI) SubmitMastersToKvStores(params martini.Params, r render.Render, req *http.Request) {
-	clusterName, err := getClusterNameIfExists(params)
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
-		return
-	}
-	kvPairs, submittedCount, err := logic.SubmitMastersToKvStores(clusterName, true)
-	if err != nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
-		return
-	}
-	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Submitted %d masters", submittedCount), Details: kvPairs})
-}
-
-// Clusters provides list of known masters
-func (this *HttpAPI) Masters(params martini.Params, r render.Render, req *http.Request) {
-	instances, err := inst.ReadWriteableClustersMasters()
+// Clusters provides list of known primaries
+func (httpAPI *API) Primaries(params martini.Params, r render.Render, req *http.Request) {
+	instances, err := inst.ReadWriteableClustersPrimaries()
 
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
@@ -1666,29 +1627,29 @@ func (this *HttpAPI) Masters(params martini.Params, r render.Render, req *http.R
 	r.JSON(http.StatusOK, instances)
 }
 
-// ClusterMaster returns the writable master of a given cluster
-func (this *HttpAPI) ClusterMaster(params martini.Params, r render.Render, req *http.Request) {
+// ClusterPrimary returns the writable primary of a given cluster
+func (httpAPI *API) ClusterPrimary(params martini.Params, r render.Render, req *http.Request) {
 	clusterName, err := figureClusterName(getClusterHint(params))
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
 		return
 	}
 
-	masters, err := inst.ReadClusterMaster(clusterName)
+	primaries, err := inst.ReadClusterPrimary(clusterName)
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
 		return
 	}
-	if len(masters) == 0 {
-		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("No masters found for %+v", clusterName)})
+	if len(primaries) == 0 {
+		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("No primaries found for %+v", clusterName)})
 		return
 	}
 
-	r.JSON(http.StatusOK, masters[0])
+	r.JSON(http.StatusOK, primaries[0])
 }
 
 // Downtimed lists downtimed instances, potentially filtered by cluster
-func (this *HttpAPI) Downtimed(params martini.Params, r render.Render, req *http.Request) {
+func (httpAPI *API) Downtimed(params martini.Params, r render.Render, req *http.Request) {
 	clusterName, err := getClusterNameIfExists(params)
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
@@ -1705,7 +1666,7 @@ func (this *HttpAPI) Downtimed(params martini.Params, r render.Render, req *http
 }
 
 // AllInstances lists all known instances
-func (this *HttpAPI) AllInstances(params martini.Params, r render.Render, req *http.Request) {
+func (httpAPI *API) AllInstances(params martini.Params, r render.Render, req *http.Request) {
 	instances, err := inst.SearchInstances("")
 
 	if err != nil {
@@ -1717,7 +1678,7 @@ func (this *HttpAPI) AllInstances(params martini.Params, r render.Render, req *h
 }
 
 // Search provides list of instances matching given search param via various criteria.
-func (this *HttpAPI) Search(params martini.Params, r render.Render, req *http.Request) {
+func (httpAPI *API) Search(params martini.Params, r render.Render, req *http.Request) {
 	searchString := params["searchString"]
 	if searchString == "" {
 		searchString = req.URL.Query().Get("s")
@@ -1733,7 +1694,7 @@ func (this *HttpAPI) Search(params martini.Params, r render.Render, req *http.Re
 }
 
 // Problems provides list of instances with known problems
-func (this *HttpAPI) Problems(params martini.Params, r render.Render, req *http.Request) {
+func (httpAPI *API) Problems(params martini.Params, r render.Render, req *http.Request) {
 	clusterName := params["clusterName"]
 	instances, err := inst.ReadProblemInstances(clusterName)
 
@@ -1746,13 +1707,13 @@ func (this *HttpAPI) Problems(params martini.Params, r render.Render, req *http.
 }
 
 // Audit provides list of audit entries by given page number
-func (this *HttpAPI) Audit(params martini.Params, r render.Render, req *http.Request) {
+func (httpAPI *API) Audit(params martini.Params, r render.Render, req *http.Request) {
 	page, err := strconv.Atoi(params["page"])
 	if err != nil || page < 0 {
 		page = 0
 	}
 	var auditedInstanceKey *inst.InstanceKey
-	if instanceKey, err := this.getInstanceKey(params["host"], params["port"]); err == nil {
+	if instanceKey, err := httpAPI.getInstanceKey(params["host"], params["port"]); err == nil {
 		auditedInstanceKey = &instanceKey
 	}
 
@@ -1767,7 +1728,7 @@ func (this *HttpAPI) Audit(params martini.Params, r render.Render, req *http.Req
 }
 
 // HostnameResolveCache shows content of in-memory hostname cache
-func (this *HttpAPI) HostnameResolveCache(params martini.Params, r render.Render, req *http.Request) {
+func (httpAPI *API) HostnameResolveCache(params martini.Params, r render.Render, req *http.Request) {
 	content, err := inst.HostnameResolveCache()
 
 	if err != nil {
@@ -1779,7 +1740,7 @@ func (this *HttpAPI) HostnameResolveCache(params martini.Params, r render.Render
 }
 
 // ResetHostnameResolveCache clears in-memory hostname resovle cache
-func (this *HttpAPI) ResetHostnameResolveCache(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (httpAPI *API) ResetHostnameResolveCache(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
@@ -1795,14 +1756,14 @@ func (this *HttpAPI) ResetHostnameResolveCache(params martini.Params, r render.R
 }
 
 // DeregisterHostnameUnresolve deregisters the unresolve name used previously
-func (this *HttpAPI) DeregisterHostnameUnresolve(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (httpAPI *API) DeregisterHostnameUnresolve(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
 	}
 
 	var instanceKey *inst.InstanceKey
-	if instKey, err := this.getInstanceKey(params["host"], params["port"]); err == nil {
+	if instKey, err := httpAPI.getInstanceKey(params["host"], params["port"]); err == nil {
 		instanceKey = &instKey
 	}
 
@@ -1821,14 +1782,14 @@ func (this *HttpAPI) DeregisterHostnameUnresolve(params martini.Params, r render
 }
 
 // RegisterHostnameUnresolve registers the unresolve name to use
-func (this *HttpAPI) RegisterHostnameUnresolve(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (httpAPI *API) RegisterHostnameUnresolve(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
 	}
 
 	var instanceKey *inst.InstanceKey
-	if instKey, err := this.getInstanceKey(params["host"], params["port"]); err == nil {
+	if instKey, err := httpAPI.getInstanceKey(params["host"], params["port"]); err == nil {
 		instanceKey = &instKey
 	}
 
@@ -1848,7 +1809,7 @@ func (this *HttpAPI) RegisterHostnameUnresolve(params martini.Params, r render.R
 }
 
 // SubmitPoolInstances (re-)applies the list of hostnames for a given pool
-func (this *HttpAPI) SubmitPoolInstances(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (httpAPI *API) SubmitPoolInstances(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
@@ -1872,7 +1833,7 @@ func (this *HttpAPI) SubmitPoolInstances(params martini.Params, r render.Render,
 }
 
 // SubmitPoolHostnames (re-)applies the list of hostnames for a given pool
-func (this *HttpAPI) ReadClusterPoolInstancesMap(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (httpAPI *API) ReadClusterPoolInstancesMap(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
@@ -1890,7 +1851,7 @@ func (this *HttpAPI) ReadClusterPoolInstancesMap(params martini.Params, r render
 }
 
 // GetHeuristicClusterPoolInstances returns instances belonging to a cluster's pool
-func (this *HttpAPI) GetHeuristicClusterPoolInstances(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (httpAPI *API) GetHeuristicClusterPoolInstances(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
@@ -1912,7 +1873,7 @@ func (this *HttpAPI) GetHeuristicClusterPoolInstances(params martini.Params, r r
 }
 
 // GetHeuristicClusterPoolInstances returns instances belonging to a cluster's pool
-func (this *HttpAPI) GetHeuristicClusterPoolInstancesLag(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (httpAPI *API) GetHeuristicClusterPoolInstancesLag(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
@@ -1934,7 +1895,7 @@ func (this *HttpAPI) GetHeuristicClusterPoolInstancesLag(params martini.Params, 
 }
 
 // ReloadClusterAlias clears in-memory hostname resovle cache
-func (this *HttpAPI) ReloadClusterAlias(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (httpAPI *API) ReloadClusterAlias(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
@@ -1944,7 +1905,7 @@ func (this *HttpAPI) ReloadClusterAlias(params martini.Params, r render.Render, 
 }
 
 // BulkPromotionRules returns a list of the known promotion rules for each instance
-func (this *HttpAPI) BulkPromotionRules(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (httpAPI *API) BulkPromotionRules(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
@@ -1960,7 +1921,7 @@ func (this *HttpAPI) BulkPromotionRules(params martini.Params, r render.Render, 
 }
 
 // BulkInstances returns a list of all known instances
-func (this *HttpAPI) BulkInstances(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (httpAPI *API) BulkInstances(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
@@ -1976,7 +1937,7 @@ func (this *HttpAPI) BulkInstances(params martini.Params, r render.Render, req *
 }
 
 // DiscoveryMetricsRaw will return the last X seconds worth of discovery information in time based order as a JSON array
-func (this *HttpAPI) DiscoveryMetricsRaw(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (httpAPI *API) DiscoveryMetricsRaw(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	seconds, err := strconv.Atoi(params["seconds"])
 	if err != nil || seconds <= 0 {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Invalid value provided for seconds"})
@@ -1996,7 +1957,7 @@ func (this *HttpAPI) DiscoveryMetricsRaw(params martini.Params, r render.Render,
 
 // DiscoveryMetricsAggregated will return a single set of aggregated metrics for raw values collected since the
 // specified time.
-func (this *HttpAPI) DiscoveryMetricsAggregated(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (httpAPI *API) DiscoveryMetricsAggregated(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	seconds, _ := strconv.Atoi(params["seconds"])
 
 	refTime := time.Now().Add(-time.Duration(seconds) * time.Second)
@@ -2011,7 +1972,7 @@ func (this *HttpAPI) DiscoveryMetricsAggregated(params martini.Params, r render.
 
 // DiscoveryQueueMetricsRaw returns the raw queue metrics (active and
 // queued values), data taken secondly for the last N seconds.
-func (this *HttpAPI) DiscoveryQueueMetricsRaw(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (httpAPI *API) DiscoveryQueueMetricsRaw(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	seconds, err := strconv.Atoi(params["seconds"])
 	log.Debugf("DiscoveryQueueMetricsRaw: seconds: %d", seconds)
 	if err != nil {
@@ -2029,7 +1990,7 @@ func (this *HttpAPI) DiscoveryQueueMetricsRaw(params martini.Params, r render.Re
 // DiscoveryQueueMetricsAggregated returns a single value showing the metrics of the discovery queue over the last N seconds.
 // This is expected to be called every 60 seconds (?) and the config setting of the retention period is currently hard-coded.
 // See go/discovery/ for more information.
-func (this *HttpAPI) DiscoveryQueueMetricsAggregated(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (httpAPI *API) DiscoveryQueueMetricsAggregated(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	seconds, err := strconv.Atoi(params["seconds"])
 	log.Debugf("DiscoveryQueueMetricsAggregated: seconds: %d", seconds)
 	if err != nil {
@@ -2045,7 +2006,7 @@ func (this *HttpAPI) DiscoveryQueueMetricsAggregated(params martini.Params, r re
 }
 
 // BackendQueryMetricsRaw returns the raw backend query metrics
-func (this *HttpAPI) BackendQueryMetricsRaw(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (httpAPI *API) BackendQueryMetricsRaw(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	seconds, err := strconv.Atoi(params["seconds"])
 	log.Debugf("BackendQueryMetricsRaw: seconds: %d", seconds)
 	if err != nil {
@@ -2065,7 +2026,7 @@ func (this *HttpAPI) BackendQueryMetricsRaw(params martini.Params, r render.Rend
 	r.JSON(http.StatusOK, m)
 }
 
-func (this *HttpAPI) BackendQueryMetricsAggregated(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (httpAPI *API) BackendQueryMetricsAggregated(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	seconds, err := strconv.Atoi(params["seconds"])
 	log.Debugf("BackendQueryMetricsAggregated: seconds: %d", seconds)
 	if err != nil {
@@ -2081,7 +2042,7 @@ func (this *HttpAPI) BackendQueryMetricsAggregated(params martini.Params, r rend
 }
 
 // WriteBufferMetricsRaw returns the raw instance write buffer metrics
-func (this *HttpAPI) WriteBufferMetricsRaw(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (httpAPI *API) WriteBufferMetricsRaw(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	seconds, err := strconv.Atoi(params["seconds"])
 	log.Debugf("WriteBufferMetricsRaw: seconds: %d", seconds)
 	if err != nil {
@@ -2102,7 +2063,7 @@ func (this *HttpAPI) WriteBufferMetricsRaw(params martini.Params, r render.Rende
 }
 
 // WriteBufferMetricsAggregated provides aggregate metrics of instance write buffer metrics
-func (this *HttpAPI) WriteBufferMetricsAggregated(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (httpAPI *API) WriteBufferMetricsAggregated(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	seconds, err := strconv.Atoi(params["seconds"])
 	log.Debugf("WriteBufferMetricsAggregated: seconds: %d", seconds)
 	if err != nil {
@@ -2118,12 +2079,12 @@ func (this *HttpAPI) WriteBufferMetricsAggregated(params martini.Params, r rende
 }
 
 // Headers is a self-test call which returns HTTP headers
-func (this *HttpAPI) Headers(params martini.Params, r render.Render, req *http.Request) {
+func (httpAPI *API) Headers(params martini.Params, r render.Render, req *http.Request) {
 	r.JSON(http.StatusOK, req.Header)
 }
 
 // Health performs a self test
-func (this *HttpAPI) Health(params martini.Params, r render.Render, req *http.Request) {
+func (httpAPI *API) Health(params martini.Params, r render.Render, req *http.Request) {
 	health, err := process.HealthTest()
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("Application node is unhealthy %+v", err), Details: health})
@@ -2135,12 +2096,12 @@ func (this *HttpAPI) Health(params martini.Params, r render.Render, req *http.Re
 }
 
 // LBCheck returns a constant respnse, and this can be used by load balancers that expect a given string.
-func (this *HttpAPI) LBCheck(params martini.Params, r render.Render, req *http.Request) {
+func (httpAPI *API) LBCheck(params martini.Params, r render.Render, req *http.Request) {
 	r.JSON(http.StatusOK, "OK")
 }
 
 // LBCheck returns a constant respnse, and this can be used by load balancers that expect a given string.
-func (this *HttpAPI) LeaderCheck(params martini.Params, r render.Render, req *http.Request) {
+func (httpAPI *API) LeaderCheck(params martini.Params, r render.Render, req *http.Request) {
 	respondStatus, err := strconv.Atoi(params["errorStatusCode"])
 	if err != nil || respondStatus < 0 {
 		respondStatus = http.StatusNotFound
@@ -2158,7 +2119,7 @@ func (this *HttpAPI) LeaderCheck(params martini.Params, r render.Render, req *ht
 // expect a 200
 // It might be a good idea to deprecate the current Health() behavior and roll this in at some
 // point
-func (this *HttpAPI) StatusCheck(params martini.Params, r render.Render, req *http.Request) {
+func (httpAPI *API) StatusCheck(params martini.Params, r render.Render, req *http.Request) {
 	health, err := process.HealthTest()
 	if err != nil {
 		r.JSON(500, &APIResponse{Code: ERROR, Message: fmt.Sprintf("Application node is unhealthy %+v", err), Details: health})
@@ -2168,7 +2129,7 @@ func (this *HttpAPI) StatusCheck(params martini.Params, r render.Render, req *ht
 }
 
 // GrabElection forcibly grabs leadership. Use with care!!
-func (this *HttpAPI) GrabElection(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (httpAPI *API) GrabElection(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
@@ -2183,7 +2144,7 @@ func (this *HttpAPI) GrabElection(params martini.Params, r render.Render, req *h
 }
 
 // Reelect causes re-elections for an active node
-func (this *HttpAPI) Reelect(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (httpAPI *API) Reelect(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
@@ -2198,7 +2159,7 @@ func (this *HttpAPI) Reelect(params martini.Params, r render.Render, req *http.R
 }
 
 // ReloadConfiguration reloads confiug settings (not all of which will apply after change)
-func (this *HttpAPI) ReloadConfiguration(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (httpAPI *API) ReloadConfiguration(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
@@ -2211,7 +2172,7 @@ func (this *HttpAPI) ReloadConfiguration(params martini.Params, r render.Render,
 }
 
 // ReplicationAnalysis retuens list of issues
-func (this *HttpAPI) replicationAnalysis(clusterName string, instanceKey *inst.InstanceKey, params martini.Params, r render.Render, req *http.Request) {
+func (httpAPI *API) replicationAnalysis(clusterName string, instanceKey *inst.InstanceKey, params martini.Params, r render.Render, req *http.Request) {
 	analysis, err := inst.GetReplicationAnalysis(clusterName, &inst.ReplicationAnalysisHints{IncludeDowntimed: true})
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("Cannot get analysis: %+v", err)})
@@ -2232,12 +2193,12 @@ func (this *HttpAPI) replicationAnalysis(clusterName string, instanceKey *inst.I
 }
 
 // ReplicationAnalysis retuens list of issues
-func (this *HttpAPI) ReplicationAnalysis(params martini.Params, r render.Render, req *http.Request) {
-	this.replicationAnalysis("", nil, params, r, req)
+func (httpAPI *API) ReplicationAnalysis(params martini.Params, r render.Render, req *http.Request) {
+	httpAPI.replicationAnalysis("", nil, params, r, req)
 }
 
 // ReplicationAnalysis retuens list of issues
-func (this *HttpAPI) ReplicationAnalysisForCluster(params martini.Params, r render.Render, req *http.Request) {
+func (httpAPI *API) ReplicationAnalysisForCluster(params martini.Params, r render.Render, req *http.Request) {
 	var clusterName string
 	var err error
 	if clusterName, err = inst.DeduceClusterName(params["clusterName"]); err != nil {
@@ -2248,12 +2209,12 @@ func (this *HttpAPI) ReplicationAnalysisForCluster(params martini.Params, r rend
 		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("Cannot get cluster name: %+v", params["clusterName"])})
 		return
 	}
-	this.replicationAnalysis(clusterName, nil, params, r, req)
+	httpAPI.replicationAnalysis(clusterName, nil, params, r, req)
 }
 
 // ReplicationAnalysis retuens list of issues
-func (this *HttpAPI) ReplicationAnalysisForKey(params martini.Params, r render.Render, req *http.Request) {
-	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
+func (httpAPI *API) ReplicationAnalysisForKey(params martini.Params, r render.Render, req *http.Request) {
+	instanceKey, err := httpAPI.getInstanceKey(params["host"], params["port"])
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("Cannot get analysis: %+v", err)})
 		return
@@ -2262,28 +2223,28 @@ func (this *HttpAPI) ReplicationAnalysisForKey(params martini.Params, r render.R
 		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("Cannot get analysis: invalid key %+v", instanceKey)})
 		return
 	}
-	this.replicationAnalysis("", &instanceKey, params, r, req)
+	httpAPI.replicationAnalysis("", &instanceKey, params, r, req)
 }
 
 // RecoverLite attempts recovery on a given instance, without executing external processes
-func (this *HttpAPI) RecoverLite(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (httpAPI *API) RecoverLite(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	params["skipProcesses"] = "true"
-	this.Recover(params, r, req, user)
+	httpAPI.Recover(params, r, req, user)
 }
 
 // Recover attempts recovery on a given instance
-func (this *HttpAPI) Recover(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (httpAPI *API) Recover(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
 	}
-	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
+	instanceKey, err := httpAPI.getInstanceKey(params["host"], params["port"])
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
 	var candidateKey *inst.InstanceKey
-	if key, err := this.getInstanceKey(params["candidateHost"], params["candidatePort"]); err == nil {
+	if key, err := httpAPI.getInstanceKey(params["candidateHost"], params["candidatePort"]); err == nil {
 		candidateKey = &key
 	}
 
@@ -2304,8 +2265,8 @@ func (this *HttpAPI) Recover(params martini.Params, r render.Render, req *http.R
 	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Recovery executed on %+v", instanceKey), Details: *promotedInstanceKey})
 }
 
-// GracefulMasterTakeover gracefully fails over a master onto its single replica.
-func (this *HttpAPI) gracefulMasterTakeover(params martini.Params, r render.Render, req *http.Request, user auth.User, auto bool) {
+// GracefulPrimaryTakeover gracefully fails over a primary onto its single replica.
+func (httpAPI *API) gracefulPrimaryTakeover(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
@@ -2315,34 +2276,34 @@ func (this *HttpAPI) gracefulMasterTakeover(params martini.Params, r render.Rend
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
-	designatedKey, _ := this.getInstanceKey(params["designatedHost"], params["designatedPort"])
+	designatedKey, _ := httpAPI.getInstanceKey(params["designatedHost"], params["designatedPort"])
 	// designatedKey may be empty/invalid
-	topologyRecovery, _, err := logic.GracefulMasterTakeover(clusterName, &designatedKey, auto)
+	topologyRecovery, err := logic.GracefulPrimaryTakeover(clusterName, &designatedKey)
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), Details: topologyRecovery})
 		return
 	}
 	if topologyRecovery == nil || topologyRecovery.SuccessorKey == nil {
-		Respond(r, &APIResponse{Code: ERROR, Message: "graceful-master-takeover: no successor promoted", Details: topologyRecovery})
+		Respond(r, &APIResponse{Code: ERROR, Message: "graceful-primary-takeover: no successor promoted", Details: topologyRecovery})
 		return
 	}
-	Respond(r, &APIResponse{Code: OK, Message: "graceful-master-takeover: successor promoted", Details: topologyRecovery})
+	Respond(r, &APIResponse{Code: OK, Message: "graceful-primary-takeover: successor promoted", Details: topologyRecovery})
 }
 
-// GracefulMasterTakeover gracefully fails over a master, either:
+// GracefulPrimaryTakeover gracefully fails over a primary, either:
 // - onto its single replica, or
 // - onto a replica indicated by the user
-func (this *HttpAPI) GracefulMasterTakeover(params martini.Params, r render.Render, req *http.Request, user auth.User) {
-	this.gracefulMasterTakeover(params, r, req, user, false)
+func (httpAPI *API) GracefulPrimaryTakeover(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+	httpAPI.gracefulPrimaryTakeover(params, r, req, user)
 }
 
-// GracefulMasterTakeoverAuto gracefully fails over a master onto a replica of orchestrator's choosing
-func (this *HttpAPI) GracefulMasterTakeoverAuto(params martini.Params, r render.Render, req *http.Request, user auth.User) {
-	this.gracefulMasterTakeover(params, r, req, user, true)
+// GracefulPrimaryTakeoverAuto gracefully fails over a primary onto a replica of orchestrator's choosing
+func (httpAPI *API) GracefulPrimaryTakeoverAuto(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+	httpAPI.gracefulPrimaryTakeover(params, r, req, user)
 }
 
-// ForceMasterFailover fails over a master (even if there's no particular problem with the master)
-func (this *HttpAPI) ForceMasterFailover(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+// ForcePrimaryFailover fails over a primary (even if there's no particular problem with the primary)
+func (httpAPI *API) ForcePrimaryFailover(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
@@ -2352,20 +2313,20 @@ func (this *HttpAPI) ForceMasterFailover(params martini.Params, r render.Render,
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
-	topologyRecovery, err := logic.ForceMasterFailover(clusterName)
+	topologyRecovery, err := logic.ForcePrimaryFailover(clusterName)
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
 	if topologyRecovery.SuccessorKey != nil {
-		Respond(r, &APIResponse{Code: OK, Message: "Master failed over", Details: topologyRecovery})
+		Respond(r, &APIResponse{Code: OK, Message: "Primary failed over", Details: topologyRecovery})
 	} else {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Master not failed over", Details: topologyRecovery})
+		Respond(r, &APIResponse{Code: ERROR, Message: "Primary not failed over", Details: topologyRecovery})
 	}
 }
 
-// ForceMasterTakeover fails over a master (even if there's no particular problem with the master)
-func (this *HttpAPI) ForceMasterTakeover(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+// ForcePrimaryTakeover fails over a primary (even if there's no particular problem with the primary)
+func (httpAPI *API) ForcePrimaryTakeover(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
@@ -2375,7 +2336,7 @@ func (this *HttpAPI) ForceMasterTakeover(params martini.Params, r render.Render,
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
-	designatedKey, _ := this.getInstanceKey(params["designatedHost"], params["designatedPort"])
+	designatedKey, _ := httpAPI.getInstanceKey(params["designatedHost"], params["designatedPort"])
 	designatedInstance, _, err := inst.ReadInstance(&designatedKey)
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
@@ -2386,30 +2347,30 @@ func (this *HttpAPI) ForceMasterTakeover(params martini.Params, r render.Render,
 		return
 	}
 
-	topologyRecovery, err := logic.ForceMasterTakeover(clusterName, designatedInstance)
+	topologyRecovery, err := logic.ForcePrimaryTakeover(clusterName, designatedInstance)
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
 	if topologyRecovery.SuccessorKey != nil {
-		Respond(r, &APIResponse{Code: OK, Message: "Master failed over", Details: topologyRecovery})
+		Respond(r, &APIResponse{Code: OK, Message: "Primary failed over", Details: topologyRecovery})
 	} else {
-		Respond(r, &APIResponse{Code: ERROR, Message: "Master not failed over", Details: topologyRecovery})
+		Respond(r, &APIResponse{Code: ERROR, Message: "Primary not failed over", Details: topologyRecovery})
 	}
 }
 
 // Registers promotion preference for given instance
-func (this *HttpAPI) RegisterCandidate(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (httpAPI *API) RegisterCandidate(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
 	}
-	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
+	instanceKey, err := httpAPI.getInstanceKey(params["host"], params["port"])
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
-	promotionRule, err := inst.ParseCandidatePromotionRule(params["promotionRule"])
+	promotionRule, err := promotionrule.Parse(params["promotionRule"])
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
@@ -2432,23 +2393,23 @@ func (this *HttpAPI) RegisterCandidate(params martini.Params, r render.Render, r
 }
 
 // AutomatedRecoveryFilters retuens list of clusters which are configured with automated recovery
-func (this *HttpAPI) AutomatedRecoveryFilters(params martini.Params, r render.Render, req *http.Request) {
-	automatedRecoveryMap := make(map[string]interface{})
-	automatedRecoveryMap["RecoverMasterClusterFilters"] = config.Config.RecoverMasterClusterFilters
-	automatedRecoveryMap["RecoverIntermediateMasterClusterFilters"] = config.Config.RecoverIntermediateMasterClusterFilters
+func (httpAPI *API) AutomatedRecoveryFilters(params martini.Params, r render.Render, req *http.Request) {
+	automatedRecoveryMap := make(map[string]any)
+	automatedRecoveryMap["RecoverPrimaryClusterFilters"] = config.Config.RecoverPrimaryClusterFilters
+	automatedRecoveryMap["RecoverIntermediatePrimaryClusterFilters"] = config.Config.RecoverIntermediatePrimaryClusterFilters
 	automatedRecoveryMap["RecoveryIgnoreHostnameFilters"] = config.Config.RecoveryIgnoreHostnameFilters
 
 	Respond(r, &APIResponse{Code: OK, Message: "Automated recovery configuration details", Details: automatedRecoveryMap})
 }
 
 // AuditFailureDetection provides list of topology_failure_detection entries
-func (this *HttpAPI) AuditFailureDetection(params martini.Params, r render.Render, req *http.Request) {
+func (httpAPI *API) AuditFailureDetection(params martini.Params, r render.Render, req *http.Request) {
 
 	var audits []*logic.TopologyRecovery
 	var err error
 
-	if detectionId, derr := strconv.ParseInt(params["id"], 10, 0); derr == nil && detectionId > 0 {
-		audits, err = logic.ReadFailureDetection(detectionId)
+	if detectionID, derr := strconv.ParseInt(params["id"], 10, 0); derr == nil && detectionID > 0 {
+		audits, err = logic.ReadFailureDetection(detectionID)
 	} else {
 		page, derr := strconv.Atoi(params["page"])
 		if derr != nil || page < 0 {
@@ -2466,7 +2427,7 @@ func (this *HttpAPI) AuditFailureDetection(params martini.Params, r render.Rende
 }
 
 // AuditRecoverySteps returns audited steps of a given recovery
-func (this *HttpAPI) AuditRecoverySteps(params martini.Params, r render.Render, req *http.Request) {
+func (httpAPI *API) AuditRecoverySteps(params martini.Params, r render.Render, req *http.Request) {
 	recoveryUID := params["uid"]
 	audits, err := logic.ReadTopologyRecoverySteps(recoveryUID)
 
@@ -2479,7 +2440,7 @@ func (this *HttpAPI) AuditRecoverySteps(params martini.Params, r render.Render, 
 }
 
 // ReadReplicationAnalysisChangelog lists instances and their analysis changelog
-func (this *HttpAPI) ReadReplicationAnalysisChangelog(params martini.Params, r render.Render, req *http.Request) {
+func (httpAPI *API) ReadReplicationAnalysisChangelog(params martini.Params, r render.Render, req *http.Request) {
 	changelogs, err := inst.ReadReplicationAnalysisChangelog()
 
 	if err != nil {
@@ -2491,14 +2452,14 @@ func (this *HttpAPI) ReadReplicationAnalysisChangelog(params martini.Params, r r
 }
 
 // AuditRecovery provides list of topology-recovery entries
-func (this *HttpAPI) AuditRecovery(params martini.Params, r render.Render, req *http.Request) {
+func (httpAPI *API) AuditRecovery(params martini.Params, r render.Render, req *http.Request) {
 	var audits []*logic.TopologyRecovery
 	var err error
 
 	if recoveryUID := params["uid"]; recoveryUID != "" {
 		audits, err = logic.ReadRecoveryByUID(recoveryUID)
-	} else if recoveryId, derr := strconv.ParseInt(params["id"], 10, 0); derr == nil && recoveryId > 0 {
-		audits, err = logic.ReadRecovery(recoveryId)
+	} else if recoveryID, derr := strconv.ParseInt(params["id"], 10, 0); derr == nil && recoveryID > 0 {
+		audits, err = logic.ReadRecovery(recoveryID)
 	} else {
 		page, derr := strconv.Atoi(params["page"])
 		if derr != nil || page < 0 {
@@ -2518,7 +2479,7 @@ func (this *HttpAPI) AuditRecovery(params martini.Params, r render.Render, req *
 }
 
 // ActiveClusterRecovery returns recoveries in-progress for a given cluster
-func (this *HttpAPI) ActiveClusterRecovery(params martini.Params, r render.Render, req *http.Request) {
+func (httpAPI *API) ActiveClusterRecovery(params martini.Params, r render.Render, req *http.Request) {
 	recoveries, err := logic.ReadActiveClusterRecovery(params["clusterName"])
 
 	if err != nil {
@@ -2530,7 +2491,7 @@ func (this *HttpAPI) ActiveClusterRecovery(params martini.Params, r render.Rende
 }
 
 // RecentlyActiveClusterRecovery returns recoveries in-progress for a given cluster
-func (this *HttpAPI) RecentlyActiveClusterRecovery(params martini.Params, r render.Render, req *http.Request) {
+func (httpAPI *API) RecentlyActiveClusterRecovery(params martini.Params, r render.Render, req *http.Request) {
 	recoveries, err := logic.ReadRecentlyActiveClusterRecovery(params["clusterName"])
 
 	if err != nil {
@@ -2542,8 +2503,8 @@ func (this *HttpAPI) RecentlyActiveClusterRecovery(params martini.Params, r rend
 }
 
 // RecentlyActiveClusterRecovery returns recoveries in-progress for a given cluster
-func (this *HttpAPI) RecentlyActiveInstanceRecovery(params martini.Params, r render.Render, req *http.Request) {
-	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
+func (httpAPI *API) RecentlyActiveInstanceRecovery(params martini.Params, r render.Render, req *http.Request) {
+	instanceKey, err := httpAPI.getInstanceKey(params["host"], params["port"])
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
@@ -2560,7 +2521,7 @@ func (this *HttpAPI) RecentlyActiveInstanceRecovery(params martini.Params, r ren
 }
 
 // ClusterInfo provides details of a given cluster
-func (this *HttpAPI) AcknowledgeClusterRecoveries(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (httpAPI *API) AcknowledgeClusterRecoveries(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
@@ -2584,16 +2545,16 @@ func (this *HttpAPI) AcknowledgeClusterRecoveries(params martini.Params, r rende
 		Respond(r, &APIResponse{Code: ERROR, Message: "No acknowledge comment given"})
 		return
 	}
-	userId := getUserId(req, user)
-	if userId == "" {
-		userId = inst.GetMaintenanceOwner()
+	userID := getUserID(req, user)
+	if userID == "" {
+		userID = inst.GetMaintenanceOwner()
 	}
 	if orcraft.IsRaftEnabled() {
-		ack := logic.NewRecoveryAcknowledgement(userId, comment)
+		ack := logic.NewRecoveryAcknowledgement(userID, comment)
 		ack.ClusterName = clusterName
 		_, err = orcraft.PublishCommand("ack-recovery", ack)
 	} else {
-		_, err = logic.AcknowledgeClusterRecoveries(clusterName, userId, comment)
+		_, err = logic.AcknowledgeClusterRecoveries(clusterName, userID, comment)
 	}
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
@@ -2604,13 +2565,13 @@ func (this *HttpAPI) AcknowledgeClusterRecoveries(params martini.Params, r rende
 }
 
 // ClusterInfo provides details of a given cluster
-func (this *HttpAPI) AcknowledgeInstanceRecoveries(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (httpAPI *API) AcknowledgeInstanceRecoveries(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
 	}
 
-	instanceKey, err := this.getInstanceKey(params["host"], params["port"])
+	instanceKey, err := httpAPI.getInstanceKey(params["host"], params["port"])
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
@@ -2621,16 +2582,16 @@ func (this *HttpAPI) AcknowledgeInstanceRecoveries(params martini.Params, r rend
 		Respond(r, &APIResponse{Code: ERROR, Message: "No acknowledge comment given"})
 		return
 	}
-	userId := getUserId(req, user)
-	if userId == "" {
-		userId = inst.GetMaintenanceOwner()
+	userID := getUserID(req, user)
+	if userID == "" {
+		userID = inst.GetMaintenanceOwner()
 	}
 	if orcraft.IsRaftEnabled() {
-		ack := logic.NewRecoveryAcknowledgement(userId, comment)
+		ack := logic.NewRecoveryAcknowledgement(userID, comment)
 		ack.Key = instanceKey
 		_, err = orcraft.PublishCommand("ack-recovery", ack)
 	} else {
-		_, err = logic.AcknowledgeInstanceRecoveries(&instanceKey, userId, comment)
+		_, err = logic.AcknowledgeInstanceRecoveries(&instanceKey, userID, comment)
 	}
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
@@ -2641,46 +2602,46 @@ func (this *HttpAPI) AcknowledgeInstanceRecoveries(params martini.Params, r rend
 }
 
 // ClusterInfo provides details of a given cluster
-func (this *HttpAPI) AcknowledgeRecovery(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (httpAPI *API) AcknowledgeRecovery(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
 	}
 	var err error
-	var recoveryId int64
+	var recoveryID int64
 	var idParam string
 
 	// Ack either via id or uid
-	recoveryUid := params["uid"]
-	if recoveryUid == "" {
+	recoveryUID := params["uid"]
+	if recoveryUID == "" {
 		idParam = params["recoveryId"]
-		recoveryId, err = strconv.ParseInt(idParam, 10, 0)
+		recoveryID, err = strconv.ParseInt(idParam, 10, 0)
 		if err != nil {
 			Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 			return
 		}
 	} else {
-		idParam = recoveryUid
+		idParam = recoveryUID
 	}
 	comment := strings.TrimSpace(req.URL.Query().Get("comment"))
 	if comment == "" {
 		Respond(r, &APIResponse{Code: ERROR, Message: "No acknowledge comment given"})
 		return
 	}
-	userId := getUserId(req, user)
-	if userId == "" {
-		userId = inst.GetMaintenanceOwner()
+	userID := getUserID(req, user)
+	if userID == "" {
+		userID = inst.GetMaintenanceOwner()
 	}
 	if orcraft.IsRaftEnabled() {
-		ack := logic.NewRecoveryAcknowledgement(userId, comment)
-		ack.Id = recoveryId
-		ack.UID = recoveryUid
+		ack := logic.NewRecoveryAcknowledgement(userID, comment)
+		ack.ID = recoveryID
+		ack.UID = recoveryUID
 		_, err = orcraft.PublishCommand("ack-recovery", ack)
 	} else {
-		if recoveryUid != "" {
-			_, err = logic.AcknowledgeRecoveryByUID(recoveryUid, userId, comment)
+		if recoveryUID != "" {
+			_, err = logic.AcknowledgeRecoveryByUID(recoveryUID, userID, comment)
 		} else {
-			_, err = logic.AcknowledgeRecovery(recoveryId, userId, comment)
+			_, err = logic.AcknowledgeRecovery(recoveryID, userID, comment)
 		}
 	}
 
@@ -2693,7 +2654,7 @@ func (this *HttpAPI) AcknowledgeRecovery(params martini.Params, r render.Render,
 }
 
 // ClusterInfo provides details of a given cluster
-func (this *HttpAPI) AcknowledgeAllRecoveries(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (httpAPI *API) AcknowledgeAllRecoveries(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
@@ -2704,17 +2665,17 @@ func (this *HttpAPI) AcknowledgeAllRecoveries(params martini.Params, r render.Re
 		Respond(r, &APIResponse{Code: ERROR, Message: "No acknowledge comment given"})
 		return
 	}
-	userId := getUserId(req, user)
-	if userId == "" {
-		userId = inst.GetMaintenanceOwner()
+	userID := getUserID(req, user)
+	if userID == "" {
+		userID = inst.GetMaintenanceOwner()
 	}
 	var err error
 	if orcraft.IsRaftEnabled() {
-		ack := logic.NewRecoveryAcknowledgement(userId, comment)
+		ack := logic.NewRecoveryAcknowledgement(userID, comment)
 		ack.AllRecoveries = true
 		_, err = orcraft.PublishCommand("ack-recovery", ack)
 	} else {
-		_, err = logic.AcknowledgeAllRecoveries(userId, comment)
+		_, err = logic.AcknowledgeAllRecoveries(userID, comment)
 	}
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: fmt.Sprintf("%+v", err)})
@@ -2725,7 +2686,7 @@ func (this *HttpAPI) AcknowledgeAllRecoveries(params martini.Params, r render.Re
 }
 
 // BlockedRecoveries reads list of currently blocked recoveries, optionally filtered by cluster name
-func (this *HttpAPI) BlockedRecoveries(params martini.Params, r render.Render, req *http.Request) {
+func (httpAPI *API) BlockedRecoveries(params martini.Params, r render.Render, req *http.Request) {
 	blockedRecoveries, err := logic.ReadBlockedRecoveries(params["clusterName"])
 
 	if err != nil {
@@ -2737,7 +2698,7 @@ func (this *HttpAPI) BlockedRecoveries(params martini.Params, r render.Render, r
 }
 
 // DisableGlobalRecoveries globally disables recoveries
-func (this *HttpAPI) DisableGlobalRecoveries(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (httpAPI *API) DisableGlobalRecoveries(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
@@ -2759,7 +2720,7 @@ func (this *HttpAPI) DisableGlobalRecoveries(params martini.Params, r render.Ren
 }
 
 // EnableGlobalRecoveries globally enables recoveries
-func (this *HttpAPI) EnableGlobalRecoveries(params martini.Params, r render.Render, req *http.Request, user auth.User) {
+func (httpAPI *API) EnableGlobalRecoveries(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
@@ -2780,7 +2741,7 @@ func (this *HttpAPI) EnableGlobalRecoveries(params martini.Params, r render.Rend
 }
 
 // CheckGlobalRecoveries checks whether
-func (this *HttpAPI) CheckGlobalRecoveries(params martini.Params, r render.Render, req *http.Request) {
+func (httpAPI *API) CheckGlobalRecoveries(params martini.Params, r render.Render, req *http.Request) {
 	isDisabled, err := logic.IsRecoveryDisabled()
 
 	if err != nil {
@@ -2794,259 +2755,243 @@ func (this *HttpAPI) CheckGlobalRecoveries(params martini.Params, r render.Rende
 	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Global recoveries %+v", details), Details: details})
 }
 
-func (this *HttpAPI) getSynonymPath(path string) (synonymPath string) {
-	pathBase := strings.Split(path, "/")[0]
-	if synonym, ok := apiSynonyms[pathBase]; ok {
-		synonymPath = fmt.Sprintf("%s%s", synonym, path[len(pathBase):])
-	}
-	return synonymPath
-}
-
-func (this *HttpAPI) registerSingleAPIRequest(m *martini.ClassicMartini, path string, handler martini.Handler, allowProxy bool) {
+func (httpAPI *API) registerSingleAPIRequest(m *martini.ClassicMartini, path string, handler martini.Handler, allowProxy bool) {
 	registeredPaths = append(registeredPaths, path)
-	fullPath := fmt.Sprintf("%s/api/%s", this.URLPrefix, path)
+	fullPath := fmt.Sprintf("%s/api/%s", httpAPI.URLPrefix, path)
 
 	m.Get(fullPath, handler)
 }
 
-func (this *HttpAPI) registerAPIRequestInternal(m *martini.ClassicMartini, path string, handler martini.Handler, allowProxy bool) {
-	this.registerSingleAPIRequest(m, path, handler, allowProxy)
-
-	if synonym := this.getSynonymPath(path); synonym != "" {
-		this.registerSingleAPIRequest(m, synonym, handler, allowProxy)
-	}
+func (httpAPI *API) registerAPIRequestInternal(m *martini.ClassicMartini, path string, handler martini.Handler, allowProxy bool) {
+	httpAPI.registerSingleAPIRequest(m, path, handler, allowProxy)
 }
 
-func (this *HttpAPI) registerAPIRequest(m *martini.ClassicMartini, path string, handler martini.Handler) {
-	this.registerAPIRequestInternal(m, path, handler, true)
+func (httpAPI *API) registerAPIRequest(m *martini.ClassicMartini, path string, handler martini.Handler) {
+	httpAPI.registerAPIRequestInternal(m, path, handler, true)
 }
 
-func (this *HttpAPI) registerAPIRequestNoProxy(m *martini.ClassicMartini, path string, handler martini.Handler) {
-	this.registerAPIRequestInternal(m, path, handler, false)
+func (httpAPI *API) registerAPIRequestNoProxy(m *martini.ClassicMartini, path string, handler martini.Handler) {
+	httpAPI.registerAPIRequestInternal(m, path, handler, false)
 }
 
 // RegisterRequests makes for the de-facto list of known API calls
-func (this *HttpAPI) RegisterRequests(m *martini.ClassicMartini) {
+func (httpAPI *API) RegisterRequests(m *martini.ClassicMartini) {
 	// Smart relocation:
-	this.registerAPIRequest(m, "relocate/:host/:port/:belowHost/:belowPort", this.RelocateBelow)
-	this.registerAPIRequest(m, "relocate-below/:host/:port/:belowHost/:belowPort", this.RelocateBelow)
-	this.registerAPIRequest(m, "relocate-slaves/:host/:port/:belowHost/:belowPort", this.RelocateReplicas)
-	this.registerAPIRequest(m, "regroup-slaves/:host/:port", this.RegroupReplicas)
+	httpAPI.registerAPIRequest(m, "relocate/:host/:port/:belowHost/:belowPort", httpAPI.RelocateBelow)
+	httpAPI.registerAPIRequest(m, "relocate-below/:host/:port/:belowHost/:belowPort", httpAPI.RelocateBelow)
+	httpAPI.registerAPIRequest(m, "relocate-replicas/:host/:port/:belowHost/:belowPort", httpAPI.RelocateReplicas)
+	httpAPI.registerAPIRequest(m, "regroup-replicas/:host/:port", httpAPI.RegroupReplicas)
 
 	// Classic file:pos relocation:
-	this.registerAPIRequest(m, "move-up/:host/:port", this.MoveUp)
-	this.registerAPIRequest(m, "move-up-slaves/:host/:port", this.MoveUpReplicas)
-	this.registerAPIRequest(m, "move-below/:host/:port/:siblingHost/:siblingPort", this.MoveBelow)
-	this.registerAPIRequest(m, "repoint/:host/:port/:belowHost/:belowPort", this.Repoint)
-	this.registerAPIRequest(m, "repoint-slaves/:host/:port", this.RepointReplicas)
-	this.registerAPIRequest(m, "make-co-master/:host/:port", this.MakeCoMaster)
-	this.registerAPIRequest(m, "enslave-siblings/:host/:port", this.TakeSiblings)
-	this.registerAPIRequest(m, "enslave-master/:host/:port", this.TakeMaster)
+	httpAPI.registerAPIRequest(m, "move-up/:host/:port", httpAPI.MoveUp)
+	httpAPI.registerAPIRequest(m, "move-up-replicas/:host/:port", httpAPI.MoveUpReplicas)
+	httpAPI.registerAPIRequest(m, "move-below/:host/:port/:siblingHost/:siblingPort", httpAPI.MoveBelow)
+	httpAPI.registerAPIRequest(m, "repoint/:host/:port/:belowHost/:belowPort", httpAPI.Repoint)
+	httpAPI.registerAPIRequest(m, "repoint-replicas/:host/:port", httpAPI.RepointReplicas)
+	httpAPI.registerAPIRequest(m, "make-co-primary/:host/:port", httpAPI.MakeCoPrimary)
+	httpAPI.registerAPIRequest(m, "take-siblings/:host/:port", httpAPI.TakeSiblings)
+	httpAPI.registerAPIRequest(m, "take-primary/:host/:port", httpAPI.TakePrimary)
 
 	// Binlog server relocation:
-	this.registerAPIRequest(m, "regroup-slaves-bls/:host/:port", this.RegroupReplicasBinlogServers)
+	httpAPI.registerAPIRequest(m, "regroup-replicas-bls/:host/:port", httpAPI.RegroupReplicasBinlogServers)
 
 	// GTID relocation:
-	this.registerAPIRequest(m, "move-below-gtid/:host/:port/:belowHost/:belowPort", this.MoveBelowGTID)
-	this.registerAPIRequest(m, "move-slaves-gtid/:host/:port/:belowHost/:belowPort", this.MoveReplicasGTID)
-	this.registerAPIRequest(m, "regroup-slaves-gtid/:host/:port", this.RegroupReplicasGTID)
+	httpAPI.registerAPIRequest(m, "move-below-gtid/:host/:port/:belowHost/:belowPort", httpAPI.MoveBelowGTID)
+	httpAPI.registerAPIRequest(m, "move-replicas-gtid/:host/:port/:belowHost/:belowPort", httpAPI.MoveReplicasGTID)
+	httpAPI.registerAPIRequest(m, "regroup-replicas-gtid/:host/:port", httpAPI.RegroupReplicasGTID)
 
 	// Replication, general:
-	this.registerAPIRequest(m, "enable-gtid/:host/:port", this.EnableGTID)
-	this.registerAPIRequest(m, "disable-gtid/:host/:port", this.DisableGTID)
-	this.registerAPIRequest(m, "locate-gtid-errant/:host/:port", this.LocateErrantGTID)
-	this.registerAPIRequest(m, "gtid-errant-reset-master/:host/:port", this.ErrantGTIDResetMaster)
-	this.registerAPIRequest(m, "gtid-errant-inject-empty/:host/:port", this.ErrantGTIDInjectEmpty)
-	this.registerAPIRequest(m, "skip-query/:host/:port", this.SkipQuery)
-	this.registerAPIRequest(m, "start-slave/:host/:port", this.StartReplication)
-	this.registerAPIRequest(m, "restart-slave/:host/:port", this.RestartReplication)
-	this.registerAPIRequest(m, "stop-slave/:host/:port", this.StopReplication)
-	this.registerAPIRequest(m, "stop-slave-nice/:host/:port", this.StopReplicationNicely)
-	this.registerAPIRequest(m, "reset-slave/:host/:port", this.ResetReplication)
-	this.registerAPIRequest(m, "detach-slave/:host/:port", this.DetachReplicaMasterHost)
-	this.registerAPIRequest(m, "reattach-slave/:host/:port", this.ReattachReplicaMasterHost)
-	this.registerAPIRequest(m, "detach-slave-master-host/:host/:port", this.DetachReplicaMasterHost)
-	this.registerAPIRequest(m, "reattach-slave-master-host/:host/:port", this.ReattachReplicaMasterHost)
-	this.registerAPIRequest(m, "flush-binary-logs/:host/:port", this.FlushBinaryLogs)
-	this.registerAPIRequest(m, "purge-binary-logs/:host/:port/:logFile", this.PurgeBinaryLogs)
-	this.registerAPIRequest(m, "restart-slave-statements/:host/:port", this.RestartReplicationStatements)
+	httpAPI.registerAPIRequest(m, "enable-gtid/:host/:port", httpAPI.EnableGTID)
+	httpAPI.registerAPIRequest(m, "disable-gtid/:host/:port", httpAPI.DisableGTID)
+	httpAPI.registerAPIRequest(m, "locate-gtid-errant/:host/:port", httpAPI.LocateErrantGTID)
+	httpAPI.registerAPIRequest(m, "gtid-errant-reset-primary/:host/:port", httpAPI.ErrantGTIDResetPrimary)
+	httpAPI.registerAPIRequest(m, "gtid-errant-inject-empty/:host/:port", httpAPI.ErrantGTIDInjectEmpty)
+	httpAPI.registerAPIRequest(m, "skip-query/:host/:port", httpAPI.SkipQuery)
+	httpAPI.registerAPIRequest(m, "start-replica/:host/:port", httpAPI.StartReplication)
+	httpAPI.registerAPIRequest(m, "restart-replica/:host/:port", httpAPI.RestartReplication)
+	httpAPI.registerAPIRequest(m, "stop-replica/:host/:port", httpAPI.StopReplication)
+	httpAPI.registerAPIRequest(m, "stop-replica-nice/:host/:port", httpAPI.StopReplicationNicely)
+	httpAPI.registerAPIRequest(m, "reset-replica/:host/:port", httpAPI.ResetReplication)
+	httpAPI.registerAPIRequest(m, "detach-replica/:host/:port", httpAPI.DetachReplicaPrimaryHost)
+	httpAPI.registerAPIRequest(m, "reattach-replica/:host/:port", httpAPI.ReattachReplicaPrimaryHost)
+	httpAPI.registerAPIRequest(m, "detach-replica-primary-host/:host/:port", httpAPI.DetachReplicaPrimaryHost)
+	httpAPI.registerAPIRequest(m, "reattach-replica-primary-host/:host/:port", httpAPI.ReattachReplicaPrimaryHost)
+	httpAPI.registerAPIRequest(m, "flush-binary-logs/:host/:port", httpAPI.FlushBinaryLogs)
+	httpAPI.registerAPIRequest(m, "purge-binary-logs/:host/:port/:logFile", httpAPI.PurgeBinaryLogs)
+	httpAPI.registerAPIRequest(m, "restart-replica-statements/:host/:port", httpAPI.RestartReplicationStatements)
 
 	// Replication information:
-	this.registerAPIRequest(m, "can-replicate-from/:host/:port/:belowHost/:belowPort", this.CanReplicateFrom)
-	this.registerAPIRequest(m, "can-replicate-from-gtid/:host/:port/:belowHost/:belowPort", this.CanReplicateFromGTID)
+	httpAPI.registerAPIRequest(m, "can-replicate-from/:host/:port/:belowHost/:belowPort", httpAPI.CanReplicateFrom)
+	httpAPI.registerAPIRequest(m, "can-replicate-from-gtid/:host/:port/:belowHost/:belowPort", httpAPI.CanReplicateFromGTID)
 
 	// Instance:
-	this.registerAPIRequest(m, "set-read-only/:host/:port", this.SetReadOnly)
-	this.registerAPIRequest(m, "set-writeable/:host/:port", this.SetWriteable)
-	this.registerAPIRequest(m, "kill-query/:host/:port/:process", this.KillQuery)
+	httpAPI.registerAPIRequest(m, "set-read-only/:host/:port", httpAPI.SetReadOnly)
+	httpAPI.registerAPIRequest(m, "set-writeable/:host/:port", httpAPI.SetWriteable)
+	httpAPI.registerAPIRequest(m, "kill-query/:host/:port/:process", httpAPI.KillQuery)
 
 	// Pools:
-	this.registerAPIRequest(m, "submit-pool-instances/:pool", this.SubmitPoolInstances)
-	this.registerAPIRequest(m, "cluster-pool-instances/:clusterName", this.ReadClusterPoolInstancesMap)
-	this.registerAPIRequest(m, "cluster-pool-instances/:clusterName/:pool", this.ReadClusterPoolInstancesMap)
-	this.registerAPIRequest(m, "heuristic-cluster-pool-instances/:clusterName", this.GetHeuristicClusterPoolInstances)
-	this.registerAPIRequest(m, "heuristic-cluster-pool-instances/:clusterName/:pool", this.GetHeuristicClusterPoolInstances)
-	this.registerAPIRequest(m, "heuristic-cluster-pool-lag/:clusterName", this.GetHeuristicClusterPoolInstancesLag)
-	this.registerAPIRequest(m, "heuristic-cluster-pool-lag/:clusterName/:pool", this.GetHeuristicClusterPoolInstancesLag)
+	httpAPI.registerAPIRequest(m, "submit-pool-instances/:pool", httpAPI.SubmitPoolInstances)
+	httpAPI.registerAPIRequest(m, "cluster-pool-instances/:clusterName", httpAPI.ReadClusterPoolInstancesMap)
+	httpAPI.registerAPIRequest(m, "cluster-pool-instances/:clusterName/:pool", httpAPI.ReadClusterPoolInstancesMap)
+	httpAPI.registerAPIRequest(m, "heuristic-cluster-pool-instances/:clusterName", httpAPI.GetHeuristicClusterPoolInstances)
+	httpAPI.registerAPIRequest(m, "heuristic-cluster-pool-instances/:clusterName/:pool", httpAPI.GetHeuristicClusterPoolInstances)
+	httpAPI.registerAPIRequest(m, "heuristic-cluster-pool-lag/:clusterName", httpAPI.GetHeuristicClusterPoolInstancesLag)
+	httpAPI.registerAPIRequest(m, "heuristic-cluster-pool-lag/:clusterName/:pool", httpAPI.GetHeuristicClusterPoolInstancesLag)
 
 	// Information:
-	this.registerAPIRequest(m, "search/:searchString", this.Search)
-	this.registerAPIRequest(m, "search", this.Search)
+	httpAPI.registerAPIRequest(m, "search/:searchString", httpAPI.Search)
+	httpAPI.registerAPIRequest(m, "search", httpAPI.Search)
 
 	// Cluster
-	this.registerAPIRequest(m, "cluster/:clusterHint", this.Cluster)
-	this.registerAPIRequest(m, "cluster/alias/:clusterAlias", this.ClusterByAlias)
-	this.registerAPIRequest(m, "cluster/instance/:host/:port", this.ClusterByInstance)
-	this.registerAPIRequest(m, "cluster-info/:clusterHint", this.ClusterInfo)
-	this.registerAPIRequest(m, "cluster-info/alias/:clusterAlias", this.ClusterInfoByAlias)
-	this.registerAPIRequest(m, "cluster-osc-slaves/:clusterHint", this.ClusterOSCReplicas)
-	this.registerAPIRequest(m, "set-cluster-alias/:clusterName", this.SetClusterAliasManualOverride)
-	this.registerAPIRequest(m, "clusters", this.Clusters)
-	this.registerAPIRequest(m, "clusters-info", this.ClustersInfo)
+	httpAPI.registerAPIRequest(m, "cluster/:clusterHint", httpAPI.Cluster)
+	httpAPI.registerAPIRequest(m, "cluster/alias/:clusterAlias", httpAPI.ClusterByAlias)
+	httpAPI.registerAPIRequest(m, "cluster/instance/:host/:port", httpAPI.ClusterByInstance)
+	httpAPI.registerAPIRequest(m, "cluster-info/:clusterHint", httpAPI.ClusterInfo)
+	httpAPI.registerAPIRequest(m, "cluster-info/alias/:clusterAlias", httpAPI.ClusterInfoByAlias)
+	httpAPI.registerAPIRequest(m, "cluster-osc-replicas/:clusterHint", httpAPI.ClusterOSCReplicas)
+	httpAPI.registerAPIRequest(m, "set-cluster-alias/:clusterName", httpAPI.SetClusterAliasManualOverride)
+	httpAPI.registerAPIRequest(m, "clusters", httpAPI.Clusters)
+	httpAPI.registerAPIRequest(m, "clusters-info", httpAPI.ClustersInfo)
 
-	this.registerAPIRequest(m, "masters", this.Masters)
-	this.registerAPIRequest(m, "master/:clusterHint", this.ClusterMaster)
-	this.registerAPIRequest(m, "instance-replicas/:host/:port", this.InstanceReplicas)
-	this.registerAPIRequest(m, "all-instances", this.AllInstances)
-	this.registerAPIRequest(m, "downtimed", this.Downtimed)
-	this.registerAPIRequest(m, "downtimed/:clusterHint", this.Downtimed)
-	this.registerAPIRequest(m, "topology/:clusterHint", this.AsciiTopology)
-	this.registerAPIRequest(m, "topology/:host/:port", this.AsciiTopology)
-	this.registerAPIRequest(m, "topology-tabulated/:clusterHint", this.AsciiTopologyTabulated)
-	this.registerAPIRequest(m, "topology-tabulated/:host/:port", this.AsciiTopologyTabulated)
-	this.registerAPIRequest(m, "topology-tags/:clusterHint", this.AsciiTopologyTags)
-	this.registerAPIRequest(m, "topology-tags/:host/:port", this.AsciiTopologyTags)
-	this.registerAPIRequest(m, "snapshot-topologies", this.SnapshotTopologies)
-
-	// Key-value:
-	this.registerAPIRequest(m, "submit-masters-to-kv-stores", this.SubmitMastersToKvStores)
-	this.registerAPIRequest(m, "submit-masters-to-kv-stores/:clusterHint", this.SubmitMastersToKvStores)
+	httpAPI.registerAPIRequest(m, "primaries", httpAPI.Primaries)
+	httpAPI.registerAPIRequest(m, "primary/:clusterHint", httpAPI.ClusterPrimary)
+	httpAPI.registerAPIRequest(m, "instance-replicas/:host/:port", httpAPI.InstanceReplicas)
+	httpAPI.registerAPIRequest(m, "all-instances", httpAPI.AllInstances)
+	httpAPI.registerAPIRequest(m, "downtimed", httpAPI.Downtimed)
+	httpAPI.registerAPIRequest(m, "downtimed/:clusterHint", httpAPI.Downtimed)
+	httpAPI.registerAPIRequest(m, "topology/:clusterHint", httpAPI.ASCIITopology)
+	httpAPI.registerAPIRequest(m, "topology/:host/:port", httpAPI.ASCIITopology)
+	httpAPI.registerAPIRequest(m, "topology-tabulated/:clusterHint", httpAPI.ASCIITopologyTabulated)
+	httpAPI.registerAPIRequest(m, "topology-tabulated/:host/:port", httpAPI.ASCIITopologyTabulated)
+	httpAPI.registerAPIRequest(m, "topology-tags/:clusterHint", httpAPI.ASCIITopologyTags)
+	httpAPI.registerAPIRequest(m, "topology-tags/:host/:port", httpAPI.ASCIITopologyTags)
+	httpAPI.registerAPIRequest(m, "snapshot-topologies", httpAPI.SnapshotTopologies)
 
 	// Tags:
-	this.registerAPIRequest(m, "tagged", this.Tagged)
-	this.registerAPIRequest(m, "tags/:host/:port", this.Tags)
-	this.registerAPIRequest(m, "tag-value/:host/:port", this.TagValue)
-	this.registerAPIRequest(m, "tag-value/:host/:port/:tagName", this.TagValue)
-	this.registerAPIRequest(m, "tag/:host/:port", this.Tag)
-	this.registerAPIRequest(m, "tag/:host/:port/:tagName/:tagValue", this.Tag)
-	this.registerAPIRequest(m, "untag/:host/:port", this.Untag)
-	this.registerAPIRequest(m, "untag/:host/:port/:tagName", this.Untag)
-	this.registerAPIRequest(m, "untag-all", this.UntagAll)
-	this.registerAPIRequest(m, "untag-all/:tagName/:tagValue", this.UntagAll)
+	httpAPI.registerAPIRequest(m, "tagged", httpAPI.Tagged)
+	httpAPI.registerAPIRequest(m, "tags/:host/:port", httpAPI.Tags)
+	httpAPI.registerAPIRequest(m, "tag-value/:host/:port", httpAPI.TagValue)
+	httpAPI.registerAPIRequest(m, "tag-value/:host/:port/:tagName", httpAPI.TagValue)
+	httpAPI.registerAPIRequest(m, "tag/:host/:port", httpAPI.Tag)
+	httpAPI.registerAPIRequest(m, "tag/:host/:port/:tagName/:tagValue", httpAPI.Tag)
+	httpAPI.registerAPIRequest(m, "untag/:host/:port", httpAPI.Untag)
+	httpAPI.registerAPIRequest(m, "untag/:host/:port/:tagName", httpAPI.Untag)
+	httpAPI.registerAPIRequest(m, "untag-all", httpAPI.UntagAll)
+	httpAPI.registerAPIRequest(m, "untag-all/:tagName/:tagValue", httpAPI.UntagAll)
 
 	// Instance management:
-	this.registerAPIRequest(m, "instance/:host/:port", this.Instance)
-	this.registerAPIRequest(m, "discover/:host/:port", this.Discover)
-	this.registerAPIRequest(m, "async-discover/:host/:port", this.AsyncDiscover)
-	this.registerAPIRequest(m, "refresh/:host/:port", this.Refresh)
-	this.registerAPIRequest(m, "forget/:host/:port", this.Forget)
-	this.registerAPIRequest(m, "forget-cluster/:clusterHint", this.ForgetCluster)
-	this.registerAPIRequest(m, "begin-maintenance/:host/:port/:owner/:reason", this.BeginMaintenance)
-	this.registerAPIRequest(m, "end-maintenance/:host/:port", this.EndMaintenanceByInstanceKey)
-	this.registerAPIRequest(m, "in-maintenance/:host/:port", this.InMaintenance)
-	this.registerAPIRequest(m, "end-maintenance/:maintenanceKey", this.EndMaintenance)
-	this.registerAPIRequest(m, "maintenance", this.Maintenance)
-	this.registerAPIRequest(m, "begin-downtime/:host/:port/:owner/:reason", this.BeginDowntime)
-	this.registerAPIRequest(m, "begin-downtime/:host/:port/:owner/:reason/:duration", this.BeginDowntime)
-	this.registerAPIRequest(m, "end-downtime/:host/:port", this.EndDowntime)
+	httpAPI.registerAPIRequest(m, "instance/:host/:port", httpAPI.Instance)
+	httpAPI.registerAPIRequest(m, "discover/:host/:port", httpAPI.Discover)
+	httpAPI.registerAPIRequest(m, "async-discover/:host/:port", httpAPI.AsyncDiscover)
+	httpAPI.registerAPIRequest(m, "refresh/:host/:port", httpAPI.Refresh)
+	httpAPI.registerAPIRequest(m, "forget/:host/:port", httpAPI.Forget)
+	httpAPI.registerAPIRequest(m, "forget-cluster/:clusterHint", httpAPI.ForgetCluster)
+	httpAPI.registerAPIRequest(m, "begin-maintenance/:host/:port/:owner/:reason", httpAPI.BeginMaintenance)
+	httpAPI.registerAPIRequest(m, "end-maintenance/:host/:port", httpAPI.EndMaintenanceByInstanceKey)
+	httpAPI.registerAPIRequest(m, "in-maintenance/:host/:port", httpAPI.InMaintenance)
+	httpAPI.registerAPIRequest(m, "end-maintenance/:maintenanceKey", httpAPI.EndMaintenance)
+	httpAPI.registerAPIRequest(m, "maintenance", httpAPI.Maintenance)
+	httpAPI.registerAPIRequest(m, "begin-downtime/:host/:port/:owner/:reason", httpAPI.BeginDowntime)
+	httpAPI.registerAPIRequest(m, "begin-downtime/:host/:port/:owner/:reason/:duration", httpAPI.BeginDowntime)
+	httpAPI.registerAPIRequest(m, "end-downtime/:host/:port", httpAPI.EndDowntime)
 
 	// Recovery:
-	this.registerAPIRequest(m, "replication-analysis", this.ReplicationAnalysis)
-	this.registerAPIRequest(m, "replication-analysis/:clusterName", this.ReplicationAnalysisForCluster)
-	this.registerAPIRequest(m, "replication-analysis/instance/:host/:port", this.ReplicationAnalysisForKey)
-	this.registerAPIRequest(m, "recover/:host/:port", this.Recover)
-	this.registerAPIRequest(m, "recover/:host/:port/:candidateHost/:candidatePort", this.Recover)
-	this.registerAPIRequest(m, "recover-lite/:host/:port", this.RecoverLite)
-	this.registerAPIRequest(m, "recover-lite/:host/:port/:candidateHost/:candidatePort", this.RecoverLite)
-	this.registerAPIRequest(m, "graceful-master-takeover/:host/:port", this.GracefulMasterTakeover)
-	this.registerAPIRequest(m, "graceful-master-takeover/:host/:port/:designatedHost/:designatedPort", this.GracefulMasterTakeover)
-	this.registerAPIRequest(m, "graceful-master-takeover/:clusterHint", this.GracefulMasterTakeover)
-	this.registerAPIRequest(m, "graceful-master-takeover/:clusterHint/:designatedHost/:designatedPort", this.GracefulMasterTakeover)
-	this.registerAPIRequest(m, "graceful-master-takeover-auto/:host/:port", this.GracefulMasterTakeoverAuto)
-	this.registerAPIRequest(m, "graceful-master-takeover-auto/:host/:port/:designatedHost/:designatedPort", this.GracefulMasterTakeoverAuto)
-	this.registerAPIRequest(m, "graceful-master-takeover-auto/:clusterHint", this.GracefulMasterTakeoverAuto)
-	this.registerAPIRequest(m, "graceful-master-takeover-auto/:clusterHint/:designatedHost/:designatedPort", this.GracefulMasterTakeoverAuto)
-	this.registerAPIRequest(m, "force-master-failover/:host/:port", this.ForceMasterFailover)
-	this.registerAPIRequest(m, "force-master-failover/:clusterHint", this.ForceMasterFailover)
-	this.registerAPIRequest(m, "force-master-takeover/:clusterHint/:designatedHost/:designatedPort", this.ForceMasterTakeover)
-	this.registerAPIRequest(m, "force-master-takeover/:host/:port/:designatedHost/:designatedPort", this.ForceMasterTakeover)
-	this.registerAPIRequest(m, "register-candidate/:host/:port/:promotionRule", this.RegisterCandidate)
-	this.registerAPIRequest(m, "automated-recovery-filters", this.AutomatedRecoveryFilters)
-	this.registerAPIRequest(m, "audit-failure-detection", this.AuditFailureDetection)
-	this.registerAPIRequest(m, "audit-failure-detection/:page", this.AuditFailureDetection)
-	this.registerAPIRequest(m, "audit-failure-detection/id/:id", this.AuditFailureDetection)
-	this.registerAPIRequest(m, "audit-failure-detection/alias/:clusterAlias", this.AuditFailureDetection)
-	this.registerAPIRequest(m, "audit-failure-detection/alias/:clusterAlias/:page", this.AuditFailureDetection)
-	this.registerAPIRequest(m, "replication-analysis-changelog", this.ReadReplicationAnalysisChangelog)
-	this.registerAPIRequest(m, "audit-recovery", this.AuditRecovery)
-	this.registerAPIRequest(m, "audit-recovery/:page", this.AuditRecovery)
-	this.registerAPIRequest(m, "audit-recovery/id/:id", this.AuditRecovery)
-	this.registerAPIRequest(m, "audit-recovery/uid/:uid", this.AuditRecovery)
-	this.registerAPIRequest(m, "audit-recovery/cluster/:clusterName", this.AuditRecovery)
-	this.registerAPIRequest(m, "audit-recovery/cluster/:clusterName/:page", this.AuditRecovery)
-	this.registerAPIRequest(m, "audit-recovery/alias/:clusterAlias", this.AuditRecovery)
-	this.registerAPIRequest(m, "audit-recovery/alias/:clusterAlias/:page", this.AuditRecovery)
-	this.registerAPIRequest(m, "audit-recovery-steps/:uid", this.AuditRecoverySteps)
-	this.registerAPIRequest(m, "active-cluster-recovery/:clusterName", this.ActiveClusterRecovery)
-	this.registerAPIRequest(m, "recently-active-cluster-recovery/:clusterName", this.RecentlyActiveClusterRecovery)
-	this.registerAPIRequest(m, "recently-active-instance-recovery/:host/:port", this.RecentlyActiveInstanceRecovery)
-	this.registerAPIRequest(m, "ack-recovery/cluster/:clusterHint", this.AcknowledgeClusterRecoveries)
-	this.registerAPIRequest(m, "ack-recovery/cluster/alias/:clusterAlias", this.AcknowledgeClusterRecoveries)
-	this.registerAPIRequest(m, "ack-recovery/instance/:host/:port", this.AcknowledgeInstanceRecoveries)
-	this.registerAPIRequest(m, "ack-recovery/:recoveryId", this.AcknowledgeRecovery)
-	this.registerAPIRequest(m, "ack-recovery/uid/:uid", this.AcknowledgeRecovery)
-	this.registerAPIRequest(m, "ack-all-recoveries", this.AcknowledgeAllRecoveries)
-	this.registerAPIRequest(m, "blocked-recoveries", this.BlockedRecoveries)
-	this.registerAPIRequest(m, "blocked-recoveries/cluster/:clusterName", this.BlockedRecoveries)
-	this.registerAPIRequest(m, "disable-global-recoveries", this.DisableGlobalRecoveries)
-	this.registerAPIRequest(m, "enable-global-recoveries", this.EnableGlobalRecoveries)
-	this.registerAPIRequest(m, "check-global-recoveries", this.CheckGlobalRecoveries)
+	httpAPI.registerAPIRequest(m, "replication-analysis", httpAPI.ReplicationAnalysis)
+	httpAPI.registerAPIRequest(m, "replication-analysis/:clusterName", httpAPI.ReplicationAnalysisForCluster)
+	httpAPI.registerAPIRequest(m, "replication-analysis/instance/:host/:port", httpAPI.ReplicationAnalysisForKey)
+	httpAPI.registerAPIRequest(m, "recover/:host/:port", httpAPI.Recover)
+	httpAPI.registerAPIRequest(m, "recover/:host/:port/:candidateHost/:candidatePort", httpAPI.Recover)
+	httpAPI.registerAPIRequest(m, "recover-lite/:host/:port", httpAPI.RecoverLite)
+	httpAPI.registerAPIRequest(m, "recover-lite/:host/:port/:candidateHost/:candidatePort", httpAPI.RecoverLite)
+	httpAPI.registerAPIRequest(m, "graceful-primary-takeover/:host/:port", httpAPI.GracefulPrimaryTakeover)
+	httpAPI.registerAPIRequest(m, "graceful-primary-takeover/:host/:port/:designatedHost/:designatedPort", httpAPI.GracefulPrimaryTakeover)
+	httpAPI.registerAPIRequest(m, "graceful-primary-takeover/:clusterHint", httpAPI.GracefulPrimaryTakeover)
+	httpAPI.registerAPIRequest(m, "graceful-primary-takeover/:clusterHint/:designatedHost/:designatedPort", httpAPI.GracefulPrimaryTakeover)
+	httpAPI.registerAPIRequest(m, "graceful-primary-takeover-auto/:host/:port", httpAPI.GracefulPrimaryTakeoverAuto)
+	httpAPI.registerAPIRequest(m, "graceful-primary-takeover-auto/:host/:port/:designatedHost/:designatedPort", httpAPI.GracefulPrimaryTakeoverAuto)
+	httpAPI.registerAPIRequest(m, "graceful-primary-takeover-auto/:clusterHint", httpAPI.GracefulPrimaryTakeoverAuto)
+	httpAPI.registerAPIRequest(m, "graceful-primary-takeover-auto/:clusterHint/:designatedHost/:designatedPort", httpAPI.GracefulPrimaryTakeoverAuto)
+	httpAPI.registerAPIRequest(m, "force-primary-failover/:host/:port", httpAPI.ForcePrimaryFailover)
+	httpAPI.registerAPIRequest(m, "force-primary-failover/:clusterHint", httpAPI.ForcePrimaryFailover)
+	httpAPI.registerAPIRequest(m, "force-primary-takeover/:clusterHint/:designatedHost/:designatedPort", httpAPI.ForcePrimaryTakeover)
+	httpAPI.registerAPIRequest(m, "force-primary-takeover/:host/:port/:designatedHost/:designatedPort", httpAPI.ForcePrimaryTakeover)
+	httpAPI.registerAPIRequest(m, "register-candidate/:host/:port/:promotionRule", httpAPI.RegisterCandidate)
+	httpAPI.registerAPIRequest(m, "automated-recovery-filters", httpAPI.AutomatedRecoveryFilters)
+	httpAPI.registerAPIRequest(m, "audit-failure-detection", httpAPI.AuditFailureDetection)
+	httpAPI.registerAPIRequest(m, "audit-failure-detection/:page", httpAPI.AuditFailureDetection)
+	httpAPI.registerAPIRequest(m, "audit-failure-detection/id/:id", httpAPI.AuditFailureDetection)
+	httpAPI.registerAPIRequest(m, "audit-failure-detection/alias/:clusterAlias", httpAPI.AuditFailureDetection)
+	httpAPI.registerAPIRequest(m, "audit-failure-detection/alias/:clusterAlias/:page", httpAPI.AuditFailureDetection)
+	httpAPI.registerAPIRequest(m, "replication-analysis-changelog", httpAPI.ReadReplicationAnalysisChangelog)
+	httpAPI.registerAPIRequest(m, "audit-recovery", httpAPI.AuditRecovery)
+	httpAPI.registerAPIRequest(m, "audit-recovery/:page", httpAPI.AuditRecovery)
+	httpAPI.registerAPIRequest(m, "audit-recovery/id/:id", httpAPI.AuditRecovery)
+	httpAPI.registerAPIRequest(m, "audit-recovery/uid/:uid", httpAPI.AuditRecovery)
+	httpAPI.registerAPIRequest(m, "audit-recovery/cluster/:clusterName", httpAPI.AuditRecovery)
+	httpAPI.registerAPIRequest(m, "audit-recovery/cluster/:clusterName/:page", httpAPI.AuditRecovery)
+	httpAPI.registerAPIRequest(m, "audit-recovery/alias/:clusterAlias", httpAPI.AuditRecovery)
+	httpAPI.registerAPIRequest(m, "audit-recovery/alias/:clusterAlias/:page", httpAPI.AuditRecovery)
+	httpAPI.registerAPIRequest(m, "audit-recovery-steps/:uid", httpAPI.AuditRecoverySteps)
+	httpAPI.registerAPIRequest(m, "active-cluster-recovery/:clusterName", httpAPI.ActiveClusterRecovery)
+	httpAPI.registerAPIRequest(m, "recently-active-cluster-recovery/:clusterName", httpAPI.RecentlyActiveClusterRecovery)
+	httpAPI.registerAPIRequest(m, "recently-active-instance-recovery/:host/:port", httpAPI.RecentlyActiveInstanceRecovery)
+	httpAPI.registerAPIRequest(m, "ack-recovery/cluster/:clusterHint", httpAPI.AcknowledgeClusterRecoveries)
+	httpAPI.registerAPIRequest(m, "ack-recovery/cluster/alias/:clusterAlias", httpAPI.AcknowledgeClusterRecoveries)
+	httpAPI.registerAPIRequest(m, "ack-recovery/instance/:host/:port", httpAPI.AcknowledgeInstanceRecoveries)
+	httpAPI.registerAPIRequest(m, "ack-recovery/:recoveryId", httpAPI.AcknowledgeRecovery)
+	httpAPI.registerAPIRequest(m, "ack-recovery/uid/:uid", httpAPI.AcknowledgeRecovery)
+	httpAPI.registerAPIRequest(m, "ack-all-recoveries", httpAPI.AcknowledgeAllRecoveries)
+	httpAPI.registerAPIRequest(m, "blocked-recoveries", httpAPI.BlockedRecoveries)
+	httpAPI.registerAPIRequest(m, "blocked-recoveries/cluster/:clusterName", httpAPI.BlockedRecoveries)
+	httpAPI.registerAPIRequest(m, "disable-global-recoveries", httpAPI.DisableGlobalRecoveries)
+	httpAPI.registerAPIRequest(m, "enable-global-recoveries", httpAPI.EnableGlobalRecoveries)
+	httpAPI.registerAPIRequest(m, "check-global-recoveries", httpAPI.CheckGlobalRecoveries)
 
 	// General
-	this.registerAPIRequest(m, "problems", this.Problems)
-	this.registerAPIRequest(m, "problems/:clusterName", this.Problems)
-	this.registerAPIRequest(m, "audit", this.Audit)
-	this.registerAPIRequest(m, "audit/:page", this.Audit)
-	this.registerAPIRequest(m, "audit/instance/:host/:port", this.Audit)
-	this.registerAPIRequest(m, "audit/instance/:host/:port/:page", this.Audit)
-	this.registerAPIRequest(m, "resolve/:host/:port", this.Resolve)
+	httpAPI.registerAPIRequest(m, "problems", httpAPI.Problems)
+	httpAPI.registerAPIRequest(m, "problems/:clusterName", httpAPI.Problems)
+	httpAPI.registerAPIRequest(m, "audit", httpAPI.Audit)
+	httpAPI.registerAPIRequest(m, "audit/:page", httpAPI.Audit)
+	httpAPI.registerAPIRequest(m, "audit/instance/:host/:port", httpAPI.Audit)
+	httpAPI.registerAPIRequest(m, "audit/instance/:host/:port/:page", httpAPI.Audit)
+	httpAPI.registerAPIRequest(m, "resolve/:host/:port", httpAPI.Resolve)
 
 	// Meta, no proxy
-	this.registerAPIRequestNoProxy(m, "headers", this.Headers)
-	this.registerAPIRequestNoProxy(m, "health", this.Health)
-	this.registerAPIRequestNoProxy(m, "lb-check", this.LBCheck)
-	this.registerAPIRequestNoProxy(m, "_ping", this.LBCheck)
-	this.registerAPIRequestNoProxy(m, "leader-check", this.LeaderCheck)
-	this.registerAPIRequestNoProxy(m, "leader-check/:errorStatusCode", this.LeaderCheck)
-	this.registerAPIRequestNoProxy(m, "grab-election", this.GrabElection)
-	this.registerAPIRequestNoProxy(m, "reload-configuration", this.ReloadConfiguration)
-	this.registerAPIRequestNoProxy(m, "hostname-resolve-cache", this.HostnameResolveCache)
-	this.registerAPIRequestNoProxy(m, "reset-hostname-resolve-cache", this.ResetHostnameResolveCache)
+	httpAPI.registerAPIRequestNoProxy(m, "headers", httpAPI.Headers)
+	httpAPI.registerAPIRequestNoProxy(m, "health", httpAPI.Health)
+	httpAPI.registerAPIRequestNoProxy(m, "lb-check", httpAPI.LBCheck)
+	httpAPI.registerAPIRequestNoProxy(m, "_ping", httpAPI.LBCheck)
+	httpAPI.registerAPIRequestNoProxy(m, "leader-check", httpAPI.LeaderCheck)
+	httpAPI.registerAPIRequestNoProxy(m, "leader-check/:errorStatusCode", httpAPI.LeaderCheck)
+	httpAPI.registerAPIRequestNoProxy(m, "grab-election", httpAPI.GrabElection)
+	httpAPI.registerAPIRequestNoProxy(m, "reload-configuration", httpAPI.ReloadConfiguration)
+	httpAPI.registerAPIRequestNoProxy(m, "hostname-resolve-cache", httpAPI.HostnameResolveCache)
+	httpAPI.registerAPIRequestNoProxy(m, "reset-hostname-resolve-cache", httpAPI.ResetHostnameResolveCache)
 	// Meta
-	this.registerAPIRequest(m, "routed-leader-check", this.LeaderCheck)
-	this.registerAPIRequest(m, "reelect", this.Reelect)
-	this.registerAPIRequest(m, "reload-cluster-alias", this.ReloadClusterAlias)
-	this.registerAPIRequest(m, "deregister-hostname-unresolve/:host/:port", this.DeregisterHostnameUnresolve)
-	this.registerAPIRequest(m, "register-hostname-unresolve/:host/:port/:virtualname", this.RegisterHostnameUnresolve)
+	httpAPI.registerAPIRequest(m, "routed-leader-check", httpAPI.LeaderCheck)
+	httpAPI.registerAPIRequest(m, "reelect", httpAPI.Reelect)
+	httpAPI.registerAPIRequest(m, "reload-cluster-alias", httpAPI.ReloadClusterAlias)
+	httpAPI.registerAPIRequest(m, "deregister-hostname-unresolve/:host/:port", httpAPI.DeregisterHostnameUnresolve)
+	httpAPI.registerAPIRequest(m, "register-hostname-unresolve/:host/:port/:virtualname", httpAPI.RegisterHostnameUnresolve)
 
 	// Bulk access to information
-	this.registerAPIRequest(m, "bulk-instances", this.BulkInstances)
-	this.registerAPIRequest(m, "bulk-promotion-rules", this.BulkPromotionRules)
+	httpAPI.registerAPIRequest(m, "bulk-instances", httpAPI.BulkInstances)
+	httpAPI.registerAPIRequest(m, "bulk-promotion-rules", httpAPI.BulkPromotionRules)
 
 	// Monitoring
-	this.registerAPIRequest(m, "discovery-metrics-raw/:seconds", this.DiscoveryMetricsRaw)
-	this.registerAPIRequest(m, "discovery-metrics-aggregated/:seconds", this.DiscoveryMetricsAggregated)
-	this.registerAPIRequest(m, "discovery-queue-metrics-raw/:seconds", this.DiscoveryQueueMetricsRaw)
-	this.registerAPIRequest(m, "discovery-queue-metrics-aggregated/:seconds", this.DiscoveryQueueMetricsAggregated)
-	this.registerAPIRequest(m, "backend-query-metrics-raw/:seconds", this.BackendQueryMetricsRaw)
-	this.registerAPIRequest(m, "backend-query-metrics-aggregated/:seconds", this.BackendQueryMetricsAggregated)
-	this.registerAPIRequest(m, "write-buffer-metrics-raw/:seconds", this.WriteBufferMetricsRaw)
-	this.registerAPIRequest(m, "write-buffer-metrics-aggregated/:seconds", this.WriteBufferMetricsAggregated)
+	httpAPI.registerAPIRequest(m, "discovery-metrics-raw/:seconds", httpAPI.DiscoveryMetricsRaw)
+	httpAPI.registerAPIRequest(m, "discovery-metrics-aggregated/:seconds", httpAPI.DiscoveryMetricsAggregated)
+	httpAPI.registerAPIRequest(m, "discovery-queue-metrics-raw/:seconds", httpAPI.DiscoveryQueueMetricsRaw)
+	httpAPI.registerAPIRequest(m, "discovery-queue-metrics-aggregated/:seconds", httpAPI.DiscoveryQueueMetricsAggregated)
+	httpAPI.registerAPIRequest(m, "backend-query-metrics-raw/:seconds", httpAPI.BackendQueryMetricsRaw)
+	httpAPI.registerAPIRequest(m, "backend-query-metrics-aggregated/:seconds", httpAPI.BackendQueryMetricsAggregated)
+	httpAPI.registerAPIRequest(m, "write-buffer-metrics-raw/:seconds", httpAPI.WriteBufferMetricsRaw)
+	httpAPI.registerAPIRequest(m, "write-buffer-metrics-aggregated/:seconds", httpAPI.WriteBufferMetricsAggregated)
 
 	// Configurable status check endpoint
 	if config.Config.StatusEndpoint == config.DefaultStatusAPIEndpoint {
-		this.registerAPIRequestNoProxy(m, "status", this.StatusCheck)
+		httpAPI.registerAPIRequestNoProxy(m, "status", httpAPI.StatusCheck)
 	} else {
-		m.Get(config.Config.StatusEndpoint, this.StatusCheck)
+		m.Get(config.Config.StatusEndpoint, httpAPI.StatusCheck)
 	}
 }

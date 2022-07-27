@@ -17,9 +17,8 @@ limitations under the License.
 package topotests
 
 import (
-	"testing"
-
 	"context"
+	"testing"
 
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"

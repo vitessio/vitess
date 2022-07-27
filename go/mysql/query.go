@@ -365,6 +365,7 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (*sqltypes.Result, 
 			InsertID:            packetOk.lastInsertID,
 			SessionStateChanges: packetOk.sessionStateData,
 			StatusFlags:         packetOk.statusFlags,
+			Info:                packetOk.info,
 		}, more, warnings, nil
 	}
 
@@ -448,6 +449,7 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (*sqltypes.Result, 
 				more = (packetOk.statusFlags & ServerMoreResultsExists) != 0
 				result.SessionStateChanges = packetOk.sessionStateData
 				result.StatusFlags = packetOk.statusFlags
+				result.Info = packetOk.info
 			}
 			return result, more, warnings, nil
 
@@ -463,7 +465,7 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (*sqltypes.Result, 
 			if err := c.drainResults(); err != nil {
 				return nil, false, 0, err
 			}
-			return nil, false, 0, NewSQLError(ERVitessMaxRowsExceeded, SSUnknownSQLState, "Row count exceeded %d", maxrows)
+			return nil, false, 0, vterrors.Errorf(vtrpc.Code_ABORTED, "Row count exceeded %d", maxrows)
 		}
 
 		// Regular row.
@@ -867,7 +869,11 @@ func (c *Conn) parseComStmtSendLongData(data []byte) (uint32, uint16, []byte, bo
 		return 0, 0, nil, false
 	}
 
-	return statementID, paramID, data[pos:], true
+	chunkData := data[pos:]
+	chunk := make([]byte, len(chunkData))
+	copy(chunk, chunkData)
+
+	return statementID, paramID, chunk, true
 }
 
 func (c *Conn) parseComStmtClose(data []byte) (uint32, bool) {

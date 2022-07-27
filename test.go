@@ -1,4 +1,4 @@
-///bin/true; exec /usr/bin/env go run "$0" "$@"
+// /bin/true; exec /usr/bin/env go run "$0" "$@"
 
 /*
  * Copyright 2019 The Vitess Authors.
@@ -42,7 +42,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
@@ -75,7 +74,7 @@ For example:
 // Flags
 var (
 	flavor           = flag.String("flavor", "mysql57", "comma-separated bootstrap flavor(s) to run against (when using Docker mode). Available flavors: all,"+flavors)
-	bootstrapVersion = flag.String("bootstrap-version", "1", "the version identifier to use for the docker images")
+	bootstrapVersion = flag.String("bootstrap-version", "10", "the version identifier to use for the docker images")
 	runCount         = flag.Int("runs", 1, "run each test this many times")
 	retryMax         = flag.Int("retry", 3, "max number of retries, to detect flaky tests")
 	logPass          = flag.Bool("log-pass", false, "log test output even if it passes")
@@ -168,6 +167,9 @@ func (t *Test) run(dir, dataDir string) ([]byte, error) {
 		if strings.Contains(fmt.Sprintf("%v", t.File), ".go") {
 			testCmd = []string{"tools/e2e_go_test.sh"}
 			testCmd = append(testCmd, t.Args...)
+			if *keepData {
+				testCmd = append(testCmd, "-keep-data")
+			}
 		} else {
 			testCmd = []string{"test/" + t.File, "-v", "--skip-build", "--keep-logs"}
 			testCmd = append(testCmd, t.Args...)
@@ -241,7 +243,7 @@ func (t *Test) run(dir, dataDir string) ([]byte, error) {
 	return buf.Bytes(), runErr
 }
 
-func (t *Test) logf(format string, v ...interface{}) {
+func (t *Test) logf(format string, v ...any) {
 	if *runCount > 1 {
 		log.Printf("%v.%v[%v/%v]: %v", t.flavor, t.name, t.runIndex+1, *runCount, fmt.Sprintf(format, v...))
 	} else {
@@ -291,7 +293,7 @@ func main() {
 	log.Printf("Output directory: %v", outDir)
 
 	// Get test configs.
-	configData, err := ioutil.ReadFile(configFileName)
+	configData, err := os.ReadFile(configFileName)
 	if err != nil {
 		log.Fatalf("Can't read config file: %v", err)
 	}
@@ -368,7 +370,7 @@ func main() {
 	if *docker {
 		// Copy working repo to tmpDir.
 		// This doesn't work outside Docker since it messes up GOROOT.
-		tmpDir, err = ioutil.TempDir(os.TempDir(), "vt_")
+		tmpDir, err = os.MkdirTemp(os.TempDir(), "vt_")
 		if err != nil {
 			log.Fatalf("Can't create temp dir in %v", os.TempDir())
 		}
@@ -457,7 +459,7 @@ func main() {
 					test.logf("running (try %v/%v)...", try, tryMax)
 
 					// Make a unique VTDATAROOT.
-					dataDir, err := ioutil.TempDir(vtDataRoot, "vt_")
+					dataDir, err := os.MkdirTemp(vtDataRoot, "vt_")
 					if err != nil {
 						test.logf("Failed to create temporary subdir in VTDATAROOT: %v", vtDataRoot)
 						mu.Lock()
@@ -479,7 +481,7 @@ func main() {
 						outFile := fmt.Sprintf("%v.%v-%v.%v.log", test.flavor, test.name, test.runIndex+1, try)
 						outFilePath := path.Join(outDir, outFile)
 						test.logf("saving test output to %v", outFilePath)
-						if fileErr := ioutil.WriteFile(outFilePath, output, os.FileMode(0644)); fileErr != nil {
+						if fileErr := os.WriteFile(outFilePath, output, os.FileMode(0644)); fileErr != nil {
 							test.logf("WriteFile error: %v", fileErr)
 						}
 					}
@@ -658,7 +660,7 @@ func testFlaked(name string, try int) {
 func updateTestStats(name string, update func(*TestStats)) {
 	var stats Stats
 
-	data, err := ioutil.ReadFile(statsFileName)
+	data, err := os.ReadFile(statsFileName)
 	if err != nil {
 		log.Print("Can't read stats file, starting new one.")
 	} else {
@@ -680,7 +682,7 @@ func updateTestStats(name string, update func(*TestStats)) {
 		log.Printf("Can't encode stats file: %v", err)
 		return
 	}
-	if err := ioutil.WriteFile(statsFileName, data, 0644); err != nil {
+	if err := os.WriteFile(statsFileName, data, 0644); err != nil {
 		log.Printf("Can't write stats file: %v", err)
 	}
 }

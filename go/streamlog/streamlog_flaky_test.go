@@ -20,7 +20,6 @@ import (
 	"bufio"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"net/url"
@@ -39,7 +38,7 @@ func (l *logMessage) Format(params url.Values) string {
 	return l.val + "\n"
 }
 
-func testLogf(w io.Writer, params url.Values, m interface{}) error {
+func testLogf(w io.Writer, params url.Values, m any) error {
 	_, err := io.WriteString(w, m.(*logMessage).Format(params))
 	return err
 }
@@ -194,10 +193,7 @@ func TestChannel(t *testing.T) {
 func TestFile(t *testing.T) {
 	logger := New("logger", 10)
 
-	dir, err := ioutil.TempDir("", "streamlog_file")
-	if err != nil {
-		t.Fatalf("error getting tempdir: %v", err)
-	}
+	dir := t.TempDir()
 
 	logPath := path.Join(dir, "test.log")
 	logChan, err := logger.LogToFile(logPath, testLogf)
@@ -213,7 +209,7 @@ func TestFile(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	want := "test 1\ntest 2\n"
-	contents, _ := ioutil.ReadFile(logPath)
+	contents, _ := os.ReadFile(logPath)
 	got := string(contents)
 	if want != string(got) {
 		t.Errorf("streamlog file: want %q got %q", want, got)
@@ -227,7 +223,7 @@ func TestFile(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	want = "test 1\ntest 2\ntest 3\n"
-	contents, _ = ioutil.ReadFile(rotatedPath)
+	contents, _ = os.ReadFile(rotatedPath)
 	got = string(contents)
 	if want != string(got) {
 		t.Errorf("streamlog file: want %q got %q", want, got)
@@ -235,21 +231,23 @@ func TestFile(t *testing.T) {
 
 	// Send the rotate signal which should reopen the original file path
 	// for new logs to go to
-	syscall.Kill(syscall.Getpid(), syscall.SIGUSR2)
+	if err := syscall.Kill(syscall.Getpid(), syscall.SIGUSR2); err != nil {
+		t.Logf("failed to send streamlog rotate signal: %v", err)
+	}
 	time.Sleep(10 * time.Millisecond)
 
 	logger.Send(&logMessage{"test 4"})
 	time.Sleep(10 * time.Millisecond)
 
 	want = "test 1\ntest 2\ntest 3\n"
-	contents, _ = ioutil.ReadFile(rotatedPath)
+	contents, _ = os.ReadFile(rotatedPath)
 	got = string(contents)
 	if want != string(got) {
 		t.Errorf("streamlog file: want %q got %q", want, got)
 	}
 
 	want = "test 4\n"
-	contents, _ = ioutil.ReadFile(logPath)
+	contents, _ = os.ReadFile(logPath)
 	got = string(contents)
 	if want != string(got) {
 		t.Errorf("streamlog file: want %q got %q", want, got)

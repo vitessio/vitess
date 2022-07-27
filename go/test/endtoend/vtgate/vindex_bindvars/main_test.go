@@ -23,10 +23,10 @@ import (
 	"os"
 	"testing"
 
+	"vitess.io/vitess/go/test/endtoend/utils"
+
 	"github.com/stretchr/testify/require"
 	"gotest.tools/assert"
-
-	"vitess.io/vitess/go/sqltypes"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -44,7 +44,6 @@ var (
     PRIMARY KEY (id)
 ) ENGINE=Innodb;
 
-
 CREATE TABLE lookup1 (
     field BIGINT NOT NULL,
     keyspace_id binary(8),
@@ -56,6 +55,12 @@ CREATE TABLE lookup2 (
     keyspace_id binary(8),
     UNIQUE KEY (field2)
 ) ENGINE=Innodb;
+
+CREATE TABLE thex (
+    id VARBINARY(64) NOT NULL,
+    field BIGINT NOT NULL,
+    PRIMARY KEY (id)
+) ENGINE=InnoDB;
 `
 
 	VSchema = `
@@ -64,6 +69,18 @@ CREATE TABLE lookup2 (
     "vindexes": {
         "hash": {
             "type": "hash"
+        },
+        "binary_vdx": {
+            "type": "binary"
+        },
+        "binary_md5_vdx": {
+            "type": "binary_md5"
+        },
+        "xxhash_vdx": {
+            "type": "xxhash"
+        },
+        "numeric_vdx": {
+            "type": "numeric"
         },
         "lookup1": {
             "type": "consistent_lookup",
@@ -118,6 +135,14 @@ CREATE TABLE lookup2 (
                     "name": "hash"
                 }
             ]
+        },
+        "thex": {
+            "column_vindexes": [
+                {
+                    "column": "id",
+                    "name": "binary_vdx"
+                }
+            ]
         }
     }
 }`
@@ -143,7 +168,7 @@ func TestMain(m *testing.M) {
 			SchemaSQL: SchemaSQL,
 			VSchema:   VSchema,
 		}
-		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 1, true)
+		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 0, false)
 		if err != nil {
 			return 1
 		}
@@ -162,6 +187,28 @@ func TestMain(m *testing.M) {
 	os.Exit(exitCode)
 }
 
+func TestVindexHexTypes(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.Nil(t, err)
+	defer conn.Close()
+
+	utils.Exec(t, conn, "INSERT INTO thex (id, field) VALUES "+
+		"(0x01,1), "+
+		"(x'a5',2), "+
+		"(0x48656c6c6f20476f7068657221,3), "+
+		"(x'c26caa1a5eb94096d29a1bec',4)")
+	result := utils.Exec(t, conn, "select id, field from thex order by id")
+
+	expected :=
+		"[[VARBINARY(\"\\x01\") INT64(1)] " +
+			"[VARBINARY(\"Hello Gopher!\") INT64(3)] " +
+			"[VARBINARY(\"\\xa5\") INT64(2)] " +
+			"[VARBINARY(\"\\xc2l\\xaa\\x1a^\\xb9@\\x96Қ\\x1b\\xec\") INT64(4)]]"
+	assert.Equal(t, expected, fmt.Sprintf("%v", result.Rows))
+}
+
 func TestVindexBindVarOverlap(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
@@ -169,7 +216,7 @@ func TestVindexBindVarOverlap(t *testing.T) {
 	require.Nil(t, err)
 	defer conn.Close()
 
-	exec(t, conn, "INSERT INTO t1 (id, field, field2) VALUES "+
+	utils.Exec(t, conn, "INSERT INTO t1 (id, field, field2) VALUES "+
 		"(0,1,2), "+
 		"(1,2,3), "+
 		"(2,3,4), "+
@@ -191,7 +238,7 @@ func TestVindexBindVarOverlap(t *testing.T) {
 		"(18,19,20), "+
 		"(19,20,21), "+
 		"(20,21,22)")
-	result := exec(t, conn, "select id, field, field2 from t1 order by id")
+	result := utils.Exec(t, conn, "select id, field, field2 from t1 order by id")
 
 	expected :=
 		"[[INT64(0) INT64(1) INT64(2)] " +
@@ -216,11 +263,4 @@ func TestVindexBindVarOverlap(t *testing.T) {
 			"[INT64(19) INT64(20) INT64(21)] " +
 			"[INT64(20) INT64(21) INT64(22)]]"
 	assert.Equal(t, expected, fmt.Sprintf("%v", result.Rows))
-}
-
-func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
-	t.Helper()
-	qr, err := conn.ExecuteFetch(query, 1000, true)
-	require.NoError(t, err)
-	return qr
 }

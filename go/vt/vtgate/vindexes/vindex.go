@@ -17,6 +17,7 @@ limitations under the License.
 package vindexes
 
 import (
+	"context"
 	"fmt"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -35,8 +36,8 @@ import (
 // in the current context and session of a VTGate request. Vindexes
 // can use this interface to execute lookup queries.
 type VCursor interface {
-	Execute(method string, query string, bindvars map[string]*querypb.BindVariable, rollbackOnError bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error)
-	ExecuteKeyspaceID(keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, rollbackOnError, autocommit bool) (*sqltypes.Result, error)
+	Execute(ctx context.Context, method string, query string, bindvars map[string]*querypb.BindVariable, rollbackOnError bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error)
+	ExecuteKeyspaceID(ctx context.Context, keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, rollbackOnError, autocommit bool) (*sqltypes.Result, error)
 	InTransactionAndIsDML() bool
 	LookupRowLockShardSession() vtgatepb.CommitOrder
 }
@@ -77,18 +78,25 @@ type SingleColumn interface {
 	// a KeyRange, or a single KeyspaceID.
 	// If the Vindex is non-unique, each id would map to either
 	// a KeyRange, or a list of KeyspaceID.
-	Map(vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error)
+	Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error)
 
 	// Verify returns true for every id that successfully maps to the
 	// specified keyspace id.
-	Verify(vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error)
+	Verify(ctx context.Context, vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error)
 }
 
 // MultiColumn defines the interface for a multi-column vindex.
 type MultiColumn interface {
 	Vindex
-	Map(vcursor VCursor, rowsColValues [][]sqltypes.Value) ([]key.Destination, error)
-	Verify(vcursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte) ([]bool, error)
+	Map(ctx context.Context, vcursor VCursor, rowsColValues [][]sqltypes.Value) ([]key.Destination, error)
+	Verify(ctx context.Context, vcursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte) ([]bool, error)
+	// PartialVindex returns true if subset of columns can be passed in to the vindex Map and Verify function.
+	PartialVindex() bool
+}
+
+// Hashing defined the interface for the vindexes that export the Hash function to be used by multi-column vindex.
+type Hashing interface {
+	Hash(id sqltypes.Value) ([]byte, error)
 }
 
 // A Reversible vindex is one that can perform a
@@ -120,19 +128,24 @@ type Prefixable interface {
 type Lookup interface {
 	// Create creates an association between ids and ksids. If ignoreMode
 	// is true, then the Create should ignore dup key errors.
-	Create(vc VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte, ignoreMode bool) error
+	Create(ctx context.Context, vcursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte, ignoreMode bool) error
 
-	Delete(vc VCursor, rowsColValues [][]sqltypes.Value, ksid []byte) error
+	Delete(ctx context.Context, vcursor VCursor, rowsColValues [][]sqltypes.Value, ksid []byte) error
 
 	// Update replaces the mapping of old values with new values for a keyspace id.
-	Update(vc VCursor, oldValues []sqltypes.Value, ksid []byte, newValues []sqltypes.Value) error
+	Update(ctx context.Context, vcursor VCursor, oldValues []sqltypes.Value, ksid []byte, newValues []sqltypes.Value) error
+}
+
+// LookupBackfill interfaces all lookup vindexes that can backfill rows, such as LookupUnique.
+type LookupBackfill interface {
+	IsBackfilling() bool
 }
 
 // WantOwnerInfo defines the interface that a vindex must
 // satisfy to request info about the owner table. This information can
 // be used to query the owner's table for the owning row's presence.
 type WantOwnerInfo interface {
-	SetOwnerInfo(keyspace, table string, cols []sqlparser.ColIdent) error
+	SetOwnerInfo(keyspace, table string, cols []sqlparser.IdentifierCI) error
 }
 
 // A NewVindexFunc is a function that creates a Vindex based on the
@@ -164,23 +177,23 @@ func CreateVindex(vindexType, name string, params map[string]string) (Vindex, er
 }
 
 // Map invokes the Map implementation supplied by the vindex.
-func Map(vindex Vindex, vcursor VCursor, rowsColValues [][]sqltypes.Value) ([]key.Destination, error) {
+func Map(ctx context.Context, vindex Vindex, vcursor VCursor, rowsColValues [][]sqltypes.Value) ([]key.Destination, error) {
 	switch vindex := vindex.(type) {
 	case MultiColumn:
-		return vindex.Map(vcursor, rowsColValues)
+		return vindex.Map(ctx, vcursor, rowsColValues)
 	case SingleColumn:
-		return vindex.Map(vcursor, firstColsOnly(rowsColValues))
+		return vindex.Map(ctx, vcursor, firstColsOnly(rowsColValues))
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vindex '%T' does not have Map function", vindex)
 }
 
 // Verify invokes the Verify implementation supplied by the vindex.
-func Verify(vindex Vindex, vcursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte) ([]bool, error) {
+func Verify(ctx context.Context, vindex Vindex, vcursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte) ([]bool, error) {
 	switch vindex := vindex.(type) {
 	case MultiColumn:
-		return vindex.Verify(vcursor, rowsColValues, ksids)
+		return vindex.Verify(ctx, vcursor, rowsColValues, ksids)
 	case SingleColumn:
-		return vindex.Verify(vcursor, firstColsOnly(rowsColValues), ksids)
+		return vindex.Verify(ctx, vcursor, firstColsOnly(rowsColValues), ksids)
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vindex '%T' does not have Verify function", vindex)
 }

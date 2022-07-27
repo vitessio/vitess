@@ -23,7 +23,6 @@ package zkctl
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"os/exec"
@@ -39,10 +38,10 @@ import (
 )
 
 const (
-	// startWaitTime is the number of seconds to wait at Start.
-	startWaitTime = 20
-	// shutdownWaitTime is the number of seconds to wait at Shutdown.
-	shutdownWaitTime = 20
+	// startWaitTime is how long to wait at Start.
+	startWaitTime = 30 * time.Second
+	// shutdownWaitTime is how long to wait at Shutdown.
+	shutdownWaitTime = 20 * time.Second
 )
 
 // Zkd manages the running of ZooKeeper servers.
@@ -94,25 +93,29 @@ func (zkd *Zkd) Start() error {
 	}
 
 	// give it some time to succeed - usually by the time the socket emerges
-	// we are in good shape
-	for i := 0; i < startWaitTime; i++ {
-		zkAddr := fmt.Sprintf(":%v", zkd.config.ClientPort)
+	// we are in good shape, but not always. So let's continue to retry until
+	// we get an imok response from the socket or we timeout.
+	timeout := time.Now().Add(startWaitTime)
+	zkAddr := fmt.Sprintf(":%v", zkd.config.ClientPort)
+	for time.Now().Before(timeout) {
 		conn, connErr := net.Dial("tcp", zkAddr)
 		if connErr != nil {
 			err = connErr
-			time.Sleep(time.Second)
-			continue
 		} else {
-			err = nil
 			conn.Write([]byte("ruok"))
 			reply := make([]byte, 4)
 			conn.Read(reply)
-			if string(reply) != "imok" {
-				err = fmt.Errorf("local zk unhealthy: %v %v", zkAddr, reply)
-			}
 			conn.Close()
-			break
+			if string(reply) == "imok" {
+				err = nil
+				break
+			}
+			err = fmt.Errorf("local zk unhealthy: %v %v", zkAddr, reply)
 		}
+		time.Sleep(time.Second)
+	}
+	if err != nil {
+		return err
 	}
 	zkd.done = make(chan struct{})
 	go func(done chan<- struct{}) {
@@ -126,7 +129,7 @@ func (zkd *Zkd) Start() error {
 // Shutdown kills a ZooKeeper server, but keeps its data dir intact.
 func (zkd *Zkd) Shutdown() error {
 	log.Infof("zkctl.Shutdown")
-	pidData, err := ioutil.ReadFile(zkd.config.PidFile())
+	pidData, err := os.ReadFile(zkd.config.PidFile())
 	if err != nil {
 		return err
 	}
@@ -138,7 +141,8 @@ func (zkd *Zkd) Shutdown() error {
 	if err != nil && err != syscall.ESRCH {
 		return err
 	}
-	for i := 0; i < shutdownWaitTime; i++ {
+	timeout := time.Now().Add(shutdownWaitTime)
+	for time.Now().Before(timeout) {
 		if syscall.Kill(pid, syscall.SIGKILL) == syscall.ESRCH {
 			return nil
 		}
@@ -173,7 +177,7 @@ func (zkd *Zkd) Init() error {
 
 	configData, err := zkd.makeCfg()
 	if err == nil {
-		err = ioutil.WriteFile(zkd.config.ConfigFile(), []byte(configData), 0664)
+		err = os.WriteFile(zkd.config.ConfigFile(), []byte(configData), 0664)
 	}
 	if err != nil {
 		log.Errorf("failed creating %v: %v", zkd.config.ConfigFile(), err)
@@ -191,8 +195,21 @@ func (zkd *Zkd) Init() error {
 		return err
 	}
 
-	zkAddr := fmt.Sprintf("localhost:%v", zkd.config.ClientPort)
-	zk, session, err := zookeeper.Connect([]string{zkAddr}, startWaitTime*time.Second)
+	var (
+		zk      *zookeeper.Conn
+		session <-chan zookeeper.Event
+		zkAddr  = fmt.Sprintf("localhost:%v", zkd.config.ClientPort)
+	)
+
+	// Let's retry to deal with ephemeral network issues or CI slowness.
+	timeout := time.Now().Add(startWaitTime)
+	for time.Now().Before(timeout) {
+		zk, session, err = zookeeper.Connect([]string{zkAddr}, startWaitTime)
+		if err == nil {
+			break
+		}
+		time.Sleep(1 * time.Second)
+	}
 	if err != nil {
 		return err
 	}

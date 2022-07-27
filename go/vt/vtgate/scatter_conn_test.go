@@ -44,17 +44,17 @@ import (
 func TestExecuteFailOnAutocommit(t *testing.T) {
 
 	createSandbox("TestExecuteFailOnAutocommit")
-	hc := discovery.NewFakeHealthCheck()
+	hc := discovery.NewFakeHealthCheck(nil)
 	sc := newTestScatterConn(hc, new(sandboxTopo), "aa")
-	sbc0 := hc.AddTestTablet("aa", "0", 1, "TestExecuteFailOnAutocommit", "0", topodatapb.TabletType_MASTER, true, 1, nil)
-	sbc1 := hc.AddTestTablet("aa", "1", 1, "TestExecuteFailOnAutocommit", "1", topodatapb.TabletType_MASTER, true, 1, nil)
+	sbc0 := hc.AddTestTablet("aa", "0", 1, "TestExecuteFailOnAutocommit", "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
+	sbc1 := hc.AddTestTablet("aa", "1", 1, "TestExecuteFailOnAutocommit", "1", topodatapb.TabletType_PRIMARY, true, 1, nil)
 
 	rss := []*srvtopo.ResolvedShard{
 		{
 			Target: &querypb.Target{
 				Keyspace:   "TestExecuteFailOnAutocommit",
 				Shard:      "0",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			Gateway: sbc0,
 		},
@@ -62,7 +62,7 @@ func TestExecuteFailOnAutocommit(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   "TestExecuteFailOnAutocommit",
 				Shard:      "1",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			Gateway: sbc1,
 		},
@@ -89,7 +89,7 @@ func TestExecuteFailOnAutocommit(t *testing.T) {
 		InTransaction: true,
 		ShardSessions: []*vtgatepb.Session_ShardSession{
 			{
-				Target:        &querypb.Target{Keyspace: "TestExecuteFailOnAutocommit", Shard: "0", TabletType: topodatapb.TabletType_MASTER, Cell: "aa"},
+				Target:        &querypb.Target{Keyspace: "TestExecuteFailOnAutocommit", Shard: "0", TabletType: topodatapb.TabletType_PRIMARY, Cell: "aa"},
 				TransactionId: 123,
 				TabletAlias:   nil,
 			},
@@ -107,7 +107,7 @@ func TestExecuteFailOnAutocommit(t *testing.T) {
 func TestReservedOnMultiReplica(t *testing.T) {
 	keyspace := "keyspace"
 	createSandbox(keyspace)
-	hc := discovery.NewFakeHealthCheck()
+	hc := discovery.NewFakeHealthCheck(nil)
 	sc := newTestScatterConn(hc, new(sandboxTopo), "aa")
 	sbc0_1 := hc.AddTestTablet("aa", "0", 1, keyspace, "0", topodatapb.TabletType_REPLICA, true, 1, nil)
 	sbc0_2 := hc.AddTestTablet("aa", "2", 1, keyspace, "0", topodatapb.TabletType_REPLICA, true, 1, nil)
@@ -252,7 +252,7 @@ func TestReservedBeginTableDriven(t *testing.T) {
 	for _, test := range tests {
 		keyspace := "keyspace"
 		createSandbox(keyspace)
-		hc := discovery.NewFakeHealthCheck()
+		hc := discovery.NewFakeHealthCheck(nil)
 		sc := newTestScatterConn(hc, new(sandboxTopo), "aa")
 		sbc0 := hc.AddTestTablet("aa", "0", 1, keyspace, "0", topodatapb.TabletType_REPLICA, true, 1, nil)
 		sbc1 := hc.AddTestTablet("aa", "1", 1, keyspace, "1", topodatapb.TabletType_REPLICA, true, 1, nil)
@@ -289,7 +289,7 @@ func TestReservedBeginTableDriven(t *testing.T) {
 func TestReservedConnFail(t *testing.T) {
 	keyspace := "keyspace"
 	createSandbox(keyspace)
-	hc := discovery.NewFakeHealthCheck()
+	hc := discovery.NewFakeHealthCheck(nil)
 	sc := newTestScatterConn(hc, new(sandboxTopo), "aa")
 	sbc0 := hc.AddTestTablet("aa", "0", 1, keyspace, "0", topodatapb.TabletType_REPLICA, true, 1, nil)
 	_ = hc.AddTestTablet("aa", "1", 1, keyspace, "1", topodatapb.TabletType_REPLICA, true, 1, nil)
@@ -326,7 +326,7 @@ func TestReservedConnFail(t *testing.T) {
 	oldRId = session.Session.ShardSessions[0].ReservedId
 
 	sbc0.Queries = nil
-	sbc0.EphemeralShardErr = vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "operation not allowed in state NOT_SERVING during query: query1")
+	sbc0.EphemeralShardErr = mysql.NewSQLError(mysql.ERQueryInterrupted, mysql.SSUnknownSQLState, "transaction 123 in use: for tx killer rollback")
 	_ = executeOnShardsReturnsErr(t, res, keyspace, sc, session, destinations)
 	assert.Equal(t, 2, len(sbc0.Queries), "one for the failed attempt, and one for the retry")
 	require.Equal(t, 1, len(session.ShardSessions))
@@ -334,7 +334,15 @@ func TestReservedConnFail(t *testing.T) {
 	oldRId = session.Session.ShardSessions[0].ReservedId
 
 	sbc0.Queries = nil
-	sbc0.EphemeralShardErr = vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "invalid tablet type: REPLICA, want: MASTER or MASTER")
+	sbc0.EphemeralShardErr = vterrors.New(vtrpcpb.Code_CLUSTER_EVENT, "operation not allowed in state NOT_SERVING during query: query1")
+	_ = executeOnShardsReturnsErr(t, res, keyspace, sc, session, destinations)
+	assert.Equal(t, 2, len(sbc0.Queries), "one for the failed attempt, and one for the retry")
+	require.Equal(t, 1, len(session.ShardSessions))
+	assert.NotEqual(t, oldRId, session.Session.ShardSessions[0].ReservedId, "should have recreated a reserved connection since the last connection was lost")
+	oldRId = session.Session.ShardSessions[0].ReservedId
+
+	sbc0.Queries = nil
+	sbc0.EphemeralShardErr = vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "invalid tablet type: REPLICA, want: PRIMARY")
 	_ = executeOnShardsReturnsErr(t, res, keyspace, sc, session, destinations)
 	assert.Equal(t, 2, len(sbc0.Queries), "one for the failed attempt, and one for the retry")
 	require.Equal(t, 1, len(session.ShardSessions))
@@ -420,6 +428,10 @@ func TestIsConnClosed(t *testing.T) {
 		"tx not found missing tx id",
 		mysql.NewSQLError(mysql.ERQueryInterrupted, mysql.SSUnknownSQLState, "transaction not found"),
 		false,
+	}, {
+		"tx getting killed by tx killer",
+		mysql.NewSQLError(mysql.ERQueryInterrupted, mysql.SSUnknownSQLState, "transaction 111 in use: for tx killer rollback"),
+		true,
 	}}
 
 	for _, tCase := range testCases {

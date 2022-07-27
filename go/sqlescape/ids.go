@@ -14,24 +14,49 @@ limitations under the License.
 package sqlescape
 
 import (
-	"bytes"
+	"strings"
 )
 
 // EscapeID returns a backticked identifier given an input string.
 func EscapeID(in string) string {
-	var buf bytes.Buffer
+	var buf strings.Builder
 	WriteEscapeID(&buf, in)
 	return buf.String()
 }
 
 // WriteEscapeID writes a backticked identifier from an input string into buf.
-func WriteEscapeID(buf *bytes.Buffer, in string) {
+func WriteEscapeID(buf *strings.Builder, in string) {
+	// growing by 4 more than the length, gives us room
+	// for guaranteed escaping with backticks on each end,
+	// plus a small amount of room just in case there are
+	// backticks within the symbol that needs to be double
+	// escaped. This is an unlikely edge case.
+	buf.Grow(4 + len(in))
+
 	buf.WriteByte('`')
-	for _, c := range in {
-		buf.WriteRune(c)
-		if c == '`' {
+	for i := 0; i < len(in); i++ {
+		buf.WriteByte(in[i])
+		if in[i] == '`' {
 			buf.WriteByte('`')
 		}
 	}
 	buf.WriteByte('`')
+}
+
+// EscapeIDs runs sqlescape.EscapeID() for all entries in the slice.
+func EscapeIDs(identifiers []string) []string {
+	result := make([]string, len(identifiers))
+	for i := range identifiers {
+		result[i] = EscapeID(identifiers[i])
+	}
+	return result
+}
+
+// UnescapeID reverses any backticking in the input string.
+func UnescapeID(in string) string {
+	l := len(in)
+	if l >= 2 && in[0] == '`' && in[l-1] == '`' {
+		return in[1 : l-1]
+	}
+	return in
 }

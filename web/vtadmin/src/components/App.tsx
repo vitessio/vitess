@@ -18,7 +18,7 @@ import { BrowserRouter as Router, Redirect, Route, Switch } from 'react-router-d
 
 import style from './App.module.scss';
 import { Tablets } from './routes/Tablets';
-import { Debug } from './routes/Debug';
+import { Settings } from './routes/Settings';
 import { NavRail } from './NavRail';
 import { Error404 } from './routes/Error404';
 import { Clusters } from './routes/Clusters';
@@ -32,6 +32,12 @@ import { Workflow } from './routes/workflow/Workflow';
 import { VTExplain } from './routes/VTExplain';
 import { Keyspace } from './routes/keyspace/Keyspace';
 import { Tablet } from './routes/tablet/Tablet';
+import { Backups } from './routes/Backups';
+import { Shard } from './routes/shard/Shard';
+import { Vtctlds } from './routes/Vtctlds';
+import { SnackbarContainer } from './Snackbar';
+import { isReadOnlyMode } from '../util/env';
+import { CreateKeyspace } from './routes/createKeyspace/CreateKeyspace';
 
 export const App = () => {
     return (
@@ -40,9 +46,13 @@ export const App = () => {
                 <div className={style.navContainer}>
                     <NavRail />
                 </div>
-
+                <SnackbarContainer />
                 <div className={style.mainContainer}>
                     <Switch>
+                        <Route path="/backups">
+                            <Backups />
+                        </Route>
+
                         <Route path="/clusters">
                             <Clusters />
                         </Route>
@@ -51,8 +61,18 @@ export const App = () => {
                             <Gates />
                         </Route>
 
-                        <Route path="/keyspaces">
+                        <Route exact path="/keyspaces">
                             <Keyspaces />
+                        </Route>
+
+                        {!isReadOnlyMode() && (
+                            <Route exact path="/keyspaces/create">
+                                <CreateKeyspace />
+                            </Route>
+                        )}
+
+                        <Route path="/keyspace/:clusterID/:keyspace/shard/:shard">
+                            <Shard />
                         </Route>
 
                         <Route path="/keyspace/:clusterID/:name">
@@ -75,6 +95,10 @@ export const App = () => {
                             <Tablet />
                         </Route>
 
+                        <Route path="/vtctlds">
+                            <Vtctlds />
+                        </Route>
+
                         <Route path="/vtexplain">
                             <VTExplain />
                         </Route>
@@ -91,11 +115,11 @@ export const App = () => {
                             <Workflow />
                         </Route>
 
-                        <Route path="/debug">
-                            <Debug />
+                        <Route path="/settings">
+                            <Settings />
                         </Route>
 
-                        <Redirect exact from="/" to="/tablets" />
+                        <Redirect exact from="/" to="/schemas" />
 
                         <Route>
                             <Error404 />

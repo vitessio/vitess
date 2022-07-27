@@ -126,7 +126,7 @@ var locksKey locksKeyType
 //     as well as the associated horizontal resharding operations.
 //   * vertical resharding: includes changing the keyspace 'ServedFrom'
 //     field, as well as the associated vertical resharding operations.
-//   * 'vtctl SetShardIsMasterServing' emergency operations
+//   * 'vtctl SetShardIsPrimaryServing' emergency operations
 //   * 'vtctl SetShardTabletControl' emergency operations
 //   * 'vtctl SourceShardAdd' and 'vtctl SourceShardDelete' emergency operations
 // * keyspace-wide schema changes
@@ -208,6 +208,26 @@ func CheckKeyspaceLocked(ctx context.Context, keyspace string) error {
 	return nil
 }
 
+// CheckKeyspaceLockedAndRenew can be called on a context to make sure we have the lock
+// for a given keyspace. The function also attempts to renew the lock.
+func CheckKeyspaceLockedAndRenew(ctx context.Context, keyspace string) error {
+	// extract the locksInfo pointer
+	i, ok := ctx.Value(locksKey).(*locksInfo)
+	if !ok {
+		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "keyspace %v is not locked (no locksInfo)", keyspace)
+	}
+	i.mu.Lock()
+	defer i.mu.Unlock()
+
+	// find the individual entry
+	entry, ok := i.info[keyspace]
+	if !ok {
+		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "keyspace %v is not locked (no lockInfo in map)", keyspace)
+	}
+	// try renewing lease:
+	return entry.lockDescriptor.Check(ctx)
+}
+
 // lockKeyspace will lock the keyspace in the topology server.
 // unlockKeyspace should be called if this returns no error.
 func (l *Lock) lockKeyspace(ctx context.Context, ts *Server, keyspace string) (LockDescriptor, error) {
@@ -266,11 +286,11 @@ func (l *Lock) unlockKeyspace(ctx context.Context, ts *Server, keyspace string, 
 // UpdateShardFields, which is not locking the shard object. The
 // current list of actions that lock a shard are:
 // * all Vitess-controlled re-parenting operations:
-//   * InitShardMaster
+//   * InitShardPrimary
 //   * PlannedReparentShard
 //   * EmergencyReparentShard
 // * operations that we don't want to conflict with re-parenting:
-//   * DeleteTablet when it's the shard's current master
+//   * DeleteTablet when it's the shard's current primary
 //
 func (ts *Server) LockShard(ctx context.Context, keyspace, shard, action string) (context.Context, func(*error), error) {
 	i, ok := ctx.Value(locksKey).(*locksInfo)

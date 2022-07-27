@@ -13,23 +13,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Unfortunately golangci-lint does not work well on checking just modified files.
-# We will enable it for everything here, but with most of the linters disabled.
-# See: https://github.com/vitessio/vitess/issues/5503
-
-gofiles=$(git diff --cached --name-only --diff-filter=ACM | grep '^go/.*\.go$' | grep -v '^go/vt/proto/' | grep -v 'go/vt/sqlparser/sql.go')
-
-# xargs -n1 because dirname on MacOS does not support multiple arguments.
-gopackages=$(echo $gofiles | xargs -n1 dirname | sort -u)
-
 GOLANGCI_LINT=$(command -v golangci-lint >/dev/null 2>&1)
 if [ $? -eq 1 ]; then
   echo "Downloading golangci-lint..."
-  curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.34.1
+  go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.46.2
 fi
 
-for gopackage in $gopackages
-do
- echo "Linting $gopackage"
- golangci-lint run --fast $gopackage
-done
+gofiles=$(git diff --cached --name-only --diff-filter=ACM | grep '^go/.*\.go$')
+if [ -z "$gofiles" ]; then
+  exit 0
+fi
+
+gopackages=$(echo "$gofiles" | xargs -n1 dirname | sort -u | paste -sd ' ' -)
+
+echo "Linting $gopackages"
+golangci-lint run -E revive $gopackages

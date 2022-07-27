@@ -3,8 +3,8 @@ package common
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
+	"os"
 
 	vtfcr "vitess.io/vitess/go/vt/vttablet/customrule/filecustomrule"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
@@ -18,7 +18,7 @@ func GetRules(path string) *rules.Rules {
 	return rules
 }
 
-func MustPrintJSON(obj interface{}) {
+func MustPrintJSON(obj any) {
 	enc, err := json.MarshalIndent(obj, "", "  ")
 	if err != nil {
 		log.Fatalf("Unable to marshal object: %v", err)
@@ -26,13 +26,13 @@ func MustPrintJSON(obj interface{}) {
 	fmt.Printf("%v\n", string(enc))
 }
 
-func MustWriteJSON(obj interface{}, path string) {
+func MustWriteJSON(obj any, path string) {
 	enc, err := json.MarshalIndent(obj, "", "  ")
 	if err != nil {
 		log.Fatalf("Unable to marshal object: %v", err)
 	}
 
-	err = ioutil.WriteFile(path, enc, 0400)
+	err = os.WriteFile(path, enc, 0400)
 	if err != nil {
 		log.Fatalf("Unable to save new JSON: %v", err)
 	}

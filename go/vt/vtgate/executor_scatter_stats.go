@@ -61,7 +61,7 @@ func (e *Executor) gatherScatterStats() (statsResults, error) {
 	plans := make([]*engine.Plan, 0)
 	routes := make([]*engine.Route, 0)
 	// First we go over all plans and collect statistics and all query plans for scatter queries
-	e.plans.ForEach(func(value interface{}) bool {
+	e.plans.ForEach(func(value any) bool {
 		plan := value.(*engine.Plan)
 		scatter := engine.Find(findScatter, plan.Instructions)
 		readOnly := !engine.Exists(isUpdating, plan.Instructions)
@@ -134,7 +134,7 @@ func (e *Executor) WriteScatterStats(w http.ResponseWriter) {
 	}
 
 	t := template.New("template")
-	t, err = t.Parse(html)
+	t, err = t.Parse(statsHTML)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
@@ -145,7 +145,7 @@ func (e *Executor) WriteScatterStats(w http.ResponseWriter) {
 		http.Error(w, err.Error(), 500)
 	}
 
-	_, err = w.Write([]byte(fmt.Sprintf("Percentage of time spent on scatter queries: %2.2f%%", results.PercentTimeScatter)))
+	_, err = fmt.Fprintf(w, "Percentage of time spent on scatter queries: %2.2f%%", results.PercentTimeScatter)
 
 	if err != nil {
 		http.Error(w, err.Error(), 500)
@@ -153,7 +153,7 @@ func (e *Executor) WriteScatterStats(w http.ResponseWriter) {
 
 }
 
-const html = `
+const statsHTML = `
 <thead>
 	<tr>
 		<th>Query</th>
@@ -181,7 +181,7 @@ const html = `
 func findScatter(p engine.Primitive) bool {
 	switch v := p.(type) {
 	case *engine.Route:
-		return v.Opcode == engine.SelectScatter
+		return v.Opcode == engine.Scatter
 	default:
 		return false
 	}

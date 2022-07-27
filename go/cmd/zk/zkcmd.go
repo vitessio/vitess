@@ -19,9 +19,10 @@ package main
 import (
 	"archive/zip"
 	"bytes"
+	"context"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -32,16 +33,18 @@ import (
 	"syscall"
 	"time"
 
-	"context"
-
+	"github.com/spf13/pflag"
 	"github.com/z-division/go-zookeeper/zk"
-	"golang.org/x/crypto/ssh/terminal"
+	"golang.org/x/term"
 
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo/zk2topo"
 	"vitess.io/vitess/go/vt/vtctl"
+
+	// Include deprecation warnings for soon-to-be-unsupported flag invocations.
+	_flag "vitess.io/vitess/go/internal/flag"
 )
 
 var doc = `
@@ -137,13 +140,13 @@ var (
 func main() {
 	defer exit.Recover()
 	defer logutil.Flush()
-	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage of %v:\n", os.Args[0])
-		flag.PrintDefaults()
-		fmt.Fprint(os.Stderr, doc)
-	}
-	flag.Parse()
-	args := flag.Args()
+
+	fs := pflag.NewFlagSet("zkcmd", pflag.ExitOnError)
+	_flag.SetUsage(flag.CommandLine, _flag.UsageOptions{ // TODO: hmmm
+		Epilogue: func(w io.Writer) { fmt.Fprint(w, doc) },
+	})
+	_flag.Parse(fs)
+	args := _flag.Args()
 	if len(args) == 0 {
 		flag.Usage()
 		exit.Return(1)
@@ -156,6 +159,7 @@ func main() {
 		log.Exitf("Unknown command %v", cmdName)
 	}
 	subFlags := flag.NewFlagSet(cmdName, flag.ExitOnError)
+	_flag.SetUsage(subFlags, _flag.UsageOptions{})
 
 	// Create a context for the command, cancel it if we get a signal.
 	ctx, cancel := context.WithCancel(context.Background())
@@ -558,7 +562,7 @@ func cmdCat(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
 			decoded = string(data)
 		}
 		fmt.Print(decoded)
-		if len(decoded) > 0 && decoded[len(decoded)-1] != '\n' && (terminal.IsTerminal(int(os.Stdout.Fd())) || *longListing) {
+		if len(decoded) > 0 && decoded[len(decoded)-1] != '\n' && (term.IsTerminal(int(os.Stdout.Fd())) || *longListing) {
 			fmt.Print("\n")
 		}
 	}
@@ -607,7 +611,7 @@ func cmdEdit(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
 		return fmt.Errorf("edit: cannot start $EDITOR: %v", err)
 	}
 
-	fileData, err := ioutil.ReadFile(tmpPath)
+	fileData, err := os.ReadFile(tmpPath)
 	if err != nil {
 		os.Remove(tmpPath)
 		return fmt.Errorf("edit: cannot read file %v", err)
@@ -784,7 +788,7 @@ func getPathData(ctx context.Context, filePath string) ([]byte, error) {
 	var err error
 	file, err := os.Open(filePath)
 	if err == nil {
-		data, err := ioutil.ReadAll(file)
+		data, err := io.ReadAll(file)
 		if err == nil {
 			return data, err
 		}
@@ -800,7 +804,7 @@ func setPathData(ctx context.Context, filePath string, data []byte) error {
 		}
 		return err
 	}
-	return ioutil.WriteFile(filePath, []byte(data), 0666)
+	return os.WriteFile(filePath, []byte(data), 0666)
 }
 
 func fileCp(ctx context.Context, srcPath, dstPath string) error {
@@ -954,7 +958,7 @@ func cmdUnzip(ctx context.Context, subFlags *flag.FlagSet, args []string) error 
 		if err != nil {
 			return fmt.Errorf("unzip: error %v", err)
 		}
-		data, err := ioutil.ReadAll(rc)
+		data, err := io.ReadAll(rc)
 		if err != nil {
 			return fmt.Errorf("unzip: failed reading archive: %v", err)
 		}

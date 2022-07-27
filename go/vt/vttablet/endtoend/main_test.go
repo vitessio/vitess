@@ -20,7 +20,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"testing"
 
@@ -62,6 +61,7 @@ func TestMain(m *testing.M) {
 				},
 			},
 			OnlyMySQL: true,
+			Charset:   "utf8mb4_general_ci",
 		}
 		if err := cfg.InitSchemas("vttest", testSchema, nil); err != nil {
 			fmt.Fprintf(os.Stderr, "InitSchemas failed: %v\n", err)
@@ -102,7 +102,7 @@ func TestMain(m *testing.M) {
 }
 
 func initTableACL() error {
-	file, err := ioutil.TempFile("", "tableacl.json")
+	file, err := os.CreateTemp("", "tableacl.json")
 	if err != nil {
 		return err
 	}

@@ -64,7 +64,7 @@ var (
 // mysqldPort needs to be unique per instance per machine.
 func NewMycnf(tabletUID uint32, mysqlPort int32) *Mycnf {
 	cnf := new(Mycnf)
-	cnf.path = MycnfFile(tabletUID)
+	cnf.Path = MycnfFile(tabletUID)
 	tabletDir := TabletDir(tabletUID)
 	cnf.ServerID = tabletUID
 	cnf.MysqlPort = mysqlPort

@@ -72,12 +72,12 @@ type StreamLogger struct {
 	name       string
 	size       int
 	mu         sync.Mutex
-	subscribed map[chan interface{}]string
+	subscribed map[chan any]string
 }
 
 // LogFormatter is the function signature used to format an arbitrary
 // message for the given output writer.
-type LogFormatter func(out io.Writer, params url.Values, message interface{}) error
+type LogFormatter func(out io.Writer, params url.Values, message any) error
 
 // New returns a new StreamLogger that can stream events to subscribers.
 // The size parameter defines the channel size for the subscribers.
@@ -85,13 +85,13 @@ func New(name string, size int) *StreamLogger {
 	return &StreamLogger{
 		name:       name,
 		size:       size,
-		subscribed: make(map[chan interface{}]string),
+		subscribed: make(map[chan any]string),
 	}
 }
 
 // Send sends message to all the writers subscribed to logger. Calling
 // Send does not block.
-func (logger *StreamLogger) Send(message interface{}) {
+func (logger *StreamLogger) Send(message any) {
 	logger.mu.Lock()
 	defer logger.mu.Unlock()
 
@@ -108,17 +108,17 @@ func (logger *StreamLogger) Send(message interface{}) {
 
 // Subscribe returns a channel which can be used to listen
 // for messages.
-func (logger *StreamLogger) Subscribe(name string) chan interface{} {
+func (logger *StreamLogger) Subscribe(name string) chan any {
 	logger.mu.Lock()
 	defer logger.mu.Unlock()
 
-	ch := make(chan interface{}, logger.size)
+	ch := make(chan any, logger.size)
 	logger.subscribed[ch] = name
 	return ch
 }
 
 // Unsubscribe removes the channel from the subscription.
-func (logger *StreamLogger) Unsubscribe(ch chan interface{}) {
+func (logger *StreamLogger) Unsubscribe(ch chan any) {
 	logger.mu.Lock()
 	defer logger.mu.Unlock()
 
@@ -163,7 +163,7 @@ func (logger *StreamLogger) ServeLogs(url string, logf LogFormatter) {
 //
 // Returns the channel used for the subscription which can be used to close
 // it.
-func (logger *StreamLogger) LogToFile(path string, logf LogFormatter) (chan interface{}, error) {
+func (logger *StreamLogger) LogToFile(path string, logf LogFormatter) (chan any, error) {
 	rotateChan := make(chan os.Signal, 1)
 	signal.Notify(rotateChan, syscall.SIGUSR2)
 
@@ -179,7 +179,7 @@ func (logger *StreamLogger) LogToFile(path string, logf LogFormatter) (chan inte
 		for {
 			select {
 			case record := <-logChan:
-				logf(f, formatParams, record)
+				logf(f, formatParams, record) // nolint:errcheck
 			case <-rotateChan:
 				f.Close()
 				f, _ = os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
@@ -199,7 +199,7 @@ type Formatter interface {
 // GetFormatter returns a formatter function for objects conforming to the
 // Formatter interface
 func GetFormatter(logger *StreamLogger) LogFormatter {
-	return func(w io.Writer, params url.Values, val interface{}) error {
+	return func(w io.Writer, params url.Values, val any) error {
 		fmter, ok := val.(Formatter)
 		if !ok {
 			_, err := fmt.Fprintf(w, "Error: unexpected value of type %T in %s!", val, logger.Name())

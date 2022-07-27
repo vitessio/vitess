@@ -58,13 +58,11 @@ func NewVtctlPipe(t *testing.T, ts *topo.Server) *VtctlPipe {
 		// make sure we use the right protocol
 		flag.Set("vtctl_client_protocol", "grpc")
 
-		// Enable all query groups
-		flag.Set("enable_queries", "true")
 		servenv.FireRunHooks()
 	})
 
 	// Listen on a random port
-	listener, err := net.Listen("tcp", ":0")
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("Cannot listen: %v", err)
 	}

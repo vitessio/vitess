@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# This is an example script that creates a quorum of ZooKeeper servers.
+# This is an example script that creates a quorum of Etcd servers.
 
 source ./env.sh
 
@@ -40,9 +40,9 @@ etcdctl --endpoints "http://${ETCD_SERVER}" mkdir /vitess/$cell &
 echo "add $cell CellInfo"
 set +e
 # shellcheck disable=SC2086
-vtctl $TOPOLOGY_FLAGS AddCellInfo \
-  -root /vitess/$cell \
-  -server_address "${ETCD_SERVER}" \
+vtctl $TOPOLOGY_FLAGS VtctldCommand AddCellInfo -- \
+  --root /vitess/$cell \
+  --server-address "${ETCD_SERVER}" \
   $cell
 set -e
 

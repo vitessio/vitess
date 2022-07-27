@@ -20,8 +20,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"gopkg.in/yaml.v2"
 )
 
 func TestMergeConfig(t *testing.T) {
@@ -140,78 +138,6 @@ func TestMergeConfig(t *testing.T) {
 
 			actual := tt.base.Merge(tt.override)
 			assert.Equal(t, tt.expected, actual)
-		})
-	}
-}
-
-func TestConfigUnmarshalYAML(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name   string
-		yaml   string
-		config Config
-		err    error
-	}{
-		{
-			name: "simple",
-			yaml: `name: cluster1
-id: c1`,
-			config: Config{
-				ID:                   "c1",
-				Name:                 "cluster1",
-				DiscoveryFlagsByImpl: map[string]map[string]string{},
-			},
-			err: nil,
-		},
-		{
-			name: "discovery flags",
-			yaml: `name: cluster1
-id: c1
-discovery: consul
-discovery-consul-vtgate-datacenter-tmpl: "dev-{{ .Cluster }}"
-discovery-zk-whatever: 5
-`,
-			config: Config{
-				ID:            "c1",
-				Name:          "cluster1",
-				DiscoveryImpl: "consul",
-				DiscoveryFlagsByImpl: map[string]map[string]string{
-					"consul": {
-						"vtgate-datacenter-tmpl": "dev-{{ .Cluster }}",
-					},
-					"zk": {
-						"whatever": "5",
-					},
-				},
-			},
-		},
-		{
-			name:   "errors",
-			yaml:   `name: "cluster1`,
-			config: Config{},
-			err:    assert.AnError,
-		},
-	}
-
-	for _, tt := range tests {
-		tt := tt
-
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			cfg := Config{
-				DiscoveryFlagsByImpl: map[string]map[string]string{},
-			}
-
-			err := yaml.Unmarshal([]byte(tt.yaml), &cfg)
-			if tt.err != nil {
-				assert.Error(t, err)
-				return
-			}
-
-			require.NoError(t, err)
-			assert.Equal(t, tt.config, cfg)
 		})
 	}
 }

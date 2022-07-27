@@ -50,14 +50,19 @@ func (p *poller) Status() (time.Duration, error) {
 		return 0, err
 	}
 
-	if !status.ReplicationRunning() {
+	// If replication is not currently running or we don't know what the lag is -- most commonly
+	// because the replica mysqld is in the process of trying to start replicating from its source
+	// but it hasn't yet reached the point where it can calculate the seconds_behind_master
+	// value and it's thus NULL -- then we will estimate the lag ourselves using the last seen
+	// value + the time elapsed since.
+	if !status.Healthy() || status.ReplicationLagUnknown {
 		if p.timeRecorded.IsZero() {
 			return 0, vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "replication is not running")
 		}
 		return time.Since(p.timeRecorded) + p.lag, nil
 	}
 
-	p.lag = time.Duration(status.SecondsBehindMaster) * time.Second
+	p.lag = time.Duration(status.ReplicationLagSeconds) * time.Second
 	p.timeRecorded = time.Now()
 	replicationLagSeconds.Set(int64(p.lag.Seconds()))
 	return p.lag, nil

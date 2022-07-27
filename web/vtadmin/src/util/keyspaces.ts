@@ -25,7 +25,7 @@ export type ShardsByState = { [k in ShardState]: vtctldata.IShard[] };
 
 export const getShardsByState = <K extends pb.IKeyspace>(keyspace: K | null | undefined): ShardsByState => {
     const grouped = groupBy(Object.values(keyspace?.shards || {}), (s) =>
-        s.shard?.is_master_serving ? ShardState.serving : ShardState.nonserving
+        s.shard?.is_primary_serving ? ShardState.serving : ShardState.nonserving
     );
 
     // Add exhaustive enum keys (since groupBy only returns a dictionary), as well as define defaults
@@ -33,4 +33,39 @@ export const getShardsByState = <K extends pb.IKeyspace>(keyspace: K | null | un
         [ShardState.serving]: grouped.serving || [],
         [ShardState.nonserving]: grouped.nonserving || [],
     };
+};
+
+export interface ShardRange {
+    start: number;
+    end: number;
+}
+
+/**
+ * getShardSortRange returns the start and end described by the shard name,
+ * in base 10. Ranges at the start/end of the shard range are parsed as
+ * minimum/maximum integer values. Useful for sorting shard names numerically.
+ */
+export const getShardSortRange = (shardName: string): ShardRange => {
+    if (shardName === '0' || shardName === '-') {
+        return {
+            start: Number.MIN_VALUE,
+            end: Number.MAX_VALUE,
+        };
+    }
+
+    const parsed = shardName.split('-');
+    if (parsed.length !== 2) {
+        throw Error(`could not parse sortable range from shard ${shardName}`);
+    }
+
+    // Parse the hexadecimal values into base 10 integers, and normalize the
+    // start and end of the ranges.
+    const start = parsed[0] === '' ? Number.MIN_VALUE : parseInt(parsed[0], 16);
+    const end = parsed[1] === '' ? Number.MAX_VALUE : parseInt(parsed[1], 16);
+
+    if (isNaN(start) || isNaN(end)) {
+        throw Error(`could not parse sortable range from shard ${shardName}`);
+    }
+
+    return { start, end };
 };

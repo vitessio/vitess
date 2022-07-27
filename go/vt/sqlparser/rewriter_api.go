@@ -35,7 +35,7 @@ package sqlparser
 // i.e., fields of basic types (strings, []byte, etc.) are ignored.
 //
 func Rewrite(node SQLNode, pre, post ApplyFunc) (result SQLNode) {
-	parent := &struct{ SQLNode }{node}
+	parent := &RootNode{node}
 
 	// this is the root-replacer, used when the user replaces the root of the ast
 	replacer := func(newNode SQLNode, _ SQLNode) {
@@ -50,6 +50,11 @@ func Rewrite(node SQLNode, pre, post ApplyFunc) (result SQLNode) {
 	a.rewriteSQLNode(parent, node, replacer)
 
 	return parent.SQLNode
+}
+
+// RootNode is the root node of the AST when rewriting. It is the first element of the tree.
+type RootNode struct {
+	SQLNode
 }
 
 // An ApplyFunc is invoked by Rewrite for each node n, even if n is nil,
@@ -67,6 +72,9 @@ type Cursor struct {
 	parent   SQLNode
 	replacer replacerFunc
 	node     SQLNode
+
+	// marks that the node has been replaced, and the new node should be visited
+	revisit bool
 }
 
 // Node returns the current Node.
@@ -80,6 +88,32 @@ func (c *Cursor) Parent() SQLNode { return c.parent }
 func (c *Cursor) Replace(newNode SQLNode) {
 	c.replacer(newNode, c.parent)
 	c.node = newNode
+}
+
+// ReplacerF returns a replace func that will work even when the cursor has moved to a different node.
+func (c *Cursor) ReplacerF() func(newNode SQLNode) {
+	replacer := c.replacer
+	parent := c.parent
+	return func(newNode SQLNode) {
+		replacer(newNode, parent)
+	}
+}
+
+// ReplaceAndRevisit replaces the current node in the parent field with this new object.
+// When used, this will abort the visitation of the current node - no post or children visited,
+// and the new node visited.
+func (c *Cursor) ReplaceAndRevisit(newNode SQLNode) {
+	switch newNode.(type) {
+	case SelectExprs:
+	default:
+		// We need to add support to the generated code for when to look at the revisit flag. At the moment it is only
+		// there for slices of SQLNode implementations
+		panic("no support added for this type yet")
+	}
+
+	c.replacer(newNode, c.parent)
+	c.node = newNode
+	c.revisit = true
 }
 
 type replacerFunc func(newNode, parent SQLNode)

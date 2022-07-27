@@ -19,19 +19,17 @@ package vtbackup
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
 	"testing"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/test/endtoend/sharding/initialsharding"
 	"vitess.io/vitess/go/vt/log"
 )
 
 var (
-	master           *cluster.Vttablet
+	primary          *cluster.Vttablet
 	replica1         *cluster.Vttablet
 	replica2         *cluster.Vttablet
 	localCluster     *cluster.LocalProcessCluster
@@ -44,14 +42,14 @@ var (
 	shardKsName      = fmt.Sprintf("%s/%s", keyspaceName, shardName)
 	dbCredentialFile string
 	commonTabletArg  = []string{
-		"-vreplication_healthcheck_topology_refresh", "1s",
-		"-vreplication_healthcheck_retry_delay", "1s",
-		"-vreplication_retry_delay", "1s",
-		"-degraded_threshold", "5s",
-		"-lock_tables_timeout", "5s",
-		"-watch_replication_stream",
-		"-enable_replication_reporter",
-		"-serving_state_grace_period", "1s"}
+		"--vreplication_healthcheck_topology_refresh", "1s",
+		"--vreplication_healthcheck_retry_delay", "1s",
+		"--vreplication_retry_delay", "1s",
+		"--degraded_threshold", "5s",
+		"--lock_tables_timeout", "5s",
+		"--watch_replication_stream",
+		"--enable_replication_reporter",
+		"--serving_state_grace_period", "1s"}
 )
 
 func TestMain(m *testing.M) {
@@ -80,26 +78,31 @@ func TestMain(m *testing.M) {
 			},
 		}
 		shard := &localCluster.Keyspaces[0].Shards[0]
-
-		// Create a new init_db.sql file that sets up passwords for all users.
-		// Then we use a db-credentials-file with the passwords.
-		dbCredentialFile = initialsharding.WriteDbCredentialToTmp(localCluster.TmpDirectory)
-		initDb, _ := ioutil.ReadFile(path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"))
-		sql := string(initDb)
-		newInitDBFile = path.Join(localCluster.TmpDirectory, "init_db_with_passwords.sql")
-		sql = sql + initialsharding.GetPasswordUpdateSQL(localCluster)
-		err = ioutil.WriteFile(newInitDBFile, []byte(sql), 0666)
+		vtctldClientProcess := cluster.VtctldClientProcessInstance("localhost", localCluster.VtctldProcess.GrpcPort, localCluster.TmpDirectory)
+		_, err = vtctldClientProcess.ExecuteCommandWithOutput("CreateKeyspace", keyspaceName, "--durability-policy=semi_sync")
 		if err != nil {
 			return 1, err
 		}
 
-		extraArgs := []string{"-db-credentials-file", dbCredentialFile}
-		commonTabletArg = append(commonTabletArg, "-db-credentials-file", dbCredentialFile)
+		// Create a new init_db.sql file that sets up passwords for all users.
+		// Then we use a db-credentials-file with the passwords.
+		dbCredentialFile = cluster.WriteDbCredentialToTmp(localCluster.TmpDirectory)
+		initDb, _ := os.ReadFile(path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"))
+		sql := string(initDb)
+		newInitDBFile = path.Join(localCluster.TmpDirectory, "init_db_with_passwords.sql")
+		sql = sql + cluster.GetPasswordUpdateSQL(localCluster)
+		err = os.WriteFile(newInitDBFile, []byte(sql), 0666)
+		if err != nil {
+			return 1, err
+		}
 
-		master = localCluster.NewVttabletInstance("replica", 0, "")
+		extraArgs := []string{"--db-credentials-file", dbCredentialFile}
+		commonTabletArg = append(commonTabletArg, "--db-credentials-file", dbCredentialFile)
+
+		primary = localCluster.NewVttabletInstance("replica", 0, "")
 		replica1 = localCluster.NewVttabletInstance("replica", 0, "")
 		replica2 = localCluster.NewVttabletInstance("replica", 0, "")
-		shard.Vttablets = []*cluster.Vttablet{master, replica1, replica2}
+		shard.Vttablets = []*cluster.Vttablet{primary, replica1, replica2}
 
 		// Start MySql processes
 		var mysqlProcs []*exec.Cmd
@@ -113,12 +116,11 @@ func TestMain(m *testing.M) {
 			tablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, localCluster.TmpDirectory)
 			tablet.MysqlctlProcess.InitDBFile = newInitDBFile
 			tablet.MysqlctlProcess.ExtraArgs = extraArgs
-			if proc, err := tablet.MysqlctlProcess.StartProcess(); err != nil {
+			proc, err := tablet.MysqlctlProcess.StartProcess()
+			if err != nil {
 				return 1, err
-			} else {
-				// ignore golint warning, we need the else block to use proc
-				mysqlProcs = append(mysqlProcs, proc)
 			}
+			mysqlProcs = append(mysqlProcs, proc)
 		}
 		for _, proc := range mysqlProcs {
 			if err := proc.Wait(); err != nil {
@@ -127,7 +129,7 @@ func TestMain(m *testing.M) {
 		}
 
 		// Create database
-		for _, tablet := range []cluster.Vttablet{*master, *replica1} {
+		for _, tablet := range []cluster.Vttablet{*primary, *replica1} {
 			if err := tablet.VttabletProcess.CreateDB(keyspaceName); err != nil {
 				return 1, err
 			}

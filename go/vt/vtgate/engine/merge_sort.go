@@ -18,11 +18,10 @@ package engine
 
 import (
 	"container/heap"
+	"context"
 	"io"
 
 	"vitess.io/vitess/go/mysql"
-
-	"context"
 
 	"vitess.io/vitess/go/sqltypes"
 
@@ -34,7 +33,7 @@ import (
 // StreamExecutor is a subset of Primitive that MergeSort
 // requires its inputs to satisfy.
 type StreamExecutor interface {
-	StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantields bool, callback func(*sqltypes.Result) error) error
+	StreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error
 }
 
 var _ Primitive = (*MergeSort)(nil)
@@ -50,7 +49,7 @@ var _ Primitive = (*MergeSort)(nil)
 // so that vdiff can use it. In that situation, only StreamExecute is used.
 type MergeSort struct {
 	Primitives              []StreamExecutor
-	OrderBy                 []OrderbyParams
+	OrderBy                 []OrderByParams
 	ScatterErrorsAsWarnings bool
 	noInputs
 	noTxNeeded
@@ -65,19 +64,20 @@ func (ms *MergeSort) GetKeyspaceName() string { return "" }
 // GetTableName satisfies Primitive.
 func (ms *MergeSort) GetTableName() string { return "" }
 
-// Execute is not supported.
-func (ms *MergeSort) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+// TryExecute is not supported.
+func (ms *MergeSort) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] Execute is not reachable")
 }
 
 // GetFields is not supported.
-func (ms *MergeSort) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (ms *MergeSort) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] GetFields is not reachable")
 }
 
-// StreamExecute performs a streaming exec.
-func (ms *MergeSort) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	ctx, cancel := context.WithCancel(vcursor.Context())
+// TryStreamExecute performs a streaming exec.
+func (ms *MergeSort) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	var cancel context.CancelFunc
+	ctx, cancel = context.WithCancel(ctx)
 	defer cancel()
 	gotFields := wantfields
 	handles := make([]*streamHandle, len(ms.Primitives))
@@ -210,7 +210,7 @@ func (ms *MergeSort) getStreamingFields(handles []*streamHandle, callback func(*
 }
 
 func (ms *MergeSort) description() PrimitiveDescription {
-	other := map[string]interface{}{
+	other := map[string]any{
 		"OrderBy": ms.OrderBy,
 	}
 	return PrimitiveDescription{
@@ -244,29 +244,24 @@ func runOneStream(ctx context.Context, vcursor VCursor, input StreamExecutor, bi
 		defer close(handle.fields)
 		defer close(handle.row)
 
-		handle.err = input.StreamExecute(
-			vcursor,
-			bindVars,
-			wantfields,
-			func(qr *sqltypes.Result) error {
-				if len(qr.Fields) != 0 {
-					select {
-					case handle.fields <- qr.Fields:
-					case <-ctx.Done():
-						return io.EOF
-					}
+		handle.err = input.StreamExecute(ctx, vcursor, bindVars, wantfields, func(qr *sqltypes.Result) error {
+			if len(qr.Fields) != 0 {
+				select {
+				case handle.fields <- qr.Fields:
+				case <-ctx.Done():
+					return io.EOF
 				}
+			}
 
-				for _, row := range qr.Rows {
-					select {
-					case handle.row <- row:
-					case <-ctx.Done():
-						return io.EOF
-					}
+			for _, row := range qr.Rows {
+				select {
+				case handle.row <- row:
+				case <-ctx.Done():
+					return io.EOF
 				}
-				return nil
-			},
-		)
+			}
+			return nil
+		})
 	}()
 
 	return handle
@@ -322,12 +317,12 @@ func (sh *scatterHeap) Swap(i, j int) {
 }
 
 // Push satisfies heap.Interface.
-func (sh *scatterHeap) Push(x interface{}) {
+func (sh *scatterHeap) Push(x any) {
 	sh.rows = append(sh.rows, x.(streamRow))
 }
 
 // Pop satisfies heap.Interface.
-func (sh *scatterHeap) Pop() interface{} {
+func (sh *scatterHeap) Pop() any {
 	n := len(sh.rows)
 	x := sh.rows[n-1]
 	sh.rows = sh.rows[:n-1]

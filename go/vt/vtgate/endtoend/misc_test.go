@@ -36,7 +36,7 @@ func TestDatabaseFunc(t *testing.T) {
 
 	exec(t, conn, "use ks")
 	qr := exec(t, conn, "select database()")
-	require.Equal(t, `[[VARBINARY("ks")]]`, fmt.Sprintf("%v", qr.Rows))
+	require.Equal(t, `[[VARCHAR("ks")]]`, fmt.Sprintf("%v", qr.Rows))
 }
 
 func TestSysNumericPrecisionScale(t *testing.T) {

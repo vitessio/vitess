@@ -18,7 +18,6 @@ package sqlparser
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 )
 
@@ -73,6 +72,48 @@ func keywordASCIIMatch(input string, expected string) bool {
 // non_reserved_keywords grammar in sql.y -- this will allow the keyword to be used
 // in identifiers. See the docs for each grammar to determine which one to put it into.
 var keywords = []keyword{
+	{"_armscii8", UNDERSCORE_ARMSCII8},
+	{"_ascii", UNDERSCORE_ASCII},
+	{"_big5", UNDERSCORE_BIG5},
+	{"_binary", UNDERSCORE_BINARY},
+	{"_cp1250", UNDERSCORE_CP1250},
+	{"_cp1251", UNDERSCORE_CP1251},
+	{"_cp1256", UNDERSCORE_CP1256},
+	{"_cp1257", UNDERSCORE_CP1257},
+	{"_cp850", UNDERSCORE_CP850},
+	{"_cp852", UNDERSCORE_CP852},
+	{"_cp866", UNDERSCORE_CP866},
+	{"_cp932", UNDERSCORE_CP932},
+	{"_dec8", UNDERSCORE_DEC8},
+	{"_eucjpms", UNDERSCORE_EUCJPMS},
+	{"_euckr", UNDERSCORE_EUCKR},
+	{"_gb18030", UNDERSCORE_GB18030},
+	{"_gb2312", UNDERSCORE_GB2312},
+	{"_gbk", UNDERSCORE_GBK},
+	{"_geostd8", UNDERSCORE_GEOSTD8},
+	{"_greek", UNDERSCORE_GREEK},
+	{"_hebrew", UNDERSCORE_HEBREW},
+	{"_hp8", UNDERSCORE_HP8},
+	{"_keybcs2", UNDERSCORE_KEYBCS2},
+	{"_koi8r", UNDERSCORE_KOI8R},
+	{"_koi8u", UNDERSCORE_KOI8U},
+	{"_latin1", UNDERSCORE_LATIN1},
+	{"_latin2", UNDERSCORE_LATIN2},
+	{"_latin5", UNDERSCORE_LATIN5},
+	{"_latin7", UNDERSCORE_LATIN7},
+	{"_macce", UNDERSCORE_MACCE},
+	{"_macroman", UNDERSCORE_MACROMAN},
+	{"_sjis", UNDERSCORE_SJIS},
+	{"_swe7", UNDERSCORE_SWE7},
+	{"_tis620", UNDERSCORE_TIS620},
+	{"_ucs2", UNDERSCORE_UCS2},
+	{"_ujis", UNDERSCORE_UJIS},
+	{"_utf16", UNDERSCORE_UTF16},
+	{"_utf16le", UNDERSCORE_UTF16LE},
+	{"_utf32", UNDERSCORE_UTF32},
+	{"_utf8", UNDERSCORE_UTF8},
+	{"_utf8mb4", UNDERSCORE_UTF8MB4},
+	{"_utf8mb3", UNDERSCORE_UTF8MB3},
 	{"accessible", UNUSED},
 	{"action", ACTION},
 	{"add", ADD},
@@ -84,26 +125,30 @@ var keywords = []keyword{
 	{"always", ALWAYS},
 	{"analyze", ANALYZE},
 	{"and", AND},
+	{"array", ARRAY},
 	{"as", AS},
 	{"asc", ASC},
+	{"ascii", ASCII},
 	{"asensitive", UNUSED},
 	{"auto_increment", AUTO_INCREMENT},
+	{"autoextend_size", AUTOEXTEND_SIZE},
+	{"avg", AVG},
 	{"avg_row_length", AVG_ROW_LENGTH},
 	{"before", UNUSED},
 	{"begin", BEGIN},
 	{"between", BETWEEN},
 	{"bigint", BIGINT},
 	{"binary", BINARY},
-	{"_binary", UNDERSCORE_BINARY},
-	{"_utf8mb4", UNDERSCORE_UTF8MB4},
-	{"_utf8", UNDERSCORE_UTF8},
-	{"_latin1", UNDERSCORE_LATIN1},
 	{"bit", BIT},
+	{"bit_and", BIT_AND},
+	{"bit_or", BIT_OR},
+	{"bit_xor", BIT_XOR},
 	{"blob", BLOB},
 	{"bool", BOOL},
 	{"boolean", BOOLEAN},
-	{"both", UNUSED},
+	{"both", BOTH},
 	{"by", BY},
+	{"byte", BYTE},
 	{"call", CALL},
 	{"cancel", CANCEL},
 	{"cascade", CASCADE},
@@ -117,11 +162,13 @@ var keywords = []keyword{
 	{"charset", CHARSET},
 	{"check", CHECK},
 	{"checksum", CHECKSUM},
+	{"cleanup", CLEANUP},
 	{"coalesce", COALESCE},
 	{"code", CODE},
 	{"collate", COLLATE},
 	{"collation", COLLATION},
 	{"column", COLUMN},
+	{"column_format", COLUMN_FORMAT},
 	{"columns", COLUMNS},
 	{"comment", COMMENT_KEYWORD},
 	{"committed", COMMITTED},
@@ -136,12 +183,17 @@ var keywords = []keyword{
 	{"continue", UNUSED},
 	{"convert", CONVERT},
 	{"copy", COPY},
-	{"cume_dist", UNUSED},
-	{"substr", SUBSTR},
+	{"count", COUNT},
+	{"cume_dist", CUME_DIST},
+	{"substr", SUBSTRING},
+	{"subpartition", SUBPARTITION},
+	{"subpartitions", SUBPARTITIONS},
 	{"substring", SUBSTRING},
+	{"srid", SRID},
 	{"create", CREATE},
 	{"cross", CROSS},
 	{"csv", CSV},
+	{"current", CURRENT},
 	{"current_date", CURRENT_DATE},
 	{"current_time", CURRENT_TIME},
 	{"current_timestamp", CURRENT_TIMESTAMP},
@@ -150,21 +202,23 @@ var keywords = []keyword{
 	{"data", DATA},
 	{"database", DATABASE},
 	{"databases", DATABASES},
-	{"day_hour", UNUSED},
-	{"day_microsecond", UNUSED},
-	{"day_minute", UNUSED},
-	{"day_second", UNUSED},
+	{"day", DAY},
+	{"day_hour", DAY_HOUR},
+	{"day_microsecond", DAY_MICROSECOND},
+	{"day_minute", DAY_MINUTE},
+	{"day_second", DAY_SECOND},
 	{"date", DATE},
 	{"datetime", DATETIME},
+	{"deallocate", DEALLOCATE},
 	{"dec", UNUSED},
-	{"decimal", DECIMAL},
+	{"decimal", DECIMAL_TYPE},
 	{"declare", UNUSED},
 	{"default", DEFAULT},
 	{"definer", DEFINER},
 	{"delay_key_write", DELAY_KEY_WRITE},
 	{"delayed", UNUSED},
 	{"delete", DELETE},
-	{"dense_rank", UNUSED},
+	{"dense_rank", DENSE_RANK},
 	{"desc", DESC},
 	{"describe", DESCRIBE},
 	{"deterministic", UNUSED},
@@ -184,13 +238,14 @@ var keywords = []keyword{
 	{"each", UNUSED},
 	{"else", ELSE},
 	{"elseif", UNUSED},
-	{"empty", UNUSED},
+	{"empty", EMPTY},
 	{"enable", ENABLE},
 	{"enclosed", ENCLOSED},
 	{"encryption", ENCRYPTION},
 	{"end", END},
 	{"enforced", ENFORCED},
 	{"engine", ENGINE},
+	{"engine_attribute", ENGINE_ATTRIBUTE},
 	{"engines", ENGINES},
 	{"enum", ENUM},
 	{"error", ERROR},
@@ -199,26 +254,33 @@ var keywords = []keyword{
 	{"event", EVENT},
 	{"exchange", EXCHANGE},
 	{"exclusive", EXCLUSIVE},
+	{"execute", EXECUTE},
 	{"exists", EXISTS},
 	{"exit", UNUSED},
 	{"explain", EXPLAIN},
 	{"expansion", EXPANSION},
+	{"expire", EXPIRE},
 	{"export", EXPORT},
 	{"extended", EXTENDED},
+	{"extract", EXTRACT},
+	{"extractvalue", ExtractValue},
 	{"false", FALSE},
 	{"fetch", UNUSED},
 	{"fields", FIELDS},
 	{"first", FIRST},
-	{"first_value", UNUSED},
+	{"first_value", FIRST_VALUE},
 	{"fixed", FIXED},
 	{"float", FLOAT_TYPE},
 	{"float4", UNUSED},
 	{"float8", UNUSED},
 	{"flush", FLUSH},
+	{"following", FOLLOWING},
 	{"for", FOR},
 	{"force", FORCE},
 	{"foreign", FOREIGN},
 	{"format", FORMAT},
+	{"format_bytes", FORMAT_BYTES},
+	{"format_pico_time", FORMAT_PICO_TIME},
 	{"from", FROM},
 	{"full", FULL},
 	{"fulltext", FULLTEXT},
@@ -226,22 +288,28 @@ var keywords = []keyword{
 	{"general", GENERAL},
 	{"generated", GENERATED},
 	{"geometry", GEOMETRY},
+	{"geomcollection", GEOMETRYCOLLECTION},
 	{"geometrycollection", GEOMETRYCOLLECTION},
 	{"get", UNUSED},
+	{"get_lock", GET_LOCK},
 	{"global", GLOBAL},
 	{"gtid_executed", GTID_EXECUTED},
+	{"gtid_subset", GTID_SUBSET},
+	{"gtid_subtract", GTID_SUBTRACT},
 	{"grant", UNUSED},
 	{"group", GROUP},
 	{"grouping", UNUSED},
 	{"groups", UNUSED},
 	{"group_concat", GROUP_CONCAT},
+	{"hash", HASH},
 	{"having", HAVING},
 	{"header", HEADER},
 	{"high_priority", UNUSED},
 	{"hosts", HOSTS},
-	{"hour_microsecond", UNUSED},
-	{"hour_minute", UNUSED},
-	{"hour_second", UNUSED},
+	{"hour", HOUR},
+	{"hour_microsecond", HOUR_MICROSECOND},
+	{"hour_minute", HOUR_MINUTE},
+	{"hour_second", HOUR_SECOND},
 	{"if", IF},
 	{"ignore", IGNORE},
 	{"import", IMPORT},
@@ -255,6 +323,8 @@ var keywords = []keyword{
 	{"insensitive", UNUSED},
 	{"insert", INSERT},
 	{"insert_method", INSERT_METHOD},
+	{"instant", INSTANT},
+	{"invisible", INVISIBLE},
 	{"int", INT},
 	{"int1", UNUSED},
 	{"int2", UNUSED},
@@ -266,38 +336,71 @@ var keywords = []keyword{
 	{"into", INTO},
 	{"io_after_gtids", UNUSED},
 	{"is", IS},
+	{"is_free_lock", IS_FREE_LOCK},
+	{"is_used_lock", IS_USED_LOCK},
 	{"isolation", ISOLATION},
 	{"iterate", UNUSED},
 	{"invoker", INVOKER},
 	{"join", JOIN},
 	{"json", JSON},
-	{"json_table", UNUSED},
+	{"json_array", JSON_ARRAY},
+	{"json_array_append", JSON_ARRAY_APPEND},
+	{"json_array_insert", JSON_ARRAY_INSERT},
+	{"json_contains", JSON_CONTAINS},
+	{"json_contains_path", JSON_CONTAINS_PATH},
+	{"json_depth", JSON_DEPTH},
+	{"json_extract", JSON_EXTRACT},
+	{"json_insert", JSON_INSERT},
+	{"json_length", JSON_LENGTH},
+	{"json_keys", JSON_KEYS},
+	{"json_merge", JSON_MERGE},
+	{"json_merge_patch", JSON_MERGE_PATCH},
+	{"json_merge_preserve", JSON_MERGE_PRESERVE},
+	{"json_object", JSON_OBJECT},
+	{"json_overlaps", JSON_OVERLAPS},
+	{"json_pretty", JSON_PRETTY},
+	{"json_remove", JSON_REMOVE},
+	{"json_replace", JSON_REPLACE},
+	{"json_search", JSON_SEARCH},
+	{"json_schema_valid", JSON_SCHEMA_VALID},
+	{"json_schema_validation_report", JSON_SCHEMA_VALIDATION_REPORT},
+	{"json_set", JSON_SET},
+	{"json_storage_free", JSON_STORAGE_FREE},
+	{"json_storage_size", JSON_STORAGE_SIZE},
+	{"json_quote", JSON_QUOTE},
+	{"json_table", JSON_TABLE},
+	{"json_type", JSON_TYPE},
+	{"json_value", JSON_VALUE},
+	{"json_valid", JSON_VALID},
+	{"json_unquote", JSON_UNQUOTE},
 	{"key", KEY},
 	{"keys", KEYS},
 	{"keyspaces", KEYSPACES},
 	{"key_block_size", KEY_BLOCK_SIZE},
 	{"kill", UNUSED},
-	{"lag", UNUSED},
+	{"lag", LAG},
 	{"language", LANGUAGE},
 	{"last", LAST},
-	{"last_value", UNUSED},
+	{"last_value", LAST_VALUE},
 	{"last_insert_id", LAST_INSERT_ID},
-	{"lateral", UNUSED},
-	{"lead", UNUSED},
-	{"leading", UNUSED},
+	{"lateral", LATERAL},
+	{"lead", LEAD},
+	{"leading", LEADING},
 	{"leave", UNUSED},
 	{"left", LEFT},
 	{"less", LESS},
 	{"level", LEVEL},
 	{"like", LIKE},
 	{"limit", LIMIT},
-	{"linear", UNUSED},
+	{"linear", LINEAR},
 	{"lines", LINES},
 	{"linestring", LINESTRING},
+	{"list", LIST},
 	{"load", LOAD},
 	{"local", LOCAL},
 	{"localtime", LOCALTIME},
 	{"localtimestamp", LOCALTIMESTAMP},
+	{"locate", LOCATE},
 	{"lock", LOCK},
 	{"logs", LOGS},
 	{"long", UNUSED},
@@ -305,20 +408,26 @@ var keywords = []keyword{
 	{"longtext", LONGTEXT},
 	{"loop", UNUSED},
 	{"low_priority", LOW_PRIORITY},
+	{"ltrim", LTRIM},
+	{"min", MIN},
 	{"manifest", MANIFEST},
 	{"master_bind", UNUSED},
 	{"match", MATCH},
+	{"max", MAX},
 	{"max_rows", MAX_ROWS},
 	{"maxvalue", MAXVALUE},
 	{"mediumblob", MEDIUMBLOB},
 	{"mediumint", MEDIUMINT},
 	{"mediumtext", MEDIUMTEXT},
 	{"memory", MEMORY},
+	{"member", MEMBER},
 	{"merge", MERGE},
+	{"microsecond", MICROSECOND},
 	{"middleint", UNUSED},
 	{"min_rows", MIN_ROWS},
-	{"minute_microsecond", UNUSED},
-	{"minute_second", UNUSED},
+	{"minute", MINUTE},
+	{"minute_microsecond", MINUTE_MICROSECOND},
+	{"minute_second", MINUTE_SECOND},
 	{"mod", MOD},
 	{"mode", MODE},
 	{"modify", MODIFY},
@@ -326,20 +435,24 @@ var keywords = []keyword{
 	{"multilinestring", MULTILINESTRING},
 	{"multipoint", MULTIPOINT},
 	{"multipolygon", MULTIPOLYGON},
+	{"month", MONTH},
 	{"name", NAME},
 	{"names", NAMES},
 	{"natural", NATURAL},
 	{"nchar", NCHAR},
 	{"next", NEXT},
+	{"nested", NESTED},
 	{"no", NO},
 	{"none", NONE},
 	{"not", NOT},
+	{"now", NOW},
 	{"no_write_to_binlog", NO_WRITE_TO_BINLOG},
-	{"nth_value", UNUSED},
-	{"ntile", UNUSED},
+	{"nth_value", NTH_VALUE},
+	{"ntile", NTILE},
 	{"null", NULL},
+	{"nulls", NULLS},
 	{"numeric", NUMERIC},
-	{"of", UNUSED},
+	{"of", OF},
 	{"off", OFF},
 	{"offset", OFFSET},
 	{"on", ON},
@@ -351,39 +464,56 @@ var keywords = []keyword{
 	{"optionally", OPTIONALLY},
 	{"or", OR},
 	{"order", ORDER},
+	{"ordinality", ORDINALITY},
 	{"out", UNUSED},
 	{"outer", OUTER},
 	{"outfile", OUTFILE},
-	{"over", UNUSED},
+	{"over", OVER},
 	{"overwrite", OVERWRITE},
 	{"pack_keys", PACK_KEYS},
 	{"parser", PARSER},
+	{"partial", PARTIAL},
 	{"partition", PARTITION},
+	{"partitions", PARTITIONS},
 	{"partitioning", PARTITIONING},
 	{"password", PASSWORD},
-	{"percent_rank", UNUSED},
+	{"path", PATH},
+	{"percent_rank", PERCENT_RANK},
 	{"plugins", PLUGINS},
 	{"point", POINT},
 	{"polygon", POLYGON},
+	{"position", POSITION},
+	{"preceding", PRECEDING},
 	{"precision", UNUSED},
+	{"prepare", PREPARE},
 	{"primary", PRIMARY},
 	{"privileges", PRIVILEGES},
 	{"processlist", PROCESSLIST},
 	{"procedure", PROCEDURE},
+	{"ps_current_thread_id", PS_CURRENT_THREAD_ID},
+	{"ps_thread_id", PS_THREAD_ID},
 	{"query", QUERY},
-	{"range", UNUSED},
-	{"rank", UNUSED},
+	{"range", RANGE},
+	{"quarter", QUARTER},
+	{"rank", RANK},
+	{"ratio", RATIO},
 	{"read", READ},
 	{"reads", UNUSED},
 	{"read_write", UNUSED},
 	{"real", REAL},
 	{"rebuild", REBUILD},
-	{"recursive", UNUSED},
+	{"recursive", RECURSIVE},
 	{"redundant", REDUNDANT},
 	{"references", REFERENCES},
 	{"regexp", REGEXP},
+	{"regexp_instr", REGEXP_INSTR},
+	{"regexp_like", REGEXP_LIKE},
+	{"regexp_replace", REGEXP_REPLACE},
+	{"regexp_substr", REGEXP_SUBSTR},
 	{"relay", RELAY},
 	{"release", RELEASE},
+	{"release_all_locks", RELEASE_ALL_LOCKS},
+	{"release_lock", RELEASE_LOCK},
 	{"remove", REMOVE},
 	{"rename", RENAME},
 	{"reorganize", REORGANIZE},
@@ -393,21 +523,28 @@ var keywords = []keyword{
 	{"replace", REPLACE},
 	{"require", UNUSED},
 	{"resignal", UNUSED},
+	{"respect", RESPECT},
 	{"restrict", RESTRICT},
 	{"return", UNUSED},
+	{"returning", RETURNING},
 	{"retry", RETRY},
 	{"revert", REVERT},
 	{"revoke", UNUSED},
 	{"right", RIGHT},
-	{"rlike", REGEXP},
+	{"rlike", RLIKE},
 	{"rollback", ROLLBACK},
+	{"row", ROW},
 	{"row_format", ROW_FORMAT},
-	{"row_number", UNUSED},
+	{"row_number", ROW_NUMBER},
+	{"rows", ROWS},
+	{"rtrim", RTRIM},
 	{"s3", S3},
 	{"savepoint", SAVEPOINT},
 	{"schema", SCHEMA},
 	{"schemas", SCHEMAS},
-	{"second_microsecond", UNUSED},
+	{"second", SECOND},
+	{"second_microsecond", SECOND_MICROSECOND},
+	{"secondary_engine_attribute", SECONDARY_ENGINE_ATTRIBUTE},
 	{"security", SECURITY},
 	{"select", SELECT},
 	{"sensitive", UNUSED},
@@ -421,6 +558,7 @@ var keywords = []keyword{
 	{"show", SHOW},
 	{"signal", UNUSED},
 	{"signed", SIGNED},
+	{"simple", SIMPLE},
 	{"slow", SLOW},
 	{"smallint", SMALLINT},
 	{"spatial", SPATIAL},
@@ -441,12 +579,16 @@ var keywords = []keyword{
 	{"stats_persistent", STATS_PERSISTENT},
 	{"stats_sample_pages", STATS_SAMPLE_PAGES},
 	{"status", STATUS},
+	{"std", STD},
+	{"stddev", STDDEV},
+	{"stddev_pop", STDDEV_POP},
+	{"stddev_samp", STDDEV_SAMP},
 	{"storage", STORAGE},
 	{"stored", STORED},
 	{"straight_join", STRAIGHT_JOIN},
 	{"stream", STREAM},
+	{"sum", SUM},
 	{"system", UNUSED},
-	{"vstream", VSTREAM},
 	{"table", TABLE},
 	{"tables", TABLES},
 	{"tablespace", TABLESPACE},
@@ -456,6 +598,7 @@ var keywords = []keyword{
 	{"text", TEXT},
 	{"than", THAN},
 	{"then", THEN},
+	{"throttle", THROTTLE},
 	{"time", TIME},
 	{"timestamp", TIMESTAMP},
 	{"timestampadd", TIMESTAMPADD},
@@ -464,7 +607,7 @@ var keywords = []keyword{
 	{"tinyint", TINYINT},
 	{"tinytext", TINYTEXT},
 	{"to", TO},
-	{"trailing", UNUSED},
+	{"trailing", TRAILING},
 	{"transaction", TRANSACTION},
 	{"tree", TREE},
 	{"traditional", TRADITIONAL},
@@ -472,14 +615,19 @@ var keywords = []keyword{
 	{"triggers", TRIGGERS},
 	{"true", TRUE},
 	{"truncate", TRUNCATE},
+	{"trim", TRIM},
+	{"unbounded", UNBOUNDED},
 	{"uncommitted", UNCOMMITTED},
 	{"undefined", UNDEFINED},
 	{"undo", UNUSED},
+	{"unicode", UNICODE},
 	{"union", UNION},
 	{"unique", UNIQUE},
 	{"unlock", UNLOCK},
 	{"unsigned", UNSIGNED},
+	{"unthrottle", UNTHROTTLE},
 	{"update", UPDATE},
+	{"updatexml", UpdateXML},
 	{"upgrade", UPGRADE},
 	{"usage", UNUSED},
 	{"use", USE},
@@ -491,10 +639,13 @@ var keywords = []keyword{
 	{"utc_timestamp", UTC_TIMESTAMP},
 	{"validation", VALIDATION},
 	{"values", VALUES},
+	{"var_pop", VAR_POP},
+	{"var_samp", VAR_SAMP},
 	{"variables", VARIABLES},
 	{"varbinary", VARBINARY},
 	{"varchar", VARCHAR},
 	{"varcharacter", UNUSED},
+	{"variance", VARIANCE},
 	{"varying", UNUSED},
 	{"vgtid_executed", VGTID_EXECUTED},
 	{"virtual", VIRTUAL},
@@ -504,23 +655,31 @@ var keywords = []keyword{
 	{"vitess", VITESS},
 	{"vitess_keyspaces", VITESS_KEYSPACES},
 	{"vitess_metadata", VITESS_METADATA},
-	{"vitess_shards", VITESS_SHARDS},
-	{"vitess_tablets", VITESS_TABLETS},
 	{"vitess_migration", VITESS_MIGRATION},
 	{"vitess_migrations", VITESS_MIGRATIONS},
+	{"vitess_replication_status", VITESS_REPLICATION_STATUS},
+	{"vitess_shards", VITESS_SHARDS},
+	{"vitess_tablets", VITESS_TABLETS},
+	{"vitess_target", VITESS_TARGET},
+	{"vitess_throttled_apps", VITESS_THROTTLED_APPS},
 	{"vschema", VSCHEMA},
+	{"vstream", VSTREAM},
 	{"warnings", WARNINGS},
+	{"wait_for_executed_gtid_set", WAIT_FOR_EXECUTED_GTID_SET},
+	{"wait_until_sql_thread_after_gtids", WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS},
+	{"weight_string", WEIGHT_STRING},
 	{"when", WHEN},
 	{"where", WHERE},
 	{"while", UNUSED},
-	{"window", UNUSED},
+	{"window", WINDOW},
 	{"with", WITH},
 	{"without", WITHOUT},
 	{"work", WORK},
 	{"write", WRITE},
+	{"visible", VISIBLE},
 	{"xor", XOR},
 	{"year", YEAR},
-	{"year_month", UNUSED},
+	{"year_month", YEAR_MONTH},
 	{"zerofill", ZEROFILL},
 }
 
@@ -528,7 +687,42 @@ var keywords = []keyword{
 var keywordStrings = map[int]string{}
 
 // keywordLookupTable is a perfect hash map that maps **case insensitive** keyword names to their ids
-var keywordLookupTable *perfectTable
+var keywordLookupTable *caseInsensitiveTable
+
+type caseInsensitiveTable struct {
+	h map[uint64]keyword
+}
+
+func buildCaseInsensitiveTable(keywords []keyword) *caseInsensitiveTable {
+	table := &caseInsensitiveTable{
+		h: make(map[uint64]keyword, len(keywords)),
+	}
+
+	for _, kw := range keywords {
+		hash := fnv1aIstr(offset64, kw.name)
+		if _, exists := table.h[hash]; exists {
+			panic("collision in caseInsensitiveTable")
+		}
+		table.h[hash] = kw
+	}
+	return table
+}
+
+func (cit *caseInsensitiveTable) LookupString(name string) (int, bool) {
+	hash := fnv1aIstr(offset64, name)
+	if candidate, ok := cit.h[hash]; ok {
+		return candidate.id, candidate.matchStr(name)
+	}
+	return 0, false
+}
+
+func (cit *caseInsensitiveTable) Lookup(name []byte) (int, bool) {
+	hash := fnv1aI(offset64, name)
+	if candidate, ok := cit.h[hash]; ok {
+		return candidate.id, candidate.match(name)
+	}
+	return 0, false
+}
 
 func init() {
 	for _, kw := range keywords {
@@ -541,7 +735,7 @@ func init() {
 		keywordStrings[kw.id] = kw.name
 	}
 
-	keywordLookupTable = buildKeywordTable(keywords)
+	keywordLookupTable = buildCaseInsensitiveTable(keywords)
 }
 
 // KeywordString returns the string corresponding to the given keyword
@@ -551,15 +745,6 @@ func KeywordString(id int) string {
 		return ""
 	}
 	return str
-}
-
-type perfectTable struct {
-	keys       []keyword
-	level0     []uint32 // power of 2 size
-	level0Mask int      // len(Level0) - 1
-	level1     []uint32 // power of 2 size >= len(keys)
-	level1Mask int      // len(Level1) - 1
-	min, max   int
 }
 
 const offset64 = uint64(14695981039346656037)
@@ -584,120 +769,4 @@ func fnv1aIstr(h uint64, s string) uint64 {
 		h = (h ^ uint64(c)) * prime64
 	}
 	return h
-}
-
-// buildKeywordTable generates a perfect hash map for all the keywords using the "Hash, displace, and compress"
-// algorithm described in http://cmph.sourceforge.net/papers/esa09.pdf.
-func buildKeywordTable(keywords []keyword) *perfectTable {
-	type indexBucket struct {
-		n    int
-		vals []int
-	}
-
-	nextPow2 := func(n int) int {
-		for i := 1; ; i *= 2 {
-			if i >= n {
-				return i
-			}
-		}
-	}
-
-	var (
-		level0        = make([]uint32, nextPow2(len(keywords)/4))
-		level0Mask    = len(level0) - 1
-		level1        = make([]uint32, nextPow2(len(keywords)))
-		level1Mask    = len(level1) - 1
-		sparseBuckets = make([][]int, len(level0))
-		zeroSeed      = offset64
-		min, max      = len(keywords[0].name), len(keywords[0].name)
-	)
-	for i, kw := range keywords {
-		kwlen := len(kw.name)
-		if kwlen > max {
-			max = kwlen
-		}
-		if kwlen < min {
-			min = kwlen
-		}
-
-		n := int(fnv1aIstr(zeroSeed, kw.name)) & level0Mask
-		sparseBuckets[n] = append(sparseBuckets[n], i)
-	}
-	var buckets []indexBucket
-	for n, vals := range sparseBuckets {
-		if len(vals) > 0 {
-			buckets = append(buckets, indexBucket{n, vals})
-		}
-	}
-	sort.Slice(buckets, func(i, j int) bool {
-		return len(buckets[i].vals) > len(buckets[j].vals)
-	})
-
-	occ := make([]bool, len(level1))
-	var tmpOcc []int
-	for _, bucket := range buckets {
-		var seed uint64
-	trySeed:
-		tmpOcc = tmpOcc[:0]
-		for _, i := range bucket.vals {
-			n := int(fnv1aIstr(seed, keywords[i].name)) & level1Mask
-			if occ[n] {
-				for _, n := range tmpOcc {
-					occ[n] = false
-				}
-				seed++
-				goto trySeed
-			}
-			occ[n] = true
-			tmpOcc = append(tmpOcc, n)
-			level1[n] = uint32(i)
-		}
-		level0[bucket.n] = uint32(seed)
-	}
-
-	return &perfectTable{
-		keys:       keywords,
-		level0:     level0,
-		level0Mask: level0Mask,
-		level1:     level1,
-		level1Mask: level1Mask,
-		min:        min,
-		max:        max,
-	}
-}
-
-// Lookup looks up the given keyword on the perfect map for keywords.
-// The provided bytes are not modified and are compared **case insensitively**
-func (t *perfectTable) Lookup(keyword []byte) (int, bool) {
-	kwlen := len(keyword)
-	if kwlen > t.max || kwlen < t.min {
-		return 0, false
-	}
-
-	i0 := int(fnv1aI(offset64, keyword)) & t.level0Mask
-	seed := t.level0[i0]
-	i1 := int(fnv1aI(uint64(seed), keyword)) & t.level1Mask
-	cell := &t.keys[int(t.level1[i1])]
-	if cell.match(keyword) {
-		return cell.id, true
-	}
-	return 0, false
-}
-
-// LookupString looks up the given keyword on the perfect map for keywords.
-// The provided string is compared **case insensitively**
-func (t *perfectTable) LookupString(keyword string) (int, bool) {
-	kwlen := len(keyword)
-	if kwlen > t.max || kwlen < t.min {
-		return 0, false
-	}
-
-	i0 := int(fnv1aIstr(offset64, keyword)) & t.level0Mask
-	seed := t.level0[i0]
-	i1 := int(fnv1aIstr(uint64(seed), keyword)) & t.level1Mask
-	cell := &t.keys[int(t.level1[i1])]
-	if cell.matchStr(keyword) {
-		return cell.id, true
-	}
-	return 0, false
 }

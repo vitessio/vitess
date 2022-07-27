@@ -17,19 +17,17 @@ limitations under the License.
 package mysql
 
 import (
+	"context"
 	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
 	"net"
-	"strconv"
-	"strings"
 	"time"
 
-	"context"
-
-	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/mysql/collations"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttls"
 )
@@ -61,12 +59,6 @@ func Connect(ctx context.Context, params *ConnParams) (*Conn, error) {
 		addr = params.UnixSocket
 	} else {
 		addr = net.JoinHostPort(params.Host, fmt.Sprintf("%v", params.Port))
-	}
-
-	// Figure out the character set we want.
-	characterSet, err := parseCharacterSet(params.Charset)
-	if err != nil {
-		return nil, err
 	}
 
 	// Start a background connection routine.  It first
@@ -123,7 +115,7 @@ func Connect(ctx context.Context, params *ConnParams) (*Conn, error) {
 		// make any read or write just return with an error
 		// right away.
 		status <- connectResult{
-			err: c.clientHandshake(characterSet, params),
+			err: c.clientHandshake(params),
 		}
 	}()
 
@@ -174,6 +166,7 @@ func Connect(ctx context.Context, params *ConnParams) (*Conn, error) {
 			return nil, cr.err
 		}
 	}
+
 	return c, nil
 }
 
@@ -198,36 +191,19 @@ func (c *Conn) Ping() error {
 	case ErrPacket:
 		return ParseErrorPacket(data)
 	}
-	return vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected packet type: %d", data[0])
-}
-
-// parseCharacterSet parses the provided character set.
-// Returns SQLError(CRCantReadCharset) if it can't.
-func parseCharacterSet(cs string) (uint8, error) {
-	// Check if it's empty, return utf8. This is a reasonable default.
-	if cs == "" {
-		return CharacterSetUtf8, nil
-	}
-
-	// Check if it's in our map.
-	characterSet, ok := CharacterSetMap[strings.ToLower(cs)]
-	if ok {
-		return characterSet, nil
-	}
-
-	// As a fallback, try to parse a number. So we support more values.
-	if i, err := strconv.ParseInt(cs, 10, 8); err == nil {
-		return uint8(i), nil
-	}
-
-	// No luck.
-	return 0, NewSQLError(CRCantReadCharset, SSUnknownSQLState, "failed to interpret character set '%v'. Try using an integer value if needed", cs)
+	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected packet type: %d", data[0])
 }
 
 // clientHandshake handles the client side of the handshake.
 // Note the connection can be closed while this is running.
 // Returns a SQLError.
-func (c *Conn) clientHandshake(characterSet uint8, params *ConnParams) error {
+func (c *Conn) clientHandshake(params *ConnParams) error {
+	// if EnableQueryInfo is set, make sure that all queries starting with the handshake
+	// will actually process the INFO fields in QUERY_OK packets
+	if params.EnableQueryInfo {
+		c.enableQueryInfo = true
+	}
+
 	// Wait for the server initial handshake packet, and parse it.
 	data, err := c.readPacket()
 	if err != nil {
@@ -252,11 +228,16 @@ func (c *Conn) clientHandshake(characterSet uint8, params *ConnParams) error {
 		c.Capabilities = capabilities & (CapabilityClientDeprecateEOF)
 	}
 
+	charset, err := collations.Local().ParseConnectionCharset(params.Charset)
+	if err != nil {
+		return err
+	}
+
 	// Handle switch to SSL if necessary.
-	if params.Flags&CapabilityClientSSL > 0 {
+	if params.SslEnabled() {
 		// If client asked for SSL, but server doesn't support it,
 		// stop right here.
-		if capabilities&CapabilityClientSSL == 0 {
+		if params.SslRequired() && capabilities&CapabilityClientSSL == 0 {
 			return NewSQLError(CRSSLConnectionError, SSUnknownSQLState, "server doesn't support SSL but client asked for it")
 		}
 
@@ -276,14 +257,19 @@ func (c *Conn) clientHandshake(characterSet uint8, params *ConnParams) error {
 			}
 		}
 
+		tlsVersion, err := vttls.TLSVersionToNumber(params.TLSMinVersion)
+		if err != nil {
+			return NewSQLError(CRSSLConnectionError, SSUnknownSQLState, "error parsing minimal TLS version: %v", err)
+		}
+
 		// Build the TLS config.
-		clientConfig, err := vttls.ClientConfig(params.SslCert, params.SslKey, params.SslCa, serverName)
+		clientConfig, err := vttls.ClientConfig(params.EffectiveSslMode(), params.SslCert, params.SslKey, params.SslCa, params.SslCrl, serverName, tlsVersion)
 		if err != nil {
 			return NewSQLError(CRSSLConnectionError, SSUnknownSQLState, "error loading client cert and ca: %v", err)
 		}
 
 		// Send the SSLRequest packet.
-		if err := c.writeSSLRequest(capabilities, characterSet, params); err != nil {
+		if err := c.writeSSLRequest(capabilities, charset, params); err != nil {
 			return err
 		}
 
@@ -314,7 +300,7 @@ func (c *Conn) clientHandshake(characterSet uint8, params *ConnParams) error {
 
 	// Build and send our handshake response 41.
 	// Note this one will never have SSL flag on.
-	if err := c.writeHandshakeResponse41(capabilities, scrambledPassword, characterSet, params); err != nil {
+	if err := c.writeHandshakeResponse41(capabilities, scrambledPassword, charset, params); err != nil {
 		return err
 	}
 
@@ -416,7 +402,7 @@ func (c *Conn) parseInitialHandshakePacket(data []byte) (uint32, []byte, error) 
 	if !ok {
 		return 0, nil, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "parseInitialHandshakePacket: packet has no character set")
 	}
-	c.CharacterSet = characterSet
+	c.CharacterSet = collations.ID(characterSet)
 
 	// Status flags. Ignored.
 	_, pos, ok = readUint16(data, pos)
@@ -478,7 +464,7 @@ func (c *Conn) parseInitialHandshakePacket(data []byte) (uint32, []byte, error) 
 			// 5.6.2 that don't have a null terminated string.
 			authPluginName = string(data[pos : len(data)-1])
 		}
-		c.authPluginName = authPluginName
+		c.authPluginName = AuthMethodDescription(authPluginName)
 	}
 
 	return capabilities, authPluginData, nil
@@ -612,7 +598,7 @@ func (c *Conn) writeHandshakeResponse41(capabilities uint32, scrambledPassword [
 	}
 
 	// Assume native client during response
-	pos = writeNullString(data, pos, c.authPluginName)
+	pos = writeNullString(data, pos, string(c.authPluginName))
 
 	// Sanity-check the length.
 	if pos != len(data) {
@@ -715,7 +701,7 @@ func (c *Conn) handleAuthMoreDataPacket(data byte, params *ConnParams) error {
 			// Encrypt password with public key
 			enc, err := EncryptPasswordWithPublicKey(c.salt, []byte(params.Pass), pub)
 			if err != nil {
-				return vterrors.Errorf(vtrpc.Code_INTERNAL, "error encrypting password with public key: %v", err)
+				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "error encrypting password with public key: %v", err)
 			}
 			// Write encrypted password
 			if err := c.writeScrambledPassword(enc); err != nil {
@@ -729,11 +715,11 @@ func (c *Conn) handleAuthMoreDataPacket(data byte, params *ConnParams) error {
 	}
 }
 
-func parseAuthSwitchRequest(data []byte) (string, []byte, error) {
+func parseAuthSwitchRequest(data []byte) (AuthMethodDescription, []byte, error) {
 	pos := 1
 	pluginName, pos, ok := readNullString(data, pos)
 	if !ok {
-		return "", nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "cannot get plugin name from AuthSwitchRequest: %v", data)
+		return "", nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "cannot get plugin name from AuthSwitchRequest: %v", data)
 	}
 
 	// If this was a request with a salt in it, max 20 bytes
@@ -741,7 +727,7 @@ func parseAuthSwitchRequest(data []byte) (string, []byte, error) {
 	if len(salt) > 20 {
 		salt = salt[:20]
 	}
-	return pluginName, salt, nil
+	return AuthMethodDescription(pluginName), salt, nil
 }
 
 // requestPublicKey requests a public key from the server
@@ -750,7 +736,7 @@ func (c *Conn) requestPublicKey() (rsaKey *rsa.PublicKey, err error) {
 	data, pos := c.startEphemeralPacketWithHeader(1)
 	data[pos] = 0x02
 	if err := c.writeEphemeralPacket(); err != nil {
-		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "error sending public key request packet: %v", err)
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "error sending public key request packet: %v", err)
 	}
 
 	response, err := c.readPacket()
@@ -766,7 +752,7 @@ func (c *Conn) requestPublicKey() (rsaKey *rsa.PublicKey, err error) {
 	block, _ := pem.Decode(response[1:])
 	pub, err := x509.ParsePKIXPublicKey(block.Bytes)
 	if err != nil {
-		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "failed to parse public key from server: %v", err)
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to parse public key from server: %v", err)
 	}
 
 	return pub.(*rsa.PublicKey), nil
@@ -780,7 +766,7 @@ func (c *Conn) writeClearTextPassword(params *ConnParams) error {
 	pos = writeNullString(data, pos, params.Pass)
 	// Sanity check.
 	if pos != len(data) {
-		return vterrors.Errorf(vtrpc.Code_INTERNAL, "error building ClearTextPassword packet: got %v bytes expected %v", pos, len(data))
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "error building ClearTextPassword packet: got %v bytes expected %v", pos, len(data))
 	}
 	return c.writeEphemeralPacket()
 }
@@ -792,7 +778,7 @@ func (c *Conn) writeScrambledPassword(scrambledPassword []byte) error {
 	pos += copy(data[pos:], scrambledPassword)
 	// Sanity check.
 	if pos != len(data) {
-		return vterrors.Errorf(vtrpc.Code_INTERNAL, "error building %v packet: got %v bytes expected %v", c.authPluginName, pos, len(data))
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "error building %v packet: got %v bytes expected %v", c.authPluginName, pos, len(data))
 	}
 	return c.writeEphemeralPacket()
 }

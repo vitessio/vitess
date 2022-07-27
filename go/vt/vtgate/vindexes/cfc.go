@@ -1,19 +1,24 @@
 /*
 Copyright 2021 The Vitess Authors.
+
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
+
     http://www.apache.org/licenses/LICENSE-2.0
+
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
+
 package vindexes
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -204,10 +209,14 @@ func (vind *CFC) computeKsid(v []byte, prefix bool) ([]byte, error) {
 }
 
 // Verify returns true if ids maps to ksids.
-func (vind *CFC) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
+func (vind *CFC) Verify(ctx context.Context, vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
 	out := make([]bool, len(ids))
 	for i := range ids {
-		v, err := vind.computeKsid(ids[i].ToBytes(), false)
+		idBytes, err := ids[i].ToBytes()
+		if err != nil {
+			return out, err
+		}
+		v, err := vind.computeKsid(idBytes, false)
 		if err != nil {
 			return nil, err
 		}
@@ -217,10 +226,14 @@ func (vind *CFC) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool
 }
 
 // Map can map ids to key.Destination objects.
-func (vind *CFC) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+func (vind *CFC) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	out := make([]key.Destination, len(ids))
 	for i, id := range ids {
-		v, err := vind.computeKsid(id.ToBytes(), false)
+		idBytes, err := id.ToBytes()
+		if err != nil {
+			return out, err
+		}
+		v, err := vind.computeKsid(idBytes, false)
 		if err != nil {
 			return nil, err
 		}
@@ -289,10 +302,13 @@ func (vind *prefixCFC) IsUnique() bool {
 }
 
 // Map can map ids to key.Destination objects.
-func (vind *prefixCFC) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+func (vind *prefixCFC) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	out := make([]key.Destination, len(ids))
 	for i, id := range ids {
-		value := id.ToBytes()
+		value, err := id.ToBytes()
+		if err != nil {
+			return out, err
+		}
 		prefix := findPrefix(value)
 		begin, err := vind.computeKsid(prefix, true)
 		if err != nil {

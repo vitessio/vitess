@@ -34,7 +34,7 @@ var (
 
 type rows struct {
 	cols []string
-	vals [][]interface{}
+	vals [][]any
 	pos  int
 
 	closed bool

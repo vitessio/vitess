@@ -27,9 +27,9 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 )
 
-// NewMasterParticipation is part of the topo.Server interface
-func (s *Server) NewMasterParticipation(name, id string) (topo.MasterParticipation, error) {
-	return &etcdMasterParticipation{
+// NewLeaderParticipation is part of the topo.Server interface
+func (s *Server) NewLeaderParticipation(name, id string) (topo.LeaderParticipation, error) {
+	return &etcdLeaderParticipation{
 		s:    s,
 		name: name,
 		id:   id,
@@ -38,16 +38,16 @@ func (s *Server) NewMasterParticipation(name, id string) (topo.MasterParticipati
 	}, nil
 }
 
-// etcdMasterParticipation implements topo.MasterParticipation.
+// etcdLeaderParticipation implements topo.LeaderParticipation.
 //
 // We use a directory (in global election path, with the name) with
 // ephemeral files in it, that contains the id.  The oldest revision
 // wins the election.
-type etcdMasterParticipation struct {
+type etcdLeaderParticipation struct {
 	// s is our parent etcd topo Server
 	s *Server
 
-	// name is the name of this MasterParticipation
+	// name is the name of this LeaderParticipation
 	name string
 
 	// id is the process's current id.
@@ -60,12 +60,12 @@ type etcdMasterParticipation struct {
 	done chan struct{}
 }
 
-// WaitForMastership is part of the topo.MasterParticipation interface.
-func (mp *etcdMasterParticipation) WaitForMastership() (context.Context, error) {
+// WaitForLeadership is part of the topo.LeaderParticipation interface.
+func (mp *etcdLeaderParticipation) WaitForLeadership() (context.Context, error) {
 	// If Stop was already called, mp.done is closed, so we are interrupted.
 	select {
 	case <-mp.done:
-		return nil, topo.NewError(topo.Interrupted, "mastership")
+		return nil, topo.NewError(topo.Interrupted, "Leadership")
 	default:
 	}
 
@@ -86,7 +86,7 @@ func (mp *etcdMasterParticipation) WaitForMastership() (context.Context, error) 
 		close(mp.done)
 	}()
 
-	// Try to get the mastership, by getting a lock.
+	// Try to get the primaryship, by getting a lock.
 	var err error
 	ld, err = mp.s.lock(lockCtx, electionPath, mp.id)
 	if err != nil {
@@ -99,14 +99,14 @@ func (mp *etcdMasterParticipation) WaitForMastership() (context.Context, error) 
 	return lockCtx, nil
 }
 
-// Stop is part of the topo.MasterParticipation interface
-func (mp *etcdMasterParticipation) Stop() {
+// Stop is part of the topo.LeaderParticipation interface
+func (mp *etcdLeaderParticipation) Stop() {
 	close(mp.stop)
 	<-mp.done
 }
 
-// GetCurrentMasterID is part of the topo.MasterParticipation interface
-func (mp *etcdMasterParticipation) GetCurrentMasterID(ctx context.Context) (string, error) {
+// GetCurrentLeaderID is part of the topo.LeaderParticipation interface
+func (mp *etcdLeaderParticipation) GetCurrentLeaderID(ctx context.Context) (string, error) {
 	electionPath := path.Join(mp.s.root, electionsPath, mp.name)
 
 	// Get the keys in the directory, older first.
@@ -118,7 +118,7 @@ func (mp *etcdMasterParticipation) GetCurrentMasterID(ctx context.Context) (stri
 		return "", convertError(err, electionPath)
 	}
 	if len(resp.Kvs) == 0 {
-		// No key starts with this prefix, means nobody is the master.
+		// No key starts with this prefix, means nobody is the primary.
 		return "", nil
 	}
 	return string(resp.Kvs[0].Value), nil

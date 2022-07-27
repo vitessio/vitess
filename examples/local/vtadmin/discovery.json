@@ -2,6 +2,7 @@
     "vtctlds": [
         {
             "host": {
+                "fqdn": "localhost:15000",
                 "hostname": "localhost:15999"
             }
         }

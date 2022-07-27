@@ -17,6 +17,8 @@ limitations under the License.
 
 package planbuilder
 
+import hack "vitess.io/vitess/go/hack"
+
 type cachedObject interface {
 	CachedSize(alloc bool) int64
 }
@@ -30,7 +32,7 @@ func (cached *Permission) CachedSize(alloc bool) int64 {
 		size += int64(24)
 	}
 	// field TableName string
-	size += int64(len(cached.TableName))
+	size += hack.RuntimeAllocSize(int64(len(cached.TableName)))
 	return size
 }
 func (cached *Plan) CachedSize(alloc bool) int64 {
@@ -39,23 +41,30 @@ func (cached *Plan) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(168)
+		size += int64(112)
 	}
 	// field Table *vitess.io/vitess/go/vt/vttablet/tabletserver/schema.Table
 	size += cached.Table.CachedSize(true)
+	// field AllTables []*vitess.io/vitess/go/vt/vttablet/tabletserver/schema.Table
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.AllTables)) * int64(8))
+		for _, elem := range cached.AllTables {
+			size += elem.CachedSize(true)
+		}
+	}
 	// field Permissions []vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder.Permission
 	{
-		size += int64(cap(cached.Permissions)) * int64(24)
+		size += hack.RuntimeAllocSize(int64(cap(cached.Permissions)) * int64(24))
 		for _, elem := range cached.Permissions {
 			size += elem.CachedSize(false)
 		}
 	}
-	// field FieldQuery *vitess.io/vitess/go/vt/sqlparser.ParsedQuery
-	size += cached.FieldQuery.CachedSize(true)
 	// field FullQuery *vitess.io/vitess/go/vt/sqlparser.ParsedQuery
 	size += cached.FullQuery.CachedSize(true)
-	// field NextCount vitess.io/vitess/go/sqltypes.PlanValue
-	size += cached.NextCount.CachedSize(false)
+	// field NextCount vitess.io/vitess/go/vt/vtgate/evalengine.Expr
+	if cc, ok := cached.NextCount.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
 	// field WhereClause *vitess.io/vitess/go/vt/sqlparser.ParsedQuery
 	size += cached.WhereClause.CachedSize(true)
 	// field FullStmt vitess.io/vitess/go/vt/sqlparser.Statement

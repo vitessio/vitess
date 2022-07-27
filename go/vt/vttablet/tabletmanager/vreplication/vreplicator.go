@@ -19,8 +19,14 @@ package vreplication
 import (
 	"flag"
 	"fmt"
+	"math"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
+
+	"vitess.io/vitess/go/timer"
+	"vitess.io/vitess/go/vt/sqlparser"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 
@@ -35,6 +41,7 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
 
 var (
@@ -67,6 +74,29 @@ var (
 	vreplicationStoreCompressedGTID = flag.Bool("vreplication_store_compressed_gtid", false, "Store compressed gtids in the pos column of _vt.vreplication")
 )
 
+const (
+	getSQLModeQuery = `SELECT @@session.sql_mode AS sql_mode`
+	// SQLMode should be used whenever performing a schema change as part of a vreplication
+	// workflow to ensure that you set a permissive SQL mode as defined by
+	// VReplication. We follow MySQL's model for recreating database objects
+	// on a target -- using SQL statements generated from a source -- which
+	// ensures that we can recreate them regardless of the sql_mode that was
+	// in effect on the source when it was created:
+	//   https://github.com/mysql/mysql-server/blob/3290a66c89eb1625a7058e0ef732432b6952b435/client/mysqldump.cc#L795-L818
+	SQLMode          = "NO_AUTO_VALUE_ON_ZERO"
+	StrictSQLMode    = "STRICT_ALL_TABLES,NO_AUTO_VALUE_ON_ZERO"
+	setSQLModeQueryf = `SET @@session.sql_mode='%s'`
+)
+
+type ComponentName string
+
+const (
+	VPlayerComponentName     ComponentName = "vplayer"
+	VCopierComponentName     ComponentName = "vcopier"
+	VStreamerComponentName   ComponentName = "vstreamer"
+	RowStreamerComponentName ComponentName = "rowstreamer"
+)
+
 // vreplicator provides the core logic to start vreplication streams
 type vreplicator struct {
 	vre      *Engine
@@ -82,6 +112,12 @@ type vreplicator struct {
 	colInfoMap map[string][]*ColumnInfo
 
 	originalFKCheckSetting int64
+	originalSQLMode        string
+
+	WorkflowType int64
+	WorkflowName string
+
+	throttleUpdatesRateLimiter *timer.RateLimiter
 }
 
 // newVReplicator creates a new vreplicator. The valid fields from the source are:
@@ -118,6 +154,8 @@ func newVReplicator(id uint32, source *binlogdatapb.BinlogSource, sourceVStreame
 		stats:           stats,
 		dbClient:        newVDBClient(dbClient, stats),
 		mysqld:          mysqld,
+
+		throttleUpdatesRateLimiter: timer.NewRateLimiter(time.Second),
 	}
 }
 
@@ -145,15 +183,23 @@ func newVReplicator(id uint32, source *binlogdatapb.BinlogSource, sourceVStreame
 func (vr *vreplicator) Replicate(ctx context.Context) error {
 	err := vr.replicate(ctx)
 	if err != nil {
-		log.Errorf("Replicate error: %s", err.Error())
-		if err := vr.setMessage(fmt.Sprintf("Error: %s", err.Error())); err != nil {
-			log.Errorf("Failed to set error state: %v", err)
+		if err := vr.setMessage(err.Error()); err != nil {
+			binlogplayer.LogError("Failed to set error state", err)
 		}
 	}
 	return err
 }
 
 func (vr *vreplicator) replicate(ctx context.Context) error {
+	// Manage SQL_MODE in the same way that mysqldump does.
+	// Save the original sql_mode, set it to a permissive mode,
+	// and then reset it back to the original value at the end.
+	resetFunc, err := vr.setSQLMode(ctx)
+	defer resetFunc()
+	if err != nil {
+		return err
+	}
+
 	colInfo, err := vr.buildColInfoMap(ctx)
 	if err != nil {
 		return err
@@ -164,6 +210,7 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 	}
 	//defensive guard, should be a no-op since it should happen after copy is done
 	defer vr.resetFKCheckAfterCopy()
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -178,11 +225,10 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		// If any of the operations below changed state to Stopped, we should return.
-		if settings.State == binlogplayer.BlpStopped {
+		// If any of the operations below changed state to Stopped or Error, we should return.
+		if settings.State == binlogplayer.BlpStopped || settings.State == binlogplayer.BlpError {
 			return nil
 		}
-
 		switch {
 		case numTablesToCopy != 0:
 			if err := vr.clearFKCheck(); err != nil {
@@ -236,14 +282,14 @@ type ColumnInfo struct {
 }
 
 func (vr *vreplicator) buildColInfoMap(ctx context.Context) (map[string][]*ColumnInfo, error) {
-	schema, err := vr.mysqld.GetSchema(ctx, vr.dbClient.DBName(), []string{"/.*/"}, nil, false)
+	req := &tabletmanagerdatapb.GetSchemaRequest{Tables: []string{"/.*/"}}
+	schema, err := vr.mysqld.GetSchema(ctx, vr.dbClient.DBName(), req)
 	if err != nil {
 		return nil, err
 	}
 	queryTemplate := "select character_set_name, collation_name, column_name, data_type, column_type, extra from information_schema.columns where table_schema=%s and table_name=%s;"
 	colInfoMap := make(map[string][]*ColumnInfo)
 	for _, td := range schema.TableDefinitions {
-
 		query := fmt.Sprintf(queryTemplate, encodeString(vr.dbClient.DBName()), encodeString(td.Name))
 		qr, err := vr.mysqld.FetchSuperQuery(ctx, query)
 		if err != nil {
@@ -255,9 +301,17 @@ func (vr *vreplicator) buildColInfoMap(ctx context.Context) (map[string][]*Colum
 
 		var pks []string
 		if len(td.PrimaryKeyColumns) != 0 {
+			// Use the PK
 			pks = td.PrimaryKeyColumns
 		} else {
-			pks = td.Columns
+			// Use a PK equivalent if one exists
+			if pks, err = vr.mysqld.GetPrimaryKeyEquivalentColumns(ctx, vr.dbClient.DBName(), td.Name); err != nil {
+				return nil, err
+			}
+			// Fall back to using every column in the table if there's no PK or PKE
+			if len(pks) == 0 {
+				pks = td.Columns
+			}
 		}
 		var colInfo []*ColumnInfo
 		for _, row := range qr.Rows {
@@ -293,7 +347,7 @@ func (vr *vreplicator) buildColInfoMap(ctx context.Context) (map[string][]*Colum
 				}
 			}
 			extra := strings.ToLower(row[5].ToString())
-			if strings.Contains(extra, "generated") || strings.Contains(extra, "virtual") {
+			if strings.Contains(extra, "stored generated") || strings.Contains(extra, "virtual generated") {
 				isGenerated = true
 			}
 			colInfo = append(colInfo, &ColumnInfo{
@@ -318,7 +372,7 @@ func (vr *vreplicator) readSettings(ctx context.Context) (settings binlogplayer.
 	}
 
 	query := fmt.Sprintf("select count(*) from _vt.copy_state where vrepl_id=%d", vr.id)
-	qr, err := withDDL.Exec(ctx, query, vr.dbClient.ExecuteFetch)
+	qr, err := withDDL.Exec(ctx, query, vr.dbClient.ExecuteFetch, vr.dbClient.ExecuteFetch)
 	if err != nil {
 		return settings, numTablesToCopy, err
 	}
@@ -329,15 +383,20 @@ func (vr *vreplicator) readSettings(ctx context.Context) (settings binlogplayer.
 	if err != nil {
 		return settings, numTablesToCopy, err
 	}
+	vr.WorkflowType = settings.WorkflowType
+	vr.WorkflowName = settings.WorkflowName
 	return settings, numTablesToCopy, nil
 }
 
 func (vr *vreplicator) setMessage(message string) error {
+	message = binlogplayer.MessageTruncate(message)
 	vr.stats.History.Add(&binlogplayer.StatsHistoryRecord{
 		Time:    time.Now(),
 		Message: message,
 	})
-	query := fmt.Sprintf("update _vt.vreplication set message=%v where id=%v", encodeString(binlogplayer.MessageTruncate(message)), vr.id)
+	buf := sqlparser.NewTrackedBuffer(nil)
+	buf.Myprintf("update _vt.vreplication set message=%s where id=%s", encodeString(message), strconv.Itoa(int(vr.id)))
+	query := buf.ParsedQuery().Query
 	if _, err := vr.dbClient.Execute(query); err != nil {
 		return fmt.Errorf("could not set message: %v: %v", query, err)
 	}
@@ -400,7 +459,109 @@ func (vr *vreplicator) resetFKCheckAfterCopy() error {
 	return err
 }
 
+func (vr *vreplicator) setSQLMode(ctx context.Context) (func(), error) {
+	resetFunc := func() {}
+	// First save the original SQL mode if we have not already done so
+	if vr.originalSQLMode == "" {
+		res, err := vr.dbClient.Execute(getSQLModeQuery)
+		if err != nil || len(res.Rows) != 1 {
+			return resetFunc, fmt.Errorf("could not get the original sql_mode on target: %v", err)
+		}
+		vr.originalSQLMode = res.Named().Row().AsString("sql_mode", "")
+	}
+
+	// Create a callback function for resetting the original
+	// SQL mode back at the end of the vreplication operation.
+	// You should defer this callback wherever you call setSQLMode()
+	resetFunc = func() {
+		query := fmt.Sprintf(setSQLModeQueryf, vr.originalSQLMode)
+		_, err := vr.dbClient.Execute(query)
+		if err != nil {
+			log.Warningf("could not reset sql_mode on target using %s: %v", query, err)
+		}
+	}
+	vreplicationSQLMode := SQLMode
+	settings, _, err := vr.readSettings(ctx)
+	if err != nil {
+		return resetFunc, err
+	}
+	if settings.WorkflowType == int64(binlogdatapb.VReplicationWorkflowType_ONLINEDDL) {
+		vreplicationSQLMode = StrictSQLMode
+	}
+
+	// Now set it to a permissive mode that will allow us to recreate
+	// any database object that exists on the source in full on the
+	// target
+	query := fmt.Sprintf(setSQLModeQueryf, vreplicationSQLMode)
+	if _, err := vr.dbClient.Execute(query); err != nil {
+		return resetFunc, fmt.Errorf("could not set the permissive sql_mode on target using %s: %v", query, err)
+	}
+
+	return resetFunc, nil
+}
+
+// throttlerAppName returns the app name to be used by throttlerClient for this particular workflow
+// example results:
+// - "vreplication" for most flows
+// - "vreplication:online-ddl" for online ddl flows.
+//   Note that with such name, it's possible to throttle
+//   the worflow by either /throttler/throttle-app?app=vreplication and/or /throttler/throttle-app?app=online-ddl
+//   This is useful when we want to throttle all migrations. We throttle "online-ddl" and that applies to both vreplication
+//   migrations as well as gh-ost migrations.
+func (vr *vreplicator) throttlerAppName() string {
+	names := []string{vr.WorkflowName, throttlerVReplicationAppName}
+	if vr.WorkflowType == int64(binlogdatapb.VReplicationWorkflowType_ONLINEDDL) {
+		names = append(names, throttlerOnlineDDLAppName)
+	}
+	return strings.Join(names, ":")
+}
+
+func (vr *vreplicator) updateTimeThrottled(componentThrottled ComponentName) error {
+	err := vr.throttleUpdatesRateLimiter.Do(func() error {
+		tm := time.Now().Unix()
+		update, err := binlogplayer.GenerateUpdateTimeThrottled(vr.id, tm, string(componentThrottled))
+		if err != nil {
+			return err
+		}
+		if _, err := withDDL.Exec(vr.vre.ctx, update, vr.dbClient.ExecuteFetch, vr.dbClient.ExecuteFetch); err != nil {
+			return fmt.Errorf("error %v updating time throttled", err)
+		}
+		return nil
+	})
+	return err
+}
+
+func (vr *vreplicator) updateHeartbeatTime(tm int64) error {
+	update, err := binlogplayer.GenerateUpdateHeartbeat(vr.id, tm)
+	if err != nil {
+		return err
+	}
+	if _, err := withDDL.Exec(vr.vre.ctx, update, vr.dbClient.ExecuteFetch, vr.dbClient.ExecuteFetch); err != nil {
+		return fmt.Errorf("error %v updating time", err)
+	}
+	return nil
+}
+
 func (vr *vreplicator) clearFKCheck() error {
 	_, err := vr.dbClient.Execute("set foreign_key_checks=0;")
 	return err
+}
+
+func recalculatePKColsInfoByColumnNames(uniqueKeyColumnNames []string, colInfos []*ColumnInfo) (pkColInfos []*ColumnInfo) {
+	pkColInfos = colInfos[:]
+	columnOrderMap := map[string]int64{}
+	for _, colInfo := range pkColInfos {
+		columnOrderMap[colInfo.Name] = math.MaxInt64
+	}
+
+	isPKMap := map[string]bool{}
+	for i, colName := range uniqueKeyColumnNames {
+		columnOrderMap[colName] = int64(i)
+		isPKMap[colName] = true
+	}
+	sort.SliceStable(pkColInfos, func(i, j int) bool { return columnOrderMap[pkColInfos[i].Name] < columnOrderMap[pkColInfos[j].Name] })
+	for i := range pkColInfos {
+		pkColInfos[i].IsPK = isPKMap[pkColInfos[i].Name]
+	}
+	return pkColInfos
 }

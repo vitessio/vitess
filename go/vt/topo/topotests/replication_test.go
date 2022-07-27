@@ -17,16 +17,16 @@ limitations under the License.
 package topotests
 
 import (
+	"context"
 	"strings"
 	"testing"
 
 	"google.golang.org/protobuf/proto"
 
-	"context"
-
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -65,8 +65,12 @@ func TestFixShardReplication(t *testing.T) {
 
 	// Run FixShardReplication, should do nothing.
 	logger := logutil.NewMemoryLogger()
-	if err := topo.FixShardReplication(ctx, ts, logger, cell, keyspace, shard); err != nil {
+	problem, err := topo.FixShardReplication(ctx, ts, logger, cell, keyspace, shard)
+	if err != nil {
 		t.Errorf("FixShardReplication failed: %v", err)
+	}
+	if problem != nil {
+		t.Errorf("FixShardReplication should have found no issues, got %+v", problem)
 	}
 	sri, err = ts.GetShardReplication(ctx, cell, keyspace, shard)
 	if err != nil {
@@ -79,21 +83,37 @@ func TestFixShardReplication(t *testing.T) {
 		t.Errorf("Wrong log: %v", logger.String())
 	}
 
+	bogusTablet := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: cell,
+			Uid:  2,
+		},
+	}
+
 	// Add a bogus entries: a non-existing tablet.
 	if err := ts.UpdateShardReplicationFields(ctx, cell, keyspace, shard, func(sr *topodatapb.ShardReplication) error {
 		sr.Nodes = append(sr.Nodes, &topodatapb.ShardReplication_Node{
-			TabletAlias: &topodatapb.TabletAlias{
-				Cell: cell,
-				Uid:  2,
-			},
+			TabletAlias: bogusTablet.Alias,
 		})
 		return nil
 	}); err != nil {
 		t.Fatalf("UpdateShardReplicationFields failed: %v", err)
 	}
 	logger.Clear()
-	if err := topo.FixShardReplication(ctx, ts, logger, cell, keyspace, shard); err != nil {
+	problem, err = topo.FixShardReplication(ctx, ts, logger, cell, keyspace, shard)
+	if err != nil {
 		t.Errorf("FixShardReplication failed: %v", err)
+	}
+	if problem == nil {
+		t.Errorf("FixShardReplication should have found problem, but found none")
+	} else {
+		if problem.Type != topodatapb.ShardReplicationError_NOT_FOUND {
+			t.Errorf("FixShardReplication problem.Type mismatch: want %q got %q", topoproto.ShardReplicationErrorTypeString(topodatapb.ShardReplicationError_NOT_FOUND), topoproto.ShardReplicationErrorTypeString(problem.Type))
+		}
+
+		if !topoproto.TabletAliasEqual(problem.TabletAlias, bogusTablet.Alias) {
+			t.Errorf("FixShardReplication problem.TabletAlias mismatch: want %q got %q", topoproto.TabletAliasString(bogusTablet.Alias), topoproto.TabletAliasString(problem.TabletAlias))
+		}
 	}
 	sri, err = ts.GetShardReplication(ctx, cell, keyspace, shard)
 	if err != nil {
@@ -107,30 +127,40 @@ func TestFixShardReplication(t *testing.T) {
 	}
 
 	// Add a bogus entries: a tablet with wrong keyspace.
-	if err := ts.CreateTablet(ctx, &topodatapb.Tablet{
+	bogusTablet = &topodatapb.Tablet{
 		Keyspace: "other" + keyspace,
 		Shard:    shard,
 		Alias: &topodatapb.TabletAlias{
 			Cell: cell,
 			Uid:  3,
 		},
-	}); err != nil {
+	}
+	if err := ts.CreateTablet(ctx, bogusTablet); err != nil {
 		t.Fatalf("CreateTablet failed: %v", err)
 	}
 	if err := ts.UpdateShardReplicationFields(ctx, cell, keyspace, shard, func(sr *topodatapb.ShardReplication) error {
 		sr.Nodes = append(sr.Nodes, &topodatapb.ShardReplication_Node{
-			TabletAlias: &topodatapb.TabletAlias{
-				Cell: cell,
-				Uid:  3,
-			},
+			TabletAlias: bogusTablet.Alias,
 		})
 		return nil
 	}); err != nil {
 		t.Fatalf("UpdateShardReplicationFields failed: %v", err)
 	}
 	logger.Clear()
-	if err := topo.FixShardReplication(ctx, ts, logger, cell, keyspace, shard); err != nil {
+	problem, err = topo.FixShardReplication(ctx, ts, logger, cell, keyspace, shard)
+	if err != nil {
 		t.Errorf("FixShardReplication failed: %v", err)
+	}
+	if problem == nil {
+		t.Errorf("FixShardReplication should have found problem, but found none")
+	} else {
+		if problem.Type != topodatapb.ShardReplicationError_TOPOLOGY_MISMATCH {
+			t.Errorf("FixShardReplication problem.Type mismatch: want %q got %q", topoproto.ShardReplicationErrorTypeString(topodatapb.ShardReplicationError_TOPOLOGY_MISMATCH), topoproto.ShardReplicationErrorTypeString(problem.Type))
+		}
+
+		if !topoproto.TabletAliasEqual(problem.TabletAlias, bogusTablet.Alias) {
+			t.Errorf("FixShardReplication problem.TabletAlias mismatch: want %q got %q", topoproto.TabletAliasString(bogusTablet.Alias), topoproto.TabletAliasString(problem.TabletAlias))
+		}
 	}
 	sri, err = ts.GetShardReplication(ctx, cell, keyspace, shard)
 	if err != nil {

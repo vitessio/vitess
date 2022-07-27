@@ -24,9 +24,10 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
-func buildAlterMigrationPlan(query string, vschema ContextVSchema, enableOnlineDDL bool) (engine.Primitive, error) {
+func buildAlterMigrationPlan(query string, vschema plancontext.VSchema, enableOnlineDDL bool) (*planResult, error) {
 	if !enableOnlineDDL {
 		return nil, schema.ErrOnlineDDLDisabled
 	}
@@ -38,7 +39,7 @@ func buildAlterMigrationPlan(query string, vschema ContextVSchema, enableOnlineD
 		return nil, vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.NoDB, "No database selected: use keyspace<:shard><@type> or keyspace<[range]><@type> (<> are optional)")
 	}
 
-	if tabletType != topodatapb.TabletType_MASTER {
+	if tabletType != topodatapb.TabletType_PRIMARY {
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "ALTER VITESS_MIGRATION works only on primary tablet")
 	}
 
@@ -46,14 +47,15 @@ func buildAlterMigrationPlan(query string, vschema ContextVSchema, enableOnlineD
 		dest = key.DestinationAllShards{}
 	}
 
-	return &engine.Send{
+	send := &engine.Send{
 		Keyspace:          ks,
 		TargetDestination: dest,
 		Query:             query,
-	}, nil
+	}
+	return newPlanResult(send), nil
 }
 
-func buildRevertMigrationPlan(query string, stmt *sqlparser.RevertMigration, vschema ContextVSchema, enableOnlineDDL bool) (engine.Primitive, error) {
+func buildRevertMigrationPlan(query string, stmt *sqlparser.RevertMigration, vschema plancontext.VSchema, enableOnlineDDL bool) (*planResult, error) {
 	if !enableOnlineDDL {
 		return nil, schema.ErrOnlineDDLDisabled
 	}
@@ -65,7 +67,7 @@ func buildRevertMigrationPlan(query string, stmt *sqlparser.RevertMigration, vsc
 		return nil, vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.NoDB, "No database selected: use keyspace<:shard><@type> or keyspace<[range]><@type> (<> are optional)")
 	}
 
-	if tabletType != topodatapb.TabletType_MASTER {
+	if tabletType != topodatapb.TabletType_PRIMARY {
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "REVERT VITESS_MIGRATION works only on primary tablet")
 	}
 
@@ -73,10 +75,39 @@ func buildRevertMigrationPlan(query string, stmt *sqlparser.RevertMigration, vsc
 		dest = key.DestinationAllShards{}
 	}
 
-	return &engine.RevertMigration{
+	emig := &engine.RevertMigration{
 		Keyspace:          ks,
 		TargetDestination: dest,
 		Stmt:              stmt,
 		Query:             query,
-	}, nil
+	}
+	return newPlanResult(emig), nil
+}
+
+func buildShowMigrationLogsPlan(query string, vschema plancontext.VSchema, enableOnlineDDL bool) (*planResult, error) {
+	if !enableOnlineDDL {
+		return nil, schema.ErrOnlineDDLDisabled
+	}
+	dest, ks, tabletType, err := vschema.TargetDestination("")
+	if err != nil {
+		return nil, err
+	}
+	if ks == nil {
+		return nil, vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.NoDB, "No database selected: use keyspace<:shard><@type> or keyspace<[range]><@type> (<> are optional)")
+	}
+
+	if tabletType != topodatapb.TabletType_PRIMARY {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "SHOW VITESS_MIGRATION works only on primary tablet")
+	}
+
+	if dest == nil {
+		dest = key.DestinationAllShards{}
+	}
+
+	send := &engine.Send{
+		Keyspace:          ks,
+		TargetDestination: dest,
+		Query:             query,
+	}
+	return newPlanResult(send), nil
 }
