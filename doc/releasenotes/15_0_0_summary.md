@@ -18,7 +18,7 @@
 
 #### Vindex Interface
 
-All the vindex interface methods are changed by adding context.Context as an input parameter.
+All the vindex interface methods are changed by adding `context.Context` as an input parameter.
 
 E.g:
 ```go
