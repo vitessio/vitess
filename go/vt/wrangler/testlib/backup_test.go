@@ -135,6 +135,12 @@ func testBackupRestore(t *testing.T, cDetails *compressionDetails) error {
 		}
 	}
 
+	// get the flavor and version to deal with any behavioral differences
+	versionStr, err := mysqlctl.GetVersionString()
+	require.NoError(t, err)
+	flavor, version, err := mysqlctl.ParseVersionString(versionStr)
+	require.NoError(t, err)
+
 	// Initialize the fake mysql root directories
 	sourceInnodbDataDir := path.Join(root, "source_innodb_data")
 	sourceInnodbLogDir := path.Join(root, "source_innodb_log")
@@ -143,8 +149,21 @@ func testBackupRestore(t *testing.T, cDetails *compressionDetails) error {
 	for _, s := range []string{sourceInnodbDataDir, sourceInnodbLogDir, sourceDataDbDir} {
 		require.NoError(t, os.MkdirAll(s, os.ModePerm))
 	}
+
+	// innodbRedoLogSubDir provides the InnoDB redo log subdirectory if the server has one.
+	// Starting with MySQL 8.0.30, the InnoDB redo logs are stored in a subdirectory of the
+	// <innodb_log_group_home_dir> (<datadir>/. by default) called "#innodb_redo". See:
+	//   https://dev.mysql.com/doc/refman/8.0/en/innodb-redo-log.html#innodb-modifying-redo-log-capacity
+	if (flavor == mysqlctl.FlavorMySQL || flavor == mysqlctl.FlavorPercona) &&
+		((version.Major == 8 && version.Patch >= 30) || version.Major >= 9) {
+		newPath := path.Join(sourceInnodbLogDir, "#innodb_redo")
+		require.NoError(t, os.Mkdir(newPath, os.ModePerm))
+		require.NoError(t, os.WriteFile(path.Join(newPath, "#ib_redo1"), []byte("innodb log 1 contents"), os.ModePerm))
+	} else {
+		require.NoError(t, os.WriteFile(path.Join(sourceInnodbLogDir, "innodb_log_1"), []byte("innodb log 1 contents"), os.ModePerm))
+	}
+
 	require.NoError(t, os.WriteFile(path.Join(sourceInnodbDataDir, "innodb_data_1"), []byte("innodb data 1 contents"), os.ModePerm))
-	require.NoError(t, os.WriteFile(path.Join(sourceInnodbLogDir, "innodb_log_1"), []byte("innodb log 1 contents"), os.ModePerm))
 	require.NoError(t, os.WriteFile(path.Join(sourceDataDbDir, "db.opt"), []byte("db opt file"), os.ModePerm))
 
 	// create a primary tablet, set its primary position
@@ -250,7 +269,7 @@ func testBackupRestore(t *testing.T, cDetails *compressionDetails) error {
 		RelayLogInfoPath:      path.Join(root, "relay-log.info"),
 	}
 
-	err := destTablet.TM.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */, time.Time{} /* backupTime */)
+	err = destTablet.TM.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */, time.Time{} /* backupTime */)
 	if err != nil {
 		return err
 	}
