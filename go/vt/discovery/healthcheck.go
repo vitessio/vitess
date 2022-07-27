@@ -92,9 +92,6 @@ var (
 	waitAvailableTabletInterval = 100 * time.Millisecond
 )
 
-func init() {
-}
-
 // See the documentation for NewHealthCheck below for an explanation of these parameters.
 const (
 	DefaultHealthCheckRetryDelay = 5 * time.Second
@@ -160,7 +157,7 @@ func registerDiscoveryFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&refreshKnownTablets, "tablet_refresh_known_tablets", true, "Whether to reload the tablet's address/port map from topo in case they change.")
 	fs.IntVar(&topoReadConcurrency, "topo_read_concurrency", 32, "Concurrency of topo reads.")
 	fs.StringSliceVar(&tabletFilters, "tablet_filters", []string{}, "Specifies a comma-separated list of 'keyspace|shard_name or keyrange' values to filter the tablets to watch.")
-	topoproto.TabletTypeListVar(fs, &AllowedTabletTypes, "allowed_tablet_types", "Specifies the tablet types this vtgate is allowed to route queries to.")
+	fs.Var((*topoproto.TabletTypeListFlag)(&AllowedTabletTypes), "allowed_tablet_types", "Specifies the tablet types this vtgate is allowed to route queries to.")
 	fs.StringSliceVar(&KeyspacesToWatch, "keyspaces_to_watch", []string{}, "Specifies which keyspaces this vtgate should have access to while routing queries or accessing the vschema.")
 	ParseTabletURLTemplateFromFlag()
 }
