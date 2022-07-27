@@ -351,46 +351,53 @@ func TestOkPackets(t *testing.T) {
 	}()
 
 	testCases := []struct {
-		data        string
+		dataIn      string
+		dataOut     string
 		cc          uint32
 		expectedErr string
 	}{{
-		data: `
+		dataIn: `
 00000000  00 00 00 02 00 00 00                              |.......|`,
 		cc: CapabilityClientProtocol41,
 	}, {
-		data: `
+		dataIn: `
 00000000  00 00 00 02 00                                    |.....|`,
 		cc:          CapabilityClientTransactions,
 		expectedErr: "invalid OK packet warnings: &{[0 0 0 2 0] 0}",
 	}, {
-		data: `
+		dataIn: `
 00000000  00 00 00 02 40 00 00 00  2a 03 28 00 26 66 32 37  |....@...*.(.&f27|
 00000010  66 36 39 37 31 2d 30 33  65 37 2d 31 31 65 62 2d  |f6971-03e7-11eb-|
 00000020  38 35 63 35 2d 39 38 61  66 36 35 61 36 64 63 34  |85c5-98af65a6dc4|
 00000030  61 3a 32                                          |a:2|`,
 		cc: CapabilityClientProtocol41 | CapabilityClientTransactions | CapabilityClientSessionTrack,
 	}, {
-		data:        `00000000  00 00 00 02 40 00 00 00  07 01 05 04 74 65 73 74  |....@.......test|`,
-		cc:          CapabilityClientProtocol41 | CapabilityClientTransactions | CapabilityClientSessionTrack,
-		expectedErr: "invalid OK packet session state change type: 1",
+		dataIn:  `00000000  00 00 00 02 40 00 00 00  07 01 05 04 74 65 73 74  |....@.......test|`,
+		dataOut: `00000000  00 00 00 02 40 00 00 00  04 03 02 00 00  |....@........|`,
+		cc:      CapabilityClientProtocol41 | CapabilityClientTransactions | CapabilityClientSessionTrack,
 	}, {
-		data: `
+		dataIn: `
 00000000  00 00 00 00 40 00 00 00  14 00 0f 0a 61 75 74 6f  |....@.......auto|
 00000010  63 6f 6d 6d 69 74 03 4f  46 46 02 01 31           |commit.OFF..1|`,
-		cc:          CapabilityClientProtocol41 | CapabilityClientTransactions | CapabilityClientSessionTrack,
-		expectedErr: "invalid OK packet session state change type: 0",
+		dataOut: `
+00000000  00 00 00 00 40 00 00 00  04 03 02 00 00           |....@........|`,
+		cc: CapabilityClientProtocol41 | CapabilityClientTransactions | CapabilityClientSessionTrack,
 	}, {
-		data: `
+		dataIn: `
 00000000  00 00 00 00 40 00 00 00  0a 01 05 04 74 65 73 74  |....@.......test|
 00000010  02 01 31                                          |..1|`,
-		cc:          CapabilityClientProtocol41 | CapabilityClientTransactions | CapabilityClientSessionTrack,
-		expectedErr: "invalid OK packet session state change type: 1",
+		dataOut: `
+00000000  00 00 00 00 40 00 00 00  04 03 02 00 00           |....@........|`,
+		cc: CapabilityClientProtocol41 | CapabilityClientTransactions | CapabilityClientSessionTrack,
 	}}
 
 	for i, testCase := range testCases {
 		t.Run("data packet:"+strconv.Itoa(i), func(t *testing.T) {
-			data := ReadHexDump(testCase.data)
+			data := ReadHexDump(testCase.dataIn)
+			dataOut := data
+			if testCase.dataOut != "" {
+				dataOut = ReadHexDump(testCase.dataOut)
+			}
 
 			cConn.Capabilities = testCase.cc
 			sConn.Capabilities = testCase.cc
@@ -407,10 +414,10 @@ func TestOkPackets(t *testing.T) {
 			err = sConn.writeOKPacket(packetOk)
 			require.NoError(t, err, "failed to write OK packet")
 
-			// receive the ok packer on client
+			// receive the ok packet on client
 			readData, err := cConn.ReadPacket()
 			require.NoError(t, err, "failed to read packet that was written")
-			assert.Equal(t, data, readData, "data read and written does not match")
+			assert.Equal(t, dataOut, readData, "data read and written does not match")
 		})
 	}
 }

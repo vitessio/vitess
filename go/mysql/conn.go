@@ -1466,8 +1466,12 @@ func (c *Conn) parseOKPacket(in []byte) (*PacketOK, error) {
 				return fail("invalid OK packet session state change length: %v", data)
 			}
 			sscType, ok := data.readByte()
-			if !ok || sscType != SessionTrackGtids {
+			if !ok {
 				return fail("invalid OK packet session state change type: %v", sscType)
+			}
+			// If it's not a GTID, we don't care about it so we can return.
+			if sscType != SessionTrackGtids {
+				return packetOK, nil
 			}
 
 			// Move past the total length of the changed entity: 1 byte
