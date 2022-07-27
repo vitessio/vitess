@@ -228,8 +228,6 @@ func WaitForMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, shards []c
 		}
 		time.Sleep(1 * time.Second)
 	}
-	require.Fail(t, fmt.Sprintf("migration %s did not reach an expected status (%v) before hitting the timeout of %v, last known status: %v",
-		uuid, expectStatuses, timeout, lastKnownStatus))
 	return schema.OnlineDDLStatus(lastKnownStatus)
 }
 
