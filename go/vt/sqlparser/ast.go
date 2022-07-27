@@ -3301,6 +3301,7 @@ func (*JoinTableExpr) iTableExpr()    {}
 func (*CommonTableExpr) iTableExpr()  {}
 func (*ValuesStatement) iTableExpr()  {}
 func (TableFuncExpr) iTableExpr()     {}
+func (*JSONTableExpr) iTableExpr()    {}
 
 // AliasedTableExpr represents a table expression
 // coupled with an optional alias, AS OF expression, and index hints.
@@ -3729,6 +3730,26 @@ func (node *JoinTableExpr) walkSubtree(visit Visit) error {
 		node.RightExpr,
 		node.Condition,
 	)
+}
+
+// JSONTableExpr represents a TableExpr that's a json_table operation.
+type JSONTableExpr struct {
+	Data    string
+	Path    string
+	Columns *TableSpec
+	Alias   TableIdent
+}
+
+// Format formats the node.
+func (node *JSONTableExpr) Format(buf *TrackedBuffer) {
+	buf.Myprintf("%s %s %v %s", node.Data, node.Path, node.Columns, node.Alias)
+}
+
+func (node *JSONTableExpr) walkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+	return Walk(visit)
 }
 
 // IndexHints represents a list of index hints.

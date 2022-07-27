@@ -309,11 +309,14 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> SUM VAR_POP VARIANCE VAR_SAMP CUME_DIST DENSE_RANK FIRST_VALUE LAG LAST_VALUE LEAD NTH_VALUE NTILE
 %token <bytes> ROW_NUMBER PERCENT_RANK RANK
 
+// Table functions
+%token <bytes> JSON_TABLE
+
 // Match
 %token <bytes> MATCH AGAINST BOOLEAN LANGUAGE WITH QUERY EXPANSION
 
 // MySQL reserved words that are unused by this grammar will map to this token.
-%token <bytes> UNUSED ARRAY DESCRIPTION EMPTY JSON_TABLE LATERAL MEMBER RECURSIVE
+%token <bytes> UNUSED ARRAY DESCRIPTION EMPTY LATERAL MEMBER RECURSIVE
 %token <bytes> ACTIVE BUCKETS CLONE COMPONENT DEFINITION ENFORCED EXCLUDE FOLLOWING GEOMCOLLECTION GET_MASTER_PUBLIC_KEY HISTOGRAM HISTORY
 %token <bytes> INACTIVE INVISIBLE LOCKED MASTER_COMPRESSION_ALGORITHMS MASTER_PUBLIC_KEY_PATH MASTER_TLS_CIPHERSUITES MASTER_ZSTD_COMPRESSION_LEVEL
 %token <bytes> NESTED NETWORK_NAMESPACE NOWAIT NULLS OJ OLD ORDINALITY ORGANIZATION OTHERS PATH PERSIST PERSIST_ONLY PRECEDING PRIVILEGE_CHECKS_USER PROCESS
@@ -362,7 +365,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <expr> expression naked_like group_by
 %type <tableExprs> table_references cte_list from_opt
 %type <with> with_clause
-%type <tableExpr> table_reference table_function table_factor join_table common_table_expression
+%type <tableExpr> table_reference table_function table_factor join_table json_table common_table_expression
 %type <simpleTableExpr> values_statement subquery_or_values
 %type <subquery> subquery
 %type <joinCondition> join_condition join_condition_opt on_expression_opt
@@ -4282,6 +4285,7 @@ table_references:
 table_reference:
   table_factor
 | join_table
+| json_table
 
 table_factor:
   aliased_table_name
@@ -4437,6 +4441,12 @@ join_table:
 | table_reference natural_join table_factor
   {
     $$ = &JoinTableExpr{LeftExpr: $1, Join: $2, RightExpr: $3}
+  }
+
+json_table:
+  table_reference JSON_TABLE openb STRING ',' STRING COLUMNS openb table_column_list closeb closeb AS table_alias
+  {
+    $$ = &JSONTableExpr{Data: string($4), Path: string($6), Columns: $9, Alias: $13}
   }
 
 join_condition:
