@@ -17,21 +17,13 @@ limitations under the License.
 package topoproto
 
 import (
-	"flag"
 	"strings"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-// TabletTypeVar defines a TabletType flag with the specified name, default value and usage
-// string. The argument 'p' points to a tabletType in which to store the value of the flag.
-func TabletTypeVar(p *topodatapb.TabletType, name string, defaultValue topodatapb.TabletType, usage string) {
-	*p = defaultValue
-	flag.Var((*TabletTypeFlag)(p), name, usage)
-}
-
-// TabletTypeListFlag implements the flag.Value interface, for parsing a command-line comma-separated
-// list of value into a slice of TabletTypes.
+// TabletTypeListFlag implements the pflag.Value interface, for parsing a command-line comma-separated
+// list of values into a slice of TabletTypes.
 type TabletTypeListFlag []topodatapb.TabletType
 
 // String is part of the pflag.Value interface.
@@ -45,27 +37,25 @@ func (ttlv *TabletTypeListFlag) Set(v string) (err error) {
 	return err
 }
 
-// Type is for satisfying the pflag.Value interface.
+// Type is part of the pflag.Value interface.
 func (ttlv *TabletTypeListFlag) Type() string {
 	return "[]topodatapb.TabletType"
 }
 
-// TabletTypeFlag implements the flag.Value interface, for parsing a command-line value into a TabletType.
+// TabletTypeFlag implements the pflag.Value interface, for parsing a command-line value into a TabletType.
 type TabletTypeFlag topodatapb.TabletType
 
-// String is part of the flag.Value interface.
+// String is part of the pflag.Value interfaces.
 func (ttf *TabletTypeFlag) String() string {
 	return topodatapb.TabletType(*ttf).String()
 }
 
-// Set is part of the flag.Value interface.
+// Set is part of the pflag.Value interfaces.
 func (ttf *TabletTypeFlag) Set(v string) error {
 	t, err := ParseTabletType(v)
 	*ttf = TabletTypeFlag(t)
 	return err
 }
 
-// Get is for satisflying the internal flag interface.
-func (ttf *TabletTypeFlag) Get() any {
-	return *ttf
-}
+// Type is part of the pflag.Value interface.
+func (*TabletTypeFlag) Type() string { return "topodatapb.TabletType" }
