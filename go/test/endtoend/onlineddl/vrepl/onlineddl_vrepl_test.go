@@ -254,7 +254,7 @@ func TestSchemaChange(t *testing.T) {
 	providedMigrationContext := ""
 	testWithInitialSchema(t)
 	t.Run("alter non_online", func(t *testing.T) {
-		testOnlineDDLStatement(t, alterTableNormalStatement, string(schema.DDLStrategyDirect), providedUUID, providedMigrationContext, "vtctl", "non_online", "")
+		_ = testOnlineDDLStatement(t, alterTableNormalStatement, string(schema.DDLStrategyDirect), providedUUID, providedMigrationContext, "vtctl", "non_online", "")
 		insertRows(t, 2)
 		testRows(t)
 	})
@@ -313,7 +313,7 @@ func TestSchemaChange(t *testing.T) {
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 	})
 	t.Run("fail duplicate migration with different context", func(t *testing.T) {
-		testOnlineDDLStatement(t, alterTableTrivialStatement, "online", providedUUID, "endtoend:different-context-0000", "vtctl", "vrepl_col", "rejected")
+		_ = testOnlineDDLStatement(t, alterTableTrivialStatement, "online", providedUUID, "endtoend:different-context-0000", "vtctl", "vrepl_col", "rejected")
 	})
 	providedUUID = ""
 	providedMigrationContext = ""
@@ -322,7 +322,7 @@ func TestSchemaChange(t *testing.T) {
 		insertRows(t, 2)
 		uuid := testOnlineDDLStatement(t, alterTableTrivialStatement, "vitess -postpone-completion", providedUUID, providedMigrationContext, "vtgate", "test_val", "")
 		// Should be running!
-		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalMigrationWait, schema.OnlineDDLStatusRunning)
+		_ = onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalMigrationWait, schema.OnlineDDLStatusRunning)
 		// Issue a complete and wait for successful completion
 		onlineddl.CheckCompleteMigration(t, &vtParams, shards, uuid, true)
 		// This part may take a while, because we depend on vreplicatoin polling
@@ -346,10 +346,10 @@ func TestSchemaChange(t *testing.T) {
 		defer onlineddl.UnthrottleAllMigrations(t, &vtParams)
 
 		uuid := testOnlineDDLStatement(t, alterTableThrottlingStatement, "online", providedUUID, providedMigrationContext, "vtgate", "vrepl_col", "", schema.OnlineDDLStatusRunning)
-		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalMigrationWait, schema.OnlineDDLStatusRunning)
+		_ = onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalMigrationWait, schema.OnlineDDLStatusRunning)
 		testRows(t)
 		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, true)
-		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalMigrationWait, schema.OnlineDDLStatusFailed)
+		_ = onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalMigrationWait, schema.OnlineDDLStatusFailed)
 	})
 
 	t.Run("throttled and unthrottled migration", func(t *testing.T) {
@@ -362,7 +362,7 @@ func TestSchemaChange(t *testing.T) {
 		onlineddl.CheckThrottledApps(t, &vtParams, onlineDDLThrottlerAppName, true)
 
 		uuid := testOnlineDDLStatement(t, alterTableTrivialStatement, "vitess", providedUUID, providedMigrationContext, "vtgate", "test_val", "", schema.OnlineDDLStatusRunning)
-		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalMigrationWait, schema.OnlineDDLStatusRunning)
+		_ = onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalMigrationWait, schema.OnlineDDLStatusRunning)
 		testRows(t)
 
 		// gotta give the migration a few seconds to read throttling info from _vt.vreplication and write
@@ -451,7 +451,7 @@ func TestSchemaChange(t *testing.T) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				testOnlineDDLStatement(t, alterTableThrottlingStatement, "vitess", providedUUID, providedMigrationContext, "vtgate", "vrepl_col", "", schema.OnlineDDLStatusRunning, schema.OnlineDDLStatusReady)
+				_ = testOnlineDDLStatement(t, alterTableThrottlingStatement, "vitess", providedUUID, providedMigrationContext, "vtgate", "vrepl_col", "", schema.OnlineDDLStatusRunning, schema.OnlineDDLStatusReady)
 			}()
 		}
 		wg.Wait()
@@ -470,7 +470,7 @@ func TestSchemaChange(t *testing.T) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				testOnlineDDLStatement(t, alterTableThrottlingStatement, "online", providedUUID, providedMigrationContext, "vtgate", "vrepl_col", "", schema.OnlineDDLStatusRunning, schema.OnlineDDLStatusReady)
+				_ = testOnlineDDLStatement(t, alterTableThrottlingStatement, "online", providedUUID, providedMigrationContext, "vtgate", "vrepl_col", "", schema.OnlineDDLStatusRunning, schema.OnlineDDLStatusReady)
 			}()
 		}
 		wg.Wait()
@@ -558,7 +558,7 @@ func TestSchemaChange(t *testing.T) {
 					assert.Contains(t, body, onlineDDLThrottlerAppName)
 				}
 
-				onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, extendedMigrationWait, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+				_ = onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, extendedMigrationWait, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 			})
 
 			t.Run("Check tablet post PRS", func(t *testing.T) {
@@ -584,7 +584,7 @@ func TestSchemaChange(t *testing.T) {
 				}
 				onlineddl.CheckRetryPartialMigration(t, &vtParams, uuid)
 				// Now it should complete on the failed shard
-				onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, extendedMigrationWait, schema.OnlineDDLStatusComplete)
+				_ = onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, extendedMigrationWait, schema.OnlineDDLStatusComplete)
 			})
 		})
 	}
