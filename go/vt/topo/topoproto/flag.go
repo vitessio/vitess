@@ -27,8 +27,8 @@ import (
 
 // TabletTypeListVar defines a []TabletType flag with the specified name and usage
 // string. The argument 'p' points to a []TabletType in which to store the value of the flag.
-func TabletTypeListVar(p *[]topodatapb.TabletType, name string, usage string) {
-	pflag.Var((*TabletTypeListValue)(p), name, usage)
+func TabletTypeListVar(fs *pflag.FlagSet, p *[]topodatapb.TabletType, name string, usage string) {
+	fs.Var((*TabletTypeListValue)(p), name, usage)
 }
 
 // TabletTypeVar defines a TabletType flag with the specified name, default value and usage

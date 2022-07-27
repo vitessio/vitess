@@ -80,8 +80,7 @@ var (
 	tabletFilters []string
 
 	// refreshInterval is the interval at which healthcheck refreshes its list of tablets from topo.
-	// We need to initialize this for tests to pass.
-	refreshInterval = time.Minute
+	refreshInterval time.Duration
 
 	// refreshKnownTablets tells us whether to process all tablets or only new tablets.
 	refreshKnownTablets bool
@@ -156,13 +155,13 @@ func init() {
 }
 
 func registerDiscoveryFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&TabletURLTemplateString, "tablet_url_template", "http://{{.GetTabletHostPort}}", "format string describing debug tablet url formatting. See the Go code for getTabletDebugURL() how to customize this.")
-	fs.DurationVar(&refreshInterval, "tablet_refresh_interval", 1*time.Minute, "tablet refresh interval")
-	fs.BoolVar(&refreshKnownTablets, "tablet_refresh_known_tablets", true, "tablet refresh reloads the tablet address/port map from topo in case it changes")
-	fs.IntVar(&topoReadConcurrency, "topo_read_concurrency", 32, "concurrent topo reads")
-	fs.StringSliceVar(&tabletFilters, "tablet_filters", []string{}, "Specifies a comma-separated list of 'keyspace|shard_name or keyrange' values to filter the tablets to watch")
-	topoproto.TabletTypeListVar(&AllowedTabletTypes, "allowed_tablet_types", "Specifies the tablet types this vtgate is allowed to route queries to")
-	fs.StringSliceVar(&KeyspacesToWatch, "keyspaces_to_watch", []string{}, "Specifies which keyspaces this vtgate should have access to while routing queries or accessing the vschema")
+	fs.StringVar(&TabletURLTemplateString, "tablet_url_template", "http://{{.GetTabletHostPort}}", "Format string describing debug tablet url formatting. See getTabletDebugURL() for how to customize this.")
+	fs.DurationVar(&refreshInterval, "tablet_refresh_interval", 1*time.Minute, "Tablet refresh interval.")
+	fs.BoolVar(&refreshKnownTablets, "tablet_refresh_known_tablets", true, "Whether to reload the tablet's address/port map from topo in case they change.")
+	fs.IntVar(&topoReadConcurrency, "topo_read_concurrency", 32, "Concurrency of topo reads.")
+	fs.StringSliceVar(&tabletFilters, "tablet_filters", []string{}, "Specifies a comma-separated list of 'keyspace|shard_name or keyrange' values to filter the tablets to watch.")
+	topoproto.TabletTypeListVar(fs, &AllowedTabletTypes, "allowed_tablet_types", "Specifies the tablet types this vtgate is allowed to route queries to.")
+	fs.StringSliceVar(&KeyspacesToWatch, "keyspaces_to_watch", []string{}, "Specifies which keyspaces this vtgate should have access to while routing queries or accessing the vschema.")
 	ParseTabletURLTemplateFromFlag()
 }
 

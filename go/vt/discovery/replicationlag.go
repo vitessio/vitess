@@ -28,10 +28,10 @@ import (
 
 var (
 	// lowReplicationLag defines the duration that replication lag is low enough that the VTTablet is considered healthy.
-	lowReplicationLag             = 30 * time.Second
-	highReplicationLagMinServing  = 2 * time.Hour
-	minNumTablets                 = 2
-	legacyReplicationLagAlgorithm = true
+	lowReplicationLag             time.Duration
+	highReplicationLagMinServing  time.Duration
+	minNumTablets                 int
+	legacyReplicationLagAlgorithm bool
 )
 
 func init() {
@@ -39,10 +39,10 @@ func init() {
 }
 
 func registerReplicationFlags(fs *pflag.FlagSet) {
-	fs.DurationVar(&lowReplicationLag, "discovery_low_replication_lag", 30*time.Second, "the replication lag that is considered low enough to be healthy")
-	fs.DurationVar(&highReplicationLagMinServing, "discovery_high_replication_lag_minimum_serving", 2*time.Hour, "the replication lag that is considered too high when applying the min_number_serving_vttablets threshold")
-	fs.IntVar(&minNumTablets, "min_number_serving_vttablets", 2, "the minimum number of vttablets for each replicating tablet_type (e.g. replica, rdonly) that will be continue to be used even with replication lag above discovery_low_replication_lag, but still below discovery_high_replication_lag_minimum_serving")
-	fs.BoolVar(&legacyReplicationLagAlgorithm, "legacy_replication_lag_algorithm", true, "use the legacy algorithm when selecting the vttablets for serving")
+	fs.DurationVar(&lowReplicationLag, "discovery_low_replication_lag", 30*time.Second, "Threshold below which replication lag is considered low enough to be healthy.")
+	fs.DurationVar(&highReplicationLagMinServing, "discovery_high_replication_lag_minimum_serving", 2*time.Hour, "Threshold above which replication lag is considered too high when applying the min_number_serving_vttablets flag.")
+	fs.IntVar(&minNumTablets, "min_number_serving_vttablets", 2, "The minimum number of vttablets for each replicating tablet_type (e.g. replica, rdonly) that will be continue to be used even with replication lag above discovery_low_replication_lag, but still below discovery_high_replication_lag_minimum_serving.")
+	fs.BoolVar(&legacyReplicationLagAlgorithm, "legacy_replication_lag_algorithm", true, "Use the legacy algorithm when selecting vttablets for serving.")
 }
 
 // GetLowReplicationLag getter for use by debugenv

@@ -71,6 +71,7 @@ func init() {
 		log.Errorf("failed to set flag \"tablet_protocol\" to \"fake_gateway\":%v", err)
 	}
 	connMap = make(map[string]*fakeConn)
+	refreshInterval = time.Minute
 }
 
 func TestHealthCheck(t *testing.T) {
