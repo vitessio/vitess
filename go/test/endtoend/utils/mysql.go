@@ -68,7 +68,7 @@ func NewMySQL(cluster *cluster.LocalProcessCluster, dbName string, schemaSQL ...
 	}
 
 	for _, sql := range schemaSQL {
-		err = prepareMySQLWithSchema(err, params, sql)
+		err = prepareMySQLWithSchema(params, sql)
 		if err != nil {
 			return mysql.ConnParams{}, nil, err
 		}
@@ -119,7 +119,7 @@ func initMysqld(mysqld *mysqlctl.Mysqld, mycnf *mysqlctl.Mycnf, initSQLFile stri
 	return nil
 }
 
-func prepareMySQLWithSchema(err error, params mysql.ConnParams, sql string) error {
+func prepareMySQLWithSchema(params mysql.ConnParams, sql string) error {
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &params)
 	if err != nil {
