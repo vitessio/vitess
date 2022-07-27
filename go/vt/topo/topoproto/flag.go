@@ -20,16 +20,8 @@ import (
 	"flag"
 	"strings"
 
-	"github.com/spf13/pflag"
-
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
-
-// TabletTypeListVar defines a []TabletType flag with the specified name and usage
-// string. The argument 'p' points to a []TabletType in which to store the value of the flag.
-func TabletTypeListVar(fs *pflag.FlagSet, p *[]topodatapb.TabletType, name string, usage string) {
-	fs.Var((*TabletTypeListValue)(p), name, usage)
-}
 
 // TabletTypeVar defines a TabletType flag with the specified name, default value and usage
 // string. The argument 'p' points to a tabletType in which to store the value of the flag.
@@ -38,28 +30,23 @@ func TabletTypeVar(p *topodatapb.TabletType, name string, defaultValue topodatap
 	flag.Var((*TabletTypeFlag)(p), name, usage)
 }
 
-// TabletTypeListValue implements the flag.Value interface, for parsing a command-line comma-separated
+// TabletTypeListFlag implements the flag.Value interface, for parsing a command-line comma-separated
 // list of value into a slice of TabletTypes.
-type TabletTypeListValue []topodatapb.TabletType
+type TabletTypeListFlag []topodatapb.TabletType
 
-// String is part of the flag.Value interface.
-func (ttlv *TabletTypeListValue) String() string {
+// String is part of the pflag.Value interface.
+func (ttlv *TabletTypeListFlag) String() string {
 	return strings.Join(MakeStringTypeList(*ttlv), ",")
 }
 
-// Set is part of the flag.Value interface.
-func (ttlv *TabletTypeListValue) Set(v string) (err error) {
+// Set is part of the pflag.Value interface.
+func (ttlv *TabletTypeListFlag) Set(v string) (err error) {
 	*ttlv, err = ParseTabletTypes(v)
 	return err
 }
 
-// Get is for satisfying the internal flag interface.
-func (ttlv *TabletTypeListValue) Get() any {
-	return *ttlv
-}
-
 // Type is for satisfying the pflag.Value interface.
-func (ttlv *TabletTypeListValue) Type() string {
+func (ttlv *TabletTypeListFlag) Type() string {
 	return "[]topodatapb.TabletType"
 }
 
