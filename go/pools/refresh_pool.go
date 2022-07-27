@@ -37,11 +37,11 @@ type (
 		refreshStop     chan struct{}
 		refreshWg       sync.WaitGroup
 
-		pool IRefreshPool
+		pool refreshPool
 	}
 )
 
-type IRefreshPool interface {
+type refreshPool interface {
 	// reopen drains and reopens the connection pool
 	reopen()
 
@@ -49,7 +49,7 @@ type IRefreshPool interface {
 	closeIdleResources()
 }
 
-func newPoolRefresh(pool IRefreshPool, refreshCheck RefreshCheck, refreshInterval time.Duration) *poolRefresh {
+func newPoolRefresh(pool refreshPool, refreshCheck RefreshCheck, refreshInterval time.Duration) *poolRefresh {
 	if refreshCheck == nil || refreshInterval <= 0 {
 		return nil
 	}
