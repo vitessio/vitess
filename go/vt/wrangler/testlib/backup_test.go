@@ -376,6 +376,7 @@ func TestBackupRestoreLagged(t *testing.T) {
 	if needIt {
 		newPath := path.Join(sourceInnodbLogDir, mysql.DynamicRedoLogSubdir)
 		require.NoError(t, os.Mkdir(newPath, os.ModePerm))
+		require.NoError(t, os.WriteFile(path.Join(newPath, "#ib_redo1"), []byte("innodb log 1 contents"), os.ModePerm))
 	} else {
 		require.NoError(t, os.WriteFile(path.Join(sourceInnodbLogDir, "innodb_log_1"), []byte("innodb log 1 contents"), os.ModePerm))
 	}
@@ -878,7 +879,7 @@ func needInnoDBRedoLogSubdir() (needIt bool, err error) {
 	versionStr := fmt.Sprintf("%d.%d.%d", sv.Major, sv.Minor, sv.Patch)
 	_, capableOf, _ := mysql.GetFlavor(versionStr, nil)
 	if capableOf == nil {
-		return needIt, fmt.Errorf("cannot determine database flavor details for version %v", versionStr)
+		return needIt, fmt.Errorf("cannot determine database flavor details for version %s", versionStr)
 	}
 	return capableOf(mysql.DynamicRedoLogCapacityFlavorCapability)
 }
