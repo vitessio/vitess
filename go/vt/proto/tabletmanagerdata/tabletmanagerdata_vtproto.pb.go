@@ -4292,17 +4292,17 @@ func (m *VDiffRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i--
 		dAtA[i] = 0x2a
 	}
-	if len(m.SubCommand) > 0 {
-		i -= len(m.SubCommand)
-		copy(dAtA[i:], m.SubCommand)
-		i = encodeVarint(dAtA, i, uint64(len(m.SubCommand)))
+	if len(m.ActionArg) > 0 {
+		i -= len(m.ActionArg)
+		copy(dAtA[i:], m.ActionArg)
+		i = encodeVarint(dAtA, i, uint64(len(m.ActionArg)))
 		i--
 		dAtA[i] = 0x22
 	}
-	if len(m.Command) > 0 {
-		i -= len(m.Command)
-		copy(dAtA[i:], m.Command)
-		i = encodeVarint(dAtA, i, uint64(len(m.Command)))
+	if len(m.Action) > 0 {
+		i -= len(m.Action)
+		copy(dAtA[i:], m.Action)
+		i = encodeVarint(dAtA, i, uint64(len(m.Action)))
 		i--
 		dAtA[i] = 0x1a
 	}
@@ -6306,11 +6306,11 @@ func (m *VDiffRequest) SizeVT() (n int) {
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
-	l = len(m.Command)
+	l = len(m.Action)
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
-	l = len(m.SubCommand)
+	l = len(m.ActionArg)
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
@@ -15283,7 +15283,7 @@ func (m *VDiffRequest) UnmarshalVT(dAtA []byte) error {
 			iNdEx = postIndex
 		case 3:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Command", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field Action", wireType)
 			}
 			var stringLen uint64
 			for shift := uint(0); ; shift += 7 {
@@ -15311,11 +15311,11 @@ func (m *VDiffRequest) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Command = string(dAtA[iNdEx:postIndex])
+			m.Action = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		case 4:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field SubCommand", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field ActionArg", wireType)
 			}
 			var stringLen uint64
 			for shift := uint(0); ; shift += 7 {
@@ -15343,7 +15343,7 @@ func (m *VDiffRequest) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.SubCommand = string(dAtA[iNdEx:postIndex])
+			m.ActionArg = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		case 5:
 			if wireType != 2 {

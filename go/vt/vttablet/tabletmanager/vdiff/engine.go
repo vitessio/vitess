@@ -259,7 +259,7 @@ func (vde *Engine) getPendingVDiffs(ctx context.Context) (*sqltypes.Result, erro
 }
 
 func (vde *Engine) getVDiffsToRetry(ctx context.Context, dbClient binlogplayer.DBClient) (*sqltypes.Result, error) {
-	qr, err := withDDL.Exec(ctx, sqlGetVDiffsToRetry, dbClient.ExecuteFetch, dbClient.ExecuteFetch)
+	qr, err := withDDL.ExecIgnore(ctx, sqlGetVDiffsToRetry, dbClient.ExecuteFetch)
 	if err != nil {
 		return nil, err
 	}
