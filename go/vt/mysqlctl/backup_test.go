@@ -24,6 +24,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/mysql"
 )
 
 func TestFindFilesToBackup(t *testing.T) {
@@ -52,9 +54,9 @@ func TestFindFilesToBackup(t *testing.T) {
 	}
 
 	innodbLogFile := "innodb_log_1"
-	if innodbLogSubDir := features.hasInnoDBRedoLogSubDir(); innodbLogSubDir != "" {
-		os.Mkdir(path.Join(innodbLogDir, innodbLogSubDir), os.ModePerm)
-		innodbLogFile = path.Join(innodbLogSubDir, "#ib_redo1")
+	if features.hasInnoDBRedoLogSubDir() {
+		os.Mkdir(path.Join(innodbLogDir, mysql.DynamicRedoLogSubdir), os.ModePerm)
+		innodbLogFile = path.Join(mysql.DynamicRedoLogSubdir, "#ib_redo1")
 	}
 
 	if err := os.WriteFile(path.Join(innodbDataDir, "innodb_data_1"), []byte("innodb data 1 contents"), os.ModePerm); err != nil {
@@ -117,13 +119,13 @@ func TestFindFilesToBackup(t *testing.T) {
 		},
 	}
 	// We'll have a direntry for the subdir itself in the list
-	if innodbLogSubDir := features.hasInnoDBRedoLogSubDir(); innodbLogSubDir != "" {
+	if features.hasInnoDBRedoLogSubDir() {
 		expected = append(expected, FileEntry{
 			Base: "InnoDBLog",
-			Name: innodbLogSubDir,
+			Name: mysql.DynamicRedoLogSubdir,
 		})
 	}
-	// order matters for the DeepEqual
+	// Order matters for the DeepEqual
 	expected = append(expected, FileEntry{
 		Base: "InnoDBLog",
 		Name: innodbLogFile,
