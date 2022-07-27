@@ -114,10 +114,8 @@ func (vtworker *VtworkerProcess) IsHealthy() bool {
 	if err != nil {
 		return false
 	}
-	if resp.StatusCode == 200 {
-		return true
-	}
-	return false
+	defer resp.Body.Close()
+	return resp.StatusCode == 200
 }
 
 // TearDown shutdowns the running vtworker process
@@ -221,6 +219,7 @@ func (vtworker *VtworkerProcess) GetVars() (map[string]any, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error getting response from %s", vtworker.VerifyURL)
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode == 200 {
 		respByte, _ := io.ReadAll(resp.Body)
 		err := json.Unmarshal(respByte, &resultMap)
