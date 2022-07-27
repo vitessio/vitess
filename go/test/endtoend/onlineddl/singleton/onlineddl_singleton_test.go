@@ -106,6 +106,7 @@ func TestMain(m *testing.M) {
 			"--heartbeat_enable",
 			"--heartbeat_interval", "250ms",
 			"--heartbeat_on_demand_duration", "5s",
+			"--watch_replication_stream",
 		}
 		clusterInstance.VtGateExtraArgs = []string{}
 
