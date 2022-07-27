@@ -664,7 +664,7 @@ func (qre *QueryExecutor) execDMLLimit(conn *StatefulConnection) (*sqltypes.Resu
 func (qre *QueryExecutor) verifyRowCount(count, maxrows int64) error {
 	if count > maxrows {
 		callerID := callerid.ImmediateCallerIDFromContext(qre.ctx)
-		return mysql.NewSQLError(mysql.ERVitessMaxRowsExceeded, mysql.SSUnknownSQLState, "caller id: %s: row count exceeded %d", callerID.Username, maxrows)
+		return vterrors.Errorf(vtrpcpb.Code_ABORTED, "caller id: %s: row count exceeded %d", callerID.Username, maxrows)
 	}
 	warnThreshold := qre.tsv.qe.warnResultSize.Get()
 	if warnThreshold > 0 && count > warnThreshold {

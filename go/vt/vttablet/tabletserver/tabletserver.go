@@ -1382,10 +1382,8 @@ func (tsv *TabletServer) convertAndLogError(ctx context.Context, sql string, bin
 	// We assume that bind variable have PII, which are included in the MySQL
 	// query and come back as part of the error message. Removing the MySQL
 	// error helps us avoid leaking PII.
-	// There are two exceptions:
-	// 1. If no bind vars were specified, it's likely that the query was issued
-	// by someone manually. So, we don't suppress the error.
-	// 2. FAILED_PRECONDITION errors. These are caused when a failover is in progress.
+	// There is one exception:
+	// 1. FAILED_PRECONDITION errors. These are caused when a failover is in progress.
 	// If so, we don't want to suppress the error. This will allow VTGate to
 	// detect and perform buffering during failovers.
 	var message string
@@ -1393,7 +1391,7 @@ func (tsv *TabletServer) convertAndLogError(ctx context.Context, sql string, bin
 	if ok {
 		sqlState := sqlErr.SQLState()
 		errnum := sqlErr.Number()
-		if tsv.TerseErrors && len(bindVariables) != 0 && errCode != vtrpcpb.Code_FAILED_PRECONDITION {
+		if tsv.TerseErrors && errCode != vtrpcpb.Code_FAILED_PRECONDITION {
 			err = vterrors.Errorf(errCode, "(errno %d) (sqlstate %s)%s: %s", errnum, sqlState, callerID, queryAsString(sql, bindVariables, tsv.TerseErrors))
 			if logMethod != nil {
 				message = fmt.Sprintf("(errno %d) (sqlstate %s)%s: %s", errnum, sqlState, callerID, truncateSQLAndBindVars(sql, bindVariables, tsv.Config().SanitizeLogMessages))
@@ -1485,7 +1483,7 @@ func convertErrorCode(err error) vtrpcpb.Code {
 		errCode = vtrpcpb.Code_CLUSTER_EVENT
 	case mysql.ERTableExists, mysql.ERDupEntry, mysql.ERFileExists, mysql.ERUDFExists:
 		errCode = vtrpcpb.Code_ALREADY_EXISTS
-	case mysql.ERGotSignal, mysql.ERForcingClose, mysql.ERAbortingConnection, mysql.ERLockDeadlock, mysql.ERVitessMaxRowsExceeded:
+	case mysql.ERGotSignal, mysql.ERForcingClose, mysql.ERAbortingConnection, mysql.ERLockDeadlock:
 		// For ERLockDeadlock, a deadlock rolls back the transaction.
 		errCode = vtrpcpb.Code_ABORTED
 	case mysql.ERUnknownComError, mysql.ERBadNullError, mysql.ERBadDb, mysql.ERBadTable, mysql.ERNonUniq, mysql.ERWrongFieldWithGroup, mysql.ERWrongGroupField,
