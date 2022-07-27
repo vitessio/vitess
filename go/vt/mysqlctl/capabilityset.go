@@ -51,11 +51,11 @@ func (c *capabilitySet) hasMaria104InstallDb() bool {
 	return c.isMariaDB() && c.version.atLeast(ServerVersion{Major: 10, Minor: 4, Patch: 0})
 }
 
-// innodbRedoLogSubDir provides the InnoDB redo log subdirectory if the server has one.
+// hasInnoDBRedoLogSubDir provides the InnoDB redo log subdirectory if the server has one.
 // Starting with MySQL 8.0.30, the InnoDB redo logs are stored in a subdirectory of the
 // <innodb_log_group_home_dir> (<datadir>/. by default) called "#innodb_redo". See:
 //   https://dev.mysql.com/doc/refman/8.0/en/innodb-redo-log.html#innodb-modifying-redo-log-capacity
-func (c *capabilitySet) innodbRedoLogSubDir() string {
+func (c *capabilitySet) hasInnoDBRedoLogSubDir() string {
 	dir := ""
 	if c.isMySQLLike() && c.version.atLeast(ServerVersion{Major: 8, Minor: 0, Patch: 30}) {
 		dir = "#innodb_redo"
