@@ -57,22 +57,37 @@ jobs:
       - get_previous_release
 
     steps:
+    - name: Check if workflow needs to be skipped
+      id: skip-workflow
+      run: |
+        skip='false'
+        if [[ "${{github.event.pull_request}}" ==  "" ]] && [[ "${{github.ref}}" != "refs/heads/main" ]] && [[ ! "${{github.ref}}" =~ ^refs/heads/release-[0-9]+\.[0-9]$ ]] && [[ ! "${{github.ref}}" =~ "refs/tags/.*" ]]; then
+          skip='true'
+        fi
+        echo Skip ${skip}
+        echo "::set-output name=skip-workflow::${skip}"
+
     - name: Set up Go
+      if: steps.skip-workflow.outputs.skip-workflow == 'false'
       uses: actions/setup-go@v2
       with:
         go-version: 1.18.4
 
     - name: Set up python
+      if: steps.skip-workflow.outputs.skip-workflow == 'false'
       uses: actions/setup-python@v2
 
     - name: Tune the OS
+      if: steps.skip-workflow.outputs.skip-workflow == 'false'
       run: |
         echo '1024 65535' | sudo tee -a /proc/sys/net/ipv4/ip_local_port_range
 
     - name: Checkout to commit's code
+      if: steps.skip-workflow.outputs.skip-workflow == 'false'
       uses: actions/checkout@v2
 
     - name: Get base dependencies
+      if: steps.skip-workflow.outputs.skip-workflow == 'false'
       run: |
         sudo DEBIAN_FRONTEND="noninteractive" apt-get update
         # Uninstall any previously installed MySQL first
@@ -109,15 +124,18 @@ jobs:
 
     # Checkout to the last release of Vitess
     - name: Check out other version's code (${{ needs.get_previous_release.outputs.previous_release }})
+      if: steps.skip-workflow.outputs.skip-workflow == 'false'
       uses: actions/checkout@v2
       with:
         ref: ${{ needs.get_previous_release.outputs.previous_release }}
 
     - name: Get dependencies for the last release
+      if: steps.skip-workflow.outputs.skip-workflow == 'false'
       run: |
         go mod download
 
     - name: Building last release's binaries
+      if: steps.skip-workflow.outputs.skip-workflow == 'false'
       timeout-minutes: 10
       run: |
         source build.env
@@ -128,13 +146,16 @@ jobs:
 
     # Checkout to this build's commit
     - name: Check out commit's code
+      if: steps.skip-workflow.outputs.skip-workflow == 'false'
       uses: actions/checkout@v2
 
     - name: Get dependencies for this commit
+      if: steps.skip-workflow.outputs.skip-workflow == 'false'
       run: |
         go mod download
 
     - name: Building the binaries for this commit
+      if: steps.skip-workflow.outputs.skip-workflow == 'false'
       timeout-minutes: 10
       run: |
         source build.env
@@ -144,6 +165,7 @@ jobs:
 
     # Swap the binaries in the bin. Use vtctl version n-1 and keep vttablet at version n
     - name: Use last release's Vtctl
+      if: steps.skip-workflow.outputs.skip-workflow == 'false'
       run: |
         source build.env
 
@@ -157,6 +179,7 @@ jobs:
 
     # Running a test with vtctl at version n-1 and vttablet at version n
     - name: Run reparent tests (vtctl=N-1, vttablet=N)
+      if: steps.skip-workflow.outputs.skip-workflow == 'false'
       run: |
         rm -rf /tmp/vtdataroot
         mkdir -p /tmp/vtdataroot

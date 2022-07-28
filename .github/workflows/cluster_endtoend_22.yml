@@ -17,22 +17,37 @@ jobs:
     runs-on: ubuntu-18.04
 
     steps:
+    - name: Check if workflow needs to be skipped
+      id: skip-workflow
+      run: |
+        skip='false'
+        if [[ "${{github.event.pull_request}}" ==  "" ]] && [[ "${{github.ref}}" != "refs/heads/main" ]] && [[ ! "${{github.ref}}" =~ ^refs/heads/release-[0-9]+\.[0-9]$ ]] && [[ ! "${{github.ref}}" =~ "refs/tags/.*" ]]; then
+          skip='true'
+        fi
+        echo Skip ${skip}
+        echo "::set-output name=skip-workflow::${skip}"
+
     - name: Set up Go
+      if: steps.skip-workflow.outputs.skip-workflow == 'false'
       uses: actions/setup-go@v2
       with:
         go-version: 1.17.12
 
     - name: Set up python
+      if: steps.skip-workflow.outputs.skip-workflow == 'false'
       uses: actions/setup-python@v2
 
     - name: Tune the OS
+      if: steps.skip-workflow.outputs.skip-workflow == 'false'
       run: |
         echo '1024 65535' | sudo tee -a /proc/sys/net/ipv4/ip_local_port_range
 
     - name: Check out code
+      if: steps.skip-workflow.outputs.skip-workflow == 'false'
       uses: actions/checkout@v2
 
     - name: Get dependencies
+      if: steps.skip-workflow.outputs.skip-workflow == 'false'
       run: |
         sudo apt-get update
         sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd curl git wget eatmydata
@@ -52,6 +67,7 @@ jobs:
         sudo apt-get install percona-xtrabackup-24
 
     - name: Setup launchable dependencies
+      if: steps.skip-workflow.outputs.skip-workflow == 'false'
       run: |
         # Get Launchable CLI installed. If you can, make it a part of the builder image to speed things up
         pip3 install --user launchable~=1.0 > /dev/null
@@ -63,6 +79,7 @@ jobs:
         launchable record build --name "$GITHUB_RUN_ID" --source .
 
     - name: Run cluster endtoend test
+      if: steps.skip-workflow.outputs.skip-workflow == 'false'
       timeout-minutes: 30
       run: |
         source build.env
@@ -73,10 +90,10 @@ jobs:
         eatmydata -- go run test.go -docker=false -follow -shard 22 | tee -a output.txt | go-junit-report -set-exit-code > report.xml
 
     - name: Print test output and Record test result in launchable
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && always()
       run: |
         # send recorded tests to launchable
         launchable record tests --build "$GITHUB_RUN_ID" go-test . || true
 
         # print test output
         cat output.txt
-      if: always()
