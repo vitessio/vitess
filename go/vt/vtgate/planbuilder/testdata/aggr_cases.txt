@@ -5597,3 +5597,51 @@ Gen4 error: aggregate functions take a single argument 'count(distinct user_id, 
   ]
 }
 Gen4 plan same as above
+
+# grouping on data from derived table
+"select val1, count(*)  from (select id, val1 from user where val2 \u003c 4 order by val1 limit 2) as x group by val1"
+"unsupported: cross-shard query with aggregates"
+{
+  "QueryType": "SELECT",
+  "Original": "select val1, count(*)  from (select id, val1 from user where val2 \u003c 4 order by val1 limit 2) as x group by val1",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "count_star(1) AS count(*)",
+    "GroupBy": "(0|2)",
+    "ResultColumns": 2,
+    "Inputs": [
+      {
+        "OperatorType": "Projection",
+        "Expressions": [
+          "[COLUMN 1] as val1",
+          "[COLUMN 0] as count(*)",
+          "[COLUMN 2]"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Limit",
+            "Count": "INT64(2)",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select id, val1, weight_string(val1) from `user` where 1 != 1",
+                "OrderBy": "(1|2) ASC, (1|2) ASC",
+                "Query": "select id, val1, weight_string(val1) from `user` where val2 \u003c 4 order by val1 asc, val1 asc limit :__upper_limit",
+                "Table": "`user`"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
+}
