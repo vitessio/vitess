@@ -734,3 +734,17 @@ func (db *LocalCluster) UnsetReadOnly(dbname string) error {
 	_, err = conn.ExecuteUnSetSuperReadOnly()
 	return err
 }
+
+func (db *LocalCluster) InitSchema() ([]error, error) {
+	// get a dba connection
+	params := db.mysql.Params("")
+	conn, err := mysql.Connect(context.Background(), &params)
+	if err != nil {
+		log.Infof("error in getting connection object %s", err)
+		return nil, err
+	}
+	defer conn.Close()
+
+	errors := mysql.SchemaInitializer.InitializeSchema(conn, false, true)
+	return errors, nil
+}
