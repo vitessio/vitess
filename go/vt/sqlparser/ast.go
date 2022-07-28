@@ -2119,6 +2119,9 @@ type ColumnType struct {
 
 	// For spatial types
 	SRID *SQLVal
+
+	// For json_table
+	Path string
 }
 
 func (ct *ColumnType) merge(other ColumnType) error {
