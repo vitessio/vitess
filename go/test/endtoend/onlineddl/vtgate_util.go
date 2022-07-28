@@ -93,7 +93,7 @@ func CheckRetryMigration(t *testing.T, vtParams *mysql.ConnParams, shards []clus
 }
 
 // CheckRetryPartialMigration attempts to retry a migration where a subset of shards failed
-func CheckRetryPartialMigration(t *testing.T, vtParams *mysql.ConnParams, uuid string, expectAtLeastRowsAffected int64) {
+func CheckRetryPartialMigration(t *testing.T, vtParams *mysql.ConnParams, uuid string, expectAtLeastRowsAffected uint64) {
 	query, err := sqlparser.ParseAndBind("alter vitess_migration %a retry",
 		sqltypes.StringBindVariable(uuid),
 	)
