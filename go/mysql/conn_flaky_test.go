@@ -300,7 +300,7 @@ func TestBasicPackets(t *testing.T) {
 	data, err = cConn.ReadPacket()
 	require.NoError(err)
 	require.NotEmpty(data)
-	assert.True(isEOFPacket(data), "expected EOF")
+	assert.True(cConn.isEOFPacket(data), "expected EOF")
 
 	packetOk, err = cConn.parseOKPacket(data)
 	require.NoError(err)
@@ -339,7 +339,7 @@ func TestBasicPackets(t *testing.T) {
 	data, err = cConn.ReadPacket()
 	require.NoError(err)
 	require.NotEmpty(data)
-	assert.True(isEOFPacket(data), "expected EOF")
+	assert.True(cConn.isEOFPacket(data), "expected EOF")
 }
 
 func TestOkPackets(t *testing.T) {
@@ -445,6 +445,13 @@ func ReadHexDump(value string) []byte {
 
 // Mostly a sanity check.
 func TestEOFOrLengthEncodedIntFuzz(t *testing.T) {
+	listener, sConn, cConn := createSocketPair(t)
+	defer func() {
+		listener.Close()
+		sConn.Close()
+		cConn.Close()
+	}()
+
 	for i := 0; i < 100; i++ {
 		bytes := make([]byte, rand.Intn(16)+1)
 		_, err := crypto_rand.Read(bytes)
@@ -454,7 +461,7 @@ func TestEOFOrLengthEncodedIntFuzz(t *testing.T) {
 		bytes[0] = 0xfe
 
 		_, _, isInt := readLenEncInt(bytes, 0)
-		isEOF := isEOFPacket(bytes)
+		isEOF := cConn.isEOFPacket(bytes)
 		if (isInt && isEOF) || (!isInt && !isEOF) {
 			t.Fatalf("0xfe bytestring is EOF xor Int. Bytes %v", bytes)
 		}
