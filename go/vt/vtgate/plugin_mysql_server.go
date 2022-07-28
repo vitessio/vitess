@@ -550,6 +550,11 @@ func rollbackAtShutdown() {
 		}
 	}()
 
+	if vtgateHandle == nil {
+		// we still haven't been able to initialise the vtgateHandler, so we don't need to rollback anything
+		return
+	}
+
 	// If vtgate is instead busy executing a query, the number of open conns
 	// will be non-zero. Give another second for those queries to finish.
 	for i := 0; i < 100; i++ {
