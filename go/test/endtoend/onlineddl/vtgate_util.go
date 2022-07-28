@@ -92,6 +92,17 @@ func CheckRetryMigration(t *testing.T, vtParams *mysql.ConnParams, shards []clus
 	}
 }
 
+// CheckRetryPartialMigration attempts to retry a migration where a subset of shards failed
+func CheckRetryPartialMigration(t *testing.T, vtParams *mysql.ConnParams, uuid string, expectAtLeastRowsAffected int64) {
+	query, err := sqlparser.ParseAndBind("alter vitess_migration %a retry",
+		sqltypes.StringBindVariable(uuid),
+	)
+	require.NoError(t, err)
+	r := VtgateExecQuery(t, vtParams, query, "")
+
+	assert.GreaterOrEqual(t, expectAtLeastRowsAffected, r.RowsAffected)
+}
+
 // CheckCancelMigration attempts to cancel a migration, and expects success/failure by counting affected rows
 func CheckCancelMigration(t *testing.T, vtParams *mysql.ConnParams, shards []cluster.Shard, uuid string, expectCancelPossible bool) {
 	query, err := sqlparser.ParseAndBind("alter vitess_migration %a cancel",
