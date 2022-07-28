@@ -29,8 +29,8 @@ func DetachFromTerminalAndExit() {
 	args := os.Args[1:]
 	i := 0
 	for ; i < len(args); i++ {
-		if strings.HasPrefix(args[i], "-detach") {
-			args[i] = "-detach=false"
+		if strings.HasPrefix(args[i], "-detach") || strings.HasPrefix(args[i], "--detach") {
+			args[i] = "--detach=false"
 			break
 		}
 	}

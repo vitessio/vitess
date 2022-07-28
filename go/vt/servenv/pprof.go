@@ -20,7 +20,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -169,14 +168,14 @@ func (prof *profile) mkprofile() io.WriteCloser {
 	var (
 		path string
 		err  error
-		logf = func(format string, args ...interface{}) {}
+		logf = func(format string, args ...any) {}
 	)
 
 	if prof.path != "" {
 		path = prof.path
 		err = os.MkdirAll(path, 0777)
 	} else {
-		path, err = ioutil.TempDir("", "profile")
+		path, err = os.MkdirTemp("", "profile")
 	}
 	if err != nil {
 		log.Fatalf("pprof: could not create initial output directory: %v", err)

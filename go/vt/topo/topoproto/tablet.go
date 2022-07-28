@@ -63,6 +63,16 @@ func TabletAliasEqual(left, right *topodatapb.TabletAlias) bool {
 	return proto.Equal(left, right)
 }
 
+// IsTabletInList returns true if the tablet is in the list of tablets given
+func IsTabletInList(tablet *topodatapb.Tablet, allTablets []*topodatapb.Tablet) bool {
+	for _, tab := range allTablets {
+		if TabletAliasEqual(tablet.Alias, tab.Alias) {
+			return true
+		}
+	}
+	return false
+}
+
 // TabletAliasString formats a TabletAlias
 func TabletAliasString(ta *topodatapb.TabletAlias) string {
 	if ta == nil {
@@ -154,7 +164,7 @@ func (tal TabletAliasList) ToStringSlice() []string {
 
 // AllTabletTypes lists all the possible tablet types
 var AllTabletTypes = []topodatapb.TabletType{
-	topodatapb.TabletType_MASTER,
+	topodatapb.TabletType_PRIMARY,
 	topodatapb.TabletType_REPLICA,
 	topodatapb.TabletType_RDONLY,
 	topodatapb.TabletType_BATCH,
@@ -223,7 +233,7 @@ func MysqlAddr(tablet *topodatapb.Tablet) string {
 	return netutil.JoinHostPort(tablet.MysqlHostname, tablet.MysqlPort)
 }
 
-// MySQLIP returns the MySQL server's IP by resolvign the host name.
+// MySQLIP returns the MySQL server's IP by resolving the hostname.
 func MySQLIP(tablet *topodatapb.Tablet) (string, error) {
 	ipAddrs, err := net.LookupHost(tablet.MysqlHostname)
 	if err != nil {
@@ -249,4 +259,15 @@ func TabletDbName(tablet *topodatapb.Tablet) string {
 // for serving.
 func TabletIsAssigned(tablet *topodatapb.Tablet) bool {
 	return tablet != nil && tablet.Keyspace != "" && tablet.Shard != ""
+}
+
+// IsServingType returns true if the tablet type is one that should be serving to be healthy, or false if the tablet type
+// should not be serving in it's healthy state.
+func IsServingType(tabletType topodatapb.TabletType) bool {
+	switch tabletType {
+	case topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA, topodatapb.TabletType_BATCH, topodatapb.TabletType_EXPERIMENTAL:
+		return true
+	default:
+		return false
+	}
 }

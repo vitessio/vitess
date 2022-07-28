@@ -68,6 +68,7 @@ func TestHealthStreamerBroadcast(t *testing.T) {
 	}
 	blpFunc = testBlpFunc
 	hs := newHealthStreamer(env, alias)
+	hs.InitDBConfig(&querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}, config.DB.DbaWithDB())
 	hs.Open()
 	defer hs.Close()
 	target := &querypb.Target{}
@@ -94,31 +95,31 @@ func TestHealthStreamerBroadcast(t *testing.T) {
 		},
 		TabletAlias: alias,
 		RealtimeStats: &querypb.RealtimeStats{
-			SecondsBehindMasterFilteredReplication: 1,
-			BinlogPlayersCount:                     2,
+			FilteredReplicationLagSeconds: 1,
+			BinlogPlayersCount:            2,
 		},
 	}
 	assert.Equal(t, want, shr)
 
-	// Test master and timestamp.
+	// Test primary and timestamp.
 	now := time.Now()
-	hs.ChangeState(topodatapb.TabletType_MASTER, now, 0, nil, true)
+	hs.ChangeState(topodatapb.TabletType_PRIMARY, now, 0, nil, true)
 	shr = <-ch
 	want = &querypb.StreamHealthResponse{
 		Target: &querypb.Target{
-			TabletType: topodatapb.TabletType_MASTER,
+			TabletType: topodatapb.TabletType_PRIMARY,
 		},
 		TabletAlias:                         alias,
 		Serving:                             true,
 		TabletExternallyReparentedTimestamp: now.Unix(),
 		RealtimeStats: &querypb.RealtimeStats{
-			SecondsBehindMasterFilteredReplication: 1,
-			BinlogPlayersCount:                     2,
+			FilteredReplicationLagSeconds: 1,
+			BinlogPlayersCount:            2,
 		},
 	}
 	assert.Equal(t, want, shr)
 
-	// Test non-serving, and 0 timestamp for non-master.
+	// Test non-serving, and 0 timestamp for non-primary.
 	hs.ChangeState(topodatapb.TabletType_REPLICA, now, 1*time.Second, nil, false)
 	shr = <-ch
 	want = &querypb.StreamHealthResponse{
@@ -127,9 +128,9 @@ func TestHealthStreamerBroadcast(t *testing.T) {
 		},
 		TabletAlias: alias,
 		RealtimeStats: &querypb.RealtimeStats{
-			SecondsBehindMaster:                    1,
-			SecondsBehindMasterFilteredReplication: 1,
-			BinlogPlayersCount:                     2,
+			ReplicationLagSeconds:         1,
+			FilteredReplicationLagSeconds: 1,
+			BinlogPlayersCount:            2,
 		},
 	}
 	assert.Equal(t, want, shr)
@@ -143,9 +144,9 @@ func TestHealthStreamerBroadcast(t *testing.T) {
 		},
 		TabletAlias: alias,
 		RealtimeStats: &querypb.RealtimeStats{
-			HealthError:                            "repl err",
-			SecondsBehindMasterFilteredReplication: 1,
-			BinlogPlayersCount:                     2,
+			HealthError:                   "repl err",
+			FilteredReplicationLagSeconds: 1,
+			BinlogPlayersCount:            2,
 		},
 	}
 	assert.Equal(t, want, shr)
@@ -166,7 +167,7 @@ func TestReloadSchema(t *testing.T) {
 	blpFunc = testBlpFunc
 	hs := newHealthStreamer(env, alias)
 
-	target := &querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	configs := config.DB
 
 	db.AddQuery(mysql.CreateVTDatabase, &sqltypes.Result{})
@@ -227,7 +228,7 @@ func TestDoesNotReloadSchema(t *testing.T) {
 	blpFunc = testBlpFunc
 	hs := newHealthStreamer(env, alias)
 
-	target := &querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	configs := config.DB
 
 	hs.InitDBConfig(target, configs.DbaWithDB())
@@ -279,7 +280,7 @@ func TestInitialReloadSchema(t *testing.T) {
 	blpFunc = testBlpFunc
 	hs := newHealthStreamer(env, alias)
 
-	target := &querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	configs := config.DB
 
 	db.AddQuery(mysql.CreateVTDatabase, &sqltypes.Result{})

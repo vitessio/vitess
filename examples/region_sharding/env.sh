@@ -51,7 +51,7 @@ if [ "${TOPO}" = "zk2" ]; then
     # Set topology environment parameters.
     ZK_SERVER="localhost:21811,localhost:21812,localhost:21813"
     # shellcheck disable=SC2034
-    TOPOLOGY_FLAGS="-topo_implementation zk2 -topo_global_server_address ${ZK_SERVER} -topo_global_root /vitess/global"
+    TOPOLOGY_FLAGS="--topo_implementation zk2 --topo_global_server_address ${ZK_SERVER} --topo_global_root /vitess/global"
 
     mkdir -p "${VTDATAROOT}/tmp"
 elif [ "${TOPO}" = "k8s" ]; then
@@ -60,10 +60,10 @@ elif [ "${TOPO}" = "k8s" ]; then
     K8S_PORT="8443"
     K8S_KUBECONFIG=$VTDATAROOT/tmp/k8s.kubeconfig
     # shellcheck disable=SC2034
-    TOPOLOGY_FLAGS="-topo_implementation k8s -topo_k8s_kubeconfig ${K8S_KUBECONFIG} -topo_global_server_address ${K8S_ADDR}:${K8S_PORT} -topo_global_root /vitess/global"
+    TOPOLOGY_FLAGS="--topo_implementation k8s --topo_k8s_kubeconfig ${K8S_KUBECONFIG} --topo_global_server_address ${K8S_ADDR}:${K8S_PORT} --topo_global_root /vitess/global"
 else
     ETCD_SERVER="localhost:2379"
-    TOPOLOGY_FLAGS="-topo_implementation etcd2 -topo_global_server_address $ETCD_SERVER -topo_global_root /vitess/global"
+    TOPOLOGY_FLAGS="--topo_implementation etcd2 --topo_global_server_address $ETCD_SERVER --topo_global_root /vitess/global"
 
     mkdir -p "${VTDATAROOT}/etcd"
 fi
@@ -75,7 +75,8 @@ mkdir -p "${VTDATAROOT}/tmp"
 # such as ~/.my.cnf
 
 alias mysql="command mysql -h 127.0.0.1 -P 15306"
-alias vtctlclient="command vtctlclient -server localhost:15999 -log_dir ${VTDATAROOT}/tmp -alsologtostderr"
+alias vtctlclient="command vtctlclient --server localhost:15999 --log_dir ${VTDATAROOT}/tmp --alsologtostderr"
+alias vtctldclient="command vtctldclient --server localhost:15999"
 
 # Make sure aliases are expanded in non-interactive shell
 shopt -s expand_aliases

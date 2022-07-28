@@ -27,7 +27,7 @@ import (
 
 // AssertClusterWorkflowsEqual is a test helper for asserting that two
 // ClusterWorkflows objects are equal.
-func AssertClusterWorkflowsEqual(t *testing.T, expected *vtadminpb.ClusterWorkflows, actual *vtadminpb.ClusterWorkflows, msgAndArgs ...interface{}) {
+func AssertClusterWorkflowsEqual(t *testing.T, expected *vtadminpb.ClusterWorkflows, actual *vtadminpb.ClusterWorkflows, msgAndArgs ...any) {
 	t.Helper()
 
 	if expected == nil && actual == nil {
@@ -46,7 +46,7 @@ func AssertClusterWorkflowsEqual(t *testing.T, expected *vtadminpb.ClusterWorkfl
 
 // AssertGetWorkflowsResponsesEqual is a test helper for asserting that two
 // GetWorkflowsResponse objects are equal.
-func AssertGetWorkflowsResponsesEqual(t *testing.T, expected *vtadminpb.GetWorkflowsResponse, actual *vtadminpb.GetWorkflowsResponse, msgAndArgs ...interface{}) {
+func AssertGetWorkflowsResponsesEqual(t *testing.T, expected *vtadminpb.GetWorkflowsResponse, actual *vtadminpb.GetWorkflowsResponse, msgAndArgs ...any) {
 	t.Helper()
 
 	if expected == nil && actual == nil {

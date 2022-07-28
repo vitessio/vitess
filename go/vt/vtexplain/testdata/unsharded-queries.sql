@@ -1,3 +1,4 @@
+show tables from ks_unsharded;
 select * from t1;
 insert into t1 (id,intval,floatval) values (1,2,3.14);
 update t1 set intval = 10;

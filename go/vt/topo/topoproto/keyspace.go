@@ -42,3 +42,9 @@ func KeyspaceTypeString(kt topodatapb.KeyspaceType) string {
 
 	return str
 }
+
+// KeyspaceTypeLString returns the lowercased string representation of a
+// KeyspaceType.
+func KeyspaceTypeLString(kt topodatapb.KeyspaceType) string {
+	return strings.ToLower(KeyspaceTypeString(kt))
+}

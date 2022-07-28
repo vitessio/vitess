@@ -45,9 +45,10 @@ import (
 // It is only enabled if restore_from_backup is set.
 
 var (
-	restoreFromBackup     = flag.Bool("restore_from_backup", false, "(init restore parameter) will check BackupStorage for a recent backup at startup and start there")
-	restoreConcurrency    = flag.Int("restore_concurrency", 4, "(init restore parameter) how many concurrent files to restore at once")
-	waitForBackupInterval = flag.Duration("wait_for_backup_interval", 0, "(init restore parameter) if this is greater than 0, instead of starting up empty when no backups are found, keep checking at this interval for a backup to appear")
+	restoreFromBackup      = flag.Bool("restore_from_backup", false, "(init restore parameter) will check BackupStorage for a recent backup at startup and start there")
+	restoreFromBackupTsStr = flag.String("restore_from_backup_ts", "", "(init restore parameter) if set, restore the latest backup taken at or before this timestamp. Example: '2021-04-29.133050'")
+	restoreConcurrency     = flag.Int("restore_concurrency", 4, "(init restore parameter) how many concurrent files to restore at once")
+	waitForBackupInterval  = flag.Duration("wait_for_backup_interval", 0, "(init restore parameter) if this is greater than 0, instead of starting up empty when no backups are found, keep checking at this interval for a backup to appear")
 
 	// Flags for PITR
 	binlogHost           = flag.String("binlog_host", "", "PITR restore parameter: hostname/IP of binlog server.")
@@ -65,7 +66,7 @@ var (
 // It will either work, fail gracefully, or return
 // an error in case of a non-recoverable error.
 // It takes the action lock so no RPC interferes.
-func (tm *TabletManager) RestoreData(ctx context.Context, logger logutil.Logger, waitForBackupInterval time.Duration, deleteBeforeRestore bool) error {
+func (tm *TabletManager) RestoreData(ctx context.Context, logger logutil.Logger, waitForBackupInterval time.Duration, deleteBeforeRestore bool, backupTime time.Time) error {
 	if err := tm.lock(ctx); err != nil {
 		return err
 	}
@@ -119,7 +120,7 @@ func (tm *TabletManager) RestoreData(ctx context.Context, logger logutil.Logger,
 
 	startTime = time.Now()
 
-	err = tm.restoreDataLocked(ctx, logger, waitForBackupInterval, deleteBeforeRestore)
+	err = tm.restoreDataLocked(ctx, logger, waitForBackupInterval, deleteBeforeRestore, backupTime)
 	if err != nil {
 		return err
 	}
@@ -137,7 +138,7 @@ func (tm *TabletManager) RestoreData(ctx context.Context, logger logutil.Logger,
 	return nil
 }
 
-func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.Logger, waitForBackupInterval time.Duration, deleteBeforeRestore bool) error {
+func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.Logger, waitForBackupInterval time.Duration, deleteBeforeRestore bool, backupTime time.Time) error {
 
 	tablet := tm.Tablet()
 	originalType := tablet.Type
@@ -152,6 +153,7 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 	if err != nil {
 		return err
 	}
+
 	// For a SNAPSHOT keyspace, we have to look for backups of BaseKeyspace
 	// so we will pass the BaseKeyspace in RestoreParams instead of tablet.Keyspace
 	if keyspaceInfo.KeyspaceType == topodatapb.KeyspaceType_SNAPSHOT {
@@ -159,7 +161,7 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 			return vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, fmt.Sprintf("snapshot keyspace %v has no base_keyspace set", tablet.Keyspace))
 		}
 		keyspace = keyspaceInfo.BaseKeyspace
-		log.Infof("Using base_keyspace %v to restore keyspace %v", keyspace, tablet.Keyspace)
+		log.Infof("Using base_keyspace %v to restore keyspace %v using a backup time of %v", keyspace, tablet.Keyspace, backupTime)
 	}
 
 	params := mysqlctl.RestoreParams{
@@ -173,11 +175,11 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 		DbName:              topoproto.TabletDbName(tablet),
 		Keyspace:            keyspace,
 		Shard:               tablet.Shard,
-		StartTime:           logutil.ProtoToTime(keyspaceInfo.SnapshotTime),
+		StartTime:           backupTime,
 	}
 
 	// Check whether we're going to restore before changing to RESTORE type,
-	// so we keep our MasterTermStartTime (if any) if we aren't actually restoring.
+	// so we keep our PrimaryTermStartTime (if any) if we aren't actually restoring.
 	ok, err := mysqlctl.ShouldRestore(ctx, params)
 	if err != nil {
 		return err
@@ -190,9 +192,9 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 		metadataManager := &mysqlctl.MetadataManager{}
 		return metadataManager.PopulateMetadataTables(params.Mysqld, params.LocalMetadata, params.DbName)
 	}
-	// We should not become master after restore, because that would incorrectly
-	// start a new master term, and it's likely our data dir will be out of date.
-	if originalType == topodatapb.TabletType_MASTER {
+	// We should not become primary after restore, because that would incorrectly
+	// start a new primary term, and it's likely our data dir will be out of date.
+	if originalType == topodatapb.TabletType_PRIMARY {
 		originalType = tm.baseTabletType
 	}
 	if err := tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_RESTORE, DBActionNone); err != nil {
@@ -235,7 +237,7 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 		// Starting from here we won't be able to recover if we get stopped by a cancelled
 		// context. Thus we use the background context to get through to the finish.
 		if keyspaceInfo.KeyspaceType == topodatapb.KeyspaceType_NORMAL {
-			// Reconnect to master only for "NORMAL" keyspaces
+			// Reconnect to primary only for "NORMAL" keyspaces
 			if err := tm.startReplication(context.Background(), pos, originalType); err != nil {
 				return err
 			}
@@ -325,7 +327,7 @@ func (tm *TabletManager) getGTIDFromTimestamp(ctx context.Context, pos mysql.Pos
 		Host: connParams.Host,
 		Port: connParams.Port,
 	}
-	dbCfgs.SetDbParams(*connParams, *connParams)
+	dbCfgs.SetDbParams(*connParams, *connParams, *connParams)
 	vsClient := vreplication.NewReplicaConnector(connParams)
 
 	filter := &binlogdatapb.Filter{
@@ -340,7 +342,7 @@ func (tm *TabletManager) getGTIDFromTimestamp(ctx context.Context, pos mysql.Pos
 		return "", "", err
 	}
 	defer binlogConn.Close()
-	lastPos, err := binlogConn.MasterPosition()
+	lastPos, err := binlogConn.PrimaryPosition()
 	if err != nil {
 		return "", "", err
 	}
@@ -415,17 +417,17 @@ func (tm *TabletManager) catchupToGTID(ctx context.Context, afterGTIDPos string,
 
 	if *binlogSslCa != "" || *binlogSslCert != "" {
 		// We need to use TLS
-		changeMasterCmd := fmt.Sprintf("CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d, MASTER_USER='%s', MASTER_PASSWORD='%s', MASTER_AUTO_POSITION=1, MASTER_SSL=1", *binlogHost, *binlogPort, *binlogUser, *binlogPwd)
+		cmd := fmt.Sprintf("CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d, MASTER_USER='%s', MASTER_PASSWORD='%s', MASTER_AUTO_POSITION=1, MASTER_SSL=1", *binlogHost, *binlogPort, *binlogUser, *binlogPwd)
 		if *binlogSslCa != "" {
-			changeMasterCmd += fmt.Sprintf(", MASTER_SSL_CA='%s'", *binlogSslCa)
+			cmd += fmt.Sprintf(", MASTER_SSL_CA='%s'", *binlogSslCa)
 		}
 		if *binlogSslCert != "" {
-			changeMasterCmd += fmt.Sprintf(", MASTER_SSL_CERT='%s'", *binlogSslCert)
+			cmd += fmt.Sprintf(", MASTER_SSL_CERT='%s'", *binlogSslCert)
 		}
 		if *binlogSslKey != "" {
-			changeMasterCmd += fmt.Sprintf(", MASTER_SSL_KEY='%s'", *binlogSslKey)
+			cmd += fmt.Sprintf(", MASTER_SSL_KEY='%s'", *binlogSslKey)
 		}
-		cmds = append(cmds, changeMasterCmd+";")
+		cmds = append(cmds, cmd+";")
 	} else {
 		// No TLS
 		cmds = append(cmds, fmt.Sprintf("CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d, MASTER_USER='%s', MASTER_PASSWORD='%s', MASTER_AUTO_POSITION=1;", *binlogHost, *binlogPort, *binlogUser, *binlogPwd))
@@ -441,14 +443,14 @@ func (tm *TabletManager) catchupToGTID(ctx context.Context, afterGTIDPos string,
 		return vterrors.Wrap(err, fmt.Sprintf("failed to restart the replication until %s GTID", afterGTIDStr))
 	}
 	log.Infof("Waiting for position to reach", beforeGTIDPosParsed.GTIDSet.Last())
-	// Could not use `agent.MysqlDaemon.WaitMasterPos` as replication is stopped with `START SLAVE UNTIL SQL_BEFORE_GTIDS`
+	// Could not use `agent.MysqlDaemon.WaitSourcePos` as replication is stopped with `START SLAVE UNTIL SQL_BEFORE_GTIDS`
 	// this is as per https://dev.mysql.com/doc/refman/5.6/en/start-slave.html
 	// We need to wait until replication catches upto the specified afterGTIDPos
 	chGTIDCaughtup := make(chan bool)
 	go func() {
 		timeToWait := time.Now().Add(*timeoutForGTIDLookup)
 		for time.Now().Before(timeToWait) {
-			pos, err := tm.MysqlDaemon.MasterPosition()
+			pos, err := tm.MysqlDaemon.PrimaryPosition()
 			if err != nil {
 				chGTIDCaughtup <- false
 			}
@@ -486,84 +488,88 @@ func (tm *TabletManager) catchupToGTID(ctx context.Context, afterGTIDPos string,
 func (tm *TabletManager) startReplication(ctx context.Context, pos mysql.Position, tabletType topodatapb.TabletType) error {
 	cmds := []string{
 		"STOP SLAVE",
-		"RESET SLAVE ALL", // "ALL" makes it forget master host:port.
+		"RESET SLAVE ALL", // "ALL" makes it forget primary host:port.
 	}
 	if err := tm.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds); err != nil {
 		return vterrors.Wrap(err, "failed to reset replication")
 	}
 
-	// Set the position at which to resume from the master.
+	// Set the position at which to resume from the primary.
 	if err := tm.MysqlDaemon.SetReplicationPosition(ctx, pos); err != nil {
 		return vterrors.Wrap(err, "failed to set replication position")
 	}
 
-	// Read the shard to find the current master, and its location.
+	// At this point we've restored the data from the backup _and_ we've saved the
+	// replication state metadata that is consistent with the snapshot of the data
+	// contained in the backup. This means that we have everything needed to start
+	// replication at a later time, and since with active parents disabled we do
+	// not ever start replication automatically, we can now safely return.
+	if *mysqlctl.DisableActiveReparents {
+		return nil
+	}
+
+	// Read the shard to find the current primary, and its location.
 	tablet := tm.Tablet()
 	si, err := tm.TopoServer.GetShard(ctx, tablet.Keyspace, tablet.Shard)
 	if err != nil {
 		return vterrors.Wrap(err, "can't read shard")
 	}
-	if si.MasterAlias == nil {
-		// We've restored, but there's no master. This is fine, since we've
+	if si.PrimaryAlias == nil {
+		// We've restored, but there's no primary. This is fine, since we've
 		// already set the position at which to resume when we're later reparented.
 		// If we had instead considered this fatal, all tablets would crash-loop
-		// until a master appears, which would make it impossible to elect a master.
-		log.Warningf("Can't start replication after restore: shard %v/%v has no master.", tablet.Keyspace, tablet.Shard)
+		// until a primary appears, which would make it impossible to elect a primary.
+		log.Warningf("Can't start replication after restore: shard %v/%v has no primary.", tablet.Keyspace, tablet.Shard)
 		return nil
 	}
-	if topoproto.TabletAliasEqual(si.MasterAlias, tablet.Alias) {
-		// We used to be the master before we got restarted in an empty data dir,
-		// and no other master has been elected in the meantime.
+	if topoproto.TabletAliasEqual(si.PrimaryAlias, tablet.Alias) {
+		// We used to be the primary before we got restarted in an empty data dir,
+		// and no other primary has been elected in the meantime.
 		// This shouldn't happen, so we'll let the operator decide which tablet
-		// should actually be promoted to master.
-		log.Warningf("Can't start replication after restore: master record still points to this tablet.")
+		// should actually be promoted to primary.
+		log.Warningf("Can't start replication after restore: primary in shard record still points to this tablet.")
 		return nil
 	}
-	ti, err := tm.TopoServer.GetTablet(ctx, si.MasterAlias)
+	ti, err := tm.TopoServer.GetTablet(ctx, si.PrimaryAlias)
 	if err != nil {
-		return vterrors.Wrapf(err, "Cannot read master tablet %v", si.MasterAlias)
+		return vterrors.Wrapf(err, "Cannot read primary tablet %v", si.PrimaryAlias)
 	}
 
-	// If using semi-sync, we need to enable it before connecting to master.
-	if err := tm.fixSemiSync(tabletType); err != nil {
+	// If using semi-sync, we need to enable it before connecting to primary.
+	if err := tm.fixSemiSync(tabletType, SemiSyncActionNone); err != nil {
 		return err
 	}
 
-	// Set master and start replication.
-	if err := tm.MysqlDaemon.SetMaster(ctx, ti.Tablet.MysqlHostname, int(ti.Tablet.MysqlPort), false /* stopReplicationBefore */, !*mysqlctl.DisableActiveReparents /* startReplicationAfter */); err != nil {
-		return vterrors.Wrap(err, "MysqlDaemon.SetMaster failed")
+	// Set primary and start replication.
+	if err := tm.MysqlDaemon.SetReplicationSource(ctx, ti.Tablet.MysqlHostname, int(ti.Tablet.MysqlPort), false /* stopReplicationBefore */, !*mysqlctl.DisableActiveReparents /* startReplicationAfter */); err != nil {
+		return vterrors.Wrap(err, "MysqlDaemon.SetReplicationSource failed")
 	}
 
-	// If active reparents are disabled, we don't restart replication. So it makes no sense to wait for an update on the replica.
-	// Return immediately.
-	if *mysqlctl.DisableActiveReparents {
-		return nil
-	}
-	// wait for reliable seconds behind master
+	// wait for reliable replication_lag_seconds
 	// we have pos where we want to resume from
-	// if MasterPosition is the same, that means no writes
-	// have happened to master, so we are up-to-date
+	// if PrimaryPosition is the same, that means no writes
+	// have happened to primary, so we are up-to-date
 	// otherwise, wait for replica's Position to change from
 	// the initial pos before proceeding
 	tmc := tmclient.NewTabletManagerClient()
 	defer tmc.Close()
 	remoteCtx, remoteCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
 	defer remoteCancel()
-	posStr, err := tmc.MasterPosition(remoteCtx, ti.Tablet)
+	posStr, err := tmc.PrimaryPosition(remoteCtx, ti.Tablet)
 	if err != nil {
-		// It is possible that though MasterAlias is set, the master tablet is unreachable
+		// It is possible that though PrimaryAlias is set, the primary tablet is unreachable
 		// Log a warning and let tablet restore in that case
 		// If we had instead considered this fatal, all tablets would crash-loop
-		// until a master appears, which would make it impossible to elect a master.
-		log.Warningf("Can't get master replication position after restore: %v", err)
+		// until a primary appears, which would make it impossible to elect a primary.
+		log.Warningf("Can't get primary replication position after restore: %v", err)
 		return nil
 	}
-	masterPos, err := mysql.DecodePosition(posStr)
+	primaryPos, err := mysql.DecodePosition(posStr)
 	if err != nil {
-		return vterrors.Wrapf(err, "can't decode master replication position: %q", posStr)
+		return vterrors.Wrapf(err, "can't decode primary replication position: %q", posStr)
 	}
 
-	if !pos.Equal(masterPos) {
+	if !pos.Equal(primaryPos) {
 		for {
 			if err := ctx.Err(); err != nil {
 				return err
@@ -591,7 +597,7 @@ func (tm *TabletManager) getLocalMetadataValues(tabletType topodatapb.TabletType
 		"DataCenter":    tablet.Alias.Cell,
 		"PromotionRule": "must_not",
 	}
-	if isMasterEligible(tabletType) {
+	if isPrimaryEligible(tabletType) {
 		values["PromotionRule"] = "neutral"
 	}
 	return values

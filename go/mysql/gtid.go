@@ -40,16 +40,16 @@ type GTID interface {
 	Flavor() string
 
 	// SourceServer returns the ID of the server that generated the transaction.
-	SourceServer() interface{}
+	SourceServer() any
 
 	// SequenceNumber returns the ID number that increases with each transaction.
 	// It is only valid to compare the sequence numbers of two GTIDs if they have
 	// the same domain value.
-	SequenceNumber() interface{}
+	SequenceNumber() any
 
 	// SequenceDomain returns the ID of the domain within which two sequence
 	// numbers can be meaningfully compared.
-	SequenceDomain() interface{}
+	SequenceDomain() any
 
 	// GTIDSet returns a GTIDSet of the same flavor as this GTID, containing only
 	// this GTID.

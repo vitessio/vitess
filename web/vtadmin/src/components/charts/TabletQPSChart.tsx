@@ -37,7 +37,7 @@ export const TabletQPSChart = ({ alias, clusterID }: Props) => {
     );
 
     const options = useMemo(() => {
-        const tsdata = getQPSTimeseries(debugVars, query.dataUpdatedAt);
+        const tsdata = getQPSTimeseries(debugVars?.data, query.dataUpdatedAt);
 
         const series: Highcharts.SeriesOptionsType[] = Object.entries(tsdata).map(([name, data]) => ({
             data,

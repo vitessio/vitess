@@ -17,8 +17,6 @@
 package logic
 
 import (
-	"fmt"
-	"math/rand"
 	"os"
 	"os/signal"
 	"sync"
@@ -30,23 +28,18 @@ import (
 	"github.com/rcrowley/go-metrics"
 	"github.com/sjmudd/stopwatch"
 
-	"vitess.io/vitess/go/vt/orchestrator/agent"
 	"vitess.io/vitess/go/vt/orchestrator/collection"
 	"vitess.io/vitess/go/vt/orchestrator/config"
 	"vitess.io/vitess/go/vt/orchestrator/discovery"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 	"vitess.io/vitess/go/vt/orchestrator/inst"
-	"vitess.io/vitess/go/vt/orchestrator/kv"
 	ometrics "vitess.io/vitess/go/vt/orchestrator/metrics"
 	"vitess.io/vitess/go/vt/orchestrator/process"
-	orcraft "vitess.io/vitess/go/vt/orchestrator/raft"
 	"vitess.io/vitess/go/vt/orchestrator/util"
 )
 
 const (
-	discoveryMetricsName        = "DISCOVERY_METRICS"
-	yieldAfterUnhealthyDuration = 5 * config.HealthPollSeconds * time.Second
-	fatalAfterUnhealthyDuration = 30 * config.HealthPollSeconds * time.Second
+	discoveryMetricsName = "DISCOVERY_METRICS"
 )
 
 // discoveryQueue is a channel of deduplicated instanceKey-s
@@ -55,6 +48,7 @@ const (
 var discoveryQueue *discovery.Queue
 var snapshotDiscoveryKeys chan inst.InstanceKey
 var snapshotDiscoveryKeysMutex sync.Mutex
+var hasReceivedSIGTERM int32
 
 var discoveriesCounter = metrics.NewCounter()
 var failedDiscoveriesCounter = metrics.NewCounter()
@@ -63,15 +57,11 @@ var discoveryQueueLengthGauge = metrics.NewGauge()
 var discoveryRecentCountGauge = metrics.NewGauge()
 var isElectedGauge = metrics.NewGauge()
 var isHealthyGauge = metrics.NewGauge()
-var isRaftHealthyGauge = metrics.NewGauge()
-var isRaftLeaderGauge = metrics.NewGauge()
 var discoveryMetrics = collection.CreateOrReturnCollection(discoveryMetricsName)
 
-var isElectedNode int64 = 0
+var isElectedNode int64
 
 var recentDiscoveryOperationKeys *cache.Cache
-var pseudoGTIDPublishCache = cache.New(time.Minute, time.Second)
-var kvFoundCache = cache.New(10*time.Minute, time.Minute)
 
 func init() {
 	snapshotDiscoveryKeys = make(chan inst.InstanceKey, 10)
@@ -83,8 +73,6 @@ func init() {
 	metrics.Register("discoveries.recent_count", discoveryRecentCountGauge)
 	metrics.Register("elect.is_elected", isElectedGauge)
 	metrics.Register("health.is_healthy", isHealthyGauge)
-	metrics.Register("raft.is_healthy", isRaftHealthyGauge)
-	metrics.Register("raft.is_leader", isRaftLeaderGauge)
 
 	ometrics.OnMetricsTick(func() {
 		discoveryQueueLengthGauge.Update(int64(discoveryQueue.QueueLen()))
@@ -101,29 +89,13 @@ func init() {
 	ometrics.OnMetricsTick(func() {
 		isHealthyGauge.Update(atomic.LoadInt64(&process.LastContinousCheckHealthy))
 	})
-	ometrics.OnMetricsTick(func() {
-		var healthy int64
-		if orcraft.IsHealthy() {
-			healthy = 1
-		}
-		isRaftHealthyGauge.Update(healthy)
-	})
-	ometrics.OnMetricsTick(func() {
-		isRaftLeaderGauge.Update(atomic.LoadInt64(&isElectedNode))
-	})
 }
 
 func IsLeader() bool {
-	if orcraft.IsRaftEnabled() {
-		return orcraft.IsLeader()
-	}
 	return atomic.LoadInt64(&isElectedNode) == 1
 }
 
 func IsLeaderOrActive() bool {
-	if orcraft.IsRaftEnabled() {
-		return orcraft.IsPartOfQuorum()
-	}
 	return atomic.LoadInt64(&isElectedNode) == 1
 }
 
@@ -147,10 +119,28 @@ func acceptSignals() {
 				config.Reload()
 				discoveryMetrics.SetExpirePeriod(time.Duration(config.Config.DiscoveryCollectionRetentionSeconds) * time.Second)
 			case syscall.SIGTERM:
-				log.Infof("Received SIGTERM. Shutting down orchestrator")
+				log.Infof("Received SIGTERM. Starting shutdown")
+				atomic.StoreInt32(&hasReceivedSIGTERM, 1)
 				discoveryMetrics.StopAutoExpiration()
 				// probably should poke other go routines to stop cleanly here ...
 				inst.AuditOperation("shutdown", nil, "Triggered via SIGTERM")
+				timeout := time.After(*shutdownWaitTime)
+				func() {
+					for {
+						count := atomic.LoadInt32(&shardsLockCounter)
+						if count == 0 {
+							return
+						}
+						select {
+						case <-timeout:
+							log.Infof("wait for lock release timed out. Some locks might not have been released.")
+							return
+						default:
+							time.Sleep(100 * time.Millisecond)
+						}
+					}
+				}()
+				log.Infof("Shutting down orchestrator")
 				os.Exit(0)
 			}
 		}
@@ -176,7 +166,7 @@ func handleDiscoveryRequests() {
 					continue
 				}
 
-				DiscoverInstance(instanceKey)
+				DiscoverInstance(instanceKey, false /* forceDiscovery */)
 				discoveryQueue.Release(instanceKey)
 			}
 		}()
@@ -184,9 +174,9 @@ func handleDiscoveryRequests() {
 }
 
 // DiscoverInstance will attempt to discover (poll) an instance (unless
-// it is already up to date) and will also ensure that its master and
+// it is already up to date) and will also ensure that its primary and
 // replicas (if any) are also checked.
-func DiscoverInstance(instanceKey inst.InstanceKey) {
+func DiscoverInstance(instanceKey inst.InstanceKey, forceDiscovery bool) {
 	if inst.InstanceIsForgotten(&instanceKey) {
 		log.Debugf("discoverInstance: skipping discovery of %+v because it is set to be forgotten", instanceKey)
 		return
@@ -221,7 +211,7 @@ func DiscoverInstance(instanceKey inst.InstanceKey) {
 	// Calculate the expiry period each time as InstancePollSeconds
 	// _may_ change during the run of the process (via SIGHUP) and
 	// it is not possible to change the cache's default expiry..
-	if existsInCacheError := recentDiscoveryOperationKeys.Add(instanceKey.DisplayString(), true, instancePollSecondsDuration()); existsInCacheError != nil {
+	if existsInCacheError := recentDiscoveryOperationKeys.Add(instanceKey.DisplayString(), true, instancePollSecondsDuration()); existsInCacheError != nil && !forceDiscovery {
 		// Just recently attempted
 		return
 	}
@@ -229,7 +219,7 @@ func DiscoverInstance(instanceKey inst.InstanceKey) {
 	latency.Start("backend")
 	instance, found, _ := inst.ReadInstance(&instanceKey)
 	latency.Stop("backend")
-	if found && instance.IsUpToDate && instance.IsLastCheckValid {
+	if !forceDiscovery && found && instance.IsUpToDate && instance.IsLastCheckValid {
 		// we've already discovered this one. Skip!
 		return
 	}
@@ -279,21 +269,7 @@ func DiscoverInstance(instanceKey inst.InstanceKey) {
 func onHealthTick() {
 	wasAlreadyElected := IsLeader()
 
-	if orcraft.IsRaftEnabled() {
-		if orcraft.IsLeader() {
-			atomic.StoreInt64(&isElectedNode, 1)
-		} else {
-			atomic.StoreInt64(&isElectedNode, 0)
-		}
-		if process.SinceLastGoodHealthCheck() > yieldAfterUnhealthyDuration {
-			log.Errorf("Heath test is failing for over %+v seconds. raft yielding", yieldAfterUnhealthyDuration.Seconds())
-			orcraft.Yield()
-		}
-		if process.SinceLastGoodHealthCheck() > fatalAfterUnhealthyDuration {
-			orcraft.FatalRaftError(fmt.Errorf("Node is unable to register health. Please check database connnectivity."))
-		}
-	}
-	if !orcraft.IsRaftEnabled() {
+	{
 		myIsElectedNode, err := process.AttemptElection()
 		if err != nil {
 			log.Errore(err)
@@ -346,95 +322,6 @@ func onHealthTick() {
 	}
 }
 
-// publishDiscoverMasters will publish to raft a discovery request for all known masters.
-// This makes for a best-effort keep-in-sync between raft nodes, where some may have
-// inconsistent data due to hosts being forgotten, for example.
-func publishDiscoverMasters() error {
-	instances, err := inst.ReadWriteableClustersMasters()
-	if err == nil {
-		for _, instance := range instances {
-			key := instance.Key
-			go orcraft.PublishCommand("discover", key)
-		}
-	}
-	return log.Errore(err)
-}
-
-// InjectPseudoGTIDOnWriters will inject a PseudoGTID entry on all writable, accessible,
-// supported writers.
-func InjectPseudoGTIDOnWriters() error {
-	instances, err := inst.ReadWriteableClustersMasters()
-	if err != nil {
-		return log.Errore(err)
-	}
-	for i := range rand.Perm(len(instances)) {
-		instance := instances[i]
-		go func() {
-			if injected, _ := inst.CheckAndInjectPseudoGTIDOnWriter(instance); injected {
-				clusterName := instance.ClusterName
-				if orcraft.IsRaftEnabled() {
-					// We prefer not saturating our raft communication. Pseudo-GTID information is
-					// OK to be cached for a while.
-					if _, found := pseudoGTIDPublishCache.Get(clusterName); !found {
-						pseudoGTIDPublishCache.Set(clusterName, true, cache.DefaultExpiration)
-						orcraft.PublishCommand("injected-pseudo-gtid", clusterName)
-					}
-				} else {
-					inst.RegisterInjectedPseudoGTID(clusterName)
-				}
-			}
-		}()
-	}
-	return nil
-}
-
-// Write a cluster's master (or all clusters masters) to kv stores.
-// This should generally only happen once in a lifetime of a cluster. Otherwise KV
-// stores are updated via failovers.
-func SubmitMastersToKvStores(clusterName string, force bool) (kvPairs [](*kv.KVPair), submittedCount int, err error) {
-	kvPairs, err = inst.GetMastersKVPairs(clusterName)
-	log.Debugf("kv.SubmitMastersToKvStores, clusterName: %s, force: %+v: numPairs: %+v", clusterName, force, len(kvPairs))
-	if err != nil {
-		return kvPairs, submittedCount, log.Errore(err)
-	}
-	var selectedError error
-	var submitKvPairs [](*kv.KVPair)
-	for _, kvPair := range kvPairs {
-		if !force {
-			// !force: Called periodically to auto-populate KV
-			// We'd like to avoid some overhead.
-			if _, found := kvFoundCache.Get(kvPair.Key); found {
-				// Let's not overload database with queries. Let's not overload raft with events.
-				continue
-			}
-			v, found, err := kv.GetValue(kvPair.Key)
-			if err == nil && found && v == kvPair.Value {
-				// Already has the right value.
-				kvFoundCache.Set(kvPair.Key, true, cache.DefaultExpiration)
-				continue
-			}
-		}
-		submitKvPairs = append(submitKvPairs, kvPair)
-	}
-	log.Debugf("kv.SubmitMastersToKvStores: submitKvPairs: %+v", len(submitKvPairs))
-	for _, kvPair := range submitKvPairs {
-		if orcraft.IsRaftEnabled() {
-			_, err = orcraft.PublishCommand("put-key-value", kvPair)
-		} else {
-			err = kv.PutKVPair(kvPair)
-		}
-		if err == nil {
-			submittedCount++
-		} else {
-			selectedError = err
-		}
-	}
-	if err := kv.DistributePairs(kvPairs); err != nil {
-		log.Errore(err)
-	}
-	return kvPairs, submittedCount, log.Errore(selectedError)
-}
-
 func injectSeeds(seedOnce *sync.Once) {
 	seedOnce.Do(func() {
 		for _, seed := range config.Config.DiscoverySeeds {
@@ -464,9 +351,7 @@ func ContinuousDiscovery() {
 	healthTick := time.Tick(config.HealthPollSeconds * time.Second)
 	instancePollTick := time.Tick(instancePollSecondsDuration())
 	caretakingTick := time.Tick(time.Minute)
-	raftCaretakingTick := time.Tick(10 * time.Minute)
 	recoveryTick := time.Tick(time.Duration(config.RecoveryPollSeconds) * time.Second)
-	autoPseudoGTIDTick := time.Tick(time.Duration(config.PseudoGTIDIntervalSeconds) * time.Second)
 	tabletTopoTick := OpenTabletDiscovery()
 	var recoveryEntrance int64
 	var snapshotTopologiesTick <-chan time.Time
@@ -481,16 +366,7 @@ func ContinuousDiscovery() {
 	var seedOnce sync.Once
 
 	go ometrics.InitMetrics()
-	go ometrics.InitGraphiteMetrics()
 	go acceptSignals()
-	go kv.InitKVStores()
-	inst.SetDurabilityPolicy(config.Config.Durability)
-	if config.Config.RaftEnabled {
-		if err := orcraft.Setup(NewCommandApplier(), NewSnapshotDataCreatorApplier(), process.ThisHostname); err != nil {
-			log.Fatale(err)
-		}
-		go orcraft.Monitor()
-	}
 
 	if *config.RuntimeCLIFlags.GrabElection {
 		process.GrabElection()
@@ -514,34 +390,25 @@ func ContinuousDiscovery() {
 					go injectSeeds(&seedOnce)
 				}
 			}()
-		case <-autoPseudoGTIDTick:
-			go func() {
-				if config.Config.AutoPseudoGTID && IsLeader() {
-					go InjectPseudoGTIDOnWriters()
-				}
-			}()
 		case <-caretakingTick:
 			// Various periodic internal maintenance tasks
 			go func() {
 				if IsLeaderOrActive() {
-					go inst.RecordInstanceCoordinatesHistory()
 					go inst.ReviewUnseenInstances()
-					go inst.InjectUnseenMasters()
+					go inst.InjectUnseenPrimaries()
 
 					go inst.ForgetLongUnseenInstances()
 					go inst.ForgetUnseenInstancesDifferentlyResolved()
 					go inst.ForgetExpiredHostnameResolves()
 					go inst.DeleteInvalidHostnameResolves()
-					go inst.ResolveUnknownMasterHostnameResolves()
+					go inst.ResolveUnknownPrimaryHostnameResolves()
 					go inst.ExpireMaintenance()
 					go inst.ExpireCandidateInstances()
 					go inst.ExpireHostnameUnresolve()
 					go inst.ExpireClusterDomainName()
 					go inst.ExpireAudit()
-					go inst.ExpireMasterPositionEquivalence()
 					go inst.ExpirePoolInstances()
 					go inst.FlushNontrivialResolveCacheToDatabase()
-					go inst.ExpireInjectedPseudoGTID()
 					go inst.ExpireStaleInstanceBinlogCoordinates()
 					go process.ExpireNodesHistory()
 					go process.ExpireAccessTokens()
@@ -549,19 +416,11 @@ func ContinuousDiscovery() {
 					go ExpireFailureDetectionHistory()
 					go ExpireTopologyRecoveryHistory()
 					go ExpireTopologyRecoveryStepsHistory()
-
-					if runCheckAndRecoverOperationsTimeRipe() && IsLeader() {
-						go SubmitMastersToKvStores("", false)
-					}
 				} else {
 					// Take this opportunity to refresh yourself
 					go inst.LoadHostnameResolveCache()
 				}
 			}()
-		case <-raftCaretakingTick:
-			if orcraft.IsRaftEnabled() && orcraft.IsLeader() {
-				go publishDiscoverMasters()
-			}
 		case <-recoveryTick:
 			go func() {
 				if IsLeaderOrActive() {
@@ -593,56 +452,8 @@ func ContinuousDiscovery() {
 				}
 			}()
 		case <-tabletTopoTick:
-			go RefreshTablets()
+			go RefreshAllKeyspaces()
+			go RefreshTablets(false /* forceRefresh */)
 		}
-	}
-}
-
-func pollAgent(hostname string) error {
-	polledAgent, err := agent.GetAgent(hostname)
-	agent.UpdateAgentLastChecked(hostname)
-
-	if err != nil {
-		return log.Errore(err)
-	}
-
-	err = agent.UpdateAgentInfo(hostname, polledAgent)
-	if err != nil {
-		return log.Errore(err)
-	}
-
-	return nil
-}
-
-// ContinuousAgentsPoll starts an asynchronuous infinite process where agents are
-// periodically investigated and their status captured, and long since unseen agents are
-// purged and forgotten.
-func ContinuousAgentsPoll() {
-	log.Infof("Starting continuous agents poll")
-
-	go discoverSeededAgents()
-
-	tick := time.Tick(config.HealthPollSeconds * time.Second)
-	caretakingTick := time.Tick(time.Hour)
-	for range tick {
-		agentsHosts, _ := agent.ReadOutdatedAgentsHosts()
-		log.Debugf("outdated agents hosts: %+v", agentsHosts)
-		for _, hostname := range agentsHosts {
-			go pollAgent(hostname)
-		}
-		// See if we should also forget agents (lower frequency)
-		select {
-		case <-caretakingTick:
-			agent.ForgetLongUnseenAgents()
-			agent.FailStaleSeeds()
-		default:
-		}
-	}
-}
-
-func discoverSeededAgents() {
-	for seededAgent := range agent.SeededAgents {
-		instanceKey := &inst.InstanceKey{Hostname: seededAgent.Hostname, Port: int(seededAgent.MySQLPort)}
-		go inst.ReadTopologyInstance(instanceKey)
 	}
 }

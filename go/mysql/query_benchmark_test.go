@@ -37,11 +37,11 @@ const benchmarkQueryPrefix = "benchmark "
 func benchmarkQuery(b *testing.B, threads int, query string) {
 	th := &testHandler{}
 
-	authServer := &AuthServerNone{}
+	authServer := NewAuthServerNone()
 
 	lCfg := ListenerConfig{
 		Protocol:           "tcp",
-		Address:            ":0",
+		Address:            "127.0.0.1:",
 		AuthServer:         authServer,
 		Handler:            th,
 		ConnReadBufferSize: testReadConnBufferSize,

@@ -2,7 +2,7 @@
 
 # Introduction
 
-This document builds on top of [The V3 high level design](https://github.com/vitessio/vitess/blob/master/doc/V3HighLevelDesign.md). It discusses implementation of subquery support in greater detail.
+This document builds on top of [The V3 high level design](https://github.com/vitessio/vitess/blob/main/doc/V3HighLevelDesign.md). It discusses implementation of subquery support in greater detail.
 
 
 

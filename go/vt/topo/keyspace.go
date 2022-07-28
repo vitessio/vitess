@@ -49,6 +49,11 @@ func (ki *KeyspaceInfo) KeyspaceName() string {
 	return ki.keyspace
 }
 
+// SetKeyspaceName sets the keyspace name
+func (ki *KeyspaceInfo) SetKeyspaceName(name string) {
+	ki.keyspace = name
+}
+
 // GetServedFrom returns a Keyspace_ServedFrom record if it exists.
 func (ki *KeyspaceInfo) GetServedFrom(tabletType topodatapb.TabletType) *topodatapb.Keyspace_ServedFrom {
 	for _, ksf := range ki.ServedFroms {
@@ -61,8 +66,9 @@ func (ki *KeyspaceInfo) GetServedFrom(tabletType topodatapb.TabletType) *topodat
 
 // CheckServedFromMigration makes sure a requested migration is safe
 func (ki *KeyspaceInfo) CheckServedFromMigration(tabletType topodatapb.TabletType, cells []string, keyspace string, remove bool) error {
-	// master is a special case with a few extra checks
-	if tabletType == topodatapb.TabletType_MASTER {
+	// primary is a special case with a few extra checks
+	if tabletType == topodatapb.TabletType_PRIMARY {
+		// TODO(deepthi): these master references will go away when we delete legacy resharding
 		if !remove {
 			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot add master back to %v", ki.keyspace)
 		}
@@ -193,6 +199,20 @@ func (ts *Server) GetKeyspace(ctx context.Context, keyspace string) (*KeyspaceIn
 	}, nil
 }
 
+// GetKeyspaceDurability reads the given keyspace and returns its durabilty policy
+func (ts *Server) GetKeyspaceDurability(ctx context.Context, keyspace string) (string, error) {
+	keyspaceInfo, err := ts.GetKeyspace(ctx, keyspace)
+	if err != nil {
+		return "", err
+	}
+	// Get the durability policy from the keyspace information
+	// If it is unspecified, use the default durability which is "none" for backward compatibility
+	if keyspaceInfo.GetDurabilityPolicy() != "" {
+		return keyspaceInfo.GetDurabilityPolicy(), nil
+	}
+	return "none", nil
+}
+
 // UpdateKeyspace updates the keyspace data. It checks the keyspace is locked.
 func (ts *Server) UpdateKeyspace(ctx context.Context, ki *KeyspaceInfo) error {
 	// make sure it is locked first
@@ -242,7 +262,7 @@ func (ts *Server) FindAllShardsInKeyspace(ctx context.Context, keyspace string) 
 	return result, nil
 }
 
-// GetServingShards returns all shards where the master is serving.
+// GetServingShards returns all shards where the primary is serving.
 func (ts *Server) GetServingShards(ctx context.Context, keyspace string) ([]*ShardInfo, error) {
 	shards, err := ts.GetShardNames(ctx, keyspace)
 	if err != nil {
@@ -255,7 +275,7 @@ func (ts *Server) GetServingShards(ctx context.Context, keyspace string) ([]*Sha
 		if err != nil {
 			return nil, vterrors.Wrapf(err, "GetShard(%v, %v) failed", keyspace, shard)
 		}
-		if !si.IsMasterServing {
+		if !si.IsPrimaryServing {
 			continue
 		}
 		result = append(result, si)

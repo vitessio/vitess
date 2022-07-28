@@ -24,12 +24,13 @@ import (
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/test/endtoend/utils"
+
 	"github.com/stretchr/testify/assert"
 
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
@@ -213,13 +214,6 @@ func TestMain(m *testing.M) {
 	os.Exit(exitCode)
 }
 
-func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
-	t.Helper()
-	qr, err := conn.ExecuteFetch(query, 1000, true)
-	require.Nil(t, err)
-	return qr
-}
-
 func TestSeq(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
@@ -232,40 +226,40 @@ func TestSeq(t *testing.T) {
 	defer conn.Close()
 
 	//Initialize seq table
-	exec(t, conn, "insert into sequence_test_seq(id, next_id, cache) values(0,1,10)")
+	utils.Exec(t, conn, "insert into sequence_test_seq(id, next_id, cache) values(0,1,10)")
 
 	//Insert 4 values in the main table
-	exec(t, conn, "insert into sequence_test(val) values('a'), ('b') ,('c'), ('d')")
+	utils.Exec(t, conn, "insert into sequence_test(val) values('a'), ('b') ,('c'), ('d')")
 
 	// Test select calls to main table and verify expected id.
-	qr := exec(t, conn, "select id, val  from sequence_test where id=4")
+	qr := utils.Exec(t, conn, "select id, val  from sequence_test where id=4")
 	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(4) VARCHAR("d")]]`; got != want {
 		t.Errorf("select:\n%v want\n%v", got, want)
 	}
 
 	// Test next available seq id from cache
-	qr = exec(t, conn, "select next 1 values from sequence_test_seq")
+	qr = utils.Exec(t, conn, "select next 1 values from sequence_test_seq")
 	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(5)]]`; got != want {
 		t.Errorf("select:\n%v want\n%v", got, want)
 	}
 
-	//Test next_id from seq table which should be the increased by cache value(id+cache)
-	qr = exec(t, conn, "select next_id from sequence_test_seq")
+	// Test next_id from seq table which should be the increased by cache value(id+cache)
+	qr = utils.Exec(t, conn, "select next_id from sequence_test_seq")
 	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(11)]]`; got != want {
 		t.Errorf("select:\n%v want\n%v", got, want)
 	}
 
 	// Test insert with no auto-inc
-	exec(t, conn, "insert into sequence_test(id, val) values(6, 'f')")
-	qr = exec(t, conn, "select * from sequence_test")
+	utils.Exec(t, conn, "insert into sequence_test(id, val) values(6, 'f')")
+	qr = utils.Exec(t, conn, "select * from sequence_test")
 	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(1) VARCHAR("a")] [INT64(2) VARCHAR("b")] [INT64(3) VARCHAR("c")] [INT64(4) VARCHAR("d")] [INT64(6) VARCHAR("f")]]`; got != want {
 		t.Errorf("select:\n%v want\n%v", got, want)
 	}
 
-	//Next insert will fail as we have corrupted the sequence
-	exec(t, conn, "begin")
+	// Next insert will fail as we have corrupted the sequence
+	utils.Exec(t, conn, "begin")
 	_, err = conn.ExecuteFetch("insert into sequence_test(val) values('g')", 1000, false)
-	exec(t, conn, "rollback")
+	utils.Exec(t, conn, "rollback")
 	want := "Duplicate entry"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("wrong insert: %v, must contain %s", err, want)
@@ -308,8 +302,8 @@ func TestInsertAllDefaults(t *testing.T) {
 	defer conn.Close()
 
 	// inserting into a table that has default values for all columns works well
-	exec(t, conn, `insert into allDefaults () values ()`)
-	result := exec(t, conn, `select * from uks.id_seq`)
+	utils.Exec(t, conn, `insert into allDefaults () values ()`)
+	result := utils.Exec(t, conn, `select * from uks.id_seq`)
 	assert.Equal(t, 1, len(result.Rows))
 
 	// inserting into a table that does not have default values for all columns fails

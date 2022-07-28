@@ -17,17 +17,16 @@ limitations under the License.
 package workflow
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
-
-	"context"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/timer"
@@ -157,27 +156,62 @@ func getID(url, base string) (int, error) {
 	return i, nil
 }
 
-func httpErrorf(w http.ResponseWriter, r *http.Request, format string, args ...interface{}) {
+const HTTPHeaderRedactedMessage string = "*** redacted by sanitizeRequestHeader() ***"
+
+var allowedHTTPHeadersList = map[string]any{
+	"Accept":                    nil,
+	"Accept-Encoding":           nil,
+	"Accept-Language":           nil,
+	"Upgrade-Insecure-Requests": nil,
+	"User-Agent":                nil,
+	"X-Forwarded-For":           nil,
+	"X-Forwarded-Host":          nil,
+	"X-Forwarded-Proto":         nil,
+	"X-Real-Ip":                 nil,
+}
+
+// sanitizeRequestHeader - (unless sanitizeHTTPHeaders=false) makes a copy of r and returns it with sanitized headers
+func sanitizeRequestHeader(r *http.Request, sanitizeHTTPHeaders bool) *http.Request {
+	if !sanitizeHTTPHeaders {
+		return r
+	}
+
+	s := r.Clone(r.Context())
+
+	for k := range s.Header {
+		if _, ok := allowedHTTPHeadersList[k]; !ok {
+			s.Header.Set(k, HTTPHeaderRedactedMessage)
+		}
+	}
+
+	return s
+}
+
+func (m *Manager) httpErrorf(w http.ResponseWriter, r *http.Request, format string, args ...any) {
 	errMsg := fmt.Sprintf(format, args...)
-	log.Errorf("HTTP error on %v: %v, request: %#v", r.URL.Path, errMsg, r)
+	log.Errorf("HTTP error on %v: %v, request: %#v",
+		r.URL.Path,
+		errMsg,
+		sanitizeRequestHeader(r, m.sanitizeHTTPHeaders),
+	)
 	http.Error(w, errMsg, http.StatusInternalServerError)
 }
 
-func handleAPI(pattern string, handlerFunc func(w http.ResponseWriter, r *http.Request) error) {
+func (m *Manager) handleAPI(pattern string, handlerFunc func(w http.ResponseWriter, r *http.Request) error) {
 	http.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if x := recover(); x != nil {
-				httpErrorf(w, r, "uncaught panic: %v", x)
+				m.httpErrorf(w, r, "uncaught panic: %v", x)
 			}
 		}()
 
 		if err := acl.CheckAccessHTTP(r, acl.ADMIN); err != nil {
-			httpErrorf(w, r, "WorkflowManager acl.CheckAccessHTTP failed: %v", err)
+			m.httpErrorf(w, r, "WorkflowManager acl.CheckAccessHTTP failed: %v", err)
 			return
 		}
 
 		if err := handlerFunc(w, r); err != nil {
-			httpErrorf(w, r, "%v", err)
+			m.httpErrorf(w, r, "%v", err)
 		}
 	})
 }
@@ -187,7 +221,7 @@ func (m *Manager) HandleHTTPLongPolling(pattern string) {
 	log.Infof("workflow Manager listening to web traffic at %v/{create,poll,delete}", pattern)
 	lpm := newLongPollingManager(m)
 
-	handleAPI(pattern+"/create", func(w http.ResponseWriter, r *http.Request) error {
+	m.handleAPI(pattern+"/create", func(w http.ResponseWriter, r *http.Request) error {
 		result, i, err := lpm.create(r.URL)
 		if err != nil {
 			return fmt.Errorf("longPollingManager.create failed: %v", err)
@@ -201,7 +235,7 @@ func (m *Manager) HandleHTTPLongPolling(pattern string) {
 		return nil
 	})
 
-	handleAPI(pattern+"/poll/", func(w http.ResponseWriter, r *http.Request) error {
+	m.handleAPI(pattern+"/poll/", func(w http.ResponseWriter, r *http.Request) error {
 		i, err := getID(r.URL.Path, pattern+"/poll/")
 		if err != nil {
 			return err
@@ -220,7 +254,7 @@ func (m *Manager) HandleHTTPLongPolling(pattern string) {
 		return nil
 	})
 
-	handleAPI(pattern+"/remove/", func(w http.ResponseWriter, r *http.Request) error {
+	m.handleAPI(pattern+"/remove/", func(w http.ResponseWriter, r *http.Request) error {
 		i, err := getID(r.URL.Path, pattern+"/remove/")
 		if err != nil {
 			return err
@@ -231,13 +265,13 @@ func (m *Manager) HandleHTTPLongPolling(pattern string) {
 		return nil
 	})
 
-	handleAPI(pattern+"/action/", func(w http.ResponseWriter, r *http.Request) error {
+	m.handleAPI(pattern+"/action/", func(w http.ResponseWriter, r *http.Request) error {
 		_, err := getID(r.URL.Path, pattern+"/action/")
 		if err != nil {
 			return err
 		}
 
-		data, err := ioutil.ReadAll(r.Body)
+		data, err := io.ReadAll(r.Body)
 		if err != nil {
 			return err
 		}

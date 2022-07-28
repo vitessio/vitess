@@ -17,31 +17,36 @@ limitations under the License.
 package evalengine
 
 import (
+	"math"
+	"time"
+
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
-
-	"strconv"
-
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine/internal/decimal"
 )
 
 // Cast converts a Value to the target type.
-func Cast(v sqltypes.Value, typ querypb.Type) (sqltypes.Value, error) {
+func Cast(v sqltypes.Value, typ sqltypes.Type) (sqltypes.Value, error) {
 	if v.Type() == typ || v.IsNull() {
 		return v, nil
 	}
+	vBytes, err := v.ToBytes()
+	if err != nil {
+		return v, err
+	}
 	if sqltypes.IsSigned(typ) && v.IsSigned() {
-		return sqltypes.MakeTrusted(typ, v.ToBytes()), nil
+		return sqltypes.MakeTrusted(typ, vBytes), nil
 	}
 	if sqltypes.IsUnsigned(typ) && v.IsUnsigned() {
-		return sqltypes.MakeTrusted(typ, v.ToBytes()), nil
+		return sqltypes.MakeTrusted(typ, vBytes), nil
 	}
 	if (sqltypes.IsFloat(typ) || typ == sqltypes.Decimal) && (v.IsIntegral() || v.IsFloat() || v.Type() == sqltypes.Decimal) {
-		return sqltypes.MakeTrusted(typ, v.ToBytes()), nil
+		return sqltypes.MakeTrusted(typ, vBytes), nil
 	}
 	if sqltypes.IsQuoted(typ) && (v.IsIntegral() || v.IsFloat() || v.Type() == sqltypes.Decimal || v.IsQuoted()) {
-		return sqltypes.MakeTrusted(typ, v.ToBytes()), nil
+		return sqltypes.MakeTrusted(typ, vBytes), nil
 	}
 
 	// Explicitly disallow Expression.
@@ -51,40 +56,40 @@ func Cast(v sqltypes.Value, typ querypb.Type) (sqltypes.Value, error) {
 
 	// If the above fast-paths were not possible,
 	// go through full validation.
-	return sqltypes.NewValue(typ, v.ToBytes())
+	return sqltypes.NewValue(typ, vBytes)
 }
 
 // ToUint64 converts Value to uint64.
 func ToUint64(v sqltypes.Value) (uint64, error) {
-	num, err := newIntegralNumeric(v)
-	if err != nil {
+	var num EvalResult
+	if err := num.setValueIntegralNumeric(v); err != nil {
 		return 0, err
 	}
-	switch num.typ {
+	switch num.typeof() {
 	case sqltypes.Int64:
-		if num.ival < 0 {
-			return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "negative number cannot be converted to unsigned: %d", num.ival)
+		if num.uint64() > math.MaxInt64 {
+			return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "negative number cannot be converted to unsigned: %d", num.int64())
 		}
-		return uint64(num.ival), nil
+		return num.uint64(), nil
 	case sqltypes.Uint64:
-		return num.uval, nil
+		return num.uint64(), nil
 	}
 	panic("unreachable")
 }
 
 // ToInt64 converts Value to int64.
 func ToInt64(v sqltypes.Value) (int64, error) {
-	num, err := newIntegralNumeric(v)
-	if err != nil {
+	var num EvalResult
+	if err := num.setValueIntegralNumeric(v); err != nil {
 		return 0, err
 	}
-	switch num.typ {
+	switch num.typeof() {
 	case sqltypes.Int64:
-		return num.ival, nil
+		return num.int64(), nil
 	case sqltypes.Uint64:
-		ival := int64(num.uval)
+		ival := num.int64()
 		if ival < 0 {
-			return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsigned number overflows int64 value: %d", num.uval)
+			return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsigned number overflows int64 value: %d", num.uint64())
 		}
 		return ival, nil
 	}
@@ -93,34 +98,18 @@ func ToInt64(v sqltypes.Value) (int64, error) {
 
 // ToFloat64 converts Value to float64.
 func ToFloat64(v sqltypes.Value) (float64, error) {
-	num, err := newEvalResult(v)
-	if err != nil {
+	var num EvalResult
+	if err := num.setValue(v, collationNumeric); err != nil {
 		return 0, err
 	}
-	switch num.typ {
-	case sqltypes.Int64:
-		return float64(num.ival), nil
-	case sqltypes.Uint64:
-		return float64(num.uval), nil
-	case sqltypes.Float64:
-		return num.fval, nil
-	}
-
-	if sqltypes.IsText(num.typ) || sqltypes.IsBinary(num.typ) {
-		fval, err := strconv.ParseFloat(string(v.Raw()), 64)
-		if err != nil {
-			return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
-		}
-		return fval, nil
-	}
-
-	return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "cannot convert to float: %s", v.String())
+	num.makeFloat()
+	return num.float64(), nil
 }
 
 // ToNative converts Value to a native go type.
 // Decimal is returned as []byte.
-func ToNative(v sqltypes.Value) (interface{}, error) {
-	var out interface{}
+func ToNative(v sqltypes.Value) (any, error) {
+	var out any
 	var err error
 	switch {
 	case v.Type() == sqltypes.Null:
@@ -132,183 +121,209 @@ func ToNative(v sqltypes.Value) (interface{}, error) {
 	case v.IsFloat():
 		return ToFloat64(v)
 	case v.IsQuoted() || v.Type() == sqltypes.Bit || v.Type() == sqltypes.Decimal:
-		out = v.ToBytes()
+		out, err = v.ToBytes()
 	case v.Type() == sqltypes.Expression:
 		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v cannot be converted to a go type", v)
 	}
 	return out, err
 }
 
-// newEvalResult parses a value and produces an EvalResult containing the value
-func newEvalResult(v sqltypes.Value) (EvalResult, error) {
-	raw := v.Raw()
-	switch {
-	case v.IsBinary() || v.IsText():
-		return EvalResult{bytes: raw, typ: sqltypes.VarBinary}, nil
-	case v.IsSigned():
-		ival, err := strconv.ParseInt(string(raw), 10, 64)
-		if err != nil {
-			return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
-		}
-		return EvalResult{ival: ival, typ: sqltypes.Int64}, nil
-	case v.IsUnsigned():
-		uval, err := strconv.ParseUint(string(raw), 10, 64)
-		if err != nil {
-			return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
-		}
-		return EvalResult{uval: uval, typ: sqltypes.Uint64}, nil
-	case v.IsFloat() || v.Type() == sqltypes.Decimal:
-		fval, err := strconv.ParseFloat(string(raw), 64)
-		if err != nil {
-			return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
-		}
-		return EvalResult{fval: fval, typ: sqltypes.Float64}, nil
-	default:
-		return EvalResult{typ: v.Type(), bytes: raw}, nil
-	}
-}
-
-// newIntegralNumeric parses a value and produces an Int64 or Uint64.
-func newIntegralNumeric(v sqltypes.Value) (EvalResult, error) {
-	str := v.ToString()
-	switch {
-	case v.IsSigned():
-		ival, err := strconv.ParseInt(str, 10, 64)
-		if err != nil {
-			return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
-		}
-		return EvalResult{ival: ival, typ: sqltypes.Int64}, nil
-	case v.IsUnsigned():
-		uval, err := strconv.ParseUint(str, 10, 64)
-		if err != nil {
-			return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
-		}
-		return EvalResult{uval: uval, typ: sqltypes.Uint64}, nil
-	}
-
-	// For other types, do best effort.
-	if ival, err := strconv.ParseInt(str, 10, 64); err == nil {
-		return EvalResult{ival: ival, typ: sqltypes.Int64}, nil
-	}
-	if uval, err := strconv.ParseUint(str, 10, 64); err == nil {
-		return EvalResult{uval: uval, typ: sqltypes.Uint64}, nil
-	}
-	return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "could not parse value: '%s'", str)
-}
-
-func (v EvalResult) toSQLValue(resultType querypb.Type) sqltypes.Value {
-	switch {
-	case sqltypes.IsSigned(resultType):
-		switch v.typ {
-		case sqltypes.Int64, sqltypes.Int32:
-			return sqltypes.MakeTrusted(resultType, strconv.AppendInt(nil, int64(v.ival), 10))
-		case sqltypes.Uint64, sqltypes.Uint32:
-			return sqltypes.MakeTrusted(resultType, strconv.AppendInt(nil, int64(v.uval), 10))
-		case sqltypes.Float64, sqltypes.Float32:
-			return sqltypes.MakeTrusted(resultType, strconv.AppendInt(nil, int64(v.fval), 10))
-		}
-	case sqltypes.IsUnsigned(resultType):
-		switch v.typ {
-		case sqltypes.Uint64, sqltypes.Uint32:
-			return sqltypes.MakeTrusted(resultType, strconv.AppendUint(nil, uint64(v.uval), 10))
-		case sqltypes.Int64, sqltypes.Int32:
-			return sqltypes.MakeTrusted(resultType, strconv.AppendUint(nil, uint64(v.ival), 10))
-		case sqltypes.Float64, sqltypes.Float32:
-			return sqltypes.MakeTrusted(resultType, strconv.AppendUint(nil, uint64(v.fval), 10))
-		}
-	case sqltypes.IsFloat(resultType) || resultType == sqltypes.Decimal:
-		switch v.typ {
-		case sqltypes.Int64, sqltypes.Int32:
-			return sqltypes.MakeTrusted(resultType, strconv.AppendInt(nil, int64(v.ival), 10))
-		case sqltypes.Uint64, sqltypes.Uint32:
-			return sqltypes.MakeTrusted(resultType, strconv.AppendUint(nil, uint64(v.uval), 10))
-		case sqltypes.Float64, sqltypes.Float32:
-			format := byte('g')
-			if resultType == sqltypes.Decimal {
-				format = 'f'
-			}
-			return sqltypes.MakeTrusted(resultType, strconv.AppendFloat(nil, float64(v.fval), format, -1, 64))
-		}
-	default:
-		return sqltypes.MakeTrusted(resultType, v.bytes)
-	}
-	return sqltypes.NULL
-}
-
-func hashCode(v EvalResult) int64 {
-	// we cast all numerical values to float64 and return the hashcode for that
-	var val float64
-	switch v.typ {
+func compareNumeric(v1, v2 *EvalResult) (int, error) {
+	// Equalize the types the same way MySQL does
+	// https://dev.mysql.com/doc/refman/8.0/en/type-conversion.html
+	switch v1.typeof() {
 	case sqltypes.Int64:
-		val = float64(v.ival)
-	case sqltypes.Uint64:
-		val = float64(v.uval)
-	case sqltypes.Float64:
-		val = v.fval
-	}
-
-	// this will not work for ±0, NaN and ±Inf,
-	// so one must still check using `compareNumeric` which will not be fooled
-	return int64(val)
-}
-
-func compareNumeric(v1, v2 EvalResult) (int, error) {
-	// Equalize the types.
-	switch v1.typ {
-	case sqltypes.Int64:
-		switch v2.typ {
+		switch v2.typeof() {
 		case sqltypes.Uint64:
-			if v1.ival < 0 {
+			if v1.uint64() > math.MaxInt64 {
 				return -1, nil
 			}
-			v1 = EvalResult{typ: sqltypes.Uint64, uval: uint64(v1.ival)}
+			v1.setUint64(v1.uint64())
 		case sqltypes.Float64:
-			v1 = EvalResult{typ: sqltypes.Float64, fval: float64(v1.ival)}
+			v1.setFloat(float64(v1.int64()))
+		case sqltypes.Decimal:
+			v1.setDecimal(decimal.NewFromInt(v1.int64()), 0)
 		}
 	case sqltypes.Uint64:
-		switch v2.typ {
+		switch v2.typeof() {
 		case sqltypes.Int64:
-			if v2.ival < 0 {
+			if v2.uint64() > math.MaxInt64 {
 				return 1, nil
 			}
-			v2 = EvalResult{typ: sqltypes.Uint64, uval: uint64(v2.ival)}
+			v2.setUint64(v2.uint64())
 		case sqltypes.Float64:
-			v1 = EvalResult{typ: sqltypes.Float64, fval: float64(v1.uval)}
+			v1.setFloat(float64(v1.uint64()))
+		case sqltypes.Decimal:
+			v1.setDecimal(decimal.NewFromUint(v1.uint64()), 0)
 		}
 	case sqltypes.Float64:
-		switch v2.typ {
+		switch v2.typeof() {
 		case sqltypes.Int64:
-			v2 = EvalResult{typ: sqltypes.Float64, fval: float64(v2.ival)}
+			v2.setFloat(float64(v2.int64()))
 		case sqltypes.Uint64:
-			v2 = EvalResult{typ: sqltypes.Float64, fval: float64(v2.uval)}
+			if v1.float64() < 0 {
+				return -1, nil
+			}
+			v2.setFloat(float64(v2.uint64()))
+		case sqltypes.Decimal:
+			f, ok := v2.decimal().Float64()
+			if !ok {
+				return 0, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.DataOutOfRange, "DECIMAL value is out of range")
+			}
+			v2.setFloat(f)
 		}
+	case sqltypes.Decimal:
+		switch v2.typeof() {
+		case sqltypes.Int64:
+			v2.setDecimal(decimal.NewFromInt(v2.int64()), 0)
+		case sqltypes.Uint64:
+			v2.setDecimal(decimal.NewFromUint(v2.uint64()), 0)
+		case sqltypes.Float64:
+			f, ok := v1.decimal().Float64()
+			if !ok {
+				return 0, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.DataOutOfRange, "DECIMAL value is out of range")
+			}
+			v1.setFloat(f)
+		}
+	}
+
+	// The types are not comparable.
+	if v1.typeof() != v2.typeof() {
+		return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cannot compare %v and %v", v1.typeof(), v2.typeof())
 	}
 
 	// Both values are of the same type.
-	switch v1.typ {
-	case sqltypes.Int64:
+	switch v1.typeof() {
+	case sqltypes.Int8, sqltypes.Int16, sqltypes.Int24, sqltypes.Int32, sqltypes.Int64:
+		v1v, v2v := v1.int64(), v2.int64()
 		switch {
-		case v1.ival == v2.ival:
+		case v1v == v2v:
 			return 0, nil
-		case v1.ival < v2.ival:
+		case v1v < v2v:
 			return -1, nil
 		}
-	case sqltypes.Uint64:
+	case sqltypes.Uint8, sqltypes.Uint16, sqltypes.Uint24, sqltypes.Uint32, sqltypes.Uint64:
 		switch {
-		case v1.uval == v2.uval:
+		case v1.uint64() == v2.uint64():
 			return 0, nil
-		case v1.uval < v2.uval:
+		case v1.uint64() < v2.uint64():
 			return -1, nil
 		}
-	case sqltypes.Float64:
+	case sqltypes.Float32, sqltypes.Float64:
+		v1v, v2v := v1.float64(), v2.float64()
 		switch {
-		case v1.fval == v2.fval:
+		case v1v == v2v:
 			return 0, nil
-		case v1.fval < v2.fval:
+		case v1v < v2v:
 			return -1, nil
+		}
+	case sqltypes.Decimal:
+		return v1.decimal().Cmp(v2.decimal()), nil
+	}
+	return 1, nil
+}
+
+func parseDate(expr *EvalResult) (t time.Time, err error) {
+	switch expr.typeof() {
+	case sqltypes.Date:
+		t, err = time.Parse("2006-01-02", expr.string())
+	case sqltypes.Timestamp, sqltypes.Datetime:
+		t, err = time.Parse("2006-01-02 15:04:05", expr.string())
+	case sqltypes.Time:
+		t, err = time.Parse("15:04:05", expr.string())
+		if err == nil {
+			now := time.Now()
+			// setting the date to today's date, because we use AddDate on t
+			// which is "0000-01-01 xx:xx:xx", we do minus one on the month
+			// and day to take into account the 01 in both month and day of t
+			t = t.AddDate(now.Year(), int(now.Month()-1), now.Day()-1)
 		}
 	}
+	return
+}
 
-	// v1>v2
-	return 1, nil
+// matchExprWithAnyDateFormat formats the given expr (usually a string) to a date using the first format
+// that does not return an error.
+func matchExprWithAnyDateFormat(expr *EvalResult) (t time.Time, err error) {
+	layouts := []string{"2006-01-02", "2006-01-02 15:04:05", "15:04:05"}
+	for _, layout := range layouts {
+		t, err = time.Parse(layout, expr.string())
+		if err == nil {
+			if layout == "15:04:05" {
+				now := time.Now()
+				// setting the date to today's date, because we use AddDate on t
+				// which is "0000-01-01 xx:xx:xx", we do minus one on the month
+				// and day to take into account the 01 in both month and day of t
+				t = t.AddDate(now.Year(), int(now.Month()-1), now.Day()-1)
+			}
+			return
+		}
+	}
+	return
+}
+
+// Date comparison based on:
+// 		- https://dev.mysql.com/doc/refman/8.0/en/type-conversion.html
+// 		- https://dev.mysql.com/doc/refman/8.0/en/date-and-time-type-conversion.html
+func compareDates(l, r *EvalResult) (int, error) {
+	lTime, err := parseDate(l)
+	if err != nil {
+		return 0, err
+	}
+	rTime, err := parseDate(r)
+	if err != nil {
+		return 0, err
+	}
+
+	return compareGoTimes(lTime, rTime)
+}
+
+func compareDateAndString(l, r *EvalResult) (int, error) {
+	var lTime, rTime time.Time
+	var err error
+	switch {
+	case sqltypes.IsDate(l.typeof()):
+		lTime, err = parseDate(l)
+		if err != nil {
+			return 0, err
+		}
+		rTime, err = matchExprWithAnyDateFormat(r)
+		if err != nil {
+			return 0, err
+		}
+	case l.isTextual():
+		rTime, err = parseDate(r)
+		if err != nil {
+			return 0, err
+		}
+		lTime, err = matchExprWithAnyDateFormat(l)
+		if err != nil {
+			return 0, err
+		}
+	}
+	return compareGoTimes(lTime, rTime)
+}
+
+func compareGoTimes(lTime, rTime time.Time) (int, error) {
+	if lTime.Before(rTime) {
+		return -1, nil
+	}
+	if lTime.After(rTime) {
+		return 1, nil
+	}
+	return 0, nil
+}
+
+// More on string collations coercibility on MySQL documentation:
+// 		- https://dev.mysql.com/doc/refman/8.0/en/charset-collation-coercibility.html
+func compareStrings(l, r *EvalResult) int {
+	coll, err := mergeCollations(l, r)
+	if err != nil {
+		throwEvalError(err)
+	}
+	collation := collations.Local().LookupByID(coll)
+	if collation == nil {
+		panic("unknown collation after coercion")
+	}
+	return collation.Collate(l.bytes(), r.bytes(), false)
 }

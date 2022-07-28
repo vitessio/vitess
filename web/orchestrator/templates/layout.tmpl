@@ -200,9 +200,9 @@
 						<button type="button" class="btn btn-danger" data-btn="skip-query" title="Skip a single query and resume replication">Skip query</button>
 						<button type="button" class="btn btn-warning" data-btn="set-read-only"><span class="glyphicon glyphicon-eye-open"></span> Set read-only</button>
 						<button type="button" class="btn btn-warning" data-btn="set-writeable"><span class="glyphicon glyphicon-pencil"></span> Set writeable</button>
-						<button type="button" class="btn btn-warning" data-btn="reattach-replica-master-host" title="Reattach woth detached master">
+						<button type="button" class="btn btn-warning" data-btn="reattach-replica-primary-host" title="Reattach woth detached primary">
 							</span> Reattach</button>
-						<button type="button" class="btn btn-danger" data-btn="reset-replica" title="Make this replica forget its master and stop replicating">Reset replica</button>
+						<button type="button" class="btn btn-danger" data-btn="reset-replica" title="Make this replica forget its primary and stop replicating">Reset replica</button>
 						<button type="button" class="btn btn-info" data-btn="take-siblings" title="Take siblings of this replica">Take siblings</button>
 						<button type="button" class="btn btn-success" data-btn="enable-gtid"><span class="glyphicon glyphicon-globe"></span> Enable</button>
 						<button type="button" class="btn btn-danger" data-btn="disable-gtid"><span class="glyphicon glyphicon-remove"></span> Disable</button>
@@ -212,7 +212,7 @@
 								<span class="caret"></span> <span class="sr-only">Toggle Dropdown</span>
 							</button>
 							<ul class="dropdown-menu" role="menu">
-								<li><a href="#" data-btn="gtid-errant-reset-master">Reset master</a></li>
+								<li><a href="#" data-btn="gtid-errant-reset-primary">Reset primary</a></li>
 								<li><a href="#" data-btn="gtid-errant-inject-empty">Inject empty transactions</a></li>
 							</ul>
 						</div>
@@ -220,13 +220,6 @@
 						<button type="button" class="btn alert-danger" data-btn="forget-instance" title="Make orchestrator forget this instance. Orchestrator may auto-find it again."><span class="glyphicon glyphicon-remove"></span> Forget</button>
 						<button type="button" class="btn btn-warning" data-btn="end-maintenance" title="End maintenance period now">End maintenance</button>
 						<button type="button" class="btn btn-primary" data-dismiss="modal">Done</button>
-						<div class="btn-group" data-btn-group="move-equivalent">
-							<button type="button" class="btn btn-success dropdown-toggle" data-toggle="dropdown">
-								Safe revert to <span class="caret"></span> <span class="sr-only">Toggle Dropdown</span>
-							</button>
-							<ul class="dropdown-menu" role="menu">
-							</ul>
-						</div>
 					</div>
 				</div>
 				<!-- /.modal-content -->

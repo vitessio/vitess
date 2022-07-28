@@ -71,8 +71,8 @@ func (rts rTablets) Less(i, j int) bool {
 		return false
 	}
 
-	// the type proto has MASTER first, so sort by that. Will show
-	// the MASTER first, then each replica type sorted by
+	// the type proto has PRIMARY first, so sort by that. Will show
+	// the PRIMARY first, then each replica type sorted by
 	// replication position.
 	if l.Tablet.Type < r.Tablet.Type {
 		return true
@@ -101,7 +101,7 @@ func (rts rTablets) Less(i, j int) bool {
 //
 // The sorting order is:
 // 1. Tablets that do not have a replication Status.
-// 2. Any tablets of type MASTER.
+// 2. Any tablets of type PRIMARY.
 // 3. Remaining tablets sorted by comparing replication positions.
 func SortedReplicatingTablets(tabletMap map[string]*topodatapb.Tablet, replicationStatuses map[string]*replicationdatapb.Status) []*ReplicatingTablet {
 	rtablets := make([]*ReplicatingTablet, 0, len(tabletMap))

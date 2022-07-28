@@ -27,9 +27,9 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 )
 
-// NewMasterParticipation is part of the topo.Server interface
-func (s *Server) NewMasterParticipation(name, id string) (topo.MasterParticipation, error) {
-	return &consulMasterParticipation{
+// NewLeaderParticipation is part of the topo.Server interface
+func (s *Server) NewLeaderParticipation(name, id string) (topo.LeaderParticipation, error) {
+	return &consulLeaderParticipation{
 		s:    s,
 		name: name,
 		id:   id,
@@ -38,15 +38,15 @@ func (s *Server) NewMasterParticipation(name, id string) (topo.MasterParticipati
 	}, nil
 }
 
-// consulMasterParticipation implements topo.MasterParticipation.
+// consulLeaderParticipation implements topo.LeaderParticipation.
 //
 // We use a key with name <global>/elections/<name> for the lock,
 // that contains the id.
-type consulMasterParticipation struct {
+type consulLeaderParticipation struct {
 	// s is our parent consul topo Server
 	s *Server
 
-	// name is the name of this MasterParticipation
+	// name is the name of this LeaderParticipation
 	name string
 
 	// id is the process's current id.
@@ -59,8 +59,8 @@ type consulMasterParticipation struct {
 	done chan struct{}
 }
 
-// WaitForMastership is part of the topo.MasterParticipation interface.
-func (mp *consulMasterParticipation) WaitForMastership() (context.Context, error) {
+// WaitForLeadership is part of the topo.LeaderParticipation interface.
+func (mp *consulLeaderParticipation) WaitForLeadership() (context.Context, error) {
 
 	electionPath := path.Join(mp.s.root, electionsPath, mp.name)
 	l, err := mp.s.client.LockOpts(&api.LockOptions{
@@ -74,7 +74,7 @@ func (mp *consulMasterParticipation) WaitForMastership() (context.Context, error
 	// If Stop was already called, mp.done is closed, so we are interrupted.
 	select {
 	case <-mp.done:
-		return nil, topo.NewError(topo.Interrupted, "mastership")
+		return nil, topo.NewError(topo.Interrupted, "Leadership")
 	default:
 	}
 
@@ -90,7 +90,7 @@ func (mp *consulMasterParticipation) WaitForMastership() (context.Context, error
 		return nil, err
 	}
 
-	// We have the lock, keep mastership until we lose it.
+	// We have the lock, keep primaryship until we lose it.
 	lockCtx, lockCancel := context.WithCancel(context.Background())
 	go func() {
 		select {
@@ -98,15 +98,15 @@ func (mp *consulMasterParticipation) WaitForMastership() (context.Context, error
 			lockCancel()
 			// We could have lost the lock. Per consul API, explicitly call Unlock to make sure that session will not be renewed.
 			if err := l.Unlock(); err != nil {
-				log.Errorf("master election(%v) Unlock failed: %v", mp.name, err)
+				log.Errorf("Leader election(%v) Unlock failed: %v", mp.name, err)
 			}
 		case <-mp.stop:
 			// Stop was called. We stop the context first,
 			// so the running process is not thinking it
-			// is the master any more, then we unlock.
+			// is the primary any more, then we unlock.
 			lockCancel()
 			if err := l.Unlock(); err != nil {
-				log.Errorf("master election(%v) Unlock failed: %v", mp.name, err)
+				log.Errorf("Leader election(%v) Unlock failed: %v", mp.name, err)
 			}
 			close(mp.done)
 		}
@@ -115,14 +115,14 @@ func (mp *consulMasterParticipation) WaitForMastership() (context.Context, error
 	return lockCtx, nil
 }
 
-// Stop is part of the topo.MasterParticipation interface
-func (mp *consulMasterParticipation) Stop() {
+// Stop is part of the topo.LeaderParticipation interface
+func (mp *consulLeaderParticipation) Stop() {
 	close(mp.stop)
 	<-mp.done
 }
 
-// GetCurrentMasterID is part of the topo.MasterParticipation interface
-func (mp *consulMasterParticipation) GetCurrentMasterID(ctx context.Context) (string, error) {
+// GetCurrentLeaderID is part of the topo.LeaderParticipation interface
+func (mp *consulLeaderParticipation) GetCurrentLeaderID(ctx context.Context) (string, error) {
 	electionPath := path.Join(mp.s.root, electionsPath, mp.name)
 	pair, _, err := mp.s.kv.Get(electionPath, nil)
 	if err != nil {

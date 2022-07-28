@@ -25,12 +25,19 @@
         "Query": "flush local tables `user`, user_extra with read lock"
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "main.unsharded_a",
+    "user.user",
+    "user.user_extra"
+  ]
 }
+Gen4 plan same as above
 
 # Flush statement with flush options
 "flush no_write_to_binlog hosts, logs"
 "keyspace not specified"
+Gen4 plan same as above
 
 # Flush statement with routing rules
 "flush local tables route1, route2"
@@ -59,12 +66,18 @@
         "Query": "flush local tables `user`"
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "main.unsharded",
+    "user.user"
+  ]
 }
+Gen4 plan same as above
 
 # Incorrect tables in flush
 "flush tables user.a with read lock"
 "table a not found"
+Gen4 plan same as above
 
 # Unknown tables in unsharded keyspaces are allowed
 "flush tables main.a with read lock"
@@ -79,8 +92,12 @@
     },
     "TargetDestination": "AllShards()",
     "Query": "flush tables a with read lock"
-  }
+  },
+  "TablesUsed": [
+    "main.a"
+  ]
 }
+Gen4 plan same as above
 
 # Flush statement with 3 keyspaces
 "flush local tables user, unsharded_a, user_extra, unsharded_tab with read lock"
@@ -118,5 +135,12 @@
         "Query": "flush local tables `user`, user_extra with read lock"
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "main.unsharded_a",
+    "main_2.unsharded_tab",
+    "user.user",
+    "user.user_extra"
+  ]
 }
+Gen4 plan same as above

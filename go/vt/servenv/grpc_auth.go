@@ -54,7 +54,7 @@ func GetAuthenticator(name string) func() (Authenticator, error) {
 }
 
 // FakeAuthStreamInterceptor fake interceptor to test plugin
-func FakeAuthStreamInterceptor(srv interface{}, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+func FakeAuthStreamInterceptor(srv any, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 	if fakeDummyAuthenticate(stream.Context()) {
 		return handler(srv, stream)
 	}
@@ -62,7 +62,7 @@ func FakeAuthStreamInterceptor(srv interface{}, stream grpc.ServerStream, info *
 }
 
 // FakeAuthUnaryInterceptor fake interceptor to test plugin
-func FakeAuthUnaryInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+func FakeAuthUnaryInterceptor(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 	if fakeDummyAuthenticate(ctx) {
 		return handler(ctx, req)
 	}

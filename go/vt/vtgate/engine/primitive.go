@@ -18,15 +18,10 @@ package engine
 
 import (
 	"context"
-	"encoding/json"
-	"sync/atomic"
-	"time"
 
-	"golang.org/x/sync/errgroup"
-
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
-	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -49,9 +44,6 @@ type (
 	// VCursor defines the interface the engine will use
 	// to execute routes.
 	VCursor interface {
-		// Context returns the context of the current request.
-		Context() context.Context
-
 		GetKeyspace() string
 		// MaxMemoryRows returns the maxMemoryRows flag value.
 		MaxMemoryRows() int
@@ -61,35 +53,35 @@ type (
 		// if the max memory rows override directive is set to true
 		ExceedsMaxMemoryRows(numRows int) bool
 
-		// SetContextTimeout updates the context and sets a timeout.
-		SetContextTimeout(timeout time.Duration) context.CancelFunc
-
-		// ErrorGroupCancellableContext updates context that can be cancelled.
-		ErrorGroupCancellableContext() (*errgroup.Group, func())
-
 		// V3 functions.
-		Execute(method string, query string, bindvars map[string]*querypb.BindVariable, rollbackOnError bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error)
+		Execute(ctx context.Context, method string, query string, bindVars map[string]*querypb.BindVariable, rollbackOnError bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error)
 		AutocommitApproval() bool
 
+		// Primitive functions
+		ExecutePrimitive(ctx context.Context, primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error)
+		StreamExecutePrimitive(ctx context.Context, primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error
+
 		// Shard-level functions.
-		ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, rollbackOnError, canAutocommit bool) (*sqltypes.Result, []error)
-		ExecuteStandalone(query string, bindvars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard) (*sqltypes.Result, error)
-		StreamExecuteMulti(query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, callback func(reply *sqltypes.Result) error) []error
+		ExecuteMultiShard(ctx context.Context, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, rollbackOnError, canAutocommit bool) (*sqltypes.Result, []error)
+		ExecuteStandalone(ctx context.Context, query string, bindVars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard) (*sqltypes.Result, error)
+		StreamExecuteMulti(ctx context.Context, query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, rollbackOnError bool, autocommit bool, callback func(reply *sqltypes.Result) error) []error
 
 		// Keyspace ID level functions.
-		ExecuteKeyspaceID(keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, rollbackOnError, autocommit bool) (*sqltypes.Result, error)
+		ExecuteKeyspaceID(ctx context.Context, keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, rollbackOnError, autocommit bool) (*sqltypes.Result, error)
 
 		// Resolver methods, from key.Destination to srvtopo.ResolvedShard.
 		// Will replace all of the Topo functions.
-		ResolveDestinations(keyspace string, ids []*querypb.Value, destinations []key.Destination) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error)
+		ResolveDestinations(ctx context.Context, keyspace string, ids []*querypb.Value, destinations []key.Destination) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error)
 
-		ExecuteVSchema(keyspace string, vschemaDDL *sqlparser.AlterVschema) error
+		ResolveDestinationsMultiCol(ctx context.Context, keyspace string, ids [][]sqltypes.Value, destinations []key.Destination) ([]*srvtopo.ResolvedShard, [][][]sqltypes.Value, error)
 
-		SubmitOnlineDDL(onlineDDl *schema.OnlineDDL) error
+		ExecuteVSchema(ctx context.Context, keyspace string, vschemaDDL *sqlparser.AlterVschema) error
 
 		Session() SessionActions
 
-		ExecuteLock(rs *srvtopo.ResolvedShard, query *querypb.BoundQuery) (*sqltypes.Result, error)
+		ConnCollation() collations.ID
+
+		ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, lockFuncType sqlparser.LockingFuncType) (*sqltypes.Result, error)
 
 		InTransactionAndIsDML() bool
 
@@ -103,19 +95,33 @@ type (
 		// KeyspaceAvailable returns true when a keyspace is visible from vtgate
 		KeyspaceAvailable(ks string) bool
 
-		MessageStream(rss []*srvtopo.ResolvedShard, tableName string, callback func(*sqltypes.Result) error) error
+		MessageStream(ctx context.Context, rss []*srvtopo.ResolvedShard, tableName string, callback func(*sqltypes.Result) error) error
 
-		VStream(rss []*srvtopo.ResolvedShard, filter *binlogdatapb.Filter, gtid string, callback func(evs []*binlogdatapb.VEvent) error) error
+		VStream(ctx context.Context, rss []*srvtopo.ResolvedShard, filter *binlogdatapb.Filter, gtid string, callback func(evs []*binlogdatapb.VEvent) error) error
+
+		// ShowExec takes in show command and use executor to execute the query, they are used when topo access is involved.
+		ShowExec(ctx context.Context, command sqlparser.ShowCommandType, filter *sqlparser.ShowFilter) (*sqltypes.Result, error)
+		// SetExec takes in k,v pair and use executor to set them in topo metadata.
+		SetExec(ctx context.Context, name string, value string) error
+
+		// CanUseSetVar returns true if system_settings can use SET_VAR hint.
+		CanUseSetVar() bool
+
+		// ReleaseLock releases all the held advisory locks.
+		ReleaseLock(ctx context.Context) error
+
+		// StreamExecutePrimitiveStandalone executes the primitive in its own new autocommit session.
+		StreamExecutePrimitiveStandalone(ctx context.Context, primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(result *sqltypes.Result) error) error
 	}
 
-	//SessionActions gives primitives ability to interact with the session state
+	// SessionActions gives primitives ability to interact with the session state
 	SessionActions interface {
 		// RecordWarning stores the given warning in the current session
 		RecordWarning(warning *querypb.QueryWarning)
 
 		SetTarget(target string) error
 
-		SetUDV(key string, value interface{}) error
+		SetUDV(key string, value any) error
 
 		SetSysVar(name string, expr string)
 
@@ -128,9 +134,9 @@ type (
 		// ShardSession returns shard info about open connections
 		ShardSession() []*srvtopo.ResolvedShard
 
-		SetAutocommit(bool) error
-		SetClientFoundRows(bool) error
-		SetSkipQueryPlanCache(bool) error
+		SetAutocommit(ctx context.Context, autocommit bool) error
+		SetClientFoundRows(context.Context, bool) error
+		SetSkipQueryPlanCache(context.Context, bool) error
 		SetSQLSelectLimit(int64) error
 		SetTransactionMode(vtgatepb.TransactionMode)
 		SetWorkload(querypb.ExecuteOptions_Workload)
@@ -142,8 +148,11 @@ type (
 
 		GetSessionUUID() string
 
-		SetSessionEnableSystemSettings(bool) error
+		SetSessionEnableSystemSettings(context.Context, bool) error
 		GetSessionEnableSystemSettings() bool
+
+		GetSystemVariables(func(k string, v string))
+		HasSystemVariables() bool
 
 		// SetReadAfterWriteGTID sets the GTID that the user expects a replica to have caught up with before answering a query
 		SetReadAfterWriteGTID(string)
@@ -153,26 +162,13 @@ type (
 		// HasCreatedTempTable will mark the session as having created temp tables
 		HasCreatedTempTable()
 		GetWarnings() []*querypb.QueryWarning
-	}
 
-	// Plan represents the execution strategy for a given query.
-	// For now it's a simple wrapper around the real instructions.
-	// An instruction (aka Primitive) is typically a tree where
-	// each node does its part by combining the results of the
-	// sub-nodes.
-	Plan struct {
-		Type         sqlparser.StatementType // The type of query we have
-		Original     string                  // Original is the original query.
-		Instructions Primitive               // Instructions contains the instructions needed to fulfil the query.
-		BindVarNeeds *sqlparser.BindVarNeeds // Stores BindVars needed to be provided as part of expression rewriting
-		Warnings     []*querypb.QueryWarning // Warnings that need to be yielded every time this query runs
-
-		ExecCount    uint64 // Count of times this plan was executed
-		ExecTime     uint64 // Total execution time
-		ShardQueries uint64 // Total number of shard queries
-		RowsReturned uint64 // Total number of rows
-		RowsAffected uint64 // Total number of rows
-		Errors       uint64 // Total number of errors
+		// AnyAdvisoryLockTaken returns true of any advisory lock is taken
+		AnyAdvisoryLockTaken() bool
+		// AddAdvisoryLock adds advisory lock to the session
+		AddAdvisoryLock(name string)
+		// RemoveAdvisoryLock removes advisory lock from the session
+		RemoveAdvisoryLock(name string)
 	}
 
 	// Match is used to check if a Primitive matches
@@ -186,12 +182,13 @@ type (
 		RouteType() string
 		GetKeyspaceName() string
 		GetTableName() string
-		Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error)
-		StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error
-		GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error)
+		GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error)
 		NeedsTransaction() bool
 
-		// The inputs to this Primitive
+		TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error)
+		TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error
+
+		// Inputs is a slice containing the inputs to this Primitive
 		Inputs() []Primitive
 
 		// description is the description, sans the inputs, of this Primitive.
@@ -207,28 +204,13 @@ type (
 
 	// txNeeded is a default implementation for Primitives that need transaction handling
 	txNeeded struct{}
+
+	// Gen4Comparer interfaces all Primitive used to compare Gen4 with other planners (V3, MySQL, ...).
+	Gen4Comparer interface {
+		Primitive
+		GetGen4Primitive() Primitive
+	}
 )
-
-// AddStats updates the plan execution statistics
-func (p *Plan) AddStats(execCount uint64, execTime time.Duration, shardQueries, rowsAffected, rowsReturned, errors uint64) {
-	atomic.AddUint64(&p.ExecCount, execCount)
-	atomic.AddUint64(&p.ExecTime, uint64(execTime))
-	atomic.AddUint64(&p.ShardQueries, shardQueries)
-	atomic.AddUint64(&p.RowsAffected, rowsAffected)
-	atomic.AddUint64(&p.RowsReturned, rowsReturned)
-	atomic.AddUint64(&p.Errors, errors)
-}
-
-// Stats returns a copy of the plan execution statistics
-func (p *Plan) Stats() (execCount uint64, execTime time.Duration, shardQueries, rowsAffected, rowsReturned, errors uint64) {
-	execCount = atomic.LoadUint64(&p.ExecCount)
-	execTime = time.Duration(atomic.LoadUint64(&p.ExecTime))
-	shardQueries = atomic.LoadUint64(&p.ShardQueries)
-	rowsAffected = atomic.LoadUint64(&p.RowsAffected)
-	rowsReturned = atomic.LoadUint64(&p.RowsReturned)
-	errors = atomic.LoadUint64(&p.Errors)
-	return
-}
 
 // Find will return the first Primitive that matches the evaluate function. If no match is found, nil will be returned
 func Find(isMatch Match, start Primitive) Primitive {
@@ -247,38 +229,6 @@ func Find(isMatch Match, start Primitive) Primitive {
 // Exists traverses recursively down the Primitive tree structure, and returns true when Match returns true
 func Exists(m Match, p Primitive) bool {
 	return Find(m, p) != nil
-}
-
-//MarshalJSON serializes the plan into a JSON representation.
-func (p *Plan) MarshalJSON() ([]byte, error) {
-	var instructions *PrimitiveDescription
-	if p.Instructions != nil {
-		description := PrimitiveToPlanDescription(p.Instructions)
-		instructions = &description
-	}
-
-	marshalPlan := struct {
-		QueryType    string
-		Original     string                `json:",omitempty"`
-		Instructions *PrimitiveDescription `json:",omitempty"`
-		ExecCount    uint64                `json:",omitempty"`
-		ExecTime     time.Duration         `json:",omitempty"`
-		ShardQueries uint64                `json:",omitempty"`
-		RowsAffected uint64                `json:",omitempty"`
-		RowsReturned uint64                `json:",omitempty"`
-		Errors       uint64                `json:",omitempty"`
-	}{
-		QueryType:    p.Type.String(),
-		Original:     p.Original,
-		Instructions: instructions,
-		ExecCount:    atomic.LoadUint64(&p.ExecCount),
-		ExecTime:     time.Duration(atomic.LoadUint64(&p.ExecTime)),
-		ShardQueries: atomic.LoadUint64(&p.ShardQueries),
-		RowsAffected: atomic.LoadUint64(&p.RowsAffected),
-		RowsReturned: atomic.LoadUint64(&p.RowsReturned),
-		Errors:       atomic.LoadUint64(&p.Errors),
-	}
-	return json.Marshal(marshalPlan)
 }
 
 // Inputs implements no inputs

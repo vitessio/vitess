@@ -50,10 +50,10 @@ type MysqlctldProcess struct {
 func (mysqlctld *MysqlctldProcess) InitDb() (err error) {
 	tmpProcess := exec.Command(
 		mysqlctld.Binary,
-		"-log_dir", mysqlctld.LogDirectory,
-		"-tablet_uid", fmt.Sprintf("%d", mysqlctld.TabletUID),
-		"-mysql_port", fmt.Sprintf("%d", mysqlctld.MySQLPort),
-		"-init_db_sql_file", mysqlctld.InitDBFile,
+		"--log_dir", mysqlctld.LogDirectory,
+		"--tablet_uid", fmt.Sprintf("%d", mysqlctld.TabletUID),
+		"--mysql_port", fmt.Sprintf("%d", mysqlctld.MySQLPort),
+		"--init_db_sql_file", mysqlctld.InitDBFile,
 	)
 	return tmpProcess.Run()
 }
@@ -66,16 +66,16 @@ func (mysqlctld *MysqlctldProcess) Start() error {
 	_ = createDirectory(mysqlctld.LogDirectory, 0700)
 	tempProcess := exec.Command(
 		mysqlctld.Binary,
-		"-log_dir", mysqlctld.LogDirectory,
-		"-tablet_uid", fmt.Sprintf("%d", mysqlctld.TabletUID),
-		"-mysql_port", fmt.Sprintf("%d", mysqlctld.MySQLPort),
+		"--log_dir", mysqlctld.LogDirectory,
+		"--tablet_uid", fmt.Sprintf("%d", mysqlctld.TabletUID),
+		"--mysql_port", fmt.Sprintf("%d", mysqlctld.MySQLPort),
 	)
 
 	tempProcess.Args = append(tempProcess.Args, mysqlctld.ExtraArgs...)
 
 	if mysqlctld.InitMysql {
 		tempProcess.Args = append(tempProcess.Args,
-			"-init_db_sql_file", mysqlctld.InitDBFile)
+			"--init_db_sql_file", mysqlctld.InitDBFile)
 	}
 
 	errFile, _ := os.Create(path.Join(mysqlctld.LogDirectory, "mysqlctld-stderr.txt"))
@@ -130,7 +130,7 @@ func (mysqlctld *MysqlctldProcess) Stop() error {
 	mysqlctld.exitSignalReceived = true
 	tmpProcess := exec.Command(
 		"mysqlctl",
-		"-tablet_uid", fmt.Sprintf("%d", mysqlctld.TabletUID),
+		"--tablet_uid", fmt.Sprintf("%d", mysqlctld.TabletUID),
 	)
 	tmpProcess.Args = append(tmpProcess.Args, mysqlctld.ExtraArgs...)
 	tmpProcess.Args = append(tmpProcess.Args, "shutdown")

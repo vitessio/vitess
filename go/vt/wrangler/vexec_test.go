@@ -31,7 +31,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 )
 
-func TestVExec2(t *testing.T) {
+func TestVExec(t *testing.T) {
 	ctx := context.Background()
 	workflow := "wrWorkflow"
 	keyspace := "target"
@@ -42,14 +42,14 @@ func TestVExec2(t *testing.T) {
 	wr := New(logger, env.topoServ, env.tmc)
 
 	vx := newVExec(ctx, workflow, keyspace, query, wr)
-	err := vx.getMasters()
+	err := vx.getPrimaries()
 	require.Nil(t, err)
-	masters := vx.masters
-	require.NotNil(t, masters)
-	require.Equal(t, len(masters), 2)
+	primaries := vx.primaries
+	require.NotNil(t, primaries)
+	require.Equal(t, len(primaries), 2)
 	var shards []string
-	for _, master := range masters {
-		shards = append(shards, master.Shard)
+	for _, primary := range primaries {
+		shards = append(shards, primary.Shard)
 	}
 	sort.Strings(shards)
 	require.Equal(t, fmt.Sprintf("%v", shards), "[-80 80-]")
@@ -172,7 +172,7 @@ func TestWorkflowStatusUpdate(t *testing.T) {
 	require.Equal(t, "Running", updateState("", "Running", nil, int64(time.Now().Second())))
 	require.Equal(t, "Lagging", updateState("", "Running", nil, int64(time.Now().Second())-100))
 	require.Equal(t, "Copying", updateState("", "Running", []copyState{{Table: "t1", LastPK: "[[INT64(10)]]"}}, int64(time.Now().Second())))
-	require.Equal(t, "Error", updateState("error: master tablet not contactable", "Running", nil, 0))
+	require.Equal(t, "Error", updateState("error: primary tablet not contactable", "Running", nil, 0))
 }
 
 func TestWorkflowListStreams(t *testing.T) {
@@ -211,9 +211,11 @@ func TestWorkflowListStreams(t *testing.T) {
 		]
 	},
 	"MaxVReplicationLag": 0,
+	"MaxVReplicationTransactionLag": 0,
+	"Frozen": false,
 	"ShardStatuses": {
 		"-80/zone1-0000000200": {
-			"MasterReplicationStatuses": [
+			"PrimaryReplicationStatuses": [
 				{
 					"Shard": "-80",
 					"Tablet": "zone1-0000000200",
@@ -235,7 +237,11 @@ func TestWorkflowListStreams(t *testing.T) {
 					"DBName": "vt_target",
 					"TransactionTimestamp": 0,
 					"TimeUpdated": 1234,
+					"TimeHeartbeat": 1234,
+					"TimeThrottled": 0,
+					"ComponentThrottled": "",
 					"Message": "",
+					"Tags": "",
 					"CopyState": [
 						{
 							"Table": "t1",
@@ -245,10 +251,10 @@ func TestWorkflowListStreams(t *testing.T) {
 				}
 			],
 			"TabletControls": null,
-			"MasterIsServing": true
+			"PrimaryIsServing": true
 		},
 		"80-/zone1-0000000210": {
-			"MasterReplicationStatuses": [
+			"PrimaryReplicationStatuses": [
 				{
 					"Shard": "80-",
 					"Tablet": "zone1-0000000210",
@@ -270,7 +276,11 @@ func TestWorkflowListStreams(t *testing.T) {
 					"DBName": "vt_target",
 					"TransactionTimestamp": 0,
 					"TimeUpdated": 1234,
+					"TimeHeartbeat": 1234,
+					"TimeThrottled": 0,
+					"ComponentThrottled": "",
 					"Message": "",
+					"Tags": "",
 					"CopyState": [
 						{
 							"Table": "t1",
@@ -280,9 +290,11 @@ func TestWorkflowListStreams(t *testing.T) {
 				}
 			],
 			"TabletControls": null,
-			"MasterIsServing": true
+			"PrimaryIsServing": true
 		}
-	}
+	},
+	"SourceTimeZone": "",
+	"TargetTimeZone": ""
 }
 
 `
@@ -290,6 +302,8 @@ func TestWorkflowListStreams(t *testing.T) {
 	// MaxVReplicationLag needs to be reset. This can't be determinable in this kind of a test because time.Now() is constantly shifting.
 	re := regexp.MustCompile(`"MaxVReplicationLag": \d+`)
 	got = re.ReplaceAllLiteralString(got, `"MaxVReplicationLag": 0`)
+	re = regexp.MustCompile(`"MaxVReplicationTransactionLag": \d+`)
+	got = re.ReplaceAllLiteralString(got, `"MaxVReplicationTransactionLag": 0`)
 	require.Equal(t, want, got)
 
 	results, err := wr.execWorkflowAction(ctx, workflow, keyspace, "stop", false)

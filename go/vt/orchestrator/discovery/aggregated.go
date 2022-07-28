@@ -88,9 +88,9 @@ func aggregate(results []collection.Metric) AggregatedDiscoveryMetrics {
 		FailedInstanceSeconds            = "FailedInstanceSeconds"
 	)
 
-	counters := make(map[counterKey]uint64)           // map of string based counters
-	names := make(map[hostKey](map[string]int))       // map of string based names (using a map)
-	timings := make(map[timerKey](stats.Float64Data)) // map of string based float64 values
+	counters := make(map[counterKey]uint64)         // map of string based counters
+	names := make(map[hostKey]map[string]int)       // map of string based names (using a map)
+	timings := make(map[timerKey]stats.Float64Data) // map of string based float64 values
 
 	// initialise counters
 	for _, v := range []counterKey{FailedDiscoveries, Discoveries} {

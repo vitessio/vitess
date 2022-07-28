@@ -141,7 +141,7 @@ func TestMariaGTIDFlavor(t *testing.T) {
 
 func TestMariaGTIDSequenceDomain(t *testing.T) {
 	input := MariadbGTID{Domain: 12, Server: 345, Sequence: 6789}
-	want := interface{}(uint32(12))
+	want := any(uint32(12))
 
 	got := input.SequenceDomain()
 	if got != want {
@@ -151,7 +151,7 @@ func TestMariaGTIDSequenceDomain(t *testing.T) {
 
 func TestMariaGTIDSourceServer(t *testing.T) {
 	input := MariadbGTID{Domain: 12, Server: 345, Sequence: 6789}
-	want := interface{}(uint32(345))
+	want := any(uint32(345))
 
 	got := input.SourceServer()
 	if got != want {
@@ -161,7 +161,7 @@ func TestMariaGTIDSourceServer(t *testing.T) {
 
 func TestMariaGTIDSequenceNumber(t *testing.T) {
 	input := MariadbGTID{Domain: 12, Server: 345, Sequence: 6789}
-	want := interface{}(uint64(6789))
+	want := any(uint64(6789))
 
 	got := input.SequenceNumber()
 	if got != want {

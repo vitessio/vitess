@@ -48,51 +48,6 @@ func TestParseAlterTableOptions(t *testing.T) {
 	}
 }
 
-func TestReplaceTableNameInCreateTableStatement(t *testing.T) {
-	replacementTableName := `my_table`
-	tt := []struct {
-		stmt    string
-		expect  string
-		isError bool
-	}{
-		{
-			stmt:    "CREATE TABLE tbl (id int)",
-			isError: true,
-		},
-		{
-			stmt:   "CREATE TABLE `tbl` (id int)",
-			expect: "CREATE TABLE `my_table` (id int)",
-		},
-		{
-			stmt:   "CREATE     TABLE     `tbl`    (id int)",
-			expect: "CREATE     TABLE     `my_table`    (id int)",
-		},
-		{
-			stmt:   "create table `tbl` (id int)",
-			expect: "create table `my_table` (id int)",
-		},
-		{
-			stmt:    "CREATE TABLE `schema`.`tbl` (id int)",
-			isError: true,
-		},
-		{
-			stmt:    "CREATE TABLE IF NOT EXISTS `tbl` (id int)",
-			isError: true,
-		},
-	}
-	for _, ts := range tt {
-		t.Run(ts.stmt, func(*testing.T) {
-			result, err := ReplaceTableNameInCreateTableStatement(ts.stmt, replacementTableName)
-			if ts.isError {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-				assert.Equal(t, ts.expect, result)
-			}
-		})
-	}
-}
-
 func TestLegacyParseRevertUUID(t *testing.T) {
 
 	{
@@ -107,5 +62,104 @@ func TestLegacyParseRevertUUID(t *testing.T) {
 	{
 		_, err := legacyParseRevertUUID("revert vitess_migration '4e5dcf80_354b_11eb_82cd_f875a4d24e90'")
 		assert.Error(t, err)
+	}
+}
+
+func TestParseEnumValues(t *testing.T) {
+	{
+		inputs := []string{
+			`enum('x-small','small','medium','large','x-large')`,
+			`ENUM('x-small','small','medium','large','x-large')`,
+			`'x-small','small','medium','large','x-large'`,
+		}
+		for _, input := range inputs {
+			enumValues := ParseEnumValues(input)
+			assert.Equal(t, `'x-small','small','medium','large','x-large'`, enumValues)
+		}
+	}
+	{
+		inputs := []string{
+			``,
+			`abc`,
+			`func('x-small','small','medium','large','x-large')`,
+			`set('x-small','small','medium','large','x-large')`,
+		}
+		for _, input := range inputs {
+			enumValues := ParseEnumValues(input)
+			assert.Equal(t, input, enumValues)
+		}
+	}
+}
+
+func TestParseSetValues(t *testing.T) {
+	{
+		inputs := []string{
+			`set('x-small','small','medium','large','x-large')`,
+			`SET('x-small','small','medium','large','x-large')`,
+			`'x-small','small','medium','large','x-large'`,
+		}
+		for _, input := range inputs {
+			setValues := ParseSetValues(input)
+			assert.Equal(t, `'x-small','small','medium','large','x-large'`, setValues)
+		}
+	}
+	{
+		inputs := []string{
+			``,
+			`abc`,
+			`func('x-small','small','medium','large','x-large')`,
+			`enum('x-small','small','medium','large','x-large')`,
+			`ENUM('x-small','small','medium','large','x-large')`,
+		}
+		for _, input := range inputs {
+			setValues := ParseSetValues(input)
+			assert.Equal(t, input, setValues)
+		}
+	}
+}
+
+func TestParseEnumTokens(t *testing.T) {
+	{
+		input := `'x-small','small','medium','large','x-large'`
+		enumTokens := parseEnumOrSetTokens(input)
+		expect := []string{"x-small", "small", "medium", "large", "x-large"}
+		assert.Equal(t, expect, enumTokens)
+	}
+	{
+		input := `enum('x-small','small','medium','large','x-large')`
+		enumTokens := parseEnumOrSetTokens(input)
+		assert.Nil(t, enumTokens)
+	}
+	{
+		input := `set('x-small','small','medium','large','x-large')`
+		enumTokens := parseEnumOrSetTokens(input)
+		assert.Nil(t, enumTokens)
+	}
+}
+
+func TestParseEnumTokensMap(t *testing.T) {
+	{
+		input := `'x-small','small','medium','large','x-large'`
+
+		enumTokensMap := ParseEnumOrSetTokensMap(input)
+		expect := map[string]string{
+			"1": "x-small",
+			"2": "small",
+			"3": "medium",
+			"4": "large",
+			"5": "x-large",
+		}
+		assert.Equal(t, expect, enumTokensMap)
+	}
+	{
+		inputs := []string{
+			`enum('x-small','small','medium','large','x-large')`,
+			`set('x-small','small','medium','large','x-large')`,
+		}
+		for _, input := range inputs {
+			enumTokensMap := ParseEnumOrSetTokensMap(input)
+			expect := map[string]string{}
+			assert.Equal(t, expect, enumTokensMap)
+		}
 	}
 }

@@ -27,8 +27,10 @@ import (
 	"strings"
 
 	"google.golang.org/protobuf/encoding/prototext"
+	"k8s.io/apimachinery/pkg/util/sets"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -40,7 +42,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-var (
+const (
 	// Frozen is the message value of frozen vreplication streams.
 	Frozen = "FROZEN"
 )
@@ -104,16 +106,25 @@ type ITrafficSwitcher interface {
 
 	/* Functions that expose fields on the *wrangler.trafficSwitcher */
 
+	ExternalTopo() *topo.Server
 	MigrationType() binlogdatapb.MigrationType
 	ReverseWorkflowName() string
 	SourceKeyspaceName() string
 	SourceKeyspaceSchema() *vindexes.KeyspaceSchema
+	Sources() map[string]*MigrationSource
+	Tables() []string
+	TargetKeyspaceName() string
+	Targets() map[string]*MigrationTarget
 	WorkflowName() string
+	SourceTimeZone() string
 
 	/* Functions that *wrangler.trafficSwitcher implements */
 
 	ForAllSources(f func(source *MigrationSource) error) error
 	ForAllTargets(f func(target *MigrationTarget) error) error
+	ForAllUIDs(f func(target *MigrationTarget, uid uint32) error) error
+	SourceShards() []*topo.ShardInfo
+	TargetShards() []*topo.ShardInfo
 }
 
 // TargetInfo contains the metadata for a set of targets involved in a workflow.
@@ -199,12 +210,12 @@ func BuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManag
 			return nil, err
 		}
 
-		if si.MasterAlias == nil {
+		if si.PrimaryAlias == nil {
 			// This can happen if bad inputs are given.
 			return nil, fmt.Errorf("shard %v/%v doesn't have a primary set", targetKeyspace, targetShard)
 		}
 
-		primary, err := ts.GetTablet(ctx, si.MasterAlias)
+		primary, err := ts.GetTablet(ctx, si.PrimaryAlias)
 		if err != nil {
 			return nil, err
 		}
@@ -236,7 +247,11 @@ func BuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManag
 			}
 
 			var bls binlogdatapb.BinlogSource
-			if err := prototext.Unmarshal(row[1].ToBytes(), &bls); err != nil {
+			rowBytes, err := row[1].ToBytes()
+			if err != nil {
+				return nil, err
+			}
+			if err := prototext.Unmarshal(rowBytes, &bls); err != nil {
 				return nil, err
 			}
 
@@ -262,6 +277,48 @@ func BuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManag
 		OptCells:       optCells,
 		OptTabletTypes: optTabletTypes,
 	}, nil
+}
+
+// CompareShards compares the list of shards in a workflow with the shards in
+// that keyspace according to the topo. It returns an error if they do not match.
+//
+// This function is used to validate MoveTables workflows.
+//
+// (TODO|@ajm188): This function is temporarily-exported until *wrangler.trafficSwitcher
+// has been fully moved over to this package. Once that refactor is finished,
+// this function should be unexported. Consequently, YOU SHOULD NOT DEPEND ON
+// THIS FUNCTION EXTERNALLY.
+func CompareShards(ctx context.Context, keyspace string, shards []*topo.ShardInfo, ts *topo.Server) error {
+	shardSet := sets.NewString()
+	for _, si := range shards {
+		shardSet.Insert(si.ShardName())
+	}
+
+	topoShards, err := ts.GetShardNames(ctx, keyspace)
+	if err != nil {
+		return err
+	}
+
+	topoShardSet := sets.NewString(topoShards...)
+	if !shardSet.Equal(topoShardSet) {
+		wfExtra := shardSet.Difference(topoShardSet)
+		topoExtra := topoShardSet.Difference(shardSet)
+
+		var rec concurrency.AllErrorRecorder
+		if wfExtra.Len() > 0 {
+			wfExtraSorted := wfExtra.List()
+			rec.RecordError(fmt.Errorf("switch command shards not in topo: %v", wfExtraSorted))
+		}
+
+		if topoExtra.Len() > 0 {
+			topoExtraSorted := topoExtra.List()
+			rec.RecordError(fmt.Errorf("topo shards not in switch command: %v", topoExtraSorted))
+		}
+
+		return fmt.Errorf("mismatched shards for keyspace %s: %s", keyspace, strings.Join(rec.ErrorStrings(), "; "))
+	}
+
+	return nil
 }
 
 // HashStreams produces a stable hash based on the target keyspace and migration

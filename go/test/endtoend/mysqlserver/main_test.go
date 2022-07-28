@@ -42,11 +42,20 @@ var (
 		data longblob,
 		primary key (id)
 		) Engine=InnoDB;
+	create table vt_partition_test (
+		c1 int NOT NULL,
+		logdata BLOB NOT NULL,
+		created DATETIME NOT NULL,
+		PRIMARY KEY(c1, created)
+		)
+		PARTITION BY HASH( TO_DAYS(created) )
+		PARTITIONS 10;
 `
 	createProcSQL = `use vt_test_keyspace;
 CREATE PROCEDURE testing()
 BEGIN
 	delete from vt_insert_test;
+	delete from vt_partition_test;
 END;
 `
 )
@@ -73,7 +82,7 @@ func TestMain(m *testing.M) {
 		ACLConfig := `{
 			"table_groups": [
 				{
-					"table_names_or_prefixes": ["vt_insert_test", "dual"],
+					"table_names_or_prefixes": ["vt_insert_test", "vt_partition_test", "dual"],
 					"readers": ["vtgate client 1"],
 					"writers": ["vtgate client 1"],
 					"admins": ["vtgate client 1"]
@@ -100,17 +109,17 @@ func TestMain(m *testing.M) {
 		}
 
 		clusterInstance.VtGateExtraArgs = []string{
-			"-vschema_ddl_authorized_users=%",
-			"-mysql_server_query_timeout", "1s",
-			"-mysql_auth_server_impl", "static",
-			"-mysql_auth_server_static_file", clusterInstance.TmpDirectory + mysqlAuthServerStatic,
-			"-mysql_server_version", "8.0.16-7",
-			"-warn_sharded_only=true",
+			"--vschema_ddl_authorized_users=%",
+			"--mysql_server_query_timeout", "1s",
+			"--mysql_auth_server_impl", "static",
+			"--mysql_auth_server_static_file", clusterInstance.TmpDirectory + mysqlAuthServerStatic,
+			"--mysql_server_version", "8.0.16-7",
+			"--warn_sharded_only=true",
 		}
 
 		clusterInstance.VtTabletExtraArgs = []string{
-			"-table-acl-config", clusterInstance.TmpDirectory + tableACLConfig,
-			"-queryserver-config-strict-table-acl",
+			"--table-acl-config", clusterInstance.TmpDirectory + tableACLConfig,
+			"--queryserver-config-strict-table-acl",
 		}
 
 		// Start keyspace
@@ -134,8 +143,8 @@ func TestMain(m *testing.M) {
 			Pass:  "testpassword1",
 		}
 
-		masterProcess := clusterInstance.Keyspaces[0].Shards[0].MasterTablet().VttabletProcess
-		if _, err := masterProcess.QueryTablet(createProcSQL, keyspaceName, false); err != nil {
+		primaryTabletProcess := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet().VttabletProcess
+		if _, err := primaryTabletProcess.QueryTablet(createProcSQL, keyspaceName, false); err != nil {
 			return 1, err
 		}
 

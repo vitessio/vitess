@@ -17,15 +17,13 @@ limitations under the License.
 package testlib
 
 import (
-	"io/ioutil"
+	"context"
 	"os"
 	"path"
 	"strings"
 	"testing"
 
 	"google.golang.org/protobuf/proto"
-
-	"context"
 
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 
@@ -55,39 +53,34 @@ func testVtctlTopoCommand(t *testing.T, vp *VtctlPipe, args []string, want strin
 // "Topo" group.
 func TestVtctlTopoCommands(t *testing.T) {
 	ts := memorytopo.NewServer("cell1", "cell2")
-	if err := ts.CreateKeyspace(context.Background(), "ks1", &topodatapb.Keyspace{ShardingColumnName: "col1"}); err != nil {
+	if err := ts.CreateKeyspace(context.Background(), "ks1", &topodatapb.Keyspace{KeyspaceType: topodatapb.KeyspaceType_NORMAL}); err != nil {
 		t.Fatalf("CreateKeyspace() failed: %v", err)
 	}
-	if err := ts.CreateKeyspace(context.Background(), "ks2", &topodatapb.Keyspace{ShardingColumnName: "col2"}); err != nil {
+	if err := ts.CreateKeyspace(context.Background(), "ks2", &topodatapb.Keyspace{KeyspaceType: topodatapb.KeyspaceType_SNAPSHOT}); err != nil {
 		t.Fatalf("CreateKeyspace() failed: %v", err)
 	}
 	vp := NewVtctlPipe(t, ts)
 	defer vp.Close()
 
-	tmp, err := ioutil.TempDir("", "vtctltopotest")
-	if err != nil {
-		t.Fatalf("TempDir failed: %v", err)
-	}
-	defer os.RemoveAll(tmp)
+	tmp := t.TempDir()
 
 	// Test TopoCat.
 	testVtctlTopoCommand(t, vp, []string{"TopoCat", "-long", "-decode_proto", "/keyspaces/*/Keyspace"}, `path=/keyspaces/ks1/Keyspace version=V
-sharding_column_name:"col1"
 path=/keyspaces/ks2/Keyspace version=V
-sharding_column_name:"col2"
+keyspace_type:SNAPSHOT
 `)
 
 	// Test TopoCp from topo to disk.
 	ksFile := path.Join(tmp, "Keyspace")
-	_, err = vp.RunAndOutput([]string{"TopoCp", "/keyspaces/ks1/Keyspace", ksFile})
+	_, err := vp.RunAndOutput([]string{"TopoCp", "/keyspaces/ks1/Keyspace", ksFile})
 	if err != nil {
 		t.Fatalf("TopoCp(/keyspaces/ks1/Keyspace) failed: %v", err)
 	}
-	contents, err := ioutil.ReadFile(ksFile)
+	contents, err := os.ReadFile(ksFile)
 	if err != nil {
 		t.Fatalf("copy failed: %v", err)
 	}
-	expected := &topodatapb.Keyspace{ShardingColumnName: "col1"}
+	expected := &topodatapb.Keyspace{KeyspaceType: topodatapb.KeyspaceType_NORMAL}
 	got := &topodatapb.Keyspace{}
 	if err = proto.Unmarshal(contents, got); err != nil {
 		t.Fatalf("bad keyspace data %v", err)

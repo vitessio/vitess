@@ -28,13 +28,13 @@ import (
 
 // HTTPStreamWriterMock implements http.ResponseWriter and adds a channel to sync writes and reads
 type HTTPStreamWriterMock struct {
-	ch   chan interface{}
+	ch   chan any
 	data []byte
 }
 
 // NewHTTPStreamWriterMock returns a new HTTPStreamWriterMock
 func NewHTTPStreamWriterMock() *HTTPStreamWriterMock {
-	return &HTTPStreamWriterMock{ch: make(chan interface{}, 1), data: make([]byte, 0)}
+	return &HTTPStreamWriterMock{ch: make(chan any, 1), data: make([]byte, 0)}
 }
 
 // Header is a stub

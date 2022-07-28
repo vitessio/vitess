@@ -95,9 +95,9 @@ func (s *streamHealthTabletServer) BroadcastHealth() {
 	shr := &querypb.StreamHealthResponse{
 		TabletExternallyReparentedTimestamp: 42,
 		RealtimeStats: &querypb.RealtimeStats{
-			HealthError:         "testHealthError",
-			SecondsBehindMaster: 72,
-			CpuUsage:            1.1,
+			HealthError:           "testHealthError",
+			ReplicationLagSeconds: 72,
+			CpuUsage:              1.1,
 		},
 	}
 
@@ -112,14 +112,11 @@ func TestTabletData(t *testing.T) {
 	ts := memorytopo.NewServer("cell1", "cell2")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 
-	if err := ts.CreateKeyspace(context.Background(), "ks", &topodatapb.Keyspace{
-		ShardingColumnName: "keyspace_id",
-		ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
-	}); err != nil {
+	if err := ts.CreateKeyspace(context.Background(), "ks", &topodatapb.Keyspace{}); err != nil {
 		t.Fatalf("CreateKeyspace failed: %v", err)
 	}
 
-	tablet1 := testlib.NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_MASTER, nil, testlib.TabletKeyspaceShard(t, "ks", "-80"))
+	tablet1 := testlib.NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_PRIMARY, nil, testlib.TabletKeyspaceShard(t, "ks", "-80"))
 	shsq := newStreamHealthTabletServer(t)
 	grpcqueryservice.Register(tablet1.RPCServer, shsq)
 	tablet1.StartActionLoop(t, wr)
@@ -151,9 +148,9 @@ func TestTabletData(t *testing.T) {
 	}
 
 	stats := &querypb.RealtimeStats{
-		HealthError:         "testHealthError",
-		SecondsBehindMaster: 72,
-		CpuUsage:            1.1,
+		HealthError:           "testHealthError",
+		ReplicationLagSeconds: 72,
+		CpuUsage:              1.1,
 	}
 	if got, want := result.RealtimeStats, stats; !proto.Equal(got, want) {
 		t.Errorf("RealtimeStats = %#v, want %#v", got, want)

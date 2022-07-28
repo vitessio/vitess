@@ -31,7 +31,7 @@ type converter struct {
 	location *time.Location
 }
 
-func (cv *converter) ToNative(v sqltypes.Value) (interface{}, error) {
+func (cv *converter) ToNative(v sqltypes.Value) (any, error) {
 	switch v.Type() {
 	case sqltypes.Datetime, sqltypes.Timestamp:
 		return DatetimeToNative(v, cv.location)
@@ -41,7 +41,7 @@ func (cv *converter) ToNative(v sqltypes.Value) (interface{}, error) {
 	return evalengine.ToNative(v)
 }
 
-func (cv *converter) BuildBindVariable(v interface{}) (*querypb.BindVariable, error) {
+func (cv *converter) BuildBindVariable(v any) (*querypb.BindVariable, error) {
 	if t, ok := v.(time.Time); ok {
 		return sqltypes.ValueBindVariable(NewDatetime(t, cv.location)), nil
 	}

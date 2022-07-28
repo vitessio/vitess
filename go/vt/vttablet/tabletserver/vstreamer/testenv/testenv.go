@@ -21,6 +21,9 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"regexp"
+	"strconv"
+	"strings"
 
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -52,6 +55,11 @@ type Env struct {
 	Mysqld       *mysqlctl.Mysqld
 	SchemaEngine *schema.Engine
 	Flavor       string
+	// MySQL and Percona are considered equivalent here and both called mysql
+	DBType         string
+	DBMajorVersion int
+	DBMinorVersion int
+	DBPatchVersion int
 }
 
 // Init initializes an Env.
@@ -87,6 +95,7 @@ func Init() (*Env, error) {
 			},
 		},
 		OnlyMySQL: true,
+		Charset:   "utf8mb4_general_ci",
 	}
 	te.cluster = &vttest.LocalCluster{
 		Config: cfg,
@@ -100,8 +109,29 @@ func Init() (*Env, error) {
 	config.DB = te.Dbcfgs
 	te.TabletEnv = tabletenv.NewEnv(config, "VStreamerTest")
 	te.Mysqld = mysqlctl.NewMysqld(te.Dbcfgs)
-	pos, _ := te.Mysqld.MasterPosition()
+	pos, _ := te.Mysqld.PrimaryPosition()
 	te.Flavor = pos.GTIDSet.Flavor()
+	if strings.HasPrefix(strings.ToLower(te.Flavor), string(mysqlctl.FlavorMariaDB)) {
+		te.DBType = string(mysqlctl.FlavorMariaDB)
+	} else {
+		// MySQL and Percona are equivalent for the tests
+		te.DBType = string(mysqlctl.FlavorMySQL)
+	}
+	dbVersionStr := te.Mysqld.GetVersionString()
+	dbVersionStrParts := strings.Split(dbVersionStr, ".")
+	var err error
+	te.DBMajorVersion, err = strconv.Atoi(dbVersionStrParts[0])
+	if err != nil {
+		return nil, fmt.Errorf("could not parse database major version from '%s': %v", dbVersionStr, err)
+	}
+	te.DBMinorVersion, err = strconv.Atoi(dbVersionStrParts[1])
+	if err != nil {
+		return nil, fmt.Errorf("could not parse database minor version from '%s': %v", dbVersionStr, err)
+	}
+	te.DBPatchVersion, err = strconv.Atoi(dbVersionStrParts[2])
+	if err != nil {
+		return nil, fmt.Errorf("could not parse database patch version from '%s': %v", dbVersionStr, err)
+	}
 
 	te.SchemaEngine = schema.NewEngine(te.TabletEnv)
 	te.SchemaEngine.InitDBConfig(te.Dbcfgs.DbaWithDB())
@@ -137,5 +167,27 @@ func (te *Env) SetVSchema(vs string) error {
 	if err := te.TopoServ.SaveVSchema(ctx, te.KeyspaceName, &kspb); err != nil {
 		return err
 	}
+	te.SchemaEngine.Reload(ctx)
 	return te.TopoServ.RebuildSrvVSchema(ctx, te.Cells)
+}
+
+// In MySQL 8.0 and later information_schema no longer contains the display width for integer types and
+// as of 8.0.19 for year types as this was an unnecessary headache because it can only serve to confuse
+// if the display width is less than the type width (8.0 no longer supports the 2 digit YEAR). So if the
+// test is running against MySQL 8.0 or later then you should use this function to replace e.g.
+// `int([0-9]*)` with `int` in the expected results string that we define in the test.
+func (te *Env) RemoveAnyDeprecatedDisplayWidths(orig string) string {
+	if te.DBType != string(mysqlctl.FlavorMySQL) || te.DBMajorVersion < 8 {
+		return orig
+	}
+	var adjusted string
+	baseIntType := "int"
+	intRE := regexp.MustCompile(`(i)?int\(([0-9]*)?\)`)
+	adjusted = intRE.ReplaceAllString(orig, baseIntType)
+	if (te.DBMajorVersion > 8 || te.DBMinorVersion > 0) || te.DBPatchVersion >= 19 {
+		baseYearType := "year"
+		yearRE := regexp.MustCompile(`(i)?year\(([0-9]*)?\)`)
+		adjusted = yearRE.ReplaceAllString(adjusted, baseYearType)
+	}
+	return adjusted
 }

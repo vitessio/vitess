@@ -74,8 +74,7 @@ the Execute API.
 
 vtgate now exposes an API endpoint that implements the regular MySQL server
 protocol. All calls are forwarded to the Execute API. The database provided on
-the connection is used as the keyspace, if any. The tablet type is also Master
-for now.
+the connection is used as the keyspace, if any. The tablet type used is PRIMARY/MASTER.
 
 ## Update Stream and Message Stream
 

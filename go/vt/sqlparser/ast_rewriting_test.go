@@ -27,6 +27,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+type testCaseSetVar struct {
+	in, expected, setVarComment string
+}
+
+type testCaseSysVar struct {
+	in, expected string
+	sysVar       map[string]string
+}
+
 type myTestCase struct {
 	in, expected                                                       string
 	liid, db, foundRows, rowCount, rawGTID, rawTimeout, sessTrackGTID  bool
@@ -155,6 +164,9 @@ func TestRewrites(in *testing.T) {
 		in:       "select (select 42) from dual",
 		expected: "select 42 as `(select 42 from dual)` from dual",
 	}, {
+		in:       "select exists(select 1) from user",
+		expected: "select exists(select 1 limit 1) from user",
+	}, {
 		in:       "select * from user where col = (select 42)",
 		expected: "select * from user where col = 42",
 	}, {
@@ -173,11 +185,33 @@ func TestRewrites(in *testing.T) {
 		expected: "select * from user where col = :__vtread_after_write_gtid or col = :__vtread_after_write_timeout or col = :__vtsession_track_gtids",
 		rawGTID:  true, rawTimeout: true, sessTrackGTID: true,
 	}, {
-		in:       "SELECT a.col, b.col FROM A JOIN B USING (id)",
-		expected: "SELECT a.col, b.col FROM A JOIN B ON A.id = B.id",
+		in:       "SELECT * FROM tbl WHERE id IN (SELECT 1 FROM dual)",
+		expected: "SELECT * FROM tbl WHERE id IN (1)",
 	}, {
-		in:       "SELECT a.col, b.col FROM A JOIN B USING (id1,id2,id3)",
-		expected: "SELECT a.col, b.col FROM A JOIN B ON A.id1 = B.id1 AND A.id2 = B.id2 AND A.id3 = B.id3",
+		in:       "SELECT * FROM tbl WHERE id IN (SELECT last_insert_id() FROM dual)",
+		expected: "SELECT * FROM tbl WHERE id IN (:__lastInsertId)",
+		liid:     true,
+	}, {
+		in:       "SELECT * FROM tbl WHERE id IN (SELECT (SELECT 1 FROM dual WHERE 1 = 0) FROM dual)",
+		expected: "SELECT * FROM tbl WHERE id IN (SELECT 1 FROM dual WHERE 1 = 0)",
+	}, {
+		in:       "SELECT * FROM tbl WHERE id IN (SELECT 1 FROM dual WHERE 1 = 0)",
+		expected: "SELECT * FROM tbl WHERE id IN (SELECT 1 FROM dual WHERE 1 = 0)",
+	}, {
+		in:       "SELECT * FROM tbl WHERE id IN (SELECT 1,2 FROM dual)",
+		expected: "SELECT * FROM tbl WHERE id IN (SELECT 1,2 FROM dual)",
+	}, {
+		in:       "SELECT * FROM tbl WHERE id IN (SELECT 1 FROM dual ORDER BY 1)",
+		expected: "SELECT * FROM tbl WHERE id IN (SELECT 1 FROM dual ORDER BY 1)",
+	}, {
+		in:       "SELECT * FROM tbl WHERE id IN (SELECT id FROM user GROUP BY id)",
+		expected: "SELECT * FROM tbl WHERE id IN (SELECT id FROM user GROUP BY id)",
+	}, {
+		in:       "SELECT * FROM tbl WHERE id IN (SELECT 1 FROM dual, user)",
+		expected: "SELECT * FROM tbl WHERE id IN (SELECT 1 FROM dual, user)",
+	}, {
+		in:       "SELECT * FROM tbl WHERE id IN (SELECT 1 FROM dual limit 1)",
+		expected: "SELECT * FROM tbl WHERE id IN (SELECT 1 FROM dual limit 1)",
 	}, {
 		// SELECT * behaves different depending the join type used, so if that has been used, we won't rewrite
 		in:       "SELECT * FROM A JOIN B USING (id1,id2,id3)",
@@ -186,6 +220,63 @@ func TestRewrites(in *testing.T) {
 		in:       "CALL proc(@foo)",
 		expected: "CALL proc(:__vtudvfoo)",
 		udv:      1,
+	}, {
+		in:       "SELECT * FROM tbl WHERE NOT id = 42",
+		expected: "SELECT * FROM tbl WHERE id != 42",
+	}, {
+		in:       "SELECT * FROM tbl WHERE not id < 12",
+		expected: "SELECT * FROM tbl WHERE id >= 12",
+	}, {
+		in:       "SELECT * FROM tbl WHERE not id > 12",
+		expected: "SELECT * FROM tbl WHERE id <= 12",
+	}, {
+		in:       "SELECT * FROM tbl WHERE not id <= 33",
+		expected: "SELECT * FROM tbl WHERE id > 33",
+	}, {
+		in:       "SELECT * FROM tbl WHERE not id >= 33",
+		expected: "SELECT * FROM tbl WHERE id < 33",
+	}, {
+		in:       "SELECT * FROM tbl WHERE not id != 33",
+		expected: "SELECT * FROM tbl WHERE id = 33",
+	}, {
+		in:       "SELECT * FROM tbl WHERE not id in (1,2,3)",
+		expected: "SELECT * FROM tbl WHERE id not in (1,2,3)",
+	}, {
+		in:       "SELECT * FROM tbl WHERE not id not in (1,2,3)",
+		expected: "SELECT * FROM tbl WHERE id in (1,2,3)",
+	}, {
+		in:       "SELECT * FROM tbl WHERE not id not in (1,2,3)",
+		expected: "SELECT * FROM tbl WHERE id in (1,2,3)",
+	}, {
+		in:       "SELECT * FROM tbl WHERE not id like '%foobar'",
+		expected: "SELECT * FROM tbl WHERE id not like '%foobar'",
+	}, {
+		in:       "SELECT * FROM tbl WHERE not id not like '%foobar'",
+		expected: "SELECT * FROM tbl WHERE id like '%foobar'",
+	}, {
+		in:       "SELECT * FROM tbl WHERE not id regexp '%foobar'",
+		expected: "SELECT * FROM tbl WHERE id not regexp '%foobar'",
+	}, {
+		in:       "SELECT * FROM tbl WHERE not id not regexp '%foobar'",
+		expected: "select * from tbl where id regexp '%foobar'",
+	}, {
+		in:       "SELECT * FROM tbl WHERE exists(select col1, col2 from other_table where foo > bar)",
+		expected: "SELECT * FROM tbl WHERE exists(select 1 from other_table where foo > bar limit 1)",
+	}, {
+		in:       "SELECT * FROM tbl WHERE exists(select col1, col2 from other_table where foo > bar limit 100 offset 34)",
+		expected: "SELECT * FROM tbl WHERE exists(select 1 from other_table where foo > bar limit 1 offset 34)",
+	}, {
+		in:       "SELECT * FROM tbl WHERE exists(select col1, col2, count(*) from other_table where foo > bar group by col1, col2)",
+		expected: "SELECT * FROM tbl WHERE exists(select 1 from other_table where foo > bar limit 1)",
+	}, {
+		in:       "SELECT * FROM tbl WHERE exists(select col1, col2 from other_table where foo > bar group by col1, col2)",
+		expected: "SELECT * FROM tbl WHERE exists(select 1 from other_table where foo > bar limit 1)",
+	}, {
+		in:       "SELECT * FROM tbl WHERE exists(select count(*) from other_table where foo > bar)",
+		expected: "SELECT * FROM tbl WHERE true",
+	}, {
+		in:       "SELECT * FROM tbl WHERE exists(select col1, col2, count(*) from other_table where foo > bar group by col1, col2 having count(*) > 3)",
+		expected: "SELECT * FROM tbl WHERE exists(select col1, col2, count(*) from other_table where foo > bar group by col1, col2 having count(*) > 3 limit 1)",
 	}, {
 		in:                          "SHOW VARIABLES",
 		expected:                    "SHOW VARIABLES",
@@ -230,7 +321,7 @@ func TestRewrites(in *testing.T) {
 			stmt, err := Parse(tc.in)
 			require.NoError(err)
 
-			result, err := RewriteAST(stmt, "ks") // passing `ks` just to test that no rewriting happens as it is not system schema
+			result, err := RewriteAST(stmt, "ks", SQLSelectLimitUnset, "", nil) // passing `ks` just to test that no rewriting happens as it is not system schema
 			require.NoError(err)
 
 			expected, err := Parse(tc.expected)
@@ -263,6 +354,85 @@ func TestRewrites(in *testing.T) {
 	}
 }
 
+func TestRewritesWithSetVarComment(in *testing.T) {
+	tests := []testCaseSetVar{{
+		in:            "select 1",
+		expected:      "select 1",
+		setVarComment: "",
+	}, {
+		in:            "select 1",
+		expected:      "select /*+ AA(a) */ 1",
+		setVarComment: "AA(a)",
+	}, {
+		in:            "insert /* toto */ into t(id) values(1)",
+		expected:      "insert /*+ AA(a) */ /* toto */ into t(id) values(1)",
+		setVarComment: "AA(a)",
+	}, {
+		in:            "select  /* toto */ * from t union select * from s",
+		expected:      "select /*+ AA(a) */ /* toto */ * from t union select /*+ AA(a) */ * from s",
+		setVarComment: "AA(a)",
+	}, {
+		in:            "vstream /* toto */ * from t1",
+		expected:      "vstream /*+ AA(a) */ /* toto */ * from t1",
+		setVarComment: "AA(a)",
+	}, {
+		in:            "stream /* toto */ t from t1",
+		expected:      "stream /*+ AA(a) */ /* toto */ t from t1",
+		setVarComment: "AA(a)",
+	}, {
+		in:            "update /* toto */ t set id = 1",
+		expected:      "update /*+ AA(a) */ /* toto */ t set id = 1",
+		setVarComment: "AA(a)",
+	}, {
+		in:            "delete /* toto */ from t",
+		expected:      "delete /*+ AA(a) */ /* toto */ from t",
+		setVarComment: "AA(a)",
+	}}
+
+	for _, tc := range tests {
+		in.Run(tc.in, func(t *testing.T) {
+			require := require.New(t)
+			stmt, err := Parse(tc.in)
+			require.NoError(err)
+
+			result, err := RewriteAST(stmt, "ks", SQLSelectLimitUnset, tc.setVarComment, nil)
+			require.NoError(err)
+
+			expected, err := Parse(tc.expected)
+			require.NoError(err, "test expectation does not parse [%s]", tc.expected)
+
+			assert.Equal(t, String(expected), String(result.AST))
+		})
+	}
+}
+
+func TestRewritesSysVar(in *testing.T) {
+	tests := []testCaseSysVar{{
+		in:       "select @x = @@sql_mode",
+		expected: "select :__vtudvx = @@sql_mode as `@x = @@sql_mode` from dual",
+	}, {
+		in:       "select @x = @@sql_mode",
+		expected: "select :__vtudvx = :__vtsql_mode as `@x = @@sql_mode` from dual",
+		sysVar:   map[string]string{"sql_mode": "' '"},
+	}}
+
+	for _, tc := range tests {
+		in.Run(tc.in, func(t *testing.T) {
+			require := require.New(t)
+			stmt, err := Parse(tc.in)
+			require.NoError(err)
+
+			result, err := RewriteAST(stmt, "ks", SQLSelectLimitUnset, "", tc.sysVar)
+			require.NoError(err)
+
+			expected, err := Parse(tc.expected)
+			require.NoError(err, "test expectation does not parse [%s]", tc.expected)
+
+			assert.Equal(t, String(expected), String(result.AST))
+		})
+	}
+}
+
 func TestRewritesWithDefaultKeyspace(in *testing.T) {
 	tests := []myTestCase{{
 		in:       "SELECT 1 from x.test",
@@ -287,7 +457,7 @@ func TestRewritesWithDefaultKeyspace(in *testing.T) {
 		expected: "SELECT 1 from (select 2 from sys.test) t",
 	}, {
 		in:       "SELECT 1 from test where exists (select 2 from test)",
-		expected: "SELECT 1 from sys.test where exists (select 2 from sys.test)",
+		expected: "SELECT 1 from sys.test where exists (select 1 from sys.test limit 1)",
 	}, {
 		in:       "SELECT 1 from dual",
 		expected: "SELECT 1 from dual",
@@ -302,7 +472,7 @@ func TestRewritesWithDefaultKeyspace(in *testing.T) {
 			stmt, err := Parse(tc.in)
 			require.NoError(err)
 
-			result, err := RewriteAST(stmt, "sys")
+			result, err := RewriteAST(stmt, "sys", SQLSelectLimitUnset, "", nil)
 			require.NoError(err)
 
 			expected, err := Parse(tc.expected)

@@ -26,6 +26,7 @@ tags
 
 # vscode
 .vscode/
+__debug_bin
 
 # C build dirs
 **/build
@@ -73,9 +74,8 @@ releases
 /web/vtctld2/bower.json~
 /web/vtctld2/public/bower_components/
 
-
-# Vagrant
-.vagrant
+# Local examples
+/examples/local/vtdataroot
 
 /dist/
 /vthook/

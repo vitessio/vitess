@@ -19,11 +19,15 @@ package planbuilder
 import (
 	"errors"
 	"fmt"
+	"sort"
+	"strings"
+
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -84,6 +88,8 @@ func (pb *primitiveBuilder) processTableExpr(tableExpr sqlparser.TableExpr, rese
 		return err
 	case *sqlparser.JoinTableExpr:
 		return pb.processJoin(tableExpr, reservedVars, where)
+	case *sqlparser.JSONTableExpr:
+		return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: json_table expressions")
 	}
 	return fmt.Errorf("BUG: unexpected table expression type: %T", tableExpr)
 }
@@ -96,10 +102,16 @@ func (pb *primitiveBuilder) processTableExpr(tableExpr sqlparser.TableExpr, rese
 // columns that represent underlying vindex columns are also exposed as
 // vindex columns.
 func (pb *primitiveBuilder) processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, reservedVars *sqlparser.ReservedVars) error {
+	if tableExpr.Columns != nil {
+		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: column aliases in derived table")
+	}
 	switch expr := tableExpr.Expr.(type) {
 	case sqlparser.TableName:
 		return pb.buildTablePrimitive(tableExpr, expr)
 	case *sqlparser.DerivedTable:
+		if expr.Lateral {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported: lateral derived tables")
+		}
 		spb := newPrimitiveBuilder(pb.vschema, pb.jt)
 		switch stmt := expr.Select.(type) {
 		case *sqlparser.Select:
@@ -117,7 +129,7 @@ func (pb *primitiveBuilder) processAliasedTable(tableExpr *sqlparser.AliasedTabl
 		subroute, ok := spb.plan.(*route)
 		if !ok {
 			var err error
-			pb.plan, pb.st, err = newSubquery(tableExpr.As, spb.plan)
+			pb.plan, pb.st, err = newSimpleProjection(tableExpr.As, spb.plan)
 			if err != nil {
 				return err
 			}
@@ -142,8 +154,18 @@ func (pb *primitiveBuilder) processAliasedTable(tableExpr *sqlparser.AliasedTabl
 		// a new set of column references will be generated against the new tables,
 		// and those vindex maps will be returned. They have to replace the old vindex
 		// maps of the inherited route options.
+		var tableNames []string
+		spbTables, err := spb.st.AllVschemaTableNames()
+		if err != nil {
+			return err
+		}
+		for _, table := range spbTables {
+			tableNames = append(tableNames, table.Name.String())
+		}
+		sort.Strings(tableNames)
 		vschemaTable := &vindexes.Table{
 			Keyspace: subroute.eroute.Keyspace,
+			Name:     sqlparser.NewIdentifierCS(strings.Join(tableNames, ", ")),
 		}
 		for _, rc := range subroute.ResultColumns() {
 			if rc.column.vindex == nil {
@@ -157,7 +179,7 @@ func (pb *primitiveBuilder) processAliasedTable(tableExpr *sqlparser.AliasedTabl
 				}
 			}
 			vschemaTable.ColumnVindexes = append(vschemaTable.ColumnVindexes, &vindexes.ColumnVindex{
-				Columns: []sqlparser.ColIdent{rc.alias},
+				Columns: []sqlparser.IdentifierCI{rc.alias},
 				Vindex:  rc.column.vindex,
 			})
 		}
@@ -185,7 +207,8 @@ func (pb *primitiveBuilder) buildTablePrimitive(tableExpr *sqlparser.AliasedTabl
 			return err
 		}
 		rb, st := newRoute(sel)
-		rb.eroute = engine.NewSimpleRoute(engine.SelectDBA, ks)
+		rb.eroute = engine.NewSimpleRoute(engine.DBA, ks)
+		rb.eroute.TableName = sqlparser.String(tableName)
 		pb.plan, pb.st = rb, st
 		// Add the table to symtab
 		return st.AddTable(&table{
@@ -241,23 +264,24 @@ func (pb *primitiveBuilder) buildTablePrimitive(tableExpr *sqlparser.AliasedTabl
 	var eroute *engine.Route
 	switch {
 	case vschemaTable.Type == vindexes.TypeSequence:
-		eroute = engine.NewSimpleRoute(engine.SelectNext, vschemaTable.Keyspace)
+		eroute = engine.NewSimpleRoute(engine.Next, vschemaTable.Keyspace)
 	case vschemaTable.Type == vindexes.TypeReference:
-		eroute = engine.NewSimpleRoute(engine.SelectReference, vschemaTable.Keyspace)
+		eroute = engine.NewSimpleRoute(engine.Reference, vschemaTable.Keyspace)
 	case !vschemaTable.Keyspace.Sharded:
-		eroute = engine.NewSimpleRoute(engine.SelectUnsharded, vschemaTable.Keyspace)
+		eroute = engine.NewSimpleRoute(engine.Unsharded, vschemaTable.Keyspace)
 	case vschemaTable.Pinned == nil:
-		eroute = engine.NewSimpleRoute(engine.SelectScatter, vschemaTable.Keyspace)
+		eroute = engine.NewSimpleRoute(engine.Scatter, vschemaTable.Keyspace)
 		eroute.TargetDestination = destTarget
 		eroute.TargetTabletType = destTableType
 	default:
 		// Pinned tables have their keyspace ids already assigned.
 		// Use the Binary vindex, which is the identity function
 		// for keyspace id.
-		eroute = engine.NewSimpleRoute(engine.SelectEqualUnique, vschemaTable.Keyspace)
+		eroute = engine.NewSimpleRoute(engine.EqualUnique, vschemaTable.Keyspace)
 		vindex, _ = vindexes.NewBinary("binary", nil)
-		eroute.Vindex, _ = vindex.(vindexes.SingleColumn)
-		eroute.Values = []sqltypes.PlanValue{{Value: sqltypes.MakeTrusted(sqltypes.VarBinary, vschemaTable.Pinned)}}
+		eroute.Vindex = vindex
+		lit := evalengine.NewLiteralString(vschemaTable.Pinned, collations.TypedCollation{})
+		eroute.Values = []evalengine.Expr{lit}
 	}
 	eroute.TableName = sqlparser.String(vschemaTable.Name)
 	rb.eroute = eroute
@@ -321,7 +345,7 @@ func (pb *primitiveBuilder) join(rpb *primitiveBuilder, ajoin *sqlparser.JoinTab
 		return newJoin(pb, rpb, ajoin, reservedVars)
 	}
 
-	if lRoute.eroute.Opcode == engine.SelectReference {
+	if lRoute.eroute.Opcode == engine.Reference {
 		// Swap the conditions & eroutes, and then merge.
 		lRoute.condition, rRoute.condition = rRoute.condition, lRoute.condition
 		lRoute.eroute, rRoute.eroute = rRoute.eroute, lRoute.eroute
@@ -343,6 +367,18 @@ func (pb *primitiveBuilder) join(rpb *primitiveBuilder, ajoin *sqlparser.JoinTab
 	} else {
 		sel.From = sqlparser.TableExprs{ajoin}
 	}
+	// join table name
+	if lRoute.eroute.TableName != rRoute.eroute.TableName {
+		lRoute.eroute.TableName = strings.Join([]string{lRoute.eroute.TableName, rRoute.eroute.TableName}, ", ")
+	}
+
+	// join sysTableNames
+	for tableName, expr := range rRoute.eroute.SysTableTableName {
+		_, ok := lRoute.eroute.SysTableTableName[tableName]
+		if !ok {
+			lRoute.eroute.SysTableTableName[tableName] = expr
+		}
+	}
 
 	// Since the routes have merged, set st.singleRoute to point at
 	// the merged route.
@@ -356,7 +392,7 @@ func (pb *primitiveBuilder) join(rpb *primitiveBuilder, ajoin *sqlparser.JoinTab
 	}
 	ajoin.Condition.On = expr
 	pb.addPullouts(pullouts)
-	for _, filter := range splitAndExpression(nil, ajoin.Condition.On) {
+	for _, filter := range sqlparser.SplitAndExpression(nil, ajoin.Condition.On) {
 		lRoute.UpdatePlan(pb, filter)
 	}
 	return nil

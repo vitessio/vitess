@@ -18,7 +18,10 @@ package discovery
 
 import (
 	"bytes"
+	"encoding/json"
 	"strings"
+
+	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 
@@ -32,16 +35,50 @@ import (
 // TabletHealth represents simple tablet health data that is returned to users of healthcheck.
 // No synchronization is required because we always return a copy.
 type TabletHealth struct {
-	Conn                queryservice.QueryService
-	Tablet              *topodata.Tablet
-	Target              *query.Target
-	Stats               *query.RealtimeStats
-	MasterTermStartTime int64
-	LastError           error
-	Serving             bool
+	Conn                 queryservice.QueryService
+	Tablet               *topodata.Tablet
+	Target               *query.Target
+	Stats                *query.RealtimeStats
+	PrimaryTermStartTime int64
+	LastError            error
+	Serving              bool
+}
 
-	// TablesUpdated contains a list of all tables that we need to fetch new schema info for
-	TablesUpdated []string
+func (th *TabletHealth) MarshalJSON() ([]byte, error) {
+	return json.Marshal(&struct {
+		Key                                 string
+		Tablet                              *topodata.Tablet
+		Name                                string
+		Target                              *query.Target
+		Up                                  bool
+		Serving                             bool
+		PrimaryTermStartTime                int64
+		TabletExternallyReparentedTimestamp int64
+		Stats                               *query.RealtimeStats
+		LastError                           error
+	}{
+		// The Key and Name fields are fields that used to live in the legacy tablet health
+		// TODO: remove Key and Name in v15
+		Key:    TabletToMapKey(th.Tablet),
+		Tablet: th.Tablet,
+		Name:   topoproto.TabletAliasString(th.Tablet.Alias),
+		Target: th.Target,
+
+		// Setting Up to true to ensure backward compatibility
+		// TODO: remove Up in v15
+		Up: true,
+
+		Serving: th.Serving,
+
+		// We copy the PrimaryTermStartTime value onto TabletExternallyReparentedTimestamp to
+		// ensure backward compatibility.
+		// TODO: remove Up in v15
+		PrimaryTermStartTime:                th.PrimaryTermStartTime,
+		TabletExternallyReparentedTimestamp: th.PrimaryTermStartTime,
+
+		Stats:     th.Stats,
+		LastError: th.LastError,
+	})
 }
 
 // DeepEqual compares two TabletHealth. Since we include protos, we
@@ -50,7 +87,7 @@ func (th *TabletHealth) DeepEqual(other *TabletHealth) bool {
 	return proto.Equal(th.Tablet, other.Tablet) &&
 		proto.Equal(th.Target, other.Target) &&
 		th.Serving == other.Serving &&
-		th.MasterTermStartTime == other.MasterTermStartTime &&
+		th.PrimaryTermStartTime == other.PrimaryTermStartTime &&
 		proto.Equal(th.Stats, other.Stats) &&
 		((th.LastError == nil && other.LastError == nil) ||
 			(th.LastError != nil && other.LastError != nil && th.LastError.Error() == other.LastError.Error()))
@@ -92,6 +129,6 @@ func (th *TabletHealth) GetHostNameLevel(level int) string {
 // https://{{.GetHostNameLevel 0}}.bastion.corp -> https://host.bastion.corp
 func (th *TabletHealth) getTabletDebugURL() string {
 	var buffer bytes.Buffer
-	tabletURLTemplate.Execute(&buffer, th)
+	_ = tabletURLTemplate.Execute(&buffer, th)
 	return buffer.String()
 }

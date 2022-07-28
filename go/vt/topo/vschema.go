@@ -46,7 +46,9 @@ func (ts *Server) SaveVSchema(ctx context.Context, keyspace string, vschema *vsc
 
 	_, err = ts.globalCell.Update(ctx, nodePath, data, nil)
 	if err != nil {
-		log.Infof("successfully updated vschema for keyspace %s: %v", keyspace, data)
+		log.Errorf("failed to update vschema for keyspace %s: %v", keyspace, err)
+	} else {
+		log.Infof("successfully updated vschema for keyspace %s: %+v", keyspace, vschema)
 	}
 	return err
 }

@@ -17,10 +17,9 @@ limitations under the License.
 package vtctld
 
 import (
+	"context"
 	"flag"
 	"time"
-
-	"context"
 
 	"vitess.io/vitess/go/trace"
 
@@ -30,8 +29,6 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtctl"
 	"vitess.io/vitess/go/vt/workflow"
-	"vitess.io/vitess/go/vt/workflow/resharding"
-	"vitess.io/vitess/go/vt/workflow/reshardingworkflowgen"
 	"vitess.io/vitess/go/vt/workflow/topovalidator"
 )
 
@@ -55,19 +52,14 @@ func initWorkflowManager(ts *topo.Server) {
 		topovalidator.RegisterShardValidator()
 		topovalidator.Register()
 
-		// Register the Horizontal Resharding workflow.
-		resharding.Register()
-
-		// Register workflow that generates Horizontal Resharding workflows.
-		reshardingworkflowgen.Register()
-
-		// Unregister the blacklisted workflows.
+		// Unregister the disabled workflows.
 		for _, name := range workflowManagerDisable {
 			workflow.Unregister(name)
 		}
 
 		// Create the WorkflowManager.
 		vtctl.WorkflowManager = workflow.NewManager(ts)
+		vtctl.WorkflowManager.SetSanitizeHTTPHeaders(*sanitizeLogMessages)
 
 		// Register the long polling and websocket handlers.
 		vtctl.WorkflowManager.HandleHTTPLongPolling(apiPrefix + "workflow")
@@ -92,7 +84,7 @@ func runWorkflowManagerAlone() {
 }
 
 func runWorkflowManagerElection(ts *topo.Server) {
-	var mp topo.MasterParticipation
+	var mp topo.LeaderParticipation
 
 	// We use servenv.ListeningURL which is only populated during Run,
 	// so we have to start this with OnRun.
@@ -106,22 +98,22 @@ func runWorkflowManagerElection(ts *topo.Server) {
 			return
 		}
 
-		mp, err = conn.NewMasterParticipation("vtctld", servenv.ListeningURL.Host)
+		mp, err = conn.NewLeaderParticipation("vtctld", servenv.ListeningURL.Host)
 		if err != nil {
-			log.Errorf("Cannot start MasterParticipation, disabling workflow manager: %v", err)
+			log.Errorf("Cannot start LeaderParticipation, disabling workflow manager: %v", err)
 			return
 		}
 
 		// Set up a redirect host so when we are not the
-		// master, we can redirect traffic properly.
+		// primary, we can redirect traffic properly.
 		vtctl.WorkflowManager.SetRedirectFunc(func() (string, error) {
 			ctx := context.Background()
-			return mp.GetCurrentMasterID(ctx)
+			return mp.GetCurrentLeaderID(ctx)
 		})
 
 		go func() {
 			for {
-				ctx, err := mp.WaitForMastership()
+				ctx, err := mp.WaitForLeadership()
 				switch {
 				case err == nil:
 					vtctl.WorkflowManager.Run(ctx)

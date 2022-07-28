@@ -19,15 +19,17 @@ package integration
 import (
 	"fmt"
 	"testing"
+
+	"vitess.io/vitess/go/hack"
 )
 
 func TestTypeSizes(t *testing.T) {
-	const PtrSize = 8
-	const SliceHeaderSize = 3 * PtrSize
-	const FatPointerSize = 2 * PtrSize
-	const BucketHeaderSize = 8
-	const BucketSize = 8
-	const HashMapHeaderSize = 48
+	var PtrSize = hack.RuntimeAllocSize(8)
+	var SliceHeaderSize = hack.RuntimeAllocSize(3 * PtrSize)
+	var FatPointerSize = hack.RuntimeAllocSize(2 * PtrSize)
+	var BucketHeaderSize = hack.RuntimeAllocSize(8)
+	var BucketSize = hack.RuntimeAllocSize(8)
+	var HashMapHeaderSize = hack.RuntimeAllocSize(48)
 
 	cases := []struct {
 		obj  cachedObject
@@ -70,8 +72,8 @@ func TestTypeSizes(t *testing.T) {
 		{&Map3{field1: map[uint64]B{0: &Bimpl{}}}, PtrSize + HashMapHeaderSize + BucketHeaderSize + 8*BucketSize + FatPointerSize*BucketSize + PtrSize + 8},
 		{&Map3{field1: map[uint64]B{0: nil}}, PtrSize + HashMapHeaderSize + BucketHeaderSize + 8*BucketSize + FatPointerSize*BucketSize + PtrSize},
 
-		{&String1{}, PtrSize*2 + 8},
-		{&String1{field1: "1234"}, PtrSize*2 + 8 + 4},
+		{&String1{}, hack.RuntimeAllocSize(PtrSize*2 + 8)},
+		{&String1{field1: "1234"}, hack.RuntimeAllocSize(PtrSize*2+8) + hack.RuntimeAllocSize(4)},
 	}
 
 	for _, tt := range cases {

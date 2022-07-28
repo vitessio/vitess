@@ -79,7 +79,7 @@ func initResolver(t *testing.T, name string) *Resolver {
 	// Rebuild should error because allowPartial is false and shard does not cover full keyrange
 	err = topotools.RebuildKeyspace(ctx, logutil.NewConsoleLogger(), ts, "rks", []string{cell}, false)
 	require.Error(t, err, "RebuildKeyspace(rks) failed")
-	require.EqualError(t, err, "keyspace partition for MASTER in cell cell1 does not end with max key")
+	require.EqualError(t, err, "keyspace partition for PRIMARY in cell cell1 does not end with max key")
 
 	// Rebuild should succeed with allowPartial true
 	err = topotools.RebuildKeyspace(ctx, logutil.NewConsoleLogger(), ts, "rks", []string{cell}, true)

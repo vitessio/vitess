@@ -17,6 +17,7 @@ limitations under the License.
 package messager
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -29,8 +30,6 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/test/utils"
-
-	"context"
 
 	"github.com/stretchr/testify/assert"
 
@@ -65,7 +64,7 @@ var (
 
 func newMMTable() *schema.Table {
 	return &schema.Table{
-		Name: sqlparser.NewTableIdent("foo"),
+		Name: sqlparser.NewIdentifierCS("foo"),
 		Type: schema.Message,
 		MessageInfo: &schema.MessageInfo{
 			Fields:             testFields,
@@ -81,7 +80,7 @@ func newMMTable() *schema.Table {
 
 func newMMTableWithBackoff() *schema.Table {
 	return &schema.Table{
-		Name: sqlparser.NewTableIdent("foo"),
+		Name: sqlparser.NewIdentifierCS("foo"),
 		Type: schema.Message,
 		MessageInfo: &schema.MessageInfo{
 			Fields:             testFields,
@@ -149,7 +148,7 @@ func TestReceiverCancel(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		runtime.Gosched()
 		time.Sleep(10 * time.Millisecond)
-		if mm.receiverCount() != 0 {
+		if len(mm.receivers) != 0 {
 			continue
 		}
 		return
@@ -504,9 +503,7 @@ func TestMessageManagerStreamerAndPoller(t *testing.T) {
 	for {
 		runtime.Gosched()
 		time.Sleep(10 * time.Millisecond)
-		mm.streamMu.Lock()
-		pos := mm.lastPollPosition
-		mm.streamMu.Unlock()
+		pos := mm.getLastPollPosition()
 		if pos != nil {
 			break
 		}
@@ -750,7 +747,7 @@ func TestMMGenerate(t *testing.T) {
 		t.Errorf("gotAcked: %d, should be with 10s of %d", gotAcked, wantAcked)
 	}
 	gotids := bv["ids"]
-	wantids := sqltypes.TestBindVariable([]interface{}{"1", "2"})
+	wantids := sqltypes.TestBindVariable([]any{[]byte{'1'}, []byte{'2'}})
 	utils.MustMatch(t, wantids, gotids, "did not match")
 
 	query, bv = mm.GeneratePostponeQuery([]string{"1", "2"})
@@ -795,7 +792,7 @@ func TestMMGenerateWithBackoff(t *testing.T) {
 	mm.Open()
 	defer mm.Close()
 
-	wantids := sqltypes.TestBindVariable([]interface{}{"1", "2"})
+	wantids := sqltypes.TestBindVariable([]any{[]byte{'1'}, []byte{'2'}})
 
 	query, bv := mm.GeneratePostponeQuery([]string{"1", "2"})
 	wantQuery := "update foo set time_next = :time_now + :wait_time + IF(FLOOR((:min_backoff<<ifnull(epoch, 0)) * :jitter) < :min_backoff, :min_backoff, IF(FLOOR((:min_backoff<<ifnull(epoch, 0)) * :jitter) > :max_backoff, :max_backoff, FLOOR((:min_backoff<<ifnull(epoch, 0)) * :jitter))), epoch = ifnull(epoch, 0)+1 where id in ::ids and time_acked is null"
@@ -849,7 +846,7 @@ func (fts *fakeTabletServer) SetChannel(ch chan string) {
 	fts.mu.Unlock()
 }
 
-func (fts *fakeTabletServer) PostponeMessages(ctx context.Context, target *querypb.Target, name string, ids []string) (count int64, err error) {
+func (fts *fakeTabletServer) PostponeMessages(ctx context.Context, target *querypb.Target, gen QueryGenerator, ids []string) (count int64, err error) {
 	fts.postponeCount.Add(1)
 	fts.mu.Lock()
 	ch := fts.ch
@@ -860,7 +857,7 @@ func (fts *fakeTabletServer) PostponeMessages(ctx context.Context, target *query
 	return 0, nil
 }
 
-func (fts *fakeTabletServer) PurgeMessages(ctx context.Context, target *querypb.Target, name string, timeCutoff int64) (count int64, err error) {
+func (fts *fakeTabletServer) PurgeMessages(ctx context.Context, target *querypb.Target, gen QueryGenerator, timeCutoff int64) (count int64, err error) {
 	fts.purgeCount.Add(1)
 	fts.mu.Lock()
 	ch := fts.ch

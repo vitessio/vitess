@@ -36,8 +36,8 @@ type HostnameResolve struct {
 	resolvedHostname string
 }
 
-func (this HostnameResolve) String() string {
-	return fmt.Sprintf("%s %s", this.hostname, this.resolvedHostname)
+func (hostnameResolve HostnameResolve) String() string {
+	return fmt.Sprintf("%s %s", hostnameResolve.hostname, hostnameResolve.resolvedHostname)
 }
 
 type HostnameUnresolve struct {
@@ -45,8 +45,8 @@ type HostnameUnresolve struct {
 	unresolvedHostname string
 }
 
-func (this HostnameUnresolve) String() string {
-	return fmt.Sprintf("%s %s", this.hostname, this.unresolvedHostname)
+func (hostnameUnresolve HostnameUnresolve) String() string {
+	return fmt.Sprintf("%s %s", hostnameUnresolve.hostname, hostnameUnresolve.unresolvedHostname)
 }
 
 type HostnameRegistration struct {
@@ -73,7 +73,7 @@ func NewHostnameDeregistration(instanceKey *InstanceKey) *HostnameRegistration {
 
 var hostnameResolvesLightweightCache *cache.Cache
 var hostnameResolvesLightweightCacheInit = &sync.Mutex{}
-var hostnameResolvesLightweightCacheLoadedOnceFromDB bool = false
+var hostnameResolvesLightweightCacheLoadedOnceFromDB = false
 var hostnameIPsCache = cache.New(10*time.Minute, time.Minute)
 
 func init() {

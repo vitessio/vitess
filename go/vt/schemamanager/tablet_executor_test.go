@@ -17,22 +17,21 @@ limitations under the License.
 package schemamanager
 
 import (
+	"context"
 	"strings"
 	"testing"
 	"time"
 
-	"context"
+	"github.com/stretchr/testify/assert"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo/memorytopo"
 
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/topo/memorytopo"
-	"vitess.io/vitess/go/vt/wrangler"
-
-	"github.com/stretchr/testify/assert"
 )
 
 var (
@@ -54,10 +53,9 @@ func TestTabletExecutorOpen(t *testing.T) {
 	}
 }
 
-func TestTabletExecutorOpenWithEmptyMasterAlias(t *testing.T) {
+func TestTabletExecutorOpenWithEmptyPrimaryAlias(t *testing.T) {
 	ctx := context.Background()
 	ts := memorytopo.NewServer("test_cell")
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, newFakeTabletManagerClient())
 	tablet := &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
 			Cell: "test_cell",
@@ -68,12 +66,12 @@ func TestTabletExecutorOpenWithEmptyMasterAlias(t *testing.T) {
 		Type:     topodatapb.TabletType_REPLICA,
 	}
 	// This will create the Keyspace, Shard and Tablet record.
-	// Since this is a replica tablet, the Shard will have no master.
-	if err := wr.InitTablet(ctx, tablet, false /*allowMasterOverride*/, true /*createShardAndKeyspace*/, false /*allowUpdate*/); err != nil {
+	// Since this is a replica tablet, the Shard will have no primary.
+	if err := ts.InitTablet(ctx, tablet, false /*allowPrimaryOverride*/, true /*createShardAndKeyspace*/, false /*allowUpdate*/); err != nil {
 		t.Fatalf("InitTablet failed: %v", err)
 	}
-	executor := NewTabletExecutor("TestTabletExecutorOpenWithEmptyMasterAlias", wr, testWaitReplicasTimeout)
-	if err := executor.Open(ctx, "test_keyspace"); err == nil || !strings.Contains(err.Error(), "does not have a master") {
+	executor := NewTabletExecutor("TestTabletExecutorOpenWithEmptyPrimaryAlias", ts, newFakeTabletManagerClient(), logutil.NewConsoleLogger(), testWaitReplicasTimeout)
+	if err := executor.Open(ctx, "test_keyspace"); err == nil || !strings.Contains(err.Error(), "does not have a primary") {
 		t.Fatalf("executor.Open() = '%v', want error", err)
 	}
 	executor.Close()
@@ -105,8 +103,7 @@ func TestTabletExecutorValidate(t *testing.T) {
 		},
 	})
 
-	wr := wrangler.New(logutil.NewConsoleLogger(), newFakeTopo(t), fakeTmc)
-	executor := NewTabletExecutor("TestTabletExecutorValidate", wr, testWaitReplicasTimeout)
+	executor := NewTabletExecutor("TestTabletExecutorValidate", newFakeTopo(t), fakeTmc, logutil.NewConsoleLogger(), testWaitReplicasTimeout)
 	ctx := context.Background()
 
 	sqls := []string{
@@ -195,8 +192,7 @@ func TestTabletExecutorDML(t *testing.T) {
 		},
 	})
 
-	wr := wrangler.New(logutil.NewConsoleLogger(), newFakeTopo(t), fakeTmc)
-	executor := NewTabletExecutor("TestTabletExecutorDML", wr, testWaitReplicasTimeout)
+	executor := NewTabletExecutor("TestTabletExecutorDML", newFakeTopo(t), fakeTmc, logutil.NewConsoleLogger(), testWaitReplicasTimeout)
 	ctx := context.Background()
 
 	executor.Open(ctx, "unsharded_keyspace")
@@ -244,6 +240,12 @@ func TestIsOnlineSchemaDDL(t *testing.T) {
 			ddlStrategy: "online",
 			isOnlineDDL: true,
 			strategy:    schema.DDLStrategyOnline,
+		},
+		{
+			query:       "ALTER TABLE t ADD COLUMN i INT",
+			ddlStrategy: "vitess",
+			isOnlineDDL: true,
+			strategy:    schema.DDLStrategyVitess,
 		},
 		{
 			query:       "ALTER TABLE t ADD COLUMN i INT",

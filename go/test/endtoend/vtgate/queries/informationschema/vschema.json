@@ -1,0 +1,112 @@
+{
+  "sharded": true,
+  "vindexes": {
+    "hash": {
+      "type": "hash"
+    },
+    "unicode_loose_xxhash" : {
+      "type": "unicode_loose_xxhash"
+    },
+    "t3_id7_vdx": {
+      "type": "lookup_hash",
+      "params": {
+        "table": "t3_id7_idx",
+        "from": "id7",
+        "to": "id6"
+      },
+      "owner": "t3"
+    },
+    "t7_xxhash_vdx": {
+      "type": "consistent_lookup",
+      "params": {
+        "table": "t7_xxhash_idx",
+        "from": "phone",
+        "to": "keyspace_id",
+        "ignore_nulls": "true"
+      },
+      "owner": "t7_xxhash"
+    }
+  },
+  "tables": {
+    "t3": {
+      "column_vindexes": [
+        {
+          "column": "id6",
+          "name": "hash"
+        },
+        {
+          "column": "id7",
+          "name": "t3_id7_vdx"
+        }
+      ]
+    },
+    "t3_id7_idx": {
+      "column_vindexes": [
+        {
+          "column": "id7",
+          "name": "hash"
+        }
+      ]
+    },
+    "t9": {
+      "column_vindexes": [
+        {
+          "column": "id1",
+          "name": "hash"
+        }
+      ]
+    },
+    "aggr_test": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "hash"
+        }
+      ],
+      "columns": [
+        {
+          "name": "val1",
+          "type": "VARCHAR"
+        }
+      ]
+    },
+    "aggr_test_dates": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "hash"
+        }
+      ],
+      "columns": [
+        {
+          "name": "val1",
+          "type": "DATETIME"
+        },
+        {
+          "name": "val2",
+          "type": "DATETIME"
+        }
+      ]
+    },
+    "t7_xxhash": {
+      "column_vindexes": [
+        {
+          "column": "uid",
+          "name": "unicode_loose_xxhash"
+        },
+        {
+          "column": "phone",
+          "name": "t7_xxhash_vdx"
+        }
+      ]
+    },
+    "t7_xxhash_idx": {
+      "column_vindexes": [
+        {
+          "column": "phone",
+          "name": "unicode_loose_xxhash"
+        }
+      ]
+    }
+  }
+}

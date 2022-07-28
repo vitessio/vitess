@@ -64,7 +64,7 @@ export const Schema = () => {
                         <Link to="/schemas">Schemas</Link>
                     </NavCrumbs>
 
-                    <WorkspaceTitle className="font-family-monospace">{table}</WorkspaceTitle>
+                    <WorkspaceTitle className="font-mono">{table}</WorkspaceTitle>
 
                     <div className={style.headingMeta}>
                         <span>
@@ -112,13 +112,13 @@ export const Schema = () => {
                 {!is404 && !isError && tableDefinition && (
                     <div className={style.container}>
                         <section className={style.panel}>
-                            <h3>Table Definition</h3>
+                            <h3 className="my-8">Table Definition</h3>
                             <Code code={tableDefinition.schema} />
                         </section>
 
                         {!!tableVindexes.length && (
                             <section className={style.panel}>
-                                <h3>Vindexes</h3>
+                                <h3 className="my-8">Vindexes</h3>
                                 <p>
                                     A Vindex provides a way to map a column value to a keyspace ID. Since each shard in
                                     Vitess covers a range of keyspace ID values, this mapping can be used to identify
@@ -141,7 +141,7 @@ export const Schema = () => {
                                             <th>Params</th>
                                         </tr>
                                     </thead>
-                                    <tbody className="font-family-monospace">
+                                    <tbody className="font-mono">
                                         {tableVindexes.map((v, vdx) => {
                                             const columns = v.column ? [v.column] : v.columns;
                                             return (
@@ -165,9 +165,7 @@ export const Schema = () => {
                                                                 </div>
                                                             ))
                                                         ) : (
-                                                            <span className="font-size-small text-color-secondary">
-                                                                N/A
-                                                            </span>
+                                                            <span className="text-sm text-secondary">N/A</span>
                                                         )}
                                                     </td>
                                                 </tr>

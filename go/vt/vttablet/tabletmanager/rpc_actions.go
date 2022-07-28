@@ -30,17 +30,27 @@ import (
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // DBAction is used to tell ChangeTabletType whether to call SetReadOnly on change to
-// MASTER tablet type
+// PRIMARY tablet type
 type DBAction int
 
 // Allowed values for DBAction
 const (
 	DBActionNone = DBAction(iota)
 	DBActionSetReadWrite
+)
+
+// SemiSyncAction is used to tell fixSemiSync whether to change the semi-sync
+// settings or not.
+type SemiSyncAction int
+
+// Allowed values for SemiSyncAction
+const (
+	SemiSyncActionNone = SemiSyncAction(iota)
+	SemiSyncActionSet
+	SemiSyncActionUnset
 )
 
 // This file contains the implementations of RPCTM methods.
@@ -67,19 +77,17 @@ func (tm *TabletManager) SetReadOnly(ctx context.Context, rdonly bool) error {
 }
 
 // ChangeType changes the tablet type
-func (tm *TabletManager) ChangeType(ctx context.Context, tabletType topodatapb.TabletType) error {
+func (tm *TabletManager) ChangeType(ctx context.Context, tabletType topodatapb.TabletType, semiSync bool) error {
 	if err := tm.lock(ctx); err != nil {
 		return err
 	}
 	defer tm.unlock()
-	return tm.changeTypeLocked(ctx, tabletType, DBActionNone)
+	return tm.changeTypeLocked(ctx, tabletType, DBActionNone, convertBoolToSemiSyncAction(semiSync))
 }
 
 // ChangeType changes the tablet type
-func (tm *TabletManager) changeTypeLocked(ctx context.Context, tabletType topodatapb.TabletType, action DBAction) error {
-	// We don't want to allow multiple callers to claim a tablet as drained. There is a race that could happen during
-	// horizontal resharding where two vtworkers will try to DRAIN the same tablet. This check prevents that race from
-	// causing errors.
+func (tm *TabletManager) changeTypeLocked(ctx context.Context, tabletType topodatapb.TabletType, action DBAction, semiSync SemiSyncAction) error {
+	// We don't want to allow multiple callers to claim a tablet as drained.
 	if tabletType == topodatapb.TabletType_DRAINED && tm.Tablet().Type == topodatapb.TabletType_DRAINED {
 		return fmt.Errorf("Tablet: %v, is already drained", tm.tabletAlias)
 	}
@@ -89,7 +97,7 @@ func (tm *TabletManager) changeTypeLocked(ctx context.Context, tabletType topoda
 	}
 
 	// Let's see if we need to fix semi-sync acking.
-	if err := tm.fixSemiSyncAndReplication(tm.Tablet().Type); err != nil {
+	if err := tm.fixSemiSyncAndReplication(tm.Tablet().Type, semiSync); err != nil {
 		return vterrors.Wrap(err, "fixSemiSyncAndReplication failed, may not ack correctly")
 	}
 	return nil
@@ -134,7 +142,9 @@ func (tm *TabletManager) RunHealthCheck(ctx context.Context) {
 	tm.QueryServiceControl.BroadcastHealth()
 }
 
-// IgnoreHealthError sets the regexp for health check errors to ignore.
-func (tm *TabletManager) IgnoreHealthError(ctx context.Context, pattern string) error {
-	return vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "deprecated")
+func convertBoolToSemiSyncAction(semiSync bool) SemiSyncAction {
+	if semiSync {
+		return SemiSyncActionSet
+	}
+	return SemiSyncActionUnset
 }

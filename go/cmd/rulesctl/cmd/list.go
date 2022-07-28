@@ -29,7 +29,7 @@ func List() *cobra.Command {
 	listCmd.Run = func(cmd *cobra.Command, args []string) {
 		rules := common.GetRules(configFile)
 
-		var out interface{}
+		var out any
 		if listOptName == "" {
 			if listOptNamesOnly {
 				out = []string{}
@@ -40,11 +40,13 @@ func List() *cobra.Command {
 				out = rules
 			}
 		} else {
-			out = rules.Find(listOptName)
-			if listOptNamesOnly && out != nil {
+			rule := rules.Find(listOptName)
+			if listOptNamesOnly && rule != nil {
 				out = listOptName
 			} else if listOptNamesOnly {
 				out = ""
+			} else {
+				out = rule
 			}
 		}
 

@@ -21,8 +21,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
-func buildUsePlan(stmt *sqlparser.Use, vschema ContextVSchema) (engine.Primitive, error) {
-	return &engine.UpdateTarget{
-		Target: stmt.DBName.String(),
-	}, nil
+func buildUsePlan(stmt *sqlparser.Use) (*planResult, error) {
+	prim := &engine.UpdateTarget{Target: stmt.DBName.String()}
+	return newPlanResult(prim), nil
 }

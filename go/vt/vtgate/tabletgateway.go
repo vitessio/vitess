@@ -18,19 +18,22 @@ package vtgate
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"math/rand"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 
-	"vitess.io/vitess/go/vt/topo/topoproto"
+	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/buffer"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
@@ -40,28 +43,36 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-const (
-	tabletGatewayImplementation = "tabletgateway"
-)
-
-func init() {
-	RegisterGatewayCreator(tabletGatewayImplementation, createTabletGateway)
-}
-
 var (
 	_ discovery.HealthCheck = (*discovery.HealthCheckImpl)(nil)
 	// CellsToWatch is the list of cells the healthcheck operates over. If it is empty, only the local cell is watched
-	CellsToWatch = flag.String("cells_to_watch", "", "comma-separated list of cells for watching tablets")
+	CellsToWatch string
+
+	bufferImplementation = "keyspace_events"
+	initialTabletTimeout = 30 * time.Second
+	// retryCount is the number of times a query will be retried on error
+	retryCount = 2
 )
+
+func init() {
+	servenv.OnParseFor("vtgate", func(fs *pflag.FlagSet) {
+		fs.StringVar(&CellsToWatch, "cells_to_watch", "", "comma-separated list of cells for watching tablets")
+		fs.StringVar(&bufferImplementation, "buffer_implementation", "keyspace_events", "Allowed values: healthcheck (legacy implementation), keyspace_events (default)")
+		fs.DurationVar(&initialTabletTimeout, "gateway_initial_tablet_timeout", 30*time.Second, "At startup, the tabletGateway will wait up to this duration to get at least one tablet per keyspace/shard/tablet type")
+		fs.IntVar(&retryCount, "retry-count", 2, "retry count")
+	})
+}
 
 // TabletGateway implements the Gateway interface.
 // This implementation uses the new healthcheck module.
 type TabletGateway struct {
 	queryservice.QueryService
-	hc            discovery.HealthCheck
-	srvTopoServer srvtopo.Server
-	localCell     string
-	retryCount    int
+	hc                   discovery.HealthCheck
+	kev                  *discovery.KeyspaceEventWatcher
+	srvTopoServer        srvtopo.Server
+	localCell            string
+	retryCount           int
+	defaultConnCollation uint32
 
 	// mu protects the fields of this group.
 	mu sync.Mutex
@@ -69,13 +80,8 @@ type TabletGateway struct {
 	// keyspace/shard/tablet_type.
 	statusAggregators map[string]*TabletStatusAggregator
 
-	// buffer, if enabled, buffers requests during a detected MASTER failover.
+	// buffer, if enabled, buffers requests during a detected PRIMARY failover.
 	buffer *buffer.Buffer
-}
-
-func createTabletGateway(ctx context.Context, _ discovery.LegacyHealthCheck, serv srvtopo.Server, cell string, _ int) Gateway {
-	// we ignore the passed in LegacyHealthCheck and let TabletGateway create it's own HealthCheck
-	return NewTabletGateway(ctx, nil /*discovery.Healthcheck*/, serv, cell)
 }
 
 func createHealthCheck(ctx context.Context, retryDelay, timeout time.Duration, ts *topo.Server, cell, cellsToWatch string) discovery.HealthCheck {
@@ -83,7 +89,6 @@ func createHealthCheck(ctx context.Context, retryDelay, timeout time.Duration, t
 }
 
 // NewTabletGateway creates and returns a new TabletGateway
-// NewTabletGateway is the default Gateway implementation
 func NewTabletGateway(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, localCell string) *TabletGateway {
 	// hack to accomodate various users of gateway + tests
 	if hc == nil {
@@ -95,46 +100,79 @@ func NewTabletGateway(ctx context.Context, hc discovery.HealthCheck, serv srvtop
 				log.Exitf("Unable to create new TabletGateway: %v", err)
 			}
 		}
-		hc = createHealthCheck(ctx, *HealthCheckRetryDelay, *HealthCheckTimeout, topoServer, localCell, *CellsToWatch)
-
+		hc = createHealthCheck(ctx, *HealthCheckRetryDelay, *HealthCheckTimeout, topoServer, localCell, CellsToWatch)
 	}
-	vtgateHealthCheck = hc
 	gw := &TabletGateway{
 		hc:                hc,
 		srvTopoServer:     serv,
 		localCell:         localCell,
-		retryCount:        *RetryCount,
+		retryCount:        retryCount,
 		statusAggregators: make(map[string]*TabletStatusAggregator),
-		buffer:            buffer.New(),
 	}
-	// subscribe to healthcheck updates so that buffer can be notified if needed
-	// we run this in a separate goroutine so that normal processing doesn't need to block
-	hcChan := hc.Subscribe()
-	bufferCtx, bufferCancel := context.WithCancel(ctx)
-	go func(ctx context.Context, c chan *discovery.TabletHealth, buffer *buffer.Buffer) {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case result := <-hcChan:
-				if result == nil {
-					// If result is nil it must mean the channel has been closed. Stop goroutine in that case
-					bufferCancel()
-					return
-				}
-				if result.Target.TabletType == topodatapb.TabletType_MASTER {
-					buffer.ProcessMasterHealth(result)
-				}
-			}
-		}
-	}(bufferCtx, hcChan, gw.buffer)
+	gw.setupBuffering(ctx)
 	gw.QueryService = queryservice.Wrap(nil, gw.withRetry)
 	return gw
 }
 
+func (gw *TabletGateway) setupBuffering(ctx context.Context) {
+	cfg := buffer.NewConfigFromFlags()
+	gw.buffer = buffer.New(cfg)
+
+	switch bufferImplementation {
+	case "healthcheck":
+		// subscribe to healthcheck updates so that buffer can be notified if needed
+		// we run this in a separate goroutine so that normal processing doesn't need to block
+		hcChan := gw.hc.Subscribe()
+		bufferCtx, bufferCancel := context.WithCancel(ctx)
+
+		go func(ctx context.Context, c chan *discovery.TabletHealth, buffer *buffer.Buffer) {
+			defer bufferCancel()
+
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case result := <-hcChan:
+					if result == nil {
+						return
+					}
+					if result.Target.TabletType == topodatapb.TabletType_PRIMARY {
+						buffer.ProcessPrimaryHealth(result)
+					}
+				}
+			}
+		}(bufferCtx, hcChan, gw.buffer)
+
+	case "keyspace_events":
+		gw.kev = discovery.NewKeyspaceEventWatcher(ctx, gw.srvTopoServer, gw.hc, gw.localCell)
+		ksChan := gw.kev.Subscribe()
+		bufferCtx, bufferCancel := context.WithCancel(ctx)
+
+		go func(ctx context.Context, c chan *discovery.KeyspaceEvent, buffer *buffer.Buffer) {
+			defer bufferCancel()
+
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case result := <-ksChan:
+					if result == nil {
+						return
+					}
+					buffer.HandleKeyspaceEvent(result)
+				}
+			}
+		}(bufferCtx, ksChan, gw.buffer)
+
+	default:
+		log.Exitf("unknown buffering implementation for TabletGateway: %q", bufferImplementation)
+	}
+}
+
 // QueryServiceByAlias satisfies the Gateway interface
 func (gw *TabletGateway) QueryServiceByAlias(alias *topodatapb.TabletAlias, target *querypb.Target) (queryservice.QueryService, error) {
-	return gw.hc.TabletConnection(alias, target)
+	qs, err := gw.hc.TabletConnection(alias, target)
+	return queryservice.Wrap(qs, gw.withShardError), NewShardError(err, target)
 }
 
 // RegisterStats registers the stats to export the lag since the last refresh
@@ -144,7 +182,25 @@ func (gw *TabletGateway) RegisterStats() {
 }
 
 // WaitForTablets is part of the Gateway interface.
-func (gw *TabletGateway) WaitForTablets(ctx context.Context, tabletTypesToWait []topodatapb.TabletType) error {
+func (gw *TabletGateway) WaitForTablets(tabletTypesToWait []topodatapb.TabletType) (err error) {
+	log.Infof("Gateway waiting for serving tablets of types %v ...", tabletTypesToWait)
+	ctx, cancel := context.WithTimeout(context.Background(), initialTabletTimeout)
+	defer cancel()
+
+	defer func() {
+		switch err {
+		case nil:
+			// Log so we know everything is fine.
+			log.Infof("Waiting for tablets completed")
+		case context.DeadlineExceeded:
+			// In this scenario, we were able to reach the
+			// topology service, but some tablets may not be
+			// ready. We just warn and keep going.
+			log.Warningf("Timeout waiting for all keyspaces / shards to have healthy tablets of types %v, may be in degraded mode", tabletTypesToWait)
+			err = nil
+		}
+	}()
+
 	// Skip waiting for tablets if we are not told to do so.
 	if len(tabletTypesToWait) == 0 {
 		return nil
@@ -183,11 +239,14 @@ func (gw *TabletGateway) CacheStatus() TabletCacheStatusList {
 // the middle of a transaction. While returning the error check if it maybe a result of
 // a resharding event, and set the re-resolve bit and let the upper layers
 // re-resolve and retry.
+//
+// withRetry also adds shard information to errors returned from the inner QueryService, so
+// withShardError should not be combined with withRetry.
 func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, _ queryservice.QueryService,
 	_ string, inTransaction bool, inner func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService) (bool, error)) error {
 	// for transactions, we connect to a specific tablet instead of letting gateway choose one
-	if inTransaction && target.TabletType != topodatapb.TabletType_MASTER {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "gateway's query service can only be used for non-transactional queries on replicas")
+	if inTransaction && target.TabletType != topodatapb.TabletType_PRIMARY {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "tabletGateway's query service can only be used for non-transactional queries on replicas")
 	}
 	var tabletLastUsed *topodatapb.Tablet
 	var err error
@@ -208,21 +267,14 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 
 	bufferedOnce := false
 	for i := 0; i < gw.retryCount+1; i++ {
-		// Check if we should buffer MASTER queries which failed due to an ongoing
+		// Check if we should buffer PRIMARY queries which failed due to an ongoing
 		// failover.
 		// Note: We only buffer once and only "!inTransaction" queries i.e.
 		// a) no transaction is necessary (e.g. critical reads) or
 		// b) no transaction was created yet.
-		if !bufferedOnce && !inTransaction && target.TabletType == topodatapb.TabletType_MASTER {
+		if !bufferedOnce && !inTransaction && target.TabletType == topodatapb.TabletType_PRIMARY {
 			// The next call blocks if we should buffer during a failover.
 			retryDone, bufferErr := gw.buffer.WaitForFailoverEnd(ctx, target.Keyspace, target.Shard, err)
-			if bufferErr != nil {
-				// Buffering failed e.g. buffer is already full. Do not retry.
-				err = vterrors.Errorf(vterrors.Code(bufferErr),
-					"failed to automatically buffer and retry failed request during failover: %v original err (type=%T): %v",
-					bufferErr, err, err)
-				break
-			}
 
 			// Request may have been buffered.
 			if retryDone != nil {
@@ -231,10 +283,30 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 				defer retryDone()
 				bufferedOnce = true
 			}
+
+			if bufferErr != nil {
+				err = vterrors.Wrapf(bufferErr,
+					"failed to automatically buffer and retry failed request during failover. original err (type=%T): %v",
+					err, err)
+				break
+			}
 		}
 
 		tablets := gw.hc.GetHealthyTabletStats(target)
 		if len(tablets) == 0 {
+			// if we have a keyspace event watcher, check if the reason why our primary is not available is that it's currently being resharded
+			// or if a reparent operation is in progress.
+			if kev := gw.kev; kev != nil {
+				if kev.TargetIsBeingResharded(target) {
+					err = vterrors.Errorf(vtrpcpb.Code_CLUSTER_EVENT, "current keyspace is being resharded")
+					continue
+				}
+				if kev.PrimaryIsNotServing(target) {
+					err = vterrors.Errorf(vtrpcpb.Code_CLUSTER_EVENT, "primary is not serving, there is a reparent operation in progress")
+					continue
+				}
+			}
+
 			// fail fast if there is no tablet
 			err = vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "no healthy tablet available for '%s'", target.String())
 			break
@@ -265,6 +337,8 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 			continue
 		}
 
+		gw.updateDefaultConnCollation(tabletLastUsed)
+
 		startTime := time.Now()
 		var canRetry bool
 		canRetry, err = inner(ctx, target, th.Conn)
@@ -275,6 +349,13 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 		}
 		break
 	}
+	return NewShardError(err, target)
+}
+
+// withShardError adds shard information to errors returned from the inner QueryService.
+func (gw *TabletGateway) withShardError(ctx context.Context, target *querypb.Target, conn queryservice.QueryService,
+	_ string, _ bool, inner func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService) (bool, error)) error {
+	_, err := inner(ctx, target, conn)
 	return NewShardError(err, target)
 }
 
@@ -325,13 +406,13 @@ func (gw *TabletGateway) shuffleTablets(cell string, tablets []*discovery.Tablet
 		}
 	}
 
-	//shuffle in same cell tablets
+	// shuffle in same cell tablets
 	for i := sameCellMax; i > 0; i-- {
 		swap := rand.Intn(i + 1)
 		tablets[i], tablets[swap] = tablets[swap], tablets[i]
 	}
 
-	//shuffle in diff cell tablets
+	// shuffle in diff cell tablets
 	for i, diffCellMin := length-1, sameCellMax+1; i > diffCellMin; i-- {
 		swap := rand.Intn(i-sameCellMax) + diffCellMin
 		tablets[i], tablets[swap] = tablets[swap], tablets[i]
@@ -350,6 +431,20 @@ func (gw *TabletGateway) nextTablet(cell string, tablets []*discovery.TabletHeal
 // TabletsCacheStatus returns a displayable version of the health check cache.
 func (gw *TabletGateway) TabletsCacheStatus() discovery.TabletsCacheStatusList {
 	return gw.hc.CacheStatus()
+}
+
+func (gw *TabletGateway) updateDefaultConnCollation(tablet *topodatapb.Tablet) {
+	if atomic.CompareAndSwapUint32(&gw.defaultConnCollation, 0, tablet.DefaultConnCollation) {
+		return
+	}
+	if atomic.LoadUint32(&gw.defaultConnCollation) != tablet.DefaultConnCollation {
+		log.Warning("this Vitess cluster has tablets with different default connection collations")
+	}
+}
+
+// DefaultConnCollation returns the default connection collation of this TabletGateway
+func (gw *TabletGateway) DefaultConnCollation() collations.ID {
+	return collations.ID(atomic.LoadUint32(&gw.defaultConnCollation))
 }
 
 // NewShardError returns a new error with the shard info amended.

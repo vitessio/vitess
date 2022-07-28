@@ -20,6 +20,8 @@ package mysqlserver
 import (
 	"context"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -193,8 +195,26 @@ func TestSelectWithUnauthorizedUser(t *testing.T) {
 
 	_, err = conn.ExecuteFetch("SELECT * from vt_insert_test limit 1", 1, false)
 	require.NotNilf(t, err, "error expected, got nil")
-	assert.Contains(t, err.Error(), "table acl error")
-	assert.Contains(t, err.Error(), "cannot run Select on table")
+	assert.Contains(t, err.Error(), "Select command denied to user")
+	assert.Contains(t, err.Error(), "for table 'vt_insert_test' (ACL check error)")
+}
+
+// TestPartitionedTable validates that partitioned tables are recognized by schema engine
+func TestPartitionedTable(t *testing.T) {
+	defer cluster.PanicHandler(t)
+
+	tablet := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet()
+
+	// Partitioned table already created, check if vttablet knows about it
+	url := fmt.Sprintf("http://localhost:%d/schemaz", tablet.HTTPPort)
+	resp, err := http.Get(url)
+	require.NoError(t, err)
+
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Contains(t, string(body), "vt_partition_test")
 }
 
 func connectDB(t *testing.T, vtParams mysql.ConnParams, params ...string) *sql.DB {

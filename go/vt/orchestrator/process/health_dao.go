@@ -141,10 +141,10 @@ func ExpireNodesHistory() error {
 	return log.Errore(err)
 }
 
-func ReadAvailableNodes(onlyHttpNodes bool) (nodes [](*NodeHealth), err error) {
+func ReadAvailableNodes(onlyHTTPNodes bool) (nodes [](*NodeHealth), err error) {
 	extraInfo := ""
-	if onlyHttpNodes {
-		extraInfo = string(OrchestratorExecutionHttpMode)
+	if onlyHTTPNodes {
+		extraInfo = string(OrchestratorExecutionHTTPMode)
 	}
 	query := `
 		select
@@ -173,8 +173,8 @@ func ReadAvailableNodes(onlyHttpNodes bool) (nodes [](*NodeHealth), err error) {
 	return nodes, log.Errore(err)
 }
 
-func TokenBelongsToHealthyHttpService(token string) (result bool, err error) {
-	extraInfo := string(OrchestratorExecutionHttpMode)
+func TokenBelongsToHealthyHTTPService(token string) (result bool, err error) {
+	extraInfo := string(OrchestratorExecutionHTTPMode)
 
 	query := `
 		select

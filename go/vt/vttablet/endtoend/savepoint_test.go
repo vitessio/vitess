@@ -22,7 +22,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
 )
 
@@ -30,17 +29,10 @@ func TestSavepointInTransactionWithSRollback(t *testing.T) {
 	client := framework.NewClient()
 	defer client.Execute("delete from vitess_test where intval = 5", nil)
 
-	queries := []*querypb.BoundQuery{
-		{
-			Sql:           "savepoint a",
-			BindVariables: nil,
-		},
-		{
-			Sql:           "insert into vitess_test (intval, floatval, charval, binval) values (5, null, null, null)",
-			BindVariables: nil,
-		},
-	}
-	_, err := client.BeginExecuteBatch(queries, false)
+	prequery := "savepoint a"
+	query := "insert into vitess_test (intval, floatval, charval, binval) values (5, null, null, null)"
+
+	_, err := client.BeginExecute(query, nil, []string{prequery})
 	require.NoError(t, err)
 
 	qr, err := client.Execute("select intval from vitess_test where intval = 5", nil)
@@ -63,17 +55,10 @@ func TestSavepointInTransactionWithRelease(t *testing.T) {
 
 	vstart := framework.DebugVars()
 
-	queries := []*querypb.BoundQuery{
-		{
-			Sql:           "savepoint a",
-			BindVariables: nil,
-		},
-		{
-			Sql:           "insert into vitess_test (intval, floatval, charval, binval) values (5, null, null, null)",
-			BindVariables: nil,
-		},
-	}
-	_, err := client.BeginExecuteBatch(queries, false)
+	prequery := "savepoint a"
+	query := "insert into vitess_test (intval, floatval, charval, binval) values (5, null, null, null)"
+
+	_, err := client.BeginExecute(query, nil, []string{prequery})
 	require.NoError(t, err)
 
 	qr, err := client.Execute("select intval from vitess_test where intval in (5, 6)", nil)
@@ -118,7 +103,7 @@ func TestSavepointInTransactionWithRelease(t *testing.T) {
 		diff int
 	}{{
 		tag:  "Queries/Histograms/Savepoint/Count",
-		diff: 2,
+		diff: 1,
 	}, {
 		tag:  "Queries/Histograms/Release/Count",
 		diff: 1,
@@ -127,7 +112,9 @@ func TestSavepointInTransactionWithRelease(t *testing.T) {
 		diff: 2,
 	}}
 	for _, expected := range expectedDiffs {
-		compareIntDiff(t, vend, expected.tag, vstart, expected.diff)
+		t.Run(expected.tag, func(t *testing.T) {
+			compareIntDiff(t, vend, expected.tag, vstart, expected.diff)
+		})
 	}
 }
 

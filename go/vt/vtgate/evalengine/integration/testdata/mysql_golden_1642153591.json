@@ -1,0 +1,18 @@
+[
+    {
+        "Query": "SELECT null <= ('f' > -1) * -1",
+        "Value": "NULL"
+    },
+    {
+        "Query": "SELECT null = ('f' like 0) - 1",
+        "Value": "NULL"
+    },
+    {
+        "Query": "SELECT null <= 0 not in (-1, 'fOo' like -1, 'fOo' like -1, 'fOo' like -1)",
+        "Value": "NULL"
+    },
+    {
+        "Query": "SELECT 1 / 1 / 1 not in (0, 0, null, 'f')",
+        "Value": "NULL"
+    }
+]

@@ -17,29 +17,36 @@ limitations under the License.
 package tabletmanager
 
 import (
+	"context"
 	"testing"
 	"time"
-
-	"vitess.io/vitess/go/test/utils"
-
-	"context"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"
+	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/fakemysqldaemon"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+)
+
+var (
+	dbServerVersion = "5.7.0"
+	charsetName     = "utf8mb4"
+	dbsvCollID      = collations.NewEnvironment(dbServerVersion).DefaultCollationForCharset(charsetName).ID()
 )
 
 func TestStartBuildTabletFromInput(t *testing.T) {
@@ -63,20 +70,23 @@ func TestStartBuildTabletFromInput(t *testing.T) {
 			"vt":   port,
 			"grpc": grpcport,
 		},
-		Keyspace:       "test_keyspace",
-		Shard:          "0",
-		KeyRange:       nil,
-		Type:           topodatapb.TabletType_REPLICA,
-		DbNameOverride: "aa",
+		Keyspace:             "test_keyspace",
+		Shard:                "0",
+		KeyRange:             nil,
+		Type:                 topodatapb.TabletType_REPLICA,
+		Tags:                 map[string]string{},
+		DbNameOverride:       "aa",
+		DbServerVersion:      dbServerVersion,
+		DefaultConnCollation: uint32(dbsvCollID),
 	}
 
-	gotTablet, err := BuildTabletFromInput(alias, port, grpcport)
+	gotTablet, err := BuildTabletFromInput(alias, port, grpcport, dbServerVersion, nil)
 	require.NoError(t, err)
 
 	// Hostname should be resolved.
 	assert.Equal(t, wantTablet, gotTablet)
 	*tabletHostname = ""
-	gotTablet, err = BuildTabletFromInput(alias, port, grpcport)
+	gotTablet, err = BuildTabletFromInput(alias, port, grpcport, dbServerVersion, nil)
 	require.NoError(t, err)
 	assert.NotEqual(t, "", gotTablet.Hostname)
 
@@ -88,7 +98,7 @@ func TestStartBuildTabletFromInput(t *testing.T) {
 		Start: []byte(""),
 		End:   []byte("\xc0"),
 	}
-	gotTablet, err = BuildTabletFromInput(alias, port, grpcport)
+	gotTablet, err = BuildTabletFromInput(alias, port, grpcport, dbServerVersion, nil)
 	require.NoError(t, err)
 	// KeyRange check is explicit because the next comparison doesn't
 	// show the diff well enough.
@@ -98,26 +108,64 @@ func TestStartBuildTabletFromInput(t *testing.T) {
 	// Invalid inputs.
 	*initKeyspace = ""
 	*initShard = "0"
-	_, err = BuildTabletFromInput(alias, port, grpcport)
+	_, err = BuildTabletFromInput(alias, port, grpcport, dbServerVersion, nil)
 	assert.Contains(t, err.Error(), "init_keyspace and init_shard must be specified")
 
 	*initKeyspace = "test_keyspace"
 	*initShard = ""
-	_, err = BuildTabletFromInput(alias, port, grpcport)
+	_, err = BuildTabletFromInput(alias, port, grpcport, dbServerVersion, nil)
 	assert.Contains(t, err.Error(), "init_keyspace and init_shard must be specified")
 
 	*initShard = "x-y"
-	_, err = BuildTabletFromInput(alias, port, grpcport)
+	_, err = BuildTabletFromInput(alias, port, grpcport, dbServerVersion, nil)
 	assert.Contains(t, err.Error(), "cannot validate shard name")
 
 	*initShard = "0"
 	*initTabletType = "bad"
-	_, err = BuildTabletFromInput(alias, port, grpcport)
+	_, err = BuildTabletFromInput(alias, port, grpcport, dbServerVersion, nil)
 	assert.Contains(t, err.Error(), "unknown TabletType bad")
 
-	*initTabletType = "master"
-	_, err = BuildTabletFromInput(alias, port, grpcport)
-	assert.Contains(t, err.Error(), "invalid init_tablet_type MASTER")
+	*initTabletType = "primary"
+	_, err = BuildTabletFromInput(alias, port, grpcport, dbServerVersion, nil)
+	assert.Contains(t, err.Error(), "invalid init_tablet_type PRIMARY")
+}
+
+func TestBuildTabletFromInputWithBuildTags(t *testing.T) {
+	alias := &topodatapb.TabletAlias{
+		Cell: "cell",
+		Uid:  1,
+	}
+	port := int32(12)
+	grpcport := int32(34)
+
+	// Hostname should be used as is.
+	*tabletHostname = "foo"
+	*initKeyspace = "test_keyspace"
+	*initShard = "0"
+	*initTabletType = "replica"
+	*initDbNameOverride = "aa"
+	*skipBuildInfoTags = ""
+	defer func() { *skipBuildInfoTags = "/.*/" }()
+	wantTablet := &topodatapb.Tablet{
+		Alias:    alias,
+		Hostname: "foo",
+		PortMap: map[string]int32{
+			"vt":   port,
+			"grpc": grpcport,
+		},
+		Keyspace:             "test_keyspace",
+		Shard:                "0",
+		KeyRange:             nil,
+		Type:                 topodatapb.TabletType_REPLICA,
+		Tags:                 servenv.AppVersion.ToStringMap(),
+		DbNameOverride:       "aa",
+		DbServerVersion:      dbServerVersion,
+		DefaultConnCollation: uint32(dbsvCollID),
+	}
+
+	gotTablet, err := BuildTabletFromInput(alias, port, grpcport, dbServerVersion, nil)
+	require.NoError(t, err)
+	assert.Equal(t, wantTablet, gotTablet)
 }
 
 func TestStartCreateKeyspaceShard(t *testing.T) {
@@ -125,6 +173,7 @@ func TestStartCreateKeyspaceShard(t *testing.T) {
 	rebuildKeyspaceRetryInterval = 10 * time.Millisecond
 
 	ctx := context.Background()
+	statsTabletTypeCount.ResetAll()
 	cell := "cell1"
 	ts := memorytopo.NewServer(cell)
 	tm := newTestTM(t, ts, 1, "ks", "0")
@@ -203,7 +252,7 @@ func TestStartCreateKeyspaceShard(t *testing.T) {
 	ensureSrvKeyspace(t, ts, cell, "ks4")
 }
 
-func TestCheckMastership(t *testing.T) {
+func TestCheckPrimaryShip(t *testing.T) {
 	defer func(saved time.Duration) { rebuildKeyspaceRetryInterval = saved }(rebuildKeyspaceRetryInterval)
 	rebuildKeyspaceRetryInterval = 10 * time.Millisecond
 
@@ -225,16 +274,16 @@ func TestCheckMastership(t *testing.T) {
 	assert.Equal(t, topodatapb.TabletType_REPLICA, ti.Type)
 	tm.Stop()
 
-	// 2. Update shard's master to our alias, then try to init again.
-	// (This simulates the case where the MasterAlias in the shard record says
-	// that we are the master but the tablet record says otherwise. In that case,
-	// we become master by inheriting the shard record's timestamp.)
+	// 2. Update shard's primary to our alias, then try to init again.
+	// (This simulates the case where the PrimaryAlias in the shard record says
+	// that we are the primary but the tablet record says otherwise. In that case,
+	// we become primary by inheriting the shard record's timestamp.)
 	now := time.Now()
 	_, err = ts.UpdateShardFields(ctx, "ks", "0", func(si *topo.ShardInfo) error {
-		si.MasterAlias = alias
-		si.MasterTermStartTime = logutil.TimeToProto(now)
+		si.PrimaryAlias = alias
+		si.PrimaryTermStartTime = logutil.TimeToProto(now)
 		// Reassign to now for easier comparison.
-		now = si.GetMasterTermStartTime()
+		now = si.GetPrimaryTermStartTime()
 		return nil
 	})
 	require.NoError(t, err)
@@ -242,59 +291,59 @@ func TestCheckMastership(t *testing.T) {
 	require.NoError(t, err)
 	ti, err = ts.GetTablet(ctx, alias)
 	require.NoError(t, err)
-	assert.Equal(t, topodatapb.TabletType_MASTER, ti.Type)
-	ter0 := ti.GetMasterTermStartTime()
+	assert.Equal(t, topodatapb.TabletType_PRIMARY, ti.Type)
+	ter0 := ti.GetPrimaryTermStartTime()
 	assert.Equal(t, now, ter0)
-	assert.Equal(t, "master", statsTabletType.Get())
+	assert.Equal(t, "primary", statsTabletType.Get())
 	tm.Stop()
 
 	// 3. Delete the tablet record. The shard record still says that we are the
-	// MASTER. Since it is the only source, we assume that its information is
-	// correct and start as MASTER.
+	// PRIMARY. Since it is the only source, we assume that its information is
+	// correct and start as PRIMARY.
 	err = ts.DeleteTablet(ctx, alias)
 	require.NoError(t, err)
 	err = tm.Start(tablet, 0)
 	require.NoError(t, err)
 	ti, err = ts.GetTablet(ctx, alias)
 	require.NoError(t, err)
-	assert.Equal(t, topodatapb.TabletType_MASTER, ti.Type)
-	ter1 := ti.GetMasterTermStartTime()
+	assert.Equal(t, topodatapb.TabletType_PRIMARY, ti.Type)
+	ter1 := ti.GetPrimaryTermStartTime()
 	tm.Stop()
 
-	// 4. Fix the tablet record to agree that we're master.
+	// 4. Fix the tablet record to agree that we're primary.
 	// Shard and tablet record are in sync now and we assume that we are actually
-	// the MASTER.
-	ti.Type = topodatapb.TabletType_MASTER
+	// the PRIMARY.
+	ti.Type = topodatapb.TabletType_PRIMARY
 	err = ts.UpdateTablet(ctx, ti)
 	require.NoError(t, err)
 	err = tm.Start(tablet, 0)
 	require.NoError(t, err)
 	ti, err = ts.GetTablet(ctx, alias)
 	require.NoError(t, err)
-	assert.Equal(t, topodatapb.TabletType_MASTER, ti.Type)
-	ter2 := ti.GetMasterTermStartTime()
+	assert.Equal(t, topodatapb.TabletType_PRIMARY, ti.Type)
+	ter2 := ti.GetPrimaryTermStartTime()
 	assert.Equal(t, ter1, ter2)
 	tm.Stop()
 
-	// 5. Subsequent inits will still start the vttablet as MASTER.
+	// 5. Subsequent inits will still start the vttablet as PRIMARY.
 	err = tm.Start(tablet, 0)
 	require.NoError(t, err)
 	ti, err = ts.GetTablet(ctx, alias)
 	require.NoError(t, err)
-	assert.Equal(t, topodatapb.TabletType_MASTER, ti.Type)
-	ter3 := ti.GetMasterTermStartTime()
+	assert.Equal(t, topodatapb.TabletType_PRIMARY, ti.Type)
+	ter3 := ti.GetPrimaryTermStartTime()
 	assert.Equal(t, ter1, ter3)
 	tm.Stop()
 
-	// 6. If the shard record shows a different master with an older
-	// timestamp, we take over mastership.
+	// 6. If the shard record shows a different primary with an older
+	// timestamp, we take over primaryship.
 	otherAlias := &topodatapb.TabletAlias{
 		Cell: "cell1",
 		Uid:  2,
 	}
 	_, err = ts.UpdateShardFields(ctx, "ks", "0", func(si *topo.ShardInfo) error {
-		si.MasterAlias = otherAlias
-		si.MasterTermStartTime = logutil.TimeToProto(ter1.Add(-10 * time.Second))
+		si.PrimaryAlias = otherAlias
+		si.PrimaryTermStartTime = logutil.TimeToProto(ter1.Add(-10 * time.Second))
 		return nil
 	})
 	require.NoError(t, err)
@@ -302,27 +351,27 @@ func TestCheckMastership(t *testing.T) {
 	require.NoError(t, err)
 	ti, err = ts.GetTablet(ctx, alias)
 	require.NoError(t, err)
-	assert.Equal(t, topodatapb.TabletType_MASTER, ti.Type)
-	ter4 := ti.GetMasterTermStartTime()
+	assert.Equal(t, topodatapb.TabletType_PRIMARY, ti.Type)
+	ter4 := ti.GetPrimaryTermStartTime()
 	assert.Equal(t, ter1, ter4)
 	tm.Stop()
 
-	// 7. If the shard record shows a different master with a newer
+	// 7. If the shard record shows a different primary with a newer
 	// timestamp, we remain replica.
 	_, err = ts.UpdateShardFields(ctx, "ks", "0", func(si *topo.ShardInfo) error {
-		si.MasterAlias = otherAlias
-		si.MasterTermStartTime = logutil.TimeToProto(ter4.Add(10 * time.Second))
+		si.PrimaryAlias = otherAlias
+		si.PrimaryTermStartTime = logutil.TimeToProto(ter4.Add(10 * time.Second))
 		return nil
 	})
 	require.NoError(t, err)
 	tablet.Type = topodatapb.TabletType_REPLICA
-	tablet.MasterTermStartTime = nil
+	tablet.PrimaryTermStartTime = nil
 	err = tm.Start(tablet, 0)
 	require.NoError(t, err)
 	ti, err = ts.GetTablet(ctx, alias)
 	require.NoError(t, err)
 	assert.Equal(t, topodatapb.TabletType_REPLICA, ti.Type)
-	ter5 := ti.GetMasterTermStartTime()
+	ter5 := ti.GetPrimaryTermStartTime()
 	assert.True(t, ter5.IsZero())
 	tm.Stop()
 }
@@ -479,22 +528,22 @@ func TestCheckTabletTypeResets(t *testing.T) {
 	// Verify that it changes back to initTabletType
 	assert.Equal(t, topodatapb.TabletType_REPLICA, ti.Type)
 
-	// 3. Update shard's master to our alias, then try to init again.
-	// (This simulates the case where the MasterAlias in the shard record says
-	// that we are the master but the tablet record says otherwise. In that case,
-	// we become master by inheriting the shard record's timestamp.)
+	// 3. Update shard's primary to our alias, then try to init again.
+	// (This simulates the case where the PrimaryAlias in the shard record says
+	// that we are the primary but the tablet record says otherwise. In that case,
+	// we become primary by inheriting the shard record's timestamp.)
 	now := time.Now()
 	_, err = ts.UpdateShardFields(ctx, "ks", "0", func(si *topo.ShardInfo) error {
-		si.MasterAlias = alias
-		si.MasterTermStartTime = logutil.TimeToProto(now)
+		si.PrimaryAlias = alias
+		si.PrimaryTermStartTime = logutil.TimeToProto(now)
 		// Reassign to now for easier comparison.
-		now = si.GetMasterTermStartTime()
+		now = si.GetPrimaryTermStartTime()
 		return nil
 	})
 	require.NoError(t, err)
 	si, err := tm.createKeyspaceShard(ctx)
 	require.NoError(t, err)
-	err = tm.checkMastership(ctx, si)
+	err = tm.checkPrimaryShip(ctx, si)
 	require.NoError(t, err)
 	assert.Equal(t, tm.tmState.tablet.Type, tm.tmState.displayState.tablet.Type)
 	err = tm.initTablet(ctx)
@@ -502,10 +551,71 @@ func TestCheckTabletTypeResets(t *testing.T) {
 	assert.Equal(t, tm.tmState.tablet.Type, tm.tmState.displayState.tablet.Type)
 	ti, err = ts.GetTablet(ctx, alias)
 	require.NoError(t, err)
-	assert.Equal(t, topodatapb.TabletType_MASTER, ti.Type)
-	ter0 := ti.GetMasterTermStartTime()
+	assert.Equal(t, topodatapb.TabletType_PRIMARY, ti.Type)
+	ter0 := ti.GetPrimaryTermStartTime()
 	assert.Equal(t, now, ter0)
 	tm.Stop()
+}
+
+func TestGetBuildTags(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		in      map[string]string
+		skipCSV string
+		want    map[string]string
+		wantErr bool
+	}{
+		{
+			in: map[string]string{
+				"a": "a",
+				"b": "b",
+				"c": "c",
+			},
+			skipCSV: "a,c",
+			want: map[string]string{
+				"b": "b",
+			},
+		},
+		{
+			in: map[string]string{
+				"hello": "world",
+				"help":  "me",
+				"good":  "bye",
+				"a":     "b",
+			},
+			skipCSV: "a,/hel.*/",
+			want: map[string]string{
+				"good": "bye",
+			},
+		},
+		{
+			in: map[string]string{
+				"a":      "a",
+				"/hello": "/hello",
+			},
+			skipCSV: "/,a", // len(skipTag) <= 1, so not a regexp
+			want: map[string]string{
+				"/hello": "/hello",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.skipCSV, func(t *testing.T) {
+			t.Parallel()
+
+			out, err := getBuildTags(tt.in, tt.skipCSV)
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, out)
+		})
+	}
 }
 
 func newTestMysqlDaemon(t *testing.T, port int32) *fakemysqldaemon.FakeMysqlDaemon {
@@ -549,18 +659,29 @@ func newTestTM(t *testing.T, ts *topo.Server, uid int, keyspace, shard string) *
 	err := tm.Start(tablet, 0)
 	require.NoError(t, err)
 
-	// Wait for SrvKeyspace to be rebuilt.
-	for i := 0; i < 9; i++ {
-		if _, err := tm.TopoServer.GetSrvKeyspace(ctx, tm.tabletAlias.Cell, "ks"); err != nil {
-			if i == 9 {
-				require.NoError(t, err)
+	// Wait for SrvKeyspace to be rebuilt. We know that it has been built
+	// when isShardServing or tabletControls maps is non-empty.
+	timeout := time.After(1 * time.Second)
+	for {
+		select {
+		case <-timeout:
+			t.Logf("servingKeyspace not initialized for tablet uid - %d", uid)
+			return tm
+		default:
+			isNonEmpty := false
+			func() {
+				tm.tmState.mu.Lock()
+				defer tm.tmState.mu.Unlock()
+				if tm.tmState.isShardServing != nil || tm.tmState.tabletControls != nil {
+					isNonEmpty = true
+				}
+			}()
+			if isNonEmpty {
+				return tm
 			}
-			time.Sleep(10 * time.Millisecond)
-			continue
+			time.Sleep(100 * time.Millisecond)
 		}
-		break
 	}
-	return tm
 }
 
 func newTestTablet(t *testing.T, uid int, keyspace, shard string) *topodatapb.Tablet {

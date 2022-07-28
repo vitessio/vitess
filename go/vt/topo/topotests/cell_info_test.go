@@ -17,13 +17,14 @@ limitations under the License.
 package topotests
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"context"
 
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -176,4 +177,101 @@ func TestExpandCells(t *testing.T) {
 		})
 	}
 
+	t.Run("aliases", func(t *testing.T) {
+		cells := []string{"cell1", "cell2", "cell3"}
+		ts := memorytopo.NewServer(cells...)
+		err := ts.CreateCellsAlias(ctx, "alias", &topodatapb.CellsAlias{Cells: cells})
+		require.NoError(t, err)
+
+		tests := []struct {
+			name      string
+			in        string
+			out       []string
+			shouldErr bool
+		}{
+			{
+				name: "alias only",
+				in:   "alias",
+				out:  []string{"cell1", "cell2", "cell3"},
+			},
+			{
+				name: "alias and cell in alias", // test deduping logic
+				in:   "alias,cell1",
+				out:  []string{"cell1", "cell2", "cell3"},
+			},
+			{
+				name: "just cells",
+				in:   "cell1",
+				out:  []string{"cell1"},
+			},
+			{
+				name:      "missing alias",
+				in:        "not_an_alias",
+				shouldErr: true,
+			},
+		}
+
+		for _, tt := range tests {
+			tt := tt
+			t.Run(tt.name, func(t *testing.T) {
+				expanded, err := ts.ExpandCells(ctx, tt.in)
+				if tt.shouldErr {
+					assert.Error(t, err)
+					return
+				}
+
+				require.NoError(t, err)
+				assert.ElementsMatch(t, expanded, tt.out)
+			})
+		}
+	})
+}
+
+func TestDeleteCellInfo(t *testing.T) {
+	ctx := context.Background()
+	ts := memorytopo.NewServer("zone1", "unreachable")
+
+	err := ts.UpdateCellInfoFields(ctx, "unreachable", func(ci *topodatapb.CellInfo) error {
+		ci.ServerAddress = memorytopo.UnreachableServerAddr
+		return nil
+	})
+	require.NoError(t, err, "failed to update cell to point at unreachable addr")
+
+	tests := []struct {
+		force       bool
+		shouldErr   bool
+		shouldExist bool
+	}{
+		{
+			force:       false,
+			shouldErr:   true,
+			shouldExist: true,
+		},
+		{
+			force:       true,
+			shouldErr:   false,
+			shouldExist: false,
+		},
+	}
+	for _, tt := range tests {
+		func() {
+			ctx, cancel := context.WithTimeout(ctx, 10*time.Millisecond)
+			defer cancel()
+
+			err := ts.DeleteCellInfo(ctx, "unreachable", tt.force)
+			if tt.shouldErr {
+				assert.Error(t, err, "force=%t", tt.force)
+			} else {
+				assert.NoError(t, err, "force=%t", tt.force)
+			}
+
+			ci, err := ts.GetCellInfo(ctx, "unreachable", true /* strongRead */)
+			if tt.shouldExist {
+				assert.NoError(t, err)
+				assert.NotNil(t, ci)
+			} else {
+				assert.True(t, topo.IsErrType(err, topo.NoNode), "expected cell %q to not exist", "unreachable")
+			}
+		}()
+	}
 }

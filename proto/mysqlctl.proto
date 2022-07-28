@@ -22,6 +22,9 @@ option go_package = "vitess.io/vitess/go/vt/proto/mysqlctl";
 
 package mysqlctl;
 
+import "topodata.proto";
+import "vttime.proto";
+
 message StartRequest{
   repeated string mysqld_args = 1;
 }
@@ -59,4 +62,36 @@ service MysqlCtl {
 message BackupInfo {
   string name = 1;
   string directory = 2;
+
+  string keyspace = 3;
+  string shard = 4;
+
+  // The following fields will be extracted from the .Name field. If an error
+  // occurs during extraction/parsing, these fields may not be set, but
+  // VtctldServer.GetBackups will not fail.
+
+  topodata.TabletAlias tablet_alias = 5;
+  vttime.Time time = 6;
+
+  // The following fields are may or may not be currently set. Work is inflight
+  // to fully-support these fields in all backupengine/storage implementations.
+  // See https://github.com/vitessio/vitess/issues/8332.
+
+  // Engine is the name of the backupengine implementation used to create
+  // this backup.
+  string engine = 7;
+  Status status = 8;
+
+  // Status is an enum representing the possible status of a backup.
+  enum Status {
+      UNKNOWN = 0;
+      INCOMPLETE = 1;
+      COMPLETE = 2;
+      // A backup status of INVALID should be set if the backup is complete
+      // but unusable in some way (partial upload, corrupt file, etc).
+      INVALID = 3;
+      // A backup status of VALID should be set if the backup is both
+      // complete and usuable.
+      VALID = 4;
+  }  
 }

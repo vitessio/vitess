@@ -172,7 +172,7 @@ func (st *symtab) AddTable(t *table) error {
 		st.singleRoute = nil
 	}
 	if _, ok := st.tables[t.alias]; ok {
-		return fmt.Errorf("duplicate symbol: %s", sqlparser.String(t.alias))
+		return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqTable, "Not unique table/alias: '%s'", t.alias.Name.String())
 	}
 	st.tables[t.alias] = t
 	st.tableNames = append(st.tableNames, t.alias)
@@ -203,6 +203,24 @@ func (st *symtab) AllTables() []*table {
 		tables = append(tables, st.tables[tname])
 	}
 	return tables
+}
+
+// AllVschemaTableNames returns an ordered list of all current vschema tables.
+func (st *symtab) AllVschemaTableNames() ([]*vindexes.Table, error) {
+	if len(st.tableNames) == 0 {
+		return nil, nil
+	}
+	tables := make([]*vindexes.Table, 0, len(st.tableNames))
+	for _, tname := range st.tableNames {
+		t, ok := st.tables[tname]
+		if !ok {
+			return nil, fmt.Errorf("table %v not found", sqlparser.String(tname))
+		}
+		if t.vschemaTable != nil {
+			tables = append(tables, t.vschemaTable)
+		}
+	}
+	return tables, nil
 }
 
 // FindTable finds a table in symtab. This function is specifically used
@@ -379,7 +397,7 @@ func (st *symtab) searchTables(col *sqlparser.ColName) (*column, error) {
 
 // ResultFromNumber returns the result column index based on the column
 // order expression.
-func ResultFromNumber(rcs []*resultColumn, val *sqlparser.Literal) (int, error) {
+func ResultFromNumber(rcs []*resultColumn, val *sqlparser.Literal, caller string) (int, error) {
 	if val.Type != sqlparser.IntVal {
 		return 0, errors.New("column number is not an int")
 	}
@@ -388,7 +406,7 @@ func ResultFromNumber(rcs []*resultColumn, val *sqlparser.Literal) (int, error) 
 		return 0, fmt.Errorf("error parsing column number: %s", sqlparser.String(val))
 	}
 	if num < 1 || num > int64(len(rcs)) {
-		return 0, fmt.Errorf("column number out of range: %d", num)
+		return 0, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "Unknown column '%d' in '%s'", num, caller)
 	}
 	return int(num - 1), nil
 }
@@ -459,13 +477,13 @@ func (st *symtab) ResolveSymbols(node sqlparser.SQLNode) error {
 type table struct {
 	alias           sqlparser.TableName
 	columns         map[string]*column
-	columnNames     []sqlparser.ColIdent
+	columnNames     []sqlparser.IdentifierCI
 	isAuthoritative bool
 	origin          logicalPlan
 	vschemaTable    *vindexes.Table
 }
 
-func (t *table) addColumn(alias sqlparser.ColIdent, c *column) {
+func (t *table) addColumn(alias sqlparser.IdentifierCI, c *column) {
 	if t.columns == nil {
 		t.columns = make(map[string]*column)
 	}
@@ -482,7 +500,7 @@ func (t *table) addColumn(alias sqlparser.ColIdent, c *column) {
 // If the table is authoritative and the column doesn't already
 // exist, it returns an error. If the table is not authoritative,
 // the column is added if not already present.
-func (t *table) mergeColumn(alias sqlparser.ColIdent, c *column) (*column, error) {
+func (t *table) mergeColumn(alias sqlparser.IdentifierCI, c *column) (*column, error) {
 	if t.columns == nil {
 		t.columns = make(map[string]*column)
 	}
@@ -545,7 +563,7 @@ type resultColumn struct {
 	// column will be used as the alias. If the expression is non-trivial,
 	// alias will be empty, and cannot be referenced from other parts of
 	// the query.
-	alias  sqlparser.ColIdent
+	alias  sqlparser.IdentifierCI
 	column *column
 }
 
@@ -592,12 +610,12 @@ func GetReturnType(input sqlparser.Expr) (querypb.Type, error) {
 					return GetReturnType(expr.Expr)
 				}
 			}
-		case "COUNT":
-			return querypb.Type_INT64, nil
 		}
 	case *sqlparser.ColName:
 		col := node.Metadata.(*column)
 		return col.typ, nil
+	case *sqlparser.Count, *sqlparser.CountStar:
+		return querypb.Type_INT64, nil
 	}
 	return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot evaluate return type for %T", input)
 }

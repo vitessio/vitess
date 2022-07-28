@@ -20,18 +20,19 @@ import (
 	"fmt"
 
 	"vitess.io/vitess/go/vt/orchestrator/db"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/promotionrule"
 )
 
 // CandidateDatabaseInstance contains information about explicit promotion rules for an instance
 type CandidateDatabaseInstance struct {
 	Hostname            string
 	Port                int
-	PromotionRule       CandidatePromotionRule
+	PromotionRule       promotionrule.CandidatePromotionRule
 	LastSuggestedString string
 	PromotionRuleExpiry string // generated when retrieved from database for consistency reasons
 }
 
-func NewCandidateDatabaseInstance(instanceKey *InstanceKey, promotionRule CandidatePromotionRule) *CandidateDatabaseInstance {
+func NewCandidateDatabaseInstance(instanceKey *InstanceKey, promotionRule promotionrule.CandidatePromotionRule) *CandidateDatabaseInstance {
 	return &CandidateDatabaseInstance{
 		Hostname:      instanceKey.Hostname,
 		Port:          instanceKey.Port,

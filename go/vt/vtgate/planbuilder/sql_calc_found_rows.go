@@ -28,10 +28,12 @@ var _ logicalPlan = (*sqlCalcFoundRows)(nil)
 
 type sqlCalcFoundRows struct {
 	LimitQuery, CountQuery logicalPlan
-	ljt, cjt               *jointab
+
+	// only used by WireUp for V3
+	ljt, cjt *jointab
 }
 
-//Wireup implements the logicalPlan interface
+// Wireup implements the logicalPlan interface
 func (s *sqlCalcFoundRows) Wireup(logicalPlan, *jointab) error {
 	err := s.LimitQuery.Wireup(s.LimitQuery, s.ljt)
 	if err != nil {
@@ -40,7 +42,7 @@ func (s *sqlCalcFoundRows) Wireup(logicalPlan, *jointab) error {
 	return s.CountQuery.Wireup(s.CountQuery, s.cjt)
 }
 
-//Wireup2 implements the logicalPlan interface
+// WireupGen4 implements the logicalPlan interface
 func (s *sqlCalcFoundRows) WireupGen4(semTable *semantics.SemTable) error {
 	err := s.LimitQuery.WireupGen4(semTable)
 	if err != nil {
@@ -49,48 +51,54 @@ func (s *sqlCalcFoundRows) WireupGen4(semTable *semantics.SemTable) error {
 	return s.CountQuery.WireupGen4(semTable)
 }
 
-// Solves implements the logicalPlan interface
+// ContainsTables implements the logicalPlan interface
 func (s *sqlCalcFoundRows) ContainsTables() semantics.TableSet {
 	return s.LimitQuery.ContainsTables()
 }
 
 //Primitive implements the logicalPlan interface
 func (s *sqlCalcFoundRows) Primitive() engine.Primitive {
+	countPrim := s.CountQuery.Primitive()
+	rb, ok := countPrim.(*engine.Route)
+	if ok {
+		// if our count query is an aggregation, we want the no-match result to still return a zero
+		rb.NoRoutesSpecialHandling = true
+	}
 	return engine.SQLCalcFoundRows{
 		LimitPrimitive: s.LimitQuery.Primitive(),
-		CountPrimitive: s.CountQuery.Primitive(),
+		CountPrimitive: countPrim,
 	}
 }
 
 // All the methods below are not implemented. They should not be called on a sqlCalcFoundRows plan
 
-//Order implements the logicalPlan interface
+// Order implements the logicalPlan interface
 func (s *sqlCalcFoundRows) Order() int {
 	return s.LimitQuery.Order()
 }
 
-//ResultColumns implements the logicalPlan interface
+// ResultColumns implements the logicalPlan interface
 func (s *sqlCalcFoundRows) ResultColumns() []*resultColumn {
 	return s.LimitQuery.ResultColumns()
 }
 
-//Reorder implements the logicalPlan interface
+// Reorder implements the logicalPlan interface
 func (s *sqlCalcFoundRows) Reorder(order int) {
 	s.LimitQuery.Reorder(order)
 }
 
-//SupplyVar implements the logicalPlan interface
+// SupplyVar implements the logicalPlan interface
 func (s *sqlCalcFoundRows) SupplyVar(from, to int, col *sqlparser.ColName, varname string) {
 	s.LimitQuery.SupplyVar(from, to, col, varname)
 }
 
-//SupplyCol implements the logicalPlan interface
+// SupplyCol implements the logicalPlan interface
 func (s *sqlCalcFoundRows) SupplyCol(col *sqlparser.ColName) (*resultColumn, int) {
 	return s.LimitQuery.SupplyCol(col)
 }
 
-//SupplyWeightString implements the logicalPlan interface
-func (s *sqlCalcFoundRows) SupplyWeightString(int) (weightcolNumber int, err error) {
+// SupplyWeightString implements the logicalPlan interface
+func (s *sqlCalcFoundRows) SupplyWeightString(int, bool) (weightcolNumber int, err error) {
 	return 0, UnsupportedSupplyWeightString{Type: "sqlCalcFoundRows"}
 }
 
@@ -107,4 +115,9 @@ func (s *sqlCalcFoundRows) Rewrite(inputs ...logicalPlan) error {
 // Inputs implements the logicalPlan interface
 func (s *sqlCalcFoundRows) Inputs() []logicalPlan {
 	return []logicalPlan{s.LimitQuery, s.CountQuery}
+}
+
+// OutputColumns implements the logicalPlan interface
+func (s *sqlCalcFoundRows) OutputColumns() []sqlparser.SelectExpr {
+	return s.LimitQuery.OutputColumns()
 }

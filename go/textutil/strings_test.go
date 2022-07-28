@@ -44,3 +44,67 @@ func TestSplitDelimitedList(t *testing.T) {
 		assert.Equal(t, tc.list, list)
 	}
 }
+
+func TestEscapeJoin(t *testing.T) {
+	elems := []string{"normal", "with space", "with,comma", "with?question"}
+	s := EscapeJoin(elems, ",")
+	assert.Equal(t, "normal,with+space,with%2Ccomma,with%3Fquestion", s)
+}
+
+func TestSplitUnescape(t *testing.T) {
+	{
+		s := ""
+		elems, err := SplitUnescape(s, ",")
+		assert.NoError(t, err)
+		assert.Nil(t, elems)
+	}
+	{
+		s := "normal,with+space,with%2Ccomma,with%3Fquestion"
+		expected := []string{"normal", "with space", "with,comma", "with?question"}
+		elems, err := SplitUnescape(s, ",")
+		assert.NoError(t, err)
+		assert.Equal(t, expected, elems)
+	}
+}
+
+func TestSingleWordCamel(t *testing.T) {
+	tt := []struct {
+		word   string
+		expect string
+	}{
+		{
+			word:   "",
+			expect: "",
+		},
+		{
+			word:   "_",
+			expect: "_",
+		},
+		{
+			word:   "a",
+			expect: "A",
+		},
+		{
+			word:   "A",
+			expect: "A",
+		},
+		{
+			word:   "_A",
+			expect: "_a",
+		},
+		{
+			word:   "mysql",
+			expect: "Mysql",
+		},
+		{
+			word:   "mySQL",
+			expect: "Mysql",
+		},
+	}
+	for _, tc := range tt {
+		t.Run(tc.word, func(t *testing.T) {
+			camel := SingleWordCamel(tc.word)
+			assert.Equal(t, tc.expect, camel)
+		})
+	}
+}

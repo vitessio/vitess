@@ -21,7 +21,7 @@ import (
 )
 
 func BenchmarkGet(b *testing.B) {
-	cache := NewLRUCache(64*1024*1024, func(val interface{}) int64 {
+	cache := NewLRUCache(64*1024*1024, func(val any) int64 {
 		return int64(cap(val.([]byte)))
 	})
 	value := make([]byte, 1000)

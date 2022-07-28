@@ -17,7 +17,9 @@ limitations under the License.
 package planbuilder
 
 import (
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -29,31 +31,26 @@ var _ logicalPlan = (*joinGen4)(nil)
 type joinGen4 struct {
 	// Left and Right are the nodes for the join.
 	Left, Right logicalPlan
-	Cols        []int
-	Vars        map[string]int
+
+	// The Opcode tells us if this is an inner or outer join
+	Opcode engine.JoinOpcode
+
+	// These are the columns that will be produced by this plan.
+	// Negative offsets come from the LHS, and positive from the RHS
+	Cols []int
+
+	// Vars are the columns that will be sent from the LHS to the RHS
+	// the number is the offset on the LHS result, and the string is the bind variable name used in the RHS
+	Vars map[string]int
+
+	// LHSColumns are the columns from the LHS used for the join.
+	// These are the same columns pushed on the LHS that are now used in the Vars field
+	LHSColumns []*sqlparser.ColName
+
+	gen4Plan
 }
 
-// Order implements the logicalPlan interface
-func (j *joinGen4) Order() int {
-	panic("implement me")
-}
-
-// ResultColumns implements the logicalPlan interface
-func (j *joinGen4) ResultColumns() []*resultColumn {
-	panic("implement me")
-}
-
-// Reorder implements the logicalPlan interface
-func (j *joinGen4) Reorder(i int) {
-	panic("implement me")
-}
-
-// Wireup implements the logicalPlan interface
-func (j *joinGen4) Wireup(lp logicalPlan, jt *jointab) error {
-	panic("implement me")
-}
-
-// Wireup2 implements the logicalPlan interface
+// WireupGen4 implements the logicalPlan interface
 func (j *joinGen4) WireupGen4(semTable *semantics.SemTable) error {
 	err := j.Left.WireupGen4(semTable)
 	if err != nil {
@@ -62,42 +59,38 @@ func (j *joinGen4) WireupGen4(semTable *semantics.SemTable) error {
 	return j.Right.WireupGen4(semTable)
 }
 
-// SupplyVar implements the logicalPlan interface
-func (j *joinGen4) SupplyVar(from, to int, col *sqlparser.ColName, varname string) {
-	panic("implement me")
-}
-
-// SupplyCol implements the logicalPlan interface
-func (j *joinGen4) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber int) {
-	panic("implement me")
-}
-
-// SupplyWeightString implements the logicalPlan interface
-func (j *joinGen4) SupplyWeightString(colNumber int) (weightcolNumber int, err error) {
-	panic("implement me")
-}
-
 // Primitive implements the logicalPlan interface
 func (j *joinGen4) Primitive() engine.Primitive {
 	return &engine.Join{
-		Left:  j.Left.Primitive(),
-		Right: j.Right.Primitive(),
-		Cols:  j.Cols,
-		Vars:  j.Vars,
+		Left:   j.Left.Primitive(),
+		Right:  j.Right.Primitive(),
+		Cols:   j.Cols,
+		Vars:   j.Vars,
+		Opcode: j.Opcode,
 	}
 }
 
 // Inputs implements the logicalPlan interface
 func (j *joinGen4) Inputs() []logicalPlan {
-	panic("implement me")
+	return []logicalPlan{j.Left, j.Right}
 }
 
 // Rewrite implements the logicalPlan interface
 func (j *joinGen4) Rewrite(inputs ...logicalPlan) error {
-	panic("implement me")
+	if len(inputs) != 2 {
+		return vterrors.New(vtrpcpb.Code_INTERNAL, "wrong number of children")
+	}
+	j.Left = inputs[0]
+	j.Right = inputs[1]
+	return nil
 }
 
-// Solves implements the logicalPlan interface
+// ContainsTables implements the logicalPlan interface
 func (j *joinGen4) ContainsTables() semantics.TableSet {
 	return j.Left.ContainsTables().Merge(j.Right.ContainsTables())
+}
+
+// OutputColumns implements the logicalPlan interface
+func (j *joinGen4) OutputColumns() []sqlparser.SelectExpr {
+	return getOutputColumnsFromJoin(j.Cols, j.Left.OutputColumns(), j.Right.OutputColumns())
 }

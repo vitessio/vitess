@@ -26,6 +26,9 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/sqlescape"
+	"vitess.io/vitess/go/vt/discovery"
+
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"
@@ -34,7 +37,6 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -46,13 +48,15 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 const (
-	frozenStr      = "FROZEN"
 	errorNoStreams = "no streams found in keyspace %s for: %s"
 	// use pt-osc's naming convention, this format also ensures vstreamer ignores such tables
 	renameTableTemplate = "_%.59s_old" // limit table name to 64 characters
+
+	sqlDeleteWorkflow = "delete from _vt.vreplication where db_name = %s and workflow = %s"
 )
 
 // accessType specifies the type of access for a shard (allow/disallow writes).
@@ -61,6 +65,21 @@ type accessType int
 const (
 	allowWrites = accessType(iota)
 	disallowWrites
+
+	// number of LOCK TABLES cycles to perform on the sources during SwitchWrites
+	lockTablesCycles = 2
+	// time to wait between LOCK TABLES cycles on the sources during SwitchWrites
+	lockTablesCycleDelay = time.Duration(100 * time.Millisecond)
+
+	// How long to wait when refreshing the state of each tablet in a shard. Note that these
+	// are refreshed in parallel, non-topo errors are ignored (in the error handling) and we
+	// may only do a partial refresh. Because in some cases it's unsafe to switch the traffic
+	// if some tablets do not refresh, we may need to look for partial results and produce
+	// an error (with the provided details of WHY) if we see them.
+	// Side note: the default lock/lease TTL in etcd is 60s so the default tablet refresh
+	// timeout of 60s can cause us to lose our keyspace lock before completing the
+	// operation too.
+	shardTabletRefreshTimeout = time.Duration(30 * time.Second)
 )
 
 // trafficSwitcher contains the metadata for switching read and write traffic
@@ -71,19 +90,22 @@ type trafficSwitcher struct {
 	workflow      string
 
 	// if frozen is true, the rest of the fields are not set.
-	frozen          bool
-	reverseWorkflow string
-	id              int64
-	sources         map[string]*workflow.MigrationSource
-	targets         map[string]*workflow.MigrationTarget
-	sourceKeyspace  string
-	targetKeyspace  string
-	tables          []string
-	sourceKSSchema  *vindexes.KeyspaceSchema
-	optCells        string //cells option passed to MoveTables/Reshard
-	optTabletTypes  string //tabletTypes option passed to MoveTables/Reshard
-	externalCluster string
-	externalTopo    *topo.Server
+	frozen           bool
+	reverseWorkflow  string
+	id               int64
+	sources          map[string]*workflow.MigrationSource
+	targets          map[string]*workflow.MigrationTarget
+	sourceKeyspace   string
+	targetKeyspace   string
+	tables           []string
+	keepRoutingRules bool
+	sourceKSSchema   *vindexes.KeyspaceSchema
+	optCells         string //cells option passed to MoveTables/Reshard
+	optTabletTypes   string //tabletTypes option passed to MoveTables/Reshard
+	externalCluster  string
+	externalTopo     *topo.Server
+	sourceTimeZone   string
+	targetTimeZone   string
 }
 
 /*
@@ -104,48 +126,73 @@ func (ts *trafficSwitcher) VReplicationExec(ctx context.Context, alias *topodata
 	return ts.wr.VReplicationExec(ctx, alias, query)
 }
 
+func (ts *trafficSwitcher) ExternalTopo() *topo.Server                     { return ts.externalTopo }
 func (ts *trafficSwitcher) MigrationType() binlogdatapb.MigrationType      { return ts.migrationType }
 func (ts *trafficSwitcher) ReverseWorkflowName() string                    { return ts.reverseWorkflow }
 func (ts *trafficSwitcher) SourceKeyspaceName() string                     { return ts.sourceKSSchema.Keyspace.Name }
 func (ts *trafficSwitcher) SourceKeyspaceSchema() *vindexes.KeyspaceSchema { return ts.sourceKSSchema }
+func (ts *trafficSwitcher) Sources() map[string]*workflow.MigrationSource  { return ts.sources }
+func (ts *trafficSwitcher) Tables() []string                               { return ts.tables }
+func (ts *trafficSwitcher) TargetKeyspaceName() string                     { return ts.targetKeyspace }
+func (ts *trafficSwitcher) Targets() map[string]*workflow.MigrationTarget  { return ts.targets }
 func (ts *trafficSwitcher) WorkflowName() string                           { return ts.workflow }
+func (ts *trafficSwitcher) SourceTimeZone() string                         { return ts.sourceTimeZone }
+func (ts *trafficSwitcher) TargetTimeZone() string                         { return ts.targetTimeZone }
 
 func (ts *trafficSwitcher) ForAllSources(f func(source *workflow.MigrationSource) error) error {
-	return ts.forAllSources(f)
+	var wg sync.WaitGroup
+	allErrors := &concurrency.AllErrorRecorder{}
+	for _, source := range ts.sources {
+		wg.Add(1)
+		go func(source *workflow.MigrationSource) {
+			defer wg.Done()
+
+			if err := f(source); err != nil {
+				allErrors.RecordError(err)
+			}
+		}(source)
+	}
+	wg.Wait()
+	return allErrors.AggrError(vterrors.Aggregate)
 }
+
 func (ts *trafficSwitcher) ForAllTargets(f func(source *workflow.MigrationTarget) error) error {
-	return ts.forAllTargets(f)
+	var wg sync.WaitGroup
+	allErrors := &concurrency.AllErrorRecorder{}
+	for _, target := range ts.targets {
+		wg.Add(1)
+		go func(target *workflow.MigrationTarget) {
+			defer wg.Done()
+
+			if err := f(target); err != nil {
+				allErrors.RecordError(err)
+			}
+		}(target)
+	}
+	wg.Wait()
+	return allErrors.AggrError(vterrors.Aggregate)
+}
+
+func (ts *trafficSwitcher) ForAllUIDs(f func(target *workflow.MigrationTarget, uid uint32) error) error {
+	var wg sync.WaitGroup
+	allErrors := &concurrency.AllErrorRecorder{}
+	for _, target := range ts.Targets() {
+		for uid := range target.Sources {
+			wg.Add(1)
+			go func(target *workflow.MigrationTarget, uid uint32) {
+				defer wg.Done()
+
+				if err := f(target, uid); err != nil {
+					allErrors.RecordError(err)
+				}
+			}(target, uid)
+		}
+	}
+	wg.Wait()
+	return allErrors.AggrError(vterrors.Aggregate)
 }
 
 /* end: implementation of workflow.ITrafficSwitcher */
-
-// For a Reshard, to check whether we have switched reads for a tablet type, we check if any one of the source shards has
-// the query service disabled in its tablet control record
-func (wr *Wrangler) getCellsWithShardReadsSwitched(ctx context.Context, targetKeyspace string, si *topo.ShardInfo, tabletTypeStr string) (
-	cellsSwitched, cellsNotSwitched []string, err error) {
-
-	tabletType, err := topoproto.ParseTabletType(tabletTypeStr)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	s := workflow.NewServer(wr.ts, wr.tmc)
-	return s.GetCellsWithShardReadsSwitched(ctx, targetKeyspace, si, tabletType)
-}
-
-// For MoveTables,  to check whether we have switched reads for a tablet type, we check whether the routing rule
-// for the tablet_type is pointing to the target keyspace
-func (wr *Wrangler) getCellsWithTableReadsSwitched(ctx context.Context, targetKeyspace, table, tabletTypeStr string) (
-	cellsSwitched, cellsNotSwitched []string, err error) {
-
-	tabletType, err := topoproto.ParseTabletType(tabletTypeStr)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	s := workflow.NewServer(wr.ts, wr.tmc)
-	return s.GetCellsWithTableReadsSwitched(ctx, targetKeyspace, table, tabletType)
-}
 
 func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workflowName string) (*trafficSwitcher, *workflow.State, error) {
 	ts, err := wr.buildTrafficSwitcher(ctx, targetKeyspace, workflowName)
@@ -158,113 +205,85 @@ func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workfl
 		return nil, nil, err
 	}
 
-	ws := &workflow.State{Workflow: workflowName, TargetKeyspace: targetKeyspace}
-	ws.SourceKeyspace = ts.sourceKeyspace
-	var cellsSwitched, cellsNotSwitched []string
-	var keyspace string
-	var reverse bool
+	ws := workflow.NewServer(wr.ts, wr.tmc)
+	state := &workflow.State{
+		Workflow:       workflowName,
+		SourceKeyspace: ts.SourceKeyspaceName(),
+		TargetKeyspace: targetKeyspace,
+	}
+
+	var (
+		reverse  bool
+		keyspace string
+	)
 
 	// we reverse writes by using the source_keyspace.workflowname_reverse workflow spec, so we need to use the
 	// source of the reverse workflow, which is the target of the workflow initiated by the user for checking routing rules
 	// Similarly we use a target shard of the reverse workflow as the original source to check if writes have been switched
 	if strings.HasSuffix(workflowName, "_reverse") {
 		reverse = true
-		keyspace = ws.SourceKeyspace
+		keyspace = state.SourceKeyspace
 		workflowName = workflow.ReverseWorkflowName(workflowName)
 	} else {
 		keyspace = targetKeyspace
 	}
-	if ts.migrationType == binlogdatapb.MigrationType_TABLES {
-		ws.WorkflowType = workflow.TypeMoveTables
+	if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
+		state.WorkflowType = workflow.TypeMoveTables
 
 		// we assume a consistent state, so only choose routing rule for one table for replica/rdonly
-		if len(ts.tables) == 0 {
+		if len(ts.Tables()) == 0 {
 			return nil, nil, fmt.Errorf("no tables in workflow %s.%s", keyspace, workflowName)
 
 		}
-		table := ts.tables[0]
+		table := ts.Tables()[0]
 
-		cellsSwitched, cellsNotSwitched, err = wr.getCellsWithTableReadsSwitched(ctx, keyspace, table, "rdonly")
+		state.RdonlyCellsSwitched, state.RdonlyCellsNotSwitched, err = ws.GetCellsWithTableReadsSwitched(ctx, keyspace, table, topodatapb.TabletType_RDONLY)
 		if err != nil {
 			return nil, nil, err
 		}
-		ws.RdonlyCellsNotSwitched, ws.RdonlyCellsSwitched = cellsNotSwitched, cellsSwitched
-		cellsSwitched, cellsNotSwitched, err = wr.getCellsWithTableReadsSwitched(ctx, keyspace, table, "replica")
+
+		state.ReplicaCellsSwitched, state.ReplicaCellsNotSwitched, err = ws.GetCellsWithTableReadsSwitched(ctx, keyspace, table, topodatapb.TabletType_REPLICA)
 		if err != nil {
 			return nil, nil, err
 		}
-		ws.ReplicaCellsNotSwitched, ws.ReplicaCellsSwitched = cellsNotSwitched, cellsSwitched
-		rules, err := topotools.GetRoutingRules(ctx, ts.wr.ts)
+		rules, err := topotools.GetRoutingRules(ctx, ts.TopoServer())
 		if err != nil {
 			return nil, nil, err
 		}
-		for _, table := range ts.tables {
+		for _, table := range ts.Tables() {
 			rr := rules[table]
 			// if a rule exists for the table and points to the target keyspace, writes have been switched
 			if len(rr) > 0 && rr[0] == fmt.Sprintf("%s.%s", keyspace, table) {
-				ws.WritesSwitched = true
+				state.WritesSwitched = true
 			}
 		}
 	} else {
-		ws.WorkflowType = workflow.TypeReshard
+		state.WorkflowType = workflow.TypeReshard
 
 		// we assume a consistent state, so only choose one shard
 		var shard *topo.ShardInfo
 		if reverse {
-			shard = ts.targetShards()[0]
+			shard = ts.TargetShards()[0]
 		} else {
-			shard = ts.sourceShards()[0]
+			shard = ts.SourceShards()[0]
 		}
 
-		cellsSwitched, cellsNotSwitched, err = wr.getCellsWithShardReadsSwitched(ctx, keyspace, shard, "rdonly")
+		state.RdonlyCellsSwitched, state.RdonlyCellsNotSwitched, err = ws.GetCellsWithShardReadsSwitched(ctx, keyspace, shard, topodatapb.TabletType_RDONLY)
 		if err != nil {
 			return nil, nil, err
 		}
-		ws.RdonlyCellsNotSwitched, ws.RdonlyCellsSwitched = cellsNotSwitched, cellsSwitched
-		cellsSwitched, cellsNotSwitched, err = wr.getCellsWithShardReadsSwitched(ctx, keyspace, shard, "replica")
+
+		state.ReplicaCellsSwitched, state.ReplicaCellsNotSwitched, err = ws.GetCellsWithShardReadsSwitched(ctx, keyspace, shard, topodatapb.TabletType_REPLICA)
 		if err != nil {
 			return nil, nil, err
 		}
-		ws.ReplicaCellsNotSwitched, ws.ReplicaCellsSwitched = cellsNotSwitched, cellsSwitched
-		if !shard.IsMasterServing {
-			ws.WritesSwitched = true
+
+		if !shard.IsPrimaryServing {
+			state.WritesSwitched = true
 		}
 	}
 
-	return ts, ws, nil
-}
-
-func (wr *Wrangler) doCellsHaveRdonlyTablets(ctx context.Context, cells []string) (bool, error) {
-	areAnyRdonly := func(tablets []*topo.TabletInfo) bool {
-		for _, tablet := range tablets {
-			if tablet.Type == topodatapb.TabletType_RDONLY {
-				return true
-			}
-		}
-		return false
-	}
-
-	if len(cells) == 0 {
-		tablets, err := topotools.GetAllTabletsAcrossCells(ctx, wr.ts)
-		if err != nil {
-			return false, err
-		}
-		if areAnyRdonly(tablets) {
-			return true, nil
-		}
-
-	} else {
-		for _, cell := range cells {
-			tablets, err := topotools.GetAllTablets(ctx, wr.ts, cell)
-			if err != nil {
-				return false, err
-			}
-			if areAnyRdonly(tablets) {
-				return true, nil
-			}
-		}
-	}
-	return false, nil
+	return ts, state, nil
 }
 
 // SwitchReads is a generic way of switching read traffic for a resharding workflow.
@@ -306,7 +325,7 @@ func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflowNam
 	// incorrectly report that not all reads have been switched. User currently is forced to switch non-existent rdonly tablets
 	if switchReplicas && !switchRdonly {
 		var err error
-		rdonlyTabletsExist, err := wr.doCellsHaveRdonlyTablets(ctx, cells)
+		rdonlyTabletsExist, err := topotools.DoCellsHaveRdonlyTablets(ctx, wr.ts, cells)
 		if err != nil {
 			return nil, err
 		}
@@ -332,28 +351,28 @@ func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflowNam
 	}
 
 	if err := ts.validate(ctx); err != nil {
-		ts.wr.Logger().Errorf("validate failed: %v", err)
+		ts.Logger().Errorf("validate failed: %v", err)
 		return nil, err
 	}
 
 	// For reads, locking the source keyspace is sufficient.
-	ctx, unlock, lockErr := sw.lockKeyspace(ctx, ts.sourceKeyspace, "SwitchReads")
+	ctx, unlock, lockErr := sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "SwitchReads")
 	if lockErr != nil {
-		ts.wr.Logger().Errorf("LockKeyspace failed: %v", lockErr)
+		ts.Logger().Errorf("LockKeyspace failed: %v", lockErr)
 		return nil, lockErr
 	}
 	defer unlock(&err)
 
-	if ts.migrationType == binlogdatapb.MigrationType_TABLES {
+	if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
 		if err := sw.switchTableReads(ctx, cells, servedTypes, direction); err != nil {
-			ts.wr.Logger().Errorf("switchTableReads failed: %v", err)
+			ts.Logger().Errorf("switchTableReads failed: %v", err)
 			return nil, err
 		}
 		return sw.logs(), nil
 	}
 	wr.Logger().Infof("About to switchShardReads: %+v, %+v, %+v", cells, servedTypes, direction)
 	if err := ts.switchShardReads(ctx, cells, servedTypes, direction); err != nil {
-		ts.wr.Logger().Errorf("switchShardReads failed: %v", err)
+		ts.Logger().Errorf("switchShardReads failed: %v", err)
 		return nil, err
 	}
 
@@ -367,8 +386,52 @@ func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflowNam
 	return sw.logs(), nil
 }
 
+func (wr *Wrangler) areTabletsAvailableToStreamFrom(ctx context.Context, ts *trafficSwitcher, keyspace string, shards []*topo.ShardInfo) error {
+	var cells []string
+	tabletTypes := ts.optTabletTypes
+	if ts.optCells != "" {
+		cells = strings.Split(ts.optCells, ",")
+	}
+	// FIXME: currently there is a default setting in the tablet that is used if user does not specify a tablet type,
+	// we use the value specified in the tablet flag `-vreplication_tablet_type`
+	// but ideally we should populate the vreplication table with a default value when we setup the workflow
+	if tabletTypes == "" {
+		tabletTypes = "PRIMARY,REPLICA"
+	}
+
+	var wg sync.WaitGroup
+	allErrors := &concurrency.AllErrorRecorder{}
+	for _, shard := range shards {
+		wg.Add(1)
+		go func(cells []string, keyspace string, shard *topo.ShardInfo) {
+			defer wg.Done()
+			if cells == nil {
+				cells = append(cells, shard.PrimaryAlias.Cell)
+			}
+			tp, err := discovery.NewTabletPicker(wr.ts, cells, keyspace, shard.ShardName(), tabletTypes)
+			if err != nil {
+				allErrors.RecordError(err)
+				return
+			}
+			tablets := tp.GetMatchingTablets(ctx)
+			if len(tablets) == 0 {
+				allErrors.RecordError(fmt.Errorf("no tablet found to source data in keyspace %s, shard %s", keyspace, shard.ShardName()))
+				return
+			}
+		}(cells, keyspace, shard)
+	}
+
+	wg.Wait()
+	if allErrors.HasErrors() {
+		log.Errorf("%s", allErrors.Error())
+		return allErrors.Error()
+	}
+	return nil
+}
+
 // SwitchWrites is a generic way of migrating write traffic for a resharding workflow.
-func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflowName string, timeout time.Duration, cancel, reverse, reverseReplication bool, dryRun bool) (journalID int64, dryRunResults *[]string, err error) {
+func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflowName string, timeout time.Duration,
+	cancel, reverse, reverseReplication bool, dryRun bool) (journalID int64, dryRunResults *[]string, err error) {
 	ts, ws, err := wr.getWorkflowState(ctx, targetKeyspace, workflowName)
 	_ = ws
 	if err != nil {
@@ -389,28 +452,35 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflowNa
 	}
 
 	if ts.frozen {
-		ts.wr.Logger().Warningf("Writes have already been switched for workflow %s, nothing to do here", ts.workflow)
+		ts.Logger().Warningf("Writes have already been switched for workflow %s, nothing to do here", ts.WorkflowName())
 		return 0, sw.logs(), nil
 	}
 
-	ts.wr.Logger().Infof("Built switching metadata: %+v", ts)
+	ts.Logger().Infof("Built switching metadata: %+v", ts)
 	if err := ts.validate(ctx); err != nil {
-		ts.wr.Logger().Errorf("validate failed: %v", err)
+		ts.Logger().Errorf("validate failed: %v", err)
 		return 0, nil, err
 	}
 
+	if reverseReplication {
+		err := wr.areTabletsAvailableToStreamFrom(ctx, ts, ts.TargetKeyspaceName(), ts.TargetShards())
+		if err != nil {
+			return 0, nil, err
+		}
+	}
+
 	// Need to lock both source and target keyspaces.
-	tctx, sourceUnlock, lockErr := sw.lockKeyspace(ctx, ts.sourceKeyspace, "SwitchWrites")
+	tctx, sourceUnlock, lockErr := sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "SwitchWrites")
 	if lockErr != nil {
-		ts.wr.Logger().Errorf("LockKeyspace failed: %v", lockErr)
+		ts.Logger().Errorf("LockKeyspace failed: %v", lockErr)
 		return 0, nil, lockErr
 	}
 	ctx = tctx
 	defer sourceUnlock(&err)
-	if ts.targetKeyspace != ts.sourceKeyspace {
-		tctx, targetUnlock, lockErr := sw.lockKeyspace(ctx, ts.targetKeyspace, "SwitchWrites")
+	if ts.TargetKeyspaceName() != ts.SourceKeyspaceName() {
+		tctx, targetUnlock, lockErr := sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "SwitchWrites")
 		if lockErr != nil {
-			ts.wr.Logger().Errorf("LockKeyspace failed: %v", lockErr)
+			ts.Logger().Errorf("LockKeyspace failed: %v", lockErr)
 			return 0, nil, lockErr
 		}
 		ctx = tctx
@@ -420,69 +490,87 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflowNa
 	// If no journals exist, sourceWorkflows will be initialized by sm.MigrateStreams.
 	journalsExist, sourceWorkflows, err := ts.checkJournals(ctx)
 	if err != nil {
-		ts.wr.Logger().Errorf("checkJournals failed: %v", err)
+		ts.Logger().Errorf("checkJournals failed: %v", err)
 		return 0, nil, err
 	}
 	if !journalsExist {
-		ts.wr.Logger().Infof("No previous journals were found. Proceeding normally.")
+		ts.Logger().Infof("No previous journals were found. Proceeding normally.")
 		sm, err := workflow.BuildStreamMigrator(ctx, ts, cancel)
 		if err != nil {
-			ts.wr.Logger().Errorf("buildStreamMigrater failed: %v", err)
+			ts.Logger().Errorf("buildStreamMigrater failed: %v", err)
 			return 0, nil, err
 		}
 		if cancel {
 			sw.cancelMigration(ctx, sm)
 			return 0, sw.logs(), nil
 		}
-		ts.wr.Logger().Infof("Stopping streams")
+
+		ts.Logger().Infof("Stopping streams")
 		sourceWorkflows, err = sw.stopStreams(ctx, sm)
 		if err != nil {
-			ts.wr.Logger().Errorf("stopStreams failed: %v", err)
+			ts.Logger().Errorf("stopStreams failed: %v", err)
 			for key, streams := range sm.Streams() {
 				for _, stream := range streams {
-					ts.wr.Logger().Errorf("stream in stopStreams: key %s shard %s stream %+v", key, stream.BinlogSource.Shard, stream.BinlogSource)
+					ts.Logger().Errorf("stream in stopStreams: key %s shard %s stream %+v", key, stream.BinlogSource.Shard, stream.BinlogSource)
 				}
 			}
 			sw.cancelMigration(ctx, sm)
 			return 0, nil, err
 		}
-		ts.wr.Logger().Infof("Stopping source writes")
+
+		ts.Logger().Infof("Stopping source writes")
 		if err := sw.stopSourceWrites(ctx); err != nil {
-			ts.wr.Logger().Errorf("stopSourceWrites failed: %v", err)
+			ts.Logger().Errorf("stopSourceWrites failed: %v", err)
 			sw.cancelMigration(ctx, sm)
 			return 0, nil, err
 		}
 
-		ts.wr.Logger().Infof("Waiting for streams to catchup")
+		if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
+			ts.Logger().Infof("Executing LOCK TABLES on source tables %d times", lockTablesCycles)
+			// Doing this twice with a pause in-between to catch any writes that may have raced in between
+			// the tablet's deny list check and the first mysqld side table lock.
+			for cnt := 1; cnt <= lockTablesCycles; cnt++ {
+				if err := ts.executeLockTablesOnSource(ctx); err != nil {
+					ts.Logger().Errorf("Failed to execute LOCK TABLES (attempt %d of %d) on sources: %v", cnt, lockTablesCycles, err)
+					sw.cancelMigration(ctx, sm)
+					return 0, nil, err
+				}
+				// No need to UNLOCK the tables as the connection was closed once the locks were acquired
+				// and thus the locks released.
+				time.Sleep(lockTablesCycleDelay)
+			}
+		}
+
+		ts.Logger().Infof("Waiting for streams to catchup")
 		if err := sw.waitForCatchup(ctx, timeout); err != nil {
-			ts.wr.Logger().Errorf("waitForCatchup failed: %v", err)
+			ts.Logger().Errorf("waitForCatchup failed: %v", err)
 			sw.cancelMigration(ctx, sm)
 			return 0, nil, err
 		}
 
-		ts.wr.Logger().Infof("Migrating streams")
+		ts.Logger().Infof("Migrating streams")
 		if err := sw.migrateStreams(ctx, sm); err != nil {
-			ts.wr.Logger().Errorf("migrateStreams failed: %v", err)
+			ts.Logger().Errorf("migrateStreams failed: %v", err)
 			sw.cancelMigration(ctx, sm)
 			return 0, nil, err
 		}
 
-		ts.wr.Logger().Infof("Creating reverse streams")
+		ts.Logger().Infof("Creating reverse streams")
 		if err := sw.createReverseVReplication(ctx); err != nil {
-			ts.wr.Logger().Errorf("createReverseVReplication failed: %v", err)
+			ts.Logger().Errorf("createReverseVReplication failed: %v", err)
 			sw.cancelMigration(ctx, sm)
 			return 0, nil, err
 		}
 	} else {
 		if cancel {
 			err := fmt.Errorf("traffic switching has reached the point of no return, cannot cancel")
-			ts.wr.Logger().Errorf("%v", err)
+			ts.Logger().Errorf("%v", err)
 			return 0, nil, err
 		}
-		ts.wr.Logger().Infof("Journals were found. Completing the left over steps.")
+		ts.Logger().Infof("Journals were found. Completing the left over steps.")
 		// Need to gather positions in case all journals were not created.
 		if err := ts.gatherPositions(ctx); err != nil {
-			ts.wr.Logger().Errorf("gatherPositions failed: %v", err)
+			ts.Logger().Errorf("gatherPositions failed: %v", err)
 			return 0, nil, err
 		}
 	}
@@ -490,43 +578,44 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflowNa
 	// This is the point of no return. Once a journal is created,
 	// traffic can be redirected to target shards.
 	if err := sw.createJournals(ctx, sourceWorkflows); err != nil {
-		ts.wr.Logger().Errorf("createJournals failed: %v", err)
+		ts.Logger().Errorf("createJournals failed: %v", err)
 		return 0, nil, err
 	}
 	if err := sw.allowTargetWrites(ctx); err != nil {
-		ts.wr.Logger().Errorf("allowTargetWrites failed: %v", err)
+		ts.Logger().Errorf("allowTargetWrites failed: %v", err)
 		return 0, nil, err
 	}
 	if err := sw.changeRouting(ctx); err != nil {
-		ts.wr.Logger().Errorf("changeRouting failed: %v", err)
+		ts.Logger().Errorf("changeRouting failed: %v", err)
 		return 0, nil, err
 	}
 	if err := sw.streamMigraterfinalize(ctx, ts, sourceWorkflows); err != nil {
-		ts.wr.Logger().Errorf("finalize failed: %v", err)
+		ts.Logger().Errorf("finalize failed: %v", err)
 		return 0, nil, err
 	}
 	if reverseReplication {
 		if err := sw.startReverseVReplication(ctx); err != nil {
-			ts.wr.Logger().Errorf("startReverseVReplication failed: %v", err)
+			ts.Logger().Errorf("startReverseVReplication failed: %v", err)
 			return 0, nil, err
 		}
 	}
 
 	if err := sw.freezeTargetVReplication(ctx); err != nil {
-		ts.wr.Logger().Errorf("deleteTargetVReplication failed: %v", err)
+		ts.Logger().Errorf("deleteTargetVReplication failed: %v", err)
 		return 0, nil, err
 	}
 
 	return ts.id, sw.logs(), nil
 }
 
-// DropTargets cleans up target tables, shards and blacklisted tables if a MoveTables/Reshard is cancelled
-func (wr *Wrangler) DropTargets(ctx context.Context, targetKeyspace, workflow string, keepData, dryRun bool) (*[]string, error) {
+// DropTargets cleans up target tables, shards and denied tables if a MoveTables/Reshard is cancelled
+func (wr *Wrangler) DropTargets(ctx context.Context, targetKeyspace, workflow string, keepData, keepRoutingRules, dryRun bool) (*[]string, error) {
 	ts, err := wr.buildTrafficSwitcher(ctx, targetKeyspace, workflow)
 	if err != nil {
 		wr.Logger().Errorf("buildTrafficSwitcher failed: %v", err)
 		return nil, err
 	}
+	ts.keepRoutingRules = keepRoutingRules
 	var sw iswitcher
 	if dryRun {
 		sw = &switcherDryRun{ts: ts, drLog: NewLogRecorder()}
@@ -534,30 +623,30 @@ func (wr *Wrangler) DropTargets(ctx context.Context, targetKeyspace, workflow st
 		sw = &switcher{ts: ts, wr: wr}
 	}
 	var tctx context.Context
-	tctx, sourceUnlock, lockErr := sw.lockKeyspace(ctx, ts.sourceKeyspace, "DropTargets")
+	tctx, sourceUnlock, lockErr := sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "DropTargets")
 	if lockErr != nil {
-		ts.wr.Logger().Errorf("Source LockKeyspace failed: %v", lockErr)
+		ts.Logger().Errorf("Source LockKeyspace failed: %v", lockErr)
 		return nil, lockErr
 	}
 	defer sourceUnlock(&err)
 	ctx = tctx
-	if ts.targetKeyspace != ts.sourceKeyspace {
-		tctx, targetUnlock, lockErr := sw.lockKeyspace(ctx, ts.targetKeyspace, "DropTargets")
+	if ts.TargetKeyspaceName() != ts.SourceKeyspaceName() {
+		tctx, targetUnlock, lockErr := sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "DropTargets")
 		if lockErr != nil {
-			ts.wr.Logger().Errorf("Target LockKeyspace failed: %v", lockErr)
+			ts.Logger().Errorf("Target LockKeyspace failed: %v", lockErr)
 			return nil, lockErr
 		}
 		defer targetUnlock(&err)
 		ctx = tctx
 	}
 	if !keepData {
-		switch ts.migrationType {
+		switch ts.MigrationType() {
 		case binlogdatapb.MigrationType_TABLES:
 			log.Infof("Deleting target tables")
 			if err := sw.removeTargetTables(ctx); err != nil {
 				return nil, err
 			}
-			if err := sw.dropSourceBlacklistedTables(ctx); err != nil {
+			if err := sw.dropSourceDeniedTables(ctx); err != nil {
 				return nil, err
 			}
 		case binlogdatapb.MigrationType_SHARDS:
@@ -567,24 +656,26 @@ func (wr *Wrangler) DropTargets(ctx context.Context, targetKeyspace, workflow st
 			}
 		}
 	}
-	if err := wr.dropArtifacts(ctx, sw); err != nil {
+	if err := wr.dropArtifacts(ctx, keepRoutingRules, sw); err != nil {
 		return nil, err
 	}
-	if err := ts.wr.ts.RebuildSrvVSchema(ctx, nil); err != nil {
+	if err := ts.TopoServer().RebuildSrvVSchema(ctx, nil); err != nil {
 		return nil, err
 	}
 	return sw.logs(), nil
 }
 
-func (wr *Wrangler) dropArtifacts(ctx context.Context, sw iswitcher) error {
+func (wr *Wrangler) dropArtifacts(ctx context.Context, keepRoutingRules bool, sw iswitcher) error {
 	if err := sw.dropSourceReverseVReplicationStreams(ctx); err != nil {
 		return err
 	}
 	if err := sw.dropTargetVReplicationStreams(ctx); err != nil {
 		return err
 	}
-	if err := sw.deleteRoutingRules(ctx); err != nil {
-		return err
+	if !keepRoutingRules {
+		if err := sw.deleteRoutingRules(ctx); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -593,7 +684,7 @@ func (wr *Wrangler) dropArtifacts(ctx context.Context, sw iswitcher) error {
 // finalizeMigrateWorkflow deletes the streams for the Migrate workflow.
 // We only cleanup the target for external sources
 func (wr *Wrangler) finalizeMigrateWorkflow(ctx context.Context, targetKeyspace, workflow, tableSpecs string,
-	cancel, keepData, dryRun bool) (*[]string, error) {
+	cancel, keepData, keepRoutingRules, dryRun bool) (*[]string, error) {
 	ts, err := wr.buildTrafficSwitcher(ctx, targetKeyspace, workflow)
 	if err != nil {
 		wr.Logger().Errorf("buildTrafficSwitcher failed: %v", err)
@@ -606,9 +697,9 @@ func (wr *Wrangler) finalizeMigrateWorkflow(ctx context.Context, targetKeyspace,
 		sw = &switcher{ts: ts, wr: wr}
 	}
 	var tctx context.Context
-	tctx, targetUnlock, lockErr := sw.lockKeyspace(ctx, ts.targetKeyspace, "completeMigrateWorkflow")
+	tctx, targetUnlock, lockErr := sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "completeMigrateWorkflow")
 	if lockErr != nil {
-		ts.wr.Logger().Errorf("Target LockKeyspace failed: %v", lockErr)
+		ts.Logger().Errorf("Target LockKeyspace failed: %v", lockErr)
 		return nil, lockErr
 	}
 	defer targetUnlock(&err)
@@ -618,7 +709,7 @@ func (wr *Wrangler) finalizeMigrateWorkflow(ctx context.Context, targetKeyspace,
 	}
 	if !cancel {
 		sw.addParticipatingTablesToKeyspace(ctx, targetKeyspace, tableSpecs)
-		if err := ts.wr.ts.RebuildSrvVSchema(ctx, nil); err != nil {
+		if err := ts.TopoServer().RebuildSrvVSchema(ctx, nil); err != nil {
 			return nil, err
 		}
 	}
@@ -631,8 +722,8 @@ func (wr *Wrangler) finalizeMigrateWorkflow(ctx context.Context, targetKeyspace,
 	return sw.logs(), nil
 }
 
-// DropSources cleans up source tables, shards and blacklisted tables after a MoveTables/Reshard is completed
-func (wr *Wrangler) DropSources(ctx context.Context, targetKeyspace, workflowName string, removalType workflow.TableRemovalType, keepData, force, dryRun bool) (*[]string, error) {
+// DropSources cleans up source tables, shards and denied tables after a MoveTables/Reshard is completed
+func (wr *Wrangler) DropSources(ctx context.Context, targetKeyspace, workflowName string, removalType workflow.TableRemovalType, keepData, keepRoutingRules, force, dryRun bool) (*[]string, error) {
 	ts, err := wr.buildTrafficSwitcher(ctx, targetKeyspace, workflowName)
 	if err != nil {
 		wr.Logger().Errorf("buildTrafficSwitcher failed: %v", err)
@@ -645,17 +736,17 @@ func (wr *Wrangler) DropSources(ctx context.Context, targetKeyspace, workflowNam
 		sw = &switcher{ts: ts, wr: wr}
 	}
 	var tctx context.Context
-	tctx, sourceUnlock, lockErr := sw.lockKeyspace(ctx, ts.sourceKeyspace, "DropSources")
+	tctx, sourceUnlock, lockErr := sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "DropSources")
 	if lockErr != nil {
-		ts.wr.Logger().Errorf("Source LockKeyspace failed: %v", lockErr)
+		ts.Logger().Errorf("Source LockKeyspace failed: %v", lockErr)
 		return nil, lockErr
 	}
 	defer sourceUnlock(&err)
 	ctx = tctx
-	if ts.targetKeyspace != ts.sourceKeyspace {
-		tctx, targetUnlock, lockErr := sw.lockKeyspace(ctx, ts.targetKeyspace, "DropSources")
+	if ts.TargetKeyspaceName() != ts.SourceKeyspaceName() {
+		tctx, targetUnlock, lockErr := sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "DropSources")
 		if lockErr != nil {
-			ts.wr.Logger().Errorf("Target LockKeyspace failed: %v", lockErr)
+			ts.Logger().Errorf("Target LockKeyspace failed: %v", lockErr)
 			return nil, lockErr
 		}
 		defer targetUnlock(&err)
@@ -668,13 +759,13 @@ func (wr *Wrangler) DropSources(ctx context.Context, targetKeyspace, workflowNam
 		}
 	}
 	if !keepData {
-		switch ts.migrationType {
+		switch ts.MigrationType() {
 		case binlogdatapb.MigrationType_TABLES:
 			log.Infof("Deleting tables")
 			if err := sw.removeSourceTables(ctx, removalType); err != nil {
 				return nil, err
 			}
-			if err := sw.dropSourceBlacklistedTables(ctx); err != nil {
+			if err := sw.dropSourceDeniedTables(ctx); err != nil {
 				return nil, err
 			}
 
@@ -685,10 +776,10 @@ func (wr *Wrangler) DropSources(ctx context.Context, targetKeyspace, workflowNam
 			}
 		}
 	}
-	if err := wr.dropArtifacts(ctx, sw); err != nil {
+	if err := wr.dropArtifacts(ctx, keepRoutingRules, sw); err != nil {
 		return nil, err
 	}
-	if err := ts.wr.ts.RebuildSrvVSchema(ctx, nil); err != nil {
+	if err := ts.TopoServer().RebuildSrvVSchema(ctx, nil); err != nil {
 		return nil, err
 	}
 
@@ -723,6 +814,8 @@ func (wr *Wrangler) buildTrafficSwitcher(ctx context.Context, targetKeyspace, wo
 		for _, bls := range target.Sources {
 			if ts.sourceKeyspace == "" {
 				ts.sourceKeyspace = bls.Keyspace
+				ts.sourceTimeZone = bls.SourceTimeZone
+				ts.targetTimeZone = bls.TargetTimeZone
 				ts.externalCluster = bls.ExternalCluster
 				if ts.externalCluster != "" {
 					externalTopo, err := wr.ts.OpenExternalVitessClusterServer(ctx, ts.externalCluster)
@@ -759,7 +852,7 @@ func (wr *Wrangler) buildTrafficSwitcher(ctx context.Context, targetKeyspace, wo
 			if err != nil {
 				return nil, err
 			}
-			sourcePrimary, err := sourceTopo.GetTablet(ctx, sourcesi.MasterAlias)
+			sourcePrimary, err := sourceTopo.GetTablet(ctx, sourcesi.PrimaryAlias)
 			if err != nil {
 				return nil, err
 			}
@@ -792,16 +885,16 @@ func (wr *Wrangler) buildTrafficSwitcher(ctx context.Context, targetKeyspace, wo
 }
 
 func (ts *trafficSwitcher) validate(ctx context.Context) error {
-	if ts.migrationType == binlogdatapb.MigrationType_TABLES {
+	if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
 		sourceTopo := ts.wr.ts
 		if ts.externalTopo != nil {
 			sourceTopo = ts.externalTopo
 		}
 		// All shards must be present.
-		if err := ts.compareShards(ctx, ts.sourceKeyspace, ts.sourceShards(), sourceTopo); err != nil {
+		if err := workflow.CompareShards(ctx, ts.SourceKeyspaceName(), ts.SourceShards(), sourceTopo); err != nil {
 			return err
 		}
-		if err := ts.compareShards(ctx, ts.targetKeyspace, ts.targetShards(), ts.wr.ts); err != nil {
+		if err := workflow.CompareShards(ctx, ts.TargetKeyspaceName(), ts.TargetShards(), ts.wr.ts); err != nil {
 			return err
 		}
 		// Wildcard table names not allowed.
@@ -814,26 +907,9 @@ func (ts *trafficSwitcher) validate(ctx context.Context) error {
 	return nil
 }
 
-func (ts *trafficSwitcher) compareShards(ctx context.Context, keyspace string, sis []*topo.ShardInfo, topo *topo.Server) error {
-	var shards []string
-	for _, si := range sis {
-		shards = append(shards, si.ShardName())
-	}
-	topoShards, err := topo.GetShardNames(ctx, keyspace)
-	if err != nil {
-		return err
-	}
-	sort.Strings(topoShards)
-	sort.Strings(shards)
-	if !reflect.DeepEqual(topoShards, shards) {
-		return fmt.Errorf("mismatched shards for keyspace %s: topo: %v vs switch command: %v", keyspace, topoShards, shards)
-	}
-	return nil
-}
-
 func (ts *trafficSwitcher) switchTableReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, direction workflow.TrafficSwitchDirection) error {
 	log.Infof("switchTableReads: servedTypes: %+v, direction %t", servedTypes, direction)
-	rules, err := topotools.GetRoutingRules(ctx, ts.wr.ts)
+	rules, err := topotools.GetRoutingRules(ctx, ts.TopoServer())
 	if err != nil {
 		return err
 	}
@@ -844,56 +920,56 @@ func (ts *trafficSwitcher) switchTableReads(ctx context.Context, cells []string,
 	// For backward, we redirect to source
 	for _, servedType := range servedTypes {
 		tt := strings.ToLower(servedType.String())
-		for _, table := range ts.tables {
+		for _, table := range ts.Tables() {
 			if direction == workflow.DirectionForward {
 				log.Infof("Route direction forward")
-				toTarget := []string{ts.targetKeyspace + "." + table}
+				toTarget := []string{ts.TargetKeyspaceName() + "." + table}
 				rules[table+"@"+tt] = toTarget
-				rules[ts.targetKeyspace+"."+table+"@"+tt] = toTarget
-				rules[ts.sourceKeyspace+"."+table+"@"+tt] = toTarget
+				rules[ts.TargetKeyspaceName()+"."+table+"@"+tt] = toTarget
+				rules[ts.SourceKeyspaceName()+"."+table+"@"+tt] = toTarget
 			} else {
 				log.Infof("Route direction backwards")
-				toSource := []string{ts.sourceKeyspace + "." + table}
+				toSource := []string{ts.SourceKeyspaceName() + "." + table}
 				rules[table+"@"+tt] = toSource
-				rules[ts.targetKeyspace+"."+table+"@"+tt] = toSource
-				rules[ts.sourceKeyspace+"."+table+"@"+tt] = toSource
+				rules[ts.TargetKeyspaceName()+"."+table+"@"+tt] = toSource
+				rules[ts.SourceKeyspaceName()+"."+table+"@"+tt] = toSource
 			}
 		}
 	}
-	if err := topotools.SaveRoutingRules(ctx, ts.wr.ts, rules); err != nil {
+	if err := topotools.SaveRoutingRules(ctx, ts.TopoServer(), rules); err != nil {
 		return err
 	}
-	return ts.wr.ts.RebuildSrvVSchema(ctx, cells)
+	return ts.TopoServer().RebuildSrvVSchema(ctx, cells)
 }
 
 func (ts *trafficSwitcher) switchShardReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, direction workflow.TrafficSwitchDirection) error {
 	var fromShards, toShards []*topo.ShardInfo
 	if direction == workflow.DirectionForward {
-		fromShards, toShards = ts.sourceShards(), ts.targetShards()
+		fromShards, toShards = ts.SourceShards(), ts.TargetShards()
 	} else {
-		fromShards, toShards = ts.targetShards(), ts.sourceShards()
+		fromShards, toShards = ts.TargetShards(), ts.SourceShards()
 	}
-	if err := ts.wr.ts.ValidateSrvKeyspace(ctx, ts.targetKeyspace, strings.Join(cells, ",")); err != nil {
+	if err := ts.TopoServer().ValidateSrvKeyspace(ctx, ts.TargetKeyspaceName(), strings.Join(cells, ",")); err != nil {
 		err2 := vterrors.Wrapf(err, "Before switching shard reads, found SrvKeyspace for %s is corrupt in cell %s",
-			ts.targetKeyspace, strings.Join(cells, ","))
+			ts.TargetKeyspaceName(), strings.Join(cells, ","))
 		log.Errorf("%w", err2)
 		return err2
 	}
 	for _, servedType := range servedTypes {
-		if err := ts.wr.updateShardRecords(ctx, ts.sourceKeyspace, fromShards, cells, servedType, true /* isFrom */, false /* clearSourceShards */); err != nil {
+		if err := ts.wr.updateShardRecords(ctx, ts.SourceKeyspaceName(), fromShards, cells, servedType, true /* isFrom */, false /* clearSourceShards */); err != nil {
 			return err
 		}
-		if err := ts.wr.updateShardRecords(ctx, ts.sourceKeyspace, toShards, cells, servedType, false, false); err != nil {
+		if err := ts.wr.updateShardRecords(ctx, ts.SourceKeyspaceName(), toShards, cells, servedType, false, false); err != nil {
 			return err
 		}
-		err := ts.wr.ts.MigrateServedType(ctx, ts.sourceKeyspace, toShards, fromShards, servedType, cells)
+		err := ts.TopoServer().MigrateServedType(ctx, ts.SourceKeyspaceName(), toShards, fromShards, servedType, cells)
 		if err != nil {
 			return err
 		}
 	}
-	if err := ts.wr.ts.ValidateSrvKeyspace(ctx, ts.targetKeyspace, strings.Join(cells, ",")); err != nil {
+	if err := ts.TopoServer().ValidateSrvKeyspace(ctx, ts.TargetKeyspaceName(), strings.Join(cells, ",")); err != nil {
 		err2 := vterrors.Wrapf(err, "After switching shard reads, found SrvKeyspace for %s is corrupt in cell %s",
-			ts.targetKeyspace, strings.Join(cells, ","))
+			ts.TargetKeyspaceName(), strings.Join(cells, ","))
 		log.Errorf("%w", err2)
 		return err2
 	}
@@ -904,11 +980,11 @@ func (ts *trafficSwitcher) switchShardReads(ctx context.Context, cells []string,
 // If so, it also returns the list of sourceWorkflows that need to be switched.
 func (ts *trafficSwitcher) checkJournals(ctx context.Context) (journalsExist bool, sourceWorkflows []string, err error) {
 	var (
-		ws = workflow.NewServer(ts.wr.ts, ts.wr.tmc)
+		ws = workflow.NewServer(ts.TopoServer(), ts.TabletManagerClient())
 		mu sync.Mutex
 	)
 
-	err = ts.forAllSources(func(source *workflow.MigrationSource) error {
+	err = ts.ForAllSources(func(source *workflow.MigrationSource) error {
 		mu.Lock()
 		defer mu.Unlock()
 		journal, exists, err := ws.CheckReshardingJournalExistsOnTablet(ctx, source.GetPrimary().Tablet, ts.id)
@@ -929,20 +1005,20 @@ func (ts *trafficSwitcher) checkJournals(ctx context.Context) (journalsExist boo
 
 func (ts *trafficSwitcher) stopSourceWrites(ctx context.Context) error {
 	var err error
-	if ts.migrationType == binlogdatapb.MigrationType_TABLES {
+	if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
 		err = ts.changeTableSourceWrites(ctx, disallowWrites)
 	} else {
-		err = ts.changeShardsAccess(ctx, ts.sourceKeyspace, ts.sourceShards(), disallowWrites)
+		err = ts.changeShardsAccess(ctx, ts.SourceKeyspaceName(), ts.SourceShards(), disallowWrites)
 	}
 	if err != nil {
 		log.Warningf("Error: %s", err)
 		return err
 	}
-	return ts.forAllSources(func(source *workflow.MigrationSource) error {
+	return ts.ForAllSources(func(source *workflow.MigrationSource) error {
 		var err error
-		source.Position, err = ts.wr.tmc.MasterPosition(ctx, source.GetPrimary().Tablet)
+		source.Position, err = ts.TabletManagerClient().PrimaryPosition(ctx, source.GetPrimary().Tablet)
 		ts.wr.Logger().Infof("Stopped Source Writes. Position for source %v:%v: %v",
-			ts.sourceKeyspace, source.GetShard().ShardName(), source.Position)
+			ts.SourceKeyspaceName(), source.GetShard().ShardName(), source.Position)
 		if err != nil {
 			log.Warningf("Error: %s", err)
 		}
@@ -951,13 +1027,52 @@ func (ts *trafficSwitcher) stopSourceWrites(ctx context.Context) error {
 }
 
 func (ts *trafficSwitcher) changeTableSourceWrites(ctx context.Context, access accessType) error {
-	return ts.forAllSources(func(source *workflow.MigrationSource) error {
-		if _, err := ts.wr.ts.UpdateShardFields(ctx, ts.sourceKeyspace, source.GetShard().ShardName(), func(si *topo.ShardInfo) error {
-			return si.UpdateSourceBlacklistedTables(ctx, topodatapb.TabletType_MASTER, nil, access == allowWrites /* remove */, ts.tables)
+	return ts.ForAllSources(func(source *workflow.MigrationSource) error {
+		if _, err := ts.TopoServer().UpdateShardFields(ctx, ts.SourceKeyspaceName(), source.GetShard().ShardName(), func(si *topo.ShardInfo) error {
+			return si.UpdateSourceDeniedTables(ctx, topodatapb.TabletType_PRIMARY, nil, access == allowWrites /* remove */, ts.Tables())
 		}); err != nil {
 			return err
 		}
-		return ts.wr.RefreshTabletsByShard(ctx, source.GetShard(), nil)
+		rtbsCtx, cancel := context.WithTimeout(ctx, shardTabletRefreshTimeout)
+		defer cancel()
+		isPartial, partialDetails, err := topotools.RefreshTabletsByShard(rtbsCtx, ts.TopoServer(), ts.TabletManagerClient(), source.GetShard(), nil, ts.Logger())
+		if isPartial {
+			err = fmt.Errorf("failed to successfully refresh all tablets in the %s/%s source shard (%v):\n  %v",
+				source.GetShard().Keyspace(), source.GetShard().ShardName(), err, partialDetails)
+		}
+		return err
+	})
+}
+
+// executeLockTablesOnSource executes a LOCK TABLES tb1 READ, tbl2 READ,... statement on each
+// source shard's primary tablet using a non-pooled connection as the DBA user. The connection
+// is closed when the LOCK TABLES statement returns, so we immediately release the LOCKs.
+func (ts *trafficSwitcher) executeLockTablesOnSource(ctx context.Context) error {
+	ts.Logger().Infof("Locking (and then immediately unlocking) the following tables on source keyspace %v: %v", ts.SourceKeyspaceName(), ts.Tables())
+	if len(ts.Tables()) == 0 {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "no tables found in the source keyspace %v associated with the %s workflow", ts.SourceKeyspaceName(), ts.WorkflowName())
+	}
+
+	sb := strings.Builder{}
+	sb.WriteString("LOCK TABLES ")
+	for _, tableName := range ts.Tables() {
+		sb.WriteString(fmt.Sprintf("%s READ,", sqlescape.EscapeID(tableName)))
+	}
+	// trim extra trailing comma
+	lockStmt := sb.String()[:sb.Len()-1]
+
+	return ts.ForAllSources(func(source *workflow.MigrationSource) error {
+		primary := source.GetPrimary()
+		if primary == nil {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "no primary found for source shard %s", source.GetShard())
+		}
+		tablet := primary.Tablet
+		_, err := ts.wr.ExecuteFetchAsDba(ctx, tablet.Alias, lockStmt, 1, false, true)
+		if err != nil {
+			ts.Logger().Errorf("Error executing %s on source tablet %v: %v", lockStmt, tablet, err)
+			return err
+		}
+		return err
 	})
 }
 
@@ -965,21 +1080,21 @@ func (ts *trafficSwitcher) waitForCatchup(ctx context.Context, filteredReplicati
 	ctx, cancel := context.WithTimeout(ctx, filteredReplicationWaitTime)
 	defer cancel()
 	// source writes have been stopped, wait for all streams on targets to catch up
-	if err := ts.forAllUids(func(target *workflow.MigrationTarget, uid uint32) error {
-		ts.wr.Logger().Infof("Before Catchup: uid: %d, target master %s, target position %s, shard %s", uid,
+	if err := ts.ForAllUIDs(func(target *workflow.MigrationTarget, uid uint32) error {
+		ts.Logger().Infof("Before Catchup: uid: %d, target primary %s, target position %s, shard %s", uid,
 			target.GetPrimary().AliasString(), target.Position, target.GetShard().String())
 		bls := target.Sources[uid]
-		source := ts.sources[bls.Shard]
-		ts.wr.Logger().Infof("Before Catchup: waiting for keyspace:shard: %v:%v to reach source position %v, uid %d",
-			ts.targetKeyspace, target.GetShard().ShardName(), source.Position, uid)
-		if err := ts.wr.tmc.VReplicationWaitForPos(ctx, target.GetPrimary().Tablet, int(uid), source.Position); err != nil {
+		source := ts.Sources()[bls.Shard]
+		ts.Logger().Infof("Before Catchup: waiting for keyspace:shard: %v:%v to reach source position %v, uid %d",
+			ts.TargetKeyspaceName(), target.GetShard().ShardName(), source.Position, uid)
+		if err := ts.TabletManagerClient().VReplicationWaitForPos(ctx, target.GetPrimary().Tablet, int(uid), source.Position); err != nil {
 			return err
 		}
 		log.Infof("After catchup: target keyspace:shard: %v:%v, source position %v, uid %d",
-			ts.targetKeyspace, target.GetShard().ShardName(), source.Position, uid)
-		ts.wr.Logger().Infof("After catchup: position for keyspace:shard: %v:%v reached, uid %d",
-			ts.targetKeyspace, target.GetShard().ShardName(), uid)
-		if _, err := ts.wr.tmc.VReplicationExec(ctx, target.GetPrimary().Tablet, binlogplayer.StopVReplication(uid, "stopped for cutover")); err != nil {
+			ts.TargetKeyspaceName(), target.GetShard().ShardName(), source.Position, uid)
+		ts.Logger().Infof("After catchup: position for keyspace:shard: %v:%v reached, uid %d",
+			ts.TargetKeyspaceName(), target.GetShard().ShardName(), uid)
+		if _, err := ts.TabletManagerClient().VReplicationExec(ctx, target.GetPrimary().Tablet, binlogplayer.StopVReplication(uid, "stopped for cutover")); err != nil {
 			log.Infof("error marking stopped for cutover on %s, uid %d", target.GetPrimary().AliasString(), uid)
 			return err
 		}
@@ -988,56 +1103,56 @@ func (ts *trafficSwitcher) waitForCatchup(ctx context.Context, filteredReplicati
 		return err
 	}
 	// all targets have caught up, record their positions for setting up reverse workflows
-	return ts.forAllTargets(func(target *workflow.MigrationTarget) error {
+	return ts.ForAllTargets(func(target *workflow.MigrationTarget) error {
 		var err error
-		target.Position, err = ts.wr.tmc.MasterPosition(ctx, target.GetPrimary().Tablet)
-		ts.wr.Logger().Infof("After catchup, position for target master %s, %v", target.GetPrimary().AliasString(), target.Position)
+		target.Position, err = ts.TabletManagerClient().PrimaryPosition(ctx, target.GetPrimary().Tablet)
+		ts.Logger().Infof("After catchup, position for target primary %s, %v", target.GetPrimary().AliasString(), target.Position)
 		return err
 	})
 }
 
 func (ts *trafficSwitcher) cancelMigration(ctx context.Context, sm *workflow.StreamMigrator) {
 	var err error
-	if ts.migrationType == binlogdatapb.MigrationType_TABLES {
+	if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
 		err = ts.changeTableSourceWrites(ctx, allowWrites)
 	} else {
-		err = ts.changeShardsAccess(ctx, ts.sourceKeyspace, ts.sourceShards(), allowWrites)
+		err = ts.changeShardsAccess(ctx, ts.SourceKeyspaceName(), ts.SourceShards(), allowWrites)
 	}
 	if err != nil {
-		ts.wr.Logger().Errorf("Cancel migration failed:", err)
+		ts.Logger().Errorf("Cancel migration failed:", err)
 	}
 
 	sm.CancelMigration(ctx)
 
-	err = ts.forAllTargets(func(target *workflow.MigrationTarget) error {
-		query := fmt.Sprintf("update _vt.vreplication set state='Running', message='' where db_name=%s and workflow=%s", encodeString(target.GetPrimary().DbName()), encodeString(ts.workflow))
-		_, err := ts.wr.tmc.VReplicationExec(ctx, target.GetPrimary().Tablet, query)
+	err = ts.ForAllTargets(func(target *workflow.MigrationTarget) error {
+		query := fmt.Sprintf("update _vt.vreplication set state='Running', message='' where db_name=%s and workflow=%s", encodeString(target.GetPrimary().DbName()), encodeString(ts.WorkflowName()))
+		_, err := ts.TabletManagerClient().VReplicationExec(ctx, target.GetPrimary().Tablet, query)
 		return err
 	})
 	if err != nil {
-		ts.wr.Logger().Errorf("Cancel migration failed: could not restart vreplication: %v", err)
+		ts.Logger().Errorf("Cancel migration failed: could not restart vreplication: %v", err)
 	}
 
 	err = ts.deleteReverseVReplication(ctx)
 	if err != nil {
-		ts.wr.Logger().Errorf("Cancel migration failed: could not delete revers vreplication entries: %v", err)
+		ts.Logger().Errorf("Cancel migration failed: could not delete revers vreplication entries: %v", err)
 	}
 }
 
 func (ts *trafficSwitcher) gatherPositions(ctx context.Context) error {
-	err := ts.forAllSources(func(source *workflow.MigrationSource) error {
+	err := ts.ForAllSources(func(source *workflow.MigrationSource) error {
 		var err error
-		source.Position, err = ts.wr.tmc.MasterPosition(ctx, source.GetPrimary().Tablet)
-		ts.wr.Logger().Infof("Position for source %v:%v: %v", ts.sourceKeyspace, source.GetShard().ShardName(), source.Position)
+		source.Position, err = ts.TabletManagerClient().PrimaryPosition(ctx, source.GetPrimary().Tablet)
+		ts.Logger().Infof("Position for source %v:%v: %v", ts.SourceKeyspaceName(), source.GetShard().ShardName(), source.Position)
 		return err
 	})
 	if err != nil {
 		return err
 	}
-	return ts.forAllTargets(func(target *workflow.MigrationTarget) error {
+	return ts.ForAllTargets(func(target *workflow.MigrationTarget) error {
 		var err error
-		target.Position, err = ts.wr.tmc.MasterPosition(ctx, target.GetPrimary().Tablet)
-		ts.wr.Logger().Infof("Position for target %v:%v: %v", ts.targetKeyspace, target.GetShard().ShardName(), target.Position)
+		target.Position, err = ts.TabletManagerClient().PrimaryPosition(ctx, target.GetPrimary().Tablet)
+		ts.Logger().Infof("Position for target %v:%v: %v", ts.TargetKeyspaceName(), target.GetShard().ShardName(), target.Position)
 		return err
 	})
 }
@@ -1046,16 +1161,19 @@ func (ts *trafficSwitcher) createReverseVReplication(ctx context.Context) error 
 	if err := ts.deleteReverseVReplication(ctx); err != nil {
 		return err
 	}
-	err := ts.forAllUids(func(target *workflow.MigrationTarget, uid uint32) error {
+	err := ts.ForAllUIDs(func(target *workflow.MigrationTarget, uid uint32) error {
 		bls := target.Sources[uid]
-		source := ts.sources[bls.Shard]
+		source := ts.Sources()[bls.Shard]
 		reverseBls := &binlogdatapb.BinlogSource{
-			Keyspace:   ts.targetKeyspace,
-			Shard:      target.GetShard().ShardName(),
-			TabletType: bls.TabletType,
-			Filter:     &binlogdatapb.Filter{},
-			OnDdl:      bls.OnDdl,
+			Keyspace:       ts.TargetKeyspaceName(),
+			Shard:          target.GetShard().ShardName(),
+			TabletType:     bls.TabletType,
+			Filter:         &binlogdatapb.Filter{},
+			OnDdl:          bls.OnDdl,
+			SourceTimeZone: bls.TargetTimeZone,
+			TargetTimeZone: bls.SourceTimeZone,
 		}
+
 		for _, rule := range bls.Filter.Rules {
 			if rule.Filter == "exclude" {
 				reverseBls.Filter.Rules = append(reverseBls.Filter.Rules, rule)
@@ -1063,21 +1181,21 @@ func (ts *trafficSwitcher) createReverseVReplication(ctx context.Context) error 
 			}
 			var filter string
 			if strings.HasPrefix(rule.Match, "/") {
-				if ts.sourceKSSchema.Keyspace.Sharded {
+				if ts.SourceKeyspaceSchema().Keyspace.Sharded {
 					filter = key.KeyRangeString(source.GetShard().KeyRange)
 				}
 			} else {
 				var inKeyrange string
-				if ts.sourceKSSchema.Keyspace.Sharded {
-					vtable, ok := ts.sourceKSSchema.Tables[rule.Match]
+				if ts.SourceKeyspaceSchema().Keyspace.Sharded {
+					vtable, ok := ts.SourceKeyspaceSchema().Tables[rule.Match]
 					if !ok {
 						return fmt.Errorf("table %s not found in vschema1", rule.Match)
 					}
 					// TODO(sougou): handle degenerate cases like sequence, etc.
 					// We currently assume the primary vindex is the best way to filter, which may not be true.
-					inKeyrange = fmt.Sprintf(" where in_keyrange(%s, '%s', '%s')", sqlparser.String(vtable.ColumnVindexes[0].Columns[0]), vtable.ColumnVindexes[0].Type, key.KeyRangeString(source.GetShard().KeyRange))
+					inKeyrange = fmt.Sprintf(" where in_keyrange(%s, '%s.%s', '%s')", sqlparser.String(vtable.ColumnVindexes[0].Columns[0]), ts.SourceKeyspaceName(), vtable.ColumnVindexes[0].Name, key.KeyRangeString(source.GetShard().KeyRange))
 				}
-				filter = fmt.Sprintf("select * from %s%s", rule.Match, inKeyrange)
+				filter = fmt.Sprintf("select * from %s%s", sqlescape.EscapeID(rule.Match), inKeyrange)
 			}
 			reverseBls.Filter.Rules = append(reverseBls.Filter.Rules, &binlogdatapb.Rule{
 				Match:  rule.Match,
@@ -1085,8 +1203,8 @@ func (ts *trafficSwitcher) createReverseVReplication(ctx context.Context) error 
 			})
 		}
 		log.Infof("Creating reverse workflow vreplication stream on tablet %s: workflow %s, startPos %s",
-			source.GetPrimary().Alias, ts.reverseWorkflow, target.Position)
-		_, err := ts.wr.VReplicationExec(ctx, source.GetPrimary().Alias, binlogplayer.CreateVReplicationState(ts.reverseWorkflow, reverseBls, target.Position, binlogplayer.BlpStopped, source.GetPrimary().DbName()))
+			source.GetPrimary().Alias, ts.ReverseWorkflowName(), target.Position)
+		_, err := ts.VReplicationExec(ctx, source.GetPrimary().Alias, binlogplayer.CreateVReplicationState(ts.ReverseWorkflowName(), reverseBls, target.Position, binlogplayer.BlpStopped, source.GetPrimary().DbName()))
 		if err != nil {
 			return err
 		}
@@ -1095,7 +1213,7 @@ func (ts *trafficSwitcher) createReverseVReplication(ctx context.Context) error 
 		updateQuery := ts.getReverseVReplicationUpdateQuery(target.GetPrimary().Alias.Cell, source.GetPrimary().Alias.Cell, source.GetPrimary().DbName())
 		if updateQuery != "" {
 			log.Infof("Updating vreplication stream entry on %s with: %s", source.GetPrimary().Alias, updateQuery)
-			_, err = ts.wr.VReplicationExec(ctx, source.GetPrimary().Alias, updateQuery)
+			_, err = ts.VReplicationExec(ctx, source.GetPrimary().Alias, updateQuery)
 			return err
 		}
 		return nil
@@ -1113,23 +1231,26 @@ func (ts *trafficSwitcher) getReverseVReplicationUpdateQuery(targetCell string, 
 
 	if ts.optCells != "" || ts.optTabletTypes != "" {
 		query := fmt.Sprintf("update _vt.vreplication set cell = '%s', tablet_types = '%s' where workflow = '%s' and db_name = '%s'",
-			ts.optCells, ts.optTabletTypes, ts.reverseWorkflow, dbname)
+			ts.optCells, ts.optTabletTypes, ts.ReverseWorkflowName(), dbname)
 		return query
 	}
 	return ""
 }
 
 func (ts *trafficSwitcher) deleteReverseVReplication(ctx context.Context) error {
-	return ts.forAllSources(func(source *workflow.MigrationSource) error {
-		query := fmt.Sprintf("delete from _vt.vreplication where db_name=%s and workflow=%s", encodeString(source.GetPrimary().DbName()), encodeString(ts.reverseWorkflow))
-		_, err := ts.wr.tmc.VReplicationExec(ctx, source.GetPrimary().Tablet, query)
-		return err
+	return ts.ForAllSources(func(source *workflow.MigrationSource) error {
+		query := fmt.Sprintf(sqlDeleteWorkflow, encodeString(source.GetPrimary().DbName()), encodeString(ts.reverseWorkflow))
+		if _, err := ts.TabletManagerClient().VReplicationExec(ctx, source.GetPrimary().Tablet, query); err != nil {
+			return err
+		}
+		ts.wr.deleteWorkflowVDiffData(ctx, source.GetPrimary().Tablet, ts.reverseWorkflow)
+		return nil
 	})
 }
 
 func (ts *trafficSwitcher) createJournals(ctx context.Context, sourceWorkflows []string) error {
 	log.Infof("In createJournals for source workflows %+v", sourceWorkflows)
-	return ts.forAllSources(func(source *workflow.MigrationSource) error {
+	return ts.ForAllSources(func(source *workflow.MigrationSource) error {
 		if source.Journaled {
 			return nil
 		}
@@ -1137,18 +1258,18 @@ func (ts *trafficSwitcher) createJournals(ctx context.Context, sourceWorkflows [
 		participantMap := make(map[string]bool)
 		journal := &binlogdatapb.Journal{
 			Id:              ts.id,
-			MigrationType:   ts.migrationType,
-			Tables:          ts.tables,
+			MigrationType:   ts.MigrationType(),
+			Tables:          ts.Tables(),
 			LocalPosition:   source.Position,
 			Participants:    participants,
 			SourceWorkflows: sourceWorkflows,
 		}
-		for targetShard, target := range ts.targets {
+		for targetShard, target := range ts.Targets() {
 			for _, tsource := range target.Sources {
 				participantMap[tsource.Shard] = true
 			}
 			journal.ShardGtids = append(journal.ShardGtids, &binlogdatapb.ShardGtid{
-				Keyspace: ts.targetKeyspace,
+				Keyspace: ts.TargetKeyspaceName(),
 				Shard:    targetShard,
 				Gtid:     target.Position,
 			})
@@ -1166,12 +1287,12 @@ func (ts *trafficSwitcher) createJournals(ctx context.Context, sourceWorkflows [
 
 		}
 		log.Infof("Creating journal %v", journal)
-		ts.wr.Logger().Infof("Creating journal: %v", journal)
+		ts.Logger().Infof("Creating journal: %v", journal)
 		statement := fmt.Sprintf("insert into _vt.resharding_journal "+
 			"(id, db_name, val) "+
 			"values (%v, %v, %v)",
 			ts.id, encodeString(source.GetPrimary().DbName()), encodeString(journal.String()))
-		if _, err := ts.wr.tmc.VReplicationExec(ctx, source.GetPrimary().Tablet, statement); err != nil {
+		if _, err := ts.TabletManagerClient().VReplicationExec(ctx, source.GetPrimary().Tablet, statement); err != nil {
 			return err
 		}
 		return nil
@@ -1179,57 +1300,60 @@ func (ts *trafficSwitcher) createJournals(ctx context.Context, sourceWorkflows [
 }
 
 func (ts *trafficSwitcher) allowTargetWrites(ctx context.Context) error {
-	if ts.migrationType == binlogdatapb.MigrationType_TABLES {
+	if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
 		return ts.allowTableTargetWrites(ctx)
 	}
-	return ts.changeShardsAccess(ctx, ts.targetKeyspace, ts.targetShards(), allowWrites)
+	return ts.changeShardsAccess(ctx, ts.TargetKeyspaceName(), ts.TargetShards(), allowWrites)
 }
 
 func (ts *trafficSwitcher) allowTableTargetWrites(ctx context.Context) error {
-	return ts.forAllTargets(func(target *workflow.MigrationTarget) error {
-		if _, err := ts.wr.ts.UpdateShardFields(ctx, ts.targetKeyspace, target.GetShard().ShardName(), func(si *topo.ShardInfo) error {
-			return si.UpdateSourceBlacklistedTables(ctx, topodatapb.TabletType_MASTER, nil, true, ts.tables)
+	return ts.ForAllTargets(func(target *workflow.MigrationTarget) error {
+		if _, err := ts.TopoServer().UpdateShardFields(ctx, ts.TargetKeyspaceName(), target.GetShard().ShardName(), func(si *topo.ShardInfo) error {
+			return si.UpdateSourceDeniedTables(ctx, topodatapb.TabletType_PRIMARY, nil, true, ts.Tables())
 		}); err != nil {
 			return err
 		}
-		return ts.wr.RefreshTabletsByShard(ctx, target.GetShard(), nil)
+		rtbsCtx, cancel := context.WithTimeout(ctx, shardTabletRefreshTimeout)
+		defer cancel()
+		_, _, err := topotools.RefreshTabletsByShard(rtbsCtx, ts.TopoServer(), ts.TabletManagerClient(), target.GetShard(), nil, ts.Logger())
+		return err
 	})
 }
 
 func (ts *trafficSwitcher) changeRouting(ctx context.Context) error {
-	if ts.migrationType == binlogdatapb.MigrationType_TABLES {
+	if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
 		return ts.changeWriteRoute(ctx)
 	}
 	return ts.changeShardRouting(ctx)
 }
 
 func (ts *trafficSwitcher) changeWriteRoute(ctx context.Context) error {
-	rules, err := topotools.GetRoutingRules(ctx, ts.wr.ts)
+	rules, err := topotools.GetRoutingRules(ctx, ts.TopoServer())
 	if err != nil {
 		return err
 	}
-	for _, table := range ts.tables {
-		delete(rules, ts.targetKeyspace+"."+table)
-		ts.wr.Logger().Infof("Delete routing: %v", ts.targetKeyspace+"."+table)
-		rules[table] = []string{ts.targetKeyspace + "." + table}
-		rules[ts.sourceKeyspace+"."+table] = []string{ts.targetKeyspace + "." + table}
-		ts.wr.Logger().Infof("Add routing: %v %v", table, ts.sourceKeyspace+"."+table)
+	for _, table := range ts.Tables() {
+		delete(rules, ts.TargetKeyspaceName()+"."+table)
+		ts.Logger().Infof("Delete routing: %v", ts.TargetKeyspaceName()+"."+table)
+		rules[table] = []string{ts.TargetKeyspaceName() + "." + table}
+		rules[ts.SourceKeyspaceName()+"."+table] = []string{ts.TargetKeyspaceName() + "." + table}
+		ts.Logger().Infof("Add routing: %v %v", table, ts.SourceKeyspaceName()+"."+table)
 	}
-	if err := topotools.SaveRoutingRules(ctx, ts.wr.ts, rules); err != nil {
+	if err := topotools.SaveRoutingRules(ctx, ts.TopoServer(), rules); err != nil {
 		return err
 	}
-	return ts.wr.ts.RebuildSrvVSchema(ctx, nil)
+	return ts.TopoServer().RebuildSrvVSchema(ctx, nil)
 }
 
 func (ts *trafficSwitcher) changeShardRouting(ctx context.Context) error {
-	if err := ts.wr.ts.ValidateSrvKeyspace(ctx, ts.targetKeyspace, ""); err != nil {
-		err2 := vterrors.Wrapf(err, "Before changing shard routes, found SrvKeyspace for %s is corrupt", ts.targetKeyspace)
+	if err := ts.TopoServer().ValidateSrvKeyspace(ctx, ts.TargetKeyspaceName(), ""); err != nil {
+		err2 := vterrors.Wrapf(err, "Before changing shard routes, found SrvKeyspace for %s is corrupt", ts.TargetKeyspaceName())
 		log.Errorf("%w", err2)
 		return err2
 	}
-	err := ts.forAllSources(func(source *workflow.MigrationSource) error {
-		_, err := ts.wr.ts.UpdateShardFields(ctx, ts.sourceKeyspace, source.GetShard().ShardName(), func(si *topo.ShardInfo) error {
-			si.IsMasterServing = false
+	err := ts.ForAllSources(func(source *workflow.MigrationSource) error {
+		_, err := ts.TopoServer().UpdateShardFields(ctx, ts.SourceKeyspaceName(), source.GetShard().ShardName(), func(si *topo.ShardInfo) error {
+			si.IsPrimaryServing = false
 			return nil
 		})
 		return err
@@ -1237,9 +1361,9 @@ func (ts *trafficSwitcher) changeShardRouting(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	err = ts.forAllTargets(func(target *workflow.MigrationTarget) error {
-		_, err := ts.wr.ts.UpdateShardFields(ctx, ts.targetKeyspace, target.GetShard().ShardName(), func(si *topo.ShardInfo) error {
-			si.IsMasterServing = true
+	err = ts.ForAllTargets(func(target *workflow.MigrationTarget) error {
+		_, err := ts.TopoServer().UpdateShardFields(ctx, ts.TargetKeyspaceName(), target.GetShard().ShardName(), func(si *topo.ShardInfo) error {
+			si.IsPrimaryServing = true
 			return nil
 		})
 		return err
@@ -1247,12 +1371,12 @@ func (ts *trafficSwitcher) changeShardRouting(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	err = ts.wr.ts.MigrateServedType(ctx, ts.targetKeyspace, ts.targetShards(), ts.sourceShards(), topodatapb.TabletType_MASTER, nil)
+	err = ts.TopoServer().MigrateServedType(ctx, ts.TargetKeyspaceName(), ts.TargetShards(), ts.SourceShards(), topodatapb.TabletType_PRIMARY, nil)
 	if err != nil {
 		return err
 	}
-	if err := ts.wr.ts.ValidateSrvKeyspace(ctx, ts.targetKeyspace, ""); err != nil {
-		err2 := vterrors.Wrapf(err, "After changing shard routes, found SrvKeyspace for %s is corrupt", ts.targetKeyspace)
+	if err := ts.TopoServer().ValidateSrvKeyspace(ctx, ts.TargetKeyspaceName(), ""); err != nil {
+		err2 := vterrors.Wrapf(err, "After changing shard routes, found SrvKeyspace for %s is corrupt", ts.TargetKeyspaceName())
 		log.Errorf("%w", err2)
 		return err2
 	}
@@ -1260,97 +1384,47 @@ func (ts *trafficSwitcher) changeShardRouting(ctx context.Context) error {
 }
 
 func (ts *trafficSwitcher) startReverseVReplication(ctx context.Context) error {
-	return ts.forAllSources(func(source *workflow.MigrationSource) error {
+	return ts.ForAllSources(func(source *workflow.MigrationSource) error {
 		query := fmt.Sprintf("update _vt.vreplication set state='Running', message='' where db_name=%s", encodeString(source.GetPrimary().DbName()))
-		_, err := ts.wr.VReplicationExec(ctx, source.GetPrimary().Alias, query)
+		_, err := ts.VReplicationExec(ctx, source.GetPrimary().Alias, query)
 		return err
 	})
 }
 
 func (ts *trafficSwitcher) changeShardsAccess(ctx context.Context, keyspace string, shards []*topo.ShardInfo, access accessType) error {
-	if err := ts.wr.ts.UpdateDisableQueryService(ctx, keyspace, shards, topodatapb.TabletType_MASTER, nil, access == disallowWrites /* disable */); err != nil {
+	if err := ts.TopoServer().UpdateDisableQueryService(ctx, keyspace, shards, topodatapb.TabletType_PRIMARY, nil, access == disallowWrites /* disable */); err != nil {
 		return err
 	}
-	return ts.wr.refreshMasters(ctx, shards)
+	return ts.wr.refreshPrimaryTablets(ctx, shards)
 }
 
-func (ts *trafficSwitcher) forAllSources(f func(*workflow.MigrationSource) error) error {
-	var wg sync.WaitGroup
-	allErrors := &concurrency.AllErrorRecorder{}
-	for _, source := range ts.sources {
-		wg.Add(1)
-		go func(source *workflow.MigrationSource) {
-			defer wg.Done()
-
-			if err := f(source); err != nil {
-				allErrors.RecordError(err)
-			}
-		}(source)
-	}
-	wg.Wait()
-	return allErrors.AggrError(vterrors.Aggregate)
-}
-
-func (ts *trafficSwitcher) forAllTargets(f func(*workflow.MigrationTarget) error) error {
-	var wg sync.WaitGroup
-	allErrors := &concurrency.AllErrorRecorder{}
-	for _, target := range ts.targets {
-		wg.Add(1)
-		go func(target *workflow.MigrationTarget) {
-			defer wg.Done()
-
-			if err := f(target); err != nil {
-				allErrors.RecordError(err)
-			}
-		}(target)
-	}
-	wg.Wait()
-	return allErrors.AggrError(vterrors.Aggregate)
-}
-
-func (ts *trafficSwitcher) forAllUids(f func(target *workflow.MigrationTarget, uid uint32) error) error {
-	var wg sync.WaitGroup
-	allErrors := &concurrency.AllErrorRecorder{}
-	for _, target := range ts.targets {
-		for uid := range target.Sources {
-			wg.Add(1)
-			go func(target *workflow.MigrationTarget, uid uint32) {
-				defer wg.Done()
-
-				if err := f(target, uid); err != nil {
-					allErrors.RecordError(err)
-				}
-			}(target, uid)
-		}
-	}
-	wg.Wait()
-	return allErrors.AggrError(vterrors.Aggregate)
-}
-
-func (ts *trafficSwitcher) sourceShards() []*topo.ShardInfo {
-	shards := make([]*topo.ShardInfo, 0, len(ts.sources))
-	for _, source := range ts.sources {
+func (ts *trafficSwitcher) SourceShards() []*topo.ShardInfo {
+	shards := make([]*topo.ShardInfo, 0, len(ts.Sources()))
+	for _, source := range ts.Sources() {
 		shards = append(shards, source.GetShard())
 	}
 	return shards
 }
 
-func (ts *trafficSwitcher) targetShards() []*topo.ShardInfo {
-	shards := make([]*topo.ShardInfo, 0, len(ts.targets))
-	for _, target := range ts.targets {
+func (ts *trafficSwitcher) TargetShards() []*topo.ShardInfo {
+	shards := make([]*topo.ShardInfo, 0, len(ts.Targets()))
+	for _, target := range ts.Targets() {
 		shards = append(shards, target.GetShard())
 	}
 	return shards
 }
 
-func (ts *trafficSwitcher) dropSourceBlacklistedTables(ctx context.Context) error {
-	return ts.forAllSources(func(source *workflow.MigrationSource) error {
-		if _, err := ts.wr.ts.UpdateShardFields(ctx, ts.sourceKeyspace, source.GetShard().ShardName(), func(si *topo.ShardInfo) error {
-			return si.UpdateSourceBlacklistedTables(ctx, topodatapb.TabletType_MASTER, nil, true, ts.tables)
+func (ts *trafficSwitcher) dropSourceDeniedTables(ctx context.Context) error {
+	return ts.ForAllSources(func(source *workflow.MigrationSource) error {
+		if _, err := ts.TopoServer().UpdateShardFields(ctx, ts.SourceKeyspaceName(), source.GetShard().ShardName(), func(si *topo.ShardInfo) error {
+			return si.UpdateSourceDeniedTables(ctx, topodatapb.TabletType_PRIMARY, nil, true, ts.Tables())
 		}); err != nil {
 			return err
 		}
-		return ts.wr.RefreshTabletsByShard(ctx, source.GetShard(), nil)
+		rtbsCtx, cancel := context.WithTimeout(ctx, shardTabletRefreshTimeout)
+		defer cancel()
+		_, _, err := topotools.RefreshTabletsByShard(rtbsCtx, ts.TopoServer(), ts.TabletManagerClient(), source.GetShard(), nil, ts.Logger())
+		return err
 	})
 }
 
@@ -1361,20 +1435,20 @@ func (ts *trafficSwitcher) validateWorkflowHasCompleted(ctx context.Context) err
 func doValidateWorkflowHasCompleted(ctx context.Context, ts *trafficSwitcher) error {
 	wg := sync.WaitGroup{}
 	rec := concurrency.AllErrorRecorder{}
-	if ts.migrationType == binlogdatapb.MigrationType_SHARDS {
-		_ = ts.forAllSources(func(source *workflow.MigrationSource) error {
+	if ts.MigrationType() == binlogdatapb.MigrationType_SHARDS {
+		_ = ts.ForAllSources(func(source *workflow.MigrationSource) error {
 			wg.Add(1)
-			if source.GetShard().IsMasterServing {
+			if source.GetShard().IsPrimaryServing {
 				rec.RecordError(fmt.Errorf(fmt.Sprintf("Shard %s is still serving", source.GetShard().ShardName())))
 			}
 			wg.Done()
 			return nil
 		})
 	} else {
-		_ = ts.forAllTargets(func(target *workflow.MigrationTarget) error {
+		_ = ts.ForAllTargets(func(target *workflow.MigrationTarget) error {
 			wg.Add(1)
-			query := fmt.Sprintf("select 1 from _vt.vreplication where db_name='%s' and workflow='%s' and message!='FROZEN'", target.GetPrimary().DbName(), ts.workflow)
-			rs, _ := ts.wr.VReplicationExec(ctx, target.GetPrimary().Alias, query)
+			query := fmt.Sprintf("select 1 from _vt.vreplication where db_name='%s' and workflow='%s' and message!='FROZEN'", target.GetPrimary().DbName(), ts.WorkflowName())
+			rs, _ := ts.VReplicationExec(ctx, target.GetPrimary().Alias, query)
 			if len(rs.Rows) > 0 {
 				rec.RecordError(fmt.Errorf("vreplication streams are not frozen on tablet %d", target.GetPrimary().Alias.Uid))
 			}
@@ -1382,19 +1456,21 @@ func doValidateWorkflowHasCompleted(ctx context.Context, ts *trafficSwitcher) er
 			return nil
 		})
 	}
-
-	//check if table is routable
 	wg.Wait()
-	if ts.migrationType == binlogdatapb.MigrationType_TABLES {
-		rules, err := topotools.GetRoutingRules(ctx, ts.wr.ts)
-		if err != nil {
-			rec.RecordError(fmt.Errorf("could not get RoutingRules"))
-		}
-		for fromTable, toTables := range rules {
-			for _, toTable := range toTables {
-				for _, table := range ts.tables {
-					if toTable == fmt.Sprintf("%s.%s", ts.sourceKeyspace, table) {
-						rec.RecordError(fmt.Errorf("routing still exists from keyspace %s table %s to %s", ts.sourceKeyspace, table, fromTable))
+
+	if !ts.keepRoutingRules {
+		//check if table is routable
+		if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
+			rules, err := topotools.GetRoutingRules(ctx, ts.TopoServer())
+			if err != nil {
+				rec.RecordError(fmt.Errorf("could not get RoutingRules"))
+			}
+			for fromTable, toTables := range rules {
+				for _, toTable := range toTables {
+					for _, table := range ts.Tables() {
+						if toTable == fmt.Sprintf("%s.%s", ts.SourceKeyspaceName(), table) {
+							rec.RecordError(fmt.Errorf("routing still exists from keyspace %s table %s to %s", ts.SourceKeyspaceName(), table, fromTable))
+						}
 					}
 				}
 			}
@@ -1412,22 +1488,26 @@ func getRenameFileName(tableName string) string {
 }
 
 func (ts *trafficSwitcher) removeSourceTables(ctx context.Context, removalType workflow.TableRemovalType) error {
-	err := ts.forAllSources(func(source *workflow.MigrationSource) error {
-		for _, tableName := range ts.tables {
-			query := fmt.Sprintf("drop table %s.%s", source.GetPrimary().DbName(), tableName)
+	err := ts.ForAllSources(func(source *workflow.MigrationSource) error {
+		for _, tableName := range ts.Tables() {
+			query := fmt.Sprintf("drop table %s.%s",
+				sqlescape.EscapeID(sqlescape.UnescapeID(source.GetPrimary().DbName())),
+				sqlescape.EscapeID(sqlescape.UnescapeID(tableName)))
 			if removalType == workflow.DropTable {
-				ts.wr.Logger().Infof("Dropping table %s.%s\n", source.GetPrimary().DbName(), tableName)
+				ts.Logger().Infof("%s: Dropping table %s.%s\n",
+					source.GetPrimary().String(), source.GetPrimary().DbName(), tableName)
 			} else {
 				renameName := getRenameFileName(tableName)
-				ts.wr.Logger().Infof("Renaming table %s.%s to %s.%s\n", source.GetPrimary().DbName(), tableName, source.GetPrimary().DbName(), renameName)
+				ts.Logger().Infof("%s: Renaming table %s.%s to %s.%s\n",
+					source.GetPrimary().String(), source.GetPrimary().DbName(), tableName, source.GetPrimary().DbName(), renameName)
 				query = fmt.Sprintf("rename table %s.%s TO %s.%s", source.GetPrimary().DbName(), tableName, source.GetPrimary().DbName(), renameName)
 			}
 			_, err := ts.wr.ExecuteFetchAsDba(ctx, source.GetPrimary().Alias, query, 1, false, true)
 			if err != nil {
-				ts.wr.Logger().Errorf("Error removing table %s: %v", tableName, err)
+				ts.Logger().Errorf("%s: Error removing table %s: %v", source.GetPrimary().String(), tableName, err)
 				return err
 			}
-			ts.wr.Logger().Infof("Removed table %s.%s\n", source.GetPrimary().DbName(), tableName)
+			ts.Logger().Infof("%s: Removed table %s.%s\n", source.GetPrimary().String(), source.GetPrimary().DbName(), tableName)
 
 		}
 		return nil
@@ -1436,30 +1516,30 @@ func (ts *trafficSwitcher) removeSourceTables(ctx context.Context, removalType w
 		return err
 	}
 
-	return ts.dropParticipatingTablesFromKeyspace(ctx, ts.sourceKeyspace)
+	return ts.dropParticipatingTablesFromKeyspace(ctx, ts.SourceKeyspaceName())
 }
 
 func (ts *trafficSwitcher) dropParticipatingTablesFromKeyspace(ctx context.Context, keyspace string) error {
-	vschema, err := ts.wr.ts.GetVSchema(ctx, keyspace)
+	vschema, err := ts.TopoServer().GetVSchema(ctx, keyspace)
 	if err != nil {
 		return err
 	}
-	for _, tableName := range ts.tables {
+	for _, tableName := range ts.Tables() {
 		delete(vschema.Tables, tableName)
 	}
-	return ts.wr.ts.SaveVSchema(ctx, keyspace, vschema)
+	return ts.TopoServer().SaveVSchema(ctx, keyspace, vschema)
 }
 
 // FIXME: even after dropSourceShards there are still entries in the topo, need to research and fix
 func (ts *trafficSwitcher) dropSourceShards(ctx context.Context) error {
-	return ts.forAllSources(func(source *workflow.MigrationSource) error {
-		ts.wr.Logger().Infof("Deleting shard %s.%s\n", source.GetShard().Keyspace(), source.GetShard().ShardName())
+	return ts.ForAllSources(func(source *workflow.MigrationSource) error {
+		ts.Logger().Infof("Deleting shard %s.%s\n", source.GetShard().Keyspace(), source.GetShard().ShardName())
 		err := ts.wr.DeleteShard(ctx, source.GetShard().Keyspace(), source.GetShard().ShardName(), true, false)
 		if err != nil {
-			ts.wr.Logger().Errorf("Error deleting shard %s: %v", source.GetShard().ShardName(), err)
+			ts.Logger().Errorf("Error deleting shard %s: %v", source.GetShard().ShardName(), err)
 			return err
 		}
-		ts.wr.Logger().Infof("Deleted shard %s.%s\n", source.GetShard().Keyspace(), source.GetShard().ShardName())
+		ts.Logger().Infof("Deleted shard %s.%s\n", source.GetShard().Keyspace(), source.GetShard().ShardName())
 		return nil
 	})
 }
@@ -1467,10 +1547,10 @@ func (ts *trafficSwitcher) dropSourceShards(ctx context.Context) error {
 func (ts *trafficSwitcher) freezeTargetVReplication(ctx context.Context) error {
 	// Mark target streams as frozen before deleting. If SwitchWrites gets
 	// re-invoked after a freeze, it will skip all the previous steps
-	err := ts.forAllTargets(func(target *workflow.MigrationTarget) error {
-		ts.wr.Logger().Infof("Marking target streams frozen for workflow %s db_name %s", ts.workflow, target.GetPrimary().DbName())
-		query := fmt.Sprintf("update _vt.vreplication set message = '%s' where db_name=%s and workflow=%s", frozenStr, encodeString(target.GetPrimary().DbName()), encodeString(ts.workflow))
-		_, err := ts.wr.tmc.VReplicationExec(ctx, target.GetPrimary().Tablet, query)
+	err := ts.ForAllTargets(func(target *workflow.MigrationTarget) error {
+		ts.Logger().Infof("Marking target streams frozen for workflow %s db_name %s", ts.WorkflowName(), target.GetPrimary().DbName())
+		query := fmt.Sprintf("update _vt.vreplication set message = '%s' where db_name=%s and workflow=%s", workflow.Frozen, encodeString(target.GetPrimary().DbName()), encodeString(ts.WorkflowName()))
+		_, err := ts.TabletManagerClient().VReplicationExec(ctx, target.GetPrimary().Tablet, query)
 		return err
 	})
 	if err != nil {
@@ -1480,36 +1560,46 @@ func (ts *trafficSwitcher) freezeTargetVReplication(ctx context.Context) error {
 }
 
 func (ts *trafficSwitcher) dropTargetVReplicationStreams(ctx context.Context) error {
-	return ts.forAllTargets(func(target *workflow.MigrationTarget) error {
-		ts.wr.Logger().Infof("Deleting target streams for workflow %s db_name %s", ts.workflow, target.GetPrimary().DbName())
-		query := fmt.Sprintf("delete from _vt.vreplication where db_name=%s and workflow=%s", encodeString(target.GetPrimary().DbName()), encodeString(ts.workflow))
-		_, err := ts.wr.tmc.VReplicationExec(ctx, target.GetPrimary().Tablet, query)
-		return err
+	return ts.ForAllTargets(func(target *workflow.MigrationTarget) error {
+		ts.Logger().Infof("Deleting target streams and related data for workflow %s db_name %s", ts.WorkflowName(), target.GetPrimary().DbName())
+		query := fmt.Sprintf(sqlDeleteWorkflow, encodeString(target.GetPrimary().DbName()), encodeString(ts.WorkflowName()))
+		if _, err := ts.TabletManagerClient().VReplicationExec(ctx, target.GetPrimary().Tablet, query); err != nil {
+			return err
+		}
+		ts.wr.deleteWorkflowVDiffData(ctx, target.GetPrimary().Tablet, ts.WorkflowName())
+		return nil
 	})
 }
 
 func (ts *trafficSwitcher) dropSourceReverseVReplicationStreams(ctx context.Context) error {
-	return ts.forAllSources(func(source *workflow.MigrationSource) error {
-		ts.wr.Logger().Infof("Deleting reverse streams for workflow %s db_name %s", ts.workflow, source.GetPrimary().DbName())
-		query := fmt.Sprintf("delete from _vt.vreplication where db_name=%s and workflow=%s",
-			encodeString(source.GetPrimary().DbName()), encodeString(workflow.ReverseWorkflowName(ts.workflow)))
-		_, err := ts.wr.tmc.VReplicationExec(ctx, source.GetPrimary().Tablet, query)
-		return err
+	return ts.ForAllSources(func(source *workflow.MigrationSource) error {
+		ts.Logger().Infof("Deleting reverse streams and related data for workflow %s db_name %s", ts.WorkflowName(), source.GetPrimary().DbName())
+		query := fmt.Sprintf(sqlDeleteWorkflow, encodeString(source.GetPrimary().DbName()), encodeString(workflow.ReverseWorkflowName(ts.WorkflowName())))
+		if _, err := ts.TabletManagerClient().VReplicationExec(ctx, source.GetPrimary().Tablet, query); err != nil {
+			return err
+		}
+		ts.wr.deleteWorkflowVDiffData(ctx, source.GetPrimary().Tablet, workflow.ReverseWorkflowName(ts.WorkflowName()))
+		return nil
 	})
 }
 
 func (ts *trafficSwitcher) removeTargetTables(ctx context.Context) error {
 	log.Infof("removeTargetTables")
-	err := ts.forAllTargets(func(target *workflow.MigrationTarget) error {
-		for _, tableName := range ts.tables {
-			query := fmt.Sprintf("drop table %s.%s", target.GetPrimary().DbName(), tableName)
-			ts.wr.Logger().Infof("Dropping table %s.%s\n", target.GetPrimary().DbName(), tableName)
+	err := ts.ForAllTargets(func(target *workflow.MigrationTarget) error {
+		for _, tableName := range ts.Tables() {
+			query := fmt.Sprintf("drop table %s.%s",
+				sqlescape.EscapeID(sqlescape.UnescapeID(target.GetPrimary().DbName())),
+				sqlescape.EscapeID(sqlescape.UnescapeID(tableName)))
+			ts.Logger().Infof("%s: Dropping table %s.%s\n",
+				target.GetPrimary().String(), target.GetPrimary().DbName(), tableName)
 			_, err := ts.wr.ExecuteFetchAsDba(ctx, target.GetPrimary().Alias, query, 1, false, true)
 			if err != nil {
-				ts.wr.Logger().Errorf("Error removing table %s: %v", tableName, err)
+				ts.Logger().Errorf("%s: Error removing table %s: %v",
+					target.GetPrimary().String(), tableName, err)
 				return err
 			}
-			ts.wr.Logger().Infof("Removed table %s.%s\n", target.GetPrimary().DbName(), tableName)
+			ts.Logger().Infof("%s: Removed table %s.%s\n",
+				target.GetPrimary().String(), target.GetPrimary().DbName(), tableName)
 
 		}
 		return nil
@@ -1518,40 +1608,40 @@ func (ts *trafficSwitcher) removeTargetTables(ctx context.Context) error {
 		return err
 	}
 
-	return ts.dropParticipatingTablesFromKeyspace(ctx, ts.targetKeyspace)
+	return ts.dropParticipatingTablesFromKeyspace(ctx, ts.TargetKeyspaceName())
 
 }
 
 func (ts *trafficSwitcher) dropTargetShards(ctx context.Context) error {
-	return ts.forAllTargets(func(target *workflow.MigrationTarget) error {
-		ts.wr.Logger().Infof("Deleting shard %s.%s\n", target.GetShard().Keyspace(), target.GetShard().ShardName())
+	return ts.ForAllTargets(func(target *workflow.MigrationTarget) error {
+		ts.Logger().Infof("Deleting shard %s.%s\n", target.GetShard().Keyspace(), target.GetShard().ShardName())
 		err := ts.wr.DeleteShard(ctx, target.GetShard().Keyspace(), target.GetShard().ShardName(), true, false)
 		if err != nil {
-			ts.wr.Logger().Errorf("Error deleting shard %s: %v", target.GetShard().ShardName(), err)
+			ts.Logger().Errorf("Error deleting shard %s: %v", target.GetShard().ShardName(), err)
 			return err
 		}
-		ts.wr.Logger().Infof("Deleted shard %s.%s\n", target.GetShard().Keyspace(), target.GetShard().ShardName())
+		ts.Logger().Infof("Deleted shard %s.%s\n", target.GetShard().Keyspace(), target.GetShard().ShardName())
 		return nil
 	})
 }
 
 func (ts *trafficSwitcher) deleteRoutingRules(ctx context.Context) error {
-	rules, err := topotools.GetRoutingRules(ctx, ts.wr.ts)
+	rules, err := topotools.GetRoutingRules(ctx, ts.TopoServer())
 	if err != nil {
 		return err
 	}
-	for _, table := range ts.tables {
+	for _, table := range ts.Tables() {
 		delete(rules, table)
 		delete(rules, table+"@replica")
 		delete(rules, table+"@rdonly")
-		delete(rules, ts.targetKeyspace+"."+table)
-		delete(rules, ts.targetKeyspace+"."+table+"@replica")
-		delete(rules, ts.targetKeyspace+"."+table+"@rdonly")
-		delete(rules, ts.sourceKeyspace+"."+table)
-		delete(rules, ts.sourceKeyspace+"."+table+"@replica")
-		delete(rules, ts.sourceKeyspace+"."+table+"@rdonly")
+		delete(rules, ts.TargetKeyspaceName()+"."+table)
+		delete(rules, ts.TargetKeyspaceName()+"."+table+"@replica")
+		delete(rules, ts.TargetKeyspaceName()+"."+table+"@rdonly")
+		delete(rules, ts.SourceKeyspaceName()+"."+table)
+		delete(rules, ts.SourceKeyspaceName()+"."+table+"@replica")
+		delete(rules, ts.SourceKeyspaceName()+"."+table+"@rdonly")
 	}
-	if err := topotools.SaveRoutingRules(ctx, ts.wr.ts, rules); err != nil {
+	if err := topotools.SaveRoutingRules(ctx, ts.TopoServer(), rules); err != nil {
 		return err
 	}
 	return nil
@@ -1560,9 +1650,7 @@ func (ts *trafficSwitcher) deleteRoutingRules(ctx context.Context) error {
 // addParticipatingTablesToKeyspace updates the vschema with the new tables that were created as part of the
 // Migrate flow. It is called when the Migrate flow is Completed
 func (ts *trafficSwitcher) addParticipatingTablesToKeyspace(ctx context.Context, keyspace, tableSpecs string) error {
-	var err error
-	var vschema *vschemapb.Keyspace
-	vschema, err = ts.wr.ts.GetVSchema(ctx, keyspace)
+	vschema, err := ts.TopoServer().GetVSchema(ctx, keyspace)
 	if err != nil {
 		return err
 	}
@@ -1592,5 +1680,5 @@ func (ts *trafficSwitcher) addParticipatingTablesToKeyspace(ctx context.Context,
 			vschema.Tables[table] = &vschemapb.Table{}
 		}
 	}
-	return ts.wr.ts.SaveVSchema(ctx, keyspace, vschema)
+	return ts.TopoServer().SaveVSchema(ctx, keyspace, vschema)
 }

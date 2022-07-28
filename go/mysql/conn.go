@@ -29,6 +29,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/mysql/collations"
+
 	"vitess.io/vitess/go/sqlescape"
 
 	"vitess.io/vitess/go/bucketpool"
@@ -36,7 +38,7 @@ import (
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -91,7 +93,7 @@ type Conn struct {
 
 	// authPluginName is the name of server's authentication plugin.
 	// It is set during the initial handshake.
-	authPluginName string
+	authPluginName AuthMethodDescription
 
 	// schemaName is the default database name to use. It is set
 	// during handshake, and by ComInitDb packets. Both client and
@@ -103,7 +105,7 @@ type Conn struct {
 	// ClientData is a place where an application can store any
 	// connection-related data. Mostly used on the server side, to
 	// avoid maps indexed by ConnectionID for instance.
-	ClientData interface{}
+	ClientData any
 
 	// conn is the underlying network connection.
 	// Calling Close() on the Conn will close this connection.
@@ -180,18 +182,30 @@ type Conn struct {
 	// by Handler methods.
 	StatusFlags uint16
 
-	// CharacterSet is the character set used by the other side of the
-	// connection.
-	// It is set during the initial handshake.
-	// See the values in constants.go.
-	CharacterSet uint8
+	// CharacterSet is the charset for this connection, as negotiated
+	// in our handshake with the server. Note that although the MySQL protocol lists this
+	// as a "character set", the returned byte value is actually a Collation ID,
+	// and hence it's casted as such here.
+	// If the user has specified a custom Collation in the ConnParams for this
+	// connection, once the CharacterSet has been negotiated, we will override
+	// it via SQL and update this field accordingly.
+	CharacterSet collations.ID
 
 	// Packet encoding variables.
 	sequence uint8
+
+	// ExpectSemiSyncIndicator is applicable when the connection is used for replication (ComBinlogDump).
+	// When 'true', events are assumed to be padded with 2-byte semi-sync information
+	// See https://dev.mysql.com/doc/internals/en/semi-sync-binlog-event.html
+	ExpectSemiSyncIndicator bool
+
+	// enableQueryInfo controls whether we parse the INFO field in QUERY_OK packets
+	// See: ConnParams.EnableQueryInfo
+	enableQueryInfo bool
 }
 
-// splitStatementFunciton is the function that is used to split the statement in cas ef a multi-statement query.
-var splitStatementFunction func(blob string) (pieces []string, err error) = sqlparser.SplitStatementToPieces
+// splitStatementFunciton is the function that is used to split the statement in case of a multi-statement query.
+var splitStatementFunction = sqlparser.SplitStatementToPieces
 
 // PrepareData is a buffer used for store prepare statement meta data
 type PrepareData struct {
@@ -216,7 +230,7 @@ const (
 var bufPool = bucketpool.New(connBufferSize, MaxPacketSize)
 
 // writersPool is used for pooling bufio.Writer objects.
-var writersPool = sync.Pool{New: func() interface{} { return bufio.NewWriterSize(nil, connBufferSize) }}
+var writersPool = sync.Pool{New: func() any { return bufio.NewWriterSize(nil, connBufferSize) }}
 
 // newConn is an internal method to create a Conn. Used by client and server
 // side for common creation code.
@@ -346,7 +360,7 @@ func (c *Conn) readHeaderFrom(r io.Reader) (int, error) {
 
 	sequence := uint8(c.header[3])
 	if sequence != c.sequence {
-		return 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "invalid sequence, expected %v got %v", c.sequence, sequence)
+		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid sequence, expected %v got %v", c.sequence, sequence)
 	}
 
 	c.sequence++
@@ -364,7 +378,7 @@ func (c *Conn) readHeaderFrom(r io.Reader) (int, error) {
 // it most likely will be io.EOF.
 func (c *Conn) readEphemeralPacket() ([]byte, error) {
 	if c.currentEphemeralPolicy != ephemeralUnused {
-		panic(vterrors.Errorf(vtrpc.Code_INTERNAL, "readEphemeralPacket: unexpected currentEphemeralPolicy: %v", c.currentEphemeralPolicy))
+		panic(vterrors.Errorf(vtrpcpb.Code_INTERNAL, "readEphemeralPacket: unexpected currentEphemeralPolicy: %v", c.currentEphemeralPolicy))
 	}
 
 	r := c.getReader()
@@ -424,7 +438,7 @@ func (c *Conn) readEphemeralPacket() ([]byte, error) {
 // This function usually shouldn't be used - use readEphemeralPacket.
 func (c *Conn) readEphemeralPacketDirect() ([]byte, error) {
 	if c.currentEphemeralPolicy != ephemeralUnused {
-		panic(vterrors.Errorf(vtrpc.Code_INTERNAL, "readEphemeralPacketDirect: unexpected currentEphemeralPolicy: %v", c.currentEphemeralPolicy))
+		panic(vterrors.Errorf(vtrpcpb.Code_INTERNAL, "readEphemeralPacketDirect: unexpected currentEphemeralPolicy: %v", c.currentEphemeralPolicy))
 	}
 
 	var r io.Reader = c.conn
@@ -449,7 +463,7 @@ func (c *Conn) readEphemeralPacketDirect() ([]byte, error) {
 		return *c.currentEphemeralBuffer, nil
 	}
 
-	return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "readEphemeralPacketDirect doesn't support more than one packet")
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "readEphemeralPacketDirect doesn't support more than one packet")
 }
 
 // recycleReadPacket recycles the read packet. It needs to be called
@@ -457,7 +471,7 @@ func (c *Conn) readEphemeralPacketDirect() ([]byte, error) {
 func (c *Conn) recycleReadPacket() {
 	if c.currentEphemeralPolicy != ephemeralRead {
 		// Programming error.
-		panic(vterrors.Errorf(vtrpc.Code_INTERNAL, "trying to call recycleReadPacket while currentEphemeralPolicy is %d", c.currentEphemeralPolicy))
+		panic(vterrors.Errorf(vtrpcpb.Code_INTERNAL, "trying to call recycleReadPacket while currentEphemeralPolicy is %d", c.currentEphemeralPolicy))
 	}
 	if c.currentEphemeralBuffer != nil {
 		// We are using the pool, put the buffer back in.
@@ -570,7 +584,7 @@ func (c *Conn) writePacket(data []byte) error {
 		if n, err := w.Write(data[index : index+toBeSent+packetHeaderSize]); err != nil {
 			return vterrors.Wrapf(err, "Write(packet) failed")
 		} else if n != (toBeSent + packetHeaderSize) {
-			return vterrors.Errorf(vtrpc.Code_INTERNAL, "Write(packet) returned a short write: %v < %v", n, (toBeSent + packetHeaderSize))
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Write(packet) returned a short write: %v < %v", n, (toBeSent + packetHeaderSize))
 		}
 
 		// restore the first 4 bytes once the network send is done
@@ -591,7 +605,7 @@ func (c *Conn) writePacket(data []byte) error {
 				if n, err := w.Write(header[:]); err != nil {
 					return vterrors.Wrapf(err, "Write(empty header) failed")
 				} else if n != packetHeaderSize {
-					return vterrors.Errorf(vtrpc.Code_INTERNAL, "Write(empty header) returned a short write: %v < 4", n)
+					return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Write(empty header) returned a short write: %v < 4", n)
 				}
 				c.sequence++
 			}
@@ -624,7 +638,7 @@ func (c *Conn) writeEphemeralPacket() error {
 		}
 	case ephemeralUnused, ephemeralRead:
 		// Programming error.
-		panic(vterrors.Errorf(vtrpc.Code_INTERNAL, "conn %v: trying to call writeEphemeralPacket while currentEphemeralPolicy is %v", c.ID(), c.currentEphemeralPolicy))
+		panic(vterrors.Errorf(vtrpcpb.Code_INTERNAL, "conn %v: trying to call writeEphemeralPacket while currentEphemeralPolicy is %v", c.ID(), c.currentEphemeralPolicy))
 	}
 
 	return nil
@@ -635,7 +649,7 @@ func (c *Conn) writeEphemeralPacket() error {
 func (c *Conn) recycleWritePacket() {
 	if c.currentEphemeralPolicy != ephemeralWrite {
 		// Programming error.
-		panic(vterrors.Errorf(vtrpc.Code_INTERNAL, "trying to call recycleWritePacket while currentEphemeralPolicy is %d", c.currentEphemeralPolicy))
+		panic(vterrors.Errorf(vtrpcpb.Code_INTERNAL, "trying to call recycleWritePacket while currentEphemeralPolicy is %d", c.currentEphemeralPolicy))
 	}
 	// Release our reference so the buffer can be gced
 	bufPool.Put(c.currentEphemeralBuffer)
@@ -787,7 +801,7 @@ func getLenEncInt(i uint64) []byte {
 	return data
 }
 
-func (c *Conn) writeErrorAndLog(errorCode uint16, sqlState string, format string, args ...interface{}) bool {
+func (c *Conn) writeErrorAndLog(errorCode uint16, sqlState string, format string, args ...any) bool {
 	if err := c.writeErrorPacket(errorCode, sqlState, format, args...); err != nil {
 		log.Errorf("Error writing error to %s: %v", c, err)
 		return false
@@ -807,7 +821,7 @@ func (c *Conn) writeErrorPacketFromErrorAndLog(err error) bool {
 // writeErrorPacket writes an error packet.
 // Server -> Client.
 // This method returns a generic error, not a SQLError.
-func (c *Conn) writeErrorPacket(errorCode uint16, sqlState string, format string, args ...interface{}) error {
+func (c *Conn) writeErrorPacket(errorCode uint16, sqlState string, format string, args ...any) error {
 	errorMessage := fmt.Sprintf(format, args...)
 	length := 1 + 2 + 1 + 5 + len(errorMessage)
 	data, pos := c.startEphemeralPacketWithHeader(length)
@@ -896,7 +910,13 @@ func (c *Conn) handleNextCommand(handler Handler) bool {
 	case ComResetConnection:
 		c.handleComResetConnection(handler)
 		return true
-
+	case ComFieldList:
+		c.recycleReadPacket()
+		if !c.writeErrorAndLog(ERUnknownComError, SSNetError, "command handling not implemented yet: %v", data[0]) {
+			return false
+		}
+	case ComBinlogDumpGTID:
+		return c.handleComBinlogDumpGTID(handler, data)
 	default:
 		log.Errorf("Got unhandled packet (default) from %s, returning error: %v", c, data)
 		c.recycleReadPacket()
@@ -904,6 +924,27 @@ func (c *Conn) handleNextCommand(handler Handler) bool {
 			return false
 		}
 	}
+
+	return true
+}
+
+func (c *Conn) handleComBinlogDumpGTID(handler Handler, data []byte) (kontinue bool) {
+	defer c.recycleReadPacket()
+
+	c.startWriterBuffering()
+	defer func() {
+		if err := c.endWriterBuffering(); err != nil {
+			log.Errorf("conn %v: flush() failed: %v", c.ID(), err)
+			kontinue = false
+		}
+	}()
+
+	_, _, position, err := c.parseComBinlogDumpGTID(data)
+	if err != nil {
+		log.Errorf("conn %v: parseComBinlogDumpGTID failed: %v", c.ID(), err)
+		kontinue = false
+	}
+	handler.ComBinlogDumpGTID(c, position.GTIDSet)
 
 	return true
 }
@@ -952,7 +993,7 @@ func (c *Conn) handleComStmtReset(data []byte) bool {
 }
 
 func (c *Conn) handleComStmtSendLongData(data []byte) bool {
-	stmtID, paramID, chunkData, ok := c.parseComStmtSendLongData(data)
+	stmtID, paramID, chunk, ok := c.parseComStmtSendLongData(data)
 	c.recycleReadPacket()
 	if !ok {
 		err := fmt.Errorf("error parsing statement send long data from client %v, returning error: %v", c.ConnectionID, data)
@@ -971,9 +1012,6 @@ func (c *Conn) handleComStmtSendLongData(data []byte) bool {
 		err := fmt.Errorf("invalid parameter Number from client %v, statement: %v", c.ConnectionID, prepare.PrepareStmt)
 		return c.writeErrorPacketFromErrorAndLog(err)
 	}
-
-	chunk := make([]byte, len(chunkData))
-	copy(chunk, chunkData)
 
 	key := fmt.Sprintf("v%d", paramID+1)
 	if val, ok := prepare.BindVars[key]; ok {
@@ -1095,7 +1133,7 @@ func (c *Conn) handleComPrepare(handler Handler, data []byte) (kontinue bool) {
 			return c.writeErrorPacketFromErrorAndLog(err)
 		}
 		if len(queries) != 1 {
-			log.Errorf("Conn %v: can not prepare multiple statements", c, err)
+			log.Errorf("Conn %v: can not prepare multiple statements", c)
 			return c.writeErrorPacketFromErrorAndLog(err)
 		}
 	} else {
@@ -1357,7 +1395,7 @@ func parseEOFPacket(data []byte) (warnings uint16, statusFlags uint16, err error
 	// The status flag is in position 4 & 5
 	statusFlags, _, ok := readUint16(data, 3)
 	if !ok {
-		return 0, 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "invalid EOF packet statusFlags: %v", data)
+		return 0, 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid EOF packet statusFlags: %v", data)
 	}
 	return warnings, statusFlags, nil
 }
@@ -1381,8 +1419,8 @@ func (c *Conn) parseOKPacket(in []byte) (*PacketOK, error) {
 	}
 	packetOK := &PacketOK{}
 
-	fail := func(format string, args ...interface{}) (*PacketOK, error) {
-		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, format, args...)
+	fail := func(format string, args ...any) (*PacketOK, error) {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, format, args...)
 	}
 
 	// Affected rows.
@@ -1414,10 +1452,13 @@ func (c *Conn) parseOKPacket(in []byte) (*PacketOK, error) {
 	}
 	packetOK.warnings = warnings
 
-	if c.Capabilities&uint32(CapabilityClientSessionTrack) == CapabilityClientSessionTrack {
-		// info
-		info, _ := data.readLenEncInfo()
+	// info
+	info, _ := data.readLenEncInfo()
+	if c.enableQueryInfo {
 		packetOK.info = info
+	}
+
+	if c.Capabilities&uint32(CapabilityClientSessionTrack) == CapabilityClientSessionTrack {
 		// session tracking
 		if statusFlags&ServerSessionStateChanged == ServerSessionStateChanged {
 			_, ok := data.readLenEncInt()
@@ -1445,10 +1486,6 @@ func (c *Conn) parseOKPacket(in []byte) (*PacketOK, error) {
 			}
 			packetOK.sessionStateData = gtids
 		}
-	} else {
-		// info
-		info, _ := data.readLenEncInfo()
-		packetOK.info = info
 	}
 
 	return packetOK, nil
@@ -1492,6 +1529,17 @@ func (c *Conn) GetTLSClientCerts() []*x509.Certificate {
 		return tlsConn.ConnectionState().PeerCertificates
 	}
 	return nil
+}
+
+// TLSEnabled returns true if this connection is using TLS.
+func (c *Conn) TLSEnabled() bool {
+	return c.Capabilities&CapabilityClientSSL > 0
+}
+
+// IsUnixSocket returns true if this connection is over a Unix socket.
+func (c *Conn) IsUnixSocket() bool {
+	_, ok := c.listener.listener.(*net.UnixListener)
+	return ok
 }
 
 // GetRawConn returns the raw net.Conn for nefarious purposes.

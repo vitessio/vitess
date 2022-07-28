@@ -27,7 +27,6 @@ import (
 	"github.com/patrickmn/go-cache"
 
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
-	orcraft "vitess.io/vitess/go/vt/orchestrator/raft"
 )
 
 var lastHealthCheckUnixNano int64
@@ -76,7 +75,7 @@ type HealthStatus struct {
 	Hostname           string
 	Token              string
 	IsActiveNode       bool
-	ActiveNode         NodeHealth
+	ActiveNode         *NodeHealth
 	Error              error
 	AvailableNodes     [](*NodeHealth)
 	RaftLeader         string
@@ -90,7 +89,7 @@ type OrchestratorExecutionMode string
 
 const (
 	OrchestratorExecutionCliMode  OrchestratorExecutionMode = "CLIMode"
-	OrchestratorExecutionHttpMode OrchestratorExecutionMode = "HttpMode"
+	OrchestratorExecutionHTTPMode OrchestratorExecutionMode = "HttpMode"
 )
 
 var continuousRegistrationOnce sync.Once
@@ -115,26 +114,16 @@ func HealthTest() (health *HealthStatus, err error) {
 	health = &HealthStatus{Healthy: false, Hostname: ThisHostname, Token: util.ProcessToken.Hash}
 	defer lastHealthCheckCache.Set(cacheKey, health, cache.DefaultExpiration)
 
-	if healthy, err := RegisterNode(ThisNodeHealth); err != nil {
+	healthy, err := RegisterNode(ThisNodeHealth)
+	if err != nil {
 		health.Error = err
 		return health, log.Errore(err)
-	} else {
-		health.Healthy = healthy
 	}
+	health.Healthy = healthy
 
-	if orcraft.IsRaftEnabled() {
-		health.ActiveNode.Hostname = orcraft.GetLeader()
-		health.IsActiveNode = orcraft.IsLeader()
-		health.RaftLeader = orcraft.GetLeader()
-		health.RaftLeaderURI = orcraft.LeaderURI.Get()
-		health.IsRaftLeader = orcraft.IsLeader()
-		health.RaftAdvertise = config.Config.RaftAdvertise
-		health.RaftHealthyMembers = orcraft.HealthyMembers()
-	} else {
-		if health.ActiveNode, health.IsActiveNode, err = ElectedNode(); err != nil {
-			health.Error = err
-			return health, log.Errore(err)
-		}
+	if health.ActiveNode, health.IsActiveNode, err = ElectedNode(); err != nil {
+		health.Error = err
+		return health, log.Errore(err)
 	}
 	health.AvailableNodes, _ = ReadAvailableNodes(true)
 

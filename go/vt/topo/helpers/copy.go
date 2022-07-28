@@ -25,6 +25,7 @@ import (
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -111,7 +112,7 @@ func CopyTablets(ctx context.Context, fromTS, toTS *topo.Server) {
 	}
 
 	for _, cell := range cells {
-		tabletAliases, err := fromTS.GetTabletsByCell(ctx, cell)
+		tabletAliases, err := fromTS.GetTabletAliasesByCell(ctx, cell)
 		if err != nil {
 			log.Fatalf("GetTabletsByCell(%v): %v", cell, err)
 		} else {
@@ -168,8 +169,27 @@ func CopyShardReplications(ctx context.Context, fromTS, toTS *topo.Server) {
 					continue
 				}
 
+				sriNodes := map[string]struct{}{}
+				for _, node := range sri.Nodes {
+					sriNodes[topoproto.TabletAliasString(node.TabletAlias)] = struct{}{}
+				}
+
 				if err := toTS.UpdateShardReplicationFields(ctx, cell, keyspace, shard, func(oldSR *topodatapb.ShardReplication) error {
+					var nodes []*topodatapb.ShardReplication_Node
+					for _, oldNode := range oldSR.Nodes {
+						if _, ok := sriNodes[topoproto.TabletAliasString(oldNode.TabletAlias)]; ok {
+							continue
+						}
+
+						nodes = append(nodes, oldNode)
+					}
+
+					nodes = append(nodes, sri.ShardReplication.Nodes...)
+					// Even though ShardReplication currently only has the .Nodes field,
+					// keeping the proto.Merge call here prevents this copy from
+					// unintentionally breaking if we add new fields.
 					proto.Merge(oldSR, sri.ShardReplication)
+					oldSR.Nodes = nodes
 					return nil
 				}); err != nil {
 					log.Warningf("UpdateShardReplicationFields(%v, %v, %v): %v", cell, keyspace, shard, err)

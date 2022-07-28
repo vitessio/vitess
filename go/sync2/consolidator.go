@@ -48,7 +48,7 @@ type Result struct {
 	executing    sync.RWMutex
 	consolidator *Consolidator
 	query        string
-	Result       interface{}
+	Result       any
 	Err          error
 }
 
@@ -94,7 +94,7 @@ type ConsolidatorCache struct {
 
 // NewConsolidatorCache creates a new cache with the given capacity.
 func NewConsolidatorCache(capacity int64) *ConsolidatorCache {
-	return &ConsolidatorCache{cache.NewLRUCache(capacity, func(_ interface{}) int64 {
+	return &ConsolidatorCache{cache.NewLRUCache(capacity, func(_ any) int64 {
 		return 1
 	})}
 }

@@ -17,17 +17,15 @@ limitations under the License.
 package vtctl
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path"
 
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/encoding/prototext"
-
-	"context"
-
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/vt/topo"
@@ -45,16 +43,18 @@ func init() {
 	addCommandGroup(topoGroupName)
 
 	addCommand(topoGroupName, command{
-		"TopoCat",
-		commandTopoCat,
-		"[-cell <cell>] [-decode_proto] [-decode_proto_json] [-long] <path> [<path>...]",
-		"Retrieves the file(s) at <path> from the topo service, and displays it. It can resolve wildcards, and decode the proto-encoded data."})
+		name:   "TopoCat",
+		method: commandTopoCat,
+		params: "[--cell <cell>] [--decode_proto] [--decode_proto_json] [--long] <path> [<path>...]",
+		help:   "Retrieves the file(s) at <path> from the topo service, and displays it. It can resolve wildcards, and decode the proto-encoded data.",
+	})
 
 	addCommand(topoGroupName, command{
-		"TopoCp",
-		commandTopoCp,
-		"[-cell <cell>] [-to_topo] <src> <dst>",
-		"Copies a file from topo to local file structure, or the other way around"})
+		name:   "TopoCp",
+		method: commandTopoCp,
+		params: "[--cell <cell>] [--to_topo] <src> <dst>",
+		help:   "Copies a file from topo to local file structure, or the other way around",
+	})
 }
 
 // DecodeContent uses the filename to imply a type, and proto-decodes
@@ -170,7 +170,7 @@ func copyFileFromTopo(ctx context.Context, ts *topo.Server, cell, from, to strin
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(to, data, 0644)
+	return os.WriteFile(to, data, 0644)
 }
 
 func copyFileToTopo(ctx context.Context, ts *topo.Server, cell, from, to string) error {
@@ -178,7 +178,7 @@ func copyFileToTopo(ctx context.Context, ts *topo.Server, cell, from, to string)
 	if err != nil {
 		return err
 	}
-	data, err := ioutil.ReadFile(from)
+	data, err := os.ReadFile(from)
 	if err != nil {
 		return err
 	}
@@ -260,7 +260,7 @@ func (d PlainTopologyDecoder) decode(ctx context.Context, topoPaths []string, co
 
 func (d JSONTopologyDecoder) decode(ctx context.Context, topoPaths []string, conn topo.Conn, wr *wrangler.Wrangler, long bool) error {
 	hasError := false
-	var jsonData []interface{}
+	var jsonData []any
 	for _, topoPath := range topoPaths {
 		data, version, err := conn.Get(ctx, topoPath)
 		if err != nil {
@@ -276,7 +276,7 @@ func (d JSONTopologyDecoder) decode(ctx context.Context, topoPaths []string, con
 			continue
 		}
 
-		var jsonDatum map[string]interface{}
+		var jsonDatum map[string]any
 		if err = json.Unmarshal([]byte(decoded), &jsonDatum); err != nil {
 			hasError = true
 			wr.Logger().Printf("TopoCat: cannot json Unmarshal %v: %v", topoPath, err)

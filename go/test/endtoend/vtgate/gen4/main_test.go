@@ -17,9 +17,17 @@ limitations under the License.
 package vtgate
 
 import (
+	_ "embed"
 	"flag"
+	"fmt"
 	"os"
 	"testing"
+
+	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/test/endtoend/utils"
+
+	"vitess.io/vitess/go/vt/vtgate/planbuilder"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -28,34 +36,31 @@ import (
 var (
 	clusterInstance *cluster.LocalProcessCluster
 	vtParams        mysql.ConnParams
-	KeyspaceName    = "ks"
+	mysqlParams     mysql.ConnParams
+	shardedKs       = "ks"
+	unshardedKs     = "uks"
+	shardedKsShards = []string{"-19a0", "19a0-20", "20-20c0", "20c0-"}
 	Cell            = "test"
-	SchemaSQL       = `create table t1(
-	id bigint,
-	col bigint,
-	primary key(id)
-) Engine=InnoDB;
-`
+	//go:embed sharded_schema.sql
+	shardedSchemaSQL string
 
-	VSchema = `
-{
-  "sharded": true,
-  "vindexes": {
-    "xxhash": {
-      "type": "xxhash"
-    }
-  },
-  "tables": {
-    "t1": {
-      "column_vindexes": [
-        {
-          "column": "id",
-          "name": "xxhash"
-        }
-      ]
-    }
+	//go:embed unsharded_schema.sql
+	unshardedSchemaSQL string
+
+	//go:embed sharded_vschema.json
+	shardedVSchema string
+
+	//go:embed unsharded_vschema.json
+	unshardedVSchema string
+
+	routingRules = `
+{"rules": [
+  {
+    "from_table": "ks.t1000",
+	"to_tables": ["ks.t1"]
   }
-}`
+]}
+`
 )
 
 func TestMain(m *testing.M) {
@@ -73,18 +78,42 @@ func TestMain(m *testing.M) {
 		}
 
 		// Start keyspace
-		keyspace := &cluster.Keyspace{
-			Name:      KeyspaceName,
-			SchemaSQL: SchemaSQL,
-			VSchema:   VSchema,
+		sKs := &cluster.Keyspace{
+			Name:      shardedKs,
+			SchemaSQL: shardedSchemaSQL,
+			VSchema:   shardedVSchema,
 		}
-		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 1, true)
+
+		clusterInstance.VtGateExtraArgs = []string{"--schema_change_signal"}
+		clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-schema-change-signal", "--queryserver-config-schema-change-signal-interval", "0.1"}
+		err = clusterInstance.StartKeyspace(*sKs, shardedKsShards, 0, false)
+		if err != nil {
+			return 1
+		}
+
+		uKs := &cluster.Keyspace{
+			Name:      unshardedKs,
+			SchemaSQL: unshardedSchemaSQL,
+			VSchema:   unshardedVSchema,
+		}
+		err = clusterInstance.StartUnshardedKeyspace(*uKs, 0, false)
+		if err != nil {
+			return 1
+		}
+
+		// apply routing rules
+		err = clusterInstance.VtctlclientProcess.ApplyRoutingRules(routingRules)
+		if err != nil {
+			return 1
+		}
+
+		err = clusterInstance.VtctlclientProcess.ExecuteCommand("RebuildVSchemaGraph")
 		if err != nil {
 			return 1
 		}
 
 		// Start vtgate
-		clusterInstance.VtGateExtraArgs = []string{"-planner_version", "Gen4Fallback"} // enable Gen4 planner.
+		clusterInstance.VtGatePlannerVersion = planbuilder.Gen4 // enable Gen4 planner.
 		err = clusterInstance.StartVtgate()
 		if err != nil {
 			return 1
@@ -93,7 +122,36 @@ func TestMain(m *testing.M) {
 			Host: clusterInstance.Hostname,
 			Port: clusterInstance.VtgateMySQLPort,
 		}
+
+		conn, closer, err := utils.NewMySQL(clusterInstance, shardedKs, shardedSchemaSQL)
+		if err != nil {
+			fmt.Println(err)
+			return 1
+		}
+		defer closer()
+		mysqlParams = conn
 		return m.Run()
 	}()
 	os.Exit(exitCode)
+}
+
+func start(t *testing.T) (utils.MySQLCompare, func()) {
+	mcmp, err := utils.NewMySQLCompare(t, vtParams, mysqlParams)
+	require.NoError(t, err)
+	deleteAll := func() {
+		_, _ = utils.ExecAllowError(t, mcmp.VtConn, "set workload = oltp")
+
+		tables := []string{"t1", "t2", "t3", "user_region", "region_tbl", "multicol_tbl", "t1_id2_idx", "t2_id4_idx", "u_a", "u_b"}
+		for _, table := range tables {
+			_, _ = mcmp.ExecAndIgnore("delete from " + table)
+		}
+	}
+
+	deleteAll()
+
+	return mcmp, func() {
+		deleteAll()
+		mcmp.Close()
+		cluster.PanicHandler(t)
+	}
 }

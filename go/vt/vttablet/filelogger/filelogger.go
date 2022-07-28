@@ -44,7 +44,7 @@ type FileLogger interface {
 }
 
 type fileLogger struct {
-	logChan chan interface{}
+	logChan chan any
 }
 
 func (l *fileLogger) Stop() {

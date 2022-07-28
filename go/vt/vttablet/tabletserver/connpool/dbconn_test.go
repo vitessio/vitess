@@ -118,6 +118,64 @@ func TestDBConnExec(t *testing.T) {
 	compareTimingCounts(t, "PoolTest.Exec", 1, startCounts, mysqlTimings.Counts())
 }
 
+func TestDBConnExecLost(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+
+	sql := "select * from test_table limit 1000"
+	expectedResult := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Type: sqltypes.VarChar},
+		},
+		RowsAffected: 0,
+		Rows: [][]sqltypes.Value{
+			{sqltypes.NewVarChar("123")},
+		},
+	}
+	db.AddQuery(sql, expectedResult)
+	connPool := newPool()
+	mysqlTimings := connPool.env.Stats().MySQLTimings
+	startCounts := mysqlTimings.Counts()
+	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	defer connPool.Close()
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(10*time.Second))
+	defer cancel()
+	dbConn, err := NewDBConn(context.Background(), connPool, db.ConnParams())
+	if dbConn != nil {
+		defer dbConn.Close()
+	}
+	if err != nil {
+		t.Fatalf("should not get an error, err: %v", err)
+	}
+	// Exec succeed, not asking for fields.
+	result, err := dbConn.Exec(ctx, sql, 1, false)
+	if err != nil {
+		t.Fatalf("should not get an error, err: %v", err)
+	}
+	expectedResult.Fields = nil
+	if !reflect.DeepEqual(expectedResult, result) {
+		t.Errorf("Exec: %v, want %v", expectedResult, result)
+	}
+
+	compareTimingCounts(t, "PoolTest.Exec", 1, startCounts, mysqlTimings.Counts())
+
+	// Exec fail due to server side error (e.g. query kill)
+	startCounts = mysqlTimings.Counts()
+	db.AddRejectedQuery(sql, &mysql.SQLError{
+		Num:     2013,
+		Message: "Lost connection to MySQL server during query",
+		Query:   "",
+	})
+	_, err = dbConn.Exec(ctx, sql, 1, false)
+	want := "Lost connection to MySQL server during query"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("Exec: %v, want %s", err, want)
+	}
+
+	// Should *not* see a retry, so only increment by 1
+	compareTimingCounts(t, "PoolTest.Exec", 1, startCounts, mysqlTimings.Counts())
+}
+
 func TestDBConnDeadline(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()

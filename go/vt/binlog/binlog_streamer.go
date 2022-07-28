@@ -322,7 +322,7 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 		// tells us the size of the event header.
 		if format.IsZero() {
 			// The only thing that should come before the FORMAT_DESCRIPTION_EVENT
-			// is a fake ROTATE_EVENT, which the master sends to tell us the name
+			// is a fake ROTATE_EVENT, which the primary sends to tell us the name
 			// of the current log file.
 			if ev.IsRotate() {
 				continue
@@ -479,7 +479,7 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			}
 
 			// Find and fill in the table schema.
-			tce.ti = bls.se.GetTable(sqlparser.NewTableIdent(tm.Name))
+			tce.ti = bls.se.GetTable(sqlparser.NewIdentifierCS(tm.Name))
 			if tce.ti == nil {
 				return pos, fmt.Errorf("unknown table %v in schema", tm.Name)
 			}
@@ -604,7 +604,7 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 func (bls *Streamer) appendInserts(statements []FullBinlogStatement, tce *tableCacheEntry, rows *mysql.Rows) []FullBinlogStatement {
 	for i := range rows.Rows {
 		sql := sqlparser.NewTrackedBuffer(nil)
-		sql.Myprintf("INSERT INTO %v SET ", sqlparser.NewTableIdent(tce.tm.Name))
+		sql.Myprintf("INSERT INTO %v SET ", sqlparser.NewIdentifierCS(tce.tm.Name))
 
 		keyspaceIDCell, pkValues, err := writeValuesAsSQL(sql, tce, rows, i, tce.pkNames != nil)
 		if err != nil {
@@ -640,7 +640,7 @@ func (bls *Streamer) appendInserts(statements []FullBinlogStatement, tce *tableC
 func (bls *Streamer) appendUpdates(statements []FullBinlogStatement, tce *tableCacheEntry, rows *mysql.Rows) []FullBinlogStatement {
 	for i := range rows.Rows {
 		sql := sqlparser.NewTrackedBuffer(nil)
-		sql.Myprintf("UPDATE %v SET ", sqlparser.NewTableIdent(tce.tm.Name))
+		sql.Myprintf("UPDATE %v SET ", sqlparser.NewIdentifierCS(tce.tm.Name))
 
 		keyspaceIDCell, pkValues, err := writeValuesAsSQL(sql, tce, rows, i, tce.pkNames != nil)
 		if err != nil {
@@ -683,7 +683,7 @@ func (bls *Streamer) appendUpdates(statements []FullBinlogStatement, tce *tableC
 func (bls *Streamer) appendDeletes(statements []FullBinlogStatement, tce *tableCacheEntry, rows *mysql.Rows) []FullBinlogStatement {
 	for i := range rows.Rows {
 		sql := sqlparser.NewTrackedBuffer(nil)
-		sql.Myprintf("DELETE FROM %v WHERE ", sqlparser.NewTableIdent(tce.tm.Name))
+		sql.Myprintf("DELETE FROM %v WHERE ", sqlparser.NewIdentifierCS(tce.tm.Name))
 
 		keyspaceIDCell, pkValues, err := writeIdentifiersAsSQL(sql, tce, rows, i, tce.pkNames != nil)
 		if err != nil {
@@ -743,7 +743,7 @@ func writeValuesAsSQL(sql *sqlparser.TrackedBuffer, tce *tableCacheEntry, rs *my
 		if valueIndex > 0 {
 			sql.WriteString(", ")
 		}
-		sql.Myprintf("%v", sqlparser.NewColIdent(tce.ti.Fields[c].Name))
+		sql.Myprintf("%v", sqlparser.NewIdentifierCI(tce.ti.Fields[c].Name))
 		sql.WriteByte('=')
 
 		if rs.Rows[rowIndex].NullColumns.Bit(valueIndex) {
@@ -754,11 +754,15 @@ func writeValuesAsSQL(sql *sqlparser.TrackedBuffer, tce *tableCacheEntry, rs *my
 		}
 
 		// We have real data.
-		value, l, err := mysql.CellValue(data, pos, tce.tm.Types[c], tce.tm.Metadata[c], tce.ti.Fields[c].Type)
+		value, l, err := mysql.CellValue(data, pos, tce.tm.Types[c], tce.tm.Metadata[c], &querypb.Field{Type: tce.ti.Fields[c].Type})
 		if err != nil {
 			return keyspaceIDCell, nil, err
 		}
-		if value.Type() == querypb.Type_TIMESTAMP && !bytes.HasPrefix(value.ToBytes(), mysql.ZeroTimestamp) {
+		vBytes, err := value.ToBytes()
+		if err != nil {
+			return sqltypes.Value{}, nil, err
+		}
+		if value.Type() == querypb.Type_TIMESTAMP && !bytes.HasPrefix(vBytes, mysql.ZeroTimestamp) {
 			// Values in the binary log are UTC. Let's convert them
 			// to whatever timezone the connection is using,
 			// so MySQL properly converts them back to UTC.
@@ -804,7 +808,7 @@ func writeIdentifiersAsSQL(sql *sqlparser.TrackedBuffer, tce *tableCacheEntry, r
 		if valueIndex > 0 {
 			sql.WriteString(" AND ")
 		}
-		sql.Myprintf("%v", sqlparser.NewColIdent(tce.ti.Fields[c].Name))
+		sql.Myprintf("%v", sqlparser.NewIdentifierCI(tce.ti.Fields[c].Name))
 
 		if rs.Rows[rowIndex].NullIdentifyColumns.Bit(valueIndex) {
 			// This column is represented, but its value is NULL.
@@ -815,11 +819,15 @@ func writeIdentifiersAsSQL(sql *sqlparser.TrackedBuffer, tce *tableCacheEntry, r
 		sql.WriteByte('=')
 
 		// We have real data.
-		value, l, err := mysql.CellValue(data, pos, tce.tm.Types[c], tce.tm.Metadata[c], tce.ti.Fields[c].Type)
+		value, l, err := mysql.CellValue(data, pos, tce.tm.Types[c], tce.tm.Metadata[c], &querypb.Field{Type: tce.ti.Fields[c].Type})
 		if err != nil {
 			return keyspaceIDCell, nil, err
 		}
-		if value.Type() == querypb.Type_TIMESTAMP && !bytes.HasPrefix(value.ToBytes(), mysql.ZeroTimestamp) {
+		vBytes, err := value.ToBytes()
+		if err != nil {
+			return keyspaceIDCell, nil, err
+		}
+		if value.Type() == querypb.Type_TIMESTAMP && !bytes.HasPrefix(vBytes, mysql.ZeroTimestamp) {
 			// Values in the binary log are UTC. Let's convert them
 			// to whatever timezone the connection is using,
 			// so MySQL properly converts them back to UTC.

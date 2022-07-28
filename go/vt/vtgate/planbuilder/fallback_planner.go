@@ -19,39 +19,32 @@ package planbuilder
 import (
 	"fmt"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
 type fallbackPlanner struct {
-	primary, fallback selectPlanner
+	primary, fallback stmtPlanner
 }
 
-var _ selectPlanner = (*fallbackPlanner)(nil).plan
+var _ stmtPlanner = (*fallbackPlanner)(nil).plan
 
-func (fp *fallbackPlanner) safePrimary(query string) func(sqlparser.Statement, *sqlparser.ReservedVars, ContextVSchema) (engine.Primitive, error) {
-	primaryF := fp.primary(query)
-	return func(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema ContextVSchema) (res engine.Primitive, err error) {
-		defer func() {
-			// if the primary planner panics, we want to catch it here so we can fall back
-			if r := recover(); r != nil {
-				err = fmt.Errorf("%v", r) // not using vterror since this will only be used for logging
-			}
-		}()
-		res, err = primaryF(stmt, reservedVars, vschema)
-		return
-	}
-}
-
-func (fp *fallbackPlanner) plan(query string) func(sqlparser.Statement, *sqlparser.ReservedVars, ContextVSchema) (engine.Primitive, error) {
-	primaryF := fp.safePrimary(query)
-	backupF := fp.fallback(query)
-
-	return func(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema ContextVSchema) (engine.Primitive, error) {
-		res, err := primaryF(stmt, reservedVars, vschema)
-		if err != nil {
-			return backupF(stmt, reservedVars, vschema)
+func (fp *fallbackPlanner) safePrimary(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (res *planResult, err error) {
+	defer func() {
+		// if the primary planner panics, we want to catch it here so we can fall back
+		if r := recover(); r != nil {
+			err = fmt.Errorf("%v", r) // not using vterror since this will only be used for logging
 		}
-		return res, nil
+	}()
+	res, err = fp.primary(stmt, reservedVars, vschema)
+	return
+}
+
+func (fp *fallbackPlanner) plan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
+	res, err := fp.safePrimary(sqlparser.CloneStatement(stmt), reservedVars, vschema)
+	if err != nil {
+		return fp.fallback(stmt, reservedVars, vschema)
 	}
+	return res, nil
 }

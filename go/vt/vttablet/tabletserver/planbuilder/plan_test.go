@@ -22,12 +22,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"github.com/stretchr/testify/require"
 
@@ -41,7 +42,7 @@ import (
 func (p *Plan) MarshalJSON() ([]byte, error) {
 	mplan := struct {
 		PlanID      PlanType
-		TableName   sqlparser.TableIdent   `json:",omitempty"`
+		TableName   sqlparser.IdentifierCS `json:",omitempty"`
 		Permissions []Permission           `json:",omitempty"`
 		FieldQuery  *sqlparser.ParsedQuery `json:",omitempty"`
 		FullQuery   *sqlparser.ParsedQuery `json:",omitempty"`
@@ -51,13 +52,11 @@ func (p *Plan) MarshalJSON() ([]byte, error) {
 		PlanID:      p.PlanID,
 		TableName:   p.TableName(),
 		Permissions: p.Permissions,
-		FieldQuery:  p.FieldQuery,
 		FullQuery:   p.FullQuery,
 		WhereClause: p.WhereClause,
 	}
-	if !p.NextCount.IsNull() {
-		b, _ := p.NextCount.MarshalJSON()
-		mplan.NextCount = string(b)
+	if p.NextCount != nil {
+		mplan.NextCount = evalengine.FormatExpr(p.NextCount)
 	}
 	return json.Marshal(&mplan)
 }
@@ -82,9 +81,7 @@ func TestPlan(t *testing.T) {
 				out = err.Error()
 			} else {
 				bout, err := json.Marshal(plan)
-				if err != nil {
-					t.Fatalf("Error marshalling %v: %v", plan, err)
-				}
+				require.NoError(t, err, "Error marshalling %v: %v", plan, err)
 				out = string(bout)
 			}
 			if out != tcase.output {
@@ -268,8 +265,43 @@ func TestMessageStreamingPlan(t *testing.T) {
 	}
 }
 
+func TestLockPlan(t *testing.T) {
+	testSchema := loadSchema("schema_test.json")
+	for tcase := range iterateExecFile("lock_cases.txt") {
+		t.Run(tcase.input, func(t *testing.T) {
+			var plan *Plan
+			var err error
+			statement, err := sqlparser.Parse(tcase.input)
+			if err == nil {
+				plan, err = Build(statement, testSchema, false, "dbName")
+			}
+
+			var out string
+			if err != nil {
+				out = err.Error()
+			} else {
+				bout, err := json.Marshal(plan)
+				if err != nil {
+					t.Fatalf("Error marshalling %v: %v", plan, err)
+				}
+				out = string(bout)
+			}
+			if out != tcase.output {
+				t.Errorf("Line:%v\ngot  = %s\nwant = %s", tcase.lineno, out, tcase.output)
+				if err != nil {
+					out = fmt.Sprintf("\"%s\"", out)
+				} else {
+					bout, _ := json.MarshalIndent(plan, "", "  ")
+					out = string(bout)
+				}
+				fmt.Printf("\"in> %s\"\nout>%s\nexpected: %s\n\n", tcase.input, out, tcase.output)
+			}
+		})
+	}
+}
+
 func loadSchema(name string) map[string]*schema.Table {
-	b, err := ioutil.ReadFile(locateFile(name))
+	b, err := os.ReadFile(locateFile(name))
 	if err != nil {
 		panic(err)
 	}

@@ -19,7 +19,6 @@ package etcd2topo
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
@@ -37,12 +36,9 @@ import (
 )
 
 // startEtcd starts an etcd subprocess, and waits for it to be ready.
-func startEtcd(t *testing.T) (*exec.Cmd, string, string) {
+func startEtcd(t *testing.T) string {
 	// Create a temporary directory.
-	dataDir, err := ioutil.TempDir("", "etcd")
-	if err != nil {
-		t.Fatalf("cannot create tempdir: %v", err)
-	}
+	dataDir := t.TempDir()
 
 	// Get our two ports to listen to.
 	port := testfiles.GoVtTopoEtcd2topoPort
@@ -59,7 +55,7 @@ func startEtcd(t *testing.T) (*exec.Cmd, string, string) {
 		"-listen-peer-urls", peerAddr,
 		"-initial-cluster", initialCluster,
 		"-data-dir", dataDir)
-	err = cmd.Start()
+	err := cmd.Start()
 	if err != nil {
 		t.Fatalf("failed to start etcd: %v", err)
 	}
@@ -86,17 +82,24 @@ func startEtcd(t *testing.T) (*exec.Cmd, string, string) {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
+	t.Cleanup(func() {
+		// log error
+		if err := cmd.Process.Kill(); err != nil {
+			log.Errorf("cmd.Process.Kill() failed : %v", err)
+		}
+		// log error
+		if err := cmd.Wait(); err != nil {
+			log.Errorf("cmd.wait() failed : %v", err)
+		}
+	})
 
-	return cmd, dataDir, clientAddr
+	return clientAddr
 }
 
 // startEtcdWithTLS starts an etcd subprocess with TLS setup, and waits for it to be ready.
-func startEtcdWithTLS(t *testing.T) (string, *tlstest.ClientServerKeyPairs, func()) {
+func startEtcdWithTLS(t *testing.T) (string, *tlstest.ClientServerKeyPairs) {
 	// Create a temporary directory.
-	dataDir, err := ioutil.TempDir("", "etcd")
-	if err != nil {
-		t.Fatalf("cannot create tempdir: %v", err)
-	}
+	dataDir := t.TempDir()
 
 	// Get our two ports to listen to.
 	port := testfiles.GoVtTopoEtcd2topoPort
@@ -125,7 +128,7 @@ func startEtcdWithTLS(t *testing.T) (string, *tlstest.ClientServerKeyPairs, func
 
 	cmd.Stderr = os.Stderr
 	cmd.Stdout = os.Stdout
-	err = cmd.Start()
+	err := cmd.Start()
 	if err != nil {
 		t.Fatalf("failed to start etcd: %v", err)
 	}
@@ -169,8 +172,7 @@ func startEtcdWithTLS(t *testing.T) (string, *tlstest.ClientServerKeyPairs, func
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-
-	stopEtcd := func() {
+	t.Cleanup(func() {
 		// log error
 		if err := cmd.Process.Kill(); err != nil {
 			log.Errorf("cmd.Process.Kill() failed : %v", err)
@@ -179,16 +181,14 @@ func startEtcdWithTLS(t *testing.T) (string, *tlstest.ClientServerKeyPairs, func
 		if err := cmd.Wait(); err != nil {
 			log.Errorf("cmd.wait() failed : %v", err)
 		}
-		os.RemoveAll(dataDir)
-	}
+	})
 
-	return clientAddr, &certs, stopEtcd
+	return clientAddr, &certs
 }
 
 func TestEtcd2TLS(t *testing.T) {
 	// Start a single etcd in the background.
-	clientAddr, certs, stopEtcd := startEtcdWithTLS(t)
-	defer stopEtcd()
+	clientAddr, certs := startEtcdWithTLS(t)
 
 	testIndex := 0
 	testRoot := fmt.Sprintf("/test-%v", testIndex)
@@ -218,12 +218,7 @@ func TestEtcd2TLS(t *testing.T) {
 
 func TestEtcd2Topo(t *testing.T) {
 	// Start a single etcd in the background.
-	cmd, dataDir, clientAddr := startEtcd(t)
-	defer func() {
-		cmd.Process.Kill()
-		cmd.Wait()
-		os.RemoveAll(dataDir)
-	}()
+	clientAddr := startEtcd(t)
 
 	testIndex := 0
 	newServer := func() *topo.Server {

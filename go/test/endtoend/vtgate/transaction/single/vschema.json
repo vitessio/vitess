@@ -1,0 +1,40 @@
+{
+  "sharded": true,
+  "vindexes": {
+    "unicode_loose_md5_vdx": {
+      "type": "unicode_loose_md5"
+    },
+    "uniqueConstraint_vdx": {
+      "type": "consistent_lookup_unique",
+      "params": {
+        "table": "uniqueConstraint_vdx",
+        "from": "unique_constraint",
+        "to": "keyspace_id",
+        "autocommit": "true"
+      },
+      "owner": "txn_unique_constraints"
+    }
+  },
+  "tables": {
+    "txn_unique_constraints": {
+      "column_vindexes": [
+        {
+          "column": "txn_id",
+          "name": "unicode_loose_md5_vdx"
+        },
+        {
+          "column": "unique_constraint",
+          "name": "uniqueConstraint_vdx"
+        }
+      ]
+    },
+    "uniqueConstraint_vdx": {
+      "column_vindexes": [
+        {
+          "column": "unique_constraint",
+          "name": "unicode_loose_md5_vdx"
+        }
+      ]
+    }
+  }
+}

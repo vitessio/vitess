@@ -28,9 +28,9 @@ import (
 )
 
 const (
-	// DefaultSecondsBehindMaster is the default MySQL replication lag which is
+	// DefaultReplicationLagSeconds is the default MySQL replication lag which is
 	// reported in all faked stream health responses.
-	DefaultSecondsBehindMaster uint32 = 1
+	DefaultReplicationLagSeconds uint32 = 1
 )
 
 // StreamHealthQueryService is a QueryService implementation which allows to
@@ -58,8 +58,8 @@ func NewStreamHealthQueryService(target *querypb.Target) *StreamHealthQueryServi
 }
 
 // Begin implemented as a no op
-func (q *StreamHealthQueryService) Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (int64, *topodatapb.TabletAlias, error) {
-	return 0, nil, nil
+func (q *StreamHealthQueryService) Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (queryservice.TransactionState, error) {
+	return queryservice.TransactionState{}, nil
 }
 
 // Execute implemented as a no op
@@ -72,7 +72,7 @@ func (q *StreamHealthQueryService) Execute(ctx context.Context, target *querypb.
 // the healthcheck module.
 func (q *StreamHealthQueryService) StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
 	for shr := range q.healthResponses {
-		callback(shr)
+		callback(shr) // nolint:errcheck
 	}
 	return nil
 }
@@ -84,7 +84,7 @@ func (q *StreamHealthQueryService) AddDefaultHealthResponse() {
 		Target:  proto.Clone(q.target).(*querypb.Target),
 		Serving: true,
 		RealtimeStats: &querypb.RealtimeStats{
-			SecondsBehindMaster: DefaultSecondsBehindMaster,
+			ReplicationLagSeconds: DefaultReplicationLagSeconds,
 		},
 	}
 }
@@ -96,20 +96,20 @@ func (q *StreamHealthQueryService) AddHealthResponseWithQPS(qps float64) {
 		Target:  proto.Clone(q.target).(*querypb.Target),
 		Serving: true,
 		RealtimeStats: &querypb.RealtimeStats{
-			Qps:                 qps,
-			SecondsBehindMaster: DefaultSecondsBehindMaster,
+			Qps:                   qps,
+			ReplicationLagSeconds: DefaultReplicationLagSeconds,
 		},
 	}
 }
 
-// AddHealthResponseWithSecondsBehindMaster adds a faked health response to the
-// buffer channel. Only "seconds_behind_master" is different in this message.
-func (q *StreamHealthQueryService) AddHealthResponseWithSecondsBehindMaster(replicationLag uint32) {
+// AddHealthResponseWithReplicationLag adds a faked health response to the
+// buffer channel. Only "replication_lag_seconds" is different in this message.
+func (q *StreamHealthQueryService) AddHealthResponseWithReplicationLag(replicationLag uint32) {
 	q.healthResponses <- &querypb.StreamHealthResponse{
 		Target:  proto.Clone(q.target).(*querypb.Target),
 		Serving: true,
 		RealtimeStats: &querypb.RealtimeStats{
-			SecondsBehindMaster: replicationLag,
+			ReplicationLagSeconds: replicationLag,
 		},
 	}
 }
@@ -121,7 +121,7 @@ func (q *StreamHealthQueryService) AddHealthResponseWithNotServing() {
 		Target:  proto.Clone(q.target).(*querypb.Target),
 		Serving: false,
 		RealtimeStats: &querypb.RealtimeStats{
-			SecondsBehindMaster: DefaultSecondsBehindMaster,
+			ReplicationLagSeconds: DefaultReplicationLagSeconds,
 		},
 	}
 }

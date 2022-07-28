@@ -154,7 +154,7 @@ func (sc *StatefulConnection) Release(reason tx.ReleaseReason) {
 
 // Releasef is used when the connection will not be used ever again.
 // The underlying dbConn is removed so that this connection cannot be used by mistake.
-func (sc *StatefulConnection) Releasef(reasonFormat string, a ...interface{}) {
+func (sc *StatefulConnection) Releasef(reasonFormat string, a ...any) {
 	if sc.dbConn == nil {
 		return
 	}
@@ -175,11 +175,11 @@ func (sc *StatefulConnection) Renew() error {
 }
 
 // String returns a printable version of the connection info.
-func (sc *StatefulConnection) String() string {
+func (sc *StatefulConnection) String(sanitize bool) string {
 	return fmt.Sprintf(
 		"%v\t%s",
 		sc.ConnID,
-		sc.txProps.String(),
+		sc.txProps.String(sanitize),
 	)
 }
 
@@ -268,7 +268,7 @@ func (sc *StatefulConnection) LogTransaction(reason tx.ReleaseReason) {
 	sc.Stats().UserTransactionTimesNs.Add([]string{username, reason.Name()}, int64(duration))
 	sc.txProps.Stats.Add(reason.Name(), duration)
 	if sc.txProps.LogToFile {
-		log.Infof("Logged transaction: %s", sc.String())
+		log.Infof("Logged transaction: %s", sc.String(sc.env.Config().SanitizeLogMessages))
 	}
 	tabletenv.TxLogger.Send(sc)
 }

@@ -19,19 +19,79 @@ limitations under the License.
 package pools
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sync"
 	"time"
 
-	"context"
-
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/trace"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+)
+
+type (
+	IResourcePool interface {
+		Close()
+		Name() string
+		Get(ctx context.Context) (resource Resource, err error)
+		Put(resource Resource)
+		SetCapacity(capacity int) error
+		SetIdleTimeout(idleTimeout time.Duration)
+		StatsJSON() string
+		Capacity() int64
+		Available() int64
+		Active() int64
+		InUse() int64
+		MaxCap() int64
+		WaitCount() int64
+		WaitTime() time.Duration
+		IdleTimeout() time.Duration
+		IdleClosed() int64
+		Exhausted() int64
+	}
+
+	// Resource defines the interface that every resource must provide.
+	// Thread synchronization between Close() and IsClosed()
+	// is the responsibility of the caller.
+	Resource interface {
+		Close()
+	}
+
+	// Factory is a function that can be used to create a resource.
+	Factory func(context.Context) (Resource, error)
+
+	resourceWrapper struct {
+		resource Resource
+		timeUsed time.Time
+	}
+
+	// ResourcePool allows you to use a pool of resources.
+	ResourcePool struct {
+		// stats. Atomic fields must remain at the top in order to prevent panics on certain architectures.
+		available  sync2.AtomicInt64
+		active     sync2.AtomicInt64
+		inUse      sync2.AtomicInt64
+		waitCount  sync2.AtomicInt64
+		waitTime   sync2.AtomicDuration
+		idleClosed sync2.AtomicInt64
+		exhausted  sync2.AtomicInt64
+
+		capacity    sync2.AtomicInt64
+		idleTimeout sync2.AtomicDuration
+
+		resources chan resourceWrapper
+		factory   Factory
+		idleTimer *timer.Timer
+		logWait   func(time.Time)
+
+		reopenMutex sync.Mutex
+		refresh     *poolRefresh
+	}
 )
 
 var (
@@ -39,48 +99,13 @@ var (
 	ErrClosed = errors.New("resource pool is closed")
 
 	// ErrTimeout is returned if a resource get times out.
-	ErrTimeout = vterrors.New(vtrpcpb.Code_DEADLINE_EXCEEDED, "resource pool timed out")
+	ErrTimeout = vterrors.New(vtrpcpb.Code_RESOURCE_EXHAUSTED, "resource pool timed out")
 
 	// ErrCtxTimeout is returned if a ctx is already expired by the time the resource pool is used
 	ErrCtxTimeout = vterrors.New(vtrpcpb.Code_DEADLINE_EXCEEDED, "resource pool context already expired")
 
 	prefillTimeout = 30 * time.Second
 )
-
-// Factory is a function that can be used to create a resource.
-type Factory func(context.Context) (Resource, error)
-
-// Resource defines the interface that every resource must provide.
-// Thread synchronization between Close() and IsClosed()
-// is the responsibility of the caller.
-type Resource interface {
-	Close()
-}
-
-// ResourcePool allows you to use a pool of resources.
-type ResourcePool struct {
-	// stats. Atomic fields must remain at the top in order to prevent panics on certain architectures.
-	available  sync2.AtomicInt64
-	active     sync2.AtomicInt64
-	inUse      sync2.AtomicInt64
-	waitCount  sync2.AtomicInt64
-	waitTime   sync2.AtomicDuration
-	idleClosed sync2.AtomicInt64
-	exhausted  sync2.AtomicInt64
-
-	capacity    sync2.AtomicInt64
-	idleTimeout sync2.AtomicDuration
-
-	resources chan resourceWrapper
-	factory   Factory
-	idleTimer *timer.Timer
-	logWait   func(time.Time)
-}
-
-type resourceWrapper struct {
-	resource Resource
-	timeUsed time.Time
-}
 
 // NewResourcePool creates a new ResourcePool pool.
 // capacity is the number of possible resources in the pool:
@@ -93,7 +118,9 @@ type resourceWrapper struct {
 // An idleTimeout of 0 means that there is no timeout.
 // A non-zero value of prefillParallelism causes the pool to be pre-filled.
 // The value specifies how many resources can be opened in parallel.
-func NewResourcePool(factory Factory, capacity, maxCap int, idleTimeout time.Duration, prefillParallelism int, logWait func(time.Time)) *ResourcePool {
+// refreshCheck is a function we consult at refreshInterval
+// intervals to determine if the pool should be drained and reopened
+func NewResourcePool(factory Factory, capacity, maxCap int, idleTimeout time.Duration, prefillParallelism int, logWait func(time.Time), refreshCheck RefreshCheck, refreshInterval time.Duration) *ResourcePool {
 	if capacity <= 0 || maxCap <= 0 || capacity > maxCap {
 		panic(errors.New("invalid/out of range capacity"))
 	}
@@ -142,7 +169,15 @@ func NewResourcePool(factory Factory, capacity, maxCap int, idleTimeout time.Dur
 		rp.idleTimer = timer.NewTimer(idleTimeout / 10)
 		rp.idleTimer.Start(rp.closeIdleResources)
 	}
+
+	rp.refresh = newPoolRefresh(rp, refreshCheck, refreshInterval)
+	rp.refresh.startRefreshTicker()
+
 	return rp
+}
+
+func (rp *ResourcePool) Name() string {
+	return "ResourcePool"
 }
 
 // Close empties the pool calling Close on all its resources.
@@ -153,12 +188,8 @@ func (rp *ResourcePool) Close() {
 	if rp.idleTimer != nil {
 		rp.idleTimer.Stop()
 	}
+	rp.refresh.stop()
 	_ = rp.SetCapacity(0)
-}
-
-// IsClosed returns true if the resource pool is closed.
-func (rp *ResourcePool) IsClosed() (closed bool) {
-	return rp.capacity.Get() == 0
 }
 
 // closeIdleResources scans the pool for idle resources
@@ -186,6 +217,20 @@ func (rp *ResourcePool) closeIdleResources() {
 		}()
 
 	}
+}
+
+// reopen drains and reopens the connection pool
+func (rp *ResourcePool) reopen() {
+	rp.reopenMutex.Lock() // Avoid race, since we can refresh asynchronously
+	defer rp.reopenMutex.Unlock()
+	capacity := int(rp.capacity.Get())
+	log.Infof("Draining and reopening resource pool with capacity %d by request", capacity)
+	rp.Close()
+	_ = rp.SetCapacity(capacity)
+	if rp.idleTimer != nil {
+		rp.idleTimer.Start(rp.closeIdleResources)
+	}
+	rp.refresh.startRefreshTicker()
 }
 
 // Get will return the next available resource. If capacity
@@ -290,13 +335,13 @@ func (rp *ResourcePool) SetCapacity(capacity int) error {
 		return fmt.Errorf("capacity %d is out of range", capacity)
 	}
 
-	// Atomically swap new capacity with old, but only
-	// if old capacity is non-zero.
+	// Atomically swap new capacity with old
 	var oldcap int
 	for {
 		oldcap = int(rp.capacity.Get())
-		if oldcap == 0 {
-			return ErrClosed
+		if oldcap == 0 && capacity > 0 {
+			// Closed this before, re-open the channel
+			rp.resources = make(chan resourceWrapper, cap(rp.resources))
 		}
 		if oldcap == capacity {
 			return nil

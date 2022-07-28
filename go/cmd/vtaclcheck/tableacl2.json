@@ -71,6 +71,20 @@
       "admins": ["dev"]
     },
     {
+      "name": "vitess_message4",
+      "table_names_or_prefixes": ["vitess_message4"],
+      "readers": ["dev"],
+      "writers": ["dev"],
+      "admins": ["dev"]
+    },
+    {
+      "name": "vitess_message5",
+      "table_names_or_prefixes": ["vitess_message5"],
+      "readers": ["dev"],
+      "writers": ["dev"],
+      "admins": ["dev"]
+    },
+    {
       "name": "vitess_message_auto",
       "table_names_or_prefixes": ["vitess_message_auto"],
       "readers": ["dev"],

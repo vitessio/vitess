@@ -69,9 +69,9 @@ type loggerMsg struct {
 }
 type testLogger struct {
 	logs          []loggerMsg
-	savedInfof    func(format string, args ...interface{})
-	savedWarningf func(format string, args ...interface{})
-	savedErrorf   func(format string, args ...interface{})
+	savedInfof    func(format string, args ...any)
+	savedWarningf func(format string, args ...any)
+	savedErrorf   func(format string, args ...any)
 }
 
 func newTestLogger() *testLogger {
@@ -92,19 +92,19 @@ func (tl *testLogger) Close() {
 	log.Errorf = tl.savedErrorf
 }
 
-func (tl *testLogger) recordInfof(format string, args ...interface{}) {
+func (tl *testLogger) recordInfof(format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
 	tl.logs = append(tl.logs, loggerMsg{msg, "INFO"})
 	tl.savedInfof(msg)
 }
 
-func (tl *testLogger) recordWarningf(format string, args ...interface{}) {
+func (tl *testLogger) recordWarningf(format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
 	tl.logs = append(tl.logs, loggerMsg{msg, "WARNING"})
 	tl.savedWarningf(msg)
 }
 
-func (tl *testLogger) recordErrorf(format string, args ...interface{}) {
+func (tl *testLogger) recordErrorf(format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
 	tl.logs = append(tl.logs, loggerMsg{msg, "ERROR"})
 	tl.savedErrorf(msg)

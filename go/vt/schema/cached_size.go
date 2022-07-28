@@ -17,6 +17,8 @@ limitations under the License.
 
 package schema
 
+import hack "vitess.io/vitess/go/hack"
+
 func (cached *DDLStrategySetting) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -26,8 +28,8 @@ func (cached *DDLStrategySetting) CachedSize(alloc bool) int64 {
 		size += int64(32)
 	}
 	// field Strategy vitess.io/vitess/go/vt/schema.DDLStrategy
-	size += int64(len(cached.Strategy))
+	size += hack.RuntimeAllocSize(int64(len(cached.Strategy)))
 	// field Options string
-	size += int64(len(cached.Options))
+	size += hack.RuntimeAllocSize(int64(len(cached.Options)))
 	return size
 }

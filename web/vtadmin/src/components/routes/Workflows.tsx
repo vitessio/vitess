@@ -33,14 +33,17 @@ import { WorkspaceTitle } from '../layout/WorkspaceTitle';
 import { DataFilter } from '../dataTable/DataFilter';
 import { Tooltip } from '../tooltip/Tooltip';
 import { KeyspaceLink } from '../links/KeyspaceLink';
+import { QueryLoadingPlaceholder } from '../placeholders/QueryLoadingPlaceholder';
+import { UseQueryResult } from 'react-query';
 
 export const Workflows = () => {
     useDocumentTitle('Workflows');
-    const { data } = useWorkflows({ refetchInterval: 1000 });
+    const workflowsQuery = useWorkflows();
+
     const { value: filter, updateValue: updateFilter } = useSyncedURLParam('filter');
 
     const sortedData = React.useMemo(() => {
-        const mapped = (data || []).map((workflow) => ({
+        const mapped = (workflowsQuery.data || []).map((workflow) => ({
             clusterID: workflow.cluster?.id,
             clusterName: workflow.cluster?.name,
             keyspace: workflow.keyspace,
@@ -54,7 +57,7 @@ export const Workflows = () => {
         }));
         const filtered = filterNouns(filter, mapped);
         return orderBy(filtered, ['name', 'clusterName', 'source', 'target']);
-    }, [data, filter]);
+    }, [workflowsQuery.data, filter]);
 
     const renderRows = (rows: typeof sortedData) =>
         rows.map((row, idx) => {
@@ -66,8 +69,8 @@ export const Workflows = () => {
             return (
                 <tr key={idx}>
                     <DataCell>
-                        <div className="font-weight-bold">{href ? <Link to={href}>{row.name}</Link> : row.name}</div>
-                        <div className="font-size-small text-color-secondary">{row.clusterName}</div>
+                        <div className="font-bold">{href ? <Link to={href}>{row.name}</Link> : row.name}</div>
+                        <div className="text-sm text-secondary">{row.clusterName}</div>
                     </DataCell>
                     <DataCell>
                         {row.source ? (
@@ -78,7 +81,7 @@ export const Workflows = () => {
                                 <div className={style.shardList}>{(row.sourceShards || []).join(', ')}</div>
                             </>
                         ) : (
-                            <span className="text-color-secondary">N/A</span>
+                            <span className="text-secondary">N/A</span>
                         )}
                     </DataCell>
                     <DataCell>
@@ -90,7 +93,7 @@ export const Workflows = () => {
                                 <div className={style.shardList}>{(row.targetShards || []).join(', ')}</div>
                             </>
                         ) : (
-                            <span className="text-color-secondary">N/A</span>
+                            <span className="text-secondary">N/A</span>
                         )}
                     </DataCell>
 
@@ -124,10 +127,8 @@ export const Workflows = () => {
                     </DataCell>
 
                     <DataCell>
-                        <div className="font-family-primary white-space-nowrap">{formatDateTime(row.timeUpdated)}</div>
-                        <div className="font-family-primary font-size-small text-color-secondary">
-                            {formatRelativeTime(row.timeUpdated)}
-                        </div>
+                        <div className="font-sans whitespace-nowrap">{formatDateTime(row.timeUpdated)}</div>
+                        <div className="font-sans text-sm text-secondary">{formatRelativeTime(row.timeUpdated)}</div>
                     </DataCell>
                 </tr>
             );
@@ -152,6 +153,8 @@ export const Workflows = () => {
                     data={sortedData}
                     renderRows={renderRows}
                 />
+
+                <QueryLoadingPlaceholder query={workflowsQuery as UseQueryResult} />
             </ContentContainer>
         </div>
     );

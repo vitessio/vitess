@@ -17,17 +17,21 @@ limitations under the License.
 package vstreamer
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
 
+	"vitess.io/vitess/go/vt/vtgate/semantics"
+
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/log"
-
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -48,6 +52,8 @@ type Plan struct {
 	// in the stream.
 	ColExprs []ColExpr
 
+	convertUsingUTF8Columns map[string]bool
+
 	// Filters is the list of filters to be applied to the columns
 	// of the table.
 	Filters []Filter
@@ -57,10 +63,20 @@ type Plan struct {
 type Opcode int
 
 const (
-	// Equal is used to filter an integer column on a specific value
+	// Equal is used to filter a comparable column on a specific value
 	Equal = Opcode(iota)
 	// VindexMatch is used for an in_keyrange() construct
 	VindexMatch
+	// LessThan is used to filter a comparable column if < specific value
+	LessThan
+	// LessThanEqual is used to filter a comparable column if <= specific value
+	LessThanEqual
+	// GreaterThan is used to filter a comparable column if > specific value
+	GreaterThan
+	// GreaterThanEqual is used to filter a comparable column if >= specific value
+	GreaterThanEqual
+	// NotEqual is used to filter a comparable column if != specific value
+	NotEqual
 )
 
 // Filter contains opcodes for filtering.
@@ -102,6 +118,17 @@ type Table struct {
 	Fields []*querypb.Field
 }
 
+// FindColumn finds a column in the table. It returns the index if found.
+// Otherwise, it returns -1.
+func (ta *Table) FindColumn(name sqlparser.IdentifierCI) int {
+	for i, col := range ta.Fields {
+		if name.EqualString(col.Name) {
+			return i
+		}
+	}
+	return -1
+}
+
 // fields returns the fields for the plan.
 func (plan *Plan) fields() []*querypb.Field {
 	fields := make([]*querypb.Field, len(plan.ColExprs))
@@ -111,30 +138,96 @@ func (plan *Plan) fields() []*querypb.Field {
 	return fields
 }
 
+// getOpcode returns the equivalent planbuilder opcode for operators that are supported in Filters
+func getOpcode(comparison *sqlparser.ComparisonExpr) (Opcode, error) {
+	var opcode Opcode
+	switch comparison.Operator {
+	case sqlparser.EqualOp:
+		opcode = Equal
+	case sqlparser.LessThanOp:
+		opcode = LessThan
+	case sqlparser.LessEqualOp:
+		opcode = LessThanEqual
+	case sqlparser.GreaterThanOp:
+		opcode = GreaterThan
+	case sqlparser.GreaterEqualOp:
+		opcode = GreaterThanEqual
+	case sqlparser.NotEqualOp:
+		opcode = NotEqual
+	default:
+		return -1, fmt.Errorf("comparison operator %s not supported", comparison.Operator.ToString())
+	}
+	return opcode, nil
+}
+
+// compare returns true after applying the comparison specified in the Filter to the actual data in the column
+func compare(comparison Opcode, columnValue, filterValue sqltypes.Value, charset collations.ID) (bool, error) {
+	// use null semantics: return false if either value is null
+	if columnValue.IsNull() || filterValue.IsNull() {
+		return false, nil
+	}
+	// at this point neither values can be null
+	// NullsafeCompare returns 0 if values match, -1 if columnValue < filterValue, 1 if columnValue > filterValue
+	result, err := evalengine.NullsafeCompare(columnValue, filterValue, charset)
+	if err != nil {
+		return false, err
+	}
+
+	switch comparison {
+	case Equal:
+		if result == 0 {
+			return true, nil
+		}
+	case NotEqual:
+		if result != 0 {
+			return true, nil
+		}
+	case LessThan:
+		if result == -1 {
+			return true, nil
+		}
+	case LessThanEqual:
+		if result <= 0 {
+			return true, nil
+		}
+	case GreaterThan:
+		if result == 1 {
+			return true, nil
+		}
+	case GreaterThanEqual:
+		if result >= 0 {
+			return true, nil
+		}
+	default:
+		return false, fmt.Errorf("comparison operator %d not supported", comparison)
+	}
+	return false, nil
+}
+
 // filter filters the row against the plan. It returns false if the row did not match.
 // The output of the filtering operation is stored in the 'result' argument because
 // filtering cannot be performed in-place. The result argument must be a slice of
 // length equal to ColExprs
-func (plan *Plan) filter(values, result []sqltypes.Value) (bool, error) {
+func (plan *Plan) filter(values, result []sqltypes.Value, charsets []collations.ID) (bool, error) {
 	if len(result) != len(plan.ColExprs) {
 		return false, fmt.Errorf("expected %d values in result slice", len(plan.ColExprs))
 	}
 	for _, filter := range plan.Filters {
 		switch filter.Opcode {
-		case Equal:
-			result, err := evalengine.NullsafeCompare(values[filter.ColNum], filter.Value)
-			if err != nil {
-				return false, err
-			}
-			if result != 0 {
-				return false, nil
-			}
 		case VindexMatch:
 			ksid, err := getKeyspaceID(values, filter.Vindex, filter.VindexColumns, plan.Table.Fields)
 			if err != nil {
 				return false, err
 			}
 			if !key.KeyRangeContains(filter.KeyRange, ksid) {
+				return false, nil
+			}
+		default:
+			match, err := compare(filter.Opcode, values[filter.ColNum], filter.Value, charsets[filter.ColNum])
+			if err != nil {
+				return false, err
+			}
+			if !match {
 				return false, nil
 			}
 		}
@@ -165,7 +258,7 @@ func getKeyspaceID(values []sqltypes.Value, vindex vindexes.Vindex, vindexColumn
 	for _, col := range vindexColumns {
 		vindexValues = append(vindexValues, values[col])
 	}
-	destinations, err := vindexes.Map(vindex, nil, [][]sqltypes.Value{vindexValues})
+	destinations, err := vindexes.Map(context.TODO(), vindex, nil, [][]sqltypes.Value{vindexValues})
 	if err != nil {
 		return nil, err
 	}
@@ -341,7 +434,7 @@ func buildTablePlan(ti *Table, vschema *localVSchema, query string) (*Plan, erro
 	return plan, nil
 }
 
-func analyzeSelect(query string) (sel *sqlparser.Select, fromTable sqlparser.TableIdent, err error) {
+func analyzeSelect(query string) (sel *sqlparser.Select, fromTable sqlparser.IdentifierCS, err error) {
 	statement, err := sqlparser.Parse(query)
 	if err != nil {
 		return nil, fromTable, err
@@ -364,6 +457,24 @@ func analyzeSelect(query string) (sel *sqlparser.Select, fromTable sqlparser.Tab
 	return sel, fromTable, nil
 }
 
+// isConvertColumnUsingUTF8 returns 'true' when given column needs to be converted as UTF8
+// while read from source table
+func (plan *Plan) isConvertColumnUsingUTF8(columnName string) bool {
+	if plan.convertUsingUTF8Columns == nil {
+		return false
+	}
+	return plan.convertUsingUTF8Columns[columnName]
+}
+
+// setConvertColumnUsingUTF8 marks given column as needs to be converted as UTF8
+// while read from source table
+func (plan *Plan) setConvertColumnUsingUTF8(columnName string) {
+	if plan.convertUsingUTF8Columns == nil {
+		plan.convertUsingUTF8Columns = map[string]bool{}
+	}
+	plan.convertUsingUTF8Columns[columnName] = true
+}
+
 func (plan *Plan) analyzeWhere(vschema *localVSchema, where *sqlparser.Where) error {
 	if where == nil {
 		return nil
@@ -372,6 +483,10 @@ func (plan *Plan) analyzeWhere(vschema *localVSchema, where *sqlparser.Where) er
 	for _, expr := range exprs {
 		switch expr := expr.(type) {
 		case *sqlparser.ComparisonExpr:
+			opcode, err := getOpcode(expr)
+			if err != nil {
+				return err
+			}
 			qualifiedName, ok := expr.Left.(*sqlparser.ColName)
 			if !ok {
 				return fmt.Errorf("unexpected: %v", sqlparser.String(expr))
@@ -391,18 +506,19 @@ func (plan *Plan) analyzeWhere(vschema *localVSchema, where *sqlparser.Where) er
 			if val.Type != sqlparser.IntVal && val.Type != sqlparser.StrVal {
 				return fmt.Errorf("unexpected: %v", sqlparser.String(expr))
 			}
-			pv, err := sqlparser.NewPlanValue(val)
+			pv, err := evalengine.Translate(val, semantics.EmptySemTable())
 			if err != nil {
 				return err
 			}
-			resolved, err := pv.ResolveValue(nil)
+			env := evalengine.EmptyExpressionEnv()
+			resolved, err := env.Evaluate(pv)
 			if err != nil {
 				return err
 			}
 			plan.Filters = append(plan.Filters, Filter{
-				Opcode: Equal,
+				Opcode: opcode,
 				ColNum: colnum,
-				Value:  resolved,
+				Value:  resolved.Value(),
 			})
 		case *sqlparser.FuncExpr:
 			if !expr.Name.EqualString("in_keyrange") {
@@ -469,13 +585,32 @@ func (plan *Plan) analyzeExpr(vschema *localVSchema, selExpr sqlparser.SelectExp
 		if err != nil {
 			return ColExpr{}, err
 		}
-		as := aliased.As
-		if as.IsEmpty() {
-			as = sqlparser.NewColIdent(sqlparser.String(aliased.Expr))
-		}
 		return ColExpr{
 			ColNum: colnum,
 			Field:  plan.Table.Fields[colnum],
+		}, nil
+	case sqlparser.AggrFunc:
+		if strings.ToLower(inner.AggrName()) != "keyspace_id" {
+			return ColExpr{}, fmt.Errorf("unsupported function: %v", sqlparser.String(inner))
+		}
+		if len(inner.GetArgs()) != 0 {
+			return ColExpr{}, fmt.Errorf("unexpected: %v", sqlparser.String(inner))
+		}
+		cv, err := vschema.FindColVindex(plan.Table.Name)
+		if err != nil {
+			return ColExpr{}, err
+		}
+		vindexColumns, err := buildVindexColumns(plan.Table, cv.Columns)
+		if err != nil {
+			return ColExpr{}, err
+		}
+		return ColExpr{
+			Field: &querypb.Field{
+				Name: "keyspace_id",
+				Type: sqltypes.VarBinary,
+			},
+			Vindex:        cv.Vindex,
+			VindexColumns: vindexColumns,
 		}, nil
 	case *sqlparser.FuncExpr:
 		if inner.Name.Lowered() != "keyspace_id" {
@@ -520,6 +655,17 @@ func (plan *Plan) analyzeExpr(vschema *localVSchema, selExpr sqlparser.SelectExp
 			ColNum:     -1,
 			FixedValue: sqltypes.NewInt64(num),
 		}, nil
+	case *sqlparser.ConvertUsingExpr:
+		colnum, err := findColumn(plan.Table, aliased.As)
+		if err != nil {
+			return ColExpr{}, err
+		}
+		field := plan.Table.Fields[colnum]
+		plan.setConvertColumnUsingUTF8(field.Name)
+		return ColExpr{
+			ColNum: colnum,
+			Field:  field,
+		}, nil
 	default:
 		log.Infof("Unsupported expression: %v", inner)
 		return ColExpr{}, fmt.Errorf("unsupported: %v", sqlparser.String(aliased.Expr))
@@ -530,7 +676,7 @@ func (plan *Plan) analyzeExpr(vschema *localVSchema, selExpr sqlparser.SelectExp
 // "in_keyrange(col, 'hash', '-80')", "in_keyrange(col, 'local_vindex', '-80')", or
 // "in_keyrange(col, 'ks.external_vindex', '-80')".
 func (plan *Plan) analyzeInKeyRange(vschema *localVSchema, exprs sqlparser.SelectExprs) error {
-	var colnames []sqlparser.ColIdent
+	var colnames []sqlparser.IdentifierCI
 	var krExpr sqlparser.SelectExpr
 	whereFilter := Filter{
 		Opcode: VindexMatch,
@@ -611,7 +757,7 @@ func selString(expr sqlparser.SelectExpr) (string, error) {
 
 // buildVindexColumns builds the list of column numbers of the table
 // that will be the input to the vindex function.
-func buildVindexColumns(ti *Table, colnames []sqlparser.ColIdent) ([]int, error) {
+func buildVindexColumns(ti *Table, colnames []sqlparser.IdentifierCI) ([]int, error) {
 	vindexColumns := make([]int, 0, len(colnames))
 	for _, colname := range colnames {
 		colnum, err := findColumn(ti, colname)
@@ -623,7 +769,7 @@ func buildVindexColumns(ti *Table, colnames []sqlparser.ColIdent) ([]int, error)
 	return vindexColumns, nil
 }
 
-func findColumn(ti *Table, name sqlparser.ColIdent) (int, error) {
+func findColumn(ti *Table, name sqlparser.IdentifierCI) (int, error) {
 	for i, col := range ti.Fields {
 		if name.EqualString(col.Name) {
 			return i, nil

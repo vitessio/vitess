@@ -153,7 +153,7 @@ func (e *TabletVExec) ReplaceInsertColumnVal(colName string, val *sqlparser.Lite
 	return ErrColumNotFound
 }
 
-// ReplaceInsertColumnVal manipulates the existing INSERT statement to replace a column value
+// AddOrReplaceInsertColumnVal manipulates the existing INSERT statement to replace a column value
 // into a given value
 func (e *TabletVExec) AddOrReplaceInsertColumnVal(colName string, val *sqlparser.Literal) error {
 	if err := e.ReplaceInsertColumnVal(colName, val); err != ErrColumNotFound {
@@ -165,7 +165,7 @@ func (e *TabletVExec) AddOrReplaceInsertColumnVal(colName string, val *sqlparser
 	insert, _ := e.Stmt.(*sqlparser.Insert)
 	rows, _ := insert.Rows.(sqlparser.Values)
 	rows[0] = append(rows[0], val)
-	insert.Columns = append(insert.Columns, sqlparser.NewColIdent(colName))
+	insert.Columns = append(insert.Columns, sqlparser.NewIdentifierCI(colName))
 	e.InsertCols[colName] = val
 	e.Query = sqlparser.String(e.Stmt)
 
@@ -195,7 +195,7 @@ func (e *TabletVExec) analyzeStatement() error {
 		e.TableName = sqlparser.String(stmt.Table)
 		e.InsertCols = e.analyzeInsertColumns(stmt)
 	case *sqlparser.Select:
-		e.TableName = sqlparser.String(stmt.From)
+		e.TableName = sqlparser.ToString(stmt.From)
 		e.WhereCols = e.analyzeWhereEqualsColumns(stmt.Where)
 	default:
 		return fmt.Errorf("query not supported by vexec: %+v", sqlparser.String(stmt))

@@ -40,7 +40,7 @@ type RPCTM interface {
 
 	Ping(ctx context.Context, args string) string
 
-	GetSchema(ctx context.Context, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error)
+	GetSchema(ctx context.Context, request *tabletmanagerdatapb.GetSchemaRequest) (*tabletmanagerdatapb.SchemaDefinition, error)
 
 	GetPermissions(ctx context.Context) (*tabletmanagerdatapb.Permissions, error)
 
@@ -48,7 +48,7 @@ type RPCTM interface {
 
 	SetReadOnly(ctx context.Context, rdonly bool) error
 
-	ChangeType(ctx context.Context, tabletType topodatapb.TabletType) error
+	ChangeType(ctx context.Context, tabletType topodatapb.TabletType, semiSync bool) error
 
 	Sleep(ctx context.Context, duration time.Duration)
 
@@ -57,8 +57,6 @@ type RPCTM interface {
 	RefreshState(ctx context.Context) error
 
 	RunHealthCheck(ctx context.Context)
-
-	IgnoreHealthError(ctx context.Context, pattern string) error
 
 	ReloadSchema(ctx context.Context, waitPosition string) error
 
@@ -79,21 +77,23 @@ type RPCTM interface {
 	ExecuteFetchAsApp(ctx context.Context, query []byte, maxrows int) (*querypb.QueryResult, error)
 
 	// Replication related methods
-	MasterStatus(ctx context.Context) (*replicationdatapb.MasterStatus, error)
+	PrimaryStatus(ctx context.Context) (*replicationdatapb.PrimaryStatus, error)
 
 	ReplicationStatus(ctx context.Context) (*replicationdatapb.Status, error)
+
+	FullStatus(ctx context.Context) (*replicationdatapb.FullStatus, error)
 
 	StopReplication(ctx context.Context) error
 
 	StopReplicationMinimum(ctx context.Context, position string, waitTime time.Duration) (string, error)
 
-	StartReplication(ctx context.Context) error
+	StartReplication(ctx context.Context, semiSync bool) error
 
 	StartReplicationUntilAfter(ctx context.Context, position string, waitTime time.Duration) error
 
 	GetReplicas(ctx context.Context) ([]string, error)
 
-	MasterPosition(ctx context.Context) (string, error)
+	PrimaryPosition(ctx context.Context) (string, error)
 
 	WaitForPosition(ctx context.Context, pos string) error
 
@@ -104,37 +104,42 @@ type RPCTM interface {
 	VReplicationExec(ctx context.Context, query string) (*querypb.QueryResult, error)
 	VReplicationWaitForPos(ctx context.Context, id int, pos string) error
 
+	// VDiff API
+	VDiff(ctx context.Context, req *tabletmanagerdatapb.VDiffRequest) (*tabletmanagerdatapb.VDiffResponse, error)
+
 	// Reparenting related functions
 
 	ResetReplication(ctx context.Context) error
 
-	InitMaster(ctx context.Context) (string, error)
+	InitPrimary(ctx context.Context, semiSync bool) (string, error)
 
-	PopulateReparentJournal(ctx context.Context, timeCreatedNS int64, actionName string, masterAlias *topodatapb.TabletAlias, pos string) error
+	PopulateReparentJournal(ctx context.Context, timeCreatedNS int64, actionName string, tabletAlias *topodatapb.TabletAlias, pos string) error
 
-	InitReplica(ctx context.Context, parent *topodatapb.TabletAlias, replicationPosition string, timeCreatedNS int64) error
+	InitReplica(ctx context.Context, parent *topodatapb.TabletAlias, replicationPosition string, timeCreatedNS int64, semiSync bool) error
 
-	DemoteMaster(ctx context.Context) (*replicationdatapb.MasterStatus, error)
+	DemotePrimary(ctx context.Context) (*replicationdatapb.PrimaryStatus, error)
 
-	UndoDemoteMaster(ctx context.Context) error
+	UndoDemotePrimary(ctx context.Context, semiSync bool) error
 
 	ReplicaWasPromoted(ctx context.Context) error
 
-	SetMaster(ctx context.Context, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool) error
+	ResetReplicationParameters(ctx context.Context) error
+
+	SetReplicationSource(ctx context.Context, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool, semiSync bool) error
 
 	StopReplicationAndGetStatus(ctx context.Context, stopReplicationMode replicationdatapb.StopReplicationMode) (StopReplicationAndGetStatusResponse, error)
 
 	ReplicaWasRestarted(ctx context.Context, parent *topodatapb.TabletAlias) error
 
-	PromoteReplica(ctx context.Context) (string, error)
+	PromoteReplica(ctx context.Context, semiSync bool) (string, error)
 
 	// Backup / restore related methods
 
-	Backup(ctx context.Context, concurrency int, logger logutil.Logger, allowMaster bool) error
+	Backup(ctx context.Context, concurrency int, logger logutil.Logger, allowPrimary bool) error
 
-	RestoreFromBackup(ctx context.Context, logger logutil.Logger) error
+	RestoreFromBackup(ctx context.Context, logger logutil.Logger, backupTime time.Time) error
 
 	// HandleRPCPanic is to be called in a defer statement in each
 	// RPC input point.
-	HandleRPCPanic(ctx context.Context, name string, args, reply interface{}, verbose bool, err *error)
+	HandleRPCPanic(ctx context.Context, name string, args, reply any, verbose bool, err *error)
 }

@@ -275,11 +275,11 @@ func TestTableMigrateMainflow(t *testing.T) {
 	verifyQueries(t, tme.allDBClients)
 
 	//-------------------------------------------------------------------------------------------------------------------
-	// Can't switch master with SwitchReads.
-	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", []topodatapb.TabletType{topodatapb.TabletType_MASTER}, nil, workflow.DirectionForward, false)
-	want := "tablet type must be REPLICA or RDONLY: MASTER"
+	// Can't switch primary with SwitchReads.
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", []topodatapb.TabletType{topodatapb.TabletType_PRIMARY}, nil, workflow.DirectionForward, false)
+	want := "tablet type must be REPLICA or RDONLY: PRIMARY"
 	if err == nil || err.Error() != want {
-		t.Errorf("SwitchReads(master) err: %v, want %v", err, want)
+		t.Errorf("SwitchReads(primary) err: %v, want %v", err, want)
 	}
 	verifyQueries(t, tme.allDBClients)
 
@@ -344,6 +344,7 @@ func TestTableMigrateMainflow(t *testing.T) {
 	}
 	cancelMigration()
 
+	switchWrites(tme)
 	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 0*time.Second, false, false, true, false)
 	want = "DeadlineExceeded"
 	if err == nil || !strings.Contains(err.Error(), want) {
@@ -368,10 +369,10 @@ func TestTableMigrateMainflow(t *testing.T) {
 		"ks2.t2@rdonly":  {"ks2.t2"},
 		"ks1.t2@rdonly":  {"ks2.t2"},
 	})
-	checkBlacklist(t, tme.ts, "ks1:-40", nil)
-	checkBlacklist(t, tme.ts, "ks1:40-", nil)
-	checkBlacklist(t, tme.ts, "ks2:-80", nil)
-	checkBlacklist(t, tme.ts, "ks2:80-", nil)
+	checkDenyList(t, tme.ts, "ks1:-40", nil)
+	checkDenyList(t, tme.ts, "ks1:40-", nil)
+	checkDenyList(t, tme.ts, "ks2:-80", nil)
+	checkDenyList(t, tme.ts, "ks2:80-", nil)
 
 	//-------------------------------------------------------------------------------------------------------------------
 	// Test successful SwitchWrites.
@@ -478,10 +479,10 @@ func TestTableMigrateMainflow(t *testing.T) {
 		"ks2.t2@rdonly":  {"ks2.t2"},
 		"ks1.t2@rdonly":  {"ks2.t2"},
 	})
-	checkBlacklist(t, tme.ts, "ks1:-40", []string{"t1", "t2"})
-	checkBlacklist(t, tme.ts, "ks1:40-", []string{"t1", "t2"})
-	checkBlacklist(t, tme.ts, "ks2:-80", nil)
-	checkBlacklist(t, tme.ts, "ks2:80-", nil)
+	checkDenyList(t, tme.ts, "ks1:-40", []string{"t1", "t2"})
+	checkDenyList(t, tme.ts, "ks1:40-", []string{"t1", "t2"})
+	checkDenyList(t, tme.ts, "ks2:-80", nil)
+	checkDenyList(t, tme.ts, "ks2:80-", nil)
 
 	verifyQueries(t, tme.allDBClients)
 }
@@ -593,11 +594,11 @@ func TestShardMigrateMainflow(t *testing.T) {
 	verifyQueries(t, tme.allDBClients)
 
 	//-------------------------------------------------------------------------------------------------------------------
-	// Can't switch master with SwitchReads.
-	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", []topodatapb.TabletType{topodatapb.TabletType_MASTER}, nil, workflow.DirectionForward, false)
-	want := "tablet type must be REPLICA or RDONLY: MASTER"
+	// Can't switch primary with SwitchReads.
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", []topodatapb.TabletType{topodatapb.TabletType_PRIMARY}, nil, workflow.DirectionForward, false)
+	want := "tablet type must be REPLICA or RDONLY: PRIMARY"
 	if err == nil || err.Error() != want {
-		t.Errorf("SwitchReads(master) err: %v, want %v", err, want)
+		t.Errorf("SwitchReads(primary) err: %v, want %v", err, want)
 	}
 	verifyQueries(t, tme.allDBClients)
 
@@ -614,10 +615,10 @@ func TestShardMigrateMainflow(t *testing.T) {
 	checkServedTypes(t, tme.ts, "ks:40-", 1)
 	checkServedTypes(t, tme.ts, "ks:-80", 2)
 	checkServedTypes(t, tme.ts, "ks:80-", 2)
-	checkIsMasterServing(t, tme.ts, "ks:-40", true)
-	checkIsMasterServing(t, tme.ts, "ks:40-", true)
-	checkIsMasterServing(t, tme.ts, "ks:-80", false)
-	checkIsMasterServing(t, tme.ts, "ks:80-", false)
+	checkIfPrimaryServing(t, tme.ts, "ks:-40", true)
+	checkIfPrimaryServing(t, tme.ts, "ks:40-", true)
+	checkIfPrimaryServing(t, tme.ts, "ks:-80", false)
+	checkIfPrimaryServing(t, tme.ts, "ks:80-", false)
 
 	checkJournals := func() {
 		tme.dbSourceClients[0].addQuery("select val from _vt.resharding_journal where id=6432976123657117097", &sqltypes.Result{}, nil)
@@ -668,10 +669,10 @@ func TestShardMigrateMainflow(t *testing.T) {
 	checkServedTypes(t, tme.ts, "ks:40-", 1)
 	checkServedTypes(t, tme.ts, "ks:-80", 2)
 	checkServedTypes(t, tme.ts, "ks:80-", 2)
-	checkIsMasterServing(t, tme.ts, "ks:-40", true)
-	checkIsMasterServing(t, tme.ts, "ks:40-", true)
-	checkIsMasterServing(t, tme.ts, "ks:-80", false)
-	checkIsMasterServing(t, tme.ts, "ks:80-", false)
+	checkIfPrimaryServing(t, tme.ts, "ks:-40", true)
+	checkIfPrimaryServing(t, tme.ts, "ks:40-", true)
+	checkIfPrimaryServing(t, tme.ts, "ks:-80", false)
+	checkIfPrimaryServing(t, tme.ts, "ks:80-", false)
 
 	//-------------------------------------------------------------------------------------------------------------------
 	// Test successful SwitchWrites.
@@ -761,15 +762,31 @@ func TestShardMigrateMainflow(t *testing.T) {
 	checkServedTypes(t, tme.ts, "ks:-80", 3)
 	checkServedTypes(t, tme.ts, "ks:80-", 3)
 
-	checkIsMasterServing(t, tme.ts, "ks:-40", false)
-	checkIsMasterServing(t, tme.ts, "ks:40-", false)
-	checkIsMasterServing(t, tme.ts, "ks:-80", true)
-	checkIsMasterServing(t, tme.ts, "ks:80-", true)
+	checkIfPrimaryServing(t, tme.ts, "ks:-40", false)
+	checkIfPrimaryServing(t, tme.ts, "ks:40-", false)
+	checkIfPrimaryServing(t, tme.ts, "ks:-80", true)
+	checkIfPrimaryServing(t, tme.ts, "ks:80-", true)
 
 	verifyQueries(t, tme.allDBClients)
 }
 
-func TestTableMigrateOneToMany(t *testing.T) {
+func TestTableMigrateOneToManyKeepNoArtifacts(t *testing.T) {
+	testTableMigrateOneToMany(t, false, false)
+}
+
+func TestTableMigrateOneToManyKeepDataArtifacts(t *testing.T) {
+	testTableMigrateOneToMany(t, true, false)
+}
+
+func TestTableMigrateOneToManyKeepRoutingArtifacts(t *testing.T) {
+	testTableMigrateOneToMany(t, false, true)
+}
+
+func TestTableMigrateOneToManyKeepAllArtifacts(t *testing.T) {
+	testTableMigrateOneToMany(t, true, true)
+}
+
+func testTableMigrateOneToMany(t *testing.T, keepData, keepRoutingRules bool) {
 	ctx := context.Background()
 	tme := newTestTableMigraterCustom(ctx, t, []string{"0"}, []string{"-80", "80-"}, "select * %s")
 	defer tme.stopTablets(t)
@@ -805,17 +822,17 @@ func TestTableMigrateOneToMany(t *testing.T) {
 	}
 	waitForCatchup()
 
-	deleteReverseReplicaion := func() {
+	deleteReverseReplication := func() {
 		tme.dbSourceClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks1' and workflow = 'test_reverse'", resultid34, nil)
 		tme.dbSourceClients[0].addQuery("delete from _vt.vreplication where id in (3, 4)", &sqltypes.Result{}, nil)
 		tme.dbSourceClients[0].addQuery("delete from _vt.copy_state where vrepl_id in (3, 4)", &sqltypes.Result{}, nil)
 	}
 
 	createReverseVReplication := func() {
-		deleteReverseReplicaion()
+		deleteReverseReplication()
 
-		tme.dbSourceClients[0].addQueryRE(`insert into _vt.vreplication.*test_reverse.*ks2.*-80.*t1.*from t1\\".*t2.*from t2\\"`, &sqltypes.Result{InsertID: 1}, nil)
-		tme.dbSourceClients[0].addQueryRE(`insert into _vt.vreplication.*test_reverse.*ks2.*80-.*t1.*from t1\\".*t2.*from t2\\"`, &sqltypes.Result{InsertID: 2}, nil)
+		tme.dbSourceClients[0].addQueryRE(`insert into _vt.vreplication.*test_reverse.*ks2.*-80.*t1.*from `+"`"+"t1`"+`\\".*t2.*from `+"`"+"t2`"+`\\"`, &sqltypes.Result{InsertID: 1}, nil)
+		tme.dbSourceClients[0].addQueryRE(`insert into _vt.vreplication.*test_reverse.*ks2.*80-.*t1.*from `+"`"+"t1`"+`\\".*t2.*from `+"`"+"t2`"+`\\"`, &sqltypes.Result{InsertID: 2}, nil)
 		tme.dbSourceClients[0].addQuery("select * from _vt.vreplication where id = 1", stoppedResult(1), nil)
 		tme.dbSourceClients[0].addQuery("select * from _vt.vreplication where id = 2", stoppedResult(2), nil)
 	}
@@ -842,10 +859,12 @@ func TestTableMigrateOneToMany(t *testing.T) {
 		tme.dbTargetClients[1].addQuery("select 1 from _vt.vreplication where db_name='vt_ks2' and workflow='test' and message!='FROZEN'", &sqltypes.Result{}, nil)
 	}
 	dropSourcesInvalid()
-	_, err = tme.wr.DropSources(ctx, tme.targetKeyspace, "test", workflow.DropTable, false, false, false)
+	_, err = tme.wr.DropSources(ctx, tme.targetKeyspace, "test", workflow.DropTable, keepData, keepRoutingRules, false, false)
 	require.Error(t, err, "Workflow has not completed, cannot DropSources")
 
 	tme.dbSourceClients[0].addQueryRE(tsCheckJournals, &sqltypes.Result{}, nil)
+
+	switchWrites(tme)
 	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, false, false)
 	if err != nil {
 		t.Fatal(err)
@@ -859,24 +878,27 @@ func TestTableMigrateOneToMany(t *testing.T) {
 	wantdryRunDropSources := []string{
 		"Lock keyspace ks1",
 		"Lock keyspace ks2",
-		"Dropping these tables from the database and removing them from the vschema for keyspace ks1:",
-		"	Keyspace ks1 Shard 0 DbName vt_ks1 Tablet 10 Table t1",
-		"	Keyspace ks1 Shard 0 DbName vt_ks1 Tablet 10 Table t2",
-		"Blacklisted tables [t1,t2] will be removed from:",
-		"	Keyspace ks1 Shard 0 Tablet 10",
-		"Delete reverse vreplication streams on source:",
+	}
+	if !keepData {
+		wantdryRunDropSources = append(wantdryRunDropSources, "Dropping these tables from the database and removing them from the vschema for keyspace ks1:",
+			"	Keyspace ks1 Shard 0 DbName vt_ks1 Tablet 10 Table t1",
+			"	Keyspace ks1 Shard 0 DbName vt_ks1 Tablet 10 Table t2",
+			"Denied tables [t1,t2] will be removed from:",
+			"	Keyspace ks1 Shard 0 Tablet 10")
+	}
+	wantdryRunDropSources = append(wantdryRunDropSources, "Delete reverse vreplication streams on source:",
 		"	Keyspace ks1 Shard 0 Workflow test_reverse DbName vt_ks1 Tablet 10",
 		"Delete vreplication streams on target:",
 		"	Keyspace ks2 Shard -80 Workflow test DbName vt_ks2 Tablet 20",
-		"	Keyspace ks2 Shard 80- Workflow test DbName vt_ks2 Tablet 30",
-		"Routing rules for participating tables will be deleted",
-		"Unlock keyspace ks2",
-		"Unlock keyspace ks1",
+		"	Keyspace ks2 Shard 80- Workflow test DbName vt_ks2 Tablet 30")
+	if !keepRoutingRules {
+		wantdryRunDropSources = append(wantdryRunDropSources, "Routing rules for participating tables will be deleted")
 	}
-	results, err := tme.wr.DropSources(ctx, tme.targetKeyspace, "test", workflow.DropTable, false, false, true)
+	wantdryRunDropSources = append(wantdryRunDropSources, "Unlock keyspace ks2", "Unlock keyspace ks1")
+	results, err := tme.wr.DropSources(ctx, tme.targetKeyspace, "test", workflow.DropTable, keepData, keepRoutingRules, false, true)
 	require.NoError(t, err)
 	require.Empty(t, cmp.Diff(wantdryRunDropSources, *results))
-	checkBlacklist(t, tme.ts, fmt.Sprintf("%s:%s", "ks1", "0"), []string{"t1", "t2"})
+	checkDenyList(t, tme.ts, fmt.Sprintf("%s:%s", "ks1", "0"), []string{"t1", "t2"})
 
 	dropSourcesDryRunRename := func() {
 		tme.dbTargetClients[0].addQuery("select 1 from _vt.vreplication where db_name='vt_ks2' and workflow='test' and message!='FROZEN'", &sqltypes.Result{}, nil)
@@ -886,24 +908,27 @@ func TestTableMigrateOneToMany(t *testing.T) {
 	wantdryRunRenameSources := []string{
 		"Lock keyspace ks1",
 		"Lock keyspace ks2",
-		"Renaming these tables from the database and removing them from the vschema for keyspace ks1:", "	" +
+	}
+	if !keepData {
+		wantdryRunRenameSources = append(wantdryRunRenameSources, "Renaming these tables from the database and removing them from the vschema for keyspace ks1:", "	"+
 			"Keyspace ks1 Shard 0 DbName vt_ks1 Tablet 10 Table t1",
-		"	Keyspace ks1 Shard 0 DbName vt_ks1 Tablet 10 Table t2",
-		"Blacklisted tables [t1,t2] will be removed from:",
-		"	Keyspace ks1 Shard 0 Tablet 10",
-		"Delete reverse vreplication streams on source:",
+			"	Keyspace ks1 Shard 0 DbName vt_ks1 Tablet 10 Table t2",
+			"Denied tables [t1,t2] will be removed from:",
+			"	Keyspace ks1 Shard 0 Tablet 10")
+	}
+	wantdryRunRenameSources = append(wantdryRunRenameSources, "Delete reverse vreplication streams on source:",
 		"	Keyspace ks1 Shard 0 Workflow test_reverse DbName vt_ks1 Tablet 10",
 		"Delete vreplication streams on target:",
 		"	Keyspace ks2 Shard -80 Workflow test DbName vt_ks2 Tablet 20",
-		"	Keyspace ks2 Shard 80- Workflow test DbName vt_ks2 Tablet 30",
-		"Routing rules for participating tables will be deleted",
-		"Unlock keyspace ks2",
-		"Unlock keyspace ks1",
+		"	Keyspace ks2 Shard 80- Workflow test DbName vt_ks2 Tablet 30")
+	if !keepRoutingRules {
+		wantdryRunRenameSources = append(wantdryRunRenameSources, "Routing rules for participating tables will be deleted")
 	}
-	results, err = tme.wr.DropSources(ctx, tme.targetKeyspace, "test", workflow.RenameTable, false, false, true)
+	wantdryRunRenameSources = append(wantdryRunRenameSources, "Unlock keyspace ks2", "Unlock keyspace ks1")
+	results, err = tme.wr.DropSources(ctx, tme.targetKeyspace, "test", workflow.RenameTable, keepData, keepRoutingRules, false, true)
 	require.NoError(t, err)
 	require.Empty(t, cmp.Diff(wantdryRunRenameSources, *results))
-	checkBlacklist(t, tme.ts, fmt.Sprintf("%s:%s", "ks1", "0"), []string{"t1", "t2"})
+	checkDenyList(t, tme.ts, fmt.Sprintf("%s:%s", "ks1", "0"), []string{"t1", "t2"})
 
 	dropSources := func() {
 		tme.dbTargetClients[0].addQuery("select 1 from _vt.vreplication where db_name='vt_ks2' and workflow='test' and message!='FROZEN'", &sqltypes.Result{}, nil)
@@ -916,7 +941,7 @@ func TestTableMigrateOneToMany(t *testing.T) {
 	}
 	dropSources()
 
-	checkRouting(t, tme.wr, map[string][]string{
+	wantRouting := map[string][]string{
 		"t1":             {"ks2.t1"},
 		"ks1.t1":         {"ks2.t1"},
 		"t2":             {"ks2.t2"},
@@ -933,11 +958,20 @@ func TestTableMigrateOneToMany(t *testing.T) {
 		"t2@rdonly":      {"ks2.t2"},
 		"ks2.t2@rdonly":  {"ks2.t2"},
 		"ks1.t2@rdonly":  {"ks2.t2"},
-	})
-	_, err = tme.wr.DropSources(ctx, tme.targetKeyspace, "test", workflow.RenameTable, false, false, false)
+	}
+	checkRouting(t, tme.wr, wantRouting)
+	_, err = tme.wr.DropSources(ctx, tme.targetKeyspace, "test", workflow.RenameTable, keepData, keepRoutingRules, false, false)
 	require.NoError(t, err)
-	checkBlacklist(t, tme.ts, fmt.Sprintf("%s:%s", "ks1", "0"), nil)
-	checkRouting(t, tme.wr, map[string][]string{})
+	var wantDenyList []string
+	if keepData {
+		wantDenyList = []string{"t1", "t2"}
+	}
+	checkDenyList(t, tme.ts, fmt.Sprintf("%s:%s", "ks1", "0"), wantDenyList)
+	if !keepRoutingRules {
+		wantRouting = map[string][]string{}
+	}
+	checkRouting(t, tme.wr, wantRouting)
+
 	verifyQueries(t, tme.allDBClients)
 }
 
@@ -1049,6 +1083,7 @@ func TestTableMigrateOneToManyDryRun(t *testing.T) {
 	}
 	deleteTargetVReplication()
 
+	switchWrites(tme)
 	_, results, err := tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, false, true)
 	require.NoError(t, err)
 	require.Empty(t, cmp.Diff(wantdryRunWrites, *results))
@@ -1134,6 +1169,7 @@ func TestMigrateFailJournal(t *testing.T) {
 	tme.dbSourceClients[0].addQueryRE("insert into _vt.resharding_journal", nil, errors.New("journaling intentionally failed"))
 	tme.dbSourceClients[1].addQueryRE("insert into _vt.resharding_journal", nil, errors.New("journaling intentionally failed"))
 
+	switchWrites(tme)
 	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, true, false)
 	want := "journaling intentionally failed"
 	if err == nil || !strings.Contains(err.Error(), want) {
@@ -1195,6 +1231,7 @@ func TestTableMigrateJournalExists(t *testing.T) {
 	tme.dbTargetClients[1].addQuery("select * from _vt.vreplication where id = 1", stoppedResult(1), nil)
 	tme.dbTargetClients[1].addQuery("select * from _vt.vreplication where id = 2", stoppedResult(2), nil)
 
+	switchWrites(tme)
 	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, true, false)
 	if err != nil {
 		t.Fatal(err)
@@ -1219,12 +1256,12 @@ func TestTableMigrateJournalExists(t *testing.T) {
 		"ks2.t2@rdonly":  {"ks2.t2"},
 		"ks1.t2@rdonly":  {"ks2.t2"},
 	})
-	// We're showing that there are no blacklisted tables. But in real life,
-	// tables on ks1 should be blacklisted from the previous failed attempt.
-	checkBlacklist(t, tme.ts, "ks1:-40", nil)
-	checkBlacklist(t, tme.ts, "ks1:40-", nil)
-	checkBlacklist(t, tme.ts, "ks2:-80", nil)
-	checkBlacklist(t, tme.ts, "ks2:80-", nil)
+	// We're showing that there are no denied tables. But in real life,
+	// tables on ks1 should be denied from the previous failed attempt.
+	checkDenyList(t, tme.ts, "ks1:-40", nil)
+	checkDenyList(t, tme.ts, "ks1:40-", nil)
+	checkDenyList(t, tme.ts, "ks2:-80", nil)
+	checkDenyList(t, tme.ts, "ks2:80-", nil)
 
 	verifyQueries(t, tme.allDBClients)
 }
@@ -1272,6 +1309,7 @@ func TestShardMigrateJournalExists(t *testing.T) {
 	tme.dbTargetClients[1].addQuery("update _vt.vreplication set message = 'FROZEN' where id in (2)", &sqltypes.Result{}, nil)
 	tme.dbTargetClients[1].addQuery("select * from _vt.vreplication where id = 2", stoppedResult(2), nil)
 
+	switchWrites(tme)
 	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, true, false)
 	if err != nil {
 		t.Fatal(err)
@@ -1282,10 +1320,10 @@ func TestShardMigrateJournalExists(t *testing.T) {
 	checkServedTypes(t, tme.ts, "ks:-80", 3)
 	checkServedTypes(t, tme.ts, "ks:80-", 3)
 
-	checkIsMasterServing(t, tme.ts, "ks:-40", false)
-	checkIsMasterServing(t, tme.ts, "ks:40-", false)
-	checkIsMasterServing(t, tme.ts, "ks:-80", true)
-	checkIsMasterServing(t, tme.ts, "ks:80-", true)
+	checkIfPrimaryServing(t, tme.ts, "ks:-40", false)
+	checkIfPrimaryServing(t, tme.ts, "ks:40-", false)
+	checkIfPrimaryServing(t, tme.ts, "ks:-80", true)
+	checkIfPrimaryServing(t, tme.ts, "ks:80-", true)
 
 	verifyQueries(t, tme.allDBClients)
 }
@@ -1334,6 +1372,7 @@ func TestTableMigrateCancel(t *testing.T) {
 	}
 	cancelMigration()
 
+	switchWrites(tme)
 	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, true, false, false, false)
 	if err != nil {
 		t.Fatal(err)
@@ -1393,6 +1432,7 @@ func TestTableMigrateCancelDryRun(t *testing.T) {
 	}
 	cancelMigration()
 
+	switchWrites(tme)
 	_, dryRunResults, err := tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, true, false, false, true)
 	require.NoError(t, err)
 	require.Empty(t, cmp.Diff(want, *dryRunResults))
@@ -1491,6 +1531,7 @@ func TestTableMigrateNoReverse(t *testing.T) {
 	}
 	deleteTargetVReplication()
 
+	switchWrites(tme)
 	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, false, false)
 	if err != nil {
 		t.Fatal(err)
@@ -1525,13 +1566,14 @@ func TestMigrateFrozen(t *testing.T) {
 			}},
 		},
 	}
-	tme.dbTargetClients[0].addQuery(vreplQueryks2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+	tme.dbTargetClients[0].addQuery(streamInfoKs2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 		"id|source|message|cell|tablet_types",
 		"int64|varchar|varchar|varchar|varchar"),
 		fmt.Sprintf("1|%v|FROZEN||", bls1),
 	), nil)
-	tme.dbTargetClients[1].addQuery(vreplQueryks2, &sqltypes.Result{}, nil)
+	tme.dbTargetClients[1].addQuery(streamInfoKs2, &sqltypes.Result{}, nil)
 
+	switchWrites(tme)
 	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 0*time.Second, false, false, true, false)
 	if err != nil {
 		t.Fatal(err)
@@ -1544,8 +1586,8 @@ func TestMigrateNoStreamsFound(t *testing.T) {
 	tme := newTestTableMigrater(ctx, t)
 	defer tme.stopTablets(t)
 
-	tme.dbTargetClients[0].addQuery(vreplQueryks2, &sqltypes.Result{}, nil)
-	tme.dbTargetClients[1].addQuery(vreplQueryks2, &sqltypes.Result{}, nil)
+	tme.dbTargetClients[0].addQuery(streamInfoKs2, &sqltypes.Result{}, nil)
+	tme.dbTargetClients[1].addQuery(streamInfoKs2, &sqltypes.Result{}, nil)
 
 	tme.expectNoPreviousJournals()
 	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", []topodatapb.TabletType{topodatapb.TabletType_RDONLY}, nil, workflow.DirectionForward, false)
@@ -1573,7 +1615,7 @@ func TestMigrateDistinctSources(t *testing.T) {
 			}},
 		},
 	}
-	tme.dbTargetClients[0].addQuery(vreplQueryks2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+	tme.dbTargetClients[0].addQuery(streamInfoKs2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 		"id|source|message|cell|tablet_types",
 		"int64|varchar|varchar|varchar|varchar"),
 		fmt.Sprintf("1|%v|||", bls),
@@ -1602,7 +1644,7 @@ func TestMigrateMismatchedTables(t *testing.T) {
 			}},
 		},
 	}
-	tme.dbTargetClients[0].addQuery(vreplQueryks2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+	tme.dbTargetClients[0].addQuery(streamInfoKs2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 		"id|source|message|cell|tablet_types",
 		"int64|varchar|varchar|varchar|varchar"),
 		fmt.Sprintf("1|%v|||", bls)),
@@ -1622,7 +1664,7 @@ func TestTableMigrateAllShardsNotPresent(t *testing.T) {
 	tme := newTestTableMigrater(ctx, t)
 	defer tme.stopTablets(t)
 
-	tme.dbTargetClients[0].addQuery(vreplQueryks2, &sqltypes.Result{}, nil)
+	tme.dbTargetClients[0].addQuery(streamInfoKs2, &sqltypes.Result{}, nil)
 
 	tme.expectNoPreviousJournals()
 	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", []topodatapb.TabletType{topodatapb.TabletType_RDONLY}, nil, workflow.DirectionForward, false)
@@ -1661,7 +1703,7 @@ func TestMigrateNoTableWildcards(t *testing.T) {
 			}},
 		},
 	}
-	tme.dbTargetClients[0].addQuery(vreplQueryks2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+	tme.dbTargetClients[0].addQuery(streamInfoKs2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 		"id|source|message|cell|tablet_types",
 		"int64|varchar|varchar|varchar|varchar"),
 		fmt.Sprintf("1|%v|||", bls1),
@@ -1677,7 +1719,7 @@ func TestMigrateNoTableWildcards(t *testing.T) {
 			}},
 		},
 	}
-	tme.dbTargetClients[1].addQuery(vreplQueryks2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+	tme.dbTargetClients[1].addQuery(streamInfoKs2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 		"id|source|message|cell|tablet_types",
 		"int64|varchar|varchar|varchar|varchar"),
 		fmt.Sprintf("1|%v|||", bls3),
@@ -1717,12 +1759,12 @@ func TestReverseVReplicationUpdateQuery(t *testing.T) {
 			want: fmt.Sprintf(updateQuery, "cell2", ""),
 		},
 		{
-			targetCell: "cell1", sourceCell: "cell1", optCells: "cell1,cell2", optTabletTypes: "replica,master",
-			want: fmt.Sprintf(updateQuery, "cell1,cell2", "replica,master"),
+			targetCell: "cell1", sourceCell: "cell1", optCells: "cell1,cell2", optTabletTypes: "replica,primary",
+			want: fmt.Sprintf(updateQuery, "cell1,cell2", "replica,primary"),
 		},
 		{
-			targetCell: "cell1", sourceCell: "cell1", optCells: "", optTabletTypes: "replica,master",
-			want: fmt.Sprintf(updateQuery, "", "replica,master"),
+			targetCell: "cell1", sourceCell: "cell1", optCells: "", optTabletTypes: "replica,primary",
+			want: fmt.Sprintf(updateQuery, "", "replica,primary"),
 		},
 	}
 	for _, tc := range tCases {
@@ -1733,6 +1775,304 @@ func TestReverseVReplicationUpdateQuery(t *testing.T) {
 			require.Equal(t, tc.want, got)
 		})
 	}
+}
+
+func TestShardMigrateNoAvailableTabletsForReverseReplication(t *testing.T) {
+	ctx := context.Background()
+	tme := newTestShardMigrater(ctx, t, []string{"-40", "40-"}, []string{"-80", "80-"})
+	defer tme.stopTablets(t)
+
+	// Initial check
+	checkServedTypes(t, tme.ts, "ks:-40", 3)
+	checkServedTypes(t, tme.ts, "ks:40-", 3)
+	checkServedTypes(t, tme.ts, "ks:-80", 0)
+	checkServedTypes(t, tme.ts, "ks:80-", 0)
+
+	tme.expectNoPreviousJournals()
+	//-------------------------------------------------------------------------------------------------------------------
+	// Single cell RDONLY migration.
+	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", []topodatapb.TabletType{topodatapb.TabletType_RDONLY}, []string{"cell1"}, workflow.DirectionForward, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkCellServedTypes(t, tme.ts, "ks:-40", "cell1", 2)
+	checkCellServedTypes(t, tme.ts, "ks:40-", "cell1", 2)
+	checkCellServedTypes(t, tme.ts, "ks:-80", "cell1", 1)
+	checkCellServedTypes(t, tme.ts, "ks:80-", "cell1", 1)
+	checkCellServedTypes(t, tme.ts, "ks:-40", "cell2", 3)
+	checkCellServedTypes(t, tme.ts, "ks:40-", "cell2", 3)
+	checkCellServedTypes(t, tme.ts, "ks:-80", "cell2", 0)
+	checkCellServedTypes(t, tme.ts, "ks:80-", "cell2", 0)
+	verifyQueries(t, tme.allDBClients)
+
+	tme.expectNoPreviousJournals()
+	//-------------------------------------------------------------------------------------------------------------------
+	// Other cell REPLICA migration.
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", []topodatapb.TabletType{topodatapb.TabletType_REPLICA}, []string{"cell2"}, workflow.DirectionForward, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkCellServedTypes(t, tme.ts, "ks:-40", "cell1", 2)
+	checkCellServedTypes(t, tme.ts, "ks:40-", "cell1", 2)
+	checkCellServedTypes(t, tme.ts, "ks:-80", "cell1", 1)
+	checkCellServedTypes(t, tme.ts, "ks:80-", "cell1", 1)
+	checkCellServedTypes(t, tme.ts, "ks:-40", "cell2", 1)
+	checkCellServedTypes(t, tme.ts, "ks:40-", "cell2", 1)
+	checkCellServedTypes(t, tme.ts, "ks:-80", "cell2", 2)
+	checkCellServedTypes(t, tme.ts, "ks:80-", "cell2", 2)
+	verifyQueries(t, tme.allDBClients)
+
+	tme.expectNoPreviousJournals()
+	//-------------------------------------------------------------------------------------------------------------------
+	// Single cell backward REPLICA migration.
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", []topodatapb.TabletType{topodatapb.TabletType_REPLICA}, []string{"cell2"}, workflow.DirectionBackward, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkCellServedTypes(t, tme.ts, "ks:-40", "cell1", 2)
+	checkCellServedTypes(t, tme.ts, "ks:40-", "cell1", 2)
+	checkCellServedTypes(t, tme.ts, "ks:-80", "cell1", 1)
+	checkCellServedTypes(t, tme.ts, "ks:80-", "cell1", 1)
+	checkCellServedTypes(t, tme.ts, "ks:-40", "cell2", 3)
+	checkCellServedTypes(t, tme.ts, "ks:40-", "cell2", 3)
+	checkCellServedTypes(t, tme.ts, "ks:-80", "cell2", 0)
+	checkCellServedTypes(t, tme.ts, "ks:80-", "cell2", 0)
+	verifyQueries(t, tme.allDBClients)
+
+	tme.expectNoPreviousJournals()
+	//-------------------------------------------------------------------------------------------------------------------
+	// Switch all RDONLY.
+	// This is an extra step that does not exist in the tables test.
+	// The per-cell migration mechanism is different for tables. So, this
+	// extra step is needed to bring things in sync.
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", []topodatapb.TabletType{topodatapb.TabletType_RDONLY}, nil, workflow.DirectionForward, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkServedTypes(t, tme.ts, "ks:-40", 2)
+	checkServedTypes(t, tme.ts, "ks:40-", 2)
+	checkServedTypes(t, tme.ts, "ks:-80", 1)
+	checkServedTypes(t, tme.ts, "ks:80-", 1)
+	verifyQueries(t, tme.allDBClients)
+
+	tme.expectNoPreviousJournals()
+	//-------------------------------------------------------------------------------------------------------------------
+	// Switch all REPLICA.
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", []topodatapb.TabletType{topodatapb.TabletType_REPLICA}, nil, workflow.DirectionForward, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkServedTypes(t, tme.ts, "ks:-40", 1)
+	checkServedTypes(t, tme.ts, "ks:40-", 1)
+	checkServedTypes(t, tme.ts, "ks:-80", 2)
+	checkServedTypes(t, tme.ts, "ks:80-", 2)
+	verifyQueries(t, tme.allDBClients)
+
+	tme.expectNoPreviousJournals()
+	//-------------------------------------------------------------------------------------------------------------------
+	// All cells RDONLY backward migration.
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", []topodatapb.TabletType{topodatapb.TabletType_RDONLY}, nil, workflow.DirectionBackward, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkServedTypes(t, tme.ts, "ks:-40", 2)
+	checkServedTypes(t, tme.ts, "ks:40-", 2)
+	checkServedTypes(t, tme.ts, "ks:-80", 1)
+	checkServedTypes(t, tme.ts, "ks:80-", 1)
+	verifyQueries(t, tme.allDBClients)
+
+	//-------------------------------------------------------------------------------------------------------------------
+	// Can't switch primary with SwitchReads.
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", []topodatapb.TabletType{topodatapb.TabletType_PRIMARY}, nil, workflow.DirectionForward, false)
+	want := "tablet type must be REPLICA or RDONLY: PRIMARY"
+	if err == nil || err.Error() != want {
+		t.Errorf("SwitchReads(primary) err: %v, want %v", err, want)
+	}
+	verifyQueries(t, tme.allDBClients)
+
+	//-------------------------------------------------------------------------------------------------------------------
+	// Test SwitchWrites cancelation on failure.
+
+	tme.expectNoPreviousJournals()
+	// Switch all the reads first.
+	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", []topodatapb.TabletType{topodatapb.TabletType_RDONLY}, nil, workflow.DirectionForward, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkServedTypes(t, tme.ts, "ks:-40", 1)
+	checkServedTypes(t, tme.ts, "ks:40-", 1)
+	checkServedTypes(t, tme.ts, "ks:-80", 2)
+	checkServedTypes(t, tme.ts, "ks:80-", 2)
+	checkIfPrimaryServing(t, tme.ts, "ks:-40", true)
+	checkIfPrimaryServing(t, tme.ts, "ks:40-", true)
+	checkIfPrimaryServing(t, tme.ts, "ks:-80", false)
+	checkIfPrimaryServing(t, tme.ts, "ks:80-", false)
+
+	checkJournals := func() {
+		tme.dbSourceClients[0].addQuery("select val from _vt.resharding_journal where id=6432976123657117097", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[1].addQuery("select val from _vt.resharding_journal where id=6432976123657117097", &sqltypes.Result{}, nil)
+	}
+	checkJournals()
+
+	stopStreams := func() {
+		tme.dbSourceClients[0].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped' and message != 'FROZEN'", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[1].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped' and message != 'FROZEN'", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[0].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse'", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[1].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse'", &sqltypes.Result{}, nil)
+	}
+	stopStreams()
+
+	deleteReverseReplicaion := func() {
+		tme.dbSourceClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow = 'test_reverse'", resultid3, nil)
+		tme.dbSourceClients[1].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow = 'test_reverse'", resultid34, nil)
+		tme.dbSourceClients[0].addQuery("delete from _vt.vreplication where id in (3)", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[1].addQuery("delete from _vt.vreplication where id in (3, 4)", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[0].addQuery("delete from _vt.copy_state where vrepl_id in (3)", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[1].addQuery("delete from _vt.copy_state where vrepl_id in (3, 4)", &sqltypes.Result{}, nil)
+	}
+	cancelMigration := func() {
+		tme.dbSourceClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow != 'test_reverse'", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[1].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow != 'test_reverse'", &sqltypes.Result{}, nil)
+
+		tme.dbTargetClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow = 'test'", resultid12, nil)
+		tme.dbTargetClients[1].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow = 'test'", resultid2, nil)
+		tme.dbTargetClients[0].addQuery("update _vt.vreplication set state = 'Running', message = '' where id in (1, 2)", &sqltypes.Result{}, nil)
+		tme.dbTargetClients[1].addQuery("update _vt.vreplication set state = 'Running', message = '' where id in (2)", &sqltypes.Result{}, nil)
+		tme.dbTargetClients[0].addQuery("select * from _vt.vreplication where id = 1", runningResult(1), nil)
+		tme.dbTargetClients[0].addQuery("select * from _vt.vreplication where id = 2", runningResult(2), nil)
+		tme.dbTargetClients[1].addQuery("select * from _vt.vreplication where id = 2", runningResult(2), nil)
+
+		deleteReverseReplicaion()
+	}
+	cancelMigration()
+
+	switchWrites(tme)
+	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 0*time.Second, false, false, true, false)
+	want = "DeadlineExceeded"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("SwitchWrites(0 timeout) err: %v, must contain %v", err, want)
+	}
+
+	verifyQueries(t, tme.allDBClients)
+	checkServedTypes(t, tme.ts, "ks:-40", 1)
+	checkServedTypes(t, tme.ts, "ks:40-", 1)
+	checkServedTypes(t, tme.ts, "ks:-80", 2)
+	checkServedTypes(t, tme.ts, "ks:80-", 2)
+	checkIfPrimaryServing(t, tme.ts, "ks:-40", true)
+	checkIfPrimaryServing(t, tme.ts, "ks:40-", true)
+	checkIfPrimaryServing(t, tme.ts, "ks:-80", false)
+	checkIfPrimaryServing(t, tme.ts, "ks:80-", false)
+
+	//-------------------------------------------------------------------------------------------------------------------
+	// Test successful SwitchWrites.
+
+	checkJournals()
+	stopStreams()
+
+	waitForCatchup := func() {
+		// mi.waitForCatchup-> mi.wr.tmc.VReplicationWaitForPos
+		state := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+			"pos|state|message",
+			"varchar|varchar|varchar"),
+			"MariaDB/5-456-892|Running",
+		)
+		tme.dbTargetClients[0].addQuery("select pos, state, message from _vt.vreplication where id=1", state, nil)
+		tme.dbTargetClients[1].addQuery("select pos, state, message from _vt.vreplication where id=2", state, nil)
+		tme.dbTargetClients[0].addQuery("select pos, state, message from _vt.vreplication where id=2", state, nil)
+
+		// mi.waitForCatchup-> mi.wr.tmc.VReplicationExec('stopped for cutover')
+		tme.dbTargetClients[0].addQuery("select id from _vt.vreplication where id = 1", resultid1, nil)
+		tme.dbTargetClients[0].addQuery("update _vt.vreplication set state = 'Stopped', message = 'stopped for cutover' where id in (1)", &sqltypes.Result{}, nil)
+		tme.dbTargetClients[0].addQuery("select id from _vt.vreplication where id = 2", resultid2, nil)
+		tme.dbTargetClients[0].addQuery("update _vt.vreplication set state = 'Stopped', message = 'stopped for cutover' where id in (2)", &sqltypes.Result{}, nil)
+		tme.dbTargetClients[1].addQuery("select id from _vt.vreplication where id = 2", resultid2, nil)
+		tme.dbTargetClients[1].addQuery("update _vt.vreplication set state = 'Stopped', message = 'stopped for cutover' where id in (2)", &sqltypes.Result{}, nil)
+		tme.dbTargetClients[0].addQuery("select * from _vt.vreplication where id = 1", stoppedResult(1), nil)
+		tme.dbTargetClients[1].addQuery("select * from _vt.vreplication where id = 2", stoppedResult(2), nil)
+		tme.dbTargetClients[0].addQuery("select * from _vt.vreplication where id = 2", stoppedResult(2), nil)
+	}
+	waitForCatchup()
+
+	createReverseVReplication := func() {
+		deleteReverseReplicaion()
+
+		tme.dbSourceClients[0].addQueryRE("insert into _vt.vreplication.*-80.*-40.*MariaDB/5-456-893.*Stopped", &sqltypes.Result{InsertID: 1}, nil)
+		tme.dbSourceClients[1].addQueryRE("insert into _vt.vreplication.*-80.*40-.*MariaDB/5-456-893.*Stopped", &sqltypes.Result{InsertID: 1}, nil)
+		tme.dbSourceClients[1].addQueryRE("insert into _vt.vreplication.*80-.*40-.*MariaDB/5-456-893.*Stopped", &sqltypes.Result{InsertID: 2}, nil)
+		tme.dbSourceClients[0].addQuery("select * from _vt.vreplication where id = 1", stoppedResult(1), nil)
+		tme.dbSourceClients[1].addQuery("select * from _vt.vreplication where id = 1", stoppedResult(1), nil)
+		tme.dbSourceClients[1].addQuery("select * from _vt.vreplication where id = 2", stoppedResult(2), nil)
+	}
+	createReverseVReplication()
+
+	createJournals := func() {
+		journal1 := "insert into _vt.resharding_journal.*6432976123657117097.*migration_type:SHARDS.*local_position.*MariaDB/5-456-892.*shard_gtids.*-80.*MariaDB/5-456-893.*participants.*40.*40"
+		tme.dbSourceClients[0].addQueryRE(journal1, &sqltypes.Result{}, nil)
+		journal2 := "insert into _vt.resharding_journal.*6432976123657117097.*migration_type:SHARDS.*local_position.*MariaDB/5-456-892.*shard_gtids.*80.*MariaDB/5-456-893.*shard_gtids.*80.*MariaDB/5-456-893.*participants.*40.*40"
+		tme.dbSourceClients[1].addQueryRE(journal2, &sqltypes.Result{}, nil)
+	}
+	createJournals()
+
+	startReverseVReplication := func() {
+		tme.dbSourceClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks'", resultid34, nil)
+		tme.dbSourceClients[0].addQuery("update _vt.vreplication set state = 'Running', message = '' where id in (3, 4)", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[0].addQuery("select * from _vt.vreplication where id = 3", runningResult(3), nil)
+		tme.dbSourceClients[0].addQuery("select * from _vt.vreplication where id = 4", runningResult(4), nil)
+		tme.dbSourceClients[1].addQuery("select id from _vt.vreplication where db_name = 'vt_ks'", resultid34, nil)
+		tme.dbSourceClients[1].addQuery("update _vt.vreplication set state = 'Running', message = '' where id in (3, 4)", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[1].addQuery("select * from _vt.vreplication where id = 3", runningResult(3), nil)
+		tme.dbSourceClients[1].addQuery("select * from _vt.vreplication where id = 4", runningResult(4), nil)
+	}
+	startReverseVReplication()
+
+	freezeTargetVReplication := func() {
+		tme.dbTargetClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow = 'test'", resultid12, nil)
+		tme.dbTargetClients[0].addQuery("update _vt.vreplication set message = 'FROZEN' where id in (1, 2)", &sqltypes.Result{}, nil)
+		tme.dbTargetClients[0].addQuery("select * from _vt.vreplication where id = 1", stoppedResult(1), nil)
+		tme.dbTargetClients[0].addQuery("select * from _vt.vreplication where id = 2", stoppedResult(2), nil)
+		tme.dbTargetClients[1].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow = 'test'", resultid2, nil)
+		tme.dbTargetClients[1].addQuery("update _vt.vreplication set message = 'FROZEN' where id in (2)", &sqltypes.Result{}, nil)
+		tme.dbTargetClients[1].addQuery("select * from _vt.vreplication where id = 2", stoppedResult(2), nil)
+	}
+	freezeTargetVReplication()
+
+	// Temporarily set tablet types to RDONLY to test that SwitchWrites fails if no tablets of rdonly are available
+	invariants := make(map[string]*sqltypes.Result)
+	for i := range tme.targetShards {
+		invariants[fmt.Sprintf("%s-%d", streamInfoKs, i)] = tme.dbTargetClients[i].getInvariant(streamInfoKs)
+		tme.dbTargetClients[i].addInvariant(streamInfoKs, tme.dbTargetClients[i].getInvariant(streamInfoKs+"-rdonly"))
+	}
+	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, true, false)
+	require.Error(t, err)
+	require.True(t, strings.Contains(err.Error(), "no tablet found"))
+	require.True(t, strings.Contains(err.Error(), "-80"))
+	require.True(t, strings.Contains(err.Error(), "80-"))
+	require.False(t, strings.Contains(err.Error(), "40"))
+	for i := range tme.targetShards {
+		tme.dbTargetClients[i].addInvariant(streamInfoKs, invariants[fmt.Sprintf("%s-%d", streamInfoKs, i)])
+	}
+
+	journalID, _, err := tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, true, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if journalID != 6432976123657117097 {
+		t.Errorf("journal id: %d, want 6432976123657117097", journalID)
+	}
+
+	verifyQueries(t, tme.allDBClients)
+
+	checkServedTypes(t, tme.ts, "ks:-40", 0)
+	checkServedTypes(t, tme.ts, "ks:40-", 0)
+	checkServedTypes(t, tme.ts, "ks:-80", 3)
+	checkServedTypes(t, tme.ts, "ks:80-", 3)
+
+	checkIfPrimaryServing(t, tme.ts, "ks:-40", false)
+	checkIfPrimaryServing(t, tme.ts, "ks:40-", false)
+	checkIfPrimaryServing(t, tme.ts, "ks:-80", true)
+	checkIfPrimaryServing(t, tme.ts, "ks:80-", true)
+
+	verifyQueries(t, tme.allDBClients)
 }
 
 func checkRouting(t *testing.T, wr *Wrangler, want map[string][]string) {
@@ -1770,7 +2110,7 @@ func checkCellRouting(t *testing.T, wr *Wrangler, cell string, want map[string][
 	}
 }
 
-func checkBlacklist(t *testing.T, ts *topo.Server, keyspaceShard string, want []string) {
+func checkDenyList(t *testing.T, ts *topo.Server, keyspaceShard string, want []string) {
 	t.Helper()
 	ctx := context.Background()
 	splits := strings.Split(keyspaceShard, ":")
@@ -1778,13 +2118,13 @@ func checkBlacklist(t *testing.T, ts *topo.Server, keyspaceShard string, want []
 	if err != nil {
 		t.Fatal(err)
 	}
-	tc := si.GetTabletControl(topodatapb.TabletType_MASTER)
+	tc := si.GetTabletControl(topodatapb.TabletType_PRIMARY)
 	var got []string
 	if tc != nil {
-		got = tc.BlacklistedTables
+		got = tc.DeniedTables
 	}
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("Blacklisted tables for %v: %v, want %v", keyspaceShard, got, want)
+		t.Errorf("Denied tables for %v: %v, want %v", keyspaceShard, got, want)
 	}
 }
 
@@ -1827,7 +2167,7 @@ outer:
 		keyspaceShard, cell, count, want))
 }
 
-func checkIsMasterServing(t *testing.T, ts *topo.Server, keyspaceShard string, want bool) {
+func checkIfPrimaryServing(t *testing.T, ts *topo.Server, keyspaceShard string, want bool) {
 	t.Helper()
 	ctx := context.Background()
 	splits := strings.Split(keyspaceShard, ":")
@@ -1835,8 +2175,8 @@ func checkIsMasterServing(t *testing.T, ts *topo.Server, keyspaceShard string, w
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want != si.IsMasterServing {
-		t.Errorf("IsMasterServing(%v): %v, want %v", keyspaceShard, si.IsMasterServing, want)
+	if want != si.IsPrimaryServing {
+		t.Errorf("IsPrimaryServing(%v): %v, want %v", keyspaceShard, si.IsPrimaryServing, want)
 	}
 }
 
@@ -1844,7 +2184,7 @@ func getResult(id int, state string, keyspace string, shard string) *sqltypes.Re
 	return sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 		"id|state|cell|tablet_types|source",
 		"int64|varchar|varchar|varchar|varchar"),
-		fmt.Sprintf("%d|%s|cell1|MASTER|keyspace:\"%s\" shard:\"%s\"", id, state, keyspace, shard),
+		fmt.Sprintf("%d|%s|cell1|PRIMARY|keyspace:\"%s\" shard:\"%s\"", id, state, keyspace, shard),
 	)
 }
 
@@ -1854,4 +2194,12 @@ func stoppedResult(id int) *sqltypes.Result {
 
 func runningResult(id int) *sqltypes.Result {
 	return getResult(id, "Running", tpChoice.keyspace, tpChoice.shard)
+}
+
+func switchWrites(tmeT any) {
+	if tme, ok := tmeT.(*testMigraterEnv); ok {
+		tme.tmeDB.AddQuery("lock tables `t1` read,`t2` read", &sqltypes.Result{})
+	} else if tme, ok := tmeT.(*testShardMigraterEnv); ok {
+		tme.tmeDB.AddQuery("lock tables `t1` read,`t2` read", &sqltypes.Result{})
+	}
 }

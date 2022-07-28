@@ -17,11 +17,10 @@ limitations under the License.
 package vtctl
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"strings"
-
-	"context"
 
 	"vitess.io/vitess/go/vt/wrangler"
 
@@ -37,28 +36,32 @@ func init() {
 	addCommandGroup(cellsAliasesGroupName)
 
 	addCommand(cellsAliasesGroupName, command{
-		"AddCellsAlias",
-		commandAddCellsAlias,
-		"[-cells <cell,cell2...>] <alias>",
-		"Defines a group of cells within which replica/rdonly traffic can be routed across cells. Between cells that are not in the same group (alias), only master traffic can be routed."})
+		name:   "AddCellsAlias",
+		method: commandAddCellsAlias,
+		params: "[--cells <cell,cell2...>] <alias>",
+		help:   "Defines a group of cells within which replica/rdonly traffic can be routed across cells. Between cells that are not in the same group (alias), only primary traffic can be routed.",
+	})
 
 	addCommand(cellsAliasesGroupName, command{
-		"UpdateCellsAlias",
-		commandUpdateCellsAlias,
-		"[-cells <cell,cell2,...>] <alias>",
-		"Updates the content of a CellsAlias with the provided parameters. If a value is empty, it is not updated. The CellsAlias will be created if it doesn't exist."})
+		name:   "UpdateCellsAlias",
+		method: commandUpdateCellsAlias,
+		params: "[--cells <cell,cell2,...>] <alias>",
+		help:   "Updates the content of a CellsAlias with the provided parameters. If a value is empty, it is not updated. The CellsAlias will be created if it doesn't exist.",
+	})
 
 	addCommand(cellsAliasesGroupName, command{
-		"DeleteCellsAlias",
-		commandDeleteCellsAlias,
-		"<alias>",
-		"Deletes the CellsAlias for the provided alias."})
+		name:   "DeleteCellsAlias",
+		method: commandDeleteCellsAlias,
+		params: "<alias>",
+		help:   "Deletes the CellsAlias for the provided alias.",
+	})
 
 	addCommand(cellsAliasesGroupName, command{
-		"GetCellsAliases",
-		commandGetCellsAliases,
-		"",
-		"Lists all the cells for which we have a CellsAlias object."})
+		name:   "GetCellsAliases",
+		method: commandGetCellsAliases,
+		params: "",
+		help:   "Lists all the cells for which we have a CellsAlias object.",
+	})
 }
 
 func commandAddCellsAlias(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

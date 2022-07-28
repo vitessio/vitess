@@ -19,44 +19,37 @@ limitations under the License.
 package grpcvtctldclient
 
 import (
-	"flag"
+	"context"
+	"errors"
+	"fmt"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/connectivity"
 
 	"vitess.io/vitess/go/vt/grpcclient"
+	"vitess.io/vitess/go/vt/vtctl/grpcclientcommon"
 	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
 
 	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
 )
 
-const connClosedMsg = "grpc: the client connection is closed"
-
-// (TODO:@amason) - These flags match exactly the flags used in grpcvtctlclient.
-// If a program attempts to import both of these packages, it will panic during
-// startup due to the duplicate flags.
-//
-// For everything else I've been doing a sed s/vtctl/vtctld, but I cannot do
-// that here, since these flags are already "vtctld_*". My other options are to
-// name them "vtctld2_*" or to omit them completely.
-//
-// Not to pitch project ideas in comments, but a nice project to solve
 var (
-	cert = flag.String("vtctld_grpc_cert", "", "the cert to use to connect")
-	key  = flag.String("vtctld_grpc_key", "", "the key to use to connect")
-	ca   = flag.String("vtctld_grpc_ca", "", "the server ca to use to validate servers when connecting")
-	name = flag.String("vtctld_grpc_server_name", "", "the server name to use to validate server certificate")
+	ErrConnectionShutdown = errors.New("gRPCVtctldClient in a SHUTDOWN state")
+	ErrConnectionTimeout  = errors.New("gRPC connection wait time exceeded")
 )
+
+const connClosedMsg = "grpc: the client connection is closed"
 
 type gRPCVtctldClient struct {
 	cc *grpc.ClientConn
 	c  vtctlservicepb.VtctldClient
 }
 
-//go:generate -command grpcvtctldclient go run ./codegen
+//go:generate -command grpcvtctldclient go run ../vtctldclient/codegen
 //go:generate grpcvtctldclient -out client_gen.go
 
 func gRPCVtctldClientFactory(addr string) (vtctldclient.VtctldClient, error) {
-	opt, err := grpcclient.SecureDialOption(*cert, *key, *ca, *name)
+	opt, err := grpcclientcommon.SecureDialOption()
 	if err != nil {
 		return nil, err
 	}
@@ -86,6 +79,7 @@ func NewWithDialOpts(addr string, failFast grpcclient.FailFast, opts ...grpc.Dia
 	}, nil
 }
 
+// Close is part of the vtctldclient.VtctldClient interface.
 func (client *gRPCVtctldClient) Close() error {
 	err := client.cc.Close()
 	if err == nil {
@@ -93,6 +87,45 @@ func (client *gRPCVtctldClient) Close() error {
 	}
 
 	return err
+}
+
+// WaitForReady is part of the vtctldclient.VtctldClient interface.
+func (client *gRPCVtctldClient) WaitForReady(ctx context.Context) error {
+	// The gRPC implementation of WaitForReady uses the gRPC Connectivity API
+	// See https://github.com/grpc/grpc/blob/master/doc/connectivity-semantics-and-api.md
+	for {
+		select {
+		// A READY connection to the vtctld could not be established
+		// within the context timeout. The caller should close their
+		// existing connection and establish a new one.
+		case <-ctx.Done():
+			return ErrConnectionTimeout
+
+		// Wait to transition to READY state
+		default:
+			connState := client.cc.GetState()
+
+			switch connState {
+			case connectivity.Ready:
+				return nil
+
+			// Per https://github.com/grpc/grpc/blob/master/doc/connectivity-semantics-and-api.md,
+			// a client that enters the SHUTDOWN state never leaves this state, and all new RPCs should
+			// fail immediately. Further polling is futile, in other words, and so we
+			// return an error immediately to indicate that the caller can close the connection.
+			case connectivity.Shutdown:
+				return ErrConnectionShutdown
+
+			// If the connection is IDLE, CONNECTING, or in a TRANSIENT_FAILURE mode,
+			// then we wait to see if it will transition to a READY state.
+			default:
+				if !client.cc.WaitForStateChange(ctx, connState) {
+					// If the client has failed to transition, fail so that the caller can close the connection.
+					return fmt.Errorf("failed to transition from state %s", connState)
+				}
+			}
+		}
+	}
 }
 
 func init() {

@@ -19,8 +19,12 @@ limitations under the License.
 package grpcclient
 
 import (
+	"context"
+	"crypto/tls"
 	"flag"
 	"time"
+
+	"google.golang.org/grpc/credentials/insecure"
 
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
@@ -58,6 +62,16 @@ func RegisterGRPCDialOptions(grpcDialOptionsFunc func(opts []grpc.DialOption) ([
 // failFast is a non-optional parameter because callers are required to specify
 // what that should be.
 func Dial(target string, failFast FailFast, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
+	return DialContext(context.Background(), target, failFast, opts...)
+}
+
+// DialContext creates a grpc connection to the given target. Setup steps are
+// covered by the context deadline, and, if WithBlock is specified in the dial
+// options, connection establishment steps are covered by the context as well.
+//
+// failFast is a non-optional parameter because callers are required to specify
+// what that should be.
+func DialContext(ctx context.Context, target string, failFast FailFast, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
 	grpccommon.EnableTracingOpt()
 	newopts := []grpc.DialOption{
 		grpc.WithDefaultCallOptions(
@@ -98,7 +112,7 @@ func Dial(target string, failFast FailFast, opts ...grpc.DialOption) (*grpc.Clie
 
 	newopts = append(newopts, interceptors()...)
 
-	return grpc.Dial(target, newopts...)
+	return grpc.DialContext(ctx, target, newopts...)
 }
 
 func interceptors() []grpc.DialOption {
@@ -113,14 +127,15 @@ func interceptors() []grpc.DialOption {
 // SecureDialOption returns the gRPC dial option to use for the
 // given client connection. It is either using TLS, or Insecure if
 // nothing is set.
-func SecureDialOption(cert, key, ca, name string) (grpc.DialOption, error) {
+func SecureDialOption(cert, key, ca, crl, name string) (grpc.DialOption, error) {
 	// No security options set, just return.
 	if (cert == "" || key == "") && ca == "" {
-		return grpc.WithInsecure(), nil
+		return grpc.WithTransportCredentials(insecure.NewCredentials()), nil
 	}
 
-	// Load the config.
-	config, err := vttls.ClientConfig(cert, key, ca, name)
+	// Load the config. At this point we know
+	// we want a strict config with verify identity.
+	config, err := vttls.ClientConfig(vttls.VerifyIdentity, cert, key, ca, crl, name, tls.VersionTLS12)
 	if err != nil {
 		return nil, err
 	}

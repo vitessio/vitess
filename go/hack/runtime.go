@@ -1,3 +1,5 @@
+//go:build gc && !wasm
+
 /*
 Copyright 2021 The Vitess Authors.
 
@@ -43,3 +45,14 @@ func RuntimeMemhash(b []byte, seed uint64) uint64 {
 func RuntimeStrhash(str string, seed uint64) uint64 {
 	return uint64(strhash(unsafe.Pointer(&str), uintptr(seed)))
 }
+
+//go:linkname roundupsize runtime.roundupsize
+func roundupsize(size uintptr) uintptr
+
+// RuntimeAllocSize returns size of the memory block that mallocgc will allocate if you ask for the size.
+func RuntimeAllocSize(size int64) int64 {
+	return int64(roundupsize(uintptr(size)))
+}
+
+//go:linkname ParseFloatPrefix strconv.parseFloatPrefix
+func ParseFloatPrefix(s string, bitSize int) (float64, int, error)

@@ -18,6 +18,7 @@ package testutil
 
 import (
 	"context"
+	"fmt"
 	"sort"
 
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
@@ -52,6 +53,29 @@ func (bs *backupStorage) ListBackups(ctx context.Context, dir string) ([]backups
 	sort.Sort(handlesByName(handles))
 
 	return handles, nil
+}
+
+// RemoveBackup is part of the backupstorage.BackupStorage interface.
+func (bs *backupStorage) RemoveBackup(ctx context.Context, dir string, name string) error {
+	bucket, ok := bs.Backups[dir]
+	if !ok {
+		return fmt.Errorf("no bucket for key %s in testutil.BackupStorage", dir)
+	}
+
+	idx := -1
+	for i, backup := range bucket {
+		if backup == name {
+			idx = i
+			break
+		}
+	}
+
+	if idx == -1 {
+		return fmt.Errorf("no backup found for %s/%s", dir, name)
+	}
+
+	bs.Backups[dir] = append(bucket[:idx], bucket[idx+1:]...)
+	return nil
 }
 
 // Close is part of the backupstorage.BackupStorage interface.

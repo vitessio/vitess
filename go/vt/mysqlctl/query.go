@@ -210,6 +210,24 @@ func (mysqld *Mysqld) fetchVariables(ctx context.Context, pattern string) (map[s
 	return varMap, nil
 }
 
+// fetchStatuses returns a map from MySQL status names to status value
+// for variables that match the given pattern.
+func (mysqld *Mysqld) fetchStatuses(ctx context.Context, pattern string) (map[string]string, error) {
+	query := fmt.Sprintf("SHOW STATUS LIKE '%s'", pattern)
+	qr, err := mysqld.FetchSuperQuery(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	if len(qr.Fields) != 2 {
+		return nil, fmt.Errorf("query %#v returned %d columns, expected 2", query, len(qr.Fields))
+	}
+	varMap := make(map[string]string, len(qr.Rows))
+	for _, row := range qr.Rows {
+		varMap[row[0].ToString()] = row[1].ToString()
+	}
+	return varMap, nil
+}
+
 const (
 	masterPasswordStart = "  MASTER_PASSWORD = '"
 	masterPasswordEnd   = "',\n"
@@ -219,7 +237,7 @@ const (
 
 func redactPassword(input string) string {
 	i := strings.Index(input, masterPasswordStart)
-	// We have master password in the query, try to redact it
+	// We have primary password in the query, try to redact it
 	if i != -1 {
 		j := strings.Index(input[i+len(masterPasswordStart):], masterPasswordEnd)
 		if j == -1 {

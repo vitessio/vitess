@@ -17,9 +17,8 @@ limitations under the License.
 package messager
 
 import (
-	"sync"
-
 	"context"
+	"sync"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"
@@ -37,8 +36,8 @@ import (
 // that the messager needs for callback.
 type TabletService interface {
 	tabletenv.Env
-	PostponeMessages(ctx context.Context, target *querypb.Target, name string, ids []string) (count int64, err error)
-	PurgeMessages(ctx context.Context, target *querypb.Target, name string, timeCutoff int64) (count int64, err error)
+	PostponeMessages(ctx context.Context, target *querypb.Target, querygen QueryGenerator, ids []string) (count int64, err error)
+	PurgeMessages(ctx context.Context, target *querypb.Target, querygen QueryGenerator, timeCutoff int64) (count int64, err error)
 }
 
 // VStreamer defines  the functions of VStreamer
@@ -78,28 +77,43 @@ func (me *Engine) Open() {
 		me.mu.Unlock()
 		return
 	}
+	me.isOpen = true
 	me.mu.Unlock()
 	log.Info("Messager: opening")
 	// Unlock before invoking RegisterNotifier because it
 	// obtains the same lock.
 	me.se.RegisterNotifier("messages", me.schemaChanged)
-	me.isOpen = true
 }
 
 // Close closes the Engine service.
 func (me *Engine) Close() {
+	log.Infof("messager Engine - started execution of Close. Acquiring mu lock")
 	me.mu.Lock()
+	log.Infof("messager Engine - acquired mu lock")
 	defer me.mu.Unlock()
 	if !me.isOpen {
+		log.Infof("messager Engine is not open")
 		return
 	}
 	me.isOpen = false
+	log.Infof("messager Engine - unregistering notifiers")
 	me.se.UnregisterNotifier("messages")
+	log.Infof("messager Engine - closing all managers")
 	for _, mm := range me.managers {
 		mm.Close()
 	}
 	me.managers = make(map[string]*messageManager)
 	log.Info("Messager: closed")
+}
+
+func (me *Engine) GetGenerator(name string) (QueryGenerator, error) {
+	me.mu.Lock()
+	defer me.mu.Unlock()
+	mm := me.managers[name]
+	if mm == nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "message table %s not found in schema", name)
+	}
+	return mm, nil
 }
 
 // Subscribe subscribes to messages from the requested table.
@@ -113,49 +127,13 @@ func (me *Engine) Subscribe(ctx context.Context, name string, send func(*sqltype
 	me.mu.Lock()
 	defer me.mu.Unlock()
 	if !me.isOpen {
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "messager engine is closed, probably because this is not a master any more")
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "messager engine is closed, probably because this is not a primary any more")
 	}
 	mm := me.managers[name]
 	if mm == nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "message table %s not found", name)
 	}
 	return mm.Subscribe(ctx, send), nil
-}
-
-// GenerateAckQuery returns the query and bind vars for acking a message.
-func (me *Engine) GenerateAckQuery(name string, ids []string) (string, map[string]*querypb.BindVariable, error) {
-	me.mu.Lock()
-	defer me.mu.Unlock()
-	mm := me.managers[name]
-	if mm == nil {
-		return "", nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "message table %s not found in schema", name)
-	}
-	query, bv := mm.GenerateAckQuery(ids)
-	return query, bv, nil
-}
-
-// GeneratePostponeQuery returns the query and bind vars for postponing a message.
-func (me *Engine) GeneratePostponeQuery(name string, ids []string) (string, map[string]*querypb.BindVariable, error) {
-	me.mu.Lock()
-	defer me.mu.Unlock()
-	mm := me.managers[name]
-	if mm == nil {
-		return "", nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "message table %s not found in schema", name)
-	}
-	query, bv := mm.GeneratePostponeQuery(ids)
-	return query, bv, nil
-}
-
-// GeneratePurgeQuery returns the query and bind vars for purging messages.
-func (me *Engine) GeneratePurgeQuery(name string, timeCutoff int64) (string, map[string]*querypb.BindVariable, error) {
-	me.mu.Lock()
-	defer me.mu.Unlock()
-	mm := me.managers[name]
-	if mm == nil {
-		return "", nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "message table %s not found in schema", name)
-	}
-	query, bv := mm.GeneratePurgeQuery(timeCutoff)
-	return query, bv, nil
 }
 
 func (me *Engine) schemaChanged(tables map[string]*schema.Table, created, altered, dropped []string) {

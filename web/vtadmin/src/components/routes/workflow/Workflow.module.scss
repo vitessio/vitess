@@ -14,21 +14,21 @@
  * limitations under the License.
  */
 .headingMeta {
-  display: flex;
+    display: flex;
 }
 
 .headingMeta span {
-  display: inline-block;
-  line-height: 2;
-
-  &::after {
-    color: var(--colorScaffoldingHighlight);
-    content: '/';
     display: inline-block;
-    margin: 0 1.2rem;
-  }
+    line-height: 2;
 
-  &:last-child::after {
-    content: none;
-  }
+    &::after {
+        color: var(--colorScaffoldingHighlight);
+        content: '/';
+        display: inline-block;
+        margin: 0 1.2rem;
+    }
+
+    &:last-child::after {
+        content: none;
+    }
 }

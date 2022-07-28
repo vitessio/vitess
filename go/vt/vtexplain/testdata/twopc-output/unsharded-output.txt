@@ -1,4 +1,9 @@
 ----------------------------------------------------------------------
+show tables from ks_unsharded
+
+1 ks_unsharded/-: show tables
+
+----------------------------------------------------------------------
 select * from t1
 
 1 ks_unsharded/-: select * from t1 limit 10001

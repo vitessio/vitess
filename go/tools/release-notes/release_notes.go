@@ -17,12 +17,14 @@ limitations under the License.
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
 	"os"
 	"os/exec"
+	"path"
 	"regexp"
 	"sort"
 	"strings"
@@ -35,15 +37,17 @@ type (
 		Name string `json:"name"`
 	}
 
+	labels []label
+
 	author struct {
 		Login string `json:"login"`
 	}
 
 	prInfo struct {
-		Labels []label `json:"labels"`
-		Number int     `json:"number"`
-		Title  string  `json:"title"`
-		Author author  `json:"author"`
+		Labels labels `json:"labels"`
+		Number int    `json:"number"`
+		Title  string `json:"title"`
+		Author author `json:"author"`
 	}
 
 	prsByComponent = map[string][]prInfo
@@ -59,18 +63,68 @@ type (
 		Name       string
 		Components []sortedPRComponent
 	}
+
+	knownIssue struct {
+		Number int    `json:"number"`
+		Title  string `json:"title"`
+	}
+
+	releaseNote struct {
+		Version, VersionUnderscore                        string
+		Announcement                                      string
+		KnownIssues                                       string
+		AddDetails                                        string
+		PathToChangeLogFileOnGH, ChangeLog, ChangeMetrics string
+	}
 )
 
 const (
-	markdownTemplate = `
+	releaseNotesPath       = `doc/releasenotes/`
+	releaseNotesPathGitHub = `https://github.com/vitessio/vitess/blob/main/` + releaseNotesPath
+
+	markdownTemplate = `# Release of Vitess {{.Version}}
+
+{{- if or .Announcement .AddDetails }}
+{{ .Announcement }}
+{{- end }}
+
+{{- if and (or .Announcement .AddDetails) (or .KnownIssues .ChangeLog) }}
+------------
+{{- end }}
+
+{{- if .KnownIssues }}
+## Known Issues
+{{ .KnownIssues }}
+{{- end }}
+
+{{- if .ChangeLog }}
+The entire changelog for this release can be found [here]({{ .PathToChangeLogFileOnGH }}).
+{{- end }}
+
+{{- if .ChangeLog }}
+{{ .ChangeMetrics }}
+{{- end }}
+`
+
+	markdownTemplateChangelog = `# Changelog of Vitess {{.Version}}
+{{ .ChangeLog }}
+`
+
+	markdownTemplatePR = `
 {{- range $type := . }}
-## {{ $type.Name }}
+### {{ $type.Name }}
 {{- range $component := $type.Components }} 
-### {{ $component.Name }}
+#### {{ $component.Name }}
 {{- range $prInfo := $component.PrInfos }}
  * {{ $prInfo.Title }} #{{ $prInfo.Number }}
 {{- end }}
 {{- end }}
+{{- end }}
+`
+
+	markdownTemplateKnownIssues = `
+{{- range $issue := . }}
+ * {{ $issue.Title }} #{{ $issue.Number }} 
 {{- end }}
 `
 
@@ -79,6 +133,56 @@ const (
 	numberOfThreads   = 10
 	lengthOfSingleSHA = 40
 )
+
+func (rn *releaseNote) generate(rnFile, changelogFile *os.File) error {
+	var err error
+	// Generate the release notes
+	rn.PathToChangeLogFileOnGH = fmt.Sprintf(releaseNotesPathGitHub+"%s_changelog.md", rn.VersionUnderscore)
+	if rnFile == nil {
+		rnFile, err = os.OpenFile(fmt.Sprintf(path.Join(releaseNotesPath, "%s_release_notes.md"), rn.VersionUnderscore), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+		if err != nil {
+			return err
+		}
+	}
+
+	t := template.Must(template.New("release_notes").Parse(markdownTemplate))
+	err = t.ExecuteTemplate(rnFile, "release_notes", rn)
+	if err != nil {
+		return err
+	}
+
+	// Generate the changelog
+	if changelogFile == nil {
+		changelogFile, err = os.OpenFile(fmt.Sprintf(path.Join(releaseNotesPath, "%s_changelog.md"), rn.VersionUnderscore), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+		if err != nil {
+			return err
+		}
+	}
+	t = template.Must(template.New("release_notes_changelog").Parse(markdownTemplateChangelog))
+	err = t.ExecuteTemplate(changelogFile, "release_notes_changelog", rn)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func loadKnownIssues(release string) ([]knownIssue, error) {
+	idx := strings.Index(release, ".")
+	if idx > -1 {
+		release = release[:idx]
+	}
+	label := fmt.Sprintf("Known issue: %s", release)
+	out, err := execCmd("gh", "issue", "list", "--repo", "vitessio/vitess", "--label", label, "--json", "title,number")
+	if err != nil {
+		return nil, err
+	}
+	var knownIssues []knownIssue
+	err = json.Unmarshal(out, &knownIssues)
+	if err != nil {
+		return nil, err
+	}
+	return knownIssues, nil
+}
 
 func loadMergedPRs(from, to string) (prs []string, authors []string, commitCount int, err error) {
 	// load the git log with "author \t title \t parents"
@@ -94,6 +198,7 @@ func loadMergedPRs(from, to string) (prs []string, authors []string, commitCount
 func parseGitLog(s string) (prs []string, authorCommits []string, commitCount int, err error) {
 	rx := regexp.MustCompile(`(.+)\t(.+)\t(.+)\t(.+)`)
 	mergePR := regexp.MustCompile(`Merge pull request #(\d+)`)
+	squashPR := regexp.MustCompile(`\(#(\d+)\)`)
 	authMap := map[string]string{} // here we will store email <-> gh user mappings
 	lines := strings.Split(s, "\n")
 	for _, line := range lines {
@@ -112,13 +217,19 @@ func parseGitLog(s string) (prs []string, authorCommits []string, commitCount in
 			continue
 		}
 
-		if len(parents) > lengthOfSingleSHA {
-			// if we have two parents, it means this is a merge commit. we only count non-merge commits
-			continue
+		if len(parents) <= lengthOfSingleSHA {
+			// we have a single parent, and the commit counts
+			commitCount++
+			if _, exists := authMap[authorEmail]; !exists {
+				authMap[authorEmail] = sha
+			}
 		}
-		commitCount++
-		if _, exists := authMap[authorEmail]; !exists {
-			authMap[authorEmail] = sha
+
+		squashed := squashPR.FindStringSubmatch(title)
+		if len(squashed) == 2 {
+			// this is a merged PR. remember the PR #
+			prs = append(prs, squashed[1])
+			continue
 		}
 	}
 
@@ -333,63 +444,113 @@ func createSortedPrTypeSlice(prPerType prsByType) []sortedPRType {
 	return data
 }
 
-func getOutput(fileout string) (*os.File, error) {
-	if fileout == "" {
-		return os.Stdout, nil
+func releaseSummary(summaryFile string) (string, error) {
+	contentSummary, err := os.ReadFile(summaryFile)
+	if err != nil {
+		return "", err
 	}
-
-	return os.OpenFile(fileout, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+	return string(contentSummary), nil
 }
 
-func writePrInfos(writeTo *os.File, prPerType prsByType) (err error) {
+func getStringForPullRequestInfos(prPerType prsByType) (string, error) {
 	data := createSortedPrTypeSlice(prPerType)
 
-	t := template.Must(template.New("markdownTemplate").Parse(markdownTemplate))
-	err = t.ExecuteTemplate(writeTo, "markdownTemplate", data)
-	if err != nil {
-		return err
+	t := template.Must(template.New("markdownTemplatePR").Parse(markdownTemplatePR))
+	buff := bytes.Buffer{}
+	if err := t.ExecuteTemplate(&buff, "markdownTemplatePR", data); err != nil {
+		return "", err
 	}
-	return nil
+	return buff.String(), nil
+}
+
+func getStringForKnownIssues(issues []knownIssue) (string, error) {
+	if len(issues) == 0 {
+		return "", nil
+	}
+	t := template.Must(template.New("markdownTemplateKnownIssues").Parse(markdownTemplateKnownIssues))
+	buff := bytes.Buffer{}
+	if err := t.ExecuteTemplate(&buff, "markdownTemplateKnownIssues", issues); err != nil {
+		return "", err
+	}
+	return buff.String(), nil
+}
+
+func groupAndStringifyPullRequest(pr []prInfo) (string, error) {
+	if len(pr) == 0 {
+		return "", nil
+	}
+	prPerType := groupPRs(pr)
+	prStr, err := getStringForPullRequestInfos(prPerType)
+	if err != nil {
+		return "", err
+	}
+	return prStr, nil
 }
 
 func main() {
 	from := flag.String("from", "", "from sha/tag/branch")
 	to := flag.String("to", "HEAD", "to sha/tag/branch")
-	fileout := flag.String("file", "", "file on which to write release notes, stdout if empty")
-
+	versionName := flag.String("version", "", "name of the version (has to be the following format: v11.0.0)")
+	summaryFile := flag.String("summary", "", "readme file on which there is a summary of the release")
 	flag.Parse()
 
+	// The -version flag must be of a valid format.
+	rx := regexp.MustCompile(`v(\d+)\.(\d+)\.(\d+)`)
+	// There should be 4 sub-matches, input: "v14.0.0", output: ["v14.0.0", "14", "0", "0"].
+	versionMatch := rx.FindStringSubmatch(*versionName)
+	if len(versionMatch) != 4 {
+		log.Fatal("The -version flag must be set using a valid format. Format: 'vX.X.X'.")
+	}
+
+	releaseNotes := releaseNote{
+		Version:           *versionName,
+		VersionUnderscore: fmt.Sprintf("%s_%s_%s", versionMatch[1], versionMatch[2], versionMatch[3]), // v14.0.0 -> 14_0_0, this is used to format filenames.
+	}
+
+	// summary of the release
+	if *summaryFile != "" {
+		summary, err := releaseSummary(*summaryFile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		releaseNotes.Announcement = summary
+	}
+
+	// known issues
+	knownIssues, err := loadKnownIssues(*versionName)
+	if err != nil {
+		log.Fatal(err)
+	}
+	knownIssuesStr, err := getStringForKnownIssues(knownIssues)
+	if err != nil {
+		log.Fatal(err)
+	}
+	releaseNotes.KnownIssues = knownIssuesStr
+
+	// changelog with pull requests
 	prs, authorCommits, commits, err := loadMergedPRs(*from, *to)
 	if err != nil {
 		log.Fatal(err)
 	}
-
 	prInfos, authors, err := loadAllPRs(prs, authorCommits)
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	prPerType := groupPRs(prInfos)
-	out, err := getOutput(*fileout)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer func() {
-		_ = out.Close()
-	}()
-
-	err = writePrInfos(out, prPerType)
+	releaseNotes.ChangeLog, err = groupAndStringifyPullRequest(prInfos)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	_, err = out.WriteString(fmt.Sprintf("\n\nThe release includes %d commits (excluding merges)\n", commits))
-	if err != nil {
-		log.Fatal(err)
+	// changelog metrics
+	if commits > 0 && len(authors) > 0 {
+		releaseNotes.ChangeMetrics = fmt.Sprintf(`
+The release includes %d commits (excluding merges)
+
+Thanks to all our contributors: @%s
+`, commits, strings.Join(authors, ", @"))
 	}
 
-	_, err = out.WriteString(fmt.Sprintf("Thanks to all our contributors: @%s\n", strings.Join(authors, ", @")))
-	if err != nil {
+	if err := releaseNotes.generate(nil, nil); err != nil {
 		log.Fatal(err)
 	}
 }

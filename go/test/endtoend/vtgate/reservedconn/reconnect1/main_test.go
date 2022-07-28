@@ -22,12 +22,13 @@ import (
 	"os"
 	"testing"
 
+	"vitess.io/vitess/go/test/endtoend/utils"
+
 	"github.com/stretchr/testify/assert"
 
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
@@ -85,7 +86,7 @@ func TestMain(m *testing.M) {
 		}
 
 		// Start vtgate
-		clusterInstance.VtGateExtraArgs = []string{"-lock_heartbeat_time", "2s", "-enable_system_settings=true"} // enable reserved connection.
+		clusterInstance.VtGateExtraArgs = []string{"--lock_heartbeat_time", "2s", "--enable_system_settings=true"}
 		if err := clusterInstance.StartVtgate(); err != nil {
 			return 1
 		}
@@ -104,47 +105,78 @@ func TestServingChange(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	checkedExec(t, conn, "use @rdonly")
-	checkedExec(t, conn, "set sql_mode = ''")
+	utils.Exec(t, conn, "use @rdonly")
+	utils.Exec(t, conn, "set sql_mode = ''")
 
 	// to see rdonly is available and
 	// also this will create reserved connection on rdonly on -80 and 80- shards.
-	_, err = exec(t, conn, "select * from test")
+	_, err = utils.ExecAllowError(t, conn, "select * from test")
 	for err != nil {
-		_, err = exec(t, conn, "select * from test")
+		_, err = utils.ExecAllowError(t, conn, "select * from test")
 	}
 
 	// changing rdonly tablet to spare (non serving).
 	rdonlyTablet := clusterInstance.Keyspaces[0].Shards[0].Rdonly()
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", rdonlyTablet.Alias, "spare")
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", rdonlyTablet.Alias, "replica")
 	require.NoError(t, err)
+	rdonlyTablet.Type = "replica"
 
 	// this should fail as there is no rdonly present
-	_, err = exec(t, conn, "select * from test")
+	_, err = utils.ExecAllowError(t, conn, "select * from test")
 	require.Error(t, err)
 
 	// changing replica tablet to rdonly to make rdonly available for serving.
 	replicaTablet := clusterInstance.Keyspaces[0].Shards[0].Replica()
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", replicaTablet.Alias, "rdonly")
 	require.NoError(t, err)
+	replicaTablet.Type = "rdonly"
 
 	// to see/make the new rdonly available
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Ping", replicaTablet.Alias)
 	require.NoError(t, err)
 
 	// this should pass now as there is rdonly present
-	_, err = exec(t, conn, "select * from test")
+	_, err = utils.ExecAllowError(t, conn, "select * from test")
 	assert.NoError(t, err)
 }
 
-func exec(t *testing.T, conn *mysql.Conn, query string) (*sqltypes.Result, error) {
-	t.Helper()
-	return conn.ExecuteFetch(query, 1000, true)
-}
-
-func checkedExec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
-	t.Helper()
-	qr, err := conn.ExecuteFetch(query, 1000, true)
+func TestServingChangeStreaming(t *testing.T) {
+	conn, err := mysql.Connect(context.Background(), &vtParams)
 	require.NoError(t, err)
-	return qr
+	defer conn.Close()
+
+	utils.Exec(t, conn, "set workload = olap")
+	utils.Exec(t, conn, "use @rdonly")
+	utils.Exec(t, conn, "set sql_mode = ''")
+
+	// to see rdonly is available and
+	// also this will create reserved connection on rdonly on -80 and 80- shards.
+	_, err = utils.ExecAllowError(t, conn, "select * from test")
+	for err != nil {
+		_, err = utils.ExecAllowError(t, conn, "select * from test")
+	}
+
+	// changing rdonly tablet to spare (non serving).
+	rdonlyTablet := clusterInstance.Keyspaces[0].Shards[0].Rdonly()
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", rdonlyTablet.Alias, "replica")
+	require.NoError(t, err)
+	rdonlyTablet.Type = "replica"
+
+	// this should fail as there is no rdonly present
+	_, err = utils.ExecAllowError(t, conn, "select * from test")
+	require.Error(t, err)
+
+	// changing replica tablet to rdonly to make rdonly available for serving.
+	replicaTablet := clusterInstance.Keyspaces[0].Shards[0].Replica()
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", replicaTablet.Alias, "rdonly")
+	require.NoError(t, err)
+	replicaTablet.Type = "rdonly"
+
+	// to see/make the new rdonly available
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Ping", replicaTablet.Alias)
+	require.NoError(t, err)
+
+	// this should pass now as there is rdonly present
+	_, err = utils.ExecAllowError(t, conn, "select * from test")
+	assert.NoError(t, err)
 }

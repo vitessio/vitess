@@ -68,10 +68,11 @@ func NewUserPermission(fields []*querypb.Field, values []sqltypes.Value) *tablet
 		case "user":
 			up.User = values[i].ToString()
 		case "password":
-			up.PasswordChecksum = crc64.Checksum(values[i].ToBytes(), hashTable)
+			vBytes, _ := values[i].ToBytes()
+			up.PasswordChecksum = crc64.Checksum(vBytes, hashTable)
 		case "password_last_changed":
 			// we skip this one, as the value may be
-			// different on master and replicas.
+			// different on primary and replicas.
 		default:
 			up.Privileges[field.Name] = values[i].ToString()
 		}

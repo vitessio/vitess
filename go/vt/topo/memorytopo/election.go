@@ -25,8 +25,8 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 )
 
-// NewMasterParticipation is part of the topo.Server interface
-func (c *Conn) NewMasterParticipation(name, id string) (topo.MasterParticipation, error) {
+// NewLeaderParticipation is part of the topo.Server interface
+func (c *Conn) NewLeaderParticipation(name, id string) (topo.LeaderParticipation, error) {
 	c.factory.mu.Lock()
 	defer c.factory.mu.Unlock()
 
@@ -36,7 +36,7 @@ func (c *Conn) NewMasterParticipation(name, id string) (topo.MasterParticipation
 		return nil, topo.NewError(topo.NoNode, electionPath)
 	}
 
-	return &cMasterParticipation{
+	return &cLeaderParticipation{
 		c:    c,
 		name: name,
 		id:   id,
@@ -45,16 +45,16 @@ func (c *Conn) NewMasterParticipation(name, id string) (topo.MasterParticipation
 	}, nil
 }
 
-// cMasterParticipation implements topo.MasterParticipation.
+// cLeaderParticipation implements topo.LeaderParticipation.
 //
 // We use a directory (in global election path, with the name) with
 // ephemeral files in it, that contains the id.  The oldest revision
 // wins the election.
-type cMasterParticipation struct {
+type cLeaderParticipation struct {
 	// c is our memorytopo connection
 	c *Conn
 
-	// name is the name of this MasterParticipation
+	// name is the name of this LeaderParticipation
 	name string
 
 	// id is the process's current id.
@@ -67,12 +67,12 @@ type cMasterParticipation struct {
 	done chan struct{}
 }
 
-// WaitForMastership is part of the topo.MasterParticipation interface.
-func (mp *cMasterParticipation) WaitForMastership() (context.Context, error) {
+// WaitForLeadership is part of the topo.LeaderParticipation interface.
+func (mp *cLeaderParticipation) WaitForLeadership() (context.Context, error) {
 	// If Stop was already called, mp.done is closed, so we are interrupted.
 	select {
 	case <-mp.done:
-		return nil, topo.NewError(topo.Interrupted, "mastership")
+		return nil, topo.NewError(topo.Interrupted, "Leadership")
 	default:
 	}
 
@@ -93,7 +93,7 @@ func (mp *cMasterParticipation) WaitForMastership() (context.Context, error) {
 		close(mp.done)
 	}()
 
-	// Try to get the mastership, by getting a lock.
+	// Try to get the primaryship, by getting a lock.
 	var err error
 	ld, err = mp.c.Lock(lockCtx, electionPath, mp.id)
 	if err != nil {
@@ -106,14 +106,14 @@ func (mp *cMasterParticipation) WaitForMastership() (context.Context, error) {
 	return lockCtx, nil
 }
 
-// Stop is part of the topo.MasterParticipation interface
-func (mp *cMasterParticipation) Stop() {
+// Stop is part of the topo.LeaderParticipation interface
+func (mp *cLeaderParticipation) Stop() {
 	close(mp.stop)
 	<-mp.done
 }
 
-// GetCurrentMasterID is part of the topo.MasterParticipation interface
-func (mp *cMasterParticipation) GetCurrentMasterID(ctx context.Context) (string, error) {
+// GetCurrentLeaderID is part of the topo.LeaderParticipation interface
+func (mp *cLeaderParticipation) GetCurrentLeaderID(ctx context.Context) (string, error) {
 	electionPath := path.Join(electionsPath, mp.name)
 
 	mp.c.factory.mu.Lock()

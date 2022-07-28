@@ -191,15 +191,19 @@ func (te *TxEngine) transition(state txEngineState) {
 // Close will disregard common rules for when to kill transactions
 // and wait forever for transactions to wrap up
 func (te *TxEngine) Close() {
+	log.Infof("TxEngine - started Close. Acquiring stateLock lock")
 	te.stateLock.Lock()
+	log.Infof("TxEngine - arcquired stateLock")
 	defer func() {
 		te.state = NotServing
 		te.stateLock.Unlock()
 	}()
 	if te.state == NotServing {
+		log.Infof("TxEngine - state is not serving already")
 		return
 	}
 
+	log.Infof("TxEngine - starting shutdown")
 	te.shutdownLocked()
 	log.Info("TxEngine: closed")
 }
@@ -210,7 +214,7 @@ func (te *TxEngine) isTxPoolAvailable(addToWaitGroup func(int)) error {
 
 	canOpenTransactions := te.state == AcceptingReadOnly || te.state == AcceptingReadAndWrite
 	if !canOpenTransactions {
-		return vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "tx engine can't accept new connections in state %v", te.state)
+		return vterrors.Errorf(vtrpc.Code_UNAVAILABLE, vterrors.TxEngineClosed, te.state)
 	}
 	addToWaitGroup(1)
 	return nil
@@ -286,6 +290,7 @@ func (te *TxEngine) txFinish(transactionID int64, reason tx.ReleaseReason, f fun
 // the transactions are rolled back if they're not resolved
 // by that time.
 func (te *TxEngine) shutdownLocked() {
+	log.Infof("TxEngine - called shutdownLocked")
 	immediate := true
 	if te.state == AcceptingReadAndWrite {
 		immediate = false
@@ -294,11 +299,15 @@ func (te *TxEngine) shutdownLocked() {
 	// Unlock, wait for all begin requests to complete, and relock.
 	te.state = Transitioning
 	te.stateLock.Unlock()
+	log.Infof("TxEngine - waiting for begin requests")
 	te.beginRequests.Wait()
+	log.Infof("TxEngine - acquiring state lock again")
 	te.stateLock.Lock()
+	log.Infof("TxEngine - state lock acquired again")
 
 	// Shut down functions are idempotent.
 	// No need to check if 2pc is enabled.
+	log.Infof("TxEngine - stop watchdog")
 	te.stopWatchdog()
 
 	poolEmpty := make(chan bool)
@@ -344,14 +353,19 @@ func (te *TxEngine) shutdownLocked() {
 			log.Info("Transactions completed before grace period: shutting down.")
 		}
 	}()
+	log.Infof("TxEngine - waiting for empty txPool")
 	te.txPool.WaitForEmpty()
 	// If the goroutine is still running, signal that it can exit.
 	close(poolEmpty)
 	// Make sure the goroutine has returned.
+	log.Infof("TxEngine - making sure the goroutine has returned")
 	<-rollbackDone
 
+	log.Infof("TxEngine - closing the txPool")
 	te.txPool.Close()
+	log.Infof("TxEngine - closing twoPC")
 	te.twoPC.Close()
+	log.Infof("TxEngine - finished shutdownLocked")
 }
 
 // prepareFromRedo replays and prepares the transactions
@@ -415,7 +429,7 @@ outer:
 
 // shutdownTransactions rolls back all open transactions
 // including the prepared ones.
-// This is used for transitioning from a master to a non-master
+// This is used for transitioning from a primary to a non-primary
 // serving type.
 func (te *TxEngine) shutdownTransactions() {
 	te.rollbackPrepared()
@@ -491,7 +505,7 @@ func (te *TxEngine) stopWatchdog() {
 }
 
 // ReserveBegin creates a reserved connection, and in it opens a transaction
-func (te *TxEngine) ReserveBegin(ctx context.Context, options *querypb.ExecuteOptions, preQueries []string) (int64, error) {
+func (te *TxEngine) ReserveBegin(ctx context.Context, options *querypb.ExecuteOptions, preQueries []string, postBeginQueries []string) (int64, error) {
 	span, ctx := trace.NewSpan(ctx, "TxEngine.ReserveBegin")
 	defer span.Finish()
 	err := te.isTxPoolAvailable(te.beginRequests.Add)
@@ -505,7 +519,7 @@ func (te *TxEngine) ReserveBegin(ctx context.Context, options *querypb.ExecuteOp
 		return 0, err
 	}
 	defer conn.UnlockUpdateTime()
-	_, err = te.txPool.begin(ctx, options, te.state == AcceptingReadOnly, conn, nil)
+	_, err = te.txPool.begin(ctx, options, te.state == AcceptingReadOnly, conn, postBeginQueries)
 	if err != nil {
 		conn.Close()
 		conn.Release(tx.ConnInitFail)

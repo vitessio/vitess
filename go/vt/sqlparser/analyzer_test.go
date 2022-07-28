@@ -19,13 +19,7 @@ package sqlparser
 import (
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
-	"vitess.io/vitess/go/test/utils"
-
 	"github.com/stretchr/testify/assert"
-
-	"vitess.io/vitess/go/sqltypes"
 )
 
 func TestPreview(t *testing.T) {
@@ -167,6 +161,76 @@ func TestSplitAndExpression(t *testing.T) {
 	}
 }
 
+func TestAndExpressions(t *testing.T) {
+	greaterThanExpr := &ComparisonExpr{
+		Operator: GreaterThanOp,
+		Left: &ColName{
+			Name: NewIdentifierCI("val"),
+			Qualifier: TableName{
+				Name: NewIdentifierCS("a"),
+			},
+		},
+		Right: &ColName{
+			Name: NewIdentifierCI("val"),
+			Qualifier: TableName{
+				Name: NewIdentifierCS("b"),
+			},
+		},
+	}
+	equalExpr := &ComparisonExpr{
+		Operator: EqualOp,
+		Left: &ColName{
+			Name: NewIdentifierCI("id"),
+			Qualifier: TableName{
+				Name: NewIdentifierCS("a"),
+			},
+		},
+		Right: &ColName{
+			Name: NewIdentifierCI("id"),
+			Qualifier: TableName{
+				Name: NewIdentifierCS("b"),
+			},
+		},
+	}
+	testcases := []struct {
+		name           string
+		expressions    Exprs
+		expectedOutput Expr
+	}{
+		{
+			name:           "empty input",
+			expressions:    nil,
+			expectedOutput: nil,
+		}, {
+			name: "two equal inputs",
+			expressions: Exprs{
+				greaterThanExpr,
+				equalExpr,
+				equalExpr,
+			},
+			expectedOutput: &AndExpr{
+				Left:  greaterThanExpr,
+				Right: equalExpr,
+			},
+		},
+		{
+			name: "two equal inputs",
+			expressions: Exprs{
+				equalExpr,
+				equalExpr,
+			},
+			expectedOutput: equalExpr,
+		},
+	}
+
+	for _, testcase := range testcases {
+		t.Run(testcase.name, func(t *testing.T) {
+			output := AndExpressions(testcase.expressions...)
+			assert.Equal(t, String(testcase.expectedOutput), String(output))
+		})
+	}
+}
+
 func TestTableFromStatement(t *testing.T) {
 	testcases := []struct {
 		in, out string
@@ -255,43 +319,6 @@ func TestIsColName(t *testing.T) {
 	}
 }
 
-func TestIsValue(t *testing.T) {
-	testcases := []struct {
-		in  Expr
-		out bool
-	}{{
-		in:  NewStrLiteral("aa"),
-		out: true,
-	}, {
-		in:  NewHexLiteral("3131"),
-		out: true,
-	}, {
-		in:  NewIntLiteral("1"),
-		out: true,
-	}, {
-		in:  NewArgument("a"),
-		out: true,
-	}, {
-		in:  &NullVal{},
-		out: false,
-	}}
-	for _, tc := range testcases {
-		t.Run(String(tc.in), func(t *testing.T) {
-			out := IsValue(tc.in)
-			if out != tc.out {
-				t.Errorf("IsValue(%T): %v, want %v", tc.in, out, tc.out)
-			}
-			if tc.out {
-				// NewPlanValue should not fail for valid values.
-				if _, err := NewPlanValue(tc.in); err != nil {
-					t.Error(err)
-				}
-			}
-
-		})
-	}
-}
-
 func TestIsNull(t *testing.T) {
 	testcases := []struct {
 		in  Expr
@@ -309,171 +336,3 @@ func TestIsNull(t *testing.T) {
 		}
 	}
 }
-
-func TestIsSimpleTuple(t *testing.T) {
-	testcases := []struct {
-		in  Expr
-		out bool
-	}{{
-		in:  ValTuple{NewStrLiteral("aa")},
-		out: true,
-	}, {
-		in: ValTuple{&ColName{}},
-	}, {
-		in:  ListArg("a"),
-		out: true,
-	}, {
-		in: &ColName{},
-	}}
-	for _, tc := range testcases {
-		out := IsSimpleTuple(tc.in)
-		if out != tc.out {
-			t.Errorf("IsSimpleTuple(%T): %v, want %v", tc.in, out, tc.out)
-		}
-		if tc.out {
-			// NewPlanValue should not fail for valid tuples.
-			if _, err := NewPlanValue(tc.in); err != nil {
-				t.Error(err)
-			}
-		}
-	}
-}
-
-func TestNewPlanValue(t *testing.T) {
-	tcases := []struct {
-		in  Expr
-		out sqltypes.PlanValue
-		err string
-	}{{
-		in:  Argument("valarg"),
-		out: sqltypes.PlanValue{Key: "valarg"},
-	}, {
-		in: &Literal{
-			Type: IntVal,
-			Val:  "10",
-		},
-		out: sqltypes.PlanValue{Value: sqltypes.NewInt64(10)},
-	}, {
-		in: &Literal{
-			Type: IntVal,
-			Val:  "1111111111111111111111111111111111111111",
-		},
-		err: "value out of range",
-	}, {
-		in: &Literal{
-			Type: StrVal,
-			Val:  "strval",
-		},
-		out: sqltypes.PlanValue{Value: sqltypes.NewVarBinary("strval")},
-	}, {
-		in: &Literal{
-			Type: BitVal,
-			Val:  "01100001",
-		},
-		err: "expression is too complex",
-	}, {
-		in: &Literal{
-			Type: HexVal,
-			Val:  "3131",
-		},
-		out: sqltypes.PlanValue{Value: sqltypes.NewVarBinary("11")},
-	}, {
-		in: &Literal{
-			Type: HexVal,
-			Val:  "313",
-		},
-		err: "odd length hex string",
-	}, {
-		in:  ListArg("list"),
-		out: sqltypes.PlanValue{ListKey: "list"},
-	}, {
-		in: ValTuple{
-			Argument("valarg"),
-			&Literal{
-				Type: StrVal,
-				Val:  "strval",
-			},
-		},
-		out: sqltypes.PlanValue{
-			Values: []sqltypes.PlanValue{{
-				Key: "valarg",
-			}, {
-				Value: sqltypes.NewVarBinary("strval"),
-			}},
-		},
-	}, {
-		in: ValTuple{
-			ListArg("list"),
-		},
-		err: "unsupported: nested lists",
-	}, {
-		in:  &NullVal{},
-		out: sqltypes.PlanValue{},
-	}, {
-		in: &Literal{
-			Type: FloatVal,
-			Val:  "2.1",
-		},
-		out: sqltypes.PlanValue{Value: sqltypes.NewFloat64(2.1)},
-	}, {
-		in: &UnaryExpr{
-			Operator: Latin1Op,
-			Expr: &Literal{
-				Type: StrVal,
-				Val:  "strval",
-			},
-		},
-		out: sqltypes.PlanValue{Value: sqltypes.NewVarBinary("strval")},
-	}, {
-		in: &UnaryExpr{
-			Operator: UBinaryOp,
-			Expr: &Literal{
-				Type: StrVal,
-				Val:  "strval",
-			},
-		},
-		out: sqltypes.PlanValue{Value: sqltypes.NewVarBinary("strval")},
-	}, {
-		in: &UnaryExpr{
-			Operator: Utf8mb4Op,
-			Expr: &Literal{
-				Type: StrVal,
-				Val:  "strval",
-			},
-		},
-		out: sqltypes.PlanValue{Value: sqltypes.NewVarBinary("strval")},
-	}, {
-		in: &UnaryExpr{
-			Operator: Utf8Op,
-			Expr: &Literal{
-				Type: StrVal,
-				Val:  "strval",
-			},
-		},
-		out: sqltypes.PlanValue{Value: sqltypes.NewVarBinary("strval")},
-	}, {
-		in: &UnaryExpr{
-			Operator: UMinusOp,
-			Expr: &Literal{
-				Type: FloatVal,
-				Val:  "2.1",
-			},
-		},
-		err: "expression is too complex",
-	}}
-	for _, tc := range tcases {
-		t.Run(String(tc.in), func(t *testing.T) {
-			got, err := NewPlanValue(tc.in)
-			if tc.err != "" {
-				require.Error(t, err)
-				require.Contains(t, err.Error(), tc.err)
-				return
-			}
-
-			require.NoError(t, err)
-			mustMatch(t, tc.out, got, "wut!")
-		})
-	}
-}
-
-var mustMatch = utils.MustMatchFn(".Conn")

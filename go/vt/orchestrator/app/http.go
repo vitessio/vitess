@@ -24,7 +24,6 @@ import (
 	"strings"
 	"time"
 
-	"vitess.io/vitess/go/vt/orchestrator/agent"
 	"vitess.io/vitess/go/vt/orchestrator/collection"
 	"vitess.io/vitess/go/vt/orchestrator/config"
 	"vitess.io/vitess/go/vt/orchestrator/http"
@@ -50,16 +49,13 @@ var sslPEMPassword []byte
 var agentSSLPEMPassword []byte
 var discoveryMetrics *collection.Collection
 
-// Http starts serving
-func Http(continuousDiscovery bool) {
+// HTTP starts serving
+func HTTP(continuousDiscovery bool) {
 	promptForSSLPasswords()
-	process.ContinuousRegistration(string(process.OrchestratorExecutionHttpMode), "")
+	process.ContinuousRegistration(string(process.OrchestratorExecutionHTTPMode), "")
 
 	martini.Env = martini.Prod
-	if config.Config.ServeAgentsHttp {
-		go agentsHttp()
-	}
-	standardHttp(continuousDiscovery)
+	standardHTTP(continuousDiscovery)
 }
 
 // Iterate over the private keys and get passwords for them
@@ -77,8 +73,8 @@ func promptForSSLPasswords() {
 	}
 }
 
-// standardHttp starts serving HTTP or HTTPS (api/web) requests, to be used by normal clients
-func standardHttp(continuousDiscovery bool) {
+// standardHTTP starts serving HTTP or HTTPS (api/web) requests, to be used by normal clients
+func standardHTTP(continuousDiscovery bool) {
 	m := martini.Classic()
 
 	switch strings.ToLower(config.Config.AuthenticationMethod) {
@@ -136,10 +132,10 @@ func standardHttp(continuousDiscovery bool) {
 	}
 
 	log.Info("Registering endpoints")
-	http.API.URLPrefix = config.Config.URLPrefix
-	http.Web.URLPrefix = config.Config.URLPrefix
-	http.API.RegisterRequests(m)
-	http.Web.RegisterRequests(m)
+	http.HTTPapi.URLPrefix = config.Config.URLPrefix
+	http.HTTPWeb.URLPrefix = config.Config.URLPrefix
+	http.HTTPapi.RegisterRequests(m)
+	http.HTTPWeb.RegisterRequests(m)
 
 	// Serve
 	if config.Config.ListenSocket != "" {
@@ -172,44 +168,4 @@ func standardHttp(continuousDiscovery bool) {
 		}
 	}
 	log.Info("Web server started")
-}
-
-// agentsHttp startes serving agents HTTP or HTTPS API requests
-func agentsHttp() {
-	m := martini.Classic()
-	m.Use(gzip.All())
-	m.Use(render.Renderer())
-	if config.Config.AgentsUseMutualTLS {
-		m.Use(ssl.VerifyOUs(config.Config.AgentSSLValidOUs))
-	}
-
-	log.Info("Starting agents listener")
-
-	agent.InitHttpClient()
-	go logic.ContinuousAgentsPoll()
-
-	http.AgentsAPI.URLPrefix = config.Config.URLPrefix
-	http.AgentsAPI.RegisterRequests(m)
-
-	// Serve
-	if config.Config.AgentsUseSSL {
-		log.Info("Starting agent HTTPS listener")
-		tlsConfig, err := ssl.NewTLSConfig(config.Config.AgentSSLCAFile, config.Config.AgentsUseMutualTLS)
-		if err != nil {
-			log.Fatale(err)
-		}
-		tlsConfig.InsecureSkipVerify = config.Config.AgentSSLSkipVerify
-		if err = ssl.AppendKeyPairWithPassword(tlsConfig, config.Config.AgentSSLCertFile, config.Config.AgentSSLPrivateKeyFile, agentSSLPEMPassword); err != nil {
-			log.Fatale(err)
-		}
-		if err = ssl.ListenAndServeTLS(config.Config.AgentsServerPort, m, tlsConfig); err != nil {
-			log.Fatale(err)
-		}
-	} else {
-		log.Info("Starting agent HTTP listener")
-		if err := nethttp.ListenAndServe(config.Config.AgentsServerPort, m); err != nil {
-			log.Fatale(err)
-		}
-	}
-	log.Info("Agent server started")
 }

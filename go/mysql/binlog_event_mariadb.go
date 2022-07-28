@@ -28,11 +28,22 @@ import (
 // binlogEvent.
 type mariadbBinlogEvent struct {
 	binlogEvent
+	semiSyncAckRequested bool
+}
+
+// NewMariadbBinlogEventWithSemiSyncInfo creates a BinlogEvent instance from given byte array
+func NewMariadbBinlogEventWithSemiSyncInfo(buf []byte, semiSyncAckRequested bool) BinlogEvent {
+	return mariadbBinlogEvent{binlogEvent: binlogEvent(buf), semiSyncAckRequested: semiSyncAckRequested}
 }
 
 // NewMariadbBinlogEvent creates a BinlogEvent instance from given byte array
 func NewMariadbBinlogEvent(buf []byte) BinlogEvent {
 	return mariadbBinlogEvent{binlogEvent: binlogEvent(buf)}
+}
+
+// IsSemiSyncAckRequested implements BinlogEvent.IsSemiSyncAckRequested().
+func (ev mariadbBinlogEvent) IsSemiSyncAckRequested() bool {
+	return ev.semiSyncAckRequested
 }
 
 // IsGTID implements BinlogEvent.IsGTID().

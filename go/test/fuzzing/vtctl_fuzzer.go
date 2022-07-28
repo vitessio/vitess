@@ -13,7 +13,6 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-// +build gofuzz
 
 package fuzzing
 
@@ -70,7 +69,7 @@ func getCommandType(index int) string {
 		24: "ValidateShard",
 		25: "ShardReplicationPositions",
 		26: "ListShardTablets",
-		27: "SetShardIsMasterServing",
+		27: "SetShardIsPrimaryServing",
 		28: "SetShardTabletControl",
 		29: "UpdateSrvKeyspacePartition",
 		30: "SourceShardDelete",
@@ -82,7 +81,7 @@ func getCommandType(index int) string {
 		36: "ListBackups",
 		37: "BackupShard",
 		38: "RemoveBackup",
-		39: "InitShardMaster",
+		39: "InitShardPrimary",
 		40: "PlannedReparentShard",
 		41: "EmergencyReparentShard",
 		42: "TabletExternallyReparented",
@@ -91,8 +90,6 @@ func getCommandType(index int) string {
 		45: "RemoveKeyspaceCell",
 		46: "GetKeyspace",
 		47: "GetKeyspaces",
-		48: "SetKeyspaceShardingInfo",
-		49: "SetKeyspaceServedFrom",
 		50: "RebuildKeyspaceGraph",
 		51: "ValidateKeyspace",
 		52: "Reshard",
@@ -101,17 +98,10 @@ func getCommandType(index int) string {
 		55: "CreateLookupVindex",
 		56: "ExternalizeVindex",
 		57: "Materialize",
-		58: "SplitClone",
-		59: "VerticalSplitClone",
 		60: "VDiff",
-		61: "MigrateServedTypes",
-		62: "MigrateServedFrom",
 		63: "SwitchReads",
 		64: "SwitchWrites",
-		65: "CancelResharding",
-		66: "ShowResharding",
 		67: "FindAllShardsInKeyspace",
-		68: "WaitForDrain",
 	}
 	return m[index]
 
@@ -180,15 +170,15 @@ func Fuzz(data []byte) int {
 		// Index of command in getCommandType():
 		commandIndex := int(commandPart[command]) % 68
 		vtCommand := getCommandType(commandIndex)
-		command_slice := []string{vtCommand}
+		commandSlice := []string{vtCommand}
 		args := strings.Split(string(restOfArray[from:to]), " ")
 
 		// Add params to the command
 		for i := range args {
-			command_slice = append(command_slice, args[i])
+			commandSlice = append(commandSlice, args[i])
 		}
 
-		_ = vtctl.RunCommand(ctx, wrangler.New(logger, topo, tmc), command_slice)
+		_ = vtctl.RunCommand(ctx, wrangler.New(logger, topo, tmc), commandSlice)
 		command++
 	}
 

@@ -62,7 +62,6 @@
 			<li><a href="#" data-method="smart" title="Let orchestrator choose replica relocating method">Smart mode</a></li>
 			<li><a href="#" data-method="classic" title="Move replicas using classic binlog file name and position">Classic mode</a></li>
 			<li><a href="#" data-method="gtid" title="Move replicas via GTID">GTID mode</a></li>
-			<li><a href="#" data-method="pseudo-gtid" title="Move replicas via Pseudo-GTID match of binary logs">Pseudo GTID mode</a></li>
 		</ul>
 	</div>
 </li>
@@ -73,7 +72,7 @@
 	}
 
 	function isPseudoGTIDModeEnabled() {
-		return "{{.pseudoGTIDModeEnabled}}" == "true";
+		return false;
 	}
 
 	function removeTextFromHostnameDisplay() {

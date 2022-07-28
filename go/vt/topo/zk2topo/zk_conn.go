@@ -21,9 +21,9 @@ import (
 	"crypto/x509"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"math/rand"
 	"net"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -291,7 +291,7 @@ func (c *ZkConn) maybeAddAuth(ctx context.Context) {
 	if *authFile == "" {
 		return
 	}
-	authInfoBytes, err := ioutil.ReadFile(*authFile)
+	authInfoBytes, err := os.ReadFile(*authFile)
 	if err != nil {
 		log.Errorf("failed to read topo_zk_auth_file: %v", err)
 		return
@@ -358,7 +358,7 @@ func dialZk(ctx context.Context, addr string) (*zk.Conn, <-chan zk.Event, error)
 			log.Fatalf("Unable to load cert %v and key %v, err %v", *certPath, *keyPath, err)
 		}
 
-		clientCACert, err := ioutil.ReadFile(*caPath)
+		clientCACert, err := os.ReadFile(*caPath)
 		if err != nil {
 			log.Fatalf("Unable to open ca cert %v, err %v", *caPath, err)
 		}
@@ -371,8 +371,6 @@ func dialZk(ctx context.Context, addr string) (*zk.Conn, <-chan zk.Event, error)
 			RootCAs:      clientCertPool,
 			ServerName:   serverName,
 		}
-
-		tlsConfig.BuildNameToCertificate()
 
 		dialer = zk.WithDialer(func(network, address string, timeout time.Duration) (net.Conn, error) {
 			d := net.Dialer{Timeout: timeout}

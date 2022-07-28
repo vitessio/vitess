@@ -18,7 +18,6 @@ package vtgate
 
 import (
 	"context"
-	"fmt"
 	"sync"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -88,12 +87,18 @@ func (vm *VSchemaManager) UpdateVSchema(ctx context.Context, ksName string, vsch
 			log.Errorf("error updating vschema in cell %s: %v", cell, cellErr)
 		}
 	}
+	if err != nil {
+		return err
+	}
 
-	return err
+	// Update all the local copy of VSchema if the topo update is successful.
+	vm.VSchemaUpdate(vschema, err)
+
+	return nil
 }
 
 // VSchemaUpdate builds the VSchema from SrvVschema and call subscribers.
-func (vm *VSchemaManager) VSchemaUpdate(v *vschemapb.SrvVSchema, err error) {
+func (vm *VSchemaManager) VSchemaUpdate(v *vschemapb.SrvVSchema, err error) bool {
 	log.Infof("Received vschema update")
 	switch {
 	case err == nil:
@@ -120,16 +125,17 @@ func (vm *VSchemaManager) VSchemaUpdate(v *vschemapb.SrvVSchema, err error) {
 	if v == nil {
 		// We encountered an error, build an empty vschema.
 		if vm.currentVschema == nil {
-			vschema, _ = vindexes.BuildVSchema(&vschemapb.SrvVSchema{})
+			vschema = vindexes.BuildVSchema(&vschemapb.SrvVSchema{})
 		}
 	} else {
-		vschema, err = vm.buildAndEnhanceVSchema(v)
+		vschema = vm.buildAndEnhanceVSchema(v)
 		vm.currentVschema = vschema
 	}
 
 	if vm.subscriber != nil {
 		vm.subscriber(vschema, vSchemaStats(err, vschema))
 	}
+	return true
 }
 
 func vSchemaStats(err error, vschema *vindexes.VSchema) *VSchemaStats {
@@ -155,41 +161,30 @@ func (vm *VSchemaManager) Rebuild() {
 	v := vm.currentSrvVschema
 	vm.mu.Unlock()
 
-	var vschema *vindexes.VSchema
-	var err error
-
+	log.Infof("Received schema update")
 	if v == nil {
-		// We encountered an error, we should always have a current vschema
-		log.Warning("got a schema changed signal with no loaded vschema. if this persist, something is wrong")
-		vschema, _ = vindexes.BuildVSchema(&vschemapb.SrvVSchema{})
-	} else {
-		vschema, err = vm.buildAndEnhanceVSchema(v)
-		if err != nil {
-			log.Error("failed to reload vschema after schema change")
-			return
-		}
+		log.Infof("No vschema to enhance")
+		return
 	}
 
+	vschema := vm.buildAndEnhanceVSchema(v)
+	vm.mu.Lock()
+	vm.currentVschema = vschema
+	vm.mu.Unlock()
+
 	if vm.subscriber != nil {
-		vm.subscriber(vschema, vSchemaStats(err, vschema))
+		vm.subscriber(vschema, vSchemaStats(nil, vschema))
+		log.Infof("Sent vschema to subscriber")
 	}
 }
 
 // buildAndEnhanceVSchema builds a new VSchema and uses information from the schema tracker to update it
-func (vm *VSchemaManager) buildAndEnhanceVSchema(v *vschemapb.SrvVSchema) (*vindexes.VSchema, error) {
-	vschema, err := vindexes.BuildVSchema(v)
-	if err == nil {
-		if vm.schema != nil {
-			vm.updateFromSchema(vschema)
-		}
-	} else {
-		log.Warningf("Error creating VSchema for cell %v (will try again next update): %v", vm.cell, err)
-		err = fmt.Errorf("error creating VSchema for cell %v: %v", vm.cell, err)
-		if vschemaCounters != nil {
-			vschemaCounters.Add("Parsing", 1)
-		}
+func (vm *VSchemaManager) buildAndEnhanceVSchema(v *vschemapb.SrvVSchema) *vindexes.VSchema {
+	vschema := vindexes.BuildVSchema(v)
+	if vm.schema != nil {
+		vm.updateFromSchema(vschema)
 	}
-	return vschema, err
+	return vschema
 }
 
 func (vm *VSchemaManager) updateFromSchema(vschema *vindexes.VSchema) {
@@ -201,7 +196,7 @@ func (vm *VSchemaManager) updateFromSchema(vschema *vindexes.VSchema) {
 			if vTbl == nil {
 				// a table that is unknown by the vschema. we add it as a normal table
 				ks.Tables[tblName] = &vindexes.Table{
-					Name:                    sqlparser.NewTableIdent(tblName),
+					Name:                    sqlparser.NewIdentifierCS(tblName),
 					Keyspace:                ks.Keyspace,
 					Columns:                 columns,
 					ColumnListAuthoritative: true,

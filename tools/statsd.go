@@ -19,9 +19,9 @@ package main
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
 	"sync"
 	"time"
@@ -110,7 +110,7 @@ func updateTestStats(name string, update func(*TestStats)) {
 	mu.Lock()
 	defer mu.Unlock()
 
-	data, err := ioutil.ReadFile(statsFileName)
+	data, err := os.ReadFile(statsFileName)
 	if err != nil {
 		log.Print("Can't read stats file, starting new one.")
 	} else {
@@ -132,7 +132,7 @@ func updateTestStats(name string, update func(*TestStats)) {
 		log.Printf("Can't encode stats file: %v", err)
 		return
 	}
-	if err := ioutil.WriteFile(statsFileName, data, 0644); err != nil {
+	if err := os.WriteFile(statsFileName, data, 0644); err != nil {
 		log.Printf("Can't write stats file: %v", err)
 	}
 }

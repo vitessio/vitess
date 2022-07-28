@@ -20,7 +20,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"os"
 
 	"context"
 
@@ -78,7 +78,7 @@ func staticAuthPluginInitializer() (Authenticator, error) {
 		return nil, err
 	}
 
-	data, err := ioutil.ReadFile(*credsFile)
+	data, err := os.ReadFile(*credsFile)
 	if err != nil {
 		err := fmt.Errorf("failed to load static auth plugin %v", err)
 		return nil, err

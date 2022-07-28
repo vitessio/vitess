@@ -20,22 +20,28 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
-
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/mysql"
-	tabletpb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
+
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	tmc "vitess.io/vitess/go/vt/vttablet/grpctmclient"
 )
 
 var (
-	tmClient = tmc.NewClient()
+	tmClient                 = tmc.NewClient()
+	dbCredentialFile         string
+	InsertTabletTemplateKsID = `insert into %s (id, msg) values (%d, '%s') /* id:%d */`
 )
 
 // Restart restarts vttablet and mysql.
@@ -76,18 +82,27 @@ func (tablet *Vttablet) ValidateTabletRestart(t *testing.T) {
 	require.Nilf(t, tablet.Restart(), "tablet restart failed")
 }
 
-// GetMasterPosition gets the master position of required vttablet
-func GetMasterPosition(t *testing.T, vttablet Vttablet, hostname string) (string, string) {
+// GetPrimaryPosition gets the executed replication position of given vttablet
+func GetPrimaryPosition(t *testing.T, vttablet Vttablet, hostname string) (string, string) {
 	ctx := context.Background()
 	vtablet := getTablet(vttablet.GrpcPort, hostname)
-	pos, err := tmClient.MasterPosition(ctx, vtablet)
+	pos, err := tmClient.PrimaryPosition(ctx, vtablet)
 	require.Nil(t, err)
 	gtID := strings.SplitAfter(pos, "/")[1]
 	return pos, gtID
 }
 
-// VerifyRowsInTabletForTable Verify total number of rows in a table
-// this is used to check replication caught up the changes from master
+// GetReplicationStatus gets the replication status of given vttablet
+func GetReplicationStatus(t *testing.T, vttablet *Vttablet, hostname string) *replicationdatapb.Status {
+	ctx := context.Background()
+	vtablet := getTablet(vttablet.GrpcPort, hostname)
+	pos, err := tmClient.ReplicationStatus(ctx, vtablet)
+	require.NoError(t, err)
+	return pos
+}
+
+// VerifyRowsInTabletForTable verifies the total number of rows in a table.
+// This is used to check that replication has caught up with the changes on primary.
 func VerifyRowsInTabletForTable(t *testing.T, vttablet *Vttablet, ksName string, expectedRows int, tableName string) {
 	timeout := time.Now().Add(10 * time.Second)
 	for time.Now().Before(timeout) {
@@ -172,10 +187,22 @@ func ResetTabletDirectory(tablet Vttablet) error {
 	return tablet.MysqlctlProcess.Start()
 }
 
-func getTablet(tabletGrpcPort int, hostname string) *tabletpb.Tablet {
+func getTablet(tabletGrpcPort int, hostname string) *topodatapb.Tablet {
 	portMap := make(map[string]int32)
 	portMap["grpc"] = int32(tabletGrpcPort)
-	return &tabletpb.Tablet{Hostname: hostname, PortMap: portMap}
+	return &topodatapb.Tablet{Hostname: hostname, PortMap: portMap}
+}
+
+func filterResultForWarning(input string) string {
+	lines := strings.Split(input, "\n")
+	var result string
+	for _, line := range lines {
+		if strings.Contains(line, "WARNING: vtctl should only be used for VDiff workflows") {
+			continue
+		}
+		result = result + line + "\n"
+	}
+	return result
 }
 
 func filterResultWhenRunsForCoverage(input string) string {
@@ -198,9 +225,9 @@ func filterResultWhenRunsForCoverage(input string) string {
 
 // WaitForReplicationPos will wait for replication position to catch-up
 func WaitForReplicationPos(t *testing.T, tabletA *Vttablet, tabletB *Vttablet, hostname string, timeout float64) {
-	replicationPosA, _ := GetMasterPosition(t, *tabletA, hostname)
+	replicationPosA, _ := GetPrimaryPosition(t, *tabletA, hostname)
 	for {
-		replicationPosB, _ := GetMasterPosition(t, *tabletB, hostname)
+		replicationPosB, _ := GetPrimaryPosition(t, *tabletB, hostname)
 		if positionAtLeast(t, tabletA, replicationPosB, replicationPosA) {
 			break
 		}
@@ -252,4 +279,92 @@ func NewConnParams(port int, password, socketPath, keyspace string) mysql.ConnPa
 
 	return cp
 
+}
+
+func filterDoubleDashArgs(args []string, version int) (filtered []string) {
+	if version > 13 {
+		return args
+	}
+
+	for _, arg := range args {
+		if arg == "--" {
+			continue
+		}
+
+		filtered = append(filtered, arg)
+	}
+
+	return filtered
+}
+
+// WriteDbCredentialToTmp writes JSON formatted db credentials to the
+// specified tmp directory.
+func WriteDbCredentialToTmp(tmpDir string) string {
+	data := []byte(`{
+        "vt_dba": ["VtDbaPass"],
+        "vt_app": ["VtAppPass"],
+        "vt_allprivs": ["VtAllprivsPass"],
+        "vt_repl": ["VtReplPass"],
+        "vt_filtered": ["VtFilteredPass"]
+	}`)
+	dbCredentialFile = path.Join(tmpDir, "db_credentials.json")
+	os.WriteFile(dbCredentialFile, data, 0666)
+	return dbCredentialFile
+}
+
+// GetPasswordUpdateSQL returns the SQL for updating the users' passwords
+// to the static creds used throughout tests.
+func GetPasswordUpdateSQL(localCluster *LocalProcessCluster) string {
+	pwdChangeCmd := `
+					# Set real passwords for all users.
+					SET PASSWORD FOR 'root'@'localhost' = 'RootPass';
+					SET PASSWORD FOR 'vt_dba'@'localhost' = 'VtDbaPass';
+					SET PASSWORD FOR 'vt_app'@'localhost' = 'VtAppPass';
+					SET PASSWORD FOR 'vt_allprivs'@'localhost' = 'VtAllprivsPass';
+					SET PASSWORD FOR 'vt_repl'@'%' = 'VtReplPass';
+					SET PASSWORD FOR 'vt_filtered'@'localhost' = 'VtFilteredPass';
+					FLUSH PRIVILEGES;
+					`
+	return pwdChangeCmd
+}
+
+// CheckSrvKeyspace confirms that the cell and keyspace contain the expected
+// shard mappings.
+func CheckSrvKeyspace(t *testing.T, cell string, ksname string, expectedPartition map[topodatapb.TabletType][]string, ci LocalProcessCluster) {
+	srvKeyspace := GetSrvKeyspace(t, cell, ksname, ci)
+
+	currentPartition := map[topodatapb.TabletType][]string{}
+
+	for _, partition := range srvKeyspace.Partitions {
+		currentPartition[partition.ServedType] = []string{}
+		for _, shardRef := range partition.ShardReferences {
+			currentPartition[partition.ServedType] = append(currentPartition[partition.ServedType], shardRef.Name)
+		}
+	}
+
+	assert.True(t, reflect.DeepEqual(currentPartition, expectedPartition))
+}
+
+// GetSrvKeyspace returns the SrvKeyspace structure for the cell and keyspace.
+func GetSrvKeyspace(t *testing.T, cell string, ksname string, ci LocalProcessCluster) *topodatapb.SrvKeyspace {
+	output, err := ci.VtctlclientProcess.ExecuteCommandWithOutput("GetSrvKeyspace", cell, ksname)
+	require.Nil(t, err)
+	var srvKeyspace topodatapb.SrvKeyspace
+
+	err = json2.Unmarshal([]byte(output), &srvKeyspace)
+	require.Nil(t, err)
+	return &srvKeyspace
+}
+
+// ExecuteOnTablet executes a query on the specified vttablet.
+// It should always be called with a primary tablet for a keyspace/shard.
+func ExecuteOnTablet(t *testing.T, query string, vttablet Vttablet, ks string, expectFail bool) {
+	_, _ = vttablet.VttabletProcess.QueryTablet("begin", ks, true)
+	_, err := vttablet.VttabletProcess.QueryTablet(query, ks, true)
+	if expectFail {
+		require.Error(t, err)
+	} else {
+		require.Nil(t, err)
+	}
+	_, _ = vttablet.VttabletProcess.QueryTablet("commit", ks, true)
 }

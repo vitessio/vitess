@@ -17,6 +17,7 @@ limitations under the License.
 package engine
 
 import (
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
@@ -24,6 +25,7 @@ import (
 // comparer is the struct that has the logic for comparing two rows in the result set
 type comparer struct {
 	orderBy, weightString, starColFixedIndex int
+	collationID                              collations.ID
 	desc                                     bool
 }
 
@@ -38,16 +40,17 @@ func (c *comparer) compare(r1, r2 []sqltypes.Value) (int, error) {
 	} else {
 		colIndex = c.orderBy
 	}
-	cmp, err := evalengine.NullsafeCompare(r1[colIndex], r2[colIndex])
+	cmp, err := evalengine.NullsafeCompare(r1[colIndex], r2[colIndex], c.collationID)
 	if err != nil {
 		_, isComparisonErr := err.(evalengine.UnsupportedComparisonError)
-		if !(isComparisonErr && c.weightString != -1) {
+		_, isCollationErr := err.(evalengine.UnsupportedCollationError)
+		if !isComparisonErr && !isCollationErr || c.weightString == -1 {
 			return 0, err
 		}
-		// in case of a comparison error switch to using the weight string column for ordering
+		// in case of a comparison or collation error switch to using the weight string column for ordering
 		c.orderBy = c.weightString
 		c.weightString = -1
-		cmp, err = evalengine.NullsafeCompare(r1[c.orderBy], r2[c.orderBy])
+		cmp, err = evalengine.NullsafeCompare(r1[c.orderBy], r2[c.orderBy], c.collationID)
 		if err != nil {
 			return 0, err
 		}
@@ -59,8 +62,8 @@ func (c *comparer) compare(r1, r2 []sqltypes.Value) (int, error) {
 	return cmp, nil
 }
 
-// extractSlices extracts the three fields of OrderbyParams into a slice of comparers
-func extractSlices(input []OrderbyParams) []*comparer {
+// extractSlices extracts the three fields of OrderByParams into a slice of comparers
+func extractSlices(input []OrderByParams) []*comparer {
 	var result []*comparer
 	for _, order := range input {
 		result = append(result, &comparer{
@@ -68,6 +71,7 @@ func extractSlices(input []OrderbyParams) []*comparer {
 			weightString:      order.WeightStringCol,
 			desc:              order.Desc,
 			starColFixedIndex: order.StarColFixedIndex,
+			collationID:       order.CollationID,
 		})
 	}
 	return result

@@ -17,8 +17,13 @@ limitations under the License.
 package connpool
 
 import (
+	"fmt"
+	"net"
+	"strings"
 	"sync"
 	"time"
+
+	"vitess.io/vitess/go/netutil"
 
 	"context"
 
@@ -29,6 +34,7 @@ import (
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
@@ -48,13 +54,14 @@ type Pool struct {
 	env                tabletenv.Env
 	name               string
 	mu                 sync.Mutex
-	connections        *pools.ResourcePool
+	connections        pools.IResourcePool
 	capacity           int
 	prefillParallelism int
 	timeout            time.Duration
 	idleTimeout        time.Duration
 	waiterCap          int64
 	waiterCount        sync2.AtomicInt64
+	waiterQueueFull    sync2.AtomicInt64
 	dbaPool            *dbconnpool.ConnectionPool
 	appDebugParams     dbconfigs.Connector
 }
@@ -86,10 +93,11 @@ func NewPool(env tabletenv.Env, name string, cfg tabletenv.ConnPoolConfig) *Pool
 	env.Exporter().NewGaugeDurationFunc(name+"IdleTimeout", "Tablet server idle timeout", cp.IdleTimeout)
 	env.Exporter().NewCounterFunc(name+"IdleClosed", "Tablet server conn pool idle closed", cp.IdleClosed)
 	env.Exporter().NewCounterFunc(name+"Exhausted", "Number of times pool had zero available slots", cp.Exhausted)
+	env.Exporter().NewCounterFunc(name+"WaiterQueueFull", "Number of times the waiter queue was full", cp.waiterQueueFull.Get)
 	return cp
 }
 
-func (cp *Pool) pool() (p *pools.ResourcePool) {
+func (cp *Pool) pool() (p pools.IResourcePool) {
 	cp.mu.Lock()
 	p = cp.connections
 	cp.mu.Unlock()
@@ -109,7 +117,13 @@ func (cp *Pool) Open(appParams, dbaParams, appDebugParams dbconfigs.Connector) {
 	f := func(ctx context.Context) (pools.Resource, error) {
 		return NewDBConn(ctx, cp, appParams)
 	}
-	cp.connections = pools.NewResourcePool(f, cp.capacity, cp.capacity, cp.idleTimeout, cp.prefillParallelism, cp.getLogWaitCallback())
+
+	var refreshCheck pools.RefreshCheck
+	if net.ParseIP(appParams.Host()) == nil {
+		refreshCheck = netutil.DNSTracker(appParams.Host())
+	}
+
+	cp.connections = pools.NewResourcePool(f, cp.capacity, cp.capacity, cp.idleTimeout, cp.prefillParallelism, cp.getLogWaitCallback(), refreshCheck, *mysqlctl.PoolDynamicHostnameResolution)
 	cp.appDebugParams = appDebugParams
 
 	cp.dbaPool.Open(dbaParams)
@@ -127,17 +141,25 @@ func (cp *Pool) getLogWaitCallback() func(time.Time) {
 // Close will close the pool and wait for connections to be returned before
 // exiting.
 func (cp *Pool) Close() {
+	log.Infof("connpool - started execution of Close")
 	p := cp.pool()
+	log.Infof("connpool - found the pool")
 	if p == nil {
+		log.Infof("connpool - pool is empty")
 		return
 	}
 	// We should not hold the lock while calling Close
 	// because it waits for connections to be returned.
+	log.Infof("connpool - calling close on the pool")
 	p.Close()
+	log.Infof("connpool - acquiring lock")
 	cp.mu.Lock()
+	log.Infof("connpool - acquired lock")
 	cp.connections = nil
 	cp.mu.Unlock()
+	log.Infof("connpool - closing dbaPool")
 	cp.dbaPool.Close()
+	log.Infof("connpool - finished execution of Close")
 }
 
 // Get returns a connection.
@@ -150,6 +172,7 @@ func (cp *Pool) Get(ctx context.Context) (*DBConn, error) {
 		waiterCount := cp.waiterCount.Add(1)
 		defer cp.waiterCount.Add(-1)
 		if waiterCount > cp.waiterCap {
+			cp.waiterQueueFull.Add(1)
 			return nil, vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "pool %s waiter count exceeded", cp.name)
 		}
 	}
@@ -222,7 +245,12 @@ func (cp *Pool) StatsJSON() string {
 	if p == nil {
 		return "{}"
 	}
-	return p.StatsJSON()
+	res := p.StatsJSON()
+	closingBraceIndex := strings.LastIndex(res, "}")
+	if closingBraceIndex == -1 { // unexpected...
+		return res
+	}
+	return fmt.Sprintf(`%s, "WaiterQueueFull": %v}`, res[:closingBraceIndex], cp.waiterQueueFull.Get())
 }
 
 // Capacity returns the pool capacity.

@@ -14,26 +14,26 @@
  * limitations under the License.
  */
 .shardList {
-  color: var(--textColorSecondary);
-  font-size: var(--fontSizeSmall);
-  max-width: 20rem;
-  padding-right: 24px;
+    color: var(--textColorSecondary);
+    font-size: theme('fontSize.sm');
+    max-width: 20rem;
+    padding-right: 24px;
 }
 
 .streams {
-  display: grid;
-  grid-gap: 8px;
-  grid-template-columns: repeat(4, 60px);
+    display: grid;
+    grid-gap: 8px;
+    grid-template-columns: repeat(4, 60px);
 }
 
 .stream,
 .streamPlaceholder {
-  margin: 0 4px;
-  text-align: left;
-  white-space: nowrap;
+    margin: 0 4px;
+    text-align: left;
+    white-space: nowrap;
 }
 
 .streamPlaceholder {
-  color: var(--textColorSecondary);
-  text-align: center;
+    color: var(--textColorSecondary);
+    text-align: center;
 }

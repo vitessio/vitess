@@ -73,7 +73,7 @@ func StartCustomServer(connParams, connAppDebugParams mysql.ConnParams, dbName s
 	Target = &querypb.Target{
 		Keyspace:   "vttest",
 		Shard:      "0",
-		TabletType: topodatapb.TabletType_MASTER,
+		TabletType: topodatapb.TabletType_PRIMARY,
 	}
 	TopoServer = memorytopo.NewServer("")
 
@@ -85,7 +85,7 @@ func StartCustomServer(connParams, connAppDebugParams mysql.ConnParams, dbName s
 	}
 
 	// Start http service.
-	ln, err := net.Listen("tcp", ":0")
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		return vterrors.Wrap(err, "could not start listener")
 	}
@@ -116,6 +116,7 @@ func StartServer(connParams, connAppDebugParams mysql.ConnParams, dbName string)
 	config.GracePeriods.ShutdownSeconds = 2
 	config.SignalSchemaChangeReloadIntervalSeconds = tabletenv.Seconds(2.1)
 	config.SignalWhenSchemaChange = true
+	config.Healthcheck.IntervalSeconds = 0.1
 	gotBytes, _ := yaml2.Marshal(config)
 	log.Infof("Config:\n%s", gotBytes)
 	return StartCustomServer(connParams, connAppDebugParams, dbName, config)

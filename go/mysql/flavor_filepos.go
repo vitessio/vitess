@@ -17,14 +17,15 @@ limitations under the License.
 package mysql
 
 import (
-	"errors"
+	"context"
 	"fmt"
 	"io"
 	"strconv"
 	"strings"
 	"time"
 
-	"context"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 type filePosFlavor struct {
@@ -38,14 +39,14 @@ func newFilePosFlavor() flavor {
 	return &filePosFlavor{}
 }
 
-// masterGTIDSet is part of the Flavor interface.
-func (flv *filePosFlavor) masterGTIDSet(c *Conn) (GTIDSet, error) {
+// primaryGTIDSet is part of the Flavor interface.
+func (flv *filePosFlavor) primaryGTIDSet(c *Conn) (GTIDSet, error) {
 	qr, err := c.ExecuteFetch("SHOW MASTER STATUS", 100, true /* wantfields */)
 	if err != nil {
 		return nil, err
 	}
 	if len(qr.Rows) == 0 {
-		return nil, errors.New("no master status")
+		return nil, ErrNoPrimaryStatus
 	}
 
 	resultMap, err := resultToMap(qr)
@@ -63,6 +64,36 @@ func (flv *filePosFlavor) masterGTIDSet(c *Conn) (GTIDSet, error) {
 	}, nil
 }
 
+// purgedGTIDSet is part of the Flavor interface.
+func (flv *filePosFlavor) purgedGTIDSet(c *Conn) (GTIDSet, error) {
+	return nil, nil
+}
+
+// gtidMode is part of the Flavor interface.
+func (flv *filePosFlavor) gtidMode(c *Conn) (string, error) {
+	qr, err := c.ExecuteFetch("select @@global.gtid_mode", 1, false)
+	if err != nil {
+		return "", err
+	}
+	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
+		return "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected result format for gtid_mode: %#v", qr)
+	}
+	return qr.Rows[0][0].ToString(), nil
+}
+
+// serverUUID is part of the Flavor interface.
+func (flv *filePosFlavor) serverUUID(c *Conn) (string, error) {
+	// keep @@global as lowercase, as some servers like the Ripple binlog server only honors a lowercase `global` value
+	qr, err := c.ExecuteFetch("SELECT @@global.server_uuid", 1, false)
+	if err != nil {
+		return "", err
+	}
+	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
+		return "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected result format for server_uuid: %#v", qr)
+	}
+	return qr.Rows[0][0].ToString(), nil
+}
+
 func (flv *filePosFlavor) startReplicationCommand() string {
 	return "unsupported"
 }
@@ -76,6 +107,14 @@ func (flv *filePosFlavor) stopReplicationCommand() string {
 }
 
 func (flv *filePosFlavor) stopIOThreadCommand() string {
+	return "unsupported"
+}
+
+func (flv *filePosFlavor) stopSQLThreadCommand() string {
+	return "unsupported"
+}
+
+func (flv *filePosFlavor) startSQLThreadCommand() string {
 	return "unsupported"
 }
 
@@ -109,7 +148,11 @@ func (flv *filePosFlavor) readBinlogEvent(c *Conn) (BinlogEvent, error) {
 			return nil, ParseErrorPacket(result)
 		}
 
-		event := &filePosBinlogEvent{binlogEvent: binlogEvent(result[1:])}
+		buf, semiSyncAckRequested, err := c.AnalyzeSemiSyncAckRequest(result[1:])
+		if err != nil {
+			return nil, err
+		}
+		event := newFilePosBinlogEventWithSemiSyncInfo(buf, semiSyncAckRequested)
 		switch event.Type() {
 		case eGTIDEvent, eAnonymousGTIDEvent, ePreviousGTIDsEvent, eMariaGTIDListEvent:
 			// Don't transmit fake or irrelevant events because we should not
@@ -172,6 +215,13 @@ func (flv *filePosFlavor) resetReplicationCommands(c *Conn) []string {
 	}
 }
 
+// resetReplicationParametersCommands is part of the Flavor interface.
+func (flv *filePosFlavor) resetReplicationParametersCommands(c *Conn) []string {
+	return []string{
+		"unsupported",
+	}
+}
+
 // setReplicationPositionCommands is part of the Flavor interface.
 func (flv *filePosFlavor) setReplicationPositionCommands(pos Position) []string {
 	return []string{
@@ -180,7 +230,7 @@ func (flv *filePosFlavor) setReplicationPositionCommands(pos Position) []string 
 }
 
 // setReplicationPositionCommands is part of the Flavor interface.
-func (flv *filePosFlavor) changeMasterArg() string {
+func (flv *filePosFlavor) changeReplicationSourceArg() string {
 	return "unsupported"
 }
 
@@ -208,32 +258,32 @@ func parseFilePosReplicationStatus(resultMap map[string]string) (ReplicationStat
 	status := parseReplicationStatus(resultMap)
 
 	status.Position = status.FilePosition
-	status.RelayLogPosition = status.FileRelayLogPosition
+	status.RelayLogPosition = status.RelayLogSourceBinlogEquivalentPosition
 
 	return status, nil
 }
 
-// masterStatus is part of the Flavor interface.
-func (flv *filePosFlavor) masterStatus(c *Conn) (MasterStatus, error) {
+// primaryStatus is part of the Flavor interface.
+func (flv *filePosFlavor) primaryStatus(c *Conn) (PrimaryStatus, error) {
 	qr, err := c.ExecuteFetch("SHOW MASTER STATUS", 100, true /* wantfields */)
 	if err != nil {
-		return MasterStatus{}, err
+		return PrimaryStatus{}, err
 	}
 	if len(qr.Rows) == 0 {
 		// The query returned no data. We don't know how this could happen.
-		return MasterStatus{}, ErrNoMasterStatus
+		return PrimaryStatus{}, ErrNoPrimaryStatus
 	}
 
 	resultMap, err := resultToMap(qr)
 	if err != nil {
-		return MasterStatus{}, err
+		return PrimaryStatus{}, err
 	}
 
-	return parseFilePosMasterStatus(resultMap)
+	return parseFilePosPrimaryStatus(resultMap)
 }
 
-func parseFilePosMasterStatus(resultMap map[string]string) (MasterStatus, error) {
-	status := parseMasterStatus(resultMap)
+func parseFilePosPrimaryStatus(resultMap map[string]string) (PrimaryStatus, error) {
+	status := parsePrimaryStatus(resultMap)
 
 	status.Position = status.FilePosition
 
@@ -262,6 +312,10 @@ func (*filePosFlavor) startReplicationUntilAfter(pos Position) string {
 	return "unsupported"
 }
 
+func (*filePosFlavor) startSQLThreadUntilAfter(pos Position) string {
+	return "unsupported"
+}
+
 // enableBinlogPlaybackCommand is part of the Flavor interface.
 func (*filePosFlavor) enableBinlogPlaybackCommand() string {
 	return ""
@@ -275,4 +329,12 @@ func (*filePosFlavor) disableBinlogPlaybackCommand() string {
 // baseShowTablesWithSizes is part of the Flavor interface.
 func (*filePosFlavor) baseShowTablesWithSizes() string {
 	return TablesWithSize56
+}
+
+// supportsCapability is part of the Flavor interface.
+func (*filePosFlavor) supportsCapability(serverVersion string, capability FlavorCapability) (bool, error) {
+	switch capability {
+	default:
+		return false, nil
+	}
 }

@@ -22,9 +22,10 @@ import (
 
 	"vitess.io/vitess/go/vt/orchestrator/config"
 	"vitess.io/vitess/go/vt/orchestrator/db"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/promotionrule"
 )
 
-// RegisterCandidateInstance markes a given instance as suggested for successoring a master in the event of failover.
+// RegisterCandidateInstance markes a given instance as suggested for succeeding a primary in the event of failover.
 func RegisterCandidateInstance(candidate *CandidateDatabaseInstance) error {
 	if candidate.LastSuggestedString == "" {
 		candidate = candidate.WithCurrentTime()
@@ -50,7 +51,7 @@ func RegisterCandidateInstance(candidate *CandidateDatabaseInstance) error {
 	return ExecDBWriteFunc(writeFunc)
 }
 
-// ExpireCandidateInstances removes stale master candidate suggestions.
+// ExpireCandidateInstances removes stale primary candidate suggestions.
 func ExpireCandidateInstances() error {
 	writeFunc := func() error {
 		_, err := db.ExecOrchestrator(`
@@ -93,7 +94,7 @@ func BulkReadCandidateDatabaseInstance() ([]CandidateDatabaseInstance, error) {
 		cdi := CandidateDatabaseInstance{
 			Hostname:            m.GetString("hostname"),
 			Port:                m.GetInt("port"),
-			PromotionRule:       CandidatePromotionRule(m.GetString("promotion_rule")),
+			PromotionRule:       promotionrule.CandidatePromotionRule(m.GetString("promotion_rule")),
 			LastSuggestedString: m.GetString("last_suggested"),
 			PromotionRuleExpiry: m.GetString("promotion_rule_expiry"),
 		}

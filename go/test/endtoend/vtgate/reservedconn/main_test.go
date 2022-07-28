@@ -22,13 +22,11 @@ import (
 	"os"
 	"testing"
 
-	"github.com/google/go-cmp/cmp"
+	"vitess.io/vitess/go/test/endtoend/utils"
+
 	"github.com/stretchr/testify/assert"
 
-	"github.com/stretchr/testify/require"
-
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
@@ -120,13 +118,15 @@ func TestMain(m *testing.M) {
 			SchemaSQL: sqlSchema,
 			VSchema:   vSchema,
 		}
-		clusterInstance.VtTabletExtraArgs = []string{"-queryserver-config-transaction-timeout", "5"}
+		clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-transaction-timeout", "5"}
 		if err := clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 1, false); err != nil {
 			return 1
 		}
 
 		// Start vtgate
-		clusterInstance.VtGateExtraArgs = []string{"-lock_heartbeat_time", "2s", "-enable_system_settings=true"} // enable reserved connection.
+		// This test requires setting the mysql_server_version vtgate flag
+		// to 5.7 regardless of the actual MySQL version used for the tests.
+		clusterInstance.VtGateExtraArgs = []string{"--lock_heartbeat_time", "2s", "--mysql_server_version", "5.7.0"}
 		if err := clusterInstance.StartVtgate(); err != nil {
 			return 1
 		}
@@ -140,39 +140,17 @@ func TestMain(m *testing.M) {
 	os.Exit(exitCode)
 }
 
-func exec(t *testing.T, conn *mysql.Conn, query string) (*sqltypes.Result, error) {
-	t.Helper()
-	return conn.ExecuteFetch(query, 1000, true)
-}
-
-func checkedExec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
-	t.Helper()
-	qr, err := conn.ExecuteFetch(query, 1000, true)
-	require.NoError(t, err)
-	return qr
-}
-
-func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
-	t.Helper()
-	qr := checkedExec(t, conn, query)
-	got := fmt.Sprintf("%v", qr.Rows)
-	diff := cmp.Diff(expected, got)
-	if diff != "" {
-		t.Errorf("Query: %s (-want +got):\n%s", query, diff)
-	}
-}
-
 func assertIsEmpty(t *testing.T, conn *mysql.Conn, query string) {
 	t.Helper()
-	qr := checkedExec(t, conn, query)
+	qr := utils.Exec(t, conn, query)
 	assert.Empty(t, qr.Rows)
 }
 
 func assertResponseMatch(t *testing.T, conn *mysql.Conn, query1, query2 string) {
-	qr1 := checkedExec(t, conn, query1)
+	qr1 := utils.Exec(t, conn, query1)
 	got1 := fmt.Sprintf("%v", qr1.Rows)
 
-	qr2 := checkedExec(t, conn, query2)
+	qr2 := utils.Exec(t, conn, query2)
 	got2 := fmt.Sprintf("%v", qr2.Rows)
 
 	assert.Equal(t, got1, got2)

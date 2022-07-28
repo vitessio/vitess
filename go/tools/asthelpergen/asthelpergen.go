@@ -20,12 +20,12 @@ import (
 	"bytes"
 	"fmt"
 	"go/types"
-	"io/ioutil"
 	"log"
+	"os"
 	"path"
 	"strings"
 
-	"vitess.io/vitess/go/tools/common"
+	"vitess.io/vitess/go/tools/goimports"
 
 	"github.com/dave/jennifer/jen"
 	"golang.org/x/tools/go/packages"
@@ -176,24 +176,31 @@ func (t *TypePaths) Set(path string) error {
 // currently exist on disk and returns any mismatches
 func VerifyFilesOnDisk(result map[string]*jen.File) (errors []error) {
 	for fullPath, file := range result {
-		existing, err := ioutil.ReadFile(fullPath)
+		existing, err := os.ReadFile(fullPath)
 		if err != nil {
 			errors = append(errors, fmt.Errorf("missing file on disk: %s (%w)", fullPath, err))
 			continue
 		}
 
-		var buf bytes.Buffer
-		if err := file.Render(&buf); err != nil {
-			errors = append(errors, fmt.Errorf("render error for '%s': %w", fullPath, err))
+		genFile, err := goimports.FormatJenFile(file)
+		if err != nil {
+			errors = append(errors, fmt.Errorf("goimport error: %w", err))
 			continue
 		}
 
-		if !bytes.Equal(existing, buf.Bytes()) {
+		if !bytes.Equal(existing, genFile) {
 			errors = append(errors, fmt.Errorf("'%s' has changed", fullPath))
 			continue
 		}
 	}
 	return errors
+}
+
+var acceptableBuildErrorsOn = map[string]any{
+	"ast_equals.go":  nil,
+	"ast_clone.go":   nil,
+	"ast_rewrite.go": nil,
+	"ast_visit.go":   nil,
 }
 
 // GenerateASTHelpers loads the input code, constructs the necessary generators,
@@ -203,10 +210,15 @@ func GenerateASTHelpers(packagePatterns []string, rootIface, exceptCloneType str
 		Mode: packages.NeedName | packages.NeedTypes | packages.NeedTypesSizes | packages.NeedTypesInfo | packages.NeedDeps | packages.NeedImports | packages.NeedModule,
 	}, packagePatterns...)
 
-	if err != nil || common.PkgFailed(loaded) {
-		log.Fatal("error loading packaged")
+	if err != nil {
+		log.Fatal("error loading package")
 		return nil, err
 	}
+
+	checkErrors(loaded, func(fileName string) bool {
+		_, ok := acceptableBuildErrorsOn[fileName]
+		return ok
+	})
 
 	scopes := make(map[string]*types.Scope)
 	for _, pkg := range loaded {
@@ -318,10 +330,23 @@ func printableTypeName(t types.Type) string {
 	case *types.Named:
 		return t.Obj().Name()
 	case *types.Basic:
-		return strings.Title(t.Name())
+		return strings.Title(t.Name()) // nolint
 	case *types.Interface:
 		return t.String()
 	default:
 		panic(fmt.Sprintf("unknown type %T %v", t, t))
+	}
+}
+
+func checkErrors(loaded []*packages.Package, canSkipErrorOn func(fileName string) bool) {
+	for _, l := range loaded {
+		for _, e := range l.Errors {
+			idx := strings.Index(e.Pos, ":")
+			filePath := e.Pos[:idx]
+			_, fileName := path.Split(filePath)
+			if !canSkipErrorOn(fileName) {
+				log.Fatalf("error loading package %s", e.Error())
+			}
+		}
 	}
 }

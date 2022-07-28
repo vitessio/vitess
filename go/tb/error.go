@@ -28,7 +28,7 @@ package tb
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"runtime"
 )
 
@@ -57,7 +57,7 @@ func (e stackError) StackTrace() string {
 	return e.stackTrace
 }
 
-func Errorf(msg string, args ...interface{}) error {
+func Errorf(msg string, args ...any) error {
 	stack := ""
 	// See if any arg is already embedding a stack - no need to
 	// recompute something expensive and make the message unreadable.
@@ -96,7 +96,7 @@ func stack(calldepth int) []byte {
 		// Print this much at least.  If we can't find the source, it won't show.
 		fmt.Fprintf(buf, "%s:%d (0x%x)\n", file, line, pc)
 		if file != lastFile {
-			data, err := ioutil.ReadFile(file)
+			data, err := os.ReadFile(file)
 			if err != nil {
 				continue
 			}

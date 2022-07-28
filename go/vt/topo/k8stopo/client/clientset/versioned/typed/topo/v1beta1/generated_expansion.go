@@ -18,4 +18,4 @@ limitations under the License.
 
 package v1beta1
 
-type VitessTopoNodeExpansion interface{}
+type VitessTopoNodeExpansion any

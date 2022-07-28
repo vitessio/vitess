@@ -13,6 +13,8 @@ ALL_FILES=$(find . -name "cached_size.go")
 
 set +e
 
+goimports -local vitess.io/vitess -w $ALL_FILES
+
 for SRC in $ALL_FILES
 do
   TMP="/tmp/"$(echo "$SRC" | sed 's/\//_/g' | sed "s/cached_size.go/cached_size_$$.go/g")

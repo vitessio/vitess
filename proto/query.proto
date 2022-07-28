@@ -206,6 +206,15 @@ enum Type {
   // This type is for internal use only.
   // Properties: 31, None.
   EXPRESSION = 31;
+  // HEXNUM specifies a HEXNUM type (unquoted varbinary).
+  // Properties: 32, IsText.
+  HEXNUM = 4128;
+  // HEXVAL specifies a HEXVAL type (unquoted varbinary).
+  // Properties: 33, IsText.
+  HEXVAL = 4129;
+  // BITNUM specifies a base 2 binary type (unquoted varbinary).
+  // Properties: 34, IsText.
+  BITNUM = 4130;
 }
 
 // Value represents a typed value.
@@ -305,6 +314,7 @@ message ExecuteOptions {
     Gen4Greedy = 3;
     Gen4Left2Right = 4;
     Gen4WithFallback = 5;
+    Gen4CompareV3 = 6;
   }
   
   // PlannerVersion specifies which planner to use. 
@@ -377,6 +387,7 @@ message QueryResult {
   uint64 rows_affected = 2;
   uint64 insert_id = 3;
   repeated Row rows = 4;
+  string info = 6;
 }
 
 // QueryWarning is used to convey out of band query execution warnings
@@ -444,22 +455,6 @@ message ResultWithError {
   query.QueryResult result = 2;
 }
 
-// ExecuteBatchRequest is the payload to ExecuteBatch
-message ExecuteBatchRequest {
-  vtrpc.CallerID effective_caller_id = 1;
-  VTGateCallerID immediate_caller_id = 2;
-  Target target = 3;
-  repeated BoundQuery queries = 4;
-  bool as_transaction = 5;
-  int64 transaction_id = 6;
-  ExecuteOptions options = 7;
-}
-
-// ExecuteBatchResponse is the returned value from ExecuteBatch
-message ExecuteBatchResponse {
-  repeated QueryResult results = 1;
-}
-
 // StreamExecuteRequest is the payload to StreamExecute
 message StreamExecuteRequest {
   vtrpc.CallerID effective_caller_id = 1;
@@ -468,6 +463,7 @@ message StreamExecuteRequest {
   BoundQuery query = 4;
   ExecuteOptions options = 5;
   int64 transaction_id = 6;
+  int64 reserved_id = 7;
 }
 
 // StreamExecuteResponse is the returned value from StreamExecute
@@ -635,24 +631,25 @@ message BeginExecuteResponse {
   topodata.TabletAlias tablet_alias = 4;
 }
 
-// BeginExecuteBatchRequest is the payload to BeginExecuteBatch
-message BeginExecuteBatchRequest {
+// BeginStreamExecuteRequest is the payload to BeginStreamExecute
+message BeginStreamExecuteRequest {
   vtrpc.CallerID effective_caller_id = 1;
   VTGateCallerID immediate_caller_id = 2;
   Target target = 3;
-  repeated BoundQuery queries = 4;
-  bool as_transaction = 5;
-  ExecuteOptions options = 6;
+  BoundQuery query = 4;
+  ExecuteOptions options = 5;
+  repeated string pre_queries = 6;
+  int64 reserved_id = 7;
 }
 
-// BeginExecuteBatchResponse is the returned value from BeginExecuteBatch
-message BeginExecuteBatchResponse {
+// BeginStreamExecuteResponse is the returned value from BeginStreamExecute
+message BeginStreamExecuteResponse {
   // error contains an application level error if necessary. Note the
   // transaction_id may be set, even when an error is returned, if the begin
-  // worked but the execute failed.
+  // worked but the stream execute failed.
   vtrpc.RPCError error = 1;
 
-  repeated QueryResult results = 2;
+  QueryResult result = 2;
 
   // transaction_id might be non-zero even if an error is present.
   int64 transaction_id = 3;
@@ -712,6 +709,28 @@ message ReserveExecuteResponse {
   topodata.TabletAlias tablet_alias = 4;
 }
 
+// ReserveStreamExecuteRequest is the payload to ReserveStreamExecute
+message ReserveStreamExecuteRequest {
+  vtrpc.CallerID effective_caller_id = 1;
+  VTGateCallerID immediate_caller_id = 2;
+  Target target = 3;
+  BoundQuery query = 4;
+  ExecuteOptions options = 5;
+  int64 transaction_id = 6;
+  repeated string pre_queries = 7;
+}
+
+// ReserveStreamExecuteResponse is the returned value from ReserveStreamExecute
+message ReserveStreamExecuteResponse {
+  vtrpc.RPCError error = 1;
+  QueryResult result = 2;
+
+  // The following fields might be non-zero even if an error is present.
+  int64 reserved_id = 3;
+  topodata.TabletAlias tablet_alias = 4;
+}
+
+
 // ReserveBeginExecuteRequest is the payload to ReserveBeginExecute
 message ReserveBeginExecuteRequest {
   vtrpc.CallerID effective_caller_id = 1;
@@ -720,6 +739,7 @@ message ReserveBeginExecuteRequest {
   BoundQuery query = 4;
   ExecuteOptions options = 5;
   repeated string pre_queries = 6;
+  repeated string post_begin_queries = 7;
 }
 
 // ReserveBeginExecuteResponse is the returned value from ReserveBeginExecute
@@ -729,6 +749,32 @@ message ReserveBeginExecuteResponse {
   // worked but the execute failed.
   vtrpc.RPCError error = 1;
   QueryResult result = 2;
+  // The following fields might be non-zero even if an error is present.
+  int64 transaction_id = 3;
+  int64 reserved_id = 4;
+  topodata.TabletAlias tablet_alias = 5;
+}
+
+// ReserveBeginStreamExecuteRequest is the payload to ReserveBeginStreamExecute
+message ReserveBeginStreamExecuteRequest {
+  vtrpc.CallerID effective_caller_id = 1;
+  VTGateCallerID immediate_caller_id = 2;
+  Target target = 3;
+  BoundQuery query = 4;
+  ExecuteOptions options = 5;
+  repeated string pre_queries = 6;
+  repeated string post_begin_queries = 7;
+}
+
+// ReserveBeginStreamExecuteResponse is the returned value from ReserveBeginStreamExecute
+message ReserveBeginStreamExecuteResponse {
+  // error contains an application level error if necessary. Note the
+  // transaction_id may be set, even when an error is returned, if the begin
+  // worked but the stream execute failed.
+  vtrpc.RPCError error = 1;
+
+  QueryResult result = 2;
+
   // The following fields might be non-zero even if an error is present.
   int64 transaction_id = 3;
   int64 reserved_id = 4;
@@ -760,13 +806,13 @@ message RealtimeStats {
   // we do not send queries to servers that are not healthy.
   string health_error = 1;
 
-  // seconds_behind_master is populated for replicas only. It indicates
+  // replication_lag_seconds is populated for replicas only. It indicates
   // how far behind on (MySQL) replication a replica currently is.  It is used
   // by clients for subset selection (so we don't try to send traffic
   // to tablets that are too far behind).
   // NOTE: This field must not be evaluated if "health_error" is not empty.
   // TODO(mberlin): Let's switch it to int64 instead?
-  uint32 seconds_behind_master = 2;
+  uint32 replication_lag_seconds = 2;
 
   // bin_log_players_count is the number of currently running binlog players.
   // if the value is 0, it means that filtered replication is currently not
@@ -774,12 +820,12 @@ message RealtimeStats {
   // NOTE: This field must not be evaluated if "health_error" is not empty.
   int32 binlog_players_count = 3;
 
-  // seconds_behind_master_filtered_replication is populated for the receiving
-  // master of an ongoing filtered replication only.
-  // It specifies how far the receiving master lags behind the sending master.
+  // filtered_replication_lag_seconds is populated for the receiving
+  // primary of an ongoing filtered replication only.
+  // It specifies how far the receiving primary lags behind the sending primary.
   // NOTE: This field must not be evaluated if "health_error" is not empty.
   // NOTE: This field must not be evaluated if "bin_log_players_count" is 0.
-  int64 seconds_behind_master_filtered_replication = 4;
+  int64 filtered_replication_lag_seconds = 4;
 
   // cpu_usage is used for load-based balancing
   double cpu_usage = 5;
@@ -803,15 +849,15 @@ message AggregateStats {
   // unhealthy_tablet_count is the number of unhealthy tablets in the group.
   int32 unhealthy_tablet_count = 2;
 
-  // seconds_behind_master_min is the minimum of the
-  // seconds_behind_master values of the healthy tablets. It is unset
-  // if the tablet type is master.
-  uint32 seconds_behind_master_min = 3;
+  // replication_lag_seconds_min is the minimum of the
+  // replication_lag_seconds values of the healthy tablets. It is unset
+  // if the tablet type is primary.
+  uint32 replication_lag_seconds_min = 3;
 
-  // seconds_behind_master_max is the maximum of the
-  // seconds_behind_master values of the healthy tablets. It is unset
-  // if the tablet type is master.
-  uint32 seconds_behind_master_max = 4;
+  // replication_lag_seconds_max is the maximum of the
+  // replication_lag_seconds values of the healthy tablets. It is unset
+  // if the tablet type is primary.
+  uint32 replication_lag_seconds_max = 4;
 }
 
 // StreamHealthResponse is streamed by StreamHealth on a regular basis.
@@ -825,19 +871,19 @@ message StreamHealthResponse {
   Target target = 1;
 
   // serving is true iff the tablet is serving. A tablet may not be serving
-  // if filtered replication is enabled on a master for instance,
+  // if filtered replication is enabled on a primary for instance,
   // or if a replica should not be used because the keyspace is being resharded.
   bool serving = 2;
 
   // tablet_externally_reparented_timestamp can be interpreted as the
-  // last time we knew that this tablet was the MASTER of this shard
+  // last time we knew that this tablet was the PRIMARY of this shard
   // (if StreamHealthResponse describes a group of tablets, between
-  // two vtgates, only one master will be present in the group, and
-  // this is this master's value).
+  // two vtgates, only one primary will be present in the group, and
+  // this is this primary's value).
   //
-  // It is used by vtgate when determining the current MASTER of a shard.
-  // If vtgate sees more than one MASTER tablet, this timestamp is used
-  // as tiebreaker where the MASTER with the highest timestamp wins.
+  // It is used by vtgate when determining the current PRIMARY of a shard.
+  // If vtgate sees more than one PRIMARY tablet, this timestamp is used
+  // as tiebreaker where the PRIMARY with the highest timestamp wins.
   // Another usage of this timestamp is in go/vt/vtgate/buffer to detect the end
   // of a reparent (failover) and stop buffering.
   //
@@ -845,16 +891,16 @@ message StreamHealthResponse {
   // a) the last time the RPC tabletmanager.TabletExternallyReparented was
   //    called on this tablet (usually done by an external failover tool e.g.
   //    Orchestrator). The failover tool can call this as long as we are the
-  //    master i.e. even ages after the last reparent occurred.
+  //    primary i.e. even ages after the last reparent occurred.
   // OR
   // b) the last time an active reparent was executed through a vtctl command
-  //    (InitShardMaster, PlannedReparentShard, EmergencyReparentShard)
+  //    (InitShardPrimary, PlannedReparentShard, EmergencyReparentShard)
   // OR
   // c) the last time vttablet was started and it initialized its tablet type
-  //    as MASTER because it was recorded as the shard's current master in the
+  //    as PRIMARY because it was recorded as the shard's current primary in the
   //    topology (see go/vt/vttablet/tabletmanager/init_tablet.go)
   // OR
-  // d) 0 if the vttablet was never a MASTER.
+  // d) 0 if the vttablet was never a PRIMARY.
   int64 tablet_externally_reparented_timestamp = 3;
 
   // realtime_stats contains information about the tablet status.

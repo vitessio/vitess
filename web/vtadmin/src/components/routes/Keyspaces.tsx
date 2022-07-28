@@ -16,7 +16,6 @@
 import { orderBy } from 'lodash-es';
 import * as React from 'react';
 
-import style from './Keyspaces.module.scss';
 import { useKeyspaces } from '../../hooks/api';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { useSyncedURLParam } from '../../hooks/useSyncedURLParam';
@@ -30,15 +29,20 @@ import { WorkspaceHeader } from '../layout/WorkspaceHeader';
 import { WorkspaceTitle } from '../layout/WorkspaceTitle';
 import { DataFilter } from '../dataTable/DataFilter';
 import { KeyspaceLink } from '../links/KeyspaceLink';
+import KeyspaceActions from './keyspaces/KeyspaceActions';
+import { ReadOnlyGate } from '../ReadOnlyGate';
+import { isReadOnlyMode } from '../../util/env';
+import { Link } from 'react-router-dom';
+import { QueryLoadingPlaceholder } from '../placeholders/QueryLoadingPlaceholder';
 
 export const Keyspaces = () => {
     useDocumentTitle('Keyspaces');
     const { value: filter, updateValue: updateFilter } = useSyncedURLParam('filter');
 
-    const { data } = useKeyspaces();
+    const keyspacesQuery = useKeyspaces();
 
     const ksRows = React.useMemo(() => {
-        const mapped = (data || []).map((k) => {
+        const mapped = (keyspacesQuery.data || []).map((k) => {
             const shardsByState = getShardsByState(k);
 
             return {
@@ -51,15 +55,15 @@ export const Keyspaces = () => {
         });
         const filtered = filterNouns(filter, mapped);
         return orderBy(filtered, ['cluster', 'name']);
-    }, [data, filter]);
+    }, [keyspacesQuery.data, filter]);
 
     const renderRows = (rows: typeof ksRows) =>
         rows.map((row, idx) => (
             <tr key={idx}>
                 <DataCell>
                     <KeyspaceLink clusterID={row.clusterID} name={row.name}>
-                        <div className="font-weight-bold">{row.name}</div>
-                        <div className="font-size-small text-color-secondary">{row.cluster}</div>
+                        <div className="font-bold">{row.name}</div>
+                        <div className="text-sm text-secondary">{row.cluster}</div>
                     </KeyspaceLink>
                 </DataCell>
                 <DataCell>
@@ -69,19 +73,33 @@ export const Keyspaces = () => {
                         </div>
                     )}
                     {!!row.nonservingShards && (
-                        <div className="font-weight-bold">
+                        <div className="font-bold">
                             <Pip state="danger" /> {row.nonservingShards}{' '}
                             {row.nonservingShards === 1 ? 'shard' : 'shards'} not serving
                         </div>
                     )}
                 </DataCell>
+                <ReadOnlyGate>
+                    <DataCell>
+                        <KeyspaceActions keyspace={row.name as string} clusterID={row.clusterID as string} />
+                    </DataCell>
+                </ReadOnlyGate>
             </tr>
         ));
 
     return (
         <div>
             <WorkspaceHeader>
-                <WorkspaceTitle>Keyspaces</WorkspaceTitle>
+                <div className="flex items-top justify-between max-w-screen-md">
+                    <WorkspaceTitle>Keyspaces</WorkspaceTitle>
+                    <ReadOnlyGate>
+                        <div>
+                            <Link className="btn btn-secondary btn-md" to="/keyspaces/create">
+                                Create a Keyspace
+                            </Link>
+                        </div>
+                    </ReadOnlyGate>
+                </div>
             </WorkspaceHeader>
             <ContentContainer>
                 <DataFilter
@@ -91,8 +109,13 @@ export const Keyspaces = () => {
                     placeholder="Filter keyspaces"
                     value={filter || ''}
                 />
-                <div className={style.container}>
-                    <DataTable columns={['Keyspace', 'Shards']} data={ksRows} renderRows={renderRows} />
+                <div className="max-w-screen-md">
+                    <DataTable
+                        columns={isReadOnlyMode() ? ['Keyspace', 'Shards'] : ['Keyspace', 'Shards', 'Actions']}
+                        data={ksRows}
+                        renderRows={renderRows}
+                    />
+                    <QueryLoadingPlaceholder query={keyspacesQuery} />
                 </div>
             </ContentContainer>
         </div>

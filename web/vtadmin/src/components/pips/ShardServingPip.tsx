@@ -18,8 +18,8 @@ import { Pip, PipState } from './Pip';
 
 interface Props {
     // If shard status is still pending, a neutral pip is used.
-    // The distinction between "is loading" and "is_master_serving is undefined"
-    // is useful, as it's common for the shard `shard.is_master_serving` to be
+    // The distinction between "is loading" and "is_primary_serving is undefined"
+    // is useful, as it's common for the shard `shard.is_primary_serving` to be
     // excluded from API responses for non-serving shards (instead of being
     // explicitly false.)
     isLoading?: boolean | null | undefined;

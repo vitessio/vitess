@@ -77,6 +77,7 @@ func NewStats(exporter *servenv.Exporter) *Stats {
 			vtrpcpb.Code_INTERNAL.String(),
 			vtrpcpb.Code_UNAVAILABLE.String(),
 			vtrpcpb.Code_DATA_LOSS.String(),
+			vtrpcpb.Code_CLUSTER_EVENT.String(),
 		),
 		InternalErrors:         exporter.NewCountersWithSingleLabel("InternalErrors", "Internal component errors", "type", "Task", "StrayTransactions", "Panic", "HungQuery", "Schema", "TwopcCommit", "TwopcResurrection", "WatchdogFail", "Messages"),
 		Warnings:               exporter.NewCountersWithSingleLabel("Warnings", "Warnings", "type", "ResultsExceeded"),

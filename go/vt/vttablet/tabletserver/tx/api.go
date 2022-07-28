@@ -24,6 +24,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 type (
@@ -125,9 +126,21 @@ func (p *Properties) RecordQuery(query string) {
 func (p *Properties) InTransaction() bool { return p != nil }
 
 // String returns a printable version of the transaction
-func (p *Properties) String() string {
+func (p *Properties) String(sanitize bool) string {
 	if p == nil {
 		return ""
+	}
+
+	printQueries := func() string {
+		sb := strings.Builder{}
+		for _, query := range p.Queries {
+			if sanitize {
+				query, _ = sqlparser.RedactSQLQuery(query)
+			}
+			sb.WriteString(query)
+			sb.WriteString(";")
+		}
+		return sb.String()
 	}
 
 	return fmt.Sprintf(
@@ -138,6 +151,6 @@ func (p *Properties) String() string {
 		p.EndTime.Format(time.StampMicro),
 		p.EndTime.Sub(p.StartTime).Seconds(),
 		p.Conclusion,
-		strings.Join(p.Queries, ";"),
+		printQueries(),
 	)
 }

@@ -36,18 +36,18 @@ const (
 )
 
 // Backup takes a db backup and sends it to the BackupStorage
-func (tm *TabletManager) Backup(ctx context.Context, concurrency int, logger logutil.Logger, allowMaster bool) error {
+func (tm *TabletManager) Backup(ctx context.Context, concurrency int, logger logutil.Logger, allowPrimary bool) error {
 	if tm.Cnf == nil {
 		return fmt.Errorf("cannot perform backup without my.cnf, please restart vttablet with a my.cnf file specified")
 	}
 
 	// Check tablet type current process has.
-	// During a network partition it is possible that from the topology perspective this is no longer the master,
+	// During a network partition it is possible that from the topology perspective this is no longer the primary,
 	// but the process didn't find out about this.
 	// It is not safe to take backups from tablet in this state
 	currentTablet := tm.Tablet()
-	if !allowMaster && currentTablet.Type == topodatapb.TabletType_MASTER {
-		return fmt.Errorf("type MASTER cannot take backup. if you really need to do this, rerun the backup command with -allow_master")
+	if !allowPrimary && currentTablet.Type == topodatapb.TabletType_PRIMARY {
+		return fmt.Errorf("type PRIMARY cannot take backup. if you really need to do this, rerun the backup command with --allow_primary")
 	}
 	engine, err := mysqlctl.GetBackupEngine()
 	if err != nil {
@@ -58,8 +58,8 @@ func (tm *TabletManager) Backup(ctx context.Context, concurrency int, logger log
 	if err != nil {
 		return err
 	}
-	if !allowMaster && tablet.Type == topodatapb.TabletType_MASTER {
-		return fmt.Errorf("type MASTER cannot take backup. if you really need to do this, rerun the backup command with -allow_master")
+	if !allowPrimary && tablet.Type == topodatapb.TabletType_PRIMARY {
+		return fmt.Errorf("type PRIMARY cannot take backup. if you really need to do this, rerun the backup command with --allow_primary")
 	}
 
 	// prevent concurrent backups, and record stats
@@ -85,7 +85,7 @@ func (tm *TabletManager) Backup(ctx context.Context, concurrency int, logger log
 		}
 		originalType = tablet.Type
 		// update our type to BACKUP
-		if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_BACKUP, DBActionNone); err != nil {
+		if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_BACKUP, DBActionNone, SemiSyncActionUnset); err != nil {
 			return err
 		}
 		// Tell Orchestrator we're stopped on purpose for some Vitess task.
@@ -125,8 +125,8 @@ func (tm *TabletManager) Backup(ctx context.Context, concurrency int, logger log
 		// above call to Backup. Thus we use the background context to get through to the finish.
 
 		// Change our type back to the original value.
-		// Original type could be master so pass in a real value for masterTermStartTime
-		if err := tm.changeTypeLocked(bgCtx, originalType, DBActionNone); err != nil {
+		// Original type could be primary so pass in a real value for PrimaryTermStartTime
+		if err := tm.changeTypeLocked(bgCtx, originalType, DBActionNone, SemiSyncActionNone); err != nil {
 			// failure in changing the topology type is probably worse,
 			// so returning that (we logged the snapshot error anyway)
 			if returnErr != nil {
@@ -150,8 +150,9 @@ func (tm *TabletManager) Backup(ctx context.Context, concurrency int, logger log
 	return returnErr
 }
 
-// RestoreFromBackup deletes all local data and restores anew from the latest backup.
-func (tm *TabletManager) RestoreFromBackup(ctx context.Context, logger logutil.Logger) error {
+// RestoreFromBackup deletes all local data and then restores the data from the latest backup [at
+// or before the backupTime value if specified]
+func (tm *TabletManager) RestoreFromBackup(ctx context.Context, logger logutil.Logger, backupTime time.Time) error {
 	if err := tm.lock(ctx); err != nil {
 		return err
 	}
@@ -161,15 +162,15 @@ func (tm *TabletManager) RestoreFromBackup(ctx context.Context, logger logutil.L
 	if err != nil {
 		return err
 	}
-	if tablet.Type == topodatapb.TabletType_MASTER {
-		return fmt.Errorf("type MASTER cannot restore from backup, if you really need to do this, restart vttablet in replica mode")
+	if tablet.Type == topodatapb.TabletType_PRIMARY {
+		return fmt.Errorf("type PRIMARY cannot restore from backup, if you really need to do this, restart vttablet in replica mode")
 	}
 
 	// create the loggers: tee to console and source
 	l := logutil.NewTeeLogger(logutil.NewConsoleLogger(), logger)
 
 	// now we can run restore
-	err = tm.restoreDataLocked(ctx, l, 0 /* waitForBackupInterval */, true /* deleteBeforeRestore */)
+	err = tm.restoreDataLocked(ctx, l, 0 /* waitForBackupInterval */, true /* deleteBeforeRestore */, backupTime)
 
 	// re-run health check to be sure to capture any replication delay
 	tm.QueryServiceControl.BroadcastHealth()

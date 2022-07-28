@@ -1,3 +1,5 @@
+//go:build gc && !wasm
+
 /*
 Copyright 2019 The Vitess Authors.
 
@@ -32,8 +34,13 @@ func String(b []byte) (s string) {
 	return *(*string)(unsafe.Pointer(&b))
 }
 
-// StringPointer returns &s[0], which is not allowed in go
-func StringPointer(s string) unsafe.Pointer {
-	pstring := (*reflect.StringHeader)(unsafe.Pointer(&s))
-	return unsafe.Pointer(pstring.Data)
+// StringBytes returns the underlying bytes for a string. Modifying this byte slice
+// will lead to undefined behavior.
+func StringBytes(s string) []byte {
+	var b []byte
+	hdr := (*reflect.SliceHeader)(unsafe.Pointer(&b))
+	hdr.Data = (*reflect.StringHeader)(unsafe.Pointer(&s)).Data
+	hdr.Cap = len(s)
+	hdr.Len = len(s)
+	return b
 }

@@ -132,10 +132,10 @@ func TestConsolidatorReplicasOnly(t *testing.T) {
 	afterOne := framework.FetchInt(framework.DebugVars(), totalConsolidationsTag)
 	assert.Equal(t, initial+1, afterOne, "expected one consolidation")
 
-	revert := changeVar(t, "Consolidator", tabletenv.NotOnMaster)
+	revert := changeVar(t, "Consolidator", tabletenv.NotOnPrimary)
 	defer revert()
 
-	// master should not do query consolidation
+	// primary should not do query consolidation
 	var wg2 sync.WaitGroup
 	wg2.Add(2)
 	go func() {
@@ -156,7 +156,7 @@ func TestConsolidatorReplicasOnly(t *testing.T) {
 	err := client.SetServingType(topodatapb.TabletType_REPLICA)
 	require.NoError(t, err)
 	defer func() {
-		err = client.SetServingType(topodatapb.TabletType_MASTER)
+		err = client.SetServingType(topodatapb.TabletType_PRIMARY)
 		require.NoError(t, err)
 	}()
 
@@ -290,7 +290,7 @@ func changeVar(t *testing.T, name, value string) (revert func()) {
 	}
 }
 
-func verifyMapValue(t *testing.T, values map[string]interface{}, tag string, want interface{}) {
+func verifyMapValue(t *testing.T, values map[string]any, tag string, want any) {
 	t.Helper()
 	val, ok := values[tag]
 	if !ok {
@@ -299,12 +299,12 @@ func verifyMapValue(t *testing.T, values map[string]interface{}, tag string, wan
 	assert.Equal(t, want, val)
 }
 
-func compareIntDiff(t *testing.T, end map[string]interface{}, tag string, start map[string]interface{}, diff int) {
+func compareIntDiff(t *testing.T, end map[string]any, tag string, start map[string]any, diff int) {
 	t.Helper()
 	verifyIntValue(t, end, tag, framework.FetchInt(start, tag)+diff)
 }
 
-func verifyIntValue(t *testing.T, values map[string]interface{}, tag string, want int) {
+func verifyIntValue(t *testing.T, values map[string]any, tag string, want int) {
 	t.Helper()
 	require.Equal(t, want, framework.FetchInt(values, tag), tag)
 }

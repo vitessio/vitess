@@ -27,7 +27,7 @@ In general the cluster is build in following order
 - Start topology service [default etcd]
 - Start vtctld client
 - Start required mysqld instances
-- Start corresponding vttablets (atleast 1 master and 1 replica)
+- Start corresponding vttablets (atleast 1 primary and 1 replica)
 - Start Vtgate 
 
 A good example to refer will be  go/test/endtoend/clustertest

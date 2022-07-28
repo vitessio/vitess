@@ -22,11 +22,6 @@ import (
 	"fmt"
 	"strings"
 	"unicode"
-
-	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/vterrors"
-
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // StatementType encodes the type of a SQL statement
@@ -62,6 +57,8 @@ const (
 	StmtFlush
 	StmtCallProc
 	StmtRevert
+	StmtShowMigrationLogs
+	StmtCommentOnly
 )
 
 //ASTToStatementType returns a StatementType from an AST stmt
@@ -75,7 +72,7 @@ func ASTToStatementType(stmt Statement) StatementType {
 		return StmtUpdate
 	case *Delete:
 		return StmtDelete
-	case *Set:
+	case *Set, *SetTransaction:
 		return StmtSet
 	case *Show:
 		return StmtShow
@@ -83,6 +80,8 @@ func ASTToStatementType(stmt Statement) StatementType {
 		return StmtDDL
 	case *RevertMigration:
 		return StmtRevert
+	case *ShowMigrationLogs:
+		return StmtShowMigrationLogs
 	case *Use:
 		return StmtUse
 	case *OtherRead, *OtherAdmin, *Load:
@@ -113,6 +112,8 @@ func ASTToStatementType(stmt Statement) StatementType {
 		return StmtStream
 	case *VStream:
 		return StmtVStream
+	case *CommentOnly:
+		return StmtCommentOnly
 	default:
 		return StmtUnknown
 	}
@@ -129,16 +130,26 @@ func CanNormalize(stmt Statement) bool {
 
 // CachePlan takes Statement and returns true if the query plan should be cached
 func CachePlan(stmt Statement) bool {
-	switch stmt.(type) {
-	case *Select, *Union, *ParenSelect,
-		*Insert, *Update, *Delete, *Stream:
+	var comments *ParsedComments
+	switch stmt := stmt.(type) {
+	case *Select:
+		comments = stmt.Comments
+	case *Insert:
+		comments = stmt.Comments
+	case *Update:
+		comments = stmt.Comments
+	case *Delete:
+		comments = stmt.Comments
+	case *Union, *Stream:
 		return true
+	default:
+		return false
 	}
-	return false
+	return !comments.Directives().IsSet(DirectiveSkipQueryPlanCache)
 }
 
-//MustRewriteAST takes Statement and returns true if RewriteAST must run on it for correct execution irrespective of user flags.
-func MustRewriteAST(stmt Statement) bool {
+// MustRewriteAST takes Statement and returns true if RewriteAST must run on it for correct execution irrespective of user flags.
+func MustRewriteAST(stmt Statement, hasSelectLimit bool) bool {
 	switch node := stmt.(type) {
 	case *Set:
 		return true
@@ -148,6 +159,8 @@ func MustRewriteAST(stmt Statement) bool {
 			return true
 		}
 		return false
+	case SelectStatement:
+		return hasSelectLimit
 	}
 	return false
 }
@@ -284,6 +297,8 @@ func (s StatementType) String() string {
 		return "FLUSH"
 	case StmtCallProc:
 		return "CALL_PROC"
+	case StmtCommentOnly:
+		return "COMMENT_ONLY"
 	default:
 		return "UNKNOWN"
 	}
@@ -323,6 +338,37 @@ func SplitAndExpression(filters []Expr, node Expr) []Expr {
 	return append(filters, node)
 }
 
+// AndExpressions ands together two or more expressions, minimising the expr when possible
+func AndExpressions(exprs ...Expr) Expr {
+	switch len(exprs) {
+	case 0:
+		return nil
+	case 1:
+		return exprs[0]
+	default:
+		result := (Expr)(nil)
+	outer:
+		// we'll loop and remove any duplicates
+		for i, expr := range exprs {
+			if expr == nil {
+				continue
+			}
+			if result == nil {
+				result = expr
+				continue outer
+			}
+
+			for j := 0; j < i; j++ {
+				if EqualsExpr(expr, exprs[j]) {
+					continue outer
+				}
+			}
+			result = &AndExpr{Left: result, Right: expr}
+		}
+		return result
+	}
+}
+
 // TableFromStatement returns the qualified table name for the query.
 // This works only for select statements.
 func TableFromStatement(sql string) (TableName, error) {
@@ -350,12 +396,12 @@ func TableFromStatement(sql string) (TableName, error) {
 
 // GetTableName returns the table name from the SimpleTableExpr
 // only if it's a simple expression. Otherwise, it returns "".
-func GetTableName(node SimpleTableExpr) TableIdent {
+func GetTableName(node SimpleTableExpr) IdentifierCS {
 	if n, ok := node.(TableName); ok && n.Qualifier.IsEmpty() {
 		return n.Name
 	}
 	// sub-select or '.' expression
-	return NewTableIdent("")
+	return NewIdentifierCS("")
 }
 
 // IsColName returns true if the Expr is a *ColName.
@@ -406,72 +452,11 @@ func IsSimpleTuple(node Expr) bool {
 	return false
 }
 
-// NewPlanValue builds a sqltypes.PlanValue from an Expr.
-func NewPlanValue(node Expr) (sqltypes.PlanValue, error) {
-	switch node := node.(type) {
-	case Argument:
-		return sqltypes.PlanValue{Key: string(node)}, nil
-	case *Literal:
-		switch node.Type {
-		case IntVal:
-			n, err := sqltypes.NewIntegral(string(node.Val))
-			if err != nil {
-				return sqltypes.PlanValue{}, err
-			}
-			return sqltypes.PlanValue{Value: n}, nil
-		case FloatVal:
-			return sqltypes.PlanValue{Value: sqltypes.MakeTrusted(sqltypes.Float64, node.Bytes())}, nil
-		case StrVal:
-			return sqltypes.PlanValue{Value: sqltypes.MakeTrusted(sqltypes.VarBinary, node.Bytes())}, nil
-		case HexVal:
-			v, err := node.HexDecode()
-			if err != nil {
-				return sqltypes.PlanValue{}, err
-			}
-			return sqltypes.PlanValue{Value: sqltypes.MakeTrusted(sqltypes.VarBinary, v)}, nil
-		}
-	case ListArg:
-		return sqltypes.PlanValue{ListKey: string(node)}, nil
-	case ValTuple:
-		pv := sqltypes.PlanValue{
-			Values: make([]sqltypes.PlanValue, 0, len(node)),
-		}
-		for _, val := range node {
-			innerpv, err := NewPlanValue(val)
-			if err != nil {
-				return sqltypes.PlanValue{}, err
-			}
-			if innerpv.ListKey != "" || innerpv.Values != nil {
-				return sqltypes.PlanValue{}, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: nested lists")
-			}
-			pv.Values = append(pv.Values, innerpv)
-		}
-		return pv, nil
-	case *NullVal:
-		return sqltypes.PlanValue{}, nil
-	case *UnaryExpr:
-		switch node.Operator {
-		case UBinaryOp, Utf8mb4Op, Utf8Op, Latin1Op: // for some charset introducers, we can just ignore them
-			return NewPlanValue(node.Expr)
-		}
-	}
-	return sqltypes.PlanValue{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "expression is too complex '%v'", String(node))
-}
-
 //IsLockingFunc returns true for all functions that are used to work with mysql advisory locks
 func IsLockingFunc(node Expr) bool {
-	switch p := node.(type) {
-	case *FuncExpr:
-		_, found := lockingFunctions[p.Name.Lowered()]
-		return found
+	switch node.(type) {
+	case *LockingFunc:
+		return true
 	}
 	return false
-}
-
-var lockingFunctions = map[string]interface{}{
-	"get_lock":          nil,
-	"is_free_lock":      nil,
-	"is_used_lock":      nil,
-	"release_all_locks": nil,
-	"release_lock":      nil,
 }

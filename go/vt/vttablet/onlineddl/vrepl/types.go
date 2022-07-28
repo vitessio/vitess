@@ -37,10 +37,14 @@ const (
 	TimestampColumnType
 	DateTimeColumnType
 	EnumColumnType
+	SetColumnType
 	MediumIntColumnType
 	JSONColumnType
 	FloatColumnType
+	DoubleColumnType
 	BinaryColumnType
+	StringColumnType
+	IntegerColumnType
 )
 
 // Column represents a table column
@@ -48,13 +52,54 @@ type Column struct {
 	Name                 string
 	IsUnsigned           bool
 	Charset              string
+	Collation            string
 	Type                 ColumnType
 	EnumValues           string
 	EnumToTextConversion bool
+	DataType             string // from COLUMN_TYPE column
+
+	IsNullable    bool
+	IsDefaultNull bool
+
+	CharacterMaximumLength int64
+	NumericPrecision       int64
+	NumericScale           int64
+	DateTimePrecision      int64
 
 	// add Octet length for binary type, fix bytes with suffix "00" get clipped in mysql binlog.
 	// https://github.com/github/gh-ost/issues/909
 	BinaryOctetLength uint64
+}
+
+// SetTypeIfUnknown will set a new column type only if the current type is unknown, otherwise silently skip
+func (c *Column) SetTypeIfUnknown(t ColumnType) {
+	if c.Type == UnknownColumnType {
+		c.Type = t
+	}
+}
+
+// HasDefault returns true if the column at all has a default value (possibly NULL)
+func (c *Column) HasDefault() bool {
+	if c.IsDefaultNull && !c.IsNullable {
+		// based on INFORMATION_SCHEMA.COLUMNS, this is the indicator for a 'NOT NULL' column with no default value.
+		return false
+	}
+	return true
+}
+
+// IsNumeric returns true if the column is of a numeric type
+func (c *Column) IsNumeric() bool {
+	return c.NumericPrecision > 0
+}
+
+// IsFloatingPoint returns true if the column is of a floating point numeric type
+func (c *Column) IsFloatingPoint() bool {
+	return c.Type == FloatColumnType || c.Type == DoubleColumnType
+}
+
+// IsFloatingPoint returns true if the column is of a temporal type
+func (c *Column) IsTemporal() bool {
+	return c.DateTimePrecision >= 0
 }
 
 // NewColumns creates a new column array from non empty names
@@ -139,6 +184,12 @@ func (l *ColumnList) GetColumn(columnName string) *Column {
 	return nil
 }
 
+// ColumnExists returns true if this column list has a column by a given name
+func (l *ColumnList) ColumnExists(columnName string) bool {
+	_, ok := l.Ordinals[columnName]
+	return ok
+}
+
 // String returns a comma separated list of column names
 func (l *ColumnList) String() string {
 	return strings.Join(l.Names(), ",")
@@ -165,9 +216,44 @@ func (l *ColumnList) IsSubsetOf(other *ColumnList) bool {
 	return true
 }
 
+// Difference returns a (new copy) subset of this column list, consisting of all
+// column NOT in given list.
+// The result is never nil, even if the difference is empty
+func (l *ColumnList) Difference(other *ColumnList) (diff *ColumnList) {
+	names := []string{}
+	for _, column := range l.columns {
+		if !other.ColumnExists(column.Name) {
+			names = append(names, column.Name)
+		}
+	}
+	return NewColumnList(names)
+}
+
 // Len returns the length of this list
 func (l *ColumnList) Len() int {
 	return len(l.columns)
+}
+
+// MappedNamesColumnList returns a column list based on this list, with names possibly mapped by given map
+func (l *ColumnList) MappedNamesColumnList(columnNamesMap map[string]string) *ColumnList {
+	names := l.Names()
+	for i := range names {
+		if mappedName, ok := columnNamesMap[names[i]]; ok {
+			names[i] = mappedName
+		}
+	}
+	return NewColumnList(names)
+}
+
+// SetEnumToTextConversion tells this column list that an enum is conveted to text
+func (l *ColumnList) SetEnumToTextConversion(columnName string, enumValues string) {
+	l.GetColumn(columnName).EnumToTextConversion = true
+	l.GetColumn(columnName).EnumValues = enumValues
+}
+
+// IsEnumToTextConversion tells whether an enum was converted to text
+func (l *ColumnList) IsEnumToTextConversion(columnName string) bool {
+	return l.GetColumn(columnName).EnumToTextConversion
 }
 
 // UniqueKey is the combination of a key's name and columns
@@ -175,6 +261,7 @@ type UniqueKey struct {
 	Name            string
 	Columns         ColumnList
 	HasNullable     bool
+	HasFloat        bool
 	IsAutoIncrement bool
 }
 

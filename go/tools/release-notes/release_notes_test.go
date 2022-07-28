@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -98,9 +99,104 @@ aquarapTEST@gmail.com	Fix mysql80 docker build with dep.	a28591577b8d432b9c5d78a
 TEST@planetscale.com	Revert "docker/lite/install_dependencies.sh:  Upgrade MySQL 8 to 8.0.24"	7858ff46545cff749b3663c92ae90ef27a5dfbc2	27a5dfbc2
 TEST@planetscale.com	docker/lite/install_dependencies.sh:  Upgrade MySQL 8 to 8.0.24	c91d46782933292941a846fef2590ff1a6fa193f	a6fa193f`
 
-	prs, authorCommits, count, err := parseGitLog(in)
+	prs, authorCommits, nonMergeCommits, err := parseGitLog(in)
 	require.NoError(t, err)
-	assert.Equal(t, []string{"7629", "7831", "7912", "7943", "7951", "7959", "7964", "7968", "7970"}, prs)
-	assert.Equal(t, []string{"385d0b327", "3b744e782", "4a0a943b0", "538709da5", "616f5562c", "6b9a731a2", "e5242a88a", "edac2baf8"}, authorCommits)
-	assert.Equal(t, 28, count)
+	assert.Equal(t, prs, []string{"7629", "7831", "7912", "7934", "7943", "7951", "7959", "7964", "7968", "7970"})
+	assert.Equal(t, authorCommits, []string{"385d0b327", "3b744e782", "4a0a943b0", "538709da5", "616f5562c", "6b9a731a2", "e5242a88a", "edac2baf8"})
+	assert.Equal(t, 28, nonMergeCommits)
+}
+
+func TestLoadSummaryReadme(t *testing.T) {
+	readmeFile, err := os.CreateTemp("", "*.md")
+	require.NoError(t, err)
+
+	readmeContent := `- New Gen4 feature
+- Self hosted runners
+- Bunch of features
+`
+
+	err = os.WriteFile(readmeFile.Name(), []byte(readmeContent), 0644)
+	require.NoError(t, err)
+
+	str, err := releaseSummary(readmeFile.Name())
+	require.NoError(t, err)
+	require.Equal(t, str, readmeContent)
+}
+
+func TestGenerateReleaseNotes(t *testing.T) {
+	tcs := []struct {
+		name                 string
+		releaseNote          releaseNote
+		expectedOut          string
+		expectedOutChangeLog string
+	}{
+		{
+			name:        "empty",
+			releaseNote: releaseNote{},
+			expectedOut: "# Release of Vitess \n",
+		}, {
+			name:        "with version number",
+			releaseNote: releaseNote{Version: "v12.0.0"},
+			expectedOut: "# Release of Vitess v12.0.0\n",
+		}, {
+			name:        "with announcement",
+			releaseNote: releaseNote{Announcement: "This is the new release.\n\nNew features got added.", Version: "v12.0.0"},
+			expectedOut: "# Release of Vitess v12.0.0\n" +
+				"This is the new release.\n\nNew features got added.\n",
+		}, {
+			name:        "with announcement and known issues",
+			releaseNote: releaseNote{Announcement: "This is the new release.\n\nNew features got added.", Version: "v12.0.0", KnownIssues: "* bug 1\n* bug 2\n"},
+			expectedOut: "# Release of Vitess v12.0.0\n" +
+				"This is the new release.\n\nNew features got added.\n" +
+				"------------\n" +
+				"## Known Issues\n" +
+				"* bug 1\n" +
+				"* bug 2\n\n",
+		}, {
+			name: "with announcement and change log",
+			releaseNote: releaseNote{
+				Announcement:      "This is the new release.\n\nNew features got added.",
+				Version:           "v12.0.0",
+				VersionUnderscore: "12_0_0",
+				ChangeLog:         "* PR 1\n* PR 2\n",
+				ChangeMetrics:     "optimization is the root of all evil",
+			},
+			expectedOut: "# Release of Vitess v12.0.0\n" +
+				"This is the new release.\n\nNew features got added.\n" +
+				"------------\n" +
+				"The entire changelog for this release can be found [here](https://github.com/vitessio/vitess/blob/main/doc/releasenotes/12_0_0_changelog.md).\n" +
+				"optimization is the root of all evil\n",
+			expectedOutChangeLog: "# Changelog of Vitess v12.0.0\n" +
+				"* PR 1\n" +
+				"* PR 2\n\n",
+		}, {
+			name: "with only change log",
+			releaseNote: releaseNote{
+				Version:           "v12.0.0",
+				VersionUnderscore: "12_0_0",
+				ChangeLog:         "* PR 1\n* PR 2\n",
+				ChangeMetrics:     "optimization is the root of all evil",
+			},
+			expectedOut: "# Release of Vitess v12.0.0\n" +
+				"The entire changelog for this release can be found [here](https://github.com/vitessio/vitess/blob/main/doc/releasenotes/12_0_0_changelog.md).\n" +
+				"optimization is the root of all evil\n",
+			expectedOutChangeLog: "# Changelog of Vitess v12.0.0\n" +
+				"* PR 1\n" +
+				"* PR 2\n\n",
+		},
+	}
+
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			outFileRn, err := os.CreateTemp("", "*.md")
+			require.NoError(t, err)
+			outFileChangelog, err := os.CreateTemp("", "*.md")
+			require.NoError(t, err)
+			err = tc.releaseNote.generate(outFileRn, outFileChangelog)
+			require.NoError(t, err)
+			all, err := os.ReadFile(outFileRn.Name())
+			require.NoError(t, err)
+			require.Equal(t, tc.expectedOut, string(all))
+		})
+	}
 }

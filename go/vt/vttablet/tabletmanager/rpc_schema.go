@@ -30,8 +30,8 @@ import (
 )
 
 // GetSchema returns the schema.
-func (tm *TabletManager) GetSchema(ctx context.Context, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
-	return tm.MysqlDaemon.GetSchema(ctx, topoproto.TabletDbName(tm.Tablet()), tables, excludeTables, includeViews)
+func (tm *TabletManager) GetSchema(ctx context.Context, request *tabletmanagerdatapb.GetSchemaRequest) (*tabletmanagerdatapb.SchemaDefinition, error) {
+	return tm.MysqlDaemon.GetSchema(ctx, topoproto.TabletDbName(tm.Tablet()), request)
 }
 
 // ReloadSchema will reload the schema
@@ -49,7 +49,7 @@ func (tm *TabletManager) ReloadSchema(ctx context.Context, waitPosition string) 
 			return vterrors.Wrapf(err, "ReloadSchema: can't parse wait position (%q)", waitPosition)
 		}
 		log.Infof("ReloadSchema: waiting for replication position: %v", waitPosition)
-		if err := tm.MysqlDaemon.WaitMasterPos(ctx, pos); err != nil {
+		if err := tm.MysqlDaemon.WaitSourcePos(ctx, pos); err != nil {
 			return err
 		}
 	}
@@ -89,6 +89,6 @@ func (tm *TabletManager) ApplySchema(ctx context.Context, change *tmutils.Schema
 	}
 
 	// and if it worked, reload the schema
-	tm.ReloadSchema(ctx, "")
+	tm.ReloadSchema(ctx, "") // nolint:errcheck
 	return scr, nil
 }

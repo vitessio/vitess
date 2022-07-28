@@ -23,10 +23,11 @@ import (
 	"os"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"vitess.io/vitess/go/test/endtoend/utils"
+
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
@@ -65,14 +66,14 @@ func TestMain(m *testing.M) {
 		}
 
 		// List of users authorized to execute vschema ddl operations
-		clusterInstance.VtGateExtraArgs = []string{"-vschema_ddl_authorized_users=%"}
+		clusterInstance.VtGateExtraArgs = []string{"--vschema_ddl_authorized_users=%", "--schema_change_signal=false"}
 
 		// Start keyspace
 		keyspace := &cluster.Keyspace{
 			Name:      keyspaceName,
 			SchemaSQL: sqlSchema,
 		}
-		if err := clusterInstance.StartUnshardedKeyspace(*keyspace, 1, false); err != nil {
+		if err := clusterInstance.StartUnshardedKeyspace(*keyspace, 0, false); err != nil {
 			return 1, err
 		}
 
@@ -99,74 +100,46 @@ func TestVSchema(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer conn.Close()
 
 	// Test the empty database with no vschema
-	exec(t, conn, "insert into vt_user (id,name) values(1,'test1'), (2,'test2'), (3,'test3'), (4,'test4')")
+	utils.Exec(t, conn, "insert into vt_user (id,name) values(1,'test1'), (2,'test2'), (3,'test3'), (4,'test4')")
 
-	qr := exec(t, conn, "select id, name from vt_user order by id")
-	got := fmt.Sprintf("%v", qr.Rows)
-	want := `[[INT64(1) VARCHAR("test1")] [INT64(2) VARCHAR("test2")] [INT64(3) VARCHAR("test3")] [INT64(4) VARCHAR("test4")]]`
-	assert.Equal(t, want, got)
+	utils.AssertMatches(t, conn, "select id, name from vt_user order by id",
+		`[[INT64(1) VARCHAR("test1")] [INT64(2) VARCHAR("test2")] [INT64(3) VARCHAR("test3")] [INT64(4) VARCHAR("test4")]]`)
 
-	qr = exec(t, conn, "delete from vt_user")
-	got = fmt.Sprintf("%v", qr.Rows)
-	want = `[]`
-	assert.Equal(t, want, got)
+	utils.AssertMatches(t, conn, "delete from vt_user", `[]`)
 
 	// Test empty vschema
-	qr = exec(t, conn, "SHOW VSCHEMA TABLES")
-	got = fmt.Sprintf("%v", qr.Rows)
-	want = `[[VARCHAR("dual")]]`
-	assert.Equal(t, want, got)
+	utils.AssertMatches(t, conn, "SHOW VSCHEMA TABLES", `[[VARCHAR("dual")]]`)
 
 	// Use the DDL to create an unsharded vschema and test again
 
 	// Create VSchema and do a Select to force update VSCHEMA
-	exec(t, conn, "begin")
-	exec(t, conn, "ALTER VSCHEMA ADD TABLE vt_user")
-	exec(t, conn, "select * from  vt_user")
-	exec(t, conn, "commit")
+	utils.Exec(t, conn, "begin")
+	utils.Exec(t, conn, "ALTER VSCHEMA ADD TABLE vt_user")
+	utils.Exec(t, conn, "select * from  vt_user")
+	utils.Exec(t, conn, "commit")
 
-	exec(t, conn, "begin")
-	exec(t, conn, "ALTER VSCHEMA ADD TABLE main")
-	exec(t, conn, "select * from  main")
-	exec(t, conn, "commit")
+	utils.Exec(t, conn, "begin")
+	utils.Exec(t, conn, "ALTER VSCHEMA ADD TABLE main")
+	utils.Exec(t, conn, "select * from  main")
+	utils.Exec(t, conn, "commit")
 
 	// Test Showing Tables
-	qr = exec(t, conn, "SHOW VSCHEMA TABLES")
-	got = fmt.Sprintf("%v", qr.Rows)
-	want = `[[VARCHAR("dual")] [VARCHAR("main")] [VARCHAR("vt_user")]]`
-	assert.Equal(t, want, got)
+	utils.AssertMatches(t, conn,
+		"SHOW VSCHEMA TABLES",
+		`[[VARCHAR("dual")] [VARCHAR("main")] [VARCHAR("vt_user")]]`)
 
 	// Test Showing Vindexes
-	qr = exec(t, conn, "SHOW VSCHEMA VINDEXES")
-	got = fmt.Sprintf("%v", qr.Rows)
-	want = `[]`
-	assert.Equal(t, want, got)
+	utils.AssertMatches(t, conn, "SHOW VSCHEMA VINDEXES", `[]`)
 
 	// Test DML operations
-	exec(t, conn, "insert into vt_user (id,name) values(1,'test1'), (2,'test2'), (3,'test3'), (4,'test4')")
-	qr = exec(t, conn, "select id, name from vt_user order by id")
-	got = fmt.Sprintf("%v", qr.Rows)
-	want = `[[INT64(1) VARCHAR("test1")] [INT64(2) VARCHAR("test2")] [INT64(3) VARCHAR("test3")] [INT64(4) VARCHAR("test4")]]`
-	assert.Equal(t, want, got)
+	utils.Exec(t, conn, "insert into vt_user (id,name) values(1,'test1'), (2,'test2'), (3,'test3'), (4,'test4')")
+	utils.AssertMatches(t, conn, "select id, name from vt_user order by id",
+		`[[INT64(1) VARCHAR("test1")] [INT64(2) VARCHAR("test2")] [INT64(3) VARCHAR("test3")] [INT64(4) VARCHAR("test4")]]`)
 
-	qr = exec(t, conn, "delete from vt_user")
-	got = fmt.Sprintf("%v", qr.Rows)
-	want = `[]`
-	assert.Equal(t, want, got)
+	utils.AssertMatches(t, conn, "delete from vt_user", `[]`)
 
-}
-
-func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
-	t.Helper()
-	qr, err := conn.ExecuteFetch(query, 1000, true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return qr
 }

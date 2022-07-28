@@ -30,11 +30,14 @@ import (
 	"strconv"
 	"strings"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/onlineddl/vrepl"
@@ -48,78 +51,96 @@ type VReplStream struct {
 	source               string
 	pos                  string
 	timeUpdated          int64
+	timeHeartbeat        int64
+	timeThrottled        int64
+	componentThrottled   string
 	transactionTimestamp int64
 	state                string
 	message              string
+	rowsCopied           int64
 	bls                  *binlogdatapb.BinlogSource
+}
+
+// livenessTimeIndicator returns a time indicator for last known healthy state.
+// vreplication uses three indicators:
+// - transaction_timestamp
+// - time_heartbeat
+// - time_throttled.
+// Updating any of them, also updates time_updated, indicating liveness.
+func (v *VReplStream) livenessTimeIndicator() int64 {
+	return v.timeUpdated
+}
+
+// isFailed() returns true when the workflow is actively running
+func (v *VReplStream) isRunning() bool {
+	switch v.state {
+	case binlogplayer.VReplicationInit, binlogplayer.VReplicationCopying, binlogplayer.BlpRunning:
+		return true
+	}
+	return false
+}
+
+// isFailed() returns true when the workflow has failed and will not retry
+func (v *VReplStream) isFailed() bool {
+	switch {
+	case v.state == binlogplayer.BlpError:
+		return true
+	case strings.Contains(strings.ToLower(v.message), "error"):
+		return true
+	}
+	return false
 }
 
 // VRepl is an online DDL helper for VReplication based migrations (ddl_strategy="online")
 type VRepl struct {
-	workflow     string
-	keyspace     string
-	shard        string
-	dbName       string
-	sourceTable  string
-	targetTable  string
-	pos          string
-	alterOptions string
+	workflow    string
+	keyspace    string
+	shard       string
+	dbName      string
+	sourceTable string
+	targetTable string
+	pos         string
+	alterQuery  string
+	tableRows   int64
 
-	sharedPKColumns *vrepl.ColumnList
+	sourceSharedColumns              *vrepl.ColumnList
+	targetSharedColumns              *vrepl.ColumnList
+	droppedSourceNonGeneratedColumns *vrepl.ColumnList
+	droppedNoDefaultColumnNames      []string
+	expandedColumnNames              []string
+	sharedColumnsMap                 map[string]string
+	sourceAutoIncrement              uint64
 
-	sourceSharedColumns *vrepl.ColumnList
-	targetSharedColumns *vrepl.ColumnList
-	sharedColumnsMap    map[string]string
-	sourceAutoIncrement uint64
+	chosenSourceUniqueKey *vrepl.UniqueKey
+	chosenTargetUniqueKey *vrepl.UniqueKey
 
-	filterQuery string
-	bls         *binlogdatapb.BinlogSource
+	addedUniqueKeys   []*vrepl.UniqueKey
+	removedUniqueKeys []*vrepl.UniqueKey
+
+	revertibleNotes string
+	filterQuery     string
+	enumToTextMap   map[string]string
+	bls             *binlogdatapb.BinlogSource
 
 	parser *vrepl.AlterTableParser
+
+	convertCharset map[string](*binlogdatapb.CharsetConversion)
 }
 
 // NewVRepl creates a VReplication handler for Online DDL
-func NewVRepl(workflow, keyspace, shard, dbName, sourceTable, targetTable, alterOptions string) *VRepl {
+func NewVRepl(workflow, keyspace, shard, dbName, sourceTable, targetTable, alterQuery string) *VRepl {
 	return &VRepl{
-		workflow:     workflow,
-		keyspace:     keyspace,
-		shard:        shard,
-		dbName:       dbName,
-		sourceTable:  sourceTable,
-		targetTable:  targetTable,
-		alterOptions: alterOptions,
-		parser:       vrepl.NewAlterTableParser(),
+		workflow:       workflow,
+		keyspace:       keyspace,
+		shard:          shard,
+		dbName:         dbName,
+		sourceTable:    sourceTable,
+		targetTable:    targetTable,
+		alterQuery:     alterQuery,
+		parser:         vrepl.NewAlterTableParser(),
+		enumToTextMap:  map[string]string{},
+		convertCharset: map[string](*binlogdatapb.CharsetConversion){},
 	}
-}
-
-// getCandidateUniqueKeys investigates a table and returns the list of unique keys
-// candidate for chunking
-func (v *VRepl) getCandidateUniqueKeys(ctx context.Context, conn *dbconnpool.DBConnection, tableName string) (uniqueKeys [](*vrepl.UniqueKey), err error) {
-
-	query, err := sqlparser.ParseAndBind(sqlShowColumnsFrom,
-		sqltypes.StringBindVariable(v.dbName),
-		sqltypes.StringBindVariable(tableName),
-		sqltypes.StringBindVariable(v.dbName),
-		sqltypes.StringBindVariable(tableName),
-	)
-	if err != nil {
-		return uniqueKeys, err
-	}
-
-	rs, err := conn.ExecuteFetch(query, math.MaxInt64, true)
-	if err != nil {
-		return nil, err
-	}
-	for _, row := range rs.Named().Rows {
-		uniqueKey := &vrepl.UniqueKey{
-			Name:            row.AsString("INDEX_NAME", ""),
-			Columns:         *vrepl.ParseColumnList(row.AsString("COLUMN_NAMES", "")),
-			HasNullable:     row.AsBool("has_nullable", false),
-			IsAutoIncrement: row.AsBool("is_auto_increment", false),
-		}
-		uniqueKeys = append(uniqueKeys, uniqueKey)
-	}
-	return uniqueKeys, nil
 }
 
 // readAutoIncrement reads the AUTO_INCREMENT vlaue, if any, for a give ntable
@@ -158,7 +179,7 @@ func (v *VRepl) readTableColumns(ctx context.Context, conn *dbconnpool.DBConnect
 		columnNames = append(columnNames, columnName)
 
 		extra := row.AsString("Extra", "")
-		if strings.Contains(extra, "VIRTUAL") {
+		if strings.Contains(extra, "STORED GENERATED") || strings.Contains(extra, "VIRTUAL GENERATED") {
 			virtualColumnNames = append(virtualColumnNames, columnName)
 		}
 
@@ -171,6 +192,49 @@ func (v *VRepl) readTableColumns(ctx context.Context, conn *dbconnpool.DBConnect
 		return nil, nil, nil, fmt.Errorf("Found 0 columns on `%s`", tableName)
 	}
 	return vrepl.NewColumnList(columnNames), vrepl.NewColumnList(virtualColumnNames), vrepl.NewColumnList(pkColumnNames), nil
+}
+
+// readTableUniqueKeys reads all unique keys from a given table, by order of usefulness/performance: PRIMARY first, integers are better, non-null are better
+func (v *VRepl) readTableUniqueKeys(ctx context.Context, conn *dbconnpool.DBConnection, tableName string) (uniqueKeys []*vrepl.UniqueKey, err error) {
+	query, err := sqlparser.ParseAndBind(sqlSelectUniqueKeys,
+		sqltypes.StringBindVariable(v.dbName),
+		sqltypes.StringBindVariable(tableName),
+		sqltypes.StringBindVariable(v.dbName),
+		sqltypes.StringBindVariable(tableName),
+	)
+	if err != nil {
+		return nil, err
+	}
+	rs, err := conn.ExecuteFetch(query, math.MaxInt64, true)
+	if err != nil {
+		return nil, err
+	}
+	for _, row := range rs.Named().Rows {
+		uniqueKey := &vrepl.UniqueKey{
+			Name:            row.AsString("index_name", ""),
+			Columns:         *vrepl.ParseColumnList(row.AsString("column_names", "")),
+			HasNullable:     row.AsBool("has_nullable", false),
+			HasFloat:        row.AsBool("is_float", false),
+			IsAutoIncrement: row.AsBool("is_auto_increment", false),
+		}
+		uniqueKeys = append(uniqueKeys, uniqueKey)
+	}
+	return uniqueKeys, nil
+}
+
+// readTableStatus reads table status information
+func (v *VRepl) readTableStatus(ctx context.Context, conn *dbconnpool.DBConnection, tableName string) (tableRows int64, err error) {
+	parsed := sqlparser.BuildParsedQuery(sqlShowTableStatus, tableName)
+	rs, err := conn.ExecuteFetch(parsed.Query, math.MaxInt64, true)
+	if err != nil {
+		return 0, err
+	}
+	row := rs.Named().Row()
+	if row == nil {
+		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Cannot SHOW TABLE STATUS LIKE '%s'", tableName)
+	}
+	tableRows, err = row.ToInt64("Rows")
+	return tableRows, err
 }
 
 // applyColumnTypes
@@ -197,142 +261,80 @@ func (v *VRepl) applyColumnTypes(ctx context.Context, conn *dbconnpool.DBConnect
 				continue
 			}
 
+			column.DataType = row.AsString("DATA_TYPE", "") // a more canonical form of column_type
+			column.IsNullable = (row.AsString("IS_NULLABLE", "") == "YES")
+			column.IsDefaultNull = row.AsBool("is_default_null", false)
+
+			column.CharacterMaximumLength = row.AsInt64("CHARACTER_MAXIMUM_LENGTH", 0)
+			column.NumericPrecision = row.AsInt64("NUMERIC_PRECISION", 0)
+			column.NumericScale = row.AsInt64("NUMERIC_SCALE", 0)
+			column.DateTimePrecision = row.AsInt64("DATETIME_PRECISION", -1)
+
+			column.Type = vrepl.UnknownColumnType
 			if strings.Contains(columnType, "unsigned") {
 				column.IsUnsigned = true
 			}
 			if strings.Contains(columnType, "mediumint") {
-				column.Type = vrepl.MediumIntColumnType
+				column.SetTypeIfUnknown(vrepl.MediumIntColumnType)
 			}
 			if strings.Contains(columnType, "timestamp") {
-				column.Type = vrepl.TimestampColumnType
+				column.SetTypeIfUnknown(vrepl.TimestampColumnType)
 			}
 			if strings.Contains(columnType, "datetime") {
-				column.Type = vrepl.DateTimeColumnType
+				column.SetTypeIfUnknown(vrepl.DateTimeColumnType)
 			}
 			if strings.Contains(columnType, "json") {
-				column.Type = vrepl.JSONColumnType
+				column.SetTypeIfUnknown(vrepl.JSONColumnType)
 			}
 			if strings.Contains(columnType, "float") {
-				column.Type = vrepl.FloatColumnType
+				column.SetTypeIfUnknown(vrepl.FloatColumnType)
+			}
+			if strings.Contains(columnType, "double") {
+				column.SetTypeIfUnknown(vrepl.DoubleColumnType)
 			}
 			if strings.HasPrefix(columnType, "enum") {
-				column.Type = vrepl.EnumColumnType
-				column.EnumValues = vrepl.ParseEnumValues(columnType)
+				column.SetTypeIfUnknown(vrepl.EnumColumnType)
+				column.EnumValues = schema.ParseEnumValues(columnType)
+			}
+			if strings.HasPrefix(columnType, "set(") {
+				column.SetTypeIfUnknown(vrepl.SetColumnType)
+				column.EnumValues = schema.ParseSetValues(columnType)
 			}
 			if strings.HasPrefix(columnType, "binary") {
-				column.Type = vrepl.BinaryColumnType
+				column.SetTypeIfUnknown(vrepl.BinaryColumnType)
 				column.BinaryOctetLength = columnOctetLength
 			}
 			if charset := row.AsString("CHARACTER_SET_NAME", ""); charset != "" {
 				column.Charset = charset
 			}
+			if collation := row.AsString("COLLATION_NAME", ""); collation != "" {
+				column.SetTypeIfUnknown(vrepl.StringColumnType)
+				column.Collation = collation
+			}
 		}
 	}
 	return nil
-}
-
-// getSharedColumns returns the intersection of two lists of columns in same order as the first list
-func (v *VRepl) getSharedColumns(sourceColumns, targetColumns *vrepl.ColumnList, sourceVirtualColumns, targetVirtualColumns *vrepl.ColumnList, columnRenameMap map[string]string) (
-	sourceSharedColumns *vrepl.ColumnList, targetSharedColumns *vrepl.ColumnList, sharedColumnsMap map[string]string,
-) {
-	sharedColumnNames := []string{}
-	for _, sourceColumn := range sourceColumns.Names() {
-		isSharedColumn := false
-		for _, targetColumn := range targetColumns.Names() {
-			if strings.EqualFold(sourceColumn, targetColumn) {
-				// both tables have this column. Good start.
-				isSharedColumn = true
-				break
-			}
-			if strings.EqualFold(columnRenameMap[sourceColumn], targetColumn) {
-				// column in source is renamed in target
-				isSharedColumn = true
-				break
-			}
-		}
-		for _, virtualColumn := range sourceVirtualColumns.Names() {
-			// virtual/generated columns on source are silently skipped
-			if strings.EqualFold(sourceColumn, virtualColumn) {
-				isSharedColumn = false
-			}
-		}
-		for _, virtualColumn := range targetVirtualColumns.Names() {
-			// virtual/generated columns on target are silently skipped
-			if strings.EqualFold(sourceColumn, virtualColumn) {
-				isSharedColumn = false
-			}
-		}
-		if isSharedColumn {
-			sharedColumnNames = append(sharedColumnNames, sourceColumn)
-		}
-	}
-	sharedColumnsMap = map[string]string{}
-	for _, columnName := range sharedColumnNames {
-		if mapped, ok := columnRenameMap[columnName]; ok {
-			sharedColumnsMap[columnName] = mapped
-		} else {
-			sharedColumnsMap[columnName] = columnName
-		}
-	}
-	mappedSharedColumnNames := []string{}
-	for _, columnName := range sharedColumnNames {
-		mappedSharedColumnNames = append(mappedSharedColumnNames, sharedColumnsMap[columnName])
-	}
-	return vrepl.NewColumnList(sharedColumnNames), vrepl.NewColumnList(mappedSharedColumnNames), sharedColumnsMap
-}
-
-// getSharedPKColumns returns the intersection of PRIMARY KEY columns (taking renaming into consideration) between source and target tables
-func (v *VRepl) getSharedPKColumns(sourcePKColumns, targetPKColumns *vrepl.ColumnList, columnRenameMap map[string]string) (
-	sharedPKColumns *vrepl.ColumnList,
-) {
-	sharedColumnNames := []string{}
-	for _, sourceColumn := range sourcePKColumns.Names() {
-		isSharedColumn := false
-		for _, targetColumn := range targetPKColumns.Names() {
-			if strings.EqualFold(sourceColumn, targetColumn) {
-				// both tables have this column. Good start.
-				isSharedColumn = true
-				break
-			}
-			if strings.EqualFold(columnRenameMap[sourceColumn], targetColumn) {
-				// column in source is renamed in target
-				isSharedColumn = true
-				break
-			}
-		}
-		if isSharedColumn {
-			sharedColumnNames = append(sharedColumnNames, sourceColumn)
-		}
-	}
-	return vrepl.NewColumnList(sharedColumnNames)
-}
-
-// getSharedUniqueKeys returns the intersection of two given unique keys,
-// testing by list of columns
-func (v *VRepl) getSharedUniqueKeys(sourceUniqueKeys, targetUniqueKeys [](*vrepl.UniqueKey)) (uniqueKeys [](*vrepl.UniqueKey), err error) {
-	// We actually do NOT rely on key name, just on the set of columns. This is because maybe
-	// the ALTER is on the name itself...
-	for _, sourceUniqueKey := range sourceUniqueKeys {
-		for _, targetUniqueKey := range targetUniqueKeys {
-			if sourceUniqueKey.Columns.EqualsByNames(&targetUniqueKey.Columns) {
-				uniqueKeys = append(uniqueKeys, sourceUniqueKey)
-			}
-		}
-	}
-	return uniqueKeys, nil
 }
 
 func (v *VRepl) analyzeAlter(ctx context.Context) error {
-	if err := v.parser.ParseAlterStatement(v.alterOptions); err != nil {
+	if v.alterQuery == "" {
+		// Happens for REVERT
+		return nil
+	}
+	if err := v.parser.ParseAlterStatement(v.alterQuery); err != nil {
 		return err
 	}
 	if v.parser.IsRenameTable() {
-		return fmt.Errorf("Renaming the table is not aupported in ALTER TABLE: %s", v.alterOptions)
+		return fmt.Errorf("Renaming the table is not aupported in ALTER TABLE: %s", v.alterQuery)
 	}
 	return nil
 }
 
-func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection) error {
+func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection) (err error) {
+	v.tableRows, err = v.readTableStatus(ctx, conn, v.sourceTable)
+	if err != nil {
+		return err
+	}
 	// columns:
 	sourceColumns, sourceVirtualColumns, sourcePKColumns, err := v.readTableColumns(ctx, conn, v.sourceTable)
 	if err != nil {
@@ -342,23 +344,99 @@ func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection
 	if err != nil {
 		return err
 	}
-	v.sourceSharedColumns, v.targetSharedColumns, v.sharedColumnsMap = v.getSharedColumns(sourceColumns, targetColumns, sourceVirtualColumns, targetVirtualColumns, v.parser.ColumnRenameMap())
+	v.sourceSharedColumns, v.targetSharedColumns, v.droppedSourceNonGeneratedColumns, v.sharedColumnsMap = vrepl.GetSharedColumns(sourceColumns, targetColumns, sourceVirtualColumns, targetVirtualColumns, v.parser)
 
-	v.sharedPKColumns = v.getSharedPKColumns(sourcePKColumns, targetPKColumns, v.parser.ColumnRenameMap())
-	if v.sharedPKColumns.Len() == 0 {
-		// TODO(shlomi): need to carefully examine what happens when we extend/reduce a PRIMARY KEY
-		// is a column subset OK?
-		return fmt.Errorf("Found no shared PRIMARY KEY columns between `%s` and `%s`", v.sourceTable, v.targetTable)
+	// unique keys
+	sourceUniqueKeys, err := v.readTableUniqueKeys(ctx, conn, v.sourceTable)
+	if err != nil {
+		return err
 	}
+	if len(sourceUniqueKeys) == 0 {
+		return fmt.Errorf("Found no possible unique key on `%s`", v.sourceTable)
+	}
+	targetUniqueKeys, err := v.readTableUniqueKeys(ctx, conn, v.targetTable)
+	if err != nil {
+		return err
+	}
+	if len(targetUniqueKeys) == 0 {
+		return fmt.Errorf("Found no possible unique key on `%s`", v.targetTable)
+	}
+	v.chosenSourceUniqueKey, v.chosenTargetUniqueKey = vrepl.GetSharedUniqueKeys(sourceUniqueKeys, targetUniqueKeys, v.parser.ColumnRenameMap())
+	if v.chosenSourceUniqueKey == nil {
+		// VReplication supports completely different unique keys on source and target, covering
+		// some/completely different columns. The condition is that the key on source
+		// must use columns which all exist on target table.
+		v.chosenSourceUniqueKey = vrepl.GetUniqueKeyCoveredByColumns(sourceUniqueKeys, v.sourceSharedColumns)
+		if v.chosenSourceUniqueKey == nil {
+			// Still no luck.
+			return fmt.Errorf("Found no possible unique key on `%s` whose columns are in target table `%s`", v.sourceTable, v.targetTable)
+		}
+	}
+	if v.chosenTargetUniqueKey == nil {
+		// VReplication supports completely different unique keys on source and target, covering
+		// some/completely different columns. The condition is that the key on target
+		// must use columns which all exist on source table.
+		v.chosenTargetUniqueKey = vrepl.GetUniqueKeyCoveredByColumns(targetUniqueKeys, v.targetSharedColumns)
+		if v.chosenTargetUniqueKey == nil {
+			// Still no luck.
+			return fmt.Errorf("Found no possible unique key on `%s` whose columns are in source table `%s`", v.targetTable, v.sourceTable)
+		}
+	}
+	if v.chosenSourceUniqueKey == nil || v.chosenTargetUniqueKey == nil {
+		return fmt.Errorf("Found no shared, not nullable, unique keys between `%s` and `%s`", v.sourceTable, v.targetTable)
+	}
+	v.addedUniqueKeys = vrepl.AddedUniqueKeys(sourceUniqueKeys, targetUniqueKeys, v.parser.ColumnRenameMap())
+	v.removedUniqueKeys = vrepl.RemovedUniqueKeys(sourceUniqueKeys, targetUniqueKeys, v.parser.ColumnRenameMap())
 
-	if err := v.applyColumnTypes(ctx, conn, v.sourceTable, sourceColumns, sourceVirtualColumns, sourcePKColumns, v.sourceSharedColumns, v.sharedPKColumns); err != nil {
+	// chosen source & target unique keys have exact columns in same order
+	sharedPKColumns := &v.chosenSourceUniqueKey.Columns
+
+	if err := v.applyColumnTypes(ctx, conn, v.sourceTable, sourceColumns, sourceVirtualColumns, sourcePKColumns, v.sourceSharedColumns, sharedPKColumns, v.droppedSourceNonGeneratedColumns); err != nil {
 		return err
 	}
 	if err := v.applyColumnTypes(ctx, conn, v.targetTable, targetColumns, targetVirtualColumns, targetPKColumns, v.targetSharedColumns); err != nil {
 		return err
 	}
 
+	for _, sourcePKColumn := range sharedPKColumns.Columns() {
+		mappedColumn := v.targetSharedColumns.GetColumn(sourcePKColumn.Name)
+		if sourcePKColumn.Type == vrepl.EnumColumnType && mappedColumn.Type == vrepl.EnumColumnType {
+			// An ENUM as part of PRIMARY KEY. We must convert it to text because OMG that's complicated.
+			// There's a scenario where a query may modify the enum value (and it's bad practice, seeing
+			// that it's part of the PK, but it's still valid), and in that case we must have the string value
+			// to be able to DELETE the old row
+			v.targetSharedColumns.SetEnumToTextConversion(mappedColumn.Name, sourcePKColumn.EnumValues)
+			v.enumToTextMap[sourcePKColumn.Name] = sourcePKColumn.EnumValues
+		}
+	}
+
+	for i := range v.sourceSharedColumns.Columns() {
+		sourceColumn := v.sourceSharedColumns.Columns()[i]
+		mappedColumn := v.targetSharedColumns.Columns()[i]
+		if sourceColumn.Type == vrepl.EnumColumnType && mappedColumn.Type != vrepl.EnumColumnType && mappedColumn.Charset != "" {
+			// A column is converted from ENUM type to textual type
+			v.targetSharedColumns.SetEnumToTextConversion(mappedColumn.Name, sourceColumn.EnumValues)
+			v.enumToTextMap[sourceColumn.Name] = sourceColumn.EnumValues
+		}
+	}
+
+	v.droppedNoDefaultColumnNames = vrepl.GetNoDefaultColumnNames(v.droppedSourceNonGeneratedColumns)
+	var expandedDescriptions map[string]string
+	v.expandedColumnNames, expandedDescriptions = vrepl.GetExpandedColumnNames(v.sourceSharedColumns, v.targetSharedColumns)
+
 	v.sourceAutoIncrement, err = v.readAutoIncrement(ctx, conn, v.sourceTable)
+
+	notes := []string{}
+	for _, uk := range v.removedUniqueKeys {
+		notes = append(notes, fmt.Sprintf("unique constraint removed: %s", uk.Name))
+	}
+	for _, name := range v.droppedNoDefaultColumnNames {
+		notes = append(notes, fmt.Sprintf("column %s dropped, and had no default value", name))
+	}
+	for _, name := range v.expandedColumnNames {
+		notes = append(notes, fmt.Sprintf("column %s: %s", name, expandedDescriptions[name]))
+	}
+	v.revertibleNotes = strings.Join(notes, "\n")
 	if err != nil {
 		return err
 	}
@@ -374,18 +452,50 @@ func (v *VRepl) generateFilterQuery(ctx context.Context) error {
 	}
 	var sb strings.Builder
 	sb.WriteString("select ")
-	for i, col := range v.sourceSharedColumns.Columns() {
-		name := col.Name
+
+	for i, sourceCol := range v.sourceSharedColumns.Columns() {
+		name := sourceCol.Name
 		targetName := v.sharedColumnsMap[name]
+
+		targetCol := v.targetSharedColumns.GetColumn(targetName)
+		if targetCol == nil {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Cannot find target column %s", targetName)
+		}
 
 		if i > 0 {
 			sb.WriteString(", ")
 		}
-		switch col.Type {
-		case vrepl.JSONColumnType:
-			sb.WriteString("convert(")
-			sb.WriteString(escapeName(name))
-			sb.WriteString(" using utf8mb4)")
+		switch {
+		case sourceCol.EnumToTextConversion:
+			sb.WriteString(fmt.Sprintf("CONCAT(%s)", escapeName(name)))
+		case sourceCol.Type == vrepl.JSONColumnType:
+			sb.WriteString(fmt.Sprintf("convert(%s using utf8mb4)", escapeName(name)))
+		case sourceCol.Type == vrepl.StringColumnType:
+			// Check source and target charset/encoding. If needed, create
+			// a binlogdatapb.CharsetConversion entry (later written to vreplication)
+			fromEncoding, ok := mysql.CharacterSetEncoding[sourceCol.Charset]
+			if !ok {
+				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Character set %s not supported for column %s", sourceCol.Charset, sourceCol.Name)
+			}
+			toEncoding, ok := mysql.CharacterSetEncoding[targetCol.Charset]
+			// Let's see if target col is at all textual
+			if targetCol.Type == vrepl.StringColumnType && !ok {
+				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Character set %s not supported for column %s", targetCol.Charset, targetCol.Name)
+			}
+			if fromEncoding == nil && toEncoding == nil && targetCol.Type != vrepl.JSONColumnType {
+				// Both source and target have trivial charsets
+				sb.WriteString(escapeName(name))
+			} else {
+				// encoding can be nil for trivial charsets, like utf8, ascii, binary, etc.
+				v.convertCharset[targetName] = &binlogdatapb.CharsetConversion{
+					FromCharset: sourceCol.Charset,
+					ToCharset:   targetCol.Charset,
+				}
+				sb.WriteString(fmt.Sprintf("convert(%s using utf8mb4)", escapeName(name)))
+			}
+		case targetCol.Type == vrepl.JSONColumnType && sourceCol.Type != vrepl.JSONColumnType:
+			// Convert any type to JSON: encode the type as utf8mb4 text
+			sb.WriteString(fmt.Sprintf("convert(%s using utf8mb4)", escapeName(name)))
 		default:
 			sb.WriteString(escapeName(name))
 		}
@@ -406,10 +516,24 @@ func (v *VRepl) analyzeBinlogSource(ctx context.Context) {
 		Filter:        &binlogdatapb.Filter{},
 		StopAfterCopy: false,
 	}
-	rule := &binlogdatapb.Rule{
-		Match:  v.targetTable,
-		Filter: v.filterQuery,
+
+	encodeColumns := func(columns *vrepl.ColumnList) string {
+		return textutil.EscapeJoin(columns.Names(), ",")
 	}
+	rule := &binlogdatapb.Rule{
+		Match:                        v.targetTable,
+		Filter:                       v.filterQuery,
+		SourceUniqueKeyColumns:       encodeColumns(&v.chosenSourceUniqueKey.Columns),
+		TargetUniqueKeyColumns:       encodeColumns(&v.chosenTargetUniqueKey.Columns),
+		SourceUniqueKeyTargetColumns: encodeColumns(v.chosenSourceUniqueKey.Columns.MappedNamesColumnList(v.sharedColumnsMap)),
+	}
+	if len(v.convertCharset) > 0 {
+		rule.ConvertCharset = v.convertCharset
+	}
+	if len(v.enumToTextMap) > 0 {
+		rule.ConvertEnumToText = v.enumToTextMap
+	}
+
 	bls.Filter.Rules = append(bls.Filter.Rules, rule)
 	v.bls = bls
 }
@@ -431,7 +555,7 @@ func (v *VRepl) analyze(ctx context.Context, conn *dbconnpool.DBConnection) erro
 // generateInsertStatement generates the INSERT INTO _vt.replication stataement that creates the vreplication workflow
 func (v *VRepl) generateInsertStatement(ctx context.Context) (string, error) {
 	ig := vreplication.NewInsertGenerator(binlogplayer.BlpStopped, v.dbName)
-	ig.AddRow(v.workflow, v.bls, v.pos, "", "MASTER")
+	ig.AddRow(v.workflow, v.bls, v.pos, "", "in_order:REPLICA,PRIMARY")
 
 	return ig.String(), nil
 }

@@ -13,26 +13,62 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { useQuery, useQueryClient, UseQueryOptions } from 'react-query';
 import {
+    useMutation,
+    UseMutationOptions,
+    useQueries,
+    useQuery,
+    useQueryClient,
+    UseQueryOptions,
+    UseQueryResult,
+} from 'react-query';
+import {
+    fetchBackups,
     fetchClusters,
     fetchExperimentalTabletDebugVars,
     fetchGates,
+    fetchKeyspace,
     fetchKeyspaces,
     fetchSchema,
     FetchSchemaParams,
     fetchSchemas,
     fetchTablet,
+    FetchTabletParams,
+    pingTablet,
     fetchTablets,
     fetchVSchema,
     FetchVSchemaParams,
+    fetchVtctlds,
     fetchVTExplain,
     fetchWorkflow,
     fetchWorkflows,
+    TabletDebugVarsResponse,
+    refreshState,
+    runHealthCheck,
+    deleteTablet,
+    refreshTabletReplicationSource,
+    startReplication,
+    stopReplication,
+    setReadOnly,
+    setReadWrite,
+    ValidateKeyspaceParams,
+    validateKeyspace,
+    validateSchemaKeyspace,
+    ValidateSchemaKeyspaceParams,
+    ValidateVersionKeyspaceParams,
+    validateVersionKeyspace,
+    fetchShardReplicationPositions,
+    createKeyspace,
+    reloadSchema,
 } from '../api/http';
 import { vtadmin as pb } from '../proto/vtadmin';
-import { TabletDebugVars } from '../util/tabletDebugVars';
 import { formatAlias } from '../util/tablets';
+
+/**
+ * useBackups is a query hook that fetches all backups across every cluster.
+ */
+export const useBackups = (options?: UseQueryOptions<pb.ClusterBackup[], Error> | undefined) =>
+    useQuery(['backups'], fetchBackups, options);
 
 /**
  * useClusters is a query hook that fetches all clusters VTAdmin is configured to discover.
@@ -45,6 +81,37 @@ export const useClusters = (options?: UseQueryOptions<pb.Cluster[], Error> | und
  */
 export const useGates = (options?: UseQueryOptions<pb.VTGate[], Error> | undefined) =>
     useQuery(['gates'], fetchGates, options);
+
+/**
+ * useKeyspace is a query hook that fetches a single keyspace by name.
+ */
+export const useKeyspace = (
+    params: Parameters<typeof fetchKeyspace>[0],
+    options?: UseQueryOptions<pb.Keyspace, Error>
+) => {
+    const queryClient = useQueryClient();
+    return useQuery(['keyspace', params], () => fetchKeyspace(params), {
+        initialData: () => {
+            const keyspaces = queryClient.getQueryData<pb.Keyspace[]>('keyspaces');
+            return (keyspaces || []).find(
+                (k) => k.cluster?.id === params.clusterID && k.keyspace?.name === params.name
+            );
+        },
+        ...options,
+    });
+};
+
+/**
+ * useCreateKeyspace is a mutation query hook that creates a keyspace.
+ */
+export const useCreateKeyspace = (
+    params: Parameters<typeof createKeyspace>[0],
+    options: UseMutationOptions<Awaited<ReturnType<typeof createKeyspace>>, Error>
+) => {
+    return useMutation<Awaited<ReturnType<typeof createKeyspace>>, Error>(() => {
+        return createKeyspace(params);
+    }, options);
+};
 
 /**
  * useKeyspaces is a query hook that fetches all keyspaces across every cluster.
@@ -65,6 +132,12 @@ export const useTablets = (options?: UseQueryOptions<pb.Tablet[], Error> | undef
     useQuery(['tablets'], fetchTablets, options);
 
 /**
+ * useVtctlds is a query hook that fetches all vtctlds across every cluster.
+ */
+export const useVtctlds = (options?: UseQueryOptions<pb.Vtctld[], Error> | undefined) =>
+    useQuery(['vtctlds'], fetchVtctlds, options);
+
+/**
  * useTablet is a query hook that fetches a single tablet by alias.
  */
 export const useTablet = (params: Parameters<typeof fetchTablet>[0], options?: UseQueryOptions<pb.Tablet, Error>) => {
@@ -80,15 +153,144 @@ export const useTablet = (params: Parameters<typeof fetchTablet>[0], options?: U
     });
 };
 
+/**
+ *
+ * useDeleteTablet is a mutate hook that deletes a tablet by alias and optionally, cluster id.
+ */
+export const useDeleteTablet = (
+    params: Parameters<typeof deleteTablet>[0],
+    options: UseMutationOptions<Awaited<ReturnType<typeof deleteTablet>>, Error>
+) => {
+    return useMutation<Awaited<ReturnType<typeof deleteTablet>>, Error>(() => {
+        return deleteTablet(params);
+    }, options);
+};
+
+/**
+ * useRefreshTabletReplicationSource performs a `CHANGE REPLICATION SOURCE TO`
+ * on a tablet to replicate from the current primary in the shard.
+ */
+export const useRefreshTabletReplicationSource = (
+    params: Parameters<typeof refreshTabletReplicationSource>[0],
+    options: UseMutationOptions<Awaited<ReturnType<typeof refreshTabletReplicationSource>>, Error>
+) => {
+    return useMutation<Awaited<ReturnType<typeof refreshTabletReplicationSource>>, Error>(() => {
+        return refreshTabletReplicationSource(params);
+    }, options);
+};
+
+/**
+ * useSetReadOnly sets the tablet to read only
+ */
+export const useSetReadOnly = (
+    params: Parameters<typeof setReadOnly>[0],
+    options: UseMutationOptions<Awaited<ReturnType<typeof setReadOnly>>, Error>
+) => {
+    return useMutation<Awaited<ReturnType<typeof setReadOnly>>, Error>(() => {
+        return setReadOnly(params);
+    }, options);
+};
+
+/**
+ * useSetReadWrite sets the tablet to read only
+ */
+export const useSetReadWrite = (
+    params: Parameters<typeof setReadWrite>[0],
+    options: UseMutationOptions<Awaited<ReturnType<typeof setReadWrite>>, Error>
+) => {
+    return useMutation<Awaited<ReturnType<typeof setReadWrite>>, Error>(() => {
+        return setReadWrite(params);
+    }, options);
+};
+
+/**
+ * useShardReplicationPositions is a query hook that shows the replication status
+ * of each replica machine in the shard graph.
+ */
+export const useShardReplicationPositions = (
+    params: Parameters<typeof fetchShardReplicationPositions>[0],
+    options?: UseQueryOptions<pb.GetShardReplicationPositionsResponse, Error> | undefined
+) => useQuery(['shard_replication_positions', params], () => fetchShardReplicationPositions(params), options);
+
+/**
+ * useStartReplication starts replication on the specified tablet.
+ */
+export const useStartReplication = (
+    params: Parameters<typeof startReplication>[0],
+    options: UseMutationOptions<Awaited<ReturnType<typeof startReplication>>, Error>
+) => {
+    return useMutation<Awaited<ReturnType<typeof startReplication>>, Error>(() => {
+        return startReplication(params);
+    }, options);
+};
+
+/**
+ * useStopReplication stops replication on the specified tablet.
+ */
+export const useStopReplication = (
+    params: Parameters<typeof stopReplication>[0],
+    options: UseMutationOptions<Awaited<ReturnType<typeof stopReplication>>, Error>
+) => {
+    return useMutation<Awaited<ReturnType<typeof stopReplication>>, Error>(() => {
+        return stopReplication(params);
+    }, options);
+};
+
+/**
+ * usePingTablet is a query hook that pings a single tablet by tablet alias and (optionally) cluster id.
+ */
+export const usePingTablet = (
+    params: Parameters<typeof pingTablet>[0],
+    options?: UseQueryOptions<pb.PingTabletResponse, Error>
+) => {
+    return useQuery(['ping-tablet', params], () => pingTablet(params), options);
+};
+
+/**
+ * useRefreshState is a query hook that reloads the tablet record on the specified tablet.
+ */
+export const useRefreshState = (
+    params: Parameters<typeof refreshState>[0],
+    options?: UseQueryOptions<pb.RefreshStateResponse, Error>
+) => {
+    return useQuery(['refresh-state', params], () => refreshState(params), options);
+};
+
+/**
+ * useRefreshState is a query hook that reloads the tablet record on the specified tablet.
+ */
+export const useHealthCheck = (
+    params: Parameters<typeof runHealthCheck>[0],
+    options?: UseQueryOptions<pb.RunHealthCheckResponse, Error>
+) => {
+    return useQuery(['run-health-check', params], () => runHealthCheck(params), options);
+};
+
 export const useExperimentalTabletDebugVars = (
-    params: Parameters<typeof fetchExperimentalTabletDebugVars>[0],
-    options?: UseQueryOptions<TabletDebugVars, Error>
+    params: FetchTabletParams,
+    options?: UseQueryOptions<TabletDebugVarsResponse, Error>
 ) => {
     return useQuery(
         ['experimental/tablet/debug/vars', params],
         () => fetchExperimentalTabletDebugVars(params),
         options
     );
+};
+
+// Future enhancement: add vtadmin-api endpoint to fetch /debug/vars
+// for multiple tablets in a single request. https://github.com/vitessio/vitess/projects/12#card-63086674
+export const useManyExperimentalTabletDebugVars = (
+    params: FetchTabletParams[],
+    defaultOptions: UseQueryOptions<TabletDebugVarsResponse, Error> = {}
+) => {
+    // Robust typing for useQueries is still in progress, so we do
+    // some sneaky type-casting. See https://github.com/tannerlinsley/react-query/issues/1675
+    const queries = params.map((p) => ({
+        queryKey: ['experimental/tablet/debug/vars', p],
+        queryFn: () => fetchExperimentalTabletDebugVars(p),
+        ...(defaultOptions as any),
+    }));
+    return useQueries(queries) as UseQueryResult<TabletDebugVarsResponse, Error>[];
 };
 
 /**
@@ -137,6 +339,42 @@ export const useSchema = (params: FetchSchemaParams, options?: UseQueryOptions<p
         },
         ...options,
     });
+};
+
+/**
+ * useValidateKeyspace is a query hook that validates that all nodes reachable from the specified keyspace are consistent.
+ */
+export const useValidateKeyspace = (
+    params: ValidateKeyspaceParams,
+    options?: UseMutationOptions<Awaited<ReturnType<typeof validateKeyspace>>, Error>
+) => {
+    return useMutation<Awaited<ReturnType<typeof validateKeyspace>>, Error>(() => {
+        return validateKeyspace(params);
+    }, options);
+};
+
+/**
+ * useValidateKeyspace is a query hook that validates that all nodes reachable from the specified keyspace are consistent.
+ */
+export const useValidateSchemaKeyspace = (
+    params: ValidateSchemaKeyspaceParams,
+    options?: UseMutationOptions<Awaited<ReturnType<typeof validateSchemaKeyspace>>, Error>
+) => {
+    return useMutation<Awaited<ReturnType<typeof validateSchemaKeyspace>>, Error>(() => {
+        return validateSchemaKeyspace(params);
+    }, options);
+};
+
+/**
+ * useValidateVersion is a query hook that validates that all nodes reachable from the specified keyspace are consistent.
+ */
+export const useValidateVersionKeyspace = (
+    params: ValidateVersionKeyspaceParams,
+    options?: UseMutationOptions<Awaited<ReturnType<typeof validateVersionKeyspace>>, Error>
+) => {
+    return useMutation<Awaited<ReturnType<typeof validateVersionKeyspace>>, Error>(() => {
+        return validateVersionKeyspace(params);
+    }, options);
 };
 
 /**
@@ -191,4 +429,17 @@ export const useWorkflow = (
         },
         ...options,
     });
+};
+
+/**
+ * useReloadSchema is a mutate hook that reloads schemas in one or more
+ * keyspaces, shards, or tablets in the cluster, depending on the request parameters.
+ */
+export const useReloadSchema = (
+    params: Parameters<typeof reloadSchema>[0],
+    options?: UseMutationOptions<Awaited<ReturnType<typeof reloadSchema>>, Error>
+) => {
+    return useMutation<Awaited<ReturnType<typeof reloadSchema>>, Error>(() => {
+        return reloadSchema(params);
+    }, options);
 };

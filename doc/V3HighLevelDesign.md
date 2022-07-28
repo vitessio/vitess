@@ -6,7 +6,7 @@ The goal of this document is to describe the guiding principles that will be use
 
 ### Prerequisites
 
-Before reading this doc you must be familiar with [vindexes](https://github.com/vitessio/vitess/blob/master/doc/V3VindexDesign.md), which is used as foundation for the arguments presented here.
+Before reading this doc you must be familiar with [vindexes](https://github.com/vitessio/vitess/blob/main/doc/V3VindexDesign.md), which is used as foundation for the arguments presented here.
 
 # Background
 
@@ -1194,7 +1194,7 @@ The overall strategy is as follows:
 
 In order to align ourselves with our priorities, we’ll start off with a limited set of primitives, and then we can expand from there.
 
-VTGate already has `Route` and `RouteMerge` as primitives. To this list, let’s add `Join` and `LeftJoin`. Using these primitives, we should be able to cover priorities 1-3 (mentioned in the [Prioritization](https://github.com/vitessio/vitess/blob/master/doc/V3HighLevelDesign.md#prioritization) section). So, any constructs that will require VTGate to do additional work will not be supported. Here’s a recap of what each primitive must do:
+VTGate already has `Route` and `RouteMerge` as primitives. To this list, let’s add `Join` and `LeftJoin`. Using these primitives, we should be able to cover priorities 1-3 (mentioned in the [Prioritization](https://github.com/vitessio/vitess/blob/main/doc/V3HighLevelDesign.md#prioritization) section). So, any constructs that will require VTGate to do additional work will not be supported. Here’s a recap of what each primitive must do:
 
 * `Route`: Sends a query to a single shard or unsharded keyspace.
 * `RouteMerge`: Sends a (mostly) identical query to multiple shards and returns the combined results in no particular order.
@@ -1678,7 +1678,7 @@ Currently, the AST contains only information parsed from the query. When we anal
 
 Since we need them again for resolving dependencies, we have to store them somewhere. We also have to retrieve the right one for each subquery. This gives rise to a dependency issue: Subqueries can be anywhere in the parse tree. So, it’s unnatural to have an outside data structure that points to various parts of the AST.
 
-So, we make a compromise: we extend the Select structure and add a Symbols (interface{}) member to it. Every time we finish analyzing a subquery, we set the Symbols member to point to the symbol table. With this compromise, the rest of the code base will flow naturally while resolving dependencies.
+So, we make a compromise: we extend the Select structure and add a Symbols (any) member to it. Every time we finish analyzing a subquery, we set the Symbols member to point to the symbol table. With this compromise, the rest of the code base will flow naturally while resolving dependencies.
 
 ## Plan generation
 
@@ -1735,4 +1735,3 @@ Filter:
 ## Other expensive primitives
 
 The rest of the primitives have potentially unbounded memory consequences. For these, we’ll have to explore map-reduce based approaches.
-

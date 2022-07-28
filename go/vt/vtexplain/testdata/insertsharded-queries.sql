@@ -25,3 +25,13 @@ With the multi-shard autocommit option selected all inserts happen in one
 round trip so there is no race
 */
 insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into music_extra (id, extra) values (1, 'a'), (2, 'b'), (3, 'c');
+
+/*
+ Explicit begin and commit are needed to make the vtexplain output predicable for tests to pass.
+ the lookup queries gets executed without a transaction.
+ That is evident from the fact that begin only gets executed when origin insert statement is executed
+ and not the lookup query.
+ */
+begin;
+insert into member (lkp, more_id, id) values ("a", 1, 1), ("b", 1, 3), ("c", 1, 1) on duplicate key update more_id = 2;
+commit;

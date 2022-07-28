@@ -21,8 +21,17 @@ import './index.css';
 import './components/charts/charts.scss';
 
 import { App } from './components/App';
+import * as errorHandler from './errors/errorHandler';
 
-const queryClient = new QueryClient();
+errorHandler.initialize();
+
+const queryClient = new QueryClient({
+    defaultOptions: {
+        queries: {
+            refetchOnWindowFocus: false,
+        },
+    },
+});
 
 ReactDOM.render(
     <React.StrictMode>

@@ -1,0 +1,58 @@
+version: "2.1"
+services:
+  consul1:
+    image: consul:latest
+    hostname: "consul1"
+    ports:
+      - "8400:8400"
+      - "8500:8500"
+      - "8600:8600"
+    command: "agent -server -bootstrap-expect 3 -ui -disable-host-node-id -client 0.0.0.0"
+  consul2:
+    image: consul:latest
+    hostname: "consul2"
+    expose:
+      - "8400"
+      - "8500"
+      - "8600"
+    command: "agent -server -retry-join consul1 -disable-host-node-id"
+    depends_on:
+      - consul1
+  consul3:
+    image: consul:latest
+    hostname: "consul3"
+    expose:
+      - "8400"
+      - "8500"
+      - "8600"
+    command: "agent -server -retry-join consul1 -disable-host-node-id"
+    depends_on:
+      - consul1
+  # This is a convenience container to quickly test vitess against an external database.
+  # In practice you will point Vitess to your existing database and migrate to a Vitess managed cluster.
+  external_db_host:
+    build:
+      context: ./external_db/mysql
+      dockerfile: Dockerfile
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-pass}
+      MYSQL_DATABASE: ${DB:-commerce}
+      MYSQL_USER: ${DB_USER:-external_db_user}
+      MYSQL_PASSWORD: ${DB_PASS:-external_db_password}
+    volumes:
+      - ./external_db/mysql/:/docker-entrypoint-initdb.d/
+      - ./external_db/mysql/log:/var/log/mysql
+    command:
+      - --server-id=1
+      - --log-bin=mysql-bin
+      - --gtid_mode=ON
+      - --enforce_gtid_consistency
+      - --general_log=1
+      - --slow_query_log=1
+    healthcheck:
+      test: "/usr/bin/mysql --user=root --password=$${MYSQL_ROOT_PASSWORD} --execute \"SHOW DATABASES;\""
+      timeout: 10s
+      retries: 10
+    ports:
+      - "3306"

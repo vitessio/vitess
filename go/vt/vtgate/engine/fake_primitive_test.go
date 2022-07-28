@@ -17,6 +17,7 @@ limitations under the License.
 package engine
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"strings"
@@ -38,6 +39,8 @@ type fakePrimitive struct {
 	sendErr error
 
 	log []string
+
+	allResultsInOneCall bool
 }
 
 func (f *fakePrimitive) Inputs() []Primitive {
@@ -63,7 +66,7 @@ func (f *fakePrimitive) GetTableName() string {
 	return "fakeTable"
 }
 
-func (f *fakePrimitive) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (f *fakePrimitive) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	f.log = append(f.log, fmt.Sprintf("Execute %v %v", printBindVars(bindVars), wantfields))
 	if f.results == nil {
 		return nil, f.sendErr
@@ -77,42 +80,48 @@ func (f *fakePrimitive) Execute(vcursor VCursor, bindVars map[string]*querypb.Bi
 	return r, nil
 }
 
-func (f *fakePrimitive) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (f *fakePrimitive) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	f.log = append(f.log, fmt.Sprintf("StreamExecute %v %v", printBindVars(bindVars), wantfields))
 	if f.results == nil {
 		return f.sendErr
 	}
 
-	r := f.results[f.curResult]
-	f.curResult++
-	if r == nil {
-		return f.sendErr
-	}
-	if err := callback(&sqltypes.Result{Fields: r.Fields}); err != nil {
-		return err
-	}
-	result := &sqltypes.Result{}
-	for i := 0; i < len(r.Rows); i++ {
-		result.Rows = append(result.Rows, r.Rows[i])
-		// Send only two rows at a time.
-		if i%2 == 1 {
+	readMoreResults := true
+	for readMoreResults && f.curResult < len(f.results) {
+		readMoreResults = f.allResultsInOneCall
+		r := f.results[f.curResult]
+		f.curResult++
+		if r == nil {
+			return f.sendErr
+		}
+		if wantfields {
+			if err := callback(&sqltypes.Result{Fields: r.Fields}); err != nil {
+				return err
+			}
+		}
+		result := &sqltypes.Result{}
+		for i := 0; i < len(r.Rows); i++ {
+			result.Rows = append(result.Rows, r.Rows[i])
+			// Send only two rows at a time.
+			if i%2 == 1 {
+				if err := callback(result); err != nil {
+					return err
+				}
+				result = &sqltypes.Result{}
+			}
+		}
+		if len(result.Rows) != 0 {
 			if err := callback(result); err != nil {
 				return err
 			}
-			result = &sqltypes.Result{}
 		}
 	}
-	if len(result.Rows) != 0 {
-		if err := callback(result); err != nil {
-			return err
-		}
-	}
+
 	return nil
 }
-
-func (f *fakePrimitive) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (f *fakePrimitive) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	f.log = append(f.log, fmt.Sprintf("GetFields %v", printBindVars(bindVars)))
-	return f.Execute(vcursor, bindVars, true /* wantfields */)
+	return f.TryExecute(ctx, vcursor, bindVars, true /* wantfields */)
 }
 
 func (f *fakePrimitive) ExpectLog(t *testing.T, want []string) {
@@ -128,7 +137,7 @@ func (f *fakePrimitive) NeedsTransaction() bool {
 
 func wrapStreamExecute(prim Primitive, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	var result *sqltypes.Result
-	err := prim.StreamExecute(vcursor, bindVars, wantfields, func(r *sqltypes.Result) error {
+	err := prim.TryStreamExecute(context.Background(), vcursor, bindVars, wantfields, func(r *sqltypes.Result) error {
 		if result == nil {
 			result = r
 		} else {

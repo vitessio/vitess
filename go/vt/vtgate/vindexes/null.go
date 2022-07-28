@@ -18,6 +18,7 @@ package vindexes
 
 import (
 	"bytes"
+	"context"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -64,7 +65,7 @@ func (vind *Null) NeedsVCursor() bool {
 }
 
 // Map can map ids to key.Destination objects.
-func (vind *Null) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+func (vind *Null) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	out := make([]key.Destination, 0, len(ids))
 	for i := 0; i < len(ids); i++ {
 		out = append(out, key.DestinationKeyspaceID(nullksid))
@@ -73,7 +74,7 @@ func (vind *Null) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, 
 }
 
 // Verify returns true if ids maps to ksids.
-func (vind *Null) Verify(cursor VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
+func (vind *Null) Verify(ctx context.Context, vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
 	out := make([]bool, len(ids))
 	for i := range ids {
 		out[i] = bytes.Equal(nullksid, ksids[i])

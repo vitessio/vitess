@@ -19,19 +19,18 @@ package unsharded
 import (
 	"context"
 	"flag"
-	"fmt"
 	"os"
 	"sync"
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/test/endtoend/utils"
+
 	"github.com/stretchr/testify/assert"
 
-	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
@@ -65,7 +64,7 @@ func TestMain(m *testing.M) {
 		}
 
 		// Start vtgate
-		clusterInstance.VtGateExtraArgs = []string{"-dbddl_plugin", "noop", "-mysql_server_query_timeout", "60s"}
+		clusterInstance.VtGateExtraArgs = []string{"--dbddl_plugin", "noop", "--mysql_server_query_timeout", "60s"}
 		vtgateProcess := clusterInstance.NewVtgateInstance()
 		vtgateProcess.SysVarSetEnabled = true
 		if err := vtgateProcess.Setup(); err != nil {
@@ -97,7 +96,7 @@ func TestDBDDLPlugin(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			qr := exec(t, conn, `create database aaa`)
+			qr := utils.Exec(t, conn, `create database aaa`)
 			require.EqualValues(t, 1, qr.RowsAffected)
 		}()
 		time.Sleep(300 * time.Millisecond)
@@ -106,15 +105,15 @@ func TestDBDDLPlugin(t *testing.T) {
 		// wait until the create database query has returned
 		wg.Wait()
 
-		exec(t, conn, `use aaa`)
-		exec(t, conn, `create table t (id bigint primary key)`)
-		exec(t, conn, `insert into t(id) values (1),(2),(3),(4),(5)`)
-		assertMatches(t, conn, "select count(*) from t", `[[INT64(5)]]`)
+		utils.Exec(t, conn, `use aaa`)
+		utils.Exec(t, conn, `create table t (id bigint primary key)`)
+		utils.Exec(t, conn, `insert into t(id) values (1),(2),(3),(4),(5)`)
+		utils.AssertMatches(t, conn, "select count(*) from t", `[[INT64(5)]]`)
 
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_ = exec(t, conn, `drop database aaa`)
+			_ = utils.Exec(t, conn, `drop database aaa`)
 		}()
 		time.Sleep(300 * time.Millisecond)
 		shutdown(t, "aaa")
@@ -165,25 +164,8 @@ func shutdown(t *testing.T, ksName string) {
 	}
 
 	require.NoError(t,
-		clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteKeyspace", "-recursive", ksName))
+		clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteKeyspace", "--", "--recursive", ksName))
 
 	require.NoError(t,
 		clusterInstance.VtctlclientProcess.ExecuteCommand("RebuildVSchemaGraph"))
-}
-
-func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
-	t.Helper()
-	qr, err := conn.ExecuteFetch(query, 1000, true)
-	require.NoError(t, err)
-	return qr
-}
-
-func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
-	t.Helper()
-	qr := exec(t, conn, query)
-	got := fmt.Sprintf("%v", qr.Rows)
-	diff := cmp.Diff(expected, got)
-	if diff != "" {
-		t.Errorf("Query: %s (-want +got):\n%s", query, diff)
-	}
 }

@@ -25,6 +25,7 @@ const (
 
 	// invalid argument
 	BadFieldError
+	BadTableError
 	CantUseOptionHere
 	DataOutOfRange
 	EmptyQuery
@@ -32,17 +33,24 @@ const (
 	IncorrectGlobalLocalVar
 	NonUniqError
 	NonUniqTable
+	NonUpdateableTable
 	SyntaxError
+	WrongFieldWithGroup
 	WrongGroupField
 	WrongTypeForVar
 	WrongValueForVar
 	LockOrActiveTransaction
+	MixOfGroupFuncAndFields
+	DupFieldName
+	WrongValueCountOnRow
 
 	// failed precondition
 	NoDB
 	InnodbReadOnly
 	WrongNumberOfColumnsInSelect
 	CantDoThisInTransaction
+	RequiresPrimaryKey
+	OperandColumns
 
 	// not found
 	BadDb

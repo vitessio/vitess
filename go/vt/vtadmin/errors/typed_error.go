@@ -27,32 +27,46 @@ import (
 type TypedError interface {
 	Error() string
 	Code() string
-	Details() interface{}
+	Details() any
 	HTTPStatus() int
 }
 
 // BadRequest is returned when some request parameter is invalid.
 type BadRequest struct {
 	Err        error
-	ErrDetails interface{}
+	ErrDetails any
 }
 
-func (e *BadRequest) Error() string        { return e.Err.Error() }
-func (e *BadRequest) Code() string         { return "bad request" }
-func (e *BadRequest) Details() interface{} { return e.ErrDetails }
-func (e *BadRequest) HTTPStatus() int      { return http.StatusBadRequest }
+func (e *BadRequest) Error() string   { return e.Err.Error() }
+func (e *BadRequest) Code() string    { return "bad request" }
+func (e *BadRequest) Details() any    { return e.ErrDetails }
+func (e *BadRequest) HTTPStatus() int { return http.StatusBadRequest }
 
 // Unknown is the generic error, used when a more specific error is either
 // unspecified or inappropriate.
 type Unknown struct {
 	Err        error
-	ErrDetails interface{}
+	ErrDetails any
 }
 
-func (e *Unknown) Error() string        { return e.Err.Error() }
-func (e *Unknown) Code() string         { return "unknown" }
-func (e *Unknown) Details() interface{} { return e.ErrDetails }
-func (e *Unknown) HTTPStatus() int      { return http.StatusInternalServerError }
+func (e *Unknown) Error() string   { return e.Err.Error() }
+func (e *Unknown) Code() string    { return "unknown" }
+func (e *Unknown) Details() any    { return e.ErrDetails }
+func (e *Unknown) HTTPStatus() int { return http.StatusInternalServerError }
+
+// Internal is returned when an http adapter encounters an internal error (e.g.
+// an internal route variable name changed).
+//
+// Functionally, this is the same as Unknown with a different error code.
+type Internal struct {
+	Err        error
+	ErrDetails any
+}
+
+func (e *Internal) Error() string   { return e.Err.Error() }
+func (e *Internal) Code() string    { return "internal" }
+func (e *Internal) Details() any    { return e.ErrDetails }
+func (e *Internal) HTTPStatus() int { return http.StatusInternalServerError }
 
 // ErrInvalidCluster is returned when a cluster parameter, either in a route or
 // as a query param, is invalid.
@@ -60,10 +74,10 @@ type ErrInvalidCluster struct {
 	Err error
 }
 
-func (e *ErrInvalidCluster) Error() string        { return e.Err.Error() }
-func (e *ErrInvalidCluster) Code() string         { return "invalid cluster" }
-func (e *ErrInvalidCluster) Details() interface{} { return nil }
-func (e *ErrInvalidCluster) HTTPStatus() int      { return http.StatusBadRequest }
+func (e *ErrInvalidCluster) Error() string   { return e.Err.Error() }
+func (e *ErrInvalidCluster) Code() string    { return "invalid cluster" }
+func (e *ErrInvalidCluster) Details() any    { return nil }
+func (e *ErrInvalidCluster) HTTPStatus() int { return http.StatusBadRequest }
 
 // MissingParams is returned when an HTTP handler requires parameters that were
 // not provided.
@@ -75,9 +89,9 @@ func (e *MissingParams) Error() string {
 	return fmt.Sprintf("missing required params: %s", strings.Join(e.Params, ", "))
 }
 
-func (e *MissingParams) Code() string         { return "missing params" }
-func (e *MissingParams) Details() interface{} { return nil }
-func (e *MissingParams) HTTPStatus() int      { return http.StatusBadRequest }
+func (e *MissingParams) Code() string    { return "missing params" }
+func (e *MissingParams) Details() any    { return nil }
+func (e *MissingParams) HTTPStatus() int { return http.StatusBadRequest }
 
 // NoSuchSchema is returned when a schema definition cannot be found for a given
 // set of filter criteria. Both GetSchema and FindSchema can return this error.
@@ -90,8 +104,8 @@ func (e *NoSuchSchema) Error() string {
 	return fmt.Sprintf("%s: no schemas found with table named %s", e.Code(), e.Table)
 }
 
-func (e *NoSuchSchema) Details() interface{} {
-	details := map[string]interface{}{
+func (e *NoSuchSchema) Details() any {
+	details := map[string]any{
 		"table": e.Table,
 	}
 

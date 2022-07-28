@@ -21,11 +21,15 @@ import (
 	"testing"
 
 	"context"
+
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // The fakeConn is a wrapper for a Conn that emits stats for every operation
 type fakeConn struct {
-	v Version
+	v        Version
+	readOnly bool
 }
 
 // ListDir is part of the Conn interface
@@ -39,6 +43,9 @@ func (st *fakeConn) ListDir(ctx context.Context, dirPath string, full bool) (res
 
 // Create is part of the Conn interface
 func (st *fakeConn) Create(ctx context.Context, filePath string, contents []byte) (ver Version, err error) {
+	if st.readOnly {
+		return nil, vterrors.Errorf(vtrpc.Code_READ_ONLY, "topo server connection is read-only")
+	}
 	if filePath == "error" {
 		return ver, fmt.Errorf("Dummy error")
 
@@ -48,6 +55,9 @@ func (st *fakeConn) Create(ctx context.Context, filePath string, contents []byte
 
 // Update is part of the Conn interface
 func (st *fakeConn) Update(ctx context.Context, filePath string, contents []byte, version Version) (ver Version, err error) {
+	if st.readOnly {
+		return nil, vterrors.Errorf(vtrpc.Code_READ_ONLY, "topo server connection is read-only")
+	}
 	if filePath == "error" {
 		return ver, fmt.Errorf("Dummy error")
 
@@ -64,8 +74,19 @@ func (st *fakeConn) Get(ctx context.Context, filePath string) (bytes []byte, ver
 	return bytes, ver, err
 }
 
+// List is part of the Conn interface
+func (st *fakeConn) List(ctx context.Context, filePathPrefix string) (bytes []KVInfo, err error) {
+	if filePathPrefix == "error" {
+		return bytes, fmt.Errorf("Dummy error")
+	}
+	return bytes, err
+}
+
 // Delete is part of the Conn interface
 func (st *fakeConn) Delete(ctx context.Context, filePath string, version Version) (err error) {
+	if st.readOnly {
+		return vterrors.Errorf(vtrpc.Code_READ_ONLY, "topo server connection is read-only")
+	}
 	if filePath == "error" {
 		return fmt.Errorf("dummy error")
 	}
@@ -74,6 +95,9 @@ func (st *fakeConn) Delete(ctx context.Context, filePath string, version Version
 
 // Lock is part of the Conn interface
 func (st *fakeConn) Lock(ctx context.Context, dirPath, contents string) (lock LockDescriptor, err error) {
+	if st.readOnly {
+		return nil, vterrors.Errorf(vtrpc.Code_READ_ONLY, "topo server connection is read-only")
+	}
 	if dirPath == "error" {
 		return lock, fmt.Errorf("dummy error")
 
@@ -86,8 +110,8 @@ func (st *fakeConn) Watch(ctx context.Context, filePath string) (current *WatchD
 	return current, changes, cancel
 }
 
-// NewMasterParticipation is part of the Conn interface
-func (st *fakeConn) NewMasterParticipation(name, id string) (mp MasterParticipation, err error) {
+// NewLeaderParticipation is part of the Conn interface
+func (st *fakeConn) NewLeaderParticipation(name, id string) (mp LeaderParticipation, err error) {
 	if name == "error" {
 		return mp, fmt.Errorf("dummy error")
 
@@ -97,6 +121,16 @@ func (st *fakeConn) NewMasterParticipation(name, id string) (mp MasterParticipat
 
 // Close is part of the Conn interface
 func (st *fakeConn) Close() {
+}
+
+// SetReadOnly with true prevents any write operations from being made on the topo connection
+func (st *fakeConn) SetReadOnly(readOnly bool) {
+	st.readOnly = readOnly
+}
+
+// IsReadOnly allows you to check the access type for the topo connection
+func (st *fakeConn) IsReadOnly() bool {
+	return st.readOnly
 }
 
 //TestStatsConnTopoListDir emits stats on ListDir
@@ -275,13 +309,18 @@ func TestStatsConnTopoWatch(t *testing.T) {
 
 }
 
-//TestStatsConnTopoNewMasterParticipation emits stats on NewMasterParticipation
-func TestStatsConnTopoNewMasterParticipation(t *testing.T) {
+//TestStatsConnTopoNewLeaderParticipation emits stats on NewLeaderParticipation
+func TestStatsConnTopoNewLeaderParticipation(t *testing.T) {
 	conn := &fakeConn{}
 	statsConn := NewStatsConn("global", conn)
 
-	statsConn.NewMasterParticipation("", "")
+	_, _ = statsConn.NewLeaderParticipation("", "")
+	// TODO(deepthi): delete "Master" stats after v13.0
 	timingCounts := topoStatsConnTimings.Counts()["NewMasterParticipation.global"]
+	if got, want := timingCounts, int64(1); got != want {
+		t.Errorf("stats were not properly recorded: got = %d, want = %d", got, want)
+	}
+	timingCounts = topoStatsConnTimings.Counts()["NewLeaderParticipation.global"]
 	if got, want := timingCounts, int64(1); got != want {
 		t.Errorf("stats were not properly recorded: got = %d, want = %d", got, want)
 	}
@@ -291,11 +330,22 @@ func TestStatsConnTopoNewMasterParticipation(t *testing.T) {
 	if got, want := errorCount, int64(0); got != want {
 		t.Errorf("stats were not properly recorded: got = %d, want = %d", got, want)
 	}
+	// error is zero before getting an error
+	errorCount = topoStatsConnErrors.Counts()["NewLeaderParticipation.global"]
+	if got, want := errorCount, int64(0); got != want {
+		t.Errorf("stats were not properly recorded: got = %d, want = %d", got, want)
+	}
 
-	statsConn.NewMasterParticipation("error", "")
+	_, _ = statsConn.NewLeaderParticipation("error", "")
 
 	// error stats gets emitted
 	errorCount = topoStatsConnErrors.Counts()["NewMasterParticipation.global"]
+	if got, want := errorCount, int64(1); got != want {
+		t.Errorf("stats were not properly recorded: got = %d, want = %d", got, want)
+	}
+
+	// error stats gets emitted
+	errorCount = topoStatsConnErrors.Counts()["NewLeaderParticipation.global"]
 	if got, want := errorCount, int64(1); got != want {
 		t.Errorf("stats were not properly recorded: got = %d, want = %d", got, want)
 	}

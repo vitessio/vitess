@@ -22,7 +22,12 @@
 if [[ -z $MYSQL_MAX_CONNECTIONS ]]; then
   MYSQL_MAX_CONNECTIONS=1000
 fi
-echo "max_connections = $MYSQL_MAX_CONNECTIONS" >> /vt/config/mycnf/default-fast.cnf
+echo "max_connections = $MYSQL_MAX_CONNECTIONS" >> /vt/config/mycnf/test-suite.cnf
+
+# Delete socket files before running mysqlctld if exists.
+# This is the primary reason for unhealthy state on restart.
+# https://github.com/vitessio/vitess/pull/5115/files
+rm -vf "$VTDATAROOT"/"$tablet_dir"/{mysql.sock,mysql.sock.lock}
 
 # Run the vttestserver binary
 /vt/bin/vttestserver \
@@ -35,6 +40,7 @@ echo "max_connections = $MYSQL_MAX_CONNECTIONS" >> /vt/config/mycnf/default-fast
 	-foreign_key_mode "${FOREIGN_KEY_MODE:-allow}" \
 	-enable_online_ddl="${ENABLE_ONLINE_DDL:-true}" \
 	-enable_direct_ddl="${ENABLE_DIRECT_DDL:-true}" \
+	-planner-version="${PLANNER_VERSION:-v3}" \
 	-vschema_ddl_authorized_users=% \
 	-schema_dir="/vt/schema/"
 

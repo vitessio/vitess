@@ -30,11 +30,11 @@ import (
 func (r *Reparent) Syslog() (syslog.Priority, string) {
 	var oldAlias *topodata.TabletAlias
 	var newAlias *topodata.TabletAlias
-	if r.OldMaster != nil {
-		oldAlias = r.OldMaster.Alias
+	if r.OldPrimary != nil {
+		oldAlias = r.OldPrimary.Alias
 	}
-	if r.NewMaster != nil {
-		newAlias = r.NewMaster.Alias
+	if r.NewPrimary != nil {
+		newAlias = r.NewPrimary.Alias
 	}
 
 	return syslog.LOG_INFO, fmt.Sprintf("%s/%s [reparent %v -> %v] %s (%s)",

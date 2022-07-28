@@ -25,46 +25,112 @@ import (
 
 // ReplicationStatus holds replication information from SHOW SLAVE STATUS.
 type ReplicationStatus struct {
+	// Position is the current position of the replica. For GTID replication implementations
+	// it is the executed GTID set. For file replication implementation, it is same as
+	// FilePosition
 	Position Position
 	// RelayLogPosition is the Position that the replica would be at if it
 	// were to finish executing everything that's currently in its relay log.
 	// However, some MySQL flavors don't expose this information,
 	// in which case RelayLogPosition.IsZero() will be true.
-	RelayLogPosition     Position
-	FilePosition         Position
-	FileRelayLogPosition Position
-	MasterServerID       uint
-	IOThreadRunning      bool
-	SQLThreadRunning     bool
-	SecondsBehindMaster  uint
-	MasterHost           string
-	MasterPort           int
-	MasterConnectRetry   int
-	MasterUUID           SID
+	// If ReplicationLagUnknown is true then we should not rely on the seconds
+	// behind value and we can instead try to calculate the lag ourselves when
+	// appropriate. For MySQL GTID replication implementation it is the union of
+	// executed GTID set and retrieved GTID set. For file replication implementation,
+	// it is same as RelayLogSourceBinlogEquivalentPosition
+	RelayLogPosition Position
+	// FilePosition stores the position of the source tablets binary log
+	// upto which the SQL thread of the replica has run.
+	FilePosition Position
+	// RelayLogSourceBinlogEquivalentPosition stores the position of the source tablets binary log
+	// upto which the IO thread has read and added to the relay log
+	RelayLogSourceBinlogEquivalentPosition Position
+	// RelayLogFilePosition stores the position in the relay log file
+	RelayLogFilePosition  Position
+	SourceServerID        uint
+	IOState               ReplicationState
+	LastIOError           string
+	SQLState              ReplicationState
+	LastSQLError          string
+	ReplicationLagSeconds uint
+	ReplicationLagUnknown bool
+	SourceHost            string
+	SourcePort            int
+	SourceUser            string
+	ConnectRetry          int
+	SourceUUID            SID
+	SQLDelay              uint
+	AutoPosition          bool
+	UsingGTID             bool
+	HasReplicationFilters bool
+	SSLAllowed            bool
 }
 
-// ReplicationRunning returns true iff both the IO and SQL threads are
-// running.
-func (s *ReplicationStatus) ReplicationRunning() bool {
-	return s.IOThreadRunning && s.SQLThreadRunning
+// Running returns true if both the IO and SQL threads are running.
+func (s *ReplicationStatus) Running() bool {
+	return s.IOState == ReplicationStateRunning && s.SQLState == ReplicationStateRunning
+}
+
+// Healthy returns true if both the SQL IO components are healthy
+func (s *ReplicationStatus) Healthy() bool {
+	return s.SQLHealthy() && s.IOHealthy()
+}
+
+// IOHealthy returns true if the IO thread is running OR, the
+// IO thread is connecting AND there's no IO error from the last
+// attempt to connect to the source.
+func (s *ReplicationStatus) IOHealthy() bool {
+	return s.IOState == ReplicationStateRunning ||
+		(s.IOState == ReplicationStateConnecting && s.LastIOError == "")
+}
+
+// SQLHealthy returns true if the SQLState is running.
+// For consistency and to support altering this calculation in the future.
+func (s *ReplicationStatus) SQLHealthy() bool {
+	return s.SQLState == ReplicationStateRunning
 }
 
 // ReplicationStatusToProto translates a Status to proto3.
 func ReplicationStatusToProto(s ReplicationStatus) *replicationdatapb.Status {
-	return &replicationdatapb.Status{
-		Position:             EncodePosition(s.Position),
-		RelayLogPosition:     EncodePosition(s.RelayLogPosition),
-		FilePosition:         EncodePosition(s.FilePosition),
-		FileRelayLogPosition: EncodePosition(s.FileRelayLogPosition),
-		MasterServerId:       uint32(s.MasterServerID),
-		IoThreadRunning:      s.IOThreadRunning,
-		SqlThreadRunning:     s.SQLThreadRunning,
-		SecondsBehindMaster:  uint32(s.SecondsBehindMaster),
-		MasterHost:           s.MasterHost,
-		MasterPort:           int32(s.MasterPort),
-		MasterConnectRetry:   int32(s.MasterConnectRetry),
-		MasterUuid:           s.MasterUUID.String(),
+	replstatuspb := &replicationdatapb.Status{
+		Position:                               EncodePosition(s.Position),
+		RelayLogPosition:                       EncodePosition(s.RelayLogPosition),
+		FilePosition:                           EncodePosition(s.FilePosition),
+		RelayLogSourceBinlogEquivalentPosition: EncodePosition(s.RelayLogSourceBinlogEquivalentPosition),
+		SourceServerId:                         uint32(s.SourceServerID),
+		ReplicationLagSeconds:                  uint32(s.ReplicationLagSeconds),
+		ReplicationLagUnknown:                  s.ReplicationLagUnknown,
+		SqlDelay:                               uint32(s.SQLDelay),
+		RelayLogFilePosition:                   EncodePosition(s.RelayLogFilePosition),
+		SourceHost:                             s.SourceHost,
+		SourceUser:                             s.SourceUser,
+		SourcePort:                             int32(s.SourcePort),
+		ConnectRetry:                           int32(s.ConnectRetry),
+		SourceUuid:                             s.SourceUUID.String(),
+		IoState:                                int32(s.IOState),
+		LastIoError:                            s.LastIOError,
+		SqlState:                               int32(s.SQLState),
+		LastSqlError:                           s.LastSQLError,
+		SslAllowed:                             s.SSLAllowed,
+		HasReplicationFilters:                  s.HasReplicationFilters,
+		AutoPosition:                           s.AutoPosition,
+		UsingGtid:                              s.UsingGTID,
 	}
+
+	// We need to be able to send gRPC response messages from v14 and newer tablets to
+	// v13 and older clients. The older clients will not be processing the IoState or
+	// SqlState values in the message but instead looking at the IoThreadRunning and
+	// SqlThreadRunning booleans so we need to map and share this dual state.
+	// Note: v13 and older clients considered the IO thread state of connecting to
+	//       be equal to running. That is why we do so here when mapping the states.
+	// This backwards compatibility can be removed in v15+.
+	if s.IOState == ReplicationStateRunning || s.IOState == ReplicationStateConnecting {
+		replstatuspb.IoThreadRunning = true
+	}
+	if s.SQLState == ReplicationStateRunning {
+		replstatuspb.SqlThreadRunning = true
+	}
+	return replstatuspb
 }
 
 // ProtoToReplicationStatus translates a proto Status, or panics.
@@ -81,38 +147,76 @@ func ProtoToReplicationStatus(s *replicationdatapb.Status) ReplicationStatus {
 	if err != nil {
 		panic(vterrors.Wrapf(err, "cannot decode FilePosition"))
 	}
-	fileRelayPos, err := DecodePosition(s.FileRelayLogPosition)
+	fileRelayPos, err := DecodePosition(s.RelayLogSourceBinlogEquivalentPosition)
 	if err != nil {
-		panic(vterrors.Wrapf(err, "cannot decode FileRelayLogPosition"))
+		panic(vterrors.Wrapf(err, "cannot decode RelayLogSourceBinlogEquivalentPosition"))
+	}
+	relayFilePos, err := DecodePosition(s.RelayLogFilePosition)
+	if err != nil {
+		panic(vterrors.Wrapf(err, "cannot decode RelayLogFilePosition"))
 	}
 	var sid SID
-	if s.MasterUuid != "" {
-		sid, err = ParseSID(s.MasterUuid)
+	if s.SourceUuid != "" {
+		sid, err = ParseSID(s.SourceUuid)
 		if err != nil {
-			panic(vterrors.Wrapf(err, "cannot decode MasterUUID"))
+			panic(vterrors.Wrapf(err, "cannot decode SourceUUID"))
 		}
 	}
-	return ReplicationStatus{
-		Position:             pos,
-		RelayLogPosition:     relayPos,
-		FilePosition:         filePos,
-		FileRelayLogPosition: fileRelayPos,
-		MasterServerID:       uint(s.MasterServerId),
-		IOThreadRunning:      s.IoThreadRunning,
-		SQLThreadRunning:     s.SqlThreadRunning,
-		SecondsBehindMaster:  uint(s.SecondsBehindMaster),
-		MasterHost:           s.MasterHost,
-		MasterPort:           int(s.MasterPort),
-		MasterConnectRetry:   int(s.MasterConnectRetry),
-		MasterUUID:           sid,
+	replstatus := ReplicationStatus{
+		Position:                               pos,
+		RelayLogPosition:                       relayPos,
+		FilePosition:                           filePos,
+		RelayLogSourceBinlogEquivalentPosition: fileRelayPos,
+		RelayLogFilePosition:                   relayFilePos,
+		SourceServerID:                         uint(s.SourceServerId),
+		ReplicationLagSeconds:                  uint(s.ReplicationLagSeconds),
+		ReplicationLagUnknown:                  s.ReplicationLagUnknown,
+		SQLDelay:                               uint(s.SqlDelay),
+		SourceHost:                             s.SourceHost,
+		SourceUser:                             s.SourceUser,
+		SourcePort:                             int(s.SourcePort),
+		ConnectRetry:                           int(s.ConnectRetry),
+		SourceUUID:                             sid,
+		IOState:                                ReplicationState(s.IoState),
+		LastIOError:                            s.LastIoError,
+		SQLState:                               ReplicationState(s.SqlState),
+		LastSQLError:                           s.LastSqlError,
+		SSLAllowed:                             s.SslAllowed,
+		HasReplicationFilters:                  s.HasReplicationFilters,
+		AutoPosition:                           s.AutoPosition,
+		UsingGTID:                              s.UsingGtid,
 	}
+
+	// We need to be able to process gRPC response messages from v13 and older tablets.
+	// In those cases there will be no value (unknown) for the IoState or SqlState but
+	// the message will have the IoThreadRunning and SqlThreadRunning booleans and we
+	// need to revert to our assumptions about a binary state as that's all the older
+	// tablet can provide (really only applicable to the IO status as that is NOT binary
+	// but rather has three states: Running, Stopped, Connecting).
+	// This backwards compatibility can be removed in v15+.
+	if replstatus.IOState == ReplicationStateUnknown {
+		if s.IoThreadRunning {
+			replstatus.IOState = ReplicationStateRunning
+		} else {
+			replstatus.IOState = ReplicationStateStopped
+		}
+	}
+	if replstatus.SQLState == ReplicationStateUnknown {
+		if s.SqlThreadRunning {
+			replstatus.SQLState = ReplicationStateRunning
+		} else {
+			replstatus.SQLState = ReplicationStateStopped
+		}
+	}
+
+	return replstatus
 }
 
 // FindErrantGTIDs can be used to find errant GTIDs in the receiver's relay log, by comparing it against all known replicas,
 // provided as a list of ReplicationStatus's. This method only works if the flavor for all retrieved ReplicationStatus's is MySQL.
 // The result is returned as a Mysql56GTIDSet, each of whose elements is a found errant GTID.
 func (s *ReplicationStatus) FindErrantGTIDs(otherReplicaStatuses []*ReplicationStatus) (Mysql56GTIDSet, error) {
-	set, ok := s.RelayLogPosition.GTIDSet.(Mysql56GTIDSet)
+	relayLogSet, ok := s.RelayLogPosition.GTIDSet.(Mysql56GTIDSet)
 	if !ok {
 		return nil, fmt.Errorf("errant GTIDs can only be computed on the MySQL flavor")
 	}
@@ -123,22 +227,13 @@ func (s *ReplicationStatus) FindErrantGTIDs(otherReplicaStatuses []*ReplicationS
 		if !ok {
 			panic("The receiver ReplicationStatus contained a Mysql56GTIDSet in its relay log, but a replica's ReplicationStatus is of another flavor. This should never happen.")
 		}
-		// Copy and throw out master SID from consideration, so we don't mutate input.
-		otherSetNoMasterSID := make(Mysql56GTIDSet, len(otherSet))
-		for sid, intervals := range otherSet {
-			if sid == status.MasterUUID {
-				continue
-			}
-			otherSetNoMasterSID[sid] = intervals
-		}
-
-		otherSets = append(otherSets, otherSetNoMasterSID)
+		otherSets = append(otherSets, otherSet)
 	}
 
 	// Copy set for final diffSet so we don't mutate receiver.
-	diffSet := make(Mysql56GTIDSet, len(set))
-	for sid, intervals := range set {
-		if sid == s.MasterUUID {
+	diffSet := make(Mysql56GTIDSet, len(relayLogSet))
+	for sid, intervals := range relayLogSet {
+		if sid == s.SourceUUID {
 			continue
 		}
 		diffSet[sid] = intervals

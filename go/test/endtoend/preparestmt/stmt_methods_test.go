@@ -73,7 +73,7 @@ func TestInsertUpdateDelete(t *testing.T) {
 	// inserting multiple rows into test table
 	for i := 1; i <= 100; i++ {
 		// preparing value for the insert testing
-		insertValue := []interface{}{
+		insertValue := []any{
 			i, strconv.FormatInt(int64(i), 10) + "21", i * 100,
 			127, 1, 32767, 8388607, 2147483647, 2.55, 64.9, 55.5,
 			time.Date(2009, 5, 5, 0, 0, 0, 50000, time.UTC),
@@ -165,7 +165,7 @@ func TestAutoIncColumns(t *testing.T) {
 ) VALUES (?,  ?,  ?,  ?,  ?, ?,
 		  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?, ?, ?, ?,
 		  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?, ?, ?, ?);`
-	insertValue := []interface{}{
+	insertValue := []any{
 		"21", 0,
 		127, 1, 32767, 8388607, 2147483647, 2.55, 64.9, 55.5,
 		time.Date(2009, 5, 5, 0, 0, 0, 50000, time.UTC),
@@ -235,7 +235,7 @@ func TestColumnParameter(t *testing.T) {
 	parameter1 := "param1"
 	message := "TestColumnParameter"
 	insertStmt := "INSERT INTO " + tableName + " (id, msg, keyspace_id) VALUES (?, ?, ?);"
-	values := []interface{}{
+	values := []any{
 		id,
 		message,
 		2000,
@@ -378,4 +378,61 @@ func TestSelectDBA(t *testing.T) {
 		rowCount++
 	}
 	require.Equal(t, 2, rowCount)
+}
+
+func TestSelectLock(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	dbo := Connect(t)
+	defer dbo.Close()
+
+	// Get Lock
+	prepare, err := dbo.Prepare("select get_lock(?, ?)")
+	require.NoError(t, err)
+
+	rows, err := prepare.Query("a", 100000)
+	require.NoError(t, err)
+
+	var resultBytes sql.RawBytes
+	require.True(t, rows.Next(), "no rows found")
+	err = rows.Scan(&resultBytes)
+	require.NoError(t, err)
+	assert.Equal(t, "1", string(resultBytes))
+
+	// for connection to be reused.
+	err = rows.Close()
+	require.NoError(t, err)
+
+	// Release Lock
+	prepare, err = dbo.Prepare("select release_lock(?)")
+	require.NoError(t, err)
+
+	rows, err = prepare.Query("a")
+	require.NoError(t, err)
+	defer rows.Close()
+
+	require.True(t, rows.Next(), "no rows found")
+	err = rows.Scan(&resultBytes)
+	require.NoError(t, err)
+	assert.Equal(t, "1", string(resultBytes))
+}
+
+func TestShowColumns(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	dbo := Connect(t)
+	defer dbo.Close()
+
+	prepare, err := dbo.Prepare("show columns from vt_prepare_stmt_test where Field = 'id'")
+	require.NoError(t, err)
+
+	rows, err := prepare.Query()
+	require.NoError(t, err)
+	defer rows.Close()
+
+	require.True(t, rows.Next(), "no rows found")
+	cols, err := rows.Columns()
+	if err != nil {
+		return
+	}
+	require.Len(t, cols, 6)
+	require.False(t, rows.Next())
 }

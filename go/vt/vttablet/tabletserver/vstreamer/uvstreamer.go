@@ -76,9 +76,9 @@ type uvstreamer struct {
 	stopPos mysql.Position
 
 	// lastTimestampNs is the last timestamp seen so far.
-	lastTimestampNs     int64
-	secondsBehindMaster int64
-	mu                  sync.Mutex
+	lastTimestampNs       int64
+	ReplicationLagSeconds int64
+	mu                    sync.Mutex
 
 	config *uvstreamerConfig
 
@@ -98,6 +98,10 @@ func newUVStreamer(ctx context.Context, vse *Engine, cp dbconfigs.Connector, se 
 	}
 	send2 := func(evs []*binlogdatapb.VEvent) error {
 		vse.vstreamerEventsStreamed.Add(int64(len(evs)))
+		for _, ev := range evs {
+			ev.Keyspace = vse.keyspace
+			ev.Shard = vse.shard
+		}
 		return send(evs)
 	}
 	uvs := &uvstreamer{
@@ -209,11 +213,11 @@ func getQuery(tableName string, filter string) string {
 	switch {
 	case filter == "":
 		buf := sqlparser.NewTrackedBuffer(nil)
-		buf.Myprintf("select * from %v", sqlparser.NewTableIdent(tableName))
+		buf.Myprintf("select * from %v", sqlparser.NewIdentifierCS(tableName))
 		query = buf.String()
 	case key.IsKeyRange(filter):
 		buf := sqlparser.NewTrackedBuffer(nil)
-		buf.Myprintf("select * from %v where in_keyrange(%v)", sqlparser.NewTableIdent(tableName), sqlparser.NewStrLiteral(filter))
+		buf.Myprintf("select * from %v where in_keyrange(%v)", sqlparser.NewIdentifierCS(tableName), sqlparser.NewStrLiteral(filter))
 		query = buf.String()
 	}
 	return query
@@ -270,8 +274,8 @@ func (uvs *uvstreamer) send2(evs []*binlogdatapb.VEvent) error {
 		uvs.lastTimestampNs = ev.Timestamp * 1e9
 	}
 	behind := time.Now().UnixNano() - uvs.lastTimestampNs
-	uvs.setSecondsBehindMaster(behind / 1e9)
-	//log.Infof("sbm set to %d", uvs.secondsBehindMaster)
+	uvs.setReplicationLagSeconds(behind / 1e9)
+	//log.Infof("sbm set to %d", uvs.ReplicationLagSeconds)
 	var evs2 []*binlogdatapb.VEvent
 	if len(uvs.plans) > 0 {
 		evs2 = uvs.filterEvents(evs)
@@ -338,7 +342,7 @@ func (uvs *uvstreamer) currentPosition() (mysql.Position, error) {
 		return mysql.Position{}, err
 	}
 	defer conn.Close()
-	return conn.MasterPosition()
+	return conn.PrimaryPosition()
 }
 
 func (uvs *uvstreamer) init() error {
@@ -464,17 +468,27 @@ func (uvs *uvstreamer) setPosition(gtid string, isInTx bool) error {
 		return nil
 	}
 	gtidEvent := &binlogdatapb.VEvent{
-		Type: binlogdatapb.VEventType_GTID,
-		Gtid: gtid,
+		Type:     binlogdatapb.VEventType_GTID,
+		Gtid:     gtid,
+		Keyspace: uvs.vse.keyspace,
+		Shard:    uvs.vse.shard,
 	}
 
 	var evs []*binlogdatapb.VEvent
 	if !isInTx {
-		evs = append(evs, &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_BEGIN})
+		evs = append(evs, &binlogdatapb.VEvent{
+			Type:     binlogdatapb.VEventType_BEGIN,
+			Keyspace: uvs.vse.keyspace,
+			Shard:    uvs.vse.shard,
+		})
 	}
 	evs = append(evs, gtidEvent)
 	if !isInTx {
-		evs = append(evs, &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_COMMIT})
+		evs = append(evs, &binlogdatapb.VEvent{
+			Type:     binlogdatapb.VEventType_COMMIT,
+			Keyspace: uvs.vse.keyspace,
+			Shard:    uvs.vse.shard,
+		})
 	}
 	if err := uvs.send(evs); err != nil {
 		return err
@@ -483,14 +497,14 @@ func (uvs *uvstreamer) setPosition(gtid string, isInTx bool) error {
 	return nil
 }
 
-func (uvs *uvstreamer) getSecondsBehindMaster() int64 {
+func (uvs *uvstreamer) getReplicationLagSeconds() int64 {
 	uvs.mu.Lock()
 	defer uvs.mu.Unlock()
-	return uvs.secondsBehindMaster
+	return uvs.ReplicationLagSeconds
 }
 
-func (uvs *uvstreamer) setSecondsBehindMaster(sbm int64) {
+func (uvs *uvstreamer) setReplicationLagSeconds(sbm int64) {
 	uvs.mu.Lock()
 	defer uvs.mu.Unlock()
-	uvs.secondsBehindMaster = sbm
+	uvs.ReplicationLagSeconds = sbm
 }

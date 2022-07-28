@@ -212,20 +212,6 @@ func TestKeyRangeAdd(t *testing.T) {
 		out:    "40-c0",
 		ok:     true,
 	}}
-	stringToKeyRange := func(spec string) *topodatapb.KeyRange {
-		if spec == "" {
-			return nil
-		}
-		parts := strings.Split(spec, "-")
-		if len(parts) != 2 {
-			panic("invalid spec")
-		}
-		kr, err := ParseKeyRangeParts(parts[0], parts[1])
-		if err != nil {
-			panic(err)
-		}
-		return kr
-	}
 	keyRangeToString := func(kr *topodatapb.KeyRange) string {
 		if kr == nil {
 			return ""
@@ -238,6 +224,170 @@ func TestKeyRangeAdd(t *testing.T) {
 		out, ok := KeyRangeAdd(first, second)
 		assert.Equal(t, tcase.out, keyRangeToString(out))
 		assert.Equal(t, tcase.ok, ok)
+	}
+}
+
+func TestKeyRangeEndEqual(t *testing.T) {
+	testcases := []struct {
+		first  string
+		second string
+		out    bool
+	}{{
+		first:  "",
+		second: "",
+		out:    true,
+	}, {
+		first:  "",
+		second: "-80",
+		out:    false,
+	}, {
+		first:  "40-",
+		second: "10-",
+		out:    true,
+	}, {
+		first:  "-8000",
+		second: "-80",
+		out:    true,
+	}, {
+		first:  "-8000",
+		second: "-8000000000000000",
+		out:    true,
+	}, {
+		first:  "-80",
+		second: "-8000",
+		out:    true,
+	}}
+
+	for _, tcase := range testcases {
+		first := stringToKeyRange(tcase.first)
+		second := stringToKeyRange(tcase.second)
+		out := KeyRangeEndEqual(first, second)
+		if out != tcase.out {
+			t.Fatalf("KeyRangeEndEqual(%q, %q) expected %t, got %t", tcase.first, tcase.second, tcase.out, out)
+		}
+	}
+}
+
+func TestKeyRangeStartEqual(t *testing.T) {
+	testcases := []struct {
+		first  string
+		second string
+		out    bool
+	}{{
+		first:  "",
+		second: "",
+		out:    true,
+	}, {
+		first:  "",
+		second: "-80",
+		out:    true,
+	}, {
+		first:  "40-",
+		second: "20-",
+		out:    false,
+	}, {
+		first:  "-8000",
+		second: "-80",
+		out:    true,
+	}, {
+		first:  "-8000",
+		second: "-8000000000000000",
+		out:    true,
+	}, {
+		first:  "-80",
+		second: "-8000",
+		out:    true,
+	}}
+
+	for _, tcase := range testcases {
+		first := stringToKeyRange(tcase.first)
+		second := stringToKeyRange(tcase.second)
+		out := KeyRangeStartEqual(first, second)
+		if out != tcase.out {
+			t.Fatalf("KeyRangeStartEqual(%q, %q) expected %t, got %t", tcase.first, tcase.second, tcase.out, out)
+		}
+	}
+}
+
+func TestKeyRangeEqual(t *testing.T) {
+	testcases := []struct {
+		first  string
+		second string
+		out    bool
+	}{{
+		first:  "",
+		second: "",
+		out:    true,
+	}, {
+		first:  "",
+		second: "-80",
+		out:    false,
+	}, {
+		first:  "-8000",
+		second: "-80",
+		out:    true,
+	}, {
+		first:  "-8000",
+		second: "-8000000000000000",
+		out:    true,
+	}, {
+		first:  "-80",
+		second: "-8000",
+		out:    true,
+	}}
+
+	for _, tcase := range testcases {
+		first := stringToKeyRange(tcase.first)
+		second := stringToKeyRange(tcase.second)
+		out := KeyRangeEqual(first, second)
+		if out != tcase.out {
+			t.Fatalf("KeyRangeEqual(%q, %q) expected %t, got %t", tcase.first, tcase.second, tcase.out, out)
+		}
+	}
+}
+
+func TestKeyRangeContiguous(t *testing.T) {
+	testcases := []struct {
+		first  string
+		second string
+		out    bool
+	}{{
+		first:  "-40",
+		second: "40-80",
+		out:    true,
+	}, {
+		first:  "40-80",
+		second: "-40",
+		out:    false,
+	}, {
+		first:  "-",
+		second: "-40",
+		out:    true,
+	}, {
+		first:  "40-80",
+		second: "c0-",
+		out:    false,
+	}, {
+		first:  "40-80",
+		second: "80-c0",
+		out:    true,
+	}, {
+		first:  "40-80",
+		second: "8000000000000000-c000000000000000",
+		out:    true,
+	}, {
+		first:  "4000000000000000-8000000000000000",
+		second: "80-c0",
+		out:    true,
+	}}
+
+	for _, tcase := range testcases {
+		first := stringToKeyRange(tcase.first)
+		second := stringToKeyRange(tcase.second)
+		out := KeyRangeContiguous(first, second)
+		if out != tcase.out {
+			t.Fatalf("KeyRangeContiguous(%q, %q) expected %t, got %t", tcase.first, tcase.second, tcase.out, out)
+		}
 	}
 }
 
@@ -536,7 +686,9 @@ func BenchmarkKeyRangesOverlap(b *testing.B) {
 	}
 
 	for i := 0; i < b.N; i++ {
-		KeyRangesOverlap(kr1, kr2)
+		if _, err := KeyRangesOverlap(kr1, kr2); err != nil {
+			b.Fatal(err)
+		}
 	}
 }
 
@@ -651,4 +803,19 @@ func TestShardCalculatorForShardsGreaterThan512(t *testing.T) {
 	want := "ff80-"
 
 	assert.Equal(t, want, got[511], "Invalid mapping for a 512-shard keyspace. Expected %v, got %v", want, got[511])
+}
+
+func stringToKeyRange(spec string) *topodatapb.KeyRange {
+	if spec == "" {
+		return nil
+	}
+	parts := strings.Split(spec, "-")
+	if len(parts) != 2 {
+		panic("invalid spec")
+	}
+	kr, err := ParseKeyRangeParts(parts[0], parts[1])
+	if err != nil {
+		panic(err)
+	}
+	return kr
 }

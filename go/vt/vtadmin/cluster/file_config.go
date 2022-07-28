@@ -17,17 +17,17 @@ limitations under the License.
 package cluster
 
 import (
-	"io/ioutil"
 	"strings"
 
-	"gopkg.in/yaml.v2"
+	"github.com/spf13/viper"
 )
 
 // FileConfig represents the structure of a set of cluster configs on disk. It
-// contains both a default config, and cluster-specific overrides. Currently
-// only YAML config files are supported.
+// contains both a default config, and cluster-specific overrides. Viper is used
+// internally to load the config file, so any file format supported by viper is
+// permitted.
 //
-// A valid config looks like:
+// A valid YAML config looks like:
 //		defaults:
 //			discovery: k8s
 //		clusters:
@@ -40,30 +40,6 @@ import (
 type FileConfig struct {
 	Defaults Config
 	Clusters map[string]Config
-}
-
-// UnmarshalYAML is part of the yaml.Unmarshaler interface.
-func (fc *FileConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	tmp := struct {
-		Defaults Config
-		Clusters map[string]Config
-	}{
-		Defaults: fc.Defaults,
-		Clusters: fc.Clusters,
-	}
-
-	if err := unmarshal(&tmp); err != nil {
-		return err
-	}
-
-	fc.Defaults = tmp.Defaults
-	fc.Clusters = make(map[string]Config, len(tmp.Clusters))
-
-	for id, cfg := range tmp.Clusters {
-		fc.Clusters[id] = cfg.Merge(Config{ID: id})
-	}
-
-	return nil
 }
 
 // String is part of the flag.Value interface.
@@ -88,14 +64,57 @@ func (fc *FileConfig) Type() string {
 }
 
 // Set is part of the flag.Value interface. It loads the file configuration
-// found at the path passed to the flag.
+// found at the path passed to the flag. Any config file format supported by
+// viper is supported by FileConfig.
 func (fc *FileConfig) Set(value string) error {
-	data, err := ioutil.ReadFile(value)
-	if err != nil {
+	v := viper.New()
+	v.SetConfigFile(value)
+	if err := v.ReadInConfig(); err != nil {
 		return err
 	}
 
-	return yaml.Unmarshal(data, fc)
+	return fc.unmarshalViper(v)
+}
+
+func (fc *FileConfig) unmarshalViper(v *viper.Viper) error {
+	tmp := struct { // work around mapstructure's interface; see https://github.com/spf13/viper/issues/338#issuecomment-382376136
+		Defaults map[string]string
+		Clusters map[string]map[string]string
+	}{
+		Defaults: map[string]string{},
+		Clusters: map[string]map[string]string{},
+	}
+
+	if err := v.Unmarshal(&tmp); err != nil {
+		return err
+	}
+
+	if err := fc.Defaults.unmarshalMap(tmp.Defaults); err != nil {
+		return err
+	}
+
+	if fc.Clusters == nil {
+		fc.Clusters = map[string]Config{}
+	}
+	for id, clusterMap := range tmp.Clusters {
+		c, ok := fc.Clusters[id]
+		if !ok {
+			c = Config{
+				ID:                   id,
+				DiscoveryFlagsByImpl: map[string]map[string]string{},
+				VtSQLFlags:           map[string]string{},
+				VtctldFlags:          map[string]string{},
+			}
+		}
+
+		if err := c.unmarshalMap(clusterMap); err != nil {
+			return err
+		}
+
+		fc.Clusters[id] = c
+	}
+
+	return nil
 }
 
 // Combine combines a FileConfig with a default Config and a ClustersFlag (each
