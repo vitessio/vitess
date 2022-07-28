@@ -38,6 +38,9 @@ var (
 	// VT13001 General Error
 	VT13001 = errorWithoutState("VT13001", vtrpcpb.Code_INTERNAL, "[BUG] %s", "aa")
 
+	// VT13002 Test
+	VT13002 = errorWithoutState("VT13002", vtrpcpb.Code_INTERNAL, "[BUG] %s", "aa")
+
 	Errors = []func(args ...any) *OurError{
 		VT03001,
 		VT03002,
@@ -48,6 +51,7 @@ var (
 		VT06001,
 		VT12001,
 		VT13001,
+		VT13002,
 	}
 )
 
