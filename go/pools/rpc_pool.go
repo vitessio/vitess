@@ -32,7 +32,7 @@ import (
 // one method of acquisition, Acquire(context.Context), which always uses the
 // lower of the pool-global timeout or the context deadline.
 type RPCPool struct {
-	rp          *ResourcePool
+	rp          IResourcePool
 	waitTimeout time.Duration
 }
 
