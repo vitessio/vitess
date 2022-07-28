@@ -10,7 +10,7 @@ to be changed.
 
 Given the way the FQDN is configured the TLS certificate may not match the
 server's "base" (<region>.<end_point_address>) due to the leading <path>
-so setting --3_backup_force_path_style=true will force the s3 client to
+so setting --s3_backup_force_path_style=true will force the s3 client to
 connect to <region>.<endpoint> and then make a request using the full
 path within the http calls.
 

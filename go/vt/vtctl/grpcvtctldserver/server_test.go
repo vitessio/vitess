@@ -56,7 +56,7 @@ import (
 )
 
 func init() {
-	*backupstorage.BackupStorageImplementation = testutil.BackupStorageImplementation
+	backupstorage.BackupStorageImplementation = testutil.BackupStorageImplementation
 
 	// For tests that don't actually care about mocking the tmclient (i.e. they
 	// call NewVtctldServer to initialize the unit under test), this needs to be
@@ -4047,8 +4047,8 @@ func TestGetBackups(t *testing.T) {
 	utils.MustMatch(t, expected, resp)
 
 	t.Run("no backupstorage", func(t *testing.T) {
-		*backupstorage.BackupStorageImplementation = "doesnotexist"
-		defer func() { *backupstorage.BackupStorageImplementation = testutil.BackupStorageImplementation }()
+		backupstorage.BackupStorageImplementation = "doesnotexist"
+		defer func() { backupstorage.BackupStorageImplementation = testutil.BackupStorageImplementation }()
 
 		_, err := vtctld.GetBackups(ctx, &vtctldatapb.GetBackupsRequest{
 			Keyspace: "testkeyspace",

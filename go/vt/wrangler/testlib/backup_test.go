@@ -116,7 +116,7 @@ func testBackupRestore(t *testing.T, cDetails *compressionDetails) error {
 	// Initialize BackupStorage
 	fbsRoot := path.Join(root, "fbs")
 	filebackupstorage.FileBackupStorageRoot = fbsRoot
-	*backupstorage.BackupStorageImplementation = "file"
+	backupstorage.BackupStorageImplementation = "file"
 	if cDetails != nil {
 		if cDetails.BuiltinCompressor != "" {
 			*mysqlctl.BuiltinCompressor = cDetails.BuiltinCompressor
@@ -349,7 +349,7 @@ func TestBackupRestoreLagged(t *testing.T) {
 	// Initialize BackupStorage
 	fbsRoot := path.Join(root, "fbs")
 	filebackupstorage.FileBackupStorageRoot = fbsRoot
-	*backupstorage.BackupStorageImplementation = "file"
+	backupstorage.BackupStorageImplementation = "file"
 
 	// Initialize the fake mysql root directories
 	sourceInnodbDataDir := path.Join(root, "source_innodb_data")
@@ -553,7 +553,7 @@ func TestRestoreUnreachablePrimary(t *testing.T) {
 	// Initialize BackupStorage
 	fbsRoot := path.Join(root, "fbs")
 	filebackupstorage.FileBackupStorageRoot = fbsRoot
-	*backupstorage.BackupStorageImplementation = "file"
+	backupstorage.BackupStorageImplementation = "file"
 
 	// Initialize the fake mysql root directories
 	sourceInnodbDataDir := path.Join(root, "source_innodb_data")
@@ -713,7 +713,7 @@ func TestDisableActiveReparents(t *testing.T) {
 	// Initialize BackupStorage
 	fbsRoot := path.Join(root, "fbs")
 	filebackupstorage.FileBackupStorageRoot = fbsRoot
-	*backupstorage.BackupStorageImplementation = "file"
+	backupstorage.BackupStorageImplementation = "file"
 
 	// Initialize the fake mysql root directories
 	sourceInnodbDataDir := path.Join(root, "source_innodb_data")
