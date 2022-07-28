@@ -55,12 +55,14 @@ func TestCrossCellDurability(t *testing.T) {
 		utils.CheckSemiSyncSetupCorrectly(t, tablet, "ON")
 	}
 
-	// Bring up a new replica tablet
-	// In this new tablet, we do not disable active reparents, otherwise replication will not be started.
-	newReplica := utils.StartNewVTTablet(t, clusterInstance)
-	// Add the tablet to the list of tablets in this shard
-	clusterInstance.Keyspaces[0].Shards[0].Vttablets = append(clusterInstance.Keyspaces[0].Shards[0].Vttablets, newReplica)
-	// Check that we can replicate to it and semi-sync is setup correctly on it
-	utils.ConfirmReplication(t, tablets[3], []*cluster.Vttablet{tablets[0], tablets[1], tablets[2], newReplica})
-	utils.CheckSemiSyncSetupCorrectly(t, newReplica, "ON")
+	for i, supportsBackup := range []bool{false, true} {
+		// Bring up a new replica tablet
+		// In this new tablet, we do not disable active reparents, otherwise replication will not be started.
+		newReplica := utils.StartNewVTTablet(t, clusterInstance, 300+i, supportsBackup)
+		// Add the tablet to the list of tablets in this shard
+		clusterInstance.Keyspaces[0].Shards[0].Vttablets = append(clusterInstance.Keyspaces[0].Shards[0].Vttablets, newReplica)
+		// Check that we can replicate to it and semi-sync is setup correctly on it
+		utils.ConfirmReplication(t, tablets[3], []*cluster.Vttablet{tablets[0], tablets[1], tablets[2], newReplica})
+		utils.CheckSemiSyncSetupCorrectly(t, newReplica, "ON")
+	}
 }
