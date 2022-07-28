@@ -93,6 +93,11 @@ func TestVtGateVtExplain(t *testing.T) {
 	conn, err := mysql.Connect(context.Background(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
+
+	utils.AssertContainsError(t, conn,
+		`explain format=vtexplain insert into user (id,lookup,lookup_unique) values (4,'apa','foo'),(5,'apa','bar'),(6,'monkey','nobar')`,
+		"vtexplain will actually run queries")
+
 	expected := `[[INT32(0) VARCHAR("ks") VARCHAR("40-80") VARCHAR("begin")] ` +
 		`[INT32(0) VARCHAR("ks") VARCHAR("40-80") VARCHAR("insert into lookup(lookup, id, keyspace_id) values ('monkey', 3, 'N\xb1\x90ɢ\xfa\x16\x9c') on duplicate key update lookup = values(lookup), id = values(id), keyspace_id = values(keyspace_id)")] ` +
 		`[INT32(1) VARCHAR("ks") VARCHAR("-40") VARCHAR("begin")] ` +
@@ -111,7 +116,7 @@ func TestVtGateVtExplain(t *testing.T) {
 		`[INT32(9) VARCHAR("ks") VARCHAR("-40") VARCHAR("insert into ` + "`user`" + `(id, lookup, lookup_unique) values (1, 'apa', 'apa'), (2, 'apa', 'bandar')")] ` +
 		`[INT32(10) VARCHAR("ks") VARCHAR("40-80") VARCHAR("commit")] ` +
 		`[INT32(11) VARCHAR("ks") VARCHAR("-40") VARCHAR("commit")]]`
-	utils.AssertMatchesNoOrder(t, conn, `explain format=vtexplain insert into user (id,lookup,lookup_unique) values (1,'apa','apa'),(2,'apa','bandar'),(3,'monkey','monkey')`, expected)
+	utils.AssertMatchesNoOrder(t, conn, `explain /*vt+ ACTUALLY_RUN_QUERIES */ format=vtexplain insert into user (id,lookup,lookup_unique) values (1,'apa','apa'),(2,'apa','bandar'),(3,'monkey','monkey')`, expected)
 
 	expected = `[[INT32(0) VARCHAR("ks") VARCHAR("-40") VARCHAR("select lookup, keyspace_id from lookup where lookup in ('apa')")]` +
 		` [INT32(1) VARCHAR("ks") VARCHAR("40-80") VARCHAR("select id from ` + "`user`" + ` where lookup = 'apa'")]]`
@@ -138,6 +143,10 @@ func TestVtGateVtExplain(t *testing.T) {
 		` [INT32(10) VARCHAR("ks") VARCHAR("40-80") VARCHAR("insert into ` + "`user`" + `(id, lookup, lookup_unique) values (5, 'apa', 'bar')")]` +
 		` [INT32(11) VARCHAR("ks") VARCHAR("c0-") VARCHAR("begin")]` +
 		` [INT32(11) VARCHAR("ks") VARCHAR("c0-") VARCHAR("insert into ` + "`user`" + `(id, lookup, lookup_unique) values (4, 'apa', 'foo'), (6, 'monkey', 'nobar')")]]`
-	utils.AssertMatchesNoOrder(t, conn, `explain format=vtexplain insert into user (id,lookup,lookup_unique) values (4,'apa','foo'),(5,'apa','bar'),(6,'monkey','nobar')`, expected)
+
+	utils.AssertMatchesNoOrder(t, conn,
+		`explain /*vt+ ACTUALLY_RUN_QUERIES */ format=vtexplain insert into user (id,lookup,lookup_unique) values (4,'apa','foo'),(5,'apa','bar'),(6,'monkey','nobar')`,
+		expected)
+
 	utils.Exec(t, conn, "rollback")
 }
