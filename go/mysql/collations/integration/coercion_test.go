@@ -202,7 +202,7 @@ func TestComparisonSemantics(t *testing.T) {
 							t.Errorf("expected %s vs %s to fail coercion: %v", collA.Collation.Name(), collB.Collation.Name(), errRemote)
 							continue
 						}
-						if !strings.HasPrefix(errRemote.Error(), errLocal.Error()) {
+						if !strings.HasPrefix(normalizeCollationInError(errRemote.Error()), normalizeCollationInError(errLocal.Error())) {
 							t.Fatalf("bad error message: expected %q, got %q", errRemote, errLocal)
 						}
 						continue
@@ -213,7 +213,7 @@ func TestComparisonSemantics(t *testing.T) {
 						continue
 					}
 
-					remoteCollation := collations.Local().LookupByName(resultRemote.Rows[0][1].ToString())
+					remoteCollation := collations.Local().LookupByName(normalizeCollationForLookup(resultRemote.Rows[0][1].ToString()))
 					remoteCI, _ := resultRemote.Rows[0][2].ToInt64()
 					remoteTest.Test(t, &RemoteCoercionResult{
 						Expr:         resultRemote.Rows[0][0],
@@ -224,4 +224,23 @@ func TestComparisonSemantics(t *testing.T) {
 			}
 		})
 	}
+}
+
+// normalizeCollationInError normalizes the collation name in the error output.
+// Starting with mysql 8.0.30 collations prefixed with `utf8_` have been changed to use `utf8mb3_` instead
+// This is inconsistent with older MySQL versions and causes the tests to fail against it.
+// As a stop-gap solution, this functions normalizes the error messages so that the tests pass until we
+// have a fix for it.
+// TODO: Remove error normalization
+func normalizeCollationInError(errMessage string) string {
+	return strings.ReplaceAll(errMessage, "utf8_", "utf8mb3_")
+}
+
+// normalizeCollationForLookup normalizes the collation name in the error output.
+// Starting with mysql 8.0.30 collations prefixed with `utf8_` have been changed to use `utf8mb3_` instead
+// This is inconsistent with our collation lookup which in release-13.0 doesn't have aliases for `utf8mb3`.
+// So to make the test work, we have to convert the collation name before lookup by replacing `utf8mb3_`
+// with `utf8_`. This is not an issue for release-14.0 upwards, since they have aliases for `utf8mb3_` in lookups
+func normalizeCollationForLookup(collation string) string {
+	return strings.ReplaceAll(collation, "utf8mb3_", "utf8_")
 }
