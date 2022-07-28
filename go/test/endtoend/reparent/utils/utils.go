@@ -194,8 +194,8 @@ func setupShard(ctx context.Context, t *testing.T, clusterInstance *cluster.Loca
 }
 
 // StartNewVTTablet starts a new vttablet instance
-func StartNewVTTablet(t *testing.T, clusterInstance *cluster.LocalProcessCluster) *cluster.Vttablet {
-	tablet := clusterInstance.NewVttabletInstance("replica", 300, cell1)
+func StartNewVTTablet(t *testing.T, clusterInstance *cluster.LocalProcessCluster, uuid int, supportsBackup bool) *cluster.Vttablet {
+	tablet := clusterInstance.NewVttabletInstance("replica", uuid, cell1)
 	keyspace := clusterInstance.Keyspaces[0]
 	shard := keyspace.Shards[0]
 
@@ -222,6 +222,7 @@ func StartNewVTTablet(t *testing.T, clusterInstance *cluster.LocalProcessCluster
 		},
 		clusterInstance.EnableSemiSync,
 		clusterInstance.DefaultCharset)
+	tablet.VttabletProcess.SupportsBackup = supportsBackup
 
 	log.Infof("Starting MySql for tablet %v", tablet.Alias)
 	proc, err := tablet.MysqlctlProcess.StartProcess()

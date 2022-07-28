@@ -44,6 +44,7 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vdiff"
 
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -403,12 +404,13 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, healthCheckInterval ti
 	}
 	if restoring {
 		// If restore was triggered, it will take care
-		// of updating the tablet state.
+		// of updating the tablet state and initializing replication.
 		return nil
 	}
 
+	_, err = tm.initializeReplication(ctx, tm.baseTabletType)
 	tm.tmState.Open()
-	return nil
+	return err
 }
 
 // Close prepares a tablet for shutdown. First we check our tablet ownership and
@@ -838,4 +840,60 @@ func (tm *TabletManager) hookExtraEnv() map[string]string {
 		"KEYSPACE":     tablet.Keyspace,
 		"SHARD":        tablet.Shard,
 	}
+}
+
+// initializeReplication is used to initialize the replication when the tablet starts.
+// It returns the current primary tablet for use externally
+func (tm *TabletManager) initializeReplication(ctx context.Context, tabletType topodatapb.TabletType) (primary *topo.TabletInfo, err error) {
+	// If active reparents are disabled, we do not touch replication.
+	// There is nothing to do
+	if *mysqlctl.DisableActiveReparents {
+		return nil, nil
+	}
+
+	// Read the shard to find the current primary, and its location.
+	tablet := tm.Tablet()
+	si, err := tm.TopoServer.GetShard(ctx, tablet.Keyspace, tablet.Shard)
+	if err != nil {
+		return nil, vterrors.Wrap(err, "can't read shard")
+	}
+	if si.PrimaryAlias == nil {
+		// There's no primary. This is fine, since there might be no primary currently
+		log.Warningf("Cannot start replication during initialization: shard %v/%v has no primary.", tablet.Keyspace, tablet.Shard)
+		return nil, nil
+	}
+	if topoproto.TabletAliasEqual(si.PrimaryAlias, tablet.Alias) {
+		// We used to be the primary before we got restarted,
+		// and no other primary has been elected in the meantime.
+		// There isn't anything to do here either.
+		log.Warningf("Cannot start replication during initialization: primary in shard record still points to this tablet.")
+		return nil, nil
+	}
+	currentPrimary, err := tm.TopoServer.GetTablet(ctx, si.PrimaryAlias)
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "Cannot read primary tablet %v", si.PrimaryAlias)
+	}
+
+	durabilityName, err := tm.TopoServer.GetKeyspaceDurability(ctx, tablet.Keyspace)
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "Cannot read keyspace durability %v", tablet.Keyspace)
+	}
+	log.Infof("Getting a new durability policy for %v", durabilityName)
+	durability, err := reparentutil.GetDurabilityPolicy(durabilityName)
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "Cannot get durability policy %v", durabilityName)
+	}
+	// If using semi-sync, we need to enable it before connecting to primary.
+	// We should set the correct type, since it is used in replica semi-sync
+	tablet.Type = tabletType
+	if err := tm.fixSemiSync(tabletType, convertBoolToSemiSyncAction(reparentutil.IsReplicaSemiSync(durability, currentPrimary.Tablet, tablet))); err != nil {
+		return nil, err
+	}
+
+	// Set primary and start replication.
+	if err := tm.MysqlDaemon.SetReplicationSource(ctx, currentPrimary.Tablet.MysqlHostname, int(currentPrimary.Tablet.MysqlPort), false /* stopReplicationBefore */, true /* startReplicationAfter */); err != nil {
+		return nil, vterrors.Wrap(err, "MysqlDaemon.SetReplicationSource failed")
+	}
+
+	return currentPrimary, nil
 }
