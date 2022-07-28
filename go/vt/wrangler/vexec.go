@@ -150,6 +150,9 @@ func (wr *Wrangler) VExecResult(ctx context.Context, workflow, keyspace, query s
 
 // VExec executes queries on a table on all primaries in the target keyspace of the workflow
 func (wr *Wrangler) VExec(ctx context.Context, workflow, keyspace, query string, dryRun bool) (map[*topo.TabletInfo]*sqltypes.Result, error) {
+	if wr.VExecFunc != nil {
+		return wr.VExecFunc(ctx, workflow, keyspace, query, dryRun)
+	}
 	results, err := wr.runVexec(ctx, workflow, keyspace, query, dryRun)
 	retResults := make(map[*topo.TabletInfo]*sqltypes.Result)
 	for tablet, result := range results {

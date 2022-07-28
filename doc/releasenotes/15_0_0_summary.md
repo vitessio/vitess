@@ -59,6 +59,12 @@ All Online DDL migrations using the `vitess` strategy are now eligible to run co
 
 The main use case is to run multiple concurrent migrations, all with `--postpone-completion`. All table-copy operations will run sequentially, but no migration will actually cut-over, and eventually all migration will be `ready_to_complete`, continuously tailing the binary logs and keeping up-to-date. A quick and iterative `ALTER VITESS_MIGRATION '...' COMPLETE` sequence of commands will cut-over all migrations _closely together_ (though not atomically together).
 
+#### vtctl command changes. 
+All `online DDL show` commands can now be run with a few additional parameters
+- `--order` , order migrations in the output by either ascending or descending order of their `id` fields.
+- `--skip`  , skip specified number of migrations in the output.
+- `--limit` , limit results to a specified number of migrations in the output.
+
 #### New syntax
 
 The following is now supported:
