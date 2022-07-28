@@ -178,6 +178,7 @@ func setupShard(ctx context.Context, t *testing.T, clusterInstance *cluster.Loca
 		require.NoError(t, err)
 	}
 
+	time.Sleep(10 * time.Second)
 	// Initialize shard
 	err := clusterInstance.VtctlclientProcess.InitializeShard(KeyspaceName, shardName, tablets[0].Cell, tablets[0].TabletUID)
 	require.NoError(t, err)
