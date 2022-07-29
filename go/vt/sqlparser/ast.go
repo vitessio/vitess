@@ -3739,7 +3739,7 @@ func (node *JoinTableExpr) walkSubtree(visit Visit) error {
 type JSONTableExpr struct {
 	Data    string
 	Path    string
-	Columns *TableSpec // TODO: fix
+	Columns *TableSpec
 	Alias   TableIdent
 }
 
