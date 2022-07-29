@@ -365,7 +365,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <expr> expression naked_like group_by
 %type <tableExprs> table_references cte_list from_opt
 %type <with> with_clause
-%type <tableExpr> table_reference table_function table_factor join_table json_table common_table_expression
+%type <tableExpr> table_reference table_function table_factor join_table common_table_expression // json_table
 %type <simpleTableExpr> values_statement subquery_or_values
 %type <subquery> subquery
 %type <joinCondition> join_condition join_condition_opt on_expression_opt
@@ -2354,7 +2354,7 @@ column_type_options:
     $$ = $1
   }
 | column_type_options PATH STRING
-{
+  {
     opt := ColumnType{Path: string($3)}
     if err := $1.merge(opt); err != nil {
     	yylex.Error(err.Error())
@@ -4294,7 +4294,7 @@ table_references:
 table_reference:
   table_factor
 | join_table
-| json_table
+//| json_table
 
 table_factor:
   aliased_table_name
@@ -4422,10 +4422,15 @@ partition_list:
   }
 
 table_function:
-  ID openb argument_expression_list_opt closeb
+  JSON_TABLE openb STRING ',' STRING COLUMNS openb table_column_list closeb closeb AS table_alias
+  {
+    $$ = &JSONTableExpr{Data: string($3), Path: string($5), Columns: $8, Alias: $12}
+  }
+| ID openb argument_expression_list_opt closeb
   {
     $$ = &TableFuncExpr{Name: string($1), Exprs: $3}
   }
+
 
 // There is a grammar conflict here:
 // 1: INSERT INTO a SELECT * FROM b JOIN c ON b.i = c.i
@@ -4450,12 +4455,6 @@ join_table:
 | table_reference natural_join table_factor
   {
     $$ = &JoinTableExpr{LeftExpr: $1, Join: $2, RightExpr: $3}
-  }
-
-json_table:
-  table_reference JSON_TABLE openb STRING ',' STRING COLUMNS openb table_column_list closeb closeb AS table_alias
-  {
-    $$ = &JSONTableExpr{Data: string($4), Path: string($6), Columns: $9, Alias: $13}
   }
 
 join_condition:

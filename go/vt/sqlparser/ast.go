@@ -3301,10 +3301,10 @@ type TableExpr interface {
 func (*AliasedTableExpr) iTableExpr() {}
 func (*ParenTableExpr) iTableExpr()   {}
 func (*JoinTableExpr) iTableExpr()    {}
+func (*JSONTableExpr) iTableExpr()    {}
 func (*CommonTableExpr) iTableExpr()  {}
 func (*ValuesStatement) iTableExpr()  {}
 func (TableFuncExpr) iTableExpr()     {}
-func (*JSONTableExpr) iTableExpr()    {}
 
 // AliasedTableExpr represents a table expression
 // coupled with an optional alias, AS OF expression, and index hints.
@@ -3739,7 +3739,7 @@ func (node *JoinTableExpr) walkSubtree(visit Visit) error {
 type JSONTableExpr struct {
 	Data    string
 	Path    string
-	Columns *TableSpec
+	Columns *TableSpec // TODO: fix
 	Alias   TableIdent
 }
 
