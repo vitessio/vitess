@@ -27,6 +27,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/vt/logutil"
 )
 
@@ -94,6 +96,17 @@ func TestBuiltinCompressors(t *testing.T) {
 			if !reflect.DeepEqual(data, decompressed.Bytes()) {
 				t.Error("decompressed content differs from the original")
 			}
+		})
+	}
+}
+
+func TestUnSupportedBuiltinCompressors(t *testing.T) {
+	logger := logutil.NewMemoryLogger()
+
+	for _, engine := range []string{"external", "foobar"} {
+		t.Run(engine, func(t *testing.T) {
+			_, err := newBuiltinCompressor(engine, nil, logger)
+			require.ErrorContains(t, err, "unsupported engine value for CompressionEngineName. supported values are `external`, `pgzip`, `pargzip`, `zstd`, `lz4` value:")
 		})
 	}
 }
@@ -182,6 +195,32 @@ func TestValidateExternalCmd(t *testing.T) {
 					t.Errorf("Expected path \"%s\" to include \"%s\"", path, tt.path)
 				}
 			}
+			if tt.errStr == "" {
+				if err != nil {
+					t.Errorf("Expected result \"%v\", got \"%v\"", "<nil>", err)
+				}
+			} else {
+				if !strings.Contains(fmt.Sprintf("%v", err), tt.errStr) {
+					t.Errorf("Expected result \"%v\", got \"%v\"", tt.errStr, err)
+				}
+			}
+		})
+	}
+}
+
+func TestValidateCompressionEngineName(t *testing.T) {
+	tests := []struct {
+		engineName string
+		errStr     string
+	}{
+		// we expect ls to be on PATH as it is a basic command part of busybox and most containers
+		{"external", ""},
+		{"foobar", "unsupported engine value for CompressionEngineName. supported values are `external`, `pgzip`, `pargzip`, `zstd`, `lz4` value: \"foobar\""},
+	}
+
+	for i, tt := range tests {
+		t.Run(fmt.Sprintf("Test #%d", i+1), func(t *testing.T) {
+			err := validateExternalCompressionEngineName(tt.engineName)
 			if tt.errStr == "" {
 				if err != nil {
 					t.Errorf("Expected result \"%v\", got \"%v\"", "<nil>", err)

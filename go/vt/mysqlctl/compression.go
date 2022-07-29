@@ -47,13 +47,14 @@ const (
 var (
 	compressionLevel = flag.Int("compression-level", 1, "what level to pass to the compressor")
 	// switch which compressor/decompressor to use
-	BuiltinCompressor = flag.String("builtin-compressor", "pgzip", "builtin compressor engine to use")
+	CompressionEngineName = flag.String("compression-engine-name", "pgzip", "compressor engine used for compression.")
 	// use and external command to decompress the backups
 	ExternalCompressorCmd   = flag.String("external-compressor", "", "command with arguments to use when compressing a backup")
 	ExternalCompressorExt   = flag.String("external-compressor-extension", "", "extension to use when using an external compressor")
 	ExternalDecompressorCmd = flag.String("external-decompressor", "", "command with arguments to use when decompressing a backup")
 
-	errUnsupportedCompressionEngine = errors.New("unsupported engine")
+	errUnsupportedDeCompressionEngine = errors.New("unsupported engine in manifest. `external' compression engine needs ExternalDecompressorCmd")
+	errUnsupportedCompressionEngine   = errors.New("unsupported engine value for CompressionEngineName. supported values are `external`, `pgzip`, `pargzip`, `zstd`, `lz4`")
 
 	// this is used by getEngineFromExtension() to figure out which engine to use in case the user didn't specify
 	engineExtensions = map[string][]string{
@@ -82,6 +83,21 @@ func validateExternalCmd(cmd string) (string, error) {
 	return exec.LookPath(cmd)
 }
 
+// Validate compression engine is one of the supported values.
+func validateExternalCompressionEngineName(engine string) error {
+	switch engine {
+	case PgzipCompressor:
+	case PargzipCompressor:
+	case Lz4Compressor:
+	case ZstdCompressor:
+	case ExternalCompressor:
+	default:
+		return fmt.Errorf("%w value: %q", errUnsupportedCompressionEngine, engine)
+	}
+
+	return nil
+}
+
 func prepareExternalCmd(ctx context.Context, cmdStr string) (*exec.Cmd, error) {
 	cmdArgs, err := shlex.Split(cmdStr)
 	if err != nil {
@@ -100,6 +116,10 @@ func prepareExternalCmd(ctx context.Context, cmdStr string) (*exec.Cmd, error) {
 // This returns a writer that writes the compressed output of the external command to the provided writer.
 func newExternalCompressor(ctx context.Context, cmdStr string, writer io.Writer, logger logutil.Logger) (io.WriteCloser, error) {
 	logger.Infof("Compressing using external command: %q", cmdStr)
+	// validate value of compression engine name
+	if err := validateExternalCompressionEngineName(*CompressionEngineName); err != nil {
+		return nil, err
+	}
 
 	cmd, err := prepareExternalCmd(ctx, cmdStr)
 	if err != nil {
@@ -216,7 +236,7 @@ func newBuiltinCompressor(engine string, writer io.Writer, logger logutil.Logger
 		}
 		compressor = zst
 	default:
-		err = fmt.Errorf("Unkown compressor engine: %q", engine)
+		err = fmt.Errorf("%w value: %q", errUnsupportedCompressionEngine, engine)
 		return compressor, err
 	}
 

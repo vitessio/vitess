@@ -57,8 +57,8 @@ Usage of vttablet:
 	PITR restore parameter: TLS server name (common name) to verify against for the binlog server we are connecting to (If not set: use the hostname or IP supplied in -binlog_host).
   --binlog_user string
 	PITR restore parameter: username of binlog server.
-  --builtin-compressor string
-	builtin compressor engine to use (default pgzip)
+  --compression-engine-name string
+	compressor engine used for compression. (default pgzip)
   --builtinbackup_mysqld_timeout duration
 	how long to wait for mysqld to shutdown at the start of the backup (default 10m0s)
   --builtinbackup_progress duration

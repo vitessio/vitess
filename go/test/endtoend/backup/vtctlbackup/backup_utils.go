@@ -227,7 +227,7 @@ func getCompressorArgs(cDetails *CompressionDetails) []string {
 	}
 
 	if cDetails.BuiltinCompressor != "" {
-		args = append(args, fmt.Sprintf("--builtin-compressor=%s", cDetails.BuiltinCompressor))
+		args = append(args, fmt.Sprintf("--compression-engine-name=%s", cDetails.BuiltinCompressor))
 	}
 	if cDetails.BuiltinDecompressor != "" {
 		args = append(args, fmt.Sprintf("--builtin-decompressor=%s", cDetails.BuiltinDecompressor))

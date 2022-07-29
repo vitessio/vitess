@@ -71,7 +71,7 @@ func TestBackupRestoreWithPargzip(t *testing.T) {
 }
 
 func setDefaultCompressionFlag() {
-	*mysqlctl.BuiltinCompressor = "pgzip"
+	*mysqlctl.CompressionEngineName = "pgzip"
 	*mysqlctl.ExternalCompressorCmd = ""
 	*mysqlctl.ExternalCompressorExt = ""
 	*mysqlctl.ExternalDecompressorCmd = ""
@@ -115,7 +115,7 @@ func testBackupRestore(t *testing.T, cDetails *compressionDetails) error {
 	*backupstorage.BackupStorageImplementation = "file"
 	if cDetails != nil {
 		if cDetails.BuiltinCompressor != "" {
-			*mysqlctl.BuiltinCompressor = cDetails.BuiltinCompressor
+			*mysqlctl.CompressionEngineName = cDetails.BuiltinCompressor
 		}
 		if cDetails.ExternalCompressorCmd != "" {
 			*mysqlctl.ExternalCompressorCmd = cDetails.ExternalCompressorCmd

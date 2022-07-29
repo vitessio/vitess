@@ -111,7 +111,7 @@ func (be *XtrabackupEngine) backupFileName() string {
 		if *ExternalDecompressorCmd != "" {
 			fileName += *ExternalCompressorExt
 		} else {
-			if ext, err := getExtensionFromEngine(*BuiltinCompressor); err != nil {
+			if ext, err := getExtensionFromEngine(*CompressionEngineName); err != nil {
 				// there is a check for this, but just in case that fails, we set a extension to the file
 				fileName += ".unknown"
 			} else {
@@ -185,13 +185,6 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, params BackupPara
 	}
 	defer closeFile(mwc, backupManifestFileName, params.Logger, &finalErr)
 
-	// set the correct value of compression engine used.
-	// if an external compressor is used, empty engine value
-	// is saved in the MANIFEST
-	var compressionEngineValue = *BuiltinCompressor
-	if *ExternalCompressorCmd != "" {
-		compressionEngineValue = ExternalCompressor
-	}
 	// JSON-encode and write the MANIFEST
 	bm := &xtraBackupManifest{
 		// Common base fields
@@ -210,7 +203,7 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, params BackupPara
 		NumStripes:      int32(numStripes),
 		StripeBlockSize: int32(*xtrabackupStripeBlockSize),
 		// builtin specific field
-		CompressionEngine: compressionEngineValue,
+		CompressionEngine: *CompressionEngineName,
 	}
 
 	data, err := json.MarshalIndent(bm, "", "  ")
@@ -310,7 +303,7 @@ func (be *XtrabackupEngine) backupFiles(ctx context.Context, params BackupParams
 			if *ExternalCompressorCmd != "" {
 				compressor, err = newExternalCompressor(ctx, *ExternalCompressorCmd, writer, params.Logger)
 			} else {
-				compressor, err = newBuiltinCompressor(*BuiltinCompressor, writer, params.Logger)
+				compressor, err = newBuiltinCompressor(*CompressionEngineName, writer, params.Logger)
 			}
 			if err != nil {
 				return replicationPosition, vterrors.Wrap(err, "can't create compressor")
@@ -572,8 +565,10 @@ func (be *XtrabackupEngine) extractFiles(ctx context.Context, logger logutil.Log
 			if *ExternalDecompressorCmd != "" {
 				if deCompressionEngine == ExternalCompressor {
 					deCompressionEngine = *ExternalDecompressorCmd
+					decompressor, err = newExternalDecompressor(ctx, deCompressionEngine, reader, logger)
+				} else {
+					decompressor, err = newBuiltinDecompressor(deCompressionEngine, reader, logger)
 				}
-				decompressor, err = newExternalDecompressor(ctx, deCompressionEngine, reader, logger)
 			} else {
 				if deCompressionEngine == ExternalCompressor {
 					return fmt.Errorf("%w %q", errUnsupportedCompressionEngine, ExternalCompressor)

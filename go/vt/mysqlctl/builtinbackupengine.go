@@ -342,13 +342,6 @@ func (be *BuiltinBackupEngine) backupFiles(ctx context.Context, params BackupPar
 		}
 	}()
 
-	// set the correct value of compression engine used.
-	// if an external compressor is used, empty engine value
-	// is saved in the MANIFEST
-	var compressionEngineValue = *BuiltinCompressor
-	if *ExternalCompressorCmd != "" {
-		compressionEngineValue = ExternalCompressor
-	}
 	// JSON-encode and write the MANIFEST
 	bm := &builtinBackupManifest{
 		// Common base fields
@@ -363,7 +356,7 @@ func (be *BuiltinBackupEngine) backupFiles(ctx context.Context, params BackupPar
 		FileEntries:       fes,
 		TransformHook:     *backupStorageHook,
 		SkipCompress:      !*backupStorageCompress,
-		CompressionEngine: compressionEngineValue,
+		CompressionEngine: *CompressionEngineName,
 	}
 	data, err := json.MarshalIndent(bm, "", "  ")
 	if err != nil {
@@ -513,7 +506,7 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 		if *ExternalCompressorCmd != "" {
 			compressor, err = newExternalCompressor(ctx, *ExternalCompressorCmd, writer, params.Logger)
 		} else {
-			compressor, err = newBuiltinCompressor(*BuiltinCompressor, writer, params.Logger)
+			compressor, err = newBuiltinCompressor(*CompressionEngineName, writer, params.Logger)
 		}
 		if err != nil {
 			return vterrors.Wrap(err, "can't create compressor")
@@ -613,7 +606,7 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreP
 			// And restore the file.
 			name := fmt.Sprintf("%v", i)
 			params.Logger.Infof("Copying file %v: %v", name, fes[i].Name)
-			err := be.restoreFile(ctx, params, bh, &fes[i], bm.TransformHook, !bm.SkipCompress, bm.CompressionEngine, name)
+			err := be.restoreFile(ctx, params, bh, &fes[i], bm, name)
 			if err != nil {
 				rec.RecordError(vterrors.Wrapf(err, "can't restore file %v to %v", name, fes[i].Name))
 			}
@@ -624,7 +617,7 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreP
 }
 
 // restoreFile restores an individual file.
-func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle, fe *FileEntry, transformHook string, compress bool, deCompressionEngine string, name string) (finalErr error) {
+func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle, fe *FileEntry, bm builtinBackupManifest, name string) (finalErr error) {
 	// Open the source file for reading.
 	source, err := bh.ReadFile(ctx, name)
 	if err != nil {
@@ -656,18 +649,19 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 
 	// Create the external read pipe, if any.
 	var wait hook.WaitFunc
-	if transformHook != "" {
-		h := hook.NewHook(transformHook, []string{"-operation", "read"})
+	if bm.TransformHook != "" {
+		h := hook.NewHook(bm.TransformHook, []string{"-operation", "read"})
 		h.ExtraEnv = params.HookExtraEnv
 		reader, wait, _, err = h.ExecuteAsReadPipe(reader)
 		if err != nil {
-			return vterrors.Wrapf(err, "'%v' hook returned error", transformHook)
+			return vterrors.Wrapf(err, "'%v' hook returned error", bm.TransformHook)
 		}
 	}
 
 	// Create the uncompresser if needed.
-	if compress {
+	if !bm.SkipCompress {
 		var decompressor io.ReadCloser
+		var deCompressionEngine = bm.CompressionEngine
 		if deCompressionEngine == "" {
 			// for backward compatibility
 			deCompressionEngine = PgzipCompressor
@@ -675,11 +669,13 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 		if *ExternalDecompressorCmd != "" {
 			if deCompressionEngine == ExternalCompressor {
 				deCompressionEngine = *ExternalDecompressorCmd
+				decompressor, err = newExternalDecompressor(ctx, deCompressionEngine, reader, params.Logger)
+			} else {
+				decompressor, err = newBuiltinDecompressor(deCompressionEngine, reader, params.Logger)
 			}
-			decompressor, err = newExternalDecompressor(ctx, deCompressionEngine, reader, params.Logger)
 		} else {
 			if deCompressionEngine == ExternalCompressor {
-				return fmt.Errorf("%w %q", errUnsupportedCompressionEngine, ExternalCompressor)
+				return fmt.Errorf("%w value: %q", errUnsupportedDeCompressionEngine, ExternalCompressor)
 			}
 			decompressor, err = newBuiltinDecompressor(deCompressionEngine, reader, params.Logger)
 		}
@@ -710,10 +706,10 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 	if wait != nil {
 		stderr, err := wait()
 		if stderr != "" {
-			log.Infof("'%v' hook returned stderr: %v", transformHook, stderr)
+			log.Infof("'%v' hook returned stderr: %v", bm.TransformHook, stderr)
 		}
 		if err != nil {
-			return vterrors.Wrapf(err, "'%v' returned error", transformHook)
+			return vterrors.Wrapf(err, "'%v' returned error", bm.TransformHook)
 		}
 	}
 
