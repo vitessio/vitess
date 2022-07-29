@@ -19,7 +19,6 @@ package vindexes
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -280,28 +279,7 @@ func (lu *LookupUnique) Map(ctx context.Context, vcursor VCursor, ids []sqltypes
 }
 
 func (lu *LookupUnique) MapResult(ids []sqltypes.Value, results []*sqltypes.Result) ([]key.Destination, error) {
-	out := make([]key.Destination, 0, len(ids))
-	if lu.writeOnly {
-		for range ids {
-			out = append(out, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{}})
-		}
-		return out, nil
-	}
-	for i, result := range results {
-		switch len(result.Rows) {
-		case 0:
-			out = append(out, key.DestinationNone{})
-		case 1:
-			rowBytes, err := result.Rows[0][0].ToBytes()
-			if err != nil {
-				return nil, err
-			}
-			out = append(out, key.DestinationKeyspaceID(rowBytes))
-		default:
-			return nil, fmt.Errorf("Lookup.Map: unexpected multiple results from vindex %s: %v", lu.lkp.Table, ids[i])
-		}
-	}
-	return out, nil
+	return lu.lkp.mapResult(ids, results, lu.writeOnly)
 }
 
 // Verify returns true if ids maps to ksids.

@@ -24,6 +24,8 @@ import (
 	"strconv"
 	"strings"
 
+	"vitess.io/vitess/go/vt/key"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -354,6 +356,33 @@ func (lkp *lookupInternal) initDelStmt() string {
 	}
 	delBuffer.WriteString(" and " + lkp.To + " = :" + lkp.To)
 	return delBuffer.String()
+}
+
+// MapResult implements the LookupPlanable interface
+func (lkp *lookupInternal) mapResult(ids []sqltypes.Value, results []*sqltypes.Result, writeOnly bool) ([]key.Destination, error) {
+	out := make([]key.Destination, 0, len(ids))
+	if writeOnly {
+		for range ids {
+			out = append(out, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{}})
+		}
+		return out, nil
+	}
+
+	for i, result := range results {
+		switch len(result.Rows) {
+		case 0:
+			out = append(out, key.DestinationNone{})
+		case 1:
+			rowBytes, err := result.Rows[0][0].ToBytes()
+			if err != nil {
+				return out, err
+			}
+			out = append(out, key.DestinationKeyspaceID(rowBytes))
+		default:
+			return nil, fmt.Errorf("Lookup.Map: unexpected multiple results from vindex %s: %v", lkp.Table, ids[i])
+		}
+	}
+	return out, nil
 }
 
 type commonConfig struct {

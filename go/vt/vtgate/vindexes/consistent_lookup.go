@@ -36,12 +36,14 @@ import (
 )
 
 var (
-	_ SingleColumn  = (*ConsistentLookupUnique)(nil)
-	_ Lookup        = (*ConsistentLookupUnique)(nil)
-	_ WantOwnerInfo = (*ConsistentLookupUnique)(nil)
-	_ SingleColumn  = (*ConsistentLookup)(nil)
-	_ Lookup        = (*ConsistentLookup)(nil)
-	_ WantOwnerInfo = (*ConsistentLookup)(nil)
+	_ SingleColumn   = (*ConsistentLookupUnique)(nil)
+	_ Lookup         = (*ConsistentLookupUnique)(nil)
+	_ WantOwnerInfo  = (*ConsistentLookupUnique)(nil)
+	_ LookupPlanable = (*ConsistentLookupUnique)(nil)
+	_ SingleColumn   = (*ConsistentLookup)(nil)
+	_ Lookup         = (*ConsistentLookup)(nil)
+	_ WantOwnerInfo  = (*ConsistentLookup)(nil)
+	_ LookupPlanable = (*ConsistentLookup)(nil)
 )
 
 func init() {
@@ -105,22 +107,22 @@ func (lu *ConsistentLookup) Map(ctx context.Context, vcursor VCursor, ids []sqlt
 	if err != nil {
 		return nil, err
 	}
-	for _, result := range results {
-		if len(result.Rows) == 0 {
-			out = append(out, key.DestinationNone{})
-			continue
-		}
-		ksids := make([][]byte, 0, len(result.Rows))
-		for _, row := range result.Rows {
-			rowBytes, err := row[0].ToBytes()
-			if err != nil {
-				return nil, err
-			}
-			ksids = append(ksids, rowBytes)
-		}
-		out = append(out, key.DestinationKeyspaceIDs(ksids))
-	}
-	return out, nil
+	return lu.MapResult(ids, results)
+}
+
+// MapResult implements the LookupPlanable interface
+func (lu *ConsistentLookup) MapResult(ids []sqltypes.Value, results []*sqltypes.Result) ([]key.Destination, error) {
+	return lu.lkp.mapResult(ids, results, lu.writeOnly)
+}
+
+// Query implements the LookupPlanable interface
+func (lu *ConsistentLookup) Query() (selQuery string, arguments []string) {
+	return lu.lkp.sel, lu.lkp.FromColumns
+}
+
+// AllowBatch implements the LookupPlanable interface
+func (lu *ConsistentLookup) AllowBatch() bool {
+	return lu.lkp.BatchLookup
 }
 
 //====================================================================
@@ -174,21 +176,22 @@ func (lu *ConsistentLookupUnique) Map(ctx context.Context, vcursor VCursor, ids 
 	if err != nil {
 		return nil, err
 	}
-	for i, result := range results {
-		switch len(result.Rows) {
-		case 0:
-			out = append(out, key.DestinationNone{})
-		case 1:
-			rowBytes, err := result.Rows[0][0].ToBytes()
-			if err != nil {
-				return out, err
-			}
-			out = append(out, key.DestinationKeyspaceID(rowBytes))
-		default:
-			return nil, fmt.Errorf("Lookup.Map: unexpected multiple results from vindex %s: %v", lu.lkp.Table, ids[i])
-		}
-	}
-	return out, nil
+	return lu.MapResult(ids, results)
+}
+
+// MapResult implements the LookupPlanable interface
+func (lu *ConsistentLookupUnique) MapResult(ids []sqltypes.Value, results []*sqltypes.Result) ([]key.Destination, error) {
+	return lu.lkp.mapResult(ids, results, lu.writeOnly)
+}
+
+// Query implements the LookupPlanable interface
+func (lu *ConsistentLookupUnique) Query() (selQuery string, arguments []string) {
+	return lu.lkp.sel, lu.lkp.FromColumns
+}
+
+// AllowBatch implements the LookupPlanable interface
+func (lu *ConsistentLookupUnique) AllowBatch() bool {
+	return lu.lkp.BatchLookup
 }
 
 //====================================================================
