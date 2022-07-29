@@ -73,6 +73,12 @@ func copySchema(t *testing.T, useShardAsSource bool) {
 	defer sourceRdonlyDb.Close()
 	sourceRdonly := NewFakeTablet(t, wr, "cell1", 1,
 		topodatapb.TabletType_RDONLY, sourceRdonlyDb, TabletKeyspaceShard(t, "ks", "-80"))
+	sourceRdonly.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		// These 2 statements come from tablet startup
+		"FAKE SET MASTER",
+		"START SLAVE",
+	}
+	sourceRdonly.FakeMysqlDaemon.SetReplicationSourceInputs = append(sourceRdonly.FakeMysqlDaemon.SetReplicationSourceInputs, fmt.Sprintf("%v:%v", sourcePrimary.Tablet.MysqlHostname, sourcePrimary.Tablet.MysqlPort))
 
 	destinationPrimaryDb := fakesqldb.New(t).SetName("destinationPrimaryDb")
 	defer destinationPrimaryDb.Close()
