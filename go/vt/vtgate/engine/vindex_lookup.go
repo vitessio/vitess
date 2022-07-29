@@ -19,6 +19,8 @@ package engine
 import (
 	"context"
 
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+
 	"vitess.io/vitess/go/vt/key"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -163,6 +165,11 @@ func (vr *VindexLookup) description() PrimitiveDescription {
 }
 
 func (vr *VindexLookup) lookup(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]*sqltypes.Result, error) {
+	co := vr.Vindex.GetCommitOrder()
+	if co != vtgatepb.CommitOrder_NORMAL {
+		vcursor.Session().SetCommitOrder(co)
+		defer vcursor.Session().SetCommitOrder(vtgatepb.CommitOrder_NORMAL)
+	}
 	if ids[0].IsIntegral() || vr.Vindex.AllowBatch() {
 		return vr.executeBatch(ctx, vcursor, ids)
 	}

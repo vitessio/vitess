@@ -169,6 +169,8 @@ type (
 		AddAdvisoryLock(name string)
 		// RemoveAdvisoryLock removes advisory lock from the session
 		RemoveAdvisoryLock(name string)
+
+		SetCommitOrder(co vtgatepb.CommitOrder)
 	}
 
 	// Match is used to check if a Primitive matches

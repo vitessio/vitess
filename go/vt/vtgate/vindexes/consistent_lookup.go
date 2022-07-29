@@ -110,21 +110,6 @@ func (lu *ConsistentLookup) Map(ctx context.Context, vcursor VCursor, ids []sqlt
 	return lu.MapResult(ids, results)
 }
 
-// MapResult implements the LookupPlanable interface
-func (lu *ConsistentLookup) MapResult(ids []sqltypes.Value, results []*sqltypes.Result) ([]key.Destination, error) {
-	return lu.lkp.mapResult(ids, results, lu.writeOnly)
-}
-
-// Query implements the LookupPlanable interface
-func (lu *ConsistentLookup) Query() (selQuery string, arguments []string) {
-	return lu.lkp.query()
-}
-
-// AllowBatch implements the LookupPlanable interface
-func (lu *ConsistentLookup) AllowBatch() bool {
-	return lu.lkp.BatchLookup
-}
-
 //====================================================================
 
 // ConsistentLookupUnique defines a vindex that uses a lookup table.
@@ -179,19 +164,9 @@ func (lu *ConsistentLookupUnique) Map(ctx context.Context, vcursor VCursor, ids 
 	return lu.MapResult(ids, results)
 }
 
-// MapResult implements the LookupPlanable interface
-func (lu *ConsistentLookupUnique) MapResult(ids []sqltypes.Value, results []*sqltypes.Result) ([]key.Destination, error) {
-	return lu.lkp.mapResult(ids, results, lu.writeOnly)
-}
-
-// Query implements the LookupPlanable interface
-func (lu *ConsistentLookupUnique) Query() (selQuery string, arguments []string) {
-	return lu.lkp.query()
-}
-
-// AllowBatch implements the LookupPlanable interface
-func (lu *ConsistentLookupUnique) AllowBatch() bool {
-	return lu.lkp.BatchLookup
+// IsBackfilling implements the LookupBackfill interface
+func (lu *ConsistentLookupUnique) IsBackfilling() bool {
+	return lu.writeOnly
 }
 
 //====================================================================
@@ -407,7 +382,22 @@ func (lu *clCommon) addWhere(buf *bytes.Buffer, cols []string) {
 	}
 }
 
-// IsBackfilling implements the LookupBackfill interface
-func (lu *ConsistentLookupUnique) IsBackfilling() bool {
-	return lu.writeOnly
+// MapResult implements the LookupPlanable interface
+func (lu *clCommon) MapResult(ids []sqltypes.Value, results []*sqltypes.Result) ([]key.Destination, error) {
+	return lu.lkp.mapResult(ids, results, lu.writeOnly)
+}
+
+// Query implements the LookupPlanable interface
+func (lu *clCommon) Query() (selQuery string, arguments []string) {
+	return lu.lkp.query()
+}
+
+// AllowBatch implements the LookupPlanable interface
+func (lu *clCommon) AllowBatch() bool {
+	return lu.lkp.BatchLookup
+}
+
+// GetCommitOrder implements the LookupPlanable interface
+func (lu *clCommon) GetCommitOrder() vtgatepb.CommitOrder {
+	return vtgatepb.CommitOrder_PRE
 }

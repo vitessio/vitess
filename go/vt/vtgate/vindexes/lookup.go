@@ -48,6 +48,10 @@ type LookupNonUnique struct {
 	lkp       lookupInternal
 }
 
+func (ln *LookupNonUnique) GetCommitOrder() vtgatepb.CommitOrder {
+	return vtgatepb.CommitOrder_NORMAL
+}
+
 func (ln *LookupNonUnique) AllowBatch() bool {
 	return ln.lkp.BatchLookup
 }
@@ -208,6 +212,10 @@ type LookupUnique struct {
 	name      string
 	writeOnly bool
 	lkp       lookupInternal
+}
+
+func (lu *LookupUnique) GetCommitOrder() vtgatepb.CommitOrder {
+	return vtgatepb.CommitOrder_NORMAL
 }
 
 func (lu *LookupUnique) AllowBatch() bool {

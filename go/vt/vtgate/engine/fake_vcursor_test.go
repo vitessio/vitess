@@ -50,6 +50,11 @@ var _ SessionActions = (*noopVCursor)(nil)
 type noopVCursor struct {
 }
 
+func (t *noopVCursor) SetCommitOrder(co vtgatepb.CommitOrder) {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (t *noopVCursor) StreamExecutePrimitiveStandalone(ctx context.Context, primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(result *sqltypes.Result) error) error {
 	return primitive.TryStreamExecute(ctx, t, bindVars, wantfields, callback)
 }

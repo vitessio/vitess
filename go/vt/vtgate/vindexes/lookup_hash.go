@@ -169,6 +169,11 @@ func (lh *LookupHash) AllowBatch() bool {
 	return lh.lkp.BatchLookup
 }
 
+// GetCommitOrder implements the LookupPlanable interface
+func (lh *LookupHash) GetCommitOrder() vtgatepb.CommitOrder {
+	return vtgatepb.CommitOrder_NORMAL
+}
+
 // Verify returns true if ids maps to ksids.
 func (lh *LookupHash) Verify(ctx context.Context, vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
 	if lh.writeOnly {
@@ -396,4 +401,9 @@ func (lhu *LookupHashUnique) AllowBatch() bool {
 
 func (lhu *LookupHashUnique) Query() (selQuery string, arguments []string) {
 	return lhu.lkp.query()
+}
+
+// GetCommitOrder implements the LookupPlanable interface
+func (lhu *LookupHashUnique) GetCommitOrder() vtgatepb.CommitOrder {
+	return vtgatepb.CommitOrder_NORMAL
 }

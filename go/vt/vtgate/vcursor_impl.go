@@ -800,6 +800,10 @@ func (vc *vcursorImpl) RemoveAdvisoryLock(name string) {
 	vc.safeSession.RemoveAdvisoryLock(name)
 }
 
+func (vc *vcursorImpl) SetCommitOrder(co vtgatepb.CommitOrder) {
+	vc.safeSession.SetCommitOrder(co)
+}
+
 // GetDBDDLPluginName implements the VCursor interface
 func (vc *vcursorImpl) GetDBDDLPluginName() string {
 	return *dbDDLPlugin

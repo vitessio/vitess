@@ -140,6 +140,7 @@ type (
 		Query() (selQuery string, arguments []string)
 		MapResult(ids []sqltypes.Value, results []*sqltypes.Result) ([]key.Destination, error)
 		AllowBatch() bool
+		GetCommitOrder() vtgatepb.CommitOrder
 	}
 
 	// LookupBackfill interfaces all lookup vindexes that can backfill rows, such as LookupUnique.
