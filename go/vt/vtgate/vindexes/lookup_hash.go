@@ -30,10 +30,12 @@ import (
 )
 
 var (
-	_ SingleColumn = (*LookupHash)(nil)
-	_ Lookup       = (*LookupHash)(nil)
-	_ SingleColumn = (*LookupHashUnique)(nil)
-	_ Lookup       = (*LookupHashUnique)(nil)
+	_ SingleColumn   = (*LookupHash)(nil)
+	_ Lookup         = (*LookupHash)(nil)
+	_ LookupPlanable = (*LookupHash)(nil)
+	_ SingleColumn   = (*LookupHashUnique)(nil)
+	_ Lookup         = (*LookupHashUnique)(nil)
+	_ LookupPlanable = (*LookupHashUnique)(nil)
 )
 
 func init() {
@@ -124,6 +126,19 @@ func (lh *LookupHash) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.V
 	if err != nil {
 		return nil, err
 	}
+	return lh.MapResult(ids, results)
+}
+
+// MapResult implements the LookupPlanable interface
+func (lh *LookupHash) MapResult(ids []sqltypes.Value, results []*sqltypes.Result) ([]key.Destination, error) {
+	out := make([]key.Destination, 0, len(ids))
+	if lh.writeOnly {
+		for range ids {
+			out = append(out, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{}})
+		}
+		return out, nil
+	}
+
 	for _, result := range results {
 		if len(result.Rows) == 0 {
 			out = append(out, key.DestinationNone{})
@@ -142,6 +157,16 @@ func (lh *LookupHash) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.V
 		out = append(out, key.DestinationKeyspaceIDs(ksids))
 	}
 	return out, nil
+}
+
+// Query implements the LookupPlanable interface
+func (lh *LookupHash) Query() (selQuery string, arguments []string) {
+	return lh.lkp.query()
+}
+
+// AllowBatch implements the LookupPlanable interface
+func (lh *LookupHash) AllowBatch() bool {
+	return lh.lkp.BatchLookup
 }
 
 // Verify returns true if ids maps to ksids.
@@ -370,5 +395,5 @@ func (lhu *LookupHashUnique) AllowBatch() bool {
 }
 
 func (lhu *LookupHashUnique) Query() (selQuery string, arguments []string) {
-	return lhu.lkp.sel, lhu.lkp.FromColumns
+	return lhu.lkp.query()
 }

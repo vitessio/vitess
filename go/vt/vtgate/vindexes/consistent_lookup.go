@@ -117,7 +117,7 @@ func (lu *ConsistentLookup) MapResult(ids []sqltypes.Value, results []*sqltypes.
 
 // Query implements the LookupPlanable interface
 func (lu *ConsistentLookup) Query() (selQuery string, arguments []string) {
-	return lu.lkp.sel, lu.lkp.FromColumns
+	return lu.lkp.query()
 }
 
 // AllowBatch implements the LookupPlanable interface
@@ -186,7 +186,7 @@ func (lu *ConsistentLookupUnique) MapResult(ids []sqltypes.Value, results []*sql
 
 // Query implements the LookupPlanable interface
 func (lu *ConsistentLookupUnique) Query() (selQuery string, arguments []string) {
-	return lu.lkp.sel, lu.lkp.FromColumns
+	return lu.lkp.query()
 }
 
 // AllowBatch implements the LookupPlanable interface

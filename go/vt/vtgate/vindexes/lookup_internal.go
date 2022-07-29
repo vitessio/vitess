@@ -385,6 +385,10 @@ func (lkp *lookupInternal) mapResult(ids []sqltypes.Value, results []*sqltypes.R
 	return out, nil
 }
 
+func (lkp *lookupInternal) query() (selQuery string, arguments []string) {
+	return lkp.sel, lkp.FromColumns
+}
+
 type commonConfig struct {
 	autocommit           bool
 	multiShardAutocommit bool

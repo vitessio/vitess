@@ -159,7 +159,7 @@ func (ln *LookupNonUnique) MarshalJSON() ([]byte, error) {
 
 // Query implements the LookupPlanable interface
 func (ln *LookupNonUnique) Query() (selQuery string, arguments []string) {
-	return ln.lkp.sel, ln.lkp.FromColumns
+	return ln.lkp.query()
 }
 
 // NewLookup creates a LookupNonUnique vindex.
@@ -324,5 +324,5 @@ func (lu *LookupUnique) LookupQuery() (string, error) {
 }
 
 func (lu *LookupUnique) Query() (string, []string) {
-	return lu.lkp.sel, lu.lkp.FromColumns
+	return lu.lkp.query()
 }
