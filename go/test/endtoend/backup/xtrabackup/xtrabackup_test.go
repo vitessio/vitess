@@ -31,8 +31,8 @@ func TestXtrabackup(t *testing.T) {
 
 func TestXtrabackWithZstdCompression(t *testing.T) {
 	defer setDefaultCompressionFlag()
-	// CompressionEngineName will be ignored in this case
 	cDetails := &backup.CompressionDetails{
+		CompressorEngineName:    "zstd",
 		ExternalCompressorCmd:   "zstd",
 		ExternalCompressorExt:   ".zst",
 		ExternalDecompressorCmd: "zstd -d",

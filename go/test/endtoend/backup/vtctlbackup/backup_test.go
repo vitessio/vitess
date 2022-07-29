@@ -30,7 +30,7 @@ func TestBackupMain(t *testing.T) {
 func TestBackupMainWithZstdCompression(t *testing.T) {
 	defer setDefaultCompressionFlag()
 	cDetails := &CompressionDetails{
-		BuiltinCompressor:       "lz4",
+		CompressorEngineName:    "zstd",
 		ExternalCompressorCmd:   "zstd",
 		ExternalCompressorExt:   ".zst",
 		ExternalDecompressorCmd: "zstd -d",
