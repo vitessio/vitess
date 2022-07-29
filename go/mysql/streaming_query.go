@@ -78,7 +78,7 @@ func (c *Conn) ExecuteStreamFetch(query string) (err error) {
 			return NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
 		}
 		defer c.recycleReadPacket()
-		if isEOFPacket(data, false) {
+		if c.isEOFPacket(data) {
 			// This is what we expect.
 			// Warnings and status flags are ignored.
 			// goto: end
@@ -123,7 +123,7 @@ func (c *Conn) FetchNext(in []sqltypes.Value) ([]sqltypes.Value, *sqltypes.Resul
 		return nil, nil, err
 	}
 
-	if isEOFPacket(data, c.Capabilities&CapabilityClientDeprecateEOF != 0) {
+	if c.isEOFPacket(data) {
 		// Warnings and status flags are ignored.
 		c.fields = nil
 		if c.Capabilities&CapabilityClientDeprecateEOF != 0 && c.enableQueryInfo {
