@@ -18,6 +18,7 @@ package tabletmanager
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -341,6 +342,17 @@ func TestCheckPrimaryShip(t *testing.T) {
 		Cell: "cell1",
 		Uid:  2,
 	}
+	otherTablet := &topodatapb.Tablet{
+		Alias:         otherAlias,
+		Keyspace:      "ks",
+		Shard:         "0",
+		Type:          topodatapb.TabletType_PRIMARY,
+		MysqlHostname: "localhost",
+		MysqlPort:     1234,
+	}
+	// Create the tablet record for the primary
+	err = ts.CreateTablet(ctx, otherTablet)
+	require.NoError(t, err)
 	_, err = ts.UpdateShardFields(ctx, "ks", "0", func(si *topo.ShardInfo) error {
 		si.PrimaryAlias = otherAlias
 		si.PrimaryTermStartTime = logutil.TimeToProto(ter1.Add(-10 * time.Second))
@@ -366,6 +378,13 @@ func TestCheckPrimaryShip(t *testing.T) {
 	require.NoError(t, err)
 	tablet.Type = topodatapb.TabletType_REPLICA
 	tablet.PrimaryTermStartTime = nil
+	// Get the fakeMySQL and set it up to expect a set replication source command
+	fakeMysql := tm.MysqlDaemon.(*fakemysqldaemon.FakeMysqlDaemon)
+	fakeMysql.SetReplicationSourceInputs = append(fakeMysql.SetReplicationSourceInputs, fmt.Sprintf("%v:%v", otherTablet.MysqlHostname, otherTablet.MysqlPort))
+	fakeMysql.ExpectedExecuteSuperQueryList = []string{
+		"FAKE SET MASTER",
+		"START SLAVE",
+	}
 	err = tm.Start(tablet, 0)
 	require.NoError(t, err)
 	ti, err = ts.GetTablet(ctx, alias)
