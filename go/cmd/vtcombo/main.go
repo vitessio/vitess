@@ -307,3 +307,8 @@ func (mysqld *vtcomboMysqld) StartReplicationUntilAfter(ctx context.Context, pos
 func (mysqld *vtcomboMysqld) StopReplication(hookExtraEnv map[string]string) error {
 	return nil
 }
+
+// SetSemiSyncEnabled implements the MysqlDaemon interface
+func (mysqld *vtcomboMysqld) SetSemiSyncEnabled(source, replica bool) error {
+	return nil
+}
