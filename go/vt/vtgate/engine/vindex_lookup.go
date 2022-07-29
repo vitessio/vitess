@@ -19,6 +19,8 @@ package engine
 import (
 	"context"
 
+	"vitess.io/vitess/go/vt/key"
+
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -67,7 +69,7 @@ func (vr *VindexLookup) GetTableName() string {
 
 // GetFields implements the Primitive interface
 func (vr *VindexLookup) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	panic("implement me")
+	return vr.SendTo.GetFields(ctx, vcursor, bindVars)
 }
 
 // NeedsTransaction implements the Primitive interface
@@ -86,6 +88,15 @@ func (vr *VindexLookup) TryExecute(ctx context.Context, vcursor VCursor, bindVar
 		return nil, err
 	}
 
+	dest, err := vr.postLookupPreExecute(ids, results, bindVars)
+	if err != nil {
+		return nil, err
+	}
+
+	return vr.SendTo.executeAfterLookup(ctx, vcursor, bindVars, wantfields, ids, dest)
+}
+
+func (vr *VindexLookup) postLookupPreExecute(ids []sqltypes.Value, results []*sqltypes.Result, bindVars map[string]*querypb.BindVariable) ([]key.Destination, error) {
 	dest, err := vr.Vindex.MapResult(ids, results)
 	if err != nil {
 		return nil, err
@@ -99,14 +110,27 @@ func (vr *VindexLookup) TryExecute(ctx context.Context, vcursor VCursor, bindVar
 		}
 		bindVars[ListVarName] = valsBV
 	}
-
-	return vr.SendTo.executeAfterLookup(ctx, vcursor, bindVars, wantfields, ids, dest)
+	return dest, nil
 }
 
 // TryStreamExecute implements the Primitive interface
 func (vr *VindexLookup) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	// TODO implement me
-	panic("implement me")
+	ids, err := vr.generateIds(vcursor, bindVars)
+	if err != nil {
+		return err
+	}
+
+	results, err := vr.lookup(ctx, vcursor, ids)
+	if err != nil {
+		return err
+	}
+
+	dest, err := vr.postLookupPreExecute(ids, results, bindVars)
+	if err != nil {
+		return err
+	}
+
+	return vr.SendTo.streamExecuteAfterLookup(ctx, vcursor, bindVars, wantfields, callback, ids, dest)
 }
 
 // Inputs implements the Primitive interface
@@ -139,52 +163,61 @@ func (vr *VindexLookup) description() PrimitiveDescription {
 }
 
 func (vr *VindexLookup) lookup(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]*sqltypes.Result, error) {
-	results := make([]*sqltypes.Result, 0, len(ids))
 	if ids[0].IsIntegral() || vr.Vindex.AllowBatch() {
-		// for integral types, batch query all ids and then map them back to the input order
-		vars, err := sqltypes.BuildBindVariable(ids)
+		return vr.executeBatch(ctx, vcursor, ids)
+	}
+	return vr.executeNonBatch(ctx, vcursor, ids)
+}
+
+func (vr *VindexLookup) executeNonBatch(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]*sqltypes.Result, error) {
+	results := make([]*sqltypes.Result, 0, len(ids))
+	// for non integral and binary type, fallback to send query per id
+	for _, id := range ids {
+		vars, err := sqltypes.BuildBindVariable([]any{id})
 		if err != nil {
 			return nil, err
 		}
 		bindVars := map[string]*querypb.BindVariable{
 			vr.Arguments[0]: vars,
-		} // select * from user where id in (1,2,3,4)
-		result, err := vcursor.ExecutePrimitive(ctx, vr.Lookup, bindVars, true)
+		}
+		result, err := vcursor.ExecutePrimitive(ctx, vr.Lookup, bindVars, false)
 		if err != nil {
-			return nil, vterrors.Wrapf(err, "failed while running the lookup query")
+			return nil, err
 		}
-		resultMap := make(map[string][][]sqltypes.Value)
+		rows := make([][]sqltypes.Value, 0, len(result.Rows))
 		for _, row := range result.Rows {
-			resultMap[row[0].ToString()] = append(resultMap[row[0].ToString()], []sqltypes.Value{row[1]})
+			rows = append(rows, []sqltypes.Value{row[1]})
 		}
+		results = append(results, &sqltypes.Result{
+			Rows: rows,
+		})
+	}
+	return results, nil
+}
 
-		for _, id := range ids {
-			results = append(results, &sqltypes.Result{
-				Rows: resultMap[id.ToString()],
-			})
-		}
-	} else {
-		// for non integral and binary type, fallback to send query per id
-		for _, id := range ids {
-			vars, err := sqltypes.BuildBindVariable([]any{id})
-			if err != nil {
-				return nil, err
-			}
-			bindVars := map[string]*querypb.BindVariable{
-				vr.Arguments[0]: vars,
-			}
-			result, err := vcursor.ExecutePrimitive(ctx, vr.Lookup, bindVars, true)
-			if err != nil {
-				return nil, err
-			}
-			rows := make([][]sqltypes.Value, 0, len(result.Rows))
-			for _, row := range result.Rows {
-				rows = append(rows, []sqltypes.Value{row[1]})
-			}
-			results = append(results, &sqltypes.Result{
-				Rows: rows,
-			})
-		}
+func (vr *VindexLookup) executeBatch(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]*sqltypes.Result, error) {
+	results := make([]*sqltypes.Result, 0, len(ids))
+	// for integral types, batch query all ids and then map them back to the input order
+	vars, err := sqltypes.BuildBindVariable(ids)
+	if err != nil {
+		return nil, err
+	}
+	bindVars := map[string]*querypb.BindVariable{
+		vr.Arguments[0]: vars,
+	}
+	result, err := vcursor.ExecutePrimitive(ctx, vr.Lookup, bindVars, false)
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "failed while running the lookup query")
+	}
+	resultMap := make(map[string][][]sqltypes.Value)
+	for _, row := range result.Rows {
+		resultMap[row[0].ToString()] = append(resultMap[row[0].ToString()], []sqltypes.Value{row[1]})
+	}
+
+	for _, id := range ids {
+		results = append(results, &sqltypes.Result{
+			Rows: resultMap[id.ToString()],
+		})
 	}
 	return results, nil
 }

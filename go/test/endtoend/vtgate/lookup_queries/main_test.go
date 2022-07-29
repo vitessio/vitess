@@ -134,13 +134,20 @@ func TestLookupQueries(t *testing.T) {
 	(1, 'apa',    'apa'), 
 	(2, 'apa',    'bandar'), 
 	(3, 'monkey', 'monkey')`)
-	mcmp.AssertMatches("select id from user where lookup = 'apa'", "[[INT64(1)] [INT64(2)]]")
-	mcmp.AssertMatches("select id from user where lookup = 'not there'", "[]")
-	mcmp.AssertMatchesNoOrder("select id from user where lookup in ('apa', 'monkey')", "[[INT64(1)] [INT64(2)] [INT64(3)]]")
-	mcmp.AssertMatches("select count(*) from user where lookup in ('apa', 'monkey')", "[[INT64(3)]]")
 
-	mcmp.AssertMatches("select id from user where lookup_unique = 'apa'", "[[INT64(1)]]")
-	mcmp.AssertMatches("select id from user where lookup_unique = 'not there'", "[]")
-	mcmp.AssertMatchesNoOrder("select id from user where lookup_unique in ('apa', 'bandar')", "[[INT64(1)] [INT64(2)]]")
-	mcmp.AssertMatches("select count(*) from user where lookup_unique in ('apa', 'monkey', 'bandar')", "[[INT64(3)]]")
+	for _, workload := range []string{"olap", "oltp"} {
+		t.Run(workload, func(t *testing.T) {
+			utils.Exec(t, mcmp.VtConn, "set workload = "+workload)
+
+			mcmp.AssertMatches("select id from user where lookup = 'apa'", "[[INT64(1)] [INT64(2)]]")
+			mcmp.AssertMatches("select id from user where lookup = 'not there'", "[]")
+			mcmp.AssertMatchesNoOrder("select id from user where lookup in ('apa', 'monkey')", "[[INT64(1)] [INT64(2)] [INT64(3)]]")
+			mcmp.AssertMatches("select count(*) from user where lookup in ('apa', 'monkey')", "[[INT64(3)]]")
+
+			mcmp.AssertMatches("select id from user where lookup_unique = 'apa'", "[[INT64(1)]]")
+			mcmp.AssertMatches("select id from user where lookup_unique = 'not there'", "[]")
+			mcmp.AssertMatchesNoOrder("select id from user where lookup_unique in ('apa', 'bandar')", "[[INT64(1)] [INT64(2)]]")
+			mcmp.AssertMatches("select count(*) from user where lookup_unique in ('apa', 'monkey', 'bandar')", "[[INT64(3)]]")
+		})
+	}
 }
