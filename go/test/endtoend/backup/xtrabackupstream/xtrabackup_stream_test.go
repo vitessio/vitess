@@ -35,7 +35,7 @@ func TestXtrabackupStreamWithlz4Compression(t *testing.T) {
 		CompressorEngineName: "lz4",
 	}
 
-	backup.TestBackup(t, backup.XtraBackup, "xbstream", 8, cDetails, []string{"TestReplicaBackup"})
+	backup.TestBackup(t, backup.XtraBackup, "xbstream", 8, cDetails, []string{"primaryReplicaSameBackupModifiedCompressionEngine"})
 }
 
 func setDefaultCompressionFlag() {

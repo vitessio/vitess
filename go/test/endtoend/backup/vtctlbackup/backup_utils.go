@@ -247,8 +247,8 @@ func updateCompressorArgs(commonArgs []string, cDetails *CompressionDetails) []s
 	}
 
 	for i, s := range commonArgs {
-		if strings.Contains(s, "--compression-engine-name") == true || strings.Contains(s, "--external-compressor") == true ||
-			strings.Contains(s, "--external-compressor-extension") == true || strings.Contains(s, "--external-decompressor") == true {
+		if strings.Contains(s, "--compression-engine-name") || strings.Contains(s, "--external-compressor") ||
+			strings.Contains(s, "--external-compressor-extension") || strings.Contains(s, "--external-decompressor") {
 			commonArgs = append(commonArgs[:i], commonArgs[i+1:]...)
 		}
 	}
@@ -460,6 +460,7 @@ func primaryReplicaSameBackup(t *testing.T) {
 	require.Nil(t, err)
 
 	// now bring up the other replica, letting it restore from backup.
+	restoreWaitForBackup(t, "replica", nil)
 	err = replica2.VttabletProcess.WaitForTabletStatusesForTimeout([]string{"SERVING"}, timeout)
 	require.Nil(t, err)
 
@@ -490,6 +491,10 @@ func primaryReplicaSameBackup(t *testing.T) {
 	err = localCluster.VtctlclientProcess.ExecuteCommand("Backup", replica1.Alias)
 	require.Nil(t, err)
 
+	// Insert more data on replica2 (current primary).
+	_, err = replica2.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test4')", keyspaceName, true)
+	require.Nil(t, err)
+
 	// Force replica1 to restore from backup.
 	verifyRestoreTablet(t, replica1, "SERVING")
 
@@ -502,7 +507,7 @@ func primaryReplicaSameBackup(t *testing.T) {
 //    Test a primary and replica from the same backup.
 //
 //    Check that a replica and primary both restored from the same backup
-//    can replicate successfully.
+//    We change compression alogrithm in between but it should not break any restore functionality
 func primaryReplicaSameBackupModifiedCompressionEngine(t *testing.T) {
 	// insert data on primary, wait for replica to get it
 	verifyInitialReplication(t)
@@ -520,7 +525,7 @@ func primaryReplicaSameBackupModifiedCompressionEngine(t *testing.T) {
 	cDetails := &CompressionDetails{
 		CompressorEngineName:    "pgzip",
 		ExternalCompressorCmd:   "gzip -c",
-		ExternalCompressorExt:   "",
+		ExternalCompressorExt:   ".gz",
 		ExternalDecompressorCmd: "",
 	}
 	restoreWaitForBackup(t, "replica", cDetails)
@@ -803,7 +808,6 @@ func restoreWaitForBackup(t *testing.T, tabletType string, cDetails *Compression
 	if cDetails != nil {
 		replicaTabletArgs = updateCompressorArgs(replicaTabletArgs, cDetails)
 	}
-	//replicaTabletArgs = append(replicaTabletArgs, "--backup_engine_implementation", "fake_implementation")
 	replicaTabletArgs = append(replicaTabletArgs, "--wait_for_backup_interval", "1s")
 	replicaTabletArgs = append(replicaTabletArgs, "--init_tablet_type", tabletType)
 	replica2.VttabletProcess.ExtraArgs = replicaTabletArgs
