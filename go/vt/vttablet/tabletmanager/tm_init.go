@@ -408,7 +408,10 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, healthCheckInterval ti
 		return nil
 	}
 
-	_, err = tm.initializeReplication(ctx, tm.baseTabletType)
+	// We should be re-read the tablet from tabletManager and use the type specified there.
+	// We shouldn't use the base tablet type directly, since the type could have changed to PRIMARY
+	// earlier in tm.checkPrimaryShip code.
+	_, err = tm.initializeReplication(ctx, tm.Tablet().Type)
 	tm.tmState.Open()
 	return err
 }
@@ -848,6 +851,12 @@ func (tm *TabletManager) initializeReplication(ctx context.Context, tabletType t
 	// If active reparents are disabled, we do not touch replication.
 	// There is nothing to do
 	if *mysqlctl.DisableActiveReparents {
+		return nil, nil
+	}
+
+	// If the desired tablet type is primary, then we shouldn't be setting our replication source.
+	// So there is nothing to do.
+	if tabletType == topodatapb.TabletType_PRIMARY {
 		return nil, nil
 	}
 
