@@ -159,7 +159,8 @@ func TestSchemaVersioning(t *testing.T) {
 	}
 	go func() {
 		defer close(eventCh)
-		if err := tsv.VStream(ctx, target, "current", nil, filter, send); err != nil {
+		req := &binlogdatapb.VStreamRequest{Target: target, Position: "current", TableLastPKs: nil, Filter: filter}
+		if err := tsv.VStream(ctx, req, send); err != nil {
 			fmt.Printf("Error in tsv.VStream: %v", err)
 			t.Error(err)
 		}
@@ -210,7 +211,8 @@ func TestSchemaVersioning(t *testing.T) {
 	}
 	go func() {
 		defer close(eventCh)
-		if err := tsv.VStream(ctx, target, startPos, nil, filter, send); err != nil {
+		req := &binlogdatapb.VStreamRequest{Target: target, Position: startPos, TableLastPKs: nil, Filter: filter}
+		if err := tsv.VStream(ctx, req, send); err != nil {
 			fmt.Printf("Error in tsv.VStream: %v", err)
 			t.Error(err)
 		}
@@ -274,7 +276,8 @@ func TestSchemaVersioning(t *testing.T) {
 	}
 	go func() {
 		defer close(eventCh)
-		if err := tsv.VStream(ctx, target, startPos, nil, filter, send); err != nil {
+		req := &binlogdatapb.VStreamRequest{Target: target, Position: startPos, TableLastPKs: nil, Filter: filter}
+		if err := tsv.VStream(ctx, req, send); err != nil {
 			fmt.Printf("Error in tsv.VStream: %v", err)
 			t.Error(err)
 		}

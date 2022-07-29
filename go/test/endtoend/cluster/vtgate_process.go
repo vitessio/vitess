@@ -32,6 +32,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
@@ -69,7 +70,6 @@ const defaultVtGatePlannerVersion = planbuilder.Gen4CompareV3
 
 // Setup starts Vtgate process with required arguements
 func (vtgate *VtgateProcess) Setup() (err error) {
-
 	args := []string{
 		"--topo_implementation", vtgate.CommonArg.TopoImplementation,
 		"--topo_global_server_address", vtgate.CommonArg.TopoGlobalAddress,
@@ -85,6 +85,28 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 		"--tablet_types_to_wait", vtgate.TabletTypesToWait,
 		"--service_map", vtgate.ServiceMap,
 		"--mysql_auth_server_impl", vtgate.MySQLAuthServerImpl,
+	}
+	// If no explicit mysql_server_version has been specified then we autodetect
+	// the MySQL version that will be used for the test and base the vtgate's
+	// mysql server version on that.
+	msvflag := false
+	for _, f := range vtgate.ExtraArgs {
+		if strings.Contains(f, "mysql_server_version") {
+			msvflag = true
+			break
+		}
+	}
+	if !msvflag {
+		version, err := mysqlctl.GetVersionString()
+		if err != nil {
+			return err
+		}
+		_, vers, err := mysqlctl.ParseVersionString(version)
+		if err != nil {
+			return err
+		}
+		mysqlvers := fmt.Sprintf("%d.%d.%d-vitess", vers.Major, vers.Minor, vers.Patch)
+		args = append(args, "--mysql_server_version", mysqlvers)
 	}
 	if vtgate.PlannerVersion > 0 {
 		args = append(args, "--planner-version", vtgate.PlannerVersion.String())
@@ -142,10 +164,9 @@ func (vtgate *VtgateProcess) WaitForStatus() bool {
 	if err != nil {
 		return false
 	}
-	if resp.StatusCode == 200 {
-		return true
-	}
-	return false
+	defer resp.Body.Close()
+
+	return resp.StatusCode == 200
 }
 
 // GetStatusForTabletOfShard function gets status for a specific tablet of a shard in keyspace
@@ -155,6 +176,8 @@ func (vtgate *VtgateProcess) GetStatusForTabletOfShard(name string, endPointsCou
 	if err != nil {
 		return false
 	}
+	defer resp.Body.Close()
+
 	if resp.StatusCode == 200 {
 		resultMap := make(map[string]any)
 		respByte, _ := io.ReadAll(resp.Body)
@@ -264,6 +287,8 @@ func (vtgate *VtgateProcess) GetVars() (map[string]any, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error getting response from %s", vtgate.VerifyURL)
 	}
+	defer resp.Body.Close()
+
 	if resp.StatusCode == 200 {
 		respByte, _ := io.ReadAll(resp.Body)
 		err := json.Unmarshal(respByte, &resultMap)
@@ -283,6 +308,7 @@ func (vtgate *VtgateProcess) ReadVSchema() (*interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer resp.Body.Close()
 	res, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err

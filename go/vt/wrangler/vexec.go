@@ -151,6 +151,9 @@ func (wr *Wrangler) VExecResult(ctx context.Context, workflow, keyspace, query s
 
 // VExec executes queries on a table on all primaries in the target keyspace of the workflow
 func (wr *Wrangler) VExec(ctx context.Context, workflow, keyspace, query string, dryRun bool) (map[*topo.TabletInfo]*sqltypes.Result, error) {
+	if wr.VExecFunc != nil {
+		return wr.VExecFunc(ctx, workflow, keyspace, query, dryRun)
+	}
 	results, err := wr.runVexec(ctx, workflow, keyspace, query, dryRun)
 	retResults := make(map[*topo.TabletInfo]*sqltypes.Result)
 	for tablet, result := range results {
@@ -216,10 +219,7 @@ func (vx *vexec) exec() (map[*topo.TabletInfo]*querypb.QueryResult, error) {
 				// If we deleted a workflow then let's make a best effort attempt to clean
 				// up any related data.
 				if vx.query == sqlVReplicationDelete {
-					query := fmt.Sprintf(sqlDeleteVDiffs, encodeString(primary.Keyspace), encodeString(vx.workflow))
-					if _, err := vx.wr.tmc.ExecuteFetchAsDba(ctx, primary.Tablet, false, []byte(query), -1, false, false); err != nil {
-						vx.wr.Logger().Infof("Error deleting vdiff data for %s.%s workflow: %v", primary.Keyspace, vx.workflow, err)
-					}
+					vx.wr.deleteWorkflowVDiffData(ctx, primary.Tablet, vx.workflow)
 				}
 				mu.Lock()
 				results[primary] = qr

@@ -121,7 +121,8 @@ func (td *tableDiffer) buildTablePlan() (*tablePlan, error) {
 		colname := targetSelect.SelectExprs[i].(*sqlparser.AliasedExpr).Expr.(*sqlparser.ColName).Name.Lowered()
 		_, ok := fields[colname]
 		if !ok {
-			return nil, fmt.Errorf("column %v not found in table %v", colname, tp.table.Name)
+			return nil, fmt.Errorf("column %v not found in table %v on tablet %v",
+				colname, tp.table.Name, td.wd.ct.vde.thisTablet.Alias)
 		}
 		tp.compareCols[i].colName = colname
 
@@ -159,7 +160,7 @@ func (td *tableDiffer) buildTablePlan() (*tablePlan, error) {
 	return tp, err
 }
 
-// findPKs identifies PKs and removes them from the columns to do data comparison
+// findPKs identifies PKs and removes them from the columns to do data comparison.
 func (tp *tablePlan) findPKs(targetSelect *sqlparser.Select) error {
 	var orderby sqlparser.OrderBy
 	for _, pk := range tp.table.PrimaryKeyColumns {

@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 
 	"vitess.io/vitess/go/vt/orchestrator/inst"
-	"vitess.io/vitess/go/vt/orchestrator/kv"
 
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 )
@@ -72,8 +71,6 @@ func (applier *CommandApplier) ApplyCommand(op string, value []byte) any {
 		return applier.disableGlobalRecoveries(value)
 	case "enable-global-recoveries":
 		return applier.enableGlobalRecoveries(value)
-	case "put-key-value":
-		return applier.putKeyValue(value)
 	case "put-instance-tag":
 		return applier.putInstanceTag(value)
 	case "delete-instance-tag":
@@ -231,15 +228,6 @@ func (applier *CommandApplier) disableGlobalRecoveries(value []byte) any {
 
 func (applier *CommandApplier) enableGlobalRecoveries(value []byte) any {
 	err := EnableRecovery()
-	return err
-}
-
-func (applier *CommandApplier) putKeyValue(value []byte) any {
-	kvPair := kv.KeyValuePair{}
-	if err := json.Unmarshal(value, &kvPair); err != nil {
-		return log.Errore(err)
-	}
-	err := kv.PutKVPair(&kvPair)
 	return err
 }
 

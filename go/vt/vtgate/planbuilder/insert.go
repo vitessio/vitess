@@ -35,7 +35,7 @@ import (
 )
 
 // buildInsertPlan builds the route for an INSERT statement.
-func buildInsertPlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (engine.Primitive, error) {
+func buildInsertPlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
 	ins := stmt.(*sqlparser.Insert)
 	pb := newPrimitiveBuilder(vschema, newJointab(reservedVars))
 	exprs := sqlparser.TableExprs{&sqlparser.AliasedTableExpr{Expr: ins.Table}}
@@ -67,13 +67,15 @@ func buildInsertPlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedV
 	return buildInsertShardedPlan(ins, vschemaTable, reservedVars, vschema)
 }
 
-func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (engine.Primitive, error) {
+func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
 	eins := engine.NewSimpleInsert(
 		engine.InsertUnsharded,
 		table,
 		table.Keyspace,
 	)
 	var rows sqlparser.Values
+	tc := &tableCollector{}
+	tc.addVindexTable(table)
 	switch insertValues := ins.Rows.(type) {
 	case *sqlparser.Select, *sqlparser.Union:
 		if eins.Table.AutoIncrement != nil {
@@ -83,13 +85,14 @@ func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table, rese
 		if err != nil {
 			return nil, err
 		}
-		if route, ok := plan.(*engine.Route); ok && !route.Keyspace.Sharded && table.Keyspace.Name == route.Keyspace.Name {
+		tc.addAllTables(plan.tables)
+		if route, ok := plan.primitive.(*engine.Route); ok && !route.Keyspace.Sharded && table.Keyspace.Name == route.Keyspace.Name {
 			eins.Query = generateQuery(ins)
-			return eins, nil
+		} else {
+			eins.Input = plan.primitive
+			generateInsertSelectQuery(ins, eins)
 		}
-		eins.Input = plan
-		generateInsertSelectQuery(ins, eins)
-		return eins, nil
+		return newPlanResult(eins, tc.getTables()...), nil
 	case sqlparser.Values:
 		rows = insertValues
 	default:
@@ -119,14 +122,16 @@ func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table, rese
 		eins.Query = generateQuery(ins)
 	}
 
-	return eins, nil
+	return newPlanResult(eins, tc.getTables()...), nil
 }
 
-func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (engine.Primitive, error) {
+func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
 	eins := &engine.Insert{
 		Table:    table,
 		Keyspace: table.Keyspace,
 	}
+	tc := &tableCollector{}
+	tc.addVindexTable(table)
 	eins.Ignore = bool(ins.Ignore)
 	if ins.OnDup != nil {
 		if isVindexChanging(sqlparser.UpdateExprs(ins.OnDup), eins.Table.ColumnVindexes) {
@@ -188,12 +193,14 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table, reserv
 	eins.VindexValues = routeValues
 	eins.Query = generateQuery(ins)
 	generateInsertShardedQuery(ins, eins, rows)
-	return eins, nil
+	return newPlanResult(eins, tc.getTables()...), nil
 }
 
 // buildInsertSelectPlan builds an insert using select plan.
-func buildInsertSelectPlan(ins *sqlparser.Insert, table *vindexes.Table, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, eins *engine.Insert) (engine.Primitive, error) {
+func buildInsertSelectPlan(ins *sqlparser.Insert, table *vindexes.Table, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, eins *engine.Insert) (*planResult, error) {
 	eins.Opcode = engine.InsertSelect
+	tc := &tableCollector{}
+	tc.addVindexTable(table)
 
 	// check if column list is provided if not, then vschema should be able to provide the column list.
 	if len(ins.Columns) == 0 {
@@ -208,16 +215,17 @@ func buildInsertSelectPlan(ins *sqlparser.Insert, table *vindexes.Table, reserve
 	if err != nil {
 		return nil, err
 	}
-	eins.Input = plan
+	tc.addAllTables(plan.tables)
+	eins.Input = plan.primitive
 
 	// When the table you are steaming data from and table you are inserting from are same.
 	// Then due to locking of the index range on the table we might not be able to insert into the table.
 	// Therefore, instead of streaming, this flag will ensure the records are first read and then inserted.
-	if strings.Contains(plan.GetTableName(), table.Name.String()) {
+	if strings.Contains(plan.primitive.GetTableName(), table.Name.String()) {
 		eins.ForceNonStreaming = true
 	}
 
-	// auto-increment column is added explicility if not provided.
+	// auto-increment column is added explicitly if not provided.
 	if err := modifyForAutoinc(ins, eins); err != nil {
 		return nil, err
 	}
@@ -229,10 +237,10 @@ func buildInsertSelectPlan(ins *sqlparser.Insert, table *vindexes.Table, reserve
 	}
 
 	generateInsertSelectQuery(ins, eins)
-	return eins, nil
+	return newPlanResult(eins, tc.getTables()...), nil
 }
 
-func subquerySelectPlan(ins *sqlparser.Insert, vschema plancontext.VSchema, reservedVars *sqlparser.ReservedVars, sharded bool) (engine.Primitive, error) {
+func subquerySelectPlan(ins *sqlparser.Insert, vschema plancontext.VSchema, reservedVars *sqlparser.ReservedVars, sharded bool) (*planResult, error) {
 	selectStmt, queryPlanner, err := getStatementAndPlanner(ins, vschema)
 	if err != nil {
 		return nil, err

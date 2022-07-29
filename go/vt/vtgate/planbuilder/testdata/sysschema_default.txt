@@ -15,7 +15,24 @@
     "Table": "dual"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select @@max_allowed_packet from dual",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Reference",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select @@max_allowed_packet from dual where 1 != 1",
+    "Query": "select @@max_allowed_packet from dual",
+    "Table": "dual"
+  },
+  "TablesUsed": [
+    "main.dual"
+  ]
+}
 
 # unqualified table name
 "select t.table_schema,t.table_name,c.column_name,c.column_type from tables t join columns c on c.table_schema = t.table_schema and c.table_name = t.table_name where t.table_schema = 'user' and c.table_schema = 'user' order by t.table_schema,t.table_name,c.column_name"
@@ -70,7 +87,25 @@ Gen4 plan same as above
     "Table": "dual"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT (SELECT 1 FROM information_schema.schemata WHERE schema_name='MyDatabase' LIMIT 1);",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "DBA",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select (select 1 from information_schema.schemata where 1 != 1) from dual where 1 != 1",
+    "Query": "select (select 1 from information_schema.schemata where schema_name = :__vtschemaname limit 1) from dual",
+    "SysTableTableSchema": "[VARCHAR(\"MyDatabase\")]",
+    "Table": "dual"
+  },
+  "TablesUsed": [
+    "main.dual"
+  ]
+}
 
 # system schema query as a derived table
 "SELECT * from (SELECT 1 FROM information_schema.schemata WHERE schema_name='MyDatabase' LIMIT 1) x"

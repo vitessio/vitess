@@ -1,4 +1,40 @@
+## Summary
+
+- [Vindex Interface](#vindex-interface)
+- [LogStats Table and Keyspace deprecated](#logstats-table-and-keyspace-deprecated)
+- [Command-line syntax deprecations](#command-line-syntax-deprecations)
+- [New command line flags and behavior](#new-command-line-flags-and-behavior)
+- [Online DDL changes](#online-ddl-changes)
+- [Tablet throttler](#tablet-throttler)
+- [VDiff2](#vdiff2)
+- [Mysql Compatibility](#mysql-compatibility)
+- [Durability Policy](#durability-policy)
+
+## Known Issues
+
 ## Major Changes
+
+### Breaking Changes
+
+#### Vindex Interface
+
+All the vindex interface methods are changed by adding `context.Context` as an input parameter.
+
+E.g:
+```go
+Map(vcursor VCursor, .... ) .... 
+	To
+Map(ctx context.Context, vcursor VCursor, .... ) ....
+```
+
+This only affects users who have added their own custom vindex implementation. 
+They are required to change their implementation with these new interface method expectations.
+
+#### LogStats Table and Keyspace deprecated
+
+Information about which tables are used was being reported through the `Keyspace` and `Table` fields on LogStats.
+For multi-table queries, this output can be confusing, so we have added `TablesUsed`, that is a string array, listing all tables and which keyspace they are on.
+`Keyspace` and `Table` fields are deprecated and will be removed in the v16 release of Vitess.
 
 ### Command-line syntax deprecations
 
@@ -15,8 +51,7 @@ The following VTTablet flags were deprecated in 7.0. They have now been deleted
 
 #### vttablet startup flag deprecations
 - --enable-query-plan-field-caching is now deprecated. It will be removed in v16.
-
-### New Syntax
+- --enable_semi_sync is now deprecated. It will be removed in v16. Instead, set the correct durability policy using `SetKeyspaceDurabilityPolicy`
 
 ### VDiff2
 
@@ -53,6 +88,10 @@ $ vtctlclient --server=localhost:15999 VDiff -- --v2 --format=json customer.comm
 Please see the VDiff2 [documentation](https://vitess.io/docs/15.0/reference/vreplication/vdiff2/) for additional information.
 
 ### New command line flags and behavior
+
+#### vtctl GetSchema --table-schema-only
+
+The new flag `--table-schema-only` skips column introspection. `GetSchema` only returns general schema analysis, and specifically it includes the `CREATE TABLE|VIEW` statement in the `schema` field.
 
 #### Support for additional compressors and decompressors during backup & restore
 Backup/Restore now allow you many more options for compression and decompression instead of relying on the default compressor(`pgzip`).
@@ -96,11 +135,27 @@ compressor value to the others.
 All Online DDL migrations using the `vitess` strategy are now eligible to run concurrently, given `--allow-concurrent` DDL strategy flag. Until now, only `CREATE`, `DROP` and `REVERT` migrations were eligible, and now `ALTER` migrations are supported, as well. The terms for `ALTER` migrations concurrency:
 
 - DDL strategy must be `vitess --allow-concurent ...`
-- No two migrations can run concurrently on same table
+- No two migrations can run concurrently on the same table
 - No two `ALTER`s will copy table data concurrently
 - A concurrent `ALTER` migration will not start if another `ALTER` is running and is not `ready_to_complete`
 
-The main use case is to run multiple concurrent migrations, all with `--postpone-completion`. All table-copy operations will run sequentially, but no migration will actually cut-over, and eventually all migration will be `ready_to_complete`, continuously tailing the binary logs and keeping up-to-date. A quick and iterative `ALTER VITESS_MIGRATION '...' COMPLETE` sequence of commands will cut-over all migrations _closely together_ (though not atomically together).
+The main use case is to run multiple concurrent migrations, all with `--postpone-completion`. All table-copy operations will run sequentially, but no migration will actually cut-over, and eventually all migrations will be `ready_to_complete`, continuously tailing the binary logs and keeping up-to-date. A quick and iterative `ALTER VITESS_MIGRATION '...' COMPLETE` sequence of commands will cut-over all migrations _closely together_ (though not atomically together).
+
+#### vtctl command changes. 
+All `online DDL show` commands can now be run with a few additional parameters
+- `--order` , order migrations in the output by either ascending or descending order of their `id` fields.
+- `--skip`  , skip specified number of migrations in the output.
+- `--limit` , limit results to a specified number of migrations in the output.
+
+#### New syntax
+
+The following is now supported:
+
+```sql
+ALTER VITESS_MIGRATION COMPLETE ALL
+```
+
+This works on all pending migrations (`queued`, `ready`, `running`) and internally issues a `ALTER VITESS_MIGRATION '<uuid>' COMPLETE` for each one. The command is useful for completing multiple concurrent migrations (see above) that are open-ended (`--postpone-completion`).
 
 ### Tablet throttler
 
@@ -123,3 +178,17 @@ $ curl -s http://127.0.0.1:15100/debug/vars | jq . | grep Throttler
   "ThrottlerProbesLatency": 355523,
   "ThrottlerProbesTotal": 74,
 ```
+
+### Mysql Compatibility
+
+#### Lookup Vindexes
+
+Lookup vindexes now support a new parameter `multi_shard_autocommit`. If this is set to `true`, lookup vindex dml queries will be sent as autocommit to all shards instead of being wrapped in a transaction.
+This is different from the existing `autocommit` parameter where the query is sent in its own transaction separate from the ongoing transaction if any i.e. begin -> lookup query execs -> commit/rollback
+
+### Durability Policy
+
+#### Cross Cell
+
+A new durability policy `cross_cell` is now supported. `cross_cell` durability policy only allows replica tablets from a different cell than the current primary to
+send semi-sync ACKs. This ensures that any committed write exists in at least 2 tablets belonging to different cells.

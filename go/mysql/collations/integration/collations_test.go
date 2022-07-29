@@ -35,8 +35,18 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/remote"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
+
+var collationEnv *collations.Environment
+
+func init() {
+	// We require MySQL 8.0 collations for the comparisons in the tests
+	mySQLVersion := "8.0.0"
+	servenv.MySQLServerVersion = &mySQLVersion
+	collationEnv = collations.NewEnvironment(mySQLVersion)
+}
 
 func getSQLQueries(t *testing.T, testfile string) []string {
 	tf, err := os.Open(testfile)
@@ -105,7 +115,7 @@ func parseWeightString(b []byte) []byte {
 }
 
 func (u *uca900CollationTest) Test(t *testing.T, result *sqltypes.Result) {
-	coll := collations.Local().LookupByName(u.collation)
+	coll := collationEnv.LookupByName(u.collation)
 	if coll == nil {
 		t.Fatalf("unknown collation %q", u.collation)
 	}
@@ -215,7 +225,7 @@ func TestCollationWithSpace(t *testing.T) {
 
 	for _, collName := range []string{"utf8mb4_0900_ai_ci", "utf8mb4_unicode_ci", "utf8mb4_unicode_520_ci"} {
 		t.Run(collName, func(t *testing.T) {
-			local := collations.Local().LookupByName(collName)
+			local := collationEnv.LookupByName(collName)
 			remote := remote.NewCollation(conn, collName)
 
 			for _, size := range []int{0, codepoints, codepoints + 1, codepoints + 2, 20, 32} {

@@ -81,3 +81,16 @@ create table user_region (
    email varchar(64),
    primary key (regionId,userId)
 ) Engine=InnoDB;
+
+create table member (
+    id bigint,
+    lkp binary(16) NOT NULL,
+    more_id int not null,
+    primary key (id)
+) Engine=InnoDB;
+
+create table lkp_idx (
+    lkp binary(16) NOT NULL,
+    id bigint,
+    primary key (lkp)
+) Engine=InnoDB;

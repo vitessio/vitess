@@ -57,5 +57,9 @@
       "INT64(5)"
     ],
     "Vindex": "user_index"
-  }
+  },
+  "TablesUsed": [
+    "second_user.dual",
+    "user.user"
+  ]
 }
