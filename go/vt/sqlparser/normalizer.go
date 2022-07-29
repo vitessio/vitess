@@ -117,7 +117,7 @@ func (nz *normalizer) convertLiteralDedup(node *Literal, cursor *Cursor) {
 	}
 
 	// Make the bindvar
-	bval := nz.sqlToBindvar(node)
+	bval := SQLToBindvar(node)
 	if bval == nil {
 		return
 	}
@@ -146,7 +146,7 @@ func (nz *normalizer) convertLiteralDedup(node *Literal, cursor *Cursor) {
 
 // convertLiteral converts an Literal without the dedup.
 func (nz *normalizer) convertLiteral(node *Literal, cursor *Cursor) {
-	bval := nz.sqlToBindvar(node)
+	bval := SQLToBindvar(node)
 	if bval == nil {
 		return
 	}
@@ -176,7 +176,7 @@ func (nz *normalizer) convertComparison(node *ComparisonExpr) {
 		Type: querypb.Type_TUPLE,
 	}
 	for _, val := range tupleVals {
-		bval := nz.sqlToBindvar(val)
+		bval := SQLToBindvar(val)
 		if bval == nil {
 			return
 		}
@@ -191,7 +191,7 @@ func (nz *normalizer) convertComparison(node *ComparisonExpr) {
 	node.Right = ListArg(bvname)
 }
 
-func (nz *normalizer) sqlToBindvar(node SQLNode) *querypb.BindVariable {
+func SQLToBindvar(node SQLNode) *querypb.BindVariable {
 	if node, ok := node.(*Literal); ok {
 		var v sqltypes.Value
 		var err error
