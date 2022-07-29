@@ -765,7 +765,7 @@ func TestReplLag(t *testing.T) {
 		delete(ksToSandbox, ks1)
 		delete(ksToSandbox, ks2)
 	}()
-	serv := new(sandboxTopo)
+	serv := newSandboxForCells([]string{cell})
 	resolver := newTestResolver(hc, serv, cell)
 	shards := []string{"-20", "20-"}
 	port := int32(1)
@@ -1543,7 +1543,7 @@ func TestSelectScatter(t *testing.T) {
 	s := createSandbox(KsTestSharded)
 	s.VSchema = executorVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
-	serv := new(sandboxTopo)
+	serv := newSandboxForCells([]string{cell})
 	resolver := newTestResolver(hc, serv, cell)
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
 	var conns []*sandboxconn.SandboxConn
@@ -1578,7 +1578,7 @@ func TestSelectScatterPartial(t *testing.T) {
 	s := createSandbox(KsTestSharded)
 	s.VSchema = executorVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
-	serv := new(sandboxTopo)
+	serv := newSandboxForCells([]string{cell})
 	resolver := newTestResolver(hc, serv, cell)
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
 	var conns []*sandboxconn.SandboxConn
@@ -1638,7 +1638,7 @@ func TestSelectScatterPartialOLAP(t *testing.T) {
 	s := createSandbox(KsTestSharded)
 	s.VSchema = executorVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
-	serv := new(sandboxTopo)
+	serv := newSandboxForCells([]string{cell})
 	resolver := newTestResolver(hc, serv, cell)
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
 	var conns []*sandboxconn.SandboxConn
@@ -1689,7 +1689,7 @@ func TestSelectScatterPartialOLAP2(t *testing.T) {
 	s := createSandbox(KsTestSharded)
 	s.VSchema = executorVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
-	serv := new(sandboxTopo)
+	serv := newSandboxForCells([]string{cell})
 	resolver := newTestResolver(hc, serv, cell)
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
 	var conns []*sandboxconn.SandboxConn
@@ -1745,7 +1745,7 @@ func TestStreamSelectScatter(t *testing.T) {
 	s := createSandbox(KsTestSharded)
 	s.VSchema = executorVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
-	serv := new(sandboxTopo)
+	serv := newSandboxForCells([]string{cell})
 	resolver := newTestResolver(hc, serv, cell)
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
 	for _, shard := range shards {
@@ -1780,7 +1780,7 @@ func TestSelectScatterOrderBy(t *testing.T) {
 	s := createSandbox(KsTestSharded)
 	s.VSchema = executorVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
-	serv := new(sandboxTopo)
+	serv := newSandboxForCells([]string{cell})
 	resolver := newTestResolver(hc, serv, cell)
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
 	var conns []*sandboxconn.SandboxConn
@@ -1846,7 +1846,7 @@ func TestSelectScatterOrderByVarChar(t *testing.T) {
 	s := createSandbox(KsTestSharded)
 	s.VSchema = executorVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
-	serv := new(sandboxTopo)
+	serv := newSandboxForCells([]string{cell})
 	resolver := newTestResolver(hc, serv, cell)
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
 	var conns []*sandboxconn.SandboxConn
@@ -1910,7 +1910,7 @@ func TestStreamSelectScatterOrderBy(t *testing.T) {
 	s := createSandbox(KsTestSharded)
 	s.VSchema = executorVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
-	serv := new(sandboxTopo)
+	serv := newSandboxForCells([]string{cell})
 	resolver := newTestResolver(hc, serv, cell)
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
 	var conns []*sandboxconn.SandboxConn
@@ -1968,7 +1968,7 @@ func TestStreamSelectScatterOrderByVarChar(t *testing.T) {
 	s := createSandbox(KsTestSharded)
 	s.VSchema = executorVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
-	serv := new(sandboxTopo)
+	serv := newSandboxForCells([]string{cell})
 	resolver := newTestResolver(hc, serv, cell)
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
 	var conns []*sandboxconn.SandboxConn
@@ -2026,7 +2026,7 @@ func TestSelectScatterAggregate(t *testing.T) {
 	s := createSandbox(KsTestSharded)
 	s.VSchema = executorVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
-	serv := new(sandboxTopo)
+	serv := newSandboxForCells([]string{cell})
 	resolver := newTestResolver(hc, serv, cell)
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
 	var conns []*sandboxconn.SandboxConn
@@ -2085,7 +2085,7 @@ func TestStreamSelectScatterAggregate(t *testing.T) {
 	s := createSandbox(KsTestSharded)
 	s.VSchema = executorVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
-	serv := new(sandboxTopo)
+	serv := newSandboxForCells([]string{cell})
 	resolver := newTestResolver(hc, serv, cell)
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
 	var conns []*sandboxconn.SandboxConn
@@ -2145,7 +2145,7 @@ func TestSelectScatterLimit(t *testing.T) {
 	s := createSandbox(KsTestSharded)
 	s.VSchema = executorVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
-	serv := new(sandboxTopo)
+	serv := newSandboxForCells([]string{cell})
 	resolver := newTestResolver(hc, serv, cell)
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
 	var conns []*sandboxconn.SandboxConn
@@ -2213,7 +2213,7 @@ func TestStreamSelectScatterLimit(t *testing.T) {
 	s := createSandbox(KsTestSharded)
 	s.VSchema = executorVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
-	serv := new(sandboxTopo)
+	serv := newSandboxForCells([]string{cell})
 	resolver := newTestResolver(hc, serv, cell)
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
 	var conns []*sandboxconn.SandboxConn
@@ -3018,7 +3018,7 @@ func TestStreamOrderByLimitWithMultipleResults(t *testing.T) {
 	s := createSandbox(KsTestSharded)
 	s.VSchema = executorVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
-	serv := new(sandboxTopo)
+	serv := newSandboxForCells([]string{cell})
 	resolver := newTestResolver(hc, serv, cell)
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
 	count := 1
@@ -3052,7 +3052,7 @@ func TestSelectScatterFails(t *testing.T) {
 	s := createSandbox(KsTestSharded)
 	s.VSchema = executorVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
-	serv := new(sandboxTopo)
+	serv := newSandboxForCells([]string{cell})
 	resolver := newTestResolver(hc, serv, cell)
 
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
@@ -3531,7 +3531,7 @@ func TestSelectAggregationNoData(t *testing.T) {
 	hc := discovery.NewFakeHealthCheck(nil)
 	createSandbox(KsTestSharded).VSchema = executorVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
-	serv := new(sandboxTopo)
+	serv := newSandboxForCells([]string{cell})
 	resolver := newTestResolver(hc, serv, cell)
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
 	var conns []*sandboxconn.SandboxConn
@@ -3615,7 +3615,7 @@ func TestSelectAggregationData(t *testing.T) {
 	hc := discovery.NewFakeHealthCheck(nil)
 	createSandbox(KsTestSharded).VSchema = executorVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
-	serv := new(sandboxTopo)
+	serv := newSandboxForCells([]string{cell})
 	resolver := newTestResolver(hc, serv, cell)
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
 	var conns []*sandboxconn.SandboxConn
