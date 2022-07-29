@@ -681,6 +681,11 @@ type (
 	// It should be used only as an indicator. It does not contain
 	// the full AST for the statement.
 	OtherAdmin struct{}
+
+	// CommentOnly represents a query which only has comments
+	CommentOnly struct {
+		Comments []string
+	}
 )
 
 func (*Union) iStatement()             {}
@@ -704,6 +709,7 @@ func (*Savepoint) iStatement()         {}
 func (*Release) iStatement()           {}
 func (*OtherRead) iStatement()         {}
 func (*OtherAdmin) iStatement()        {}
+func (*CommentOnly) iStatement()       {}
 func (*Select) iSelectStatement()      {}
 func (*Union) iSelectStatement()       {}
 func (*Load) iStatement()              {}
@@ -2375,7 +2381,7 @@ type (
 
 	// MatchExpr represents a call to the MATCH function
 	MatchExpr struct {
-		Columns SelectExprs
+		Columns []*ColName
 		Expr    Expr
 		Option  MatchExprOption
 	}
@@ -2388,6 +2394,33 @@ type (
 		Expr  Expr
 		Whens []*When
 		Else  Expr
+	}
+
+	// InsertExpr represents an INSERT expression
+	InsertExpr struct {
+		Str    Expr
+		Pos    Expr
+		Len    Expr
+		NewStr Expr
+	}
+
+	// IntervalFuncExpr represents an INTERVAL function expression
+	IntervalFuncExpr struct {
+		Expr  Expr
+		Exprs Exprs
+	}
+
+	// LocateExpr represents a LOCATE function expression
+	LocateExpr struct {
+		SubStr Expr
+		Str    Expr
+		Pos    Expr
+	}
+
+	// CharExpr represents a CHAR function expression
+	CharExpr struct {
+		Exprs   Exprs
+		Charset string
 	}
 
 	// Default represents a DEFAULT expression.
@@ -2860,6 +2893,20 @@ type (
 		Type     PerformanceSchemaType
 		Argument Expr
 	}
+
+	// GTIDType is an enum that get types of GTIDFunc
+	GTIDType int8
+
+	// GTIDFuncExpr stands for GTID Functions
+	// Set1 Acts as gtid_set for WAIT_FOR_EXECUTED_GTID_SET() and WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS()
+	// For more details, visit https://dev.mysql.com/doc/refman/8.0/en/gtid-functions.html
+	GTIDFuncExpr struct {
+		Type    GTIDType
+		Set1    Expr
+		Set2    Expr
+		Timeout Expr
+		Channel Expr
+	}
 )
 
 // iExpr ensures that only expressions nodes can be assigned to a Expr
@@ -2894,6 +2941,10 @@ func (*ValuesFuncExpr) iExpr()                     {}
 func (*CastExpr) iExpr()                           {}
 func (*ConvertExpr) iExpr()                        {}
 func (*SubstrExpr) iExpr()                         {}
+func (*InsertExpr) iExpr()                         {}
+func (*IntervalFuncExpr) iExpr()                   {}
+func (*LocateExpr) iExpr()                         {}
+func (*CharExpr) iExpr()                           {}
 func (*ConvertUsingExpr) iExpr()                   {}
 func (*MatchExpr) iExpr()                          {}
 func (*Default) iExpr()                            {}
@@ -2935,6 +2986,7 @@ func (*ExtractValueExpr) iExpr()                   {}
 func (*UpdateXMLExpr) iExpr()                      {}
 func (*LockingFunc) iExpr()                        {}
 func (*PerformanceSchemaFuncExpr) iExpr()          {}
+func (*GTIDFuncExpr) iExpr()                       {}
 func (*Sum) iExpr()                                {}
 func (*Min) iExpr()                                {}
 func (*Max) iExpr()                                {}
@@ -2964,6 +3016,10 @@ func (*ValuesFuncExpr) iCallable()                     {}
 func (*ConvertExpr) iCallable()                        {}
 func (*TrimFuncExpr) iCallable()                       {}
 func (*SubstrExpr) iCallable()                         {}
+func (*InsertExpr) iCallable()                         {}
+func (*IntervalFuncExpr) iCallable()                   {}
+func (*LocateExpr) iCallable()                         {}
+func (*CharExpr) iCallable()                           {}
 func (*ConvertUsingExpr) iCallable()                   {}
 func (*MatchExpr) iCallable()                          {}
 func (*GroupConcatExpr) iCallable()                    {}
@@ -3001,6 +3057,14 @@ func (*NamedWindow) iCallable()                        {}
 func (*ExtractValueExpr) iCallable()                   {}
 func (*UpdateXMLExpr) iCallable()                      {}
 func (*PerformanceSchemaFuncExpr) iCallable()          {}
+func (*GTIDFuncExpr) iCallable()                       {}
+
+func (*Sum) iCallable()       {}
+func (*Min) iCallable()       {}
+func (*Max) iCallable()       {}
+func (*Avg) iCallable()       {}
+func (*CountStar) iCallable() {}
+func (*Count) iCallable()     {}
 
 func (sum *Sum) GetArg() Expr                   { return sum.Arg }
 func (min *Min) GetArg() Expr                   { return min.Arg }

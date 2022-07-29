@@ -396,7 +396,7 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (*sqltypes.Result, 
 		if err != nil {
 			return nil, false, 0, NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
 		}
-		if isEOFPacket(data) {
+		if c.isEOFPacket(data) {
 
 			// This is what we expect.
 			// Warnings and status flags are ignored.
@@ -419,10 +419,7 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (*sqltypes.Result, 
 			return nil, false, 0, err
 		}
 
-		// TODO: harshit - the EOF packet is deprecated as of MySQL 5.7.5.
-		// https://dev.mysql.com/doc/internals/en/packet-EOF_Packet.html
-		// It will be OK Packet with EOF Header. This needs to change in the code here.
-		if isEOFPacket(data) {
+		if c.isEOFPacket(data) {
 			defer c.recycleReadPacket()
 
 			// Strip the partial Fields before returning.
@@ -465,7 +462,7 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (*sqltypes.Result, 
 			if err := c.drainResults(); err != nil {
 				return nil, false, 0, err
 			}
-			return nil, false, 0, NewSQLError(ERVitessMaxRowsExceeded, SSUnknownSQLState, "Row count exceeded %d", maxrows)
+			return nil, false, 0, vterrors.Errorf(vtrpc.Code_ABORTED, "Row count exceeded %d", maxrows)
 		}
 
 		// Regular row.
@@ -486,7 +483,7 @@ func (c *Conn) drainResults() error {
 		if err != nil {
 			return NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
 		}
-		if isEOFPacket(data) {
+		if c.isEOFPacket(data) {
 			c.recycleReadPacket()
 			return nil
 		} else if isErrorPacket(data) {

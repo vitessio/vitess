@@ -61,7 +61,6 @@ func TestQueryExecutorPlans(t *testing.T) {
 		RowsAffected: 1,
 	}
 	fields := sqltypes.MakeTestFields("a|b", "int64|varchar")
-	fieldResult := sqltypes.MakeTestResult(fields)
 	selectResult := sqltypes.MakeTestResult(fields, "1|aaa")
 	emptyResult := &sqltypes.Result{}
 
@@ -85,33 +84,23 @@ func TestQueryExecutorPlans(t *testing.T) {
 	}{{
 		input: "select * from t",
 		dbResponses: []dbResponse{{
-			query:  "select * from t where 1 != 1",
-			result: fieldResult,
-		}, {
 			query:  "select * from t limit 10001",
 			result: selectResult,
 		}},
 		resultWant: selectResult,
 		planWant:   "Select",
-		logWant:    "select * from t where 1 != 1; select * from t limit 10001",
-		// Because the fields would have been cached before, the field query will
-		// not get re-executed.
-		inTxWant: "select * from t limit 10001",
+		logWant:    "select * from t limit 10001",
+		inTxWant:   "select * from t limit 10001",
 	}, {
 		input: "select * from t limit 1",
 		dbResponses: []dbResponse{{
-			query:  "select * from t where 1 != 1",
-			result: fieldResult,
-		}, {
 			query:  "select * from t limit 1",
 			result: selectResult,
 		}},
 		resultWant: selectResult,
 		planWant:   "Select",
-		logWant:    "select * from t where 1 != 1; select * from t limit 1",
-		// Because the fields would have been cached before, the field query will
-		// not get re-executed.
-		inTxWant: "select * from t limit 1",
+		logWant:    "select * from t limit 1",
+		inTxWant:   "select * from t limit 1",
 	}, {
 		input: "show engines",
 		dbResponses: []dbResponse{{
@@ -306,13 +295,13 @@ func TestQueryExecutorPlans(t *testing.T) {
 
 			// Test inside a transaction.
 			target := tsv.sm.Target()
-			txid, alias, err := tsv.Begin(ctx, target, nil)
+			state, err := tsv.Begin(ctx, target, nil)
 			require.NoError(t, err)
-			require.NotNil(t, alias, "alias should not be nil")
-			assert.Equal(t, tsv.alias, alias, "Wrong alias returned by Begin")
-			defer tsv.Commit(ctx, target, txid)
+			require.NotNil(t, state.TabletAlias, "alias should not be nil")
+			assert.Equal(t, tsv.alias, state.TabletAlias, "Wrong alias returned by Begin")
+			defer tsv.Commit(ctx, target, state.TransactionID)
 
-			qre = newTestQueryExecutor(ctx, tsv, tcase.input, txid)
+			qre = newTestQueryExecutor(ctx, tsv, tcase.input, state.TransactionID)
 			got, err = qre.Execute()
 			require.NoError(t, err, tcase.input)
 			assert.Equal(t, tcase.resultWant, got, "in tx: %v", tcase.input)
@@ -333,7 +322,6 @@ func TestQueryExecutorQueryAnnotation(t *testing.T) {
 	}
 
 	fields := sqltypes.MakeTestFields("a|b", "int64|varchar")
-	fieldResult := sqltypes.MakeTestResult(fields)
 	selectResult := sqltypes.MakeTestResult(fields, "1|aaa")
 
 	testcases := []struct {
@@ -354,9 +342,6 @@ func TestQueryExecutorQueryAnnotation(t *testing.T) {
 	}{{
 		input: "select * from t",
 		dbResponses: []dbResponse{{
-			query:  "select * from t where 1 != 1",
-			result: fieldResult,
-		}, {
 			query:  "select * from t limit 10001",
 			result: selectResult,
 		}, {
@@ -365,10 +350,8 @@ func TestQueryExecutorQueryAnnotation(t *testing.T) {
 		}},
 		resultWant: selectResult,
 		planWant:   "Select",
-		logWant:    "select * from t where 1 != 1; /* u1@PRIMARY */ select * from t limit 10001",
-		// Because the fields would have been cached before, the field query will
-		// not get re-executed.
-		inTxWant: "/* u1@PRIMARY */ select * from t limit 10001",
+		logWant:    "/* u1@PRIMARY */ select * from t limit 10001",
+		inTxWant:   "/* u1@PRIMARY */ select * from t limit 10001",
 	}}
 	for _, tcase := range testcases {
 		t.Run(tcase.input, func(t *testing.T) {
@@ -401,13 +384,13 @@ func TestQueryExecutorQueryAnnotation(t *testing.T) {
 
 			// Test inside a transaction.
 			target := tsv.sm.Target()
-			txid, alias, err := tsv.Begin(ctx, target, nil)
+			state, err := tsv.Begin(ctx, target, nil)
 			require.NoError(t, err)
-			require.NotNil(t, alias, "alias should not be nil")
-			assert.Equal(t, tsv.alias, alias, "Wrong alias returned by Begin")
-			defer tsv.Commit(ctx, target, txid)
+			require.NotNil(t, state.TabletAlias, "alias should not be nil")
+			assert.Equal(t, tsv.alias, state.TabletAlias, "Wrong alias returned by Begin")
+			defer tsv.Commit(ctx, target, state.TransactionID)
 
-			qre = newTestQueryExecutor(ctx, tsv, tcase.input, txid)
+			qre = newTestQueryExecutor(ctx, tsv, tcase.input, state.TransactionID)
 			got, err = qre.Execute()
 			require.NoError(t, err, tcase.input)
 			assert.Equal(t, tcase.resultWant, got, "in tx: %v", tcase.input)
@@ -442,13 +425,13 @@ func TestQueryExecutorSelectImpossible(t *testing.T) {
 	}{{
 		input: "select * from t where 1 != 1",
 		dbResponses: []dbResponse{{
-			query:  "select * from t where 1 != 1",
+			query:  "select * from t where 1 != 1 limit 10001",
 			result: fieldResult,
 		}},
 		resultWant: fieldResult,
 		planWant:   "SelectImpossible",
-		logWant:    "select * from t where 1 != 1",
-		inTxWant:   "",
+		logWant:    "select * from t where 1 != 1 limit 10001",
+		inTxWant:   "select * from t where 1 != 1 limit 10001",
 	}}
 	for _, tcase := range testcases {
 		func() {
@@ -468,13 +451,13 @@ func TestQueryExecutorSelectImpossible(t *testing.T) {
 			assert.Equal(t, tcase.planWant, qre.logStats.PlanType, tcase.input)
 			assert.Equal(t, tcase.logWant, qre.logStats.RewrittenSQL(), tcase.input)
 			target := tsv.sm.Target()
-			txid, alias, err := tsv.Begin(ctx, target, nil)
+			state, err := tsv.Begin(ctx, target, nil)
 			require.NoError(t, err)
-			require.NotNil(t, alias, "alias should not be nil")
-			assert.Equal(t, tsv.alias, alias, "Wrong tablet alias from Begin")
-			defer tsv.Commit(ctx, target, txid)
+			require.NotNil(t, state.TabletAlias, "alias should not be nil")
+			assert.Equal(t, tsv.alias, state.TabletAlias, "Wrong tablet alias from Begin")
+			defer tsv.Commit(ctx, target, state.TransactionID)
 
-			qre = newTestQueryExecutor(ctx, tsv, tcase.input, txid)
+			qre = newTestQueryExecutor(ctx, tsv, tcase.input, state.TransactionID)
 			got, err = qre.Execute()
 			require.NoError(t, err, tcase.input)
 			assert.Equal(t, tcase.resultWant, got, "in tx: %v", tcase.input)
@@ -539,10 +522,8 @@ func TestQueryExecutorLimitFailure(t *testing.T) {
 			query:  "select * from t limit 3",
 			result: selectResult,
 		}},
-		err:     "count exceeded",
-		logWant: "select * from t where 1 != 1; select * from t limit 3",
-		// Because the fields would have been cached before, the field query will
-		// not get re-executed.
+		err:      "count exceeded",
+		logWant:  "select * from t limit 3",
 		inTxWant: "select * from t limit 3",
 	}, {
 		input: "update test_table set a=1",
@@ -601,13 +582,13 @@ func TestQueryExecutorLimitFailure(t *testing.T) {
 
 			// Test inside a transaction.
 			target := tsv.sm.Target()
-			txid, alias, err := tsv.Begin(ctx, target, nil)
+			state, err := tsv.Begin(ctx, target, nil)
 			require.NoError(t, err)
-			require.NotNil(t, alias, "alias should not be nil")
-			assert.Equal(t, tsv.alias, alias, "Wrong tablet alias from Begin")
-			defer tsv.Commit(ctx, target, txid)
+			require.NotNil(t, state.TabletAlias, "alias should not be nil")
+			assert.Equal(t, tsv.alias, state.TabletAlias, "Wrong tablet alias from Begin")
+			defer tsv.Commit(ctx, target, state.TransactionID)
 
-			qre = newTestQueryExecutor(ctx, tsv, tcase.input, txid)
+			qre = newTestQueryExecutor(ctx, tsv, tcase.input, state.TransactionID)
 			_, err = qre.Execute()
 			assert.Error(t, err)
 			assert.Contains(t, err.Error(), tcase.err)
@@ -622,7 +603,7 @@ func TestQueryExecutorLimitFailure(t *testing.T) {
 				return
 			}
 			// Ensure transaction was rolled back.
-			conn, err := tsv.te.txPool.GetAndLock(txid, "")
+			conn, err := tsv.te.txPool.GetAndLock(state.TransactionID, "")
 			require.NoError(t, err)
 			defer conn.Release(tx.TxClose)
 
@@ -1283,16 +1264,16 @@ func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb
 
 func newTransaction(tsv *TabletServer, options *querypb.ExecuteOptions) int64 {
 	target := tsv.sm.Target()
-	transactionID, _, err := tsv.Begin(context.Background(), target, options)
+	state, err := tsv.Begin(context.Background(), target, options)
 	if err != nil {
 		panic(vterrors.Wrap(err, "failed to start a transaction"))
 	}
-	return transactionID
+	return state.TransactionID
 }
 
 func newTestQueryExecutor(ctx context.Context, tsv *TabletServer, sql string, txID int64) *QueryExecutor {
 	logStats := tabletenv.NewLogStats(ctx, "TestQueryExecutor")
-	plan, err := tsv.qe.GetPlan(ctx, logStats, sql, false, 0, nil)
+	plan, err := tsv.qe.GetPlan(ctx, logStats, sql, false, 0)
 	if err != nil {
 		panic(err)
 	}
@@ -1407,6 +1388,14 @@ func addQueryExecutorSupportedQueries(db *fakesqldb.DB) {
 		"select 0 as x from dual where 1 != 1 union select 1 as y from dual where 1 != 1 limit 10001": {
 			Fields: []*querypb.Field{{
 				Type: sqltypes.Uint64,
+			}},
+			Rows: [][]sqltypes.Value{},
+		},
+		"select * from t where 1 != 1 limit 10001": {
+			Fields: []*querypb.Field{{
+				Type: sqltypes.Uint64,
+			}, {
+				Type: sqltypes.VarChar,
 			}},
 			Rows: [][]sqltypes.Value{},
 		},

@@ -59,8 +59,6 @@ var (
 	// 2. in vtctld so it can be exported to the UI (different
 	// package, that's why it's exported). That way we can disable
 	// menu items there, using features.
-	// 3. prevents the vtworker from updating replication topology
-	// after restarting replication after a split clone/diff.
 	DisableActiveReparents = flag.Bool("disable_active_reparents", false, "if set, do not allow active reparents. Use this to protect a cluster using external reparents.")
 
 	dbaPoolSize = flag.Int("dba_pool_size", 20, "Size of the connection pool for dba connections")

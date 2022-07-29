@@ -28,7 +28,8 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/test/endtoend/sharding/initialsharding"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/proto/topodata"
@@ -44,6 +45,7 @@ const (
 	XtraBackup = iota
 	Backup
 	Mysqlctld
+	timeout = time.Duration(60 * time.Second)
 )
 
 var (
@@ -80,8 +82,16 @@ var (
 					  ) Engine=InnoDB`
 )
 
+type CompressionDetails struct {
+	BuiltinCompressor       string
+	BuiltinDecompressor     string
+	ExternalCompressorCmd   string
+	ExternalCompressorExt   string
+	ExternalDecompressorCmd string
+}
+
 // LaunchCluster : starts the cluster as per given params.
-func LaunchCluster(setupType int, streamMode string, stripes int) (int, error) {
+func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *CompressionDetails) (int, error) {
 	localCluster = cluster.NewCluster(cell, hostname)
 
 	// Start topo server
@@ -103,11 +113,11 @@ func LaunchCluster(setupType int, streamMode string, stripes int) (int, error) {
 	}
 	shard := &localCluster.Keyspaces[0].Shards[0]
 
-	dbCredentialFile = initialsharding.WriteDbCredentialToTmp(localCluster.TmpDirectory)
+	dbCredentialFile = cluster.WriteDbCredentialToTmp(localCluster.TmpDirectory)
 	initDb, _ := os.ReadFile(path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"))
 	sql := string(initDb)
 	newInitDBFile = path.Join(localCluster.TmpDirectory, "init_db_with_passwords.sql")
-	sql = sql + initialsharding.GetPasswordUpdateSQL(localCluster)
+	sql = sql + cluster.GetPasswordUpdateSQL(localCluster)
 	err = os.WriteFile(newInitDBFile, []byte(sql), 0666)
 	if err != nil {
 		return 1, err
@@ -136,6 +146,8 @@ func LaunchCluster(setupType int, streamMode string, stripes int) (int, error) {
 		commonTabletArg = append(commonTabletArg, xtrabackupArgs...)
 	}
 
+	commonTabletArg = append(commonTabletArg, getCompressorArgs(cDetails)...)
+
 	var mysqlProcs []*exec.Cmd
 	for i := 0; i < 3; i++ {
 		tabletType := "replica"
@@ -147,7 +159,6 @@ func LaunchCluster(setupType int, streamMode string, stripes int) (int, error) {
 		tablet.VttabletProcess.DbPassword = dbPassword
 		tablet.VttabletProcess.ExtraArgs = commonTabletArg
 		tablet.VttabletProcess.SupportsBackup = true
-		tablet.VttabletProcess.EnableSemiSync = true
 
 		if setupType == Mysqlctld {
 			tablet.MysqlctldProcess = *cluster.MysqlCtldProcessInstance(tablet.TabletUID, tablet.MySQLPort, localCluster.TmpDirectory)
@@ -208,13 +219,61 @@ func LaunchCluster(setupType int, streamMode string, stripes int) (int, error) {
 	return 0, nil
 }
 
+func getCompressorArgs(cDetails *CompressionDetails) []string {
+	var args []string
+
+	if cDetails == nil {
+		return args
+	}
+
+	if cDetails.BuiltinCompressor != "" {
+		args = append(args, fmt.Sprintf("--builtin-compressor=%s", cDetails.BuiltinCompressor))
+	}
+	if cDetails.BuiltinDecompressor != "" {
+		args = append(args, fmt.Sprintf("--builtin-decompressor=%s", cDetails.BuiltinDecompressor))
+	}
+	if cDetails.ExternalCompressorCmd != "" {
+		args = append(args, fmt.Sprintf("--external-compressor=%s", cDetails.ExternalCompressorCmd))
+	}
+	if cDetails.ExternalCompressorExt != "" {
+		args = append(args, fmt.Sprintf("--external-compressor-extension=%s", cDetails.ExternalCompressorExt))
+	}
+	if cDetails.ExternalDecompressorCmd != "" {
+		args = append(args, fmt.Sprintf("--external-decompressor=%s", cDetails.ExternalDecompressorCmd))
+	}
+
+	return args
+
+}
+
 // TearDownCluster shuts down all cluster processes
 func TearDownCluster() {
 	localCluster.Teardown()
 }
 
 // TestBackup runs all the backup tests
-func TestBackup(t *testing.T, setupType int, streamMode string, stripes int) {
+func TestBackup(t *testing.T, setupType int, streamMode string, stripes int, cDetails *CompressionDetails, runSpecific []string) error {
+	verStr, err := mysqlctl.GetVersionString()
+	require.NoError(t, err)
+	_, vers, err := mysqlctl.ParseVersionString(verStr)
+	require.NoError(t, err)
+	switch streamMode {
+	case "xbstream":
+		if vers.Major < 8 {
+			t.Logf("Skipping xtrabackup tests with --xtrabackup_stream_mode=xbstream as those are only tested on XtraBackup/MySQL 8.0+")
+			return nil
+		}
+	case "", "tar": // streaming method of tar is the default for the vttablet --xtrabackup_stream_mode flag
+		// XtraBackup 8.0 must be used with MySQL 8.0 and it no longer supports tar as a stream method:
+		//    https://docs.percona.com/percona-xtrabackup/2.4/innobackupex/streaming_backups_innobackupex.html
+		//    https://docs.percona.com/percona-xtrabackup/8.0/xtrabackup_bin/backup.streaming.html
+		if vers.Major > 5 {
+			t.Logf("Skipping xtrabackup tests with --xtrabackup_stream_mode=tar as tar is no longer a streaming option in XtraBackup 8.0")
+			return nil
+		}
+	default:
+		require.FailNow(t, fmt.Sprintf("Unsupported xtrabackup stream mode: %s", streamMode))
+	}
 
 	testMethods := []struct {
 		name   string
@@ -235,7 +294,7 @@ func TestBackup(t *testing.T, setupType int, streamMode string, stripes int) {
 		{
 			name:   "TestPrimaryBackup",
 			method: primaryBackup,
-		}, //
+		},
 		{
 			name:   "TestPrimaryReplicaSameBackup",
 			method: primaryReplicaSameBackup,
@@ -255,9 +314,8 @@ func TestBackup(t *testing.T, setupType int, streamMode string, stripes int) {
 	}
 
 	defer cluster.PanicHandler(t)
-
 	// setup cluster for the testing
-	code, err := LaunchCluster(setupType, streamMode, stripes)
+	code, err := LaunchCluster(setupType, streamMode, stripes, cDetails)
 	require.Nilf(t, err, "setup failed with status code %d", code)
 
 	// Teardown the cluster
@@ -266,9 +324,23 @@ func TestBackup(t *testing.T, setupType int, streamMode string, stripes int) {
 	// Run all the backup tests
 
 	for _, test := range testMethods {
-		t.Run(test.name, test.method)
+		if len(runSpecific) > 0 && !isRegistered(test.name, runSpecific) {
+			continue
+		}
+		if retVal := t.Run(test.name, test.method); !retVal {
+			return vterrors.Errorf(vtrpc.Code_UNKNOWN, "test failure: %s", test.name)
+		}
 	}
+	return nil
+}
 
+func isRegistered(name string, runlist []string) bool {
+	for _, f := range runlist {
+		if f == name {
+			return true
+		}
+	}
+	return false
 }
 
 type restoreMethod func(t *testing.T, tablet *cluster.Vttablet)
@@ -301,7 +373,7 @@ func primaryBackup(t *testing.T) {
 	require.Nil(t, err)
 
 	// We'll restore this on the primary later to test restores using a backup timestamp
-	firstBackupTimestamp := time.Now().Format(mysqlctl.BackupTimestampFormat)
+	firstBackupTimestamp := time.Now().UTC().Format(mysqlctl.BackupTimestampFormat)
 
 	backups := localCluster.VerifyBackupCount(t, shardKsName, 1)
 	assert.Contains(t, backups[0], primary.Alias)
@@ -310,7 +382,7 @@ func primaryBackup(t *testing.T) {
 	require.Nil(t, err)
 
 	restoreWaitForBackup(t, "replica")
-	err = replica2.VttabletProcess.WaitForTabletStatusesForTimeout([]string{"SERVING"}, 25*time.Second)
+	err = replica2.VttabletProcess.WaitForTabletStatusesForTimeout([]string{"SERVING"}, timeout)
 	require.Nil(t, err)
 
 	// Verify that we have all the new data -- we should have 2 records now...
@@ -375,7 +447,7 @@ func primaryReplicaSameBackup(t *testing.T) {
 
 	// now bring up the other replica, letting it restore from backup.
 	restoreWaitForBackup(t, "replica")
-	err = replica2.VttabletProcess.WaitForTabletStatusesForTimeout([]string{"SERVING"}, 25*time.Second)
+	err = replica2.VttabletProcess.WaitForTabletStatusesForTimeout([]string{"SERVING"}, timeout)
 	require.Nil(t, err)
 
 	// check the new replica has the data

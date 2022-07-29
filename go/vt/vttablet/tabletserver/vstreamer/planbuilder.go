@@ -17,6 +17,7 @@ limitations under the License.
 package vstreamer
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -257,7 +258,7 @@ func getKeyspaceID(values []sqltypes.Value, vindex vindexes.Vindex, vindexColumn
 	for _, col := range vindexColumns {
 		vindexValues = append(vindexValues, values[col])
 	}
-	destinations, err := vindexes.Map(vindex, nil, [][]sqltypes.Value{vindexValues})
+	destinations, err := vindexes.Map(context.TODO(), vindex, nil, [][]sqltypes.Value{vindexValues})
 	if err != nil {
 		return nil, err
 	}

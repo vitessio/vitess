@@ -14536,6 +14536,9 @@ export namespace tabletmanagerdata {
 
         /** GetSchemaRequest exclude_tables */
         exclude_tables?: (string[]|null);
+
+        /** GetSchemaRequest table_schema_only */
+        table_schema_only?: (boolean|null);
     }
 
     /** Represents a GetSchemaRequest. */
@@ -14555,6 +14558,9 @@ export namespace tabletmanagerdata {
 
         /** GetSchemaRequest exclude_tables. */
         public exclude_tables: string[];
+
+        /** GetSchemaRequest table_schema_only. */
+        public table_schema_only: boolean;
 
         /**
          * Creates a new GetSchemaRequest instance using the specified properties.
@@ -20192,9 +20198,6 @@ export namespace tabletmanagerdata {
     /** Properties of a DemotePrimaryResponse. */
     interface IDemotePrimaryResponse {
 
-        /** DemotePrimaryResponse deprecated_position */
-        deprecated_position?: (string|null);
-
         /** DemotePrimaryResponse primary_status */
         primary_status?: (replicationdata.IPrimaryStatus|null);
     }
@@ -20207,9 +20210,6 @@ export namespace tabletmanagerdata {
          * @param [properties] Properties to set
          */
         constructor(properties?: tabletmanagerdata.IDemotePrimaryResponse);
-
-        /** DemotePrimaryResponse deprecated_position. */
-        public deprecated_position: string;
 
         /** DemotePrimaryResponse primary_status. */
         public primary_status?: (replicationdata.IPrimaryStatus|null);
@@ -21434,9 +21434,6 @@ export namespace tabletmanagerdata {
     /** Properties of a StopReplicationAndGetStatusResponse. */
     interface IStopReplicationAndGetStatusResponse {
 
-        /** StopReplicationAndGetStatusResponse hybrid_status */
-        hybrid_status?: (replicationdata.IStatus|null);
-
         /** StopReplicationAndGetStatusResponse status */
         status?: (replicationdata.IStopReplicationStatus|null);
     }
@@ -21449,9 +21446,6 @@ export namespace tabletmanagerdata {
          * @param [properties] Properties to set
          */
         constructor(properties?: tabletmanagerdata.IStopReplicationAndGetStatusResponse);
-
-        /** StopReplicationAndGetStatusResponse hybrid_status. */
-        public hybrid_status?: (replicationdata.IStatus|null);
 
         /** StopReplicationAndGetStatusResponse status. */
         public status?: (replicationdata.IStopReplicationStatus|null);
@@ -22274,11 +22268,11 @@ export namespace tabletmanagerdata {
         /** VDiffRequest workflow */
         workflow?: (string|null);
 
-        /** VDiffRequest command */
-        command?: (string|null);
+        /** VDiffRequest action */
+        action?: (string|null);
 
-        /** VDiffRequest sub_command */
-        sub_command?: (string|null);
+        /** VDiffRequest action_arg */
+        action_arg?: (string|null);
 
         /** VDiffRequest vdiff_uuid */
         vdiff_uuid?: (string|null);
@@ -22302,11 +22296,11 @@ export namespace tabletmanagerdata {
         /** VDiffRequest workflow. */
         public workflow: string;
 
-        /** VDiffRequest command. */
-        public command: string;
+        /** VDiffRequest action. */
+        public action: string;
 
-        /** VDiffRequest sub_command. */
-        public sub_command: string;
+        /** VDiffRequest action_arg. */
+        public action_arg: string;
 
         /** VDiffRequest vdiff_uuid. */
         public vdiff_uuid: string;
@@ -22697,8 +22691,8 @@ export namespace tabletmanagerdata {
         /** VDiffCoreOptions tables */
         tables?: (string|null);
 
-        /** VDiffCoreOptions resumable */
-        resumable?: (boolean|null);
+        /** VDiffCoreOptions auto_retry */
+        auto_retry?: (boolean|null);
 
         /** VDiffCoreOptions max_rows */
         max_rows?: (number|Long|null);
@@ -22728,8 +22722,8 @@ export namespace tabletmanagerdata {
         /** VDiffCoreOptions tables. */
         public tables: string;
 
-        /** VDiffCoreOptions resumable. */
-        public resumable: boolean;
+        /** VDiffCoreOptions auto_retry. */
+        public auto_retry: boolean;
 
         /** VDiffCoreOptions max_rows. */
         public max_rows: (number|Long);
@@ -23299,7 +23293,8 @@ export namespace query {
         JSON = 2078,
         EXPRESSION = 31,
         HEXNUM = 4128,
-        HEXVAL = 4129
+        HEXVAL = 4129,
+        BITNUM = 4130
     }
 
     /** Properties of a Value. */
@@ -38327,6 +38322,9 @@ export namespace vtctldata {
 
         /** GetSchemaRequest table_sizes_only */
         table_sizes_only?: (boolean|null);
+
+        /** GetSchemaRequest table_schema_only */
+        table_schema_only?: (boolean|null);
     }
 
     /** Represents a GetSchemaRequest. */
@@ -38355,6 +38353,9 @@ export namespace vtctldata {
 
         /** GetSchemaRequest table_sizes_only. */
         public table_sizes_only: boolean;
+
+        /** GetSchemaRequest table_schema_only. */
+        public table_schema_only: boolean;
 
         /**
          * Creates a new GetSchemaRequest instance using the specified properties.
@@ -50144,6 +50145,9 @@ export namespace binlogdata {
 
         /** VEvent shard */
         shard?: (string|null);
+
+        /** VEvent throttled */
+        throttled?: (boolean|null);
     }
 
     /** Represents a VEvent. */
@@ -50193,6 +50197,9 @@ export namespace binlogdata {
 
         /** VEvent shard. */
         public shard: string;
+
+        /** VEvent throttled. */
+        public throttled: boolean;
 
         /**
          * Creates a new VEvent instance using the specified properties.
@@ -50798,6 +50805,12 @@ export namespace binlogdata {
 
         /** VStreamRowsResponse lastpk */
         lastpk?: (query.IRow|null);
+
+        /** VStreamRowsResponse throttled */
+        throttled?: (boolean|null);
+
+        /** VStreamRowsResponse heartbeat */
+        heartbeat?: (boolean|null);
     }
 
     /** Represents a VStreamRowsResponse. */
@@ -50823,6 +50836,12 @@ export namespace binlogdata {
 
         /** VStreamRowsResponse lastpk. */
         public lastpk?: (query.IRow|null);
+
+        /** VStreamRowsResponse throttled. */
+        public throttled: boolean;
+
+        /** VStreamRowsResponse heartbeat. */
+        public heartbeat: boolean;
 
         /**
          * Creates a new VStreamRowsResponse instance using the specified properties.

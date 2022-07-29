@@ -24,9 +24,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
-
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/discovery"
 
@@ -46,7 +45,43 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
+type compressionDetails struct {
+	BuiltinCompressor       string
+	BuiltinDecompressor     string
+	ExternalCompressorCmd   string
+	ExternalCompressorExt   string
+	ExternalDecompressorCmd string
+}
+
 func TestBackupRestore(t *testing.T) {
+	defer setDefaultCompressionFlag()
+	err := testBackupRestore(t, nil)
+	require.NoError(t, err)
+}
+
+// TODO: @rameez. I was expecting this test to fail but it turns out
+// we infer decompressor through compression engine in builtinEngine.
+// It is only in xtrabackup where we infer decompressor through extension & BuiltinDecompressor param.
+func TestBackupRestoreWithPargzip(t *testing.T) {
+	defer setDefaultCompressionFlag()
+	cDetails := &compressionDetails{
+		BuiltinCompressor:   "pargzip",
+		BuiltinDecompressor: "lz4",
+	}
+
+	err := testBackupRestore(t, cDetails)
+	require.ErrorContains(t, err, "lz4: bad magic number")
+}
+
+func setDefaultCompressionFlag() {
+	*mysqlctl.BuiltinCompressor = "pgzip"
+	*mysqlctl.BuiltinDecompressor = "auto"
+	*mysqlctl.ExternalCompressorCmd = ""
+	*mysqlctl.ExternalCompressorExt = ""
+	*mysqlctl.ExternalDecompressorCmd = ""
+}
+
+func testBackupRestore(t *testing.T, cDetails *compressionDetails) error {
 	delay := discovery.GetTabletPickerRetryDelay()
 	defer func() {
 		discovery.SetTabletPickerRetryDelay(delay)
@@ -80,8 +115,25 @@ func TestBackupRestore(t *testing.T) {
 
 	// Initialize BackupStorage
 	fbsRoot := path.Join(root, "fbs")
-	*filebackupstorage.FileBackupStorageRoot = fbsRoot
-	*backupstorage.BackupStorageImplementation = "file"
+	filebackupstorage.FileBackupStorageRoot = fbsRoot
+	backupstorage.BackupStorageImplementation = "file"
+	if cDetails != nil {
+		if cDetails.BuiltinCompressor != "" {
+			*mysqlctl.BuiltinCompressor = cDetails.BuiltinCompressor
+		}
+		if cDetails.BuiltinDecompressor != "" {
+			*mysqlctl.BuiltinDecompressor = cDetails.BuiltinDecompressor
+		}
+		if cDetails.ExternalCompressorCmd != "" {
+			*mysqlctl.ExternalCompressorCmd = cDetails.ExternalCompressorCmd
+		}
+		if cDetails.ExternalCompressorExt != "" {
+			*mysqlctl.ExternalCompressorExt = cDetails.ExternalCompressorExt
+		}
+		if cDetails.ExternalDecompressorCmd != "" {
+			*mysqlctl.ExternalDecompressorCmd = cDetails.ExternalDecompressorCmd
+		}
+	}
 
 	// Initialize the fake mysql root directories
 	sourceInnodbDataDir := path.Join(root, "source_innodb_data")
@@ -198,7 +250,10 @@ func TestBackupRestore(t *testing.T) {
 		RelayLogInfoPath:      path.Join(root, "relay-log.info"),
 	}
 
-	require.NoError(t, destTablet.TM.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */, time.Time{} /* backupTime */))
+	err := destTablet.TM.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */, time.Time{} /* backupTime */)
+	if err != nil {
+		return err
+	}
 	// verify the full status
 	require.NoError(t, destTablet.FakeMysqlDaemon.CheckSuperQueryList(), "destTablet.FakeMysqlDaemon.CheckSuperQueryList failed")
 	assert.True(t, destTablet.FakeMysqlDaemon.Replicating)
@@ -253,6 +308,7 @@ func TestBackupRestore(t *testing.T) {
 	assert.Equal(t, topodatapb.TabletType_PRIMARY, primary.Tablet.Type)
 	assert.False(t, primary.FakeMysqlDaemon.Replicating)
 	assert.True(t, primary.FakeMysqlDaemon.Running)
+	return nil
 }
 
 // TestBackupRestoreLagged tests the changes made in https://github.com/vitessio/vitess/pull/5000
@@ -292,8 +348,8 @@ func TestBackupRestoreLagged(t *testing.T) {
 
 	// Initialize BackupStorage
 	fbsRoot := path.Join(root, "fbs")
-	*filebackupstorage.FileBackupStorageRoot = fbsRoot
-	*backupstorage.BackupStorageImplementation = "file"
+	filebackupstorage.FileBackupStorageRoot = fbsRoot
+	backupstorage.BackupStorageImplementation = "file"
 
 	// Initialize the fake mysql root directories
 	sourceInnodbDataDir := path.Join(root, "source_innodb_data")
@@ -496,8 +552,8 @@ func TestRestoreUnreachablePrimary(t *testing.T) {
 
 	// Initialize BackupStorage
 	fbsRoot := path.Join(root, "fbs")
-	*filebackupstorage.FileBackupStorageRoot = fbsRoot
-	*backupstorage.BackupStorageImplementation = "file"
+	filebackupstorage.FileBackupStorageRoot = fbsRoot
+	backupstorage.BackupStorageImplementation = "file"
 
 	// Initialize the fake mysql root directories
 	sourceInnodbDataDir := path.Join(root, "source_innodb_data")
@@ -656,8 +712,8 @@ func TestDisableActiveReparents(t *testing.T) {
 
 	// Initialize BackupStorage
 	fbsRoot := path.Join(root, "fbs")
-	*filebackupstorage.FileBackupStorageRoot = fbsRoot
-	*backupstorage.BackupStorageImplementation = "file"
+	filebackupstorage.FileBackupStorageRoot = fbsRoot
+	backupstorage.BackupStorageImplementation = "file"
 
 	// Initialize the fake mysql root directories
 	sourceInnodbDataDir := path.Join(root, "source_innodb_data")

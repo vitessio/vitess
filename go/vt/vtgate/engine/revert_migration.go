@@ -17,11 +17,11 @@ limitations under the License.
 package engine
 
 import (
+	"context"
 	"fmt"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
-	"vitess.io/vitess/go/vt/proto/query"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/schema"
@@ -70,7 +70,7 @@ func (v *RevertMigration) GetTableName() string {
 }
 
 // TryExecute implements the Primitive interface
-func (v *RevertMigration) TryExecute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool) (result *sqltypes.Result, err error) {
+func (v *RevertMigration) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (result *sqltypes.Result, err error) {
 	result = &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{
@@ -100,7 +100,7 @@ func (v *RevertMigration) TryExecute(vcursor VCursor, bindVars map[string]*query
 		IsDML:             false,
 		SingleShardOnly:   false,
 	}
-	if _, err := vcursor.ExecutePrimitive(&s, bindVars, wantfields); err != nil {
+	if _, err := vcursor.ExecutePrimitive(ctx, &s, bindVars, wantfields); err != nil {
 		return result, err
 	}
 	result.Rows = append(result.Rows, []sqltypes.Value{
@@ -110,8 +110,8 @@ func (v *RevertMigration) TryExecute(vcursor VCursor, bindVars map[string]*query
 }
 
 // TryStreamExecute implements the Primitive interface
-func (v *RevertMigration) TryStreamExecute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	results, err := v.TryExecute(vcursor, bindVars, wantfields)
+func (v *RevertMigration) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	results, err := v.TryExecute(ctx, vcursor, bindVars, wantfields)
 	if err != nil {
 		return err
 	}
@@ -119,6 +119,6 @@ func (v *RevertMigration) TryStreamExecute(vcursor VCursor, bindVars map[string]
 }
 
 //GetFields implements the Primitive interface
-func (v *RevertMigration) GetFields(vcursor VCursor, bindVars map[string]*query.BindVariable) (*sqltypes.Result, error) {
+func (v *RevertMigration) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] GetFields is not reachable")
 }

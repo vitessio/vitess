@@ -58,6 +58,7 @@ const (
 	StmtCallProc
 	StmtRevert
 	StmtShowMigrationLogs
+	StmtCommentOnly
 )
 
 //ASTToStatementType returns a StatementType from an AST stmt
@@ -111,6 +112,8 @@ func ASTToStatementType(stmt Statement) StatementType {
 		return StmtStream
 	case *VStream:
 		return StmtVStream
+	case *CommentOnly:
+		return StmtCommentOnly
 	default:
 		return StmtUnknown
 	}
@@ -294,6 +297,8 @@ func (s StatementType) String() string {
 		return "FLUSH"
 	case StmtCallProc:
 		return "CALL_PROC"
+	case StmtCommentOnly:
+		return "COMMENT_ONLY"
 	default:
 		return "UNKNOWN"
 	}

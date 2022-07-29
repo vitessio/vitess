@@ -784,7 +784,7 @@ func TestDialogServer(t *testing.T) {
 	}
 	sql := "select rows"
 	output, ok := runMysql(t, params, sql)
-	if strings.Contains(output, "No such file or directory") {
+	if strings.Contains(output, "No such file or directory") || strings.Contains(output, "Authentication plugin 'dialog' cannot be loaded") {
 		t.Logf("skipping dialog plugin tests, as the dialog plugin cannot be loaded: %v", err)
 		return
 	}
@@ -1174,10 +1174,10 @@ func TestErrorCodes(t *testing.T) {
 			text:     "resource exhausted",
 		},
 		{
-			err:      vterrors.Wrap(NewSQLError(ERVitessMaxRowsExceeded, SSUnknownSQLState, "Row count exceeded 10000"), "wrapped"),
-			code:     ERVitessMaxRowsExceeded,
-			sqlState: SSUnknownSQLState,
-			text:     "resource exhausted",
+			err:      vterrors.Wrap(vterrors.Errorf(vtrpcpb.Code_ABORTED, "Row count exceeded 10000"), "wrapped"),
+			code:     ERQueryInterrupted,
+			sqlState: SSQueryInterrupted,
+			text:     "aborted",
 		},
 	}
 

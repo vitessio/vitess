@@ -82,7 +82,7 @@ func (s *server) GetSchema(ctx context.Context, request *tabletmanagerdatapb.Get
 	defer s.tm.HandleRPCPanic(ctx, "GetSchema", request, response, false /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.GetSchemaResponse{}
-	sd, err := s.tm.GetSchema(ctx, request.Tables, request.ExcludeTables, request.IncludeViews)
+	sd, err := s.tm.GetSchema(ctx, request)
 	if err == nil {
 		response.SchemaDefinition = sd
 	}
@@ -416,7 +416,6 @@ func (s *server) DemotePrimary(ctx context.Context, request *tabletmanagerdatapb
 	response = &tabletmanagerdatapb.DemotePrimaryResponse{}
 	status, err := s.tm.DemotePrimary(ctx)
 	if err == nil {
-		response.DeprecatedPosition = status.Position //nolint
 		response.PrimaryStatus = status
 	}
 	return response, err
@@ -464,9 +463,7 @@ func (s *server) StopReplicationAndGetStatus(ctx context.Context, request *table
 	response = &tabletmanagerdatapb.StopReplicationAndGetStatusResponse{}
 	statusResponse, err := s.tm.StopReplicationAndGetStatus(ctx, request.StopReplicationMode)
 	if err == nil {
-		response.HybridStatus = statusResponse.HybridStatus //nolint
 		response.Status = statusResponse.Status
-
 	}
 	return response, err
 }

@@ -68,6 +68,7 @@ func TestHealthStreamerBroadcast(t *testing.T) {
 	}
 	blpFunc = testBlpFunc
 	hs := newHealthStreamer(env, alias)
+	hs.InitDBConfig(&querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}, config.DB.DbaWithDB())
 	hs.Open()
 	defer hs.Close()
 	target := &querypb.Target{}

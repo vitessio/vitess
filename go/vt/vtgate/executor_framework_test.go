@@ -23,6 +23,8 @@ import (
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/vt/vtgate/logstats"
+
 	"vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/vt/topo"
@@ -377,10 +379,10 @@ func (v *keyRangeLookuper) String() string   { return "keyrange_lookuper" }
 func (*keyRangeLookuper) Cost() int          { return 0 }
 func (*keyRangeLookuper) IsUnique() bool     { return false }
 func (*keyRangeLookuper) NeedsVCursor() bool { return false }
-func (*keyRangeLookuper) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
+func (*keyRangeLookuper) Verify(context.Context, vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
-func (*keyRangeLookuper) Map(cursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+func (*keyRangeLookuper) Map(ctx context.Context, vcursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	return []key.Destination{
 		key.DestinationKeyRange{
 			KeyRange: &topodatapb.KeyRange{
@@ -402,10 +404,10 @@ func (v *keyRangeLookuperUnique) String() string   { return "keyrange_lookuper" 
 func (*keyRangeLookuperUnique) Cost() int          { return 0 }
 func (*keyRangeLookuperUnique) IsUnique() bool     { return true }
 func (*keyRangeLookuperUnique) NeedsVCursor() bool { return false }
-func (*keyRangeLookuperUnique) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
+func (*keyRangeLookuperUnique) Verify(context.Context, vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
-func (*keyRangeLookuperUnique) Map(cursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+func (*keyRangeLookuperUnique) Map(ctx context.Context, vcursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	return []key.Destination{
 		key.DestinationKeyRange{
 			KeyRange: &topodatapb.KeyRange{
@@ -590,11 +592,11 @@ func assertQueries(t *testing.T, sbc *sandboxconn.SandboxConn, wantQueries []*qu
 		if len(wantQueries) < idx {
 			t.Errorf("got more queries than expected")
 		}
-		require.Equal(t, wantQueries[idx].BindVariables, query.BindVariables)
 		got := query.Sql
 		expected := wantQueries[idx].Sql
-		idx++
 		assert.Equal(t, expected, got)
+		assert.Equal(t, wantQueries[idx].BindVariables, query.BindVariables)
+		idx++
 	}
 }
 
@@ -643,12 +645,12 @@ func testNonZeroDuration(t *testing.T, what, d string) {
 	}
 }
 
-func getQueryLog(logChan chan any) *LogStats {
+func getQueryLog(logChan chan any) *logstats.LogStats {
 	var log any
 
 	select {
 	case log = <-logChan:
-		return log.(*LogStats)
+		return log.(*logstats.LogStats)
 	default:
 		return nil
 	}
@@ -661,12 +663,10 @@ func getQueryLog(logChan chan any) *LogStats {
 // is a repeat query.
 var testPlannedQueries = map[string]bool{}
 
-func testQueryLog(t *testing.T, logChan chan any, method, stmtType, sql string, shardQueries int) *LogStats {
+func testQueryLog(t *testing.T, logChan chan any, method, stmtType, sql string, shardQueries int) *logstats.LogStats {
 	t.Helper()
 
-	var logStats *LogStats
-
-	logStats = getQueryLog(logChan)
+	logStats := getQueryLog(logChan)
 	require.NotNil(t, logStats)
 
 	var log bytes.Buffer

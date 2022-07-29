@@ -47,11 +47,13 @@ var (
 func TestHelpOutput(t *testing.T) {
 	args := []string{"--help"}
 	for binary, helptext := range helpOutput {
-		cmd := exec.Command(binary, args...)
-		output := bytes.Buffer{}
-		cmd.Stderr = &output
-		err := cmd.Run()
-		require.NoError(t, err)
-		utils.MustMatch(t, helptext, output.String())
+		t.Run(binary, func(t *testing.T) {
+			cmd := exec.Command(binary, args...)
+			output := bytes.Buffer{}
+			cmd.Stderr = &output
+			err := cmd.Run()
+			require.NoError(t, err)
+			utils.MustMatch(t, helptext, output.String())
+		})
 	}
 }

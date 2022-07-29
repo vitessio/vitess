@@ -18,6 +18,7 @@ package vtgate
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -956,6 +957,16 @@ func TestInsertShardedAutocommitLookup(t *testing.T) {
 				"to": "user_id",
 				"autocommit": "true"
 			}
+		},
+		"music_user_map": {
+			"type": "lookup_hash",
+			"owner": "user",
+			"params": {
+				"table": "music_user_map",
+				"from": "music",
+				"to": "user_id",
+				"multi_shard_autocommit": "true"
+			}
 		}
 	},
 	"tables": {
@@ -968,6 +979,10 @@ func TestInsertShardedAutocommitLookup(t *testing.T) {
 				{
 					"column": "name",
 					"name": "name_user_map"
+				},
+				{
+					"column": "music",
+					"name": "music_user_map"
 				}
 			],
 			"auto_increment": {
@@ -986,14 +1001,15 @@ func TestInsertShardedAutocommitLookup(t *testing.T) {
 `
 	executor, sbc1, sbc2, sbclookup := createCustomExecutor(vschema)
 
-	_, err := executorExecSession(executor, "insert into user(id, v, name) values (1, 2, 'myname')", nil, &vtgatepb.Session{})
+	_, err := executorExecSession(executor, "insert into user(id, v, name, music) values (1, 2, 'myname', 'star')", nil, &vtgatepb.Session{})
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql: "insert into `user`(id, v, `name`) values (:_Id_0, 2, :_name_0)",
+		Sql: "insert into `user`(id, v, `name`, music) values (:_Id_0, 2, :_name_0, :_music_0)",
 		BindVariables: map[string]*querypb.BindVariable{
-			"_Id_0":   sqltypes.Int64BindVariable(1),
-			"_name_0": sqltypes.StringBindVariable("myname"),
-			"__seq0":  sqltypes.Int64BindVariable(1),
+			"_Id_0":    sqltypes.Int64BindVariable(1),
+			"_music_0": sqltypes.StringBindVariable("star"),
+			"_name_0":  sqltypes.StringBindVariable("myname"),
+			"__seq0":   sqltypes.Int64BindVariable(1),
 		},
 	}}
 	assertQueries(t, sbc1, wantQueries)
@@ -1002,6 +1018,12 @@ func TestInsertShardedAutocommitLookup(t *testing.T) {
 		Sql: "insert into name_user_map(`name`, user_id) values (:name_0, :user_id_0) on duplicate key update `name` = values(`name`), user_id = values(user_id)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"name_0":    sqltypes.StringBindVariable("myname"),
+			"user_id_0": sqltypes.Uint64BindVariable(1),
+		},
+	}, {
+		Sql: "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into music_user_map(music, user_id) values (:music_0, :user_id_0) on duplicate key update music = values(music), user_id = values(user_id)",
+		BindVariables: map[string]*querypb.BindVariable{
+			"music_0":   sqltypes.StringBindVariable("star"),
 			"user_id_0": sqltypes.Uint64BindVariable(1),
 		},
 	}}
@@ -1993,7 +2015,7 @@ func TestReservedConnDML(t *testing.T) {
 
 	wantQueries = append(wantQueries,
 		&querypb.BoundQuery{Sql: "set @@default_week_format = 1", BindVariables: map[string]*querypb.BindVariable{}},
-		&querypb.BoundQuery{Sql: "insert into `simple` values ()", BindVariables: map[string]*querypb.BindVariable{}})
+		&querypb.BoundQuery{Sql: "insert into `simple`() values ()", BindVariables: map[string]*querypb.BindVariable{}})
 	_, err = executor.Execute(ctx, "TestReservedConnDML", session, "insert into `simple`() values ()", nil)
 	require.NoError(t, err)
 	assertQueries(t, sbc, wantQueries)
@@ -2008,7 +2030,7 @@ func TestReservedConnDML(t *testing.T) {
 	// as the first time the query fails due to connection loss i.e. reserved conn lost. It will be recreated to set statement will be executed again.
 	wantQueries = append(wantQueries,
 		&querypb.BoundQuery{Sql: "set @@default_week_format = 1", BindVariables: map[string]*querypb.BindVariable{}},
-		&querypb.BoundQuery{Sql: "insert into `simple` values ()", BindVariables: map[string]*querypb.BindVariable{}})
+		&querypb.BoundQuery{Sql: "insert into `simple`() values ()", BindVariables: map[string]*querypb.BindVariable{}})
 	_, err = executor.Execute(ctx, "TestReservedConnDML", session, "insert into `simple`() values ()", nil)
 	require.NoError(t, err)
 	assertQueries(t, sbc, wantQueries)
@@ -2050,7 +2072,7 @@ func TestStreamingDML(t *testing.T) {
 		openTx:      true,
 		changedRows: 1,
 		expQuery: []*querypb.BoundQuery{{
-			Sql:           "insert into `simple` values ()",
+			Sql:           "insert into `simple`() values ()",
 			BindVariables: map[string]*querypb.BindVariable{},
 		}},
 	}, {
@@ -2247,4 +2269,112 @@ func TestMultiInternalSavepoint(t *testing.T) {
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	assertQueriesWithSavepoint(t, sbc1, wantQ)
+}
+
+func TestInsertSelectFromDual(t *testing.T) {
+	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
+
+	logChan := QueryLogger.Subscribe("TestInsertSelect")
+	defer QueryLogger.Unsubscribe(logChan)
+
+	session := NewAutocommitSession(&vtgatepb.Session{})
+
+	query := "insert into user(id, v, name) select 1, 2, 'myname' from dual"
+	wantQueries := []*querypb.BoundQuery{{
+		Sql: "insert into `user`(id, v, `name`) values (:_c0_0, :_c0_1, :_c0_2)",
+		BindVariables: map[string]*querypb.BindVariable{
+			"_c0_0": sqltypes.Int64BindVariable(1),
+			"_c0_1": sqltypes.Int64BindVariable(2),
+			"_c0_2": sqltypes.StringBindVariable("myname"),
+		},
+	}}
+
+	wantlkpQueries := []*querypb.BoundQuery{{
+		Sql: "insert into name_user_map(`name`, user_id) values (:name_0, :user_id_0)",
+		BindVariables: map[string]*querypb.BindVariable{
+			"name_0":    sqltypes.StringBindVariable("myname"),
+			"user_id_0": sqltypes.Uint64BindVariable(1),
+		},
+	}}
+
+	for _, workload := range []string{"olap", "oltp"} {
+		sbc1.Queries = nil
+		sbc2.Queries = nil
+		sbclookup.Queries = nil
+		wQuery := fmt.Sprintf("set @@workload = %s", workload)
+		_, err := executor.Execute(context.Background(), "TestInsertSelect", session, wQuery, nil)
+		require.NoError(t, err)
+
+		_, err = executor.Execute(context.Background(), "TestInsertSelect", session, query, nil)
+		require.NoError(t, err)
+
+		assertQueries(t, sbc1, wantQueries)
+		assertQueries(t, sbc2, nil)
+		assertQueries(t, sbclookup, wantlkpQueries)
+
+		testQueryLog(t, logChan, "TestInsertSelect", "SET", wQuery, 0)
+		testQueryLog(t, logChan, "VindexCreate", "INSERT", "insert into name_user_map(name, user_id) values(:name_0, :user_id_0)", 1)
+		testQueryLog(t, logChan, "TestInsertSelect", "INSERT", "insert into user(id, v, name) select 1, 2, 'myname' from dual", 1)
+	}
+}
+
+func TestInsertSelectFromTable(t *testing.T) {
+	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
+
+	logChan := QueryLogger.Subscribe("TestInsertSelect")
+	defer QueryLogger.Unsubscribe(logChan)
+
+	session := NewAutocommitSession(&vtgatepb.Session{})
+
+	query := "insert into user(id, name) select c1, c2 from music"
+	wantQueries := []*querypb.BoundQuery{{
+		Sql:           "select c1, c2 from music for update",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}, {
+		Sql: "insert into `user`(id, `name`) values (:_c0_0, :_c0_1), (:_c1_0, :_c1_1), (:_c2_0, :_c2_1), (:_c3_0, :_c3_1), (:_c4_0, :_c4_1), (:_c5_0, :_c5_1), (:_c6_0, :_c6_1), (:_c7_0, :_c7_1)",
+		BindVariables: map[string]*querypb.BindVariable{
+			"_c0_0": sqltypes.Int32BindVariable(1), "_c0_1": sqltypes.StringBindVariable("foo"),
+			"_c1_0": sqltypes.Int32BindVariable(1), "_c1_1": sqltypes.StringBindVariable("foo"),
+			"_c2_0": sqltypes.Int32BindVariable(1), "_c2_1": sqltypes.StringBindVariable("foo"),
+			"_c3_0": sqltypes.Int32BindVariable(1), "_c3_1": sqltypes.StringBindVariable("foo"),
+			"_c4_0": sqltypes.Int32BindVariable(1), "_c4_1": sqltypes.StringBindVariable("foo"),
+			"_c5_0": sqltypes.Int32BindVariable(1), "_c5_1": sqltypes.StringBindVariable("foo"),
+			"_c6_0": sqltypes.Int32BindVariable(1), "_c6_1": sqltypes.StringBindVariable("foo"),
+			"_c7_0": sqltypes.Int32BindVariable(1), "_c7_1": sqltypes.StringBindVariable("foo"),
+		},
+	}}
+
+	wantlkpQueries := []*querypb.BoundQuery{{
+		Sql: "insert into name_user_map(`name`, user_id) values (:name_0, :user_id_0), (:name_1, :user_id_1), (:name_2, :user_id_2), (:name_3, :user_id_3), (:name_4, :user_id_4), (:name_5, :user_id_5), (:name_6, :user_id_6), (:name_7, :user_id_7)",
+		BindVariables: map[string]*querypb.BindVariable{
+			"name_0": sqltypes.StringBindVariable("foo"), "user_id_0": sqltypes.Uint64BindVariable(1),
+			"name_1": sqltypes.StringBindVariable("foo"), "user_id_1": sqltypes.Uint64BindVariable(1),
+			"name_2": sqltypes.StringBindVariable("foo"), "user_id_2": sqltypes.Uint64BindVariable(1),
+			"name_3": sqltypes.StringBindVariable("foo"), "user_id_3": sqltypes.Uint64BindVariable(1),
+			"name_4": sqltypes.StringBindVariable("foo"), "user_id_4": sqltypes.Uint64BindVariable(1),
+			"name_5": sqltypes.StringBindVariable("foo"), "user_id_5": sqltypes.Uint64BindVariable(1),
+			"name_6": sqltypes.StringBindVariable("foo"), "user_id_6": sqltypes.Uint64BindVariable(1),
+			"name_7": sqltypes.StringBindVariable("foo"), "user_id_7": sqltypes.Uint64BindVariable(1),
+		},
+	}}
+
+	for _, workload := range []string{"olap", "oltp"} {
+		sbc1.Queries = nil
+		sbc2.Queries = nil
+		sbclookup.Queries = nil
+		wQuery := fmt.Sprintf("set @@workload = %s", workload)
+		_, err := executor.Execute(context.Background(), "TestInsertSelect", session, wQuery, nil)
+		require.NoError(t, err)
+
+		_, err = executor.Execute(context.Background(), "TestInsertSelect", session, query, nil)
+		require.NoError(t, err)
+
+		assertQueries(t, sbc1, wantQueries)
+		assertQueries(t, sbc2, wantQueries[:1]) // select scatter query went scatter.
+		assertQueries(t, sbclookup, wantlkpQueries)
+
+		testQueryLog(t, logChan, "TestInsertSelect", "SET", wQuery, 0)
+		testQueryLog(t, logChan, "VindexCreate", "INSERT", "insert into name_user_map(name, user_id) values(:name_0, :user_id_0), (:name_1, :user_id_1), (:name_2, :user_id_2), (:name_3, :user_id_3), (:name_4, :user_id_4), (:name_5, :user_id_5), (:name_6, :user_id_6), (:name_7, :user_id_7)", 1)
+		testQueryLog(t, logChan, "TestInsertSelect", "INSERT", "insert into user(id, name) select c1, c2 from music", 9) // 8 from select and 1 from insert.
+	}
 }

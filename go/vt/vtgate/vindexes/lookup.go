@@ -17,6 +17,7 @@ limitations under the License.
 package vindexes
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 
@@ -69,7 +70,7 @@ func (ln *LookupNonUnique) NeedsVCursor() bool {
 }
 
 // Map can map ids to key.Destination objects.
-func (ln *LookupNonUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+func (ln *LookupNonUnique) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	out := make([]key.Destination, 0, len(ids))
 	if ln.writeOnly {
 		for range ids {
@@ -86,7 +87,7 @@ func (ln *LookupNonUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([]key.Des
 		return out, nil
 	}
 
-	results, err := ln.lkp.Lookup(vcursor, ids, vtgatepb.CommitOrder_NORMAL)
+	results, err := ln.lkp.Lookup(ctx, vcursor, ids, vtgatepb.CommitOrder_NORMAL)
 	if err != nil {
 		return nil, err
 	}
@@ -122,7 +123,7 @@ func (ln *LookupNonUnique) MapResult(ids []sqltypes.Value, results []*sqltypes.R
 }
 
 // Verify returns true if ids maps to ksids.
-func (ln *LookupNonUnique) Verify(vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
+func (ln *LookupNonUnique) Verify(ctx context.Context, vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
 	if ln.writeOnly {
 		out := make([]bool, len(ids))
 		for i := range ids {
@@ -130,22 +131,22 @@ func (ln *LookupNonUnique) Verify(vcursor VCursor, ids []sqltypes.Value, ksids [
 		}
 		return out, nil
 	}
-	return ln.lkp.Verify(vcursor, ids, ksidsToValues(ksids))
+	return ln.lkp.Verify(ctx, vcursor, ids, ksidsToValues(ksids))
 }
 
 // Create reserves the id by inserting it into the vindex table.
-func (ln *LookupNonUnique) Create(vcursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte, ignoreMode bool) error {
-	return ln.lkp.Create(vcursor, rowsColValues, ksidsToValues(ksids), ignoreMode)
+func (ln *LookupNonUnique) Create(ctx context.Context, vcursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte, ignoreMode bool) error {
+	return ln.lkp.Create(ctx, vcursor, rowsColValues, ksidsToValues(ksids), ignoreMode)
 }
 
 // Delete deletes the entry from the vindex table.
-func (ln *LookupNonUnique) Delete(vcursor VCursor, rowsColValues [][]sqltypes.Value, ksid []byte) error {
-	return ln.lkp.Delete(vcursor, rowsColValues, sqltypes.MakeTrusted(sqltypes.VarBinary, ksid), vtgatepb.CommitOrder_NORMAL)
+func (ln *LookupNonUnique) Delete(ctx context.Context, vcursor VCursor, rowsColValues [][]sqltypes.Value, ksid []byte) error {
+	return ln.lkp.Delete(ctx, vcursor, rowsColValues, sqltypes.MakeTrusted(sqltypes.VarBinary, ksid), vtgatepb.CommitOrder_NORMAL)
 }
 
 // Update updates the entry in the vindex table.
-func (ln *LookupNonUnique) Update(vcursor VCursor, oldValues []sqltypes.Value, ksid []byte, newValues []sqltypes.Value) error {
-	return ln.lkp.Update(vcursor, oldValues, ksid, sqltypes.MakeTrusted(sqltypes.VarBinary, ksid), newValues)
+func (ln *LookupNonUnique) Update(ctx context.Context, vcursor VCursor, oldValues []sqltypes.Value, ksid []byte, newValues []sqltypes.Value) error {
+	return ln.lkp.Update(ctx, vcursor, oldValues, ksid, sqltypes.MakeTrusted(sqltypes.VarBinary, ksid), newValues)
 }
 
 // MarshalJSON returns a JSON representation of LookupHash.
@@ -170,7 +171,7 @@ func (ln *LookupNonUnique) Query() (selQuery string, arguments []string) {
 func NewLookup(name string, m map[string]string) (Vindex, error) {
 	lookup := &LookupNonUnique{name: name}
 
-	autocommit, err := boolFromMap(m, "autocommit")
+	cc, err := parseCommonConfig(m)
 	if err != nil {
 		return nil, err
 	}
@@ -180,7 +181,8 @@ func NewLookup(name string, m map[string]string) (Vindex, error) {
 	}
 
 	// if autocommit is on for non-unique lookup, upsert should also be on.
-	if err := lookup.lkp.Init(m, autocommit, autocommit /* upsert */); err != nil {
+	upsert := cc.autocommit || cc.multiShardAutocommit
+	if err := lookup.lkp.Init(m, cc.autocommit, upsert, cc.multiShardAutocommit); err != nil {
 		return nil, err
 	}
 	return lookup, nil
@@ -217,7 +219,7 @@ type LookupUnique struct {
 func NewLookupUnique(name string, m map[string]string) (Vindex, error) {
 	lu := &LookupUnique{name: name}
 
-	autocommit, err := boolFromMap(m, "autocommit")
+	cc, err := parseCommonConfig(m)
 	if err != nil {
 		return nil, err
 	}
@@ -227,7 +229,7 @@ func NewLookupUnique(name string, m map[string]string) (Vindex, error) {
 	}
 
 	// Don't allow upserts for unique vindexes.
-	if err := lu.lkp.Init(m, autocommit, false /* upsert */); err != nil {
+	if err := lu.lkp.Init(m, cc.autocommit, false /* upsert */, cc.multiShardAutocommit); err != nil {
 		return nil, err
 	}
 	return lu, nil
@@ -254,7 +256,7 @@ func (lu *LookupUnique) NeedsVCursor() bool {
 }
 
 // Map can map ids to key.Destination objects.
-func (lu *LookupUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+func (lu *LookupUnique) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	if lu.writeOnly {
 		out := make([]key.Destination, 0, len(ids))
 		for range ids {
@@ -262,7 +264,7 @@ func (lu *LookupUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([]key.Destin
 		}
 		return out, nil
 	}
-	results, err := lu.lkp.Lookup(vcursor, ids, vtgatepb.CommitOrder_NORMAL)
+	results, err := lu.lkp.Lookup(ctx, vcursor, ids, vtgatepb.CommitOrder_NORMAL)
 	if err != nil {
 		return nil, err
 	}
@@ -295,7 +297,7 @@ func (lu *LookupUnique) MapResult(ids []sqltypes.Value, results []*sqltypes.Resu
 }
 
 // Verify returns true if ids maps to ksids.
-func (lu *LookupUnique) Verify(vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
+func (lu *LookupUnique) Verify(ctx context.Context, vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
 	if lu.writeOnly {
 		out := make([]bool, len(ids))
 		for i := range ids {
@@ -303,22 +305,22 @@ func (lu *LookupUnique) Verify(vcursor VCursor, ids []sqltypes.Value, ksids [][]
 		}
 		return out, nil
 	}
-	return lu.lkp.Verify(vcursor, ids, ksidsToValues(ksids))
+	return lu.lkp.Verify(ctx, vcursor, ids, ksidsToValues(ksids))
 }
 
 // Create reserves the id by inserting it into the vindex table.
-func (lu *LookupUnique) Create(vcursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte, ignoreMode bool) error {
-	return lu.lkp.Create(vcursor, rowsColValues, ksidsToValues(ksids), ignoreMode)
+func (lu *LookupUnique) Create(ctx context.Context, vcursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte, ignoreMode bool) error {
+	return lu.lkp.Create(ctx, vcursor, rowsColValues, ksidsToValues(ksids), ignoreMode)
 }
 
 // Update updates the entry in the vindex table.
-func (lu *LookupUnique) Update(vcursor VCursor, oldValues []sqltypes.Value, ksid []byte, newValues []sqltypes.Value) error {
-	return lu.lkp.Update(vcursor, oldValues, ksid, sqltypes.MakeTrusted(sqltypes.VarBinary, ksid), newValues)
+func (lu *LookupUnique) Update(ctx context.Context, vcursor VCursor, oldValues []sqltypes.Value, ksid []byte, newValues []sqltypes.Value) error {
+	return lu.lkp.Update(ctx, vcursor, oldValues, ksid, sqltypes.MakeTrusted(sqltypes.VarBinary, ksid), newValues)
 }
 
 // Delete deletes the entry from the vindex table.
-func (lu *LookupUnique) Delete(vcursor VCursor, rowsColValues [][]sqltypes.Value, ksid []byte) error {
-	return lu.lkp.Delete(vcursor, rowsColValues, sqltypes.MakeTrusted(sqltypes.VarBinary, ksid), vtgatepb.CommitOrder_NORMAL)
+func (lu *LookupUnique) Delete(ctx context.Context, vcursor VCursor, rowsColValues [][]sqltypes.Value, ksid []byte) error {
+	return lu.lkp.Delete(ctx, vcursor, rowsColValues, sqltypes.MakeTrusted(sqltypes.VarBinary, ksid), vtgatepb.CommitOrder_NORMAL)
 }
 
 // MarshalJSON returns a JSON representation of LookupUnique.

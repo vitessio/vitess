@@ -201,7 +201,7 @@ func newTestResharderTMClient() *testResharderTMClient {
 	}
 }
 
-func (tmc *testResharderTMClient) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
+func (tmc *testResharderTMClient) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.GetSchemaRequest) (*tabletmanagerdatapb.SchemaDefinition, error) {
 	return tmc.schema, nil
 }
 

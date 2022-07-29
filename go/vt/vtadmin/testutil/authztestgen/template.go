@@ -87,19 +87,29 @@ func Test{{ .Method }}(t *testing.T) {
 	err := opts.RBAC.Reify()
 	require.NoError(t, err, "failed to reify authorization rules: %+v", opts.RBAC.Rules)
 
+	{{ if not .SerializeCases }}
 	api := vtadmin.NewAPI(testClusters(t), opts)
 	t.Cleanup(func() {
 		if err := api.Close(); err != nil {
 			t.Logf("api did not close cleanly: %s", err.Error())
 		}
 	})
+	{{ end }}
 
 	{{ with $test := . -}}
 	{{ range .Cases }}
 	t.Run("{{ .Name }}", func(t *testing.T) {
-		{{- if not $test.SerializeCases -}}t.Parallel(){{- end }}
-		{{ getActor .Actor }}
+		t.Parallel()
+		{{ if $test.SerializeCases }}
+		api := vtadmin.NewAPI(testClusters(t), opts)
+		t.Cleanup(func() {
+			if err := api.Close(); err != nil {
+				t.Logf("api did not close cleanly: %s", err.Error())
+			}
+		})
+		{{ end }}
 
+		{{ getActor .Actor }}
 		ctx := context.Background()
 		if actor != nil {
 			ctx = rbac.NewContext(ctx, actor)

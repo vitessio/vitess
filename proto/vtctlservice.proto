@@ -199,11 +199,6 @@ service Vtctld {
   rpc RunHealthCheck(vtctldata.RunHealthCheckRequest) returns (vtctldata.RunHealthCheckResponse) {};
   // SetKeyspaceDurabilityPolicy updates the DurabilityPolicy for a keyspace.
   rpc SetKeyspaceDurabilityPolicy(vtctldata.SetKeyspaceDurabilityPolicyRequest) returns (vtctldata.SetKeyspaceDurabilityPolicyResponse) {};
-  // SetKeyspaceServedFrom changes the ServedFromMap manually, and is intended
-  // only for emergency fixes. This does not rebuild the serving graph.
-  //
-  // The ServedFromMap is automatically updated as a part of MigrateServedFrom.
-  rpc SetKeyspaceServedFrom(vtctldata.SetKeyspaceServedFromRequest) returns (vtctldata.SetKeyspaceServedFromResponse) {};
   // SetShardIsPrimaryServing adds or removes a shard from serving.
   //
   // This is meant as an emergency function. It does not rebuild any serving

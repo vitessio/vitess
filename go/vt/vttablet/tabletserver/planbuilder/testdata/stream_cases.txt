@@ -18,7 +18,12 @@
 
 # select for update
 "select * from a for update"
-"select with lock not allowed for streaming"
+{
+  "PlanID": "SelectStream",
+  "TableName": "a",
+  "Permissions":[{"TableName":"a","Role":0}],
+  "FullQuery": "select * from a for update"
+}
 
 # union
 "select * from a union select * from b"

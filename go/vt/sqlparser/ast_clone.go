@@ -87,6 +87,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfCastExpr(in)
 	case *ChangeColumn:
 		return CloneRefOfChangeColumn(in)
+	case *CharExpr:
+		return CloneRefOfCharExpr(in)
 	case *CheckConstraintDefinition:
 		return CloneRefOfCheckConstraintDefinition(in)
 	case *ColName:
@@ -99,6 +101,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfColumnType(in)
 	case Columns:
 		return CloneColumns(in)
+	case *CommentOnly:
+		return CloneRefOfCommentOnly(in)
 	case *Commit:
 		return CloneRefOfCommit(in)
 	case *CommonTableExpr:
@@ -177,6 +181,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfFromFirstLastClause(in)
 	case *FuncExpr:
 		return CloneRefOfFuncExpr(in)
+	case *GTIDFuncExpr:
+		return CloneRefOfGTIDFuncExpr(in)
 	case GroupBy:
 		return CloneGroupBy(in)
 	case *GroupConcatExpr:
@@ -195,8 +201,12 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfIndexInfo(in)
 	case *Insert:
 		return CloneRefOfInsert(in)
+	case *InsertExpr:
+		return CloneRefOfInsertExpr(in)
 	case *IntervalExpr:
 		return CloneRefOfIntervalExpr(in)
+	case *IntervalFuncExpr:
+		return CloneRefOfIntervalFuncExpr(in)
 	case *IntroducerExpr:
 		return CloneRefOfIntroducerExpr(in)
 	case *IsExpr:
@@ -267,6 +277,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfLiteral(in)
 	case *Load:
 		return CloneRefOfLoad(in)
+	case *LocateExpr:
+		return CloneRefOfLocateExpr(in)
 	case *LockOption:
 		return CloneRefOfLockOption(in)
 	case *LockTables:
@@ -816,6 +828,16 @@ func CloneRefOfChangeColumn(n *ChangeColumn) *ChangeColumn {
 	return &out
 }
 
+// CloneRefOfCharExpr creates a deep clone of the input.
+func CloneRefOfCharExpr(n *CharExpr) *CharExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Exprs = CloneExprs(n.Exprs)
+	return &out
+}
+
 // CloneRefOfCheckConstraintDefinition creates a deep clone of the input.
 func CloneRefOfCheckConstraintDefinition(n *CheckConstraintDefinition) *CheckConstraintDefinition {
 	if n == nil {
@@ -876,6 +898,16 @@ func CloneColumns(n Columns) Columns {
 		res = append(res, CloneIdentifierCI(x))
 	}
 	return res
+}
+
+// CloneRefOfCommentOnly creates a deep clone of the input.
+func CloneRefOfCommentOnly(n *CommentOnly) *CommentOnly {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Comments = CloneSliceOfString(n.Comments)
+	return &out
 }
 
 // CloneRefOfCommit creates a deep clone of the input.
@@ -1307,6 +1339,19 @@ func CloneRefOfFuncExpr(n *FuncExpr) *FuncExpr {
 	return &out
 }
 
+// CloneRefOfGTIDFuncExpr creates a deep clone of the input.
+func CloneRefOfGTIDFuncExpr(n *GTIDFuncExpr) *GTIDFuncExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Set1 = CloneExpr(n.Set1)
+	out.Set2 = CloneExpr(n.Set2)
+	out.Timeout = CloneExpr(n.Timeout)
+	out.Channel = CloneExpr(n.Channel)
+	return &out
+}
+
 // CloneGroupBy creates a deep clone of the input.
 func CloneGroupBy(n GroupBy) GroupBy {
 	if n == nil {
@@ -1401,6 +1446,19 @@ func CloneRefOfInsert(n *Insert) *Insert {
 	return &out
 }
 
+// CloneRefOfInsertExpr creates a deep clone of the input.
+func CloneRefOfInsertExpr(n *InsertExpr) *InsertExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Str = CloneExpr(n.Str)
+	out.Pos = CloneExpr(n.Pos)
+	out.Len = CloneExpr(n.Len)
+	out.NewStr = CloneExpr(n.NewStr)
+	return &out
+}
+
 // CloneRefOfIntervalExpr creates a deep clone of the input.
 func CloneRefOfIntervalExpr(n *IntervalExpr) *IntervalExpr {
 	if n == nil {
@@ -1408,6 +1466,17 @@ func CloneRefOfIntervalExpr(n *IntervalExpr) *IntervalExpr {
 	}
 	out := *n
 	out.Expr = CloneExpr(n.Expr)
+	return &out
+}
+
+// CloneRefOfIntervalFuncExpr creates a deep clone of the input.
+func CloneRefOfIntervalFuncExpr(n *IntervalFuncExpr) *IntervalFuncExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Expr = CloneExpr(n.Expr)
+	out.Exprs = CloneExprs(n.Exprs)
 	return &out
 }
 
@@ -1767,6 +1836,18 @@ func CloneRefOfLoad(n *Load) *Load {
 	return &out
 }
 
+// CloneRefOfLocateExpr creates a deep clone of the input.
+func CloneRefOfLocateExpr(n *LocateExpr) *LocateExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.SubStr = CloneExpr(n.SubStr)
+	out.Str = CloneExpr(n.Str)
+	out.Pos = CloneExpr(n.Pos)
+	return &out
+}
+
 // CloneRefOfLockOption creates a deep clone of the input.
 func CloneRefOfLockOption(n *LockOption) *LockOption {
 	if n == nil {
@@ -1803,7 +1884,7 @@ func CloneRefOfMatchExpr(n *MatchExpr) *MatchExpr {
 		return nil
 	}
 	out := *n
-	out.Columns = CloneSelectExprs(n.Columns)
+	out.Columns = CloneSliceOfRefOfColName(n.Columns)
 	out.Expr = CloneExpr(n.Expr)
 	return &out
 }
@@ -3134,10 +3215,18 @@ func CloneCallable(in Callable) Callable {
 	switch in := in.(type) {
 	case *ArgumentLessWindowExpr:
 		return CloneRefOfArgumentLessWindowExpr(in)
+	case *Avg:
+		return CloneRefOfAvg(in)
+	case *CharExpr:
+		return CloneRefOfCharExpr(in)
 	case *ConvertExpr:
 		return CloneRefOfConvertExpr(in)
 	case *ConvertUsingExpr:
 		return CloneRefOfConvertUsingExpr(in)
+	case *Count:
+		return CloneRefOfCount(in)
+	case *CountStar:
+		return CloneRefOfCountStar(in)
 	case *CurTimeFuncExpr:
 		return CloneRefOfCurTimeFuncExpr(in)
 	case *ExtractFuncExpr:
@@ -3148,8 +3237,14 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfFirstOrLastValueExpr(in)
 	case *FuncExpr:
 		return CloneRefOfFuncExpr(in)
+	case *GTIDFuncExpr:
+		return CloneRefOfGTIDFuncExpr(in)
 	case *GroupConcatExpr:
 		return CloneRefOfGroupConcatExpr(in)
+	case *InsertExpr:
+		return CloneRefOfInsertExpr(in)
+	case *IntervalFuncExpr:
+		return CloneRefOfIntervalFuncExpr(in)
 	case *JSONArrayExpr:
 		return CloneRefOfJSONArrayExpr(in)
 	case *JSONAttributesExpr:
@@ -3192,10 +3287,16 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfJSONValueModifierExpr(in)
 	case *LagLeadExpr:
 		return CloneRefOfLagLeadExpr(in)
+	case *LocateExpr:
+		return CloneRefOfLocateExpr(in)
 	case *MatchExpr:
 		return CloneRefOfMatchExpr(in)
+	case *Max:
+		return CloneRefOfMax(in)
 	case *MemberOfExpr:
 		return CloneRefOfMemberOfExpr(in)
+	case *Min:
+		return CloneRefOfMin(in)
 	case *NTHValueExpr:
 		return CloneRefOfNTHValueExpr(in)
 	case *NamedWindow:
@@ -3214,6 +3315,8 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfRegexpSubstrExpr(in)
 	case *SubstrExpr:
 		return CloneRefOfSubstrExpr(in)
+	case *Sum:
+		return CloneRefOfSum(in)
 	case *TimestampFuncExpr:
 		return CloneRefOfTimestampFuncExpr(in)
 	case *TrimFuncExpr:
@@ -3372,6 +3475,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfCaseExpr(in)
 	case *CastExpr:
 		return CloneRefOfCastExpr(in)
+	case *CharExpr:
+		return CloneRefOfCharExpr(in)
 	case *ColName:
 		return CloneRefOfColName(in)
 	case *CollateExpr:
@@ -3402,10 +3507,16 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfFirstOrLastValueExpr(in)
 	case *FuncExpr:
 		return CloneRefOfFuncExpr(in)
+	case *GTIDFuncExpr:
+		return CloneRefOfGTIDFuncExpr(in)
 	case *GroupConcatExpr:
 		return CloneRefOfGroupConcatExpr(in)
+	case *InsertExpr:
+		return CloneRefOfInsertExpr(in)
 	case *IntervalExpr:
 		return CloneRefOfIntervalExpr(in)
+	case *IntervalFuncExpr:
+		return CloneRefOfIntervalFuncExpr(in)
 	case *IntroducerExpr:
 		return CloneRefOfIntroducerExpr(in)
 	case *IsExpr:
@@ -3456,6 +3567,8 @@ func CloneExpr(in Expr) Expr {
 		return in
 	case *Literal:
 		return CloneRefOfLiteral(in)
+	case *LocateExpr:
+		return CloneRefOfLocateExpr(in)
 	case *LockingFunc:
 		return CloneRefOfLockingFunc(in)
 	case *MatchExpr:
@@ -3640,6 +3753,8 @@ func CloneStatement(in Statement) Statement {
 		return CloneRefOfBegin(in)
 	case *CallProc:
 		return CloneRefOfCallProc(in)
+	case *CommentOnly:
+		return CloneRefOfCommentOnly(in)
 	case *Commit:
 		return CloneRefOfCommit(in)
 	case *CreateDatabase:
@@ -3994,6 +4109,18 @@ func CloneTableAndLockTypes(n TableAndLockTypes) TableAndLockTypes {
 	res := make(TableAndLockTypes, 0, len(n))
 	for _, x := range n {
 		res = append(res, CloneRefOfTableAndLockType(x))
+	}
+	return res
+}
+
+// CloneSliceOfRefOfColName creates a deep clone of the input.
+func CloneSliceOfRefOfColName(n []*ColName) []*ColName {
+	if n == nil {
+		return nil
+	}
+	res := make([]*ColName, 0, len(n))
+	for _, x := range n {
+		res = append(res, CloneRefOfColName(x))
 	}
 	return res
 }

@@ -255,6 +255,7 @@ func tmRPCTestRPCTimeout(ctx context.Context, t *testing.T, client tmclient.Tabl
 
 var testGetSchemaTables = []string{"table1", "table2"}
 var testGetSchemaExcludeTables = []string{"etable1", "etable2", "etable3"}
+var testGetSchemaReq = &tabletmanagerdatapb.GetSchemaRequest{Tables: testGetSchemaTables, ExcludeTables: testGetSchemaExcludeTables, IncludeViews: true}
 var testGetSchemaReply = &tabletmanagerdatapb.SchemaDefinition{
 	DatabaseSchema: "CREATE DATABASE {{.DatabaseName}}",
 	TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
@@ -280,23 +281,23 @@ var testGetSchemaReply = &tabletmanagerdatapb.SchemaDefinition{
 	Version: "xxx",
 }
 
-func (fra *fakeRPCTM) GetSchema(ctx context.Context, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
+func (fra *fakeRPCTM) GetSchema(ctx context.Context, request *tabletmanagerdatapb.GetSchemaRequest) (*tabletmanagerdatapb.SchemaDefinition, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
-	compare(fra.t, "GetSchema tables", tables, testGetSchemaTables)
-	compare(fra.t, "GetSchema excludeTables", excludeTables, testGetSchemaExcludeTables)
-	compareBool(fra.t, "GetSchema includeViews", includeViews)
+	compare(fra.t, "GetSchema tables", request.Tables, testGetSchemaTables)
+	compare(fra.t, "GetSchema excludeTables", request.ExcludeTables, testGetSchemaExcludeTables)
+	compareBool(fra.t, "GetSchema includeViews", request.IncludeViews)
 	return testGetSchemaReply, nil
 }
 
 func tmRPCTestGetSchema(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	result, err := client.GetSchema(ctx, tablet, testGetSchemaTables, testGetSchemaExcludeTables, true)
+	result, err := client.GetSchema(ctx, tablet, testGetSchemaReq)
 	compareError(t, "GetSchema", err, result, testGetSchemaReply)
 }
 
 func tmRPCTestGetSchemaPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	_, err := client.GetSchema(ctx, tablet, testGetSchemaTables, testGetSchemaExcludeTables, true)
+	_, err := client.GetSchema(ctx, tablet, testGetSchemaReq)
 	expectHandleRPCPanic(t, "GetSchema", false /*verbose*/, err)
 }
 
@@ -1120,7 +1121,6 @@ func (fra *fakeRPCTM) StopReplicationAndGetStatus(ctx context.Context, stopRepli
 		panic(fmt.Errorf("test-triggered panic"))
 	}
 	return tabletmanager.StopReplicationAndGetStatusResponse{
-		HybridStatus: testReplicationStatus,
 		Status: &replicationdatapb.StopReplicationStatus{
 			Before: testReplicationStatus,
 			After:  testReplicationStatus,
@@ -1154,14 +1154,14 @@ func tmRPCTestReplicaWasRestartedPanic(ctx context.Context, t *testing.T, client
 }
 
 func tmRPCTestStopReplicationAndGetStatus(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	rp, _, err := client.StopReplicationAndGetStatus(ctx, tablet, replicationdatapb.StopReplicationMode_IOANDSQLTHREAD)
+	rp, err := client.StopReplicationAndGetStatus(ctx, tablet, replicationdatapb.StopReplicationMode_IOANDSQLTHREAD)
 	compareError(t, "StopReplicationAndGetStatus", err, rp, testReplicationStatus)
-	rp, _, err = client.StopReplicationAndGetStatus(ctx, tablet, replicationdatapb.StopReplicationMode_IOTHREADONLY)
+	rp, err = client.StopReplicationAndGetStatus(ctx, tablet, replicationdatapb.StopReplicationMode_IOTHREADONLY)
 	compareError(t, "StopReplicationAndGetStatus", err, rp, testReplicationStatus)
 }
 
 func tmRPCTestStopReplicationAndGetStatusPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	_, _, err := client.StopReplicationAndGetStatus(ctx, tablet, replicationdatapb.StopReplicationMode_IOANDSQLTHREAD)
+	_, err := client.StopReplicationAndGetStatus(ctx, tablet, replicationdatapb.StopReplicationMode_IOANDSQLTHREAD)
 	expectHandleRPCPanic(t, "StopReplicationAndGetStatus", true /*verbose*/, err)
 }
 

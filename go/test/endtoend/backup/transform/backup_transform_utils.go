@@ -30,7 +30,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/test/endtoend/sharding/initialsharding"
 	"vitess.io/vitess/go/vt/log"
 )
 
@@ -87,11 +86,11 @@ func TestMainSetup(m *testing.M, useMysqlctld bool) {
 		}
 		shard := &localCluster.Keyspaces[0].Shards[0]
 		// changing password for mysql user
-		dbCredentialFile = initialsharding.WriteDbCredentialToTmp(localCluster.TmpDirectory)
+		dbCredentialFile = cluster.WriteDbCredentialToTmp(localCluster.TmpDirectory)
 		initDb, _ := os.ReadFile(path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"))
 		sql := string(initDb)
 		newInitDBFile = path.Join(localCluster.TmpDirectory, "init_db_with_passwords.sql")
-		sql = sql + initialsharding.GetPasswordUpdateSQL(localCluster)
+		sql = sql + cluster.GetPasswordUpdateSQL(localCluster)
 		os.WriteFile(newInitDBFile, []byte(sql), 0666)
 
 		extraArgs := []string{"--db-credentials-file", dbCredentialFile}

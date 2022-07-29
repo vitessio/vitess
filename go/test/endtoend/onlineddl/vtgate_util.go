@@ -133,6 +133,17 @@ func CheckCompleteMigration(t *testing.T, vtParams *mysql.ConnParams, shards []c
 	}
 }
 
+// CheckCompleteAllMigrations completes all pending migrations and expect number of affected rows
+// A negative value for expectCount indicates "don't care, no need to check"
+func CheckCompleteAllMigrations(t *testing.T, vtParams *mysql.ConnParams, expectCount int) {
+	completeQuery := "alter vitess_migration complete all"
+	r := VtgateExecQuery(t, vtParams, completeQuery, "")
+
+	if expectCount >= 0 {
+		assert.Equal(t, expectCount, int(r.RowsAffected))
+	}
+}
+
 // CheckCancelAllMigrations cancels all pending migrations and expect number of affected rows
 // A negative value for expectCount indicates "don't care, no need to check"
 func CheckCancelAllMigrations(t *testing.T, vtParams *mysql.ConnParams, expectCount int) {
@@ -269,4 +280,29 @@ func CheckThrottledApps(t *testing.T, vtParams *mysql.ConnParams, appName string
 		}
 	}
 	assert.Equal(t, expectFind, found, "check app %v in throttled apps: %v", appName, found)
+}
+
+// WaitForThrottledTimestamp waits for a migration to have a non-empty last_throttled_timestamp
+func WaitForThrottledTimestamp(t *testing.T, vtParams *mysql.ConnParams, uuid string, timeout time.Duration) (
+	row sqltypes.RowNamedValues,
+	startedTimestamp string,
+	lastThrottledTimestamp string,
+) {
+	startTime := time.Now()
+	for time.Since(startTime) < timeout {
+		rs := ReadMigrations(t, vtParams, uuid)
+		require.NotNil(t, rs)
+		for _, row = range rs.Named().Rows {
+			startedTimestamp = row.AsString("started_timestamp", "")
+			require.NotEmpty(t, startedTimestamp)
+			lastThrottledTimestamp = row.AsString("last_throttled_timestamp", "")
+			if lastThrottledTimestamp != "" {
+				// good. This is what we've been waiting for.
+				return row, startedTimestamp, lastThrottledTimestamp
+			}
+		}
+		time.Sleep(1 * time.Second)
+	}
+	t.Error("timeout waiting for last_throttled_timestamp to have nonempty value")
+	return
 }

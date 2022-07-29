@@ -454,3 +454,46 @@ func TestUsingJoin(t *testing.T) {
 	mcmp.AssertMatchesNoOrderInclColumnNames(`select * from t2 join t3 using (tcol1) having tcol1 = 12`,
 		`[[VARCHAR("12") INT64(1) VARCHAR("12") INT64(1) VARCHAR("12")]]`)
 }
+
+// TestInsertFunction tests the INSERT function
+func TestInsertFunction(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec(`insert into t2(id, tcol1, tcol2) values (1, "Test", "This"),(2, "Testing", "Is"),(3, "TEST", "A")`)
+	mcmp.AssertMatches(`SELECT INSERT('Quadratic', 3, 4, 'What')`, `[[VARCHAR("QuWhattic")]]`)
+	mcmp.AssertMatches(`SELECT INSERT(tcol1, id, 3, tcol2) from t2`, `[[VARCHAR("Thist")] [VARCHAR("TIsing")] [VARCHAR("TEA")]]`)
+}
+
+// TestGTIDFunctions tests the gtid functions
+func TestGTIDFunctions(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.AssertMatches(`select gtid_subset('3E11FA47-71CA-11E1-9E33-C80AA9429562:23','3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57')`, `[[INT64(1)]]`)
+	mcmp.AssertMatches(`select gtid_subtract('3E11FA47-71CA-11E1-9E33-C80AA9429562:23-78','3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57')`, `[[VARCHAR("3e11fa47-71ca-11e1-9e33-c80aa9429562:58-78")]]`)
+}
+
+func TestFilterOnLeftOuterJoin(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	// insert some data.
+	utils.Exec(t, mcmp.VtConn, `insert into team (id, name) values (11, 'Acme'), (22, 'B'), (33, 'C')`)
+	utils.Exec(t, mcmp.VtConn, `insert into team_fact (id, team, fact) values (1, 11, 'A'), (2, 22, 'A'), (3, 33, 'A')`)
+
+	// Gen4 only supported query.
+	query := `select team.id
+				from team_fact
+				  join team on team.id = team_fact.team
+				  left outer join team_member on team_member.team = team.id
+				where (
+				  team_fact.fact = 'A'
+				  and team_member.user is null
+				  and team_fact.team >= 22
+				)`
+
+	// Ideally we should get `[[INT32(22)] [INT32(33)]]`
+	// Change the expectation when we support better conversion handling in numeric comparison.
+	utils.AssertContainsError(t, mcmp.VtConn, query, `unsupported: cannot compare INT32 and INT64`)
+}

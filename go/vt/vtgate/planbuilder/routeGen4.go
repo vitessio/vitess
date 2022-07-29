@@ -103,7 +103,7 @@ func (rb *routeGen4) WireupGen4(ctx *plancontext.PlanningContext) error {
 		Values:    rb.eroute.Values,
 		SendTo:    rb.eroute,
 		Arguments: args,
-		Lookup:    lookupPrimitive,
+		Lookup:    lookupPrimitive.primitive,
 	}
 
 	rb.eroute.RoutingParameters.Opcode = engine.ByDestination

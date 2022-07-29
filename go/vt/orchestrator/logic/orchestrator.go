@@ -33,7 +33,6 @@ import (
 	"vitess.io/vitess/go/vt/orchestrator/discovery"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 	"vitess.io/vitess/go/vt/orchestrator/inst"
-	"vitess.io/vitess/go/vt/orchestrator/kv"
 	ometrics "vitess.io/vitess/go/vt/orchestrator/metrics"
 	"vitess.io/vitess/go/vt/orchestrator/process"
 	"vitess.io/vitess/go/vt/orchestrator/util"
@@ -63,7 +62,6 @@ var discoveryMetrics = collection.CreateOrReturnCollection(discoveryMetricsName)
 var isElectedNode int64
 
 var recentDiscoveryOperationKeys *cache.Cache
-var kvFoundCache = cache.New(10*time.Minute, time.Minute)
 
 func init() {
 	snapshotDiscoveryKeys = make(chan inst.InstanceKey, 10)
@@ -324,49 +322,6 @@ func onHealthTick() {
 	}
 }
 
-// SubmitPrimariesToKvStores records a cluster's primary (or all clusters primaries) to kv stores.
-// This should generally only happen once in a lifetime of a cluster. Otherwise KV
-// stores are updated via failovers.
-func SubmitPrimariesToKvStores(clusterName string, force bool) (kvPairs [](*kv.KeyValuePair), submittedCount int, err error) {
-	kvPairs, err = inst.GetPrimariesKVPairs(clusterName)
-	log.Debugf("kv.SubmitPrimariesToKvStores, clusterName: %s, force: %+v: numPairs: %+v", clusterName, force, len(kvPairs))
-	if err != nil {
-		return kvPairs, submittedCount, log.Errore(err)
-	}
-	var selectedError error
-	var submitKvPairs [](*kv.KeyValuePair)
-	for _, kvPair := range kvPairs {
-		if !force {
-			// !force: Called periodically to auto-populate KV
-			// We'd like to avoid some overhead.
-			if _, found := kvFoundCache.Get(kvPair.Key); found {
-				// Let's not overload database with queries. Let's not overload raft with events.
-				continue
-			}
-			v, found, err := kv.GetValue(kvPair.Key)
-			if err == nil && found && v == kvPair.Value {
-				// Already has the right value.
-				kvFoundCache.Set(kvPair.Key, true, cache.DefaultExpiration)
-				continue
-			}
-		}
-		submitKvPairs = append(submitKvPairs, kvPair)
-	}
-	log.Debugf("kv.SubmitPrimariesToKvStores: submitKvPairs: %+v", len(submitKvPairs))
-	for _, kvPair := range submitKvPairs {
-		err := kv.PutKVPair(kvPair)
-		if err == nil {
-			submittedCount++
-		} else {
-			selectedError = err
-		}
-	}
-	if err := kv.DistributePairs(kvPairs); err != nil {
-		log.Errore(err)
-	}
-	return kvPairs, submittedCount, log.Errore(selectedError)
-}
-
 func injectSeeds(seedOnce *sync.Once) {
 	seedOnce.Do(func() {
 		for _, seed := range config.Config.DiscoverySeeds {
@@ -412,7 +367,6 @@ func ContinuousDiscovery() {
 
 	go ometrics.InitMetrics()
 	go acceptSignals()
-	go kv.InitKVStores()
 
 	if *config.RuntimeCLIFlags.GrabElection {
 		process.GrabElection()
@@ -462,10 +416,6 @@ func ContinuousDiscovery() {
 					go ExpireFailureDetectionHistory()
 					go ExpireTopologyRecoveryHistory()
 					go ExpireTopologyRecoveryStepsHistory()
-
-					if runCheckAndRecoverOperationsTimeRipe() && IsLeader() {
-						go SubmitPrimariesToKvStores("", false)
-					}
 				} else {
 					// Take this opportunity to refresh yourself
 					go inst.LoadHostnameResolveCache()

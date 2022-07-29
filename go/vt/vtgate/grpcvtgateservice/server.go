@@ -30,7 +30,6 @@ import (
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/callinfo"
 	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate"
 	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
@@ -110,12 +109,6 @@ func (vtg *VTGate) Execute(ctx context.Context, request *vtgatepb.ExecuteRequest
 	if session == nil {
 		session = &vtgatepb.Session{Autocommit: true}
 	}
-	if session.TargetString == "" && request.TabletType != topodatapb.TabletType_UNKNOWN {
-		session.TargetString = request.KeyspaceShard + "@" + topoproto.TabletTypeLString(request.TabletType)
-	}
-	if session.Options == nil {
-		session.Options = request.Options
-	}
 	session, result, err := vtg.server.Execute(ctx, session, request.Query.Sql, request.Query.BindVariables)
 	return &vtgatepb.ExecuteResponse{
 		Result:  sqltypes.ResultToProto3(result),
@@ -139,12 +132,6 @@ func (vtg *VTGate) ExecuteBatch(ctx context.Context, request *vtgatepb.ExecuteBa
 	if session == nil {
 		session = &vtgatepb.Session{Autocommit: true}
 	}
-	if session.TargetString == "" {
-		session.TargetString = request.KeyspaceShard + "@" + topoproto.TabletTypeLString(request.TabletType)
-	}
-	if session.Options == nil {
-		session.Options = request.Options
-	}
 	session, results, err := vtg.server.ExecuteBatch(ctx, session, sqlQueries, bindVars)
 	return &vtgatepb.ExecuteBatchResponse{
 		Results: sqltypes.QueryResponsesToProto3(results),
@@ -164,13 +151,6 @@ func (vtg *VTGate) StreamExecute(request *vtgatepb.StreamExecuteRequest, stream 
 		session = &vtgatepb.Session{Autocommit: true}
 	}
 
-	// Do not set target if the tablet_type is not set correctly.
-	if session.TargetString == "" && request.TabletType != topodatapb.TabletType_UNKNOWN {
-		session.TargetString = request.KeyspaceShard + "@" + topoproto.TabletTypeLString(request.TabletType)
-	}
-	if session.Options == nil {
-		session.Options = request.Options
-	}
 	vtgErr := vtg.server.StreamExecute(ctx, session, request.Query.Sql, request.Query.BindVariables, func(value *sqltypes.Result) error {
 		// Send is not safe to call concurrently, but vtgate
 		// guarantees that it's not.

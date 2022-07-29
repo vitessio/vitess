@@ -28,6 +28,8 @@ import (
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/vt/vtgate/logstats"
+
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/cache"
@@ -117,7 +119,7 @@ func TestExecutorMaxMemoryRowsExceeded(t *testing.T) {
 
 func TestExecutorTransactionsNoAutoCommit(t *testing.T) {
 	executor, _, _, sbclookup := createExecutorEnv()
-	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary"})
+	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary", SessionUUID: "suuid"})
 
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
@@ -125,23 +127,25 @@ func TestExecutorTransactionsNoAutoCommit(t *testing.T) {
 	// begin.
 	_, err := executor.Execute(ctx, "TestExecute", session, "begin", nil)
 	require.NoError(t, err)
-	wantSession := &vtgatepb.Session{InTransaction: true, TargetString: "@primary"}
+	wantSession := &vtgatepb.Session{InTransaction: true, TargetString: "@primary", SessionUUID: "suuid"}
 	utils.MustMatch(t, wantSession, session.Session, "session")
 	assert.EqualValues(t, 0, sbclookup.CommitCount.Get(), "commit count")
 	logStats := testQueryLog(t, logChan, "TestExecute", "BEGIN", "begin", 0)
 	assert.EqualValues(t, 0, logStats.CommitTime, "logstats: expected zero CommitTime")
+	assert.EqualValues(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
 
 	// commit.
 	_, err = executor.Execute(ctx, "TestExecute", session, "select id from main1", nil)
 	require.NoError(t, err)
 	logStats = testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from main1", 1)
 	assert.EqualValues(t, 0, logStats.CommitTime, "logstats: expected zero CommitTime")
+	assert.EqualValues(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
 
 	_, err = executor.Execute(context.Background(), "TestExecute", session, "commit", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantSession = &vtgatepb.Session{TargetString: "@primary"}
+	wantSession = &vtgatepb.Session{TargetString: "@primary", SessionUUID: "suuid"}
 	if !proto.Equal(session.Session, wantSession) {
 		t.Errorf("begin: %v, want %v", session.Session, wantSession)
 	}
@@ -152,6 +156,7 @@ func TestExecutorTransactionsNoAutoCommit(t *testing.T) {
 	if logStats.CommitTime == 0 {
 		t.Errorf("logstats: expected non-zero CommitTime")
 	}
+	assert.EqualValues(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
 
 	// rollback.
 	_, err = executor.Execute(ctx, "TestExecute", session, "begin", nil)
@@ -160,7 +165,7 @@ func TestExecutorTransactionsNoAutoCommit(t *testing.T) {
 	require.NoError(t, err)
 	_, err = executor.Execute(ctx, "TestExecute", session, "rollback", nil)
 	require.NoError(t, err)
-	wantSession = &vtgatepb.Session{TargetString: "@primary"}
+	wantSession = &vtgatepb.Session{TargetString: "@primary", SessionUUID: "suuid"}
 	utils.MustMatch(t, wantSession, session.Session, "session")
 	assert.EqualValues(t, 1, sbclookup.RollbackCount.Get(), "rollback count")
 	_ = testQueryLog(t, logChan, "TestExecute", "BEGIN", "begin", 0)
@@ -169,6 +174,7 @@ func TestExecutorTransactionsNoAutoCommit(t *testing.T) {
 	if logStats.CommitTime == 0 {
 		t.Errorf("logstats: expected non-zero CommitTime")
 	}
+	assert.EqualValues(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
 
 	// CloseSession doesn't log anything
 	err = executor.CloseSession(ctx, session)
@@ -205,7 +211,7 @@ func TestDirectTargetRewrites(t *testing.T) {
 
 func TestExecutorTransactionsAutoCommit(t *testing.T) {
 	executor, _, _, sbclookup := createExecutorEnv()
-	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary", Autocommit: true})
+	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary", Autocommit: true, SessionUUID: "suuid"})
 
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
@@ -213,26 +219,29 @@ func TestExecutorTransactionsAutoCommit(t *testing.T) {
 	// begin.
 	_, err := executor.Execute(ctx, "TestExecute", session, "begin", nil)
 	require.NoError(t, err)
-	wantSession := &vtgatepb.Session{InTransaction: true, TargetString: "@primary", Autocommit: true}
+	wantSession := &vtgatepb.Session{InTransaction: true, TargetString: "@primary", Autocommit: true, SessionUUID: "suuid"}
 	utils.MustMatch(t, wantSession, session.Session, "session")
 	if commitCount := sbclookup.CommitCount.Get(); commitCount != 0 {
 		t.Errorf("want 0, got %d", commitCount)
 	}
-	_ = testQueryLog(t, logChan, "TestExecute", "BEGIN", "begin", 0)
+	logStats := testQueryLog(t, logChan, "TestExecute", "BEGIN", "begin", 0)
+	assert.EqualValues(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
 
 	// commit.
 	_, err = executor.Execute(ctx, "TestExecute", session, "select id from main1", nil)
 	require.NoError(t, err)
 	_, err = executor.Execute(ctx, "TestExecute", session, "commit", nil)
 	require.NoError(t, err)
-	wantSession = &vtgatepb.Session{TargetString: "@primary", Autocommit: true}
+	wantSession = &vtgatepb.Session{TargetString: "@primary", Autocommit: true, SessionUUID: "suuid"}
 	utils.MustMatch(t, wantSession, session.Session, "session")
 	assert.EqualValues(t, 1, sbclookup.CommitCount.Get())
 
-	logStats := testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from main1", 1)
+	logStats = testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from main1", 1)
 	assert.EqualValues(t, 0, logStats.CommitTime)
+	assert.EqualValues(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
 	logStats = testQueryLog(t, logChan, "TestExecute", "COMMIT", "commit", 1)
 	assert.NotEqual(t, 0, logStats.CommitTime)
+	assert.EqualValues(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
 
 	// rollback.
 	_, err = executor.Execute(ctx, "TestExecute", session, "begin", nil)
@@ -241,11 +250,15 @@ func TestExecutorTransactionsAutoCommit(t *testing.T) {
 	require.NoError(t, err)
 	_, err = executor.Execute(ctx, "TestExecute", session, "rollback", nil)
 	require.NoError(t, err)
-	wantSession = &vtgatepb.Session{TargetString: "@primary", Autocommit: true}
+	wantSession = &vtgatepb.Session{TargetString: "@primary", Autocommit: true, SessionUUID: "suuid"}
 	utils.MustMatch(t, wantSession, session.Session, "session")
 	if rollbackCount := sbclookup.RollbackCount.Get(); rollbackCount != 1 {
 		t.Errorf("want 1, got %d", rollbackCount)
 	}
+	_ = testQueryLog(t, logChan, "TestExecute", "BEGIN", "begin", 0)
+	_ = testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from main1", 1)
+	logStats = testQueryLog(t, logChan, "TestExecute", "ROLLBACK", "rollback", 1)
+	assert.EqualValues(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
 }
 
 func TestExecutorTransactionsAutoCommitStreaming(t *testing.T) {
@@ -255,6 +268,7 @@ func TestExecutorTransactionsAutoCommitStreaming(t *testing.T) {
 		TargetString: "@primary",
 		Autocommit:   true,
 		Options:      oltpOptions,
+		SessionUUID:  "suuid",
 	})
 
 	logChan := QueryLogger.Subscribe("Test")
@@ -277,24 +291,28 @@ func TestExecutorTransactionsAutoCommitStreaming(t *testing.T) {
 		TargetString:  "@primary",
 		Autocommit:    true,
 		Options:       oltpOptions,
+		SessionUUID:   "suuid",
 	}
 	utils.MustMatch(t, wantSession, session.Session, "session")
 	assert.Zero(t, sbclookup.CommitCount.Get())
-	_ = testQueryLog(t, logChan, "TestExecute", "BEGIN", "begin", 0)
+	logStats := testQueryLog(t, logChan, "TestExecute", "BEGIN", "begin", 0)
+	assert.EqualValues(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
 
 	// commit.
 	_, err = executor.Execute(ctx, "TestExecute", session, "select id from main1", nil)
 	require.NoError(t, err)
 	_, err = executor.Execute(ctx, "TestExecute", session, "commit", nil)
 	require.NoError(t, err)
-	wantSession = &vtgatepb.Session{TargetString: "@primary", Autocommit: true, Options: oltpOptions}
+	wantSession = &vtgatepb.Session{TargetString: "@primary", Autocommit: true, Options: oltpOptions, SessionUUID: "suuid"}
 	utils.MustMatch(t, wantSession, session.Session, "session")
 	assert.EqualValues(t, 1, sbclookup.CommitCount.Get())
 
-	logStats := testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from main1", 1)
+	logStats = testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from main1", 1)
 	assert.EqualValues(t, 0, logStats.CommitTime)
+	assert.EqualValues(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
 	logStats = testQueryLog(t, logChan, "TestExecute", "COMMIT", "commit", 1)
 	assert.NotEqual(t, 0, logStats.CommitTime)
+	assert.EqualValues(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
 
 	// rollback.
 	_, err = executor.Execute(ctx, "TestExecute", session, "begin", nil)
@@ -303,7 +321,7 @@ func TestExecutorTransactionsAutoCommitStreaming(t *testing.T) {
 	require.NoError(t, err)
 	_, err = executor.Execute(ctx, "TestExecute", session, "rollback", nil)
 	require.NoError(t, err)
-	wantSession = &vtgatepb.Session{TargetString: "@primary", Autocommit: true, Options: oltpOptions}
+	wantSession = &vtgatepb.Session{TargetString: "@primary", Autocommit: true, Options: oltpOptions, SessionUUID: "suuid"}
 	utils.MustMatch(t, wantSession, session.Session, "session")
 	assert.EqualValues(t, 1, sbclookup.RollbackCount.Get())
 }
@@ -776,8 +794,6 @@ func TestExecutorShow(t *testing.T) {
 	}
 	utils.MustMatch(t, wantqr, qr, query)
 
-	// The FakeLegacyTablets in FakeLegacyHealthCheck don't have support for these columns/values
-	// So let's just be sure the statement works and we get the expected results (none)
 	query = "show vitess_replication_status"
 	qr, err = executor.Execute(ctx, "TestExecute", session, query, nil)
 	require.NoError(t, err)
@@ -1572,8 +1588,8 @@ var pv = querypb.ExecuteOptions_Gen4
 
 func TestGetPlanUnnormalized(t *testing.T) {
 	r, _, _, _ := createExecutorEnv()
-	emptyvc, _ := newVCursorImpl(ctx, NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
-	unshardedvc, _ := newVCursorImpl(ctx, NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
+	emptyvc, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
+	unshardedvc, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
 
 	query1 := "select * from music_user_map where id = 1"
 	plan1, logStats1 := getPlanCached(t, r, emptyvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false)
@@ -1635,9 +1651,9 @@ func assertCacheContains(t *testing.T, e *Executor, want []string) {
 	}
 }
 
-func getPlanCached(t *testing.T, e *Executor, vcursor *vcursorImpl, sql string, comments sqlparser.MarginComments, bindVars map[string]*querypb.BindVariable, skipQueryPlanCache bool) (*engine.Plan, *LogStats) {
-	logStats := NewLogStats(ctx, "Test", "", nil)
-	plan, err := e.getPlan(vcursor, sql, comments, bindVars, &SafeSession{
+func getPlanCached(t *testing.T, e *Executor, vcursor *vcursorImpl, sql string, comments sqlparser.MarginComments, bindVars map[string]*querypb.BindVariable, skipQueryPlanCache bool) (*engine.Plan, *logstats.LogStats) {
+	logStats := logstats.NewLogStats(ctx, "Test", "", "", nil)
+	plan, err := e.getPlan(context.Background(), vcursor, sql, comments, bindVars, &SafeSession{
 		Session: &vtgatepb.Session{Options: &querypb.ExecuteOptions{SkipQueryPlanCache: skipQueryPlanCache}},
 	}, logStats)
 	require.NoError(t, err)
@@ -1649,7 +1665,7 @@ func getPlanCached(t *testing.T, e *Executor, vcursor *vcursorImpl, sql string, 
 
 func TestGetPlanCacheUnnormalized(t *testing.T) {
 	r, _, _, _ := createExecutorEnv()
-	emptyvc, _ := newVCursorImpl(ctx, NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
+	emptyvc, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
 	query1 := "select * from music_user_map where id = 1"
 
 	_, logStats1 := getPlanCached(t, r, emptyvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, true)
@@ -1670,7 +1686,7 @@ func TestGetPlanCacheUnnormalized(t *testing.T) {
 
 	// Skip cache using directive
 	r, _, _, _ = createExecutorEnv()
-	unshardedvc, _ := newVCursorImpl(ctx, NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
+	unshardedvc, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
 
 	query1 = "insert /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ into user(id) values (1), (2)"
 	getPlanCached(t, r, unshardedvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false)
@@ -1681,12 +1697,12 @@ func TestGetPlanCacheUnnormalized(t *testing.T) {
 	assertCacheSize(t, r.plans, 1)
 
 	// the target string will be resolved and become part of the plan cache key, which adds a new entry
-	ksIDVc1, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "[deadbeef]"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
+	ksIDVc1, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "[deadbeef]"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
 	getPlanCached(t, r, ksIDVc1, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false)
 	assertCacheSize(t, r.plans, 2)
 
 	// the target string will be resolved and become part of the plan cache key, as it's an unsharded ks, it will be the same entry as above
-	ksIDVc2, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "[beefdead]"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
+	ksIDVc2, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "[beefdead]"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
 	getPlanCached(t, r, ksIDVc2, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false)
 	assertCacheSize(t, r.plans, 2)
 }
@@ -1694,7 +1710,7 @@ func TestGetPlanCacheUnnormalized(t *testing.T) {
 func TestGetPlanCacheNormalized(t *testing.T) {
 	r, _, _, _ := createExecutorEnv()
 	r.normalize = true
-	emptyvc, _ := newVCursorImpl(ctx, NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
+	emptyvc, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
 
 	query1 := "select * from music_user_map where id = 1"
 	_, logStats1 := getPlanCached(t, r, emptyvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, true /* skipQueryPlanCache */)
@@ -1713,7 +1729,7 @@ func TestGetPlanCacheNormalized(t *testing.T) {
 	// Skip cache using directive
 	r, _, _, _ = createExecutorEnv()
 	r.normalize = true
-	unshardedvc, _ := newVCursorImpl(ctx, NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
+	unshardedvc, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
 
 	query1 = "insert /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ into user(id) values (1), (2)"
 	getPlanCached(t, r, unshardedvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false)
@@ -1724,12 +1740,12 @@ func TestGetPlanCacheNormalized(t *testing.T) {
 	assertCacheSize(t, r.plans, 1)
 
 	// the target string will be resolved and become part of the plan cache key, which adds a new entry
-	ksIDVc1, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "[deadbeef]"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
+	ksIDVc1, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "[deadbeef]"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
 	getPlanCached(t, r, ksIDVc1, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false)
 	assertCacheSize(t, r.plans, 2)
 
 	// the target string will be resolved and become part of the plan cache key, as it's an unsharded ks, it will be the same entry as above
-	ksIDVc2, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "[beefdead]"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
+	ksIDVc2, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "[beefdead]"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
 	getPlanCached(t, r, ksIDVc2, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false)
 	assertCacheSize(t, r.plans, 2)
 }
@@ -1737,8 +1753,8 @@ func TestGetPlanCacheNormalized(t *testing.T) {
 func TestGetPlanNormalized(t *testing.T) {
 	r, _, _, _ := createExecutorEnv()
 	r.normalize = true
-	emptyvc, _ := newVCursorImpl(ctx, NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
-	unshardedvc, _ := newVCursorImpl(ctx, NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
+	emptyvc, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
+	unshardedvc, _ := newVCursorImpl(NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, false, pv)
 
 	query1 := "select * from music_user_map where id = 1"
 	query2 := "select * from music_user_map where id = 2"
@@ -1782,7 +1798,7 @@ func TestGetPlanNormalized(t *testing.T) {
 		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats4.SQL)
 	}
 
-	var logStats5 *LogStats
+	var logStats5 *logstats.LogStats
 	plan3, logStats5 = getPlanCached(t, r, unshardedvc, query1, makeComments(" /* comment 5 */"), map[string]*querypb.BindVariable{}, false)
 	if plan1 == plan3 {
 		t.Errorf("getPlan(query1, ks): plans must not be equal: %p %p", plan1, plan3)
@@ -1802,7 +1818,7 @@ func TestGetPlanNormalized(t *testing.T) {
 	}
 	assertCacheContains(t, r, want)
 
-	_, err := r.getPlan(emptyvc, "syntax", makeComments(""), map[string]*querypb.BindVariable{}, nil, nil)
+	_, err := r.getPlan(context.Background(), emptyvc, "syntax", makeComments(""), map[string]*querypb.BindVariable{}, nil, nil)
 	wantErr := "syntax error at position 7 near 'syntax'"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("getPlan(syntax): %v, want %s", err, wantErr)

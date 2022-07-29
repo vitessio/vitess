@@ -22,7 +22,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
-func buildOtherReadAndAdmin(sql string, vschema plancontext.VSchema) (engine.Primitive, error) {
+func buildOtherReadAndAdmin(sql string, vschema plancontext.VSchema) (*planResult, error) {
 	destination, keyspace, _, err := vschema.TargetDestination("")
 	if err != nil {
 		return nil, err
@@ -32,10 +32,10 @@ func buildOtherReadAndAdmin(sql string, vschema plancontext.VSchema) (engine.Pri
 		destination = key.DestinationAnyShard{}
 	}
 
-	return &engine.Send{
+	return newPlanResult(&engine.Send{
 		Keyspace:          keyspace,
 		TargetDestination: destination,
 		Query:             sql, //This is original sql query to be passed as the parser can provide partial ddl AST.
 		SingleShardOnly:   true,
-	}, nil
+	}), nil
 }

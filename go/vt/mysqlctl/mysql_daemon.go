@@ -82,7 +82,7 @@ type MysqlDaemon interface {
 	Promote(map[string]string) (mysql.Position, error)
 
 	// Schema related methods
-	GetSchema(ctx context.Context, dbName string, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error)
+	GetSchema(ctx context.Context, dbName string, request *tabletmanagerdatapb.GetSchemaRequest) (*tabletmanagerdatapb.SchemaDefinition, error)
 	GetColumns(ctx context.Context, dbName, table string) ([]*querypb.Field, []string, error)
 	GetPrimaryKeyColumns(ctx context.Context, dbName, table string) ([]string, error)
 	GetPrimaryKeyEquivalentColumns(ctx context.Context, dbName, table string) ([]string, error)

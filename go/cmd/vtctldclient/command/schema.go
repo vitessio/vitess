@@ -156,11 +156,12 @@ func commandApplySchema(cmd *cobra.Command, args []string) error {
 }
 
 var getSchemaOptions = struct {
-	Tables         []string
-	ExcludeTables  []string
-	IncludeViews   bool
-	TableNamesOnly bool
-	TableSizesOnly bool
+	Tables          []string
+	ExcludeTables   []string
+	IncludeViews    bool
+	TableNamesOnly  bool
+	TableSizesOnly  bool
+	TableSchemaOnly bool
 }{}
 
 func commandGetSchema(cmd *cobra.Command, args []string) error {
@@ -176,12 +177,13 @@ func commandGetSchema(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
 	resp, err := client.GetSchema(commandCtx, &vtctldatapb.GetSchemaRequest{
-		TabletAlias:    alias,
-		Tables:         getSchemaOptions.Tables,
-		ExcludeTables:  getSchemaOptions.ExcludeTables,
-		IncludeViews:   getSchemaOptions.IncludeViews,
-		TableNamesOnly: getSchemaOptions.TableNamesOnly,
-		TableSizesOnly: getSchemaOptions.TableSizesOnly,
+		TabletAlias:     alias,
+		Tables:          getSchemaOptions.Tables,
+		ExcludeTables:   getSchemaOptions.ExcludeTables,
+		IncludeViews:    getSchemaOptions.IncludeViews,
+		TableNamesOnly:  getSchemaOptions.TableNamesOnly,
+		TableSizesOnly:  getSchemaOptions.TableSizesOnly,
+		TableSchemaOnly: getSchemaOptions.TableSchemaOnly,
 	})
 	if err != nil {
 		return err
@@ -301,6 +303,7 @@ func init() {
 	GetSchema.Flags().BoolVar(&getSchemaOptions.IncludeViews, "include-views", false, "Includes views in the output in addition to base tables.")
 	GetSchema.Flags().BoolVarP(&getSchemaOptions.TableNamesOnly, "table-names-only", "n", false, "Display only table names in the result.")
 	GetSchema.Flags().BoolVarP(&getSchemaOptions.TableSizesOnly, "table-sizes-only", "s", false, "Display only size information for matching tables. Ignored if --table-names-only is set.")
+	GetSchema.Flags().BoolVarP(&getSchemaOptions.TableSchemaOnly, "table-schema-only", "", false, "Skip introspecting columns and fields metadata.")
 
 	Root.AddCommand(GetSchema)
 

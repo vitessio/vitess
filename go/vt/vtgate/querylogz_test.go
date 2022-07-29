@@ -25,6 +25,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtgate/logstats"
+
 	"context"
 
 	"vitess.io/vitess/go/streamlog"
@@ -45,7 +47,7 @@ func TestQuerylogzHandlerInvalidLogStats(t *testing.T) {
 
 func TestQuerylogzHandlerFormatting(t *testing.T) {
 	req, _ := http.NewRequest("GET", "/querylogz?timeout=10&limit=1", nil)
-	logStats := NewLogStats(context.Background(), "Execute", "select name from test_table limit 1000", nil)
+	logStats := logstats.NewLogStats(context.Background(), "Execute", "select name from test_table limit 1000", "suuid", nil)
 	logStats.StmtType = "select"
 	logStats.RowsAffected = 1000
 	logStats.ShardQueries = 1
@@ -66,6 +68,7 @@ func TestQuerylogzHandlerFormatting(t *testing.T) {
 		`<td></td>`,
 		`<td>effective-caller</td>`,
 		`<td>immediate-caller</td>`,
+		`<td>suuid</td>`,
 		`<td>Nov 29 13:33:09.000000</td>`,
 		`<td>Nov 29 13:33:09.001000</td>`,
 		`<td>0.001</td>`,
@@ -95,6 +98,7 @@ func TestQuerylogzHandlerFormatting(t *testing.T) {
 		`<td></td>`,
 		`<td>effective-caller</td>`,
 		`<td>immediate-caller</td>`,
+		`<td>suuid</td>`,
 		`<td>Nov 29 13:33:09.000000</td>`,
 		`<td>Nov 29 13:33:09.020000</td>`,
 		`<td>0.02</td>`,
@@ -124,6 +128,7 @@ func TestQuerylogzHandlerFormatting(t *testing.T) {
 		`<td></td>`,
 		`<td>effective-caller</td>`,
 		`<td>immediate-caller</td>`,
+		`<td>suuid</td>`,
 		`<td>Nov 29 13:33:09.000000</td>`,
 		`<td>Nov 29 13:33:09.500000</td>`,
 		`<td>0.5</td>`,
@@ -157,7 +162,7 @@ func TestQuerylogzHandlerFormatting(t *testing.T) {
 
 }
 
-func checkQuerylogzHasStats(t *testing.T, pattern []string, logStats *LogStats, page []byte) {
+func checkQuerylogzHasStats(t *testing.T, pattern []string, logStats *logstats.LogStats, page []byte) {
 	t.Helper()
 	matcher := regexp.MustCompile(strings.Join(pattern, `\s*`))
 	if !matcher.Match(page) {

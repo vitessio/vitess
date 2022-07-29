@@ -51,17 +51,27 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-var connMap map[string]*fakeConn
-var connMapMu sync.Mutex
+var (
+	connMap   map[string]*fakeConn
+	connMapMu sync.Mutex
+)
+
+func testChecksum(t *testing.T, want, got int64) {
+	t.Helper()
+	if want != got {
+		t.Errorf("want checksum %v, got %v", want, got)
+	}
+}
 
 func init() {
 	tabletconn.RegisterDialer("fake_gateway", tabletDialer)
 
-	//log error
+	// log error
 	if err := flag.Set("tablet_protocol", "fake_gateway"); err != nil {
 		log.Errorf("failed to set flag \"tablet_protocol\" to \"fake_gateway\":%v", err)
 	}
 	connMap = make(map[string]*fakeConn)
+	refreshInterval = time.Minute
 }
 
 func TestHealthCheck(t *testing.T) {
@@ -196,7 +206,7 @@ func TestHealthCheck(t *testing.T) {
 	}
 	input <- shr
 	result = <-resultChan
-	//TODO: figure out how to compare objects that contain errors using utils.MustMatch
+	// TODO: figure out how to compare objects that contain errors using utils.MustMatch
 	assert.True(t, want.DeepEqual(result), "Wrong TabletHealth data\n Expected: %v\n Actual:   %v", want, result)
 	testChecksum(t, 1027934207, hc.stateChecksum()) // unchanged
 
@@ -257,7 +267,7 @@ func TestHealthCheckStreamError(t *testing.T) {
 		LastError:            fmt.Errorf("some stream error"),
 	}
 	result = <-resultChan
-	//TODO: figure out how to compare objects that contain errors using utils.MustMatch
+	// TODO: figure out how to compare objects that contain errors using utils.MustMatch
 	assert.True(t, want.DeepEqual(result), "Wrong TabletHealth data\n Expected: %v\n Actual:   %v", want, result)
 	// tablet should be removed from healthy list
 	a := hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA})
@@ -317,7 +327,7 @@ func TestHealthCheckErrorOnPrimary(t *testing.T) {
 		LastError:            fmt.Errorf("some stream error"),
 	}
 	result = <-resultChan
-	//TODO: figure out how to compare objects that contain errors using utils.MustMatch
+	// TODO: figure out how to compare objects that contain errors using utils.MustMatch
 	assert.True(t, want.DeepEqual(result), "Wrong TabletHealth data\n Expected: %v\n Actual:   %v", want, result)
 	// tablet should be removed from healthy list
 	a := hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY})
@@ -1134,6 +1144,9 @@ func TestHealthCheckChecksGrpcPort(t *testing.T) {
 }
 
 func TestTemplate(t *testing.T) {
+	TabletURLTemplateString = "http://{{.GetTabletHostPort}}"
+	ParseTabletURLTemplateFromFlag()
+
 	tablet := topo.NewTablet(0, "cell", "a")
 	ts := []*TabletHealth{
 		{
@@ -1151,17 +1164,14 @@ func TestTemplate(t *testing.T) {
 	}
 	templ := template.New("").Funcs(status.StatusFuncs)
 	templ, err := templ.Parse(HealthCheckTemplate)
-	require.Nil(t, err, "error parsing template")
+	require.Nil(t, err, "error parsing template: %v", err)
 	wr := &bytes.Buffer{}
 	err = templ.Execute(wr, []*TabletsCacheStatus{tcs})
-	require.Nil(t, err, "error executing template")
+	require.Nil(t, err, "error executing template: %v", err)
 }
 
 func TestDebugURLFormatting(t *testing.T) {
-	//log error
-	if err2 := flag.Set("tablet_url_template", "https://{{.GetHostNameLevel 0}}.bastion.{{.Tablet.Alias.Cell}}.corp"); err2 != nil {
-		log.Errorf("flag.Set(\"tablet_url_template\", \"https://{{.GetHostNameLevel 0}}.bastion.{{.Tablet.Alias.Cell}}.corp\") failed : %v", err2)
-	}
+	TabletURLTemplateString = "https://{{.GetHostNameLevel 0}}.bastion.{{.Tablet.Alias.Cell}}.corp"
 	ParseTabletURLTemplateFromFlag()
 
 	tablet := topo.NewTablet(0, "cell", "host.dc.domain")

@@ -1133,7 +1133,7 @@ func (c *Conn) handleComPrepare(handler Handler, data []byte) (kontinue bool) {
 			return c.writeErrorPacketFromErrorAndLog(err)
 		}
 		if len(queries) != 1 {
-			log.Errorf("Conn %v: can not prepare multiple statements", c, err)
+			log.Errorf("Conn %v: can not prepare multiple statements", c)
 			return c.writeErrorPacketFromErrorAndLog(err)
 		}
 	} else {
@@ -1363,9 +1363,12 @@ func (c *Conn) execQuery(query string, handler Handler, more bool) execResult {
 // Packet parsing methods, for generic packets.
 //
 
-// isEOFPacket determines whether or not a data packet is a "true" EOF. DO NOT blindly compare the
-// first byte of a packet to EOFPacket as you might do for other packet types, as 0xfe is overloaded
-// as a first byte.
+// isEOFPacket determines whether a data packet is an EOF. In case the client capabilities
+// do not have DEPRECATE_EOF set, DO NOT blindly compare the first byte of a packet to EOFPacket
+// as you might do for other packet types, as 0xfe is overloaded as a first byte.
+
+// In case that DEPRECATE_EOF is set, we have really an OK packet which is always maximum a single
+// packet and not multiple, but otherwise 0xfe definitely indicates it is an EOF.
 //
 // Per https://dev.mysql.com/doc/internals/en/packet-EOF_Packet.html, a packet starting with 0xfe
 // but having length >= 9 (on top of 4 byte header) is not a true EOF but a LengthEncodedInteger
@@ -1379,8 +1382,14 @@ func (c *Conn) execQuery(query string, handler Handler, more bool) execResult {
 //
 // More docs here:
 // https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_basic_response_packets.html
-func isEOFPacket(data []byte) bool {
-	return data[0] == EOFPacket && len(data) < 9
+func (c *Conn) isEOFPacket(data []byte) bool {
+	if data[0] != EOFPacket {
+		return false
+	}
+	if c.Capabilities&CapabilityClientDeprecateEOF == 0 {
+		return len(data) < 9
+	}
+	return len(data) < MaxPacketSize
 }
 
 // parseEOFPacket returns the warning count and a boolean to indicate if there
@@ -1466,8 +1475,12 @@ func (c *Conn) parseOKPacket(in []byte) (*PacketOK, error) {
 				return fail("invalid OK packet session state change length: %v", data)
 			}
 			sscType, ok := data.readByte()
-			if !ok || sscType != SessionTrackGtids {
+			if !ok {
 				return fail("invalid OK packet session state change type: %v", sscType)
+			}
+			// If it's not a GTID, we don't care about it so we can return.
+			if sscType != SessionTrackGtids {
+				return packetOK, nil
 			}
 
 			// Move past the total length of the changed entity: 1 byte

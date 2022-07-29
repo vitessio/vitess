@@ -24,6 +24,8 @@ import (
 	"flag"
 	"time"
 
+	"google.golang.org/grpc/credentials/insecure"
+
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"google.golang.org/grpc"
@@ -128,7 +130,7 @@ func interceptors() []grpc.DialOption {
 func SecureDialOption(cert, key, ca, crl, name string) (grpc.DialOption, error) {
 	// No security options set, just return.
 	if (cert == "" || key == "") && ca == "" {
-		return grpc.WithInsecure(), nil
+		return grpc.WithTransportCredentials(insecure.NewCredentials()), nil
 	}
 
 	// Load the config. At this point we know

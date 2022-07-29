@@ -51,7 +51,7 @@ var (
 // PooledDBConnection objects.
 type ConnectionPool struct {
 	mu                  sync.Mutex
-	connections         *pools.ResourcePool
+	connections         pools.IResourcePool
 	capacity            int
 	idleTimeout         time.Duration
 	resolutionFrequency time.Duration
@@ -82,7 +82,7 @@ func NewConnectionPool(name string, capacity int, idleTimeout time.Duration, dns
 	return cp
 }
 
-func (cp *ConnectionPool) pool() (p *pools.ResourcePool) {
+func (cp *ConnectionPool) pool() (p pools.IResourcePool) {
 	cp.mu.Lock()
 	p = cp.connections
 	cp.mu.Unlock()

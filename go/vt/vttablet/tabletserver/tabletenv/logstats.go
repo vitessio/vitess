@@ -80,11 +80,6 @@ func (stats *LogStats) Send() {
 	StatsLogger.Send(stats)
 }
 
-// Context returns the context used by LogStats.
-func (stats *LogStats) Context() context.Context {
-	return stats.Ctx
-}
-
 // ImmediateCaller returns the immediate caller stored in LogStats.Ctx
 func (stats *LogStats) ImmediateCaller() string {
 	return callerid.GetUsername(callerid.ImmediateCallerIDFromContext(stats.Ctx))

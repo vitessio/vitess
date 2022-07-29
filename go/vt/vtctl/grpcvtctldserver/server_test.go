@@ -56,7 +56,7 @@ import (
 )
 
 func init() {
-	*backupstorage.BackupStorageImplementation = testutil.BackupStorageImplementation
+	backupstorage.BackupStorageImplementation = testutil.BackupStorageImplementation
 
 	// For tests that don't actually care about mocking the tmclient (i.e. they
 	// call NewVtctldServer to initialize the unit under test), this needs to be
@@ -3408,7 +3408,6 @@ func TestEmergencyReparentShard(t *testing.T) {
 					"zone1-0000000101": nil,
 				},
 				StopReplicationAndGetStatusResults: map[string]struct {
-					Status     *replicationdatapb.Status
 					StopStatus *replicationdatapb.StopReplicationStatus
 					Error      error
 				}{
@@ -4048,8 +4047,8 @@ func TestGetBackups(t *testing.T) {
 	utils.MustMatch(t, expected, resp)
 
 	t.Run("no backupstorage", func(t *testing.T) {
-		*backupstorage.BackupStorageImplementation = "doesnotexist"
-		defer func() { *backupstorage.BackupStorageImplementation = testutil.BackupStorageImplementation }()
+		backupstorage.BackupStorageImplementation = "doesnotexist"
+		defer func() { backupstorage.BackupStorageImplementation = testutil.BackupStorageImplementation }()
 
 		_, err := vtctld.GetBackups(ctx, &vtctldatapb.GetBackupsRequest{
 			Keyspace: "testkeyspace",
@@ -8372,93 +8371,6 @@ func TestSetKeyspaceDurabilityPolicy(t *testing.T) {
 			resp, err := vtctld.SetKeyspaceDurabilityPolicy(ctx, tt.req)
 			if tt.expectedErr != "" {
 				assert.EqualError(t, err, tt.expectedErr)
-				return
-			}
-
-			require.NoError(t, err)
-			utils.MustMatch(t, tt.expected, resp)
-		})
-	}
-}
-
-func TestSetKeyspaceServedFrom(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name      string
-		keyspaces []*vtctldatapb.Keyspace
-		req       *vtctldatapb.SetKeyspaceServedFromRequest
-		expected  *vtctldatapb.SetKeyspaceServedFromResponse
-		shouldErr bool
-	}{
-		{
-			name: "ok",
-			keyspaces: []*vtctldatapb.Keyspace{
-				{
-					Name:     "ks1",
-					Keyspace: &topodatapb.Keyspace{},
-				},
-				{
-					Name:     "ks2",
-					Keyspace: &topodatapb.Keyspace{},
-				},
-			},
-			req: &vtctldatapb.SetKeyspaceServedFromRequest{
-				Keyspace:       "ks1",
-				TabletType:     topodatapb.TabletType_REPLICA,
-				Cells:          []string{"zone1"},
-				SourceKeyspace: "ks2",
-			},
-			expected: &vtctldatapb.SetKeyspaceServedFromResponse{
-				Keyspace: &topodatapb.Keyspace{
-					ServedFroms: []*topodatapb.Keyspace_ServedFrom{
-						{
-							TabletType: topodatapb.TabletType_REPLICA,
-							Cells:      []string{"zone1"},
-							Keyspace:   "ks2",
-						},
-					},
-				},
-			},
-		},
-		{
-			name: "keyspace not found",
-			req: &vtctldatapb.SetKeyspaceServedFromRequest{
-				Keyspace: "ks1",
-			},
-			shouldErr: true,
-		},
-		{
-			name: "fail to update servedfrom map",
-			keyspaces: []*vtctldatapb.Keyspace{
-				{
-					Name:     "ks1",
-					Keyspace: &topodatapb.Keyspace{},
-				},
-			},
-			req: &vtctldatapb.SetKeyspaceServedFromRequest{
-				TabletType: topodatapb.TabletType_PRIMARY,
-			},
-			shouldErr: true,
-		},
-	}
-
-	ctx := context.Background()
-
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			ts := memorytopo.NewServer("zone1")
-			testutil.AddKeyspaces(ctx, t, ts, tt.keyspaces...)
-
-			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-				return NewVtctldServer(ts)
-			})
-			resp, err := vtctld.SetKeyspaceServedFrom(ctx, tt.req)
-			if tt.shouldErr {
-				assert.Error(t, err)
 				return
 			}
 

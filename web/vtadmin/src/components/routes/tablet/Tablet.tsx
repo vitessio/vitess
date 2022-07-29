@@ -33,6 +33,7 @@ import Advanced from './Advanced';
 import style from './Tablet.module.scss';
 import { TabletCharts } from './TabletCharts';
 import { TabletReplication } from './TabletReplication';
+import { env } from '../../../util/env';
 
 interface RouteParams {
     alias: string;
@@ -125,7 +126,7 @@ export const Tablet = () => {
                         <div>
                             <Code code={JSON.stringify(tablet, null, 2)} />
 
-                            {process.env.REACT_APP_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS && (
+                            {env().REACT_APP_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS && (
                                 <Code code={JSON.stringify(debugVars, null, 2)} />
                             )}
                         </div>

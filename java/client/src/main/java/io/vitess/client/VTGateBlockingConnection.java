@@ -95,31 +95,6 @@ public final class VTGateBlockingConnection implements Closeable {
   }
 
   /**
-   * This method calls the VTGate to execute list of queries as a batch.
-   * <p>
-   * <p>If asTransaction is set to <code>true</code> then query execution will not change the
-   * session cookie.
-   * Otherwise, query execution will become part of the session.</p>
-   *
-   * @param ctx Context on user and execution deadline if any.
-   * @param queryList List of sql queries to be executed.
-   * @param bindVarsList <p>For each sql query it will provide a list of parameters to bind with. If
-   * provided, should match the number of sql queries.</p>
-   * @param asTransaction To execute query without impacting session cookie.
-   * @param vtSession Session to be used with the call.
-   * @return List of Cursors
-   * @throws SQLException If anything fails on query execution.
-   */
-  public List<CursorWithError> executeBatch(Context ctx,
-      List<String> queryList,
-      @Nullable List<Map<String, ?>> bindVarsList,
-      boolean asTransaction,
-      final VTSession vtSession) throws SQLException {
-    return vtGateConnection.executeBatch(ctx, queryList, bindVarsList, asTransaction, vtSession)
-        .checkedGet();
-  }
-
-  /**
    * This method should be used execute select query to return response as a stream.
    *
    * @param ctx Context on user and execution deadline if any.

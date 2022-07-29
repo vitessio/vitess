@@ -143,11 +143,11 @@ func newWranglerTestEnv(sourceShards, targetShards []string, query string, posit
 		env.tmc.setVRResults(primary.tablet, "insert into _vt.vreplication(state, workflow, db_name) values ('Running', 'wk1', 'ks1'), ('Stopped', 'wk1', 'ks1')", &sqltypes.Result{RowsAffected: 2})
 
 		result := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-			"id|source|pos|stop_pos|max_replication_lag|state|db_name|time_updated|transaction_timestamp|time_heartbeat|message|tags",
-			"int64|varchar|varchar|varchar|int64|varchar|varchar|int64|int64|int64|varchar|varchar"),
-			fmt.Sprintf("1|%v|MySQL56/14b68925-696a-11ea-aee7-fec597a91f5e:1-3||0|Running|vt_target|%d|0|%d||", bls, timeUpdated, timeUpdated),
+			"id|source|pos|stop_pos|max_replication_lag|state|db_name|time_updated|transaction_timestamp|time_heartbeat|time_throttled|component_throttled|message|tags",
+			"int64|varchar|varchar|varchar|int64|varchar|varchar|int64|int64|int64|int64|varchar|varchar|varchar"),
+			fmt.Sprintf("1|%v|MySQL56/14b68925-696a-11ea-aee7-fec597a91f5e:1-3||0|Running|vt_target|%d|0|%d|0|||", bls, timeUpdated, timeUpdated),
 		)
-		env.tmc.setVRResults(primary.tablet, "select id, source, pos, stop_pos, max_replication_lag, state, db_name, time_updated, transaction_timestamp, time_heartbeat, message, tags from _vt.vreplication where db_name = 'vt_target' and workflow = 'wrWorkflow'", result)
+		env.tmc.setVRResults(primary.tablet, "select id, source, pos, stop_pos, max_replication_lag, state, db_name, time_updated, transaction_timestamp, time_heartbeat, time_throttled, component_throttled, message, tags from _vt.vreplication where db_name = 'vt_target' and workflow = 'wrWorkflow'", result)
 		env.tmc.setVRResults(
 			primary.tablet,
 			"select source, pos from _vt.vreplication where db_name='vt_target' and workflow='wrWorkflow'",
@@ -172,9 +172,9 @@ func newWranglerTestEnv(sourceShards, targetShards []string, query string, posit
 
 		env.tmc.setVRResults(primary.tablet, "select table_name, lastpk from _vt.copy_state where vrepl_id = 1", result)
 
-		env.tmc.setVRResults(primary.tablet, "select id, source, pos, stop_pos, max_replication_lag, state, db_name, time_updated, transaction_timestamp, message, tags from _vt.vreplication where db_name = 'vt_target' and workflow = 'bad'", &sqltypes.Result{})
+		env.tmc.setVRResults(primary.tablet, "select id, source, pos, stop_pos, max_replication_lag, state, db_name, time_updated, transaction_timestamp, time_heartbeat, time_throttled, component_throttled, message, tags from _vt.vreplication where db_name = 'vt_target' and workflow = 'bad'", &sqltypes.Result{})
 
-		env.tmc.setVRResults(primary.tablet, "select id, source, pos, stop_pos, max_replication_lag, state, db_name, time_updated, transaction_timestamp, message, tags from _vt.vreplication where db_name = 'vt_target' and workflow = 'badwf'", &sqltypes.Result{})
+		env.tmc.setVRResults(primary.tablet, "select id, source, pos, stop_pos, max_replication_lag, state, db_name, time_updated, transaction_timestamp, time_heartbeat, time_throttled, component_throttled, message, tags from _vt.vreplication where db_name = 'vt_target' and workflow = 'badwf'", &sqltypes.Result{})
 		env.tmc.vrpos[tabletID] = testSourceGtid
 		env.tmc.pos[tabletID] = testTargetPrimaryPosition
 
@@ -311,7 +311,7 @@ func newTestWranglerTMClient() *testWranglerTMClient {
 	}
 }
 
-func (tmc *testWranglerTMClient) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
+func (tmc *testWranglerTMClient) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.GetSchemaRequest) (*tabletmanagerdatapb.SchemaDefinition, error) {
 	return tmc.schema, nil
 }
 

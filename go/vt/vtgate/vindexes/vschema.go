@@ -78,7 +78,7 @@ func (rr *RoutingRule) MarshalJSON() ([]byte, error) {
 	}
 	tables := make([]string, 0, len(rr.Tables))
 	for _, t := range rr.Tables {
-		tables = append(tables, t.Keyspace.Name+"."+t.Name.String())
+		tables = append(tables, t.ToString())
 	}
 
 	return json.Marshal(tables)
@@ -759,4 +759,13 @@ func FindVindexForSharding(tableName string, colVindexes []*ColumnVindex) (*Colu
 		return nil, fmt.Errorf("could not find a vindex to use for sharding table %v", tableName)
 	}
 	return result, nil
+}
+
+// ToString prints the table name
+func (t *Table) ToString() string {
+	res := ""
+	if t.Keyspace != nil {
+		res = t.Keyspace.Name + "."
+	}
+	return res + t.Name.String()
 }

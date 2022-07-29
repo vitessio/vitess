@@ -39,45 +39,46 @@ func TestSetSysVarSingle(t *testing.T) {
 		Port: clusterInstance.VtgateMySQLPort,
 	}
 	type queriesWithExpectations struct {
-		name, expr, expected string
+		name, expr string
+		expected   []string
 	}
 
 	queries := []queriesWithExpectations{{
 		name:     "default_storage_engine", // ignored
 		expr:     "INNODB",
-		expected: `[[VARCHAR("InnoDB")]]`,
+		expected: []string{`[[VARCHAR("InnoDB")]]`},
 	}, {
 		name:     "character_set_client", // check and ignored
 		expr:     "utf8mb4",
-		expected: `[[VARCHAR("utf8mb4")]]`,
+		expected: []string{`[[VARCHAR("utf8mb4")]]`, `[[VARCHAR("utf8")]]`},
 	}, {
 		name:     "character_set_client", // ignored so will keep the actual value
 		expr:     "@charvar",
-		expected: `[[VARCHAR("utf8mb4")]]`,
+		expected: []string{`[[VARCHAR("utf8mb4")]]`, `[[VARCHAR("utf8")]]`},
 	}, {
 		name:     "sql_mode", // use reserved conn
 		expr:     "''",
-		expected: `[[VARCHAR("")]]`,
+		expected: []string{`[[VARCHAR("")]]`},
 	}, {
 		name:     "sql_mode", // use reserved conn
 		expr:     `concat(@@sql_mode,"NO_ZERO_DATE")`,
-		expected: `[[VARCHAR("NO_ZERO_DATE")]]`,
+		expected: []string{`[[VARCHAR("NO_ZERO_DATE")]]`},
 	}, {
 		name:     "sql_mode", // use reserved conn
 		expr:     "@@sql_mode",
-		expected: `[[VARCHAR("NO_ZERO_DATE")]]`,
+		expected: []string{`[[VARCHAR("NO_ZERO_DATE")]]`},
 	}, {
 		name:     "SQL_SAFE_UPDATES", // use reserved conn
 		expr:     "1",
-		expected: "[[INT64(1)]]",
+		expected: []string{"[[INT64(1)]]"},
 	}, {
 		name:     "sql_auto_is_null", // ignored so will keep the actual value
 		expr:     "on",
-		expected: `[[INT64(0)]]`,
+		expected: []string{`[[INT64(0)]]`},
 	}, {
 		name:     "sql_notes", // use reserved conn
 		expr:     "off",
-		expected: "[[INT64(0)]]",
+		expected: []string{"[[INT64(0)]]"},
 	}}
 
 	conn, err := mysql.Connect(ctx, &vtParams)
@@ -88,7 +89,7 @@ func TestSetSysVarSingle(t *testing.T) {
 		query := fmt.Sprintf("set %s = %s", q.name, q.expr)
 		t.Run(fmt.Sprintf("%d-%s", i, query), func(t *testing.T) {
 			utils.Exec(t, conn, query)
-			utils.AssertMatches(t, conn, fmt.Sprintf("select @@%s", q.name), q.expected)
+			utils.AssertMatchesAny(t, conn, fmt.Sprintf("select @@%s", q.name), q.expected...)
 		})
 	}
 }

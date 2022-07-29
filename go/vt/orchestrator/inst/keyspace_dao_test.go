@@ -19,6 +19,7 @@ package inst
 import (
 	"testing"
 
+	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/orchestrator/db"

@@ -31,6 +31,7 @@ linters:
     # Extras
     - gofmt
     - goimports
+    - exportloopref
 
     # revive is a replacement for golint, but we do not run it in CI for now.
     # This is only enabled as a post-commit hook
@@ -159,4 +160,4 @@ issues:
 
 # https://github.com/golangci/golangci/wiki/Configuration
 service:
-  golangci-lint-version: 1.45.0 # use the fixed version to not introduce new linters unexpectedly
+  golangci-lint-version: 1.46.2 # use the fixed version to not introduce new linters unexpectedly

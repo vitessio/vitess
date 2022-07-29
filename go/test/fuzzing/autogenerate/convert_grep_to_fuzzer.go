@@ -53,7 +53,6 @@ var importPathShort = map[string]string{
 	"vitess.io/vitess/go/vt/proto/vschema":           "vschema",
 	"vitess.io/vitess/go/vt/proto/mysqlctl":          "mysqlctl",
 	"vitess.io/vitess/go/vt/proto/vtadmin":           "vtadmin",
-	"vitess.io/vitess/go/vt/proto/vtworkerdata":      "vtworkerdata",
 	"vitess.io/vitess/go/vt/proto/throttlerdata":     "throttlerdata",
 	"vitess.io/vitess/go/vt/proto/topodata":          "topodata",
 }
@@ -77,7 +76,6 @@ var pathToImportPath = map[string]string{
 	"./proto/vschema/vschema_vtproto.pb.go":                     "vitess.io/vitess/go/vt/proto/vschema",
 	"./proto/mysqlctl/mysqlctl_vtproto.pb.go":                   "vitess.io/vitess/go/vt/proto/mysqlctl",
 	"./proto/vtadmin/vtadmin_vtproto.pb.go":                     "vitess.io/vitess/go/vt/proto/vtadmin",
-	"./proto/vtworkerdata/vtworkerdata_vtproto.pb.go":           "vitess.io/vitess/go/vt/proto/vtworkerdata",
 	"./proto/throttlerdata/throttlerdata_vtproto.pb.go":         "vitess.io/vitess/go/vt/proto/throttlerdata",
 	"./proto/topodata/topodata_vtproto.pb.go":                   "vitess.io/vitess/go/vt/proto/topodata",
 }

@@ -319,22 +319,3 @@ func writeHostnameIPs(hostname string, ipv4String string, ipv6String string) err
 	}
 	return ExecDBWriteFunc(writeFunc)
 }
-
-// readUnresolvedHostname reverse-reads hostname resolve. It returns a hostname which matches given pattern and resovles to resolvedHostname,
-// or, in the event no such hostname is found, the given resolvedHostname, unchanged.
-func readHostnameIPs(hostname string) (ipv4 string, ipv6 string, err error) {
-	query := `
-		select
-			ipv4, ipv6
-		from
-			hostname_ips
-		where
-			hostname = ?
-	`
-	err = db.QueryOrchestrator(query, sqlutils.Args(hostname), func(m sqlutils.RowMap) error {
-		ipv4 = m.GetString("ipv4")
-		ipv6 = m.GetString("ipv6")
-		return nil
-	})
-	return ipv4, ipv6, log.Errore(err)
-}

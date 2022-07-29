@@ -27,6 +27,7 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -721,33 +722,52 @@ func (vre *Engine) WaitForPos(ctx context.Context, id int, pos string) error {
 		qr, err := dbClient.ExecuteFetch(binlogplayer.ReadVReplicationStatus(uint32(id)), 10)
 		switch {
 		case err != nil:
-			return err
+			// We have high contention on the _vt.vreplication row, so retry if our read gets
+			// killed off by the deadlock detector and should be re-tried.
+			// The full error we get back from MySQL in that case is:
+			// Deadlock found when trying to get lock; try restarting transaction (errno 1213) (sqlstate 40001)
+			// Docs: https://dev.mysql.com/doc/mysql-errors/en/server-error-reference.html#error_er_lock_deadlock
+			if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Number() == mysql.ERLockDeadlock {
+				log.Infof("Deadlock detected waiting for pos %s: %v; will retry", pos, err)
+			} else {
+				return err
+			}
 		case len(qr.Rows) == 0:
 			return fmt.Errorf("vreplication stream %d not found", id)
 		case len(qr.Rows) > 1 || len(qr.Rows[0]) != 3:
 			return fmt.Errorf("unexpected result: %v", qr)
 		}
-		current, err := binlogplayer.DecodePosition(qr.Rows[0][0].ToString())
-		if err != nil {
-			return err
-		}
 
-		if current.AtLeast(mPos) {
-			log.Infof("position: %s reached, wait time: %v", pos, time.Since(start))
-			return nil
-		}
+		// When err is not nil then we got a retryable error and will loop again
+		if err == nil {
+			current, dcerr := binlogplayer.DecodePosition(qr.Rows[0][0].ToString())
+			if dcerr != nil {
+				return dcerr
+			}
 
-		if qr.Rows[0][1].ToString() == binlogplayer.BlpStopped {
-			return fmt.Errorf("replication has stopped at %v before reaching position %v, message: %s", current, mPos, qr.Rows[0][2].ToString())
+			if current.AtLeast(mPos) {
+				log.Infof("position: %s reached, wait time: %v", pos, time.Since(start))
+				return nil
+			}
+
+			if qr.Rows[0][1].ToString() == binlogplayer.BlpStopped {
+				return fmt.Errorf("replication has stopped at %v before reaching position %v, message: %s", current, mPos, qr.Rows[0][2].ToString())
+			}
 		}
 
 		select {
 		case <-ctx.Done():
-			err = fmt.Errorf("error waiting for pos: %s, last pos: %s: %v, wait time: %v: %s",
-				pos, qr.Rows[0][0].ToString(), ctx.Err(), time.Since(start),
-				"possibly no tablets are available to stream in the source keyspace for your cell and tablet_types setting")
-			log.Error(err.Error())
-			return err
+			var doneErr error
+			if err != nil { // we had a retryable error and never got status info
+				doneErr = fmt.Errorf("error waiting for pos: %s, unable to get vreplication status for id %d: %v, wait time: %v",
+					pos, id, err, time.Since(start))
+			} else {
+				doneErr = fmt.Errorf("error waiting for pos: %s, last pos: %s: %v, wait time: %v: %s",
+					pos, qr.Rows[0][0].ToString(), ctx.Err(), time.Since(start),
+					"possibly no tablets are available to stream in the source keyspace for your cell and tablet_types setting")
+			}
+			log.Error(doneErr.Error())
+			return doneErr
 		case <-vre.ctx.Done():
 			return fmt.Errorf("vreplication is closing: %v", vre.ctx.Err())
 		case <-tkr.C:

@@ -90,8 +90,6 @@ func getCommandType(index int) string {
 		45: "RemoveKeyspaceCell",
 		46: "GetKeyspace",
 		47: "GetKeyspaces",
-		48: "SetKeyspaceShardingInfo",
-		49: "SetKeyspaceServedFrom",
 		50: "RebuildKeyspaceGraph",
 		51: "ValidateKeyspace",
 		52: "Reshard",
@@ -100,17 +98,10 @@ func getCommandType(index int) string {
 		55: "CreateLookupVindex",
 		56: "ExternalizeVindex",
 		57: "Materialize",
-		58: "SplitClone",
-		59: "VerticalSplitClone",
 		60: "VDiff",
-		61: "MigrateServedTypes",
-		62: "MigrateServedFrom",
 		63: "SwitchReads",
 		64: "SwitchWrites",
-		65: "CancelResharding",
-		66: "ShowResharding",
 		67: "FindAllShardsInKeyspace",
-		68: "WaitForDrain",
 	}
 	return m[index]
 

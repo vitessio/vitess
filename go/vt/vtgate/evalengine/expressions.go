@@ -496,13 +496,17 @@ func (bv *BindVariable) eval(env *ExpressionEnv, result *EvalResult) {
 // typeof implements the Expr interface
 func (bv *BindVariable) typeof(env *ExpressionEnv) (sqltypes.Type, flag) {
 	bvar := bv.bvar(env)
-	if bvar.Type == sqltypes.Null {
+	switch bvar.Type {
+	case sqltypes.Null:
 		return sqltypes.Null, flagNull | flagNullable
+	case sqltypes.HexNum, sqltypes.HexVal:
+		return sqltypes.VarBinary, flagHex
+	default:
+		if bv.coerceType >= 0 {
+			return bv.coerceType, 0
+		}
+		return bvar.Type, 0
 	}
-	if bv.coerceType >= 0 {
-		return bv.coerceType, 0
-	}
-	return bvar.Type, 0
 }
 
 // eval implements the Expr interface

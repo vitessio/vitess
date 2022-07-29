@@ -17,18 +17,17 @@ limitations under the License.
 package general
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
-
-	"vitess.io/vitess/go/vt/log"
-
-	"vitess.io/vitess/go/test/endtoend/vtorc/utils"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/vtorc/utils"
+	"vitess.io/vitess/go/vt/log"
 )
 
 // Cases to test:
@@ -156,10 +155,6 @@ func TestStopReplication(t *testing.T) {
 	curPrimary := utils.ShardPrimaryTablet(t, clusterInfo, keyspace, shard0)
 	assert.NotNil(t, curPrimary, "should have elected a primary")
 
-	// TODO(deepthi): we should not need to do this, the DB should be created automatically
-	_, err := curPrimary.VttabletProcess.QueryTablet(fmt.Sprintf("create database IF NOT EXISTS vt_%s", keyspace.Name), keyspace.Name, false)
-	require.NoError(t, err)
-
 	var replica *cluster.Vttablet
 	for _, tablet := range shard0.Vttablets {
 		// we know we have only two tablets, so the "other" one must be the new primary
@@ -170,7 +165,21 @@ func TestStopReplication(t *testing.T) {
 	}
 	require.NotNil(t, replica, "should be able to find a replica")
 	// use vtctlclient to stop replication
-	_, err = clusterInfo.ClusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("StopReplication", replica.Alias)
+	_, err := clusterInfo.ClusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("StopReplication", replica.Alias)
+	require.NoError(t, err)
+
+	// check replication is setup correctly
+	utils.CheckReplication(t, clusterInfo, curPrimary, []*cluster.Vttablet{replica}, 15*time.Second)
+
+	// Stop just the IO thread on the replica
+	_, err = utils.RunSQL(t, "STOP SLAVE IO_THREAD", replica, "")
+	require.NoError(t, err)
+
+	// check replication is setup correctly
+	utils.CheckReplication(t, clusterInfo, curPrimary, []*cluster.Vttablet{replica}, 15*time.Second)
+
+	// Stop just the SQL thread on the replica
+	_, err = utils.RunSQL(t, "STOP SLAVE SQL_THREAD", replica, "")
 	require.NoError(t, err)
 
 	// check replication is setup correctly
@@ -394,10 +403,10 @@ func TestVtorcWithPrs(t *testing.T) {
 	utils.CheckReplication(t, clusterInfo, curPrimary, shard0.Vttablets, 10*time.Second)
 
 	output, err := clusterInfo.ClusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
-		"PlannedReparentShard",
-		"-keyspace_shard", fmt.Sprintf("%s/%s", keyspace.Name, shard0.Name),
-		"-wait_replicas_timeout", "31s",
-		"-new_primary", replica.Alias)
+		"PlannedReparentShard", "--",
+		"--keyspace_shard", fmt.Sprintf("%s/%s", keyspace.Name, shard0.Name),
+		"--wait_replicas_timeout", "31s",
+		"--new_primary", replica.Alias)
 	require.NoError(t, err, "error in PlannedReparentShard output - %s", output)
 
 	time.Sleep(40 * time.Second)
@@ -425,4 +434,52 @@ func TestMultipleDurabilities(t *testing.T) {
 	// find primary from topo
 	primary := utils.ShardPrimaryTablet(t, clusterInfo, keyspaceSemiSync, shardSemiSync)
 	assert.NotNil(t, primary, "should have elected a primary")
+}
+
+// TestDurabilityPolicySetLater tests that VTOrc works even if the durability policy of the keyspace is
+// set after VTOrc has been started.
+func TestDurabilityPolicySetLater(t *testing.T) {
+	// stop any vtorc instance running due to a previous test.
+	utils.StopVtorcs(t, clusterInfo)
+	newCluster := utils.SetupNewClusterSemiSync(t)
+	keyspace := &newCluster.ClusterInstance.Keyspaces[0]
+	shard0 := &keyspace.Shards[0]
+	// Before starting VTOrc we explicity want to set the durability policy of the keyspace to an empty string
+	func() {
+		ctx, unlock, lockErr := newCluster.Ts.LockKeyspace(context.Background(), keyspace.Name, "TestDurabilityPolicySetLater")
+		require.NoError(t, lockErr)
+		defer unlock(&lockErr)
+		ki, err := newCluster.Ts.GetKeyspace(ctx, keyspace.Name)
+		require.NoError(t, err)
+		ki.DurabilityPolicy = ""
+		err = newCluster.Ts.UpdateKeyspace(ctx, ki)
+		require.NoError(t, err)
+	}()
+
+	// Verify that the durability policy is indeed empty
+	ki, err := newCluster.Ts.GetKeyspace(context.Background(), keyspace.Name)
+	require.NoError(t, err)
+	require.Empty(t, ki.DurabilityPolicy)
+
+	// Now start the vtorc instances
+	utils.StartVtorcs(t, newCluster, nil, cluster.VtorcConfiguration{
+		PreventCrossDataCenterPrimaryFailover: true,
+	}, 1)
+	defer func() {
+		utils.StopVtorcs(t, newCluster)
+		newCluster.ClusterInstance.Teardown()
+	}()
+
+	// Wait for some time to be sure that VTOrc has started.
+	// TODO(GuptaManan100): Once we have a debug page for VTOrc, use that instead
+	time.Sleep(30 * time.Second)
+
+	// Now set the correct durability policy
+	out, err := newCluster.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspace.Name, "--durability-policy=semi_sync")
+	require.NoError(t, err, out)
+
+	// VTOrc should promote a new primary after seeing the durability policy change
+	primary := utils.ShardPrimaryTablet(t, newCluster, keyspace, shard0)
+	assert.NotNil(t, primary, "should have elected a primary")
+	utils.CheckReplication(t, newCluster, primary, shard0.Vttablets, 10*time.Second)
 }

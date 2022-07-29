@@ -18,6 +18,7 @@ package vindexes
 
 import (
 	"bytes"
+	"context"
 	"encoding/hex"
 	"fmt"
 	"reflect"
@@ -59,7 +60,7 @@ func TestBinaryMap(t *testing.T) {
 		out: []byte("test2"),
 	}}
 	for _, tcase := range tcases {
-		got, err := binOnlyVindex.Map(nil, []sqltypes.Value{tcase.in})
+		got, err := binOnlyVindex.Map(context.Background(), nil, []sqltypes.Value{tcase.in})
 		if err != nil {
 			t.Error(err)
 		}
@@ -77,7 +78,7 @@ func TestBinaryVerify(t *testing.T) {
 	hexBytes, _ := hex.DecodeString(hexValStr)
 	ids := []sqltypes.Value{sqltypes.NewVarBinary("1"), sqltypes.NewVarBinary("2"), sqltypes.NewHexVal([]byte(hexValStrSQL)), sqltypes.NewHexNum([]byte(hexNumStrSQL))}
 	ksids := [][]byte{[]byte("1"), []byte("1"), hexBytes, hexBytes}
-	got, err := binOnlyVindex.Verify(nil, ids, ksids)
+	got, err := binOnlyVindex.Verify(context.Background(), nil, ids, ksids)
 	if err != nil {
 		t.Fatal(err)
 	}
