@@ -18,7 +18,6 @@ package vtcombo
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"os"
 	"path"
@@ -90,7 +89,6 @@ func CreateTablet(
 		Uid:  uid,
 	}
 	log.Infof("Creating %v tablet %v for %v/%v", tabletType, topoproto.TabletAliasString(alias), keyspace, shard)
-	flag.Set("debug-url-prefix", fmt.Sprintf("/debug-%d", uid))
 
 	controller := tabletserver.NewServer(topoproto.TabletAliasString(alias), ts, alias)
 	initTabletType := tabletType
