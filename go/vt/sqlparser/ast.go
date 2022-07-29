@@ -2189,6 +2189,13 @@ func (ct *ColumnType) merge(other ColumnType) error {
 		ct.SRID = other.SRID
 	}
 
+	if other.Path != "" {
+		if ct.Path != "" {
+			return errors.New("cannot include PATH more than once")
+		}
+		ct.Path = other.Path
+	}
+
 	return nil
 }
 
