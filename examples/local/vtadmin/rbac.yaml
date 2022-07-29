@@ -8,3 +8,10 @@ rules:
     - "ping"
     subjects: ["*"]
     clusters: ["*"]
+  - resource: "Shard"
+    actions:
+    - "emergency_reparent_shard"
+    - "planned_reparent_shard"
+    subjects: ["*"]
+    clusters:
+    - "local"

@@ -17,6 +17,7 @@ limitations under the License.
 package orderby
 
 import (
+	_ "embed"
 	"flag"
 	"fmt"
 	"os"
@@ -34,104 +35,12 @@ var (
 	mysqlParams     mysql.ConnParams
 	keyspaceName    = "ks_orderby"
 	cell            = "test_orderby"
-	schemaSQL       = `create table t1(
-	id1 bigint,
-	id2 bigint,
-	primary key(id1)
-) Engine=InnoDB;
 
-create table t1_id2_idx(
-	id2 bigint,
-	keyspace_id varbinary(10),
-	primary key(id2)
-) Engine=InnoDB;
+	//go:embed schema.sql
+	schemaSQL string
 
-create table t4(
-	id1 bigint,
-	id2 varchar(10),
-	primary key(id1)
-) ENGINE=InnoDB DEFAULT charset=utf8mb4 COLLATE=utf8mb4_general_ci;
-
-create table t4_id2_idx(
-	id2 varchar(10),
-	id1 bigint,
-	keyspace_id varbinary(50),
-    primary key(id2, id1)
-) Engine=InnoDB DEFAULT charset=utf8mb4 COLLATE=utf8mb4_general_ci;
-`
-
-	vschema = `
-{
-  "sharded": true,
-  "vindexes": {
-    "hash": {
-      "type": "hash"
-    },
-    "unicode_loose_md5" : {
-	  "type": "unicode_loose_md5"
-    },
-    "t1_id2_vdx": {
-      "type": "consistent_lookup_unique",
-      "params": {
-        "table": "t1_id2_idx",
-        "from": "id2",
-        "to": "keyspace_id"
-      },
-      "owner": "t1"
-    },
-     "t4_id2_vdx": {
-      "type": "consistent_lookup",
-      "params": {
-        "table": "t4_id2_idx",
-        "from": "id2,id1",
-        "to": "keyspace_id"
-      },
-      "owner": "t4"
-    }
-  },
-  "tables": {
-    "t1": {
-      "column_vindexes": [
-        {
-          "column": "id1",
-          "name": "hash"
-        },
-        {
-          "column": "id2",
-          "name": "t1_id2_vdx"
-        }
-      ]
-    },
-    "t1_id2_idx": {
-      "column_vindexes": [
-        {
-          "column": "id2",
-          "name": "hash"
-        }
-      ]
-    },
-	"t4": {
-      "column_vindexes": [
-        {
-          "column": "id1",
-          "name": "hash"
-        },
-        {
-          "columns": ["id2", "id1"],
-          "name": "t4_id2_vdx"
-        }
-      ]
-    },
-    "t4_id2_idx": {
-      "column_vindexes": [
-        {
-          "column": "id2",
-          "name": "unicode_loose_md5"
-        }
-      ]
-    }
-  }
-}`
+	//go:embed vschema.json
+	vschema string
 )
 
 func TestMain(m *testing.M) {

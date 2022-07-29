@@ -138,7 +138,7 @@ func checkCompatibleCollations(
 			}
 		}
 
-	case charset.Charset_utf8, charset.Charset_ucs2, charset.Charset_utf16, charset.Charset_utf16le:
+	case charset.Charset_utf8mb3, charset.Charset_ucs2, charset.Charset_utf16, charset.Charset_utf16le:
 		switch {
 		case leftCoercibility < rightCoercibility:
 			return true
@@ -257,13 +257,13 @@ func (env *Environment) MergeCollations(left, right TypedCollation, opt Coercion
 		if left.Coercibility <= right.Coercibility {
 			return left, nil, nil, nil
 		}
-		return right, nil, nil, nil
+		goto coerceToRight
 	}
 	if _, rightIsBinary := rightColl.(*Collation_binary); rightIsBinary {
 		if left.Coercibility >= right.Coercibility {
 			return right, nil, nil, nil
 		}
-		return left, nil, nil, nil
+		goto coerceToLeft
 	}
 
 	if opt.ConvertToSuperset {

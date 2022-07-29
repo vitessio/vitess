@@ -406,6 +406,8 @@ func (er *astRewriter) rewrite(cursor *Cursor) bool {
 				er.bindVars.AddSysVar(sysVar)
 			}
 		}
+	case *ExistsExpr:
+		er.existsRewrite(cursor, node)
 	}
 	return true
 }
@@ -558,6 +560,34 @@ func (er *astRewriter) unnestSubQueries(cursor *Cursor, subquery *Subquery) {
 	}
 
 	cursor.Replace(rewritten)
+}
+
+func (er *astRewriter) existsRewrite(cursor *Cursor, node *ExistsExpr) {
+	switch node := node.Subquery.Select.(type) {
+	case *Select:
+		if node.Limit == nil {
+			node.Limit = &Limit{}
+		}
+		node.Limit.Rowcount = NewIntLiteral("1")
+
+		if node.Having != nil {
+			// If the query has HAVING, we can't take any shortcuts
+			return
+		}
+
+		if len(node.GroupBy) == 0 && node.SelectExprs.AllAggregation() {
+			// in these situations, we are guaranteed to always get a non-empty result,
+			// so we can replace the EXISTS with a literal true
+			cursor.Replace(BoolVal(true))
+		}
+
+		// If we are not doing HAVING, we can safely replace all select expressions with a
+		// single `1` and remove any grouping
+		node.SelectExprs = SelectExprs{
+			&AliasedExpr{Expr: NewIntLiteral("1")},
+		}
+		node.GroupBy = nil
+	}
 }
 
 func bindVarExpression(name string) Expr {

@@ -75,6 +75,7 @@ var (
 	enableConsolidatorReplicas   bool
 	enableHeartbeat              bool
 	heartbeatInterval            time.Duration
+	heartbeatOnDemandDuration    time.Duration
 	healthCheckInterval          time.Duration
 	degradedThreshold            time.Duration
 	unhealthyThreshold           time.Duration
@@ -150,6 +151,7 @@ func init() {
 
 	flag.BoolVar(&enableHeartbeat, "heartbeat_enable", false, "If true, vttablet records (if master) or checks (if replica) the current time of a replication heartbeat in the table _vt.heartbeat. The result is used to inform the serving state of the vttablet via healthchecks.")
 	flag.DurationVar(&heartbeatInterval, "heartbeat_interval", 1*time.Second, "How frequently to read and write replication heartbeat.")
+	flag.DurationVar(&heartbeatOnDemandDuration, "heartbeat_on_demand_duration", 0, "If non-zero, heartbeats are only written upon consumer request, and only run for up to given duration following the request. Frequent requests can keep the heartbeat running consistently; when requests are infrequent heartbeat may completely stop between requests")
 	flagutil.DualFormatBoolVar(&currentConfig.EnableLagThrottler, "enable_lag_throttler", defaultConfig.EnableLagThrottler, "If true, vttablet will run a throttler service, and will implicitly enable heartbeats")
 
 	flag.BoolVar(&currentConfig.EnforceStrictTransTables, "enforce_strict_trans_tables", defaultConfig.EnforceStrictTransTables, "If true, vttablet requires MySQL to run with STRICT_TRANS_TABLES or STRICT_ALL_TABLES on. It is recommended to not turn this flag off. Otherwise MySQL may alter your supplied values before saving them to the database.")
@@ -202,7 +204,11 @@ func Init() {
 	if heartbeatInterval > time.Second {
 		heartbeatInterval = time.Second
 	}
+	if heartbeatOnDemandDuration < 0 {
+		heartbeatOnDemandDuration = 0
+	}
 	currentConfig.ReplicationTracker.HeartbeatIntervalSeconds.Set(heartbeatInterval)
+	currentConfig.ReplicationTracker.HeartbeatOnDemandSeconds.Set(heartbeatOnDemandDuration)
 
 	switch {
 	case enableHeartbeat:
@@ -339,6 +345,7 @@ type ReplicationTrackerConfig struct {
 	// Mode can be disable, polling or heartbeat. Default is disable.
 	Mode                     string  `json:"mode,omitempty"`
 	HeartbeatIntervalSeconds Seconds `json:"heartbeatIntervalSeconds,omitempty"`
+	HeartbeatOnDemandSeconds Seconds `json:"heartbeatOnDemandSeconds,omitempty"`
 }
 
 // TransactionLimitConfig captures configuration of transaction pool slots
@@ -487,7 +494,7 @@ var defaultConfig = TabletConfig{
 	SignalSchemaChangeReloadIntervalSeconds: 5,
 	MessagePostponeParallelism:              4,
 	CacheResultFields:                       true,
-	SignalWhenSchemaChange:                  false, // while this feature is experimental, the safe default is off
+	SignalWhenSchemaChange:                  true,
 
 	EnableTxThrottler:           false,
 	TxThrottlerConfig:           defaultTxThrottlerConfig(),

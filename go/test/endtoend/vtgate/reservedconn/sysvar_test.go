@@ -39,45 +39,46 @@ func TestSetSysVarSingle(t *testing.T) {
 		Port: clusterInstance.VtgateMySQLPort,
 	}
 	type queriesWithExpectations struct {
-		name, expr, expected string
+		name, expr string
+		expected   []string
 	}
 
 	queries := []queriesWithExpectations{{
 		name:     "default_storage_engine", // ignored
 		expr:     "INNODB",
-		expected: `[[VARCHAR("InnoDB")]]`,
+		expected: []string{`[[VARCHAR("InnoDB")]]`},
 	}, {
 		name:     "character_set_client", // check and ignored
 		expr:     "utf8mb4",
-		expected: `[[VARCHAR("utf8mb4")]]`,
+		expected: []string{`[[VARCHAR("utf8mb4")]]`, `[[VARCHAR("utf8")]]`},
 	}, {
 		name:     "character_set_client", // ignored so will keep the actual value
 		expr:     "@charvar",
-		expected: `[[VARCHAR("utf8mb4")]]`,
+		expected: []string{`[[VARCHAR("utf8mb4")]]`, `[[VARCHAR("utf8")]]`},
 	}, {
 		name:     "sql_mode", // use reserved conn
 		expr:     "''",
-		expected: `[[VARCHAR("")]]`,
+		expected: []string{`[[VARCHAR("")]]`},
 	}, {
 		name:     "sql_mode", // use reserved conn
 		expr:     `concat(@@sql_mode,"NO_ZERO_DATE")`,
-		expected: `[[VARCHAR("NO_ZERO_DATE")]]`,
+		expected: []string{`[[VARCHAR("NO_ZERO_DATE")]]`},
 	}, {
 		name:     "sql_mode", // use reserved conn
 		expr:     "@@sql_mode",
-		expected: `[[VARCHAR("NO_ZERO_DATE")]]`,
+		expected: []string{`[[VARCHAR("NO_ZERO_DATE")]]`},
 	}, {
 		name:     "SQL_SAFE_UPDATES", // use reserved conn
 		expr:     "1",
-		expected: "[[INT64(1)]]",
+		expected: []string{"[[INT64(1)]]"},
 	}, {
 		name:     "sql_auto_is_null", // ignored so will keep the actual value
 		expr:     "on",
-		expected: `[[INT64(0)]]`,
+		expected: []string{`[[INT64(0)]]`},
 	}, {
 		name:     "sql_notes", // use reserved conn
 		expr:     "off",
-		expected: "[[INT64(0)]]",
+		expected: []string{"[[INT64(0)]]"},
 	}}
 
 	conn, err := mysql.Connect(ctx, &vtParams)
@@ -88,7 +89,7 @@ func TestSetSysVarSingle(t *testing.T) {
 		query := fmt.Sprintf("set %s = %s", q.name, q.expr)
 		t.Run(fmt.Sprintf("%d-%s", i, query), func(t *testing.T) {
 			utils.Exec(t, conn, query)
-			utils.AssertMatches(t, conn, fmt.Sprintf("select @@%s", q.name), q.expected)
+			utils.AssertMatchesOneOf(t, conn, fmt.Sprintf("select @@%s", q.name), q.expected...)
 		})
 	}
 }
@@ -128,7 +129,7 @@ func TestSetSystemVarWithTxFailure(t *testing.T) {
 	utils.Exec(t, conn, "insert into test (id, val1) values (80, null)")
 
 	// before changing any settings, let's confirm sql_safe_updates value
-	utils.AssertMatches(t, conn, `select @@sql_safe_updates from test where id = 80`, `[[INT64(0)]]`)
+	utils.AssertMatches(t, conn, `select /*vt+ PLANNER=gen4 */ @@sql_safe_updates from test where id = 80`, `[[INT64(0)]]`)
 
 	utils.Exec(t, conn, "set sql_safe_updates = 1")
 	utils.Exec(t, conn, "begin")
@@ -301,6 +302,27 @@ func TestSetSystemVarInTxWithConnError(t *testing.T) {
 
 	// subsequent queries on 80- will pass
 	utils.AssertMatches(t, conn, "select id, @@sql_safe_updates from test where id = 4", "[[INT64(4) INT64(1)]]")
+}
+
+func BenchmarkReservedConnFieldQuery(b *testing.B) {
+	vtParams := mysql.ConnParams{
+		Host: "localhost",
+		Port: clusterInstance.VtgateMySQLPort,
+	}
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(b, err)
+	defer conn.Close()
+
+	utils.Exec(b, conn, "delete from test")
+	utils.Exec(b, conn, "insert into test (id, val1) values (1, 'toto'), (4, 'tata')")
+
+	// set sql_mode to empty to force the use of reserved connection
+	utils.Exec(b, conn, "set sql_mode = ''")
+	utils.AssertMatches(b, conn, "select 	@@sql_mode", `[[VARCHAR("")]]`)
+
+	for i := 0; i < b.N; i++ {
+		utils.Exec(b, conn, "select id, val1 from test")
+	}
 }
 
 func TestEnableSystemSettings(t *testing.T) {

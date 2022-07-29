@@ -63,11 +63,14 @@ func Append(buf *strings.Builder, node SQLNode) {
 	node.formatFast(tbuf)
 }
 
-// IndexColumn describes a column in an index definition with optional length
+// IndexColumn describes a column or expression in an index definition with optional length (for column)
 type IndexColumn struct {
-	Column    ColIdent
-	Length    *Literal
-	Direction OrderDirection
+	// Only one of Column or Expression can be specified
+	// Length is an optional field which is only applicable when Column is used
+	Column     ColIdent
+	Length     *Literal
+	Expression Expr
+	Direction  OrderDirection
 }
 
 // LengthScaleOption is used for types that have an optional length
@@ -121,6 +124,18 @@ const (
 	NoAction
 	SetNull
 	SetDefault
+)
+
+// MatchAction indicates the type of match for a referential constraint, so
+// a `MATCH FULL`, `MATCH SIMPLE` or `MATCH PARTIAL`.
+type MatchAction int
+
+const (
+	// DefaultAction indicates no action was explicitly specified.
+	DefaultMatch MatchAction = iota
+	Full
+	Partial
+	Simple
 )
 
 // ShowTablesOpt is show tables option
@@ -612,7 +627,7 @@ func NewColNameWithQualifier(identifier string, table TableName) *ColName {
 }
 
 // NewSelect is used to create a select statement
-func NewSelect(comments Comments, exprs SelectExprs, selectOptions []string, into *SelectInto, from TableExprs, where *Where, groupBy GroupBy, having *Where) *Select {
+func NewSelect(comments Comments, exprs SelectExprs, selectOptions []string, into *SelectInto, from TableExprs, where *Where, groupBy GroupBy, having *Where, windows NamedWindows) *Select {
 	var cache *bool
 	var distinct, straightJoinHint, sqlFoundRows bool
 
@@ -644,6 +659,7 @@ func NewSelect(comments Comments, exprs SelectExprs, selectOptions []string, int
 		Where:            where,
 		GroupBy:          groupBy,
 		Having:           having,
+		Windows:          windows,
 	}
 }
 
@@ -653,6 +669,10 @@ func NewColIdentWithAt(str string, at AtCount) ColIdent {
 		val: str,
 		at:  at,
 	}
+}
+
+func NewOffset(v int, original Expr) *Offset {
+	return &Offset{V: v, Original: String(original)}
 }
 
 // IsEmpty returns true if the name is empty.
@@ -1341,6 +1361,102 @@ func (ty TrimType) ToString() string {
 }
 
 // ToString returns the type as a string
+func (ty FrameUnitType) ToString() string {
+	switch ty {
+	case FrameRowsType:
+		return FrameRowsStr
+	case FrameRangeType:
+		return FrameRangeStr
+	default:
+		return "Unknown FrameUnitType"
+	}
+}
+
+// ToString returns the type as a string
+func (ty FramePointType) ToString() string {
+	switch ty {
+	case CurrentRowType:
+		return CurrentRowStr
+	case UnboundedPrecedingType:
+		return UnboundedPrecedingStr
+	case UnboundedFollowingType:
+		return UnboundedFollowingStr
+	case ExprPrecedingType:
+		return ExprPrecedingStr
+	case ExprFollowingType:
+		return ExprFollowingStr
+	default:
+		return "Unknown FramePointType"
+	}
+}
+
+// ToString returns the type as a string
+func (ty ArgumentLessWindowExprType) ToString() string {
+	switch ty {
+	case CumeDistExprType:
+		return CumeDistExprStr
+	case DenseRankExprType:
+		return DenseRankExprStr
+	case PercentRankExprType:
+		return PercentRankExprStr
+	case RankExprType:
+		return RankExprStr
+	case RowNumberExprType:
+		return RowNumberExprStr
+	default:
+		return "Unknown ArgumentLessWindowExprType"
+	}
+}
+
+// ToString returns the type as a string
+func (ty NullTreatmentType) ToString() string {
+	switch ty {
+	case RespectNullsType:
+		return RespectNullsStr
+	case IgnoreNullsType:
+		return IgnoreNullsStr
+	default:
+		return "Unknown NullTreatmentType"
+	}
+}
+
+// ToString returns the type as a string
+func (ty FromFirstLastType) ToString() string {
+	switch ty {
+	case FromFirstType:
+		return FromFirstStr
+	case FromLastType:
+		return FromLastStr
+	default:
+		return "Unknown FromFirstLastType"
+	}
+}
+
+// ToString returns the type as a string
+func (ty FirstOrLastValueExprType) ToString() string {
+	switch ty {
+	case FirstValueExprType:
+		return FirstValueExprStr
+	case LastValueExprType:
+		return LastValueExprStr
+	default:
+		return "Unknown FirstOrLastValueExprType"
+	}
+}
+
+// ToString returns the type as a string
+func (ty LagLeadExprType) ToString() string {
+	switch ty {
+	case LagExprType:
+		return LagExprStr
+	case LeadExprType:
+		return LeadExprStr
+	default:
+		return "Unknown LagLeadExprType"
+	}
+}
+
+// ToString returns the type as a string
 func (ty JSONAttributeType) ToString() string {
 	switch ty {
 	case DepthAttributeType:
@@ -1385,6 +1501,24 @@ func (ty JSONValueMergeType) ToString() string {
 		return JSONMergePreserveStr
 	default:
 		return "Unknown JSONValueMergeType"
+	}
+}
+
+// ToString returns the type as a string
+func (ty LockingFuncType) ToString() string {
+	switch ty {
+	case GetLock:
+		return GetLockStr
+	case IsFreeLock:
+		return IsFreeLockStr
+	case IsUsedLock:
+		return IsUsedLockStr
+	case ReleaseAllLocks:
+		return ReleaseAllLocksStr
+	case ReleaseLock:
+		return ReleaseLockStr
+	default:
+		return "Unknown LockingFuncType"
 	}
 }
 
@@ -1471,14 +1605,16 @@ func (sel SelectIntoType) ToString() string {
 }
 
 // ToString returns the type as a string
-func (node CollateAndCharsetType) ToString() string {
+func (node DatabaseOptionType) ToString() string {
 	switch node {
 	case CharacterSetType:
 		return CharacterSetStr
 	case CollateType:
 		return CollateStr
+	case EncryptionType:
+		return EncryptionStr
 	default:
-		return "Unknown CollateAndCharsetType Type"
+		return "Unknown DatabaseOptionType Type"
 	}
 }
 
@@ -1594,6 +1730,8 @@ func (key DropKeyType) ToString() string {
 		return ForeignKeyTypeStr
 	case NormalKeyType:
 		return NormalKeyTypeStr
+	case CheckKeyType:
+		return CheckKeyTypeStr
 	default:
 		return "Unknown DropKeyType"
 	}
@@ -1612,6 +1750,20 @@ func (lock LockOptionType) ToString() string {
 		return ExclusiveTypeStr
 	default:
 		return "Unknown type LockOptionType"
+	}
+}
+
+// ToString returns the string associated with JoinType
+func (columnFormat ColumnFormat) ToString() string {
+	switch columnFormat {
+	case FixedFormat:
+		return keywordStrings[FIXED]
+	case DynamicFormat:
+		return keywordStrings[DYNAMIC]
+	case DefaultFormat:
+		return keywordStrings[DEFAULT]
+	default:
+		return "Unknown column format type"
 	}
 }
 
@@ -1780,6 +1932,29 @@ func (es *ExtractedSubquery) updateAlternative() {
 	}
 }
 
+// ColumnName returns the alias if one was provided, otherwise prints the AST
+func (ae *AliasedExpr) ColumnName() string {
+	if !ae.As.IsEmpty() {
+		return ae.As.String()
+	}
+
+	if col, ok := ae.Expr.(*ColName); ok {
+		return col.Name.String()
+	}
+
+	return String(ae.Expr)
+}
+
+// AllAggregation returns true if all the expressions contain aggregation
+func (s SelectExprs) AllAggregation() bool {
+	for _, k := range s {
+		if !ContainsAggregation(k) {
+			return false
+		}
+	}
+	return true
+}
+
 func isExprLiteral(expr Expr) bool {
 	switch expr := expr.(type) {
 	case *Literal:
@@ -1836,4 +2011,8 @@ func RemoveKeyspace(in SQLNode) SQLNode {
 func convertStringToInt(integer string) int {
 	val, _ := strconv.Atoi(integer)
 	return val
+}
+
+func (node *ColName) IsVariable() bool {
+	return node.Name.AtCount() != NoAt
 }

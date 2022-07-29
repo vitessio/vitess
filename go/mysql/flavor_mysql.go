@@ -56,6 +56,44 @@ func (mysqlFlavor) primaryGTIDSet(c *Conn) (GTIDSet, error) {
 	return parseMysql56GTIDSet(qr.Rows[0][0].ToString())
 }
 
+// purgedGTIDSet is part of the Flavor interface.
+func (mysqlFlavor) purgedGTIDSet(c *Conn) (GTIDSet, error) {
+	// keep @@global as lowercase, as some servers like the Ripple binlog server only honors a lowercase `global` value
+	qr, err := c.ExecuteFetch("SELECT @@global.gtid_purged", 1, false)
+	if err != nil {
+		return nil, err
+	}
+	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
+		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected result format for gtid_purged: %#v", qr)
+	}
+	return parseMysql56GTIDSet(qr.Rows[0][0].ToString())
+}
+
+// serverUUID is part of the Flavor interface.
+func (mysqlFlavor) serverUUID(c *Conn) (string, error) {
+	// keep @@global as lowercase, as some servers like the Ripple binlog server only honors a lowercase `global` value
+	qr, err := c.ExecuteFetch("SELECT @@global.server_uuid", 1, false)
+	if err != nil {
+		return "", err
+	}
+	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
+		return "", vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected result format for server_uuid: %#v", qr)
+	}
+	return qr.Rows[0][0].ToString(), nil
+}
+
+// gtidMode is part of the Flavor interface.
+func (mysqlFlavor) gtidMode(c *Conn) (string, error) {
+	qr, err := c.ExecuteFetch("select @@global.gtid_mode", 1, false)
+	if err != nil {
+		return "", err
+	}
+	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
+		return "", vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected result format for gtid_mode: %#v", qr)
+	}
+	return qr.Rows[0][0].ToString(), nil
+}
+
 func (mysqlFlavor) startReplicationCommand() string {
 	return "START SLAVE"
 }
@@ -113,6 +151,14 @@ func (mysqlFlavor) resetReplicationCommands(c *Conn) []string {
 	}
 	if c.SemiSyncExtensionLoaded() {
 		resetCommands = append(resetCommands, "SET GLOBAL rpl_semi_sync_master_enabled = false, GLOBAL rpl_semi_sync_slave_enabled = false") // semi-sync will be enabled if needed when replica is started.
+	}
+	return resetCommands
+}
+
+// resetReplicationParametersCommands is part of the Flavor interface.
+func (mysqlFlavor) resetReplicationParametersCommands(c *Conn) []string {
+	resetCommands := []string{
+		"RESET SLAVE ALL", // "ALL" makes it forget source host:port.
 	}
 	return resetCommands
 }
@@ -303,9 +349,12 @@ func (mysqlFlavor56) baseShowTablesWithSizes() string {
 	return TablesWithSize56
 }
 
-// supportsFastDropTable is part of the Flavor interface.
-func (mysqlFlavor56) supportsFastDropTable(c *Conn) (bool, error) {
-	return false, nil
+// supportsCapability is part of the Flavor interface.
+func (mysqlFlavor56) supportsCapability(serverVersion string, capability FlavorCapability) (bool, error) {
+	switch capability {
+	default:
+		return false, nil
+	}
 }
 
 // baseShowTablesWithSizes is part of the Flavor interface.
@@ -313,9 +362,14 @@ func (mysqlFlavor57) baseShowTablesWithSizes() string {
 	return TablesWithSize57
 }
 
-// supportsFastDropTable is part of the Flavor interface.
-func (mysqlFlavor57) supportsFastDropTable(c *Conn) (bool, error) {
-	return false, nil
+// supportsCapability is part of the Flavor interface.
+func (mysqlFlavor57) supportsCapability(serverVersion string, capability FlavorCapability) (bool, error) {
+	switch capability {
+	case MySQLJSONFlavorCapability:
+		return true, nil
+	default:
+		return false, nil
+	}
 }
 
 // baseShowTablesWithSizes is part of the Flavor interface.
@@ -323,7 +377,25 @@ func (mysqlFlavor80) baseShowTablesWithSizes() string {
 	return TablesWithSize80
 }
 
-// supportsFastDropTable is part of the Flavor interface.
-func (mysqlFlavor80) supportsFastDropTable(c *Conn) (bool, error) {
-	return c.ServerVersionAtLeast(8, 0, 23)
+// supportsCapability is part of the Flavor interface.
+func (mysqlFlavor80) supportsCapability(serverVersion string, capability FlavorCapability) (bool, error) {
+	switch capability {
+	case InstantDDLFlavorCapability,
+		InstantAddLastColumnFlavorCapability,
+		InstantAddDropVirtualColumnFlavorCapability,
+		InstantChangeColumnDefaultFlavorCapability:
+		return true, nil
+	case InstantAddDropColumnFlavorCapability:
+		return ServerVersionAtLeast(serverVersion, 8, 0, 29)
+	case TransactionalGtidExecutedFlavorCapability:
+		return ServerVersionAtLeast(serverVersion, 8, 0, 17)
+	case FastDropTableFlavorCapability:
+		return ServerVersionAtLeast(serverVersion, 8, 0, 23)
+	case MySQLJSONFlavorCapability:
+		return true, nil
+	case MySQLUpgradeInServerFlavorCapability:
+		return ServerVersionAtLeast(serverVersion, 8, 0, 16)
+	default:
+		return false, nil
+	}
 }

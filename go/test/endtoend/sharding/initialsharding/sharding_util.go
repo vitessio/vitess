@@ -97,7 +97,6 @@ func ClusterWrapper(isMulti bool) (int, error) {
 	ClusterInstance = nil
 	ClusterInstance = cluster.NewCluster(cell, hostname)
 
-	ClusterInstance.VtctldExtraArgs = append(ClusterInstance.VtctldExtraArgs, "--durability_policy=semi_sync")
 	// Start topo server
 	if err := ClusterInstance.StartTopo(); err != nil {
 		return 1, err
@@ -113,12 +112,19 @@ func ClusterWrapper(isMulti bool) (int, error) {
 		return 1, err
 	}
 	ClusterInstance.Keyspaces = append(ClusterInstance.Keyspaces, cluster.Keyspace{Name: keyspaceName1})
+	vtctldClientProcess := cluster.VtctldClientProcessInstance("localhost", ClusterInstance.VtctldProcess.GrpcPort, ClusterInstance.TmpDirectory)
+	if _, err := vtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName1, "--durability-policy=semi_sync"); err != nil {
+		return 1, err
+	}
 
 	if isMulti {
 		if err := ClusterInstance.VtctlProcess.CreateKeyspace(keyspaceName2); err != nil {
 			return 1, err
 		}
 		ClusterInstance.Keyspaces = append(ClusterInstance.Keyspaces, cluster.Keyspace{Name: keyspaceName2})
+		if _, err := vtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName2, "--durability-policy=semi_sync"); err != nil {
+			return 1, err
+		}
 	}
 
 	initClusterForInitialSharding(keyspaceName1, []string{"0"}, 3, true, isMulti)

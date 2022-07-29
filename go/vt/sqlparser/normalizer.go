@@ -86,6 +86,9 @@ func (nz *normalizer) WalkSelect(cursor *Cursor) bool {
 		nz.convertLiteralDedup(node, cursor)
 	case *ComparisonExpr:
 		nz.convertComparison(node)
+	case *FramePoint:
+		// do not make a bind var for rows and range
+		return false
 	case *ColName, TableName:
 		// Common node types that never contain Literals or ListArgs but create a lot of object
 		// allocations.

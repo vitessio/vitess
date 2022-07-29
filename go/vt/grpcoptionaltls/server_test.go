@@ -16,7 +16,6 @@ import (
 	"context"
 	"crypto/tls"
 	"net"
-	"os"
 	"testing"
 	"time"
 
@@ -48,13 +47,9 @@ type testCredentials struct {
 	server credentials.TransportCredentials
 }
 
-func createCredentials() (*testCredentials, error) {
+func createCredentials(t *testing.T) (*testCredentials, error) {
 	// Create a temporary directory.
-	certDir, err := os.MkdirTemp("", "optionaltls_grpc_test")
-	if err != nil {
-		return nil, err
-	}
-	defer os.RemoveAll(certDir)
+	certDir := t.TempDir()
 
 	certs := tlstest.CreateClientServerCertPairs(certDir)
 	cert, err := tls.LoadX509KeyPair(certs.ServerCert, certs.ServerKey)
@@ -77,7 +72,7 @@ func TestOptionalTLS(t *testing.T) {
 	testCtx, testCancel := context.WithCancel(context.Background())
 	defer testCancel()
 
-	tc, err := createCredentials()
+	tc, err := createCredentials(t)
 	if err != nil {
 		t.Fatalf("failed to create credentials %v", err)
 	}

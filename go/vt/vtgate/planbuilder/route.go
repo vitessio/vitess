@@ -391,7 +391,13 @@ func (rb *route) MergeSubquery(pb *primitiveBuilder, inner *route) bool {
 			default:
 				return false
 			}
+		} else {
+			if rb.eroute.Opcode == engine.Reference {
+				rb.eroute.RoutingParameters = inner.eroute.RoutingParameters
+				rb.condition = inner.condition
+			}
 		}
+
 		rb.substitutions = append(rb.substitutions, inner.substitutions...)
 		inner.Redirect = rb
 		return true
@@ -411,11 +417,7 @@ func (rb *route) MergeUnion(right *route, isDistinct bool) bool {
 }
 
 func (rb *route) isSingleShard() bool {
-	switch rb.eroute.Opcode {
-	case engine.Unsharded, engine.DBA, engine.Next, engine.EqualUnique, engine.Reference:
-		return true
-	}
-	return false
+	return rb.eroute.Opcode.IsSingleShard()
 }
 
 // JoinCanMerge, SubqueryCanMerge and unionCanMerge have subtly different behaviors.
@@ -466,9 +468,10 @@ func (rb *route) SubqueryCanMerge(pb *primitiveBuilder, inner *route) bool {
 		return false
 	}
 
-	// if either side is a reference table, we can just merge it and use the opcode of the other side
+	// if either side is a reference table, and we know the other side will only run once,
+	// we can just merge them and use the opcode of the other side
 	if rb.eroute.Opcode == engine.Reference || inner.eroute.Opcode == engine.Reference {
-		return true
+		return rb.isSingleShard() && inner.isSingleShard()
 	}
 
 	switch rb.eroute.Opcode {
@@ -691,6 +694,10 @@ func (rb *route) computeISPlan(pb *primitiveBuilder, comparison *sqlparser.IsExp
 	vindex = pb.st.Vindex(comparison.Left, rb)
 	// fallback to scatter gather if there is no vindex
 	if vindex == nil {
+		return engine.Scatter, nil, nil
+	}
+	if _, isLookup := vindex.(vindexes.Lookup); isLookup {
+		// the lookup table is keyed by the lookup value, so it does not support nulls
 		return engine.Scatter, nil, nil
 	}
 	if vindex.IsUnique() {

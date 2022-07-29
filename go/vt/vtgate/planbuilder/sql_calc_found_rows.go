@@ -58,9 +58,15 @@ func (s *sqlCalcFoundRows) ContainsTables() semantics.TableSet {
 
 //Primitive implements the logicalPlan interface
 func (s *sqlCalcFoundRows) Primitive() engine.Primitive {
+	countPrim := s.CountQuery.Primitive()
+	rb, ok := countPrim.(*engine.Route)
+	if ok {
+		// if our count query is an aggregation, we want the no-match result to still return a zero
+		rb.NoRoutesSpecialHandling = true
+	}
 	return engine.SQLCalcFoundRows{
 		LimitPrimitive: s.LimitQuery.Primitive(),
-		CountPrimitive: s.CountQuery.Primitive(),
+		CountPrimitive: countPrim,
 	}
 }
 

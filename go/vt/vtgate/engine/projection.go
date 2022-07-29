@@ -17,6 +17,8 @@ limitations under the License.
 package engine
 
 import (
+	"sync"
+
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -80,34 +82,47 @@ func (p *Projection) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bi
 }
 
 // TryStreamExecute implements the Primitive interface
-func (p *Projection) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantields bool, callback func(*sqltypes.Result) error) error {
-	result, err := vcursor.ExecutePrimitive(p.Input, bindVars, wantields)
-	if err != nil {
-		return err
-	}
-
+func (p *Projection) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	env := evalengine.EnvWithBindVars(bindVars, vcursor.ConnCollation())
-	if wantields {
-		err = p.addFields(env, result)
+	var once sync.Once
+	var fields []*querypb.Field
+	return vcursor.StreamExecutePrimitive(p.Input, bindVars, wantfields, func(qr *sqltypes.Result) error {
+		var err error
+		if wantfields {
+			once.Do(func() {
+				env.Fields = qr.Fields
+				fieldRes := &sqltypes.Result{}
+				err = p.addFields(env, fieldRes)
+				if err != nil {
+					return
+				}
+				fields = fieldRes.Fields
+				err = callback(fieldRes)
+				if err != nil {
+					return
+				}
+			})
+			qr.Fields = fields
+		}
 		if err != nil {
 			return err
 		}
-	}
-	var rows [][]sqltypes.Value
-	env.Fields = result.Fields
-	for _, row := range result.Rows {
-		env.Row = row
-		for _, exp := range p.Exprs {
-			result, err := env.Evaluate(exp)
-			if err != nil {
-				return err
+		resultRows := make([]sqltypes.Row, 0, len(qr.Rows))
+		for _, r := range qr.Rows {
+			resultRow := make(sqltypes.Row, 0, len(p.Exprs))
+			env.Row = r
+			for _, exp := range p.Exprs {
+				c, err := env.Evaluate(exp)
+				if err != nil {
+					return err
+				}
+				resultRow = append(resultRow, c.Value())
 			}
-			row = append(row, result.Value())
+			resultRows = append(resultRows, resultRow)
 		}
-		rows = append(rows, row)
-	}
-	result.Rows = rows
-	return callback(result)
+		qr.Rows = resultRows
+		return callback(qr)
+	})
 }
 
 // GetFields implements the Primitive interface

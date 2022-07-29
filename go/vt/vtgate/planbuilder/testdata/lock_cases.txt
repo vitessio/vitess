@@ -11,7 +11,9 @@
     },
     "TargetDestination": "KeyspaceID(00)",
     "FieldQuery": "select get_lock('xyz', 10) from dual where 1 != 1",
-    "Query": "select get_lock('xyz', 10) from dual"
+    "lock_func": [
+      "get_lock('xyz', 10)"
+    ]
   }
 }
 Gen4 plan same as above
@@ -29,7 +31,9 @@ Gen4 plan same as above
     },
     "TargetDestination": "KeyspaceID(00)",
     "FieldQuery": "select is_free_lock('xyz') from dual where 1 != 1",
-    "Query": "select is_free_lock('xyz') from dual"
+    "lock_func": [
+      "is_free_lock('xyz')"
+    ]
   }
 }
 Gen4 plan same as above
@@ -47,7 +51,9 @@ Gen4 plan same as above
     },
     "TargetDestination": "KeyspaceID(00)",
     "FieldQuery": "select get_lock(:v1, :v2) from dual where 1 != 1",
-    "Query": "select get_lock(:v1, :v2) from dual"
+    "lock_func": [
+      "get_lock(:v1, :v2)"
+    ]
   }
 }
 Gen4 plan same as above
@@ -81,6 +87,27 @@ Gen4 plan same as above
   "Original": "unlock tables",
   "Instructions": {
     "OperatorType": "Rows"
+  }
+}
+Gen4 plan same as above
+
+# multiple lock functions
+"select get_lock('xyz', 10), is_free_lock('abc') from dual"
+{
+  "QueryType": "SELECT",
+  "Original": "select get_lock('xyz', 10), is_free_lock('abc') from dual",
+  "Instructions": {
+    "OperatorType": "Lock",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "KeyspaceID(00)",
+    "FieldQuery": "select get_lock('xyz', 10), is_free_lock('abc') from dual where 1 != 1",
+    "lock_func": [
+      "get_lock('xyz', 10)",
+      "is_free_lock('abc')"
+    ]
   }
 }
 Gen4 plan same as above

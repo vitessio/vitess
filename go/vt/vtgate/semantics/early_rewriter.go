@@ -25,6 +25,7 @@ import (
 )
 
 type earlyRewriter struct {
+	binder  *binder
 	scoper  *scoper
 	clause  string
 	warning string
@@ -37,7 +38,7 @@ func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
 		if !isSel {
 			return nil
 		}
-		tables := r.scoper.currentScope().tables
+		currentScope := r.scoper.currentScope()
 		var selExprs sqlparser.SelectExprs
 		changed := false
 		for _, selectExpr := range node {
@@ -46,7 +47,7 @@ func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
 				selExprs = append(selExprs, selectExpr)
 				continue
 			}
-			starExpanded, colNames, err := expandTableColumns(tables, starExpr)
+			starExpanded, colNames, err := expandTableColumns(starExpr, currentScope.tables, r.binder.usingJoinInfo, r.scoper.org)
 			if err != nil {
 				return err
 			}
@@ -149,7 +150,75 @@ func realCloneOfColNames(expr sqlparser.Expr, union bool) sqlparser.Expr {
 	}, nil).(sqlparser.Expr)
 }
 
-func expandTableColumns(tables []TableInfo, starExpr *sqlparser.StarExpr) (bool, sqlparser.SelectExprs, error) {
+func rewriteJoinUsing(
+	current *scope,
+	using sqlparser.Columns,
+	org originable,
+) error {
+	joinUsing := current.prepareUsingMap()
+	predicates := make([]sqlparser.Expr, 0, len(using))
+	for _, column := range using {
+		var foundTables []sqlparser.TableName
+		for _, tbl := range current.tables {
+			if !tbl.authoritative() {
+				return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "can't handle JOIN USING without authoritative tables")
+			}
+
+			currTable := tbl.getTableSet(org)
+			usingCols := joinUsing[currTable]
+			if usingCols == nil {
+				usingCols = map[string]TableSet{}
+			}
+			for _, col := range tbl.getColumns() {
+				_, found := usingCols[col.Name]
+				if found {
+					tblName, err := tbl.Name()
+					if err != nil {
+						return err
+					}
+
+					foundTables = append(foundTables, tblName)
+					break // no need to look at other columns in this table
+				}
+			}
+		}
+		for i, lft := range foundTables {
+			for j := i + 1; j < len(foundTables); j++ {
+				rgt := foundTables[j]
+				predicates = append(predicates, &sqlparser.ComparisonExpr{
+					Operator: sqlparser.EqualOp,
+					Left:     sqlparser.NewColNameWithQualifier(column.String(), lft),
+					Right:    sqlparser.NewColNameWithQualifier(column.String(), rgt),
+				})
+			}
+		}
+	}
+
+	// now, we go up the scope until we find a SELECT with a where clause we can add this predicate to
+	for current != nil {
+		sel, found := current.stmt.(*sqlparser.Select)
+		if found {
+			if sel.Where == nil {
+				sel.Where = &sqlparser.Where{
+					Type: sqlparser.WhereClause,
+					Expr: sqlparser.AndExpressions(predicates...),
+				}
+			} else {
+				sel.Where.Expr = sqlparser.AndExpressions(append(predicates, sel.Where.Expr)...)
+			}
+			return nil
+		}
+		current = current.parent
+	}
+	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "did not find WHERE clause")
+}
+
+func expandTableColumns(
+	starExpr *sqlparser.StarExpr,
+	tables []TableInfo,
+	joinUsing map[TableSet]map[string]TableSet,
+	org originable,
+) (bool, sqlparser.SelectExprs, error) {
 	unknownTbl := true
 	var colNames sqlparser.SelectExprs
 	starExpanded := true
@@ -169,7 +238,13 @@ func expandTableColumns(tables []TableInfo, starExpr *sqlparser.StarExpr) (bool,
 
 		withAlias := len(tables) > 1
 		withQualifier := withAlias || !tbl.getExpr().As.IsEmpty()
-		for _, col := range tbl.getColumns() {
+		currTable := tbl.getTableSet(org)
+		usingCols := joinUsing[currTable]
+		if usingCols == nil {
+			usingCols = map[string]TableSet{}
+		}
+
+		addColName := func(col ColumnInfo) {
 			var colName *sqlparser.ColName
 			var alias sqlparser.ColIdent
 			if withQualifier {
@@ -181,6 +256,40 @@ func expandTableColumns(tables []TableInfo, starExpr *sqlparser.StarExpr) (bool,
 				alias = sqlparser.NewColIdent(col.Name)
 			}
 			colNames = append(colNames, &sqlparser.AliasedExpr{Expr: colName, As: alias})
+		}
+
+		/*
+			Redundant column elimination and column ordering occurs according to standard SQL, producing this display order:
+			  *	First, coalesced common columns of the two joined tables, in the order in which they occur in the first table
+			  *	Second, columns unique to the first table, in order in which they occur in that table
+			  *	Third, columns unique to the second table, in order in which they occur in that table
+
+			From: https://dev.mysql.com/doc/refman/8.0/en/join.html
+		*/
+	outer:
+		// in this first loop we just find columns used in any JOIN USING used on this table
+		for _, col := range tbl.getColumns() {
+			ts, found := usingCols[col.Name]
+			if found {
+				for i, ts := range ts.Constituents() {
+					if ts.Equals(currTable) {
+						if i == 0 {
+							addColName(col)
+						} else {
+							continue outer
+						}
+					}
+				}
+			}
+		}
+
+		// and this time around we are printing any columns not involved in any JOIN USING
+		for _, col := range tbl.getColumns() {
+			if ts, found := usingCols[col.Name]; found && currTable.IsSolvedBy(ts) {
+				continue
+			}
+
+			addColName(col)
 		}
 	}
 

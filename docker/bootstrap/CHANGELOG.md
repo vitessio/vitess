@@ -33,5 +33,12 @@ List of changes between bootstrap image versions.
 ### Changes
 - Update versions of zookeeper and consul
 - Get `make tools` working on M1 mac
-    
+
+## [9] - 2022-06-02
+### Changes
+- Update build to golang 1.18.3
+
+## [10] - 2022-07-13
+### Changes
+- Update build to golang 1.18.4
 

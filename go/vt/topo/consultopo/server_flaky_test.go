@@ -17,6 +17,7 @@ limitations under the License.
 package consultopo
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -26,8 +27,6 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/vt/log"
-
-	"context"
 
 	"github.com/hashicorp/consul/api"
 
@@ -45,11 +44,7 @@ func startConsul(t *testing.T, authToken string) (*exec.Cmd, string, string) {
 	// Create a temporary config file, as ports cannot all be set
 	// via command line. The file name has to end with '.json' so
 	// we're not using TempFile.
-	configDir, err := os.MkdirTemp("", "consul")
-	if err != nil {
-		t.Fatalf("cannot create temp dir: %v", err)
-	}
-	defer os.RemoveAll(configDir)
+	configDir := t.TempDir()
 
 	configFilename := path.Join(configDir, "consul.json")
 	configFile, err := os.OpenFile(configFilename, os.O_RDWR|os.O_CREATE, 0600)

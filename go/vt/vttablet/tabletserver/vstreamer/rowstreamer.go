@@ -196,6 +196,13 @@ func (rs *rowStreamer) buildPKColumns(st *binlogdatapb.MinimalTable) ([]int, err
 	}
 	var pkColumns = make([]int, 0)
 	if len(st.PKColumns) == 0 {
+		// Use a PK equivalent if one exists
+		pkColumns, err := rs.vse.mapPKEquivalentCols(rs.ctx, st)
+		if err == nil && len(pkColumns) != 0 {
+			return pkColumns, nil
+		}
+
+		// Fall back to using every column in the table if there's no PK or PKE
 		pkColumns = make([]int, len(st.Fields))
 		for i := range st.Fields {
 			pkColumns[i] = i
@@ -306,7 +313,6 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 	lastpk := make([]sqltypes.Value, len(rs.pkColumns))
 	byteCount := 0
 	for {
-		//log.Infof("StreamResponse for loop iteration starts")
 		if rs.ctx.Err() != nil {
 			log.Infof("Stream ended because of ctx.Done")
 			return fmt.Errorf("stream ended: %v", rs.ctx.Err())
@@ -351,11 +357,9 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 
 			rs.vse.rowStreamerNumRows.Add(int64(len(response.Rows)))
 			rs.vse.rowStreamerNumPackets.Add(int64(1))
-
 			startSend := time.Now()
 			err = send(&response)
 			if err != nil {
-				log.Infof("Rowstreamer send returned error %v", err)
 				return err
 			}
 			rs.pktsize.Record(byteCount, time.Since(startSend))

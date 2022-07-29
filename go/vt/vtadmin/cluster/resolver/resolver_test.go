@@ -17,7 +17,10 @@ limitations under the License.
 package resolver
 
 import (
+	"context"
+	"fmt"
 	"net/url"
+	"sort"
 	"testing"
 	"time"
 
@@ -32,24 +35,88 @@ import (
 
 type mockClientConn struct {
 	grpcresolver.ClientConn
-	Addrs             []grpcresolver.Address
-	UpdateStateCalled bool
-	ReportedError     error
+
+	updates chan grpcresolver.State
+	errors  chan error
+
+	ctx    context.Context
+	cancel context.CancelFunc
+}
+
+func newMockClientConn(minExpectedCalls int) *mockClientConn {
+	ctx, cancel := context.WithCancel(context.Background())
+	return &mockClientConn{
+		updates: make(chan grpcresolver.State, minExpectedCalls),
+		errors:  make(chan error, minExpectedCalls),
+		ctx:     ctx,
+		cancel:  cancel,
+	}
+}
+
+func (cc *mockClientConn) close() {
+	cc.cancel()
+}
+
+func (cc *mockClientConn) assertUpdateWithin(t testing.TB, timeout time.Duration, expected grpcresolver.State, msgAndArgs ...any) bool {
+	t.Helper()
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	select {
+	case <-ctx.Done():
+		return assert.Fail(t, "failed to receive update", "did not receive update %v within %v: %s", expected, timeout, ctx.Err())
+	case actual := <-cc.updates:
+		sort.Slice(expected.Addresses, func(i, j int) bool {
+			return expected.Addresses[i].Addr < expected.Addresses[j].Addr
+		})
+		sort.Slice(actual.Addresses, func(i, j int) bool {
+			return actual.Addresses[i].Addr < actual.Addresses[j].Addr
+		})
+
+		return assert.Equal(t, expected, actual, msgAndArgs...)
+	}
+}
+
+func (cc *mockClientConn) assertErrorReportedWithin(t testing.TB, timeout time.Duration, msgAndArgs ...any) bool {
+	t.Helper()
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	select {
+	case <-ctx.Done():
+		return assert.Fail(t, "failed to receive reported error", "did not receive reported error within %v: %s", timeout, ctx.Err())
+	case actual := <-cc.errors:
+		return assert.Error(t, actual, msgAndArgs...)
+	}
 }
 
 func (cc *mockClientConn) UpdateState(state grpcresolver.State) error {
-	cc.UpdateStateCalled = true
-	cc.Addrs = state.Addresses
-	return nil
+	select {
+	case <-cc.ctx.Done():
+		return fmt.Errorf("failed to update state; clientconn closed: %w", cc.ctx.Err())
+	case cc.updates <- state:
+		return nil
+	default:
+		return fmt.Errorf("%w: failed to update; buffer full", assert.AnError)
+	}
 }
 
-func (cc *mockClientConn) ReportError(err error) { cc.ReportedError = err }
+func (cc *mockClientConn) ReportError(err error) {
+	select {
+	case <-cc.ctx.Done():
+	case cc.errors <- err:
+	default:
+	}
+}
 
 var testopts = Options{
-	DiscoveryTimeout: time.Millisecond * 50,
+	DiscoveryTimeout:     time.Millisecond * 50,
+	MinDiscoveryInterval: 0,
 }
 
-func mustBuild(t *testing.T, b *builder, target grpcresolver.Target, cc grpcresolver.ClientConn, opts grpcresolver.BuildOptions) *resolver {
+func mustBuild(t testing.TB, b *builder, target grpcresolver.Target, cc grpcresolver.ClientConn, opts grpcresolver.BuildOptions) *resolver {
 	t.Helper()
 
 	r, err := b.build(target, cc, opts)
@@ -68,18 +135,21 @@ func TestResolveNow(t *testing.T) {
 	testopts := testopts
 	testopts.Discovery = disco
 
-	cc := mockClientConn{}
+	cc := newMockClientConn(1)
 	r := mustBuild(t, &builder{opts: testopts}, grpcresolver.Target{
 		URL: url.URL{Host: "vtctld"},
-	}, &cc, grpcresolver.BuildOptions{})
+	}, cc, grpcresolver.BuildOptions{})
 
 	r.ResolveNow(grpcresolver.ResolveNowOptions{})
 
-	assert.ElementsMatch(t, cc.Addrs, []grpcresolver.Address{
-		{
+	expectedUpdate := grpcresolver.State{
+		Addresses: []grpcresolver.Address{{
 			Addr: "one",
-		},
-	})
+		}},
+	}
+	cc.assertUpdateWithin(t, time.Millisecond*100, expectedUpdate)
+	cc.close()
+	r.Close()
 
 	disco.Clear()
 	disco.AddTaggedVtctlds(nil, &vtadminpb.Vtctld{
@@ -88,16 +158,23 @@ func TestResolveNow(t *testing.T) {
 		Hostname: "three",
 	})
 
+	cc = newMockClientConn(1)
+	r = mustBuild(t, &builder{opts: testopts}, grpcresolver.Target{
+		URL: url.URL{Host: "vtctld"},
+	}, cc, grpcresolver.BuildOptions{})
 	r.ResolveNow(grpcresolver.ResolveNowOptions{})
 
-	assert.ElementsMatch(t, cc.Addrs, []grpcresolver.Address{
+	expectedUpdate.Addresses = []grpcresolver.Address{
 		{
 			Addr: "two",
 		},
 		{
 			Addr: "three",
 		},
-	})
+	}
+	cc.assertUpdateWithin(t, time.Millisecond*100, expectedUpdate)
+	cc.close()
+	r.Close()
 }
 
 func TestResolveWithTags(t *testing.T) {
@@ -113,19 +190,23 @@ func TestResolveWithTags(t *testing.T) {
 	testopts := testopts
 	testopts.Discovery = disco
 
-	cc := mockClientConn{}
-	r := mustBuild(t, &builder{opts: testopts}, grpcresolver.Target{
+	cc := newMockClientConn(1)
+	opts := testopts
+	opts.DiscoveryTags = []string{"tag2"}
+	r := mustBuild(t, &builder{opts: opts}, grpcresolver.Target{
 		URL: url.URL{Host: "vtgate"},
-	}, &cc, grpcresolver.BuildOptions{})
-	r.opts.DiscoveryTags = []string{"tag2"}
+	}, cc, grpcresolver.BuildOptions{})
+
+	expectedUpdate := grpcresolver.State{
+		Addresses: []grpcresolver.Address{{
+			Addr: "two",
+		}},
+	}
 
 	r.ResolveNow(grpcresolver.ResolveNowOptions{})
-
-	assert.ElementsMatch(t, cc.Addrs, []grpcresolver.Address{
-		{
-			Addr: "two",
-		},
-	})
+	cc.assertUpdateWithin(t, time.Millisecond*100, expectedUpdate)
+	cc.close()
+	r.Close()
 }
 
 func TestResolveEmptyList(t *testing.T) {
@@ -138,28 +219,41 @@ func TestResolveEmptyList(t *testing.T) {
 	testopts := testopts
 	testopts.Discovery = disco
 
-	cc := mockClientConn{}
+	cc := newMockClientConn(1)
 	r := mustBuild(t,
 		&builder{opts: testopts}, grpcresolver.Target{
 			URL: url.URL{Host: "vtgate"}, // we only have vtctlds
-		}, &cc, grpcresolver.BuildOptions{},
+		}, cc, grpcresolver.BuildOptions{},
 	)
 
-	r.ResolveNow(grpcresolver.ResolveNowOptions{})
+	expectedUpdate := grpcresolver.State{
+		Addresses: []grpcresolver.Address{},
+	}
 
-	assert.Empty(t, cc.Addrs, "ClientConn should have no addresses")
-	assert.True(t, cc.UpdateStateCalled, "resolver should still call cc.UpdateState with empty host list")
+	r.ResolveNow(grpcresolver.ResolveNowOptions{})
+	cc.assertUpdateWithin(t, time.Millisecond*50, expectedUpdate, "resolver should still call cc.UpdateState with empty host list")
+	cc.close()
+	r.Close()
 
 	disco.AddTaggedGates(nil, &vtadminpb.VTGate{
 		Hostname: "gate:one",
 	})
 
+	cc = newMockClientConn(1)
+	r = mustBuild(t,
+		&builder{opts: testopts}, grpcresolver.Target{
+			URL: url.URL{Host: "vtgate"},
+		}, cc, grpcresolver.BuildOptions{},
+	)
+
+	expectedUpdate.Addresses = []grpcresolver.Address{{
+		Addr: "gate:one",
+	}}
+
 	r.ResolveNow(grpcresolver.ResolveNowOptions{})
-	assert.ElementsMatch(t, cc.Addrs, []grpcresolver.Address{
-		{
-			Addr: "gate:one",
-		},
-	})
+	cc.assertUpdateWithin(t, time.Millisecond*50, expectedUpdate)
+	cc.close()
+	r.Close()
 }
 
 func TestBuild(t *testing.T) {
@@ -175,22 +269,22 @@ func TestBuild(t *testing.T) {
 	b := &builder{opts: testopts}
 
 	tests := []struct {
-		name      string
-		target    grpcresolver.Target
-		shouldErr bool
-		assertion func(t *testing.T, cc *mockClientConn)
+		name               string
+		target             grpcresolver.Target
+		shouldErr          bool
+		expectUpdateWithin time.Duration
+		expectedUpdate     grpcresolver.State
+		msgAndArgs         []any
 	}{
 		{
 			name: "vtctld",
 			target: grpcresolver.Target{
 				URL: url.URL{Host: "vtctld"},
 			},
-			assertion: func(t *testing.T, cc *mockClientConn) {
-				assert.ElementsMatch(t, cc.Addrs, []grpcresolver.Address{
-					{
-						Addr: "vtctld:one",
-					},
-				})
+			expectedUpdate: grpcresolver.State{
+				Addresses: []grpcresolver.Address{{
+					Addr: "vtctld:one",
+				}},
 			},
 		},
 		{
@@ -198,10 +292,8 @@ func TestBuild(t *testing.T) {
 			target: grpcresolver.Target{
 				URL: url.URL{Host: "vtgate"},
 			},
-			assertion: func(t *testing.T, cc *mockClientConn) {
-				assert.Empty(t, cc.Addrs, "resolver should not add addresses to clientconn (no vtgates in discovery)")
-				assert.True(t, cc.UpdateStateCalled, "resolver should still call UpdateState on clientconn (no vtgates in discovery)")
-			},
+			expectedUpdate: grpcresolver.State{Addresses: []grpcresolver.Address{}},
+			msgAndArgs:     []any{"resolver should still call UpdateState on clientconn (no vtgates in discovery)"},
 		},
 		{
 			name: "bad authority",
@@ -217,8 +309,8 @@ func TestBuild(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			cc := &mockClientConn{}
-			_, err := b.Build(tt.target, cc, grpcresolver.BuildOptions{})
+			cc := newMockClientConn(1)
+			r, err := b.Build(tt.target, cc, grpcresolver.BuildOptions{})
 			if tt.shouldErr {
 				assert.Error(t, err)
 				return
@@ -226,10 +318,15 @@ func TestBuild(t *testing.T) {
 
 			require.NoError(t, err)
 
-			func() {
-				t.Helper()
-				tt.assertion(t, cc)
-			}()
+			timeout := tt.expectUpdateWithin
+			if timeout == 0 {
+				timeout = time.Millisecond * 50
+			}
+
+			cc.assertUpdateWithin(t, timeout, tt.expectedUpdate, tt.msgAndArgs...)
+
+			cc.close()
+			r.Close()
 		})
 	}
 }

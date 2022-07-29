@@ -33,10 +33,11 @@ import (
 var (
 	// CreateShard makes a CreateShard gRPC request to a vtctld.
 	CreateShard = &cobra.Command{
-		Use:   "CreateShard [--force|-f] [--include-parent|-p] <keyspace/shard>",
-		Short: "Creates the specified shard in the topology.",
-		Args:  cobra.ExactArgs(1),
-		RunE:  commandCreateShard,
+		Use:                   "CreateShard [--force|-f] [--include-parent|-p] <keyspace/shard>",
+		Short:                 "Creates the specified shard in the topology.",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(1),
+		RunE:                  commandCreateShard,
 	}
 	// DeleteShards makes a DeleteShards gRPC request to a vtctld.
 	DeleteShards = &cobra.Command{
@@ -47,22 +48,25 @@ var (
 In recursive mode, it also deletes all tablets belonging to the shard.
 Otherwise, the shard must be empty (have no tablets) or returns an error for
 that shard.`,
-		Args: cobra.MinimumNArgs(1),
-		RunE: commandDeleteShards,
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.MinimumNArgs(1),
+		RunE:                  commandDeleteShards,
 	}
 	// GetShard makes a GetShard gRPC request to a vtctld.
 	GetShard = &cobra.Command{
-		Use:   "GetShard <keyspace/shard>",
-		Short: "Returns information about a shard in the topology.",
-		Args:  cobra.ExactArgs(1),
-		RunE:  commandGetShard,
+		Use:                   "GetShard <keyspace/shard>",
+		Short:                 "Returns information about a shard in the topology.",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(1),
+		RunE:                  commandGetShard,
 	}
 	// RemoveShardCell makes a RemoveShardCell gRPC request to a vtctld.
 	RemoveShardCell = &cobra.Command{
-		Use:   "RemoveShardCell [--force|-f] [--recursive|-r] <keyspace/shard> <cell>",
-		Short: "Remove the specified cell from the specified shard's Cells list.",
-		Args:  cobra.ExactArgs(2),
-		RunE:  commandRemoveShardCell,
+		Use:                   "RemoveShardCell [--force|-f] [--recursive|-r] <keyspace/shard> <cell>",
+		Short:                 "Remove the specified cell from the specified shard's Cells list.",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(2),
+		RunE:                  commandRemoveShardCell,
 	}
 	// SetShardIsPrimaryServing makes a SetShardIsPrimaryServing gRPC call to a
 	// vtctld.
@@ -121,8 +125,9 @@ useful after a MoveTables has finished to remove serving restrictions.`,
 		Long: `Shows the replication status of each tablet in the shard graph.
 Output is sorted by tablet type, then replication position.
 Use ctrl-C to interrupt the command and see partial results if needed.`,
-		Args: cobra.ExactArgs(1),
-		RunE: commandShardReplicationPositions,
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(1),
+		RunE:                  commandShardReplicationPositions,
 	}
 	// ShardReplicationRemove makse a ShardReplicationRemove gRPC request to a vtctld.
 	ShardReplicationRemove = &cobra.Command{
@@ -543,8 +548,8 @@ func commandSourceShardDelete(cmd *cobra.Command, args []string) error {
 }
 
 func init() {
-	CreateShard.Flags().BoolVarP(&createShardOptions.Force, "force", "f", false, "")
-	CreateShard.Flags().BoolVarP(&createShardOptions.IncludeParent, "include-parent", "p", false, "")
+	CreateShard.Flags().BoolVarP(&createShardOptions.Force, "force", "f", false, "Overwrite an existing shard record, if one exists.")
+	CreateShard.Flags().BoolVarP(&createShardOptions.IncludeParent, "include-parent", "p", false, "Creates the parent keyspace record if does not already exist.")
 	Root.AddCommand(CreateShard)
 
 	DeleteShards.Flags().BoolVarP(&deleteShardsOptions.Recursive, "recursive", "r", false, "Also delete all tablets belonging to the shard. This is required to delete a non-empty shard.")
@@ -571,7 +576,7 @@ func init() {
 	Root.AddCommand(ShardReplicationPositions)
 	Root.AddCommand(ShardReplicationRemove)
 
-	SourceShardAdd.Flags().StringVar(&sourceShardAddOptions.KeyRangeStr, "key-range", "", "Key range to use for the SourceShard")
+	SourceShardAdd.Flags().StringVar(&sourceShardAddOptions.KeyRangeStr, "key-range", "", "Key range to use for the SourceShard.")
 	SourceShardAdd.Flags().StringSliceVar(&sourceShardAddOptions.Tables, "tables", nil, "Comma-separated lists of tables to replicate (for MoveTables). Each table name is either an exact match, or a regular expression of the form \"/regexp/\".")
 	Root.AddCommand(SourceShardAdd)
 

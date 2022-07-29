@@ -30,6 +30,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/acl"
@@ -89,6 +91,7 @@ type Executor struct {
 	resolver    *Resolver
 	scatterConn *ScatterConn
 	txConn      *TxConn
+	pv          plancontext.PlannerVersion
 
 	mu           sync.Mutex
 	vschema      *vindexes.VSchema
@@ -113,7 +116,18 @@ const pathScatterStats = "/debug/scatter_stats"
 const pathVSchema = "/debug/vschema"
 
 // NewExecutor creates a new Executor.
-func NewExecutor(ctx context.Context, serv srvtopo.Server, cell string, resolver *Resolver, normalize, warnOnShardedOnly bool, streamSize int, cacheCfg *cache.Config, schemaTracker SchemaInfo, noScatter bool) *Executor {
+func NewExecutor(
+	ctx context.Context,
+	serv srvtopo.Server,
+	cell string,
+	resolver *Resolver,
+	normalize, warnOnShardedOnly bool,
+	streamSize int,
+	cacheCfg *cache.Config,
+	schemaTracker SchemaInfo,
+	noScatter bool,
+	pv plancontext.PlannerVersion,
+) *Executor {
 	e := &Executor{
 		serv:            serv,
 		cell:            cell,
@@ -126,6 +140,7 @@ func NewExecutor(ctx context.Context, serv srvtopo.Server, cell string, resolver
 		streamSize:      streamSize,
 		schemaTracker:   schemaTracker,
 		allowScatter:    !noScatter,
+		pv:              pv,
 	}
 
 	vschemaacl.Init()
@@ -941,11 +956,6 @@ type iQueryOption interface {
 // getPlan computes the plan for the given query. If one is in
 // the cache, it reuses it.
 func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.MarginComments, bindVars map[string]*querypb.BindVariable, qo iQueryOption, logStats *LogStats) (*engine.Plan, error) {
-	if logStats != nil {
-		logStats.SQL = comments.Leading + sql + comments.Trailing
-		logStats.BindVariables = bindVars
-	}
-
 	if e.VSchema() == nil {
 		return nil, errors.New("vschema not initialized")
 	}
@@ -991,7 +1001,7 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 
 	if logStats != nil {
 		logStats.SQL = comments.Leading + query + comments.Trailing
-		logStats.BindVariables = bindVars
+		logStats.BindVariables = sqltypes.CopyBindVariables(bindVars)
 	}
 
 	planHash := sha256.New()
@@ -1012,11 +1022,12 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 	plan.Warnings = vcursor.warnings
 	vcursor.warnings = nil
 
-	if qo.cachePlan() && sqlparser.CachePlan(statement) {
+	err = e.checkThatPlanIsValid(stmt, plan)
+	// Only cache the plan if it is valid (i.e. does not scatter)
+	if err == nil && qo.cachePlan() && sqlparser.CachePlan(statement) {
 		e.plans.Set(planKey, plan)
 	}
-
-	return e.checkThatPlanIsValid(stmt, plan)
+	return plan, err
 }
 
 func (e *Executor) canNormalizeStatement(stmt sqlparser.Statement, qo iQueryOption, setVarComment string) bool {
@@ -1225,7 +1236,7 @@ func (e *Executor) prepare(ctx context.Context, safeSession *SafeSession, sql st
 func (e *Executor) handlePrepare(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *LogStats) ([]*querypb.Field, error) {
 	// V3 mode.
 	query, comments := sqlparser.SplitMarginComments(sql)
-	vcursor, _ := newVCursorImpl(ctx, safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver, e.serv, e.warnShardedOnly)
+	vcursor, _ := newVCursorImpl(ctx, safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver, e.serv, e.warnShardedOnly, e.pv)
 	plan, err := e.getPlan(
 		vcursor,
 		query,
@@ -1274,8 +1285,8 @@ func (e *Executor) StreamExecuteMulti(ctx context.Context, query string, rss []*
 }
 
 // ExecuteLock implements the IExecutor interface
-func (e *Executor) ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, session *SafeSession) (*sqltypes.Result, error) {
-	return e.scatterConn.ExecuteLock(ctx, rs, query, session)
+func (e *Executor) ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, session *SafeSession, lockFuncType sqlparser.LockingFuncType) (*sqltypes.Result, error) {
+	return e.scatterConn.ExecuteLock(ctx, rs, query, session, lockFuncType)
 }
 
 // ExecuteMessageStream implements the IExecutor interface
@@ -1324,9 +1335,9 @@ func (e *Executor) startVStream(ctx context.Context, rss []*srvtopo.ResolvedShar
 	return nil
 }
 
-func (e *Executor) checkThatPlanIsValid(stmt sqlparser.Statement, plan *engine.Plan) (*engine.Plan, error) {
+func (e *Executor) checkThatPlanIsValid(stmt sqlparser.Statement, plan *engine.Plan) error {
 	if e.allowScatter || sqlparser.AllowScatterDirective(stmt) {
-		return plan, nil
+		return nil
 	}
 	// we go over all the primitives in the plan, searching for a route that is of SelectScatter opcode
 	badPrimitive := engine.Find(func(node engine.Primitive) bool {
@@ -1338,10 +1349,10 @@ func (e *Executor) checkThatPlanIsValid(stmt sqlparser.Statement, plan *engine.P
 	}, plan.Instructions)
 
 	if badPrimitive == nil {
-		return plan, nil
+		return nil
 	}
 
-	return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "plan includes scatter, which is disallowed using the `no_scatter` command line argument")
+	return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "plan includes scatter, which is disallowed using the `no_scatter` command line argument")
 }
 
 func getTabletThrottlerStatus(tabletHostPort string) (string, error) {
@@ -1378,4 +1389,9 @@ func getTabletThrottlerStatus(tabletHostPort string) (string, error) {
 
 	status := fmt.Sprintf("{\"state\":\"%s\",\"load\":%.2f,\"message\":\"%s\"}", httpStatusStr, load, elements.Message)
 	return status, nil
+}
+
+// ReleaseLock implements the IExecutor interface
+func (e *Executor) ReleaseLock(ctx context.Context, session *SafeSession) error {
+	return e.txConn.ReleaseLock(ctx, session)
 }

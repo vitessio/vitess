@@ -107,7 +107,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count(0)",
+    "Aggregates": "sum_count(0) AS count",
     "GroupBy": "1, 4, 3",
     "ResultColumns": 4,
     "Inputs": [
@@ -133,7 +133,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "sum(0) AS count(*)",
+    "Aggregates": "sum_count_star(0) AS count(*)",
     "GroupBy": "(1|4), 2 COLLATE latin1_swedish_ci, (3|5)",
     "ResultColumns": 4,
     "Inputs": [
@@ -161,7 +161,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count(0)",
+    "Aggregates": "sum_count(0) AS count",
     "GroupBy": "1",
     "Inputs": [
       {
@@ -185,7 +185,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "sum(0) AS count(*)",
+    "Aggregates": "sum_count_star(0) AS count(*)",
     "GroupBy": "1",
     "Inputs": [
       {
@@ -218,7 +218,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "count(0)",
+        "Aggregates": "sum_count(0) AS count",
         "GroupBy": "1, 4, 3",
         "ResultColumns": 5,
         "Inputs": [
@@ -252,7 +252,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "sum(0) AS k",
+        "Aggregates": "sum_count_star(0) AS k",
         "GroupBy": "(1|4), 2 COLLATE latin1_swedish_ci, (3|5)",
         "Inputs": [
           {
@@ -281,7 +281,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Scalar",
-    "Aggregates": "count(0)",
+    "Aggregates": "sum_count(0) AS count",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -303,7 +303,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Scalar",
-    "Aggregates": "sum(0) AS count(*)",
+    "Aggregates": "sum_count_star(0) AS count(*)",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -596,7 +596,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count(1)",
+    "Aggregates": "sum_count(1) AS count",
     "GroupBy": "0",
     "Inputs": [
       {
@@ -620,7 +620,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "sum(1) AS count(*)",
+    "Aggregates": "sum_count_star(1) AS count(*)",
     "GroupBy": "0",
     "Inputs": [
       {
@@ -648,7 +648,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "sum(1) AS count(*)",
+    "Aggregates": "sum_count_star(1) AS count(*)",
     "GroupBy": "0, (2|3)",
     "ResultColumns": 2,
     "Inputs": [
@@ -676,7 +676,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count(1)",
+    "Aggregates": "sum_count(1) AS count",
     "GroupBy": "0",
     "Inputs": [
       {
@@ -701,7 +701,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "sum(1) AS count(*)",
+    "Aggregates": "sum_count_star(1) AS count(*)",
     "GroupBy": "(0|2)",
     "ResultColumns": 2,
     "Inputs": [
@@ -871,7 +871,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "count(0)",
+        "Aggregates": "sum_count(0) AS count",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -901,7 +901,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum(0) AS a",
+        "Aggregates": "sum_count_star(0) AS a",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -928,7 +928,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Scalar",
-    "Aggregates": "count(1)",
+    "Aggregates": "sum_count(1) AS count",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -944,7 +944,28 @@ Gen4 plan same as above
     ]
   }
 }
-Gen4 error: In aggregated query without GROUP BY, expression of SELECT list contains nonaggregated column 'id'; this is incompatible with sql_mode=only_full_group_by
+{
+  "QueryType": "SELECT",
+  "Original": "select id, count(*) from user",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Scalar",
+    "Aggregates": "random(0) AS id, sum_count_star(1) AS count(*)",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id, count(*) from `user` where 1 != 1",
+        "Query": "select id, count(*) from `user`",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
 
 # scatter aggregate using distinctdistinct
 "select distinct col from user"
@@ -1027,7 +1048,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count(1)",
+    "Aggregates": "sum_count(1) AS count",
     "GroupBy": "0",
     "Inputs": [
       {
@@ -1051,7 +1072,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "sum(1) AS count(distinct id)",
+    "Aggregates": "sum_count_distinct(1) AS count(distinct id)",
     "GroupBy": "0",
     "Inputs": [
       {
@@ -1078,7 +1099,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count_distinct(1) AS count(distinct col2)",
+    "Aggregates": "count_distinct_count(1) AS count(distinct col2)",
     "GroupBy": "0",
     "Inputs": [
       {
@@ -1131,7 +1152,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Scalar",
-    "Aggregates": "count_distinct(0) AS count(distinct col2)",
+    "Aggregates": "count_distinct_count(0) AS count(distinct col2)",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -1182,7 +1203,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count_distinct(1) AS c2",
+    "Aggregates": "count_distinct_count(1) AS c2",
     "GroupBy": "0",
     "Inputs": [
       {
@@ -1235,7 +1256,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "sum_distinct(1) AS sum(distinct col2)",
+    "Aggregates": "sum_distinct_sum(1) AS sum(distinct col2)",
     "GroupBy": "0",
     "Inputs": [
       {
@@ -1346,7 +1367,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "count_distinct(1) AS k",
+        "Aggregates": "count_distinct_count(1) AS k",
         "GroupBy": "0",
         "Inputs": [
           {
@@ -1413,7 +1434,7 @@ Gen4 error: Can't group on 'count(*)'
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count(2)",
+    "Aggregates": "sum_count(2) AS count",
     "GroupBy": "1, 0",
     "Inputs": [
       {
@@ -1438,7 +1459,7 @@ Gen4 error: Can't group on 'count(*)'
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "sum(2) AS count(*)",
+    "Aggregates": "sum_count_star(2) AS count(*)",
     "GroupBy": "(0|3), (1|4)",
     "ResultColumns": 3,
     "Inputs": [
@@ -1466,7 +1487,7 @@ Gen4 error: Can't group on 'count(*)'
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count(2)",
+    "Aggregates": "sum_count(2) AS count",
     "GroupBy": "1, 0",
     "Inputs": [
       {
@@ -1491,7 +1512,7 @@ Gen4 error: Can't group on 'count(*)'
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "sum(2) AS count(*)",
+    "Aggregates": "sum_count_star(2) AS count(*)",
     "GroupBy": "(0|3), (1|4)",
     "ResultColumns": 3,
     "Inputs": [
@@ -1519,7 +1540,7 @@ Gen4 error: Can't group on 'count(*)'
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count(2)",
+    "Aggregates": "sum_count(2) AS count",
     "GroupBy": "1, 0",
     "Inputs": [
       {
@@ -1544,7 +1565,7 @@ Gen4 error: Can't group on 'count(*)'
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "sum(2) AS count(*)",
+    "Aggregates": "sum_count_star(2) AS count(*)",
     "GroupBy": "(0|3), (1|4)",
     "ResultColumns": 3,
     "Inputs": [
@@ -1626,7 +1647,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Scalar",
-    "Aggregates": "count(0)",
+    "Aggregates": "sum_count(0) AS count",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -1648,7 +1669,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Scalar",
-    "Aggregates": "sum(0) AS count(*)",
+    "Aggregates": "sum_count_star(0) AS count(*)",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -1673,7 +1694,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count(4)",
+    "Aggregates": "sum_count(4) AS count",
     "GroupBy": "0, 1, 2",
     "Inputs": [
       {
@@ -1692,7 +1713,31 @@ Gen4 plan same as above
     ]
   }
 }
-Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column 'd' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
+{
+  "QueryType": "SELECT",
+  "Original": "select a, b, c, d, count(*) from user group by 1, 2, 3 order by 1, 2, 3",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "random(3) AS d, sum_count_star(4) AS count(*)",
+    "GroupBy": "(0|5), (1|6), (2|7)",
+    "ResultColumns": 5,
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select a, b, c, d, count(*), weight_string(a), weight_string(b), weight_string(c) from `user` where 1 != 1 group by a, weight_string(a), b, weight_string(b), c, weight_string(c)",
+        "OrderBy": "(0|5) ASC, (1|6) ASC, (2|7) ASC",
+        "Query": "select a, b, c, d, count(*), weight_string(a), weight_string(b), weight_string(c) from `user` group by a, weight_string(a), b, weight_string(b), c, weight_string(c) order by a asc, b asc, c asc",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
 
 # scatter aggregate with named order by columns
 "select a, b, c, d, count(*) from user group by 1, 2, 3 order by a, b, c"
@@ -1702,7 +1747,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count(4)",
+    "Aggregates": "sum_count(4) AS count",
     "GroupBy": "0, 1, 2",
     "Inputs": [
       {
@@ -1721,7 +1766,31 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
     ]
   }
 }
-Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column 'd' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
+{
+  "QueryType": "SELECT",
+  "Original": "select a, b, c, d, count(*) from user group by 1, 2, 3 order by a, b, c",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "random(3) AS d, sum_count_star(4) AS count(*)",
+    "GroupBy": "(0|5), (1|6), (2|7)",
+    "ResultColumns": 5,
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select a, b, c, d, count(*), weight_string(a), weight_string(b), weight_string(c) from `user` where 1 != 1 group by a, weight_string(a), b, weight_string(b), c, weight_string(c)",
+        "OrderBy": "(0|5) ASC, (1|6) ASC, (2|7) ASC",
+        "Query": "select a, b, c, d, count(*), weight_string(a), weight_string(b), weight_string(c) from `user` group by a, weight_string(a), b, weight_string(b), c, weight_string(c) order by a asc, b asc, c asc",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
 
 # scatter aggregate with jumbled order by columns
 "select a, b, c, d, count(*) from user group by 1, 2, 3, 4 order by d, b, a, c"
@@ -1731,7 +1800,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count(4)",
+    "Aggregates": "sum_count(4) AS count",
     "GroupBy": "0, 1, 2, 3",
     "Inputs": [
       {
@@ -1756,7 +1825,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "sum(4) AS count(*)",
+    "Aggregates": "sum_count_star(4) AS count(*)",
     "GroupBy": "(3|8), (1|6), (0|5), (2|7)",
     "ResultColumns": 5,
     "Inputs": [
@@ -1784,7 +1853,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count(4)",
+    "Aggregates": "sum_count(4) AS count",
     "GroupBy": "2, 1, 0, 3",
     "Inputs": [
       {
@@ -1809,7 +1878,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "sum(4) AS count(*)",
+    "Aggregates": "sum_count_star(4) AS count(*)",
     "GroupBy": "(3|8), (1|6), (0|5), (2|7)",
     "ResultColumns": 5,
     "Inputs": [
@@ -1837,7 +1906,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count(3)",
+    "Aggregates": "sum_count(3) AS count",
     "GroupBy": "2, 1, 0",
     "Inputs": [
       {
@@ -1862,7 +1931,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "sum(3) AS count(*)",
+    "Aggregates": "sum_count_star(3) AS count(*)",
     "GroupBy": "(0|4), (2|6), (1|5)",
     "ResultColumns": 4,
     "Inputs": [
@@ -1899,7 +1968,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "count(1)",
+        "Aggregates": "sum_count(1) AS count",
         "GroupBy": "0",
         "Inputs": [
           {
@@ -1929,7 +1998,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "sum(1) AS count(*)",
+        "Aggregates": "sum_count_star(1) AS count(*)",
         "GroupBy": "0",
         "Inputs": [
           {
@@ -2022,7 +2091,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "count(1)",
+        "Aggregates": "sum_count(1) AS count",
         "GroupBy": "0",
         "Inputs": [
           {
@@ -2043,7 +2112,35 @@ Gen4 plan same as above
     ]
   }
 }
-Gen4 error: In aggregated query without GROUP BY, expression of SELECT list contains nonaggregated column 'a'; this is incompatible with sql_mode=only_full_group_by
+{
+  "QueryType": "SELECT",
+  "Original": "select distinct a, count(*) from user",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "GroupBy": "0, 1",
+    "Inputs": [
+      {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "random(0) AS a, sum_count_star(1) AS count(*)",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select a, count(*) from `user` where 1 != 1",
+            "Query": "select a, count(*) from `user`",
+            "Table": "`user`"
+          }
+        ]
+      }
+    ]
+  }
+}
 
 # distinct and aggregate functions
 "select distinct a, count(*) from user group by a"
@@ -2056,7 +2153,7 @@ Gen4 error: In aggregated query without GROUP BY, expression of SELECT list cont
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "count(1)",
+        "Aggregates": "sum_count(1) AS count",
         "GroupBy": "0, 0",
         "Inputs": [
           {
@@ -2089,7 +2186,7 @@ Gen4 error: In aggregated query without GROUP BY, expression of SELECT list cont
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "sum(1) AS count(*)",
+        "Aggregates": "sum_count_star(1) AS count(*)",
         "GroupBy": "(0|2)",
         "Inputs": [
           {
@@ -2113,7 +2210,31 @@ Gen4 error: In aggregated query without GROUP BY, expression of SELECT list cont
 # Group by invalid column number (code is duplicated from symab).
 "select id from user group by 1.1"
 "column number is not an int"
-Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column 'id' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user group by 1.1",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "random(0) AS id",
+    "GroupBy": "1",
+    "ResultColumns": 1,
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id, 1.1 from `user` where 1 != 1 group by 1.1",
+        "OrderBy": "1 ASC",
+        "Query": "select id, 1.1 from `user` group by 1.1 order by 1.1 asc",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
 
 # Group by out of range column number (code is duplicated from symab).
 "select id from user group by 2"
@@ -2134,7 +2255,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Scalar",
-    "Aggregates": "sum(0) AS count(*)",
+    "Aggregates": "sum_count_star(0) AS count(*)",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -2161,7 +2282,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "sum(1) AS count(*)",
+    "Aggregates": "sum_count_star(1) AS count(*)",
     "GroupBy": "0",
     "Inputs": [
       {
@@ -2242,7 +2363,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "count(0)",
+        "Aggregates": "sum_count(0) AS count",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -2266,7 +2387,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Scalar",
-    "Aggregates": "sum(0) AS count(*)",
+    "Aggregates": "sum_count_star(0) AS count(*)",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -2298,7 +2419,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Projection",
         "Expressions": [
-          "[COLUMN 0]",
+          "[COLUMN 0] as a",
           "[COLUMN 1]"
         ],
         "Inputs": [
@@ -2387,7 +2508,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "sum(1) AS k",
+        "Aggregates": "sum_count_star(1) AS k",
         "GroupBy": "0",
         "Inputs": [
           {
@@ -2416,7 +2537,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count(1)",
+    "Aggregates": "sum_count(1) AS count",
     "GroupBy": "0",
     "Inputs": [
       {
@@ -2440,7 +2561,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "sum(1) AS k",
+    "Aggregates": "sum_count_star(1) AS k",
     "GroupBy": "0",
     "Inputs": [
       {
@@ -2486,7 +2607,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Scalar",
-    "Aggregates": "count(0)",
+    "Aggregates": "sum_count(0) AS count",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -2496,7 +2617,7 @@ Gen4 plan same as above
           "Sharded": true
         },
         "FieldQuery": "select count(*) from `user` where 1 != 1",
-        "Query": "select count(*) from `user` where exists (select 1 from user_extra where user_id = `user`.id group by user_id having max(col) \u003e 10)",
+        "Query": "select count(*) from `user` where exists (select 1 from user_extra where user_id = `user`.id group by user_id having max(col) \u003e 10 limit 1)",
         "Table": "`user`"
       }
     ]
@@ -2508,7 +2629,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Scalar",
-    "Aggregates": "sum(0) AS count(*)",
+    "Aggregates": "sum_count_star(0) AS count(*)",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -2518,7 +2639,7 @@ Gen4 plan same as above
           "Sharded": true
         },
         "FieldQuery": "select count(*) from `user` where 1 != 1",
-        "Query": "select count(*) from `user` where exists (select 1 from user_extra where user_id = `user`.id group by user_id having max(col) \u003e 10)",
+        "Query": "select count(*) from `user` where exists (select 1 from user_extra where user_id = `user`.id group by user_id having max(col) \u003e 10 limit 1)",
         "Table": "`user`"
       }
     ]
@@ -2552,7 +2673,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count(1)",
+    "Aggregates": "sum_count(1) AS count",
     "GroupBy": "0",
     "Inputs": [
       {
@@ -2577,7 +2698,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "sum(1) AS count(*)",
+    "Aggregates": "sum_count_star(1) AS count(*)",
     "GroupBy": "(0|2)",
     "ResultColumns": 2,
     "Inputs": [
@@ -2605,7 +2726,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count(1)",
+    "Aggregates": "sum_count(1) AS count",
     "GroupBy": "0",
     "Inputs": [
       {
@@ -2630,7 +2751,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "sum(1) AS count(*)",
+    "Aggregates": "sum_count_star(1) AS count(*)",
     "GroupBy": "(0|2)",
     "ResultColumns": 2,
     "Inputs": [
@@ -2757,7 +2878,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum(0) AS a",
+        "Aggregates": "sum_count_star(0) AS a",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -2789,7 +2910,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum(0) AS a",
+        "Aggregates": "sum_count_star(0) AS a",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -2821,7 +2942,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum(0) AS a",
+        "Aggregates": "sum_count_star(0) AS a",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -2853,7 +2974,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum(0) AS a",
+        "Aggregates": "sum_count_star(0) AS a",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -2885,7 +3006,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum(0) AS a",
+        "Aggregates": "sum_count_star(0) AS a",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -2917,7 +3038,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum(0) AS a",
+        "Aggregates": "sum_count_star(0) AS a",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -2949,7 +3070,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum(0) AS a",
+        "Aggregates": "sum_count_star(0) AS a",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -2981,7 +3102,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum(0) AS a",
+        "Aggregates": "sum_count_star(0) AS a",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -3013,7 +3134,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "sum(1) AS a",
+        "Aggregates": "sum_count_star(1) AS a",
         "GroupBy": "0",
         "Inputs": [
           {
@@ -3054,7 +3175,7 @@ Gen4 plan same as above
           {
             "OperatorType": "Aggregate",
             "Variant": "Ordered",
-            "Aggregates": "sum(0) AS a",
+            "Aggregates": "sum_count_star(0) AS a",
             "GroupBy": "(1|2)",
             "Inputs": [
               {
@@ -3085,7 +3206,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count_distinct(1) AS count(distinct textcol1)",
+    "Aggregates": "count_distinct_count(1) AS count(distinct textcol1)",
     "GroupBy": "0",
     "Inputs": [
       {
@@ -3150,7 +3271,46 @@ Gen4 plan same as above
     "Vindex": "name_user_map"
   }
 }
-Gen4 error: cannot push projections in ordered aggregates
+{
+  "QueryType": "SELECT",
+  "Original": "select 1 from user having count(id) = 10 and name = 'a'",
+  "Instructions": {
+    "OperatorType": "SimpleProjection",
+    "Columns": [
+      0
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Filter",
+        "Predicate": "OFFSET(1, 'count(id)') = 10",
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "random(0) AS 1, sum_count(1) AS count(id)",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Equal",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1, count(id) from `user` where 1 != 1",
+                "Query": "select 1, count(id) from `user` where `name` = 'a'",
+                "Table": "`user`",
+                "Values": [
+                  "VARCHAR(\"a\")"
+                ],
+                "Vindex": "name_user_map"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
 
 # Aggregates and joins
 "select count(*) from user join user_extra"
@@ -3161,7 +3321,7 @@ Gen4 error: cannot push projections in ordered aggregates
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Scalar",
-    "Aggregates": "sum(0) AS count(*)",
+    "Aggregates": "sum_count_star(0) AS count(*)",
     "Inputs": [
       {
         "OperatorType": "Projection",
@@ -3172,7 +3332,7 @@ Gen4 error: cannot push projections in ordered aggregates
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinColumnIndexes": "L:0,R:0",
+            "JoinColumnIndexes": "L:0,R:1",
             "TableName": "`user`_user_extra",
             "Inputs": [
               {
@@ -3193,8 +3353,8 @@ Gen4 error: cannot push projections in ordered aggregates
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select count(*) from user_extra where 1 != 1",
-                "Query": "select count(*) from user_extra",
+                "FieldQuery": "select 1, count(*) from user_extra where 1 != 1 group by 1",
+                "Query": "select 1, count(*) from user_extra group by 1",
                 "Table": "user_extra"
               }
             ]
@@ -3222,7 +3382,42 @@ Gen4 error: cannot push projections in ordered aggregates
     "Table": "`user`"
   }
 }
-Gen4 error: cannot push projections in ordered aggregates
+{
+  "QueryType": "SELECT",
+  "Original": "select 1 from user having count(id) = 10",
+  "Instructions": {
+    "OperatorType": "SimpleProjection",
+    "Columns": [
+      0
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Filter",
+        "Predicate": "OFFSET(1, 'count(id)') = 10",
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "random(0) AS 1, sum_count(1) AS count(id)",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1, count(id) from `user` where 1 != 1",
+                "Query": "select 1, count(id) from `user`",
+                "Table": "`user`"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
 
 # Aggregate on join
 "select user.a, count(*) from user join user_extra group by user.a"
@@ -3233,14 +3428,14 @@ Gen4 error: cannot push projections in ordered aggregates
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "sum(1) AS count(*)",
+    "Aggregates": "sum_count_star(1) AS count(*)",
     "GroupBy": "(0|2)",
     "ResultColumns": 2,
     "Inputs": [
       {
         "OperatorType": "Projection",
         "Expressions": [
-          "[COLUMN 0]",
+          "[COLUMN 0] as a",
           "[COLUMN 2] * [COLUMN 3] as count(*)",
           "[COLUMN 1]"
         ],
@@ -3248,7 +3443,7 @@ Gen4 error: cannot push projections in ordered aggregates
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinColumnIndexes": "L:1,L:2,L:0,R:0",
+            "JoinColumnIndexes": "L:1,L:2,L:0,R:1",
             "TableName": "`user`_user_extra",
             "Inputs": [
               {
@@ -3270,8 +3465,8 @@ Gen4 error: cannot push projections in ordered aggregates
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select count(*) from user_extra where 1 != 1",
-                "Query": "select count(*) from user_extra",
+                "FieldQuery": "select 1, count(*) from user_extra where 1 != 1 group by 1",
+                "Query": "select 1, count(*) from user_extra group by 1",
                 "Table": "user_extra"
               }
             ]
@@ -3291,14 +3486,14 @@ Gen4 error: cannot push projections in ordered aggregates
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "sum(1) AS count(user_extra.a)",
+    "Aggregates": "sum_count(1) AS count(user_extra.a)",
     "GroupBy": "(0|2)",
     "ResultColumns": 2,
     "Inputs": [
       {
         "OperatorType": "Projection",
         "Expressions": [
-          "[COLUMN 0]",
+          "[COLUMN 0] as a",
           "[COLUMN 2] * [COLUMN 3] as count(user_extra.a)",
           "[COLUMN 1]"
         ],
@@ -3306,7 +3501,7 @@ Gen4 error: cannot push projections in ordered aggregates
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinColumnIndexes": "L:1,L:2,L:0,R:0",
+            "JoinColumnIndexes": "L:1,L:2,L:0,R:1",
             "TableName": "`user`_user_extra",
             "Inputs": [
               {
@@ -3328,8 +3523,8 @@ Gen4 error: cannot push projections in ordered aggregates
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select count(user_extra.a) from user_extra where 1 != 1",
-                "Query": "select count(user_extra.a) from user_extra",
+                "FieldQuery": "select 1, count(user_extra.a) from user_extra where 1 != 1 group by 1",
+                "Query": "select 1, count(user_extra.a) from user_extra group by 1",
                 "Table": "user_extra"
               }
             ]
@@ -3349,7 +3544,7 @@ Gen4 error: cannot push projections in ordered aggregates
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "sum(0) AS count(u.textcol1), sum(1) AS count(ue.foo)",
+    "Aggregates": "sum_count(0) AS count(u.textcol1), sum_count(1) AS count(ue.foo)",
     "GroupBy": "(2|3)",
     "ResultColumns": 3,
     "Inputs": [
@@ -3358,7 +3553,7 @@ Gen4 error: cannot push projections in ordered aggregates
         "Expressions": [
           "([COLUMN 2] * [COLUMN 3]) * [COLUMN 4] as count(u.textcol1)",
           "([COLUMN 5] * [COLUMN 6]) * [COLUMN 7] as count(ue.foo)",
-          "[COLUMN 0]",
+          "[COLUMN 0] as bar",
           "[COLUMN 1]"
         ],
         "Inputs": [
@@ -3438,7 +3633,7 @@ Gen4 error: cannot push projections in ordered aggregates
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "min(1), sum_distinct(2) AS sum(distinct col3)",
+    "Aggregates": "min(1), sum_distinct_sum(2) AS sum(distinct col3)",
     "GroupBy": "0",
     "Inputs": [
       {
@@ -3492,7 +3687,7 @@ Gen4 error: cannot push projections in ordered aggregates
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Scalar",
-    "Aggregates": "sum(0) AS count(*)",
+    "Aggregates": "sum_count_star(0) AS count(*)",
     "Inputs": [
       {
         "OperatorType": "Projection",
@@ -3545,7 +3740,7 @@ Gen4 error: cannot push projections in ordered aggregates
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count_distinct(1) AS count(distinct val1), count(2)",
+    "Aggregates": "count_distinct_count(1) AS count(distinct val1), sum_count(2) AS count",
     "GroupBy": "0",
     "Inputs": [
       {
@@ -3570,7 +3765,7 @@ Gen4 error: cannot push projections in ordered aggregates
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count_distinct(1|4) AS count(distinct val1), sum(2) AS count(*)",
+    "Aggregates": "count_distinct(1|4) AS count(distinct val1), sum_count_star(2) AS count(*)",
     "GroupBy": "(0|3)",
     "ResultColumns": 3,
     "Inputs": [
@@ -3598,7 +3793,7 @@ Gen4 error: cannot push projections in ordered aggregates
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count(1)",
+    "Aggregates": "sum_count(1) AS count",
     "GroupBy": "0",
     "Inputs": [
       {
@@ -3623,7 +3818,7 @@ Gen4 error: cannot push projections in ordered aggregates
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "sum(1) AS count(*)",
+    "Aggregates": "sum_count_star(1) AS count(*)",
     "GroupBy": "(0|2)",
     "ResultColumns": 2,
     "Inputs": [
@@ -3681,7 +3876,7 @@ Gen4 error: cannot push projections in ordered aggregates
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count_distinct(0|4) AS count(distinct tcol2), sum(2) AS count(*), sum_distinct(3|4) AS sum(distinct tcol2)",
+    "Aggregates": "count_distinct(0|4) AS count(distinct tcol2), sum_count_star(2) AS count(*), sum_distinct(3|4) AS sum(distinct tcol2)",
     "GroupBy": "(1|5)",
     "ResultColumns": 4,
     "Inputs": [
@@ -3717,8 +3912,8 @@ Gen4 error: cannot push projections in ordered aggregates
       {
         "OperatorType": "Projection",
         "Expressions": [
-          "[COLUMN 0]",
-          "[COLUMN 1]",
+          "[COLUMN 0] as textcol1",
+          "[COLUMN 1] as val2",
           "[COLUMN 2]"
         ],
         "Inputs": [
@@ -3808,9 +4003,9 @@ Gen4 error: cannot push projections in ordered aggregates
       {
         "OperatorType": "Projection",
         "Expressions": [
-          "[COLUMN 0]",
+          "[COLUMN 0] as col",
           "[COLUMN 3] as min(user_extra.foo)",
-          "[COLUMN 1]",
+          "[COLUMN 1] as bar",
           "[COLUMN 4] as max(user_extra.bar)",
           "[COLUMN 2]"
         ],
@@ -3818,7 +4013,7 @@ Gen4 error: cannot push projections in ordered aggregates
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinColumnIndexes": "L:0,L:1,L:2,R:0,R:1",
+            "JoinColumnIndexes": "L:0,L:1,L:2,R:1,R:2",
             "JoinVars": {
               "user_col": 0
             },
@@ -3843,8 +4038,8 @@ Gen4 error: cannot push projections in ordered aggregates
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select min(user_extra.foo), max(user_extra.bar) from user_extra where 1 != 1",
-                "Query": "select min(user_extra.foo), max(user_extra.bar) from user_extra where user_extra.bar = :user_col",
+                "FieldQuery": "select 1, min(user_extra.foo), max(user_extra.bar) from user_extra where 1 != 1 group by 1",
+                "Query": "select 1, min(user_extra.foo), max(user_extra.bar) from user_extra where user_extra.bar = :user_col group by 1",
                 "Table": "user_extra"
               }
             ]
@@ -3915,7 +4110,7 @@ Gen4 error: aggregate functions take a single argument 'count(distinct user_id, 
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinColumnIndexes": "L:0,L:1,L:2,R:0",
+            "JoinColumnIndexes": "L:0,L:1,L:2,R:1",
             "TableName": "`user`_user_extra",
             "Inputs": [
               {
@@ -3936,8 +4131,8 @@ Gen4 error: aggregate functions take a single argument 'count(distinct user_id, 
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select count(*) from user_extra where 1 != 1",
-                "Query": "select count(*) from user_extra",
+                "FieldQuery": "select 1, count(*) from user_extra where 1 != 1 group by 1",
+                "Query": "select 1, count(*) from user_extra group by 1",
                 "Table": "user_extra"
               }
             ]
@@ -3947,3 +4142,770 @@ Gen4 error: aggregate functions take a single argument 'count(distinct user_id, 
     ]
   }
 }
+
+# find aggregation expression and use column offset in filter
+"select foo, count(*) from user group by foo having count(*) = 3"
+"unsupported: filtering on results of aggregates"
+{
+  "QueryType": "SELECT",
+  "Original": "select foo, count(*) from user group by foo having count(*) = 3",
+  "Instructions": {
+    "OperatorType": "SimpleProjection",
+    "Columns": [
+      0,
+      1
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Filter",
+        "Predicate": "OFFSET(1, 'count(*)') = 3",
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Ordered",
+            "Aggregates": "sum_count_star(1) AS count(*)",
+            "GroupBy": "(0|2)",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select foo, count(*), weight_string(foo) from `user` where 1 != 1 group by foo, weight_string(foo)",
+                "OrderBy": "(0|2) ASC",
+                "Query": "select foo, count(*), weight_string(foo) from `user` group by foo, weight_string(foo) order by foo asc",
+                "Table": "`user`"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
+
+# find aggregation expression and use column offset in filter times two
+"select foo, sum(foo), sum(bar) from user group by foo having sum(foo)+sum(bar) = 42"
+"unsupported: filtering on results of aggregates"
+{
+  "QueryType": "SELECT",
+  "Original": "select foo, sum(foo), sum(bar) from user group by foo having sum(foo)+sum(bar) = 42",
+  "Instructions": {
+    "OperatorType": "SimpleProjection",
+    "Columns": [
+      0,
+      1,
+      2
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Filter",
+        "Predicate": "OFFSET(1, 'sum(foo)') + OFFSET(2, 'sum(bar)') = 42",
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Ordered",
+            "Aggregates": "sum(1) AS sum(foo), sum(2) AS sum(bar)",
+            "GroupBy": "(0|3)",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select foo, sum(foo), sum(bar), weight_string(foo) from `user` where 1 != 1 group by foo, weight_string(foo)",
+                "OrderBy": "(0|3) ASC",
+                "Query": "select foo, sum(foo), sum(bar), weight_string(foo) from `user` group by foo, weight_string(foo) order by foo asc",
+                "Table": "`user`"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
+
+# find aggregation expression and use column offset in filter times three
+"select foo, sum(foo) as fooSum, sum(bar) as barSum from user group by foo having fooSum+sum(bar) = 42"
+"unsupported: filtering on results of aggregates"
+{
+  "QueryType": "SELECT",
+  "Original": "select foo, sum(foo) as fooSum, sum(bar) as barSum from user group by foo having fooSum+sum(bar) = 42",
+  "Instructions": {
+    "OperatorType": "SimpleProjection",
+    "Columns": [
+      0,
+      1,
+      2
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Filter",
+        "Predicate": "fooSum + OFFSET(2, 'sum(bar)') = 42",
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Ordered",
+            "Aggregates": "sum(1) AS fooSum, sum(2) AS barSum",
+            "GroupBy": "(0|3)",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select foo, sum(foo) as fooSum, sum(bar) as barSum, weight_string(foo) from `user` where 1 != 1 group by foo, weight_string(foo)",
+                "OrderBy": "(0|3) ASC",
+                "Query": "select foo, sum(foo) as fooSum, sum(bar) as barSum, weight_string(foo) from `user` group by foo, weight_string(foo) order by foo asc",
+                "Table": "`user`"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
+
+# having should be able to add new aggregation expressions in having
+"select foo from user group by foo having count(*) = 3"
+"unsupported: filtering on results of aggregates"
+{
+  "QueryType": "SELECT",
+  "Original": "select foo from user group by foo having count(*) = 3",
+  "Instructions": {
+    "OperatorType": "SimpleProjection",
+    "Columns": [
+      0
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Filter",
+        "Predicate": "OFFSET(1, 'count(*)') = 3",
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Ordered",
+            "Aggregates": "sum_count_star(1) AS count(*)",
+            "GroupBy": "(0|2)",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select foo, count(*), weight_string(foo) from `user` where 1 != 1 group by foo, weight_string(foo)",
+                "OrderBy": "(0|2) ASC",
+                "Query": "select foo, count(*), weight_string(foo) from `user` group by foo, weight_string(foo) order by foo asc",
+                "Table": "`user`"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
+
+"select u.id from user u join user_extra ue on ue.id = u.id group by u.id having count(u.name) = 3"
+"unsupported: cross-shard query with aggregates"
+{
+  "QueryType": "SELECT",
+  "Original": "select u.id from user u join user_extra ue on ue.id = u.id group by u.id having count(u.name) = 3",
+  "Instructions": {
+    "OperatorType": "SimpleProjection",
+    "Columns": [
+      0
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Filter",
+        "Predicate": "OFFSET(1, 'count(u.`name`)') = 3",
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Ordered",
+            "Aggregates": "sum_count(1) AS count(u.`name`)",
+            "GroupBy": "(0|2)",
+            "Inputs": [
+              {
+                "OperatorType": "Projection",
+                "Expressions": [
+                  "[COLUMN 0] as id",
+                  "[COLUMN 2] * [COLUMN 3] as count(u.`name`)",
+                  "[COLUMN 1]"
+                ],
+                "Inputs": [
+                  {
+                    "OperatorType": "Sort",
+                    "Variant": "Memory",
+                    "OrderBy": "(0|1) ASC",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Join",
+                        "Variant": "Join",
+                        "JoinColumnIndexes": "R:1,R:2,L:1,R:0",
+                        "JoinVars": {
+                          "ue_id": 0
+                        },
+                        "TableName": "user_extra_`user`",
+                        "Inputs": [
+                          {
+                            "OperatorType": "Route",
+                            "Variant": "Scatter",
+                            "Keyspace": {
+                              "Name": "user",
+                              "Sharded": true
+                            },
+                            "FieldQuery": "select ue.id, count(*), weight_string(ue.id) from user_extra as ue where 1 != 1 group by ue.id, weight_string(ue.id)",
+                            "Query": "select ue.id, count(*), weight_string(ue.id) from user_extra as ue group by ue.id, weight_string(ue.id)",
+                            "Table": "user_extra"
+                          },
+                          {
+                            "OperatorType": "Route",
+                            "Variant": "EqualUnique",
+                            "Keyspace": {
+                              "Name": "user",
+                              "Sharded": true
+                            },
+                            "FieldQuery": "select count(u.`name`), u.id, weight_string(u.id) from `user` as u where 1 != 1 group by u.id, weight_string(u.id)",
+                            "Query": "select count(u.`name`), u.id, weight_string(u.id) from `user` as u where u.id = :ue_id group by u.id, weight_string(u.id)",
+                            "Table": "`user`",
+                            "Values": [
+                              ":ue_id"
+                            ],
+                            "Vindex": "user_index"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
+
+"select u.id from user u join user_extra ue on ue.user_id = u.id group by u.id having count(u.name) = 3"
+{
+  "QueryType": "SELECT",
+  "Original": "select u.id from user u join user_extra ue on ue.user_id = u.id group by u.id having count(u.name) = 3",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select u.id from `user` as u join user_extra as ue on ue.user_id = u.id where 1 != 1 group by u.id",
+    "Query": "select u.id from `user` as u join user_extra as ue on ue.user_id = u.id group by u.id having count(u.`name`) = 3",
+    "Table": "`user`, user_extra"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select u.id from user u join user_extra ue on ue.user_id = u.id group by u.id having count(u.name) = 3",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select u.id from `user` as u, user_extra as ue where 1 != 1 group by u.id",
+    "Query": "select u.id from `user` as u, user_extra as ue where ue.user_id = u.id group by u.id having count(u.`name`) = 3",
+    "Table": "`user`, user_extra"
+  }
+}
+
+# only extract the aggregation once, even if used twice
+"select u.id from user u join user_extra ue on ue.id = u.id group by u.id having count(*) < 3 and count(*) > 5"
+"unsupported: cross-shard query with aggregates"
+{
+  "QueryType": "SELECT",
+  "Original": "select u.id from user u join user_extra ue on ue.id = u.id group by u.id having count(*) \u003c 3 and count(*) \u003e 5",
+  "Instructions": {
+    "OperatorType": "SimpleProjection",
+    "Columns": [
+      0
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Filter",
+        "Predicate": "OFFSET(1, 'count(*)') \u003c 3 and OFFSET(1, 'count(*)') \u003e 5",
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Ordered",
+            "Aggregates": "sum_count_star(1) AS count(*)",
+            "GroupBy": "(0|2)",
+            "Inputs": [
+              {
+                "OperatorType": "Projection",
+                "Expressions": [
+                  "[COLUMN 0] as id",
+                  "[COLUMN 2] * [COLUMN 3] as count(*)",
+                  "[COLUMN 1]"
+                ],
+                "Inputs": [
+                  {
+                    "OperatorType": "Sort",
+                    "Variant": "Memory",
+                    "OrderBy": "(0|1) ASC",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Join",
+                        "Variant": "Join",
+                        "JoinColumnIndexes": "R:1,R:2,L:1,R:0",
+                        "JoinVars": {
+                          "ue_id": 0
+                        },
+                        "TableName": "user_extra_`user`",
+                        "Inputs": [
+                          {
+                            "OperatorType": "Route",
+                            "Variant": "Scatter",
+                            "Keyspace": {
+                              "Name": "user",
+                              "Sharded": true
+                            },
+                            "FieldQuery": "select ue.id, count(*), weight_string(ue.id) from user_extra as ue where 1 != 1 group by ue.id, weight_string(ue.id)",
+                            "Query": "select ue.id, count(*), weight_string(ue.id) from user_extra as ue group by ue.id, weight_string(ue.id)",
+                            "Table": "user_extra"
+                          },
+                          {
+                            "OperatorType": "Route",
+                            "Variant": "EqualUnique",
+                            "Keyspace": {
+                              "Name": "user",
+                              "Sharded": true
+                            },
+                            "FieldQuery": "select count(*), u.id, weight_string(u.id) from `user` as u where 1 != 1 group by u.id, weight_string(u.id)",
+                            "Query": "select count(*), u.id, weight_string(u.id) from `user` as u where u.id = :ue_id group by u.id, weight_string(u.id)",
+                            "Table": "`user`",
+                            "Values": [
+                              ":ue_id"
+                            ],
+                            "Vindex": "user_index"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
+
+"select (select 1 from user u having count(ue.col) > 10) from user_extra ue"
+"symbol ue.col not found in subquery"
+{
+  "QueryType": "SELECT",
+  "Original": "select (select 1 from user u having count(ue.col) \u003e 10) from user_extra ue",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutValue",
+    "PulloutVars": [
+      "__sq1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "SimpleProjection",
+        "Columns": [
+          0
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Filter",
+            "Predicate": "OFFSET(1, 'count(ue.col)') \u003e 10",
+            "Inputs": [
+              {
+                "OperatorType": "Aggregate",
+                "Variant": "Scalar",
+                "Aggregates": "random(0) AS 1, sum_count(1) AS count(ue.col)",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 1, count(ue.col) from `user` as u where 1 != 1",
+                    "Query": "select 1, count(ue.col) from `user` as u",
+                    "Table": "`user`"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select :__sq1 from user_extra as ue where 1 != 1",
+        "Query": "select :__sq1 from user_extra as ue",
+        "Table": "user_extra"
+      }
+    ]
+  }
+}
+
+# group by and ',' joins with condition
+"select user.col from user join user_extra on user_extra.col = user.col group by user.id"
+"unsupported: cross-shard query with aggregates"
+{
+  "QueryType": "SELECT",
+  "Original": "select user.col from user join user_extra on user_extra.col = user.col group by user.id",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "random(0) AS col",
+    "GroupBy": "(2|1)",
+    "ResultColumns": 1,
+    "Inputs": [
+      {
+        "OperatorType": "Projection",
+        "Expressions": [
+          "[COLUMN 2] * [COLUMN 3] as col",
+          "[COLUMN 1]",
+          "[COLUMN 0] as id"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "L:1,L:2,L:0,R:1",
+            "JoinVars": {
+              "user_col": 0
+            },
+            "TableName": "`user`_user_extra",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select `user`.col, `user`.id, weight_string(`user`.id) from `user` where 1 != 1 group by `user`.col, `user`.id, weight_string(`user`.id)",
+                "OrderBy": "(1|2) ASC",
+                "Query": "select `user`.col, `user`.id, weight_string(`user`.id) from `user` group by `user`.col, `user`.id, weight_string(`user`.id) order by `user`.id asc",
+                "Table": "`user`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1, count(*) from user_extra where 1 != 1 group by 1",
+                "Query": "select 1, count(*) from user_extra where user_extra.col = :user_col group by 1",
+                "Table": "user_extra"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
+
+# scatter aggregate symtab lookup error
+"select id, b as id, count(*) from user order by id"
+"ambiguous symbol reference: id"
+{
+  "QueryType": "SELECT",
+  "Original": "select id, b as id, count(*) from user order by id",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Scalar",
+    "Aggregates": "random(0) AS id, random(1) AS id, sum_count_star(2) AS count(*)",
+    "ResultColumns": 3,
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id, b as id, count(*), weight_string(b) from `user` where 1 != 1",
+        "OrderBy": "(1|3) ASC",
+        "Query": "select id, b as id, count(*), weight_string(b) from `user` order by id asc",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
+
+# aggr and non-aggr without group by (with query does not give useful result out)
+"select id, count(*) from user"
+{
+  "QueryType": "SELECT",
+  "Original": "select id, count(*) from user",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Scalar",
+    "Aggregates": "sum_count(1) AS count",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id, count(*) from `user` where 1 != 1",
+        "Query": "select id, count(*) from `user`",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select id, count(*) from user",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Scalar",
+    "Aggregates": "random(0) AS id, sum_count_star(1) AS count(*)",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id, count(*) from `user` where 1 != 1",
+        "Query": "select id, count(*) from `user`",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
+
+# group by and ',' joins
+"select user.id from user, user_extra group by id"
+"unsupported: cross-shard query with aggregates"
+{
+  "QueryType": "SELECT",
+  "Original": "select user.id from user, user_extra group by id",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "random(0) AS id",
+    "GroupBy": "(2|1)",
+    "ResultColumns": 1,
+    "Inputs": [
+      {
+        "OperatorType": "Projection",
+        "Expressions": [
+          "[COLUMN 2] * [COLUMN 3] as id",
+          "[COLUMN 1]",
+          "[COLUMN 0] as id"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "L:0,L:1,L:0,R:1",
+            "TableName": "`user`_user_extra",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select `user`.id, weight_string(id) from `user` where 1 != 1 group by id, weight_string(id)",
+                "OrderBy": "(0|1) ASC",
+                "Query": "select `user`.id, weight_string(id) from `user` group by id, weight_string(id) order by id asc",
+                "Table": "`user`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1, count(*) from user_extra where 1 != 1 group by 1",
+                "Query": "select 1, count(*) from user_extra group by 1",
+                "Table": "user_extra"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
+
+# count on column from LIMIT
+"select count(city) from (select phone, id, city from user where id > 12 limit 10) as x"
+"unsupported: cross-shard query with aggregates"
+{
+  "QueryType": "SELECT",
+  "Original": "select count(city) from (select phone, id, city from user where id \u003e 12 limit 10) as x",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Scalar",
+    "Aggregates": "count(0) AS count(city)",
+    "Inputs": [
+      {
+        "OperatorType": "Projection",
+        "Expressions": [
+          "[COLUMN 2] as count(city)"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Limit",
+            "Count": "INT64(10)",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select phone, id, city from `user` where 1 != 1",
+                "Query": "select phone, id, city from `user` where id \u003e 12 limit :__upper_limit",
+                "Table": "`user`"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
+
+# count(*) on column from LIMIT
+"select count(*) from (select phone, id, city from user where id > 12 limit 10) as x"
+"unsupported: cross-shard query with aggregates"
+{
+  "QueryType": "SELECT",
+  "Original": "select count(*) from (select phone, id, city from user where id \u003e 12 limit 10) as x",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Scalar",
+    "Aggregates": "count_star(0) AS count(*)",
+    "Inputs": [
+      {
+        "OperatorType": "Projection",
+        "Expressions": [
+          "[COLUMN 0] as count(*)"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Limit",
+            "Count": "INT64(10)",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select phone, id, city from `user` where 1 != 1",
+                "Query": "select phone, id, city from `user` where id \u003e 12 limit :__upper_limit",
+                "Table": "`user`"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
+
+# count non-null columns incoming from outer joins should work well
+"select count(col) from (select user_extra.col as col from user left join user_extra on user.id = user_extra.id limit 10) as x"
+{
+  "QueryType": "SELECT",
+  "Original": "select count(col) from (select user_extra.col as col from user left join user_extra on user.id = user_extra.id limit 10) as x",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Scalar",
+    "Aggregates": "count(0) AS count(col)",
+    "Inputs": [
+      {
+        "OperatorType": "Projection",
+        "Expressions": [
+          "[COLUMN 0] as count(col)"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Limit",
+            "Count": "INT64(10)",
+            "Inputs": [
+              {
+                "OperatorType": "Join",
+                "Variant": "LeftJoin",
+                "JoinColumnIndexes": "R:0",
+                "JoinVars": {
+                  "user_id": 0
+                },
+                "TableName": "`user`_user_extra",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select `user`.id from `user` where 1 != 1",
+                    "Query": "select `user`.id from `user`",
+                    "Table": "`user`"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select user_extra.col as col from user_extra where 1 != 1",
+                    "Query": "select user_extra.col as col from user_extra where user_extra.id = :user_id",
+                    "Table": "user_extra"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
+Gen4 plan same as above

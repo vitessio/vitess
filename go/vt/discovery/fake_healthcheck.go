@@ -18,6 +18,7 @@ package discovery
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"sync"
 
@@ -42,8 +43,9 @@ import (
 // NewFakeHealthCheck returns the fake healthcheck object.
 func NewFakeHealthCheck(ch chan *TabletHealth) *FakeHealthCheck {
 	return &FakeHealthCheck{
-		items: make(map[string]*fhcItem),
-		ch:    ch,
+		items:      make(map[string]*fhcItem),
+		itemsAlias: make(map[string]*fhcItem),
+		ch:         ch,
 	}
 }
 
@@ -52,6 +54,7 @@ type FakeHealthCheck struct {
 	// mu protects the items map
 	mu               sync.RWMutex
 	items            map[string]*fhcItem
+	itemsAlias       map[string]*fhcItem
 	currentTabletUID int
 	// channel to return on subscribe. Pass nil if no subscribe should not return a channel
 	ch chan *TabletHealth
@@ -85,6 +88,24 @@ func (fhc *FakeHealthCheck) GetHealthyTabletStats(target *querypb.Target) []*Tab
 		}
 	}
 	return result
+}
+
+// GetTabletHealthByAlias results the TabletHealth of the tablet that matches the given alias
+func (fhc *FakeHealthCheck) GetTabletHealthByAlias(alias *topodatapb.TabletAlias) (*TabletHealth, error) {
+	return fhc.GetTabletHealth("", alias)
+}
+
+// GetTabletHealth results the TabletHealth of the tablet that matches the given alias
+func (fhc *FakeHealthCheck) GetTabletHealth(kst KeyspaceShardTabletType, alias *topodatapb.TabletAlias) (*TabletHealth, error) {
+	fhc.mu.Lock()
+	defer fhc.mu.Unlock()
+
+	if hd, ok := fhc.itemsAlias[alias.String()]; ok {
+		if hd.ts.Tablet.Alias.String() == alias.String() {
+			return hd.ts, nil
+		}
+	}
+	return nil, fmt.Errorf("could not find tablet: %s", alias.String())
 }
 
 // Subscribe returns the channel in the struct. Subscribe should only be called in one place for this fake health check
@@ -174,6 +195,7 @@ func (fhc *FakeHealthCheck) AddTablet(tablet *topodatapb.Tablet) {
 	fhc.mu.Lock()
 	defer fhc.mu.Unlock()
 	fhc.items[key] = item
+	fhc.itemsAlias[tablet.Alias.String()] = item
 }
 
 // RemoveTablet removes the tablet.
@@ -216,19 +238,46 @@ func (fhc *FakeHealthCheck) TabletConnection(alias *topodatapb.TabletAlias, targ
 
 // CacheStatus returns the status for each tablet
 func (fhc *FakeHealthCheck) CacheStatus() TabletsCacheStatusList {
+	tcsMap := fhc.CacheStatusMap()
+	tcsl := make(TabletsCacheStatusList, 0, len(tcsMap))
+	for _, tcs := range tcsMap {
+		tcsl = append(tcsl, tcs)
+	}
+	sort.Sort(tcsl)
+	return tcsl
+}
+
+// CacheStatusMap returns a map of the health check cache.
+func (fhc *FakeHealthCheck) CacheStatusMap() map[string]*TabletsCacheStatus {
+	tcsMap := make(map[string]*TabletsCacheStatus)
+	fhc.mu.Lock()
+	defer fhc.mu.Unlock()
+	for _, ths := range fhc.items {
+		key := fmt.Sprintf("%v.%v.%v.%v", ths.ts.Tablet.Alias.Cell, ths.ts.Target.Keyspace, ths.ts.Target.Shard, ths.ts.Target.TabletType.String())
+		var tcs *TabletsCacheStatus
+		var ok bool
+		if tcs, ok = tcsMap[key]; !ok {
+			tcs = &TabletsCacheStatus{
+				Cell:   ths.ts.Tablet.Alias.Cell,
+				Target: ths.ts.Target,
+			}
+			tcsMap[key] = tcs
+		}
+		tcs.TabletsStats = append(tcs.TabletsStats, ths.ts)
+	}
+	return tcsMap
+}
+
+// UpdateHealth adds a TabletHealth for the tablet defined in th.
+func (fhc *FakeHealthCheck) UpdateHealth(th *TabletHealth) {
 	fhc.mu.Lock()
 	defer fhc.mu.Unlock()
 
-	stats := make(TabletsCacheStatusList, 0, len(fhc.items))
-	for _, item := range fhc.items {
-		stats = append(stats, &TabletsCacheStatus{
-			Cell:         "FakeCell",
-			Target:       item.ts.Target,
-			TabletsStats: TabletStatsList{item.ts},
-		})
+	key := TabletToMapKey(th.Tablet)
+	if t, ok := fhc.items[key]; ok {
+		t.ts = th
+		fhc.itemsAlias[th.Tablet.Alias.String()].ts = th
 	}
-	sort.Sort(stats)
-	return stats
 }
 
 // Close is not implemented.
@@ -275,6 +324,7 @@ func (fhc *FakeHealthCheck) AddFakeTablet(cell, host string, port int32, keyspac
 			},
 		}
 		fhc.items[key] = item
+		fhc.itemsAlias[t.Alias.String()] = item
 	}
 	item.ts.Target = &querypb.Target{
 		Keyspace:   keyspace,

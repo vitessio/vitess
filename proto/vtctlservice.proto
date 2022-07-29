@@ -197,6 +197,8 @@ service Vtctld {
   rpc RestoreFromBackup(vtctldata.RestoreFromBackupRequest) returns (stream vtctldata.RestoreFromBackupResponse) {};
   // RunHealthCheck runs a healthcheck on the remote tablet.
   rpc RunHealthCheck(vtctldata.RunHealthCheckRequest) returns (vtctldata.RunHealthCheckResponse) {};
+  // SetKeyspaceDurabilityPolicy updates the DurabilityPolicy for a keyspace.
+  rpc SetKeyspaceDurabilityPolicy(vtctldata.SetKeyspaceDurabilityPolicyRequest) returns (vtctldata.SetKeyspaceDurabilityPolicyResponse) {};
   // SetKeyspaceServedFrom changes the ServedFromMap manually, and is intended
   // only for emergency fixes. This does not rebuild the serving graph.
   //

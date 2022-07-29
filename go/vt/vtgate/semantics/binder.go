@@ -17,6 +17,8 @@ limitations under the License.
 package semantics
 
 import (
+	"strings"
+
 	"vitess.io/vitess/go/vt/vtgate/engine"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -37,18 +39,24 @@ type binder struct {
 	typer       *typer
 	subqueryMap map[sqlparser.Statement][]*sqlparser.ExtractedSubquery
 	subqueryRef map[*sqlparser.Subquery]*sqlparser.ExtractedSubquery
+
+	// every table will have an entry in the outer map. it will point to a map with all the columns
+	// that this map is joined with using USING.
+	// This information is used to expand `*` correctly, and is not available post-analysis
+	usingJoinInfo map[TableSet]map[string]TableSet
 }
 
 func newBinder(scoper *scoper, org originable, tc *tableCollector, typer *typer) *binder {
 	return &binder{
-		recursive:   map[sqlparser.Expr]TableSet{},
-		direct:      map[sqlparser.Expr]TableSet{},
-		scoper:      scoper,
-		org:         org,
-		tc:          tc,
-		typer:       typer,
-		subqueryMap: map[sqlparser.Statement][]*sqlparser.ExtractedSubquery{},
-		subqueryRef: map[*sqlparser.Subquery]*sqlparser.ExtractedSubquery{},
+		recursive:     map[sqlparser.Expr]TableSet{},
+		direct:        map[sqlparser.Expr]TableSet{},
+		scoper:        scoper,
+		org:           org,
+		tc:            tc,
+		typer:         typer,
+		subqueryMap:   map[sqlparser.Statement][]*sqlparser.ExtractedSubquery{},
+		subqueryRef:   map[*sqlparser.Subquery]*sqlparser.ExtractedSubquery{},
+		usingJoinInfo: map[TableSet]map[string]TableSet{},
 	}
 }
 
@@ -65,11 +73,43 @@ func (b *binder) up(cursor *sqlparser.Cursor) error {
 		b.subqueryRef[node] = sq
 
 		b.setSubQueryDependencies(node, currScope)
-
+	case *sqlparser.JoinCondition:
+		currScope := b.scoper.currentScope()
+		for _, ident := range node.Using {
+			name := sqlparser.NewColName(ident.String())
+			deps, err := b.resolveColumn(name, currScope, true)
+			if err != nil {
+				return err
+			}
+			currScope.joinUsing[ident.Lowered()] = deps.direct
+		}
+		if len(node.Using) > 0 {
+			err := rewriteJoinUsing(currScope, node.Using, b.org)
+			if err != nil {
+				return err
+			}
+			node.Using = nil
+		}
 	case *sqlparser.ColName:
-		deps, err := b.resolveColumn(node, b.scoper.currentScope())
+		if node.IsVariable() {
+			break
+		}
+		currentScope := b.scoper.currentScope()
+		deps, err := b.resolveColumn(node, currentScope, false)
 		if err != nil {
-			return err
+			if deps.direct.NumberOfTables() == 0 ||
+				!strings.HasSuffix(err.Error(), "is ambiguous") ||
+				!b.canRewriteUsingJoin(deps, node) {
+				return err
+			}
+
+			// if we got here it means we are dealing with a ColName that is involved in a JOIN USING.
+			// we do the rewriting of these ColName structs here because it would be difficult to copy all the
+			// needed state over to the earlyRewriter
+			deps, err = b.rewriteJoinUsingColName(deps, node, currentScope)
+			if err != nil {
+				return err
+			}
 		}
 		b.recursive[node] = deps.recursive
 		b.direct[node] = deps.direct
@@ -96,6 +136,48 @@ func (b *binder) up(cursor *sqlparser.Cursor) error {
 		b.direct[node] = ts
 	}
 	return nil
+}
+
+func (b *binder) rewriteJoinUsingColName(deps dependency, node *sqlparser.ColName, currentScope *scope) (dependency, error) {
+	constituents := deps.recursive.Constituents()
+	if len(constituents) < 1 {
+		return dependency{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "not expected - we should not a colname that depends on nothing")
+	}
+	newTbl := constituents[0]
+	infoFor, err := b.tc.tableInfoFor(newTbl)
+	if err != nil {
+		return dependency{}, err
+	}
+	alias := infoFor.getExpr().As
+	if alias.IsEmpty() {
+		name, err := infoFor.Name()
+		if err != nil {
+			return dependency{}, err
+		}
+		node.Qualifier = name
+	} else {
+		node.Qualifier = sqlparser.TableName{
+			Name: sqlparser.NewTableIdent(alias.String()),
+		}
+	}
+	deps, err = b.resolveColumn(node, currentScope, false)
+	if err != nil {
+		return dependency{}, err
+	}
+	return deps, nil
+}
+
+// canRewriteUsingJoin will return true when this ColName is safe to rewrite since it can only belong to a USING JOIN
+func (b *binder) canRewriteUsingJoin(deps dependency, node *sqlparser.ColName) bool {
+	tbls := deps.direct.Constituents()
+	colName := node.Name.Lowered()
+	for _, tbl := range tbls {
+		m := b.usingJoinInfo[tbl]
+		if _, found := m[colName]; !found {
+			return false
+		}
+	}
+	return true
 }
 
 // setSubQueryDependencies sets the correct dependencies for the subquery
@@ -154,25 +236,32 @@ func (b *binder) createExtractedSubquery(cursor *sqlparser.Cursor, currScope *sc
 	return sq, nil
 }
 
-func (b *binder) resolveColumn(colName *sqlparser.ColName, current *scope) (deps dependency, err error) {
+func (b *binder) resolveColumn(colName *sqlparser.ColName, current *scope, allowMulti bool) (dependency, error) {
 	var thisDeps dependencies
 	for current != nil {
-		thisDeps, err = b.resolveColumnInScope(current, colName)
+		var err error
+		thisDeps, err = b.resolveColumnInScope(current, colName, allowMulti)
 		if err != nil {
 			err = makeAmbiguousError(colName, err)
-			return dependency{}, err
+			if thisDeps == nil {
+				return dependency{}, err
+			}
 		}
 		if !thisDeps.empty() {
-			deps, err = thisDeps.get()
-			err = makeAmbiguousError(colName, err)
+			deps, thisErr := thisDeps.get()
+			if thisErr != nil {
+				err = makeAmbiguousError(colName, thisErr)
+			}
 			return deps, err
+		} else if err != nil {
+			return dependency{}, err
 		}
 		current = current.parent
 	}
 	return dependency{}, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "symbol %s not found", sqlparser.String(colName))
 }
 
-func (b *binder) resolveColumnInScope(current *scope, expr *sqlparser.ColName) (dependencies, error) {
+func (b *binder) resolveColumnInScope(current *scope, expr *sqlparser.ColName, allowMulti bool) (dependencies, error) {
 	var deps dependencies = &nothing{}
 	for _, table := range current.tables {
 		if !expr.Qualifier.IsEmpty() && !table.matches(expr.Qualifier) {
@@ -182,10 +271,7 @@ func (b *binder) resolveColumnInScope(current *scope, expr *sqlparser.ColName) (
 		if err != nil {
 			return nil, err
 		}
-		deps, err = thisDeps.merge(deps)
-		if err != nil {
-			return nil, err
-		}
+		deps = thisDeps.merge(deps, allowMulti)
 	}
 	if deps, isUncertain := deps.(*uncertain); isUncertain && deps.fail {
 		// if we have a failure from uncertain, we matched the column to multiple non-authoritative tables

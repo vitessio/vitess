@@ -82,6 +82,10 @@ func loadMysqlMetadata() (all AllMetadata) {
 		}
 		_ = rf.Close()
 
+		if _, aliased := CharsetAliases[meta.Charset]; aliased {
+			meta.Charset = CharsetAliases[meta.Charset]
+		}
+
 		all = append(all, &meta)
 	}
 

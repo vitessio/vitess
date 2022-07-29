@@ -1722,15 +1722,21 @@ Gen4 plan same as above
     ],
     "Inputs": [
       {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select col from `user` where 1 != 1",
-        "Query": "select col from `user`",
-        "Table": "`user`"
+        "OperatorType": "Limit",
+        "Count": "INT64(1)",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from `user` where 1 != 1",
+            "Query": "select 1 from `user` limit :__upper_limit",
+            "Table": "`user`"
+          }
+        ]
       },
       {
         "OperatorType": "Route",
@@ -1757,15 +1763,21 @@ Gen4 plan same as above
     ],
     "Inputs": [
       {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select col from `user` where 1 != 1",
-        "Query": "select col from `user`",
-        "Table": "`user`"
+        "OperatorType": "Limit",
+        "Count": "INT64(1)",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from `user` where 1 != 1",
+            "Query": "select 1 from `user` limit :__upper_limit",
+            "Table": "`user`"
+          }
+        ]
       },
       {
         "OperatorType": "Route",
@@ -2100,18 +2112,14 @@ Gen4 plan same as above
   "Original": "select id from music where id is null",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "EqualUnique",
+    "Variant": "Scatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
     "FieldQuery": "select id from music where 1 != 1",
     "Query": "select id from music where id is null",
-    "Table": "music",
-    "Values": [
-      "NULL"
-    ],
-    "Vindex": "music_user_map"
+    "Table": "music"
   }
 }
 Gen4 plan same as above
@@ -2614,7 +2622,7 @@ Gen4 plan same as above
       "Sharded": true
     },
     "FieldQuery": "select u1.col from `user` as u1 where 1 != 1",
-    "Query": "select u1.col from `user` as u1 where u1.id = 5 and exists (select u2.`name` from `user` as u2 where u2.id = 5)",
+    "Query": "select u1.col from `user` as u1 where u1.id = 5 and exists (select 1 from `user` as u2 where u2.id = 5 limit 1)",
     "Table": "`user`",
     "Values": [
       "INT64(5)"
@@ -2637,7 +2645,7 @@ Gen4 plan same as above
       "Sharded": true
     },
     "FieldQuery": "select u1.col from `user` as u1 where 1 != 1",
-    "Query": "select u1.col from `user` as u1 where u1.id = 5 and not exists (select u2.`name` from `user` as u2 where u2.id = 5)",
+    "Query": "select u1.col from `user` as u1 where u1.id = 5 and not exists (select 1 from `user` as u2 where u2.id = 5 limit 1)",
     "Table": "`user`",
     "Values": [
       "INT64(5)"
@@ -2667,8 +2675,8 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select u2.`name` from `user` as u2 where 1 != 1",
-        "Query": "select u2.`name` from `user` as u2 where u2.id = 5",
+        "FieldQuery": "select 1 from `user` as u2 where 1 != 1",
+        "Query": "select 1 from `user` as u2 where u2.id = 5 limit 1",
         "Table": "`user`",
         "Values": [
           "INT64(5)"
@@ -2706,8 +2714,8 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select u2.`name` from `user` as u2 where 1 != 1",
-        "Query": "select u2.`name` from `user` as u2 where u2.id = 5",
+        "FieldQuery": "select 1 from `user` as u2 where 1 != 1",
+        "Query": "select 1 from `user` as u2 where u2.id = 5 limit 1",
         "Table": "`user`",
         "Values": [
           "INT64(5)"
@@ -4039,3 +4047,26 @@ Gen4 plan same as above
     "Vindex": "user_index"
   }
 }
+
+# Don't pick a vindex for an IS NULL predicate if it's a lookup vindex
+"select id from music where id is null and user_id in (1,2)"
+{
+  "QueryType": "SELECT",
+  "Original": "select id from music where id is null and user_id in (1,2)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "IN",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from music where 1 != 1",
+    "Query": "select id from music where id is null and user_id in ::__vals",
+    "Table": "music",
+    "Values": [
+      "(INT64(1), INT64(2))"
+    ],
+    "Vindex": "user_index"
+  }
+}
+Gen4 plan same as above

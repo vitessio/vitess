@@ -81,6 +81,8 @@ type RPCTM interface {
 
 	ReplicationStatus(ctx context.Context) (*replicationdatapb.Status, error)
 
+	FullStatus(ctx context.Context) (*replicationdatapb.FullStatus, error)
+
 	StopReplication(ctx context.Context) error
 
 	StopReplicationMinimum(ctx context.Context, position string, waitTime time.Duration) (string, error)
@@ -102,6 +104,9 @@ type RPCTM interface {
 	VReplicationExec(ctx context.Context, query string) (*querypb.QueryResult, error)
 	VReplicationWaitForPos(ctx context.Context, id int, pos string) error
 
+	// VDiff API
+	VDiff(ctx context.Context, req *tabletmanagerdatapb.VDiffRequest) (*tabletmanagerdatapb.VDiffResponse, error)
+
 	// Reparenting related functions
 
 	ResetReplication(ctx context.Context) error
@@ -117,6 +122,8 @@ type RPCTM interface {
 	UndoDemotePrimary(ctx context.Context, semiSync bool) error
 
 	ReplicaWasPromoted(ctx context.Context) error
+
+	ResetReplicationParameters(ctx context.Context) error
 
 	SetReplicationSource(ctx context.Context, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool, semiSync bool) error
 

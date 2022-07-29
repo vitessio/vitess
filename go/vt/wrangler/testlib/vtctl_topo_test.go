@@ -17,14 +17,13 @@ limitations under the License.
 package testlib
 
 import (
+	"context"
 	"os"
 	"path"
 	"strings"
 	"testing"
 
 	"google.golang.org/protobuf/proto"
-
-	"context"
 
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 
@@ -63,11 +62,7 @@ func TestVtctlTopoCommands(t *testing.T) {
 	vp := NewVtctlPipe(t, ts)
 	defer vp.Close()
 
-	tmp, err := os.MkdirTemp("", "vtctltopotest")
-	if err != nil {
-		t.Fatalf("TempDir failed: %v", err)
-	}
-	defer os.RemoveAll(tmp)
+	tmp := t.TempDir()
 
 	// Test TopoCat.
 	testVtctlTopoCommand(t, vp, []string{"TopoCat", "-long", "-decode_proto", "/keyspaces/*/Keyspace"}, `path=/keyspaces/ks1/Keyspace version=V
@@ -78,7 +73,7 @@ sharding_column_name:"col2"
 
 	// Test TopoCp from topo to disk.
 	ksFile := path.Join(tmp, "Keyspace")
-	_, err = vp.RunAndOutput([]string{"TopoCp", "/keyspaces/ks1/Keyspace", ksFile})
+	_, err := vp.RunAndOutput([]string{"TopoCp", "/keyspaces/ks1/Keyspace", ksFile})
 	if err != nil {
 		t.Fatalf("TopoCp(/keyspaces/ks1/Keyspace) failed: %v", err)
 	}

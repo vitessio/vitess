@@ -75,9 +75,7 @@ func TestPersistentMode(t *testing.T) {
 	conf := config
 	defer resetFlags(args, conf)
 
-	dir, err := os.MkdirTemp("/tmp", "vttestserver_persistent_mode_")
-	assert.NoError(t, err)
-	defer os.RemoveAll(dir)
+	dir := t.TempDir()
 
 	cluster, err := startPersistentCluster(dir)
 	assert.NoError(t, err)
@@ -224,11 +222,7 @@ func TestMtlsAuth(t *testing.T) {
 	defer resetFlags(args, conf)
 
 	// Our test root.
-	root, err := os.MkdirTemp("", "tlstest")
-	if err != nil {
-		t.Fatalf("TempDir failed: %v", err)
-	}
-	defer os.RemoveAll(root)
+	root := t.TempDir()
 
 	// Create the certs and configs.
 	tlstest.CreateCA(root)
@@ -267,11 +261,7 @@ func TestMtlsAuthUnauthorizedFails(t *testing.T) {
 	defer resetFlags(args, conf)
 
 	// Our test root.
-	root, err := os.MkdirTemp("", "tlstest")
-	if err != nil {
-		t.Fatalf("TempDir failed: %v", err)
-	}
-	defer os.RemoveAll(root)
+	root := t.TempDir()
 
 	// Create the certs and configs.
 	tlstest.CreateCA(root)

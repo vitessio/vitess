@@ -472,6 +472,16 @@ func (s *VtctldServer) ChangeTabletType(ctx context.Context, req *vtctldatapb.Ch
 		return nil, err
 	}
 
+	durabilityName, err := s.ts.GetKeyspaceDurability(ctx, tablet.Keyspace)
+	if err != nil {
+		return nil, err
+	}
+	log.Infof("Getting a new durability policy for %v", durabilityName)
+	durability, err := reparentutil.GetDurabilityPolicy(durabilityName)
+	if err != nil {
+		return nil, err
+	}
+
 	if !shard.HasPrimary() {
 		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no primary tablet for shard %v/%v", tablet.Keyspace, tablet.Shard)
 	}
@@ -493,7 +503,7 @@ func (s *VtctldServer) ChangeTabletType(ctx context.Context, req *vtctldatapb.Ch
 	// Since we want to check the durability rules for the desired state and not before we make that change
 	expectedTablet := proto.Clone(tablet.Tablet).(*topodatapb.Tablet)
 	expectedTablet.Type = req.DbType
-	err = s.tmc.ChangeType(ctx, tablet.Tablet, req.DbType, reparentutil.IsReplicaSemiSync(shardPrimary.Tablet, expectedTablet))
+	err = s.tmc.ChangeType(ctx, tablet.Tablet, req.DbType, reparentutil.IsReplicaSemiSync(durability, shardPrimary.Tablet, expectedTablet))
 	if err != nil {
 		return nil, err
 	}
@@ -525,6 +535,7 @@ func (s *VtctldServer) CreateKeyspace(ctx context.Context, req *vtctldatapb.Crea
 	span.Annotate("sharding_column_type", topoproto.KeyspaceIDTypeLString(req.ShardingColumnType))
 	span.Annotate("force", req.Force)
 	span.Annotate("allow_empty_vschema", req.AllowEmptyVSchema)
+	span.Annotate("durability_policy", req.DurabilityPolicy)
 
 	switch req.Type {
 	case topodatapb.KeyspaceType_NORMAL:
@@ -550,8 +561,9 @@ func (s *VtctldServer) CreateKeyspace(ctx context.Context, req *vtctldatapb.Crea
 
 		ServedFroms: req.ServedFroms,
 
-		BaseKeyspace: req.BaseKeyspace,
-		SnapshotTime: req.SnapshotTime,
+		BaseKeyspace:     req.BaseKeyspace,
+		SnapshotTime:     req.SnapshotTime,
+		DurabilityPolicy: req.DurabilityPolicy,
 	}
 
 	err := s.ts.CreateKeyspace(ctx, req.Name, ki)
@@ -1735,6 +1747,16 @@ func (s *VtctldServer) InitShardPrimaryLocked(
 	}
 	ev.ShardInfo = *shardInfo
 
+	durabilityName, err := s.ts.GetKeyspaceDurability(ctx, req.Keyspace)
+	if err != nil {
+		return err
+	}
+	log.Infof("Getting a new durability policy for %v", durabilityName)
+	durability, err := reparentutil.GetDurabilityPolicy(durabilityName)
+	if err != nil {
+		return err
+	}
+
 	event.DispatchUpdate(ev, "reading tablet map")
 	tabletMap, err := s.ts.GetTabletMapForShard(ctx, req.Keyspace, req.Shard)
 	if err != nil {
@@ -1814,7 +1836,7 @@ func (s *VtctldServer) InitShardPrimaryLocked(
 	// position
 	logger.Infof("initializing primary on %v", topoproto.TabletAliasString(req.PrimaryElectTabletAlias))
 	event.DispatchUpdate(ev, "initializing primary")
-	rp, err := tmc.InitPrimary(ctx, primaryElectTabletInfo.Tablet, reparentutil.SemiSyncAckers(primaryElectTabletInfo.Tablet) > 0)
+	rp, err := tmc.InitPrimary(ctx, primaryElectTabletInfo.Tablet, reparentutil.SemiSyncAckers(durability, primaryElectTabletInfo.Tablet) > 0)
 	if err != nil {
 		return err
 	}
@@ -1855,7 +1877,7 @@ func (s *VtctldServer) InitShardPrimaryLocked(
 			go func(alias string, tabletInfo *topo.TabletInfo) {
 				defer wgReplicas.Done()
 				logger.Infof("initializing replica %v", alias)
-				if err := tmc.InitReplica(replCtx, tabletInfo.Tablet, req.PrimaryElectTabletAlias, rp, now, reparentutil.IsReplicaSemiSync(primaryElectTabletInfo.Tablet, tabletInfo.Tablet)); err != nil {
+				if err := tmc.InitReplica(replCtx, tabletInfo.Tablet, req.PrimaryElectTabletAlias, rp, now, reparentutil.IsReplicaSemiSync(durability, primaryElectTabletInfo.Tablet, tabletInfo.Tablet)); err != nil {
 					rec.RecordError(fmt.Errorf("tablet %v InitReplica failed: %v", alias, err))
 				}
 			}(alias, tabletInfo)
@@ -2300,7 +2322,17 @@ func (s *VtctldServer) ReparentTablet(ctx context.Context, req *vtctldatapb.Repa
 		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot ReparentTablet current shard primary (%v) onto itself", topoproto.TabletAliasString(req.Tablet))
 	}
 
-	if err := s.tmc.SetReplicationSource(ctx, tablet.Tablet, shard.PrimaryAlias, 0, "", false, reparentutil.IsReplicaSemiSync(shardPrimary.Tablet, tablet.Tablet)); err != nil {
+	durabilityName, err := s.ts.GetKeyspaceDurability(ctx, tablet.Keyspace)
+	if err != nil {
+		return nil, err
+	}
+	log.Infof("Getting a new durability policy for %v", durabilityName)
+	durability, err := reparentutil.GetDurabilityPolicy(durabilityName)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := s.tmc.SetReplicationSource(ctx, tablet.Tablet, shard.PrimaryAlias, 0, "", false, reparentutil.IsReplicaSemiSync(durability, shardPrimary.Tablet, tablet.Tablet)); err != nil {
 		return nil, err
 	}
 
@@ -2391,6 +2423,44 @@ func (s *VtctldServer) RunHealthCheck(ctx context.Context, req *vtctldatapb.RunH
 	}
 
 	return &vtctldatapb.RunHealthCheckResponse{}, nil
+}
+
+// SetKeyspaceDurabilityPolicy is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) SetKeyspaceDurabilityPolicy(ctx context.Context, req *vtctldatapb.SetKeyspaceDurabilityPolicyRequest) (*vtctldatapb.SetKeyspaceDurabilityPolicyResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.SetKeyspaceDurabilityPolicy")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("durability_policy", req.DurabilityPolicy)
+
+	ctx, unlock, lockErr := s.ts.LockKeyspace(ctx, req.Keyspace, "SetKeyspaceDurabilityPolicy")
+	if lockErr != nil {
+		return nil, lockErr
+	}
+
+	var err error
+	defer unlock(&err)
+
+	ki, err := s.ts.GetKeyspace(ctx, req.Keyspace)
+	if err != nil {
+		return nil, err
+	}
+
+	policyValid := reparentutil.CheckDurabilityPolicyExists(req.DurabilityPolicy)
+	if !policyValid {
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "durability policy <%v> is not a valid policy. Please register it as a policy first", req.DurabilityPolicy)
+	}
+
+	ki.DurabilityPolicy = req.DurabilityPolicy
+
+	err = s.ts.UpdateKeyspace(ctx, ki)
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.SetKeyspaceDurabilityPolicyResponse{
+		Keyspace: ki.Keyspace,
+	}, nil
 }
 
 // SetKeyspaceServedFrom is part of the vtctlservicepb.VtctldServer interface.
@@ -2964,7 +3034,17 @@ func (s *VtctldServer) StartReplication(ctx context.Context, req *vtctldatapb.St
 		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "primary %v and replica %v not in same keypace shard (%v/%v)", topoproto.TabletAliasString(shard.PrimaryAlias), topoproto.TabletAliasString(tablet.Alias), tablet.Keyspace, tablet.Shard)
 	}
 
-	if err := s.tmc.StartReplication(ctx, tablet.Tablet, reparentutil.IsReplicaSemiSync(shardPrimary.Tablet, tablet.Tablet)); err != nil {
+	durabilityName, err := s.ts.GetKeyspaceDurability(ctx, tablet.Keyspace)
+	if err != nil {
+		return nil, err
+	}
+	log.Infof("Getting a new durability policy for %v", durabilityName)
+	durability, err := reparentutil.GetDurabilityPolicy(durabilityName)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := s.tmc.StartReplication(ctx, tablet.Tablet, reparentutil.IsReplicaSemiSync(durability, shardPrimary.Tablet, tablet.Tablet)); err != nil {
 		log.Errorf("StartReplication: failed to start replication on %v: %v", alias, err)
 		return nil, err
 	}
@@ -3053,7 +3133,17 @@ func (s *VtctldServer) TabletExternallyReparented(ctx context.Context, req *vtct
 
 	event.DispatchUpdate(ev, "starting external reparent")
 
-	if err := s.tmc.ChangeType(ctx, tablet.Tablet, topodatapb.TabletType_PRIMARY, reparentutil.SemiSyncAckers(tablet.Tablet) > 0); err != nil {
+	durabilityName, err := s.ts.GetKeyspaceDurability(ctx, tablet.Keyspace)
+	if err != nil {
+		return nil, err
+	}
+	log.Infof("Getting a new durability policy for %v", durabilityName)
+	durability, err := reparentutil.GetDurabilityPolicy(durabilityName)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := s.tmc.ChangeType(ctx, tablet.Tablet, topodatapb.TabletType_PRIMARY, reparentutil.SemiSyncAckers(durability, tablet.Tablet) > 0); err != nil {
 		log.Warningf("ChangeType(%v, PRIMARY): %v", topoproto.TabletAliasString(req.Tablet), err)
 		return nil, err
 	}

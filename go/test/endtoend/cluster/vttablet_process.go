@@ -414,8 +414,28 @@ func (vttablet *VttabletProcess) QueryTabletWithDB(query string, dbname string) 
 	return executeQuery(conn, query)
 }
 
+// executeQuery will retry the query up to 10 times with a small sleep in between each try.
+// This allows the tests to be more robust in the face of transient failures.
 func executeQuery(dbConn *mysql.Conn, query string) (*sqltypes.Result, error) {
-	return dbConn.ExecuteFetch(query, 10000, true)
+	var (
+		err    error
+		result *sqltypes.Result
+	)
+	retries := 10
+	retryDelay := 1 * time.Second
+	for i := 0; i < retries; i++ {
+		if i > 0 {
+			// We only audit from 2nd attempt and onwards, otherwise this is just too verbose.
+			log.Infof("Executing query %s (attempt %d of %d)", query, (i + 1), retries)
+		}
+		result, err = dbConn.ExecuteFetch(query, 10000, true)
+		if err == nil {
+			break
+		}
+		time.Sleep(retryDelay)
+	}
+
+	return result, err
 }
 
 // GetDBVar returns first matching database variable's value
@@ -465,7 +485,7 @@ func (vttablet *VttabletProcess) WaitForVReplicationToCatchup(t testing.TB, work
 		for duration > 0 {
 			log.Infof("Executing query %s on %s", query, vttablet.Name)
 			lastChecked = time.Now()
-			qr, err := conn.ExecuteFetch(query, 1000, true)
+			qr, err := executeQuery(conn, query)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -514,7 +534,7 @@ func (vttablet *VttabletProcess) BulkLoad(t testing.TB, db, table string, bulkIn
 	defer conn.Close()
 
 	query := fmt.Sprintf("LOAD DATA INFILE '%s' INTO TABLE `%s` FIELDS TERMINATED BY ',' ENCLOSED BY '\"'", tmpbulk.Name(), table)
-	_, err = conn.ExecuteFetch(query, 1, false)
+	_, err = executeQuery(conn, query)
 	if err != nil {
 		t.Fatal(err)
 	}

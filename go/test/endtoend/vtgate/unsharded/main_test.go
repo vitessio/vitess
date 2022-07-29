@@ -460,7 +460,12 @@ func TestFloatValueDefault(t *testing.T) {
 
 	utils.Exec(t, conn, `create table test_float_default (pos_f float default 2.1, neg_f float default -2.1);`)
 	defer utils.Exec(t, conn, `drop table test_float_default`)
-	utils.AssertMatches(t, conn, "select table_name, column_name, column_default from information_schema.columns where table_name = 'test_float_default'", `[[VARCHAR("test_float_default") VARCHAR("pos_f") TEXT("2.1")] [VARCHAR("test_float_default") VARCHAR("neg_f") TEXT("-2.1")]]`)
+
+	want57 := `[[VARCHAR("test_float_default") VARCHAR("pos_f") TEXT("2.1")] [VARCHAR("test_float_default") VARCHAR("neg_f") TEXT("-2.1")]]`
+	want80 := `[[VARBINARY("test_float_default") VARCHAR("pos_f") BLOB("2.1")] [VARBINARY("test_float_default") VARCHAR("neg_f") BLOB("-2.1")]]`
+
+	query := "select table_name, column_name, column_default from information_schema.columns where table_name = 'test_float_default'"
+	utils.AssertMatchesOneOf(t, conn, query, want57, want80)
 }
 
 // TestRowCountExceeded tests the error message received when a query exceeds the row count specified

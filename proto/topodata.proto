@@ -316,7 +316,11 @@ message Keyspace {
   // snapshot_time (in UTC) is a property of snapshot
   // keyspaces which tells us what point in time
   // the snapshot is of
-  vttime.Time snapshot_time = 7;  
+  vttime.Time snapshot_time = 7;
+
+  // DurabilityPolicy is the durability policy to be
+  // used for the keyspace.
+  string durability_policy = 8;
 }
 
 // ShardReplication describes the MySQL replication relationships

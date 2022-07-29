@@ -16,6 +16,11 @@ do
   docker push vitess/k8s:$vt_base_version-$debian_version
   if [[ $debian_version == $default_debian_version ]]; then docker push vitess/k8s:$vt_base_version; fi
 
+  docker build --platform linux/amd64 --build-arg VT_BASE_VER=$vt_base_version --build-arg DEBIAN_VER=$debian_version-slim -t vitess/vtadmin:$vt_base_version-$debian_version k8s/vtadmin
+  docker tag vitess/vtadmin:$vt_base_version-$debian_version vitess/vtadmin:$vt_base_version
+  docker push vitess/vtadmin:$vt_base_version-$debian_version
+  if [[ $debian_version == $default_debian_version ]]; then docker push vitess/vtadmin:$vt_base_version; fi
+
   docker build --platform linux/amd64 --build-arg VT_BASE_VER=$vt_base_version --build-arg DEBIAN_VER=$debian_version-slim -t vitess/vtgate:$vt_base_version-$debian_version k8s/vtgate
   docker tag vitess/vtgate:$vt_base_version-$debian_version vitess/vtgate:$vt_base_version
   docker push vitess/vtgate:$vt_base_version-$debian_version

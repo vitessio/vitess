@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vtadmin"
+	"vitess.io/vitess/go/vt/vtadmin/cache"
 	"vitess.io/vitess/go/vt/vtadmin/cluster"
 	"vitess.io/vitess/go/vt/vtadmin/grpcserver"
 	vtadminhttp "vitess.io/vitess/go/vt/vtadmin/http"
@@ -46,6 +47,8 @@ var (
 	rbacConfigPath string
 	enableRBAC     bool
 	disableRBAC    bool
+
+	cacheRefreshKey string
 
 	traceCloser io.Closer = &noopCloser{}
 
@@ -92,7 +95,7 @@ func startTracing(cmd *cobra.Command) {
 }
 
 func run(cmd *cobra.Command, args []string) {
-	bootSpan, _ := trace.NewSpan(context.Background(), "vtadmin.boot")
+	bootSpan, ctx := trace.NewSpan(context.Background(), "vtadmin.boot")
 	defer bootSpan.Finish()
 
 	configs := clusterFileConfig.Combine(defaultClusterConfig, clusterConfigs)
@@ -120,7 +123,7 @@ func run(cmd *cobra.Command, args []string) {
 	}
 
 	for i, cfg := range configs {
-		cluster, err := cfg.Cluster()
+		cluster, err := cfg.Cluster(ctx)
 		if err != nil {
 			bootSpan.Finish()
 			fatal(err)
@@ -128,6 +131,11 @@ func run(cmd *cobra.Command, args []string) {
 
 		clusters[i] = cluster
 	}
+
+	if cacheRefreshKey == "" {
+		log.Warningf("no cache-refresh-key set; forcing cache refreshes will not be possible")
+	}
+	cache.SetCacheRefreshKey(cacheRefreshKey)
 
 	s := vtadmin.NewAPI(clusters, vtadmin.Options{
 		GRPCOpts:              opts,
@@ -171,6 +179,9 @@ func main() {
 	rootCmd.Flags().BoolVar(&httpOpts.DisableDebug, "http-no-debug", false, "whether to disable /debug/pprof/* and /debug/env HTTP endpoints")
 	rootCmd.Flags().Var(&debug.OmitEnv, "http-debug-omit-env", "name of an environment variable to omit from /debug/env, if http debug endpoints are enabled. specify multiple times to omit multiple env vars")
 	rootCmd.Flags().Var(&debug.SanitizeEnv, "http-debug-sanitize-env", "name of an environment variable to sanitize in /debug/env, if http debug endpoints are enabled. specify multiple times to sanitize multiple env vars")
+	rootCmd.Flags().StringVar(&opts.MetricsEndpoint, "http-metrics-endpoint", "/metrics",
+		"HTTP endpoint to expose prometheus metrics on. Omit to disable scraping metrics. "+
+			"Using a path used by VTAdmin's http API is unsupported and causes undefined behavior.")
 	rootCmd.Flags().StringSliceVar(&httpOpts.CORSOrigins, "http-origin", []string{}, "repeated, comma-separated flag of allowed CORS origins. omit to disable CORS")
 	rootCmd.Flags().StringVar(&httpOpts.ExperimentalOptions.TabletURLTmpl,
 		"http-tablet-url-tmpl",
@@ -184,6 +195,12 @@ func main() {
 	rootCmd.Flags().StringVar(&rbacConfigPath, "rbac-config", "", "path to an RBAC config file. must be set if passing --rbac")
 	rootCmd.Flags().BoolVar(&enableRBAC, "rbac", false, "whether to enable RBAC. must be set if not passing --rbac")
 	rootCmd.Flags().BoolVar(&disableRBAC, "no-rbac", false, "whether to disable RBAC. must be set if not passing --no-rbac")
+
+	// Global cache flags (N.B. there are also cluster-specific cache flags)
+	cacheRefreshHelp := "instructs a request to ignore any cached data (if applicable) and refresh the cache;" +
+		"usable as an HTTP header named 'X-<key>' and as a gRPC metadata key '<key>'\n" +
+		"Note: any whitespace characters are replaced with hyphens."
+	rootCmd.Flags().StringVar(&cacheRefreshKey, "cache-refresh-key", "vt-cache-refresh", cacheRefreshHelp)
 
 	// glog flags, no better way to do this
 	rootCmd.Flags().AddGoFlag(flag.Lookup("v"))

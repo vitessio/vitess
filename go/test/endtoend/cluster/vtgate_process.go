@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"os/exec"
@@ -31,6 +32,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
@@ -68,7 +70,6 @@ const defaultVtGatePlannerVersion = planbuilder.Gen4CompareV3
 
 // Setup starts Vtgate process with required arguements
 func (vtgate *VtgateProcess) Setup() (err error) {
-
 	args := []string{
 		"--topo_implementation", vtgate.CommonArg.TopoImplementation,
 		"--topo_global_server_address", vtgate.CommonArg.TopoGlobalAddress,
@@ -85,8 +86,38 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 		"--service_map", vtgate.ServiceMap,
 		"--mysql_auth_server_impl", vtgate.MySQLAuthServerImpl,
 	}
+	// If no explicit mysql_server_version has been specified then we autodetect
+	// the MySQL version that will be used for the test and base the vtgate's
+	// mysql server version on that.
+	msvflag := false
+	for _, f := range vtgate.ExtraArgs {
+		if strings.Contains(f, "mysql_server_version") {
+			msvflag = true
+			break
+		}
+	}
+	if !msvflag {
+		version, err := mysqlctl.GetVersionString()
+		if err != nil {
+			return err
+		}
+		_, vers, err := mysqlctl.ParseVersionString(version)
+		if err != nil {
+			return err
+		}
+		mysqlvers := fmt.Sprintf("%d.%d.%d-vitess", vers.Major, vers.Minor, vers.Patch)
+		args = append(args, "--mysql_server_version", mysqlvers)
+	}
 	if vtgate.PlannerVersion > 0 {
-		args = append(args, "--planner_version", vtgate.PlannerVersion.String())
+		v, err := GetMajorVersion("vtgate")
+		if err != nil {
+			return err
+		}
+		plannerFlag := "--planner-version"
+		if v < 14 {
+			plannerFlag = "--planner_version"
+		}
+		args = append(args, plannerFlag, vtgate.PlannerVersion.String())
 	}
 	if vtgate.SysVarSetEnabled {
 		args = append(args, "--enable_system_settings")
@@ -178,7 +209,9 @@ func (vtgate *VtgateProcess) GetStatusForTabletOfShard(name string, endPointsCou
 // WaitForStatusOfTabletInShard function waits till status of a tablet in shard is 1
 // endPointsCount: how many endpoints to wait for
 func (vtgate *VtgateProcess) WaitForStatusOfTabletInShard(name string, endPointsCount int) error {
-	timeout := time.Now().Add(15 * time.Second)
+	log.Infof("Waiting for healthy status of %d %s tablets in cell %s",
+		endPointsCount, name, vtgate.Cell)
+	timeout := time.Now().Add(30 * time.Second)
 	for time.Now().Before(timeout) {
 		if vtgate.GetStatusForTabletOfShard(name, endPointsCount) {
 			return nil
@@ -270,4 +303,24 @@ func (vtgate *VtgateProcess) GetVars() (map[string]any, error) {
 		return resultMap, nil
 	}
 	return nil, fmt.Errorf("unsuccessful response")
+}
+
+// ReadVSchema reads the vschema from the vtgate endpoint for it and returns
+// a pointer to the interface. To read this vschema, the caller must convert it to a map
+func (vtgate *VtgateProcess) ReadVSchema() (*interface{}, error) {
+	httpClient := &http.Client{Timeout: 5 * time.Second}
+	resp, err := httpClient.Get(vtgate.VSchemaURL)
+	if err != nil {
+		return nil, err
+	}
+	res, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	var results interface{}
+	err = json.Unmarshal(res, &results)
+	if err != nil {
+		return nil, err
+	}
+	return &results, nil
 }

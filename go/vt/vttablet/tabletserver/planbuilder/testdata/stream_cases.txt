@@ -62,5 +62,9 @@
 "syntax error at position 7 near 'syntax'"
 
 # named locks are unsafe with server-side connection pooling
-"select get_lock('foo') from dual"
-"get_lock('foo') not allowed without a reserved connections"
+"select get_lock('foo', 10) from dual"
+"get_lock('foo', 10) not allowed without a reserved connections"
+
+# set statement unsafe with pooling
+"set @udv = 10"
+"set @udv = 10 not allowed without a reserved connections"

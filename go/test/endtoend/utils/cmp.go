@@ -89,6 +89,16 @@ func (mcmp *MySQLCompare) AssertMatchesNoOrder(query, expected string) {
 	assert.Equal(mcmp.t, utils.SortString(expected), utils.SortString(actual), "for query: [%s] expected \n%s \nbut actual \n%s", query, expected, actual)
 }
 
+// AssertMatchesNoOrderInclColumnNames executes the given query against both Vitess and MySQL.
+// The test will be marked as failed if there is a mismatch between the two result sets.
+// This method also checks that the column names are the same and in the same order
+func (mcmp *MySQLCompare) AssertMatchesNoOrderInclColumnNames(query, expected string) {
+	mcmp.t.Helper()
+	qr := mcmp.ExecWithColumnCompare(query)
+	actual := fmt.Sprintf("%v", qr.Rows)
+	assert.Equal(mcmp.t, utils.SortString(expected), utils.SortString(actual), "for query: [%s] expected \n%s \nbut actual \n%s", query, expected, actual)
+}
+
 // AssertIsEmpty executes the given query against both Vitess and MySQL and ensures
 // their results match and are empty.
 func (mcmp *MySQLCompare) AssertIsEmpty(query string) {
@@ -110,6 +120,22 @@ func (mcmp *MySQLCompare) AssertFoundRowsValue(query, workload string, count int
 	assert.Equalf(mcmp.t, want, got, "Workload: %s\nQuery:%s\n", workload, query)
 }
 
+// AssertMatchesNoCompare compares the record of mysql and vitess separately and not with each other.
+func (mcmp *MySQLCompare) AssertMatchesNoCompare(query, mExp string, vExp string) {
+	mcmp.t.Helper()
+	mQr, vQr := mcmp.execNoCompare(query)
+	got := fmt.Sprintf("%v", mQr.Rows)
+	diff := cmp.Diff(mExp, got)
+	if diff != "" {
+		mcmp.t.Errorf("MySQL Query: %s (-want +got):\n%s\nGot:%s", query, diff, got)
+	}
+	got = fmt.Sprintf("%v", vQr.Rows)
+	diff = cmp.Diff(vExp, got)
+	if diff != "" {
+		mcmp.t.Errorf("Vitess Query: %s (-want +got):\n%s\nGot:%s", query, diff, got)
+	}
+}
+
 // Exec executes the given query against both Vitess and MySQL and compares
 // the two result set. If there is a mismatch, the difference will be printed and the
 // test will fail. If the query produces an error in either Vitess or MySQL, the test
@@ -122,7 +148,33 @@ func (mcmp *MySQLCompare) Exec(query string) *sqltypes.Result {
 
 	mysqlQr, err := mcmp.MySQLConn.ExecuteFetch(query, 1000, true)
 	require.NoError(mcmp.t, err, "[MySQL Error] for query: "+query)
-	compareVitessAndMySQLResults(mcmp.t, query, vtQr, mysqlQr)
+	compareVitessAndMySQLResults(mcmp.t, query, vtQr, mysqlQr, false)
+	return vtQr
+}
+
+func (mcmp *MySQLCompare) execNoCompare(query string) (*sqltypes.Result, *sqltypes.Result) {
+	mcmp.t.Helper()
+	vtQr, err := mcmp.VtConn.ExecuteFetch(query, 1000, true)
+	require.NoError(mcmp.t, err, "[Vitess Error] for query: "+query)
+
+	mysqlQr, err := mcmp.MySQLConn.ExecuteFetch(query, 1000, true)
+	require.NoError(mcmp.t, err, "[MySQL Error] for query: "+query)
+	return mysqlQr, vtQr
+}
+
+// ExecWithColumnCompare executes the given query against both Vitess and MySQL and compares
+// the two result set. If there is a mismatch, the difference will be printed and the
+// test will fail. If the query produces an error in either Vitess or MySQL, the test
+// will be marked as failed.
+// The result set of Vitess is returned to the caller.
+func (mcmp *MySQLCompare) ExecWithColumnCompare(query string) *sqltypes.Result {
+	mcmp.t.Helper()
+	vtQr, err := mcmp.VtConn.ExecuteFetch(query, 1000, true)
+	require.NoError(mcmp.t, err, "[Vitess Error] for query: "+query)
+
+	mysqlQr, err := mcmp.MySQLConn.ExecuteFetch(query, 1000, true)
+	require.NoError(mcmp.t, err, "[MySQL Error] for query: "+query)
+	compareVitessAndMySQLResults(mcmp.t, query, vtQr, mysqlQr, true)
 	return vtQr
 }
 
@@ -140,7 +192,7 @@ func (mcmp *MySQLCompare) ExecAllowAndCompareError(query string) (*sqltypes.Resu
 	// Since we allow errors, we don't want to compare results if one of the client failed.
 	// Vitess and MySQL should always be agreeing whether the query returns an error or not.
 	if vtErr == nil && mysqlErr == nil {
-		compareVitessAndMySQLResults(mcmp.t, query, vtQr, mysqlQr)
+		compareVitessAndMySQLResults(mcmp.t, query, vtQr, mysqlQr, false)
 	}
 	return vtQr, vtErr
 }

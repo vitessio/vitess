@@ -12,9 +12,6 @@ relay_log_info_repository = TABLE
 relay_log_purge = 1
 relay_log_recovery = 1
 
-# we should never need super privileges
-super-read-only
-
 # In MySQL 5.7 the default charset is latin1
 
 character_set_server = utf8

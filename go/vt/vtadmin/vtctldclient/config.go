@@ -20,11 +20,13 @@ import (
 	"fmt"
 
 	"github.com/spf13/pflag"
+	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/resolver"
 	"vitess.io/vitess/go/vt/vtadmin/credentials"
+	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
 
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 )
@@ -37,6 +39,24 @@ type Config struct {
 	Cluster *vtadminpb.Cluster
 
 	ResolverOptions *resolver.Options
+
+	dialFunc func(addr string, ff grpcclient.FailFast, opts ...grpc.DialOption) (vtctldclient.VtctldClient, error)
+}
+
+// ConfigOption is a function that mutates a Config. It should return the same
+// Config structure, in a builder-pattern style.
+type ConfigOption func(cfg *Config) *Config
+
+// WithDialFunc returns a ConfigOption that applies the given dial function to
+// a Config.
+//
+// It is used to support dependency injection in tests, and needs to be exported
+// for higher-level tests (via vtadmin/testutil).
+func WithDialFunc(f func(addr string, ff grpcclient.FailFast, opts ...grpc.DialOption) (vtctldclient.VtctldClient, error)) ConfigOption {
+	return func(cfg *Config) *Config {
+		cfg.dialFunc = f
+		return cfg
+	}
 }
 
 // Parse returns a new config with the given cluster and discovery, after

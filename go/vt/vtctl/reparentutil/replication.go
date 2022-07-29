@@ -26,6 +26,7 @@ import (
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/concurrency"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/topo"
@@ -123,6 +124,7 @@ func FindValidEmergencyReparentCandidates(
 		case len(errantGTIDs) != 0:
 			// This tablet has errant GTIDs. It's not a valid candidate for
 			// reparent, so don't insert it into the final mapping.
+			log.Errorf("skipping %v because we detected errant GTIDs - %v", alias, errantGTIDs)
 			continue
 		}
 
@@ -150,7 +152,21 @@ func ReplicaWasRunning(stopStatus *replicationdatapb.StopReplicationStatus) (boo
 		return false, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "could not determine Before state of StopReplicationStatus %v", stopStatus)
 	}
 
-	return stopStatus.Before.IoState == int32(mysql.ReplicationStateRunning) || stopStatus.Before.SqlState == int32(mysql.ReplicationStateRunning), nil
+	replStatus := mysql.ProtoToReplicationStatus(stopStatus.Before)
+	return (replStatus.IOState == mysql.ReplicationStateRunning) ||
+		(replStatus.SQLState == mysql.ReplicationStateRunning), nil
+}
+
+// SQLThreadWasRunning returns true if a StopReplicationStatus indicates that the
+// replica had a running sql thread. It returns an
+// error if the Before state of replication is nil.
+func SQLThreadWasRunning(stopStatus *replicationdatapb.StopReplicationStatus) (bool, error) {
+	if stopStatus == nil || stopStatus.Before == nil {
+		return false, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "could not determine Before state of StopReplicationStatus %v", stopStatus)
+	}
+
+	replStatus := mysql.ProtoToReplicationStatus(stopStatus.Before)
+	return replStatus.SQLState == mysql.ReplicationStateRunning, nil
 }
 
 // SetReplicationSource is used to set the replication source on the specified
@@ -168,7 +184,17 @@ func SetReplicationSource(ctx context.Context, ts *topo.Server, tmc tmclient.Tab
 		return nil
 	}
 
-	isSemiSync := IsReplicaSemiSync(shardPrimary.Tablet, tablet)
+	durabilityName, err := ts.GetKeyspaceDurability(ctx, tablet.Keyspace)
+	if err != nil {
+		return err
+	}
+	log.Infof("Getting a new durability policy for %v", durabilityName)
+	durability, err := GetDurabilityPolicy(durabilityName)
+	if err != nil {
+		return err
+	}
+
+	isSemiSync := IsReplicaSemiSync(durability, shardPrimary.Tablet, tablet)
 	return tmc.SetReplicationSource(ctx, tablet, shardPrimary.Alias, 0, "", false, isSemiSync)
 }
 
@@ -192,6 +218,7 @@ func stopReplicationAndBuildStatusMaps(
 	waitReplicasTimeout time.Duration,
 	ignoredTablets sets.String,
 	tabletToWaitFor *topodatapb.TabletAlias,
+	durability Durabler,
 	logger logutil.Logger,
 ) (*replicationSnapshot, error) {
 	event.DispatchUpdate(ev, "stop replication on all replicas")
@@ -229,10 +256,10 @@ func stopReplicationAndBuildStatusMaps(
 
 				primaryStatus, err = tmc.DemotePrimary(groupCtx, tabletInfo.Tablet)
 				if err != nil {
-					msg := "replica %v thinks it's primary but we failed to demote it"
-					err = vterrors.Wrapf(err, msg+": %v", alias, err)
+					msg := "replica %v thinks it's primary but we failed to demote it: %v"
+					err = vterrors.Wrapf(err, msg, alias, err)
 
-					logger.Warningf(msg, alias)
+					logger.Warningf(msg, alias, err)
 					return
 				}
 
@@ -245,10 +272,24 @@ func stopReplicationAndBuildStatusMaps(
 				err = vterrors.Wrapf(err, "error when getting replication status for alias %v: %v", alias, err)
 			}
 		} else {
-			m.Lock()
-			res.statusMap[alias] = stopReplicationStatus
-			res.reachableTablets = append(res.reachableTablets, tabletInfo.Tablet)
-			m.Unlock()
+			var sqlThreadRunning bool
+			// Check if the sql thread was running for the tablet
+			sqlThreadRunning, err = SQLThreadWasRunning(stopReplicationStatus)
+			if err == nil {
+				// If the sql thread was running, then we will add the tablet to the status map and the list of
+				// reachable tablets.
+				if sqlThreadRunning {
+					m.Lock()
+					res.statusMap[alias] = stopReplicationStatus
+					res.reachableTablets = append(res.reachableTablets, tabletInfo.Tablet)
+					m.Unlock()
+				} else {
+					// If the sql thread was stopped, we do not consider the tablet as reachable
+					// The user must either explicitly ignore this tablet or start its replication
+					logger.Warningf("sql thread stopped on tablet - %v", alias)
+					err = vterrors.New(vtrpc.Code_FAILED_PRECONDITION, "sql thread stopped on tablet - "+alias)
+				}
+			}
 		}
 	}
 
@@ -280,7 +321,7 @@ func stopReplicationAndBuildStatusMaps(
 		return res, nil
 	}
 	// check that the tablets we were able to reach are sufficient for us to guarantee that no new write will be accepted by any tablet
-	revokeSuccessful := haveRevoked(res.reachableTablets, allTablets)
+	revokeSuccessful := haveRevoked(durability, res.reachableTablets, allTablets)
 	if !revokeSuccessful {
 		return nil, vterrors.Wrapf(errRecorder.Error(), "could not reach sufficient tablets to guarantee safety: %v", errRecorder.Error())
 	}
@@ -295,7 +336,7 @@ func stopReplicationAndBuildStatusMaps(
 func WaitForRelayLogsToApply(ctx context.Context, tmc tmclient.TabletManagerClient, tabletInfo *topo.TabletInfo, status *replicationdatapb.StopReplicationStatus) error {
 	switch status.After.RelayLogPosition {
 	case "":
-		return tmc.WaitForPosition(ctx, tabletInfo.Tablet, status.After.FileRelayLogPosition)
+		return tmc.WaitForPosition(ctx, tabletInfo.Tablet, status.After.RelayLogSourceBinlogEquivalentPosition)
 	default:
 		return tmc.WaitForPosition(ctx, tabletInfo.Tablet, status.After.RelayLogPosition)
 	}

@@ -176,6 +176,11 @@ func tmcStartReplication(ctx context.Context, tabletGrpcPort int) error {
 	return tmClient.StartReplication(ctx, vtablet, false)
 }
 
+func tmcResetReplicationParameters(ctx context.Context, tabletGrpcPort int) error {
+	vttablet := getTablet(tabletGrpcPort)
+	return tmClient.ResetReplicationParameters(ctx, vttablet)
+}
+
 func tmcPrimaryPosition(ctx context.Context, tabletGrpcPort int) (string, error) {
 	vtablet := getTablet(tabletGrpcPort)
 	return tmClient.PrimaryPosition(ctx, vtablet)

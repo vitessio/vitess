@@ -55,6 +55,11 @@ type fakeRPCTM struct {
 	mu sync.Mutex
 }
 
+func (fra *fakeRPCTM) VDiff(ctx context.Context, req *tabletmanagerdatapb.VDiffRequest) (*tabletmanagerdatapb.VDiffResponse, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (fra *fakeRPCTM) LockTables(ctx context.Context) error {
 	panic("implement me")
 }
@@ -694,6 +699,10 @@ var testReplicationStatus = &replicationdatapb.Status{
 	ConnectRetry:          12,
 }
 
+var testFullStatus = &replicationdatapb.FullStatus{
+	ReplicationStatus: testReplicationStatus,
+}
+
 var testPrimaryStatus = &replicationdatapb.PrimaryStatus{Position: "MariaDB/1-345-789"}
 
 func (fra *fakeRPCTM) PrimaryStatus(ctx context.Context) (*replicationdatapb.PrimaryStatus, error) {
@@ -718,6 +727,23 @@ func tmRPCTestReplicationStatus(ctx context.Context, t *testing.T, client tmclie
 func tmRPCTestReplicationStatusPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	_, err := client.ReplicationStatus(ctx, tablet)
 	expectHandleRPCPanic(t, "ReplicationStatus", false /*verbose*/, err)
+}
+
+func (fra *fakeRPCTM) FullStatus(ctx context.Context) (*replicationdatapb.FullStatus, error) {
+	if fra.panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
+	return testFullStatus, nil
+}
+
+func tmRPCTestFullStatus(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	rs, err := client.FullStatus(ctx, tablet)
+	compareError(t, "FullStatus", err, rs, testFullStatus)
+}
+
+func tmRPCTestFullStatusPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	_, err := client.FullStatus(ctx, tablet)
+	expectHandleRPCPanic(t, "FullStatus", false /*verbose*/, err)
 }
 
 var testReplicationPosition = "MariaDB/5-456-890"
@@ -1044,6 +1070,26 @@ func tmRPCTestReplicaWasPromotedPanic(ctx context.Context, t *testing.T, client 
 	expectHandleRPCPanic(t, "ReplicaWasPromoted", true /*verbose*/, err)
 }
 
+var testResetReplicationParametersCalled = false
+
+func (fra *fakeRPCTM) ResetReplicationParameters(ctx context.Context) error {
+	if fra.panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
+	testResetReplicationParametersCalled = true
+	return nil
+}
+
+func tmRPCTestResetReplicationParameters(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	err := client.ResetReplicationParameters(ctx, tablet)
+	compareError(t, "ResetReplicationParameters", err, true, testResetReplicationParametersCalled)
+}
+
+func tmRPCTestResetReplicationParametersPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	err := client.ResetReplicationParameters(ctx, tablet)
+	expectHandleRPCPanic(t, "ResetReplicationParameters", true /*verbose*/, err)
+}
+
 var testSetReplicationSourceCalled = false
 var testForceStartReplica = true
 
@@ -1255,6 +1301,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 	tmRPCTestPrimaryPosition(ctx, t, client, tablet)
 
 	tmRPCTestReplicationStatus(ctx, t, client, tablet)
+	tmRPCTestFullStatus(ctx, t, client, tablet)
 	tmRPCTestPrimaryPosition(ctx, t, client, tablet)
 	tmRPCTestStopReplication(ctx, t, client, tablet)
 	tmRPCTestStopReplicationMinimum(ctx, t, client, tablet)
@@ -1279,6 +1326,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 	tmRPCTestInitReplica(ctx, t, client, tablet)
 	tmRPCTestReplicaWasPromoted(ctx, t, client, tablet)
 	tmRPCTestReplicaWasRestarted(ctx, t, client, tablet)
+	tmRPCTestResetReplicationParameters(ctx, t, client, tablet)
 
 	// Backup / restore related methods
 	tmRPCTestBackup(ctx, t, client, tablet)
@@ -1309,6 +1357,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 	// Replication related methods
 	tmRPCTestPrimaryPositionPanic(ctx, t, client, tablet)
 	tmRPCTestReplicationStatusPanic(ctx, t, client, tablet)
+	tmRPCTestFullStatusPanic(ctx, t, client, tablet)
 	tmRPCTestStopReplicationPanic(ctx, t, client, tablet)
 	tmRPCTestStopReplicationMinimumPanic(ctx, t, client, tablet)
 	tmRPCTestStartReplicationPanic(ctx, t, client, tablet)
@@ -1329,6 +1378,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 
 	tmRPCTestInitReplicaPanic(ctx, t, client, tablet)
 	tmRPCTestReplicaWasPromotedPanic(ctx, t, client, tablet)
+	tmRPCTestResetReplicationParametersPanic(ctx, t, client, tablet)
 	tmRPCTestReplicaWasRestartedPanic(ctx, t, client, tablet)
 	// Backup / restore related methods
 	tmRPCTestBackupPanic(ctx, t, client, tablet)

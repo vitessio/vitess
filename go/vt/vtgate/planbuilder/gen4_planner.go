@@ -95,12 +95,14 @@ func gen4SelectStmtPlanner(
 	}
 
 	primitive := plan.Primitive()
-	if rb, ok := primitive.(*engine.Route); ok {
+	if rb, ok := primitive.(*engine.Route); ok && isSel {
 		// this is done because engine.Route doesn't handle the empty result well
 		// if it doesn't find a shard to send the query to.
 		// All other engine primitives can handle this, so we only need it when
 		// Route is the last (and only) instruction before the user sees a result
-		rb.NoRoutesSpecialHandling = true
+		if isOnlyDual(sel) || (len(sel.GroupBy) == 0 && sel.SelectExprs.AllAggregation()) {
+			rb.NoRoutesSpecialHandling = true
+		}
 	}
 
 	return primitive, nil
@@ -413,7 +415,7 @@ func planHorizon(ctx *plancontext.PlanningContext, plan logicalPlan, in sqlparse
 }
 
 func planOrderByOnUnion(ctx *plancontext.PlanningContext, plan logicalPlan, union *sqlparser.Union) (logicalPlan, error) {
-	qp, err := abstract.CreateQPFromUnion(union, ctx.SemTable)
+	qp, err := abstract.CreateQPFromUnion(union)
 	if err != nil {
 		return nil, err
 	}

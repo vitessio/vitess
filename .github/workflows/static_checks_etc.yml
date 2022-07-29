@@ -1,0 +1,179 @@
+name: Static Code Checks, Etc.
+
+on:
+  - pull_request
+  - push
+
+jobs:
+  build:
+    name: Static Code Checks Etc
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check if workflow needs to be skipped
+        id: skip-workflow
+        run: |
+          skip='false'
+          if [[ "${{github.event.pull_request}}" ==  "" ]] && [[ "${{github.ref}}" != "refs/heads/main" ]] && [[ ! "${{github.ref}}" =~ ^refs/heads/release-[0-9]+\.[0-9]$ ]] && [[ ! "${{github.ref}}" =~ "refs/tags/.*" ]]; then
+            skip='true'
+          fi
+          echo Skip ${skip}
+          echo "::set-output name=skip-workflow::${skip}"  
+
+      - name: Checkout code
+        if: steps.skip-workflow.outputs.skip-workflow == 'false'
+        uses: actions/checkout@v2
+
+      - name: Run FOSSA scan and upload build data
+        if: steps.skip-workflow.outputs.skip-workflow == 'false'
+        uses: fossa-contrib/fossa-action@v1
+        with:
+          fossa-api-key: 76d7483ea206d530d9452e44bffe7ba8
+
+      - name: Check for changes in Go files
+        if: steps.skip-workflow.outputs.skip-workflow == 'false'
+        uses: frouioui/paths-filter@main
+        id: changes
+        with:
+          token: ''
+          filters: |
+            go_files:
+              - '**/*.go'
+              - '*.go'
+              - 'go.[sumod]'
+            parser_changes:
+              - 'go/vt/sqlparser/**'
+              - 'go.[sumod]'
+              - 'build.env'
+              - 'bootstrap.sh'
+              - 'tools/**'
+            proto_changes:
+              - 'bootstrap.sh'
+              - 'tools/**'
+              - 'build.env'
+              - 'go.[sumod]'
+              - 'Makefile'
+              - 'go/vt/proto/**'
+              - 'proto/*.proto'
+            sizegen:
+              - 'go/**/*.go'
+              - 'test.go'
+              - 'Makefile'
+              - 'build.env'
+              - 'go.[sumod]'
+              - 'tools/**'
+              - 'bootstrap.sh'
+            visitor:
+              - 'go/tools/asthelpergen/**'
+              - 'go/vt/sqlparser/**'
+              - 'Makefile'
+              - 'build.env'
+              - 'go.[sumod]'
+              - 'tools/**'
+              - 'bootstrap.sh'
+              - 'misc/git/hooks/asthelpers'
+            docker:
+              - 'docker/**'
+              - 'test.go'
+              - 'Makefile'
+              - 'bootstrap.sh'
+
+      ## Setup and install
+      - name: Set up Go
+        if: steps.skip-workflow.outputs.skip-workflow == 'false'
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.18.4
+
+      - name: Get dependencies
+        if: steps.skip-workflow.outputs.skip-workflow == 'false'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y make unzip g++ etcd curl git wget
+          sudo service etcd stop
+          go mod download
+
+      - name: Run make minimaltools
+        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.parser_changes == 'true' || steps.changes.outputs.proto_changes == 'true'
+        run: |
+          make minimaltools
+
+      - name: Install golangci-lint
+        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.go_files == 'true'
+        run: |
+          go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.45.2
+
+      - name: Install goimports
+        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.go_files == 'true' || steps.changes.outputs.visitor == 'true'
+        run: |
+          go install golang.org/x/tools/cmd/goimports@latest
+
+      ## Go files
+      - name: Run go fmt
+        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.go_files == 'true'
+        run: |
+          gofmt -l . | grep -vF vendor/ && exit 1 || echo "All files formatted correctly"
+
+      - name: Run goimports
+        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.go_files == 'true'
+        run: |
+          out=$(goimports -local vitess.io/vitess -l -w $(find . -name "*.go" | grep -v ".pb.go"))
+          echo $out | grep go > /dev/null && echo -e "The following files are malformatted:\n$out" && exit 1 || echo "All the files are formatted correctly"
+
+      - name: Clean Env
+        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.go_files == 'true'
+        run: $(go env GOPATH)/bin/golangci-lint cache clean
+
+      - name: Print linter version
+        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.go_files == 'true'
+        run: $(go env GOPATH)/bin/golangci-lint --version
+
+      - name: Run golangci-lint
+        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.go_files == 'true'
+        run: $(go env GOPATH)/bin/golangci-lint run go/...
+
+      - name: Run go mod tidy
+        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.go_files == 'true'
+        run: |
+          set -e
+          go mod tidy
+          output=$(git status -s)
+          if [ -z "${output}" ]; then
+            exit 0
+          fi
+          echo 'We wish to maintain a tidy state for go mod. Please run `go mod tidy` on your branch, commit and push again.'
+          echo 'Running `go mod tidy` on this CI test yields with the following changes:'
+          echo "$output"
+          exit 1
+
+      ## Parser
+      - name: check_make_parser
+        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.parser_changes == 'true'
+        run: |
+          tools/check_make_parser.sh
+
+      ## Sizegen
+      - name: check_make_sizegen
+        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.sizegen == 'true'
+        run: |
+          tools/check_make_sizegen.sh
+
+      ## Visitor
+      - name: check_make_visitor
+        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.visitor == 'true'
+        run: |
+          misc/git/hooks/asthelpers
+
+      ## Docker
+      - name: run ensure_bootstrap_version
+        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.docker == 'true'
+        run: |
+          make ensure_bootstrap_version
+          git status
+          test -z "$(git diff-index --name-only HEAD --)" || exit 1
+
+      ## Proto
+      - name: check_make_proto
+        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.proto_changes == 'true'
+        run: |
+          tools/check_make_proto.sh

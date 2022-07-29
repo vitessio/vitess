@@ -158,7 +158,7 @@ func VtctldProcessInstance(httpPort int, grpcPort int, topoPort int, hostname st
 		Name:                        "vtctld",
 		Binary:                      "vtctld",
 		CommonArg:                   *vtctl,
-		ServiceMap:                  "grpc-vtctl",
+		ServiceMap:                  "grpc-vtctl,grpc-vtctld",
 		BackupStorageImplementation: "file",
 		FileBackupStorageRoot:       path.Join(os.Getenv("VTDATAROOT"), "/backups"),
 		LogDir:                      tmpDirectory,

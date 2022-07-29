@@ -72,9 +72,7 @@ type API struct {
 
 	authz *rbac.Authorizer
 
-	// See https://github.com/vitessio/vitess/issues/7723 for why this exists.
-	vtexplainLock sync.Mutex
-	options       Options
+	options Options
 }
 
 // Options wraps the configuration options for different components of the
@@ -90,11 +88,6 @@ type Options struct {
 
 // NewAPI returns a new API, configured to service the given set of clusters,
 // and configured with the given options.
-//
-// If opts.GRPCOpts.Services is nil, NewAPI will automatically add
-// "vtadmin.VTAdminServer" to the list of services queryable in the healthcheck
-// service. Callers can opt-out of this behavior by explicitly setting this
-// value to the empty slice.
 func NewAPI(clusters []*cluster.Cluster, opts Options) *API {
 	clusterMap := make(map[string]*cluster.Cluster, len(clusters))
 	for _, cluster := range clusters {
@@ -212,6 +205,28 @@ func NewAPI(clusters []*cluster.Cluster, opts Options) *API {
 	return api
 }
 
+// Close closes all the clusters in an API concurrently. Its primary function is
+// to gracefully shutdown cache background goroutines to avoid data races in
+// tests, but needs to be exported to be called by those tests. It does not have
+// any production use case.
+func (api *API) Close() error {
+	var (
+		wg  sync.WaitGroup
+		rec concurrency.AllErrorRecorder
+	)
+
+	for _, c := range api.clusters {
+		wg.Add(1)
+		go func(c *cluster.Cluster) {
+			defer wg.Done()
+			rec.RecordError(c.Close())
+		}(c)
+	}
+
+	wg.Wait()
+	return rec.Error()
+}
+
 // ListenAndServe starts serving this API on the configured Addr (see
 // grpcserver.Options) until shutdown or irrecoverable error occurs.
 func (api *API) ListenAndServe() error {
@@ -233,7 +248,7 @@ func (api *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if clusterCookie, err := r.Cookie("cluster"); err == nil {
 		urlDecoded, err := url.QueryUnescape(clusterCookie.Value)
 		if err == nil {
-			c, id, err := dynamic.ClusterFromString(urlDecoded)
+			c, id, err := dynamic.ClusterFromString(r.Context(), urlDecoded)
 			if id != "" {
 				if err != nil {
 					log.Warningf("failed to extract valid cluster from cookie; attempting to use existing cluster with id=%s; error: %s", id, err)
@@ -281,6 +296,19 @@ func (api *API) WithCluster(c *cluster.Cluster, id string) dynamic.API {
 			shouldAddCluster = shouldAddCluster || !isEqual
 		}
 		if shouldAddCluster {
+			if existingCluster != nil {
+				if err := existingCluster.Close(); err != nil {
+					log.Errorf("%s; some connections and goroutines may linger", err.Error())
+				}
+
+				idx := stdsort.Search(len(api.clusters), func(i int) bool {
+					return api.clusters[i].ID == existingCluster.ID
+				})
+				if idx >= 0 && idx < len(api.clusters) {
+					api.clusters = append(api.clusters[:idx], api.clusters[idx+1:]...)
+				}
+			}
+
 			api.clusterMap[id] = c
 			api.clusters = append(api.clusters, c)
 			sort.ClustersBy(func(c1, c2 *cluster.Cluster) bool {
@@ -310,6 +338,8 @@ func (api *API) Handler() http.Handler {
 	httpAPI := vtadminhttp.NewAPI(api, api.options.HTTPOpts)
 
 	router.HandleFunc("/backups", httpAPI.Adapt(vtadminhttp.GetBackups)).Name("API.GetBackups")
+	router.HandleFunc("/cells", httpAPI.Adapt(vtadminhttp.GetCellInfos)).Name("API.GetCellInfos")
+	router.HandleFunc("/cells_aliases", httpAPI.Adapt(vtadminhttp.GetCellsAliases)).Name("API.GetCellsAliases")
 	router.HandleFunc("/clusters", httpAPI.Adapt(vtadminhttp.GetClusters)).Name("API.GetClusters")
 	router.HandleFunc("/gates", httpAPI.Adapt(vtadminhttp.GetGates)).Name("API.GetGates")
 	router.HandleFunc("/keyspace/{cluster_id}", httpAPI.Adapt(vtadminhttp.CreateKeyspace)).Name("API.CreateKeyspace").Methods("POST")
@@ -322,6 +352,9 @@ func (api *API) Handler() http.Handler {
 	router.HandleFunc("/schema/{table}", httpAPI.Adapt(vtadminhttp.FindSchema)).Name("API.FindSchema")
 	router.HandleFunc("/schema/{cluster_id}/{keyspace}/{table}", httpAPI.Adapt(vtadminhttp.GetSchema)).Name("API.GetSchema")
 	router.HandleFunc("/schemas", httpAPI.Adapt(vtadminhttp.GetSchemas)).Name("API.GetSchemas")
+	router.HandleFunc("/schemas/reload", httpAPI.Adapt(vtadminhttp.ReloadSchemas)).Name("API.ReloadSchemas").Methods("PUT", "OPTIONS")
+	router.HandleFunc("/shard/{cluster_id}/{keyspace}/{shard}/emergency_failover", httpAPI.Adapt(vtadminhttp.EmergencyFailoverShard)).Name("API.EmergencyFailoverShard").Methods("POST")
+	router.HandleFunc("/shard/{cluster_id}/{keyspace}/{shard}/planned_failover", httpAPI.Adapt(vtadminhttp.PlannedFailoverShard)).Name("API.PlannedFailoverShard").Methods("POST")
 	router.HandleFunc("/shard_replication_positions", httpAPI.Adapt(vtadminhttp.GetShardReplicationPositions)).Name("API.GetShardReplicationPositions")
 	router.HandleFunc("/shards/{cluster_id}", httpAPI.Adapt(vtadminhttp.CreateShard)).Name("API.CreateShard").Methods("POST")
 	router.HandleFunc("/shards/{cluster_id}", httpAPI.Adapt(vtadminhttp.DeleteShards)).Name("API.DeleteShards").Methods("DELETE")
@@ -333,11 +366,13 @@ func (api *API) Handler() http.Handler {
 	router.HandleFunc("/tablet/{tablet}/healthcheck", httpAPI.Adapt(vtadminhttp.RunHealthCheck)).Name("API.RunHealthCheck")
 	router.HandleFunc("/tablet/{tablet}/ping", httpAPI.Adapt(vtadminhttp.PingTablet)).Name("API.PingTablet")
 	router.HandleFunc("/tablet/{tablet}/refresh", httpAPI.Adapt(vtadminhttp.RefreshState)).Name("API.RefreshState").Methods("PUT", "OPTIONS")
-	router.HandleFunc("/tablet/{tablet}/reparent", httpAPI.Adapt(vtadminhttp.ReparentTablet)).Name("API.ReparentTablet").Methods("PUT", "OPTIONS")
+	router.HandleFunc("/tablet/{tablet}/refresh_replication_source", httpAPI.Adapt(vtadminhttp.RefreshTabletReplicationSource)).Name("API.RefreshTabletReplicationSource").Methods("PUT", "OPTIONS")
+	router.HandleFunc("/tablet/{tablet}/reload_schema", httpAPI.Adapt(vtadminhttp.ReloadTabletSchema)).Name("API.ReloadTabletSchema").Methods("PUT", "OPTIONS")
 	router.HandleFunc("/tablet/{tablet}/set_read_only", httpAPI.Adapt(vtadminhttp.SetReadOnly)).Name("API.SetReadOnly").Methods("PUT", "OPTIONS")
 	router.HandleFunc("/tablet/{tablet}/set_read_write", httpAPI.Adapt(vtadminhttp.SetReadWrite)).Name("API.SetReadWrite").Methods("PUT", "OPTIONS")
 	router.HandleFunc("/tablet/{tablet}/start_replication", httpAPI.Adapt(vtadminhttp.StartReplication)).Name("API.StartReplication").Methods("PUT", "OPTIONS")
 	router.HandleFunc("/tablet/{tablet}/stop_replication", httpAPI.Adapt(vtadminhttp.StopReplication)).Name("API.StopReplication").Methods("PUT", "OPTIONS")
+	router.HandleFunc("/tablet/{tablet}/externally_promoted", httpAPI.Adapt(vtadminhttp.TabletExternallyPromoted)).Name("API.TabletExternallyPromoted").Methods("POST")
 	router.HandleFunc("/vschema/{cluster_id}/{keyspace}", httpAPI.Adapt(vtadminhttp.GetVSchema)).Name("API.GetVSchema")
 	router.HandleFunc("/vschemas", httpAPI.Adapt(vtadminhttp.GetVSchemas)).Name("API.GetVSchemas")
 	router.HandleFunc("/vtctlds", httpAPI.Adapt(vtadminhttp.GetVtctlds)).Name("API.GetVtctlds")
@@ -357,9 +392,12 @@ func (api *API) EjectDynamicCluster(key string, value any) {
 	defer api.clusterMu.Unlock()
 
 	// Delete dynamic clusters from clusterMap when they are expired from clusterCache
-	_, ok := api.clusterMap[key]
+	c, ok := api.clusterMap[key]
 	if ok {
 		delete(api.clusterMap, key)
+		if err := c.Close(); err != nil {
+			log.Errorf("%s; some connections and goroutines may linger", err.Error())
+		}
 	}
 
 	// Maintain order of clusters when removing dynamic cluster
@@ -368,9 +406,7 @@ func (api *API) EjectDynamicCluster(key string, value any) {
 		log.Errorf("Cannot remove cluster %s from api.clusters. Cluster index %d is out of range for clusters slice of %d length.", key, clusterIndex, len(api.clusters))
 	}
 
-	api.clusters[0] = api.clusters[clusterIndex]
-
-	api.clusters = api.clusters[1:]
+	api.clusters = append(api.clusters[:clusterIndex], api.clusters[clusterIndex+1:]...)
 }
 
 // CreateKeyspace is part of the vtadminpb.VTAdminServer interface.
@@ -386,10 +422,6 @@ func (api *API) CreateKeyspace(ctx context.Context, req *vtadminpb.CreateKeyspac
 
 	c, err := api.getClusterForRequest(req.ClusterId)
 	if err != nil {
-		return nil, err
-	}
-
-	if err := c.Vtctld.Dial(ctx); err != nil {
 		return nil, err
 	}
 
@@ -419,10 +451,6 @@ func (api *API) CreateShard(ctx context.Context, req *vtadminpb.CreateShardReque
 		return nil, err
 	}
 
-	if err := c.Vtctld.Dial(ctx); err != nil {
-		return nil, err
-	}
-
 	return c.CreateShard(ctx, req.Options)
 }
 
@@ -439,10 +467,6 @@ func (api *API) DeleteKeyspace(ctx context.Context, req *vtadminpb.DeleteKeyspac
 
 	c, err := api.getClusterForRequest(req.ClusterId)
 	if err != nil {
-		return nil, err
-	}
-
-	if err := c.Vtctld.Dial(ctx); err != nil {
 		return nil, err
 	}
 
@@ -465,11 +489,47 @@ func (api *API) DeleteShards(ctx context.Context, req *vtadminpb.DeleteShardsReq
 		return nil, err
 	}
 
-	if err := c.Vtctld.Dial(ctx); err != nil {
+	return c.DeleteShards(ctx, req.Options)
+}
+
+// DeleteTablet is part of the vtadminpb.VTAdminServer interface.
+func (api *API) DeleteTablet(ctx context.Context, req *vtadminpb.DeleteTabletRequest) (*vtadminpb.DeleteTabletResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.DeleteTablet")
+	defer span.Finish()
+
+	tablet, c, err := api.getTabletForAction(ctx, span, rbac.DeleteAction, req.Alias, req.ClusterIds)
+	if err != nil {
 		return nil, err
 	}
 
-	return c.DeleteShards(ctx, req.Options)
+	if _, err := c.DeleteTablets(ctx, &vtctldatapb.DeleteTabletsRequest{
+		AllowPrimary:  req.AllowPrimary,
+		TabletAliases: []*topodatapb.TabletAlias{tablet.Tablet.Alias},
+	}); err != nil {
+		return nil, fmt.Errorf("failed to delete tablet: %w", err)
+	}
+
+	return &vtadminpb.DeleteTabletResponse{
+		Status:  "ok",
+		Cluster: c.ToProto(),
+	}, nil
+}
+
+// EmergencyFailoverShard is part of the vtadminpb.VTAdminServer interface.
+func (api *API) EmergencyFailoverShard(ctx context.Context, req *vtadminpb.EmergencyFailoverShardRequest) (*vtadminpb.EmergencyFailoverShardResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.EmergencyFailoverShard")
+	defer span.Finish()
+
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	if !api.authz.IsAuthorized(ctx, c.ID, rbac.ShardResource, rbac.EmergencyFailoverShardAction) {
+		return nil, nil
+	}
+
+	return c.EmergencyFailoverShard(ctx, req.Options)
 }
 
 // FindSchema is part of the vtadminpb.VTAdminServer interface.
@@ -555,6 +615,10 @@ func (api *API) GetBackups(ctx context.Context, req *vtadminpb.GetBackupsRequest
 		backups []*vtadminpb.ClusterBackup
 	)
 
+	if req.RequestOptions == nil {
+		req.RequestOptions = &vtctldatapb.GetBackupsRequest{}
+	}
+
 	for _, c := range clusters {
 		if !api.authz.IsAuthorized(ctx, c.ID, rbac.BackupResource, rbac.GetAction) {
 			continue
@@ -586,6 +650,96 @@ func (api *API) GetBackups(ctx context.Context, req *vtadminpb.GetBackupsRequest
 
 	return &vtadminpb.GetBackupsResponse{
 		Backups: backups,
+	}, nil
+}
+
+// GetCellInfos is part of the vtadminpb.VTAdminServer interface.
+func (api *API) GetCellInfos(ctx context.Context, req *vtadminpb.GetCellInfosRequest) (*vtadminpb.GetCellInfosResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.GetCellInfos")
+	defer span.Finish()
+
+	clusters, _ := api.getClustersForRequest(req.ClusterIds)
+
+	var (
+		m         sync.Mutex
+		wg        sync.WaitGroup
+		rec       concurrency.AllErrorRecorder
+		cellInfos []*vtadminpb.ClusterCellInfo
+	)
+
+	for _, c := range clusters {
+		if !api.authz.IsAuthorized(ctx, c.ID, rbac.CellInfoResource, rbac.GetAction) {
+			continue
+		}
+
+		wg.Add(1)
+		go func(c *cluster.Cluster) {
+			defer wg.Done()
+
+			clusterCellInfos, err := c.GetCellInfos(ctx, req)
+			if err != nil {
+				rec.RecordError(fmt.Errorf("failed to GetCellInfos for cluster %s: %w", c.ID, err))
+				return
+			}
+
+			m.Lock()
+			defer m.Unlock()
+			cellInfos = append(cellInfos, clusterCellInfos...)
+		}(c)
+	}
+
+	wg.Wait()
+	if rec.HasErrors() {
+		return nil, rec.Error()
+	}
+
+	return &vtadminpb.GetCellInfosResponse{
+		CellInfos: cellInfos,
+	}, nil
+}
+
+// GetCellsAliases is part of the vtadminpb.VTAdminServer interface.
+func (api *API) GetCellsAliases(ctx context.Context, req *vtadminpb.GetCellsAliasesRequest) (*vtadminpb.GetCellsAliasesResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.GetCellsAliases")
+	defer span.Finish()
+
+	clusters, _ := api.getClustersForRequest(req.ClusterIds)
+
+	var (
+		m       sync.Mutex
+		wg      sync.WaitGroup
+		rec     concurrency.AllErrorRecorder
+		aliases []*vtadminpb.ClusterCellsAliases
+	)
+
+	for _, c := range clusters {
+		if !api.authz.IsAuthorized(ctx, c.ID, rbac.CellsAliasResource, rbac.GetAction) {
+			continue
+		}
+
+		wg.Add(1)
+		go func(c *cluster.Cluster) {
+			defer wg.Done()
+
+			clusterAliases, err := c.GetCellsAliases(ctx)
+			if err != nil {
+				rec.RecordError(fmt.Errorf("failed to GetCellsAliases for cluster %s: %w", c.ID, err))
+				return
+			}
+
+			m.Lock()
+			defer m.Unlock()
+			aliases = append(aliases, clusterAliases)
+		}(c)
+	}
+
+	wg.Wait()
+	if rec.HasErrors() {
+		return nil, rec.Error()
+	}
+
+	return &vtadminpb.GetCellsAliasesResponse{
+		Aliases: aliases,
 	}, nil
 }
 
@@ -939,265 +1093,8 @@ func (api *API) GetTablet(ctx context.Context, req *vtadminpb.GetTabletRequest) 
 	span, ctx := trace.NewSpan(ctx, "API.GetTablet")
 	defer span.Finish()
 
-	return api.getTabletForAction(ctx, span, rbac.GetAction, req.Alias, req.ClusterIds)
-}
-
-func (api *API) DeleteTablet(ctx context.Context, req *vtadminpb.DeleteTabletRequest) (*vtadminpb.DeleteTabletResponse, error) {
-	span, ctx := trace.NewSpan(ctx, "API.DeleteTablet")
-	defer span.Finish()
-
-	tablet, err := api.getTabletForAction(ctx, span, rbac.DeleteAction, req.Alias, req.ClusterIds)
-	if err != nil {
-		return nil, err
-	}
-
-	c, err := api.getClusterForRequest(tablet.Cluster.Id)
-	if err != nil {
-		return nil, err
-	}
-
-	cluster.AnnotateSpan(c, span)
-
-	if err := c.Vtctld.Dial(ctx); err != nil {
-		return nil, err
-	}
-
-	_, err = c.Vtctld.DeleteTablets(ctx, &vtctldatapb.DeleteTabletsRequest{
-		TabletAliases: []*topodatapb.TabletAlias{
-			tablet.Tablet.Alias,
-		},
-	})
-
-	if err != nil {
-		return nil, fmt.Errorf("Error deleting tablet: %w", err)
-	}
-
-	return &vtadminpb.DeleteTabletResponse{Status: "ok"}, nil
-}
-
-func (api *API) ReparentTablet(ctx context.Context, req *vtadminpb.ReparentTabletRequest) (*vtadminpb.ReparentTabletResponse, error) {
-	span, ctx := trace.NewSpan(ctx, "API.ReparentTablet")
-	defer span.Finish()
-
-	tablet, err := api.getTabletForAction(ctx, span, rbac.PutAction, req.Alias, req.ClusterIds)
-	if err != nil {
-		return nil, err
-	}
-
-	c, err := api.getClusterForRequest(tablet.Cluster.Id)
-	if err != nil {
-		return nil, err
-	}
-
-	cluster.AnnotateSpan(c, span)
-
-	if err := c.Vtctld.Dial(ctx); err != nil {
-		return nil, err
-	}
-
-	r, err := c.Vtctld.ReparentTablet(ctx, &vtctldatapb.ReparentTabletRequest{
-		Tablet: tablet.Tablet.Alias,
-	})
-
-	if err != nil {
-		return nil, fmt.Errorf("Error reparenting tablet: %w", err)
-	}
-
-	return &vtadminpb.ReparentTabletResponse{Keyspace: r.Keyspace, Primary: r.Primary.String(), Shard: r.Shard}, nil
-}
-
-// PingTablet is part of the vtadminpb.VTAdminServer interface.
-func (api *API) RunHealthCheck(ctx context.Context, req *vtadminpb.RunHealthCheckRequest) (*vtadminpb.RunHealthCheckResponse, error) {
-	span, ctx := trace.NewSpan(ctx, "API.RunHealthCheck")
-	defer span.Finish()
-
-	tablet, err := api.getTabletForAction(ctx, span, rbac.GetAction, req.Alias, req.ClusterIds)
-	if err != nil {
-		return nil, err
-	}
-
-	c, err := api.getClusterForRequest(tablet.Cluster.Id)
-	if err != nil {
-		return nil, err
-	}
-
-	cluster.AnnotateSpan(c, span)
-
-	if err := c.Vtctld.Dial(ctx); err != nil {
-		return nil, err
-	}
-
-	_, err = c.Vtctld.RunHealthCheck(ctx, &vtctldatapb.RunHealthCheckRequest{
-		TabletAlias: tablet.Tablet.Alias,
-	})
-
-	if err != nil {
-		return nil, fmt.Errorf("Error running health check on tablet: %w", err)
-	}
-
-	return &vtadminpb.RunHealthCheckResponse{Status: "ok"}, nil
-}
-
-// PingTablet is part of the vtadminpb.VTAdminServer interface.
-func (api *API) PingTablet(ctx context.Context, req *vtadminpb.PingTabletRequest) (*vtadminpb.PingTabletResponse, error) {
-	span, ctx := trace.NewSpan(ctx, "API.PingTablet")
-	defer span.Finish()
-
-	tablet, err := api.getTabletForAction(ctx, span, rbac.PingAction, req.Alias, req.ClusterIds)
-	if err != nil {
-		return nil, err
-	}
-
-	c, err := api.getClusterForRequest(tablet.Cluster.Id)
-	if err != nil {
-		return nil, err
-	}
-
-	cluster.AnnotateSpan(c, span)
-
-	if err := c.Vtctld.Dial(ctx); err != nil {
-		return nil, err
-	}
-
-	_, err = c.Vtctld.PingTablet(ctx, &vtctldatapb.PingTabletRequest{
-		TabletAlias: tablet.Tablet.Alias,
-	})
-
-	if err != nil {
-		return nil, fmt.Errorf("Error pinging cluster: %w", err)
-	}
-
-	return &vtadminpb.PingTabletResponse{Status: "ok"}, nil
-}
-
-// SetReadOnly sets the tablet to read only mode
-func (api *API) SetReadOnly(ctx context.Context, req *vtadminpb.SetReadOnlyRequest) (*vtadminpb.SetReadOnlyResponse, error) {
-	span, ctx := trace.NewSpan(ctx, "API.SetReadOnly")
-	defer span.Finish()
-
-	tablet, err := api.getTabletForAction(ctx, span, rbac.PutAction, req.Alias, req.ClusterIds)
-	if err != nil {
-		return nil, err
-	}
-
-	c, err := api.getClusterForRequest(tablet.Cluster.Id)
-	if err != nil {
-		return nil, err
-	}
-
-	cluster.AnnotateSpan(c, span)
-
-	if err := c.Vtctld.Dial(ctx); err != nil {
-		return nil, err
-	}
-
-	_, err = c.Vtctld.SetWritable(ctx, &vtctldatapb.SetWritableRequest{
-		TabletAlias: tablet.Tablet.Alias,
-		Writable:    false,
-	})
-
-	if err != nil {
-		return nil, fmt.Errorf("Error setting tablet to read-only: %w", err)
-	}
-
-	return &vtadminpb.SetReadOnlyResponse{}, nil
-}
-
-// SetReadWrite sets the tablet to read-write mode
-func (api *API) SetReadWrite(ctx context.Context, req *vtadminpb.SetReadWriteRequest) (*vtadminpb.SetReadWriteResponse, error) {
-	span, ctx := trace.NewSpan(ctx, "API.SetReadWrite")
-	defer span.Finish()
-
-	tablet, err := api.getTabletForAction(ctx, span, rbac.PutAction, req.Alias, req.ClusterIds)
-	if err != nil {
-		return nil, err
-	}
-
-	c, err := api.getClusterForRequest(tablet.Cluster.Id)
-	if err != nil {
-		return nil, err
-	}
-
-	cluster.AnnotateSpan(c, span)
-
-	if err := c.Vtctld.Dial(ctx); err != nil {
-		return nil, err
-	}
-
-	_, err = c.Vtctld.SetWritable(ctx, &vtctldatapb.SetWritableRequest{
-		TabletAlias: tablet.Tablet.Alias,
-		Writable:    true,
-	})
-
-	if err != nil {
-		return nil, fmt.Errorf("Error setting tablet to read-write: %w", err)
-	}
-
-	return &vtadminpb.SetReadWriteResponse{}, nil
-}
-
-// StartReplication starts replication on the specified tablet.
-func (api *API) StartReplication(ctx context.Context, req *vtadminpb.StartReplicationRequest) (*vtadminpb.StartReplicationResponse, error) {
-	span, ctx := trace.NewSpan(ctx, "API.StartReplication")
-	defer span.Finish()
-
-	tablet, err := api.getTabletForAction(ctx, span, rbac.PutAction, req.Alias, req.ClusterIds)
-	if err != nil {
-		return nil, err
-	}
-
-	c, err := api.getClusterForRequest(tablet.Cluster.Id)
-	if err != nil {
-		return nil, err
-	}
-
-	cluster.AnnotateSpan(c, span)
-
-	if err := c.Vtctld.Dial(ctx); err != nil {
-		return nil, err
-	}
-
-	_, err = c.Vtctld.StartReplication(ctx, &vtctldatapb.StartReplicationRequest{
-		TabletAlias: tablet.Tablet.Alias,
-	})
-
-	if err != nil {
-		return nil, fmt.Errorf("Error starting replication: %w", err)
-	}
-
-	return &vtadminpb.StartReplicationResponse{Status: "ok"}, nil
-}
-
-// StopReplication stops replication on the specified tablet.
-func (api *API) StopReplication(ctx context.Context, req *vtadminpb.StopReplicationRequest) (*vtadminpb.StopReplicationResponse, error) {
-	span, ctx := trace.NewSpan(ctx, "API.StopReplication")
-	defer span.Finish()
-
-	tablet, err := api.getTabletForAction(ctx, span, rbac.PutAction, req.Alias, req.ClusterIds)
-	if err != nil {
-		return nil, err
-	}
-
-	c, err := api.getClusterForRequest(tablet.Cluster.Id)
-	if err != nil {
-		return nil, err
-	}
-
-	cluster.AnnotateSpan(c, span)
-
-	if err := c.Vtctld.Dial(ctx); err != nil {
-		return nil, err
-	}
-
-	_, err = c.Vtctld.StopReplication(ctx, &vtctldatapb.StopReplicationRequest{
-		TabletAlias: tablet.Tablet.Alias,
-	})
-
-	if err != nil {
-		return nil, fmt.Errorf("Error stopping replication: %w", err)
-	}
-
-	return &vtadminpb.StopReplicationResponse{Status: "ok"}, nil
+	t, _, err := api.getTabletForAction(ctx, span, rbac.GetAction, req.Alias, req.ClusterIds)
+	return t, err
 }
 
 // GetTablets is part of the vtadminpb.VTAdminServer interface.
@@ -1263,10 +1160,6 @@ func (api *API) GetVSchema(ctx context.Context, req *vtadminpb.GetVSchemaRequest
 		return nil, nil
 	}
 
-	if err := c.Vtctld.Dial(ctx); err != nil {
-		return nil, err
-	}
-
 	return c.GetVSchema(ctx, req.Keyspace)
 }
 
@@ -1306,11 +1199,6 @@ func (api *API) GetVSchemas(ctx context.Context, req *vtadminpb.GetVSchemasReque
 			defer span.Finish()
 
 			cluster.AnnotateSpan(c, span)
-
-			if err := c.Vtctld.Dial(ctx); err != nil {
-				rec.RecordError(fmt.Errorf("Vtctld.Dial(cluster = %s): %w", c.ID, err))
-				return
-			}
 
 			getKeyspacesSpan, getKeyspacesCtx := trace.NewSpan(ctx, "Cluster.GetKeyspaces")
 			cluster.AnnotateSpan(c, getKeyspacesSpan)
@@ -1493,39 +1381,252 @@ func (api *API) GetWorkflows(ctx context.Context, req *vtadminpb.GetWorkflowsReq
 	}, nil
 }
 
-// RefreshState reloads the tablet record on the specified tablet.
-func (api *API) RefreshState(ctx context.Context, req *vtadminpb.RefreshStateRequest) (*vtadminpb.RefreshStateResponse, error) {
-	span, ctx := trace.NewSpan(ctx, "API.RefreshState")
+// PingTablet is part of the vtadminpb.VTAdminServer interface.
+func (api *API) PingTablet(ctx context.Context, req *vtadminpb.PingTabletRequest) (*vtadminpb.PingTabletResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.PingTablet")
 	defer span.Finish()
 
-	tablet, err := api.getTabletForAction(ctx, span, rbac.PutAction, req.Alias, req.ClusterIds)
-	if err != nil {
-		return nil, err
-	}
-
-	c, err := api.getClusterForRequest(tablet.Cluster.Id)
+	tablet, c, err := api.getTabletForAction(ctx, span, rbac.PingAction, req.Alias, req.ClusterIds)
 	if err != nil {
 		return nil, err
 	}
 
 	cluster.AnnotateSpan(c, span)
 
-	if err := c.Vtctld.Dial(ctx); err != nil {
-		return nil, err
-	}
-
-	_, err = c.Vtctld.RefreshState(ctx, &vtctldatapb.RefreshStateRequest{
+	_, err = c.Vtctld.PingTablet(ctx, &vtctldatapb.PingTabletRequest{
 		TabletAlias: tablet.Tablet.Alias,
 	})
 
 	if err != nil {
-		return nil, fmt.Errorf("Error pinging cluster: %w", err)
+		return nil, err
 	}
 
-	return &vtadminpb.RefreshStateResponse{Status: "ok"}, nil
+	return &vtadminpb.PingTabletResponse{
+		Status:  "ok",
+		Cluster: c.ToProto(),
+	}, nil
 }
 
-// ValidateKeyspace validates that all nodes reachable from the specified keyspace are consistent.
+// PlannedFailoverShard is part of the vtadminpb.VTAdminServer interface.
+func (api *API) PlannedFailoverShard(ctx context.Context, req *vtadminpb.PlannedFailoverShardRequest) (*vtadminpb.PlannedFailoverShardResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.PlannedFailoverShard")
+	defer span.Finish()
+
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	if !api.authz.IsAuthorized(ctx, c.ID, rbac.ShardResource, rbac.PlannedFailoverShardAction) {
+		return nil, nil
+	}
+
+	return c.PlannedFailoverShard(ctx, req.Options)
+}
+
+// RefreshState is part of the vtadminpb.VTAdminServer interface.
+func (api *API) RefreshState(ctx context.Context, req *vtadminpb.RefreshStateRequest) (*vtadminpb.RefreshStateResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.RefreshState")
+	defer span.Finish()
+
+	tablet, c, err := api.getTabletForAction(ctx, span, rbac.PutAction, req.Alias, req.ClusterIds)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := c.RefreshState(ctx, tablet); err != nil {
+		return nil, err
+	}
+
+	return &vtadminpb.RefreshStateResponse{
+		Status:  "ok",
+		Cluster: c.ToProto(),
+	}, nil
+}
+
+// RefreshTabletReplicationSource is part of the vtadminpb.VTAdminServer interface.
+func (api *API) RefreshTabletReplicationSource(ctx context.Context, req *vtadminpb.RefreshTabletReplicationSourceRequest) (*vtadminpb.RefreshTabletReplicationSourceResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.RefreshTabletReplicationSource")
+	defer span.Finish()
+
+	tablet, c, err := api.getTabletForAction(ctx, span, rbac.RefreshTabletReplicationSourceAction, req.Alias, req.ClusterIds)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.RefreshTabletReplicationSource(ctx, tablet)
+}
+
+// ReloadSchemas is part of the vtadminpb.VTAdminServer interface.
+func (api *API) ReloadSchemas(ctx context.Context, req *vtadminpb.ReloadSchemasRequest) (*vtadminpb.ReloadSchemasResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.ReloadSchemas")
+	defer span.Finish()
+
+	clusters, _ := api.getClustersForRequest(req.ClusterIds)
+
+	var (
+		m    sync.Mutex
+		wg   sync.WaitGroup
+		rec  concurrency.AllErrorRecorder
+		resp vtadminpb.ReloadSchemasResponse
+	)
+
+	for _, c := range clusters {
+		if !api.authz.IsAuthorized(ctx, c.ID, rbac.SchemaResource, rbac.ReloadAction) {
+			continue
+		}
+
+		wg.Add(1)
+
+		go func(c *cluster.Cluster) {
+			defer wg.Done()
+
+			cr, err := c.ReloadSchemas(ctx, req)
+			if err != nil {
+				rec.RecordError(fmt.Errorf("ReloadSchemas(cluster = %s) failed: %w", c.ID, err))
+				return
+			}
+
+			m.Lock()
+			defer m.Unlock()
+			resp.KeyspaceResults = append(resp.KeyspaceResults, cr.KeyspaceResults...)
+			resp.ShardResults = append(resp.ShardResults, cr.ShardResults...)
+			resp.TabletResults = append(resp.TabletResults, cr.TabletResults...)
+		}(c)
+	}
+
+	wg.Wait()
+	if rec.HasErrors() {
+		return nil, rec.Error()
+	}
+
+	return &resp, nil
+}
+
+// RunHealthCheck is part of the vtadminpb.VTAdminServer interface.
+func (api *API) RunHealthCheck(ctx context.Context, req *vtadminpb.RunHealthCheckRequest) (*vtadminpb.RunHealthCheckResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.RunHealthCheck")
+	defer span.Finish()
+
+	tablet, c, err := api.getTabletForAction(ctx, span, rbac.GetAction, req.Alias, req.ClusterIds)
+	if err != nil {
+		return nil, err
+	}
+
+	cluster.AnnotateSpan(c, span)
+
+	_, err = c.Vtctld.RunHealthCheck(ctx, &vtctldatapb.RunHealthCheckRequest{
+		TabletAlias: tablet.Tablet.Alias,
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtadminpb.RunHealthCheckResponse{
+		Status:  "ok",
+		Cluster: c.ToProto(),
+	}, nil
+}
+
+// SetReadOnly is part of the vtadminpb.VTAdminServer interface.
+func (api *API) SetReadOnly(ctx context.Context, req *vtadminpb.SetReadOnlyRequest) (*vtadminpb.SetReadOnlyResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.SetReadOnly")
+	defer span.Finish()
+
+	tablet, c, err := api.getTabletForAction(ctx, span, rbac.ManageTabletWritabilityAction, req.Alias, req.ClusterIds)
+	if err != nil {
+		return nil, err
+	}
+
+	err = c.SetWritable(ctx, &vtctldatapb.SetWritableRequest{
+		TabletAlias: tablet.Tablet.Alias,
+		Writable:    false,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("Error setting tablet to read-only: %w", err)
+	}
+
+	return &vtadminpb.SetReadOnlyResponse{}, nil
+}
+
+// SetReadWrite is part of the vtadminpb.VTAdminServer interface.
+func (api *API) SetReadWrite(ctx context.Context, req *vtadminpb.SetReadWriteRequest) (*vtadminpb.SetReadWriteResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.SetReadWrite")
+	defer span.Finish()
+
+	tablet, c, err := api.getTabletForAction(ctx, span, rbac.ManageTabletWritabilityAction, req.Alias, req.ClusterIds)
+	if err != nil {
+		return nil, err
+	}
+
+	err = c.SetWritable(ctx, &vtctldatapb.SetWritableRequest{
+		TabletAlias: tablet.Tablet.Alias,
+		Writable:    true,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("Error setting tablet to read-write: %w", err)
+	}
+
+	return &vtadminpb.SetReadWriteResponse{}, nil
+}
+
+// StartReplication is part of the vtadminpb.VTAdminServer interface.
+func (api *API) StartReplication(ctx context.Context, req *vtadminpb.StartReplicationRequest) (*vtadminpb.StartReplicationResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.StartReplication")
+	defer span.Finish()
+
+	tablet, c, err := api.getTabletForAction(ctx, span, rbac.ManageTabletReplicationAction, req.Alias, req.ClusterIds)
+	if err != nil {
+		return nil, err
+	}
+
+	start := true
+	if err := c.ToggleTabletReplication(ctx, tablet, start); err != nil {
+		return nil, err
+	}
+
+	return &vtadminpb.StartReplicationResponse{
+		Status:  "ok",
+		Cluster: c.ToProto(),
+	}, nil
+}
+
+// StopReplication is part of the vtadminpb.VTAdminServer interface.
+func (api *API) StopReplication(ctx context.Context, req *vtadminpb.StopReplicationRequest) (*vtadminpb.StopReplicationResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.StopReplication")
+	defer span.Finish()
+
+	tablet, c, err := api.getTabletForAction(ctx, span, rbac.ManageTabletReplicationAction, req.Alias, req.ClusterIds)
+	if err != nil {
+		return nil, err
+	}
+
+	start := true
+	if err := c.ToggleTabletReplication(ctx, tablet, !start); err != nil {
+		return nil, err
+	}
+
+	return &vtadminpb.StopReplicationResponse{
+		Status:  "ok",
+		Cluster: c.ToProto(),
+	}, nil
+}
+
+// TabletExternallyPromoted is part of the vtadminpb.VTAdminServer interface.
+func (api *API) TabletExternallyPromoted(ctx context.Context, req *vtadminpb.TabletExternallyPromotedRequest) (*vtadminpb.TabletExternallyPromotedResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.TabletExternallyPromoted")
+	defer span.Finish()
+
+	tablet, c, err := api.getTabletForShardAction(ctx, span, rbac.TabletExternallyPromotedAction, req.Alias, req.ClusterIds)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.TabletExternallyPromoted(ctx, tablet)
+}
+
+// ValidateKeyspace is part of the vtadminpb.VTAdminServer interface.
 func (api *API) ValidateKeyspace(ctx context.Context, req *vtadminpb.ValidateKeyspaceRequest) (*vtctldatapb.ValidateKeyspaceResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "API.ValidateKeyspace")
 	defer span.Finish()
@@ -1551,7 +1652,7 @@ func (api *API) ValidateKeyspace(ctx context.Context, req *vtadminpb.ValidateKey
 	return res, nil
 }
 
-// ValidateSchemaKeyspace validates that the schema on the primary tablet for shard 0 matches the schema on all of the other tablets in the keyspace
+// ValidateSchemaKeyspace is part of the vtadminpb.VTAdminServer interface.
 func (api *API) ValidateSchemaKeyspace(ctx context.Context, req *vtadminpb.ValidateSchemaKeyspaceRequest) (*vtctldatapb.ValidateSchemaKeyspaceResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "API.ValidateSchemaKeyspace")
 	defer span.Finish()
@@ -1565,10 +1666,6 @@ func (api *API) ValidateSchemaKeyspace(ctx context.Context, req *vtadminpb.Valid
 		return nil, nil
 	}
 
-	if err := c.Vtctld.Dial(ctx); err != nil {
-		return nil, err
-	}
-
 	res, err := c.Vtctld.ValidateSchemaKeyspace(ctx, &vtctldatapb.ValidateSchemaKeyspaceRequest{
 		Keyspace: req.Keyspace,
 	})
@@ -1580,7 +1677,7 @@ func (api *API) ValidateSchemaKeyspace(ctx context.Context, req *vtadminpb.Valid
 	return res, nil
 }
 
-// ValidateVersionKeyspace validates that the version on the primary of shard 0 matches all of the other tablets in the keyspace.
+// ValidateVersionKeyspace is part of the vtadminpb.VTAdminServer interface.
 func (api *API) ValidateVersionKeyspace(ctx context.Context, req *vtadminpb.ValidateVersionKeyspaceRequest) (*vtctldatapb.ValidateVersionKeyspaceResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "API.ValidateVersionKeyspace")
 	defer span.Finish()
@@ -1592,10 +1689,6 @@ func (api *API) ValidateVersionKeyspace(ctx context.Context, req *vtadminpb.Vali
 
 	if !api.authz.IsAuthorized(ctx, c.ID, rbac.KeyspaceResource, rbac.PutAction) {
 		return nil, nil
-	}
-
-	if err := c.Vtctld.Dial(ctx); err != nil {
-		return nil, err
 	}
 
 	res, err := c.Vtctld.ValidateVersionKeyspace(ctx, &vtctldatapb.ValidateVersionKeyspaceRequest{
@@ -1646,10 +1739,6 @@ func (api *API) VTExplain(ctx context.Context, req *vtadminpb.VTExplainRequest) 
 	}
 
 	span.Annotate("tablet_alias", topoproto.TabletAliasString(tablet.Tablet.Alias))
-
-	if err := c.Vtctld.Dial(ctx); err != nil {
-		return nil, err
-	}
 
 	var (
 		wg sync.WaitGroup
@@ -1723,9 +1812,7 @@ func (api *API) VTExplain(ctx context.Context, req *vtadminpb.VTExplainRequest) 
 	go func(c *cluster.Cluster) {
 		defer wg.Done()
 
-		shards, err := c.FindAllShardsInKeyspace(ctx, req.Keyspace, cluster.FindAllShardsInKeyspaceOptions{
-			SkipDial: true,
-		})
+		shards, err := c.FindAllShardsInKeyspace(ctx, req.Keyspace, cluster.FindAllShardsInKeyspaceOptions{})
 		if err != nil {
 			er.RecordError(err)
 			return
@@ -1751,33 +1838,22 @@ func (api *API) VTExplain(ctx context.Context, req *vtadminpb.VTExplainRequest) 
 		return nil, er.Error()
 	}
 
-	opts := &vtexplain.Options{ReplicationMode: "ROW"}
-
-	lockWaitStart := time.Now()
-
-	api.vtexplainLock.Lock()
-	defer api.vtexplainLock.Unlock()
-
-	lockWaitTime := time.Since(lockWaitStart)
-	log.Infof("vtexplain lock wait time: %s", lockWaitTime)
-
-	span.Annotate("vtexplain_lock_wait_time", lockWaitTime.String())
-
-	if err := vtexplain.Init(srvVSchema, schema, shardMap, opts); err != nil {
+	vte, err := vtexplain.Init(srvVSchema, schema, shardMap, &vtexplain.Options{ReplicationMode: "ROW"})
+	if err != nil {
 		return nil, fmt.Errorf("error initilaizing vtexplain: %w", err)
 	}
+	defer vte.Stop()
 
-	defer vtexplain.Stop()
-
-	plans, err := vtexplain.Run(req.Sql)
+	plans, err := vte.Run(req.Sql)
 	if err != nil {
 		return nil, fmt.Errorf("error running vtexplain: %w", err)
 	}
 
-	response, err := vtexplain.ExplainsAsText(plans)
+	response, err := vte.ExplainsAsText(plans)
 	if err != nil {
 		return nil, fmt.Errorf("error converting vtexplain to text output: %w", err)
 	}
+
 	return &vtadminpb.VTExplainResponse{
 		Response: response,
 	}, nil
@@ -1820,28 +1896,38 @@ func (api *API) getClustersForRequest(ids []string) ([]*cluster.Cluster, []strin
 	return clusters, ids
 }
 
-func (api *API) getTabletForAction(ctx context.Context, span trace.Span, action rbac.Action, alias string, clusterIds []string) (*vtadminpb.Tablet, error) {
-	span.Annotate("tablet_alias", alias)
+func (api *API) getTabletForAction(ctx context.Context, span trace.Span, action rbac.Action, alias *topodatapb.TabletAlias, clusterIDs []string) (*vtadminpb.Tablet, *cluster.Cluster, error) {
+	return api.getTabletForResourceAndAction(ctx, span, rbac.TabletResource, action, alias, clusterIDs)
+}
 
-	tabletAlias, err := topoproto.ParseTabletAlias(alias)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse tablet_alias %s: %w", alias, err)
-	}
+func (api *API) getTabletForShardAction(ctx context.Context, span trace.Span, action rbac.Action, alias *topodatapb.TabletAlias, clusterIDs []string) (*vtadminpb.Tablet, *cluster.Cluster, error) {
+	return api.getTabletForResourceAndAction(ctx, span, rbac.ShardResource, action, alias, clusterIDs)
+}
 
-	span.Annotate("tablet_cell", tabletAlias.Cell)
-	span.Annotate("tablet_uid", tabletAlias.Uid)
+func (api *API) getTabletForResourceAndAction(
+	ctx context.Context,
+	span trace.Span,
+	resource rbac.Resource,
+	action rbac.Action,
+	alias *topodatapb.TabletAlias,
+	clusterIDs []string,
+) (*vtadminpb.Tablet, *cluster.Cluster, error) {
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(alias))
+	span.Annotate("tablet_cell", alias.Cell)
+	span.Annotate("tablet_uid", alias.Uid)
 
-	clusters, ids := api.getClustersForRequest(clusterIds)
+	clusters, ids := api.getClustersForRequest(clusterIDs)
 
 	var (
+		m   sync.Mutex
+		wg  sync.WaitGroup
+		rec concurrency.AllErrorRecorder
+
 		tablets []*vtadminpb.Tablet
-		wg      sync.WaitGroup
-		er      concurrency.AllErrorRecorder
-		m       sync.Mutex
 	)
 
 	for _, c := range clusters {
-		if !api.authz.IsAuthorized(ctx, c.ID, rbac.TabletResource, action) {
+		if !api.authz.IsAuthorized(ctx, c.ID, resource, action) {
 			continue
 		}
 
@@ -1850,38 +1936,39 @@ func (api *API) getTabletForAction(ctx context.Context, span trace.Span, action 
 		go func(c *cluster.Cluster) {
 			defer wg.Done()
 
-			ts, err := c.GetTablets(ctx)
+			ts, err := c.FindTablets(ctx, func(t *vtadminpb.Tablet) bool {
+				return topoproto.TabletAliasEqual(t.Tablet.Alias, alias)
+			}, -1)
 			if err != nil {
-				er.RecordError(fmt.Errorf("GetTablets(cluster = %s): %w", c.ID, err))
+				rec.RecordError(fmt.Errorf("FindTablets(cluster = %s): %w", c.ID, err))
 				return
 			}
 
-			var found []*vtadminpb.Tablet
-
-			for _, t := range ts {
-				if t.Tablet.Alias.Cell == tabletAlias.Cell && t.Tablet.Alias.Uid == tabletAlias.Uid {
-					found = append(found, t)
-				}
-			}
-
 			m.Lock()
-			tablets = append(tablets, found...)
+			tablets = append(tablets, ts...)
 			m.Unlock()
 		}(c)
 	}
 
 	wg.Wait()
 
-	if er.HasErrors() {
-		return nil, er.Error()
+	if rec.HasErrors() {
+		return nil, nil, rec.Error()
 	}
 
 	switch len(tablets) {
 	case 0:
-		return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "%s: %s, searched clusters = %v", errors.ErrNoTablet, alias, ids)
+		return nil, nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "%s: %s, searched clusters = %v", errors.ErrNoTablet, alias, ids)
 	case 1:
-		return tablets[0], nil
+		t := tablets[0]
+		for _, c := range clusters {
+			if c.ID == t.Cluster.Id {
+				return t, c, nil
+			}
+		}
+
+		return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "impossible: found tablet from cluster %s but cannot find cluster with that id", t.Cluster.Id)
 	}
 
-	return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "%s: %s, searched clusters = %v", errors.ErrAmbiguousTablet, alias, ids)
+	return nil, nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "%s: %s, searched clusters = %v", errors.ErrAmbiguousTablet, alias, ids)
 }

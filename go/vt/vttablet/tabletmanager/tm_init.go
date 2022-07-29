@@ -44,6 +44,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vdiff"
+
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"vitess.io/vitess/go/flagutil"
@@ -131,6 +133,7 @@ type TabletManager struct {
 	QueryServiceControl tabletserver.Controller
 	UpdateStream        binlog.UpdateStreamControl
 	VREngine            *vreplication.Engine
+	VDiffEngine         *vdiff.Engine
 
 	// MetadataManager manages the local metadata tables for a tablet. It
 	// exists, and is exported, to support swapping a nil pointer in test code,
@@ -375,6 +378,11 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, healthCheckInterval ti
 		servenv.OnTerm(tm.VREngine.Close)
 	}
 
+	if tm.VDiffEngine != nil {
+		tm.VDiffEngine.InitDBConfig(tm.DBConfigs)
+		servenv.OnTerm(tm.VDiffEngine.Close)
+	}
+
 	// The following initializations don't need to be done
 	// in any specific order.
 	tm.startShardSync()
@@ -450,6 +458,10 @@ func (tm *TabletManager) Stop() {
 
 	if tm.VREngine != nil {
 		tm.VREngine.Close()
+	}
+
+	if tm.VDiffEngine != nil {
+		tm.VDiffEngine.Close()
 	}
 
 	tm.MysqlDaemon.Close()

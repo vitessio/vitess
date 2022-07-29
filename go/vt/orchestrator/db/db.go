@@ -30,10 +30,24 @@ import (
 
 var (
 	EmptyArgs []any
+	Db        DB = (*vtorcDB)(nil)
 )
 
 var mysqlURI string
 var dbMutex sync.Mutex
+
+type DB interface {
+	QueryOrchestrator(query string, argsArray []any, onRow func(sqlutils.RowMap) error) error
+}
+
+type vtorcDB struct {
+}
+
+var _ DB = (*vtorcDB)(nil)
+
+func (m *vtorcDB) QueryOrchestrator(query string, argsArray []any, onRow func(sqlutils.RowMap) error) error {
+	return QueryOrchestrator(query, argsArray, onRow)
+}
 
 type DummySQLResult struct {
 }

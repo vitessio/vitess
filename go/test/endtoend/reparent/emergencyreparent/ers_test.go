@@ -340,10 +340,10 @@ func TestPullFromRdonly(t *testing.T) {
 	require.NoError(t, err)
 }
 
-// TestNoReplicationStatusAndReplicationStopped checks that ERS is able to fix
-// replicas which do not have any replication status and also succeeds if the replication
+// TestNoReplicationStatusAndIOThreadStopped checks that ERS is able to fix
+// replicas which do not have any replication status and also succeeds if the io thread
 // is stopped on the primary elect.
-func TestNoReplicationStatusAndReplicationStopped(t *testing.T) {
+func TestNoReplicationStatusAndIOThreadStopped(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	clusterInstance := utils.SetupReparentCluster(t, true)
 	defer utils.TeardownCluster(clusterInstance)
@@ -352,11 +352,9 @@ func TestNoReplicationStatusAndReplicationStopped(t *testing.T) {
 
 	err := clusterInstance.VtctlclientProcess.ExecuteCommand("ExecuteFetchAsDba", tablets[1].Alias, `STOP SLAVE; RESET SLAVE ALL`)
 	require.NoError(t, err)
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ExecuteFetchAsDba", tablets[2].Alias, `STOP SLAVE;`)
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ExecuteFetchAsDba", tablets[3].Alias, `STOP SLAVE IO_THREAD;`)
 	require.NoError(t, err)
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ExecuteFetchAsDba", tablets[3].Alias, `STOP SLAVE SQL_THREAD;`)
-	require.NoError(t, err)
-	// Run an additional command in the current primary which will only be acked by tablets[3] and be in its relay log.
+	// Run an additional command in the current primary which will only be acked by tablets[2] and be in its relay log.
 	insertedVal := utils.ConfirmReplication(t, tablets[0], nil)
 	// Failover to tablets[3]
 	out, err := utils.Ers(clusterInstance, tablets[3], "60s", "30s")
@@ -366,8 +364,8 @@ func TestNoReplicationStatusAndReplicationStopped(t *testing.T) {
 	require.NoError(t, err)
 	// Confirm that replication is setup correctly from tablets[3] to tablets[0]
 	utils.ConfirmReplication(t, tablets[3], tablets[:1])
-	// Confirm that tablets[2] which had replication stopped initially still has its replication stopped
-	utils.CheckReplicationStatus(context.Background(), t, tablets[2], false, false)
+	// Confirm that tablets[2] which had no replication status initially now has its replication started
+	utils.CheckReplicationStatus(context.Background(), t, tablets[1], true, true)
 }
 
 // TestERSForInitialization tests whether calling ERS in the beginning sets up the cluster properly or not
@@ -376,7 +374,6 @@ func TestERSForInitialization(t *testing.T) {
 	clusterInstance := cluster.NewCluster("zone1", "localhost")
 	defer clusterInstance.Teardown()
 	keyspace := &cluster.Keyspace{Name: utils.KeyspaceName}
-	clusterInstance.VtctldExtraArgs = append(clusterInstance.VtctldExtraArgs, "--durability_policy=semi_sync")
 	// Start topo server
 	err := clusterInstance.StartTopo()
 	require.NoError(t, err)
@@ -399,6 +396,11 @@ func TestERSForInitialization(t *testing.T) {
 	// Initialize Cluster
 	err = clusterInstance.SetupCluster(keyspace, []cluster.Shard{*shard})
 	require.NoError(t, err)
+	if clusterInstance.VtctlMajorVersion >= 14 {
+		vtctldClientProcess := cluster.VtctldClientProcessInstance("localhost", clusterInstance.VtctldProcess.GrpcPort, clusterInstance.TmpDirectory)
+		out, err := vtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspace.Name, "--durability-policy=semi_sync")
+		require.NoError(t, err, out)
+	}
 
 	//Start MySql
 	var mysqlCtlProcessList []*exec.Cmd

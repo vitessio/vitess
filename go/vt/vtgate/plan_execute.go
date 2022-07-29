@@ -53,7 +53,7 @@ func (e *Executor) newExecute(
 	}
 
 	query, comments := sqlparser.SplitMarginComments(sql)
-	vcursor, err := newVCursorImpl(ctx, safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver, e.serv, e.warnShardedOnly)
+	vcursor, err := newVCursorImpl(ctx, safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver, e.serv, e.warnShardedOnly, e.pv)
 	if err != nil {
 		return err
 	}
@@ -220,7 +220,7 @@ func (e *Executor) executePlan(
 
 // rollbackExecIfNeeded rollbacks the partial execution if earlier it was detected that it needs partial query execution to be rolled back.
 func (e *Executor) rollbackExecIfNeeded(ctx context.Context, safeSession *SafeSession, bindVars map[string]*querypb.BindVariable, logStats *LogStats, err error) error {
-	if safeSession.InTransaction() && safeSession.rollbackOnPartialExec != "" {
+	if safeSession.InTransaction() && safeSession.IsRollbackSet() {
 		rErr := e.rollbackPartialExec(ctx, safeSession, bindVars, logStats)
 		return vterrors.Wrap(err, rErr.Error())
 	}
@@ -235,8 +235,8 @@ func (e *Executor) rollbackPartialExec(ctx context.Context, safeSession *SafeSes
 
 	// needs to rollback only once.
 	rQuery := safeSession.rollbackOnPartialExec
-	safeSession.rollbackOnPartialExec = ""
 	if rQuery != txRollback {
+		safeSession.SavepointRollback()
 		_, _, err := e.execute(ctx, safeSession, rQuery, bindVars, logStats)
 		if err == nil {
 			return vterrors.New(vtrpcpb.Code_ABORTED, "reverted partial DML execution failure")

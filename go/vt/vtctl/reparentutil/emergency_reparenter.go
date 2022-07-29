@@ -63,6 +63,7 @@ type EmergencyReparentOptions struct {
 	// Private options managed internally. We use value passing to avoid leaking
 	// these details back out.
 	lockAction string
+	durability Durabler
 }
 
 // counters for Emergency Reparent Shard
@@ -161,6 +162,17 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	}
 	ev.ShardInfo = *shardInfo
 
+	keyspaceDurability, err := erp.ts.GetKeyspaceDurability(ctx, keyspace)
+	if err != nil {
+		return err
+	}
+
+	erp.logger.Infof("Getting a new durability policy for %v", keyspaceDurability)
+	opts.durability, err = GetDurabilityPolicy(keyspaceDurability)
+	if err != nil {
+		return err
+	}
+
 	// get the previous primary according to the topology server,
 	// we use this information to choose the best candidate in the same cell
 	// and to undo promotion in case of failure
@@ -180,7 +192,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	}
 
 	// Stop replication on all the tablets and build their status map
-	stoppedReplicationSnapshot, err = stopReplicationAndBuildStatusMaps(ctx, erp.tmc, ev, tabletMap, opts.WaitReplicasTimeout, opts.IgnoreReplicas, opts.NewPrimaryAlias, erp.logger)
+	stoppedReplicationSnapshot, err = stopReplicationAndBuildStatusMaps(ctx, erp.tmc, ev, tabletMap, opts.WaitReplicasTimeout, opts.IgnoreReplicas, opts.NewPrimaryAlias, opts.durability, erp.logger)
 	if err != nil {
 		return vterrors.Wrapf(err, "failed to stop replication and build status maps: %v", err)
 	}
@@ -372,7 +384,7 @@ func (erp *EmergencyReparenter) findMostAdvanced(
 	}
 
 	// sort the tablets for finding the best intermediate source in ERS
-	err = sortTabletsForReparent(validTablets, tabletPositions)
+	err = sortTabletsForReparent(validTablets, tabletPositions, opts.durability)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -515,7 +527,7 @@ func (erp *EmergencyReparenter) reparentReplicas(
 			forceStart = fs
 		}
 
-		err := erp.tmc.SetReplicationSource(replCtx, ti.Tablet, newPrimaryTablet.Alias, 0, "", forceStart, IsReplicaSemiSync(newPrimaryTablet, ti.Tablet))
+		err := erp.tmc.SetReplicationSource(replCtx, ti.Tablet, newPrimaryTablet.Alias, 0, "", forceStart, IsReplicaSemiSync(opts.durability, newPrimaryTablet, ti.Tablet))
 		if err != nil {
 			err = vterrors.Wrapf(err, "tablet %v SetReplicationSource failed: %v", alias, err)
 			rec.RecordError(err)
@@ -660,7 +672,7 @@ func (erp *EmergencyReparenter) identifyPrimaryCandidate(
 	// If the intermediate source has the same promotion rules as some other tablets, then we prioritize using
 	// the intermediate source since we won't have to wait for the new candidate to catch up!
 	for _, promotionRule := range promotionrule.AllPromotionRules() {
-		candidates := getTabletsWithPromotionRules(validCandidates, promotionRule)
+		candidates := getTabletsWithPromotionRules(opts.durability, validCandidates, promotionRule)
 		candidate = findCandidate(intermediateSource, candidates)
 		if candidate != nil {
 			return candidate, nil
@@ -684,11 +696,11 @@ func (erp *EmergencyReparenter) promoteNewPrimary(
 	if ev.ShardInfo.PrimaryAlias == nil {
 		erp.logger.Infof("setting up %v as new primary for an uninitialized cluster", newPrimary.Alias)
 		// we call InitPrimary when the PrimaryAlias in the ShardInfo is empty. This happens when we have an uninitialized cluster.
-		_, err = erp.tmc.InitPrimary(ctx, newPrimary, SemiSyncAckers(newPrimary) > 0)
+		_, err = erp.tmc.InitPrimary(ctx, newPrimary, SemiSyncAckers(opts.durability, newPrimary) > 0)
 	} else {
 		erp.logger.Infof("starting promotion for the new primary - %v", newPrimary.Alias)
 		// we call PromoteReplica which changes the tablet type, fixes the semi-sync, set the primary to read-write and flushes the binlogs
-		_, err = erp.tmc.PromoteReplica(ctx, newPrimary, SemiSyncAckers(newPrimary) > 0)
+		_, err = erp.tmc.PromoteReplica(ctx, newPrimary, SemiSyncAckers(opts.durability, newPrimary) > 0)
 	}
 	if err != nil {
 		return vterrors.Wrapf(err, "primary-elect tablet %v failed to be upgraded to primary: %v", newPrimary.Alias, err)
@@ -708,7 +720,7 @@ func (erp *EmergencyReparenter) filterValidCandidates(validTablets []*topodatapb
 	for _, tablet := range validTablets {
 		tabletAliasStr := topoproto.TabletAliasString(tablet.Alias)
 		// Remove tablets which have MustNot promote rule since they must never be promoted
-		if PromotionRule(tablet) == promotionrule.MustNot {
+		if PromotionRule(opts.durability, tablet) == promotionrule.MustNot {
 			erp.logger.Infof("Removing %s from list of valid candidates for promotion because it has the Must Not promote rule", tabletAliasStr)
 			if opts.NewPrimaryAlias != nil && topoproto.TabletAliasEqual(opts.NewPrimaryAlias, tablet.Alias) {
 				return nil, vterrors.Errorf(vtrpc.Code_ABORTED, "proposed primary %s has a must not promotion rule", topoproto.TabletAliasString(opts.NewPrimaryAlias))
@@ -724,7 +736,7 @@ func (erp *EmergencyReparenter) filterValidCandidates(validTablets []*topodatapb
 			continue
 		}
 		// Remove any tablet which cannot make forward progress using the list of tablets we have reached
-		if !canEstablishForTablet(tablet, tabletsReachable) {
+		if !canEstablishForTablet(opts.durability, tablet, tabletsReachable) {
 			erp.logger.Infof("Removing %s from list of valid candidates for promotion because it will not be able to make forward progress on promotion with the tablets currently reachable", tabletAliasStr)
 			if opts.NewPrimaryAlias != nil && topoproto.TabletAliasEqual(opts.NewPrimaryAlias, tablet.Alias) {
 				return nil, vterrors.Errorf(vtrpc.Code_ABORTED, "proposed primary %s will not be able to make forward progress on being promoted", topoproto.TabletAliasString(opts.NewPrimaryAlias))

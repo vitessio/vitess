@@ -209,11 +209,10 @@ const (
 	Utf8mb4Str  = "_utf8mb4"
 	NStringStr  = "N"
 
-	// ConvertType.Operator
+	// DatabaseOption.Type
 	CharacterSetStr = " character set"
-
-	// CollateAndCharset.Type
-	CollateStr = " collate"
+	CollateStr      = " collate"
+	EncryptionStr   = " encryption"
 
 	// MatchExpr.Option
 	NoOptionStr                              = ""
@@ -303,11 +302,46 @@ const (
 	PrimaryKeyTypeStr = "primary key"
 	ForeignKeyTypeStr = "foreign key"
 	NormalKeyTypeStr  = "key"
+	CheckKeyTypeStr   = "check"
 
 	// TrimType strings
 	BothTrimStr     = "both"
 	LeadingTrimStr  = "leading"
 	TrailingTrimStr = "trailing"
+
+	// FrameUnitType strings
+	FrameRowsStr  = "rows"
+	FrameRangeStr = "range"
+
+	// FramePointType strings
+	CurrentRowStr         = "current row"
+	UnboundedPrecedingStr = "unbounded preceding"
+	UnboundedFollowingStr = "unbounded following"
+	ExprPrecedingStr      = "preceding"
+	ExprFollowingStr      = "following"
+
+	// ArgumentLessWindowExprType strings
+	CumeDistExprStr    = "cume_dist"
+	DenseRankExprStr   = "dense_rank"
+	PercentRankExprStr = "percent_rank"
+	RankExprStr        = "rank"
+	RowNumberExprStr   = "row_number"
+
+	// NullTreatmentType strings
+	RespectNullsStr = "respect nulls"
+	IgnoreNullsStr  = "ignore nulls"
+
+	// FromFirstLastType strings
+	FromFirstStr = "respect nulls"
+	FromLastStr  = "ignore nulls"
+
+	// FirstOrLastValueExprType strings
+	FirstValueExprStr = "first_value"
+	LastValueExprStr  = "last_value"
+
+	// FirstOrLastValueExprType strings
+	LagExprStr  = "lag"
+	LeadExprStr = "lead"
 
 	// TrimFuncType strings
 	NormalTrimStr = "trim"
@@ -331,6 +365,13 @@ const (
 	JSONMergeStr         = "json_merge"
 	JSONMergePatchStr    = "json_merge_patch"
 	JSONMergePreserveStr = "json_merge_preserve"
+
+	// LockingFuncType strings
+	GetLockStr         = "get_lock"
+	IsFreeLockStr      = "is_free_lock"
+	IsUsedLockStr      = "is_used_lock"
+	ReleaseAllLocksStr = "release_all_locks"
+	ReleaseLockStr     = "release_lock"
 
 	// LockOptionType strings
 	NoneTypeStr      = "none"
@@ -431,6 +472,54 @@ const (
 	RTrimType
 )
 
+// Constants for Enum Type - FrameUnitType
+const (
+	FrameRowsType FrameUnitType = iota
+	FrameRangeType
+)
+
+// Constants for Enum Type - FramePointType
+const (
+	CurrentRowType FramePointType = iota
+	UnboundedPrecedingType
+	UnboundedFollowingType
+	ExprPrecedingType
+	ExprFollowingType
+)
+
+// Constants for Enum Type - ArgumentLessWindowExprType
+const (
+	CumeDistExprType ArgumentLessWindowExprType = iota
+	DenseRankExprType
+	PercentRankExprType
+	RankExprType
+	RowNumberExprType
+)
+
+// Constants for Enum Type - NullTreatmentType
+const (
+	RespectNullsType NullTreatmentType = iota
+	IgnoreNullsType
+)
+
+// Constants for Enum Type - FromFirstLastType
+const (
+	FromFirstType FromFirstLastType = iota
+	FromLastType
+)
+
+// Constants for Enum Type - FirstOrLastValueExprType
+const (
+	FirstValueExprType FirstOrLastValueExprType = iota
+	LastValueExprType
+)
+
+// Constants for Enum Type - FirstOrLastValueExprType
+const (
+	LagExprType LagLeadExprType = iota
+	LeadExprType
+)
+
 // Constants for Enum Type - JSONAttributeType
 const (
 	DepthAttributeType JSONAttributeType = iota
@@ -453,6 +542,15 @@ const (
 	JSONMergeType JSONValueMergeType = iota
 	JSONMergePatchType
 	JSONMergePreserveType
+)
+
+// Constants for Enum Type - LockingFuncType
+const (
+	GetLock LockingFuncType = iota
+	IsFreeLock
+	IsUsedLock
+	ReleaseAllLocks
+	ReleaseLock
 )
 
 // Constants for Enum Type - WhereType
@@ -618,10 +716,11 @@ const (
 	DefaultJSONType
 )
 
-// Constant for Enum Type - CollateAndCharsetType
+// Constant for Enum Type - DatabaseOptionType
 const (
-	CollateType CollateAndCharsetType = iota
+	CollateType DatabaseOptionType = iota
 	CharacterSetType
+	EncryptionType
 )
 
 // LockType constants
@@ -682,6 +781,7 @@ const (
 	PrimaryKeyType DropKeyType = iota
 	ForeignKeyType
 	NormalKeyType
+	CheckKeyType
 )
 
 // LockOptionType constants
@@ -699,12 +799,24 @@ const (
 	CancelMigrationType
 	CancelAllMigrationType
 	CleanupMigrationType
+	ThrottleMigrationType
+	ThrottleAllMigrationType
+	UnthrottleMigrationType
+	UnthrottleAllMigrationType
 )
 
 // ColumnStorage constants
 const (
 	VirtualStorage ColumnStorage = iota
 	StoredStorage
+)
+
+// ColumnFormat constants
+const (
+	UnspecifiedFormat ColumnFormat = iota
+	FixedFormat
+	DynamicFormat
+	DefaultFormat
 )
 
 // IntervalTypes constants

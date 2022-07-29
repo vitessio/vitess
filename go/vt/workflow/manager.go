@@ -24,7 +24,7 @@ import (
 	"sync"
 	"time"
 
-	gouuid "github.com/pborman/uuid"
+	gouuid "github.com/google/uuid"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
@@ -260,9 +260,14 @@ func (m *Manager) Create(ctx context.Context, factoryName string, args []string)
 		return "", fmt.Errorf("no factory named %v is registered", factoryName)
 	}
 
+	uuid, err := gouuid.NewUUID()
+	if err != nil {
+		return "", err
+	}
+
 	// Create the initial workflowpb.Workflow object.
 	w := &workflowpb.Workflow{
-		Uuid:        gouuid.NewUUID().String(),
+		Uuid:        uuid.String(),
 		CreateTime:  time.Now().UnixNano(),
 		FactoryName: factoryName,
 		State:       workflowpb.WorkflowState_NotStarted,

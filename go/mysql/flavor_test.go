@@ -14,6 +14,7 @@ limitations under the License.
 package mysql
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -47,6 +48,11 @@ func TestServerVersionAtLeast(t *testing.T) {
 			expect:  true,
 		},
 		{
+			version: "8.0.14",
+			parts:   []int{7, 5},
+			expect:  true,
+		},
+		{
 			version: "8.0.14-log",
 			parts:   []int{7, 5, 20},
 			expect:  true,
@@ -73,12 +79,70 @@ func TestServerVersionAtLeast(t *testing.T) {
 		},
 	}
 	for _, tc := range testcases {
-		result, err := serverVersionAtLeast(tc.version, tc.parts...)
+		result, err := ServerVersionAtLeast(tc.version, tc.parts...)
 		if tc.expectError {
 			assert.Error(t, err)
 		} else {
 			assert.NoError(t, err)
 			assert.Equal(t, tc.expect, result)
 		}
+	}
+}
+
+func TestGetFlavor(t *testing.T) {
+	testcases := []struct {
+		version    string
+		capability FlavorCapability
+		isCapable  bool
+	}{
+		{
+			version:    "8.0.14",
+			capability: InstantDDLFlavorCapability,
+			isCapable:  true,
+		},
+		{
+			version:    "8.0.20",
+			capability: TransactionalGtidExecutedFlavorCapability,
+			isCapable:  true,
+		},
+		{
+			version:    "8.0.0",
+			capability: InstantAddLastColumnFlavorCapability,
+			isCapable:  true,
+		},
+		{
+			version:    "8.0.0",
+			capability: InstantAddDropColumnFlavorCapability,
+			isCapable:  false,
+		},
+		{
+			version:    "5.6.7",
+			capability: InstantDDLFlavorCapability,
+			isCapable:  false,
+		},
+		{
+			version:    "5.7.29",
+			capability: TransactionalGtidExecutedFlavorCapability,
+			isCapable:  false,
+		},
+		{
+			version:    "5.6.7",
+			capability: MySQLJSONFlavorCapability,
+			isCapable:  false,
+		},
+		{
+			version:    "5.7.29",
+			capability: MySQLJSONFlavorCapability,
+			isCapable:  true,
+		},
+	}
+	for _, tc := range testcases {
+		name := fmt.Sprintf("%s %v", tc.version, tc.capability)
+		t.Run(name, func(t *testing.T) {
+			_, capableOf, _ := GetFlavor(tc.version, nil)
+			isCapable, err := capableOf(tc.capability)
+			assert.NoError(t, err)
+			assert.Equal(t, tc.isCapable, isCapable)
+		})
 	}
 }

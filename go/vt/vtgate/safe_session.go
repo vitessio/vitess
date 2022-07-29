@@ -18,6 +18,7 @@ package vtgate
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -45,6 +46,7 @@ type SafeSession struct {
 	// executed. If there was a subsequent failure, if we have a savepoint we rollback to that.
 	// Otherwise, the transaction is rolled back.
 	rollbackOnPartialExec string
+	savepointName         string
 
 	// this is a signal that found_rows has already been handles by the primitives,
 	// and doesn't have to be updated by the executor
@@ -88,8 +90,16 @@ type savepointState int
 
 const (
 	savepointStateNotSet = savepointState(iota)
-	savepointNeeded
+	// savepointNotNeeded - savepoint is not required
 	savepointNotNeeded
+	// savepointNeeded - savepoint may be required
+	savepointNeeded
+	// savepointSet - savepoint is set on the session
+	savepointSet
+	// savepointRollbackSet - rollback to savepoint is set on the session
+	savepointRollbackSet
+	// savepointRollback - rollback happened on the savepoint
+	savepointRollback
 )
 
 // NewSafeSession returns a new SafeSession based on the Session
@@ -206,12 +216,55 @@ func (session *SafeSession) SetSavepointState(spNeed bool) {
 	}
 }
 
-// InsertSavepoints returns true if we should insert savepoints.
-func (session *SafeSession) InsertSavepoints() bool {
+// CanAddSavepoint returns true if we should insert savepoint and there is no existing savepoint.
+func (session *SafeSession) CanAddSavepoint() bool {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 
 	return session.savepointState == savepointNeeded
+}
+
+// SetSavepoint stores the savepoint name to session.
+func (session *SafeSession) SetSavepoint(name string) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
+	session.savepointName = name
+	session.savepointState = savepointSet
+}
+
+// SetRollbackCommand stores the rollback command to session and executed if required.
+func (session *SafeSession) SetRollbackCommand() {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
+	// if the rollback already happened on the savepoint. There is nothing to set or execute on later.
+	if session.savepointState == savepointRollback {
+		return
+	}
+
+	if session.savepointState == savepointSet {
+		session.rollbackOnPartialExec = fmt.Sprintf("rollback to %s", session.savepointName)
+	} else {
+		session.rollbackOnPartialExec = txRollback
+	}
+	session.savepointState = savepointRollbackSet
+}
+
+// SavepointRollback updates the state that transaction was rolledback to the savepoint stored in the session.
+func (session *SafeSession) SavepointRollback() {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
+	session.savepointState = savepointRollback
+}
+
+// IsRollbackSet returns true if rollback to savepoint can be done.
+func (session *SafeSession) IsRollbackSet() bool {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
+	return session.savepointState == savepointRollbackSet
 }
 
 // SetCommitOrder sets the commit order.
@@ -479,6 +532,7 @@ func (session *SafeSession) ResetLock() {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	session.LockSession = nil
+	session.AdvisoryLock = nil
 }
 
 // ResetAll resets the shard sessions and lock session.
@@ -494,6 +548,7 @@ func (session *SafeSession) ResetAll() {
 	session.PreSessions = nil
 	session.PostSessions = nil
 	session.LockSession = nil
+	session.AdvisoryLock = nil
 }
 
 // ResetShard reset the shard session for the provided tablet alias.
@@ -662,4 +717,73 @@ func (session *SafeSession) getSessions() []*vtgatepb.Session_ShardSession {
 	default:
 		return session.ShardSessions
 	}
+}
+
+func (session *SafeSession) RemoveInternalSavepoint() {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
+	if session.savepointName == "" {
+		return
+	}
+	sCount := len(session.Savepoints)
+	if sCount == 0 {
+		return
+	}
+	sLast := sCount - 1
+	if strings.Contains(session.Savepoints[sLast], session.savepointName) {
+		session.Savepoints = session.Savepoints[0:sLast]
+	}
+}
+
+// HasAdvisoryLock returns if any advisory lock is taken
+func (session *SafeSession) HasAdvisoryLock() bool {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
+	return len(session.AdvisoryLock) != 0
+}
+
+// AddAdvisoryLock adds the advisory lock to the list.
+func (session *SafeSession) AddAdvisoryLock(name string) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
+	if session.AdvisoryLock == nil {
+		session.AdvisoryLock = map[string]int64{name: 1}
+		return
+	}
+	count, exists := session.AdvisoryLock[name]
+	if exists {
+		count++
+	}
+	session.AdvisoryLock[name] = count
+}
+
+// RemoveAdvisoryLock removes the advisory lock from the list.
+func (session *SafeSession) RemoveAdvisoryLock(name string) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
+	if session.AdvisoryLock == nil {
+		return
+	}
+	count, exists := session.AdvisoryLock[name]
+	if !exists {
+		return
+	}
+	count--
+	if count == 0 {
+		delete(session.AdvisoryLock, name)
+		return
+	}
+	session.AdvisoryLock[name] = count
+}
+
+// ClearAdvisoryLock clears the advisory lock list.
+func (session *SafeSession) ClearAdvisoryLock() {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
+	session.AdvisoryLock = nil
 }

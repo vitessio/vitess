@@ -19,6 +19,7 @@ limitations under the License.
 package collations
 
 import (
+	"flag"
 	"sync"
 
 	"vitess.io/vitess/go/vt/servenv"
@@ -31,8 +32,14 @@ var defaultEnvInit sync.Once
 // on the value of the `mysql_server_version` flag passed to this Vitess process.
 func Local() *Environment {
 	defaultEnvInit.Do(func() {
+		if !flag.Parsed() {
+			panic("collations.Local() called too early")
+		}
 		if *servenv.MySQLServerVersion == "" {
-			defaultEnv = fetchCacheEnvironment(collverMySQL80)
+			// The default server version used by vtgate is 5.7.9
+			// NOTE: this should be changed along with the effective default
+			//       for the vtgate mysql_server_version flag.
+			defaultEnv = fetchCacheEnvironment(collverMySQL57)
 		} else {
 			defaultEnv = NewEnvironment(*servenv.MySQLServerVersion)
 		}

@@ -3698,7 +3698,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "count(0)",
+        "Aggregates": "sum_count(0) AS count",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -3728,7 +3728,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum(0) AS a",
+        "Aggregates": "sum_count_star(0) AS a",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -4623,7 +4623,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count(1)",
+    "Aggregates": "sum_count(1) AS count",
     "GroupBy": "0",
     "Inputs": [
       {
@@ -4648,7 +4648,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "sum(1) AS count(*)",
+    "Aggregates": "sum_count_star(1) AS count(*)",
     "GroupBy": "(0|2)",
     "ResultColumns": 2,
     "Inputs": [
@@ -4663,6 +4663,47 @@ Gen4 plan same as above
         "OrderBy": "(0|2) ASC",
         "Query": "select col1, count(*), weight_string(col1) from (select colC + colD as col1 from `user`) as tbl group by col1, weight_string(col1) order by col1 asc",
         "Table": "`user`"
+      }
+    ]
+  }
+}
+
+# join with USING construct
+"select * from authoritative join unsharded_authoritative using(col1)"
+"unsupported: join with USING(column_list) clause for complex queries"
+{
+  "QueryType": "SELECT",
+  "Original": "select * from authoritative join unsharded_authoritative using(col1)",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "L:1,L:2,L:3,R:0",
+    "JoinVars": {
+      "authoritative_col1": 0
+    },
+    "TableName": "authoritative_unsharded_authoritative",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select authoritative.col1, authoritative.col1 as col1, authoritative.user_id as user_id, authoritative.col2 as col2 from authoritative where 1 != 1",
+        "Query": "select authoritative.col1, authoritative.col1 as col1, authoritative.user_id as user_id, authoritative.col2 as col2 from authoritative",
+        "Table": "authoritative"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select unsharded_authoritative.col2 as col2 from unsharded_authoritative where 1 != 1",
+        "Query": "select unsharded_authoritative.col2 as col2 from unsharded_authoritative where unsharded_authoritative.col1 = :authoritative_col1",
+        "Table": "unsharded_authoritative"
       }
     ]
   }

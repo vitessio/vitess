@@ -218,7 +218,6 @@ func setupVaultServer(t *testing.T, vs *VaultServer) (string, string) {
 func initializeClusterEarly(t *testing.T) {
 	clusterInstance = cluster.NewCluster(cell, hostname)
 
-	clusterInstance.VtctldExtraArgs = append(clusterInstance.VtctldExtraArgs, "--durability_policy=semi_sync")
 	// Start topo server
 	err := clusterInstance.StartTopo()
 	require.NoError(t, err)
@@ -247,6 +246,9 @@ func initializeClusterLate(t *testing.T) {
 
 	err := clusterInstance.SetupCluster(keyspace, []cluster.Shard{*shard})
 	require.NoError(t, err)
+	vtctldClientProcess := cluster.VtctldClientProcessInstance("localhost", clusterInstance.VtctldProcess.GrpcPort, clusterInstance.TmpDirectory)
+	out, err := vtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=semi_sync")
+	require.NoError(t, err, out)
 
 	// Start MySQL
 	var mysqlCtlProcessList []*exec.Cmd

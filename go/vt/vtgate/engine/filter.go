@@ -53,7 +53,7 @@ func (f *Filter) GetTableName() string {
 
 // TryExecute satisfies the Primitive interface.
 func (f *Filter) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	result, err := f.Input.TryExecute(vcursor, bindVars, wantfields)
+	result, err := vcursor.ExecutePrimitive(f.Input, bindVars, wantfields)
 	if err != nil {
 		return nil, err
 	}
@@ -101,7 +101,8 @@ func (f *Filter) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.
 		results.Rows = rows
 		return callback(results)
 	}
-	return f.Input.TryStreamExecute(vcursor, bindVars, wantfields, filter)
+
+	return vcursor.StreamExecutePrimitive(f.Input, bindVars, wantfields, filter)
 }
 
 // GetFields implements the Primitive interface.

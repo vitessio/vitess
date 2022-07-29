@@ -1146,3 +1146,17 @@ func buildLdPaths() ([]string, error) {
 func (mysqld *Mysqld) GetVersionString() string {
 	return fmt.Sprintf("%d.%d.%d", mysqld.capabilities.version.Major, mysqld.capabilities.version.Minor, mysqld.capabilities.version.Patch)
 }
+
+// GetVersionComment gets the version comment.
+func (mysqld *Mysqld) GetVersionComment(ctx context.Context) string {
+	qr, err := mysqld.FetchSuperQuery(ctx, "select @@global.version_comment")
+	if err != nil {
+		return ""
+	}
+	if len(qr.Rows) != 1 {
+		return ""
+	}
+	res := qr.Named().Row()
+	versionComment, _ := res.ToString("@@global.version_comment")
+	return versionComment
+}

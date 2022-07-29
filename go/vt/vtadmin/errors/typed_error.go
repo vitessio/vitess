@@ -54,6 +54,20 @@ func (e *Unknown) Code() string    { return "unknown" }
 func (e *Unknown) Details() any    { return e.ErrDetails }
 func (e *Unknown) HTTPStatus() int { return http.StatusInternalServerError }
 
+// Internal is returned when an http adapter encounters an internal error (e.g.
+// an internal route variable name changed).
+//
+// Functionally, this is the same as Unknown with a different error code.
+type Internal struct {
+	Err        error
+	ErrDetails any
+}
+
+func (e *Internal) Error() string   { return e.Err.Error() }
+func (e *Internal) Code() string    { return "internal" }
+func (e *Internal) Details() any    { return e.ErrDetails }
+func (e *Internal) HTTPStatus() int { return http.StatusInternalServerError }
+
 // ErrInvalidCluster is returned when a cluster parameter, either in a route or
 // as a query param, is invalid.
 type ErrInvalidCluster struct {

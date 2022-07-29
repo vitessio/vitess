@@ -53,6 +53,8 @@ const (
 	// MultiEqual is used for routing queries with IN with tuple clause
 	// Requires: A Vindex, and a multi Tuple Values.
 	MultiEqual
+	// SubShard is for when we are missing one or more columns from a composite vindex
+	SubShard
 	// Scatter is for routing a scattered statement.
 	Scatter
 	// Next is for fetching from a sequence.
@@ -68,8 +70,6 @@ const (
 	// Is used when the query explicitly sets a target destination:
 	// in the clause e.g: UPDATE `keyspace[-]`.x1 SET foo=1
 	ByDestination
-	// SubShard is for when we are missing one or more columns from a composite vindex
-	SubShard
 )
 
 var opName = map[Opcode]string{

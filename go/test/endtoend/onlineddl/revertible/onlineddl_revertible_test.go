@@ -207,6 +207,7 @@ func TestMain(m *testing.M) {
 			"--throttle_threshold", "1s",
 			"--heartbeat_enable",
 			"--heartbeat_interval", "250ms",
+			"--heartbeat_on_demand_duration", "5s",
 		}
 		clusterInstance.VtGateExtraArgs = []string{}
 

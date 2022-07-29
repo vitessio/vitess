@@ -24,9 +24,8 @@ import (
 	"os/exec"
 	"path"
 	"runtime"
-	"time"
-
 	"testing"
+	"time"
 
 	extensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
@@ -45,11 +44,7 @@ func TestKubernetesTopo(t *testing.T) {
 	}
 
 	// Create a data dir for test data
-	testDataDir, err := os.MkdirTemp("", "vt-test-k3s")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(testDataDir) // clean up
+	testDataDir := t.TempDir()
 
 	// Gen a temp file name for the config
 	testConfig, err := os.CreateTemp("", "vt-test-k3s-config")

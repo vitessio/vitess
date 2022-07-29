@@ -18,14 +18,19 @@ package vreplication
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -38,10 +43,8 @@ import (
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/log"
-	throttlebase "vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
-	"vitess.io/vitess/go/vt/wrangler"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	throttlebase "vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 )
 
 var (
@@ -66,7 +69,7 @@ const (
 	deleteOpenTxQuery = "delete from customer where name = 'openTxQuery'"
 
 	merchantKeyspace = "merchant-type"
-	maxWait          = 10 * time.Second
+	maxWait          = 60 * time.Second
 	BypassLagCheck   = true // temporary fix for flakiness seen only in CI when lag check is introduced
 )
 
@@ -208,7 +211,7 @@ func TestV2WorkflowsAcrossDBVersions(t *testing.T) {
 
 func TestMultiCellVreplicationWorkflow(t *testing.T) {
 	cells := []string{"zone1", "zone2"}
-	allCellNames = "zone1,zone2"
+	allCellNames = strings.Join(cells, ",")
 
 	vc = NewVitessCluster(t, "TestMultiCellVreplicationWorkflow", cells, mainClusterConfig)
 	require.NotNil(t, vc)
@@ -231,6 +234,86 @@ func TestMultiCellVreplicationWorkflow(t *testing.T) {
 	verifyClusterHealth(t, vc)
 	insertInitialData(t)
 	shardCustomer(t, true, []*Cell{cell1, cell2}, cell2.Name, true)
+
+	// we tag along this test so as not to create the overhead of creating another cluster
+	testVStreamCellFlag(t)
+}
+
+func testVStreamCellFlag(t *testing.T) {
+	vgtid := &binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{
+			Keyspace: "product",
+			Shard:    "0",
+			Gtid:     "",
+		}}}
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "product",
+			Filter: "select * from product",
+		}},
+	}
+	ctx := context.Background()
+
+	type vstreamTestCase struct {
+		cells       string
+		expectError bool
+	}
+	nonExistingCell := "zone7"
+	vstreamTestCases := []vstreamTestCase{
+		{"zone1,zone2", false},
+		{nonExistingCell, true},
+		{"", false},
+	}
+
+	for _, tc := range vstreamTestCases {
+		t.Run("VStreamCellsFlag/"+tc.cells, func(t *testing.T) {
+			conn, err := vtgateconn.Dial(ctx, fmt.Sprintf("localhost:%d", vc.ClusterConfig.vtgateGrpcPort))
+			require.NoError(t, err)
+			defer conn.Close()
+
+			flags := &vtgatepb.VStreamFlags{}
+			if tc.cells != "" {
+				flags.Cells = tc.cells
+			}
+
+			ctx2, cancel := context.WithTimeout(ctx, 30*time.Second)
+			reader, err := conn.VStream(ctx2, topodatapb.TabletType_REPLICA, vgtid, filter, flags)
+			require.NoError(t, err)
+
+			rowsReceived := false
+			var wg sync.WaitGroup
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				defer cancel()
+
+				events, err := reader.Recv()
+				switch err {
+				case nil:
+					if len(events) > 0 {
+						log.Infof("received %d events", len(events))
+						rowsReceived = true
+					}
+				case io.EOF:
+					log.Infof("stream ended without data")
+				default:
+					log.Infof("%s:: remote error: %v", time.Now(), err)
+				}
+			}()
+			wg.Wait()
+
+			if tc.expectError {
+				require.False(t, rowsReceived)
+
+				// if no tablet was found the tablet picker adds a key which includes the cell name to the vtgate TabletPickerNoTabletFoundErrorCount stat
+				pickerErrorStat, err := getDebugVar(t, vc.ClusterConfig.vtgatePort, []string{"TabletPickerNoTabletFoundErrorCount"})
+				require.NoError(t, err)
+				require.Contains(t, pickerErrorStat, nonExistingCell)
+			} else {
+				require.True(t, rowsReceived)
+			}
+		})
+	}
 }
 
 // TestCellAliasVreplicationWorkflow tests replication from a cell with an alias to test the tablet picker's alias functionality
@@ -407,12 +490,12 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 
 		customerTab1 := custKs.Shards["-80"].Tablets["zone1-200"].Vttablet
 		customerTab2 := custKs.Shards["80-"].Tablets["zone1-300"].Vttablet
+		productTab := vc.Cells[defaultCell.Name].Keyspaces["product"].Shards["0"].Tablets["zone1-100"].Vttablet
 
 		catchup(t, customerTab1, workflow, "MoveTables")
 		catchup(t, customerTab2, workflow, "MoveTables")
 
-		productTab := vc.Cells[defaultCell.Name].Keyspaces["product"].Shards["0"].Tablets["zone1-100"].Vttablet
-		query := "select * from customer"
+		query := "select cid from customer"
 		require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "product", query, query))
 		insertQuery1 := "insert into customer(cid, name) values(1001, 'tempCustomer1')"
 		matchInsertQuery1 := "insert into customer(cid, `name`) values (:vtg1, :vtg2)"
@@ -429,7 +512,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 			execVtgateQuery(t, vtgateConn, "product", fmt.Sprintf("update `%s` set name='xyz'", tbl))
 		}
 
-		vdiff(t, ksWorkflow, "")
+		vdiff1(t, ksWorkflow, "")
 		switchReadsDryRun(t, allCellNames, ksWorkflow, dryRunResultsReadCustomerShard)
 		switchReads(t, allCellNames, ksWorkflow)
 		require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "customer", query, query))
@@ -443,7 +526,10 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		if withOpenTx && commit != nil {
 			commit(t)
 		}
-		vdiff(t, "product.p2c_reverse", "")
+
+		catchup(t, productTab, workflow, "MoveTables")
+
+		vdiff1(t, "product.p2c_reverse", "")
 		if withOpenTx {
 			execVtgateQuery(t, vtgateConn, "", deleteOpenTxQuery)
 		}
@@ -695,14 +781,13 @@ func reshard(t *testing.T, ksName string, tableName string, workflow string, sou
 				continue
 			}
 		}
-		vdiff(t, ksWorkflow, "")
+		vdiff1(t, ksWorkflow, "")
 		switchReads(t, allCellNames, ksWorkflow)
 		if dryRunResultSwitchWrites != nil {
 			switchWritesDryRun(t, ksWorkflow, dryRunResultSwitchWrites)
 		}
 		switchWrites(t, ksWorkflow, false)
 		dropSources(t, ksWorkflow)
-
 		for tabletName, count := range counts {
 			if tablets[tabletName] == nil {
 				continue
@@ -728,7 +813,7 @@ func shardOrders(t *testing.T) {
 		customerTab2 := custKs.Shards["80-"].Tablets["zone1-300"].Vttablet
 		catchup(t, customerTab1, workflow, "MoveTables")
 		catchup(t, customerTab2, workflow, "MoveTables")
-		vdiff(t, ksWorkflow, "")
+		vdiff1(t, ksWorkflow, "")
 		switchReads(t, allCellNames, ksWorkflow)
 		switchWrites(t, ksWorkflow, false)
 		dropSources(t, ksWorkflow)
@@ -762,7 +847,7 @@ func shardMerchant(t *testing.T) {
 		catchup(t, merchantTab1, workflow, "MoveTables")
 		catchup(t, merchantTab2, workflow, "MoveTables")
 
-		vdiff(t, fmt.Sprintf("%s.%s", merchantKeyspace, workflow), "")
+		vdiff1(t, fmt.Sprintf("%s.%s", merchantKeyspace, workflow), "")
 		switchReads(t, allCellNames, ksWorkflow)
 		switchWrites(t, ksWorkflow, false)
 		printRoutingRules(t, vc, "After merchant movetables")
@@ -778,27 +863,6 @@ func shardMerchant(t *testing.T) {
 		validateCountInTablet(t, merchantTab1, merchantKeyspace, "merchant", 1)
 		validateCountInTablet(t, merchantTab2, merchantKeyspace, "merchant", 1)
 		validateCount(t, vtgateConn, merchantKeyspace, "merchant", 2)
-	})
-}
-
-func vdiff(t *testing.T, workflow, cells string) {
-	t.Run("vdiff", func(t *testing.T) {
-		output, err := vc.VtctlClient.ExecuteCommandWithOutput("VDiff", "--", "--tablet_types=primary", "--source_cell="+cells, "--format", "json", workflow)
-		log.Infof("vdiff err: %+v, output: %+v", err, output)
-		require.Nil(t, err)
-		require.NotNil(t, output)
-		diffReports := make(map[string]*wrangler.DiffReport)
-		err = json.Unmarshal([]byte(output), &diffReports)
-		require.Nil(t, err)
-		if len(diffReports) < 1 {
-			t.Fatal("VDiff did not return a valid json response " + output + "\n")
-		}
-		require.True(t, len(diffReports) > 0)
-		for key, diffReport := range diffReports {
-			if diffReport.ProcessedRows != diffReport.MatchingRows {
-				require.Failf(t, "vdiff failed", "Table %d : %#v\n", key, diffReport)
-			}
-		}
 	})
 }
 

@@ -34,7 +34,7 @@ import (
 )
 
 // AssertMatches ensures the given query produces the expected results.
-func AssertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
+func AssertMatches(t testing.TB, conn *mysql.Conn, query, expected string) {
 	t.Helper()
 	qr := Exec(t, conn, query)
 	got := fmt.Sprintf("%v", qr.Rows)
@@ -42,6 +42,20 @@ func AssertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
 	if diff != "" {
 		t.Errorf("Query: %s (-want +got):\n%s\nGot:%s", query, diff, got)
 	}
+}
+
+// AssertMatchesOneOf ensures the given query produces one of the expected results.
+// useful when a test can give different results depending on mysql flavor
+func AssertMatchesOneOf(t testing.TB, conn *mysql.Conn, query string, expectedValues ...string) {
+	t.Helper()
+	qr := Exec(t, conn, query)
+	got := fmt.Sprintf("%v", qr.Rows)
+	for _, expected := range expectedValues {
+		if cmp.Equal(expected, got) {
+			return
+		}
+	}
+	t.Errorf("Query: %s (-want +got):\n%+v\nGot:%s", query, expectedValues, got)
 }
 
 // AssertMatchesCompareMySQL executes the given query on both Vitess and MySQL and make sure
@@ -99,7 +113,7 @@ func AssertResultIsEmpty(t *testing.T, conn *mysql.Conn, pre string) {
 
 // Exec executes the given query using the given connection. The results are returned.
 // The test fails if the query produces an error.
-func Exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
+func Exec(t testing.TB, conn *mysql.Conn, query string) *sqltypes.Result {
 	t.Helper()
 	qr, err := conn.ExecuteFetch(query, 1000, true)
 	require.NoError(t, err, "for query: "+query)
@@ -118,7 +132,7 @@ func ExecCompareMySQL(t *testing.T, vtConn, mysqlConn *mysql.Conn, query string)
 
 	mysqlQr, err := mysqlConn.ExecuteFetch(query, 1000, true)
 	require.NoError(t, err, "[MySQL Error] for query: "+query)
-	compareVitessAndMySQLResults(t, query, vtQr, mysqlQr)
+	compareVitessAndMySQLResults(t, query, vtQr, mysqlQr, false)
 	return vtQr
 }
 
@@ -158,4 +172,42 @@ func AssertMatchesWithTimeout(t *testing.T, conn *mysql.Conn, query, expected st
 		}
 
 	}
+}
+
+// WaitForAuthoritative waits for a table to become authoritative
+func WaitForAuthoritative(t *testing.T, cluster *cluster.LocalProcessCluster, ks, tbl string) error {
+	timeout := time.After(10 * time.Second)
+	for {
+		select {
+		case <-timeout:
+			return fmt.Errorf("schema tracking didn't mark table t2 as authoritative until timeout")
+		default:
+			time.Sleep(1 * time.Second)
+			res, err := cluster.VtgateProcess.ReadVSchema()
+			require.NoError(t, err, res)
+			t2Map := getTableT2Map(res, ks, tbl)
+			authoritative, fieldPresent := t2Map["column_list_authoritative"]
+			if !fieldPresent {
+				continue
+			}
+			authoritativeBool, isBool := authoritative.(bool)
+			if !isBool || !authoritativeBool {
+				continue
+			}
+			return nil
+		}
+	}
+}
+
+func getTableT2Map(res *interface{}, ks, tbl string) map[string]interface{} {
+	step1 := convertToMap(*res)["keyspaces"]
+	step2 := convertToMap(step1)[ks]
+	step3 := convertToMap(step2)["tables"]
+	tblMap := convertToMap(step3)[tbl]
+	return convertToMap(tblMap)
+}
+
+func convertToMap(input interface{}) map[string]interface{} {
+	output := input.(map[string]interface{})
+	return output
 }

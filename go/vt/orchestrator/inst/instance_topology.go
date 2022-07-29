@@ -929,7 +929,7 @@ func MakeCoPrimary(instanceKey *InstanceKey) (*Instance, error) {
 	}
 	log.Infof("Will make %+v co-primary of %+v", instanceKey, primary.Key)
 
-	var gitHint OperationGTIDHint = GTIDHintNeutral
+	var gitHint = GTIDHintNeutral
 	if maintenanceToken, merr := BeginMaintenance(instanceKey, GetMaintenanceOwner(), fmt.Sprintf("make co-primary of %+v", primary.Key)); merr != nil {
 		err = fmt.Errorf("Cannot begin maintenance on %+v: %v", *instanceKey, merr)
 		goto Cleanup

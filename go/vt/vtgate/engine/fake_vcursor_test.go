@@ -51,7 +51,38 @@ var _ SessionActions = (*noopVCursor)(nil)
 
 // noopVCursor is used to build other vcursors.
 type noopVCursor struct {
-	ctx context.Context
+	ctx    context.Context
+	cancel context.CancelFunc
+}
+
+func newNoopVCursor(ctx context.Context) *noopVCursor {
+	n := &noopVCursor{}
+	n.ctx, n.cancel = context.WithCancel(ctx)
+	return n
+}
+
+func (t *noopVCursor) AnyAdvisoryLockTaken() bool {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (t *noopVCursor) AddAdvisoryLock(name string) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (t *noopVCursor) RemoveAdvisoryLock(name string) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (t *noopVCursor) ReleaseLock() error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (t *noopVCursor) CancelContext() {
+	t.cancel()
 }
 
 func (t *noopVCursor) SetExec(name string, value string) error {
@@ -160,7 +191,7 @@ func (t *noopVCursor) FindRoutedTable(sqlparser.TableName) (*vindexes.Table, err
 	panic("implement me")
 }
 
-func (t *noopVCursor) ExecuteLock(rs *srvtopo.ResolvedShard, query *querypb.BoundQuery) (*sqltypes.Result, error) {
+func (t *noopVCursor) ExecuteLock(rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, lockFuncType sqlparser.LockingFuncType) (*sqltypes.Result, error) {
 	panic("implement me")
 }
 

@@ -232,7 +232,7 @@ func TestNormalize(t *testing.T) {
 	}, {
 		// Do not normalize cast/convert types
 		in:      `select CAST("test" AS CHAR(60))`,
-		outstmt: `select convert(:bv1, CHAR(60)) from dual`,
+		outstmt: `select cast(:bv1 as CHAR(60)) from dual`,
 		outbv: map[string]*querypb.BindVariable{
 			"bv1": sqltypes.StringBindVariable("test"),
 		},
@@ -273,6 +273,10 @@ func TestNormalizeValidSQL(t *testing.T) {
 			}
 			tree, err := Parse(tcase.input)
 			require.NoError(t, err, tcase.input)
+			// Skip the test for the queries that do not run the normalizer
+			if !CanNormalize(tree) {
+				return
+			}
 			bv := make(map[string]*querypb.BindVariable)
 			known := make(BindVars)
 			err = Normalize(tree, NewReservedVars("vtg", known), bv)

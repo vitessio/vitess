@@ -38,10 +38,14 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfAliasedTableExpr(in, f)
 	case *AlterCharset:
 		return VisitRefOfAlterCharset(in, f)
+	case *AlterCheck:
+		return VisitRefOfAlterCheck(in, f)
 	case *AlterColumn:
 		return VisitRefOfAlterColumn(in, f)
 	case *AlterDatabase:
 		return VisitRefOfAlterDatabase(in, f)
+	case *AlterIndex:
+		return VisitRefOfAlterIndex(in, f)
 	case *AlterMigration:
 		return VisitRefOfAlterMigration(in, f)
 	case *AlterTable:
@@ -54,6 +58,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfAndExpr(in, f)
 	case Argument:
 		return VisitArgument(in, f)
+	case *ArgumentLessWindowExpr:
+		return VisitRefOfArgumentLessWindowExpr(in, f)
 	case *AutoIncSpec:
 		return VisitRefOfAutoIncSpec(in, f)
 	case *Begin:
@@ -68,6 +74,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfCallProc(in, f)
 	case *CaseExpr:
 		return VisitRefOfCaseExpr(in, f)
+	case *CastExpr:
+		return VisitRefOfCastExpr(in, f)
 	case *ChangeColumn:
 		return VisitRefOfChangeColumn(in, f)
 	case *CheckConstraintDefinition:
@@ -138,14 +146,24 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitExprs(in, f)
 	case *ExtractFuncExpr:
 		return VisitRefOfExtractFuncExpr(in, f)
+	case *ExtractValueExpr:
+		return VisitRefOfExtractValueExpr(in, f)
 	case *ExtractedSubquery:
 		return VisitRefOfExtractedSubquery(in, f)
+	case *FirstOrLastValueExpr:
+		return VisitRefOfFirstOrLastValueExpr(in, f)
 	case *Flush:
 		return VisitRefOfFlush(in, f)
 	case *Force:
 		return VisitRefOfForce(in, f)
 	case *ForeignKeyDefinition:
 		return VisitRefOfForeignKeyDefinition(in, f)
+	case *FrameClause:
+		return VisitRefOfFrameClause(in, f)
+	case *FramePoint:
+		return VisitRefOfFramePoint(in, f)
+	case *FromFirstLastClause:
+		return VisitRefOfFromFirstLastClause(in, f)
 	case *FuncExpr:
 		return VisitRefOfFuncExpr(in, f)
 	case GroupBy:
@@ -224,6 +242,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfJtOnResponse(in, f)
 	case *KeyState:
 		return VisitRefOfKeyState(in, f)
+	case *LagLeadExpr:
+		return VisitRefOfLagLeadExpr(in, f)
 	case *Limit:
 		return VisitRefOfLimit(in, f)
 	case ListArg:
@@ -236,20 +256,34 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfLockOption(in, f)
 	case *LockTables:
 		return VisitRefOfLockTables(in, f)
+	case *LockingFunc:
+		return VisitRefOfLockingFunc(in, f)
+	case MatchAction:
+		return VisitMatchAction(in, f)
 	case *MatchExpr:
 		return VisitRefOfMatchExpr(in, f)
 	case *MemberOfExpr:
 		return VisitRefOfMemberOfExpr(in, f)
 	case *ModifyColumn:
 		return VisitRefOfModifyColumn(in, f)
+	case *NTHValueExpr:
+		return VisitRefOfNTHValueExpr(in, f)
+	case *NamedWindow:
+		return VisitRefOfNamedWindow(in, f)
+	case NamedWindows:
+		return VisitNamedWindows(in, f)
 	case *Nextval:
 		return VisitRefOfNextval(in, f)
 	case *NotExpr:
 		return VisitRefOfNotExpr(in, f)
+	case *NtileExpr:
+		return VisitRefOfNtileExpr(in, f)
+	case *NullTreatmentClause:
+		return VisitRefOfNullTreatmentClause(in, f)
 	case *NullVal:
 		return VisitRefOfNullVal(in, f)
-	case Offset:
-		return VisitOffset(in, f)
+	case *Offset:
+		return VisitRefOfOffset(in, f)
 	case OnDup:
 		return VisitOnDup(in, f)
 	case *OptLike:
@@ -266,6 +300,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfOtherAdmin(in, f)
 	case *OtherRead:
 		return VisitRefOfOtherRead(in, f)
+	case *OverClause:
+		return VisitRefOfOverClause(in, f)
 	case *ParenTableExpr:
 		return VisitRefOfParenTableExpr(in, f)
 	case *ParsedComments:
@@ -290,6 +326,14 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitReferenceAction(in, f)
 	case *ReferenceDefinition:
 		return VisitRefOfReferenceDefinition(in, f)
+	case *RegexpInstrExpr:
+		return VisitRefOfRegexpInstrExpr(in, f)
+	case *RegexpLikeExpr:
+		return VisitRefOfRegexpLikeExpr(in, f)
+	case *RegexpReplaceExpr:
+		return VisitRefOfRegexpReplaceExpr(in, f)
+	case *RegexpSubstrExpr:
+		return VisitRefOfRegexpSubstrExpr(in, f)
 	case *Release:
 		return VisitRefOfRelease(in, f)
 	case *RenameIndex:
@@ -334,12 +378,20 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfShowMigrationLogs(in, f)
 	case *ShowOther:
 		return VisitRefOfShowOther(in, f)
+	case *ShowThrottledApps:
+		return VisitRefOfShowThrottledApps(in, f)
 	case *StarExpr:
 		return VisitRefOfStarExpr(in, f)
 	case *Stream:
 		return VisitRefOfStream(in, f)
 	case *SubPartition:
 		return VisitRefOfSubPartition(in, f)
+	case *SubPartitionDefinition:
+		return VisitRefOfSubPartitionDefinition(in, f)
+	case *SubPartitionDefinitionOptions:
+		return VisitRefOfSubPartitionDefinitionOptions(in, f)
+	case SubPartitionDefinitions:
+		return VisitSubPartitionDefinitions(in, f)
 	case *Subquery:
 		return VisitRefOfSubquery(in, f)
 	case *SubstrExpr:
@@ -376,6 +428,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfUpdateExpr(in, f)
 	case UpdateExprs:
 		return VisitUpdateExprs(in, f)
+	case *UpdateXMLExpr:
+		return VisitRefOfUpdateXMLExpr(in, f)
 	case *Use:
 		return VisitRefOfUse(in, f)
 	case *VStream:
@@ -398,6 +452,12 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfWhen(in, f)
 	case *Where:
 		return VisitRefOfWhere(in, f)
+	case *WindowDefinition:
+		return VisitRefOfWindowDefinition(in, f)
+	case WindowDefinitions:
+		return VisitWindowDefinitions(in, f)
+	case *WindowSpecification:
+		return VisitRefOfWindowSpecification(in, f)
 	case *With:
 		return VisitRefOfWith(in, f)
 	case *XorExpr:
@@ -496,6 +556,18 @@ func VisitRefOfAlterCharset(in *AlterCharset, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfAlterCheck(in *AlterCheck, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitColIdent(in.Name, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfAlterColumn(in *AlterColumn, f Visit) error {
 	if in == nil {
 		return nil
@@ -523,11 +595,26 @@ func VisitRefOfAlterDatabase(in *AlterDatabase, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfAlterIndex(in *AlterIndex, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitColIdent(in.Name, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfAlterMigration(in *AlterMigration, f Visit) error {
 	if in == nil {
 		return nil
 	}
 	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitRefOfLiteral(in.Ratio, f); err != nil {
 		return err
 	}
 	return nil
@@ -620,6 +707,18 @@ func VisitRefOfAndExpr(in *AndExpr, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfArgumentLessWindowExpr(in *ArgumentLessWindowExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitRefOfOverClause(in.OverClause, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfAutoIncSpec(in *AutoIncSpec, f Visit) error {
 	if in == nil {
 		return nil
@@ -708,6 +807,21 @@ func VisitRefOfCaseExpr(in *CaseExpr, f Visit) error {
 		}
 	}
 	if err := VisitExpr(in.Else, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfCastExpr(in *CastExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Expr, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfConvertType(in.Type, f); err != nil {
 		return err
 	}
 	return nil
@@ -1220,6 +1334,21 @@ func VisitRefOfExtractFuncExpr(in *ExtractFuncExpr, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfExtractValueExpr(in *ExtractValueExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Fragment, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.XPathExpr, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfExtractedSubquery(in *ExtractedSubquery, f Visit) error {
 	if in == nil {
 		return nil
@@ -1237,6 +1366,24 @@ func VisitRefOfExtractedSubquery(in *ExtractedSubquery, f Visit) error {
 		return err
 	}
 	if err := VisitExpr(in.alternative, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfFirstOrLastValueExpr(in *FirstOrLastValueExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Expr, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfNullTreatmentClause(in.NullTreatmentClause, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfOverClause(in.OverClause, f); err != nil {
 		return err
 	}
 	return nil
@@ -1276,6 +1423,42 @@ func VisitRefOfForeignKeyDefinition(in *ForeignKeyDefinition, f Visit) error {
 		return err
 	}
 	if err := VisitRefOfReferenceDefinition(in.ReferenceDefinition, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfFrameClause(in *FrameClause, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitRefOfFramePoint(in.Start, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfFramePoint(in.End, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfFramePoint(in *FramePoint, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Expr, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfFromFirstLastClause(in *FromFirstLastClause, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
 	return nil
@@ -1757,6 +1940,15 @@ func VisitRefOfJSONValueExpr(in *JSONValueExpr, f Visit) error {
 	if err := VisitJSONPathParam(in.Path, f); err != nil {
 		return err
 	}
+	if err := VisitRefOfConvertType(in.ReturningType, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfJtOnResponse(in.EmptyOnResponse, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfJtOnResponse(in.ErrorOnResponse, f); err != nil {
+		return err
+	}
 	return nil
 }
 func VisitRefOfJSONValueMergeExpr(in *JSONValueMergeExpr, f Visit) error {
@@ -1854,6 +2046,30 @@ func VisitRefOfKeyState(in *KeyState, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfLagLeadExpr(in *LagLeadExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Expr, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.N, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Default, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfOverClause(in.OverClause, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfNullTreatmentClause(in.NullTreatmentClause, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfLimit(in *Limit, f Visit) error {
 	if in == nil {
 		return nil
@@ -1905,6 +2121,21 @@ func VisitRefOfLockTables(in *LockTables, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfLockingFunc(in *LockingFunc, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Name, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Timeout, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfMatchExpr(in *MatchExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -1950,6 +2181,56 @@ func VisitRefOfModifyColumn(in *ModifyColumn, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfNTHValueExpr(in *NTHValueExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Expr, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.N, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfOverClause(in.OverClause, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfFromFirstLastClause(in.FromFirstLastClause, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfNullTreatmentClause(in.NullTreatmentClause, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfNamedWindow(in *NamedWindow, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitWindowDefinitions(in.Windows, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitNamedWindows(in NamedWindows, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	for _, el := range in {
+		if err := VisitRefOfNamedWindow(el, f); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 func VisitRefOfNextval(in *Nextval, f Visit) error {
 	if in == nil {
 		return nil
@@ -1974,7 +2255,40 @@ func VisitRefOfNotExpr(in *NotExpr, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfNtileExpr(in *NtileExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.N, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfOverClause(in.OverClause, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfNullTreatmentClause(in *NullTreatmentClause, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
+}
 func VisitRefOfNullVal(in *NullVal, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
+}
+func VisitRefOfOffset(in *Offset, f Visit) error {
 	if in == nil {
 		return nil
 	}
@@ -2080,6 +2394,21 @@ func VisitRefOfOtherRead(in *OtherRead, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfOverClause(in *OverClause, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitColIdent(in.WindowName, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfWindowSpecification(in.WindowSpec, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfParenTableExpr(in *ParenTableExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -2136,6 +2465,9 @@ func VisitRefOfPartitionDefinitionOptions(in *PartitionDefinitionOptions, f Visi
 		return err
 	}
 	if err := VisitRefOfLiteral(in.IndexDirectory, f); err != nil {
+		return err
+	}
+	if err := VisitSubPartitionDefinitions(in.SubPartitionDefinitions, f); err != nil {
 		return err
 	}
 	return nil
@@ -2252,10 +2584,109 @@ func VisitRefOfReferenceDefinition(in *ReferenceDefinition, f Visit) error {
 	if err := VisitColumns(in.ReferencedColumns, f); err != nil {
 		return err
 	}
+	if err := VisitMatchAction(in.Match, f); err != nil {
+		return err
+	}
 	if err := VisitReferenceAction(in.OnDelete, f); err != nil {
 		return err
 	}
 	if err := VisitReferenceAction(in.OnUpdate, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfRegexpInstrExpr(in *RegexpInstrExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Expr, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Pattern, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Position, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Occurrence, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.ReturnOption, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.MatchType, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfRegexpLikeExpr(in *RegexpLikeExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Expr, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Pattern, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.MatchType, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfRegexpReplaceExpr(in *RegexpReplaceExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Expr, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Pattern, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Repl, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Occurrence, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Position, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.MatchType, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfRegexpSubstrExpr(in *RegexpSubstrExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Expr, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Pattern, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Occurrence, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Position, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.MatchType, f); err != nil {
 		return err
 	}
 	return nil
@@ -2390,6 +2821,9 @@ func VisitRefOfSelect(in *Select, f Visit) error {
 		return err
 	}
 	if err := VisitRefOfWhere(in.Having, f); err != nil {
+		return err
+	}
+	if err := VisitNamedWindows(in.Windows, f); err != nil {
 		return err
 	}
 	if err := VisitOrderBy(in.OrderBy, f); err != nil {
@@ -2565,6 +2999,15 @@ func VisitRefOfShowOther(in *ShowOther, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfShowThrottledApps(in *ShowThrottledApps, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
+}
 func VisitRefOfStarExpr(in *StarExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -2607,6 +3050,56 @@ func VisitRefOfSubPartition(in *SubPartition, f Visit) error {
 	}
 	if err := VisitExpr(in.Expr, f); err != nil {
 		return err
+	}
+	return nil
+}
+func VisitRefOfSubPartitionDefinition(in *SubPartitionDefinition, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitColIdent(in.Name, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfSubPartitionDefinitionOptions(in.Options, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfSubPartitionDefinitionOptions(in *SubPartitionDefinitionOptions, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitRefOfLiteral(in.Comment, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfPartitionEngine(in.Engine, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfLiteral(in.DataDirectory, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfLiteral(in.IndexDirectory, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitSubPartitionDefinitions(in SubPartitionDefinitions, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	for _, el := range in {
+		if err := VisitRefOfSubPartitionDefinition(el, f); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -2878,6 +3371,24 @@ func VisitUpdateExprs(in UpdateExprs, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfUpdateXMLExpr(in *UpdateXMLExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Target, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.XPathExpr, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.NewXML, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfUse(in *Use, f Visit) error {
 	if in == nil {
 		return nil
@@ -3034,6 +3545,56 @@ func VisitRefOfWhere(in *Where, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfWindowDefinition(in *WindowDefinition, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitColIdent(in.Name, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfWindowSpecification(in.WindowSpec, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitWindowDefinitions(in WindowDefinitions, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	for _, el := range in {
+		if err := VisitRefOfWindowDefinition(el, f); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+func VisitRefOfWindowSpecification(in *WindowSpecification, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitColIdent(in.Name, f); err != nil {
+		return err
+	}
+	if err := VisitExprs(in.PartitionClause, f); err != nil {
+		return err
+	}
+	if err := VisitOrderBy(in.OrderClause, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfFrameClause(in.FrameClause, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfWith(in *With, f Visit) error {
 	if in == nil {
 		return nil
@@ -3078,8 +3639,12 @@ func VisitAlterOption(in AlterOption, f Visit) error {
 		return VisitAlgorithmValue(in, f)
 	case *AlterCharset:
 		return VisitRefOfAlterCharset(in, f)
+	case *AlterCheck:
+		return VisitRefOfAlterCheck(in, f)
 	case *AlterColumn:
 		return VisitRefOfAlterColumn(in, f)
+	case *AlterIndex:
+		return VisitRefOfAlterIndex(in, f)
 	case *ChangeColumn:
 		return VisitRefOfChangeColumn(in, f)
 	case *DropColumn:
@@ -3116,6 +3681,8 @@ func VisitCallable(in Callable, f Visit) error {
 		return nil
 	}
 	switch in := in.(type) {
+	case *ArgumentLessWindowExpr:
+		return VisitRefOfArgumentLessWindowExpr(in, f)
 	case *ConvertExpr:
 		return VisitRefOfConvertExpr(in, f)
 	case *ConvertUsingExpr:
@@ -3124,6 +3691,10 @@ func VisitCallable(in Callable, f Visit) error {
 		return VisitRefOfCurTimeFuncExpr(in, f)
 	case *ExtractFuncExpr:
 		return VisitRefOfExtractFuncExpr(in, f)
+	case *ExtractValueExpr:
+		return VisitRefOfExtractValueExpr(in, f)
+	case *FirstOrLastValueExpr:
+		return VisitRefOfFirstOrLastValueExpr(in, f)
 	case *FuncExpr:
 		return VisitRefOfFuncExpr(in, f)
 	case *GroupConcatExpr:
@@ -3168,16 +3739,34 @@ func VisitCallable(in Callable, f Visit) error {
 		return VisitRefOfJSONValueMergeExpr(in, f)
 	case *JSONValueModifierExpr:
 		return VisitRefOfJSONValueModifierExpr(in, f)
+	case *LagLeadExpr:
+		return VisitRefOfLagLeadExpr(in, f)
 	case *MatchExpr:
 		return VisitRefOfMatchExpr(in, f)
 	case *MemberOfExpr:
 		return VisitRefOfMemberOfExpr(in, f)
+	case *NTHValueExpr:
+		return VisitRefOfNTHValueExpr(in, f)
+	case *NamedWindow:
+		return VisitRefOfNamedWindow(in, f)
+	case *NtileExpr:
+		return VisitRefOfNtileExpr(in, f)
+	case *RegexpInstrExpr:
+		return VisitRefOfRegexpInstrExpr(in, f)
+	case *RegexpLikeExpr:
+		return VisitRefOfRegexpLikeExpr(in, f)
+	case *RegexpReplaceExpr:
+		return VisitRefOfRegexpReplaceExpr(in, f)
+	case *RegexpSubstrExpr:
+		return VisitRefOfRegexpSubstrExpr(in, f)
 	case *SubstrExpr:
 		return VisitRefOfSubstrExpr(in, f)
 	case *TimestampFuncExpr:
 		return VisitRefOfTimestampFuncExpr(in, f)
 	case *TrimFuncExpr:
 		return VisitRefOfTrimFuncExpr(in, f)
+	case *UpdateXMLExpr:
+		return VisitRefOfUpdateXMLExpr(in, f)
 	case *ValuesFuncExpr:
 		return VisitRefOfValuesFuncExpr(in, f)
 	case *WeightStringFuncExpr:
@@ -3296,6 +3885,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfAndExpr(in, f)
 	case Argument:
 		return VisitArgument(in, f)
+	case *ArgumentLessWindowExpr:
+		return VisitRefOfArgumentLessWindowExpr(in, f)
 	case *BetweenExpr:
 		return VisitRefOfBetweenExpr(in, f)
 	case *BinaryExpr:
@@ -3304,6 +3895,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitBoolVal(in, f)
 	case *CaseExpr:
 		return VisitRefOfCaseExpr(in, f)
+	case *CastExpr:
+		return VisitRefOfCastExpr(in, f)
 	case *ColName:
 		return VisitRefOfColName(in, f)
 	case *CollateExpr:
@@ -3322,8 +3915,12 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfExistsExpr(in, f)
 	case *ExtractFuncExpr:
 		return VisitRefOfExtractFuncExpr(in, f)
+	case *ExtractValueExpr:
+		return VisitRefOfExtractValueExpr(in, f)
 	case *ExtractedSubquery:
 		return VisitRefOfExtractedSubquery(in, f)
+	case *FirstOrLastValueExpr:
+		return VisitRefOfFirstOrLastValueExpr(in, f)
 	case *FuncExpr:
 		return VisitRefOfFuncExpr(in, f)
 	case *GroupConcatExpr:
@@ -3374,22 +3971,40 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfJSONValueMergeExpr(in, f)
 	case *JSONValueModifierExpr:
 		return VisitRefOfJSONValueModifierExpr(in, f)
+	case *LagLeadExpr:
+		return VisitRefOfLagLeadExpr(in, f)
 	case ListArg:
 		return VisitListArg(in, f)
 	case *Literal:
 		return VisitRefOfLiteral(in, f)
+	case *LockingFunc:
+		return VisitRefOfLockingFunc(in, f)
 	case *MatchExpr:
 		return VisitRefOfMatchExpr(in, f)
 	case *MemberOfExpr:
 		return VisitRefOfMemberOfExpr(in, f)
+	case *NTHValueExpr:
+		return VisitRefOfNTHValueExpr(in, f)
+	case *NamedWindow:
+		return VisitRefOfNamedWindow(in, f)
 	case *NotExpr:
 		return VisitRefOfNotExpr(in, f)
+	case *NtileExpr:
+		return VisitRefOfNtileExpr(in, f)
 	case *NullVal:
 		return VisitRefOfNullVal(in, f)
-	case Offset:
-		return VisitOffset(in, f)
+	case *Offset:
+		return VisitRefOfOffset(in, f)
 	case *OrExpr:
 		return VisitRefOfOrExpr(in, f)
+	case *RegexpInstrExpr:
+		return VisitRefOfRegexpInstrExpr(in, f)
+	case *RegexpLikeExpr:
+		return VisitRefOfRegexpLikeExpr(in, f)
+	case *RegexpReplaceExpr:
+		return VisitRefOfRegexpReplaceExpr(in, f)
+	case *RegexpSubstrExpr:
+		return VisitRefOfRegexpSubstrExpr(in, f)
 	case *Subquery:
 		return VisitRefOfSubquery(in, f)
 	case *SubstrExpr:
@@ -3400,6 +4015,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfTrimFuncExpr(in, f)
 	case *UnaryExpr:
 		return VisitRefOfUnaryExpr(in, f)
+	case *UpdateXMLExpr:
+		return VisitRefOfUpdateXMLExpr(in, f)
 	case ValTuple:
 		return VisitValTuple(in, f)
 	case *ValuesFuncExpr:
@@ -3438,6 +4055,8 @@ func VisitJSONPathParam(in JSONPathParam, f Visit) error {
 		return VisitRefOfAndExpr(in, f)
 	case Argument:
 		return VisitArgument(in, f)
+	case *ArgumentLessWindowExpr:
+		return VisitRefOfArgumentLessWindowExpr(in, f)
 	case *BetweenExpr:
 		return VisitRefOfBetweenExpr(in, f)
 	case *BinaryExpr:
@@ -3446,6 +4065,8 @@ func VisitJSONPathParam(in JSONPathParam, f Visit) error {
 		return VisitBoolVal(in, f)
 	case *CaseExpr:
 		return VisitRefOfCaseExpr(in, f)
+	case *CastExpr:
+		return VisitRefOfCastExpr(in, f)
 	case *ColName:
 		return VisitRefOfColName(in, f)
 	case *CollateExpr:
@@ -3464,8 +4085,12 @@ func VisitJSONPathParam(in JSONPathParam, f Visit) error {
 		return VisitRefOfExistsExpr(in, f)
 	case *ExtractFuncExpr:
 		return VisitRefOfExtractFuncExpr(in, f)
+	case *ExtractValueExpr:
+		return VisitRefOfExtractValueExpr(in, f)
 	case *ExtractedSubquery:
 		return VisitRefOfExtractedSubquery(in, f)
+	case *FirstOrLastValueExpr:
+		return VisitRefOfFirstOrLastValueExpr(in, f)
 	case *FuncExpr:
 		return VisitRefOfFuncExpr(in, f)
 	case *GroupConcatExpr:
@@ -3516,22 +4141,40 @@ func VisitJSONPathParam(in JSONPathParam, f Visit) error {
 		return VisitRefOfJSONValueMergeExpr(in, f)
 	case *JSONValueModifierExpr:
 		return VisitRefOfJSONValueModifierExpr(in, f)
+	case *LagLeadExpr:
+		return VisitRefOfLagLeadExpr(in, f)
 	case ListArg:
 		return VisitListArg(in, f)
 	case *Literal:
 		return VisitRefOfLiteral(in, f)
+	case *LockingFunc:
+		return VisitRefOfLockingFunc(in, f)
 	case *MatchExpr:
 		return VisitRefOfMatchExpr(in, f)
 	case *MemberOfExpr:
 		return VisitRefOfMemberOfExpr(in, f)
+	case *NTHValueExpr:
+		return VisitRefOfNTHValueExpr(in, f)
+	case *NamedWindow:
+		return VisitRefOfNamedWindow(in, f)
 	case *NotExpr:
 		return VisitRefOfNotExpr(in, f)
+	case *NtileExpr:
+		return VisitRefOfNtileExpr(in, f)
 	case *NullVal:
 		return VisitRefOfNullVal(in, f)
-	case Offset:
-		return VisitOffset(in, f)
+	case *Offset:
+		return VisitRefOfOffset(in, f)
 	case *OrExpr:
 		return VisitRefOfOrExpr(in, f)
+	case *RegexpInstrExpr:
+		return VisitRefOfRegexpInstrExpr(in, f)
+	case *RegexpLikeExpr:
+		return VisitRefOfRegexpLikeExpr(in, f)
+	case *RegexpReplaceExpr:
+		return VisitRefOfRegexpReplaceExpr(in, f)
+	case *RegexpSubstrExpr:
+		return VisitRefOfRegexpSubstrExpr(in, f)
 	case *Subquery:
 		return VisitRefOfSubquery(in, f)
 	case *SubstrExpr:
@@ -3542,6 +4185,8 @@ func VisitJSONPathParam(in JSONPathParam, f Visit) error {
 		return VisitRefOfTrimFuncExpr(in, f)
 	case *UnaryExpr:
 		return VisitRefOfUnaryExpr(in, f)
+	case *UpdateXMLExpr:
+		return VisitRefOfUpdateXMLExpr(in, f)
 	case ValTuple:
 		return VisitValTuple(in, f)
 	case *ValuesFuncExpr:
@@ -3694,6 +4339,8 @@ func VisitStatement(in Statement, f Visit) error {
 		return VisitRefOfShow(in, f)
 	case *ShowMigrationLogs:
 		return VisitRefOfShowMigrationLogs(in, f)
+	case *ShowThrottledApps:
+		return VisitRefOfShowThrottledApps(in, f)
 	case *Stream:
 		return VisitRefOfStream(in, f)
 	case *TruncateTable:
@@ -3755,7 +4402,7 @@ func VisitListArg(in ListArg, f Visit) error {
 	_, err := f(in)
 	return err
 }
-func VisitOffset(in Offset, f Visit) error {
+func VisitMatchAction(in MatchAction, f Visit) error {
 	_, err := f(in)
 	return err
 }

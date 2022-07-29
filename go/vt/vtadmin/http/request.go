@@ -23,7 +23,10 @@ import (
 
 	"github.com/gorilla/mux"
 
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtadmin/errors"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // Request wraps an *http.Request to provide some convenience functions for
@@ -32,7 +35,7 @@ type Request struct{ *http.Request }
 
 // Vars returns the route variables in a request, if any, as defined by
 // gorilla/mux.
-func (r Request) Vars() map[string]string {
+func (r Request) Vars() Vars {
 	return mux.Vars(r.Request)
 }
 
@@ -72,4 +75,33 @@ func (r Request) ParseQueryParamAsUint32(name string, defaultVal uint32) (uint32
 	}
 
 	return defaultVal, nil
+}
+
+// Vars is a mapping of the route variable values in a given request.
+//
+// See (gorilla/mux).Vars for details. We define a type here to add some
+// additional behavior for extracting non-string values.
+type Vars map[string]string
+
+// GetTabletAlias returns the route named `key` as a TabletAlias.
+//
+// It returns an error if the route has no variable with that name, or if it
+// cannot be parsed as a TabletAlias.
+func (v Vars) GetTabletAlias(key string) (*topodatapb.TabletAlias, error) {
+	aliasStr, ok := v[key]
+	if !ok {
+		return nil, &errors.Internal{
+			Err: fmt.Errorf("no route variable found with name %s", key),
+		}
+	}
+
+	alias, err := topoproto.ParseTabletAlias(aliasStr)
+	if err != nil {
+		return nil, &errors.BadRequest{
+			Err:        err,
+			ErrDetails: fmt.Sprintf("could not parse route variable %s (= %v) as tablet alias", key, aliasStr),
+		}
+	}
+
+	return alias, nil
 }

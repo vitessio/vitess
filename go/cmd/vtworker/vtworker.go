@@ -37,7 +37,6 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 	"vitess.io/vitess/go/vt/worker"
 
 	// Include deprecation warnings for soon-to-be-unsupported flag invocations.
@@ -48,13 +47,14 @@ var (
 	cell                   = flag.String("cell", "", "cell to pick servers from")
 	commandDisplayInterval = flag.Duration("command_display_interval", time.Second, "Interval between each status update when vtworker is executing a single command from the command line")
 	username               = flag.String("username", "", "If set, value is set as immediate caller id in the request and used by vttablet for TableACL check")
-	durabilityPolicy       = flag.String("durability_policy", "none", "type of durability to enforce. Default is none. Other values are dictated by registered plugins")
+	_                      = flag.String("durability_policy", "none", "type of durability to enforce. Default is none. Other values are dictated by registered plugins")
 )
 
 func init() {
 	servenv.RegisterDefaultFlags()
 
 	logger := logutil.NewConsoleLogger()
+	logger.Printf("*** This is a legacy sharding tool that will soon be removed! Please use the MoveTables or Reshard commands instead: https://vitess.io/docs/reference/vreplication/ ***\n")
 	flag.CommandLine.SetOutput(logutil.NewLoggerWriter(logger))
 	_flag.SetUsage(flag.CommandLine, _flag.UsageOptions{
 		Preface: func(w io.Writer) {
@@ -84,11 +84,6 @@ func main() {
 	if *servenv.Version {
 		servenv.AppVersion.Print()
 		os.Exit(0)
-	}
-
-	if err := reparentutil.SetDurabilityPolicy(*durabilityPolicy); err != nil {
-		log.Errorf("error in setting durability policy: %v", err)
-		exit.Return(1)
 	}
 
 	ts := topo.Open()

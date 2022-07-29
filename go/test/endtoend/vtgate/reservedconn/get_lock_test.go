@@ -255,3 +255,19 @@ func TestLocksResetLockOnTimeout(t *testing.T) {
 	utils.AssertContainsError(t, conn, `select is_free_lock('lock')`, "held locks released")
 	utils.AssertMatches(t, conn, `select is_free_lock('lock')`, `[[INT64(1)]]`)
 }
+
+func TestLockWaitOnConnTimeoutWithTxNext(t *testing.T) {
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	utils.AssertMatches(t, conn, `select get_lock('lock', 5)`, `[[INT64(1)]]`)
+	time.Sleep(1 * time.Second)
+	utils.AssertMatches(t, conn, `select release_lock('lock')`, `[[INT64(1)]]`)
+	time.Sleep(12 * time.Second) // wait for reserved connection timeout of 5 seconds and some buffer
+	_ = utils.Exec(t, conn, `begin`)
+	_ = utils.Exec(t, conn, `insert into test(id, val1) values (1, 'msg')`)
+	time.Sleep(1 * time.Second) // some wait for rollback to kick in (won't happen after fix)
+	utils.AssertMatches(t, conn, `select id, val1 from test where val1 = 'msg'`, `[[INT64(1) VARCHAR("msg")]]`)
+	_ = utils.Exec(t, conn, `commit`)
+}

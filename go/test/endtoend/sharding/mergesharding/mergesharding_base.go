@@ -108,7 +108,6 @@ func TestMergesharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 
 	// Launch keyspace
 	keyspace := &cluster.Keyspace{Name: keyspaceName}
-	clusterInstance.VtctldExtraArgs = append(clusterInstance.VtctldExtraArgs, "--durability_policy=semi_sync")
 
 	// Start topo server
 	err := clusterInstance.StartTopo()
@@ -161,6 +160,10 @@ func TestMergesharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	err = clusterInstance.SetupCluster(keyspace, []cluster.Shard{*shard0, *shard1, *shard2, *shard3})
 	require.NoError(t, err)
 	assert.Equal(t, len(clusterInstance.Keyspaces[0].Shards), 4)
+
+	vtctldClientProcess := cluster.VtctldClientProcessInstance("localhost", clusterInstance.VtctldProcess.GrpcPort, clusterInstance.TmpDirectory)
+	out, err := vtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=semi_sync")
+	require.NoError(t, err, out)
 
 	//Start MySql
 	var mysqlCtlProcessList []*exec.Cmd

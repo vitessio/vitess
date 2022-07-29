@@ -17,6 +17,8 @@ limitations under the License.
 package engine
 
 import (
+	"sync"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -30,6 +32,9 @@ var _ Primitive = (*ScalarAggregate)(nil)
 type ScalarAggregate struct {
 	// PreProcess is true if one of the aggregates needs preprocessing.
 	PreProcess bool `json:",omitempty"`
+
+	AggrOnEngine bool
+
 	// Aggregates specifies the aggregation parameters for each
 	// aggregation function: function opcode and input column number.
 	Aggregates []*AggregateParams
@@ -69,7 +74,7 @@ func (sa *ScalarAggregate) GetFields(vcursor VCursor, bindVars map[string]*query
 	if err != nil {
 		return nil, err
 	}
-	qr = &sqltypes.Result{Fields: convertFields(qr.Fields, sa.PreProcess, sa.Aggregates)}
+	qr = &sqltypes.Result{Fields: convertFields(qr.Fields, sa.PreProcess, sa.Aggregates, sa.AggrOnEngine)}
 	return qr.Truncate(sa.TruncateColumnCount), nil
 }
 
@@ -85,14 +90,14 @@ func (sa *ScalarAggregate) TryExecute(vcursor VCursor, bindVars map[string]*quer
 		return nil, err
 	}
 	out := &sqltypes.Result{
-		Fields: convertFields(result.Fields, sa.PreProcess, sa.Aggregates),
+		Fields: convertFields(result.Fields, sa.PreProcess, sa.Aggregates, sa.AggrOnEngine),
 	}
 
 	var resultRow []sqltypes.Value
 	var curDistincts []sqltypes.Value
 	for _, row := range result.Rows {
 		if resultRow == nil {
-			resultRow, curDistincts = convertRow(row, sa.PreProcess, sa.Aggregates)
+			resultRow, curDistincts = convertRow(row, sa.PreProcess, sa.Aggregates, sa.AggrOnEngine)
 			continue
 		}
 		resultRow, curDistincts, err = merge(result.Fields, resultRow, row, curDistincts, sa.Collations, sa.Aggregates)
@@ -128,10 +133,16 @@ func (sa *ScalarAggregate) TryStreamExecute(vcursor VCursor, bindVars map[string
 	var curDistincts []sqltypes.Value
 	var fields []*querypb.Field
 	fieldsSent := false
+	var mu sync.Mutex
 
 	err := vcursor.StreamExecutePrimitive(sa.Input, bindVars, wantfields, func(result *sqltypes.Result) error {
+		// as the underlying primitive call is not sync
+		// and here scalar aggregate is using shared variables we have to sync the callback
+		// for correct aggregation.
+		mu.Lock()
+		defer mu.Unlock()
 		if len(result.Fields) != 0 && !fieldsSent {
-			fields = convertFields(result.Fields, sa.PreProcess, sa.Aggregates)
+			fields = convertFields(result.Fields, sa.PreProcess, sa.Aggregates, sa.AggrOnEngine)
 			if err := cb(&sqltypes.Result{Fields: fields}); err != nil {
 				return err
 			}
@@ -141,7 +152,7 @@ func (sa *ScalarAggregate) TryStreamExecute(vcursor VCursor, bindVars map[string
 		// this code is very similar to the TryExecute method
 		for _, row := range result.Rows {
 			if current == nil {
-				current, curDistincts = convertRow(row, sa.PreProcess, sa.Aggregates)
+				current, curDistincts = convertRow(row, sa.PreProcess, sa.Aggregates, sa.AggrOnEngine)
 				continue
 			}
 			var err error
@@ -156,6 +167,20 @@ func (sa *ScalarAggregate) TryStreamExecute(vcursor VCursor, bindVars map[string
 		return err
 	}
 
+	if current == nil {
+		// When doing aggregation without grouping keys, we need to produce a single row containing zero-value for the
+		// different aggregation functions
+		current, err = sa.createEmptyRow()
+		if err != nil {
+			return err
+		}
+	} else {
+		current, err = convertFinal(current, sa.Aggregates)
+		if err != nil {
+			return err
+		}
+	}
+
 	return cb(&sqltypes.Result{Rows: [][]sqltypes.Value{current}})
 }
 
@@ -163,7 +188,11 @@ func (sa *ScalarAggregate) TryStreamExecute(vcursor VCursor, bindVars map[string
 func (sa *ScalarAggregate) createEmptyRow() ([]sqltypes.Value, error) {
 	out := make([]sqltypes.Value, len(sa.Aggregates))
 	for i, aggr := range sa.Aggregates {
-		value, err := createEmptyValueFor(aggr.Opcode)
+		op := aggr.Opcode
+		if aggr.OrigOpcode != AggregateUnassigned {
+			op = aggr.OrigOpcode
+		}
+		value, err := createEmptyValueFor(op)
 		if err != nil {
 			return nil, err
 		}
@@ -176,7 +205,8 @@ func createEmptyValueFor(opcode AggregateOpcode) (sqltypes.Value, error) {
 	switch opcode {
 	case
 		AggregateCountDistinct,
-		AggregateCount:
+		AggregateCount,
+		AggregateCountStar:
 		return countZero, nil
 	case
 		AggregateSumDistinct,

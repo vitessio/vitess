@@ -535,10 +535,25 @@ const (
 	ERTableNameNotAllowedHere      = 1250
 	ERQueryInterrupted             = 1317
 	ERTruncatedWrongValueForField  = 1366
+	ERIllegalValueForType          = 1367
 	ERDataTooLong                  = 1406
+	ErrWrongValueForType           = 1411
 	ERWarnDataTruncated            = 1265
 	ERForbidSchemaChange           = 1450
 	ERDataOutOfRange               = 1690
+	ERInvalidJSONText              = 3140
+	ERInvalidJSONTextInParams      = 3141
+	ERInvalidJSONBinaryData        = 3142
+	ERInvalidJSONCharset           = 3144
+	ERInvalidCastToJSON            = 3147
+	ERJSONValueTooBig              = 3150
+	ERJSONDocumentTooDeep          = 3157
+
+	ErrCantCreateGeometryObject      = 1416
+	ErrGISDataWrongEndianess         = 3055
+	ErrNotImplementedForCartesianSRS = 3704
+	ErrNotImplementedForProjectedSRS = 3705
+	ErrNonPositiveRadius             = 3706
 
 	// server not available
 	ERServerIsntAvailable = 3168
@@ -616,6 +631,7 @@ var CharacterSetEncoding = map[string]encoding.Encoding{
 	"gbk":     simplifiedchinese.GBK,
 	"latin5":  charmap.ISO8859_9,
 	"utf8":    nil,
+	"utf8mb3": nil,
 	"cp866":   charmap.CodePage866,
 	"cp852":   charmap.CodePage852,
 	"latin7":  charmap.ISO8859_13,

@@ -17,6 +17,7 @@ limitations under the License.
 package schemamanager
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path"
@@ -24,17 +25,11 @@ import (
 	"strings"
 	"testing"
 
-	"context"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 func TestLocalControllerNoSchemaChanges(t *testing.T) {
-	schemaChangeDir, err := os.MkdirTemp("", "localcontroller-test")
-	defer os.RemoveAll(schemaChangeDir)
-	if err != nil {
-		t.Fatalf("failed to create temp schema change dir, error: %v", err)
-	}
+	schemaChangeDir := t.TempDir()
 	controller := NewLocalController(schemaChangeDir)
 	ctx := context.Background()
 	if err := controller.Open(ctx); err != nil {
@@ -58,8 +53,7 @@ func TestLocalControllerOpen(t *testing.T) {
 		t.Fatalf("Open should fail, no such dir, but got: %v", err)
 	}
 
-	schemaChangeDir, _ := os.MkdirTemp("", "localcontroller-test")
-	defer os.RemoveAll(schemaChangeDir)
+	schemaChangeDir := t.TempDir()
 
 	// create a file under schema change dir
 	_, err := os.Create(path.Join(schemaChangeDir, "create_test_table.sql"))
@@ -100,11 +94,7 @@ func TestLocalControllerOpen(t *testing.T) {
 }
 
 func TestLocalControllerSchemaChange(t *testing.T) {
-	schemaChangeDir, err := os.MkdirTemp("", "localcontroller-test")
-	if err != nil {
-		t.Fatalf("failed to create temp schema change dir, error: %v", err)
-	}
-	defer os.RemoveAll(schemaChangeDir)
+	schemaChangeDir := t.TempDir()
 
 	testKeyspaceInputDir := path.Join(schemaChangeDir, "test_keyspace/input")
 	if err := os.MkdirAll(testKeyspaceInputDir, os.ModePerm); err != nil {

@@ -116,7 +116,7 @@ func TestSchemaChange(t *testing.T) {
 
 func testWithInitialSchema(t *testing.T) {
 	// Create 4 tables
-	var sqlQuery = "" //nolint
+	var sqlQuery = "" // nolint
 	for i := 0; i < totalTableCount; i++ {
 		sqlQuery = fmt.Sprintf(createTable, fmt.Sprintf("vt_select_test_%02d", i))
 		err := clusterInstance.VtctlclientProcess.ApplySchema(keyspaceName, sqlQuery)
@@ -148,13 +148,13 @@ func testWithAlterDatabase(t *testing.T) {
 }
 
 // testWithDropCreateSchema , we should be able to drop and create same schema
-//Tests that a DROP and CREATE table will pass PreflightSchema check.
+// Tests that a DROP and CREATE table will pass PreflightSchema check.
 //
-//PreflightSchema checks each SQL statement separately. When doing so, it must
-//consider previous statements within the same ApplySchema command. For
-//example, a CREATE after DROP must not fail: When CREATE is checked, DROP
-//must have been executed first.
-//See: https://github.com/vitessio/vitess/issues/1731#issuecomment-222914389
+// PreflightSchema checks each SQL statement separately. When doing so, it must
+// consider previous statements within the same ApplySchema command. For
+// example, a CREATE after DROP must not fail: When CREATE is checked, DROP
+// must have been executed first.
+// See: https://github.com/vitessio/vitess/issues/1731#issuecomment-222914389
 func testWithDropCreateSchema(t *testing.T) {
 	dropCreateTable := fmt.Sprintf("DROP TABLE vt_select_test_%02d ;", 2) + fmt.Sprintf(createTable, fmt.Sprintf("vt_select_test_%02d", 2))
 	err := clusterInstance.VtctlclientProcess.ApplySchema(keyspaceName, dropCreateTable)
@@ -207,11 +207,11 @@ func testSchemaChangePreflightErrorPartially(t *testing.T) {
 }
 
 // testDropNonExistentTables applying same schema + new schema should throw error for existing one and also add the new schema
-//If a table does not exist, DROP TABLE should error during preflight
-//because the statement does not change the schema as there is
-//nothing to drop.
-//In case of DROP TABLE IF EXISTS though, it should not error as this
-//is the MySQL behavior the user expects.
+// If a table does not exist, DROP TABLE should error during preflight
+// because the statement does not change the schema as there is
+// nothing to drop.
+// In case of DROP TABLE IF EXISTS though, it should not error as this
+// is the MySQL behavior the user expects.
 func testDropNonExistentTables(t *testing.T) {
 	dropNonExistentTable := "DROP TABLE nonexistent_table;"
 	output, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ApplySchema", "--", "--sql", dropNonExistentTable, keyspaceName)

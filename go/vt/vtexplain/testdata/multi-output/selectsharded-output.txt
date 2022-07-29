@@ -128,7 +128,7 @@ select name from user where id not in (select id from t1) /* non-correlated subq
 ----------------------------------------------------------------------
 select name from user where exists (select id from t1) /* non-correlated subquery as EXISTS */
 
-1 ks_unsharded/-: select id from t1 limit 10001 /* non-correlated subquery as EXISTS */
+1 ks_unsharded/-: select 1 from t1 limit 1 /* non-correlated subquery as EXISTS */
 2 ks_sharded/-40: select `name` from `user` where 1 limit 10001 /* non-correlated subquery as EXISTS */
 2 ks_sharded/40-80: select `name` from `user` where 1 limit 10001 /* non-correlated subquery as EXISTS */
 2 ks_sharded/80-c0: select `name` from `user` where 1 limit 10001 /* non-correlated subquery as EXISTS */

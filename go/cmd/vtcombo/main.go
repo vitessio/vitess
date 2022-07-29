@@ -28,6 +28,9 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/vt/env"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+
 	"vitess.io/vitess/go/vt/vttest"
 
 	"google.golang.org/protobuf/proto"
@@ -53,24 +56,22 @@ import (
 )
 
 var (
-	tpb vttestpb.VTTestTopology
-
-	schemaDir = flag.String("schema_dir", "", "Schema base directory. Should contain one directory per keyspace, with a vschema.json file if necessary.")
-
-	startMysql = flag.Bool("start_mysql", false, "Should vtcombo also start mysql")
-
-	mysqlPort = flag.Int("mysql_port", 3306, "mysql port")
-
+	schemaDir          = flag.String("schema_dir", "", "Schema base directory. Should contain one directory per keyspace, with a vschema.json file if necessary.")
+	startMysql         = flag.Bool("start_mysql", false, "Should vtcombo also start mysql")
+	mysqlPort          = flag.Int("mysql_port", 3306, "mysql port")
 	externalTopoServer = flag.Bool("external_topo_server", false, "Should vtcombo use an external topology server instead of starting its own in-memory topology server. "+
 		"If true, vtcombo will use the flags defined in topo/server.go to open topo server")
+	plannerVersion           = flag.String("planner-version", "", "Sets the default planner to use when the session has not changed it. Valid values are: V3, Gen4, Gen4Greedy and Gen4Fallback. Gen4Fallback tries the gen4 planner and falls back to the V3 planner if the gen4 fails.")
+	plannerVersionDeprecated = flag.String("planner_version", "", "Deprecated flag. Use planner-version instead")
 
+	tpb             vttestpb.VTTestTopology
 	ts              *topo.Server
 	resilientServer *srvtopo.ResilientServer
 )
 
 func init() {
 	flag.Var(vttest.TextTopoData(&tpb), "proto_topo", "vttest proto definition of the topology, encoded in compact text format. See vttest.proto for more information.")
-	flag.Var(vttest.JsonTopoData(&tpb), "json_topo", "vttest proto definition of the topology, encoded in json format. See vttest.proto for more information.")
+	flag.Var(vttest.JSONTopoData(&tpb), "json_topo", "vttest proto definition of the topology, encoded in json format. See vttest.proto for more information.")
 
 	servenv.RegisterDefaultFlags()
 }
@@ -241,12 +242,17 @@ func main() {
 		topodatapb.TabletType_REPLICA,
 		topodatapb.TabletType_RDONLY,
 	}
+	version, err := env.CheckPlannerVersionFlag(plannerVersion, plannerVersionDeprecated)
+	if err != nil {
+		log.Exitf("failed to get planner version from flags: %v", err)
+	}
+	plannerVersion, _ := plancontext.PlannerNameToVersion(version)
 
 	vtgate.QueryLogHandler = "/debug/vtgate/querylog"
 	vtgate.QueryLogzHandler = "/debug/vtgate/querylogz"
 	vtgate.QueryzHandler = "/debug/vtgate/queryz"
 	// pass nil for healthcheck, it will get created
-	vtg := vtgate.Init(context.Background(), nil, resilientServer, tpb.Cells[0], tabletTypesToWait)
+	vtg := vtgate.Init(context.Background(), nil, resilientServer, tpb.Cells[0], tabletTypesToWait, plannerVersion)
 
 	// vtctld configuration and init
 	err = vtctld.InitVtctld(ts)

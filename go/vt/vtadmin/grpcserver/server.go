@@ -22,6 +22,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -32,6 +33,7 @@ import (
 	otgrpc "github.com/grpc-ecosystem/go-grpc-middleware/tracing/opentracing"
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/opentracing/opentracing-go"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/soheilhy/cmux"
 	"google.golang.org/grpc"
 	channelz "google.golang.org/grpc/channelz/service"
@@ -67,6 +69,15 @@ type Options struct {
 	// EnableChannelz specifies whether to register the channelz service on the
 	// gRPC server.
 	EnableChannelz bool
+
+	// MetricsEndpoint is the route to serve promhttp metrics on, including
+	// those collected be grpc_prometheus interceptors.
+	//
+	// It is the user's responsibility to ensure this does not conflict with
+	// other endpoints.
+	//
+	// Omit to not export metrics.
+	MetricsEndpoint string
 
 	StreamInterceptors []grpc.StreamServerInterceptor
 	UnaryInterceptors  []grpc.UnaryServerInterceptor
@@ -194,6 +205,15 @@ func (s *Server) ListenAndServe() error { // nolint:funlen
 		log.Warning(err)
 		shutdown <- err
 	}()
+
+	if s.opts.MetricsEndpoint != "" {
+		if !strings.HasPrefix(s.opts.MetricsEndpoint, "/") {
+			s.opts.MetricsEndpoint = "/" + s.opts.MetricsEndpoint
+		}
+
+		grpc_prometheus.Register(s.gRPCServer)
+		s.router.Handle(s.opts.MetricsEndpoint, promhttp.Handler())
+	}
 
 	// Start the servers
 	go func() {

@@ -26,6 +26,7 @@ tags
 
 # vscode
 .vscode/
+__debug_bin
 
 # C build dirs
 **/build

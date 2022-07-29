@@ -124,18 +124,19 @@ func XTestSupportTables(t *testing.T) {
 		if coll == nil {
 			vdata := globalVersionInfo[id]
 
-			var collname string
-			for _, name := range vdata.alias {
-				collname = name
+			var collnames []string
+			for _, alias := range vdata.alias {
+				collnames = append(collnames, alias.name)
 				break
 			}
+			collname := strings.Join(collnames, ",")
 			parts := strings.Split(collname, "_")
 
 			fmt.Fprintf(out, "| %s | %s", collname, parts[0])
 			for _, env := range envs {
 				var supported bool
-				for v := range vdata.alias {
-					if v&env.version != 0 {
+				for _, alias := range vdata.alias {
+					if alias.mask&env.version != 0 {
 						supported = true
 						break
 					}

@@ -547,6 +547,61 @@ Gen4 plan same as above
   }
 }
 
+# update changes non owned vindex column
+"update music_extra set music_id = 1 where user_id = 1"
+{
+  "QueryType": "UPDATE",
+  "Original": "update music_extra set music_id = 1 where user_id = 1",
+  "Instructions": {
+    "OperatorType": "Update",
+    "Variant": "Equal",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "ChangedVindexValues": [
+      "music_user_map:1"
+    ],
+    "KsidLength": 1,
+    "KsidVindex": "user_index",
+    "MultiShardAutocommit": false,
+    "OwnedVindexQuery": "select user_id, music_id = 1 from music_extra where user_id = 1 for update",
+    "Query": "update music_extra set music_id = 1 where user_id = 1",
+    "Table": "music_extra",
+    "Values": [
+      "INT64(1)"
+    ],
+    "Vindex": "user_index"
+  }
+}
+{
+  "QueryType": "UPDATE",
+  "Original": "update music_extra set music_id = 1 where user_id = 1",
+  "Instructions": {
+    "OperatorType": "Update",
+    "Variant": "EqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "ChangedVindexValues": [
+      "music_user_map:1"
+    ],
+    "KsidLength": 1,
+    "KsidVindex": "user_index",
+    "MultiShardAutocommit": false,
+    "OwnedVindexQuery": "select user_id, music_id = 1 from music_extra where user_id = 1 for update",
+    "Query": "update music_extra set music_id = 1 where user_id = 1",
+    "Table": "music_extra",
+    "Values": [
+      "INT64(1)"
+    ],
+    "Vindex": "user_index"
+  }
+}
+
 # update by primary keyspace id, stray where clause
 "update user set val = 1 where id = id2 and id = 1"
 {
@@ -2953,7 +3008,7 @@ Gen4 plan same as above
     },
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
-    "Query": "insert into user_privacy_consents(user_id, accepted_at) select user_id, accepted_at from (select 1 as user_id, 1629194864 as accepted_at from dual) as tmp where not exists (select user_id from user_privacy_consents where user_id = 1) for update",
+    "Query": "insert into user_privacy_consents(user_id, accepted_at) select user_id, accepted_at from (select 1 as user_id, 1629194864 as accepted_at from dual) as tmp where not exists (select 1 from user_privacy_consents where user_id = 1 limit 1) for update",
     "TableName": "user_privacy_consents"
   }
 }
@@ -4417,3 +4472,26 @@ Gen4 plan same as above
     "Table": "user"
   }
 }
+
+# all defaults empty column, empty values
+"insert into authoritative () values ()"
+{
+  "QueryType": "INSERT",
+  "Original": "insert into authoritative () values ()",
+  "Instructions": {
+    "OperatorType": "Insert",
+    "Variant": "Sharded",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "MultiShardAutocommit": false,
+    "Query": "insert into authoritative(user_id) values (:_user_id_0)",
+    "TableName": "authoritative",
+    "VindexValues": {
+      "user_index": "NULL"
+    }
+  }
+}
+Gen4 plan same as above

@@ -37,14 +37,15 @@ import (
 var (
 	// CreateKeyspace makes a CreateKeyspace gRPC call to a vtctld.
 	CreateKeyspace = &cobra.Command{
-		Use:   "CreateKeyspace <keyspace> [--force|-f] [--sharding-column-name NAME --sharding-column-type TYPE] [--base-keyspace KEYSPACE --snapshot-timestamp TIME] [--served-from DB_TYPE:KEYSPACE ...]",
+		Use:   "CreateKeyspace <keyspace> [--force|-f] [--type KEYSPACE_TYPE] [--base-keyspace KEYSPACE --snapshot-timestamp TIME] [--served-from DB_TYPE:KEYSPACE ...]  [--durability-policy <policy_name>]",
 		Short: "Creates the specified keyspace in the topology.",
 		Long: `Creates the specified keyspace in the topology.
 	
 For a SNAPSHOT keyspace, the request must specify the name of a base keyspace,
 as well as a snapshot time.`,
-		Args: cobra.ExactArgs(1),
-		RunE: commandCreateKeyspace,
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(1),
+		RunE:                  commandCreateKeyspace,
 	}
 	// DeleteKeyspace makes a DeleteKeyspace gRPC call to a vtctld.
 	DeleteKeyspace = &cobra.Command{
@@ -54,47 +55,67 @@ as well as a snapshot time.`,
 
 In recursive mode, it also recursively deletes all shards in the keyspace.
 Otherwise, the keyspace must be empty (have no shards), or returns an error.`,
-		Args: cobra.ExactArgs(1),
-		RunE: commandDeleteKeyspace,
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(1),
+		RunE:                  commandDeleteKeyspace,
 	}
 	// FindAllShardsInKeyspace makes a FindAllShardsInKeyspace gRPC call to a vtctld.
 	FindAllShardsInKeyspace = &cobra.Command{
-		Use:     "FindAllShardsInKeyspace <keyspace>",
-		Short:   "Returns a map of shard names to shard references for a given keyspace.",
-		Aliases: []string{"findallshardsinkeyspace"},
-		Args:    cobra.ExactArgs(1),
-		RunE:    commandFindAllShardsInKeyspace,
+		Use:                   "FindAllShardsInKeyspace <keyspace>",
+		Short:                 "Returns a map of shard names to shard references for a given keyspace.",
+		DisableFlagsInUseLine: true,
+		Aliases:               []string{"findallshardsinkeyspace"},
+		Args:                  cobra.ExactArgs(1),
+		RunE:                  commandFindAllShardsInKeyspace,
 	}
 	// GetKeyspace makes a GetKeyspace gRPC call to a vtctld.
 	GetKeyspace = &cobra.Command{
-		Use:     "GetKeyspace <keyspace>",
-		Short:   "Returns information about the given keyspace from the topology.",
-		Aliases: []string{"getkeyspace"},
-		Args:    cobra.ExactArgs(1),
-		RunE:    commandGetKeyspace,
+		Use:                   "GetKeyspace <keyspace>",
+		Short:                 "Returns information about the given keyspace from the topology.",
+		DisableFlagsInUseLine: true,
+		Aliases:               []string{"getkeyspace"},
+		Args:                  cobra.ExactArgs(1),
+		RunE:                  commandGetKeyspace,
 	}
 	// GetKeyspaces makes a GetKeyspaces gRPC call to a vtctld.
 	GetKeyspaces = &cobra.Command{
-		Use:     "GetKeyspaces",
-		Short:   "Returns information about every keyspace in the topology.",
-		Aliases: []string{"getkeyspaces"},
-		Args:    cobra.NoArgs,
-		RunE:    commandGetKeyspaces,
+		Use:                   "GetKeyspaces",
+		Short:                 "Returns information about every keyspace in the topology.",
+		DisableFlagsInUseLine: true,
+		Aliases:               []string{"getkeyspaces"},
+		Args:                  cobra.NoArgs,
+		RunE:                  commandGetKeyspaces,
 	}
 	// RemoveKeyspaceCell makes a RemoveKeyspaceCell gRPC call to a vtctld.
 	RemoveKeyspaceCell = &cobra.Command{
-		Use:   "RemoveKeyspaceCell [--force|-f] [--recursive|-r] <keyspace> <cell>",
-		Short: "Removes the specified cell from the Cells list for all shards in the specified keyspace (by calling RemoveShardCell on every shard). It also removes the SrvKeyspace for that keyspace in that cell.",
-		Args:  cobra.ExactArgs(2),
-		RunE:  commandRemoveKeyspaceCell,
+		Use:                   "RemoveKeyspaceCell [--force|-f] [--recursive|-r] <keyspace> <cell>",
+		Short:                 "Removes the specified cell from the Cells list for all shards in the specified keyspace (by calling RemoveShardCell on every shard). It also removes the SrvKeyspace for that keyspace in that cell.",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(2),
+		RunE:                  commandRemoveKeyspaceCell,
+	}
+	// SetKeyspaceDurabilityPolicy makes a SetKeyspaceDurabilityPolicy gRPC call to a vtcltd.
+	SetKeyspaceDurabilityPolicy = &cobra.Command{
+		Use:   "SetKeyspaceDurabilityPolicy [--durability-policy=policy_name] <keyspace name>",
+		Short: "Sets the durability-policy used by the specified keyspace.",
+		Long: `Sets the durability-policy used by the specified keyspace. 
+Durability policy governs the durability of the keyspace by describing which tablets should be sending semi-sync acknowledgements to the primary.
+Possible values include 'semi_sync', 'none' and others as dictated by registered plugins.
+
+To set the durability policy of customer keyspace to semi_sync, you would use the following command:
+SetKeyspaceDurabilityPolicy --durability-policy='semi_sync' customer`,
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(1),
+		RunE:                  commandSetKeyspaceDurabilityPolicy,
 	}
 	// SetKeyspaceServedFrom makes a SetKeyspaceServedFrom gRPC call to a vtcltd.
 	SetKeyspaceServedFrom = &cobra.Command{
 		Use:                   "SetKeyspaceServedFrom [--source <keyspace>] [--remove] [--cells=<cells>] <keyspace> <tablet_type>",
-		Short:                 "Updates the ServedFromMap for a keyspace manually. This command is intended for emergency fixes; the map is automatically set by MigrateServedTypes. This command does not rebuild the serving graph.",
+		Short:                 "Updates the ServedFromMap for a keyspace manually. This command is intended for emergency fixes. This command does not rebuild the serving graph.",
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.ExactArgs(2),
 		RunE:                  commandSetKeyspaceServedFrom,
+		Deprecated:            "and will soon be removed! Please use VReplication instead: https://vitess.io/docs/reference/vreplication",
 	}
 	// SetKeyspaceShardingInfo makes a SetKeyspaceShardingInfo gRPC call to a vtcltd.
 	SetKeyspaceShardingInfo = &cobra.Command{
@@ -103,19 +124,25 @@ Otherwise, the keyspace must be empty (have no shards), or returns an error.`,
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.RangeArgs(1, 3),
 		RunE:                  commandSetKeyspaceShardingInfo,
+		Deprecated:            "and will soon be removed! Please use VReplication instead: https://vitess.io/docs/reference/vreplication",
 	}
+	// ValidateSchemaKeyspace makes a ValidateSchemaKeyspace gRPC call to a vtctld.
 	ValidateSchemaKeyspace = &cobra.Command{
 		Use:                   "ValidateSchemaKeyspace [--exclude-tables=<exclude_tables>] [--include-views] [--skip-no-primary] [--include-vschema] <keyspace>",
-		Aliases:               []string{"validateschemakeyspace"},
+		Short:                 "Validates that the schema on the primary tablet for shard 0 matches the schema on all other tablets in the keyspace.",
 		DisableFlagsInUseLine: true,
+		Aliases:               []string{"validateschemakeyspace"},
 		Args:                  cobra.ExactArgs(1),
 		RunE:                  commandValidateSchemaKeyspace,
 	}
+	// ValidateVersionKeyspace makes a ValidateVersionKeyspace gRPC call to a vtctld.
 	ValidateVersionKeyspace = &cobra.Command{
-		Use:     "ValidateVersionKeyspace <keyspace>",
-		Aliases: []string{"validateversionkeyspace"},
-		Args:    cobra.ExactArgs(1),
-		RunE:    commandValidateVersionKeyspace,
+		Use:                   "ValidateVersionKeyspace <keyspace>",
+		Short:                 "Validates that the version on the primary tablet of shard 0 matches all of the other tablets in the keyspace.",
+		DisableFlagsInUseLine: true,
+		Aliases:               []string{"validateversionkeyspace"},
+		Args:                  cobra.ExactArgs(1),
+		RunE:                  commandValidateVersionKeyspace,
 	}
 )
 
@@ -131,6 +158,7 @@ var createKeyspaceOptions = struct {
 	KeyspaceType      cli.KeyspaceTypeFlag
 	BaseKeyspace      string
 	SnapshotTimestamp string
+	DurabilityPolicy  string
 }{
 	KeyspaceType: cli.KeyspaceTypeFlag(topodatapb.KeyspaceType_NORMAL),
 }
@@ -146,6 +174,10 @@ func commandCreateKeyspace(cmd *cobra.Command, args []string) error {
 
 	var snapshotTime *vttime.Time
 	if topodatapb.KeyspaceType(createKeyspaceOptions.KeyspaceType) == topodatapb.KeyspaceType_SNAPSHOT {
+		if createKeyspaceOptions.DurabilityPolicy != "none" {
+			return errors.New("--durability-policy cannot be specified while creating a snapshot keyspace")
+		}
+
 		if createKeyspaceOptions.BaseKeyspace == "" {
 			return errors.New("--base-keyspace is required for a snapshot keyspace")
 		}
@@ -177,6 +209,7 @@ func commandCreateKeyspace(cmd *cobra.Command, args []string) error {
 		Type:               topodatapb.KeyspaceType(createKeyspaceOptions.KeyspaceType),
 		BaseKeyspace:       createKeyspaceOptions.BaseKeyspace,
 		SnapshotTime:       snapshotTime,
+		DurabilityPolicy:   createKeyspaceOptions.DurabilityPolicy,
 	}
 
 	for n, v := range createKeyspaceOptions.ServedFromsMap.StringMapValue {
@@ -310,6 +343,31 @@ func commandRemoveKeyspaceCell(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("Successfully removed keyspace %s from cell %s\n", keyspace, cell)
 
+	return nil
+}
+
+var setKeyspaceDurabilityPolicyOptions = struct {
+	DurabilityPolicy string
+}{}
+
+func commandSetKeyspaceDurabilityPolicy(cmd *cobra.Command, args []string) error {
+	keyspace := cmd.Flags().Arg(0)
+	cli.FinishedParsing(cmd)
+
+	resp, err := client.SetKeyspaceDurabilityPolicy(commandCtx, &vtctldatapb.SetKeyspaceDurabilityPolicyRequest{
+		Keyspace:         keyspace,
+		DurabilityPolicy: setKeyspaceDurabilityPolicyOptions.DurabilityPolicy,
+	})
+	if err != nil {
+		return err
+	}
+
+	data, err := cli.MarshalJSON(resp)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("%s\n", data)
 	return nil
 }
 
@@ -458,14 +516,17 @@ func commandValidateVersionKeyspace(cmd *cobra.Command, args []string) error {
 }
 
 func init() {
-	CreateKeyspace.Flags().BoolVarP(&createKeyspaceOptions.Force, "force", "f", false, "Proceeds even if the keyspace already exists. Does not overwrite the existing keyspace record")
-	CreateKeyspace.Flags().BoolVarP(&createKeyspaceOptions.AllowEmptyVSchema, "allow-empty-vschema", "e", false, "Allows a new keyspace to have no vschema")
-	CreateKeyspace.Flags().StringVar(&createKeyspaceOptions.ShardingColumnName, "sharding-column-name", "", "The column name to use for sharding operations")
-	CreateKeyspace.Flags().Var(&createKeyspaceOptions.ShardingColumnType, "sharding-column-type", "The type of the column to use for sharding operations")
+	CreateKeyspace.Flags().BoolVarP(&createKeyspaceOptions.Force, "force", "f", false, "Proceeds even if the keyspace already exists. Does not overwrite the existing keyspace record.")
+	CreateKeyspace.Flags().BoolVarP(&createKeyspaceOptions.AllowEmptyVSchema, "allow-empty-vschema", "e", false, "Allows a new keyspace to have no vschema.")
+	CreateKeyspace.Flags().StringVar(&createKeyspaceOptions.ShardingColumnName, "sharding-column-name", "", "The column name to use for sharding operations.")
+	CreateKeyspace.Flags().MarkDeprecated("sharding-column-name", "Specifying a sharding-column-name on the Keyspace is deprecated and will be removed in a future release.")
+	CreateKeyspace.Flags().Var(&createKeyspaceOptions.ShardingColumnType, "sharding-column-type", "The type of the column to use for sharding operations.")
+	CreateKeyspace.Flags().MarkDeprecated("sharding-column-type", "Specifying a sharding-column-type on the Keyspace is deprecated and will be removed in a future release.")
 	CreateKeyspace.Flags().Var(&createKeyspaceOptions.ServedFromsMap, "served-from", "Specifies a set of db_type:keyspace pairs used to serve traffic for the keyspace.")
-	CreateKeyspace.Flags().Var(&createKeyspaceOptions.KeyspaceType, "type", "The type of the keyspace")
+	CreateKeyspace.Flags().Var(&createKeyspaceOptions.KeyspaceType, "type", "The type of the keyspace.")
 	CreateKeyspace.Flags().StringVar(&createKeyspaceOptions.BaseKeyspace, "base-keyspace", "", "The base keyspace for a snapshot keyspace.")
 	CreateKeyspace.Flags().StringVar(&createKeyspaceOptions.SnapshotTimestamp, "snapshot-timestamp", "", "The snapshot time for a snapshot keyspace, as a timestamp in RFC3339 format.")
+	CreateKeyspace.Flags().StringVar(&createKeyspaceOptions.DurabilityPolicy, "durability-policy", "none", "Type of durability to enforce for this keyspace. Default is none. Possible values include 'semi_sync' and others as dictated by registered plugins.")
 	Root.AddCommand(CreateKeyspace)
 
 	DeleteKeyspace.Flags().BoolVarP(&deleteKeyspaceOptions.Recursive, "recursive", "r", false, "Recursively delete all shards in the keyspace, and all tablets in those shards.")
@@ -485,13 +546,16 @@ func init() {
 	SetKeyspaceServedFrom.Flags().StringVar(&setKeyspaceServedFromOptions.SourceKeyspace, "source", "", "Specifies the source keyspace name.")
 	Root.AddCommand(SetKeyspaceServedFrom)
 
+	SetKeyspaceDurabilityPolicy.Flags().StringVar(&setKeyspaceDurabilityPolicyOptions.DurabilityPolicy, "durability-policy", "none", "Type of durability to enforce for this keyspace. Default is none. Other values include 'semi_sync' and others as dictated by registered plugins.")
+	Root.AddCommand(SetKeyspaceDurabilityPolicy)
+
 	SetKeyspaceShardingInfo.Flags().BoolVarP(&setKeyspaceShardingInfoOptions.Force, "force", "f", false, "Updates fields even if they are already set. Use caution before passing force to this command.")
 	Root.AddCommand(SetKeyspaceShardingInfo)
 
-	ValidateSchemaKeyspace.Flags().BoolVar(&validateSchemaKeyspaceOptions.IncludeViews, "include-views", false, "Includes views in compared schemas")
-	ValidateSchemaKeyspace.Flags().BoolVar(&validateSchemaKeyspaceOptions.IncludeVSchema, "include-vschema", false, "Includes VSchema validation in validation results")
-	ValidateSchemaKeyspace.Flags().BoolVar(&validateSchemaKeyspaceOptions.SkipNoPrimary, "skip-no-primary", false, "Skips validation on whether or not a primary exists in shards")
-	ValidateSchemaKeyspace.Flags().StringSliceVar(&validateSchemaKeyspaceOptions.ExcludeTables, "exclude-tables", []string{}, "Tables to exclude during schema comparison")
+	ValidateSchemaKeyspace.Flags().BoolVar(&validateSchemaKeyspaceOptions.IncludeViews, "include-views", false, "Includes views in compared schemas.")
+	ValidateSchemaKeyspace.Flags().BoolVar(&validateSchemaKeyspaceOptions.IncludeVSchema, "include-vschema", false, "Includes VSchema validation in validation results.")
+	ValidateSchemaKeyspace.Flags().BoolVar(&validateSchemaKeyspaceOptions.SkipNoPrimary, "skip-no-primary", false, "Skips validation on whether or not a primary exists in shards.")
+	ValidateSchemaKeyspace.Flags().StringSliceVar(&validateSchemaKeyspaceOptions.ExcludeTables, "exclude-tables", []string{}, "Tables to exclude during schema comparison.")
 	Root.AddCommand(ValidateSchemaKeyspace)
 
 	Root.AddCommand(ValidateVersionKeyspace)

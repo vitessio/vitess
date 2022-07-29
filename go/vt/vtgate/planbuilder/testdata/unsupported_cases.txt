@@ -41,12 +41,12 @@ Gen4 plan same as above
 # join with USING construct
 "select * from user join user_extra using(id)"
 "unsupported: join with USING(column_list) clause for complex queries"
-Gen4 plan same as above
+Gen4 error: can't handle JOIN USING without authoritative tables
 
 # join with USING construct with 3 tables
 "select user.id from user join user_extra using(id) join music using(id2)"
 "unsupported: join with USING(column_list) clause for complex queries"
-Gen4 plan same as above
+Gen4 error: can't handle JOIN USING without authoritative tables
 
 # natural left join
 "select * from user natural left join user_extra"
@@ -68,15 +68,10 @@ Gen4 plan same as above
 "unsupported: '*' expression in cross-shard query"
 Gen4 error: cannot use column offsets in group statement when using `*`
 
-# group by must reference select list
-"select a from user group by b"
-"unsupported: in scatter query: group by column must reference column in SELECT list"
-Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column 'a' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
-
 # complex group by expression
 "select a from user group by a+1"
 "unsupported: in scatter query: only simple references allowed"
-Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column 'a' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
+Gen4 error: unsupported: in scatter query: complex order by expression: a + 1
 
 # Complex aggregate expression on scatter
 "select 1+count(*) from user"
@@ -88,11 +83,6 @@ Gen4 plan same as above
 "unsupported: only one expression allowed inside aggregates: count(a, b)"
 Gen4 error: aggregate functions take a single argument 'count(a, b)'
 
-# scatter aggregate symtab lookup error
-"select id, b as id, count(*) from user order by id"
-"ambiguous symbol reference: id"
-Gen4 error: In aggregated query without GROUP BY, expression of SELECT list contains nonaggregated column 'id'; this is incompatible with sql_mode=only_full_group_by
-
 # scatter aggregate complex order by
 "select id from user group by id order by id+1"
 "unsupported: in scatter query: complex order by expression: id + 1"
@@ -101,22 +91,12 @@ Gen4 plan same as above
 # Scatter order by is complex with aggregates in select
 "select col, count(*) from user group by col order by col+1"
 "unsupported: in scatter query: complex order by expression: col + 1"
-Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column 'col + 1' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
+Gen4 plan same as above
 
 # Aggregate detection (group_concat)
 "select group_concat(user.a) from user join user_extra"
 "unsupported: cross-shard query with aggregates"
 Gen4 error: unsupported: in scatter query: complex aggregate expression
-
-# group by and ',' joins
-"select user.id from user, user_extra group by id"
-"unsupported: cross-shard query with aggregates"
-Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column '`user`.id' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
-
-# group by and ',' joins with condition
-"select user.col from user join user_extra on user_extra.col = user.col group by user.id"
-"unsupported: cross-shard query with aggregates"
-Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column '`user`.col' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
 
 # subqueries not supported in group by
 "select id from user group by id, (select id from user_extra)"
@@ -176,11 +156,6 @@ Gen4 plan same as above
 # update change in multicol vindex column
 "update multicol_tbl set colc = 5, colb = 4 where cola = 1 and colb = 2"
 "unsupported: You can't update primary vindex columns. Invalid update on vindex: multicolIdx"
-Gen4 plan same as above
-
-# update changes non owned vindex column
-"update music_extra set music_id = 1 where user_id = 1"
-"unsupported: You can only update owned vindexes. Invalid update on vindex: music_user_map"
 Gen4 plan same as above
 
 # update changes non lookup vindex column
@@ -336,7 +311,7 @@ Gen4 plan same as above
 "is_free_lock('xyz') allowed only with dual"
 Gen4 plan same as above
 
-# union with SQL_CALC_FOUND_ROWS 
+# union with SQL_CALC_FOUND_ROWS
 "(select sql_calc_found_rows id from user where id = 1 limit 1) union select id from user where id = 1"
 "SQL_CALC_FOUND_ROWS not supported with union"
 Gen4 plan same as above
@@ -391,52 +366,6 @@ Gen4 plan same as above
 "Select query does not belong to the same keyspace as the view statement"
 Gen4 plan same as above
 
-# table_schema OR predicate
-# It is unsupported because we do not route queries to multiple keyspaces right now
-"SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'ks' OR TABLE_SCHEMA = 'main'"
-{
-  "QueryType": "SELECT",
-  "Original": "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'ks' OR TABLE_SCHEMA = 'main'",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "DBA",
-    "Keyspace": {
-      "Name": "main",
-      "Sharded": false
-    },
-    "FieldQuery": "select * from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
-    "Query": "select * from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = 'ks' or TABLE_SCHEMA = 'main'",
-    "Table": "INFORMATION_SCHEMA.`TABLES`"
-  }
-}
-Gen4 plan same as above
-
-# aggr and non-aggr without group by (with query does not give useful result out)
-"select id, count(*) from user"
-{
-  "QueryType": "SELECT",
-  "Original": "select id, count(*) from user",
-  "Instructions": {
-    "OperatorType": "Aggregate",
-    "Variant": "Scalar",
-    "Aggregates": "count(1)",
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select id, count(*) from `user` where 1 != 1",
-        "Query": "select id, count(*) from `user`",
-        "Table": "`user`"
-      }
-    ]
-  }
-}
-Gen4 error: In aggregated query without GROUP BY, expression of SELECT list contains nonaggregated column 'id'; this is incompatible with sql_mode=only_full_group_by
-
 # avg function on scatter query
 "select avg(id) from user"
 "unsupported: in scatter query: complex aggregate expression"
@@ -446,15 +375,6 @@ Gen4 error: unsupported: in scatter query: aggregation function 'avg'
 "select distinct a, b as a from user"
 "generating order by clause: ambiguous symbol reference: a"
 Gen4 plan same as above
-
-# TODO this should be planned without using OA and MS
-"select u.id from user u join user_extra ue on ue.id = u.id group by u.id having count(u.name) = 3"
-"unsupported: cross-shard query with aggregates"
-Gen4 error: cannot push projections in ordered aggregates
-
-"select (select 1 from user u having count(ue.col) > 10) from user_extra ue"
-"symbol ue.col not found in subquery"
-Gen4 error: cannot push projections in ordered aggregates
 
 # subquery of information_schema with itself and star expression in outer select
 "select a.*, u.id from information_schema.a a, user u where a.id in (select * from information_schema.b)"
@@ -522,11 +442,6 @@ Gen4 error: can't push predicates on concatenate
 "expr cannot be translated, not supported: (select 1 from `user` where id = 1)"
 Gen4 plan same as above
 
-# join with USING construct
-"select user.id from user join user_extra using(id)"
-"unsupported: join with USING(column_list) clause for complex queries"
-Gen4 plan same as above
-
 # lateral derived tables
 "select * from user, lateral (select * from user_extra where user_id = user.id) t"
 "unsupported: lateral derived tables"
@@ -535,4 +450,9 @@ Gen4 plan same as above
 # json_table expressions
 "SELECT * FROM JSON_TABLE('[ {\"c1\": null} ]','$[*]' COLUMNS( c1 INT PATH '$.c1' ERROR ON ERROR )) as jt"
 "unsupported: json_table expressions"
+Gen4 plan same as above
+
+# mix lock with other expr
+"select get_lock('xyz', 10), 1 from dual"
+"unsupported: lock function and other expression in same select query"
 Gen4 plan same as above

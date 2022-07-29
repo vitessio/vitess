@@ -565,8 +565,13 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 			if expr, ok := selExpr.Expr.(*sqlparser.FuncExpr); ok {
 				switch fname := expr.Name.Lowered(); fname {
 				case "count", "sum":
+					// this will only work as long as aggregates can be pushed down to tablets
+					// this won't work: "select count(*) from (select id from t limit 1)"
+					// since vreplication only handles simple tables (no joins/derived tables) this is fine for now
+					// but will need to be revisited when we add such support to vreplication
+					aggregateFuncType := "sum"
 					aggregates = append(aggregates, &engine.AggregateParams{
-						Opcode: engine.SupportedAggregates[fname],
+						Opcode: engine.SupportedAggregates[aggregateFuncType],
 						Col:    len(sourceSelect.SelectExprs) - 1,
 					})
 				}
@@ -993,7 +998,7 @@ func (sm *shardStreamer) StreamExecute(vcursor engine.VCursor, bindVars map[stri
 }
 
 // humanInt formats large integers to a value easier to the eye: 100000=100k 1e12=1b 234000000=234m ...
-func humanInt(n int64) string {
+func humanInt(n int64) string { // nolint
 	var val float64
 	var unit string
 	switch true {

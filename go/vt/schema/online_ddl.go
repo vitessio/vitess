@@ -32,7 +32,6 @@ import (
 )
 
 var (
-	migrationBasePath                 = "schema-migration"
 	onlineDdlUUIDRegexp               = regexp.MustCompile(`^[0-f]{8}_[0-f]{4}_[0-f]{4}_[0-f]{4}_[0-f]{12}$`)
 	onlineDDLGeneratedTableNameRegexp = regexp.MustCompile(`^_[0-f]{8}_[0-f]{4}_[0-f]{4}_[0-f]{4}_[0-f]{12}_([0-9]{14})_(gho|ghc|del|new|vrepl)$`)
 	ptOSCGeneratedTableNameRegexp     = regexp.MustCompile(`^_.*_old$`)
@@ -66,33 +65,6 @@ func validateWalk(node sqlparser.SQLNode) (kontinue bool, err error) {
 		return false, ErrRenameTableFound
 	}
 	return false, nil
-}
-
-// MigrationBasePath is the root for all schema migration entries
-func MigrationBasePath() string {
-	return migrationBasePath
-}
-
-// MigrationRequestsPath is the base path for all newly received schema migration requests.
-// such requests need to be investigates/reviewed, and to be assigned to all shards
-func MigrationRequestsPath() string {
-	return fmt.Sprintf("%s/requests", MigrationBasePath())
-}
-
-// MigrationQueuedPath is the base path for schema migrations that have been reviewed and
-// queued for execution. Kept for historical reference
-func MigrationQueuedPath() string {
-	return fmt.Sprintf("%s/queued", MigrationBasePath())
-}
-
-// MigrationJobsKeyspacePath is the base path for a tablet job, by keyspace
-func MigrationJobsKeyspacePath(keyspace string) string {
-	return fmt.Sprintf("%s/jobs/%s", MigrationBasePath(), keyspace)
-}
-
-// MigrationJobsKeyspaceShardPath is the base path for a tablet job, by keyspace and shard
-func MigrationJobsKeyspaceShardPath(keyspace, shard string) string {
-	return fmt.Sprintf("%s/%s", MigrationJobsKeyspacePath(keyspace), shard)
 }
 
 // OnlineDDLStatus is an indicator to a online DDL status
@@ -359,11 +331,6 @@ func (onlineDDL *OnlineDDL) RequestTimeSeconds() int64 {
 	return onlineDDL.RequestTime / int64(time.Second)
 }
 
-// JobsKeyspaceShardPath returns job/<keyspace>/<shard>/<uuid>
-func (onlineDDL *OnlineDDL) JobsKeyspaceShardPath(shard string) string {
-	return MigrationJobsKeyspaceShardPath(onlineDDL.Keyspace, shard)
-}
-
 // ToJSON exports this onlineDDL to JSON
 func (onlineDDL *OnlineDDL) ToJSON() ([]byte, error) {
 	return json.Marshal(onlineDDL)
@@ -465,7 +432,7 @@ func (onlineDDL *OnlineDDL) GetGCUUID() string {
 // CreateOnlineDDLUUID creates a UUID in OnlineDDL format, e.g.:
 // a0638f6b_ec7b_11ea_9bf8_000d3a9b8a9a
 func CreateOnlineDDLUUID() (string, error) {
-	return createUUID("_")
+	return CreateUUIDWithDelimiter("_")
 }
 
 // IsOnlineDDLUUID answers 'true' when the given string is an online-ddl UUID, e.g.:

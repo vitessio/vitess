@@ -683,25 +683,32 @@ func (cluster *LocalProcessCluster) RestartVtgate() (err error) {
 	return err
 }
 
-// WaitForTabletsToHealthyInVtgate waits for all tablets in all shards to be healthy as per vtgate
+// WaitForTabletsToHealthyInVtgate waits for all tablets in all shards to be seen as
+// healthy and serving in vtgate.
+// For each shard:
+//   - It must have 1 (and only 1) healthy primary tablet so we always wait for that
+//   - For replica and rdonly tablets, which are optional, we wait for as many as we
+//     should have based on how the cluster was defined.
 func (cluster *LocalProcessCluster) WaitForTabletsToHealthyInVtgate() (err error) {
-	var isRdOnlyPresent bool
 	for _, keyspace := range cluster.Keyspaces {
 		for _, shard := range keyspace.Shards {
-			isRdOnlyPresent = false
+			rdonlyTabletCount, replicaTabletCount := 0, 0
+			for _, tablet := range shard.Vttablets {
+				switch strings.ToLower(tablet.Type) {
+				case "replica":
+					replicaTabletCount++
+				case "rdonly":
+					rdonlyTabletCount++
+				}
+			}
 			if err = cluster.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", keyspace.Name, shard.Name), 1); err != nil {
 				return err
 			}
-			if err = cluster.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspace.Name, shard.Name), 1); err != nil {
-				return err
+			if replicaTabletCount > 0 {
+				err = cluster.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspace.Name, shard.Name), replicaTabletCount)
 			}
-			for _, tablet := range shard.Vttablets {
-				if tablet.Type == "rdonly" {
-					isRdOnlyPresent = true
-				}
-			}
-			if isRdOnlyPresent {
-				err = cluster.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", keyspace.Name, shard.Name), 1)
+			if rdonlyTabletCount > 0 {
+				err = cluster.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", keyspace.Name, shard.Name), rdonlyTabletCount)
 			}
 			if err != nil {
 				return err

@@ -61,7 +61,6 @@ func TestMain(m *testing.M) {
 		localCluster = cluster.NewCluster(cell, hostname)
 		defer localCluster.Teardown()
 
-		localCluster.VtctldExtraArgs = append(localCluster.VtctldExtraArgs, "--durability_policy=semi_sync")
 		// Start topo server
 		err := localCluster.StartTopo()
 		if err != nil {
@@ -80,6 +79,11 @@ func TestMain(m *testing.M) {
 			},
 		}
 		shard := &localCluster.Keyspaces[0].Shards[0]
+		vtctldClientProcess := cluster.VtctldClientProcessInstance("localhost", localCluster.VtctldProcess.GrpcPort, localCluster.TmpDirectory)
+		_, err = vtctldClientProcess.ExecuteCommandWithOutput("CreateKeyspace", keyspaceName, "--durability-policy=semi_sync")
+		if err != nil {
+			return 1, err
+		}
 
 		// Create a new init_db.sql file that sets up passwords for all users.
 		// Then we use a db-credentials-file with the passwords.

@@ -16,5 +16,5 @@
 
 # this script creates a new keyspace in preparation for vertical resharding
 
-vtctlclient --server localhost:15999 CreateKeyspace -- --served_from='primary:commerce,replica:commerce,rdonly:commerce' customer
+vtctldclient --server localhost:15999 CreateKeyspace --served-from='primary:commerce,replica:commerce,rdonly:commerce' --durability-policy=semi_sync customer
 

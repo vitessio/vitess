@@ -256,6 +256,7 @@ func (txc *TxConn) ReleaseLock(ctx context.Context, session *SafeSession) error 
 	}
 	defer session.ResetLock()
 
+	session.ClearAdvisoryLock()
 	ls := session.LockSession
 	if ls.ReservedId == 0 {
 		return nil
@@ -264,13 +265,7 @@ func (txc *TxConn) ReleaseLock(ctx context.Context, session *SafeSession) error 
 	if err != nil {
 		return err
 	}
-	err = qs.Release(ctx, ls.Target, 0, ls.ReservedId)
-	if err != nil {
-		return err
-	}
-	ls.ReservedId = 0
-	return nil
-
+	return qs.Release(ctx, ls.Target, 0, ls.ReservedId)
 }
 
 // ReleaseAll releases all the shard sessions and lock session.

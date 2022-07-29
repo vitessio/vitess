@@ -25,4 +25,7 @@ for i in 200 201 202; do
 	CELL=zone1 KEYSPACE=customer TABLET_UID=$i ./scripts/vttablet-up.sh
 done
 
+# set the correct durability policy for the keyspace
+vtctldclient --server localhost:15999 SetKeyspaceDurabilityPolicy --durability-policy=semi_sync customer
+
 vtctldclient InitShardPrimary --force customer/0 zone1-200

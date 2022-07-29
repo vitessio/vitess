@@ -140,15 +140,7 @@ var executorVSchema = `
 			"params": {
 				"region_bytes": "1"
 			}
-    	},
-		"multicol_vdx": {
-			"type": "multicol",
-			"params": {
-				"column_count": "3",
-				"column_bytes": "1,3,4",
-				"column_vindex": "hash,binary,unicode_loose_xxhash"
-			}
-        }
+    	}
 	},
 	"tables": {
 		"user": {
@@ -328,15 +320,7 @@ var executorVSchema = `
 					"name": "regional_vdx"
 				}
 			]
-    	},
-		"multicoltbl": {
-			"column_vindexes": [
-				{
-					"columns": ["cola","colb","colc"],
-					"name": "multicol_vdx"
-				}
-			]
-		}
+    	}
 	}
 }
 `
@@ -443,7 +427,7 @@ func init() {
 func createExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn.SandboxConn) {
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
-	s := createSandbox("TestExecutor")
+	s := createSandbox(KsTestSharded)
 	s.VSchema = executorVSchema
 	serv := newSandboxForCells([]string{cell})
 	resolver := newTestResolver(hc, serv, cell)
@@ -485,7 +469,7 @@ func createExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn
 	bad.VSchema = badVSchema
 
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
-	executor = NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig, nil, false)
+	executor = NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig, nil, false, querypb.ExecuteOptions_V3)
 
 	key.AnyShardPicker = DestinationAnyShardPickerFirstShard{}
 	// create a new session each time so that ShardSessions don't get re-used across tests
@@ -498,7 +482,7 @@ func createExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn
 func createCustomExecutor(vschema string) (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn.SandboxConn) {
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
-	s := createSandbox("TestExecutor")
+	s := createSandbox(KsTestSharded)
 	s.VSchema = vschema
 	serv := newSandboxForCells([]string{cell})
 	resolver := newTestResolver(hc, serv, cell)
@@ -509,7 +493,7 @@ func createCustomExecutor(vschema string) (executor *Executor, sbc1, sbc2, sbclo
 	sbclookup = hc.AddTestTablet(cell, "0", 1, KsTestUnsharded, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 
-	executor = NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig, nil, false)
+	executor = NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig, nil, false, querypb.ExecuteOptions_V3)
 	// create a new session each time so that ShardSessions don't get re-used across tests
 	primarySession = &vtgatepb.Session{
 		TargetString: "@primary",
@@ -520,7 +504,7 @@ func createCustomExecutor(vschema string) (executor *Executor, sbc1, sbc2, sbclo
 func createCustomExecutorSetValues(vschema string, values []*sqltypes.Result) (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn.SandboxConn) {
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
-	s := createSandbox("TestExecutor")
+	s := createSandbox(KsTestSharded)
 	s.VSchema = vschema
 	serv := newSandboxForCells([]string{cell})
 	resolver := newTestResolver(hc, serv, cell)
@@ -538,7 +522,7 @@ func createCustomExecutorSetValues(vschema string, values []*sqltypes.Result) (e
 	sbclookup = hc.AddTestTablet(cell, "0", 1, KsTestUnsharded, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 
-	executor = NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig, nil, false)
+	executor = NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig, nil, false, querypb.ExecuteOptions_V3)
 	// create a new session each time so that ShardSessions don't get re-used across tests
 	primarySession = &vtgatepb.Session{
 		TargetString: "@primary",
@@ -626,7 +610,11 @@ func assertQueriesWithSavepoint(t *testing.T, sbc *sandboxconn.SandboxConn, want
 			if !strings.HasPrefix(expected, "savepoint") {
 				t.Fatal("savepoint expected")
 			}
-			savepointStore[expected[10:]] = got[10:]
+			if sp, exists := savepointStore[expected[10:]]; exists {
+				assert.Equal(t, sp, got[10:])
+			} else {
+				savepointStore[expected[10:]] = got[10:]
+			}
 			continue
 		}
 		if strings.HasPrefix(got, "rollback to") {
@@ -676,26 +664,8 @@ var testPlannedQueries = map[string]bool{}
 func testQueryLog(t *testing.T, logChan chan any, method, stmtType, sql string, shardQueries int) *LogStats {
 	t.Helper()
 
-	return testQueryLogWithSavepoint(t, logChan, method, stmtType, sql, shardQueries, false /* checkSavepoint */)
-}
-
-func testQueryLogWithSavepoint(t *testing.T, logChan chan any, method, stmtType, sql string, shardQueries int, checkSavepoint bool) *LogStats {
-	t.Helper()
-
-	var logStats *LogStats
-
-	if checkSavepoint {
-		logStats = getQueryLog(logChan)
-		require.NotNil(t, logStats)
-	} else {
-		for {
-			logStats = getQueryLog(logChan)
-			require.NotNil(t, logStats)
-			if logStats.Method != "MarkSavepoint" {
-				break
-			}
-		}
-	}
+	logStats := getQueryLog(logChan)
+	require.NotNil(t, logStats)
 
 	var log bytes.Buffer
 	streamlog.GetFormatter(QueryLogger)(&log, nil, logStats)
@@ -709,11 +679,9 @@ func testQueryLogWithSavepoint(t *testing.T, logChan chan any, method, stmtType,
 	checkEqualQuery := true
 	// The internal savepoints are created with uuids so the value of it not known to assert.
 	// Therefore, the equal query check is ignored.
-	if checkSavepoint {
-		switch stmtType {
-		case "SAVEPOINT", "SAVEPOINT_ROLLBACK", "RELEASE":
-			checkEqualQuery = false
-		}
+	switch stmtType {
+	case "SAVEPOINT", "SAVEPOINT_ROLLBACK", "RELEASE":
+		checkEqualQuery = false
 	}
 	// only test the durations if there is no error (fields[16])
 	if fields[16] == "\"\"" {

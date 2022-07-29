@@ -23,6 +23,8 @@ import (
 	"flag"
 	"os"
 
+	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vdiff"
+
 	rice "github.com/GeertJohan/go.rice"
 
 	"vitess.io/vitess/go/vt/binlog"
@@ -104,6 +106,7 @@ func main() {
 		QueryServiceControl: qsc,
 		UpdateStream:        binlog.NewUpdateStream(ts, tablet.Keyspace, tabletAlias.Cell, qsc.SchemaEngine()),
 		VREngine:            vreplication.NewEngine(config, ts, tabletAlias.Cell, mysqld, qsc.LagThrottler()),
+		VDiffEngine:         vdiff.NewEngine(config, ts, tablet),
 		MetadataManager:     &mysqlctl.MetadataManager{},
 	}
 	if err := tm.Start(tablet, config.Healthcheck.IntervalSeconds.Get()); err != nil {

@@ -153,6 +153,7 @@ rowStreamer:
   maxMySQLReplLagSecs: 43200
 schemaReloadIntervalSeconds: 1800
 signalSchemaChangeReloadIntervalSeconds: 5
+signalWhenSchemaChange: true
 streamBufferSize: 32768
 txPool:
   idleTimeoutSeconds: 1800
@@ -217,6 +218,7 @@ func TestFlags(t *testing.T) {
 		QueryCacheLFU:                           cache.DefaultConfig.LFU,
 		SchemaReloadIntervalSeconds:             1800,
 		SignalSchemaChangeReloadIntervalSeconds: 5,
+		SignalWhenSchemaChange:                  true,
 		TrackSchemaVersions:                     false,
 		MessagePostponeParallelism:              4,
 		CacheResultFields:                       true,

@@ -11,9 +11,6 @@ binlog_expire_logs_seconds = 259200
 # disable mysqlx
 mysqlx = 0
 
-# we should never need super privileges
-super-read-only
-
 # 8.0 changes the default auth-plugin to caching_sha2_password
 default_authentication_plugin = mysql_native_password
 

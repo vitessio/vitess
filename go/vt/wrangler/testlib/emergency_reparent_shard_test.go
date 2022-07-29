@@ -31,7 +31,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
-	"vitess.io/vitess/go/vt/vtctl/reparentutil"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/reparenttestutil"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/wrangler"
 
@@ -44,7 +44,6 @@ func TestEmergencyReparentShard(t *testing.T) {
 		discovery.SetTabletPickerRetryDelay(delay)
 	}()
 	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
-	_ = reparentutil.SetDurabilityPolicy("semi_sync")
 
 	ts := memorytopo.NewServer("cell1", "cell2")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
@@ -56,6 +55,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 	newPrimary := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, nil)
 	goodReplica1 := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, nil)
 	goodReplica2 := NewFakeTablet(t, wr, "cell2", 3, topodatapb.TabletType_REPLICA, nil)
+	reparenttestutil.SetKeyspaceDurability(context.Background(), t, ts, "test_keyspace", "semi_sync")
 
 	oldPrimary.FakeMysqlDaemon.Replicating = false
 	oldPrimary.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
@@ -194,7 +194,6 @@ func TestEmergencyReparentShardPrimaryElectNotBest(t *testing.T) {
 		discovery.SetTabletPickerRetryDelay(delay)
 	}()
 	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
-	_ = reparentutil.SetDurabilityPolicy("semi_sync")
 
 	ts := memorytopo.NewServer("cell1", "cell2")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
@@ -203,6 +202,7 @@ func TestEmergencyReparentShardPrimaryElectNotBest(t *testing.T) {
 	oldPrimary := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_PRIMARY, nil)
 	newPrimary := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, nil)
 	moreAdvancedReplica := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, nil)
+	reparenttestutil.SetKeyspaceDurability(context.Background(), t, ts, "test_keyspace", "semi_sync")
 
 	// new primary
 	newPrimary.FakeMysqlDaemon.Replicating = true

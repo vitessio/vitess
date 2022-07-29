@@ -184,7 +184,7 @@ func (collector *TableGC) Open() (err error) {
 		return err
 	}
 	defer conn.Close()
-	serverSupportsFastDrops, err := conn.SupportsFastDropTable()
+	serverSupportsFastDrops, err := conn.SupportsCapability(mysql.FastDropTableFlavorCapability)
 	if err != nil {
 		return err
 	}

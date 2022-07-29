@@ -35,7 +35,7 @@ func (cached *AggregateParams) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(80)
+		size += int64(96)
 	}
 	// field Alias string
 	size += hack.RuntimeAllocSize(int64(len(cached.Alias)))
@@ -43,6 +43,8 @@ func (cached *AggregateParams) CachedSize(alloc bool) int64 {
 	if cc, ok := cached.Expr.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
+	// field Original *vitess.io/vitess/go/vt/sqlparser.AliasedExpr
+	size += cached.Original.CachedSize(true)
 	return size
 }
 func (cached *AlterVSchema) CachedSize(alloc bool) int64 {
@@ -446,10 +448,31 @@ func (cached *Lock) CachedSize(alloc bool) int64 {
 	if cc, ok := cached.TargetDestination.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
-	// field Query string
-	size += hack.RuntimeAllocSize(int64(len(cached.Query)))
 	// field FieldQuery string
 	size += hack.RuntimeAllocSize(int64(len(cached.FieldQuery)))
+	// field LockFunctions []*vitess.io/vitess/go/vt/vtgate/engine.LockFunc
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.LockFunctions)) * int64(8))
+		for _, elem := range cached.LockFunctions {
+			size += elem.CachedSize(true)
+		}
+	}
+	return size
+}
+func (cached *LockFunc) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	// field Typ *vitess.io/vitess/go/vt/sqlparser.LockingFunc
+	size += cached.Typ.CachedSize(true)
+	// field Name vitess.io/vitess/go/vt/vtgate/evalengine.Expr
+	if cc, ok := cached.Name.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
 	return size
 }
 func (cached *MStream) CachedSize(alloc bool) int64 {
@@ -722,7 +745,7 @@ func (cached *Route) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(112)
+		size += int64(128)
 	}
 	// field Query string
 	size += hack.RuntimeAllocSize(int64(len(cached.Query)))

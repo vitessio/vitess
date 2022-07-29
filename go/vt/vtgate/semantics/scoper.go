@@ -34,16 +34,18 @@ type (
 		wScope map[*sqlparser.Select]*scope
 		scopes []*scope
 		org    originable
+		binder *binder
 
 		// These scopes are only used for rewriting ORDER BY 1 and GROUP BY 1
 		specialExprScopes map[*sqlparser.Literal]*scope
 	}
 
 	scope struct {
-		parent  *scope
-		stmt    sqlparser.Statement
-		tables  []TableInfo
-		isUnion bool
+		parent    *scope
+		stmt      sqlparser.Statement
+		tables    []TableInfo
+		isUnion   bool
+		joinUsing map[string]TableSet
 	}
 )
 
@@ -238,12 +240,19 @@ func (s *scoper) push(sc *scope) {
 }
 
 func (s *scoper) popScope() {
+	usingMap := s.currentScope().prepareUsingMap()
+	for ts, m := range usingMap {
+		s.binder.usingJoinInfo[ts] = m
+	}
 	l := len(s.scopes) - 1
 	s.scopes = s.scopes[:l]
 }
 
 func newScope(parent *scope) *scope {
-	return &scope{parent: parent}
+	return &scope{
+		parent:    parent,
+		joinUsing: map[string]TableSet{},
+	}
 }
 
 func (s *scope) addTable(info TableInfo) error {
@@ -264,4 +273,19 @@ func (s *scope) addTable(info TableInfo) error {
 	}
 	s.tables = append(s.tables, info)
 	return nil
+}
+
+func (s *scope) prepareUsingMap() (result map[TableSet]map[string]TableSet) {
+	result = map[TableSet]map[string]TableSet{}
+	for colName, tss := range s.joinUsing {
+		for _, ts := range tss.Constituents() {
+			m := result[ts]
+			if m == nil {
+				m = map[string]TableSet{}
+			}
+			m[colName] = tss
+			result[ts] = m
+		}
+	}
+	return
 }

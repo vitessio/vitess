@@ -254,9 +254,9 @@ func (ts TableSet) ForEachTable(callback func(int)) {
 }
 
 // Constituents returns a slice with the indices for all tables in this TableSet
-func (ts TableSet) Constituents() (result []int) {
+func (ts TableSet) Constituents() (result []TableSet) {
 	ts.ForEachTable(func(t int) {
-		result = append(result, t)
+		result = append(result, SingleTableSet(t))
 	})
 	return
 }

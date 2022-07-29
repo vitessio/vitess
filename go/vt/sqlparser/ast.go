@@ -128,11 +128,12 @@ type (
 	// AlgorithmValue is the algorithm specified in the alter table command
 	AlgorithmValue string
 
-	// AlterColumn is used to add or drop defaults to columns in alter table command
+	// AlterColumn is used to add or drop defaults & visibility to columns in alter table command
 	AlterColumn struct {
 		Column      *ColName
 		DropDefault bool
 		DefaultVal  Expr
+		Invisible   *bool
 	}
 
 	// With contains the lists of common table expression and specifies if it is recursive or not
@@ -166,6 +167,18 @@ type (
 	AlterCharset struct {
 		CharacterSet string
 		Collate      string
+	}
+
+	// AlterCheck represents the `ALTER CHECK` part in an `ALTER TABLE ALTER CHECK` command.
+	AlterCheck struct {
+		Name     ColIdent
+		Enforced bool
+	}
+
+	// AlterIndex represents the `ALTER INDEX` part in an `ALTER TABLE ALTER INDEX` command.
+	AlterIndex struct {
+		Name      ColIdent
+		Invisible bool
 	}
 
 	// KeyState is used to disable or enable the keys in an alter table statement
@@ -238,6 +251,7 @@ type (
 		With        *With
 		GroupBy     GroupBy
 		Having      *Where
+		Windows     NamedWindows
 		OrderBy     OrderBy
 		Limit       *Limit
 		Lock        Lock
@@ -248,7 +262,7 @@ type (
 	SelectInto struct {
 		Type         SelectIntoType
 		FileName     string
-		Charset      string
+		Charset      ColumnCharset
 		FormatOption string
 		ExportOption string
 		Manifest     string
@@ -377,12 +391,12 @@ type (
 		IfExists bool
 	}
 
-	// CollateAndCharsetType is an enum for CollateAndCharset.Type
-	CollateAndCharsetType int8
+	// DatabaseOptionType is an enum for create database options
+	DatabaseOptionType int8
 
-	// CollateAndCharset is a struct that stores Collation or Character Set value
-	CollateAndCharset struct {
-		Type      CollateAndCharsetType
+	// DatabaseOption is a struct that stores Collation or Character Set value
+	DatabaseOption struct {
+		Type      DatabaseOptionType
 		IsDefault bool
 		Value     string
 	}
@@ -392,7 +406,7 @@ type (
 		Comments      *ParsedComments
 		DBName        TableIdent
 		IfNotExists   bool
-		CreateOptions []CollateAndCharset
+		CreateOptions []DatabaseOption
 		FullyParsed   bool
 	}
 
@@ -400,7 +414,7 @@ type (
 	AlterDatabase struct {
 		DBName              TableIdent
 		UpdateDataDirectory bool
-		AlterOptions        []CollateAndCharset
+		AlterOptions        []DatabaseOption
 		FullyParsed         bool
 	}
 
@@ -450,6 +464,11 @@ type (
 		Comments *ParsedComments
 	}
 
+	// ShowThrottledApps represents a SHOW VITESS_THROTTLED_APPS statement
+	ShowThrottledApps struct {
+		Comments Comments
+	}
+
 	// RevertMigration represents a REVERT VITESS_MIGRATION statement
 	RevertMigration struct {
 		UUID     string
@@ -461,8 +480,10 @@ type (
 
 	// AlterMigration represents a ALTER VITESS_MIGRATION statement
 	AlterMigration struct {
-		Type AlterMigrationType
-		UUID string
+		Type   AlterMigrationType
+		UUID   string
+		Expire string
+		Ratio  *Literal
 	}
 
 	// AlterTable represents a ALTER TABLE statement.
@@ -693,6 +714,7 @@ func (*AlterVschema) iStatement()      {}
 func (*AlterMigration) iStatement()    {}
 func (*RevertMigration) iStatement()   {}
 func (*ShowMigrationLogs) iStatement() {}
+func (*ShowThrottledApps) iStatement() {}
 func (*DropTable) iStatement()         {}
 func (*DropView) iStatement()          {}
 func (*TruncateTable) iStatement()     {}
@@ -718,6 +740,8 @@ func (*AddIndexDefinition) iAlterOption()      {}
 func (*AddColumns) iAlterOption()              {}
 func (AlgorithmValue) iAlterOption()           {}
 func (*AlterColumn) iAlterOption()             {}
+func (*AlterCheck) iAlterOption()              {}
+func (*AlterIndex) iAlterOption()              {}
 func (*ChangeColumn) iAlterOption()            {}
 func (*ModifyColumn) iAlterOption()            {}
 func (*AlterCharset) iAlterOption()            {}
@@ -1618,7 +1642,28 @@ type PartitionDefinition struct {
 }
 
 type PartitionDefinitionOptions struct {
-	ValueRange     *PartitionValueRange
+	ValueRange              *PartitionValueRange
+	Comment                 *Literal
+	Engine                  *PartitionEngine
+	DataDirectory           *Literal
+	IndexDirectory          *Literal
+	MaxRows                 *int
+	MinRows                 *int
+	TableSpace              string
+	SubPartitionDefinitions SubPartitionDefinitions
+}
+
+// Subpartition Definition Corresponds to the subpartition_definition option of partition_definition
+type SubPartitionDefinition struct {
+	Name    ColIdent
+	Options *SubPartitionDefinitionOptions
+}
+
+// This is a list of SubPartitionDefinition
+type SubPartitionDefinitions []*SubPartitionDefinition
+
+// Different options/attributes that can be provided to a subpartition_definition.
+type SubPartitionDefinitionOptions struct {
 	Comment        *Literal
 	Engine         *PartitionEngine
 	DataDirectory  *Literal
@@ -1702,14 +1747,32 @@ type ColumnType struct {
 	Scale    *Literal
 
 	// Text field options
-	Charset string
+	Charset ColumnCharset
 
 	// Enum values
 	EnumValues []string
 }
 
+// ColumnCharset exists because in the type definition it's possible
+// to add the binary marker for a character set, so we need to track
+// when this happens. We can't at the point of where we parse things
+// backfill this with an existing collation. Firstly because we don't
+// have access to that during parsing, but more importantly because
+// it would generate syntax that is invalid.
+//
+// Not in all cases where a binary marker is allowed, a collation is
+// allowed. See https://dev.mysql.com/doc/refman/8.0/en/cast-functions.html
+// specifically under Character Set Conversions.
+type ColumnCharset struct {
+	Name   string
+	Binary bool
+}
+
 // ColumnStorage is an enum that defines the type of storage.
 type ColumnStorage int
+
+// ColumnFormat is an enum that defines the type of storage.
+type ColumnFormat int
 
 // ColumnTypeOptions are generic field options for a column type
 type ColumnTypeOptions struct {
@@ -1733,6 +1796,29 @@ type ColumnTypeOptions struct {
 
 	// Key specification
 	KeyOpt ColumnKeyOption
+
+	// Stores the tri state of having either VISIBLE, INVISIBLE or nothing specified
+	// on the column. In case of nothing, this is nil, when VISIBLE is set it's false
+	// and only when INVISIBLE is set does the pointer value return true.
+	Invisible *bool
+
+	// Storage format for this specific column. This is NDB specific, but the parser
+	// still allows for it and ignores it for other storage engines. So we also should
+	// parse it but it's then not used anywhere.
+	Format ColumnFormat
+
+	// EngineAttribute is a new attribute not used for anything yet, but accepted
+	// since 8.0.23 in the MySQL parser.
+	EngineAttribute *Literal
+
+	// SecondaryEngineAttribute is a new attribute not used for anything yet, but accepted
+	// since 8.0.23 in the MySQL parser.
+	SecondaryEngineAttribute *Literal
+
+	// SRID is an attribute that indiciates the spatial reference system.
+	//
+	// https://dev.mysql.com/doc/refman/8.0/en/spatial-type-overview.html
+	SRID *Literal
 }
 
 // IndexDefinition describes an index in a CREATE TABLE statement
@@ -1796,6 +1882,7 @@ type (
 	ReferenceDefinition struct {
 		ReferencedTable   TableName
 		ReferencedColumns Columns
+		Match             MatchAction
 		OnDelete          ReferenceAction
 		OnUpdate          ReferenceAction
 	}
@@ -1990,6 +2077,83 @@ type TrimFuncType int8
 
 // TrimType is an enum to get types of Trim
 type TrimType int8
+
+// Types for window functions
+type (
+
+	// WindowSpecification represents window_spec
+	// More information available here: https://dev.mysql.com/doc/refman/8.0/en/window-functions-usage.html
+	WindowSpecification struct {
+		Name            ColIdent
+		PartitionClause Exprs
+		OrderClause     OrderBy
+		FrameClause     *FrameClause
+	}
+
+	WindowDefinition struct {
+		Name       ColIdent
+		WindowSpec *WindowSpecification
+	}
+
+	WindowDefinitions []*WindowDefinition
+
+	NamedWindow struct {
+		Windows WindowDefinitions
+	}
+
+	NamedWindows []*NamedWindow
+
+	// FrameClause represents frame_clause
+	// More information available here: https://dev.mysql.com/doc/refman/8.0/en/window-functions-frames.html
+	FrameClause struct {
+		Unit  FrameUnitType
+		Start *FramePoint
+		End   *FramePoint
+	}
+
+	// FramePoint refers to frame_start/frame_end
+	// More information available here: https://dev.mysql.com/doc/refman/8.0/en/window-functions-frames.html
+	FramePoint struct {
+		Type FramePointType
+		Expr Expr
+	}
+
+	// OverClause refers to over_clause
+	// More information available here: https://dev.mysql.com/doc/refman/8.0/en/window-functions-usage.html
+	OverClause struct {
+		WindowName ColIdent
+		WindowSpec *WindowSpecification
+	}
+
+	// FrameUnitType is an enum to get types of Unit used in FrameClause.
+	FrameUnitType int8
+
+	// FrameUnitType is an enum to get types of FramePoint.
+	FramePointType int8
+
+	// NullTreatmentClause refers to null_treatment
+	// According to SQL Docs:  Some window functions permit a null_treatment clause that specifies how to handle NULL values when calculating results.
+	// This clause is optional. It is part of the SQL standard, but the MySQL implementation permits only RESPECT NULLS (which is also the default).
+	// This means that NULL values are considered when calculating results. IGNORE NULLS is parsed, but produces an error.
+	NullTreatmentClause struct {
+		Type NullTreatmentType
+	}
+
+	// NullTreatmentType is an enum to get types for NullTreatmentClause
+	NullTreatmentType int8
+
+	// FromFirstLastClause refers to from_first_last
+	// According to SQL Docs:  from_first_last is part of the SQL standard, but the MySQL implementation permits only FROM FIRST (which is also the default).
+	// This means that calculations begin at the first row of the window.
+	// FROM LAST is parsed, but produces an error.
+	// To obtain the same effect as FROM LAST (begin calculations at the last row of the window), use ORDER BY to sort in reverse order.
+	FromFirstLastClause struct {
+		Type FromFirstLastType
+	}
+
+	// FromFirstLastType is an enum to get types for FromFirstLastClause
+	FromFirstLastType int8
+)
 
 // *********** Expressions
 type (
@@ -2186,8 +2350,17 @@ type (
 		To   Expr
 	}
 
+	// CastExpr represents a call to CAST(expr AS type)
+	// This is separate from CONVERT(expr, type) since there are
+	// places such as in CREATE TABLE statements where they
+	// are treated differently.
+	CastExpr struct {
+		Expr  Expr
+		Type  *ConvertType
+		Array bool
+	}
+
 	// ConvertExpr represents a call to CONVERT(expr, type)
-	// or it's equivalent CAST(expr AS type). Both are rewritten to the former.
 	ConvertExpr struct {
 		Expr Expr
 		Type *ConvertType
@@ -2267,8 +2440,12 @@ type (
 		JSONVal Expr
 	}
 
-	// Offset is another AST type that is used during planning and never produced by the parser
-	Offset int
+	// Offset is an AST type that is used during planning and never produced by the parser
+	// it is the column offset from the incoming result stream
+	Offset struct {
+		V        int
+		Original string
+	}
 
 	// JSONArrayExpr represents JSON_ARRAY()
 	// More information on https://dev.mysql.com/doc/refman/8.0/en/json-creation-functions.html#function_json-array
@@ -2396,8 +2573,11 @@ type (
 	// JSONValueExpr represents the function and arguments for JSON_VALUE()
 	// For more information, see https://dev.mysql.com/doc/refman/8.0/en/json-search-functions.html#function_json-value
 	JSONValueExpr struct {
-		JSONDoc Expr
-		Path    JSONPathParam
+		JSONDoc         Expr
+		Path            JSONPathParam
+		ReturningType   *ConvertType
+		EmptyOnResponse *JtOnResponse
+		ErrorOnResponse *JtOnResponse
 	}
 
 	// MemberOf represents the function and arguments for MEMBER OF()
@@ -2467,6 +2647,122 @@ type (
 	JSONUnquoteExpr struct {
 		JSONValue Expr
 	}
+
+	// RegexpInstrExpr represents REGEXP_INSTR()
+	// For more information, visit https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-instr
+	RegexpInstrExpr struct {
+		Expr         Expr
+		Pattern      Expr
+		Position     Expr
+		Occurrence   Expr
+		ReturnOption Expr
+		MatchType    Expr
+	}
+
+	// RegexpLikeExpr represents REGEXP_LIKE()
+	// For more information, visit https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-like
+	RegexpLikeExpr struct {
+		Expr      Expr
+		Pattern   Expr
+		MatchType Expr
+	}
+
+	// RegexpReplaceExpr represents REGEXP_REPLACE()
+	// For more information, visit https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-replace
+	RegexpReplaceExpr struct {
+		Expr       Expr
+		Pattern    Expr
+		Repl       Expr
+		Occurrence Expr
+		Position   Expr
+		MatchType  Expr
+	}
+
+	// RegexpSubstrExpr represents REGEXP_SUBSTR()
+	// For more information, visit https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-substr
+	RegexpSubstrExpr struct {
+		Expr       Expr
+		Pattern    Expr
+		Occurrence Expr
+		Position   Expr
+		MatchType  Expr
+	}
+
+	// ArgumentLessWindowExpr stands for the following window_functions: CUME_DIST, DENSE_RANK, PERCENT_RANK, RANK, ROW_NUMBER
+	// These functions do not take any argument.
+	ArgumentLessWindowExpr struct {
+		Type       ArgumentLessWindowExprType
+		OverClause *OverClause
+	}
+
+	// ArgumentLessWindowExprType is an enum to get types of ArgumentLessWindowExpr.
+	ArgumentLessWindowExprType int8
+
+	// FirstOrLastValueExpr stands for the following window_functions: FIRST_VALUE, LAST_VALUE
+	FirstOrLastValueExpr struct {
+		Type                FirstOrLastValueExprType
+		Expr                Expr
+		NullTreatmentClause *NullTreatmentClause
+		OverClause          *OverClause
+	}
+
+	// FirstOrLastValueExprType is an enum to get types of FirstOrLastValueExpr.
+	FirstOrLastValueExprType int8
+
+	// NtileExpr stands for the NTILE()
+	NtileExpr struct {
+		N          Expr
+		OverClause *OverClause
+	}
+
+	// NTHValueExpr stands for the NTH_VALUE()
+	NTHValueExpr struct {
+		Expr                Expr
+		N                   Expr
+		OverClause          *OverClause
+		FromFirstLastClause *FromFirstLastClause
+		NullTreatmentClause *NullTreatmentClause
+	}
+
+	// LagLeadExpr stand for the following: LAG, LEAD
+	LagLeadExpr struct {
+		Type                LagLeadExprType
+		Expr                Expr
+		N                   Expr
+		Default             Expr
+		OverClause          *OverClause
+		NullTreatmentClause *NullTreatmentClause
+	}
+
+	// LagLeadExprType is an enum to get types of LagLeadExpr.
+	LagLeadExprType int8
+
+	// ExtractValueExpr stands for EXTRACTVALUE() XML function
+	// Extract a value from an XML string using XPath notation
+	// For more details, visit https://dev.mysql.com/doc/refman/8.0/en/xml-functions.html#function_extractvalue
+	ExtractValueExpr struct {
+		Fragment  Expr
+		XPathExpr Expr
+	}
+
+	// UpdateXMLExpr stands for UpdateXML() XML function
+	// Return replaced XML fragment
+	// For more details, visit https://dev.mysql.com/doc/refman/8.0/en/xml-functions.html#function_updatexml
+	UpdateXMLExpr struct {
+		Target    Expr
+		XPathExpr Expr
+		NewXML    Expr
+	}
+
+	// LockingFuncType is an enum that get types of LockingFunc
+	LockingFuncType int8
+
+	// LockingFunc represents the advisory lock functions.
+	LockingFunc struct {
+		Type    LockingFuncType
+		Name    Expr
+		Timeout Expr
+	}
 )
 
 // iExpr ensures that only expressions nodes can be assigned to a Expr
@@ -2498,6 +2794,7 @@ func (*WeightStringFuncExpr) iExpr()               {}
 func (*CurTimeFuncExpr) iExpr()                    {}
 func (*CaseExpr) iExpr()                           {}
 func (*ValuesFuncExpr) iExpr()                     {}
+func (*CastExpr) iExpr()                           {}
 func (*ConvertExpr) iExpr()                        {}
 func (*SubstrExpr) iExpr()                         {}
 func (*ConvertUsingExpr) iExpr()                   {}
@@ -2508,7 +2805,7 @@ func (*ExtractedSubquery) iExpr()                  {}
 func (*TrimFuncExpr) iExpr()                       {}
 func (*JSONSchemaValidFuncExpr) iExpr()            {}
 func (*JSONSchemaValidationReportFuncExpr) iExpr() {}
-func (Offset) iExpr()                              {}
+func (*Offset) iExpr()                             {}
 func (*JSONPrettyExpr) iExpr()                     {}
 func (*JSONStorageFreeExpr) iExpr()                {}
 func (*JSONStorageSizeExpr) iExpr()                {}
@@ -2528,6 +2825,19 @@ func (*JSONValueMergeExpr) iExpr()                 {}
 func (*JSONRemoveExpr) iExpr()                     {}
 func (*JSONUnquoteExpr) iExpr()                    {}
 func (*MemberOfExpr) iExpr()                       {}
+func (*RegexpInstrExpr) iExpr()                    {}
+func (*RegexpLikeExpr) iExpr()                     {}
+func (*RegexpReplaceExpr) iExpr()                  {}
+func (*RegexpSubstrExpr) iExpr()                   {}
+func (*ArgumentLessWindowExpr) iExpr()             {}
+func (*FirstOrLastValueExpr) iExpr()               {}
+func (*NtileExpr) iExpr()                          {}
+func (*NTHValueExpr) iExpr()                       {}
+func (*LagLeadExpr) iExpr()                        {}
+func (*NamedWindow) iExpr()                        {}
+func (*ExtractValueExpr) iExpr()                   {}
+func (*UpdateXMLExpr) iExpr()                      {}
+func (*LockingFunc) iExpr()                        {}
 
 // iCallable marks all expressions that represent function calls
 func (*FuncExpr) iCallable()                           {}
@@ -2563,6 +2873,18 @@ func (*JSONValueMergeExpr) iCallable()                 {}
 func (*JSONRemoveExpr) iCallable()                     {}
 func (*JSONUnquoteExpr) iCallable()                    {}
 func (*MemberOfExpr) iCallable()                       {}
+func (*RegexpInstrExpr) iCallable()                    {}
+func (*RegexpLikeExpr) iCallable()                     {}
+func (*RegexpReplaceExpr) iCallable()                  {}
+func (*RegexpSubstrExpr) iCallable()                   {}
+func (*ArgumentLessWindowExpr) iCallable()             {}
+func (*FirstOrLastValueExpr) iCallable()               {}
+func (*NtileExpr) iCallable()                          {}
+func (*NTHValueExpr) iCallable()                       {}
+func (*LagLeadExpr) iCallable()                        {}
+func (*NamedWindow) iCallable()                        {}
+func (*ExtractValueExpr) iCallable()                   {}
+func (*UpdateXMLExpr) iCallable()                      {}
 
 // Exprs represents a list of value expressions.
 // It's not a valid expression because it's not parenthesized.
@@ -2577,7 +2899,7 @@ type ConvertType struct {
 	Type    string
 	Length  *Literal
 	Scale   *Literal
-	Charset string
+	Charset ColumnCharset
 }
 
 // GroupBy represents a GROUP BY clause.

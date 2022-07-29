@@ -52,6 +52,9 @@ type (
 		// Context returns the context of the current request.
 		Context() context.Context
 
+		// CancelContext cancels the highest level context and its children.
+		CancelContext()
+
 		GetKeyspace() string
 		// MaxMemoryRows returns the maxMemoryRows flag value.
 		MaxMemoryRows() int
@@ -99,7 +102,7 @@ type (
 
 		ConnCollation() collations.ID
 
-		ExecuteLock(rs *srvtopo.ResolvedShard, query *querypb.BoundQuery) (*sqltypes.Result, error)
+		ExecuteLock(rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, lockFuncType sqlparser.LockingFuncType) (*sqltypes.Result, error)
 
 		InTransactionAndIsDML() bool
 
@@ -124,6 +127,9 @@ type (
 
 		// CanUseSetVar returns true if system_settings can use SET_VAR hint.
 		CanUseSetVar() bool
+
+		// ReleaseLock releases all the held advisory locks.
+		ReleaseLock() error
 	}
 
 	//SessionActions gives primitives ability to interact with the session state
@@ -174,6 +180,13 @@ type (
 		// HasCreatedTempTable will mark the session as having created temp tables
 		HasCreatedTempTable()
 		GetWarnings() []*querypb.QueryWarning
+
+		// AnyAdvisoryLockTaken returns true of any advisory lock is taken
+		AnyAdvisoryLockTaken() bool
+		// AddAdvisoryLock adds advisory lock to the session
+		AddAdvisoryLock(name string)
+		// RemoveAdvisoryLock removes advisory lock from the session
+		RemoveAdvisoryLock(name string)
 	}
 
 	// Plan represents the execution strategy for a given query.

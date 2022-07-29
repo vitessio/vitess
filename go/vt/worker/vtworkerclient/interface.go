@@ -29,7 +29,7 @@ import (
 )
 
 // protocol specifics which RPC client implementation should be used.
-var protocol = flag.String("vtworker_client_protocol", "grpc", "the protocol to use to talk to the vtworker server")
+var protocol = flag.String("vtworker_client_protocol", "grpc", "(DEPRECATED) the protocol to use to talk to the vtworker server")
 
 // Client defines the interface used to send remote vtworker commands
 type Client interface {
