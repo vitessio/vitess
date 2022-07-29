@@ -140,7 +140,7 @@ func (vr *VindexLookup) description() PrimitiveDescription {
 
 func (vr *VindexLookup) lookup(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]*sqltypes.Result, error) {
 	results := make([]*sqltypes.Result, 0, len(ids))
-	if vr.Opcode == IN || ids[0].IsIntegral() {
+	if ids[0].IsIntegral() || vr.Vindex.AllowBatch() {
 		// for integral types, batch query all ids and then map them back to the input order
 		vars, err := sqltypes.BuildBindVariable(ids)
 		if err != nil {
@@ -148,7 +148,7 @@ func (vr *VindexLookup) lookup(ctx context.Context, vcursor VCursor, ids []sqlty
 		}
 		bindVars := map[string]*querypb.BindVariable{
 			vr.Arguments[0]: vars,
-		}
+		} // select * from user where id in (1,2,3,4)
 		result, err := vcursor.ExecutePrimitive(ctx, vr.Lookup, bindVars, true)
 		if err != nil {
 			return nil, vterrors.Wrapf(err, "failed while running the lookup query")

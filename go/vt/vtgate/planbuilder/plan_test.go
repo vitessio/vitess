@@ -105,6 +105,7 @@ func (v *nameLkpIndex) String() string   { return v.name }
 func (*nameLkpIndex) Cost() int          { return 3 }
 func (*nameLkpIndex) IsUnique() bool     { return false }
 func (*nameLkpIndex) NeedsVCursor() bool { return false }
+func (*nameLkpIndex) AllowBatch() bool   { return false }
 func (*nameLkpIndex) Verify(context.Context, vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }

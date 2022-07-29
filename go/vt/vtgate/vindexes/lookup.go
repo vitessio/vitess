@@ -49,6 +49,10 @@ type LookupNonUnique struct {
 	lkp       lookupInternal
 }
 
+func (ln *LookupNonUnique) AllowBatch() bool {
+	return ln.lkp.BatchLookup
+}
+
 // String returns the name of the vindex.
 func (ln *LookupNonUnique) String() string {
 	return ln.name
@@ -205,6 +209,10 @@ type LookupUnique struct {
 	name      string
 	writeOnly bool
 	lkp       lookupInternal
+}
+
+func (lu *LookupUnique) AllowBatch() bool {
+	return lu.lkp.BatchLookup
 }
 
 // NewLookupUnique creates a LookupUnique vindex.

@@ -43,7 +43,7 @@ type lookupInternal struct {
 	Upsert               bool     `json:"upsert,omitempty"`
 	IgnoreNulls          bool     `json:"ignore_nulls,omitempty"`
 	BatchLookup          bool     `json:"batch_lookup,omitempty"`
-	sel, ver, del        string
+	sel, ver, del        string   // sel: map query, ver: verify query, del: delete query
 }
 
 func (lkp *lookupInternal) Init(lookupQueryParams map[string]string, autocommit, upsert, multiShardAutocommit bool) error {

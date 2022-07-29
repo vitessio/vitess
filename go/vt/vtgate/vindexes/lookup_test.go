@@ -72,7 +72,7 @@ func (vc *vcursor) Execute(ctx context.Context, method string, query string, bin
 }
 
 func (vc *vcursor) ExecuteKeyspaceID(ctx context.Context, keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, rollbackOnError, autocommit bool) (*sqltypes.Result, error) {
-	return vc.execute("ExecuteKeyspaceID", query, bindVars, rollbackOnError)
+	return vc.execute(query, bindVars)
 }
 
 func (vc *vcursor) execute(query string, bindvars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {

@@ -59,11 +59,17 @@ select count(*) from user where id = 1 /* point aggregate */
 ----------------------------------------------------------------------
 select count(*) from user where name in ('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j') /* scatter aggregate */
 
-1 ks_sharded/-40: select `name`, user_id from name_user_map where `name` in ('f', 'g', 'i', 'j') limit 10001 /* scatter aggregate */
-1 ks_sharded/40-80: select `name`, user_id from name_user_map where `name` in ('b', 'c', 'h') limit 10001 /* scatter aggregate */
-1 ks_sharded/80-c0: select `name`, user_id from name_user_map where `name` in ('e') limit 10001 /* scatter aggregate */
-1 ks_sharded/c0-: select `name`, user_id from name_user_map where `name` in ('a', 'd') limit 10001 /* scatter aggregate */
-2 ks_sharded/-40: select count(*) from `user` where `name` in ('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j') limit 10001 /* scatter aggregate */
+1 ks_sharded/c0-: select `name`, user_id from name_user_map where `name` in ('a') limit 10001 /* scatter aggregate */
+2 ks_sharded/40-80: select `name`, user_id from name_user_map where `name` in ('b') limit 10001 /* scatter aggregate */
+3 ks_sharded/40-80: select `name`, user_id from name_user_map where `name` in ('c') limit 10001 /* scatter aggregate */
+4 ks_sharded/c0-: select `name`, user_id from name_user_map where `name` in ('d') limit 10001 /* scatter aggregate */
+5 ks_sharded/80-c0: select `name`, user_id from name_user_map where `name` in ('e') limit 10001 /* scatter aggregate */
+6 ks_sharded/-40: select `name`, user_id from name_user_map where `name` in ('f') limit 10001 /* scatter aggregate */
+7 ks_sharded/-40: select `name`, user_id from name_user_map where `name` in ('g') limit 10001 /* scatter aggregate */
+8 ks_sharded/40-80: select `name`, user_id from name_user_map where `name` in ('h') limit 10001 /* scatter aggregate */
+9 ks_sharded/-40: select `name`, user_id from name_user_map where `name` in ('i') limit 10001 /* scatter aggregate */
+10 ks_sharded/-40: select `name`, user_id from name_user_map where `name` in ('j') limit 10001 /* scatter aggregate */
+11 ks_sharded/-40: select count(*) from `user` where `name` in ('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j') limit 10001 /* scatter aggregate */
 
 ----------------------------------------------------------------------
 select count(*) from customer where email in ('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j') /* scatter aggregate with batching */

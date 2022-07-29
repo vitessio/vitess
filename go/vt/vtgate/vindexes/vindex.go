@@ -139,6 +139,7 @@ type (
 		String() string
 		Query() (selQuery string, arguments []string)
 		MapResult(ids []sqltypes.Value, results []*sqltypes.Result) ([]key.Destination, error)
+		AllowBatch() bool
 	}
 
 	// LookupBackfill interfaces all lookup vindexes that can backfill rows, such as LookupUnique.

@@ -218,10 +218,6 @@ type LookupHashUnique struct {
 	lkp       lookupInternal
 }
 
-func (lhu *LookupHashUnique) Query() (selQuery string, arguments []string) {
-	return lhu.lkp.sel, lhu.lkp.FromColumns
-}
-
 var _ LookupPlanable = (*LookupHashUnique)(nil)
 
 // NewLookupHashUnique creates a LookupHashUnique vindex.
@@ -367,4 +363,12 @@ func (lhu *LookupHashUnique) MarshalJSON() ([]byte, error) {
 // IsBackfilling implements the LookupBackfill interface
 func (lhu *LookupHashUnique) IsBackfilling() bool {
 	return lhu.writeOnly
+}
+
+func (lhu *LookupHashUnique) AllowBatch() bool {
+	return lhu.lkp.BatchLookup
+}
+
+func (lhu *LookupHashUnique) Query() (selQuery string, arguments []string) {
+	return lhu.lkp.sel, lhu.lkp.FromColumns
 }

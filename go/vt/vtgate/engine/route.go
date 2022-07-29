@@ -197,10 +197,10 @@ func (route *Route) executeInternal(ctx context.Context, vcursor VCursor, bindVa
 		return nil, err
 	}
 
-	return route.executeShards(ctx, vcursor, bindVars, wantfields, rss, bvs, err)
+	return route.executeShards(ctx, vcursor, bindVars, wantfields, rss, bvs)
 }
 
-func (route *Route) executeShards(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, rss []*srvtopo.ResolvedShard, bvs []map[string]*querypb.BindVariable, err error) (*sqltypes.Result, error) {
+func (route *Route) executeShards(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, rss []*srvtopo.ResolvedShard, bvs []map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	// Select Next - sequence query does not need to be executed in a dedicated connection (reserved or transaction)
 	if route.Opcode == Next {
 		ctx = context.WithValue(ctx, IgnoreReserveTxn, true)
@@ -222,6 +222,7 @@ func (route *Route) executeShards(ctx context.Context, vcursor VCursor, bindVars
 		// and the ones that don't. So, we are sending the query to any shard! This is safe because
 		// the query contains a predicate that make it not match any rows on that shard. (If they did,
 		// we should have gotten that shard back already from findRoute)
+		var err error
 		rss, bvs, err = route.anyShard(ctx, vcursor, bindVars)
 		if err != nil {
 			return nil, err
@@ -467,7 +468,7 @@ func (route *Route) executeAfterLookup(ctx context.Context, vcursor VCursor, bin
 	for i := range bvs {
 		bvs[i] = bindVars
 	}
-	return route.executeShards(nil, vcursor, bindVars, wantfields, rss, bvs, err)
+	return route.executeShards(ctx, vcursor, bindVars, wantfields, rss, bvs)
 }
 
 func execShard(ctx context.Context, vcursor VCursor, query string, bindVars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard, rollbackOnError, canAutocommit bool) (*sqltypes.Result, error) {
