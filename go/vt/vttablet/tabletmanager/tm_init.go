@@ -864,33 +864,33 @@ func (tm *TabletManager) initializeReplication(ctx context.Context, tabletType t
 	tablet := tm.Tablet()
 	si, err := tm.TopoServer.GetShard(ctx, tablet.Keyspace, tablet.Shard)
 	if err != nil {
-		return nil, vterrors.Wrap(err, "can't read shard")
+		return nil, vterrors.Wrap(err, "cannot read shard")
 	}
 	if si.PrimaryAlias == nil {
 		// There's no primary. This is fine, since there might be no primary currently
-		log.Warningf("Cannot start replication during initialization: shard %v/%v has no primary.", tablet.Keyspace, tablet.Shard)
+		log.Warningf("cannot start replication during initialization: shard %v/%v has no primary.", tablet.Keyspace, tablet.Shard)
 		return nil, nil
 	}
 	if topoproto.TabletAliasEqual(si.PrimaryAlias, tablet.Alias) {
 		// We used to be the primary before we got restarted,
 		// and no other primary has been elected in the meantime.
 		// There isn't anything to do here either.
-		log.Warningf("Cannot start replication during initialization: primary in shard record still points to this tablet.")
+		log.Warningf("cannot start replication during initialization: primary in shard record still points to this tablet.")
 		return nil, nil
 	}
 	currentPrimary, err := tm.TopoServer.GetTablet(ctx, si.PrimaryAlias)
 	if err != nil {
-		return nil, vterrors.Wrapf(err, "Cannot read primary tablet %v", si.PrimaryAlias)
+		return nil, vterrors.Wrapf(err, "cannot read primary tablet %v", si.PrimaryAlias)
 	}
 
 	durabilityName, err := tm.TopoServer.GetKeyspaceDurability(ctx, tablet.Keyspace)
 	if err != nil {
-		return nil, vterrors.Wrapf(err, "Cannot read keyspace durability %v", tablet.Keyspace)
+		return nil, vterrors.Wrapf(err, "cannot read keyspace durability policy %v", tablet.Keyspace)
 	}
 	log.Infof("Getting a new durability policy for %v", durabilityName)
 	durability, err := reparentutil.GetDurabilityPolicy(durabilityName)
 	if err != nil {
-		return nil, vterrors.Wrapf(err, "Cannot get durability policy %v", durabilityName)
+		return nil, vterrors.Wrapf(err, "cannot get durability policy %v", durabilityName)
 	}
 	// If using semi-sync, we need to enable it before connecting to primary.
 	// We should set the correct type, since it is used in replica semi-sync

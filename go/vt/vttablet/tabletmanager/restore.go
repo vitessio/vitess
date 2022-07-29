@@ -506,7 +506,7 @@ func (tm *TabletManager) startReplication(ctx context.Context, pos mysql.Positio
 
 	primary, err := tm.initializeReplication(ctx, tabletType)
 	// If we ran into an error while initializing replication, then there is no point in waiting for catch-up.
-	// Also, if there is primary tablet in the shard, we don't need to proceed further.
+	// Also, if there is no primary tablet in the shard, we don't need to proceed further.
 	if err != nil || primary == nil {
 		return err
 	}
