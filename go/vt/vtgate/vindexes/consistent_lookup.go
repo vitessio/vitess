@@ -110,6 +110,43 @@ func (lu *ConsistentLookup) Map(ctx context.Context, vcursor VCursor, ids []sqlt
 	return lu.MapResult(ids, results)
 }
 
+// MapResult implements the LookupPlanable interface
+func (lu *ConsistentLookup) MapResult(ids []sqltypes.Value, results []*sqltypes.Result) ([]key.Destination, error) {
+	out := make([]key.Destination, 0, len(ids))
+	if lu.writeOnly {
+		for range ids {
+			out = append(out, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{}})
+		}
+		return out, nil
+	}
+	for _, result := range results {
+		if len(result.Rows) == 0 {
+			out = append(out, key.DestinationNone{})
+			continue
+		}
+		ksids := make([][]byte, 0, len(result.Rows))
+		for _, row := range result.Rows {
+			rowBytes, err := row[0].ToBytes()
+			if err != nil {
+				return nil, err
+			}
+			ksids = append(ksids, rowBytes)
+		}
+		out = append(out, key.DestinationKeyspaceIDs(ksids))
+	}
+	return out, nil
+}
+
+// Query implements the LookupPlanable interface
+func (lu *ConsistentLookup) Query() (selQuery string, arguments []string) {
+	return lu.lkp.query()
+}
+
+// AllowBatch implements the LookupPlanable interface
+func (lu *ConsistentLookup) AllowBatch() bool {
+	return lu.lkp.BatchLookup
+}
+
 //====================================================================
 
 // ConsistentLookupUnique defines a vindex that uses a lookup table.
@@ -164,9 +201,41 @@ func (lu *ConsistentLookupUnique) Map(ctx context.Context, vcursor VCursor, ids 
 	return lu.MapResult(ids, results)
 }
 
-// IsBackfilling implements the LookupBackfill interface
-func (lu *ConsistentLookupUnique) IsBackfilling() bool {
-	return lu.writeOnly
+// MapResult implements the LookupPlanable interface
+func (lu *ConsistentLookupUnique) MapResult(ids []sqltypes.Value, results []*sqltypes.Result) ([]key.Destination, error) {
+	out := make([]key.Destination, 0, len(ids))
+	if lu.writeOnly {
+		for range ids {
+			out = append(out, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{}})
+		}
+		return out, nil
+	}
+
+	for i, result := range results {
+		switch len(result.Rows) {
+		case 0:
+			out = append(out, key.DestinationNone{})
+		case 1:
+			rowBytes, err := result.Rows[0][0].ToBytes()
+			if err != nil {
+				return out, err
+			}
+			out = append(out, key.DestinationKeyspaceID(rowBytes))
+		default:
+			return nil, fmt.Errorf("Lookup.Map: unexpected multiple results from vindex %s: %v", lu.lkp.Table, ids[i])
+		}
+	}
+	return out, nil
+}
+
+// Query implements the LookupPlanable interface
+func (lu *ConsistentLookupUnique) Query() (selQuery string, arguments []string) {
+	return lu.lkp.query()
+}
+
+// AllowBatch implements the LookupPlanable interface
+func (lu *ConsistentLookupUnique) AllowBatch() bool {
+	return lu.lkp.BatchLookup
 }
 
 //====================================================================
@@ -382,22 +451,12 @@ func (lu *clCommon) addWhere(buf *bytes.Buffer, cols []string) {
 	}
 }
 
-// MapResult implements the LookupPlanable interface
-func (lu *clCommon) MapResult(ids []sqltypes.Value, results []*sqltypes.Result) ([]key.Destination, error) {
-	return lu.lkp.mapResult(ids, results, lu.writeOnly)
-}
-
-// Query implements the LookupPlanable interface
-func (lu *clCommon) Query() (selQuery string, arguments []string) {
-	return lu.lkp.query()
-}
-
-// AllowBatch implements the LookupPlanable interface
-func (lu *clCommon) AllowBatch() bool {
-	return lu.lkp.BatchLookup
-}
-
 // GetCommitOrder implements the LookupPlanable interface
 func (lu *clCommon) GetCommitOrder() vtgatepb.CommitOrder {
 	return vtgatepb.CommitOrder_PRE
+}
+
+// IsBackfilling implements the LookupBackfill interface
+func (lu *ConsistentLookupUnique) IsBackfilling() bool {
+	return lu.writeOnly
 }
