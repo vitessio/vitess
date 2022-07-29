@@ -501,8 +501,8 @@ message VExecResponse {
 message VDiffRequest {
   string keyspace = 1;
   string workflow = 2;
-  string command = 3;
-  string sub_command = 4;
+  string action = 3;
+  string action_arg = 4;
   string vdiff_uuid = 5;
   VDiffOptions options = 6;
 }
@@ -529,7 +529,7 @@ message VDiffReportOptions {
 
 message VDiffCoreOptions {
   string tables = 1;
-  bool resumable = 2;
+  bool auto_retry = 2;
   int64  max_rows = 3;
   bool checksum = 4;
   int64 sample_pct = 5;

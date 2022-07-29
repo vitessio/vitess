@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/sync2"
+	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/logutil"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -31,6 +32,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtctl/schematools"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 )
 
@@ -332,7 +334,7 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 	// keyspace-wide operations like resharding migrations.
 	ctx, unlock, lockErr := exec.ts.LockKeyspace(ctx, exec.keyspace, "ApplySchemaKeyspace")
 	if lockErr != nil {
-		execResult.ExecutorErr = lockErr.Error()
+		execResult.ExecutorErr = vterrors.Wrapf(lockErr, "lockErr in ApplySchemaKeyspace %v", exec.keyspace).Error()
 		return &execResult
 	}
 	defer func() {
@@ -341,7 +343,7 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 		var unlockErr error
 		unlock(&unlockErr)
 		if execResult.ExecutorErr == "" && unlockErr != nil {
-			execResult.ExecutorErr = unlockErr.Error()
+			execResult.ExecutorErr = vterrors.Wrapf(unlockErr, "unlockErr in ApplySchemaKeyspace %v", exec.keyspace).Error()
 		}
 	}()
 
@@ -357,31 +359,26 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 	}
 	providedUUID := ""
 
-	syncOperationExecuted := false
-	for index, sql := range sqls {
-		execResult.CurSQLIndex = index
-		if exec.hasProvidedUUIDs() {
-			providedUUID = exec.uuids[index]
-		}
-		executedAsynchronously, err := exec.executeSQL(ctx, sql, providedUUID, &execResult)
-		if err != nil {
-			execResult.ExecutorErr = err.Error()
-			return &execResult
-		}
-		if !executedAsynchronously {
-			syncOperationExecuted = true
-		}
-		if len(execResult.FailedShards) > 0 {
-			break
-		}
-	}
+	rl := timer.NewRateLimiter(*topo.RemoteOperationTimeout / 4)
+	defer rl.Stop()
 
-	if syncOperationExecuted {
+	syncOperationExecuted := false
+
+	// ReloadSchema once. Do it even if we do an early return on error
+	defer func() {
+		if !syncOperationExecuted {
+			exec.logger.Infof("Skipped ReloadSchema since all SQLs executed asynchronously")
+			return
+		}
 		// same shards will appear multiple times in execResult.SuccessShards when there are
 		// multiple SQLs
 		uniqueShards := map[string]*ShardResult{}
-		for _, result := range execResult.SuccessShards {
-			uniqueShards[result.Shard] = &result
+		for i := range execResult.SuccessShards {
+			// Please do not change the above iteration to "for result := range ...".
+			// This is because we want to end up grabbing a pointer to the result. But golang's "for"
+			// implementation reuses the iteration parameter, and we end up reusing the same pointer.
+			result := &execResult.SuccessShards[i]
+			uniqueShards[result.Shard] = result
 		}
 		var wg sync.WaitGroup
 		// If all shards succeeded, wait (up to waitReplicasTimeout) for replicas to
@@ -404,14 +401,36 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 					result.Shard,
 					result.Position,
 					concurrency,
-					false, /* includePrimary */
+					true, /* includePrimary */
 				)
 			}(result)
 		}
 		wg.Wait()
-	} else {
-		exec.logger.Infof("Skipped ReloadSchema since all SQLs executed asynchronously")
+	}()
+
+	for index, sql := range sqls {
+		// Attempt to renew lease:
+		if err := rl.Do(func() error { return topo.CheckKeyspaceLockedAndRenew(ctx, exec.keyspace) }); err != nil {
+			execResult.ExecutorErr = vterrors.Wrapf(err, "CheckKeyspaceLocked in ApplySchemaKeyspace %v", exec.keyspace).Error()
+			return &execResult
+		}
+		execResult.CurSQLIndex = index
+		if exec.hasProvidedUUIDs() {
+			providedUUID = exec.uuids[index]
+		}
+		executedAsynchronously, err := exec.executeSQL(ctx, sql, providedUUID, &execResult)
+		if err != nil {
+			execResult.ExecutorErr = err.Error()
+			return &execResult
+		}
+		if !executedAsynchronously {
+			syncOperationExecuted = true
+		}
+		if len(execResult.FailedShards) > 0 {
+			break
+		}
 	}
+
 	return &execResult
 }
 
@@ -472,7 +491,7 @@ func (exec *TabletExecutor) executeOneTablet(
 				sql = sqlparser.String(ddlStmt)
 			}
 		}
-		result, err = exec.tmc.ExecuteFetchAsDba(ctx, tablet, false, []byte(sql), 10, false, true)
+		result, err = exec.tmc.ExecuteFetchAsDba(ctx, tablet, false, []byte(sql), 10, false, false /* do not ReloadSchema */)
 	}
 	if err != nil {
 		errChan <- ShardWithError{Shard: tablet.Shard, Err: err.Error()}

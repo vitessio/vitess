@@ -22268,11 +22268,11 @@ export namespace tabletmanagerdata {
         /** VDiffRequest workflow */
         workflow?: (string|null);
 
-        /** VDiffRequest command */
-        command?: (string|null);
+        /** VDiffRequest action */
+        action?: (string|null);
 
-        /** VDiffRequest sub_command */
-        sub_command?: (string|null);
+        /** VDiffRequest action_arg */
+        action_arg?: (string|null);
 
         /** VDiffRequest vdiff_uuid */
         vdiff_uuid?: (string|null);
@@ -22296,11 +22296,11 @@ export namespace tabletmanagerdata {
         /** VDiffRequest workflow. */
         public workflow: string;
 
-        /** VDiffRequest command. */
-        public command: string;
+        /** VDiffRequest action. */
+        public action: string;
 
-        /** VDiffRequest sub_command. */
-        public sub_command: string;
+        /** VDiffRequest action_arg. */
+        public action_arg: string;
 
         /** VDiffRequest vdiff_uuid. */
         public vdiff_uuid: string;
@@ -22691,8 +22691,8 @@ export namespace tabletmanagerdata {
         /** VDiffCoreOptions tables */
         tables?: (string|null);
 
-        /** VDiffCoreOptions resumable */
-        resumable?: (boolean|null);
+        /** VDiffCoreOptions auto_retry */
+        auto_retry?: (boolean|null);
 
         /** VDiffCoreOptions max_rows */
         max_rows?: (number|Long|null);
@@ -22722,8 +22722,8 @@ export namespace tabletmanagerdata {
         /** VDiffCoreOptions tables. */
         public tables: string;
 
-        /** VDiffCoreOptions resumable. */
-        public resumable: boolean;
+        /** VDiffCoreOptions auto_retry. */
+        public auto_retry: boolean;
 
         /** VDiffCoreOptions max_rows. */
         public max_rows: (number|Long);
@@ -23293,7 +23293,8 @@ export namespace query {
         JSON = 2078,
         EXPRESSION = 31,
         HEXNUM = 4128,
-        HEXVAL = 4129
+        HEXVAL = 4129,
+        BITNUM = 4130
     }
 
     /** Properties of a Value. */

@@ -116,6 +116,7 @@ func New(code vtrpcpb.Code, message string) error {
 // Errorf formats according to a format specifier and returns the string
 // as a value that satisfies error.
 // Errorf also records the stack trace at the point it was called.
+// Use this for Vitess-specific errors that don't have a MySQL counterpart
 func Errorf(code vtrpcpb.Code, format string, args ...any) error {
 	return &fundamental{
 		msg:   fmt.Sprintf(format, args...),
@@ -127,6 +128,7 @@ func Errorf(code vtrpcpb.Code, format string, args ...any) error {
 // NewErrorf formats according to a format specifier and returns the string
 // as a value that satisfies error.
 // NewErrorf also records the stack trace at the point it was called.
+// Use this for errors in Vitess that we eventually want to mimic as a MySQL error
 func NewErrorf(code vtrpcpb.Code, state State, format string, args ...any) error {
 	msg := format
 	if len(args) != 0 {

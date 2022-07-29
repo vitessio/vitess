@@ -175,7 +175,7 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		) AS is_failing_to_connect_to_primary,
 		MIN(
 			primary_instance.replica_sql_running = 0
-			AND primary_instance.replica_io_running = 0
+			OR primary_instance.replica_io_running = 0
 		) AS replication_stopped,
 		MIN(
 			primary_downtime.downtime_active is not null

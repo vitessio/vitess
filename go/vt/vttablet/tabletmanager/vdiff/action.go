@@ -20,11 +20,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"github.com/google/uuid"
 
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/withddl"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -37,6 +37,7 @@ type VDiffAction string //nolint
 const (
 	CreateAction  VDiffAction = "create"
 	ShowAction    VDiffAction = "show"
+	StopAction    VDiffAction = "stop"
 	ResumeAction  VDiffAction = "resume"
 	DeleteAction  VDiffAction = "delete"
 	AllActionArg              = "all"
@@ -44,7 +45,7 @@ const (
 )
 
 var (
-	Actions    = []VDiffAction{CreateAction, ShowAction, ResumeAction, DeleteAction}
+	Actions    = []VDiffAction{CreateAction, ShowAction, StopAction, ResumeAction, DeleteAction}
 	ActionArgs = []string{AllActionArg, LastActionArg}
 )
 
@@ -59,126 +60,27 @@ func (vde *Engine) PerformVDiffAction(ctx context.Context, req *tabletmanagerdat
 		return nil, err
 	}
 	defer dbClient.Close()
-	var qr *sqltypes.Result
-	var err error
-	options := req.Options
 
-	action := VDiffAction(strings.ToLower(req.Command))
+	vde.vdiffSchemaCreateOnce.Do(func() {
+		_, _ = withDDL.Exec(ctx, withddl.QueryToTriggerWithDDL, dbClient.ExecuteFetch, dbClient.ExecuteFetch)
+	})
+
+	action := VDiffAction(req.Action)
 	switch action {
 	case CreateAction, ResumeAction:
-		query := fmt.Sprintf(sqlGetVDiffID, encodeString(req.VdiffUuid))
-		if qr, err = withDDL.Exec(context.Background(), query, dbClient.ExecuteFetch, dbClient.ExecuteFetch); err != nil {
-			return nil, err
-		}
-		recordFound := len(qr.Rows) == 1
-		if recordFound && action == CreateAction {
-			return nil, fmt.Errorf("vdiff with UUID %s already exists", req.VdiffUuid)
-		} else if action == ResumeAction {
-			if !recordFound {
-				return nil, fmt.Errorf("vdiff with UUID %s not found", req.VdiffUuid)
-			}
-			if resp.Id, err = qr.Named().Row().ToInt64("id"); err != nil {
-				return nil, fmt.Errorf("vdiff found with invalid id: %w", err)
-			}
-		}
-		options, err = vde.fixupOptions(options)
-		if err != nil {
-			return nil, err
-		}
-		optionsJSON, err := json.Marshal(options)
-		if err != nil {
-			return nil, err
-		}
-		if action == CreateAction {
-			query := fmt.Sprintf(sqlNewVDiff,
-				encodeString(req.Keyspace), encodeString(req.Workflow), "pending", encodeString(string(optionsJSON)),
-				vde.thisTablet.Shard, topoproto.TabletDbName(vde.thisTablet), req.VdiffUuid)
-			if qr, err = withDDL.Exec(context.Background(), query, dbClient.ExecuteFetch, dbClient.ExecuteFetch); err != nil {
-				return nil, err
-			}
-			if qr.InsertID == 0 {
-				return nil, fmt.Errorf("unable to create vdiff record (%w); statement: %s", err, query)
-			}
-			resp.Id = int64(qr.InsertID)
-		} else {
-			query := fmt.Sprintf(sqlResumeVDiff, encodeString(string(optionsJSON)), encodeString(req.VdiffUuid))
-			if qr, err = withDDL.Exec(context.Background(), query, dbClient.ExecuteFetch, dbClient.ExecuteFetch); err != nil {
-				return nil, err
-			}
-			if qr.RowsAffected == 0 {
-				return nil, fmt.Errorf("unable to update vdiff record (%w); statement: %s", err, query)
-			}
-		}
-		resp.VdiffUuid = req.VdiffUuid
-		qr, err := vde.getVDiffByID(ctx, resp.Id)
-		if err != nil {
-			return nil, err
-		}
-		if err := vde.addController(qr.Named().Row(), options); err != nil {
+		if err := vde.handleCreateResumeAction(ctx, dbClient, action, req, resp); err != nil {
 			return nil, err
 		}
 	case ShowAction:
-		vdiffUUID := ""
-		if req.SubCommand == LastActionArg {
-			query := fmt.Sprintf(sqlGetMostRecentVDiff, encodeString(req.Keyspace), encodeString(req.Workflow))
-			if qr, err = withDDL.Exec(context.Background(), query, dbClient.ExecuteFetch, dbClient.ExecuteFetch); err != nil {
-				return nil, err
-			}
-			if len(qr.Rows) == 1 {
-				row := qr.Named().Row()
-				vdiffUUID = row.AsString("vdiff_uuid", "")
-			}
-		} else {
-			if uuidt, err := uuid.Parse(req.SubCommand); err == nil {
-				vdiffUUID = uuidt.String()
-			}
+		if err := vde.handleShowAction(ctx, dbClient, action, req, resp); err != nil {
+			return nil, err
 		}
-		if vdiffUUID != "" {
-			resp.VdiffUuid = vdiffUUID
-			query := fmt.Sprintf(sqlGetVDiffByKeyspaceWorkflowUUID, encodeString(req.Keyspace), encodeString(req.Workflow), encodeString(vdiffUUID))
-			if qr, err = withDDL.Exec(context.Background(), query, dbClient.ExecuteFetch, dbClient.ExecuteFetch); err != nil {
-				return nil, err
-			}
-			switch len(qr.Rows) {
-			case 0:
-				return nil, fmt.Errorf("no vdiff found for keyspace %s and workflow %s: %s", req.Keyspace, req.Workflow, query)
-			case 1:
-				row := qr.Named().Row()
-				vdiffID, _ := row["id"].ToInt64()
-				summary, err := vde.getVDiffSummary(vdiffID, dbClient)
-				resp.Output = summary
-				if err != nil {
-					return nil, err
-				}
-			default:
-				return nil, fmt.Errorf("too many vdiffs found (%d) for keyspace %s and workflow %s", len(qr.Rows), req.Keyspace, req.Workflow)
-			}
-		}
-		switch req.SubCommand {
-		case AllActionArg:
-			if qr, err = withDDL.Exec(context.Background(), sqlGetAllVDiffs, dbClient.ExecuteFetch, dbClient.ExecuteFetch); err != nil {
-				return nil, err
-			}
-			resp.Output = sqltypes.ResultToProto3(qr)
-		case LastActionArg:
-		default:
-			if _, err := uuid.Parse(req.SubCommand); err != nil {
-				return nil, fmt.Errorf("action argument %s not supported", req.SubCommand)
-			}
+	case StopAction:
+		if err := vde.handleStopAction(ctx, dbClient, action, req, resp); err != nil {
+			return nil, err
 		}
 	case DeleteAction:
-		query := ""
-		switch req.SubCommand {
-		case AllActionArg:
-			query = fmt.Sprintf(sqlDeleteVDiffs, encodeString(req.Keyspace), encodeString(req.Workflow))
-		default:
-			uuid, err := uuid.Parse(req.SubCommand)
-			if err != nil {
-				return nil, fmt.Errorf("action argument %s not supported", req.SubCommand)
-			}
-			query = fmt.Sprintf(sqlDeleteVDiffByUUID, encodeString(req.Keyspace), encodeString(req.Workflow), encodeString(uuid.String()))
-		}
-		if _, err = withDDL.Exec(context.Background(), query, dbClient.ExecuteFetch, dbClient.ExecuteFetch); err != nil {
+		if err := vde.handleDeleteAction(ctx, dbClient, action, req, resp); err != nil {
 			return nil, err
 		}
 	default:
@@ -192,14 +94,14 @@ func (vde *Engine) getVDiffSummary(vdiffID int64, dbClient binlogplayer.DBClient
 	var err error
 
 	query := fmt.Sprintf(sqlVDiffSummary, vdiffID)
-	if qr, err = withDDL.Exec(context.Background(), query, dbClient.ExecuteFetch, dbClient.ExecuteFetch); err != nil {
+	if qr, err = dbClient.ExecuteFetch(query, -1); err != nil {
 		return nil, err
 	}
 	return sqltypes.ResultToProto3(qr), nil
 
 }
 
-// Validate vdiff options. Also setup defaults where applicable
+// Validate vdiff options. Also setup defaults where applicable.
 func (vde *Engine) fixupOptions(options *tabletmanagerdatapb.VDiffOptions) (*tabletmanagerdatapb.VDiffOptions, error) {
 	// Assign defaults to sourceCell and targetCell if not specified.
 	sourceCell := options.PickerOptions.SourceCell
@@ -226,4 +128,169 @@ func (vde *Engine) fixupOptions(options *tabletmanagerdatapb.VDiffOptions) (*tab
 	options.PickerOptions.TargetCell = targetCell
 
 	return options, nil
+}
+
+func (vde *Engine) handleCreateResumeAction(ctx context.Context, dbClient binlogplayer.DBClient, action VDiffAction, req *tabletmanagerdatapb.VDiffRequest, resp *tabletmanagerdatapb.VDiffResponse) error {
+	var qr *sqltypes.Result
+	var err error
+	options := req.Options
+
+	query := fmt.Sprintf(sqlGetVDiffID, encodeString(req.VdiffUuid))
+	if qr, err = dbClient.ExecuteFetch(query, 1); err != nil {
+		return err
+	}
+	recordFound := len(qr.Rows) == 1
+	if recordFound && action == CreateAction {
+		return fmt.Errorf("vdiff with UUID %s already exists on tablet %v",
+			req.VdiffUuid, vde.thisTablet.Alias)
+	} else if action == ResumeAction {
+		if !recordFound {
+			return fmt.Errorf("vdiff with UUID %s not found on tablet %v",
+				req.VdiffUuid, vde.thisTablet.Alias)
+		}
+		if resp.Id, err = qr.Named().Row().ToInt64("id"); err != nil {
+			return fmt.Errorf("vdiff found with invalid id on tablet %v: %w",
+				vde.thisTablet.Alias, err)
+		}
+	}
+	if options, err = vde.fixupOptions(options); err != nil {
+		return err
+	}
+	optionsJSON, err := json.Marshal(options)
+	if err != nil {
+		return err
+	}
+	if action == CreateAction {
+		query := fmt.Sprintf(sqlNewVDiff,
+			encodeString(req.Keyspace), encodeString(req.Workflow), "pending", encodeString(string(optionsJSON)),
+			vde.thisTablet.Shard, topoproto.TabletDbName(vde.thisTablet), req.VdiffUuid)
+		if qr, err = dbClient.ExecuteFetch(query, 1); err != nil {
+			return err
+		}
+		if qr.InsertID == 0 {
+			return fmt.Errorf("unable to create vdiff for UUID %s on tablet %v (%w)",
+				req.VdiffUuid, vde.thisTablet.Alias, err)
+		}
+		resp.Id = int64(qr.InsertID)
+	} else {
+		query := fmt.Sprintf(sqlResumeVDiff, encodeString(string(optionsJSON)), encodeString(req.VdiffUuid))
+		if qr, err = dbClient.ExecuteFetch(query, 1); err != nil {
+			return err
+		}
+		if qr.RowsAffected == 0 {
+			msg := fmt.Sprintf("no completed or stopped vdiff found for UUID %s on tablet %v",
+				req.VdiffUuid, vde.thisTablet.Alias)
+			if err != nil {
+				msg = fmt.Sprintf("%s (%v)", msg, err)
+			}
+			return fmt.Errorf(msg)
+		}
+	}
+
+	resp.VdiffUuid = req.VdiffUuid
+	qr, err = vde.getVDiffByID(ctx, dbClient, resp.Id)
+	if err != nil {
+		return err
+	}
+	vde.mu.Lock()
+	defer vde.mu.Unlock()
+	if err := vde.addController(qr.Named().Row(), options); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (vde *Engine) handleShowAction(ctx context.Context, dbClient binlogplayer.DBClient, action VDiffAction, req *tabletmanagerdatapb.VDiffRequest, resp *tabletmanagerdatapb.VDiffResponse) error {
+	var qr *sqltypes.Result
+	var err error
+	vdiffUUID := ""
+
+	if req.ActionArg == LastActionArg {
+		query := fmt.Sprintf(sqlGetMostRecentVDiff, encodeString(req.Keyspace), encodeString(req.Workflow))
+		if qr, err = dbClient.ExecuteFetch(query, 1); err != nil {
+			return err
+		}
+		if len(qr.Rows) == 1 {
+			row := qr.Named().Row()
+			vdiffUUID = row.AsString("vdiff_uuid", "")
+		}
+	} else {
+		if uuidt, err := uuid.Parse(req.ActionArg); err == nil {
+			vdiffUUID = uuidt.String()
+		}
+	}
+	if vdiffUUID != "" {
+		resp.VdiffUuid = vdiffUUID
+		query := fmt.Sprintf(sqlGetVDiffByKeyspaceWorkflowUUID, encodeString(req.Keyspace), encodeString(req.Workflow), encodeString(vdiffUUID))
+		if qr, err = dbClient.ExecuteFetch(query, 1); err != nil {
+			return err
+		}
+		switch len(qr.Rows) {
+		case 0:
+			return fmt.Errorf("no vdiff found for UUID %s keyspace %s and workflow %s on tablet %v",
+				vdiffUUID, req.Keyspace, req.Workflow, vde.thisTablet.Alias)
+		case 1:
+			row := qr.Named().Row()
+			vdiffID, _ := row["id"].ToInt64()
+			summary, err := vde.getVDiffSummary(vdiffID, dbClient)
+			resp.Output = summary
+			if err != nil {
+				return err
+			}
+		default:
+			return fmt.Errorf("too many vdiffs found (%d) for UUID %s keyspace %s and workflow %s on tablet %v",
+				len(qr.Rows), vdiffUUID, req.Keyspace, req.Workflow, vde.thisTablet.Alias)
+		}
+	}
+	switch req.ActionArg {
+	case AllActionArg:
+		if qr, err = dbClient.ExecuteFetch(sqlGetAllVDiffs, -1); err != nil {
+			return err
+		}
+		resp.Output = sqltypes.ResultToProto3(qr)
+	case LastActionArg:
+	default:
+		if _, err := uuid.Parse(req.ActionArg); err != nil {
+			return fmt.Errorf("action argument %s not supported", req.ActionArg)
+		}
+	}
+
+	return nil
+}
+
+func (vde *Engine) handleStopAction(ctx context.Context, dbClient binlogplayer.DBClient, action VDiffAction, req *tabletmanagerdatapb.VDiffRequest, resp *tabletmanagerdatapb.VDiffResponse) error {
+	vde.mu.Lock()
+	defer vde.mu.Unlock()
+	for _, controller := range vde.controllers {
+		if controller.uuid == req.VdiffUuid {
+			controller.Stop()
+			if err := controller.markStoppedByRequest(); err != nil {
+				return err
+			}
+			break
+		}
+	}
+	return nil
+}
+
+func (vde *Engine) handleDeleteAction(ctx context.Context, dbClient binlogplayer.DBClient, action VDiffAction, req *tabletmanagerdatapb.VDiffRequest, resp *tabletmanagerdatapb.VDiffResponse) error {
+	var err error
+	query := ""
+
+	switch req.ActionArg {
+	case AllActionArg:
+		query = fmt.Sprintf(sqlDeleteVDiffs, encodeString(req.Keyspace), encodeString(req.Workflow))
+	default:
+		uuid, err := uuid.Parse(req.ActionArg)
+		if err != nil {
+			return fmt.Errorf("action argument %s not supported", req.ActionArg)
+		}
+		query = fmt.Sprintf(sqlDeleteVDiffByUUID, encodeString(uuid.String()))
+	}
+	if _, err = dbClient.ExecuteFetch(query, 1); err != nil {
+		return err
+	}
+
+	return nil
 }

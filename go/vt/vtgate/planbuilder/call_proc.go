@@ -23,7 +23,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
-func buildCallProcPlan(stmt *sqlparser.CallProc, vschema plancontext.VSchema) (engine.Primitive, error) {
+func buildCallProcPlan(stmt *sqlparser.CallProc, vschema plancontext.VSchema) (*planResult, error) {
 	var ks string
 	if !stmt.Name.Qualifier.IsEmpty() {
 		ks = stmt.Name.Qualifier.String()
@@ -43,11 +43,11 @@ func buildCallProcPlan(stmt *sqlparser.CallProc, vschema plancontext.VSchema) (e
 
 	stmt.Name.Qualifier = sqlparser.NewIdentifierCS("")
 
-	return &engine.Send{
+	return newPlanResult(&engine.Send{
 		Keyspace:          keyspace,
 		TargetDestination: dest,
 		Query:             sqlparser.String(stmt),
-	}, nil
+	}), nil
 }
 
 const errNotAllowWhenSharded = "CALL is not supported for sharded database"

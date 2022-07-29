@@ -74,7 +74,7 @@ func deleteCell(t *testing.T) {
 	deleteTablet(t, shard2Rdonly)
 
 	// Delete cell2 info from topo
-	res, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("DeleteCellInfo", "--force", cell2)
+	res, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("DeleteCellInfo", "--", "--force", cell2)
 	t.Log(res)
 	require.Nil(t, err)
 
