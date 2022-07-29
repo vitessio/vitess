@@ -30,11 +30,7 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/vt/vtgate/logstats"
-
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cache"
@@ -54,7 +50,10 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/vtgate/logstats"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vtgate/vschemaacl"
 
@@ -67,7 +66,7 @@ import (
 
 var (
 	errNoKeyspace     = vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.NoDB, "No database selected: use keyspace<:shard><@type> or keyspace<[range]><@type> (<> are optional)")
-	defaultTabletType topodatapb.TabletType
+	defaultTabletType = topodatapb.TabletType_PRIMARY
 
 	// TODO: @rafael - These two counters should be deprecated in favor of the ByTable ones. They are kept for now for backwards compatibility.
 	queriesProcessed = stats.NewCountersWithSingleLabel("QueriesProcessed", "Queries processed at vtgate by plan type", "Plan")
@@ -82,7 +81,14 @@ const (
 )
 
 func init() {
-	topoproto.TabletTypeVar(&defaultTabletType, "default_tablet_type", topodatapb.TabletType_PRIMARY, "The default tablet type to set for queries, when one is not explicitly selected")
+	registerTabletTypeFlag := func(fs *pflag.FlagSet) {
+		fs.Var((*topoproto.TabletTypeFlag)(&defaultTabletType), "default_tablet_type", "The default tablet type to set for queries, when one is not explicitly selected.")
+	}
+
+	servenv.OnParseFor("vtgate", registerTabletTypeFlag)
+	servenv.OnParseFor("vtgateclienttest", registerTabletTypeFlag)
+	servenv.OnParseFor("vtcombo", registerTabletTypeFlag)
+	servenv.OnParseFor("vtexplain", registerTabletTypeFlag)
 }
 
 // Executor is the engine that executes queries by utilizing

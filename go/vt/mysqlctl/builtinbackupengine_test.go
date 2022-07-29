@@ -47,7 +47,7 @@ func createBackupDir(root string, dirs ...string) error {
 func TestExecuteBackup(t *testing.T) {
 	// Set up local backup directory
 	backupRoot := "testdata/builtinbackup_test"
-	*filebackupstorage.FileBackupStorageRoot = backupRoot
+	filebackupstorage.FileBackupStorageRoot = backupRoot
 	require.NoError(t, createBackupDir(backupRoot, "innodb", "log", "datadir"))
 	defer os.RemoveAll(backupRoot)
 
