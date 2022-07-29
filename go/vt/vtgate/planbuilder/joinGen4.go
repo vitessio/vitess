@@ -17,7 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -78,7 +77,7 @@ func (j *joinGen4) Inputs() []logicalPlan {
 // Rewrite implements the logicalPlan interface
 func (j *joinGen4) Rewrite(inputs ...logicalPlan) error {
 	if len(inputs) != 2 {
-		return vterrors.New(vtrpcpb.Code_INTERNAL, "wrong number of children")
+		return vterrors.VT13001("wrong number of children")
 	}
 	j.Left = inputs[0]
 	j.Right = inputs[1]

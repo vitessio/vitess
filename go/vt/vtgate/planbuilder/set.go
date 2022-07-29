@@ -27,7 +27,6 @@ import (
 
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/key"
@@ -95,13 +94,13 @@ func buildSetPlan(stmt *sqlparser.Set, vschema plancontext.VSchema) (*planResult
 			}
 			val, ok := value.(string)
 			if !ok {
-				return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValueForVar, "unexpected value type for '%s': %v", expr.Var.Name, value)
+				return nil, vterrors.VT03009(expr.Var.Name, value)
 			}
 
 			setOps = append(setOps,
 				&engine.VitessMetadata{Name: expr.Var.Name.Lowered(), Value: val})
 		default:
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: undefined set type: %v", expr.Var.Scope.ToString())
+			return nil, vterrors.VT13001(fmt.Sprintf("undefined set type: %v", expr.Var.Scope.ToString()))
 		}
 	}
 
@@ -118,13 +117,13 @@ func buildSetPlan(stmt *sqlparser.Set, vschema plancontext.VSchema) (*planResult
 
 func buildSetOpReadOnly(setting) planFunc {
 	return func(expr *sqlparser.SetExpr, schema plancontext.VSchema, _ *expressionConverter) (engine.SetOp, error) {
-		return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.IncorrectGlobalLocalVar, "variable '%s' is a read only variable", expr.Var.Name)
+		return nil, vterrors.VT03010(expr.Var.Name)
 	}
 }
 
 func buildNotSupported(setting) planFunc {
 	return func(expr *sqlparser.SetExpr, schema plancontext.VSchema, _ *expressionConverter) (engine.SetOp, error) {
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%s: system setting is not supported", expr.Var.Name)
+		return nil, vterrors.VT12001(fmt.Sprintf("%s: system setting is not supported", expr.Var.Name))
 	}
 }
 
@@ -199,7 +198,7 @@ func buildSetOpVitessAware(s setting) planFunc {
 		_, isDefault := astExpr.Expr.(*sqlparser.Default)
 		if isDefault {
 			if s.defaultValue == nil {
-				return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, defaultNotSupportedErrFmt, astExpr.Var.Name)
+				return nil, vterrors.VT12001(fmt.Sprintf(defaultNotSupportedErrFmt, astExpr.Var.Name))
 			}
 			runtimeExpr = s.defaultValue
 		} else {
@@ -252,7 +251,7 @@ func extractValue(expr *sqlparser.SetExpr, boolean bool) (string, error) {
 		return fmt.Sprintf("'%s'", sqlparser.String(expr.Expr)), nil
 
 	case *sqlparser.Default:
-		return "", vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, defaultNotSupportedErrFmt, expr.Var.Name)
+		return "", vterrors.VT12001(defaultNotSupportedErrFmt, expr.Var.Name)
 	}
 
 	return sqlparser.String(expr.Expr), nil
@@ -277,7 +276,7 @@ func getValueFor(expr *sqlparser.SetExpr) (any, error) {
 			}
 			return num, nil
 		default:
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid value type: %v", sqlparser.String(expr))
+			return nil, vterrors.VT03011(sqlparser.String(expr))
 		}
 	case sqlparser.BoolVal:
 		var val int64
@@ -292,6 +291,6 @@ func getValueFor(expr *sqlparser.SetExpr) (any, error) {
 	case *sqlparser.Default:
 		return "default", nil
 	default:
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid syntax: %s", sqlparser.String(expr))
+		return nil, vterrors.VT03012(sqlparser.String(expr))
 	}
 }

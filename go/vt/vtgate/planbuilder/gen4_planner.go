@@ -17,8 +17,9 @@ limitations under the License.
 package planbuilder
 
 import (
+	"fmt"
+
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -39,7 +40,7 @@ func gen4Planner(query string, plannerVersion querypb.ExecuteOptions_PlannerVers
 		case *sqlparser.Update:
 			return gen4UpdateStmtPlanner(plannerVersion, stmt, reservedVars, vschema)
 		default:
-			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%T not yet supported", stmt)
+			return nil, vterrors.VT12001(fmt.Sprintf("%T", stmt))
 		}
 	}
 }
@@ -54,11 +55,11 @@ func gen4SelectStmtPlanner(
 	switch node := stmt.(type) {
 	case *sqlparser.Select:
 		if node.With != nil {
-			return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: with expression in select statement")
+			return nil, vterrors.VT12001("with expression in select statement")
 		}
 	case *sqlparser.Union:
 		if node.With != nil {
-			return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: with expression in union statement")
+			return nil, vterrors.VT12001("with expression in union statement")
 		}
 	}
 
@@ -246,7 +247,7 @@ func gen4UpdateStmtPlanner(
 	vschema plancontext.VSchema,
 ) (*planResult, error) {
 	if updStmt.With != nil {
-		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: with expression in update statement")
+		return nil, vterrors.VT12001("with expression in update statement")
 	}
 
 	ksName := ""

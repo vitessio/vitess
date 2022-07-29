@@ -17,7 +17,6 @@ limitations under the License.
 package physical
 
 import (
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
@@ -93,7 +92,7 @@ func (d *Derived) findOutputColumn(name *sqlparser.ColName) (int, error) {
 			if exp.As.IsEmpty() {
 				col, ok := exp.Expr.(*sqlparser.ColName)
 				if !ok {
-					return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "complex expression needs column alias: %s", sqlparser.String(exp))
+					return 0, vterrors.VT12001("complex expression needs column alias: %s", sqlparser.String(exp))
 				}
 				if name.Name.Equal(col.Name) {
 					return j, nil
@@ -108,5 +107,5 @@ func (d *Derived) findOutputColumn(name *sqlparser.ColName) (int, error) {
 	if hasStar {
 		return -1, nil
 	}
-	return 0, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.BadFieldError, "Unknown column '%s' in 'field list'", name.Name.String())
+	return 0, vterrors.VT03014(name.Name.String(), "field list")
 }

@@ -17,7 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -97,7 +96,7 @@ func newJoin(lpb, rpb *primitiveBuilder, ajoin *sqlparser.JoinTableExpr, reserve
 				return err
 			}
 		case ajoin.Condition.Using != nil:
-			return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: join with USING(column_list) clause for complex queries")
+			return vterrors.VT12001("join with USING(column_list) clause for complex queries")
 		}
 	}
 	lpb.plan = &join{
@@ -227,7 +226,7 @@ func (jb *join) SupplyWeightString(colNumber int, alsoAddToGroupBy bool) (weight
 // Rewrite implements the logicalPlan interface
 func (jb *join) Rewrite(inputs ...logicalPlan) error {
 	if len(inputs) != 2 {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "join: wrong number of inputs")
+		return vterrors.VT13001("join: wrong number of inputs")
 	}
 	jb.Left = inputs[0]
 	jb.Right = inputs[1]

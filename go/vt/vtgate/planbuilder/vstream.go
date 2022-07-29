@@ -68,8 +68,6 @@ func buildVStreamPlan(stmt *sqlparser.VStream, vschema plancontext.VSchema) (*pl
 	}), nil
 }
 
-const errWhereFormat = "where clause can only be of the type 'pos > <value>'"
-
 func getVStreamStartPos(stmt *sqlparser.VStream) (string, error) {
 	var colName, pos string
 	if stmt.Where != nil {
@@ -84,14 +82,14 @@ func getVStreamStartPos(stmt *sqlparser.VStream) (string, error) {
 					}
 					colName = strings.ToLower(c.Name.String())
 					if colName != "pos" {
-						return "", vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.SyntaxError, errWhereFormat)
+						return "", vterrors.VT03017()
 					}
 				}
 			} else {
-				return "", vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.SyntaxError, errWhereFormat)
+				return "", vterrors.VT03017()
 			}
 		default:
-			return "", vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.SyntaxError, errWhereFormat)
+			return "", vterrors.VT03017()
 		}
 	}
 	return pos, nil

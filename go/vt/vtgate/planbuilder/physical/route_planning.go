@@ -35,8 +35,6 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
-
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 type (
@@ -122,7 +120,7 @@ func CreatePhysicalOperator(ctx *plancontext.PlanningContext, opTree abstract.Lo
 			}
 			if dest != nil {
 				if typ != topodatapb.TabletType_PRIMARY {
-					return nil, vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.InnodbReadOnly, "unsupported: update statement with a replica target")
+					return nil, vterrors.VT12001("update statement with a replica target")
 				}
 				// we are dealing with an explicitly targeted UPDATE
 				opCode = engine.ByDestination
@@ -158,12 +156,12 @@ func CreatePhysicalOperator(ctx *plancontext.PlanningContext, opTree abstract.Lo
 
 		if r.RouteOpCode == engine.Scatter && op.AST.Limit != nil {
 			// TODO systay: we should probably check for other op code types - IN could also hit multiple shards (2022-04-07)
-			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "multi shard update with limit is not supported")
+			return nil, vterrors.VT12001("multi shard update with limit is not supported")
 		}
 
 		return r, nil
 	default:
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid operator tree: %T", op)
+		return nil, vterrors.VT13001(fmt.Sprintf("invalid operator tree: %T", op))
 	}
 }
 
@@ -253,7 +251,7 @@ func createRoute(ctx *plancontext.PlanningContext, table *abstract.QueryTable, s
 	}
 	vschemaTable, _, _, _, target, err := ctx.VSchema.FindTableOrVindex(table.Table)
 	if target != nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: SELECT with a target destination")
+		return nil, vterrors.VT12001("SELECT with a target destination")
 	}
 	if err != nil {
 		return nil, err
@@ -264,7 +262,7 @@ func createRoute(ctx *plancontext.PlanningContext, table *abstract.QueryTable, s
 		table.Table.Name = vschemaTable.Name
 		astTable, ok := table.Alias.Expr.(sqlparser.TableName)
 		if !ok {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] a derived table should never be a routed table")
+			return nil, vterrors.VT13001("a derived table should never be a routed table")
 		}
 		realTableName := sqlparser.NewIdentifierCS(vschemaTable.Name.String())
 		astTable.Name = realTableName
@@ -461,7 +459,7 @@ func mergeRoutes(ctx *plancontext.PlanningContext, qg *abstract.QueryGraph, phys
 			physicalOps = append(physicalOps, bestTree)
 		} else {
 			if crossJoinsOK {
-				return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "should not happen")
+				return nil, vterrors.VT13001("should not happen")
 			}
 			// we will only fail to find a join plan when there are only cross joins left
 			// when that happens, we switch over to allow cross joins as well.
@@ -664,7 +662,7 @@ func tryMerge(
 			return nil, nil
 		}
 		if !sameKeyspace {
-			return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard correlated subquery")
+			return nil, vterrors.VT12001("cross-shard correlated subquery")
 		}
 
 		canMerge := canMergeOnFilters(ctx, aRoute, bRoute, joinPredicates)
@@ -901,7 +899,7 @@ func VisitOperators(op abstract.PhysicalOperator, f func(tbl abstract.PhysicalOp
 			}
 		}
 	default:
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unknown operator type while visiting - %T", op)
+		return vterrors.VT13001(fmt.Sprintf("unknown operator type while visiting - %T", op))
 	}
 	return nil
 }
@@ -1021,7 +1019,7 @@ func pushJoinPredicates(
 		op.Predicates = append(op.Predicates, exprs...)
 		return op, nil
 	default:
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unknown type %T pushJoinPredicates", op)
+		return nil, vterrors.VT13001(fmt.Sprintf("unknown type %T pushJoinPredicates", op))
 	}
 }
 
