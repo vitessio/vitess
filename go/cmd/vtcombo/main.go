@@ -28,15 +28,12 @@ import (
 	"strings"
 	"time"
 
-	"vitess.io/vitess/go/vt/env"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-
-	"vitess.io/vitess/go/vt/vttest"
-
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/exit"
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/env"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
@@ -48,7 +45,9 @@ import (
 	"vitess.io/vitess/go/vt/vtcombo"
 	"vitess.io/vitess/go/vt/vtctld"
 	"vitess.io/vitess/go/vt/vtgate"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"vitess.io/vitess/go/vt/vttest"
 	"vitess.io/vitess/go/vt/wrangler"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -160,10 +159,10 @@ func main() {
 	servenv.Init()
 	tabletenv.Init()
 
-	var mysqld *mysqlctl.Mysqld
+	mysqld := &vtcomboMysqld{}
 	var cnf *mysqlctl.Mycnf
 	if *startMysql {
-		mysqld, cnf = startMysqld(1)
+		mysqld.Mysqld, cnf = startMysqld(1)
 		servenv.OnClose(func() {
 			mysqld.Shutdown(context.TODO(), cnf, true)
 		})
@@ -172,7 +171,7 @@ func main() {
 
 	} else {
 		dbconfigs.GlobalDBConfigs.InitWithSocket("")
-		mysqld = mysqlctl.NewMysqld(&dbconfigs.GlobalDBConfigs)
+		mysqld.Mysqld = mysqlctl.NewMysqld(&dbconfigs.GlobalDBConfigs)
 		servenv.OnClose(mysqld.Close)
 	}
 
@@ -274,4 +273,42 @@ func main() {
 		ts.Close()
 	})
 	servenv.RunDefault()
+}
+
+// vtcomboMysqld is a wrapper on top of mysqlctl.Mysqld.
+// We need this wrapper because vtcombo runs with a single MySQL instance
+// which all the tablets connect to. (replica, primary, all). This means that we shouldn't
+// be trying to run any replication related commands on it, otherwise they fail.
+type vtcomboMysqld struct {
+	*mysqlctl.Mysqld
+}
+
+// SetReplicationSource implements the MysqlDaemon interface
+func (mysqld *vtcomboMysqld) SetReplicationSource(ctx context.Context, host string, port int, replicationStopBefore bool, replicationStartAfter bool) error {
+	return nil
+}
+
+//StartReplication implements the MysqlDaemon interface
+func (mysqld *vtcomboMysqld) StartReplication(hookExtraEnv map[string]string) error {
+	return nil
+}
+
+//RestartReplication implements the MysqlDaemon interface
+func (mysqld *vtcomboMysqld) RestartReplication(hookExtraEnv map[string]string) error {
+	return nil
+}
+
+//StartReplicationUntilAfter implements the MysqlDaemon interface
+func (mysqld *vtcomboMysqld) StartReplicationUntilAfter(ctx context.Context, pos mysql.Position) error {
+	return nil
+}
+
+//StopReplication implements the MysqlDaemon interface
+func (mysqld *vtcomboMysqld) StopReplication(hookExtraEnv map[string]string) error {
+	return nil
+}
+
+// SetSemiSyncEnabled implements the MysqlDaemon interface
+func (mysqld *vtcomboMysqld) SetSemiSyncEnabled(source, replica bool) error {
+	return nil
 }
