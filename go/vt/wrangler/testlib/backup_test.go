@@ -143,8 +143,18 @@ func testBackupRestore(t *testing.T, cDetails *compressionDetails) error {
 	for _, s := range []string{sourceInnodbDataDir, sourceInnodbLogDir, sourceDataDbDir} {
 		require.NoError(t, os.MkdirAll(s, os.ModePerm))
 	}
+
+	needIt, err := needInnoDBRedoLogSubdir()
+	require.NoError(t, err)
+	if needIt {
+		newPath := path.Join(sourceInnodbLogDir, mysql.DynamicRedoLogSubdir)
+		require.NoError(t, os.Mkdir(newPath, os.ModePerm))
+		require.NoError(t, os.WriteFile(path.Join(newPath, "#ib_redo1"), []byte("innodb log 1 contents"), os.ModePerm))
+	} else {
+		require.NoError(t, os.WriteFile(path.Join(sourceInnodbLogDir, "innodb_log_1"), []byte("innodb log 1 contents"), os.ModePerm))
+	}
+
 	require.NoError(t, os.WriteFile(path.Join(sourceInnodbDataDir, "innodb_data_1"), []byte("innodb data 1 contents"), os.ModePerm))
-	require.NoError(t, os.WriteFile(path.Join(sourceInnodbLogDir, "innodb_log_1"), []byte("innodb log 1 contents"), os.ModePerm))
 	require.NoError(t, os.WriteFile(path.Join(sourceDataDbDir, "db.opt"), []byte("db opt file"), os.ModePerm))
 
 	// create a primary tablet, set its primary position
@@ -250,7 +260,7 @@ func testBackupRestore(t *testing.T, cDetails *compressionDetails) error {
 		RelayLogInfoPath:      path.Join(root, "relay-log.info"),
 	}
 
-	err := destTablet.TM.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */, time.Time{} /* backupTime */)
+	err = destTablet.TM.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */, time.Time{} /* backupTime */)
 	if err != nil {
 		return err
 	}
@@ -360,7 +370,17 @@ func TestBackupRestoreLagged(t *testing.T) {
 		require.NoError(t, os.MkdirAll(s, os.ModePerm))
 	}
 	require.NoError(t, os.WriteFile(path.Join(sourceInnodbDataDir, "innodb_data_1"), []byte("innodb data 1 contents"), os.ModePerm))
-	require.NoError(t, os.WriteFile(path.Join(sourceInnodbLogDir, "innodb_log_1"), []byte("innodb log 1 contents"), os.ModePerm))
+
+	needIt, err := needInnoDBRedoLogSubdir()
+	require.NoError(t, err)
+	if needIt {
+		newPath := path.Join(sourceInnodbLogDir, mysql.DynamicRedoLogSubdir)
+		require.NoError(t, os.Mkdir(newPath, os.ModePerm))
+		require.NoError(t, os.WriteFile(path.Join(newPath, "#ib_redo1"), []byte("innodb log 1 contents"), os.ModePerm))
+	} else {
+		require.NoError(t, os.WriteFile(path.Join(sourceInnodbLogDir, "innodb_log_1"), []byte("innodb log 1 contents"), os.ModePerm))
+	}
+
 	require.NoError(t, os.WriteFile(path.Join(sourceDataDbDir, "db.opt"), []byte("db opt file"), os.ModePerm))
 
 	// create a primary tablet, set its position
@@ -564,7 +584,17 @@ func TestRestoreUnreachablePrimary(t *testing.T) {
 		require.NoError(t, os.MkdirAll(s, os.ModePerm))
 	}
 	require.NoError(t, os.WriteFile(path.Join(sourceInnodbDataDir, "innodb_data_1"), []byte("innodb data 1 contents"), os.ModePerm))
-	require.NoError(t, os.WriteFile(path.Join(sourceInnodbLogDir, "innodb_log_1"), []byte("innodb log 1 contents"), os.ModePerm))
+
+	needIt, err := needInnoDBRedoLogSubdir()
+	require.NoError(t, err)
+	if needIt {
+		newPath := path.Join(sourceInnodbLogDir, mysql.DynamicRedoLogSubdir)
+		require.NoError(t, os.Mkdir(newPath, os.ModePerm))
+		require.NoError(t, os.WriteFile(path.Join(newPath, "#ib_redo1"), []byte("innodb log 1 contents"), os.ModePerm))
+	} else {
+		require.NoError(t, os.WriteFile(path.Join(sourceInnodbLogDir, "innodb_log_1"), []byte("innodb log 1 contents"), os.ModePerm))
+	}
+
 	require.NoError(t, os.WriteFile(path.Join(sourceDataDbDir, "db.opt"), []byte("db opt file"), os.ModePerm))
 
 	// create a primary tablet, set its primary position
@@ -724,7 +754,17 @@ func TestDisableActiveReparents(t *testing.T) {
 		require.NoError(t, os.MkdirAll(s, os.ModePerm))
 	}
 	require.NoError(t, os.WriteFile(path.Join(sourceInnodbDataDir, "innodb_data_1"), []byte("innodb data 1 contents"), os.ModePerm))
-	require.NoError(t, os.WriteFile(path.Join(sourceInnodbLogDir, "innodb_log_1"), []byte("innodb log 1 contents"), os.ModePerm))
+
+	needIt, err := needInnoDBRedoLogSubdir()
+	require.NoError(t, err)
+	if needIt {
+		newPath := path.Join(sourceInnodbLogDir, mysql.DynamicRedoLogSubdir)
+		require.NoError(t, os.Mkdir(newPath, os.ModePerm))
+		require.NoError(t, os.WriteFile(path.Join(newPath, "#ib_redo1"), []byte("innodb log 1 contents"), os.ModePerm))
+	} else {
+		require.NoError(t, os.WriteFile(path.Join(sourceInnodbLogDir, "innodb_log_1"), []byte("innodb log 1 contents"), os.ModePerm))
+	}
+
 	require.NoError(t, os.WriteFile(path.Join(sourceDataDbDir, "db.opt"), []byte("db opt file"), os.ModePerm))
 
 	// create a primary tablet, set its primary position
@@ -821,4 +861,25 @@ func TestDisableActiveReparents(t *testing.T) {
 	require.NoError(t, destTablet.FakeMysqlDaemon.CheckSuperQueryList(), "destTablet.FakeMysqlDaemon.CheckSuperQueryList failed")
 	assert.False(t, destTablet.FakeMysqlDaemon.Replicating)
 	assert.True(t, destTablet.FakeMysqlDaemon.Running)
+}
+
+// needInnoDBRedoLogSubdir indicates whether we need to create a redo log subdirectory.
+// Starting with MySQL 8.0.30, the InnoDB redo logs are stored in a subdirectory of the
+// <innodb_log_group_home_dir> (<datadir>/. by default) called "#innodb_redo". See:
+//   https://dev.mysql.com/doc/refman/8.0/en/innodb-redo-log.html#innodb-modifying-redo-log-capacity
+func needInnoDBRedoLogSubdir() (needIt bool, err error) {
+	mysqldVersionStr, err := mysqlctl.GetVersionString()
+	if err != nil {
+		return needIt, err
+	}
+	_, sv, err := mysqlctl.ParseVersionString(mysqldVersionStr)
+	if err != nil {
+		return needIt, err
+	}
+	versionStr := fmt.Sprintf("%d.%d.%d", sv.Major, sv.Minor, sv.Patch)
+	_, capableOf, _ := mysql.GetFlavor(versionStr, nil)
+	if capableOf == nil {
+		return needIt, fmt.Errorf("cannot determine database flavor details for version %s", versionStr)
+	}
+	return capableOf(mysql.DynamicRedoLogCapacityFlavorCapability)
 }
