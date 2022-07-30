@@ -61,6 +61,12 @@ func TestTabletInitialBackup(t *testing.T) {
 	// Initialize the tablets
 	initTablets(t, false, false)
 
+	for _, tablet := range localCluster.Keyspaces[0].Shards[0].Vttablets {
+		if _, err := tablet.VttabletProcess.QueryTabletWithReadOnlyHandling("SET GLOBAL read_only='OFF'", "", false); err != nil {
+			log.Info("")
+		}
+	}
+
 	// Restore the Tablets
 	restore(t, primary, "replica", "NOT_SERVING")
 	err := localCluster.VtctlclientProcess.ExecuteCommand(
@@ -113,10 +119,10 @@ func firstBackupTest(t *testing.T, tabletType string) {
 	require.Nil(t, err)
 
 	// insert data on primary, wait for replica to get it
-	_, err = primary.VttabletProcess.QueryTablet(vtInsertTest, keyspaceName, true)
+	_, err = primary.VttabletProcess.QueryTabletWithReadOnlyHandling(vtInsertTest, keyspaceName, true)
 	require.Nil(t, err)
 	// Add a single row with value 'test1' to the primary tablet
-	_, err = primary.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test1')", keyspaceName, true)
+	_, err = primary.VttabletProcess.QueryTabletWithReadOnlyHandling("insert into vt_insert_test (msg) values ('test1')", keyspaceName, true)
 	require.Nil(t, err)
 
 	// Check that the specified tablet has the expected number of rows
@@ -131,7 +137,7 @@ func firstBackupTest(t *testing.T, tabletType string) {
 	verifyBackupCount(t, shardKsName, len(backups)+1)
 
 	// insert more data on the primary
-	_, err = primary.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test2')", keyspaceName, true)
+	_, err = primary.VttabletProcess.QueryTabletWithReadOnlyHandling("insert into vt_insert_test (msg) values ('test2')", keyspaceName, true)
 	require.Nil(t, err)
 	cluster.VerifyRowsInTablet(t, replica1, keyspaceName, 2)
 
@@ -160,7 +166,6 @@ func firstBackupTest(t *testing.T, tabletType string) {
 
 	removeBackups(t)
 	verifyBackupCount(t, shardKsName, 0)
-
 }
 
 func vtBackup(t *testing.T, initialBackup bool, restartBeforeBackup bool) {
@@ -227,7 +232,7 @@ func initTablets(t *testing.T, startTablet bool, initShardPrimary bool) {
 			require.Nil(t, err)
 		}
 	}
-
+	time.Sleep(10 * time.Second)
 	if initShardPrimary {
 		// choose primary and start replication
 		err := localCluster.VtctlclientProcess.InitShardPrimary(keyspaceName, shardName, cell, primary.TabletUID)
