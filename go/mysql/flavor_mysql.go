@@ -400,6 +400,8 @@ func (mysqlFlavor80) supportsCapability(serverVersion string, capability FlavorC
 		return true, nil
 	case MySQLUpgradeInServerFlavorCapability:
 		return ServerVersionAtLeast(serverVersion, 8, 0, 16)
+	case DynamicRedoLogCapacityFlavorCapability:
+		return ServerVersionAtLeast(serverVersion, 8, 0, 30)
 	default:
 		return false, nil
 	}
