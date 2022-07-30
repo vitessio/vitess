@@ -332,7 +332,7 @@ func (stc *ScatterConn) processOneStreamingResult(mu *sync.Mutex, fieldSent *boo
 	} else {
 		if len(qr.Fields) == 0 {
 			// Unreachable: this can happen only if vttablet misbehaves.
-			return vterrors.New(vtrpcpb.Code_INTERNAL, "received rows before fields")
+			return vterrors.VT13001("received rows before fields")
 		}
 		*fieldSent = true
 	}
@@ -697,7 +697,7 @@ func (stc *ScatterConn) ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedSha
 	defer stc.endLockAction(startTime, allErrors, statsKey, &err)
 
 	if session == nil || session.Session == nil {
-		return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "session cannot be nil")
+		return nil, vterrors.VT13001("session cannot be nil")
 	}
 
 	opts = session.Session.Options
@@ -838,9 +838,9 @@ func lockInfo(target *querypb.Target, session *SafeSession, lockFuncType sqlpars
 	// TODO: after release 14.0, uncomment this line.
 	// This commented for backward compatiblity as there is a specific check in vttablet for lock functions,
 	// to always be on reserved connection.
-	//if lockFuncType != sqlparser.GetLock {
+	// if lockFuncType != sqlparser.GetLock {
 	//	return info, nil
-	//}
+	// }
 	if info.reservedID == 0 {
 		info.actionNeeded = reserve
 	}

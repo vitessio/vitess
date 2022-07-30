@@ -65,7 +65,7 @@ import (
 )
 
 var (
-	errNoKeyspace     = vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.NoDB, "No database selected: use keyspace<:shard><@type> or keyspace<[range]><@type> (<> are optional)")
+	errNoKeyspace     = vterrors.VT09005()
 	defaultTabletType = topodatapb.TabletType_PRIMARY
 
 	// TODO: @rafael - These two counters should be deprecated in favor of the ByTable ones. They are kept for now for backwards compatibility.

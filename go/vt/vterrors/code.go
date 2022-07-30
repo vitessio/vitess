@@ -70,6 +70,13 @@ var (
 	VT13001 = errorWithoutState("VT13001", vtrpcpb.Code_INTERNAL, "[BUG] %s", "aa")
 	VT13002 = errorWithoutState("VT13002", vtrpcpb.Code_INTERNAL, "unexpected AST struct for query: %s", "aa")
 
+	VT14001 = errorWithoutState("VT14001", vtrpcpb.Code_UNAVAILABLE, "Connection error", "aa")
+	VT14002 = errorWithoutState("VT14002", vtrpcpb.Code_UNAVAILABLE, "No available connection", "aa")
+	VT14003 = errorWithoutState("VT14003", vtrpcpb.Code_UNAVAILABLE, "No connection for tablet %v", "aa")
+
+	VT17001 = errorWithoutState("VT17001", vtrpcpb.Code_CLUSTER_EVENT, "operation not allowed in state NOT_SERVING during query: %s", "aa")
+	VT17002 = errorWithoutState("VT17002", vtrpcpb.Code_CLUSTER_EVENT, "invalid tablet type: REPLICA, want: PRIMARY", "aa")
+
 	Errors = []func(args ...any) *OurError{
 		VT03001,
 		VT03002,
@@ -111,6 +118,11 @@ var (
 		VT12001,
 		VT13001,
 		VT13002,
+		VT14001,
+		VT14002,
+		VT14003,
+		VT17001,
+		VT17002,
 	}
 )
 

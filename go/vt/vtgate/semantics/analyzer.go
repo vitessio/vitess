@@ -256,11 +256,11 @@ func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 	switch node := cursor.Node().(type) {
 	case *sqlparser.Update:
 		if len(node.TableExprs) != 1 {
-			return UnshardedError{Inner: vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: multiple tables in update")}
+			return UnshardedError{Inner: vterrors.VT12001("multiple tables in update")}
 		}
 		alias, isAlias := node.TableExprs[0].(*sqlparser.AliasedTableExpr)
 		if !isAlias {
-			return UnshardedError{Inner: vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: multiple tables in update")}
+			return UnshardedError{Inner: vterrors.VT12001("multiple tables in update")}
 		}
 		_, isDerived := alias.Expr.(*sqlparser.DerivedTable)
 		if isDerived {
@@ -305,7 +305,7 @@ func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 		}
 	case *sqlparser.JoinTableExpr:
 		if node.Join == sqlparser.NaturalJoinType || node.Join == sqlparser.NaturalRightJoinType || node.Join == sqlparser.NaturalLeftJoinType {
-			return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: "+node.Join.ToString())
+			return vterrors.VT12001(node.Join.ToString())
 		}
 	case *sqlparser.LockingFunc:
 		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%v allowed only with dual", sqlparser.String(node))
@@ -329,7 +329,7 @@ func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 			return err
 		}
 	case *sqlparser.JSONTableExpr:
-		return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: json_table expressions")
+		return vterrors.VT12001("json_table expressions")
 	}
 
 	return nil
