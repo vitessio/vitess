@@ -365,7 +365,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <expr> expression naked_like group_by
 %type <tableExprs> table_references cte_list from_opt
 %type <with> with_clause
-%type <tableExpr> table_reference table_function table_factor join_table common_table_expression // json_table
+%type <tableExpr> table_reference table_function table_factor join_table common_table_expression
 %type <simpleTableExpr> values_statement subquery_or_values
 %type <subquery> subquery
 %type <joinCondition> join_condition join_condition_opt on_expression_opt
@@ -4294,7 +4294,6 @@ table_references:
 table_reference:
   table_factor
 | join_table
-//| json_table
 
 table_factor:
   aliased_table_name
@@ -4422,9 +4421,10 @@ partition_list:
   }
 
 table_function:
+  // TODO: handle NESTED
   JSON_TABLE openb STRING ',' STRING COLUMNS openb table_column_list closeb closeb AS table_alias
   {
-    $$ = &JSONTableExpr{Data: string($3), Path: string($5), Columns: $8, Alias: $12}
+    $$ = &JSONTableExpr{Data: $3, Path: string($5), Columns: $8, Alias: $12}
   }
 | ID openb argument_expression_list_opt closeb
   {
