@@ -68,6 +68,7 @@ type (
 	resourceWrapper struct {
 		resource Resource
 		timeUsed time.Time
+		err      error // opening error
 	}
 
 	// ResourcePool allows you to use a pool of resources.

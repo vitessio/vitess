@@ -1,0 +1,358 @@
+/*
+Copyright 2022 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+// Package pools provides functionality to manage and reuse resources
+// like connections.
+package pools
+
+import (
+	"context"
+	"sync"
+	"time"
+)
+
+var _ IResourcePool = (*DynamicResourcePool)(nil)
+var _ refreshPool = (*DynamicResourcePool)(nil)
+
+// DynamicResourcePool the design is inspired from the golang database/sql package
+// whose source code is governed by a BSD-style license.
+type DynamicResourcePool struct {
+	f Factory // function that creates a new resource when needed.
+
+	mu            sync.Mutex // protects following
+	closed        bool
+	rawConnection []*resourceWrapper
+	connRequests  map[uint64]chan resourceWrapper
+	nextRequest   uint64
+	maxCapacity   int // maximum number of resources in the pool
+	numOpen       int // number of open resources
+	// Used to signal the need for new connections
+	// a goroutine running resourceOpener() reads on this chan and
+	// mayCreateResourceLocked sends on the chan (one send per needed connection)
+	// It is closed during dp.Close(). The close tells the resourceOpener
+	// goroutine to exit.
+	openerCh chan struct{}
+
+	cancel func() // cancel stops the connection opener.
+}
+
+func NewDynamicResourcePool(factory Factory, maxCap int) *DynamicResourcePool {
+	if maxCap <= 0 {
+		// TODO: we can look at it if we want to support unlimited capacity.
+		panic("pool capacity must be greater than 0")
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	pool := &DynamicResourcePool{
+		f:            factory,
+		maxCapacity:  maxCap,
+		openerCh:     make(chan struct{}, 1000000),
+		connRequests: make(map[uint64]chan resourceWrapper),
+		cancel:       cancel,
+	}
+
+	go pool.resourceOpener(ctx)
+
+	return pool
+}
+
+func (dp *DynamicResourcePool) Name() string {
+	return "DynamicResourcePool"
+}
+
+// Runs in a separate goroutine, opens new connections when requested.
+func (dp *DynamicResourcePool) resourceOpener(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-dp.openerCh:
+			dp.openNewResource(ctx)
+		}
+	}
+}
+
+// Open one new resource
+func (dp *DynamicResourcePool) openNewResource(ctx context.Context) {
+	// mayCreateResourceLocked has already executed dp.numOpen++ before it sent
+	// on dp.openerCh. This function must execute dp.numOpen-- if the
+	// connection fails or is closed before returning.
+	resource, err := dp.f(ctx)
+	dp.mu.Lock()
+	defer dp.mu.Unlock()
+	if dp.closed {
+		if err == nil {
+			resource.Close()
+		}
+		dp.numOpen--
+		return
+	}
+	if err != nil {
+		dp.numOpen--
+		dp.putLocked(nil, err)
+		dp.mayCreateResourceLocked()
+		return
+	}
+
+	added := dp.putLocked(resource, err)
+	if !added {
+		dp.numOpen--
+		resource.Close()
+	}
+}
+
+func (dp *DynamicResourcePool) Get(ctx context.Context) (resource Resource, err error) {
+	dp.mu.Lock()
+	if dp.closed {
+		// pool is closed, return error
+		dp.mu.Unlock()
+		return nil, ErrClosed
+	}
+	// 1: Check if the context is expired.
+	select {
+	default:
+	case <-ctx.Done():
+		dp.mu.Unlock()
+		return nil, ctx.Err()
+	}
+	// 2: Check if there are resources available.
+	last := len(dp.rawConnection) - 1
+	if last >= 0 {
+		conn := dp.rawConnection[last]
+		dp.rawConnection = dp.rawConnection[:last]
+		dp.mu.Unlock()
+		return conn.resource, nil
+	}
+	// 3: Check if the pool is at maxCapacity.
+	if dp.numOpen >= dp.maxCapacity {
+		// make a request channel.
+		req := make(chan resourceWrapper, 1)
+		dp.nextRequest++
+		reqKey := dp.nextRequest
+		dp.connRequests[reqKey] = req
+		dp.mu.Unlock()
+
+		select {
+		case <-ctx.Done():
+			// Timeout happened.
+			// Removing the connection request and ensure no value has been sent on the channel.
+			dp.mu.Lock()
+			delete(dp.connRequests, reqKey)
+			dp.mu.Unlock()
+
+			select {
+			default:
+			case ret, ok := <-req:
+				if ok && ret.resource != nil {
+					dp.Put(ret.resource)
+				}
+			}
+			return nil, ctx.Err()
+		case ret, ok := <-req:
+			if !ok {
+				return nil, ErrClosed
+			}
+			if ret.resource == nil {
+				return nil, ret.err
+			}
+			return ret.resource, nil
+		}
+	}
+	// 4: Create a new resource.
+	dp.numOpen++ // optimistically increase the number of open resources.
+	dp.mu.Unlock()
+	resource, err = dp.f(ctx)
+	if err != nil {
+		dp.mu.Lock()
+		dp.numOpen-- // undo optimistic increase.
+		dp.mayCreateResourceLocked()
+		dp.mu.Unlock()
+		return nil, err
+	}
+	return resource, nil
+}
+
+// Put puts the resource back into the pool.
+func (dp *DynamicResourcePool) Put(resource Resource) {
+	dp.mu.Lock()
+	if resource == nil {
+		// the resource was probably closed outside.
+		// so, decrement numOpen and create the difference
+		dp.numOpen--
+		dp.mayCreateResourceLocked()
+		dp.mu.Unlock()
+		return
+	}
+	added := dp.putLocked(resource, nil)
+	dp.mu.Unlock()
+
+	if !added {
+		dp.resourceClose(resource)
+		return
+	}
+
+}
+
+func (dp *DynamicResourcePool) putLocked(resource Resource, err error) bool {
+	if dp.closed {
+		return false
+	}
+	if dp.numOpen > dp.maxCapacity {
+		return false
+	}
+	if reqC := len(dp.connRequests); reqC > 0 {
+		var req chan resourceWrapper
+		var reqKey uint64
+		for reqKey, req = range dp.connRequests {
+			break
+		}
+		delete(dp.connRequests, reqKey) // Remove from pending requests.
+		req <- resourceWrapper{
+			resource: resource,
+			err:      err,
+		}
+		return true
+	}
+	if err == nil {
+		dp.rawConnection = append(dp.rawConnection, &resourceWrapper{resource: resource})
+		return true
+	}
+	return false
+}
+
+func (dp *DynamicResourcePool) resourceClose(resource Resource) {
+	resource.Close()
+	dp.mu.Lock()
+	dp.numOpen--
+	dp.mayCreateResourceLocked()
+	dp.mu.Unlock()
+}
+
+// Assumes dp.mu is locked.
+// If there are connRequests and the resource limit hasn't been reached,
+// then open new resources.
+func (dp *DynamicResourcePool) mayCreateResourceLocked() {
+	if dp.closed {
+		return
+	}
+	numRequests := len(dp.connRequests)
+	numCanOpen := dp.maxCapacity - dp.numOpen
+	if numRequests > numCanOpen {
+		numRequests = numCanOpen
+	}
+	for numRequests > 0 {
+		dp.numOpen++ // optimistically
+		numRequests--
+		dp.openerCh <- struct{}{}
+	}
+}
+
+func (dp *DynamicResourcePool) Close() {
+	dp.mu.Lock()
+	if dp.closed { // idempotent
+		dp.mu.Unlock()
+		return
+	}
+
+	copyResources := make([]*resourceWrapper, 0, len(dp.rawConnection))
+	copyResources = append(copyResources, dp.rawConnection...)
+
+	dp.rawConnection = nil
+	dp.closed = true
+	for _, req := range dp.connRequests {
+		close(req)
+	}
+	dp.mu.Unlock()
+	for _, r := range copyResources {
+		dp.resourceClose(r.resource)
+	}
+	dp.cancel() // stops the resource opener.
+}
+
+func (dp *DynamicResourcePool) reopen() {
+	//TODO implement me
+	panic("i	mplement me")
+}
+
+func (dp *DynamicResourcePool) closeIdleResources() {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (dp *DynamicResourcePool) SetCapacity(capacity int) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (dp *DynamicResourcePool) SetIdleTimeout(idleTimeout time.Duration) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (dp *DynamicResourcePool) StatsJSON() string {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (dp *DynamicResourcePool) Capacity() int64 {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (dp *DynamicResourcePool) Available() int64 {
+	dp.mu.Lock()
+	defer dp.mu.Unlock()
+	return int64(dp.numOpen)
+}
+
+func (dp *DynamicResourcePool) Active() int64 {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (dp *DynamicResourcePool) InUse() int64 {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (dp *DynamicResourcePool) MaxCap() int64 {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (dp *DynamicResourcePool) WaitCount() int64 {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (dp *DynamicResourcePool) WaitTime() time.Duration {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (dp *DynamicResourcePool) IdleTimeout() time.Duration {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (dp *DynamicResourcePool) IdleClosed() int64 {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (dp *DynamicResourcePool) Exhausted() int64 {
+	//TODO implement me
+	panic("implement me")
+}
