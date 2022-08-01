@@ -17,9 +17,8 @@ limitations under the License.
 package topo
 
 import (
-	"sort"
-
 	"context"
+	"sort"
 )
 
 // Conn defines the interface that must be implemented by topology
@@ -120,17 +119,13 @@ type Conn interface {
 
 	// Watch starts watching a file in the provided cell.  It
 	// returns the current value, a 'changes' channel to read the
-	// changes from, and a 'cancel' function to call to stop the
-	// watch.  If the initial read fails, or the file doesn't
-	// exist, current.Err is set, and 'changes'/'cancel' are nil.
-	// Otherwise current.Err is nil, and current.Contents /
-	// current.Version are accurate. The provided context is only
-	// used to setup the current watch, and not after Watch()
-	// returns.
+	// changes from, and an error.
+	// If the initial read fails, or the file doesn't
+	// exist, an error is returned.
 	//
-	// To stop the watch, just call the returned 'cancel' function.
+	// To stop the watch, cancel the provided context.
 	// This will eventually result in a final WatchData result with Err =
-	// ErrInterrupted. It should be safe to call the 'cancel' function
+	// ErrInterrupted. It should be safe to cancel the context
 	// multiple times, or after the Watch already errored out.
 	//
 	// The 'changes' channel may return a record with Err != nil.
@@ -158,7 +153,7 @@ type Conn interface {
 	// being correct quickly, as long as it eventually gets there.
 	//
 	// filePath is a path relative to the root directory of the cell.
-	Watch(ctx context.Context, filePath string) (current *WatchData, changes <-chan *WatchData, cancel CancelFunc)
+	Watch(ctx context.Context, filePath string) (current *WatchData, changes <-chan *WatchData, err error)
 
 	//
 	// Leader election methods. This is meant to have a small
