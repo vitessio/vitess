@@ -2512,7 +2512,9 @@ func TestExecutorVtExplain(t *testing.T) {
 	})
 	qr, err := executor.Execute(ctx, "TestExecutorVtExplain", session, "explain format=vtexplain select * from user where name = 'apa'", nil)
 	require.NoError(t, err)
-	fmt.Printf("%v\n", qr.Rows)
+	txt := fmt.Sprintf("%v\n", qr.Rows)
+	lookupQuery := "select `name`, user_id from name_user_map where `name` in"
+	require.Contains(t, txt, lookupQuery)
 }
 
 func exec(executor *Executor, session *SafeSession, sql string) (*sqltypes.Result, error) {
