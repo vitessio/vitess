@@ -25,6 +25,9 @@ import (
 	"vitess.io/vitess/go/test/endtoend/reparent/utils"
 )
 
+// TestCrossCellDurability tests 2 things -
+// 1. When PRS is run with the cross_cell durability policy setup, then the semi-sync settings on all the tablets are as expected
+// 2. Bringing up a new vttablet should have its replication and semi-sync setup correctly without any external interference
 func TestCrossCellDurability(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	clusterInstance := utils.SetupReparentCluster(t, "cross_cell")
@@ -50,5 +53,16 @@ func TestCrossCellDurability(t *testing.T) {
 	// others are in Cell1, so all of them are eligible to send semi-sync ACKs
 	for _, tablet := range tablets {
 		utils.CheckSemiSyncSetupCorrectly(t, tablet, "ON")
+	}
+
+	for i, supportsBackup := range []bool{false, true} {
+		// Bring up a new replica tablet
+		// In this new tablet, we do not disable active reparents, otherwise replication will not be started.
+		newReplica := utils.StartNewVTTablet(t, clusterInstance, 300+i, supportsBackup)
+		// Add the tablet to the list of tablets in this shard
+		clusterInstance.Keyspaces[0].Shards[0].Vttablets = append(clusterInstance.Keyspaces[0].Shards[0].Vttablets, newReplica)
+		// Check that we can replicate to it and semi-sync is setup correctly on it
+		utils.ConfirmReplication(t, tablets[3], []*cluster.Vttablet{tablets[0], tablets[1], tablets[2], newReplica})
+		utils.CheckSemiSyncSetupCorrectly(t, newReplica, "ON")
 	}
 }

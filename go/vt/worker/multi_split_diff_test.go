@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vttablet/grpcqueryservice"
 	"vitess.io/vitess/go/vt/vttablet/queryservice/fakes"
@@ -308,6 +309,45 @@ func testMultiSplitDiff(t *testing.T, v3 bool) {
 			excludedTable:            excludedTable,
 			shardIndex:               1,
 		})
+	}
+
+	sourceRdonly1.FakeMysqlDaemon.SetReplicationSourceInputs = append(sourceRdonly1.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(sourcePrimary.Tablet))
+	sourceRdonly1.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		// These 2 statements come from tablet startup
+		"FAKE SET MASTER",
+		"START SLAVE",
+	}
+	sourceRdonly2.FakeMysqlDaemon.SetReplicationSourceInputs = append(sourceRdonly2.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(sourcePrimary.Tablet))
+	sourceRdonly2.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		// These 2 statements come from tablet startup
+		"FAKE SET MASTER",
+		"START SLAVE",
+	}
+
+	leftRdonly1.FakeMysqlDaemon.SetReplicationSourceInputs = append(leftRdonly1.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(leftPrimary.Tablet))
+	leftRdonly1.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		// These 2 statements come from tablet startup
+		"FAKE SET MASTER",
+		"START SLAVE",
+	}
+	leftRdonly2.FakeMysqlDaemon.SetReplicationSourceInputs = append(leftRdonly2.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(leftPrimary.Tablet))
+	leftRdonly2.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		// These 2 statements come from tablet startup
+		"FAKE SET MASTER",
+		"START SLAVE",
+	}
+
+	rightRdonly1.FakeMysqlDaemon.SetReplicationSourceInputs = append(rightRdonly1.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(rightPrimary.Tablet))
+	rightRdonly1.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		// These 2 statements come from tablet startup
+		"FAKE SET MASTER",
+		"START SLAVE",
+	}
+	rightRdonly2.FakeMysqlDaemon.SetReplicationSourceInputs = append(rightRdonly2.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(rightPrimary.Tablet))
+	rightRdonly2.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		// These 2 statements come from tablet startup
+		"FAKE SET MASTER",
+		"START SLAVE",
 	}
 
 	// Start action loop after having registered all RPC services.

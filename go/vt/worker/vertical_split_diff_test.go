@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vttablet/grpcqueryservice"
 	"vitess.io/vitess/go/vt/vttablet/queryservice/fakes"
@@ -182,6 +183,32 @@ func TestVerticalSplitDiff(t *testing.T) {
 
 			StreamHealthQueryService: qs,
 		})
+	}
+
+	sourceRdonly1.FakeMysqlDaemon.SetReplicationSourceInputs = append(sourceRdonly1.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(sourcePrimary.Tablet))
+	sourceRdonly1.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		// These 2 statements come from tablet startup
+		"FAKE SET MASTER",
+		"START SLAVE",
+	}
+	sourceRdonly2.FakeMysqlDaemon.SetReplicationSourceInputs = append(sourceRdonly2.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(sourcePrimary.Tablet))
+	sourceRdonly2.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		// These 2 statements come from tablet startup
+		"FAKE SET MASTER",
+		"START SLAVE",
+	}
+
+	destRdonly1.FakeMysqlDaemon.SetReplicationSourceInputs = append(destRdonly1.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(destPrimary.Tablet))
+	destRdonly1.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		// These 2 statements come from tablet startup
+		"FAKE SET MASTER",
+		"START SLAVE",
+	}
+	destRdonly2.FakeMysqlDaemon.SetReplicationSourceInputs = append(destRdonly2.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(destPrimary.Tablet))
+	destRdonly2.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		// These 2 statements come from tablet startup
+		"FAKE SET MASTER",
+		"START SLAVE",
 	}
 
 	// Start action loop after having registered all RPC services.

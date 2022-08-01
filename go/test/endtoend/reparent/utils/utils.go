@@ -195,6 +195,52 @@ func setupShard(ctx context.Context, t *testing.T, clusterInstance *cluster.Loca
 	WaitForReplicationToStart(t, clusterInstance, KeyspaceName, shardName, len(tablets), true)
 }
 
+// StartNewVTTablet starts a new vttablet instance
+func StartNewVTTablet(t *testing.T, clusterInstance *cluster.LocalProcessCluster, uuid int, supportsBackup bool) *cluster.Vttablet {
+	tablet := clusterInstance.NewVttabletInstance("replica", uuid, cell1)
+	keyspace := clusterInstance.Keyspaces[0]
+	shard := keyspace.Shards[0]
+
+	// Setup MysqlctlProcess
+	tablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory)
+	// Setup VttabletProcess
+	tablet.VttabletProcess = cluster.VttabletProcessInstance(
+		tablet.HTTPPort,
+		tablet.GrpcPort,
+		tablet.TabletUID,
+		tablet.Cell,
+		shard.Name,
+		keyspace.Name,
+		clusterInstance.VtctldProcess.Port,
+		tablet.Type,
+		clusterInstance.TopoProcess.Port,
+		clusterInstance.Hostname,
+		clusterInstance.TmpDirectory,
+		[]string{
+			"--lock_tables_timeout", "5s",
+			"--init_populate_metadata",
+			"--track_schema_versions=true",
+			"--queryserver_enable_online_ddl=false",
+		},
+		clusterInstance.EnableSemiSync,
+		clusterInstance.DefaultCharset)
+	tablet.VttabletProcess.SupportsBackup = supportsBackup
+
+	log.Infof("Starting MySql for tablet %v", tablet.Alias)
+	proc, err := tablet.MysqlctlProcess.StartProcess()
+	require.NoError(t, err, "Error starting start mysql")
+	if err := proc.Wait(); err != nil {
+		clusterInstance.PrintMysqlctlLogFiles()
+		require.FailNow(t, "Error starting mysql: %s", err.Error())
+	}
+
+	err = tablet.VttabletProcess.Setup()
+	require.NoError(t, err)
+	err = tablet.VttabletProcess.WaitForTabletStatuses([]string{"SERVING", "NOT_SERVING"})
+	require.NoError(t, err)
+	return tablet
+}
+
 //endregion
 
 //region database queries
@@ -387,20 +433,33 @@ func isHealthyPrimaryTablet(t *testing.T, clusterInstance *cluster.LocalProcessC
 func CheckInsertedValues(ctx context.Context, t *testing.T, tablet *cluster.Vttablet, index int) error {
 	query := fmt.Sprintf("select msg from vt_insert_test where id=%d", index)
 	tabletParams := getMysqlConnParam(tablet)
-	conn, err := mysql.Connect(ctx, &tabletParams)
-	require.Nil(t, err)
-	defer conn.Close()
+	var conn *mysql.Conn
 
 	// wait until it gets the data
 	timeout := time.Now().Add(replicationWaitTimeout)
 	i := 0
 	for time.Now().Before(timeout) {
-		// We'll get a mysql.ERNoSuchTable (1146) error if the CREATE TABLE has not replicated yet and
-		// it's possible that we get other ephemeral errors too, so we make the tests more robust by
-		// retrying with the timeout.
-		qr, err := conn.ExecuteFetch(query, 1, true)
-		if err == nil && len(qr.Rows) == 1 {
-			return nil
+		// We start with no connection to MySQL
+		if conn == nil {
+			// Try connecting to MySQL
+			mysqlConn, err := mysql.Connect(ctx, &tabletParams)
+			// This can fail if the database create hasn't been replicated yet.
+			// We ignore this failure and try again later
+			if err == nil {
+				// If we succeed, then we store the connection
+				// and reuse it for checking the rows in the table.
+				conn = mysqlConn
+				defer conn.Close()
+			}
+		}
+		if conn != nil {
+			// We'll get a mysql.ERNoSuchTable (1146) error if the CREATE TABLE has not replicated yet and
+			// it's possible that we get other ephemeral errors too, so we make the tests more robust by
+			// retrying with the timeout.
+			qr, err := conn.ExecuteFetch(query, 1, true)
+			if err == nil && len(qr.Rows) == 1 {
+				return nil
+			}
 		}
 		t := time.Duration(300 * i)
 		time.Sleep(t * time.Millisecond)

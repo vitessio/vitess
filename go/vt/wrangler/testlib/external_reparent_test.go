@@ -258,6 +258,12 @@ func TestTabletExternallyReparentedWithDifferentMysqlPort(t *testing.T) {
 
 	// On the good replicas, we will respond to
 	// TabletActionReplicaWasRestarted and point to the new mysql port
+	goodReplica.FakeMysqlDaemon.SetReplicationSourceInputs = append(goodReplica.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(oldPrimary.Tablet))
+	goodReplica.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		// These 2 statements come from tablet startup
+		"FAKE SET MASTER",
+		"START SLAVE",
+	}
 	goodReplica.StartActionLoop(t, wr)
 	defer goodReplica.StopActionLoop(t)
 
@@ -339,6 +345,12 @@ func TestTabletExternallyReparentedContinueOnUnexpectedPrimary(t *testing.T) {
 
 	// On the good replica, we will respond to
 	// TabletActionReplicaWasRestarted and point to a bad host
+	goodReplica.FakeMysqlDaemon.SetReplicationSourceInputs = append(goodReplica.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(oldPrimary.Tablet))
+	goodReplica.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		// These 2 statements come from tablet startup
+		"FAKE SET MASTER",
+		"START SLAVE",
+	}
 	goodReplica.StartActionLoop(t, wr)
 	defer goodReplica.StopActionLoop(t)
 
@@ -414,9 +426,14 @@ func TestTabletExternallyReparentedRerun(t *testing.T) {
 	oldPrimary.StartActionLoop(t, wr)
 	defer oldPrimary.StopActionLoop(t)
 
-	goodReplica.FakeMysqlDaemon.SetReplicationSourceInputs = append(goodReplica.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(newPrimary.Tablet))
+	goodReplica.FakeMysqlDaemon.SetReplicationSourceInputs = append(goodReplica.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(newPrimary.Tablet), topoproto.MysqlAddr(oldPrimary.Tablet))
 	// On the good replica, we will respond to
 	// TabletActionReplicaWasRestarted.
+	goodReplica.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		// These 2 statements come from tablet startup
+		"FAKE SET MASTER",
+		"START SLAVE",
+	}
 	goodReplica.StartActionLoop(t, wr)
 	defer goodReplica.StopActionLoop(t)
 

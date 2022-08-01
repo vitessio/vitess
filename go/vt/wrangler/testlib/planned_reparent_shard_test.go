@@ -112,8 +112,11 @@ func TestPlannedReparentShardNoPrimaryProvided(t *testing.T) {
 	// good replica 1 is replicating
 	goodReplica1.FakeMysqlDaemon.ReadOnly = true
 	goodReplica1.FakeMysqlDaemon.Replicating = true
-	goodReplica1.FakeMysqlDaemon.SetReplicationSourceInputs = append(goodReplica1.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(newPrimary.Tablet))
+	goodReplica1.FakeMysqlDaemon.SetReplicationSourceInputs = append(goodReplica1.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(newPrimary.Tablet), topoproto.MysqlAddr(oldPrimary.Tablet))
 	goodReplica1.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		// These 2 statements come from tablet startup
+		"FAKE SET MASTER",
+		"START SLAVE",
 		"STOP SLAVE",
 		"FAKE SET MASTER",
 		"START SLAVE",
@@ -224,8 +227,11 @@ func TestPlannedReparentShardNoError(t *testing.T) {
 	// goodReplica1 is replicating
 	goodReplica1.FakeMysqlDaemon.ReadOnly = true
 	goodReplica1.FakeMysqlDaemon.Replicating = true
-	goodReplica1.FakeMysqlDaemon.SetReplicationSourceInputs = append(goodReplica1.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(newPrimary.Tablet))
+	goodReplica1.FakeMysqlDaemon.SetReplicationSourceInputs = append(goodReplica1.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(newPrimary.Tablet), topoproto.MysqlAddr(oldPrimary.Tablet))
 	goodReplica1.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		// These 2 statements come from tablet startup
+		"FAKE SET MASTER",
+		"START SLAVE",
 		"STOP SLAVE",
 		"FAKE SET MASTER",
 		"START SLAVE",
@@ -235,12 +241,15 @@ func TestPlannedReparentShardNoError(t *testing.T) {
 
 	// goodReplica2 is not replicating
 	goodReplica2.FakeMysqlDaemon.ReadOnly = true
-	goodReplica2.FakeMysqlDaemon.Replicating = false
-	goodReplica2.FakeMysqlDaemon.SetReplicationSourceInputs = append(goodReplica2.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(newPrimary.Tablet))
-	goodReplica2.StartActionLoop(t, wr)
+	goodReplica2.FakeMysqlDaemon.SetReplicationSourceInputs = append(goodReplica2.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(newPrimary.Tablet), topoproto.MysqlAddr(oldPrimary.Tablet))
 	goodReplica2.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		// These 2 statements come from tablet startup
+		"FAKE SET MASTER",
+		"START SLAVE",
 		"FAKE SET MASTER",
 	}
+	goodReplica2.StartActionLoop(t, wr)
+	goodReplica2.FakeMysqlDaemon.Replicating = false
 	defer goodReplica2.StopActionLoop(t)
 
 	// run PlannedReparentShard
@@ -434,8 +443,11 @@ func TestPlannedReparentShardWaitForPositionFail(t *testing.T) {
 	// good replica 1 is replicating
 	goodReplica1.FakeMysqlDaemon.ReadOnly = true
 	goodReplica1.FakeMysqlDaemon.Replicating = true
-	goodReplica1.FakeMysqlDaemon.SetReplicationSourceInputs = append(goodReplica1.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(newPrimary.Tablet))
+	goodReplica1.FakeMysqlDaemon.SetReplicationSourceInputs = append(goodReplica1.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(newPrimary.Tablet), topoproto.MysqlAddr(oldPrimary.Tablet))
 	goodReplica1.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		// These 2 statements come from tablet startup
+		"FAKE SET MASTER",
+		"START SLAVE",
 		"STOP SLAVE",
 		"FAKE SET MASTER",
 		"START SLAVE",
@@ -445,12 +457,15 @@ func TestPlannedReparentShardWaitForPositionFail(t *testing.T) {
 
 	// good replica 2 is not replicating
 	goodReplica2.FakeMysqlDaemon.ReadOnly = true
-	goodReplica2.FakeMysqlDaemon.Replicating = false
-	goodReplica2.FakeMysqlDaemon.SetReplicationSourceInputs = append(goodReplica2.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(newPrimary.Tablet))
-	goodReplica2.StartActionLoop(t, wr)
+	goodReplica2.FakeMysqlDaemon.SetReplicationSourceInputs = append(goodReplica2.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(newPrimary.Tablet), topoproto.MysqlAddr(oldPrimary.Tablet))
 	goodReplica2.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		// These 2 statements come from tablet startup
+		"FAKE SET MASTER",
+		"START SLAVE",
 		"FAKE SET MASTER",
 	}
+	goodReplica2.StartActionLoop(t, wr)
+	goodReplica2.FakeMysqlDaemon.Replicating = false
 	defer goodReplica2.StopActionLoop(t)
 
 	// run PlannedReparentShard
@@ -535,23 +550,29 @@ func TestPlannedReparentShardWaitForPositionTimeout(t *testing.T) {
 	// good replica 1 is replicating
 	goodReplica1.FakeMysqlDaemon.ReadOnly = true
 	goodReplica1.FakeMysqlDaemon.Replicating = true
-	goodReplica1.FakeMysqlDaemon.SetReplicationSourceInputs = append(goodReplica1.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(newPrimary.Tablet))
+	goodReplica1.FakeMysqlDaemon.SetReplicationSourceInputs = append(goodReplica1.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(newPrimary.Tablet), topoproto.MysqlAddr(oldPrimary.Tablet))
 	goodReplica1.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		// These 2 statements come from tablet startup
+		"FAKE SET MASTER",
+		"START SLAVE",
 		"STOP SLAVE",
 		"FAKE SET MASTER",
-		"START replica",
+		"START SLAVE",
 	}
 	goodReplica1.StartActionLoop(t, wr)
 	defer goodReplica1.StopActionLoop(t)
 
 	// good replica 2 is not replicating
 	goodReplica2.FakeMysqlDaemon.ReadOnly = true
-	goodReplica2.FakeMysqlDaemon.Replicating = false
-	goodReplica2.FakeMysqlDaemon.SetReplicationSourceInputs = append(goodReplica2.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(newPrimary.Tablet))
-	goodReplica2.StartActionLoop(t, wr)
+	goodReplica2.FakeMysqlDaemon.SetReplicationSourceInputs = append(goodReplica2.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(newPrimary.Tablet), topoproto.MysqlAddr(oldPrimary.Tablet))
 	goodReplica2.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		// These 2 statements come from tablet startup
+		"FAKE SET MASTER",
+		"START SLAVE",
 		"FAKE SET MASTER",
 	}
+	goodReplica2.StartActionLoop(t, wr)
+	goodReplica2.FakeMysqlDaemon.Replicating = false
 	defer goodReplica2.StopActionLoop(t)
 
 	// run PlannedReparentShard
@@ -607,14 +628,17 @@ func TestPlannedReparentShardRelayLogError(t *testing.T) {
 	goodReplica1.FakeMysqlDaemon.ReadOnly = true
 	goodReplica1.FakeMysqlDaemon.Replicating = true
 	goodReplica1.FakeMysqlDaemon.SetReplicationSourceInputs = append(goodReplica1.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(primary.Tablet))
-	// simulate error that will trigger a call to RestartReplication
-	goodReplica1.FakeMysqlDaemon.SetReplicationSourceError = errors.New("Slave failed to initialize relay log info structure from the repository")
 	goodReplica1.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		// These 2 statements come from tablet startup
+		"FAKE SET MASTER",
+		"START SLAVE",
+		// simulate error that will trigger a call to RestartReplication
 		"STOP SLAVE",
 		"RESET SLAVE",
 		"START SLAVE",
 	}
 	goodReplica1.StartActionLoop(t, wr)
+	goodReplica1.FakeMysqlDaemon.SetReplicationSourceError = errors.New("Slave failed to initialize relay log info structure from the repository")
 	defer goodReplica1.StopActionLoop(t)
 
 	// run PlannedReparentShard
@@ -687,9 +711,11 @@ func TestPlannedReparentShardRelayLogErrorStartReplication(t *testing.T) {
 	goodReplica1.FakeMysqlDaemon.SetReplicationSourceInputs = append(goodReplica1.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(primary.Tablet))
 	goodReplica1.FakeMysqlDaemon.CurrentSourceHost = primary.Tablet.MysqlHostname
 	goodReplica1.FakeMysqlDaemon.CurrentSourcePort = int(primary.Tablet.MysqlPort)
-	// simulate error that will trigger a call to RestartReplication
-	goodReplica1.FakeMysqlDaemon.StartReplicationError = errors.New("Slave failed to initialize relay log info structure from the repository")
 	goodReplica1.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		// simulate error that will trigger a call to RestartReplication
+		// These 2 statements come from tablet startup
+		"FAKE SET MASTER",
+		"START SLAVE",
 		// In SetReplicationSource, we find that the source host and port was already set correctly,
 		// So we try to stop and start replication. The first STOP SLAVE comes from there
 		"STOP SLAVE",
@@ -699,6 +725,7 @@ func TestPlannedReparentShardRelayLogErrorStartReplication(t *testing.T) {
 		"START SLAVE",
 	}
 	goodReplica1.StartActionLoop(t, wr)
+	goodReplica1.FakeMysqlDaemon.StartReplicationError = errors.New("Slave failed to initialize relay log info structure from the repository")
 	defer goodReplica1.StopActionLoop(t)
 
 	// run PlannedReparentShard
@@ -794,8 +821,11 @@ func TestPlannedReparentShardPromoteReplicaFail(t *testing.T) {
 	// good replica 1 is replicating
 	goodReplica1.FakeMysqlDaemon.ReadOnly = true
 	goodReplica1.FakeMysqlDaemon.Replicating = true
-	goodReplica1.FakeMysqlDaemon.SetReplicationSourceInputs = append(goodReplica1.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(newPrimary.Tablet))
+	goodReplica1.FakeMysqlDaemon.SetReplicationSourceInputs = append(goodReplica1.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(newPrimary.Tablet), topoproto.MysqlAddr(oldPrimary.Tablet))
 	goodReplica1.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		// These 2 statements come from tablet startup
+		"FAKE SET MASTER",
+		"START SLAVE",
 		"STOP SLAVE",
 		"FAKE SET MASTER",
 		"START SLAVE",
@@ -805,12 +835,15 @@ func TestPlannedReparentShardPromoteReplicaFail(t *testing.T) {
 
 	// good replica 2 is not replicating
 	goodReplica2.FakeMysqlDaemon.ReadOnly = true
-	goodReplica2.FakeMysqlDaemon.Replicating = false
-	goodReplica2.FakeMysqlDaemon.SetReplicationSourceInputs = append(goodReplica2.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(newPrimary.Tablet))
-	goodReplica2.StartActionLoop(t, wr)
+	goodReplica2.FakeMysqlDaemon.SetReplicationSourceInputs = append(goodReplica2.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(newPrimary.Tablet), topoproto.MysqlAddr(oldPrimary.Tablet))
 	goodReplica2.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		// These 2 statements come from tablet startup
+		"FAKE SET MASTER",
+		"START SLAVE",
 		"FAKE SET MASTER",
 	}
+	goodReplica2.StartActionLoop(t, wr)
+	goodReplica2.FakeMysqlDaemon.Replicating = false
 	defer goodReplica2.StopActionLoop(t)
 
 	// run PlannedReparentShard
@@ -903,6 +936,9 @@ func TestPlannedReparentShardSamePrimary(t *testing.T) {
 	goodReplica1.FakeMysqlDaemon.Replicating = true
 	goodReplica1.FakeMysqlDaemon.SetReplicationSourceInputs = append(goodReplica1.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(oldPrimary.Tablet))
 	goodReplica1.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		// These 2 statements come from tablet startup
+		"FAKE SET MASTER",
+		"START SLAVE",
 		"STOP SLAVE",
 		"FAKE SET MASTER",
 		"START SLAVE",
@@ -912,12 +948,15 @@ func TestPlannedReparentShardSamePrimary(t *testing.T) {
 
 	// goodReplica2 is not replicating
 	goodReplica2.FakeMysqlDaemon.ReadOnly = true
-	goodReplica2.FakeMysqlDaemon.Replicating = false
 	goodReplica2.FakeMysqlDaemon.SetReplicationSourceInputs = append(goodReplica2.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(oldPrimary.Tablet))
-	goodReplica2.StartActionLoop(t, wr)
 	goodReplica2.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		// These 2 statements come from tablet startup
+		"FAKE SET MASTER",
+		"START SLAVE",
 		"FAKE SET MASTER",
 	}
+	goodReplica2.StartActionLoop(t, wr)
+	goodReplica2.FakeMysqlDaemon.Replicating = false
 	defer goodReplica2.StopActionLoop(t)
 
 	// run PlannedReparentShard

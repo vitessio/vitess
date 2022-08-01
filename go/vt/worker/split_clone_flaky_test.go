@@ -216,7 +216,11 @@ func (tc *splitCloneTestCase) setUpWithConcurrency(v3 bool, concurrency, writeQu
 		sourceRdonly.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
 			GTIDSet: mysql.MariadbGTIDSet{12: mysql.MariadbGTID{Domain: 12, Server: 34, Sequence: 5678}},
 		}
+		sourceRdonly.FakeMysqlDaemon.SetReplicationSourceInputs = append(sourceRdonly.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(sourcePrimary.Tablet))
 		sourceRdonly.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+			// These 2 statements come from tablet startup
+			"FAKE SET MASTER",
+			"START SLAVE",
 			"STOP SLAVE",
 			"START SLAVE",
 		}
@@ -227,10 +231,25 @@ func (tc *splitCloneTestCase) setUpWithConcurrency(v3 bool, concurrency, writeQu
 		grpcqueryservice.Register(sourceRdonly.RPCServer, qs)
 		tc.sourceRdonlyQs = append(tc.sourceRdonlyQs, qs)
 	}
+	leftRdonly1.FakeMysqlDaemon.SetReplicationSourceInputs = append(leftRdonly1.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(leftPrimary.Tablet))
+	leftRdonly2.FakeMysqlDaemon.SetReplicationSourceInputs = append(leftRdonly2.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(leftPrimary.Tablet))
+	leftReplica.FakeMysqlDaemon.SetReplicationSourceInputs = append(leftReplica.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(leftPrimary.Tablet))
+	rightRdonly2.FakeMysqlDaemon.SetReplicationSourceInputs = append(rightRdonly2.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(rightPrimary.Tablet))
+	rightRdonly1.FakeMysqlDaemon.SetReplicationSourceInputs = append(rightRdonly1.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(rightPrimary.Tablet))
+	leftReplica.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		// These 2 statements come from tablet startup
+		"FAKE SET MASTER",
+		"START SLAVE",
+	}
 	// Set up destination rdonlys which will be used as input for the diff during the clone.
 	for i, destRdonly := range []*testlib.FakeTablet{leftRdonly1, rightRdonly1, leftRdonly2, rightRdonly2} {
 		shqs := fakes.NewStreamHealthQueryService(destRdonly.Target())
 		shqs.AddDefaultHealthResponse()
+		destRdonly.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+			// These 2 statements come from tablet startup
+			"FAKE SET MASTER",
+			"START SLAVE",
+		}
 		qs := newTestQueryService(tc.t, destRdonly.Target(), shqs, i%2, 2, topoproto.TabletAliasString(destRdonly.Tablet.Alias), false /* omitKeyspaceID */)
 		grpcqueryservice.Register(destRdonly.RPCServer, qs)
 		if i%2 == 0 {

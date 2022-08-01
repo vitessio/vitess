@@ -141,7 +141,11 @@ func TestVerticalSplitClone(t *testing.T) {
 	sourceRdonly.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{12: mysql.MariadbGTID{Domain: 12, Server: 34, Sequence: 5678}},
 	}
+	sourceRdonly.FakeMysqlDaemon.SetReplicationSourceInputs = append(sourceRdonly.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(sourcePrimary.Tablet))
 	sourceRdonly.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		// These 2 statements come from tablet startup
+		"FAKE SET MASTER",
+		"START SLAVE",
 		"STOP SLAVE",
 		"START SLAVE",
 	}
@@ -167,6 +171,12 @@ func TestVerticalSplitClone(t *testing.T) {
 		destPrimaryQs.addGeneratedRows(verticalSplitCloneTestMin, verticalSplitCloneTestMax)
 	}
 
+	destRdonly.FakeMysqlDaemon.SetReplicationSourceInputs = append(destRdonly.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(destPrimary.Tablet))
+	destRdonly.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		// These 2 statements come from tablet startup
+		"FAKE SET MASTER",
+		"START SLAVE",
+	}
 	// Start action loop after having registered all RPC services.
 	for _, ft := range []*testlib.FakeTablet{sourcePrimary, sourceRdonly, destPrimary, destRdonly} {
 		ft.StartActionLoop(t, wi.wr)
