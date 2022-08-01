@@ -142,8 +142,6 @@ type TabletManagerClient struct {
 	}
 	// keyed by tablet alias.
 	ChangeTabletTypeResult map[string]error
-	// FullStatus result
-	FullStatusResult *replicationdatapb.FullStatus
 	// keyed by tablet alias.
 	DemotePrimaryDelays map[string]time.Duration
 	// keyed by tablet alias.
@@ -172,6 +170,8 @@ type TabletManagerClient struct {
 		Response *hk.HookResult
 		Error    error
 	}
+	// FullStatus result
+	FullStatusResult *replicationdatapb.FullStatus
 	// keyed by tablet alias.
 	GetPermissionsDelays map[string]time.Duration
 	// keyed by tablet alias.
@@ -413,19 +413,6 @@ func (fake *TabletManagerClient) ChangeType(ctx context.Context, tablet *topodat
 	return err
 }
 
-// FullStatus is part of the tmclient.TabletManagerClient interface.
-func (fake *TabletManagerClient) FullStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.FullStatus, error) {
-	if fake.FullStatusResult != nil {
-		return fake.FullStatusResult, nil
-	}
-
-	if fake.TopoServer == nil {
-		return nil, assert.AnError
-	}
-
-	return nil, fmt.Errorf("no output set for FullStatus")
-}
-
 // DemotePrimary is part of the tmclient.TabletManagerClient interface.
 func (fake *TabletManagerClient) DemotePrimary(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
 	if fake.DemotePrimaryResults == nil {
@@ -526,6 +513,19 @@ func (fake *TabletManagerClient) ExecuteHook(ctx context.Context, tablet *topoda
 	}
 
 	return nil, fmt.Errorf("%w: no ExecuteHook result set for tablet %s", assert.AnError, key)
+}
+
+// FullStatus is part of the tmclient.TabletManagerClient interface.
+func (fake *TabletManagerClient) FullStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.FullStatus, error) {
+	if fake.FullStatusResult != nil {
+		return fake.FullStatusResult, nil
+	}
+
+	if fake.TopoServer == nil {
+		return nil, assert.AnError
+	}
+
+	return nil, fmt.Errorf("no output set for FullStatus")
 }
 
 // GetPermission is part of the tmclient.TabletManagerClient interface.
