@@ -386,4 +386,14 @@ type LeaderParticipation interface {
 	// GetCurrentLeaderID returns the current primary id.
 	// This may not work after Stop has been called.
 	GetCurrentLeaderID(ctx context.Context) (string, error)
+
+	// WaitForNewLeader allows for nodes to wait until a leadership
+	// election cycle completes and to get subsequent updates of
+	// leadership changes. This way logic that needs to know if leadership
+	// changes also if we're not the leader ourselves doesn't need to
+	// poll for leadership status.
+	//
+	// For topo implementation that have this, it can be used more
+	// efficiently than needing a busy wait loop.
+	WaitForNewLeader(ctx context.Context) (<-chan string, error)
 }

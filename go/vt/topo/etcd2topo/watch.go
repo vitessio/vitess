@@ -76,6 +76,8 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 		var watchRetries int
 		for {
 			select {
+			case <-s.running:
+				return
 			case <-watchCtx.Done():
 				// This includes context cancellation errors.
 				notifications <- &topo.WatchData{
@@ -87,6 +89,8 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 					if watchRetries > 10 {
 						select {
 						case <-time.After(time.Duration(watchRetries) * time.Second):
+						case <-s.running:
+							continue
 						case <-watchCtx.Done():
 							continue
 						}
@@ -188,6 +192,8 @@ func (s *Server) WatchRecursive(ctx context.Context, dirpath string) ([]*topo.Wa
 		var watchRetries int
 		for {
 			select {
+			case <-s.running:
+				return
 			case <-watchCtx.Done():
 				// This includes context cancellation errors.
 				notifications <- &topo.WatchDataRecursive{
@@ -199,6 +205,8 @@ func (s *Server) WatchRecursive(ctx context.Context, dirpath string) ([]*topo.Wa
 					if watchRetries > 10 {
 						select {
 						case <-time.After(time.Duration(watchRetries) * time.Second):
+						case <-s.running:
+							continue
 						case <-watchCtx.Done():
 							continue
 						}
