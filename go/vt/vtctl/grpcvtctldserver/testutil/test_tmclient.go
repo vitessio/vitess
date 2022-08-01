@@ -40,6 +40,7 @@ import (
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
+	"vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
@@ -329,8 +330,8 @@ func (stream *backupStreamAdapter) Send(msg *logutilpb.Event) error {
 }
 
 // Backup is part of the tmclient.TabletManagerClient interface.
-func (fake *TabletManagerClient) Backup(ctx context.Context, tablet *topodatapb.Tablet, concurrency int, allowPrimary bool) (logutil.EventStream, error) {
-	if tablet.Type == topodatapb.TabletType_PRIMARY && !allowPrimary {
+func (fake *TabletManagerClient) Backup(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdata.BackupRequest) (logutil.EventStream, error) {
+	if tablet.Type == topodatapb.TabletType_PRIMARY && !req.AllowPrimary {
 		return nil, fmt.Errorf("cannot backup primary with allowPrimary=false")
 	}
 

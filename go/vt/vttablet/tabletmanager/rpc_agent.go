@@ -29,6 +29,7 @@ import (
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 // RPCTM defines the interface implemented by the TM for RPCs.
@@ -135,7 +136,7 @@ type RPCTM interface {
 
 	// Backup / restore related methods
 
-	Backup(ctx context.Context, concurrency int, logger logutil.Logger, allowPrimary bool) error
+	Backup(ctx context.Context, logger logutil.Logger, request *vtctldatapb.BackupRequest) error
 
 	RestoreFromBackup(ctx context.Context, logger logutil.Logger, backupTime time.Time) error
 

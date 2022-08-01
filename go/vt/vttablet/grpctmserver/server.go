@@ -21,6 +21,7 @@ import (
 
 	"vitess.io/vitess/go/vt/callerid"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/proto/vtctldata"
 
 	"context"
 
@@ -494,7 +495,8 @@ func (s *server) Backup(request *tabletmanagerdatapb.BackupRequest, stream table
 		})
 	})
 
-	return s.tm.Backup(ctx, int(request.Concurrency), logger, request.AllowPrimary)
+	r := &vtctldata.BackupRequest{Concurrency: uint64(request.Concurrency), AllowPrimary: request.AllowPrimary}
+	return s.tm.Backup(ctx, logger, r)
 }
 
 func (s *server) RestoreFromBackup(request *tabletmanagerdatapb.RestoreFromBackupRequest, stream tabletmanagerservicepb.TabletManager_RestoreFromBackupServer) (err error) {
