@@ -111,5 +111,9 @@ func TopoServerTestSuite(t *testing.T, factory func() *topo.Server) {
 	checkWatch(t, ts)
 	t.Log("=== checkWatchInterrupt")
 	checkWatchInterrupt(t, ts)
+
+	t.Log("=== checkList")
+	checkList(t, ts)
+
 	ts.Close()
 }
