@@ -98,33 +98,39 @@ Backup/Restore now allow you many more options for compression and decompression
 There are some built-in compressors which you can use out-of-the-box. Users will need to evaluate which option works best for their
 use-case. Here are the flags that control this feature
 
-- --builtin-compressor
+- --compression-engine-name
 - --external-compressor
 - --external-decompressor
 - --external-compressor-extension
 - --compression-level
 
-builtin compressor as of today supports the following options
+`--compression-engine-name` specifies the engine used for compression. It can have one of the following values
+
 - pgzip
 - pargzip
 - lz4
 - zstd
+- external
 
-If you want to use any of the builtin compressors, simply set one of the above values for `--builtin-compressor`. During restore the system
-will read the MANIFEST file to get the compressor engine value and use that value for decompression.
+where 'external' is set only when we are using compressor other than the ones mentioned above. If you want to use any of the built-in compressors,
+simply set one of the above values for `--compression-engine-name`. Value specified in `--compression-engine-name` is saved in MANIFEST,
+which is later read by restore routine to decide what engine to use for decompression. Default value for engine is 'pgzip'.
 
 If you would like to use a custom command or external tool for compression/decompression then you need to provide the full command with
 arguments to the `--external-compressor` and `--external-decompressor` flags. `--external-compressor-extension` flag also needs to be provided
-so that compressed files are created with the correct extension. There is no need to override `--builtin-compressor` when using an external
-compressor/decompressor. Please note that if you want the current behavior then you don't need to change anything in these flags.
+so that compressed files are created with the correct extension. If the external command is not using any of the built-in compression engine
+(i-e pgzip, pargzip, lz4 or zstd) then you need to set `--compression-engine-name` to value 'external'.
+
+Please note that if you want the current production behavior then you don't need to change any of these flags.
 You can read more about backup & restore [here] (https://vitess.io/docs/15.0/user-guides/operating-vitess/backup-and-restore/).
 
-Important Note: If you decided to switch from external compressor to built-in compressor at any point in the future. You might need to do it
-in two steps. 
-- step #1, set `--external-compressor` and `--external-compressor-extension` flag values to empty and change `--builtin-compressor` to desired value.
+Important Note: If you decided to switch from external compressor to built-in supported compressors (i-e pgzi,, pargzip, lz4 or zstd) at any point
+in the future. You might need to do it in two steps.
+
+- step #1, set `--external-compressor` and `--external-compressor-extension` flag values to empty and change `--compression-engine-name` to desired value.
 - Step #2, after few cycles of backups now set `--external-decompressor` flag value to empty.
 
-The reason we recommend not to change all the values together is because builtin compressor have no way to find out which external decompressor
+The reason we recommend not to change all the values together is because restore routine have no way to find out which external decompressor
 being used during the previous backups. Please make sure you have thought out all possible scenarios for restore before transitioning from one
 compressor value to the others.
 

@@ -81,7 +81,8 @@ type xtraBackupManifest struct {
 	BackupManifest
 	// CompressionEngine stores which compression engine was originally provided
 	// to compress the files. Please note that if user has provided externalCompressorCmd
-	// then this value will not be used during decompression.
+	// then it will contain value 'external'. This field is used during restore routine to
+	// get a hint about what kind of compression was used.
 	CompressionEngine string `json:",omitempty"`
 	// Name of the backup file
 	FileName string

@@ -241,11 +241,13 @@ func getCompressorArgs(cDetails *CompressionDetails) []string {
 
 }
 
+// update arguments with new values of compressionDetail.
 func updateCompressorArgs(commonArgs []string, cDetails *CompressionDetails) []string {
 	if cDetails == nil {
 		return commonArgs
 	}
 
+	// remove if any compression flag already exists
 	for i, s := range commonArgs {
 		if strings.Contains(s, "--compression-engine-name") || strings.Contains(s, "--external-compressor") ||
 			strings.Contains(s, "--external-compressor-extension") || strings.Contains(s, "--external-decompressor") {
@@ -253,6 +255,7 @@ func updateCompressorArgs(commonArgs []string, cDetails *CompressionDetails) []s
 		}
 	}
 
+	// update it with new values
 	commonArgs = append(commonArgs, getCompressorArgs(cDetails)...)
 	return commonArgs
 }
