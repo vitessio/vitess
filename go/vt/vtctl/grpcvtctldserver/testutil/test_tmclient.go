@@ -142,6 +142,8 @@ type TabletManagerClient struct {
 	}
 	// keyed by tablet alias.
 	ChangeTabletTypeResult map[string]error
+	// FullStatus result
+	FullStatusResult *replicationdatapb.FullStatus
 	// keyed by tablet alias.
 	DemotePrimaryDelays map[string]time.Duration
 	// keyed by tablet alias.
@@ -409,6 +411,19 @@ func (fake *TabletManagerClient) ChangeType(ctx context.Context, tablet *topodat
 
 	_, err := topotools.ChangeType(ctx, fake.TopoServer, tablet.Alias, newType, &vttime.Time{})
 	return err
+}
+
+// FullStatus is part of the tmclient.TabletManagerClient interface.
+func (fake *TabletManagerClient) FullStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.FullStatus, error) {
+	if fake.FullStatusResult != nil {
+		return fake.FullStatusResult, nil
+	}
+
+	if fake.TopoServer == nil {
+		return nil, assert.AnError
+	}
+
+	return nil, fmt.Errorf("no output set for FullStatus")
 }
 
 // DemotePrimary is part of the tmclient.TabletManagerClient interface.
