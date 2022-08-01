@@ -12,7 +12,6 @@ import (
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
 	vtctldata "vitess.io/vitess/go/vt/proto/vtctldata"
-	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 // This is a compile-time assertion to ensure that this generated file
@@ -442,7 +441,7 @@ func (c *vtctldClient) ApplyVSchema(ctx context.Context, in *vtctldata.ApplyVSch
 	return out, nil
 }
 
-func (c *vtctldClient) Backup(ctx context.Context, in *vtctldatapb.BackupRequest, opts ...grpc.CallOption) (Vtctld_BackupClient, error) {
+func (c *vtctldClient) Backup(ctx context.Context, in *vtctldata.BackupRequest, opts ...grpc.CallOption) (Vtctld_BackupClient, error) {
 	stream, err := c.cc.NewStream(ctx, &Vtctld_ServiceDesc.Streams[0], "/vtctlservice.Vtctld/Backup", opts...)
 	if err != nil {
 		return nil, err
