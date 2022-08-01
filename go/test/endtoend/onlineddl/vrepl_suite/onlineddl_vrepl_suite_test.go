@@ -319,7 +319,7 @@ func waitForMigration(t *testing.T, uuid string, timeout time.Duration) sqltypes
 		row := readMigration(t, uuid)
 		status = row["migration_status"].ToString()
 		switch status {
-		case string(schema.OnlineDDLStatusComplete), string(schema.OnlineDDLStatusFailed):
+		case string(schema.OnlineDDLStatusComplete), string(schema.OnlineDDLStatusFailed), string(schema.OnlineDDLStatusCancelled):
 			// migration is complete, either successful or not
 			return row
 		}
