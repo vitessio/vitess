@@ -1420,9 +1420,8 @@ exit $exit_code
 
 		log.Infof("Will now dry-run gh-ost on: %s:%d", variables.host, variables.port)
 		if err := runGhost(false); err != nil {
-			// perhaps gh-ost was interrupted midway and didn't have the chance to send a "failes" status
-			_ = e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusFailed)
-			_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, err.Error())
+			// perhaps gh-ost was interrupted midway and didn't have the chance to send a "failed" status
+			_ = e.failMigration(ctx, onlineDDL, err)
 
 			log.Errorf("Error executing gh-ost dry run: %+v", err)
 			return err
@@ -1433,8 +1432,7 @@ exit $exit_code
 		startedMigrations.Add(1)
 		if err := runGhost(true); err != nil {
 			// perhaps gh-ost was interrupted midway and didn't have the chance to send a "failes" status
-			_ = e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusFailed)
-			_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, err.Error())
+			_ = e.failMigration(ctx, onlineDDL, err)
 			failedMigrations.Add(1)
 			log.Errorf("Error running gh-ost: %+v", err)
 			return err
@@ -1644,8 +1642,7 @@ export MYSQL_PWD
 		log.Infof("Will now dry-run pt-online-schema-change on: %s:%d", variables.host, variables.port)
 		if err := runPTOSC(false); err != nil {
 			// perhaps pt-osc was interrupted midway and didn't have the chance to send a "failes" status
-			_ = e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusFailed)
-			_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, err.Error())
+			_ = e.failMigration(ctx, onlineDDL, err)
 			_ = e.updateMigrationTimestamp(ctx, "completed_timestamp", onlineDDL.UUID)
 			log.Errorf("Error executing pt-online-schema-change dry run: %+v", err)
 			return err
@@ -1656,8 +1653,7 @@ export MYSQL_PWD
 		startedMigrations.Add(1)
 		if err := runPTOSC(true); err != nil {
 			// perhaps pt-osc was interrupted midway and didn't have the chance to send a "failes" status
-			_ = e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusFailed)
-			_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, err.Error())
+			_ = e.failMigration(ctx, onlineDDL, err)
 			_ = e.updateMigrationTimestamp(ctx, "completed_timestamp", onlineDDL.UUID)
 			_ = e.dropPTOSCMigrationTriggers(ctx, onlineDDL)
 			failedMigrations.Add(1)
@@ -1738,7 +1734,6 @@ func (e *Executor) terminateMigration(ctx context.Context, onlineDDL *schema.Onl
 		if err := e.terminateVReplMigration(ctx, onlineDDL.UUID); err != nil {
 			return foundRunning, fmt.Errorf("Error terminating migration, vreplication exec error: %+v", err)
 		}
-		_ = e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusFailed)
 	case schema.DDLStrategyPTOSC:
 		// see if pt-osc is running (could have been executed by this vttablet or one that crashed in the past)
 		if running, pid, _ := e.isPTOSCMigrationRunning(ctx, onlineDDL.UUID); running {
@@ -1794,17 +1789,25 @@ func (e *Executor) CancelMigration(ctx context.Context, uuid string, message str
 	case schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed:
 		log.Infof("CancelMigration: migration %s is in non-cancellable status: %v", uuid, onlineDDL.Status)
 		return emptyResult, nil
+	}
+	// From this point on, we're actually cancelling a migration
+	_ = e.updateMigrationTimestamp(ctx, "cancelled_timestamp", uuid)
+	defer e.failMigration(ctx, onlineDDL, errors.New(message))
+	defer e.triggerNextCheckInterval()
+
+	switch onlineDDL.Status {
 	case schema.OnlineDDLStatusQueued, schema.OnlineDDLStatusReady:
 		log.Infof("CancelMigration: cancelling %s with status: %v", uuid, onlineDDL.Status)
 		if err := e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusCancelled); err != nil {
 			return nil, err
 		}
-		rowsAffected = 1
+		return &sqltypes.Result{RowsAffected: 1}, nil
 	}
-	defer e.triggerNextCheckInterval()
 
 	migrationFound, err := e.terminateMigration(ctx, onlineDDL)
-	defer e.updateMigrationMessage(ctx, onlineDDL.UUID, message)
+	if err != nil {
+		return result, err
+	}
 
 	if migrationFound {
 		log.Infof("CancelMigration: terminated %s with status: %v", uuid, onlineDDL.Status)
@@ -2341,7 +2344,7 @@ func (e *Executor) getCompletedMigrationByContextAndSQL(ctx context.Context, onl
 
 // failMigration marks a migration as failed
 func (e *Executor) failMigration(ctx context.Context, onlineDDL *schema.OnlineDDL, err error) error {
-	_ = e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusFailed)
+	_ = e.updateMigrationStatusFailedOrCancelled(ctx, onlineDDL.UUID)
 	if err != nil {
 		_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, err.Error())
 	}
@@ -3712,6 +3715,18 @@ func (e *Executor) updateTabletFailure(ctx context.Context, uuid string) error {
 		return err
 	}
 	_, err = e.execQuery(ctx, bound)
+	return err
+}
+
+func (e *Executor) updateMigrationStatusFailedOrCancelled(ctx context.Context, uuid string) error {
+	log.Infof("updateMigrationStatus: transitioning migration: %s into status failed or cancelled", uuid)
+	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationStatusFailedOrCancelled,
+		sqltypes.StringBindVariable(uuid),
+	)
+	if err != nil {
+		return err
+	}
+	_, err = e.execQuery(ctx, query)
 	return err
 }
 
