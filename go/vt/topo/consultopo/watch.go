@@ -128,3 +128,12 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 
 	return wd, notifications, nil
 }
+
+// WatchRecursive is part of the topo.Conn interface.
+func (s *Server) WatchRecursive(_ context.Context, path string) ([]*topo.WatchDataRecursive, <-chan *topo.WatchDataRecursive, error) {
+	// This isn't implemented yet, but likely can be implemented using List
+	// with blocking logic like how we use Get with blocking for regular Watch.
+	// See also how https://www.consul.io/docs/dynamic-app-config/watches#keyprefix
+	// works under the hood.
+	return nil, nil, topo.NewError(topo.NoImplementation, path)
+}

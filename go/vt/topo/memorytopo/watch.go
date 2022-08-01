@@ -48,7 +48,7 @@ func (c *Conn) Watch(ctx context.Context, filePath string) (*topo.WatchData, <-c
 	notifications := make(chan *topo.WatchData, 100)
 	watchIndex := nextWatchIndex
 	nextWatchIndex++
-	n.watches[watchIndex] = notifications
+	n.watches[watchIndex] = watch{contents: notifications}
 
 	go func() {
 		<-ctx.Done()
@@ -64,9 +64,58 @@ func (c *Conn) Watch(ctx context.Context, filePath string) (*topo.WatchData, <-c
 
 		if w, ok := n.watches[watchIndex]; ok {
 			delete(n.watches, watchIndex)
-			w <- &topo.WatchData{Err: topo.NewError(topo.Interrupted, "watch")}
-			close(w)
+			w.contents <- &topo.WatchData{Err: topo.NewError(topo.Interrupted, "watch")}
+			close(w.contents)
 		}
 	}()
 	return current, notifications, nil
+}
+
+// WatchRecursive is part of the topo.Conn interface.
+func (c *Conn) WatchRecursive(ctx context.Context, dirpath string) ([]*topo.WatchDataRecursive, <-chan *topo.WatchDataRecursive, error) {
+	c.factory.mu.Lock()
+	defer c.factory.mu.Unlock()
+
+	if c.factory.err != nil {
+		return nil, nil, c.factory.err
+	}
+
+	n := c.factory.getOrCreatePath(c.cell, dirpath)
+	if n == nil {
+		return nil, nil, topo.NewError(topo.NoNode, dirpath)
+	}
+
+	var initialwd []*topo.WatchDataRecursive
+	n.recurseContents(func(n *node) {
+		initialwd = append(initialwd, &topo.WatchDataRecursive{
+			Path: n.name,
+			WatchData: topo.WatchData{
+				Contents: n.contents,
+				Version:  NodeVersion(n.version),
+			},
+		})
+	})
+
+	notifications := make(chan *topo.WatchDataRecursive, 100)
+	watchIndex := nextWatchIndex
+	nextWatchIndex++
+	n.watches[watchIndex] = watch{recursive: notifications}
+
+	go func() {
+		defer close(notifications)
+
+		<-ctx.Done()
+
+		c.factory.mu.Lock()
+		defer c.factory.mu.Unlock()
+
+		n := c.factory.nodeByPath(c.cell, dirpath)
+		if n != nil {
+			delete(n.watches, watchIndex)
+		}
+
+		notifications <- &topo.WatchDataRecursive{WatchData: topo.WatchData{Err: topo.NewError(topo.Interrupted, "watch")}}
+	}()
+
+	return initialwd, notifications, nil
 }

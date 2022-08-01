@@ -243,5 +243,4 @@ func checkList(t *testing.T, ts *topo.Server) {
 			t.Fatalf("found entry doesn't have value \"a\" for path %q: %s", path, string(entries[0].Value))
 		}
 	}
-
 }

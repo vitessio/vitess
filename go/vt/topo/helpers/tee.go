@@ -168,6 +168,10 @@ func (c *TeeConn) Watch(ctx context.Context, filePath string) (*topo.WatchData, 
 	return c.primary.Watch(ctx, filePath)
 }
 
+func (c *TeeConn) WatchRecursive(ctx context.Context, path string) ([]*topo.WatchDataRecursive, <-chan *topo.WatchDataRecursive, error) {
+	return c.primary.WatchRecursive(ctx, path)
+}
+
 //
 // Lock management.
 //

@@ -20,12 +20,11 @@ limitations under the License.
 package memorytopo
 
 import (
+	"context"
 	"math/rand"
 	"strings"
 	"sync"
 	"time"
-
-	"context"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
@@ -146,6 +145,12 @@ func (c *Conn) Close() {
 	c.factory = nil
 }
 
+type watch struct {
+	contents  chan *topo.WatchData
+	recursive chan *topo.WatchDataRecursive
+	lock      chan string
+}
+
 // node contains a directory or a file entry.
 // Exactly one of contents or children is not nil.
 type node struct {
@@ -159,7 +164,7 @@ type node struct {
 	parent *node
 
 	// watches is a map of all watches for this node.
-	watches map[int]chan *topo.WatchData
+	watches map[int]watch
 
 	// lock is nil when the node is not locked.
 	// otherwise it has a channel that is closed by unlock.
@@ -175,11 +180,34 @@ func (n *node) isDirectory() bool {
 	return n.children != nil
 }
 
+func (n *node) recurseContents(callback func(n *node)) {
+	if n.isDirectory() {
+		for _, child := range n.children {
+			child.recurseContents(callback)
+		}
+	} else {
+		callback(n)
+	}
+}
+
+func (n *node) propagateRecursiveWatch(ev *topo.WatchDataRecursive) {
+	for parent := n.parent; parent != nil; parent = parent.parent {
+		for _, w := range parent.watches {
+			if w.recursive != nil {
+				w.recursive <- ev
+			}
+		}
+	}
+}
+
 // PropagateWatchError propagates the given error to all watches on this node
 // and recursively applies to all children
 func (n *node) PropagateWatchError(err error) {
 	for _, ch := range n.watches {
-		ch <- &topo.WatchData{
+		if ch.contents == nil {
+			continue
+		}
+		ch.contents <- &topo.WatchData{
 			Err: err,
 		}
 	}
@@ -230,7 +258,7 @@ func (f *Factory) newFile(name string, contents []byte, parent *node) *node {
 		version:  f.getNextVersion(),
 		contents: contents,
 		parent:   parent,
-		watches:  make(map[int]chan *topo.WatchData),
+		watches:  make(map[int]watch),
 	}
 }
 
@@ -240,6 +268,7 @@ func (f *Factory) newDirectory(name string, parent *node) *node {
 		version:  f.getNextVersion(),
 		children: make(map[string]*node),
 		parent:   parent,
+		watches:  make(map[int]watch),
 	}
 }
 

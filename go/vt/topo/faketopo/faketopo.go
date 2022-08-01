@@ -321,6 +321,10 @@ func (f *FakeConn) Watch(ctx context.Context, filePath string) (*topo.WatchData,
 	return current, notifications, nil
 }
 
+func (f *FakeConn) WatchRecursive(ctx context.Context, path string) ([]*topo.WatchDataRecursive, <-chan *topo.WatchDataRecursive, error) {
+	panic("implement me")
+}
+
 // NewLeaderParticipation implements the Conn interface
 func (f *FakeConn) NewLeaderParticipation(string, string) (topo.LeaderParticipation, error) {
 	panic("implement me")

@@ -95,3 +95,11 @@ func (zs *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, 
 
 	return wd, c, nil
 }
+
+// WatchRecursive is part of the topo.Conn interface.
+func (zs *Server) WatchRecursive(_ context.Context, path string) ([]*topo.WatchDataRecursive, <-chan *topo.WatchDataRecursive, error) {
+	// This isn't implemented yet, but potentially can be implemented if we want
+	// to update the minimum ZooKeeper requirement to 3.6.0 and use recursive watches.
+	// Also see https://zookeeper.apache.org/doc/r3.6.3/zookeeperProgrammers.html#sc_WatchPersistentRecursive
+	return nil, nil, topo.NewError(topo.NoImplementation, path)
+}

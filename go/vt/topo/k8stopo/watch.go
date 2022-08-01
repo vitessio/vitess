@@ -119,3 +119,10 @@ func closeOnDone(ctx context.Context, filePath string, informerChan chan struct{
 	close(informerChan)
 	close(changes)
 }
+
+// WatchRecursive is part of the topo.Conn interface.
+func (s *Server) WatchRecursive(_ context.Context, path string) ([]*topo.WatchDataRecursive, <-chan *topo.WatchDataRecursive, error) {
+	// Kubernetes doesn't seem to provide a primitive that watches a prefix
+	// or directory, so this likely can never be implemented.
+	return nil, nil, topo.NewError(topo.NoImplementation, path)
+}

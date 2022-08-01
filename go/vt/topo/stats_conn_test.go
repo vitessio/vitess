@@ -109,6 +109,11 @@ func (st *fakeConn) Watch(ctx context.Context, filePath string) (current *WatchD
 	return current, changes, err
 }
 
+// WatchRecursive is part of the Conn interface
+func (st *fakeConn) WatchRecursive(ctx context.Context, path string) (current []*WatchDataRecursive, changes <-chan *WatchDataRecursive, err error) {
+	return current, changes, err
+}
+
 // NewLeaderParticipation is part of the Conn interface
 func (st *fakeConn) NewLeaderParticipation(name, id string) (mp LeaderParticipation, err error) {
 	if name == "error" {
