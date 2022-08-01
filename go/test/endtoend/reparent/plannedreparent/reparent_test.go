@@ -26,10 +26,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"google.golang.org/protobuf/encoding/protojson"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/reparent/utils"
 	"vitess.io/vitess/go/vt/log"
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 )
 
 func TestPrimaryToSpareStateChangeImpossible(t *testing.T) {
@@ -449,7 +452,10 @@ func TestFullStatus(t *testing.T) {
 	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
 
 	// Check that full status gives the correct result for a primary tablet
-	primaryStatus, err := utils.TmcFullStatus(context.Background(), tablets[0])
+	primaryStatusString, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("GetFullStatus", tablets[0].Alias)
+	require.NoError(t, err)
+	primaryStatus := &replicationdatapb.FullStatus{}
+	err = protojson.Unmarshal([]byte(primaryStatusString), primaryStatus)
 	require.NoError(t, err)
 	assert.NotEmpty(t, primaryStatus.ServerUuid)
 	assert.NotEmpty(t, primaryStatus.ServerId)
@@ -474,7 +480,10 @@ func TestFullStatus(t *testing.T) {
 	assert.NotEmpty(t, primaryStatus.VersionComment)
 
 	// Check that full status gives the correct result for a replica tablet
-	replicaStatus, err := utils.TmcFullStatus(context.Background(), tablets[1])
+	replicaStatusString, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("GetFullStatus", tablets[1].Alias)
+	require.NoError(t, err)
+	replicaStatus := &replicationdatapb.FullStatus{}
+	err = protojson.Unmarshal([]byte(replicaStatusString), replicaStatus)
 	require.NoError(t, err)
 	assert.NotEmpty(t, replicaStatus.ServerUuid)
 	assert.NotEmpty(t, replicaStatus.ServerId)
