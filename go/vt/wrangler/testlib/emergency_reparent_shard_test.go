@@ -135,8 +135,11 @@ func TestEmergencyReparentShard(t *testing.T) {
 		GTIDSet: goodReplica1RelayLogPos,
 	}
 	goodReplica1.FakeMysqlDaemon.WaitPrimaryPositions = append(goodReplica1.FakeMysqlDaemon.WaitPrimaryPositions, goodReplica1.FakeMysqlDaemon.CurrentSourceFilePosition)
-	goodReplica1.FakeMysqlDaemon.SetReplicationSourceInputs = append(goodReplica1.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(newPrimary.Tablet))
+	goodReplica1.FakeMysqlDaemon.SetReplicationSourceInputs = append(goodReplica1.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(newPrimary.Tablet), topoproto.MysqlAddr(oldPrimary.Tablet))
 	goodReplica1.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		// These 2 statements come from tablet startup
+		"FAKE SET MASTER",
+		"START SLAVE",
 		"STOP SLAVE IO_THREAD",
 		"STOP SLAVE",
 		"FAKE SET MASTER",
@@ -162,11 +165,14 @@ func TestEmergencyReparentShard(t *testing.T) {
 		GTIDSet: goodReplica2RelayLogPos,
 	}
 	goodReplica2.FakeMysqlDaemon.WaitPrimaryPositions = append(goodReplica2.FakeMysqlDaemon.WaitPrimaryPositions, goodReplica2.FakeMysqlDaemon.CurrentSourceFilePosition)
-	goodReplica2.FakeMysqlDaemon.SetReplicationSourceInputs = append(goodReplica2.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(newPrimary.Tablet))
-	goodReplica2.StartActionLoop(t, wr)
+	goodReplica2.FakeMysqlDaemon.SetReplicationSourceInputs = append(goodReplica2.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(newPrimary.Tablet), topoproto.MysqlAddr(oldPrimary.Tablet))
 	goodReplica2.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		// These 2 statements come from tablet startup
+		"FAKE SET MASTER",
+		"START SLAVE",
 		"FAKE SET MASTER",
 	}
+	goodReplica2.StartActionLoop(t, wr)
 	defer goodReplica2.StopActionLoop(t)
 
 	// run EmergencyReparentShard
@@ -257,10 +263,13 @@ func TestEmergencyReparentShardPrimaryElectNotBest(t *testing.T) {
 	moreAdvancedReplica.FakeMysqlDaemon.CurrentSourceFilePosition = mysql.Position{
 		GTIDSet: moreAdvancedReplicaLogPos,
 	}
-	moreAdvancedReplica.FakeMysqlDaemon.SetReplicationSourceInputs = append(moreAdvancedReplica.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(newPrimary.Tablet))
+	moreAdvancedReplica.FakeMysqlDaemon.SetReplicationSourceInputs = append(moreAdvancedReplica.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(newPrimary.Tablet), topoproto.MysqlAddr(oldPrimary.Tablet))
 	moreAdvancedReplica.FakeMysqlDaemon.WaitPrimaryPositions = append(moreAdvancedReplica.FakeMysqlDaemon.WaitPrimaryPositions, moreAdvancedReplica.FakeMysqlDaemon.CurrentSourceFilePosition)
 	newPrimary.FakeMysqlDaemon.WaitPrimaryPositions = append(newPrimary.FakeMysqlDaemon.WaitPrimaryPositions, moreAdvancedReplica.FakeMysqlDaemon.CurrentPrimaryPosition)
 	moreAdvancedReplica.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		// These 2 statements come from tablet startup
+		"FAKE SET MASTER",
+		"START SLAVE",
 		"STOP SLAVE IO_THREAD",
 		"STOP SLAVE",
 		"FAKE SET MASTER",
