@@ -23,9 +23,6 @@ import (
 	"path"
 	"time"
 
-	"vitess.io/vitess/go/vt/proto/tabletmanagerdata"
-	"vitess.io/vitess/go/vt/proto/vschema"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/grpcclient"
@@ -34,6 +31,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
+	"vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
@@ -900,7 +898,7 @@ func (itmc *internalTabletManagerClient) PromoteReplica(context.Context, *topoda
 	return "", fmt.Errorf("not implemented in vtcombo")
 }
 
-func (itmc *internalTabletManagerClient) Backup(context.Context, *topodatapb.Tablet, *tabletmanagerdata.BackupRequest) (logutil.EventStream, error) {
+func (itmc *internalTabletManagerClient) Backup(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.BackupRequest) (logutil.EventStream, error) {
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 

@@ -29,7 +29,6 @@ import (
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
-	"vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -207,7 +206,7 @@ type TabletManagerClient interface {
 	//
 
 	// Backup creates a database backup
-	Backup(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdata.BackupRequest) (logutil.EventStream, error)
+	Backup(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.BackupRequest) (logutil.EventStream, error)
 
 	// RestoreFromBackup deletes local data and restores database from backup
 	RestoreFromBackup(ctx context.Context, tablet *topodatapb.Tablet, backupTime time.Time) (logutil.EventStream, error)

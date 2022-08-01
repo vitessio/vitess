@@ -36,7 +36,6 @@ import (
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
-	"vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -326,7 +325,7 @@ func (e *eofEventStream) Recv() (*logutilpb.Event, error) {
 }
 
 // Backup is part of the tmclient.TabletManagerClient interface.
-func (client *FakeTabletManagerClient) Backup(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdata.BackupRequest) (logutil.EventStream, error) {
+func (client *FakeTabletManagerClient) Backup(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.BackupRequest) (logutil.EventStream, error) {
 	return &eofEventStream{}, nil
 }
 
