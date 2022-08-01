@@ -45,6 +45,7 @@ func NewSrvKeyspaceWatcher(topoServer *topo.Server, counts *stats.CountersWithSi
 
 		current, changes, err := topoServer.WatchSrvKeyspace(watchCtx, key.cell, key.keyspace)
 		if err != nil {
+			entry.update(ctx, nil, err, true)
 			return
 		}
 

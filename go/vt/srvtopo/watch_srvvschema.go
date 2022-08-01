@@ -43,6 +43,7 @@ func NewSrvVSchemaWatcher(topoServer *topo.Server, counts *stats.CountersWithSin
 
 		current, changes, err := topoServer.WatchSrvVSchema(ctx, key.String())
 		if err != nil {
+			entry.update(ctx, nil, err, true)
 			return
 		}
 
