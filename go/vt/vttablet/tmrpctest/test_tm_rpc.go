@@ -40,9 +40,9 @@ import (
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
+	"vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 // fakeRPCTM implements tabletmanager.RPCTM and fills in all
@@ -1192,7 +1192,7 @@ var testBackupAllowPrimary = false
 var testBackupCalled = false
 var testRestoreFromBackupCalled = false
 
-func (fra *fakeRPCTM) Backup(ctx context.Context, logger logutil.Logger, request *vtctldatapb.BackupRequest) error {
+func (fra *fakeRPCTM) Backup(ctx context.Context, logger logutil.Logger, request *tabletmanagerdata.BackupRequest) error {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
