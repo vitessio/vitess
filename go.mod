@@ -53,7 +53,7 @@ require (
 	github.com/martini-contrib/auth v0.0.0-20150219114609-fa62c19b7ae8
 	github.com/martini-contrib/gzip v0.0.0-20151124214156-6c035326b43f
 	github.com/martini-contrib/render v0.0.0-20150707142108-ec18f8345a11
-	github.com/mattn/go-sqlite3 v1.14.6
+	github.com/mattn/go-sqlite3 v1.14.14
 	github.com/minio/minio-go v0.0.0-20190131015406-c8a261de75c1
 	github.com/mitchellh/go-testing-interface v1.14.0 // indirect
 	github.com/montanaflynn/stats v0.6.3
