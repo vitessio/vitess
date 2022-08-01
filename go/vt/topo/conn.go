@@ -155,6 +155,44 @@ type Conn interface {
 	// filePath is a path relative to the root directory of the cell.
 	Watch(ctx context.Context, filePath string) (current *WatchData, changes <-chan *WatchData, err error)
 
+	// WatchRecursive starts watching a file prefix in the provided cell. It
+	// returns all the current values for existing files with the given
+	// prefix, a 'changes' channel  to read the changes from and an error.
+	//
+	// The provided context should be canceled when stopping WatchRecursive().
+	// This API is different from Watch() and Watch() will be changed
+	// to match this API as well in the future.
+	//
+	// Canceling will eventually result in a final WatchDataRecursive result with Err =
+	// ErrInterrupted.
+	//
+	// The 'changes' channel may return a record with Err != nil.
+	// In that case, the channel will also be closed right after
+	// that record.  In any case, 'changes' has to be drained of
+	// all events, even when 'stop' is closed.
+	//
+	// Note the 'changes' channel can return twice the same
+	// Version/Contents (for instance, if the watch is interrupted
+	// and restarted within the Conn implementation).
+	// Similarly, the 'changes' channel may skip versions / changes
+	// (that is, if value goes [A, B, C, D, E, F], the watch may only
+	// receive [A, B, F]). This should only happen for rapidly
+	// changing values though. Usually, the initial value will come
+	// back right away. And a stable value (that hasn't changed for
+	// a while) should be seen shortly.
+	//
+	// The WatchRecursive call is not guaranteed to return exactly up to
+	// date data right away. For instance, if a file is created
+	// and saved, and then a watch is set on that file, it may
+	// return ErrNoNode (as the underlying configuration service
+	// may use asynchronous caches that are not up to date
+	// yet). The only guarantee is that the watch data will
+	// eventually converge. Vitess doesn't explicitly depend on the data
+	// being correct quickly, as long as it eventually gets there.
+	//
+	// path is a path relative to the root directory of the cell.
+	WatchRecursive(ctx context.Context, path string) ([]*WatchDataRecursive, <-chan *WatchDataRecursive, error)
+
 	//
 	// Leader election methods. This is meant to have a small
 	// number of processes elect a primary within a group. The
@@ -269,6 +307,17 @@ type WatchData struct {
 	// - ErrInterrupted if 'cancel' was called.
 	// - any other platform-specific error.
 	Err error
+}
+
+// WatchDataRecursive is the structure returned by the WatchRecursive() API.
+// It contains the same data as WatchData, but additionally also the specific
+// path of the entry that the recursive watch applies to, since an entire
+// file prefix can be watched.
+type WatchDataRecursive struct {
+	// Path is the path that has changed
+	Path string
+
+	WatchData
 }
 
 // KVInfo is a structure that contains a generic key/value pair from

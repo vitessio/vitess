@@ -168,6 +168,13 @@ func (st *StatsConn) Watch(ctx context.Context, filePath string) (current *Watch
 	return st.conn.Watch(ctx, filePath)
 }
 
+func (st *StatsConn) WatchRecursive(ctx context.Context, path string) ([]*WatchDataRecursive, <-chan *WatchDataRecursive, error) {
+	startTime := time.Now()
+	statsKey := []string{"WatchRecursive", st.cell}
+	defer topoStatsConnTimings.Record(statsKey, startTime)
+	return st.conn.WatchRecursive(ctx, path)
+}
+
 // NewLeaderParticipation is part of the Conn interface
 func (st *StatsConn) NewLeaderParticipation(name, id string) (LeaderParticipation, error) {
 	startTime := time.Now()
