@@ -119,7 +119,7 @@ func buildShowBasicPlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) 
 	case sqlparser.VitessTarget:
 		return buildShowTargetPlan(vschema)
 	case sqlparser.VschemaTables:
-		return buildVschemaTablesPlan(show, vschema)
+		return buildVschemaTablesPlan(vschema)
 	case sqlparser.VschemaVindexes:
 		return buildVschemaVindexesPlan(show, vschema)
 	}
@@ -229,11 +229,11 @@ func buildDBPlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) (engine
 		filter = regexp.MustCompile(".*")
 	}
 
-	//rows := make([][]sqltypes.Value, 0, len(ks)+4)
+	// rows := make([][]sqltypes.Value, 0, len(ks)+4)
 	var rows [][]sqltypes.Value
 
 	if show.Command == sqlparser.Database {
-		//Hard code default databases
+		// Hard code default databases
 		ks = append(ks, &vindexes.Keyspace{Name: "information_schema"},
 			&vindexes.Keyspace{Name: "mysql"},
 			&vindexes.Keyspace{Name: "sys"},
@@ -603,12 +603,8 @@ func buildWarnings() (engine.Primitive, error) {
 		rows := make([][]sqltypes.Value, 0, len(warns))
 
 		for _, warn := range warns {
-			txt := "Warning"
-			if warn.Code == 1003 {
-				txt = "Note"
-			}
 			rows = append(rows, []sqltypes.Value{
-				sqltypes.NewVarChar(txt),
+				sqltypes.NewVarChar("Warning"),
 				sqltypes.NewUint32(warn.Code),
 				sqltypes.NewVarChar(warn.Message),
 			})
@@ -649,7 +645,7 @@ func buildEnginesPlan() (engine.Primitive, error) {
 		buildVarCharFields("Engine", "Support", "Comment", "Transactions", "XA", "Savepoints")), nil
 }
 
-func buildVschemaTablesPlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) (engine.Primitive, error) {
+func buildVschemaTablesPlan(vschema plancontext.VSchema) (engine.Primitive, error) {
 	vs := vschema.GetVSchema()
 	ks, err := vschema.DefaultKeyspace()
 	if err != nil {
