@@ -1133,26 +1133,6 @@ func (s *VtctldServer) GetCellsAliases(ctx context.Context, req *vtctldatapb.Get
 	return &vtctldatapb.GetCellsAliasesResponse{Aliases: aliases}, nil
 }
 
-// GetKeyspace is part of the vtctlservicepb.VtctldServer interface.
-func (s *VtctldServer) GetKeyspace(ctx context.Context, req *vtctldatapb.GetKeyspaceRequest) (*vtctldatapb.GetKeyspaceResponse, error) {
-	span, ctx := trace.NewSpan(ctx, "VtctldServer.GetKeyspace")
-	defer span.Finish()
-
-	span.Annotate("keyspace", req.Keyspace)
-
-	keyspace, err := s.ts.GetKeyspace(ctx, req.Keyspace)
-	if err != nil {
-		return nil, err
-	}
-
-	return &vtctldatapb.GetKeyspaceResponse{
-		Keyspace: &vtctldatapb.Keyspace{
-			Name:     req.Keyspace,
-			Keyspace: keyspace.Keyspace,
-		},
-	}, nil
-}
-
 // GetFullStatus is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) GetFullStatus(ctx context.Context, req *vtctldatapb.GetFullStatusRequest) (*vtctldatapb.GetFullStatusResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.GetFullStatus")
@@ -1172,6 +1152,26 @@ func (s *VtctldServer) GetFullStatus(ctx context.Context, req *vtctldatapb.GetFu
 
 	return &vtctldatapb.GetFullStatusResponse{
 		Status: res,
+	}, nil
+}
+
+// GetKeyspace is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) GetKeyspace(ctx context.Context, req *vtctldatapb.GetKeyspaceRequest) (*vtctldatapb.GetKeyspaceResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.GetKeyspace")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.Keyspace)
+
+	keyspace, err := s.ts.GetKeyspace(ctx, req.Keyspace)
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.GetKeyspaceResponse{
+		Keyspace: &vtctldatapb.Keyspace{
+			Name:     req.Keyspace,
+			Keyspace: keyspace.Keyspace,
+		},
 	}, nil
 }
 
