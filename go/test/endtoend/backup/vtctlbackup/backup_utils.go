@@ -395,7 +395,7 @@ func primaryBackup(t *testing.T) {
 	_, err = primary.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test2')", keyspaceName, true)
 	require.Nil(t, err)
 
-	restoreWaitForBackup(t, "replica", nil)
+	restoreWaitForBackup(t, "replica", nil, true)
 	err = replica2.VttabletProcess.WaitForTabletStatusesForTimeout([]string{"SERVING"}, timeout)
 	require.Nil(t, err)
 
@@ -460,7 +460,7 @@ func primaryReplicaSameBackup(t *testing.T) {
 	require.Nil(t, err)
 
 	// now bring up the other replica, letting it restore from backup.
-	restoreWaitForBackup(t, "replica", nil)
+	restoreWaitForBackup(t, "replica", nil, true)
 	err = replica2.VttabletProcess.WaitForTabletStatusesForTimeout([]string{"SERVING"}, timeout)
 	require.Nil(t, err)
 
@@ -528,7 +528,7 @@ func primaryReplicaSameBackupModifiedCompressionEngine(t *testing.T) {
 		ExternalCompressorExt:   ".gz",
 		ExternalDecompressorCmd: "",
 	}
-	restoreWaitForBackup(t, "replica", cDetails)
+	restoreWaitForBackup(t, "replica", cDetails, false)
 	err = replica2.VttabletProcess.WaitForTabletStatusesForTimeout([]string{"SERVING"}, timeout)
 	require.Nil(t, err)
 
@@ -758,7 +758,7 @@ func terminatedRestore(t *testing.T) {
 //
 //
 func vtctlBackup(t *testing.T, tabletType string) {
-	restoreWaitForBackup(t, tabletType, nil)
+	restoreWaitForBackup(t, tabletType, nil, true)
 	verifyInitialReplication(t)
 
 	err := localCluster.VtctlclientProcess.ExecuteCommand("Backup", replica1.Alias)
@@ -801,12 +801,15 @@ func verifyInitialReplication(t *testing.T) {
 // Override the backup engine implementation to a non-existent one for restore.
 // This setting should only matter for taking new backups. We should be able
 // to restore a previous backup successfully regardless of this setting.
-func restoreWaitForBackup(t *testing.T, tabletType string, cDetails *CompressionDetails) {
+func restoreWaitForBackup(t *testing.T, tabletType string, cDetails *CompressionDetails, fakeImpl bool) {
 	replica2.Type = tabletType
 	replica2.ValidateTabletRestart(t)
 	replicaTabletArgs := commonTabletArg
 	if cDetails != nil {
 		replicaTabletArgs = updateCompressorArgs(replicaTabletArgs, cDetails)
+	}
+	if fakeImpl {
+		replicaTabletArgs = append(replicaTabletArgs, "--backup_engine_implementation", "fake_implementation")
 	}
 	replicaTabletArgs = append(replicaTabletArgs, "--wait_for_backup_interval", "1s")
 	replicaTabletArgs = append(replicaTabletArgs, "--init_tablet_type", tabletType)
