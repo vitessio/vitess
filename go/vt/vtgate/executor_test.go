@@ -2515,6 +2515,17 @@ func TestExecutorVtExplain(t *testing.T) {
 	txt := fmt.Sprintf("%v\n", qr.Rows)
 	lookupQuery := "select `name`, user_id from name_user_map where `name` in"
 	require.Contains(t, txt, lookupQuery)
+
+	// Test the streaming side as well
+	var results []sqltypes.Row
+	session = NewAutocommitSession(&vtgatepb.Session{})
+	err = executor.StreamExecute(ctx, "TestExecutorVtExplain", session, "explain format=vtexplain select * from user where name = 'apa'", nil, func(result *sqltypes.Result) error {
+		results = append(results, result.Rows...)
+		return nil
+	})
+	require.NoError(t, err)
+	txt = fmt.Sprintf("%v\n", results)
+	require.Contains(t, txt, lookupQuery)
 }
 
 func exec(executor *Executor, session *SafeSession, sql string) (*sqltypes.Result, error) {

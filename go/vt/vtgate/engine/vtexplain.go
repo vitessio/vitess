@@ -68,13 +68,49 @@ func (v *VTExplain) NeedsTransaction() bool {
 // TryExecute implements the Primitive interface
 func (v *VTExplain) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	vcursor.Session().VtExplainLogging()
-	return vcursor.ExecutePrimitive(ctx, v.Input, bindVars, wantfields)
+	_, err := vcursor.ExecutePrimitive(ctx, v.Input, bindVars, wantfields)
+	if err != nil {
+		return nil, err
+	}
+	result := convertToVTExplainResult(vcursor.Session().GetVTExplainLogs())
+	return result, nil
 }
 
 // TryStreamExecute implements the Primitive interface
 func (v *VTExplain) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	//TODO implement me
-	panic("implement me")
+	vcursor.Session().VtExplainLogging()
+	err := vcursor.StreamExecutePrimitive(ctx, v.Input, bindVars, wantfields, func(result *sqltypes.Result) error {
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	result := convertToVTExplainResult(vcursor.Session().GetVTExplainLogs())
+	return callback(result)
+}
+
+func convertToVTExplainResult(logs []ExecuteEntry) *sqltypes.Result {
+	fields := []*querypb.Field{{
+		Name: "#", Type: sqltypes.Int32,
+	}, {
+		Name: "keyspace", Type: sqltypes.VarChar,
+	}, {
+		Name: "shard", Type: sqltypes.VarChar,
+	}, {
+		Name: "query", Type: sqltypes.VarChar,
+	}}
+	qr := &sqltypes.Result{
+		Fields: fields,
+	}
+	for _, line := range logs {
+		qr.Rows = append(qr.Rows, sqltypes.Row{
+			sqltypes.NewInt32(int32(line.ID)),
+			sqltypes.NewVarChar(line.Keyspace),
+			sqltypes.NewVarChar(line.Shard),
+			sqltypes.NewVarChar(line.Query),
+		})
+	}
+	return qr
 }
 
 // Inputs implements the Primitive interface

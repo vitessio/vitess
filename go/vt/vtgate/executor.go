@@ -392,36 +392,8 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 		qr = result
 		return nil
 	})
-	if safeSession.logging != nil && !safeSession.vindexExec {
-		qr = convertToVTExplainResult(safeSession)
-	}
 
 	return stmtType, qr, err
-}
-
-func convertToVTExplainResult(safeSession *SafeSession) *sqltypes.Result {
-	logs := safeSession.logging.GetLogs()
-	fields := []*querypb.Field{{
-		Name: "#", Type: sqltypes.Int32,
-	}, {
-		Name: "keyspace", Type: sqltypes.VarChar,
-	}, {
-		Name: "shard", Type: sqltypes.VarChar,
-	}, {
-		Name: "query", Type: sqltypes.VarChar,
-	}}
-	qr := &sqltypes.Result{
-		Fields: fields,
-	}
-	for _, line := range logs {
-		qr.Rows = append(qr.Rows, sqltypes.Row{
-			sqltypes.NewInt32(int32(line.ID)),
-			sqltypes.NewVarChar(line.Keyspace),
-			sqltypes.NewVarChar(line.Shard),
-			sqltypes.NewVarChar(line.Query),
-		})
-	}
-	return qr
 }
 
 // addNeededBindVars adds bind vars that are needed by the plan

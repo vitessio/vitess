@@ -171,6 +171,7 @@ type (
 		RemoveAdvisoryLock(name string)
 
 		VtExplainLogging()
+		GetVTExplainLogs() []ExecuteEntry
 	}
 
 	// Match is used to check if a Primitive matches

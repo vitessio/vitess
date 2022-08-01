@@ -423,10 +423,6 @@ func (vc *vcursorImpl) StreamExecutePrimitiveStandalone(ctx context.Context, pri
 
 // Execute is part of the engine.VCursor interface.
 func (vc *vcursorImpl) Execute(ctx context.Context, method string, query string, bindVars map[string]*querypb.BindVariable, rollbackOnError bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error) {
-	vc.safeSession.vindexExec = true
-	defer func() {
-		vc.safeSession.vindexExec = false
-	}()
 	session := vc.safeSession
 	if co == vtgatepb.CommitOrder_AUTOCOMMIT {
 		// For autocommit, we have to create an independent session.
@@ -996,4 +992,8 @@ func (vc *vcursorImpl) cloneWithAutocommitSession() *vcursorImpl {
 
 func (vc *vcursorImpl) VtExplainLogging() {
 	vc.safeSession.EnableLogging()
+}
+
+func (vc *vcursorImpl) GetVTExplainLogs() []engine.ExecuteEntry {
+	return vc.safeSession.logging.GetLogs()
 }

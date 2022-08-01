@@ -98,29 +98,32 @@ func TestVtGateVtExplain(t *testing.T) {
 		`explain format=vtexplain insert into user (id,lookup,lookup_unique) values (4,'apa','foo'),(5,'apa','bar'),(6,'monkey','nobar')`,
 		"vtexplain will actually run queries")
 
-	expected := `[[INT32(0) VARCHAR("ks") VARCHAR("40-80") VARCHAR("begin")] ` +
-		`[INT32(0) VARCHAR("ks") VARCHAR("40-80") VARCHAR("insert into lookup(lookup, id, keyspace_id) values ('monkey', 3, 'N\xb1\x90ɢ\xfa\x16\x9c') on duplicate key update lookup = values(lookup), id = values(id), keyspace_id = values(keyspace_id)")] ` +
-		`[INT32(1) VARCHAR("ks") VARCHAR("-40") VARCHAR("begin")] ` +
-		`[INT32(1) VARCHAR("ks") VARCHAR("-40") VARCHAR("insert into lookup(lookup, id, keyspace_id) values ('apa', 1, '\x16k@\xb4J\xbaK\xd6'), ('apa', 2, '\x06\xe7\xea\\\"Βp\x8f') on duplicate key update lookup = values(lookup), id = values(id), keyspace_id = values(keyspace_id)")] ` +
-		`[INT32(2) VARCHAR("ks") VARCHAR("40-80") VARCHAR("commit")] ` +
-		`[INT32(3) VARCHAR("ks") VARCHAR("-40") VARCHAR("commit")] ` +
-		`[INT32(4) VARCHAR("ks") VARCHAR("40-80") VARCHAR("begin")] ` +
-		`[INT32(4) VARCHAR("ks") VARCHAR("40-80") VARCHAR("insert into lookup_unique(lookup_unique, keyspace_id) values ('monkey', 'N\xb1\x90ɢ\xfa\x16\x9c')")] ` +
-		`[INT32(5) VARCHAR("ks") VARCHAR("-40") VARCHAR("begin")] ` +
-		`[INT32(5) VARCHAR("ks") VARCHAR("-40") VARCHAR("insert into lookup_unique(lookup_unique, keyspace_id) values ('apa', '\x16k@\xb4J\xbaK\xd6'), ('bandar', '\x06\xe7\xea\\\"Βp\x8f')")] ` +
-		`[INT32(6) VARCHAR("ks") VARCHAR("40-80") VARCHAR("commit")] ` +
-		`[INT32(7) VARCHAR("ks") VARCHAR("-40") VARCHAR("commit")] ` +
-		`[INT32(8) VARCHAR("ks") VARCHAR("40-80") VARCHAR("begin")] ` +
-		`[INT32(8) VARCHAR("ks") VARCHAR("40-80") VARCHAR("insert into ` + "`user`" + `(id, lookup, lookup_unique) values (3, 'monkey', 'monkey')")] ` +
-		`[INT32(9) VARCHAR("ks") VARCHAR("-40") VARCHAR("begin")] ` +
-		`[INT32(9) VARCHAR("ks") VARCHAR("-40") VARCHAR("insert into ` + "`user`" + `(id, lookup, lookup_unique) values (1, 'apa', 'apa'), (2, 'apa', 'bandar')")] ` +
-		`[INT32(10) VARCHAR("ks") VARCHAR("40-80") VARCHAR("commit")] ` +
-		`[INT32(11) VARCHAR("ks") VARCHAR("-40") VARCHAR("commit")]]`
+	expected := `[[INT32(0) VARCHAR("ks") VARCHAR("-40") VARCHAR("begin")]` +
+		` [INT32(0) VARCHAR("ks") VARCHAR("-40") VARCHAR("insert into lookup(lookup, id, keyspace_id) values ('apa', 1, '\x16k@\xb4J\xbaK\xd6'), ('apa', 2, '\x06\xe7\xea\\\"Βp\x8f') on duplicate key update lookup = values(lookup), id = values(id), keyspace_id = values(keyspace_id)")]` +
+		` [INT32(1) VARCHAR("ks") VARCHAR("40-80") VARCHAR("begin")]` +
+		` [INT32(1) VARCHAR("ks") VARCHAR("40-80") VARCHAR("insert into lookup(lookup, id, keyspace_id) values ('monkey', 3, 'N\xb1\x90ɢ\xfa\x16\x9c') on duplicate key update lookup = values(lookup), id = values(id), keyspace_id = values(keyspace_id)")]` +
+		` [INT32(2) VARCHAR("ks") VARCHAR("-40") VARCHAR("commit")]` +
+		` [INT32(3) VARCHAR("ks") VARCHAR("40-80") VARCHAR("commit")]` +
+		` [INT32(4) VARCHAR("ks") VARCHAR("40-80") VARCHAR("begin")]` +
+		` [INT32(4) VARCHAR("ks") VARCHAR("40-80") VARCHAR("insert into lookup_unique(lookup_unique, keyspace_id) values ('monkey', 'N\xb1\x90ɢ\xfa\x16\x9c')")]` +
+		` [INT32(5) VARCHAR("ks") VARCHAR("-40") VARCHAR("begin")]` +
+		` [INT32(5) VARCHAR("ks") VARCHAR("-40") VARCHAR("insert into lookup_unique(lookup_unique, keyspace_id) values ('apa', '\x16k@\xb4J\xbaK\xd6'), ('bandar', '\x06\xe7\xea\\\"Βp\x8f')")]` +
+		` [INT32(6) VARCHAR("ks") VARCHAR("40-80") VARCHAR("commit")]` +
+		` [INT32(7) VARCHAR("ks") VARCHAR("-40") VARCHAR("commit")]` +
+		` [INT32(8) VARCHAR("ks") VARCHAR("40-80") VARCHAR("begin")]` +
+		` [INT32(8) VARCHAR("ks") VARCHAR("40-80") VARCHAR("insert into ` + "`user`" + `(id, lookup, lookup_unique) values (3, 'monkey', 'monkey')")]` +
+		` [INT32(9) VARCHAR("ks") VARCHAR("-40") VARCHAR("begin")]` +
+		` [INT32(9) VARCHAR("ks") VARCHAR("-40") VARCHAR("insert into ` + "`user`" + `(id, lookup, lookup_unique) values (1, 'apa', 'apa'), (2, 'apa', 'bandar')")]]`
 	utils.AssertMatchesNoOrder(t, conn, `explain /*vt+ ACTUALLY_RUN_QUERIES */ format=vtexplain insert into user (id,lookup,lookup_unique) values (1,'apa','apa'),(2,'apa','bandar'),(3,'monkey','monkey')`, expected)
 
 	expected = `[[INT32(0) VARCHAR("ks") VARCHAR("-40") VARCHAR("select lookup, keyspace_id from lookup where lookup in ('apa')")]` +
-		` [INT32(1) VARCHAR("ks") VARCHAR("40-80") VARCHAR("select id from ` + "`user`" + ` where lookup = 'apa'")]]`
-	utils.AssertMatches(t, conn, `explain format=vtexplain select id from user where lookup = "apa"`, expected)
+		` [INT32(1) VARCHAR("ks") VARCHAR("-40") VARCHAR("select id from ` + "`user`" + ` where lookup = 'apa'")]]`
+	for _, mode := range []string{"oltp", "olap"} {
+		t.Run(mode, func(t *testing.T) {
+			utils.Exec(t, conn, "set workload = "+mode)
+			utils.AssertMatches(t, conn, `explain format=vtexplain select id from user where lookup = "apa"`, expected)
+		})
+	}
 
 	// transaction explicitly started to no commit in the end.
 	utils.Exec(t, conn, "begin")
