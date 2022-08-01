@@ -250,7 +250,7 @@ func testSingle(t *testing.T, testName string) {
 
 	if expectedErrorMessage, exists := readTestFile(t, testName, "expect_failure"); exists {
 		// Failure is expected!
-		assert.Equal(t, string(schema.OnlineDDLStatusFailed), migrationStatus)
+		assert.Contains(t, []string{string(schema.OnlineDDLStatusFailed), string(schema.OnlineDDLStatusCancelled)}, migrationStatus)
 		require.Contains(t, migrationMessage, expectedErrorMessage, "expected error message (%s) to contain (%s)", migrationMessage, expectedErrorMessage)
 		// no need to proceed to checksum or anything further
 		return
