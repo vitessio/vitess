@@ -178,6 +178,8 @@ func NewQueryEngine(env tabletenv.Env, se *schema.Engine) *QueryEngine {
 	qe.consolidator = sync2.NewConsolidator()
 	if config.ConsolidatorStreamTotalSize > 0 && config.ConsolidatorStreamQuerySize > 0 {
 		qe.streamConsolidator = NewStreamConsolidator(config.ConsolidatorStreamTotalSize, config.ConsolidatorStreamQuerySize, returnStreamResult)
+	} else {
+		log.Info("Disabling stream consolidator.")
 	}
 	qe.txSerializer = txserializer.New(env)
 

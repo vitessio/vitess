@@ -139,6 +139,8 @@ func init() {
 	flag.BoolVar(&currentConfig.EnforceStrictTransTables, "enforce_strict_trans_tables", defaultConfig.EnforceStrictTransTables, "If true, vttablet requires MySQL to run with STRICT_TRANS_TABLES or STRICT_ALL_TABLES on. It is recommended to not turn this flag off. Otherwise MySQL may alter your supplied values before saving them to the database.")
 	flagutil.DualFormatBoolVar(&enableConsolidator, "enable_consolidator", true, "This option enables the query consolidator.")
 	flagutil.DualFormatBoolVar(&enableConsolidatorReplicas, "enable_consolidator_replicas", false, "This option enables the query consolidator only on replicas.")
+	flagutil.DualFormatInt64Var(&currentConfig.ConsolidatorStreamQuerySize, "consolidator_stream_query_size", defaultConfig.ConsolidatorStreamQuerySize, "Configure the stream consolidator query size. Setting to 0 disables the stream consolidator.")
+	flagutil.DualFormatInt64Var(&currentConfig.ConsolidatorStreamTotalSize, "consolidator_stream_total_size", defaultConfig.ConsolidatorStreamTotalSize, "Configure the stream consolidator total size. Setting to 0 disables the stream consolidator.")
 	flagutil.DualFormatBoolVar(&currentConfig.DeprecatedCacheResultFields, "enable_query_plan_field_caching", defaultConfig.DeprecatedCacheResultFields, "(DEPRECATED) This option fetches & caches fields (columns) when storing query plans")
 
 	flag.DurationVar(&healthCheckInterval, "health_check_interval", 20*time.Second, "Interval between health checks")
