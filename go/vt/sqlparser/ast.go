@@ -1935,7 +1935,7 @@ func (c Comments) Parsed() *ParsedComments {
 
 type ParsedComments struct {
 	comments    Comments
-	_directives CommentDirectives
+	_directives *CommentDirectives
 }
 
 // SelectExprs represents SELECT expressions.
