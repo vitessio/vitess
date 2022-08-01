@@ -60,9 +60,9 @@ func TestWatchShardNoNode(t *testing.T) {
 	ts := memorytopo.NewServer("cell1")
 
 	// No Shard -> ErrNoNode
-	current, _, err := ts.WatchShard(ctx, keyspace, shard)
+	_, _, err := ts.WatchShard(ctx, keyspace, shard)
 	if !topo.IsErrType(err, topo.NoNode) {
-		t.Errorf("Got invalid result from WatchShard(not there): %v", current.Err)
+		t.Errorf("Got invalid result from WatchShard(not there): %v", err)
 	}
 }
 
