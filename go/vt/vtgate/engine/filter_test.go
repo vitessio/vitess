@@ -25,17 +25,40 @@ import (
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
-func TestFilterPass(t *testing.T) {
-	predicate := &evalengine.ComparisonExpr{
-		BinaryExpr: evalengine.BinaryExpr{
-			Left:  evalengine.NewColumn(0, defaultCollation()),
-			Right: evalengine.NewColumn(1, defaultCollation()),
-		},
-		Op: evalengine.CompareGT{},
+type dummyTranslator struct{}
+
+func (d dummyTranslator) ColumnLookup(col *sqlparser.ColName) (int, error) {
+	switch col.Name.String() {
+	case "left":
+		return 0, nil
+	case "right":
+		return 1, nil
+	default:
+		panic("unexpected column name")
 	}
+}
+
+func (d dummyTranslator) CollationForExpr(_ sqlparser.Expr) collations.ID {
+	return collationEnv.LookupByName("utf8mb4_bin").ID()
+}
+
+func (d dummyTranslator) DefaultCollation() collations.ID {
+	return collationEnv.LookupByName("utf8mb4_bin").ID()
+}
+
+func TestFilterPass(t *testing.T) {
+	predicate := &sqlparser.ComparisonExpr{
+		Operator: sqlparser.GreaterThanOp,
+		Left:     sqlparser.NewColName("left"),
+		Right:    sqlparser.NewColName("right"),
+	}
+
+	pred, err := evalengine.Translate(predicate, &dummyTranslator{})
+	require.NoError(t, err)
 
 	tcases := []struct {
 		name   string
@@ -57,7 +80,7 @@ func TestFilterPass(t *testing.T) {
 	for _, tc := range tcases {
 		t.Run(tc.name, func(t *testing.T) {
 			filter := &Filter{
-				Predicate: predicate,
+				Predicate: pred,
 				Input:     &fakePrimitive{results: []*sqltypes.Result{tc.res}},
 			}
 			qr, err := filter.TryExecute(context.Background(), &noopVCursor{}, nil, false)
@@ -68,13 +91,14 @@ func TestFilterPass(t *testing.T) {
 }
 
 func TestFilterMixedFail(t *testing.T) {
-	predicate := &evalengine.ComparisonExpr{
-		BinaryExpr: evalengine.BinaryExpr{
-			Left:  evalengine.NewColumn(0, defaultCollation()),
-			Right: evalengine.NewColumn(1, defaultCollation()),
-		},
-		Op: evalengine.CompareGT{},
+	predicate := &sqlparser.ComparisonExpr{
+		Operator: sqlparser.GreaterThanOp,
+		Left:     sqlparser.NewColName("left"),
+		Right:    sqlparser.NewColName("right"),
 	}
+
+	pred, err := evalengine.Translate(predicate, &dummyTranslator{})
+	require.NoError(t, err)
 
 	tcases := []struct {
 		name   string
@@ -96,19 +120,11 @@ func TestFilterMixedFail(t *testing.T) {
 	for _, tc := range tcases {
 		t.Run(tc.name, func(t *testing.T) {
 			filter := &Filter{
-				Predicate: predicate,
+				Predicate: pred,
 				Input:     &fakePrimitive{results: []*sqltypes.Result{tc.res}},
 			}
 			_, err := filter.TryExecute(context.Background(), &noopVCursor{}, nil, false)
 			require.EqualError(t, err, tc.expErr)
 		})
-	}
-}
-
-func defaultCollation() collations.TypedCollation {
-	return collations.TypedCollation{
-		Collation:    collationEnv.LookupByName("utf8mb4_bin").ID(),
-		Coercibility: collations.CoerceImplicit,
-		Repertoire:   collations.RepertoireASCII,
 	}
 }
