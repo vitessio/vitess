@@ -475,6 +475,84 @@ func (er *EvalResult) nullSafeHashcode() (HashCode, error) {
 	}
 }
 
+// NullsafeHashCodeInPlace behaves like NullsafeHashCode but the type coercion is performed
+// in-place for performance reasons. Eventually this method will replace the old implementation.
+func NullsafeHashCodeInPlace(v sqltypes.Value, collation collations.ID, typ sqltypes.Type) (HashCode, error) {
+	switch {
+	case typ == sqltypes.Null:
+		return HashCode(math.MaxUint64), nil
+
+	case sqltypes.IsFloat(typ):
+		var f float64
+		var err error
+
+		switch {
+		case v.IsSigned():
+			var ival int64
+			ival, err = v.ToInt64()
+			f = float64(ival)
+		case v.IsUnsigned():
+			var uval uint64
+			uval, err = v.ToUint64()
+			f = float64(uval)
+		case v.IsFloat() || v.Type() == sqltypes.Decimal:
+			f, err = v.ToFloat64()
+		case v.IsText() || v.IsBinary():
+			f = parseStringToFloat(v.RawStr())
+		default:
+			return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coercion should not try to coerce this value to a float: %v", v)
+		}
+		return HashCode(math.Float64bits(f)), err
+
+	case sqltypes.IsSigned(typ):
+		var i int64
+		var err error
+
+		switch {
+		case v.IsSigned():
+			i, err = v.ToInt64()
+		case v.IsUnsigned():
+			var uval uint64
+			uval, err = v.ToUint64()
+			i = int64(uval)
+		default:
+			return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coercion should not try to coerce this value to a signed int: %v", v)
+		}
+		return HashCode(uint64(i)), err
+
+	case sqltypes.IsUnsigned(typ):
+		var u uint64
+		var err error
+
+		switch {
+		case v.IsSigned():
+			var ival int64
+			ival, err = v.ToInt64()
+			u = uint64(ival)
+		case v.IsUnsigned():
+			u, err = v.ToUint64()
+		default:
+			return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coercion should not try to coerce this value to a unsigned int: %v", v)
+		}
+
+		return HashCode(u), err
+
+	case sqltypes.IsBinary(typ):
+		coll := collations.Local().LookupByID(collations.CollationBinaryID)
+		return coll.Hash(v.Raw(), 0), nil
+
+	case sqltypes.IsText(typ):
+		coll := collations.Local().LookupByID(collation)
+		if coll == nil {
+			return 0, UnsupportedCollationHashError
+		}
+		return coll.Hash(v.Raw(), 0), nil
+
+	default:
+		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unsupported hash type: %v", v)
+	}
+}
+
 func (er *EvalResult) setValueCast(v sqltypes.Value, typ sqltypes.Type) error {
 	switch {
 	case typ == sqltypes.Null:
@@ -1014,6 +1092,14 @@ func (er *EvalResult) TupleValues() []sqltypes.Value {
 		result = append(result, val.value())
 	}
 	return result
+}
+
+func (er *EvalResult) MustBoolean() bool {
+	b, err := er.ToBooleanStrict()
+	if err != nil {
+		panic(err)
+	}
+	return b
 }
 
 // ToBooleanStrict is used when the casting to a boolean has to be minimally forgiving,
