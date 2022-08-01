@@ -1,1 +1,0 @@
-alter vschema on test_table add vindex my_vdx (id)

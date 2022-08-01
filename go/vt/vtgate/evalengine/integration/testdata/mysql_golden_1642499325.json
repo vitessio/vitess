@@ -1,6 +1,0 @@
-[
-    {
-        "Query": "SELECT null in (0 - (1 != 'f'), 'F', 'F')",
-        "Value": "NULL"
-    }
-]

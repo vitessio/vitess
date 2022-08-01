@@ -1,1 +1,0 @@
-add column sum_ab int as (a + b) virtual not null
