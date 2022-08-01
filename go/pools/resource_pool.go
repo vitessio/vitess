@@ -19,21 +19,79 @@ limitations under the License.
 package pools
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/vt/log"
-
-	"context"
-
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/trace"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+)
+
+type (
+	IResourcePool interface {
+		Close()
+		Name() string
+		Get(ctx context.Context) (resource Resource, err error)
+		Put(resource Resource)
+		SetCapacity(capacity int) error
+		SetIdleTimeout(idleTimeout time.Duration)
+		StatsJSON() string
+		Capacity() int64
+		Available() int64
+		Active() int64
+		InUse() int64
+		MaxCap() int64
+		WaitCount() int64
+		WaitTime() time.Duration
+		IdleTimeout() time.Duration
+		IdleClosed() int64
+		Exhausted() int64
+	}
+
+	// Resource defines the interface that every resource must provide.
+	// Thread synchronization between Close() and IsClosed()
+	// is the responsibility of the caller.
+	Resource interface {
+		Close()
+	}
+
+	// Factory is a function that can be used to create a resource.
+	Factory func(context.Context) (Resource, error)
+
+	resourceWrapper struct {
+		resource Resource
+		timeUsed time.Time
+	}
+
+	// ResourcePool allows you to use a pool of resources.
+	ResourcePool struct {
+		// stats. Atomic fields must remain at the top in order to prevent panics on certain architectures.
+		available  sync2.AtomicInt64
+		active     sync2.AtomicInt64
+		inUse      sync2.AtomicInt64
+		waitCount  sync2.AtomicInt64
+		waitTime   sync2.AtomicDuration
+		idleClosed sync2.AtomicInt64
+		exhausted  sync2.AtomicInt64
+
+		capacity    sync2.AtomicInt64
+		idleTimeout sync2.AtomicDuration
+
+		resources chan resourceWrapper
+		factory   Factory
+		idleTimer *timer.Timer
+		logWait   func(time.Time)
+
+		reopenMutex sync.Mutex
+		refresh     *poolRefresh
+	}
 )
 
 var (
@@ -48,52 +106,6 @@ var (
 
 	prefillTimeout = 30 * time.Second
 )
-
-// Factory is a function that can be used to create a resource.
-type Factory func(context.Context) (Resource, error)
-
-// RefreshCheck is a function used to determine if a resource pool should be
-// refreshed (i.e. closed and reopened)
-type RefreshCheck func() (bool, error)
-
-// Resource defines the interface that every resource must provide.
-// Thread synchronization between Close() and IsClosed()
-// is the responsibility of the caller.
-type Resource interface {
-	Close()
-}
-
-// ResourcePool allows you to use a pool of resources.
-type ResourcePool struct {
-	// stats. Atomic fields must remain at the top in order to prevent panics on certain architectures.
-	available  sync2.AtomicInt64
-	active     sync2.AtomicInt64
-	inUse      sync2.AtomicInt64
-	waitCount  sync2.AtomicInt64
-	waitTime   sync2.AtomicDuration
-	idleClosed sync2.AtomicInt64
-	exhausted  sync2.AtomicInt64
-
-	capacity    sync2.AtomicInt64
-	idleTimeout sync2.AtomicDuration
-
-	resources chan resourceWrapper
-	factory   Factory
-	idleTimer *timer.Timer
-	logWait   func(time.Time)
-
-	refreshCheck    RefreshCheck
-	refreshInterval time.Duration
-	refreshStop     chan struct{}
-	refreshTicker   *time.Ticker
-	refreshWg       sync.WaitGroup
-	reopenMutex     sync.Mutex
-}
-
-type resourceWrapper struct {
-	resource Resource
-	timeUsed time.Time
-}
 
 // NewResourcePool creates a new ResourcePool pool.
 // capacity is the number of possible resources in the pool:
@@ -158,37 +170,14 @@ func NewResourcePool(factory Factory, capacity, maxCap int, idleTimeout time.Dur
 		rp.idleTimer.Start(rp.closeIdleResources)
 	}
 
-	if refreshCheck != nil && refreshInterval > 0 {
-		rp.refreshInterval = refreshInterval
-		rp.refreshCheck = refreshCheck
-		rp.startRefreshTicker()
-	}
+	rp.refresh = newPoolRefresh(rp, refreshCheck, refreshInterval)
+	rp.refresh.startRefreshTicker()
 
 	return rp
 }
 
-func (rp *ResourcePool) startRefreshTicker() {
-	rp.refreshTicker = time.NewTicker(rp.refreshInterval)
-	rp.refreshStop = make(chan struct{})
-	rp.refreshWg.Add(1)
-	go func() {
-		defer rp.refreshWg.Done()
-		for {
-			select {
-			case <-rp.refreshTicker.C:
-				val, err := rp.refreshCheck()
-				if err != nil {
-					log.Info(err)
-				}
-				if val {
-					go rp.reopen()
-					return
-				}
-			case <-rp.refreshStop:
-				return
-			}
-		}
-	}()
+func (rp *ResourcePool) Name() string {
+	return "ResourcePool"
 }
 
 // Close empties the pool calling Close on all its resources.
@@ -199,17 +188,8 @@ func (rp *ResourcePool) Close() {
 	if rp.idleTimer != nil {
 		rp.idleTimer.Stop()
 	}
-	if rp.refreshTicker != nil {
-		rp.refreshTicker.Stop()
-		close(rp.refreshStop)
-		rp.refreshWg.Wait()
-	}
+	rp.refresh.stop()
 	_ = rp.SetCapacity(0)
-}
-
-// IsClosed returns true if the resource pool is closed.
-func (rp *ResourcePool) IsClosed() (closed bool) {
-	return rp.capacity.Get() == 0
 }
 
 // closeIdleResources scans the pool for idle resources
@@ -250,9 +230,7 @@ func (rp *ResourcePool) reopen() {
 	if rp.idleTimer != nil {
 		rp.idleTimer.Start(rp.closeIdleResources)
 	}
-	if rp.refreshCheck != nil {
-		rp.startRefreshTicker()
-	}
+	rp.refresh.startRefreshTicker()
 }
 
 // Get will return the next available resource. If capacity

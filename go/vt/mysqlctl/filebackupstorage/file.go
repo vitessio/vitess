@@ -19,23 +19,35 @@ limitations under the License.
 package filebackupstorage
 
 import (
-	"flag"
+	"context"
 	"fmt"
 	"io"
 	"os"
 	"path"
 
-	"context"
+	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
+	"vitess.io/vitess/go/vt/servenv"
 )
 
 var (
 	// FileBackupStorageRoot is where the backups will go.
 	// Exported for test purposes.
-	FileBackupStorageRoot = flag.String("file_backup_storage_root", "", "root directory for the file backup storage")
+	FileBackupStorageRoot string
 )
+
+func registerFlags(fs *pflag.FlagSet) {
+	fs.StringVar(&FileBackupStorageRoot, "file_backup_storage_root", "", "Root directory for the file backup storage.")
+}
+
+func init() {
+	servenv.OnParseFor("vtbackup", registerFlags)
+	servenv.OnParseFor("vtctl", registerFlags)
+	servenv.OnParseFor("vtctld", registerFlags)
+	servenv.OnParseFor("vttablet", registerFlags)
+}
 
 // FileBackupHandle implements BackupHandle for local file system.
 type FileBackupHandle struct {
@@ -76,7 +88,7 @@ func (fbh *FileBackupHandle) AddFile(ctx context.Context, filename string, files
 	if fbh.readOnly {
 		return nil, fmt.Errorf("AddFile cannot be called on read-only backup")
 	}
-	p := path.Join(*FileBackupStorageRoot, fbh.dir, fbh.name, filename)
+	p := path.Join(FileBackupStorageRoot, fbh.dir, fbh.name, filename)
 	return os.Create(p)
 }
 
@@ -101,7 +113,7 @@ func (fbh *FileBackupHandle) ReadFile(ctx context.Context, filename string) (io.
 	if !fbh.readOnly {
 		return nil, fmt.Errorf("ReadFile cannot be called on read-write backup")
 	}
-	p := path.Join(*FileBackupStorageRoot, fbh.dir, fbh.name, filename)
+	p := path.Join(FileBackupStorageRoot, fbh.dir, fbh.name, filename)
 	return os.Open(p)
 }
 
@@ -111,7 +123,7 @@ type FileBackupStorage struct{}
 // ListBackups is part of the BackupStorage interface
 func (fbs *FileBackupStorage) ListBackups(ctx context.Context, dir string) ([]backupstorage.BackupHandle, error) {
 	// ReadDir already sorts the results
-	p := path.Join(*FileBackupStorageRoot, dir)
+	p := path.Join(FileBackupStorageRoot, dir)
 	fi, err := os.ReadDir(p)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -141,7 +153,7 @@ func (fbs *FileBackupStorage) ListBackups(ctx context.Context, dir string) ([]ba
 // StartBackup is part of the BackupStorage interface
 func (fbs *FileBackupStorage) StartBackup(ctx context.Context, dir, name string) (backupstorage.BackupHandle, error) {
 	// Make sure the directory exists.
-	p := path.Join(*FileBackupStorageRoot, dir)
+	p := path.Join(FileBackupStorageRoot, dir)
 	if err := os.MkdirAll(p, os.ModePerm); err != nil {
 		return nil, err
 	}
@@ -162,7 +174,7 @@ func (fbs *FileBackupStorage) StartBackup(ctx context.Context, dir, name string)
 
 // RemoveBackup is part of the BackupStorage interface
 func (fbs *FileBackupStorage) RemoveBackup(ctx context.Context, dir, name string) error {
-	p := path.Join(*FileBackupStorageRoot, dir, name)
+	p := path.Join(FileBackupStorageRoot, dir, name)
 	return os.RemoveAll(p)
 }
 

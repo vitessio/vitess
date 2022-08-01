@@ -17,18 +17,16 @@ limitations under the License.
 package vtgate
 
 import (
+	"context"
 	"strings"
 	"testing"
 
-	"google.golang.org/protobuf/proto"
-
 	"github.com/stretchr/testify/assert"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/test/utils"
 
 	"github.com/stretchr/testify/require"
-
-	"context"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/discovery"
@@ -75,7 +73,7 @@ func init() {
 `
 	hcVTGateTest = discovery.NewFakeHealthCheck(nil)
 	*transactionMode = "MULTI"
-	Init(context.Background(), hcVTGateTest, new(sandboxTopo), "aa", nil, querypb.ExecuteOptions_Gen4)
+	Init(context.Background(), hcVTGateTest, newSandboxForCells([]string{"aa"}), "aa", nil, querypb.ExecuteOptions_Gen4)
 
 	*mysqlServerPort = 0
 	*mysqlAuthServerImpl = "none"
