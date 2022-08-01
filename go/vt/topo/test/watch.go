@@ -17,14 +17,13 @@ limitations under the License.
 package test
 
 import (
+	"context"
 	"testing"
 	"time"
 
 	"vitess.io/vitess/go/vt/key"
 
 	"google.golang.org/protobuf/proto"
-
-	"context"
 
 	"vitess.io/vitess/go/vt/topo"
 
@@ -36,19 +35,22 @@ import (
 // provided srvKeyspace.
 func waitForInitialValue(t *testing.T, conn topo.Conn, srvKeyspace *topodatapb.SrvKeyspace) (changes <-chan *topo.WatchData, cancel func()) {
 	var current *topo.WatchData
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
 	start := time.Now()
+	var err error
 	for {
-		current, changes, cancel = conn.Watch(ctx, "keyspaces/test_keyspace/SrvKeyspace")
-		if topo.IsErrType(current.Err, topo.NoNode) {
+		current, changes, err = conn.Watch(ctx, "keyspaces/test_keyspace/SrvKeyspace")
+		if topo.IsErrType(err, topo.NoNode) {
 			// hasn't appeared yet
 			if time.Since(start) > 10*time.Second {
+				cancel()
 				t.Fatalf("time out waiting for file to appear")
 			}
 			time.Sleep(10 * time.Millisecond)
 			continue
 		}
-		if current.Err != nil {
+		if err != nil {
+			cancel()
 			t.Fatalf("watch failed: %v", current.Err)
 		}
 		// we got a valid result
@@ -56,9 +58,11 @@ func waitForInitialValue(t *testing.T, conn topo.Conn, srvKeyspace *topodatapb.S
 	}
 	got := &topodatapb.SrvKeyspace{}
 	if err := proto.Unmarshal(current.Contents, got); err != nil {
+		cancel()
 		t.Fatalf("cannot proto-unmarshal data: %v", err)
 	}
 	if !proto.Equal(got, srvKeyspace) {
+		cancel()
 		t.Fatalf("got bad data: %v expected: %v", got, srvKeyspace)
 	}
 
@@ -68,15 +72,16 @@ func waitForInitialValue(t *testing.T, conn topo.Conn, srvKeyspace *topodatapb.S
 // checkWatch runs the tests on the Watch part of the Conn API.
 // We use a SrvKeyspace object.
 func checkWatch(t *testing.T, ts *topo.Server) {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	conn, err := ts.ConnForCell(ctx, LocalCellName)
 	if err != nil {
 		t.Fatalf("ConnForCell(test) failed: %v", err)
 	}
 
 	// start watching something that doesn't exist -> error
-	current, changes, _ := conn.Watch(ctx, "keyspaces/test_keyspace/SrvKeyspace")
-	if !topo.IsErrType(current.Err, topo.NoNode) {
+	current, changes, err := conn.Watch(ctx, "keyspaces/test_keyspace/SrvKeyspace")
+	if !topo.IsErrType(err, topo.NoNode) {
 		t.Errorf("watch on missing node didn't return ErrNoNode: %v %v", current, changes)
 	}
 
@@ -104,8 +109,8 @@ func checkWatch(t *testing.T, ts *topo.Server) {
 	}
 
 	// start watching again, it should work
-	changes, cancel := waitForInitialValue(t, conn, srvKeyspace)
-	defer cancel()
+	changes, secondCancel := waitForInitialValue(t, conn, srvKeyspace)
+	defer secondCancel()
 
 	// change the data
 	srvKeyspace.Partitions[0].ShardReferences[0].Name = "new_name"

@@ -164,7 +164,7 @@ func (c *TeeConn) Delete(ctx context.Context, filePath string, version topo.Vers
 }
 
 // Watch is part of the topo.Conn interface
-func (c *TeeConn) Watch(ctx context.Context, filePath string) (*topo.WatchData, <-chan *topo.WatchData, topo.CancelFunc) {
+func (c *TeeConn) Watch(ctx context.Context, filePath string) (*topo.WatchData, <-chan *topo.WatchData, error) {
 	return c.primary.Watch(ctx, filePath)
 }
 

@@ -17,10 +17,9 @@ limitations under the License.
 package etcd2topo
 
 import (
+	"context"
 	"path"
 	"time"
-
-	"context"
 
 	"go.etcd.io/etcd/api/v3/mvccpb"
 	clientv3 "go.etcd.io/etcd/client/v3"
@@ -33,29 +32,29 @@ import (
 )
 
 // Watch is part of the topo.Conn interface.
-func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <-chan *topo.WatchData, topo.CancelFunc) {
+func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <-chan *topo.WatchData, error) {
 	nodePath := path.Join(s.root, filePath)
 
 	// Get the initial version of the file
-	initial, err := s.cli.Get(ctx, nodePath)
+	initialCtx, initialCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	defer initialCancel()
+	initial, err := s.cli.Get(initialCtx, nodePath)
 	if err != nil {
 		// Generic error.
-		return &topo.WatchData{Err: convertError(err, nodePath)}, nil, nil
+		return nil, nil, convertError(err, nodePath)
 	}
+
 	if len(initial.Kvs) != 1 {
 		// Node doesn't exist.
-		return &topo.WatchData{Err: topo.NewError(topo.NoNode, nodePath)}, nil, nil
+		return nil, nil, topo.NewError(topo.NoNode, nodePath)
 	}
 	wd := &topo.WatchData{
 		Contents: initial.Kvs[0].Value,
 		Version:  EtcdVersion(initial.Kvs[0].ModRevision),
 	}
 
-	// Create an outer context that will be canceled on return and will cancel all inner watches.
-	outerCtx, outerCancel := context.WithCancel(context.Background())
-
 	// Create a context, will be used to cancel the watch on retry.
-	watchCtx, watchCancel := context.WithCancel(outerCtx)
+	watchCtx, watchCancel := context.WithCancel(ctx)
 
 	// Create the Watcher.  We start watching from the response we
 	// got, not from the file original version, as the server may
@@ -63,14 +62,14 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 	watcher := s.cli.Watch(watchCtx, nodePath, clientv3.WithRev(initial.Header.Revision))
 	if watcher == nil {
 		watchCancel()
-		outerCancel()
-		return &topo.WatchData{Err: vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "Watch failed")}, nil, nil
+		return nil, nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "Watch failed")
 	}
 
 	// Create the notifications channel, send updates to it.
 	notifications := make(chan *topo.WatchData, 10)
 	go func() {
 		defer close(notifications)
+		defer watchCancel()
 
 		var currVersion = initial.Header.Revision
 		var watchRetries int
@@ -91,7 +90,7 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 					watchRetries++
 					// Cancel inner context on retry and create new one.
 					watchCancel()
-					watchCtx, watchCancel = context.WithCancel(outerCtx)
+					watchCtx, watchCancel = context.WithCancel(ctx)
 					newWatcher := s.cli.Watch(watchCtx, nodePath, clientv3.WithRev(currVersion))
 					if newWatcher == nil {
 						log.Warningf("watch %v failed and get a nil channel returned, currVersion: %v", nodePath, currVersion)
@@ -137,5 +136,5 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 		}
 	}()
 
-	return wd, notifications, topo.CancelFunc(outerCancel)
+	return wd, notifications, nil
 }

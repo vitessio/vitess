@@ -17,29 +17,28 @@ limitations under the License.
 package memorytopo
 
 import (
-	"fmt"
-
 	"context"
+	"fmt"
 
 	"vitess.io/vitess/go/vt/topo"
 )
 
 // Watch is part of the topo.Conn interface.
-func (c *Conn) Watch(ctx context.Context, filePath string) (*topo.WatchData, <-chan *topo.WatchData, topo.CancelFunc) {
+func (c *Conn) Watch(ctx context.Context, filePath string) (*topo.WatchData, <-chan *topo.WatchData, error) {
 	c.factory.mu.Lock()
 	defer c.factory.mu.Unlock()
 
 	if c.factory.err != nil {
-		return &topo.WatchData{Err: c.factory.err}, nil, nil
+		return nil, nil, c.factory.err
 	}
 
 	n := c.factory.nodeByPath(c.cell, filePath)
 	if n == nil {
-		return &topo.WatchData{Err: topo.NewError(topo.NoNode, filePath)}, nil, nil
+		return nil, nil, topo.NewError(topo.NoNode, filePath)
 	}
 	if n.contents == nil {
 		// it's a directory
-		return &topo.WatchData{Err: fmt.Errorf("cannot watch directory %v in cell %v", filePath, c.cell)}, nil, nil
+		return nil, nil, fmt.Errorf("cannot watch directory %v in cell %v", filePath, c.cell)
 	}
 	current := &topo.WatchData{
 		Contents: n.contents,
@@ -51,7 +50,8 @@ func (c *Conn) Watch(ctx context.Context, filePath string) (*topo.WatchData, <-c
 	nextWatchIndex++
 	n.watches[watchIndex] = notifications
 
-	cancel := func() {
+	go func() {
+		<-ctx.Done()
 		// This function can be called at any point, so we first need
 		// to make sure the watch is still valid.
 		c.factory.mu.Lock()
@@ -67,6 +67,6 @@ func (c *Conn) Watch(ctx context.Context, filePath string) (*topo.WatchData, <-c
 			w <- &topo.WatchData{Err: topo.NewError(topo.Interrupted, "watch")}
 			close(w)
 		}
-	}
-	return current, notifications, cancel
+	}()
+	return current, notifications, nil
 }
