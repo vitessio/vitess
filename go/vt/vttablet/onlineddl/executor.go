@@ -1805,10 +1805,6 @@ func (e *Executor) CancelMigration(ctx context.Context, uuid string, message str
 	}
 
 	migrationFound, err := e.terminateMigration(ctx, onlineDDL)
-	if err != nil {
-		return result, err
-	}
-
 	if migrationFound {
 		log.Infof("CancelMigration: terminated %s with status: %v", uuid, onlineDDL.Status)
 		rowsAffected = 1
