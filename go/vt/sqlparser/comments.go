@@ -230,7 +230,7 @@ func (c *ParsedComments) Directives() CommentDirectives {
 				if !ok {
 					val = "true"
 				}
-				c._directives[directive] = val
+				c._directives[strings.ToLower(directive)] = val
 			}
 		}
 	}
@@ -260,16 +260,8 @@ func (d CommentDirectives) IsSet(key string) bool {
 	if d == nil {
 		return false
 	}
-	var val string
-	exists := false
-	for commentDirective, value := range d {
-		if strings.EqualFold(commentDirective, key) {
-			val = value
-			exists = true
-			break
-		}
-	}
-	if !exists {
+	val, found := d[strings.ToLower(key)]
+	if !found {
 		return false
 	}
 	// ParseBool handles "0", "1", "true", "false" and all similars
@@ -279,7 +271,7 @@ func (d CommentDirectives) IsSet(key string) bool {
 
 // GetString gets a directive value as string, with default value if not found
 func (d CommentDirectives) GetString(key string, defaultVal string) string {
-	val, ok := d[key]
+	val, ok := d[strings.ToLower(key)]
 	if !ok {
 		return defaultVal
 	}

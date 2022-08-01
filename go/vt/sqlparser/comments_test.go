@@ -275,45 +275,45 @@ func TestExtractCommentDirectives(t *testing.T) {
 	}, {
 		input: "/*vt+ SINGLE_OPTION */",
 		vals: CommentDirectives{
-			"SINGLE_OPTION": "true",
+			"single_option": "true",
 		},
 	}, {
 		input: "/*vt+ ONE_OPT TWO_OPT */",
 		vals: CommentDirectives{
-			"ONE_OPT": "true",
-			"TWO_OPT": "true",
+			"one_opt": "true",
+			"two_opt": "true",
 		},
 	}, {
 		input: "/*vt+ ONE_OPT */ /* other comment */ /*vt+ TWO_OPT */",
 		vals: CommentDirectives{
-			"ONE_OPT": "true",
-			"TWO_OPT": "true",
+			"one_opt": "true",
+			"two_opt": "true",
 		},
 	}, {
 		input: "/*vt+ ONE_OPT=abc TWO_OPT=def */",
 		vals: CommentDirectives{
-			"ONE_OPT": "abc",
-			"TWO_OPT": "def",
+			"one_opt": "abc",
+			"two_opt": "def",
 		},
 	}, {
 		input: "/*vt+ ONE_OPT=true TWO_OPT=false */",
 		vals: CommentDirectives{
-			"ONE_OPT": "true",
-			"TWO_OPT": "false",
+			"one_opt": "true",
+			"two_opt": "false",
 		},
 	}, {
 		input: "/*vt+ ONE_OPT=true TWO_OPT=\"false\" */",
 		vals: CommentDirectives{
-			"ONE_OPT": "true",
-			"TWO_OPT": "\"false\"",
+			"one_opt": "true",
+			"two_opt": "\"false\"",
 		},
 	}, {
 		input: "/*vt+ RANGE_OPT=[a:b] ANOTHER ANOTHER_WITH_VALEQ=val= AND_ONE_WITH_EQ== */",
 		vals: CommentDirectives{
-			"RANGE_OPT":          "[a:b]",
-			"ANOTHER":            "true",
-			"ANOTHER_WITH_VALEQ": "val=",
-			"AND_ONE_WITH_EQ":    "=",
+			"range_opt":          "[a:b]",
+			"another":            "true",
+			"another_with_valeq": "val=",
+			"and_one_with_eq":    "=",
 		},
 	}}
 
