@@ -1153,6 +1153,28 @@ func (s *VtctldServer) GetKeyspace(ctx context.Context, req *vtctldatapb.GetKeys
 	}, nil
 }
 
+// GetFullStatus is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) GetFullStatus(ctx context.Context, req *vtctldatapb.GetFullStatusRequest) (*vtctldatapb.GetFullStatusResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.GetFullStatus")
+	defer span.Finish()
+
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(req.TabletAlias))
+
+	ti, err := s.ts.GetTablet(ctx, req.TabletAlias)
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := s.tmc.FullStatus(ctx, ti.Tablet)
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.GetFullStatusResponse{
+		Status: res,
+	}, nil
+}
+
 // GetKeyspaces is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) GetKeyspaces(ctx context.Context, req *vtctldatapb.GetKeyspacesRequest) (*vtctldatapb.GetKeyspacesResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.GetKeyspaces")

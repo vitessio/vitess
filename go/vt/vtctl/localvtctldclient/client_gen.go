@@ -246,6 +246,11 @@ func (client *localVtctldClient) GetCellsAliases(ctx context.Context, in *vtctld
 	return client.s.GetCellsAliases(ctx, in)
 }
 
+// GetFullStatus is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) GetFullStatus(ctx context.Context, in *vtctldatapb.GetFullStatusRequest, opts ...grpc.CallOption) (*vtctldatapb.GetFullStatusResponse, error) {
+	return client.s.GetFullStatus(ctx, in)
+}
+
 // GetKeyspace is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) GetKeyspace(ctx context.Context, in *vtctldatapb.GetKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.GetKeyspaceResponse, error) {
 	return client.s.GetKeyspace(ctx, in)
