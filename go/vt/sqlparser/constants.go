@@ -825,6 +825,8 @@ const (
 // AlterMigrationType constants
 const (
 	RetryMigrationType AlterMigrationType = iota
+	LaunchMigrationType
+	LaunchAllMigrationType
 	CompleteMigrationType
 	CompleteAllMigrationType
 	CancelMigrationType
