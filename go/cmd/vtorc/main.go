@@ -17,7 +17,6 @@
 package main
 
 import (
-	"flag"
 	"os"
 	"reflect"
 	"strings"
@@ -31,6 +30,8 @@ import (
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 	"vitess.io/vitess/go/vt/orchestrator/inst"
 	"vitess.io/vitess/go/vt/servenv"
+
+	_flag "vitess.io/vitess/go/internal/flag"
 )
 
 var (
@@ -80,16 +81,14 @@ func main() {
 	// TODO(sougou): remove cli code
 	fs := pflag.NewFlagSet("vtorc", pflag.ExitOnError)
 
-	// servenv.OnParseFor("vtorc", func(global *pflag.FlagSet) {
-	// 	fs.AddFlagSet(global)
-	// })
-
 	args := append([]string{}, os.Args...)
 	os.Args = os.Args[0:1]
 	servenv.ParseFlags("vtorc")
 
-	fs.AddGoFlagSet(flag.CommandLine)
-
+	// N.B. This code has to be duplicated from go/internal/flag in order to
+	// correctly transform `-help` => `--help`. Otherwise passing `-help` would
+	// produce:
+	//	unknown shorthand flag: 'e' in -elp
 	var help bool
 	if fs.Lookup("help") == nil {
 		if fs.ShorthandLookup("h") == nil {
@@ -119,20 +118,20 @@ func main() {
 	config.RuntimeCLIFlags.IgnoreRaftSetup = fs.Bool("ignore-raft-setup", false, "Override RaftEnabled for CLI invocation (CLI by default not allowed for raft setups). NOTE: operations by CLI invocation may not reflect in all raft nodes.")
 	config.RuntimeCLIFlags.Tag = fs.String("tag", "", "tag to add ('tagname' or 'tagname=tagvalue') or to search ('tagname' or 'tagname=tagvalue' or comma separated 'tag0,tag1=val1,tag2' for intersection of all)")
 
-	pflagargs := transformArgsForPflag(fs, args[1:])
-	if !reflect.DeepEqual(args[1:], pflagargs) {
+	os.Args = append(os.Args, transformArgsForPflag(fs, args[1:])...)
+	if !reflect.DeepEqual(args, os.Args) {
 		// warn the user so they can adjust their CLI scripts
 		warning := `CLI args passed do not conform to pflag parsing behavior
 The arguments have been transformed for compatibility as follows:
 	%v => %v
 Please update your scripts before the next version, when this will begin to break.
 `
-		log.Warningf(warning, args[1:], pflagargs)
+		log.Warningf(warning, args, os.Args)
 	}
 
-	_ = fs.Parse(pflagargs)
+	_flag.Parse(fs)
+	// N.B. Also duplicated from go/internal/flag, for the same reason as above.
 	if help {
-		pflag.CommandLine = fs
 		pflag.Usage()
 		os.Exit(0)
 	}
