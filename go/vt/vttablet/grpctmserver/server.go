@@ -497,7 +497,7 @@ func (s *server) Backup(request *tabletmanagerdatapb.BackupRequest, stream table
 		})
 	})
 
-	return s.tm.Backup(ctx, int(request.Concurrency), logger, request.AllowPrimary)
+	return s.tm.Backup(ctx, logger, request)
 }
 
 func (s *server) RestoreFromBackup(request *tabletmanagerdatapb.RestoreFromBackupRequest, stream tabletmanagerservicepb.TabletManager_RestoreFromBackupServer) (err error) {

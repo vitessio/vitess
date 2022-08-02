@@ -206,7 +206,7 @@ type TabletManagerClient interface {
 	//
 
 	// Backup creates a database backup
-	Backup(ctx context.Context, tablet *topodatapb.Tablet, concurrency int, allowPrimary bool) (logutil.EventStream, error)
+	Backup(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.BackupRequest) (logutil.EventStream, error)
 
 	// RestoreFromBackup deletes local data and restores database from backup
 	RestoreFromBackup(ctx context.Context, tablet *topodatapb.Tablet, backupTime time.Time) (logutil.EventStream, error)

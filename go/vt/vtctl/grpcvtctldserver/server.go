@@ -333,7 +333,7 @@ func (s *VtctldServer) Backup(req *vtctldatapb.BackupRequest, stream vtctlservic
 	span.Annotate("keyspace", ti.Keyspace)
 	span.Annotate("shard", ti.Shard)
 
-	return s.backupTablet(ctx, ti.Tablet, int(req.Concurrency), req.AllowPrimary, stream)
+	return s.backupTablet(ctx, ti.Tablet, req, stream)
 }
 
 // BackupShard is part of the vtctlservicepb.VtctldServer interface.
@@ -386,13 +386,15 @@ func (s *VtctldServer) BackupShard(req *vtctldatapb.BackupShardRequest, stream v
 
 	span.Annotate("tablet_alias", topoproto.TabletAliasString(backupTablet.Alias))
 
-	return s.backupTablet(ctx, backupTablet, int(req.Concurrency), req.AllowPrimary, stream)
+	r := &vtctldatapb.BackupRequest{Concurrency: req.Concurrency, AllowPrimary: req.AllowPrimary}
+	return s.backupTablet(ctx, backupTablet, r, stream)
 }
 
-func (s *VtctldServer) backupTablet(ctx context.Context, tablet *topodatapb.Tablet, concurrency int, allowPrimary bool, stream interface {
+func (s *VtctldServer) backupTablet(ctx context.Context, tablet *topodatapb.Tablet, req *vtctldatapb.BackupRequest, stream interface {
 	Send(resp *vtctldatapb.BackupResponse) error
 }) error {
-	logStream, err := s.tmc.Backup(ctx, tablet, concurrency, allowPrimary)
+	r := &tabletmanagerdatapb.BackupRequest{Concurrency: int64(req.Concurrency), AllowPrimary: req.AllowPrimary}
+	logStream, err := s.tmc.Backup(ctx, tablet, r)
 	if err != nil {
 		return err
 	}

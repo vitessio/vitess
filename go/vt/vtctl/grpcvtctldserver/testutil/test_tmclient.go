@@ -330,8 +330,8 @@ func (stream *backupStreamAdapter) Send(msg *logutilpb.Event) error {
 }
 
 // Backup is part of the tmclient.TabletManagerClient interface.
-func (fake *TabletManagerClient) Backup(ctx context.Context, tablet *topodatapb.Tablet, concurrency int, allowPrimary bool) (logutil.EventStream, error) {
-	if tablet.Type == topodatapb.TabletType_PRIMARY && !allowPrimary {
+func (fake *TabletManagerClient) Backup(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.BackupRequest) (logutil.EventStream, error) {
+	if tablet.Type == topodatapb.TabletType_PRIMARY && !req.AllowPrimary {
 		return nil, fmt.Errorf("cannot backup primary with allowPrimary=false")
 	}
 

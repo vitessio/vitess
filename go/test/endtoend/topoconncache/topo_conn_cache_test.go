@@ -52,7 +52,7 @@ func TestVtctldListAllTablets(t *testing.T) {
 func testListAllTablets(t *testing.T) {
 	// first w/o any filters, aside from cell
 	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ListAllTablets")
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	tablets := getAllTablets()
 	tabletsFromCMD := strings.Split(result, "\n")
@@ -76,7 +76,7 @@ func deleteCell(t *testing.T) {
 	// Delete cell2 info from topo
 	res, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("DeleteCellInfo", "--force", cell2)
 	t.Log(res)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// update clusterInstance to remaining vttablets and shards
 	shard1.Vttablets = []*cluster.Vttablet{shard1Primary}
@@ -85,7 +85,7 @@ func deleteCell(t *testing.T) {
 
 	// Now list all tablets
 	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ListAllTablets")
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	tablets := getAllTablets()
 	tabletsFromCMD := strings.Split(result, "\n")
@@ -112,7 +112,7 @@ func deleteTablet(t *testing.T, tablet *cluster.Vttablet) {
 	wg.Wait()
 
 	err := clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", tablet.Alias)
-	require.Nil(t, err)
+	require.NoError(t, err)
 }
 
 func addCellback(t *testing.T) {
@@ -120,7 +120,7 @@ func addCellback(t *testing.T) {
 	clusterInstance.VtctlProcess.TopoRootPath = "/org1/obj1/"
 
 	err := clusterInstance.VtctlProcess.AddCellInfo(cell2)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// create new vttablets
 	shard1Replica = clusterInstance.NewVttabletInstance("replica", 0, cell2)
@@ -154,29 +154,24 @@ func addCellback(t *testing.T) {
 		)
 		tablet.VttabletProcess.SupportsBackup = true
 		proc, err := tablet.MysqlctlProcess.StartProcess()
-		if err != nil {
-			require.Nil(t, err)
-		}
+		require.NoError(t, err)
 		mysqlProcs = append(mysqlProcs, proc)
 	}
 	for _, proc := range mysqlProcs {
-		if err := proc.Wait(); err != nil {
-			require.Nil(t, err)
-		}
+		err := proc.Wait()
+		require.NoError(t, err)
 	}
 
 	for _, tablet := range []*cluster.Vttablet{shard1Replica, shard1Rdonly} {
 		tablet.VttabletProcess.Shard = shard1.Name
-		if err := tablet.VttabletProcess.Setup(); err != nil {
-			require.Nil(t, err)
-		}
+		err := tablet.VttabletProcess.Setup()
+		require.NoError(t, err)
 	}
 
 	for _, tablet := range []*cluster.Vttablet{shard2Replica, shard2Rdonly} {
 		tablet.VttabletProcess.Shard = shard2.Name
-		if err := tablet.VttabletProcess.Setup(); err != nil {
-			require.Nil(t, err)
-		}
+		err := tablet.VttabletProcess.Setup()
+		require.NoError(t, err)
 	}
 
 	shard1.Vttablets = append(shard1.Vttablets, shard1Replica)
@@ -185,7 +180,7 @@ func addCellback(t *testing.T) {
 	shard2.Vttablets = append(shard2.Vttablets, shard1Rdonly)
 
 	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ListAllTablets")
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	tablets := getAllTablets()
 	tabletsFromCMD := strings.Split(result, "\n")
