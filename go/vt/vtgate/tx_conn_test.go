@@ -1189,7 +1189,7 @@ func TestTxConnMultiGoSessions(t *testing.T) {
 			Keyspace: "0",
 		},
 	}}
-	err := txc.runSessions(ctx, input, func(ctx context.Context, s *vtgatepb.Session_ShardSession) error {
+	err := txc.runSessions(ctx, input, nil, func(ctx context.Context, s *vtgatepb.Session_ShardSession, logger *executeLogger) error {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "err %s", s.Target.Keyspace)
 	})
 	want := "err 0"
@@ -1204,7 +1204,7 @@ func TestTxConnMultiGoSessions(t *testing.T) {
 			Keyspace: "1",
 		},
 	}}
-	err = txc.runSessions(ctx, input, func(ctx context.Context, s *vtgatepb.Session_ShardSession) error {
+	err = txc.runSessions(ctx, input, nil, func(ctx context.Context, s *vtgatepb.Session_ShardSession, logger *executeLogger) error {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "err %s", s.Target.Keyspace)
 	})
 	want = "err 0\nerr 1"
@@ -1212,7 +1212,7 @@ func TestTxConnMultiGoSessions(t *testing.T) {
 	wantCode := vtrpcpb.Code_INTERNAL
 	assert.Equal(t, wantCode, vterrors.Code(err), "error code")
 
-	err = txc.runSessions(ctx, input, func(ctx context.Context, s *vtgatepb.Session_ShardSession) error {
+	err = txc.runSessions(ctx, input, nil, func(ctx context.Context, s *vtgatepb.Session_ShardSession, logger *executeLogger) error {
 		return nil
 	})
 	require.NoError(t, err)

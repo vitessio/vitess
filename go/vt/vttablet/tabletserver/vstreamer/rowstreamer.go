@@ -167,7 +167,7 @@ func (rs *rowStreamer) buildPlan() error {
 	}
 
 	directives := sel.Comments.Directives()
-	if s := directives.GetString("ukColumns", ""); s != "" {
+	if s, found := directives.GetString("ukColumns", ""); found {
 		rs.ukColumnNames, err = textutil.SplitUnescape(s, ",")
 		if err != nil {
 			return err

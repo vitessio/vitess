@@ -36,10 +36,14 @@ func buildExplainPlan(stmt sqlparser.Explain, reservedVars *sqlparser.ReservedVa
 	case *sqlparser.ExplainTab:
 		return explainTabPlan(explain, vschema)
 	case *sqlparser.ExplainStmt:
-		if explain.Type == sqlparser.VitessType {
+		switch explain.Type {
+		case sqlparser.VitessType:
 			return buildVitessTypePlan(explain, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
+		case sqlparser.VTExplainType:
+			return buildVTExplainTypePlan(explain, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
+		default:
+			return buildOtherReadAndAdmin(sqlparser.String(explain), vschema)
 		}
-		return buildOtherReadAndAdmin(sqlparser.String(explain), vschema)
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected explain type: %T", stmt)
 }
@@ -109,6 +113,23 @@ func buildVitessTypePlan(explain *sqlparser.ExplainStmt, reservedVars *sqlparser
 	}
 
 	return newPlanResult(engine.NewRowsPrimitive(rows, fields)), nil
+}
+
+func buildVTExplainTypePlan(explain *sqlparser.ExplainStmt, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (*planResult, error) {
+	input, err := createInstructionFor(sqlparser.String(explain.Statement), explain.Statement, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
+	if err != nil {
+		return nil, err
+	}
+	switch input.primitive.(type) {
+	case *engine.Insert, *engine.Delete, *engine.Update:
+		directives := explain.GetParsedComments().Directives()
+		if directives.IsSet(sqlparser.DirectiveVtexplainRunDMLQueries) {
+			break
+		}
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "explain format = vtexplain will actually run queries. `/*vt+ %s */` must be set to run DML queries in vtexplain. Example: `explain /*vt+ %s */ format = vtexplain delete from t1`", sqlparser.DirectiveVtexplainRunDMLQueries, sqlparser.DirectiveVtexplainRunDMLQueries)
+	}
+
+	return &planResult{primitive: &engine.VTExplain{Input: input.primitive}, tables: input.tables}, nil
 }
 
 func extractQuery(m map[string]any) string {
