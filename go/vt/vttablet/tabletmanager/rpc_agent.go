@@ -135,7 +135,7 @@ type RPCTM interface {
 
 	// Backup / restore related methods
 
-	Backup(ctx context.Context, concurrency int, logger logutil.Logger, allowPrimary bool) error
+	Backup(ctx context.Context, logger logutil.Logger, request *tabletmanagerdatapb.BackupRequest) error
 
 	RestoreFromBackup(ctx context.Context, logger logutil.Logger, backupTime time.Time) error
 
