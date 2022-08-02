@@ -39,6 +39,27 @@ var (
 	AppVersion string
 )
 
+// transformArgsForPflag turns a slice of raw args passed on the command line,
+// possibly incompatible with pflag (because the user is expecting stdlib flag
+// parsing behavior) and transforms them into the arguments that should have
+// been passed to conform to pflag parsing behavior.
+//
+// the primary function is to catch any cases where the user specified a longopt
+// with only a single hyphen (e.g. `-myflag`) and correct it to be
+// double-hyphenated.
+//
+// note that this transformation does _not_ actually validate the arguments; for
+// example if the user specifies `--myflag`, but the FlagSet has no such flag
+// defined, that will still appear in the returned result and will (correctly)
+// cause a parse error later on in `main`, at which point the CLI usage will
+// be printed.
+//
+// note also that this transformation is incomplete. pflag allows interspersing
+// of flag and positional arguments, whereas stdlib flag does not. however, for
+// vtorc specifically, with the exception of `vtorc help <topic>`, the CLI only
+// consumes flag arguments (in other words, there are no supported subcommands),
+// so this is a non-issue, and is not implemented here in order to make this
+// function a bit simpler.
 func transformArgsForPflag(fs *pflag.FlagSet, args []string) (result []string) {
 	for i, arg := range args {
 		switch {
@@ -77,8 +98,10 @@ func transformArgsForPflag(fs *pflag.FlagSet, args []string) (result []string) {
 
 // main is the application's entry point. It will either spawn a CLI or HTTP itnerfaces.
 func main() {
-	// TODO(sougou): change this to use vitess servenv framework
 	// TODO(sougou): remove cli code
+
+	// TODO(ajm188): after v15, remove this pflag hack and use servenv.ParseFlags
+	// directly. I am not sure if the above TODO from sougou still applies.
 	fs := pflag.NewFlagSet("vtorc", pflag.ExitOnError)
 
 	args := append([]string{}, os.Args...)
