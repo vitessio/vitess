@@ -169,6 +169,9 @@ type (
 		AddAdvisoryLock(name string)
 		// RemoveAdvisoryLock removes advisory lock from the session
 		RemoveAdvisoryLock(name string)
+
+		VtExplainLogging()
+		GetVTExplainLogs() []ExecuteEntry
 	}
 
 	// Match is used to check if a Primitive matches

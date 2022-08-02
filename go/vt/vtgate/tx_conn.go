@@ -76,6 +76,7 @@ func (txc *TxConn) Commit(ctx context.Context, session *SafeSession) error {
 	case vtgatepb.TransactionMode_UNSPECIFIED:
 		twopc = txc.mode == vtgatepb.TransactionMode_TWOPC
 	}
+
 	if twopc {
 		return txc.commit2PC(ctx, session)
 	}
@@ -89,7 +90,7 @@ func (txc *TxConn) queryService(alias *topodatapb.TabletAlias) (queryservice.Que
 	return txc.tabletGateway.QueryServiceByAlias(alias, nil)
 }
 
-func (txc *TxConn) commitShard(ctx context.Context, s *vtgatepb.Session_ShardSession) error {
+func (txc *TxConn) commitShard(ctx context.Context, s *vtgatepb.Session_ShardSession, logging *executeLogger) error {
 	if s.TransactionId == 0 {
 		return nil
 	}
@@ -105,24 +106,25 @@ func (txc *TxConn) commitShard(ctx context.Context, s *vtgatepb.Session_ShardSes
 	}
 	s.TransactionId = 0
 	s.ReservedId = reservedID
+	logging.log(s.Target, "commit", false, nil)
 	return nil
 }
 
 func (txc *TxConn) commitNormal(ctx context.Context, session *SafeSession) error {
-	if err := txc.runSessions(ctx, session.PreSessions, txc.commitShard); err != nil {
+	if err := txc.runSessions(ctx, session.PreSessions, session.logging, txc.commitShard); err != nil {
 		_ = txc.Release(ctx, session)
 		return err
 	}
 
 	// Retain backward compatibility on commit order for the normal session.
 	for _, shardSession := range session.ShardSessions {
-		if err := txc.commitShard(ctx, shardSession); err != nil {
+		if err := txc.commitShard(ctx, shardSession, session.logging); err != nil {
 			_ = txc.Release(ctx, session)
 			return err
 		}
 	}
 
-	if err := txc.runSessions(ctx, session.PostSessions, txc.commitShard); err != nil {
+	if err := txc.runSessions(ctx, session.PostSessions, session.logging, txc.commitShard); err != nil {
 		// If last commit fails, there will be nothing to rollback.
 		session.RecordWarning(&querypb.QueryWarning{Message: fmt.Sprintf("post-operation transaction had an error: %v", err)})
 		// With reserved connection we should release them.
@@ -158,7 +160,7 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) error {
 		return err
 	}
 
-	err = txc.runSessions(ctx, session.ShardSessions[1:], func(ctx context.Context, s *vtgatepb.Session_ShardSession) error {
+	err = txc.runSessions(ctx, session.ShardSessions[1:], session.logging, func(ctx context.Context, s *vtgatepb.Session_ShardSession, logging *executeLogger) error {
 		return txc.tabletGateway.Prepare(ctx, s.Target, s.TransactionId, dtid)
 	})
 	if err != nil {
@@ -176,7 +178,7 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *SafeSession) error {
 		return err
 	}
 
-	err = txc.runSessions(ctx, session.ShardSessions[1:], func(ctx context.Context, s *vtgatepb.Session_ShardSession) error {
+	err = txc.runSessions(ctx, session.ShardSessions[1:], session.logging, func(ctx context.Context, s *vtgatepb.Session_ShardSession, logging *executeLogger) error {
 		return txc.tabletGateway.CommitPrepared(ctx, s.Target, dtid)
 	})
 	if err != nil {
@@ -196,7 +198,7 @@ func (txc *TxConn) Rollback(ctx context.Context, session *SafeSession) error {
 	allsessions := append(session.PreSessions, session.ShardSessions...)
 	allsessions = append(allsessions, session.PostSessions...)
 
-	err := txc.runSessions(ctx, allsessions, func(ctx context.Context, s *vtgatepb.Session_ShardSession) error {
+	err := txc.runSessions(ctx, allsessions, session.logging, func(ctx context.Context, s *vtgatepb.Session_ShardSession, logging *executeLogger) error {
 		if s.TransactionId == 0 {
 			return nil
 		}
@@ -210,6 +212,7 @@ func (txc *TxConn) Rollback(ctx context.Context, session *SafeSession) error {
 		}
 		s.TransactionId = 0
 		s.ReservedId = reservedID
+		logging.log(s.Target, "rollback", false, nil)
 		return nil
 	})
 	if err != nil {
@@ -231,7 +234,7 @@ func (txc *TxConn) Release(ctx context.Context, session *SafeSession) error {
 	allsessions := append(session.PreSessions, session.ShardSessions...)
 	allsessions = append(allsessions, session.PostSessions...)
 
-	return txc.runSessions(ctx, allsessions, func(ctx context.Context, s *vtgatepb.Session_ShardSession) error {
+	return txc.runSessions(ctx, allsessions, session.logging, func(ctx context.Context, s *vtgatepb.Session_ShardSession, logging *executeLogger) error {
 		if s.ReservedId == 0 && s.TransactionId == 0 {
 			return nil
 		}
@@ -281,7 +284,7 @@ func (txc *TxConn) ReleaseAll(ctx context.Context, session *SafeSession) error {
 		allsessions = append(allsessions, session.LockSession)
 	}
 
-	return txc.runSessions(ctx, allsessions, func(ctx context.Context, s *vtgatepb.Session_ShardSession) error {
+	return txc.runSessions(ctx, allsessions, session.logging, func(ctx context.Context, s *vtgatepb.Session_ShardSession, loggging *executeLogger) error {
 		if s.ReservedId == 0 && s.TransactionId == 0 {
 			return nil
 		}
@@ -361,11 +364,11 @@ func (txc *TxConn) resumeCommit(ctx context.Context, target *querypb.Target, tra
 	return txc.tabletGateway.ConcludeTransaction(ctx, target, transaction.Dtid)
 }
 
-// runSessions executes the action for all shardSessions in parallel and returns a consolildated error.
-func (txc *TxConn) runSessions(ctx context.Context, shardSessions []*vtgatepb.Session_ShardSession, action func(context.Context, *vtgatepb.Session_ShardSession) error) error {
+// runSessions executes the action for all shardSessions in parallel and returns a consolidated error.
+func (txc *TxConn) runSessions(ctx context.Context, shardSessions []*vtgatepb.Session_ShardSession, logging *executeLogger, action func(context.Context, *vtgatepb.Session_ShardSession, *executeLogger) error) error {
 	// Fastpath.
 	if len(shardSessions) == 1 {
-		return action(ctx, shardSessions[0])
+		return action(ctx, shardSessions[0], logging)
 	}
 
 	allErrors := new(concurrency.AllErrorRecorder)
@@ -374,7 +377,7 @@ func (txc *TxConn) runSessions(ctx context.Context, shardSessions []*vtgatepb.Se
 		wg.Add(1)
 		go func(s *vtgatepb.Session_ShardSession) {
 			defer wg.Done()
-			if err := action(ctx, s); err != nil {
+			if err := action(ctx, s, logging); err != nil {
 				allErrors.RecordError(err)
 			}
 		}(s)

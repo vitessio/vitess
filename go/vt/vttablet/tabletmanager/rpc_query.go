@@ -51,7 +51,7 @@ func (tm *TabletManager) ExecuteFetchAsDba(ctx context.Context, query []byte, db
 	}
 
 	// Handle special possible directives
-	var directives sqlparser.CommentDirectives
+	var directives *sqlparser.CommentDirectives
 	if stmt, err := sqlparser.Parse(string(query)); err == nil {
 		if cmnt, ok := stmt.(sqlparser.Commented); ok {
 			directives = cmnt.GetParsedComments().Directives()
