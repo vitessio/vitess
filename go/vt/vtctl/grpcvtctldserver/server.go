@@ -393,7 +393,11 @@ func (s *VtctldServer) BackupShard(req *vtctldatapb.BackupShardRequest, stream v
 func (s *VtctldServer) backupTablet(ctx context.Context, tablet *topodatapb.Tablet, req *vtctldatapb.BackupRequest, stream interface {
 	Send(resp *vtctldatapb.BackupResponse) error
 }) error {
-	r := &tabletmanagerdatapb.BackupRequest{Concurrency: int64(req.Concurrency), AllowPrimary: req.AllowPrimary}
+	r := &tabletmanagerdatapb.BackupRequest{
+		Concurrency:        int64(req.Concurrency),
+		AllowPrimary:       req.AllowPrimary,
+		IncrementalFromPos: req.IncrementalFromPos,
+	}
 	logStream, err := s.tmc.Backup(ctx, tablet, r)
 	if err != nil {
 		return err
