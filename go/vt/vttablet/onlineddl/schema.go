@@ -79,6 +79,7 @@ const (
 	alterSchemaMigrationsTableSpecialPlan              = "ALTER TABLE _vt.schema_migrations add column special_plan text NOT NULL"
 	alterSchemaMigrationsLastThrottled                 = "ALTER TABLE _vt.schema_migrations add column last_throttled_timestamp timestamp NULL DEFAULT NULL"
 	alterSchemaMigrationsComponentThrottled            = "ALTER TABLE _vt.schema_migrations add column component_throttled tinytext NOT NULL"
+	alterSchemaMigrationsCancelledTimestamp            = "ALTER TABLE _vt.schema_migrations add column cancelled_timestamp timestamp NULL DEFAULT NULL"
 
 	sqlInsertMigration = `INSERT IGNORE INTO _vt.schema_migrations (
 		migration_uuid,
@@ -119,6 +120,11 @@ const (
 	`
 	sqlUpdateMigrationStatus = `UPDATE _vt.schema_migrations
 			SET migration_status=%a
+		WHERE
+			migration_uuid=%a
+	`
+	sqlUpdateMigrationStatusFailedOrCancelled = `UPDATE _vt.schema_migrations
+			SET migration_status=IF(cancelled_timestamp IS NULL, 'failed', 'cancelled')
 		WHERE
 			migration_uuid=%a
 	`
@@ -272,6 +278,7 @@ const (
 			ready_timestamp=NULL,
 			started_timestamp=NULL,
 			liveness_timestamp=NULL,
+			cancelled_timestamp=NULL,
 			completed_timestamp=NULL,
 			cleanup_timestamp=NULL
 		WHERE
@@ -289,6 +296,7 @@ const (
 			ready_timestamp=NULL,
 			started_timestamp=NULL,
 			liveness_timestamp=NULL,
+			cancelled_timestamp=NULL,
 			completed_timestamp=NULL,
 			cleanup_timestamp=NULL
 		WHERE
@@ -410,6 +418,7 @@ const (
 			vitess_liveness_indicator,
 			user_throttle_ratio,
 			last_throttled_timestamp,
+			cancelled_timestamp,
 			component_throttled,
 			postpone_completion
 		FROM _vt.schema_migrations
@@ -627,4 +636,5 @@ var ApplyDDL = []string{
 	alterSchemaMigrationsTableSpecialPlan,
 	alterSchemaMigrationsLastThrottled,
 	alterSchemaMigrationsComponentThrottled,
+	alterSchemaMigrationsCancelledTimestamp,
 }
