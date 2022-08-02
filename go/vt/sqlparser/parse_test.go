@@ -2060,8 +2060,8 @@ var (
 		input:  "describe select * from t",
 		output: "explain select * from t",
 	}, {
-		input:  "describe /*vt+ actually_run_queries */ select * from t",
-		output: "explain /*vt+ actually_run_queries */ select * from t",
+		input:  "describe /*vt+ execute_dml_queries */ select * from t",
+		output: "explain /*vt+ execute_dml_queries */ select * from t",
 	}, {
 		input:  "desc select * from t",
 		output: "explain select * from t",

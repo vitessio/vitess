@@ -42,8 +42,8 @@ const (
 	DirectiveAllowHashJoin = "ALLOW_HASH_JOIN"
 	// DirectiveQueryPlanner lets the user specify per query which planner should be used
 	DirectiveQueryPlanner = "PLANNER"
-	// DirectiveActuallyRunQueries tells explain format = vtexplain that it is okay to also run the query.
-	DirectiveActuallyRunQueries = "ACTUALLY_RUN_QUERIES"
+	// DirectiveVtexplainRunDMLQueries tells explain format = vtexplain that it is okay to also run the query.
+	DirectiveVtexplainRunDMLQueries = "EXECUTE_DML_QUERIES"
 )
 
 func isNonSpace(r rune) bool {
