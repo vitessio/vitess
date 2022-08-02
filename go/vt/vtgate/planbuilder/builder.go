@@ -190,7 +190,7 @@ func getPlannerFromQueryHint(stmt sqlparser.Statement) (plancontext.PlannerVersi
 	}
 
 	d := cm.GetParsedComments().Directives()
-	val, ok := d[sqlparser.DirectiveQueryPlanner]
+	val, ok := d.GetString(sqlparser.DirectiveQueryPlanner, "")
 	if !ok {
 		return plancontext.PlannerVersion(0), false
 	}

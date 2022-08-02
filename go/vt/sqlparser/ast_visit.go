@@ -1430,6 +1430,9 @@ func VisitRefOfExplainStmt(in *ExplainStmt, f Visit) error {
 	if err := VisitStatement(in.Statement, f); err != nil {
 		return err
 	}
+	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
+		return err
+	}
 	return nil
 }
 func VisitRefOfExplainTab(in *ExplainTab, f Visit) error {

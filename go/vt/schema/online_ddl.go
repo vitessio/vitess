@@ -276,15 +276,11 @@ func OnlineDDLFromCommentedStatement(stmt sqlparser.Statement) (onlineDDL *Onlin
 
 	directives := comments.Directives()
 	decodeDirective := func(name string) (string, error) {
-		value, ok := directives[name]
+		value, ok := directives.GetString(name, "")
 		if !ok {
 			return "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "no value found for comment directive %s", name)
 		}
-		unquoted, err := strconv.Unquote(value)
-		if err != nil {
-			return "", err
-		}
-		b, err := hex.DecodeString(unquoted)
+		b, err := hex.DecodeString(value)
 		if err != nil {
 			return "", err
 		}

@@ -401,7 +401,7 @@ func TestSchemaChange(t *testing.T) {
 			// let's cancel it
 			onlineddl.CheckCancelMigration(t, &vtParams, shards, drop1uuid, true)
 			time.Sleep(2 * time.Second)
-			onlineddl.CheckMigrationStatus(t, &vtParams, shards, drop1uuid, schema.OnlineDDLStatusFailed)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, drop1uuid, schema.OnlineDDLStatusCancelled)
 		})
 		t.Run("complete t1", func(t *testing.T) {
 			// t1 should be still running!
@@ -511,7 +511,7 @@ func TestSchemaChange(t *testing.T) {
 			// let's cancel it
 			onlineddl.CheckCancelMigration(t, &vtParams, shards, drop1uuid, true)
 			time.Sleep(2 * time.Second)
-			onlineddl.CheckMigrationStatus(t, &vtParams, shards, drop1uuid, schema.OnlineDDLStatusFailed)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, drop1uuid, schema.OnlineDDLStatusCancelled)
 		})
 		t.Run("complete t1", func(t *testing.T) {
 			// t1 should be still running!
@@ -537,7 +537,7 @@ func TestSchemaChange(t *testing.T) {
 			// let's cancel it
 			onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, true)
 			time.Sleep(2 * time.Second)
-			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusCancelled)
 		})
 
 		// now, we submit the exact same migratoin again: same UUID, same migration context.
