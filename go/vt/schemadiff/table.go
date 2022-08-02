@@ -1457,14 +1457,16 @@ func sortAlterOptions(diff *AlterTableEntityDiff) {
 			return 2
 		case *sqlparser.ModifyColumn:
 			return 3
-		case *sqlparser.AddColumns:
+		case *sqlparser.RenameColumn:
 			return 4
-		case *sqlparser.AddIndexDefinition:
+		case *sqlparser.AddColumns:
 			return 5
-		case *sqlparser.AddConstraintDefinition:
+		case *sqlparser.AddIndexDefinition:
 			return 6
-		case sqlparser.TableOptions, *sqlparser.TableOptions:
+		case *sqlparser.AddConstraintDefinition:
 			return 7
+		case sqlparser.TableOptions, *sqlparser.TableOptions:
+			return 8
 		default:
 			return math.MaxInt
 		}
@@ -1704,6 +1706,8 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 					found = true
 					// redefine. see if we need to position it anywhere other than end of table
 					c.TableSpec.Columns[i].Name = opt.NewName.Name
+					delete(columnExists, opt.OldName.Name.Lowered())
+					columnExists[opt.NewName.Name.Lowered()] = true
 					break
 				}
 			}
