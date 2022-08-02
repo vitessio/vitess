@@ -23,8 +23,6 @@ import (
 	"path"
 	"time"
 
-	"vitess.io/vitess/go/vt/proto/vschema"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/grpcclient"
@@ -50,6 +48,7 @@ import (
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	vttestpb "vitess.io/vitess/go/vt/proto/vttest"
 )
@@ -148,7 +147,7 @@ func CreateTablet(
 func InitRoutingRules(
 	ctx context.Context,
 	ts *topo.Server,
-	rr *vschema.RoutingRules,
+	rr *vschemapb.RoutingRules,
 ) error {
 	if rr == nil {
 		return nil
@@ -899,7 +898,7 @@ func (itmc *internalTabletManagerClient) PromoteReplica(context.Context, *topoda
 	return "", fmt.Errorf("not implemented in vtcombo")
 }
 
-func (itmc *internalTabletManagerClient) Backup(context.Context, *topodatapb.Tablet, int, bool) (logutil.EventStream, error) {
+func (itmc *internalTabletManagerClient) Backup(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.BackupRequest) (logutil.EventStream, error) {
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 
