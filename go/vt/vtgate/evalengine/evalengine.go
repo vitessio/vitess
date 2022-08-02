@@ -23,6 +23,7 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine/internal/decimal"
 )
@@ -104,6 +105,14 @@ func ToFloat64(v sqltypes.Value) (float64, error) {
 	}
 	num.makeFloat()
 	return num.float64(), nil
+}
+
+func LiteralToValue(literal *sqlparser.Literal) (sqltypes.Value, error) {
+	lit, err := translateLiteral(literal, nil)
+	if err != nil {
+		return sqltypes.Value{}, err
+	}
+	return lit.Val.Value(), nil
 }
 
 // ToNative converts Value to a native go type.

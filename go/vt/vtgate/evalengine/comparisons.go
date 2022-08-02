@@ -27,6 +27,13 @@ import (
 )
 
 type (
+	Filter interface {
+		Expr
+		LeftExpr() Expr
+		RightExpr() Expr
+		filterExpr()
+	}
+
 	ComparisonExpr struct {
 		BinaryExpr
 		Op ComparisonOp
@@ -58,6 +65,9 @@ type (
 	compareGE         struct{}
 	compareNullSafeEQ struct{}
 )
+
+func (*ComparisonExpr) filterExpr() {}
+func (*InExpr) filterExpr()         {}
 
 func (compareEQ) String() string { return "=" }
 func (compareEQ) compare(left, right *EvalResult) (boolean, error) {

@@ -79,6 +79,14 @@ type (
 	}
 )
 
+func (expr *BinaryExpr) LeftExpr() Expr {
+	return expr.Left
+}
+
+func (expr *BinaryExpr) RightExpr() Expr {
+	return expr.Right
+}
+
 var _ Expr = (*Literal)(nil)
 var _ Expr = (*BindVariable)(nil)
 var _ Expr = (*Column)(nil)
@@ -140,6 +148,10 @@ func (env *ExpressionEnv) subexpr(expr Expr, nth int) (Expr, int) {
 	case *BindVariable:
 		tt, _ := expr.typeof(env)
 		if tt == sqltypes.Tuple {
+			return nil, 1
+		}
+	case *Literal:
+		if expr.Val.typeof() == sqltypes.Tuple {
 			return nil, 1
 		}
 	case TupleExpr:
