@@ -70,7 +70,7 @@ func (td *tableDiffer) buildTablePlan() (*tablePlan, error) {
 		case *sqlparser.StarExpr:
 			// If it's a '*' expression, expand column list from the schema.
 			for _, fld := range tp.table.Fields {
-				aliased := &sqlparser.AliasedExpr{Expr: &sqlparser.ColName{Name: sqlparser.NewColIdent(fld.Name)}}
+				aliased := &sqlparser.AliasedExpr{Expr: &sqlparser.ColName{Name: sqlparser.NewIdentifierCI(fld.Name)}}
 				sourceSelect.SelectExprs = append(sourceSelect.SelectExprs, aliased)
 				targetSelect.SelectExprs = append(targetSelect.SelectExprs, aliased)
 			}
@@ -90,8 +90,8 @@ func (td *tableDiffer) buildTablePlan() (*tablePlan, error) {
 			targetSelect.SelectExprs = append(targetSelect.SelectExprs, &sqlparser.AliasedExpr{Expr: targetCol})
 
 			// Check if it's an aggregate expression
-			if expr, ok := selExpr.Expr.(*sqlparser.FuncExpr); ok {
-				switch fname := expr.Name.Lowered(); fname {
+			if expr, ok := selExpr.Expr.(sqlparser.AggrFunc); ok {
+				switch fname := strings.ToLower(expr.AggrName()); fname {
 				case "count", "sum":
 					// this will only work as long as aggregates can be pushed down to tablets
 					// this won't work: "select count(*) from (select id from t limit 1)"
@@ -133,7 +133,7 @@ func (td *tableDiffer) buildTablePlan() (*tablePlan, error) {
 	targetSelect.From = sqlparser.TableExprs{
 		&sqlparser.AliasedTableExpr{
 			Expr: &sqlparser.TableName{
-				Name: sqlparser.NewTableIdent(tp.table.Name),
+				Name: sqlparser.NewIdentifierCS(tp.table.Name),
 			},
 		},
 	}
@@ -190,7 +190,7 @@ func (tp *tablePlan) findPKs(targetSelect *sqlparser.Select) error {
 			return fmt.Errorf("column %v not found in table %v", pk, tp.table.Name)
 		}
 		orderby = append(orderby, &sqlparser.Order{
-			Expr:      &sqlparser.ColName{Name: sqlparser.NewColIdent(pk)},
+			Expr:      &sqlparser.ColName{Name: sqlparser.NewIdentifierCI(pk)},
 			Direction: sqlparser.AscOrder,
 		})
 	}

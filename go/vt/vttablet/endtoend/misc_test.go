@@ -302,10 +302,7 @@ func TestBindInSelect(t *testing.T) {
 		"select :bv from dual",
 		map[string]*querypb.BindVariable{"bv": sqltypes.Int64BindVariable(1)},
 	)
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	want := &sqltypes.Result{
 		Fields: []*querypb.Field{{
 			Name:         "1",
@@ -915,4 +912,34 @@ func TestSysSchema(t *testing.T) {
 	// The issue is only in MySQL 8.0 , As CI is on MySQL 5.7 need to check with Uint64
 	assert.True(t, qr.Fields[4].Type == sqltypes.Uint64 || qr.Fields[4].Type == sqltypes.Uint32)
 	assert.Equal(t, querypb.Type_UINT64, qr.Rows[0][4].Type())
+}
+
+func TestHexAndBitBindVar(t *testing.T) {
+	client := framework.NewClient()
+
+	bv := map[string]*querypb.BindVariable{
+		"vtg1": sqltypes.HexNumBindVariable([]byte("0x9")),
+		"vtg2": sqltypes.HexValBindVariable([]byte("X'09'")),
+	}
+	qr, err := client.Execute("select :vtg1, :vtg2, 0x9, X'09', 0b1001, B'1001'", bv)
+	require.NoError(t, err)
+	assert.Equal(t, `[[VARBINARY("\t") VARBINARY("\t") VARBINARY("\t") VARBINARY("\t") VARBINARY("\t") VARBINARY("\t")]]`, fmt.Sprintf("%v", qr.Rows))
+
+	qr, err = client.Execute("select 1 + :vtg1, 1 + :vtg2, 1 + 0x9, 1 + X'09', 1 + 0b1001, 1 + B'1001'", bv)
+	require.NoError(t, err)
+	assert.Equal(t, `[[UINT64(10) UINT64(10) UINT64(10) UINT64(10) INT64(10) INT64(10)]]`, fmt.Sprintf("%v", qr.Rows))
+
+	bv = map[string]*querypb.BindVariable{
+		"vtg1": sqltypes.BitNumBindVariable([]byte("0b1001")),
+		"vtg2": sqltypes.HexNumBindVariable([]byte("0x9")),
+		"vtg3": sqltypes.BitNumBindVariable([]byte("0b100110101111")),
+		"vtg4": sqltypes.HexNumBindVariable([]byte("0x9af")),
+	}
+	qr, err = client.Execute("select :vtg1, :vtg2, :vtg3, :vtg4", bv)
+	require.NoError(t, err)
+	assert.Equal(t, `[[VARBINARY("\t") VARBINARY("\t") VARBINARY("\t\xaf") VARBINARY("\t\xaf")]]`, fmt.Sprintf("%v", qr.Rows))
+
+	qr, err = client.Execute("select 1 + :vtg1, 1 + :vtg2, 1 + :vtg3, 1 + :vtg4", bv)
+	require.NoError(t, err)
+	assert.Equal(t, `[[INT64(10) UINT64(10) INT64(2480) UINT64(2480)]]`, fmt.Sprintf("%v", qr.Rows))
 }

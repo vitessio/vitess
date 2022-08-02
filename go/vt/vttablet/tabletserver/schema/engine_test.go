@@ -169,7 +169,7 @@ func TestOpenAndReload(t *testing.T) {
 	assert.EqualValues(t, secondReadRowsValue, se.innoDbReadRowsCounter.Get())
 
 	want["test_table_03"] = &Table{
-		Name: sqlparser.NewTableIdent("test_table_03"),
+		Name: sqlparser.NewIdentifierCS("test_table_03"),
 		Fields: []*querypb.Field{{
 			Name: "pk1",
 			Type: sqltypes.Int32,
@@ -186,7 +186,7 @@ func TestOpenAndReload(t *testing.T) {
 		AllocatedSize: 256,
 	}
 	want["test_table_04"] = &Table{
-		Name: sqlparser.NewTableIdent("test_table_04"),
+		Name: sqlparser.NewIdentifierCS("test_table_04"),
 		Fields: []*querypb.Field{{
 			Name: "pk",
 			Type: sqltypes.Int32,
@@ -317,7 +317,7 @@ func TestReloadWithSwappedTables(t *testing.T) {
 	err := se.Reload(context.Background())
 	require.NoError(t, err)
 	want["test_table_04"] = &Table{
-		Name: sqlparser.NewTableIdent("test_table_04"),
+		Name: sqlparser.NewIdentifierCS("test_table_04"),
 		Fields: []*querypb.Field{{
 			Name: "mypk",
 			Type: sqltypes.Int32,
@@ -386,7 +386,7 @@ func TestReloadWithSwappedTables(t *testing.T) {
 	delete(want, "test_table_03")
 	delete(want, "test_table_04")
 	want["test_table_03"] = &Table{
-		Name: sqlparser.NewTableIdent("test_table_03"),
+		Name: sqlparser.NewIdentifierCS("test_table_03"),
 		Fields: []*querypb.Field{{
 			Name: "mypk",
 			Type: sqltypes.Int32,
@@ -397,7 +397,7 @@ func TestReloadWithSwappedTables(t *testing.T) {
 		AllocatedSize: 256,
 	}
 	want["test_table_04"] = &Table{
-		Name: sqlparser.NewTableIdent("test_table_04"),
+		Name: sqlparser.NewIdentifierCS("test_table_04"),
 		Fields: []*querypb.Field{{
 			Name: "pk",
 			Type: sqltypes.Int32,
@@ -500,10 +500,10 @@ func newDBConfigs(db *fakesqldb.DB) *dbconfigs.DBConfigs {
 func initialSchema() map[string]*Table {
 	return map[string]*Table{
 		"dual": {
-			Name: sqlparser.NewTableIdent("dual"),
+			Name: sqlparser.NewIdentifierCS("dual"),
 		},
 		"test_table_01": {
-			Name: sqlparser.NewTableIdent("test_table_01"),
+			Name: sqlparser.NewIdentifierCS("test_table_01"),
 			Fields: []*querypb.Field{{
 				Name: "pk",
 				Type: sqltypes.Int32,
@@ -514,7 +514,7 @@ func initialSchema() map[string]*Table {
 			AllocatedSize: 0x96,
 		},
 		"test_table_02": {
-			Name: sqlparser.NewTableIdent("test_table_02"),
+			Name: sqlparser.NewIdentifierCS("test_table_02"),
 			Fields: []*querypb.Field{{
 				Name: "pk",
 				Type: sqltypes.Int32,
@@ -525,7 +525,7 @@ func initialSchema() map[string]*Table {
 			AllocatedSize: 0x96,
 		},
 		"test_table_03": {
-			Name: sqlparser.NewTableIdent("test_table_03"),
+			Name: sqlparser.NewIdentifierCS("test_table_03"),
 			Fields: []*querypb.Field{{
 				Name: "pk",
 				Type: sqltypes.Int32,
@@ -536,7 +536,7 @@ func initialSchema() map[string]*Table {
 			AllocatedSize: 0x96,
 		},
 		"seq": {
-			Name: sqlparser.NewTableIdent("seq"),
+			Name: sqlparser.NewIdentifierCS("seq"),
 			Type: Sequence,
 			Fields: []*querypb.Field{{
 				Name: "id",
@@ -558,7 +558,7 @@ func initialSchema() map[string]*Table {
 			SequenceInfo:  &SequenceInfo{},
 		},
 		"msg": {
-			Name: sqlparser.NewTableIdent("msg"),
+			Name: sqlparser.NewIdentifierCS("msg"),
 			Type: Message,
 			Fields: []*querypb.Field{{
 				Name: "id",

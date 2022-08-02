@@ -954,7 +954,7 @@ func (e *Executor) validateAndEditCreateTableStatement(ctx context.Context, onli
 		case *sqlparser.ConstraintDefinition:
 			oldName := node.Name.String()
 			newName := newConstraintName(sqlparser.CanonicalString(node.Details), oldName)
-			node.Name = sqlparser.NewColIdent(newName)
+			node.Name = sqlparser.NewIdentifierCI(newName)
 			constraintMap[oldName] = newName
 		}
 		return true, nil
@@ -977,7 +977,7 @@ func (e *Executor) validateAndEditAlterTableStatement(ctx context.Context, alter
 				if !ok {
 					return false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Found DROP CONSTRAINT: %v, but could not find constraint name in map", sqlparser.CanonicalString(node))
 				}
-				node.Name = sqlparser.NewColIdent(mappedName)
+				node.Name = sqlparser.NewIdentifierCI(mappedName)
 			}
 		}
 		return true, nil

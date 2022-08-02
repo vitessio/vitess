@@ -18,6 +18,7 @@ package vtgate
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
@@ -32,8 +33,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/stretchr/testify/assert"
-
-	"context"
 
 	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/sqltypes"

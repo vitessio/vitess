@@ -96,7 +96,7 @@ Gen4 plan same as above
 # Aggregate detection (group_concat)
 "select group_concat(user.a) from user join user_extra"
 "unsupported: cross-shard query with aggregates"
-Gen4 error: unsupported: in scatter query: complex aggregate expression
+Gen4 error: unsupported: in scatter query: aggregation function 'group_concat'
 
 # subqueries not supported in group by
 "select id from user group by id, (select id from user_extra)"

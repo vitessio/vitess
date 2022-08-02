@@ -319,7 +319,7 @@ func translateIntroducerExpr(introduced *sqlparser.IntroducerExpr, lookup Transl
 
 func translateFuncExpr(fn *sqlparser.FuncExpr, lookup TranslationLookup) (Expr, error) {
 	var args TupleExpr
-	var aliases []sqlparser.ColIdent
+	var aliases []sqlparser.IdentifierCI
 	for _, expr := range fn.Exprs {
 		aliased, ok := expr.(*sqlparser.AliasedExpr)
 		if !ok {

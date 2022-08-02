@@ -2241,11 +2241,6 @@ Gen4 plan same as above
 "Unknown column '2' in 'group statement'"
 Gen4 plan same as above
 
-# syntax error detected by planbuilder
-"select count(distinct *) from user"
-"syntax error: count(distinct *)"
-Gen4 plan same as above
-
 # here it is safe to remove the order by on the derived table since it will not influence the output of the count(*)
 "select count(*) from (select user.col, user_extra.extra from user join user_extra on user.id = user_extra.user_id order by user_extra.extra) a"
 "unsupported: cross-shard query with aggregates"

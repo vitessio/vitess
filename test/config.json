@@ -669,6 +669,15 @@
 			"RetryMax": 2,
 			"Tags": []
 		},
+		"vtgate_queries_misc": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/queries/misc"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vtgate_queries",
+			"RetryMax": 1,
+			"Tags": []
+		},
 		"vtgate_queries_normalize": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/queries/normalize"],

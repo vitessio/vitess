@@ -182,7 +182,7 @@ func TestInformationSchemaWithTableAndSchemaWithRoutedTables(t *testing.T) {
 			if tc.routed {
 				vc.tableRoutes = tableRoutes{
 					tbl: &vindexes.Table{
-						Name:     sqlparser.NewTableIdent("routedTable"),
+						Name:     sqlparser.NewIdentifierCS("routedTable"),
 						Keyspace: &vindexes.Keyspace{Name: "routedKeyspace"},
 					}}
 			}

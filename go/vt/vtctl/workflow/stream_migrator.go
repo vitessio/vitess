@@ -712,7 +712,7 @@ func (sm *StreamMigrator) templatizeKeyRange(ctx context.Context, rule *binlogda
 	// There was no in_keyrange expression. Create a new one.
 	vtable := sm.ts.SourceKeyspaceSchema().Tables[rule.Match]
 	inkr := &sqlparser.FuncExpr{
-		Name: sqlparser.NewColIdent("in_keyrange"),
+		Name: sqlparser.NewIdentifierCI("in_keyrange"),
 		Exprs: sqlparser.SelectExprs{
 			&sqlparser.AliasedExpr{Expr: &sqlparser.ColName{Name: vtable.ColumnVindexes[0].Columns[0]}},
 			&sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral(vtable.ColumnVindexes[0].Type)},

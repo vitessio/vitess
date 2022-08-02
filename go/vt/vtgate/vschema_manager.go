@@ -196,7 +196,7 @@ func (vm *VSchemaManager) updateFromSchema(vschema *vindexes.VSchema) {
 			if vTbl == nil {
 				// a table that is unknown by the vschema. we add it as a normal table
 				ks.Tables[tblName] = &vindexes.Table{
-					Name:                    sqlparser.NewTableIdent(tblName),
+					Name:                    sqlparser.NewIdentifierCS(tblName),
 					Keyspace:                ks.Keyspace,
 					Columns:                 columns,
 					ColumnListAuthoritative: true,

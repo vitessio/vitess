@@ -154,8 +154,8 @@ func TestVaultAuth(t *testing.T) {
 	require.True(t, bytes.Contains(logContents, []byte(tokenRenewalString)))
 }
 
-func startVaultServer(t *testing.T) *VaultServer {
-	vs := &VaultServer{
+func startVaultServer(t *testing.T) *Server {
+	vs := &Server{
 		address: hostname,
 		port1:   clusterInstance.GetAndReservePort(),
 		port2:   clusterInstance.GetAndReservePort(),
@@ -167,7 +167,7 @@ func startVaultServer(t *testing.T) *VaultServer {
 }
 
 // Setup everything we need in the Vault server
-func setupVaultServer(t *testing.T, vs *VaultServer) (string, string) {
+func setupVaultServer(t *testing.T, vs *Server) (string, string) {
 	// The setup script uses these environment variables
 	//   We also reuse VAULT_ADDR and VAULT_CACERT later on
 	os.Setenv("VAULT", vs.execPath)

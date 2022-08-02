@@ -307,15 +307,6 @@ func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 		if node.Join == sqlparser.NaturalJoinType || node.Join == sqlparser.NaturalRightJoinType || node.Join == sqlparser.NaturalLeftJoinType {
 			return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: "+node.Join.ToString())
 		}
-	case *sqlparser.FuncExpr:
-		if node.Distinct {
-			err := vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "syntax error: %s", sqlparser.String(node))
-			if len(node.Exprs) < 1 {
-				return err
-			} else if _, ok := node.Exprs[0].(*sqlparser.AliasedExpr); !ok {
-				return err
-			}
-		}
 	case *sqlparser.LockingFunc:
 		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%v allowed only with dual", sqlparser.String(node))
 	case *sqlparser.Union:

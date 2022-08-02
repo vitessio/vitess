@@ -246,14 +246,14 @@ func expandTableColumns(
 
 		addColName := func(col ColumnInfo) {
 			var colName *sqlparser.ColName
-			var alias sqlparser.ColIdent
+			var alias sqlparser.IdentifierCI
 			if withQualifier {
 				colName = sqlparser.NewColNameWithQualifier(col.Name, tblName)
 			} else {
 				colName = sqlparser.NewColName(col.Name)
 			}
 			if withAlias {
-				alias = sqlparser.NewColIdent(col.Name)
+				alias = sqlparser.NewIdentifierCI(col.Name)
 			}
 			colNames = append(colNames, &sqlparser.AliasedExpr{Expr: colName, As: alias})
 		}

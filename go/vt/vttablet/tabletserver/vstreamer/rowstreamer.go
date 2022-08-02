@@ -191,7 +191,7 @@ func (rs *rowStreamer) buildPKColumnsFromUniqueKey() ([]int, error) {
 	// We wish to utilize a UNIQUE KEY which is not the PRIMARY KEY/
 
 	for _, colName := range rs.ukColumnNames {
-		index := rs.plan.Table.FindColumn(sqlparser.NewColIdent(colName))
+		index := rs.plan.Table.FindColumn(sqlparser.NewIdentifierCI(colName))
 		if index < 0 {
 			return pkColumns, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "column %v is listed as unique key, but not present in table %v", colName, rs.plan.Table.Name)
 		}
@@ -235,13 +235,13 @@ func (rs *rowStreamer) buildSelect() (string, error) {
 	prefix := ""
 	for _, col := range rs.plan.Table.Fields {
 		if rs.plan.isConvertColumnUsingUTF8(col.Name) {
-			buf.Myprintf("%sconvert(%v using utf8mb4) as %v", prefix, sqlparser.NewColIdent(col.Name), sqlparser.NewColIdent(col.Name))
+			buf.Myprintf("%sconvert(%v using utf8mb4) as %v", prefix, sqlparser.NewIdentifierCI(col.Name), sqlparser.NewIdentifierCI(col.Name))
 		} else {
-			buf.Myprintf("%s%v", prefix, sqlparser.NewColIdent(col.Name))
+			buf.Myprintf("%s%v", prefix, sqlparser.NewIdentifierCI(col.Name))
 		}
 		prefix = ", "
 	}
-	buf.Myprintf(" from %v", sqlparser.NewTableIdent(rs.plan.Table.Name))
+	buf.Myprintf(" from %v", sqlparser.NewIdentifierCS(rs.plan.Table.Name))
 	if len(rs.lastpk) != 0 {
 		if len(rs.lastpk) != len(rs.pkColumns) {
 			return "", fmt.Errorf("primary key values don't match length: %v vs %v", rs.lastpk, rs.pkColumns)
@@ -257,19 +257,19 @@ func (rs *rowStreamer) buildSelect() (string, error) {
 			buf.Myprintf("%s(", prefix)
 			prefix = " or "
 			for i, pk := range rs.pkColumns[:lastcol] {
-				buf.Myprintf("%v = ", sqlparser.NewColIdent(rs.plan.Table.Fields[pk].Name))
+				buf.Myprintf("%v = ", sqlparser.NewIdentifierCI(rs.plan.Table.Fields[pk].Name))
 				rs.lastpk[i].EncodeSQL(buf)
 				buf.Myprintf(" and ")
 			}
-			buf.Myprintf("%v > ", sqlparser.NewColIdent(rs.plan.Table.Fields[rs.pkColumns[lastcol]].Name))
+			buf.Myprintf("%v > ", sqlparser.NewIdentifierCI(rs.plan.Table.Fields[rs.pkColumns[lastcol]].Name))
 			rs.lastpk[lastcol].EncodeSQL(buf)
 			buf.Myprintf(")")
 		}
 	}
-	buf.Myprintf(" order by ", sqlparser.NewTableIdent(rs.plan.Table.Name))
+	buf.Myprintf(" order by ", sqlparser.NewIdentifierCS(rs.plan.Table.Name))
 	prefix = ""
 	for _, pk := range rs.pkColumns {
-		buf.Myprintf("%s%v", prefix, sqlparser.NewColIdent(rs.plan.Table.Fields[pk].Name))
+		buf.Myprintf("%s%v", prefix, sqlparser.NewIdentifierCI(rs.plan.Table.Fields[pk].Name))
 		prefix = ", "
 	}
 	return buf.String(), nil

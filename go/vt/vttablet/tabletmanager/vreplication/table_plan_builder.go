@@ -42,7 +42,7 @@ const ExcludeStr = "exclude"
 
 // tablePlanBuilder contains the metadata needed for building a TablePlan.
 type tablePlanBuilder struct {
-	name       sqlparser.TableIdent
+	name       sqlparser.IdentifierCS
 	sendSelect *sqlparser.Select
 	// selColumns keeps track of the columns we want to pull from source.
 	// If Lastpk is set, we compare this list against the table's pk and
@@ -60,7 +60,7 @@ type tablePlanBuilder struct {
 // colExpr describes the processing to be performed to
 // compute the value of one column of the target table.
 type colExpr struct {
-	colName sqlparser.ColIdent
+	colName sqlparser.IdentifierCI
 	colType querypb.Type
 	// operation==opExpr: full expression is set
 	// operation==opCount: nothing is set.
@@ -199,11 +199,11 @@ func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*Colum
 	switch {
 	case filter == "":
 		buf := sqlparser.NewTrackedBuffer(nil)
-		buf.Myprintf("select * from %v", sqlparser.NewTableIdent(tableName))
+		buf.Myprintf("select * from %v", sqlparser.NewIdentifierCS(tableName))
 		query = buf.String()
 	case key.IsKeyRange(filter):
 		buf := sqlparser.NewTrackedBuffer(nil)
-		buf.Myprintf("select * from %v where in_keyrange(%v)", sqlparser.NewTableIdent(tableName), sqlparser.NewStrLiteral(filter))
+		buf.Myprintf("select * from %v where in_keyrange(%v)", sqlparser.NewIdentifierCS(tableName), sqlparser.NewStrLiteral(filter))
 		query = buf.String()
 	case filter == ExcludeStr:
 		return nil, nil
@@ -245,7 +245,7 @@ func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*Colum
 	}
 
 	tpb := &tablePlanBuilder{
-		name: sqlparser.NewTableIdent(tableName),
+		name: sqlparser.NewIdentifierCS(tableName),
 		sendSelect: &sqlparser.Select{
 			From:  sel.From,
 			Where: sel.Where,
@@ -268,7 +268,7 @@ func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*Colum
 	// care.
 	if tpb.lastpk != nil {
 		for _, f := range tpb.lastpk.Fields {
-			tpb.addCol(sqlparser.NewColIdent(f.Name))
+			tpb.addCol(sqlparser.NewIdentifierCI(f.Name))
 		}
 	}
 	if err := tpb.analyzeGroupBy(sel.GroupBy); err != nil {
@@ -429,25 +429,33 @@ func (tpb *tablePlanBuilder) analyzeExpr(selExpr sqlparser.SelectExpr) (*colExpr
 		return cexpr, nil
 	}
 	if expr, ok := aliased.Expr.(*sqlparser.FuncExpr); ok {
-		if expr.Distinct {
+		switch fname := expr.Name.Lowered(); fname {
+		case "keyspace_id":
+			if len(expr.Exprs) != 0 {
+				return nil, fmt.Errorf("unexpected: %v", sqlparser.String(expr))
+			}
+			tpb.sendSelect.SelectExprs = append(tpb.sendSelect.SelectExprs, &sqlparser.AliasedExpr{Expr: aliased.Expr})
+			// The vstreamer responds with "keyspace_id" as the field name for this request.
+			cexpr.expr = &sqlparser.ColName{Name: sqlparser.NewIdentifierCI("keyspace_id")}
+			return cexpr, nil
+		}
+	}
+	if expr, ok := aliased.Expr.(sqlparser.AggrFunc); ok {
+		if expr.IsDistinct() {
 			return nil, fmt.Errorf("unexpected: %v", sqlparser.String(expr))
 		}
-		switch fname := expr.Name.Lowered(); fname {
+		switch fname := strings.ToLower(expr.AggrName()); fname {
 		case "count":
-			if _, ok := expr.Exprs[0].(*sqlparser.StarExpr); !ok {
+			if _, ok := expr.(*sqlparser.CountStar); !ok {
 				return nil, fmt.Errorf("only count(*) is supported: %v", sqlparser.String(expr))
 			}
 			cexpr.operation = opCount
 			return cexpr, nil
 		case "sum":
-			if len(expr.Exprs) != 1 {
+			if len(expr.GetArgs()) != 1 {
 				return nil, fmt.Errorf("unexpected: %v", sqlparser.String(expr))
 			}
-			aInner, ok := expr.Exprs[0].(*sqlparser.AliasedExpr)
-			if !ok {
-				return nil, fmt.Errorf("unexpected: %v", sqlparser.String(expr))
-			}
-			innerCol, ok := aInner.Expr.(*sqlparser.ColName)
+			innerCol, ok := expr.GetArg().(*sqlparser.ColName)
 			if !ok {
 				return nil, fmt.Errorf("unexpected: %v", sqlparser.String(expr))
 			}
@@ -458,14 +466,6 @@ func (tpb *tablePlanBuilder) analyzeExpr(selExpr sqlparser.SelectExpr) (*colExpr
 			cexpr.expr = innerCol
 			tpb.addCol(innerCol.Name)
 			cexpr.references[innerCol.Name.String()] = true
-			return cexpr, nil
-		case "keyspace_id":
-			if len(expr.Exprs) != 0 {
-				return nil, fmt.Errorf("unexpected: %v", sqlparser.String(expr))
-			}
-			tpb.sendSelect.SelectExprs = append(tpb.sendSelect.SelectExprs, &sqlparser.AliasedExpr{Expr: aliased.Expr})
-			// The vstreamer responds with "keyspace_id" as the field name for this request.
-			cexpr.expr = &sqlparser.ColName{Name: sqlparser.NewColIdent("keyspace_id")}
 			return cexpr, nil
 		}
 	}
@@ -479,11 +479,8 @@ func (tpb *tablePlanBuilder) analyzeExpr(selExpr sqlparser.SelectExpr) (*colExpr
 			cexpr.references[node.Name.String()] = true
 		case *sqlparser.Subquery:
 			return false, fmt.Errorf("unsupported subquery: %v", sqlparser.String(node))
-		case *sqlparser.FuncExpr:
-			// Other aggregates are not supported.
-			if node.IsAggregate() {
-				return false, fmt.Errorf("unexpected: %v", sqlparser.String(node))
-			}
+		case sqlparser.AggrFunc:
+			return false, fmt.Errorf("unexpected: %v", sqlparser.String(node))
 		}
 		return true, nil
 	}, aliased.Expr)
@@ -496,7 +493,7 @@ func (tpb *tablePlanBuilder) analyzeExpr(selExpr sqlparser.SelectExpr) (*colExpr
 
 // addCol adds the specified column to the send query
 // if it's not already present.
-func (tpb *tablePlanBuilder) addCol(ident sqlparser.ColIdent) {
+func (tpb *tablePlanBuilder) addCol(ident sqlparser.IdentifierCI) {
 	tpb.sendSelect.SelectExprs = append(tpb.sendSelect.SelectExprs, &sqlparser.AliasedExpr{
 		Expr: &sqlparser.ColName{Name: ident},
 	})
@@ -558,7 +555,7 @@ func (tpb *tablePlanBuilder) analyzePK(cols []*ColumnInfo) error {
 			// it silently and let it re-materialize by MySQL itself on the target.
 			continue
 		}
-		cexpr := tpb.findCol(sqlparser.NewColIdent(col.Name))
+		cexpr := tpb.findCol(sqlparser.NewIdentifierCI(col.Name))
 		if cexpr == nil {
 			// TODO(shlomi): at some point in the futue we want to make this check stricter.
 			// We could be reading a generated column c1 which in turn selects some other column c2.
@@ -595,11 +592,11 @@ func (tpb *tablePlanBuilder) analyzeExtraSourcePkCols(colInfos []*ColumnInfo, so
 			continue
 		}
 
-		if cexpr := findCol(sqlparser.NewColIdent(col.Name), tpb.pkCols); cexpr != nil {
+		if cexpr := findCol(sqlparser.NewIdentifierCI(col.Name), tpb.pkCols); cexpr != nil {
 			// Column is already found in pkCols. It's not an "extra" column
 			continue
 		}
-		if cexpr := findCol(sqlparser.NewColIdent(col.Name), tpb.colExprs); cexpr != nil {
+		if cexpr := findCol(sqlparser.NewIdentifierCI(col.Name), tpb.colExprs); cexpr != nil {
 			tpb.extraSourcePkCols = append(tpb.extraSourcePkCols, cexpr)
 		} else {
 			// Column not found
@@ -614,7 +611,7 @@ func (tpb *tablePlanBuilder) analyzeExtraSourcePkCols(colInfos []*ColumnInfo, so
 }
 
 // findCol finds a column in a list of expressions
-func findCol(name sqlparser.ColIdent, exprs []*colExpr) *colExpr {
+func findCol(name sqlparser.IdentifierCI, exprs []*colExpr) *colExpr {
 	for _, cexpr := range exprs {
 		if cexpr.colName.Equal(name) {
 			return cexpr
@@ -623,7 +620,7 @@ func findCol(name sqlparser.ColIdent, exprs []*colExpr) *colExpr {
 	return nil
 }
 
-func (tpb *tablePlanBuilder) findCol(name sqlparser.ColIdent) *colExpr {
+func (tpb *tablePlanBuilder) findCol(name sqlparser.IdentifierCI) *colExpr {
 	return findCol(name, tpb.colExprs)
 }
 
@@ -891,7 +888,7 @@ func (tpb *tablePlanBuilder) generatePKConstraint(buf *sqlparser.TrackedBuffer, 
 	for _, pkname := range tpb.lastpk.Fields {
 		charSet, collation := tpb.getCharsetAndCollation(pkname.Name)
 		charSetCollations = append(charSetCollations, &charSetCollation{charSet: charSet, collation: collation})
-		buf.Myprintf("%s%s%v%s", separator, charSet, &sqlparser.ColName{Name: sqlparser.NewColIdent(pkname.Name)}, collation)
+		buf.Myprintf("%s%s%v%s", separator, charSet, &sqlparser.ColName{Name: sqlparser.NewIdentifierCI(pkname.Name)}, collation)
 		separator = ","
 	}
 	separator = ") <= ("
@@ -905,7 +902,7 @@ func (tpb *tablePlanBuilder) generatePKConstraint(buf *sqlparser.TrackedBuffer, 
 	buf.WriteString(")")
 }
 
-func (tpb *tablePlanBuilder) isColumnGenerated(col sqlparser.ColIdent) bool {
+func (tpb *tablePlanBuilder) isColumnGenerated(col sqlparser.IdentifierCI) bool {
 	for _, colInfo := range tpb.colInfos {
 		if col.EqualString(colInfo.Name) && colInfo.IsGenerated {
 			return true

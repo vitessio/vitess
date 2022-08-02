@@ -731,7 +731,7 @@ func (vs *vstreamer) buildTableColumns(tm *mysql.TableMap) ([]*querypb.Field, er
 			Type: t,
 		})
 	}
-	st, err := vs.se.GetTableForPos(sqlparser.NewTableIdent(tm.Name), mysql.EncodePosition(vs.pos))
+	st, err := vs.se.GetTableForPos(sqlparser.NewIdentifierCS(tm.Name), mysql.EncodePosition(vs.pos))
 	if err != nil {
 		if vs.filter.FieldEventMode == binlogdatapb.Filter_ERR_ON_MISMATCH {
 			log.Infof("No schema found for table %s", tm.Name)

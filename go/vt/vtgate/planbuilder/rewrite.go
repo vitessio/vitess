@@ -76,7 +76,7 @@ func (r *rewriter) rewriteDown(cursor *sqlparser.Cursor) bool {
 		}
 		tableName := node.Expr.(sqlparser.TableName)
 		// if the table name matches what the original is, then we do not need to rewrite
-		if sqlparser.EqualsTableIdent(vindexTable.Name, tableName.Name) {
+		if sqlparser.EqualsIdentifierCS(vindexTable.Name, tableName.Name) {
 			break
 		}
 		// if there is no as clause, then move the routed table to the as clause.
@@ -191,7 +191,8 @@ func rewriteHavingClause(node *sqlparser.Select) {
 				}
 				return false
 			default:
-				hasAggr = hasAggr || sqlparser.IsAggregation(x)
+				_, isAggregate := x.(sqlparser.AggrFunc)
+				hasAggr = hasAggr || isAggregate
 			}
 			return true
 		}, nil)

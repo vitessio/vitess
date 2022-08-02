@@ -260,8 +260,8 @@ func (rp *RoutingParameters) routedTable(vcursor VCursor, bindVars map[string]*q
 	var routedKs *vindexes.Keyspace
 	for tblBvName, tableName := range tableNames {
 		tbl := sqlparser.TableName{
-			Name:      sqlparser.NewTableIdent(tableName),
-			Qualifier: sqlparser.NewTableIdent(tableSchema),
+			Name:      sqlparser.NewIdentifierCS(tableName),
+			Qualifier: sqlparser.NewIdentifierCS(tableSchema),
 		}
 		routedTable, err := vcursor.FindRoutedTable(tbl)
 		if err != nil {

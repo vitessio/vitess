@@ -120,7 +120,7 @@ func TestSelectDBA(t *testing.T) {
 		query, map[string]*querypb.BindVariable{},
 	)
 	require.NoError(t, err)
-	wantQueries = []*querypb.BoundQuery{{Sql: "select COUNT(*) from INFORMATION_SCHEMA.`TABLES` as ist where ist.table_schema = :__vtschemaname and ist.table_name = :ist_table_name",
+	wantQueries = []*querypb.BoundQuery{{Sql: "select count(*) from INFORMATION_SCHEMA.`TABLES` as ist where ist.table_schema = :__vtschemaname and ist.table_name = :ist_table_name",
 		BindVariables: map[string]*querypb.BindVariable{
 			"__vtschemaname": sqltypes.StringBindVariable("performance_schema"),
 			"ist_table_name": sqltypes.StringBindVariable("foo"),
@@ -482,7 +482,7 @@ func TestGen4SelectDBA(t *testing.T) {
 		query, map[string]*querypb.BindVariable{},
 	)
 	require.NoError(t, err)
-	wantQueries = []*querypb.BoundQuery{{Sql: "select COUNT(*) from INFORMATION_SCHEMA.`TABLES` as ist where ist.table_schema = :__vtschemaname and ist.table_name = :ist_table_name",
+	wantQueries = []*querypb.BoundQuery{{Sql: "select count(*) from INFORMATION_SCHEMA.`TABLES` as ist where ist.table_schema = :__vtschemaname and ist.table_name = :ist_table_name",
 		BindVariables: map[string]*querypb.BindVariable{
 			"vtg1":           sqltypes.StringBindVariable("performance_schema"),
 			"vtg2":           sqltypes.StringBindVariable("foo"),
@@ -1279,7 +1279,7 @@ func TestSelectDual(t *testing.T) {
 	_, err := executorExec(executor, "select @@aa.bb from dual", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select @@aa.bb from dual",
+		Sql:           "select @@`aa.bb` from dual",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
@@ -3747,4 +3747,20 @@ func TestSelectAggregationData(t *testing.T) {
 			assert.Equal(t, tc.expSandboxQ, conns[0].Queries[0].Sql)
 		})
 	}
+}
+
+func TestSelectHexAndBit(t *testing.T) {
+	executor, _, _, _ := createExecutorEnv()
+	executor.normalize = true
+	session := NewAutocommitSession(&vtgatepb.Session{})
+
+	qr, err := executor.Execute(context.Background(), "TestSelectHexAndBit", session,
+		"select 0b1001, b'1001', 0x9, x'09'", nil)
+	require.NoError(t, err)
+	require.Equal(t, `[[VARBINARY("\t") VARBINARY("\t") VARBINARY("\t") VARBINARY("\t")]]`, fmt.Sprintf("%v", qr.Rows))
+
+	qr, err = executor.Execute(context.Background(), "TestSelectHexAndBit", session,
+		"select 1 + 0b1001, 1 + b'1001', 1 + 0x9, 1 + x'09'", nil)
+	require.NoError(t, err)
+	require.Equal(t, `[[UINT64(10) UINT64(10) UINT64(10) UINT64(10)]]`, fmt.Sprintf("%v", qr.Rows))
 }

@@ -13,22 +13,22 @@ import (
 
 func TestVSchemaUpdate(t *testing.T) {
 	cols1 := []vindexes.Column{{
-		Name: sqlparser.NewColIdent("id"),
+		Name: sqlparser.NewIdentifierCI("id"),
 		Type: querypb.Type_INT64,
 	}}
 	cols2 := []vindexes.Column{{
-		Name: sqlparser.NewColIdent("uid"),
+		Name: sqlparser.NewIdentifierCI("uid"),
 		Type: querypb.Type_INT64,
 	}, {
-		Name: sqlparser.NewColIdent("name"),
+		Name: sqlparser.NewIdentifierCI("name"),
 		Type: querypb.Type_VARCHAR,
 	}}
 	ks := &vindexes.Keyspace{Name: "ks"}
-	dual := &vindexes.Table{Type: vindexes.TypeReference, Name: sqlparser.NewTableIdent("dual"), Keyspace: ks}
-	tblNoCol := &vindexes.Table{Name: sqlparser.NewTableIdent("tbl"), Keyspace: ks, ColumnListAuthoritative: true}
-	tblCol1 := &vindexes.Table{Name: sqlparser.NewTableIdent("tbl"), Keyspace: ks, Columns: cols1, ColumnListAuthoritative: true}
-	tblCol2 := &vindexes.Table{Name: sqlparser.NewTableIdent("tbl"), Keyspace: ks, Columns: cols2, ColumnListAuthoritative: true}
-	tblCol2NA := &vindexes.Table{Name: sqlparser.NewTableIdent("tbl"), Keyspace: ks, Columns: cols2}
+	dual := &vindexes.Table{Type: vindexes.TypeReference, Name: sqlparser.NewIdentifierCS("dual"), Keyspace: ks}
+	tblNoCol := &vindexes.Table{Name: sqlparser.NewIdentifierCS("tbl"), Keyspace: ks, ColumnListAuthoritative: true}
+	tblCol1 := &vindexes.Table{Name: sqlparser.NewIdentifierCS("tbl"), Keyspace: ks, Columns: cols1, ColumnListAuthoritative: true}
+	tblCol2 := &vindexes.Table{Name: sqlparser.NewIdentifierCS("tbl"), Keyspace: ks, Columns: cols2, ColumnListAuthoritative: true}
+	tblCol2NA := &vindexes.Table{Name: sqlparser.NewIdentifierCS("tbl"), Keyspace: ks, Columns: cols2}
 
 	tcases := []struct {
 		name           string
@@ -120,22 +120,22 @@ func TestVSchemaUpdate(t *testing.T) {
 
 func TestRebuildVSchema(t *testing.T) {
 	cols1 := []vindexes.Column{{
-		Name: sqlparser.NewColIdent("id"),
+		Name: sqlparser.NewIdentifierCI("id"),
 		Type: querypb.Type_INT64,
 	}}
 	cols2 := []vindexes.Column{{
-		Name: sqlparser.NewColIdent("uid"),
+		Name: sqlparser.NewIdentifierCI("uid"),
 		Type: querypb.Type_INT64,
 	}, {
-		Name: sqlparser.NewColIdent("name"),
+		Name: sqlparser.NewIdentifierCI("name"),
 		Type: querypb.Type_VARCHAR,
 	}}
 	ks := &vindexes.Keyspace{Name: "ks"}
-	dual := &vindexes.Table{Type: vindexes.TypeReference, Name: sqlparser.NewTableIdent("dual"), Keyspace: ks}
-	tblNoCol := &vindexes.Table{Name: sqlparser.NewTableIdent("tbl"), Keyspace: ks, ColumnListAuthoritative: true}
-	tblCol1 := &vindexes.Table{Name: sqlparser.NewTableIdent("tbl"), Keyspace: ks, Columns: cols1, ColumnListAuthoritative: true}
-	tblCol2 := &vindexes.Table{Name: sqlparser.NewTableIdent("tbl"), Keyspace: ks, Columns: cols2, ColumnListAuthoritative: true}
-	tblCol2NA := &vindexes.Table{Name: sqlparser.NewTableIdent("tbl"), Keyspace: ks, Columns: cols2}
+	dual := &vindexes.Table{Type: vindexes.TypeReference, Name: sqlparser.NewIdentifierCS("dual"), Keyspace: ks}
+	tblNoCol := &vindexes.Table{Name: sqlparser.NewIdentifierCS("tbl"), Keyspace: ks, ColumnListAuthoritative: true}
+	tblCol1 := &vindexes.Table{Name: sqlparser.NewIdentifierCS("tbl"), Keyspace: ks, Columns: cols1, ColumnListAuthoritative: true}
+	tblCol2 := &vindexes.Table{Name: sqlparser.NewIdentifierCS("tbl"), Keyspace: ks, Columns: cols2, ColumnListAuthoritative: true}
+	tblCol2NA := &vindexes.Table{Name: sqlparser.NewIdentifierCS("tbl"), Keyspace: ks, Columns: cols2}
 
 	tcases := []struct {
 		name       string

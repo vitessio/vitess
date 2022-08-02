@@ -41,8 +41,8 @@ import (
 
 func TestConsistentLookupInit(t *testing.T) {
 	lookup := createConsistentLookup(t, "consistent_lookup", true)
-	cols := []sqlparser.ColIdent{
-		sqlparser.NewColIdent("fc"),
+	cols := []sqlparser.IdentifierCI{
+		sqlparser.NewIdentifierCI("fc"),
 	}
 	err := lookup.(WantOwnerInfo).SetOwnerInfo("ks", "t1", cols)
 	want := "does not match"
@@ -487,9 +487,9 @@ func createConsistentLookup(t *testing.T, name string, writeOnly bool) SingleCol
 	if err != nil {
 		t.Fatal(err)
 	}
-	cols := []sqlparser.ColIdent{
-		sqlparser.NewColIdent("fc1"),
-		sqlparser.NewColIdent("fc2"),
+	cols := []sqlparser.IdentifierCI{
+		sqlparser.NewIdentifierCI("fc1"),
+		sqlparser.NewIdentifierCI("fc2"),
 	}
 	if err := l.(WantOwnerInfo).SetOwnerInfo("ks", "dot.t1", cols); err != nil {
 		t.Fatal(err)

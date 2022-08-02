@@ -23336,7 +23336,8 @@ export namespace query {
         JSON = 2078,
         EXPRESSION = 31,
         HEXNUM = 4128,
-        HEXVAL = 4129
+        HEXVAL = 4129,
+        BITNUM = 4130
     }
 
     /** Properties of a Value. */

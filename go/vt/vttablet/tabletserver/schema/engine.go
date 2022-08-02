@@ -454,7 +454,7 @@ func (se *Engine) populatePrimaryKeys(ctx context.Context, conn *connpool.DBConn
 			continue
 		}
 		colName := row[1].ToString()
-		index := table.FindColumn(sqlparser.NewColIdent(colName))
+		index := table.FindColumn(sqlparser.NewIdentifierCI(colName))
 		if index < 0 {
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "column %v is listed as primary key, but not present in table %v", colName, tableName)
 		}
@@ -470,7 +470,7 @@ func (se *Engine) RegisterVersionEvent() error {
 }
 
 // GetTableForPos returns a best-effort schema for a specific gtid
-func (se *Engine) GetTableForPos(tableName sqlparser.TableIdent, gtid string) (*binlogdatapb.MinimalTable, error) {
+func (se *Engine) GetTableForPos(tableName sqlparser.IdentifierCS, gtid string) (*binlogdatapb.MinimalTable, error) {
 	mt, err := se.historian.GetTableForPos(tableName, gtid)
 	if err != nil {
 		log.Infof("GetTableForPos returned error: %s", err.Error())
@@ -548,7 +548,7 @@ func (se *Engine) broadcast(created, altered, dropped []string) {
 }
 
 // GetTable returns the info for a table.
-func (se *Engine) GetTable(tableName sqlparser.TableIdent) *Table {
+func (se *Engine) GetTable(tableName sqlparser.IdentifierCS) *Table {
 	se.mu.Lock()
 	defer se.mu.Unlock()
 	return se.tables[tableName.String()]

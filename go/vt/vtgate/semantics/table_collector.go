@@ -106,14 +106,14 @@ func (tc *tableCollector) up(cursor *sqlparser.Cursor) error {
 	return nil
 }
 
-func newVindexTable(t sqlparser.TableIdent) *vindexes.Table {
+func newVindexTable(t sqlparser.IdentifierCS) *vindexes.Table {
 	vindexCols := []vindexes.Column{
-		{Name: sqlparser.NewColIdent("id")},
-		{Name: sqlparser.NewColIdent("keyspace_id")},
-		{Name: sqlparser.NewColIdent("range_start")},
-		{Name: sqlparser.NewColIdent("range_end")},
-		{Name: sqlparser.NewColIdent("hex_keyspace_id")},
-		{Name: sqlparser.NewColIdent("shard")},
+		{Name: sqlparser.NewIdentifierCI("id")},
+		{Name: sqlparser.NewIdentifierCI("keyspace_id")},
+		{Name: sqlparser.NewIdentifierCI("range_start")},
+		{Name: sqlparser.NewIdentifierCI("range_end")},
+		{Name: sqlparser.NewIdentifierCI("hex_keyspace_id")},
+		{Name: sqlparser.NewIdentifierCI("shard")},
 	}
 
 	return &vindexes.Table{

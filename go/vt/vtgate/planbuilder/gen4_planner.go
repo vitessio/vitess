@@ -328,9 +328,9 @@ func rewriteRoutedTables(updStmt *sqlparser.Update, vschema plancontext.VSchema)
 			name := tableName.Name
 			if aliasTbl.As.IsEmpty() {
 				// if the user hasn't specified an alias, we'll insert one here so the old table name still works
-				aliasTbl.As = sqlparser.NewTableIdent(name.String())
+				aliasTbl.As = sqlparser.NewIdentifierCS(name.String())
 			}
-			tableName.Name = sqlparser.NewTableIdent(vschemaTable.Name.String())
+			tableName.Name = sqlparser.NewIdentifierCS(vschemaTable.Name.String())
 			aliasTbl.Expr = tableName
 		}
 

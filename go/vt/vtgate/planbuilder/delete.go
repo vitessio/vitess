@@ -74,8 +74,8 @@ func rewriteSingleTbl(del *sqlparser.Delete) (*sqlparser.Delete, error) {
 	if !ok {
 		return del, nil
 	}
-	if !atExpr.As.IsEmpty() && !sqlparser.EqualsTableIdent(del.Targets[0].Name, atExpr.As) {
-		//Unknown table in MULTI DELETE
+	if !atExpr.As.IsEmpty() && !sqlparser.EqualsIdentifierCS(del.Targets[0].Name, atExpr.As) {
+		// Unknown table in MULTI DELETE
 		return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.UnknownTable, "Unknown table '%s' in MULTI DELETE", del.Targets[0].Name.String())
 	}
 
@@ -84,8 +84,8 @@ func rewriteSingleTbl(del *sqlparser.Delete) (*sqlparser.Delete, error) {
 		// derived table
 		return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUpdateableTable, "The target table %s of the DELETE is not updatable", atExpr.As.String())
 	}
-	if atExpr.As.IsEmpty() && !sqlparser.EqualsTableIdent(del.Targets[0].Name, tbl.Name) {
-		//Unknown table in MULTI DELETE
+	if atExpr.As.IsEmpty() && !sqlparser.EqualsIdentifierCS(del.Targets[0].Name, tbl.Name) {
+		// Unknown table in MULTI DELETE
 		return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.UnknownTable, "Unknown table '%s' in MULTI DELETE", del.Targets[0].Name.String())
 	}
 

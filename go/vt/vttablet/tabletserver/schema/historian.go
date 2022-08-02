@@ -131,7 +131,7 @@ func (h *historian) RegisterVersionEvent() error {
 }
 
 // GetTableForPos returns a best-effort schema for a specific gtid
-func (h *historian) GetTableForPos(tableName sqlparser.TableIdent, gtid string) (*binlogdatapb.MinimalTable, error) {
+func (h *historian) GetTableForPos(tableName sqlparser.IdentifierCS, gtid string) (*binlogdatapb.MinimalTable, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if !h.isOpen {
@@ -232,7 +232,7 @@ func (h *historian) sortSchemas() {
 }
 
 // getTableFromHistoryForPos looks in the cache for a schema for a specific gtid
-func (h *historian) getTableFromHistoryForPos(tableName sqlparser.TableIdent, pos mysql.Position) *binlogdatapb.MinimalTable {
+func (h *historian) getTableFromHistoryForPos(tableName sqlparser.IdentifierCS, pos mysql.Position) *binlogdatapb.MinimalTable {
 	idx := sort.Search(len(h.schemas), func(i int) bool {
 		return pos.Equal(h.schemas[i].pos) || !pos.AtLeast(h.schemas[i].pos)
 	})

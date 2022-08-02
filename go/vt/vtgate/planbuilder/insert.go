@@ -328,7 +328,7 @@ func extractColVindexOffsets(ins *sqlparser.Insert, colVindexes []*vindexes.Colu
 
 // findColumn returns the column index where it is placed on the insert column list.
 // Otherwise, return -1 when not found.
-func findColumn(ins *sqlparser.Insert, col sqlparser.ColIdent) int {
+func findColumn(ins *sqlparser.Insert, col sqlparser.IdentifierCI) int {
 	for i, column := range ins.Columns {
 		if col.Equal(column) {
 			return i
@@ -412,7 +412,7 @@ func modifyForAutoinc(ins *sqlparser.Insert, eins *engine.Insert) error {
 
 // findOrAddColumn finds the position of a column in the insert. If it's
 // absent it appends it to the with NULL values and returns that position.
-func findOrAddColumn(ins *sqlparser.Insert, col sqlparser.ColIdent) int {
+func findOrAddColumn(ins *sqlparser.Insert, col sqlparser.IdentifierCI) int {
 	colNum := findColumn(ins, col)
 	if colNum >= 0 {
 		return colNum

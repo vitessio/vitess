@@ -61,20 +61,20 @@ func buildSetPlan(stmt *sqlparser.Set, vschema plancontext.VSchema) (engine.Prim
 		// we have a UDV. If the original query didn't explicitly specify the scope, it
 		// would have been explictly set to sqlparser.SessionStr before reaching this
 		// phase of planning
-		switch expr.Scope {
+		switch expr.Var.Scope {
 		case sqlparser.GlobalScope:
 			setOp, err := planSysVarCheckIgnore(expr, vschema, true)
 			if err != nil {
 				return nil, err
 			}
 			setOps = append(setOps, setOp)
-		case sqlparser.ImplicitScope:
+		case sqlparser.VariableScope:
 			evalExpr, err := ec.convert(expr.Expr /*boolean*/, false /*identifierAsString*/, false)
 			if err != nil {
 				return nil, err
 			}
 			setOp := &engine.UserDefinedVariable{
-				Name: expr.Name.Lowered(),
+				Name: expr.Var.Name.Lowered(),
 				Expr: evalExpr,
 			}
 			setOps = append(setOps, setOp)
@@ -95,13 +95,13 @@ func buildSetPlan(stmt *sqlparser.Set, vschema plancontext.VSchema) (engine.Prim
 			}
 			val, ok := value.(string)
 			if !ok {
-				return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValueForVar, "unexpected value type for '%s': %v", expr.Name, value)
+				return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValueForVar, "unexpected value type for '%s': %v", expr.Var.Name, value)
 			}
 
 			setOps = append(setOps,
-				&engine.VitessMetadata{Name: expr.Name.Lowered(), Value: val})
+				&engine.VitessMetadata{Name: expr.Var.Name.Lowered(), Value: val})
 		default:
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: undefined set type: %v", expr.Scope)
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: undefined set type: %v", expr.Var.Scope.ToString())
 		}
 	}
 
@@ -118,13 +118,13 @@ func buildSetPlan(stmt *sqlparser.Set, vschema plancontext.VSchema) (engine.Prim
 
 func buildSetOpReadOnly(s setting) planFunc {
 	return func(expr *sqlparser.SetExpr, schema plancontext.VSchema, _ *expressionConverter) (engine.SetOp, error) {
-		return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.IncorrectGlobalLocalVar, "variable '%s' is a read only variable", expr.Name)
+		return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.IncorrectGlobalLocalVar, "variable '%s' is a read only variable", expr.Var.Name)
 	}
 }
 
 func buildNotSupported(setting) planFunc {
 	return func(expr *sqlparser.SetExpr, schema plancontext.VSchema, _ *expressionConverter) (engine.SetOp, error) {
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%s: system setting is not supported", expr.Name)
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%s: system setting is not supported", expr.Var.Name)
 	}
 }
 
@@ -135,7 +135,7 @@ func buildSetOpIgnore(s setting) planFunc {
 			return nil, err
 		}
 		return &engine.SysVarIgnore{
-			Name: expr.Name.Lowered(),
+			Name: expr.Var.Name.Lowered(),
 			Expr: value,
 		}, nil
 	}
@@ -158,7 +158,7 @@ func planSysVarCheckIgnore(expr *sqlparser.SetExpr, schema plancontext.VSchema, 
 	}
 
 	return &engine.SysVarCheckAndIgnore{
-		Name:              expr.Name.Lowered(),
+		Name:              expr.Var.Name.Lowered(),
 		Keyspace:          keyspace,
 		TargetDestination: dest,
 		Expr:              value,
@@ -180,7 +180,7 @@ func buildSetOpReservedConn(s setting) planFunc {
 		}
 
 		return &engine.SysVarReservedConn{
-			Name:              expr.Name.Lowered(),
+			Name:              expr.Var.Name.Lowered(),
 			Keyspace:          ks,
 			TargetDestination: vschema.Destination(),
 			Expr:              value,
@@ -199,7 +199,7 @@ func buildSetOpVitessAware(s setting) planFunc {
 		_, isDefault := astExpr.Expr.(*sqlparser.Default)
 		if isDefault {
 			if s.defaultValue == nil {
-				return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, defaultNotSupportedErrFmt, astExpr.Name)
+				return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, defaultNotSupportedErrFmt, astExpr.Var.Name)
 			}
 			runtimeExpr = s.defaultValue
 		} else {
@@ -210,7 +210,7 @@ func buildSetOpVitessAware(s setting) planFunc {
 		}
 
 		return &engine.SysVarSetAware{
-			Name: astExpr.Name.Lowered(),
+			Name: astExpr.Var.Name.Lowered(),
 			Expr: runtimeExpr,
 		}, nil
 	}
@@ -243,17 +243,16 @@ func extractValue(expr *sqlparser.SetExpr, boolean bool) (string, error) {
 	case *sqlparser.ColName:
 		// this is a little of a hack. it's used when the setting is not a normal expression, but rather
 		// an enumeration, such as utf8, utf8mb4, etc
-		if node.Name.AtCount() == sqlparser.NoAt {
-			switch node.Name.Lowered() {
-			case "on":
-				return "1", nil
-			case "off":
-				return "0", nil
-			}
-			return fmt.Sprintf("'%s'", sqlparser.String(expr.Expr)), nil
+		switch node.Name.Lowered() {
+		case "on":
+			return "1", nil
+		case "off":
+			return "0", nil
 		}
+		return fmt.Sprintf("'%s'", sqlparser.String(expr.Expr)), nil
+
 	case *sqlparser.Default:
-		return "", vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, defaultNotSupportedErrFmt, expr.Name)
+		return "", vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, defaultNotSupportedErrFmt, expr.Var.Name)
 	}
 
 	return sqlparser.String(expr.Expr), nil

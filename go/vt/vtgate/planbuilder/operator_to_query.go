@@ -117,8 +117,8 @@ func (qb *queryBuilder) sortTables() {
 
 func (qb *queryBuilder) addTable(db, tableName, alias string, tableID semantics.TableSet, hints sqlparser.IndexHints) {
 	tableExpr := sqlparser.TableName{
-		Name:      sqlparser.NewTableIdent(tableName),
-		Qualifier: sqlparser.NewTableIdent(db),
+		Name:      sqlparser.NewIdentifierCS(tableName),
+		Qualifier: sqlparser.NewIdentifierCS(db),
 	}
 	qb.addTableExpr(tableName, alias, tableID, tableExpr, hints)
 }
@@ -131,7 +131,7 @@ func (qb *queryBuilder) addTableExpr(tableName, alias string, tableID semantics.
 	elems := &sqlparser.AliasedTableExpr{
 		Expr:       tblExpr,
 		Partitions: nil,
-		As:         sqlparser.NewTableIdent(alias),
+		As:         sqlparser.NewIdentifierCS(alias),
 		Hints:      hints,
 		Columns:    nil,
 	}
@@ -232,7 +232,7 @@ func (qb *queryBuilder) rewriteExprForDerivedTable(expr sqlparser.Expr, dtName s
 			hasTable := qb.hasTable(node.Qualifier.Name.String())
 			if hasTable {
 				node.Qualifier = sqlparser.TableName{
-					Name: sqlparser.NewTableIdent(dtName),
+					Name: sqlparser.NewIdentifierCS(dtName),
 				}
 			}
 		}

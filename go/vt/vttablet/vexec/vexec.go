@@ -165,7 +165,7 @@ func (e *TabletVExec) AddOrReplaceInsertColumnVal(colName string, val *sqlparser
 	insert, _ := e.Stmt.(*sqlparser.Insert)
 	rows, _ := insert.Rows.(sqlparser.Values)
 	rows[0] = append(rows[0], val)
-	insert.Columns = append(insert.Columns, sqlparser.NewColIdent(colName))
+	insert.Columns = append(insert.Columns, sqlparser.NewIdentifierCI(colName))
 	e.InsertCols[colName] = val
 	e.Query = sqlparser.String(e.Stmt)
 

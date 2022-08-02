@@ -117,12 +117,11 @@ func TestMain(m *testing.M) {
 			tablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, localCluster.TmpDirectory)
 			tablet.MysqlctlProcess.InitDBFile = newInitDBFile
 			tablet.MysqlctlProcess.ExtraArgs = extraArgs
-			if proc, err := tablet.MysqlctlProcess.StartProcess(); err != nil {
+			proc, err := tablet.MysqlctlProcess.StartProcess()
+			if err != nil {
 				return 1, err
-			} else {
-				// ignore golint warning, we need the else block to use proc
-				mysqlProcs = append(mysqlProcs, proc)
 			}
+			mysqlProcs = append(mysqlProcs, proc)
 		}
 		for _, proc := range mysqlProcs {
 			if err := proc.Wait(); err != nil {

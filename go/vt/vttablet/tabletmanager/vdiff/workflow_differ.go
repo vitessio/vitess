@@ -245,11 +245,11 @@ func (wd *workflowDiffer) buildPlan(dbClient binlogplayer.DBClient, filter *binl
 		switch {
 		case rule.Filter == "":
 			buf := sqlparser.NewTrackedBuffer(nil)
-			buf.Myprintf("select * from %v", sqlparser.NewTableIdent(table.Name))
+			buf.Myprintf("select * from %v", sqlparser.NewIdentifierCS(table.Name))
 			sourceQuery = buf.String()
 		case key.IsKeyRange(rule.Filter):
 			buf := sqlparser.NewTrackedBuffer(nil)
-			buf.Myprintf("select * from %v where in_keyrange(%v)", sqlparser.NewTableIdent(table.Name), sqlparser.NewStrLiteral(rule.Filter))
+			buf.Myprintf("select * from %v where in_keyrange(%v)", sqlparser.NewIdentifierCS(table.Name), sqlparser.NewStrLiteral(rule.Filter))
 			sourceQuery = buf.String()
 		}
 

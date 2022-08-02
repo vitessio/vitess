@@ -259,7 +259,7 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 
 	for _, table := range tables {
 		buf := sqlparser.NewTrackedBuffer(nil)
-		buf.Myprintf("select * from %v", sqlparser.NewTableIdent(table))
+		buf.Myprintf("select * from %v", sqlparser.NewIdentifierCS(table))
 		ms.TableSettings = append(ms.TableSettings, &vtctldatapb.TableMaterializeSettings{
 			TargetTable:      table,
 			SourceExpression: buf.String(),
@@ -631,21 +631,21 @@ func (wr *Wrangler) prepareCreateLookup(ctx context.Context, keyspace string, sp
 	buf = sqlparser.NewTrackedBuffer(nil)
 	buf.Myprintf("select ")
 	for i := range vindexFromCols {
-		buf.Myprintf("%v as %v, ", sqlparser.NewColIdent(sourceVindexColumns[i]), sqlparser.NewColIdent(vindexFromCols[i]))
+		buf.Myprintf("%v as %v, ", sqlparser.NewIdentifierCI(sourceVindexColumns[i]), sqlparser.NewIdentifierCI(vindexFromCols[i]))
 	}
 	if strings.EqualFold(vindexToCol, "keyspace_id") || strings.EqualFold(vindex.Type, "consistent_lookup_unique") || strings.EqualFold(vindex.Type, "consistent_lookup") {
-		buf.Myprintf("keyspace_id() as %v ", sqlparser.NewColIdent(vindexToCol))
+		buf.Myprintf("keyspace_id() as %v ", sqlparser.NewIdentifierCI(vindexToCol))
 	} else {
-		buf.Myprintf("%v as %v ", sqlparser.NewColIdent(vindexToCol), sqlparser.NewColIdent(vindexToCol))
+		buf.Myprintf("%v as %v ", sqlparser.NewIdentifierCI(vindexToCol), sqlparser.NewIdentifierCI(vindexToCol))
 	}
-	buf.Myprintf("from %v", sqlparser.NewTableIdent(sourceTableName))
+	buf.Myprintf("from %v", sqlparser.NewIdentifierCS(sourceTableName))
 	if vindex.Owner != "" {
 		// Only backfill
 		buf.Myprintf(" group by ")
 		for i := range vindexFromCols {
-			buf.Myprintf("%v, ", sqlparser.NewColIdent(vindexFromCols[i]))
+			buf.Myprintf("%v, ", sqlparser.NewIdentifierCI(vindexFromCols[i]))
 		}
-		buf.Myprintf("%v", sqlparser.NewColIdent(vindexToCol))
+		buf.Myprintf("%v", sqlparser.NewIdentifierCI(vindexToCol))
 	}
 	materializeQuery = buf.String()
 
@@ -1206,7 +1206,7 @@ func (mz *materializer) generateInserts(ctx context.Context, targetShard *topo.S
 				subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral(vindexName)})
 				subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral("{{.keyrange}}")})
 				inKeyRange := &sqlparser.FuncExpr{
-					Name:  sqlparser.NewColIdent("in_keyrange"),
+					Name:  sqlparser.NewIdentifierCI("in_keyrange"),
 					Exprs: subExprs,
 				}
 				if sel.Where != nil {
@@ -1236,7 +1236,7 @@ func (mz *materializer) generateInserts(ctx context.Context, targetShard *topo.S
 	return ig.String(), nil
 }
 
-func matchColInSelect(col sqlparser.ColIdent, sel *sqlparser.Select) (*sqlparser.ColName, error) {
+func matchColInSelect(col sqlparser.IdentifierCI, sel *sqlparser.Select) (*sqlparser.ColName, error) {
 	for _, selExpr := range sel.SelectExprs {
 		switch selExpr := selExpr.(type) {
 		case *sqlparser.StarExpr:

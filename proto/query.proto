@@ -212,6 +212,9 @@ enum Type {
   // HEXVAL specifies a HEXVAL type (unquoted varbinary).
   // Properties: 33, IsText.
   HEXVAL = 4129;
+  // BITNUM specifies a base 2 binary type (unquoted varbinary).
+  // Properties: 34, IsText.
+  BITNUM = 4130;
 }
 
 // Value represents a typed value.

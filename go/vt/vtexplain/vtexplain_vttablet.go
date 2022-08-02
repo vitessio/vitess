@@ -527,7 +527,7 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 			tables = append(tables, getTables(from)...)
 		}
 
-		tableColumnMap := map[sqlparser.TableIdent]map[string]querypb.Type{}
+		tableColumnMap := map[sqlparser.IdentifierCS]map[string]querypb.Type{}
 		for _, table := range tables {
 			if table == nil {
 				continue
@@ -678,7 +678,7 @@ func getTables(node sqlparser.SQLNode) []*sqlparser.AliasedTableExpr {
 	return tables
 }
 
-func inferColTypeFromExpr(node sqlparser.Expr, tableColumnMap map[sqlparser.TableIdent]map[string]querypb.Type, colNames []string, colTypes []querypb.Type) ([]string, []querypb.Type) {
+func inferColTypeFromExpr(node sqlparser.Expr, tableColumnMap map[sqlparser.IdentifierCS]map[string]querypb.Type, colNames []string, colTypes []querypb.Type) ([]string, []querypb.Type) {
 	switch node := node.(type) {
 	case *sqlparser.ColName:
 		if node.Qualifier.Name.IsEmpty() {

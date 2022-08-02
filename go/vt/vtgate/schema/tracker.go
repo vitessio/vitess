@@ -218,7 +218,7 @@ func (t *Tracker) updateTables(keyspace string, res *sqltypes.Result) {
 		collation := row[3].ToString()
 
 		cType := sqlparser.ColumnType{Type: colType}
-		col := vindexes.Column{Name: sqlparser.NewColIdent(colName), Type: cType.SQLType(), CollationName: collation}
+		col := vindexes.Column{Name: sqlparser.NewIdentifierCI(colName), Type: cType.SQLType(), CollationName: collation}
 		cols := t.tables.get(keyspace, tbl)
 
 		t.tables.set(keyspace, tbl, append(cols, col))

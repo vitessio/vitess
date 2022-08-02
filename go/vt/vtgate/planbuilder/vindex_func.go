@@ -71,7 +71,7 @@ func newVindexFunc(alias sqlparser.TableName, vindex vindexes.SingleColumn) (*vi
 	}
 
 	for _, colName := range colnames {
-		t.addColumn(sqlparser.NewColIdent(colName), &column{origin: vf})
+		t.addColumn(sqlparser.NewIdentifierCI(colName), &column{origin: vf})
 	}
 	t.isAuthoritative = true
 

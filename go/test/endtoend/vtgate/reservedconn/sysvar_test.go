@@ -129,7 +129,7 @@ func TestSetSystemVarWithTxFailure(t *testing.T) {
 	utils.Exec(t, conn, "insert into test (id, val1) values (80, null)")
 
 	// before changing any settings, let's confirm sql_safe_updates value
-	utils.AssertMatches(t, conn, `select /*vt+ PLANNER=gen4 */ @@sql_safe_updates from test where id = 80`, `[[INT64(0)]]`)
+	utils.AssertMatches(t, conn, `select @@sql_safe_updates from test where id = 80`, `[[INT64(0)]]`)
 
 	utils.Exec(t, conn, "set sql_safe_updates = 1")
 	utils.Exec(t, conn, "begin")

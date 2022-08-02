@@ -44,7 +44,7 @@ func TestLoadTable(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := &Table{
-		Name: sqlparser.NewTableIdent("test_table"),
+		Name: sqlparser.NewIdentifierCS("test_table"),
 		Fields: []*querypb.Field{{
 			Name: "pk",
 			Type: sqltypes.Int32,
@@ -68,7 +68,7 @@ func TestLoadTableSequence(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := &Table{
-		Name:         sqlparser.NewTableIdent("test_table"),
+		Name:         sqlparser.NewIdentifierCS("test_table"),
 		Type:         Sequence,
 		SequenceInfo: &SequenceInfo{},
 	}
@@ -88,7 +88,7 @@ func TestLoadTableMessage(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := &Table{
-		Name: sqlparser.NewTableIdent("test_table"),
+		Name: sqlparser.NewIdentifierCS("test_table"),
 		Type: Message,
 		Fields: []*querypb.Field{{
 			Name: "id",

@@ -81,7 +81,7 @@ func (p *projection) OutputColumns() []sqlparser.SelectExpr {
 	for i, expr := range p.columns {
 		columns = append(columns, &sqlparser.AliasedExpr{
 			Expr: expr,
-			As:   sqlparser.NewColIdent(p.columnNames[i]),
+			As:   sqlparser.NewIdentifierCI(p.columnNames[i]),
 		})
 	}
 	return columns

@@ -213,11 +213,11 @@ func getQuery(tableName string, filter string) string {
 	switch {
 	case filter == "":
 		buf := sqlparser.NewTrackedBuffer(nil)
-		buf.Myprintf("select * from %v", sqlparser.NewTableIdent(tableName))
+		buf.Myprintf("select * from %v", sqlparser.NewIdentifierCS(tableName))
 		query = buf.String()
 	case key.IsKeyRange(filter):
 		buf := sqlparser.NewTrackedBuffer(nil)
-		buf.Myprintf("select * from %v where in_keyrange(%v)", sqlparser.NewTableIdent(tableName), sqlparser.NewStrLiteral(filter))
+		buf.Myprintf("select * from %v where in_keyrange(%v)", sqlparser.NewIdentifierCS(tableName), sqlparser.NewStrLiteral(filter))
 		query = buf.String()
 	}
 	return query

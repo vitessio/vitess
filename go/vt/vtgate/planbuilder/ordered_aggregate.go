@@ -19,6 +19,7 @@ package planbuilder
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	"vitess.io/vitess/go/mysql/collations"
 
@@ -263,19 +264,21 @@ func (oa *orderedAggregate) Primitive() engine.Primitive {
 }
 
 func (oa *orderedAggregate) pushAggr(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, origin logicalPlan) (rc *resultColumn, colNumber int, err error) {
-	funcExpr := expr.Expr.(*sqlparser.FuncExpr)
-	origOpcode := engine.SupportedAggregates[funcExpr.Name.Lowered()]
+	aggrFunc, _ := expr.Expr.(sqlparser.AggrFunc)
+	origOpcode := engine.SupportedAggregates[strings.ToLower(aggrFunc.AggrName())]
 	opcode := origOpcode
-	if len(funcExpr.Exprs) != 1 {
-		return nil, 0, fmt.Errorf("unsupported: only one expression allowed inside aggregates: %s", sqlparser.String(funcExpr))
+	if aggrFunc.GetArgs() != nil &&
+		len(aggrFunc.GetArgs()) != 1 {
+		return nil, 0, fmt.Errorf("unsupported: only one expression allowed inside aggregates: %s", sqlparser.String(expr))
 	}
-	handleDistinct, innerAliased, err := oa.needDistinctHandling(pb, funcExpr, opcode)
+
+	handleDistinct, innerAliased, err := oa.needDistinctHandling(pb, expr, opcode)
 	if err != nil {
 		return nil, 0, err
 	}
 	if handleDistinct {
 		if oa.extraDistinct != nil {
-			return nil, 0, fmt.Errorf("unsupported: only one distinct aggregation allowed in a select: %s", sqlparser.String(funcExpr))
+			return nil, 0, fmt.Errorf("unsupported: only one distinct aggregation allowed in a select: %s", sqlparser.String(expr))
 		}
 		// Push the expression that's inside the aggregate.
 		// The column will eventually get added to the group by and order by clauses.
@@ -325,17 +328,23 @@ func (oa *orderedAggregate) pushAggr(pb *primitiveBuilder, expr *sqlparser.Alias
 // needDistinctHandling returns true if oa needs to handle the distinct clause.
 // If true, it will also return the aliased expression that needs to be pushed
 // down into the underlying route.
-func (oa *orderedAggregate) needDistinctHandling(pb *primitiveBuilder, funcExpr *sqlparser.FuncExpr, opcode engine.AggregateOpcode) (bool, *sqlparser.AliasedExpr, error) {
-	if !funcExpr.Distinct {
+func (oa *orderedAggregate) needDistinctHandling(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, opcode engine.AggregateOpcode) (bool, *sqlparser.AliasedExpr, error) {
+	var innerAliased *sqlparser.AliasedExpr
+	aggr, ok := expr.Expr.(sqlparser.AggrFunc)
+
+	if !ok {
+		return false, nil, fmt.Errorf("syntax error: %s", sqlparser.String(expr))
+	}
+
+	if !aggr.IsDistinct() {
 		return false, nil, nil
 	}
 	if opcode != engine.AggregateCount && opcode != engine.AggregateSum && opcode != engine.AggregateCountStar {
 		return false, nil, nil
 	}
-	innerAliased, ok := funcExpr.Exprs[0].(*sqlparser.AliasedExpr)
-	if !ok {
-		return false, nil, fmt.Errorf("syntax error: %s", sqlparser.String(funcExpr))
-	}
+
+	innerAliased = &sqlparser.AliasedExpr{Expr: aggr.GetArg()}
+
 	rb, ok := oa.input.(*route)
 	if !ok {
 		// Unreachable
@@ -392,7 +401,7 @@ func (oa *orderedAggregate) WireupGen4(semTable *semantics.SemTable) error {
 func (oa *orderedAggregate) OutputColumns() []sqlparser.SelectExpr {
 	outputCols := sqlparser.CloneSelectExprs(oa.input.OutputColumns())
 	for _, aggr := range oa.aggregates {
-		outputCols[aggr.Col] = &sqlparser.AliasedExpr{Expr: aggr.Expr, As: sqlparser.NewColIdent(aggr.Alias)}
+		outputCols[aggr.Col] = &sqlparser.AliasedExpr{Expr: aggr.Expr, As: sqlparser.NewIdentifierCI(aggr.Alias)}
 	}
 	if oa.truncateColumnCount > 0 {
 		return outputCols[:oa.truncateColumnCount]

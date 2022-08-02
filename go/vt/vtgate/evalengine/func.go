@@ -51,7 +51,7 @@ type builtinRewrite func([]Expr, TranslationLookup) (Expr, error)
 
 type CallExpr struct {
 	Arguments TupleExpr
-	Aliases   []sqlparser.ColIdent
+	Aliases   []sqlparser.IdentifierCI
 	Method    string
 	F         builtin
 }

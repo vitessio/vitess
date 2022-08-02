@@ -176,7 +176,7 @@ INPUT
 select @sum;
 END
 OUTPUT
-select @sum from dual
+select @`sum` from dual
 END
 INPUT
 select s1 from t1 group by 1 having 1 = 0;
@@ -1310,7 +1310,7 @@ INPUT
 select value,description,COUNT(bug_id) from t2 left join t1 on t2.program=t1.product and t2.value=t1.component where program="AAAAA" group by value having COUNT(bug_id) IN (0,2);
 END
 OUTPUT
-select value, description, COUNT(bug_id) from t2 left join t1 on t2.program = t1.product and t2.value = t1.component where program = 'AAAAA' group by value having COUNT(bug_id) in (0, 2)
+select value, description, count(bug_id) from t2 left join t1 on t2.program = t1.product and t2.value = t1.component where program = 'AAAAA' group by value having count(bug_id) in (0, 2)
 END
 INPUT
 select from t1 where s1 < 'K' and s1 = 'Y';
@@ -1892,7 +1892,7 @@ INPUT
 select a, MAX(b), CASE MAX(b) when 4 then 4 when 43 then 43 else 0 end from t1 group by a;
 END
 OUTPUT
-select a, MAX(b), case MAX(b) when 4 then 4 when 43 then 43 else 0 end from t1 group by a
+select a, max(b), case max(b) when 4 then 4 when 43 then 43 else 0 end from t1 group by a
 END
 INPUT
 select from t4 where c1 < f1();
@@ -1958,7 +1958,7 @@ INPUT
 select @@local.profiling_history_size;
 END
 OUTPUT
-select @@local.profiling_history_size from dual
+select @@profiling_history_size from dual
 END
 INPUT
 select 0 % null as 'NULL';
@@ -2222,7 +2222,7 @@ INPUT
 select a.id, b.category as catid, b.state as stateid, b.county as countyid from t1 a, t2 b where (a.token = 'a71250b7ed780f6ef3185bfffe027983') and (a.count = b.id) order by a.id;
 END
 OUTPUT
-select a.id, b.category as catid, b.state as stateid, b.county as countyid from t1 as a, t2 as b where a.token = 'a71250b7ed780f6ef3185bfffe027983' and a.count = b.id order by a.id asc
+select a.id, b.category as catid, b.state as stateid, b.county as countyid from t1 as a, t2 as b where a.token = 'a71250b7ed780f6ef3185bfffe027983' and a.`count` = b.id order by a.id asc
 END
 INPUT
 select sql_data_access from information_schema.routines where specific_name like 'p%' and ROUTINE_SCHEMA != 'sys';
@@ -2438,7 +2438,7 @@ INPUT
 select Case When Count(*) < MAX_REQ Then 1 Else 0 End from t1 where t1.USR_ID = 1 group by MAX_REQ;
 END
 OUTPUT
-select case when Count(*) < MAX_REQ then 1 else 0 end from t1 where t1.USR_ID = 1 group by MAX_REQ
+select case when count(*) < MAX_REQ then 1 else 0 end from t1 where t1.USR_ID = 1 group by MAX_REQ
 END
 INPUT
 select t1.*,t2.* from t1 inner join t2 using (a);
@@ -2480,7 +2480,7 @@ INPUT
 select a.id, b.category as catid, b.state as stateid, b.county as countyid from t1 a, t2 b ignore index (primary) where (a.token ='a71250b7ed780f6ef3185bfffe027983') and (a.count = b.id);
 END
 OUTPUT
-select a.id, b.category as catid, b.state as stateid, b.county as countyid from t1 as a, t2 as b ignore index (`primary`) where a.token = 'a71250b7ed780f6ef3185bfffe027983' and a.count = b.id
+select a.id, b.category as catid, b.state as stateid, b.county as countyid from t1 as a, t2 as b ignore index (`primary`) where a.token = 'a71250b7ed780f6ef3185bfffe027983' and a.`count` = b.id
 END
 INPUT
 select count(distinct n2) from t1;
@@ -2708,7 +2708,7 @@ INPUT
 select t2.count, t1.name from t2 inner join t1 using (color);
 END
 OUTPUT
-select t2.count, t1.`name` from t2 join t1 using (color)
+select t2.`count`, t1.`name` from t2 join t1 using (color)
 END
 INPUT
 select st_touches(st_union(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)')));
@@ -2888,7 +2888,7 @@ INPUT
 select @@session.transaction_isolation;
 END
 OUTPUT
-select @@session.transaction_isolation from dual
+select @@transaction_isolation from dual
 END
 INPUT
 select hex(left(_utf16 0xD800DC00D87FDFFF, 1));
@@ -2972,7 +2972,7 @@ INPUT
 select 497, TMP.ID, NULL from (select 497 as ID, MAX(t3.DATA) as DATA from t1 join t2 on (t1.ObjectID = t2.ID) join t3 on (t1.ObjectID = t3.ID) group by t2.ParID order by DATA DESC) as TMP;
 END
 OUTPUT
-select 497, TMP.ID, null from (select 497 as ID, MAX(t3.`DATA`) as `DATA` from t1 join t2 on t1.ObjectID = t2.ID join t3 on t1.ObjectID = t3.ID group by t2.ParID order by `DATA` desc) as TMP
+select 497, TMP.ID, null from (select 497 as ID, max(t3.`DATA`) as `DATA` from t1 join t2 on t1.ObjectID = t2.ID join t3 on t1.ObjectID = t3.ID group by t2.ParID order by `DATA` desc) as TMP
 END
 INPUT
 select cast(1000 as CHAR(3));
@@ -3920,7 +3920,7 @@ INPUT
 select row_number() over (), value,description,COUNT(bug_id) from t2 left join t1 on t2.program=t1.product and t2.value=t1.component where program="AAAAA" group by value having COUNT(bug_id) IN (0,2);
 END
 OUTPUT
-select row_number() over (), value, description, COUNT(bug_id) from t2 left join t1 on t2.program = t1.product and t2.value = t1.component where program = 'AAAAA' group by value having COUNT(bug_id) in (0, 2)
+select row_number() over (), value, description, count(bug_id) from t2 left join t1 on t2.program = t1.product and t2.value = t1.component where program = 'AAAAA' group by value having count(bug_id) in (0, 2)
 END
 INPUT
 select from t1 where lower(a)='aaa';
@@ -6584,7 +6584,7 @@ INPUT
 select a, MAX(b), FIELD(MAX(b), '43', '4', '5') from t1 group by a;
 END
 OUTPUT
-select a, MAX(b), FIELD(MAX(b), '43', '4', '5') from t1 group by a
+select a, max(b), FIELD(max(b), '43', '4', '5') from t1 group by a
 END
 INPUT
 select min(t1.a3), max(t2.a2) from t1, t2 where t1.a2 = 0 and t2.a3 = 'CA';
@@ -7220,7 +7220,7 @@ INPUT
 select userid,count(*) from t1 group by userid having 3 IN (1,COUNT(*)) order by userid desc;
 END
 OUTPUT
-select userid, count(*) from t1 group by userid having 3 in (1, COUNT(*)) order by userid desc
+select userid, count(*) from t1 group by userid having 3 in (1, count(*)) order by userid desc
 END
 INPUT
 select count(distinct t) from t1;
@@ -7778,7 +7778,7 @@ INPUT
 select REQ_ID, Group_Concat(URL) as URL, Min(t1.URL_ID) urll, Max(t1.URL_ID) urlg from t1, t2 where t2.URL_ID = t1.URL_ID group by REQ_ID;
 END
 OUTPUT
-select REQ_ID, group_concat(URL) as URL, Min(t1.URL_ID) as urll, Max(t1.URL_ID) as urlg from t1, t2 where t2.URL_ID = t1.URL_ID group by REQ_ID
+select REQ_ID, group_concat(URL) as URL, min(t1.URL_ID) as urll, max(t1.URL_ID) as urlg from t1, t2 where t2.URL_ID = t1.URL_ID group by REQ_ID
 END
 INPUT
 select SUBSTR('abcdefg',0,0) FROM DUAL;
@@ -8324,7 +8324,7 @@ INPUT
 select count(*) from t1 INNER JOIN (SELECT A.E1, A.E2, A.E3 FROM t1 AS A WHERE A.E3 = (SELECT MAX(B.E3) FROM t1 AS B WHERE A.E2 = B.E2)) AS themax ON t1.E1 = themax.E2 AND t1.E1 = t1.E2;
 END
 OUTPUT
-select count(*) from t1 join (select A.E1, A.E2, A.E3 from t1 as A where A.E3 = (select MAX(B.E3) from t1 as B where A.E2 = B.E2)) as themax on t1.E1 = themax.E2 and t1.E1 = t1.E2
+select count(*) from t1 join (select A.E1, A.E2, A.E3 from t1 as A where A.E3 = (select max(B.E3) from t1 as B where A.E2 = B.E2)) as themax on t1.E1 = themax.E2 and t1.E1 = t1.E2
 END
 INPUT
 select insert('hello', 1, -18446744073709551617, 'hi');
@@ -9260,7 +9260,7 @@ INPUT
 select @@local.profiling;
 END
 OUTPUT
-select @@local.profiling from dual
+select @@profiling from dual
 END
 INPUT
 select 5.0 div 2;
@@ -10634,7 +10634,7 @@ INPUT
 select value,description,COUNT(bug_id) from t2 left join t1 on t2.program=t1.product and t2.value=t1.component where program="AAAAA" group by value;
 END
 OUTPUT
-select value, description, COUNT(bug_id) from t2 left join t1 on t2.program = t1.product and t2.value = t1.component where program = 'AAAAA' group by value
+select value, description, count(bug_id) from t2 left join t1 on t2.program = t1.product and t2.value = t1.component where program = 'AAAAA' group by value
 END
 INPUT
 select sql_big_result c,count(t) from t1 group by c order by c limit 10;
@@ -10718,7 +10718,7 @@ INPUT
 select a, MAX(b), CONCAT_WS(MAX(b), '43', '4', '5') from t1 group by a;
 END
 OUTPUT
-select a, MAX(b), CONCAT_WS(MAX(b), '43', '4', '5') from t1 group by a
+select a, max(b), CONCAT_WS(max(b), '43', '4', '5') from t1 group by a
 END
 INPUT
 select 1, st_intersects(t.geom, p.geom) from tbl_polygon t, tbl_polygon p where t.id = 'POLY1' and p.id = 'POLY2';
@@ -10844,7 +10844,7 @@ INPUT
 select t2.count, t1.name from t2 natural join t1;
 END
 OUTPUT
-select t2.count, t1.`name` from t2 natural join t1
+select t2.`count`, t1.`name` from t2 natural join t1
 END
 INPUT
 select 1+1,1-1,1+1*2,8/5,8%5,mod(8,5),mod(8,5)|0,-(1+1)*-2;
@@ -11720,7 +11720,7 @@ INPUT
 select a, MAX(b), INTERVAL (MAX(b), 1,3,10,30,39,40,50,60,100,1000) from t1 group by a;
 END
 OUTPUT
-select a, MAX(b), interval(MAX(b), 1, 3, 10, 30, 39, 40, 50, 60, 100, 1000) from t1 group by a
+select a, max(b), interval(max(b), 1, 3, 10, 30, 39, 40, 50, 60, 100, 1000) from t1 group by a
 END
 INPUT
 select d as e, two as f from v;
@@ -12632,7 +12632,7 @@ INPUT
 select @@keycache1.key_buffer_size;
 END
 OUTPUT
-select @@keycache1.key_buffer_size from dual
+select @@`keycache1.key_buffer_size` from dual
 END
 INPUT
 select group_concat(c1 order by binary c1 separator '') from t1 group by c1 collate utf32_polish_ci;
@@ -12878,7 +12878,7 @@ INPUT
 select @@keycache2.key_buffer_size;
 END
 OUTPUT
-select @@keycache2.key_buffer_size from dual
+select @@`keycache2.key_buffer_size` from dual
 END
 INPUT
 select from t1 where MATCH(a,b) AGAINST ("indexes collections");
@@ -13208,7 +13208,7 @@ INPUT
 select a, MAX(b), ELT(MAX(b), 'a', 'b', 'c', 'd', 'e', 'f') from t1 group by a;
 END
 OUTPUT
-select a, MAX(b), ELT(MAX(b), 'a', 'b', 'c', 'd', 'e', 'f') from t1 group by a
+select a, max(b), ELT(max(b), 'a', 'b', 'c', 'd', 'e', 'f') from t1 group by a
 END
 INPUT
 select avg ( (select (select sum(outr.a + innr.a) from t1 as innr limit 1) as tt from t1 as outr order by outr.a limit 1)) from t1 as most_outer;
@@ -15056,7 +15056,7 @@ INPUT
 select @@keycache2.key_cache_block_size;
 END
 OUTPUT
-select @@keycache2.key_cache_block_size from dual
+select @@`keycache2.key_cache_block_size` from dual
 END
 INPUT
 select date_add("1997-12-31 23:59:59",INTERVAL "1 1:1:1" DAY_SECOND);
@@ -15104,7 +15104,7 @@ INPUT
 select @@keycache1.key_cache_block_size;
 END
 OUTPUT
-select @@keycache1.key_cache_block_size from dual
+select @@`keycache1.key_cache_block_size` from dual
 END
 INPUT
 select rand(rand);
@@ -15752,7 +15752,7 @@ INPUT
 select @@session.thread_handling;
 END
 OUTPUT
-select @@session.thread_handling from dual
+select @@thread_handling from dual
 END
 INPUT
 select convert(_koi8r'�' using utf8) < convert(_koi8r'�' using utf8);
@@ -17714,7 +17714,7 @@ INPUT
 select grp, sum(a)+count(a)+avg(a)+std(a)+variance(a)+bit_or(a)+bit_and(a)+min(a)+max(a)+min(c)+max(c) as sum from t1 group by grp;
 END
 OUTPUT
-select grp, sum(a) + count(a) + avg(a) + std(a) + variance(a) + bit_or(a) + bit_and(a) + min(a) + max(a) + min(c) + max(c) as sum from t1 group by grp
+select grp, sum(a) + count(a) + avg(a) + std(a) + variance(a) + bit_or(a) + bit_and(a) + min(a) + max(a) + min(c) + max(c) as `sum` from t1 group by grp
 END
 INPUT
 select -9223372036854775808 1 as result;
@@ -19004,7 +19004,7 @@ INPUT
 select a, MAX(b), MAKE_SET(MAX(b), 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h') from t1 group by a;
 END
 OUTPUT
-select a, MAX(b), MAKE_SET(MAX(b), 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h') from t1 group by a
+select a, max(b), MAKE_SET(max(b), 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h') from t1 group by a
 END
 INPUT
 select lpad(c1,3,'�'), lpad('�',3,c1) from t1;

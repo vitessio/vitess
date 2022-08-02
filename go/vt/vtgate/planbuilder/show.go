@@ -165,9 +165,9 @@ func buildVariablePlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) (
 
 func buildShowTblPlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) (engine.Primitive, error) {
 	if !show.DbName.IsEmpty() {
-		show.Tbl.Qualifier = sqlparser.NewTableIdent(show.DbName.String())
+		show.Tbl.Qualifier = sqlparser.NewIdentifierCS(show.DbName.String())
 		// Remove Database Name from the query.
-		show.DbName = sqlparser.NewTableIdent("")
+		show.DbName = sqlparser.NewIdentifierCS("")
 	}
 
 	dest := key.Destination(key.DestinationAnyShard{})
@@ -188,7 +188,7 @@ func buildShowTblPlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) (e
 			return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.UnknownTable, "Table '%s' doesn't exist", show.Tbl.Name.String())
 		}
 		// Update the table.
-		show.Tbl.Qualifier = sqlparser.NewTableIdent("")
+		show.Tbl.Qualifier = sqlparser.NewIdentifierCS("")
 		show.Tbl.Name = table.Name
 
 		if destination != nil {
@@ -287,7 +287,7 @@ func buildPlanWithDB(show *sqlparser.ShowBasic, vschema plancontext.VSchema) (en
 		dbDestination = ks.Name
 	} else {
 		// Remove Database Name from the query.
-		show.DbName = sqlparser.NewTableIdent("")
+		show.DbName = sqlparser.NewIdentifierCS("")
 	}
 	destination, keyspace, _, err := vschema.TargetDestination(dbDestination)
 	if err != nil {
@@ -298,7 +298,7 @@ func buildPlanWithDB(show *sqlparser.ShowBasic, vschema plancontext.VSchema) (en
 	}
 
 	if dbName.IsEmpty() {
-		dbName = sqlparser.NewTableIdent(keyspace.Name)
+		dbName = sqlparser.NewIdentifierCS(keyspace.Name)
 	}
 
 	query := sqlparser.String(show)
@@ -495,7 +495,7 @@ func buildCreateTblPlan(show *sqlparser.ShowCreate, vschema plancontext.VSchema)
 		if destKs != nil {
 			dest = destKs
 		}
-		show.Op.Qualifier = sqlparser.NewTableIdent("")
+		show.Op.Qualifier = sqlparser.NewIdentifierCS("")
 		show.Op.Name = tbl.Name
 	}
 
@@ -522,7 +522,7 @@ func buildCreatePlan(show *sqlparser.ShowCreate, vschema plancontext.VSchema) (e
 		}
 		dbName = ks.Name
 	} else {
-		show.Op.Qualifier = sqlparser.NewTableIdent("")
+		show.Op.Qualifier = sqlparser.NewIdentifierCS("")
 	}
 
 	dest, ks, _, err := vschema.TargetDestination(dbName)

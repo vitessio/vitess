@@ -266,11 +266,11 @@ func createRoute(ctx *plancontext.PlanningContext, table *abstract.QueryTable, s
 		if !ok {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] a derived table should never be a routed table")
 		}
-		realTableName := sqlparser.NewTableIdent(vschemaTable.Name.String())
+		realTableName := sqlparser.NewIdentifierCS(vschemaTable.Name.String())
 		astTable.Name = realTableName
 		if table.Alias.As.IsEmpty() {
 			// if the user hasn't specified an alias, we'll insert one here so the old table name still works
-			table.Alias.As = sqlparser.NewTableIdent(name.String())
+			table.Alias.As = sqlparser.NewIdentifierCS(name.String())
 		}
 	}
 	plan := &Route{

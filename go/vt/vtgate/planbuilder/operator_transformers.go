@@ -550,7 +550,7 @@ func transformDerivedPlan(ctx *plancontext.PlanningContext, op *physical.Derived
 	derivedTable := &sqlparser.DerivedTable{Select: innerSelect}
 	tblExpr := &sqlparser.AliasedTableExpr{
 		Expr:    derivedTable,
-		As:      sqlparser.NewTableIdent(op.Alias),
+		As:      sqlparser.NewIdentifierCS(op.Alias),
 		Columns: op.ColumnAliases,
 	}
 	selectExprs := sqlparser.SelectExprs{}

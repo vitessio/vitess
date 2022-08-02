@@ -91,9 +91,6 @@ func (b *binder) up(cursor *sqlparser.Cursor) error {
 			node.Using = nil
 		}
 	case *sqlparser.ColName:
-		if node.IsVariable() {
-			break
-		}
 		currentScope := b.scoper.currentScope()
 		deps, err := b.resolveColumn(node, currentScope, false)
 		if err != nil {
@@ -116,14 +113,7 @@ func (b *binder) up(cursor *sqlparser.Cursor) error {
 		if deps.typ != nil {
 			b.typer.setTypeFor(node, *deps.typ)
 		}
-	case *sqlparser.FuncExpr:
-		// need special handling so that any lingering `*` expressions are bound to all local tables
-		if len(node.Exprs) != 1 {
-			break
-		}
-		if _, isStar := node.Exprs[0].(*sqlparser.StarExpr); !isStar {
-			break
-		}
+	case *sqlparser.CountStar:
 		scope := b.scoper.currentScope()
 		var ts TableSet
 		for _, table := range scope.tables {
@@ -157,7 +147,7 @@ func (b *binder) rewriteJoinUsingColName(deps dependency, node *sqlparser.ColNam
 		node.Qualifier = name
 	} else {
 		node.Qualifier = sqlparser.TableName{
-			Name: sqlparser.NewTableIdent(alias.String()),
+			Name: sqlparser.NewIdentifierCS(alias.String()),
 		}
 	}
 	deps, err = b.resolveColumn(node, currentScope, false)

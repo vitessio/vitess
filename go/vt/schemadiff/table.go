@@ -521,7 +521,7 @@ func (c *CreateTableEntity) normalizeKeys() {
 				suggestedKeyName = fmt.Sprintf("%s_%d", colName, enumerate)
 			}
 			// OK we found a free slot!
-			key.Info.Name = sqlparser.NewColIdent(suggestedKeyName)
+			key.Info.Name = sqlparser.NewIdentifierCI(suggestedKeyName)
 			keyNameExists[strings.ToLower(suggestedKeyName)] = true
 		}
 
@@ -565,7 +565,7 @@ func (c *CreateTableEntity) normalizeUnnamedConstraints() {
 				suggestedCheckName = fmt.Sprintf(nameFormat, c.CreateTable.Table.Name.String(), enumerate)
 			}
 			// OK we found a free slot!
-			constraint.Name = sqlparser.NewColIdent(suggestedCheckName)
+			constraint.Name = sqlparser.NewIdentifierCI(suggestedCheckName)
 			constraintNameExists[strings.ToLower(suggestedCheckName)] = true
 		}
 	}
@@ -948,7 +948,7 @@ func (c *CreateTableEntity) isRangePartitionsRotation(
 	for _, p := range droppedPartitions1 {
 		partitionSpec := &sqlparser.PartitionSpec{
 			Action: sqlparser.DropAction,
-			Names:  []sqlparser.ColIdent{p.Name},
+			Names:  []sqlparser.IdentifierCI{p.Name},
 		}
 		partitionSpecs = append(partitionSpecs, partitionSpec)
 	}
@@ -1113,7 +1113,7 @@ func (c *CreateTableEntity) diffKeys(alterTable *sqlparser.AlterTable,
 		t2KeysMap[key.Info.Name.String()] = key
 	}
 
-	dropKeyStatement := func(name sqlparser.ColIdent) *sqlparser.DropKey {
+	dropKeyStatement := func(name sqlparser.IdentifierCI) *sqlparser.DropKey {
 		dropKey := &sqlparser.DropKey{}
 		if strings.EqualFold(dropKey.Name.String(), "PRIMARY") {
 			dropKey.Type = sqlparser.PrimaryKeyType
@@ -2090,6 +2090,6 @@ func (c *CreateTableEntity) identicalOtherThanName(other *CreateTableEntity) boo
 // tableWithMaskedName returns the CREATE TABLE statement but with table's name replaced with a constant arbitrary name
 func tableWithMaskedName(createTable *sqlparser.CreateTable) string {
 	createTable = sqlparser.CloneRefOfCreateTable(createTable)
-	createTable.Table.Name = sqlparser.NewTableIdent("mask")
+	createTable.Table.Name = sqlparser.NewIdentifierCS("mask")
 	return sqlparser.CanonicalString(createTable)
 }
