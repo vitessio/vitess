@@ -90,6 +90,15 @@ func main() {
 
 	fs.AddGoFlagSet(flag.CommandLine)
 
+	var help bool
+	if fs.Lookup("help") == nil {
+		if fs.ShorthandLookup("h") == nil {
+			fs.BoolVarP(&help, "help", "h", false, "display usage and exit")
+		} else {
+			fs.BoolVar(&help, "help", false, "display usage and exit")
+		}
+	}
+
 	configFile := fs.String("config", "", "config file name")
 	sibling := fs.StringP("sibling", "s", "", "sibling instance, host_fqdn[:port]")
 	destination := fs.StringP("destination", "d", "", "destination instance, host_fqdn[:port] (synonym to -s)")
@@ -111,17 +120,22 @@ func main() {
 	config.RuntimeCLIFlags.Tag = fs.String("tag", "", "tag to add ('tagname' or 'tagname=tagvalue') or to search ('tagname' or 'tagname=tagvalue' or comma separated 'tag0,tag1=val1,tag2' for intersection of all)")
 
 	pflagargs := transformArgsForPflag(fs, args[1:])
-	if !reflect.DeepEqual(args, pflagargs) {
+	if !reflect.DeepEqual(args[1:], pflagargs) {
 		// warn the user so they can adjust their CLI scripts
 		warning := `CLI args passed do not conform to pflag parsing behavior
 The arguments have been transformed for compatibility as follows:
-	%v
+	%v => %v
 Please update your scripts before the next version, when this will begin to break.
 `
-		log.Warningf(warning, pflagargs)
+		log.Warningf(warning, args[1:], pflagargs)
 	}
 
 	_ = fs.Parse(pflagargs)
+	if help {
+		pflag.CommandLine = fs
+		pflag.Usage()
+		os.Exit(0)
+	}
 
 	if *destination != "" && *sibling != "" {
 		log.Fatalf("-s and -d are synonyms, yet both were specified. You're probably doing the wrong thing.")
@@ -186,9 +200,9 @@ Please update your scripts before the next version, when this will begin to brea
 	config.MarkConfigurationLoaded()
 
 	helpTopic := ""
-	if flag.Arg(0) == "help" {
-		if flag.Arg(1) != "" {
-			helpTopic = flag.Arg(1)
+	if fs.Arg(0) == "help" {
+		if fs.Arg(1) != "" {
+			helpTopic = fs.Arg(1)
 		}
 	}
 
