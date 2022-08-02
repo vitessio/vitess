@@ -214,8 +214,8 @@ func (cached *AlterMigration) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.Expire)))
 	// field Ratio *vitess.io/vitess/go/vt/sqlparser.Literal
 	size += cached.Ratio.CachedSize(true)
-	// field Shard string
-	size += hack.RuntimeAllocSize(int64(len(cached.Shard)))
+	// field Shards string
+	size += hack.RuntimeAllocSize(int64(len(cached.Shards)))
 	return size
 }
 func (cached *AlterTable) CachedSize(alloc bool) int64 {

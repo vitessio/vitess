@@ -336,6 +336,22 @@ func (e *Executor) triggerNextCheckInterval() {
 	}
 }
 
+// matchesShards checks whether given comma delimited shard names include this tablet's shard. If the input param is empty then
+// that implicitly means "true"
+func (e *Executor) matchesShards(commaDelimitedShards string) bool {
+	shards := textutil.SplitDelimitedList(commaDelimitedShards)
+	if len(shards) == 0 {
+		// Nothing explicitly defined, so implicitly all shards are allowed
+		return true
+	}
+	for _, shard := range shards {
+		if shard == e.shard {
+			return true
+		}
+	}
+	return false
+}
+
 // countOwnedRunningMigrations returns an estimate of current count of running migrations; this is
 // normally an accurate number, but can be inexact because the exdcutor peridocially reviews
 // e.ownedRunningMigrations and adds/removes migrations based on actual migration state.
@@ -4096,19 +4112,16 @@ func (e *Executor) CompletePendingMigrations(ctx context.Context) (result *sqlty
 }
 
 // LaunchMigration clears the postpone_launch flag for a given migration, assuming it was set in the first place
-func (e *Executor) LaunchMigration(ctx context.Context, uuid string, shard string) (result *sqltypes.Result, err error) {
+func (e *Executor) LaunchMigration(ctx context.Context, uuid string, shardsArg string) (result *sqltypes.Result, err error) {
 	if !e.isOpen {
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "online ddl is disabled")
 	}
 	if !schema.IsOnlineDDLUUID(uuid) {
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "Not a valid migration ID in EXECUTE: %s", uuid)
 	}
-	if shard != "" {
-		// explicit shard requested
-		if shard != e.shard {
-			// Does not apply  to this shard!
-			return &sqltypes.Result{}, nil
-		}
+	if !e.matchesShards(shardsArg) {
+		// Does not apply  to this shard!
+		return &sqltypes.Result{}, nil
 	}
 	log.Infof("LaunchMigration: request to execute migration %s", uuid)
 

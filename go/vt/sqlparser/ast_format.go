@@ -306,8 +306,8 @@ func (node *AlterMigration) Format(buf *TrackedBuffer) {
 	if node.Ratio != nil {
 		buf.astPrintf(node, " ratio %v", node.Ratio)
 	}
-	if node.Shard != "" {
-		buf.astPrintf(node, " shard '%s'", node.Shard)
+	if node.Shards != "" {
+		buf.astPrintf(node, " vitess_shards '%s'", node.Shards)
 	}
 }
 

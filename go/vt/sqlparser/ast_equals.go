@@ -1638,7 +1638,7 @@ func EqualsRefOfAlterMigration(a, b *AlterMigration) bool {
 	}
 	return a.UUID == b.UUID &&
 		a.Expire == b.Expire &&
-		a.Shard == b.Shard &&
+		a.Shards == b.Shards &&
 		a.Type == b.Type &&
 		EqualsRefOfLiteral(a.Ratio, b.Ratio)
 }

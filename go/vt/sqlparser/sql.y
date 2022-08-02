@@ -2,8 +2,7 @@
 Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
+xYou may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
@@ -301,7 +300,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> SEQUENCE MERGE TEMPORARY TEMPTABLE INVOKER SECURITY FIRST AFTER LAST
 
 // Migration tokens
-%token <str> VITESS_MIGRATION CANCEL RETRY LAUNCH COMPLETE CLEANUP THROTTLE UNTHROTTLE EXPIRE RATIO SHARD
+%token <str> VITESS_MIGRATION CANCEL RETRY LAUNCH COMPLETE CLEANUP THROTTLE UNTHROTTLE EXPIRE RATIO
 
 // Transaction Tokens
 %token <str> BEGIN START TRANSACTION COMMIT ROLLBACK SAVEPOINT RELEASE WORK
@@ -3182,12 +3181,12 @@ alter_statement:
       UUID: string($4),
     }
   }
-| ALTER comment_opt VITESS_MIGRATION STRING LAUNCH SHARD STRING
+| ALTER comment_opt VITESS_MIGRATION STRING LAUNCH VITESS_SHARDS STRING
   {
     $$ = &AlterMigration{
       Type: LaunchMigrationType,
       UUID: string($4),
-      Shard: string($7),
+      Shards: string($7),
     }
   }
 | ALTER comment_opt VITESS_MIGRATION LAUNCH ALL

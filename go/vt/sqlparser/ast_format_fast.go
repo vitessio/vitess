@@ -438,9 +438,9 @@ func (node *AlterMigration) formatFast(buf *TrackedBuffer) {
 		buf.WriteString(" ratio ")
 		node.Ratio.formatFast(buf)
 	}
-	if node.Shard != "" {
-		buf.WriteString(" shard '")
-		buf.WriteString(node.Shard)
+	if node.Shards != "" {
+		buf.WriteString(" vitess_shards '")
+		buf.WriteString(node.Shards)
 		buf.WriteByte('\'')
 	}
 }

@@ -554,7 +554,6 @@ var keywords = []keyword{
 	{"serializable", SERIALIZABLE},
 	{"session", SESSION},
 	{"set", SET},
-	{"shard", SHARD},
 	{"share", SHARE},
 	{"shared", SHARED},
 	{"show", SHOW},

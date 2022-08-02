@@ -489,7 +489,7 @@ type (
 		UUID   string
 		Expire string
 		Ratio  *Literal
-		Shard  string
+		Shards string
 	}
 
 	// AlterTable represents a ALTER TABLE statement.
