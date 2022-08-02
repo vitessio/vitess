@@ -186,17 +186,21 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 			return false, vterrors.Wrap(err, "can't get position on primary")
 		}
 	} else {
-		if err = params.Mysqld.StopReplication(params.HookExtraEnv); err != nil {
+		if err := params.Mysqld.StopReplication(params.HookExtraEnv); err != nil {
 			return false, vterrors.Wrapf(err, "can't stop replica")
 		}
-		var replicaStatus mysql.ReplicationStatus
-		replicaStatus, err = params.Mysqld.ReplicationStatus()
+		replicaStatus, err := params.Mysqld.ReplicationStatus()
 		if err != nil {
 			return false, vterrors.Wrap(err, "can't get replica status")
 		}
 		replicationPosition = replicaStatus.Position
 	}
 	params.Logger.Infof("using replication position: %v", replicationPosition)
+
+	serverUUID, err := params.Mysqld.GetServerUUID(ctx)
+	if err != nil {
+		return false, vterrors.Wrap(err, "can't get server uuid")
+	}
 
 	// shutdown mysqld
 	shutdownCtx, cancel := context.WithTimeout(ctx, *BuiltinBackupMysqldTimeout)
@@ -207,7 +211,7 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 	}
 
 	// Backup everything, capture the error.
-	backupErr := be.backupFiles(ctx, params, bh, replicationPosition)
+	backupErr := be.backupFiles(ctx, params, bh, replicationPosition, serverUUID)
 	usable := backupErr == nil
 
 	// Try to restart mysqld, use background context in case we timed out the original context
@@ -283,7 +287,7 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 }
 
 // backupFiles finds the list of files to backup, and creates the backup.
-func (be *BuiltinBackupEngine) backupFiles(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle, replicationPosition mysql.Position) (finalErr error) {
+func (be *BuiltinBackupEngine) backupFiles(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle, replicationPosition mysql.Position, serverUUID string) (finalErr error) {
 
 	// Get the files to backup.
 	// We don't care about totalSize because we add each file separately.
@@ -346,6 +350,8 @@ func (be *BuiltinBackupEngine) backupFiles(ctx context.Context, params BackupPar
 		BackupManifest: BackupManifest{
 			BackupMethod: builtinBackupEngineName,
 			Position:     replicationPosition,
+			ServerUUID:   serverUUID,
+			TabletAlias:  params.TabletAlias,
 			BackupTime:   params.BackupTime.UTC().Format(time.RFC3339),
 			FinishedTime: time.Now().UTC().Format(time.RFC3339),
 		},

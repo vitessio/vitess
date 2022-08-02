@@ -157,6 +157,11 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, params BackupPara
 	if err != nil {
 		return false, vterrors.Wrap(err, "unable to obtain primary position")
 	}
+	serverUUID, err := conn.GetServerUUID()
+	if err != nil {
+		return false, vterrors.Wrap(err, "can't get server uuid")
+	}
+
 	flavor := pos.GTIDSet.Flavor()
 	params.Logger.Infof("Detected MySQL flavor: %v", flavor)
 
@@ -189,6 +194,8 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, params BackupPara
 		BackupManifest: BackupManifest{
 			BackupMethod: xtrabackupEngineName,
 			Position:     replicationPosition,
+			ServerUUID:   serverUUID,
+			TabletAlias:  params.TabletAlias,
 			BackupTime:   params.BackupTime.UTC().Format(time.RFC3339),
 			FinishedTime: time.Now().UTC().Format(time.RFC3339),
 		},

@@ -187,6 +187,11 @@ type BackupManifest struct {
 	// FinishedTime is the time (in RFC 3339 format, UTC) at which the backup finished, if known.
 	// Some backups may not set this field if they were created before the field was added.
 	FinishedTime string
+
+	// ServerUUID identifies the server from which backup was taken
+	ServerUUID string
+
+	TabletAlias string
 }
 
 // FindBackupToRestore returns a selected candidate backup to be restored.
