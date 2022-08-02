@@ -65,6 +65,9 @@ type BackupParams struct {
 	TabletAlias string
 	// BackupTime is the time at which the backup is being started
 	BackupTime time.Time
+	// Position of last known backup. If non empty, then this value indicates the backup should be incremental
+	// and as of this position
+	IncrementalFromPos string
 }
 
 // RestoreParams is the struct that holds all params passed to ExecuteRestore

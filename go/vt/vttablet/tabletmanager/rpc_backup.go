@@ -105,16 +105,17 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 
 	// now we can run the backup
 	backupParams := mysqlctl.BackupParams{
-		Cnf:          tm.Cnf,
-		Mysqld:       tm.MysqlDaemon,
-		Logger:       l,
-		Concurrency:  int(req.Concurrency),
-		HookExtraEnv: tm.hookExtraEnv(),
-		TopoServer:   tm.TopoServer,
-		Keyspace:     tablet.Keyspace,
-		Shard:        tablet.Shard,
-		TabletAlias:  topoproto.TabletAliasString(tablet.Alias),
-		BackupTime:   time.Now(),
+		Cnf:                tm.Cnf,
+		Mysqld:             tm.MysqlDaemon,
+		Logger:             l,
+		Concurrency:        int(req.Concurrency),
+		IncrementalFromPos: req.IncrementalFromPos,
+		HookExtraEnv:       tm.hookExtraEnv(),
+		TopoServer:         tm.TopoServer,
+		Keyspace:           tablet.Keyspace,
+		Shard:              tablet.Shard,
+		TabletAlias:        topoproto.TabletAliasString(tablet.Alias),
+		BackupTime:         time.Now(),
 	}
 
 	returnErr := mysqlctl.Backup(ctx, backupParams)
