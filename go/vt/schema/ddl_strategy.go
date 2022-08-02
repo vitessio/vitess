@@ -33,7 +33,7 @@ const (
 	singletonFlag          = "singleton"
 	singletonContextFlag   = "singleton-context"
 	allowZeroInDateFlag    = "allow-zero-in-date"
-	postponeExecutionFlag  = "postpone-execution"
+	postponeLaunchFlag     = "postpone-launch"
 	postponeCompletionFlag = "postpone-completion"
 	allowConcurrentFlag    = "allow-concurrent"
 	fastOverRevertibleFlag = "fast-over-revertible"
@@ -143,9 +143,9 @@ func (setting *DDLStrategySetting) IsAllowZeroInDateFlag() bool {
 	return setting.hasFlag(allowZeroInDateFlag)
 }
 
-// IsPostponeExecution checks if strategy options include -postpone-execution
-func (setting *DDLStrategySetting) IsPostponeExecution() bool {
-	return setting.hasFlag(postponeExecutionFlag)
+// IsPostponeLaunch checks if strategy options include -postpone-launch
+func (setting *DDLStrategySetting) IsPostponeLaunch() bool {
+	return setting.hasFlag(postponeLaunchFlag)
 }
 
 // IsPostponeCompletion checks if strategy options include -postpone-completion
@@ -190,7 +190,7 @@ func (setting *DDLStrategySetting) RuntimeOptions() []string {
 		case isFlag(opt, singletonFlag):
 		case isFlag(opt, singletonContextFlag):
 		case isFlag(opt, allowZeroInDateFlag):
-		case isFlag(opt, postponeExecutionFlag):
+		case isFlag(opt, postponeLaunchFlag):
 		case isFlag(opt, postponeCompletionFlag):
 		case isFlag(opt, allowConcurrentFlag):
 		case isFlag(opt, fastOverRevertibleFlag):

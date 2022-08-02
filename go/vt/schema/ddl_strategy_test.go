@@ -44,7 +44,7 @@ func TestParseDDLStrategy(t *testing.T) {
 		options              string
 		isDeclarative        bool
 		isSingleton          bool
-		isPostponeExecution  bool
+		isPostponeLaunch     bool
 		isPostponeCompletion bool
 		isAllowConcurrent    bool
 		fastOverRevertible   bool
@@ -104,11 +104,11 @@ func TestParseDDLStrategy(t *testing.T) {
 			isSingleton:      true,
 		},
 		{
-			strategyVariable:    "online -postpone-execution",
-			strategy:            DDLStrategyOnline,
-			options:             "-postpone-execution",
-			runtimeOptions:      "",
-			isPostponeExecution: true,
+			strategyVariable: "online -postpone-launch",
+			strategy:         DDLStrategyOnline,
+			options:          "-postpone-launch",
+			runtimeOptions:   "",
+			isPostponeLaunch: true,
 		},
 		{
 			strategyVariable:     "online -postpone-completion",
@@ -154,7 +154,7 @@ func TestParseDDLStrategy(t *testing.T) {
 		assert.Equal(t, ts.isDeclarative, setting.IsDeclarative())
 		assert.Equal(t, ts.isSingleton, setting.IsSingleton())
 		assert.Equal(t, ts.isPostponeCompletion, setting.IsPostponeCompletion())
-		assert.Equal(t, ts.isPostponeExecution, setting.IsPostponeExecution())
+		assert.Equal(t, ts.isPostponeLaunch, setting.IsPostponeLaunch())
 		assert.Equal(t, ts.isAllowConcurrent, setting.IsAllowConcurrent())
 		assert.Equal(t, ts.fastOverRevertible, setting.IsFastOverRevertibleFlag())
 		assert.Equal(t, ts.fastRangeRotation, setting.IsFastRangeRotationFlag())
