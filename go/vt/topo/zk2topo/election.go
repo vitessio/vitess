@@ -17,10 +17,9 @@ limitations under the License.
 package zk2topo
 
 import (
+	"context"
 	"path"
 	"sort"
-
-	"context"
 
 	"github.com/z-division/go-zookeeper/zk"
 
@@ -197,4 +196,11 @@ func (mp *zkLeaderParticipation) GetCurrentLeaderID(ctx context.Context) (string
 
 		return string(data), nil
 	}
+}
+
+// WaitForNewLeader is part of the topo.LeaderParticipation interface
+func (mp *zkLeaderParticipation) WaitForNewLeader(context.Context) (<-chan string, error) {
+	// This isn't implemented yet, but likely can be implemented in the same way
+	// as how WatchRecursive could be implemented as well.
+	return nil, topo.NewError(topo.NoImplementation, "wait for leader not supported in ZK2 topo")
 }
