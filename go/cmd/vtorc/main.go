@@ -169,7 +169,7 @@ Please update your scripts before the next version, when this will begin to brea
 		}
 	default:
 		{
-			log.Fatalf("-promotion-rule only supports prefer|neutral|prefer_not|must_not")
+			log.Fatalf("--promotion-rule only supports prefer|neutral|prefer_not|must_not")
 		}
 	}
 	if *destination == "" {
