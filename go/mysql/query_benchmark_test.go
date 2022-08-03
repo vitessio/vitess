@@ -18,7 +18,6 @@ package mysql
 
 import (
 	"context"
-	"flag"
 	"math/rand"
 	"net"
 	"strings"
@@ -26,10 +25,6 @@ import (
 )
 
 var testReadConnBufferSize = DefaultConnBufferSize
-
-func init() {
-	flag.IntVar(&testReadConnBufferSize, "test.read_conn_buffer_size", DefaultConnBufferSize, "buffer size for reads from connections in tests")
-}
 
 const benchmarkQueryPrefix = "benchmark "
 

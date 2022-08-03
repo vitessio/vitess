@@ -19,7 +19,6 @@ package mysql
 import (
 	"bytes"
 	"encoding/json"
-	"flag"
 	"net"
 	"os"
 	"os/signal"
@@ -34,9 +33,9 @@ import (
 )
 
 var (
-	mysqlAuthServerStaticFile           = flag.String("mysql_auth_server_static_file", "", "JSON File to read the users/passwords from.")
-	mysqlAuthServerStaticString         = flag.String("mysql_auth_server_static_string", "", "JSON representation of the users/passwords config.")
-	mysqlAuthServerStaticReloadInterval = flag.Duration("mysql_auth_static_reload_interval", 0, "Ticker to reload credentials")
+	mysqlAuthServerStaticFile           string        = ""
+	mysqlAuthServerStaticString         string        = ""
+	mysqlAuthServerStaticReloadInterval time.Duration = 0
 )
 
 const (
