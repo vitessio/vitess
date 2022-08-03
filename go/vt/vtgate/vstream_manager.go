@@ -468,6 +468,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 				}
 				if err != nil {
 					errCh <- err
+					return err
 				}
 				return nil
 			})
@@ -516,7 +517,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 						return err
 					}
 
-					if err := vs.sendAll(sgtid, eventss); err != nil {
+					if err := vs.sendAll(ctx, sgtid, eventss); err != nil {
 						return err
 					}
 					eventss = nil
@@ -535,7 +536,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 					if vs.stopOnReshard && journal.MigrationType == binlogdatapb.MigrationType_SHARDS {
 						sendevents = append(sendevents, event)
 						eventss = append(eventss, sendevents)
-						if err := vs.sendAll(sgtid, eventss); err != nil {
+						if err := vs.sendAll(ctx, sgtid, eventss); err != nil {
 							return err
 						}
 						eventss = nil
@@ -588,7 +589,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 }
 
 // sendAll sends a group of events together while holding the lock.
-func (vs *vstream) sendAll(sgtid *binlogdatapb.ShardGtid, eventss [][]*binlogdatapb.VEvent) error {
+func (vs *vstream) sendAll(ctx context.Context, sgtid *binlogdatapb.ShardGtid, eventss [][]*binlogdatapb.VEvent) error {
 	vs.mu.Lock()
 	defer vs.mu.Unlock()
 
@@ -635,7 +636,11 @@ func (vs *vstream) sendAll(sgtid *binlogdatapb.ShardGtid, eventss [][]*binlogdat
 				}
 			}
 		}
-		vs.eventCh <- events
+		select {
+		case <-ctx.Done():
+			return nil
+		case vs.eventCh <- events:
+		}
 	}
 	return nil
 }
