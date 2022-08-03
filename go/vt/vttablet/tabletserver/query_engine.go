@@ -293,9 +293,11 @@ func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats
 	span, ctx := trace.NewSpan(ctx, "QueryEngine.GetPlan")
 	defer span.Finish()
 
-	if plan := qe.getQuery(sql); plan != nil {
-		logStats.CachedPlan = true
-		return plan, nil
+	if !skipQueryPlanCache {
+		if plan := qe.getQuery(sql); plan != nil {
+			logStats.CachedPlan = true
+			return plan, nil
+		}
 	}
 
 	// Obtain read lock to prevent schema from changing while

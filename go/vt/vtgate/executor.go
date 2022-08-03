@@ -1087,11 +1087,9 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 		isNormalized = true
 	}
 
-	if logStats != nil {
-		logStats.SQL = comments.Leading + query + comments.Trailing
-		logStats.IsNormalized = isNormalized
-		logStats.BindVariables = sqltypes.CopyBindVariables(bindVars)
-	}
+	logStats.SQL = comments.Leading + query + comments.Trailing
+	logStats.IsNormalized = isNormalized
+	logStats.BindVariables = sqltypes.CopyBindVariables(bindVars)
 
 	planHash := sha256.New()
 	_, _ = planHash.Write([]byte(vcursor.planPrefixKey()))
@@ -1099,8 +1097,11 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 	_, _ = planHash.Write(hack.StringBytes(query))
 	planKey := hex.EncodeToString(planHash.Sum(nil))
 
-	if plan, ok := e.plans.Get(planKey); ok {
-		return plan.(*engine.Plan), nil
+	if sqlparser.CachePlan(statement) && qo.cachePlan() {
+		if plan, ok := e.plans.Get(planKey); ok {
+			logStats.CachedPlan = true
+			return plan.(*engine.Plan), nil
+		}
 	}
 
 	plan, err := planbuilder.BuildFromStmt(query, statement, reservedVars, vcursor, bindVarNeeds, *enableOnlineDDL, *enableDirectDDL)
