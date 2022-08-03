@@ -51,7 +51,7 @@ jobs:
     timeout-minutes: 40
     if: always() && (needs.get_previous_release.result == 'success')
     name: Run Upgrade Downgrade Test Backup Manual
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     needs:
       - get_upgrade_downgrade_label
       - get_previous_release
@@ -92,33 +92,29 @@ jobs:
             - 'bootstrap.sh'
 
     - name: Set up Go
-      if: steps.skip-workflow.outputs.skip-workflow == 'false'
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-go@v2
       with:
         go-version: 1.18.4
 
     - name: Set up python
-      if: steps.skip-workflow.outputs.skip-workflow == 'false'
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-python@v2
 
     - name: Tune the OS
-      if: steps.skip-workflow.outputs.skip-workflow == 'false'
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
         echo '1024 65535' | sudo tee -a /proc/sys/net/ipv4/ip_local_port_range
 
     # TEMPORARY WHILE GITHUB FIXES THIS https://github.com/actions/virtual-environments/issues/3185
     - name: Add the current IP address, long hostname and short hostname record to /etc/hosts file
-      if: steps.skip-workflow.outputs.skip-workflow == 'false'
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
         echo -e "$(ip addr show eth0 | grep "inet\b" | awk '{print $2}' | cut -d/ -f1)\t$(hostname -f) $(hostname -s)" | sudo tee -a /etc/hosts
     # DON'T FORGET TO REMOVE CODE ABOVE WHEN ISSUE IS ADRESSED!
 
-    - name: Checkout to commit's code
-      if: steps.skip-workflow.outputs.skip-workflow == 'false'
-      uses: actions/checkout@v2
-
     - name: Get base dependencies
-      if: steps.skip-workflow.outputs.skip-workflow == 'false'
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
         sudo DEBIAN_FRONTEND="noninteractive" apt-get update
         # Uninstall any previously installed MySQL first
@@ -129,13 +125,22 @@ jobs:
         sudo deluser mysql
         sudo rm -rf /var/lib/mysql
         sudo rm -rf /etc/mysql
-        # Install mysql80
-        sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 467B942D3A79BD29
-        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.20-1_all.deb
-        echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0 | sudo debconf-set-selections
-        sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
-        sudo apt-get update
-        sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y mysql-server mysql-client
+
+        # Install MySQL 8.0
+        ####
+        ## Pin the MySQL version at 8.0.29 as Vitess 12.0 does not have the fix to support
+        ## backups of 8.0.30+ and no backport to v12.0 is currently planned.
+        ##   See: https://github.com/vitessio/vitess/pull/10847
+        ####
+        wget -c https://cdn.mysql.com/archives/mysql-8.0/mysql-common_8.0.29-1ubuntu20.04_amd64.deb \
+                https://cdn.mysql.com/archives/mysql-8.0/mysql-community-client-core_8.0.29-1ubuntu20.04_amd64.deb \
+                https://cdn.mysql.com/archives/mysql-8.0/mysql-community-client-plugins_8.0.29-1ubuntu20.04_amd64.deb \
+                https://cdn.mysql.com/archives/mysql-8.0/mysql-client_8.0.29-1ubuntu20.04_amd64.deb \
+                https://cdn.mysql.com/archives/mysql-8.0/mysql-community-server-core_8.0.29-1ubuntu20.04_amd64.deb \
+                https://cdn.mysql.com/archives/mysql-8.0/mysql-community-server_8.0.29-1ubuntu20.04_amd64.deb \
+                https://cdn.mysql.com/archives/mysql-8.0/mysql-community-client_8.0.29-1ubuntu20.04_amd64.deb
+        sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y ./mysql-*.deb
+
         # Install everything else we need, and configure
         sudo apt-get install -y make unzip g++ etcd curl git wget eatmydata grep
         sudo service mysql stop
@@ -145,7 +150,7 @@ jobs:
         sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld || echo "could not remove mysqld profile"
 
         # install JUnit report formatter
-        go get -u github.com/vitessio/go-junit-report@HEAD
+        go install github.com/jstemmer/go-junit-report@latest
 
         wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
         sudo apt-get install -y gnupg2
@@ -155,18 +160,18 @@ jobs:
 
     # Checkout to the last release of Vitess
     - name: Checkout to the other version's code (${{ needs.get_previous_release.outputs.previous_release }})
-      if: steps.skip-workflow.outputs.skip-workflow == 'false'
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       uses: actions/checkout@v2
       with:
         ref: ${{ needs.get_previous_release.outputs.previous_release }}
 
     - name: Get dependencies for the last release
-      if: steps.skip-workflow.outputs.skip-workflow == 'false'
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
         go mod download
 
     - name: Building last release's binaries
-      if: steps.skip-workflow.outputs.skip-workflow == 'false'
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 5
       run: |
         source build.env
@@ -177,21 +182,21 @@ jobs:
 
     # Checkout to this build's commit
     - name: Checkout to commit's code
-      if: steps.skip-workflow.outputs.skip-workflow == 'false'
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       uses: actions/checkout@v2
 
     - name: Get dependencies for this commit
-      if: steps.skip-workflow.outputs.skip-workflow == 'false'
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
         go mod download
 
     - name: Run make minimaltools
-      if: steps.skip-workflow.outputs.skip-workflow == 'false'
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
         make minimaltools
 
     - name: Building the binaries for this commit
-      if: steps.skip-workflow.outputs.skip-workflow == 'false'
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 5
       run: |
         source build.env
@@ -202,7 +207,7 @@ jobs:
     # We create a sharded Vitess cluster following the local example.
     # We also insert a few rows in our three tables.
     - name: Create the example Vitess cluster with all components using version N
-      if: steps.skip-workflow.outputs.skip-workflow == 'false'
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 5
       run: |
         source build.env ; cd examples/local
@@ -210,7 +215,7 @@ jobs:
 
     # Taking a backup
     - name: Take a backup of all the shards
-      if: steps.skip-workflow.outputs.skip-workflow == 'false'
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 2
       run: |
         source build.env ; cd examples/local
@@ -224,7 +229,7 @@ jobs:
     #     - corder:   5
     # We shall see the same number of rows after restoring the backup.
     - name: Insert more data after the backup
-      if: steps.skip-workflow.outputs.skip-workflow == 'false'
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
         source build.env ; cd examples/local ; source ./env.sh
 
@@ -234,7 +239,7 @@ jobs:
 
     # Stop all the tablets and remove their data
     - name: Stop tablets
-      if: steps.skip-workflow.outputs.skip-workflow == 'false'
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 5
       run: |
         source build.env ; cd examples/local
@@ -242,7 +247,7 @@ jobs:
 
     # We downgrade: we use the version N-1 of vttablet
     - name: Downgrade - Swap binaries, use VTTablet N-1
-      if: steps.skip-workflow.outputs.skip-workflow == 'false'
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
         source build.env
 
@@ -252,7 +257,7 @@ jobs:
 
     # Starting the tablets again, they will automatically start restoring the last backup.
     - name: Start new tablets and restore
-      if: steps.skip-workflow.outputs.skip-workflow == 'false'
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 5
       run: |
         source build.env ; cd examples/local
@@ -262,7 +267,7 @@ jobs:
 
     # Count the number of rows in each table to make sure the restoration is successful.
     - name: Assert the number of rows in every table
-      if: steps.skip-workflow.outputs.skip-workflow == 'false'
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
         source build.env ; cd examples/local ; source ./env.sh
 
@@ -272,7 +277,7 @@ jobs:
 
     # We insert one more row in every table.
     - name: Insert more rows in the tables
-      if: steps.skip-workflow.outputs.skip-workflow == 'false'
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
         source build.env ; cd examples/local ; source ./env.sh
 
@@ -282,7 +287,7 @@ jobs:
 
     # Taking a second backup of the cluster.
     - name: Take a second backup of all the shards
-      if: steps.skip-workflow.outputs.skip-workflow == 'false'
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 2
       run: |
         source build.env ; cd examples/local
@@ -290,7 +295,7 @@ jobs:
 
     # Stopping the tablets so we can perform the upgrade.
     - name: Stop tablets
-      if: steps.skip-workflow.outputs.skip-workflow == 'false'
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 5
       run: |
         source build.env ; cd examples/local
@@ -298,7 +303,7 @@ jobs:
 
     # We upgrade: we swap binaries and use the version N of the tablet.
     - name: Upgrade - Swap binaries, use VTTablet N
-      if: steps.skip-workflow.outputs.skip-workflow == 'false'
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
         source build.env
 
@@ -308,7 +313,7 @@ jobs:
 
     # Starting the tablets again and restoring the previous backup.
     - name: Start new tablets and restore
-      if: steps.skip-workflow.outputs.skip-workflow == 'false'
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 5
       run: |
         source build.env ; cd examples/local
@@ -318,7 +323,7 @@ jobs:
 
     # We count the number of rows in every table to check that the restore step was successful.
     - name: Assert the number of rows in every table
-      if: steps.skip-workflow.outputs.skip-workflow == 'false'
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
         source build.env ; cd examples/local ; source ./env.sh
 
@@ -327,7 +332,7 @@ jobs:
         echo "select count(sku) from corder;" | mysql 2>&1| grep 6
 
     - name: Stop the Vitess cluster
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && always()
+      if: always() && steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
         source build.env ; cd examples/local
         ./401_teardown.sh || true
