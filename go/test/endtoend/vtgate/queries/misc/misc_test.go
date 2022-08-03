@@ -68,3 +68,12 @@ func TestHexVals(t *testing.T) {
 	mcmp.AssertMatches(`select 1 + x'09', 2 + 0x9`, `[[UINT64(10) UINT64(11)]]`)
 	mcmp.AssertMatches(`select 1 + X'09', 2 + 0x9 from t1`, `[[UINT64(10) UINT64(11)]]`)
 }
+
+func TestDateTimeTimestampVals(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.AssertMatches(`select date'2022-08-03'`, `[[DATE("2022-08-03")]]`)
+	mcmp.AssertMatches(`select time'12:34:56'`, `[[TIME("12:34:56")]]`)
+	mcmp.AssertMatches(`select timestamp'2012-12-31 11:30:45'`, `[[DATETIME("2012-12-31 11:30:45")]]`)
+}

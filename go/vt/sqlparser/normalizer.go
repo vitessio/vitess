@@ -223,6 +223,15 @@ func SQLToBindvar(node SQLNode) *querypb.BindVariable {
 				return nil
 			}
 			v, err = sqltypes.NewValue(sqltypes.HexNum, []byte(fmt.Sprintf("0x%x", ui)))
+		case DateVal:
+			v, err = sqltypes.NewValue(sqltypes.Date, node.Bytes())
+		case TimeVal:
+			v, err = sqltypes.NewValue(sqltypes.Time, node.Bytes())
+		case TimestampVal:
+			// This is actually a DATETIME MySQL type. The timestamp literal
+			// syntax is part of the SQL standard and MySQL DATETIME matches
+			// the type best.
+			v, err = sqltypes.NewValue(sqltypes.Datetime, node.Bytes())
 		default:
 			return nil
 		}

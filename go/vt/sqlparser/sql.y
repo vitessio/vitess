@@ -1661,6 +1661,18 @@ text_literal
     bindVariable(yylex, $2[1:])
     $$ = &IntroducerExpr{CharacterSet: $1, Expr: NewArgument($2[1:])}
   }
+| DATE STRING
+  {
+  $$ = NewDateLiteral($2)
+  }
+| TIME STRING
+  {
+  $$ = NewTimeLiteral($2)
+  }
+| TIMESTAMP STRING
+  {
+  $$ = NewTimestampLiteral($2)
+  }
 
 underscore_charsets:
   UNDERSCORE_ARMSCII8
