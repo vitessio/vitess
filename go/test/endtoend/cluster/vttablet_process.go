@@ -164,9 +164,9 @@ func (vttablet *VttabletProcess) GetStatus() string {
 	if err != nil {
 		return ""
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode == 200 {
 		respByte, _ := io.ReadAll(resp.Body)
-		defer resp.Body.Close()
 		return string(respByte)
 	}
 	return ""
@@ -178,6 +178,8 @@ func (vttablet *VttabletProcess) GetVars() map[string]any {
 	if err != nil {
 		return nil
 	}
+	defer resp.Body.Close()
+
 	if resp.StatusCode == 200 {
 		resultMap := make(map[string]any)
 		respByte, _ := io.ReadAll(resp.Body)
@@ -196,6 +198,8 @@ func (vttablet *VttabletProcess) GetStatusDetails() string {
 	if err != nil {
 		return fmt.Sprintf("Status details failed: %v", err.Error())
 	}
+	defer resp.Body.Close()
+
 	respByte, _ := io.ReadAll(resp.Body)
 	return string(respByte)
 }

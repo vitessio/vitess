@@ -71,6 +71,7 @@ func init() {
 		log.Errorf("failed to set flag \"tablet_protocol\" to \"fake_gateway\":%v", err)
 	}
 	connMap = make(map[string]*fakeConn)
+	refreshInterval = time.Minute
 }
 
 func TestHealthCheck(t *testing.T) {
@@ -1143,6 +1144,9 @@ func TestHealthCheckChecksGrpcPort(t *testing.T) {
 }
 
 func TestTemplate(t *testing.T) {
+	TabletURLTemplateString = "http://{{.GetTabletHostPort}}"
+	ParseTabletURLTemplateFromFlag()
+
 	tablet := topo.NewTablet(0, "cell", "a")
 	ts := []*TabletHealth{
 		{
@@ -1160,17 +1164,14 @@ func TestTemplate(t *testing.T) {
 	}
 	templ := template.New("").Funcs(status.StatusFuncs)
 	templ, err := templ.Parse(HealthCheckTemplate)
-	require.Nil(t, err, "error parsing template")
+	require.Nil(t, err, "error parsing template: %v", err)
 	wr := &bytes.Buffer{}
 	err = templ.Execute(wr, []*TabletsCacheStatus{tcs})
-	require.Nil(t, err, "error executing template")
+	require.Nil(t, err, "error executing template: %v", err)
 }
 
 func TestDebugURLFormatting(t *testing.T) {
-	// log error
-	if err2 := flag.Set("tablet_url_template", "https://{{.GetHostNameLevel 0}}.bastion.{{.Tablet.Alias.Cell}}.corp"); err2 != nil {
-		log.Errorf("flag.Set(\"tablet_url_template\", \"https://{{.GetHostNameLevel 0}}.bastion.{{.Tablet.Alias.Cell}}.corp\") failed : %v", err2)
-	}
+	TabletURLTemplateString = "https://{{.GetHostNameLevel 0}}.bastion.{{.Tablet.Alias.Cell}}.corp"
 	ParseTabletURLTemplateFromFlag()
 
 	tablet := topo.NewTablet(0, "cell", "host.dc.domain")

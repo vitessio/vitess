@@ -1,5 +1,5 @@
 Usage of vtgate:
-      --allowed_tablet_types TabletTypeList                              Specifies the tablet types this vtgate is allowed to route queries to
+      --allowed_tablet_types []topodatapb.TabletType                     Specifies the tablet types this vtgate is allowed to route queries to.
       --alsologtostderr                                                  log to standard error as well as files
       --buffer_drain_concurrency int                                     Maximum number of requests retried simultaneously. More concurrency will increase the load on the PRIMARY vttablet when draining the buffer. (default 1)
       --buffer_implementation string                                     Allowed values: healthcheck (legacy implementation), keyspace_events (default) (default "keyspace_events")
@@ -17,10 +17,10 @@ Usage of vtgate:
       --datadog-agent-port string                                        port to send spans to. if empty, no tracing will be done
       --dbddl_plugin string                                              controls how to handle CREATE/DROP DATABASE. use it if you are using your own database provisioning service (default "fail")
       --ddl_strategy string                                              Set default strategy for DDL statements. Override with @@ddl_strategy session variable (default "direct")
-      --default_tablet_type TabletTypeFlag                               The default tablet type to set for queries, when one is not explicitly selected (default PRIMARY)
+      --default_tablet_type topodatapb.TabletType                        The default tablet type to set for queries, when one is not explicitly selected. (default PRIMARY)
       --disable_local_gateway                                            deprecated: if specified, this process will not route any queries to local tablets in the local cell
-      --discovery_high_replication_lag_minimum_serving duration          the replication lag that is considered too high when applying the min_number_serving_vttablets threshold (default 2h0m0s)
-      --discovery_low_replication_lag duration                           the replication lag that is considered low enough to be healthy (default 30s)
+      --discovery_high_replication_lag_minimum_serving duration          Threshold above which replication lag is considered too high when applying the min_number_serving_vttablets flag. (default 2h0m0s)
+      --discovery_low_replication_lag duration                           Threshold below which replication lag is considered low enough to be healthy. (default 30s)
       --emit_stats                                                       If set, emit stats to push-based monitoring and stats backends
       --enable_buffer                                                    Enable buffering (stalling) of primary traffic during failovers.
       --enable_buffer_dry_run                                            Detect and log failover events, but do not actually buffer requests.
@@ -65,9 +65,9 @@ Usage of vtgate:
       --jaeger-agent-host string                                         host and port to send spans to. if empty, no tracing will be done
       --keep_logs duration                                               keep logs for this long (using ctime) (zero to keep forever) (default 0s)
       --keep_logs_by_mtime duration                                      keep logs for this long (using mtime) (zero to keep forever) (default 0s)
-      --keyspaces_to_watch StringList                                    Specifies which keyspaces this vtgate should have access to while routing queries or accessing the vschema
+      --keyspaces_to_watch strings                                       Specifies which keyspaces this vtgate should have access to while routing queries or accessing the vschema.
       --lameduck-period duration                                         keep running at least this long after SIGTERM before stopping (default 50ms)
-      --legacy_replication_lag_algorithm                                 use the legacy algorithm when selecting the vttablets for serving (default true)
+      --legacy_replication_lag_algorithm                                 Use the legacy algorithm when selecting vttablets for serving. (default true)
       --lock_heartbeat_time duration                                     If there is lock function used. This will keep the lock connection active by using this heartbeat (default 5s)
       --log_backtrace_at traceLocation                                   when logging hits line file:N, emit a stack trace (default :0)
       --log_dir string                                                   If non-empty, write log files in this directory
@@ -79,7 +79,7 @@ Usage of vtgate:
       --max_payload_size int                                             The threshold for query payloads in bytes. A payload greater than this threshold will result in a failure to handle the query.
       --mem-profile-rate int                                             deprecated: use '-pprof=mem' instead (default 524288)
       --message_stream_grace_period duration                             the amount of time to give for a vttablet to resume if it ends a message stream, usually because of a reparent. (default 30s)
-      --min_number_serving_vttablets int                                 the minimum number of vttablets for each replicating tablet_type (e.g. replica, rdonly) that will be continue to be used even with replication lag above discovery_low_replication_lag, but still below discovery_high_replication_lag_minimum_serving (default 2)
+      --min_number_serving_vttablets int                                 The minimum number of vttablets for each replicating tablet_type (e.g. replica, rdonly) that will be continue to be used even with replication lag above discovery_low_replication_lag, but still below discovery_high_replication_lag_minimum_serving. (default 2)
       --mutex-profile-fraction int                                       deprecated: use '-pprof=mutex' instead
       --mysql_allow_clear_text_without_tls                               If set, the server will allow the use of a clear text password over non-SSL connections.
       --mysql_auth_server_impl string                                    Which auth server implementation to use. Options: none, ldap, clientcert, static, vault. (default "static")
@@ -154,7 +154,7 @@ Usage of vtgate:
       --statsd_sample_rate float                                          (default 1)
       --stderrthreshold severity                                         logs at or above this threshold go to stderr (default 1)
       --stream_buffer_size int                                           the number of bytes sent from vtgate for each stream call. It's recommended to keep this value in sync with vttablet's query-server-config-stream-buffer-size. (default 32768)
-      --tablet_filters StringList                                        Specifies a comma-separated list of 'keyspace|shard_name or keyrange' values to filter the tablets to watch
+      --tablet_filters strings                                           Specifies a comma-separated list of 'keyspace|shard_name or keyrange' values to filter the tablets to watch.
       --tablet_grpc_ca string                                            the server ca to use to validate servers when connecting
       --tablet_grpc_cert string                                          the cert to use to connect
       --tablet_grpc_crl string                                           the server crl to use to validate server certificates when connecting
@@ -162,10 +162,10 @@ Usage of vtgate:
       --tablet_grpc_server_name string                                   the server name to use to validate server certificate
       --tablet_manager_protocol string                                   the protocol to use to talk to vttablet (default "grpc")
       --tablet_protocol string                                           how to talk to the vttablets (default "grpc")
-      --tablet_refresh_interval duration                                 tablet refresh interval (default 1m0s)
-      --tablet_refresh_known_tablets                                     tablet refresh reloads the tablet address/port map from topo in case it changes (default true)
+      --tablet_refresh_interval duration                                 Tablet refresh interval. (default 1m0s)
+      --tablet_refresh_known_tablets                                     Whether to reload the tablet's address/port map from topo in case they change. (default true)
       --tablet_types_to_wait string                                      wait till connected for specified tablet types during Gateway initialization
-      --tablet_url_template string                                       format string describing debug tablet url formatting. See the Go code for getTabletDebugURL() how to customize this. (default "http://{{.GetTabletHostPort}}")
+      --tablet_url_template string                                       Format string describing debug tablet url formatting. See getTabletDebugURL() for how to customize this. (default "http://{{.GetTabletHostPort}}")
       --topo_consul_lock_delay duration                                  LockDelay for consul session. (default 15s)
       --topo_consul_lock_session_checks string                           List of checks for consul session. (default "serfHealth")
       --topo_consul_lock_session_ttl string                              TTL for consul session.
@@ -180,7 +180,7 @@ Usage of vtgate:
       --topo_k8s_context string                                          The kubeconfig context to use, overrides the 'current-context' from the config
       --topo_k8s_kubeconfig string                                       Path to a valid kubeconfig file. When running as a k8s pod inside the same cluster you wish to use as the topo, you may omit this and the below arguments, and Vitess is capable of auto-discovering the correct values. https://kubernetes.io/docs/tasks/access-application-cluster/access-cluster/#accessing-the-api-from-a-pod
       --topo_k8s_namespace string                                        The kubernetes namespace to use for all objects. Default comes from the context or in-cluster config
-      --topo_read_concurrency int                                        concurrent topo reads (default 32)
+      --topo_read_concurrency int                                        Concurrency of topo reads. (default 32)
       --topo_zk_auth_file string                                         auth to use when connecting to the zk topo server, file contents should be <scheme>:<auth>, e.g., digest:user:pass
       --topo_zk_base_timeout duration                                    zk base timeout (see zk.Connect) (default 30s)
       --topo_zk_max_concurrency int                                      maximum number of pending requests to send to a Zookeeper server. (default 64)

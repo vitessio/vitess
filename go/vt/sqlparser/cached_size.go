@@ -704,6 +704,33 @@ func (cached *ColumnTypeOptions) CachedSize(alloc bool) int64 {
 	size += cached.SRID.CachedSize(true)
 	return size
 }
+
+//go:nocheckptr
+func (cached *CommentDirectives) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(8)
+	}
+	// field m map[string]string
+	if cached.m != nil {
+		size += int64(48)
+		hmap := reflect.ValueOf(cached.m)
+		numBuckets := int(math.Pow(2, float64((*(*uint8)(unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
+		numOldBuckets := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
+		size += hack.RuntimeAllocSize(int64(numOldBuckets * 272))
+		if len(cached.m) > 0 || numBuckets > 1 {
+			size += hack.RuntimeAllocSize(int64(numBuckets * 272))
+		}
+		for k, v := range cached.m {
+			size += hack.RuntimeAllocSize(int64(len(k)))
+			size += hack.RuntimeAllocSize(int64(len(v)))
+		}
+	}
+	return size
+}
 func (cached *CommentOnly) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1166,12 +1193,14 @@ func (cached *ExplainStmt) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(24)
+		size += int64(32)
 	}
 	// field Statement vitess.io/vitess/go/vt/sqlparser.Statement
 	if cc, ok := cached.Statement.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
+	// field Comments *vitess.io/vitess/go/vt/sqlparser.ParsedComments
+	size += cached.Comments.CachedSize(true)
 	return size
 }
 func (cached *ExplainTab) CachedSize(alloc bool) int64 {
@@ -2654,8 +2683,6 @@ func (cached *ParenTableExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
-
-//go:nocheckptr
 func (cached *ParsedComments) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2671,21 +2698,8 @@ func (cached *ParsedComments) CachedSize(alloc bool) int64 {
 			size += hack.RuntimeAllocSize(int64(len(elem)))
 		}
 	}
-	// field _directives vitess.io/vitess/go/vt/sqlparser.CommentDirectives
-	if cached._directives != nil {
-		size += int64(48)
-		hmap := reflect.ValueOf(cached._directives)
-		numBuckets := int(math.Pow(2, float64((*(*uint8)(unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
-		numOldBuckets := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
-		size += hack.RuntimeAllocSize(int64(numOldBuckets * 272))
-		if len(cached._directives) > 0 || numBuckets > 1 {
-			size += hack.RuntimeAllocSize(int64(numBuckets * 272))
-		}
-		for k, v := range cached._directives {
-			size += hack.RuntimeAllocSize(int64(len(k)))
-			size += hack.RuntimeAllocSize(int64(len(v)))
-		}
-	}
+	// field _directives *vitess.io/vitess/go/vt/sqlparser.CommentDirectives
+	size += cached._directives.CachedSize(true)
 	return size
 }
 func (cached *ParsedQuery) CachedSize(alloc bool) int64 {

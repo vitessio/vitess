@@ -17,9 +17,8 @@ limitations under the License.
 package topo
 
 import (
-	"time"
-
 	"context"
+	"time"
 
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -162,11 +161,18 @@ func (st *StatsConn) Lock(ctx context.Context, dirPath, contents string) (LockDe
 }
 
 // Watch is part of the Conn interface
-func (st *StatsConn) Watch(ctx context.Context, filePath string) (current *WatchData, changes <-chan *WatchData, cancel CancelFunc) {
+func (st *StatsConn) Watch(ctx context.Context, filePath string) (current *WatchData, changes <-chan *WatchData, err error) {
 	startTime := time.Now()
 	statsKey := []string{"Watch", st.cell}
 	defer topoStatsConnTimings.Record(statsKey, startTime)
 	return st.conn.Watch(ctx, filePath)
+}
+
+func (st *StatsConn) WatchRecursive(ctx context.Context, path string) ([]*WatchDataRecursive, <-chan *WatchDataRecursive, error) {
+	startTime := time.Now()
+	statsKey := []string{"WatchRecursive", st.cell}
+	defer topoStatsConnTimings.Record(statsKey, startTime)
+	return st.conn.WatchRecursive(ctx, path)
 }
 
 // NewLeaderParticipation is part of the Conn interface

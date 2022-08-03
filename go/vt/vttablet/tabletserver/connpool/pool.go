@@ -54,7 +54,7 @@ type Pool struct {
 	env                tabletenv.Env
 	name               string
 	mu                 sync.Mutex
-	connections        *pools.ResourcePool
+	connections        pools.IResourcePool
 	capacity           int
 	prefillParallelism int
 	timeout            time.Duration
@@ -97,7 +97,7 @@ func NewPool(env tabletenv.Env, name string, cfg tabletenv.ConnPoolConfig) *Pool
 	return cp
 }
 
-func (cp *Pool) pool() (p *pools.ResourcePool) {
+func (cp *Pool) pool() (p pools.IResourcePool) {
 	cp.mu.Lock()
 	p = cp.connections
 	cp.mu.Unlock()

@@ -1,8 +1,19 @@
+//go:build !race
+
+// Disabling race detector because it doesn't like TestPProfInitWithWaitSig and TestPProfInitWithoutWaitSig,
+// but the profileStarted variable is updated in response to signals invoked in the tests and works as intended.
+
 package servenv
 
 import (
+	"flag"
+	"os/signal"
 	"reflect"
+	"syscall"
 	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestParseProfileFlag(t *testing.T) {
@@ -44,4 +55,52 @@ func TestParseProfileFlag(t *testing.T) {
 			}
 		})
 	}
+}
+
+// with waitSig, we should start with profiling off and toggle on-off-on-off
+func TestPProfInitWithWaitSig(t *testing.T) {
+	signal.Reset(syscall.SIGUSR1)
+	flag.Set("pprof", "cpu,waitSig")
+
+	pprof_init()
+	time.Sleep(1 * time.Second)
+	assert.Equal(t, uint32(0), profileStarted)
+
+	syscall.Kill(syscall.Getpid(), syscall.SIGUSR1)
+	time.Sleep(1 * time.Second)
+	assert.Equal(t, uint32(1), profileStarted)
+
+	syscall.Kill(syscall.Getpid(), syscall.SIGUSR1)
+	time.Sleep(1 * time.Second)
+	assert.Equal(t, uint32(0), profileStarted)
+
+	syscall.Kill(syscall.Getpid(), syscall.SIGUSR1)
+	time.Sleep(1 * time.Second)
+	assert.Equal(t, uint32(1), profileStarted)
+
+	syscall.Kill(syscall.Getpid(), syscall.SIGUSR1)
+	time.Sleep(1 * time.Second)
+	assert.Equal(t, uint32(0), profileStarted)
+}
+
+// without waitSig, we should start with profiling on and toggle off-on-off
+func TestPProfInitWithoutWaitSig(t *testing.T) {
+	signal.Reset(syscall.SIGUSR1)
+	flag.Set("pprof", "cpu")
+
+	pprof_init()
+	time.Sleep(1 * time.Second)
+	assert.Equal(t, uint32(1), profileStarted)
+
+	syscall.Kill(syscall.Getpid(), syscall.SIGUSR1)
+	time.Sleep(1 * time.Second)
+	assert.Equal(t, uint32(0), profileStarted)
+
+	syscall.Kill(syscall.Getpid(), syscall.SIGUSR1)
+	time.Sleep(1 * time.Second)
+	assert.Equal(t, uint32(1), profileStarted)
+
+	syscall.Kill(syscall.Getpid(), syscall.SIGUSR1)
+	time.Sleep(1 * time.Second)
+	assert.Equal(t, uint32(0), profileStarted)
 }

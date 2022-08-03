@@ -664,6 +664,7 @@ var keywords = []keyword{
 	{"vitess_throttled_apps", VITESS_THROTTLED_APPS},
 	{"vschema", VSCHEMA},
 	{"vstream", VSTREAM},
+	{"vtexplain", VTEXPLAIN},
 	{"warnings", WARNINGS},
 	{"wait_for_executed_gtid_set", WAIT_FOR_EXECUTED_GTID_SET},
 	{"wait_until_sql_thread_after_gtids", WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS},

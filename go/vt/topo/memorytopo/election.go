@@ -17,9 +17,8 @@ limitations under the License.
 package memorytopo
 
 import (
-	"path"
-
 	"context"
+	"path"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
@@ -125,4 +124,45 @@ func (mp *cLeaderParticipation) GetCurrentLeaderID(ctx context.Context) (string,
 	}
 
 	return n.lockContents, nil
+}
+
+// WaitForNewLeader is part of the topo.LeaderParticipation interface
+func (mp *cLeaderParticipation) WaitForNewLeader(ctx context.Context) (<-chan string, error) {
+	mp.c.factory.mu.Lock()
+	defer mp.c.factory.mu.Unlock()
+
+	electionPath := path.Join(electionsPath, mp.name)
+	n := mp.c.factory.nodeByPath(mp.c.cell, electionPath)
+	if n == nil {
+		return nil, topo.NewError(topo.NoNode, electionPath)
+	}
+
+	notifications := make(chan string, 8)
+	watchIndex := nextWatchIndex
+	nextWatchIndex++
+	n.watches[watchIndex] = watch{lock: notifications}
+
+	if n.lock != nil {
+		notifications <- n.lockContents
+	}
+
+	go func() {
+		defer close(notifications)
+
+		select {
+		case <-mp.stop:
+		case <-ctx.Done():
+		}
+
+		mp.c.factory.mu.Lock()
+		defer mp.c.factory.mu.Unlock()
+
+		n := mp.c.factory.nodeByPath(mp.c.cell, electionPath)
+		if n == nil {
+			return
+		}
+		delete(n.watches, watchIndex)
+	}()
+
+	return notifications, nil
 }

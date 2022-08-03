@@ -89,6 +89,12 @@ func TestShardReplicationStatuses(t *testing.T) {
 	}
 	replica.FakeMysqlDaemon.CurrentSourceHost = primary.Tablet.MysqlHostname
 	replica.FakeMysqlDaemon.CurrentSourcePort = int(primary.Tablet.MysqlPort)
+	replica.FakeMysqlDaemon.SetReplicationSourceInputs = append(replica.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(primary.Tablet))
+	replica.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		// These 2 statements come from tablet startup
+		"FAKE SET MASTER",
+		"START SLAVE",
+	}
 	replica.StartActionLoop(t, wr)
 	defer replica.StopActionLoop(t)
 
@@ -153,6 +159,9 @@ func TestReparentTablet(t *testing.T) {
 	replica.FakeMysqlDaemon.IOThreadRunning = true
 	replica.FakeMysqlDaemon.SetReplicationSourceInputs = append(replica.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(primary.Tablet))
 	replica.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		// These 2 statements come from tablet startup
+		"FAKE SET MASTER",
+		"START SLAVE",
 		"STOP SLAVE",
 		"FAKE SET MASTER",
 		"START SLAVE",

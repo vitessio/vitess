@@ -17,9 +17,8 @@ limitations under the License.
 package k8stopo
 
 import (
-	"path"
-
 	"context"
+	"path"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
@@ -120,4 +119,11 @@ func (mp *kubernetesLeaderParticipation) GetCurrentLeaderID(ctx context.Context)
 		return "", err
 	}
 	return string(id), nil
+}
+
+// WaitForNewLeader is part of the topo.LeaderParticipation interface
+func (mp *kubernetesLeaderParticipation) WaitForNewLeader(context.Context) (<-chan string, error) {
+	// Kubernetes doesn't seem to provide a primitive that watches a prefix
+	// or directory, so this likely can never be implemented.
+	return nil, topo.NewError(topo.NoImplementation, "wait for leader not supported in K8s topo")
 }

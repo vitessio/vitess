@@ -427,6 +427,7 @@ func (vc *vcursorImpl) Execute(ctx context.Context, method string, query string,
 	if co == vtgatepb.CommitOrder_AUTOCOMMIT {
 		// For autocommit, we have to create an independent session.
 		session = NewAutocommitSession(vc.safeSession.Session)
+		session.logging = vc.safeSession.logging
 		rollbackOnError = false
 	} else {
 		session.SetCommitOrder(co)
@@ -987,4 +988,12 @@ func (vc *vcursorImpl) cloneWithAutocommitSession() *vcursorImpl {
 		warnShardedOnly: vc.warnShardedOnly,
 		pv:              vc.pv,
 	}
+}
+
+func (vc *vcursorImpl) VtExplainLogging() {
+	vc.safeSession.EnableLogging()
+}
+
+func (vc *vcursorImpl) GetVTExplainLogs() []engine.ExecuteEntry {
+	return vc.safeSession.logging.GetLogs()
 }
