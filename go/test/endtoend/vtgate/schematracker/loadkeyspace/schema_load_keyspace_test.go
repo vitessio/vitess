@@ -69,7 +69,7 @@ func TestBlockedLoadKeyspace(t *testing.T) {
 		Name:      keyspaceName,
 		SchemaSQL: sqlSchema,
 	}
-	clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-schema-change-signal=false"}
+	clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-schema-change-signal=false", "--use_super_read_only=true"}
 	err = clusterInstance.StartUnshardedKeyspace(*keyspace, 0, false)
 	require.NoError(t, err)
 

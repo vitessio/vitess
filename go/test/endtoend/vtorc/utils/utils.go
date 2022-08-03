@@ -173,6 +173,9 @@ func createVttablets(clusterInstance *cluster.LocalProcessCluster, cellInfos []*
 			return err
 		}
 	}
+
+	time.Sleep(10 * time.Second)
+
 	for _, tablet := range shard0.Vttablets {
 		err := tablet.VttabletProcess.WaitForTabletStatuses([]string{"SERVING", "NOT_SERVING"})
 		if err != nil {

@@ -22,6 +22,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/event"
@@ -581,19 +583,23 @@ func (pr *PlannedReparenter) reparentShardLocked(
 	case currentPrimary == nil && ev.ShardInfo.PrimaryAlias == nil:
 		// Case (1): no primary has been elected ever. Initialize
 		// the primary-elect tablet
+		log.Info("reparentShardLocked>performInitialPromotion")
 		reparentJournalPos, err = pr.performInitialPromotion(ctx, ev.NewPrimary, opts)
 		needsRefresh = true
 	case currentPrimary == nil && ev.ShardInfo.PrimaryAlias != nil:
 		// Case (2): no clear current primary. Try to find a safe promotion
 		// candidate, and promote to it.
+		log.Info("reparentShardLocked>performPotentialPromotion")
 		reparentJournalPos, err = pr.performPotentialPromotion(ctx, keyspace, shard, ev.NewPrimary, tabletMap, opts)
 	case topoproto.TabletAliasEqual(currentPrimary.Alias, opts.NewPrimaryAlias):
 		// Case (3): desired new primary is the current primary. Attempt to fix
 		// up replicas to recover from a previous partial promotion.
+		log.Info("reparentShardLocked>performPartialPromotionRecovery")
 		reparentJournalPos, err = pr.performPartialPromotionRecovery(ctx, ev.NewPrimary)
 	default:
 		// Case (4): desired primary and current primary differ. Do a graceful
 		// demotion-then-promotion.
+		log.Info("reparentShardLocked>performGracefulPromotion")
 		reparentJournalPos, err = pr.performGracefulPromotion(ctx, ev, keyspace, shard, currentPrimary, ev.NewPrimary, tabletMap, opts)
 	}
 

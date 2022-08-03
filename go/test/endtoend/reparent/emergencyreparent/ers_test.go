@@ -27,10 +27,15 @@ import (
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/reparent/utils"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/vttablet/tabletmanager"
 )
 
 func TestTrivialERS(t *testing.T) {
 	defer cluster.PanicHandler(t)
+
+	/**tabletmanager.SetSuperReadOnly = true
+	defer func() { *tabletmanager.SetSuperReadOnly = false }()*/
+
 	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
@@ -370,6 +375,8 @@ func TestNoReplicationStatusAndIOThreadStopped(t *testing.T) {
 // TestERSForInitialization tests whether calling ERS in the beginning sets up the cluster properly or not
 func TestERSForInitialization(t *testing.T) {
 	var tablets []*cluster.Vttablet
+	*tabletmanager.SetSuperReadOnly = true
+	defer func() { *tabletmanager.SetSuperReadOnly = false }()
 	clusterInstance := cluster.NewCluster("zone1", "localhost")
 	defer clusterInstance.Teardown()
 	keyspace := &cluster.Keyspace{Name: utils.KeyspaceName}
@@ -390,6 +397,7 @@ func TestERSForInitialization(t *testing.T) {
 		"--enable_semi_sync",
 		"--init_populate_metadata",
 		"--track_schema_versions=true",
+		"--use_super_read_only=true",
 	}
 
 	// Initialize Cluster
@@ -427,7 +435,7 @@ func TestERSForInitialization(t *testing.T) {
 		err := tablet.VttabletProcess.WaitForTabletStatuses([]string{"SERVING", "NOT_SERVING"})
 		require.NoError(t, err)
 	}
-
+	time.Sleep(10 * time.Second)
 	// Force the replica to reparent assuming that all the datasets are identical.
 	res, err := utils.Ers(clusterInstance, tablets[0], "60s", "30s")
 	require.NoError(t, err, res)

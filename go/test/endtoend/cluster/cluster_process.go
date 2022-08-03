@@ -349,6 +349,16 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 			}
 		}
 
+		for _, tablet := range shard.Vttablets {
+			if err = tablet.VttabletProcess.WaitForTabletStatuses([]string{"SERVING", "NOT_SERVING"}); err != nil {
+				log.Errorf("tablet status no reached. %d err: %v", tablet.TabletUID, err)
+				return
+			}
+		}
+
+		// wait for addKeyspaceToTracker to timeout
+		time.Sleep(10 * time.Second)
+
 		// Make first tablet as primary
 		if err = cluster.VtctlclientProcess.InitializeShard(keyspace.Name, shardName, cluster.Cell, shard.Vttablets[0].TabletUID); err != nil {
 			log.Errorf("error running InitializeShard on keyspace %v, shard %v: %v", keyspace.Name, shardName, err)
