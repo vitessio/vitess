@@ -88,18 +88,18 @@ type AuthServerStaticEntry struct {
 // InitAuthServerStatic Handles initializing the AuthServerStatic if necessary.
 func InitAuthServerStatic() {
 	// Check parameters.
-	if *mysqlAuthServerStaticFile == "" && *mysqlAuthServerStaticString == "" {
+	if mysqlAuthServerStaticFile == "" && mysqlAuthServerStaticString == "" {
 		// Not configured, nothing to do.
 		log.Infof("Not configuring AuthServerStatic, as mysql_auth_server_static_file and mysql_auth_server_static_string are empty")
 		return
 	}
-	if *mysqlAuthServerStaticFile != "" && *mysqlAuthServerStaticString != "" {
+	if mysqlAuthServerStaticFile != "" && mysqlAuthServerStaticString != "" {
 		// Both parameters specified, can only use one.
 		log.Fatalf("Both mysql_auth_server_static_file and mysql_auth_server_static_string specified, can only use one.")
 	}
 
 	// Create and register auth server.
-	RegisterAuthServerStaticFromParams(*mysqlAuthServerStaticFile, *mysqlAuthServerStaticString, *mysqlAuthServerStaticReloadInterval)
+	RegisterAuthServerStaticFromParams(mysqlAuthServerStaticFile, mysqlAuthServerStaticString, mysqlAuthServerStaticReloadInterval)
 }
 
 // NewAuthServerStatic returns a new AuthServerStatic, reading from |file| or
