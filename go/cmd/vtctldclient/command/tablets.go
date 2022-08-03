@@ -628,8 +628,8 @@ func init() {
 	Root.AddCommand(DeleteTablets)
 
 	Root.AddCommand(ExecuteHook)
-	Root.AddCommand(GetPermissions)
 	Root.AddCommand(GetFullStatus)
+	Root.AddCommand(GetPermissions)
 	Root.AddCommand(GetTablet)
 
 	GetTablets.Flags().StringSliceVarP(&getTabletsOptions.TabletAliasStrings, "tablet-alias", "t", nil, "List of tablet aliases to filter by.")
