@@ -154,7 +154,7 @@ Please update your scripts before the next version, when this will begin to brea
 
 	_flag.Parse(fs)
 	// N.B. Also duplicated from go/internal/flag, for the same reason as above.
-	if help {
+	if help || fs.Arg(0) == "help" {
 		pflag.Usage()
 		os.Exit(0)
 	}
@@ -221,17 +221,5 @@ Please update your scripts before the next version, when this will begin to brea
 	config.RuntimeCLIFlags.ConfiguredVersion = AppVersion
 	config.MarkConfigurationLoaded()
 
-	helpTopic := ""
-	if fs.Arg(0) == "help" {
-		if fs.Arg(1) != "" {
-			helpTopic = fs.Arg(1)
-		}
-	}
-
-	switch {
-	case helpTopic != "":
-		app.HelpCommand(helpTopic)
-	default:
-		app.HTTP(*discovery)
-	}
+	app.HTTP(*discovery)
 }
