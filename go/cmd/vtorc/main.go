@@ -96,12 +96,10 @@ func transformArgsForPflag(fs *pflag.FlagSet, args []string) (result []string) {
 	return result
 }
 
-// main is the application's entry point. It will either spawn a CLI or HTTP itnerfaces.
+// main is the application's entry point. It will spawn an HTTP interface.
 func main() {
-	// TODO(sougou): remove cli code
-
 	// TODO(ajm188): after v15, remove this pflag hack and use servenv.ParseFlags
-	// directly. I am not sure if the above TODO from sougou still applies.
+	// directly.
 	fs := pflag.NewFlagSet("vtorc", pflag.ExitOnError)
 
 	args := append([]string{}, os.Args...)
