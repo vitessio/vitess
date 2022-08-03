@@ -101,7 +101,7 @@ func (si *schemaInitializer) RegisterSchemaInitializer(name string, initFunc fun
 
 // TODO do we need context here
 func (si *schemaInitializer) InitializeSchema(conn *Conn, disableSuperReadOnly bool, disableReplication bool) []error {
-	log.Infof("run all mutation")
+	log.Infof("run all mutation %d", len(si.funcs))
 	si.mu.Lock()
 	defer si.mu.Unlock()
 
@@ -127,6 +127,7 @@ func (si *schemaInitializer) InitializeSchema(conn *Conn, disableSuperReadOnly b
 	var errors []error
 	for _, f := range si.funcs {
 		if f.initialized {
+			log.Infof("%s is already initialized", f.name)
 			continue
 		}
 		log.Infof("SchemaInitializer: running init function: %s", f.name)

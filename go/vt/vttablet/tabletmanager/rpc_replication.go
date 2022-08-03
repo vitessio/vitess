@@ -372,6 +372,17 @@ func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string
 		}
 	}
 
+	// we need to insert something in the binlogs, so we can get the
+	// current position. Let's just use the mysqlctl.CreateReparentJournal commands.
+	cmds := mysqlctl.CreateReparentJournal()
+	if err := tm.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds); err != nil {
+		return "", err
+	}
+
+	// Execute ALTER statement on reparent_journal table and ignore errors
+	cmds = mysqlctl.AlterReparentJournal()
+	_ = tm.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds)
+
 	// get the current replication position
 	pos, err := tm.MysqlDaemon.PrimaryPosition()
 	if err != nil {
@@ -399,7 +410,17 @@ func (tm *TabletManager) PopulateReparentJournal(ctx context.Context, timeCreate
 	if err != nil {
 		return err
 	}
-	cmds := []string{mysqlctl.PopulateReparentJournal(timeCreatedNS, actionName, topoproto.TabletAliasString(primaryAlias), pos)}
+	/*cmds := []string{mysqlctl.PopulateReparentJournal(timeCreatedNS, actionName, topoproto.TabletAliasString(primaryAlias), pos)}*/
+	cmds := mysqlctl.CreateReparentJournal()
+	if err := tm.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds); err != nil {
+		return err
+	}
+
+	// Execute ALTER statement on reparent_journal table and ignore errors
+	cmds = mysqlctl.AlterReparentJournal()
+	_ = tm.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds)
+
+	cmds = []string{mysqlctl.PopulateReparentJournal(timeCreatedNS, actionName, topoproto.TabletAliasString(primaryAlias), pos)}
 	return tm.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds)
 }
 

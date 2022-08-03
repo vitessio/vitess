@@ -326,6 +326,13 @@ func (hs *healthStreamer) reload() error {
 	defer conn.Recycle()
 
 	log.Infof("InitSchemaLocked END: %t", hs.initSuccess)
+	if !hs.initSuccess {
+		hs.initSuccess, err = hs.InitSchemaLocked(conn)
+		if err != nil {
+			return err
+		}
+	}
+
 	var tables []string
 	var tableNames []string
 
@@ -384,6 +391,17 @@ func (hs *healthStreamer) reload() error {
 	hs.state.RealtimeStats.TableSchemaChanged = nil
 
 	return nil
+}
+
+func (hs *healthStreamer) InitSchemaLocked(conn *connpool.DBConn) (bool, error) {
+	for _, query := range mysql.VTDatabaseInit {
+		_, err := conn.Exec(hs.ctx, query, 1, false)
+		if err != nil {
+			return false, err
+		}
+	}
+
+	return true, nil
 }
 
 func init() {

@@ -432,11 +432,13 @@ func (tm *TabletManager) initSchema(ctx context.Context,
 		return nil, err
 	}
 
-	defer func() {
-		if err := mysql.SchemaInitializer.SetSuperReadOnlyUser(conn.Conn); err != nil {
-			log.Warning("not able to set super-read-only user")
-		}
-	}()
+	if *mysqlctl.DisableActiveReparents {
+		defer func() {
+			if err := mysql.SchemaInitializer.SetSuperReadOnlyUser(conn.Conn); err != nil {
+				log.Warning("not able to set super-read-only user")
+			}
+		}()
+	}
 
 	errors := mysql.SchemaInitializer.InitializeSchema(conn.Conn, false, true)
 

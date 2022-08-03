@@ -26,6 +26,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/mysqlctl"
+
 	"vitess.io/vitess/go/test/endtoend/cluster"
 
 	"github.com/stretchr/testify/assert"
@@ -55,24 +57,21 @@ func TestTabletInitialBackup(t *testing.T) {
 	//    - list the backups, remove them
 	defer cluster.PanicHandler(t)
 
+	*mysqlctl.DisableActiveReparents = true
+	defer func() { *mysqlctl.DisableActiveReparents = false }()
+
 	vtBackup(t, true, false)
 	verifyBackupCount(t, shardKsName, 1)
 
 	// Initialize the tablets
 	initTablets(t, false, false)
 
-	for _, tablet := range localCluster.Keyspaces[0].Shards[0].Vttablets {
-		if _, err := tablet.VttabletProcess.QueryTabletWithReadOnlyHandling("SET GLOBAL read_only='OFF'", "", false); err != nil {
-			log.Info("")
-		}
-	}
-
 	// Restore the Tablets
-	restore(t, primary, "replica", "NOT_SERVING")
+	restore(t, primary, "replica", "NOT_SERVING", true)
 	err := localCluster.VtctlclientProcess.ExecuteCommand(
 		"TabletExternallyReparented", primary.Alias)
 	require.Nil(t, err)
-	restore(t, replica1, "replica", "SERVING")
+	restore(t, replica1, "replica", "SERVING", true)
 
 	// Run the entire backup test
 	firstBackupTest(t, "replica")
@@ -144,7 +143,7 @@ func firstBackupTest(t *testing.T, tabletType string) {
 	// now bring up the other replica, letting it restore from backup.
 	err = localCluster.VtctlclientProcess.InitTablet(replica2, cell, keyspaceName, hostname, shardName)
 	require.Nil(t, err)
-	restore(t, replica2, "replica", "SERVING")
+	restore(t, replica2, "replica", "SERVING", true)
 	// Replica2 takes time to serve. Sleeping for 5 sec.
 	time.Sleep(5 * time.Second)
 	//check the new replica has the data
@@ -169,7 +168,7 @@ func firstBackupTest(t *testing.T, tabletType string) {
 }
 
 func vtBackup(t *testing.T, initialBackup bool, restartBeforeBackup bool) {
-	// Take the back using vtbackup executable
+	// Take the backup using vtbackup executable
 	extraArgs := []string{"--allow_first_backup", "--db-credentials-file", dbCredentialFile}
 	if restartBeforeBackup {
 		extraArgs = append(extraArgs, "--restart_before_backup")
@@ -240,7 +239,7 @@ func initTablets(t *testing.T, startTablet bool, initShardPrimary bool) {
 	}
 }
 
-func restore(t *testing.T, tablet *cluster.Vttablet, tabletType string, waitForState string) {
+func restore(t *testing.T, tablet *cluster.Vttablet, tabletType string, waitForState string, setReadOnly bool) {
 	// Erase mysql/tablet dir, then start tablet with restore enabled.
 
 	log.Infof("restoring tablet %s", time.Now())
@@ -256,6 +255,12 @@ func restore(t *testing.T, tablet *cluster.Vttablet, tabletType string, waitForS
 	tablet.VttabletProcess.SupportsBackup = true
 	err = tablet.VttabletProcess.Setup()
 	require.Nil(t, err)
+	err = tablet.VttabletProcess.WaitForTabletStatuses([]string{"SERVING", "NOT_SERVING"})
+	require.NoError(t, err)
+	if setReadOnly {
+		_, err = tablet.VttabletProcess.QueryTabletWithReadOnlyHandling("SET GLOBAL read_only='OFF'", "", false)
+		require.Nil(t, err)
+	}
 }
 
 func resetTabletDirectory(t *testing.T, tablet cluster.Vttablet, initMysql bool) {
