@@ -66,7 +66,7 @@ var (
 	healthcheckOnce           sync.Once
 
 	// TabletURLTemplateString is a flag to generate URLs for the tablets that vtgate discovers.
-	TabletURLTemplateString string
+	TabletURLTemplateString = "http://{{.GetTabletHostPort}}"
 	tabletURLTemplate       *template.Template
 
 	// AllowedTabletTypes is the list of allowed tablet types. e.g. {PRIMARY, REPLICA}.
@@ -80,13 +80,13 @@ var (
 	tabletFilters []string
 
 	// refreshInterval is the interval at which healthcheck refreshes its list of tablets from topo.
-	refreshInterval time.Duration
+	refreshInterval = 1 * time.Minute
 
 	// refreshKnownTablets tells us whether to process all tablets or only new tablets.
-	refreshKnownTablets bool
+	refreshKnownTablets = true
 
 	// topoReadConcurrency tells us how many topo reads are allowed in parallel.
-	topoReadConcurrency int
+	topoReadConcurrency = 32
 
 	// How much to sleep between each check.
 	waitAvailableTabletInterval = 100 * time.Millisecond
