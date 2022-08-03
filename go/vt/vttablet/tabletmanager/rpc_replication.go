@@ -271,15 +271,18 @@ func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string
 		return "", err
 	}
 
-	// Execute ALTER statement on reparent_journal table and ignore errors
-	cmds = mysqlctl.AlterReparentJournal()
-	_ = tm.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds)
-
 	// get the current replication position
 	pos, err := tm.MysqlDaemon.PrimaryPosition()
 	if err != nil {
 		return "", err
 	}
+
+	// Execute ALTER statement on reparent_journal table and ignore errors.
+	// This ALTER statement has to be after we take the position of the primary
+	// so that if we use that position to set the gtid_purged on replica's we still
+	// replicate this statement if it succeeds.
+	cmds = mysqlctl.AlterReparentJournal()
+	_ = tm.MysqlDaemon.ExecuteSuperQueryList(ctx, cmds)
 
 	// Set the server read-write, from now on we can accept real
 	// client writes. Note that if semi-sync replication is enabled,
