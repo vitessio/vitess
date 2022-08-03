@@ -313,7 +313,7 @@ func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Dur
 	if cellsToWatch == "" {
 		cells = append(cells, localCell)
 	}
-	log.Errorf("Refresh Interval - %v", refreshInterval)
+
 	for _, c := range cells {
 		log.Infof("Setting up healthcheck for cell: %v", c)
 		if c == "" {
