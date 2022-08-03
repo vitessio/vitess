@@ -22,6 +22,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/sqlparser"
+
 	"github.com/pkg/errors"
 
 	"github.com/stretchr/testify/assert"
@@ -125,6 +127,51 @@ func TestInsightsSummaries(t *testing.T) {
 			expect(queryStatsBundleTopic, "select sleep(5)", "query_count:1", "sum_total_duration:{seconds:5}", "max_total_duration:{seconds:5}"),
 			expect(queryStatsBundleTopic, "select * from foo", "query_count:4", "sum_total_duration:{nanos:40000000}",
 				"max_total_duration:{nanos:10000000}", "sum_rows_read:17", "max_rows_read:7"),
+		})
+}
+
+func TestInsightsSchemaChanges(t *testing.T) {
+	insightsTestHelper(t, true, setupOptions{},
+		[]insightsQuery{
+			{sql: "create table foo (bar int)"},
+			{sql: "alter table foo add column bar int"},
+			{sql: "drop table foo"},
+			{sql: "rename table foo to bar"},
+			{sql: "alter view foo as select * from bar"},
+			{sql: "create view foo as select * from bar"},
+			{sql: "drop view foo"},
+		},
+		[]insightsKafkaExpectation{
+			expect(queryStatsBundleTopic, "create table foo"),
+			expect(schemaChangeTopic, "CREATE TABLE `foo` (\\\\n\\\\t`bar` int\\\\n)", "operation:CREATE_TABLE", "normalized:true"),
+
+			expect(queryStatsBundleTopic, "alter table foo"),
+			expect(schemaChangeTopic, "ALTER TABLE `foo` ADD COLUMN `bar` int", "operation:ALTER_TABLE", "normalized:true"),
+
+			expect(queryStatsBundleTopic, "drop table foo"),
+			expect(schemaChangeTopic, "DROP TABLE `foo`", "operation:DROP_TABLE", "normalized:true"),
+
+			expect(queryStatsBundleTopic, "rename table foo"),
+			expect(schemaChangeTopic, "RENAME TABLE `foo` TO `bar`", "operation:RENAME_TABLE", "normalized:true"),
+
+			expect(queryStatsBundleTopic, "alter view foo"),
+			expect(schemaChangeTopic, "ALTER VIEW `foo` AS SELECT * FROM `bar`", "operation:ALTER_VIEW", "normalized:true"),
+
+			expect(queryStatsBundleTopic, "create view foo"),
+			expect(schemaChangeTopic, "CREATE VIEW `foo` AS SELECT * FROM `bar`", "operation:CREATE_VIEW", "normalized:true"),
+
+			expect(queryStatsBundleTopic, "drop view foo"),
+			expect(schemaChangeTopic, "DROP VIEW `foo`", "operation:DROP_VIEW", "normalized:true"),
+		})
+}
+
+func TestInsightsSchemaChangesNoTruncateTable(t *testing.T) {
+	insightsTestHelper(t, true, setupOptions{},
+		[]insightsQuery{
+			{sql: "truncate table foo"},
+		},
+		[]insightsKafkaExpectation{
+			expect(queryStatsBundleTopic, "truncate table foo"),
 		})
 }
 
@@ -666,7 +713,7 @@ func insightsTestHelper(t *testing.T, mockTimer bool, options setupOptions, quer
 	}
 	insights.Sender = func(buf []byte, topic, key string) error {
 		assert.Contains(t, string(buf), "mumblefoo", "database branch public ID not present in message body")
-		assert.True(t, strings.HasPrefix(key, "mumblefoo/"), "key has unexpected form %q", key)
+		assert.True(t, strings.HasPrefix(key, "mumblefoo"), "key has unexpected form %q", key)
 		assert.Contains(t, string(buf), queryURLBase+"/"+topic, "expected key not present in message body")
 		var found bool
 		for i, ex := range expect {
@@ -703,7 +750,7 @@ func insightsTestHelper(t *testing.T, mockTimer bool, options setupOptions, quer
 		if q.error != "" {
 			ls.Error = errors.New(q.error)
 		} else {
-			ls.StmtType = strings.ToUpper(strings.SplitN(q.sql, " ", 2)[0])
+			ls.StmtType = sqlparser.Preview(q.sql).String()
 		}
 		logger.Send(ls)
 	}

@@ -56,6 +56,7 @@ import (
 const (
 	queryTopic            = "vtgate.v1.Query"
 	queryStatsBundleTopic = "vtgate.v1.QueryStatsBundle"
+	schemaChangeTopic     = "vtgate.v1.SchemaChange"
 	queryURLBase          = "psevents.planetscale.com"
 	BrokersVar            = "INSIGHTS_KAFKA_BROKERS"
 	UsernameVar           = "INSIGHTS_KAFKA_USERNAME"
@@ -385,11 +386,89 @@ func splitTables(tableList string) []string {
 	return ret
 }
 
+func (ii *Insights) makeSchemaChangeMessage(ls *LogStats) ([]byte, error) {
+	stmt, err := sqlparser.Parse(ls.SQL)
+
+	if err != nil {
+		return nil, err
+	}
+
+	ddlStmt, ok := stmt.(sqlparser.DDLStatement)
+	if !ok {
+		return nil, errors.Errorf("Expected a DDLStatement but got a %T", stmt)
+	}
+
+	operation := pbvtgate.SchemaChange_UNKNOWN
+
+	switch ddlStmt.(type) {
+	case *sqlparser.CreateTable:
+		operation = pbvtgate.SchemaChange_CREATE_TABLE
+	case *sqlparser.AlterTable:
+		operation = pbvtgate.SchemaChange_ALTER_TABLE
+	case *sqlparser.TruncateTable:
+		// Truncate table isn't really a schema change
+		return nil, nil
+	case *sqlparser.DropTable:
+		operation = pbvtgate.SchemaChange_DROP_TABLE
+	case *sqlparser.RenameTable:
+		operation = pbvtgate.SchemaChange_RENAME_TABLE
+	case *sqlparser.AlterView:
+		operation = pbvtgate.SchemaChange_ALTER_VIEW
+	case *sqlparser.CreateView:
+		operation = pbvtgate.SchemaChange_CREATE_VIEW
+	case *sqlparser.DropView:
+		operation = pbvtgate.SchemaChange_DROP_VIEW
+	}
+
+	// Sometimes DDL statements aren't fully parsed (but are still executed).
+	// If that happens we want to send along the original query as the DDL.
+	fullyParsed := ddlStmt.IsFullyParsed()
+	var ddl string
+	if fullyParsed {
+		ddl = sqlparser.CanonicalString(ddlStmt)
+	} else {
+		ddl = ls.SQL
+	}
+
+	sc := pbvtgate.SchemaChange{
+		DatabaseBranchPublicId: ii.DatabaseBranchPublicID,
+		Ddl:                    ddl,
+		Normalized:             fullyParsed,
+		Operation:              operation,
+		Keyspace:               ls.Keyspace,
+	}
+
+	var out []byte
+
+	if ii.KafkaText {
+		out, err = prototext.Marshal(&sc)
+	} else {
+		out, err = sc.MarshalVT()
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return ii.makeEnvelope(out, schemaChangeTopic)
+}
+
 func (ii *Insights) handleMessage(record interface{}) {
 	ls, ok := record.(*LogStats)
 	if !ok {
 		log.Infof("not a LogStats: %v (%T)", record, record)
 		return
+	}
+
+	if ls.StmtType == "DDL" && ls.Error == nil {
+		buf, err := ii.makeSchemaChangeMessage(ls)
+
+		if err != nil {
+			log.Warningf("Could not send schema change event: %v", err)
+		} else {
+			if buf != nil {
+				ii.reserveAndSend(buf, schemaChangeTopic, ii.DatabaseBranchPublicID)
+			}
+		}
 	}
 
 	var sql string
