@@ -251,6 +251,7 @@ func (e *Executor) rollbackPartialExec(ctx context.Context, safeSession *SafeSes
 func (e *Executor) setLogStats(logStats *logstats.LogStats, plan *engine.Plan, vcursor *vcursorImpl, execStart time.Time, err error, qr *sqltypes.Result) {
 	logStats.StmtType = plan.Type.String()
 	logStats.Keyspace = plan.Instructions.GetKeyspaceName()
+	logStats.ActiveKeyspace = vcursor.keyspace
 	logStats.Table = plan.Instructions.GetTableName()
 	logStats.TablesUsed = plan.TablesUsed
 	logStats.TabletType = vcursor.TabletType().String()
