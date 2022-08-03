@@ -17,14 +17,13 @@ limitations under the License.
 package topo
 
 import (
+	"context"
 	"encoding/hex"
 	"fmt"
 	"path"
 	"sync"
 
 	"google.golang.org/protobuf/proto"
-
-	"context"
 
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -51,16 +50,18 @@ type WatchSrvKeyspaceData struct {
 // WatchSrvKeyspace will set a watch on the SrvKeyspace object.
 // It has the same contract as Conn.Watch, but it also unpacks the
 // contents into a SrvKeyspace object.
-func (ts *Server) WatchSrvKeyspace(ctx context.Context, cell, keyspace string) (*WatchSrvKeyspaceData, <-chan *WatchSrvKeyspaceData, CancelFunc) {
+func (ts *Server) WatchSrvKeyspace(ctx context.Context, cell, keyspace string) (*WatchSrvKeyspaceData, <-chan *WatchSrvKeyspaceData, error) {
 	conn, err := ts.ConnForCell(ctx, cell)
 	if err != nil {
 		return &WatchSrvKeyspaceData{Err: err}, nil, nil
 	}
 
 	filePath := srvKeyspaceFileName(keyspace)
-	current, wdChannel, cancel := conn.Watch(ctx, filePath)
-	if current.Err != nil {
-		return &WatchSrvKeyspaceData{Err: current.Err}, nil, nil
+	ctx, cancel := context.WithCancel(ctx)
+	current, wdChannel, err := conn.Watch(ctx, filePath)
+	if err != nil {
+		cancel()
+		return nil, nil, err
 	}
 	value := &topodatapb.SrvKeyspace{}
 	if err := proto.Unmarshal(current.Contents, value); err != nil {
@@ -68,7 +69,7 @@ func (ts *Server) WatchSrvKeyspace(ctx context.Context, cell, keyspace string) (
 		cancel()
 		for range wdChannel {
 		}
-		return &WatchSrvKeyspaceData{Err: vterrors.Wrapf(err, "error unpacking initial SrvKeyspace object")}, nil, nil
+		return nil, nil, vterrors.Wrapf(err, "error unpacking initial SrvKeyspace object")
 	}
 
 	changes := make(chan *WatchSrvKeyspaceData, 10)
@@ -79,6 +80,7 @@ func (ts *Server) WatchSrvKeyspace(ctx context.Context, cell, keyspace string) (
 	// send an ErrInterrupted and then close the channel. We'll
 	// just propagate that back to our caller.
 	go func() {
+		defer cancel()
 		defer close(changes)
 
 		for wd := range wdChannel {
@@ -103,7 +105,7 @@ func (ts *Server) WatchSrvKeyspace(ctx context.Context, cell, keyspace string) (
 		}
 	}()
 
-	return &WatchSrvKeyspaceData{Value: value}, changes, cancel
+	return &WatchSrvKeyspaceData{Value: value}, changes, nil
 }
 
 // GetSrvKeyspaceNames returns the SrvKeyspace objects for a cell.
