@@ -213,6 +213,9 @@ var (
 		input:  "select date'2022-10-03'",
 		output: "select date'2022-10-03' from dual",
 	}, {
+		input:  "select date, time, timestamp from t",
+		output: "select `date`, `time`, `timestamp` from t",
+	}, {
 		input:  "select time'12:34:56'",
 		output: "select time'12:34:56' from dual",
 	}, {
