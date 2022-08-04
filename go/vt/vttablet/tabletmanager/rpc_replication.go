@@ -40,7 +40,7 @@ import (
 
 var (
 	_                = flag.Bool("enable_semi_sync", false, "DEPRECATED - Set the correct durability policy on the keyspace instead.")
-	SetSuperReadOnly = flag.Bool("use_super_read_only", false, "Set super_read_only flag when performing planned failover.")
+	SetSuperReadOnly = flag.Bool("use_super_read_only", true, "Set super_read_only flag when performing planned failover.")
 	reparentQueries  []string
 )
 
