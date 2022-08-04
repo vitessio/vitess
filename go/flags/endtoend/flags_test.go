@@ -32,6 +32,9 @@ import (
 )
 
 var (
+	//go:embed vtexplain.txt
+	vtexplainTxt string
+
 	//go:embed vtgate.txt
 	vtgateTxt string
 
@@ -42,9 +45,10 @@ var (
 	vtctldTxt string
 
 	helpOutput = map[string]string{
-		"vtgate":   vtgateTxt,
-		"vttablet": vttabletTxt,
-		"vtctld":   vtctldTxt,
+		"vtexplain": vtexplainTxt,
+		"vtgate":    vtgateTxt,
+		"vttablet":  vttabletTxt,
+		"vtctld":    vtctldTxt,
 	}
 )
 
