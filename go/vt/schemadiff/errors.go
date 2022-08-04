@@ -14,7 +14,6 @@ var (
 	ErrUnexpectedTableSpec            = errors.New("unexpected table spec")
 	ErrExpectedCreateTable            = errors.New("expected a CREATE TABLE statement")
 	ErrExpectedCreateView             = errors.New("expected a CREATE VIEW statement")
-	ErrViewDependencyUnresolved       = errors.New("views have unresolved/loop dependencies")
 )
 
 type UnsupportedEntityError struct {
@@ -238,4 +237,12 @@ type InvalidColumnInForeignKeyConstraintError struct {
 func (e *InvalidColumnInForeignKeyConstraintError) Error() string {
 	return fmt.Sprintf("invalid column %s referenced by foreign key constraint %s in table %s",
 		sqlescape.EscapeID(e.Column), sqlescape.EscapeID(e.Constraint), sqlescape.EscapeID(e.Table))
+}
+
+type ViewDependencyUnresolvedError struct {
+	View string
+}
+
+func (e *ViewDependencyUnresolvedError) Error() string {
+	return fmt.Sprintf("view %s has unresolved/loops dependencies", sqlescape.EscapeID(e.View))
 }
