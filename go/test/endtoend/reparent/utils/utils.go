@@ -710,7 +710,7 @@ func ReplicationThreadsStatus(t *testing.T, status *replicationdatapb.Status) (b
 	ioState := mysql.ReplicationState(status.IoState)
 	ioThread := ioState == mysql.ReplicationStateRunning || ioState == mysql.ReplicationStateConnecting
 	sqlState := mysql.ReplicationState(status.SqlState)
-	sqlThread := sqlState == mysql.ReplicationStateRunning || ioState == mysql.ReplicationStateConnecting
+	sqlThread := sqlState == mysql.ReplicationStateRunning || sqlState == mysql.ReplicationStateConnecting
 	return ioThread, sqlThread
 }
 
