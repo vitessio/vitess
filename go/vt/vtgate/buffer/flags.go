@@ -18,61 +18,81 @@ package buffer
 
 import (
 	"errors"
-	"flag"
 	"fmt"
 	"strings"
 	"time"
 
+	"github.com/spf13/pflag"
+
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 )
 
 var (
-	bufferEnabled       = flag.Bool("enable_buffer", false, "Enable buffering (stalling) of primary traffic during failovers.")
-	bufferEnabledDryRun = flag.Bool("enable_buffer_dry_run", false, "Detect and log failover events, but do not actually buffer requests.")
+	bufferEnabled       bool
+	bufferEnabledDryRun bool
 
-	bufferWindow                  = flag.Duration("buffer_window", 10*time.Second, "Duration for how long a request should be buffered at most.")
-	bufferSize                    = flag.Int("buffer_size", 1000, "Maximum number of buffered requests in flight (across all ongoing failovers).")
-	bufferMaxFailoverDuration     = flag.Duration("buffer_max_failover_duration", 20*time.Second, "Stop buffering completely if a failover takes longer than this duration.")
-	bufferMinTimeBetweenFailovers = flag.Duration("buffer_min_time_between_failovers", 1*time.Minute, "Minimum time between the end of a failover and the start of the next one (tracked per shard). Faster consecutive failovers will not trigger buffering.")
+	bufferWindow                  = 10 * time.Second
+	bufferSize                    = 1000
+	bufferMaxFailoverDuration     = 20 * time.Second
+	bufferMinTimeBetweenFailovers = time.Minute
 
-	bufferDrainConcurrency = flag.Int("buffer_drain_concurrency", 1, "Maximum number of requests retried simultaneously. More concurrency will increase the load on the PRIMARY vttablet when draining the buffer.")
-	bufferKeyspaceShards   = flag.String("buffer_keyspace_shards", "", "If not empty, limit buffering to these entries (comma separated). Entry format: keyspace or keyspace/shard. Requires --enable_buffer=true.")
+	bufferDrainConcurrency = 1
+	bufferKeyspaceShards   string
 )
 
+func registerFlags(fs *pflag.FlagSet) {
+	fs.BoolVar(&bufferEnabled, "enable_buffer", false, "Enable buffering (stalling) of primary traffic during failovers.")
+	fs.BoolVar(&bufferEnabledDryRun, "enable_buffer_dry_run", false, "Detect and log failover events, but do not actually buffer requests.")
+
+	fs.DurationVar(&bufferWindow, "buffer_window", 10*time.Second, "Duration for how long a request should be buffered at most.")
+	fs.IntVar(&bufferSize, "buffer_size", 1000, "Maximum number of buffered requests in flight (across all ongoing failovers).")
+	fs.DurationVar(&bufferMaxFailoverDuration, "buffer_max_failover_duration", 20*time.Second, "Stop buffering completely if a failover takes longer than this duration.")
+	fs.DurationVar(&bufferMinTimeBetweenFailovers, "buffer_min_time_between_failovers", 1*time.Minute, "Minimum time between the end of a failover and the start of the next one (tracked per shard). Faster consecutive failovers will not trigger buffering.")
+
+	fs.IntVar(&bufferDrainConcurrency, "buffer_drain_concurrency", 1, "Maximum number of requests retried simultaneously. More concurrency will increase the load on the PRIMARY vttablet when draining the buffer.")
+	fs.StringVar(&bufferKeyspaceShards, "buffer_keyspace_shards", "", "If not empty, limit buffering to these entries (comma separated). Entry format: keyspace or keyspace/shard. Requires --enable_buffer=true.")
+}
+
+func init() {
+	servenv.OnParseFor("vtgate", registerFlags)
+	servenv.OnParseFor("vtcombo", registerFlags)
+}
+
 func verifyFlags() error {
-	if *bufferWindow < 1*time.Second {
-		return fmt.Errorf("-buffer_window must be >= 1s (specified value: %v)", *bufferWindow)
+	if bufferWindow < 1*time.Second {
+		return fmt.Errorf("--buffer_window must be >= 1s (specified value: %v)", bufferWindow)
 	}
-	if *bufferWindow > *bufferMaxFailoverDuration {
-		return fmt.Errorf("-buffer_window must be <= -buffer_max_failover_duration: %v vs. %v", *bufferWindow, *bufferMaxFailoverDuration)
+	if bufferWindow > bufferMaxFailoverDuration {
+		return fmt.Errorf("--buffer_window must be <= --buffer_max_failover_duration: %v vs. %v", bufferWindow, bufferMaxFailoverDuration)
 	}
-	if *bufferSize < 1 {
-		return fmt.Errorf("-buffer_size must be >= 1 (specified value: %d)", *bufferSize)
+	if bufferSize < 1 {
+		return fmt.Errorf("--buffer_size must be >= 1 (specified value: %d)", bufferSize)
 	}
-	if *bufferMinTimeBetweenFailovers < *bufferMaxFailoverDuration*time.Duration(2) {
-		return fmt.Errorf("-buffer_min_time_between_failovers should be at least twice the length of -buffer_max_failover_duration: %v vs. %v", *bufferMinTimeBetweenFailovers, *bufferMaxFailoverDuration)
-	}
-
-	if *bufferDrainConcurrency < 1 {
-		return fmt.Errorf("-buffer_drain_concurrency must be >= 1 (specified value: %d)", *bufferDrainConcurrency)
+	if bufferMinTimeBetweenFailovers < bufferMaxFailoverDuration*time.Duration(2) {
+		return fmt.Errorf("--buffer_min_time_between_failovers should be at least twice the length of --buffer_max_failover_duration: %v vs. %v", bufferMinTimeBetweenFailovers, bufferMaxFailoverDuration)
 	}
 
-	if *bufferKeyspaceShards != "" && !*bufferEnabled {
-		return fmt.Errorf("-buffer_keyspace_shards=%v also requires that -enable_buffer is set", *bufferKeyspaceShards)
+	if bufferDrainConcurrency < 1 {
+		return fmt.Errorf("--buffer_drain_concurrency must be >= 1 (specified value: %d)", bufferDrainConcurrency)
 	}
-	if *bufferEnabled && *bufferEnabledDryRun && *bufferKeyspaceShards == "" {
+
+	if bufferKeyspaceShards != "" && !bufferEnabled {
+		return fmt.Errorf("--buffer_keyspace_shards=%v also requires that --enable_buffer is set", bufferKeyspaceShards)
+	}
+	if bufferEnabled && bufferEnabledDryRun && bufferKeyspaceShards == "" {
 		return errors.New("both the dry-run mode and actual buffering is enabled. To avoid ambiguity, keyspaces and shards for actual buffering must be explicitly listed in --buffer_keyspace_shards")
 	}
 
-	keyspaces, shards := keyspaceShardsToSets(*bufferKeyspaceShards)
+	keyspaces, shards := keyspaceShardsToSets(bufferKeyspaceShards)
 	for s := range shards {
 		keyspace, _, err := topoproto.ParseKeyspaceShard(s)
 		if err != nil {
 			return err
 		}
 		if keyspaces[keyspace] {
-			return fmt.Errorf("-buffer_keyspace_shards has overlapping entries (keyspace only vs. keyspace/shard): %v vs. %v Please remove one or the other", keyspace, s)
+			return fmt.Errorf("--buffer_keyspace_shards has overlapping entries (keyspace only vs. keyspace/shard): %v vs. %v Please remove one or the other", keyspace, s)
 		}
 	}
 
@@ -149,14 +169,14 @@ func NewConfigFromFlags() *Config {
 	if err := verifyFlags(); err != nil {
 		log.Fatalf("Invalid buffer configuration: %v", err)
 	}
-	bufferSizeStat.Set(int64(*bufferSize))
-	keyspaces, shards := keyspaceShardsToSets(*bufferKeyspaceShards)
+	bufferSizeStat.Set(int64(bufferSize))
+	keyspaces, shards := keyspaceShardsToSets(bufferKeyspaceShards)
 
-	if *bufferEnabledDryRun {
+	if bufferEnabledDryRun {
 		log.Infof("vtgate buffer in dry-run mode enabled for all requests. Dry-run bufferings will log failovers but not buffer requests.")
 	}
 
-	if *bufferEnabled {
+	if bufferEnabled {
 		log.Infof("vtgate buffer enabled. PRIMARY requests will be buffered during detected failovers.")
 
 		// Log a second line if it's only enabled for some keyspaces or shards.
@@ -174,27 +194,27 @@ func NewConfigFromFlags() *Config {
 		if limited != "" {
 			limited = header + limited
 			dryRunOverride := ""
-			if *bufferEnabledDryRun {
+			if bufferEnabledDryRun {
 				dryRunOverride = " Dry-run mode is overridden for these entries and actual buffering will take place."
 			}
 			log.Infof("%v.%v", limited, dryRunOverride)
 		}
 	}
 
-	if !*bufferEnabledDryRun && !*bufferEnabled {
+	if !bufferEnabledDryRun && !bufferEnabled {
 		log.Infof("vtgate buffer not enabled.")
 	}
 
 	return &Config{
-		Enabled: *bufferEnabled,
-		DryRun:  *bufferEnabledDryRun,
+		Enabled: bufferEnabled,
+		DryRun:  bufferEnabledDryRun,
 
-		Window:                  *bufferWindow,
-		Size:                    *bufferSize,
-		MaxFailoverDuration:     *bufferMaxFailoverDuration,
-		MinTimeBetweenFailovers: *bufferMinTimeBetweenFailovers,
+		Window:                  bufferWindow,
+		Size:                    bufferSize,
+		MaxFailoverDuration:     bufferMaxFailoverDuration,
+		MinTimeBetweenFailovers: bufferMinTimeBetweenFailovers,
 
-		DrainConcurrency: *bufferDrainConcurrency,
+		DrainConcurrency: bufferDrainConcurrency,
 
 		Keyspaces: keyspaces,
 		Shards:    shards,
