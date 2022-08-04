@@ -33,12 +33,12 @@ var (
 	bufferEnabled       bool
 	bufferEnabledDryRun bool
 
-	bufferWindow                  time.Duration
-	bufferSize                    int
-	bufferMaxFailoverDuration     time.Duration
-	bufferMinTimeBetweenFailovers time.Duration
+	bufferWindow                  = 10 * time.Second
+	bufferSize                    = 1000
+	bufferMaxFailoverDuration     = 20 * time.Second
+	bufferMinTimeBetweenFailovers = time.Minute
 
-	bufferDrainConcurrency int
+	bufferDrainConcurrency = 1
 	bufferKeyspaceShards   string
 )
 
