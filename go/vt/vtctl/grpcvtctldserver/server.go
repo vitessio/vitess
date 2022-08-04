@@ -1135,6 +1135,28 @@ func (s *VtctldServer) GetCellsAliases(ctx context.Context, req *vtctldatapb.Get
 	return &vtctldatapb.GetCellsAliasesResponse{Aliases: aliases}, nil
 }
 
+// GetFullStatus is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) GetFullStatus(ctx context.Context, req *vtctldatapb.GetFullStatusRequest) (*vtctldatapb.GetFullStatusResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.GetFullStatus")
+	defer span.Finish()
+
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(req.TabletAlias))
+
+	ti, err := s.ts.GetTablet(ctx, req.TabletAlias)
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := s.tmc.FullStatus(ctx, ti.Tablet)
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.GetFullStatusResponse{
+		Status: res,
+	}, nil
+}
+
 // GetKeyspace is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) GetKeyspace(ctx context.Context, req *vtctldatapb.GetKeyspaceRequest) (*vtctldatapb.GetKeyspaceResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.GetKeyspace")
