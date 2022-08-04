@@ -304,7 +304,6 @@ func (f *FakeConn) Watch(ctx context.Context, filePath string) (*topo.WatchData,
 	f.watches[filePath] = append(f.watches[filePath], notifications)
 
 	go func() {
-		defer close(notifications)
 		<-ctx.Done()
 		watches, isPresent := f.watches[filePath]
 		if !isPresent {
