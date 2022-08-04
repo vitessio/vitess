@@ -96,8 +96,7 @@ var (
 
 var (
 	vtDataRoot = os.Getenv("VTDATAROOT")
-
-	extraArgs []string
+	extraArgs  []string
 )
 
 const (
