@@ -396,6 +396,14 @@ func (mysqld *Mysqld) SetReplicationSource(ctx context.Context, host string, por
 	if replicationStopBefore {
 		cmds = append(cmds, conn.StopReplicationCommand())
 	}
+	// Reset replication parameters commands makes the instance forget the source host port
+	// This is required because sometimes MySQL gets stuck due to improper initialization of
+	// master info structure or related failures and throws errors like
+	// ERROR 1201 (HY000): Could not initialize master info structure; more error messages can be found in the MySQL error log
+	// These errors can only be resolved by resetting the replication parameters, otherwise START SLAVE fails.
+	// Therefore, we have elected to always reset the replication parameters whenever we try to set the source host port
+	// Since there is no real overhead, but it makes this function robust enough to also handle failures like these.
+	cmds = append(cmds, conn.ResetReplicationParametersCommands()...)
 	// If flag value is same as default, check deprecated flag value
 	if *replicationConnectRetry == 10*time.Second && *masterConnectRetry != *replicationConnectRetry {
 		*replicationConnectRetry = *masterConnectRetry
