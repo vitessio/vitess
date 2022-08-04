@@ -232,7 +232,7 @@ func (s *Schema) normalize() error {
 		// - two views have a circular dependency
 		for _, v := range s.views {
 			if _, ok := dependencyLevels[v.Name()]; !ok {
-				// We _know_ that in this iteration, at least one view is found unassugned a dependency level.
+				// We _know_ that in this iteration, at least one view is found unassigned a dependency level.
 				// We return the first one.
 				return &ApplyViewNotFoundError{View: v.ViewName.Name.String()}
 			}
