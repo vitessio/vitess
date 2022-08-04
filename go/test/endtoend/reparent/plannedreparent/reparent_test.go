@@ -391,7 +391,7 @@ func TestReplicationStatus(t *testing.T) {
 	require.NoError(t, err)
 	// Check the replication status on tablets[1] and assert that the IO thread is read to be running and SQL thread is stopped
 	replicationStatus := cluster.GetReplicationStatus(t, tablets[1], utils.Hostname)
-	ioThread, sqlThread := utils.ReplicationThreadsStatus(t, replicationStatus, clusterInstance.VtctlMajorVersion, clusterInstance.VtTabletMajorVersion)
+	ioThread, sqlThread := utils.ReplicationThreadsStatus(t, replicationStatus)
 	require.True(t, ioThread)
 	require.False(t, sqlThread)
 	// Assert that the 4 file log positions are non-empty
@@ -404,7 +404,7 @@ func TestReplicationStatus(t *testing.T) {
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ExecuteFetchAsDba", tablets[1].Alias, `STOP SLAVE;`)
 	require.NoError(t, err)
 	replicationStatus = cluster.GetReplicationStatus(t, tablets[1], utils.Hostname)
-	ioThread, sqlThread = utils.ReplicationThreadsStatus(t, replicationStatus, clusterInstance.VtctlMajorVersion, clusterInstance.VtTabletMajorVersion)
+	ioThread, sqlThread = utils.ReplicationThreadsStatus(t, replicationStatus)
 	require.False(t, ioThread)
 	require.False(t, sqlThread)
 	// Assert that the 4 file log positions are non-empty
@@ -417,7 +417,7 @@ func TestReplicationStatus(t *testing.T) {
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ExecuteFetchAsDba", tablets[1].Alias, `START SLAVE;`)
 	require.NoError(t, err)
 	replicationStatus = cluster.GetReplicationStatus(t, tablets[1], utils.Hostname)
-	ioThread, sqlThread = utils.ReplicationThreadsStatus(t, replicationStatus, clusterInstance.VtctlMajorVersion, clusterInstance.VtTabletMajorVersion)
+	ioThread, sqlThread = utils.ReplicationThreadsStatus(t, replicationStatus)
 	require.True(t, ioThread)
 	require.True(t, sqlThread)
 	// Assert that the 4 file log positions are non-empty
@@ -430,7 +430,7 @@ func TestReplicationStatus(t *testing.T) {
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ExecuteFetchAsDba", tablets[1].Alias, `STOP SLAVE IO_THREAD;`)
 	require.NoError(t, err)
 	replicationStatus = cluster.GetReplicationStatus(t, tablets[1], utils.Hostname)
-	ioThread, sqlThread = utils.ReplicationThreadsStatus(t, replicationStatus, clusterInstance.VtctlMajorVersion, clusterInstance.VtTabletMajorVersion)
+	ioThread, sqlThread = utils.ReplicationThreadsStatus(t, replicationStatus)
 	require.False(t, ioThread)
 	require.True(t, sqlThread)
 	// Assert that the 4 file log positions are non-empty
