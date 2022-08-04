@@ -365,7 +365,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <expr> expression naked_like group_by
 %type <tableExprs> table_references cte_list from_opt
 %type <with> with_clause
-%type <tableExpr> table_reference table_function table_factor join_table common_table_expression
+%type <tableExpr> table_reference table_function table_factor join_table json_table common_table_expression
 %type <simpleTableExpr> values_statement subquery_or_values
 %type <subquery> subquery
 %type <joinCondition> join_condition join_condition_opt on_expression_opt
@@ -442,7 +442,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <str> charset underscore_charsets
 %type <str> show_session_or_global
 %type <convertType> convert_type
-%type <columnType> column_type  column_type_options
+%type <columnType> column_type  column_type_options json_table_column_options
 %type <columnType> int_type decimal_type numeric_type time_type char_type spatial_type
 %type <sqlVal> length_opt column_comment ignore_number_opt
 %type <optVal> column_default on_update
@@ -456,14 +456,14 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <boolVal> auto_increment local_opt optionally_opt
 %type <colKeyOpt> column_key
 %type <strs> enum_values
-%type <columnDefinition> column_definition column_definition_for_create
+%type <columnDefinition> column_definition column_definition_for_create json_table_column_definition
 %type <indexDefinition> index_definition
 %type <constraintDefinition> constraint_definition check_constraint_definition
 %type <str> index_or_key indexes_or_keys index_or_key_opt
 %type <str> from_or_in show_database_opt
 %type <str> name_opt
 %type <str> equal_opt
-%type <TableSpec> table_spec table_column_list
+%type <TableSpec> table_spec table_column_list json_table_column_list
 %type <str> table_option_list table_option table_opt_value
 %type <indexInfo> index_info
 %type <indexColumn> index_column
@@ -2345,7 +2345,7 @@ column_type_options:
     $$ = $1
   }
 | column_type_options SRID INTEGRAL
-{
+  {
     opt := ColumnType{SRID: NewIntVal($3)}
     if err := $1.merge(opt); err != nil {
     	yylex.Error(err.Error())
@@ -4294,6 +4294,7 @@ table_references:
 table_reference:
   table_factor
 | join_table
+| json_table
 
 table_factor:
   aliased_table_name
@@ -4421,12 +4422,7 @@ partition_list:
   }
 
 table_function:
-  // TODO: handle NESTED
-  JSON_TABLE openb STRING ',' STRING COLUMNS openb table_column_list closeb closeb AS table_alias
-  {
-    $$ = &JSONTableExpr{Data: $3, Path: string($5), Columns: $8, Alias: $12}
-  }
-| ID openb argument_expression_list_opt closeb
+  ID openb argument_expression_list_opt closeb
   {
     $$ = &TableFuncExpr{Name: string($1), Exprs: $3}
   }
@@ -4542,6 +4538,74 @@ natural_join:
       $$ = NaturalRightJoinStr
     }
   }
+
+json_table:
+  JSON_TABLE openb STRING ',' STRING COLUMNS openb json_table_column_list closeb closeb AS table_alias
+  {
+    $$ = &JSONTableExpr{Data: $3, Path: string($5), Columns: $8, Alias: $12}
+  }
+
+json_table_column_list:
+  json_table_column_definition
+  {
+    $$ = &TableSpec{}
+    $$.AddColumn($1)
+  }
+| json_table_column_list ',' json_table_column_definition
+  {
+    $$.AddColumn($3)
+  }
+
+json_table_column_definition:
+  // TODO: reserved_sql_id FOR ORDINALITY // this is supposed to work like auto_increment
+  reserved_sql_id column_type json_table_column_options
+  {
+    if err := $2.merge($3); err != nil {
+      yylex.Error(err.Error())
+      return 1
+    }
+    $$ = &ColumnDefinition{Name: $1, Type: $2}
+  }
+
+json_table_column_options:
+  PATH STRING // TODO: on_empty on_error
+  {
+    $$ = ColumnType{Path: string($2)}
+  }
+| EXISTS PATH STRING
+  {
+    $$ = ColumnType{Path: string($3)}
+  }
+
+// TODO: factor these out later
+//on_empty:
+//  NULL ON EMPTY
+//  {
+//
+//  }
+//| DEFAULT value_expression ON EMPTY
+//  {
+//
+//  }
+//| ERROR ON EMPTY
+//  {
+//
+//  }
+
+// TODO: factor these out later
+//on_error:
+//  NULL ON EMPTY
+//  {
+//
+//  }
+//| DEFAULT value_expression ON EMPTY
+//  {
+//
+//  }
+//| ERROR ON EMPTY
+//  {
+//
+//  }
 
 trigger_name:
   sql_id
