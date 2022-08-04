@@ -244,5 +244,5 @@ type ViewDependencyUnresolvedError struct {
 }
 
 func (e *ViewDependencyUnresolvedError) Error() string {
-	return fmt.Sprintf("view %s has unresolved/loops dependencies", sqlescape.EscapeID(e.View))
+	return fmt.Sprintf("view %s has unresolved/loop dependencies", sqlescape.EscapeID(e.View))
 }
