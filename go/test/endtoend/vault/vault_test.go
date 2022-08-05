@@ -275,6 +275,16 @@ func initializeClusterLate(t *testing.T) {
 		tablet.MysqlctlProcess.ExtraArgs = append(tablet.MysqlctlProcess.ExtraArgs, mysqlctlArg...)
 	}
 
+	for _, tablet := range shard.Vttablets {
+		if err = tablet.VttabletProcess.WaitForTabletStatuses([]string{"SERVING", "NOT_SERVING"}); err != nil {
+			log.Errorf("tablet status no reached. %d err: %v", tablet.TabletUID, err)
+			return
+		}
+	}
+
+	// wait for addKeyspaceToTracker to timeout
+	time.Sleep(10 * time.Second)
+
 	err = clusterInstance.VtctlclientProcess.InitShardPrimary(keyspaceName, shard.Name, cell, primary.TabletUID)
 	require.NoError(t, err)
 

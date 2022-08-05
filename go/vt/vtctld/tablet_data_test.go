@@ -22,6 +22,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/mysql/fakesqldb"
+
 	"context"
 
 	"google.golang.org/protobuf/proto"
@@ -115,8 +117,8 @@ func TestTabletData(t *testing.T) {
 	if err := ts.CreateKeyspace(context.Background(), "ks", &topodatapb.Keyspace{}); err != nil {
 		t.Fatalf("CreateKeyspace failed: %v", err)
 	}
-
-	tablet1 := testlib.NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_PRIMARY, nil, testlib.TabletKeyspaceShard(t, "ks", "-80"))
+	db := fakesqldb.NewWithExpectedQueries(t)
+	tablet1 := testlib.NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_PRIMARY, db, testlib.TabletKeyspaceShard(t, "ks", "-80"))
 	shsq := newStreamHealthTabletServer(t)
 	grpcqueryservice.Register(tablet1.RPCServer, shsq)
 	tablet1.StartActionLoop(t, wr)

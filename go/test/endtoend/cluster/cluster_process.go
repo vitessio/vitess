@@ -356,7 +356,6 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 			}
 		}
 
-		// wait for addKeyspaceToTracker to timeout
 		time.Sleep(10 * time.Second)
 
 		// Make first tablet as primary
