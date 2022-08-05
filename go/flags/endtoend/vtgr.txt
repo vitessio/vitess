@@ -1,5 +1,5 @@
 Usage of vtgr:
-      --abort_rebootstrap                                                don't allow vtgr to rebootstrap an existing group
+      --abort_rebootstrap                                                Don't allow vtgr to rebootstrap an existing group.
       --alsologtostderr                                                  log to standard error as well as files
       --catch-sigpipe                                                    catch and ignore SIGPIPE on stdout and stderr if specified
       --clusters_to_watch strings                                        Comma-separated list of keyspaces or keyspace/shards that this instance will monitor and repair. Defaults to all clusters in the topology. Example: "ks1,ks2/-80"
@@ -7,13 +7,13 @@ Usage of vtgr:
       --cpu_profile string                                               deprecated: use '-pprof=cpu' instead
       --datadog-agent-host string                                        host to send spans to. if empty, no tracing will be done
       --datadog-agent-port string                                        port to send spans to. if empty, no tracing will be done
-      --db_config string                                                 full path to db config file that will be used by VTGR
-      --db_flavor string                                                 mysql flavor override (default "MySQL56")
-      --db_port int                                                      local mysql port, set this to enable local fast check
+      --db_config string                                                 Full path to db config file that will be used by VTGR.
+      --db_flavor string                                                 MySQL flavor override. (default "MySQL56")
+      --db_port int                                                      Local mysql port, set this to enable local fast check.
       --emit_stats                                                       If set, emit stats to push-based monitoring and stats backends
-      --enable_heartbeat_check                                           enable heartbeat checking, set together with -group_heartbeat_threshold
-      --gr_port int                                                      port to bootstrap a mysql group (default 33061)
-      --group_heartbeat_threshold int                                    VTGR will trigger backoff on inconsistent state if the group heartbeat staleness exceeds this threshold (in seconds). Should be used along with -enable_heartbeat_check
+      --enable_heartbeat_check                                           Enable heartbeat checking, set together with --group_heartbeat_threshold.
+      --gr_port int                                                      Port to bootstrap a MySQL group. (default 33061)
+      --group_heartbeat_threshold int                                    VTGR will trigger backoff on inconsistent state if the group heartbeat staleness exceeds this threshold (in seconds). Should be used along with --enable_heartbeat_check.
       --grpc_auth_mode string                                            Which auth plugin implementation to use (eg: static)
       --grpc_auth_mtls_allowed_substrings string                         List of substrings of at least one of the client certificate names (separated by colon).
       --grpc_auth_static_client_creds string                             when using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server
@@ -59,10 +59,10 @@ Usage of vtgr:
       --ping_tablet_timeout duration                                     time to wait when we ping a tablet (default 2s)
       --pprof string                                                     enable profiling
       --purge_logs_interval duration                                     how often try to remove old logs (default 1h0m0s)
-      --refresh_interval duration                                        refresh interval to load tablets (default 10s)
+      --refresh_interval duration                                        Refresh interval to load tablets. (default 10s)
       --remote_operation_timeout duration                                time to wait for a remote operation (default 30s)
-      --scan_interval duration                                           scan interval to diagnose and repair (default 3s)
-      --scan_repair_timeout duration                                     time to wait for a Diagnose and repair operation (default 3s)
+      --scan_interval duration                                           Scan interval to diagnose and repair. (default 3s)
+      --scan_repair_timeout duration                                     Time to wait for a Diagnose and repair operation. (default 3s)
       --security_policy string                                           the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
       --service_map StringList                                           comma separated list of services to enable (or disable if prefixed with '-') Example: grpc-queryservice
       --sql-max-length-errors int                                        truncate queries in error logs to the given length (default unlimited)
@@ -105,4 +105,4 @@ Usage of vtgr:
   -v, --v Level                                                          log level for V logs
       --version                                                          print binary version
       --vmodule moduleSpec                                               comma-separated list of pattern=N settings for file-filtered logging
-      --vtgr_config string                                               config file for vtgr
+      --vtgr_config string                                               Config file for vtgr.
