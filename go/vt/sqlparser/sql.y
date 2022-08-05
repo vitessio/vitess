@@ -2589,6 +2589,54 @@ char_type:
   {
     $$ = ColumnType{Type: string($1), EnumValues: $3, Charset: $5, Collate: $6}
   }
+| CHAR length_opt charset_opt BINARY
+  {
+    $$ = ColumnType{Type: string($1), Length: $2, Charset: $3, BinaryCollate: true}
+  }
+| CHARACTER length_opt charset_opt BINARY
+  {
+    $$ = ColumnType{Type: string($1), Length: $2, Charset: $3, BinaryCollate: true}
+  }
+| VARCHAR length_opt charset_opt BINARY
+  {
+    $$ = ColumnType{Type: string($1), Length: $2, Charset: $3, BinaryCollate: true}
+  }
+| CHARACTER VARYING length_opt charset_opt BINARY
+  {
+    $$ = ColumnType{Type: string($1) + " " + string($2), Length: $3, Charset: $4, BinaryCollate: true}
+  }
+| TEXT charset_opt BINARY
+  {
+    $$ = ColumnType{Type: string($1), Charset: $2, BinaryCollate: true}
+  }
+| TINYTEXT charset_opt BINARY
+  {
+    $$ = ColumnType{Type: string($1), Charset: $2, BinaryCollate: true}
+  }
+| MEDIUMTEXT charset_opt BINARY
+  {
+    $$ = ColumnType{Type: string($1), Charset: $2, BinaryCollate: true}
+  }
+| LONGTEXT charset_opt BINARY
+  {
+    $$ = ColumnType{Type: string($1), Charset: $2, BinaryCollate: true}
+  }
+| LONG charset_opt BINARY
+  {
+    $$ = ColumnType{Type: string($1), Charset: $2, BinaryCollate: true}
+  }
+| LONG VARCHAR charset_opt BINARY
+  {
+    $$ = ColumnType{Type: string($1) + " " + string($2), Charset: $3, BinaryCollate: true}
+  }
+| ENUM '(' enum_values ')' charset_opt BINARY
+  {
+    $$ = ColumnType{Type: string($1), EnumValues: $3, Charset: $5, BinaryCollate: true}
+  }
+| SET '(' enum_values ')' charset_opt BINARY
+  {
+    $$ = ColumnType{Type: string($1), EnumValues: $3, Charset: $5, BinaryCollate: true}
+  }
 
 spatial_type:
   GEOMETRY
