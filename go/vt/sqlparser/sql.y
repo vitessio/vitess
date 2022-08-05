@@ -442,7 +442,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <str> charset underscore_charsets
 %type <str> show_session_or_global
 %type <convertType> convert_type
-%type <columnType> column_type  column_type_options json_table_column_options
+%type <columnType> column_type  column_type_options json_table_column_options on_empty
 %type <columnType> int_type decimal_type numeric_type time_type char_type spatial_type
 %type <sqlVal> length_opt column_comment ignore_number_opt
 %type <optVal> column_default on_update
@@ -4556,6 +4556,7 @@ json_table_column_list:
     $$.AddColumn($3)
   }
 
+// TODO: implement NESTED
 json_table_column_definition:
   // TODO: reserved_sql_id FOR ORDINALITY // this is supposed to work like auto_increment
   reserved_sql_id column_type json_table_column_options
@@ -4567,8 +4568,10 @@ json_table_column_definition:
     $$ = &ColumnDefinition{Name: $1, Type: $2}
   }
 
+// TODO: default value for non-existent member is NULL, but use "zero" when it is specified
+// TODO: exists overrides DEFAULT <json_string> ON EMPTY
 json_table_column_options:
-  PATH STRING // TODO: on_empty on_error
+  PATH STRING on_empty // TODO: on_empty on_error
   {
     $$ = ColumnType{Path: string($2)}
   }
@@ -4578,17 +4581,17 @@ json_table_column_options:
   }
 
 // TODO: factor these out later
-//on_empty:
-//  NULL ON EMPTY
-//  {
-//
-//  }
-//| DEFAULT value_expression ON EMPTY
-//  {
-//
-//  }
+on_empty:
+  NULL ON EMPTY
+  {
+
+  }
+| DEFAULT value_expression ON EMPTY
+  {
+
+  }
 //| ERROR ON EMPTY
-//  {
+//  {go
 //
 //  }
 

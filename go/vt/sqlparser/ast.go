@@ -2121,7 +2121,9 @@ type ColumnType struct {
 	SRID *SQLVal
 
 	// For json_table
-	Path string
+	Path    string
+	Exists  bool
+	OnEmpty Expr
 }
 
 func (ct *ColumnType) merge(other ColumnType) error {
