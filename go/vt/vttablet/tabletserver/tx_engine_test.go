@@ -204,7 +204,7 @@ func TestTxEngineRenewFails(t *testing.T) {
 	conn.Unlock() // but we keep holding on to it... sneaky....
 
 	// this next bit sets up the scp so our renew will fail
-	conn2, err := te.txPool.scp.NewConn(ctx, options)
+	conn2, err := te.txPool.scp.NewConn(ctx, options, 0)
 	require.NoError(t, err)
 	defer conn2.Release(tx.TxCommit)
 	te.txPool.scp.lastID.Set(conn2.ConnID - 1)

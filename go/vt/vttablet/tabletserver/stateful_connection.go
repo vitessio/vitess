@@ -50,6 +50,7 @@ type StatefulConnection struct {
 	reservedProps  *Properties
 	tainted        bool
 	enforceTimeout bool
+	timeout        time.Duration
 }
 
 // Properties contains meta information about the connection
@@ -100,6 +101,13 @@ func (sc *StatefulConnection) Exec(ctx context.Context, query string, maxrows in
 		return nil, err
 	}
 	return r, nil
+}
+
+func (sc *StatefulConnection) Timeout() time.Duration {
+	if sc.txProps != nil {
+		return sc.txProps.Timeout
+	}
+	return sc.timeout
 }
 
 func (sc *StatefulConnection) execWithRetry(ctx context.Context, query string, maxrows int, wantfields bool) (string, error) {

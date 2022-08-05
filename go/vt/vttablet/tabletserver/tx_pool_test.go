@@ -351,7 +351,9 @@ func TestTxPoolGetConnRecentlyRemovedTransaction(t *testing.T) {
 	assertErrorMatch(id, "transaction committed")
 
 	txPool, _ = newTxPool()
-	txPool.SetTimeout(1 * time.Millisecond)
+	txPool.env.Config().SetTxTimeoutForWorkload(1*time.Millisecond, querypb.ExecuteOptions_OLTP)
+	txPool.env.Config().SetTxTimeoutForWorkload(1*time.Millisecond, querypb.ExecuteOptions_OLAP)
+	txPool.SetTransactionKillerInterval(100 * time.Microsecond)
 	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 	defer txPool.Close()
 
@@ -386,6 +388,7 @@ func TestTxTimeoutKillsTransactions(t *testing.T) {
 	env.Config().TxPool.Size = 1
 	env.Config().TxPool.MaxWaiters = 0
 	env.Config().Oltp.TxTimeoutSeconds = 1
+	env.Config().TransactionKillerIntervalSeconds = 0.1
 	_, txPool, limiter, closer := setupWithEnv(t, env)
 	defer closer()
 	startingKills := txPool.env.Stats().KillCounters.Counts()["Transactions"]

@@ -21,6 +21,7 @@ import (
 
 	"vitess.io/vitess/go/pools"
 
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
 
 	"context"
@@ -28,7 +29,6 @@ import (
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
@@ -135,11 +135,19 @@ func (sf *StatefulConnectionPool) AdjustLastID(id int64) {
 	}
 }
 
-// GetOutdated returns a list of connections that are older than age.
-// It does not return any connections that are in use.
+// GetElapsedTimeout returns sessions older than the transaction timeout.
+// Does not return any connections that are in use.
 // TODO(sougou): deprecate.
-func (sf *StatefulConnectionPool) GetOutdated(age time.Duration, purpose string) []*StatefulConnection {
-	return mapToTxConn(sf.active.GetOutdated(age, purpose))
+func (sf *StatefulConnectionPool) GetElapsedTimeout(purpose string) []*StatefulConnection {
+	now := time.Now()
+	return mapToTxConn(sf.active.GetOutdatedByTimeFn(purpose, func(val any) time.Time {
+		conn := val.(*StatefulConnection)
+		timeout := conn.Timeout()
+		if timeout == 0 { // no timeout
+			return time.Unix(0, 0)
+		}
+		return now.Add(-timeout)
+	}))
 }
 
 func mapToTxConn(outdated []any) []*StatefulConnection {
@@ -168,8 +176,7 @@ func (sf *StatefulConnectionPool) GetAndLock(id int64, reason string) (*Stateful
 
 // NewConn creates a new StatefulConnection. It will be created from either the normal pool or
 // the found_rows pool, depending on the options provided
-func (sf *StatefulConnectionPool) NewConn(ctx context.Context, options *querypb.ExecuteOptions) (*StatefulConnection, error) {
-
+func (sf *StatefulConnectionPool) NewConn(ctx context.Context, options *querypb.ExecuteOptions, timeout time.Duration) (*StatefulConnection, error) {
 	var conn *connpool.DBConn
 	var err error
 
@@ -189,6 +196,7 @@ func (sf *StatefulConnectionPool) NewConn(ctx context.Context, options *querypb.
 		pool:           sf,
 		env:            sf.env,
 		enforceTimeout: options.GetWorkload() != querypb.ExecuteOptions_DBA,
+		timeout:        timeout,
 	}
 
 	err = sf.active.Register(

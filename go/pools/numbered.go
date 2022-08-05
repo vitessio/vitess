@@ -172,15 +172,23 @@ func (nu *Numbered) GetByFilter(purpose string, match func(val any) bool) (vals 
 
 // GetOutdated returns a list of resources that are older than age, and locks them.
 // It does not return any resources that are already locked.
-func (nu *Numbered) GetOutdated(age time.Duration, purpose string) (vals []any) {
+func (nu *Numbered) GetOutdated(ago time.Duration, purpose string) (vals []any) {
+	since := time.Now().Add(-ago)
+	return nu.GetOutdatedByTimeFn(purpose, func(_ any) time.Time {
+		return since
+	})
+}
+
+// GetOutdatedByAgeFn returns a list of resources that haven't been used since timeFn(),
+// and locks them.  It does not return any resources that are already locked.
+func (nu *Numbered) GetOutdatedByTimeFn(purpose string, timeFn func(val any) time.Time) (vals []any) {
 	nu.mu.Lock()
 	defer nu.mu.Unlock()
-	now := time.Now()
 	for _, nw := range nu.resources {
 		if nw.inUse || !nw.enforceTimeout {
 			continue
 		}
-		if nw.timeUsed.Add(age).Sub(now) <= 0 {
+		if nw.timeUsed.Before(timeFn(nw.val)) {
 			nw.inUse = true
 			nw.purpose = purpose
 			vals = append(vals, nw.val)

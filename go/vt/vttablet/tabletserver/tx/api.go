@@ -57,6 +57,7 @@ type (
 		Autocommit      bool
 		Conclusion      string
 		LogToFile       bool
+		Timeout         time.Duration
 
 		Stats *servenv.TimingsWrapper
 	}

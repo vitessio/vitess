@@ -96,7 +96,6 @@ type TabletServer struct {
 	config                 *tabletenv.TabletConfig
 	stats                  *tabletenv.Stats
 	QueryTimeout           sync2.AtomicDuration
-	txTimeout              sync2.AtomicDuration
 	TerseErrors            bool
 	enableHotRowProtection bool
 	topoServer             *topo.Server
@@ -152,7 +151,6 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 		stats:                  tabletenv.NewStats(exporter),
 		config:                 config,
 		QueryTimeout:           sync2.NewAtomicDuration(config.Oltp.QueryTimeoutSeconds.Get()),
-		txTimeout:              sync2.NewAtomicDuration(config.Oltp.TxTimeoutSeconds.Get()),
 		TerseErrors:            config.TerseErrors,
 		enableHotRowProtection: config.HotRowProtection.Mode != tabletenv.Disable,
 		topoServer:             topoServer,
@@ -721,7 +719,7 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sq
 		allowOnShutdown = true
 		// Use the smaller of the two values (0 means infinity).
 		// TODO(sougou): Assign deadlines to each transaction and set query timeout accordingly.
-		timeout = smallerTimeout(timeout, tsv.txTimeout.Get())
+		timeout = smallerTimeout(timeout, tsv.config.TxTimeoutForWorkload(options.GetWorkload()))
 	}
 	err = tsv.execRequest(
 		ctx, timeout,
@@ -808,7 +806,7 @@ func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Targ
 	if transactionID != 0 {
 		allowOnShutdown = true
 		// Use the transaction timeout.
-		timeout = tsv.txTimeout.Get()
+		timeout = tsv.config.TxTimeoutForWorkload(options.GetWorkload())
 	}
 
 	return tsv.execRequest(
@@ -1181,7 +1179,7 @@ func (tsv *TabletServer) ReserveExecute(ctx context.Context, target *querypb.Tar
 	if transactionID != 0 {
 		allowOnShutdown = true
 		// Use the smaller of the two values (0 means infinity).
-		timeout = smallerTimeout(timeout, tsv.txTimeout.Get())
+		timeout = smallerTimeout(timeout, tsv.config.TxTimeoutForWorkload(options.GetWorkload()))
 	}
 
 	err = tsv.execRequest(
@@ -1226,7 +1224,7 @@ func (tsv *TabletServer) ReserveStreamExecute(
 	if transactionID != 0 {
 		allowOnShutdown = true
 		// Use the transaction timeout.
-		timeout = tsv.txTimeout.Get()
+		timeout = tsv.config.TxTimeoutForWorkload(options.GetWorkload())
 	}
 
 	err = tsv.execRequest(
@@ -1810,17 +1808,6 @@ func (tsv *TabletServer) SetTxPoolSize(val int) {
 // TxPoolSize returns the tx pool size.
 func (tsv *TabletServer) TxPoolSize() int {
 	return tsv.te.txPool.scp.Capacity()
-}
-
-// SetTxTimeout changes the transaction timeout to the specified value.
-func (tsv *TabletServer) SetTxTimeout(val time.Duration) {
-	tsv.te.txPool.SetTimeout(val)
-	tsv.txTimeout.Set(val)
-}
-
-// TxTimeout returns the transaction timeout.
-func (tsv *TabletServer) TxTimeout() time.Duration {
-	return tsv.txTimeout.Get()
 }
 
 // SetQueryPlanCacheCap changes the plan cache capacity to the specified value.
