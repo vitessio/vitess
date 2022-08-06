@@ -15,6 +15,8 @@ Usage of vtexplain:
       --builtinbackup_progress duration                                  how often to send progress updates when backing up large files (default 5s)
       --catch-sigpipe                                                    catch and ignore SIGPIPE on stdout and stderr if specified
       --compression-level int                                            what level to pass to the compressor (default 1)
+      --consolidator-stream-query-size int                               Configure the stream consolidator query size in bytes. Setting to 0 disables the stream consolidator. (default 2097152)
+      --consolidator-stream-total-size int                               Configure the stream consolidator total size in bytes. Setting to 0 disables the stream consolidator. (default 134217728)
       --cpu_profile string                                               deprecated: use '-pprof=cpu' instead
       --datadog-agent-host string                                        host to send spans to. if empty, no tracing will be done
       --datadog-agent-port string                                        port to send spans to. if empty, no tracing will be done
