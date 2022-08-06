@@ -77,3 +77,12 @@ func TestDateTimeTimestampVals(t *testing.T) {
 	mcmp.AssertMatches(`select time'12:34:56'`, `[[TIME("12:34:56")]]`)
 	mcmp.AssertMatches(`select timestamp'2012-12-31 11:30:45'`, `[[DATETIME("2012-12-31 11:30:45")]]`)
 }
+
+func TestInvalidDateTimeTimestampVals(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.ExecAllowAndCompareError(`select date'2022'`)
+	mcmp.ExecAllowAndCompareError(`select time'12:34:56:78'`)
+	mcmp.ExecAllowAndCompareError(`select timestamp'2022'`)
+}
