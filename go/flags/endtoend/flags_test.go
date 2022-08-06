@@ -38,6 +38,9 @@ var (
 	//go:embed vtgate.txt
 	vtgateTxt string
 
+	//go:embed vtgr.txt
+	vtgrTxt string
+
 	//go:embed vttablet.txt
 	vttabletTxt string
 
@@ -47,6 +50,7 @@ var (
 	helpOutput = map[string]string{
 		"vtexplain": vtexplainTxt,
 		"vtgate":    vtgateTxt,
+		"vtgr":      vtgrTxt,
 		"vttablet":  vttabletTxt,
 		"vtctld":    vtctldTxt,
 	}
