@@ -451,7 +451,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <empty> to_opt to_or_as as_opt column_opt describe
 %type <str> algorithm_opt definer_opt security_opt
 %type <viewSpec> view_opts
-%type <bytes> reserved_keyword non_reserved_keyword column_name_safe_reserved_keyword
+%type <bytes> reserved_keyword non_reserved_keyword column_name_safe_reserved_keyword conflict_keywords
 %type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt using_opt existing_window_name_opt
 %type <colIdents> reserved_sql_id_list
 %type <expr> charset_value
@@ -6583,7 +6583,6 @@ non_reserved_keyword:
 | AGGREGATE
 | ALGORITHM
 | ALWAYS
-//| ANALYZE
 | ANY
 | ARRAY
 | AT
@@ -6611,7 +6610,7 @@ non_reserved_keyword:
 | COLLATION
 | COLUMNS
 | COLUMN_NAME
-| COMMENT_KEYWORD
+//| COMMENT_KEYWORD
 | COMMIT
 | COMMITTED
 | COMPONENT
@@ -6822,14 +6821,48 @@ non_reserved_keyword:
 | WRITE
 | X509
 | YEAR
+| conflict_keywords
+
+// TODO: these keywords all cause either shift/reduce or reduce/reduce conflicts; no clue why
+conflict_keywords:
+  ACCOUNT
+| ASCII
+| ATTRIBUTE
+| AVG
+| BIT_AND
+| BIT_OR
+| BIT_XOR
+| COMMENT_KEYWORD
+| COUNT
+| ESCAPE
+| EVENT
+| EXECUTE
+| FAILED_LOGIN_ATTEMPTS
+| FILE
+| FIRST
+| FORMAT
+| IDENTIFIED
+| JSON_ARRAYAGG
+| JSON_OBJECTAGG
+| NEXT
+| NONE
+| OFF
+| PASSWORD
+| PASSWORD_LOCK_TIME
+| PROCESS
+| RELOAD
+| SHUTDOWN
+| SUPER
+| TIMESTAMPADD
+| TIMESTAMPDIFF
+| VIEW
 
 // Reserved keywords that cause grammar conflicts in some places, but are safe to use as column name / alias identifiers.
 // These keywords should also go in reserved_keyword.
 // TODO: The ones commented out here cause shift/reduce conflicts but need to be column name safe
 column_name_safe_reserved_keyword:
 //| NEXT
-  NONE
-| NVAR
+ NVAR
 //| NVARCHAR
 //| OFF
 //| SQL_CACHE
