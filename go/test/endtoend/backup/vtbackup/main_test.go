@@ -22,6 +22,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"strings"
 	"testing"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -89,8 +90,10 @@ func TestMain(m *testing.M) {
 		dbCredentialFile = cluster.WriteDbCredentialToTmp(localCluster.TmpDirectory)
 		initDb, _ := os.ReadFile(path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"))
 		sql := string(initDb)
+		spilltedString := strings.Split(sql, "# add custom sql here")
+		firstPart := spilltedString[0] + cluster.GetPasswordUpdateSQL(localCluster)
+		sql = firstPart + spilltedString[1]
 		newInitDBFile = path.Join(localCluster.TmpDirectory, "init_db_with_passwords.sql")
-		sql = sql + cluster.GetPasswordUpdateSQL(localCluster)
 		err = os.WriteFile(newInitDBFile, []byte(sql), 0666)
 		if err != nil {
 			return 1, err

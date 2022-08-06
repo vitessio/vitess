@@ -23,6 +23,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"strings"
 	"testing"
 	"time"
 
@@ -95,13 +96,16 @@ func TestMainImpl(m *testing.M) {
 		dbCredentialFile = cluster.WriteDbCredentialToTmp(localCluster.TmpDirectory)
 		initDb, _ := os.ReadFile(path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"))
 		sql := string(initDb)
-		newInitDBFile = path.Join(localCluster.TmpDirectory, "init_db_with_passwords.sql")
-		sql = sql + cluster.GetPasswordUpdateSQL(localCluster)
+		spilltedString := strings.Split(sql, "# add custom sql here")
+		firstPart := spilltedString[0] + cluster.GetPasswordUpdateSQL(localCluster)
+
 		// https://github.com/vitessio/vitess/issues/8315
 		oldAlterTableMode := `
 SET GLOBAL old_alter_table = ON;
 `
-		sql = sql + oldAlterTableMode
+		sql = firstPart + oldAlterTableMode
+		sql = sql + spilltedString[1]
+		newInitDBFile = path.Join(localCluster.TmpDirectory, "init_db_with_passwords.sql")
 		os.WriteFile(newInitDBFile, []byte(sql), 0666)
 
 		extraArgs := []string{"--db-credentials-file", dbCredentialFile}

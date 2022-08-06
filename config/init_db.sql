@@ -108,5 +108,7 @@ FLUSH PRIVILEGES;
 RESET SLAVE ALL;
 RESET MASTER;
 
+# add custom sql here
+
 # We need to set super_read_only back to what it was before
 SET GLOBAL super_read_only=IFNULL(@original_super_read_only, 'OFF');
