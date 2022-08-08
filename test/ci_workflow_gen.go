@@ -124,12 +124,12 @@ var (
 		"vtorc",
 		"vtorc_8.0",
 		"schemadiff_vrepl",
-		"topo_connection_cache",
 	}
 
 	clusterSelfHostedList = []string{
 		"12",
 		"18",
+		"topo_connection_cache",
 	}
 	clusterDockerList           = []string{}
 	clustersRequiringXtraBackup = []string{
