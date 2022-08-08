@@ -6309,7 +6309,8 @@ kill_statement:
   Sorted alphabetically
 */
 reserved_keyword:
-  ACCOUNT
+  ACCESSIBLE
+| ACCOUNT
 | ADD
 | AFTER // TODO: this is not reserved in MySQL, why is it here?
 | ALTER
