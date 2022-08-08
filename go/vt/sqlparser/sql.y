@@ -361,7 +361,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <selectExpr> select_expression argument_expression
 %type <expr> expression naked_like group_by
 %type <tableExprs> table_references cte_list from_opt
-%type <with> with_clause
+%type <with> with_clause with_clause_opt
 %type <tableExpr> table_reference table_function table_factor join_table common_table_expression
 %type <simpleTableExpr> values_statement subquery_or_values
 %type <subquery> subquery
@@ -680,6 +680,15 @@ with_clause:
     $$ = &With{Ctes: $3, Recursive: true}
   }
 
+with_clause_opt:
+  {
+    $$ = nil
+  }
+| with_clause
+  {
+    $$ = $1
+  }
+
 cte_list:
   common_table_expression
   {
@@ -725,27 +734,28 @@ union_rhs:
   }
 
 insert_statement:
-  insert_or_replace comment_opt ignore_opt into_table_name opt_partition_clause insert_data on_dup_opt
+  with_clause_opt insert_or_replace comment_opt ignore_opt into_table_name opt_partition_clause insert_data on_dup_opt
   {
     // insert_data returns a *Insert pre-filled with Columns & Values
-    ins := $6
-    ins.Action = $1
-    ins.Comments = $2
-    ins.Ignore = $3
-    ins.Table = $4
-    ins.Partitions = $5
-    ins.OnDup = OnDup($7)
+    ins := $7
+    ins.Action = $2
+    ins.Comments = $3
+    ins.Ignore = $4
+    ins.Table = $5
+    ins.Partitions = $6
+    ins.OnDup = OnDup($8)
+    ins.With = $1
     $$ = ins
   }
-| insert_or_replace comment_opt ignore_opt into_table_name opt_partition_clause SET assignment_list on_dup_opt
+| with_clause_opt insert_or_replace comment_opt ignore_opt into_table_name opt_partition_clause SET assignment_list on_dup_opt
   {
-    cols := make(Columns, 0, len($7))
-    vals := make(ValTuple, 0, len($8))
-    for _, updateList := range $7 {
+    cols := make(Columns, 0, len($8))
+    vals := make(ValTuple, 0, len($9))
+    for _, updateList := range $8 {
       cols = append(cols, updateList.Name.Name)
       vals = append(vals, updateList.Expr)
     }
-    $$ = &Insert{Action: $1, Comments: Comments($2), Ignore: $3, Table: $4, Partitions: $5, Columns: cols, Rows: Values{vals}, OnDup: OnDup($8)}
+    $$ = &Insert{Action: $2, Comments: Comments($3), Ignore: $4, Table: $5, Partitions: $6, Columns: cols, Rows: Values{vals}, OnDup: OnDup($9), With: $1}
   }
 
 insert_or_replace:
@@ -759,27 +769,27 @@ insert_or_replace:
   }
 
 update_statement:
-  UPDATE comment_opt ignore_opt table_references SET assignment_list where_expression_opt order_by_opt limit_opt
+  with_clause_opt UPDATE comment_opt ignore_opt table_references SET assignment_list where_expression_opt order_by_opt limit_opt
   {
-    $$ = &Update{Comments: Comments($2), Ignore: $3, TableExprs: $4, Exprs: $6, Where: NewWhere(WhereStr, $7), OrderBy: $8, Limit: $9}
+    $$ = &Update{Comments: Comments($3), Ignore: $4, TableExprs: $5, Exprs: $7, Where: NewWhere(WhereStr, $8), OrderBy: $9, Limit: $10, With: $1}
   }
 
 delete_statement:
-  DELETE comment_opt FROM table_name opt_partition_clause where_expression_opt order_by_opt limit_opt
+  with_clause_opt DELETE comment_opt FROM table_name opt_partition_clause where_expression_opt order_by_opt limit_opt
   {
-    $$ = &Delete{Comments: Comments($2), TableExprs:  TableExprs{&AliasedTableExpr{Expr:$4}}, Partitions: $5, Where: NewWhere(WhereStr, $6), OrderBy: $7, Limit: $8}
+    $$ = &Delete{Comments: Comments($3), TableExprs: TableExprs{&AliasedTableExpr{Expr:$5}}, Partitions: $6, Where: NewWhere(WhereStr, $7), OrderBy: $8, Limit: $9, With: $1}
   }
-| DELETE comment_opt FROM table_name_list USING table_references where_expression_opt
+| with_clause_opt DELETE comment_opt FROM table_name_list USING table_references where_expression_opt
   {
-    $$ = &Delete{Comments: Comments($2), Targets: $4, TableExprs: $6, Where: NewWhere(WhereStr, $7)}
+    $$ = &Delete{Comments: Comments($3), Targets: $5, TableExprs: $7, Where: NewWhere(WhereStr, $8), With: $1}
   }
-| DELETE comment_opt table_name_list from_or_using table_references where_expression_opt
+| with_clause_opt DELETE comment_opt table_name_list from_or_using table_references where_expression_opt
   {
-    $$ = &Delete{Comments: Comments($2), Targets: $3, TableExprs: $5, Where: NewWhere(WhereStr, $6)}
+    $$ = &Delete{Comments: Comments($3), Targets: $4, TableExprs: $6, Where: NewWhere(WhereStr, $7), With: $1}
   }
-| DELETE comment_opt delete_table_list from_or_using table_references where_expression_opt
+| with_clause_opt DELETE comment_opt delete_table_list from_or_using table_references where_expression_opt
   {
-    $$ = &Delete{Comments: Comments($2), Targets: $3, TableExprs: $5, Where: NewWhere(WhereStr, $6)}
+    $$ = &Delete{Comments: Comments($3), Targets: $4, TableExprs: $6, Where: NewWhere(WhereStr, $7), With: $1}
   }
 
 from_or_using:
