@@ -451,7 +451,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <empty> to_opt to_or_as as_opt column_opt describe
 %type <str> algorithm_opt definer_opt security_opt
 %type <viewSpec> view_opts
-%type <bytes> reserved_keyword non_reserved_keyword column_name_safe_reserved_keyword conflict_keywords
+%type <bytes> reserved_keyword reserved_unreserved_keywords non_reserved_keyword column_name_safe_reserved_keyword non_reserved_keyword2 //conflict_keywords
 %type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt using_opt existing_window_name_opt
 %type <colIdents> reserved_sql_id_list
 %type <expr> charset_value
@@ -3100,10 +3100,14 @@ constraint_definition:
   {
     $$ = &ConstraintDefinition{Name: string($2), Details: $3}
   }
-|  CONSTRAINT column_name_safe_reserved_keyword constraint_info
-   {
-     $$ = &ConstraintDefinition{Name: string($2), Details: $3}
-   }
+|  CONSTRAINT non_reserved_keyword2 constraint_info
+  {
+    $$ = &ConstraintDefinition{Name: string($2), Details: $3}
+  }
+//|  CONSTRAINT column_name_safe_reserved_keyword constraint_info
+//   {
+//     $$ = &ConstraintDefinition{Name: string($2), Details: $3}
+//   }
 |  constraint_info
   {
     $$ = &ConstraintDefinition{Details: $1}
@@ -3144,7 +3148,7 @@ check_constraint_definition:
   {
     $$ = &ConstraintDefinition{Details: $2}
   }
-|  check_constraint_info
+| check_constraint_info
   {
     $$ = &ConstraintDefinition{Details: $1}
   }
@@ -3353,7 +3357,12 @@ alter_table_statement_part:
     $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints:
         []*ConstraintDefinition{&ConstraintDefinition{Name: string($3)}}}}
   }
-| DROP CONSTRAINT column_name_safe_reserved_keyword
+| DROP CONSTRAINT non_reserved_keyword
+  {
+    $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints:
+        []*ConstraintDefinition{&ConstraintDefinition{Name: string($3)}}}}
+  }
+| DROP CONSTRAINT non_reserved_keyword2
   {
     $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints:
         []*ConstraintDefinition{&ConstraintDefinition{Name: string($3)}}}}
@@ -3363,10 +3372,15 @@ alter_table_statement_part:
     $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints:
         []*ConstraintDefinition{&ConstraintDefinition{Name: string($3), Details: &CheckConstraintDefinition{}}}}}
   }
-| DROP CHECK column_name_safe_reserved_keyword
+| DROP CHECK non_reserved_keyword
   {
     $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints:
         []*ConstraintDefinition{&ConstraintDefinition{Name: string($3), Details: &CheckConstraintDefinition{}}}}}
+  }
+| DROP CHECK non_reserved_keyword2
+  {
+    $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints:
+        []*ConstraintDefinition{&ConstraintDefinition{Name: string($3)}}}}
   }
 | DROP index_or_key sql_id
   {
@@ -4285,6 +4299,10 @@ col_alias:
     $$ = NewColIdent(string($1))
   }
 | STRING
+  {
+    $$ = NewColIdent(string($1))
+  }
+| non_reserved_keyword2
   {
     $$ = NewColIdent(string($1))
   }
@@ -6127,6 +6145,10 @@ sql_id:
   {
     $$ = NewColIdent(string($1))
   }
+| non_reserved_keyword2
+  {
+    $$ = NewColIdent(string($1))
+  }
 
 reserved_sql_id_list:
   reserved_sql_id
@@ -6563,6 +6585,27 @@ reserved_keyword:
 | XOR
 | YEAR_MONTH
 | ZEROFILL
+| reserved_unreserved_keywords
+
+reserved_unreserved_keywords:
+  AVG
+| BIT_AND
+| BIT_OR
+| BIT_XOR
+| COMMENT_KEYWORD
+//| COUNT
+| ESCAPE
+| FIRST
+| FORMAT
+| JSON_ARRAYAGG
+| JSON_OBJECTAGG
+| NEXT
+//| NONE
+| OFF
+| TIMESTAMPADD
+| TIMESTAMPDIFF
+| STATUS
+
 
 /*
   These are non-reserved Vitess, because they don't cause conflicts in the grammar.
@@ -6572,7 +6615,6 @@ reserved_keyword:
   Sorted alphabetically
 */
 // TODO: commented out words here should be non_reserved_keywords but cause shift/reduce conflicts when added
-// TODO: it might be ok to just not have them listed, since they are unreserved anyway
 non_reserved_keyword:
 // ACCOUNT
   ACTION
@@ -6784,7 +6826,7 @@ non_reserved_keyword:
 | SLOW
 | SRID
 | START
-| STATUS
+//| STATUS
 | STREAM
 | SUBCLASS_ORIGIN
 | SUBJECT
@@ -6810,7 +6852,7 @@ non_reserved_keyword:
 | UNUSED
 | USER
 | USER_RESOURCES
-| VALUE
+//| VALUE
 | VARIABLES
 | VCPU
 //| VIEW
@@ -6821,53 +6863,57 @@ non_reserved_keyword:
 | WRITE
 | X509
 | YEAR
-| conflict_keywords
 
-// TODO: these keywords all cause either shift/reduce or reduce/reduce conflicts; no clue why
-conflict_keywords:
+// Reserved keywords that cause grammar conflicts in some places, but are safe to use as column name / alias identifiers.
+// These keywords should also go in reserved_keyword.
+// TODO: The ones commented out here cause shift/reduce conflicts but need to be column name safe
+column_name_safe_reserved_keyword:
+  AVG
+| COUNT
+| MAX
+| MIN
+| SUM
+| VALUE
+//| COMMENT_KEYWORD
+//| NEXT
+//| NVAR
+//| NVARCHAR
+//| OFF
+//| SQL_CACHE
+//| SQL_NO_CACHE
+
+non_reserved_keyword2:
   ACCOUNT
 | ASCII
 | ATTRIBUTE
-| AVG
-| BIT_AND
-| BIT_OR
-| BIT_XOR
-| COMMENT_KEYWORD
-| COUNT
-| ESCAPE
+//| AVG
+//| BIT_AND
+//| BIT_OR
+//| BIT_XOR
+//| COMMENT_KEYWORD
+//| COUNT
+//| ESCAPE
 | EVENT
 | EXECUTE
 | FAILED_LOGIN_ATTEMPTS
 | FILE
-| FIRST
-| FORMAT
+//| FIRST
+//| FORMAT
 | IDENTIFIED
-| JSON_ARRAYAGG
-| JSON_OBJECTAGG
-| NEXT
-| NONE
-| OFF
+//| JSON_ARRAYAGG
+//| JSON_OBJECTAGG
+//| NEXT
+//| NONE
+//| OFF
 | PASSWORD
 | PASSWORD_LOCK_TIME
 | PROCESS
 | RELOAD
 | SHUTDOWN
 | SUPER
-| TIMESTAMPADD
-| TIMESTAMPDIFF
+//| TIMESTAMPADD
+//| TIMESTAMPDIFF
 | VIEW
-
-// Reserved keywords that cause grammar conflicts in some places, but are safe to use as column name / alias identifiers.
-// These keywords should also go in reserved_keyword.
-// TODO: The ones commented out here cause shift/reduce conflicts but need to be column name safe
-column_name_safe_reserved_keyword:
-//| NEXT
- NVAR
-//| NVARCHAR
-//| OFF
-//| SQL_CACHE
-//| SQL_NO_CACHE
-| SUM
 
 openb:
   '('
