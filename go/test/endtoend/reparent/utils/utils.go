@@ -702,18 +702,6 @@ func CheckReplicationStatus(ctx context.Context, t *testing.T, tablet *cluster.V
 	}
 }
 
-// ReplicationThreadsStatus returns the status of the IO and SQL thread. For v15 onwards, only the IoState and SqlState
-// fields are read, since they are provided from v14 tablets onwards.
-func ReplicationThreadsStatus(t *testing.T, status *replicationdatapb.Status) (bool, bool) {
-	require.NotEqual(t, mysql.ReplicationStateUnknown, mysql.ReplicationState(status.IoState))
-	require.NotEqual(t, mysql.ReplicationStateUnknown, mysql.ReplicationState(status.SqlState))
-	ioState := mysql.ReplicationState(status.IoState)
-	ioThread := ioState == mysql.ReplicationStateRunning || ioState == mysql.ReplicationStateConnecting
-	sqlState := mysql.ReplicationState(status.SqlState)
-	sqlThread := sqlState == mysql.ReplicationStateRunning || sqlState == mysql.ReplicationStateConnecting
-	return ioThread, sqlThread
-}
-
 // TmcFullStatus retuns the result of the TabletManagerClient RPC FullStatus
 func TmcFullStatus(ctx context.Context, tablet *cluster.Vttablet) (*replicationdatapb.FullStatus, error) {
 	// create tablet manager client
