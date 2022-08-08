@@ -157,7 +157,7 @@ func init() {
 	flag.BoolVar(&currentConfig.EnforceStrictTransTables, "enforce_strict_trans_tables", defaultConfig.EnforceStrictTransTables, "If true, vttablet requires MySQL to run with STRICT_TRANS_TABLES or STRICT_ALL_TABLES on. It is recommended to not turn this flag off. Otherwise MySQL may alter your supplied values before saving them to the database.")
 	flagutil.DualFormatBoolVar(&enableConsolidator, "enable_consolidator", true, "This option enables the query consolidator.")
 	flagutil.DualFormatBoolVar(&enableConsolidatorReplicas, "enable_consolidator_replicas", false, "This option enables the query consolidator only on replicas.")
-	flagutil.DualFormatBoolVar(&currentConfig.CacheResultFields, "enable_query_plan_field_caching", defaultConfig.CacheResultFields, "This option fetches & caches fields (columns) when storing query plans")
+	flagutil.DualFormatBoolVar(&currentConfig.DeprecatedCacheResultFields, "enable_query_plan_field_caching", defaultConfig.DeprecatedCacheResultFields, "(DEPRECATED) This option fetches & caches fields (columns) when storing query plans")
 
 	flag.DurationVar(&healthCheckInterval, "health_check_interval", 20*time.Second, "Interval between health checks")
 	flag.DurationVar(&degradedThreshold, "degraded_threshold", 30*time.Second, "replication lag after which a replica is considered degraded")
@@ -273,7 +273,7 @@ type TabletConfig struct {
 	TerseErrors                             bool    `json:"terseErrors,omitempty"`
 	AnnotateQueries                         bool    `json:"annotateQueries,omitempty"`
 	MessagePostponeParallelism              int     `json:"messagePostponeParallelism,omitempty"`
-	CacheResultFields                       bool    `json:"cacheResultFields,omitempty"`
+	DeprecatedCacheResultFields             bool    `json:"cacheResultFields,omitempty"`
 	SignalWhenSchemaChange                  bool    `json:"signalWhenSchemaChange,omitempty"`
 
 	ExternalConnections map[string]*dbconfigs.DBConfigs `json:"externalConnections,omitempty"`
@@ -493,7 +493,7 @@ var defaultConfig = TabletConfig{
 	SchemaReloadIntervalSeconds:             30 * 60,
 	SignalSchemaChangeReloadIntervalSeconds: 5,
 	MessagePostponeParallelism:              4,
-	CacheResultFields:                       true,
+	DeprecatedCacheResultFields:             true,
 	SignalWhenSchemaChange:                  true,
 
 	EnableTxThrottler:           false,

@@ -221,7 +221,7 @@ func TestFlags(t *testing.T) {
 		SignalWhenSchemaChange:                  true,
 		TrackSchemaVersions:                     false,
 		MessagePostponeParallelism:              4,
-		CacheResultFields:                       true,
+		DeprecatedCacheResultFields:             true,
 		TxThrottlerConfig:                       "target_replication_lag_sec: 2\nmax_replication_lag_sec: 10\ninitial_rate: 100\nmax_increase: 1\nemergency_decrease: 0.5\nmin_duration_between_increases_sec: 40\nmax_duration_between_increases_sec: 62\nmin_duration_between_decreases_sec: 20\nspread_backlog_across_sec: 20\nage_bad_rate_after_sec: 180\nbad_rate_increase: 0.1\nmax_rate_approach_threshold: 0.9\n",
 		TxThrottlerHealthCheckCells:             []string{},
 		TransactionLimitConfig: TransactionLimitConfig{

@@ -188,7 +188,8 @@ func TestThreadsRunning(t *testing.T) {
 
 	sleepSeconds := 6
 	for i := 0; i < testThreshold; i++ {
-		go vtgateExec(t, fmt.Sprintf("select sleep(%d)", sleepSeconds), "")
+		// each query must be distinct, so they don't get consolidated
+		go vtgateExec(t, fmt.Sprintf("select sleep(%d)", sleepSeconds+i), "")
 	}
 	t.Run("exceeds threshold", func(t *testing.T) {
 		time.Sleep(3 * time.Second)
