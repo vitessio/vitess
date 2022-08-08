@@ -1276,6 +1276,12 @@ func (node *Literal) Format(buf *TrackedBuffer) {
 		buf.astPrintf(node, "X'%s'", node.Val)
 	case BitVal:
 		buf.astPrintf(node, "B'%s'", node.Val)
+	case DateVal:
+		buf.astPrintf(node, "date'%s'", node.Val)
+	case TimeVal:
+		buf.astPrintf(node, "time'%s'", node.Val)
+	case TimestampVal:
+		buf.astPrintf(node, "timestamp'%s'", node.Val)
 	default:
 		panic("unexpected")
 	}

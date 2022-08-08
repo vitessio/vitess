@@ -232,18 +232,11 @@ func compareNumeric(v1, v2 *EvalResult) (int, error) {
 func parseDate(expr *EvalResult) (t time.Time, err error) {
 	switch expr.typeof() {
 	case sqltypes.Date:
-		t, err = time.Parse("2006-01-02", expr.string())
+		t, err = sqlparser.ParseDate(expr.string())
 	case sqltypes.Timestamp, sqltypes.Datetime:
-		t, err = time.Parse("2006-01-02 15:04:05", expr.string())
+		t, err = sqlparser.ParseDateTime(expr.string())
 	case sqltypes.Time:
-		t, err = time.Parse("15:04:05", expr.string())
-		if err == nil {
-			now := time.Now()
-			// setting the date to today's date, because we use AddDate on t
-			// which is "0000-01-01 xx:xx:xx", we do minus one on the month
-			// and day to take into account the 01 in both month and day of t
-			t = t.AddDate(now.Year(), int(now.Month()-1), now.Day()-1)
-		}
+		t, err = sqlparser.ParseTime(expr.string())
 	}
 	return
 }
@@ -251,20 +244,15 @@ func parseDate(expr *EvalResult) (t time.Time, err error) {
 // matchExprWithAnyDateFormat formats the given expr (usually a string) to a date using the first format
 // that does not return an error.
 func matchExprWithAnyDateFormat(expr *EvalResult) (t time.Time, err error) {
-	layouts := []string{"2006-01-02", "2006-01-02 15:04:05", "15:04:05"}
-	for _, layout := range layouts {
-		t, err = time.Parse(layout, expr.string())
-		if err == nil {
-			if layout == "15:04:05" {
-				now := time.Now()
-				// setting the date to today's date, because we use AddDate on t
-				// which is "0000-01-01 xx:xx:xx", we do minus one on the month
-				// and day to take into account the 01 in both month and day of t
-				t = t.AddDate(now.Year(), int(now.Month()-1), now.Day()-1)
-			}
-			return
-		}
+	t, err = sqlparser.ParseDate(expr.string())
+	if err == nil {
+		return
 	}
+	t, err = sqlparser.ParseDateTime(expr.string())
+	if err == nil {
+		return
+	}
+	t, err = sqlparser.ParseTime(expr.string())
 	return
 }
 

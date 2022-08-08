@@ -541,6 +541,7 @@ const (
 	ERInvalidCastToJSON            = 3147
 	ERJSONValueTooBig              = 3150
 	ERJSONDocumentTooDeep          = 3157
+	ERWrongValue                   = 1525
 
 	ErrCantCreateGeometryObject      = 1416
 	ErrGISDataWrongEndianess         = 3055
