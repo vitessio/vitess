@@ -1,14 +1,14 @@
 # DO NOT MODIFY: THIS FILE IS GENERATED USING "make generate_ci_workflows"
 
-name: Cluster (resharding_bytes)
+name: Cluster (vreplication_across_db_versions)
 on: [push]
 concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (resharding_bytes)')
+  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (vreplication_across_db_versions)')
   cancel-in-progress: true
 
 jobs:
   build:
-    name: Run endtoend tests on Cluster (resharding_bytes)
+    name: Run endtoend tests on Cluster (vreplication_across_db_versions)
     runs-on: ubuntu-20.04
 
     steps:
@@ -64,4 +64,4 @@ jobs:
 
         set -x
 
-        eatmydata -- go run test.go -docker=false -follow -shard resharding_bytes
+        eatmydata -- go run test.go -docker=false -follow -shard vreplication_across_db_versions
