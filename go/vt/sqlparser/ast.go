@@ -2104,8 +2104,9 @@ type ColumnType struct {
 	Scale    *SQLVal
 
 	// Text field options
-	Charset string
-	Collate string
+	Charset       string
+	Collate       string
+	BinaryCollate bool
 
 	// Enum values
 	EnumValues []string
@@ -2213,6 +2214,9 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 	}
 	if ct.Charset != "" {
 		opts = append(opts, keywordStrings[CHARACTER], keywordStrings[SET], ct.Charset)
+	}
+	if ct.BinaryCollate {
+		opts = append(opts, keywordStrings[BINARY])
 	}
 	if ct.Collate != "" {
 		opts = append(opts, keywordStrings[COLLATE], ct.Collate)
