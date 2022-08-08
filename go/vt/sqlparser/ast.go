@@ -1280,6 +1280,7 @@ type Insert struct {
 	Comments   Comments
 	Ignore     string
 	Table      TableName
+	With       *With
 	Partitions Partitions
 	Columns    Columns
 	Rows       InsertRows
@@ -1329,6 +1330,7 @@ type Update struct {
 	Comments   Comments
 	Ignore     string
 	TableExprs TableExprs
+	With       *With
 	Exprs      AssignmentExprs
 	Where      *Where
 	OrderBy    OrderBy
@@ -1363,6 +1365,7 @@ type Delete struct {
 	Comments   Comments
 	Targets    TableNames
 	TableExprs TableExprs
+	With       *With
 	Partitions Partitions
 	Where      *Where
 	OrderBy    OrderBy
