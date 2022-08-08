@@ -506,7 +506,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <str> header_opt export_options manifest_opt overwrite_opt format_opt optionally_opt regexp_symbol
 %type <str> fields_opts fields_opt_list fields_opt lines_opts lines_opt lines_opt_list
 %type <lock> locking_clause
-%type <columns> ins_column_list column_list column_list_opt index_list
+%type <columns> ins_column_list column_list column_list_opt column_list_empty index_list
 %type <variable> variable_expr set_variable user_defined_variable
 %type <variables> at_id_list execute_statement_list_opt
 %type <partitions> opt_partition_clause partition_list
@@ -3277,7 +3277,7 @@ partitions_options_beginning:
         Expr: $4,
       }
     }
-| linear_opt KEY algorithm_opt '(' column_list ')'
+| linear_opt KEY algorithm_opt '(' column_list_empty ')'
     {
       $$ = &PartitionOption {
         IsLinear: $1,
@@ -4776,6 +4776,15 @@ column_list_opt:
 | '(' column_list ')'
   {
     $$ = $2
+  }
+
+column_list_empty:
+  {
+    $$ = nil
+  }
+| column_list
+  {
+    $$ = $1
   }
 
 column_list:

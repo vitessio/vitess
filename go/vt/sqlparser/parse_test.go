@@ -1489,6 +1489,9 @@ var (
 		input:  "create table t (id int) partition by key (id) partitions 2",
 		output: "create table t (\n\tid int\n)\npartition by key (id) partitions 2",
 	}, {
+		input:  "create table t (id int, primary key(id)) partition by key () partitions 2",
+		output: "create table t (\n\tid int,\n\tprimary key (id)\n)\npartition by key () partitions 2",
+	}, {
 		input:  "create table t (id int) partition by key algorithm = 1 (id)",
 		output: "create table t (\n\tid int\n)\npartition by key algorithm = 1 (id)",
 	}, {

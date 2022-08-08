@@ -568,7 +568,11 @@ func (node *PartitionOption) Format(buf *TrackedBuffer) {
 		if node.KeyAlgorithm != 0 {
 			buf.astPrintf(node, " algorithm = %d", node.KeyAlgorithm)
 		}
-		buf.astPrintf(node, " %v", node.ColList)
+		if len(node.ColList) == 0 {
+			buf.literal(" ()")
+		} else {
+			buf.astPrintf(node, " %v", node.ColList)
+		}
 	case RangeType, ListType:
 		buf.astPrintf(node, " %s", node.Type.ToString())
 		if node.Expr != nil {
@@ -611,7 +615,11 @@ func (node *SubPartition) Format(buf *TrackedBuffer) {
 		if node.KeyAlgorithm != 0 {
 			buf.astPrintf(node, " algorithm = %d", node.KeyAlgorithm)
 		}
-		buf.astPrintf(node, " %v", node.ColList)
+		if len(node.ColList) == 0 {
+			buf.literal(" ()")
+		} else {
+			buf.astPrintf(node, " %v", node.ColList)
+		}
 	}
 
 	if node.SubPartitions != -1 {
