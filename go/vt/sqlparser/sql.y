@@ -4782,13 +4782,9 @@ column_list_empty:
   {
     $$ = nil
   }
-| sql_id
+| column_list
   {
-    $$ = Columns{$1}
-  }
-| column_list_empty ',' sql_id
-  {
-    $$ = append($$, $3)
+    $$ = $1
   }
 
 column_list:
