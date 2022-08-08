@@ -457,7 +457,7 @@ web_bootstrap:
 
 # Do a production build of the vtctld UI.
 # This target needs to be manually run every time any file within web/vtctld2/app
-# is modified to regenerate rice-box.go
+# is modified to regenerate assets.
 web_build: web_bootstrap
 	./tools/web_build.sh
 
