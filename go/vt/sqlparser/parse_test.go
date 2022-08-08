@@ -398,6 +398,18 @@ var (
 		}, {
 			input: "with recursive t (n) as (select (1) from dual union select n + 1 from t where n < 100) select sum(n) from t",
 		}, {
+			input: "with cte1 as (select a from b) update c set d = e",
+		}, {
+			input: "with recursive cte1 as (select a from b) update c set d = e",
+		}, {
+			input: "with cte1 as (select a from b) delete from d where e = f",
+		}, {
+			input: "with recursive cte1 as (select a from b) delete from d where e = f",
+		}, {
+			input: "with cte1 as (select a from b) insert into c select * from cte1",
+		}, {
+			input: "with recursive cte1 as (select a from b) insert into c select * from cte1",
+		}, {
 			input: "select /* s.t */ 1 from s.t",
 		}, {
 			input: "select /* keyword schema & table name */ 1 from `By`.`bY`",
