@@ -398,6 +398,18 @@ var (
 		}, {
 			input: "with recursive t (n) as (select (1) from dual union select n + 1 from t where n < 100) select sum(n) from t",
 		}, {
+			input: "with cte1 as (select a from b) update c set d = e",
+		}, {
+			input: "with recursive cte1 as (select a from b) update c set d = e",
+		}, {
+			input: "with cte1 as (select a from b) delete from d where e = f",
+		}, {
+			input: "with recursive cte1 as (select a from b) delete from d where e = f",
+		}, {
+			input: "with cte1 as (select a from b) insert into c select * from cte1",
+		}, {
+			input: "with recursive cte1 as (select a from b) insert into c select * from cte1",
+		}, {
 			input: "select /* s.t */ 1 from s.t",
 		}, {
 			input: "select /* keyword schema & table name */ 1 from `By`.`bY`",
@@ -2074,6 +2086,9 @@ var (
 		}, {
 			input:  "alter table t change foo bar int not null auto_increment first",
 			output: "alter table t change column foo (\n\tbar int not null auto_increment\n) first",
+		}, {
+			input:  "alter table test change v1 v2 varchar(255) character set utf8mb4 binary not null",
+			output: "alter table test change column v1 (\n\tv2 varchar(255) character set utf8mb4 binary not null\n)",
 		}, {
 			input:  "alter table a modify foo int unique comment 'a comment here' auto_increment on update current_timestamp() default 0 not null after bar",
 			output: "alter table a modify column foo (\n\tfoo int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n) after bar",
@@ -3867,6 +3882,7 @@ func TestCreateTable(t *testing.T) {
 			"	col_varchar2 varchar(2),\n" +
 			"	col_varchar3 varchar(3) character set ascii,\n" +
 			"	col_varchar4 varchar(4) character set ascii collate ascii_bin,\n" +
+			"	col_varchar5 varchar(5) character set ascii binary,\n" +
 			"	col_character_varying character varying,\n" +
 			"	col_character_varying2 character varying(2),\n" +
 			"	col_character_varying3 character varying(3) character set ascii,\n" +

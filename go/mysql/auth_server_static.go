@@ -19,7 +19,6 @@ package mysql
 import (
 	"bytes"
 	"encoding/json"
-	"flag"
 	"net"
 	"os"
 	"os/signal"
@@ -34,9 +33,9 @@ import (
 )
 
 var (
-	mysqlAuthServerStaticFile           = flag.String("mysql_auth_server_static_file", "", "JSON File to read the users/passwords from.")
-	mysqlAuthServerStaticString         = flag.String("mysql_auth_server_static_string", "", "JSON representation of the users/passwords config.")
-	mysqlAuthServerStaticReloadInterval = flag.Duration("mysql_auth_static_reload_interval", 0, "Ticker to reload credentials")
+	mysqlAuthServerStaticFile           string        = ""
+	mysqlAuthServerStaticString         string        = ""
+	mysqlAuthServerStaticReloadInterval time.Duration = 0
 )
 
 const (
@@ -86,23 +85,6 @@ type AuthServerStaticEntry struct {
 	Groups              []string
 }
 
-// InitAuthServerStatic Handles initializing the AuthServerStatic if necessary.
-func InitAuthServerStatic() {
-	// Check parameters.
-	if *mysqlAuthServerStaticFile == "" && *mysqlAuthServerStaticString == "" {
-		// Not configured, nothing to do.
-		log.Infof("Not configuring AuthServerStatic, as mysql_auth_server_static_file and mysql_auth_server_static_string are empty")
-		return
-	}
-	if *mysqlAuthServerStaticFile != "" && *mysqlAuthServerStaticString != "" {
-		// Both parameters specified, can only use one.
-		log.Fatalf("Both mysql_auth_server_static_file and mysql_auth_server_static_string specified, can only use one.")
-	}
-
-	// Create and register auth server.
-	RegisterAuthServerStaticFromParams(*mysqlAuthServerStaticFile, *mysqlAuthServerStaticString, *mysqlAuthServerStaticReloadInterval)
-}
-
 // NewAuthServerStatic returns a new AuthServerStatic, reading from |file| or
 // |jsonConfig|. If |file| is specified, periodically reloads at
 // |reloadInterval| and listens for SIGHUP to reload on demand. The auth server
@@ -119,18 +101,6 @@ func NewAuthServerStatic(file, jsonConfig string, reloadInterval time.Duration) 
 	a.reload()
 	a.installSignalHandlers()
 	return a
-}
-
-// RegisterAuthServerStaticFromParams creates and registers a new
-// AuthServerStatic, loaded for a JSON file or string. If file is set,
-// it uses file. Otherwise, load the string. It log.Fatals out in case
-// of error.
-func RegisterAuthServerStaticFromParams(file, str string, reloadInterval time.Duration) {
-	authServerStatic := NewAuthServerStatic(file, str, reloadInterval)
-	if len(authServerStatic.entries) <= 0 {
-		log.Fatalf("Failed to populate entries from file: %v", file)
-	}
-	RegisterAuthServerImpl("static", authServerStatic)
 }
 
 func (a *AuthServerStatic) reload() {

@@ -30,7 +30,6 @@ package stats
 import (
 	"bytes"
 	"expvar"
-	"flag"
 	"fmt"
 	"strconv"
 	"sync"
@@ -39,9 +38,9 @@ import (
 	"github.com/dolthub/vitess/go/vt/log"
 )
 
-var emitStats = flag.Bool("emit_stats", false, "true iff we should emit stats to push-based monitoring/stats backends")
-var statsEmitPeriod = flag.Duration("stats_emit_period", time.Duration(60*time.Second), "Interval between emitting stats to all registered backends")
-var statsBackend = flag.String("stats_backend", "", "The name of the registered push-based monitoring/stats backend to use")
+var emitStats = false
+var statsEmitPeriod = time.Duration(60 * time.Second)
+var statsBackend = ""
 
 // NewVarHook is the type of a hook to export variables in a different way
 type NewVarHook func(name string, v expvar.Var)
@@ -122,7 +121,7 @@ func RegisterPushBackend(name string, backend PushBackend) {
 		log.Fatalf("PushBackend %s already exists; can't register the same name multiple times", name)
 	}
 	pushBackends[name] = backend
-	if *emitStats {
+	if emitStats {
 		// Start a single goroutine to emit stats periodically
 		once.Do(func() {
 			go emitToBackend(statsEmitPeriod)
@@ -132,19 +131,19 @@ func RegisterPushBackend(name string, backend PushBackend) {
 
 // emitToBackend does a periodic emit to the selected PushBackend. If a push fails,
 // it will be logged as a warning (but things will otherwise proceed as normal).
-func emitToBackend(emitPeriod *time.Duration) {
-	ticker := time.NewTicker(*emitPeriod)
+func emitToBackend(emitPeriod time.Duration) {
+	ticker := time.NewTicker(emitPeriod)
 	defer ticker.Stop()
 	for range ticker.C {
-		backend, ok := pushBackends[*statsBackend]
+		backend, ok := pushBackends[statsBackend]
 		if !ok {
-			log.Errorf("No PushBackend registered with name %s", *statsBackend)
+			log.Errorf("No PushBackend registered with name %s", statsBackend)
 			return
 		}
 		err := backend.PushAll()
 		if err != nil {
 			// TODO(aaijazi): This might cause log spam...
-			log.Warningf("Pushing stats to backend %v failed: %v", *statsBackend, err)
+			log.Warningf("Pushing stats to backend %v failed: %v", statsBackend, err)
 		}
 	}
 }
