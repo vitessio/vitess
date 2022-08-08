@@ -5842,8 +5842,9 @@ func TestKeywordsCorrectlyDoParse(t *testing.T) {
 	dTest := "DELETE FROM t where %s=1"
 	uTest := "UPDATE t SET %s=1"
 	cTest := "CREATE TABLE t(%s int)"
+	tcTest := "SELECT * FROM t ORDER BY t.%s"
 
-	tests := []string{aliasTest, iTest, dTest, uTest, cTest}
+	tests := []string{aliasTest, iTest, dTest, uTest, cTest, tcTest}
 
 	for _, kw := range correctlyDoParse {
 		for _, query := range tests {
@@ -5853,6 +5854,18 @@ func TestKeywordsCorrectlyDoParse(t *testing.T) {
 				assert.NoError(t, err)
 			})
 		}
+	}
+}
+
+func TestReservedKeywordsParseWhenQualified(t *testing.T) {
+	tcTest := "SELECT * FROM tbl ORDER BY tbl.%s"
+
+	for _, kw := range correctlyDontParse {
+		test := fmt.Sprintf(tcTest, kw)
+		t.Run(test, func(t *testing.T) {
+			_, err := Parse(test)
+			assert.NoError(t, err)
+		})
 	}
 }
 
