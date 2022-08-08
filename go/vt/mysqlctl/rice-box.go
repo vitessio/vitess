@@ -17,7 +17,7 @@ func init() {
 	}
 	file3 := &embedded.EmbeddedFile{
 		Filename:    "init_db.sql",
-		FileModTime: time.Unix(1659745815, 0),
+		FileModTime: time.Unix(1659924805, 0),
 
 		Content: string("# This file is executed immediately after mysql_install_db,\n# to initialize a fresh data directory.\n\n###############################################################################\n# WARNING: This sql is *NOT* safe for production use,\n#          as it contains default well-known users and passwords.\n#          Care should be taken to change these users and passwords\n#          for production.\n###############################################################################\n\n###############################################################################\n# Equivalent of mysql_secure_installation\n###############################################################################\n# We need to ensure that super_read_only is disabled so that we can execute\n# these commands. Note that disabling it does NOT disable read_only.\n# We save the current value so that we only re-enable it at the end if it was\n# enabled before.\nSET @original_super_read_only=IF(@@global.super_read_only=1, 'ON', 'OFF');\nSET GLOBAL super_read_only='OFF';\n\n# Changes during the init db should not make it to the binlog.\n# They could potentially create errant transactions on replicas.\nSET sql_log_bin = 0;\n# Remove anonymous users.\nDELETE FROM mysql.user WHERE User = '';\n\n# Disable remote root access (only allow UNIX socket).\nDELETE FROM mysql.user WHERE User = 'root' AND Host != 'localhost';\n\n# Remove test database.\nDROP DATABASE IF EXISTS test;\n\n###############################################################################\n# Vitess defaults\n###############################################################################\n\n# Vitess-internal database.\nCREATE DATABASE IF NOT EXISTS _vt;\n# Note that definitions of local_metadata and shard_metadata should be the same\n# as in production which is defined in go/vt/mysqlctl/metadata_tables.go.\nCREATE TABLE IF NOT EXISTS _vt.local_metadata (\n  name VARCHAR(255) NOT NULL,\n  value VARCHAR(255) NOT NULL,\n  db_name VARBINARY(255) NOT NULL,\n  PRIMARY KEY (db_name, name)\n  ) ENGINE=InnoDB;\nCREATE TABLE IF NOT EXISTS _vt.shard_metadata (\n  name VARCHAR(255) NOT NULL,\n  value MEDIUMBLOB NOT NULL,\n  db_name VARBINARY(255) NOT NULL,\n  PRIMARY KEY (db_name, name)\n  ) ENGINE=InnoDB;\n\n# Admin user with all privileges.\nCREATE USER 'vt_dba'@'localhost';\nGRANT ALL ON *.* TO 'vt_dba'@'localhost';\nGRANT GRANT OPTION ON *.* TO 'vt_dba'@'localhost';\n\n# User for app traffic, with global read-write access.\nCREATE USER 'vt_app'@'localhost';\nGRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, RELOAD, PROCESS, FILE,\n  REFERENCES, INDEX, ALTER, SHOW DATABASES, CREATE TEMPORARY TABLES,\n  LOCK TABLES, EXECUTE, REPLICATION CLIENT, CREATE VIEW,\n  SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, CREATE USER, EVENT, TRIGGER\n  ON *.* TO 'vt_app'@'localhost';\n\n# User for app debug traffic, with global read access.\nCREATE USER 'vt_appdebug'@'localhost';\nGRANT SELECT, SHOW DATABASES, PROCESS ON *.* TO 'vt_appdebug'@'localhost';\n\n# User for administrative operations that need to be executed as non-SUPER.\n# Same permissions as vt_app here.\nCREATE USER 'vt_allprivs'@'localhost';\nGRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, RELOAD, PROCESS, FILE,\n  REFERENCES, INDEX, ALTER, SHOW DATABASES, CREATE TEMPORARY TABLES,\n  LOCK TABLES, EXECUTE, REPLICATION SLAVE, REPLICATION CLIENT, CREATE VIEW,\n  SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, CREATE USER, EVENT, TRIGGER\n  ON *.* TO 'vt_allprivs'@'localhost';\n\n# User for slave replication connections.\nCREATE USER 'vt_repl'@'%';\nGRANT REPLICATION SLAVE ON *.* TO 'vt_repl'@'%';\n\n# User for Vitess VReplication (base vstreamers and vplayer).\nCREATE USER 'vt_filtered'@'localhost';\nGRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, RELOAD, PROCESS, FILE,\n  REFERENCES, INDEX, ALTER, SHOW DATABASES, CREATE TEMPORARY TABLES,\n  LOCK TABLES, EXECUTE, REPLICATION SLAVE, REPLICATION CLIENT, CREATE VIEW,\n  SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, CREATE USER, EVENT, TRIGGER\n  ON *.* TO 'vt_filtered'@'localhost';\n\n# User for general MySQL monitoring.\nCREATE USER 'vt_monitoring'@'localhost';\nGRANT SELECT, PROCESS, SUPER, REPLICATION CLIENT, RELOAD\n  ON *.* TO 'vt_monitoring'@'localhost';\nGRANT SELECT, UPDATE, DELETE, DROP\n  ON performance_schema.* TO 'vt_monitoring'@'localhost';\n\n# User for Orchestrator (https://github.com/openark/orchestrator).\nCREATE USER 'orc_client_user'@'%' IDENTIFIED BY 'orc_client_user_password';\nGRANT SUPER, PROCESS, REPLICATION SLAVE, RELOAD\n  ON *.* TO 'orc_client_user'@'%';\nGRANT SELECT\n  ON _vt.* TO 'orc_client_user'@'%';\n\nFLUSH PRIVILEGES;\n\nRESET SLAVE ALL;\nRESET MASTER;\n\n# add custom sql here\n\n# We need to set super_read_only back to what it was before\nSET GLOBAL super_read_only=IFNULL(@original_super_read_only, 'OFF');\n"),
 	}
@@ -59,13 +59,13 @@ func init() {
 	}
 	fileb := &embedded.EmbeddedFile{
 		Filename:    "mycnf/mysql57.cnf",
-		FileModTime: time.Unix(1659744597, 0),
+		FileModTime: time.Unix(1659924805, 0),
 
 		Content: string("# This file is auto-included when MySQL 5.7 is detected.\n\n# MySQL 5.7 does not enable the binary log by default, and \n# info repositories default to file\n\ngtid_mode = ON\nlog_slave_updates\nenforce_gtid_consistency\nexpire_logs_days = 3\nmaster_info_repository = TABLE\nrelay_log_info_repository = TABLE\nrelay_log_purge = 1\nrelay_log_recovery = 1\n\n# In MySQL 5.7 the default charset is latin1\n\ncharacter_set_server = utf8\ncollation_server = utf8_general_ci\n\n# Semi-sync replication is required for automated unplanned failover\n# (when the primary goes away). Here we just load the plugin so it's\n# available if desired, but it's disabled at startup.\n#\n# VTTablet will enable semi-sync at the proper time when replication is set up,\n# or when a primary is promoted or demoted based on the durability policy configured.\nplugin-load = rpl_semi_sync_master=semisync_master.so;rpl_semi_sync_slave=semisync_slave.so\n\n# When semi-sync is enabled, don't allow fallback to async\n# if you get no ack, or have no replicas. This is necessary to\n# prevent alternate futures when doing a failover in response to\n# a primary that becomes unresponsive.\nrpl_semi_sync_master_timeout = 1000000000000000000\nrpl_semi_sync_master_wait_no_slave = 1\nsuper-read-only\n\n"),
 	}
 	filec := &embedded.EmbeddedFile{
 		Filename:    "mycnf/mysql80.cnf",
-		FileModTime: time.Unix(1659744597, 0),
+		FileModTime: time.Unix(1659924805, 0),
 
 		Content: string("# This file is auto-included when MySQL 8.0 is detected.\n\n# MySQL 8.0 enables binlog by default with sync_binlog and TABLE info repositories\n# It does not enable GTIDs or enforced GTID consistency\n\ngtid_mode = ON\nenforce_gtid_consistency\nrelay_log_recovery = 1\nbinlog_expire_logs_seconds = 259200\n\n# disable mysqlx\nmysqlx = 0\n\n# 8.0 changes the default auth-plugin to caching_sha2_password\ndefault_authentication_plugin = mysql_native_password\n\n# Semi-sync replication is required for automated unplanned failover\n# (when the primary goes away). Here we just load the plugin so it's\n# available if desired, but it's disabled at startup.\n#\n# VTTablet will enable semi-sync at the proper time when replication is set up,\n# or when a primary is promoted or demoted based on the durability policy configured.\nplugin-load = rpl_semi_sync_master=semisync_master.so;rpl_semi_sync_slave=semisync_slave.so\n\n# MySQL 8.0 will not load plugins during --initialize\n# which makes these options unknown. Prefixing with --loose\n# tells the server it's fine if they are not understood.\nloose_rpl_semi_sync_master_timeout = 1000000000000000000\nloose_rpl_semi_sync_master_wait_no_slave = 1\nsuper-read-only\n"),
 	}
@@ -109,7 +109,7 @@ func init() {
 	// define dirs
 	dir1 := &embedded.EmbeddedDir{
 		Filename:   "",
-		DirModTime: time.Unix(1659745815, 0),
+		DirModTime: time.Unix(1659924805, 0),
 		ChildFiles: []*embedded.EmbeddedFile{
 			file2, // "gomysql.pc.tmpl"
 			file3, // "init_db.sql"
@@ -119,7 +119,7 @@ func init() {
 	}
 	dir4 := &embedded.EmbeddedDir{
 		Filename:   "mycnf",
-		DirModTime: time.Unix(1659744597, 0),
+		DirModTime: time.Unix(1659924805, 0),
 		ChildFiles: []*embedded.EmbeddedFile{
 			file5, // "mycnf/default.cnf"
 			file6, // "mycnf/mariadb100.cnf"
@@ -175,7 +175,7 @@ func init() {
 	// register embeddedBox
 	embedded.RegisterEmbeddedBox(`../../../config`, &embedded.EmbeddedBox{
 		Name: `../../../config`,
-		Time: time.Unix(1659745815, 0),
+		Time: time.Unix(1659924805, 0),
 		Dirs: map[string]*embedded.EmbeddedDir{
 			"":             dir1,
 			"mycnf":        dir4,
