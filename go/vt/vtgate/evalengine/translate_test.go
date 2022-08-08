@@ -98,7 +98,7 @@ func TestTranslateSimplification(t *testing.T) {
 		{"time'12:34:45'", ok(`TIME("12:34:45")`), ok(`TIME("12:34:45")`)},
 		{"timestamp'2022-10-03 12:34:45'", ok(`DATETIME("2022-10-03 12:34:45")`), ok(`DATETIME("2022-10-03 12:34:45")`)},
 		{"date'2022'", err(`incorrect DATE value: '2022'`), err(`incorrect DATE value: '2022'`)},
-		{"time'12:34'", err(`incorrect TIME value: '12:34'`), err(`incorrect TIME value: '12:34'`)},
+		{"time'2022-10-03'", err(`incorrect TIME value: '2022-10-03'`), err(`incorrect TIME value: '2022-10-03'`)},
 		{"timestamp'2022-10-03'", err(`incorrect DATETIME value: '2022-10-03'`), err(`incorrect DATETIME value: '2022-10-03'`)},
 	}
 
