@@ -36,9 +36,6 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
-	tmc "vitess.io/vitess/go/vt/vttablet/grpctmclient"
-
-	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -157,8 +154,8 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 		}
 	}
 	if clusterInstance.VtctlMajorVersion >= 14 {
-		vtctldClientProcess := cluster.VtctldClientProcessInstance("localhost", clusterInstance.VtctldProcess.GrpcPort, clusterInstance.TmpDirectory)
-		out, err := vtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", KeyspaceName, fmt.Sprintf("--durability-policy=%s", durability))
+		clusterInstance.VtctldClientProcess = *cluster.VtctldClientProcessInstance("localhost", clusterInstance.VtctldProcess.GrpcPort, clusterInstance.TmpDirectory)
+		out, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", KeyspaceName, fmt.Sprintf("--durability-policy=%s", durability))
 		require.NoError(t, err, out)
 	}
 
@@ -700,19 +697,4 @@ func CheckReplicationStatus(ctx context.Context, t *testing.T, tablet *cluster.V
 	} else {
 		require.Equal(t, "No", res.Rows[0][11].ToString())
 	}
-}
-
-// TmcFullStatus retuns the result of the TabletManagerClient RPC FullStatus
-func TmcFullStatus(ctx context.Context, tablet *cluster.Vttablet) (*replicationdatapb.FullStatus, error) {
-	// create tablet manager client
-	tmClient := tmc.NewClient()
-
-	vttablet := getTablet(tablet.GrpcPort)
-	return tmClient.FullStatus(ctx, vttablet)
-}
-
-func getTablet(tabletGrpcPort int) *topodatapb.Tablet {
-	portMap := make(map[string]int32)
-	portMap["grpc"] = int32(tabletGrpcPort)
-	return &topodatapb.Tablet{Hostname: Hostname, PortMap: portMap}
 }
