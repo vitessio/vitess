@@ -313,32 +313,12 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> MATCH AGAINST BOOLEAN LANGUAGE WITH QUERY EXPANSION
 
 // MySQL reserved words that are unused by this grammar will map to this token.
-%token <bytes> ACCESSIBLE ASENSITIVE
-%token <bytes> CUBE
-%token <bytes> DAY_HOUR DAY_MICROSECOND DAY_MINUTE DAY_SECOND DISTINCTROW DUAL
-%token <bytes> FETCH FLOAT4 FLOAT8
-%token <bytes> GET
-%token <bytes> HIGH_PRIORITY HOUR_MICROSECOND HOUR_MINUTE HOUR_SECOND
-%token <bytes> INSENSITIVE INT1 INT2 INT3 INT4 INT8 IO_AFTER_GTIDS IO_BEFORE_GTIDS ITERATE
-%token <bytes> LEAVE LINEAR LOOP
-%token <bytes> MASTER_BIND MASTER_SSL_VERIFY_SERVER_CERT
-%token <bytes> PURGE
-%token <bytes> READ_WRITE RETURN RLIKE
-%token <bytes> SECOND_MICROSECOND SENSITIVE SPECIFIC SQL_BIG_RESULT SQL_SMALL_RESULT
-%token <bytes> VARCHARACTER
-%token <bytes> WHILE
-%token <bytes> YEAR_MONTH
-
-%token <bytes> UNUSED DESCRIPTION EMPTY JSON_TABLE LATERAL MEMBER RECURSIVE
-%token <bytes> BUCKETS CLONE COMPONENT DEFINITION ENFORCED EXCLUDE FOLLOWING GEOMCOLLECTION GET_MASTER_PUBLIC_KEY HISTOGRAM HISTORY
+%token <bytes> UNUSED ARRAY DESCRIPTION EMPTY JSON_TABLE LATERAL MEMBER RECURSIVE
+%token <bytes> ACTIVE BUCKETS CLONE COMPONENT DEFINITION ENFORCED EXCLUDE FOLLOWING GEOMCOLLECTION GET_MASTER_PUBLIC_KEY HISTOGRAM HISTORY
 %token <bytes> INACTIVE INVISIBLE LOCKED MASTER_COMPRESSION_ALGORITHMS MASTER_PUBLIC_KEY_PATH MASTER_TLS_CIPHERSUITES MASTER_ZSTD_COMPRESSION_LEVEL
 %token <bytes> NESTED NETWORK_NAMESPACE NOWAIT NULLS OJ OLD ORDINALITY ORGANIZATION OTHERS PATH PERSIST PERSIST_ONLY PRECEDING PRIVILEGE_CHECKS_USER PROCESS
 %token <bytes> REFERENCE REQUIRE_ROW_FORMAT RESOURCE RESPECT RESTART RETAIN SECONDARY SECONDARY_ENGINE SECONDARY_LOAD SECONDARY_UNLOAD SKIP
 %token <bytes> THREAD_PRIORITY TIES VCPU VISIBLE SYSTEM INFILE
-
-// MySQL unreserved keywords that are currently unused
-%token <bytes> ACTIVE AGGREGATE ANY ARRAY ASCII AT AUTOEXTEND_SIZE
-%token <bytes> ENDS EVENTS
 
 // Generated Columns
 %token <bytes> GENERATED ALWAYS STORED VIRTUAL
@@ -451,7 +431,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <empty> to_opt to_or_as as_opt column_opt describe
 %type <str> algorithm_opt definer_opt security_opt
 %type <viewSpec> view_opts
-%type <bytes> reserved_keyword reserved_unreserved_keywords non_reserved_keyword column_name_safe_reserved_keyword non_reserved_keyword2 //conflict_keywords
+%type <bytes> reserved_keyword non_reserved_keyword column_name_safe_reserved_keyword
 %type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt using_opt existing_window_name_opt
 %type <colIdents> reserved_sql_id_list
 %type <expr> charset_value
@@ -2254,7 +2234,7 @@ column_definition:
   }
 
 column_definition_for_create:
-  sql_id column_type column_type_options
+  reserved_sql_id column_type column_type_options
   {
     if err := $2.merge($3); err != nil {
       yylex.Error(err.Error())
@@ -3100,14 +3080,10 @@ constraint_definition:
   {
     $$ = &ConstraintDefinition{Name: string($2), Details: $3}
   }
-|  CONSTRAINT non_reserved_keyword2 constraint_info
-  {
-    $$ = &ConstraintDefinition{Name: string($2), Details: $3}
-  }
-//|  CONSTRAINT column_name_safe_reserved_keyword constraint_info
-//   {
-//     $$ = &ConstraintDefinition{Name: string($2), Details: $3}
-//   }
+|  CONSTRAINT column_name_safe_reserved_keyword constraint_info
+   {
+     $$ = &ConstraintDefinition{Name: string($2), Details: $3}
+   }
 |  constraint_info
   {
     $$ = &ConstraintDefinition{Details: $1}
@@ -3148,7 +3124,7 @@ check_constraint_definition:
   {
     $$ = &ConstraintDefinition{Details: $2}
   }
-| check_constraint_info
+|  check_constraint_info
   {
     $$ = &ConstraintDefinition{Details: $1}
   }
@@ -3357,12 +3333,7 @@ alter_table_statement_part:
     $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints:
         []*ConstraintDefinition{&ConstraintDefinition{Name: string($3)}}}}
   }
-| DROP CONSTRAINT non_reserved_keyword
-  {
-    $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints:
-        []*ConstraintDefinition{&ConstraintDefinition{Name: string($3)}}}}
-  }
-| DROP CONSTRAINT non_reserved_keyword2
+| DROP CONSTRAINT column_name_safe_reserved_keyword
   {
     $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints:
         []*ConstraintDefinition{&ConstraintDefinition{Name: string($3)}}}}
@@ -3372,15 +3343,10 @@ alter_table_statement_part:
     $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints:
         []*ConstraintDefinition{&ConstraintDefinition{Name: string($3), Details: &CheckConstraintDefinition{}}}}}
   }
-| DROP CHECK non_reserved_keyword
+| DROP CHECK column_name_safe_reserved_keyword
   {
     $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints:
         []*ConstraintDefinition{&ConstraintDefinition{Name: string($3), Details: &CheckConstraintDefinition{}}}}}
-  }
-| DROP CHECK non_reserved_keyword2
-  {
-    $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints:
-        []*ConstraintDefinition{&ConstraintDefinition{Name: string($3)}}}}
   }
 | DROP index_or_key sql_id
   {
@@ -4302,10 +4268,6 @@ col_alias:
   {
     $$ = NewColIdent(string($1))
   }
-| non_reserved_keyword2
-  {
-    $$ = NewColIdent(string($1))
-  }
 
 table_references:
   table_reference
@@ -4594,7 +4556,7 @@ table_name:
   {
     $$ = TableName{Name: $1}
   }
-| table_id '.' table_id
+| table_id '.' reserved_table_id
   {
     $$ = TableName{Qualifier: $1, Name: $3}
   }
@@ -6145,10 +6107,6 @@ sql_id:
   {
     $$ = NewColIdent(string($1))
   }
-| non_reserved_keyword2
-  {
-    $$ = NewColIdent(string($1))
-  }
 
 reserved_sql_id_list:
   reserved_sql_id
@@ -6331,239 +6289,164 @@ kill_statement:
   Sorted alphabetically
 */
 reserved_keyword:
-  ACCESSIBLE
+  ACCOUNT
 | ADD
-| ALL
+| AFTER // TODO: this is not reserved in MySQL, why is it here?
 | ALTER
-| ANALYZE
 | AND
+| ARRAY
 | AS
 | ASC
-| ASENSITIVE
-| BEFORE
+| ATTRIBUTE
+| AUTO_INCREMENT
+| AVG
 | BETWEEN
-| BIGINT
 | BINARY
-// TODO: bit_and, bit_or, and bit_xor shouldn't be here
-| BLOB
-| BOTH
+| BIT_AND
+| BIT_OR
+| BIT_XOR
 | BY
 | CALL
-| CASCADE
 | CASE
-| CHANGE
-| CHAR
-| CHARACTER
-| CHECK
 | COLLATE
-| COLUMN
-| CONDITION
-| CONTINUE
+| COMMENT_KEYWORD
 | CONVERT
+| CONNECTION
+| COUNT
 | CREATE
 | CROSS
-| CUBE
-| CUME_DIST
 | CURRENT_DATE
 | CURRENT_TIME
 | CURRENT_TIMESTAMP
-| CURRENT_USER
-| CURSOR
 | DATABASE
 | DATABASES
-| DAY_HOUR
-| DAY_MICROSECOND
-| DAY_MINUTE
-| DAY_SECOND
-| DEC
-| DECIMAL
-| DECLARE
 | DEFAULT
 | DELETE
-| DENSE_RANK
 | DESC
 | DESCRIBE
 | DETERMINISTIC
 | DISTINCT
-| DISTINCTROW
 | DIV
-| DOUBLE
 | DROP
-| DUAL
-| EACH
 | ELSE
 | ELSEIF
-| EMPTY
-| ENCLOSED
-| ESCAPED
-| EXCEPT
+| END
+| ERRORS
+| ESCAPE
+| EVENT
+| EXECUTE
 | EXISTS
-| EXIT
 | EXPLAIN
+| FAILED_LOGIN_ATTEMPTS
 | FALSE
-| FETCH
-| FIRST_VALUE
-| FLOAT
-| FLOAT4
-| FLOAT8
+| FILE
+| FIRST
+| FOLLOWING
+| FOLLOWS
 | FOR
 | FORCE
-| FOREIGN
+| FORMAT
+| FOUND
 | FROM
-| FULLTEXT
+| FULL
 | FUNCTION
 | GENERATED
-| GET
 | GRANT
 | GROUP
 | GROUPING
 | GROUPS
+| HANDLER
 | HAVING
-| HIGH_PRIORITY
-| HOUR_MICROSECOND
-| HOUR_MINUTE
-| HOUR_SECOND
+| IDENTIFIED
 | IF
 | IGNORE
 | IN
-| INDEX
-| INFILE
-| INNER
 | INOUT
-| INSENSITIVE
+| INDEX
+| INNER
 | INSERT
-| INT
-| INT1
-| INT2
-| INT3
-| INT4
-| INT8
-| INTEGER
 | INTERVAL
 | INTO
-| IO_AFTER_GTIDS
-| IO_BEFORE_GTIDS
 | IS
-| ITERATE
 | JOIN
+| JSON_ARRAYAGG
+| JSON_OBJECTAGG
 | JSON_TABLE
 | KEY
-| KEYS
 | KILL
-| LAG
-| LAST_VALUE
 | LATERAL
-| LEAD
-| LEADING
-| LEAVE
 | LEFT
 | LIKE
 | LIMIT
-| LINEAR
-| LINES
-| LOAD
 | LOCALTIME
 | LOCALTIMESTAMP
 | LOCK
-| LONG
-| LONGBLOB
-| LONGTEXT
-| LOOP
-| LOW_PRIORITY
-| MASTER_BIND
-| MASTER_SSL_VERIFY_SERVER_CERT
 | MATCH
+| MAX
 | MAXVALUE
+| MEMBER
+| MIN
 | MOD
 | MODIFIES
 | NATURAL
+| NEXT // next should be doable as non-reserved, but is not due to the special `select next num_val` query that vitess supports
 | NONE
 | NOT
-| NO_WRITE_TO_BINLOG
-| NTH_VALUE
-| NTILE
 | NULL
-| NUMERIC
 | NVAR
 | OF
+| OFF
 | ON
-| OPTIMIZE
 | OPTIMIZER_COSTS
-| OPTION
-| OPTIONALLY
 | OR
 | ORDER
 | OUT
 | OUTER
-| OUTFILE
 | OVER
-| PARTITION
-| PERCENT_RANK
-| PRECISION
-| PRIMARY
+| PASSWORD
+| PASSWORD_LOCK
+| PASSWORD_LOCK_TIME
 | PROCEDURE
-| PURGE
-| RANGE
-| RANK
-| READ
+| PROCESS
 | READS
-| READ_WRITE
-| REAL
 | RECURSIVE
 | REFERENCES
 | REGEXP
-| RELEASE
+| RELOAD
 | RENAME
 | REPLACE
 | REQUIRE
-| RESIGNAL
-| RESTRICT
-| RETURN
 | REVOKE
 | RIGHT
-| RLIKE
-| ROW
-| ROWS
-| ROW_NUMBER
 | SCHEMA
-| SCHEMAS
-| SECOND_MICROSECOND
 | SELECT
-| SENSITIVE
 | SEPARATOR
 | SET
 | SHOW
-| SIGNAL
-| SMALLINT
-| SPATIAL
-| SPECIFIC
+| SHUTDOWN
 | SQL
-| SQLEXCEPTION
-| SQLSTATE
-| SQLWARNING
-| SQL_BIG_RESULT
-| SQL_CALC_FOUND_ROWS
-| SQL_SMALL_RESULT
-| SSL
-| STARTING
+| STATUS
+| STD
+| STDDEV
+| STDDEV_POP
+| STDDEV_SAMP
 | STORED
 | STRAIGHT_JOIN
+| SUBSTR
+| SUBSTRING
+| SUM
+| SUPER
 | SYSTEM
 | TABLE
-| TERMINATED
 | THEN
-| TINYBLOB
-| TINYINT
-| TINYTEXT
+| TIMESTAMPADD
+| TIMESTAMPDIFF
 | TO
-| TRAILING
 | TRIGGER
 | TRUE
-| UNDO
 | UNION
 | UNIQUE
 | UNLOCK
-| UNSIGNED
 | UPDATE
 | USAGE
 | USE
@@ -6572,40 +6455,17 @@ reserved_keyword:
 | UTC_TIME
 | UTC_TIMESTAMP
 | VALUES
-| VARBINARY
-| VARCHAR
-| VARCHARACTER
-| VARYING
+| VALUE
+| VARIANCE
+| VAR_POP
+| VAR_SAMP
+| VIEW
 | VIRTUAL
 | WHEN
 | WHERE
-| WHILE
 | WINDOW
 | WITH
 | XOR
-| YEAR_MONTH
-| ZEROFILL
-| reserved_unreserved_keywords
-
-reserved_unreserved_keywords:
-  AVG
-| BIT_AND
-| BIT_OR
-| BIT_XOR
-| COMMENT_KEYWORD
-//| COUNT
-| ESCAPE
-| FIRST
-| FORMAT
-| JSON_ARRAYAGG
-| JSON_OBJECTAGG
-| NEXT
-//| NONE
-| OFF
-| TIMESTAMPADD
-| TIMESTAMPDIFF
-| STATUS
-
 
 /*
   These are non-reserved Vitess, because they don't cause conflicts in the grammar.
@@ -6614,37 +6474,31 @@ reserved_unreserved_keywords:
 
   Sorted alphabetically
 */
-// TODO: commented out words here should be non_reserved_keywords but cause shift/reduce conflicts when added
 non_reserved_keyword:
-// ACCOUNT
   ACTION
 | ACTIVE
 | ADMIN
-| AFTER
 | AGAINST
-| AGGREGATE
 | ALGORITHM
 | ALWAYS
-| ANY
-| ARRAY
-| AT
-//| ATTRIBUTE
 | AUTHENTICATION
-| AUTOEXTEND_SIZE
-| AUTO_INCREMENT
-//| AVG
+| BEFORE // TODO: this (and some others) should be reserved
 | BEGIN
+| BIGINT
 | SERIAL
 | BIT
-//| BIT_AND
-//| BIT_OR
-//| BIT_XOR
+| BLOB
 | BOOL
 | BOOLEAN
 | BUCKETS
+| CASCADE
 | CATALOG_NAME
+| CHANGE
 | CHANNEL
+| CHAR
+| CHARACTER
 | CHARSET
+| CHECK
 | CIPHER
 | CLASS_ORIGIN
 | CLIENT
@@ -6652,58 +6506,47 @@ non_reserved_keyword:
 | COLLATION
 | COLUMNS
 | COLUMN_NAME
-//| COMMENT_KEYWORD
 | COMMIT
 | COMMITTED
 | COMPONENT
-| CONNECTION
 | CONSTRAINT
 | CONSTRAINT_CATALOG
 | CONSTRAINT_NAME
 | CONSTRAINT_SCHEMA
 | CONTAINS
-//| COUNT
 | CURRENT
 | CURSOR_NAME
 | DATA
 | DATE
 | DATETIME
 | DAY
+| DECIMAL
+| DECLARE
 | DEFINER
 | DEFINITION
 | DESCRIPTION
 | DISABLE
+| DOUBLE
 | DUMPFILE
 | DUPLICATE
+| EACH
 | ENABLE
 | ENCRYPTION
-| END
-| ENDS
 | ENFORCED
 | ENGINE
 | ENGINES
 | ENUM
 | ERROR
-| ERRORS
-//| ESCAPE
-//| EVENT
-| EVENTS
-//| EXECUTE
+| EXCEPT
 | EXCLUDE
 | EXPANSION
 | EXPIRE
-//| FAILED_LOGIN_ATTEMPTS
 | FIELDS
-//| FILE
-//| FIRST
-| FOLLOWING
-| FOLLOWS
 | FIXED
 | FLOAT_TYPE
 | FLUSH
-//| FORMAT
-| FOUND
-| FULL
+| FOREIGN
+| FULLTEXT
 | GENERAL
 | GEOMCOLLECTION
 | GEOMETRY
@@ -6711,30 +6554,34 @@ non_reserved_keyword:
 | GET_MASTER_PUBLIC_KEY
 | GLOBAL
 | GRANTS
-| HANDLER
 | HOSTS
 | HISTOGRAM
 | HISTORY
-//| IDENTIFIED
 | INACTIVE
 | INDEXES
 | INITIAL
+| INT
+| INTEGER
 | INVISIBLE
 | INVOKER
 | ISOLATION
 | ISSUER
 | JSON
-//| JSON_ARRAYAGG
-//| JSON_OBJECTAGG
+| KEYS
 | KEY_BLOCK_SIZE
 | LANGUAGE
 | LAST_INSERT_ID
 | LESS
 | LEVEL
+| LINES
 | LINESTRING
+| LOAD
 | LOCAL
 | LOCKED
 | LOGS
+| LONGBLOB
+| LONGTEXT
+| LOW_PRIORITY
 | MASTER_COMPRESSION_ALGORITHMS
 | MASTER_PUBLIC_KEY_PATH
 | MASTER_TLS_CIPHERSUITES
@@ -6746,7 +6593,6 @@ non_reserved_keyword:
 | MEDIUMBLOB
 | MEDIUMINT
 | MEDIUMTEXT
-| MEMBER
 | MERGE
 | MESSAGE_TEXT
 | MODE
@@ -6761,22 +6607,22 @@ non_reserved_keyword:
 | NESTED
 | NETWORK_NAMESPACE
 | NEVER
-//| NEXT // next should be doable as non-reserved, but is not due to the special `select next num_val` query that vitess supports
 | NO
 | NOWAIT
 | NULLS
-//| OFF
+| NUMERIC
 | OFFSET
 | OJ
 | OLD
 | ONLY
+| OPTIMIZE
+| OPTION
 | OPTIONAL
+| OPTIONALLY
 | ORDINALITY
 | ORGANIZATION
 | OTHERS
-//| PASSWORD
-| PASSWORD_LOCK
-//| PASSWORD_LOCK_TIME
+| PARTITION
 | PATH
 | PERSIST
 | PERSIST_ONLY
@@ -6785,30 +6631,38 @@ non_reserved_keyword:
 | POLYGON
 | PRECEDES
 | PRECEDING
+| PRECISION
+| PRIMARY
 | PRIVILEGE_CHECKS_USER
 | PRIVILEGES
-//| PROCESS
 | PROCESSLIST
 | PROXY
 | QUERY
 | RANDOM
+| RANGE
+| READ
+| REAL
 | REFERENCE
 | RELAY
-//| RELOAD
+| RELEASE
 | REORGANIZE
 | REPAIR
 | REPEATABLE
 | REPLICATION
 | REQUIRE_ROW_FORMAT
+| RESIGNAL
 | RESOURCE
 | RESPECT
 | RESTART
+| RESTRICT
 | RETAIN
 | REUSE
 | ROLE
 | ROLLBACK
 | ROUTINE
+| ROWS
 | SAVEPOINT
+| SCHEMAS
 | SCHEMA_NAME
 | SECONDARY
 | SECONDARY_ENGINE
@@ -6819,18 +6673,21 @@ non_reserved_keyword:
 | SERIALIZABLE
 | SESSION
 | SHARE
-//| SHUTDOWN
+| SIGNAL
 | SIGNED
 | SKIP
 | SLAVE
 | SLOW
+| SMALLINT
+| SPATIAL
+| SQLSTATE
 | SRID
+| SSL
 | START
-//| STATUS
+| STARTING
 | STREAM
 | SUBCLASS_ORIGIN
 | SUBJECT
-//| SUPER
 | TABLES
 | TABLESPACE
 | TABLE_NAME
@@ -6842,20 +6699,23 @@ non_reserved_keyword:
 | TIES
 | TIME
 | TIMESTAMP
-//| TIMESTAMPADD
-//| TIMESTAMPDIFF
+| TINYBLOB
+| TINYINT
+| TINYTEXT
 | TRANSACTION
 | TRIGGERS
 | TRUNCATE
 | UNBOUNDED
 | UNCOMMITTED
+| UNSIGNED
 | UNUSED
 | USER
 | USER_RESOURCES
-//| VALUE
+| VARBINARY
+| VARCHAR
 | VARIABLES
+| VARYING
 | VCPU
-//| VIEW
 | VISIBLE
 | UNDEFINED
 | WARNINGS
@@ -6863,57 +6723,69 @@ non_reserved_keyword:
 | WRITE
 | X509
 | YEAR
+| ZEROFILL
 
 // Reserved keywords that cause grammar conflicts in some places, but are safe to use as column name / alias identifiers.
 // These keywords should also go in reserved_keyword.
 // TODO: The ones commented out here cause shift/reduce conflicts but need to be column name safe
 column_name_safe_reserved_keyword:
-  AVG
-| COUNT
-| MAX
-| MIN
-| SUM
-| VALUE
-//| COMMENT_KEYWORD
-//| NEXT
-//| NVAR
-//| NVARCHAR
-//| OFF
-//| SQL_CACHE
-//| SQL_NO_CACHE
-
-non_reserved_keyword2:
   ACCOUNT
-| ASCII
+| AFTER
 | ATTRIBUTE
-//| AVG
-//| BIT_AND
-//| BIT_OR
-//| BIT_XOR
-//| COMMENT_KEYWORD
-//| COUNT
+| AUTO_INCREMENT
+| AVG
+| BIT_AND
+| BIT_OR
+| BIT_XOR
+| CONNECTION
+| COUNT
+| END
+| ERRORS
 //| ESCAPE
 | EVENT
 | EXECUTE
 | FAILED_LOGIN_ATTEMPTS
 | FILE
-//| FIRST
-//| FORMAT
+| FIRST
+| FOLLOWING
+| FOLLOWS
+| FORMAT
+| FOUND
+| FULL
+| HANDLER
 | IDENTIFIED
-//| JSON_ARRAYAGG
-//| JSON_OBJECTAGG
+| JSON_ARRAYAGG
+| JSON_OBJECTAGG
+| MAX
+| MIN
 //| NEXT
-//| NONE
+| NONE
+| NVAR
+//| NVARCHAR
 //| OFF
 | PASSWORD
+| PASSWORD_LOCK
 | PASSWORD_LOCK_TIME
 | PROCESS
 | RELOAD
 | SHUTDOWN
+//| SQL_CACHE
+//| SQL_NO_CACHE
+| STATUS
+| STD
+| STDDEV
+| STDDEV_POP
+| STDDEV_SAMP
 | SUPER
-//| TIMESTAMPADD
-//| TIMESTAMPDIFF
+| TIMESTAMPADD
+| TIMESTAMPDIFF
+| SUM
+| VALUE
+| VARIANCE
+| VAR_POP
+| VAR_SAMP
 | VIEW
+| COMMENT_KEYWORD
 
 openb:
   '('
