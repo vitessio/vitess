@@ -6547,7 +6547,6 @@ reserved_keyword:
 | MIDDLEINT
 | MIN
 | MINUTE_MICROSECOND
-//| MINUTE_SECOND
 | MOD
 | MODIFIES
 | NATURAL
@@ -6744,7 +6743,6 @@ non_reserved_keyword:
 | ENGINES
 | ENUM
 | ERROR
-//| ESCAPE
 | EXCLUDE
 | EXPANSION
 | EXPIRE
