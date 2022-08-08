@@ -91,7 +91,7 @@ func getResourcePool(size, parallelism int) IResourcePool {
 }
 
 func getDynamicPool(size, _ int) IResourcePool {
-	return NewDynamicResourcePool(testResourceFactory, size)
+	return NewDynamicResourcePool(testResourceFactory, size, 0)
 }
 
 func testResourceFactory(context.Context) (Resource, error) {
