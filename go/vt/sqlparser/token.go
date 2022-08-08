@@ -143,7 +143,6 @@ var keywords = map[string]int{
 	"accessible":               UNUSED,
 	"account":                  ACCOUNT,
 	"action":                   ACTION,
-	"active":                   ACTIVE,
 	"add":                      ADD,
 	"admin":                    ADMIN,
 	"after":                    AFTER,
