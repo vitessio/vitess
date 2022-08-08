@@ -6359,14 +6359,15 @@ kill_statement:
 */
 reserved_keyword:
   ACCESSIBLE
-| ASENSITIVE
 | ACCOUNT
 | ADD
 | ALTER
+| ANALYZE
 | AND
 | ARRAY
 | AS
 | ASC
+| ASENSITIVE
 | ATTRIBUTE
 | AUTO_INCREMENT
 | AVG
@@ -6378,6 +6379,7 @@ reserved_keyword:
 | BIT_OR
 | BIT_XOR
 | BLOB
+| BOTH
 | BY
 | CALL
 | CASCADE
@@ -6541,6 +6543,7 @@ reserved_keyword:
 | PASSWORD
 | PASSWORD_LOCK
 | PASSWORD_LOCK_TIME
+| PERCENT_RANK
 | PRECISION
 | PRIMARY
 | PROCEDURE
@@ -6550,6 +6553,7 @@ reserved_keyword:
 | READS
 | READ_WRITE
 | RANGE
+| RANK
 | REAL
 | RECURSIVE
 | REFERENCES
