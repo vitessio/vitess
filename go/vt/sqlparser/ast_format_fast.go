@@ -1676,6 +1676,18 @@ func (node *Literal) formatFast(buf *TrackedBuffer) {
 		buf.WriteString("B'")
 		buf.WriteString(node.Val)
 		buf.WriteByte('\'')
+	case DateVal:
+		buf.WriteString("date'")
+		buf.WriteString(node.Val)
+		buf.WriteByte('\'')
+	case TimeVal:
+		buf.WriteString("time'")
+		buf.WriteString(node.Val)
+		buf.WriteByte('\'')
+	case TimestampVal:
+		buf.WriteString("timestamp'")
+		buf.WriteString(node.Val)
+		buf.WriteByte('\'')
 	default:
 		panic("unexpected")
 	}
