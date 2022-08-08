@@ -25,8 +25,8 @@ import (
 
 // Watch is part of the topo.Conn interface.
 func (c *Conn) Watch(ctx context.Context, filePath string) (*topo.WatchData, <-chan *topo.WatchData, error) {
-	c.factory.mu.Lock()
-	defer c.factory.mu.Unlock()
+	c.factory.Lock()
+	defer c.factory.Unlock()
 
 	if c.factory.err != nil {
 		return nil, nil, c.factory.err
@@ -54,10 +54,11 @@ func (c *Conn) Watch(ctx context.Context, filePath string) (*topo.WatchData, <-c
 		<-ctx.Done()
 		// This function can be called at any point, so we first need
 		// to make sure the watch is still valid.
-		c.factory.mu.Lock()
-		defer c.factory.mu.Unlock()
+		c.factory.Lock()
+		f := c.factory
+		defer f.Unlock()
 
-		n := c.factory.nodeByPath(c.cell, filePath)
+		n := f.nodeByPath(c.cell, filePath)
 		if n == nil {
 			return
 		}
@@ -73,8 +74,8 @@ func (c *Conn) Watch(ctx context.Context, filePath string) (*topo.WatchData, <-c
 
 // WatchRecursive is part of the topo.Conn interface.
 func (c *Conn) WatchRecursive(ctx context.Context, dirpath string) ([]*topo.WatchDataRecursive, <-chan *topo.WatchDataRecursive, error) {
-	c.factory.mu.Lock()
-	defer c.factory.mu.Unlock()
+	c.factory.Lock()
+	defer c.factory.Unlock()
 
 	if c.factory.err != nil {
 		return nil, nil, c.factory.err
@@ -106,10 +107,11 @@ func (c *Conn) WatchRecursive(ctx context.Context, dirpath string) ([]*topo.Watc
 
 		<-ctx.Done()
 
-		c.factory.mu.Lock()
-		defer c.factory.mu.Unlock()
+		c.factory.Lock()
+		f := c.factory
+		defer f.Unlock()
 
-		n := c.factory.nodeByPath(c.cell, dirpath)
+		n := f.nodeByPath(c.cell, dirpath)
 		if n != nil {
 			delete(n.watches, watchIndex)
 		}
