@@ -777,7 +777,7 @@ update_statement:
 delete_statement:
   with_clause_opt DELETE comment_opt FROM table_name opt_partition_clause where_expression_opt order_by_opt limit_opt
   {
-    $$ = &Delete{Comments: Comments($3), TableExprs:  TableExprs{&AliasedTableExpr{Expr:$4}}, Partitions: $5, Where: NewWhere(WhereStr, $6), OrderBy: $7, Limit: $8, With: $1}
+    $$ = &Delete{Comments: Comments($3), TableExprs: TableExprs{&AliasedTableExpr{Expr:$5}}, Partitions: $6, Where: NewWhere(WhereStr, $7), OrderBy: $8, Limit: $9, With: $1}
   }
 | with_clause_opt DELETE comment_opt FROM table_name_list USING table_references where_expression_opt
   {

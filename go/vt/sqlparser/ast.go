@@ -1293,7 +1293,8 @@ const (
 
 // Format formats the node.
 func (node *Insert) Format(buf *TrackedBuffer) {
-	buf.Myprintf("%s %v%sinto %v%v%v %v%v",
+	buf.Myprintf("%v%s %v%sinto %v%v%v %v%v",
+		node.With,
 		node.Action,
 		node.Comments, node.Ignore,
 		node.Table, node.Partitions, node.Columns, node.Rows, node.OnDup)
@@ -1310,6 +1311,7 @@ func (node *Insert) walkSubtree(visit Visit) error {
 		node.Columns,
 		node.Rows,
 		node.OnDup,
+		node.With,
 	)
 }
 
@@ -1339,8 +1341,8 @@ type Update struct {
 
 // Format formats the node.
 func (node *Update) Format(buf *TrackedBuffer) {
-	buf.Myprintf("update %v%s%v set %v%v%v%v",
-		node.Comments, node.Ignore, node.TableExprs,
+	buf.Myprintf("%vupdate %v%s%v set %v%v%v%v",
+		node.With, node.Comments, node.Ignore, node.TableExprs,
 		node.Exprs, node.Where, node.OrderBy, node.Limit)
 }
 
@@ -1356,6 +1358,7 @@ func (node *Update) walkSubtree(visit Visit) error {
 		node.Where,
 		node.OrderBy,
 		node.Limit,
+		node.With,
 	)
 }
 
@@ -1374,7 +1377,7 @@ type Delete struct {
 
 // Format formats the node.
 func (node *Delete) Format(buf *TrackedBuffer) {
-	buf.Myprintf("delete %v", node.Comments)
+	buf.Myprintf("%vdelete %v", node.With, node.Comments)
 	if node.Targets != nil {
 		buf.Myprintf("%v ", node.Targets)
 	}
@@ -1393,6 +1396,7 @@ func (node *Delete) walkSubtree(visit Visit) error {
 		node.Where,
 		node.OrderBy,
 		node.Limit,
+		node.With,
 	)
 }
 
@@ -3408,6 +3412,10 @@ func (w *With) Format(buf *TrackedBuffer) {
 }
 
 func (w *With) walkSubtree(visit Visit) error {
+	if w == nil {
+		return nil
+	}
+
 	for _, n := range w.Ctes {
 		if err := Walk(visit, n); err != nil {
 			return err

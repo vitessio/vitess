@@ -7382,7 +7382,7 @@ yydefault:
 		yyDollar = yyS[yypt-9 : yypt+1]
 //line sql.y:779
 		{
-			yyVAL.statement = &Delete{Comments: Comments(yyDollar[3].bytes2), TableExprs: TableExprs{&AliasedTableExpr{Expr: yyDollar[4].bytes}}, Partitions: yyDollar[5].tableName, Where: NewWhere(WhereStr, yyDollar[6].partitions), OrderBy: yyDollar[7].expr, Limit: yyDollar[8].orderBy, With: yyDollar[1].with}
+			yyVAL.statement = &Delete{Comments: Comments(yyDollar[3].bytes2), TableExprs: TableExprs{&AliasedTableExpr{Expr: yyDollar[5].tableName}}, Partitions: yyDollar[6].partitions, Where: NewWhere(WhereStr, yyDollar[7].expr), OrderBy: yyDollar[8].orderBy, Limit: yyDollar[9].limit, With: yyDollar[1].with}
 		}
 	case 70:
 		yyDollar = yyS[yypt-8 : yypt+1]
