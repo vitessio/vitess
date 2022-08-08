@@ -679,10 +679,6 @@ func (vw *vschemaWrapper) currentDb() string {
 	return ksName
 }
 
-func escapeNewLines(in string) string {
-	return strings.ReplaceAll(in, "\n", "\\n")
-}
-
 func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper) {
 	t.Run(filename, func(t *testing.T) {
 		expected := &strings.Builder{}
@@ -701,7 +697,10 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper) {
 				}
 				outFirstPlanner = out
 
-				expected.WriteString(fmt.Sprintf("%s\"%s\"\n%s\n", tcase.comments, escapeNewLines(tcase.input), out))
+				expected.WriteString(tcase.comments)
+				encoder := json.NewEncoder(expected)
+				encoder.Encode(tcase.input)
+				expected.WriteString(fmt.Sprintf("%s\n", out))
 			})
 
 			vschema.version = Gen4

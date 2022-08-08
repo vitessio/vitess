@@ -23,8 +23,8 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
-func gen4CompareV3Planner(query string) func(sqlparser.Statement, *sqlparser.ReservedVars, plancontext.VSchema) (engine.Primitive, error) {
-	return func(statement sqlparser.Statement, vars *sqlparser.ReservedVars, ctxVSchema plancontext.VSchema) (engine.Primitive, error) {
+func gen4CompareV3Planner(query string) func(sqlparser.Statement, *sqlparser.ReservedVars, plancontext.VSchema) (*planResult, error) {
+	return func(statement sqlparser.Statement, vars *sqlparser.ReservedVars, ctxVSchema plancontext.VSchema) (*planResult, error) {
 		switch statement.(type) {
 		case *sqlparser.Select, *sqlparser.Union:
 		// These we can compare. Everything else we'll just use the Gen4 planner
@@ -51,7 +51,7 @@ func gen4CompareV3Planner(query string) func(sqlparser.Statement, *sqlparser.Res
 		// since lock primitives can imply the creation or deletion of locks,
 		// we want to execute them once using Gen4 to avoid the duplicated locks
 		// or double lock-releases.
-		if onlyGen4 || (gen4Primitive != nil && hasLockPrimitive(gen4Primitive)) {
+		if onlyGen4 || (gen4Primitive != nil && hasLockPrimitive(gen4Primitive.primitive)) {
 			return gen4Primitive, gen4Err
 		}
 
@@ -64,11 +64,13 @@ func gen4CompareV3Planner(query string) func(sqlparser.Statement, *sqlparser.Res
 			return nil, err
 		}
 
-		return &engine.Gen4CompareV3{
-			V3:         v3Primitive,
-			Gen4:       gen4Primitive,
+		primitive := &engine.Gen4CompareV3{
+			V3:         v3Primitive.primitive,
+			Gen4:       gen4Primitive.primitive,
 			HasOrderBy: hasOrderBy,
-		}, nil
+		}
+
+		return newPlanResult(primitive, gen4Primitive.tables...), nil
 	}
 }
 
@@ -108,7 +110,7 @@ func preliminaryChecks(statement sqlparser.Statement) (bool, bool, error) {
 	return onlyGen4, hasOrderBy, nil
 }
 
-func planWithPlannerVersion(statement sqlparser.Statement, vars *sqlparser.ReservedVars, ctxVSchema plancontext.VSchema, query string, version plancontext.PlannerVersion) (engine.Primitive, error) {
+func planWithPlannerVersion(statement sqlparser.Statement, vars *sqlparser.ReservedVars, ctxVSchema plancontext.VSchema, query string, version plancontext.PlannerVersion) (*planResult, error) {
 	ctxVSchema.SetPlannerVersion(version)
 	stmt := sqlparser.CloneStatement(statement)
 	return createInstructionFor(query, stmt, vars, ctxVSchema, false, false)

@@ -31,20 +31,24 @@ import (
 )
 
 // Builds an explain-plan for the given Primitive
-func buildExplainPlan(stmt sqlparser.Explain, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (engine.Primitive, error) {
+func buildExplainPlan(stmt sqlparser.Explain, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (*planResult, error) {
 	switch explain := stmt.(type) {
 	case *sqlparser.ExplainTab:
 		return explainTabPlan(explain, vschema)
 	case *sqlparser.ExplainStmt:
-		if explain.Type == sqlparser.VitessType {
+		switch explain.Type {
+		case sqlparser.VitessType:
 			return buildVitessTypePlan(explain, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
+		case sqlparser.VTExplainType:
+			return buildVTExplainTypePlan(explain, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
+		default:
+			return buildOtherReadAndAdmin(sqlparser.String(explain), vschema)
 		}
-		return buildOtherReadAndAdmin(sqlparser.String(explain), vschema)
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected explain type: %T", stmt)
 }
 
-func explainTabPlan(explain *sqlparser.ExplainTab, vschema plancontext.VSchema) (engine.Primitive, error) {
+func explainTabPlan(explain *sqlparser.ExplainTab, vschema plancontext.VSchema) (*planResult, error) {
 	_, _, ks, _, destination, err := vschema.FindTableOrVindex(explain.Table)
 	if err != nil {
 		return nil, err
@@ -63,20 +67,20 @@ func explainTabPlan(explain *sqlparser.ExplainTab, vschema plancontext.VSchema) 
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "Cannot find keyspace for: %s", ks)
 	}
 
-	return &engine.Send{
+	return newPlanResult(&engine.Send{
 		Keyspace:          keyspace,
 		TargetDestination: destination,
 		Query:             sqlparser.String(explain),
 		SingleShardOnly:   true,
-	}, nil
+	}, singleTable(keyspace.Name, explain.Table.Name.String())), nil
 }
 
-func buildVitessTypePlan(explain *sqlparser.ExplainStmt, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (engine.Primitive, error) {
+func buildVitessTypePlan(explain *sqlparser.ExplainStmt, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (*planResult, error) {
 	innerInstruction, err := createInstructionFor(sqlparser.String(explain.Statement), explain.Statement, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
 	if err != nil {
 		return nil, err
 	}
-	descriptions := treeLines(engine.PrimitiveToPlanDescription(innerInstruction))
+	descriptions := treeLines(engine.PrimitiveToPlanDescription(innerInstruction.primitive))
 
 	var rows [][]sqltypes.Value
 	for _, line := range descriptions {
@@ -108,7 +112,24 @@ func buildVitessTypePlan(explain *sqlparser.ExplainStmt, reservedVars *sqlparser
 		{Name: "query", Type: querypb.Type_VARCHAR},
 	}
 
-	return engine.NewRowsPrimitive(rows, fields), nil
+	return newPlanResult(engine.NewRowsPrimitive(rows, fields)), nil
+}
+
+func buildVTExplainTypePlan(explain *sqlparser.ExplainStmt, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (*planResult, error) {
+	input, err := createInstructionFor(sqlparser.String(explain.Statement), explain.Statement, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
+	if err != nil {
+		return nil, err
+	}
+	switch input.primitive.(type) {
+	case *engine.Insert, *engine.Delete, *engine.Update:
+		directives := explain.GetParsedComments().Directives()
+		if directives.IsSet(sqlparser.DirectiveVtexplainRunDMLQueries) {
+			break
+		}
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "explain format = vtexplain will actually run queries. `/*vt+ %s */` must be set to run DML queries in vtexplain. Example: `explain /*vt+ %s */ format = vtexplain delete from t1`", sqlparser.DirectiveVtexplainRunDMLQueries, sqlparser.DirectiveVtexplainRunDMLQueries)
+	}
+
+	return &planResult{primitive: &engine.VTExplain{Input: input.primitive}, tables: input.tables}, nil
 }
 
 func extractQuery(m map[string]any) string {

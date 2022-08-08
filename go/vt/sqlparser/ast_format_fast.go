@@ -1314,6 +1314,7 @@ func (node *ExplainStmt) formatFast(buf *TrackedBuffer) {
 		format = "format = " + node.Type.ToString() + " "
 	}
 	buf.WriteString("explain ")
+	node.Comments.formatFast(buf)
 	buf.WriteString(format)
 	node.Statement.formatFast(buf)
 }

@@ -1,5 +1,5 @@
 name: docker_test_cluster_25
-on: [push, pull_request]
+on: [push]
 jobs:
 
   build:
@@ -7,25 +7,24 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Configure git private repo access
+        env:
+          GITHUB_TOKEN: ${{ secrets.PLANETSCALE_ACTIONS_BOT_TOKEN }}
+        run: |
+          git config --global --add url."https://${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/"
 
-    - name: Set up Go
-      uses: actions/setup-go@v2
-      with:
-        go-version: 1.18.4
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.18.4
 
-    - name: Tune the OS
-      run: |
-        echo '1024 65535' | sudo tee -a /proc/sys/net/ipv4/ip_local_port_range
+      - name: Tune the OS
+        run: |
+          echo '1024 65535' | sudo tee -a /proc/sys/net/ipv4/ip_local_port_range
 
-    # TEMPORARY WHILE GITHUB FIXES THIS https://github.com/actions/virtual-environments/issues/3185
-    - name: Add the current IP address, long hostname and short hostname record to /etc/hosts file
-      run: |
-        echo -e "$(ip addr show eth0 | grep "inet\b" | awk '{print $2}' | cut -d/ -f1)\t$(hostname -f) $(hostname -s)" | sudo tee -a /etc/hosts
-    # DON'T FORGET TO REMOVE CODE ABOVE WHEN ISSUE IS ADRESSED!
+      - name: Check out code
+        uses: actions/checkout@v2
 
-    - name: Check out code
-      uses: actions/checkout@v2
-
-    - name: Run tests which require docker - 2
-      run: |
-        go run test.go -docker=true --follow -shard 25
+      - name: Run tests which require docker - 2
+        run: |
+          go run test.go -docker=true --follow -shard 25

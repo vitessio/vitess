@@ -25,7 +25,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
-func buildPlanForBypass(stmt sqlparser.Statement, _ *sqlparser.ReservedVars, vschema plancontext.VSchema) (engine.Primitive, error) {
+func buildPlanForBypass(stmt sqlparser.Statement, _ *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
 	switch vschema.Destination().(type) {
 	case key.DestinationExactKeyRange:
 		if _, ok := stmt.(*sqlparser.Insert); ok {
@@ -37,12 +37,13 @@ func buildPlanForBypass(stmt sqlparser.Statement, _ *sqlparser.ReservedVars, vsc
 	if err != nil {
 		return nil, err
 	}
-	return &engine.Send{
+	send := &engine.Send{
 		Keyspace:             keyspace,
 		TargetDestination:    vschema.Destination(),
 		Query:                sqlparser.String(stmt),
 		IsDML:                sqlparser.IsDMLStatement(stmt),
 		SingleShardOnly:      false,
 		MultishardAutocommit: sqlparser.MultiShardAutocommitDirective(stmt),
-	}, nil
+	}
+	return newPlanResult(send), nil
 }

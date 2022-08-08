@@ -28,6 +28,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtgate/logstats"
+
 	"github.com/segmentio/kafka-go"
 
 	"vitess.io/vitess/go/vt/vtgate/errorsanitizer"
@@ -257,7 +259,7 @@ func (ii *Insights) startInterval() {
 	ii.PeriodStart = time.Now()
 }
 
-func (ii *Insights) shouldSendToInsights(ls *LogStats) bool {
+func (ii *Insights) shouldSendToInsights(ls *logstats.LogStats) bool {
 	return ls.TotalTime().Milliseconds() > int64(ii.ResponseTimeThreshold) || ls.RowsRead >= uint64(ii.RowsReadThreshold) || ls.Error != nil
 }
 
@@ -386,7 +388,7 @@ func splitTables(tableList string) []string {
 	return ret
 }
 
-func (ii *Insights) makeSchemaChangeMessage(ls *LogStats) ([]byte, error) {
+func (ii *Insights) makeSchemaChangeMessage(ls *logstats.LogStats) ([]byte, error) {
 	stmt, err := sqlparser.Parse(ls.SQL)
 
 	if err != nil {
@@ -453,7 +455,7 @@ func (ii *Insights) makeSchemaChangeMessage(ls *LogStats) ([]byte, error) {
 }
 
 func (ii *Insights) handleMessage(record interface{}) {
-	ls, ok := record.(*LogStats)
+	ls, ok := record.(*logstats.LogStats)
 	if !ok {
 		log.Infof("not a LogStats: %v (%T)", record, record)
 		return
@@ -556,7 +558,7 @@ func maxDuration(a time.Duration, b time.Duration) time.Duration {
 	return b
 }
 
-func (ii *Insights) addToAggregates(ls *LogStats, sql string, tables []string) bool {
+func (ii *Insights) addToAggregates(ls *logstats.LogStats, sql string, tables []string) bool {
 	// no locks needed if all callers are on the same thread
 
 	var pa *QueryPatternAggregation
@@ -644,7 +646,7 @@ func hostnameOrEmpty() string {
 	return hostname
 }
 
-func (ii *Insights) makeQueryMessage(ls *LogStats, sql string, tables []string, tags []*pbvtgate.Query_Tag) ([]byte, error) {
+func (ii *Insights) makeQueryMessage(ls *logstats.LogStats, sql string, tables []string, tags []*pbvtgate.Query_Tag) ([]byte, error) {
 	addr, user := ls.RemoteAddrUsername()
 	var port *wrapperspb.UInt32Value
 	if strings.Contains(addr, ":") {

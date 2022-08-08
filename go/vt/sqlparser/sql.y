@@ -379,7 +379,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> GTID_SUBSET GTID_SUBTRACT WAIT_FOR_EXECUTED_GTID_SET WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS
 
 // Explain tokens
-%token <str> FORMAT TREE VITESS TRADITIONAL
+%token <str> FORMAT TREE VITESS TRADITIONAL VTEXPLAIN
 
 // Lock type tokens
 %token <str> LOCAL LOW_PRIORITY
@@ -4258,6 +4258,10 @@ explain_format_opt:
   {
     $$ = VitessType
   }
+| FORMAT '=' VTEXPLAIN
+  {
+    $$ = VTExplainType
+  }
 | FORMAT '=' TRADITIONAL
   {
     $$ = TraditionalType
@@ -4313,13 +4317,13 @@ wild_opt:
   }
 
 explain_statement:
-  explain_synonyms table_name wild_opt
+  explain_synonyms comment_opt table_name wild_opt
   {
-    $$ = &ExplainTab{Table: $2, Wild: $3}
+    $$ = &ExplainTab{Table: $3, Wild: $4}
   }
-| explain_synonyms explain_format_opt explainable_statement
+| explain_synonyms comment_opt explain_format_opt explainable_statement
   {
-    $$ = &ExplainStmt{Type: $2, Statement: $3}
+    $$ = &ExplainStmt{Type: $3, Statement: $4, Comments: Comments($2).Parsed()}
   }
 
 other_statement:

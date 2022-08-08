@@ -2301,7 +2301,8 @@ func EqualsRefOfExplainStmt(a, b *ExplainStmt) bool {
 		return false
 	}
 	return a.Type == b.Type &&
-		EqualsStatement(a.Statement, b.Statement)
+		EqualsStatement(a.Statement, b.Statement) &&
+		EqualsRefOfParsedComments(a.Comments, b.Comments)
 }
 
 // EqualsRefOfExplainTab does deep equals between the two objects.

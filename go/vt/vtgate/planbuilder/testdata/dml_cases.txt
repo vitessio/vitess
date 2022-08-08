@@ -23,7 +23,10 @@ Gen4 plan same as above
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "update m1 set val = 1"
-  }
+  },
+  "TablesUsed": [
+    "main.m1"
+  ]
 }
 Gen4 plan same as above
 
@@ -42,7 +45,10 @@ Gen4 plan same as above
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "update unsharded set val = 1"
-  }
+  },
+  "TablesUsed": [
+    "main.unsharded"
+  ]
 }
 Gen4 plan same as above
 
@@ -61,7 +67,10 @@ Gen4 plan same as above
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "update unsharded set col = (select col from unsharded limit 1)"
-  }
+  },
+  "TablesUsed": [
+    "main.unsharded"
+  ]
 }
 Gen4 plan same as above
 
@@ -80,7 +89,10 @@ Gen4 plan same as above
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "update unsharded set col = (select id from unsharded union select id from unsharded)"
-  }
+  },
+  "TablesUsed": [
+    "main.unsharded"
+  ]
 }
 Gen4 plan same as above
 
@@ -99,12 +111,15 @@ Gen4 plan same as above
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "update unsharded set col = (select id from unsharded as a join unsharded as b on a.id = b.id)"
-  }
+  },
+  "TablesUsed": [
+    "main.unsharded"
+  ]
 }
 Gen4 plan same as above
 
 # update with join subquery
-"update unsharded as foo left join (select id from unsharded where col is not null order by col desc limit 10) as keepers on foo.id = keepers.id set col1 = 'asdf' where keepers.id is null and foo.col is not null and foo.col < 1000"
+"update unsharded as foo left join (select id from unsharded where col is not null order by col desc limit 10) as keepers on foo.id = keepers.id set col1 = 'asdf' where keepers.id is null and foo.col is not null and foo.col \u003c 1000"
 {
   "QueryType": "UPDATE",
   "Original": "update unsharded as foo left join (select id from unsharded where col is not null order by col desc limit 10) as keepers on foo.id = keepers.id set col1 = 'asdf' where keepers.id is null and foo.col is not null and foo.col \u003c 1000",
@@ -118,7 +133,10 @@ Gen4 plan same as above
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "update unsharded as foo left join (select id from unsharded where col is not null order by col desc limit 10) as keepers on foo.id = keepers.id set col1 = 'asdf' where keepers.id is null and foo.col is not null and foo.col \u003c 1000"
-  }
+  },
+  "TablesUsed": [
+    "main.unsharded"
+  ]
 }
 Gen4 plan same as above
 
@@ -142,7 +160,10 @@ Gen4 plan same as above
       "INT64(1)"
     ],
     "Vindex": "user_index"
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 {
   "QueryType": "UPDATE",
@@ -162,7 +183,10 @@ Gen4 plan same as above
       "INT64(1)"
     ],
     "Vindex": "user_index"
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 
 # update: routing rules for subquery.
@@ -180,9 +204,30 @@ Gen4 plan same as above
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "update unsharded_a set a = (select a from unsharded as route2)"
-  }
+  },
+  "TablesUsed": [
+    "main.unsharded_a"
+  ]
 }
-Gen4 plan same as above
+{
+  "QueryType": "UPDATE",
+  "Original": "update unsharded_a set a=(select a from route2)",
+  "Instructions": {
+    "OperatorType": "Update",
+    "Variant": "Unsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetTabletType": "PRIMARY",
+    "MultiShardAutocommit": false,
+    "Query": "update unsharded_a set a = (select a from unsharded as route2)"
+  },
+  "TablesUsed": [
+    "main.unsharded",
+    "main.unsharded_a"
+  ]
+}
 
 # delete unsharded
 "delete from unsharded"
@@ -199,7 +244,10 @@ Gen4 plan same as above
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "delete from unsharded"
-  }
+  },
+  "TablesUsed": [
+    "main.unsharded"
+  ]
 }
 Gen4 plan same as above
 
@@ -223,7 +271,10 @@ Gen4 plan same as above
       "INT64(1)"
     ],
     "Vindex": "user_index"
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 {
   "QueryType": "UPDATE",
@@ -243,7 +294,10 @@ Gen4 plan same as above
       "INT64(1)"
     ],
     "Vindex": "user_index"
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 
 # update by primary keyspace id with alias
@@ -266,7 +320,10 @@ Gen4 plan same as above
       "INT64(1)"
     ],
     "Vindex": "user_index"
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 {
   "QueryType": "UPDATE",
@@ -286,7 +343,10 @@ Gen4 plan same as above
       "INT64(1)"
     ],
     "Vindex": "user_index"
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 
 # update by primary keyspace id with parenthesized expression
@@ -309,7 +369,10 @@ Gen4 plan same as above
       "INT64(1)"
     ],
     "Vindex": "user_index"
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 {
   "QueryType": "UPDATE",
@@ -329,7 +392,10 @@ Gen4 plan same as above
       "INT64(1)"
     ],
     "Vindex": "user_index"
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 
 # update by primary keyspace id with multi-part where clause with parens
@@ -352,7 +418,10 @@ Gen4 plan same as above
       "INT64(1)"
     ],
     "Vindex": "user_index"
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 {
   "QueryType": "UPDATE",
@@ -372,7 +441,10 @@ Gen4 plan same as above
       "INT64(1)"
     ],
     "Vindex": "user_index"
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 
 # update by primary keyspace id, changing one vindex column
@@ -401,7 +473,10 @@ Gen4 plan same as above
       "INT64(1)"
     ],
     "Vindex": "user_index"
-  }
+  },
+  "TablesUsed": [
+    "user.user_metadata"
+  ]
 }
 {
   "QueryType": "UPDATE",
@@ -427,7 +502,10 @@ Gen4 plan same as above
       "INT64(1)"
     ],
     "Vindex": "user_index"
-  }
+  },
+  "TablesUsed": [
+    "user.user_metadata"
+  ]
 }
 
 # update by primary keyspace id, changing same vindex twice
@@ -462,7 +540,10 @@ Gen4 plan same as above
       "INT64(1)"
     ],
     "Vindex": "user_index"
-  }
+  },
+  "TablesUsed": [
+    "user.user_metadata"
+  ]
 }
 {
   "QueryType": "UPDATE",
@@ -489,7 +570,10 @@ Gen4 plan same as above
       "INT64(1)"
     ],
     "Vindex": "user_index"
-  }
+  },
+  "TablesUsed": [
+    "user.user_metadata"
+  ]
 }
 
 # update by primary keyspace id, changing one vindex column, using order by and limit
@@ -518,7 +602,10 @@ Gen4 plan same as above
       "INT64(1)"
     ],
     "Vindex": "user_index"
-  }
+  },
+  "TablesUsed": [
+    "user.user_metadata"
+  ]
 }
 {
   "QueryType": "UPDATE",
@@ -544,7 +631,10 @@ Gen4 plan same as above
       "INT64(1)"
     ],
     "Vindex": "user_index"
-  }
+  },
+  "TablesUsed": [
+    "user.user_metadata"
+  ]
 }
 
 # update changes non owned vindex column
@@ -573,7 +663,10 @@ Gen4 plan same as above
       "INT64(1)"
     ],
     "Vindex": "user_index"
-  }
+  },
+  "TablesUsed": [
+    "user.music_extra"
+  ]
 }
 {
   "QueryType": "UPDATE",
@@ -599,7 +692,10 @@ Gen4 plan same as above
       "INT64(1)"
     ],
     "Vindex": "user_index"
-  }
+  },
+  "TablesUsed": [
+    "user.music_extra"
+  ]
 }
 
 # update by primary keyspace id, stray where clause
@@ -622,7 +718,10 @@ Gen4 plan same as above
       "INT64(1)"
     ],
     "Vindex": "user_index"
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 {
   "QueryType": "UPDATE",
@@ -642,7 +741,10 @@ Gen4 plan same as above
       "INT64(1)"
     ],
     "Vindex": "user_index"
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 
 # update by primary keyspace id, stray where clause with conversion error
@@ -665,7 +767,10 @@ Gen4 plan same as above
       "INT64(1)"
     ],
     "Vindex": "user_index"
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 {
   "QueryType": "UPDATE",
@@ -685,7 +790,10 @@ Gen4 plan same as above
       "INT64(1)"
     ],
     "Vindex": "user_index"
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 
 # delete from by primary keyspace id
@@ -711,7 +819,10 @@ Gen4 plan same as above
       "INT64(1)"
     ],
     "Vindex": "user_index"
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 Gen4 plan same as above
 
@@ -730,7 +841,11 @@ Gen4 plan same as above
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "delete a from unsharded_a as a, unsharded_b as b where a.id = b.id and b.val = 1"
-  }
+  },
+  "TablesUsed": [
+    "main.unsharded_a",
+    "main.unsharded_b"
+  ]
 }
 Gen4 plan same as above
 
@@ -749,12 +864,16 @@ Gen4 plan same as above
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "delete a from unsharded_a as a join unsharded_b as b on a.id = b.id where b.val = 1"
-  }
+  },
+  "TablesUsed": [
+    "main.unsharded_a",
+    "main.unsharded_b"
+  ]
 }
 Gen4 plan same as above
 
 #delete with join from subquery
-"delete foo from unsharded as foo left join (select id from unsharded where col is not null order by col desc limit 10) as keepers on foo.id = keepers.id where keepers.id is null and foo.col is not null and foo.col < 1000"
+"delete foo from unsharded as foo left join (select id from unsharded where col is not null order by col desc limit 10) as keepers on foo.id = keepers.id where keepers.id is null and foo.col is not null and foo.col \u003c 1000"
 {
   "QueryType": "DELETE",
   "Original": "delete foo from unsharded as foo left join (select id from unsharded where col is not null order by col desc limit 10) as keepers on foo.id = keepers.id where keepers.id is null and foo.col is not null and foo.col \u003c 1000",
@@ -768,7 +887,11 @@ Gen4 plan same as above
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "delete foo from unsharded as foo left join (select id from unsharded where col is not null order by col desc limit 10) as keepers on foo.id = keepers.id where keepers.id is null and foo.col is not null and foo.col \u003c 1000"
-  }
+  },
+  "TablesUsed": [
+    "main.",
+    "main.unsharded"
+  ]
 }
 Gen4 plan same as above
 
@@ -795,7 +918,10 @@ Gen4 plan same as above
       "INT64(1)"
     ],
     "Vindex": "user_index"
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 Gen4 plan same as above
 
@@ -814,7 +940,10 @@ Gen4 plan same as above
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "delete from unsharded_a where a = (select a from unsharded as route2)"
-  }
+  },
+  "TablesUsed": [
+    "main.unsharded_a"
+  ]
 }
 Gen4 plan same as above
 
@@ -838,7 +967,10 @@ Gen4 plan same as above
       "INT64(1)"
     ],
     "Vindex": "music_user_map"
-  }
+  },
+  "TablesUsed": [
+    "user.music"
+  ]
 }
 {
   "QueryType": "UPDATE",
@@ -858,7 +990,10 @@ Gen4 plan same as above
       "INT64(1)"
     ],
     "Vindex": "music_user_map"
-  }
+  },
+  "TablesUsed": [
+    "user.music"
+  ]
 }
 
 # update multi-table ansi join
@@ -876,7 +1011,11 @@ Gen4 plan same as above
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "update unsharded_a as a join unsharded_b as b on a.id = b.id set a.val = 'foo' where b.val = 1"
-  }
+  },
+  "TablesUsed": [
+    "main.unsharded_a",
+    "main.unsharded_b"
+  ]
 }
 Gen4 plan same as above
 
@@ -895,7 +1034,11 @@ Gen4 plan same as above
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "update unsharded_a as a, unsharded_b as b set a.val = 'foo' where a.id = b.id and b.val = 1"
-  }
+  },
+  "TablesUsed": [
+    "main.unsharded_a",
+    "main.unsharded_b"
+  ]
 }
 Gen4 plan same as above
 
@@ -922,7 +1065,10 @@ Gen4 plan same as above
       "INT64(1)"
     ],
     "Vindex": "music_user_map"
-  }
+  },
+  "TablesUsed": [
+    "user.music"
+  ]
 }
 Gen4 plan same as above
 
@@ -946,7 +1092,10 @@ Gen4 plan same as above
       "INT64(1)"
     ],
     "Vindex": "user_index"
-  }
+  },
+  "TablesUsed": [
+    "user.music_extra"
+  ]
 }
 Gen4 plan same as above
 
@@ -966,7 +1115,10 @@ Gen4 plan same as above
     "MultiShardAutocommit": false,
     "Query": "insert into unsharded values ()",
     "TableName": "unsharded"
-  }
+  },
+  "TablesUsed": [
+    "main.unsharded"
+  ]
 }
 Gen4 plan same as above
 
@@ -986,7 +1138,10 @@ Gen4 plan same as above
     "MultiShardAutocommit": false,
     "Query": "insert into unsharded values (1, 2)",
     "TableName": "unsharded"
-  }
+  },
+  "TablesUsed": [
+    "main.unsharded"
+  ]
 }
 Gen4 plan same as above
 
@@ -1006,7 +1161,10 @@ Gen4 plan same as above
     "MultiShardAutocommit": false,
     "Query": "insert into unsharded values (1, 2) on duplicate key update x = 3",
     "TableName": "unsharded"
-  }
+  },
+  "TablesUsed": [
+    "main.unsharded"
+  ]
 }
 Gen4 plan same as above
 
@@ -1026,7 +1184,10 @@ Gen4 plan same as above
     "MultiShardAutocommit": false,
     "Query": "insert into unsharded_authoritative(col1, col2) values (:__seq0, 1)",
     "TableName": "unsharded_authoritative"
-  }
+  },
+  "TablesUsed": [
+    "main.unsharded_authoritative"
+  ]
 }
 Gen4 plan same as above
 
@@ -1051,7 +1212,10 @@ Gen4 plan same as above
       "music_user_map": "INT64(2)",
       "user_index": "INT64(1)"
     }
-  }
+  },
+  "TablesUsed": [
+    "user.music"
+  ]
 }
 Gen4 plan same as above
 
@@ -1076,7 +1240,10 @@ Gen4 plan same as above
       "music_user_map": "INT64(2), INT64(4)",
       "user_index": "INT64(1), INT64(3)"
     }
-  }
+  },
+  "TablesUsed": [
+    "user.music"
+  ]
 }
 Gen4 plan same as above
 
@@ -1096,9 +1263,31 @@ Gen4 plan same as above
     "MultiShardAutocommit": false,
     "Query": "insert into unsharded select id from unsharded_auto for update",
     "TableName": "unsharded"
-  }
+  },
+  "TablesUsed": [
+    "main.unsharded"
+  ]
 }
-Gen4 plan same as above
+{
+  "QueryType": "INSERT",
+  "Original": "insert into unsharded select id from unsharded_auto",
+  "Instructions": {
+    "OperatorType": "Insert",
+    "Variant": "Unsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetTabletType": "PRIMARY",
+    "MultiShardAutocommit": false,
+    "Query": "insert into unsharded select id from unsharded_auto for update",
+    "TableName": "unsharded"
+  },
+  "TablesUsed": [
+    "main.unsharded",
+    "main.unsharded_auto"
+  ]
+}
 
 # insert unsharded with select with join
 "insert into unsharded select id from unsharded join unsharded_auto"
@@ -1116,9 +1305,31 @@ Gen4 plan same as above
     "MultiShardAutocommit": false,
     "Query": "insert into unsharded select id from unsharded join unsharded_auto for update",
     "TableName": "unsharded"
-  }
+  },
+  "TablesUsed": [
+    "main.unsharded"
+  ]
 }
-Gen4 plan same as above
+{
+  "QueryType": "INSERT",
+  "Original": "insert into unsharded select id from unsharded join unsharded_auto",
+  "Instructions": {
+    "OperatorType": "Insert",
+    "Variant": "Unsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetTabletType": "PRIMARY",
+    "MultiShardAutocommit": false,
+    "Query": "insert into unsharded select id from unsharded join unsharded_auto for update",
+    "TableName": "unsharded"
+  },
+  "TablesUsed": [
+    "main.unsharded",
+    "main.unsharded_auto"
+  ]
+}
 
 # insert unsharded, invalid value for auto-inc
 "insert into unsharded_auto(id, val) values(18446744073709551616, 'aa')"
@@ -1136,7 +1347,10 @@ Gen4 plan same as above
     "MultiShardAutocommit": false,
     "Query": "insert into unsharded_auto(id, val) values (:__seq0, 'aa')",
     "TableName": "unsharded_auto"
-  }
+  },
+  "TablesUsed": [
+    "main.unsharded_auto"
+  ]
 }
 Gen4 plan same as above
 
@@ -1156,7 +1370,10 @@ Gen4 plan same as above
     "MultiShardAutocommit": false,
     "Query": "insert into unsharded_auto(id, val) values (:__seq0, 'aa')",
     "TableName": "unsharded_auto"
-  }
+  },
+  "TablesUsed": [
+    "main.unsharded_auto"
+  ]
 }
 Gen4 plan same as above
 
@@ -1176,7 +1393,10 @@ Gen4 plan same as above
     "MultiShardAutocommit": false,
     "Query": "insert into unsharded_auto(val, id) values ('aa', :__seq0)",
     "TableName": "unsharded_auto"
-  }
+  },
+  "TablesUsed": [
+    "main.unsharded_auto"
+  ]
 }
 Gen4 plan same as above
 
@@ -1196,7 +1416,10 @@ Gen4 plan same as above
     "MultiShardAutocommit": false,
     "Query": "insert into unsharded_auto(val, id) values (false, :__seq0)",
     "TableName": "unsharded_auto"
-  }
+  },
+  "TablesUsed": [
+    "main.unsharded_auto"
+  ]
 }
 Gen4 plan same as above
 
@@ -1216,7 +1439,10 @@ Gen4 plan same as above
     "MultiShardAutocommit": false,
     "Query": "insert into unsharded_auto(id, val) values (:__seq0, 'aa'), (:__seq1, 'bb')",
     "TableName": "unsharded_auto"
-  }
+  },
+  "TablesUsed": [
+    "main.unsharded_auto"
+  ]
 }
 Gen4 plan same as above
 
@@ -1236,7 +1462,10 @@ Gen4 plan same as above
     "MultiShardAutocommit": false,
     "Query": "insert into unsharded values (1, 1)",
     "TableName": "unsharded"
-  }
+  },
+  "TablesUsed": [
+    "main.unsharded"
+  ]
 }
 Gen4 plan same as above
 
@@ -1261,7 +1490,10 @@ Gen4 plan same as above
       "name_user_map": "NULL",
       "user_index": ":__seq0"
     }
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 Gen4 plan same as above
 
@@ -1286,7 +1518,10 @@ Gen4 plan same as above
       "name_user_map": "NULL",
       "user_index": ":__seq0"
     }
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 Gen4 plan same as above
 
@@ -1314,7 +1549,10 @@ Gen4 plan same as above
     "VindexValues": {
       "user_index": "INT64(1)"
     }
-  }
+  },
+  "TablesUsed": [
+    "user.authoritative"
+  ]
 }
 Gen4 plan same as above
 
@@ -1339,7 +1577,10 @@ Gen4 plan same as above
       "name_user_map": "NULL",
       "user_index": ":__seq0"
     }
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 Gen4 plan same as above
 
@@ -1364,7 +1605,10 @@ Gen4 plan same as above
       "name_user_map": "NULL",
       "user_index": ":__seq0"
     }
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 Gen4 plan same as above
 
@@ -1390,7 +1634,10 @@ Gen4 plan same as above
       "name_user_map": "NULL",
       "user_index": ":__seq0"
     }
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 Gen4 plan same as above
 
@@ -1416,7 +1663,10 @@ Gen4 plan same as above
       "name_user_map": "NULL",
       "user_index": ":__seq0"
     }
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 Gen4 plan same as above
 
@@ -1441,7 +1691,10 @@ Gen4 plan same as above
       "name_user_map": "NULL",
       "user_index": ":__seq0"
     }
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 Gen4 plan same as above
 
@@ -1466,7 +1719,10 @@ Gen4 plan same as above
       "name_user_map": "NULL",
       "user_index": ":__seq0"
     }
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 Gen4 plan same as above
 
@@ -1491,7 +1747,10 @@ Gen4 plan same as above
       "name_user_map": "NULL",
       "user_index": ":__seq0"
     }
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 Gen4 plan same as above
 
@@ -1516,7 +1775,10 @@ Gen4 plan same as above
       "name_user_map": "NULL",
       "user_index": ":__seq0"
     }
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 Gen4 plan same as above
 
@@ -1541,7 +1803,10 @@ Gen4 plan same as above
       "name_user_map": "VARCHAR(\"foo\")",
       "user_index": ":__seq0"
     }
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 Gen4 plan same as above
 
@@ -1564,7 +1829,10 @@ Gen4 plan same as above
     "VindexValues": {
       "user_index": "NULL"
     }
-  }
+  },
+  "TablesUsed": [
+    "user.user_extra"
+  ]
 }
 Gen4 plan same as above
 
@@ -1587,7 +1855,10 @@ Gen4 plan same as above
     "VindexValues": {
       "user_index": "INT64(1)"
     }
-  }
+  },
+  "TablesUsed": [
+    "user.weird`name"
+  ]
 }
 Gen4 plan same as above
 
@@ -1607,9 +1878,31 @@ Gen4 plan same as above
     "MultiShardAutocommit": false,
     "Query": "insert into unsharded select 1 from dual union select 1 from dual for update",
     "TableName": "unsharded"
-  }
+  },
+  "TablesUsed": [
+    "main.unsharded"
+  ]
 }
-Gen4 plan same as above
+{
+  "QueryType": "INSERT",
+  "Original": "insert into unsharded select 1 from dual union select 1 from dual",
+  "Instructions": {
+    "OperatorType": "Insert",
+    "Variant": "Unsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetTabletType": "PRIMARY",
+    "MultiShardAutocommit": false,
+    "Query": "insert into unsharded select 1 from dual union select 1 from dual for update",
+    "TableName": "unsharded"
+  },
+  "TablesUsed": [
+    "main.dual",
+    "main.unsharded"
+  ]
+}
 
 # insert for non-vindex autoinc, invalid value
 "insert into user_extra(nonid, extra_id) values (2, 18446744073709551616)"
@@ -1630,7 +1923,10 @@ Gen4 plan same as above
     "VindexValues": {
       "user_index": "NULL"
     }
-  }
+  },
+  "TablesUsed": [
+    "user.user_extra"
+  ]
 }
 Gen4 plan same as above
 
@@ -1654,7 +1950,10 @@ Gen4 plan same as above
       "music_user_map": "INT64(1)",
       "user_index": "DECIMAL(18446744073709551616)"
     }
-  }
+  },
+  "TablesUsed": [
+    "user.music_extra"
+  ]
 }
 Gen4 plan same as above
 
@@ -1689,7 +1988,10 @@ Gen4 plan same as above
       "name_user_map": "NULL, NULL",
       "user_index": ":__seq0, :__seq1"
     }
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 Gen4 plan same as above
 
@@ -1715,7 +2017,10 @@ Gen4 plan same as above
       "name_user_map": "NULL, NULL",
       "user_index": ":__seq0, :__seq1"
     }
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 Gen4 plan same as above
 
@@ -1740,7 +2045,10 @@ Gen4 plan same as above
       "name_user_map": "NULL, NULL",
       "user_index": ":__seq0, :__seq1"
     }
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 Gen4 plan same as above
 
@@ -1765,7 +2073,10 @@ Gen4 plan same as above
     "MultiShardAutocommit": false,
     "Query": "replace into unsharded values (1, 2)",
     "TableName": "unsharded"
-  }
+  },
+  "TablesUsed": [
+    "main.unsharded"
+  ]
 }
 Gen4 plan same as above
 
@@ -1785,9 +2096,31 @@ Gen4 plan same as above
     "MultiShardAutocommit": false,
     "Query": "replace into unsharded select id from unsharded_auto for update",
     "TableName": "unsharded"
-  }
+  },
+  "TablesUsed": [
+    "main.unsharded"
+  ]
 }
-Gen4 plan same as above
+{
+  "QueryType": "INSERT",
+  "Original": "replace into unsharded select id from unsharded_auto",
+  "Instructions": {
+    "OperatorType": "Insert",
+    "Variant": "Unsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetTabletType": "PRIMARY",
+    "MultiShardAutocommit": false,
+    "Query": "replace into unsharded select id from unsharded_auto for update",
+    "TableName": "unsharded"
+  },
+  "TablesUsed": [
+    "main.unsharded",
+    "main.unsharded_auto"
+  ]
+}
 
 # replace unsharded, invalid value for auto-inc
 "replace into unsharded_auto(id, val) values(18446744073709551616, 'aa')"
@@ -1805,7 +2138,10 @@ Gen4 plan same as above
     "MultiShardAutocommit": false,
     "Query": "replace into unsharded_auto(id, val) values (:__seq0, 'aa')",
     "TableName": "unsharded_auto"
-  }
+  },
+  "TablesUsed": [
+    "main.unsharded_auto"
+  ]
 }
 Gen4 plan same as above
 
@@ -1825,7 +2161,10 @@ Gen4 plan same as above
     "MultiShardAutocommit": false,
     "Query": "replace into unsharded_auto(id, val) values (:__seq0, 'aa')",
     "TableName": "unsharded_auto"
-  }
+  },
+  "TablesUsed": [
+    "main.unsharded_auto"
+  ]
 }
 Gen4 plan same as above
 
@@ -1845,7 +2184,10 @@ Gen4 plan same as above
     "MultiShardAutocommit": false,
     "Query": "replace into unsharded_auto(val, id) values ('aa', :__seq0)",
     "TableName": "unsharded_auto"
-  }
+  },
+  "TablesUsed": [
+    "main.unsharded_auto"
+  ]
 }
 Gen4 plan same as above
 
@@ -1865,7 +2207,10 @@ Gen4 plan same as above
     "MultiShardAutocommit": false,
     "Query": "replace into unsharded_auto(id, val) values (:__seq0, 'aa'), (:__seq1, 'bb')",
     "TableName": "unsharded_auto"
-  }
+  },
+  "TablesUsed": [
+    "main.unsharded_auto"
+  ]
 }
 Gen4 plan same as above
 
@@ -1895,7 +2240,10 @@ Gen4 plan same as above
       "colb_colc_map": "INT64(2), INT64(3)",
       "kid_index": "INT64(4)"
     }
-  }
+  },
+  "TablesUsed": [
+    "user.multicolvin"
+  ]
 }
 Gen4 plan same as above
 
@@ -1919,7 +2267,10 @@ Gen4 plan same as above
       "cola_kid_map": "INT64(2), INT64(1)",
       "kid_index": "INT64(1)"
     }
-  }
+  },
+  "TablesUsed": [
+    "user.overlap_vindex"
+  ]
 }
 Gen4 plan same as above
 
@@ -1944,7 +2295,10 @@ Gen4 plan same as above
       "colb_colc_map": "INT64(2), INT64(6), INT64(3), INT64(7)",
       "kid_index": "INT64(4), INT64(8)"
     }
-  }
+  },
+  "TablesUsed": [
+    "user.multicolvin"
+  ]
 }
 Gen4 plan same as above
 
@@ -1971,7 +2325,10 @@ Gen4 plan same as above
       "INT64(1)"
     ],
     "Vindex": "kid_index"
-  }
+  },
+  "TablesUsed": [
+    "user.multicolvin"
+  ]
 }
 Gen4 plan same as above
 
@@ -2001,7 +2358,10 @@ Gen4 plan same as above
       "INT64(1)"
     ],
     "Vindex": "kid_index"
-  }
+  },
+  "TablesUsed": [
+    "user.multicolvin"
+  ]
 }
 {
   "QueryType": "UPDATE",
@@ -2027,7 +2387,10 @@ Gen4 plan same as above
       "INT64(1)"
     ],
     "Vindex": "kid_index"
-  }
+  },
+  "TablesUsed": [
+    "user.multicolvin"
+  ]
 }
 
 # update multiple vindexes, with multi column vindex
@@ -2057,7 +2420,10 @@ Gen4 plan same as above
       "INT64(1)"
     ],
     "Vindex": "kid_index"
-  }
+  },
+  "TablesUsed": [
+    "user.multicolvin"
+  ]
 }
 {
   "QueryType": "UPDATE",
@@ -2084,7 +2450,10 @@ Gen4 plan same as above
       "INT64(1)"
     ],
     "Vindex": "kid_index"
-  }
+  },
+  "TablesUsed": [
+    "user.multicolvin"
+  ]
 }
 
 # update with no primary vindex on where clause (scatter update)
@@ -2103,7 +2472,10 @@ Gen4 plan same as above
     "MultiShardAutocommit": false,
     "Query": "update user_extra set val = 1",
     "Table": "user_extra"
-  }
+  },
+  "TablesUsed": [
+    "user.user_extra"
+  ]
 }
 Gen4 plan same as above
 
@@ -2123,7 +2495,10 @@ Gen4 plan same as above
     "MultiShardAutocommit": false,
     "Query": "update user_extra set val = 1",
     "Table": "user_extra"
-  }
+  },
+  "TablesUsed": [
+    "user.user_extra"
+  ]
 }
 Gen4 plan same as above
 
@@ -2143,7 +2518,10 @@ Gen4 plan same as above
     "MultiShardAutocommit": true,
     "Query": "update /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ user_extra set val = 1",
     "Table": "user_extra"
-  }
+  },
+  "TablesUsed": [
+    "user.user_extra"
+  ]
 }
 Gen4 plan same as above
 
@@ -2164,7 +2542,10 @@ Gen4 plan same as above
     "Query": "update /*vt+ QUERY_TIMEOUT_MS=1 */ user_extra set val = 1",
     "QueryTimeout": 1,
     "Table": "user_extra"
-  }
+  },
+  "TablesUsed": [
+    "user.user_extra"
+  ]
 }
 Gen4 plan same as above
 
@@ -2184,7 +2565,10 @@ Gen4 plan same as above
     "MultiShardAutocommit": false,
     "Query": "update user_extra set val = 1 where id between 1 and 2",
     "Table": "user_extra"
-  }
+  },
+  "TablesUsed": [
+    "user.user_extra"
+  ]
 }
 Gen4 plan same as above
 
@@ -2208,7 +2592,10 @@ Gen4 plan same as above
       "(INT64(1), INT64(2))"
     ],
     "Vindex": "user_index"
-  }
+  },
+  "TablesUsed": [
+    "user.user_extra"
+  ]
 }
 Gen4 plan same as above
 
@@ -2228,7 +2615,10 @@ Gen4 plan same as above
     "MultiShardAutocommit": false,
     "Query": "update user_extra set val = 1 where `name` = 'foo'",
     "Table": "user_extra"
-  }
+  },
+  "TablesUsed": [
+    "user.user_extra"
+  ]
 }
 Gen4 plan same as above
 
@@ -2248,7 +2638,10 @@ Gen4 plan same as above
     "MultiShardAutocommit": false,
     "Query": "update user_extra set val = 1 where id in (1, 2)",
     "Table": "user_extra"
-  }
+  },
+  "TablesUsed": [
+    "user.user_extra"
+  ]
 }
 Gen4 plan same as above
 
@@ -2268,7 +2661,10 @@ Gen4 plan same as above
     "MultiShardAutocommit": false,
     "Query": "update user_extra set val = 1 where `name` = 'foo' or id = 1",
     "Table": "user_extra"
-  }
+  },
+  "TablesUsed": [
+    "user.user_extra"
+  ]
 }
 Gen4 plan same as above
 
@@ -2288,7 +2684,10 @@ Gen4 plan same as above
     "MultiShardAutocommit": false,
     "Query": "delete from user_extra",
     "Table": "user_extra"
-  }
+  },
+  "TablesUsed": [
+    "user.user_extra"
+  ]
 }
 Gen4 plan same as above
 
@@ -2308,7 +2707,10 @@ Gen4 plan same as above
     "MultiShardAutocommit": false,
     "Query": "delete from user_extra",
     "Table": "user_extra"
-  }
+  },
+  "TablesUsed": [
+    "user.user_extra"
+  ]
 }
 Gen4 plan same as above
 
@@ -2328,7 +2730,10 @@ Gen4 plan same as above
     "MultiShardAutocommit": false,
     "Query": "delete from user_extra where user_id between 1 and 2",
     "Table": "user_extra"
-  }
+  },
+  "TablesUsed": [
+    "user.user_extra"
+  ]
 }
 Gen4 plan same as above
 
@@ -2348,7 +2753,10 @@ Gen4 plan same as above
     "MultiShardAutocommit": false,
     "Query": "delete from user_extra where `name` = 'jose'",
     "Table": "user_extra"
-  }
+  },
+  "TablesUsed": [
+    "user.user_extra"
+  ]
 }
 Gen4 plan same as above
 
@@ -2368,7 +2776,10 @@ Gen4 plan same as above
     "MultiShardAutocommit": true,
     "Query": "delete /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ from user_extra where `name` = 'jose'",
     "Table": "user_extra"
-  }
+  },
+  "TablesUsed": [
+    "user.user_extra"
+  ]
 }
 Gen4 plan same as above
 
@@ -2389,7 +2800,10 @@ Gen4 plan same as above
     "Query": "delete /*vt+ QUERY_TIMEOUT_MS=1 */ from user_extra where `name` = 'jose'",
     "QueryTimeout": 1,
     "Table": "user_extra"
-  }
+  },
+  "TablesUsed": [
+    "user.user_extra"
+  ]
 }
 Gen4 plan same as above
 
@@ -2413,7 +2827,10 @@ Gen4 plan same as above
       "(INT64(1), INT64(2))"
     ],
     "Vindex": "user_index"
-  }
+  },
+  "TablesUsed": [
+    "user.user_extra"
+  ]
 }
 Gen4 plan same as above
 
@@ -2432,9 +2849,31 @@ Gen4 plan same as above
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "update unsharded set col = (select id from unsharded_a where id = unsharded.col) where col = (select id from unsharded_b)"
-  }
+  },
+  "TablesUsed": [
+    "main.unsharded"
+  ]
 }
-Gen4 plan same as above
+{
+  "QueryType": "UPDATE",
+  "Original": "update unsharded set col = (select id from unsharded_a where id = unsharded.col) where col = (select id from unsharded_b)",
+  "Instructions": {
+    "OperatorType": "Update",
+    "Variant": "Unsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetTabletType": "PRIMARY",
+    "MultiShardAutocommit": false,
+    "Query": "update unsharded set col = (select id from unsharded_a where id = unsharded.col) where col = (select id from unsharded_b)"
+  },
+  "TablesUsed": [
+    "main.unsharded",
+    "main.unsharded_a",
+    "main.unsharded_b"
+  ]
+}
 
 # unsharded delete where inner query references outer query
 "delete from unsharded where col = (select id from unsharded_a where id = unsharded.col)"
@@ -2451,7 +2890,10 @@ Gen4 plan same as above
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
     "Query": "delete from unsharded where col = (select id from unsharded_a where id = unsharded.col)"
-  }
+  },
+  "TablesUsed": [
+    "main.unsharded"
+  ]
 }
 Gen4 plan same as above
 
@@ -2481,7 +2923,10 @@ Gen4 plan same as above
       "INT64(1)"
     ],
     "Vindex": "user_index"
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 {
   "QueryType": "UPDATE",
@@ -2507,7 +2952,10 @@ Gen4 plan same as above
       "INT64(1)"
     ],
     "Vindex": "user_index"
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 
 # insert using last_insert_id
@@ -2526,7 +2974,10 @@ Gen4 plan same as above
     "MultiShardAutocommit": false,
     "Query": "insert into unsharded values (:__lastInsertId, 2)",
     "TableName": "unsharded"
-  }
+  },
+  "TablesUsed": [
+    "main.unsharded"
+  ]
 }
 Gen4 plan same as above
 
@@ -2556,7 +3007,10 @@ Gen4 plan same as above
       "(INT64(1), INT64(2), INT64(3))"
     ],
     "Vindex": "user_index"
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 Gen4 plan same as above
 
@@ -2582,7 +3036,10 @@ Gen4 plan same as above
     "OwnedVindexQuery": "select Id, `Name`, Costly, `name` = null from `user` for update",
     "Query": "update `user` set `name` = null",
     "Table": "user"
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 Gen4 plan same as above
 
@@ -2608,7 +3065,10 @@ Gen4 plan same as above
     "OwnedVindexQuery": "select Id, `Name`, Costly, `name` = null from `user` where id + 1 = 2 for update",
     "Query": "update `user` set `name` = null where id + 1 = 2",
     "Table": "user"
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 Gen4 plan same as above
 
@@ -2635,7 +3095,10 @@ Gen4 plan same as above
       "(INT64(1), INT64(2), INT64(3))"
     ],
     "Vindex": "user_index"
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 Gen4 plan same as above
 
@@ -2658,7 +3121,10 @@ Gen4 plan same as above
     "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where id + 1 = 2 for update",
     "Query": "delete from `user` where id + 1 = 2",
     "Table": "user"
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 Gen4 plan same as above
 
@@ -2681,7 +3147,10 @@ Gen4 plan same as above
     "OwnedVindexQuery": "select Id, `Name`, Costly from `user` for update",
     "Query": "delete from `user`",
     "Table": "user"
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 Gen4 plan same as above
 
@@ -2708,7 +3177,10 @@ Gen4 plan same as above
       "INT64(1)"
     ],
     "Vindex": "music_user_map"
-  }
+  },
+  "TablesUsed": [
+    "user.music"
+  ]
 }
 Gen4 plan same as above
 
@@ -2728,7 +3200,10 @@ Gen4 plan same as above
     "MultiShardAutocommit": false,
     "Query": "update `user` set val = 1",
     "Table": "user"
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 Gen4 plan same as above
 
@@ -2751,7 +3226,10 @@ Gen4 plan same as above
     "OwnedVindexQuery": "select Id, `Name`, Costly from `user` for update",
     "Query": "delete from `user`",
     "Table": "user"
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 Gen4 plan same as above
 
@@ -2781,7 +3259,10 @@ Gen4 plan same as above
       "INT64(1)"
     ],
     "Vindex": "kid_index"
-  }
+  },
+  "TablesUsed": [
+    "user.multicolvin"
+  ]
 }
 {
   "QueryType": "UPDATE",
@@ -2807,7 +3288,10 @@ Gen4 plan same as above
       "INT64(1)"
     ],
     "Vindex": "kid_index"
-  }
+  },
+  "TablesUsed": [
+    "user.multicolvin"
+  ]
 }
 
 # update with binary value
@@ -2836,7 +3320,10 @@ Gen4 plan same as above
       "INT64(1)"
     ],
     "Vindex": "user_index"
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 {
   "QueryType": "UPDATE",
@@ -2862,7 +3349,10 @@ Gen4 plan same as above
       "INT64(1)"
     ],
     "Vindex": "user_index"
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 
 # delete with binary value
@@ -2884,7 +3374,10 @@ Gen4 plan same as above
     "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where `name` = _binary 'abc' for update",
     "Query": "delete from `user` where `name` = _binary 'abc'",
     "Table": "user"
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 Gen4 plan same as above
 
@@ -2907,7 +3400,10 @@ Gen4 plan same as above
     "OwnedVindexQuery": "select Id, `Name`, Costly from `user` for update",
     "Query": "delete from `user`",
     "Table": "user"
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 Gen4 plan same as above
 
@@ -2933,7 +3429,10 @@ Gen4 plan same as above
     "OwnedVindexQuery": "select Id, `Name`, Costly, `name` = 'myname' from `user` for update",
     "Query": "update `user` set `name` = 'myname'",
     "Table": "user"
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 Gen4 plan same as above
 
@@ -2953,7 +3452,10 @@ Gen4 plan same as above
     "MultiShardAutocommit": false,
     "Query": "update user_extra set val = 1",
     "Table": "user_extra"
-  }
+  },
+  "TablesUsed": [
+    "user.user_extra"
+  ]
 }
 Gen4 plan same as above
 
@@ -2976,7 +3478,10 @@ Gen4 plan same as above
     "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where `user`.id * `user`.col = `user`.foo for update",
     "Query": "delete from `user` where `user`.id * `user`.col = `user`.foo",
     "Table": "user"
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 Gen4 plan same as above
 
@@ -3010,7 +3515,10 @@ Gen4 plan same as above
     "MultiShardAutocommit": false,
     "Query": "insert into user_privacy_consents(user_id, accepted_at) select user_id, accepted_at from (select 1 as user_id, 1629194864 as accepted_at from dual) as tmp where not exists (select 1 from user_privacy_consents where user_id = 1 limit 1) for update",
     "TableName": "user_privacy_consents"
-  }
+  },
+  "TablesUsed": [
+    "main.user_privacy_consents"
+  ]
 }
 Gen4 error: unsupported: unable to split predicates to derived table: not :__sq_has_values1
 
@@ -3033,7 +3541,10 @@ Gen4 error: unsupported: unable to split predicates to derived table: not :__sq_
     "OwnedVindexQuery": "select c1, c2, c3 from t1 where c2 = 20 for update",
     "Query": "delete from t1 where c2 = 20",
     "Table": "t1"
-  }
+  },
+  "TablesUsed": [
+    "zlookup_unique.t1"
+  ]
 }
 Gen4 plan same as above
 
@@ -3059,7 +3570,10 @@ Gen4 plan same as above
     "OwnedVindexQuery": "select c1, c2, c3, c2 = 1 from t1 where c2 = 20 for update",
     "Query": "update t1 set c2 = 1 where c2 = 20",
     "Table": "t1"
-  }
+  },
+  "TablesUsed": [
+    "zlookup_unique.t1"
+  ]
 }
 Gen4 plan same as above
 
@@ -3086,7 +3600,10 @@ Gen4 plan same as above
       "INT64(20)"
     ],
     "Vindex": "lookup_t1_2"
-  }
+  },
+  "TablesUsed": [
+    "zlookup_unique.t1"
+  ]
 }
 Gen4 plan same as above
 
@@ -3116,7 +3633,10 @@ Gen4 plan same as above
       "INT64(20)"
     ],
     "Vindex": "lookup_t1_2"
-  }
+  },
+  "TablesUsed": [
+    "zlookup_unique.t1"
+  ]
 }
 {
   "QueryType": "UPDATE",
@@ -3142,7 +3662,10 @@ Gen4 plan same as above
       "INT64(20)"
     ],
     "Vindex": "lookup_t1_2"
-  }
+  },
+  "TablesUsed": [
+    "zlookup_unique.t1"
+  ]
 }
 
 # Delete EQUAL and IN on backfilling and non-backfilling unique lookup vindexes should be a delete IN
@@ -3168,7 +3691,10 @@ Gen4 plan same as above
       "(INT64(20), INT64(21))"
     ],
     "Vindex": "lookup_t1_2"
-  }
+  },
+  "TablesUsed": [
+    "zlookup_unique.t1"
+  ]
 }
 Gen4 plan same as above
 
@@ -3198,12 +3724,15 @@ Gen4 plan same as above
       "(INT64(20), INT64(21))"
     ],
     "Vindex": "lookup_t1_2"
-  }
+  },
+  "TablesUsed": [
+    "zlookup_unique.t1"
+  ]
 }
 Gen4 plan same as above
 
 #update with alias table
-"update user u set u.name = 'john' where u.col > 20"
+"update user u set u.name = 'john' where u.col \u003e 20"
 {
   "QueryType": "UPDATE",
   "Original": "update user u set u.name = 'john' where u.col \u003e 20",
@@ -3224,12 +3753,15 @@ Gen4 plan same as above
     "OwnedVindexQuery": "select Id, `Name`, Costly, u.`name` = 'john' from `user` as u where u.col \u003e 20 for update",
     "Query": "update `user` as u set u.`name` = 'john' where u.col \u003e 20",
     "Table": "user"
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 Gen4 plan same as above
 
 #delete with alias table
-"delete from user u where u.col > 20"
+"delete from user u where u.col \u003e 20"
 {
   "QueryType": "DELETE",
   "Original": "delete from user u where u.col \u003e 20",
@@ -3247,7 +3779,10 @@ Gen4 plan same as above
     "OwnedVindexQuery": "select Id, `Name`, Costly from `user` as u where u.col \u003e 20 for update",
     "Query": "delete from `user` as u where u.col \u003e 20",
     "Table": "user"
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
 Gen4 plan same as above
 
@@ -3272,7 +3807,10 @@ Gen4 plan same as above
       "INT64(2)"
     ],
     "Vindex": "multicolIdx"
-  }
+  },
+  "TablesUsed": [
+    "user.multicol_tbl"
+  ]
 }
 {
   "QueryType": "UPDATE",
@@ -3293,7 +3831,10 @@ Gen4 plan same as above
       "INT64(2)"
     ],
     "Vindex": "multicolIdx"
-  }
+  },
+  "TablesUsed": [
+    "user.multicol_tbl"
+  ]
 }
 
 # update with a multicol vindex - reverse order
@@ -3317,7 +3858,10 @@ Gen4 plan same as above
       "INT64(2)"
     ],
     "Vindex": "multicolIdx"
-  }
+  },
+  "TablesUsed": [
+    "user.multicol_tbl"
+  ]
 }
 {
   "QueryType": "UPDATE",
@@ -3338,7 +3882,10 @@ Gen4 plan same as above
       "INT64(2)"
     ],
     "Vindex": "multicolIdx"
-  }
+  },
+  "TablesUsed": [
+    "user.multicol_tbl"
+  ]
 }
 
 # update with a multicol vindex using an IN clause
@@ -3362,7 +3909,10 @@ Gen4 plan same as above
       "(INT64(1), INT64(2))"
     ],
     "Vindex": "multicolIdx"
-  }
+  },
+  "TablesUsed": [
+    "user.multicol_tbl"
+  ]
 }
 Gen4 plan same as above
 
@@ -3387,7 +3937,10 @@ Gen4 plan same as above
       "(INT64(1), INT64(2))"
     ],
     "Vindex": "multicolIdx"
-  }
+  },
+  "TablesUsed": [
+    "user.multicol_tbl"
+  ]
 }
 Gen4 plan same as above
 
@@ -3415,7 +3968,10 @@ Gen4 plan same as above
       "INT64(2)"
     ],
     "Vindex": "multicolIdx"
-  }
+  },
+  "TablesUsed": [
+    "user.multicol_tbl"
+  ]
 }
 Gen4 plan same as above
 
@@ -3443,7 +3999,10 @@ Gen4 plan same as above
       "INT64(2)"
     ],
     "Vindex": "multicolIdx"
-  }
+  },
+  "TablesUsed": [
+    "user.multicol_tbl"
+  ]
 }
 Gen4 plan same as above
 
@@ -3471,7 +4030,10 @@ Gen4 plan same as above
       "(INT64(1), INT64(2))"
     ],
     "Vindex": "multicolIdx"
-  }
+  },
+  "TablesUsed": [
+    "user.multicol_tbl"
+  ]
 }
 Gen4 plan same as above
 
@@ -3499,7 +4061,10 @@ Gen4 plan same as above
       "(INT64(1), INT64(2))"
     ],
     "Vindex": "multicolIdx"
-  }
+  },
+  "TablesUsed": [
+    "user.multicol_tbl"
+  ]
 }
 Gen4 plan same as above
 
@@ -3530,7 +4095,10 @@ Gen4 plan same as above
       "INT64(2)"
     ],
     "Vindex": "multicolIdx"
-  }
+  },
+  "TablesUsed": [
+    "user.multicol_tbl"
+  ]
 }
 {
   "QueryType": "UPDATE",
@@ -3557,7 +4125,10 @@ Gen4 plan same as above
       "INT64(2)"
     ],
     "Vindex": "multicolIdx"
-  }
+  },
+  "TablesUsed": [
+    "user.multicol_tbl"
+  ]
 }
 
 # update with routing using non-unique lookup vindex
@@ -3580,7 +4151,10 @@ Gen4 plan same as above
       "VARCHAR(\"foo\")"
     ],
     "Vindex": "name_muticoltbl_map"
-  }
+  },
+  "TablesUsed": [
+    "user.multicol_tbl"
+  ]
 }
 Gen4 plan same as above
 
@@ -3604,7 +4178,10 @@ Gen4 plan same as above
       "INT64(1)"
     ],
     "Vindex": "multicolIdx"
-  }
+  },
+  "TablesUsed": [
+    "user.multicol_tbl"
+  ]
 }
 {
   "QueryType": "UPDATE",
@@ -3624,7 +4201,10 @@ Gen4 plan same as above
       "INT64(1)"
     ],
     "Vindex": "multicolIdx"
-  }
+  },
+  "TablesUsed": [
+    "user.multicol_tbl"
+  ]
 }
 
 # update with routing using subsharding column on lookup vindex
@@ -3653,7 +4233,10 @@ Gen4 plan same as above
       "INT64(1)"
     ],
     "Vindex": "multicolIdx"
-  }
+  },
+  "TablesUsed": [
+    "user.multicol_tbl"
+  ]
 }
 {
   "QueryType": "UPDATE",
@@ -3679,7 +4262,10 @@ Gen4 plan same as above
       "INT64(1)"
     ],
     "Vindex": "multicolIdx"
-  }
+  },
+  "TablesUsed": [
+    "user.multicol_tbl"
+  ]
 }
 
 # update with routing using subsharding column with in query
@@ -3708,7 +4294,10 @@ Gen4 plan same as above
       "(INT64(1), INT64(2))"
     ],
     "Vindex": "multicolIdx"
-  }
+  },
+  "TablesUsed": [
+    "user.multicol_tbl"
+  ]
 }
 Gen4 plan same as above
 
@@ -3732,7 +4321,10 @@ Gen4 plan same as above
       "INT64(2)"
     ],
     "Vindex": "multicolIdx"
-  }
+  },
+  "TablesUsed": [
+    "user.multicol_tbl"
+  ]
 }
 {
   "QueryType": "UPDATE",
@@ -3752,7 +4344,10 @@ Gen4 plan same as above
       "VARCHAR(\"foo\")"
     ],
     "Vindex": "name_muticoltbl_map"
-  }
+  },
+  "TablesUsed": [
+    "user.multicol_tbl"
+  ]
 }
 
 # delete with routing using non-unique lookup vindex
@@ -3778,7 +4373,10 @@ Gen4 plan same as above
       "VARCHAR(\"foo\")"
     ],
     "Vindex": "name_muticoltbl_map"
-  }
+  },
+  "TablesUsed": [
+    "user.multicol_tbl"
+  ]
 }
 Gen4 plan same as above
 
@@ -3805,7 +4403,10 @@ Gen4 plan same as above
       "INT64(1)"
     ],
     "Vindex": "multicolIdx"
-  }
+  },
+  "TablesUsed": [
+    "user.multicol_tbl"
+  ]
 }
 Gen4 plan same as above
 
@@ -3832,7 +4433,10 @@ Gen4 plan same as above
       "(INT64(1), INT64(2))"
     ],
     "Vindex": "multicolIdx"
-  }
+  },
+  "TablesUsed": [
+    "user.multicol_tbl"
+  ]
 }
 Gen4 plan same as above
 
@@ -3859,7 +4463,10 @@ Gen4 plan same as above
       "INT64(2)"
     ],
     "Vindex": "multicolIdx"
-  }
+  },
+  "TablesUsed": [
+    "user.multicol_tbl"
+  ]
 }
 Gen4 plan same as above
 
@@ -3895,9 +4502,47 @@ Gen4 plan same as above
         "Table": "`user`"
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "user.music"
+  ]
 }
-Gen4 plan same as above
+{
+  "QueryType": "INSERT",
+  "Original": "insert into music(id, user_id) select * from user",
+  "Instructions": {
+    "OperatorType": "Insert",
+    "Variant": "Select",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "MultiShardAutocommit": false,
+    "TableName": "music",
+    "VindexOffsetFromSelect": {
+      "music_user_map": "[0]",
+      "user_index": "[1]"
+    },
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select * from `user` where 1 != 1",
+        "Query": "select * from `user` for update",
+        "Table": "`user`"
+      }
+    ]
+  },
+  "TablesUsed": [
+    "user.music",
+    "user.user"
+  ]
+}
 
 # insert using select with more columns in insert
 "insert into music(id, user_id) select 1"
@@ -3946,9 +4591,47 @@ Gen4 plan same as above
         "Table": "`user`"
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "user.user_extra"
+  ]
 }
-Gen4 plan same as above
+{
+  "QueryType": "INSERT",
+  "Original": "insert into user_extra(user_id) select id from user",
+  "Instructions": {
+    "OperatorType": "Insert",
+    "Variant": "Select",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "AutoIncrement": "main:1",
+    "MultiShardAutocommit": false,
+    "TableName": "user_extra",
+    "VindexOffsetFromSelect": {
+      "user_index": "[0]"
+    },
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from `user` where 1 != 1",
+        "Query": "select id from `user` for update",
+        "Table": "`user`"
+      }
+    ]
+  },
+  "TablesUsed": [
+    "user.user",
+    "user.user_extra"
+  ]
+}
 
 # insert using select with auto-inc column using vitess sequence, sequence column present
 "insert into user_extra(id, user_id) select null, id from user"
@@ -3982,9 +4665,47 @@ Gen4 plan same as above
         "Table": "`user`"
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "user.user_extra"
+  ]
 }
-Gen4 plan same as above
+{
+  "QueryType": "INSERT",
+  "Original": "insert into user_extra(id, user_id) select null, id from user",
+  "Instructions": {
+    "OperatorType": "Insert",
+    "Variant": "Select",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "AutoIncrement": "main:2",
+    "MultiShardAutocommit": false,
+    "TableName": "user_extra",
+    "VindexOffsetFromSelect": {
+      "user_index": "[1]"
+    },
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select null, id from `user` where 1 != 1",
+        "Query": "select null, id from `user` for update",
+        "Table": "`user`"
+      }
+    ]
+  },
+  "TablesUsed": [
+    "user.user",
+    "user.user_extra"
+  ]
+}
 
 # sharded insert from select
 "insert into user(id) select 1 from dual"
@@ -4020,9 +4741,49 @@ Gen4 plan same as above
         ]
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
-Gen4 plan same as above
+{
+  "QueryType": "INSERT",
+  "Original": "insert into user(id) select 1 from dual",
+  "Instructions": {
+    "OperatorType": "Insert",
+    "Variant": "Select",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "AutoIncrement": "main:0",
+    "MultiShardAutocommit": false,
+    "TableName": "user",
+    "VindexOffsetFromSelect": {
+      "costly_map": "[-1]",
+      "name_user_map": "[-1]",
+      "user_index": "[0]"
+    },
+    "Inputs": [
+      {
+        "OperatorType": "Projection",
+        "Expressions": [
+          "INT64(1) as 1"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "SingleRow"
+          }
+        ]
+      }
+    ]
+  },
+  "TablesUsed": [
+    "main.dual",
+    "user.user"
+  ]
+}
 
 # insert using select with sharding column is autoinc and not present in the insert column query
 "insert into user(pattern) SELECT 1"
@@ -4058,9 +4819,49 @@ Gen4 plan same as above
         ]
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
 }
-Gen4 plan same as above
+{
+  "QueryType": "INSERT",
+  "Original": "insert into user(pattern) SELECT 1",
+  "Instructions": {
+    "OperatorType": "Insert",
+    "Variant": "Select",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "AutoIncrement": "main:1",
+    "MultiShardAutocommit": false,
+    "TableName": "user",
+    "VindexOffsetFromSelect": {
+      "costly_map": "[-1]",
+      "name_user_map": "[-1]",
+      "user_index": "[1]"
+    },
+    "Inputs": [
+      {
+        "OperatorType": "Projection",
+        "Expressions": [
+          "INT64(1) as 1"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "SingleRow"
+          }
+        ]
+      }
+    ]
+  },
+  "TablesUsed": [
+    "main.dual",
+    "user.user"
+  ]
+}
 
 # insert using select with sharding column is not an autoinc and not present in the insert column query
 "insert into user_extra(pattern) SELECT 1"
@@ -4099,9 +4900,47 @@ Gen4 plan same as above
         "Table": "`user`"
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "user.user_extra"
+  ]
 }
-Gen4 plan same as above
+{
+  "QueryType": "INSERT",
+  "Original": "insert into user_extra(user_id, col) select col1, col2 from user",
+  "Instructions": {
+    "OperatorType": "Insert",
+    "Variant": "Select",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "AutoIncrement": "main:2",
+    "MultiShardAutocommit": false,
+    "TableName": "user_extra",
+    "VindexOffsetFromSelect": {
+      "user_index": "[0]"
+    },
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col1, col2 from `user` where 1 != 1",
+        "Query": "select col1, col2 from `user` for update",
+        "Table": "`user`"
+      }
+    ]
+  },
+  "TablesUsed": [
+    "user.user",
+    "user.user_extra"
+  ]
+}
 
 # unsharded same keyspace
 "insert into unsharded(col) select col from unsharded_auto"
@@ -4119,9 +4958,31 @@ Gen4 plan same as above
     "MultiShardAutocommit": false,
     "Query": "insert into unsharded(col) select col from unsharded_auto for update",
     "TableName": "unsharded"
-  }
+  },
+  "TablesUsed": [
+    "main.unsharded"
+  ]
 }
-Gen4 plan same as above
+{
+  "QueryType": "INSERT",
+  "Original": "insert into unsharded(col) select col from unsharded_auto",
+  "Instructions": {
+    "OperatorType": "Insert",
+    "Variant": "Unsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetTabletType": "PRIMARY",
+    "MultiShardAutocommit": false,
+    "Query": "insert into unsharded(col) select col from unsharded_auto for update",
+    "TableName": "unsharded"
+  },
+  "TablesUsed": [
+    "main.unsharded",
+    "main.unsharded_auto"
+  ]
+}
 
 # sharded different keyspace
 "insert into user_extra(user_id, col) select col1, col2 from t1"
@@ -4155,9 +5016,47 @@ Gen4 plan same as above
         "Table": "t1"
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "user.user_extra"
+  ]
 }
-Gen4 plan same as above
+{
+  "QueryType": "INSERT",
+  "Original": "insert into user_extra(user_id, col) select col1, col2 from t1",
+  "Instructions": {
+    "OperatorType": "Insert",
+    "Variant": "Select",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "AutoIncrement": "main:2",
+    "MultiShardAutocommit": false,
+    "TableName": "user_extra",
+    "VindexOffsetFromSelect": {
+      "user_index": "[0]"
+    },
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "zlookup_unique",
+          "Sharded": true
+        },
+        "FieldQuery": "select col1, col2 from t1 where 1 != 1",
+        "Query": "select col1, col2 from t1 for update",
+        "Table": "t1"
+      }
+    ]
+  },
+  "TablesUsed": [
+    "user.user_extra",
+    "zlookup_unique.t1"
+  ]
+}
 
 # sharded insert table, unsharded select table
 "insert into user_extra(user_id, col) select col1, col2 from unsharded_tab"
@@ -4191,9 +5090,47 @@ Gen4 plan same as above
         "Table": "unsharded_tab"
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "user.user_extra"
+  ]
 }
-Gen4 plan same as above
+{
+  "QueryType": "INSERT",
+  "Original": "insert into user_extra(user_id, col) select col1, col2 from unsharded_tab",
+  "Instructions": {
+    "OperatorType": "Insert",
+    "Variant": "Select",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "AutoIncrement": "main:2",
+    "MultiShardAutocommit": false,
+    "TableName": "user_extra",
+    "VindexOffsetFromSelect": {
+      "user_index": "[0]"
+    },
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main_2",
+          "Sharded": false
+        },
+        "FieldQuery": "select col1, col2 from unsharded_tab where 1 != 1",
+        "Query": "select col1, col2 from unsharded_tab for update",
+        "Table": "unsharded_tab"
+      }
+    ]
+  },
+  "TablesUsed": [
+    "main_2.unsharded_tab",
+    "user.user_extra"
+  ]
+}
 
 # unsharded different keyspace
 "insert into unsharded(col) select col from unsharded_tab"
@@ -4223,9 +5160,43 @@ Gen4 plan same as above
         "Table": "unsharded_tab"
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "main.unsharded"
+  ]
 }
-Gen4 plan same as above
+{
+  "QueryType": "INSERT",
+  "Original": "insert into unsharded(col) select col from unsharded_tab",
+  "Instructions": {
+    "OperatorType": "Insert",
+    "Variant": "Unsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetTabletType": "PRIMARY",
+    "MultiShardAutocommit": false,
+    "TableName": "unsharded",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main_2",
+          "Sharded": false
+        },
+        "FieldQuery": "select col from unsharded_tab where 1 != 1",
+        "Query": "select col from unsharded_tab for update",
+        "Table": "unsharded_tab"
+      }
+    ]
+  },
+  "TablesUsed": [
+    "main.unsharded",
+    "main_2.unsharded_tab"
+  ]
+}
 
 # unsharded insert table, sharded select table
 "insert into unsharded(col) select col from t1"
@@ -4255,9 +5226,43 @@ Gen4 plan same as above
         "Table": "t1"
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "main.unsharded"
+  ]
 }
-Gen4 plan same as above
+{
+  "QueryType": "INSERT",
+  "Original": "insert into unsharded(col) select col from t1",
+  "Instructions": {
+    "OperatorType": "Insert",
+    "Variant": "Unsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetTabletType": "PRIMARY",
+    "MultiShardAutocommit": false,
+    "TableName": "unsharded",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "zlookup_unique",
+          "Sharded": true
+        },
+        "FieldQuery": "select col from t1 where 1 != 1",
+        "Query": "select col from t1 for update",
+        "Table": "t1"
+      }
+    ]
+  },
+  "TablesUsed": [
+    "main.unsharded",
+    "zlookup_unique.t1"
+  ]
+}
 
 # unsharded subquery in sharded update, not the same keyspace between outer and inner
 "update user set col = (select id from unsharded)"
@@ -4296,7 +5301,11 @@ Gen4 plan same as above
         "Table": "user"
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "main.unsharded",
+    "user.user"
+  ]
 }
 
 # sharded subquery in unsharded update, not the same keyspace
@@ -4336,7 +5345,11 @@ Gen4 plan same as above
         "Table": "unsharded"
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "main.unsharded",
+    "user.user"
+  ]
 }
 
 # sharded join unsharded subqueries in unsharded update
@@ -4402,7 +5415,11 @@ Gen4 plan same as above
         "Table": "unsharded"
       }
     ]
-  }
+  },
+  "TablesUsed": [
+    "main.unsharded",
+    "user.user"
+  ]
 }
 
 # sharded update with sub query where the sources can be merged into a single query
@@ -4426,7 +5443,11 @@ Gen4 plan same as above
       "INT64(5)"
     ],
     "Vindex": "user_index"
-  }
+  },
+  "TablesUsed": [
+    "user.user",
+    "user.user_extra"
+  ]
 }
 
 # merge through correlated subquery
@@ -4450,11 +5471,15 @@ Gen4 plan same as above
       "INT64(5)"
     ],
     "Vindex": "user_index"
-  }
+  },
+  "TablesUsed": [
+    "user.user",
+    "user.user_extra"
+  ]
 }
 
 # merge through correlated subquery #2
-"update user set col = (select count(*) from user_extra where user_extra.user_id = user.id) where id > 5"
+"update user set col = (select count(*) from user_extra where user_extra.user_id = user.id) where id \u003e 5"
 "unsupported: subqueries in sharded DML"
 {
   "QueryType": "UPDATE",
@@ -4470,7 +5495,11 @@ Gen4 plan same as above
     "MultiShardAutocommit": false,
     "Query": "update `user` set col = (select count(*) from user_extra where user_extra.user_id = `user`.id) where id \u003e 5",
     "Table": "user"
-  }
+  },
+  "TablesUsed": [
+    "user.user",
+    "user.user_extra"
+  ]
 }
 
 # all defaults empty column, empty values
@@ -4492,6 +5521,78 @@ Gen4 plan same as above
     "VindexValues": {
       "user_index": "NULL"
     }
-  }
+  },
+  "TablesUsed": [
+    "user.authoritative"
+  ]
 }
 Gen4 plan same as above
+
+
+# explain dml without any directive should fail
+"explain format=vtexplain delete from user"
+"explain format = vtexplain will actually run queries. `/*vt+ EXECUTE_DML_QUERIES */` must be set to run DML queries in vtexplain. Example: `explain /*vt+ EXECUTE_DML_QUERIES */ format = vtexplain delete from t1`"
+Gen4 plan same as above
+
+# explain dml with actually_run_query directive
+"explain /*vt+ execute_dml_queries */ format=vtexplain delete from user"
+{
+  "QueryType": "EXPLAIN",
+  "Original": "explain /*vt+ execute_dml_queries */ format=vtexplain delete from user",
+  "Instructions": {
+    "OperatorType": "VTEXPLAIN",
+    "Inputs": [
+      {
+        "OperatorType": "Delete",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "KsidLength": 1,
+        "KsidVindex": "user_index",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select Id, `Name`, Costly from `user` for update",
+        "Query": "delete from `user`",
+        "Table": "user"
+      }
+    ]
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
+}
+Gen4 plan same as above
+
+# explain dml with actually_run_query directive - 2
+"explain /*vt+ eXECUTE_DML_QUERIES */ format=vtexplain delete from user"
+{
+  "QueryType": "EXPLAIN",
+  "Original": "explain /*vt+ eXECUTE_DML_QUERIES */ format=vtexplain delete from user",
+  "Instructions": {
+    "OperatorType": "VTEXPLAIN",
+    "Inputs": [
+      {
+        "OperatorType": "Delete",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "KsidLength": 1,
+        "KsidVindex": "user_index",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select Id, `Name`, Costly from `user` for update",
+        "Query": "delete from `user`",
+        "Table": "user"
+      }
+    ]
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
+}
+Gen4 plan same as above
+

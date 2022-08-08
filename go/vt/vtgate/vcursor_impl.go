@@ -24,6 +24,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtgate/logstats"
+
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	"github.com/google/uuid"
@@ -101,7 +103,7 @@ type vcursorImpl struct {
 	executor       iExecute
 	resolver       *srvtopo.Resolver
 	topoServer     *topo.Server
-	logStats       *LogStats
+	logStats       *logstats.LogStats
 	collation      collations.ID
 
 	ignoreMaxMemoryRows bool
@@ -123,7 +125,7 @@ func newVCursorImpl(
 	safeSession *SafeSession,
 	marginComments sqlparser.MarginComments,
 	executor *Executor,
-	logStats *LogStats,
+	logStats *logstats.LogStats,
 	vm VSchemaOperator,
 	vschema *vindexes.VSchema,
 	resolver *srvtopo.Resolver,
@@ -471,6 +473,7 @@ func (vc *vcursorImpl) Execute(method string, query string, bindVars map[string]
 	if co == vtgatepb.CommitOrder_AUTOCOMMIT {
 		// For autocommit, we have to create an independent session.
 		session = NewAutocommitSession(vc.safeSession.Session)
+		session.logging = vc.safeSession.logging
 		rollbackOnError = false
 	} else {
 		session.SetCommitOrder(co)
@@ -1022,4 +1025,12 @@ func (vc *vcursorImpl) cloneWithAutocommitSession() *vcursorImpl {
 		warnShardedOnly: vc.warnShardedOnly,
 		pv:              vc.pv,
 	}
+}
+
+func (vc *vcursorImpl) VtExplainLogging() {
+	vc.safeSession.EnableLogging()
+}
+
+func (vc *vcursorImpl) GetVTExplainLogs() []engine.ExecuteEntry {
+	return vc.safeSession.logging.GetLogs()
 }

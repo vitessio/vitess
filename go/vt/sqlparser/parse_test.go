@@ -2072,6 +2072,9 @@ var (
 		input:  "describe select * from t",
 		output: "explain select * from t",
 	}, {
+		input:  "describe /*vt+ execute_dml_queries */ select * from t",
+		output: "explain /*vt+ execute_dml_queries */ select * from t",
+	}, {
 		input:  "desc select * from t",
 		output: "explain select * from t",
 	}, {
@@ -2094,10 +2097,15 @@ var (
 	}, {
 		input: "explain format = json select * from t",
 	}, {
+		input: "explain format = vtexplain select * from t",
+	}, {
 		input: "explain format = vitess select * from t",
 	}, {
 		input:  "describe format = vitess select * from t",
 		output: "explain format = vitess select * from t",
+	}, {
+		input:  "describe format = vtexplain select * from t",
+		output: "explain format = vtexplain select * from t",
 	}, {
 		input: "explain delete from t",
 	}, {

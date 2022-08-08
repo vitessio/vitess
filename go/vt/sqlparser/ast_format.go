@@ -990,7 +990,7 @@ func (node *ExplainStmt) Format(buf *TrackedBuffer) {
 	default:
 		format = "format = " + node.Type.ToString() + " "
 	}
-	buf.astPrintf(node, "explain %s%v", format, node.Statement)
+	buf.astPrintf(node, "explain %v%s%v", node.Comments, format, node.Statement)
 }
 
 // Format formats the node.

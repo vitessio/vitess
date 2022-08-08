@@ -22,6 +22,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtgate/logstats"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"github.com/pkg/errors"
@@ -490,7 +492,7 @@ func TestNormalization(t *testing.T) {
 		{"savepoint foo", "savepoint <id>"},
 		{"release savepoint bar", "release savepoint <id>"},
 
-		//-- VALUES compaction
+		// -- VALUES compaction
 		// one tuple
 		{"insert into xyz values (:v1, :v2)", "insert into xyz values <values>"},
 
@@ -506,7 +508,7 @@ func TestNormalization(t *testing.T) {
 		// question marks instead
 		{"insert into xyz values (?, ?)", "insert into xyz values <values>"},
 
-		//-- SET compaction
+		// -- SET compaction
 		// case insensitive
 		{"SELECT 1 FROM x WHERE xyz IN (:vtg1, :vtg2) AND abc in (:v3, :v4)", "select 1 from x where xyz in (<elements>) and abc in (<elements>)"},
 
@@ -737,7 +739,7 @@ func insightsTestHelper(t *testing.T, mockTimer bool, options setupOptions, quer
 	}
 	now := time.Now()
 	for _, q := range queries {
-		ls := &LogStats{
+		ls := &logstats.LogStats{
 			SQL:          q.sql,
 			RawSQL:       q.rawSQL,
 			IsNormalized: q.error == "" || q.normalizedError,
@@ -764,7 +766,7 @@ func insightsTestHelper(t *testing.T, mockTimer bool, options setupOptions, quer
 }
 
 var (
-	lsSlowQuery = &LogStats{
+	lsSlowQuery = &logstats.LogStats{
 		SQL:          "select sleep(:vtg1)",
 		IsNormalized: true,
 		StartTime:    time.Now().Add(-5 * time.Second),

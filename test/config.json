@@ -723,6 +723,15 @@
 			"RetryMax": 2,
 			"Tags": []
 		},
+		"vtgate_queries_vtexplain": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/queries/vtexplain"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vtgate_queries",
+			"RetryMax": 2,
+			"Tags": []
+		},
 		"vtgate_concurrentdml": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/concurrentdml"],
