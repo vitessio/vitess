@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
 	"vitess.io/vitess/go/exit"
@@ -33,6 +34,7 @@ import (
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/servenv"
 )
 
 // Global flag variables for all commands.
@@ -308,7 +310,14 @@ func main() {
 	Mysqlctl.PersistentFlags().StringVar(&mysqlSocket, "mysql_socket", "", "path to the mysql socket")
 
 	dbconfigs.RegisterFlags(dbconfigs.Dba)
-	Mysqlctl.PersistentFlags().AddGoFlagSet(flag.CommandLine)
+
+	servenv.OnParseFor("mysqlctl", func(fs *pflag.FlagSet) {
+		Mysqlctl.PersistentFlags().AddFlagSet(fs)
+	})
+	tmp := os.Args
+	os.Args = os.Args[0:1]
+	servenv.ParseFlags("mysqlctl")
+	os.Args = tmp
 
 	Init.Flags().DurationVar(&commandInitOptions.WaitTime, "wait_time", 5*time.Minute, "Time to wait for startup.")
 	Init.Flags().StringVar(&commandInitOptions.InitDbSQLFile, "init_db_sql_file", "", "Path to .sql file to run after `mysql_install_db` completes.")
