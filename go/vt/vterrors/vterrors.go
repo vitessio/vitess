@@ -87,9 +87,10 @@ package vterrors
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"io"
+
+	"github.com/spf13/pflag"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
@@ -98,8 +99,10 @@ import (
 // embedded stack trace in the output.
 var logErrStacks bool
 
-func init() {
-	flag.BoolVar(&logErrStacks, "log_err_stacks", false, "log stack traces for errors")
+// RegisterFlags registers the command-line options that control vterror
+// behavior on the provided FlagSet.
+func RegisterFlags(fs *pflag.FlagSet) {
+	fs.BoolVar(&logErrStacks, "log_err_stacks", false, "log stack traces for errors")
 }
 
 // New returns an error with the supplied message.
