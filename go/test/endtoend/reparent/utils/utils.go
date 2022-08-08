@@ -36,7 +36,6 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
-	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -698,39 +697,4 @@ func CheckReplicationStatus(ctx context.Context, t *testing.T, tablet *cluster.V
 	} else {
 		require.Equal(t, "No", res.Rows[0][11].ToString())
 	}
-}
-
-// ReplicationThreadsStatus returns the status of the IO and SQL thread. It reads the result of the replication status
-// based on the vtctl major version provided. It also uses the vttabletVersion to assert on the expectation of the new fields
-// being unknown for the old vttablets and that they match for the new vttablets
-func ReplicationThreadsStatus(t *testing.T, status *replicationdatapb.Status, vtctlVersion, vttabletVersion int) (bool, bool) {
-	if vttabletVersion == 13 {
-		// If vttablet is version 13, then the new fields should be unknown
-		require.Equal(t, mysql.ReplicationStateUnknown, mysql.ReplicationState(status.IoState))
-		require.Equal(t, mysql.ReplicationStateUnknown, mysql.ReplicationState(status.SqlState))
-	} else {
-		// For the new vttablet, the new parameters should not be unknown. Moreover, the old parameters should also be provided
-		// and should agree with the new ones
-		require.NotEqual(t, mysql.ReplicationStateUnknown, mysql.ReplicationState(status.IoState))
-		require.NotEqual(t, mysql.ReplicationStateUnknown, mysql.ReplicationState(status.SqlState))
-		require.Equal(t, status.IoThreadRunning, mysql.ReplicationState(status.IoState) == mysql.ReplicationStateRunning)
-		require.Equal(t, status.SqlThreadRunning, mysql.ReplicationState(status.SqlState) == mysql.ReplicationStateRunning)
-	}
-
-	// if vtctlVersion provided is 13, then we should read the old parameters, since that is what old vtctl would do
-	if vtctlVersion == 13 {
-		return status.IoThreadRunning, status.SqlThreadRunning
-	}
-	// If we are at the latest vtctl version, we should read the latest parameters if provided otherwise the old ones
-	ioState := mysql.ReplicationState(status.IoState)
-	ioThread := status.IoThreadRunning
-	if ioState != mysql.ReplicationStateUnknown {
-		ioThread = ioState == mysql.ReplicationStateRunning
-	}
-	sqlState := mysql.ReplicationState(status.SqlState)
-	sqlThread := status.SqlThreadRunning
-	if sqlState != mysql.ReplicationStateUnknown {
-		sqlThread = sqlState == mysql.ReplicationStateRunning
-	}
-	return ioThread, sqlThread
 }
