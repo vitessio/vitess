@@ -86,21 +86,23 @@ limitations under the License.
 package vterrors
 
 import (
-	"flag"
+	"context"
 	"fmt"
 	"io"
 
-	"context"
+	"github.com/spf13/pflag"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-// LogErrStacks controls whether or not printing errors includes the
+// logErrStacks controls whether or not printing errors includes the
 // embedded stack trace in the output.
-var LogErrStacks bool
+var logErrStacks bool
 
-func init() {
-	flag.BoolVar(&LogErrStacks, "log_err_stacks", false, "log stack traces for errors")
+// RegisterFlags registers the command-line options that control vterror
+// behavior on the provided FlagSet.
+func RegisterFlags(fs *pflag.FlagSet) {
+	fs.BoolVar(&logErrStacks, "log_err_stacks", false, "log stack traces for errors")
 }
 
 // New returns an error with the supplied message.
@@ -153,7 +155,7 @@ func (f *fundamental) Format(s fmt.State, verb rune) {
 	case 'v':
 		panicIfError(io.WriteString(s, "Code: "+f.code.String()+"\n"))
 		panicIfError(io.WriteString(s, f.msg+"\n"))
-		if LogErrStacks {
+		if logErrStacks {
 			f.stack.Format(s, verb)
 		}
 		return
@@ -249,7 +251,7 @@ func (w *wrapping) Format(s fmt.State, verb rune) {
 	if rune('v') == verb {
 		panicIfError(fmt.Fprintf(s, "%v\n", w.Cause()))
 		panicIfError(io.WriteString(s, w.msg))
-		if LogErrStacks {
+		if logErrStacks {
 			w.stack.Format(s, verb)
 		}
 		return
