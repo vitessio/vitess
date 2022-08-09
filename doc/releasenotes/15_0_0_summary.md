@@ -112,13 +112,14 @@ use-case. Here are the flags that control this feature
 - zstd
 - external
 
-where 'external' is set only when we are using custom command or external tool other than the ones mentioned above. If you want to use any of the built-in compressors,
-simply set one of the above values for `--compression-engine-name`. Value specified in `--compression-engine-name` is saved in MANIFEST,
-which is later read by restore routine to decide what engine to use for decompression. Default value for engine is 'pgzip'.
+where 'external' is set only when using a custom command or tool other than the ones that are already provided. 
+If you want to use any of the built-in compressors, simply set one of the above values for `--compression-engine-name`. The value
+specified in `--compression-engine-name` is saved in the backup MANIFEST, which is later read by the restore process to decide which
+engine to use for decompression. Default value for engine is 'pgzip'.
 
 If you would like to use a custom command or external tool for compression/decompression then you need to provide the full command with
 arguments to the `--external-compressor` and `--external-decompressor` flags. `--external-compressor-extension` flag also needs to be provided
-so that compressed files are created with the correct extension. If the external command is not using any of the built-in compression engine
+so that compressed files are created with the correct extension. If the external command is not using any of the built-in compression engines
 (i-e pgzip, pargzip, lz4 or zstd) then you need to set `--compression-engine-name` to value 'external'.
 
 Please note that if you want the current production behavior then you don't need to change any of these flags.

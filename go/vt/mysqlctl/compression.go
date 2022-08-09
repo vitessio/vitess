@@ -53,8 +53,8 @@ var (
 	ExternalCompressorExt   = flag.String("external-compressor-extension", "", "extension to use when using an external compressor")
 	ExternalDecompressorCmd = flag.String("external-decompressor", "", "command with arguments to use when decompressing a backup")
 
-	errUnsupportedDeCompressionEngine = errors.New("unsupported engine in manifest. `external' compression engine needs ExternalDecompressorCmd")
-	errUnsupportedCompressionEngine   = errors.New("unsupported engine value for CompressionEngineName. supported values are `external`, `pgzip`, `pargzip`, `zstd`, `lz4`")
+	errUnsupportedDeCompressionEngine = errors.New("unsupported engine in MANIFEST. You need to provide --external-decompressor if using 'external' compression engine")
+	errUnsupportedCompressionEngine   = errors.New("unsupported engine value for --compression-engine-name. supported values are 'external', 'pgzip', 'pargzip', 'zstd', 'lz4'")
 
 	// this is used by getEngineFromExtension() to figure out which engine to use in case the user didn't specify
 	engineExtensions = map[string][]string{
