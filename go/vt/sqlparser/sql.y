@@ -5225,10 +5225,6 @@ function_call_keyword:
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3}
   }
-//| INTERVAL openb argument_expression_list closeb
-//  {
-//    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3}
-//  }
 | SUBSTR openb column_name FROM value_expression FOR value_expression closeb
   {
     $$ = &SubstrExpr{Name: $3, From: $5, To: $7}
