@@ -3668,7 +3668,12 @@ func runParseTestCase(t *testing.T, tcase parseTest) bool {
 	})
 }
 
-// TestFunctionCalls validates that every MySQL built-in function parses correctly
+// TestFunctionCalls validates that every MySQL built-in function parses correctly. List of functions found here:
+// https://dev.mysql.com/doc/refman/8.0/en/built-in-function-reference.html
+// Some functions are required to have a certain number or type of arguments because they are defined as reserved words.
+// Others are not, which means they parse correctly but lead to semantically meaningless results. That's fine for the
+// purpose of this test: we just want to make sure that all built-in functions parse correctly and aren't broken by
+// grammar changes.
 func TestFunctionCalls(t *testing.T) {
 	queries := []string{
 		"select ABS() from dual",
@@ -4080,6 +4085,7 @@ func TestFunctionCalls(t *testing.T) {
 		"select YEARWEEK() from dual",
 	}
 
+	// Functions where the input doesn't match the output. Prefer query tests above when possible.
 	testCases := []parseTest{
 		{
 			input: 		"select CAST(1 as datetime) from dual",
@@ -4091,6 +4097,7 @@ func TestFunctionCalls(t *testing.T) {
 		},
 	}
 
+	// Unimplemented or broken functionality
 	skippedTestCases := []parseTest{
 		{
 			// USING syntax parsed but not captured
