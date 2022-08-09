@@ -5265,6 +5265,10 @@ function_call_keyword:
   {
     $$ = &ValuesFuncExpr{Name: $3}
   }
+| REPEAT openb argument_expression_list closeb
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3}
+  }
 
 /*
   Function calls using non reserved keywords but with special syntax forms.
