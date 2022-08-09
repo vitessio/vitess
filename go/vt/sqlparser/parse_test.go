@@ -4374,39 +4374,7 @@ func TestCreateTable(t *testing.T) {
 	}
 
 	nonsupportedKeywords := []string{
-		"sql_cache",
-		"cume_dist",
-		"last_value",
-		"percent_rank",
-		"lag",
-		"first_value",
-		"column",
-		"long",
-		"sql_no_cache",
-		"current_user",
-		"row",
-		"lead",
-		"full",
-		"nvarchar",
-		"_binary",
-		"dec",
-		"all",
-		"processlist",
-		"dense_rank",
-		"analyze",
-		"format",
-		"ntile",
-		"cast",
-		"follows",
-		"group_concat",
-		"nth_value",
-		"_utf8mb4",
-		"row_number",
-		"rank",
-		"infile",
-		"escaped",
-		"terminated",
-		"enclosed",
+		"comment",
 	}
 	nonsupported := map[string]bool{}
 	for _, x := range nonsupportedKeywords {
@@ -5854,9 +5822,10 @@ func TestKeywordsCorrectlyDoParse(t *testing.T) {
 	dTest := "DELETE FROM t where %s=1"
 	uTest := "UPDATE t SET %s=1"
 	cTest := "CREATE TABLE t(%s int)"
+	tTest := "CREATE TABLE %s(i int)"
 	tcTest := "SELECT * FROM t ORDER BY t.%s"
 
-	tests := []string{aliasTest, iTest, dTest, uTest, cTest, tcTest}
+	tests := []string{aliasTest, iTest, dTest, uTest, cTest, tTest, tcTest}
 
 	for _, kw := range correctlyDoParse {
 		for _, query := range tests {
