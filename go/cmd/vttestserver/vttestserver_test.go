@@ -81,6 +81,7 @@ func TestPersistentMode(t *testing.T) {
 	cluster, err := startPersistentCluster(dir)
 	assert.NoError(t, err)
 
+	time.Sleep(10 * time.Second)
 	// basic sanity checks similar to TestRunsVschemaMigrations
 	assertColumnVindex(t, cluster, columnVindex{keyspace: "test_keyspace", table: "test_table", vindex: "my_vdx", vindexType: "hash", column: "id"})
 	assertColumnVindex(t, cluster, columnVindex{keyspace: "app_customer", table: "customers", vindex: "hash", vindexType: "hash", column: "id"})

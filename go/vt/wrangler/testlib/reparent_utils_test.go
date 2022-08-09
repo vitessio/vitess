@@ -20,6 +20,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/mysql/fakesqldb"
+
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/reparenttestutil"
 
 	"vitess.io/vitess/go/vt/discovery"
@@ -53,8 +55,9 @@ func TestShardReplicationStatuses(t *testing.T) {
 	if _, err := ts.GetOrCreateShard(ctx, "test_keyspace", "0"); err != nil {
 		t.Fatalf("GetOrCreateShard failed: %v", err)
 	}
-	primary := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_PRIMARY, nil)
-	replica := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, nil)
+	db := fakesqldb.NewWithExpectedQueries(t)
+	primary := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_PRIMARY, db)
+	replica := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, db)
 
 	// mark the primary inside the shard
 	if _, err := ts.UpdateShardFields(ctx, "test_keyspace", "0", func(si *topo.ShardInfo) error {
@@ -135,8 +138,9 @@ func TestReparentTablet(t *testing.T) {
 	if _, err := ts.GetOrCreateShard(ctx, "test_keyspace", "0"); err != nil {
 		t.Fatalf("CreateShard failed: %v", err)
 	}
-	primary := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_PRIMARY, nil)
-	replica := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, nil)
+	db := fakesqldb.NewWithExpectedQueries(t)
+	primary := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_PRIMARY, db)
+	replica := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, db)
 	reparenttestutil.SetKeyspaceDurability(context.Background(), t, ts, "test_keyspace", "semi_sync")
 
 	// mark the primary inside the shard
