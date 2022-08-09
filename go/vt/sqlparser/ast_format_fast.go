@@ -759,8 +759,12 @@ func (node *PartitionOption) formatFast(buf *TrackedBuffer) {
 			buf.WriteString(" algorithm = ")
 			buf.WriteString(fmt.Sprintf("%d", node.KeyAlgorithm))
 		}
-		buf.WriteByte(' ')
-		node.ColList.formatFast(buf)
+		if len(node.ColList) == 0 {
+			buf.WriteString(" ()")
+		} else {
+			buf.WriteByte(' ')
+			node.ColList.formatFast(buf)
+		}
 	case RangeType, ListType:
 		buf.WriteByte(' ')
 		buf.WriteString(node.Type.ToString())
@@ -812,8 +816,12 @@ func (node *SubPartition) formatFast(buf *TrackedBuffer) {
 			buf.WriteString(" algorithm = ")
 			buf.WriteString(fmt.Sprintf("%d", node.KeyAlgorithm))
 		}
-		buf.WriteByte(' ')
-		node.ColList.formatFast(buf)
+		if len(node.ColList) == 0 {
+			buf.WriteString(" ()")
+		} else {
+			buf.WriteByte(' ')
+			node.ColList.formatFast(buf)
+		}
 	}
 
 	if node.SubPartitions != -1 {
