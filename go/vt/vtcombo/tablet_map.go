@@ -121,12 +121,22 @@ func CreateTablet(
 		return err
 	}
 
+	if err := tm.MysqlDaemon.SetSuperReadOnly(false); err != nil {
+		return fmt.Errorf("failed on set super read only on %v: %v", topoproto.TabletAliasString(alias), err)
+	}
+
+	//time.Sleep(10 * time.Second)
+
 	if tabletType == topodatapb.TabletType_PRIMARY {
 		// Semi-sync has to be set to false, since we have 1 single backing MySQL
-		if err := tm.ChangeType(ctx, topodatapb.TabletType_PRIMARY /* semi-sync */, false); err != nil {
+		/*if _, err := tm.InitPrimary(ctx, false); err != nil {
+			return fmt.Errorf("TabletExternallyReparented failed on primary %v: %v", topoproto.TabletAliasString(alias), err)
+		}*/
+		if err := tm.ChangeType(ctx, topodatapb.TabletType_PRIMARY, false); err != nil {
 			return fmt.Errorf("TabletExternallyReparented failed on primary %v: %v", topoproto.TabletAliasString(alias), err)
 		}
 	}
+
 	controller.AddStatusHeader()
 	controller.AddStatusPart()
 	tabletMap[uid] = &comboTablet{

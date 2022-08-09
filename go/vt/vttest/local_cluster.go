@@ -319,7 +319,9 @@ func (db *LocalCluster) Setup() error {
 			}
 			return err
 		}
-
+		if err := db.UnsetReadOnly(""); err != nil {
+			return err
+		}
 		if err := db.createDatabases(); err != nil {
 			return err
 		}

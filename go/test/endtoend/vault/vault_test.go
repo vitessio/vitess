@@ -67,7 +67,8 @@ var (
 		//   so we can speed up token refresh
 		"--queryserver-config-schema-reload-time", "5",
 		"--serving_state_grace_period", "1s",
-		"--use_super_read_only", "true"}
+		fmt.Sprintf("--use_super_read_only=%t", true),
+	}
 	vaultTabletArg = []string{
 		"--db-credentials-server", "vault",
 		"--db-credentials-vault-timeout", "3s",
