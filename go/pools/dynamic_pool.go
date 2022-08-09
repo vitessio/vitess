@@ -20,9 +20,11 @@ package pools
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/timer"
 )
 
@@ -36,13 +38,16 @@ const resourceRequestQueueSize = 1000000
 // DynamicResourcePool the design is inspired from the golang database/sql package
 // whose source code is governed by a BSD-style license.
 type DynamicResourcePool struct {
+	// Atomic access only (stats). At top of in order to prevent panics on certain architectures.
+	waitTime sync2.AtomicDuration // Total time, the connections waited for.
+
 	f Factory // function that creates a new resource when needed.
 
 	maxCapacity int // maximum number of resources in the pool
 
 	mu            sync.Mutex // protects following
 	closed        bool
-	rawConnection []*resourceWrapper
+	rawConnection []resourceWrapper
 	connRequests  map[uint64]chan resourceWrapper
 	nextRequest   uint64
 	numOpen       int // number of open resources
@@ -53,6 +58,9 @@ type DynamicResourcePool struct {
 	openerCh    chan struct{}
 	maxIdleTime time.Duration // maximum amount of time a resource may remain idle before being closed
 	idleTimer   *timer.Timer  // idleTimer periodically closes idle resources.
+
+	waitCount         int64 // Total number of connections waited for.
+	maxIdleTimeClosed int64 // Total number of connections closed due to idle time.
 
 	cancel func() // cancel stops the connection opener.
 }
@@ -157,7 +165,10 @@ func (dp *DynamicResourcePool) Get(ctx context.Context) (resource Resource, err 
 		dp.nextRequest++
 		reqKey := dp.nextRequest
 		dp.connRequests[reqKey] = req
+		dp.waitCount++
 		dp.mu.Unlock()
+
+		startTime := time.Now()
 
 		select {
 		case <-ctx.Done():
@@ -166,6 +177,8 @@ func (dp *DynamicResourcePool) Get(ctx context.Context) (resource Resource, err 
 			dp.mu.Lock()
 			delete(dp.connRequests, reqKey)
 			dp.mu.Unlock()
+
+			dp.waitTime.Add(time.Since(startTime))
 
 			select {
 			default:
@@ -176,6 +189,8 @@ func (dp *DynamicResourcePool) Get(ctx context.Context) (resource Resource, err 
 			}
 			return nil, ctx.Err()
 		case ret, ok := <-req:
+			dp.waitTime.Add(time.Since(startTime))
+
 			if !ok {
 				return nil, ErrClosed
 			}
@@ -241,7 +256,10 @@ func (dp *DynamicResourcePool) putLocked(resource Resource, err error) bool {
 		return true
 	}
 	if err == nil {
-		dp.rawConnection = append(dp.rawConnection, &resourceWrapper{resource: resource})
+		dp.rawConnection = append(dp.rawConnection, resourceWrapper{
+			resource: resource,
+			timeUsed: time.Now(),
+		})
 		return true
 	}
 	return false
@@ -285,7 +303,7 @@ func (dp *DynamicResourcePool) Close() {
 		dp.idleTimer.Stop()
 	}
 
-	copyResources := make([]*resourceWrapper, 0, len(dp.rawConnection))
+	copyResources := make([]resourceWrapper, 0, len(dp.rawConnection))
 	copyResources = append(copyResources, dp.rawConnection...)
 
 	dp.rawConnection = nil
@@ -319,8 +337,8 @@ func (dp *DynamicResourcePool) closeIdleResources() {
 }
 
 // resourceCleanerLocked removes resources that should be closed.
-func (dp *DynamicResourcePool) resourceCleanerLocked() []*resourceWrapper {
-	var closing []*resourceWrapper
+func (dp *DynamicResourcePool) resourceCleanerLocked() []resourceWrapper {
+	var closing []resourceWrapper
 
 	// As rawConnection is ordered by timeUsed process
 	// in reverse order to minimise the work needed.
@@ -332,6 +350,8 @@ func (dp *DynamicResourcePool) resourceCleanerLocked() []*resourceWrapper {
 			i++
 			closing = dp.rawConnection[:i:i]
 			dp.rawConnection = dp.rawConnection[i:]
+			idleClosing := int64(len(closing))
+			dp.maxIdleTimeClosed += idleClosing
 			break
 		}
 	}
@@ -364,8 +384,18 @@ func (dp *DynamicResourcePool) SetIdleTimeout(idleTimeout time.Duration) {
 }
 
 func (dp *DynamicResourcePool) StatsJSON() string {
-	//TODO implement me
-	panic("implement me")
+	return fmt.Sprintf(`{"Capacity": %v, "Available": %v, "Active": %v, "InUse": %v, "MaxCapacity": %v, "WaitCount": %v, "WaitTime": %v, "IdleTimeout": %v, "IdleClosed": %v, "Exhausted": %v}`,
+		dp.Capacity(),
+		dp.Available(),
+		dp.Active(),
+		dp.InUse(),
+		dp.MaxCap(),
+		dp.WaitCount(),
+		dp.WaitTime().Nanoseconds(),    // nolint: staticcheck
+		dp.IdleTimeout().Nanoseconds(), // nolint: staticcheck
+		dp.IdleClosed(),
+		dp.Exhausted(),
+	)
 }
 
 func (dp *DynamicResourcePool) Capacity() int64 {
@@ -379,13 +409,16 @@ func (dp *DynamicResourcePool) Available() int64 {
 }
 
 func (dp *DynamicResourcePool) Active() int64 {
-	//TODO implement me
-	panic("implement me")
+	dp.mu.Lock()
+	defer dp.mu.Unlock()
+	return int64(dp.numOpen)
 }
 
 func (dp *DynamicResourcePool) InUse() int64 {
-	//TODO implement me
-	panic("implement me")
+	dp.mu.Lock()
+	defer dp.mu.Unlock()
+	inUse := dp.numOpen - len(dp.rawConnection)
+	return int64(inUse)
 }
 
 func (dp *DynamicResourcePool) MaxCap() int64 {
@@ -393,13 +426,14 @@ func (dp *DynamicResourcePool) MaxCap() int64 {
 }
 
 func (dp *DynamicResourcePool) WaitCount() int64 {
-	//TODO implement me
-	panic("implement me")
+	dp.mu.Lock()
+	defer dp.mu.Unlock()
+	waitCount := dp.waitCount
+	return waitCount
 }
 
 func (dp *DynamicResourcePool) WaitTime() time.Duration {
-	//TODO implement me
-	panic("implement me")
+	return dp.waitTime.Get()
 }
 
 func (dp *DynamicResourcePool) IdleTimeout() time.Duration {
@@ -410,8 +444,10 @@ func (dp *DynamicResourcePool) IdleTimeout() time.Duration {
 }
 
 func (dp *DynamicResourcePool) IdleClosed() int64 {
-	//TODO implement me
-	panic("implement me")
+	dp.mu.Lock()
+	defer dp.mu.Unlock()
+	idleClosed := dp.maxIdleTimeClosed
+	return idleClosed
 }
 
 func (dp *DynamicResourcePool) Exhausted() int64 {
