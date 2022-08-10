@@ -18,7 +18,6 @@ package vtctld
 
 import (
 	"flag"
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -40,7 +39,6 @@ func TestWebApp(t *testing.T) {
 	defer res.Body.Close()
 
 	data, err := ioutil.ReadAll(res.Body)
-	fmt.Printf("body: %s\n", string(data))
 
 	assert.NoError(t, err)
 	assert.Contains(t, string(data), "<!doctype html>")
