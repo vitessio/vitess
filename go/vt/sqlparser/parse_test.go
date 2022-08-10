@@ -6275,8 +6275,9 @@ func TestKeywordsCorrectlyDoParse(t *testing.T) {
 	cTest := "CREATE TABLE t(%s int)"
 	tTest := "CREATE TABLE %s(i int)"
 	tcTest := "SELECT * FROM t ORDER BY t.%s"
+	sTest := "SELECT %s.c FROM t"
 
-	tests := []string{aliasTest, iTest, dTest, uTest, cTest, tTest, tcTest}
+	tests := []string{aliasTest, iTest, dTest, uTest, cTest, tTest, tcTest, sTest}
 
 	for _, kw := range correctlyDoParse {
 		for _, query := range tests {

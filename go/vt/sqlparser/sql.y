@@ -5815,23 +5815,13 @@ column_name:
   {
     $$ = &ColName{Name: $1}
   }
-| table_id '.' reserved_sql_id
-  {
-    $$ = &ColName{Qualifier: TableName{Name: $1}, Name: $3}
-  }
-| table_id '.' reserved_table_id '.' reserved_sql_id
-  {
-    $$ = &ColName{Qualifier: TableName{Qualifier: $1, Name: $3}, Name: $5}
-  }
-// TODO: should just be reserved_keywords or reserved_table_id
-| reserved_keyword2 '.' reserved_sql_id
-  {
-    $$ = &ColName{Qualifier: TableName{Name: NewTableIdent(string($1))}, Name: $3}
-  }
-// TODO: should just be in non_reserved_keywords
 | non_reserved_keyword2
   {
     $$ = &ColName{Name: NewColIdent(string($1))}
+  }
+| table_id '.' reserved_sql_id
+  {
+    $$ = &ColName{Qualifier: TableName{Name: $1}, Name: $3}
   }
 | table_id '.' non_reserved_keyword2
   {
@@ -5844,6 +5834,26 @@ column_name:
 | table_id '.' FORMAT
   {
     $$ = &ColName{Qualifier: TableName{Name: $1}, Name: NewColIdent(string($3))}
+  }
+| reserved_keyword2 '.' reserved_sql_id
+  {
+    $$ = &ColName{Qualifier: TableName{Name: NewTableIdent(string($1))}, Name: $3}
+  }
+| non_reserved_keyword2 '.' reserved_sql_id
+  {
+    $$ = &ColName{Name: NewColIdent(string($1))}
+  }
+| ACCOUNT '.' reserved_sql_id
+  {
+    $$ = &ColName{Qualifier: TableName{Name: NewTableIdent(string($1))}, Name: $3}
+  }
+| FORMAT '.' reserved_sql_id
+  {
+    $$ = &ColName{Qualifier: TableName{Name: NewTableIdent(string($1))}, Name: $3}
+  }
+| table_id '.' reserved_table_id '.' reserved_sql_id
+  {
+    $$ = &ColName{Qualifier: TableName{Qualifier: $1, Name: $3}, Name: $5}
   }
 
 value:
