@@ -19,9 +19,9 @@ limitations under the License.
 package collations
 
 import (
-	"flag"
 	"sync"
 
+	"vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/vt/servenv"
 )
 
