@@ -48,7 +48,8 @@ type DynamicResourcePool struct {
 	mu            sync.Mutex // protects following
 	closed        bool
 	rawConnection []resourceWrapper
-	connRequests  map[uint64]chan resourceWrapper
+	connReceiver  chan resourceWrapper
+	connRequests  map[uint64]any
 	nextRequest   uint64
 	numOpen       int // number of open resources
 	// signals the need for new resource to a goroutine running resourceOpener().
@@ -76,7 +77,8 @@ func NewDynamicResourcePool(factory Factory, maxCap int, idleTimeout time.Durati
 		maxCapacity:  maxCap,
 		maxIdleTime:  idleTimeout,
 		openerCh:     make(chan struct{}, resourceRequestQueueSize),
-		connRequests: make(map[uint64]chan resourceWrapper),
+		connReceiver: make(chan resourceWrapper, resourceRequestQueueSize),
+		connRequests: make(map[uint64]any),
 		cancel:       cancel,
 	}
 
@@ -160,11 +162,9 @@ func (dp *DynamicResourcePool) Get(ctx context.Context) (resource Resource, err 
 	}
 	// 3: Check if the pool is at maxCapacity.
 	if dp.numOpen >= dp.maxCapacity {
-		// make a request channel.
-		req := make(chan resourceWrapper, 1)
 		dp.nextRequest++
 		reqKey := dp.nextRequest
-		dp.connRequests[reqKey] = req
+		dp.connRequests[reqKey] = nil
 		dp.waitCount++
 		dp.mu.Unlock()
 
@@ -174,21 +174,30 @@ func (dp *DynamicResourcePool) Get(ctx context.Context) (resource Resource, err 
 		case <-ctx.Done():
 			// Timeout happened.
 			// Removing the connection request and ensure no value has been sent on the channel.
+			connSentForThisReq := false
 			dp.mu.Lock()
-			delete(dp.connRequests, reqKey)
+			// If the key is still in the map, it means the connection request has not been fulfilled.
+			// And if the key is not in the map, that means the connection request is fulfilled.
+			if _, exists := dp.connRequests[reqKey]; !exists {
+				connSentForThisReq = true
+			} else {
+				delete(dp.connRequests, reqKey)
+			}
 			dp.mu.Unlock()
 
 			dp.waitTime.Add(time.Since(startTime))
 
-			select {
-			default:
-			case ret, ok := <-req:
-				if ok && ret.resource != nil {
-					dp.Put(ret.resource)
+			if connSentForThisReq {
+				select {
+				default:
+				case ret, ok := <-dp.connReceiver:
+					if ok && ret.resource != nil {
+						dp.Put(ret.resource)
+					}
 				}
 			}
 			return nil, ctx.Err()
-		case ret, ok := <-req:
+		case ret, ok := <-dp.connReceiver:
 			dp.waitTime.Add(time.Since(startTime))
 
 			if !ok {
@@ -243,13 +252,12 @@ func (dp *DynamicResourcePool) putLocked(resource Resource, err error) bool {
 		return false
 	}
 	if reqC := len(dp.connRequests); reqC > 0 {
-		var req chan resourceWrapper
 		var reqKey uint64
-		for reqKey, req = range dp.connRequests {
+		for reqKey = range dp.connRequests {
 			break
 		}
-		delete(dp.connRequests, reqKey) // Remove from pending requests.
-		req <- resourceWrapper{
+		delete(dp.connRequests, reqKey) // Remove from pending request.
+		dp.connReceiver <- resourceWrapper{
 			resource: resource,
 			err:      err,
 		}
@@ -308,9 +316,9 @@ func (dp *DynamicResourcePool) Close() {
 
 	dp.rawConnection = nil
 	dp.closed = true
-	for _, req := range dp.connRequests {
-		close(req)
-	}
+	// TODO: verify if this works as intended.
+	// Close the receiver conn channel.
+	close(dp.connReceiver)
 	dp.mu.Unlock()
 	for _, r := range copyResources {
 		dp.resourceClose(r.resource)
