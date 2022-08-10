@@ -3167,7 +3167,7 @@ func (node *Over) Format(buf *TrackedBuffer) {
 		return
 	}
 
-	if !node.NameRef.IsEmpty() {
+	if node.isSimpleRef() {
 		buf.Myprintf("over %v", node.NameRef)
 	} else {
 		buf.Myprintf("over (")
@@ -3181,6 +3181,10 @@ func (node *Over) walkSubtree(visit Visit) error {
 		return nil
 	}
 	return Walk(visit, node.PartitionBy, node.OrderBy, node.Name)
+}
+
+func (node *Over) isSimpleRef() bool {
+	return !node.NameRef.IsEmpty() && len(node.PartitionBy) == 0 && len(node.OrderBy) == 0 && node.Frame == nil
 }
 
 // Nextval defines the NEXT VALUE expression.

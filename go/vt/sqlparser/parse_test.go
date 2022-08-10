@@ -1952,13 +1952,13 @@ var (
 		}, {
 			input: "select name, dense_rank() over (w1 partition by x) from t window w1 as ( order by y asc)",
 		}, {
-			input: "select name, dense_rank() over (w1 partition by x), count(*) over (w2) from t window w1 as ( order by y asc), w2 as (w1 partition by x)",
+			input: "select name, dense_rank() over (w1 partition by x), count(*) over w2 from t window w1 as ( order by y asc), w2 as (w1 partition by x)",
 		}, {
-			input: "select name, dense_rank() over (w3) from t window w1 as (w2), w2 as (), w3 as (w1)",
+			input: "select name, dense_rank() over w3 from t window w1 as (w2), w2 as (), w3 as (w1)",
 		}, {
-			input: "select name, dense_rank() over (window_name) from t",
+			input: "select name, dense_rank() over window_name from t",
 		}, {
-			input: "with a as (select (1) from dual) select name, dense_rank() over (window_name) from a",
+			input: "with a as (select (1) from dual) select name, dense_rank() over window_name from a",
 		}, {
 			input: "select name, dense_rank() over (w1 partition by x) from t window w1 as (ROWS UNBOUNDED PRECEDING)",
 		}, {
@@ -4139,7 +4139,7 @@ func TestConvert(t *testing.T) {
 	validSQL := []parseTest{
 		{
 			input:  "select cast('abc' as date) from t",
-			output: "select convert('abc', date) from t",
+			output: "select cast('abc', date) from t",
 		}, {
 			input:                      "select cast('abc' as date) from t",
 			useSelectExpressionLiteral: true,
