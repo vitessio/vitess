@@ -46,7 +46,7 @@ func TestPerformVDiffAction(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := tt.vde.PerformVDiffAction(ctx, tt.req)
-			if err != nil && tt.wantErr != nil && !vterrors.Equals(err, tt.wantErr) {
+			if tt.wantErr != nil && !vterrors.Equals(err, tt.wantErr) {
 				t.Errorf("Engine.PerformVDiffAction() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
