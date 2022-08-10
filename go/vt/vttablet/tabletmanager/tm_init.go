@@ -437,7 +437,7 @@ func (tm *TabletManager) initSchema(ctx context.Context,
 		return nil, err
 	}
 
-	if !*mysqlctl.DisableActiveReparents {
+	if !*mysqlctl.DisableActiveReparents && *mysqlctl.SetSuperReadOnlyAfterSchmaInitializer {
 		defer func() {
 			if err := mysql.SchemaInitializer.SetSuperReadOnlyUser(conn.Conn); err != nil {
 				log.Warning("not able to set super-read-only user")
@@ -860,7 +860,7 @@ func (tm *TabletManager) exportStats() {
 	statsShard.Set(tablet.Shard)
 	statsTabletType.Set(topoproto.TabletTypeLString(tm.tmState.tablet.Type))
 	statsTabletTypeCount.Add(topoproto.TabletTypeLString(tm.tmState.tablet.Type), 1)
-	if key.RangeIsPartial(tablet.KeyRange) {
+	if key.KeyRangeIsPartial(tablet.KeyRange) {
 		statsKeyRangeStart.Set(hex.EncodeToString(tablet.KeyRange.Start))
 		statsKeyRangeEnd.Set(hex.EncodeToString(tablet.KeyRange.End))
 	}

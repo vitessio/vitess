@@ -152,13 +152,13 @@ func (ts *tmState) RefreshFromTopoInfo(ctx context.Context, shardInfo *topo.Shar
 		for _, partition := range srvKeyspace.GetPartitions() {
 
 			for _, shard := range partition.GetShardReferences() {
-				if key.RangeEqual(shard.GetKeyRange(), ts.tablet.KeyRange) {
+				if key.KeyRangeEqual(shard.GetKeyRange(), ts.tablet.KeyRange) {
 					ts.isShardServing[partition.GetServedType()] = true
 				}
 			}
 
 			for _, tabletControl := range partition.GetShardTabletControls() {
-				if key.RangeEqual(tabletControl.GetKeyRange(), ts.KeyRange()) {
+				if key.KeyRangeEqual(tabletControl.GetKeyRange(), ts.KeyRange()) {
 					if tabletControl.QueryServiceDisabled {
 						ts.tabletControls[partition.GetServedType()] = true
 					}

@@ -219,7 +219,7 @@ func (vf *VindexFunc) buildRow(id sqltypes.Value, ksid []byte, kr *topodatapb.Ke
 			}
 		case 5:
 			if ksid != nil {
-				row = append(row, sqltypes.NewVarBinary(key.RangeString(kr)))
+				row = append(row, sqltypes.NewVarBinary(key.KeyRangeString(kr)))
 			} else {
 				row = append(row, sqltypes.NULL)
 			}

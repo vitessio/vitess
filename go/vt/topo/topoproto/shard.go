@@ -53,7 +53,7 @@ func SourceShardString(source *topodatapb.Shard_SourceShard) string {
 // SourceShardAsHTML returns a HTML version of the object.
 func SourceShardAsHTML(source *topodatapb.Shard_SourceShard) template.HTML {
 	result := fmt.Sprintf("<b>Uid</b>: %v</br>\n<b>Source</b>: %v/%v</br>\n", source.Uid, source.Keyspace, source.Shard)
-	if key.RangeIsPartial(source.KeyRange) {
+	if key.KeyRangeIsPartial(source.KeyRange) {
 		result += fmt.Sprintf("<b>KeyRange</b>: %v-%v</br>\n",
 			hex.EncodeToString(source.KeyRange.Start),
 			hex.EncodeToString(source.KeyRange.End))

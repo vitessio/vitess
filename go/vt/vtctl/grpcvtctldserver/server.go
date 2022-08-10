@@ -2859,7 +2859,7 @@ func (s *VtctldServer) SourceShardAdd(ctx context.Context, req *vtctldatapb.Sour
 	span.Annotate("uid", req.Uid)
 	span.Annotate("source_keyspace", req.SourceKeyspace)
 	span.Annotate("source_shard", req.SourceShard)
-	span.Annotate("keyrange", key.RangeString(req.KeyRange))
+	span.Annotate("keyrange", key.KeyRangeString(req.KeyRange))
 	span.Annotate("tables", strings.Join(req.Tables, ","))
 
 	var (

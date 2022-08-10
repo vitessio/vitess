@@ -187,7 +187,7 @@ func getShardRanges(ks string, vschema *vschemapb.Keyspace, ksShardMap map[strin
 		}
 
 		shards[i] = &topodatapb.ShardReference{
-			Name:     key.RangeString(kr),
+			Name:     key.KeyRangeString(kr),
 			KeyRange: kr,
 		}
 	}

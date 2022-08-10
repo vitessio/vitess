@@ -150,7 +150,7 @@ func createShardedSrvKeyspace(shardSpec, servedFromKeyspace string) (*topodatapb
 	shards := make([]*topodatapb.ShardReference, 0, len(shardKrArray))
 	for i := 0; i < len(shardKrArray); i++ {
 		shard := &topodatapb.ShardReference{
-			Name:     key.RangeString(shardKrArray[i]),
+			Name:     key.KeyRangeString(shardKrArray[i]),
 			KeyRange: shardKrArray[i],
 		}
 		shards = append(shards, shard)

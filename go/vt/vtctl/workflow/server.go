@@ -154,7 +154,7 @@ func (s *Server) GetCellsWithShardReadsSwitched(
 			// If reads and writes are both switched it is possible that the
 			// shard is not in the partition table.
 			for _, shardReference := range partition.GetShardReferences() {
-				if key.RangeEqual(shardReference.GetKeyRange(), si.GetKeyRange()) {
+				if key.KeyRangeEqual(shardReference.GetKeyRange(), si.GetKeyRange()) {
 					found = true
 					break
 				}
@@ -169,7 +169,7 @@ func (s *Server) GetCellsWithShardReadsSwitched(
 			}
 
 			for _, tabletControl := range partition.GetShardTabletControls() {
-				if key.RangeEqual(tabletControl.GetKeyRange(), si.GetKeyRange()) {
+				if key.KeyRangeEqual(tabletControl.GetKeyRange(), si.GetKeyRange()) {
 					if !tabletControl.GetQueryServiceDisabled() {
 						shardServedTypes = append(shardServedTypes, si.ShardName())
 					}

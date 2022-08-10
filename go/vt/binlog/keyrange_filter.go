@@ -49,7 +49,7 @@ func keyRangeFilterFunc(keyrange *topodatapb.KeyRange, callback func(*binlogdata
 					updateStreamErrors.Add("KeyRangeStream", 1)
 					return fmt.Errorf("SBR mode unsupported for streaming: %s", statement.Statement.Sql)
 				}
-				if !key.RangeContains(keyrange, statement.KeyspaceID) {
+				if !key.KeyRangeContains(keyrange, statement.KeyspaceID) {
 					continue
 				}
 				filtered = append(filtered, statement.Statement)

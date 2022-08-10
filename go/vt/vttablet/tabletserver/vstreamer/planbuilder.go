@@ -219,7 +219,7 @@ func (plan *Plan) filter(values, result []sqltypes.Value, charsets []collations.
 			if err != nil {
 				return false, err
 			}
-			if !key.RangeContains(filter.KeyRange, ksid) {
+			if !key.KeyRangeContains(filter.KeyRange, ksid) {
 				return false, nil
 			}
 		default:

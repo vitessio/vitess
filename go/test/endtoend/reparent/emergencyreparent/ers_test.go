@@ -33,9 +33,6 @@ import (
 func TestTrivialERS(t *testing.T) {
 	defer cluster.PanicHandler(t)
 
-	/**tabletmanager.SetSuperReadOnly = true
-	defer func() { *tabletmanager.SetSuperReadOnly = false }()*/
-
 	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets

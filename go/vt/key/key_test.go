@@ -126,7 +126,7 @@ func TestEvenShardsKeyRange(t *testing.T) {
 		}
 
 		// Check if the string representation is equal as well.
-		if gotStr, want := RangeString(got), tc.wantSpec; gotStr != want {
+		if gotStr, want := KeyRangeString(got), tc.wantSpec; gotStr != want {
 			t.Errorf("EvenShardsKeyRange(%v) = %v, want = %v", got, gotStr, want)
 		}
 
@@ -216,12 +216,12 @@ func TestKeyRangeAdd(t *testing.T) {
 		if kr == nil {
 			return ""
 		}
-		return RangeString(kr)
+		return KeyRangeString(kr)
 	}
 	for _, tcase := range testcases {
 		first := stringToKeyRange(tcase.first)
 		second := stringToKeyRange(tcase.second)
-		out, ok := RangeAdd(first, second)
+		out, ok := KeyRangeAdd(first, second)
 		assert.Equal(t, tcase.out, keyRangeToString(out))
 		assert.Equal(t, tcase.ok, ok)
 	}
@@ -261,9 +261,9 @@ func TestKeyRangeEndEqual(t *testing.T) {
 	for _, tcase := range testcases {
 		first := stringToKeyRange(tcase.first)
 		second := stringToKeyRange(tcase.second)
-		out := RangeEndEqual(first, second)
+		out := KeyRangeEndEqual(first, second)
 		if out != tcase.out {
-			t.Fatalf("RangeEndEqual(%q, %q) expected %t, got %t", tcase.first, tcase.second, tcase.out, out)
+			t.Fatalf("KeyRangeEndEqual(%q, %q) expected %t, got %t", tcase.first, tcase.second, tcase.out, out)
 		}
 	}
 }
@@ -302,9 +302,9 @@ func TestKeyRangeStartEqual(t *testing.T) {
 	for _, tcase := range testcases {
 		first := stringToKeyRange(tcase.first)
 		second := stringToKeyRange(tcase.second)
-		out := RangeStartEqual(first, second)
+		out := KeyRangeStartEqual(first, second)
 		if out != tcase.out {
-			t.Fatalf("RangeStartEqual(%q, %q) expected %t, got %t", tcase.first, tcase.second, tcase.out, out)
+			t.Fatalf("KeyRangeStartEqual(%q, %q) expected %t, got %t", tcase.first, tcase.second, tcase.out, out)
 		}
 	}
 }
@@ -339,9 +339,9 @@ func TestKeyRangeEqual(t *testing.T) {
 	for _, tcase := range testcases {
 		first := stringToKeyRange(tcase.first)
 		second := stringToKeyRange(tcase.second)
-		out := RangeEqual(first, second)
+		out := KeyRangeEqual(first, second)
 		if out != tcase.out {
-			t.Fatalf("RangeEqual(%q, %q) expected %t, got %t", tcase.first, tcase.second, tcase.out, out)
+			t.Fatalf("KeyRangeEqual(%q, %q) expected %t, got %t", tcase.first, tcase.second, tcase.out, out)
 		}
 	}
 }
@@ -384,9 +384,9 @@ func TestKeyRangeContiguous(t *testing.T) {
 	for _, tcase := range testcases {
 		first := stringToKeyRange(tcase.first)
 		second := stringToKeyRange(tcase.second)
-		out := RangeContiguous(first, second)
+		out := KeyRangeContiguous(first, second)
 		if out != tcase.out {
-			t.Fatalf("RangeContiguous(%q, %q) expected %t, got %t", tcase.first, tcase.second, tcase.out, out)
+			t.Fatalf("KeyRangeContiguous(%q, %q) expected %t, got %t", tcase.first, tcase.second, tcase.out, out)
 		}
 	}
 }
@@ -490,11 +490,11 @@ func TestContains(t *testing.T) {
 		if err != nil {
 			t.Errorf("Unexpected error: %v", err)
 		}
-		if c := RangeContains(kr, k); c != el.contained {
+		if c := KeyRangeContains(kr, k); c != el.contained {
 			t.Errorf("Unexpected result: contains for %v and (%v-%v) yields %v.", el.kid, el.start, el.end, c)
 		}
-		if !RangeContains(nil, k) {
-			t.Errorf("RangeContains(nil, x) should always be true")
+		if !KeyRangeContains(nil, k) {
+			t.Errorf("KeyRangeContains(nil, x) should always be true")
 		}
 	}
 }
@@ -543,22 +543,22 @@ func TestIntersectOverlap(t *testing.T) {
 			t.Errorf("Unexpected error: %v", err)
 		}
 		right := &topodatapb.KeyRange{Start: c, End: d}
-		if c := RangesIntersect(left, right); c != el.intersects {
-			t.Errorf("Unexpected result: RangesIntersect for %v and %v yields %v.", left, right, c)
+		if c := KeyRangesIntersect(left, right); c != el.intersects {
+			t.Errorf("Unexpected result: KeyRangesIntersect for %v and %v yields %v.", left, right, c)
 		}
-		overlap, err := RangesOverlap(left, right)
+		overlap, err := KeyRangesOverlap(left, right)
 		if el.intersects {
 			if err != nil {
-				t.Errorf("Unexpected result: RangesOverlap for overlapping %v and %v returned an error: %v", left, right, err)
+				t.Errorf("Unexpected result: KeyRangesOverlap for overlapping %v and %v returned an error: %v", left, right, err)
 			} else {
 				got := hex.EncodeToString(overlap.Start) + "-" + hex.EncodeToString(overlap.End)
 				if got != el.overlap {
-					t.Errorf("Unexpected result: RangesOverlap for overlapping %v and %v should have returned: %v but got: %v", left, right, el.overlap, got)
+					t.Errorf("Unexpected result: KeyRangesOverlap for overlapping %v and %v should have returned: %v but got: %v", left, right, el.overlap, got)
 				}
 			}
 		} else {
 			if err == nil {
-				t.Errorf("Unexpected result: RangesOverlap for non-overlapping %v and %v should have returned an error", left, right)
+				t.Errorf("Unexpected result: KeyRangesOverlap for non-overlapping %v and %v should have returned an error", left, right)
 			}
 		}
 	}
@@ -609,9 +609,9 @@ func TestKeyRangeIncludes(t *testing.T) {
 				t.Fatalf("test data error in %v: %v", tc.small, err)
 			}
 		}
-		got := RangeIncludes(big, small)
+		got := KeyRangeIncludes(big, small)
 		if got != tc.expected {
-			t.Errorf("RangeIncludes for test case '%v' returned %v but expected %v", tc.name, got, tc.expected)
+			t.Errorf("KeyRangeIncludes for test case '%v' returned %v but expected %v", tc.name, got, tc.expected)
 		}
 	}
 }
@@ -655,7 +655,7 @@ func BenchmarkKeyRangeContains(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		for _, key := range keys {
-			RangeContains(kr, key)
+			KeyRangeContains(kr, key)
 		}
 	}
 }
@@ -671,7 +671,7 @@ func BenchmarkKeyRangesIntersect(b *testing.B) {
 	}
 
 	for i := 0; i < b.N; i++ {
-		RangesIntersect(kr1, kr2)
+		KeyRangesIntersect(kr1, kr2)
 	}
 }
 
@@ -686,7 +686,7 @@ func BenchmarkKeyRangesOverlap(b *testing.B) {
 	}
 
 	for i := 0; i < b.N; i++ {
-		if _, err := RangesOverlap(kr1, kr2); err != nil {
+		if _, err := KeyRangesOverlap(kr1, kr2); err != nil {
 			b.Fatal(err)
 		}
 	}

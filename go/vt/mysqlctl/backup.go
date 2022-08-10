@@ -17,6 +17,7 @@ limitations under the License.
 package mysqlctl
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -25,8 +26,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"context"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/stats"
@@ -418,7 +417,7 @@ func initSchema(ctx context.Context, params RestoreParams) ([]error, error) {
 		return nil, err
 	}
 
-	if !*DisableActiveReparents {
+	if !*DisableActiveReparents && *SetSuperReadOnlyAfterSchmaInitializer {
 		defer func() {
 			if err := mysql.SchemaInitializer.SetSuperReadOnlyUser(conn.Conn); err != nil {
 				log.Warning("not able to set super-read-only user")

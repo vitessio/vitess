@@ -107,9 +107,10 @@ func EvenShardsKeyRange(i, n int) (*topodatapb.KeyRange, error) {
 	return &topodatapb.KeyRange{Start: startBytes, End: endBytes}, nil
 }
 
-// RangeAdd adds two adjacent keyranges into a single value.
+// KeyRangeAdd adds two adjacent keyranges into a single value.
 // If the values are not adjacent, it returns false.
-func RangeAdd(first, second *topodatapb.KeyRange) (*topodatapb.KeyRange, bool) {
+// nolint:revive
+func KeyRangeAdd(first, second *topodatapb.KeyRange) (*topodatapb.KeyRange, bool) {
 	if first == nil || second == nil {
 		return nil, false
 	}
@@ -122,8 +123,9 @@ func RangeAdd(first, second *topodatapb.KeyRange) (*topodatapb.KeyRange, bool) {
 	return nil, false
 }
 
-// RangeContains returns true if the provided id is in the keyrange.
-func RangeContains(kr *topodatapb.KeyRange, id []byte) bool {
+// KeyRangeContains returns true if the provided id is in the keyrange.
+// nolint:revive
+func KeyRangeContains(kr *topodatapb.KeyRange, id []byte) bool {
 	if kr == nil {
 		return true
 	}
@@ -144,24 +146,27 @@ func ParseKeyRangeParts(start, end string) (*topodatapb.KeyRange, error) {
 	return &topodatapb.KeyRange{Start: s, End: e}, nil
 }
 
-// RangeString prints a topodatapb.KeyRange
-func RangeString(k *topodatapb.KeyRange) string {
+// KeyRangeString prints a topodatapb.KeyRange
+// nolint:revive
+func KeyRangeString(k *topodatapb.KeyRange) string {
 	if k == nil {
 		return "-"
 	}
 	return hex.EncodeToString(k.Start) + "-" + hex.EncodeToString(k.End)
 }
 
-// RangeIsPartial returns true if the KeyRange does not cover the entire space.
-func RangeIsPartial(kr *topodatapb.KeyRange) bool {
+// KeyRangeIsPartial returns true if the KeyRange does not cover the entire space.
+// nolint:revive
+func KeyRangeIsPartial(kr *topodatapb.KeyRange) bool {
 	if kr == nil {
 		return false
 	}
 	return !(len(kr.Start) == 0 && len(kr.End) == 0)
 }
 
-// RangeEqual returns true if both key ranges cover the same area
-func RangeEqual(left, right *topodatapb.KeyRange) bool {
+// KeyRangeEqual returns true if both key ranges cover the same area
+// nolint:revive
+func KeyRangeEqual(left, right *topodatapb.KeyRange) bool {
 	if left == nil {
 		return right == nil || (len(right.Start) == 0 && len(right.End) == 0)
 	}
@@ -194,8 +199,9 @@ func addPadding(kr []byte) []byte {
 	return paddedKr
 }
 
-// RangeStartSmaller returns true if right's keyrange start is _after_ left's start
-func RangeStartSmaller(left, right *topodatapb.KeyRange) bool {
+// KeyRangeStartSmaller returns true if right's keyrange start is _after_ left's start
+// nolint:revive
+func KeyRangeStartSmaller(left, right *topodatapb.KeyRange) bool {
 	if left == nil {
 		return right != nil
 	}
@@ -205,8 +211,9 @@ func RangeStartSmaller(left, right *topodatapb.KeyRange) bool {
 	return bytes.Compare(left.Start, right.Start) < 0
 }
 
-// RangeStartEqual returns true if both key ranges have the same start
-func RangeStartEqual(left, right *topodatapb.KeyRange) bool {
+// KeyRangeStartEqual returns true if both key ranges have the same start
+// nolint:revive
+func KeyRangeStartEqual(left, right *topodatapb.KeyRange) bool {
 	if left == nil {
 		return right == nil || len(right.Start) == 0
 	}
@@ -216,9 +223,10 @@ func RangeStartEqual(left, right *topodatapb.KeyRange) bool {
 	return bytes.Equal(addPadding(left.Start), addPadding(right.Start))
 }
 
-// RangeContiguous returns true if the end of the left key range exactly
+// KeyRangeContiguous returns true if the end of the left key range exactly
 // matches the start of the right key range (i.e they are contigious)
-func RangeContiguous(left, right *topodatapb.KeyRange) bool {
+// nolint:revive
+func KeyRangeContiguous(left, right *topodatapb.KeyRange) bool {
 	if left == nil {
 		return right == nil || (len(right.Start) == 0 && len(right.End) == 0)
 	}
@@ -228,8 +236,9 @@ func RangeContiguous(left, right *topodatapb.KeyRange) bool {
 	return bytes.Equal(addPadding(left.End), addPadding(right.Start))
 }
 
-// RangeEndEqual returns true if both key ranges have the same end
-func RangeEndEqual(left, right *topodatapb.KeyRange) bool {
+// KeyRangeEndEqual returns true if both key ranges have the same end
+// nolint:revive
+func KeyRangeEndEqual(left, right *topodatapb.KeyRange) bool {
 	if left == nil {
 		return right == nil || len(right.End) == 0
 	}
@@ -245,8 +254,9 @@ func RangeEndEqual(left, right *topodatapb.KeyRange) bool {
 // intersects = (b > c) && (a < d)
 // overlap = min(b, d) - max(c, a)
 
-// RangesIntersect returns true if some Keyspace values exist in both ranges.
-func RangesIntersect(first, second *topodatapb.KeyRange) bool {
+// KeyRangesIntersect returns true if some Keyspace values exist in both ranges.
+// nolint:revive
+func KeyRangesIntersect(first, second *topodatapb.KeyRange) bool {
 	if first == nil || second == nil {
 		return true
 	}
@@ -254,10 +264,11 @@ func RangesIntersect(first, second *topodatapb.KeyRange) bool {
 		(len(second.End) == 0 || bytes.Compare(first.Start, second.End) < 0)
 }
 
-// RangesOverlap returns the overlap between two KeyRanges.
+// KeyRangesOverlap returns the overlap between two KeyRanges.
 // They need to overlap, otherwise an error is returned.
-func RangesOverlap(first, second *topodatapb.KeyRange) (*topodatapb.KeyRange, error) {
-	if !RangesIntersect(first, second) {
+// nolint:revive
+func KeyRangesOverlap(first, second *topodatapb.KeyRange) (*topodatapb.KeyRange, error) {
+	if !KeyRangesIntersect(first, second) {
 		return nil, fmt.Errorf("KeyRanges %v and %v don't overlap", first, second)
 	}
 	if first == nil {
@@ -283,10 +294,11 @@ func RangesOverlap(first, second *topodatapb.KeyRange) (*topodatapb.KeyRange, er
 	return result, nil
 }
 
-// RangeIncludes returns true if the first provided KeyRange, big,
+// KeyRangeIncludes returns true if the first provided KeyRange, big,
 // contains the second KeyRange, small. If they intersect, but small
 // spills out, this returns false.
-func RangeIncludes(big, small *topodatapb.KeyRange) bool {
+// nolint:revive
+func KeyRangeIncludes(big, small *topodatapb.KeyRange) bool {
 	if big == nil {
 		// The outside one covers everything, we're good.
 		return true

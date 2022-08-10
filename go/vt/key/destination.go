@@ -123,23 +123,23 @@ func (d DestinationExactKeyRange) Resolve(allShards []*topodatapb.ShardReference
 
 // String is part of the Destination interface.
 func (d DestinationExactKeyRange) String() string {
-	return "DestinationExactKeyRange(" + RangeString(d.KeyRange) + ")"
+	return "DestinationExactKeyRange(" + KeyRangeString(d.KeyRange) + ")"
 }
 
 func processExactKeyRange(allShards []*topodatapb.ShardReference, kr *topodatapb.KeyRange, addShard func(shard string) error) error {
 	sort.SliceStable(allShards, func(i, j int) bool {
-		return RangeStartSmaller(allShards[i].GetKeyRange(), allShards[j].GetKeyRange())
+		return KeyRangeStartSmaller(allShards[i].GetKeyRange(), allShards[j].GetKeyRange())
 	})
 
 	shardnum := 0
 	for shardnum < len(allShards) {
-		if RangeStartEqual(kr, allShards[shardnum].KeyRange) {
+		if KeyRangeStartEqual(kr, allShards[shardnum].KeyRange) {
 			break
 		}
 		shardnum++
 	}
 	for shardnum < len(allShards) {
-		if !RangesIntersect(kr, allShards[shardnum].KeyRange) {
+		if !KeyRangesIntersect(kr, allShards[shardnum].KeyRange) {
 			// If we are over the requested keyrange, we
 			// can stop now, we won't find more.
 			break
@@ -147,12 +147,12 @@ func processExactKeyRange(allShards []*topodatapb.ShardReference, kr *topodatapb
 		if err := addShard(allShards[shardnum].Name); err != nil {
 			return err
 		}
-		if RangeEndEqual(kr, allShards[shardnum].KeyRange) {
+		if KeyRangeEndEqual(kr, allShards[shardnum].KeyRange) {
 			return nil
 		}
 		shardnum++
 	}
-	return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "keyrange %v does not exactly match shards", RangeString(kr))
+	return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "keyrange %v does not exactly match shards", KeyRangeString(kr))
 }
 
 //
@@ -183,7 +183,7 @@ func (d DestinationExactKeyRanges) String() string {
 		if i > 0 {
 			buffer.WriteByte(',')
 		}
-		buffer.WriteString(RangeString(kr))
+		buffer.WriteString(KeyRangeString(kr))
 	}
 	buffer.WriteByte(')')
 	return buffer.String()
@@ -210,12 +210,12 @@ func (d DestinationKeyRange) Resolve(allShards []*topodatapb.ShardReference, add
 
 // String is part of the Destination interface.
 func (d DestinationKeyRange) String() string {
-	return "DestinationKeyRange(" + RangeString(d.KeyRange) + ")"
+	return "DestinationKeyRange(" + KeyRangeString(d.KeyRange) + ")"
 }
 
 func processKeyRange(allShards []*topodatapb.ShardReference, kr *topodatapb.KeyRange, addShard func(shard string) error) error {
 	for _, shard := range allShards {
-		if !RangesIntersect(kr, shard.KeyRange) {
+		if !KeyRangesIntersect(kr, shard.KeyRange) {
 			// We don't need that shard.
 			continue
 		}
@@ -252,7 +252,7 @@ func (d DestinationKeyRanges) String() string {
 		if i > 0 {
 			buffer.WriteByte(',')
 		}
-		buffer.WriteString(RangeString(kr))
+		buffer.WriteString(KeyRangeString(kr))
 	}
 	buffer.WriteByte(')')
 	return buffer.String()
@@ -287,7 +287,7 @@ func GetShardForKeyspaceID(allShards []*topodatapb.ShardReference, keyspaceID []
 	}
 
 	for _, shardReference := range allShards {
-		if RangeContains(shardReference.KeyRange, keyspaceID) {
+		if KeyRangeContains(shardReference.KeyRange, keyspaceID) {
 			return shardReference.Name, nil
 		}
 	}

@@ -121,6 +121,7 @@ func CreateTablet(
 		return err
 	}
 
+	log.Infof("setting super read only to false for test purpose %v", topoproto.TabletAliasString(alias))
 	if err := tm.MysqlDaemon.SetSuperReadOnly(false); err != nil {
 		return fmt.Errorf("failed on set super read only on %v: %v", topoproto.TabletAliasString(alias), err)
 	}

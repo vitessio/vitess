@@ -49,7 +49,7 @@ func initResolver(t *testing.T, name string) *Resolver {
 		t.Fatalf("key.ParseShardingSpec failed: %v", err)
 	}
 	for _, kr := range shardKrArray {
-		shard := key.RangeString(kr)
+		shard := key.KeyRangeString(kr)
 		if err := ts.CreateShard(ctx, "sks", shard); err != nil {
 			t.Fatalf("CreateShard(\"%v\") failed: %v", shard, err)
 		}

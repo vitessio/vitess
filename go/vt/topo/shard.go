@@ -304,7 +304,7 @@ func (ts *Server) CreateShard(ctx context.Context, keyspace, shard string) (err 
 		return err
 	}
 	for _, si := range sis {
-		if si.KeyRange == nil || key.RangesIntersect(si.KeyRange, keyRange) {
+		if si.KeyRange == nil || key.KeyRangesIntersect(si.KeyRange, keyRange) {
 			value.IsPrimaryServing = false
 			break
 		}

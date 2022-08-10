@@ -343,7 +343,7 @@ func newTestShardMigrater(ctx context.Context, t *testing.T, sourceShards, targe
 		var rows, rowsRdOnly []string
 		var streamExtInfoRows []string
 		for j, sourceShard := range sourceShards {
-			if !key.RangesIntersect(tme.targetKeyRanges[i], tme.sourceKeyRanges[j]) {
+			if !key.KeyRangesIntersect(tme.targetKeyRanges[i], tme.sourceKeyRanges[j]) {
 				continue
 			}
 			bls := &binlogdatapb.BinlogSource{
@@ -490,7 +490,7 @@ func (tme *testMigraterEnv) expectNoPreviousReverseJournals() {
 func (tme *testShardMigraterEnv) forAllStreams(f func(i, j int)) {
 	for i := range tme.targetShards {
 		for j := range tme.sourceShards {
-			if !key.RangesIntersect(tme.targetKeyRanges[i], tme.sourceKeyRanges[j]) {
+			if !key.KeyRangesIntersect(tme.targetKeyRanges[i], tme.sourceKeyRanges[j]) {
 				continue
 			}
 			f(i, j)
@@ -533,7 +533,7 @@ func (tme *testShardMigraterEnv) expectDeleteReverseVReplication() {
 func (tme *testShardMigraterEnv) expectCreateReverseVReplication() {
 	tme.expectDeleteReverseVReplication()
 	tme.forAllStreams(func(i, j int) {
-		tme.dbSourceClients[j].addQueryRE(fmt.Sprintf("insert into _vt.vreplication.*%s.*%s.*MariaDB/5-456-893.*Stopped", tme.targetShards[i], key.RangeString(tme.sourceKeyRanges[j])), &sqltypes.Result{InsertID: uint64(j + 1)}, nil)
+		tme.dbSourceClients[j].addQueryRE(fmt.Sprintf("insert into _vt.vreplication.*%s.*%s.*MariaDB/5-456-893.*Stopped", tme.targetShards[i], key.KeyRangeString(tme.sourceKeyRanges[j])), &sqltypes.Result{InsertID: uint64(j + 1)}, nil)
 		tme.dbSourceClients[j].addQuery(fmt.Sprintf("select * from _vt.vreplication where id = %d", j+1), stoppedResult(j+1), nil)
 	})
 }

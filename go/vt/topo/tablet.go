@@ -575,7 +575,7 @@ func (ts *Server) InitTablet(ctx context.Context, tablet *topodatapb.Tablet, all
 	if err != nil {
 		return fmt.Errorf("cannot get (or create) shard %v/%v: %v", tablet.Keyspace, tablet.Shard, err)
 	}
-	if !key.RangeEqual(si.KeyRange, tablet.KeyRange) {
+	if !key.KeyRangeEqual(si.KeyRange, tablet.KeyRange) {
 		return fmt.Errorf("shard %v/%v has a different KeyRange: %v != %v", tablet.Keyspace, tablet.Shard, si.KeyRange, tablet.KeyRange)
 	}
 	if tablet.Type == topodatapb.TabletType_PRIMARY && si.HasPrimary() && !topoproto.TabletAliasEqual(si.PrimaryAlias, tablet.Alias) && !allowPrimaryOverride {

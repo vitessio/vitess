@@ -319,9 +319,6 @@ func (db *LocalCluster) Setup() error {
 			}
 			return err
 		}
-		if err := db.UnsetReadOnly(""); err != nil {
-			return err
-		}
 		if err := db.createDatabases(); err != nil {
 			return err
 		}
@@ -364,6 +361,12 @@ func (db *LocalCluster) Setup() error {
 	} else {
 		log.Info("Mysql data directory exists in persistent mode. Will only execute vschema migrations during startup")
 		if err := db.loadSchema(false); err != nil {
+			return err
+		}
+	}
+	// In the end set super read only to false.
+	if initializing {
+		if err := db.UnsetReadOnly(""); err != nil {
 			return err
 		}
 	}

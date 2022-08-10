@@ -557,7 +557,7 @@ func (sm *StreamMigrator) createTargetStreams(ctx context.Context, tmpl []*VRepl
 				buf := &strings.Builder{}
 
 				t := template.Must(template.New("").Parse(rule.Filter))
-				if err := t.Execute(buf, key.RangeString(target.GetShard().KeyRange)); err != nil {
+				if err := t.Execute(buf, key.KeyRangeString(target.GetShard().KeyRange)); err != nil {
 					return err
 				}
 

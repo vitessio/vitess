@@ -268,7 +268,7 @@ func (ts *Server) AddSrvKeyspacePartitions(ctx context.Context, keyspace string,
 					for _, si := range shards {
 						found := false
 						for _, shardReference := range partition.GetShardReferences() {
-							if key.RangeEqual(shardReference.GetKeyRange(), si.GetKeyRange()) {
+							if key.KeyRangeEqual(shardReference.GetKeyRange(), si.GetKeyRange()) {
 								found = true
 							}
 						}
@@ -448,7 +448,7 @@ func (ts *Server) UpdateDisableQueryService(ctx context.Context, keyspace string
 					for _, si := range shards {
 						found := false
 						for _, tabletControl := range partition.GetShardTabletControls() {
-							if key.RangeEqual(tabletControl.GetKeyRange(), si.GetKeyRange()) {
+							if key.KeyRangeEqual(tabletControl.GetKeyRange(), si.GetKeyRange()) {
 								found = true
 								tabletControl.QueryServiceDisabled = disableQueryService
 							}
@@ -524,7 +524,7 @@ func (ts *Server) MigrateServedType(ctx context.Context, keyspace string, shards
 					for _, shardReference := range partition.GetShardReferences() {
 						inShardsToRemove := false
 						for _, si := range shardsToRemove {
-							if key.RangeEqual(shardReference.GetKeyRange(), si.GetKeyRange()) {
+							if key.KeyRangeEqual(shardReference.GetKeyRange(), si.GetKeyRange()) {
 								inShardsToRemove = true
 								break
 							}
@@ -538,7 +538,7 @@ func (ts *Server) MigrateServedType(ctx context.Context, keyspace string, shards
 					for _, si := range shardsToAdd {
 						alreadyAdded := false
 						for _, shardReference := range partition.GetShardReferences() {
-							if key.RangeEqual(shardReference.GetKeyRange(), si.GetKeyRange()) {
+							if key.KeyRangeEqual(shardReference.GetKeyRange(), si.GetKeyRange()) {
 								alreadyAdded = true
 								break
 							}
@@ -682,7 +682,7 @@ func OrderAndCheckPartitions(cell string, srvKeyspace *topodatapb.SrvKeyspace) e
 				// this is the custom sharding case, all KeyRanges must be nil
 				continue
 			}
-			if !key.RangeContiguous(currShard.KeyRange, nextShard.KeyRange) {
+			if !key.KeyRangeContiguous(currShard.KeyRange, nextShard.KeyRange) {
 				return fmt.Errorf("non-contiguous KeyRange values for %v in cell %v at shard %v to %v: %v != %v", tabletType, cell, i, i+1, hex.EncodeToString(currShard.KeyRange.End), hex.EncodeToString(nextShard.KeyRange.Start))
 			}
 		}
