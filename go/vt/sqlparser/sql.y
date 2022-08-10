@@ -6213,9 +6213,9 @@ assignment_expression:
   {
     $$ = &AssignmentExpr{Name: $1, Expr: $3}
   }
-//| reserved_keyword '=' expression {
-//    $$ = &AssignmentExpr{Name: &ColName{Name: NewColIdent(string($1))}, Expr: $3}
-//  }
+| column_name_safe_reserved_keyword '=' expression {
+    $$ = &AssignmentExpr{Name: &ColName{Name: NewColIdent(string($1))}, Expr: $3}
+  }
 | ACCOUNT '=' expression
   {
     $$ = &AssignmentExpr{Name: &ColName{Name: NewColIdent(string($1))}, Expr: $3}

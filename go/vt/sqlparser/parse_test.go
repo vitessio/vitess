@@ -5839,32 +5839,54 @@ func TestKeywordsCorrectlyDoParse(t *testing.T) {
 }
 
 func TestReservedKeywordsParseWhenQualified(t *testing.T) {
-	tcTest := "SELECT * FROM tbl ORDER BY tbl.%s"
+	tcTest := "SELECT * FROM t ORDER BY t.%s"
+	sTest := "SELECT t.%s FROM t"
+
+	tests := []string{tcTest, sTest}
 
 	for _, kw := range correctlyDontParse {
-		test := fmt.Sprintf(tcTest, kw)
-		t.Run(test, func(t *testing.T) {
-			_, err := Parse(test)
-			assert.NoError(t, err)
-		})
+		for _, query := range tests {
+			test := fmt.Sprintf(query, kw)
+			t.Run(test, func(t *testing.T) {
+				_, err := Parse(test)
+				assert.NoError(t, err)
+			})
+		}
 	}
 }
 
 // TestKeywordsCorrectlyDontParse ensures certain keywords should not be parsed in certain queries.
 func TestKeywordsCorrectlyDontParse(t *testing.T) {
 	aliasTest := "SELECT 1 as %s"
-	// TODO: Want all of these passing eventually
 	iTest := "INSERT INTO t (%s) VALUES (1)"
 	dTest := "DELETE FROM t where %s=1"
 	uTest := "UPDATE t SET %s=1"
 	cTest := "CREATE TABLE t(%s int)"
 	tTest := "CREATE TABLE %s(i int)"
-	tcTest := "SELECT * FROM t ORDER BY t.%s"
 
-	tests := []string{aliasTest, iTest, dTest, uTest, cTest, tTest, tcTest}
+	// these are reserved keywords that are also values, so they can be used in conditions
+	valid_condition_reserved_keywords := map[string]bool{
+		"current_date":      true,
+		"current_time":      true,
+		"current_timestamp": true,
+		"current_user":      true,
+		"false":             true,
+		"localtime":         true,
+		"localtimestamp":    true,
+		"null":              true,
+		"true":              true,
+		"utc_date":          true,
+		"utc_time":          true,
+		"utc_timestamp":     true,
+	}
+
+	tests := []string{aliasTest, iTest, dTest, uTest, cTest, tTest}
 
 	for _, kw := range correctlyDontParse {
 		for _, query := range tests {
+			if query == dTest && valid_condition_reserved_keywords[kw] {
+				continue
+			}
 			test := fmt.Sprintf(query, kw)
 			t.Run(test, func(t *testing.T) {
 				_, err := Parse(test)
