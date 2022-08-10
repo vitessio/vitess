@@ -33,7 +33,6 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 
-	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	tmc "vitess.io/vitess/go/vt/vttablet/grpctmclient"
 )
@@ -90,15 +89,6 @@ func GetPrimaryPosition(t *testing.T, vttablet Vttablet, hostname string) (strin
 	require.Nil(t, err)
 	gtID := strings.SplitAfter(pos, "/")[1]
 	return pos, gtID
-}
-
-// GetReplicationStatus gets the replication status of given vttablet
-func GetReplicationStatus(t *testing.T, vttablet *Vttablet, hostname string) *replicationdatapb.Status {
-	ctx := context.Background()
-	vtablet := getTablet(vttablet.GrpcPort, hostname)
-	pos, err := tmClient.ReplicationStatus(ctx, vtablet)
-	require.NoError(t, err)
-	return pos
 }
 
 // VerifyRowsInTabletForTable verifies the total number of rows in a table.

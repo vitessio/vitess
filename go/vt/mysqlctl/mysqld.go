@@ -41,7 +41,7 @@ import (
 	"sync"
 	"time"
 
-	rice "github.com/GeertJohan/go.rice"
+	"vitess.io/vitess/config"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -668,12 +668,7 @@ func (mysqld *Mysqld) Init(ctx context.Context, cnf *Mycnf, initDBSQLFile string
 	}
 
 	if initDBSQLFile == "" { // default to built-in
-		riceBox := rice.MustFindBox("../../../config")
-		sqlFile, err := riceBox.Open("init_db.sql")
-		if err != nil {
-			return fmt.Errorf("could not open built-in init_db.sql file")
-		}
-		if err := mysqld.executeMysqlScript(params, sqlFile); err != nil {
+		if err := mysqld.executeMysqlScript(params, strings.NewReader(config.DefaultInitDB)); err != nil {
 			return fmt.Errorf("failed to initialize mysqld: %v", err)
 		}
 		return nil
@@ -804,13 +799,7 @@ func (mysqld *Mysqld) getMycnfTemplate() string {
 	}
 	myTemplateSource := new(bytes.Buffer)
 	myTemplateSource.WriteString("[mysqld]\n")
-
-	riceBox := rice.MustFindBox("../../../config")
-	b, err := riceBox.Bytes("mycnf/default.cnf")
-	if err != nil {
-		log.Warningf("could not open embedded default.cnf config file")
-	}
-	myTemplateSource.Write(b)
+	myTemplateSource.WriteString(config.MycnfDefault)
 
 	// database flavor + version specific file.
 	// {flavor}{major}{minor}.cnf
@@ -818,12 +807,39 @@ func (mysqld *Mysqld) getMycnfTemplate() string {
 	if mysqld.capabilities.isMySQLLike() {
 		f = FlavorMySQL
 	}
-	fn := fmt.Sprintf("mycnf/%s%d%d.cnf", f, mysqld.capabilities.version.Major, mysqld.capabilities.version.Minor)
-	b, err = riceBox.Bytes(fn)
-	if err != nil {
-		log.Infof("this version of Vitess does not include built-in support for %v %v", mysqld.capabilities.flavor, mysqld.capabilities.version)
+	var versionConfig string
+	switch f {
+	case FlavorPercona, FlavorMySQL:
+		switch mysqld.capabilities.version.Major {
+		case 5:
+			if mysqld.capabilities.version.Minor == 7 {
+				versionConfig = config.MycnfMySQL57
+			} else {
+				log.Infof("this version of Vitess does not include built-in support for %v %v", mysqld.capabilities.flavor, mysqld.capabilities.version)
+			}
+		case 8:
+			versionConfig = config.MycnfMySQL80
+		default:
+			log.Infof("this version of Vitess does not include built-in support for %v %v", mysqld.capabilities.flavor, mysqld.capabilities.version)
+		}
+	case FlavorMariaDB:
+		switch mysqld.capabilities.version.Minor {
+		case 0:
+			versionConfig = config.MycnfMariaDB100
+		case 1:
+			versionConfig = config.MycnfMariaDB101
+		case 2:
+			versionConfig = config.MycnfMariaDB102
+		case 3:
+			versionConfig = config.MycnfMariaDB103
+		case 4:
+			versionConfig = config.MycnfMariaDB104
+		default:
+			log.Infof("this version of Vitess does not include built-in support for %v %v", mysqld.capabilities.flavor, mysqld.capabilities.version)
+		}
 	}
-	myTemplateSource.Write(b)
+
+	myTemplateSource.WriteString(versionConfig)
 
 	if extraCnf := os.Getenv("EXTRA_MY_CNF"); extraCnf != "" {
 		parts := strings.Split(extraCnf, ":")

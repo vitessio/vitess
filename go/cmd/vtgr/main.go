@@ -15,24 +15,24 @@ package main
 
 import (
 	"context"
-	"flag"
-	"strings"
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtgr"
-
-	// Include deprecation warnings for soon-to-be-unsupported flag invocations.
-	_flag "vitess.io/vitess/go/internal/flag"
 )
 
 func main() {
-	clustersToWatch := flag.String("clusters_to_watch", "", "Comma-separated list of keyspaces or keyspace/shards that this instance will monitor and repair. Defaults to all clusters in the topology. Example: \"ks1,ks2/-80\"")
-	_flag.Parse(pflag.NewFlagSet("vtgr", pflag.ExitOnError))
+	var clustersToWatch []string
+	servenv.OnParseFor("vtgr", func(fs *pflag.FlagSet) {
+		fs.StringSliceVar(&clustersToWatch, "clusters_to_watch", nil, `Comma-separated list of keyspaces or keyspace/shards that this instance will monitor and repair. Defaults to all clusters in the topology. Example: "ks1,ks2/-80"`)
+	})
+
+	servenv.ParseFlags("vtgr")
 
 	// openTabletDiscovery will open up a connection to topo server
 	// and populate the tablets in memory
-	vtgr := vtgr.OpenTabletDiscovery(context.Background(), nil, strings.Split(*clustersToWatch, ","))
+	vtgr := vtgr.OpenTabletDiscovery(context.Background(), nil, clustersToWatch)
 	vtgr.RefreshCluster()
 	vtgr.ScanAndRepair()
 

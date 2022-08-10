@@ -210,6 +210,18 @@ var (
 		input:  "select 0x010, 0x0111, x'0111'",
 		output: "select 0x010, 0x0111, X'0111' from dual",
 	}, {
+		input:  "select date'2022-10-03'",
+		output: "select date'2022-10-03' from dual",
+	}, {
+		input:  "select date, time, timestamp from t",
+		output: "select `date`, `time`, `timestamp` from t",
+	}, {
+		input:  "select time'12:34:56'",
+		output: "select time'12:34:56' from dual",
+	}, {
+		input:  "select timestamp'2012-12-31 11:30:45'",
+		output: "select timestamp'2012-12-31 11:30:45' from dual",
+	}, {
 		input:  "select * from information_schema.columns",
 		output: "select * from information_schema.`columns`",
 	}, {
@@ -1476,6 +1488,9 @@ var (
 	}, {
 		input:  "create table t (id int) partition by key (id) partitions 2",
 		output: "create table t (\n\tid int\n)\npartition by key (id) partitions 2",
+	}, {
+		input:  "create table t (id int, primary key(id)) partition by key () partitions 2",
+		output: "create table t (\n\tid int,\n\tprimary key (id)\n)\npartition by key () partitions 2",
 	}, {
 		input:  "create table t (id int) partition by key algorithm = 1 (id)",
 		output: "create table t (\n\tid int\n)\npartition by key algorithm = 1 (id)",
