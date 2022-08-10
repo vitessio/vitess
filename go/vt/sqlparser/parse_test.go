@@ -6276,8 +6276,10 @@ func TestKeywordsCorrectlyDoParse(t *testing.T) {
 	tTest := "CREATE TABLE %s(i int)"
 	tcTest := "SELECT * FROM t ORDER BY t.%s"
 	sTest := "SELECT %s.c FROM t"
+	dropConstraintTest := "ALTER TABLE t DROP CONSTRAINT %s"
+	dropCheckTest := "ALTER TABLE t DROP CHECK %s"
 
-	tests := []string{aliasTest, iTest, dTest, uTest, cTest, tTest, tcTest, sTest}
+	tests := []string{aliasTest, iTest, dTest, uTest, cTest, tTest, tcTest, sTest, dropConstraintTest, dropCheckTest}
 
 	for _, kw := range correctlyDoParse {
 		for _, query := range tests {

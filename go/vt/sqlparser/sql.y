@@ -452,7 +452,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <empty> to_opt to_or_as as_opt column_opt describe
 %type <str> algorithm_opt definer_opt security_opt
 %type <viewSpec> view_opts
-%type <bytes> reserved_keyword reserved_keyword2 non_reserved_keyword column_name_safe_reserved_keyword non_reserved_keyword2 non_reserved_keyword3
+%type <bytes> reserved_keyword qualified_column_name_safe_reserved_keyword non_reserved_keyword column_name_safe_reserved_keyword non_reserved_keyword2 non_reserved_keyword3
 %type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt using_opt existing_window_name_opt
 %type <colIdents> reserved_sql_id_list
 %type <expr> charset_value
@@ -3477,7 +3477,22 @@ alter_table_statement_part:
     $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints:
         []*ConstraintDefinition{&ConstraintDefinition{Name: string($3)}}}}
   }
+| DROP CONSTRAINT column_name_safe_reserved_keyword
+  {
+    $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints:
+        []*ConstraintDefinition{&ConstraintDefinition{Name: string($3)}}}}
+  }
 | DROP CONSTRAINT non_reserved_keyword
+  {
+    $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints:
+        []*ConstraintDefinition{&ConstraintDefinition{Name: string($3)}}}}
+  }
+| DROP CONSTRAINT non_reserved_keyword2
+  {
+    $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints:
+        []*ConstraintDefinition{&ConstraintDefinition{Name: string($3)}}}}
+  }
+| DROP CONSTRAINT non_reserved_keyword3
   {
     $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints:
         []*ConstraintDefinition{&ConstraintDefinition{Name: string($3)}}}}
@@ -3487,7 +3502,22 @@ alter_table_statement_part:
     $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints:
         []*ConstraintDefinition{&ConstraintDefinition{Name: string($3), Details: &CheckConstraintDefinition{}}}}}
   }
+| DROP CHECK column_name_safe_reserved_keyword
+  {
+    $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints:
+        []*ConstraintDefinition{&ConstraintDefinition{Name: string($3), Details: &CheckConstraintDefinition{}}}}}
+  }
 | DROP CHECK non_reserved_keyword
+  {
+    $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints:
+        []*ConstraintDefinition{&ConstraintDefinition{Name: string($3), Details: &CheckConstraintDefinition{}}}}}
+  }
+| DROP CHECK non_reserved_keyword2
+  {
+    $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints:
+        []*ConstraintDefinition{&ConstraintDefinition{Name: string($3), Details: &CheckConstraintDefinition{}}}}}
+  }
+| DROP CHECK non_reserved_keyword3
   {
     $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints:
         []*ConstraintDefinition{&ConstraintDefinition{Name: string($3), Details: &CheckConstraintDefinition{}}}}}
@@ -4712,7 +4742,6 @@ table_name:
   {
     $$ = TableName{Name: $1}
   }
-// TODO: should be reserved.reserved
 | table_id '.' reserved_table_id
   {
     $$ = TableName{Qualifier: $1, Name: $3}
@@ -5835,7 +5864,7 @@ column_name:
   {
     $$ = &ColName{Qualifier: TableName{Name: $1}, Name: NewColIdent(string($3))}
   }
-| reserved_keyword2 '.' reserved_sql_id
+| qualified_column_name_safe_reserved_keyword '.' reserved_sql_id
   {
     $$ = &ColName{Qualifier: TableName{Name: NewTableIdent(string($1))}, Name: $3}
   }
@@ -6825,7 +6854,7 @@ reserved_keyword:
 | YEAR_MONTH
 | ZEROFILL
 
-reserved_keyword2:
+qualified_column_name_safe_reserved_keyword:
   ACCESSIBLE
 | ADD
 | ALTER
