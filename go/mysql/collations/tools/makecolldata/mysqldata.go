@@ -17,7 +17,6 @@ limitations under the License.
 package main
 
 import (
-	"flag"
 	"fmt"
 	"log"
 	"path"
@@ -25,12 +24,14 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/spf13/pflag"
+
 	"vitess.io/vitess/go/mysql/collations/internal/charset"
 	"vitess.io/vitess/go/mysql/collations/internal/uca"
 	"vitess.io/vitess/go/mysql/collations/tools/makecolldata/codegen"
 )
 
-var Print8BitData = flag.Bool("full8bit", false, "")
+var Print8BitData = pflag.Bool("full8bit", false, "")
 
 type TableGenerator struct {
 	*codegen.Generator
