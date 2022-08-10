@@ -4764,6 +4764,7 @@ table_name:
   {
     $$ = TableName{Name: $1}
   }
+// TODO: should be reserved.reserved
 | table_id '.' reserved_table_id
   {
     $$ = TableName{Qualifier: $1, Name: $3}
@@ -6091,7 +6092,7 @@ ins_column_list_opt:
   }
 
 ins_column_list:
-  reserved_sql_id
+  sql_id
   {
     $$ = Columns{$1}
   }
@@ -7129,64 +7130,13 @@ non_reserved_keyword2:
 
 // Reserved keywords that cause grammar conflicts in some places, but are safe to use as column name / alias identifiers.
 // These keywords should also go in reserved_keyword.
-// TODO: The ones commented out here cause shift/reduce conflicts but need to be column name safe
+// TODO: These shouldn't be reserved, but they are
 column_name_safe_reserved_keyword:
-//  ACCOUNT
-////| ARRAY
-//| ATTRIBUTE
-////| AUTO_INCREMENT
   AVG
-//| BIT_AND
-//| BIT_OR
-//| BIT_XOR
-//| CONNECTION
 | COUNT
-////| END
-//| ERRORS
-//| EVENT
-//| EXECUTE
-//| FAILED_LOGIN_ATTEMPTS
-//| FILE
-//| FIRST
-//| FOLLOWING
-//| FOLLOWS
-//| FORMAT
-//| FOUND
-//| FULL
-//| HANDLER
-//| IDENTIFIED
-//| JSON_ARRAYAGG
-//| JSON_OBJECTAGG
 | MAX
 | MIN
-////| NEXT
-//| NONE
-//| NVAR
-////| NVARCHAR
-////| OFF
-//| PASSWORD
-//| PASSWORD_LOCK
-//| PASSWORD_LOCK_TIME
-//| PROCESS
-//| RELOAD
-//| SHUTDOWN
-////| SQL_CACHE
-////| SQL_NO_CACHE
-//| STATUS
-//| STD
-//| STDDEV
-//| STDDEV_POP
-//| STDDEV_SAMP
-//| SUPER
-//| TIMESTAMPADD
-//| TIMESTAMPDIFF
 | SUM
-//| VALUE
-//| VARIANCE
-//| VAR_POP
-//| VAR_SAMP
-//| VIEW
-//| COMMENT_KEYWORD
 
 openb:
   '('

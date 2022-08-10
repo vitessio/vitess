@@ -5854,12 +5854,14 @@ func TestReservedKeywordsParseWhenQualified(t *testing.T) {
 func TestKeywordsCorrectlyDontParse(t *testing.T) {
 	aliasTest := "SELECT 1 as %s"
 	// TODO: Want all of these passing eventually
-	// iTest := "INSERT INTO t (%s) VALUES (1)"
-	// dTest := "DELETE FROM t where %s=1"
-	// uTest := "UPDATE t SET %s=1"
-	// cTest := "CREATE TABLE t(%s int)"
+	iTest := "INSERT INTO t (%s) VALUES (1)"
+	dTest := "DELETE FROM t where %s=1"
+	uTest := "UPDATE t SET %s=1"
+	cTest := "CREATE TABLE t(%s int)"
+	tTest := "CREATE TABLE %s(i int)"
+	tcTest := "SELECT * FROM t ORDER BY t.%s"
 
-	tests := []string{aliasTest}
+	tests := []string{aliasTest, iTest, dTest, uTest, cTest, tTest, tcTest}
 
 	for _, kw := range correctlyDontParse {
 		for _, query := range tests {
@@ -5898,7 +5900,7 @@ func TestKeywordsIncorrectlyDoParse(t *testing.T) {
 		for _, query := range tests {
 			test := fmt.Sprintf(query, kw)
 			t.Run(test, func(t *testing.T) {
-				t.Skip()
+				//t.Skip()
 				_, err := Parse(test)
 				assert.Error(t, err)
 			})
