@@ -2279,13 +2279,21 @@ column_definition:
   }
 
 column_definition_for_create:
-  reserved_sql_id column_type column_type_options
+  sql_id column_type column_type_options
   {
     if err := $2.merge($3); err != nil {
       yylex.Error(err.Error())
       return 1
     }
     $$ = &ColumnDefinition{Name: $1, Type: $2}
+  }
+| column_name_safe_reserved_keyword column_type column_type_options
+  {
+    if err := $2.merge($3); err != nil {
+      yylex.Error(err.Error())
+      return 1
+    }
+    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: $2}
   }
 | non_reserved_keyword2 column_type column_type_options
   {
@@ -5047,10 +5055,6 @@ value_expression:
   {
     $$ = $1
   }
-| column_name_safe_reserved_keyword
-  {
-    $$ = &ColName{Name: NewColIdent(string($1))}
-  }
 | ACCOUNT
   {
     $$ = &ColName{Name: NewColIdent(string($1))}
@@ -5066,6 +5070,10 @@ value_expression:
 | column_name
   {
     $$ = $1
+  }
+| column_name_safe_reserved_keyword
+  {
+    $$ = &ColName{Name: NewColIdent(string($1))}
   }
 | tuple_expression
   {
@@ -6108,6 +6116,10 @@ ins_column_list:
   {
     $$ = append($$, $5)
   }
+| column_name_safe_reserved_keyword
+  {
+    $$ = Columns{NewColIdent(string($1))}
+  }
 | non_reserved_keyword2
   {
     $$ = Columns{NewColIdent(string($1))}
@@ -6201,9 +6213,9 @@ assignment_expression:
   {
     $$ = &AssignmentExpr{Name: $1, Expr: $3}
   }
-| reserved_keyword '=' expression {
-    $$ = &AssignmentExpr{Name: &ColName{Name: NewColIdent(string($1))}, Expr: $3}
-  }
+//| reserved_keyword '=' expression {
+//    $$ = &AssignmentExpr{Name: &ColName{Name: NewColIdent(string($1))}, Expr: $3}
+//  }
 | ACCOUNT '=' expression
   {
     $$ = &AssignmentExpr{Name: &ColName{Name: NewColIdent(string($1))}, Expr: $3}
