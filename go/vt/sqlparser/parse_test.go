@@ -5839,15 +5839,30 @@ func TestKeywordsCorrectlyDoParse(t *testing.T) {
 }
 
 func TestReservedKeywordsParseWhenQualified(t *testing.T) {
-	tcTest := "SELECT * FROM t ORDER BY t.%s"
-	sTest := "SELECT t.%s FROM t"
+	tcTest := "SELECT * FROM t ORDER BY %s.%s"
+	sTest := "SELECT %s.%s FROM t"
 
 	tests := []string{tcTest, sTest}
 
+	// these are reserved keywords that don't work even when qualified
+	badReservedKeywords := map[string]bool{
+		"all":                 true,
+		"distinct":            true,
+		"div":                 true,
+		"key":                 true,
+		"select":              true,
+		"sql_calc_found_rows": true,
+		"straight_join":       true,
+		"when":                true,
+	}
+
 	for _, kw := range correctlyDontParse {
 		for _, query := range tests {
-			test := fmt.Sprintf(query, kw)
+			test := fmt.Sprintf(query, kw, kw)
 			t.Run(test, func(t *testing.T) {
+				if badReservedKeywords[kw] {
+					t.Skip("this reserved word doesn't work when qualified")
+				}
 				_, err := Parse(test)
 				assert.NoError(t, err)
 			})
@@ -5865,7 +5880,7 @@ func TestKeywordsCorrectlyDontParse(t *testing.T) {
 	tTest := "CREATE TABLE %s(i int)"
 
 	// these are reserved keywords that are also values, so they can be used in conditions
-	valid_condition_reserved_keywords := map[string]bool{
+	validConditionReservedKeywords := map[string]bool{
 		"current_date":      true,
 		"current_time":      true,
 		"current_timestamp": true,
@@ -5884,7 +5899,7 @@ func TestKeywordsCorrectlyDontParse(t *testing.T) {
 
 	for _, kw := range correctlyDontParse {
 		for _, query := range tests {
-			if query == dTest && valid_condition_reserved_keywords[kw] {
+			if query == dTest && validConditionReservedKeywords[kw] {
 				continue
 			}
 			test := fmt.Sprintf(query, kw)
