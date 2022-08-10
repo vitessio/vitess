@@ -218,7 +218,8 @@ func (tc *splitCloneTestCase) setUpWithConcurrency(v3 bool, concurrency, writeQu
 		}
 		sourceRdonly.FakeMysqlDaemon.SetReplicationSourceInputs = append(sourceRdonly.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(sourcePrimary.Tablet))
 		sourceRdonly.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
-			// These 2 statements come from tablet startup
+			// These 3 statements come from tablet startup
+			"RESET SLAVE ALL",
 			"FAKE SET MASTER",
 			"START SLAVE",
 			"STOP SLAVE",
@@ -237,7 +238,8 @@ func (tc *splitCloneTestCase) setUpWithConcurrency(v3 bool, concurrency, writeQu
 	rightRdonly2.FakeMysqlDaemon.SetReplicationSourceInputs = append(rightRdonly2.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(rightPrimary.Tablet))
 	rightRdonly1.FakeMysqlDaemon.SetReplicationSourceInputs = append(rightRdonly1.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(rightPrimary.Tablet))
 	leftReplica.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
-		// These 2 statements come from tablet startup
+		// These 3 statements come from tablet startup
+		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START SLAVE",
 	}
@@ -246,7 +248,8 @@ func (tc *splitCloneTestCase) setUpWithConcurrency(v3 bool, concurrency, writeQu
 		shqs := fakes.NewStreamHealthQueryService(destRdonly.Target())
 		shqs.AddDefaultHealthResponse()
 		destRdonly.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
-			// These 2 statements come from tablet startup
+			// These 3 statements come from tablet startup
+			"RESET SLAVE ALL",
 			"FAKE SET MASTER",
 			"START SLAVE",
 		}

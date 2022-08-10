@@ -564,7 +564,8 @@ func TestPermissions(t *testing.T) {
 	}
 	replica.FakeMysqlDaemon.SetReplicationSourceInputs = append(replica.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(primary.Tablet))
 	replica.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
-		// These 2 statements come from tablet startup
+		// These 3 statements come from tablet startup
+		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START SLAVE",
 	}

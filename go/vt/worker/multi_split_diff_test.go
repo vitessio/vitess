@@ -313,39 +313,45 @@ func testMultiSplitDiff(t *testing.T, v3 bool) {
 
 	sourceRdonly1.FakeMysqlDaemon.SetReplicationSourceInputs = append(sourceRdonly1.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(sourcePrimary.Tablet))
 	sourceRdonly1.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
-		// These 2 statements come from tablet startup
+		// These 3 statements come from tablet startup
+		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START SLAVE",
 	}
 	sourceRdonly2.FakeMysqlDaemon.SetReplicationSourceInputs = append(sourceRdonly2.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(sourcePrimary.Tablet))
 	sourceRdonly2.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
-		// These 2 statements come from tablet startup
+		// These 3 statements come from tablet startup
+		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START SLAVE",
 	}
 
 	leftRdonly1.FakeMysqlDaemon.SetReplicationSourceInputs = append(leftRdonly1.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(leftPrimary.Tablet))
 	leftRdonly1.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
-		// These 2 statements come from tablet startup
+		// These 3 statements come from tablet startup
+		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START SLAVE",
 	}
 	leftRdonly2.FakeMysqlDaemon.SetReplicationSourceInputs = append(leftRdonly2.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(leftPrimary.Tablet))
 	leftRdonly2.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
-		// These 2 statements come from tablet startup
+		// These 3 statements come from tablet startup
+		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START SLAVE",
 	}
 
 	rightRdonly1.FakeMysqlDaemon.SetReplicationSourceInputs = append(rightRdonly1.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(rightPrimary.Tablet))
 	rightRdonly1.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
-		// These 2 statements come from tablet startup
+		// These 3 statements come from tablet startup
+		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START SLAVE",
 	}
 	rightRdonly2.FakeMysqlDaemon.SetReplicationSourceInputs = append(rightRdonly2.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(rightPrimary.Tablet))
 	rightRdonly2.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
-		// These 2 statements come from tablet startup
+		// These 3 statements come from tablet startup
+		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START SLAVE",
 	}

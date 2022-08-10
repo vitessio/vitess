@@ -143,7 +143,8 @@ func TestVerticalSplitClone(t *testing.T) {
 	}
 	sourceRdonly.FakeMysqlDaemon.SetReplicationSourceInputs = append(sourceRdonly.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(sourcePrimary.Tablet))
 	sourceRdonly.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
-		// These 2 statements come from tablet startup
+		// These 3 statements come from tablet startup
+		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START SLAVE",
 		"STOP SLAVE",
@@ -173,7 +174,8 @@ func TestVerticalSplitClone(t *testing.T) {
 
 	destRdonly.FakeMysqlDaemon.SetReplicationSourceInputs = append(destRdonly.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(destPrimary.Tablet))
 	destRdonly.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
-		// These 2 statements come from tablet startup
+		// These 3 statements come from tablet startup
+		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START SLAVE",
 	}
