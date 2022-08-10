@@ -29,4 +29,4 @@ const (
 
 // Generate all the metadata used for collations from the JSON data dumped from MySQL
 // In 32 bit systems, do not use memory embedding, it's not worth it
-//go:generate go run ./tools/makecolldata/ -embed=false
+//go:generate go run ./tools/makecolldata/ --embed=false
