@@ -3176,8 +3176,12 @@ type Over WindowDef
 
 // Format formats the node.
 func (node *Over) Format(buf *TrackedBuffer) {
-	if !node.Name.IsEmpty() {
-		buf.Myprintf("over %v", node.Name)
+	if node == nil {
+		return
+	}
+
+	if node.isSimpleRef() {
+		buf.Myprintf("over %v", node.NameRef)
 	} else {
 		buf.Myprintf("over (")
 		buf.Myprintf("%v", (*WindowDef)(node))
@@ -3190,6 +3194,10 @@ func (node *Over) walkSubtree(visit Visit) error {
 		return nil
 	}
 	return Walk(visit, node.PartitionBy, node.OrderBy, node.Name)
+}
+
+func (node *Over) isSimpleRef() bool {
+	return !node.NameRef.IsEmpty() && len(node.PartitionBy) == 0 && len(node.OrderBy) == 0 && node.Frame == nil
 }
 
 // Nextval defines the NEXT VALUE expression.
@@ -4986,15 +4994,16 @@ func (node *TrimExpr) walkSubtree(visit Visit) error {
 }
 
 // ConvertExpr represents a call to CONVERT(expr, type)
-// or it's equivalent CAST(expr AS type). Both are rewritten to the former.
+// or its equivalent CAST(expr AS type). Both are rewritten to the former.
 type ConvertExpr struct {
+	Name string
 	Expr Expr
 	Type *ConvertType
 }
 
 // Format formats the node.
 func (node *ConvertExpr) Format(buf *TrackedBuffer) {
-	buf.Myprintf("convert(%v, %v)", node.Expr, node.Type)
+	buf.Myprintf("%s(%v, %v)", node.Name, node.Expr, node.Type)
 }
 
 func (node *ConvertExpr) walkSubtree(visit Visit) error {

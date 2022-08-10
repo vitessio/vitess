@@ -5278,21 +5278,37 @@ function_call_keyword:
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3}
   }
+| GROUPING openb argument_expression_list closeb
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3}
+  }
 | SCHEMA openb closeb
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1))}
   }
 | CONVERT openb expression ',' convert_type closeb
   {
-    $$ = &ConvertExpr{Expr: $3, Type: $5}
+    $$ = &ConvertExpr{Name: string($1), Expr: $3, Type: $5}
   }
 | CAST openb expression AS convert_type closeb
   {
-    $$ = &ConvertExpr{Expr: $3, Type: $5}
+    $$ = &ConvertExpr{Name: string($1), Expr: $3, Type: $5}
+  }
+| CHAR openb argument_expression_list closeb
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3}
+  }
+| CHAR openb argument_expression_list USING charset closeb
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3}
   }
 | CONVERT openb expression USING charset closeb
   {
     $$ = &ConvertUsingExpr{Expr: $3, Type: $5}
+  }
+| INSERT openb argument_expression_list closeb
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3}
   }
 | SUBSTR openb column_name FROM value_expression FOR value_expression closeb
   {
