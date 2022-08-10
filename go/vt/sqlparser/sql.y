@@ -2303,6 +2303,14 @@ column_definition_for_create:
     }
     $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: $2}
   }
+| ESCAPE column_type column_type_options
+  {
+    if err := $2.merge($3); err != nil {
+      yylex.Error(err.Error())
+      return 1
+    }
+    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: $2}
+  }
 | FORMAT column_type column_type_options
   {
     if err := $2.merge($3); err != nil {
@@ -2311,7 +2319,38 @@ column_definition_for_create:
     }
     $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: $2}
   }
-
+| NEXT column_type column_type_options
+  {
+    if err := $2.merge($3); err != nil {
+      yylex.Error(err.Error())
+      return 1
+    }
+    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: $2}
+  }
+| OFF column_type column_type_options
+  {
+    if err := $2.merge($3); err != nil {
+      yylex.Error(err.Error())
+      return 1
+    }
+    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: $2}
+  }
+| SQL_CACHE column_type column_type_options
+  {
+    if err := $2.merge($3); err != nil {
+      yylex.Error(err.Error())
+      return 1
+    }
+    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: $2}
+  }
+| SQL_NO_CACHE column_type column_type_options
+  {
+    if err := $2.merge($3); err != nil {
+      yylex.Error(err.Error())
+      return 1
+    }
+    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: $2}
+  }
 
 stored_opt:
   {
@@ -4387,6 +4426,10 @@ as_ci_opt:
   {
     $$ = $2
   }
+| AS ESCAPE
+  {
+    $$ = NewColIdent(string($2))
+  }
 
 col_alias:
   ID
@@ -4414,6 +4457,22 @@ col_alias:
     $$ = NewColIdent(string($1))
   }
 | FORMAT
+  {
+    $$ = NewColIdent(string($1))
+  }
+| NEXT
+  {
+    $$ = NewColIdent(string($1))
+  }
+| OFF
+  {
+    $$ = NewColIdent(string($1))
+  }
+| SQL_CACHE
+  {
+    $$ = NewColIdent(string($1))
+  }
+| SQL_NO_CACHE
   {
     $$ = NewColIdent(string($1))
   }
@@ -6056,7 +6115,27 @@ ins_column_list:
   {
     $$ = Columns{NewColIdent(string($1))}
   }
+| ESCAPE
+  {
+    $$ = Columns{NewColIdent(string($1))}
+  }
 | FORMAT
+  {
+    $$ = Columns{NewColIdent(string($1))}
+  }
+| NEXT
+  {
+    $$ = Columns{NewColIdent(string($1))}
+  }
+| OFF
+  {
+    $$ = Columns{NewColIdent(string($1))}
+  }
+| SQL_CACHE
+  {
+    $$ = Columns{NewColIdent(string($1))}
+  }
+| SQL_NO_CACHE
   {
     $$ = Columns{NewColIdent(string($1))}
   }
@@ -6124,12 +6203,31 @@ assignment_expression:
 | reserved_keyword '=' expression {
     $$ = &AssignmentExpr{Name: &ColName{Name: NewColIdent(string($1))}, Expr: $3}
   }
-// TODO: bad but works
 | ACCOUNT '=' expression
   {
     $$ = &AssignmentExpr{Name: &ColName{Name: NewColIdent(string($1))}, Expr: $3}
   }
+| ESCAPE '=' expression
+  {
+    $$ = &AssignmentExpr{Name: &ColName{Name: NewColIdent(string($1))}, Expr: $3}
+  }
 | FORMAT '=' expression
+  {
+    $$ = &AssignmentExpr{Name: &ColName{Name: NewColIdent(string($1))}, Expr: $3}
+  }
+| NEXT '=' expression
+  {
+    $$ = &AssignmentExpr{Name: &ColName{Name: NewColIdent(string($1))}, Expr: $3}
+  }
+| OFF '=' expression
+  {
+    $$ = &AssignmentExpr{Name: &ColName{Name: NewColIdent(string($1))}, Expr: $3}
+  }
+| SQL_CACHE '=' expression
+  {
+    $$ = &AssignmentExpr{Name: &ColName{Name: NewColIdent(string($1))}, Expr: $3}
+  }
+| SQL_NO_CACHE '=' expression
   {
     $$ = &AssignmentExpr{Name: &ColName{Name: NewColIdent(string($1))}, Expr: $3}
   }
@@ -6662,7 +6760,6 @@ reserved_keyword:
 | MOD
 | MODIFIES
 | NATURAL
-| NEXT // next should be doable as non-reserved, but is not due to the special `select next num_val` query that vitess supports
 | NOT
 | NO_WRITE_TO_BINLOG
 | NTH_VALUE
@@ -6671,7 +6768,6 @@ reserved_keyword:
 | NUMERIC
 | NVAR
 | OF
-| OFF
 | ON
 | OPTIMIZE
 | OPTIMIZER_COSTS
@@ -6918,6 +7014,7 @@ non_reserved_keyword:
 | NO
 | NOWAIT
 | NULLS
+| NVARCHAR
 | OFFSET
 | OJ
 | OLD
@@ -7015,12 +7112,16 @@ non_reserved_keyword2:
 | FILE
 | FIRST
 | IDENTIFIED
+//| NEXT
 | NONE
+//| OFF
 | PASSWORD
 | PASSWORD_LOCK_TIME
 | PROCESS
 | RELOAD
 | SHUTDOWN
+//| SQL_CACHE
+//| SQL_NO_CACHE
 | SUPER
 | TIMESTAMPADD
 | TIMESTAMPDIFF

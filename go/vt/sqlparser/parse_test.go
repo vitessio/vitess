@@ -5283,6 +5283,7 @@ var correctlyDoParse = []string{
 	"no_wait",
 	"nulls",
 	"number",
+	"nvarchar",
 	"offset",
 	"oj",
 	"old",
@@ -5787,7 +5788,6 @@ var correctlyDontParse = []string{
 var incorrectlyDontParse = []string{
 	"escape",
 	"next",
-	"nvarchar",
 	"off",
 	"sql_cache",
 	"sql_no_cache",
@@ -5920,7 +5920,7 @@ func TestKeywordsIncorrectlyDontParse(t *testing.T) {
 		for _, query := range tests {
 			test := fmt.Sprintf(query, kw)
 			t.Run(test, func(t *testing.T) {
-				t.Skip()
+				t.Skip("delete doesn't work for these words yet")
 				_, err := Parse(test)
 				assert.NoError(t, err)
 			})
