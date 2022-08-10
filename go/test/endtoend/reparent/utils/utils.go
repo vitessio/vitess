@@ -229,9 +229,9 @@ func StartNewVTTablet(t *testing.T, clusterInstance *cluster.LocalProcessCluster
 		require.FailNow(t, "Error starting mysql: %s", err.Error())
 	}
 
+	// The tablet should come up as serving since the primary for the shard already exists
+	tablet.VttabletProcess.ServingStatus = "SERVING"
 	err = tablet.VttabletProcess.Setup()
-	require.NoError(t, err)
-	err = tablet.VttabletProcess.WaitForTabletStatuses([]string{"SERVING", "NOT_SERVING"})
 	require.NoError(t, err)
 	return tablet
 }
