@@ -549,6 +549,14 @@ message GetCellsAliasesResponse {
   map<string,topodata.CellsAlias> aliases = 1;
 }
 
+message GetFullStatusRequest {
+  topodata.TabletAlias tablet_alias = 1;
+}
+
+message GetFullStatusResponse {
+  replicationdata.FullStatus status = 1;
+}
+
 message GetKeyspacesRequest {
 }
 
