@@ -6266,22 +6266,6 @@ var incorrectlyParse = []string{
 	"minute_second",
 }
 
-// not reserved in mysql
-var incorrectlyParseForNonSelect = []string{
-	"auto_increment", "add", "and", "alter", "mod", "asc", "as", "between", "binary", "by",
-	"call", "case", "collate", "convert", "connection", "create", "cross", "current", "current_date", "current_time", "current_timestamp", "database", "databases", "default", "delete",
-	"desc", "describe", "deterministic", "distinct", "div", "drop", "else", "elseif", "end", "escape", "event", "execute",
-	"exists", "explain", "failed_login_attempts", "false", "file", "first", "following", "for", "force", "from", "function",
-	"grant", "group", "grouping", "groups", "having", "identified", "if", "ignore", "in", "inout", "index", "inner", "insert",
-	"interval", "into", "is", "join", "key", "kill", "left",
-	"like", "limit", "localtime", "localtimestamp", "lock", "match", "maxvalue", "mod", "modifies",
-	"natural", "next", "none", "not", "null", "of", "off", "on", "or", "order", "out", "outer", "over", "password",
-	"password_lock_time", "procedure", "process", "reads", "recursive", "references", "regexp", "reload", "rename",
-	"replace", "require", "revoke", "right", "schema", "select", "separator", "set", "show", "shutdown", "sql", "straight_join", "substr", "substring", "super", "table", "then",
-	"timestampadd", "timestampdiff", "to", "trigger", "true", "union", "unique", "unlock", "update", "usage", "use", "using",
-	"utc_date", "utc_time", "utc_timestamp", "values", "when", "where", "window", "with",
-}
-
 // TestKeywordsCorrectlyParse ensures that certain keywords can be parsed by a series of edit queries.
 func TestKeywordsCorrectlyDoParse(t *testing.T) {
 	aliasTest := "SELECT 1 as %s"
