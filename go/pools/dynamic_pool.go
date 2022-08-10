@@ -45,8 +45,7 @@ type DynamicResourcePool struct {
 	closed        bool
 	rawConnection []resourceWrapper
 	connReceiver  chan resourceWrapper
-	connRequests  map[uint64]any
-	nextRequest   uint64
+	waiter        sync2.AtomicInt64
 	numOpen       int // number of open resources
 	// signals the need for new resource to a goroutine running resourceOpener().
 	// mayCreateResourceLocked sends on this chan (one send per needed connection)
@@ -74,7 +73,6 @@ func NewDynamicResourcePool(factory Factory, maxCap int, idleTimeout time.Durati
 		maxIdleTime:  idleTimeout,
 		openerCh:     make(chan struct{}, 4*maxCap),
 		connReceiver: make(chan resourceWrapper, 4*maxCap),
-		connRequests: make(map[uint64]any),
 		cancel:       cancel,
 	}
 
@@ -158,9 +156,7 @@ func (dp *DynamicResourcePool) Get(ctx context.Context) (resource Resource, err 
 	}
 	// 3: Check if the pool is at maxCapacity.
 	if dp.numOpen >= dp.maxCapacity {
-		dp.nextRequest++
-		reqKey := dp.nextRequest
-		dp.connRequests[reqKey] = nil
+		dp.waiter.Add(1)
 		dp.waitCount++
 		dp.mu.Unlock()
 
@@ -169,31 +165,11 @@ func (dp *DynamicResourcePool) Get(ctx context.Context) (resource Resource, err 
 		select {
 		case <-ctx.Done():
 			// Timeout happened.
-			// Removing the connection request and ensure no value has been sent on the channel.
-			connSentForThisReq := false
-			dp.mu.Lock()
-			// If the key is still in the map, it means the connection request has not been fulfilled.
-			// And if the key is not in the map, that means the connection request is fulfilled.
-			if _, exists := dp.connRequests[reqKey]; !exists {
-				connSentForThisReq = true
-			} else {
-				delete(dp.connRequests, reqKey)
-			}
-			dp.mu.Unlock()
-
+			dp.waiter.Add(-1)
 			dp.waitTime.Add(time.Since(startTime))
-
-			if connSentForThisReq {
-				select {
-				default:
-				case ret, ok := <-dp.connReceiver:
-					if ok && ret.resource != nil {
-						dp.Put(ret.resource)
-					}
-				}
-			}
 			return nil, ctx.Err()
 		case ret, ok := <-dp.connReceiver:
+			dp.waiter.Add(-1)
 			dp.waitTime.Add(time.Since(startTime))
 
 			if !ok {
@@ -247,12 +223,7 @@ func (dp *DynamicResourcePool) putLocked(resource Resource, err error) bool {
 	if dp.numOpen > dp.maxCapacity {
 		return false
 	}
-	if reqC := len(dp.connRequests); reqC > 0 {
-		var reqKey uint64
-		for reqKey = range dp.connRequests {
-			break
-		}
-		delete(dp.connRequests, reqKey) // Remove from pending request.
+	if dp.waiter.Get() > 0 {
 		dp.connReceiver <- resourceWrapper{
 			resource: resource,
 			err:      err,
@@ -284,8 +255,8 @@ func (dp *DynamicResourcePool) mayCreateResourceLocked() {
 	if dp.closed {
 		return
 	}
-	numRequests := len(dp.connRequests)
-	numCanOpen := dp.maxCapacity - dp.numOpen
+	numRequests := dp.waiter.Get()
+	numCanOpen := int64(dp.maxCapacity - dp.numOpen)
 	if numRequests > numCanOpen {
 		numRequests = numCanOpen
 	}
