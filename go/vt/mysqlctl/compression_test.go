@@ -106,7 +106,7 @@ func TestUnSupportedBuiltinCompressors(t *testing.T) {
 	for _, engine := range []string{"external", "foobar"} {
 		t.Run(engine, func(t *testing.T) {
 			_, err := newBuiltinCompressor(engine, nil, logger)
-			require.ErrorContains(t, err, "unsupported engine value for CompressionEngineName. supported values are `external`, `pgzip`, `pargzip`, `zstd`, `lz4` value:")
+			require.ErrorContains(t, err, "unsupported engine value for --compression-engine-name. supported values are 'external', 'pgzip', 'pargzip', 'zstd', 'lz4' value:")
 		})
 	}
 }
@@ -215,7 +215,7 @@ func TestValidateCompressionEngineName(t *testing.T) {
 	}{
 		// we expect ls to be on PATH as it is a basic command part of busybox and most containers
 		{"external", ""},
-		{"foobar", "unsupported engine value for CompressionEngineName. supported values are `external`, `pgzip`, `pargzip`, `zstd`, `lz4` value: \"foobar\""},
+		{"foobar", "unsupported engine value for --compression-engine-name. supported values are 'external', 'pgzip', 'pargzip', 'zstd', 'lz4' value: \"foobar\""},
 	}
 
 	for i, tt := range tests {
