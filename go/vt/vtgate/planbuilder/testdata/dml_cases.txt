@@ -5544,3 +5544,72 @@ Gen4 plan same as above
   ]
 }
 Gen4 plan same as above
+
+
+# explain dml without any directive should fail
+"explain format=vtexplain delete from user"
+"explain format = vtexplain will actually run queries. `/*vt+ EXECUTE_DML_QUERIES */` must be set to run DML queries in vtexplain. Example: `explain /*vt+ EXECUTE_DML_QUERIES */ format = vtexplain delete from t1`"
+Gen4 plan same as above
+
+# explain dml with actually_run_query directive
+"explain /*vt+ execute_dml_queries */ format=vtexplain delete from user"
+{
+  "QueryType": "EXPLAIN",
+  "Original": "explain /*vt+ execute_dml_queries */ format=vtexplain delete from user",
+  "Instructions": {
+    "OperatorType": "VTEXPLAIN",
+    "Inputs": [
+      {
+        "OperatorType": "Delete",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "KsidLength": 1,
+        "KsidVindex": "user_index",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select Id, `Name`, Costly from `user` for update",
+        "Query": "delete from `user`",
+        "Table": "user"
+      }
+    ]
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
+}
+Gen4 plan same as above
+
+# explain dml with actually_run_query directive - 2
+"explain /*vt+ eXECUTE_DML_QUERIES */ format=vtexplain delete from user"
+{
+  "QueryType": "EXPLAIN",
+  "Original": "explain /*vt+ eXECUTE_DML_QUERIES */ format=vtexplain delete from user",
+  "Instructions": {
+    "OperatorType": "VTEXPLAIN",
+    "Inputs": [
+      {
+        "OperatorType": "Delete",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "KsidLength": 1,
+        "KsidVindex": "user_index",
+        "MultiShardAutocommit": false,
+        "OwnedVindexQuery": "select Id, `Name`, Costly from `user` for update",
+        "Query": "delete from `user`",
+        "Table": "user"
+      }
+    ]
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
+}
+Gen4 plan same as above
+

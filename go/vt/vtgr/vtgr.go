@@ -17,8 +17,8 @@ limitations under the License.
 package vtgr
 
 import (
+	"context"
 	"errors"
-	"flag"
 	"os"
 	"os/signal"
 	"strings"
@@ -26,12 +26,12 @@ import (
 	"syscall"
 	"time"
 
-	"vitess.io/vitess/go/vt/concurrency"
-
-	"golang.org/x/net/context"
+	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/sync2"
+	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtgr/config"
 	"vitess.io/vitess/go/vt/vtgr/controller"
@@ -40,13 +40,23 @@ import (
 )
 
 var (
-	refreshInterval      = flag.Duration("refresh_interval", 10*time.Second, "refresh interval to load tablets")
-	scanInterval         = flag.Duration("scan_interval", 3*time.Second, "scan interval to diagnose and repair")
-	scanAndRepairTimeout = flag.Duration("scan_repair_timeout", 3*time.Second, "time to wait for a Diagnose and repair operation")
-	vtgrConfigFile       = flag.String("vtgr_config", "", "config file for vtgr")
+	refreshInterval      = 10 * time.Second
+	scanInterval         = 3 * time.Second
+	scanAndRepairTimeout = 3 * time.Second
+	vtgrConfigFile       string
 
-	localDbPort = flag.Int("db_port", 0, "local mysql port, set this to enable local fast check")
+	localDbPort int
 )
+
+func init() {
+	servenv.OnParseFor("vtgr", func(fs *pflag.FlagSet) {
+		fs.DurationVar(&refreshInterval, "refresh_interval", 10*time.Second, "Refresh interval to load tablets.")
+		fs.DurationVar(&scanInterval, "scan_interval", 3*time.Second, "Scan interval to diagnose and repair.")
+		fs.DurationVar(&scanAndRepairTimeout, "scan_repair_timeout", 3*time.Second, "Time to wait for a Diagnose and repair operation.")
+		fs.StringVar(&vtgrConfigFile, "vtgr_config", "", "Config file for vtgr.")
+		fs.IntVar(&localDbPort, "db_port", 0, "Local mysql port, set this to enable local fast check.")
+	})
+}
 
 // VTGR is the interface to manage the component to set up group replication with Vitess.
 // The main goal of it is to reconcile MySQL group and the Vitess topology.
@@ -81,10 +91,10 @@ func OpenTabletDiscovery(ctx context.Context, cellsToWatch, clustersToWatch []st
 // OpenTabletDiscoveryWithAcitve opens connection with topo server
 // and triggers the first round of controller based on parameter
 func OpenTabletDiscoveryWithAcitve(ctx context.Context, cellsToWatch, clustersToWatch []string, active bool) *VTGR {
-	if *vtgrConfigFile == "" {
+	if vtgrConfigFile == "" {
 		log.Fatal("vtgr_config is required")
 	}
-	config, err := config.ReadVTGRConfig(*vtgrConfigFile)
+	config, err := config.ReadVTGRConfig(vtgrConfigFile)
 	if err != nil {
 		log.Fatalf("Cannot load vtgr config file: %v", err)
 	}
@@ -100,7 +110,7 @@ func OpenTabletDiscoveryWithAcitve(ctx context.Context, cellsToWatch, clustersTo
 		if strings.Contains(ks, "/") {
 			// This is a keyspace/shard specification
 			input := strings.Split(ks, "/")
-			shards = append(shards, controller.NewGRShard(input[0], input[1], cellsToWatch, vtgr.tmc, vtgr.topo, db.NewVTGRSqlAgent(), config, *localDbPort, active))
+			shards = append(shards, controller.NewGRShard(input[0], input[1], cellsToWatch, vtgr.tmc, vtgr.topo, db.NewVTGRSqlAgent(), config, localDbPort, active))
 		} else {
 			// Assume this is a keyspace and find all shards in keyspace
 			shardNames, err := vtgr.topo.GetShardNames(ctx, ks)
@@ -114,7 +124,7 @@ func OpenTabletDiscoveryWithAcitve(ctx context.Context, cellsToWatch, clustersTo
 				continue
 			}
 			for _, s := range shardNames {
-				shards = append(shards, controller.NewGRShard(ks, s, cellsToWatch, vtgr.tmc, vtgr.topo, db.NewVTGRSqlAgent(), config, *localDbPort, active))
+				shards = append(shards, controller.NewGRShard(ks, s, cellsToWatch, vtgr.tmc, vtgr.topo, db.NewVTGRSqlAgent(), config, localDbPort, active))
 			}
 		}
 	}
@@ -139,9 +149,9 @@ func OpenTabletDiscoveryWithAcitve(ctx context.Context, cellsToWatch, clustersTo
 func (vtgr *VTGR) RefreshCluster() {
 	for _, shard := range vtgr.Shards {
 		go func(shard *controller.GRShard) {
-			ticker := time.Tick(*refreshInterval)
+			ticker := time.Tick(refreshInterval)
 			for range ticker {
-				ctx, cancel := context.WithTimeout(vtgr.ctx, *refreshInterval)
+				ctx, cancel := context.WithTimeout(vtgr.ctx, refreshInterval)
 				shard.UpdateTabletsInShardWithLock(ctx)
 				cancel()
 			}
@@ -153,10 +163,10 @@ func (vtgr *VTGR) RefreshCluster() {
 func (vtgr *VTGR) ScanAndRepair() {
 	for _, shard := range vtgr.Shards {
 		go func(shard *controller.GRShard) {
-			ticker := time.Tick(*scanInterval)
+			ticker := time.Tick(scanInterval)
 			for range ticker {
 				func() {
-					ctx, cancel := context.WithTimeout(vtgr.ctx, *scanAndRepairTimeout)
+					ctx, cancel := context.WithTimeout(vtgr.ctx, scanAndRepairTimeout)
 					defer cancel()
 					if !vtgr.stopped.Get() {
 						log.Infof("Start scan and repair %v/%v", shard.KeyspaceShard.Keyspace, shard.KeyspaceShard.Shard)

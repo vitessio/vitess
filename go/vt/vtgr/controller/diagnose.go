@@ -17,8 +17,8 @@ limitations under the License.
 package controller
 
 import (
+	"context"
 	"errors"
-	"flag"
 	"fmt"
 	"math/rand"
 	"os"
@@ -27,18 +27,23 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/net/context"
+	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/concurrency"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgr/db"
 )
 
-var (
-	pingTabletTimeout = flag.Duration("ping_tablet_timeout", 2*time.Second, "time to wait when we ping a tablet")
-)
+var pingTabletTimeout = 2 * time.Second
+
+func init() {
+	servenv.OnParseFor("vtgr", func(fs *pflag.FlagSet) {
+		fs.DurationVar(&pingTabletTimeout, "ping_tablet_timeout", 2*time.Second, "time to wait when we ping a tablet")
+	})
+}
 
 // DiagnoseType is the types of Diagnose result
 type DiagnoseType string
@@ -363,7 +368,7 @@ func (shard *GRShard) isPrimaryReachable(ctx context.Context) (bool, error) {
 }
 
 func (shard *GRShard) instanceReachable(ctx context.Context, instance *grInstance) bool {
-	pingCtx, cancel := context.WithTimeout(context.Background(), *pingTabletTimeout)
+	pingCtx, cancel := context.WithTimeout(context.Background(), pingTabletTimeout)
 	defer cancel()
 	c := make(chan error, 1)
 	// tmc.Ping create grpc client connection first without timeout via dial
@@ -373,7 +378,7 @@ func (shard *GRShard) instanceReachable(ctx context.Context, instance *grInstanc
 	go func() { c <- shard.tmc.Ping(pingCtx, instance.tablet) }()
 	select {
 	case <-pingCtx.Done():
-		shard.logger.Errorf("Ping abort timeout %v", *pingTabletTimeout)
+		shard.logger.Errorf("Ping abort timeout %v", pingTabletTimeout)
 		return false
 	case err := <-c:
 		if err != nil {

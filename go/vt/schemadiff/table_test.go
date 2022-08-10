@@ -160,6 +160,14 @@ func TestCreateTableDiff(t *testing.T) {
 			cdiff:     "ALTER TABLE `t1` RENAME COLUMN `i1` TO `i2`, RENAME COLUMN `v1` TO `v2`",
 		},
 		{
+			name:      "rename mid column and add an index. statement",
+			from:      "create table t1 (id int primary key, i1 int not null, c char(3) default '')",
+			to:        "create table t2 (id int primary key, i2 int not null, c char(3) default '', key i2_idx(i2))",
+			colrename: ColumnRenameHeuristicStatement,
+			diff:      "alter table t1 rename column i1 to i2, add key i2_idx (i2)",
+			cdiff:     "ALTER TABLE `t1` RENAME COLUMN `i1` TO `i2`, ADD KEY `i2_idx` (`i2`)",
+		},
+		{
 			// in a future iteration, this will generate a RENAME for both column, like in the previous test. Until then, we do not RENAME two successive columns
 			name:      "rename two successive columns. statement",
 			from:      "create table t1 (id int primary key, i1 int not null, v1 varchar(32))",

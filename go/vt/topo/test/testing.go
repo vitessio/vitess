@@ -96,6 +96,11 @@ func TopoServerTestSuite(t *testing.T, factory func() *topo.Server) {
 	checkElection(t, ts)
 	ts.Close()
 
+	t.Log("=== checkWaitForNewLeader")
+	ts = factory()
+	checkWaitForNewLeader(t, ts)
+	ts.Close()
+
 	t.Log("=== checkDirectory")
 	ts = factory()
 	checkDirectory(t, ts)
@@ -111,5 +116,12 @@ func TopoServerTestSuite(t *testing.T, factory func() *topo.Server) {
 	checkWatch(t, ts)
 	t.Log("=== checkWatchInterrupt")
 	checkWatchInterrupt(t, ts)
+
+	t.Log("=== checkList")
+	checkList(t, ts)
+
+	t.Log("=== checkWatchRecursive")
+	checkWatchRecursive(t, ts)
+
 	ts.Close()
 }

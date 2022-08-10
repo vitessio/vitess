@@ -333,7 +333,7 @@ func (s *VtctldServer) Backup(req *vtctldatapb.BackupRequest, stream vtctlservic
 	span.Annotate("keyspace", ti.Keyspace)
 	span.Annotate("shard", ti.Shard)
 
-	return s.backupTablet(ctx, ti.Tablet, int(req.Concurrency), req.AllowPrimary, stream)
+	return s.backupTablet(ctx, ti.Tablet, req, stream)
 }
 
 // BackupShard is part of the vtctlservicepb.VtctldServer interface.
@@ -386,13 +386,15 @@ func (s *VtctldServer) BackupShard(req *vtctldatapb.BackupShardRequest, stream v
 
 	span.Annotate("tablet_alias", topoproto.TabletAliasString(backupTablet.Alias))
 
-	return s.backupTablet(ctx, backupTablet, int(req.Concurrency), req.AllowPrimary, stream)
+	r := &vtctldatapb.BackupRequest{Concurrency: req.Concurrency, AllowPrimary: req.AllowPrimary}
+	return s.backupTablet(ctx, backupTablet, r, stream)
 }
 
-func (s *VtctldServer) backupTablet(ctx context.Context, tablet *topodatapb.Tablet, concurrency int, allowPrimary bool, stream interface {
+func (s *VtctldServer) backupTablet(ctx context.Context, tablet *topodatapb.Tablet, req *vtctldatapb.BackupRequest, stream interface {
 	Send(resp *vtctldatapb.BackupResponse) error
 }) error {
-	logStream, err := s.tmc.Backup(ctx, tablet, concurrency, allowPrimary)
+	r := &tabletmanagerdatapb.BackupRequest{Concurrency: int64(req.Concurrency), AllowPrimary: req.AllowPrimary}
+	logStream, err := s.tmc.Backup(ctx, tablet, r)
 	if err != nil {
 		return err
 	}
@@ -1131,6 +1133,28 @@ func (s *VtctldServer) GetCellsAliases(ctx context.Context, req *vtctldatapb.Get
 	}
 
 	return &vtctldatapb.GetCellsAliasesResponse{Aliases: aliases}, nil
+}
+
+// GetFullStatus is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) GetFullStatus(ctx context.Context, req *vtctldatapb.GetFullStatusRequest) (*vtctldatapb.GetFullStatusResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.GetFullStatus")
+	defer span.Finish()
+
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(req.TabletAlias))
+
+	ti, err := s.ts.GetTablet(ctx, req.TabletAlias)
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := s.tmc.FullStatus(ctx, ti.Tablet)
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.GetFullStatusResponse{
+		Status: res,
+	}, nil
 }
 
 // GetKeyspace is part of the vtctlservicepb.VtctldServer interface.

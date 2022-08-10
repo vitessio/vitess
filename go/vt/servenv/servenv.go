@@ -47,6 +47,7 @@ import (
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	// register the proper init and shutdown hooks for logging
 	_ "vitess.io/vitess/go/vt/logutil"
@@ -232,8 +233,10 @@ func RunDefault() {
 }
 
 var (
-	flagHooksM       sync.Mutex
-	globalFlagHooks  []func(*pflag.FlagSet)
+	flagHooksM      sync.Mutex
+	globalFlagHooks = []func(*pflag.FlagSet){
+		vterrors.RegisterFlags,
+	}
 	commandFlagHooks = map[string][]func(*pflag.FlagSet){}
 )
 

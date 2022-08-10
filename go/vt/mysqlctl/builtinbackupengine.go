@@ -393,12 +393,13 @@ func newBackupWriter(filename string, maxSize int64, w io.Writer) *backupPipe {
 	}
 }
 
-func newBackupReader(filename string, r io.Reader) *backupPipe {
+func newBackupReader(filename string, maxSize int64, r io.Reader) *backupPipe {
 	return &backupPipe{
 		crc32:    crc32.NewIEEE(),
 		r:        r,
 		filename: filename,
 		done:     make(chan struct{}),
+		maxSize:  maxSize,
 	}
 }
 
@@ -435,10 +436,10 @@ func (bp *backupPipe) HashString() string {
 func (bp *backupPipe) ReportProgress(period time.Duration, logger logutil.Logger) {
 	tick := time.NewTicker(period)
 	defer tick.Stop()
-
 	for {
 		select {
 		case <-bp.done:
+			logger.Infof("Done taking Backup %q", bp.filename)
 			return
 		case <-tick.C:
 			written := float64(atomic.LoadInt64(&bp.nn))
@@ -484,7 +485,8 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 	}(name, fe.Name)
 
 	bw := newBackupWriter(fe.Name, fi.Size(), wc)
-	go bw.ReportProgress(*builtinBackupProgress, params.Logger)
+	br := newBackupReader(fe.Name, fi.Size(), source)
+	go br.ReportProgress(*builtinBackupProgress, params.Logger)
 
 	var writer io.Writer = bw
 
@@ -517,7 +519,7 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 
 	// Copy from the source file to writer (optional gzip,
 	// optional pipe, tee, output file and hasher).
-	_, err = io.Copy(writer, source)
+	_, err = io.Copy(writer, br)
 	if err != nil {
 		return vterrors.Wrap(err, "cannot copy data")
 	}
@@ -546,6 +548,10 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 	// Close the backupPipe to finish writing on destination.
 	if err = bw.Close(); err != nil {
 		return vterrors.Wrapf(err, "cannot flush destination: %v", name)
+	}
+
+	if err := br.Close(); err != nil {
+		return vterrors.Wrap(err, "failed to close the source reader")
 	}
 
 	// Save the hash.
@@ -642,7 +648,7 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 		}
 	}()
 
-	bp := newBackupReader(name, source)
+	bp := newBackupReader(name, 0, source)
 	go bp.ReportProgress(*builtinBackupProgress, params.Logger)
 
 	dst := bufio.NewWriterSize(dstFile, writerBufferSize)

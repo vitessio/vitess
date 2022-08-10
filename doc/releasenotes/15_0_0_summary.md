@@ -9,6 +9,7 @@
 - [VDiff2](#vdiff2)
 - [Mysql Compatibility](#mysql-compatibility)
 - [Durability Policy](#durability-policy)
+- [New EXPLAIN format](#new-explain-format)
 
 ## Known Issues
 
@@ -199,3 +200,9 @@ This is different from the existing `autocommit` parameter where the query is se
 
 A new durability policy `cross_cell` is now supported. `cross_cell` durability policy only allows replica tablets from a different cell than the current primary to
 send semi-sync ACKs. This ensures that any committed write exists in at least 2 tablets belonging to different cells.
+
+### New EXPLAIN format
+
+#### FORMAT=vtexplain
+
+With this new `explain` format, you can get an output that is very similar to the command line `vtexplain` app, but from a running `vtgate`, through a MySQL query.

@@ -105,6 +105,8 @@ service Vtctld {
   // GetCellsAliases returns a mapping of cell alias to cells identified by that
   // alias.
   rpc GetCellsAliases(vtctldata.GetCellsAliasesRequest) returns (vtctldata.GetCellsAliasesResponse) {};
+  // GetFullStatus returns the full status of MySQL including the replication information, semi-sync information, GTID information among others
+  rpc GetFullStatus(vtctldata.GetFullStatusRequest) returns (vtctldata.GetFullStatusResponse) {};
   // GetKeyspace reads the given keyspace from the topo and returns it.
   rpc GetKeyspace(vtctldata.GetKeyspaceRequest) returns (vtctldata.GetKeyspaceResponse) {};
   // GetKeyspaces returns the keyspace struct of all keyspaces in the topo.

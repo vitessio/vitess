@@ -161,6 +161,9 @@ const (
 	HexNum
 	HexVal
 	BitVal
+	DateVal
+	TimeVal
+	TimestampVal
 )
 
 // queryOptimizerPrefix is the prefix of an optimizer hint comment.
@@ -514,6 +517,21 @@ func NewHexLiteral(in string) *Literal {
 // NewBitLiteral builds a new BitVal containing a bit literal.
 func NewBitLiteral(in string) *Literal {
 	return &Literal{Type: BitVal, Val: in}
+}
+
+// NewDateLiteral builds a new Date.
+func NewDateLiteral(in string) *Literal {
+	return &Literal{Type: DateVal, Val: in}
+}
+
+// NewTimeLiteral builds a new Date.
+func NewTimeLiteral(in string) *Literal {
+	return &Literal{Type: TimeVal, Val: in}
+}
+
+// NewTimestampLiteral builds a new Date.
+func NewTimestampLiteral(in string) *Literal {
+	return &Literal{Type: TimestampVal, Val: in}
 }
 
 // NewArgument builds a new ValArg.
@@ -1611,6 +1629,8 @@ func (ty ExplainType) ToString() string {
 		return JSONStr
 	case VitessType:
 		return VitessStr
+	case VTExplainType:
+		return VTExplainStr
 	case TraditionalType:
 		return TraditionalStr
 	case AnalyzeType:
