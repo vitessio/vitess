@@ -225,6 +225,17 @@ func bindVariable(yylex yyLexer, bvar string) {
 // In order to ensure lower precedence of reduction, this rule has to come before the precedence declaration of '('.
 // This precedence should not be used anywhere else other than with function names that are non-reserved-keywords.
 %nonassoc <str> FUNCTION_CALL_NON_KEYWORD
+// STRING_TYPE_PREFIX_NON_KEYWORD is used to resolve shift-reduce conflicts occuring due to column_name symbol and
+// being able to use keywords like DATE and TIME as prefixes to strings to denote their type. The shift-reduce conflict occurrs because
+// after seeing one of these non-reserved keywords, if we see a STRING, then we can either shift to use the STRING typed rule in literal or
+// reduce the non-reserved keyword into column_name and eventually use a rule from simple_expr.
+// The way to fix this conflict is to give shifting higher precedence than reducing.
+// Adding no precedence also works, since shifting is the default, but it reports some conflicts
+// Precedence is also assined to shifting on STRING.
+// We also need to add a lower precedence to reducing the grammar symbol to non-reserved keywords.
+// In order to ensure lower precedence of reduction, this rule has to come before the precedence declaration of STRING.
+// This precedence should not be used anywhere else other than with non-reserved-keywords that are also used for type-casting a STRING.
+%nonassoc <str> STRING_TYPE_PREFIX_NON_KEYWORD
 
 %token LEX_ERROR
 %left <str> UNION
@@ -240,7 +251,8 @@ func bindVariable(yylex yyLexer, bvar string) {
 %left <str> ON USING INPLACE COPY INSTANT ALGORITHM NONE SHARED EXCLUSIVE
 %left <str> SUBQUERY_AS_EXPR
 %left <str> '(' ',' ')'
-%token <str> ID AT_ID AT_AT_ID HEX STRING NCHAR_STRING INTEGRAL FLOAT DECIMAL HEXNUM VALUE_ARG LIST_ARG COMMENT COMMENT_KEYWORD BITNUM BIT_LITERAL COMPRESSION
+%nonassoc <str> STRING
+%token <str> ID AT_ID AT_AT_ID HEX NCHAR_STRING INTEGRAL FLOAT DECIMAL HEXNUM VALUE_ARG LIST_ARG COMMENT COMMENT_KEYWORD BITNUM BIT_LITERAL COMPRESSION
 %token <str> JSON_PRETTY JSON_STORAGE_SIZE JSON_STORAGE_FREE JSON_CONTAINS JSON_CONTAINS_PATH JSON_EXTRACT JSON_KEYS JSON_OVERLAPS JSON_SEARCH JSON_VALUE
 %token <str> EXTRACT
 %token <str> NULL TRUE FALSE OFF
@@ -494,7 +506,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <str> header_opt export_options manifest_opt overwrite_opt format_opt optionally_opt regexp_symbol
 %type <str> fields_opts fields_opt_list fields_opt lines_opts lines_opt lines_opt_list
 %type <lock> locking_clause
-%type <columns> ins_column_list column_list column_list_opt index_list
+%type <columns> ins_column_list column_list column_list_opt column_list_empty index_list
 %type <variable> variable_expr set_variable user_defined_variable
 %type <variables> at_id_list execute_statement_list_opt
 %type <partitions> opt_partition_clause partition_list
@@ -1660,6 +1672,18 @@ text_literal
   {
     bindVariable(yylex, $2[1:])
     $$ = &IntroducerExpr{CharacterSet: $1, Expr: NewArgument($2[1:])}
+  }
+| DATE STRING
+  {
+  $$ = NewDateLiteral($2)
+  }
+| TIME STRING
+  {
+  $$ = NewTimeLiteral($2)
+  }
+| TIMESTAMP STRING
+  {
+  $$ = NewTimestampLiteral($2)
   }
 
 underscore_charsets:
@@ -3253,7 +3277,7 @@ partitions_options_beginning:
         Expr: $4,
       }
     }
-| linear_opt KEY algorithm_opt '(' column_list ')'
+| linear_opt KEY algorithm_opt '(' column_list_empty ')'
     {
       $$ = &PartitionOption {
         IsLinear: $1,
@@ -4752,6 +4776,15 @@ column_list_opt:
 | '(' column_list ')'
   {
     $$ = $2
+  }
+
+column_list_empty:
+  {
+    $$ = nil
+  }
+| column_list
+  {
+    $$ = $1
   }
 
 column_list:
@@ -7441,7 +7474,7 @@ non_reserved_keyword:
 | CSV
 | CURRENT
 | DATA
-| DATE
+| DATE %prec STRING_TYPE_PREFIX_NON_KEYWORD
 | DATETIME
 | DEALLOCATE
 | DECIMAL_TYPE
@@ -7708,8 +7741,8 @@ non_reserved_keyword:
 | THREAD_PRIORITY
 | THROTTLE
 | TIES
-| TIME
-| TIMESTAMP
+| TIME %prec STRING_TYPE_PREFIX_NON_KEYWORD
+| TIMESTAMP %prec STRING_TYPE_PREFIX_NON_KEYWORD
 | TINYBLOB
 | TINYINT
 | TINYTEXT

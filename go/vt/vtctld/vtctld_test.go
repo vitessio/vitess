@@ -30,7 +30,8 @@ func TestWebApp(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, appPrefix, nil)
 	w := httptest.NewRecorder()
 
-	webAppHandler(w, req)
+	handler := staticContentHandler(true)
+	handler.ServeHTTP(w, req)
 	res := w.Result()
 
 	assert.Equal(t, http.StatusOK, res.StatusCode)
@@ -38,6 +39,7 @@ func TestWebApp(t *testing.T) {
 	defer res.Body.Close()
 
 	data, err := ioutil.ReadAll(res.Body)
+
 	assert.NoError(t, err)
 	assert.Contains(t, string(data), "<!doctype html>")
 }
@@ -49,7 +51,8 @@ func TestWebAppDisabled(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, appPrefix, nil)
 	w := httptest.NewRecorder()
 
-	webAppHandler(w, req)
+	handler := staticContentHandler(false)
+	handler.ServeHTTP(w, req)
 	res := w.Result()
 
 	assert.Equal(t, http.StatusNotFound, res.StatusCode)

@@ -96,7 +96,8 @@ func TestVersion(t *testing.T) {
 	sourceReplicaGitRev := "fake git rev"
 	sourceReplica.FakeMysqlDaemon.SetReplicationSourceInputs = append(sourceReplica.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(sourcePrimary.Tablet))
 	sourceReplica.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
-		// These 2 statements come from tablet startup
+		// These 3 statements come from tablet startup
+		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START SLAVE",
 	}

@@ -142,6 +142,9 @@ func (c *Conn) dial(ctx context.Context) error {
 // Close is part of the topo.Conn interface.
 // It nils out factory, so any subsequent call will panic.
 func (c *Conn) Close() {
+	c.factory.Lock()
+	f := c.factory
+	defer f.Unlock()
 	c.factory = nil
 }
 

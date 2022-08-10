@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine/internal/decimal"
 )
@@ -379,6 +380,41 @@ func NewLiteralString(val []byte, collation collations.TypedCollation) *Literal 
 	lit := &Literal{}
 	lit.Val.setRaw(sqltypes.VarChar, val, collation)
 	return lit
+}
+
+// NewLiteralDateFromBytes returns a literal expression.
+func NewLiteralDateFromBytes(val []byte) (*Literal, error) {
+	_, err := sqlparser.ParseDate(string(val))
+	if err != nil {
+		return nil, err
+	}
+	lit := &Literal{}
+	lit.Val.setRaw(querypb.Type_DATE, val, collationNumeric)
+	return lit, nil
+}
+
+// NewLiteralTimeFromBytes returns a literal expression.
+// it validates the time by parsing it and checking the error.
+func NewLiteralTimeFromBytes(val []byte) (*Literal, error) {
+	_, err := sqlparser.ParseTime(string(val))
+	if err != nil {
+		return nil, err
+	}
+	lit := &Literal{}
+	lit.Val.setRaw(querypb.Type_TIME, val, collationNumeric)
+	return lit, nil
+}
+
+// NewLiteralDatetimeFromBytes returns a literal expression.
+// it validates the datetime by parsing it and checking the error.
+func NewLiteralDatetimeFromBytes(val []byte) (*Literal, error) {
+	_, err := sqlparser.ParseDateTime(string(val))
+	if err != nil {
+		return nil, err
+	}
+	lit := &Literal{}
+	lit.Val.setRaw(querypb.Type_DATETIME, val, collationNumeric)
+	return lit, nil
 }
 
 func parseHexLiteral(val []byte) ([]byte, error) {

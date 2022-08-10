@@ -93,8 +93,9 @@ type LocalProcessCluster struct {
 	VtctlMajorVersion    int
 
 	// standalone executable
-	VtctlclientProcess VtctlClientProcess
-	VtctlProcess       VtctlProcess
+	VtctlclientProcess  VtctlClientProcess
+	VtctldClientProcess VtctldClientProcess
+	VtctlProcess        VtctlProcess
 
 	// background executable processes
 	TopoProcess     TopoProcess

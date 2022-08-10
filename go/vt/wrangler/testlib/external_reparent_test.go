@@ -94,6 +94,7 @@ func TestTabletExternallyReparentedBasic(t *testing.T) {
 
 	oldPrimary.FakeMysqlDaemon.SetReplicationSourceInputs = append(oldPrimary.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(newPrimary.Tablet))
 	oldPrimary.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START Replica",
 	}
@@ -174,6 +175,7 @@ func TestTabletExternallyReparentedToReplica(t *testing.T) {
 	// primary is still good to go.
 	oldPrimary.FakeMysqlDaemon.SetReplicationSourceInputs = append(oldPrimary.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(newPrimary.Tablet))
 	oldPrimary.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START Replica",
 	}
@@ -253,6 +255,7 @@ func TestTabletExternallyReparentedWithDifferentMysqlPort(t *testing.T) {
 
 	oldPrimary.FakeMysqlDaemon.SetReplicationSourceInputs = append(oldPrimary.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(newPrimary.Tablet))
 	oldPrimary.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START Replica",
 	}
@@ -265,7 +268,8 @@ func TestTabletExternallyReparentedWithDifferentMysqlPort(t *testing.T) {
 	// TabletActionReplicaWasRestarted and point to the new mysql port
 	goodReplica.FakeMysqlDaemon.SetReplicationSourceInputs = append(goodReplica.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(oldPrimary.Tablet))
 	goodReplica.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
-		// These 2 statements come from tablet startup
+		// These 3 statements come from tablet startup
+		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START SLAVE",
 	}
@@ -341,6 +345,7 @@ func TestTabletExternallyReparentedContinueOnUnexpectedPrimary(t *testing.T) {
 
 	oldPrimary.FakeMysqlDaemon.SetReplicationSourceInputs = append(oldPrimary.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(newPrimary.Tablet))
 	oldPrimary.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START Replica",
 	}
@@ -353,7 +358,8 @@ func TestTabletExternallyReparentedContinueOnUnexpectedPrimary(t *testing.T) {
 	// TabletActionReplicaWasRestarted and point to a bad host
 	goodReplica.FakeMysqlDaemon.SetReplicationSourceInputs = append(goodReplica.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(oldPrimary.Tablet))
 	goodReplica.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
-		// These 2 statements come from tablet startup
+		// These 3 statements come from tablet startup
+		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START SLAVE",
 	}
@@ -425,6 +431,7 @@ func TestTabletExternallyReparentedRerun(t *testing.T) {
 
 	oldPrimary.FakeMysqlDaemon.SetReplicationSourceInputs = append(oldPrimary.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(newPrimary.Tablet))
 	oldPrimary.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START Replica",
 	}
@@ -437,7 +444,8 @@ func TestTabletExternallyReparentedRerun(t *testing.T) {
 	// On the good replica, we will respond to
 	// TabletActionReplicaWasRestarted.
 	goodReplica.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
-		// These 2 statements come from tablet startup
+		// These 3 statements come from tablet startup
+		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START SLAVE",
 	}
