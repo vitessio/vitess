@@ -4661,7 +4661,10 @@ json_table_column_options:
 
 // TODO: factor these out later
 on_empty:
-  NULL ON EMPTY
+  {
+
+  }
+| NULL ON EMPTY
   {
 
   }

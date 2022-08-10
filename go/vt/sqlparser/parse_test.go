@@ -4088,12 +4088,12 @@ func TestFunctionCalls(t *testing.T) {
 	// Functions where the input doesn't match the output. Prefer query tests above when possible.
 	testCases := []parseTest{
 		{
-			input: 		"select CAST(1 as datetime) from dual",
+			input:  "select CAST(1 as datetime) from dual",
 			output: "select CAST(1, datetime) from dual",
 		},
 		{
-			input: 		"select LOCALTIMESTAMP from dual",
-			output: 		"select LOCALTIMESTAMP() from dual",
+			input:  "select LOCALTIMESTAMP from dual",
+			output: "select LOCALTIMESTAMP() from dual",
 		},
 	}
 
@@ -4101,19 +4101,19 @@ func TestFunctionCalls(t *testing.T) {
 	skippedTestCases := []parseTest{
 		{
 			// USING syntax parsed but not captured
-			input: 				"select CHAR(77,121,83,81,'76' USING utf8mb4) from dual",
+			input: "select CHAR(77,121,83,81,'76' USING utf8mb4) from dual",
 		},
 		{
 			// INTERVAL function produces a grammar conflict
-			input: 		"select INTERVAL(col1, col2) from dual",
+			input: "select INTERVAL(col1, col2) from dual",
 		},
 		{
 			// not implemented
-			input: 		`select SELECT 17 MEMBER OF('[23, "abc", 17, "ab", 10]'); from dual`,
+			input: `select SELECT 17 MEMBER OF('[23, "abc", 17, "ab", 10]'); from dual`,
 		},
 		{
 			// not implemented
-			input: 		"select JSON_TABLE('') from dual",
+			input: "select JSON_TABLE('') from dual",
 		},
 	}
 
@@ -6424,6 +6424,17 @@ func TestKeywordsIncorrectlyDontParse(t *testing.T) {
 			})
 		}
 	}
+}
+
+func TestJSONTable(t *testing.T) {
+	validSQL := []parseTest{{
+		input: `SELECT * FROM JSON_TABLE( '[{"a":1},{"a":2}]', "$[*]" COLUMNS(x varchar(100) path "$.a")) as tt;`,
+	}}
+
+	for _, tcase := range validSQL {
+		runParseTestCase(t, tcase)
+	}
+
 }
 
 // Benchmark run on 6/23/17, prior to improvements:
