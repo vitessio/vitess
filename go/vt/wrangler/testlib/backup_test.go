@@ -58,8 +58,6 @@ func TestBackupRestore(t *testing.T) {
 	require.NoError(t, err)
 }
 
-// Given we infer decompressor through Manifest file.
-// It is only in xtrabackup where we infer decompressor through extension & BuiltinDecompressor param.
 func TestBackupRestoreWithPargzip(t *testing.T) {
 	defer setDefaultCompressionFlag()
 	cDetails := &compressionDetails{
