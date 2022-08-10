@@ -452,7 +452,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <empty> to_opt to_or_as as_opt column_opt describe
 %type <str> algorithm_opt definer_opt security_opt
 %type <viewSpec> view_opts
-%type <bytes> reserved_keyword reserved_keyword2 non_reserved_keyword column_name_safe_reserved_keyword non_reserved_keyword2
+%type <bytes> reserved_keyword reserved_keyword2 non_reserved_keyword column_name_safe_reserved_keyword non_reserved_keyword2 non_reserved_keyword3
 %type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt using_opt existing_window_name_opt
 %type <colIdents> reserved_sql_id_list
 %type <expr> charset_value
@@ -2303,7 +2303,7 @@ column_definition_for_create:
     }
     $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: $2}
   }
-| ACCOUNT column_type column_type_options
+| non_reserved_keyword3 column_type column_type_options
   {
     if err := $2.merge($3); err != nil {
       yylex.Error(err.Error())
@@ -2312,46 +2312,6 @@ column_definition_for_create:
     $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: $2}
   }
 | ESCAPE column_type column_type_options
-  {
-    if err := $2.merge($3); err != nil {
-      yylex.Error(err.Error())
-      return 1
-    }
-    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: $2}
-  }
-| FORMAT column_type column_type_options
-  {
-    if err := $2.merge($3); err != nil {
-      yylex.Error(err.Error())
-      return 1
-    }
-    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: $2}
-  }
-| NEXT column_type column_type_options
-  {
-    if err := $2.merge($3); err != nil {
-      yylex.Error(err.Error())
-      return 1
-    }
-    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: $2}
-  }
-| OFF column_type column_type_options
-  {
-    if err := $2.merge($3); err != nil {
-      yylex.Error(err.Error())
-      return 1
-    }
-    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: $2}
-  }
-| SQL_CACHE column_type column_type_options
-  {
-    if err := $2.merge($3); err != nil {
-      yylex.Error(err.Error())
-      return 1
-    }
-    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: $2}
-  }
-| SQL_NO_CACHE column_type column_type_options
   {
     if err := $2.merge($3); err != nil {
       yylex.Error(err.Error())
@@ -4460,27 +4420,7 @@ col_alias:
   {
     $$ = NewColIdent(string($1))
   }
-| ACCOUNT
-  {
-    $$ = NewColIdent(string($1))
-  }
-| FORMAT
-  {
-    $$ = NewColIdent(string($1))
-  }
-| NEXT
-  {
-    $$ = NewColIdent(string($1))
-  }
-| OFF
-  {
-    $$ = NewColIdent(string($1))
-  }
-| SQL_CACHE
-  {
-    $$ = NewColIdent(string($1))
-  }
-| SQL_NO_CACHE
+| non_reserved_keyword3
   {
     $$ = NewColIdent(string($1))
   }
@@ -5883,6 +5823,11 @@ column_name:
   {
     $$ = &ColName{Qualifier: TableName{Qualifier: $1, Name: $3}, Name: $5}
   }
+// TODO: should just be reserved_keywords or reserved_table_id
+| reserved_keyword2 '.' reserved_sql_id
+  {
+    $$ = &ColName{Qualifier: TableName{Name: NewTableIdent(string($1))}, Name: $3}
+  }
 // TODO: should just be in non_reserved_keywords
 | non_reserved_keyword2
   {
@@ -5899,10 +5844,6 @@ column_name:
 | table_id '.' FORMAT
   {
     $$ = &ColName{Qualifier: TableName{Name: $1}, Name: NewColIdent(string($3))}
-  }
-| reserved_keyword2 '.' reserved_sql_id
-  {
-    $$ = &ColName{Qualifier: TableName{Name: NewTableIdent(string($1))}, Name: $3}
   }
 
 value:
@@ -6144,31 +6085,11 @@ ins_column_list:
   {
     $$ = Columns{NewColIdent(string($1))}
   }
-| ACCOUNT
+| non_reserved_keyword3
   {
     $$ = Columns{NewColIdent(string($1))}
   }
 | ESCAPE
-  {
-    $$ = Columns{NewColIdent(string($1))}
-  }
-| FORMAT
-  {
-    $$ = Columns{NewColIdent(string($1))}
-  }
-| NEXT
-  {
-    $$ = Columns{NewColIdent(string($1))}
-  }
-| OFF
-  {
-    $$ = Columns{NewColIdent(string($1))}
-  }
-| SQL_CACHE
-  {
-    $$ = Columns{NewColIdent(string($1))}
-  }
-| SQL_NO_CACHE
   {
     $$ = Columns{NewColIdent(string($1))}
   }
@@ -6236,31 +6157,11 @@ assignment_expression:
 | column_name_safe_reserved_keyword '=' expression {
     $$ = &AssignmentExpr{Name: &ColName{Name: NewColIdent(string($1))}, Expr: $3}
   }
-| ACCOUNT '=' expression
+| non_reserved_keyword3 '=' expression
   {
     $$ = &AssignmentExpr{Name: &ColName{Name: NewColIdent(string($1))}, Expr: $3}
   }
 | ESCAPE '=' expression
-  {
-    $$ = &AssignmentExpr{Name: &ColName{Name: NewColIdent(string($1))}, Expr: $3}
-  }
-| FORMAT '=' expression
-  {
-    $$ = &AssignmentExpr{Name: &ColName{Name: NewColIdent(string($1))}, Expr: $3}
-  }
-| NEXT '=' expression
-  {
-    $$ = &AssignmentExpr{Name: &ColName{Name: NewColIdent(string($1))}, Expr: $3}
-  }
-| OFF '=' expression
-  {
-    $$ = &AssignmentExpr{Name: &ColName{Name: NewColIdent(string($1))}, Expr: $3}
-  }
-| SQL_CACHE '=' expression
-  {
-    $$ = &AssignmentExpr{Name: &ColName{Name: NewColIdent(string($1))}, Expr: $3}
-  }
-| SQL_NO_CACHE '=' expression
   {
     $$ = &AssignmentExpr{Name: &ColName{Name: NewColIdent(string($1))}, Expr: $3}
   }
@@ -7196,9 +7097,7 @@ reserved_keyword2:
 
   Sorted alphabetically
 */
-// TODO: commented out words here SHOULD be marked as non_reserved_keywords, but cause conflicts
 non_reserved_keyword:
-// ACCOUNT
   ACTION
 | ACTIVE
 | ADMIN
@@ -7207,10 +7106,8 @@ non_reserved_keyword:
 | ALGORITHM
 | ALWAYS
 | ARRAY
-//| ATTRIBUTE
 | AUTHENTICATION
 | AUTO_INCREMENT
-//| AVG
 | BEGIN
 | SERIAL
 | BIT
@@ -7227,7 +7124,6 @@ non_reserved_keyword:
 | COLLATION
 | COLUMNS
 | COLUMN_NAME
-//| COMMENT_KEYWORD
 | COMMIT
 | COMMITTED
 | CONNECTION
@@ -7257,9 +7153,7 @@ non_reserved_keyword:
 | ENUM
 | ERROR
 | ERRORS
-//| EVENT
 | EXCLUDE
-//| EXECUTE
 | EXPANSION
 | EXPIRE
 | FIELDS
@@ -7410,7 +7304,7 @@ non_reserved_keyword:
 | X509
 | YEAR
 
-// non_reserved_keywords that can't go in non_reserved_keywords for some reason
+// non_reserved_keyword that can't go in non_reserved_keyword for some reason
 non_reserved_keyword2:
   ATTRIBUTE
 | COMMENT_KEYWORD
@@ -7420,20 +7314,25 @@ non_reserved_keyword2:
 | FILE
 | FIRST
 | IDENTIFIED
-//| NEXT
 | NONE
-//| OFF
 | PASSWORD
 | PASSWORD_LOCK_TIME
 | PROCESS
 | RELOAD
 | SHUTDOWN
-//| SQL_CACHE
-//| SQL_NO_CACHE
 | SUPER
 | TIMESTAMPADD
 | TIMESTAMPDIFF
 | VIEW
+
+// non_reserved_keyword that can't go in non_reserved_keyword or non_reserved_keyword2 for some reason
+non_reserved_keyword3:
+  ACCOUNT
+| FORMAT
+| NEXT
+| OFF
+| SQL_CACHE
+| SQL_NO_CACHE
 
 // Reserved keywords that cause grammar conflicts in some places, but are safe to use as column name / alias identifiers.
 // These keywords should also go in reserved_keyword.
