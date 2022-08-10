@@ -31,10 +31,6 @@ import (
 var _ IResourcePool = (*DynamicResourcePool)(nil)
 var _ refreshPool = (*DynamicResourcePool)(nil)
 
-// resourceRequestQueueSize is the size of the resource opener request chan.
-// This value should be larger than the value for maxCapacity.
-const resourceRequestQueueSize = 1000000
-
 // DynamicResourcePool the design is inspired from the golang database/sql package
 // whose source code is governed by a BSD-style license.
 type DynamicResourcePool struct {
@@ -76,8 +72,8 @@ func NewDynamicResourcePool(factory Factory, maxCap int, idleTimeout time.Durati
 		f:            factory,
 		maxCapacity:  maxCap,
 		maxIdleTime:  idleTimeout,
-		openerCh:     make(chan struct{}, resourceRequestQueueSize),
-		connReceiver: make(chan resourceWrapper, resourceRequestQueueSize),
+		openerCh:     make(chan struct{}, 4*maxCap),
+		connReceiver: make(chan resourceWrapper, 4*maxCap),
 		connRequests: make(map[uint64]any),
 		cancel:       cancel,
 	}
