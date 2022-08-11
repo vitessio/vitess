@@ -582,11 +582,11 @@ func tmRPCTestApplySchemaPanic(ctx context.Context, t *testing.T, client tmclien
 
 var testExecuteQueryQuery = []byte("drop table t")
 
-func (fra *fakeRPCTM) ExecuteQuery(ctx context.Context, query []byte, dbName string, maxrows int) (*querypb.QueryResult, error) {
+func (fra *fakeRPCTM) ExecuteQuery(ctx context.Context, req *tabletmanagerdatapb.ExecuteQueryRequest) (*querypb.QueryResult, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
-	compare(fra.t, "ExecuteQuery query", query, testExecuteQueryQuery)
+	compare(fra.t, "ExecuteQuery query", req.Query, testExecuteQueryQuery)
 
 	return testExecuteFetchResult, nil
 }
@@ -619,35 +619,35 @@ var testExecuteFetchResult = &querypb.QueryResult{
 	},
 }
 
-func (fra *fakeRPCTM) ExecuteFetchAsDba(ctx context.Context, query []byte, dbName string, maxrows int, disableBinlogs bool, reloadSchema bool) (*querypb.QueryResult, error) {
+func (fra *fakeRPCTM) ExecuteFetchAsDba(ctx context.Context, req *tabletmanagerdatapb.ExecuteFetchAsDbaRequest) (*querypb.QueryResult, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
-	compare(fra.t, "ExecuteFetchAsDba query", query, testExecuteFetchQuery)
-	compare(fra.t, "ExecuteFetchAsDba maxrows", maxrows, testExecuteFetchMaxRows)
-	compareBool(fra.t, "ExecuteFetchAsDba disableBinlogs", disableBinlogs)
-	compareBool(fra.t, "ExecuteFetchAsDba reloadSchema", reloadSchema)
+	compare(fra.t, "ExecuteFetchAsDba query", req.Query, testExecuteFetchQuery)
+	compare(fra.t, "ExecuteFetchAsDba maxrows", req.MaxRows, testExecuteFetchMaxRows)
+	compareBool(fra.t, "ExecuteFetchAsDba disableBinlogs", req.DisableBinlogs)
+	compareBool(fra.t, "ExecuteFetchAsDba reloadSchema", req.ReloadSchema)
 
 	return testExecuteFetchResult, nil
 }
 
-func (fra *fakeRPCTM) ExecuteFetchAsAllPrivs(ctx context.Context, query []byte, dbName string, maxrows int, reloadSchema bool) (*querypb.QueryResult, error) {
+func (fra *fakeRPCTM) ExecuteFetchAsAllPrivs(ctx context.Context, req *tabletmanagerdatapb.ExecuteFetchAsAllPrivsRequest) (*querypb.QueryResult, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
-	compare(fra.t, "ExecuteFetchAsAllPrivs query", query, testExecuteFetchQuery)
-	compare(fra.t, "ExecuteFetchAsAllPrivs maxrows", maxrows, testExecuteFetchMaxRows)
-	compareBool(fra.t, "ExecuteFetchAsAllPrivs reloadSchema", reloadSchema)
+	compare(fra.t, "ExecuteFetchAsAllPrivs query", req.Query, testExecuteFetchQuery)
+	compare(fra.t, "ExecuteFetchAsAllPrivs maxrows", req.MaxRows, testExecuteFetchMaxRows)
+	compareBool(fra.t, "ExecuteFetchAsAllPrivs reloadSchema", req.ReloadSchema)
 
 	return testExecuteFetchResult, nil
 }
 
-func (fra *fakeRPCTM) ExecuteFetchAsApp(ctx context.Context, query []byte, maxrows int) (*querypb.QueryResult, error) {
+func (fra *fakeRPCTM) ExecuteFetchAsApp(ctx context.Context, req *tabletmanagerdatapb.ExecuteFetchAsAppRequest) (*querypb.QueryResult, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
-	compare(fra.t, "ExecuteFetchAsApp query", query, testExecuteFetchQuery)
-	compare(fra.t, "ExecuteFetchAsApp maxrows", maxrows, testExecuteFetchMaxRows)
+	compare(fra.t, "ExecuteFetchAsApp query", req.Query, testExecuteFetchQuery)
+	compare(fra.t, "ExecuteFetchAsApp maxrows", req.MaxRows, testExecuteFetchMaxRows)
 	return testExecuteFetchResult, nil
 }
 
