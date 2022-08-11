@@ -394,6 +394,23 @@ func (c *Conn) ExecuteSetSuperReadOnly() (result *sqltypes.Result, err error) {
 	return result, err
 }
 
+func (c *Conn) ExecuteUnSetReadOnly() (result *sqltypes.Result, err error) {
+	if err := c.WriteComQuery("SELECT @@global.read_only"); err != nil {
+		return nil, err
+	}
+	res, _, _, err := c.ReadQueryResult(1, false)
+	if err == nil && len(res.Rows) == 1 {
+		sro := res.Rows[0][0].ToString()
+		if sro == "1" || sro == "ON" {
+			if err = c.WriteComQuery("SET GLOBAL read_only='OFF'"); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	return result, err
+}
+
 // ExecuteFetchWithWarningCount is for fetching results and a warning count
 // Note: In a future iteration this should be abolished and merged into the
 // ExecuteFetch API.

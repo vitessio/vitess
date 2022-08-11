@@ -647,7 +647,7 @@ func (vttablet *VttabletProcess) InitSchema() []error {
 	return errors
 }
 
-func (vttablet *VttabletProcess) UnsetReadOnly(dbname string) error {
+func (vttablet *VttabletProcess) UnsetSuperReadOnly(dbname string) error {
 	conn, err := vttablet.defaultConn("")
 	if err != nil {
 		log.Infof("error in getting connection object %s", err)
@@ -656,5 +656,17 @@ func (vttablet *VttabletProcess) UnsetReadOnly(dbname string) error {
 	defer conn.Close()
 
 	_, err = conn.ExecuteUnSetSuperReadOnly()
+	return err
+}
+
+func (vttablet *VttabletProcess) UnsetReadOnly(dbname string) error {
+	conn, err := vttablet.defaultConn("")
+	if err != nil {
+		log.Infof("error in getting connection object %s", err)
+		return err
+	}
+	defer conn.Close()
+
+	_, err = conn.ExecuteUnSetReadOnly()
 	return err
 }

@@ -107,6 +107,7 @@ Usage of vtexplain:
       --hot_row_protection_concurrent_transactions int                   Number of concurrent transactions let through to the txpool/MySQL for the same hot row. Should be > 1 to have enough 'ready' transactions in MySQL and benefit from a pipelining effect. (default 5)
       --hot_row_protection_max_global_queue_size int                     Global queue limit across all row (ranges). Useful to prevent that the queue can grow unbounded. (default 1000)
       --hot_row_protection_max_queue_size int                            Maximum number of BeginExecute RPCs which will be queued for the same row (range). (default 20)
+      --init_populate_metadata                                           (init parameter) populate metadata tables even if restore_from_backup is disabled. If restore_from_backup is enabled, metadata tables are always populated regardless of this flag.
       --jaeger-agent-host string                                         host and port to send spans to. if empty, no tracing will be done
       --keep_logs duration                                               keep logs for this long (using ctime) (zero to keep forever) (default 0s)
       --keep_logs_by_mtime duration                                      keep logs for this long (using mtime) (zero to keep forever) (default 0s)
@@ -216,6 +217,7 @@ Usage of vtexplain:
       --security_policy string                                           the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
       --service_map StringList                                           comma separated list of services to enable (or disable if prefixed with '-') Example: grpc-queryservice
       --serving_state_grace_period duration                              how long to pause after broadcasting health to vtgate, before enforcing a new serving state (default 0s)
+      --set_super_read_only_after_schema_initializer                     Set super_read_only in mysql to true after we are done with all schema initialization during vttablet initialization. (default true)
       --shards int                                                       Number of shards per keyspace. Passing --ks-shard-map/--ks-shard-map-file causes this flag to be ignored. (default 2)
       --shutdown_grace_period float                                      how long to wait (in seconds) for queries and transactions to complete during graceful shutdown.
       --sql string                                                       A list of semicolon-delimited SQL commands to analyze

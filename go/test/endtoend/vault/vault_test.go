@@ -68,6 +68,7 @@ var (
 		"--queryserver-config-schema-reload-time", "5",
 		"--serving_state_grace_period", "1s",
 		fmt.Sprintf("--use_super_read_only=%t", true),
+		fmt.Sprintf("--set_super_read_only_after_schema_initializer=%t", false),
 	}
 	vaultTabletArg = []string{
 		"--db-credentials-server", "vault",
@@ -268,8 +269,35 @@ func initializeClusterLate(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	for _, tablet := range []*cluster.Vttablet{primary, replica} {
+	for _, tablet := range shard.Vttablets {
+		// remove super read-only from vttablet
+		tablet.VttabletProcess.UnsetReadOnly("")
+	}
+
+	/*for _, tablet := range []*cluster.Vttablet{primary, replica} {
 		tablet.VttabletProcess.EnableSemiSync = true
+		err = tablet.VttabletProcess.Setup()
+		require.NoError(t, err)
+
+		// Modify mysqlctl password too, or teardown will be locked out
+		tablet.MysqlctlProcess.ExtraArgs = append(tablet.MysqlctlProcess.ExtraArgs, mysqlctlArg...)
+	}*/
+	for _, tablet := range []*cluster.Vttablet{primary, replica} {
+		for _, user := range mysqlUsers {
+			query := fmt.Sprintf("ALTER USER '%s'@'%s' IDENTIFIED BY '%s';", user, hostname, mysqlPassword)
+			_, err = tablet.VttabletProcess.QueryTablet(query, keyspace.Name, false)
+			// Reset after the first ALTER, or we lock ourselves out.
+			tablet.VttabletProcess.DbPassword = mysqlPassword
+			if err != nil {
+				query = fmt.Sprintf("ALTER USER '%s'@'%%' IDENTIFIED BY '%s';", user, mysqlPassword)
+				_, err = tablet.VttabletProcess.QueryTablet(query, keyspace.Name, false)
+				require.NoError(t, err)
+			}
+		}
+		query := fmt.Sprintf("create database %s;", dbName)
+		_, err = tablet.VttabletProcess.QueryTablet(query, keyspace.Name, false)
+		require.NoError(t, err)
+
 		err = tablet.VttabletProcess.Setup()
 		require.NoError(t, err)
 
@@ -295,7 +323,7 @@ func initializeClusterLate(t *testing.T) {
 	require.NoError(t, err)
 
 	// do schema change only on primary. It should be replayed on replicas automatically
-	for _, tablet := range []*cluster.Vttablet{primary} {
+	/*for _, tablet := range []*cluster.Vttablet{primary} {
 		for _, user := range mysqlUsers {
 			query := fmt.Sprintf("ALTER USER '%s'@'%s' IDENTIFIED BY '%s';", user, hostname, mysqlPassword)
 			_, err = tablet.VttabletProcess.QueryTablet(query, keyspace.Name, false)
@@ -311,7 +339,7 @@ func initializeClusterLate(t *testing.T) {
 		query := fmt.Sprintf("create database IF NOT EXISTS %s;", dbName)
 		_, err = tablet.VttabletProcess.QueryTablet(query, keyspace.Name, false)
 		require.NoError(t, err)
-	}
+	}*/
 }
 
 func insertRow(t *testing.T, id int, productName string) {
