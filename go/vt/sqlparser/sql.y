@@ -4717,7 +4717,7 @@ natural_join:
   }
 
 json_table:
-  JSON_TABLE openb STRING ',' STRING COLUMNS openb json_table_column_list closeb closeb AS table_alias
+  JSON_TABLE openb value_expression ',' STRING COLUMNS openb json_table_column_list closeb closeb AS table_alias
   {
     $$ = &JSONTableExpr{Data: $3, Path: string($5), Columns: $8, Alias: $12}
   }

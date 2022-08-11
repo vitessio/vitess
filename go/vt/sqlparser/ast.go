@@ -3773,7 +3773,7 @@ func (node *JoinTableExpr) walkSubtree(visit Visit) error {
 
 // JSONTableExpr represents a TableExpr that's a json_table operation.
 type JSONTableExpr struct {
-	Data    []byte
+	Data    Expr
 	Path    string
 	Columns *TableSpec
 	Alias   TableIdent
