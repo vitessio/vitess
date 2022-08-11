@@ -2285,6 +2285,9 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 			opts = append(opts, keywordStrings[VIRTUAL])
 		}
 	}
+	if ct.Path != "" {
+		opts = append(opts, keywordStrings[PATH], `"`+ct.Path+`"`)
+	}
 
 	if len(opts) != 0 {
 		buf.Myprintf(" %s", strings.Join(opts, " "))
@@ -3778,7 +3781,7 @@ type JSONTableExpr struct {
 
 // Format formats the node.
 func (node *JSONTableExpr) Format(buf *TrackedBuffer) {
-	buf.Myprintf("%s %s %v %v", node.Data, node.Path, node.Columns, node.Alias)
+	buf.Myprintf(`JSON_TABLE('%s', "%s" COLUMNS%v) as %v`, node.Data, node.Path, node.Columns, node.Alias)
 }
 
 func (node *JSONTableExpr) walkSubtree(visit Visit) error {

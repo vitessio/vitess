@@ -6427,9 +6427,36 @@ func TestKeywordsIncorrectlyDontParse(t *testing.T) {
 }
 
 func TestJSONTable(t *testing.T) {
-	validSQL := []parseTest{{
-		input: `SELECT * FROM JSON_TABLE( '[{"a":1},{"a":2}]', "$[*]" COLUMNS(x varchar(100) path "$.a")) as tt;`,
-	}}
+	validSQL := []parseTest{
+		{
+			input: `
+SELECT *
+FROM
+	JSON_TABLE(
+		'[{"a":1},{"a":2}]',
+		"$[*]" COLUMNS(
+			x varchar(100) path "$.a"
+		)
+	) as tt;`,
+			output: `select * from JSON_TABLE('[{"a":1},{"a":2}]', "$[*]" COLUMNS(
+	x varchar(100) path "$.a"
+)) as tt`},
+		{
+			input: `
+SELECT *
+FROM
+	JSON_TABLE(
+		'[{"a":1, "b":2},{"a":3, "b":4}]',
+		"$[*]" COLUMNS(
+			x varchar(100) path "$.a",
+			y varchar(100) path "$.b"
+		)
+	) as tt;`,
+			output: `select * from JSON_TABLE('[{"a":1, "b":2},{"a":3, "b":4}]', "$[*]" COLUMNS(
+	x varchar(100) path "$.a",
+	y varchar(100) path "$.b"
+)) as tt`},
+	}
 
 	for _, tcase := range validSQL {
 		runParseTestCase(t, tcase)
