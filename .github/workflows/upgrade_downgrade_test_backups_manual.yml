@@ -120,13 +120,13 @@ jobs:
         #sudo apt-get update
         #sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y mysql-server mysql-client
         ####
-        wget -c https://cdn.mysql.com/archives/mysql-8.0/mysql-common_8.0.29-1ubuntu20.04_amd64.deb \
-                https://cdn.mysql.com/archives/mysql-8.0/mysql-community-client-core_8.0.29-1ubuntu20.04_amd64.deb \
-                https://cdn.mysql.com/archives/mysql-8.0/mysql-community-client-plugins_8.0.29-1ubuntu20.04_amd64.deb \
-                https://cdn.mysql.com/archives/mysql-8.0/mysql-client_8.0.29-1ubuntu20.04_amd64.deb \
-                https://cdn.mysql.com/archives/mysql-8.0/mysql-community-server-core_8.0.29-1ubuntu20.04_amd64.deb \
-                https://cdn.mysql.com/archives/mysql-8.0/mysql-community-server_8.0.29-1ubuntu20.04_amd64.deb \
-                https://cdn.mysql.com/archives/mysql-8.0/mysql-community-client_8.0.29-1ubuntu20.04_amd64.deb
+        wget -c https://cdn.mysql.com/archives/mysql-8.0/mysql-common_8.0.28-1ubuntu20.04_amd64.deb \
+                https://cdn.mysql.com/archives/mysql-8.0/mysql-community-client-core_8.0.28-1ubuntu20.04_amd64.deb \
+                https://cdn.mysql.com/archives/mysql-8.0/mysql-community-client-plugins_8.0.28-1ubuntu20.04_amd64.deb \
+                https://cdn.mysql.com/archives/mysql-8.0/mysql-client_8.0.28-1ubuntu20.04_amd64.deb \
+                https://cdn.mysql.com/archives/mysql-8.0/mysql-community-server-core_8.0.28-1ubuntu20.04_amd64.deb \
+                https://cdn.mysql.com/archives/mysql-8.0/mysql-community-server_8.0.28-1ubuntu20.04_amd64.deb \
+                https://cdn.mysql.com/archives/mysql-8.0/mysql-community-client_8.0.28-1ubuntu20.04_amd64.deb
         sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y ./mysql-*.deb
 
         # Install everything else we need, and configure

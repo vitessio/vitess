@@ -36,35 +36,33 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
+const (
+	PgzipCompressor    = "pgzip"
+	PargzipCompressor  = "pargzip"
+	ZstdCompressor     = "zstd"
+	Lz4Compressor      = "lz4"
+	ExternalCompressor = "external"
+)
+
 var (
 	compressionLevel = flag.Int("compression-level", 1, "what level to pass to the compressor")
 	// switch which compressor/decompressor to use
-	BuiltinCompressor   = flag.String("builtin-compressor", "pgzip", "builtin compressor engine to use")
-	BuiltinDecompressor = flag.String("builtin-decompressor", "auto", "builtin decompressor engine to use")
+	CompressionEngineName = flag.String("compression-engine-name", "pgzip", "compressor engine used for compression.")
 	// use and external command to decompress the backups
 	ExternalCompressorCmd   = flag.String("external-compressor", "", "command with arguments to use when compressing a backup")
 	ExternalCompressorExt   = flag.String("external-compressor-extension", "", "extension to use when using an external compressor")
 	ExternalDecompressorCmd = flag.String("external-decompressor", "", "command with arguments to use when decompressing a backup")
 
-	errUnsupportedCompressionEngine    = errors.New("unsupported engine")
-	errUnsupportedCompressionExtension = errors.New("unsupported extension")
+	errUnsupportedDeCompressionEngine = errors.New("unsupported engine in MANIFEST. You need to provide --external-decompressor if using 'external' compression engine")
+	errUnsupportedCompressionEngine   = errors.New("unsupported engine value for --compression-engine-name. supported values are 'external', 'pgzip', 'pargzip', 'zstd', 'lz4'")
 
 	// this is used by getEngineFromExtension() to figure out which engine to use in case the user didn't specify
 	engineExtensions = map[string][]string{
-		".gz":  {"pgzip", "pargzip"},
-		".lz4": {"lz4"},
-		".zst": {"zstd"},
+		".gz":  {PgzipCompressor, PargzipCompressor},
+		".lz4": {Lz4Compressor},
+		".zst": {ZstdCompressor},
 	}
 )
-
-func getEngineFromExtension(extension string) (string, error) {
-	for ext, eng := range engineExtensions {
-		if ext == extension {
-			return eng[0], nil // we select the first supported engine in auto mode
-		}
-	}
-	return "", fmt.Errorf("%w %q", errUnsupportedCompressionExtension, extension)
-}
 
 func getExtensionFromEngine(engine string) (string, error) {
 	for ext, eng := range engineExtensions {
@@ -85,7 +83,22 @@ func validateExternalCmd(cmd string) (string, error) {
 	return exec.LookPath(cmd)
 }
 
-func prepareExternalCompressionCmd(ctx context.Context, cmdStr string) (*exec.Cmd, error) {
+// Validate compression engine is one of the supported values.
+func validateExternalCompressionEngineName(engine string) error {
+	switch engine {
+	case PgzipCompressor:
+	case PargzipCompressor:
+	case Lz4Compressor:
+	case ZstdCompressor:
+	case ExternalCompressor:
+	default:
+		return fmt.Errorf("%w value: %q", errUnsupportedCompressionEngine, engine)
+	}
+
+	return nil
+}
+
+func prepareExternalCmd(ctx context.Context, cmdStr string) (*exec.Cmd, error) {
 	cmdArgs, err := shlex.Split(cmdStr)
 	if err != nil {
 		return nil, err
@@ -103,8 +116,12 @@ func prepareExternalCompressionCmd(ctx context.Context, cmdStr string) (*exec.Cm
 // This returns a writer that writes the compressed output of the external command to the provided writer.
 func newExternalCompressor(ctx context.Context, cmdStr string, writer io.Writer, logger logutil.Logger) (io.WriteCloser, error) {
 	logger.Infof("Compressing using external command: %q", cmdStr)
+	// validate value of compression engine name
+	if err := validateExternalCompressionEngineName(*CompressionEngineName); err != nil {
+		return nil, err
+	}
 
-	cmd, err := prepareExternalCompressionCmd(ctx, cmdStr)
+	cmd, err := prepareExternalCmd(ctx, cmdStr)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "unable to start external command")
 	}
@@ -134,7 +151,7 @@ func newExternalCompressor(ctx context.Context, cmdStr string, writer io.Writer,
 func newExternalDecompressor(ctx context.Context, cmdStr string, reader io.Reader, logger logutil.Logger) (io.ReadCloser, error) {
 	logger.Infof("Decompressing using external command: %q", cmdStr)
 
-	cmd, err := prepareExternalCompressionCmd(ctx, cmdStr)
+	cmd, err := prepareExternalCmd(ctx, cmdStr)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "unable to start external command")
 	}
@@ -159,38 +176,23 @@ func newExternalDecompressor(ctx context.Context, cmdStr string, reader io.Reade
 	return decompressor, nil
 }
 
-// This is a wrapper to get the right decompressor (see below) based on the extension of the file.
-func newBuiltinDecompressorFromExtension(extension, engine string, reader io.Reader, logger logutil.Logger) (decompressor io.ReadCloser, err error) {
-	// we only infer the engine from the extension is set to "auto", otherwise we use whatever the user selected
-	if engine == "auto" {
-		logger.Infof("Builtin decompressor set to auto, checking which engine to decompress based on the extension")
-
-		eng, err := getEngineFromExtension(extension)
-		if err != nil {
-			return decompressor, err
-		}
-		engine = eng
-	}
-	return newBuiltinDecompressor(engine, reader, logger)
-}
-
 // This returns a reader that will decompress the underlying provided reader and will use the specified supported engine.
 func newBuiltinDecompressor(engine string, reader io.Reader, logger logutil.Logger) (decompressor io.ReadCloser, err error) {
-	if engine == "pargzip" {
+	if engine == PargzipCompressor {
 		logger.Warningf("engine \"pargzip\" doesn't support decompression, using \"pgzip\" instead")
-		engine = "pgzip"
+		engine = PgzipCompressor
 	}
 
 	switch engine {
-	case "pgzip":
+	case PgzipCompressor:
 		d, err := pgzip.NewReader(reader)
 		if err != nil {
 			return nil, err
 		}
 		decompressor = d
-	case "lz4":
+	case Lz4Compressor:
 		decompressor = ioutil.NopCloser(lz4.NewReader(reader))
-	case "zstd":
+	case ZstdCompressor:
 		d, err := zstd.NewReader(reader)
 		if err != nil {
 			return nil, err
@@ -208,33 +210,33 @@ func newBuiltinDecompressor(engine string, reader io.Reader, logger logutil.Logg
 // This returns a writer that will compress the data using the specified engine before writing to the underlying writer.
 func newBuiltinCompressor(engine string, writer io.Writer, logger logutil.Logger) (compressor io.WriteCloser, err error) {
 	switch engine {
-	case "pgzip":
+	case PgzipCompressor:
 		gzip, err := pgzip.NewWriterLevel(writer, *compressionLevel)
 		if err != nil {
 			return compressor, vterrors.Wrap(err, "cannot create gzip compressor")
 		}
 		gzip.SetConcurrency(*backupCompressBlockSize, *backupCompressBlocks)
 		compressor = gzip
-	case "pargzip":
+	case PargzipCompressor:
 		gzip := pargzip.NewWriter(writer)
 		gzip.ChunkSize = *backupCompressBlockSize
 		gzip.Parallel = *backupCompressBlocks
 		gzip.CompressionLevel = *compressionLevel
 		compressor = gzip
-	case "lz4":
+	case Lz4Compressor:
 		lz4Writer := lz4.NewWriter(writer).WithConcurrency(*backupCompressBlocks)
 		lz4Writer.Header = lz4.Header{
 			CompressionLevel: *compressionLevel,
 		}
 		compressor = lz4Writer
-	case "zstd":
+	case ZstdCompressor:
 		zst, err := zstd.NewWriter(writer, zstd.WithEncoderLevel(zstd.EncoderLevel(*compressionLevel)))
 		if err != nil {
 			return compressor, vterrors.Wrap(err, "cannot create zstd compressor")
 		}
 		compressor = zst
 	default:
-		err = fmt.Errorf("Unkown compressor engine: %q", engine)
+		err = fmt.Errorf("%w value: %q", errUnsupportedCompressionEngine, engine)
 		return compressor, err
 	}
 

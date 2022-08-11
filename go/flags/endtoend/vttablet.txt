@@ -27,12 +27,11 @@ Usage of vttablet:
       --binlog_ssl_key string                                            PITR restore parameter: Filename containing mTLS client private key for use in binlog server authentication.
       --binlog_ssl_server_name string                                    PITR restore parameter: TLS server name (common name) to verify against for the binlog server we are connecting to (If not set: use the hostname or IP supplied in -binlog_host).
       --binlog_user string                                               PITR restore parameter: username of binlog server.
-      --builtin-compressor string                                        builtin compressor engine to use (default "pgzip")
-      --builtin-decompressor string                                      builtin decompressor engine to use (default "auto")
       --builtinbackup_mysqld_timeout duration                            how long to wait for mysqld to shutdown at the start of the backup (default 10m0s)
       --builtinbackup_progress duration                                  how often to send progress updates when backing up large files (default 5s)
       --catch-sigpipe                                                    catch and ignore SIGPIPE on stdout and stderr if specified
       --ceph_backup_storage_config string                                Path to JSON config file for ceph backup storage. (default "ceph_backup_config.json")
+      --compression-engine-name string                                   compressor engine used for compression. (default "pgzip")
       --compression-level int                                            what level to pass to the compressor (default 1)
       --consolidator-stream-query-size int                               Configure the stream consolidator query size in bytes. Setting to 0 disables the stream consolidator. (default 2097152)
       --consolidator-stream-total-size int                               Configure the stream consolidator total size in bytes. Setting to 0 disables the stream consolidator. (default 134217728)
