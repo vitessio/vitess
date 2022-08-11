@@ -4088,12 +4088,12 @@ func TestFunctionCalls(t *testing.T) {
 	// Functions where the input doesn't match the output. Prefer query tests above when possible.
 	testCases := []parseTest{
 		{
-			input: 		"select CAST(1 as datetime) from dual",
+			input:  "select CAST(1 as datetime) from dual",
 			output: "select CAST(1, datetime) from dual",
 		},
 		{
-			input: 		"select LOCALTIMESTAMP from dual",
-			output: 		"select LOCALTIMESTAMP() from dual",
+			input:  "select LOCALTIMESTAMP from dual",
+			output: "select LOCALTIMESTAMP() from dual",
 		},
 	}
 
@@ -4101,19 +4101,19 @@ func TestFunctionCalls(t *testing.T) {
 	skippedTestCases := []parseTest{
 		{
 			// USING syntax parsed but not captured
-			input: 				"select CHAR(77,121,83,81,'76' USING utf8mb4) from dual",
+			input: "select CHAR(77,121,83,81,'76' USING utf8mb4) from dual",
 		},
 		{
 			// INTERVAL function produces a grammar conflict
-			input: 		"select INTERVAL(col1, col2) from dual",
+			input: "select INTERVAL(col1, col2) from dual",
 		},
 		{
 			// not implemented
-			input: 		`select SELECT 17 MEMBER OF('[23, "abc", 17, "ab", 10]'); from dual`,
+			input: `select SELECT 17 MEMBER OF('[23, "abc", 17, "ab", 10]'); from dual`,
 		},
 		{
 			// not implemented
-			input: 		"select JSON_TABLE('') from dual",
+			input: "select JSON_TABLE('') from dual",
 		},
 	}
 
@@ -4841,39 +4841,7 @@ func TestCreateTable(t *testing.T) {
 	}
 
 	nonsupportedKeywords := []string{
-		"sql_cache",
-		"cume_dist",
-		"last_value",
-		"percent_rank",
-		"lag",
-		"first_value",
-		"column",
-		"long",
-		"sql_no_cache",
-		"current_user",
-		"row",
-		"lead",
-		"full",
-		"nvarchar",
-		"_binary",
-		"dec",
-		"all",
-		"processlist",
-		"dense_rank",
-		"analyze",
-		"format",
-		"ntile",
-		"cast",
-		"follows",
-		"group_concat",
-		"nth_value",
-		"_utf8mb4",
-		"row_number",
-		"rank",
-		"infile",
-		"escaped",
-		"terminated",
-		"enclosed",
+		"comment",
 	}
 	nonsupported := map[string]bool{}
 	for _, x := range nonsupportedKeywords {
@@ -5782,6 +5750,7 @@ var correctlyDoParse = []string{
 	"no_wait",
 	"nulls",
 	"number",
+	"nvarchar",
 	"offset",
 	"oj",
 	"old",
@@ -6286,7 +6255,6 @@ var correctlyDontParse = []string{
 var incorrectlyDontParse = []string{
 	"escape",
 	"next",
-	"nvarchar",
 	"off",
 	"sql_cache",
 	"sql_no_cache",
@@ -6298,22 +6266,6 @@ var incorrectlyParse = []string{
 	"minute_second",
 }
 
-// not reserved in mysql
-var incorrectlyParseForNonSelect = []string{
-	"auto_increment", "add", "and", "alter", "mod", "asc", "as", "between", "binary", "by",
-	"call", "case", "collate", "convert", "connection", "create", "cross", "current", "current_date", "current_time", "current_timestamp", "database", "databases", "default", "delete",
-	"desc", "describe", "deterministic", "distinct", "div", "drop", "else", "elseif", "end", "escape", "event", "execute",
-	"exists", "explain", "failed_login_attempts", "false", "file", "first", "following", "for", "force", "from", "function",
-	"grant", "group", "grouping", "groups", "having", "identified", "if", "ignore", "in", "inout", "index", "inner", "insert",
-	"interval", "into", "is", "join", "key", "kill", "left",
-	"like", "limit", "localtime", "localtimestamp", "lock", "match", "maxvalue", "mod", "modifies",
-	"natural", "next", "none", "not", "null", "of", "off", "on", "or", "order", "out", "outer", "over", "password",
-	"password_lock_time", "procedure", "process", "reads", "recursive", "references", "regexp", "reload", "rename",
-	"replace", "require", "revoke", "right", "schema", "select", "separator", "set", "show", "shutdown", "sql", "straight_join", "substr", "substring", "super", "table", "then",
-	"timestampadd", "timestampdiff", "to", "trigger", "true", "union", "unique", "unlock", "update", "usage", "use", "using",
-	"utc_date", "utc_time", "utc_timestamp", "values", "when", "where", "window", "with",
-}
-
 // TestKeywordsCorrectlyParse ensures that certain keywords can be parsed by a series of edit queries.
 func TestKeywordsCorrectlyDoParse(t *testing.T) {
 	aliasTest := "SELECT 1 as %s"
@@ -6321,9 +6273,13 @@ func TestKeywordsCorrectlyDoParse(t *testing.T) {
 	dTest := "DELETE FROM t where %s=1"
 	uTest := "UPDATE t SET %s=1"
 	cTest := "CREATE TABLE t(%s int)"
+	tTest := "CREATE TABLE %s(i int)"
 	tcTest := "SELECT * FROM t ORDER BY t.%s"
+	sTest := "SELECT %s.c FROM t"
+	dropConstraintTest := "ALTER TABLE t DROP CONSTRAINT %s"
+	dropCheckTest := "ALTER TABLE t DROP CHECK %s"
 
-	tests := []string{aliasTest, iTest, dTest, uTest, cTest, tcTest}
+	tests := []string{aliasTest, iTest, dTest, uTest, cTest, tTest, tcTest, sTest, dropConstraintTest, dropCheckTest}
 
 	for _, kw := range correctlyDoParse {
 		for _, query := range tests {
@@ -6337,30 +6293,69 @@ func TestKeywordsCorrectlyDoParse(t *testing.T) {
 }
 
 func TestReservedKeywordsParseWhenQualified(t *testing.T) {
-	tcTest := "SELECT * FROM tbl ORDER BY tbl.%s"
+	tcTest := "SELECT * FROM t ORDER BY %s.%s"
+	sTest := "SELECT %s.%s FROM t"
+
+	tests := []string{tcTest, sTest}
+
+	// these are reserved keywords that don't work even when qualified
+	badReservedKeywords := map[string]bool{
+		"all":                 true,
+		"distinct":            true,
+		"div":                 true,
+		"key":                 true,
+		"select":              true,
+		"sql_calc_found_rows": true,
+		"straight_join":       true,
+		"when":                true,
+	}
 
 	for _, kw := range correctlyDontParse {
-		test := fmt.Sprintf(tcTest, kw)
-		t.Run(test, func(t *testing.T) {
-			_, err := Parse(test)
-			assert.NoError(t, err)
-		})
+		for _, query := range tests {
+			test := fmt.Sprintf(query, kw, kw)
+			t.Run(test, func(t *testing.T) {
+				if badReservedKeywords[kw] {
+					t.Skip("this reserved word doesn't work when qualified")
+				}
+				_, err := Parse(test)
+				assert.NoError(t, err)
+			})
+		}
 	}
 }
 
 // TestKeywordsCorrectlyDontParse ensures certain keywords should not be parsed in certain queries.
 func TestKeywordsCorrectlyDontParse(t *testing.T) {
 	aliasTest := "SELECT 1 as %s"
-	// TODO: Want all of these passing eventually
-	// iTest := "INSERT INTO t (%s) VALUES (1)"
-	// dTest := "DELETE FROM t where %s=1"
-	// uTest := "UPDATE t SET %s=1"
-	// cTest := "CREATE TABLE t(%s int)"
+	iTest := "INSERT INTO t (%s) VALUES (1)"
+	dTest := "DELETE FROM t where %s=1"
+	uTest := "UPDATE t SET %s=1"
+	cTest := "CREATE TABLE t(%s int)"
+	tTest := "CREATE TABLE %s(i int)"
 
-	tests := []string{aliasTest}
+	// these are reserved keywords that are also values, so they can be used in conditions
+	validConditionReservedKeywords := map[string]bool{
+		"current_date":      true,
+		"current_time":      true,
+		"current_timestamp": true,
+		"current_user":      true,
+		"false":             true,
+		"localtime":         true,
+		"localtimestamp":    true,
+		"null":              true,
+		"true":              true,
+		"utc_date":          true,
+		"utc_time":          true,
+		"utc_timestamp":     true,
+	}
+
+	tests := []string{aliasTest, iTest, dTest, uTest, cTest, tTest}
 
 	for _, kw := range correctlyDontParse {
 		for _, query := range tests {
+			if query == dTest && validConditionReservedKeywords[kw] {
+				continue
+			}
 			test := fmt.Sprintf(query, kw)
 			t.Run(test, func(t *testing.T) {
 				_, err := Parse(test)
@@ -6390,18 +6385,6 @@ func TestKeywordsIncorrectlyDoParse(t *testing.T) {
 			})
 		}
 	}
-
-	tests = []string{iTest, dTest, uTest}
-	for _, kw := range incorrectlyParseForNonSelect {
-		for _, query := range tests {
-			test := fmt.Sprintf(query, kw)
-			t.Run(test, func(t *testing.T) {
-				t.Skip()
-				_, err := Parse(test)
-				assert.Error(t, err)
-			})
-		}
-	}
 }
 
 // TestKeywordsIncorrectlyDontParse documents behavior where the parser is incorrectly throwing an error for a valid keyword.
@@ -6418,7 +6401,7 @@ func TestKeywordsIncorrectlyDontParse(t *testing.T) {
 		for _, query := range tests {
 			test := fmt.Sprintf(query, kw)
 			t.Run(test, func(t *testing.T) {
-				t.Skip()
+				t.Skip("delete doesn't work for these words yet")
 				_, err := Parse(test)
 				assert.NoError(t, err)
 			})
