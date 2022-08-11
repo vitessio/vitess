@@ -109,7 +109,7 @@ type TabletManagerClient interface {
 	// ExecuteFetchAsApp executes a query remotely using the App pool
 	// If usePool is set, a connection pool may be used to make the
 	// query faster. Close() should close the pool in that case.
-	ExecuteFetchAsApp(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, query []byte, maxRows int) (*querypb.QueryResult, error)
+	ExecuteFetchAsApp(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteFetchAsAppRequest) (*querypb.QueryResult, error)
 
 	//
 	// Replication related methods

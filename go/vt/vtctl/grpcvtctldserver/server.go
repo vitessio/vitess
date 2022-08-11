@@ -929,7 +929,10 @@ func (s *VtctldServer) ExecuteFetchAsApp(ctx context.Context, req *vtctldatapb.E
 		return nil, err
 	}
 
-	qr, err := s.tmc.ExecuteFetchAsApp(ctx, ti.Tablet, req.UsePool, []byte(req.Query), int(req.MaxRows))
+	qr, err := s.tmc.ExecuteFetchAsApp(ctx, ti.Tablet, req.UsePool, &tabletmanagerdatapb.ExecuteFetchAsAppRequest{
+		Query:   []byte(req.Query),
+		MaxRows: uint64(req.MaxRows),
+	})
 	if err != nil {
 		return nil, err
 	}

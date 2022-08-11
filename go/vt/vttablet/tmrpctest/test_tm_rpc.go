@@ -660,7 +660,10 @@ func tmRPCTestExecuteFetch(ctx context.Context, t *testing.T, client tmclient.Ta
 		ReloadSchema:   true,
 	})
 	compareError(t, "ExecuteFetchAsDba", err, qr, testExecuteFetchResult)
-	qr, err = client.ExecuteFetchAsApp(ctx, tablet, true, testExecuteFetchQuery, testExecuteFetchMaxRows)
+	qr, err = client.ExecuteFetchAsApp(ctx, tablet, true, &tabletmanagerdatapb.ExecuteFetchAsAppRequest{
+		Query:   testExecuteFetchQuery,
+		MaxRows: uint64(testExecuteFetchMaxRows),
+	})
 	compareError(t, "ExecuteFetchAsApp", err, qr, testExecuteFetchResult)
 
 	// not using pool
@@ -671,7 +674,10 @@ func tmRPCTestExecuteFetch(ctx context.Context, t *testing.T, client tmclient.Ta
 		ReloadSchema:   true,
 	})
 	compareError(t, "ExecuteFetchAsDba", err, qr, testExecuteFetchResult)
-	qr, err = client.ExecuteFetchAsApp(ctx, tablet, false, testExecuteFetchQuery, testExecuteFetchMaxRows)
+	qr, err = client.ExecuteFetchAsApp(ctx, tablet, false, &tabletmanagerdatapb.ExecuteFetchAsAppRequest{
+		Query:   testExecuteFetchQuery,
+		MaxRows: uint64(testExecuteFetchMaxRows),
+	})
 	compareError(t, "ExecuteFetchAsApp", err, qr, testExecuteFetchResult)
 	qr, err = client.ExecuteFetchAsAllPrivs(ctx, tablet, &tabletmanagerdatapb.ExecuteFetchAsAllPrivsRequest{
 		Query:        testExecuteFetchQuery,
@@ -690,7 +696,10 @@ func tmRPCTestExecuteFetchPanic(ctx context.Context, t *testing.T, client tmclie
 		DisableBinlogs: true,
 	})
 	expectHandleRPCPanic(t, "ExecuteFetchAsDba", false /*verbose*/, err)
-	_, err = client.ExecuteFetchAsApp(ctx, tablet, true, testExecuteFetchQuery, testExecuteFetchMaxRows)
+	_, err = client.ExecuteFetchAsApp(ctx, tablet, true, &tabletmanagerdatapb.ExecuteFetchAsAppRequest{
+		Query:   testExecuteFetchQuery,
+		MaxRows: uint64(testExecuteFetchMaxRows),
+	})
 	expectHandleRPCPanic(t, "ExecuteFetchAsApp", false /*verbose*/, err)
 
 	// not using pool
@@ -700,7 +709,10 @@ func tmRPCTestExecuteFetchPanic(ctx context.Context, t *testing.T, client tmclie
 		DisableBinlogs: true,
 	})
 	expectHandleRPCPanic(t, "ExecuteFetchAsDba", false /*verbose*/, err)
-	_, err = client.ExecuteFetchAsApp(ctx, tablet, false, testExecuteFetchQuery, testExecuteFetchMaxRows)
+	_, err = client.ExecuteFetchAsApp(ctx, tablet, false, &tabletmanagerdatapb.ExecuteFetchAsAppRequest{
+		Query:   testExecuteFetchQuery,
+		MaxRows: uint64(testExecuteFetchMaxRows),
+	})
 	expectHandleRPCPanic(t, "ExecuteFetchAsApp", false /*verbose*/, err)
 	_, err = client.ExecuteFetchAsAllPrivs(ctx, tablet, &tabletmanagerdatapb.ExecuteFetchAsAllPrivsRequest{
 		Query:   testExecuteFetchQuery,

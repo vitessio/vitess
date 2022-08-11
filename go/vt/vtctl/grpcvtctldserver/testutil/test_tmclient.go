@@ -444,7 +444,7 @@ func (fake *TabletManagerClient) DemotePrimary(ctx context.Context, tablet *topo
 }
 
 // ExecuteFetchAsApp is part of the tmclient.TabletManagerClient interface.
-func (fake *TabletManagerClient) ExecuteFetchAsApp(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, query []byte, maxRows int) (*querypb.QueryResult, error) {
+func (fake *TabletManagerClient) ExecuteFetchAsApp(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteFetchAsAppRequest) (*querypb.QueryResult, error) {
 	if fake.ExecuteFetchAsAppResults == nil {
 		return nil, fmt.Errorf("%w: no ExecuteFetchAsApp results on fake TabletManagerClient", assert.AnError)
 	}

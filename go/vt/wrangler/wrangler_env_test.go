@@ -332,13 +332,13 @@ func (tmc *testWranglerTMClient) VReplicationExec(ctx context.Context, tablet *t
 	return result, nil
 }
 
-func (tmc *testWranglerTMClient) ExecuteFetchAsApp(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, query []byte, maxRows int) (*querypb.QueryResult, error) {
+func (tmc *testWranglerTMClient) ExecuteFetchAsApp(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteFetchAsAppRequest) (*querypb.QueryResult, error) {
 	t := wranglerEnv.tablets[int(tablet.Alias.Uid)]
-	t.gotQueries = append(t.gotQueries, string(query))
-	result, ok := t.queryResults[string(query)]
+	t.gotQueries = append(t.gotQueries, string(req.Query))
+	result, ok := t.queryResults[string(req.Query)]
 	if !ok {
 		result = &querypb.QueryResult{}
-		log.Errorf("Query: %s, Result :%v\n", query, result)
+		log.Errorf("Query: %s, Result :%v\n", string(req.Query), result)
 	}
 	return result, nil
 }
