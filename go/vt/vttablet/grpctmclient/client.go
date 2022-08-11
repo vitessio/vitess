@@ -404,18 +404,23 @@ func (client *Client) UnlockTables(ctx context.Context, tablet *topodatapb.Table
 }
 
 // ExecuteQuery is part of the tmclient.TabletManagerClient interface.
-func (client *Client) ExecuteQuery(ctx context.Context, tablet *topodatapb.Tablet, query []byte, maxrows int) (*querypb.QueryResult, error) {
+func (client *Client) ExecuteQuery(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.ExecuteQueryRequest) (*querypb.QueryResult, error) {
 	c, closer, err := client.dialer.dial(ctx, tablet)
 	if err != nil {
 		return nil, err
 	}
 	defer closer.Close()
 
+	cid := req.CallerId
+	if cid == nil {
+		cid = callerid.EffectiveCallerIDFromContext(ctx)
+	}
+
 	response, err := c.ExecuteQuery(ctx, &tabletmanagerdatapb.ExecuteQueryRequest{
-		Query:    query,
+		Query:    req.Query,
 		DbName:   topoproto.TabletDbName(tablet),
-		MaxRows:  uint64(maxrows),
-		CallerId: callerid.EffectiveCallerIDFromContext(ctx),
+		MaxRows:  req.MaxRows,
+		CallerId: cid,
 	})
 	if err != nil {
 		return nil, err
@@ -424,7 +429,7 @@ func (client *Client) ExecuteQuery(ctx context.Context, tablet *topodatapb.Table
 }
 
 // ExecuteFetchAsDba is part of the tmclient.TabletManagerClient interface.
-func (client *Client) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, query []byte, maxRows int, disableBinlogs, reloadSchema bool) (*querypb.QueryResult, error) {
+func (client *Client) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteFetchAsDbaRequest) (*querypb.QueryResult, error) {
 	var c tabletmanagerservicepb.TabletManagerClient
 	var err error
 	if usePool {
@@ -446,11 +451,11 @@ func (client *Client) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.
 	}
 
 	response, err := c.ExecuteFetchAsDba(ctx, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
-		Query:          query,
+		Query:          req.Query,
 		DbName:         topoproto.TabletDbName(tablet),
-		MaxRows:        uint64(maxRows),
-		DisableBinlogs: disableBinlogs,
-		ReloadSchema:   reloadSchema,
+		MaxRows:        req.MaxRows,
+		DisableBinlogs: req.DisableBinlogs,
+		ReloadSchema:   req.DisableBinlogs,
 	})
 	if err != nil {
 		return nil, err
@@ -459,7 +464,7 @@ func (client *Client) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.
 }
 
 // ExecuteFetchAsAllPrivs is part of the tmclient.TabletManagerClient interface.
-func (client *Client) ExecuteFetchAsAllPrivs(ctx context.Context, tablet *topodatapb.Tablet, query []byte, maxRows int, reloadSchema bool) (*querypb.QueryResult, error) {
+func (client *Client) ExecuteFetchAsAllPrivs(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.ExecuteFetchAsAllPrivsRequest) (*querypb.QueryResult, error) {
 	c, closer, err := client.dialer.dial(ctx, tablet)
 	if err != nil {
 		return nil, err
@@ -467,10 +472,10 @@ func (client *Client) ExecuteFetchAsAllPrivs(ctx context.Context, tablet *topoda
 	defer closer.Close()
 
 	response, err := c.ExecuteFetchAsAllPrivs(ctx, &tabletmanagerdatapb.ExecuteFetchAsAllPrivsRequest{
-		Query:        query,
+		Query:        req.Query,
 		DbName:       topoproto.TabletDbName(tablet),
-		MaxRows:      uint64(maxRows),
-		ReloadSchema: reloadSchema,
+		MaxRows:      req.MaxRows,
+		ReloadSchema: req.ReloadSchema,
 	})
 	if err != nil {
 		return nil, err
@@ -479,7 +484,7 @@ func (client *Client) ExecuteFetchAsAllPrivs(ctx context.Context, tablet *topoda
 }
 
 // ExecuteFetchAsApp is part of the tmclient.TabletManagerClient interface.
-func (client *Client) ExecuteFetchAsApp(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, query []byte, maxRows int) (*querypb.QueryResult, error) {
+func (client *Client) ExecuteFetchAsApp(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteFetchAsAppRequest) (*querypb.QueryResult, error) {
 	var c tabletmanagerservicepb.TabletManagerClient
 	var err error
 	if usePool {
@@ -500,10 +505,7 @@ func (client *Client) ExecuteFetchAsApp(ctx context.Context, tablet *topodatapb.
 		defer closer.Close()
 	}
 
-	response, err := c.ExecuteFetchAsApp(ctx, &tabletmanagerdatapb.ExecuteFetchAsAppRequest{
-		Query:   query,
-		MaxRows: uint64(maxRows),
-	})
+	response, err := c.ExecuteFetchAsApp(ctx, req)
 	if err != nil {
 		return nil, err
 	}

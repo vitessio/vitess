@@ -202,7 +202,7 @@ func (s *server) ExecuteQuery(ctx context.Context, request *tabletmanagerdatapb.
 		ctx = callerid.NewContext(ctx, request.CallerId, &querypb.VTGateCallerID{Username: request.CallerId.Principal})
 	}
 	response = &tabletmanagerdatapb.ExecuteQueryResponse{}
-	qr, err := s.tm.ExecuteQuery(ctx, request.Query, request.DbName, int(request.MaxRows))
+	qr, err := s.tm.ExecuteQuery(ctx, request)
 	if err != nil {
 		return nil, vterrors.ToGRPC(err)
 	}
@@ -214,7 +214,7 @@ func (s *server) ExecuteFetchAsDba(ctx context.Context, request *tabletmanagerda
 	defer s.tm.HandleRPCPanic(ctx, "ExecuteFetchAsDba", request, response, false /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.ExecuteFetchAsDbaResponse{}
-	qr, err := s.tm.ExecuteFetchAsDba(ctx, request.Query, request.DbName, int(request.MaxRows), request.DisableBinlogs, request.ReloadSchema)
+	qr, err := s.tm.ExecuteFetchAsDba(ctx, request)
 	if err != nil {
 		return nil, vterrors.ToGRPC(err)
 	}
@@ -226,7 +226,7 @@ func (s *server) ExecuteFetchAsAllPrivs(ctx context.Context, request *tabletmana
 	defer s.tm.HandleRPCPanic(ctx, "ExecuteFetchAsAllPrivs", request, response, false /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.ExecuteFetchAsAllPrivsResponse{}
-	qr, err := s.tm.ExecuteFetchAsAllPrivs(ctx, request.Query, request.DbName, int(request.MaxRows), request.ReloadSchema)
+	qr, err := s.tm.ExecuteFetchAsAllPrivs(ctx, request)
 	if err != nil {
 		return nil, vterrors.ToGRPC(err)
 	}
@@ -238,7 +238,7 @@ func (s *server) ExecuteFetchAsApp(ctx context.Context, request *tabletmanagerda
 	defer s.tm.HandleRPCPanic(ctx, "ExecuteFetchAsApp", request, response, false /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.ExecuteFetchAsAppResponse{}
-	qr, err := s.tm.ExecuteFetchAsApp(ctx, request.Query, int(request.MaxRows))
+	qr, err := s.tm.ExecuteFetchAsApp(ctx, request)
 	if err != nil {
 		return nil, vterrors.ToGRPC(err)
 	}
