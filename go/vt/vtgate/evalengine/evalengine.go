@@ -201,14 +201,9 @@ func compareNumeric(v1, v2 *EvalResult) (int, error) {
 		}
 	}
 
-	// The types are not comparable.
-	if v1.typeof() != v2.typeof() {
-		return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cannot compare %v and %v", v1.typeof(), v2.typeof())
-	}
-
 	// Both values are of the same type.
 	switch v1.typeof() {
-	case sqltypes.Int8, sqltypes.Int16, sqltypes.Int24, sqltypes.Int32, sqltypes.Int64:
+	case sqltypes.Int64:
 		v1v, v2v := v1.int64(), v2.int64()
 		switch {
 		case v1v == v2v:
@@ -216,14 +211,14 @@ func compareNumeric(v1, v2 *EvalResult) (int, error) {
 		case v1v < v2v:
 			return -1, nil
 		}
-	case sqltypes.Uint8, sqltypes.Uint16, sqltypes.Uint24, sqltypes.Uint32, sqltypes.Uint64:
+	case sqltypes.Uint64:
 		switch {
 		case v1.uint64() == v2.uint64():
 			return 0, nil
 		case v1.uint64() < v2.uint64():
 			return -1, nil
 		}
-	case sqltypes.Float32, sqltypes.Float64:
+	case sqltypes.Float64:
 		v1v, v2v := v1.float64(), v2.float64()
 		switch {
 		case v1v == v2v:
