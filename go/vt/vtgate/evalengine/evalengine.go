@@ -138,6 +138,11 @@ func ToNative(v sqltypes.Value) (any, error) {
 }
 
 func compareNumeric(v1, v2 *EvalResult) (int, error) {
+	// upcast all <64 bit numeric types to 64 bit, e.g. int8 -> int64, uint8 -> uint64, float32 -> float64
+	// so we don't have to consider integer types which aren't 64 bit
+	v1.upcastNumeric()
+	v2.upcastNumeric()
+
 	// Equalize the types the same way MySQL does
 	// https://dev.mysql.com/doc/refman/8.0/en/type-conversion.html
 	switch v1.typeof() {
