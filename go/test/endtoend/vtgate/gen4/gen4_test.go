@@ -479,8 +479,8 @@ func TestFilterOnLeftOuterJoin(t *testing.T) {
 	defer closer()
 
 	// insert some data.
-	utils.Exec(t, mcmp.VtConn, `insert into team (id, name) values (11, 'Acme'), (22, 'B'), (33, 'C')`)
-	utils.Exec(t, mcmp.VtConn, `insert into team_fact (id, team, fact) values (1, 11, 'A'), (2, 22, 'A'), (3, 33, 'A')`)
+	mcmp.Exec(`insert into team (id, name) values (11, 'Acme'), (22, 'B'), (33, 'C')`)
+	mcmp.Exec(`insert into team_fact (id, team, fact) values (1, 11, 'A'), (2, 22, 'A'), (3, 33, 'A')`)
 
 	// Gen4 only supported query.
 	query := `select team.id
