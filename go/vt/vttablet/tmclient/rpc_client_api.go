@@ -103,7 +103,8 @@ type TabletManagerClient interface {
 	ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteFetchAsDbaRequest) (*querypb.QueryResult, error)
 
 	// ExecuteFetchAsAllPrivs executes a query remotely using the allprivs user.
-	ExecuteFetchAsAllPrivs(ctx context.Context, tablet *topodatapb.Tablet, query []byte, maxRows int, reloadSchema bool) (*querypb.QueryResult, error)
+	// req.DbName is ignored in favor of using the tablet's DbName field.
+	ExecuteFetchAsAllPrivs(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.ExecuteFetchAsAllPrivsRequest) (*querypb.QueryResult, error)
 
 	// ExecuteFetchAsApp executes a query remotely using the App pool
 	// If usePool is set, a connection pool may be used to make the

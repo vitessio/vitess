@@ -673,7 +673,11 @@ func tmRPCTestExecuteFetch(ctx context.Context, t *testing.T, client tmclient.Ta
 	compareError(t, "ExecuteFetchAsDba", err, qr, testExecuteFetchResult)
 	qr, err = client.ExecuteFetchAsApp(ctx, tablet, false, testExecuteFetchQuery, testExecuteFetchMaxRows)
 	compareError(t, "ExecuteFetchAsApp", err, qr, testExecuteFetchResult)
-	qr, err = client.ExecuteFetchAsAllPrivs(ctx, tablet, testExecuteFetchQuery, testExecuteFetchMaxRows, true)
+	qr, err = client.ExecuteFetchAsAllPrivs(ctx, tablet, &tabletmanagerdatapb.ExecuteFetchAsAllPrivsRequest{
+		Query:        testExecuteFetchQuery,
+		MaxRows:      uint64(testExecuteFetchMaxRows),
+		ReloadSchema: true,
+	})
 	compareError(t, "ExecuteFetchAsAllPrivs", err, qr, testExecuteFetchResult)
 
 }
@@ -698,7 +702,10 @@ func tmRPCTestExecuteFetchPanic(ctx context.Context, t *testing.T, client tmclie
 	expectHandleRPCPanic(t, "ExecuteFetchAsDba", false /*verbose*/, err)
 	_, err = client.ExecuteFetchAsApp(ctx, tablet, false, testExecuteFetchQuery, testExecuteFetchMaxRows)
 	expectHandleRPCPanic(t, "ExecuteFetchAsApp", false /*verbose*/, err)
-	_, err = client.ExecuteFetchAsAllPrivs(ctx, tablet, testExecuteFetchQuery, testExecuteFetchMaxRows, false)
+	_, err = client.ExecuteFetchAsAllPrivs(ctx, tablet, &tabletmanagerdatapb.ExecuteFetchAsAllPrivsRequest{
+		Query:   testExecuteFetchQuery,
+		MaxRows: uint64(testExecuteFetchMaxRows),
+	})
 	expectHandleRPCPanic(t, "ExecuteFetchAsAllPrivs", false /*verbose*/, err)
 }
 
