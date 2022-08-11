@@ -455,7 +455,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <empty> to_opt to_or_as as_opt column_opt describe
 %type <str> algorithm_opt definer_opt security_opt
 %type <viewSpec> view_opts
-%type <bytes> reserved_keyword non_reserved_keyword column_name_safe_reserved_keyword
+%type <bytes> reserved_keyword qualified_column_name_safe_reserved_keyword non_reserved_keyword column_name_safe_reserved_keyword non_reserved_keyword2 non_reserved_keyword3
 %type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt using_opt existing_window_name_opt
 %type <colIdents> reserved_sql_id_list
 %type <expr> charset_value
@@ -2202,6 +2202,20 @@ create_table_prefix:
 
     $$ = &DDL{Action: CreateStr, Table: $5, IfNotExists: ne, Temporary: neTemp}
   }
+| CREATE temp_opt TABLE not_exists_opt FORMAT
+  {
+    var ne bool
+    if $4 != 0 {
+      ne = true
+    }
+
+    var neTemp bool
+    if $2 != 0 {
+      neTemp = true
+    }
+
+    $$ = &DDL{Action: CreateStr, Table: TableName{Name: NewTableIdent(string($5))}, IfNotExists: ne, Temporary: neTemp}
+  }
 
 table_spec:
   '(' table_column_list ')' table_option_list
@@ -2258,7 +2272,7 @@ column_definition:
     }
     $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: $2}
   }
-| column_name_safe_reserved_keyword column_type column_type_options
+| non_reserved_keyword column_type column_type_options
   {
     if err := $2.merge($3); err != nil {
       yylex.Error(err.Error())
@@ -2268,13 +2282,45 @@ column_definition:
   }
 
 column_definition_for_create:
-  reserved_sql_id column_type column_type_options
+  sql_id column_type column_type_options
   {
     if err := $2.merge($3); err != nil {
       yylex.Error(err.Error())
       return 1
     }
     $$ = &ColumnDefinition{Name: $1, Type: $2}
+  }
+| column_name_safe_reserved_keyword column_type column_type_options
+  {
+    if err := $2.merge($3); err != nil {
+      yylex.Error(err.Error())
+      return 1
+    }
+    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: $2}
+  }
+| non_reserved_keyword2 column_type column_type_options
+  {
+    if err := $2.merge($3); err != nil {
+      yylex.Error(err.Error())
+      return 1
+    }
+    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: $2}
+  }
+| non_reserved_keyword3 column_type column_type_options
+  {
+    if err := $2.merge($3); err != nil {
+      yylex.Error(err.Error())
+      return 1
+    }
+    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: $2}
+  }
+| ESCAPE column_type column_type_options
+  {
+    if err := $2.merge($3); err != nil {
+      yylex.Error(err.Error())
+      return 1
+    }
+    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: $2}
   }
 
 stored_opt:
@@ -3198,6 +3244,11 @@ check_constraint_definition:
   {
     $$ = &ConstraintDefinition{Name: string($2), Details: $3}
   }
+  // TODO: should be possible to use non_reserved_keyword
+| CONSTRAINT STATUS check_constraint_info
+    {
+      $$ = &ConstraintDefinition{Name: string($2), Details: $3}
+    }
 | CONSTRAINT column_name_safe_reserved_keyword check_constraint_info
     {
       $$ = &ConstraintDefinition{Name: string($2), Details: $3}
@@ -3329,6 +3380,20 @@ table_opt_value:
   {
     $$ = string($1)
   }
+// TODO: should be able to use non_reserved_keywords
+| COMMENT_KEYWORD
+  {
+    $$ = string($1)
+  }
+| EVENT
+  {
+    $$ = string($1)
+  }
+| PASSWORD
+  {
+    $$ = string($1)
+  }
+
 
 constraint_symbol_opt:
   {
@@ -3420,12 +3485,42 @@ alter_table_statement_part:
     $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints:
         []*ConstraintDefinition{&ConstraintDefinition{Name: string($3)}}}}
   }
+| DROP CONSTRAINT non_reserved_keyword
+  {
+    $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints:
+        []*ConstraintDefinition{&ConstraintDefinition{Name: string($3)}}}}
+  }
+| DROP CONSTRAINT non_reserved_keyword2
+  {
+    $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints:
+        []*ConstraintDefinition{&ConstraintDefinition{Name: string($3)}}}}
+  }
+| DROP CONSTRAINT non_reserved_keyword3
+  {
+    $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints:
+        []*ConstraintDefinition{&ConstraintDefinition{Name: string($3)}}}}
+  }
 | DROP CHECK ID
   {
     $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints:
         []*ConstraintDefinition{&ConstraintDefinition{Name: string($3), Details: &CheckConstraintDefinition{}}}}}
   }
 | DROP CHECK column_name_safe_reserved_keyword
+  {
+    $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints:
+        []*ConstraintDefinition{&ConstraintDefinition{Name: string($3), Details: &CheckConstraintDefinition{}}}}}
+  }
+| DROP CHECK non_reserved_keyword
+  {
+    $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints:
+        []*ConstraintDefinition{&ConstraintDefinition{Name: string($3), Details: &CheckConstraintDefinition{}}}}}
+  }
+| DROP CHECK non_reserved_keyword2
+  {
+    $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints:
+        []*ConstraintDefinition{&ConstraintDefinition{Name: string($3), Details: &CheckConstraintDefinition{}}}}}
+  }
+| DROP CHECK non_reserved_keyword3
   {
     $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints:
         []*ConstraintDefinition{&ConstraintDefinition{Name: string($3), Details: &CheckConstraintDefinition{}}}}}
@@ -4332,6 +4427,10 @@ as_ci_opt:
   {
     $$ = $2
   }
+| AS ESCAPE
+  {
+    $$ = NewColIdent(string($2))
+  }
 
 col_alias:
   ID
@@ -4347,6 +4446,14 @@ col_alias:
     $$ = NewColIdent(string($1))
   }
 | STRING
+  {
+    $$ = NewColIdent(string($1))
+  }
+| non_reserved_keyword2
+  {
+    $$ = NewColIdent(string($1))
+  }
+| non_reserved_keyword3
   {
     $$ = NewColIdent(string($1))
   }
@@ -4718,6 +4825,18 @@ table_name:
   {
     $$ = TableName{Qualifier: $1, Name: $3}
   }
+| column_name_safe_reserved_keyword
+  {
+    $$ = TableName{Name: NewTableIdent(string($1))}
+  }
+| non_reserved_keyword2
+  {
+    $$ = TableName{Name: NewTableIdent(string($1))}
+  }
+| ACCOUNT
+  {
+    $$ = TableName{Name: NewTableIdent(string($1))}
+  }
 
 procedure_name:
   sql_id
@@ -4984,7 +5103,11 @@ value_expression:
   {
     $$ = $1
   }
-| column_name_safe_reserved_keyword
+| ACCOUNT
+  {
+    $$ = &ColName{Name: NewColIdent(string($1))}
+  }
+| FORMAT
   {
     $$ = &ColName{Name: NewColIdent(string($1))}
   }
@@ -4995,6 +5118,10 @@ value_expression:
 | column_name
   {
     $$ = $1
+  }
+| column_name_safe_reserved_keyword
+  {
+    $$ = &ColName{Name: NewColIdent(string($1))}
   }
 | tuple_expression
   {
@@ -5796,9 +5923,41 @@ column_name:
   {
     $$ = &ColName{Name: $1}
   }
+| non_reserved_keyword2
+  {
+    $$ = &ColName{Name: NewColIdent(string($1))}
+  }
 | table_id '.' reserved_sql_id
   {
     $$ = &ColName{Qualifier: TableName{Name: $1}, Name: $3}
+  }
+| table_id '.' non_reserved_keyword2
+  {
+    $$ = &ColName{Qualifier: TableName{Name: $1}, Name: NewColIdent(string($3))}
+  }
+| table_id '.' ACCOUNT
+  {
+    $$ = &ColName{Qualifier: TableName{Name: $1}, Name: NewColIdent(string($3))}
+  }
+| table_id '.' FORMAT
+  {
+    $$ = &ColName{Qualifier: TableName{Name: $1}, Name: NewColIdent(string($3))}
+  }
+| qualified_column_name_safe_reserved_keyword '.' reserved_sql_id
+  {
+    $$ = &ColName{Qualifier: TableName{Name: NewTableIdent(string($1))}, Name: $3}
+  }
+| non_reserved_keyword2 '.' reserved_sql_id
+  {
+    $$ = &ColName{Name: NewColIdent(string($1))}
+  }
+| ACCOUNT '.' reserved_sql_id
+  {
+    $$ = &ColName{Qualifier: TableName{Name: NewTableIdent(string($1))}, Name: $3}
+  }
+| FORMAT '.' reserved_sql_id
+  {
+    $$ = &ColName{Qualifier: TableName{Name: NewTableIdent(string($1))}, Name: $3}
   }
 | table_id '.' reserved_table_id '.' reserved_sql_id
   {
@@ -6020,7 +6179,7 @@ ins_column_list_opt:
   }
 
 ins_column_list:
-  reserved_sql_id
+  sql_id
   {
     $$ = Columns{$1}
   }
@@ -6035,6 +6194,22 @@ ins_column_list:
 | ins_column_list ',' reserved_sql_id '.' reserved_sql_id
   {
     $$ = append($$, $5)
+  }
+| column_name_safe_reserved_keyword
+  {
+    $$ = Columns{NewColIdent(string($1))}
+  }
+| non_reserved_keyword2
+  {
+    $$ = Columns{NewColIdent(string($1))}
+  }
+| non_reserved_keyword3
+  {
+    $$ = Columns{NewColIdent(string($1))}
+  }
+| ESCAPE
+  {
+    $$ = Columns{NewColIdent(string($1))}
   }
 
 on_dup_opt:
@@ -6097,7 +6272,15 @@ assignment_expression:
   {
     $$ = &AssignmentExpr{Name: $1, Expr: $3}
   }
-| reserved_keyword '=' expression {
+| column_name_safe_reserved_keyword '=' expression {
+    $$ = &AssignmentExpr{Name: &ColName{Name: NewColIdent(string($1))}, Expr: $3}
+  }
+| non_reserved_keyword3 '=' expression
+  {
+    $$ = &AssignmentExpr{Name: &ColName{Name: NewColIdent(string($1))}, Expr: $3}
+  }
+| ESCAPE '=' expression
+  {
     $$ = &AssignmentExpr{Name: &ColName{Name: NewColIdent(string($1))}, Expr: $3}
   }
 
@@ -6468,18 +6651,14 @@ kill_statement:
 */
 reserved_keyword:
   ACCESSIBLE
-| ACCOUNT
 | ADD
 | ALL
 | ALTER
 | ANALYZE
 | AND
-| ARRAY
 | AS
 | ASC
 | ASENSITIVE
-| ATTRIBUTE
-| AUTO_INCREMENT
 | AVG
 | BEFORE
 | BETWEEN
@@ -6500,10 +6679,8 @@ reserved_keyword:
 | CHECK
 | COLLATE
 | COLUMN
-| COMMENT_KEYWORD
 | CONSTRAINT
 | CONDITION
-| CONNECTION
 | CONTINUE
 | CONVERT
 | COUNT
@@ -6543,33 +6720,21 @@ reserved_keyword:
 | ELSEIF
 | EMPTY
 | ENCLOSED
-| END
-| ERRORS
 | ESCAPED
-| EVENT
 | EXCEPT
-| EXECUTE
 | EXISTS
 | EXIT
 | EXPLAIN
-| FAILED_LOGIN_ATTEMPTS
 | FALSE
 | FETCH
-| FILE
-| FIRST
 | FIRST_VALUE
 | FLOAT_TYPE
 | FLOAT4
 | FLOAT8
-| FOLLOWING
-| FOLLOWS
 | FOR
 | FORCE
 | FOREIGN
-| FORMAT
-| FOUND
 | FROM
-| FULL
 | FULLTEXT
 | FUNCTION
 | GENERATED
@@ -6578,13 +6743,11 @@ reserved_keyword:
 | GROUP
 | GROUPING
 | GROUPS
-| HANDLER
 | HAVING
 | HIGH_PRIORITY
 | HOUR_MICROSECOND
 | HOUR_MINUTE
 | HOUR_SECOND
-| IDENTIFIED
 | IF
 | IGNORE
 | IN
@@ -6649,8 +6812,6 @@ reserved_keyword:
 | MOD
 | MODIFIES
 | NATURAL
-| NEXT // next should be doable as non-reserved, but is not due to the special `select next num_val` query that vitess supports
-| NONE
 | NOT
 | NO_WRITE_TO_BINLOG
 | NTH_VALUE
@@ -6659,7 +6820,6 @@ reserved_keyword:
 | NUMERIC
 | NVAR
 | OF
-| OFF
 | ON
 | OPTIMIZE
 | OPTIMIZER_COSTS
@@ -6672,14 +6832,11 @@ reserved_keyword:
 | OUTFILE
 | OVER
 | PARTITION
-| PASSWORD
 | PASSWORD_LOCK
-| PASSWORD_LOCK_TIME
 | PERCENT_RANK
 | PRECISION
 | PRIMARY
 | PROCEDURE
-| PROCESS
 | PURGE
 | READ
 | READS
@@ -6691,7 +6848,6 @@ reserved_keyword:
 | REFERENCES
 | REGEXP
 | RELEASE
-| RELOAD
 | RENAME
 | REPEAT
 | REPLACE
@@ -6713,7 +6869,6 @@ reserved_keyword:
 | SEPARATOR
 | SET
 | SHOW
-| SHUTDOWN
 | SIGNAL
 | SMALLINT
 | SPATIAL
@@ -6727,7 +6882,6 @@ reserved_keyword:
 | SQL_SMALL_RESULT
 | SSL
 | STARTING
-| STATUS
 | STD
 | STDDEV
 | STDDEV_POP
@@ -6737,13 +6891,10 @@ reserved_keyword:
 | SUBSTR
 | SUBSTRING
 | SUM
-| SUPER
 | SYSTEM
 | TABLE
 | TERMINATED
 | THEN
-| TIMESTAMPADD
-| TIMESTAMPDIFF
 | TINYBLOB
 | TINYINT
 | TINYTEXT
@@ -6764,7 +6915,6 @@ reserved_keyword:
 | UTC_TIME
 | UTC_TIMESTAMP
 | VALUES
-| VALUE
 | VARBINARY
 | VARCHAR
 | VARCHARACTER
@@ -6772,9 +6922,283 @@ reserved_keyword:
 | VARYING
 | VAR_POP
 | VAR_SAMP
-| VIEW
 | VIRTUAL
 | WHEN
+| WHERE
+| WHILE
+| WINDOW
+| WITH
+| WRITE
+| XOR
+| YEAR_MONTH
+| ZEROFILL
+
+qualified_column_name_safe_reserved_keyword:
+  ACCESSIBLE
+| ADD
+| ALTER
+| ANALYZE
+| AND
+| AS
+| ASC
+| ASENSITIVE
+| AVG
+| BEFORE
+| BETWEEN
+| BIGINT
+| BINARY
+| BIT_AND
+| BIT_OR
+| BIT_XOR
+| BLOB
+| BOTH
+| BY
+| CALL
+| CASCADE
+| CASE
+| CHANGE
+| CHAR
+| CHARACTER
+| CHECK
+| COLLATE
+| COLUMN
+| CONSTRAINT
+| CONDITION
+| CONTINUE
+| CONVERT
+| COUNT
+| CUME_DIST
+| CREATE
+| CROSS
+| CUBE
+| CURRENT_DATE
+| CURRENT_TIME
+| CURRENT_TIMESTAMP
+| CURRENT_USER
+| CURSOR
+| DATABASE
+| DATABASES
+| DAY_HOUR
+| DAY_MICROSECOND
+| DAY_MINUTE
+| DAY_SECOND
+| DEC
+| DECIMAL
+| DECLARE
+| DEFAULT
+| DELAYED
+| DELETE
+| DENSE_RANK
+| DESC
+| DESCRIBE
+| DETERMINISTIC
+| DISTINCTROW
+| DOUBLE
+| DROP
+| EACH
+| ELSE
+| ELSEIF
+| EMPTY
+| ENCLOSED
+| ESCAPED
+| EXCEPT
+| EXISTS
+| EXIT
+| EXPLAIN
+| FALSE
+| FETCH
+| FIRST_VALUE
+| FLOAT_TYPE
+| FLOAT4
+| FLOAT8
+| FOR
+| FORCE
+| FOREIGN
+| FROM
+| FULLTEXT
+| FUNCTION
+| GENERATED
+| GET
+| GRANT
+| GROUP
+| GROUPING
+| GROUPS
+| HAVING
+| HIGH_PRIORITY
+| HOUR_MICROSECOND
+| HOUR_MINUTE
+| HOUR_SECOND
+| IF
+| IGNORE
+| IN
+| INDEX
+| INFILE
+| INNER
+| INOUT
+| INSERT
+| INSENSITIVE
+| INT
+| INT1
+| INT2
+| INT3
+| INT4
+| INT8
+| INTEGER
+| INTERVAL
+| INTO
+| IO_AFTER_GTIDS
+| IO_BEFORE_GTIDS
+| IS
+| ITERATE
+| JOIN
+| JSON_ARRAYAGG
+| JSON_OBJECTAGG
+| JSON_TABLE
+| KEYS
+| KILL
+| LAG
+| LAST_VALUE
+| LATERAL
+| LEAD
+| LEADING
+| LEAVE
+| LINEAR
+| LINES
+| LOAD
+| LONG
+| LONGBLOB
+| LONGTEXT
+| LOOP
+| LOW_PRIORITY
+| LEFT
+| LIKE
+| LIMIT
+| LOCALTIME
+| LOCALTIMESTAMP
+| LOCK
+| MASTER_BIND
+| MASTER_SSL_VERIFY_SERVER_CERT
+| MATCH
+| MAX
+| MAXVALUE
+| MEDIUMBLOB
+| MEDIUMINT
+| MEDIUMTEXT
+| MEMBER
+| MIDDLEINT
+| MIN
+| MINUTE_MICROSECOND
+| MOD
+| MODIFIES
+| NATURAL
+| NOT
+| NO_WRITE_TO_BINLOG
+| NTH_VALUE
+| NTILE
+| NULL
+| NUMERIC
+| NVAR
+| OF
+| ON
+| OPTIMIZE
+| OPTIMIZER_COSTS
+| OPTION
+| OPTIONALLY
+| OR
+| ORDER
+| OUT
+| OUTER
+| OUTFILE
+| OVER
+| PARTITION
+| PASSWORD_LOCK
+| PERCENT_RANK
+| PRECISION
+| PRIMARY
+| PROCEDURE
+| PURGE
+| READ
+| READS
+| READ_WRITE
+| RANGE
+| RANK
+| REAL
+| RECURSIVE
+| REFERENCES
+| REGEXP
+| RELEASE
+| RENAME
+| REPEAT
+| REPLACE
+| REQUIRE
+| RESIGNAL
+| RESTRICT
+| RETURN
+| REVOKE
+| RIGHT
+| RLIKE
+| ROW
+| ROWS
+| ROW_NUMBER
+| SCHEMA
+| SCHEMAS
+| SECOND_MICROSECOND
+| SENSITIVE
+| SEPARATOR
+| SET
+| SHOW
+| SIGNAL
+| SMALLINT
+| SPATIAL
+| SPECIFIC
+| SQL
+| SQLEXCEPTION
+| SQLSTATE
+| SQLWARNING
+| SQL_BIG_RESULT
+| SQL_SMALL_RESULT
+| SSL
+| STARTING
+| STD
+| STDDEV
+| STDDEV_POP
+| STDDEV_SAMP
+| STORED
+| SUBSTR
+| SUBSTRING
+| SUM
+| SYSTEM
+| TABLE
+| TERMINATED
+| THEN
+| TINYBLOB
+| TINYINT
+| TINYTEXT
+| TO
+| TRAILING
+| TRIGGER
+| TRUE
+| UNDO
+| UNION
+| UNIQUE
+| UNLOCK
+| UNSIGNED
+| UPDATE
+| USAGE
+| USE
+| USING
+| UTC_DATE
+| UTC_TIME
+| UTC_TIMESTAMP
+| VALUES
+| VARBINARY
+| VARCHAR
+| VARCHARACTER
+| VARIANCE
+| VARYING
+| VAR_POP
+| VAR_SAMP
+| VIRTUAL
 | WHERE
 | WHILE
 | WINDOW
@@ -6799,7 +7223,9 @@ non_reserved_keyword:
 | AGAINST
 | ALGORITHM
 | ALWAYS
+| ARRAY
 | AUTHENTICATION
+| AUTO_INCREMENT
 | BEGIN
 | SERIAL
 | BIT
@@ -6818,6 +7244,7 @@ non_reserved_keyword:
 | COLUMN_NAME
 | COMMIT
 | COMMITTED
+| CONNECTION
 | COMPONENT
 | CONSTRAINT_CATALOG
 | CONSTRAINT_NAME
@@ -6837,17 +7264,23 @@ non_reserved_keyword:
 | DUPLICATE
 | ENABLE
 | ENCRYPTION
+| END
 | ENFORCED
 | ENGINE
 | ENGINES
 | ENUM
 | ERROR
+| ERRORS
 | EXCLUDE
 | EXPANSION
 | EXPIRE
 | FIELDS
 | FIXED
 | FLUSH
+| FOLLOWING
+| FOLLOWS
+| FOUND
+| FULL
 | GENERAL
 | GEOMCOLLECTION
 | GEOMETRY
@@ -6855,9 +7288,10 @@ non_reserved_keyword:
 | GET_MASTER_PUBLIC_KEY
 | GLOBAL
 | GRANTS
-| HOSTS
+| HANDLER
 | HISTOGRAM
 | HISTORY
+| HOSTS
 | INACTIVE
 | INDEXES
 | INITIAL
@@ -6900,6 +7334,7 @@ non_reserved_keyword:
 | NO
 | NOWAIT
 | NULLS
+| NVARCHAR
 | OFFSET
 | OJ
 | OLD
@@ -6954,6 +7389,7 @@ non_reserved_keyword:
 | SLOW
 | SRID
 | START
+| STATUS
 | STREAM
 | SUBCLASS_ORIGIN
 | SUBJECT
@@ -6976,6 +7412,7 @@ non_reserved_keyword:
 | UNUSED
 | USER
 | USER_RESOURCES
+| VALUE
 | VARIABLES
 | VCPU
 | VISIBLE
@@ -6985,66 +7422,45 @@ non_reserved_keyword:
 | X509
 | YEAR
 
-// Reserved keywords that cause grammar conflicts in some places, but are safe to use as column name / alias identifiers.
-// These keywords should also go in reserved_keyword.
-// TODO: The ones commented out here cause shift/reduce conflicts but need to be column name safe
-column_name_safe_reserved_keyword:
-  ACCOUNT
-| ARRAY
-| ATTRIBUTE
-| AUTO_INCREMENT
-| AVG
-| BIT_AND
-| BIT_OR
-| BIT_XOR
-| CONNECTION
-| COUNT
-| END
-| ERRORS
+// non_reserved_keyword that can't go in non_reserved_keyword for some reason
+non_reserved_keyword2:
+  ATTRIBUTE
+| COMMENT_KEYWORD
 | EVENT
 | EXECUTE
 | FAILED_LOGIN_ATTEMPTS
 | FILE
 | FIRST
-| FOLLOWING
-| FOLLOWS
-| FORMAT
-| FOUND
-| FULL
-| HANDLER
 | IDENTIFIED
-| JSON_ARRAYAGG
-| JSON_OBJECTAGG
-| MAX
-| MIN
-//| NEXT
 | NONE
-| NVAR
-//| NVARCHAR
-//| OFF
 | PASSWORD
-| PASSWORD_LOCK
 | PASSWORD_LOCK_TIME
 | PROCESS
 | RELOAD
 | SHUTDOWN
-//| SQL_CACHE
-//| SQL_NO_CACHE
-| STATUS
-| STD
-| STDDEV
-| STDDEV_POP
-| STDDEV_SAMP
 | SUPER
 | TIMESTAMPADD
 | TIMESTAMPDIFF
-| SUM
-| VALUE
-| VARIANCE
-| VAR_POP
-| VAR_SAMP
 | VIEW
-| COMMENT_KEYWORD
+
+// non_reserved_keyword that can't go in non_reserved_keyword or non_reserved_keyword2 for some reason
+non_reserved_keyword3:
+  ACCOUNT
+| FORMAT
+| NEXT
+| OFF
+| SQL_CACHE
+| SQL_NO_CACHE
+
+// Reserved keywords that cause grammar conflicts in some places, but are safe to use as column name / alias identifiers.
+// These keywords should also go in reserved_keyword.
+// TODO: These shouldn't be reserved, but they are
+column_name_safe_reserved_keyword:
+  AVG
+| COUNT
+| MAX
+| MIN
+| SUM
 
 openb:
   '('
