@@ -17,6 +17,7 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/workflow"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -554,7 +555,10 @@ func (vrw *VReplicationWorkflow) GetCopyProgress() (*CopyProgress, error) {
 	for _, target := range vrw.ts.targets {
 		for id, bls := range target.Sources {
 			query := fmt.Sprintf(getTablesQuery, id)
-			p3qr, err := vrw.wr.tmc.ExecuteFetchAsDba(ctx, target.GetPrimary().Tablet, true, []byte(query), MaxRows, false, false)
+			p3qr, err := vrw.wr.tmc.ExecuteFetchAsDba(ctx, target.GetPrimary().Tablet, true, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
+				Query:   []byte(query),
+				MaxRows: MaxRows,
+			})
 			if err != nil {
 				return nil, err
 			}
@@ -598,7 +602,10 @@ func (vrw *VReplicationWorkflow) GetCopyProgress() (*CopyProgress, error) {
 	}
 
 	var getTableMetrics = func(tablet *topodatapb.Tablet, query string, rowCounts *map[string]int64, tableSizes *map[string]int64) error {
-		p3qr, err := vrw.wr.tmc.ExecuteFetchAsDba(ctx, tablet, true, []byte(query), len(tables), false, false)
+		p3qr, err := vrw.wr.tmc.ExecuteFetchAsDba(ctx, tablet, true, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
+			Query:   []byte(query),
+			MaxRows: uint64(len(tables)),
+		})
 		if err != nil {
 			return err
 		}
@@ -678,7 +685,11 @@ func (wr *Wrangler) deleteWorkflowVDiffData(ctx context.Context, tablet *topodat
 						inner join _vt.vdiff_log as vdl on (vd.id = vdl.vdiff_id)
 						where vd.keyspace = %s and vd.workflow = %s`
 	query := fmt.Sprintf(sqlDeleteVDiffs, encodeString(tablet.Keyspace), encodeString(workflow))
-	if _, err := wr.tmc.ExecuteFetchAsDba(ctx, tablet, false, []byte(query), -1, false, false); err != nil {
+	rows := -1
+	if _, err := wr.tmc.ExecuteFetchAsDba(ctx, tablet, false, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
+		Query:   []byte(query),
+		MaxRows: uint64(rows),
+	}); err != nil {
 		if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Num != mysql.ERNoSuchTable { // the tables may not exist if no vdiffs have been run
 			wr.Logger().Errorf("Error deleting vdiff data for %s.%s workflow: %v", tablet.Keyspace, workflow, err)
 		}

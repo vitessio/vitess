@@ -830,7 +830,7 @@ func (itmc *internalTabletManagerClient) ExecuteQuery(context.Context, *topodata
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 
-func (itmc *internalTabletManagerClient) ExecuteFetchAsDba(context.Context, *topodatapb.Tablet, bool, []byte, int, bool, bool) (*querypb.QueryResult, error) {
+func (itmc *internalTabletManagerClient) ExecuteFetchAsDba(context.Context, *topodatapb.Tablet, bool, *tabletmanagerdatapb.ExecuteFetchAsDbaRequest) (*querypb.QueryResult, error) {
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 

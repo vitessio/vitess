@@ -468,7 +468,7 @@ func (fake *TabletManagerClient) ExecuteFetchAsApp(ctx context.Context, tablet *
 }
 
 // ExecuteFetchAsDba is part of the tmclient.TabletManagerClient interface.
-func (fake *TabletManagerClient) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, query []byte, maxRows int, disableBinlogs bool, reloadSchema bool) (*querypb.QueryResult, error) {
+func (fake *TabletManagerClient) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteFetchAsDbaRequest) (*querypb.QueryResult, error) {
 	if fake.ExecuteFetchAsDbaResults == nil {
 		return nil, fmt.Errorf("%w: no ExecuteFetchAsDba results on fake TabletManagerClient", assert.AnError)
 	}

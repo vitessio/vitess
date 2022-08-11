@@ -17,6 +17,7 @@ limitations under the License.
 package tmrpctest
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"reflect"
@@ -25,12 +26,9 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/mysql"
-
-	"context"
-
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/logutil"
@@ -655,13 +653,23 @@ func (fra *fakeRPCTM) ExecuteFetchAsApp(ctx context.Context, query []byte, maxro
 
 func tmRPCTestExecuteFetch(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	// using pool
-	qr, err := client.ExecuteFetchAsDba(ctx, tablet, true, testExecuteFetchQuery, testExecuteFetchMaxRows, true, true)
+	qr, err := client.ExecuteFetchAsDba(ctx, tablet, true, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
+		Query:          testExecuteFetchQuery,
+		MaxRows:        uint64(testExecuteFetchMaxRows),
+		DisableBinlogs: true,
+		ReloadSchema:   true,
+	})
 	compareError(t, "ExecuteFetchAsDba", err, qr, testExecuteFetchResult)
 	qr, err = client.ExecuteFetchAsApp(ctx, tablet, true, testExecuteFetchQuery, testExecuteFetchMaxRows)
 	compareError(t, "ExecuteFetchAsApp", err, qr, testExecuteFetchResult)
 
 	// not using pool
-	qr, err = client.ExecuteFetchAsDba(ctx, tablet, false, testExecuteFetchQuery, testExecuteFetchMaxRows, true, true)
+	qr, err = client.ExecuteFetchAsDba(ctx, tablet, false, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
+		Query:          testExecuteFetchQuery,
+		MaxRows:        uint64(testExecuteFetchMaxRows),
+		DisableBinlogs: true,
+		ReloadSchema:   true,
+	})
 	compareError(t, "ExecuteFetchAsDba", err, qr, testExecuteFetchResult)
 	qr, err = client.ExecuteFetchAsApp(ctx, tablet, false, testExecuteFetchQuery, testExecuteFetchMaxRows)
 	compareError(t, "ExecuteFetchAsApp", err, qr, testExecuteFetchResult)
@@ -672,13 +680,21 @@ func tmRPCTestExecuteFetch(ctx context.Context, t *testing.T, client tmclient.Ta
 
 func tmRPCTestExecuteFetchPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	// using pool
-	_, err := client.ExecuteFetchAsDba(ctx, tablet, true, testExecuteFetchQuery, testExecuteFetchMaxRows, true, false)
+	_, err := client.ExecuteFetchAsDba(ctx, tablet, true, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
+		Query:          testExecuteFetchQuery,
+		MaxRows:        uint64(testExecuteFetchMaxRows),
+		DisableBinlogs: true,
+	})
 	expectHandleRPCPanic(t, "ExecuteFetchAsDba", false /*verbose*/, err)
 	_, err = client.ExecuteFetchAsApp(ctx, tablet, true, testExecuteFetchQuery, testExecuteFetchMaxRows)
 	expectHandleRPCPanic(t, "ExecuteFetchAsApp", false /*verbose*/, err)
 
 	// not using pool
-	_, err = client.ExecuteFetchAsDba(ctx, tablet, false, testExecuteFetchQuery, testExecuteFetchMaxRows, true, false)
+	_, err = client.ExecuteFetchAsDba(ctx, tablet, false, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
+		Query:          testExecuteFetchQuery,
+		MaxRows:        uint64(testExecuteFetchMaxRows),
+		DisableBinlogs: true,
+	})
 	expectHandleRPCPanic(t, "ExecuteFetchAsDba", false /*verbose*/, err)
 	_, err = client.ExecuteFetchAsApp(ctx, tablet, false, testExecuteFetchQuery, testExecuteFetchMaxRows)
 	expectHandleRPCPanic(t, "ExecuteFetchAsApp", false /*verbose*/, err)
