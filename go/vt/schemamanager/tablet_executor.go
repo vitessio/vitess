@@ -475,7 +475,10 @@ func (exec *TabletExecutor) executeOneTablet(
 	var result *querypb.QueryResult
 	var err error
 	if viaQueryService {
-		result, err = exec.tmc.ExecuteQuery(ctx, tablet, []byte(sql), 10)
+		result, err = exec.tmc.ExecuteQuery(ctx, tablet, &tabletmanagerdatapb.ExecuteQueryRequest{
+			Query:   []byte(sql),
+			MaxRows: 10,
+		})
 	} else {
 		if exec.ddlStrategySetting != nil && exec.ddlStrategySetting.IsAllowZeroInDateFlag() {
 			// --allow-zero-in-date Applies to DDLs

@@ -404,18 +404,23 @@ func (client *Client) UnlockTables(ctx context.Context, tablet *topodatapb.Table
 }
 
 // ExecuteQuery is part of the tmclient.TabletManagerClient interface.
-func (client *Client) ExecuteQuery(ctx context.Context, tablet *topodatapb.Tablet, query []byte, maxrows int) (*querypb.QueryResult, error) {
+func (client *Client) ExecuteQuery(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.ExecuteQueryRequest) (*querypb.QueryResult, error) {
 	c, closer, err := client.dialer.dial(ctx, tablet)
 	if err != nil {
 		return nil, err
 	}
 	defer closer.Close()
 
+	cid := req.CallerId
+	if cid == nil {
+		cid = callerid.EffectiveCallerIDFromContext(ctx)
+	}
+
 	response, err := c.ExecuteQuery(ctx, &tabletmanagerdatapb.ExecuteQueryRequest{
-		Query:    query,
+		Query:    req.Query,
 		DbName:   topoproto.TabletDbName(tablet),
-		MaxRows:  uint64(maxrows),
-		CallerId: callerid.EffectiveCallerIDFromContext(ctx),
+		MaxRows:  req.MaxRows,
+		CallerId: cid,
 	})
 	if err != nil {
 		return nil, err

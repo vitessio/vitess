@@ -90,7 +90,11 @@ type TabletManagerClient interface {
 
 	UnlockTables(ctx context.Context, tablet *topodatapb.Tablet) error
 
-	ExecuteQuery(ctx context.Context, tablet *topodatapb.Tablet, query []byte, maxRows int) (*querypb.QueryResult, error)
+	// ExecuteQuery executes a query remotely on the tablet.
+	// req.DbName is ignored in favor of using the tablet's DbName field, and,
+	// if req.CallerId is nil, the effective callerid will be extracted from
+	// the context.
+	ExecuteQuery(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.ExecuteQueryRequest) (*querypb.QueryResult, error)
 
 	// ExecuteFetchAsDba executes a query remotely using the DBA pool.
 	// If usePool is set, a connection pool may be used to make the
