@@ -6421,7 +6421,7 @@ FROM
 			x varchar(100) path "$.a"
 		)
 	) as tt;`,
-			output: `select * from JSON_TABLE('[{"a":1},{"a":2}]', "$[*]" COLUMNS(
+			output: `select * from JSON_TABLE('[{\"a\":1},{\"a\":2}]', "$[*]" COLUMNS(
 	x varchar(100) path "$.a"
 )) as tt`},
 		{
@@ -6435,7 +6435,7 @@ FROM
 			y varchar(100) path "$.b"
 		)
 	) as tt;`,
-			output: `select * from JSON_TABLE('[{"a":1, "b":2},{"a":3, "b":4}]', "$[*]" COLUMNS(
+			output: `select * from JSON_TABLE('[{\"a\":1, \"b\":2},{\"a\":3, \"b\":4}]', "$[*]" COLUMNS(
 	x varchar(100) path "$.a",
 	y varchar(100) path "$.b"
 )) as tt`},

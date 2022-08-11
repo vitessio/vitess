@@ -3781,7 +3781,8 @@ type JSONTableExpr struct {
 
 // Format formats the node.
 func (node *JSONTableExpr) Format(buf *TrackedBuffer) {
-	buf.Myprintf(`JSON_TABLE('%s', "%s" COLUMNS%v) as %v`, node.Data, node.Path, node.Columns, node.Alias)
+	buf.Myprintf(`JSON_TABLE(%v, "%s" COLUMNS%v) as %v`, node.Data, node.Path, node.Columns, node.Alias)
+
 }
 
 func (node *JSONTableExpr) walkSubtree(visit Visit) error {
