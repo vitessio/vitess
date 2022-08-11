@@ -826,19 +826,19 @@ func (itmc *internalTabletManagerClient) ApplySchema(ctx context.Context, tablet
 	return t.tm.ApplySchema(ctx, change)
 }
 
-func (itmc *internalTabletManagerClient) ExecuteQuery(context.Context, *topodatapb.Tablet, []byte, int) (*querypb.QueryResult, error) {
+func (itmc *internalTabletManagerClient) ExecuteQuery(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.ExecuteQueryRequest) (*querypb.QueryResult, error) {
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 
-func (itmc *internalTabletManagerClient) ExecuteFetchAsDba(context.Context, *topodatapb.Tablet, bool, []byte, int, bool, bool) (*querypb.QueryResult, error) {
+func (itmc *internalTabletManagerClient) ExecuteFetchAsDba(context.Context, *topodatapb.Tablet, bool, *tabletmanagerdatapb.ExecuteFetchAsDbaRequest) (*querypb.QueryResult, error) {
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 
-func (itmc *internalTabletManagerClient) ExecuteFetchAsAllPrivs(context.Context, *topodatapb.Tablet, []byte, int, bool) (*querypb.QueryResult, error) {
+func (itmc *internalTabletManagerClient) ExecuteFetchAsAllPrivs(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.ExecuteFetchAsAllPrivsRequest) (*querypb.QueryResult, error) {
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 
-func (itmc *internalTabletManagerClient) ExecuteFetchAsApp(context.Context, *topodatapb.Tablet, bool, []byte, int) (*querypb.QueryResult, error) {
+func (itmc *internalTabletManagerClient) ExecuteFetchAsApp(context.Context, *topodatapb.Tablet, bool, *tabletmanagerdatapb.ExecuteFetchAsAppRequest) (*querypb.QueryResult, error) {
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 
