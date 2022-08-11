@@ -6439,6 +6439,22 @@ FROM
 	x varchar(100) path "$.a",
 	y varchar(100) path "$.b"
 )) as tt`},
+		{
+			input: `
+SELECT *
+FROM
+	JSON_TABLE(
+		concat('[{},','{}]'),
+		"$[*]" COLUMNS(
+			x varchar(100) path "$.a",
+			y varchar(100) path "$.b"
+		)
+	) as t;
+	`,
+			output: `select * from JSON_TABLE(concat('[{},', '{}]'), "$[*]" COLUMNS(
+	x varchar(100) path "$.a",
+	y varchar(100) path "$.b"
+)) as t`},
 	}
 
 	for _, tcase := range validSQL {
