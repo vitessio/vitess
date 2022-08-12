@@ -24,9 +24,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
-
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/discovery"
 
@@ -46,7 +45,37 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
+type compressionDetails struct {
+	CompressionEngineName   string
+	ExternalCompressorCmd   string
+	ExternalCompressorExt   string
+	ExternalDecompressorCmd string
+}
+
 func TestBackupRestore(t *testing.T) {
+	defer setDefaultCompressionFlag()
+	err := testBackupRestore(t, nil)
+	require.NoError(t, err)
+}
+
+func TestBackupRestoreWithPargzip(t *testing.T) {
+	defer setDefaultCompressionFlag()
+	cDetails := &compressionDetails{
+		CompressionEngineName: "pargzip",
+	}
+
+	err := testBackupRestore(t, cDetails)
+	require.NoError(t, err)
+}
+
+func setDefaultCompressionFlag() {
+	*mysqlctl.CompressionEngineName = "pgzip"
+	*mysqlctl.ExternalCompressorCmd = ""
+	*mysqlctl.ExternalCompressorExt = ""
+	*mysqlctl.ExternalDecompressorCmd = ""
+}
+
+func testBackupRestore(t *testing.T, cDetails *compressionDetails) error {
 	delay := discovery.GetTabletPickerRetryDelay()
 	defer func() {
 		discovery.SetTabletPickerRetryDelay(delay)
@@ -82,6 +111,20 @@ func TestBackupRestore(t *testing.T) {
 	fbsRoot := path.Join(root, "fbs")
 	*filebackupstorage.FileBackupStorageRoot = fbsRoot
 	*backupstorage.BackupStorageImplementation = "file"
+	if cDetails != nil {
+		if cDetails.CompressionEngineName != "" {
+			*mysqlctl.CompressionEngineName = cDetails.CompressionEngineName
+		}
+		if cDetails.ExternalCompressorCmd != "" {
+			*mysqlctl.ExternalCompressorCmd = cDetails.ExternalCompressorCmd
+		}
+		if cDetails.ExternalCompressorExt != "" {
+			*mysqlctl.ExternalCompressorExt = cDetails.ExternalCompressorExt
+		}
+		if cDetails.ExternalDecompressorCmd != "" {
+			*mysqlctl.ExternalDecompressorCmd = cDetails.ExternalDecompressorCmd
+		}
+	}
 
 	// Initialize the fake mysql root directories
 	sourceInnodbDataDir := path.Join(root, "source_innodb_data")
@@ -219,7 +262,10 @@ func TestBackupRestore(t *testing.T) {
 	}
 
 	// run the backup
-	require.NoError(t, destTablet.TM.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */, time.Time{} /* backupTime */))
+	err = destTablet.TM.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */, time.Time{} /* backupTime */)
+	if err != nil {
+		return err
+	}
 
 	// verify the full status
 	require.NoError(t, destTablet.FakeMysqlDaemon.CheckSuperQueryList(), "destTablet.FakeMysqlDaemon.CheckSuperQueryList failed")
@@ -276,6 +322,7 @@ func TestBackupRestore(t *testing.T) {
 	assert.Equal(t, topodatapb.TabletType_PRIMARY, primary.Tablet.Type)
 	assert.False(t, primary.FakeMysqlDaemon.Replicating)
 	assert.True(t, primary.FakeMysqlDaemon.Running)
+	return nil
 }
 
 // TestBackupRestoreLagged tests the changes made in https://github.com/vitessio/vitess/pull/5000

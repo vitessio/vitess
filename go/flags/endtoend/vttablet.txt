@@ -69,6 +69,10 @@ Usage of vttablet:
 	Path to JSON config file for ceph backup storage (default ceph_backup_config.json)
   --client-found-rows-pool-size int
 	DEPRECATED: queryserver-config-transaction-cap will be used instead.
+  --compression-engine-name string
+	compressor engine used for compression. (default pgzip)
+  --compression-level int
+	what level to pass to the compressor (default 1)
   --consul_auth_static_file string
 	JSON File to read the topos/tokens from.
   --cpu_profile string
@@ -407,6 +411,12 @@ Usage of vttablet:
 	if this flag is true, vttablet will fail to start if a valid tableacl config does not exist
   --enforce_strict_trans_tables
 	If true, vttablet requires MySQL to run with STRICT_TRANS_TABLES or STRICT_ALL_TABLES on. It is recommended to not turn this flag off. Otherwise MySQL may alter your supplied values before saving them to the database. (default true)
+  --external-compressor string
+	command with arguments to use when compressing a backup
+  --external-compressor-extension string
+	extension to use when using an external compressor
+  --external-decompressor string
+	command with arguments to use when decompressing a backup
   --file_backup_storage_root string
 	root directory for the file backup storage
   --filecustomrules string

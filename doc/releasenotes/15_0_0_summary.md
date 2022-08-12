@@ -46,6 +46,48 @@ Please see the VDiff2 [documentation](https://vitess.io/docs/15.0/reference/vrep
 
 ### New command line flags and behavior
 
+#### Support for additional compressors and decompressors during backup & restore
+Backup/Restore now allow you many more options for compression and decompression instead of relying on the default compressor(`pgzip`).
+There are some built-in compressors which you can use out-of-the-box. Users will need to evaluate which option works best for their
+use-case. Here are the flags that control this feature
+
+- --compression-engine-name
+- --external-compressor
+- --external-decompressor
+- --external-compressor-extension
+- --compression-level
+
+`--compression-engine-name` specifies the engine used for compression. It can have one of the following values
+
+- pgzip (Default)
+- pargzip
+- lz4
+- zstd
+- external
+
+where 'external' is set only when using a custom command or tool other than the ones that are already provided. 
+If you want to use any of the built-in compressors, simply set one of the above values for `--compression-engine-name`. The value
+specified in `--compression-engine-name` is saved in the backup MANIFEST, which is later read by the restore process to decide which
+engine to use for decompression. Default value for engine is 'pgzip'.
+
+If you would like to use a custom command or external tool for compression/decompression then you need to provide the full command with
+arguments to the `--external-compressor` and `--external-decompressor` flags. `--external-compressor-extension` flag also needs to be provided
+so that compressed files are created with the correct extension. If the external command is not using any of the built-in compression engines
+(i-e pgzip, pargzip, lz4 or zstd) then you need to set `--compression-engine-name` to value 'external'.
+
+Please note that if you want the current production behavior then you don't need to change any of these flags.
+You can read more about backup & restore [here] (https://vitess.io/docs/15.0/user-guides/operating-vitess/backup-and-restore/).
+
+If you decided to switch from an external compressor to one of the built-in supported compressors (i-e pgzip, pargzip, lz4 or zstd) at any point
+in the future, you will need to do it in two steps.
+
+- step #1, set `--external-compressor` and `--external-compressor-extension` flag values to empty and change `--compression-engine-name` to desired value.
+- Step #2, after at least one cycle of backup with new configuration, you can set `--external-decompressor` flag value to empty.
+
+The reason you cannot change all the values together is because the restore process will then have no way to find out which external decompressor
+should be used to process the previous backup. Please make sure you have thought out all possible scenarios for restore before transitioning from one
+compression engine to another.
+
 ### Online DDL changes
 
 #### Concurrent vitess migrations
