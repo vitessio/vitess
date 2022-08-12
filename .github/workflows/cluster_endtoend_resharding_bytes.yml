@@ -10,6 +10,7 @@ jobs:
   build:
     name: Run endtoend tests on Cluster (resharding_bytes)
     runs-on: ubuntu-20.04
+    timeout-minutes: 60
 
     steps:
     - name: Configure git private repo access
@@ -55,7 +56,7 @@ jobs:
         go mod download
 
     - name: Run cluster endtoend test
-      timeout-minutes: 30
+      timeout-minutes: 45
       run: |
         # We set the VTDATAROOT to the /tmp folder to reduce the file path of mysql.sock file
         # which musn't be more than 107 characters long.

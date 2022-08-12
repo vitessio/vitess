@@ -113,7 +113,7 @@
 		},
 		"backup_mysqlctld": { 
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/backup/mysqlctld"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/backup/mysqlctld", "-timeout", "20m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "21",
@@ -140,7 +140,7 @@
 		},
 		"backup_transform_mysqlctld": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/backup/transform/mysqlctld"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/backup/transform/mysqlctld", "-timeout", "20m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "21", 
@@ -330,7 +330,7 @@
 		},
 		"onlineddl_vrepl_stress": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/vrepl_stress", "-timeout", "30m"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/vrepl_stress", "-timeout", "45m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "onlineddl_vrepl_stress",
@@ -1231,7 +1231,7 @@
 		},
 		"vreplication_v2": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestBasicV2Workflows"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestBasicV2Workflows", "-timeout", "30m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_v2",
@@ -1240,7 +1240,7 @@
 		},
 		"vreplication_across_db_versions": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestV2WorkflowsAcrossDBVersions"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestV2WorkflowsAcrossDBVersions", "-timeout", "30m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_across_db_versions",
@@ -1252,7 +1252,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestMigrate"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "vreplication_migrate",
+			"Shard": "vreplication_migrate_vdiff2_convert_tz",
 			"RetryMax": 1,
 			"Tags": []
 		},
@@ -1261,7 +1261,16 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestVDiff2"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "vreplication_migrate",
+			"Shard": "vreplication_migrate_vdiff2_convert_tz",
+			"RetryMax": 1,
+			"Tags": []
+		},
+		"vreplication_movetables_tz": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestMoveTablesTZ"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vreplication_migrate_vdiff2_convert_tz",
 			"RetryMax": 1,
 			"Tags": []
 		},

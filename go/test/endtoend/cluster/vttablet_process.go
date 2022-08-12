@@ -38,6 +38,8 @@ import (
 	"vitess.io/vitess/go/vt/log"
 )
 
+const vttabletStateTimeout = 30 * time.Second
+
 // VttabletProcess is a generic handle for a running vttablet .
 // It can be spawned manually
 type VttabletProcess struct {
@@ -233,19 +235,19 @@ func (vttablet *VttabletProcess) GetTabletType() string {
 	return ""
 }
 
-// WaitForTabletStatus waits for 10 second till expected status is reached
+// WaitForTabletStatus waits for one of the expected statuses to be reached
 func (vttablet *VttabletProcess) WaitForTabletStatus(expectedStatus string) error {
-	return vttablet.WaitForTabletStatusesForTimeout([]string{expectedStatus}, 10*time.Second)
+	return vttablet.WaitForTabletStatusesForTimeout([]string{expectedStatus}, vttabletStateTimeout)
 }
 
-// WaitForTabletStatuses waits for 10 second till one of expected statuses is reached
+// WaitForTabletStatuses waits for one of expected statuses is reached
 func (vttablet *VttabletProcess) WaitForTabletStatuses(expectedStatuses []string) error {
-	return vttablet.WaitForTabletStatusesForTimeout(expectedStatuses, 10*time.Second)
+	return vttablet.WaitForTabletStatusesForTimeout(expectedStatuses, vttabletStateTimeout)
 }
 
 // WaitForTabletTypes waits for 10 second till one of expected statuses is reached
 func (vttablet *VttabletProcess) WaitForTabletTypes(expectedTypes []string) error {
-	return vttablet.WaitForTabletTypesForTimeout(expectedTypes, 10*time.Second)
+	return vttablet.WaitForTabletTypesForTimeout(expectedTypes, vttabletStateTimeout)
 }
 
 // WaitForTabletStatusesForTimeout waits till the tablet reaches to any of the provided statuses
@@ -299,7 +301,7 @@ func contains(arr []string, str string) bool {
 
 // WaitForBinLogPlayerCount waits till binlog player count var matches
 func (vttablet *VttabletProcess) WaitForBinLogPlayerCount(expectedCount int) error {
-	timeout := time.Now().Add(10 * time.Second)
+	timeout := time.Now().Add(vttabletStateTimeout)
 	for time.Now().Before(timeout) {
 		if vttablet.getVReplStreamCount() == fmt.Sprintf("%d", expectedCount) {
 			return nil
@@ -341,9 +343,9 @@ func (vttablet *VttabletProcess) getVarValue(keyname string) string {
 	return fmt.Sprintf("%v", object)
 }
 
-// TearDown shuts down the running vttablet service and fails after 10 seconds
+// TearDown shuts down the running vttablet service and fails after the timeout
 func (vttablet *VttabletProcess) TearDown() error {
-	return vttablet.TearDownWithTimeout(10 * time.Second)
+	return vttablet.TearDownWithTimeout(vttabletStateTimeout)
 }
 
 // TearDownWithTimeout shuts down the running vttablet service and fails once the given

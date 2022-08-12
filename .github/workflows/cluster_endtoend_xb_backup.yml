@@ -10,6 +10,7 @@ jobs:
   build:
     name: Run endtoend tests on Cluster (xb_backup)
     runs-on: ubuntu-20.04
+    timeout-minutes: 60
 
     steps:
     - name: Configure git private repo access
@@ -54,8 +55,10 @@ jobs:
         sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
         go mod download
 
+        sudo apt-get install percona-xtrabackup-80 lz4
+
     - name: Run cluster endtoend test
-      timeout-minutes: 30
+      timeout-minutes: 45
       run: |
         # We set the VTDATAROOT to the /tmp folder to reduce the file path of mysql.sock file
         # which musn't be more than 107 characters long.

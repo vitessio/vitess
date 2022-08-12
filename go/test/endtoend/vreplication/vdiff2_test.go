@@ -127,7 +127,7 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, cells []*Cell) 
 	arrTargetShards := strings.Split(tc.targetShards, ",")
 	if tc.typ == "Reshard" {
 		tks := vc.Cells[cells[0].Name].Keyspaces[tc.targetKs]
-		require.NoError(t, vc.AddShards(t, cells, tks, tc.targetShards, 0, 0, tc.tabletBaseID))
+		require.NoError(t, vc.AddShards(t, cells, tks, tc.targetShards, 0, 0, tc.tabletBaseID, targetKsOpts))
 		for _, shard := range arrTargetShards {
 			require.NoError(t, vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", tc.targetKs, shard), 1))
 		}

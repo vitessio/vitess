@@ -10,6 +10,7 @@ jobs:
   build:
     name: Run endtoend tests on Cluster (vreplication_migrate_vdiff2_convert_tz)
     runs-on: ubuntu-20.04
+    timeout-minutes: 60
 
     steps:
     - name: Configure git private repo access
@@ -38,17 +39,16 @@ jobs:
 
     - name: Get dependencies
       run: |
-        # Get key to latest MySQL repo
-        sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 467B942D3A79BD29
-
-        # Setup MySQL 8.0
-        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.20-1_all.deb
-        echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0 | sudo debconf-set-selections
-        sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
+        # Setup Percona Server for MySQL 8.0
+        sudo apt-get update
+        sudo apt-get install -y lsb-release gnupg2 curl
+        wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
+        sudo DEBIAN_FRONTEND="noninteractive" dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
+        sudo percona-release setup ps80
         sudo apt-get update
 
         # Install everything else we need, and configure
-        sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd curl git wget eatmydata xz-utils
+        sudo apt-get install -y percona-server-server percona-server-client make unzip g++ etcd git wget eatmydata xz-utils
         sudo service mysql stop
         sudo service etcd stop
         sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
@@ -56,7 +56,7 @@ jobs:
         go mod download
 
     - name: Run cluster endtoend test
-      timeout-minutes: 30
+      timeout-minutes: 45
       run: |
         # We set the VTDATAROOT to the /tmp folder to reduce the file path of mysql.sock file
         # which musn't be more than 107 characters long.
@@ -65,4 +65,30 @@ jobs:
 
         set -x
 
+        # Increase our local ephemeral port range as we could exhaust this
+        sudo sysctl -w net.ipv4.ip_local_port_range="22768 61999"
+        # Increase our open file descriptor limit as we could hit this
+        ulimit -n 65536
+        cat <<-EOF>>./config/mycnf/mysql80.cnf
+        innodb_buffer_pool_dump_at_shutdown=OFF
+        innodb_buffer_pool_in_core_file=OFF
+        innodb_buffer_pool_load_at_startup=OFF
+        innodb_buffer_pool_size=64M
+        innodb_doublewrite=OFF
+        innodb_flush_log_at_trx_commit=0
+        innodb_flush_neighbors=0
+        innodb_flush_method=O_DIRECT
+        innodb_numa_interleave=ON
+        innodb_adaptive_hash_index=OFF
+        sync_binlog=0
+        sync_relay_log=0
+        slave_parallel_type=LOGICAL_CLOCK
+        slave_parallel_workers=4
+        slave_preserve_commit_order=ON
+        transaction_write_set_extraction=XXHASH64
+        binlog_transaction_dependency_tracking=WRITESET
+        performance_schema=OFF
+        slow-query-log=OFF
+        EOF
+        
         eatmydata -- go run test.go -docker=false -follow -shard vreplication_migrate_vdiff2_convert_tz

@@ -32,17 +32,22 @@ import (
 )
 
 const (
-	workflowName      = "wf1"
-	sourceKs          = "product"
-	targetKs          = "customer"
-	ksWorkflow        = targetKs + "." + workflowName
-	reverseKsWorkflow = sourceKs + "." + workflowName + "_reverse"
-	tablesToMove      = "customer"
-	defaultCellName   = "zone1"
-	readQuery         = "select cid from customer"
-)
+	workflowName         = "wf1"
+	sourceKs             = "product"
+	targetKs             = "customer"
+	ksWorkflow           = targetKs + "." + workflowName
+	reverseKsWorkflow    = sourceKs + "." + workflowName + "_reverse"
+	tablesToMove         = "customer"
+	defaultCellName      = "zone1"
+	readQuery            = "select cid from customer"
+	workflowStartTimeout = 90 * time.Second
+	// Because of resource constraints -- and the fact that we have 30+ tablets and
+	// mysqld's along with the vtgate,vtctld,etcd in TestBasicV2Workflows -- the
+	// replication catchup in the final phases can be quite slow.
+	// MySQL 8.0 makes this noticably worse as it is generally more resource hungry
+	// and intensive than 5.7.
+	switchTrafficTimeout = 5 * time.Minute
 
-const (
 	workflowActionCreate         = "Create"
 	workflowActionSwitchTraffic  = "SwitchTraffic"
 	workflowActionReverseTraffic = "ReverseTraffic"
@@ -106,9 +111,14 @@ func tstWorkflowExec(t *testing.T, cells, workflow, sourceKs, targetKs, tables, 
 		if currentWorkflowType == wrangler.MoveTablesWorkflow {
 			args = append(args, "--source", sourceKs, "--tables", tables)
 		} else {
-			args = append(args, "--source_shards", sourceShards, "--target_shards", targetShards)
+			args = append(args, "--source_shards", sourceShards,
+				"--target_shards", targetShards,
+				"--timeout", workflowStartTimeout.String())
 		}
+	case workflowActionSwitchTraffic:
+		args = append(args, "--timeout", switchTrafficTimeout.String())
 	}
+
 	if cells != "" {
 		args = append(args, "--cells", cells)
 	}
@@ -243,6 +253,15 @@ func getCurrentState(t *testing.T) string {
 func TestBasicV2Workflows(t *testing.T) {
 	defaultRdonly = 1
 	defer func() { defaultRdonly = 0 }()
+
+	extraVTTabletArgs = []string{
+		"--dba_pool_size=5",
+		"--app_pool_size=8",
+		"--queryserver-config-pool-size=10",
+		"--queryserver-config-stream-pool-size=10",
+		"--queryserver-config-transaction-cap=10",
+	}
+
 	vc = setupCluster(t)
 	defer vtgateConn.Close()
 	defer vc.TearDown(t)
@@ -255,8 +274,6 @@ func TestBasicV2Workflows(t *testing.T) {
 	testReshardV2Workflow(t)
 	log.Flush()
 }
-
-const workflowStartTimeout = 5 * time.Second
 
 func waitForWorkflowToStart(t *testing.T, ksWorkflow string) {
 	done := false
@@ -750,7 +767,7 @@ func moveCustomerTableSwitchFlows(t *testing.T, cells []*Cell, sourceCellOrAlias
 func createAdditionalCustomerShards(t *testing.T, shards string) {
 	ksName := "customer"
 	keyspace := vc.Cells[defaultCell.Name].Keyspaces[ksName]
-	require.NoError(t, vc.AddShards(t, []*Cell{defaultCell, vc.Cells["zone2"]}, keyspace, shards, defaultReplicas, defaultRdonly, 400))
+	require.NoError(t, vc.AddShards(t, []*Cell{defaultCell, vc.Cells["zone2"]}, keyspace, shards, defaultReplicas, defaultRdonly, 400, targetKsOpts))
 	arrTargetShardNames := strings.Split(shards, ",")
 
 	for _, shardName := range arrTargetShardNames {
