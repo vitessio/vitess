@@ -3773,15 +3773,15 @@ func (node *JoinTableExpr) walkSubtree(visit Visit) error {
 
 // JSONTableExpr represents a TableExpr that's a json_table operation.
 type JSONTableExpr struct {
-	Data    Expr
-	Path    string
-	Columns *TableSpec
-	Alias   TableIdent
+	Data  Expr
+	Path  string
+	Spec  *TableSpec
+	Alias TableIdent
 }
 
 // Format formats the node.
 func (node *JSONTableExpr) Format(buf *TrackedBuffer) {
-	buf.Myprintf(`JSON_TABLE(%v, "%s" COLUMNS%v) as %v`, node.Data, node.Path, node.Columns, node.Alias)
+	buf.Myprintf(`JSON_TABLE(%v, "%s" COLUMNS%v) as %v`, node.Data, node.Path, node.Spec, node.Alias)
 
 }
 

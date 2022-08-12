@@ -13160,7 +13160,7 @@ yydefault:
 		yyDollar = yyS[yypt-12 : yypt+1]
 //line sql.y:4721
 		{
-			yyVAL.tableExpr = &JSONTableExpr{Data: yyDollar[3].expr, Path: string(yyDollar[5].bytes), Columns: yyDollar[8].TableSpec, Alias: yyDollar[12].tableIdent}
+			yyVAL.tableExpr = &JSONTableExpr{Data: yyDollar[3].expr, Path: string(yyDollar[5].bytes), Spec: yyDollar[8].TableSpec, Alias: yyDollar[12].tableIdent}
 		}
 	case 899:
 		yyDollar = yyS[yypt-1 : yypt+1]
