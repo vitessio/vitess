@@ -129,24 +129,6 @@
 			"RetryMax": 1,
 			"Tags": ["upgrade_downgrade_backups"]
 		},
-		"backup_transform": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/backup/transform", "-timeout", "20m"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "19",
-			"RetryMax": 1,
-			"Tags": ["upgrade_downgrade_backups"]
-		},
-		"backup_transform_mysqlctld": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/backup/transform/mysqlctld", "-timeout", "20m"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "21", 
-			"RetryMax": 1,
-			"Tags": []
-		},
 		"backup_xtrabackup": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/backup/xtrabackup"],
