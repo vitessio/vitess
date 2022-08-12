@@ -200,7 +200,7 @@ func InitTabletMap(
 
 	// Register the tablet dialer for tablet server
 	tabletconn.RegisterDialer("internal", dialer)
-	*tabletconn.TabletProtocol = "internal"
+	tabletconn.TabletProtocol = "internal"
 
 	// run healthcheck on all vttablets
 	tmc := tmclient.NewTabletManagerClient()

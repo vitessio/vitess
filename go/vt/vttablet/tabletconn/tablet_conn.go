@@ -17,11 +17,13 @@ limitations under the License.
 package tabletconn
 
 import (
-	"flag"
 	"sync"
+
+	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 
@@ -36,8 +38,27 @@ var (
 
 var (
 	// TabletProtocol is exported for unit tests
-	TabletProtocol = flag.String("tablet_protocol", "grpc", "how to talk to the vttablets")
+	//
+	// (TODO|andrew): rewrite tests so this does not need to be exported.
+	TabletProtocol = "grpc"
 )
+
+func registerFlags(fs *pflag.FlagSet) {
+	fs.StringVar(&TabletProtocol, "tablet_protocol", "grpc", "Protocol to use to talk to vttablets.")
+}
+
+func init() {
+	for _, cmd := range []string{
+		"vtcombo",
+		"vtctl",
+		"vtctld",
+		"vtctldclient",
+		"vtgate",
+		"vttablet",
+	} {
+		servenv.OnParseFor(cmd, registerFlags)
+	}
+}
 
 // TabletDialer represents a function that will return a QueryService
 // object that can communicate with a tablet. Only the tablet's
@@ -69,9 +90,9 @@ func RegisterDialer(name string, dialer TabletDialer) {
 func GetDialer() TabletDialer {
 	mu.Lock()
 	defer mu.Unlock()
-	td, ok := dialers[*TabletProtocol]
+	td, ok := dialers[TabletProtocol]
 	if !ok {
-		log.Exitf("No dialer registered for tablet protocol %s", *TabletProtocol)
+		log.Exitf("No dialer registered for tablet protocol %s", TabletProtocol)
 	}
 	return td
 }

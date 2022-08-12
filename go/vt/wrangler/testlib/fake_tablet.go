@@ -21,12 +21,11 @@ deal with topology common tasks, like fake tablets and action loops.
 package testlib
 
 import (
+	"context"
 	"net"
 	"net/http"
 	"testing"
 	"time"
-
-	"context"
 
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
@@ -269,5 +268,5 @@ func (ft *FakeTablet) Target() *querypb.Target {
 func init() {
 	// enforce we will use the right protocol (gRPC) in all unit tests
 	*tmclient.TabletManagerProtocol = "grpc"
-	*tabletconn.TabletProtocol = "grpc"
+	tabletconn.TabletProtocol = "grpc"
 }
