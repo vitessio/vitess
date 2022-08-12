@@ -4735,7 +4735,7 @@ json_table_column_list:
 
 // TODO: implement NESTED
 json_table_column_definition:
-  // TODO: reserved_sql_id FOR ORDINALITY // this is supposed to work like auto_increment
+  // TODO: reserved_sql_id FOR ORDINALITY; this is supposed to work like auto_increment
   reserved_sql_id column_type json_table_column_options
   {
     if err := $2.merge($3); err != nil {
@@ -4748,7 +4748,7 @@ json_table_column_definition:
 // TODO: default value for non-existent member is NULL, but use "zero" when it is specified
 // TODO: exists overrides DEFAULT <json_string> ON EMPTY
 json_table_column_options:
-  PATH STRING on_empty // TODO: on_empty on_error
+  PATH STRING on_empty on_error
   {
     $$ = ColumnType{Path: string($2)}
   }
@@ -4757,26 +4757,11 @@ json_table_column_options:
     $$ = ColumnType{Path: string($3)}
   }
 
-// TODO: factor these out later
+// TODO: just parse for now
 on_empty:
   {
 
   }
-| NULL ON EMPTY
-  {
-
-  }
-| DEFAULT value_expression ON EMPTY
-  {
-
-  }
-//| ERROR ON EMPTY
-//  {go
-//
-//  }
-
-// TODO: factor these out later
-//on_error:
 //  NULL ON EMPTY
 //  {
 //
@@ -4789,6 +4774,24 @@ on_empty:
 //  {
 //
 //  }
+
+// TODO: remove empty case, just there to parse
+on_error:
+  {
+
+  }
+| NULL ON EMPTY
+  {
+
+  }
+| DEFAULT value_expression ON EMPTY
+  {
+
+  }
+| ERROR ON EMPTY
+  {
+
+  }
 
 trigger_name:
   sql_id
