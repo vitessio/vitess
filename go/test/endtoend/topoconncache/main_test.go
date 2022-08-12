@@ -90,7 +90,9 @@ var (
 	shard2 cluster.Shard
 )
 
-/* This end-to-end test validates the cache fix in topo/server.go inside ConnForCell.
+/*
+	This end-to-end test validates the cache fix in topo/server.go inside ConnForCell.
+
 The issue was, if we delete and add back a cell with same name but at different path, the map of cells
 in server.go returned the connection object of the previous cell instead of newly-created one
 with the same name.

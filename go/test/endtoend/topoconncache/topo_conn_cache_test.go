@@ -164,12 +164,16 @@ func addCellback(t *testing.T) {
 
 	for _, tablet := range []*cluster.Vttablet{shard1Replica, shard1Rdonly} {
 		tablet.VttabletProcess.Shard = shard1.Name
+		// The tablet should come up as serving since the primary for the shard already exists
+		tablet.VttabletProcess.ServingStatus = "SERVING"
 		err := tablet.VttabletProcess.Setup()
 		require.NoError(t, err)
 	}
 
 	for _, tablet := range []*cluster.Vttablet{shard2Replica, shard2Rdonly} {
 		tablet.VttabletProcess.Shard = shard2.Name
+		// The tablet should come up as serving since the primary for the shard already exists
+		tablet.VttabletProcess.ServingStatus = "SERVING"
 		err := tablet.VttabletProcess.Setup()
 		require.NoError(t, err)
 	}
