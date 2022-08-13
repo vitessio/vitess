@@ -88,7 +88,8 @@ var (
 		"--degraded_threshold", "5s",
 		"--lock_tables_timeout", "5s",
 		"--watch_replication_stream",
-		"--serving_state_grace_period", "1s"}
+		"--serving_state_grace_period", "1s",
+		fmt.Sprintf("--use_super_read_only=%t", true)}
 )
 
 func removeTablets(t *testing.T, tablets []*cluster.Vttablet) {
@@ -178,6 +179,8 @@ func initializeCluster(t *testing.T) {
 		err = tablet.VttabletProcess.Setup()
 		require.NoError(t, err)
 	}
+
+	time.Sleep(10 * time.Second)
 
 	err = clusterInstance.VtctlclientProcess.InitShardPrimary(keyspaceName, shard.Name, cell, primary.TabletUID)
 	require.NoError(t, err)
