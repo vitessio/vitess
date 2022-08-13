@@ -30,27 +30,29 @@ import (
 
 // LocalController listens to the specified schema change dir and applies schema changes.
 // schema change dir lay out
-//            |
-//            |----keyspace_01
-//                 |----input
-//                      |---- create_test_table.sql
-//                      |---- alter_test_table_02.sql
-//                      |---- ...
-//                 |----complete // contains completed schema changes in yyyy/MM/dd
-//                      |----2015
-//                           |----01
-//                                |----01
-//                                     |--- create_table_table_02.sql
-//                 |----log // contains detailed execution information about schema changes
-//                      |----2015
-//                           |----01
-//                                |----01
-//                                     |--- create_table_table_02.sql
-//                 |----error // contains failed schema changes
-//                      |----2015
-//                           |----01
-//                                |----01
-//                                     |--- create_table_table_03.sql
+//
+//	|
+//	|----keyspace_01
+//	     |----input
+//	          |---- create_test_table.sql
+//	          |---- alter_test_table_02.sql
+//	          |---- ...
+//	     |----complete // contains completed schema changes in yyyy/MM/dd
+//	          |----2015
+//	               |----01
+//	                    |----01
+//	                         |--- create_table_table_02.sql
+//	     |----log // contains detailed execution information about schema changes
+//	          |----2015
+//	               |----01
+//	                    |----01
+//	                         |--- create_table_table_02.sql
+//	     |----error // contains failed schema changes
+//	          |----2015
+//	               |----01
+//	                    |----01
+//	                         |--- create_table_table_03.sql
+//
 // Schema Change Files: ${keyspace}/input/*.sql
 // Error Files:         ${keyspace}/error/${YYYY}/${MM}/${DD}/*.sql
 // Log Files:           ${keyspace}/log/${YYYY}/${MM}/${DD}/*.sql

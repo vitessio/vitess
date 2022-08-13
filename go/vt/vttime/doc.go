@@ -29,11 +29,14 @@ limitations under the License.
 //
 // When comparing two intervals, we know one of them is smaller if
 // there is no overlap and it is before:
-//   [--------]
-//                 [-----------]
+//
+//	[--------]
+//	              [-----------]
+//
 // If there is overlap, we can't say for sure:
-//   [--------]
-//        [----------]
+//
+//	[--------]
+//	     [----------]
 //
 // However, if the goal is to be sure we are producing events that
 // clients will know are chonologically ordered, it is then possible

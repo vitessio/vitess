@@ -286,7 +286,8 @@ func (a *AuthServerVault) close() {
 }
 
 // We ignore most errors here, to allow us to retry cleanly
-//   or ignore the cases where the input is not passed by file, but via env
+//
+//	or ignore the cases where the input is not passed by file, but via env
 func readFromFile(filePath string) (string, error) {
 	if filePath == "" {
 		return "", nil

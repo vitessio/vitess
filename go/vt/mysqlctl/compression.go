@@ -22,7 +22,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os/exec"
 	"sync"
 
@@ -189,7 +188,7 @@ func newBuiltinDecompressor(engine string, reader io.Reader, logger logutil.Logg
 		}
 		decompressor = d
 	case "lz4":
-		decompressor = ioutil.NopCloser(lz4.NewReader(reader))
+		decompressor = io.NopCloser(lz4.NewReader(reader))
 	case "zstd":
 		d, err := zstd.NewReader(reader)
 		if err != nil {

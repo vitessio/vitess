@@ -210,7 +210,7 @@ func evalCompareAll(lVal, rVal *EvalResult, fulleq bool) (int, bool, error) {
 }
 
 // For more details on comparison expression evaluation and type conversion:
-// 		- https://dev.mysql.com/doc/refman/8.0/en/type-conversion.html
+//   - https://dev.mysql.com/doc/refman/8.0/en/type-conversion.html
 func evalCompare(lVal, rVal *EvalResult) (comp int, err error) {
 	switch {
 	case evalResultsAreStrings(lVal, rVal):

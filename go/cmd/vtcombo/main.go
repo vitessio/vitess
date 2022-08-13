@@ -288,22 +288,22 @@ func (mysqld *vtcomboMysqld) SetReplicationSource(ctx context.Context, host stri
 	return nil
 }
 
-//StartReplication implements the MysqlDaemon interface
+// StartReplication implements the MysqlDaemon interface
 func (mysqld *vtcomboMysqld) StartReplication(hookExtraEnv map[string]string) error {
 	return nil
 }
 
-//RestartReplication implements the MysqlDaemon interface
+// RestartReplication implements the MysqlDaemon interface
 func (mysqld *vtcomboMysqld) RestartReplication(hookExtraEnv map[string]string) error {
 	return nil
 }
 
-//StartReplicationUntilAfter implements the MysqlDaemon interface
+// StartReplicationUntilAfter implements the MysqlDaemon interface
 func (mysqld *vtcomboMysqld) StartReplicationUntilAfter(ctx context.Context, pos mysql.Position) error {
 	return nil
 }
 
-//StopReplication implements the MysqlDaemon interface
+// StopReplication implements the MysqlDaemon interface
 func (mysqld *vtcomboMysqld) StopReplication(hookExtraEnv map[string]string) error {
 	return nil
 }

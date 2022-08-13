@@ -142,7 +142,7 @@ func (planner *VReplicationQueryPlanner) PlanQuery(stmt sqlparser.Statement) (pl
 // respectively, and (b) db_name and workflow do not appear in the original
 // query's WHERE clause:
 //
-// 		WHERE (db_name = {{ .DBName }} AND)? (workflow = {{ .Workflow }} AND)? {{ .OriginalWhere }}
+//	WHERE (db_name = {{ .DBName }} AND)? (workflow = {{ .Workflow }} AND)? {{ .OriginalWhere }}
 func (planner *VReplicationQueryPlanner) QueryParams() QueryParams {
 	return QueryParams{
 		DBName:         planner.dbname,

@@ -130,10 +130,10 @@ func (mp *zkLeaderParticipation) WaitForLeadership() (context.Context, error) {
 
 // watchLeadership is the background go routine we run while we are the primary.
 // We will do two things:
-// - watch for changes to the proposal file. If anything happens there,
-//   it most likely means we lost the ZK session, so we want to stop
-//   being the primary.
-// - wait for mp.stop.
+//   - watch for changes to the proposal file. If anything happens there,
+//     it most likely means we lost the ZK session, so we want to stop
+//     being the primary.
+//   - wait for mp.stop.
 func (mp *zkLeaderParticipation) watchLeadership(ctx context.Context, conn *ZkConn, proposal string, cancel context.CancelFunc) {
 	// any interruption of this routine means we're not primary any more.
 	defer cancel()

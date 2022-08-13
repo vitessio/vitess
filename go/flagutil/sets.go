@@ -34,8 +34,8 @@ var (
 //
 // For example, defining the following:
 //
-//		var x flagutil.StringSetFlag
-//		flag.Var(&x, "foo", "")
+//	var x flagutil.StringSetFlag
+//	flag.Var(&x, "foo", "")
 //
 // And then specifying "-foo x -foo y -foo x", will result in a set of {x, y}.
 //

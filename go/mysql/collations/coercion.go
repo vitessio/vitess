@@ -37,13 +37,13 @@ func init() {
 //
 // The rules for assigning a Coercibility value to an expression are as follows:
 //
-//	- An explicit COLLATE clause has a coercibility of 0 (not coercible at all).
-//  - The concatenation of two strings with different collations has a coercibility of 1.
-//  - The collation of a column or a stored routine parameter or local variable has a coercibility of 2.
-// 	- A “system constant” (the string returned by functions such as USER() or VERSION()) has a coercibility of 3.
-// 	- The collation of a literal has a coercibility of 4.
-// 	- The collation of a numeric or temporal value has a coercibility of 5.
-//  - NULL or an expression that is derived from NULL has a coercibility of 6.
+//   - An explicit COLLATE clause has a coercibility of 0 (not coercible at all).
+//   - The concatenation of two strings with different collations has a coercibility of 1.
+//   - The collation of a column or a stored routine parameter or local variable has a coercibility of 2.
+//   - A “system constant” (the string returned by functions such as USER() or VERSION()) has a coercibility of 3.
+//   - The collation of a literal has a coercibility of 4.
+//   - The collation of a numeric or temporal value has a coercibility of 5.
+//   - NULL or an expression that is derived from NULL has a coercibility of 6.
 //
 // According to the MySQL documentation, Coercibility is an actual word of the English
 // language, although the Vitess maintainers disagree with this assessment.
