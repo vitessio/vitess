@@ -19,6 +19,7 @@ limitations under the License.
 package tabletconntest
 
 import (
+	"context"
 	"flag"
 	"io"
 	"os"
@@ -26,9 +27,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-
-	"context"
-
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -770,7 +768,7 @@ func TestSuite(t *testing.T, protocol string, tablet *topodatapb.Tablet, fake *F
 	}
 
 	// make sure we use the right client
-	*tabletconn.TabletProtocol = protocol
+	tabletconn.TabletProtocol = protocol
 
 	// create a connection
 	if clientCreds != nil {

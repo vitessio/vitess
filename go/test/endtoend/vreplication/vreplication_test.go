@@ -759,7 +759,7 @@ func reshard(t *testing.T, ksName string, tableName string, workflow string, sou
 		}
 		ksWorkflow := ksName + "." + workflow
 		keyspace := vc.Cells[defaultCell.Name].Keyspaces[ksName]
-		require.NoError(t, vc.AddShards(t, cells, keyspace, targetShards, defaultReplicas, defaultRdonly, tabletIDBase))
+		require.NoError(t, vc.AddShards(t, cells, keyspace, targetShards, defaultReplicas, defaultRdonly, tabletIDBase, targetKsOpts))
 		arrTargetShardNames := strings.Split(targetShards, ",")
 
 		for _, shardName := range arrTargetShardNames {

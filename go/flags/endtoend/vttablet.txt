@@ -27,12 +27,11 @@ Usage of vttablet:
       --binlog_ssl_key string                                            PITR restore parameter: Filename containing mTLS client private key for use in binlog server authentication.
       --binlog_ssl_server_name string                                    PITR restore parameter: TLS server name (common name) to verify against for the binlog server we are connecting to (If not set: use the hostname or IP supplied in -binlog_host).
       --binlog_user string                                               PITR restore parameter: username of binlog server.
-      --builtin-compressor string                                        builtin compressor engine to use (default "pgzip")
-      --builtin-decompressor string                                      builtin decompressor engine to use (default "auto")
       --builtinbackup_mysqld_timeout duration                            how long to wait for mysqld to shutdown at the start of the backup (default 10m0s)
       --builtinbackup_progress duration                                  how often to send progress updates when backing up large files (default 5s)
       --catch-sigpipe                                                    catch and ignore SIGPIPE on stdout and stderr if specified
       --ceph_backup_storage_config string                                Path to JSON config file for ceph backup storage. (default "ceph_backup_config.json")
+      --compression-engine-name string                                   compressor engine used for compression. (default "pgzip")
       --compression-level int                                            what level to pass to the compressor (default 1)
       --consolidator-stream-query-size int                               Configure the stream consolidator query size in bytes. Setting to 0 disables the stream consolidator. (default 2097152)
       --consolidator-stream-total-size int                               Configure the stream consolidator total size in bytes. Setting to 0 disables the stream consolidator. (default 134217728)
@@ -402,7 +401,7 @@ Usage of vttablet:
       --tablet_manager_grpc_key string                                   the key to use to connect
       --tablet_manager_grpc_server_name string                           the server name to use to validate server certificate
       --tablet_manager_protocol string                                   the protocol to use to talk to vttablet (default "grpc")
-      --tablet_protocol string                                           how to talk to the vttablets (default "grpc")
+      --tablet_protocol string                                           Protocol to use to talk to vttablets. (default "grpc")
       --throttle_check_as_check_self                                     Should throttler/check return a throttler/check-self result (changes throttler behavior for writes)
       --throttle_metrics_query SELECT                                    Override default heartbeat/lag metric. Use either SELECT (must return single row, single value) or `SHOW GLOBAL ... LIKE ...` queries. Set -throttle_metrics_threshold respectively.
       --throttle_metrics_threshold float                                 Override default throttle threshold, respective to -throttle_metrics_query (default 1.7976931348623157e+308)
