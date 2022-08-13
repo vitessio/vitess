@@ -20,6 +20,7 @@ import (
 	"context"
 	_ "embed"
 	"flag"
+	"fmt"
 	"os"
 	"testing"
 
@@ -74,7 +75,7 @@ func TestMain(m *testing.M) {
 			VSchema:   VSchema,
 		}
 		clusterInstance.VtGateExtraArgs = []string{"--schema_change_signal"}
-		clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-schema-change-signal", "--queryserver-config-schema-change-signal-interval", "0.1", "--queryserver-config-max-result-size", "100", "--queryserver-config-terse-errors"}
+		clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-schema-change-signal", "--queryserver-config-schema-change-signal-interval", "0.1", "--queryserver-config-max-result-size", "100", "--queryserver-config-terse-errors", fmt.Sprintf("--use_super_read_only=%t", true)}
 		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 0, false)
 		if err != nil {
 			return 1
