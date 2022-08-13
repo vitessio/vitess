@@ -1,3 +1,6 @@
+//go:build !codeanalysis
+// +build !codeanalysis
+
 /*
 Copyright 2019 The Vitess Authors.
 
@@ -35,7 +38,7 @@ import (
 )
 
 type zkServerAddr struct {
-	ServerID     uint32
+	ServerId     uint32 // nolint:revive
 	Hostname     string
 	LeaderPort   int
 	ElectionPort int
@@ -43,13 +46,13 @@ type zkServerAddr struct {
 }
 
 type ZkConfig struct {
-	ServerID   uint32
+	ServerId   uint32 // nolint:revive
 	ClientPort int
 	Servers    []zkServerAddr
 	Global     bool
 }
 
-/* ServerID is a unique id for a server - must be 1-255
+/* ServerId is a unique id for a server - must be 1-255
  */
 func NewZkConfig() *ZkConfig {
 	return &ZkConfig{
@@ -61,9 +64,9 @@ func NewZkConfig() *ZkConfig {
 func (cnf *ZkConfig) DataDir() string {
 	baseDir := env.VtDataRoot()
 	if cnf.Global {
-		return fmt.Sprintf("%v/zk_global_%03d", baseDir, cnf.ServerID)
+		return fmt.Sprintf("%v/zk_global_%03d", baseDir, cnf.ServerId)
 	}
-	return fmt.Sprintf("%v/zk_%03d", baseDir, cnf.ServerID)
+	return fmt.Sprintf("%v/zk_%03d", baseDir, cnf.ServerId)
 }
 
 func (cnf *ZkConfig) DirectoryList() []string {
@@ -90,7 +93,7 @@ func (cnf *ZkConfig) MyidFile() string {
 }
 
 func (cnf *ZkConfig) WriteMyid() error {
-	return os.WriteFile(cnf.MyidFile(), []byte(fmt.Sprintf("%v", cnf.ServerID)), 0664)
+	return os.WriteFile(cnf.MyidFile(), []byte(fmt.Sprintf("%v", cnf.ServerId)), 0664)
 }
 
 /*
@@ -145,14 +148,14 @@ func MakeZkConfigFromString(cmdLine string, myID uint32) *ZkConfig {
 		}
 		zkID := zkiParts[0]
 		zkAddrParts := strings.Split(zkiParts[1], ":")
-		serverID, _ := strconv.ParseUint(zkID, 10, 0)
-		if serverID > 1000 {
-			serverID = serverID % 1000
+		serverId, _ := strconv.ParseUint(zkID, 10, 0) // nolint:revive
+		if serverId > 1000 {
+			serverId = serverId % 1000
 			zkConfig.Global = true
 		}
 		myID = myID % 1000
 
-		zkServer := zkServerAddr{ServerID: uint32(serverID), ClientPort: 2181,
+		zkServer := zkServerAddr{ServerId: uint32(serverId), ClientPort: 2181,
 			LeaderPort: 2888, ElectionPort: 3888}
 		switch len(zkAddrParts) {
 		case 4:
@@ -177,13 +180,13 @@ func MakeZkConfigFromString(cmdLine string, myID uint32) *ZkConfig {
 	hostname := netutil.FullyQualifiedHostnameOrPanic()
 	log.Infof("Fully qualified machine hostname was detected as: %v", hostname)
 	for _, zkServer := range zkConfig.Servers {
-		if (myID > 0 && myID == zkServer.ServerID) || (myID == 0 && zkServer.Hostname == hostname) {
-			zkConfig.ServerID = zkServer.ServerID
+		if (myID > 0 && myID == zkServer.ServerId) || (myID == 0 && zkServer.Hostname == hostname) {
+			zkConfig.ServerId = zkServer.ServerId
 			zkConfig.ClientPort = zkServer.ClientPort
 			break
 		}
 	}
-	if zkConfig.ServerID == 0 {
+	if zkConfig.ServerId == 0 {
 		panic(fmt.Errorf("no zk server found for host %v in config %v", hostname, cmdLine))
 	}
 	return zkConfig
