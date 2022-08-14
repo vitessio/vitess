@@ -34,17 +34,14 @@ import (
 var (
 	// ConnClosed is returned when the underlying connection was closed.
 	ConnClosed = vterrors.New(vtrpcpb.Code_UNAVAILABLE, "vttablet: Connection Closed")
+
+	tabletProtocol = "grpc"
 )
 
-var (
-	// TabletProtocol is exported for unit tests
-	//
-	// (TODO|andrew): rewrite tests so this does not need to be exported.
-	TabletProtocol = "grpc"
-)
-
-func registerFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&TabletProtocol, "tablet_protocol", "grpc", "Protocol to use to talk to vttablets.")
+// RegisterFlags registers the tabletconn flags on a given flagset. It is
+// exported for tests that need to inject a particular TabletProtocol.
+func RegisterFlags(fs *pflag.FlagSet) {
+	fs.StringVar(&tabletProtocol, "tablet_protocol", "grpc", "Protocol to use to talk to vttablets.")
 }
 
 func init() {
@@ -56,7 +53,7 @@ func init() {
 		"vtgate",
 		"vttablet",
 	} {
-		servenv.OnParseFor(cmd, registerFlags)
+		servenv.OnParseFor(cmd, RegisterFlags)
 	}
 }
 
@@ -90,9 +87,9 @@ func RegisterDialer(name string, dialer TabletDialer) {
 func GetDialer() TabletDialer {
 	mu.Lock()
 	defer mu.Unlock()
-	td, ok := dialers[TabletProtocol]
+	td, ok := dialers[tabletProtocol]
 	if !ok {
-		log.Exitf("No dialer registered for tablet protocol %s", TabletProtocol)
+		log.Exitf("No dialer registered for tablet protocol %s", tabletProtocol)
 	}
 	return td
 }

@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/queryservice/fakes"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
+	"vitess.io/vitess/go/vt/vttablet/tabletconntest"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -75,7 +76,7 @@ func init() {
 // testWranglerEnv
 
 func newWranglerTestEnv(sourceShards, targetShards []string, query string, positions map[string]string, timeUpdated int64) *testWranglerEnv {
-	tabletconn.TabletProtocol = "WranglerTest"
+	tabletconntest.SetProtocol("go.vt.wrangler.vdiff_env_test", "WranglerTest")
 	env := &testWranglerEnv{
 		workflow:   "wrWorkflow",
 		tablets:    make(map[int]*testWranglerTablet),

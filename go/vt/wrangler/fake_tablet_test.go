@@ -32,7 +32,7 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl/fakemysqldaemon"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vttablet/grpctmserver"
-	"vitess.io/vitess/go/vt/vttablet/tabletconn"
+	"vitess.io/vitess/go/vt/vttablet/tabletconntest"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager"
 	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
@@ -240,5 +240,5 @@ func (ft *fakeTablet) Target() querypb.Target {
 func init() {
 	// enforce we will use the right protocol (gRPC) in all unit tests
 	*tmclient.TabletManagerProtocol = "grpc"
-	tabletconn.TabletProtocol = "grpc"
+	tabletconntest.SetProtocol("go.vt.wrangler.fake_tablet_test", "grpc")
 }
