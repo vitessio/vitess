@@ -418,11 +418,14 @@ func initSchema(ctx context.Context, params RestoreParams) ([]error, error) {
 	}
 
 	if !*DisableActiveReparents && *SetSuperReadOnlyAfterSchmaInitializer {
+		log.Info("setting up super read only...")
 		defer func() {
 			if err := mysql.SchemaInitializer.SetSuperReadOnlyUser(conn.Conn); err != nil {
 				log.Warning("not able to set super-read-only user")
 			}
 		}()
+	} else {
+		log.Info("not setting up super read only...")
 	}
 
 	metadataManager := &MetadataManager{}

@@ -438,11 +438,14 @@ func (tm *TabletManager) initSchema(ctx context.Context,
 	}
 
 	if !*mysqlctl.DisableActiveReparents && *mysqlctl.SetSuperReadOnlyAfterSchmaInitializer {
+		log.Info("setting up super read only1...")
 		defer func() {
 			if err := mysql.SchemaInitializer.SetSuperReadOnlyUser(conn.Conn); err != nil {
 				log.Warning("not able to set super-read-only user")
 			}
 		}()
+	} else {
+		log.Info("not setting super read only1...")
 	}
 
 	errors := mysql.SchemaInitializer.InitializeSchema(conn.Conn, false, true)
