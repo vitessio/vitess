@@ -23,11 +23,11 @@ package main
 
 import (
 	"context"
-	"flag"
 	"os"
 	"strings"
 	"time"
 
+	"github.com/spf13/pflag"
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/exit"
@@ -55,13 +55,14 @@ import (
 )
 
 var (
-	schemaDir          = flag.String("schema_dir", "", "Schema base directory. Should contain one directory per keyspace, with a vschema.json file if necessary.")
-	startMysql         = flag.Bool("start_mysql", false, "Should vtcombo also start mysql")
-	mysqlPort          = flag.Int("mysql_port", 3306, "mysql port")
-	externalTopoServer = flag.Bool("external_topo_server", false, "Should vtcombo use an external topology server instead of starting its own in-memory topology server. "+
+	flags              = pflag.NewFlagSet("vtcombo", pflag.ContinueOnError)
+	schemaDir          = flags.String("schema_dir", "", "Schema base directory. Should contain one directory per keyspace, with a vschema.json file if necessary.")
+	startMysql         = flags.Bool("start_mysql", false, "Should vtcombo also start mysql")
+	mysqlPort          = flags.Int("mysql_port", 3306, "mysql port")
+	externalTopoServer = flags.Bool("external_topo_server", false, "Should vtcombo use an external topology server instead of starting its own in-memory topology server. "+
 		"If true, vtcombo will use the flags defined in topo/server.go to open topo server")
-	plannerVersion           = flag.String("planner-version", "", "Sets the default planner to use when the session has not changed it. Valid values are: V3, Gen4, Gen4Greedy and Gen4Fallback. Gen4Fallback tries the gen4 planner and falls back to the V3 planner if the gen4 fails.")
-	plannerVersionDeprecated = flag.String("planner_version", "", "Deprecated flag. Use planner-version instead")
+	plannerVersion           = flags.String("planner-version", "", "Sets the default planner to use when the session has not changed it. Valid values are: V3, Gen4, Gen4Greedy and Gen4Fallback. Gen4Fallback tries the gen4 planner and falls back to the V3 planner if the gen4 fails.")
+	plannerVersionDeprecated = flags.String("planner_version", "", "Deprecated flag. Use planner-version instead")
 
 	tpb             vttestpb.VTTestTopology
 	ts              *topo.Server
@@ -69,8 +70,8 @@ var (
 )
 
 func init() {
-	flag.Var(vttest.TextTopoData(&tpb), "proto_topo", "vttest proto definition of the topology, encoded in compact text format. See vttest.proto for more information.")
-	flag.Var(vttest.JSONTopoData(&tpb), "json_topo", "vttest proto definition of the topology, encoded in json format. See vttest.proto for more information.")
+	flags.Var(vttest.TextTopoData(&tpb), "proto_topo", "vttest proto definition of the topology, encoded in compact text format. See vttest.proto for more information.")
+	flags.Var(vttest.JSONTopoData(&tpb), "json_topo", "vttest proto definition of the topology, encoded in json format. See vttest.proto for more information.")
 
 	servenv.RegisterDefaultFlags()
 }
@@ -119,6 +120,19 @@ func main() {
 	// flag parsing
 	dbconfigs.RegisterFlags(dbconfigs.All...)
 	mysqlctl.RegisterFlags()
+	servenv.OnParseFor("vtcombo", func(fs *pflag.FlagSet) {
+		// We're going to force the value later, so don't even bother letting
+		// the user know about this flag.
+		fs.MarkHidden("tablet_protocol")
+
+		// This needs to go both ways, so that the flags we defined up in our
+		// `var` and `init` blocks is available to servenv's FlagSet, and so
+		// that the other flags registered throughout the codebase are
+		// available to use when we call `flags.Set` later on.
+		flags.AddFlagSet(fs)
+		fs.AddFlagSet(flags)
+	})
+
 	servenv.ParseFlags("vtcombo")
 
 	// Stash away a copy of the topology that vtcombo was started with.
@@ -132,13 +146,13 @@ func main() {
 		tpb.Cells = append(tpb.Cells, "test")
 	}
 
-	flag.Set("cells_to_watch", strings.Join(tpb.Cells, ","))
+	flags.Set("cells_to_watch", strings.Join(tpb.Cells, ","))
 
 	// vtctld UI requires the cell flag
-	flag.Set("cell", tpb.Cells[0])
-	flag.Set("enable_realtime_stats", "true")
-	if flag.Lookup("log_dir") == nil {
-		flag.Set("log_dir", "$VTDATAROOT/tmp")
+	flags.Set("cell", tpb.Cells[0])
+	flags.Set("enable_realtime_stats", "true")
+	if flags.Lookup("log_dir") == nil {
+		flags.Set("log_dir", "$VTDATAROOT/tmp")
 	}
 
 	if *externalTopoServer {
@@ -175,8 +189,12 @@ func main() {
 		servenv.OnClose(mysqld.Close)
 	}
 
-	// tablets configuration and init.
+	// Tablet configuration and init.
 	// Send mycnf as nil because vtcombo won't do backups and restores.
+	//
+	// Also force the `--tablet_protocol` to be the "internal" protocol that
+	// InitTabletMap registers.
+	flags.Set("tablet_protocol", "internal")
 	uid, err := vtcombo.InitTabletMap(ts, &tpb, mysqld, &dbconfigs.GlobalDBConfigs, *schemaDir, *startMysql)
 	if err != nil {
 		log.Errorf("initTabletMapProto failed: %v", err)
