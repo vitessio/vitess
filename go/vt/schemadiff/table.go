@@ -1180,14 +1180,12 @@ func (c *CreateTableEntity) diffKeys(alterTable *sqlparser.AlterTable,
 			if t2Key.Info.Fulltext {
 				if addedFulltextKeys > 0 && hints.FullTextKeyStrategy == FullTextKeyDistinctStatements {
 					// Special case: MySQL does not support multiple ADD FULLTEXT KEY statements in a single ALTER
-					fmt.Printf("Added  superfluous key: %v\n", sqlparser.CanonicalString(t2Key))
 					superfluousFulltextKeys = append(superfluousFulltextKeys, addKey)
 					addedAsSuperfluousStatement = true
 				}
 				addedFulltextKeys++
 			}
 			if !addedAsSuperfluousStatement {
-				fmt.Printf("Added key: %v\n", sqlparser.CanonicalString(t2Key))
 				alterTable.AlterOptions = append(alterTable.AlterOptions, addKey)
 			}
 		}
