@@ -2305,6 +2305,9 @@ var (
 			input:  "DROP ROLE IF EXISTS role1, role2@localhost",
 			output: "drop role if exists `role1`@`%`, `role2`@`localhost`",
 		}, {
+			input:  "GRANT ALL PRIVILEGES ON * TO UserName",
+			output: "grant all on * to `UserName`@`%`",
+		}, {
 			input:  "GRANT ALL ON * TO UserName",
 			output: "grant all on * to `UserName`@`%`",
 		}, {

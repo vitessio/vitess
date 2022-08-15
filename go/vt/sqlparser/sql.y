@@ -1212,7 +1212,7 @@ grant_statement:
 | GRANT ALL PRIVILEGES ON grant_object_type grant_privilege_level TO account_name_list with_grant_opt grant_assumption
     {
       allPriv := []Privilege{Privilege{Type: PrivilegeType_All, Columns: nil}}
-      $$ = &GrantPrivilege{Privileges: allPriv, ObjectType: $4, PrivilegeLevel: $5, To: $7, WithGrantOption: $8, As: $9}
+      $$ = &GrantPrivilege{Privileges: allPriv, ObjectType: $5, PrivilegeLevel: $6, To: $8, WithGrantOption: $9, As: $10}
     }
 | GRANT grant_privilege_list ON grant_object_type grant_privilege_level TO account_name_list with_grant_opt grant_assumption
   {
