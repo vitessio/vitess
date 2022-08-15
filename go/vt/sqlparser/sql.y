@@ -4471,7 +4471,6 @@ table_references:
 table_reference:
   table_factor
 | join_table
-| json_table
 
 table_factor:
   aliased_table_name
@@ -4499,6 +4498,7 @@ table_factor:
     $$ = &ParenTableExpr{Exprs: $2}
   }
 | table_function
+| json_table
 
 values_statement:
   VALUES row_list
