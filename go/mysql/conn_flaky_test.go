@@ -468,6 +468,49 @@ func TestEOFOrLengthEncodedIntFuzz(t *testing.T) {
 	}
 }
 
+// Check various EOF packet sizes in case of deprecated EOF
+func TestIsEOFPacket(t *testing.T) {
+	listener, sConn, cConn := createSocketPair(t)
+	defer func() {
+		listener.Close()
+		sConn.Close()
+		cConn.Close()
+	}()
+
+	cConn.Capabilities |= CapabilityClientDeprecateEOF
+
+	testCases := []struct {
+		size  int
+		isEOF bool
+	}{
+		{
+			size:  1,
+			isEOF: true,
+		},
+		{
+			size:  MaxPacketSize - 1,
+			isEOF: true,
+		},
+		{
+			size:  MaxPacketSize,
+			isEOF: false,
+		},
+		{
+			size:  MaxPacketSize + 1,
+			isEOF: false,
+		},
+	}
+	for _, testCase := range testCases {
+		t.Run(fmt.Sprintf("is eof for size: %d", testCase.size), func(t *testing.T) {
+			bytes := make([]byte, testCase.size)
+			_, err := crypto_rand.Read(bytes)
+			require.NoError(t, err)
+			bytes[0] = 0xfe
+			assert.Equal(t, testCase.isEOF, cConn.isEOFPacket(bytes))
+		})
+	}
+}
+
 func TestMultiStatementStopsOnError(t *testing.T) {
 	listener, sConn, cConn := createSocketPair(t)
 	sConn.Capabilities |= CapabilityClientMultiStatements
