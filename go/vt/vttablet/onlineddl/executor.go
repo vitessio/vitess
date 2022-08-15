@@ -967,7 +967,8 @@ func (e *Executor) validateAndEditCreateTableStatement(ctx context.Context, onli
 
 // validateAndEditAlterTableStatement inspects the AlterTable statement and:
 // - modifies any CONSTRAINT name according to given name mapping
-func (e *Executor) validateAndEditAlterTableStatement(ctx context.Context, alterTable *sqlparser.AlterTable, constraintMap map[string]string) (err error) {
+// - explode ADD FULLTEXT KEY into multiple statements
+func (e *Executor) validateAndEditAlterTableStatement(ctx context.Context, alterTable *sqlparser.AlterTable, constraintMap map[string]string) (alters []*sqlparser.AlterTable, err error) {
 	validateWalk := func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node := node.(type) {
 		case *sqlparser.DropKey:
@@ -983,9 +984,38 @@ func (e *Executor) validateAndEditAlterTableStatement(ctx context.Context, alter
 		return true, nil
 	}
 	if err := sqlparser.Walk(validateWalk, alterTable); err != nil {
-		return err
+		return alters, err
 	}
-	return nil
+	alters = append(alters, alterTable)
+	// Handle ADD FULLTEXT KEY statements
+	countAddFullTextStatements := 0
+	for i := range alterTable.AlterOptions {
+		switch opt := alterTable.AlterOptions[i].(type) {
+		case *sqlparser.AddIndexDefinition:
+			if opt.IndexDefinition.Info.Fulltext {
+				if countAddFullTextStatements > 0 {
+					// We've already got one ADD FULLTEXT KEY. We can't have another
+					// in the same statement
+					alterTable.AlterOptions[i] = nil
+
+					extraAlterTable := &sqlparser.AlterTable{
+						Table:        alterTable.Table,
+						AlterOptions: []sqlparser.AlterOption{opt},
+					}
+					alters = append(alters, extraAlterTable)
+				}
+				countAddFullTextStatements++
+			}
+		}
+	}
+	for i := 0; i < len(alterTable.AlterOptions); {
+		if alterTable.AlterOptions[i] == nil {
+			alterTable.AlterOptions = append(alterTable.AlterOptions[0:i], alterTable.AlterOptions[i+1:]...)
+		} else {
+			i++
+		}
+	}
+	return alters, nil
 }
 
 // createTableLike creates the table named by `newTableName` in the likeness of onlineDDL.Table
@@ -1053,12 +1083,15 @@ func (e *Executor) initVreplicationOriginalMigration(ctx context.Context, online
 		// ALTER TABLE should apply to the vrepl table
 		alterTable.SetTable(alterTable.GetTable().Qualifier.CompliantName(), vreplTableName)
 		// Also, change any constraint names:
-		if err := e.validateAndEditAlterTableStatement(ctx, alterTable, constraintMap); err != nil {
+		alters, err := e.validateAndEditAlterTableStatement(ctx, alterTable, constraintMap)
+		if err != nil {
 			return v, err
 		}
 		// Apply ALTER TABLE to materialized table
-		if _, err := conn.ExecuteFetch(sqlparser.CanonicalString(alterTable), 0, false); err != nil {
-			return v, err
+		for _, alter := range alters {
+			if _, err := conn.ExecuteFetch(sqlparser.CanonicalString(alter), 0, false); err != nil {
+				return v, err
+			}
 		}
 	}
 	v = NewVRepl(onlineDDL.UUID, e.keyspace, e.shard, e.dbName, onlineDDL.Table, vreplTableName, onlineDDL.SQL)
