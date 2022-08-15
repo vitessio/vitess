@@ -42,7 +42,9 @@ func splitComments(sql string) (string, []string) {
 // parseCommentTags parses sqlcommenter-style key-value pairs out of an array of comments,
 // e.g. as returned by splitComments.
 // The sqlcommenter format is loosely this:
-//   /*key='value',key2='url%2dencoded value',key3='I\'m using back\\slashes'*/
+//
+//	/*key='value',key2='url%2dencoded value',key3='I\'m using back\\slashes'*/
+//
 // The full spec is here: https://google.github.io/sqlcommenter/spec/
 func parseCommentTags(comments []string) []*pbvtgate.Query_Tag {
 	var ret []*pbvtgate.Query_Tag

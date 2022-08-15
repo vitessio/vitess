@@ -475,7 +475,7 @@ func (ii *Insights) handleMessage(record interface{}) {
 
 	var sql string
 	var comments []string
-	if ls.IsNormalized {
+	if ls.IsNormalized || ls.Error == nil {
 		var renormalizeError error
 		sql, comments = splitComments(ls.SQL)
 		sql, renormalizeError = normalizeSQL(sql)
@@ -681,14 +681,14 @@ func (ii *Insights) makeQueryMessage(ls *logstats.LogStats, sql string, tables [
 		Error:                  stringOrNil(ls.ErrorStr()),
 		CommentTags:            tags,
 	}
-	if ii.SendRawQueries && ls.IsNormalized {
-		if ls.StmtType == "INSERT" {
+	if ii.SendRawQueries {
+		if ls.IsNormalized && ls.StmtType == "INSERT" {
 			if s, err := shortenRawSQL(ls.RawSQL, ii.MaxRawQueryLength); err == nil {
 				obj.RawSql = stringOrNil(s)
 				obj.RawSqlAbbreviation = pbvtgate.Query_SUMMARIZED
 			}
 		}
-		if obj.RawSql == nil { // not insert, or insert that couldn't be summarized
+		if obj.RawSql == nil { // not insert, not parseable, or insert that couldn't be summarized
 			if len(ls.RawSQL) > int(ii.MaxRawQueryLength) {
 				obj.RawSql = stringOrNil(efficientlyTruncate(ls.RawSQL, int(ii.MaxRawQueryLength)))
 				obj.RawSqlAbbreviation = pbvtgate.Query_TRUNCATED

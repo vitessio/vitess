@@ -283,11 +283,11 @@ func TestInsightsErrors(t *testing.T) {
 func TestInsightsSafeErrors(t *testing.T) {
 	insightsTestHelper(t, true, setupOptions{},
 		[]insightsQuery{
-			{sql: "select :vtg1", normalizedError: true, error: "target: commerce.0.primary: vttablet: rpc error: code = Canceled desc = (errno 2013) due to context deadline exceeded, elapsed time: 29.998788288s, killing query ID 58 (CallerID: userData1)"},
-			{sql: "select :vtg1", normalizedError: true, error: `target: commerce.0.primary: vttablet: rpc error: code = Aborted desc = Row count exceeded 10000 (errno 10001) (sqlstate HY000) (CallerID: userData1): Sql: "select * from foo as f1 join foo as f2 join foo as f3 join foo as f4 join foo as f5 join foo as f6 where f1.id > :vtg1", BindVars: {#maxLimit: "type:INT64 value:\"10001\""vtg1: "type:INT64 value:\"0\"`},
-			{sql: "select :vtg1", normalizedError: true, error: "target: commerce.0.primary: vttablet: rpc error: code = ResourceExhausted desc = grpc: trying to send message larger than max (18345369 vs. 16777216)"},
-			{sql: "select :vtg1", normalizedError: true, error: `target: commerce.0.primary: vttablet: rpc error: code = Canceled desc = EOF (errno 2013) (sqlstate HY000) (CallerID: userData1): Sql: "select :vtg1 from foo", BindVars: {#maxLimit: "type:INT64 value:\"10001\""vtg1: "type:INT64 value:\"1\"`},
-			{sql: "select :vtg1", normalizedError: true, error: `target: sharded.-40.primary: vttablet: rpc error: code = Unavailable desc = error reading from server: EOF`},
+			{sql: "select :vtg1", normalized: YES, error: "target: commerce.0.primary: vttablet: rpc error: code = Canceled desc = (errno 2013) due to context deadline exceeded, elapsed time: 29.998788288s, killing query ID 58 (CallerID: userData1)"},
+			{sql: "select :vtg1", normalized: YES, error: `target: commerce.0.primary: vttablet: rpc error: code = Aborted desc = Row count exceeded 10000 (errno 10001) (sqlstate HY000) (CallerID: userData1): Sql: "select * from foo as f1 join foo as f2 join foo as f3 join foo as f4 join foo as f5 join foo as f6 where f1.id > :vtg1", BindVars: {#maxLimit: "type:INT64 value:\"10001\""vtg1: "type:INT64 value:\"0\"`},
+			{sql: "select :vtg1", normalized: YES, error: "target: commerce.0.primary: vttablet: rpc error: code = ResourceExhausted desc = grpc: trying to send message larger than max (18345369 vs. 16777216)"},
+			{sql: "select :vtg1", normalized: YES, error: `target: commerce.0.primary: vttablet: rpc error: code = Canceled desc = EOF (errno 2013) (sqlstate HY000) (CallerID: userData1): Sql: "select :vtg1 from foo", BindVars: {#maxLimit: "type:INT64 value:\"10001\""vtg1: "type:INT64 value:\"1\"`},
+			{sql: "select :vtg1", normalized: YES, error: `target: sharded.-40.primary: vttablet: rpc error: code = Unavailable desc = error reading from server: EOF`},
 		},
 		[]insightsKafkaExpectation{
 			expect(queryTopic, `normalized_sql:{value:\"select :vtg1`, `code = Canceled`).butNot("foo", "BindVars", "Sql").count(2),
@@ -630,6 +630,48 @@ func TestRawQueries(t *testing.T) {
 		})
 }
 
+func TestNotNormalizedNotError(t *testing.T) {
+	insightsTestHelper(t, true, setupOptions{},
+		[]insightsQuery{
+			// successful, normalized
+			{sql: "select * from users where id = :vtg1", responseTime: 5 * time.Second, normalized: YES,
+				rawSQL: "select * from users where id=7"},
+
+			// successful, not normalized => statement is sent
+			{sql: "begin", responseTime: 5 * time.Second, normalized: NO,
+				rawSQL: "begin"},
+
+			// successful, not normalized => statement is sent, downcased, tags are parsed
+			{sql: "roLlBacK /*abc='xyz'*/", responseTime: 5 * time.Second, normalized: NO,
+				rawSQL: "roLlBacK /*abc='xyz'*/"},
+
+			// error, normalized => query is interesting, statement is sent
+			{sql: "select * from orders", normalized: YES, error: "no such table",
+				rawSQL: "select * from orders"},
+
+			// error, not normalized => query is interesting, statement replaced with "<error>"
+			{sql: "hello world", normalized: NO, error: "syntax error",
+				rawSQL: "hello world"},
+		},
+		[]insightsKafkaExpectation{
+			expect(queryTopic, `normalized_sql:{value:\"select * from users where id = :vtg1\"}`,
+				`raw_sql:{value:\"select * from users where id=7\"}`),
+			expect(queryStatsBundleTopic, `normalized_sql:{value:\"select * from users where id = :vtg1\"}`),
+			expect(queryTopic, `normalized_sql:{value:\"begin\"}`,
+				`raw_sql:{value:\"begin\"}`),
+			expect(queryStatsBundleTopic, `normalized_sql:{value:\"begin\"}`),
+			expect(queryTopic, `normalized_sql:{value:\"rollback\"}`, "xyz",
+				`raw_sql:{value:\"roLlBacK /*abc='xyz'*/\"}`),
+			expect(queryStatsBundleTopic, `normalized_sql:{value:\"rollback\"}`).butNot("xyz"),
+			expect(queryTopic, `normalized_sql:{value:\"select * from orders\"}`, "no such table",
+				`raw_sql:{value:\"select * from orders\"}`).butNot("<error>"),
+			expect(queryStatsBundleTopic, `normalized_sql:{value:\"select * from orders\"}`).butNot("no such table", "<error>"),
+			expect(queryTopic, `normalized_sql:{value:\"<error>\"}`, "syntax error",
+				`raw_sql:{value:\"hello world\"}`),
+			expect(queryStatsBundleTopic, `normalized_sql:{value:\"<error>\"}`).butNot("hello", "syntax error"),
+		})
+}
+
 func TestRawQueryShortening(t *testing.T) {
 	testCases := []struct {
 		input, output, errStr string
@@ -671,14 +713,22 @@ func TestRawQueryShortening(t *testing.T) {
 	}
 }
 
+const (
+	AUTO = iota
+	NO
+	YES
+)
+
 type insightsQuery struct {
 	sql, error, rawSQL string
 	responseTime       time.Duration
 	rowsRead           int
 
-	// insightsTestHelper sets ls.IsNormalized to false.  Set normalizedError=true to override this, e.g., to
-	// simulate an error that occurs after query parsing has succeeded.
-	normalizedError bool
+	// insightsTestHelper sets ls.IsNormalized to false for errors, true otherwise.
+	// Set normalized=YES or normalized=NO to override this, e.g., to simulate an error
+	// that occurs after query parsing has succeeded, or to simulate a successful
+	// statement that did not need to be normalized.
+	normalized int
 }
 
 type insightsKafkaExpectation struct {
@@ -742,7 +792,7 @@ func insightsTestHelper(t *testing.T, mockTimer bool, options setupOptions, quer
 		ls := &logstats.LogStats{
 			SQL:          q.sql,
 			RawSQL:       q.rawSQL,
-			IsNormalized: q.error == "" || q.normalizedError,
+			IsNormalized: q.normalized == YES || (q.error == "" && q.normalized == AUTO),
 			StartTime:    now.Add(-q.responseTime),
 			EndTime:      now,
 			RowsRead:     uint64(q.rowsRead),
