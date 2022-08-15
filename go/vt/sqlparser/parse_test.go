@@ -6487,6 +6487,111 @@ FROM
 			output: `select * from JSON_TABLE('[{\"a\":1},{\"a\":2}]', "$[*]" COLUMNS(
 	x varchar(100) path "$.a"
 )) as tt`},
+		{
+			input: `
+SELECT *
+FROM
+	JSON_TABLE(
+		'[{"a":1},{"a":2}]',
+		"$[*]" COLUMNS(
+			x varchar(100) path "$.a"
+		)
+	) t1
+JOIN
+	JSON_TABLE(
+		'[{"a":1},{"a":2}]',
+		"$[*]" COLUMNS(
+			x varchar(100) path "$.a"
+		)
+	) t2;`,
+			output: `select * from JSON_TABLE('[{\"a\":1},{\"a\":2}]', "$[*]" COLUMNS(
+	x varchar(100) path "$.a"
+)) as t1 join JSON_TABLE('[{\"a\":1},{\"a\":2}]', "$[*]" COLUMNS(
+	x varchar(100) path "$.a"
+)) as t2`},
+		{
+			input: `
+SELECT *
+FROM
+	JSON_TABLE(
+		'[{"a":1},{"a":2}]',
+		"$[*]" COLUMNS(
+			x varchar(100) path "$.a"
+		)
+	) t
+JOIN
+	tt;`,
+			output: `select * from JSON_TABLE('[{\"a\":1},{\"a\":2}]', "$[*]" COLUMNS(
+	x varchar(100) path "$.a"
+)) as t join tt`},
+		{
+			input: `
+SELECT *
+FROM
+	t
+JOIN
+	JSON_TABLE(
+		'[{"a":1},{"a":2}]',
+		"$[*]" COLUMNS(
+			x varchar(100) path "$.a"
+		)
+	) tt;`,
+			output: `select * from t join JSON_TABLE('[{\"a\":1},{\"a\":2}]', "$[*]" COLUMNS(
+	x varchar(100) path "$.a"
+)) as tt`},
+		{
+			input: `
+SELECT *
+FROM
+	JSON_TABLE(
+		'[{"a":1},{"a":2}]',
+		"$[*]" COLUMNS(
+			x varchar(100) path "$.a"
+		)
+	) t1
+UNION
+SELECT *
+FROM
+	JSON_TABLE(
+		'[{"b":1},{"b":2}]',
+		"$[*]" COLUMNS(
+			y varchar(100) path "$.b"
+		)
+	) t2;`,
+			output: `select * from JSON_TABLE('[{\"a\":1},{\"a\":2}]', "$[*]" COLUMNS(
+	x varchar(100) path "$.a"
+)) as t1 union select * from JSON_TABLE('[{\"b\":1},{\"b\":2}]', "$[*]" COLUMNS(
+	y varchar(100) path "$.b"
+)) as t2`},
+		{
+			input: `SELECT * FROM t WHERE i in (SELECT x FROM JSON_TABLE('[{"a":1},{"a":2}]', "$[*]" COLUMNS(x VARCHAR(100) PATH "$.a")) AS tt);`,
+			output: `select * from t where i in (select x from JSON_TABLE('[{\"a\":1},{\"a\":2}]', "$[*]" COLUMNS(
+	x VARCHAR(100) path "$.a"
+)) as tt)`,
+		},
+
+		{
+			input: `
+SELECT x, y
+FROM
+	JSON_TABLE(
+		'[{"a":1},{"a":2}]',
+		"$[*]" COLUMNS(
+			x varchar(100) path "$.a"
+		)
+	) t1,
+	JSON_TABLE(
+		'[{"b":3},{"b":4}]',
+		"$[*]" COLUMNS(
+			y varchar(100) path "$.b"
+		)
+	) t2;`,
+			output: `select x, y from JSON_TABLE('[{\"a\":1},{\"a\":2}]', "$[*]" COLUMNS(
+	x varchar(100) path "$.a"
+)) as t1, JSON_TABLE('[{\"b\":3},{\"b\":4}]', "$[*]" COLUMNS(
+	y varchar(100) path "$.b"
+)) as t2`,
+		},
 	}
 
 	for _, tcase := range validSQL {
