@@ -50,8 +50,7 @@ var (
 		"--lock_tables_timeout", "5s",
 		"--watch_replication_stream",
 		"--enable_replication_reporter",
-		"--serving_state_grace_period", "1s",
-		fmt.Sprintf("--use_super_read_only=%t", true)}
+		"--serving_state_grace_period", "1s"}
 )
 
 func TestMain(m *testing.M) {

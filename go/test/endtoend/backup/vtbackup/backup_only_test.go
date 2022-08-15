@@ -219,6 +219,11 @@ func removeBackups(t *testing.T) {
 func initTablets(t *testing.T, startTablet bool, initShardPrimary bool) {
 	// Initialize tablets
 	for _, tablet := range []cluster.Vttablet{*primary, *replica1} {
+		if initShardPrimary {
+			tablet.VttabletProcess.ExtraArgs = removeExtraArgs(tablet.VttabletProcess.ExtraArgs, "--disable_active_reparents=true")
+			tablet.VttabletProcess.ExtraArgs = removeExtraArgs(tablet.VttabletProcess.ExtraArgs, "--use_super_read_only=true")
+			tablet.VttabletProcess.ExtraArgs = append(tablet.VttabletProcess.ExtraArgs, fmt.Sprintf("--use_super_read_only=%t", true))
+		}
 		err := localCluster.VtctlclientProcess.InitTablet(&tablet, cell, keyspaceName, hostname, shardName)
 		require.Nil(t, err)
 
@@ -235,6 +240,15 @@ func initTablets(t *testing.T, startTablet bool, initShardPrimary bool) {
 	}
 }
 
+func removeExtraArgs(extraArgs []string, argToRemove string) []string {
+	for index, val := range extraArgs {
+		if val == argToRemove {
+			return append(extraArgs[:index], extraArgs[index+1:]...)
+		}
+	}
+	return extraArgs
+}
+
 func restore(t *testing.T, tablet *cluster.Vttablet, tabletType string, waitForState string, setReadOnly bool, disableReparentShard bool) {
 	// Erase mysql/tablet dir, then start tablet with restore enabled.
 
@@ -248,6 +262,8 @@ func restore(t *testing.T, tablet *cluster.Vttablet, tabletType string, waitForS
 	tablet.VttabletProcess.ExtraArgs = []string{"--db-credentials-file", dbCredentialFile}
 	if disableReparentShard {
 		tablet.VttabletProcess.ExtraArgs = append(tablet.VttabletProcess.ExtraArgs, fmt.Sprintf("--disable_active_reparents=%t", true))
+	} else {
+		tablet.VttabletProcess.ExtraArgs = append(tablet.VttabletProcess.ExtraArgs, fmt.Sprintf("--use_super_read_only=%t", true))
 	}
 	tablet.VttabletProcess.TabletType = tabletType
 	tablet.VttabletProcess.ServingStatus = waitForState
