@@ -6471,6 +6471,19 @@ FROM
 	x varchar(100) path "$.a",
 	y varchar(100) path "$.b"
 )) as t`},
+		{
+			input: `
+SELECT *
+FROM
+	JSON_TABLE(
+		'[{"a":1},{"a":2}]',
+		"$[*]" COLUMNS(
+			x varchar(100) path "$.a"
+		)
+	) tt;`,
+			output: `select * from JSON_TABLE('[{\"a\":1},{\"a\":2}]', "$[*]" COLUMNS(
+	x varchar(100) path "$.a"
+)) as tt`},
 	}
 
 	for _, tcase := range validSQL {
