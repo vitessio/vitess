@@ -40,6 +40,7 @@ func TestCreateTableDiff(t *testing.T) {
 		errorMsg   string
 		autoinc    int
 		rotation   int
+		fulltext   int
 		colrename  int
 		constraint int
 	}{
@@ -421,6 +422,29 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t1 (`id` int primary key, i int, key i_idx(i) invisible)",
 			diff:  "alter table t1 alter index i_idx invisible",
 			cdiff: "ALTER TABLE `t1` ALTER INDEX `i_idx` INVISIBLE",
+		},
+		// FULLTEXT keys
+		{
+			name:  "add one fulltext key",
+			from:  "create table t1 (id int primary key, name tinytext not null)",
+			to:    "create table t1 (id int primary key, name tinytext not null, fulltext key name_ft(name))",
+			diff:  "alter table t1 add fulltext key name_ft (`name`)",
+			cdiff: "ALTER TABLE `t1` ADD FULLTEXT KEY `name_ft` (`name`)",
+		},
+		{
+			name:   "add two fulltext keys, distinct statements",
+			from:   "create table t1 (id int primary key, name1 tinytext not null, name2 tinytext not null)",
+			to:     "create table t1 (id int primary key, name1 tinytext not null, name2 tinytext not null, fulltext key name1_ft(name1), fulltext key name2_ft(name2))",
+			diffs:  []string{"alter table t1 add fulltext key name1_ft (name1)", "alter table t1 add fulltext key name2_ft (name2)"},
+			cdiffs: []string{"ALTER TABLE `t1` ADD FULLTEXT KEY `name1_ft` (`name1`)", "ALTER TABLE `t1` ADD FULLTEXT KEY `name2_ft` (`name2`)"},
+		},
+		{
+			name:     "add two fulltext keys, unify statements",
+			from:     "create table t1 (id int primary key, name1 tinytext not null, name2 tinytext not null)",
+			to:       "create table t1 (id int primary key, name1 tinytext not null, name2 tinytext not null, fulltext key name1_ft(name1), fulltext key name2_ft(name2))",
+			fulltext: FullTextKeyUnifyStatements,
+			diff:     "alter table t1 add fulltext key name1_ft (name1), add fulltext key name2_ft (name2)",
+			cdiff:    "ALTER TABLE `t1` ADD FULLTEXT KEY `name1_ft` (`name1`), ADD FULLTEXT KEY `name2_ft` (`name2`)",
 		},
 		// CHECK constraints
 		{
@@ -981,6 +1005,7 @@ func TestCreateTableDiff(t *testing.T) {
 			hints.RangeRotationStrategy = ts.rotation
 			hints.ConstraintNamesStrategy = ts.constraint
 			hints.ColumnRenameStrategy = ts.colrename
+			hints.FullTextKeyStrategy = ts.fulltext
 			alter, err := c.Diff(other, &hints)
 
 			require.Equal(t, len(ts.diffs), len(ts.cdiffs))
