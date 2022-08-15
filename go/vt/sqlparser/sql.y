@@ -4721,6 +4721,10 @@ json_table:
   {
     $$ = &JSONTableExpr{Data: $3, Path: string($5), Spec: $8, Alias: $12}
   }
+| JSON_TABLE openb value_expression ',' STRING COLUMNS openb json_table_column_list closeb closeb table_alias
+  {
+    $$ = &JSONTableExpr{Data: $3, Path: string($5), Spec: $8, Alias: $11}
+  }
 
 json_table_column_list:
   json_table_column_definition
