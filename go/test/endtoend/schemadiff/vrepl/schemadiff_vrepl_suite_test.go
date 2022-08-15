@@ -195,6 +195,11 @@ func testSingle(t *testing.T, testName string) {
 		t.Skip("expect_failure found. Irrelevant to this suite")
 		return
 	}
+	if _, exists := readTestFile(t, testName, "skip_schemadiff"); exists {
+		// irrelevant to this suite.
+		t.Skip("skip_schemadiff found. Irrelevant to this suite")
+		return
+	}
 
 	sqlModeQuery := fmt.Sprintf("set @@global.sql_mode='%s'", defaultSQLMode)
 	_ = mysqlExec(t, sqlModeQuery, "")
