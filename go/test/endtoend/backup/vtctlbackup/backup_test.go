@@ -30,6 +30,7 @@ func TestBackupMain(t *testing.T) {
 func TestBackupMainWithZstdCompression(t *testing.T) {
 	defer setDefaultCompressionFlag()
 	cDetails := &CompressionDetails{
+		CompressorEngineName:    "zstd",
 		ExternalCompressorCmd:   "zstd",
 		ExternalCompressorExt:   ".zst",
 		ExternalDecompressorCmd: "zstd -d",
@@ -39,8 +40,7 @@ func TestBackupMainWithZstdCompression(t *testing.T) {
 }
 
 func setDefaultCompressionFlag() {
-	*mysqlctl.BuiltinCompressor = "pgzip"
-	*mysqlctl.BuiltinDecompressor = "auto"
+	*mysqlctl.CompressionEngineName = "pgzip"
 	*mysqlctl.ExternalCompressorCmd = ""
 	*mysqlctl.ExternalCompressorExt = ""
 	*mysqlctl.ExternalDecompressorCmd = ""

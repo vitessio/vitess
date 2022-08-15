@@ -17,10 +17,9 @@ limitations under the License.
 package test
 
 import (
+	"context"
 	"testing"
 	"time"
-
-	"context"
 
 	"vitess.io/vitess/go/vt/topo"
 )
@@ -145,5 +144,76 @@ func checkElection(t *testing.T, ts *topo.Server) {
 	_, err = mp2.WaitForLeadership()
 	if !topo.IsErrType(err, topo.Interrupted) {
 		t.Errorf("wrong error returned by WaitForLeadership, got %v expected %v", err, topo.NewError(topo.Interrupted, ""))
+	}
+}
+
+// checkWaitForNewLeader runs the WaitForLeadership test on the LeaderParticipation
+func checkWaitForNewLeader(t *testing.T, ts *topo.Server) {
+	conn, err := ts.ConnForCell(context.Background(), topo.GlobalCell)
+	if err != nil {
+		t.Fatalf("ConnForCell(global) failed: %v", err)
+	}
+	name := "testmp"
+
+	// create a new LeaderParticipation
+	id1 := "id1"
+	mp1, err := conn.NewLeaderParticipation(name, id1)
+	if err != nil {
+		t.Fatalf("cannot create mp1: %v", err)
+	}
+
+	// no primary yet, check name
+	waitForLeaderID(t, mp1, "")
+
+	// wait for id1 to be the primary
+	_, err = mp1.WaitForLeadership()
+	if err != nil {
+		t.Fatalf("mp1 cannot become Leader: %v", err)
+	}
+
+	// A lot of implementations use a toplevel directory for their elections.
+	// Make sure it is marked as 'Ephemeral'.
+	entries, err := conn.ListDir(context.Background(), "/", true /*full*/)
+	if err != nil {
+		t.Fatalf("ListDir(/) failed: %v", err)
+	}
+	for _, e := range entries {
+		if e.Name != topo.CellsPath {
+			if !e.Ephemeral {
+				t.Errorf("toplevel directory that is not ephemeral: %v", e)
+			}
+		}
+	}
+
+	// get the current primary name, better be id1
+	waitForLeaderID(t, mp1, id1)
+
+	// create a second LeaderParticipation on same name
+	id2 := "id2"
+	mp2, err := conn.NewLeaderParticipation(name, id2)
+	if err != nil {
+		t.Fatalf("cannot create mp2: %v", err)
+	}
+
+	leaders, err := mp2.WaitForNewLeader(context.Background())
+	if topo.IsErrType(err, topo.NoImplementation) {
+		t.Logf("%T does not support WaitForNewLeader()", mp2)
+		return
+	}
+	if err != nil {
+		t.Fatalf("cannot wait for leadership: %v", err)
+		return
+	}
+
+	// ask mp2 for primary name, should get id1
+	waitForLeaderID(t, mp2, id1)
+
+	// stop mp1
+	mp1.Stop()
+
+	leader := <-leaders
+
+	if leader != id1 {
+		t.Fatalf("wrong node elected: %v", leader)
 	}
 }

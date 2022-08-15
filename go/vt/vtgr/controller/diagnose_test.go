@@ -31,13 +31,13 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/orchestrator/inst"
-
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
 	"vitess.io/vitess/go/vt/vtgr/config"
 	"vitess.io/vitess/go/vt/vtgr/db"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 const diagnoseGroupSize = 3
@@ -244,9 +244,9 @@ func TestTabletIssueDiagnoses(t *testing.T) {
 func TestMysqlIssueDiagnoses(t *testing.T) {
 	cfg := &config.VTGRConfig{BootstrapGroupSize: diagnoseGroupSize, MinNumReplica: 2, BackoffErrorWaitTimeSeconds: 1, BootstrapWaitTimeSeconds: 1}
 	disableProtectionCfg := &config.VTGRConfig{BootstrapGroupSize: diagnoseGroupSize, MinNumReplica: 2, DisableReadOnlyProtection: true, BackoffErrorWaitTimeSeconds: 1, BootstrapWaitTimeSeconds: 1}
-	*heartbeatThreshold = 10
+	heartbeatThreshold = 10
 	defer func() {
-		*heartbeatThreshold = math.MaxInt64
+		heartbeatThreshold = math.MaxInt64
 	}()
 	type data struct {
 		alias       string

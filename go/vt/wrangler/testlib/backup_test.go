@@ -46,8 +46,7 @@ import (
 )
 
 type compressionDetails struct {
-	BuiltinCompressor       string
-	BuiltinDecompressor     string
+	CompressionEngineName   string
 	ExternalCompressorCmd   string
 	ExternalCompressorExt   string
 	ExternalDecompressorCmd string
@@ -59,23 +58,18 @@ func TestBackupRestore(t *testing.T) {
 	require.NoError(t, err)
 }
 
-// TODO: @rameez. I was expecting this test to fail but it turns out
-// we infer decompressor through compression engine in builtinEngine.
-// It is only in xtrabackup where we infer decompressor through extension & BuiltinDecompressor param.
 func TestBackupRestoreWithPargzip(t *testing.T) {
 	defer setDefaultCompressionFlag()
 	cDetails := &compressionDetails{
-		BuiltinCompressor:   "pargzip",
-		BuiltinDecompressor: "lz4",
+		CompressionEngineName: "pargzip",
 	}
 
 	err := testBackupRestore(t, cDetails)
-	require.ErrorContains(t, err, "lz4: bad magic number")
+	require.NoError(t, err)
 }
 
 func setDefaultCompressionFlag() {
-	*mysqlctl.BuiltinCompressor = "pgzip"
-	*mysqlctl.BuiltinDecompressor = "auto"
+	*mysqlctl.CompressionEngineName = "pgzip"
 	*mysqlctl.ExternalCompressorCmd = ""
 	*mysqlctl.ExternalCompressorExt = ""
 	*mysqlctl.ExternalDecompressorCmd = ""
@@ -118,11 +112,8 @@ func testBackupRestore(t *testing.T, cDetails *compressionDetails) error {
 	filebackupstorage.FileBackupStorageRoot = fbsRoot
 	backupstorage.BackupStorageImplementation = "file"
 	if cDetails != nil {
-		if cDetails.BuiltinCompressor != "" {
-			*mysqlctl.BuiltinCompressor = cDetails.BuiltinCompressor
-		}
-		if cDetails.BuiltinDecompressor != "" {
-			*mysqlctl.BuiltinDecompressor = cDetails.BuiltinDecompressor
+		if cDetails.CompressionEngineName != "" {
+			*mysqlctl.CompressionEngineName = cDetails.CompressionEngineName
 		}
 		if cDetails.ExternalCompressorCmd != "" {
 			*mysqlctl.ExternalCompressorCmd = cDetails.ExternalCompressorCmd
@@ -191,7 +182,8 @@ func testBackupRestore(t *testing.T, cDetails *compressionDetails) error {
 		},
 	}
 	sourceTablet.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
-		// These 2 statements come from tablet startup
+		// These 3 statements come from tablet startup
+		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START SLAVE",
 		// This first set of STOP and START commands come from
@@ -202,6 +194,7 @@ func testBackupRestore(t *testing.T, cDetails *compressionDetails) error {
 		// These commands come from SetReplicationSource RPC called
 		// to set the correct primary and semi-sync after Backup has concluded
 		"STOP SLAVE",
+		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START SLAVE",
 	}
@@ -238,12 +231,14 @@ func testBackupRestore(t *testing.T, cDetails *compressionDetails) error {
 		},
 	}
 	destTablet.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
-		// These 2 statements come from tablet startup
+		// These 3 statements come from tablet startup
+		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START SLAVE",
 		"STOP SLAVE",
 		"RESET SLAVE ALL",
 		"FAKE SET SLAVE POSITION",
+		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START SLAVE",
 	}
@@ -296,6 +291,7 @@ func testBackupRestore(t *testing.T, cDetails *compressionDetails) error {
 		"STOP SLAVE",
 		"RESET SLAVE ALL",
 		"FAKE SET SLAVE POSITION",
+		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START SLAVE",
 	}
@@ -423,7 +419,8 @@ func TestBackupRestoreLagged(t *testing.T) {
 	}
 	sourceTablet.FakeMysqlDaemon.SetReplicationSourceInputs = []string{fmt.Sprintf("%s:%d", primary.Tablet.MysqlHostname, primary.Tablet.MysqlPort)}
 	sourceTablet.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
-		// These 2 statements come from tablet startup
+		// These 3 statements come from tablet startup
+		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START SLAVE",
 		// This first set of STOP and START commands come from
@@ -434,6 +431,7 @@ func TestBackupRestoreLagged(t *testing.T) {
 		// These commands come from SetReplicationSource RPC called
 		// to set the correct primary and semi-sync after Backup has concluded
 		"STOP SLAVE",
+		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START SLAVE",
 	}
@@ -491,12 +489,14 @@ func TestBackupRestoreLagged(t *testing.T) {
 		},
 	}
 	destTablet.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
-		// These 2 statements come from tablet startup
+		// These 3 statements come from tablet startup
+		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START SLAVE",
 		"STOP SLAVE",
 		"RESET SLAVE ALL",
 		"FAKE SET SLAVE POSITION",
+		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START SLAVE",
 	}
@@ -642,7 +642,8 @@ func TestRestoreUnreachablePrimary(t *testing.T) {
 	}
 	sourceTablet.FakeMysqlDaemon.SetReplicationSourceInputs = []string{fmt.Sprintf("%s:%d", primary.Tablet.MysqlHostname, primary.Tablet.MysqlPort)}
 	sourceTablet.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
-		// These 2 statements come from tablet startup
+		// These 3 statements come from tablet startup
+		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START SLAVE",
 		// This first set of STOP and START commands come from
@@ -653,6 +654,7 @@ func TestRestoreUnreachablePrimary(t *testing.T) {
 		// These commands come from SetReplicationSource RPC called
 		// to set the correct primary and semi-sync after Backup has concluded
 		"STOP SLAVE",
+		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START SLAVE",
 	}
@@ -682,12 +684,14 @@ func TestRestoreUnreachablePrimary(t *testing.T) {
 		},
 	}
 	destTablet.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
-		// These 2 statements come from tablet startup
+		// These 3 statements come from tablet startup
+		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START SLAVE",
 		"STOP SLAVE",
 		"RESET SLAVE ALL",
 		"FAKE SET SLAVE POSITION",
+		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START SLAVE",
 	}

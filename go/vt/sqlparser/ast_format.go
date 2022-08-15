@@ -577,7 +577,11 @@ func (node *PartitionOption) Format(buf *TrackedBuffer) {
 		if node.KeyAlgorithm != 0 {
 			buf.astPrintf(node, " algorithm = %d", node.KeyAlgorithm)
 		}
-		buf.astPrintf(node, " %v", node.ColList)
+		if len(node.ColList) == 0 {
+			buf.literal(" ()")
+		} else {
+			buf.astPrintf(node, " %v", node.ColList)
+		}
 	case RangeType, ListType:
 		buf.astPrintf(node, " %s", node.Type.ToString())
 		if node.Expr != nil {
@@ -620,7 +624,11 @@ func (node *SubPartition) Format(buf *TrackedBuffer) {
 		if node.KeyAlgorithm != 0 {
 			buf.astPrintf(node, " algorithm = %d", node.KeyAlgorithm)
 		}
-		buf.astPrintf(node, " %v", node.ColList)
+		if len(node.ColList) == 0 {
+			buf.literal(" ()")
+		} else {
+			buf.astPrintf(node, " %v", node.ColList)
+		}
 	}
 
 	if node.SubPartitions != -1 {
@@ -1285,6 +1293,12 @@ func (node *Literal) Format(buf *TrackedBuffer) {
 		buf.astPrintf(node, "X'%s'", node.Val)
 	case BitVal:
 		buf.astPrintf(node, "B'%s'", node.Val)
+	case DateVal:
+		buf.astPrintf(node, "date'%s'", node.Val)
+	case TimeVal:
+		buf.astPrintf(node, "time'%s'", node.Val)
+	case TimestampVal:
+		buf.astPrintf(node, "timestamp'%s'", node.Val)
 	default:
 		panic("unexpected")
 	}

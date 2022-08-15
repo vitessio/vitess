@@ -170,6 +170,8 @@ type TabletManagerClient struct {
 		Response *hk.HookResult
 		Error    error
 	}
+	// FullStatus result
+	FullStatusResult *replicationdatapb.FullStatus
 	// keyed by tablet alias.
 	GetPermissionsDelays map[string]time.Duration
 	// keyed by tablet alias.
@@ -442,7 +444,7 @@ func (fake *TabletManagerClient) DemotePrimary(ctx context.Context, tablet *topo
 }
 
 // ExecuteFetchAsApp is part of the tmclient.TabletManagerClient interface.
-func (fake *TabletManagerClient) ExecuteFetchAsApp(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, query []byte, maxRows int) (*querypb.QueryResult, error) {
+func (fake *TabletManagerClient) ExecuteFetchAsApp(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteFetchAsAppRequest) (*querypb.QueryResult, error) {
 	if fake.ExecuteFetchAsAppResults == nil {
 		return nil, fmt.Errorf("%w: no ExecuteFetchAsApp results on fake TabletManagerClient", assert.AnError)
 	}
@@ -466,7 +468,7 @@ func (fake *TabletManagerClient) ExecuteFetchAsApp(ctx context.Context, tablet *
 }
 
 // ExecuteFetchAsDba is part of the tmclient.TabletManagerClient interface.
-func (fake *TabletManagerClient) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, query []byte, maxRows int, disableBinlogs bool, reloadSchema bool) (*querypb.QueryResult, error) {
+func (fake *TabletManagerClient) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteFetchAsDbaRequest) (*querypb.QueryResult, error) {
 	if fake.ExecuteFetchAsDbaResults == nil {
 		return nil, fmt.Errorf("%w: no ExecuteFetchAsDba results on fake TabletManagerClient", assert.AnError)
 	}
@@ -511,6 +513,19 @@ func (fake *TabletManagerClient) ExecuteHook(ctx context.Context, tablet *topoda
 	}
 
 	return nil, fmt.Errorf("%w: no ExecuteHook result set for tablet %s", assert.AnError, key)
+}
+
+// FullStatus is part of the tmclient.TabletManagerClient interface.
+func (fake *TabletManagerClient) FullStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.FullStatus, error) {
+	if fake.FullStatusResult != nil {
+		return fake.FullStatusResult, nil
+	}
+
+	if fake.TopoServer == nil {
+		return nil, assert.AnError
+	}
+
+	return nil, fmt.Errorf("no output set for FullStatus")
 }
 
 // GetPermission is part of the tmclient.TabletManagerClient interface.

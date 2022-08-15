@@ -1331,7 +1331,10 @@ func (mz *materializer) checkTZConversion(ctx context.Context, tz string) error 
 		}
 		testDateTime := "2006-01-02 15:04:05"
 		query := fmt.Sprintf("select convert_tz(%s, %s, 'UTC')", encodeString(testDateTime), encodeString(tz))
-		qrproto, err := mz.wr.tmc.ExecuteFetchAsApp(ctx, targetPrimary.Tablet, false, []byte(query), 1)
+		qrproto, err := mz.wr.tmc.ExecuteFetchAsApp(ctx, targetPrimary.Tablet, false, &tabletmanagerdatapb.ExecuteFetchAsAppRequest{
+			Query:   []byte(query),
+			MaxRows: 1,
+		})
 		if err != nil {
 			return vterrors.Wrapf(err, "ExecuteFetchAsApp(%v, %s)", targetPrimary.Tablet, query)
 		}

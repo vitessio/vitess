@@ -18,7 +18,6 @@ package wrangler
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"sync"
 
@@ -26,16 +25,17 @@ import (
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/queryservice/fakes"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 const (
@@ -75,7 +75,7 @@ func init() {
 // testWranglerEnv
 
 func newWranglerTestEnv(sourceShards, targetShards []string, query string, positions map[string]string, timeUpdated int64) *testWranglerEnv {
-	flag.Set("tablet_protocol", "WranglerTest")
+	tabletconn.TabletProtocol = "WranglerTest"
 	env := &testWranglerEnv{
 		workflow:   "wrWorkflow",
 		tablets:    make(map[int]*testWranglerTablet),
@@ -332,13 +332,13 @@ func (tmc *testWranglerTMClient) VReplicationExec(ctx context.Context, tablet *t
 	return result, nil
 }
 
-func (tmc *testWranglerTMClient) ExecuteFetchAsApp(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, query []byte, maxRows int) (*querypb.QueryResult, error) {
+func (tmc *testWranglerTMClient) ExecuteFetchAsApp(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteFetchAsAppRequest) (*querypb.QueryResult, error) {
 	t := wranglerEnv.tablets[int(tablet.Alias.Uid)]
-	t.gotQueries = append(t.gotQueries, string(query))
-	result, ok := t.queryResults[string(query)]
+	t.gotQueries = append(t.gotQueries, string(req.Query))
+	result, ok := t.queryResults[string(req.Query)]
 	if !ok {
 		result = &querypb.QueryResult{}
-		log.Errorf("Query: %s, Result :%v\n", query, result)
+		log.Errorf("Query: %s, Result :%v\n", string(req.Query), result)
 	}
 	return result, nil
 }

@@ -560,7 +560,7 @@ func TestDiffSchemas(t *testing.T) {
 			name:        "create view: unresolved dependencies",
 			from:        "create table t(id int)",
 			to:          "create table t(id int); create view v1 as select id from t2",
-			expectError: ErrViewDependencyUnresolved.Error(),
+			expectError: (&ApplyViewNotFoundError{View: "v1"}).Error(),
 		},
 		{
 			name: "convert table to view",

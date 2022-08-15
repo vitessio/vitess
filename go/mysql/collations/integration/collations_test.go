@@ -20,7 +20,6 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/hex"
-	"flag"
 	"fmt"
 	"os"
 	"path"
@@ -28,6 +27,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/text/encoding/unicode/utf32"
 
@@ -185,7 +185,7 @@ func processSQLTest(t *testing.T, testfile string, conn *mysql.Conn) {
 	}
 }
 
-var testOneCollation = flag.String("test-one-collation", "", "")
+var testOneCollation = pflag.String("test-one-collation", "", "")
 
 func TestCollationsOnMysqld(t *testing.T) {
 	conn := mysqlconn(t)
