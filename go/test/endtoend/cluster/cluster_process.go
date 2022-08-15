@@ -360,6 +360,7 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 		time.Sleep(10 * time.Second)
 
 		// Make first tablet as primary
+		_ = shard.Vttablets[0].VttabletProcess.UnsetSuperReadOnly("")
 		if err = cluster.VtctlclientProcess.InitializeShard(keyspace.Name, shardName, cluster.Cell, shard.Vttablets[0].TabletUID); err != nil {
 			log.Errorf("error running InitializeShard on keyspace %v, shard %v: %v", keyspace.Name, shardName, err)
 			return

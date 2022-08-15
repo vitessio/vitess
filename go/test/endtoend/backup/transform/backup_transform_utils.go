@@ -56,7 +56,8 @@ var (
 		"--lock_tables_timeout", "5s",
 		"--watch_replication_stream",
 		"--enable_replication_reporter",
-		"--serving_state_grace_period", "1s"}
+		"--serving_state_grace_period", "1s",
+		fmt.Sprintf("--use_super_read_only=%t", true)}
 )
 
 // TestMainSetup sets up the basic test cluster
@@ -90,6 +91,7 @@ func TestMainSetup(m *testing.M, useMysqlctld bool) {
 		dbCredentialFile = cluster.WriteDbCredentialToTmp(localCluster.TmpDirectory)
 		initDb, _ := os.ReadFile(path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"))
 		sql := string(initDb)
+		//sql = removeSuperReadOnlyStatements(sql)
 		spilltedString := strings.Split(sql, "# add custom sql here")
 		firstPart := spilltedString[0] + cluster.GetPasswordUpdateSQL(localCluster)
 		sql = firstPart + spilltedString[1]
@@ -171,6 +173,12 @@ func TestMainSetup(m *testing.M, useMysqlctld bool) {
 		if err := localCluster.VtctlclientProcess.InitShardPrimary(keyspaceName, shard.Name, cell, primary.TabletUID); err != nil {
 			return 1, err
 		}
+
+		for _, tablet := range []cluster.Vttablet{*primary, *replica1, *replica2} {
+			if err := tablet.VttabletProcess.UnsetSuperReadOnly(""); err != nil {
+				return 1, err
+			}
+		}
 		return m.Run(), nil
 	}()
 
@@ -182,6 +190,16 @@ func TestMainSetup(m *testing.M, useMysqlctld bool) {
 	}
 
 }
+
+/*func removeSuperReadOnlyStatements(sql string) string {
+	spilltedString := strings.Split(sql, "SET @original_super_read_only=IF(@@global.super_read_only=1, 'ON', 'OFF');")
+	tmp := spilltedString[0] + spilltedString[1]
+	spilltedString = strings.Split(tmp, "SET GLOBAL super_read_only='OFF';")
+	tmp = spilltedString[0] + spilltedString[1]
+	spilltedString = strings.Split(tmp, "SET GLOBAL super_read_only=IFNULL(@original_super_read_only, 'OFF');")
+	tmp = spilltedString[0] + spilltedString[1]
+	return tmp
+}*/
 
 // create query for test table creation
 var vtInsertTest = `create table vt_insert_test (
@@ -204,7 +222,8 @@ func TestBackupTransformImpl(t *testing.T) {
 		"--backup_storage_compress=false",
 		"--restore_from_backup",
 		"--backup_storage_implementation", "file",
-		"--file_backup_storage_root", localCluster.VtctldProcess.FileBackupStorageRoot}
+		"--file_backup_storage_root", localCluster.VtctldProcess.FileBackupStorageRoot,
+		fmt.Sprintf("--use_super_read_only=%t", true)}
 	replica1.VttabletProcess.ServingStatus = "SERVING"
 	err := replica1.VttabletProcess.Setup()
 	require.Nil(t, err)
@@ -252,7 +271,8 @@ func TestBackupTransformImpl(t *testing.T) {
 		"--db-credentials-file", dbCredentialFile,
 		"--restore_from_backup",
 		"--backup_storage_implementation", "file",
-		"--file_backup_storage_root", localCluster.VtctldProcess.FileBackupStorageRoot}
+		"--file_backup_storage_root", localCluster.VtctldProcess.FileBackupStorageRoot,
+		fmt.Sprintf("--use_super_read_only=%t", true)}
 	replica2.VttabletProcess.ServingStatus = ""
 	err = replica2.VttabletProcess.Setup()
 	require.Nil(t, err)
@@ -295,8 +315,10 @@ func TestBackupTransformErrorImpl(t *testing.T) {
 		"--backup_storage_hook", "test_backup_error",
 		"--restore_from_backup",
 		"--backup_storage_implementation", "file",
-		"--file_backup_storage_root", localCluster.VtctldProcess.FileBackupStorageRoot}
+		"--file_backup_storage_root", localCluster.VtctldProcess.FileBackupStorageRoot,
+		fmt.Sprintf("--use_super_read_only=%t", true)}
 	replica1.VttabletProcess.ServingStatus = "SERVING"
+	_ = replica1.VttabletProcess.UnsetSuperReadOnly("")
 	err = replica1.VttabletProcess.Setup()
 	require.Nil(t, err)
 
