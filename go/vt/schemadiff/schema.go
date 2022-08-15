@@ -230,7 +230,13 @@ func (s *Schema) normalize() error {
 		// We have leftover views. This can happen if the schema definition is invalid:
 		// - a view depends on a nonexistent table
 		// - two views have a circular dependency
-		return ErrViewDependencyUnresolved
+		for _, v := range s.views {
+			if _, ok := dependencyLevels[v.Name()]; !ok {
+				// We _know_ that in this iteration, at least one view is found unassigned a dependency level.
+				// We return the first one.
+				return &ApplyViewNotFoundError{View: v.ViewName.Name.String()}
+			}
+		}
 	}
 	return nil
 }
