@@ -6483,19 +6483,6 @@ FROM
 		"$[*]" COLUMNS(
 			x varchar(100) path "$.a"
 		)
-	) tt;`,
-			output: `select * from JSON_TABLE('[{\"a\":1},{\"a\":2}]', "$[*]" COLUMNS(
-	x varchar(100) path "$.a"
-)) as tt`},
-		{
-			input: `
-SELECT *
-FROM
-	JSON_TABLE(
-		'[{"a":1},{"a":2}]',
-		"$[*]" COLUMNS(
-			x varchar(100) path "$.a"
-		)
 	) t1
 JOIN
 	JSON_TABLE(
@@ -6569,7 +6556,6 @@ FROM
 	x VARCHAR(100) path "$.a"
 )) as tt)`,
 		},
-
 		{
 			input: `
 SELECT x, y
