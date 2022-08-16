@@ -234,7 +234,7 @@ func (s *Schema) normalize() error {
 			if _, ok := dependencyLevels[v.Name()]; !ok {
 				// We _know_ that in this iteration, at least one view is found unassigned a dependency level.
 				// We return the first one.
-				return &ApplyViewNotFoundError{View: v.ViewName.Name.String()}
+				return &ViewDependencyUnresolvedError{View: v.ViewName.Name.String()}
 			}
 		}
 	}
