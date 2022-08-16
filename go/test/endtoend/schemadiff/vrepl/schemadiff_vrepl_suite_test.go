@@ -251,7 +251,7 @@ func testSingle(t *testing.T, testName string) {
 			// So for schemadiff_vrepl tests we ignore any AUTO_INCREMENT requirements,
 			// they're just not interesting for this test.
 		default:
-			assert.Contains(t, toCreateTable, content, "expected SHOW CREATE TABLE to contain text in 'expect_table_structure' file")
+			assert.Regexpf(t, content, toCreateTable, "expected SHOW CREATE TABLE to match text in 'expect_table_structure' file")
 		}
 	}
 
