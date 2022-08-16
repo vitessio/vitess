@@ -39,6 +39,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/queryservice/fakes"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
+	"vitess.io/vitess/go/vt/vttablet/tabletconntest"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -58,7 +59,7 @@ func testChecksum(t *testing.T, want, got int64) {
 
 func init() {
 	tabletconn.RegisterDialer("fake_gateway", tabletDialer)
-	tabletconn.TabletProtocol = "fake_gateway"
+	tabletconntest.SetProtocol("go.vt.discovery.healthcheck_test", "fake_gateway")
 	connMap = make(map[string]*fakeConn)
 	refreshInterval = time.Minute
 }
