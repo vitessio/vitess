@@ -250,6 +250,10 @@ func (mysqld *Mysqld) SetSuperReadOnly(on bool) error {
 	} else {
 		query += "OFF"
 	}
+	if !mysqld.capabilities.isMySQLLike() {
+		// Incase mariaDB no need to call super read only.
+		return nil
+	}
 	return mysqld.ExecuteSuperQuery(context.TODO(), query)
 }
 

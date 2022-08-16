@@ -243,7 +243,7 @@ func JSONTopoData(tpb *vttestpb.VTTestTopology) flag.Value {
 type LocalCluster struct {
 	Config
 
-	// Env is the Environment which will be used for unning this local cluster.
+	// Env is the Environment which will be used for running this local cluster.
 	// It can be set by the user before calling Setup(). If not set, Setup() will
 	// use the NewDefaultEnv callback to instantiate an environment with the system
 	// default settings

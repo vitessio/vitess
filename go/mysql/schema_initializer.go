@@ -53,6 +53,9 @@ func newSchemaInitializer() *schemaInitializer {
 
 // Set super-read-only flag to 'ON'
 func (si *schemaInitializer) SetSuperReadOnlyUser(conn *Conn) error {
+	if conn.IsMariaDB() {
+		return nil
+	}
 	var err error
 	log.Infof("%s", setSuperUser)
 	// setting super_read_only to true, given it was set during tm_init.start()
@@ -65,6 +68,10 @@ func (si *schemaInitializer) SetSuperReadOnlyUser(conn *Conn) error {
 
 // Set super-read-only flag to 'OFF'
 func (si *schemaInitializer) UnsetSuperReadOnlyUser(conn *Conn) error {
+	if conn.IsMariaDB() {
+		return nil
+	}
+
 	var err error
 	// setting super_read_only to true, given it was set during tm_init.start()
 	log.Infof("%s", unSetSuperUser)
@@ -105,7 +112,7 @@ func (si *schemaInitializer) InitializeSchema(conn *Conn, disableSuperReadOnly b
 	si.mu.Lock()
 	defer si.mu.Unlock()
 
-	if disableSuperReadOnly {
+	if disableSuperReadOnly && !conn.IsMariaDB() {
 		if err := si.UnsetSuperReadOnlyUser(conn); err != nil {
 			log.Infof("error in setting super read-only user %s", err)
 			return []error{err}
