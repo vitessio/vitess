@@ -309,6 +309,9 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> SUM VAR_POP VARIANCE VAR_SAMP CUME_DIST DENSE_RANK FIRST_VALUE LAG LAST_VALUE LEAD NTH_VALUE NTILE
 %token <bytes> ROW_NUMBER PERCENT_RANK RANK
 
+// Table functions
+%token <bytes> JSON_TABLE PATH
+
 // Match
 %token <bytes> MATCH AGAINST BOOLEAN LANGUAGE WITH QUERY EXPANSION
 
@@ -330,10 +333,10 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> WHILE
 %token <bytes> YEAR_MONTH
 
-%token <bytes> UNUSED DESCRIPTION JSON_TABLE LATERAL MEMBER RECURSIVE
+%token <bytes> UNUSED DESCRIPTION LATERAL MEMBER RECURSIVE
 %token <bytes> BUCKETS CLONE COMPONENT DEFINITION ENFORCED EXCLUDE FOLLOWING GEOMCOLLECTION GET_MASTER_PUBLIC_KEY HISTOGRAM HISTORY
 %token <bytes> INACTIVE INVISIBLE LOCKED MASTER_COMPRESSION_ALGORITHMS MASTER_PUBLIC_KEY_PATH MASTER_TLS_CIPHERSUITES MASTER_ZSTD_COMPRESSION_LEVEL
-%token <bytes> NESTED NETWORK_NAMESPACE NOWAIT NULLS OJ OLD ORDINALITY ORGANIZATION OTHERS PATH PERSIST PERSIST_ONLY PRECEDING PRIVILEGE_CHECKS_USER PROCESS
+%token <bytes> NESTED NETWORK_NAMESPACE NOWAIT NULLS OJ OLD ORDINALITY ORGANIZATION OTHERS PERSIST PERSIST_ONLY PRECEDING PRIVILEGE_CHECKS_USER PROCESS
 %token <bytes> REFERENCE REQUIRE_ROW_FORMAT RESOURCE RESPECT RESTART RETAIN SECONDARY SECONDARY_ENGINE SECONDARY_LOAD SECONDARY_UNLOAD SKIP
 %token <bytes> THREAD_PRIORITY TIES VCPU VISIBLE SYSTEM INFILE
 
@@ -383,7 +386,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <expr> expression naked_like group_by
 %type <tableExprs> table_references cte_list from_opt
 %type <with> with_clause with_clause_opt
-%type <tableExpr> table_reference table_function table_factor join_table common_table_expression
+%type <tableExpr> table_reference table_function table_factor join_table json_table common_table_expression
 %type <simpleTableExpr> values_statement subquery_or_values
 %type <subquery> subquery
 %type <joinCondition> join_condition join_condition_opt on_expression_opt
@@ -460,7 +463,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <str> charset underscore_charsets
 %type <str> show_session_or_global
 %type <convertType> convert_type
-%type <columnType> column_type  column_type_options
+%type <columnType> column_type  column_type_options json_table_column_options on_empty
 %type <columnType> int_type decimal_type numeric_type time_type char_type spatial_type
 %type <sqlVal> length_opt column_comment ignore_number_opt
 %type <optVal> column_default on_update
@@ -474,14 +477,14 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <boolVal> auto_increment local_opt optionally_opt
 %type <colKeyOpt> column_key
 %type <strs> enum_values
-%type <columnDefinition> column_definition column_definition_for_create
+%type <columnDefinition> column_definition column_definition_for_create json_table_column_definition
 %type <indexDefinition> index_definition
 %type <constraintDefinition> constraint_definition check_constraint_definition
 %type <str> index_or_key indexes_or_keys index_or_key_opt
 %type <str> from_or_in show_database_opt
 %type <str> name_opt
 %type <str> equal_opt
-%type <TableSpec> table_spec table_column_list
+%type <TableSpec> table_spec table_column_list json_table_column_list
 %type <str> table_option_list table_option table_opt_value
 %type <indexInfo> index_info
 %type <indexColumn> index_column
@@ -2424,7 +2427,7 @@ column_type_options:
     $$ = $1
   }
 | column_type_options SRID INTEGRAL
-{
+  {
     opt := ColumnType{SRID: NewIntVal($3)}
     if err := $1.merge(opt); err != nil {
     	yylex.Error(err.Error())
@@ -4500,6 +4503,7 @@ table_factor:
     $$ = &ParenTableExpr{Exprs: $2}
   }
 | table_function
+| json_table
 
 values_statement:
   VALUES row_list
@@ -4604,6 +4608,7 @@ table_function:
   {
     $$ = &TableFuncExpr{Name: string($1), Exprs: $3}
   }
+
 
 // There is a grammar conflict here:
 // 1: INSERT INTO a SELECT * FROM b JOIN c ON b.i = c.i
@@ -4714,6 +4719,87 @@ natural_join:
     } else {
       $$ = NaturalRightJoinStr
     }
+  }
+
+json_table:
+  JSON_TABLE openb value_expression ',' STRING COLUMNS openb json_table_column_list closeb closeb AS table_alias
+  {
+    $$ = &JSONTableExpr{Data: $3, Path: string($5), Spec: $8, Alias: $12}
+  }
+| JSON_TABLE openb value_expression ',' STRING COLUMNS openb json_table_column_list closeb closeb table_alias
+  {
+    $$ = &JSONTableExpr{Data: $3, Path: string($5), Spec: $8, Alias: $11}
+  }
+
+json_table_column_list:
+  json_table_column_definition
+  {
+    $$ = &TableSpec{}
+    $$.AddColumn($1)
+  }
+| json_table_column_list ',' json_table_column_definition
+  {
+    $$.AddColumn($3)
+  }
+
+// TODO: implement NESTED
+json_table_column_definition:
+  // TODO: reserved_sql_id FOR ORDINALITY; this is supposed to work like auto_increment
+  reserved_sql_id column_type json_table_column_options
+  {
+    if err := $2.merge($3); err != nil {
+      yylex.Error(err.Error())
+      return 1
+    }
+    $$ = &ColumnDefinition{Name: $1, Type: $2}
+  }
+
+// TODO: default value for non-existent member is NULL, but use "zero" when it is specified
+// TODO: exists overrides DEFAULT <json_string> ON EMPTY
+json_table_column_options:
+  PATH STRING on_empty on_error
+  {
+    $$ = ColumnType{Path: string($2)}
+  }
+| EXISTS PATH STRING
+  {
+    $$ = ColumnType{Path: string($3)}
+  }
+
+// TODO: just parse for now
+on_empty:
+  {
+
+  }
+//  NULL ON EMPTY
+//  {
+//
+//  }
+//| DEFAULT value_expression ON EMPTY
+//  {
+//
+//  }
+//| ERROR ON EMPTY
+//  {
+//
+//  }
+
+// TODO: remove empty case, just there to parse
+on_error:
+  {
+
+  }
+| NULL ON EMPTY
+  {
+
+  }
+| DEFAULT value_expression ON EMPTY
+  {
+
+  }
+| ERROR ON EMPTY
+  {
+
   }
 
 trigger_name:

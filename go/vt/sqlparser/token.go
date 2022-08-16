@@ -440,6 +440,7 @@ var keywords = map[string]int{
 	"partition":                     PARTITION,
 	"password":                      PASSWORD,
 	"password_lock_time":            PASSWORD_LOCK_TIME,
+	"path":                          PATH,
 	"percent_rank":                  PERCENT_RANK,
 	"persist":                       PERSIST,
 	"persist_only":                  PERSIST_ONLY,

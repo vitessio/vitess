@@ -47,8 +47,9 @@ var zeroParser = *(yyNewParser().(*yyParserImpl))
 //
 // N.B: Parser pooling means that you CANNOT take references directly to parse stack variables (e.g.
 // $$ = &$4) in sql.y rules. You must instead add an intermediate reference like so:
-//    showCollationFilterOpt := $4
-//    $$ = &Show{Type: string($2), ShowCollationFilterOpt: &showCollationFilterOpt}
+//
+//	showCollationFilterOpt := $4
+//	$$ = &Show{Type: string($2), ShowCollationFilterOpt: &showCollationFilterOpt}
 func yyParsePooled(yylex yyLexer) int {
 	// Being very particular about using the base type and not an interface type b/c we depend on
 	// the implementation to know how to reinitialize the parser.
@@ -2127,6 +2128,11 @@ type ColumnType struct {
 
 	// For spatial types
 	SRID *SQLVal
+
+	// For json_table
+	Path    string
+	Exists  bool
+	OnEmpty Expr
 }
 
 func (ct *ColumnType) merge(other ColumnType) error {
@@ -2192,6 +2198,13 @@ func (ct *ColumnType) merge(other ColumnType) error {
 			return errors.New("cannot define SRID for non spatial types")
 		}
 		ct.SRID = other.SRID
+	}
+
+	if other.Path != "" {
+		if ct.Path != "" {
+			return errors.New("cannot include PATH more than once")
+		}
+		ct.Path = other.Path
 	}
 
 	return nil
@@ -2271,6 +2284,9 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 		} else {
 			opts = append(opts, keywordStrings[VIRTUAL])
 		}
+	}
+	if ct.Path != "" {
+		opts = append(opts, keywordStrings[PATH], `"`+ct.Path+`"`)
 	}
 
 	if len(opts) != 0 {
@@ -3317,6 +3333,7 @@ type TableExpr interface {
 func (*AliasedTableExpr) iTableExpr() {}
 func (*ParenTableExpr) iTableExpr()   {}
 func (*JoinTableExpr) iTableExpr()    {}
+func (*JSONTableExpr) iTableExpr()    {}
 func (*CommonTableExpr) iTableExpr()  {}
 func (*ValuesStatement) iTableExpr()  {}
 func (TableFuncExpr) iTableExpr()     {}
@@ -3752,6 +3769,27 @@ func (node *JoinTableExpr) walkSubtree(visit Visit) error {
 		node.RightExpr,
 		node.Condition,
 	)
+}
+
+// JSONTableExpr represents a TableExpr that's a json_table operation.
+type JSONTableExpr struct {
+	Data  Expr
+	Path  string
+	Spec  *TableSpec
+	Alias TableIdent
+}
+
+// Format formats the node.
+func (node *JSONTableExpr) Format(buf *TrackedBuffer) {
+	buf.Myprintf(`JSON_TABLE(%v, "%s" COLUMNS%v) as %v`, node.Data, node.Path, node.Spec, node.Alias)
+
+}
+
+func (node *JSONTableExpr) walkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+	return Walk(visit)
 }
 
 // IndexHints represents a list of index hints.
