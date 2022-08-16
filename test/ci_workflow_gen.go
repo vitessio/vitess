@@ -30,7 +30,7 @@ const (
 	workflowConfigDir = "../.github/workflows"
 
 	unitTestTemplate  = "templates/unit_test.tpl"
-	unitTestDatabases = "percona56, mysql80, mariadb102"
+	unitTestDatabases = "percona56, mysql80"
 
 	clusterTestTemplate = "templates/cluster_endtoend_test.tpl"
 
