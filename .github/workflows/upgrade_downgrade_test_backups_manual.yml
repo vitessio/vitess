@@ -138,7 +138,7 @@ jobs:
         sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld || echo "could not remove mysqld profile"
 
         # install JUnit report formatter
-        go install github.com/jstemmer/go-junit-report@latest
+        go install github.com/vitessio/go-junit-report@HEAD
 
         wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
         sudo apt-get install -y gnupg2
