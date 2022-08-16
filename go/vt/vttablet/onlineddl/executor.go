@@ -1769,7 +1769,7 @@ func (e *Executor) terminateMigration(ctx context.Context, onlineDDL *schema.Onl
 }
 
 // CancelMigration attempts to abort a scheduled or a running migration
-func (e *Executor) CancelMigration(ctx context.Context, uuid string, message string) (result *sqltypes.Result, err error) {
+func (e *Executor) CancelMigration(ctx context.Context, uuid string, message string, issuedByUser bool) (result *sqltypes.Result, err error) {
 	if !e.isOpen {
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "online ddl is disabled")
 	}
@@ -1791,7 +1791,14 @@ func (e *Executor) CancelMigration(ctx context.Context, uuid string, message str
 		return emptyResult, nil
 	}
 	// From this point on, we're actually cancelling a migration
-	_ = e.updateMigrationTimestamp(ctx, "cancelled_timestamp", uuid)
+	if issuedByUser {
+		// if this was issued by the user, then we mark the `cancelled_timestamp`, and based on that,
+		// the migration state will be 'cancelled'.
+		// If this was not issued by the user, then this is an internal state machine cancellation of the
+		// migration, e.g. because it is stale or has an unrecoverable error. In this case we do not mark
+		// the timestamp, and as result, the state will transition to 'failed'
+		_ = e.updateMigrationTimestamp(ctx, "cancelled_timestamp", uuid)
+	}
 	defer e.failMigration(ctx, onlineDDL, errors.New(message))
 	defer e.triggerNextCheckInterval()
 
@@ -1822,10 +1829,10 @@ func (e *Executor) CancelMigration(ctx context.Context, uuid string, message str
 }
 
 // cancelMigrations attempts to abort a list of migrations
-func (e *Executor) cancelMigrations(ctx context.Context, cancellable []*cancellableMigration) (err error) {
+func (e *Executor) cancelMigrations(ctx context.Context, cancellable []*cancellableMigration, issuedByUser bool) (err error) {
 	for _, migration := range cancellable {
 		log.Infof("cancelMigrations: cancelling %s; reason: %s", migration.uuid, migration.message)
-		if _, err := e.CancelMigration(ctx, migration.uuid, migration.message); err != nil {
+		if _, err := e.CancelMigration(ctx, migration.uuid, migration.message, issuedByUser); err != nil {
 			return err
 		}
 	}
@@ -1834,7 +1841,7 @@ func (e *Executor) cancelMigrations(ctx context.Context, cancellable []*cancella
 
 // CancelPendingMigrations cancels all pending migrations (that are expected to run or are running)
 // for this keyspace
-func (e *Executor) CancelPendingMigrations(ctx context.Context, message string) (result *sqltypes.Result, err error) {
+func (e *Executor) CancelPendingMigrations(ctx context.Context, message string, issuedByUser bool) (result *sqltypes.Result, err error) {
 	if !e.isOpen {
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "online ddl is disabled")
 	}
@@ -1847,7 +1854,7 @@ func (e *Executor) CancelPendingMigrations(ctx context.Context, message string) 
 	result = &sqltypes.Result{}
 	for _, uuid := range uuids {
 		log.Infof("CancelPendingMigrations: cancelling %s", uuid)
-		res, err := e.CancelMigration(ctx, uuid, message)
+		res, err := e.CancelMigration(ctx, uuid, message, issuedByUser)
 		if err != nil {
 			return result, err
 		}
@@ -3249,7 +3256,7 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 					// understand whether "now is a good time" or "not there yet"
 					_ = e.updateMigrationReadyToComplete(ctx, uuid, isReady)
 					if postponeCompletion {
-						// override. Even if migration is ready, we do not complet it.
+						// override. Even if migration is ready, we do not complete it.
 						isReady = false
 					}
 					if isReady {
@@ -3258,7 +3265,7 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 							if merr, ok := err.(*mysql.SQLError); ok {
 								switch merr.Num {
 								case mysql.ERTooLongIdent:
-									go e.CancelMigration(ctx, uuid, err.Error())
+									go e.CancelMigration(ctx, uuid, err.Error(), false)
 								}
 							}
 							return countRunnning, cancellable, err
@@ -3593,7 +3600,7 @@ func (e *Executor) onMigrationCheckTick() {
 	}
 	if _, cancellable, err := e.reviewRunningMigrations(ctx); err != nil {
 		log.Error(err)
-	} else if err := e.cancelMigrations(ctx, cancellable); err != nil {
+	} else if err := e.cancelMigrations(ctx, cancellable, false); err != nil {
 		log.Error(err)
 	}
 	if err := e.reviewStaleMigrations(ctx); err != nil {
@@ -4420,13 +4427,13 @@ func (e *Executor) VExec(ctx context.Context, vx *vexec.TabletVExec) (qr *queryp
 			if !schema.IsOnlineDDLUUID(uuid) {
 				return nil, fmt.Errorf("Not an Online DDL UUID: %s", uuid)
 			}
-			return response(e.CancelMigration(ctx, uuid, "cancel by user"))
+			return response(e.CancelMigration(ctx, uuid, "cancel by user", true))
 		case cancelAllMigrationHint:
 			uuid, _ := vx.ColumnStringVal(vx.WhereCols, "migration_uuid")
 			if uuid != "" {
 				return nil, fmt.Errorf("Unexpetced UUID: %s", uuid)
 			}
-			return response(e.CancelPendingMigrations(ctx, "cancel-all by user"))
+			return response(e.CancelPendingMigrations(ctx, "cancel-all by user", true))
 		default:
 			return nil, fmt.Errorf("Unexpected value for migration_status: %v. Supported values are: %s, %s",
 				statusVal, retryMigrationHint, cancelMigrationHint)
