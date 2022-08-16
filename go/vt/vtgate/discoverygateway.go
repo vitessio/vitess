@@ -17,8 +17,8 @@ limitations under the License.
 package vtgate
 
 import (
-	"flag"
 	"context"
+	"flag"
 	"fmt"
 	"math/rand"
 	"sort"
