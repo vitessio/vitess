@@ -989,32 +989,28 @@ func (e *Executor) validateAndEditAlterTableStatement(ctx context.Context, alter
 	alters = append(alters, alterTable)
 	// Handle ADD FULLTEXT KEY statements
 	countAddFullTextStatements := 0
+	redactedOptions := make([]sqlparser.AlterOption, 0, len(alterTable.AlterOptions))
 	for i := range alterTable.AlterOptions {
-		switch opt := alterTable.AlterOptions[i].(type) {
+		opt := alterTable.AlterOptions[i]
+		switch opt := opt.(type) {
 		case *sqlparser.AddIndexDefinition:
 			if opt.IndexDefinition.Info.Fulltext {
-				if countAddFullTextStatements > 0 {
+				countAddFullTextStatements++
+				if countAddFullTextStatements > 1 {
 					// We've already got one ADD FULLTEXT KEY. We can't have another
 					// in the same statement
-					alterTable.AlterOptions[i] = nil
-
 					extraAlterTable := &sqlparser.AlterTable{
 						Table:        alterTable.Table,
 						AlterOptions: []sqlparser.AlterOption{opt},
 					}
 					alters = append(alters, extraAlterTable)
+					continue
 				}
-				countAddFullTextStatements++
 			}
 		}
+		redactedOptions = append(redactedOptions, opt)
 	}
-	for i := 0; i < len(alterTable.AlterOptions); {
-		if alterTable.AlterOptions[i] == nil {
-			alterTable.AlterOptions = append(alterTable.AlterOptions[0:i], alterTable.AlterOptions[i+1:]...)
-		} else {
-			i++
-		}
-	}
+	alterTable.AlterOptions = redactedOptions
 	return alters, nil
 }
 
