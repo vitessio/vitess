@@ -1621,3 +1621,13 @@ func RemoveKeyspace(in SQLNode) SQLNode {
 		return true
 	})
 }
+
+// AllAggregation returns true if all the expressions contain aggregation
+func (s SelectExprs) AllAggregation() bool {
+	for _, k := range s {
+		if !ContainsAggregation(k) {
+			return false
+		}
+	}
+	return true
+}

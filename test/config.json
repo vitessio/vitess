@@ -998,7 +998,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/sec_vind"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "vtgate_vindex_heavy",
+			"Shard": "vtgate_vindex",
 			"RetryMax": 2,
 			"Tags": []
 		},
