@@ -108,7 +108,6 @@ func (d *AlterTableEntityDiff) addSubsequentDiff(diff *AlterTableEntityDiff) {
 	}
 }
 
-//
 type CreateTableEntityDiff struct {
 	to          *CreateTableEntity
 	createTable *sqlparser.CreateTable
@@ -165,7 +164,6 @@ func (d *CreateTableEntityDiff) SubsequentDiff() EntityDiff {
 func (d *CreateTableEntityDiff) SetSubsequentDiff(EntityDiff) {
 }
 
-//
 type DropTableEntityDiff struct {
 	from      *CreateTableEntity
 	dropTable *sqlparser.DropTable
@@ -222,7 +220,6 @@ func (d *DropTableEntityDiff) SubsequentDiff() EntityDiff {
 func (d *DropTableEntityDiff) SetSubsequentDiff(EntityDiff) {
 }
 
-//
 type RenameTableEntityDiff struct {
 	from        *CreateTableEntity
 	to          *CreateTableEntity
@@ -1861,9 +1858,9 @@ func (c *CreateTableEntity) Apply(diff EntityDiff) (Entity, error) {
 
 // postApplyNormalize runs at the end of apply() and to reorganize/edit things that
 // a MySQL will do implicitly:
-// - edit or remove keys if referenced columns are dropped
-// - drop check constraints for a single specific column if that column
-//   is the only referenced column in that check constraint.
+//   - edit or remove keys if referenced columns are dropped
+//   - drop check constraints for a single specific column if that column
+//     is the only referenced column in that check constraint.
 func (c *CreateTableEntity) postApplyNormalize() error {
 	// reduce or remove keys based on existing column list
 	// (a column may have been removed)postApplyNormalize

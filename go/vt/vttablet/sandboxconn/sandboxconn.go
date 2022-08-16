@@ -639,7 +639,7 @@ func (sbc *SandboxConn) getTxReservedID(txID int64) int64 {
 	return sbc.txIDToRID[txID]
 }
 
-//StringQueries returns the queries executed as a slice of strings
+// StringQueries returns the queries executed as a slice of strings
 func (sbc *SandboxConn) StringQueries() []string {
 	result := make([]string, len(sbc.Queries))
 	for i, query := range sbc.Queries {

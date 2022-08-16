@@ -471,12 +471,12 @@ func (blp *BinlogPlayer) exec(sql string) (*sqltypes.Result, error) {
 // writeRecoveryPosition writes the current GTID as the recovery position
 // for the next transaction.
 // It also tries to get the timestamp for the transaction. Two cases:
-// - we have statements, and they start with a SET TIMESTAMP that we
-//   can parse: then we update transaction_timestamp in vreplication
-//   with it, and set ReplicationLagSeconds to now() - transaction_timestamp
-// - otherwise (the statements are probably filtered out), we leave
-//   transaction_timestamp alone (keeping the old value), and we don't
-//   change ReplicationLagSeconds
+//   - we have statements, and they start with a SET TIMESTAMP that we
+//     can parse: then we update transaction_timestamp in vreplication
+//     with it, and set ReplicationLagSeconds to now() - transaction_timestamp
+//   - otherwise (the statements are probably filtered out), we leave
+//     transaction_timestamp alone (keeping the old value), and we don't
+//     change ReplicationLagSeconds
 func (blp *BinlogPlayer) writeRecoveryPosition(tx *binlogdatapb.BinlogTransaction) error {
 	position, err := DecodePosition(tx.EventToken.Position)
 	if err != nil {
@@ -573,11 +573,13 @@ var AlterVReplicationTable = []string{
 }
 
 // WithDDLInitialQueries contains the queries that:
-// - are to be expected by the mock db client during tests, or
-// - trigger some of the above _vt.vreplication schema changes to take effect
-//   when the binlogplayer starts up
+//   - are to be expected by the mock db client during tests, or
+//   - trigger some of the above _vt.vreplication schema changes to take effect
+//     when the binlogplayer starts up
+//
 // todo: cleanup here. QueryToTriggerWithDDL will be enough to ensure vreplication schema gets created/altered correctly.
-//   So do that explicitly and move queries required into the mock code.
+//
+//	So do that explicitly and move queries required into the mock code.
 var WithDDLInitialQueries = []string{
 	"SELECT db_name FROM _vt.vreplication LIMIT 0",
 	"SELECT rows_copied FROM _vt.vreplication LIMIT 0",

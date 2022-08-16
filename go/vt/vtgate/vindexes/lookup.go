@@ -141,13 +141,15 @@ func (ln *LookupNonUnique) MarshalJSON() ([]byte, error) {
 
 // NewLookup creates a LookupNonUnique vindex.
 // The supplied map has the following required fields:
-//   table: name of the backing table. It can be qualified by the keyspace.
-//   from: list of columns in the table that have the 'from' values of the lookup vindex.
-//   to: The 'to' column name of the table.
+//
+//	table: name of the backing table. It can be qualified by the keyspace.
+//	from: list of columns in the table that have the 'from' values of the lookup vindex.
+//	to: The 'to' column name of the table.
 //
 // The following fields are optional:
-//   autocommit: setting this to "true" will cause inserts to upsert and deletes to be ignored.
-//   write_only: in this mode, Map functions return the full keyrange causing a full scatter.
+//
+//	autocommit: setting this to "true" will cause inserts to upsert and deletes to be ignored.
+//	write_only: in this mode, Map functions return the full keyrange causing a full scatter.
 func NewLookup(name string, m map[string]string) (Vindex, error) {
 	lookup := &LookupNonUnique{name: name}
 
@@ -189,13 +191,15 @@ type LookupUnique struct {
 
 // NewLookupUnique creates a LookupUnique vindex.
 // The supplied map has the following required fields:
-//   table: name of the backing table. It can be qualified by the keyspace.
-//   from: list of columns in the table that have the 'from' values of the lookup vindex.
-//   to: The 'to' column name of the table.
+//
+//	table: name of the backing table. It can be qualified by the keyspace.
+//	from: list of columns in the table that have the 'from' values of the lookup vindex.
+//	to: The 'to' column name of the table.
 //
 // The following fields are optional:
-//   autocommit: setting this to "true" will cause deletes to be ignored.
-//   write_only: in this mode, Map functions return the full keyrange causing a full scatter.
+//
+//	autocommit: setting this to "true" will cause deletes to be ignored.
+//	write_only: in this mode, Map functions return the full keyrange causing a full scatter.
 func NewLookupUnique(name string, m map[string]string) (Vindex, error) {
 	lu := &LookupUnique{name: name}
 

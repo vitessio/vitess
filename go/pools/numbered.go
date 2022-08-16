@@ -47,7 +47,7 @@ type unregistered struct {
 	timeUnregistered time.Time
 }
 
-//NewNumbered creates a new numbered
+// NewNumbered creates a new numbered
 func NewNumbered() *Numbered {
 	n := &Numbered{
 		resources: make(map[int64]*numberedWrapper),
@@ -218,12 +218,12 @@ func (nu *Numbered) WaitForEmpty() {
 	}
 }
 
-//StatsJSON returns stats in JSON format
+// StatsJSON returns stats in JSON format
 func (nu *Numbered) StatsJSON() string {
 	return fmt.Sprintf("{\"Size\": %v}", nu.Size())
 }
 
-//Size returns the current size
+// Size returns the current size
 func (nu *Numbered) Size() int64 {
 	nu.mu.Lock()
 	defer nu.mu.Unlock()

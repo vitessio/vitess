@@ -231,9 +231,9 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 // uses it to start/stop query buffering for a given table.
 // It is onlineDDLExecutor's responsibility to make sure beffering is stopped after some definite amount of time.
 // There are two layers to buffering/unbuffering:
-// 1. the creation and destruction of a QueryRuleSource. The existence of such source affects query plan rules
-//    for all new queries (see Execute() function and call to GetPlan())
-// 2. affecting already existing rules: a Rule has a concext.WithCancel, that is cancelled by onlineDDLExecutor
+//  1. the creation and destruction of a QueryRuleSource. The existence of such source affects query plan rules
+//     for all new queries (see Execute() function and call to GetPlan())
+//  2. affecting already existing rules: a Rule has a concext.WithCancel, that is cancelled by onlineDDLExecutor
 func (tsv *TabletServer) onlineDDLExecutorToggleTableBuffer(bufferingCtx context.Context, tableName string, bufferQueries bool) {
 	queryRuleSource := fmt.Sprintf("onlineddl/%s", tableName)
 
@@ -1421,9 +1421,10 @@ func (tsv *TabletServer) convertAndLogError(ctx context.Context, sql string, bin
 }
 
 // truncateSQLAndBindVars calls TruncateForLog which:
-//  splits off trailing comments, truncates the query, re-adds the trailing comments,
-//  if sanitize is false appends quoted bindvar:value pairs in sorted order, and
-//  lastly it truncates the resulting string
+//
+//	splits off trailing comments, truncates the query, re-adds the trailing comments,
+//	if sanitize is false appends quoted bindvar:value pairs in sorted order, and
+//	lastly it truncates the resulting string
 func truncateSQLAndBindVars(sql string, bindVariables map[string]*querypb.BindVariable, sanitize bool) string {
 	truncatedQuery := sqlparser.TruncateForLog(sql)
 	buf := &bytes.Buffer{}

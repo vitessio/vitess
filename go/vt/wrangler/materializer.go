@@ -846,7 +846,6 @@ func (wr *Wrangler) ExternalizeVindex(ctx context.Context, qualifiedVindexName s
 	return wr.ts.RebuildSrvVSchema(ctx, nil)
 }
 
-//
 func (wr *Wrangler) collectTargetStreams(ctx context.Context, mz *materializer) ([]string, error) {
 	var shardTablets []string
 	var mu sync.Mutex

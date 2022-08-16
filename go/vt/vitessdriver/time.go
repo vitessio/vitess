@@ -35,11 +35,11 @@ var isoTimeLength = len(isoTimeFormat)
 // parseISOTime pases a time string in MySQL's textual datetime format.
 // This is very similar to ISO8601, with some differences:
 //
-// - There is no T separator between the date and time sections;
-//   a space is used instead.
-// - There is never a timezone section in the string, as these datetimes
-//   are not timezone-aware. There isn't a Z value for UTC times for
-//   the same reason.
+//   - There is no T separator between the date and time sections;
+//     a space is used instead.
+//   - There is never a timezone section in the string, as these datetimes
+//     are not timezone-aware. There isn't a Z value for UTC times for
+//     the same reason.
 //
 // Note that this function can handle both DATE (which should _always_ have
 // a length of 10) and DATETIME strings (which have a variable length, 18+
