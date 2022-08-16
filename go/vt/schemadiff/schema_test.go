@@ -110,7 +110,7 @@ func TestNewSchemaFromQueriesUnresolved(t *testing.T) {
 	)
 	_, err := NewSchemaFromQueries(queries)
 	assert.Error(t, err)
-	assert.EqualError(t, err, (&ApplyViewNotFoundError{View: "v7"}).Error())
+	assert.EqualError(t, err, (&ViewDependencyUnresolvedError{View: "v7"}).Error())
 }
 
 func TestNewSchemaFromQueriesUnresolvedAlias(t *testing.T) {
@@ -120,7 +120,7 @@ func TestNewSchemaFromQueriesUnresolvedAlias(t *testing.T) {
 	)
 	_, err := NewSchemaFromQueries(queries)
 	assert.Error(t, err)
-	assert.EqualError(t, err, (&ApplyViewNotFoundError{View: "v7"}).Error())
+	assert.EqualError(t, err, (&ViewDependencyUnresolvedError{View: "v7"}).Error())
 }
 
 func TestNewSchemaFromQueriesLoop(t *testing.T) {
@@ -131,7 +131,7 @@ func TestNewSchemaFromQueriesLoop(t *testing.T) {
 	)
 	_, err := NewSchemaFromQueries(queries)
 	assert.Error(t, err)
-	assert.EqualError(t, err, (&ApplyViewNotFoundError{View: "v7"}).Error())
+	assert.EqualError(t, err, (&ViewDependencyUnresolvedError{View: "v7"}).Error())
 }
 
 func TestToSQL(t *testing.T) {
