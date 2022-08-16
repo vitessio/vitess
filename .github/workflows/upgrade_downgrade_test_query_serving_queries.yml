@@ -12,7 +12,7 @@ concurrency:
 
 jobs:
   get_previous_release:
-    if: always() && github.event_name == 'pull_request'
+    if: always()
     name: Get latest release
     runs-on: ubuntu-latest
     outputs:
