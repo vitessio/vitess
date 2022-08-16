@@ -87,7 +87,7 @@ jobs:
         go mod download
 
         # install JUnit report formatter
-        go install github.com/jstemmer/go-junit-report@latest
+        go install github.com/vitessio/go-junit-report@HEAD
 
         {{if .InstallXtraBackup}}
 
