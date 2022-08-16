@@ -118,6 +118,7 @@ func main() {
 	defer exit.Recover()
 
 	// flag parsing
+	var globalFlags *pflag.FlagSet
 	dbconfigs.RegisterFlags(dbconfigs.All...)
 	mysqlctl.RegisterFlags()
 	servenv.OnParseFor("vtcombo", func(fs *pflag.FlagSet) {
@@ -125,15 +126,29 @@ func main() {
 		// the user know about this flag.
 		fs.MarkHidden("tablet_protocol")
 
-		// This needs to go both ways, so that the flags we defined up in our
-		// `var` and `init` blocks is available to servenv's FlagSet, and so
-		// that the other flags registered throughout the codebase are
-		// available to use when we call `flags.Set` later on.
-		flags.AddFlagSet(fs)
+		// Add the vtcombo flags declared above in var/init sections to the
+		// global flags.
 		fs.AddFlagSet(flags)
+		// Save for later -- see comment directly after ParseFlags for why.
+		globalFlags = fs
 	})
 
 	servenv.ParseFlags("vtcombo")
+
+	// At this point, servenv.ParseFlags has invoked _flag.Parse, which has
+	// combined all the flags everywhere into the globalFlags variable we
+	// stashed a reference to earlier in our OnParseFor callback function.
+	//
+	// We now take those flags and make them available to our `flags` instance,
+	// which we call `Set` on various flags to force their values further down
+	// in main().
+	//
+	// N.B.: we could just as easily call Set on globalFlags on everything
+	// (including our local flags), but we need to save a reference either way,
+	// and that in particular (globalFlags.Set on a local flag) feels more
+	// potentially confusing than its inverse (flags.Set on a global flag), so
+	// we go this way.
+	flags.AddFlagSet(globalFlags)
 
 	// Stash away a copy of the topology that vtcombo was started with.
 	//
