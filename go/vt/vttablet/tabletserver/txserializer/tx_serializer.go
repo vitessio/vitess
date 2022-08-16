@@ -44,15 +44,15 @@ import (
 //
 // This implementation has some parallels to the sync2.Consolidator class.
 // However, there are many substantial differences:
-// - Results are not shared between queued transactions.
-// - Only one waiting transaction and not all are notified when the current one
-//   has finished.
-// - Waiting transactions are woken up in FIFO order.
-// - Waiting transactions are unblocked if their context is done.
-// - Both the local queue (per row range) and global queue (whole process) are
-//   limited to avoid that queued transactions can consume the full capacity
-//   of vttablet. This is important if the capaciy is finite. For example, the
-//   number of RPCs in flight could be limited by the RPC subsystem.
+//   - Results are not shared between queued transactions.
+//   - Only one waiting transaction and not all are notified when the current one
+//     has finished.
+//   - Waiting transactions are woken up in FIFO order.
+//   - Waiting transactions are unblocked if their context is done.
+//   - Both the local queue (per row range) and global queue (whole process) are
+//     limited to avoid that queued transactions can consume the full capacity
+//     of vttablet. This is important if the capaciy is finite. For example, the
+//     number of RPCs in flight could be limited by the RPC subsystem.
 type TxSerializer struct {
 	env tabletenv.Env
 	*sync2.ConsolidatorCache

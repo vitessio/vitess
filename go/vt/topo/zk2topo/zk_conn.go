@@ -73,12 +73,12 @@ func ZkTime(t time.Time) int64 {
 
 // ZkConn is a wrapper class on top of a zk.Conn.
 // It will do a few things for us:
-// - add the context parameter. However, we do not enforce its deadlines
-//   necessarily.
-// - enforce a max concurrency of access to Zookeeper. We just don't
-//   want to make too many calls concurrently, to not take too many resources.
-// - retry some calls to Zookeeper. If we were disconnected from the
-//   server, we want to try connecting again before failing.
+//   - add the context parameter. However, we do not enforce its deadlines
+//     necessarily.
+//   - enforce a max concurrency of access to Zookeeper. We just don't
+//     want to make too many calls concurrently, to not take too many resources.
+//   - retry some calls to Zookeeper. If we were disconnected from the
+//     server, we want to try connecting again before failing.
 type ZkConn struct {
 	// addr is set at construction time, and immutable.
 	addr string

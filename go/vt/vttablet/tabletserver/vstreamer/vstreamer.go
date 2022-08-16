@@ -99,18 +99,22 @@ type streamerPlan struct {
 // cp: the mysql conn params.
 // sh: the schema engine. The vstreamer uses it to convert the TableMap into field info.
 // startPos: a flavor compliant position to stream from. This can also contain the special
-//   value "current", which means start from the current position.
+//
+//	value "current", which means start from the current position.
+//
 // filter: the list of filtering rules. If a rule has a select expression for its filter,
-//   the select list can only reference direct columns. No other expressions are allowed.
-//   The select expression is allowed to contain the special 'keyspace_id()' function which
-//   will return the keyspace id of the row. Examples:
-//   "select * from t", same as an empty Filter,
-//   "select * from t where in_keyrange('-80')", same as "-80",
-//   "select * from t where in_keyrange(col1, 'hash', '-80')",
-//   "select col1, col2 from t where...",
-//   "select col1, keyspace_id() from t where...".
-//   Only "in_keyrange" and limited comparison operators (see enum Opcode in planbuilder.go) are supported in the where clause.
-//   Other constructs like joins, group by, etc. are not supported.
+//
+//	the select list can only reference direct columns. No other expressions are allowed.
+//	The select expression is allowed to contain the special 'keyspace_id()' function which
+//	will return the keyspace id of the row. Examples:
+//	"select * from t", same as an empty Filter,
+//	"select * from t where in_keyrange('-80')", same as "-80",
+//	"select * from t where in_keyrange(col1, 'hash', '-80')",
+//	"select col1, col2 from t where...",
+//	"select col1, keyspace_id() from t where...".
+//	Only "in_keyrange" and limited comparison operators (see enum Opcode in planbuilder.go) are supported in the where clause.
+//	Other constructs like joins, group by, etc. are not supported.
+//
 // vschema: the current vschema. This value can later be changed through the SetVSchema method.
 // send: callback function to send events.
 func newVStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, startPos string, stopPos string, filter *binlogdatapb.Filter, vschema *localVSchema, send func([]*binlogdatapb.VEvent) error, phase string, vse *Engine) *vstreamer {

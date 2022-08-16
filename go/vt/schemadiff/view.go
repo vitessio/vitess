@@ -22,7 +22,6 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
-//
 type AlterViewEntityDiff struct {
 	from      *CreateViewEntity
 	to        *CreateViewEntity

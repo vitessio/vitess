@@ -260,8 +260,8 @@ func matchExprWithAnyDateFormat(expr *EvalResult) (t time.Time, err error) {
 }
 
 // Date comparison based on:
-// 		- https://dev.mysql.com/doc/refman/8.0/en/type-conversion.html
-// 		- https://dev.mysql.com/doc/refman/8.0/en/date-and-time-type-conversion.html
+//   - https://dev.mysql.com/doc/refman/8.0/en/type-conversion.html
+//   - https://dev.mysql.com/doc/refman/8.0/en/date-and-time-type-conversion.html
 func compareDates(l, r *EvalResult) (int, error) {
 	lTime, err := parseDate(l)
 	if err != nil {
@@ -312,7 +312,7 @@ func compareGoTimes(lTime, rTime time.Time) (int, error) {
 }
 
 // More on string collations coercibility on MySQL documentation:
-// 		- https://dev.mysql.com/doc/refman/8.0/en/charset-collation-coercibility.html
+//   - https://dev.mysql.com/doc/refman/8.0/en/charset-collation-coercibility.html
 func compareStrings(l, r *EvalResult) int {
 	coll, err := mergeCollations(l, r)
 	if err != nil {

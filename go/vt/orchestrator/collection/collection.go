@@ -15,7 +15,6 @@
 */
 
 /*
-
 Package collection holds routines for collecting "high frequency"
 metrics and handling their auto-expiry based on a configured retention
 time. This becomes more interesting as the number of MySQL servers
@@ -31,10 +30,10 @@ data or the raw data for custom analysis over the period requested.
 
 This is expected to be used for the following types of metric:
 
-* discovery metrics (time to poll a MySQL server and collect status)
-* queue metrics (statistics within the discovery queue itself)
-* query metrics (statistics on the number of queries made to the
-  backend MySQL database)
+  - discovery metrics (time to poll a MySQL server and collect status)
+  - queue metrics (statistics within the discovery queue itself)
+  - query metrics (statistics on the number of queries made to the
+    backend MySQL database)
 
 Orchestrator code can just add a new metric without worrying about
 removing it later, and other code which serves API requests can
@@ -57,7 +56,6 @@ orchestrator run out of memory eventually.
 
 Current code uses DiscoveryCollectionRetentionSeconds as the
 time to keep metric data.
-
 */
 package collection
 

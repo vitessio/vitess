@@ -430,7 +430,7 @@ func VerifyAllTasksDone(ctx context.Context, ts *topo.Server, uuid string) error
 	return verifyAllTasksState(ctx, ts, uuid, workflowpb.TaskState_TaskDone)
 }
 
-//verifyAllTasksState verifies that all tasks are in taskState. Only for tests purposes.
+// verifyAllTasksState verifies that all tasks are in taskState. Only for tests purposes.
 func verifyAllTasksState(ctx context.Context, ts *topo.Server, uuid string, taskState workflowpb.TaskState) error {
 	checkpoint, err := checkpoint(ctx, ts, uuid)
 	if err != nil {

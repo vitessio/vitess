@@ -458,10 +458,10 @@ func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.Tab
 //
 // It attemps to idempotently ensure the following guarantees upon returning
 // successfully:
-//   * No future writes will be accepted.
-//   * No writes are in-flight.
-//   * MySQL is in read-only mode.
-//   * Semi-sync settings are consistent with a REPLICA tablet.
+//   - No future writes will be accepted.
+//   - No writes are in-flight.
+//   - MySQL is in read-only mode.
+//   - Semi-sync settings are consistent with a REPLICA tablet.
 //
 // If necessary, it waits for all in-flight writes to complete or time out.
 //

@@ -641,16 +641,20 @@ func TestCaseExprWithPredicate(t *testing.T) {
 }
 
 // HACK: for CASE comparisons, the expression is supposed to decompose like this:
-//		CASE a WHEN b THEN bb WHEN c THEN cc ELSE d
-//			=> CASE WHEN a = b THEN bb WHEN a == c THEN cc ELSE d
+//
+//	CASE a WHEN b THEN bb WHEN c THEN cc ELSE d
+//		=> CASE WHEN a = b THEN bb WHEN a == c THEN cc ELSE d
+//
 // See: https://dev.mysql.com/doc/refman/5.7/en/flow-control-functions.html#operator_case
 // However, MySQL does not seem to be using the real `=` operator for some of these comparisons
 // namely, numerical comparisons are coerced into an unsigned form when they shouldn't.
 // Example:
-//		SELECT -1 = 18446744073709551615
-//			=> 0
-//		SELECT -1 WHEN 18446744073709551615 THEN 1 ELSE 0 END
-//			=> 1
+//
+//	SELECT -1 = 18446744073709551615
+//		=> 0
+//	SELECT -1 WHEN 18446744073709551615 THEN 1 ELSE 0 END
+//		=> 1
+//
 // This does not happen for other types, which all follow the behavior of the `=` operator,
 // so we're going to assume this is a bug for now.
 func comparisonSkip(a, b string) bool {

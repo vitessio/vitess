@@ -204,8 +204,8 @@ func checkUnionColumns(union *sqlparser.Union) error {
 }
 
 /*
-	errors that happen when we are evaluating SELECT expressions are saved until we know
-	if we can merge everything into a single route or not
+errors that happen when we are evaluating SELECT expressions are saved until we know
+if we can merge everything into a single route or not
 */
 func (a *analyzer) enterProjection(cursor *sqlparser.Cursor) {
 	_, ok := cursor.Node().(sqlparser.SelectExprs)

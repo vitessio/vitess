@@ -32,12 +32,12 @@ import (
 // the route_uri. To add additional spans, extract the span in your
 // VTAdminHTTPHandler like:
 //
-//		func Handler(ctx context.Context, r Request, api *API) *JSONResponse {
-//			span, _ := trace.FromContext(ctx)
-//			span.Annotate("foo", "bar")
+//	func Handler(ctx context.Context, r Request, api *API) *JSONResponse {
+//		span, _ := trace.FromContext(ctx)
+//		span.Annotate("foo", "bar")
 //
-//			return NewJSONResponse(api.Something(ctx))
-//		}
+//		return NewJSONResponse(api.Something(ctx))
+//	}
 //
 // An unnamed route will get a span named "vtadmin:http:<unnamed route>".
 func TraceHandler(next http.Handler) http.Handler {
