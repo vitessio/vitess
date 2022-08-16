@@ -26,12 +26,15 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/grpcclient"
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
@@ -768,7 +771,7 @@ func TestSuite(t *testing.T, protocol string, tablet *topodatapb.Tablet, fake *F
 	}
 
 	// make sure we use the right client
-	tabletconn.TabletProtocol = protocol
+	SetProtocol(t.Name(), protocol)
 
 	// create a connection
 	if clientCreds != nil {
@@ -787,4 +790,32 @@ func TestSuite(t *testing.T, protocol string, tablet *topodatapb.Tablet, fake *F
 
 	// and we're done
 	conn.Close(context.Background())
+}
+
+const tabletProtocolFlagName = "tablet_protocol"
+
+// SetProtocol is a helper function to set the tabletconn --tablet_protocol flag
+// value for tests.
+//
+// Note that because this variable is bound to a flag, the effects of this
+// function are global, not scoped to the calling test-case. Therefore it should
+// not be used in conjunction with t.Parallel.
+func SetProtocol(name string, protocol string) {
+	var tmp []string
+	tmp, os.Args = os.Args[:], []string{name}
+	defer func() { os.Args = tmp }()
+
+	servenv.OnParseFor(name, func(fs *pflag.FlagSet) {
+		if fs.Lookup(tabletProtocolFlagName) != nil {
+			return
+		}
+
+		tabletconn.RegisterFlags(fs)
+	})
+	servenv.ParseFlags(name)
+
+	if err := pflag.Set(tabletProtocolFlagName, protocol); err != nil {
+		msg := "failed to set flag %q to %q: %v"
+		log.Errorf(msg, tabletProtocolFlagName, protocol, err)
+	}
 }
