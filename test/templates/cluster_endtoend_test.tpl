@@ -57,7 +57,11 @@ jobs:
     {{end}}
 
     - name: Run cluster endtoend test
-      timeout-minutes: 30
-      run: |
-        source build.env
-        eatmydata -- go run test.go -docker=false -print-log -follow -shard {{.Shard}}
+      uses: nick-fields/retry@v2
+      with:
+        timeout_minutes: 30
+        max_attempts: 3
+        retry_on: error
+        command: |
+          source build.env
+          eatmydata -- go run test.go -docker=false -print-log -follow -shard {{.Shard}}
