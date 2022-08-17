@@ -108,7 +108,6 @@ func (d *AlterTableEntityDiff) addSubsequentDiff(diff *AlterTableEntityDiff) {
 	}
 }
 
-//
 type CreateTableEntityDiff struct {
 	to          *CreateTableEntity
 	createTable *sqlparser.CreateTable
@@ -165,7 +164,6 @@ func (d *CreateTableEntityDiff) SubsequentDiff() EntityDiff {
 func (d *CreateTableEntityDiff) SetSubsequentDiff(EntityDiff) {
 }
 
-//
 type DropTableEntityDiff struct {
 	from      *CreateTableEntity
 	dropTable *sqlparser.DropTable
@@ -222,7 +220,6 @@ func (d *DropTableEntityDiff) SubsequentDiff() EntityDiff {
 func (d *DropTableEntityDiff) SetSubsequentDiff(EntityDiff) {
 }
 
-//
 type RenameTableEntityDiff struct {
 	from        *CreateTableEntity
 	to          *CreateTableEntity
@@ -621,7 +618,9 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 		Table: otherStmt.Table,
 	}
 	diffedTableCharset := ""
+	var parentAlterTableEntityDiff *AlterTableEntityDiff
 	var partitionSpecs []*sqlparser.PartitionSpec
+	var superfluousFulltextKeys []*sqlparser.AddIndexDefinition
 	{
 		t1Options := c.CreateTable.TableSpec.Options
 		t2Options := other.CreateTable.TableSpec.Options
@@ -639,7 +638,7 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 		// ordered keys for both tables:
 		t1Keys := c.CreateTable.TableSpec.Indexes
 		t2Keys := other.CreateTable.TableSpec.Indexes
-		c.diffKeys(alterTable, t1Keys, t2Keys, hints)
+		superfluousFulltextKeys = c.diffKeys(alterTable, t1Keys, t2Keys, hints)
 	}
 	{
 		// diff constraints
@@ -668,10 +667,19 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 			return nil, err
 		}
 	}
-	var parentAlterTableEntityDiff *AlterTableEntityDiff
 	tableSpecHasChanged := len(alterTable.AlterOptions) > 0 || alterTable.PartitionOption != nil || alterTable.PartitionSpec != nil
 	if tableSpecHasChanged {
 		parentAlterTableEntityDiff = &AlterTableEntityDiff{alterTable: alterTable, from: c, to: other}
+	}
+	for _, superfluousFulltextKey := range superfluousFulltextKeys {
+		alterTable := &sqlparser.AlterTable{
+			Table:        otherStmt.Table,
+			AlterOptions: []sqlparser.AlterOption{superfluousFulltextKey},
+		}
+		diff := &AlterTableEntityDiff{alterTable: alterTable, from: c, to: other}
+		// if we got superfluous fulltext keys, that means the table spec has changed, ie
+		// parentAlterTableEntityDiff is not nil
+		parentAlterTableEntityDiff.addSubsequentDiff(diff)
 	}
 	for _, partitionSpec := range partitionSpecs {
 		alterTable := &sqlparser.AlterTable{
@@ -1103,7 +1111,7 @@ func (c *CreateTableEntity) diffKeys(alterTable *sqlparser.AlterTable,
 	t1Keys []*sqlparser.IndexDefinition,
 	t2Keys []*sqlparser.IndexDefinition,
 	hints *DiffHints,
-) {
+) (superfluousFulltextKeys []*sqlparser.AddIndexDefinition) {
 	t1KeysMap := map[string]*sqlparser.IndexDefinition{}
 	t2KeysMap := map[string]*sqlparser.IndexDefinition{}
 	for _, key := range t1Keys {
@@ -1134,6 +1142,7 @@ func (c *CreateTableEntity) diffKeys(alterTable *sqlparser.AlterTable,
 		}
 	}
 
+	addedFulltextKeys := 0
 	for _, t2Key := range t2Keys {
 		t2KeyName := t2Key.Info.Name.String()
 		// evaluate modified & added keys:
@@ -1164,9 +1173,21 @@ func (c *CreateTableEntity) diffKeys(alterTable *sqlparser.AlterTable,
 			addKey := &sqlparser.AddIndexDefinition{
 				IndexDefinition: t2Key,
 			}
-			alterTable.AlterOptions = append(alterTable.AlterOptions, addKey)
+			addedAsSuperfluousStatement := false
+			if t2Key.Info.Fulltext {
+				if addedFulltextKeys > 0 && hints.FullTextKeyStrategy == FullTextKeyDistinctStatements {
+					// Special case: MySQL does not support multiple ADD FULLTEXT KEY statements in a single ALTER
+					superfluousFulltextKeys = append(superfluousFulltextKeys, addKey)
+					addedAsSuperfluousStatement = true
+				}
+				addedFulltextKeys++
+			}
+			if !addedAsSuperfluousStatement {
+				alterTable.AlterOptions = append(alterTable.AlterOptions, addKey)
+			}
 		}
 	}
+	return superfluousFulltextKeys
 }
 
 // indexOnlyVisibilityChange checks whether the change on an index is only
@@ -1837,9 +1858,9 @@ func (c *CreateTableEntity) Apply(diff EntityDiff) (Entity, error) {
 
 // postApplyNormalize runs at the end of apply() and to reorganize/edit things that
 // a MySQL will do implicitly:
-// - edit or remove keys if referenced columns are dropped
-// - drop check constraints for a single specific column if that column
-//   is the only referenced column in that check constraint.
+//   - edit or remove keys if referenced columns are dropped
+//   - drop check constraints for a single specific column if that column
+//     is the only referenced column in that check constraint.
 func (c *CreateTableEntity) postApplyNormalize() error {
 	// reduce or remove keys based on existing column list
 	// (a column may have been removed)postApplyNormalize

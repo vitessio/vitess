@@ -81,6 +81,11 @@ const (
 	TableRenameHeuristicStatement
 )
 
+const (
+	FullTextKeyDistinctStatements = iota
+	FullTextKeyUnifyStatements
+)
+
 // DiffHints is an assortment of rules for diffing entities
 type DiffHints struct {
 	StrictIndexOrdering     bool
@@ -89,4 +94,5 @@ type DiffHints struct {
 	ConstraintNamesStrategy int
 	ColumnRenameStrategy    int
 	TableRenameStrategy     int
+	FullTextKeyStrategy     int
 }

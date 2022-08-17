@@ -43,7 +43,7 @@ import "context"
 //			NumGoroutines: len(args),
 //			NumRequiredSuccess: 5, // need at least 5 to respond with nil error before cancelling the rest
 //			NumAllowedErrors: 1, // if more than 1 responds with non-nil error, cancel the rest
-// 			NumErrorsToWaitFor: 1, // if there is 1 response that we must wait for, before cancelling the rest
+//			NumErrorsToWaitFor: 1, // if there is 1 response that we must wait for, before cancelling the rest
 //		}
 //		errRec := errgroup.Wait(errgroupCancel, errCh)
 //
@@ -73,13 +73,14 @@ type Error struct {
 // Error channel, and are cancellable by the given cancel function.
 //
 // Wait will cancel any outstanding goroutines when the following condition is met:
-// 	* At least NumErrorsToWaitFor results with MustWaitFor set have been consumed
-//	on the error channel AND one of the following two -
-// 		(1) More than NumAllowedErrors non-nil results have been consumed on the
-// 		error channel.
 //
-// 		(2) At least NumRequiredSuccesses nil results have been consumed on the error
-// 		channel.
+//   - At least NumErrorsToWaitFor results with MustWaitFor set have been consumed
+//     on the error channel AND one of the following two -
+//     (1) More than NumAllowedErrors non-nil results have been consumed on the
+//     error channel.
+//
+//     (2) At least NumRequiredSuccesses nil results have been consumed on the error
+//     channel.
 //
 // After the cancellation condition is triggered, Wait will continue to consume
 // results off the Error channel so as to not permanently block any of those

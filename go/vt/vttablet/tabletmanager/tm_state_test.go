@@ -383,7 +383,9 @@ func TestStateChangeTabletType(t *testing.T) {
 	assert.Equal(t, int64(2), statsTabletTypeCount.Counts()["replica"])
 }
 
-/* This test verifies, even if SetServingType returns error we should still publish
+/*
+	This test verifies, even if SetServingType returns error we should still publish
+
 the new table type
 */
 func TestStateChangeTabletTypeWithFailure(t *testing.T) {

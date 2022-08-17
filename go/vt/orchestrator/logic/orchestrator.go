@@ -338,7 +338,7 @@ func injectSeeds(seedOnce *sync.Once) {
 // ContinuousDiscovery starts an asynchronuous infinite discovery process where instances are
 // periodically investigated and their status captured, and long since unseen instances are
 // purged and forgotten.
-//nolint SA1015: using time.Tick leaks the underlying ticker
+// nolint SA1015: using time.Tick leaks the underlying ticker
 func ContinuousDiscovery() {
 	log.Infof("continuous discovery: setting up")
 	continuousDiscoveryStartTime := time.Now()

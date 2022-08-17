@@ -76,6 +76,18 @@ func TestFilterPass(t *testing.T) {
 		name:   "uint64_int64",
 		res:    sqltypes.MakeTestResult(sqltypes.MakeTestFields("a|b", "uint64|int64"), "0|1", "1|0", "2|3"),
 		expRes: `[[UINT64(1) INT64(0)]]`,
+	}, {
+		name:   "int32_uint32",
+		res:    sqltypes.MakeTestResult(sqltypes.MakeTestFields("a|b", "int32|uint32"), "0|1", "1|0", "2|3"),
+		expRes: `[[INT32(1) UINT32(0)]]`,
+	}, {
+		name:   "uint16_int8",
+		res:    sqltypes.MakeTestResult(sqltypes.MakeTestFields("a|b", "uint16|int8"), "0|1", "1|0", "2|3"),
+		expRes: `[[UINT16(1) INT8(0)]]`,
+	}, {
+		name:   "uint64_int32",
+		res:    sqltypes.MakeTestResult(sqltypes.MakeTestFields("a|b", "uint64|int32"), "0|1", "1|0", "2|3"),
+		expRes: `[[UINT64(1) INT32(0)]]`,
 	}}
 	for _, tc := range tcases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -86,45 +98,6 @@ func TestFilterPass(t *testing.T) {
 			qr, err := filter.TryExecute(context.Background(), &noopVCursor{}, nil, false)
 			require.NoError(t, err)
 			require.Equal(t, tc.expRes, fmt.Sprintf("%v", qr.Rows))
-		})
-	}
-}
-
-func TestFilterMixedFail(t *testing.T) {
-	predicate := &sqlparser.ComparisonExpr{
-		Operator: sqlparser.GreaterThanOp,
-		Left:     sqlparser.NewColName("left"),
-		Right:    sqlparser.NewColName("right"),
-	}
-
-	pred, err := evalengine.Translate(predicate, &dummyTranslator{})
-	require.NoError(t, err)
-
-	tcases := []struct {
-		name   string
-		res    *sqltypes.Result
-		expErr string
-	}{{
-		name:   "int32_uint32",
-		res:    sqltypes.MakeTestResult(sqltypes.MakeTestFields("a|b", "int32|uint32"), "0|1", "1|0", "2|3"),
-		expErr: `unsupported: cannot compare INT32 and UINT32`,
-	}, {
-		name:   "uint16_int8",
-		res:    sqltypes.MakeTestResult(sqltypes.MakeTestFields("a|b", "uint16|int8"), "0|1", "1|0", "2|3"),
-		expErr: `unsupported: cannot compare UINT16 and INT8`,
-	}, {
-		name:   "uint64_int32",
-		res:    sqltypes.MakeTestResult(sqltypes.MakeTestFields("a|b", "uint64|int32"), "0|1", "1|0", "2|3"),
-		expErr: `unsupported: cannot compare UINT64 and INT32`,
-	}}
-	for _, tc := range tcases {
-		t.Run(tc.name, func(t *testing.T) {
-			filter := &Filter{
-				Predicate: pred,
-				Input:     &fakePrimitive{results: []*sqltypes.Result{tc.res}},
-			}
-			_, err := filter.TryExecute(context.Background(), &noopVCursor{}, nil, false)
-			require.EqualError(t, err, tc.expErr)
 		})
 	}
 }

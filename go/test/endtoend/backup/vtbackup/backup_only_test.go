@@ -24,6 +24,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/mysqlctl"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -136,6 +138,11 @@ func firstBackupTest(t *testing.T, tabletType string) {
 	require.Nil(t, err)
 	cluster.VerifyRowsInTablet(t, replica1, keyspaceName, 2)
 
+	// eventhough we change the value of compression it won't effect
+	// decompression since it gets its value from MANIFEST file, created
+	// as part of backup.
+	*mysqlctl.CompressionEngineName = "lz4"
+	defer func() { *mysqlctl.CompressionEngineName = "pgzip" }()
 	// now bring up the other replica, letting it restore from backup.
 	err = localCluster.VtctlclientProcess.InitTablet(replica2, cell, keyspaceName, hostname, shardName)
 	require.Nil(t, err)

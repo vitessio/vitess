@@ -109,16 +109,16 @@ func IsNull(t querypb.Type) bool {
 // Use the synonyms only to refer to the type in Value. For proto variables, use the querypb.Type constants instead.
 // The following is a complete listing of types that match each classification function in this API:
 //
-//    IsSigned(): INT8, INT16, INT24, INT32, INT64
-//    IsFloat(): FLOAT32, FLOAT64
-//    IsUnsigned(): UINT8, UINT16, UINT24, UINT32, UINT64, YEAR
-//    IsIntegral(): INT8, UINT8, INT16, UINT16, INT24, UINT24, INT32, UINT32, INT64, UINT64, YEAR
-//    IsText(): TEXT, VARCHAR, CHAR, HEXNUM, HEXVAL, BITNUM
-//    IsNumber(): INT8, UINT8, INT16, UINT16, INT24, UINT24, INT32, UINT32, INT64, UINT64, FLOAT32, FLOAT64, YEAR, DECIMAL
-//    IsQuoted(): TIMESTAMP, DATE, TIME, DATETIME, TEXT, BLOB, VARCHAR, VARBINARY, CHAR, BINARY, ENUM, SET, GEOMETRY, JSON
-//    IsBinary(): BLOB, VARBINARY, BINARY
-//    IsDate(): TIMESTAMP, DATE, TIME, DATETIME
-//    IsNull(): NULL_TYPE
+//	IsSigned(): INT8, INT16, INT24, INT32, INT64
+//	IsFloat(): FLOAT32, FLOAT64
+//	IsUnsigned(): UINT8, UINT16, UINT24, UINT32, UINT64, YEAR
+//	IsIntegral(): INT8, UINT8, INT16, UINT16, INT24, UINT24, INT32, UINT32, INT64, UINT64, YEAR
+//	IsText(): TEXT, VARCHAR, CHAR, HEXNUM, HEXVAL, BITNUM
+//	IsNumber(): INT8, UINT8, INT16, UINT16, INT24, UINT24, INT32, UINT32, INT64, UINT64, FLOAT32, FLOAT64, YEAR, DECIMAL
+//	IsQuoted(): TIMESTAMP, DATE, TIME, DATETIME, TEXT, BLOB, VARCHAR, VARBINARY, CHAR, BINARY, ENUM, SET, GEOMETRY, JSON
+//	IsBinary(): BLOB, VARBINARY, BINARY
+//	IsDate(): TIMESTAMP, DATE, TIME, DATETIME
+//	IsNull(): NULL_TYPE
 //
 // TODO(sougou): provide a categorization function
 // that returns enums, which will allow for cleaner

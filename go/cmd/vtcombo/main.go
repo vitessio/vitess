@@ -23,11 +23,11 @@ package main
 
 import (
 	"context"
-	"flag"
 	"os"
 	"strings"
 	"time"
 
+	"github.com/spf13/pflag"
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/exit"
@@ -55,13 +55,14 @@ import (
 )
 
 var (
-	schemaDir          = flag.String("schema_dir", "", "Schema base directory. Should contain one directory per keyspace, with a vschema.json file if necessary.")
-	startMysql         = flag.Bool("start_mysql", false, "Should vtcombo also start mysql")
-	mysqlPort          = flag.Int("mysql_port", 3306, "mysql port")
-	externalTopoServer = flag.Bool("external_topo_server", false, "Should vtcombo use an external topology server instead of starting its own in-memory topology server. "+
+	flags              = pflag.NewFlagSet("vtcombo", pflag.ContinueOnError)
+	schemaDir          = flags.String("schema_dir", "", "Schema base directory. Should contain one directory per keyspace, with a vschema.json file if necessary.")
+	startMysql         = flags.Bool("start_mysql", false, "Should vtcombo also start mysql")
+	mysqlPort          = flags.Int("mysql_port", 3306, "mysql port")
+	externalTopoServer = flags.Bool("external_topo_server", false, "Should vtcombo use an external topology server instead of starting its own in-memory topology server. "+
 		"If true, vtcombo will use the flags defined in topo/server.go to open topo server")
-	plannerVersion           = flag.String("planner-version", "", "Sets the default planner to use when the session has not changed it. Valid values are: V3, Gen4, Gen4Greedy and Gen4Fallback. Gen4Fallback tries the gen4 planner and falls back to the V3 planner if the gen4 fails.")
-	plannerVersionDeprecated = flag.String("planner_version", "", "Deprecated flag. Use planner-version instead")
+	plannerVersion           = flags.String("planner-version", "", "Sets the default planner to use when the session has not changed it. Valid values are: V3, Gen4, Gen4Greedy and Gen4Fallback. Gen4Fallback tries the gen4 planner and falls back to the V3 planner if the gen4 fails.")
+	plannerVersionDeprecated = flags.String("planner_version", "", "Deprecated flag. Use planner-version instead")
 
 	tpb             vttestpb.VTTestTopology
 	ts              *topo.Server
@@ -69,8 +70,8 @@ var (
 )
 
 func init() {
-	flag.Var(vttest.TextTopoData(&tpb), "proto_topo", "vttest proto definition of the topology, encoded in compact text format. See vttest.proto for more information.")
-	flag.Var(vttest.JSONTopoData(&tpb), "json_topo", "vttest proto definition of the topology, encoded in json format. See vttest.proto for more information.")
+	flags.Var(vttest.TextTopoData(&tpb), "proto_topo", "vttest proto definition of the topology, encoded in compact text format. See vttest.proto for more information.")
+	flags.Var(vttest.JSONTopoData(&tpb), "json_topo", "vttest proto definition of the topology, encoded in json format. See vttest.proto for more information.")
 
 	servenv.RegisterDefaultFlags()
 }
@@ -117,9 +118,37 @@ func main() {
 	defer exit.Recover()
 
 	// flag parsing
+	var globalFlags *pflag.FlagSet
 	dbconfigs.RegisterFlags(dbconfigs.All...)
 	mysqlctl.RegisterFlags()
+	servenv.OnParseFor("vtcombo", func(fs *pflag.FlagSet) {
+		// We're going to force the value later, so don't even bother letting
+		// the user know about this flag.
+		fs.MarkHidden("tablet_protocol")
+
+		// Add the vtcombo flags declared above in var/init sections to the
+		// global flags.
+		fs.AddFlagSet(flags)
+		// Save for later -- see comment directly after ParseFlags for why.
+		globalFlags = fs
+	})
+
 	servenv.ParseFlags("vtcombo")
+
+	// At this point, servenv.ParseFlags has invoked _flag.Parse, which has
+	// combined all the flags everywhere into the globalFlags variable we
+	// stashed a reference to earlier in our OnParseFor callback function.
+	//
+	// We now take those flags and make them available to our `flags` instance,
+	// which we call `Set` on various flags to force their values further down
+	// in main().
+	//
+	// N.B.: we could just as easily call Set on globalFlags on everything
+	// (including our local flags), but we need to save a reference either way,
+	// and that in particular (globalFlags.Set on a local flag) feels more
+	// potentially confusing than its inverse (flags.Set on a global flag), so
+	// we go this way.
+	flags.AddFlagSet(globalFlags)
 
 	// Stash away a copy of the topology that vtcombo was started with.
 	//
@@ -132,13 +161,13 @@ func main() {
 		tpb.Cells = append(tpb.Cells, "test")
 	}
 
-	flag.Set("cells_to_watch", strings.Join(tpb.Cells, ","))
+	flags.Set("cells_to_watch", strings.Join(tpb.Cells, ","))
 
 	// vtctld UI requires the cell flag
-	flag.Set("cell", tpb.Cells[0])
-	flag.Set("enable_realtime_stats", "true")
-	if flag.Lookup("log_dir") == nil {
-		flag.Set("log_dir", "$VTDATAROOT/tmp")
+	flags.Set("cell", tpb.Cells[0])
+	flags.Set("enable_realtime_stats", "true")
+	if flags.Lookup("log_dir") == nil {
+		flags.Set("log_dir", "$VTDATAROOT/tmp")
 	}
 
 	if *externalTopoServer {
@@ -175,8 +204,12 @@ func main() {
 		servenv.OnClose(mysqld.Close)
 	}
 
-	// tablets configuration and init.
+	// Tablet configuration and init.
 	// Send mycnf as nil because vtcombo won't do backups and restores.
+	//
+	// Also force the `--tablet_protocol` to be the "internal" protocol that
+	// InitTabletMap registers.
+	flags.Set("tablet_protocol", "internal")
 	uid, err := vtcombo.InitTabletMap(ts, &tpb, mysqld, &dbconfigs.GlobalDBConfigs, *schemaDir, *startMysql)
 	if err != nil {
 		log.Errorf("initTabletMapProto failed: %v", err)
@@ -288,22 +321,22 @@ func (mysqld *vtcomboMysqld) SetReplicationSource(ctx context.Context, host stri
 	return nil
 }
 
-//StartReplication implements the MysqlDaemon interface
+// StartReplication implements the MysqlDaemon interface
 func (mysqld *vtcomboMysqld) StartReplication(hookExtraEnv map[string]string) error {
 	return nil
 }
 
-//RestartReplication implements the MysqlDaemon interface
+// RestartReplication implements the MysqlDaemon interface
 func (mysqld *vtcomboMysqld) RestartReplication(hookExtraEnv map[string]string) error {
 	return nil
 }
 
-//StartReplicationUntilAfter implements the MysqlDaemon interface
+// StartReplicationUntilAfter implements the MysqlDaemon interface
 func (mysqld *vtcomboMysqld) StartReplicationUntilAfter(ctx context.Context, pos mysql.Position) error {
 	return nil
 }
 
-//StopReplication implements the MysqlDaemon interface
+// StopReplication implements the MysqlDaemon interface
 func (mysqld *vtcomboMysqld) StopReplication(hookExtraEnv map[string]string) error {
 	return nil
 }

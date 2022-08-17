@@ -33,7 +33,6 @@ package sqlparser
 //
 // Only fields that refer to AST nodes are considered children;
 // i.e., fields of basic types (strings, []byte, etc.) are ignored.
-//
 func Rewrite(node SQLNode, pre, post ApplyFunc) (result SQLNode) {
 	parent := &RootNode{node}
 

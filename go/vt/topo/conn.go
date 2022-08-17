@@ -337,32 +337,33 @@ type KVInfo struct {
 //
 // mp := server.NewLeaderParticipation("vtctld", "hostname:8080")
 // job := NewJob()
-// go func() {
-//   for {
-//     ctx, err := mp.WaitForLeadership()
-//     switch err {
-//     case nil:
-//       job.RunUntilContextDone(ctx)
-//     case topo.ErrInterrupted:
-//       return
-//     default:
-//       log.Errorf("Got error while waiting for primary, will retry in 5s: %v", err)
-//       time.Sleep(5 * time.Second)
-//     }
-//   }
-// }()
 //
-// http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-//   if job.Running() {
-//     job.WriteStatus(w, r)
-//   } else {
-//     http.Redirect(w, r, mp.GetCurrentLeaderID(context.Background()), http.StatusFound)
-//   }
-// })
+//	go func() {
+//	  for {
+//	    ctx, err := mp.WaitForLeadership()
+//	    switch err {
+//	    case nil:
+//	      job.RunUntilContextDone(ctx)
+//	    case topo.ErrInterrupted:
+//	      return
+//	    default:
+//	      log.Errorf("Got error while waiting for primary, will retry in 5s: %v", err)
+//	      time.Sleep(5 * time.Second)
+//	    }
+//	  }
+//	}()
 //
-// servenv.OnTermSync(func() {
-//   mp.Stop()
-// })
+//	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+//	  if job.Running() {
+//	    job.WriteStatus(w, r)
+//	  } else {
+//	    http.Redirect(w, r, mp.GetCurrentLeaderID(context.Background()), http.StatusFound)
+//	  }
+//	})
+//
+//	servenv.OnTermSync(func() {
+//	  mp.Stop()
+//	})
 type LeaderParticipation interface {
 	// WaitForLeadership makes the current process a candidate
 	// for election, and waits until this process is the primary.
