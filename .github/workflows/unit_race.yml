@@ -8,7 +8,7 @@ jobs:
 
   build:
     name: Unit Test (Race)
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     steps:
 
     - name: Check out code
@@ -18,8 +18,13 @@ jobs:
       run: docker build -f ./.github/docker/unit_test_race/Dockerfile -t unit_test_race:$GITHUB_SHA  .
 
     - name: Run test
-      timeout-minutes: 30
-      run: docker run --name "unit_test_race_$GITHUB_SHA" unit_test_race:$GITHUB_SHA /bin/bash -c 'make unit_test_race'
+      uses: nick-fields/retry@v2
+        with:
+          timeout_minutes: 30
+          max_attempts: 3
+          retry_on: error
+          command: |
+            docker run --name "unit_test_race_$GITHUB_SHA" unit_test_race:$GITHUB_SHA /bin/bash -c 'make unit_test_race'
 
     - name: Print Volume Used
       if: ${{ always() }}

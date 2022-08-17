@@ -17,8 +17,13 @@ jobs:
         run: docker build -f {{.Dockerfile}} -t {{.ImageName}}:$GITHUB_SHA  .
 
       - name: Run test
-        timeout-minutes: 30
-        run: docker run --name "{{.ImageName}}_$GITHUB_SHA" {{.ImageName}}:$GITHUB_SHA /bin/bash -c 'source build.env && go run test.go -keep-data=true -docker=false -print-log -follow -shard {{.Shard}} -- -- --keep-data=true'
+        uses: nick-fields/retry@v2
+        with:
+          timeout_minutes: 30
+          max_attempts: 3
+          retry_on: error
+          command: |
+            docker run --name "{{.ImageName}}_$GITHUB_SHA" {{.ImageName}}:$GITHUB_SHA /bin/bash -c 'source build.env && go run test.go -keep-data=true -docker=false -print-log -follow -shard {{.Shard}} -- -- --keep-data=true'
 
       - name: Print Volume Used
         if: ${{"{{ always() }}"}}
