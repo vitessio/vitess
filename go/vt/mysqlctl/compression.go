@@ -46,7 +46,7 @@ const (
 var (
 	compressionLevel = flag.Int("compression-level", 1, "what level to pass to the compressor")
 	// switch which compressor/decompressor to use
-	CompressionEngineName = flag.String("compression-engine-name", "pgzip", "compressor engine used for compression.")
+	CompressionEngineName = flag.String("compression-engine-name", "pargzip", "compressor engine used for compression.")
 	// use and external command to decompress the backups
 	ExternalCompressorCmd   = flag.String("external-compressor", "", "command with arguments to use when compressing a backup")
 	ExternalCompressorExt   = flag.String("external-compressor-extension", "", "extension to use when using an external compressor")
