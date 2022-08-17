@@ -431,8 +431,8 @@ Usage of vttablet:
       --topocustomrule_path string                                       path for customrules file. Disabled if empty.
       --tracer string                                                    tracing service to use (default "noop")
       --tracing-enable-logging                                           whether to enable logging in the tracing service
-      --tracing-sampling-rate OptionalFloat64                            sampling rate for the probabilistic jaeger sampler (default 0.1)
-      --tracing-sampling-type OptionalString                             sampling strategy to use for jaeger. possible values are 'const', 'probabilistic', 'rateLimiting', or 'remote' (default const)
+      --tracing-sampling-rate float                                      sampling rate for the probabilistic jaeger sampler (default 0.1)
+      --tracing-sampling-type string                                     sampling strategy to use for jaeger. possible values are 'const', 'probabilistic', 'rateLimiting', or 'remote' (default "const")
       --track_schema_versions                                            When enabled, vttablet will store versions of schemas at each position that a DDL is applied and allow retrieval of the schema corresponding to a position
       --transaction-log-stream-handler string                            URL handler for streaming transactions log (default "/debug/txlog")
       --transaction_limit_by_component                                   Include CallerID.component when considering who the user is for the purpose of transaction limit.
