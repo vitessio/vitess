@@ -18,12 +18,6 @@ jobs:
       run: |
         echo '1024 65535' | sudo tee -a /proc/sys/net/ipv4/ip_local_port_range
 
-    # TEMPORARY WHILE GITHUB FIXES THIS https://github.com/actions/virtual-environments/issues/3185
-    - name: Add the current IP address, long hostname and short hostname record to /etc/hosts file
-      run: |
-        echo -e "$(ip addr show eth0 | grep "inet\b" | awk '{print $2}' | cut -d/ -f1)\t$(hostname -f) $(hostname -s)" | sudo tee -a /etc/hosts
-    # DON'T FORGET TO REMOVE CODE ABOVE WHEN ISSUE IS ADRESSED!
-
     - name: Check out code
       uses: actions/checkout@v2
 
@@ -75,23 +69,12 @@ jobs:
 
         {{end}}
 
-        {{if (eq .Platform "mariadb101")}}
-
-        # mariadb101
-        sudo apt-get install -y software-properties-common
-        sudo apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 0xF1656F24C74CD1D8
-        sudo add-apt-repository 'deb [arch=amd64,arm64,ppc64el] http://nyc2.mirrors.digitalocean.com/mariadb/repo/10.1/ubuntu bionic main'
-        sudo apt update
-        sudo DEBIAN_FRONTEND="noninteractive" apt install -y mariadb-server
-
-        {{end}}
-
         {{if (eq .Platform "mariadb102")}}
 
         # mariadb102
         sudo apt-get install -y software-properties-common
         sudo apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 0xF1656F24C74CD1D8
-        sudo add-apt-repository 'deb [arch=amd64,arm64,ppc64el] http://nyc2.mirrors.digitalocean.com/mariadb/repo/10.2/ubuntu bionic main'
+        sudo add-apt-repository 'deb [arch=amd64,arm64,ppc64el] https://mirror.rackspace.com/mariadb/repo/10.2/ubuntu bionic main'
         sudo apt update
         sudo DEBIAN_FRONTEND="noninteractive" apt install -y mariadb-server
 
@@ -102,7 +85,7 @@ jobs:
         # mariadb103
         sudo apt-get install -y software-properties-common
         sudo apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 0xF1656F24C74CD1D8
-        sudo add-apt-repository 'deb [arch=amd64,arm64,ppc64el] http://nyc2.mirrors.digitalocean.com/mariadb/repo/10.3/ubuntu bionic main'
+        sudo add-apt-repository 'deb [arch=amd64,arm64,ppc64el] https://mirror.rackspace.com/mariadb/repo/10.3/ubuntu bionic main'
         sudo apt update
         sudo DEBIAN_FRONTEND="noninteractive" apt install -y mariadb-server
 

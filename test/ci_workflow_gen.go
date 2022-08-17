@@ -30,12 +30,12 @@ const (
 	workflowConfigDir = "../.github/workflows"
 
 	unitTestTemplate  = "templates/unit_test.tpl"
-	unitTestDatabases = "percona56, mysql80, mariadb102"
+	unitTestDatabases = "percona56, mysql57, mariadb103, mysql80, mariadb102"
 
 	clusterTestTemplate = "templates/cluster_endtoend_test.tpl"
 
 	unitTestSelfHostedTemplate    = "templates/unit_test_self_hosted.tpl"
-	unitTestSelfHostedDatabases   = "mysql57, mariadb103"
+	unitTestSelfHostedDatabases   = ""
 	dockerFileTemplate            = "templates/dockerfile.tpl"
 	clusterTestSelfHostedTemplate = "templates/cluster_endtoend_test_self_hosted.tpl"
 )
@@ -96,14 +96,13 @@ var (
 		"resharding",
 		"resharding_bytes",
 		"mysql80",
-	}
-
-	clusterSelfHostedList = []string{
 		"vreplication_basic",
 		"vreplication_multicell",
 		"vreplication_cellalias",
 		"vreplication_v2",
 	}
+
+	clusterSelfHostedList = []string{}
 	// TODO: currently some percona tools including xtrabackup are installed on all clusters, we can possibly optimize
 	// this by only installing them in the required clusters
 	clustersRequiringXtraBackup = append(clusterList, clusterSelfHostedList...)
@@ -180,7 +179,9 @@ func canonnizeList(list []string) []string {
 func parseList(csvList string) []string {
 	var list []string
 	for _, item := range strings.Split(csvList, ",") {
-		list = append(list, strings.TrimSpace(item))
+		if item != "" {
+			list = append(list, strings.TrimSpace(item))
+		}
 	}
 	return list
 }
