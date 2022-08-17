@@ -240,7 +240,7 @@ func InitVReplicationSchema() error {
 		for _, sql := range allDDLQueries {
 			if _, err := conn.ExecuteFetch(sql, 0, false); err != nil {
 				log.Errorf("Error executing %v: %v", sql, err)
-				//return err
+				return err
 			}
 		}
 

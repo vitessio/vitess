@@ -261,7 +261,6 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	}
 	// In initial_backup mode, just take a backup of this empty database.
 	if *initialBackup {
-		log.Info("initialBackup...")
 		// Take a backup of this empty DB without restoring anything.
 		// First, initialize it the way InitShardPrimary would, so this backup
 		// produces a result that can be used to skip InitShardPrimary entirely.
@@ -270,6 +269,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		if err := mysqld.ResetReplication(ctx); err != nil {
 			return fmt.Errorf("can't reset replication: %v", err)
 		}
+		// We need to switch off super-read-only before we create database.
 		_ = mysqld.SetSuperReadOnly(false)
 		defer func() {
 			_ = mysqld.SetSuperReadOnly(true)

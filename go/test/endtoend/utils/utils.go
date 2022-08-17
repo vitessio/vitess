@@ -111,7 +111,7 @@ func AssertResultIsEmpty(t *testing.T, conn *mysql.Conn, pre string) {
 	})
 }
 
-// Exec executes the given query using the given connection. The results are returned.
+// ExecWithReadOnlyHandling executes the given query using the given connection while turning super-read-only to false
 // The test fails if the query produces an error.
 func ExecWithReadOnlyHandling(t testing.TB, conn *mysql.Conn, query string) *sqltypes.Result {
 	t.Helper()

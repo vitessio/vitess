@@ -335,7 +335,7 @@ func mergeTags(a, b map[string]string) map[string]string {
 
 // Start starts the TabletManager.
 func (tm *TabletManager) Start(tablet *topodatapb.Tablet, healthCheckInterval time.Duration) error {
-	log.Infof("start initializing tablet...")
+	log.Infof("start TabletManager...")
 	tm.DBConfigs.DBName = topoproto.TabletDbName(tablet)
 	tm.replManager = newReplManager(tm.BatchCtx, tm, healthCheckInterval)
 	tm.tabletAlias = tablet.Alias
@@ -360,7 +360,6 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, healthCheckInterval ti
 		return err
 	}
 
-	log.Infof("start InitDBConfig...")
 	err = tm.QueryServiceControl.InitDBConfig(&querypb.Target{
 		Keyspace:   tablet.Keyspace,
 		Shard:      tablet.Shard,
@@ -370,23 +369,19 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, healthCheckInterval ti
 		return vterrors.Wrap(err, "failed to InitDBConfig")
 	}
 	tm.QueryServiceControl.RegisterQueryRuleSource(denyListQueryList)
-	log.Infof("start UpdateStream...")
 	if tm.UpdateStream != nil {
 		tm.UpdateStream.InitDBConfig(tm.DBConfigs)
 		servenv.OnRun(tm.UpdateStream.RegisterService)
 		servenv.OnTerm(tm.UpdateStream.Disable)
 	}
-	log.Infof("start VREngine...")
 	if tm.VREngine != nil {
 		tm.VREngine.InitDBConfig(tm.DBConfigs)
 		servenv.OnTerm(tm.VREngine.Close)
 	}
-	log.Infof("start VDiffEngine...")
 	if tm.VDiffEngine != nil {
 		tm.VDiffEngine.InitDBConfig(tm.DBConfigs)
 		servenv.OnTerm(tm.VDiffEngine.Close)
 	}
-	log.Infof("start startShardSync...")
 	// The following initializations don't need to be done
 	// in any specific order.
 	tm.startShardSync()
@@ -400,7 +395,6 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, healthCheckInterval ti
 		go tm.orc.DiscoverLoop(tm)
 	}
 	servenv.OnRun(tm.registerTabletManager)
-	log.Infof("start handleRestore...")
 	restoring, err := tm.handleRestore(tm.BatchCtx)
 	if err != nil {
 		return err
@@ -419,6 +413,7 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, healthCheckInterval ti
 	return err
 }
 
+// initSchema runs all the schema mutation during tablet setup.
 func (tm *TabletManager) initSchema(ctx context.Context,
 	mysqld mysqlctl.MysqlDaemon,
 	localMetadata map[string]string,
@@ -811,7 +806,6 @@ func (tm *TabletManager) handleRestore(ctx context.Context) (bool, error) {
 	}
 	// optionally populate metadata records
 	if *mysqlctl.InitPopulateMetadata {
-		log.Info("start populate data")
 		localMetadata := tm.getLocalMetadataValues(tablet.Type)
 		if tm.Cnf != nil { // we are managing mysqld
 			// we'll use batchCtx here because we are still initializing and can't proceed unless this succeeds
@@ -822,7 +816,6 @@ func (tm *TabletManager) handleRestore(ctx context.Context) (bool, error) {
 
 		// initialize the schema. We will not return in case of error
 		// but we will just log them and move on.
-		log.Infof("initialize schema >> no backup provided")
 		var schemaErrors []error
 		var metadataError error
 		schemaErrors, metadataError = tm.initSchema(ctx, tm.MysqlDaemon, localMetadata, topoproto.TabletDbName(tablet), tm.MetadataManager)

@@ -372,13 +372,14 @@ func (vttablet *VttabletProcess) TearDownWithTimeout(timeout time.Duration) erro
 
 // CreateDB creates the database for keyspace
 func (vttablet *VttabletProcess) CreateDB(keyspace string) error {
-	_, _ = vttablet.QueryTabletWithReadOnlyHandling(fmt.Sprintf("drop database IF EXISTS vt_%s", keyspace), keyspace, false)
-	_, err := vttablet.QueryTabletWithReadOnlyHandling(fmt.Sprintf("create database IF NOT EXISTS vt_%s", keyspace), keyspace, false)
+	_, _ = vttablet.QueryTabletWithSuperReadOnlyHandling(fmt.Sprintf("drop database IF EXISTS vt_%s", keyspace), keyspace, false)
+	_, err := vttablet.QueryTabletWithSuperReadOnlyHandling(fmt.Sprintf("create database IF NOT EXISTS vt_%s", keyspace), keyspace, false)
 	return err
 }
 
-// QueryTablet lets you execute a query in this tablet and get the result
-func (vttablet *VttabletProcess) QueryTabletWithReadOnlyHandling(query string, keyspace string, useDb bool) (*sqltypes.Result, error) {
+// QueryTabletWithSuperReadOnlyHandling lets you execute a query in this tablet while disabling super-read-only and get the result
+// It will enable super-read-only once its done executing the query.
+func (vttablet *VttabletProcess) QueryTabletWithSuperReadOnlyHandling(query string, keyspace string, useDb bool) (*sqltypes.Result, error) {
 	if !useDb {
 		keyspace = ""
 	}
@@ -388,7 +389,7 @@ func (vttablet *VttabletProcess) QueryTabletWithReadOnlyHandling(query string, k
 		return nil, err
 	}
 	defer conn.Close()
-	return executeQueryWithReadOnlyHandling(conn, query)
+	return executeQueryWithSuperReadOnlyHandling(conn, query)
 }
 
 // QueryTablet lets you execute a query in this tablet and get the result
@@ -457,8 +458,9 @@ func executeQuery(dbConn *mysql.Conn, query string) (*sqltypes.Result, error) {
 }
 
 // executeQuery will retry the query up to 10 times with a small sleep in between each try.
-// This allows the tests to be more robust in the face of transient failures.
-func executeQueryWithReadOnlyHandling(dbConn *mysql.Conn, query string) (*sqltypes.Result, error) {
+// This allows the tests to be more robust in the face of transient failures. It disables
+// super-read-only during query execution.
+func executeQueryWithSuperReadOnlyHandling(dbConn *mysql.Conn, query string) (*sqltypes.Result, error) {
 	var (
 		err    error
 		result *sqltypes.Result
@@ -634,6 +636,8 @@ func VttabletProcessInstance(port, grpcPort, tabletUID int, cell, shard, keyspac
 	return vttablet
 }
 
+// InitSchema will initialize the schema as it is done during vttablet setup.
+// There are some test cases where we are expecting schema without calling initPrimary
 func (vttablet *VttabletProcess) InitSchema() []error {
 	// get a dba connection
 	conn, err := vttablet.defaultConn("")
@@ -647,6 +651,7 @@ func (vttablet *VttabletProcess) InitSchema() []error {
 	return errors
 }
 
+// UnsetSuperReadOnly switch-off super-read-only flag in db
 func (vttablet *VttabletProcess) UnsetSuperReadOnly(dbname string) error {
 	conn, err := vttablet.defaultConn("")
 	if err != nil {
@@ -659,6 +664,7 @@ func (vttablet *VttabletProcess) UnsetSuperReadOnly(dbname string) error {
 	return err
 }
 
+// UnsetReadOnly switch-off read-only flag in db
 func (vttablet *VttabletProcess) UnsetReadOnly(dbname string) error {
 	conn, err := vttablet.defaultConn("")
 	if err != nil {

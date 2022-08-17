@@ -105,6 +105,7 @@ jobs:
       timeout-minutes: 30
       run: |
         
+        # mariadb103
         export MYSQL_FLAVOR="MariaDB103"
         
         eatmydata -- make unit_test

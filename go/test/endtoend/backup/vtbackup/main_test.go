@@ -90,6 +90,8 @@ func TestMain(m *testing.M) {
 		dbCredentialFile = cluster.WriteDbCredentialToTmp(localCluster.TmpDirectory)
 		initDb, _ := os.ReadFile(path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"))
 		sql := string(initDb)
+		// Since password update is DML we need to insert it before we disable
+		// super-read-only therefore doing the split below.
 		spilltedString := strings.Split(sql, "# add custom sql here")
 		firstPart := spilltedString[0] + cluster.GetPasswordUpdateSQL(localCluster)
 		sql = firstPart + spilltedString[1]

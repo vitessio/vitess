@@ -354,6 +354,7 @@ func (c *Conn) ExecuteFetchWithReadOnlyHandling(query string, maxrows int, wantf
 	return result, err
 }
 
+// ExecuteUnSetSuperReadOnly tries to set super-read-only to false only if it is currently enable
 func (c *Conn) ExecuteUnSetSuperReadOnly() (result *sqltypes.Result, err error) {
 	// Note: MariaDB does not have super_read_only but support for it is EOL in v14.0+
 	if !c.IsMariaDB() {
@@ -374,6 +375,7 @@ func (c *Conn) ExecuteUnSetSuperReadOnly() (result *sqltypes.Result, err error) 
 	return result, err
 }
 
+// ExecuteSetSuperReadOnly tries to set super-read-only to true only if it is currently disable
 func (c *Conn) ExecuteSetSuperReadOnly() (result *sqltypes.Result, err error) {
 	// Note: MariaDB does not have super_read_only but support for it is EOL in v14.0+
 	if !c.IsMariaDB() {
@@ -394,6 +396,7 @@ func (c *Conn) ExecuteSetSuperReadOnly() (result *sqltypes.Result, err error) {
 	return result, err
 }
 
+// ExecuteUnSetReadOnly tries to set read-only to false only if it is currently enable
 func (c *Conn) ExecuteUnSetReadOnly() (result *sqltypes.Result, err error) {
 	if err := c.WriteComQuery("SELECT @@global.read_only"); err != nil {
 		return nil, err

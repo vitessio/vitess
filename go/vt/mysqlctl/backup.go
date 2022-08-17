@@ -404,6 +404,7 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 	return manifest, nil
 }
 
+// initSchema runs all the schema mutation during tablet setup.
 func initSchema(ctx context.Context, params RestoreParams) ([]error, error) {
 	// get a dba connection
 	conn, err := params.Mysqld.GetDbaConnection(ctx)

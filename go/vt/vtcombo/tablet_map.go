@@ -126,13 +126,8 @@ func CreateTablet(
 		return fmt.Errorf("failed on set super read only on %v: %v", topoproto.TabletAliasString(alias), err)
 	}
 
-	//time.Sleep(10 * time.Second)
-
 	if tabletType == topodatapb.TabletType_PRIMARY {
 		// Semi-sync has to be set to false, since we have 1 single backing MySQL
-		/*if _, err := tm.InitPrimary(ctx, false); err != nil {
-			return fmt.Errorf("TabletExternallyReparented failed on primary %v: %v", topoproto.TabletAliasString(alias), err)
-		}*/
 		if err := tm.ChangeType(ctx, topodatapb.TabletType_PRIMARY, false); err != nil {
 			return fmt.Errorf("TabletExternallyReparented failed on primary %v: %v", topoproto.TabletAliasString(alias), err)
 		}

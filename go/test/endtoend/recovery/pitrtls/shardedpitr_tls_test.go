@@ -191,7 +191,7 @@ func initializeCluster(t *testing.T) {
 
 	for _, tablet := range []*cluster.Vttablet{primary, shard0Primary, shard1Primary} {
 		for _, query := range queryCmds {
-			_, err = tablet.VttabletProcess.QueryTabletWithReadOnlyHandling(query, keyspace.Name, false)
+			_, err = tablet.VttabletProcess.QueryTabletWithSuperReadOnlyHandling(query, keyspace.Name, false)
 			require.NoError(t, err)
 		}
 	}

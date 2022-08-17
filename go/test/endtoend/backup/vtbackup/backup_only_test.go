@@ -62,11 +62,11 @@ func TestTabletInitialBackup(t *testing.T) {
 	initTablets(t, false, false)
 
 	// Restore the Tablets
-	restore(t, primary, "replica", "NOT_SERVING", true, true)
+	restore(t, primary, "replica", "NOT_SERVING", true)
 	err := localCluster.VtctlclientProcess.ExecuteCommand(
 		"TabletExternallyReparented", primary.Alias)
 	require.Nil(t, err)
-	restore(t, replica1, "replica", "SERVING", true, false)
+	restore(t, replica1, "replica", "SERVING", false)
 
 	// Run the entire backup test
 	firstBackupTest(t, "replica")
@@ -114,10 +114,10 @@ func firstBackupTest(t *testing.T, tabletType string) {
 	require.Nil(t, err)
 
 	// insert data on primary, wait for replica to get it
-	_, err = primary.VttabletProcess.QueryTabletWithReadOnlyHandling(vtInsertTest, keyspaceName, true)
+	_, err = primary.VttabletProcess.QueryTablet(vtInsertTest, keyspaceName, true)
 	require.Nil(t, err)
 	// Add a single row with value 'test1' to the primary tablet
-	_, err = primary.VttabletProcess.QueryTabletWithReadOnlyHandling("insert into vt_insert_test (msg) values ('test1')", keyspaceName, true)
+	_, err = primary.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test1')", keyspaceName, true)
 	require.Nil(t, err)
 
 	// Check that the specified tablet has the expected number of rows
@@ -132,14 +132,14 @@ func firstBackupTest(t *testing.T, tabletType string) {
 	verifyBackupCount(t, shardKsName, len(backups)+1)
 
 	// insert more data on the primary
-	_, err = primary.VttabletProcess.QueryTabletWithReadOnlyHandling("insert into vt_insert_test (msg) values ('test2')", keyspaceName, true)
+	_, err = primary.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test2')", keyspaceName, true)
 	require.Nil(t, err)
 	cluster.VerifyRowsInTablet(t, replica1, keyspaceName, 2)
 
 	// now bring up the other replica, letting it restore from backup.
 	err = localCluster.VtctlclientProcess.InitTablet(replica2, cell, keyspaceName, hostname, shardName)
 	require.Nil(t, err)
-	restore(t, replica2, "replica", "SERVING", true, false)
+	restore(t, replica2, "replica", "SERVING", false)
 	// Replica2 takes time to serve. Sleeping for 5 sec.
 	time.Sleep(5 * time.Second)
 	//check the new replica has the data
@@ -220,18 +220,21 @@ func initTablets(t *testing.T, startTablet bool, initShardPrimary bool) {
 	// Initialize tablets
 	for _, tablet := range []cluster.Vttablet{*primary, *replica1} {
 		if initShardPrimary {
-			tablet.VttabletProcess.ExtraArgs = removeExtraArgs(tablet.VttabletProcess.ExtraArgs, "--disable_active_reparents=true")
-			tablet.VttabletProcess.ExtraArgs = removeExtraArgs(tablet.VttabletProcess.ExtraArgs, "--use_super_read_only=true")
-			tablet.VttabletProcess.ExtraArgs = append(tablet.VttabletProcess.ExtraArgs, fmt.Sprintf("--use_super_read_only=%t", true))
+			tablet.VttabletProcess.ExtraArgs = removeFromArgs(tablet.VttabletProcess.ExtraArgs, "--disable_active_reparents=true")
+			if !existsInArgs(tablet.VttabletProcess.ExtraArgs, "--use_super_read_only=true") {
+				tablet.VttabletProcess.ExtraArgs = append(tablet.VttabletProcess.ExtraArgs, fmt.Sprintf("--use_super_read_only=%t", true))
+			}
 		}
 		err := localCluster.VtctlclientProcess.InitTablet(&tablet, cell, keyspaceName, hostname, shardName)
 		require.Nil(t, err)
 
 		if startTablet {
+			tablet.VttabletProcess.ServingStatus = "NOT_SERVING"
 			err = tablet.VttabletProcess.Setup()
 			require.Nil(t, err)
 		}
 	}
+
 	time.Sleep(10 * time.Second)
 	if initShardPrimary {
 		// choose primary and start replication
@@ -240,7 +243,7 @@ func initTablets(t *testing.T, startTablet bool, initShardPrimary bool) {
 	}
 }
 
-func removeExtraArgs(extraArgs []string, argToRemove string) []string {
+func removeFromArgs(extraArgs []string, argToRemove string) []string {
 	for index, val := range extraArgs {
 		if val == argToRemove {
 			return append(extraArgs[:index], extraArgs[index+1:]...)
@@ -249,7 +252,16 @@ func removeExtraArgs(extraArgs []string, argToRemove string) []string {
 	return extraArgs
 }
 
-func restore(t *testing.T, tablet *cluster.Vttablet, tabletType string, waitForState string, setReadOnly bool, disableReparentShard bool) {
+func existsInArgs(extraArgs []string, arg string) bool {
+	for _, val := range extraArgs {
+		if val == arg {
+			return true
+		}
+	}
+	return false
+}
+
+func restore(t *testing.T, tablet *cluster.Vttablet, tabletType string, waitForState string, disableReparentShard bool) {
 	// Erase mysql/tablet dir, then start tablet with restore enabled.
 
 	log.Infof("restoring tablet %s", time.Now())
@@ -272,10 +284,6 @@ func restore(t *testing.T, tablet *cluster.Vttablet, tabletType string, waitForS
 	require.Nil(t, err)
 	err = tablet.VttabletProcess.WaitForTabletStatuses([]string{"SERVING", "NOT_SERVING"})
 	require.NoError(t, err)
-	/*if setReadOnly {
-		_, err = tablet.VttabletProcess.QueryTabletWithReadOnlyHandling("SET GLOBAL read_only='OFF'", "", false)
-		require.Nil(t, err)
-	}*/
 }
 
 func resetTabletDirectory(t *testing.T, tablet cluster.Vttablet, initMysql bool) {
@@ -313,7 +321,7 @@ func tearDown(t *testing.T, initMysql bool) {
 		_, err = tablet.VttabletProcess.QueryTablet(disableSemiSyncCommands, keyspaceName, true)
 		require.Nil(t, err)
 		for _, db := range []string{"_vt", "vt_insert_test"} {
-			_, err = tablet.VttabletProcess.QueryTabletWithReadOnlyHandling(fmt.Sprintf("drop database if exists %s", db), keyspaceName, true)
+			_, err = tablet.VttabletProcess.QueryTabletWithSuperReadOnlyHandling(fmt.Sprintf("drop database if exists %s", db), keyspaceName, true)
 			require.Nil(t, err)
 		}
 	}

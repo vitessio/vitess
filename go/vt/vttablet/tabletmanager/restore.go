@@ -187,7 +187,6 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 	}
 	if !ok {
 		params.Logger.Infof("Attempting to restore, but mysqld already contains data. Assuming vttablet was just restarted.")
-		log.Infof("initialize schema >> mysqld already contains data")
 		metadataManager := &mysqlctl.MetadataManager{}
 		var schemaErrors []error
 		var metadataError error

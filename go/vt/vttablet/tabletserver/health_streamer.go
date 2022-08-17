@@ -325,7 +325,6 @@ func (hs *healthStreamer) reload() error {
 	}
 	defer conn.Recycle()
 
-	log.Infof("InitSchemaLocked END: %t", hs.initSuccess)
 	if !hs.initSuccess {
 		hs.initSuccess, err = hs.InitSchemaLocked(conn)
 		if err != nil {
@@ -413,12 +412,6 @@ func InitSchema() error {
 		for _, sql := range mysql.VTDatabaseInit {
 			if _, err := conn.ExecuteFetch(sql, 0, false); err != nil {
 				log.Errorf("Error executing %v: %v", sql, err)
-				/*if mysql.IsSchemaApplyError(err) {
-					continue
-				}
-				if err != nil {
-					return err
-				}*/
 			}
 		}
 

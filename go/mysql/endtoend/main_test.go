@@ -243,6 +243,9 @@ ssl-key=%v/server-key.pem
 		// fmt.Printf("Connect to MySQL using parameters:\n")
 		// json.NewEncoder(os.Stdout).Encode(connParams)
 		// time.Sleep(10 * time.Minute)
+
+		// set super-read-only to 'Off' since all our instance now
+		// get started with super-read-only
 		cluster.UnsetReadOnly("")
 		return m.Run()
 	}()

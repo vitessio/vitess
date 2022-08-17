@@ -91,7 +91,8 @@ func TestMainSetup(m *testing.M, useMysqlctld bool) {
 		dbCredentialFile = cluster.WriteDbCredentialToTmp(localCluster.TmpDirectory)
 		initDb, _ := os.ReadFile(path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"))
 		sql := string(initDb)
-		//sql = removeSuperReadOnlyStatements(sql)
+		// Since password update is DML we need to insert it before we disable
+		// super-read-only therefore doing the split below.
 		spilltedString := strings.Split(sql, "# add custom sql here")
 		firstPart := spilltedString[0] + cluster.GetPasswordUpdateSQL(localCluster)
 		sql = firstPart + spilltedString[1]
@@ -174,6 +175,9 @@ func TestMainSetup(m *testing.M, useMysqlctld bool) {
 			return 1, err
 		}
 
+		// We need to disable super-read-only for each tablet. If we don't do it then
+		// our upgrade downgrade test fail because they run with N-1 vttablet binary, which does not
+		// have code to disable super-read-only during InitPrimary
 		for _, tablet := range []cluster.Vttablet{*primary, *replica1, *replica2} {
 			if err := tablet.VttabletProcess.UnsetSuperReadOnly(""); err != nil {
 				return 1, err
@@ -190,16 +194,6 @@ func TestMainSetup(m *testing.M, useMysqlctld bool) {
 	}
 
 }
-
-/*func removeSuperReadOnlyStatements(sql string) string {
-	spilltedString := strings.Split(sql, "SET @original_super_read_only=IF(@@global.super_read_only=1, 'ON', 'OFF');")
-	tmp := spilltedString[0] + spilltedString[1]
-	spilltedString = strings.Split(tmp, "SET GLOBAL super_read_only='OFF';")
-	tmp = spilltedString[0] + spilltedString[1]
-	spilltedString = strings.Split(tmp, "SET GLOBAL super_read_only=IFNULL(@original_super_read_only, 'OFF');")
-	tmp = spilltedString[0] + spilltedString[1]
-	return tmp
-}*/
 
 // create query for test table creation
 var vtInsertTest = `create table vt_insert_test (

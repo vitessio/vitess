@@ -198,6 +198,7 @@ func New(t testing.TB) *DB {
 	return db
 }
 
+// NewWithExpectedQueries returns DB with all the queries expected at the time of vttablet Initialization
 func NewWithExpectedQueries(t testing.TB) *DB {
 	newDb := New(t)
 	newDb.AddQuery("create database if not exists `vt_test_keyspace`", &sqltypes.Result{InsertID: 0, RowsAffected: 0})

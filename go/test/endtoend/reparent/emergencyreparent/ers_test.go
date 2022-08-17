@@ -27,12 +27,10 @@ import (
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/reparent/utils"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/vttablet/tabletmanager"
 )
 
 func TestTrivialERS(t *testing.T) {
 	defer cluster.PanicHandler(t)
-
 	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
@@ -372,8 +370,6 @@ func TestNoReplicationStatusAndIOThreadStopped(t *testing.T) {
 // TestERSForInitialization tests whether calling ERS in the beginning sets up the cluster properly or not
 func TestERSForInitialization(t *testing.T) {
 	var tablets []*cluster.Vttablet
-	*tabletmanager.SetSuperReadOnly = true
-	defer func() { *tabletmanager.SetSuperReadOnly = false }()
 	clusterInstance := cluster.NewCluster("zone1", "localhost")
 	defer clusterInstance.Teardown()
 	keyspace := &cluster.Keyspace{Name: utils.KeyspaceName}

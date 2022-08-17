@@ -51,7 +51,7 @@ func newSchemaInitializer() *schemaInitializer {
 	return &schemaInitializer{}
 }
 
-// Set super-read-only flag to 'ON'
+// SetSuperReadOnlyUser sets super-read-only flag to 'ON'
 func (si *schemaInitializer) SetSuperReadOnlyUser(conn *Conn) error {
 	if conn.IsMariaDB() {
 		return nil
@@ -66,7 +66,7 @@ func (si *schemaInitializer) SetSuperReadOnlyUser(conn *Conn) error {
 	return err
 }
 
-// Set super-read-only flag to 'OFF'
+// UnsetSuperReadOnlyUser sets super-read-only flag to 'OFF'
 func (si *schemaInitializer) UnsetSuperReadOnlyUser(conn *Conn) error {
 	if conn.IsMariaDB() {
 		return nil
@@ -93,7 +93,6 @@ func (si *schemaInitializer) isRegistered(name string) bool {
 
 func (si *schemaInitializer) RegisterSchemaInitializer(name string, initFunc func(conn *Conn) error, atHead bool) {
 	si.mu.Lock()
-	//log.Infof("SchemaInitializer: registering function: %s %d", name, len(si.funcs))
 	defer si.mu.Unlock()
 	if si.isRegistered(name) {
 		return
@@ -108,7 +107,7 @@ func (si *schemaInitializer) RegisterSchemaInitializer(name string, initFunc fun
 
 // TODO do we need context here
 func (si *schemaInitializer) InitializeSchema(conn *Conn, disableSuperReadOnly bool, disableReplication bool) []error {
-	log.Infof("run all mutation %d", len(si.funcs))
+	log.Infof("Run %d initialization schemas", len(si.funcs))
 	si.mu.Lock()
 	defer si.mu.Unlock()
 
