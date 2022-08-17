@@ -152,7 +152,7 @@ type clusterTest struct {
 	Name, Shard, Platform        string
 	FileName                     string
 	MakeTools, InstallXtraBackup bool
-	Ubuntu20, Docker             bool
+	Docker                       bool
 	LimitResourceUsage           bool
 }
 
@@ -346,7 +346,6 @@ func generateClusterWorkflows(list []string, tpl string) {
 				}
 			}
 			if mysqlVersion == mysql80 {
-				test.Ubuntu20 = true
 				test.Platform = string(mysql80)
 			}
 			if strings.HasPrefix(cluster, "vreplication") || strings.HasSuffix(cluster, "heavy") {
