@@ -130,6 +130,7 @@ var (
 	clusterSelfHostedList = []string{
 		"12",
 		"18",
+		"vtbackup_transform",
 	}
 	clusterDockerList           = []string{}
 	clustersRequiringXtraBackup = []string{
