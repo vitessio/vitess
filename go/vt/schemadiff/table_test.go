@@ -857,7 +857,7 @@ func TestCreateTableDiff(t *testing.T) {
 			name:  "remove table option 2",
 			from:  "create table t1 (id int primary key) CHECKSUM=1",
 			to:    "create table t1 (id int primary key) ",
-			diff:  "alter table t1 CHECKSUM 0",
+			diff:  "alter table t1 checksum 0",
 			cdiff: "ALTER TABLE `t1` CHECKSUM 0",
 		},
 		{
@@ -871,7 +871,7 @@ func TestCreateTableDiff(t *testing.T) {
 			name:  "remove table option 4",
 			from:  "create table t1 (id int auto_increment primary key) KEY_BLOCK_SIZE=16 COMPRESSION='zlib'",
 			to:    "create table t2 (id int auto_increment primary key)",
-			diff:  "alter table t1 KEY_BLOCK_SIZE 0 COMPRESSION ''",
+			diff:  "alter table t1 key_block_size 0 compression ''",
 			cdiff: "ALTER TABLE `t1` KEY_BLOCK_SIZE 0 COMPRESSION ''",
 		},
 		{
@@ -891,7 +891,7 @@ func TestCreateTableDiff(t *testing.T) {
 			from:    "create table t1 (id int auto_increment primary key)",
 			to:      "create table t2 (id int auto_increment primary key) AUTO_INCREMENT=300",
 			autoinc: AutoIncrementApplyHigher,
-			diff:    "alter table t1 AUTO_INCREMENT 300",
+			diff:    "alter table t1 auto_increment 300",
 			cdiff:   "ALTER TABLE `t1` AUTO_INCREMENT 300",
 		},
 		{
@@ -915,7 +915,7 @@ func TestCreateTableDiff(t *testing.T) {
 			from:    "create table t1 (id int auto_increment primary key) AUTO_INCREMENT=100",
 			to:      "create table t2 (id int auto_increment primary key) AUTO_INCREMENT=300",
 			autoinc: AutoIncrementApplyHigher,
-			diff:    "alter table t1 AUTO_INCREMENT 300",
+			diff:    "alter table t1 auto_increment 300",
 			cdiff:   "ALTER TABLE `t1` AUTO_INCREMENT 300",
 		},
 		{
@@ -929,7 +929,7 @@ func TestCreateTableDiff(t *testing.T) {
 			from:    "create table t1 (id int auto_increment primary key) AUTO_INCREMENT=300",
 			to:      "create table t2 (id int auto_increment primary key) AUTO_INCREMENT=100",
 			autoinc: AutoIncrementApplyAlways,
-			diff:    "alter table t1 AUTO_INCREMENT 100",
+			diff:    "alter table t1 auto_increment 100",
 			cdiff:   "ALTER TABLE `t1` AUTO_INCREMENT 100",
 		},
 		{

@@ -307,18 +307,19 @@ func (c *CreateTableEntity) normalize() *CreateTableEntity {
 
 func (c *CreateTableEntity) normalizeTableOptions() {
 	for _, opt := range c.CreateTable.TableSpec.Options {
-		switch strings.ToUpper(opt.Name) {
-		case "CHARSET", "COLLATE":
+		opt.Name = strings.ToLower(opt.Name)
+		switch opt.Name {
+		case "charset", "collate":
 			opt.String = strings.ToLower(opt.String)
 			if charset, ok := collationEnv.CharsetAlias(opt.String); ok {
 				opt.String = charset
 			}
-		case "ENGINE":
+		case "engine":
 			opt.String = strings.ToUpper(opt.String)
 			if engineName, ok := engineCasing[opt.String]; ok {
 				opt.String = engineName
 			}
-		case "ROW_FORMAT":
+		case "row_format":
 			opt.String = strings.ToUpper(opt.String)
 		}
 	}
