@@ -42,7 +42,7 @@ jobs:
             - 'tools/**'
             - 'config/**'
             - 'bootstrap.sh'
-            - '.github/workflows/**'
+            - '.github/workflows/unit_test_mariadb102.yml'
 
     - name: Set up Go
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'

@@ -41,6 +41,7 @@ jobs:
             - 'tools/**'
             - 'config/**'
             - 'bootstrap.sh'
+            - '.github/workflows/unit_race.yml'
 
     - name: Set up Go
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
