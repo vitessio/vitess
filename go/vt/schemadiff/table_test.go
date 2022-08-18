@@ -423,6 +423,13 @@ func TestCreateTableDiff(t *testing.T) {
 			diff:  "alter table t1 alter index i_idx invisible",
 			cdiff: "ALTER TABLE `t1` ALTER INDEX `i_idx` INVISIBLE",
 		},
+		{
+			name:  "key made invisible with different case",
+			from:  "create table t1 (`id` int primary key, i int, key i_idx(i))",
+			to:    "create table t1 (`id` int primary key, i int, key i_idx(i) INVISIBLE)",
+			diff:  "alter table t1 alter index i_idx invisible",
+			cdiff: "ALTER TABLE `t1` ALTER INDEX `i_idx` INVISIBLE",
+		},
 		// FULLTEXT keys
 		{
 			name:  "add one fulltext key",

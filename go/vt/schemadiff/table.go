@@ -468,6 +468,9 @@ func (c *CreateTableEntity) normalizeIndexOptions() {
 		// This name is taking straight from the input string
 		// so we want to normalize this to always lowercase.
 		idx.Info.Type = strings.ToLower(idx.Info.Type)
+		for _, opt := range idx.Options {
+			opt.Name = strings.ToLower(opt.Name)
+		}
 	}
 }
 
