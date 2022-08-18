@@ -43,6 +43,7 @@ jobs:
             - 'config/**'
             - 'bootstrap.sh'
             - 'examples/**'
+            - '.github/workflows/region_example.yml'
 
     - name: Set up Go
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.examples == 'true'
