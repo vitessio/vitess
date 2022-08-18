@@ -28,6 +28,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/spf13/pflag"
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/vt/log"
@@ -201,6 +202,12 @@ func (t *topoFlags) buildTopology() (*vttestpb.VTTestTopology, error) {
 }
 
 func parseFlags() (env vttest.Environment, err error) {
+	fs := pflag.NewFlagSet("vtgateclienttest", pflag.ExitOnError)
+	log.RegisterFlags(fs)
+
+	f := fs.Lookup("log_rotate_max_size")
+	flag.Var(f.Value, f.Name, f.Usage)
+
 	flag.Parse()
 
 	if basePort != 0 {
