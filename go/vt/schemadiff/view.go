@@ -296,3 +296,7 @@ func (c *CreateViewEntity) Apply(diff EntityDiff) (Entity, error) {
 	}
 	return dup, nil
 }
+
+func (c *CreateViewEntity) Clone() Entity {
+	return &CreateViewEntity{CreateView: *sqlparser.CloneRefOfCreateView(&c.CreateView)}
+}

@@ -323,6 +323,10 @@ func (c *CreateTableEntity) normalizeTableOptions() {
 	}
 }
 
+func (c *CreateTableEntity) Clone() Entity {
+	return &CreateTableEntity{CreateTable: *sqlparser.CloneRefOfCreateTable(&c.CreateTable)}
+}
+
 // Right now we assume MySQL 8.0 for the collation normalization handling.
 const mysqlCollationVersion = "8.0.0"
 
