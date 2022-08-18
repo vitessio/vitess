@@ -289,11 +289,11 @@ func (c *CreateViewEntity) Apply(diff EntityDiff) (Entity, error) {
 	if !ok {
 		return nil, ErrEntityTypeMismatch
 	}
-	dupCreateView := &sqlparser.CreateView{}
-	dup := &CreateViewEntity{CreateView: *dupCreateView}
+	dup := c.Clone().(*CreateViewEntity)
 	if err := dup.apply(alterDiff); err != nil {
 		return nil, err
 	}
+	dup.normalize()
 	return dup, nil
 }
 
