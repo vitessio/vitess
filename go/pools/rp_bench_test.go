@@ -59,3 +59,46 @@ func BenchmarkGetPut(b *testing.B) {
 		}
 	}
 }
+
+func BenchmarkGetPutWithSettings(b *testing.B) {
+	testResourceFactory := func(context.Context) (Resource, error) {
+		return &TestResource{}, nil
+	}
+
+	tcases := []struct {
+		name string
+		pool func(int) IResourcePool
+	}{{
+		name: "static",
+		pool: func(cap int) IResourcePool {
+			return NewResourcePool(testResourceFactory, cap, cap, 0, nil, nil, 0)
+		},
+	}}
+
+	settings := [][]string{{}, {"a", "b", "c"}}
+
+	for _, size := range []int{64, 128, 512} {
+		for _, parallelism := range []int{1, 8, 32, 128} {
+			for _, tc := range tcases {
+				rName := fmt.Sprintf("%s/x%d-cap%d", tc.name, parallelism, size)
+				b.Run(rName, func(b *testing.B) {
+					pool := tc.pool(size)
+					defer pool.Close()
+
+					b.ReportAllocs()
+					b.SetParallelism(parallelism)
+					b.RunParallel(func(pb *testing.PB) {
+						ctx := context.Background()
+						for pb.Next() {
+							if conn, err := pool.Get(ctx, settings[1]); err != nil {
+								b.Error(err)
+							} else {
+								pool.Put(conn, conn.SettingHash())
+							}
+						}
+					})
+				})
+			}
+		}
+	}
+}

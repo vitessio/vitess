@@ -385,6 +385,7 @@ func (rp *ResourcePool) SetCapacity(capacity int) error {
 		if oldcap == 0 && capacity > 0 {
 			// Closed this before, re-open the channel
 			rp.resources = make(chan resourceWrapper, cap(rp.resources))
+			rp.settingResources = make(chan resourceWrapper, cap(rp.settingResources))
 		}
 		if oldcap == capacity {
 			return nil
