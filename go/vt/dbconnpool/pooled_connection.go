@@ -30,8 +30,7 @@ func (pc *PooledDBConnection) ApplySettings(ctx context.Context, settings []stri
 }
 
 func (pc *PooledDBConnection) SettingHash() uint64 {
-	//TODO implement me
-	panic("implement me")
+	return 0
 }
 
 // Recycle should be called to return the PooledDBConnection to the pool.

@@ -98,8 +98,7 @@ func (r *_rpc) ApplySettings(_ context.Context, _ []string) error {
 }
 
 func (r *_rpc) SettingHash() uint64 {
-	// should be unreachable
-	panic("[BUG]: _rpc does not support SettingHash")
+	return 0
 }
 
 // we only ever return the same rpc pointer. it's used as a sentinel and is
