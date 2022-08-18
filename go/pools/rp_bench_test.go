@@ -47,10 +47,10 @@ func BenchmarkGetPut(b *testing.B) {
 					b.RunParallel(func(pb *testing.PB) {
 						var ctx = context.Background()
 						for pb.Next() {
-							if conn, err := pool.Get(ctx); err != nil {
+							if conn, err := pool.Get(ctx, nil); err != nil {
 								b.Error(err)
 							} else {
-								pool.Put(conn)
+								pool.Put(conn, 0)
 							}
 						}
 					})

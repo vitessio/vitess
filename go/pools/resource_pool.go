@@ -25,6 +25,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cespare/xxhash/v2"
+
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/log"
@@ -37,8 +39,8 @@ type (
 	IResourcePool interface {
 		Close()
 		Name() string
-		Get(ctx context.Context) (resource Resource, err error)
-		Put(resource Resource)
+		Get(ctx context.Context, settings []string) (resource Resource, err error)
+		Put(resource Resource, settingHash uint64)
 		SetCapacity(capacity int) error
 		SetIdleTimeout(idleTimeout time.Duration)
 		StatsJSON() string
@@ -59,6 +61,8 @@ type (
 	// is the responsibility of the caller.
 	Resource interface {
 		Close()
+		ApplySettings(ctx context.Context, settings []string) error
+		SettingHash() uint64
 	}
 
 	// Factory is a function that can be used to create a resource.
@@ -87,6 +91,8 @@ type (
 		factory   Factory
 		idleTimer *timer.Timer
 		logWait   func(time.Time)
+
+		settingResources chan resourceWrapper
 
 		reopenMutex sync.Mutex
 		refresh     *poolRefresh
@@ -122,12 +128,13 @@ func NewResourcePool(factory Factory, capacity, maxCap int, idleTimeout time.Dur
 		panic(errors.New("invalid/out of range capacity"))
 	}
 	rp := &ResourcePool{
-		resources:   make(chan resourceWrapper, maxCap),
-		factory:     factory,
-		available:   sync2.NewAtomicInt64(int64(capacity)),
-		capacity:    sync2.NewAtomicInt64(int64(capacity)),
-		idleTimeout: sync2.NewAtomicDuration(idleTimeout),
-		logWait:     logWait,
+		resources:        make(chan resourceWrapper, maxCap),
+		settingResources: make(chan resourceWrapper, maxCap),
+		factory:          factory,
+		available:        sync2.NewAtomicInt64(int64(capacity)),
+		capacity:         sync2.NewAtomicInt64(int64(capacity)),
+		idleTimeout:      sync2.NewAtomicDuration(idleTimeout),
+		logWait:          logWait,
 	}
 	for i := 0; i < capacity; i++ {
 		rp.resources <- resourceWrapper{}
@@ -205,16 +212,18 @@ func (rp *ResourcePool) reopen() {
 // has not been reached, it will create a new one using the factory. Otherwise,
 // it will wait till the next resource becomes available or a timeout.
 // A timeout of 0 is an indefinite wait.
-func (rp *ResourcePool) Get(ctx context.Context) (resource Resource, err error) {
-	return rp.get(ctx)
-}
-
-func (rp *ResourcePool) get(ctx context.Context) (resource Resource, err error) {
+func (rp *ResourcePool) Get(ctx context.Context, settings []string) (resource Resource, err error) {
 	// If ctx has already expired, avoid racing with rp's resource channel.
 	if ctx.Err() != nil {
 		return nil, ErrCtxTimeout
 	}
+	if len(settings) == 0 {
+		return rp.get(ctx)
+	}
+	return rp.getWithSettings(ctx, settings)
+}
 
+func (rp *ResourcePool) get(ctx context.Context) (resource Resource, err error) {
 	// Fetch
 	var wrapper resourceWrapper
 	var ok bool
@@ -249,12 +258,79 @@ func (rp *ResourcePool) get(ctx context.Context) (resource Resource, err error) 
 	return wrapper.resource, err
 }
 
+func (rp *ResourcePool) getWithSettings(ctx context.Context, settings []string) (Resource, error) {
+	var wrapper resourceWrapper
+	var ok bool
+
+	settingHash, err := hash(settings)
+	if err != nil {
+		return nil, err
+	}
+
+	// Fetch
+	select {
+	case wrapper, ok = <-rp.settingResources:
+	case wrapper, ok = <-rp.resources:
+	default:
+		startTime := time.Now()
+		select {
+		case wrapper, ok = <-rp.settingResources:
+		case wrapper, ok = <-rp.resources:
+		case <-ctx.Done():
+			return nil, ErrTimeout
+		}
+		rp.recordWait(startTime)
+	}
+	if !ok {
+		return nil, ErrClosed
+	}
+
+	// Checking setting hash id
+	if wrapper.resource != nil && wrapper.resource.SettingHash() != settingHash {
+		wrapper.resource.Close()
+		wrapper.resource = nil
+		rp.active.Add(-1)
+	}
+
+	// Unwrap
+	if wrapper.resource == nil {
+		wrapper.resource, err = rp.factory(ctx)
+		if err != nil {
+			rp.resources <- resourceWrapper{}
+			return nil, err
+		}
+		if err = wrapper.resource.ApplySettings(ctx, settings); err != nil {
+			return nil, err
+		}
+
+		rp.active.Add(1)
+	}
+
+	if rp.available.Add(-1) <= 0 {
+		rp.exhausted.Add(1)
+	}
+	rp.inUse.Add(1)
+	return wrapper.resource, err
+}
+
+func hash(settings []string) (uint64, error) {
+	digest := xxhash.New()
+	for _, setting := range settings {
+		_, err := digest.WriteString(setting)
+		if err != nil {
+			return 0, err
+		}
+	}
+	return digest.Sum64(), nil
+}
+
 // Put will return a resource to the pool. For every successful Get,
 // a corresponding Put is required. If you no longer need a resource,
 // you will need to call Put(nil) instead of returning the closed resource.
 // This will cause a new resource to be created in its place.
-func (rp *ResourcePool) Put(resource Resource) {
+func (rp *ResourcePool) Put(resource Resource, settingHash uint64) {
 	var wrapper resourceWrapper
+	recreated := false
 	if resource != nil {
 		wrapper = resourceWrapper{
 			resource: resource,
@@ -262,11 +338,20 @@ func (rp *ResourcePool) Put(resource Resource) {
 		}
 	} else {
 		rp.reopenResource(&wrapper)
+		recreated = true
 	}
-	select {
-	case rp.resources <- wrapper:
-	default:
-		panic(errors.New("attempt to Put into a full ResourcePool"))
+	if settingHash == 0 || recreated {
+		select {
+		case rp.resources <- wrapper:
+		default:
+			panic(errors.New("attempt to Put into a full ResourcePool"))
+		}
+	} else {
+		select {
+		case rp.settingResources <- wrapper:
+		default:
+			panic(errors.New("attempt to Put into a full ResourcePool"))
+		}
 	}
 	rp.inUse.Add(-1)
 	rp.available.Add(1)
@@ -311,7 +396,14 @@ func (rp *ResourcePool) SetCapacity(capacity int) error {
 
 	if capacity < oldcap {
 		for i := 0; i < oldcap-capacity; i++ {
-			wrapper := <-rp.resources
+			var wrapper resourceWrapper
+			for {
+				select {
+				case wrapper = <-rp.resources:
+				case wrapper = <-rp.settingResources:
+				}
+				break
+			}
 			if wrapper.resource != nil {
 				wrapper.resource.Close()
 				rp.active.Add(-1)
@@ -326,6 +418,7 @@ func (rp *ResourcePool) SetCapacity(capacity int) error {
 	}
 	if capacity == 0 {
 		close(rp.resources)
+		close(rp.settingResources)
 	}
 	return nil
 }

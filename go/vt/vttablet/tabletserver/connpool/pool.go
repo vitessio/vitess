@@ -194,7 +194,7 @@ func (cp *Pool) Get(ctx context.Context) (*DBConn, error) {
 		ctx, cancel = context.WithTimeout(ctx, cp.timeout)
 		defer cancel()
 	}
-	r, err := p.Get(ctx)
+	r, err := p.Get(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -208,9 +208,9 @@ func (cp *Pool) Put(conn *DBConn) {
 		panic(ErrConnPoolClosed)
 	}
 	if conn == nil {
-		p.Put(nil)
+		p.Put(nil, 0)
 	} else {
-		p.Put(conn)
+		p.Put(conn, 0)
 	}
 }
 

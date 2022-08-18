@@ -144,7 +144,7 @@ func (cp *ConnectionPool) Get(ctx context.Context) (*PooledDBConnection, error) 
 	if p == nil {
 		return nil, ErrConnPoolClosed
 	}
-	r, err := p.Get(ctx)
+	r, err := p.Get(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -162,10 +162,10 @@ func (cp *ConnectionPool) Put(conn *PooledDBConnection) {
 		// conn has a type, if we just Put(conn), we end up
 		// putting an interface with a nil value, that is not
 		// equal to a nil value. So just put a plain nil.
-		p.Put(nil)
+		p.Put(nil, 0)
 		return
 	}
-	p.Put(conn)
+	p.Put(conn, 0)
 }
 
 // SetCapacity alters the size of the pool at runtime.
