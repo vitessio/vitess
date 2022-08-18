@@ -30,8 +30,10 @@ type Entity interface {
 	Diff(other Entity, hints *DiffHints) (diff EntityDiff, err error)
 	// Create returns an entity diff that describes how to create this entity
 	Create() EntityDiff
-	// Create returns an entity diff that describes how to drop this entity
+	// Drop returns an entity diff that describes how to drop this entity
 	Drop() EntityDiff
+	// Clone returns a deep copy of the entity.
+	Clone() Entity
 }
 
 // EntityDiff represents the diff between two entities

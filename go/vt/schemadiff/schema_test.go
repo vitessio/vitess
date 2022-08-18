@@ -142,3 +142,13 @@ func TestToSQL(t *testing.T) {
 	sql := schema.ToSQL()
 	assert.Equal(t, toSQL, sql)
 }
+
+func TestClone(t *testing.T) {
+	schema, err := NewSchemaFromQueries(createQueries)
+	assert.NoError(t, err)
+	assert.NotNil(t, schema)
+
+	schemaClone := schema.Clone()
+	assert.Equal(t, schema, schemaClone)
+	assert.False(t, schema == schemaClone)
+}
