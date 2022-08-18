@@ -316,6 +316,7 @@ func addKeyspaceToTracker(ctx context.Context, srvResolver *srvtopo.Resolver, st
 	if len(keyspaces) == 0 {
 		log.Infof("No keyspace to load")
 	}
+
 	for _, keyspace := range keyspaces {
 		resolveAndLoadKeyspace(ctx, srvResolver, st, gw, keyspace)
 	}

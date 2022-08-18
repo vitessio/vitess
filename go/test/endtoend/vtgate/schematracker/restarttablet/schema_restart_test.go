@@ -85,6 +85,7 @@ func TestMain(m *testing.M) {
 			Name:      keyspaceName,
 			SchemaSQL: sqlSchema,
 		}
+		clusterInstance.VtTabletExtraArgs = []string{"--use_super_read_only=true"}
 		if err := clusterInstance.StartUnshardedKeyspace(*keyspace, 1, false); err != nil {
 			return 1
 		}
@@ -94,11 +95,16 @@ func TestMain(m *testing.M) {
 		tablet.VttabletProcess.ExtraArgs = []string{
 			"--queryserver-config-schema-change-signal",
 			fmt.Sprintf("--queryserver-config-schema-change-signal-interval=%d", signalInterval),
+			fmt.Sprintf("--use_super_read_only=%t", true),
 		}
 		if err := tablet.RestartOnlyTablet(); err != nil {
 			return 1
 		}
+		// since it is primary which is restarted we need to set-super-read-only flag again
+		// in real world should it be done by calling init-primary??
+		_ = tablet.VttabletProcess.UnsetReadOnly("")
 
+		time.Sleep(10 * time.Second)
 		// Start vtgate
 		if err := clusterInstance.StartVtgate(); err != nil {
 			clusterInstance.VtgateProcess = cluster.VtgateProcess{}
@@ -119,6 +125,9 @@ func TestVSchemaTrackerInit(t *testing.T) {
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
+
+	// wait for some time before we query vtgate
+	time.Sleep(10 * time.Second)
 
 	qr := utils.Exec(t, conn, "SHOW VSCHEMA TABLES")
 	got := fmt.Sprintf("%v", qr.Rows)

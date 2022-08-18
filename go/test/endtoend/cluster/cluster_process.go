@@ -361,7 +361,7 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 		// Make first tablet as primary
 		// We need to disable super-read-only explicitly here. If we don't do it then
 		// our upgrade downgrade test fail because they run with N-1 vttablet binary, which does not
-		// have code to disable super-read-only during InitPrimary
+		// have code to disable super-read-only during InitializeShard
 		_ = shard.Vttablets[0].VttabletProcess.UnsetSuperReadOnly("")
 		if err = cluster.VtctlclientProcess.InitializeShard(keyspace.Name, shardName, cluster.Cell, shard.Vttablets[0].TabletUID); err != nil {
 			log.Errorf("error running InitializeShard on keyspace %v, shard %v: %v", keyspace.Name, shardName, err)

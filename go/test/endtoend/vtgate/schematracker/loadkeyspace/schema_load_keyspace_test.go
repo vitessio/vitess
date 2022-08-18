@@ -74,7 +74,7 @@ func TestBlockedLoadKeyspace(t *testing.T) {
 	require.NoError(t, err)
 
 	// Start vtgate with the schema_change_signal flag
-	clusterInstance.VtGateExtraArgs = []string{"--schema_change_signal"}
+	clusterInstance.VtGateExtraArgs = []string{"--schema_change_signal", "--srv_topo_no_cache_for_get=true"}
 	err = clusterInstance.StartVtgate()
 	require.NoError(t, err)
 
