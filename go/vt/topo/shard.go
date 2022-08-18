@@ -389,10 +389,10 @@ func (si *ShardInfo) GetTabletControl(tabletType topodatapb.TabletType) *topodat
 // UpdateSourceDeniedTables will add or remove the listed tables
 // in the shard record's TabletControl structures. Note we don't
 // support a lot of the corner cases:
-// - only support one table list per shard. If we encounter a different
-//   table list that the provided one, we error out.
-// - we don't support DisableQueryService at the same time as DeniedTables,
-//   because it's not used in the same context (vertical vs horizontal sharding)
+//   - only support one table list per shard. If we encounter a different
+//     table list that the provided one, we error out.
+//   - we don't support DisableQueryService at the same time as DeniedTables,
+//     because it's not used in the same context (vertical vs horizontal sharding)
 //
 // This function should be called while holding the keyspace lock.
 func (si *ShardInfo) UpdateSourceDeniedTables(ctx context.Context, tabletType topodatapb.TabletType, cells []string, remove bool, tables []string) error {

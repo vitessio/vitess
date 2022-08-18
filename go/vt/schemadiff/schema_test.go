@@ -110,7 +110,7 @@ func TestNewSchemaFromQueriesUnresolved(t *testing.T) {
 	)
 	_, err := NewSchemaFromQueries(queries)
 	assert.Error(t, err)
-	assert.ErrorIs(t, err, ErrViewDependencyUnresolved)
+	assert.EqualError(t, err, (&ViewDependencyUnresolvedError{View: "v7"}).Error())
 }
 
 func TestNewSchemaFromQueriesUnresolvedAlias(t *testing.T) {
@@ -120,7 +120,7 @@ func TestNewSchemaFromQueriesUnresolvedAlias(t *testing.T) {
 	)
 	_, err := NewSchemaFromQueries(queries)
 	assert.Error(t, err)
-	assert.ErrorIs(t, err, ErrViewDependencyUnresolved)
+	assert.EqualError(t, err, (&ViewDependencyUnresolvedError{View: "v7"}).Error())
 }
 
 func TestNewSchemaFromQueriesLoop(t *testing.T) {
@@ -131,7 +131,7 @@ func TestNewSchemaFromQueriesLoop(t *testing.T) {
 	)
 	_, err := NewSchemaFromQueries(queries)
 	assert.Error(t, err)
-	assert.ErrorIs(t, err, ErrViewDependencyUnresolved)
+	assert.EqualError(t, err, (&ViewDependencyUnresolvedError{View: "v7"}).Error())
 }
 
 func TestToSQL(t *testing.T) {
@@ -141,4 +141,14 @@ func TestToSQL(t *testing.T) {
 
 	sql := schema.ToSQL()
 	assert.Equal(t, toSQL, sql)
+}
+
+func TestClone(t *testing.T) {
+	schema, err := NewSchemaFromQueries(createQueries)
+	assert.NoError(t, err)
+	assert.NotNil(t, schema)
+
+	schemaClone := schema.Clone()
+	assert.Equal(t, schema, schemaClone)
+	assert.False(t, schema == schemaClone)
 }

@@ -60,7 +60,7 @@ type Send struct {
 // ShardName as key for setting shard name in bind variables map
 const ShardName = "__vt_shard"
 
-//NeedsTransaction implements the Primitive interface
+// NeedsTransaction implements the Primitive interface
 func (s *Send) NeedsTransaction() bool {
 	return s.IsDML
 }

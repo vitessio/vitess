@@ -582,12 +582,12 @@ func (db *DB) GetQueryCalledNum(query string) int {
 	return num
 }
 
-//QueryLog returns the query log in a semicomma separated string
+// QueryLog returns the query log in a semicomma separated string
 func (db *DB) QueryLog() string {
 	return strings.Join(db.querylog, ";")
 }
 
-//ResetQueryLog resets the query log
+// ResetQueryLog resets the query log
 func (db *DB) ResetQueryLog() {
 	db.querylog = nil
 }

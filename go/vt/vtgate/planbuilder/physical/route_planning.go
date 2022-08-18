@@ -184,10 +184,10 @@ func getUpdateVindexInformation(op *abstract.Update, vindexTable *vindexes.Table
 }
 
 /*
-	The greedy planner will plan a query by finding first finding the best route plan for every table.
-    Then, iteratively, it finds the cheapest join that can be produced between the remaining plans,
-	and removes the two inputs to this cheapest plan and instead adds the join.
-	As an optimization, it first only considers joining tables that have predicates defined between them
+		The greedy planner will plan a query by finding first finding the best route plan for every table.
+	    Then, iteratively, it finds the cheapest join that can be produced between the remaining plans,
+		and removes the two inputs to this cheapest plan and instead adds the join.
+		As an optimization, it first only considers joining tables that have predicates defined between them
 */
 func greedySolve(ctx *plancontext.PlanningContext, qg *abstract.QueryGraph) (abstract.PhysicalOperator, error) {
 	routeOps, err := seedOperatorList(ctx, qg)
@@ -644,7 +644,7 @@ func tryMerge(
 			return merger(aRoute, bRoute)
 		}
 	case engine.EqualUnique:
-		// if they are already both being sent to the same shard, we can merge
+		// If the two routes fully match, they can be merged together.
 		if bRoute.RouteOpCode == engine.EqualUnique {
 			aVdx := aRoute.SelectedVindex()
 			bVdx := bRoute.SelectedVindex()
@@ -653,9 +653,12 @@ func tryMerge(
 			if aVdx == bVdx && gen4ValuesEqual(ctx, aExpr, bExpr) {
 				return merger(aRoute, bRoute)
 			}
-			return nil, nil
 		}
+
+		// If the two routes don't match, fall through to the next case and see if we
+		// can merge via join predicates instead.
 		fallthrough
+
 	case engine.Scatter, engine.IN:
 		if len(joinPredicates) == 0 {
 			// If we are doing two Scatters, we have to make sure that the

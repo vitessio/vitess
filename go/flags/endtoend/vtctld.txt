@@ -218,7 +218,7 @@ Usage of vtctld:
       --tablet_manager_grpc_key string                                   the key to use to connect
       --tablet_manager_grpc_server_name string                           the server name to use to validate server certificate
       --tablet_manager_protocol string                                   the protocol to use to talk to vttablet (default "grpc")
-      --tablet_protocol string                                           how to talk to the vttablets (default "grpc")
+      --tablet_protocol string                                           Protocol to use to talk to vttablets. (default "grpc")
       --tablet_refresh_interval duration                                 Tablet refresh interval. (default 1m0s)
       --tablet_refresh_known_tablets                                     Whether to reload the tablet's address/port map from topo in case they change. (default true)
       --tablet_url_template string                                       Format string describing debug tablet url formatting. See getTabletDebugURL() for how to customize this. (default "http://{{.GetTabletHostPort}}")
@@ -250,8 +250,8 @@ Usage of vtctld:
       --topo_zk_tls_key string                                           the key to use to connect to the zk topo server, enables TLS
       --tracer string                                                    tracing service to use (default "noop")
       --tracing-enable-logging                                           whether to enable logging in the tracing service
-      --tracing-sampling-rate OptionalFloat64                            sampling rate for the probabilistic jaeger sampler (default 0.1)
-      --tracing-sampling-type OptionalString                             sampling strategy to use for jaeger. possible values are 'const', 'probabilistic', 'rateLimiting', or 'remote' (default const)
+      --tracing-sampling-rate float                                      sampling rate for the probabilistic jaeger sampler (default 0.1)
+      --tracing-sampling-type string                                     sampling strategy to use for jaeger. possible values are 'const', 'probabilistic', 'rateLimiting', or 'remote' (default "const")
       --track_schema_versions                                            When enabled, vttablet will store versions of schemas at each position that a DDL is applied and allow retrieval of the schema corresponding to a position
       --transaction-log-stream-handler string                            URL handler for streaming transactions log (default "/debug/txlog")
       --transaction_limit_by_component                                   Include CallerID.component when considering who the user is for the purpose of transaction limit.

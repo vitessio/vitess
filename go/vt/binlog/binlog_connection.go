@@ -41,6 +41,7 @@ var (
 // connecting for replication. Each such connection must identify itself to
 // mysqld with a server ID that is unique both among other BinlogConnections and
 // among actual replicas in the topology.
+//
 //revive:disable because I'm not trying to refactor the entire code base right now
 type BinlogConnection struct {
 	*mysql.Conn
