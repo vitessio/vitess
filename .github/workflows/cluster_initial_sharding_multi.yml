@@ -26,5 +26,10 @@ jobs:
       uses: actions/checkout@v2
 
     - name: Run initial sharding multi
-      run: |
-        go run test.go -print-log initial_sharding_multi
+      uses: nick-fields/retry@v2
+      with:
+        timeout_minutes: 30
+        max_attempts: 3
+        retry_on: error
+        command: |
+          go run test.go -print-log initial_sharding_multi
