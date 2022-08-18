@@ -233,6 +233,7 @@ func (rp *ResourcePool) get(ctx context.Context) (resource Resource, err error) 
 		startTime := time.Now()
 		select {
 		case wrapper, ok = <-rp.resources:
+		case wrapper, ok = <-rp.settingResources:
 		case <-ctx.Done():
 			return nil, ErrTimeout
 		}
@@ -240,6 +241,13 @@ func (rp *ResourcePool) get(ctx context.Context) (resource Resource, err error) 
 	}
 	if !ok {
 		return nil, ErrClosed
+	}
+
+	// if the resource has settings applied, we will close it and return a new one
+	if wrapper.resource != nil && wrapper.resource.SettingHash() != 0 {
+		wrapper.resource.Close()
+		wrapper.resource = nil
+		rp.active.Add(-1)
 	}
 
 	// Unwrap
