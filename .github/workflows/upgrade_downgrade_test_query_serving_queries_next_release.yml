@@ -1,39 +1,22 @@
-name: Upgrade Downgrade Testing Query Serving (Queries)
+name: Upgrade Downgrade Testing Query Serving (Queries) Next Release
 on:
   push:
   pull_request:
 
 concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Upgrade Downgrade Testing Query Serving (Queries)')
+  group: format('{0}-{1}', ${{ github.ref }}, 'Upgrade Downgrade Testing Query Serving (Queries) Next Release')
   cancel-in-progress: true
 
 # This test ensures that our end-to-end tests work using Vitess components
 # (vtgate, vttablet, etc) built on different versions.
 
 jobs:
-  get_upgrade_downgrade_label:
-    if: github.repository == 'vitessio/vitess'
-    name: Get the Upgrade Downgrade pull request label
-    runs-on: ubuntu-latest
-    outputs:
-      hasLabel: ${{ steps.check_label.outputs.hasLabel }}
-
-    steps:
-      - name: Check Label for PR
-        if: github.event_name == 'pull_request'
-        uses: Dreamcodeio/pr-has-label-action@master
-        id: check_label
-        with:
-          label: Skip Upgrade Downgrade
-
-  get_previous_release:
-    if: always() && (github.event_name != 'pull_request' || needs.get_upgrade_downgrade_label.outputs.hasLabel != 'true')
+  get_next_release:
+    if: always()
     name: Get latest release
     runs-on: ubuntu-latest
-    needs:
-      - get_upgrade_downgrade_label
     outputs:
-      previous_release: ${{ steps.output-previous-release-ref.outputs.previous_release_ref }}
+      next_release: ${{ steps.output-next-release-ref.outputs.next_release_ref }}
 
     steps:
       - name: Check out to HEAD
@@ -42,18 +25,18 @@ jobs:
           fetch-depth: 0
 
       - name: Set output with latest release branch
-        id: output-previous-release-ref
+        id: output-next-release-ref
         run: |
-          previous_release_ref=$(./tools/get_previous_release.sh ${{github.base_ref}} ${{github.ref}})
-          echo $previous_release_ref
-          echo "::set-output name=previous_release_ref::${previous_release_ref}"
+          next_release_ref=$(./tools/get_next_release.sh ${{github.base_ref}} ${{github.ref}})
+          echo $next_release_ref
+          echo "::set-output name=next_release_ref::${next_release_ref}"
 
   upgrade_downgrade_test:
-    if: always() && (needs.get_previous_release.result == 'success')
+    if: always() && (needs.get_next_release.result == 'success')
     name: Run Upgrade Downgrade Test
     runs-on: ubuntu-latest
     needs:
-      - get_previous_release
+      - get_next_release
 
     steps:
     - name: Check if workflow needs to be skipped
@@ -61,6 +44,9 @@ jobs:
       run: |
         skip='false'
         if [[ "${{github.event.pull_request}}" ==  "" ]] && [[ "${{github.ref}}" != "refs/heads/main" ]] && [[ ! "${{github.ref}}" =~ ^refs/heads/release-[0-9]+\.[0-9]$ ]] && [[ ! "${{github.ref}}" =~ "refs/tags/.*" ]]; then
+          skip='true'
+        fi
+        if [[ "${{needs.get_next_release.outputs.next_release}}" == "" ]]; then
           skip='true'
         fi
         echo Skip ${skip}
@@ -88,6 +74,7 @@ jobs:
             - 'tools/**'
             - 'config/**'
             - 'bootstrap.sh'
+            - '.github/workflows/upgrade_downgrade_test_query_serving_queries_next_release.yml'
 
     - name: Set up Go
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
@@ -108,7 +95,7 @@ jobs:
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
         sudo DEBIAN_FRONTEND="noninteractive" apt-get update
-        # Uninstall any previously installed MySQL first
+        # Uninstall any nextly installed MySQL first
         sudo systemctl stop apparmor
         sudo DEBIAN_FRONTEND="noninteractive" apt-get remove -y --purge mysql-server mysql-client mysql-common
         sudo apt-get -y autoremove
@@ -140,19 +127,19 @@ jobs:
         sudo apt-get update
         sudo apt-get install percona-xtrabackup-24
 
-    # Checkout to the last release of Vitess
-    - name: Check out other version's code (${{ needs.get_previous_release.outputs.previous_release }})
+    # Checkout to the next release of Vitess
+    - name: Check out other version's code (${{ needs.get_next_release.outputs.next_release }})
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       uses: actions/checkout@v2
       with:
-        ref: ${{ needs.get_previous_release.outputs.previous_release }}
+        ref: ${{ needs.get_next_release.outputs.next_release }}
 
-    - name: Get dependencies for the last release
+    - name: Get dependencies for the next release
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
         go mod download
 
-    - name: Building last release's binaries
+    - name: Building next release's binaries
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 10
       run: |
@@ -191,8 +178,8 @@ jobs:
         source build.env
         eatmydata -- go run test.go -skip-build -keep-data -docker=false -print-log -follow -tag upgrade_downgrade_query_serving_queries
 
-    # Swap the binaries in the bin. Use vtgate version n-1 and keep vttablet at version n
-    - name: Use last release's VTGate
+    # Swap the binaries in the bin. Use vtgate version n+1 and keep vttablet at version n
+    - name: Use next release's VTGate
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
         source build.env
@@ -201,8 +188,8 @@ jobs:
         cp /tmp/vitess-build-other/bin/vtgate $PWD/bin/vtgate
         vtgate --version
 
-    # Running a test with vtgate at version n-1 and vttablet at version n
-    - name: Run query serving tests (vtgate=N-1, vttablet=N)
+    # Running a test with vtgate at version n+1 and vttablet at version n
+    - name: Run query serving tests (vtgate=N+1, vttablet=N)
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
         rm -rf /tmp/vtdataroot
@@ -211,7 +198,7 @@ jobs:
         source build.env
         eatmydata -- go run test.go -skip-build -keep-data -docker=false -print-log -follow -tag upgrade_downgrade_query_serving_queries
 
-    # Swap the binaries again. This time, vtgate will be at version n, and vttablet will be at version n-1
+    # Swap the binaries again. This time, vtgate will be at version n, and vttablet will be at version n+1
     - name: Use current version VTGate, and other version VTTablet
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
@@ -223,8 +210,8 @@ jobs:
         vtgate --version
         vttablet --version
 
-    # Running a test with vtgate at version n and vttablet at version n-1
-    - name: Run query serving tests (vtgate=N, vttablet=N-1)
+    # Running a test with vtgate at version n and vttablet at version n+1
+    - name: Run query serving tests (vtgate=N, vttablet=N+1)
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
         rm -rf /tmp/vtdataroot
