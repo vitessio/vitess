@@ -584,6 +584,7 @@ var WithDDLInitialQueries = []string{
 	"SELECT db_name FROM _vt.vreplication LIMIT 0",
 	"SELECT rows_copied FROM _vt.vreplication LIMIT 0",
 	"SELECT time_heartbeat FROM _vt.vreplication LIMIT 0",
+	"SELECT vrepl_id FROM _vt.vreplication_log USE INDEX (vrepl_id_idx) WHERE vrepl_id=0 LIMIT 0",
 	withddl.QueryToTriggerWithDDL,
 }
 

@@ -45,6 +45,10 @@ const (
 		PRIMARY KEY (id))`
 )
 
+var AlterVReplicationLogTable = []string{
+	"ALTER TABLE _vt.vreplication_log ADD KEY vrepl_id_idx (vrepl_id)",
+}
+
 const (
 	// Enum values for type column of _vt.vreplication_log
 

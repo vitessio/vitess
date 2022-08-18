@@ -138,7 +138,12 @@ func (wd *WithDDL) isSchemaError(err error) bool {
 		return false
 	}
 	switch merr.Num {
-	case mysql.ERNoSuchTable, mysql.ERBadDb, mysql.ERWrongValueCountOnRow, mysql.ERBadFieldError:
+	case
+		mysql.ERNoSuchTable,
+		mysql.ERBadDb,
+		mysql.ERWrongValueCountOnRow,
+		mysql.ERBadFieldError,
+		mysql.ERKeyDoesNotExist:
 		return true
 	}
 	return false

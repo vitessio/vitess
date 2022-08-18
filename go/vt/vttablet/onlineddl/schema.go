@@ -548,7 +548,18 @@ const (
 	sqlStartVReplStream             = "UPDATE _vt.vreplication set state='Running' where db_name=%a and workflow=%a"
 	sqlStopVReplStream              = "UPDATE _vt.vreplication set state='Stopped' where db_name=%a and workflow=%a"
 	sqlDeleteVReplStream            = "DELETE FROM _vt.vreplication where db_name=%a and workflow=%a"
-	sqlReadVReplStream              = `SELECT
+	sqlReadVreplLogs                = `SELECT
+			CONCAT(
+				vreplication_log.created_at, ' ',
+				CONVERT(vreplication_log.type USING UTF8), ': ',
+				IF(vreplication_log.message='',
+					CONVERT(vreplication_log.state USING UTF8),
+					CONVERT(vreplication_log.message USING UTF8)
+				)
+			) as message
+		FROM _vt.vreplication JOIN _vt.vreplication_log ON (vreplication.id = vreplication_log.vrepl_id)
+		WHERE vreplication.workflow=%a`
+	sqlReadVReplStream = `SELECT
 			id,
 			workflow,
 			source,

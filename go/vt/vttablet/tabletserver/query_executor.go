@@ -885,7 +885,7 @@ func (qre *QueryExecutor) execRevertMigration() (*sqltypes.Result, error) {
 
 func (qre *QueryExecutor) execShowMigrationLogs() (*sqltypes.Result, error) {
 	if showMigrationLogsStmt, ok := qre.plan.FullStmt.(*sqlparser.ShowMigrationLogs); ok {
-		return qre.tsv.onlineDDLExecutor.ShowMigrationLogs(qre.ctx, showMigrationLogsStmt)
+		return qre.tsv.onlineDDLExecutor.ShowMigrationLogs(qre.ctx, showMigrationLogsStmt.UUID)
 	}
 	return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "Expecting SHOW VITESS_MIGRATION plan")
 }

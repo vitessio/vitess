@@ -4269,22 +4269,52 @@ func (e *Executor) SubmitMigration(
 	return result, nil
 }
 
+func (e *Executor) readVreplicationLogs(ctx context.Context, uuid string) (logContent string, err error) {
+	query, err := sqlparser.ParseAndBind(sqlReadVreplLogs,
+		sqltypes.StringBindVariable(uuid),
+	)
+	if err != nil {
+		return "", err
+	}
+	r, err := e.execQuery(ctx, query)
+	if err != nil {
+		return "", err
+	}
+	var sb strings.Builder
+	for _, row := range r.Named().Rows {
+		sb.WriteString(row.AsString("message", ""))
+		sb.WriteString("\n")
+	}
+	return sb.String(), nil
+}
+
 // ShowMigrationLogs reads the migration log for a given migration
-func (e *Executor) ShowMigrationLogs(ctx context.Context, stmt *sqlparser.ShowMigrationLogs) (result *sqltypes.Result, err error) {
+func (e *Executor) ShowMigrationLogs(ctx context.Context, uuid string) (result *sqltypes.Result, err error) {
 	if !e.isOpen {
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "online ddl is disabled")
 	}
-	_, row, err := e.readMigration(ctx, stmt.UUID)
+	onlineDDL, row, err := e.readMigration(ctx, uuid)
 	if err != nil {
 		return nil, err
 	}
-	logFile := row["log_file"].ToString()
-	if logFile == "" {
-		return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "No log file for migration %v", stmt.UUID)
-	}
-	content, err := os.ReadFile(logFile)
-	if err != nil {
-		return nil, err
+	var logContent string
+	switch onlineDDL.Strategy {
+	case schema.DDLStrategyOnline, schema.DDLStrategyVitess:
+		logContent, err = e.readVreplicationLogs(ctx, uuid)
+		if err != nil {
+			return nil, err
+		}
+
+	case schema.DDLStrategyGhost, schema.DDLStrategyPTOSC:
+		logFile := row["log_file"].ToString()
+		if logFile == "" {
+			return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "No log file for migration %v", uuid)
+		}
+		content, err := os.ReadFile(logFile)
+		if err != nil {
+			return nil, err
+		}
+		logContent = string(content)
 	}
 
 	result = &sqltypes.Result{
@@ -4297,7 +4327,7 @@ func (e *Executor) ShowMigrationLogs(ctx context.Context, stmt *sqlparser.ShowMi
 		Rows: [][]sqltypes.Value{},
 	}
 	result.Rows = append(result.Rows, []sqltypes.Value{
-		sqltypes.NewVarChar(string(content)),
+		sqltypes.NewVarChar(logContent),
 	})
 	return result, nil
 }
