@@ -39,4 +39,9 @@ type State struct {
 	RdonlyCellsNotSwitched []string
 
 	WritesSwitched bool
+
+	// Partial MoveTables info
+	ReplicaShardsSwitched   []string
+	RdonlyShardsSwitched    []string
+	WritesPartiallySwitched bool
 }

@@ -241,24 +241,49 @@ func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workfl
 		}
 		table := ts.Tables()[0]
 
-		state.RdonlyCellsSwitched, state.RdonlyCellsNotSwitched, err = ws.GetCellsWithTableReadsSwitched(ctx, keyspace, table, topodatapb.TabletType_RDONLY)
-		if err != nil {
-			return nil, nil, err
-		}
+		if ts.isPartialMigration {
+			// first check partial SwitchReads
+			state.RdonlyShardsSwitched, err = ws.GetShardsWithReadsSwitched(ctx, keyspace, topodatapb.TabletType_RDONLY)
+			if err != nil {
+				return nil, nil, err
+			}
+			state.ReplicaShardsSwitched, err = ws.GetShardsWithReadsSwitched(ctx, keyspace, topodatapb.TabletType_REPLICA)
+			if err != nil {
+				return nil, nil, err
+			}
 
-		state.ReplicaCellsSwitched, state.ReplicaCellsNotSwitched, err = ws.GetCellsWithTableReadsSwitched(ctx, keyspace, table, topodatapb.TabletType_REPLICA)
-		if err != nil {
-			return nil, nil, err
-		}
-		rules, err := topotools.GetRoutingRules(ctx, ts.TopoServer())
-		if err != nil {
-			return nil, nil, err
-		}
-		for _, table := range ts.Tables() {
-			rr := rules[table]
-			// if a rule exists for the table and points to the target keyspace, writes have been switched
-			if len(rr) > 0 && rr[0] == fmt.Sprintf("%s.%s", keyspace, table) {
-				state.WritesSwitched = true
+			// then check partial SwitchWrites
+			shardRules, err := topotools.GetShardRoutingRules(ctx, ts.TopoServer())
+			if err != nil {
+				return nil, nil, err
+			}
+			for _, sourceShard := range ts.SourceShards() {
+				if _, ok := shardRules[fmt.Sprintf("%s.%s", ts.sourceKeyspace, sourceShard.ShardName())]; ok {
+					state.WritesPartiallySwitched = true
+					break
+				}
+			}
+		} else {
+			state.RdonlyCellsSwitched, state.RdonlyCellsNotSwitched, err = ws.GetCellsWithTableReadsSwitched(ctx, keyspace, table, topodatapb.TabletType_RDONLY)
+			if err != nil {
+				return nil, nil, err
+			}
+
+			state.ReplicaCellsSwitched, state.ReplicaCellsNotSwitched, err = ws.GetCellsWithTableReadsSwitched(ctx, keyspace, table, topodatapb.TabletType_REPLICA)
+			if err != nil {
+				return nil, nil, err
+			}
+			globalRules, err := topotools.GetRoutingRules(ctx, ts.TopoServer())
+			if err != nil {
+				return nil, nil, err
+			}
+			for _, table := range ts.Tables() {
+				rr := globalRules[table]
+				// if a rule exists for the table and points to the target keyspace, writes have been switched
+				if len(rr) > 0 && rr[0] == fmt.Sprintf("%s.%s", keyspace, table) {
+					state.WritesSwitched = true
+					break
+				}
 			}
 		}
 	} else {

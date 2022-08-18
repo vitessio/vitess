@@ -144,32 +144,48 @@ func (vrw *VReplicationWorkflow) stateAsString(ws *workflow.State) string {
 	if !vrw.Exists() {
 		stateInfo = append(stateInfo, WorkflowStateNotCreated)
 	} else {
-		if len(ws.RdonlyCellsNotSwitched) == 0 && len(ws.ReplicaCellsNotSwitched) == 0 && len(ws.ReplicaCellsSwitched) > 0 {
-			s = "All Reads Switched"
-		} else if len(ws.RdonlyCellsSwitched) == 0 && len(ws.ReplicaCellsSwitched) == 0 {
-			s = "Reads Not Switched"
-		} else {
-			stateInfo = append(stateInfo, "Reads partially switched")
-			if len(ws.ReplicaCellsNotSwitched) == 0 {
-				s += "All Replica Reads Switched"
-			} else if len(ws.ReplicaCellsSwitched) == 0 {
-				s += "Replica not switched"
+		if vrw.ts.isPartialMigration {
+			if len(ws.RdonlyShardsSwitched) > 0 || len(ws.ReplicaShardsSwitched) > 0 {
+				s = fmt.Sprintf("Reads partially switched; RDONLY tablets in shards: %s and REPLICA tablets in shards: %s",
+					strings.Join(ws.RdonlyShardsSwitched, ","), strings.Join(ws.ReplicaShardsSwitched, ","))
 			} else {
-				s += "Replica switched in cells: " + strings.Join(ws.ReplicaCellsSwitched, ",")
+				s = "Reads not switched"
 			}
-			stateInfo = append(stateInfo, s)
-			s = ""
-			if len(ws.RdonlyCellsNotSwitched) == 0 {
-				s += "All Rdonly Reads Switched"
-			} else if len(ws.RdonlyCellsSwitched) == 0 {
-				s += "Rdonly not switched"
+		} else {
+			if len(ws.RdonlyCellsNotSwitched) == 0 && len(ws.ReplicaCellsNotSwitched) == 0 && len(ws.ReplicaCellsSwitched) > 0 {
+				s = "All Reads Switched"
+			} else if len(ws.RdonlyCellsSwitched) == 0 && len(ws.ReplicaCellsSwitched) == 0 {
+				s = "Reads Not Switched"
 			} else {
-				s += "Rdonly switched in cells: " + strings.Join(ws.RdonlyCellsSwitched, ",")
+				stateInfo = append(stateInfo, "Reads partially switched")
+				if len(ws.ReplicaCellsNotSwitched) == 0 {
+					s += "All Replica Reads Switched"
+				} else if len(ws.ReplicaCellsSwitched) == 0 {
+					s += "Replica not switched"
+				} else {
+					s += "Replica switched in cells: " + strings.Join(ws.ReplicaCellsSwitched, ",")
+				}
+				stateInfo = append(stateInfo, s)
+				s = ""
+				if len(ws.RdonlyCellsNotSwitched) == 0 {
+					s += "All Rdonly Reads Switched"
+				} else if len(ws.RdonlyCellsSwitched) == 0 {
+					s += "Rdonly not switched"
+				} else {
+					s += "Rdonly switched in cells: " + strings.Join(ws.RdonlyCellsSwitched, ",")
+				}
 			}
 		}
 		stateInfo = append(stateInfo, s)
 		if ws.WritesSwitched {
 			stateInfo = append(stateInfo, "Writes Switched")
+		} else if vrw.ts.isPartialMigration && ws.WritesPartiallySwitched {
+			sourceShards := vrw.ts.SourceShards()
+			switchedShards := make([]string, len(sourceShards))
+			for i, sourceShard := range sourceShards {
+				switchedShards[i] = sourceShard.ShardName()
+			}
+			stateInfo = append(stateInfo, fmt.Sprintf("Writes partially switched, for shards: %s", strings.Join(switchedShards, ",")))
 		} else {
 			stateInfo = append(stateInfo, "Writes Not Switched")
 		}

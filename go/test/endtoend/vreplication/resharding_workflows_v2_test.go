@@ -125,7 +125,6 @@ func tstWorkflowExec(t *testing.T, cells, workflow, sourceKs, targetKs, tables, 
 		return fmt.Errorf("%s: %s", err, output)
 	}
 	return nil
-
 }
 
 func tstWorkflowSwitchReads(t *testing.T, tabletTypes, cells string) {
@@ -311,6 +310,9 @@ func TestPartialMoveTables(t *testing.T) {
 
 	// switch all traffic
 	require.NoError(t, tstWorkflowExec(t, "", wfName, "", moveToKs, "", workflowActionSwitchTraffic, "", "", ""))
+	// we only have primary tablets in the keyspace
+	require.Regexp(t, fmt.Sprintf("Current State: Reads not switched.*Writes partially switched, for shards: %s", shard),
+		lastOutput)
 	require.Equal(t, expectedShardRoutingRules, getShardRoutingRules(t))
 
 	waitForQueryResult(t, vtgateConn, "customer:80-", "select name from customer where cid = 3", `[[VARBINARY("Ringo Starr")]]`)
