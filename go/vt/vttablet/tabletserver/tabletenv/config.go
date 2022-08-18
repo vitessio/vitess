@@ -84,7 +84,6 @@ func init() {
 	flag.IntVar(&currentConfig.MessagePostponeParallelism, "queryserver-config-message-postpone-cap", defaultConfig.MessagePostponeParallelism, "query server message postpone cap is the maximum number of messages that can be postponed at any given time. Set this number to substantially lower than transaction cap, so that the transaction pool isn't exhausted by the message subsystem.")
 	SecondsVar(&currentConfig.Olap.TxTimeoutSeconds, "queryserver-config-olap-transaction-timeout", defaultConfig.Olap.TxTimeoutSeconds, "query server transaction timeout (in seconds), after which a transaction in an OLAP session will be killed")
 	SecondsVar(&currentConfig.Oltp.TxTimeoutSeconds, "queryserver-config-transaction-timeout", defaultConfig.Oltp.TxTimeoutSeconds, "query server transaction timeout (in seconds), after which a transaction in an OLTP session will be killed")
-	SecondsVar(&currentConfig.TransactionKillerIntervalSeconds, "queryserver-config-transaction-killer-interval", defaultConfig.TransactionKillerIntervalSeconds, "query server transaction killer interval (in seconds), evalution interval for killing transactions that have elapsed their timeout")
 	SecondsVar(&currentConfig.GracePeriods.ShutdownSeconds, "shutdown_grace_period", defaultConfig.GracePeriods.ShutdownSeconds, "how long to wait (in seconds) for queries and transactions to complete during graceful shutdown.")
 	flag.IntVar(&currentConfig.Oltp.MaxRows, "queryserver-config-max-result-size", defaultConfig.Oltp.MaxRows, "query server max result size, maximum number of rows allowed to return from vttablet for non-streaming queries.")
 	flag.IntVar(&currentConfig.Oltp.WarnRows, "queryserver-config-warn-result-size", defaultConfig.Oltp.WarnRows, "query server result size warning threshold, warn if number of rows returned from vttablet for non-streaming queries exceeds this")
@@ -279,8 +278,7 @@ type TabletConfig struct {
 
 	EnableLagThrottler bool `json:"-"`
 
-	TransactionLimitConfig           `json:"-"`
-	TransactionKillerIntervalSeconds Seconds `json:"transactionKillerIntervalSeconds,omitempty"`
+	TransactionLimitConfig `json:"-"`
 
 	EnforceStrictTransTables bool `json:"-"`
 	EnableOnlineDDL          bool `json:"-"`
@@ -471,7 +469,7 @@ var defaultConfig = TabletConfig{
 		MaxWaiters:         5000,
 	},
 	Olap: OlapConfig{
-		TxTimeoutSeconds: 0,
+		TxTimeoutSeconds: 30,
 	},
 	Oltp: OltpConfig{
 		QueryTimeoutSeconds: 30,
@@ -521,8 +519,7 @@ var defaultConfig = TabletConfig{
 
 	EnableLagThrottler: false, // Feature flag; to switch to 'true' at some stage in the future
 
-	TransactionLimitConfig:           defaultTransactionLimitConfig(),
-	TransactionKillerIntervalSeconds: 3,
+	TransactionLimitConfig: defaultTransactionLimitConfig(),
 
 	EnforceStrictTransTables: true,
 	EnableOnlineDDL:          true,

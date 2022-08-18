@@ -75,14 +75,20 @@ type (
 func NewTxPool(env tabletenv.Env, limiter txlimiter.TxLimiter) *TxPool {
 	config := env.Config()
 	axp := &TxPool{
-		env:     env,
-		scp:     NewStatefulConnPool(env),
-		ticks:   timer.NewTimer(config.TransactionKillerIntervalSeconds.Get()),
+		env: env,
+		scp: NewStatefulConnPool(env),
+		ticks: timer.NewTimer(smallerTimeout(
+			config.TxTimeoutForWorkload(querypb.ExecuteOptions_OLAP),
+			config.TxTimeoutForWorkload(querypb.ExecuteOptions_OLTP),
+		) / 10),
 		limiter: limiter,
 		txStats: env.Exporter().NewTimings("Transactions", "Transaction stats", "operation"),
 	}
 	// Careful: conns also exports name+"xxx" vars,
 	// but we know it doesn't export Timeout.
+	env.Exporter().NewGaugeDurationFunc("OlapTransactionTimeout", "OLAP transaction timeout", func() time.Duration {
+		return config.TxTimeoutForWorkload(querypb.ExecuteOptions_OLAP)
+	})
 	env.Exporter().NewGaugeDurationFunc("TransactionTimeout", "Transaction timeout", func() time.Duration {
 		return config.TxTimeoutForWorkload(querypb.ExecuteOptions_OLTP)
 	})
@@ -93,12 +99,17 @@ func NewTxPool(env tabletenv.Env, limiter txlimiter.TxLimiter) *TxPool {
 // that will kill long-running transactions.
 func (tp *TxPool) Open(appParams, dbaParams, appDebugParams dbconfigs.Connector) {
 	tp.scp.Open(appParams, dbaParams, appDebugParams)
-	tp.ticks.Start(func() { tp.transactionKiller() })
+	tp.ticks.SetInterval(tp.txKillerTimeoutInterval())
+	if tp.ticks.Interval() > 0 {
+		tp.ticks.Start(func() { tp.transactionKiller() })
+	}
 }
 
 // Close closes the TxPool. A closed pool can be reopened.
 func (tp *TxPool) Close() {
-	tp.ticks.Stop()
+	if tp.ticks.Running() {
+		tp.ticks.Stop()
+	}
 	tp.scp.Close()
 }
 
@@ -360,12 +371,15 @@ func (tp *TxPool) LogActive() {
 	})
 }
 
-func (tp *TxPool) SetTransactionKillerInterval(d time.Duration) {
-	tp.ticks.SetInterval(d)
-}
-
 func (tp *TxPool) txComplete(conn *StatefulConnection, reason tx.ReleaseReason) {
 	conn.LogTransaction(reason)
 	tp.limiter.Release(conn.TxProperties().ImmediateCaller, conn.TxProperties().EffectiveCaller)
 	conn.CleanTxState()
+}
+
+func (tp *TxPool) txKillerTimeoutInterval() time.Duration {
+	return smallerTimeout(
+		tp.env.Config().TxTimeoutForWorkload(querypb.ExecuteOptions_OLAP),
+		tp.env.Config().TxTimeoutForWorkload(querypb.ExecuteOptions_OLTP),
+	) / 10
 }

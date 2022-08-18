@@ -717,9 +717,12 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sq
 	timeout := tsv.QueryTimeout.Get()
 	if transactionID != 0 {
 		allowOnShutdown = true
+		// Execute calls happen for OLTP only, so we can directly fetch the
+		// OLTP TX timeout.
+		txTimeout := tsv.config.TxTimeoutForWorkload(querypb.ExecuteOptions_OLTP)
 		// Use the smaller of the two values (0 means infinity).
 		// TODO(sougou): Assign deadlines to each transaction and set query timeout accordingly.
-		timeout = smallerTimeout(timeout, tsv.config.TxTimeoutForWorkload(options.GetWorkload()))
+		timeout = smallerTimeout(timeout, txTimeout)
 	}
 	err = tsv.execRequest(
 		ctx, timeout,
@@ -805,8 +808,9 @@ func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Targ
 	var timeout time.Duration
 	if transactionID != 0 {
 		allowOnShutdown = true
-		// Use the transaction timeout.
-		timeout = tsv.config.TxTimeoutForWorkload(options.GetWorkload())
+		// Use the transaction timeout. StreamExecute calls happen for OLAP only,
+		// so we can directly fetch the OLAP TX timeout.
+		timeout = tsv.config.TxTimeoutForWorkload(querypb.ExecuteOptions_OLAP)
 	}
 
 	return tsv.execRequest(
@@ -1178,8 +1182,11 @@ func (tsv *TabletServer) ReserveExecute(ctx context.Context, target *querypb.Tar
 	timeout := tsv.QueryTimeout.Get()
 	if transactionID != 0 {
 		allowOnShutdown = true
+		// ReserveExecute is for OLAP only, so we can directly fetch the OLAP
+		// TX timeout.
+		txTimeout := tsv.config.TxTimeoutForWorkload(querypb.ExecuteOptions_OLAP)
 		// Use the smaller of the two values (0 means infinity).
-		timeout = smallerTimeout(timeout, tsv.config.TxTimeoutForWorkload(options.GetWorkload()))
+		timeout = smallerTimeout(timeout, txTimeout)
 	}
 
 	err = tsv.execRequest(
@@ -1223,8 +1230,9 @@ func (tsv *TabletServer) ReserveStreamExecute(
 	var timeout time.Duration
 	if transactionID != 0 {
 		allowOnShutdown = true
-		// Use the transaction timeout.
-		timeout = tsv.config.TxTimeoutForWorkload(options.GetWorkload())
+		// Use the transaction timeout. ReserveStreamExecute is used for OLAP
+		// only, so we can directly fetch the OLAP TX timeout.
+		timeout = tsv.config.TxTimeoutForWorkload(querypb.ExecuteOptions_OLAP)
 	}
 
 	err = tsv.execRequest(

@@ -132,7 +132,8 @@ hotRowProtection:
   maxQueueSize: 20
   mode: disable
 messagePostponeParallelism: 4
-olap: {}
+olap:
+  txTimeoutSeconds: 30
 olapReadPool:
   idleTimeoutSeconds: 1800
   size: 200
@@ -157,7 +158,6 @@ schemaReloadIntervalSeconds: 1800
 signalSchemaChangeReloadIntervalSeconds: 5
 signalWhenSchemaChange: true
 streamBufferSize: 32768
-transactionKillerIntervalSeconds: 3
 txPool:
   idleTimeoutSeconds: 1800
   maxWaiters: 5000
@@ -205,7 +205,9 @@ func TestFlags(t *testing.T) {
 			TimeoutSeconds: 1,
 			MaxWaiters:     5000,
 		},
-		Olap: OlapConfig{},
+		Olap: OlapConfig{
+			TxTimeoutSeconds: 30,
+		},
 		Oltp: OltpConfig{
 			QueryTimeoutSeconds: 30,
 			TxTimeoutSeconds:    30,
@@ -230,7 +232,6 @@ func TestFlags(t *testing.T) {
 		DeprecatedCacheResultFields:             true,
 		TxThrottlerConfig:                       "target_replication_lag_sec: 2\nmax_replication_lag_sec: 10\ninitial_rate: 100\nmax_increase: 1\nemergency_decrease: 0.5\nmin_duration_between_increases_sec: 40\nmax_duration_between_increases_sec: 62\nmin_duration_between_decreases_sec: 20\nspread_backlog_across_sec: 20\nage_bad_rate_after_sec: 180\nbad_rate_increase: 0.1\nmax_rate_approach_threshold: 0.9\n",
 		TxThrottlerHealthCheckCells:             []string{},
-		TransactionKillerIntervalSeconds:        3,
 		TransactionLimitConfig: TransactionLimitConfig{
 			TransactionLimitPerUser:     0.4,
 			TransactionLimitByUsername:  true,
