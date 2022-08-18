@@ -669,12 +669,11 @@ func getShardRoutingRulesKey(keyspace, shard string) string {
 
 // FindRoutedShard looks up shard routing rules and returns the target keyspace if applicable
 func (vschema *VSchema) FindRoutedShard(keyspace, shard string) (string, error) {
-	if vschema.ShardRoutingRules == nil {
+	if len(vschema.ShardRoutingRules) == 0 {
 		return keyspace, nil
 	}
-	targetKeyspace := vschema.ShardRoutingRules[getShardRoutingRulesKey(keyspace, shard)]
-	if targetKeyspace != "" {
-		return targetKeyspace, nil
+	if ks, ok := vschema.ShardRoutingRules[getShardRoutingRulesKey(keyspace, shard)]; ok {
+		return ks, nil
 	}
 	return keyspace, nil
 }

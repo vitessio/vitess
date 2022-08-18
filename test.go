@@ -178,7 +178,7 @@ func (t *Test) run(dir, dataDir string) ([]byte, error) {
 			testCmd = append(testCmd, t.Args...)
 		}
 		if *partialKeyspace {
-			testCmd = append(testCmd, "-partial-keyspace")
+			testCmd = append(testCmd, "--partial-keyspace")
 		}
 		testCmd = append(testCmd, extraArgs...)
 		if *docker {

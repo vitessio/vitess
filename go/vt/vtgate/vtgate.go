@@ -99,7 +99,7 @@ var (
 	enableSchemaChangeSignal = flag.Bool("schema_change_signal", true, "Enable the schema tracker; requires queryserver-config-schema-change-signal to be enabled on the underlying vttablets for this to work")
 	schemaChangeUser         = flag.String("schema_change_signal_user", "", "User to be used to send down query to vttablet to retrieve schema changes")
 
-	EnableShardRouting = flag.Bool("enable_shard_routing", false, "Follow shard routing rules used in partial movetables (default false)")
+	enableShardRouting = flag.Bool("enable_shard_routing", false, "Follow shard routing rules used in partial movetables (default false)")
 )
 
 func getTxMode() vtgatepb.TransactionMode {
@@ -306,7 +306,7 @@ func Init(
 	}
 
 	initAPI(gw.hc)
-	planbuilder.EnableShardRoutingFlag(*EnableShardRouting)
+	planbuilder.EnableShardRoutingFlag(*enableShardRouting)
 	return rpcVTGate
 }
 

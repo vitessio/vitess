@@ -42,21 +42,22 @@ func buildPlanForBypass(stmt sqlparser.Statement, _ *sqlparser.ReservedVars, vsc
 		return nil, err
 	}
 
-	switch vschema.Destination().(type) {
+	switch dest := vschema.Destination().(type) {
 	case key.DestinationExactKeyRange:
 		if _, ok := stmt.(*sqlparser.Insert); ok {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "INSERT not supported when targeting a key range: %s", vschema.TargetString())
 		}
 	case key.DestinationShard:
-		if IsShardRoutingEnabled() {
-			shard := string(vschema.Destination().(key.DestinationShard))
-			targetKeyspace, err := GetShardRoute(vschema, keyspace.Name, shard)
-			if err != nil {
-				return nil, err
-			}
-			if targetKeyspace != nil {
-				keyspace = targetKeyspace
-			}
+		if !IsShardRoutingEnabled() {
+			break
+		}
+		shard := string(dest)
+		targetKeyspace, err := GetShardRoute(vschema, keyspace.Name, shard)
+		if err != nil {
+			return nil, err
+		}
+		if targetKeyspace != nil {
+			keyspace = targetKeyspace
 		}
 	}
 
@@ -76,16 +77,5 @@ func GetShardRoute(vschema plancontext.VSchema, keyspace, shard string) (*vindex
 	if err != nil {
 		return nil, err
 	}
-	if targetKeyspaceName != keyspace {
-		keyspaces, err := vschema.AllKeyspace()
-		if err != nil {
-			return nil, err
-		}
-		for _, ks := range keyspaces {
-			if ks.Name == targetKeyspaceName {
-				return ks, nil
-			}
-		}
-	}
-	return nil, nil
+	return vschema.FindKeyspace(targetKeyspaceName)
 }

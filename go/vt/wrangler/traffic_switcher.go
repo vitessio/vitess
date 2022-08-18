@@ -962,10 +962,6 @@ func (ts *trafficSwitcher) isPartialMoveTables(sourceShards, targetShards []stri
 }
 
 func getSourceAndTargetKeyRanges(sourceShards, targetShards []string) (*topodatapb.KeyRange, *topodatapb.KeyRange, error) {
-
-	// happily string sorting of shards also sorts them in the ascending order of key ranges in vitess
-	sort.Strings(sourceShards)
-	sort.Strings(targetShards)
 	if len(sourceShards) == 0 || len(targetShards) == 0 {
 		return nil, nil, fmt.Errorf("either source or target shards are missing")
 	}
@@ -978,6 +974,9 @@ func getSourceAndTargetKeyRanges(sourceShards, targetShards []string) (*topodata
 		return krs[0], nil
 	}
 
+	// happily string sorting of shards also sorts them in the ascending order of key ranges in vitess
+	sort.Strings(sourceShards)
+	sort.Strings(targetShards)
 	getFullKeyRange := func(shards []string) (*topodatapb.KeyRange, error) {
 		// expect sorted shards
 		kr1, err := getKeyRange(sourceShards[0])
@@ -998,7 +997,7 @@ func getSourceAndTargetKeyRanges(sourceShards, targetShards []string) (*topodata
 	if err != nil {
 		return nil, nil, err
 	}
-	tkr, err := getFullKeyRange(sourceShards)
+	tkr, err := getFullKeyRange(targetShards)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1476,11 +1475,13 @@ func (ts *trafficSwitcher) changeWriteRoute(ctx context.Context) error {
 			return err
 		}
 		for _, table := range ts.Tables() {
-			delete(rules, ts.TargetKeyspaceName()+"."+table)
-			ts.Logger().Infof("Delete routing: %v", ts.TargetKeyspaceName()+"."+table)
-			rules[table] = []string{ts.TargetKeyspaceName() + "." + table}
-			rules[ts.SourceKeyspaceName()+"."+table] = []string{ts.TargetKeyspaceName() + "." + table}
-			ts.Logger().Infof("Add routing: %v %v", table, ts.SourceKeyspaceName()+"."+table)
+			targetKsTable := fmt.Sprintf("%s.%s", ts.TargetKeyspaceName(), table)
+			sourceKsTable := fmt.Sprintf("%s.%s", ts.SourceKeyspaceName(), table)
+			delete(rules, targetKsTable)
+			ts.Logger().Infof("Delete routing: %s", targetKsTable)
+			rules[table] = []string{targetKsTable}
+			rules[sourceKsTable] = []string{targetKsTable}
+			ts.Logger().Infof("Add routing: %v %v", table, sourceKsTable)
 		}
 		if err := topotools.SaveRoutingRules(ctx, ts.TopoServer(), rules); err != nil {
 			return err

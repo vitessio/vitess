@@ -95,7 +95,7 @@ func commandApplyShardRoutingRules(cmd *cobra.Command, args []string) error {
 		fmt.Printf("[DRY RUN] Would have saved new ShardRoutingRules object:\n%s\n", data)
 
 		if applyRoutingRulesOptions.SkipRebuild {
-			fmt.Println("[DRY RUN] Would not have rebuilt VSchema graph, would have required operator to run RebuildVSchemaGraph for changes to take effect")
+			fmt.Println("[DRY RUN] Would not have rebuilt VSchema graph, would have required operator to run RebuildVSchemaGraph for changes to take effect.")
 		} else {
 			fmt.Print("[DRY RUN] Would have rebuilt the VSchema graph")
 			if len(applyRoutingRulesOptions.Cells) == 0 {

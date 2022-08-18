@@ -577,7 +577,7 @@ func (vc *vcursorImpl) setRollbackOnPartialExecIfRequired(atleastOneSuccess bool
 }
 
 // fixupPartiallyMovedShards checks if any of the shards in the route has a ShardRoutingRule (true when a keyspace
-// is in the middle of being moved to another keyspace using MoveTables moving one shard at a time
+// is in the middle of being moved to another keyspace using MoveTables moving a subset of shards at a time
 func (vc *vcursorImpl) fixupPartiallyMovedShards(rss []*srvtopo.ResolvedShard) ([]*srvtopo.ResolvedShard, error) {
 	if vc.vschema.ShardRoutingRules == nil {
 		return rss, nil
@@ -600,7 +600,7 @@ func (vc *vcursorImpl) ResolveDestinations(ctx context.Context, keyspace string,
 	if err != nil {
 		return nil, nil, err
 	}
-	if *EnableShardRouting {
+	if *enableShardRouting {
 		rss, err = vc.fixupPartiallyMovedShards(rss)
 		if err != nil {
 			return nil, nil, err
@@ -614,7 +614,7 @@ func (vc *vcursorImpl) ResolveDestinationsMultiCol(ctx context.Context, keyspace
 	if err != nil {
 		return nil, nil, err
 	}
-	if *EnableShardRouting {
+	if *enableShardRouting {
 		rss, err = vc.fixupPartiallyMovedShards(rss)
 		if err != nil {
 			return nil, nil, err
