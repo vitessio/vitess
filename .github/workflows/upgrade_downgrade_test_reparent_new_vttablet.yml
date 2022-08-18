@@ -15,8 +15,6 @@ jobs:
     if: always()
     name: Get latest release
     runs-on: ubuntu-latest
-    needs:
-      - get_upgrade_downgrade_label
     outputs:
       next_release: ${{ steps.output-next-release-ref.outputs.next_release_ref }}
 
