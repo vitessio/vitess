@@ -61,7 +61,9 @@ func (a stats) Less(i, j int) bool { return a[i].Count > a[j].Count }
 
 func main() {
 	defer exit.Recover()
-	_flag.Parse(pflag.NewFlagSet("query_analyzer", pflag.ExitOnError))
+	fs := pflag.NewFlagSet("query_analyzer", pflag.ExitOnError)
+	log.RegisterFlags(fs)
+	_flag.Parse(fs)
 	for _, filename := range _flag.Args() {
 		fmt.Printf("processing: %s\n", filename)
 		if err := processFile(filename); err != nil {
