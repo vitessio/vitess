@@ -28,7 +28,9 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-) // This file defines interfaces and registration for vindexes.
+)
+
+// This file defines interfaces and registration for vindexes.
 
 type (
 	// A VCursor is an interface that allows you to execute queries
