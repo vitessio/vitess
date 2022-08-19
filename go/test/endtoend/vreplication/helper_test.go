@@ -206,7 +206,6 @@ func waitForRowCountInTablet(t *testing.T, vttablet *cluster.VttabletProcess, da
 			qr, err := vttablet.QueryTablet(query, database, true)
 			require.NoError(t, err)
 			require.NotNil(t, qr)
-			require.Equal(t, fmt.Sprintf("[[INT64(%d)]]", want), fmt.Sprintf("%v", qr.Rows))
 			if wantRes == fmt.Sprintf("%v", qr.Rows) {
 				return
 			}

@@ -880,13 +880,9 @@ func materializeProduct(t *testing.T) {
 		applyVSchema(t, materializeProductVSchema, keyspace)
 		materialize(t, materializeProductSpec)
 		customerTablets := vc.getVttabletsInKeyspace(t, defaultCell, keyspace, "primary")
-		{
-			for _, tab := range customerTablets {
-				catchup(t, tab, workflow, "Materialize")
-			}
-			for _, tab := range customerTablets {
-				waitForRowCountInTablet(t, tab, keyspace, workflow, 5)
-			}
+		for _, tab := range customerTablets {
+			catchup(t, tab, workflow, "Materialize")
+			waitForRowCountInTablet(t, tab, keyspace, workflow, 5)
 		}
 
 		productTablets := vc.getVttabletsInKeyspace(t, defaultCell, "product", "primary")
