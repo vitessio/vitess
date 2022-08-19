@@ -46,6 +46,7 @@ import (
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -320,4 +321,23 @@ func ParseFlagsWithArgs(cmd string) []string {
 	}
 
 	return args
+}
+
+func init() {
+	// These are the binaries that call trace.StartTracing. We need to register
+	// here because package trace cannot import package servenv without creating
+	// a dependency cycle.
+	for _, cmd := range []string{
+		"vtadmin",
+		"vtclient",
+		"vtcombo",
+		"vtctl",
+		"vtctlclient",
+		"vtctld",
+		"vtctldclient",
+		"vtgate",
+		"vttablet",
+	} {
+		OnParseFor(cmd, trace.RegisterFlags)
+	}
 }

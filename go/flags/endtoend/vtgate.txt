@@ -144,6 +144,7 @@ Usage of vtgate:
       --sql-max-length-ui int                                            truncate queries in debug UIs to the given length (default 512) (default 512)
       --srv_topo_cache_refresh duration                                  how frequently to refresh the topology for cached entries (default 1s)
       --srv_topo_cache_ttl duration                                      how long to use cached entries for topology (default 1s)
+      --srv_topo_no_cache_for_get                                        Always query topo when getting current value of the key
       --srv_topo_timeout duration                                        topo server timeout (default 5s)
       --stats_backend string                                             The name of the registered push-based monitoring/stats backend to use
       --stats_combine_dimensions string                                  List of dimensions to be combined into a single "all" value in exported stats vars
@@ -189,8 +190,8 @@ Usage of vtgate:
       --topo_zk_tls_key string                                           the key to use to connect to the zk topo server, enables TLS
       --tracer string                                                    tracing service to use (default "noop")
       --tracing-enable-logging                                           whether to enable logging in the tracing service
-      --tracing-sampling-rate OptionalFloat64                            sampling rate for the probabilistic jaeger sampler (default 0.1)
-      --tracing-sampling-type OptionalString                             sampling strategy to use for jaeger. possible values are 'const', 'probabilistic', 'rateLimiting', or 'remote' (default const)
+      --tracing-sampling-rate float                                      sampling rate for the probabilistic jaeger sampler (default 0.1)
+      --tracing-sampling-type string                                     sampling strategy to use for jaeger. possible values are 'const', 'probabilistic', 'rateLimiting', or 'remote' (default "const")
       --transaction_mode string                                          SINGLE: disallow multi-db transactions, MULTI: allow multi-db transactions with best effort commit, TWOPC: allow multi-db transactions with 2pc commit (default "MULTI")
   -v, --v Level                                                          log level for V logs
       --version                                                          print binary version

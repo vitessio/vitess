@@ -18,18 +18,19 @@ package flagutil
 
 import (
 	"errors"
-	"flag"
 	"strconv"
+
+	"github.com/spf13/pflag"
 )
 
-// OptionalFlag augements the flag.Value interface with a method to determine
+// OptionalFlag augements the pflag.Value interface with a method to determine
 // if a flag was set explicitly on the comand-line.
 //
 // Though not part of the interface, because the return type would be different
 // for each implementation, by convention, each implementation should define a
 // Get() method to access the underlying value.
 type OptionalFlag interface {
-	flag.Value
+	pflag.Value
 	IsSet() bool
 }
 
@@ -53,7 +54,7 @@ func NewOptionalFloat64(val float64) *OptionalFloat64 {
 	}
 }
 
-// Set is part of the flag.Value interface.
+// Set is part of the pflag.Value interface.
 func (f *OptionalFloat64) Set(arg string) error {
 	v, err := strconv.ParseFloat(arg, 64)
 	if err != nil {
@@ -66,9 +67,14 @@ func (f *OptionalFloat64) Set(arg string) error {
 	return nil
 }
 
-// String is part of the flag.Value interface.
+// String is part of the pflag.Value interface.
 func (f *OptionalFloat64) String() string {
 	return strconv.FormatFloat(f.val, 'g', -1, 64)
+}
+
+// Type is part of the pflag.Value interface.
+func (f *OptionalFloat64) Type() string {
+	return "float64"
 }
 
 // Get returns the underlying float64 value of this flag. If the flag was not
@@ -97,16 +103,21 @@ func NewOptionalString(val string) *OptionalString {
 	}
 }
 
-// Set is part of the flag.Value interface.
+// Set is part of the pflag.Value interface.
 func (f *OptionalString) Set(arg string) error {
 	f.val = arg
 	f.set = true
 	return nil
 }
 
-// String is part of the flag.Value interface.
+// String is part of the pflag.Value interface.
 func (f *OptionalString) String() string {
 	return f.val
+}
+
+// Type is part of the pflag.Value interface.
+func (f *OptionalString) Type() string {
+	return "string"
 }
 
 // Get returns the underlying string value of this flag. If the flag was not
