@@ -48,6 +48,7 @@ import (
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	// register the proper init and shutdown hooks for logging
@@ -342,6 +343,8 @@ func init() {
 		OnParseFor(cmd, trace.RegisterFlags)
 	}
 
-	// Log flags are installed for all binaries.
+	// Flags in package log are installed for all binaries.
 	OnParse(log.RegisterFlags)
+	// Flags in package logutil are installed for all binaries.
+	OnParse(logutil.RegisterFlags)
 }
