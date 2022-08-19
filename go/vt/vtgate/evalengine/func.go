@@ -27,7 +27,6 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/evalengine/internal/decimal"
 )
 
 var builtinFunctions = map[string]builtin{
@@ -646,7 +645,8 @@ func (ta *typeAggregation) result() sqltypes.Type {
 	return sqltypes.VarChar
 }
 
-type builtinCeil struct{}
+type builtinCeil struct {
+}
 
 func (builtinCeil) call(env *ExpressionEnv, args []EvalResult, result *EvalResult) {
 	inarg := &args[0]
@@ -657,21 +657,17 @@ func (builtinCeil) call(env *ExpressionEnv, args []EvalResult, result *EvalResul
 	}
 
 	if sqltypes.IsIntegral(argtype) {
-		inarg.makeFloat()
-		result.setInt64(int64(math.Ceil(inarg.float64())))
+		result.setInt64(inarg.int64())
 	} else if sqltypes.Decimal == argtype {
 		num := inarg.decimal()
-		if num.Cmp(decimal.NewFromInt(math.MaxInt32)) == 1 || num.Cmp(decimal.NewFromInt(math.MinInt32)) == -1 {
-			if num.Sign() == 1 {
-				result.setDecimal(num.Add(decimal.NewFromInt(1)), 0)
-			} else {
-				result.setDecimal(num.Add(decimal.NewFromInt(-1)), 0)
-			}
+		num = num.Ceil()
+		intnum, isfit := num.Int64()
+		if isfit {
+			result.setInt64(intnum)
 		} else {
-			floatpart, _ := num.Float64()
-			result.setInt64(int64(math.Ceil(floatpart)))
+			result.setDecimal(num, 0)
 		}
-	} else if sqltypes.VarChar == argtype || sqltypes.IsFloat(argtype) {
+	} else {
 		inarg.makeFloat()
 		result.setFloat(math.Ceil(inarg.float64()))
 	}
@@ -684,9 +680,9 @@ func (builtinCeil) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, flag)
 	t, f := args[0].typeof(env)
 	if sqltypes.IsIntegral(t) {
 		return sqltypes.Int64, f
-	} else if sqltypes.VarChar == t || sqltypes.IsFloat(t) {
-		return sqltypes.Float64, f
-	} else {
+	} else if sqltypes.Decimal == t {
 		return sqltypes.Decimal, f
+	} else {
+		return sqltypes.Float64, f
 	}
 }

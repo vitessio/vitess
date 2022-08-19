@@ -53,16 +53,15 @@ func myBigDigits(digits int32) int32 {
 //
 // Example:
 //
-//     d1 := decimal.NewFromFloat(2).div(decimal.NewFromFloat(3))
-//     d1.String() // output: "0.6666666666666667"
-//     d2 := decimal.NewFromFloat(2).div(decimal.NewFromFloat(30000))
-//     d2.String() // output: "0.0000666666666667"
-//     d3 := decimal.NewFromFloat(20000).div(decimal.NewFromFloat(3))
-//     d3.String() // output: "6666.6666666666666667"
-//     decimal.divisionPrecision = 3
-//     d4 := decimal.NewFromFloat(2).div(decimal.NewFromFloat(3))
-//     d4.String() // output: "0.667"
-//
+//	d1 := decimal.NewFromFloat(2).div(decimal.NewFromFloat(3))
+//	d1.String() // output: "0.6666666666666667"
+//	d2 := decimal.NewFromFloat(2).div(decimal.NewFromFloat(30000))
+//	d2.String() // output: "0.0000666666666667"
+//	d3 := decimal.NewFromFloat(20000).div(decimal.NewFromFloat(3))
+//	d3.String() // output: "6666.6666666666666667"
+//	decimal.divisionPrecision = 3
+//	d4 := decimal.NewFromFloat(2).div(decimal.NewFromFloat(3))
+//	d4.String() // output: "0.667"
 var divisionPrecision = 16
 
 // Zero constant, to make computations faster.
@@ -147,8 +146,8 @@ func New(value int64, exp int32) Decimal {
 //
 // Example:
 //
-//     NewFromInt(123).String() // output: "123"
-//     NewFromInt(-10).String() // output: "-10"
+//	NewFromInt(123).String() // output: "123"
+//	NewFromInt(-10).String() // output: "-10"
 func NewFromInt(value int64) Decimal {
 	return Decimal{
 		value: big.NewInt(value),
@@ -236,7 +235,7 @@ func bigPow10(n uint64) *big.Int {
 //
 // Example:
 //
-// 	d := New(12345, -4)
+//	d := New(12345, -4)
 //	d2 := d.rescale(-1)
 //	d3 := d2.rescale(-4)
 //	println(d1)
@@ -248,7 +247,6 @@ func bigPow10(n uint64) *big.Int {
 //	1.2345
 //	1.2
 //	1.2000
-//
 func (d Decimal) rescale(exp int32) Decimal {
 	d.ensureInitialized()
 
@@ -376,9 +374,11 @@ func (d Decimal) div(d2 Decimal) Decimal {
 
 // quoRem does division with remainder
 // d.quoRem(d2,precision) returns quotient q and remainder r such that
-//   d = d2 * q + r, q an integer multiple of 10^(-precision)
-//   0 <= r < abs(d2) * 10 ^(-precision) if d>=0
-//   0 >= r > -abs(d2) * 10 ^(-precision) if d<0
+//
+//	d = d2 * q + r, q an integer multiple of 10^(-precision)
+//	0 <= r < abs(d2) * 10 ^(-precision) if d>=0
+//	0 >= r > -abs(d2) * 10 ^(-precision) if d<0
+//
 // Note that precision<0 is allowed as input.
 func (d Decimal) quoRem(d2 Decimal, precision int32) (Decimal, Decimal) {
 	d.ensureInitialized()
@@ -421,8 +421,10 @@ func (d Decimal) quoRem(d2 Decimal, precision int32) (Decimal, Decimal) {
 
 // divRound divides and rounds to a given precision
 // i.e. to an integer multiple of 10^(-precision)
-//   for a positive quotient digit 5 is rounded up, away from 0
-//   if the quotient is negative then digit 5 is rounded down, away from 0
+//
+//	for a positive quotient digit 5 is rounded up, away from 0
+//	if the quotient is negative then digit 5 is rounded down, away from 0
+//
 // Note that precision<0 is allowed as input.
 func (d Decimal) divRound(d2 Decimal, precision int32) Decimal {
 	// quoRem already checks initialization
@@ -453,6 +455,19 @@ func (d Decimal) divRound(d2 Decimal, precision int32) Decimal {
 func (d Decimal) mod(d2 Decimal) Decimal {
 	quo := d.divRound(d2, -d.exp+1).truncate(0)
 	return d.sub(d2.mul(quo))
+}
+
+func (d Decimal) Ceil() Decimal {
+	// truncate to 1.0
+	ret := d.rescale(-1)
+
+	if d.Cmp(ret) != 0 {
+		return d
+	} else if d.Sign() == 1 {
+		return d.Add(New(1, 0)).truncate(0)
+	} else {
+		return d.truncate(0)
+	}
 }
 
 func (d Decimal) truncate(precision int32) Decimal {
@@ -492,10 +507,9 @@ func abs(n int32) int32 {
 
 // Cmp compares the numbers represented by d and d2 and returns:
 //
-//     -1 if d <  d2
-//      0 if d == d2
-//     +1 if d >  d2
-//
+//	-1 if d <  d2
+//	 0 if d == d2
+//	+1 if d >  d2
 func (d Decimal) Cmp(d2 Decimal) int {
 	d.ensureInitialized()
 	d2.ensureInitialized()
@@ -526,7 +540,6 @@ func (d Decimal) Equal(d2 Decimal) bool {
 //	-1 if d <  0
 //	 0 if d == 0
 //	+1 if d >  0
-//
 func (d Decimal) Sign() int {
 	if d.value == nil {
 		return 0
@@ -571,13 +584,12 @@ func (d Decimal) Float64() (f float64, ok bool) {
 //
 // Example:
 //
-//     d := New(-12345, -3)
-//     println(d.String())
+//	d := New(-12345, -3)
+//	println(d.String())
 //
 // Output:
 //
-//     -12.345
-//
+//	-12.345
 func (d Decimal) String() string {
 	return string(d.formatFast(0, false, true))
 }
@@ -587,14 +599,13 @@ func (d Decimal) String() string {
 //
 // Example:
 //
-// 	   NewFromFloat(0).StringFixed(2) // output: "0.00"
-// 	   NewFromFloat(0).StringFixed(0) // output: "0"
-// 	   NewFromFloat(5.45).StringFixed(0) // output: "5"
-// 	   NewFromFloat(5.45).StringFixed(1) // output: "5.5"
-// 	   NewFromFloat(5.45).StringFixed(2) // output: "5.45"
-// 	   NewFromFloat(5.45).StringFixed(3) // output: "5.450"
-// 	   NewFromFloat(545).StringFixed(-1) // output: "550"
-//
+//	NewFromFloat(0).StringFixed(2) // output: "0.00"
+//	NewFromFloat(0).StringFixed(0) // output: "0"
+//	NewFromFloat(5.45).StringFixed(0) // output: "5"
+//	NewFromFloat(5.45).StringFixed(1) // output: "5.5"
+//	NewFromFloat(5.45).StringFixed(2) // output: "5.45"
+//	NewFromFloat(5.45).StringFixed(3) // output: "5.450"
+//	NewFromFloat(545).StringFixed(-1) // output: "550"
 func (d Decimal) StringFixed(places int32) string {
 	// The StringFixed method allows for negative precision, which
 	// MySQL doesn't support, so we cannot round this using the string
@@ -616,9 +627,8 @@ func (d Decimal) FormatMySQL(frac int32) []byte {
 //
 // Example:
 //
-// 	   NewFromFloat(5.45).Round(1).String() // output: "5.5"
-// 	   NewFromFloat(545).Round(-1).String() // output: "550"
-//
+//	NewFromFloat(5.45).Round(1).String() // output: "5.5"
+//	NewFromFloat(545).Round(-1).String() // output: "550"
 func (d Decimal) Round(places int32) Decimal {
 	if d.exp == -places {
 		return d
@@ -675,9 +685,10 @@ func min(x, y int32) int32 {
 // largestForm returns the largest decimal that can be represented
 // with the given amount of integral and fractional digits
 // Example:
-//	largestForm(1, 1) => 9.9
-//	largestForm(5, 0) => 99999
-//  largestForm(0, 5) => 0.99999
+//
+//		largestForm(1, 1) => 9.9
+//		largestForm(5, 0) => 99999
+//	 largestForm(0, 5) => 0.99999
 func largestForm(integral, fractional int32, neg bool) Decimal {
 	// nines is just a very long string of nines; to find the
 	// largest form of a large decimal, we parse as many nines
