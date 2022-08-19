@@ -1603,14 +1603,18 @@
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "Scatter",
+        "Variant": "IN",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col1, col2 from `user` where 1 != 1",
-        "Query": "select col1, col2 from `user` where col1 in ::col1",
-        "Table": "`user`"
+        "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
+        "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
+        "Table": "name_user_vdx",
+        "Values": [
+          ":name"
+        ],
+        "Vindex": "user_index"
       },
       {
         "OperatorType": "Route",

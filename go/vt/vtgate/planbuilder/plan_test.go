@@ -107,7 +107,7 @@ func (v *nameLkpIndex) String() string                     { return v.name }
 func (*nameLkpIndex) Cost() int                            { return 3 }
 func (*nameLkpIndex) IsUnique() bool                       { return false }
 func (*nameLkpIndex) NeedsVCursor() bool                   { return false }
-func (*nameLkpIndex) AllowBatch() bool                     { return false }
+func (*nameLkpIndex) AllowBatch() bool                     { return true }
 func (*nameLkpIndex) GetCommitOrder() vtgatepb.CommitOrder { return vtgatepb.CommitOrder_NORMAL }
 func (*nameLkpIndex) Verify(context.Context, vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
@@ -125,7 +125,7 @@ func (*nameLkpIndex) Update(context.Context, vindexes.VCursor, []sqltypes.Value,
 	return nil
 }
 func (v *nameLkpIndex) Query() (string, []string) {
-	return "select col1, col2 from user where col1 in ::col1", []string{"col1"}
+	return "select name, keyspace_id from name_user_vdx where name in ::name", []string{"name"}
 }
 func (*nameLkpIndex) MapResult([]sqltypes.Value, []*sqltypes.Result) ([]key.Destination, error) {
 	return nil, nil
