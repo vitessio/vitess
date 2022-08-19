@@ -22,13 +22,6 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
-func colWithMaskedName(col *sqlparser.ColumnDefinition) *sqlparser.ColumnDefinition {
-	col = sqlparser.CloneRefOfColumnDefinition(col)
-	col.Name = sqlparser.NewIdentifierCI("mask")
-	return col
-
-}
-
 // columnDetails decorates a column with more details, used by diffing logic
 type columnDetails struct {
 	col     *sqlparser.ColumnDefinition
@@ -40,7 +33,7 @@ func (c *columnDetails) identicalOtherThanName(other *sqlparser.ColumnDefinition
 	if other == nil {
 		return false
 	}
-	return sqlparser.EqualsRefOfColumnDefinition(colWithMaskedName(c.col), colWithMaskedName(other))
+	return sqlparser.EqualsColumnType(c.col.Type, other.Type)
 }
 
 func (c *columnDetails) prevColName() string {

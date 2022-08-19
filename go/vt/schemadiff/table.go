@@ -2105,12 +2105,6 @@ func (c *CreateTableEntity) identicalOtherThanName(other *CreateTableEntity) boo
 	if other == nil {
 		return false
 	}
-	return sqlparser.EqualsRefOfCreateTable(tableWithMaskedName(&c.CreateTable), tableWithMaskedName(&other.CreateTable))
-}
-
-// tableWithMaskedName returns the CREATE TABLE statement but with table's name replaced with a constant arbitrary name
-func tableWithMaskedName(createTable *sqlparser.CreateTable) *sqlparser.CreateTable {
-	createTable = sqlparser.CloneRefOfCreateTable(createTable)
-	createTable.Table.Name = sqlparser.NewIdentifierCS("mask")
-	return createTable
+	return sqlparser.EqualsRefOfTableSpec(c.TableSpec, other.TableSpec) &&
+		sqlparser.EqualsRefOfParsedComments(c.Comments, other.Comments)
 }
