@@ -43,6 +43,11 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 )
 
+var (
+	defaultTick    = 500 * time.Millisecond
+	defaultTimeout = 30 * time.Second
+)
+
 func execMultipleQueries(t *testing.T, conn *mysql.Conn, database string, lines string) {
 	queries := strings.Split(lines, "\n")
 	for _, query := range queries {
@@ -92,22 +97,20 @@ func checkHealth(t *testing.T, url string) bool {
 	return true
 }
 
-func waitForQueryToExecute(t *testing.T, conn *mysql.Conn, database string, query string, want string) {
-	done := false
-	ticker := time.NewTicker(10 * time.Millisecond)
+func waitForQueryResult(t *testing.T, conn *mysql.Conn, database string, query string, want string) {
+	ticker := time.NewTicker(defaultTick)
+	defer ticker.Stop()
 	for {
 		select {
 		case <-ticker.C:
-			if done {
-				return
-			}
 			qr := execVtgateQuery(t, conn, database, query)
 			require.NotNil(t, qr)
 			if want == fmt.Sprintf("%v", qr.Rows) {
-				done = true
+				return
 			}
-		case <-time.After(5 * time.Second):
-			require.FailNow(t, "query %s.%s did not execute in time", database, query)
+		case <-time.After(defaultTimeout):
+			require.FailNow(t, "query %s on database %s did not return the expected result of %v before the timeout of %s",
+				query, database, want, defaultTimeout)
 		}
 	}
 }
@@ -124,24 +127,46 @@ func verifyNoInternalTables(t *testing.T, conn *mysql.Conn, keyspaceShard string
 	}
 }
 
-func validateCount(t *testing.T, conn *mysql.Conn, database string, table string, want int) {
-	qr := execVtgateQuery(t, conn, database, fmt.Sprintf("select count(*) from %s", table))
-	require.NotNil(t, qr)
-	require.NotNil(t, qr.Rows)
-	require.Equal(t, fmt.Sprintf("[[INT64(%d)]]", want), fmt.Sprintf("%v", qr.Rows))
-}
-
-func validateQuery(t *testing.T, conn *mysql.Conn, database string, query string, want string) {
-	qr := execVtgateQuery(t, conn, database, query)
-	require.NotNil(t, qr)
-	require.Equal(t, want, fmt.Sprintf("%v", qr.Rows))
-}
-
-func validateCountInTablet(t *testing.T, vttablet *cluster.VttabletProcess, database string, table string, want int) {
+func waitForRowCount(t *testing.T, conn *mysql.Conn, database string, table string, want int) {
 	query := fmt.Sprintf("select count(*) from %s", table)
-	qr, err := vttablet.QueryTablet(query, database, true)
-	require.NoError(t, err)
-	require.Equal(t, fmt.Sprintf("[[INT64(%d)]]", want), fmt.Sprintf("%v", qr.Rows))
+	wantRes := fmt.Sprintf("[[INT64(%d)]]", want)
+	ticker := time.NewTicker(defaultTick)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			qr := execVtgateQuery(t, conn, database, query)
+			require.NotNil(t, qr)
+			require.Equal(t, fmt.Sprintf("[[INT64(%d)]]", want), fmt.Sprintf("%v", qr.Rows))
+			if wantRes == fmt.Sprintf("%v", qr.Rows) {
+				return
+			}
+		case <-time.After(defaultTimeout):
+			require.FailNow(t, "table %s did not reach the expected number of rows (%d) before the timeout of %s", table, want, defaultTimeout)
+		}
+	}
+}
+
+func waitForRowCountInTablet(t *testing.T, vttablet *cluster.VttabletProcess, database string, table string, want int) {
+	query := fmt.Sprintf("select count(*) from %s", table)
+	wantRes := fmt.Sprintf("[[INT64(%d)]]", want)
+	ticker := time.NewTicker(defaultTick)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			qr, err := vttablet.QueryTablet(query, database, true)
+			require.NoError(t, err)
+			require.NotNil(t, qr)
+			require.Equal(t, fmt.Sprintf("[[INT64(%d)]]", want), fmt.Sprintf("%v", qr.Rows))
+			if wantRes == fmt.Sprintf("%v", qr.Rows) {
+				return
+			}
+		case <-time.After(defaultTimeout):
+			require.FailNow(t, "table %s did not reach the expected number of rows (%d) on the %s tablet before the timeout of %s",
+				table, want, vttablet.Name, defaultTimeout)
+		}
+	}
 }
 
 func validateThatQueryExecutesOnTablet(t *testing.T, conn *mysql.Conn, tablet *cluster.VttabletProcess, ksName string, query string, matchQuery string) bool {
@@ -296,7 +321,7 @@ func checkIfDenyListExists(t *testing.T, vc *VitessCluster, ksShard string, tabl
 
 func expectNumberOfStreams(t *testing.T, vtgateConn *mysql.Conn, name string, workflow string, database string, want int) {
 	query := fmt.Sprintf("select count(*) from _vt.vreplication where workflow='%s';", workflow)
-	validateQuery(t, vtgateConn, database, query, fmt.Sprintf(`[[INT64(%d)]]`, want))
+	waitForQueryResult(t, vtgateConn, database, query, fmt.Sprintf(`[[INT64(%d)]]`, want))
 }
 
 func printShardPositions(vc *VitessCluster, ksShards []string) {

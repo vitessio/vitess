@@ -430,9 +430,9 @@ func insertInitialData(t *testing.T) {
 		execVtgateQuery(t, vtgateConn, "product:0", "insert into customer_seq2(id, next_id, cache) values(0, 100, 100);")
 		log.Infof("Done inserting initial data")
 
-		validateCount(t, vtgateConn, "product:0", "product", 2)
-		validateCount(t, vtgateConn, "product:0", "customer", 3)
-		validateQuery(t, vtgateConn, "product:0", "select * from merchant",
+		waitForRowCount(t, vtgateConn, "product:0", "product", 2)
+		waitForRowCount(t, vtgateConn, "product:0", "customer", 3)
+		waitForQueryResult(t, vtgateConn, "product:0", "select * from merchant",
 			`[[VARCHAR("Monoprice") VARCHAR("eléctronics")] [VARCHAR("newegg") VARCHAR("elec†ronics")]]`)
 	})
 }
@@ -606,15 +606,15 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 			require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, customerTab2, "customer", insertQuery2, matchInsertQuery2))
 
 			execVtgateQuery(t, vtgateConn, "customer", "delete from customer where name like 'tempCustomer%'")
-			validateCountInTablet(t, customerTab1, "customer", "customer", 1)
-			validateCountInTablet(t, customerTab2, "customer", "customer", 2)
-			validateCount(t, vtgateConn, "customer", "customer.customer", 3)
+			waitForRowCountInTablet(t, customerTab1, "customer", "customer", 1)
+			waitForRowCountInTablet(t, customerTab2, "customer", "customer", 2)
+			waitForRowCount(t, vtgateConn, "customer", "customer.customer", 3)
 
 			query = "insert into customer (name, cid) values('george', 5)"
 			execVtgateQuery(t, vtgateConn, "customer", query)
-			validateCountInTablet(t, customerTab1, "customer", "customer", 1)
-			validateCountInTablet(t, customerTab2, "customer", "customer", 3)
-			validateCount(t, vtgateConn, "customer", "customer.customer", 4)
+			waitForRowCountInTablet(t, customerTab1, "customer", "customer", 1)
+			waitForRowCountInTablet(t, customerTab2, "customer", "customer", 3)
+			waitForRowCount(t, vtgateConn, "customer", "customer.customer", 4)
 		}
 	})
 }
@@ -623,8 +623,8 @@ func validateRollupReplicates(t *testing.T) {
 	t.Run("validateRollupReplicates", func(t *testing.T) {
 		insertMoreProducts(t)
 		time.Sleep(1 * time.Second)
-		validateCount(t, vtgateConn, "product", "rollup", 1)
-		validateQuery(t, vtgateConn, "product:0", "select rollupname, kount from rollup",
+		waitForRowCount(t, vtgateConn, "product", "rollup", 1)
+		waitForQueryResult(t, vtgateConn, "product:0", "select rollupname, kount from rollup",
 			`[[VARCHAR("total") INT32(5)]]`)
 	})
 }
@@ -668,10 +668,10 @@ func reshardCustomer2to4Split(t *testing.T, cells []*Cell, sourceCellOrAlias str
 		ksName := "customer"
 		counts := map[string]int{"zone1-600": 4, "zone1-700": 5, "zone1-800": 6, "zone1-900": 5}
 		reshard(t, ksName, "customer", "c2c4", "-80,80-", "-40,40-80,80-c0,c0-", 600, counts, nil, cells, sourceCellOrAlias)
-		validateCount(t, vtgateConn, ksName, "customer", 20)
+		waitForRowCount(t, vtgateConn, ksName, "customer", 20)
 		query := "insert into customer (name) values('yoko')"
 		execVtgateQuery(t, vtgateConn, ksName, query)
-		validateCount(t, vtgateConn, ksName, "customer", 21)
+		waitForRowCount(t, vtgateConn, ksName, "customer", 21)
 	})
 }
 
@@ -680,10 +680,10 @@ func reshardMerchant2to3SplitMerge(t *testing.T) {
 		ksName := merchantKeyspace
 		counts := map[string]int{"zone1-1600": 0, "zone1-1700": 2, "zone1-1800": 0}
 		reshard(t, ksName, "merchant", "m2m3", "-80,80-", "-40,40-c0,c0-", 1600, counts, dryRunResultsSwitchWritesM2m3, nil, "")
-		validateCount(t, vtgateConn, ksName, "merchant", 2)
+		waitForRowCount(t, vtgateConn, ksName, "merchant", 2)
 		query := "insert into merchant (mname, category) values('amazon', 'electronics')"
 		execVtgateQuery(t, vtgateConn, ksName, query)
-		validateCount(t, vtgateConn, ksName, "merchant", 3)
+		waitForRowCount(t, vtgateConn, ksName, "merchant", 3)
 
 		var output string
 		var err error
@@ -726,10 +726,10 @@ func reshardMerchant3to1Merge(t *testing.T) {
 		ksName := merchantKeyspace
 		counts := map[string]int{"zone1-2000": 3}
 		reshard(t, ksName, "merchant", "m3m1", "-40,40-c0,c0-", "0", 2000, counts, nil, nil, "")
-		validateCount(t, vtgateConn, ksName, "merchant", 3)
+		waitForRowCount(t, vtgateConn, ksName, "merchant", 3)
 		query := "insert into merchant (mname, category) values('flipkart', 'electronics')"
 		execVtgateQuery(t, vtgateConn, ksName, query)
-		validateCount(t, vtgateConn, ksName, "merchant", 4)
+		waitForRowCount(t, vtgateConn, ksName, "merchant", 4)
 	})
 }
 
@@ -792,7 +792,7 @@ func reshard(t *testing.T, ksName string, tableName string, workflow string, sou
 			if tablets[tabletName] == nil {
 				continue
 			}
-			validateCountInTablet(t, tablets[tabletName], ksName, tableName, count)
+			waitForRowCountInTablet(t, tablets[tabletName], ksName, tableName, count)
 		}
 	})
 }
@@ -817,9 +817,9 @@ func shardOrders(t *testing.T) {
 		switchReads(t, allCellNames, ksWorkflow)
 		switchWrites(t, ksWorkflow, false)
 		dropSources(t, ksWorkflow)
-		validateCountInTablet(t, customerTab1, "customer", "orders", 1)
-		validateCountInTablet(t, customerTab2, "customer", "orders", 2)
-		validateCount(t, vtgateConn, "customer", "orders", 3)
+		waitForRowCountInTablet(t, customerTab1, "customer", "orders", 1)
+		waitForRowCountInTablet(t, customerTab2, "customer", "orders", 2)
+		waitForRowCount(t, vtgateConn, "customer", "orders", 3)
 	})
 }
 
@@ -860,9 +860,9 @@ func shardMerchant(t *testing.T) {
 		}
 		dropSources(t, ksWorkflow)
 
-		validateCountInTablet(t, merchantTab1, merchantKeyspace, "merchant", 1)
-		validateCountInTablet(t, merchantTab2, merchantKeyspace, "merchant", 1)
-		validateCount(t, vtgateConn, merchantKeyspace, "merchant", 2)
+		waitForRowCountInTablet(t, merchantTab1, merchantKeyspace, "merchant", 1)
+		waitForRowCountInTablet(t, merchantTab2, merchantKeyspace, "merchant", 1)
+		waitForRowCount(t, vtgateConn, merchantKeyspace, "merchant", 2)
 	})
 }
 
@@ -886,7 +886,7 @@ func materializeProduct(t *testing.T) {
 				catchup(t, tab, workflow, "Materialize")
 			}
 			for _, tab := range customerTablets {
-				validateCountInTablet(t, tab, keyspace, workflow, 5)
+				waitForRowCountInTablet(t, tab, keyspace, workflow, 5)
 			}
 		}
 
@@ -917,7 +917,7 @@ func materializeProduct(t *testing.T) {
 			time.Sleep(1 * time.Second)
 			// we expect the additional rows to **not appear** in the materialized view
 			for _, tab := range customerTablets {
-				validateCountInTablet(t, tab, keyspace, workflow, 5)
+				waitForRowCountInTablet(t, tab, keyspace, workflow, 5)
 			}
 		})
 		t.Run("unthrottle-app-product", func(t *testing.T) {
@@ -937,7 +937,7 @@ func materializeProduct(t *testing.T) {
 				}
 			}
 			for _, tab := range customerTablets {
-				validateCountInTablet(t, tab, keyspace, workflow, 8)
+				waitForRowCountInTablet(t, tab, keyspace, workflow, 8)
 			}
 		})
 
@@ -967,7 +967,7 @@ func materializeProduct(t *testing.T) {
 			time.Sleep(1 * time.Second)
 			// we expect the additional rows to **not appear** in the materialized view
 			for _, tab := range customerTablets {
-				validateCountInTablet(t, tab, keyspace, workflow, 8)
+				waitForRowCountInTablet(t, tab, keyspace, workflow, 8)
 			}
 		})
 		t.Run("unthrottle-app-customer", func(t *testing.T) {
@@ -987,7 +987,7 @@ func materializeProduct(t *testing.T) {
 				}
 			}
 			for _, tab := range customerTablets {
-				validateCountInTablet(t, tab, keyspace, workflow, 11)
+				waitForRowCountInTablet(t, tab, keyspace, workflow, 11)
 			}
 		})
 	})
@@ -1001,8 +1001,8 @@ func materializeRollup(t *testing.T) {
 		productTab := vc.Cells[defaultCell.Name].Keyspaces["product"].Shards["0"].Tablets["zone1-100"].Vttablet
 		materialize(t, materializeRollupSpec)
 		catchup(t, productTab, workflow, "Materialize")
-		validateCount(t, vtgateConn, "product", "rollup", 1)
-		validateQuery(t, vtgateConn, "product:0", "select rollupname, kount from rollup",
+		waitForRowCount(t, vtgateConn, "product", "rollup", 1)
+		waitForQueryResult(t, vtgateConn, "product:0", "select rollupname, kount from rollup",
 			`[[VARCHAR("total") INT32(2)]]`)
 	})
 }
@@ -1014,8 +1014,8 @@ func materializeSales(t *testing.T) {
 		materialize(t, materializeSalesSpec)
 		productTab := vc.Cells[defaultCell.Name].Keyspaces["product"].Shards["0"].Tablets["zone1-100"].Vttablet
 		catchup(t, productTab, "sales", "Materialize")
-		validateCount(t, vtgateConn, "product", "sales", 2)
-		validateQuery(t, vtgateConn, "product:0", "select kount, amount from sales",
+		waitForRowCount(t, vtgateConn, "product", "sales", 2)
+		waitForQueryResult(t, vtgateConn, "product:0", "select kount, amount from sales",
 			`[[INT32(1) INT32(10)] [INT32(2) INT32(35)]]`)
 	})
 }
@@ -1028,9 +1028,9 @@ func materializeMerchantSales(t *testing.T) {
 		for _, tab := range merchantTablets {
 			catchup(t, tab, workflow, "Materialize")
 		}
-		validateCountInTablet(t, merchantTablets["zone1-400"], merchantKeyspace, "msales", 1)
-		validateCountInTablet(t, merchantTablets["zone1-500"], merchantKeyspace, "msales", 1)
-		validateCount(t, vtgateConn, merchantKeyspace, "msales", 2)
+		waitForRowCountInTablet(t, merchantTablets["zone1-400"], merchantKeyspace, "msales", 1)
+		waitForRowCountInTablet(t, merchantTablets["zone1-500"], merchantKeyspace, "msales", 1)
+		waitForRowCount(t, vtgateConn, merchantKeyspace, "msales", 2)
 	})
 }
 
@@ -1044,9 +1044,9 @@ func materializeMerchantOrders(t *testing.T) {
 		for _, tab := range merchantTablets {
 			catchup(t, tab, workflow, "Materialize")
 		}
-		validateCountInTablet(t, merchantTablets["zone1-400"], merchantKeyspace, "morders", 2)
-		validateCountInTablet(t, merchantTablets["zone1-500"], merchantKeyspace, "morders", 1)
-		validateCount(t, vtgateConn, merchantKeyspace, "morders", 3)
+		waitForRowCountInTablet(t, merchantTablets["zone1-400"], merchantKeyspace, "morders", 2)
+		waitForRowCountInTablet(t, merchantTablets["zone1-500"], merchantKeyspace, "morders", 1)
+		waitForRowCount(t, vtgateConn, merchantKeyspace, "morders", 3)
 	})
 }
 
@@ -1223,6 +1223,7 @@ func dropSources(t *testing.T, ksWorkflow string) {
 // This allows us to confirm two behaviors:
 //  1. MoveTables blocks on starting its first copy phase until we rollback
 //  2. All other workflows continue to work w/o issue with this MVCC history in place (not used yet)
+//
 // Returns a db connection used for the transaction which you can use for follow-up
 // work, such as rolling it back directly or using the releaseInnoDBRowHistory call.
 func generateInnoDBRowHistory(t *testing.T, sourceKS string, neededTrxHistory int) *mysql.Conn {

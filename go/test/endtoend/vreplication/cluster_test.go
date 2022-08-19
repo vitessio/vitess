@@ -662,7 +662,7 @@ func (vc *VitessCluster) TearDown(t testing.TB) {
 		log.Infof("TearDown() timed out")
 	}
 	// some processes seem to hang around for a bit
-	time.Sleep(5 * time.Second)
+	time.Sleep(defaultTimeout)
 }
 
 func (vc *VitessCluster) getVttabletsInKeyspace(t *testing.T, cell *Cell, ksName string, tabletType string) map[string]*cluster.VttabletProcess {

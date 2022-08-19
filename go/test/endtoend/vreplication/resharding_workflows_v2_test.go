@@ -324,7 +324,7 @@ func testVSchemaForSequenceAfterMoveTables(t *testing.T) {
 	output, err := vc.VtctlClient.ExecuteCommandWithOutput("GetVSchema", "product")
 	require.NoError(t, err)
 	assert.NotContains(t, output, "customer2\"", "customer2 still found in keyspace product")
-	validateCount(t, vtgateConn, "customer", "customer2", 3)
+	waitForRowCount(t, vtgateConn, "customer", "customer2", 3)
 
 	// check that customer2 has the sequence tag
 	output, err = vc.VtctlClient.ExecuteCommandWithOutput("GetVSchema", "customer")
@@ -336,9 +336,9 @@ func testVSchemaForSequenceAfterMoveTables(t *testing.T) {
 	for i := 0; i < num; i++ {
 		execVtgateQuery(t, vtgateConn, "customer", "insert into customer2(name) values('a')")
 	}
-	validateCount(t, vtgateConn, "customer", "customer2", 3+num)
+	waitForRowCount(t, vtgateConn, "customer", "customer2", 3+num)
 	want := fmt.Sprintf("[[INT32(%d)]]", 100+num-1)
-	validateQuery(t, vtgateConn, "customer", "select max(cid) from customer2", want)
+	waitForQueryResult(t, vtgateConn, "customer", "select max(cid) from customer2", want)
 
 	// use MoveTables to move customer2 back to product. Note that now the table has an associated sequence
 	err = tstWorkflowExec(t, defaultCellName, "wf3", targetKs, sourceKs,
@@ -368,9 +368,9 @@ func testVSchemaForSequenceAfterMoveTables(t *testing.T) {
 	for i := 0; i < num; i++ {
 		execVtgateQuery(t, vtgateConn, "product", "insert into customer2(name) values('a')")
 	}
-	validateCount(t, vtgateConn, "product", "customer2", 3+num+num)
+	waitForRowCount(t, vtgateConn, "product", "customer2", 3+num+num)
 	want = fmt.Sprintf("[[INT32(%d)]]", 100+num+num-1)
-	validateQuery(t, vtgateConn, "product", "select max(cid) from customer2", want)
+	waitForQueryResult(t, vtgateConn, "product", "select max(cid) from customer2", want)
 }
 
 // testReplicatingWithPKEnumCols ensures that we properly apply binlog events
