@@ -115,23 +115,50 @@ func waitForQueryResult(t *testing.T, conn *mysql.Conn, database string, query s
 	}
 }
 
-// waitForTabletThrttlingStatus waits for the tablet to return the provided HTTP code for
+// waitForTabletThrottlingStatus waits for the tablet to return the provided HTTP code for
 // the provided app name in its self check.
-func waitForTabletThrottlingStatus(t *testing.T, tablet *cluster.VttabletProcess, appName, want string) {
+func waitForTabletThrottlingStatus(t *testing.T, tablet *cluster.VttabletProcess, appName string, wantCode int64) {
+	var gotCode int64
 	ticker := time.NewTicker(defaultTick)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ticker.C:
-			_, body, err := throttlerCheckSelf(tablet, targetThrottlerAppName)
+			_, output, err := throttlerCheckSelf(tablet, targetThrottlerAppName)
 			require.NoError(t, err)
-			require.NotNil(t, body)
-			if want == body {
+			require.NotNil(t, output)
+			gotCode, err = jsonparser.GetInt([]byte(output), "StatusCode")
+			require.NoError(t, err)
+			if wantCode == gotCode {
 				return
 			}
 		case <-time.After(defaultTimeout):
-			require.FailNow(t, "tablet %s did not return expected state of %s for the application %s before the timeout of %s",
-				tablet.Name, want, appName, defaultTimeout)
+			require.FailNow(t, "tablet %s did not return expected status of %d for the application %s before the timeout of %s; last seen status: %d",
+				tablet.Name, wantCode, appName, defaultTimeout, gotCode)
+		}
+	}
+}
+
+// waitForNoWorkflowLag waits for the VReplication workflow's MaxVReplicationTransactionLag
+// value to be 0.
+func waitForNoWorkflowLag(t *testing.T, keyspace, worfklow string) {
+	ksWorkflow := fmt.Sprintf("%s.%s", keyspace, worfklow)
+	lag := int64(0)
+	ticker := time.NewTicker(defaultTick)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			output, err := vc.VtctlClient.ExecuteCommandWithOutput("Worfklow", "--", ksWorkflow, "show")
+			require.NoError(t, err)
+			lag, err = jsonparser.GetInt([]byte(output), "MaxVReplicationTransactionLag")
+			require.NoError(t, err)
+			if lag == 0 {
+				return
+			}
+		case <-time.After(defaultTimeout):
+			require.FailNow(t, "workflow %s did not eliminate VReplication lag before the timeout of %s; last seen MaxVReplicationTransactionLag: %d",
+				ksWorkflow, defaultTimeout, lag)
 		}
 	}
 }

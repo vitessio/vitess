@@ -899,8 +899,8 @@ func materializeProduct(t *testing.T) {
 			}
 			// Wait for throttling to take effect (caching will expire by this time):
 			for _, tab := range productTablets {
-				waitForTabletThrottlingStatus(t, tab, sourceThrottlerAppName, "417")
-				waitForTabletThrottlingStatus(t, tab, targetThrottlerAppName, "200")
+				waitForTabletThrottlingStatus(t, tab, sourceThrottlerAppName, 417)
+				waitForTabletThrottlingStatus(t, tab, targetThrottlerAppName, 200)
 			}
 			insertMoreProductsForSourceThrottler(t)
 			// To be fair to the test, we give the target time to apply the new changes. We expect it to NOT get them in the first place,
@@ -918,7 +918,7 @@ func materializeProduct(t *testing.T) {
 			}
 			// give time for unthrottling to take effect and for target to fetch data
 			for _, tab := range productTablets {
-				waitForTabletThrottlingStatus(t, tab, sourceThrottlerAppName, "200")
+				waitForTabletThrottlingStatus(t, tab, sourceThrottlerAppName, 200)
 			}
 			for _, tab := range customerTablets {
 				waitForRowCountInTablet(t, tab, keyspace, workflow, 8)
@@ -934,8 +934,8 @@ func materializeProduct(t *testing.T) {
 			}
 			// Wait for throttling to take effect (caching will expire by this time):
 			for _, tab := range customerTablets {
-				waitForTabletThrottlingStatus(t, tab, targetThrottlerAppName, "417")
-				waitForTabletThrottlingStatus(t, tab, sourceThrottlerAppName, "200")
+				waitForTabletThrottlingStatus(t, tab, targetThrottlerAppName, 417)
+				waitForTabletThrottlingStatus(t, tab, sourceThrottlerAppName, 200)
 			}
 			insertMoreProductsForTargetThrottler(t)
 			// To be fair to the test, we give the target time to apply the new changes. We expect it to NOT get them in the first place,
@@ -953,7 +953,7 @@ func materializeProduct(t *testing.T) {
 			}
 			// give time for unthrottling to take effect and for target to fetch data
 			for _, tab := range customerTablets {
-				waitForTabletThrottlingStatus(t, tab, targetThrottlerAppName, "200")
+				waitForTabletThrottlingStatus(t, tab, targetThrottlerAppName, 200)
 			}
 			for _, tab := range customerTablets {
 				waitForRowCountInTablet(t, tab, keyspace, workflow, 11)

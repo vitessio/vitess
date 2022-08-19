@@ -259,6 +259,7 @@ const workflowStartTimeout = 5 * time.Second
 func waitForWorkflowToStart(t *testing.T, ksWorkflow string) {
 	done := false
 	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
 	timer := time.NewTimer(workflowStartTimeout)
 	log.Infof("Waiting for workflow %s to start", ksWorkflow)
 	for {
@@ -288,9 +289,9 @@ func waitForWorkflowToStart(t *testing.T, ksWorkflow string) {
 				})
 				return true
 			})
-
 		case <-timer.C:
-			require.FailNowf(t, "workflow %s not yet started", ksWorkflow)
+			require.FailNow(t, fmt.Sprintf("workflow %s did not reach the started state before the timeout of %s",
+				ksWorkflow, workflowStartTimeout))
 		}
 	}
 }
@@ -385,13 +386,11 @@ func testReplicatingWithPKEnumCols(t *testing.T) {
 	// typ is an enum, with soho having a stored and binlogged value of 2
 	deleteQuery := "delete from customer where cid = 2 and typ = 'soho'"
 	insertQuery := "insert into customer(cid, name, typ, sport, meta) values(2, 'Paül','soho','cricket',convert(x'7b7d' using utf8mb4))"
-	execVtgateQuery(t, vtgateConn, "product", deleteQuery)
-	// TODO: replace this sleep with a wait for...
-	time.Sleep(2 * time.Second)
+	execVtgateQuery(t, vtgateConn, sourceKs, deleteQuery)
+	waitForNoWorkflowLag(t, targetKs, workflowName)
 	vdiff1(t, ksWorkflow, "")
-	execVtgateQuery(t, vtgateConn, "product", insertQuery)
-	// TODO: replace this sleep with a wait for...
-	time.Sleep(2 * time.Second)
+	execVtgateQuery(t, vtgateConn, sourceKs, insertQuery)
+	waitForNoWorkflowLag(t, targetKs, workflowName)
 	vdiff1(t, ksWorkflow, "")
 }
 
