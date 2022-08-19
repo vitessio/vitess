@@ -58,9 +58,9 @@ func CloneBytes(n Bytes) Bytes {
 	if n == nil {
 		return nil
 	}
-	res := make(Bytes, 0, len(n))
-	for _, x := range n {
-		res = append(res, x)
+	res := make(Bytes, len(n))
+	for i, x := range n {
+		res[i] = x
 	}
 	return res
 }
@@ -75,9 +75,9 @@ func CloneInterfaceSlice(n InterfaceSlice) InterfaceSlice {
 	if n == nil {
 		return nil
 	}
-	res := make(InterfaceSlice, 0, len(n))
-	for _, x := range n {
-		res = append(res, CloneAST(x))
+	res := make(InterfaceSlice, len(n))
+	for i, x := range n {
+		res[i] = CloneAST(x)
 	}
 	return res
 }
@@ -96,9 +96,9 @@ func CloneLeafSlice(n LeafSlice) LeafSlice {
 	if n == nil {
 		return nil
 	}
-	res := make(LeafSlice, 0, len(n))
-	for _, x := range n {
-		res = append(res, CloneRefOfLeaf(x))
+	res := make(LeafSlice, len(n))
+	for i, x := range n {
+		res[i] = CloneRefOfLeaf(x)
 	}
 	return res
 }
@@ -181,9 +181,9 @@ func CloneSliceOfAST(n []AST) []AST {
 	if n == nil {
 		return nil
 	}
-	res := make([]AST, 0, len(n))
-	for _, x := range n {
-		res = append(res, CloneAST(x))
+	res := make([]AST, len(n))
+	for i, x := range n {
+		res[i] = CloneAST(x)
 	}
 	return res
 }
@@ -193,7 +193,7 @@ func CloneSliceOfInt(n []int) []int {
 	if n == nil {
 		return nil
 	}
-	res := make([]int, 0, len(n))
+	res := make([]int, len(n))
 	copy(res, n)
 	return res
 }
@@ -203,9 +203,9 @@ func CloneSliceOfRefOfLeaf(n []*Leaf) []*Leaf {
 	if n == nil {
 		return nil
 	}
-	res := make([]*Leaf, 0, len(n))
-	for _, x := range n {
-		res = append(res, CloneRefOfLeaf(x))
+	res := make([]*Leaf, len(n))
+	for i, x := range n {
+		res[i] = CloneRefOfLeaf(x)
 	}
 	return res
 }
