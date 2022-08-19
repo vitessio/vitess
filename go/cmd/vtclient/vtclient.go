@@ -148,7 +148,9 @@ func main() {
 }
 
 func run() (*results, error) {
-	_flag.Parse(pflag.NewFlagSet("vtclient", pflag.ExitOnError))
+	fs := pflag.NewFlagSet("vtclient", pflag.ExitOnError)
+	log.RegisterFlags(fs)
+	_flag.Parse(fs)
 	args := _flag.Args()
 
 	if len(args) == 0 {

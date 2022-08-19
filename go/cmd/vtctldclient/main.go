@@ -30,6 +30,7 @@ func main() {
 
 	// Grab all those global flags across the codebase and shove 'em on in.
 	command.Root.PersistentFlags().AddGoFlagSet(flag.CommandLine)
+	log.RegisterFlags(command.Root.PersistentFlags())
 
 	// hack to get rid of an "ERROR: logging before flag.Parse"
 	args := os.Args[:]

@@ -62,7 +62,9 @@ func main() {
 	defer exit.Recover()
 	defer logutil.Flush()
 
-	_flag.Parse(pflag.NewFlagSet("zkctl", pflag.ExitOnError))
+	fs := pflag.NewFlagSet("zkctl", pflag.ExitOnError)
+	log.RegisterFlags(fs)
+	_flag.Parse(fs)
 	args := _flag.Args()
 
 	if len(args) == 0 {
