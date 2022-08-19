@@ -923,3 +923,56 @@ func killConnection(t *testing.T, connID string) {
 	require.NoError(t, err)
 	defer client.Release()
 }
+
+func BenchmarkPreQueries(b *testing.B) {
+	client := framework.NewClient()
+
+	tcases := []struct {
+		name     string
+		settings []string
+	}{{
+		name: "split_1",
+		settings: []string{
+			"set @@sql_mode = 'STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'"},
+	}, {
+		name: "split_2",
+		settings: []string{
+			"set @@sql_mode = 'STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'",
+			"set @@sql_safe_updates = false"},
+	}, {
+		name: "split_3",
+		settings: []string{
+			"set @@sql_mode = 'STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'",
+			"set @@sql_safe_updates = false",
+			"set @@read_buffer_size = 9191181919"},
+	}, {
+		name: "split_4",
+		settings: []string{
+			"set @@sql_mode = 'STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'",
+			"set @@sql_safe_updates = false", "set @@read_buffer_size = 9191181919",
+			"set @@max_heap_table_size = 10204023"},
+	}, {
+		name:     "combined_2",
+		settings: []string{"set @@sql_mode = 'STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION', @@sql_safe_updates = false"},
+	}, {
+		name:     "combined_3",
+		settings: []string{"set @@sql_mode = 'STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION', @@sql_safe_updates = false, @@read_buffer_size = 9191181919"},
+	}, {
+		name:     "combined_4",
+		settings: []string{"set @@sql_mode = 'STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION', @@sql_safe_updates = false, @@read_buffer_size = 9191181919, @@max_heap_table_size = 10204023"},
+	}}
+	query := "select connection_id()"
+
+	for _, tcase := range tcases {
+		b.Run(tcase.name, func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				if _, err := client.ReserveExecute(query, tcase.settings, nil); err != nil {
+					b.Error(err)
+				}
+				if err := client.Release(); err != nil {
+					b.Error(err)
+				}
+			}
+		})
+	}
+}

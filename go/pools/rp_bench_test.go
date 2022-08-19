@@ -102,3 +102,34 @@ func BenchmarkGetPutWithSettings(b *testing.B) {
 		}
 	}
 }
+
+func BenchmarkApplySettings(b *testing.B) {
+	b.ReportAllocs()
+	ctx := context.Background()
+	tcases := []struct {
+		name     string
+		settings []string
+	}{{
+		name:     "small",
+		settings: []string{"a", "b", "c"},
+	}, {
+		name:     "split",
+		settings: []string{"set @@sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION'", "set @@sql_safe_updates = false", "set @@read_buffer_size = 9191181919"},
+	}, {
+		name:     "combined",
+		settings: []string{"set @@sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION', @@sql_safe_updates = false, @@read_buffer_size = 9191181919"},
+	}}
+	for _, tcase := range tcases {
+		b.Run(tcase.name, func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				resource := &TestResource{}
+				if err := resource.ApplySettings(ctx, tcase.settings); err != nil {
+					b.Error(err)
+				}
+				if resource.SettingHash() == 0 {
+					b.Error("setting hash is 0")
+				}
+			}
+		})
+	}
+}
