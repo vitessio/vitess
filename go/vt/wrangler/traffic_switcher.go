@@ -383,7 +383,7 @@ func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflowNam
 
 	if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
 		if ts.isPartialMigration {
-			ts.Logger().Infof("Partial migration, skipping switchTableReads as traffic is all or nothing per shard and overriden for reads AND writes in the ShardRoutingRule created when switching writes.")
+			ts.Logger().Infof("Partial migration, skipping switchTableReads as traffic is all or nothing per shard and overridden for reads AND writes in the ShardRoutingRule created when switching writes.")
 		} else if err := sw.switchTableReads(ctx, cells, servedTypes, direction); err != nil {
 			ts.Logger().Errorf("switchTableReads failed: %v", err)
 			return nil, err

@@ -18,11 +18,13 @@ package vreplication
 
 import (
 	"fmt"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"github.com/tidwall/gjson"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
@@ -301,46 +303,101 @@ func TestPartialMoveTables(t *testing.T) {
 	catchup(t, targetTab1, wfName, "Partial MoveTables Customer to Customer2")
 	vdiff1(t, ksWf, "")
 
-	expectedShardRoutingRules := `{"rules":[{"from_keyspace":"customer","to_keyspace":"customer2","shard":"80-"}]}`
-	applyShardRoutingRules(t, expectedShardRoutingRules)
-
-	waitForRowCount(t, vtgateConn, "customer", "customer", 3)      //customer: all shards
-	waitForRowCount(t, vtgateConn, "customer2", "customer", 3)     //customer: all shards
+	waitForRowCount(t, vtgateConn, "customer", "customer", 3)      // customer: all shards
+	waitForRowCount(t, vtgateConn, "customer2", "customer", 3)     // customer: all shards
 	waitForRowCount(t, vtgateConn, "customer2:80-", "customer", 2) // customer2: 80-
 
-	waitForQueryResult(t, vtgateConn, "customer:80-", "select name from customer where cid = 3", `[[VARBINARY("ringo")]]`)
-	// updates customer2:80-
-	execVtgateQuery(t, vtgateConn, "customer2:80-", "update customer set name = 'Ringo Starr' where cid = 3")
-	// uses customer: all shards, not route
-	waitForQueryResult(t, vtgateConn, "customer", "select name from customer where cid = 3", `[[VARBINARY("ringo")]]`)
-	// uses route to customer2:80-
-	waitForQueryResult(t, vtgateConn, "customer:80-", "select name from customer where cid = 3", `[[VARBINARY("Ringo Starr")]]`)
-
-	// remove manually applied shard routing rules, these should be set by SwitchTraffic
+	// Remove any manually applied shard routing rules as these
+	// should be set by SwitchTraffic.
 	emptyRules := `{"rules":[]}`
 	applyShardRoutingRules(t, emptyRules)
 	require.Equal(t, emptyRules, getShardRoutingRules(t))
 
 	// switch all traffic
 	require.NoError(t, tstWorkflowExec(t, "", wfName, "", moveToKs, "", workflowActionSwitchTraffic, "", "", ""))
-	// we only have primary tablets in the keyspace
-	require.Regexp(t, fmt.Sprintf("Current State: Reads not switched.*Writes partially switched, for shards: %s", shard),
-		lastOutput)
+	expectedSwitchOutput := fmt.Sprintf("SwitchTraffic was successful for workflow customer2.partial\nStart State: Reads Not Switched. Writes Not Switched\nCurrent State: Reads partially switched, for shards: %s. Writes partially switched, for shards: %s\n\n",
+		shard, shard)
+	require.Equal(t, expectedSwitchOutput, lastOutput)
+
+	// Confirm global routing rules -- everything should still be routed
+	// to the source side, customer, globally.
+	output, err := vc.VtctlClient.ExecuteCommandWithOutput("GetRoutingRules")
+	require.NoError(t, err)
+	result := gjson.Get(output, "rules")
+	result.ForEach(func(attributeKey, attributeValue gjson.Result) bool {
+		// 0 is the keyspace and 1 is optional tablename[@tablettype]
+		fromKsTbl := strings.Split(attributeValue.Get("fromTable").String(), ".")
+		// 0 is the keyspace and 1 is the tablename
+		toKsTbl := strings.Split(attributeValue.Get("toTables.0").String(), ".")
+		// All tables in the customer and customer2 keyspaces should be
+		// routed to the customer keyspace.
+		if fromKsTbl[0] == "customer" || fromKsTbl[0] == "customer2" {
+			require.Equal(t, "customer", toKsTbl[0])
+		}
+		return true
+	})
+	// Confirm shard routing rules -- all traffic for the 80- shard should be
+	// routed into the customer2 keyspace, overriding the global routing rules.
+	expectedShardRoutingRules := `{"rules":[{"from_keyspace":"customer","to_keyspace":"customer2","shard":"80-"}]}`
 	require.Equal(t, expectedShardRoutingRules, getShardRoutingRules(t))
 
-	waitForQueryResult(t, vtgateConn, "customer:80-", "select name from customer where cid = 3", `[[VARBINARY("Ringo Starr")]]`)
-	execVtgateQuery(t, vtgateConn, "customer2:80-", "update customer set name = 'Squaro Planett' where cid = 3")
-	waitForQueryResult(t, vtgateConn, "customer:80-", "select name from customer where cid = 3", `[[VARBINARY("Squaro Planett")]]`)
+	// This query uses an ID that should always get routed to customer2:80-
+	targetRoutedQuery := "select name from customer where cid = 1 and noexistcol = 'foo'"
+	// This query uses an ID that should always get routed to customer:-80
+	sourceRoutedQuery := "select name from customer where cid = 2 and noexistcol = 'foo'"
 
-	// cannot Complete a partial move tables at the moment because it will find that all traffic has (obviously) not been switched
-	// we need to cleanup using Workflow delete
+	// reset any existing vtgate connection state
+	vtgateConn.Close()
+	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	defer vtgateConn.Close()
+
+	// No shard targeting
+	_, err = vtgateConn.ExecuteFetch(targetRoutedQuery, 0, false)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "target: customer2.80-.primary")
+	_, err = vtgateConn.ExecuteFetch(sourceRoutedQuery, 0, false)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "target: customer.-80.primary")
+
+	// Shard targeting
+	_, err = vtgateConn.ExecuteFetch("use `customer2:80-`", 0, false)
+	require.NoError(t, err)
+	_, err = vtgateConn.ExecuteFetch(targetRoutedQuery, 0, false)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "target: customer2.80-.primary")
+	_, err = vtgateConn.ExecuteFetch("use `customer:80-`", 0, false)
+	require.NoError(t, err)
+	_, err = vtgateConn.ExecuteFetch(targetRoutedQuery, 0, false)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "target: customer2.80-.primary")
+
+	// Tablet type targeting
+	_, err = vtgateConn.ExecuteFetch("use `customer2@replica`", 0, false)
+	require.NoError(t, err)
+	_, err = vtgateConn.ExecuteFetch(targetRoutedQuery, 0, false)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "target: customer2.80-.replica")
+	_, err = vtgateConn.ExecuteFetch(sourceRoutedQuery, 0, false)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "target: customer.-80.replica")
+	_, err = vtgateConn.ExecuteFetch("use `customer@replica`", 0, false)
+	require.NoError(t, err)
+	_, err = vtgateConn.ExecuteFetch(targetRoutedQuery, 0, false)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "target: customer2.80-.replica")
+	_, err = vtgateConn.ExecuteFetch(sourceRoutedQuery, 0, false)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "target: customer.-80.replica")
+
+	// We cannot Complete a partial move tables at the moment because it will
+	// find that all traffic has (obviously) not been switched we need to
+	// cleanup using Workflow delete.
 	err = tstWorkflowExec(t, "", wfName, "", moveToKs, "", workflowActionComplete, "", "", "")
 	require.Error(t, err)
 	require.Equal(t, expectedShardRoutingRules, getShardRoutingRules(t))
-
 	_, err = vc.VtctlClient.ExecuteCommandWithOutput("Workflow", ksWf, "delete")
 	require.NoError(t, err)
-	output, err := vc.VtctlClient.ExecuteCommandWithOutput("Workflow", ksWf, "show")
+	output, err = vc.VtctlClient.ExecuteCommandWithOutput("Workflow", ksWf, "show")
 	require.Error(t, err)
 	require.Contains(t, output, "no streams found")
 
