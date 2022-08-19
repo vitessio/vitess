@@ -196,8 +196,9 @@ func TestSchemaChange(t *testing.T) {
 	t.Run("terminate throttled migration", func(t *testing.T) {
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, throttledUUID, schema.OnlineDDLStatusRunning)
 		onlineddl.CheckCancelMigration(t, &vtParams, shards, throttledUUID, true)
-		time.Sleep(2 * time.Second)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, throttledUUID, schema.OnlineDDLStatusCancelled)
+		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, throttledUUID, 20*time.Second, schema.OnlineDDLStatusFailed, schema.OnlineDDLStatusCancelled)
+		fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, throttledUUID, schema.OnlineDDLStatusFailed, schema.OnlineDDLStatusCancelled)
 	})
 	t.Run("successful gh-ost alter, vtctl", func(t *testing.T) {
 		uuid := testOnlineDDLStatement(t, alterTableTrivialStatement, "gh-ost --singleton", "vtctl", "", "hint_col", "", false)
@@ -294,9 +295,9 @@ func TestSchemaChange(t *testing.T) {
 		// revert is running
 		_ = testOnlineDDLStatement(t, dropNonexistentTableStatement, "vitess --allow-concurrent --singleton-context", "vtctl", "migrate:ctx", "", "rejected", true)
 		onlineddl.CheckCancelMigration(t, &vtParams, shards, revertUUID, true)
-		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, revertUUID, 20*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed, schema.OnlineDDLStatusCancelled)
+		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, revertUUID, 20*time.Second, schema.OnlineDDLStatusFailed, schema.OnlineDDLStatusCancelled)
 		fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, revertUUID, schema.OnlineDDLStatusCancelled)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, revertUUID, schema.OnlineDDLStatusFailed, schema.OnlineDDLStatusCancelled)
 	})
 	t.Run("success concurrent singleton-context with no-context revert", func(t *testing.T) {
 		revertUUID := testRevertMigration(t, uuids[len(uuids)-1], "vtctl", "vitess --allow-concurrent --postpone-completion", "rev:ctx", "", false)
@@ -306,9 +307,9 @@ func TestSchemaChange(t *testing.T) {
 		uuids = append(uuids, uuid)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		onlineddl.CheckCancelMigration(t, &vtParams, shards, revertUUID, true)
-		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, revertUUID, 20*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed, schema.OnlineDDLStatusCancelled)
+		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, revertUUID, 20*time.Second, schema.OnlineDDLStatusFailed, schema.OnlineDDLStatusCancelled)
 		fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, revertUUID, schema.OnlineDDLStatusCancelled)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, revertUUID, schema.OnlineDDLStatusFailed, schema.OnlineDDLStatusCancelled)
 	})
 }
 
