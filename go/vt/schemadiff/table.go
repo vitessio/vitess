@@ -174,7 +174,7 @@ func (d *DropTableEntityDiff) IsEmpty() bool {
 	return d.Statement() == nil
 }
 
-// IsEmpty implements EntityDiff
+// Entities implements EntityDiff
 func (d *DropTableEntityDiff) Entities() (from Entity, to Entity) {
 	return d.from, nil
 }
@@ -244,7 +244,7 @@ func (d *RenameTableEntityDiff) Statement() sqlparser.Statement {
 	return d.renameTable
 }
 
-// CreateTable returns the underlying sqlparser.CreateTable that was generated for the diff.
+// RenameTable returns the underlying sqlparser.RenameTable that was generated for the diff.
 func (d *RenameTableEntityDiff) RenameTable() *sqlparser.RenameTable {
 	if d == nil {
 		return nil
@@ -646,7 +646,7 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 		// ordered columns for both tables:
 		t1Columns := c.CreateTable.TableSpec.Columns
 		t2Columns := other.CreateTable.TableSpec.Columns
-		c.diffColumns(alterTable, t1Columns, t2Columns, hints, (diffedTableCharset != ""))
+		c.diffColumns(alterTable, t1Columns, t2Columns, hints, diffedTableCharset != "")
 	}
 	{
 		// diff keys
@@ -943,7 +943,7 @@ func (c *CreateTableEntity) isRangePartitionsRotation(
 	if len(definitions2) == 0 {
 		return false, nil, nil
 	}
-	droppedPartitions1 := []*sqlparser.PartitionDefinition{}
+	var droppedPartitions1 []*sqlparser.PartitionDefinition
 	// It's OK for prefix of t1 partitions to be nonexistent in t2 (as they may have been rotated away in t2)
 	for len(definitions1) > 0 && !sqlparser.EqualsRefOfPartitionDefinition(definitions1[0], definitions2[0]) {
 		droppedPartitions1 = append(droppedPartitions1, definitions1[0])
@@ -970,8 +970,8 @@ func (c *CreateTableEntity) isRangePartitionsRotation(
 		definitions1 = definitions1[1:]
 		definitions2 = definitions2[1:]
 	}
-	partitionSpecs := []*sqlparser.PartitionSpec{}
 	addedPartitions2 := definitions2
+	partitionSpecs := make([]*sqlparser.PartitionSpec, 0, len(droppedPartitions1)+len(addedPartitions2))
 	for _, p := range droppedPartitions1 {
 		partitionSpec := &sqlparser.PartitionSpec{
 			Action: sqlparser.DropAction,
@@ -1179,7 +1179,7 @@ func (c *CreateTableEntity) diffKeys(alterTable *sqlparser.AlterTable,
 					continue
 				}
 
-				// For other changes, we're gonna drop and create.
+				// For other changes, we're going to drop and create.
 				dropKey := dropKeyStatement(t1Key.Info.Name)
 				addKey := &sqlparser.AddIndexDefinition{
 					IndexDefinition: t2Key,
@@ -1249,11 +1249,11 @@ func indexOnlyVisibilityChange(t1Key, t2Key *sqlparser.IndexDefinition) (bool, b
 func evaluateColumnReordering(t1SharedColumns, t2SharedColumns []*sqlparser.ColumnDefinition) map[string]int {
 	minimalColumnReordering := map[string]int{}
 
-	t1SharedColNames := []interface{}{}
+	t1SharedColNames := make([]interface{}, 0, len(t1SharedColumns))
 	for _, col := range t1SharedColumns {
 		t1SharedColNames = append(t1SharedColNames, col.Name.Lowered())
 	}
-	t2SharedColNames := []interface{}{}
+	t2SharedColNames := make([]interface{}, 0, len(t2SharedColumns))
 	for _, col := range t2SharedColumns {
 		t2SharedColNames = append(t2SharedColNames, col.Name.Lowered())
 	}
@@ -1306,9 +1306,9 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 
 	// For purpose of column reordering detection, we maintain a list of
 	// shared columns, by order of appearance in t1
-	t1SharedColumns := []*sqlparser.ColumnDefinition{}
+	var t1SharedColumns []*sqlparser.ColumnDefinition
 
-	dropColumns := []*sqlparser.DropColumn{}
+	var dropColumns []*sqlparser.DropColumn
 	// evaluate dropped columns
 	//
 	for _, t1Col := range t1Columns {
@@ -1325,7 +1325,7 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 
 	// For purpose of column reordering detection, we maintain a list of
 	// shared columns, by order of appearance in t2
-	t2SharedColumns := []*sqlparser.ColumnDefinition{}
+	var t2SharedColumns []*sqlparser.ColumnDefinition
 	for _, t2Col := range t2Columns {
 		if _, ok := t1ColumnsMap[t2Col.Name.Lowered()]; ok {
 			// column exists in both tables
@@ -1335,7 +1335,7 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 
 	// evaluate modified columns
 	//
-	modifyColumns := []*sqlparser.ModifyColumn{}
+	var modifyColumns []*sqlparser.ModifyColumn
 	columnReordering := evaluateColumnReordering(t1SharedColumns, t2SharedColumns)
 	for _, t2Col := range t2SharedColumns {
 		t2ColName := t2Col.Name.Lowered()
@@ -1379,7 +1379,7 @@ func (c *CreateTableEntity) diffColumns(alterTable *sqlparser.AlterTable,
 	// Every added column is obviously a diff. But on top of that, we are also interested to know
 	// if the column is added somewhere in between existing columns rather than appended to the
 	// end of existing columns list.
-	addColumns := []*sqlparser.AddColumns{}
+	var addColumns []*sqlparser.AddColumns
 	expectAppendIndex := len(t2SharedColumns)
 	for t2ColIndex, t2Col := range t2Columns {
 		if _, ok := t1ColumnsMap[t2Col.Name.Lowered()]; !ok {
@@ -1421,10 +1421,10 @@ func heuristicallyDetectColumnRenames(
 	t2ColumnsMap map[string]*columnDetails,
 	hints *DiffHints,
 ) ([]*sqlparser.DropColumn, []*sqlparser.AddColumns, []*sqlparser.RenameColumn) {
-	renameColumns := []*sqlparser.RenameColumn{}
+	var renameColumns []*sqlparser.RenameColumn
 	findRenamedColumn := func() bool {
 		// What we're doing next is to try and identify a column RENAME.
-		// We do so by cross referencing dropped and added columns.
+		// We do so by cross-referencing dropped and added columns.
 		// The check is heuristic, and looks like this:
 		// We consider a column renamed iff:
 		// - the DROP and ADD column definitions are identical other than the column name, and
@@ -1436,7 +1436,7 @@ func heuristicallyDetectColumnRenames(
 		// At any case, once we heuristically decide that we found a RENAME, we cancel the DROP,
 		// cancel the ADD, and inject a RENAME in place of both.
 
-		// findRenamedColumn cross references dropped and added columns to find a single renamed column. If such is found:
+		// findRenamedColumn cross-references dropped and added columns to find a single renamed column. If such is found:
 		// we remove the entry from DROPped columns, remove the entry from ADDed columns, add an entry for RENAMEd columns,
 		// and return 'true'.
 		// Successive calls to this function will then find the next heuristic RENAMEs.
@@ -1868,7 +1868,7 @@ func (c *CreateTableEntity) postApplyNormalize() error {
 	for _, col := range c.CreateTable.TableSpec.Columns {
 		columnExists[col.Name.Lowered()] = true
 	}
-	nonEmptyIndexes := []*sqlparser.IndexDefinition{}
+	var nonEmptyIndexes []*sqlparser.IndexDefinition
 
 	keyHasNonExistentColumns := func(keyCol *sqlparser.IndexColumn) bool {
 		if keyCol.Column.Lowered() != "" {
@@ -1879,7 +1879,7 @@ func (c *CreateTableEntity) postApplyNormalize() error {
 		return false
 	}
 	for _, key := range c.CreateTable.TableSpec.Indexes {
-		existingKeyColumns := []*sqlparser.IndexColumn{}
+		var existingKeyColumns []*sqlparser.IndexColumn
 		for _, keyCol := range key.Columns {
 			if !keyHasNonExistentColumns(keyCol) {
 				existingKeyColumns = append(existingKeyColumns, keyCol)
@@ -1892,14 +1892,14 @@ func (c *CreateTableEntity) postApplyNormalize() error {
 	}
 	c.CreateTable.TableSpec.Indexes = nonEmptyIndexes
 
-	keptConstraints := []*sqlparser.ConstraintDefinition{}
+	var keptConstraints []*sqlparser.ConstraintDefinition
 	for _, constraint := range c.CreateTable.TableSpec.Constraints {
 		check, ok := constraint.Details.(*sqlparser.CheckConstraintDefinition)
 		if !ok {
 			keptConstraints = append(keptConstraints, constraint)
 			continue
 		}
-		referencedColumns := []string{}
+		var referencedColumns []string
 		err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 			switch node := node.(type) {
 			case *sqlparser.ColName:
@@ -1974,7 +1974,7 @@ func (c *CreateTableEntity) validate() error {
 	// validate all columns referenced by generated columns do in fact exist
 	for _, col := range c.CreateTable.TableSpec.Columns {
 		if col.Type.Options != nil && col.Type.Options.As != nil {
-			referencedColumns := []string{}
+			var referencedColumns []string
 			err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 				switch node := node.(type) {
 				case *sqlparser.ColName:
@@ -1995,7 +1995,7 @@ func (c *CreateTableEntity) validate() error {
 	// validate all columns referenced by functional indexes do in fact exist
 	for _, idx := range c.CreateTable.TableSpec.Indexes {
 		for _, idxCol := range idx.Columns {
-			referencedColumns := []string{}
+			var referencedColumns []string
 			err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 				switch node := node.(type) {
 				case *sqlparser.ColName:
@@ -2031,7 +2031,7 @@ func (c *CreateTableEntity) validate() error {
 		if !ok {
 			continue
 		}
-		referencedColumns := []string{}
+		var referencedColumns []string
 		err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 			switch node := node.(type) {
 			case *sqlparser.ColName:
@@ -2060,7 +2060,7 @@ func (c *CreateTableEntity) validate() error {
 		}
 		// validate columns referenced by partitions do in fact exist
 		// also, validate that all unique keys include partitioned columns
-		partitionColNames := []string{}
+		var partitionColNames []string
 		err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 			switch node := node.(type) {
 			case *sqlparser.ColName:
