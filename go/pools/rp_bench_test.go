@@ -23,39 +23,26 @@ func BenchmarkGetPut(b *testing.B) {
 	testResourceFactory := func(context.Context) (Resource, error) {
 		return &TestResource{}, nil
 	}
-
-	tcases := []struct {
-		name string
-		pool func(int) IResourcePool
-	}{{
-		name: "static",
-		pool: func(cap int) IResourcePool {
-			return NewResourcePool(testResourceFactory, cap, cap, 0, nil, nil, 0)
-		},
-	}}
-
 	for _, size := range []int{64, 128, 512} {
 		for _, parallelism := range []int{1, 8, 32, 128} {
-			for _, tc := range tcases {
-				rName := fmt.Sprintf("%s/x%d-cap%d", tc.name, parallelism, size)
-				b.Run(rName, func(b *testing.B) {
-					pool := tc.pool(size)
-					defer pool.Close()
+			rName := fmt.Sprintf("x%d-cap%d", parallelism, size)
+			b.Run(rName, func(b *testing.B) {
+				pool := NewResourcePool(testResourceFactory, size, size, 0, nil, nil, 0)
+				defer pool.Close()
 
-					b.ReportAllocs()
-					b.SetParallelism(parallelism)
-					b.RunParallel(func(pb *testing.PB) {
-						var ctx = context.Background()
-						for pb.Next() {
-							if conn, err := pool.Get(ctx, nil); err != nil {
-								b.Error(err)
-							} else {
-								pool.Put(conn, 0)
-							}
+				b.ReportAllocs()
+				b.SetParallelism(parallelism)
+				b.RunParallel(func(pb *testing.PB) {
+					var ctx = context.Background()
+					for pb.Next() {
+						if conn, err := pool.Get(ctx, nil); err != nil {
+							b.Error(err)
+						} else {
+							pool.Put(conn, 0)
 						}
-					})
+					}
 				})
-			}
+			})
 		}
 	}
 }
@@ -64,41 +51,89 @@ func BenchmarkGetPutWithSettings(b *testing.B) {
 	testResourceFactory := func(context.Context) (Resource, error) {
 		return &TestResource{}, nil
 	}
-
-	tcases := []struct {
-		name string
-		pool func(int) IResourcePool
-	}{{
-		name: "static",
-		pool: func(cap int) IResourcePool {
-			return NewResourcePool(testResourceFactory, cap, cap, 0, nil, nil, 0)
-		},
-	}}
-
-	settings := [][]string{{}, {"a", "b", "c"}}
-
+	settings := []string{"a", "b", "c"}
 	for _, size := range []int{64, 128, 512} {
 		for _, parallelism := range []int{1, 8, 32, 128} {
-			for _, tc := range tcases {
-				rName := fmt.Sprintf("%s/x%d-cap%d", tc.name, parallelism, size)
-				b.Run(rName, func(b *testing.B) {
-					pool := tc.pool(size)
-					defer pool.Close()
+			rName := fmt.Sprintf("x%d-cap%d", parallelism, size)
+			b.Run(rName, func(b *testing.B) {
+				pool := NewResourcePool(testResourceFactory, size, size, 0, nil, nil, 0)
+				defer pool.Close()
 
-					b.ReportAllocs()
-					b.SetParallelism(parallelism)
-					b.RunParallel(func(pb *testing.PB) {
-						ctx := context.Background()
-						for pb.Next() {
-							if conn, err := pool.Get(ctx, settings[1]); err != nil {
-								b.Error(err)
-							} else {
-								pool.Put(conn, conn.SettingHash())
-							}
+				b.ReportAllocs()
+				b.SetParallelism(parallelism)
+				b.RunParallel(func(pb *testing.PB) {
+					var ctx = context.Background()
+					for pb.Next() {
+						if conn, err := pool.Get(ctx, settings); err != nil {
+							b.Error(err)
+						} else {
+							pool.Put(conn, conn.SettingHash())
 						}
-					})
+					}
 				})
-			}
+			})
+		}
+	}
+}
+
+func BenchmarkGetPutMixed(b *testing.B) {
+	testResourceFactory := func(context.Context) (Resource, error) {
+		return &TestResource{}, nil
+	}
+	settings := [][]string{nil, {"a", "b", "c"}}
+	for _, size := range []int{64, 128, 512} {
+		for _, parallelism := range []int{1, 8, 32, 128} {
+			rName := fmt.Sprintf("x%d-cap%d", parallelism, size)
+			b.Run(rName, func(b *testing.B) {
+				pool := NewResourcePool(testResourceFactory, size, size, 0, nil, nil, 0)
+				defer pool.Close()
+
+				b.ReportAllocs()
+				b.SetParallelism(parallelism)
+				b.RunParallel(func(pb *testing.PB) {
+					var ctx = context.Background()
+					i := 0
+					for pb.Next() {
+						if conn, err := pool.Get(ctx, settings[i]); err != nil {
+							b.Error(err)
+						} else {
+							pool.Put(conn, conn.SettingHash())
+						}
+						i = (i + 1) % 2
+					}
+				})
+			})
+		}
+	}
+}
+
+func BenchmarkGetPutMixedMulti(b *testing.B) {
+	testResourceFactory := func(context.Context) (Resource, error) {
+		return &TestResource{}, nil
+	}
+	settings := [][]string{nil, {"a"}, {"a", "b"}, {"c", "d", "e"}, {"x", "y", "z"}}
+	for _, size := range []int{64, 128, 512} {
+		for _, parallelism := range []int{1, 8, 32, 128} {
+			rName := fmt.Sprintf("x%d-cap%d", parallelism, size)
+			b.Run(rName, func(b *testing.B) {
+				pool := NewResourcePool(testResourceFactory, size, size, 0, nil, nil, 0)
+				defer pool.Close()
+
+				b.ReportAllocs()
+				b.SetParallelism(parallelism)
+				b.RunParallel(func(pb *testing.PB) {
+					var ctx = context.Background()
+					i := 0
+					for pb.Next() {
+						if conn, err := pool.Get(ctx, settings[i]); err != nil {
+							b.Error(err)
+						} else {
+							pool.Put(conn, conn.SettingHash())
+						}
+						i = (i + 1) % 5
+					}
+				})
+			})
 		}
 	}
 }
@@ -121,6 +156,7 @@ func BenchmarkApplySettings(b *testing.B) {
 	}}
 	for _, tcase := range tcases {
 		b.Run(tcase.name, func(b *testing.B) {
+			b.ReportAllocs()
 			for i := 0; i < b.N; i++ {
 				resource := &TestResource{}
 				if err := resource.ApplySettings(ctx, tcase.settings); err != nil {
