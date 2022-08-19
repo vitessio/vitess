@@ -14,10 +14,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# This script is used to build and copy the Angular 2 based vtctld UI
-# into the release folder (app) for checkin. Prior to running this script,
-# bootstrap.sh and bootstrap_web.sh should already have been run.
-
 # github.base_ref $1
 
 target_release=""
