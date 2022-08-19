@@ -143,8 +143,8 @@ func getViewDependentTableNames(createView *sqlparser.CreateView) (names []strin
 // normalize is called as part of Schema creation process. The user may only get a hold of normalized schema.
 // It validates some cross-entity constraints, and orders entity based on dependencies (e.g. tables, views that read from tables, 2nd level views, etc.)
 func (s *Schema) normalize() error {
-	s.named = map[string]Entity{}
-	s.sorted = []Entity{}
+	s.named = make(map[string]Entity, len(s.tables)+len(s.views))
+	s.sorted = make([]Entity, 0, len(s.tables)+len(s.views))
 	// Verify no two entities share same name
 	for _, t := range s.tables {
 		name := t.Name()
@@ -174,7 +174,7 @@ func (s *Schema) normalize() error {
 	// We actually prioritise all tables first, then views.
 	// If a view v1 depends on v2, then v2 must come before v1, even though v1
 	// precedes v2 alphabetically
-	dependencyLevels := map[string]int{}
+	dependencyLevels := make(map[string]int, len(s.tables)+len(s.views))
 	for _, t := range s.tables {
 		s.sorted = append(s.sorted, t)
 		dependencyLevels[t.Name()] = 0
@@ -204,14 +204,14 @@ func (s *Schema) normalize() error {
 	// - etc.
 	// we stop when we have been unable to find a view in an iteration.
 	for iterationLevel := 1; ; iterationLevel++ {
-		handledAnyViewsInItration := false
+		handledAnyViewsInIteration := false
 		for _, v := range s.views {
 			name := v.Name()
 			if _, ok := dependencyLevels[name]; ok {
 				// already handled; skip
 				continue
 			}
-			// Not handled. Is this view dependant on already handled objects?
+			// Not handled. Is this view dependent on already handled objects?
 			dependentNames, err := getViewDependentTableNames(&v.CreateView)
 			if err != nil {
 				return err
@@ -219,10 +219,10 @@ func (s *Schema) normalize() error {
 			if allNamesFoundInLowerLevel(dependentNames, iterationLevel) {
 				s.sorted = append(s.sorted, v)
 				dependencyLevels[v.Name()] = iterationLevel
-				handledAnyViewsInItration = true
+				handledAnyViewsInIteration = true
 			}
 		}
-		if !handledAnyViewsInItration {
+		if !handledAnyViewsInIteration {
 			break
 		}
 	}
@@ -275,7 +275,7 @@ func (s *Schema) TableNames() []string {
 	return names
 }
 
-// Tables returns this schema's views in good order (may be applied without error)
+// Views returns this schema's views in good order (may be applied without error)
 func (s *Schema) Views() []*CreateViewEntity {
 	var views []*CreateViewEntity
 	for _, entity := range s.sorted {
@@ -362,7 +362,7 @@ func (s *Schema) heuristicallyDetectTableRenames(
 
 	findRenamedTable := func() bool {
 		// What we're doing next is to try and identify a table RENAME.
-		// We do so by cross referencing dropped and created tables.
+		// We do so by cross-referencing dropped and created tables.
 		// The check is heuristic, and looks like this:
 		// We consider a table renamed iff:
 		// - the DROP and CREATE table definitions are identical other than the table name
@@ -371,7 +371,7 @@ func (s *Schema) heuristicallyDetectTableRenames(
 		// Once we heuristically decide that we found a RENAME, we cancel the DROP,
 		// cancel the CREATE, and inject a RENAME in place of both.
 
-		// findRenamedTable cross references dropped and created tables to find a single renamed table. If such is found:
+		// findRenamedTable cross-references dropped and created tables to find a single renamed table. If such is found:
 		// we remove the entry from DROPped tables, remove the entry from CREATEd tables, add an entry for RENAMEd tables,
 		// and return 'true'.
 		// Successive calls to this function will then find the next heuristic RENAMEs.
@@ -469,17 +469,21 @@ func (s *Schema) ToSQL() string {
 	return buf.String()
 }
 
-// Clone returns a deep copy of the schema. This is used when applying changes for example. It
-// will first create copies of all entities which depend on the sqlparser deep copy logic and
-// then creates a new schema from those copies.
-func (s *Schema) Clone() *Schema {
-	entities := make([]Entity, 0, len(s.Entities()))
-	for _, e := range s.Entities() {
-		entities = append(entities, e.Clone())
+// copy returns a shallow copy of the schema. This is used when applying changes for example.
+// applying changes will ensure we copy new entities themselves separately.
+func (s *Schema) copy() *Schema {
+	dup := newEmptySchema()
+	dup.tables = make([]*CreateTableEntity, len(s.tables))
+	copy(dup.tables, s.tables)
+	dup.views = make([]*CreateViewEntity, len(s.views))
+	copy(dup.views, s.views)
+	dup.named = make(map[string]Entity, len(s.named))
+	for k, v := range s.named {
+		dup.named[k] = v
 	}
-	// Can't error since we're valid ourselves.
-	schema, _ := NewSchemaFromEntities(entities)
-	return schema
+	dup.sorted = make([]Entity, len(s.sorted))
+	copy(dup.sorted, s.sorted)
+	return dup
 }
 
 // apply attempts to apply given list of diffs to this object.
@@ -604,7 +608,7 @@ func (s *Schema) apply(diffs []EntityDiff) error {
 // These diffs are CREATE/DROP/ALTER TABLE/VIEW.
 // The operation does not modify this object. Instead, if successful, a new (modified) Schema is returned.
 func (s *Schema) Apply(diffs []EntityDiff) (*Schema, error) {
-	dup := s.Clone()
+	dup := s.copy()
 	for k, v := range s.named {
 		dup.named[k] = v
 	}
