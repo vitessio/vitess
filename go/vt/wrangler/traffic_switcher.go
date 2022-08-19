@@ -241,25 +241,14 @@ func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workfl
 		}
 		table := ts.Tables()[0]
 
-		if ts.isPartialMigration {
-			// first check partial SwitchReads
-			state.RdonlyShardsSwitched, err = ws.GetShardsWithReadsSwitched(ctx, keyspace, topodatapb.TabletType_RDONLY)
-			if err != nil {
-				return nil, nil, err
-			}
-			state.ReplicaShardsSwitched, err = ws.GetShardsWithReadsSwitched(ctx, keyspace, topodatapb.TabletType_REPLICA)
-			if err != nil {
-				return nil, nil, err
-			}
-
-			// then check partial SwitchWrites
+		if ts.isPartialMigration { // shard level traffic switching is all or nothing
 			shardRules, err := topotools.GetShardRoutingRules(ctx, ts.TopoServer())
 			if err != nil {
 				return nil, nil, err
 			}
 			for _, sourceShard := range ts.SourceShards() {
 				if _, ok := shardRules[fmt.Sprintf("%s.%s", ts.sourceKeyspace, sourceShard.ShardName())]; ok {
-					state.WritesPartiallySwitched = true
+					state.WritesPartiallySwitched = true // and in effect reads are too
 					break
 				}
 			}
@@ -393,7 +382,9 @@ func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflowNam
 	defer unlock(&err)
 
 	if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
-		if err := sw.switchTableReads(ctx, cells, servedTypes, direction); err != nil {
+		if ts.isPartialMigration {
+			ts.Logger().Infof("Partial migration, skipping switchTableReads as traffic is all or nothing per shard and overriden for reads AND writes in the ShardRoutingRule created when switching writes.")
+		} else if err := sw.switchTableReads(ctx, cells, servedTypes, direction); err != nil {
 			ts.Logger().Errorf("switchTableReads failed: %v", err)
 			return nil, err
 		}

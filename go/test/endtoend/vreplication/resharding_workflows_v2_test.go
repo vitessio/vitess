@@ -18,13 +18,11 @@ package vreplication
 
 import (
 	"fmt"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"regexp"
 	"strings"
 	"testing"
-	"time"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
@@ -257,13 +255,23 @@ func TestBasicV2Workflows(t *testing.T) {
 	log.Flush()
 }
 
-// TestPartialMoveTables tests partial move tables by moving just one shard 80- from customer to customer2
+// TestPartialMoveTables tests partial move tables by moving just one shard
+// 80- from customer to customer2.
 func TestPartialMoveTables(t *testing.T) {
 	defaultRdonly = 1
 	origExtraVTGateArgs := extraVTGateArgs
-	extraVTGateArgs = append(extraVTGateArgs, "--enable_shard_routing")
+	// We need to enable shard routing for partial movetables routing.
+	// And we need to disable schema change tracking in vtgate as we want
+	// to test query routing using a query we know will fail as it's
+	// using a column that doesn't exist in the schema -- this way we
+	// get the target shard details back in the error message. If schema
+	// tracking is enabled then vtgate will produce an error about the
+	// unknown symbol before attempting to route the query.
+	extraVTGateArgs = append(extraVTGateArgs, []string{
+		"--enable_shard_routing",
+		"--schema_change_signal=false",
+	}...)
 	defer func() {
-		defaultRdonly = 0
 		extraVTGateArgs = origExtraVTGateArgs
 	}()
 	vc = setupCluster(t)
@@ -271,10 +279,16 @@ func TestPartialMoveTables(t *testing.T) {
 	defer vc.TearDown(t)
 	setupCustomerKeyspace(t)
 
+	// Move customer table from unsharded product keyspace to
+	// sharded customer keyspace.
 	createMoveTablesWorkflow(t, "customer")
+	tstWorkflowSwitchReadsAndWrites(t)
+	tstWorkflowComplete(t)
 
+	// Now setup the customer2 keyspace so we can do a partial
+	// move tables for one of the two shards: 80-.
+	defaultRdonly = 0
 	setupCustomer2Keyspace(t)
-
 	currentWorkflowType = wrangler.MoveTablesWorkflow
 	wfName := "partial"
 	moveToKs := "customer2"
@@ -285,7 +299,6 @@ func TestPartialMoveTables(t *testing.T) {
 	require.NoError(t, err)
 	targetTab1 = vc.getPrimaryTablet(t, moveToKs, shard)
 	catchup(t, targetTab1, wfName, "Partial MoveTables Customer to Customer2")
-	time.Sleep(1 * time.Second)
 	vdiff1(t, ksWf, "")
 
 	expectedShardRoutingRules := `{"rules":[{"from_keyspace":"customer","to_keyspace":"customer2","shard":"80-"}]}`
@@ -695,15 +708,26 @@ func setupCustomerKeyspace(t *testing.T) {
 }
 
 func setupCustomer2Keyspace(t *testing.T) {
-	if _, err := vc.AddKeyspace(t, []*Cell{vc.Cells["zone1"]}, "customer2", "-80,80-",
-		customerVSchema, customerSchema, 0, 0, 1200, nil); err != nil {
+	c2shards := []string{"-80", "80-"}
+	c2keyspace := "customer2"
+	if _, err := vc.AddKeyspace(t, []*Cell{vc.Cells["zone1"]}, c2keyspace, strings.Join(c2shards, ","),
+		customerVSchema, customerSchema, defaultReplicas, defaultRdonly, 1200, nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "customer", "-80"), 1); err != nil {
-		t.Fatal(err)
-	}
-	if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "customer", "80-"), 1); err != nil {
-		t.Fatal(err)
+	for _, c2shard := range c2shards {
+		if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", c2keyspace, c2shard), 1); err != nil {
+			t.Fatal(err)
+		}
+		if defaultReplicas > 0 {
+			if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", c2keyspace, c2shard), defaultReplicas); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if defaultRdonly > 0 {
+			if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", c2keyspace, c2shard), defaultRdonly); err != nil {
+				t.Fatal(err)
+			}
+		}
 	}
 }
 

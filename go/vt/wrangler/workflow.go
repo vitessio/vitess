@@ -144,14 +144,7 @@ func (vrw *VReplicationWorkflow) stateAsString(ws *workflow.State) string {
 	if !vrw.Exists() {
 		stateInfo = append(stateInfo, WorkflowStateNotCreated)
 	} else {
-		if vrw.ts.isPartialMigration {
-			if len(ws.RdonlyShardsSwitched) > 0 || len(ws.ReplicaShardsSwitched) > 0 {
-				s = fmt.Sprintf("Reads partially switched; RDONLY tablets in shards: %s and REPLICA tablets in shards: %s",
-					strings.Join(ws.RdonlyShardsSwitched, ","), strings.Join(ws.ReplicaShardsSwitched, ","))
-			} else {
-				s = "Reads not switched"
-			}
-		} else {
+		if !vrw.ts.isPartialMigration { // shard level traffic switching is all or nothing
 			if len(ws.RdonlyCellsNotSwitched) == 0 && len(ws.ReplicaCellsNotSwitched) == 0 && len(ws.ReplicaCellsSwitched) > 0 {
 				s = "All Reads Switched"
 			} else if len(ws.RdonlyCellsSwitched) == 0 && len(ws.ReplicaCellsSwitched) == 0 {
@@ -175,17 +168,26 @@ func (vrw *VReplicationWorkflow) stateAsString(ws *workflow.State) string {
 					s += "Rdonly switched in cells: " + strings.Join(ws.RdonlyCellsSwitched, ",")
 				}
 			}
+			stateInfo = append(stateInfo, s)
 		}
-		stateInfo = append(stateInfo, s)
 		if ws.WritesSwitched {
 			stateInfo = append(stateInfo, "Writes Switched")
-		} else if vrw.ts.isPartialMigration && ws.WritesPartiallySwitched {
-			sourceShards := vrw.ts.SourceShards()
-			switchedShards := make([]string, len(sourceShards))
-			for i, sourceShard := range sourceShards {
-				switchedShards[i] = sourceShard.ShardName()
+		} else if vrw.ts.isPartialMigration {
+			if ws.WritesPartiallySwitched {
+				// For partial migrations, the traffic switching is all or nothing
+				// at the shard level, so reads are effectively switched on the
+				// shard when writes are switched.
+				sourceShards := vrw.ts.SourceShards()
+				switchedShards := make([]string, len(sourceShards))
+				for i, sourceShard := range sourceShards {
+					switchedShards[i] = sourceShard.ShardName()
+				}
+				stateInfo = append(stateInfo, fmt.Sprintf("Reads partially switched, for shards: %s", strings.Join(switchedShards, ",")))
+				stateInfo = append(stateInfo, fmt.Sprintf("Writes partially switched, for shards: %s", strings.Join(switchedShards, ",")))
+			} else {
+				stateInfo = append(stateInfo, "Reads Not Switched")
+				stateInfo = append(stateInfo, "Writes Not Switched")
 			}
-			stateInfo = append(stateInfo, fmt.Sprintf("Writes partially switched, for shards: %s", strings.Join(switchedShards, ",")))
 		} else {
 			stateInfo = append(stateInfo, "Writes Not Switched")
 		}

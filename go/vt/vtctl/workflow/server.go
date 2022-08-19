@@ -114,42 +114,6 @@ func (s *Server) CheckReshardingJournalExistsOnTablet(ctx context.Context, table
 	return &journal, exists, nil
 }
 
-// GetShardsWithReadsSwitched returns the shards where reads have been
-// switched for the given tablet type.
-//
-// This function is for use in partial MoveTables or Reshard, and
-// "switched reads" is determined by checking if any of the source shards
-// have the query service disabled in its tablet control record.
-func (s *Server) GetShardsWithReadsSwitched(ctx context.Context, keyspace string, tabletType topodatapb.TabletType) (shardsSwitched []string, err error) {
-	cells, err := s.ts.GetCellInfoNames(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, cell := range cells {
-		srvks, err := s.ts.GetSrvKeyspace(ctx, cell, keyspace)
-		if err != nil {
-			return nil, err
-		}
-		for _, partition := range srvks.GetPartitions() {
-			if tabletType != partition.GetServedType() {
-				continue
-			}
-
-			for _, tabletControl := range partition.GetShardTabletControls() {
-				if !tabletControl.GetQueryServiceDisabled() {
-					for _, shard := range partition.GetShardReferences() {
-						shardsSwitched = append(shardsSwitched, shard.Name)
-					}
-				}
-				break
-			}
-		}
-	}
-
-	return shardsSwitched, nil
-}
-
 // GetCellsWithShardReadsSwitched returns the topo cells partitioned into two
 // slices: one with the cells where shard reads have been switched for the given
 // tablet type and one with the cells where shard reads have not been switched
