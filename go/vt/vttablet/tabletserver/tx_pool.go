@@ -151,7 +151,7 @@ func (tp *TxPool) WaitForEmpty() {
 	tp.scp.WaitForEmpty()
 }
 
-//NewTxProps creates a new TxProperties struct
+// NewTxProps creates a new TxProperties struct
 func (tp *TxPool) NewTxProps(immediateCaller *querypb.VTGateCallerID, effectiveCaller *vtrpcpb.CallerID, autocommit bool) *tx.Properties {
 	return &tx.Properties{
 		StartTime:       time.Now(),

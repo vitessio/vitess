@@ -31,6 +31,8 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 func TestNormalize(t *testing.T) {
@@ -261,6 +263,27 @@ func TestNormalize(t *testing.T) {
 			"bv3": sqltypes.HexNumBindVariable([]byte("0xa")),
 			"bv4": sqltypes.HexNumBindVariable([]byte("0x7f")),
 		},
+	}, {
+		// DateVal should also be normalized
+		in:      `select date'2022-08-06'`,
+		outstmt: `select :bv1 from dual`,
+		outbv: map[string]*querypb.BindVariable{
+			"bv1": sqltypes.ValueBindVariable(sqltypes.MakeTrusted(sqltypes.Date, []byte("2022-08-06"))),
+		},
+	}, {
+		// TimeVal should also be normalized
+		in:      `select time'17:05:12'`,
+		outstmt: `select :bv1 from dual`,
+		outbv: map[string]*querypb.BindVariable{
+			"bv1": sqltypes.ValueBindVariable(sqltypes.MakeTrusted(sqltypes.Time, []byte("17:05:12"))),
+		},
+	}, {
+		// TimestampVal should also be normalized
+		in:      `select timestamp'2022-08-06 17:05:12'`,
+		outstmt: `select :bv1 from dual`,
+		outbv: map[string]*querypb.BindVariable{
+			"bv1": sqltypes.ValueBindVariable(sqltypes.MakeTrusted(sqltypes.Datetime, []byte("2022-08-06 17:05:12"))),
+		},
 	}}
 	for _, tc := range testcases {
 		t.Run(tc.in, func(t *testing.T) {
@@ -271,6 +294,31 @@ func TestNormalize(t *testing.T) {
 			require.NoError(t, Normalize(stmt, NewReservedVars(prefix, known), bv))
 			assert.Equal(t, tc.outstmt, String(stmt))
 			assert.Equal(t, tc.outbv, bv)
+		})
+	}
+}
+
+func TestNormalizeInvalidDates(t *testing.T) {
+	testcases := []struct {
+		in  string
+		err error
+	}{{
+		in:  "select date'foo'",
+		err: vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValue, "incorrect DATE value: '%s'", "foo"),
+	}, {
+		in:  "select time'foo'",
+		err: vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValue, "incorrect TIME value: '%s'", "foo"),
+	}, {
+		in:  "select timestamp'foo'",
+		err: vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValue, "incorrect DATETIME value: '%s'", "foo"),
+	}}
+	for _, tc := range testcases {
+		t.Run(tc.in, func(t *testing.T) {
+			stmt, err := Parse(tc.in)
+			require.NoError(t, err)
+			known := GetBindvars(stmt)
+			bv := make(map[string]*querypb.BindVariable)
+			require.EqualError(t, Normalize(stmt, NewReservedVars("bv", known), bv), tc.err.Error())
 		})
 	}
 }

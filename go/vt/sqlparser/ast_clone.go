@@ -1194,6 +1194,7 @@ func CloneRefOfExplainStmt(n *ExplainStmt) *ExplainStmt {
 	}
 	out := *n
 	out.Statement = CloneStatement(n.Statement)
+	out.Comments = CloneRefOfParsedComments(n.Comments)
 	return &out
 }
 

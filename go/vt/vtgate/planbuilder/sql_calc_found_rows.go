@@ -57,7 +57,7 @@ func (s *sqlCalcFoundRows) ContainsTables() semantics.TableSet {
 	return s.LimitQuery.ContainsTables()
 }
 
-//Primitive implements the logicalPlan interface
+// Primitive implements the logicalPlan interface
 func (s *sqlCalcFoundRows) Primitive() engine.Primitive {
 	countPrim := s.CountQuery.Primitive()
 	rb, ok := countPrim.(*engine.Route)

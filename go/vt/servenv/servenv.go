@@ -46,7 +46,9 @@ import (
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	// register the proper init and shutdown hooks for logging
 	_ "vitess.io/vitess/go/vt/logutil"
@@ -232,8 +234,10 @@ func RunDefault() {
 }
 
 var (
-	flagHooksM       sync.Mutex
-	globalFlagHooks  []func(*pflag.FlagSet)
+	flagHooksM      sync.Mutex
+	globalFlagHooks = []func(*pflag.FlagSet){
+		vterrors.RegisterFlags,
+	}
 	commandFlagHooks = map[string][]func(*pflag.FlagSet){}
 )
 
@@ -317,4 +321,23 @@ func ParseFlagsWithArgs(cmd string) []string {
 	}
 
 	return args
+}
+
+func init() {
+	// These are the binaries that call trace.StartTracing. We need to register
+	// here because package trace cannot import package servenv without creating
+	// a dependency cycle.
+	for _, cmd := range []string{
+		"vtadmin",
+		"vtclient",
+		"vtcombo",
+		"vtctl",
+		"vtctlclient",
+		"vtctld",
+		"vtctldclient",
+		"vtgate",
+		"vttablet",
+	} {
+		OnParseFor(cmd, trace.RegisterFlags)
+	}
 }

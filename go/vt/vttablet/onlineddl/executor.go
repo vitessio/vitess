@@ -967,7 +967,8 @@ func (e *Executor) validateAndEditCreateTableStatement(ctx context.Context, onli
 
 // validateAndEditAlterTableStatement inspects the AlterTable statement and:
 // - modifies any CONSTRAINT name according to given name mapping
-func (e *Executor) validateAndEditAlterTableStatement(ctx context.Context, alterTable *sqlparser.AlterTable, constraintMap map[string]string) (err error) {
+// - explode ADD FULLTEXT KEY into multiple statements
+func (e *Executor) validateAndEditAlterTableStatement(ctx context.Context, alterTable *sqlparser.AlterTable, constraintMap map[string]string) (alters []*sqlparser.AlterTable, err error) {
 	validateWalk := func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node := node.(type) {
 		case *sqlparser.DropKey:
@@ -983,9 +984,34 @@ func (e *Executor) validateAndEditAlterTableStatement(ctx context.Context, alter
 		return true, nil
 	}
 	if err := sqlparser.Walk(validateWalk, alterTable); err != nil {
-		return err
+		return alters, err
 	}
-	return nil
+	alters = append(alters, alterTable)
+	// Handle ADD FULLTEXT KEY statements
+	countAddFullTextStatements := 0
+	redactedOptions := make([]sqlparser.AlterOption, 0, len(alterTable.AlterOptions))
+	for i := range alterTable.AlterOptions {
+		opt := alterTable.AlterOptions[i]
+		switch opt := opt.(type) {
+		case *sqlparser.AddIndexDefinition:
+			if opt.IndexDefinition.Info.Fulltext {
+				countAddFullTextStatements++
+				if countAddFullTextStatements > 1 {
+					// We've already got one ADD FULLTEXT KEY. We can't have another
+					// in the same statement
+					extraAlterTable := &sqlparser.AlterTable{
+						Table:        alterTable.Table,
+						AlterOptions: []sqlparser.AlterOption{opt},
+					}
+					alters = append(alters, extraAlterTable)
+					continue
+				}
+			}
+		}
+		redactedOptions = append(redactedOptions, opt)
+	}
+	alterTable.AlterOptions = redactedOptions
+	return alters, nil
 }
 
 // createTableLike creates the table named by `newTableName` in the likeness of onlineDDL.Table
@@ -1053,12 +1079,15 @@ func (e *Executor) initVreplicationOriginalMigration(ctx context.Context, online
 		// ALTER TABLE should apply to the vrepl table
 		alterTable.SetTable(alterTable.GetTable().Qualifier.CompliantName(), vreplTableName)
 		// Also, change any constraint names:
-		if err := e.validateAndEditAlterTableStatement(ctx, alterTable, constraintMap); err != nil {
+		alters, err := e.validateAndEditAlterTableStatement(ctx, alterTable, constraintMap)
+		if err != nil {
 			return v, err
 		}
 		// Apply ALTER TABLE to materialized table
-		if _, err := conn.ExecuteFetch(sqlparser.CanonicalString(alterTable), 0, false); err != nil {
-			return v, err
+		for _, alter := range alters {
+			if _, err := conn.ExecuteFetch(sqlparser.CanonicalString(alter), 0, false); err != nil {
+				return v, err
+			}
 		}
 	}
 	v = NewVRepl(onlineDDL.UUID, e.keyspace, e.shard, e.dbName, onlineDDL.Table, vreplTableName, onlineDDL.SQL)
@@ -1420,9 +1449,8 @@ exit $exit_code
 
 		log.Infof("Will now dry-run gh-ost on: %s:%d", variables.host, variables.port)
 		if err := runGhost(false); err != nil {
-			// perhaps gh-ost was interrupted midway and didn't have the chance to send a "failes" status
-			_ = e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusFailed)
-			_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, err.Error())
+			// perhaps gh-ost was interrupted midway and didn't have the chance to send a "failed" status
+			_ = e.failMigration(ctx, onlineDDL, err)
 
 			log.Errorf("Error executing gh-ost dry run: %+v", err)
 			return err
@@ -1433,8 +1461,7 @@ exit $exit_code
 		startedMigrations.Add(1)
 		if err := runGhost(true); err != nil {
 			// perhaps gh-ost was interrupted midway and didn't have the chance to send a "failes" status
-			_ = e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusFailed)
-			_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, err.Error())
+			_ = e.failMigration(ctx, onlineDDL, err)
 			failedMigrations.Add(1)
 			log.Errorf("Error running gh-ost: %+v", err)
 			return err
@@ -1644,8 +1671,7 @@ export MYSQL_PWD
 		log.Infof("Will now dry-run pt-online-schema-change on: %s:%d", variables.host, variables.port)
 		if err := runPTOSC(false); err != nil {
 			// perhaps pt-osc was interrupted midway and didn't have the chance to send a "failes" status
-			_ = e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusFailed)
-			_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, err.Error())
+			_ = e.failMigration(ctx, onlineDDL, err)
 			_ = e.updateMigrationTimestamp(ctx, "completed_timestamp", onlineDDL.UUID)
 			log.Errorf("Error executing pt-online-schema-change dry run: %+v", err)
 			return err
@@ -1656,8 +1682,7 @@ export MYSQL_PWD
 		startedMigrations.Add(1)
 		if err := runPTOSC(true); err != nil {
 			// perhaps pt-osc was interrupted midway and didn't have the chance to send a "failes" status
-			_ = e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusFailed)
-			_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, err.Error())
+			_ = e.failMigration(ctx, onlineDDL, err)
 			_ = e.updateMigrationTimestamp(ctx, "completed_timestamp", onlineDDL.UUID)
 			_ = e.dropPTOSCMigrationTriggers(ctx, onlineDDL)
 			failedMigrations.Add(1)
@@ -1738,7 +1763,6 @@ func (e *Executor) terminateMigration(ctx context.Context, onlineDDL *schema.Onl
 		if err := e.terminateVReplMigration(ctx, onlineDDL.UUID); err != nil {
 			return foundRunning, fmt.Errorf("Error terminating migration, vreplication exec error: %+v", err)
 		}
-		_ = e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusFailed)
 	case schema.DDLStrategyPTOSC:
 		// see if pt-osc is running (could have been executed by this vttablet or one that crashed in the past)
 		if running, pid, _ := e.isPTOSCMigrationRunning(ctx, onlineDDL.UUID); running {
@@ -1774,7 +1798,7 @@ func (e *Executor) terminateMigration(ctx context.Context, onlineDDL *schema.Onl
 }
 
 // CancelMigration attempts to abort a scheduled or a running migration
-func (e *Executor) CancelMigration(ctx context.Context, uuid string, message string) (result *sqltypes.Result, err error) {
+func (e *Executor) CancelMigration(ctx context.Context, uuid string, message string, issuedByUser bool) (result *sqltypes.Result, err error) {
 	if !e.isOpen {
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "online ddl is disabled")
 	}
@@ -1794,18 +1818,29 @@ func (e *Executor) CancelMigration(ctx context.Context, uuid string, message str
 	case schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed:
 		log.Infof("CancelMigration: migration %s is in non-cancellable status: %v", uuid, onlineDDL.Status)
 		return emptyResult, nil
+	}
+	// From this point on, we're actually cancelling a migration
+	if issuedByUser {
+		// if this was issued by the user, then we mark the `cancelled_timestamp`, and based on that,
+		// the migration state will be 'cancelled'.
+		// If this was not issued by the user, then this is an internal state machine cancellation of the
+		// migration, e.g. because it is stale or has an unrecoverable error. In this case we do not mark
+		// the timestamp, and as result, the state will transition to 'failed'
+		_ = e.updateMigrationTimestamp(ctx, "cancelled_timestamp", uuid)
+	}
+	defer e.failMigration(ctx, onlineDDL, errors.New(message))
+	defer e.triggerNextCheckInterval()
+
+	switch onlineDDL.Status {
 	case schema.OnlineDDLStatusQueued, schema.OnlineDDLStatusReady:
 		log.Infof("CancelMigration: cancelling %s with status: %v", uuid, onlineDDL.Status)
 		if err := e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusCancelled); err != nil {
 			return nil, err
 		}
-		rowsAffected = 1
+		return &sqltypes.Result{RowsAffected: 1}, nil
 	}
-	defer e.triggerNextCheckInterval()
 
 	migrationFound, err := e.terminateMigration(ctx, onlineDDL)
-	defer e.updateMigrationMessage(ctx, onlineDDL.UUID, message)
-
 	if migrationFound {
 		log.Infof("CancelMigration: terminated %s with status: %v", uuid, onlineDDL.Status)
 		rowsAffected = 1
@@ -1823,10 +1858,10 @@ func (e *Executor) CancelMigration(ctx context.Context, uuid string, message str
 }
 
 // cancelMigrations attempts to abort a list of migrations
-func (e *Executor) cancelMigrations(ctx context.Context, cancellable []*cancellableMigration) (err error) {
+func (e *Executor) cancelMigrations(ctx context.Context, cancellable []*cancellableMigration, issuedByUser bool) (err error) {
 	for _, migration := range cancellable {
 		log.Infof("cancelMigrations: cancelling %s; reason: %s", migration.uuid, migration.message)
-		if _, err := e.CancelMigration(ctx, migration.uuid, migration.message); err != nil {
+		if _, err := e.CancelMigration(ctx, migration.uuid, migration.message, issuedByUser); err != nil {
 			return err
 		}
 	}
@@ -1835,7 +1870,7 @@ func (e *Executor) cancelMigrations(ctx context.Context, cancellable []*cancella
 
 // CancelPendingMigrations cancels all pending migrations (that are expected to run or are running)
 // for this keyspace
-func (e *Executor) CancelPendingMigrations(ctx context.Context, message string) (result *sqltypes.Result, err error) {
+func (e *Executor) CancelPendingMigrations(ctx context.Context, message string, issuedByUser bool) (result *sqltypes.Result, err error) {
 	if !e.isOpen {
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "online ddl is disabled")
 	}
@@ -1848,7 +1883,7 @@ func (e *Executor) CancelPendingMigrations(ctx context.Context, message string) 
 	result = &sqltypes.Result{}
 	for _, uuid := range uuids {
 		log.Infof("CancelPendingMigrations: cancelling %s", uuid)
-		res, err := e.CancelMigration(ctx, uuid, message)
+		res, err := e.CancelMigration(ctx, uuid, message, issuedByUser)
 		if err != nil {
 			return result, err
 		}
@@ -2341,7 +2376,7 @@ func (e *Executor) getCompletedMigrationByContextAndSQL(ctx context.Context, onl
 
 // failMigration marks a migration as failed
 func (e *Executor) failMigration(ctx context.Context, onlineDDL *schema.OnlineDDL, err error) error {
-	_ = e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusFailed)
+	_ = e.updateMigrationStatusFailedOrCancelled(ctx, onlineDDL.UUID)
 	if err != nil {
 		_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, err.Error())
 	}
@@ -3250,7 +3285,7 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 					// understand whether "now is a good time" or "not there yet"
 					_ = e.updateMigrationReadyToComplete(ctx, uuid, isReady)
 					if postponeCompletion {
-						// override. Even if migration is ready, we do not complet it.
+						// override. Even if migration is ready, we do not complete it.
 						isReady = false
 					}
 					if isReady {
@@ -3259,7 +3294,7 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 							if merr, ok := err.(*mysql.SQLError); ok {
 								switch merr.Num {
 								case mysql.ERTooLongIdent:
-									go e.CancelMigration(ctx, uuid, err.Error())
+									go e.CancelMigration(ctx, uuid, err.Error(), false)
 								}
 							}
 							return countRunnning, cancellable, err
@@ -3594,7 +3629,7 @@ func (e *Executor) onMigrationCheckTick() {
 	}
 	if _, cancellable, err := e.reviewRunningMigrations(ctx); err != nil {
 		log.Error(err)
-	} else if err := e.cancelMigrations(ctx, cancellable); err != nil {
+	} else if err := e.cancelMigrations(ctx, cancellable, false); err != nil {
 		log.Error(err)
 	}
 	if err := e.reviewStaleMigrations(ctx); err != nil {
@@ -3712,6 +3747,18 @@ func (e *Executor) updateTabletFailure(ctx context.Context, uuid string) error {
 		return err
 	}
 	_, err = e.execQuery(ctx, bound)
+	return err
+}
+
+func (e *Executor) updateMigrationStatusFailedOrCancelled(ctx context.Context, uuid string) error {
+	log.Infof("updateMigrationStatus: transitioning migration: %s into status failed or cancelled", uuid)
+	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationStatusFailedOrCancelled,
+		sqltypes.StringBindVariable(uuid),
+	)
+	if err != nil {
+		return err
+	}
+	_, err = e.execQuery(ctx, query)
 	return err
 }
 
@@ -4409,13 +4456,13 @@ func (e *Executor) VExec(ctx context.Context, vx *vexec.TabletVExec) (qr *queryp
 			if !schema.IsOnlineDDLUUID(uuid) {
 				return nil, fmt.Errorf("Not an Online DDL UUID: %s", uuid)
 			}
-			return response(e.CancelMigration(ctx, uuid, "cancel by user"))
+			return response(e.CancelMigration(ctx, uuid, "cancel by user", true))
 		case cancelAllMigrationHint:
 			uuid, _ := vx.ColumnStringVal(vx.WhereCols, "migration_uuid")
 			if uuid != "" {
 				return nil, fmt.Errorf("Unexpetced UUID: %s", uuid)
 			}
-			return response(e.CancelPendingMigrations(ctx, "cancel-all by user"))
+			return response(e.CancelPendingMigrations(ctx, "cancel-all by user", true))
 		default:
 			return nil, fmt.Errorf("Unexpected value for migration_status: %v. Supported values are: %s, %s",
 				statusVal, retryMigrationHint, cancelMigrationHint)

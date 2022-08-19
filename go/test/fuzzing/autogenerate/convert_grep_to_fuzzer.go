@@ -96,12 +96,17 @@ createFunctionCall creates a function call
 This is used to create the calls to the internal harnesses:
 switch funcOp {
 case 0:
-        _ = FuzzqueryTarget(data2) <- created by createFunctionCall
+
+	_ = FuzzqueryTarget(data2) <- created by createFunctionCall
+
 case 1:
-        _ = FuzzqueryVTGateCallerID(data2) <- created by createFunctionCall
+
+	_ = FuzzqueryVTGateCallerID(data2) <- created by createFunctionCall
+
 case 2:
-        _ = FuzzqueryEventToken(data2) <- created by createFunctionCall
-}
+
+	        _ = FuzzqueryEventToken(data2) <- created by createFunctionCall
+	}
 */
 func createFunctionCall(shortName, structName string) string {
 	return fmt.Sprintf("\t_ = Fuzz%s%s(data2)\n", shortName, structName)
@@ -110,30 +115,31 @@ func createFunctionCall(shortName, structName string) string {
 /*
 createHarness creates an internal harness.
 An example of a generated harness:
-func FuzztabletmanagerdataTableDefinition(data []byte) error {
-        f := fuzz.NewConsumer(data)
-        s := &tabletmanagerdata.TableDefinition{}
-        err := f.GenerateStruct(s)
-        if err != nil {
-                return err
-        }
-        b, err := s.MarshalVT()
-        if err != nil {
-                return err
-        }
-        s2 := &tabletmanagerdata.TableDefinition{}
-        err = s2.UnmarshalVT(b)
-        if err != nil {
-                return err
-        }
-        newBytes, err := f.GetBytes()
-        if err != nil {
-                return err
-        }
-        s3 := &tabletmanagerdata.TableDefinition{}
-        err = s3.UnmarshalVT(newBytes)
-        return err
-}
+
+	func FuzztabletmanagerdataTableDefinition(data []byte) error {
+	        f := fuzz.NewConsumer(data)
+	        s := &tabletmanagerdata.TableDefinition{}
+	        err := f.GenerateStruct(s)
+	        if err != nil {
+	                return err
+	        }
+	        b, err := s.MarshalVT()
+	        if err != nil {
+	                return err
+	        }
+	        s2 := &tabletmanagerdata.TableDefinition{}
+	        err = s2.UnmarshalVT(b)
+	        if err != nil {
+	                return err
+	        }
+	        newBytes, err := f.GetBytes()
+	        if err != nil {
+	                return err
+	        }
+	        s3 := &tabletmanagerdata.TableDefinition{}
+	        err = s3.UnmarshalVT(newBytes)
+	        return err
+	}
 */
 func createHarness(shortName, structName string) string {
 	var harnessString strings.Builder

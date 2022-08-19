@@ -40,6 +40,7 @@ func TestCreateTableDiff(t *testing.T) {
 		errorMsg   string
 		autoinc    int
 		rotation   int
+		fulltext   int
 		colrename  int
 		constraint int
 	}{
@@ -158,6 +159,14 @@ func TestCreateTableDiff(t *testing.T) {
 			colrename: ColumnRenameHeuristicStatement,
 			diff:      "alter table t1 rename column i1 to i2, rename column v1 to v2",
 			cdiff:     "ALTER TABLE `t1` RENAME COLUMN `i1` TO `i2`, RENAME COLUMN `v1` TO `v2`",
+		},
+		{
+			name:      "rename mid column and add an index. statement",
+			from:      "create table t1 (id int primary key, i1 int not null, c char(3) default '')",
+			to:        "create table t2 (id int primary key, i2 int not null, c char(3) default '', key i2_idx(i2))",
+			colrename: ColumnRenameHeuristicStatement,
+			diff:      "alter table t1 rename column i1 to i2, add key i2_idx (i2)",
+			cdiff:     "ALTER TABLE `t1` RENAME COLUMN `i1` TO `i2`, ADD KEY `i2_idx` (`i2`)",
 		},
 		{
 			// in a future iteration, this will generate a RENAME for both column, like in the previous test. Until then, we do not RENAME two successive columns
@@ -413,6 +422,36 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t1 (`id` int primary key, i int, key i_idx(i) invisible)",
 			diff:  "alter table t1 alter index i_idx invisible",
 			cdiff: "ALTER TABLE `t1` ALTER INDEX `i_idx` INVISIBLE",
+		},
+		{
+			name:  "key made invisible with different case",
+			from:  "create table t1 (`id` int primary key, i int, key i_idx(i))",
+			to:    "create table t1 (`id` int primary key, i int, key i_idx(i) INVISIBLE)",
+			diff:  "alter table t1 alter index i_idx invisible",
+			cdiff: "ALTER TABLE `t1` ALTER INDEX `i_idx` INVISIBLE",
+		},
+		// FULLTEXT keys
+		{
+			name:  "add one fulltext key",
+			from:  "create table t1 (id int primary key, name tinytext not null)",
+			to:    "create table t1 (id int primary key, name tinytext not null, fulltext key name_ft(name))",
+			diff:  "alter table t1 add fulltext key name_ft (`name`)",
+			cdiff: "ALTER TABLE `t1` ADD FULLTEXT KEY `name_ft` (`name`)",
+		},
+		{
+			name:   "add two fulltext keys, distinct statements",
+			from:   "create table t1 (id int primary key, name1 tinytext not null, name2 tinytext not null)",
+			to:     "create table t1 (id int primary key, name1 tinytext not null, name2 tinytext not null, fulltext key name1_ft(name1), fulltext key name2_ft(name2))",
+			diffs:  []string{"alter table t1 add fulltext key name1_ft (name1)", "alter table t1 add fulltext key name2_ft (name2)"},
+			cdiffs: []string{"ALTER TABLE `t1` ADD FULLTEXT KEY `name1_ft` (`name1`)", "ALTER TABLE `t1` ADD FULLTEXT KEY `name2_ft` (`name2`)"},
+		},
+		{
+			name:     "add two fulltext keys, unify statements",
+			from:     "create table t1 (id int primary key, name1 tinytext not null, name2 tinytext not null)",
+			to:       "create table t1 (id int primary key, name1 tinytext not null, name2 tinytext not null, fulltext key name1_ft(name1), fulltext key name2_ft(name2))",
+			fulltext: FullTextKeyUnifyStatements,
+			diff:     "alter table t1 add fulltext key name1_ft (name1), add fulltext key name2_ft (name2)",
+			cdiff:    "ALTER TABLE `t1` ADD FULLTEXT KEY `name1_ft` (`name1`), ADD FULLTEXT KEY `name2_ft` (`name2`)",
 		},
 		// CHECK constraints
 		{
@@ -818,7 +857,7 @@ func TestCreateTableDiff(t *testing.T) {
 			name:  "remove table option 2",
 			from:  "create table t1 (id int primary key) CHECKSUM=1",
 			to:    "create table t1 (id int primary key) ",
-			diff:  "alter table t1 CHECKSUM 0",
+			diff:  "alter table t1 checksum 0",
 			cdiff: "ALTER TABLE `t1` CHECKSUM 0",
 		},
 		{
@@ -832,7 +871,7 @@ func TestCreateTableDiff(t *testing.T) {
 			name:  "remove table option 4",
 			from:  "create table t1 (id int auto_increment primary key) KEY_BLOCK_SIZE=16 COMPRESSION='zlib'",
 			to:    "create table t2 (id int auto_increment primary key)",
-			diff:  "alter table t1 KEY_BLOCK_SIZE 0 COMPRESSION ''",
+			diff:  "alter table t1 key_block_size 0 compression ''",
 			cdiff: "ALTER TABLE `t1` KEY_BLOCK_SIZE 0 COMPRESSION ''",
 		},
 		{
@@ -852,7 +891,7 @@ func TestCreateTableDiff(t *testing.T) {
 			from:    "create table t1 (id int auto_increment primary key)",
 			to:      "create table t2 (id int auto_increment primary key) AUTO_INCREMENT=300",
 			autoinc: AutoIncrementApplyHigher,
-			diff:    "alter table t1 AUTO_INCREMENT 300",
+			diff:    "alter table t1 auto_increment 300",
 			cdiff:   "ALTER TABLE `t1` AUTO_INCREMENT 300",
 		},
 		{
@@ -876,7 +915,7 @@ func TestCreateTableDiff(t *testing.T) {
 			from:    "create table t1 (id int auto_increment primary key) AUTO_INCREMENT=100",
 			to:      "create table t2 (id int auto_increment primary key) AUTO_INCREMENT=300",
 			autoinc: AutoIncrementApplyHigher,
-			diff:    "alter table t1 AUTO_INCREMENT 300",
+			diff:    "alter table t1 auto_increment 300",
 			cdiff:   "ALTER TABLE `t1` AUTO_INCREMENT 300",
 		},
 		{
@@ -890,7 +929,7 @@ func TestCreateTableDiff(t *testing.T) {
 			from:    "create table t1 (id int auto_increment primary key) AUTO_INCREMENT=300",
 			to:      "create table t2 (id int auto_increment primary key) AUTO_INCREMENT=100",
 			autoinc: AutoIncrementApplyAlways,
-			diff:    "alter table t1 AUTO_INCREMENT 100",
+			diff:    "alter table t1 auto_increment 100",
 			cdiff:   "ALTER TABLE `t1` AUTO_INCREMENT 100",
 		},
 		{
@@ -973,6 +1012,7 @@ func TestCreateTableDiff(t *testing.T) {
 			hints.RangeRotationStrategy = ts.rotation
 			hints.ConstraintNamesStrategy = ts.constraint
 			hints.ColumnRenameStrategy = ts.colrename
+			hints.FullTextKeyStrategy = ts.fulltext
 			alter, err := c.Diff(other, &hints)
 
 			require.Equal(t, len(ts.diffs), len(ts.cdiffs))

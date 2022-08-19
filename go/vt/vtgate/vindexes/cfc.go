@@ -69,17 +69,17 @@ import (
 // the behavior is exactly same as other vindex's but just more efficient in
 // controlling the fanout.
 //
-// The expected format of the vindex definition is
+// # The expected format of the vindex definition is
 //
-// "vindexes": {
-//   "cfc_md5": {
-//     "type": "cfc",
-//     "params": {
-//       "hash": "md5",
-//       "offsets": "[2,4]"
-//     }
-//   }
-// }
+//	"vindexes": {
+//	  "cfc_md5": {
+//	    "type": "cfc",
+//	    "params": {
+//	      "hash": "md5",
+//	      "offsets": "[2,4]"
+//	    }
+//	  }
+//	}
 //
 // 'offsets' only makes sense when hash is used. Offsets should be a sorted
 // list of positive ints, each of which denotes the byte offset (from the

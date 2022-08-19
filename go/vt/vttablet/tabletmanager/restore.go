@@ -243,7 +243,12 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 			}
 		}
 	case mysqlctl.ErrNoBackup:
-		// No-op, starting with empty database.
+		// Starting with empty database.
+		// We just need to initialize replication
+		_, err := tm.initializeReplication(ctx, originalType)
+		if err != nil {
+			return err
+		}
 	default:
 		// If anything failed, we should reset the original tablet type
 		if err := tm.tmState.ChangeTabletType(ctx, originalType, DBActionNone); err != nil {
@@ -305,7 +310,7 @@ func (tm *TabletManager) restoreToTimeFromBinlog(ctx context.Context, pos mysql.
 // getGTIDFromTimestamp computes 2 GTIDs based on restoreTime
 // afterPos is the GTID of the first event at or after restoreTime.
 // beforePos is the GTID of the last event before restoreTime. This is the GTID upto which replication will be applied
-// afterPos can be used directly in the query `START SLAVE UNTIL SQL_BEFORE_GTIDS = ''`
+// afterPos can be used directly in the query `START SLAVE UNTIL SQL_BEFORE_GTIDS = ”`
 // beforePos will be used to check if replication was able to catch up from the binlog server
 func (tm *TabletManager) getGTIDFromTimestamp(ctx context.Context, pos mysql.Position, restoreTime int64) (afterPos string, beforePos string, err error) {
 	connParams := &mysql.ConnParams{
@@ -499,50 +504,11 @@ func (tm *TabletManager) startReplication(ctx context.Context, pos mysql.Positio
 		return vterrors.Wrap(err, "failed to set replication position")
 	}
 
-	// At this point we've restored the data from the backup _and_ we've saved the
-	// replication state metadata that is consistent with the snapshot of the data
-	// contained in the backup. This means that we have everything needed to start
-	// replication at a later time, and since with active parents disabled we do
-	// not ever start replication automatically, we can now safely return.
-	if *mysqlctl.DisableActiveReparents {
-		return nil
-	}
-
-	// Read the shard to find the current primary, and its location.
-	tablet := tm.Tablet()
-	si, err := tm.TopoServer.GetShard(ctx, tablet.Keyspace, tablet.Shard)
-	if err != nil {
-		return vterrors.Wrap(err, "can't read shard")
-	}
-	if si.PrimaryAlias == nil {
-		// We've restored, but there's no primary. This is fine, since we've
-		// already set the position at which to resume when we're later reparented.
-		// If we had instead considered this fatal, all tablets would crash-loop
-		// until a primary appears, which would make it impossible to elect a primary.
-		log.Warningf("Can't start replication after restore: shard %v/%v has no primary.", tablet.Keyspace, tablet.Shard)
-		return nil
-	}
-	if topoproto.TabletAliasEqual(si.PrimaryAlias, tablet.Alias) {
-		// We used to be the primary before we got restarted in an empty data dir,
-		// and no other primary has been elected in the meantime.
-		// This shouldn't happen, so we'll let the operator decide which tablet
-		// should actually be promoted to primary.
-		log.Warningf("Can't start replication after restore: primary in shard record still points to this tablet.")
-		return nil
-	}
-	ti, err := tm.TopoServer.GetTablet(ctx, si.PrimaryAlias)
-	if err != nil {
-		return vterrors.Wrapf(err, "Cannot read primary tablet %v", si.PrimaryAlias)
-	}
-
-	// If using semi-sync, we need to enable it before connecting to primary.
-	if err := tm.fixSemiSync(tabletType, SemiSyncActionNone); err != nil {
+	primary, err := tm.initializeReplication(ctx, tabletType)
+	// If we ran into an error while initializing replication, then there is no point in waiting for catch-up.
+	// Also, if there is no primary tablet in the shard, we don't need to proceed further.
+	if err != nil || primary == nil {
 		return err
-	}
-
-	// Set primary and start replication.
-	if err := tm.MysqlDaemon.SetReplicationSource(ctx, ti.Tablet.MysqlHostname, int(ti.Tablet.MysqlPort), false /* stopReplicationBefore */, !*mysqlctl.DisableActiveReparents /* startReplicationAfter */); err != nil {
-		return vterrors.Wrap(err, "MysqlDaemon.SetReplicationSource failed")
 	}
 
 	// wait for reliable replication_lag_seconds
@@ -555,7 +521,7 @@ func (tm *TabletManager) startReplication(ctx context.Context, pos mysql.Positio
 	defer tmc.Close()
 	remoteCtx, remoteCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
 	defer remoteCancel()
-	posStr, err := tmc.PrimaryPosition(remoteCtx, ti.Tablet)
+	posStr, err := tmc.PrimaryPosition(remoteCtx, primary.Tablet)
 	if err != nil {
 		// It is possible that though PrimaryAlias is set, the primary tablet is unreachable
 		// Log a warning and let tablet restore in that case

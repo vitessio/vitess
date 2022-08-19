@@ -62,18 +62,26 @@ func TestInitShardPrimary(t *testing.T) {
 	}
 
 	tablet2.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
-		"FAKE RESET ALL REPLICATION",
+		// These come from tablet startup
+		"RESET SLAVE ALL",
+		"FAKE SET MASTER",
+		"START SLAVE",
+		// These come from InitShardPrimary
 		"FAKE RESET ALL REPLICATION",
 		"FAKE SET SLAVE POSITION",
+		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START SLAVE",
 	}
 	tablet2.FakeMysqlDaemon.SetReplicationSourceInputs = append(tablet2.FakeMysqlDaemon.SetReplicationSourceInputs, fmt.Sprintf("%v:%v", tablet1.Tablet.Hostname, tablet1.Tablet.MysqlPort))
 
 	tablet3.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
-		"FAKE RESET ALL REPLICATION",
+		"RESET SLAVE ALL",
+		"FAKE SET MASTER",
+		"START SLAVE",
 		"FAKE RESET ALL REPLICATION",
 		"FAKE SET SLAVE POSITION",
+		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START SLAVE",
 	}
@@ -123,6 +131,7 @@ func TestInitShardPrimaryNoFormerPrimary(t *testing.T) {
 	tablet2.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"FAKE RESET ALL REPLICATION",
 		"FAKE SET SLAVE POSITION",
+		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START SLAVE",
 	}
@@ -131,6 +140,7 @@ func TestInitShardPrimaryNoFormerPrimary(t *testing.T) {
 	tablet3.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"FAKE RESET ALL REPLICATION",
 		"FAKE SET SLAVE POSITION",
+		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START SLAVE",
 	}

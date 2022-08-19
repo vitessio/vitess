@@ -458,10 +458,10 @@ func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.Tab
 //
 // It attemps to idempotently ensure the following guarantees upon returning
 // successfully:
-//   * No future writes will be accepted.
-//   * No writes are in-flight.
-//   * MySQL is in read-only mode.
-//   * Semi-sync settings are consistent with a REPLICA tablet.
+//   - No future writes will be accepted.
+//   - No writes are in-flight.
+//   - MySQL is in read-only mode.
+//   - Semi-sync settings are consistent with a REPLICA tablet.
 //
 // If necessary, it waits for all in-flight writes to complete or time out.
 //
@@ -763,8 +763,14 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 	}
 	host := parent.Tablet.MysqlHostname
 	port := int(parent.Tablet.MysqlPort)
-	if status.SourceHost != host || status.SourcePort != port {
-		// This handles both changing the address and starting replication.
+	// We want to reset the replication parameters and set replication source again when forceStartReplication is provided
+	// because sometimes MySQL gets stuck due to improper initialization of master info structure or related failures and throws errors like
+	// ERROR 1201 (HY000): Could not initialize master info structure; more error messages can be found in the MySQL error log
+	// These errors can only be resolved by resetting the replication parameters, otherwise START SLAVE fails. So when this RPC
+	// gets called from VTOrc or replication manager to fix the replication in these cases with forceStartReplication, we should also
+	// reset the replication parameters and set the source port information again.
+	if status.SourceHost != host || status.SourcePort != port || forceStartReplication {
+		// This handles reseting the replication parameters, changing the address and then starting the replication.
 		if err := tm.MysqlDaemon.SetReplicationSource(ctx, host, port, wasReplicating, shouldbeReplicating); err != nil {
 			if err := tm.handleRelayLogError(err); err != nil {
 				return err

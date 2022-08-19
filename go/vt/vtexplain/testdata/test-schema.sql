@@ -94,3 +94,14 @@ create table lkp_idx (
     id bigint,
     primary key (lkp)
 ) Engine=InnoDB;
+
+CREATE TABLE orders (
+  id bigint,
+	customer_id bigint
+);
+
+CREATE TABLE orders_id_lookup (
+  id int NOT NULL,
+  keyspace_id varbinary(128),
+  primary key(id)
+);

@@ -66,7 +66,7 @@ var (
 	healthcheckOnce           sync.Once
 
 	// TabletURLTemplateString is a flag to generate URLs for the tablets that vtgate discovers.
-	TabletURLTemplateString string
+	TabletURLTemplateString = "http://{{.GetTabletHostPort}}"
 	tabletURLTemplate       *template.Template
 
 	// AllowedTabletTypes is the list of allowed tablet types. e.g. {PRIMARY, REPLICA}.
@@ -80,13 +80,13 @@ var (
 	tabletFilters []string
 
 	// refreshInterval is the interval at which healthcheck refreshes its list of tablets from topo.
-	refreshInterval time.Duration
+	refreshInterval = 1 * time.Minute
 
 	// refreshKnownTablets tells us whether to process all tablets or only new tablets.
-	refreshKnownTablets bool
+	refreshKnownTablets = true
 
 	// topoReadConcurrency tells us how many topo reads are allowed in parallel.
-	topoReadConcurrency int
+	topoReadConcurrency = 32
 
 	// How much to sleep between each check.
 	waitAvailableTabletInterval = 100 * time.Millisecond
@@ -149,6 +149,7 @@ func ParseTabletURLTemplateFromFlag() {
 func init() {
 	servenv.OnParseFor("vtgate", registerDiscoveryFlags)
 	servenv.OnParseFor("vtcombo", registerDiscoveryFlags)
+	servenv.OnParseFor("vtctld", registerDiscoveryFlags)
 }
 
 func registerDiscoveryFlags(fs *pflag.FlagSet) {
@@ -280,18 +281,27 @@ type HealthCheckImpl struct {
 // NewHealthCheck creates a new HealthCheck object.
 // Parameters:
 // retryDelay.
-//   The duration to wait before retrying to connect (e.g. after a failed connection
-//   attempt).
+//
+//	The duration to wait before retrying to connect (e.g. after a failed connection
+//	attempt).
+//
 // healthCheckTimeout.
-//   The duration for which we consider a health check response to be 'fresh'. If we don't get
-//   a health check response from a tablet for more than this duration, we consider the tablet
-//   not healthy.
+//
+//	The duration for which we consider a health check response to be 'fresh'. If we don't get
+//	a health check response from a tablet for more than this duration, we consider the tablet
+//	not healthy.
+//
 // topoServer.
-//   The topology server that this healthcheck object can use to retrieve cell or tablet information
+//
+//	The topology server that this healthcheck object can use to retrieve cell or tablet information
+//
 // localCell.
-//   The localCell for this healthcheck
+//
+//	The localCell for this healthcheck
+//
 // callback.
-//   A function to call when there is a primary change. Used to notify vtgate's buffer to stop buffering.
+//
+//	A function to call when there is a primary change. Used to notify vtgate's buffer to stop buffering.
 func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Duration, topoServer *topo.Server, localCell, cellsToWatch string) *HealthCheckImpl {
 	log.Infof("loading tablets for cells: %v", cellsToWatch)
 
@@ -312,6 +322,7 @@ func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Dur
 	if cellsToWatch == "" {
 		cells = append(cells, localCell)
 	}
+
 	for _, c := range cells {
 		log.Infof("Setting up healthcheck for cell: %v", c)
 		if c == "" {

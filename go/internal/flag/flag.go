@@ -66,6 +66,17 @@ func Parse(fs *flag.FlagSet) {
 	flag.Parse()
 }
 
+// Parsed returns true if the command-line flags have been parsed.
+//
+// It is agnostic to whether the standard library `flag` package or `pflag` was
+// used for parsing, in order to facilitate the migration to `pflag` for
+// VEP-4 [1].
+//
+// [1]: https://github.com/vitessio/vitess/issues/10697.
+func Parsed() bool {
+	return goflag.Parsed() || flag.Parsed()
+}
+
 // Args returns the positional arguments with the first double-dash ("--")
 // removed. If no double-dash was specified on the command-line, this is
 // equivalent to flag.Args() from the standard library flag package.
@@ -141,6 +152,7 @@ func warnOnMixedPositionalAndFlagArguments(posargs []string, warningf func(msg s
 }
 
 // From the standard library documentation:
+//
 //	> If a Value has an IsBoolFlag() bool method returning true, the
 //	> command-line parser makes -name equivalent to -name=true rather than
 //	> using the next command-line argument.

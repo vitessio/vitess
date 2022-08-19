@@ -210,6 +210,8 @@ type VtctldClient interface {
 	// GetCellsAliases returns a mapping of cell alias to cells identified by that
 	// alias.
 	GetCellsAliases(ctx context.Context, in *vtctldata.GetCellsAliasesRequest, opts ...grpc.CallOption) (*vtctldata.GetCellsAliasesResponse, error)
+	// GetFullStatus returns the full status of MySQL including the replication information, semi-sync information, GTID information among others
+	GetFullStatus(ctx context.Context, in *vtctldata.GetFullStatusRequest, opts ...grpc.CallOption) (*vtctldata.GetFullStatusResponse, error)
 	// GetKeyspace reads the given keyspace from the topo and returns it.
 	GetKeyspace(ctx context.Context, in *vtctldata.GetKeyspaceRequest, opts ...grpc.CallOption) (*vtctldata.GetKeyspaceResponse, error)
 	// GetKeyspaces returns the keyspace struct of all keyspaces in the topo.
@@ -661,6 +663,15 @@ func (c *vtctldClient) GetCellInfoNames(ctx context.Context, in *vtctldata.GetCe
 func (c *vtctldClient) GetCellsAliases(ctx context.Context, in *vtctldata.GetCellsAliasesRequest, opts ...grpc.CallOption) (*vtctldata.GetCellsAliasesResponse, error) {
 	out := new(vtctldata.GetCellsAliasesResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/GetCellsAliases", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) GetFullStatus(ctx context.Context, in *vtctldata.GetFullStatusRequest, opts ...grpc.CallOption) (*vtctldata.GetFullStatusResponse, error) {
+	out := new(vtctldata.GetFullStatusResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/GetFullStatus", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1245,6 +1256,8 @@ type VtctldServer interface {
 	// GetCellsAliases returns a mapping of cell alias to cells identified by that
 	// alias.
 	GetCellsAliases(context.Context, *vtctldata.GetCellsAliasesRequest) (*vtctldata.GetCellsAliasesResponse, error)
+	// GetFullStatus returns the full status of MySQL including the replication information, semi-sync information, GTID information among others
+	GetFullStatus(context.Context, *vtctldata.GetFullStatusRequest) (*vtctldata.GetFullStatusResponse, error)
 	// GetKeyspace reads the given keyspace from the topo and returns it.
 	GetKeyspace(context.Context, *vtctldata.GetKeyspaceRequest) (*vtctldata.GetKeyspaceResponse, error)
 	// GetKeyspaces returns the keyspace struct of all keyspaces in the topo.
@@ -1502,6 +1515,9 @@ func (UnimplementedVtctldServer) GetCellInfoNames(context.Context, *vtctldata.Ge
 }
 func (UnimplementedVtctldServer) GetCellsAliases(context.Context, *vtctldata.GetCellsAliasesRequest) (*vtctldata.GetCellsAliasesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetCellsAliases not implemented")
+}
+func (UnimplementedVtctldServer) GetFullStatus(context.Context, *vtctldata.GetFullStatusRequest) (*vtctldata.GetFullStatusResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetFullStatus not implemented")
 }
 func (UnimplementedVtctldServer) GetKeyspace(context.Context, *vtctldata.GetKeyspaceRequest) (*vtctldata.GetKeyspaceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetKeyspace not implemented")
@@ -2127,6 +2143,24 @@ func _Vtctld_GetCellsAliases_Handler(srv interface{}, ctx context.Context, dec f
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VtctldServer).GetCellsAliases(ctx, req.(*vtctldata.GetCellsAliasesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_GetFullStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.GetFullStatusRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).GetFullStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/GetFullStatus",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).GetFullStatus(ctx, req.(*vtctldata.GetFullStatusRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -3186,6 +3220,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetCellsAliases",
 			Handler:    _Vtctld_GetCellsAliases_Handler,
+		},
+		{
+			MethodName: "GetFullStatus",
+			Handler:    _Vtctld_GetFullStatus_Handler,
 		},
 		{
 			MethodName: "GetKeyspace",

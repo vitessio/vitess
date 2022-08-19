@@ -33,23 +33,22 @@ time (using helpers/tee.go). This is to facilitate migrations between
 topo servers.
 
 There are two test sub-packages associated with this code:
-- test/ contains a test suite that is run against all of our implementations.
-  It just performs a bunch of common topo server activities (create, list,
-  delete various objects, ...). If a topo implementation passes all these
-  tests, it most likely will work as expected in a real deployment.
-- topotests/ contains tests that use a memorytopo to test the code in this
-  package.
+  - test/ contains a test suite that is run against all of our implementations.
+    It just performs a bunch of common topo server activities (create, list,
+    delete various objects, ...). If a topo implementation passes all these
+    tests, it most likely will work as expected in a real deployment.
+  - topotests/ contains tests that use a memorytopo to test the code in this
+    package.
 */
 package topo
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"sync"
 
 	"vitess.io/vitess/go/vt/proto/topodata"
-
-	"context"
 
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -113,14 +112,14 @@ type Factory interface {
 }
 
 // Server is the main topo.Server object. We support two ways of creating one:
-// 1. From an implementation, server address, and root path.
-//    This uses a plugin mechanism, and we have implementations for
-//    etcd, zookeeper and consul.
-// 2. Specific implementations may have higher level creation methods
-//    (in which case they may provide a more complex Factory).
-//    We support memorytopo (for tests and processes that only need an
-//    in-memory server), and tee (a helper implementation to transition
-//    between one server implementation and another).
+//  1. From an implementation, server address, and root path.
+//     This uses a plugin mechanism, and we have implementations for
+//     etcd, zookeeper and consul.
+//  2. Specific implementations may have higher level creation methods
+//     (in which case they may provide a more complex Factory).
+//     We support memorytopo (for tests and processes that only need an
+//     in-memory server), and tee (a helper implementation to transition
+//     between one server implementation and another).
 type Server struct {
 	// globalCell is the main connection to the global topo service.
 	// It is created once at construction time.
@@ -245,6 +244,9 @@ func Open() *Server {
 func (ts *Server) ConnForCell(ctx context.Context, cell string) (Conn, error) {
 	// Global cell is the easy case.
 	if cell == GlobalCell {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
 		return ts.globalCell, nil
 	}
 

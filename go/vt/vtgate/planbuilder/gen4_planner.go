@@ -446,26 +446,23 @@ func planOrderByOnUnion(ctx *plancontext.PlanningContext, plan logicalPlan, unio
 }
 
 func pushCommentDirectivesOnPlan(plan logicalPlan, stmt sqlparser.Statement) (logicalPlan, error) {
-	var directives sqlparser.CommentDirectives
+	var directives *sqlparser.CommentDirectives
 	cmt, ok := stmt.(sqlparser.Commented)
 	if ok {
 		directives = cmt.GetParsedComments().Directives()
-	} else {
-		directives = make(sqlparser.CommentDirectives)
-	}
+		scatterAsWarns := directives.IsSet(sqlparser.DirectiveScatterErrorsAsWarnings)
+		timeout := queryTimeout(directives)
 
-	scatterAsWarns := directives.IsSet(sqlparser.DirectiveScatterErrorsAsWarnings)
-	queryTimeout := queryTimeout(directives)
-
-	if scatterAsWarns || queryTimeout > 0 {
-		_, _ = visit(plan, func(logicalPlan logicalPlan) (bool, logicalPlan, error) {
-			switch plan := logicalPlan.(type) {
-			case *routeGen4:
-				plan.eroute.ScatterErrorsAsWarnings = scatterAsWarns
-				plan.eroute.QueryTimeout = queryTimeout
-			}
-			return true, logicalPlan, nil
-		})
+		if scatterAsWarns || timeout > 0 {
+			_, _ = visit(plan, func(logicalPlan logicalPlan) (bool, logicalPlan, error) {
+				switch plan := logicalPlan.(type) {
+				case *routeGen4:
+					plan.eroute.ScatterErrorsAsWarnings = scatterAsWarns
+					plan.eroute.QueryTimeout = timeout
+				}
+				return true, logicalPlan, nil
+			})
+		}
 	}
 
 	return plan, nil

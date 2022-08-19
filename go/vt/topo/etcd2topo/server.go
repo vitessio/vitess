@@ -74,12 +74,15 @@ type Server struct {
 
 	// root is the root path for this client.
 	root string
+
+	running chan struct{}
 }
 
 // Close implements topo.Server.Close.
 // It will nil out the global and cells fields, so any attempt to
 // re-use this server will panic.
 func (s *Server) Close() {
+	close(s.running)
 	s.cli.Close()
 	s.cli = nil
 }
@@ -140,8 +143,9 @@ func NewServerWithOpts(serverAddr, root, certPath, keyPath, caPath string) (*Ser
 	}
 
 	return &Server{
-		cli:  cli,
-		root: root,
+		cli:     cli,
+		root:    root,
+		running: make(chan struct{}),
 	}, nil
 }
 

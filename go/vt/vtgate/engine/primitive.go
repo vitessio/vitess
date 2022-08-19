@@ -170,6 +170,9 @@ type (
 		// RemoveAdvisoryLock removes advisory lock from the session
 		RemoveAdvisoryLock(name string)
 
+		VtExplainLogging()
+		GetVTExplainLogs() []ExecuteEntry
+
 		SetCommitOrder(co vtgatepb.CommitOrder)
 	}
 

@@ -21,12 +21,11 @@ deal with topology common tasks, like fake tablets and action loops.
 package testlib
 
 import (
+	"context"
 	"net"
 	"net/http"
 	"testing"
 	"time"
-
-	"context"
 
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
@@ -39,7 +38,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vttablet/grpctmserver"
-	"vitess.io/vitess/go/vt/vttablet/tabletconn"
+	"vitess.io/vitess/go/vt/vttablet/tabletconntest"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
@@ -173,6 +172,7 @@ func NewFakeTablet(t *testing.T, wr *wrangler.Wrangler, cell string, uid uint32,
 // StartActionLoop will start the action loop for a fake tablet,
 // using ft.FakeMysqlDaemon as the backing mysqld.
 func (ft *FakeTablet) StartActionLoop(t *testing.T, wr *wrangler.Wrangler) {
+	t.Helper()
 	if ft.TM != nil {
 		t.Fatalf("TM for %v is already running", ft.Tablet.Alias)
 	}
@@ -213,7 +213,7 @@ func (ft *FakeTablet) StartActionLoop(t *testing.T, wr *wrangler.Wrangler) {
 		VREngine:            vreplication.NewTestEngine(wr.TopoServer(), ft.Tablet.Alias.Cell, ft.FakeMysqlDaemon, binlogplayer.NewFakeDBClient, binlogplayer.NewFakeDBClient, topoproto.TabletDbName(ft.Tablet), nil),
 	}
 	if err := ft.TM.Start(ft.Tablet, 0); err != nil {
-		t.Fatal(err)
+		t.Fatalf("Error in tablet - %v, err - %v", topoproto.TabletAliasString(ft.Tablet.Alias), err.Error())
 	}
 	ft.Tablet = ft.TM.Tablet()
 
@@ -268,5 +268,5 @@ func (ft *FakeTablet) Target() *querypb.Target {
 func init() {
 	// enforce we will use the right protocol (gRPC) in all unit tests
 	*tmclient.TabletManagerProtocol = "grpc"
-	*tabletconn.TabletProtocol = "grpc"
+	tabletconntest.SetProtocol("go.vt.wrangler.testlib", "grpc")
 }
