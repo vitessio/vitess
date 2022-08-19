@@ -64,6 +64,7 @@ func main() {
 
 	fs := pflag.NewFlagSet("zkctl", pflag.ExitOnError)
 	log.RegisterFlags(fs)
+	logutil.RegisterFlags(fs)
 	_flag.Parse(fs)
 	args := _flag.Args()
 
