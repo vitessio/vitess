@@ -229,7 +229,6 @@ func (bt *BufferingTest) createCluster() (*cluster.LocalProcessCluster, int) {
 	}
 	clusterInstance.VtTabletExtraArgs = []string{
 		"--health_check_interval", "1s",
-		"--queryserver-config-transaction-killer-interval", "2",
 		"--queryserver-config-transaction-timeout", "20",
 	}
 	if err := clusterInstance.StartUnshardedKeyspace(*keyspace, 1, false); err != nil {

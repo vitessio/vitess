@@ -105,7 +105,6 @@ func TestMain(m *testing.M) {
 			VSchema:   VSchema,
 		}
 		clusterInstance.VtTabletExtraArgs = []string{
-			"--queryserver-config-transaction-killer-interval", "0.3",
 			"--queryserver-config-transaction-timeout", "3",
 		}
 		if err := clusterInstance.StartKeyspace(*Keyspace, []string{"-80", "80-"}, 1, false); err != nil {

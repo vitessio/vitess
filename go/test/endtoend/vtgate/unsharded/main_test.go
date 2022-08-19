@@ -167,7 +167,6 @@ func TestMain(m *testing.M) {
 			VSchema:   VSchema,
 		}
 		clusterInstance.VtTabletExtraArgs = []string{
-			"--queryserver-config-transaction-killer-interval", "0.3",
 			"--queryserver-config-transaction-timeout", "3",
 			"--queryserver-config-max-result-size", "30",
 		}
