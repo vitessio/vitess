@@ -77,6 +77,21 @@ func Parsed() bool {
 	return goflag.Parsed() || flag.Parsed()
 }
 
+// Lookup returns a pflag.Flag with the given name, from either the pflag or
+// standard library `flag` CommandLine. If found in the latter, it is converted
+// to a pflag.Flag first. If found in neither, this function returns nil.
+func Lookup(name string) *flag.Flag {
+	if f := flag.Lookup(name); f != nil {
+		return f
+	}
+
+	if f := goflag.Lookup(name); f != nil {
+		return flag.PFlagFromGoFlag(f)
+	}
+
+	return nil
+}
+
 // Args returns the positional arguments with the first double-dash ("--")
 // removed. If no double-dash was specified on the command-line, this is
 // equivalent to flag.Args() from the standard library flag package.

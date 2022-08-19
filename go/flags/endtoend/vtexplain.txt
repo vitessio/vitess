@@ -104,8 +104,8 @@ Usage of vtexplain:
       --hot_row_protection_concurrent_transactions int                   Number of concurrent transactions let through to the txpool/MySQL for the same hot row. Should be > 1 to have enough 'ready' transactions in MySQL and benefit from a pipelining effect. (default 5)
       --hot_row_protection_max_global_queue_size int                     Global queue limit across all row (ranges). Useful to prevent that the queue can grow unbounded. (default 1000)
       --hot_row_protection_max_queue_size int                            Maximum number of BeginExecute RPCs which will be queued for the same row (range). (default 20)
-      --keep_logs duration                                               keep logs for this long (using ctime) (zero to keep forever) (default 0s)
-      --keep_logs_by_mtime duration                                      keep logs for this long (using mtime) (zero to keep forever) (default 0s)
+      --keep_logs duration                                               keep logs for this long (using ctime) (zero to keep forever)
+      --keep_logs_by_mtime duration                                      keep logs for this long (using mtime) (zero to keep forever)
       --ks-shard-map string                                              JSON map of keyspace name -> shard name -> ShardReference object. The inner map is the same as the output of FindAllShardsInKeyspace
       --ks-shard-map-file string                                         File containing json blob of keyspace name -> shard name -> ShardReference object
       --lameduck-period duration                                         keep running at least this long after SIGTERM before stopping (default 50ms)

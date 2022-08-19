@@ -253,8 +253,8 @@ Usage of vttablet:
       --init_tags StringMap                                              (init parameter) comma separated list of key:value pairs used to tag the tablet
       --init_timeout duration                                            (init parameter) timeout to use for the init phase. (default 1m0s)
       --jaeger-agent-host string                                         host and port to send spans to. if empty, no tracing will be done
-      --keep_logs duration                                               keep logs for this long (using ctime) (zero to keep forever) (default 0s)
-      --keep_logs_by_mtime duration                                      keep logs for this long (using mtime) (zero to keep forever) (default 0s)
+      --keep_logs duration                                               keep logs for this long (using ctime) (zero to keep forever)
+      --keep_logs_by_mtime duration                                      keep logs for this long (using mtime) (zero to keep forever)
       --lameduck-period duration                                         keep running at least this long after SIGTERM before stopping (default 50ms)
       --lock_tables_timeout duration                                     How long to keep the table locked before timing out (default 1m0s)
       --log_backtrace_at traceLocation                                   when logging hits line file:N, emit a stack trace (default :0)
