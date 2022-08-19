@@ -323,10 +323,11 @@ func ParseFlagsWithArgs(cmd string) []string {
 	return args
 }
 
+// Flag installations for packages that servenv imports. We need to register
+// here rather than in those packages (which is what we would normally do)
+// because that would create a dependency cycle.
 func init() {
-	// These are the binaries that call trace.StartTracing. We need to register
-	// here because package trace cannot import package servenv without creating
-	// a dependency cycle.
+	// These are the binaries that call trace.StartTracing.
 	for _, cmd := range []string{
 		"vtadmin",
 		"vtclient",
@@ -340,4 +341,7 @@ func init() {
 	} {
 		OnParseFor(cmd, trace.RegisterFlags)
 	}
+
+	// Log flags are installed for all binaries.
+	OnParse(log.RegisterFlags)
 }

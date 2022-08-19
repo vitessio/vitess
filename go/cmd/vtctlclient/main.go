@@ -72,7 +72,9 @@ func checkDeprecations(args []string) {
 func main() {
 	defer exit.Recover()
 
-	_flag.Parse(pflag.NewFlagSet("vtctlclient", pflag.ExitOnError))
+	fs := pflag.NewFlagSet("vtctlclient", pflag.ExitOnError)
+	log.RegisterFlags(fs)
+	_flag.Parse(fs)
 
 	closer := trace.StartTracing("vtctlclient")
 	defer trace.LogErrorsWhenClosing(closer)
