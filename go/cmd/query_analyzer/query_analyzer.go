@@ -28,6 +28,7 @@ import (
 
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	// Include deprecation warnings for soon-to-be-unsupported flag invocations.
@@ -63,6 +64,7 @@ func main() {
 	defer exit.Recover()
 	fs := pflag.NewFlagSet("query_analyzer", pflag.ExitOnError)
 	log.RegisterFlags(fs)
+	logutil.RegisterFlags(fs)
 	_flag.Parse(fs)
 	for _, filename := range _flag.Args() {
 		fmt.Printf("processing: %s\n", filename)

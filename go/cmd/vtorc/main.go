@@ -26,6 +26,7 @@ import (
 	"github.com/spf13/pflag"
 
 	vtlog "vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/orchestrator/app"
 	"vitess.io/vitess/go/vt/orchestrator/config"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
@@ -103,6 +104,7 @@ func main() {
 	// directly.
 	fs := pflag.NewFlagSet("vtorc", pflag.ExitOnError)
 	vtlog.RegisterFlags(fs)
+	logutil.RegisterFlags(fs)
 
 	args := append([]string{}, os.Args...)
 	os.Args = os.Args[0:1]

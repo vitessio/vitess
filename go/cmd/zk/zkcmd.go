@@ -143,6 +143,7 @@ func main() {
 
 	fs := pflag.NewFlagSet("zkcmd", pflag.ExitOnError)
 	log.RegisterFlags(fs)
+	logutil.RegisterFlags(fs)
 	_flag.SetUsage(flag.CommandLine, _flag.UsageOptions{ // TODO: hmmm
 		Epilogue: func(w io.Writer) { fmt.Fprint(w, doc) },
 	})

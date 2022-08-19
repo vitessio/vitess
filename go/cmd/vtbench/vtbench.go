@@ -108,6 +108,7 @@ func main() {
 	flag.Lookup("logtostderr").Value.Set("true")
 	fs := pflag.NewFlagSet("vtbench", pflag.ExitOnError)
 	log.RegisterFlags(fs)
+	logutil.RegisterFlags(fs)
 	_flag.Parse(fs)
 
 	clientProto := vtbench.MySQL

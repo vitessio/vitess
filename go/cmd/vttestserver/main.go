@@ -33,6 +33,7 @@ import (
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/vttest"
 
 	vttestpb "vitess.io/vitess/go/vt/proto/vttest"
@@ -212,9 +213,12 @@ func parseFlags() (env vttest.Environment, err error) {
 	logFlagsOnce.Do(func() {
 		fs := pflag.NewFlagSet("vtgateclienttest", pflag.ExitOnError)
 		log.RegisterFlags(fs)
+		logutil.RegisterFlags(fs)
 
-		f := fs.Lookup("log_rotate_max_size")
-		flag.Var(f.Value, f.Name, f.Usage)
+		// Move all pflag flags back to the goflag CommandLine.
+		fs.VisitAll(func(f *pflag.Flag) {
+			flag.Var(f.Value, f.Name, f.Usage)
+		})
 	})
 
 	flag.Parse()

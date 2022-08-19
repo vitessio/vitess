@@ -57,6 +57,7 @@ func main() {
 
 	fs := pflag.NewFlagSet("topo2topo", pflag.ExitOnError)
 	log.RegisterFlags(fs)
+	logutil.RegisterFlags(fs)
 	_flag.Parse(fs)
 	args := _flag.Args()
 	if len(args) != 0 {
