@@ -75,12 +75,9 @@ type (
 func NewTxPool(env tabletenv.Env, limiter txlimiter.TxLimiter) *TxPool {
 	config := env.Config()
 	axp := &TxPool{
-		env: env,
-		scp: NewStatefulConnPool(env),
-		ticks: timer.NewTimer(smallerTimeout(
-			config.TxTimeoutForWorkload(querypb.ExecuteOptions_OLAP),
-			config.TxTimeoutForWorkload(querypb.ExecuteOptions_OLTP),
-		) / 10),
+		env:     env,
+		scp:     NewStatefulConnPool(env),
+		ticks:   timer.NewTimer(txKillerTimeoutInterval(config)),
 		limiter: limiter,
 		txStats: env.Exporter().NewTimings("Transactions", "Transaction stats", "operation"),
 	}
@@ -99,7 +96,7 @@ func NewTxPool(env tabletenv.Env, limiter txlimiter.TxLimiter) *TxPool {
 // that will kill long-running transactions.
 func (tp *TxPool) Open(appParams, dbaParams, appDebugParams dbconfigs.Connector) {
 	tp.scp.Open(appParams, dbaParams, appDebugParams)
-	tp.ticks.SetInterval(tp.txKillerTimeoutInterval())
+	tp.ticks.SetInterval(txKillerTimeoutInterval(tp.env.Config()))
 	if tp.ticks.Interval() > 0 {
 		tp.ticks.Start(func() { tp.transactionKiller() })
 	}
@@ -290,8 +287,7 @@ func (tp *TxPool) begin(ctx context.Context, options *querypb.ExecuteOptions, re
 }
 
 func (tp *TxPool) createConn(ctx context.Context, options *querypb.ExecuteOptions) (*StatefulConnection, error) {
-	timeout := tp.env.Config().TxTimeoutForWorkload(options.GetWorkload())
-	conn, err := tp.scp.NewConn(ctx, options, timeout)
+	conn, err := tp.scp.NewConn(ctx, options)
 	if err != nil {
 		errCode := vterrors.Code(err)
 		switch err {
@@ -377,9 +373,9 @@ func (tp *TxPool) txComplete(conn *StatefulConnection, reason tx.ReleaseReason) 
 	conn.CleanTxState()
 }
 
-func (tp *TxPool) txKillerTimeoutInterval() time.Duration {
+func txKillerTimeoutInterval(config *tabletenv.TabletConfig) time.Duration {
 	return smallerTimeout(
-		tp.env.Config().TxTimeoutForWorkload(querypb.ExecuteOptions_OLAP),
-		tp.env.Config().TxTimeoutForWorkload(querypb.ExecuteOptions_OLTP),
+		config.TxTimeoutForWorkload(querypb.ExecuteOptions_OLAP),
+		config.TxTimeoutForWorkload(querypb.ExecuteOptions_OLTP),
 	) / 10
 }

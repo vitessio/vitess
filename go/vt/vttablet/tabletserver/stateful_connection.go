@@ -51,6 +51,7 @@ type StatefulConnection struct {
 	tainted        bool
 	enforceTimeout bool
 	timeout        time.Duration
+	timeUsed       time.Time
 }
 
 // Properties contains meta information about the connection
@@ -76,6 +77,18 @@ func (sc *StatefulConnection) IsClosed() bool {
 // IsInTransaction returns true when the connection has tx state
 func (sc *StatefulConnection) IsInTransaction() bool {
 	return sc.txProps != nil
+}
+
+func (sc *StatefulConnection) ElapsedTimeout() bool {
+	if !sc.enforceTimeout {
+		return false
+	}
+	timeout := sc.Timeout()
+	if timeout <= 0 {
+		return false
+	}
+	now := time.Now()
+	return sc.timeUsed.Before(now.Add(-sc.timeout))
 }
 
 // Exec executes the statement in the dedicated connection
