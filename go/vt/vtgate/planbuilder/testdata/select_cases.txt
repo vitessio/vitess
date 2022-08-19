@@ -5341,3 +5341,159 @@ Gen4 plan same as above
     "user.user"
   ]
 }
+
+# SQL_CALC_FOUND_ROWS with vindex lookup
+"select SQL_CALC_FOUND_ROWS id, name from user where name = 'aa' order by id limit 2"
+{
+  "QueryType": "SELECT",
+  "Original": "select SQL_CALC_FOUND_ROWS id, name from user where name = 'aa' order by id limit 2",
+  "Instructions": {
+    "OperatorType": "SQL_CALC_FOUND_ROWS",
+    "Inputs": [
+      {
+        "OperatorType": "Limit",
+        "Count": "INT64(2)",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Equal",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id, `name`, weight_string(id) from `user` where 1 != 1",
+            "OrderBy": "(0|2) ASC",
+            "Query": "select id, `name`, weight_string(id) from `user` where `name` = 'aa' order by id asc limit :__upper_limit",
+            "ResultColumns": 2,
+            "Table": "`user`",
+            "Values": [
+              "VARCHAR(\"aa\")"
+            ],
+            "Vindex": "name_user_map"
+          }
+        ]
+      },
+      {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum_count(0) AS count",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Equal",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select count(*) from `user` where 1 != 1",
+            "Query": "select count(*) from `user` where `name` = 'aa'",
+            "Table": "`user`",
+            "Values": [
+              "VARCHAR(\"aa\")"
+            ],
+            "Vindex": "name_user_map"
+          }
+        ]
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select SQL_CALC_FOUND_ROWS id, name from user where name = 'aa' order by id limit 2",
+  "Instructions": {
+    "OperatorType": "SQL_CALC_FOUND_ROWS",
+    "Inputs": [
+      {
+        "OperatorType": "Limit",
+        "Count": "INT64(2)",
+        "Inputs": [
+          {
+            "OperatorType": "VindexLookup",
+            "Variant": "Equal",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "Values": [
+              "VARCHAR(\"aa\")"
+            ],
+            "Vindex": "name_user_map",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select col1, col2 from `user` where 1 != 1",
+                "Query": "select col1, col2 from `user` where col1 in ::col1",
+                "Table": "`user`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "ByDestination",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select id, `name`, weight_string(id) from `user` where 1 != 1",
+                "OrderBy": "(0|2) ASC",
+                "Query": "select id, `name`, weight_string(id) from `user` where `name` = 'aa' order by id asc limit :__upper_limit",
+                "ResultColumns": 2,
+                "Table": "`user`"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum_count_star(0) AS count(*)",
+        "Inputs": [
+          {
+            "OperatorType": "VindexLookup",
+            "Variant": "Equal",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "Values": [
+              "VARCHAR(\"aa\")"
+            ],
+            "Vindex": "name_user_map",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select col1, col2 from `user` where 1 != 1",
+                "Query": "select col1, col2 from `user` where col1 in ::col1",
+                "Table": "`user`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "ByDestination",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select count(*) from `user` where 1 != 1",
+                "Query": "select count(*) from `user` where `name` = 'aa'",
+                "Table": "`user`"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "TablesUsed": [
+    "user.user"
+  ]
+}

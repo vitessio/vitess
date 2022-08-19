@@ -134,11 +134,6 @@ func gen4planSQLCalcFoundRows(vschema plancontext.VSchema, sel *sqlparser.Select
 	if err != nil {
 		return nil, err
 	}
-	ctx := plancontext.NewPlanningContext(reservedVars, semTable, vschema, vschema.Planner())
-	err = plan.WireupGen4(ctx)
-	if err != nil {
-		return nil, err
-	}
 	return newPlanResult(plan.Primitive(), tablesFromSemantics(semTable)...), nil
 }
 
