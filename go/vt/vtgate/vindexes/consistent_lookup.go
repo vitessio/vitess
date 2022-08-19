@@ -57,9 +57,10 @@ type ConsistentLookup struct {
 
 // NewConsistentLookup creates a ConsistentLookup vindex.
 // The supplied map has the following required fields:
-//   table: name of the backing table. It can be qualified by the keyspace.
-//   from: list of columns in the table that have the 'from' values of the lookup vindex.
-//   to: The 'to' column name of the table.
+//
+//	table: name of the backing table. It can be qualified by the keyspace.
+//	from: list of columns in the table that have the 'from' values of the lookup vindex.
+//	to: The 'to' column name of the table.
 func NewConsistentLookup(name string, m map[string]string) (Vindex, error) {
 	clc, err := newCLCommon(name, m)
 	if err != nil {
@@ -134,9 +135,10 @@ type ConsistentLookupUnique struct {
 
 // NewConsistentLookupUnique creates a ConsistentLookupUnique vindex.
 // The supplied map has the following required fields:
-//   table: name of the backing table. It can be qualified by the keyspace.
-//   from: list of columns in the table that have the 'from' values of the lookup vindex.
-//   to: The 'to' column name of the table.
+//
+//	table: name of the backing table. It can be qualified by the keyspace.
+//	from: list of columns in the table that have the 'from' values of the lookup vindex.
+//	to: The 'to' column name of the table.
 func NewConsistentLookupUnique(name string, m map[string]string) (Vindex, error) {
 	clc, err := newCLCommon(name, m)
 	if err != nil {

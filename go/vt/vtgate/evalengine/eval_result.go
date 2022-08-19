@@ -836,6 +836,20 @@ func (er *EvalResult) makeNumeric() {
 	er.setFloat(parseStringToFloat(er.string()))
 }
 
+func (er *EvalResult) upcastNumeric() {
+	if !er.isNumeric() {
+		panic("upcastNumeric on non-numeric")
+	}
+	switch tt := er.typeof(); {
+	case sqltypes.IsSigned(tt):
+		er.type_ = int16(sqltypes.Int64)
+	case sqltypes.IsUnsigned(tt):
+		er.type_ = int16(sqltypes.Uint64)
+	case sqltypes.IsFloat(tt):
+		er.type_ = int16(sqltypes.Float64)
+	}
+}
+
 func (er *EvalResult) makeUnsignedIntegral() {
 	er.makeNumeric()
 	switch tt := er.typeof(); {

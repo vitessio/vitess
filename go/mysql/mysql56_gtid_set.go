@@ -587,14 +587,19 @@ func (set Mysql56GTIDSet) Difference(other Mysql56GTIDSet) Mysql56GTIDSet {
 // This is the reverse of the SIDBlock method.
 //
 // Expected format:
-//   # bytes field
-//   8       nSIDs
+//
+//	# bytes field
+//	8       nSIDs
+//
 // (nSIDs times)
-//   16      SID
-//   8       nIntervals
+//
+//	16      SID
+//	8       nIntervals
+//
 // (nIntervals times)
-//   8       start
-//   8       end
+//
+//	8       start
+//	8       end
 func NewMysql56GTIDSetFromSIDBlock(data []byte) (Mysql56GTIDSet, error) {
 	buf := bytes.NewReader(data)
 	var set Mysql56GTIDSet = make(map[SID][]interval)

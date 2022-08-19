@@ -230,7 +230,13 @@ func (s *Schema) normalize() error {
 		// We have leftover views. This can happen if the schema definition is invalid:
 		// - a view depends on a nonexistent table
 		// - two views have a circular dependency
-		return ErrViewDependencyUnresolved
+		for _, v := range s.views {
+			if _, ok := dependencyLevels[v.Name()]; !ok {
+				// We _know_ that in this iteration, at least one view is found unassigned a dependency level.
+				// We return the first one.
+				return &ViewDependencyUnresolvedError{View: v.ViewName.Name.String()}
+			}
+		}
 	}
 	return nil
 }
@@ -463,6 +469,19 @@ func (s *Schema) ToSQL() string {
 	return buf.String()
 }
 
+// Clone returns a deep copy of the schema. This is used when applying changes for example. It
+// will first create copies of all entities which depend on the sqlparser deep copy logic and
+// then creates a new schema from those copies.
+func (s *Schema) Clone() *Schema {
+	entities := make([]Entity, 0, len(s.Entities()))
+	for _, e := range s.Entities() {
+		entities = append(entities, e.Clone())
+	}
+	// Can't error since we're valid ourselves.
+	schema, _ := NewSchemaFromEntities(entities)
+	return schema
+}
+
 // apply attempts to apply given list of diffs to this object.
 // These diffs are CREATE/DROP/ALTER TABLE/VIEW.
 func (s *Schema) apply(diffs []EntityDiff) error {
@@ -585,14 +604,7 @@ func (s *Schema) apply(diffs []EntityDiff) error {
 // These diffs are CREATE/DROP/ALTER TABLE/VIEW.
 // The operation does not modify this object. Instead, if successful, a new (modified) Schema is returned.
 func (s *Schema) Apply(diffs []EntityDiff) (*Schema, error) {
-	// we export to queries, then import back.
-	// The reason we don't just clone this object's fields, or even export/import to Statements,
-	// is that we want this schema to be immutable an unaffected by the apply() on the duplicate.
-	// statements/slices/maps will have shared pointers and changes will propagate back to this schema.
-	dup, err := NewSchemaFromQueries(s.ToQueries())
-	if err != nil {
-		return nil, err
-	}
+	dup := s.Clone()
 	for k, v := range s.named {
 		dup.named[k] = v
 	}

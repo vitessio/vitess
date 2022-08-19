@@ -19,7 +19,7 @@ package command
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"strings"
 	"time"
 
@@ -112,7 +112,7 @@ func commandApplySchema(cmd *cobra.Command, args []string) error {
 			return errors.New("Exactly one of --sql and --sql-file must be specified, not both.") // nolint
 		}
 
-		data, err := ioutil.ReadFile(applySchemaOptions.SQLFile)
+		data, err := os.ReadFile(applySchemaOptions.SQLFile)
 		if err != nil {
 			return err
 		}

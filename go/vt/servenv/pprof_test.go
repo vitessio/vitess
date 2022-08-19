@@ -62,7 +62,7 @@ func TestPProfInitWithWaitSig(t *testing.T) {
 	signal.Reset(syscall.SIGUSR1)
 	flag.Set("pprof", "cpu,waitSig")
 
-	pprof_init()
+	pprofInit()
 	time.Sleep(1 * time.Second)
 	assert.Equal(t, uint32(0), profileStarted)
 
@@ -88,7 +88,7 @@ func TestPProfInitWithoutWaitSig(t *testing.T) {
 	signal.Reset(syscall.SIGUSR1)
 	flag.Set("pprof", "cpu")
 
-	pprof_init()
+	pprofInit()
 	time.Sleep(1 * time.Second)
 	assert.Equal(t, uint32(1), profileStarted)
 

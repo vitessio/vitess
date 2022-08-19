@@ -26,7 +26,6 @@ import (
 	"os"
 	"os/exec"
 	"path"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
@@ -80,7 +79,11 @@ const (
 type xtraBackupManifest struct {
 	// BackupManifest is an anonymous embedding of the base manifest struct.
 	BackupManifest
-
+	// CompressionEngine stores which compression engine was originally provided
+	// to compress the files. Please note that if user has provided externalCompressorCmd
+	// then it will contain value 'external'. This field is used during restore routine to
+	// get a hint about what kind of compression was used.
+	CompressionEngine string `json:",omitempty"`
 	// Name of the backup file
 	FileName string
 	// Params are the parameters that backup was run with
@@ -109,7 +112,7 @@ func (be *XtrabackupEngine) backupFileName() string {
 		if *ExternalDecompressorCmd != "" {
 			fileName += *ExternalCompressorExt
 		} else {
-			if ext, err := getExtensionFromEngine(*BuiltinCompressor); err != nil {
+			if ext, err := getExtensionFromEngine(*CompressionEngineName); err != nil {
 				// there is a check for this, but just in case that fails, we set a extension to the file
 				fileName += ".unknown"
 			} else {
@@ -200,6 +203,8 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, params BackupPara
 		Params:          *xtrabackupBackupFlags,
 		NumStripes:      int32(numStripes),
 		StripeBlockSize: int32(*xtrabackupStripeBlockSize),
+		// builtin specific field
+		CompressionEngine: *CompressionEngineName,
 	}
 
 	data, err := json.MarshalIndent(bm, "", "  ")
@@ -299,7 +304,7 @@ func (be *XtrabackupEngine) backupFiles(ctx context.Context, params BackupParams
 			if *ExternalCompressorCmd != "" {
 				compressor, err = newExternalCompressor(ctx, *ExternalCompressorCmd, writer, params.Logger)
 			} else {
-				compressor, err = newBuiltinCompressor(*BuiltinCompressor, writer, params.Logger)
+				compressor, err = newBuiltinCompressor(*CompressionEngineName, writer, params.Logger)
 			}
 			if err != nil {
 				return replicationPosition, vterrors.Wrap(err, "can't create compressor")
@@ -533,8 +538,6 @@ func (be *XtrabackupEngine) extractFiles(ctx context.Context, logger logutil.Log
 	}
 
 	logger.Infof("backup file name: %s", baseFileName)
-	extension := filepath.Ext(baseFileName)
-
 	// Open the source files for reading.
 	srcFiles, err := readStripeFiles(ctx, bh, baseFileName, int(bm.NumStripes), logger)
 	if err != nil {
@@ -554,16 +557,28 @@ func (be *XtrabackupEngine) extractFiles(ctx context.Context, logger logutil.Log
 		// Create the decompressor if needed.
 		if compressed {
 			var decompressor io.ReadCloser
-
+			var deCompressionEngine = bm.CompressionEngine
+			if deCompressionEngine == "" {
+				// For backward compatibility. Incase if Manifest is from N-1 binary
+				// then we assign the default value of compressionEngine.
+				deCompressionEngine = PgzipCompressor
+			}
 			if *ExternalDecompressorCmd != "" {
-				decompressor, err = newExternalDecompressor(ctx, *ExternalDecompressorCmd, reader, logger)
+				if deCompressionEngine == ExternalCompressor {
+					deCompressionEngine = *ExternalDecompressorCmd
+					decompressor, err = newExternalDecompressor(ctx, deCompressionEngine, reader, logger)
+				} else {
+					decompressor, err = newBuiltinDecompressor(deCompressionEngine, reader, logger)
+				}
 			} else {
-				decompressor, err = newBuiltinDecompressorFromExtension(extension, *BuiltinDecompressor, reader, logger)
+				if deCompressionEngine == ExternalCompressor {
+					return fmt.Errorf("%w %q", errUnsupportedCompressionEngine, ExternalCompressor)
+				}
+				decompressor, err = newBuiltinDecompressor(deCompressionEngine, reader, logger)
 			}
 			if err != nil {
 				return vterrors.Wrap(err, "can't create decompressor")
 			}
-
 			srcDecompressors = append(srcDecompressors, decompressor)
 			reader = decompressor
 		}

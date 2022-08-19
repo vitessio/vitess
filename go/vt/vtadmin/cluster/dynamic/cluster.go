@@ -20,16 +20,15 @@ import (
 //
 // Therefore, callers should handle the return values as follows:
 //
-//		c, id, err := dynamic.ClusterFromString(ctx, s)
-//		if id == "" {
-//			// handle err, do not use `c`.
-//		}
-//		if err != nil {
-//			// log error. if desired, lookup the existing cluster with ID: `id`
-//		}
-//		// Use `c` (or existing cluster with ID == `id`) based on the dynamic cluster
-//		api.WithCluster(c, id).DoAThing()
-//
+//	c, id, err := dynamic.ClusterFromString(ctx, s)
+//	if id == "" {
+//		// handle err, do not use `c`.
+//	}
+//	if err != nil {
+//		// log error. if desired, lookup the existing cluster with ID: `id`
+//	}
+//	// Use `c` (or existing cluster with ID == `id`) based on the dynamic cluster
+//	api.WithCluster(c, id).DoAThing()
 func ClusterFromString(ctx context.Context, s string) (c *cluster.Cluster, id string, err error) {
 	cfg, id, err := cluster.LoadConfig(base64.NewDecoder(base64.StdEncoding, strings.NewReader(s)), "json")
 	if err != nil {

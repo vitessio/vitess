@@ -3944,7 +3944,8 @@ func printQueryResult(writer io.Writer, qr *sqltypes.Result) {
 // mixed protobuf and non-protobuf).
 //
 // TODO(mberlin): Switch "EnumAsInts" to "false" once the frontend is
-//                updated and mixed types will use jsonpb as well.
+//
+//	updated and mixed types will use jsonpb as well.
 func MarshalJSON(obj any) (data []byte, err error) {
 	switch obj := obj.(type) {
 	case proto.Message:

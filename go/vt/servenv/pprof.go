@@ -299,38 +299,38 @@ func (prof *profile) init() (start func(), stop func()) {
 	}
 }
 
-func pprof_init() {
+func pprofInit() {
 	prof, err := parseProfileFlag(*pprofFlag)
 	if err != nil {
 		log.Fatal(err)
 	}
 	if prof != nil {
 		start, stop := prof.init()
-		start_signal := make(chan os.Signal, 1)
-		stop_signal := make(chan os.Signal, 1)
+		startSignal := make(chan os.Signal, 1)
+		stopSignal := make(chan os.Signal, 1)
 
 		if prof.waitSig {
-			signal.Notify(start_signal, syscall.SIGUSR1)
+			signal.Notify(startSignal, syscall.SIGUSR1)
 		} else {
 			start()
-			signal.Notify(stop_signal, syscall.SIGUSR1)
+			signal.Notify(stopSignal, syscall.SIGUSR1)
 		}
 
 		go func() {
 			for {
-				<-start_signal
+				<-startSignal
 				start()
 				signal.Reset(syscall.SIGUSR1)
-				signal.Notify(stop_signal, syscall.SIGUSR1)
+				signal.Notify(stopSignal, syscall.SIGUSR1)
 			}
 		}()
 
 		go func() {
 			for {
-				<-stop_signal
+				<-stopSignal
 				stop()
 				signal.Reset(syscall.SIGUSR1)
-				signal.Notify(start_signal, syscall.SIGUSR1)
+				signal.Notify(startSignal, syscall.SIGUSR1)
 			}
 		}()
 
@@ -339,5 +339,5 @@ func pprof_init() {
 }
 
 func init() {
-	OnInit(pprof_init)
+	OnInit(pprofInit)
 }

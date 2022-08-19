@@ -17,6 +17,7 @@ limitations under the License.
 package vreplication
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"io"
@@ -27,14 +28,7 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/vt/withddl"
-
-	"vitess.io/vitess/go/vt/log"
-
 	"github.com/stretchr/testify/require"
-
-	"context"
-
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/mysql"
@@ -42,12 +36,15 @@ import (
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/grpcclient"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/queryservice/fakes"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
+	"vitess.io/vitess/go/vt/vttablet/tabletconntest"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv"
+	"vitess.io/vitess/go/vt/withddl"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -79,7 +76,7 @@ func init() {
 			tablet:       tablet,
 		}, nil
 	})
-	flag.Set("tablet_protocol", "test")
+	tabletconntest.SetProtocol("go.vt.vttablet.tabletmanager.vreplication.framework_test", "test")
 
 	binlogplayer.RegisterClientFactory("test", func() binlogplayer.Client { return globalFBC })
 	flag.Set("binlog_player_protocol", "test")

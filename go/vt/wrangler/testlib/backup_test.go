@@ -46,8 +46,7 @@ import (
 )
 
 type compressionDetails struct {
-	BuiltinCompressor       string
-	BuiltinDecompressor     string
+	CompressionEngineName   string
 	ExternalCompressorCmd   string
 	ExternalCompressorExt   string
 	ExternalDecompressorCmd string
@@ -59,23 +58,18 @@ func TestBackupRestore(t *testing.T) {
 	require.NoError(t, err)
 }
 
-// TODO: @rameez. I was expecting this test to fail but it turns out
-// we infer decompressor through compression engine in builtinEngine.
-// It is only in xtrabackup where we infer decompressor through extension & BuiltinDecompressor param.
 func TestBackupRestoreWithPargzip(t *testing.T) {
 	defer setDefaultCompressionFlag()
 	cDetails := &compressionDetails{
-		BuiltinCompressor:   "pargzip",
-		BuiltinDecompressor: "lz4",
+		CompressionEngineName: "pargzip",
 	}
 
 	err := testBackupRestore(t, cDetails)
-	require.ErrorContains(t, err, "lz4: bad magic number")
+	require.NoError(t, err)
 }
 
 func setDefaultCompressionFlag() {
-	*mysqlctl.BuiltinCompressor = "pgzip"
-	*mysqlctl.BuiltinDecompressor = "auto"
+	*mysqlctl.CompressionEngineName = "pgzip"
 	*mysqlctl.ExternalCompressorCmd = ""
 	*mysqlctl.ExternalCompressorExt = ""
 	*mysqlctl.ExternalDecompressorCmd = ""
@@ -118,11 +112,8 @@ func testBackupRestore(t *testing.T, cDetails *compressionDetails) error {
 	filebackupstorage.FileBackupStorageRoot = fbsRoot
 	backupstorage.BackupStorageImplementation = "file"
 	if cDetails != nil {
-		if cDetails.BuiltinCompressor != "" {
-			*mysqlctl.BuiltinCompressor = cDetails.BuiltinCompressor
-		}
-		if cDetails.BuiltinDecompressor != "" {
-			*mysqlctl.BuiltinDecompressor = cDetails.BuiltinDecompressor
+		if cDetails.CompressionEngineName != "" {
+			*mysqlctl.CompressionEngineName = cDetails.CompressionEngineName
 		}
 		if cDetails.ExternalCompressorCmd != "" {
 			*mysqlctl.ExternalCompressorCmd = cDetails.ExternalCompressorCmd
@@ -897,7 +888,8 @@ func TestDisableActiveReparents(t *testing.T) {
 // needInnoDBRedoLogSubdir indicates whether we need to create a redo log subdirectory.
 // Starting with MySQL 8.0.30, the InnoDB redo logs are stored in a subdirectory of the
 // <innodb_log_group_home_dir> (<datadir>/. by default) called "#innodb_redo". See:
-//   https://dev.mysql.com/doc/refman/8.0/en/innodb-redo-log.html#innodb-modifying-redo-log-capacity
+//
+//	https://dev.mysql.com/doc/refman/8.0/en/innodb-redo-log.html#innodb-modifying-redo-log-capacity
 func needInnoDBRedoLogSubdir() (needIt bool, err error) {
 	mysqldVersionStr, err := mysqlctl.GetVersionString()
 	if err != nil {
