@@ -24,6 +24,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	_flag "vitess.io/vitess/go/internal/flag"
 )
 
 var (
@@ -103,7 +105,7 @@ func purgeLogsOnce(now time.Time, dir, program string, ctimeDelta time.Duration,
 // PurgeLogs removes any log files that were started more than
 // keepLogs ago and that aren't the current log.
 func PurgeLogs() {
-	f := flag.Lookup("log_dir")
+	f := _flag.Lookup("log_dir")
 	if f == nil {
 		panic("the logging module doesn't specify a log_dir flag")
 	}
