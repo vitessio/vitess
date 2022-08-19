@@ -69,7 +69,7 @@ func NewSchemaFromEntities(entities []Entity) (*Schema, error) {
 
 // NewSchemaFromStatements creates a valid and normalized schema based on list of valid statements
 func NewSchemaFromStatements(statements []sqlparser.Statement) (*Schema, error) {
-	entities := []Entity{}
+	entities := make([]Entity, 0, len(statements))
 	for _, s := range statements {
 		switch stmt := s.(type) {
 		case *sqlparser.CreateTable:
@@ -93,7 +93,7 @@ func NewSchemaFromStatements(statements []sqlparser.Statement) (*Schema, error) 
 
 // NewSchemaFromQueries creates a valid and normalized schema based on list of queries
 func NewSchemaFromQueries(queries []string) (*Schema, error) {
-	statements := []sqlparser.Statement{}
+	statements := make([]sqlparser.Statement, 0, len(queries))
 	for _, q := range queries {
 		stmt, err := sqlparser.ParseStrictDDL(q)
 		if err != nil {
@@ -107,7 +107,7 @@ func NewSchemaFromQueries(queries []string) (*Schema, error) {
 // NewSchemaFromSQL creates a valid and normalized schema based on a SQL blob that contains
 // CREATE statements for various objects (tables, views)
 func NewSchemaFromSQL(sql string) (*Schema, error) {
-	statements := []sqlparser.Statement{}
+	var statements []sqlparser.Statement
 	tokenizer := sqlparser.NewStringTokenizer(sql)
 	for {
 		stmt, err := sqlparser.ParseNextStrictDDL(tokenizer)
@@ -443,7 +443,7 @@ func (s *Schema) View(name string) *CreateViewEntity {
 
 // ToStatements returns an ordered list of statements which can be applied to create the schema
 func (s *Schema) ToStatements() []sqlparser.Statement {
-	stmts := []sqlparser.Statement{}
+	stmts := make([]sqlparser.Statement, 0, len(s.Entities()))
 	for _, e := range s.Entities() {
 		stmts = append(stmts, e.Create().Statement())
 	}
@@ -452,7 +452,7 @@ func (s *Schema) ToStatements() []sqlparser.Statement {
 
 // ToQueries returns an ordered list of queries which can be applied to create the schema
 func (s *Schema) ToQueries() []string {
-	queries := []string{}
+	queries := make([]string, 0, len(s.Entities()))
 	for _, e := range s.Entities() {
 		queries = append(queries, e.Create().CanonicalStatementString())
 	}
