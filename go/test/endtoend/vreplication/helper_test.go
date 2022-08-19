@@ -109,8 +109,8 @@ func waitForQueryResult(t *testing.T, conn *mysql.Conn, database string, query s
 				return
 			}
 		case <-time.After(defaultTimeout):
-			require.FailNow(t, "query %s on database %s did not return the expected result of %v before the timeout of %s",
-				query, database, want, defaultTimeout)
+			require.FailNow(t, fmt.Sprintf("query %s on database %s did not return the expected result of %v before the timeout of %s",
+				query, database, want, defaultTimeout))
 		}
 	}
 }
@@ -133,15 +133,15 @@ func waitForTabletThrottlingStatus(t *testing.T, tablet *cluster.VttabletProcess
 				return
 			}
 		case <-time.After(defaultTimeout):
-			require.FailNow(t, "tablet %s did not return expected status of %d for the application %s before the timeout of %s; last seen status: %d",
-				tablet.Name, wantCode, appName, defaultTimeout, gotCode)
+			require.FailNow(t, fmt.Sprintf("tablet %s did not return expected status of %d for the application %s before the timeout of %s; last seen status: %d",
+				tablet.Name, wantCode, appName, defaultTimeout, gotCode))
 		}
 	}
 }
 
 // waitForNoWorkflowLag waits for the VReplication workflow's MaxVReplicationTransactionLag
 // value to be 0.
-func waitForNoWorkflowLag(t *testing.T, keyspace, worfklow string) {
+func waitForNoWorkflowLag(t *testing.T, vc *VitessCluster, keyspace, worfklow string) {
 	ksWorkflow := fmt.Sprintf("%s.%s", keyspace, worfklow)
 	lag := int64(0)
 	ticker := time.NewTicker(defaultTick)
@@ -157,8 +157,8 @@ func waitForNoWorkflowLag(t *testing.T, keyspace, worfklow string) {
 				return
 			}
 		case <-time.After(defaultTimeout):
-			require.FailNow(t, "workflow %s did not eliminate VReplication lag before the timeout of %s; last seen MaxVReplicationTransactionLag: %d",
-				ksWorkflow, defaultTimeout, lag)
+			require.FailNow(t, fmt.Sprintf("workflow %s did not eliminate VReplication lag before the timeout of %s; last seen MaxVReplicationTransactionLag: %d",
+				ksWorkflow, defaultTimeout, lag))
 		}
 	}
 }
@@ -190,7 +190,8 @@ func waitForRowCount(t *testing.T, conn *mysql.Conn, database string, table stri
 				return
 			}
 		case <-time.After(defaultTimeout):
-			require.FailNow(t, "table %s did not reach the expected number of rows (%d) before the timeout of %s", table, want, defaultTimeout)
+			require.FailNow(t, fmt.Sprintf("table %s did not reach the expected number of rows (%d) before the timeout of %s",
+				table, want, defaultTimeout))
 		}
 	}
 }
@@ -210,8 +211,8 @@ func waitForRowCountInTablet(t *testing.T, vttablet *cluster.VttabletProcess, da
 				return
 			}
 		case <-time.After(defaultTimeout):
-			require.FailNow(t, "table %s did not reach the expected number of rows (%d) on the %s tablet before the timeout of %s",
-				table, want, vttablet.Name, defaultTimeout)
+			require.FailNow(t, fmt.Sprintf("table %s did not reach the expected number of rows (%d) on the %s tablet before the timeout of %s",
+				table, want, vttablet.Name, defaultTimeout))
 		}
 	}
 }

@@ -62,6 +62,7 @@ func createReshardWorkflow(t *testing.T, sourceShards, targetShards string) erro
 	err := tstWorkflowExec(t, defaultCellName, workflowName, targetKs, targetKs,
 		"", workflowActionCreate, "", sourceShards, targetShards)
 	require.NoError(t, err)
+	waitForWorkflowToStart(t, ksWorkflow)
 	catchup(t, targetTab1, workflowName, "Reshard")
 	catchup(t, targetTab2, workflowName, "Reshard")
 	vdiff1(t, ksWorkflow, "")
@@ -75,6 +76,7 @@ func createMoveTablesWorkflow(t *testing.T, tables string) error {
 	err := tstWorkflowExec(t, defaultCellName, workflowName, sourceKs, targetKs,
 		tables, workflowActionCreate, "", "", "")
 	require.NoError(t, err)
+	waitForWorkflowToStart(t, ksWorkflow)
 	catchup(t, targetTab1, workflowName, "MoveTables")
 	catchup(t, targetTab2, workflowName, "MoveTables")
 	vdiff1(t, ksWorkflow, "")
@@ -387,10 +389,10 @@ func testReplicatingWithPKEnumCols(t *testing.T) {
 	deleteQuery := "delete from customer where cid = 2 and typ = 'soho'"
 	insertQuery := "insert into customer(cid, name, typ, sport, meta) values(2, 'Paül','soho','cricket',convert(x'7b7d' using utf8mb4))"
 	execVtgateQuery(t, vtgateConn, sourceKs, deleteQuery)
-	waitForNoWorkflowLag(t, targetKs, workflowName)
+	waitForNoWorkflowLag(t, vc, targetKs, workflowName)
 	vdiff1(t, ksWorkflow, "")
 	execVtgateQuery(t, vtgateConn, sourceKs, insertQuery)
-	waitForNoWorkflowLag(t, targetKs, workflowName)
+	waitForNoWorkflowLag(t, vc, targetKs, workflowName)
 	vdiff1(t, ksWorkflow, "")
 }
 
