@@ -115,6 +115,27 @@ func waitForQueryResult(t *testing.T, conn *mysql.Conn, database string, query s
 	}
 }
 
+// waitForTabletThrttlingStatus waits for the tablet to return the provided HTTP code for
+// the provided app name in its self check.
+func waitForTabletThrottlingStatus(t *testing.T, tablet *cluster.VttabletProcess, appName, want string) {
+	ticker := time.NewTicker(defaultTick)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			_, body, err := throttlerCheckSelf(tablet, targetThrottlerAppName)
+			require.NoError(t, err)
+			require.NotNil(t, body)
+			if want == body {
+				return
+			}
+		case <-time.After(defaultTimeout):
+			require.FailNow(t, "tablet %s did not return expected state of %s for the application %s before the timeout of %s",
+				tablet.Name, want, appName, defaultTimeout)
+		}
+	}
+}
+
 // verifyNoInternalTables can e.g. be used to confirm that no internal tables were
 // copied from a source to a target during a MoveTables or Reshard operation.
 func verifyNoInternalTables(t *testing.T, conn *mysql.Conn, keyspaceShard string) {

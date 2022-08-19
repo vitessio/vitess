@@ -62,7 +62,6 @@ func createReshardWorkflow(t *testing.T, sourceShards, targetShards string) erro
 	err := tstWorkflowExec(t, defaultCellName, workflowName, targetKs, targetKs,
 		"", workflowActionCreate, "", sourceShards, targetShards)
 	require.NoError(t, err)
-	time.Sleep(1 * time.Second)
 	catchup(t, targetTab1, workflowName, "Reshard")
 	catchup(t, targetTab2, workflowName, "Reshard")
 	vdiff1(t, ksWorkflow, "")
@@ -78,7 +77,6 @@ func createMoveTablesWorkflow(t *testing.T, tables string) error {
 	require.NoError(t, err)
 	catchup(t, targetTab1, workflowName, "MoveTables")
 	catchup(t, targetTab2, workflowName, "MoveTables")
-	time.Sleep(1 * time.Second)
 	vdiff1(t, ksWorkflow, "")
 	return nil
 }
@@ -388,9 +386,11 @@ func testReplicatingWithPKEnumCols(t *testing.T) {
 	deleteQuery := "delete from customer where cid = 2 and typ = 'soho'"
 	insertQuery := "insert into customer(cid, name, typ, sport, meta) values(2, 'Paül','soho','cricket',convert(x'7b7d' using utf8mb4))"
 	execVtgateQuery(t, vtgateConn, "product", deleteQuery)
+	// TODO: replace this sleep with a wait for...
 	time.Sleep(2 * time.Second)
 	vdiff1(t, ksWorkflow, "")
 	execVtgateQuery(t, vtgateConn, "product", insertQuery)
+	// TODO: replace this sleep with a wait for...
 	time.Sleep(2 * time.Second)
 	vdiff1(t, ksWorkflow, "")
 }

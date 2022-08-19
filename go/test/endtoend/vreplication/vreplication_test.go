@@ -622,7 +622,6 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 func validateRollupReplicates(t *testing.T) {
 	t.Run("validateRollupReplicates", func(t *testing.T) {
 		insertMoreProducts(t)
-		time.Sleep(1 * time.Second)
 		waitForRowCount(t, vtgateConn, "product", "rollup", 1)
 		waitForQueryResult(t, vtgateConn, "product:0", "select rollupname, kount from rollup",
 			`[[VARCHAR("total") INT32(5)]]`)
@@ -899,22 +898,12 @@ func materializeProduct(t *testing.T) {
 				assert.Contains(t, body, sourceThrottlerAppName)
 			}
 			// Wait for throttling to take effect (caching will expire by this time):
-			time.Sleep(1 * time.Second)
 			for _, tab := range productTablets {
-				{
-					_, body, err := throttlerCheckSelf(tab, sourceThrottlerAppName)
-					assert.NoError(t, err)
-					assert.Contains(t, body, "417")
-				}
-				{
-					_, body, err := throttlerCheckSelf(tab, targetThrottlerAppName)
-					assert.NoError(t, err)
-					assert.Contains(t, body, "200")
-				}
+				waitForTabletThrottlingStatus(t, tab, sourceThrottlerAppName, "417")
+				waitForTabletThrottlingStatus(t, tab, targetThrottlerAppName, "200")
 			}
 			insertMoreProductsForSourceThrottler(t)
 			// To be fair to the test, we give the target time to apply the new changes. We expect it to NOT get them in the first place,
-			time.Sleep(1 * time.Second)
 			// we expect the additional rows to **not appear** in the materialized view
 			for _, tab := range customerTablets {
 				waitForRowCountInTablet(t, tab, keyspace, workflow, 5)
@@ -928,13 +917,8 @@ func materializeProduct(t *testing.T) {
 				assert.Contains(t, body, sourceThrottlerAppName)
 			}
 			// give time for unthrottling to take effect and for target to fetch data
-			time.Sleep(3 * time.Second)
 			for _, tab := range productTablets {
-				{
-					_, body, err := throttlerCheckSelf(tab, sourceThrottlerAppName)
-					assert.NoError(t, err)
-					assert.Contains(t, body, "200")
-				}
+				waitForTabletThrottlingStatus(t, tab, sourceThrottlerAppName, "200")
 			}
 			for _, tab := range customerTablets {
 				waitForRowCountInTablet(t, tab, keyspace, workflow, 8)
@@ -949,22 +933,12 @@ func materializeProduct(t *testing.T) {
 				assert.Contains(t, body, targetThrottlerAppName)
 			}
 			// Wait for throttling to take effect (caching will expire by this time):
-			time.Sleep(1 * time.Second)
 			for _, tab := range customerTablets {
-				{
-					_, body, err := throttlerCheckSelf(tab, targetThrottlerAppName)
-					assert.NoError(t, err)
-					assert.Contains(t, body, "417")
-				}
-				{
-					_, body, err := throttlerCheckSelf(tab, sourceThrottlerAppName)
-					assert.NoError(t, err)
-					assert.Contains(t, body, "200")
-				}
+				waitForTabletThrottlingStatus(t, tab, targetThrottlerAppName, "417")
+				waitForTabletThrottlingStatus(t, tab, sourceThrottlerAppName, "200")
 			}
 			insertMoreProductsForTargetThrottler(t)
 			// To be fair to the test, we give the target time to apply the new changes. We expect it to NOT get them in the first place,
-			time.Sleep(1 * time.Second)
 			// we expect the additional rows to **not appear** in the materialized view
 			for _, tab := range customerTablets {
 				waitForRowCountInTablet(t, tab, keyspace, workflow, 8)
@@ -978,13 +952,8 @@ func materializeProduct(t *testing.T) {
 				assert.Contains(t, body, targetThrottlerAppName)
 			}
 			// give time for unthrottling to take effect and for target to fetch data
-			time.Sleep(3 * time.Second)
 			for _, tab := range customerTablets {
-				{
-					_, body, err := throttlerCheckSelf(tab, targetThrottlerAppName)
-					assert.NoError(t, err)
-					assert.Contains(t, body, "200")
-				}
+				waitForTabletThrottlingStatus(t, tab, targetThrottlerAppName, "200")
 			}
 			for _, tab := range customerTablets {
 				waitForRowCountInTablet(t, tab, keyspace, workflow, 11)
