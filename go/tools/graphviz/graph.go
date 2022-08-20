@@ -18,7 +18,6 @@ package graphviz
 
 import (
 	"fmt"
-	"html/template"
 	"os"
 	"os/exec"
 	"runtime"
@@ -33,18 +32,31 @@ type (
 		edges  []*Edge
 	}
 	Node struct {
-		id    int
-		Name  string
-		attrs []string
+		id      int
+		Name    string
+		attrs   []string
+		tooltip string
 	}
 	Edge struct {
 		From, To *Node
 	}
 )
 
+func escape(s string) string {
+	s = strings.ReplaceAll(s, "<", "\\<")
+	s = strings.ReplaceAll(s, ">", "\\>")
+	s = strings.ReplaceAll(s, "\"", "\\\"")
+	s = strings.ReplaceAll(s, "|", "\\|")
+	s = strings.ReplaceAll(s, "{", "\\{")
+	s = strings.ReplaceAll(s, "}", "\\}")
+	return s
+}
+
 func (n *Node) AddAttribute(s string) {
-	s = strings.Replace(s, "|", "\\|", -1)
-	n.attrs = append(n.attrs, template.HTMLEscaper(s))
+	n.attrs = append(n.attrs, escape(s))
+}
+func (n *Node) AddTooltip(s string) {
+	n.tooltip = escape(s)
 }
 
 func (g *Graph) produceDot() string {
@@ -63,12 +75,16 @@ node [shape=record, fontsize=10]
 
 		}
 		labels += "}"
-		dot.WriteString(fmt.Sprintf(`n%d [label="%s"]`, node.id, labels))
-		dot.WriteString("\n")
+		if node.tooltip != "" {
+			dot.WriteString(fmt.Sprintf(`n%d [label="%s", tooltip="%s"]`, node.id, labels, node.tooltip))
+		} else {
+			dot.WriteString(fmt.Sprintf(`n%d [label="%s"]`, node.id, labels))
+		}
+		dot.WriteString(";\n")
 	}
 	for _, edge := range g.edges {
 		dot.WriteString(fmt.Sprintf(`n%d -> n%d`, edge.From.id, edge.To.id))
-		dot.WriteString("\n")
+		dot.WriteString(";\n")
 	}
 	dot.WriteString("}")
 	return dot.String()
@@ -93,11 +109,7 @@ func (g *Graph) AddEdge(from, to *Node) *Edge {
 	return e
 }
 
-func (g *Graph) Render() error {
-
-	dot := g.produceDot()
-
-	const htmlTemplate = `
+const htmlTemplate = `
 <!DOCTYPE html>
 <html>
 <head>
@@ -130,6 +142,11 @@ func (g *Graph) Render() error {
 </body>
 </html>
 `
+
+func (g *Graph) Render() error {
+
+	dot := g.produceDot()
+
 	browsers := func() []string {
 		var cmds []string
 		if userBrowser := os.Getenv("BROWSER"); userBrowser != "" {
