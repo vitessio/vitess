@@ -58,16 +58,8 @@ func TestTabletCommands(t *testing.T) {
 	utils.Exec(t, conn, "insert into t1(id, value) values(1,'a'), (2,'b')")
 	checkDataOnReplica(t, replicaConn, `[[VARCHAR("a")] [VARCHAR("b")]]`)
 
-	// test exclude_field_names to vttablet works as expected
-	sql := "select id, value from t1"
-	args := []string{
-		"VtTabletExecute", "--",
-		"--options", "included_fields:TYPE_ONLY",
-		"--json",
-		primaryTablet.Alias,
-		sql,
-	}
-	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(args...)
+	sql := "select * from t1"
+	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ExecuteFetchAsDba", "--", "--json", primaryTablet.Alias, sql)
 	require.Nil(t, err)
 	assertExcludeFields(t, result)
 
