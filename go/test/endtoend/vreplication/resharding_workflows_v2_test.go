@@ -263,6 +263,7 @@ func waitForWorkflowToStart(t *testing.T, ksWorkflow string) {
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 	timer := time.NewTimer(workflowStartTimeout)
+	defer timer.Stop()
 	log.Infof("Waiting for workflow %s to start", ksWorkflow)
 	for {
 		select {

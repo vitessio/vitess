@@ -43,8 +43,8 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 )
 
-var (
-	defaultTick    = 500 * time.Millisecond
+const (
+	defaultTick    = 1 * time.Second
 	defaultTimeout = 30 * time.Second
 )
 
@@ -100,6 +100,8 @@ func checkHealth(t *testing.T, url string) bool {
 func waitForQueryResult(t *testing.T, conn *mysql.Conn, database string, query string, want string) {
 	ticker := time.NewTicker(defaultTick)
 	defer ticker.Stop()
+	timer := time.NewTimer(defaultTimeout)
+	defer timer.Stop()
 	for {
 		select {
 		case <-ticker.C:
@@ -108,7 +110,7 @@ func waitForQueryResult(t *testing.T, conn *mysql.Conn, database string, query s
 			if want == fmt.Sprintf("%v", qr.Rows) {
 				return
 			}
-		case <-time.After(defaultTimeout):
+		case <-timer.C:
 			require.FailNow(t, fmt.Sprintf("query %s on database %s did not return the expected result of %v before the timeout of %s",
 				query, database, want, defaultTimeout))
 		}
@@ -121,10 +123,13 @@ func waitForTabletThrottlingStatus(t *testing.T, tablet *cluster.VttabletProcess
 	var gotCode int64
 	ticker := time.NewTicker(defaultTick)
 	defer ticker.Stop()
+	timer := time.NewTimer(defaultTimeout)
+	defer timer.Stop()
 	for {
 		select {
 		case <-ticker.C:
 			_, output, err := throttlerCheckSelf(tablet, targetThrottlerAppName)
+			t.Logf("Throttler check self for tablet %s and app %s -- expected status code: %d -- got output: %s", tablet.Name, targetThrottlerAppName, wantCode, output)
 			require.NoError(t, err)
 			require.NotNil(t, output)
 			gotCode, err = jsonparser.GetInt([]byte(output), "StatusCode")
@@ -132,7 +137,7 @@ func waitForTabletThrottlingStatus(t *testing.T, tablet *cluster.VttabletProcess
 			if wantCode == gotCode {
 				return
 			}
-		case <-time.After(defaultTimeout):
+		case <-timer.C:
 			require.FailNow(t, fmt.Sprintf("tablet %s did not return expected status of %d for the application %s before the timeout of %s; last seen status: %d",
 				tablet.Name, wantCode, appName, defaultTimeout, gotCode))
 		}
@@ -146,17 +151,20 @@ func waitForNoWorkflowLag(t *testing.T, vc *VitessCluster, keyspace, worfklow st
 	lag := int64(0)
 	ticker := time.NewTicker(defaultTick)
 	defer ticker.Stop()
+	timer := time.NewTimer(defaultTimeout)
+	defer timer.Stop()
 	for {
 		select {
 		case <-ticker.C:
 			output, err := vc.VtctlClient.ExecuteCommandWithOutput("Worfklow", "--", ksWorkflow, "show")
+			t.Logf("Workflow %s show output: %s", ksWorkflow, output)
 			require.NoError(t, err)
 			lag, err = jsonparser.GetInt([]byte(output), "MaxVReplicationTransactionLag")
 			require.NoError(t, err)
 			if lag == 0 {
 				return
 			}
-		case <-time.After(defaultTimeout):
+		case <-timer.C:
 			require.FailNow(t, fmt.Sprintf("workflow %s did not eliminate VReplication lag before the timeout of %s; last seen MaxVReplicationTransactionLag: %d",
 				ksWorkflow, defaultTimeout, lag))
 		}
@@ -180,6 +188,8 @@ func waitForRowCount(t *testing.T, conn *mysql.Conn, database string, table stri
 	wantRes := fmt.Sprintf("[[INT64(%d)]]", want)
 	ticker := time.NewTicker(defaultTick)
 	defer ticker.Stop()
+	timer := time.NewTimer(defaultTimeout)
+	defer timer.Stop()
 	for {
 		select {
 		case <-ticker.C:
@@ -189,7 +199,7 @@ func waitForRowCount(t *testing.T, conn *mysql.Conn, database string, table stri
 			if wantRes == fmt.Sprintf("%v", qr.Rows) {
 				return
 			}
-		case <-time.After(defaultTimeout):
+		case <-timer.C:
 			require.FailNow(t, fmt.Sprintf("table %s did not reach the expected number of rows (%d) before the timeout of %s",
 				table, want, defaultTimeout))
 		}
@@ -201,6 +211,8 @@ func waitForRowCountInTablet(t *testing.T, vttablet *cluster.VttabletProcess, da
 	wantRes := fmt.Sprintf("[[INT64(%d)]]", want)
 	ticker := time.NewTicker(defaultTick)
 	defer ticker.Stop()
+	timer := time.NewTimer(defaultTimeout)
+	defer timer.Stop()
 	for {
 		select {
 		case <-ticker.C:
@@ -210,7 +222,7 @@ func waitForRowCountInTablet(t *testing.T, vttablet *cluster.VttabletProcess, da
 			if wantRes == fmt.Sprintf("%v", qr.Rows) {
 				return
 			}
-		case <-time.After(defaultTimeout):
+		case <-timer.C:
 			require.FailNow(t, fmt.Sprintf("table %s did not reach the expected number of rows (%d) on the %s tablet before the timeout of %s",
 				table, want, vttablet.Name, defaultTimeout))
 		}

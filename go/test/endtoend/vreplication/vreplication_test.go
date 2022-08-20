@@ -631,7 +631,9 @@ func validateRollupReplicates(t *testing.T) {
 func verifySourceTabletThrottling(t *testing.T, targetKS, workflow string) {
 	tDuration := time.Duration(15 * time.Second)
 	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
 	timer := time.NewTimer(tDuration)
+	defer timer.Stop()
 	ksWorkflow := fmt.Sprintf("%s.%s", targetKS, workflow)
 	for {
 		select {
@@ -892,9 +894,8 @@ func materializeProduct(t *testing.T) {
 				_, body, err := throttleApp(tab, sourceThrottlerAppName)
 				assert.NoError(t, err)
 				assert.Contains(t, body, sourceThrottlerAppName)
-			}
-			// Wait for throttling to take effect (caching will expire by this time):
-			for _, tab := range productTablets {
+
+				// Wait for throttling to take effect (caching will expire by this time):
 				waitForTabletThrottlingStatus(t, tab, sourceThrottlerAppName, 417)
 				waitForTabletThrottlingStatus(t, tab, targetThrottlerAppName, 200)
 			}
@@ -927,9 +928,8 @@ func materializeProduct(t *testing.T) {
 				_, body, err := throttleApp(tab, targetThrottlerAppName)
 				assert.NoError(t, err)
 				assert.Contains(t, body, targetThrottlerAppName)
-			}
-			// Wait for throttling to take effect (caching will expire by this time):
-			for _, tab := range customerTablets {
+
+				// Wait for throttling to take effect (caching will expire by this time):
 				waitForTabletThrottlingStatus(t, tab, targetThrottlerAppName, 417)
 				waitForTabletThrottlingStatus(t, tab, sourceThrottlerAppName, 200)
 			}
