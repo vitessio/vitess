@@ -195,7 +195,6 @@ func waitForRowCount(t *testing.T, conn *mysql.Conn, database string, table stri
 		case <-ticker.C:
 			qr := execVtgateQuery(t, conn, database, query)
 			require.NotNil(t, qr)
-			require.Equal(t, fmt.Sprintf("[[INT64(%d)]]", want), fmt.Sprintf("%v", qr.Rows))
 			if wantRes == fmt.Sprintf("%v", qr.Rows) {
 				return
 			}

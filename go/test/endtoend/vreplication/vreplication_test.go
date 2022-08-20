@@ -912,9 +912,7 @@ func materializeProduct(t *testing.T) {
 				_, body, err := unthrottleApp(tab, sourceThrottlerAppName)
 				assert.NoError(t, err)
 				assert.Contains(t, body, sourceThrottlerAppName)
-			}
-			// give time for unthrottling to take effect and for target to fetch data
-			for _, tab := range productTablets {
+				// give time for unthrottling to take effect and for target to fetch data
 				waitForTabletThrottlingStatus(t, tab, sourceThrottlerAppName, 200)
 			}
 			for _, tab := range customerTablets {
@@ -923,12 +921,11 @@ func materializeProduct(t *testing.T) {
 		})
 
 		t.Run("throttle-app-customer", func(t *testing.T) {
-			// Now, throttle the streamer on source tablets, insert some rows
+			// Now, throttle vreplication (vcopier/vapplier) on target tablets, insert some rows
 			for _, tab := range customerTablets {
 				_, body, err := throttleApp(tab, targetThrottlerAppName)
 				assert.NoError(t, err)
 				assert.Contains(t, body, targetThrottlerAppName)
-
 				// Wait for throttling to take effect (caching will expire by this time):
 				waitForTabletThrottlingStatus(t, tab, targetThrottlerAppName, 417)
 				waitForTabletThrottlingStatus(t, tab, sourceThrottlerAppName, 200)
@@ -941,7 +938,7 @@ func materializeProduct(t *testing.T) {
 			}
 		})
 		t.Run("unthrottle-app-customer", func(t *testing.T) {
-			// unthrottle on source tablets, and expect the rows to show up
+			// unthrottle on target tablets, and expect the rows to show up
 			for _, tab := range customerTablets {
 				_, body, err := unthrottleApp(tab, targetThrottlerAppName)
 				assert.NoError(t, err)
@@ -950,8 +947,6 @@ func materializeProduct(t *testing.T) {
 			// give time for unthrottling to take effect and for target to fetch data
 			for _, tab := range customerTablets {
 				waitForTabletThrottlingStatus(t, tab, targetThrottlerAppName, 200)
-			}
-			for _, tab := range customerTablets {
 				waitForRowCountInTablet(t, tab, keyspace, workflow, 11)
 			}
 		})
