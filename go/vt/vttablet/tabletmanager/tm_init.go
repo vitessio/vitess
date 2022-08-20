@@ -730,12 +730,12 @@ func (tm *TabletManager) initTablet(ctx context.Context) error {
 func (tm *TabletManager) handleRestore(ctx context.Context) (bool, error) {
 	tablet := tm.Tablet()
 	// Sanity check for inconsistent flags
-	if tm.Cnf == nil && *restoreFromBackup {
-		return false, fmt.Errorf("you cannot enable -restore_from_backup without a my.cnf file")
+	if tm.Cnf == nil && restoreFromBackup {
+		return false, fmt.Errorf("you cannot enable --restore_from_backup without a my.cnf file")
 	}
 
 	// Restore in the background
-	if *restoreFromBackup {
+	if restoreFromBackup {
 		go func() {
 			// Open the state manager after restore is done.
 			defer tm.tmState.Open()
@@ -744,17 +744,17 @@ func (tm *TabletManager) handleRestore(ctx context.Context) (bool, error) {
 			backupTime := time.Time{}
 
 			// Or if a backup timestamp was specified then we use the last backup taken at or before that time
-			if *restoreFromBackupTsStr != "" {
+			if restoreFromBackupTsStr != "" {
 				var err error
-				backupTime, err = time.Parse(mysqlctl.BackupTimestampFormat, *restoreFromBackupTsStr)
+				backupTime, err = time.Parse(mysqlctl.BackupTimestampFormat, restoreFromBackupTsStr)
 				if err != nil {
-					log.Exitf(fmt.Sprintf("RestoreFromBackup failed: unable to parse the backup timestamp value provided of '%s'", *restoreFromBackupTsStr))
+					log.Exitf(fmt.Sprintf("RestoreFromBackup failed: unable to parse the backup timestamp value provided of '%s'", restoreFromBackupTsStr))
 				}
 			}
 
 			// restoreFromBackup will just be a regular action
 			// (same as if it was triggered remotely)
-			if err := tm.RestoreData(ctx, logutil.NewConsoleLogger(), *waitForBackupInterval, false /* deleteBeforeRestore */, backupTime); err != nil {
+			if err := tm.RestoreData(ctx, logutil.NewConsoleLogger(), waitForBackupInterval, false /* deleteBeforeRestore */, backupTime); err != nil {
 				log.Exitf("RestoreFromBackup failed: %v", err)
 			}
 		}()
