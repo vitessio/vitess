@@ -98,21 +98,20 @@ func checkHealth(t *testing.T, url string) bool {
 }
 
 func waitForQueryResult(t *testing.T, conn *mysql.Conn, database string, query string, want string) {
-	ticker := time.NewTicker(defaultTick)
-	defer ticker.Stop()
 	timer := time.NewTimer(defaultTimeout)
 	defer timer.Stop()
 	for {
+		qr := execVtgateQuery(t, conn, database, query)
+		require.NotNil(t, qr)
+		if want == fmt.Sprintf("%v", qr.Rows) {
+			return
+		}
 		select {
-		case <-ticker.C:
-			qr := execVtgateQuery(t, conn, database, query)
-			require.NotNil(t, qr)
-			if want == fmt.Sprintf("%v", qr.Rows) {
-				return
-			}
 		case <-timer.C:
 			require.FailNow(t, fmt.Sprintf("query %s on database %s did not return the expected result of %v before the timeout of %s",
 				query, database, want, defaultTimeout))
+		default:
+			time.Sleep(defaultTick)
 		}
 	}
 }
@@ -121,25 +120,24 @@ func waitForQueryResult(t *testing.T, conn *mysql.Conn, database string, query s
 // the provided app name in its self check.
 func waitForTabletThrottlingStatus(t *testing.T, tablet *cluster.VttabletProcess, appName string, wantCode int64) {
 	var gotCode int64
-	ticker := time.NewTicker(defaultTick)
-	defer ticker.Stop()
 	timer := time.NewTimer(defaultTimeout)
 	defer timer.Stop()
 	for {
+		_, output, err := throttlerCheckSelf(tablet, targetThrottlerAppName)
+		t.Logf("Throttler check self for tablet %s and app %s -- expected status code: %d -- got output: %s", tablet.Name, targetThrottlerAppName, wantCode, output)
+		require.NoError(t, err)
+		require.NotNil(t, output)
+		gotCode, err = jsonparser.GetInt([]byte(output), "StatusCode")
+		require.NoError(t, err)
+		if wantCode == gotCode {
+			return
+		}
 		select {
-		case <-ticker.C:
-			_, output, err := throttlerCheckSelf(tablet, targetThrottlerAppName)
-			t.Logf("Throttler check self for tablet %s and app %s -- expected status code: %d -- got output: %s", tablet.Name, targetThrottlerAppName, wantCode, output)
-			require.NoError(t, err)
-			require.NotNil(t, output)
-			gotCode, err = jsonparser.GetInt([]byte(output), "StatusCode")
-			require.NoError(t, err)
-			if wantCode == gotCode {
-				return
-			}
 		case <-timer.C:
 			require.FailNow(t, fmt.Sprintf("tablet %s did not return expected status of %d for the application %s before the timeout of %s; last seen status: %d",
 				tablet.Name, wantCode, appName, defaultTimeout, gotCode))
+		default:
+			time.Sleep(defaultTick)
 		}
 	}
 }
@@ -149,24 +147,23 @@ func waitForTabletThrottlingStatus(t *testing.T, tablet *cluster.VttabletProcess
 func waitForNoWorkflowLag(t *testing.T, vc *VitessCluster, keyspace, worfklow string) {
 	ksWorkflow := fmt.Sprintf("%s.%s", keyspace, worfklow)
 	lag := int64(0)
-	ticker := time.NewTicker(defaultTick)
-	defer ticker.Stop()
 	timer := time.NewTimer(defaultTimeout)
 	defer timer.Stop()
 	for {
+		output, err := vc.VtctlClient.ExecuteCommandWithOutput("Worfklow", "--", ksWorkflow, "show")
+		t.Logf("Workflow %s show output: %s", ksWorkflow, output)
+		require.NoError(t, err)
+		lag, err = jsonparser.GetInt([]byte(output), "MaxVReplicationTransactionLag")
+		require.NoError(t, err)
+		if lag == 0 {
+			return
+		}
 		select {
-		case <-ticker.C:
-			output, err := vc.VtctlClient.ExecuteCommandWithOutput("Worfklow", "--", ksWorkflow, "show")
-			t.Logf("Workflow %s show output: %s", ksWorkflow, output)
-			require.NoError(t, err)
-			lag, err = jsonparser.GetInt([]byte(output), "MaxVReplicationTransactionLag")
-			require.NoError(t, err)
-			if lag == 0 {
-				return
-			}
 		case <-timer.C:
 			require.FailNow(t, fmt.Sprintf("workflow %s did not eliminate VReplication lag before the timeout of %s; last seen MaxVReplicationTransactionLag: %d",
 				ksWorkflow, defaultTimeout, lag))
+		default:
+			time.Sleep(defaultTick)
 		}
 	}
 }
@@ -186,21 +183,20 @@ func verifyNoInternalTables(t *testing.T, conn *mysql.Conn, keyspaceShard string
 func waitForRowCount(t *testing.T, conn *mysql.Conn, database string, table string, want int) {
 	query := fmt.Sprintf("select count(*) from %s", table)
 	wantRes := fmt.Sprintf("[[INT64(%d)]]", want)
-	ticker := time.NewTicker(defaultTick)
-	defer ticker.Stop()
 	timer := time.NewTimer(defaultTimeout)
 	defer timer.Stop()
 	for {
+		qr := execVtgateQuery(t, conn, database, query)
+		require.NotNil(t, qr)
+		if wantRes == fmt.Sprintf("%v", qr.Rows) {
+			return
+		}
 		select {
-		case <-ticker.C:
-			qr := execVtgateQuery(t, conn, database, query)
-			require.NotNil(t, qr)
-			if wantRes == fmt.Sprintf("%v", qr.Rows) {
-				return
-			}
 		case <-timer.C:
 			require.FailNow(t, fmt.Sprintf("table %s did not reach the expected number of rows (%d) before the timeout of %s",
 				table, want, defaultTimeout))
+		default:
+			time.Sleep(defaultTick)
 		}
 	}
 }
@@ -208,22 +204,21 @@ func waitForRowCount(t *testing.T, conn *mysql.Conn, database string, table stri
 func waitForRowCountInTablet(t *testing.T, vttablet *cluster.VttabletProcess, database string, table string, want int) {
 	query := fmt.Sprintf("select count(*) from %s", table)
 	wantRes := fmt.Sprintf("[[INT64(%d)]]", want)
-	ticker := time.NewTicker(defaultTick)
-	defer ticker.Stop()
 	timer := time.NewTimer(defaultTimeout)
 	defer timer.Stop()
 	for {
+		qr, err := vttablet.QueryTablet(query, database, true)
+		require.NoError(t, err)
+		require.NotNil(t, qr)
+		if wantRes == fmt.Sprintf("%v", qr.Rows) {
+			return
+		}
 		select {
-		case <-ticker.C:
-			qr, err := vttablet.QueryTablet(query, database, true)
-			require.NoError(t, err)
-			require.NotNil(t, qr)
-			if wantRes == fmt.Sprintf("%v", qr.Rows) {
-				return
-			}
 		case <-timer.C:
 			require.FailNow(t, fmt.Sprintf("table %s did not reach the expected number of rows (%d) on the %s tablet before the timeout of %s",
 				table, want, vttablet.Name, defaultTimeout))
+		default:
+			time.Sleep(defaultTick)
 		}
 	}
 }

@@ -68,9 +68,11 @@ const (
 	openTxQuery       = "insert into customer(cid, name, typ, sport, meta) values(4, 'openTxQuery',1,'football,baseball','{}');"
 	deleteOpenTxQuery = "delete from customer where name = 'openTxQuery'"
 
-	merchantKeyspace = "merchant-type"
-	maxWait          = 60 * time.Second
-	BypassLagCheck   = true // temporary fix for flakiness seen only in CI when lag check is introduced
+	merchantKeyspace            = "merchant-type"
+	maxWait                     = 60 * time.Second
+	BypassLagCheck              = true                         // temporary fix for flakiness seen only in CI when lag check is introduced
+	throttlerStatusThrottled    = http.StatusExpectationFailed // 417
+	throttlerStatusNotThrottled = http.StatusOK                // 200
 )
 
 func init() {
@@ -629,37 +631,35 @@ func validateRollupReplicates(t *testing.T) {
 }
 
 func verifySourceTabletThrottling(t *testing.T, targetKS, workflow string) {
-	tDuration := time.Duration(15 * time.Second)
-	ticker := time.NewTicker(5 * time.Second)
-	defer ticker.Stop()
-	timer := time.NewTimer(tDuration)
+	timer := time.NewTimer(defaultTimeout)
 	defer timer.Stop()
 	ksWorkflow := fmt.Sprintf("%s.%s", targetKS, workflow)
 	for {
-		select {
-		case <-ticker.C:
-			output, err := vc.VtctlClient.ExecuteCommandWithOutput("Workflow", ksWorkflow, "show")
-			require.NoError(t, err)
-			result := gjson.Get(output, "ShardStatuses")
-			result.ForEach(func(tabletId, tabletStreams gjson.Result) bool { // for each source tablet
-				tabletStreams.ForEach(func(streamId, streamInfos gjson.Result) bool { // for each stream
-					if streamId.String() == "PrimaryReplicationStatuses" {
-						streamInfos.ForEach(func(attributeKey, attributeValue gjson.Result) bool { // for each attribute in the stream
-							state := attributeValue.Get("State").String()
-							if state != "Copying" {
-								require.FailNowf(t, "Unexpected running workflow stream",
-									"Initial copy phase for the MoveTables workflow %s started in less than %d seconds when it should have been waiting. Show output: %s",
-									ksWorkflow, int(tDuration.Seconds()), output)
-							}
-							return true // end attribute loop
-						})
-					}
-					return true // end stream loop
-				})
-				return true // end tablet loop
+		output, err := vc.VtctlClient.ExecuteCommandWithOutput("Workflow", ksWorkflow, "show")
+		require.NoError(t, err)
+		result := gjson.Get(output, "ShardStatuses")
+		result.ForEach(func(tabletId, tabletStreams gjson.Result) bool { // for each source tablet
+			tabletStreams.ForEach(func(streamId, streamInfos gjson.Result) bool { // for each stream
+				if streamId.String() == "PrimaryReplicationStatuses" {
+					streamInfos.ForEach(func(attributeKey, attributeValue gjson.Result) bool { // for each attribute in the stream
+						state := attributeValue.Get("State").String()
+						if state != "Copying" {
+							require.FailNowf(t, "Unexpected running workflow stream",
+								"Initial copy phase for the MoveTables workflow %s started in less than %s when it should have been waiting. Show output: %s",
+								ksWorkflow, defaultTimeout, output)
+						}
+						return true // end attribute loop
+					})
+				}
+				return true // end stream loop
 			})
+			return true // end tablet loop
+		})
+		select {
 		case <-timer.C:
 			return
+		default:
+			time.Sleep(defaultTick)
 		}
 	}
 }
@@ -896,8 +896,8 @@ func materializeProduct(t *testing.T) {
 				assert.Contains(t, body, sourceThrottlerAppName)
 
 				// Wait for throttling to take effect (caching will expire by this time):
-				waitForTabletThrottlingStatus(t, tab, sourceThrottlerAppName, 417)
-				waitForTabletThrottlingStatus(t, tab, targetThrottlerAppName, 200)
+				waitForTabletThrottlingStatus(t, tab, sourceThrottlerAppName, throttlerStatusThrottled)
+				waitForTabletThrottlingStatus(t, tab, targetThrottlerAppName, throttlerStatusNotThrottled)
 			}
 			insertMoreProductsForSourceThrottler(t)
 			// To be fair to the test, we give the target time to apply the new changes. We expect it to NOT get them in the first place,
@@ -913,7 +913,7 @@ func materializeProduct(t *testing.T) {
 				assert.NoError(t, err)
 				assert.Contains(t, body, sourceThrottlerAppName)
 				// give time for unthrottling to take effect and for target to fetch data
-				waitForTabletThrottlingStatus(t, tab, sourceThrottlerAppName, 200)
+				waitForTabletThrottlingStatus(t, tab, sourceThrottlerAppName, throttlerStatusNotThrottled)
 			}
 			for _, tab := range customerTablets {
 				waitForRowCountInTablet(t, tab, keyspace, workflow, 8)
@@ -927,8 +927,8 @@ func materializeProduct(t *testing.T) {
 				assert.NoError(t, err)
 				assert.Contains(t, body, targetThrottlerAppName)
 				// Wait for throttling to take effect (caching will expire by this time):
-				waitForTabletThrottlingStatus(t, tab, targetThrottlerAppName, 417)
-				waitForTabletThrottlingStatus(t, tab, sourceThrottlerAppName, 200)
+				waitForTabletThrottlingStatus(t, tab, targetThrottlerAppName, throttlerStatusThrottled)
+				waitForTabletThrottlingStatus(t, tab, sourceThrottlerAppName, throttlerStatusNotThrottled)
 			}
 			insertMoreProductsForTargetThrottler(t)
 			// To be fair to the test, we give the target time to apply the new changes. We expect it to NOT get them in the first place,
@@ -946,7 +946,7 @@ func materializeProduct(t *testing.T) {
 			}
 			// give time for unthrottling to take effect and for target to fetch data
 			for _, tab := range customerTablets {
-				waitForTabletThrottlingStatus(t, tab, targetThrottlerAppName, 200)
+				waitForTabletThrottlingStatus(t, tab, targetThrottlerAppName, throttlerStatusNotThrottled)
 				waitForRowCountInTablet(t, tab, keyspace, workflow, 11)
 			}
 		})
