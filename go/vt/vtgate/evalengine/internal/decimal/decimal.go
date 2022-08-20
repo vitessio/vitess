@@ -459,9 +459,9 @@ func (d Decimal) mod(d2 Decimal) Decimal {
 
 func (d Decimal) Ceil() Decimal {
 	// truncate to 1.0
-	ret := d.rescale(-1)
+	ret := d.rescale(0)
 
-	if d.Cmp(ret) != 0 {
+	if d.Cmp(ret) == 0 {
 		return d
 	} else if d.Sign() == 1 {
 		return d.Add(New(1, 0)).truncate(0)
