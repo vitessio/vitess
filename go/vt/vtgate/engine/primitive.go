@@ -170,7 +170,11 @@ type (
 		// RemoveAdvisoryLock removes advisory lock from the session
 		RemoveAdvisoryLock(name string)
 
+		// VtExplainLogging enables logging of all interactions to the tablets so
+		// EXPLAIN `format=vtexplain` can report what's being done
 		VtExplainLogging()
+
+		// GetVTExplainLogs retrieves the vttablet interaction logs
 		GetVTExplainLogs() []ExecuteEntry
 
 		SetCommitOrder(co vtgatepb.CommitOrder)
