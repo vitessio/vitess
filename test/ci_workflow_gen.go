@@ -150,11 +150,12 @@ var (
 )
 
 type unitTest struct {
-	Name, Platform string
+	Name, Platform, FileName string
 }
 
 type clusterTest struct {
 	Name, Shard, Platform        string
+	FileName                     string
 	MakeTools, InstallXtraBackup bool
 	Ubuntu20, Docker             bool
 	LimitResourceUsage           bool
@@ -162,6 +163,7 @@ type clusterTest struct {
 
 type selfHostedTest struct {
 	Name, Platform, Dockerfile, Shard, ImageName, directoryName string
+	FileName                                                    string
 	MakeTools, InstallXtraBackup, Docker                        bool
 }
 
@@ -257,7 +259,8 @@ func generateSelfHostedUnitTestWorkflows() error {
 		if err != nil {
 			return err
 		}
-		filePath := fmt.Sprintf("%s/unit_test_%s.yml", workflowConfigDir, platform)
+		test.FileName = fmt.Sprintf("unit_test_%s.yml", platform)
+		filePath := fmt.Sprintf("%s/%s", workflowConfigDir, test.FileName)
 		err = writeFileFromTemplate(unitTestSelfHostedTemplate, filePath, test)
 		if err != nil {
 			log.Print(err)
@@ -308,7 +311,8 @@ func generateSelfHostedClusterWorkflows() error {
 				return err
 			}
 
-			filePath := fmt.Sprintf("%s/cluster_endtoend_%s%s.yml", workflowConfigDir, cluster, mysqlVersionIndicator)
+			test.FileName = fmt.Sprintf("cluster_endtoend_%s%s.yml", cluster, mysqlVersionIndicator)
+			filePath := fmt.Sprintf("%s/%s", workflowConfigDir, test.FileName)
 			err = writeFileFromTemplate(clusterTestSelfHostedTemplate, filePath, test)
 			if err != nil {
 				log.Print(err)
@@ -352,7 +356,8 @@ func generateClusterWorkflows(list []string, tpl string) {
 				mysqlVersionIndicator = "_" + string(mysqlVersion)
 				test.Name = test.Name + " " + string(mysqlVersion)
 			}
-			path := fmt.Sprintf("%s/cluster_endtoend_%s%s.yml", workflowConfigDir, cluster, mysqlVersionIndicator)
+			test.FileName = fmt.Sprintf("cluster_endtoend_%s%s.yml", cluster, mysqlVersionIndicator)
+			path := fmt.Sprintf("%s/%s", workflowConfigDir, test.FileName)
 			template := tpl
 			if test.Platform != "" {
 				template = fmt.Sprintf(tpl, "_"+test.Platform)
@@ -373,7 +378,8 @@ func generateUnitTestWorkflows() {
 			Name:     fmt.Sprintf("Unit Test (%s)", platform),
 			Platform: string(platform),
 		}
-		path := fmt.Sprintf("%s/unit_test_%s.yml", workflowConfigDir, platform)
+		test.FileName = fmt.Sprintf("unit_test_%s.yml", platform)
+		path := fmt.Sprintf("%s/%s", workflowConfigDir, test.FileName)
 		err := writeFileFromTemplate(unitTestTemplate, path, test)
 		if err != nil {
 			log.Print(err)

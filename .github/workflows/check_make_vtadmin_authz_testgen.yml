@@ -34,6 +34,7 @@ jobs:
             - 'go.[sumod]'
             - 'Makefile'
             - 'go/vt/vtadmin/**'
+            - '.github/workflows/check_make_vtadmin_authz_testgen.yml'
 
     - name: Set up Go
       uses: actions/setup-go@v2

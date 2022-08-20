@@ -42,7 +42,7 @@ jobs:
               - 'config/**'
               - '.github/docker/**'
               - 'bootstrap.sh'
-              - '.github/workflows/**'
+              - '.github/workflows/{{.FileName}}'
 
       - name: Build Docker Image
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
