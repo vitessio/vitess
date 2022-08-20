@@ -108,8 +108,8 @@ func waitForQueryResult(t *testing.T, conn *mysql.Conn, database string, query s
 		}
 		select {
 		case <-timer.C:
-			require.FailNow(t, fmt.Sprintf("query %s on database %s did not return the expected result of %v before the timeout of %s",
-				query, database, want, defaultTimeout))
+			require.FailNow(t, fmt.Sprintf("query %q on database %q did not return the expected result of %v before the timeout of %s; last seen result: %v",
+				query, database, want, defaultTimeout, qr.Rows))
 		default:
 			time.Sleep(defaultTick)
 		}
@@ -124,7 +124,6 @@ func waitForTabletThrottlingStatus(t *testing.T, tablet *cluster.VttabletProcess
 	defer timer.Stop()
 	for {
 		_, output, err := throttlerCheckSelf(tablet, targetThrottlerAppName)
-		t.Logf("Throttler check self for tablet %s and app %s -- expected status code: %d -- got output: %s", tablet.Name, targetThrottlerAppName, wantCode, output)
 		require.NoError(t, err)
 		require.NotNil(t, output)
 		gotCode, err = jsonparser.GetInt([]byte(output), "StatusCode")
@@ -134,7 +133,7 @@ func waitForTabletThrottlingStatus(t *testing.T, tablet *cluster.VttabletProcess
 		}
 		select {
 		case <-timer.C:
-			require.FailNow(t, fmt.Sprintf("tablet %s did not return expected status of %d for the application %s before the timeout of %s; last seen status: %d",
+			require.FailNow(t, fmt.Sprintf("tablet %q did not return expected status of %d for application %q before the timeout of %s; last seen status: %d",
 				tablet.Name, wantCode, appName, defaultTimeout, gotCode))
 		default:
 			time.Sleep(defaultTick)
@@ -151,7 +150,6 @@ func waitForNoWorkflowLag(t *testing.T, vc *VitessCluster, keyspace, worfklow st
 	defer timer.Stop()
 	for {
 		output, err := vc.VtctlClient.ExecuteCommandWithOutput("Worfklow", "--", ksWorkflow, "show")
-		t.Logf("Workflow %s show output: %s", ksWorkflow, output)
 		require.NoError(t, err)
 		lag, err = jsonparser.GetInt([]byte(output), "MaxVReplicationTransactionLag")
 		require.NoError(t, err)
@@ -160,7 +158,7 @@ func waitForNoWorkflowLag(t *testing.T, vc *VitessCluster, keyspace, worfklow st
 		}
 		select {
 		case <-timer.C:
-			require.FailNow(t, fmt.Sprintf("workflow %s did not eliminate VReplication lag before the timeout of %s; last seen MaxVReplicationTransactionLag: %d",
+			require.FailNow(t, fmt.Sprintf("workflow %q did not eliminate VReplication lag before the timeout of %s; last seen MaxVReplicationTransactionLag: %d",
 				ksWorkflow, defaultTimeout, lag))
 		default:
 			time.Sleep(defaultTick)
@@ -176,7 +174,7 @@ func verifyNoInternalTables(t *testing.T, conn *mysql.Conn, keyspaceShard string
 	require.NotNil(t, qr.Rows)
 	for _, row := range qr.Rows {
 		tableName := row[0].ToString()
-		assert.False(t, schema.IsInternalOperationTableName(tableName), "found internal table %s in shard %s", tableName, keyspaceShard)
+		assert.False(t, schema.IsInternalOperationTableName(tableName), "found internal table %q in shard %q", tableName, keyspaceShard)
 	}
 }
 
@@ -193,8 +191,8 @@ func waitForRowCount(t *testing.T, conn *mysql.Conn, database string, table stri
 		}
 		select {
 		case <-timer.C:
-			require.FailNow(t, fmt.Sprintf("table %s did not reach the expected number of rows (%d) before the timeout of %s",
-				table, want, defaultTimeout))
+			require.FailNow(t, fmt.Sprintf("table %q did not reach the expected number of rows (%d) before the timeout of %s; last seen result: %v",
+				table, want, defaultTimeout, qr.Rows))
 		default:
 			time.Sleep(defaultTick)
 		}
@@ -215,8 +213,8 @@ func waitForRowCountInTablet(t *testing.T, vttablet *cluster.VttabletProcess, da
 		}
 		select {
 		case <-timer.C:
-			require.FailNow(t, fmt.Sprintf("table %s did not reach the expected number of rows (%d) on the %s tablet before the timeout of %s",
-				table, want, vttablet.Name, defaultTimeout))
+			require.FailNow(t, fmt.Sprintf("table %q did not reach the expected number of rows (%d) on tablet %q before the timeout of %s; last seen result: %v",
+				table, want, vttablet.Name, defaultTimeout, qr.Rows))
 		default:
 			time.Sleep(defaultTick)
 		}
