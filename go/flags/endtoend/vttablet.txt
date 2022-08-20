@@ -195,7 +195,6 @@ Usage of vttablet:
       --enable_lag_throttler                                             If true, vttablet will run a throttler service, and will implicitly enable heartbeats
       --enable_query_plan_field_caching                                  (DEPRECATED) This option fetches & caches fields (columns) when storing query plans (default true)
       --enable_replication_reporter                                      Use polling to track replication lag.
-      --enable_semi_sync                                                 DEPRECATED - Set the correct durability policy on the keyspace instead.
       --enable_transaction_limit                                         If true, limit on number of transactions open at the same time will be enforced for all users. User trying to open a new transaction after exhausting their limit will receive an error immediately, regardless of whether there are available slots or not.
       --enable_transaction_limit_dry_run                                 If true, limit on number of transactions open at the same time will be tracked for all users, but not enforced.
       --enable_tx_throttler                                              If true replication-lag-based throttling on transactions will be enabled.
