@@ -514,8 +514,8 @@ func TestChangeTypeErrorWhileWritingToTopo(t *testing.T) {
 }
 
 func TestPublishStateNew(t *testing.T) {
-	defer func(saved time.Duration) { *publishRetryInterval = saved }(*publishRetryInterval)
-	*publishRetryInterval = 1 * time.Millisecond
+	defer func(saved time.Duration) { publishRetryInterval = saved }(publishRetryInterval)
+	publishRetryInterval = 1 * time.Millisecond
 
 	// This flow doesn't test the failure scenario, which
 	// we can't do using memorytopo, but we do test the retry
