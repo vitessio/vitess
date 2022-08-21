@@ -19,6 +19,7 @@ package tabletserver
 import (
 	"context"
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	"vitess.io/vitess/go/vt/log"
@@ -51,7 +52,7 @@ type StatefulConnection struct {
 	tainted        bool
 	enforceTimeout bool
 	timeout        time.Duration
-	timeUsed       time.Time
+	timeUsed       *atomic.Value
 }
 
 // Properties contains meta information about the connection
@@ -88,7 +89,7 @@ func (sc *StatefulConnection) ElapsedTimeout() bool {
 		return false
 	}
 	now := time.Now()
-	return sc.timeUsed.Before(now.Add(-sc.timeout))
+	return sc.TimeUsed().Before(now.Add(-sc.timeout))
 }
 
 // Exec executes the statement in the dedicated connection
@@ -292,6 +293,15 @@ func (sc *StatefulConnection) LogTransaction(reason tx.ReleaseReason) {
 		log.Infof("Logged transaction: %s", sc.String(sc.env.Config().SanitizeLogMessages))
 	}
 	tabletenv.TxLogger.Send(sc)
+}
+
+func (sc *StatefulConnection) TimeUsed() time.Time {
+	tu := sc.timeUsed.Load()
+	if tu == nil {
+		// This is a bug. Better to panic?
+		return time.Now()
+	}
+	return tu.(time.Time)
 }
 
 // logReservedConn logs reserved connection related stats.
