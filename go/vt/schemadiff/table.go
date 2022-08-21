@@ -615,22 +615,19 @@ func (c *CreateTableEntity) Diff(other Entity, hints *DiffHints) (EntityDiff, er
 // It returns an AlterTable statement if changes are found, or nil if not.
 // the other table may be of different name; its name is ignored.
 func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints) (*AlterTableEntityDiff, error) {
-	otherStmt := other.CreateTable
-	otherStmt.Table = c.CreateTable.Table
-
 	if !c.CreateTable.IsFullyParsed() {
 		return nil, &NotFullyParsedError{Entity: c.Name(), Statement: sqlparser.CanonicalString(&c.CreateTable)}
 	}
-	if !otherStmt.IsFullyParsed() {
-		return nil, &NotFullyParsedError{Entity: other.Name(), Statement: sqlparser.CanonicalString(&otherStmt)}
+	if !other.CreateTable.IsFullyParsed() {
+		return nil, &NotFullyParsedError{Entity: other.Name(), Statement: sqlparser.CanonicalString(&other.CreateTable)}
 	}
 
-	if sqlparser.EqualsRefOfCreateTable(&c.CreateTable, &otherStmt) {
+	if c.identicalOtherThanName(other) {
 		return nil, nil
 	}
 
 	alterTable := &sqlparser.AlterTable{
-		Table: otherStmt.Table,
+		Table: c.CreateTable.Table,
 	}
 	diffedTableCharset := ""
 	var parentAlterTableEntityDiff *AlterTableEntityDiff
@@ -688,7 +685,7 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 	}
 	for _, superfluousFulltextKey := range superfluousFulltextKeys {
 		alterTable := &sqlparser.AlterTable{
-			Table:        otherStmt.Table,
+			Table:        c.CreateTable.Table,
 			AlterOptions: []sqlparser.AlterOption{superfluousFulltextKey},
 		}
 		diff := &AlterTableEntityDiff{alterTable: alterTable, from: c, to: other}
@@ -698,7 +695,7 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 	}
 	for _, partitionSpec := range partitionSpecs {
 		alterTable := &sqlparser.AlterTable{
-			Table:         otherStmt.Table,
+			Table:         c.CreateTable.Table,
 			PartitionSpec: partitionSpec,
 		}
 		diff := &AlterTableEntityDiff{alterTable: alterTable, from: c, to: other}

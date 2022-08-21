@@ -234,28 +234,25 @@ func (c *CreateViewEntity) Diff(other Entity, hints *DiffHints) (EntityDiff, err
 // It returns an AlterView statement if changes are found, or nil if not.
 // the other view may be of different name; its name is ignored.
 func (c *CreateViewEntity) ViewDiff(other *CreateViewEntity, _ *DiffHints) (*AlterViewEntityDiff, error) {
-	otherStmt := other.CreateView
-	otherStmt.ViewName = c.CreateView.ViewName
-
-	if !c.CreateView.IsFullyParsed() {
+	if !c.IsFullyParsed() {
 		return nil, &NotFullyParsedError{Entity: c.Name(), Statement: sqlparser.CanonicalString(&c.CreateView)}
 	}
-	if !otherStmt.IsFullyParsed() {
-		return nil, &NotFullyParsedError{Entity: c.Name(), Statement: sqlparser.CanonicalString(&otherStmt)}
+	if !other.CreateView.IsFullyParsed() {
+		return nil, &NotFullyParsedError{Entity: c.Name(), Statement: sqlparser.CanonicalString(&other.CreateView)}
 	}
 
-	if sqlparser.EqualsRefOfCreateView(&c.CreateView, &otherStmt) {
+	if c.identicalOtherThanName(other) {
 		return nil, nil
 	}
 
 	alterView := &sqlparser.AlterView{
-		ViewName:    otherStmt.ViewName,
-		Algorithm:   otherStmt.Algorithm,
-		Definer:     otherStmt.Definer,
-		Security:    otherStmt.Security,
-		Columns:     otherStmt.Columns,
-		Select:      otherStmt.Select,
-		CheckOption: otherStmt.CheckOption,
+		ViewName:    c.CreateView.ViewName,
+		Algorithm:   other.CreateView.Algorithm,
+		Definer:     other.CreateView.Definer,
+		Security:    other.CreateView.Security,
+		Columns:     other.CreateView.Columns,
+		Select:      other.CreateView.Select,
+		CheckOption: other.CreateView.CheckOption,
 	}
 	return &AlterViewEntityDiff{alterView: alterView, from: c, to: other}, nil
 }
@@ -297,4 +294,18 @@ func (c *CreateViewEntity) Apply(diff EntityDiff) (Entity, error) {
 
 func (c *CreateViewEntity) Clone() Entity {
 	return &CreateViewEntity{CreateView: *sqlparser.CloneRefOfCreateView(&c.CreateView)}
+}
+
+func (c *CreateViewEntity) identicalOtherThanName(other *CreateViewEntity) bool {
+	if other == nil {
+		return false
+	}
+	return c.Algorithm == other.Algorithm &&
+		c.Security == other.Security &&
+		c.CheckOption == other.CheckOption &&
+		c.IsReplace == other.IsReplace &&
+		sqlparser.EqualsRefOfDefiner(c.Definer, other.Definer) &&
+		sqlparser.EqualsColumns(c.Columns, other.Columns) &&
+		sqlparser.EqualsSelectStatement(c.Select, other.Select) &&
+		sqlparser.EqualsRefOfParsedComments(c.Comments, other.Comments)
 }
