@@ -33,7 +33,7 @@ func (d *AlterViewEntityDiff) IsEmpty() bool {
 	return d.Statement() == nil
 }
 
-// IsEmpty implements EntityDiff
+// Entities implements EntityDiff
 func (d *AlterViewEntityDiff) Entities() (from Entity, to Entity) {
 	return d.from, d.to
 }
@@ -233,7 +233,7 @@ func (c *CreateViewEntity) Diff(other Entity, hints *DiffHints) (EntityDiff, err
 // change this view to look like the other view.
 // It returns an AlterView statement if changes are found, or nil if not.
 // the other view may be of different name; its name is ignored.
-func (c *CreateViewEntity) ViewDiff(other *CreateViewEntity, hints *DiffHints) (*AlterViewEntityDiff, error) {
+func (c *CreateViewEntity) ViewDiff(other *CreateViewEntity, _ *DiffHints) (*AlterViewEntityDiff, error) {
 	otherStmt := other.CreateView
 	otherStmt.ViewName = c.CreateView.ViewName
 
@@ -244,9 +244,7 @@ func (c *CreateViewEntity) ViewDiff(other *CreateViewEntity, hints *DiffHints) (
 		return nil, &NotFullyParsedError{Entity: c.Name(), Statement: sqlparser.CanonicalString(&otherStmt)}
 	}
 
-	format := sqlparser.CanonicalString(&c.CreateView)
-	otherFormat := sqlparser.CanonicalString(&otherStmt)
-	if format == otherFormat {
+	if sqlparser.EqualsRefOfCreateView(&c.CreateView, &otherStmt) {
 		return nil, nil
 	}
 
