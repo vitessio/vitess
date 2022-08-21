@@ -290,8 +290,8 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 
 	// If we had type BACKUP or RESTORE it's better to set our type to the init_tablet_type to make result of the restore
 	// similar to completely clean start from scratch.
-	if (originalType == topodatapb.TabletType_BACKUP || originalType == topodatapb.TabletType_RESTORE) && *initTabletType != "" {
-		initType, err := topoproto.ParseTabletType(*initTabletType)
+	if (originalType == topodatapb.TabletType_BACKUP || originalType == topodatapb.TabletType_RESTORE) && initTabletType != "" {
+		initType, err := topoproto.ParseTabletType(initTabletType)
 		if err == nil {
 			originalType = initType
 		}

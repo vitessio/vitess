@@ -333,7 +333,7 @@ func (ts *tmState) populateLocalMetadataLocked() {
 		return
 	}
 
-	if ts.isOpening && !*initPopulateMetadata {
+	if ts.isOpening && !initPopulateMetadata {
 		return
 	}
 
