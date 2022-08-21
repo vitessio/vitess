@@ -120,7 +120,7 @@ func (d *CreateTableEntityDiff) IsEmpty() bool {
 
 // Entities implements EntityDiff
 func (d *CreateTableEntityDiff) Entities() (from Entity, to Entity) {
-	return nil, &CreateTableEntity{CreateTable: *d.createTable}
+	return nil, &CreateTableEntity{CreateTable: d.createTable}
 }
 
 // Statement implements EntityDiff
@@ -279,14 +279,14 @@ func (d *RenameTableEntityDiff) SetSubsequentDiff(EntityDiff) {
 
 // CreateTableEntity stands for a TABLE construct. It contains the table's CREATE statement.
 type CreateTableEntity struct {
-	sqlparser.CreateTable
+	*sqlparser.CreateTable
 }
 
 func NewCreateTableEntity(c *sqlparser.CreateTable) (*CreateTableEntity, error) {
 	if !c.IsFullyParsed() {
 		return nil, &NotFullyParsedError{Entity: c.Table.Name.String(), Statement: sqlparser.CanonicalString(c)}
 	}
-	entity := &CreateTableEntity{CreateTable: *c}
+	entity := &CreateTableEntity{CreateTable: c}
 	entity.normalize()
 	return entity, nil
 }
@@ -326,7 +326,7 @@ func (c *CreateTableEntity) normalizeTableOptions() {
 }
 
 func (c *CreateTableEntity) Clone() Entity {
-	return &CreateTableEntity{CreateTable: *sqlparser.CloneRefOfCreateTable(&c.CreateTable)}
+	return &CreateTableEntity{CreateTable: sqlparser.CloneRefOfCreateTable(c.CreateTable)}
 }
 
 // Right now we assume MySQL 8.0 for the collation normalization handling.
@@ -616,10 +616,10 @@ func (c *CreateTableEntity) Diff(other Entity, hints *DiffHints) (EntityDiff, er
 // the other table may be of different name; its name is ignored.
 func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints) (*AlterTableEntityDiff, error) {
 	if !c.CreateTable.IsFullyParsed() {
-		return nil, &NotFullyParsedError{Entity: c.Name(), Statement: sqlparser.CanonicalString(&c.CreateTable)}
+		return nil, &NotFullyParsedError{Entity: c.Name(), Statement: sqlparser.CanonicalString(c.CreateTable)}
 	}
 	if !other.CreateTable.IsFullyParsed() {
-		return nil, &NotFullyParsedError{Entity: other.Name(), Statement: sqlparser.CanonicalString(&other.CreateTable)}
+		return nil, &NotFullyParsedError{Entity: other.Name(), Statement: sqlparser.CanonicalString(other.CreateTable)}
 	}
 
 	if c.identicalOtherThanName(other) {
@@ -1474,7 +1474,7 @@ func heuristicallyDetectColumnRenames(
 
 // Create implements Entity interface
 func (c *CreateTableEntity) Create() EntityDiff {
-	return &CreateTableEntityDiff{to: c, createTable: &c.CreateTable}
+	return &CreateTableEntityDiff{to: c, createTable: c.CreateTable}
 }
 
 // Drop implements Entity interface

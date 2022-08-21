@@ -90,7 +90,7 @@ func (d *CreateViewEntityDiff) IsEmpty() bool {
 
 // Entities implements EntityDiff
 func (d *CreateViewEntityDiff) Entities() (from Entity, to Entity) {
-	return nil, &CreateViewEntity{CreateView: *d.createView}
+	return nil, &CreateViewEntity{CreateView: d.createView}
 }
 
 // Statement implements EntityDiff
@@ -192,14 +192,14 @@ func (d *DropViewEntityDiff) SetSubsequentDiff(EntityDiff) {
 
 // CreateViewEntity stands for a VIEW construct. It contains the view's CREATE statement.
 type CreateViewEntity struct {
-	sqlparser.CreateView
+	*sqlparser.CreateView
 }
 
 func NewCreateViewEntity(c *sqlparser.CreateView) (*CreateViewEntity, error) {
 	if !c.IsFullyParsed() {
 		return nil, &NotFullyParsedError{Entity: c.ViewName.Name.String(), Statement: sqlparser.CanonicalString(c)}
 	}
-	entity := &CreateViewEntity{CreateView: *c}
+	entity := &CreateViewEntity{CreateView: c}
 	entity.normalize()
 	return entity, nil
 }
@@ -235,10 +235,10 @@ func (c *CreateViewEntity) Diff(other Entity, hints *DiffHints) (EntityDiff, err
 // the other view may be of different name; its name is ignored.
 func (c *CreateViewEntity) ViewDiff(other *CreateViewEntity, _ *DiffHints) (*AlterViewEntityDiff, error) {
 	if !c.IsFullyParsed() {
-		return nil, &NotFullyParsedError{Entity: c.Name(), Statement: sqlparser.CanonicalString(&c.CreateView)}
+		return nil, &NotFullyParsedError{Entity: c.Name(), Statement: sqlparser.CanonicalString(c.CreateView)}
 	}
 	if !other.CreateView.IsFullyParsed() {
-		return nil, &NotFullyParsedError{Entity: c.Name(), Statement: sqlparser.CanonicalString(&other.CreateView)}
+		return nil, &NotFullyParsedError{Entity: c.Name(), Statement: sqlparser.CanonicalString(other.CreateView)}
 	}
 
 	if c.identicalOtherThanName(other) {
@@ -259,7 +259,7 @@ func (c *CreateViewEntity) ViewDiff(other *CreateViewEntity, _ *DiffHints) (*Alt
 
 // Create implements Entity interface
 func (c *CreateViewEntity) Create() EntityDiff {
-	return &CreateViewEntityDiff{createView: &c.CreateView}
+	return &CreateViewEntityDiff{createView: c.CreateView}
 }
 
 // Drop implements Entity interface
@@ -293,7 +293,7 @@ func (c *CreateViewEntity) Apply(diff EntityDiff) (Entity, error) {
 }
 
 func (c *CreateViewEntity) Clone() Entity {
-	return &CreateViewEntity{CreateView: *sqlparser.CloneRefOfCreateView(&c.CreateView)}
+	return &CreateViewEntity{CreateView: sqlparser.CloneRefOfCreateView(c.CreateView)}
 }
 
 func (c *CreateViewEntity) identicalOtherThanName(other *CreateViewEntity) bool {
