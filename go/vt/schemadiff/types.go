@@ -45,9 +45,9 @@ type EntityDiff interface {
 	// Statement returns a valid SQL statement that applies the diff, e.g. an ALTER TABLE ...
 	// It returns nil if the diff is empty
 	Statement() sqlparser.Statement
-	// StatementString "stringifies" the this diff's Statement(). It returns an empty string if the diff is empty
+	// StatementString "stringifies" this diff's Statement(). It returns an empty string if the diff is empty
 	StatementString() string
-	// CanonicalStatementString "stringifies" the this diff's Statement() to a canonical string. It returns an empty string if the diff is empty
+	// CanonicalStatementString "stringifies" this diff's Statement() to a canonical string. It returns an empty string if the diff is empty
 	CanonicalStatementString() string
 	// SubsequentDiff returns a followup diff to this one, if exists
 	SubsequentDiff() EntityDiff
