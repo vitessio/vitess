@@ -62,9 +62,9 @@ var (
 	targetThrottlerAppName = "vreplication"
 )
 
-// for some tests we keep an open transaction during a SwitchWrites and commit it afterwards, to reproduce https://github.com/vitessio/vitess/issues/9400
-// we also then delete the extra row (if) added so that the row counts for the future count comparisons stay the same
 const (
+	// for some tests we keep an open transaction during a SwitchWrites and commit it afterwards, to reproduce https://github.com/vitessio/vitess/issues/9400
+	// we also then delete the extra row (if) added so that the row counts for the future count comparisons stay the same
 	openTxQuery       = "insert into customer(cid, name, typ, sport, meta) values(4, 'openTxQuery',1,'football,baseball','{}');"
 	deleteOpenTxQuery = "delete from customer where name = 'openTxQuery'"
 
@@ -921,9 +921,11 @@ func materializeProduct(t *testing.T) {
 		})
 
 		t.Run("throttle-app-customer", func(t *testing.T) {
-			// Now, throttle vreplication (vcopier/vapplier) on target tablets, insert some rows
+			// Now, throttle vreplication (vcopier/vapplier) on target tablets, and
+			// insert some more rows.
 			for _, tab := range customerTablets {
 				_, body, err := throttleApp(tab, targetThrottlerAppName)
+				t.Logf("throttleApp(%v) returned: %v, %v", tab.Name, body, err)
 				assert.NoError(t, err)
 				assert.Contains(t, body, targetThrottlerAppName)
 				// Wait for throttling to take effect (caching will expire by this time):
@@ -931,8 +933,9 @@ func materializeProduct(t *testing.T) {
 				waitForTabletThrottlingStatus(t, tab, sourceThrottlerAppName, throttlerStatusNotThrottled)
 			}
 			insertMoreProductsForTargetThrottler(t)
-			// To be fair to the test, we give the target time to apply the new changes. We expect it to NOT get them in the first place,
-			// we expect the additional rows to **not appear** in the materialized view
+			// To be fair to the test, we give the target time to apply the new changes.
+			// We expect it to NOT get them in the first place, we expect the additional
+			// rows to **not appear** in the materialized view.
 			for _, tab := range customerTablets {
 				waitForRowCountInTablet(t, tab, keyspace, workflow, 8)
 			}

@@ -33,6 +33,7 @@ import (
 	"github.com/buger/jsonparser"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tidwall/gjson"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/schema"
@@ -44,8 +45,9 @@ import (
 )
 
 const (
-	defaultTick    = 1 * time.Second
-	defaultTimeout = 30 * time.Second
+	defaultTick          = 1 * time.Second
+	defaultTimeout       = 30 * time.Second
+	workflowStartTimeout = 5 * time.Second
 )
 
 func execMultipleQueries(t *testing.T, conn *mysql.Conn, database string, lines string) {
@@ -123,12 +125,15 @@ func waitForTabletThrottlingStatus(t *testing.T, tablet *cluster.VttabletProcess
 	timer := time.NewTimer(defaultTimeout)
 	defer timer.Stop()
 	for {
-		_, output, err := throttlerCheckSelf(tablet, targetThrottlerAppName)
+		_, output, err := throttlerCheckSelf(tablet, appName)
 		require.NoError(t, err)
 		require.NotNil(t, output)
 		gotCode, err = jsonparser.GetInt([]byte(output), "StatusCode")
 		require.NoError(t, err)
 		if wantCode == gotCode {
+			// Wait for any cached check values to be cleared and the new
+			// status value to be in effect everywhere before returning.
+			time.Sleep(500 * time.Millisecond)
 			return
 		}
 		select {
@@ -227,6 +232,45 @@ func validateThatQueryExecutesOnTablet(t *testing.T, conn *mysql.Conn, tablet *c
 	require.NotNil(t, qr)
 	newCount := getQueryCount(tablet.QueryzURL, matchQuery)
 	return newCount == count+1
+}
+
+func waitForWorkflowToStart(t *testing.T, vc *VitessCluster, ksWorkflow string) {
+	done := false
+	timer := time.NewTimer(workflowStartTimeout)
+	log.Infof("Waiting for workflow %s to start", ksWorkflow)
+	for {
+		output, err := vc.VtctlClient.ExecuteCommandWithOutput("Workflow", ksWorkflow, "show")
+		require.NoError(t, err)
+		done = true
+		state := ""
+		result := gjson.Get(output, "ShardStatuses")
+		result.ForEach(func(tabletId, tabletStreams gjson.Result) bool { // for each participating tablet
+			tabletStreams.ForEach(func(streamId, streamInfos gjson.Result) bool { // for each stream
+				if streamId.String() == "PrimaryReplicationStatuses" {
+					streamInfos.ForEach(func(attributeKey, attributeValue gjson.Result) bool { // for each attribute in the stream
+						state = attributeValue.Get("State").String()
+						if state != "Running" {
+							done = false // we need to wait for all streams to start
+						}
+						return true
+					})
+				}
+				return true
+			})
+			return true
+		})
+		if done {
+			log.Infof("Workflow %s has started", ksWorkflow)
+			return
+		}
+		select {
+		case <-timer.C:
+			require.FailNowf(t, "workflow %q did not fully start before the timeout of %s",
+				ksWorkflow, workflowStartTimeout)
+		default:
+			time.Sleep(defaultTick)
+		}
+	}
 }
 
 func getHTTPBody(url string) string {
