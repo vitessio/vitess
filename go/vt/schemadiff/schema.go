@@ -212,7 +212,7 @@ func (s *Schema) normalize() error {
 				continue
 			}
 			// Not handled. Is this view dependent on already handled objects?
-			dependentNames, err := getViewDependentTableNames(&v.CreateView)
+			dependentNames, err := getViewDependentTableNames(v.CreateView)
 			if err != nil {
 				return err
 			}
@@ -497,7 +497,7 @@ func (s *Schema) apply(diffs []EntityDiff) error {
 			if _, ok := s.named[name]; ok {
 				return &ApplyDuplicateEntityError{Entity: name}
 			}
-			s.tables = append(s.tables, &CreateTableEntity{CreateTable: *diff.createTable})
+			s.tables = append(s.tables, &CreateTableEntity{CreateTable: diff.createTable})
 			_, s.named[name] = diff.Entities()
 		case *CreateViewEntityDiff:
 			// We expect the view to not exist
@@ -505,7 +505,7 @@ func (s *Schema) apply(diffs []EntityDiff) error {
 			if _, ok := s.named[name]; ok {
 				return &ApplyDuplicateEntityError{Entity: name}
 			}
-			s.views = append(s.views, &CreateViewEntity{CreateView: *diff.createView})
+			s.views = append(s.views, &CreateViewEntity{CreateView: diff.createView})
 			_, s.named[name] = diff.Entities()
 		case *DropTableEntityDiff:
 			// We expect the table to exist
