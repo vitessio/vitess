@@ -38,7 +38,7 @@ func BenchmarkGetPut(b *testing.B) {
 						if conn, err := pool.Get(ctx, nil); err != nil {
 							b.Error(err)
 						} else {
-							pool.Put(conn, 0)
+							pool.Put(conn)
 						}
 					}
 				})
@@ -67,7 +67,7 @@ func BenchmarkGetPutWithSettings(b *testing.B) {
 						if conn, err := pool.Get(ctx, settings); err != nil {
 							b.Error(err)
 						} else {
-							pool.Put(conn, conn.SettingHash())
+							pool.Put(conn)
 						}
 					}
 				})
@@ -97,7 +97,7 @@ func BenchmarkGetPutMixed(b *testing.B) {
 						if conn, err := pool.Get(ctx, settings[i]); err != nil {
 							b.Error(err)
 						} else {
-							pool.Put(conn, conn.SettingHash())
+							pool.Put(conn)
 						}
 						i = (i + 1) % 2
 					}
@@ -128,7 +128,7 @@ func BenchmarkGetPutMixedMulti(b *testing.B) {
 						if conn, err := pool.Get(ctx, settings[i]); err != nil {
 							b.Error(err)
 						} else {
-							pool.Put(conn, conn.SettingHash())
+							pool.Put(conn)
 						}
 						i = (i + 1) % 5
 					}

@@ -162,10 +162,10 @@ func (cp *ConnectionPool) Put(conn *PooledDBConnection) {
 		// conn has a type, if we just Put(conn), we end up
 		// putting an interface with a nil value, that is not
 		// equal to a nil value. So just put a plain nil.
-		p.Put(nil, 0)
+		p.Put(nil)
 		return
 	}
-	p.Put(conn, 0)
+	p.Put(conn)
 }
 
 // SetCapacity alters the size of the pool at runtime.

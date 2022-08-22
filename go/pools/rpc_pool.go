@@ -76,7 +76,7 @@ func (pool *RPCPool) Acquire(ctx context.Context) error {
 
 // Release frees a slot in the pool. It must only be called after a successful
 // call to Acquire.
-func (pool *RPCPool) Release() { pool.rp.Put(rpc, 0) }
+func (pool *RPCPool) Release() { pool.rp.Put(rpc) }
 
 // Close empties the pool, preventing further Acquire calls from succeeding.
 // It waits for all slots to be freed via Release.

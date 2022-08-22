@@ -208,9 +208,9 @@ func (cp *Pool) Put(conn *DBConn) {
 		panic(ErrConnPoolClosed)
 	}
 	if conn == nil {
-		p.Put(nil, 0)
+		p.Put(nil)
 	} else {
-		p.Put(conn, 0)
+		p.Put(conn)
 	}
 }
 

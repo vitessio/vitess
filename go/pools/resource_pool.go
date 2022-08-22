@@ -40,7 +40,7 @@ type (
 		Close()
 		Name() string
 		Get(ctx context.Context, settings []string) (resource Resource, err error)
-		Put(resource Resource, settingHash uint64)
+		Put(resource Resource)
 		SetCapacity(capacity int) error
 		SetIdleTimeout(idleTimeout time.Duration)
 		StatsJSON() string
@@ -346,14 +346,16 @@ func hash(settings []string) (uint64, error) {
 // a corresponding Put is required. If you no longer need a resource,
 // you will need to call Put(nil) instead of returning the closed resource.
 // This will cause a new resource to be created in its place.
-func (rp *ResourcePool) Put(resource Resource, settingHash uint64) {
+func (rp *ResourcePool) Put(resource Resource) {
 	var wrapper resourceWrapper
-	recreated := false
+	var recreated bool
+	var settingHash uint64
 	if resource != nil {
 		wrapper = resourceWrapper{
 			resource: resource,
 			timeUsed: time.Now(),
 		}
+		settingHash = resource.SettingHash()
 	} else {
 		rp.reopenResource(&wrapper)
 		recreated = true

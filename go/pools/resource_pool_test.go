@@ -113,14 +113,14 @@ func TestOpen(t *testing.T) {
 			resources[i] = r
 		}
 		for i := 0; i < 5; i++ {
-			p.Put(resources[i], 0)
+			p.Put(resources[i])
 		}
 		ch <- true
 	}()
 	for i := 0; i < 5; i++ {
 		// Sleep to ensure the goroutine waits
 		time.Sleep(10 * time.Millisecond)
-		p.Put(resources[i], 0)
+		p.Put(resources[i])
 	}
 	<-ch
 	assert.EqualValues(t, 5, p.WaitCount())
@@ -138,7 +138,7 @@ func TestOpen(t *testing.T) {
 	require.NoError(t, err)
 	r.Close()
 	// A nil Put should cause the resource to be reopened.
-	p.Put(nil, 0)
+	p.Put(nil)
 	assert.EqualValues(t, 5, count.Get())
 
 	for i := 0; i < 5; i++ {
@@ -147,7 +147,7 @@ func TestOpen(t *testing.T) {
 		resources[i] = r
 	}
 	for i := 0; i < 5; i++ {
-		p.Put(resources[i], 0)
+		p.Put(resources[i])
 	}
 	assert.EqualValues(t, 5, count.Get())
 	assert.EqualValues(t, 6, lastID.Get())
@@ -169,7 +169,7 @@ func TestOpen(t *testing.T) {
 		resources[i] = r
 	}
 	for i := 0; i < 6; i++ {
-		p.Put(resources[i], 0)
+		p.Put(resources[i])
 	}
 	assert.EqualValues(t, 6, count.Get())
 	assert.EqualValues(t, 9, lastID.Get())
@@ -212,11 +212,11 @@ func TestShrinking(t *testing.T) {
 	}
 	// There are already 2 resources available in the pool.
 	// So, returning one should be enough for SetCapacity to complete.
-	p.Put(resources[3], 0)
+	p.Put(resources[3])
 	<-done
 	// Return the rest of the resources
 	for i := 0; i < 3; i++ {
-		p.Put(resources[i], 0)
+		p.Put(resources[i])
 	}
 	stats := p.StatsJSON()
 	expected = `{"Capacity": 3, "Available": 3, "Active": 3, "InUse": 0, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000, "IdleClosed": 0, "Exhausted": 0}`
@@ -234,7 +234,7 @@ func TestShrinking(t *testing.T) {
 	go func() {
 		r, err := p.Get(ctx, nil)
 		require.NoError(t, err)
-		p.Put(r, 0)
+		p.Put(r)
 		done <- true
 	}()
 
@@ -247,7 +247,7 @@ func TestShrinking(t *testing.T) {
 
 	// This should not hang
 	for i := 0; i < 3; i++ {
-		p.Put(resources[i], 0)
+		p.Put(resources[i])
 	}
 	<-done
 	<-done
@@ -267,7 +267,7 @@ func TestShrinking(t *testing.T) {
 	go func() {
 		r, err := p.Get(ctx, nil)
 		require.NoError(t, err)
-		p.Put(r, 0)
+		p.Put(r)
 		done <- true
 	}()
 	time.Sleep(10 * time.Millisecond)
@@ -280,7 +280,7 @@ func TestShrinking(t *testing.T) {
 
 	// This should not hang
 	for i := 0; i < 3; i++ {
-		p.Put(resources[i], 0)
+		p.Put(resources[i])
 	}
 	<-done
 
@@ -322,7 +322,7 @@ func TestClosing(t *testing.T) {
 
 	// Put is allowed when closing
 	for i := 0; i < 5; i++ {
-		p.Put(resources[i], 0)
+		p.Put(resources[i])
 	}
 
 	// Wait for Close to return
@@ -357,7 +357,7 @@ func TestReopen(t *testing.T) {
 
 	time.Sleep(650 * time.Millisecond)
 	for i := 0; i < 5; i++ {
-		p.Put(resources[i], 0)
+		p.Put(resources[i])
 	}
 	time.Sleep(50 * time.Millisecond)
 	stats = p.StatsJSON()
@@ -379,7 +379,7 @@ func TestIdleTimeout(t *testing.T) {
 	assert.EqualValues(t, 1, count.Get())
 	assert.EqualValues(t, 0, p.IdleClosed())
 
-	p.Put(r, 0)
+	p.Put(r)
 	assert.EqualValues(t, 1, lastID.Get())
 	assert.EqualValues(t, 1, count.Get())
 	assert.EqualValues(t, 0, p.IdleClosed())
@@ -401,7 +401,7 @@ func TestIdleTimeout(t *testing.T) {
 	assert.EqualValues(t, 1, count.Get())
 	assert.EqualValues(t, 1, p.IdleClosed())
 
-	p.Put(r, 0)
+	p.Put(r)
 	r, err = p.Get(ctx, nil)
 	require.NoError(t, err)
 	assert.EqualValues(t, 2, lastID.Get())
@@ -411,7 +411,7 @@ func TestIdleTimeout(t *testing.T) {
 	// the idle close thread wakes up every 1/100 of the idle time, so ensure
 	// the timeout change applies to newly added resources
 	p.SetIdleTimeout(1000 * time.Millisecond)
-	p.Put(r, 0)
+	p.Put(r)
 
 	time.Sleep(15 * time.Millisecond)
 	assert.EqualValues(t, 2, lastID.Get())
@@ -421,7 +421,7 @@ func TestIdleTimeout(t *testing.T) {
 	// Get and Put to refresh timeUsed
 	r, err = p.Get(ctx, nil)
 	require.NoError(t, err)
-	p.Put(r, 0)
+	p.Put(r)
 	p.SetIdleTimeout(10 * time.Millisecond)
 	time.Sleep(15 * time.Millisecond)
 	assert.EqualValues(t, 3, lastID.Get())
@@ -442,7 +442,7 @@ func TestIdleTimeoutCreateFail(t *testing.T) {
 		// to prevent race with the idle closer, who will
 		// try to use it.
 		p.factory = FailFactory
-		p.Put(r, r.SettingHash())
+		p.Put(r)
 		time.Sleep(15 * time.Millisecond)
 		assert.Zero(t, p.Active())
 
@@ -476,12 +476,12 @@ func TestCreateFailOnPut(t *testing.T) {
 	defer p.Close()
 
 	for _, setting := range [][]string{nil, {"foo"}} {
-		r, err := p.Get(ctx, setting)
+		_, err := p.Get(ctx, setting)
 		require.NoError(t, err)
 
 		// change factory to fail the put.
 		p.factory = FailFactory
-		p.Put(nil, r.SettingHash())
+		p.Put(nil)
 		assert.Zero(t, p.Active())
 
 		// change back for next iteration.
@@ -532,7 +532,7 @@ func TestTimeout(t *testing.T) {
 	}
 
 	// put the connection take was taken initially.
-	p.Put(r, 0)
+	p.Put(r)
 }
 
 func TestExpired(t *testing.T) {
