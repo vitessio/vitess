@@ -925,7 +925,6 @@ func materializeProduct(t *testing.T) {
 			// insert some more rows.
 			for _, tab := range customerTablets {
 				_, body, err := throttleApp(tab, targetThrottlerAppName)
-				t.Logf("throttleApp(%v) returned: %v, %v", tab.Name, body, err)
 				assert.NoError(t, err)
 				assert.Contains(t, body, targetThrottlerAppName)
 				// Wait for throttling to take effect (caching will expire by this time):
