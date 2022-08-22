@@ -323,7 +323,7 @@ func TestOneWithTPCHVSchema(t *testing.T) {
 		sysVarEnabled: true,
 	}
 
-	testFile(t, "onecase.txt", "", vschema)
+	testFile(t, "onecase.txt", "", vschema, false)
 }
 
 func TestRubyOnRailsQueries(t *testing.T) {
