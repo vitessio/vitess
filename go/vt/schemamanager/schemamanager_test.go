@@ -47,7 +47,7 @@ var (
 func init() {
 	// enforce we will use the right protocol (gRPC) (note the
 	// client is unused, but it is initialized, so it needs to exist)
-	*tmclient.TabletManagerProtocol = "grpc"
+	tmclient.TabletManagerProtocol = "grpc"
 }
 
 func TestSchemaManagerControllerOpenFail(t *testing.T) {

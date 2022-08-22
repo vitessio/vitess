@@ -117,10 +117,10 @@ func NewVtctldServerWithTabletManagerClient(t testing.TB, ts *topo.Server, tmc t
 
 	// Be (mostly, we can't help concurrent goroutines not using this function)
 	// atomic with our mutation of the global TabletManagerProtocol pointer.
-	oldProto := *tmclient.TabletManagerProtocol
-	defer func() { *tmclient.TabletManagerProtocol = oldProto }()
+	oldProto := tmclient.TabletManagerProtocol
+	defer func() { tmclient.TabletManagerProtocol = oldProto }()
 
-	*tmclient.TabletManagerProtocol = protocol
+	tmclient.TabletManagerProtocol = protocol
 
 	return newVtctldServerFn(ts)
 }

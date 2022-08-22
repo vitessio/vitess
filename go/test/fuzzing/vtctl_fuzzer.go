@@ -29,7 +29,7 @@ import (
 )
 
 func init() {
-	*tmclient.TabletManagerProtocol = "fuzzing"
+	tmclient.TabletManagerProtocol = "fuzzing"
 	tmclient.RegisterTabletManagerClientFactory("fuzzing", func() tmclient.TabletManagerClient {
 		return nil
 	})

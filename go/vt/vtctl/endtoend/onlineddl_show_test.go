@@ -115,7 +115,7 @@ func onlineDDLTest(t *testing.T, args []string, expectedQuery string) {
 	tmclient.RegisterTabletManagerClientFactory(t.Name(), func() tmclient.TabletManagerClient {
 		return &tmc
 	})
-	*tmclient.TabletManagerProtocol = t.Name()
+	tmclient.TabletManagerProtocol = t.Name()
 
 	logger := logutil.NewMemoryLogger()
 	wr := wrangler.New(logger, fakeTopo, &tmc)

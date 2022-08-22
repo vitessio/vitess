@@ -47,7 +47,7 @@ import (
 func init() {
 	// enforce we will use the right protocol (gRPC) (note the
 	// client is unused, but it is initialized, so it needs to exist)
-	*tmclient.TabletManagerProtocol = "grpc"
+	tmclient.TabletManagerProtocol = "grpc"
 }
 
 // CreateTopoServer returns the test topo server properly configured

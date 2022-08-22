@@ -65,7 +65,7 @@ func init() {
 	// Tests that do care about the tmclient should use
 	// testutil.NewVtctldServerWithTabletManagerClient to initialize their
 	// VtctldServer.
-	*tmclient.TabletManagerProtocol = "grpcvtctldserver.test"
+	tmclient.TabletManagerProtocol = "grpcvtctldserver.test"
 	tmclient.RegisterTabletManagerClientFactory("grpcvtctldserver.test", func() tmclient.TabletManagerClient {
 		return nil
 	})

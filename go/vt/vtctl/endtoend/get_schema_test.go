@@ -155,7 +155,7 @@ func TestGetSchema(t *testing.T) {
 	tmclient.RegisterTabletManagerClientFactory(t.Name(), func() tmclient.TabletManagerClient {
 		return &tmc
 	})
-	*tmclient.TabletManagerProtocol = t.Name()
+	tmclient.TabletManagerProtocol = t.Name()
 
 	logger := logutil.NewMemoryLogger()
 

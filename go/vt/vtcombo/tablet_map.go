@@ -180,7 +180,7 @@ func InitTabletMap(
 	tmclient.RegisterTabletManagerClientFactory("internal", func() tmclient.TabletManagerClient {
 		return &internalTabletManagerClient{}
 	})
-	*tmclient.TabletManagerProtocol = "internal"
+	tmclient.TabletManagerProtocol = "internal"
 
 	// iterate through the keyspaces
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, nil)

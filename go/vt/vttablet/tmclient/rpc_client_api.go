@@ -17,15 +17,16 @@ limitations under the License.
 package tmclient
 
 import (
-	"flag"
+	"context"
 	"time"
 
-	"context"
+	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
+	"vitess.io/vitess/go/vt/servenv"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
@@ -35,7 +36,30 @@ import (
 
 // TabletManagerProtocol is the implementation to use for tablet
 // manager protocol. It is exported for tests only.
-var TabletManagerProtocol = flag.String("tablet_manager_protocol", "grpc", "the protocol to use to talk to vttablet")
+// TODO (ajm188): unexport this, rewrite tests to use RegisterFlags instead.
+var TabletManagerProtocol = "grpc"
+
+// RegisterFlags registers the tabletconn flags on a given flagset. It is
+// exported for tests that need to inject a particular TabletManagerProtocol.
+func RegisterFlags(fs *pflag.FlagSet) {
+	fs.StringVar(&TabletManagerProtocol, "tablet_manager_protocol", TabletManagerProtocol, "Protocol to use to talk to vttablets.")
+}
+
+func init() {
+	for _, cmd := range []string{
+		"vtbackup",
+		"vtcombo",
+		"vtctl",
+		"vtctld",
+		"vtctldclient",
+		"vtgr",
+		"vtorc",
+		"vttablet",
+		"vttestserver",
+	} {
+		servenv.OnParseFor(cmd, RegisterFlags)
+	}
+}
 
 // TabletManagerClient defines the interface used to talk to a remote tablet
 type TabletManagerClient interface {
@@ -244,9 +268,9 @@ func RegisterTabletManagerClientFactory(name string, factory TabletManagerClient
 // NewTabletManagerClient creates a new TabletManagerClient. Should be
 // called after flags are parsed.
 func NewTabletManagerClient() TabletManagerClient {
-	f, ok := tabletManagerClientFactories[*TabletManagerProtocol]
+	f, ok := tabletManagerClientFactories[TabletManagerProtocol]
 	if !ok {
-		log.Exitf("No TabletManagerProtocol registered with name %s", *TabletManagerProtocol)
+		log.Exitf("No TabletManagerProtocol registered with name %s", TabletManagerProtocol)
 	}
 
 	return f()

@@ -239,6 +239,6 @@ func (ft *fakeTablet) Target() querypb.Target {
 
 func init() {
 	// enforce we will use the right protocol (gRPC) in all unit tests
-	*tmclient.TabletManagerProtocol = "grpc"
+	tmclient.TabletManagerProtocol = "grpc"
 	tabletconntest.SetProtocol("go.vt.wrangler.fake_tablet_test", "grpc")
 }
