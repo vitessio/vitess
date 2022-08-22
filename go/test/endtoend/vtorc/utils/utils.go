@@ -45,7 +45,6 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -397,12 +396,10 @@ func CheckPrimaryTablet(t *testing.T, clusterInfo *VtOrcClusterInfo, tablet *clu
 			continue
 		}
 		// make sure the health stream is updated
-		result, err = clusterInfo.ClusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "--", "--count", "1", tablet.Alias)
+		shrs, err := clusterInfo.ClusterInstance.StreamTabletHealth(context.Background(), tablet, 1)
 		require.NoError(t, err)
-		var streamHealthResponse querypb.StreamHealthResponse
+		streamHealthResponse := shrs[0]
 
-		err = json2.Unmarshal([]byte(result), &streamHealthResponse)
-		require.NoError(t, err)
 		if checkServing && !streamHealthResponse.GetServing() {
 			log.Warningf("Tablet %v is not serving in health stream yet, sleep for 1 second\n", tablet.Alias)
 			time.Sleep(time.Second)

@@ -412,15 +412,9 @@ func TestMergesharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	require.NoError(t, err)
 
 	sharding.CheckTabletQueryService(t, *shard3Primary, "NOT_SERVING", false, *clusterInstance)
-	streamHealth, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
-		"VtTabletStreamHealth", "--",
-		"--count", "1", shard3Primary.Alias)
+	shrs, err := clusterInstance.StreamTabletHealth(context.Background(), shard3Primary, 1)
 	require.NoError(t, err)
-	log.Info("Got health: ", streamHealth)
-
-	var streamHealthResponse querypb.StreamHealthResponse
-	err = json.Unmarshal([]byte(streamHealth), &streamHealthResponse)
-	require.NoError(t, err)
+	streamHealthResponse := shrs[0]
 	assert.Equal(t, streamHealthResponse.Serving, false)
 	assert.NotNil(t, streamHealthResponse.RealtimeStats)
 

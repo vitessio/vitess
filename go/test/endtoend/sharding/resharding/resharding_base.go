@@ -621,20 +621,14 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RunHealthCheck", shard3Primary.Alias)
 	require.Nil(t, err)
 
-	for _, primary := range []cluster.Vttablet{*shard2Primary, *shard3Primary} {
-		sharding.CheckTabletQueryService(t, primary, "NOT_SERVING", false, *clusterInstance)
-		streamHealth, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
-			"VtTabletStreamHealth", "--",
-			"--count", "1", primary.Alias)
-		require.Nil(t, err)
-		log.Info("Got health: ", streamHealth)
+	for _, primary := range []*cluster.Vttablet{shard2Primary, shard3Primary} {
+		sharding.CheckTabletQueryService(t, *primary, "NOT_SERVING", false, *clusterInstance)
+		shrs, err := clusterInstance.StreamTabletHealth(context.Background(), primary, 1)
+		require.NoError(t, err)
+		streamHealthResponse := shrs[0]
 
-		var streamHealthResponse querypb.StreamHealthResponse
-		err = json.Unmarshal([]byte(streamHealth), &streamHealthResponse)
-		require.Nil(t, err)
 		assert.Equal(t, streamHealthResponse.Serving, false)
 		assert.NotNil(t, streamHealthResponse.RealtimeStats)
-
 	}
 
 	// now serve rdonly from the split shards, in cell1 only
