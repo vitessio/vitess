@@ -1,5 +1,5 @@
 /*
-Copyright 2019 The Vitess Authors.
+Copyright 2022 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,22 +14,25 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package logutil
+package graphviz
 
 import (
-	_flag "vitess.io/vitess/go/internal/flag"
+	"fmt"
+	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
-func init() {
-	threshold := _flag.Lookup("stderrthreshold")
-	if threshold == nil {
-		// the logging module doesn't specify a stderrthreshold flag
-		return
-	}
+func TestSimple(t *testing.T) {
+	g := New()
+	n1 := g.AddNode("apa")
+	n1.AddAttribute("aåö**|")
+	n1.AddAttribute("value")
+	n2 := g.AddNode("banan")
+	g.AddEdge(n1, n2)
 
-	const warningLevel = "1"
-	if err := threshold.Value.Set(warningLevel); err != nil {
-		return
-	}
-	threshold.DefValue = warningLevel
+	fmt.Println(g.produceDot())
+
+	err := g.Render()
+	require.NoError(t, err)
 }

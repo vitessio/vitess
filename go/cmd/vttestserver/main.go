@@ -26,11 +26,14 @@ import (
 	"os/signal"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 
+	"github.com/spf13/pflag"
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/vttest"
 
 	vttestpb "vitess.io/vitess/go/vt/proto/vttest"
@@ -200,7 +203,24 @@ func (t *topoFlags) buildTopology() (*vttestpb.VTTestTopology, error) {
 	return topo, nil
 }
 
+// Annoying, but in unit tests, parseFlags gets called multiple times per process
+// (anytime startCluster is called), so we need to guard against the second test
+// to run failing with:
+//	flag redefined: log_rotate_max_size
+var logFlagsOnce sync.Once
+
 func parseFlags() (env vttest.Environment, err error) {
+	logFlagsOnce.Do(func() {
+		fs := pflag.NewFlagSet("vtgateclienttest", pflag.ExitOnError)
+		log.RegisterFlags(fs)
+		logutil.RegisterFlags(fs)
+
+		// Move all pflag flags back to the goflag CommandLine.
+		fs.VisitAll(func(f *pflag.Flag) {
+			flag.Var(f.Value, f.Name, f.Usage)
+		})
+	})
+
 	flag.Parse()
 
 	if basePort != 0 {

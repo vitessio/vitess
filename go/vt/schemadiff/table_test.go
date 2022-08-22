@@ -351,8 +351,8 @@ func TestCreateTableDiff(t *testing.T) {
 			name:  "dropped primary key",
 			from:  "create table t1 (id int, primary key(id))",
 			to:    "create table t2 (id int)",
-			diff:  "alter table t1 drop key `PRIMARY`",
-			cdiff: "ALTER TABLE `t1` DROP KEY `PRIMARY`",
+			diff:  "alter table t1 drop primary key",
+			cdiff: "ALTER TABLE `t1` DROP PRIMARY KEY",
 		},
 		{
 			name:  "dropped key",
@@ -379,8 +379,8 @@ func TestCreateTableDiff(t *testing.T) {
 			name:  "modified primary key",
 			from:  "create table t1 (`id` int, i int, primary key(id), key i_idx(i))",
 			to:    "create table t2 (`id` int, i int, primary key(id, i),key i_idx(`i`))",
-			diff:  "alter table t1 drop key `PRIMARY`, add primary key (id, i)",
-			cdiff: "ALTER TABLE `t1` DROP KEY `PRIMARY`, ADD PRIMARY KEY (`id`, `i`)",
+			diff:  "alter table t1 drop primary key, add primary key (id, i)",
+			cdiff: "ALTER TABLE `t1` DROP PRIMARY KEY, ADD PRIMARY KEY (`id`, `i`)",
 		},
 		{
 			name: "reordered key, no diff",
