@@ -388,6 +388,7 @@ message QueryResult {
   uint64 insert_id = 3;
   repeated Row rows = 4;
   string info = 6;
+  string session_state_changes = 7;
 }
 
 // QueryWarning is used to convey out of band query execution warnings
@@ -483,6 +484,9 @@ message BeginRequest {
 message BeginResponse {
   int64 transaction_id = 1;
   topodata.TabletAlias tablet_alias = 2;
+  // The session_state_changes might be set if the transaction is a snapshot transaction
+  // and the MySQL implementation supports getting a start gtid on snapshot
+  string session_state_changes = 3;
 }
 
 // CommitRequest is the payload to Commit
@@ -629,6 +633,9 @@ message BeginExecuteResponse {
   // transaction_id might be non-zero even if an error is present.
   int64 transaction_id = 3;
   topodata.TabletAlias tablet_alias = 4;
+  // The session_state_changes might be set if the transaction is a snapshot transaction
+  // and the MySQL implementation supports getting a start gtid on snapshot
+  string session_state_changes = 5;
 }
 
 // BeginStreamExecuteRequest is the payload to BeginStreamExecute
@@ -654,6 +661,9 @@ message BeginStreamExecuteResponse {
   // transaction_id might be non-zero even if an error is present.
   int64 transaction_id = 3;
   topodata.TabletAlias tablet_alias = 4;
+  // The session_state_changes might be set if the transaction is a snapshot transaction
+  // and the MySQL implementation supports getting a start gtid on snapshot
+  string session_state_changes = 5;
 }
 
 // MessageStreamRequest is the request payload for MessageStream.
@@ -753,6 +763,9 @@ message ReserveBeginExecuteResponse {
   int64 transaction_id = 3;
   int64 reserved_id = 4;
   topodata.TabletAlias tablet_alias = 5;
+  // The session_state_changes might be set if the transaction is a snapshot transaction
+  // and the MySQL implementation supports getting a start gtid on snapshot
+  string session_state_changes = 6;
 }
 
 // ReserveBeginStreamExecuteRequest is the payload to ReserveBeginStreamExecute
@@ -779,6 +792,9 @@ message ReserveBeginStreamExecuteResponse {
   int64 transaction_id = 3;
   int64 reserved_id = 4;
   topodata.TabletAlias tablet_alias = 5;
+  // The session_state_changes might be set if the transaction is a snapshot transaction
+  // and the MySQL implementation supports getting a start gtid on snapshot
+  string session_state_changes = 6;
 }
 
 // ReleaseRequest is the payload to Release

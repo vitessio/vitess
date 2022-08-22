@@ -198,6 +198,7 @@ func (conn *gRPCQueryClient) Begin(ctx context.Context, target *querypb.Target, 
 	}
 	state.TransactionID = br.TransactionId
 	state.TabletAlias = br.TabletAlias
+	state.SessionStateChanges = br.SessionStateChanges
 	return state, nil
 }
 
@@ -445,6 +446,7 @@ func (conn *gRPCQueryClient) BeginExecute(ctx context.Context, target *querypb.T
 	}
 	state.TransactionID = reply.TransactionId
 	state.TabletAlias = conn.tablet.Alias
+	state.SessionStateChanges = reply.SessionStateChanges
 	if reply.Error != nil {
 		return state, nil, tabletconn.ErrorFromVTRPC(reply.Error)
 	}
@@ -495,6 +497,9 @@ func (conn *gRPCQueryClient) BeginStreamExecute(ctx context.Context, target *que
 		}
 		if state.TabletAlias == nil && ser.GetTabletAlias() != nil {
 			state.TabletAlias = ser.GetTabletAlias()
+		}
+		if state.SessionStateChanges == "" && ser.GetSessionStateChanges() != "" {
+			state.SessionStateChanges = ser.GetSessionStateChanges()
 		}
 
 		if err != nil {
@@ -779,6 +784,7 @@ func (conn *gRPCQueryClient) ReserveBeginExecute(ctx context.Context, target *qu
 	state.ReservedID = reply.ReservedId
 	state.TransactionID = reply.TransactionId
 	state.TabletAlias = conn.tablet.Alias
+	state.SessionStateChanges = reply.SessionStateChanges
 	if reply.Error != nil {
 		return state, nil, tabletconn.ErrorFromVTRPC(reply.Error)
 	}
@@ -834,6 +840,9 @@ func (conn *gRPCQueryClient) ReserveBeginStreamExecute(ctx context.Context, targ
 		}
 		if state.TabletAlias == nil && ser.GetTabletAlias() != nil {
 			state.TabletAlias = ser.GetTabletAlias()
+		}
+		if state.SessionStateChanges == "" && ser.GetSessionStateChanges() != "" {
+			state.SessionStateChanges = ser.GetSessionStateChanges()
 		}
 
 		if err != nil {

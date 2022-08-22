@@ -123,8 +123,9 @@ type QueryService interface {
 }
 
 type TransactionState struct {
-	TransactionID int64
-	TabletAlias   *topodatapb.TabletAlias
+	TransactionID       int64
+	TabletAlias         *topodatapb.TabletAlias
+	SessionStateChanges string
 }
 
 type ReservedState struct {
@@ -133,9 +134,10 @@ type ReservedState struct {
 }
 
 type ReservedTransactionState struct {
-	ReservedID    int64
-	TransactionID int64
-	TabletAlias   *topodatapb.TabletAlias
+	ReservedID          int64
+	TransactionID       int64
+	TabletAlias         *topodatapb.TabletAlias
+	SessionStateChanges string
 }
 
 type resultStreamer struct {
