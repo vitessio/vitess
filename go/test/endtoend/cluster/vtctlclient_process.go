@@ -49,7 +49,7 @@ type VtctlClientParams struct {
 func (vtctlclient *VtctlClientProcess) InitShardPrimary(Keyspace string, Shard string, Cell string, TabletUID int) (err error) {
 	output, err := vtctlclient.ExecuteCommandWithOutput(
 		"InitShardPrimary",
-		"-force", "-wait_replicas_timeout", "31s",
+		"--force", "--wait_replicas_timeout", "31s",
 		fmt.Sprintf("%s/%s", Keyspace, Shard),
 		fmt.Sprintf("%s-%d", Cell, TabletUID))
 	if err != nil {
@@ -62,9 +62,9 @@ func (vtctlclient *VtctlClientProcess) InitShardPrimary(Keyspace string, Shard s
 func (vtctlclient *VtctlClientProcess) InitializeShard(Keyspace string, Shard string, Cell string, TabletUID int) (err error) {
 	output, err := vtctlclient.ExecuteCommandWithOutput(
 		"PlannedReparentShard",
-		"-keyspace_shard", fmt.Sprintf("%s/%s", Keyspace, Shard),
-		"-wait_replicas_timeout", "31s",
-		"-new_primary", fmt.Sprintf("%s-%d", Cell, TabletUID))
+		"--keyspace_shard", fmt.Sprintf("%s/%s", Keyspace, Shard),
+		"--wait_replicas_timeout", "31s",
+		"--new_primary", fmt.Sprintf("%s-%d", Cell, TabletUID))
 	if err != nil {
 		log.Errorf("error in PlannedReparentShard output %s, err %s", output, err.Error())
 	}
@@ -75,23 +75,23 @@ func (vtctlclient *VtctlClientProcess) InitializeShard(Keyspace string, Shard st
 func (vtctlclient *VtctlClientProcess) ApplySchemaWithOutput(Keyspace string, SQL string, params VtctlClientParams) (result string, err error) {
 	args := []string{
 		"ApplySchema",
-		"-sql", SQL,
+		"--sql", SQL,
 	}
 	if params.MigrationContext != "" {
-		args = append(args, "-migration_context", params.MigrationContext)
+		args = append(args, "--migration_context", params.MigrationContext)
 	}
 	if params.DDLStrategy != "" {
-		args = append(args, "-ddl_strategy", params.DDLStrategy)
+		args = append(args, "--ddl_strategy", params.DDLStrategy)
 	}
 	if params.UUIDList != "" {
-		args = append(args, "-uuid_list", params.UUIDList)
+		args = append(args, "--uuid_list", params.UUIDList)
 	}
 	if params.SkipPreflight {
-		args = append(args, "-skip_preflight")
+		args = append(args, "--skip_preflight")
 	}
 
 	if params.CallerId != "" {
-		args = append(args, "-caller_id", params.CallerId)
+		args = append(args, "--caller_id", params.CallerId)
 	}
 	args = append(args, Keyspace)
 	return vtctlclient.ExecuteCommandWithOutput(args...)
@@ -108,14 +108,14 @@ func (vtctlclient *VtctlClientProcess) ApplySchema(Keyspace string, SQL string) 
 func (vtctlclient *VtctlClientProcess) ApplyVSchema(Keyspace string, JSON string) (err error) {
 	return vtctlclient.ExecuteCommand(
 		"ApplyVSchema",
-		"-vschema", JSON,
+		"--vschema", JSON,
 		Keyspace,
 	)
 }
 
 // ApplyRoutingRules does it
 func (vtctlclient *VtctlClientProcess) ApplyRoutingRules(JSON string) (err error) {
-	return vtctlclient.ExecuteCommand("ApplyRoutingRules", "-rules", JSON)
+	return vtctlclient.ExecuteCommand("ApplyRoutingRules", "--rules", JSON)
 }
 
 // OnlineDDLShowRecent responds with recent schema migration list
@@ -189,9 +189,9 @@ func (vtctlclient *VtctlClientProcess) ExecuteCommand(args ...string) (err error
 
 // ExecuteCommandWithOutput executes any vtctlclient command and returns output
 func (vtctlclient *VtctlClientProcess) ExecuteCommandWithOutput(args ...string) (result string, err error) {
-	pArgs := []string{"-server", vtctlclient.Server}
+	pArgs := []string{"--server", vtctlclient.Server}
 	if *isCoverage {
-		pArgs = append(pArgs, "-test.coverprofile="+getCoveragePath("vtctlclient-"+args[0]+".out"), "-test.v")
+		pArgs = append(pArgs, "--test.coverprofile="+getCoveragePath("vtctlclient-"+args[0]+".out"), "--test.v")
 	}
 	pArgs = append(pArgs, args...)
 	tmpProcess := exec.Command(
@@ -221,15 +221,15 @@ func (vtctlclient *VtctlClientProcess) InitTablet(tablet *Vttablet, cell string,
 	if tablet.Type == "rdonly" {
 		tabletType = "rdonly"
 	}
-	args := []string{"InitTablet", "-hostname", hostname,
-		"-port", fmt.Sprintf("%d", tablet.HTTPPort), "-allow_update", "-parent",
-		"-keyspace", keyspaceName,
-		"-shard", shardName}
+	args := []string{"InitTablet", "--hostname", hostname,
+		"--port", fmt.Sprintf("%d", tablet.HTTPPort), "--allow_update", "--parent",
+		"--keyspace", keyspaceName,
+		"--shard", shardName}
 	if tablet.MySQLPort > 0 {
-		args = append(args, "-mysql_port", fmt.Sprintf("%d", tablet.MySQLPort))
+		args = append(args, "--mysql_port", fmt.Sprintf("%d", tablet.MySQLPort))
 	}
 	if tablet.GrpcPort > 0 {
-		args = append(args, "-grpc_port", fmt.Sprintf("%d", tablet.GrpcPort))
+		args = append(args, "--grpc_port", fmt.Sprintf("%d", tablet.GrpcPort))
 	}
 	args = append(args, fmt.Sprintf("%s-%010d", cell, tablet.TabletUID), tabletType)
 	return vtctlclient.ExecuteCommand(args...)

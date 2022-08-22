@@ -41,17 +41,17 @@ type VtctlProcess struct {
 func (vtctl *VtctlProcess) AddCellInfo(Cell string) (err error) {
 	tmpProcess := exec.Command(
 		vtctl.Binary,
-		"-topo_implementation", vtctl.TopoImplementation,
-		"-topo_global_server_address", vtctl.TopoGlobalAddress,
-		"-topo_global_root", vtctl.TopoGlobalRoot,
+		"--topo_implementation", vtctl.TopoImplementation,
+		"--topo_global_server_address", vtctl.TopoGlobalAddress,
+		"--topo_global_root", vtctl.TopoGlobalRoot,
 	)
 	if *isCoverage {
-		tmpProcess.Args = append(tmpProcess.Args, "-test.coverprofile="+getCoveragePath("vtctl-addcell.out"))
+		tmpProcess.Args = append(tmpProcess.Args, "--test.coverprofile="+getCoveragePath("vtctl-addcell.out"))
 	}
 	tmpProcess.Args = append(tmpProcess.Args,
 		"AddCellInfo",
-		"-root", vtctl.TopoRootPath+Cell,
-		"-server_address", vtctl.TopoServerAddress,
+		"--root", vtctl.TopoRootPath+Cell,
+		"--server_address", vtctl.TopoServerAddress,
 		Cell)
 	log.Infof("Adding CellInfo for cell %v with command: %v", Cell, strings.Join(tmpProcess.Args, " "))
 	return tmpProcess.Run()
@@ -69,13 +69,13 @@ func (vtctl *VtctlProcess) CreateKeyspace(keyspace string) (err error) {
 // ExecuteCommandWithOutput executes any vtctlclient command and returns output
 func (vtctl *VtctlProcess) ExecuteCommandWithOutput(args ...string) (result string, err error) {
 	args = append([]string{
-		"-log_dir", vtctl.LogDir,
-		"-enable_queries",
-		"-topo_implementation", vtctl.TopoImplementation,
-		"-topo_global_server_address", vtctl.TopoGlobalAddress,
-		"-topo_global_root", vtctl.TopoGlobalRoot}, args...)
+		"--log_dir", vtctl.LogDir,
+		"--enable_queries",
+		"--topo_implementation", vtctl.TopoImplementation,
+		"--topo_global_server_address", vtctl.TopoGlobalAddress,
+		"--topo_global_root", vtctl.TopoGlobalRoot}, args...)
 	if *isCoverage {
-		args = append([]string{"-test.coverprofile=" + getCoveragePath("vtctl-o-"+args[0]+".out"), "-test.v"}, args...)
+		args = append([]string{"--test.coverprofile=" + getCoveragePath("vtctl-o-"+args[0]+".out"), "--test.v"}, args...)
 	}
 	tmpProcess := exec.Command(
 		vtctl.Binary,
@@ -89,12 +89,12 @@ func (vtctl *VtctlProcess) ExecuteCommandWithOutput(args ...string) (result stri
 // ExecuteCommand executes any vtctlclient command
 func (vtctl *VtctlProcess) ExecuteCommand(args ...string) (err error) {
 	args = append([]string{
-		"-enable_queries",
-		"-topo_implementation", vtctl.TopoImplementation,
-		"-topo_global_server_address", vtctl.TopoGlobalAddress,
-		"-topo_global_root", vtctl.TopoGlobalRoot}, args...)
+		"--enable_queries",
+		"--topo_implementation", vtctl.TopoImplementation,
+		"--topo_global_server_address", vtctl.TopoGlobalAddress,
+		"--topo_global_root", vtctl.TopoGlobalRoot}, args...)
 	if *isCoverage {
-		args = append([]string{"-test.coverprofile=" + getCoveragePath("vtctl-"+args[0]+".out"), "-test.v"}, args...)
+		args = append([]string{"--test.coverprofile=" + getCoveragePath("vtctl-"+args[0]+".out"), "--test.v"}, args...)
 	}
 	tmpProcess := exec.Command(
 		vtctl.Binary,
