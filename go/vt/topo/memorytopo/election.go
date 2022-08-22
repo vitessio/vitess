@@ -76,29 +76,28 @@ func (mp *cLeaderParticipation) WaitForLeadership() (context.Context, error) {
 	}
 
 	electionPath := path.Join(electionsPath, mp.name)
-	var ld topo.LockDescriptor
 
 	// We use a cancelable context here. If stop is closed,
 	// we just cancel that context.
 	lockCtx, lockCancel := context.WithCancel(context.Background())
+
+	// Try to get the primaryship, by getting a lock.
+	ld, err := mp.c.Lock(lockCtx, electionPath, mp.id)
+	if err != nil {
+		lockCancel()
+		close(mp.done)
+		// It can be that we were interrupted.
+		return nil, err
+	}
+
 	go func() {
 		<-mp.stop
-		if ld != nil {
-			if err := ld.Unlock(context.Background()); err != nil {
-				log.Errorf("failed to unlock LockDescriptor %v: %v", electionPath, err)
-			}
+		if err := ld.Unlock(context.Background()); err != nil {
+			log.Errorf("failed to unlock LockDescriptor %v: %v", electionPath, err)
 		}
 		lockCancel()
 		close(mp.done)
 	}()
-
-	// Try to get the primaryship, by getting a lock.
-	var err error
-	ld, err = mp.c.Lock(lockCtx, electionPath, mp.id)
-	if err != nil {
-		// It can be that we were interrupted.
-		return nil, err
-	}
 
 	// We got the lock. Return the lockContext. If Stop() is called,
 	// it will cancel the lockCtx, and cancel the returned context.
