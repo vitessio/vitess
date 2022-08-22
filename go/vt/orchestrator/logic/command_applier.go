@@ -18,10 +18,11 @@ package logic
 
 import (
 	"encoding/json"
+	"fmt"
+
+	"vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/vt/orchestrator/inst"
-
-	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 )
 
 // AsyncRequest represents an entry in the async_request table
@@ -78,7 +79,9 @@ func (applier *CommandApplier) ApplyCommand(op string, value []byte) any {
 	case "set-cluster-alias-manual-override":
 		return applier.setClusterAliasManualOverride(value)
 	}
-	return log.Errorf("Unknown command op: %s", op)
+	errMsg := fmt.Sprintf("Unknown command op: %s", op)
+	log.Errorf(errMsg)
+	return fmt.Errorf(errMsg)
 }
 
 func (applier *CommandApplier) registerNode(value []byte) any {
@@ -88,7 +91,8 @@ func (applier *CommandApplier) registerNode(value []byte) any {
 func (applier *CommandApplier) discover(value []byte) any {
 	instanceKey := inst.InstanceKey{}
 	if err := json.Unmarshal(value, &instanceKey); err != nil {
-		return log.Errore(err)
+		log.Error(err)
+		return err
 	}
 	DiscoverInstance(instanceKey, false /* forceDiscovery */)
 	return nil
@@ -97,7 +101,8 @@ func (applier *CommandApplier) discover(value []byte) any {
 func (applier *CommandApplier) forget(value []byte) any {
 	instanceKey := inst.InstanceKey{}
 	if err := json.Unmarshal(value, &instanceKey); err != nil {
-		return log.Errore(err)
+		log.Error(err)
+		return err
 	}
 	err := inst.ForgetInstance(&instanceKey)
 	return err
@@ -106,7 +111,8 @@ func (applier *CommandApplier) forget(value []byte) any {
 func (applier *CommandApplier) forgetCluster(value []byte) any {
 	var clusterName string
 	if err := json.Unmarshal(value, &clusterName); err != nil {
-		return log.Errore(err)
+		log.Error(err)
+		return err
 	}
 	err := inst.ForgetCluster(clusterName)
 	return err
@@ -115,7 +121,8 @@ func (applier *CommandApplier) forgetCluster(value []byte) any {
 func (applier *CommandApplier) beginDowntime(value []byte) any {
 	downtime := inst.Downtime{}
 	if err := json.Unmarshal(value, &downtime); err != nil {
-		return log.Errore(err)
+		log.Error(err)
+		return err
 	}
 	err := inst.BeginDowntime(&downtime)
 	return err
@@ -124,7 +131,8 @@ func (applier *CommandApplier) beginDowntime(value []byte) any {
 func (applier *CommandApplier) endDowntime(value []byte) any {
 	instanceKey := inst.InstanceKey{}
 	if err := json.Unmarshal(value, &instanceKey); err != nil {
-		return log.Errore(err)
+		log.Error(err)
+		return err
 	}
 	_, err := inst.EndDowntime(&instanceKey)
 	return err
@@ -133,7 +141,8 @@ func (applier *CommandApplier) endDowntime(value []byte) any {
 func (applier *CommandApplier) registerCandidate(value []byte) any {
 	candidate := inst.CandidateDatabaseInstance{}
 	if err := json.Unmarshal(value, &candidate); err != nil {
-		return log.Errore(err)
+		log.Error(err)
+		return err
 	}
 	err := inst.RegisterCandidateInstance(&candidate)
 	return err
@@ -143,7 +152,8 @@ func (applier *CommandApplier) ackRecovery(value []byte) any {
 	ack := RecoveryAcknowledgement{}
 	err := json.Unmarshal(value, &ack)
 	if err != nil {
-		return log.Errore(err)
+		log.Error(err)
+		return err
 	}
 	if ack.AllRecoveries {
 		_, err = AcknowledgeAllRecoveries(ack.Owner, ack.Comment)
@@ -166,7 +176,8 @@ func (applier *CommandApplier) ackRecovery(value []byte) any {
 func (applier *CommandApplier) registerHostnameUnresolve(value []byte) any {
 	registration := inst.HostnameRegistration{}
 	if err := json.Unmarshal(value, &registration); err != nil {
-		return log.Errore(err)
+		log.Error(err)
+		return err
 	}
 	err := inst.RegisterHostnameUnresolve(&registration)
 	return err
@@ -175,7 +186,8 @@ func (applier *CommandApplier) registerHostnameUnresolve(value []byte) any {
 func (applier *CommandApplier) submitPoolInstances(value []byte) any {
 	submission := inst.PoolInstancesSubmission{}
 	if err := json.Unmarshal(value, &submission); err != nil {
-		return log.Errore(err)
+		log.Error(err)
+		return err
 	}
 	err := inst.ApplyPoolInstances(&submission)
 	return err
@@ -184,7 +196,8 @@ func (applier *CommandApplier) submitPoolInstances(value []byte) any {
 func (applier *CommandApplier) registerFailureDetection(value []byte) any {
 	analysisEntry := inst.ReplicationAnalysis{}
 	if err := json.Unmarshal(value, &analysisEntry); err != nil {
-		return log.Errore(err)
+		log.Error(err)
+		return err
 	}
 	_, err := AttemptFailureDetectionRegistration(&analysisEntry)
 	return err
@@ -193,7 +206,8 @@ func (applier *CommandApplier) registerFailureDetection(value []byte) any {
 func (applier *CommandApplier) writeRecovery(value []byte) any {
 	topologyRecovery := TopologyRecovery{}
 	if err := json.Unmarshal(value, &topologyRecovery); err != nil {
-		return log.Errore(err)
+		log.Error(err)
+		return err
 	}
 	if _, err := writeTopologyRecovery(&topologyRecovery); err != nil {
 		return err
@@ -204,7 +218,8 @@ func (applier *CommandApplier) writeRecovery(value []byte) any {
 func (applier *CommandApplier) writeRecoveryStep(value []byte) any {
 	topologyRecoveryStep := TopologyRecoveryStep{}
 	if err := json.Unmarshal(value, &topologyRecoveryStep); err != nil {
-		return log.Errore(err)
+		log.Error(err)
+		return err
 	}
 	err := writeTopologyRecoveryStep(&topologyRecoveryStep)
 	return err
@@ -213,10 +228,12 @@ func (applier *CommandApplier) writeRecoveryStep(value []byte) any {
 func (applier *CommandApplier) resolveRecovery(value []byte) any {
 	topologyRecovery := TopologyRecovery{}
 	if err := json.Unmarshal(value, &topologyRecovery); err != nil {
-		return log.Errore(err)
+		log.Error(err)
+		return err
 	}
 	if err := writeResolveRecovery(&topologyRecovery); err != nil {
-		return log.Errore(err)
+		log.Error(err)
+		return err
 	}
 	return nil
 }
@@ -234,7 +251,8 @@ func (applier *CommandApplier) enableGlobalRecoveries(value []byte) any {
 func (applier *CommandApplier) putInstanceTag(value []byte) any {
 	instanceTag := inst.InstanceTag{}
 	if err := json.Unmarshal(value, &instanceTag); err != nil {
-		return log.Errore(err)
+		log.Error(err)
+		return err
 	}
 	err := inst.PutInstanceTag(&instanceTag.Key, &instanceTag.T)
 	return err
@@ -243,7 +261,8 @@ func (applier *CommandApplier) putInstanceTag(value []byte) any {
 func (applier *CommandApplier) deleteInstanceTag(value []byte) any {
 	instanceTag := inst.InstanceTag{}
 	if err := json.Unmarshal(value, &instanceTag); err != nil {
-		return log.Errore(err)
+		log.Error(err)
+		return err
 	}
 	_, err := inst.Untag(&instanceTag.Key, &instanceTag.T)
 	return err
@@ -252,7 +271,8 @@ func (applier *CommandApplier) deleteInstanceTag(value []byte) any {
 func (applier *CommandApplier) setClusterAliasManualOverride(value []byte) any {
 	var params [2]string
 	if err := json.Unmarshal(value, &params); err != nil {
-		return log.Errore(err)
+		log.Error(err)
+		return err
 	}
 	clusterName, alias := params[0], params[1]
 	err := inst.SetClusterAliasManualOverride(clusterName, alias)
