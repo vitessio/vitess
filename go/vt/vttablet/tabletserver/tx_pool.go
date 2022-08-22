@@ -17,6 +17,7 @@ limitations under the License.
 package tabletserver
 
 import (
+	"context"
 	"sync"
 	"time"
 
@@ -25,8 +26,6 @@ import (
 	"vitess.io/vitess/go/vt/servenv"
 
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
-
-	"context"
 
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/timer"
@@ -223,7 +222,7 @@ func (tp *TxPool) Rollback(ctx context.Context, txConn *StatefulConnection) erro
 // the statements (if any) executed to initiate the transaction. In autocommit
 // mode the statement will be "".
 // The connection returned is locked for the callee and its responsibility is to unlock the connection.
-func (tp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions, readOnly bool, reservedID int64, preQueries []string) (*StatefulConnection, string, error) {
+func (tp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions, readOnly bool, reservedID int64, preQueries []string) (*StatefulConnection, string, string, error) {
 	span, ctx := trace.NewSpan(ctx, "TxPool.Begin")
 	defer span.Finish()
 
@@ -232,13 +231,13 @@ func (tp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions, re
 	if reservedID != 0 {
 		conn, err = tp.scp.GetAndLock(reservedID, "start transaction on reserve conn")
 		if err != nil {
-			return nil, "", vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction %d: %v", reservedID, err)
+			return nil, "", "", vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction %d: %v", reservedID, err)
 		}
 	} else {
 		immediateCaller := callerid.ImmediateCallerIDFromContext(ctx)
 		effectiveCaller := callerid.EffectiveCallerIDFromContext(ctx)
 		if !tp.limiter.Get(immediateCaller, effectiveCaller) {
-			return nil, "", vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "per-user transaction pool connection limit exceeded")
+			return nil, "", "", vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "per-user transaction pool connection limit exceeded")
 		}
 		conn, err = tp.createConn(ctx, options)
 		defer func() {
@@ -250,28 +249,28 @@ func (tp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions, re
 		}()
 	}
 	if err != nil {
-		return nil, "", err
+		return nil, "", "", err
 	}
-	sql, err := tp.begin(ctx, options, readOnly, conn, preQueries)
+	sql, sessionStateChanges, err := tp.begin(ctx, options, readOnly, conn, preQueries)
 	if err != nil {
 		conn.Close()
 		conn.Release(tx.ConnInitFail)
-		return nil, "", err
+		return nil, "", "", err
 	}
-	return conn, sql, nil
+	return conn, sql, sessionStateChanges, nil
 }
 
-func (tp *TxPool) begin(ctx context.Context, options *querypb.ExecuteOptions, readOnly bool, conn *StatefulConnection, preQueries []string) (string, error) {
+func (tp *TxPool) begin(ctx context.Context, options *querypb.ExecuteOptions, readOnly bool, conn *StatefulConnection, preQueries []string) (string, string, error) {
 	immediateCaller := callerid.ImmediateCallerIDFromContext(ctx)
 	effectiveCaller := callerid.EffectiveCallerIDFromContext(ctx)
-	beginQueries, autocommit, err := createTransaction(ctx, options, conn, readOnly, preQueries)
+	beginQueries, autocommit, sessionStateChanges, err := createTransaction(ctx, options, conn, readOnly, preQueries)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	conn.txProps = tp.NewTxProps(immediateCaller, effectiveCaller, autocommit)
 
-	return beginQueries, nil
+	return beginQueries, sessionStateChanges, nil
 }
 
 func (tp *TxPool) createConn(ctx context.Context, options *querypb.ExecuteOptions) (*StatefulConnection, error) {
@@ -291,39 +290,54 @@ func (tp *TxPool) createConn(ctx context.Context, options *querypb.ExecuteOption
 	return conn, nil
 }
 
-func createTransaction(ctx context.Context, options *querypb.ExecuteOptions, conn *StatefulConnection, readOnly bool, preQueries []string) (string, bool, error) {
+func createTransaction(ctx context.Context, options *querypb.ExecuteOptions, conn *StatefulConnection, readOnly bool, preQueries []string) (string, bool, string, error) {
 	beginQueries := ""
 
 	autocommitTransaction := false
+	sessionStateChanges := ""
 	if queries, ok := txIsolations[options.GetTransactionIsolation()]; ok {
+		if options.GetTransactionIsolation() == querypb.ExecuteOptions_CONSISTENT_SNAPSHOT_READ_ONLY {
+			trackGtidQuery := "set session session_track_gtids = START_GTID"
+			_, err := conn.execWithRetry(ctx, trackGtidQuery, 1, false)
+			// We allow this to fail since this is a custom MySQL extension, but we return
+			// then if this query was executed or not.
+			//
+			// Callers also can know because the sessionStateChanges will be empty for a snapshot
+			// transaction and get GTID information in another (less efficient) way.
+			if err == nil {
+				beginQueries += trackGtidQuery + "; "
+			}
+		}
 		if queries.setIsolationLevel != "" {
 			txQuery := "set transaction isolation level " + queries.setIsolationLevel
-			if err := conn.execWithRetry(ctx, txQuery, 1, false); err != nil {
-				return "", false, err
+			if _, err := conn.execWithRetry(ctx, txQuery, 1, false); err != nil {
+				return "", false, "", err
 			}
-			beginQueries = queries.setIsolationLevel + "; "
+			beginQueries += queries.setIsolationLevel + "; "
 		}
 		beginSQL := queries.openTransaction
 		if readOnly &&
 			options.GetTransactionIsolation() != querypb.ExecuteOptions_CONSISTENT_SNAPSHOT_READ_ONLY {
 			beginSQL = "start transaction read only"
 		}
-		if err := conn.execWithRetry(ctx, beginSQL, 1, false); err != nil {
-			return "", false, err
+		var err error
+		sessionStateChanges, err = conn.execWithRetry(ctx, beginSQL, 1, false)
+		if err != nil {
+			return "", false, "", err
 		}
-		beginQueries = beginQueries + beginSQL
+		beginQueries += beginSQL
 	} else if options.GetTransactionIsolation() == querypb.ExecuteOptions_AUTOCOMMIT {
 		autocommitTransaction = true
 	} else {
-		return "", false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "don't know how to open a transaction of this type: %v", options.GetTransactionIsolation())
+		return "", false, "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "don't know how to open a transaction of this type: %v", options.GetTransactionIsolation())
 	}
 
 	for _, preQuery := range preQueries {
 		if _, err := conn.Exec(ctx, preQuery, 1, false); err != nil {
-			return "", false, err
+			return "", false, "", err
 		}
 	}
-	return beginQueries, autocommitTransaction, nil
+	return beginQueries, autocommitTransaction, sessionStateChanges, nil
 }
 
 // LogActive causes all existing transactions to be logged when they complete.
