@@ -111,7 +111,9 @@ func waitForVDiff2ToComplete(t *testing.T, ksWorkflow, cells, uuid string, compl
 				// We don't test that the ETA always increases as it can decrease based on how
 				// quickly we're doing work.
 				if info.Progress.ETA != "" {
-					require.GreaterOrEqual(t, info.Progress.ETA, time.Now().Format(vdiff2.TimestampFormat))
+					// If we're operating at the second boundary then the ETA can be up
+					// to 1 second in the past due to using second based precision.
+					require.GreaterOrEqual(t, info.Progress.ETA, time.Now().Add(-time.Second).Format(vdiff2.TimestampFormat))
 				}
 				if !first {
 					require.GreaterOrEqual(t, info.Progress.Percentage, previousProgress.Percentage)
