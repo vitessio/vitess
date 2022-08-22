@@ -177,6 +177,8 @@ type (
 		// GetVTExplainLogs retrieves the vttablet interaction logs
 		GetVTExplainLogs() []ExecuteEntry
 
+		// SetCommitOrder sets the commit order for the shard session in respect of the type of vindex lookup.
+		// This is used to select the right shard session to perform the vindex lookup query.
 		SetCommitOrder(co vtgatepb.CommitOrder)
 	}
 
