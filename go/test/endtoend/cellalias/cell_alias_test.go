@@ -22,7 +22,7 @@ Then we add an alias, and these tablets should be routable
 package binlog
 
 import (
-	"encoding/json"
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -32,7 +32,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/sharding"
 	"vitess.io/vitess/go/vt/proto/topodata"
@@ -347,20 +346,16 @@ func waitTillAllTabletsAreHealthyInVtgate(t *testing.T, vtgateInstance cluster.V
 }
 
 func testQueriesOnTabletType(t *testing.T, tabletType string, vtgateGrpcPort int, shouldFail bool) {
-	output, err := localCluster.VtctlProcess.ExecuteCommandWithOutput("VtGateExecute", "--", "--json",
-		"--server", fmt.Sprintf("%s:%d", localCluster.Hostname, vtgateGrpcPort),
-		"--target", "@"+tabletType,
-		fmt.Sprintf(`select * from %s`, tableName))
+	qr, err := localCluster.ExecOnVTGate(context.Background(),
+		fmt.Sprintf("%s:%d", localCluster.Hostname, vtgateGrpcPort),
+		"@"+tabletType,
+		fmt.Sprintf(`select * from %s`, tableName), nil, nil,
+	)
 	if shouldFail {
 		require.Error(t, err)
 		return
 	}
-	require.NoError(t, err)
-	var result sqltypes.Result
-
-	err = json.Unmarshal([]byte(output), &result)
-	require.NoError(t, err)
-	assert.Equal(t, len(result.Rows), 3)
+	assert.Equal(t, len(qr.Rows), 3)
 }
 
 func insertInitialValues(t *testing.T) {
