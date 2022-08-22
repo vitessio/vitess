@@ -762,8 +762,10 @@ func ReplicationThreadsStatus(t *testing.T, status *replicationdatapb.Status, vt
 		// and should agree with the new ones
 		require.NotEqual(t, mysql.ReplicationStateUnknown, mysql.ReplicationState(status.IoState))
 		require.NotEqual(t, mysql.ReplicationStateUnknown, mysql.ReplicationState(status.SqlState))
-		require.Equal(t, status.IoThreadRunning, mysql.ReplicationState(status.IoState) == mysql.ReplicationStateRunning || mysql.ReplicationState(status.IoState) == mysql.ReplicationStateConnecting)
-		require.Equal(t, status.SqlThreadRunning, mysql.ReplicationState(status.SqlState) == mysql.ReplicationStateRunning || mysql.ReplicationState(status.SqlState) == mysql.ReplicationStateConnecting)
+		if vttabletVersion == 14 {
+			require.Equal(t, status.IoThreadRunning, mysql.ReplicationState(status.IoState) == mysql.ReplicationStateRunning || mysql.ReplicationState(status.IoState) == mysql.ReplicationStateConnecting)
+			require.Equal(t, status.SqlThreadRunning, mysql.ReplicationState(status.SqlState) == mysql.ReplicationStateRunning || mysql.ReplicationState(status.SqlState) == mysql.ReplicationStateConnecting)
+		}
 	}
 
 	// if vtctlVersion provided is 13, then we should read the old parameters, since that is what old vtctl would do
