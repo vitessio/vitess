@@ -163,10 +163,7 @@ func main() {
 	rootCmd.Flags().BoolVar(&enableDynamicClusters, "enable-dynamic-clusters", false, "whether to enable dynamic clusters that are set by request header cookies or gRPC metadata")
 
 	// Tracing flags
-	rootCmd.Flags().AddGoFlag(flag.Lookup("tracer"))                 // defined in go/vt/trace
-	rootCmd.Flags().AddGoFlag(flag.Lookup("tracing-enable-logging")) // defined in go/vt/trace
-	rootCmd.Flags().AddGoFlag(flag.Lookup("tracing-sampling-type"))  // defined in go/vt/trace
-	rootCmd.Flags().AddGoFlag(flag.Lookup("tracing-sampling-rate"))  // defined in go/vt/trace
+	trace.RegisterFlags(rootCmd.Flags()) // defined in go/vt/trace
 	rootCmd.Flags().BoolVar(&opts.EnableTracing, "grpc-tracing", false, "whether to enable tracing on the gRPC server")
 	rootCmd.Flags().BoolVar(&httpOpts.EnableTracing, "http-tracing", false, "whether to enable tracing on the HTTP server")
 
