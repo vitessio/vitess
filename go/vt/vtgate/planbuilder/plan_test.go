@@ -29,6 +29,8 @@ import (
 	"strings"
 	"testing"
 
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+
 	"vitess.io/vitess/go/test/utils"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -101,10 +103,12 @@ var _ vindexes.Lookup = (*lookupIndex)(nil)
 // nameLkpIndex satisfies Lookup, NonUnique.
 type nameLkpIndex struct{ name string }
 
-func (v *nameLkpIndex) String() string   { return v.name }
-func (*nameLkpIndex) Cost() int          { return 3 }
-func (*nameLkpIndex) IsUnique() bool     { return false }
-func (*nameLkpIndex) NeedsVCursor() bool { return false }
+func (v *nameLkpIndex) String() string                     { return v.name }
+func (*nameLkpIndex) Cost() int                            { return 3 }
+func (*nameLkpIndex) IsUnique() bool                       { return false }
+func (*nameLkpIndex) NeedsVCursor() bool                   { return false }
+func (*nameLkpIndex) AllowBatch() bool                     { return true }
+func (*nameLkpIndex) GetCommitOrder() vtgatepb.CommitOrder { return vtgatepb.CommitOrder_NORMAL }
 func (*nameLkpIndex) Verify(context.Context, vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
@@ -120,6 +124,12 @@ func (*nameLkpIndex) Delete(context.Context, vindexes.VCursor, [][]sqltypes.Valu
 func (*nameLkpIndex) Update(context.Context, vindexes.VCursor, []sqltypes.Value, []byte, []sqltypes.Value) error {
 	return nil
 }
+func (v *nameLkpIndex) Query() (string, []string) {
+	return "select name, keyspace_id from name_user_vdx where name in ::name", []string{"name"}
+}
+func (*nameLkpIndex) MapResult([]sqltypes.Value, []*sqltypes.Result) ([]key.Destination, error) {
+	return nil, nil
+}
 
 func newNameLkpIndex(name string, _ map[string]string) (vindexes.Vindex, error) {
 	return &nameLkpIndex{name: name}, nil
@@ -127,6 +137,7 @@ func newNameLkpIndex(name string, _ map[string]string) (vindexes.Vindex, error) 
 
 var _ vindexes.Vindex = (*nameLkpIndex)(nil)
 var _ vindexes.Lookup = (*nameLkpIndex)(nil)
+var _ vindexes.LookupPlanable = (*nameLkpIndex)(nil)
 
 // costlyIndex satisfies Lookup, NonUnique.
 type costlyIndex struct{ name string }
@@ -301,6 +312,15 @@ func TestOneWithUserAsDefault(t *testing.T) {
 			Name:    "user",
 			Sharded: true,
 		},
+	}
+
+	testFile(t, "onecase.txt", "", vschema, false)
+}
+
+func TestOneWithTPCHVSchema(t *testing.T) {
+	vschema := &vschemaWrapper{
+		v:             loadSchema(t, "tpch_schema_test.json", true),
+		sysVarEnabled: true,
 	}
 
 	testFile(t, "onecase.txt", "", vschema, false)
