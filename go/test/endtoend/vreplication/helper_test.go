@@ -154,7 +154,7 @@ func waitForNoWorkflowLag(t *testing.T, vc *VitessCluster, keyspace, worfklow st
 	timer := time.NewTimer(defaultTimeout)
 	defer timer.Stop()
 	for {
-		output, err := vc.VtctlClient.ExecuteCommandWithOutput("Worfklow", "--", ksWorkflow, "show")
+		output, err := vc.VtctlClient.ExecuteCommandWithOutput("Workflow", "--", ksWorkflow, "show")
 		require.NoError(t, err)
 		lag, err = jsonparser.GetInt([]byte(output), "MaxVReplicationTransactionLag")
 		require.NoError(t, err)
