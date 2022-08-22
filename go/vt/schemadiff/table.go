@@ -1140,13 +1140,13 @@ func (c *CreateTableEntity) diffKeys(alterTable *sqlparser.AlterTable,
 		t2KeysMap[key.Info.Name.String()] = key
 	}
 
-	dropKeyStatement := func(name sqlparser.IdentifierCI) *sqlparser.DropKey {
+	dropKeyStatement := func(info *sqlparser.IndexInfo) *sqlparser.DropKey {
 		dropKey := &sqlparser.DropKey{}
-		if strings.EqualFold(dropKey.Name.String(), "PRIMARY") {
+		if strings.EqualFold(info.Type, sqlparser.PrimaryKeyTypeStr) {
 			dropKey.Type = sqlparser.PrimaryKeyType
 		} else {
 			dropKey.Type = sqlparser.NormalKeyType
-			dropKey.Name = name
+			dropKey.Name = info.Name
 		}
 		return dropKey
 	}
@@ -1156,7 +1156,7 @@ func (c *CreateTableEntity) diffKeys(alterTable *sqlparser.AlterTable,
 	for _, t1Key := range t1Keys {
 		if _, ok := t2KeysMap[t1Key.Info.Name.String()]; !ok {
 			// column exists in t1 but not in t2, hence it is dropped
-			dropKey := dropKeyStatement(t1Key.Info.Name)
+			dropKey := dropKeyStatement(t1Key.Info)
 			alterTable.AlterOptions = append(alterTable.AlterOptions, dropKey)
 		}
 	}
@@ -1180,7 +1180,7 @@ func (c *CreateTableEntity) diffKeys(alterTable *sqlparser.AlterTable,
 				}
 
 				// For other changes, we're going to drop and create.
-				dropKey := dropKeyStatement(t1Key.Info.Name)
+				dropKey := dropKeyStatement(t1Key.Info)
 				addKey := &sqlparser.AddIndexDefinition{
 					IndexDefinition: t2Key,
 				}
@@ -1631,7 +1631,15 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 			// we expect the named key to be found
 			found := false
 			switch opt.Type {
-			case sqlparser.NormalKeyType, sqlparser.PrimaryKeyType:
+			case sqlparser.PrimaryKeyType:
+				for i, idx := range c.TableSpec.Indexes {
+					if strings.EqualFold(idx.Info.Type, sqlparser.PrimaryKeyTypeStr) {
+						found = true
+						c.TableSpec.Indexes = append(c.TableSpec.Indexes[0:i], c.TableSpec.Indexes[i+1:]...)
+						break
+					}
+				}
+			case sqlparser.NormalKeyType:
 				for i, index := range c.TableSpec.Indexes {
 					if strings.EqualFold(index.Info.Name.String(), opt.Name.String()) {
 						found = true
