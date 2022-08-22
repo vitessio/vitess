@@ -174,23 +174,33 @@ func (rp *ResourcePool) closeIdleResources() {
 
 	for i := 0; i < available; i++ {
 		var wrapper resourceWrapper
+		var origPool bool
 		select {
 		case wrapper = <-rp.resources:
+			origPool = true
+		case wrapper = <-rp.settingResources:
+			origPool = false
 		default:
 			// stop early if we don't get anything new from the pool
 			return
 		}
 
-		func() {
-			defer func() { rp.resources <- wrapper }()
+		var reopened bool
+		if wrapper.resource != nil && idleTimeout > 0 && time.Until(wrapper.timeUsed.Add(idleTimeout)) < 0 {
+			wrapper.resource.Close()
+			rp.idleClosed.Add(1)
+			rp.reopenResource(&wrapper)
+			reopened = true
+		}
+		rp.returnResource(&wrapper, origPool, reopened)
+	}
+}
 
-			if wrapper.resource != nil && idleTimeout > 0 && time.Until(wrapper.timeUsed.Add(idleTimeout)) < 0 {
-				wrapper.resource.Close()
-				rp.idleClosed.Add(1)
-				rp.reopenResource(&wrapper)
-			}
-		}()
-
+func (rp *ResourcePool) returnResource(wrapper *resourceWrapper, origPool bool, reopened bool) {
+	if origPool || reopened {
+		rp.resources <- *wrapper
+	} else {
+		rp.settingResources <- *wrapper
 	}
 }
 

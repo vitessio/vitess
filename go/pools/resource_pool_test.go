@@ -435,15 +435,20 @@ func TestIdleTimeoutCreateFail(t *testing.T) {
 	count.Set(0)
 	p := NewResourcePool(PoolFactory, 1, 1, 10*time.Millisecond, logWait, nil, 0)
 	defer p.Close()
-	r, err := p.Get(ctx, nil)
-	require.NoError(t, err)
-	// Change the factory before putting back
-	// to prevent race with the idle closer, who will
-	// try to use it.
-	p.factory = FailFactory
-	p.Put(r, 0)
-	time.Sleep(15 * time.Millisecond)
-	assert.Zero(t, p.Active())
+	for _, setting := range [][]string{nil, {"foo"}} {
+		r, err := p.Get(ctx, setting)
+		require.NoError(t, err)
+		// Change the factory before putting back
+		// to prevent race with the idle closer, who will
+		// try to use it.
+		p.factory = FailFactory
+		p.Put(r, r.SettingHash())
+		time.Sleep(15 * time.Millisecond)
+		assert.Zero(t, p.Active())
+
+		// reset factory for next run.
+		p.factory = PoolFactory
+	}
 }
 
 func TestCreateFail(t *testing.T) {
@@ -452,12 +457,15 @@ func TestCreateFail(t *testing.T) {
 	count.Set(0)
 	p := NewResourcePool(FailFactory, 5, 5, time.Second, logWait, nil, 0)
 	defer p.Close()
-	if _, err := p.Get(ctx, nil); err.Error() != "Failed" {
-		t.Errorf("Expecting Failed, received %v", err)
+
+	for _, setting := range [][]string{nil, {"foo"}} {
+		if _, err := p.Get(ctx, setting); err.Error() != "Failed" {
+			t.Errorf("Expecting Failed, received %v", err)
+		}
+		stats := p.StatsJSON()
+		expected := `{"Capacity": 5, "Available": 5, "Active": 0, "InUse": 0, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000, "IdleClosed": 0, "Exhausted": 0}`
+		assert.Equal(t, expected, stats)
 	}
-	stats := p.StatsJSON()
-	expected := `{"Capacity": 5, "Available": 5, "Active": 0, "InUse": 0, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000, "IdleClosed": 0, "Exhausted": 0}`
-	assert.Equal(t, expected, stats)
 }
 
 func TestCreateFailOnPut(t *testing.T) {
@@ -466,11 +474,19 @@ func TestCreateFailOnPut(t *testing.T) {
 	count.Set(0)
 	p := NewResourcePool(PoolFactory, 5, 5, time.Second, logWait, nil, 0)
 	defer p.Close()
-	_, err := p.Get(ctx, nil)
-	require.NoError(t, err)
-	p.factory = FailFactory
-	p.Put(nil, 0)
-	assert.Zero(t, p.Active())
+
+	for _, setting := range [][]string{nil, {"foo"}} {
+		r, err := p.Get(ctx, setting)
+		require.NoError(t, err)
+
+		// change factory to fail the put.
+		p.factory = FailFactory
+		p.Put(nil, r.SettingHash())
+		assert.Zero(t, p.Active())
+
+		// change back for next iteration.
+		p.factory = PoolFactory
+	}
 }
 
 func TestSlowCreateFail(t *testing.T) {
@@ -480,17 +496,19 @@ func TestSlowCreateFail(t *testing.T) {
 	p := NewResourcePool(SlowFailFactory, 2, 2, time.Second, logWait, nil, 0)
 	defer p.Close()
 	ch := make(chan bool)
-	// The third Get should not wait indefinitely
-	for i := 0; i < 3; i++ {
-		go func() {
-			p.Get(ctx, nil)
-			ch <- true
-		}()
+	for _, setting := range [][]string{nil, {"foo"}} {
+		// The third Get should not wait indefinitely
+		for i := 0; i < 3; i++ {
+			go func() {
+				p.Get(ctx, setting)
+				ch <- true
+			}()
+		}
+		for i := 0; i < 3; i++ {
+			<-ch
+		}
+		assert.EqualValues(t, 2, p.Available())
 	}
-	for i := 0; i < 3; i++ {
-		<-ch
-	}
-	assert.EqualValues(t, 2, p.Available())
 }
 
 func TestTimeout(t *testing.T) {
@@ -499,12 +517,21 @@ func TestTimeout(t *testing.T) {
 	count.Set(0)
 	p := NewResourcePool(PoolFactory, 1, 1, time.Second, logWait, nil, 0)
 	defer p.Close()
+
+	// take the only connection available
 	r, err := p.Get(ctx, nil)
 	require.NoError(t, err)
-	newctx, cancel := context.WithTimeout(ctx, 1*time.Millisecond)
-	_, err = p.Get(newctx, nil)
-	cancel()
-	assert.EqualError(t, err, "resource pool timed out")
+
+	for _, setting := range [][]string{nil, {"foo"}} {
+		// trying to get the connection without a timeout.
+		newctx, cancel := context.WithTimeout(ctx, 10*time.Millisecond)
+		_, err = p.Get(newctx, setting)
+		cancel()
+		assert.EqualError(t, err, "resource pool timed out")
+
+	}
+
+	// put the connection take was taken initially.
 	p.Put(r, 0)
 }
 
@@ -513,11 +540,12 @@ func TestExpired(t *testing.T) {
 	count.Set(0)
 	p := NewResourcePool(PoolFactory, 1, 1, time.Second, logWait, nil, 0)
 	defer p.Close()
-	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-1*time.Second))
-	r, err := p.Get(ctx, nil)
-	if err == nil {
-		p.Put(r, 0)
+
+	for _, setting := range [][]string{nil, {"foo"}} {
+		// expired context
+		ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-1*time.Second))
+		_, err := p.Get(ctx, setting)
+		cancel()
+		require.EqualError(t, err, "resource pool context already expired")
 	}
-	cancel()
-	assert.EqualError(t, err, "resource pool context already expired")
 }
