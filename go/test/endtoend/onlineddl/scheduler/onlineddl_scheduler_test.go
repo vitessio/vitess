@@ -400,7 +400,8 @@ func TestSchemaChange(t *testing.T) {
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, drop1uuid, schema.OnlineDDLStatusQueued, schema.OnlineDDLStatusReady)
 			// let's cancel it
 			onlineddl.CheckCancelMigration(t, &vtParams, shards, drop1uuid, true)
-			time.Sleep(2 * time.Second)
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, drop1uuid, normalWaitTime, schema.OnlineDDLStatusFailed, schema.OnlineDDLStatusCancelled)
+			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, drop1uuid, schema.OnlineDDLStatusCancelled)
 		})
 		t.Run("complete t1", func(t *testing.T) {
@@ -510,7 +511,8 @@ func TestSchemaChange(t *testing.T) {
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, drop1uuid, schema.OnlineDDLStatusReady)
 			// let's cancel it
 			onlineddl.CheckCancelMigration(t, &vtParams, shards, drop1uuid, true)
-			time.Sleep(2 * time.Second)
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, drop1uuid, normalWaitTime, schema.OnlineDDLStatusFailed, schema.OnlineDDLStatusCancelled)
+			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, drop1uuid, schema.OnlineDDLStatusCancelled)
 		})
 		t.Run("complete t1", func(t *testing.T) {
@@ -536,7 +538,8 @@ func TestSchemaChange(t *testing.T) {
 			onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
 			// let's cancel it
 			onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, true)
-			time.Sleep(2 * time.Second)
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalWaitTime, schema.OnlineDDLStatusFailed, schema.OnlineDDLStatusCancelled)
+			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusCancelled)
 		})
 
