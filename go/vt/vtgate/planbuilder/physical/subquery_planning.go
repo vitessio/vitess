@@ -82,6 +82,37 @@ func optimizeSubQuery(ctx *plancontext.PlanningContext, op *abstract.SubQuery) (
 	return outerOp, nil
 }
 
+// Remove the given subquery from any predicates and vindex predicates.
+//
+// If a subquery is merged into it's outer query, it needs to be removed from
+// the route as it can't be used as a routing predicate anymore.
+func RemoveExtractedSubqueryPredicate(route *Route, extractedSubquery *sqlparser.ExtractedSubquery) {
+	for _, vp := range route.VindexPreds {
+		idx := -1
+
+		for j, option := range vp.Options {
+			if sqlparser.EqualsExpr(option.Predicates[0], extractedSubquery.Original) {
+				idx = j
+			}
+		}
+
+		if idx != -1 {
+			vp.Options = append(vp.Options[:idx], vp.Options[idx+1:]...)
+		}
+	}
+
+	idx := -1
+	for i, predicate := range route.SeenPredicates {
+		if sqlparser.EqualsExpr(predicate, extractedSubquery) {
+			idx = i
+		}
+	}
+
+	if idx != -1 {
+		route.SeenPredicates = append(route.SeenPredicates[:idx], route.SeenPredicates[idx+1:]...)
+	}
+}
+
 func mergeSubQueryOp(ctx *plancontext.PlanningContext, outer *Route, inner *Route, subq *abstract.SubQueryInner) (*Route, error) {
 	subq.ExtractedSubquery.NeedsRewrite = true
 
@@ -107,10 +138,17 @@ func mergeSubQueryOp(ctx *plancontext.PlanningContext, outer *Route, inner *Rout
 		outer.SysTableTableName[k] = v
 	}
 
-	err = outer.resetRoutingSelections(ctx)
-	if err != nil {
-		return nil, err
+	outer.Selected = nil
+	switch outer.RouteOpCode {
+	case engine.DBA, engine.Next, engine.Reference, engine.Unsharded:
+		// these we keep as is
+	default:
+		outer.RouteOpCode = engine.Scatter
 	}
+
+	RemoveExtractedSubqueryPredicate(outer, subq.ExtractedSubquery)
+	outer.PickBestAvailableVindex()
+
 	return outer, nil
 }
 

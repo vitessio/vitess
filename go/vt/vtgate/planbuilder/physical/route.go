@@ -600,28 +600,6 @@ func (r *Route) planCompositeInOpRecursive(
 	return foundVindex
 }
 
-func (r *Route) resetRoutingSelections(ctx *plancontext.PlanningContext) error {
-	switch r.RouteOpCode {
-	case engine.DBA, engine.Next, engine.Reference, engine.Unsharded:
-		// these we keep as is
-	default:
-		r.RouteOpCode = engine.Scatter
-	}
-
-	r.Selected = nil
-	for i, vp := range r.VindexPreds {
-		r.VindexPreds[i] = &VindexPlusPredicates{ColVindex: vp.ColVindex, TableID: vp.TableID}
-	}
-
-	for _, predicate := range r.SeenPredicates {
-		err := r.tryImprovingVindex(ctx, predicate)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func tupleAccess(expr sqlparser.Expr, coordinates []int) sqlparser.Expr {
 	tuple, _ := expr.(sqlparser.ValTuple)
 	for _, idx := range coordinates {
