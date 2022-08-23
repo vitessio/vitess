@@ -72,7 +72,7 @@ type RestoreParams struct {
 	Cnf    *Mycnf
 	Mysqld MysqlDaemon
 	Logger logutil.Logger
-	// Concurrency is the value of -restore_concurrency flag (init restore parameter)
+	// Concurrency is the value of --restore_concurrency flag (init restore parameter)
 	// It determines how many files are processed in parallel
 	Concurrency int
 	// Extra env variables for pre-restore and post-restore transform hooks

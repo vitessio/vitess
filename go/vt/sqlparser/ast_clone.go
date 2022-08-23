@@ -893,9 +893,9 @@ func CloneColumns(n Columns) Columns {
 	if n == nil {
 		return nil
 	}
-	res := make(Columns, 0, len(n))
-	for _, x := range n {
-		res = append(res, CloneIdentifierCI(x))
+	res := make(Columns, len(n))
+	for i, x := range n {
+		res[i] = CloneIdentifierCI(x)
 	}
 	return res
 }
@@ -1213,9 +1213,9 @@ func CloneExprs(n Exprs) Exprs {
 	if n == nil {
 		return nil
 	}
-	res := make(Exprs, 0, len(n))
-	for _, x := range n {
-		res = append(res, CloneExpr(x))
+	res := make(Exprs, len(n))
+	for i, x := range n {
+		res[i] = CloneExpr(x)
 	}
 	return res
 }
@@ -1358,9 +1358,9 @@ func CloneGroupBy(n GroupBy) GroupBy {
 	if n == nil {
 		return nil
 	}
-	res := make(GroupBy, 0, len(n))
-	for _, x := range n {
-		res = append(res, CloneExpr(x))
+	res := make(GroupBy, len(n))
+	for i, x := range n {
+		res[i] = CloneExpr(x)
 	}
 	return res
 }
@@ -1414,9 +1414,9 @@ func CloneIndexHints(n IndexHints) IndexHints {
 	if n == nil {
 		return nil
 	}
-	res := make(IndexHints, 0, len(n))
-	for _, x := range n {
-		res = append(res, CloneRefOfIndexHint(x))
+	res := make(IndexHints, len(n))
+	for i, x := range n {
+		res[i] = CloneRefOfIndexHint(x)
 	}
 	return res
 }
@@ -1961,9 +1961,9 @@ func CloneNamedWindows(n NamedWindows) NamedWindows {
 	if n == nil {
 		return nil
 	}
-	res := make(NamedWindows, 0, len(n))
-	for _, x := range n {
-		res = append(res, CloneRefOfNamedWindow(x))
+	res := make(NamedWindows, len(n))
+	for i, x := range n {
+		res[i] = CloneRefOfNamedWindow(x)
 	}
 	return res
 }
@@ -2031,9 +2031,9 @@ func CloneOnDup(n OnDup) OnDup {
 	if n == nil {
 		return nil
 	}
-	res := make(OnDup, 0, len(n))
-	for _, x := range n {
-		res = append(res, CloneRefOfUpdateExpr(x))
+	res := make(OnDup, len(n))
+	for i, x := range n {
+		res[i] = CloneRefOfUpdateExpr(x)
 	}
 	return res
 }
@@ -2074,9 +2074,9 @@ func CloneOrderBy(n OrderBy) OrderBy {
 	if n == nil {
 		return nil
 	}
-	res := make(OrderBy, 0, len(n))
-	for _, x := range n {
-		res = append(res, CloneRefOfOrder(x))
+	res := make(OrderBy, len(n))
+	for i, x := range n {
+		res[i] = CloneRefOfOrder(x)
 	}
 	return res
 }
@@ -2218,9 +2218,9 @@ func ClonePartitions(n Partitions) Partitions {
 	if n == nil {
 		return nil
 	}
-	res := make(Partitions, 0, len(n))
-	for _, x := range n {
-		res = append(res, CloneIdentifierCI(x))
+	res := make(Partitions, len(n))
+	for i, x := range n {
+		res[i] = CloneIdentifierCI(x)
 	}
 	return res
 }
@@ -2436,9 +2436,9 @@ func CloneSelectExprs(n SelectExprs) SelectExprs {
 	if n == nil {
 		return nil
 	}
-	res := make(SelectExprs, 0, len(n))
-	for _, x := range n {
-		res = append(res, CloneSelectExpr(x))
+	res := make(SelectExprs, len(n))
+	for i, x := range n {
+		res[i] = CloneSelectExpr(x)
 	}
 	return res
 }
@@ -2480,9 +2480,9 @@ func CloneSetExprs(n SetExprs) SetExprs {
 	if n == nil {
 		return nil
 	}
-	res := make(SetExprs, 0, len(n))
-	for _, x := range n {
-		res = append(res, CloneRefOfSetExpr(x))
+	res := make(SetExprs, len(n))
+	for i, x := range n {
+		res[i] = CloneRefOfSetExpr(x)
 	}
 	return res
 }
@@ -2673,9 +2673,9 @@ func CloneSubPartitionDefinitions(n SubPartitionDefinitions) SubPartitionDefinit
 	if n == nil {
 		return nil
 	}
-	res := make(SubPartitionDefinitions, 0, len(n))
-	for _, x := range n {
-		res = append(res, CloneRefOfSubPartitionDefinition(x))
+	res := make(SubPartitionDefinitions, len(n))
+	for i, x := range n {
+		res[i] = CloneRefOfSubPartitionDefinition(x)
 	}
 	return res
 }
@@ -2717,9 +2717,9 @@ func CloneTableExprs(n TableExprs) TableExprs {
 	if n == nil {
 		return nil
 	}
-	res := make(TableExprs, 0, len(n))
-	for _, x := range n {
-		res = append(res, CloneTableExpr(x))
+	res := make(TableExprs, len(n))
+	for i, x := range n {
+		res[i] = CloneTableExpr(x)
 	}
 	return res
 }
@@ -2734,9 +2734,9 @@ func CloneTableNames(n TableNames) TableNames {
 	if n == nil {
 		return nil
 	}
-	res := make(TableNames, 0, len(n))
-	for _, x := range n {
-		res = append(res, CloneTableName(x))
+	res := make(TableNames, len(n))
+	for i, x := range n {
+		res[i] = CloneTableName(x)
 	}
 	return res
 }
@@ -2746,9 +2746,9 @@ func CloneTableOptions(n TableOptions) TableOptions {
 	if n == nil {
 		return nil
 	}
-	res := make(TableOptions, 0, len(n))
-	for _, x := range n {
-		res = append(res, CloneRefOfTableOption(x))
+	res := make(TableOptions, len(n))
+	for i, x := range n {
+		res[i] = CloneRefOfTableOption(x)
 	}
 	return res
 }
@@ -2874,9 +2874,9 @@ func CloneUpdateExprs(n UpdateExprs) UpdateExprs {
 	if n == nil {
 		return nil
 	}
-	res := make(UpdateExprs, 0, len(n))
-	for _, x := range n {
-		res = append(res, CloneRefOfUpdateExpr(x))
+	res := make(UpdateExprs, len(n))
+	for i, x := range n {
+		res[i] = CloneRefOfUpdateExpr(x)
 	}
 	return res
 }
@@ -2922,9 +2922,9 @@ func CloneValTuple(n ValTuple) ValTuple {
 	if n == nil {
 		return nil
 	}
-	res := make(ValTuple, 0, len(n))
-	for _, x := range n {
-		res = append(res, CloneExpr(x))
+	res := make(ValTuple, len(n))
+	for i, x := range n {
+		res[i] = CloneExpr(x)
 	}
 	return res
 }
@@ -2943,9 +2943,9 @@ func CloneValues(n Values) Values {
 	if n == nil {
 		return nil
 	}
-	res := make(Values, 0, len(n))
-	for _, x := range n {
-		res = append(res, CloneValTuple(x))
+	res := make(Values, len(n))
+	for i, x := range n {
+		res[i] = CloneValTuple(x)
 	}
 	return res
 }
@@ -3065,9 +3065,9 @@ func CloneWindowDefinitions(n WindowDefinitions) WindowDefinitions {
 	if n == nil {
 		return nil
 	}
-	res := make(WindowDefinitions, 0, len(n))
-	for _, x := range n {
-		res = append(res, CloneRefOfWindowDefinition(x))
+	res := make(WindowDefinitions, len(n))
+	for i, x := range n {
+		res[i] = CloneRefOfWindowDefinition(x)
 	}
 	return res
 }
@@ -3863,9 +3863,9 @@ func CloneSliceOfRefOfColumnDefinition(n []*ColumnDefinition) []*ColumnDefinitio
 	if n == nil {
 		return nil
 	}
-	res := make([]*ColumnDefinition, 0, len(n))
-	for _, x := range n {
-		res = append(res, CloneRefOfColumnDefinition(x))
+	res := make([]*ColumnDefinition, len(n))
+	for i, x := range n {
+		res[i] = CloneRefOfColumnDefinition(x)
 	}
 	return res
 }
@@ -3884,9 +3884,9 @@ func CloneSliceOfDatabaseOption(n []DatabaseOption) []DatabaseOption {
 	if n == nil {
 		return nil
 	}
-	res := make([]DatabaseOption, 0, len(n))
-	for _, x := range n {
-		res = append(res, CloneDatabaseOption(x))
+	res := make([]DatabaseOption, len(n))
+	for i, x := range n {
+		res[i] = CloneDatabaseOption(x)
 	}
 	return res
 }
@@ -3896,9 +3896,9 @@ func CloneSliceOfAlterOption(n []AlterOption) []AlterOption {
 	if n == nil {
 		return nil
 	}
-	res := make([]AlterOption, 0, len(n))
-	for _, x := range n {
-		res = append(res, CloneAlterOption(x))
+	res := make([]AlterOption, len(n))
+	for i, x := range n {
+		res[i] = CloneAlterOption(x)
 	}
 	return res
 }
@@ -3908,9 +3908,9 @@ func CloneSliceOfIdentifierCI(n []IdentifierCI) []IdentifierCI {
 	if n == nil {
 		return nil
 	}
-	res := make([]IdentifierCI, 0, len(n))
-	for _, x := range n {
-		res = append(res, CloneIdentifierCI(x))
+	res := make([]IdentifierCI, len(n))
+	for i, x := range n {
+		res[i] = CloneIdentifierCI(x)
 	}
 	return res
 }
@@ -3920,9 +3920,9 @@ func CloneSliceOfRefOfWhen(n []*When) []*When {
 	if n == nil {
 		return nil
 	}
-	res := make([]*When, 0, len(n))
-	for _, x := range n {
-		res = append(res, CloneRefOfWhen(x))
+	res := make([]*When, len(n))
+	for i, x := range n {
+		res[i] = CloneRefOfWhen(x)
 	}
 	return res
 }
@@ -3961,7 +3961,7 @@ func CloneSliceOfString(n []string) []string {
 	if n == nil {
 		return nil
 	}
-	res := make([]string, 0, len(n))
+	res := make([]string, len(n))
 	copy(res, n)
 	return res
 }
@@ -3971,9 +3971,9 @@ func CloneSliceOfRefOfVariable(n []*Variable) []*Variable {
 	if n == nil {
 		return nil
 	}
-	res := make([]*Variable, 0, len(n))
-	for _, x := range n {
-		res = append(res, CloneRefOfVariable(x))
+	res := make([]*Variable, len(n))
+	for i, x := range n {
+		res[i] = CloneRefOfVariable(x)
 	}
 	return res
 }
@@ -4001,9 +4001,9 @@ func CloneSliceOfRefOfIndexColumn(n []*IndexColumn) []*IndexColumn {
 	if n == nil {
 		return nil
 	}
-	res := make([]*IndexColumn, 0, len(n))
-	for _, x := range n {
-		res = append(res, CloneRefOfIndexColumn(x))
+	res := make([]*IndexColumn, len(n))
+	for i, x := range n {
+		res[i] = CloneRefOfIndexColumn(x)
 	}
 	return res
 }
@@ -4013,9 +4013,9 @@ func CloneSliceOfRefOfIndexOption(n []*IndexOption) []*IndexOption {
 	if n == nil {
 		return nil
 	}
-	res := make([]*IndexOption, 0, len(n))
-	for _, x := range n {
-		res = append(res, CloneRefOfIndexOption(x))
+	res := make([]*IndexOption, len(n))
+	for i, x := range n {
+		res[i] = CloneRefOfIndexOption(x)
 	}
 	return res
 }
@@ -4025,9 +4025,9 @@ func CloneSliceOfExpr(n []Expr) []Expr {
 	if n == nil {
 		return nil
 	}
-	res := make([]Expr, 0, len(n))
-	for _, x := range n {
-		res = append(res, CloneExpr(x))
+	res := make([]Expr, len(n))
+	for i, x := range n {
+		res[i] = CloneExpr(x)
 	}
 	return res
 }
@@ -4037,9 +4037,9 @@ func CloneSliceOfRefOfJSONObjectParam(n []*JSONObjectParam) []*JSONObjectParam {
 	if n == nil {
 		return nil
 	}
-	res := make([]*JSONObjectParam, 0, len(n))
-	for _, x := range n {
-		res = append(res, CloneRefOfJSONObjectParam(x))
+	res := make([]*JSONObjectParam, len(n))
+	for i, x := range n {
+		res[i] = CloneRefOfJSONObjectParam(x)
 	}
 	return res
 }
@@ -4060,9 +4060,9 @@ func CloneSliceOfRefOfJtColumnDefinition(n []*JtColumnDefinition) []*JtColumnDef
 	if n == nil {
 		return nil
 	}
-	res := make([]*JtColumnDefinition, 0, len(n))
-	for _, x := range n {
-		res = append(res, CloneRefOfJtColumnDefinition(x))
+	res := make([]*JtColumnDefinition, len(n))
+	for i, x := range n {
+		res[i] = CloneRefOfJtColumnDefinition(x)
 	}
 	return res
 }
@@ -4107,9 +4107,9 @@ func CloneTableAndLockTypes(n TableAndLockTypes) TableAndLockTypes {
 	if n == nil {
 		return nil
 	}
-	res := make(TableAndLockTypes, 0, len(n))
-	for _, x := range n {
-		res = append(res, CloneRefOfTableAndLockType(x))
+	res := make(TableAndLockTypes, len(n))
+	for i, x := range n {
+		res[i] = CloneRefOfTableAndLockType(x)
 	}
 	return res
 }
@@ -4119,9 +4119,9 @@ func CloneSliceOfRefOfColName(n []*ColName) []*ColName {
 	if n == nil {
 		return nil
 	}
-	res := make([]*ColName, 0, len(n))
-	for _, x := range n {
-		res = append(res, CloneRefOfColName(x))
+	res := make([]*ColName, len(n))
+	for i, x := range n {
+		res[i] = CloneRefOfColName(x)
 	}
 	return res
 }
@@ -4131,9 +4131,9 @@ func CloneComments(n Comments) Comments {
 	if n == nil {
 		return nil
 	}
-	res := make(Comments, 0, len(n))
-	for _, x := range n {
-		res = append(res, x)
+	res := make(Comments, len(n))
+	for i, x := range n {
+		res[i] = x
 	}
 	return res
 }
@@ -4152,9 +4152,9 @@ func CloneSliceOfRefOfPartitionDefinition(n []*PartitionDefinition) []*Partition
 	if n == nil {
 		return nil
 	}
-	res := make([]*PartitionDefinition, 0, len(n))
-	for _, x := range n {
-		res = append(res, CloneRefOfPartitionDefinition(x))
+	res := make([]*PartitionDefinition, len(n))
+	for i, x := range n {
+		res[i] = CloneRefOfPartitionDefinition(x)
 	}
 	return res
 }
@@ -4164,9 +4164,9 @@ func CloneSliceOfRefOfRenameTablePair(n []*RenameTablePair) []*RenameTablePair {
 	if n == nil {
 		return nil
 	}
-	res := make([]*RenameTablePair, 0, len(n))
-	for _, x := range n {
-		res = append(res, CloneRefOfRenameTablePair(x))
+	res := make([]*RenameTablePair, len(n))
+	for i, x := range n {
+		res[i] = CloneRefOfRenameTablePair(x)
 	}
 	return res
 }
@@ -4186,9 +4186,9 @@ func CloneSliceOfTableExpr(n []TableExpr) []TableExpr {
 	if n == nil {
 		return nil
 	}
-	res := make([]TableExpr, 0, len(n))
-	for _, x := range n {
-		res = append(res, CloneTableExpr(x))
+	res := make([]TableExpr, len(n))
+	for i, x := range n {
+		res[i] = CloneTableExpr(x)
 	}
 	return res
 }
@@ -4198,9 +4198,9 @@ func CloneSliceOfCharacteristic(n []Characteristic) []Characteristic {
 	if n == nil {
 		return nil
 	}
-	res := make([]Characteristic, 0, len(n))
-	for _, x := range n {
-		res = append(res, CloneCharacteristic(x))
+	res := make([]Characteristic, len(n))
+	for i, x := range n {
+		res[i] = CloneCharacteristic(x)
 	}
 	return res
 }
@@ -4232,9 +4232,9 @@ func CloneSliceOfRefOfIndexDefinition(n []*IndexDefinition) []*IndexDefinition {
 	if n == nil {
 		return nil
 	}
-	res := make([]*IndexDefinition, 0, len(n))
-	for _, x := range n {
-		res = append(res, CloneRefOfIndexDefinition(x))
+	res := make([]*IndexDefinition, len(n))
+	for i, x := range n {
+		res[i] = CloneRefOfIndexDefinition(x)
 	}
 	return res
 }
@@ -4244,9 +4244,9 @@ func CloneSliceOfRefOfConstraintDefinition(n []*ConstraintDefinition) []*Constra
 	if n == nil {
 		return nil
 	}
-	res := make([]*ConstraintDefinition, 0, len(n))
-	for _, x := range n {
-		res = append(res, CloneRefOfConstraintDefinition(x))
+	res := make([]*ConstraintDefinition, len(n))
+	for i, x := range n {
+		res[i] = CloneRefOfConstraintDefinition(x)
 	}
 	return res
 }
@@ -4266,9 +4266,9 @@ func CloneSliceOfVindexParam(n []VindexParam) []VindexParam {
 	if n == nil {
 		return nil
 	}
-	res := make([]VindexParam, 0, len(n))
-	for _, x := range n {
-		res = append(res, CloneVindexParam(x))
+	res := make([]VindexParam, len(n))
+	for i, x := range n {
+		res[i] = CloneVindexParam(x)
 	}
 	return res
 }
@@ -4278,9 +4278,9 @@ func CloneSliceOfRefOfCommonTableExpr(n []*CommonTableExpr) []*CommonTableExpr {
 	if n == nil {
 		return nil
 	}
-	res := make([]*CommonTableExpr, 0, len(n))
-	for _, x := range n {
-		res = append(res, CloneRefOfCommonTableExpr(x))
+	res := make([]*CommonTableExpr, len(n))
+	for i, x := range n {
+		res[i] = CloneRefOfCommonTableExpr(x)
 	}
 	return res
 }

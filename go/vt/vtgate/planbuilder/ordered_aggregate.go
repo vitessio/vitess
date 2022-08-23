@@ -21,14 +21,14 @@ import (
 	"strconv"
 	"strings"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+
 	"vitess.io/vitess/go/mysql/collations"
 
 	"vitess.io/vitess/go/sqltypes"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
-
-	"vitess.io/vitess/go/vt/vtgate/semantics"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -45,22 +45,23 @@ var _ logicalPlan = (*orderedAggregate)(nil)
 // will be sent to the scatter route as:
 // 'select col1, col2, count(*) from t group by col1, col2 order by col1, col2`
 // The orderAggregate primitive built for this will be:
-//    &engine.OrderedAggregate {
-//      // Aggregates has one column. It computes the count
-//      // using column 2 of the underlying route.
-//      Aggregates: []AggregateParams{{
-//        Opcode: AggregateCount,
-//        Col: 2,
-//      }},
 //
-//      // Keys has the two group by values for col1 and col2.
-//      // The column numbers are from the underlying route.
-//      // These values will be used to perform the grouping
-//      // of the ordered results as they come from the underlying
-//      // route.
-//      Keys: []int{0, 1},
-//      Input: (Scatter Route with the order by request),
-//    }
+//	&engine.OrderedAggregate {
+//	  // Aggregates has one column. It computes the count
+//	  // using column 2 of the underlying route.
+//	  Aggregates: []AggregateParams{{
+//	    Opcode: AggregateCount,
+//	    Col: 2,
+//	  }},
+//
+//	  // Keys has the two group by values for col1 and col2.
+//	  // The column numbers are from the underlying route.
+//	  // These values will be used to perform the grouping
+//	  // of the ordered results as they come from the underlying
+//	  // route.
+//	  Keys: []int{0, 1},
+//	  Input: (Scatter Route with the order by request),
+//	}
 type orderedAggregate struct {
 	resultsBuilder
 	extraDistinct *sqlparser.ColName
@@ -393,8 +394,8 @@ func (oa *orderedAggregate) Wireup(plan logicalPlan, jt *jointab) error {
 	return oa.input.Wireup(plan, jt)
 }
 
-func (oa *orderedAggregate) WireupGen4(semTable *semantics.SemTable) error {
-	return oa.input.WireupGen4(semTable)
+func (oa *orderedAggregate) WireupGen4(ctx *plancontext.PlanningContext) error {
+	return oa.input.WireupGen4(ctx)
 }
 
 // OutputColumns implements the logicalPlan interface

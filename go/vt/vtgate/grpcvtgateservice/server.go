@@ -18,13 +18,12 @@ limitations under the License.
 package grpcvtgateservice
 
 import (
-	"flag"
+	"context"
 
+	"github.com/spf13/pflag"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/peer"
-
-	"context"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
@@ -46,9 +45,16 @@ const (
 	unsecureClient = "unsecure_grpc_client"
 )
 
-var (
-	useEffective = flag.Bool("grpc_use_effective_callerid", false, "If set, and SSL is not used, will set the immediate caller id from the effective caller id's principal.")
-)
+var useEffective bool
+
+func registerFlags(fs *pflag.FlagSet) {
+	fs.BoolVar(&useEffective, "grpc_use_effective_callerid", false, "If set, and SSL is not used, will set the immediate caller id from the effective caller id's principal.")
+}
+
+func init() {
+	servenv.OnParseFor("vtgate", registerFlags)
+	servenv.OnParseFor("vtcombo", registerFlags)
+}
 
 // VTGate is the public structure that is exported via gRPC
 type VTGate struct {
@@ -88,7 +94,7 @@ func immediateCallerID(ctx context.Context) (string, []string) {
 // from the incoming call and can be forwarded for use when talking to vttablet.
 func withCallerIDContext(ctx context.Context, effectiveCallerID *vtrpcpb.CallerID) context.Context {
 	immediate, dnsNames := immediateCallerID(ctx)
-	if immediate == "" && *useEffective && effectiveCallerID != nil {
+	if immediate == "" && useEffective && effectiveCallerID != nil {
 		immediate = effectiveCallerID.Principal
 	}
 	if immediate == "" {

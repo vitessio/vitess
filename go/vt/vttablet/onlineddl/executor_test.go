@@ -98,6 +98,48 @@ func TestValidateAndEditCreateTableStatement(t *testing.T) {
 	}
 }
 
+func TestValidateAndEditAlterTableStatement(t *testing.T) {
+	e := Executor{}
+	tt := []struct {
+		alter  string
+		expect []string
+	}{
+		{
+			alter:  "alter table t add column i int",
+			expect: []string{"alter table t add column i int"},
+		},
+		{
+			alter:  "alter table t add column i int, add fulltext key name1_ft (name1)",
+			expect: []string{"alter table t add column i int, add fulltext key name1_ft (name1)"},
+		},
+		{
+			alter:  "alter table t add column i int, add fulltext key name1_ft (name1), add fulltext key name2_ft (name2)",
+			expect: []string{"alter table t add column i int, add fulltext key name1_ft (name1)", "alter table t add fulltext key name2_ft (name2)"},
+		},
+		{
+			alter:  "alter table t add fulltext key name0_ft (name0), add column i int, add fulltext key name1_ft (name1), add fulltext key name2_ft (name2)",
+			expect: []string{"alter table t add fulltext key name0_ft (name0), add column i int", "alter table t add fulltext key name1_ft (name1)", "alter table t add fulltext key name2_ft (name2)"},
+		},
+	}
+	for _, tc := range tt {
+		t.Run(tc.alter, func(t *testing.T) {
+			stmt, err := sqlparser.ParseStrictDDL(tc.alter)
+			require.NoError(t, err)
+			alterTable, ok := stmt.(*sqlparser.AlterTable)
+			require.True(t, ok)
+
+			m := map[string]string{}
+			alters, err := e.validateAndEditAlterTableStatement(context.Background(), alterTable, m)
+			assert.NoError(t, err)
+			altersStrings := []string{}
+			for _, alter := range alters {
+				altersStrings = append(altersStrings, sqlparser.String(alter))
+			}
+			assert.Equal(t, tc.expect, altersStrings)
+		})
+	}
+}
+
 func TestAddInstantAlgorithm(t *testing.T) {
 	e := Executor{}
 	tt := []struct {

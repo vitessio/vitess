@@ -544,7 +544,9 @@ func (mysqld *Mysqld) ApplySchemaChange(ctx context.Context, dbName string, chan
 // are available it will attempt to choose the most efficient
 // one based on the column data types and the number of columns
 // in the index. See here for the data type storage sizes:
-//   https://dev.mysql.com/doc/refman/en/storage-requirements.html
+//
+//	https://dev.mysql.com/doc/refman/en/storage-requirements.html
+//
 // If this function is used on a table that DOES have a
 // defined PRIMARY KEY then it may return the columns for
 // that index if it is likely the most efficient one amongst
@@ -610,7 +612,7 @@ func (mysqld *Mysqld) GetPrimaryKeyEquivalentColumns(ctx context.Context, dbName
 	return cols, err
 }
 
-//tableDefinitions is a sortable collection of table definitions
+// tableDefinitions is a sortable collection of table definitions
 type tableDefinitions []*tabletmanagerdatapb.TableDefinition
 
 func (t tableDefinitions) Len() int {

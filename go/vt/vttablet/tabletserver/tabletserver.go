@@ -231,9 +231,9 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 // uses it to start/stop query buffering for a given table.
 // It is onlineDDLExecutor's responsibility to make sure beffering is stopped after some definite amount of time.
 // There are two layers to buffering/unbuffering:
-// 1. the creation and destruction of a QueryRuleSource. The existence of such source affects query plan rules
-//    for all new queries (see Execute() function and call to GetPlan())
-// 2. affecting already existing rules: a Rule has a concext.WithCancel, that is cancelled by onlineDDLExecutor
+//  1. the creation and destruction of a QueryRuleSource. The existence of such source affects query plan rules
+//     for all new queries (see Execute() function and call to GetPlan())
+//  2. affecting already existing rules: a Rule has a concext.WithCancel, that is cancelled by onlineDDLExecutor
 func (tsv *TabletServer) onlineDDLExecutorToggleTableBuffer(bufferingCtx context.Context, tableName string, bufferQueries bool) {
 	queryRuleSource := fmt.Sprintf("onlineddl/%s", tableName)
 
@@ -491,8 +491,9 @@ func (tsv *TabletServer) begin(ctx context.Context, target *querypb.Target, preQ
 			if tsv.txThrottler.Throttle() {
 				return vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "Transaction throttled")
 			}
-			transactionID, beginSQL, err := tsv.te.Begin(ctx, preQueries, reservedID, options)
+			transactionID, beginSQL, sessionStateChanges, err := tsv.te.Begin(ctx, preQueries, reservedID, options)
 			state.TransactionID = transactionID
+			state.SessionStateChanges = sessionStateChanges
 			logStats.TransactionID = transactionID
 			logStats.ReservedID = reservedID
 
@@ -1099,6 +1100,7 @@ func (tsv *TabletServer) VStreamResults(ctx context.Context, target *querypb.Tar
 // ReserveBeginExecute implements the QueryService interface
 func (tsv *TabletServer) ReserveBeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (state queryservice.ReservedTransactionState, result *sqltypes.Result, err error) {
 	var connID int64
+	var sessionStateChanges string
 	state.TabletAlias = tsv.alias
 
 	err = tsv.execRequest(
@@ -1107,7 +1109,7 @@ func (tsv *TabletServer) ReserveBeginExecute(ctx context.Context, target *queryp
 		target, options, false, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
 			defer tsv.stats.QueryTimings.Record("RESERVE", time.Now())
-			connID, err = tsv.te.ReserveBegin(ctx, options, preQueries, postBeginQueries)
+			connID, sessionStateChanges, err = tsv.te.ReserveBegin(ctx, options, preQueries, postBeginQueries)
 			if err != nil {
 				return err
 			}
@@ -1122,6 +1124,7 @@ func (tsv *TabletServer) ReserveBeginExecute(ctx context.Context, target *queryp
 	}
 	state.ReservedID = connID
 	state.TransactionID = connID
+	state.SessionStateChanges = sessionStateChanges
 
 	result, err = tsv.Execute(ctx, target, sql, bindVariables, state.TransactionID, state.ReservedID, options)
 	return state, result, err
@@ -1139,7 +1142,7 @@ func (tsv *TabletServer) ReserveBeginStreamExecute(
 	callback func(*sqltypes.Result) error,
 ) (state queryservice.ReservedTransactionState, err error) {
 	var connID int64
-	state.TabletAlias = tsv.alias
+	var sessionStateChanges string
 
 	err = tsv.execRequest(
 		ctx, tsv.QueryTimeout.Get(),
@@ -1147,7 +1150,7 @@ func (tsv *TabletServer) ReserveBeginStreamExecute(
 		target, options, false, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
 			defer tsv.stats.QueryTimings.Record("RESERVE", time.Now())
-			connID, err = tsv.te.ReserveBegin(ctx, options, preQueries, postBeginQueries)
+			connID, sessionStateChanges, err = tsv.te.ReserveBegin(ctx, options, preQueries, postBeginQueries)
 			if err != nil {
 				return err
 			}
@@ -1163,6 +1166,7 @@ func (tsv *TabletServer) ReserveBeginStreamExecute(
 	state.ReservedID = connID
 	state.TransactionID = connID
 	state.TabletAlias = tsv.alias
+	state.SessionStateChanges = sessionStateChanges
 
 	err = tsv.StreamExecute(ctx, target, sql, bindVariables, state.TransactionID, state.ReservedID, options, callback)
 	return state, err
@@ -1421,9 +1425,10 @@ func (tsv *TabletServer) convertAndLogError(ctx context.Context, sql string, bin
 }
 
 // truncateSQLAndBindVars calls TruncateForLog which:
-//  splits off trailing comments, truncates the query, re-adds the trailing comments,
-//  if sanitize is false appends quoted bindvar:value pairs in sorted order, and
-//  lastly it truncates the resulting string
+//
+//	splits off trailing comments, truncates the query, re-adds the trailing comments,
+//	if sanitize is false appends quoted bindvar:value pairs in sorted order, and
+//	lastly it truncates the resulting string
 func truncateSQLAndBindVars(sql string, bindVariables map[string]*querypb.BindVariable, sanitize bool) string {
 	truncatedQuery := sqlparser.TruncateForLog(sql)
 	buf := &bytes.Buffer{}

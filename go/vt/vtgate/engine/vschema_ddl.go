@@ -29,7 +29,7 @@ import (
 
 var _ Primitive = (*AlterVSchema)(nil)
 
-//AlterVSchema operator applies changes to VSchema
+// AlterVSchema operator applies changes to VSchema
 type AlterVSchema struct {
 	Keyspace *vindexes.Keyspace
 

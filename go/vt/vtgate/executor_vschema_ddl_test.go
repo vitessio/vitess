@@ -96,7 +96,7 @@ func waitForVschemaTables(t *testing.T, ks string, tables []string, executor *Ex
 	return nil
 }
 
-//nolint
+// nolint
 func waitForColVindexes(t *testing.T, ks, table string, names []string, executor *Executor) *vschemapb.SrvVSchema {
 	t.Helper()
 

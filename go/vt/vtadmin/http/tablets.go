@@ -108,8 +108,8 @@ func RefreshState(ctx context.Context, r Request, api *API) *JSONResponse {
 // PUT /tablet/{tablet}/refresh_replication_source.
 //
 // Query params:
-// - cluster: repeatable, list of cluster IDs to restrict to when searching fo
-//			  a tablet with that alias.
+//   - cluster: repeatable, list of cluster IDs to restrict to when searching fo
+//     a tablet with that alias.
 //
 // PUT body is unused; this endpoint takes no additional options.
 func RefreshTabletReplicationSource(ctx context.Context, r Request, api *API) *JSONResponse {

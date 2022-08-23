@@ -24026,6 +24026,9 @@ export namespace query {
 
         /** QueryResult info */
         info?: (string|null);
+
+        /** QueryResult session_state_changes */
+        session_state_changes?: (string|null);
     }
 
     /** Represents a QueryResult. */
@@ -24051,6 +24054,9 @@ export namespace query {
 
         /** QueryResult info. */
         public info: string;
+
+        /** QueryResult session_state_changes. */
+        public session_state_changes: string;
 
         /**
          * Creates a new QueryResult instance using the specified properties.
@@ -25086,6 +25092,9 @@ export namespace query {
 
         /** BeginResponse tablet_alias */
         tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** BeginResponse session_state_changes */
+        session_state_changes?: (string|null);
     }
 
     /** Represents a BeginResponse. */
@@ -25102,6 +25111,9 @@ export namespace query {
 
         /** BeginResponse tablet_alias. */
         public tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** BeginResponse session_state_changes. */
+        public session_state_changes: string;
 
         /**
          * Creates a new BeginResponse instance using the specified properties.
@@ -27282,6 +27294,9 @@ export namespace query {
 
         /** BeginExecuteResponse tablet_alias */
         tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** BeginExecuteResponse session_state_changes */
+        session_state_changes?: (string|null);
     }
 
     /** Represents a BeginExecuteResponse. */
@@ -27304,6 +27319,9 @@ export namespace query {
 
         /** BeginExecuteResponse tablet_alias. */
         public tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** BeginExecuteResponse session_state_changes. */
+        public session_state_changes: string;
 
         /**
          * Creates a new BeginExecuteResponse instance using the specified properties.
@@ -27516,6 +27534,9 @@ export namespace query {
 
         /** BeginStreamExecuteResponse tablet_alias */
         tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** BeginStreamExecuteResponse session_state_changes */
+        session_state_changes?: (string|null);
     }
 
     /** Represents a BeginStreamExecuteResponse. */
@@ -27538,6 +27559,9 @@ export namespace query {
 
         /** BeginStreamExecuteResponse tablet_alias. */
         public tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** BeginStreamExecuteResponse session_state_changes. */
+        public session_state_changes: string;
 
         /**
          * Creates a new BeginStreamExecuteResponse instance using the specified properties.
@@ -28623,6 +28647,9 @@ export namespace query {
 
         /** ReserveBeginExecuteResponse tablet_alias */
         tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** ReserveBeginExecuteResponse session_state_changes */
+        session_state_changes?: (string|null);
     }
 
     /** Represents a ReserveBeginExecuteResponse. */
@@ -28648,6 +28675,9 @@ export namespace query {
 
         /** ReserveBeginExecuteResponse tablet_alias. */
         public tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** ReserveBeginExecuteResponse session_state_changes. */
+        public session_state_changes: string;
 
         /**
          * Creates a new ReserveBeginExecuteResponse instance using the specified properties.
@@ -28863,6 +28893,9 @@ export namespace query {
 
         /** ReserveBeginStreamExecuteResponse tablet_alias */
         tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** ReserveBeginStreamExecuteResponse session_state_changes */
+        session_state_changes?: (string|null);
     }
 
     /** Represents a ReserveBeginStreamExecuteResponse. */
@@ -28888,6 +28921,9 @@ export namespace query {
 
         /** ReserveBeginStreamExecuteResponse tablet_alias. */
         public tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** ReserveBeginStreamExecuteResponse session_state_changes. */
+        public session_state_changes: string;
 
         /**
          * Creates a new ReserveBeginStreamExecuteResponse instance using the specified properties.

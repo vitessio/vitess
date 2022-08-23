@@ -45,7 +45,7 @@ FROM nginxinc/nginx-unprivileged:1.22-alpine AS nginx
 ENV VTADMIN_WEB_PORT=14201
 
 COPY --chown=nginx --from=node /vt/web/vtadmin/build /var/www/
-COPY --chown=nginx default.conf /etc/nginx/templates/default.conf.template
+COPY --chown=nginx docker/k8s/vtadmin/default.conf /etc/nginx/templates/default.conf.template
 
 # command to run nginx is in the base image
 # https://github.com/nginxinc/docker-nginx-unprivileged/blob/main/stable/alpine/Dockerfile#L150

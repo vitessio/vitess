@@ -31,10 +31,12 @@ import (
 )
 
 var (
-	_ SingleColumn = (*LookupUnicodeLooseMD5Hash)(nil)
-	_ Lookup       = (*LookupUnicodeLooseMD5Hash)(nil)
-	_ SingleColumn = (*LookupUnicodeLooseMD5HashUnique)(nil)
-	_ Lookup       = (*LookupUnicodeLooseMD5HashUnique)(nil)
+	_ SingleColumn   = (*LookupUnicodeLooseMD5Hash)(nil)
+	_ Lookup         = (*LookupUnicodeLooseMD5Hash)(nil)
+	_ LookupPlanable = (*LookupUnicodeLooseMD5Hash)(nil)
+	_ SingleColumn   = (*LookupUnicodeLooseMD5HashUnique)(nil)
+	_ Lookup         = (*LookupUnicodeLooseMD5HashUnique)(nil)
+	_ LookupPlanable = (*LookupUnicodeLooseMD5HashUnique)(nil)
 )
 
 func init() {
@@ -56,13 +58,15 @@ type LookupUnicodeLooseMD5Hash struct {
 
 // NewLookupUnicodeLooseMD5Hash creates a LookupUnicodeLooseMD5Hash vindex.
 // The supplied map has the following required fields:
-//   table: name of the backing table. It can be qualified by the keyspace.
-//   from: list of columns in the table that have the 'from' values of the lookup vindex.
-//   to: The 'to' column name of the table.
+//
+//	table: name of the backing table. It can be qualified by the keyspace.
+//	from: list of columns in the table that have the 'from' values of the lookup vindex.
+//	to: The 'to' column name of the table.
 //
 // The following fields are optional:
-//   autocommit: setting this to "true" will cause inserts to upsert and deletes to be ignored.
-//   write_only: in this mode, Map functions return the full keyrange causing a full scatter.
+//
+//	autocommit: setting this to "true" will cause inserts to upsert and deletes to be ignored.
+//	write_only: in this mode, Map functions return the full keyrange causing a full scatter.
 func NewLookupUnicodeLooseMD5Hash(name string, m map[string]string) (Vindex, error) {
 	lh := &LookupUnicodeLooseMD5Hash{name: name}
 
@@ -148,6 +152,51 @@ func (lh *LookupUnicodeLooseMD5Hash) Map(ctx context.Context, vcursor VCursor, i
 	return out, nil
 }
 
+// MapResult implements the LookupPlanable interface
+func (lh *LookupUnicodeLooseMD5Hash) MapResult(ids []sqltypes.Value, results []*sqltypes.Result) ([]key.Destination, error) {
+	out := make([]key.Destination, 0, len(ids))
+	if lh.writeOnly {
+		for range ids {
+			out = append(out, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{}})
+		}
+		return out, nil
+	}
+
+	for _, result := range results {
+		if len(result.Rows) == 0 {
+			out = append(out, key.DestinationNone{})
+			continue
+		}
+		ksids := make([][]byte, 0, len(result.Rows))
+		for _, row := range result.Rows {
+			num, err := evalengine.ToUint64(row[0])
+			if err != nil {
+				// A failure to convert is equivalent to not being
+				// able to map.
+				continue
+			}
+			ksids = append(ksids, vhash(num))
+		}
+		out = append(out, key.DestinationKeyspaceIDs(ksids))
+	}
+	return out, nil
+}
+
+// Query implements the LookupPlanable interface
+func (lh *LookupUnicodeLooseMD5Hash) Query() (selQuery string, arguments []string) {
+	return lh.lkp.query()
+}
+
+// AllowBatch implements the LookupPlanable interface
+func (lh *LookupUnicodeLooseMD5Hash) AllowBatch() bool {
+	return lh.lkp.BatchLookup
+}
+
+// GetCommitOrder implements the LookupPlanable interface
+func (lh *LookupUnicodeLooseMD5Hash) GetCommitOrder() vtgatepb.CommitOrder {
+	return vtgatepb.CommitOrder_NORMAL
+}
+
 // Verify returns true if ids maps to ksids.
 func (lh *LookupUnicodeLooseMD5Hash) Verify(ctx context.Context, vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
 	if lh.writeOnly {
@@ -231,13 +280,15 @@ type LookupUnicodeLooseMD5HashUnique struct {
 
 // NewLookupUnicodeLooseMD5HashUnique creates a LookupUnicodeLooseMD5HashUnique vindex.
 // The supplied map has the following required fields:
-//   table: name of the backing table. It can be qualified by the keyspace.
-//   from: list of columns in the table that have the 'from' values of the lookup vindex.
-//   to: The 'to' column name of the table.
+//
+//	table: name of the backing table. It can be qualified by the keyspace.
+//	from: list of columns in the table that have the 'from' values of the lookup vindex.
+//	to: The 'to' column name of the table.
 //
 // The following fields are optional:
-//   autocommit: setting this to "true" will cause deletes to be ignored.
-//   write_only: in this mode, Map functions return the full keyrange causing a full scatter.
+//
+//	autocommit: setting this to "true" will cause deletes to be ignored.
+//	write_only: in this mode, Map functions return the full keyrange causing a full scatter.
 func NewLookupUnicodeLooseMD5HashUnique(name string, m map[string]string) (Vindex, error) {
 	lhu := &LookupUnicodeLooseMD5HashUnique{name: name}
 
@@ -311,6 +362,49 @@ func (lhu *LookupUnicodeLooseMD5HashUnique) Map(ctx context.Context, vcursor VCu
 		}
 	}
 	return out, nil
+}
+
+// MapResult implements the LookupPlanable interface
+func (lhu *LookupUnicodeLooseMD5HashUnique) MapResult(ids []sqltypes.Value, results []*sqltypes.Result) ([]key.Destination, error) {
+	out := make([]key.Destination, 0, len(ids))
+	if lhu.writeOnly {
+		for range ids {
+			out = append(out, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{}})
+		}
+		return out, nil
+	}
+
+	for i, result := range results {
+		switch len(result.Rows) {
+		case 0:
+			out = append(out, key.DestinationNone{})
+		case 1:
+			num, err := evalengine.ToUint64(result.Rows[0][0])
+			if err != nil {
+				out = append(out, key.DestinationNone{})
+				continue
+			}
+			out = append(out, key.DestinationKeyspaceID(vhash(num)))
+		default:
+			return nil, fmt.Errorf("LookupUnicodeLooseMD5HashUnique.Map: unexpected multiple results from vindex %s: %v", lhu.lkp.Table, ids[i])
+		}
+	}
+	return out, nil
+}
+
+// Query implements the LookupPlanable interface
+func (lhu *LookupUnicodeLooseMD5HashUnique) Query() (selQuery string, arguments []string) {
+	return lhu.lkp.query()
+}
+
+// AllowBatch implements the LookupPlanable interface
+func (lhu *LookupUnicodeLooseMD5HashUnique) AllowBatch() bool {
+	return lhu.lkp.BatchLookup
+}
+
+// GetCommitOrder implements the LookupPlanable interface
+func (lhu *LookupUnicodeLooseMD5HashUnique) GetCommitOrder() vtgatepb.CommitOrder {
+	return vtgatepb.CommitOrder_NORMAL
 }
 
 // Verify returns true if ids maps to ksids.

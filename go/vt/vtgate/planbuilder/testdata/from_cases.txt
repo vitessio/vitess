@@ -5000,19 +5000,44 @@ Gen4 plan same as above
   "QueryType": "SELECT",
   "Original": "select u.a from (select id as b, name from user) u(a, n) where u.n = 1",
   "Instructions": {
-    "OperatorType": "Route",
+    "OperatorType": "VindexLookup",
     "Variant": "Equal",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select u.a from (select id as b, `name` from `user` where 1 != 1) as u(a, n) where 1 != 1",
-    "Query": "select u.a from (select id as b, `name` from `user` where `name` = 1) as u(a, n)",
-    "Table": "`user`",
     "Values": [
       "INT64(1)"
     ],
-    "Vindex": "name_user_map"
+    "Vindex": "name_user_map",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
+        "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
+        "Table": "name_user_vdx",
+        "Values": [
+          ":name"
+        ],
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "ByDestination",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select u.a from (select id as b, `name` from `user` where 1 != 1) as u(a, n) where 1 != 1",
+        "Query": "select u.a from (select id as b, `name` from `user` where `name` = 1) as u(a, n)",
+        "Table": "`user`"
+      }
+    ]
   },
   "TablesUsed": [
     "user.user"
@@ -5026,19 +5051,44 @@ Gen4 plan same as above
   "QueryType": "SELECT",
   "Original": "select u.a from (select id as b, name from user where b = 1) u(a, n) where u.n = 1",
   "Instructions": {
-    "OperatorType": "Route",
+    "OperatorType": "VindexLookup",
     "Variant": "Equal",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select u.a from (select id as b, `name` from `user` where 1 != 1) as u(a, n) where 1 != 1",
-    "Query": "select u.a from (select id as b, `name` from `user` where b = 1 and `name` = 1) as u(a, n)",
-    "Table": "`user`",
     "Values": [
       "INT64(1)"
     ],
-    "Vindex": "name_user_map"
+    "Vindex": "name_user_map",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
+        "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
+        "Table": "name_user_vdx",
+        "Values": [
+          ":name"
+        ],
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "ByDestination",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select u.a from (select id as b, `name` from `user` where 1 != 1) as u(a, n) where 1 != 1",
+        "Query": "select u.a from (select id as b, `name` from `user` where b = 1 and `name` = 1) as u(a, n)",
+        "Table": "`user`"
+      }
+    ]
   },
   "TablesUsed": [
     "user.user"

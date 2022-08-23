@@ -22,26 +22,26 @@ When run periodically for each shard, vtbackup can ensure these configurable pol
 * Old backups for the shard are removed.
 
 Whatever system launches vtbackup is responsible for the following:
-* Running vtbackup with similar flags that would be used for a vttablet and
-  mysqlctld in the target shard to be backed up.
-* Provisioning as much disk space for vtbackup as would be given to vttablet.
-  The data directory MUST be empty at startup. Do NOT reuse a persistent disk.
-* Running vtbackup periodically for each shard, for each backup storage location.
-* Ensuring that at most one instance runs at a time for a given pair of shard
-  and backup storage location.
-* Retrying vtbackup if it fails.
-* Alerting human operators if the failure is persistent.
+  - Running vtbackup with similar flags that would be used for a vttablet and
+    mysqlctld in the target shard to be backed up.
+  - Provisioning as much disk space for vtbackup as would be given to vttablet.
+    The data directory MUST be empty at startup. Do NOT reuse a persistent disk.
+  - Running vtbackup periodically for each shard, for each backup storage location.
+  - Ensuring that at most one instance runs at a time for a given pair of shard
+    and backup storage location.
+  - Retrying vtbackup if it fails.
+  - Alerting human operators if the failure is persistent.
 
 The process vtbackup follows to take a new backup is as follows:
-1. Restore from the most recent backup.
-2. Start a mysqld instance (but no vttablet) from the restored data.
-3. Instruct mysqld to connect to the current shard primary and replicate any
-   transactions that are new since the last backup.
-4. Ask the primary for its current replication position and set that as the goal
-   for catching up on replication before taking the backup, so the goalposts
-   don't move.
-5. Wait until replication is caught up to the goal position or beyond.
-6. Stop mysqld and take a new backup.
+ 1. Restore from the most recent backup.
+ 2. Start a mysqld instance (but no vttablet) from the restored data.
+ 3. Instruct mysqld to connect to the current shard primary and replicate any
+    transactions that are new since the last backup.
+ 4. Ask the primary for its current replication position and set that as the goal
+    for catching up on replication before taking the backup, so the goalposts
+    don't move.
+ 5. Wait until replication is caught up to the goal position or beyond.
+ 6. Stop mysqld and take a new backup.
 
 Aside from additional replication load while vtbackup's mysqld catches up on
 new transactions, the shard should be otherwise unaffected. Existing tablets

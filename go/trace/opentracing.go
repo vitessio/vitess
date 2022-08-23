@@ -17,10 +17,9 @@ limitations under the License.
 package trace
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
-
-	"context"
 
 	otgrpc "github.com/opentracing-contrib/go-grpc"
 	"github.com/opentracing/opentracing-go"
