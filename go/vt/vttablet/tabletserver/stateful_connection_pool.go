@@ -234,11 +234,10 @@ func (sf *StatefulConnectionPool) markAsNotInUse(sc *StatefulConnection, updateT
 		sc.Releasef("kill all")
 		return
 	}
-	if sf.active.Put(sc.ConnID) {
-		if updateTime {
-			sc.resetExpiryTime()
-		}
+	if updateTime {
+		sc.resetExpiryTime()
 	}
+	sf.active.Put(sc.ConnID)
 }
 
 // Capacity returns the pool capacity.
