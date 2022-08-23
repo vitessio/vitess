@@ -374,7 +374,7 @@ func TestSchemaChange(t *testing.T) {
 		require.NotNil(t, row)
 		// vplayer and vcopier update throttle timestamp every second, so we expect the value
 		// to be strictly higher than started_timestamp
-		assert.Greater(t, lastThrottledTimestamp, startedTimestamp)
+		assert.GreaterOrEqual(t, lastThrottledTimestamp, startedTimestamp)
 		component := row.AsString("component_throttled", "")
 		assert.Contains(t, []string{string(vreplication.VCopierComponentName), string(vreplication.VPlayerComponentName)}, component)
 
@@ -513,7 +513,7 @@ func TestSchemaChange(t *testing.T) {
 				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusRunning)
 				time.Sleep(5 * time.Second) // wait for _vt.vreplication to be created
 				vreplStatus := onlineddl.WaitForVReplicationStatus(t, &vtParams, shards, uuid, normalMigrationWait, "Copying")
-				require.Equal(t, "Copying", vreplStatus)
+				require.Contains(t, []string{"Copying", "Running"}, vreplStatus)
 				// again see that we're still 'running'
 				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusRunning)
 				testRows(t)
@@ -587,6 +587,10 @@ func TestSchemaChange(t *testing.T) {
 						require.NoError(t, fmt.Errorf("unexpected shard name: %s", shard))
 					}
 				}
+
+				onlineddl.CheckRetryPartialMigration(t, &vtParams, uuid, 1)
+				// Now it should complete on the failed shard
+				_ = onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, extendedMigrationWait, schema.OnlineDDLStatusComplete)
 			})
 		})
 	}

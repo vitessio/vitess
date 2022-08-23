@@ -32,15 +32,27 @@ import (
 )
 
 var (
+	//go:embed vtexplain.txt
+	vtexplainTxt string
+
 	//go:embed vtgate.txt
 	vtgateTxt string
+
+	//go:embed vtgr.txt
+	vtgrTxt string
 
 	//go:embed vttablet.txt
 	vttabletTxt string
 
+	//go:embed vtctld.txt
+	vtctldTxt string
+
 	helpOutput = map[string]string{
-		"vtgate":   vtgateTxt,
-		"vttablet": vttabletTxt,
+		"vtexplain": vtexplainTxt,
+		"vtgate":    vtgateTxt,
+		"vtgr":      vtgrTxt,
+		"vttablet":  vttabletTxt,
+		"vtctld":    vtctldTxt,
 	}
 )
 

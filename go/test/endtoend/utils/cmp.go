@@ -180,8 +180,9 @@ func (mcmp *MySQLCompare) ExecWithColumnCompare(query string) *sqltypes.Result {
 
 // ExecAllowAndCompareError executes the query against both Vitess and MySQL.
 // The test will pass if:
-// 		- MySQL and Vitess both agree that there is an error
-// 		- MySQL and Vitess did not find an error, but their results are matching
+//   - MySQL and Vitess both agree that there is an error
+//   - MySQL and Vitess did not find an error, but their results are matching
+//
 // The result set and error produced by Vitess are returned to the caller.
 func (mcmp *MySQLCompare) ExecAllowAndCompareError(query string) (*sqltypes.Result, error) {
 	mcmp.t.Helper()

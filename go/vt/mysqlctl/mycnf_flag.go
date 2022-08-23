@@ -78,14 +78,14 @@ func RegisterFlags() {
 // NewMycnfFromFlags creates a Mycnf object from the command line flags.
 //
 // Multiple modes are supported:
-// - at least mycnf_server_id is set on the command line
-//   --> then we read all parameters from the command line, and not from
-//       any my.cnf file.
-// - mycnf_server_id is not passed in, but mycnf-file is passed in
-//   --> then we read that mycnf file
-// - mycnf_server_id and mycnf-file are not passed in:
-//   --> then we use the default location of the my.cnf file for the
-//       provided uid and read that my.cnf file.
+//   - at least mycnf_server_id is set on the command line
+//     --> then we read all parameters from the command line, and not from
+//     any my.cnf file.
+//   - mycnf_server_id is not passed in, but mycnf-file is passed in
+//     --> then we read that mycnf file
+//   - mycnf_server_id and mycnf-file are not passed in:
+//     --> then we use the default location of the my.cnf file for the
+//     provided uid and read that my.cnf file.
 //
 // RegisterCommandLineFlags should have been called before calling
 // this, otherwise we'll panic.

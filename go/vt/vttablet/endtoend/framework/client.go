@@ -36,11 +36,12 @@ import (
 // It's not thread safe, but you can create multiple clients that point to the
 // same server.
 type QueryClient struct {
-	ctx           context.Context
-	target        *querypb.Target
-	server        *tabletserver.TabletServer
-	transactionID int64
-	reservedID    int64
+	ctx                 context.Context
+	target              *querypb.Target
+	server              *tabletserver.TabletServer
+	transactionID       int64
+	reservedID          int64
+	sessionStateChanges string
 }
 
 // NewClient creates a new client for Server.
@@ -94,6 +95,7 @@ func (client *QueryClient) Begin(clientFoundRows bool) error {
 		return err
 	}
 	client.transactionID = state.TransactionID
+	client.sessionStateChanges = state.SessionStateChanges
 	return nil
 }
 
@@ -192,6 +194,7 @@ func (client *QueryClient) BeginExecute(query string, bindvars map[string]*query
 		&querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL},
 	)
 	client.transactionID = state.TransactionID
+	client.sessionStateChanges = state.SessionStateChanges
 	if err != nil {
 		return nil, err
 	}
@@ -259,6 +262,7 @@ func (client *QueryClient) StreamBeginExecuteWithOptions(query string, preQuerie
 		},
 	)
 	client.transactionID = state.TransactionID
+	client.sessionStateChanges = state.SessionStateChanges
 	if err != nil {
 		return nil, err
 	}
@@ -311,6 +315,7 @@ func (client *QueryClient) ReserveBeginExecute(query string, preQueries []string
 	state, qr, err := client.server.ReserveBeginExecute(client.ctx, client.target, preQueries, postBeginQueries, query, bindvars, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
 	client.transactionID = state.TransactionID
 	client.reservedID = state.ReservedID
+	client.sessionStateChanges = state.SessionStateChanges
 	if err != nil {
 		return nil, err
 	}

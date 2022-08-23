@@ -17,9 +17,8 @@ limitations under the License.
 package trace
 
 import (
-	"io"
-
 	"context"
+	"io"
 
 	"google.golang.org/grpc"
 )

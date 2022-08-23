@@ -15,14 +15,12 @@
 # limitations under the License.
 
 # This script does a minified production build of the vtctld UI.
-# In production, the vtctld UI is hosted with [go.rice](https://github.com/GeertJohan/go.rice).
 # All front-end assets must be built, minified, and embedded in the executable.
 set -euo pipefail
 
 web_dir="$VTROOT/web/vtctld2"
 web_app_dir="$web_dir/app"
 web_dist_dir="$web_dir/dist"
-rice_dir="$VTROOT/go/vt/vtctld"
 
 (cd "$web_dir" && npm run build:prod)
 cp -f "$web_dir"/src/{favicon.ico,plotly-latest.min.js,primeui-ng-all.min.css} "$web_dist_dir"
@@ -32,5 +30,3 @@ cp -f "$web_dir"/src/{favicon.ico,plotly-latest.min.js,primeui-ng-all.min.css} "
 # instead of `app/` but... shrug!
 rm -rf "$web_app_dir"
 cp -r "$web_dist_dir" "$web_app_dir"
-
-(cd "$rice_dir" && go run github.com/GeertJohan/go.rice/rice embed-go && go build .)

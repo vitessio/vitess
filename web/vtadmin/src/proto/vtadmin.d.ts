@@ -24026,6 +24026,9 @@ export namespace query {
 
         /** QueryResult info */
         info?: (string|null);
+
+        /** QueryResult session_state_changes */
+        session_state_changes?: (string|null);
     }
 
     /** Represents a QueryResult. */
@@ -24051,6 +24054,9 @@ export namespace query {
 
         /** QueryResult info. */
         public info: string;
+
+        /** QueryResult session_state_changes. */
+        public session_state_changes: string;
 
         /**
          * Creates a new QueryResult instance using the specified properties.
@@ -25086,6 +25092,9 @@ export namespace query {
 
         /** BeginResponse tablet_alias */
         tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** BeginResponse session_state_changes */
+        session_state_changes?: (string|null);
     }
 
     /** Represents a BeginResponse. */
@@ -25102,6 +25111,9 @@ export namespace query {
 
         /** BeginResponse tablet_alias. */
         public tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** BeginResponse session_state_changes. */
+        public session_state_changes: string;
 
         /**
          * Creates a new BeginResponse instance using the specified properties.
@@ -27282,6 +27294,9 @@ export namespace query {
 
         /** BeginExecuteResponse tablet_alias */
         tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** BeginExecuteResponse session_state_changes */
+        session_state_changes?: (string|null);
     }
 
     /** Represents a BeginExecuteResponse. */
@@ -27304,6 +27319,9 @@ export namespace query {
 
         /** BeginExecuteResponse tablet_alias. */
         public tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** BeginExecuteResponse session_state_changes. */
+        public session_state_changes: string;
 
         /**
          * Creates a new BeginExecuteResponse instance using the specified properties.
@@ -27516,6 +27534,9 @@ export namespace query {
 
         /** BeginStreamExecuteResponse tablet_alias */
         tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** BeginStreamExecuteResponse session_state_changes */
+        session_state_changes?: (string|null);
     }
 
     /** Represents a BeginStreamExecuteResponse. */
@@ -27538,6 +27559,9 @@ export namespace query {
 
         /** BeginStreamExecuteResponse tablet_alias. */
         public tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** BeginStreamExecuteResponse session_state_changes. */
+        public session_state_changes: string;
 
         /**
          * Creates a new BeginStreamExecuteResponse instance using the specified properties.
@@ -28623,6 +28647,9 @@ export namespace query {
 
         /** ReserveBeginExecuteResponse tablet_alias */
         tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** ReserveBeginExecuteResponse session_state_changes */
+        session_state_changes?: (string|null);
     }
 
     /** Represents a ReserveBeginExecuteResponse. */
@@ -28648,6 +28675,9 @@ export namespace query {
 
         /** ReserveBeginExecuteResponse tablet_alias. */
         public tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** ReserveBeginExecuteResponse session_state_changes. */
+        public session_state_changes: string;
 
         /**
          * Creates a new ReserveBeginExecuteResponse instance using the specified properties.
@@ -28863,6 +28893,9 @@ export namespace query {
 
         /** ReserveBeginStreamExecuteResponse tablet_alias */
         tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** ReserveBeginStreamExecuteResponse session_state_changes */
+        session_state_changes?: (string|null);
     }
 
     /** Represents a ReserveBeginStreamExecuteResponse. */
@@ -28888,6 +28921,9 @@ export namespace query {
 
         /** ReserveBeginStreamExecuteResponse tablet_alias. */
         public tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** ReserveBeginStreamExecuteResponse session_state_changes. */
+        public session_state_changes: string;
 
         /**
          * Creates a new ReserveBeginStreamExecuteResponse instance using the specified properties.
@@ -29941,12 +29977,6 @@ export namespace replicationdata {
         /** Status position */
         position?: (string|null);
 
-        /** Status io_thread_running */
-        io_thread_running?: (boolean|null);
-
-        /** Status sql_thread_running */
-        sql_thread_running?: (boolean|null);
-
         /** Status replication_lag_seconds */
         replication_lag_seconds?: (number|null);
 
@@ -30022,12 +30052,6 @@ export namespace replicationdata {
 
         /** Status position. */
         public position: string;
-
-        /** Status io_thread_running. */
-        public io_thread_running: boolean;
-
-        /** Status sql_thread_running. */
-        public sql_thread_running: boolean;
 
         /** Status replication_lag_seconds. */
         public replication_lag_seconds: number;
@@ -37589,6 +37613,186 @@ export namespace vtctldata {
 
         /**
          * Converts this GetCellsAliasesResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a GetFullStatusRequest. */
+    interface IGetFullStatusRequest {
+
+        /** GetFullStatusRequest tablet_alias */
+        tablet_alias?: (topodata.ITabletAlias|null);
+    }
+
+    /** Represents a GetFullStatusRequest. */
+    class GetFullStatusRequest implements IGetFullStatusRequest {
+
+        /**
+         * Constructs a new GetFullStatusRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IGetFullStatusRequest);
+
+        /** GetFullStatusRequest tablet_alias. */
+        public tablet_alias?: (topodata.ITabletAlias|null);
+
+        /**
+         * Creates a new GetFullStatusRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetFullStatusRequest instance
+         */
+        public static create(properties?: vtctldata.IGetFullStatusRequest): vtctldata.GetFullStatusRequest;
+
+        /**
+         * Encodes the specified GetFullStatusRequest message. Does not implicitly {@link vtctldata.GetFullStatusRequest.verify|verify} messages.
+         * @param message GetFullStatusRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IGetFullStatusRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetFullStatusRequest message, length delimited. Does not implicitly {@link vtctldata.GetFullStatusRequest.verify|verify} messages.
+         * @param message GetFullStatusRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IGetFullStatusRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetFullStatusRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetFullStatusRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.GetFullStatusRequest;
+
+        /**
+         * Decodes a GetFullStatusRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetFullStatusRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.GetFullStatusRequest;
+
+        /**
+         * Verifies a GetFullStatusRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetFullStatusRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetFullStatusRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.GetFullStatusRequest;
+
+        /**
+         * Creates a plain object from a GetFullStatusRequest message. Also converts values to other types if specified.
+         * @param message GetFullStatusRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.GetFullStatusRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetFullStatusRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a GetFullStatusResponse. */
+    interface IGetFullStatusResponse {
+
+        /** GetFullStatusResponse status */
+        status?: (replicationdata.IFullStatus|null);
+    }
+
+    /** Represents a GetFullStatusResponse. */
+    class GetFullStatusResponse implements IGetFullStatusResponse {
+
+        /**
+         * Constructs a new GetFullStatusResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IGetFullStatusResponse);
+
+        /** GetFullStatusResponse status. */
+        public status?: (replicationdata.IFullStatus|null);
+
+        /**
+         * Creates a new GetFullStatusResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetFullStatusResponse instance
+         */
+        public static create(properties?: vtctldata.IGetFullStatusResponse): vtctldata.GetFullStatusResponse;
+
+        /**
+         * Encodes the specified GetFullStatusResponse message. Does not implicitly {@link vtctldata.GetFullStatusResponse.verify|verify} messages.
+         * @param message GetFullStatusResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IGetFullStatusResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetFullStatusResponse message, length delimited. Does not implicitly {@link vtctldata.GetFullStatusResponse.verify|verify} messages.
+         * @param message GetFullStatusResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IGetFullStatusResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetFullStatusResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetFullStatusResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.GetFullStatusResponse;
+
+        /**
+         * Decodes a GetFullStatusResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetFullStatusResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.GetFullStatusResponse;
+
+        /**
+         * Verifies a GetFullStatusResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetFullStatusResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetFullStatusResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.GetFullStatusResponse;
+
+        /**
+         * Creates a plain object from a GetFullStatusResponse message. Also converts values to other types if specified.
+         * @param message GetFullStatusResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.GetFullStatusResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetFullStatusResponse to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };

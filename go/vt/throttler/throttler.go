@@ -71,7 +71,8 @@ const (
 // Calls of Throttle() and ThreadFinished() take threadID as parameter which is
 // in the range [0, threadCount). (threadCount is set in NewThrottler().)
 // NOTE: Trottle() and ThreadFinished() assume that *per thread* calls to them
-//       are serialized and must not happen concurrently.
+//
+//	are serialized and must not happen concurrently.
 type Throttler struct {
 	// name describes the Throttler instance and is used e.g. in the webinterface.
 	name string

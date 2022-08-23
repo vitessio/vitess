@@ -23,9 +23,6 @@ import (
 	"flag"
 	"net/http"
 	"strings"
-	"time"
-
-	rice "github.com/GeertJohan/go.rice"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/vt/discovery"
@@ -33,6 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtctl"
 	"vitess.io/vitess/go/vt/wrangler"
+	"vitess.io/vitess/web/vtctld2"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
@@ -142,10 +140,9 @@ func InitVtctld(ts *topo.Server) error {
 		http.Redirect(w, r, appPrefix, http.StatusFound)
 	})
 
-	// Serve the static files for the vtctld2 web app
-	http.HandleFunc(appPrefix, webAppHandler)
+	http.Handle(appPrefix, staticContentHandler(*enableUI))
 
-	var healthCheck *discovery.HealthCheckImpl
+	var healthCheck discovery.HealthCheck
 	if *enableRealtimeStats {
 		ctx := context.Background()
 		cells, err := ts.GetKnownCells(ctx)
@@ -171,40 +168,13 @@ func InitVtctld(ts *topo.Server) error {
 	return nil
 }
 
-func webAppHandler(w http.ResponseWriter, r *http.Request) {
-	if !*enableUI {
-		http.NotFound(w, r)
-		return
+func staticContentHandler(enabled bool) http.Handler {
+	if enabled {
+		return http.FileServer(http.FS(vtctld2.Content))
 	}
 
-	// Strip the prefix.
-	parts := strings.SplitN(r.URL.Path, "/", 3)
-	if len(parts) != 3 {
-		http.NotFound(w, r)
-		return
-	}
-	rest := parts[2]
-	if rest == "" {
-		rest = "index.html"
-	}
-
-	riceBox, err := rice.FindBox("../../../web/vtctld2/app")
-	if err != nil {
-		log.Errorf("Unable to open rice box %s", err)
+	fn := func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 	}
-	fileToServe, err := riceBox.Open(rest)
-	if err != nil {
-		if !strings.ContainsAny(rest, "/.") {
-			// This is a virtual route so pass index.html
-			fileToServe, err = riceBox.Open("index.html")
-		}
-		if err != nil {
-			log.Errorf("Unable to open file from rice box %s : %s", rest, err)
-			http.NotFound(w, r)
-		}
-	}
-	if fileToServe != nil {
-		http.ServeContent(w, r, rest, time.Now(), fileToServe)
-	}
+	return http.HandlerFunc(fn)
 }

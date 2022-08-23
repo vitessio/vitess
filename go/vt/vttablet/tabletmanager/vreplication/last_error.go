@@ -62,10 +62,18 @@ func (le *lastError) record(err error) {
 func (le *lastError) shouldRetry() bool {
 	le.mu.Lock()
 	defer le.mu.Unlock()
-	if !le.firstSeen.IsZero() && time.Since(le.firstSeen) > le.maxTimeInError {
-		log.Errorf("VReplication encountered the same error continuously since %s, we will assume this is a non-recoverable error and will not retry anymore; the workflow will need to be manually restarted once error '%s' has been addressed",
-			le.firstSeen.UTC(), le.err)
-		return false
+	if le.maxTimeInError == 0 {
+		// The value of 0 means "no time limit"
+		return true
 	}
-	return true
+	if le.firstSeen.IsZero() {
+		return true
+	}
+	if time.Since(le.firstSeen) <= le.maxTimeInError {
+		// within the max time range
+		return true
+	}
+	log.Errorf("VReplication encountered the same error continuously since %s, we will assume this is a non-recoverable error and will not retry anymore; the workflow will need to be manually restarted once error '%s' has been addressed",
+		le.firstSeen.UTC(), le.err)
+	return false
 }

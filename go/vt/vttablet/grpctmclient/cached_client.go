@@ -182,18 +182,18 @@ func (dialer *cachedConnDialer) tryFromCache(addr string, locker sync.Locker) (c
 }
 
 // pollOnce is called on each iteration of the polling loop in dial(). It:
-// - locks the conns cache for writes
-// - attempts to get a connection from the cache. If found, redial() it and exit.
-// - peeks at the head of the eviction queue. if the peeked conn has no refs, it
-//   is unused, and can be evicted to make room for the new connection to addr.
-//   If the peeked conn has refs, exit.
-// - pops the conn we just peeked from the queue, deletes it from the cache, and
-//   close the underlying ClientConn for that conn.
-// - attempt a newdial. if the newdial fails, it will release a slot on the
-//   connWaitSema, so another dial() call can successfully acquire it to dial
-//   a new conn. if the newdial succeeds, we will have evicted one conn, but
-//   added another, so the net change is 0, and no changes to the connWaitSema
-//   are made.
+//   - locks the conns cache for writes
+//   - attempts to get a connection from the cache. If found, redial() it and exit.
+//   - peeks at the head of the eviction queue. if the peeked conn has no refs, it
+//     is unused, and can be evicted to make room for the new connection to addr.
+//     If the peeked conn has refs, exit.
+//   - pops the conn we just peeked from the queue, deletes it from the cache, and
+//     close the underlying ClientConn for that conn.
+//   - attempt a newdial. if the newdial fails, it will release a slot on the
+//     connWaitSema, so another dial() call can successfully acquire it to dial
+//     a new conn. if the newdial succeeds, we will have evicted one conn, but
+//     added another, so the net change is 0, and no changes to the connWaitSema
+//     are made.
 //
 // It returns a TabletManagerClient impl, an io.Closer, a flag to indicate
 // whether the dial() poll loop should exit, and an error.

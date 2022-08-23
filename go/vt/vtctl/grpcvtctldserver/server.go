@@ -42,17 +42,15 @@ import (
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/concurrency"
 	hk "vitess.io/vitess/go/vt/hook"
-	"vitess.io/vitess/go/vt/mysqlctl"
-	"vitess.io/vitess/go/vt/schema"
-
-	"vitess.io/vitess/go/vt/schemamanager"
-
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/mysqlctl/mysqlctlproto"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
+	"vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/schemamanager"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -936,7 +934,10 @@ func (s *VtctldServer) ExecuteFetchAsApp(ctx context.Context, req *vtctldatapb.E
 		return nil, err
 	}
 
-	qr, err := s.tmc.ExecuteFetchAsApp(ctx, ti.Tablet, req.UsePool, []byte(req.Query), int(req.MaxRows))
+	qr, err := s.tmc.ExecuteFetchAsApp(ctx, ti.Tablet, req.UsePool, &tabletmanagerdatapb.ExecuteFetchAsAppRequest{
+		Query:   []byte(req.Query),
+		MaxRows: uint64(req.MaxRows),
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -959,7 +960,12 @@ func (s *VtctldServer) ExecuteFetchAsDBA(ctx context.Context, req *vtctldatapb.E
 		return nil, err
 	}
 
-	qr, err := s.tmc.ExecuteFetchAsDba(ctx, ti.Tablet, false, []byte(req.Query), int(req.MaxRows), req.DisableBinlogs, req.ReloadSchema)
+	qr, err := s.tmc.ExecuteFetchAsDba(ctx, ti.Tablet, false, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
+		Query:          []byte(req.Query),
+		MaxRows:        uint64(req.MaxRows),
+		DisableBinlogs: req.DisableBinlogs,
+		ReloadSchema:   req.ReloadSchema,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -1138,6 +1144,28 @@ func (s *VtctldServer) GetCellsAliases(ctx context.Context, req *vtctldatapb.Get
 	}
 
 	return &vtctldatapb.GetCellsAliasesResponse{Aliases: aliases}, nil
+}
+
+// GetFullStatus is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) GetFullStatus(ctx context.Context, req *vtctldatapb.GetFullStatusRequest) (*vtctldatapb.GetFullStatusResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.GetFullStatus")
+	defer span.Finish()
+
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(req.TabletAlias))
+
+	ti, err := s.ts.GetTablet(ctx, req.TabletAlias)
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := s.tmc.FullStatus(ctx, ti.Tablet)
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.GetFullStatusResponse{
+		Status: res,
+	}, nil
 }
 
 // GetKeyspace is part of the vtctlservicepb.VtctldServer interface.
@@ -1923,7 +1951,11 @@ func (s *VtctldServer) InitShardPrimaryLocked(
 	// If the database doesn't exist, it means the user intends for these tablets
 	// to begin serving with no data (i.e. first time initialization).
 	createDB := fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s", sqlescape.EscapeID(topoproto.TabletDbName(primaryElectTabletInfo.Tablet)))
-	if _, err := tmc.ExecuteFetchAsDba(ctx, primaryElectTabletInfo.Tablet, false, []byte(createDB), 1, false, true); err != nil {
+	if _, err := tmc.ExecuteFetchAsDba(ctx, primaryElectTabletInfo.Tablet, false, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
+		Query:        []byte(createDB),
+		MaxRows:      1,
+		ReloadSchema: true,
+	}); err != nil {
 		return fmt.Errorf("failed to create database: %v", err)
 	}
 	// Refresh the state to force the tabletserver to reconnect after db has been created.

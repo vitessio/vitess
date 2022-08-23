@@ -12,7 +12,7 @@ concurrency:
 
 jobs:
   get_previous_release:
-    if: always() && github.event_name == 'pull_request'
+    if: always()
     name: Get latest release
     runs-on: ubuntu-latest
     outputs:
@@ -36,7 +36,6 @@ jobs:
     name: Run Upgrade Downgrade Test
     runs-on: ubuntu-latest
     needs:
-      - get_upgrade_downgrade_label
       - get_previous_release
 
     steps:
@@ -72,6 +71,7 @@ jobs:
             - 'tools/**'
             - 'config/**'
             - 'bootstrap.sh'
+            - '.github/workflows/upgrade_downgrade_test_query_serving_queries.yml'
 
     - name: Set up Go
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
@@ -116,7 +116,7 @@ jobs:
         sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld || echo "could not remove mysqld profile"
 
         # install JUnit report formatter
-        go install github.com/jstemmer/go-junit-report@latest
+        go install github.com/vitessio/go-junit-report@HEAD
 
         wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
         sudo apt-get install -y gnupg2

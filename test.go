@@ -27,10 +27,12 @@ run against a given flavor, it may take some time for the corresponding
 bootstrap image (vitess/bootstrap:<flavor>) to be downloaded.
 
 It is meant to be run from the Vitess root, like so:
-  $ go run test.go [args]
+
+	$ go run test.go [args]
 
 For a list of options, run:
-  $ go run test.go --help
+
+	$ go run test.go --help
 */
 package main
 

@@ -252,6 +252,8 @@ func (stc *ScatterConn) ExecuteMultiShard(
 			default:
 				return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected actionNeeded on query execution: %v", info.actionNeeded)
 			}
+			session.logging.log(rs.Target, queries[i].Sql, info.actionNeeded == begin || info.actionNeeded == reserveBegin, queries[i].BindVariables)
+
 			// We need to new shard info irrespective of the error.
 			newInfo := info.updateTransactionAndReservedID(transactionID, reservedID, alias)
 			if err != nil {
@@ -447,6 +449,8 @@ func (stc *ScatterConn) StreamExecuteMulti(
 			default:
 				return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected actionNeeded on query execution: %v", info.actionNeeded)
 			}
+			session.logging.log(rs.Target, query, info.actionNeeded == begin || info.actionNeeded == reserveBegin, bindVars[i])
+
 			// We need to new shard info irrespective of the error.
 			newInfo := info.updateTransactionAndReservedID(transactionID, reservedID, alias)
 			if err != nil {
@@ -838,9 +842,9 @@ func lockInfo(target *querypb.Target, session *SafeSession, lockFuncType sqlpars
 	// TODO: after release 14.0, uncomment this line.
 	// This commented for backward compatiblity as there is a specific check in vttablet for lock functions,
 	// to always be on reserved connection.
-	//if lockFuncType != sqlparser.GetLock {
+	// if lockFuncType != sqlparser.GetLock {
 	//	return info, nil
-	//}
+	// }
 	if info.reservedID == 0 {
 		info.actionNeeded = reserve
 	}

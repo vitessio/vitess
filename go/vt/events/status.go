@@ -29,11 +29,11 @@ import (
 //
 // For example:
 //
-//   type MyEvent struct {
-//     StatusUpdater
-//   }
-//   ev := &MyEvent{}
-//   event.DispatchUpdate(ev, "new status")
+//	type MyEvent struct {
+//	  StatusUpdater
+//	}
+//	ev := &MyEvent{}
+//	event.DispatchUpdate(ev, "new status")
 type StatusUpdater struct {
 	Status string
 

@@ -250,7 +250,10 @@ func main() {
 		exit.Return(1)
 	}
 	dbconfigs.RegisterFlags(dbconfigs.Dba)
-	_flag.Parse(pflag.NewFlagSet("mysqlctl", pflag.ExitOnError))
+	fs := pflag.NewFlagSet("mysqlctl", pflag.ExitOnError)
+	log.RegisterFlags(fs)
+	logutil.RegisterFlags(fs)
+	_flag.Parse(fs)
 
 	tabletAddr = netutil.JoinHostPort("localhost", int32(*port))
 

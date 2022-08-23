@@ -203,6 +203,12 @@ func translateLiteral(lit *sqlparser.Literal, lookup TranslationLookup) (*Litera
 		return NewLiteralBinaryFromHexNum(lit.Bytes())
 	case sqlparser.HexVal:
 		return NewLiteralBinaryFromHex(lit.Bytes())
+	case sqlparser.DateVal:
+		return NewLiteralDateFromBytes(lit.Bytes())
+	case sqlparser.TimeVal:
+		return NewLiteralTimeFromBytes(lit.Bytes())
+	case sqlparser.TimestampVal:
+		return NewLiteralDatetimeFromBytes(lit.Bytes())
 	default:
 		return nil, translateExprNotSupported(lit)
 	}

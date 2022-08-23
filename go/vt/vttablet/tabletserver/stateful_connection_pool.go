@@ -60,7 +60,7 @@ type StatefulConnectionPool struct {
 	lastID        sync2.AtomicInt64
 }
 
-//NewStatefulConnPool creates an ActivePool
+// NewStatefulConnPool creates an ActivePool
 func NewStatefulConnPool(env tabletenv.Env) *StatefulConnectionPool {
 	config := env.Config()
 

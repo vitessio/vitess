@@ -50,27 +50,32 @@ var _ SessionActions = (*noopVCursor)(nil)
 type noopVCursor struct {
 }
 
+func (t *noopVCursor) SetCommitOrder(co vtgatepb.CommitOrder) {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (t *noopVCursor) StreamExecutePrimitiveStandalone(ctx context.Context, primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(result *sqltypes.Result) error) error {
 	return primitive.TryStreamExecute(ctx, t, bindVars, wantfields, callback)
 }
 
 func (t *noopVCursor) AnyAdvisoryLockTaken() bool {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
 func (t *noopVCursor) AddAdvisoryLock(name string) {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
 func (t *noopVCursor) RemoveAdvisoryLock(name string) {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
 func (t *noopVCursor) ReleaseLock(context.Context) error {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
@@ -192,7 +197,7 @@ func (t *noopVCursor) SetUDV(key string, value any) error {
 }
 
 func (t *noopVCursor) SetSysVar(name string, expr string) {
-	//panic("implement me")
+	// panic("implement me")
 }
 
 func (t *noopVCursor) InReservedConn() bool {
@@ -684,6 +689,15 @@ func (f *loggingVCursor) CanUseSetVar() bool {
 		f.log = append(f.log, "SET_VAR can be used")
 	}
 	return useSetVar
+}
+
+func (t *noopVCursor) VtExplainLogging() {}
+func (t *noopVCursor) DisableLogging()   {}
+func (t *noopVCursor) GetVTExplainLogs() []ExecuteEntry {
+	return nil
+}
+func (t *noopVCursor) GetLogs() ([]ExecuteEntry, error) {
+	return nil, nil
 }
 
 func expectResult(t *testing.T, msg string, result, want *sqltypes.Result) {

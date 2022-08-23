@@ -105,16 +105,22 @@ func gen4SelectStmtPlanner(
 	}
 
 	primitive := plan.Primitive()
-	if rb, ok := primitive.(*engine.Route); ok && isSel {
-		// this is done because engine.Route doesn't handle the empty result well
-		// if it doesn't find a shard to send the query to.
-		// All other engine primitives can handle this, so we only need it when
-		// Route is the last (and only) instruction before the user sees a result
-		if isOnlyDual(sel) || (len(sel.GroupBy) == 0 && sel.SelectExprs.AllAggregation()) {
-			rb.NoRoutesSpecialHandling = true
-		}
+	if !isSel {
+		return newPlanResult(primitive, tablesFromSemantics(st)...), nil
 	}
 
+	// this is done because engine.Route doesn't handle the empty result well
+	// if it doesn't find a shard to send the query to.
+	// All other engine primitives can handle this, so we only need it when
+	// Route is the last (and only) instruction before the user sees a result
+	if isOnlyDual(sel) || (len(sel.GroupBy) == 0 && sel.SelectExprs.AllAggregation()) {
+		switch prim := primitive.(type) {
+		case *engine.Route:
+			prim.NoRoutesSpecialHandling = true
+		case *engine.VindexLookup:
+			prim.SendTo.NoRoutesSpecialHandling = true
+		}
+	}
 	return newPlanResult(primitive, tablesFromSemantics(st)...), nil
 }
 
@@ -131,10 +137,6 @@ func gen4planSQLCalcFoundRows(vschema plancontext.VSchema, sel *sqlparser.Select
 	vschema.PlannerWarning(semTable.Warning)
 
 	plan, err := buildSQLCalcFoundRowsPlan(query, sel, reservedVars, vschema, planSelectGen4)
-	if err != nil {
-		return nil, err
-	}
-	err = plan.WireupGen4(semTable)
 	if err != nil {
 		return nil, err
 	}
@@ -180,8 +182,10 @@ func newBuildSelectPlan(
 	// record any warning as planner warning.
 	vschema.PlannerWarning(semTable.Warning)
 
+	ctx := plancontext.NewPlanningContext(reservedVars, semTable, vschema, version)
+
 	if ks, _ := semTable.SingleUnshardedKeyspace(); ks != nil {
-		plan, err := unshardedShortcut(selStmt, ks, semTable)
+		plan, err := unshardedShortcut(ctx, selStmt, ks)
 		return plan, semTable, err
 	}
 
@@ -195,7 +199,6 @@ func newBuildSelectPlan(
 		return nil, nil, err
 	}
 
-	ctx := plancontext.NewPlanningContext(reservedVars, semTable, vschema, version)
 	logical, err := abstract.CreateLogicalOperatorFromAST(selStmt, semTable)
 	if err != nil {
 		return nil, nil, err
@@ -227,7 +230,7 @@ func newBuildSelectPlan(
 		}
 	}
 
-	if err := plan.WireupGen4(semTable); err != nil {
+	if err := plan.WireupGen4(ctx); err != nil {
 		return nil, nil, err
 	}
 
@@ -312,7 +315,7 @@ func gen4UpdateStmtPlanner(
 
 	setLockOnAllSelect(plan)
 
-	if err := plan.WireupGen4(semTable); err != nil {
+	if err := plan.WireupGen4(ctx); err != nil {
 		return nil, err
 	}
 
@@ -444,26 +447,23 @@ func planOrderByOnUnion(ctx *plancontext.PlanningContext, plan logicalPlan, unio
 }
 
 func pushCommentDirectivesOnPlan(plan logicalPlan, stmt sqlparser.Statement) (logicalPlan, error) {
-	var directives sqlparser.CommentDirectives
+	var directives *sqlparser.CommentDirectives
 	cmt, ok := stmt.(sqlparser.Commented)
 	if ok {
 		directives = cmt.GetParsedComments().Directives()
-	} else {
-		directives = make(sqlparser.CommentDirectives)
-	}
+		scatterAsWarns := directives.IsSet(sqlparser.DirectiveScatterErrorsAsWarnings)
+		timeout := queryTimeout(directives)
 
-	scatterAsWarns := directives.IsSet(sqlparser.DirectiveScatterErrorsAsWarnings)
-	queryTimeout := queryTimeout(directives)
-
-	if scatterAsWarns || queryTimeout > 0 {
-		_, _ = visit(plan, func(logicalPlan logicalPlan) (bool, logicalPlan, error) {
-			switch plan := logicalPlan.(type) {
-			case *routeGen4:
-				plan.eroute.ScatterErrorsAsWarnings = scatterAsWarns
-				plan.eroute.QueryTimeout = queryTimeout
-			}
-			return true, logicalPlan, nil
-		})
+		if scatterAsWarns || timeout > 0 {
+			_, _ = visit(plan, func(logicalPlan logicalPlan) (bool, logicalPlan, error) {
+				switch plan := logicalPlan.(type) {
+				case *routeGen4:
+					plan.eroute.ScatterErrorsAsWarnings = scatterAsWarns
+					plan.eroute.QueryTimeout = timeout
+				}
+				return true, logicalPlan, nil
+			})
+		}
 	}
 
 	return plan, nil

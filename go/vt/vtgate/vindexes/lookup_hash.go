@@ -30,10 +30,12 @@ import (
 )
 
 var (
-	_ SingleColumn = (*LookupHash)(nil)
-	_ Lookup       = (*LookupHash)(nil)
-	_ SingleColumn = (*LookupHashUnique)(nil)
-	_ Lookup       = (*LookupHashUnique)(nil)
+	_ SingleColumn   = (*LookupHash)(nil)
+	_ Lookup         = (*LookupHash)(nil)
+	_ LookupPlanable = (*LookupHash)(nil)
+	_ SingleColumn   = (*LookupHashUnique)(nil)
+	_ Lookup         = (*LookupHashUnique)(nil)
+	_ LookupPlanable = (*LookupHashUnique)(nil)
 )
 
 func init() {
@@ -55,13 +57,15 @@ type LookupHash struct {
 
 // NewLookupHash creates a LookupHash vindex.
 // The supplied map has the following required fields:
-//   table: name of the backing table. It can be qualified by the keyspace.
-//   from: list of columns in the table that have the 'from' values of the lookup vindex.
-//   to: The 'to' column name of the table.
+//
+//	table: name of the backing table. It can be qualified by the keyspace.
+//	from: list of columns in the table that have the 'from' values of the lookup vindex.
+//	to: The 'to' column name of the table.
 //
 // The following fields are optional:
-//   autocommit: setting this to "true" will cause inserts to upsert and deletes to be ignored.
-//   write_only: in this mode, Map functions return the full keyrange causing a full scatter.
+//
+//	autocommit: setting this to "true" will cause inserts to upsert and deletes to be ignored.
+//	write_only: in this mode, Map functions return the full keyrange causing a full scatter.
 func NewLookupHash(name string, m map[string]string) (Vindex, error) {
 	lh := &LookupHash{name: name}
 
@@ -124,6 +128,19 @@ func (lh *LookupHash) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.V
 	if err != nil {
 		return nil, err
 	}
+	return lh.MapResult(ids, results)
+}
+
+// MapResult implements the LookupPlanable interface
+func (lh *LookupHash) MapResult(ids []sqltypes.Value, results []*sqltypes.Result) ([]key.Destination, error) {
+	out := make([]key.Destination, 0, len(ids))
+	if lh.writeOnly {
+		for range ids {
+			out = append(out, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{}})
+		}
+		return out, nil
+	}
+
 	for _, result := range results {
 		if len(result.Rows) == 0 {
 			out = append(out, key.DestinationNone{})
@@ -142,6 +159,21 @@ func (lh *LookupHash) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.V
 		out = append(out, key.DestinationKeyspaceIDs(ksids))
 	}
 	return out, nil
+}
+
+// Query implements the LookupPlanable interface
+func (lh *LookupHash) Query() (selQuery string, arguments []string) {
+	return lh.lkp.query()
+}
+
+// AllowBatch implements the LookupPlanable interface
+func (lh *LookupHash) AllowBatch() bool {
+	return lh.lkp.BatchLookup
+}
+
+// GetCommitOrder implements the LookupPlanable interface
+func (lh *LookupHash) GetCommitOrder() vtgatepb.CommitOrder {
+	return vtgatepb.CommitOrder_NORMAL
 }
 
 // Verify returns true if ids maps to ksids.
@@ -218,15 +250,19 @@ type LookupHashUnique struct {
 	lkp       lookupInternal
 }
 
+var _ LookupPlanable = (*LookupHashUnique)(nil)
+
 // NewLookupHashUnique creates a LookupHashUnique vindex.
 // The supplied map has the following required fields:
-//   table: name of the backing table. It can be qualified by the keyspace.
-//   from: list of columns in the table that have the 'from' values of the lookup vindex.
-//   to: The 'to' column name of the table.
+//
+//	table: name of the backing table. It can be qualified by the keyspace.
+//	from: list of columns in the table that have the 'from' values of the lookup vindex.
+//	to: The 'to' column name of the table.
 //
 // The following fields are optional:
-//   autocommit: setting this to "true" will cause deletes to be ignored.
-//   write_only: in this mode, Map functions return the full keyrange causing a full scatter.
+//
+//	autocommit: setting this to "true" will cause deletes to be ignored.
+//	write_only: in this mode, Map functions return the full keyrange causing a full scatter.
 func NewLookupHashUnique(name string, m map[string]string) (Vindex, error) {
 	lhu := &LookupHashUnique{name: name}
 
@@ -268,8 +304,8 @@ func (lhu *LookupHashUnique) NeedsVCursor() bool {
 
 // Map can map ids to key.Destination objects.
 func (lhu *LookupHashUnique) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
-	out := make([]key.Destination, 0, len(ids))
 	if lhu.writeOnly {
+		out := make([]key.Destination, 0, len(ids))
 		for range ids {
 			out = append(out, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{}})
 		}
@@ -279,6 +315,17 @@ func (lhu *LookupHashUnique) Map(ctx context.Context, vcursor VCursor, ids []sql
 	results, err := lhu.lkp.Lookup(ctx, vcursor, ids, vtgatepb.CommitOrder_NORMAL)
 	if err != nil {
 		return nil, err
+	}
+	return lhu.MapResult(ids, results)
+}
+
+func (lhu *LookupHashUnique) MapResult(ids []sqltypes.Value, results []*sqltypes.Result) ([]key.Destination, error) {
+	out := make([]key.Destination, 0, len(ids))
+	if lhu.writeOnly {
+		for range ids {
+			out = append(out, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{}})
+		}
+		return out, nil
 	}
 	for i, result := range results {
 		switch len(result.Rows) {
@@ -350,4 +397,17 @@ func (lhu *LookupHashUnique) MarshalJSON() ([]byte, error) {
 // IsBackfilling implements the LookupBackfill interface
 func (lhu *LookupHashUnique) IsBackfilling() bool {
 	return lhu.writeOnly
+}
+
+func (lhu *LookupHashUnique) AllowBatch() bool {
+	return lhu.lkp.BatchLookup
+}
+
+func (lhu *LookupHashUnique) Query() (selQuery string, arguments []string) {
+	return lhu.lkp.query()
+}
+
+// GetCommitOrder implements the LookupPlanable interface
+func (lhu *LookupHashUnique) GetCommitOrder() vtgatepb.CommitOrder {
+	return vtgatepb.CommitOrder_NORMAL
 }
