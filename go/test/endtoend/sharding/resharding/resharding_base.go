@@ -185,6 +185,10 @@ var (
 func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	defer cluster.PanicHandler(t)
 	clusterInstance = cluster.NewCluster(cell1, hostname)
+	clusterInstance.VtctldExtraArgs = append(clusterInstance.VtctldExtraArgs,
+		// hard-code these two soon-to-be deprecated drain values.
+		"--wait_for_drain_sleep_rdonly", "1s",
+		"--wait_for_drain_sleep_replica", "1s")
 	defer clusterInstance.Teardown()
 
 	// Launch keyspace
