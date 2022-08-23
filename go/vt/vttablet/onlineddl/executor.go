@@ -1815,7 +1815,7 @@ func (e *Executor) CancelMigration(ctx context.Context, uuid string, message str
 	}
 
 	switch onlineDDL.Status {
-	case schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed:
+	case schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed, schema.OnlineDDLStatusCancelled:
 		log.Infof("CancelMigration: migration %s is in non-cancellable status: %v", uuid, onlineDDL.Status)
 		return emptyResult, nil
 	}
@@ -1826,7 +1826,9 @@ func (e *Executor) CancelMigration(ctx context.Context, uuid string, message str
 		// If this was not issued by the user, then this is an internal state machine cancellation of the
 		// migration, e.g. because it is stale or has an unrecoverable error. In this case we do not mark
 		// the timestamp, and as result, the state will transition to 'failed'
-		_ = e.updateMigrationTimestamp(ctx, "cancelled_timestamp", uuid)
+		if err := e.updateMigrationTimestamp(ctx, "cancelled_timestamp", uuid); err != nil {
+			return nil, err
+		}
 	}
 	defer e.failMigration(ctx, onlineDDL, errors.New(message))
 	defer e.triggerNextCheckInterval()
@@ -1834,9 +1836,6 @@ func (e *Executor) CancelMigration(ctx context.Context, uuid string, message str
 	switch onlineDDL.Status {
 	case schema.OnlineDDLStatusQueued, schema.OnlineDDLStatusReady:
 		log.Infof("CancelMigration: cancelling %s with status: %v", uuid, onlineDDL.Status)
-		if err := e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusCancelled); err != nil {
-			return nil, err
-		}
 		return &sqltypes.Result{RowsAffected: 1}, nil
 	}
 
