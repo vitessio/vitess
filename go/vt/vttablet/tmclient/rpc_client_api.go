@@ -34,15 +34,14 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-// TabletManagerProtocol is the implementation to use for tablet
-// manager protocol. It is exported for tests only.
-// TODO (ajm188): unexport this, rewrite tests to use RegisterFlags instead.
-var TabletManagerProtocol = "grpc"
+// tabletManagerProtocol is the implementation to use for tablet
+// manager protocol.
+var tabletManagerProtocol = "grpc"
 
 // RegisterFlags registers the tabletconn flags on a given flagset. It is
 // exported for tests that need to inject a particular TabletManagerProtocol.
 func RegisterFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&TabletManagerProtocol, "tablet_manager_protocol", TabletManagerProtocol, "Protocol to use to talk to vttablets.")
+	fs.StringVar(&tabletManagerProtocol, "tablet_manager_protocol", tabletManagerProtocol, "Protocol to use to talk to vttablets.")
 }
 
 func init() {
@@ -268,9 +267,9 @@ func RegisterTabletManagerClientFactory(name string, factory TabletManagerClient
 // NewTabletManagerClient creates a new TabletManagerClient. Should be
 // called after flags are parsed.
 func NewTabletManagerClient() TabletManagerClient {
-	f, ok := tabletManagerClientFactories[TabletManagerProtocol]
+	f, ok := tabletManagerClientFactories[tabletManagerProtocol]
 	if !ok {
-		log.Exitf("No TabletManagerProtocol registered with name %s", TabletManagerProtocol)
+		log.Exitf("No TabletManagerProtocol registered with name %s", tabletManagerProtocol)
 	}
 
 	return f()

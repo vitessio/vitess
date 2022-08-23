@@ -36,6 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtctl/internal/grpcshim"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
+	"vitess.io/vitess/go/vt/vttablet/tmclienttest"
 
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -117,10 +118,8 @@ func NewVtctldServerWithTabletManagerClient(t testing.TB, ts *topo.Server, tmc t
 
 	// Be (mostly, we can't help concurrent goroutines not using this function)
 	// atomic with our mutation of the global TabletManagerProtocol pointer.
-	oldProto := tmclient.TabletManagerProtocol
-	defer func() { tmclient.TabletManagerProtocol = oldProto }()
-
-	tmclient.TabletManagerProtocol = protocol
+	reset := tmclienttest.SetProtocol("go.vt.vtctl.grpcvtctldserver.testutil", protocol)
+	defer reset()
 
 	return newVtctldServerFn(ts)
 }
