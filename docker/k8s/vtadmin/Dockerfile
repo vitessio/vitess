@@ -21,6 +21,7 @@ FROM node:16-${DEBIAN_VER} as node
 
 # Set up Vitess environment (just enough to run pre-built Go binaries)
 ENV VTROOT /vt
+ENV VTADMIN_WEB_PORT=14201
 
 # Prepare directory structure.
 RUN mkdir -p /vt/bin && \
@@ -39,13 +40,16 @@ COPY --from=k8s /vt/web/vtadmin /vt/web/vtadmin
 RUN npm --prefix /vt/web/vtadmin ci && \
     npm run --prefix /vt/web/vtadmin build
 
+# add vitess user/group and add permissions
+RUN deluser node && \
+    groupadd -r --gid 2000 vitess && \
+    useradd -r -g vitess --uid 1000 vitess && \
+    chown -R vitess:vitess /vt && \
+    chown -R vitess:vitess /vtdataroot
 
-FROM nginxinc/nginx-unprivileged:1.22-alpine AS nginx
+USER vitess
 
-ENV VTADMIN_WEB_PORT=14201
+VOLUME /vt/web/vtadmin/build/config
 
-COPY --chown=nginx --from=node /vt/web/vtadmin/build /var/www/
-COPY --chown=nginx docker/k8s/vtadmin/default.conf /etc/nginx/templates/default.conf.template
+CMD ["/bin/bash", "-c", "/vt/web/vtadmin/node_modules/.bin/serve --no-clipboard -l $VTADMIN_WEB_PORT -s /vt/web/vtadmin/build"]
 
-# command to run nginx is in the base image
-# https://github.com/nginxinc/docker-nginx-unprivileged/blob/main/stable/alpine/Dockerfile#L150
