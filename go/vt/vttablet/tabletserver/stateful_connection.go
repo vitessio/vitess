@@ -19,7 +19,6 @@ package tabletserver
 import (
 	"context"
 	"fmt"
-	"sync/atomic"
 	"time"
 
 	"vitess.io/vitess/go/vt/log"
@@ -52,7 +51,7 @@ type StatefulConnection struct {
 	tainted        bool
 	enforceTimeout bool
 	timeout        time.Duration
-	expiryTime     *atomic.Value
+	expiryTime     time.Time
 }
 
 // Properties contains meta information about the connection
@@ -287,12 +286,7 @@ func (sc *StatefulConnection) LogTransaction(reason tx.ReleaseReason) {
 }
 
 func (sc *StatefulConnection) ExpiryTime() time.Time {
-	tu := sc.expiryTime.Load()
-	if tu == nil {
-		// This is a bug. Better to panic?
-		return time.Unix(1<<63-1, 0)
-	}
-	return tu.(time.Time)
+	return sc.expiryTime
 }
 
 func (sc *StatefulConnection) SetTimeout(timeout time.Duration) {
@@ -325,5 +319,5 @@ func (sc *StatefulConnection) getUsername() string {
 }
 
 func (sc *StatefulConnection) resetExpiryTime() {
-	sc.expiryTime.Store(time.Now().Add(sc.timeout))
+	sc.expiryTime = time.Now().Add(sc.timeout)
 }

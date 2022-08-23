@@ -17,7 +17,6 @@ limitations under the License.
 package tabletserver
 
 import (
-	"sync/atomic"
 	"time"
 
 	"vitess.io/vitess/go/pools"
@@ -192,7 +191,6 @@ func (sf *StatefulConnectionPool) NewConn(ctx context.Context, options *querypb.
 		pool:           sf,
 		env:            sf.env,
 		enforceTimeout: options.GetWorkload() != querypb.ExecuteOptions_DBA,
-		expiryTime:     &atomic.Value{},
 	}
 	// This will set both the timeout and initialize the expiryTime.
 	sfConn.SetTimeout(sf.env.Config().TxTimeoutForWorkload(options.GetWorkload()))
@@ -252,6 +250,6 @@ func (sf *StatefulConnectionPool) Capacity() int {
 func (sf *StatefulConnectionPool) renewConn(sc *StatefulConnection) error {
 	sf.active.Unregister(sc.ConnID, "renew existing connection")
 	sc.ConnID = sf.lastID.Add(1)
-	sc.expiryTime.Store(time.Now())
+	sc.resetExpiryTime()
 	return sf.active.Register(sc.ConnID, sc)
 }
