@@ -70,7 +70,7 @@ Usage of vttablet:
   --client-found-rows-pool-size int
 	DEPRECATED: queryserver-config-transaction-cap will be used instead.
   --compression-engine-name string
-	compressor engine used for compression. (default pgzip)
+	compressor engine used for compression. (default pargzip)
   --compression-level int
 	what level to pass to the compressor (default 1)
   --consul_auth_static_file string

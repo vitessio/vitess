@@ -59,8 +59,8 @@ use-case. Here are the flags that control this feature
 
 `--compression-engine-name` specifies the engine used for compression. It can have one of the following values
 
-- pgzip (Default)
-- pargzip
+- pargzip (Default)
+- pgzip
 - lz4
 - zstd
 - external
