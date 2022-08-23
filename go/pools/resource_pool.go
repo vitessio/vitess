@@ -237,17 +237,27 @@ func (rp *ResourcePool) get(ctx context.Context) (resource Resource, err error) 
 	// Fetch
 	var wrapper resourceWrapper
 	var ok bool
+	// If we put both the channel together, then, go select can read from any channel
+	// this way we guarantee it will try to read from the channel we intended to read it from first
+	// and then try to read from next best available resource.
 	select {
+	// check normal resources first
 	case wrapper, ok = <-rp.resources:
 	default:
-		startTime := time.Now()
 		select {
-		case wrapper, ok = <-rp.resources:
+		// then checking setting resources
 		case wrapper, ok = <-rp.settingResources:
-		case <-ctx.Done():
-			return nil, ErrTimeout
+		default:
+			// now waiting
+			startTime := time.Now()
+			select {
+			case wrapper, ok = <-rp.resources:
+			case wrapper, ok = <-rp.settingResources:
+			case <-ctx.Done():
+				return nil, ErrTimeout
+			}
+			rp.recordWait(startTime)
 		}
-		rp.recordWait(startTime)
 	}
 	if !ok {
 		return nil, ErrClosed
@@ -287,24 +297,30 @@ func (rp *ResourcePool) getWithSettings(ctx context.Context, settings []string) 
 
 	// Fetch
 	select {
+	// check setting resources first
 	case wrapper, ok = <-rp.settingResources:
-	case wrapper, ok = <-rp.resources:
 	default:
-		startTime := time.Now()
 		select {
-		case wrapper, ok = <-rp.settingResources:
+		// then, check normal resources
 		case wrapper, ok = <-rp.resources:
-		case <-ctx.Done():
-			return nil, ErrTimeout
+		default:
+			// now waiting
+			startTime := time.Now()
+			select {
+			case wrapper, ok = <-rp.settingResources:
+			case wrapper, ok = <-rp.resources:
+			case <-ctx.Done():
+				return nil, ErrTimeout
+			}
+			rp.recordWait(startTime)
 		}
-		rp.recordWait(startTime)
 	}
 	if !ok {
 		return nil, ErrClosed
 	}
 
-	// Checking setting hash id
-	if wrapper.resource != nil && wrapper.resource.SettingHash() != settingHash {
+	// Checking setting hash id, if it is different, we will close the resource and return a new one later in unwrap
+	if wrapper.resource != nil && wrapper.resource.SettingHash() > 0 && wrapper.resource.SettingHash() != settingHash {
 		wrapper.resource.Close()
 		wrapper.resource = nil
 		rp.active.Add(-1)
@@ -317,11 +333,13 @@ func (rp *ResourcePool) getWithSettings(ctx context.Context, settings []string) 
 			rp.resources <- resourceWrapper{}
 			return nil, err
 		}
+		rp.active.Add(1)
+	}
+
+	if wrapper.resource.SettingHash() == 0 {
 		if err = wrapper.resource.ApplySettings(ctx, settings); err != nil {
 			return nil, err
 		}
-
-		rp.active.Add(1)
 	}
 
 	if rp.available.Add(-1) <= 0 {
