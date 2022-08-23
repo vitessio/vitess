@@ -41,7 +41,7 @@ var tabletManagerProtocol = "grpc"
 // RegisterFlags registers the tabletconn flags on a given flagset. It is
 // exported for tests that need to inject a particular TabletManagerProtocol.
 func RegisterFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&tabletManagerProtocol, "tablet_manager_protocol", tabletManagerProtocol, "Protocol to use to talk to vttablets.")
+	fs.StringVar(&tabletManagerProtocol, "tablet_manager_protocol", tabletManagerProtocol, "Protocol to use to make tabletmanager RPCs to vttablets.")
 }
 
 func init() {
