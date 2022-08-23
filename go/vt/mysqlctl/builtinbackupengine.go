@@ -147,6 +147,35 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 
 	params.Logger.Infof("Hook: %v, Compress: %v", *backupStorageHook, *backupStorageCompress)
 
+	if params.IncrementalFromPos != "" {
+		return be.executeIncrementalBackup(ctx, params, bh)
+	}
+	return be.executeFullBackup(ctx, params, bh)
+}
+
+// executeIncrementalBackup returns a boolean that indicates if the backup is usable,
+// and an overall error.
+func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (bool, error) {
+	rp, err := mysql.DecodePosition(params.IncrementalFromPos)
+	if err != nil {
+		return false, vterrors.Wrapf(err, "cannot decode position in incremental backup: %v", params.IncrementalFromPos)
+	}
+	if !rp.MatchesFlavor(mysql.Mysql56FlavorID) {
+		return false, vterrors.Wrapf(err, "incremental backup only supports MySQL GTID positions. Got: %v", params.IncrementalFromPos)
+	}
+	return false, nil
+}
+
+// executeFullBackup returns a boolean that indicates if the backup is usable,
+// and an overall error.
+func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (bool, error) {
+
+	params.Logger.Infof("Hook: %v, Compress: %v", *backupStorageHook, *backupStorageCompress)
+
+	if params.IncrementalFromPos != "" {
+		return be.executeIncrementalBackup(ctx, params, bh)
+	}
+
 	// Save initial state so we can restore.
 	replicaStartRequired := false
 	sourceIsPrimary := false
@@ -186,6 +215,7 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 			return false, vterrors.Wrap(err, "can't get position on primary")
 		}
 	} else {
+		// This is a replica
 		if err := params.Mysqld.StopReplication(params.HookExtraEnv); err != nil {
 			return false, vterrors.Wrapf(err, "can't stop replica")
 		}

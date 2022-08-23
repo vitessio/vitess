@@ -133,7 +133,9 @@ func closeFile(wc io.WriteCloser, fileName string, logger logutil.Logger, finalE
 // ExecuteBackup returns a boolean that indicates if the backup is usable,
 // and an overall error.
 func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (complete bool, finalErr error) {
-
+	if params.IncrementalFromPos != "" {
+		return false, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "incremental backups not supported in xtrabackup engine.")
+	}
 	if *xtrabackupUser == "" {
 		return false, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "xtrabackupUser must be specified.")
 	}
