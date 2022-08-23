@@ -87,7 +87,7 @@ func TestOpen(t *testing.T) {
 	count.Set(0)
 	waitStarts = waitStarts[:0]
 
-	p := NewResourcePool(PoolFactory, 6, 6, 10*time.Minute, logWait, nil, 0)
+	p := NewResourcePool(PoolFactory, 6, 6, time.Second, logWait, nil, 0)
 	p.SetCapacity(5)
 	var resources [10]Resource
 	var r Resource
@@ -288,51 +288,51 @@ func TestShrinking(t *testing.T) {
 	assert.EqualValues(t, p.WaitCount(), len(waitStarts))
 	assert.EqualValues(t, 2, count.Get())
 
-	//// Test race condition of SetCapacity with itself
-	//p.SetCapacity(3)
-	//for i := 0; i < 3; i++ {
-	//	var r Resource
-	//	var err error
-	//	if i%2 == 0 {
-	//		r, err = p.Get(ctx, nil)
-	//	} else {
-	//		r, err = p.Get(ctx, []string{"foo"})
-	//	}
-	//	require.NoError(t, err)
-	//	resources[i] = r
-	//}
-	//// This will wait because pool is empty
-	//go func() {
-	//	r, err := p.Get(ctx, nil)
-	//	require.NoError(t, err)
-	//	p.Put(r)
-	//	done <- true
-	//}()
-	//time.Sleep(10 * time.Millisecond)
-	//
-	//// This will wait till we Put
-	//go p.SetCapacity(2)
-	//time.Sleep(10 * time.Millisecond)
-	//go p.SetCapacity(4)
-	//time.Sleep(10 * time.Millisecond)
-	//
-	//// This should not hang
-	//for i := 0; i < 3; i++ {
-	//	p.Put(resources[i])
-	//}
-	//<-done
-	//
-	//err = p.SetCapacity(-1)
-	//if err == nil {
-	//	t.Errorf("Expecting error")
-	//}
-	//err = p.SetCapacity(255555)
-	//if err == nil {
-	//	t.Errorf("Expecting error")
-	//}
-	//
-	//assert.EqualValues(t, 4, p.Capacity())
-	//assert.EqualValues(t, 4, p.Available())
+	// Test race condition of SetCapacity with itself
+	p.SetCapacity(3)
+	for i := 0; i < 3; i++ {
+		var r Resource
+		var err error
+		if i%2 == 0 {
+			r, err = p.Get(ctx, nil)
+		} else {
+			r, err = p.Get(ctx, []string{"foo"})
+		}
+		require.NoError(t, err)
+		resources[i] = r
+	}
+	// This will wait because pool is empty
+	go func() {
+		r, err := p.Get(ctx, nil)
+		require.NoError(t, err)
+		p.Put(r)
+		done <- true
+	}()
+	time.Sleep(10 * time.Millisecond)
+
+	// This will wait till we Put
+	go p.SetCapacity(2)
+	time.Sleep(10 * time.Millisecond)
+	go p.SetCapacity(4)
+	time.Sleep(10 * time.Millisecond)
+
+	// This should not hang
+	for i := 0; i < 3; i++ {
+		p.Put(resources[i])
+	}
+	<-done
+
+	err = p.SetCapacity(-1)
+	if err == nil {
+		t.Errorf("Expecting error")
+	}
+	err = p.SetCapacity(255555)
+	if err == nil {
+		t.Errorf("Expecting error")
+	}
+
+	assert.EqualValues(t, 4, p.Capacity())
+	assert.EqualValues(t, 4, p.Available())
 }
 
 func TestClosing(t *testing.T) {
@@ -660,4 +660,113 @@ func TestExpired(t *testing.T) {
 		cancel()
 		require.EqualError(t, err, "resource pool context already expired")
 	}
+}
+
+func TestMultiSettings(t *testing.T) {
+	ctx := context.Background()
+	lastID.Set(0)
+	count.Set(0)
+	waitStarts = waitStarts[:0]
+
+	p := NewResourcePool(PoolFactory, 5, 5, time.Second, logWait, nil, 0)
+	var resources [10]Resource
+	var r Resource
+	var err error
+
+	settings := [][]string{nil, {"foo"}, {"bar"}, {"bar"}, {"foo"}}
+
+	// Test Get
+	for i := 0; i < 5; i++ {
+		r, err = p.Get(ctx, settings[i])
+		require.NoError(t, err)
+		resources[i] = r
+		assert.EqualValues(t, 5-i-1, p.Available())
+		assert.Zero(t, p.WaitCount())
+		assert.Zero(t, len(waitStarts))
+		assert.Zero(t, p.WaitTime())
+		assert.EqualValues(t, i+1, lastID.Get())
+		assert.EqualValues(t, i+1, count.Get())
+	}
+
+	// Test that Get waits
+	ch := make(chan bool)
+	go func() {
+		for i := 0; i < 5; i++ {
+			r, err = p.Get(ctx, settings[i])
+			require.NoError(t, err)
+			resources[i] = r
+		}
+		for i := 0; i < 5; i++ {
+			p.Put(resources[i])
+		}
+		ch <- true
+	}()
+	for i := 0; i < 5; i++ {
+		// Sleep to ensure the goroutine waits
+		time.Sleep(10 * time.Millisecond)
+		p.Put(resources[i])
+	}
+	<-ch
+	assert.EqualValues(t, 5, p.WaitCount())
+	assert.Equal(t, 5, len(waitStarts))
+	// verify start times are monotonic increasing
+	for i := 1; i < len(waitStarts); i++ {
+		if waitStarts[i].Before(waitStarts[i-1]) {
+			t.Errorf("Expecting monotonic increasing start times")
+		}
+	}
+	assert.NotZero(t, p.WaitTime())
+	assert.EqualValues(t, 5, lastID.Get())
+
+	// Close
+	p.Close()
+	assert.EqualValues(t, 0, p.Capacity())
+	assert.EqualValues(t, 0, p.Available())
+	assert.EqualValues(t, 0, count.Get())
+}
+
+func TestMultiSettingsWithClosures(t *testing.T) {
+	ctx := context.Background()
+	lastID.Set(0)
+	count.Set(0)
+	closeCount.Set(0)
+
+	p := NewResourcePool(PoolFactory, 5, 5, time.Second, logWait, nil, 0)
+	var resources [10]Resource
+	var r Resource
+	var err error
+
+	settings := [][]string{nil, {"foo"}, {"bar"}, {"bar"}, {"foo"}}
+
+	// Test Get
+	for i := 0; i < 5; i++ {
+		r, err = p.Get(ctx, settings[i])
+		require.NoError(t, err)
+		resources[i] = r
+		assert.EqualValues(t, 5-i-1, p.Available())
+		assert.EqualValues(t, i+1, lastID.Get())
+		assert.EqualValues(t, i+1, count.Get())
+	}
+
+	// Put all of them back
+	for i := 0; i < 5; i++ {
+		p.Put(resources[i])
+	}
+
+	// Getting all with same settings.
+	for i := 0; i < 5; i++ {
+		r, err = p.Get(ctx, settings[1]) // {foo}
+		require.NoError(t, err)
+		p.Put(r)
+	}
+	assert.EqualValues(t, 2, closeCount.Get()) // when setting was {bar} and getting for {foo}
+	assert.EqualValues(t, 5, p.Available())
+	assert.EqualValues(t, 7, lastID.Get())
+	assert.EqualValues(t, 5, count.Get())
+
+	// Close
+	p.Close()
+	assert.EqualValues(t, 0, p.Capacity())
+	assert.EqualValues(t, 0, p.Available())
+	assert.EqualValues(t, 0, count.Get())
 }
