@@ -3029,6 +3029,15 @@ func TestSelectScatterFails(t *testing.T) {
 
 	_, err = executorExecSession(executor, "select /*vt+ ALLOW_SCATTER */ id from user", nil, sess)
 	require.NoError(t, err)
+
+	_, err = executorExecSession(executor, "begin", nil, sess)
+	require.NoError(t, err)
+
+	_, err = executorExecSession(executor, "commit", nil, sess)
+	require.NoError(t, err)
+
+	_, err = executorExecSession(executor, "savepoint a", nil, sess)
+	require.NoError(t, err)
 }
 
 func TestGen4SelectStraightJoin(t *testing.T) {
