@@ -192,10 +192,10 @@ func (sf *StatefulConnectionPool) NewConn(ctx context.Context, options *querypb.
 		pool:           sf,
 		env:            sf.env,
 		enforceTimeout: options.GetWorkload() != querypb.ExecuteOptions_DBA,
-		timeout:        sf.env.Config().TxTimeoutForWorkload(options.GetWorkload()),
-		timeUsed:       &atomic.Value{},
+		expiryTime:     &atomic.Value{},
 	}
-	sfConn.timeUsed.Store(time.Now())
+	// This will set both the timeout and initialize the expiryTime.
+	sfConn.SetTimeout(sf.env.Config().TxTimeoutForWorkload(options.GetWorkload()))
 
 	err = sf.active.Register(sfConn.ConnID, sfConn)
 	if err != nil {
@@ -238,7 +238,7 @@ func (sf *StatefulConnectionPool) markAsNotInUse(sc *StatefulConnection, updateT
 	}
 	if sf.active.Put(sc.ConnID) {
 		if updateTime {
-			sc.timeUsed.Store(time.Now())
+			sc.resetExpiryTime()
 		}
 	}
 }
@@ -252,6 +252,6 @@ func (sf *StatefulConnectionPool) Capacity() int {
 func (sf *StatefulConnectionPool) renewConn(sc *StatefulConnection) error {
 	sf.active.Unregister(sc.ConnID, "renew existing connection")
 	sc.ConnID = sf.lastID.Add(1)
-	sc.timeUsed.Store(time.Now())
+	sc.expiryTime.Store(time.Now())
 	return sf.active.Register(sc.ConnID, sc)
 }

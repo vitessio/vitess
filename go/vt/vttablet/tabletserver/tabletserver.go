@@ -1182,9 +1182,9 @@ func (tsv *TabletServer) ReserveExecute(ctx context.Context, target *querypb.Tar
 	timeout := tsv.QueryTimeout.Get()
 	if transactionID != 0 {
 		allowOnShutdown = true
-		// ReserveExecute is for OLAP only, so we can directly fetch the OLAP
+		// ReserveExecute is for OLTP only, so we can directly fetch the OLTP
 		// TX timeout.
-		txTimeout := tsv.config.TxTimeoutForWorkload(querypb.ExecuteOptions_OLAP)
+		txTimeout := tsv.config.TxTimeoutForWorkload(querypb.ExecuteOptions_OLTP)
 		// Use the smaller of the two values (0 means infinity).
 		timeout = smallerTimeout(timeout, txTimeout)
 	}

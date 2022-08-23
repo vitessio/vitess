@@ -128,7 +128,7 @@ func (tp *TxPool) Shutdown(ctx context.Context) {
 func (tp *TxPool) transactionKiller() {
 	defer tp.env.LogError()
 	for _, conn := range tp.scp.GetElapsedTimeout(vterrors.TxKillerRollback) {
-		timeout := conn.Timeout()
+		timeout := conn.timeout
 		log.Warningf("killing transaction (exceeded timeout: %v): %s", timeout, conn.String(tp.env.Config().SanitizeLogMessages))
 		switch {
 		case conn.IsTainted():
@@ -158,14 +158,13 @@ func (tp *TxPool) WaitForEmpty() {
 }
 
 // NewTxProps creates a new TxProperties struct
-func (tp *TxPool) NewTxProps(immediateCaller *querypb.VTGateCallerID, effectiveCaller *vtrpcpb.CallerID, autocommit bool, timeout time.Duration) *tx.Properties {
+func (tp *TxPool) NewTxProps(immediateCaller *querypb.VTGateCallerID, effectiveCaller *vtrpcpb.CallerID, autocommit bool) *tx.Properties {
 	return &tx.Properties{
 		StartTime:       time.Now(),
 		EffectiveCaller: effectiveCaller,
 		ImmediateCaller: immediateCaller,
 		Autocommit:      autocommit,
 		Stats:           tp.txStats,
-		Timeout:         timeout,
 	}
 }
 
@@ -241,6 +240,9 @@ func (tp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions, re
 		if err != nil {
 			return nil, "", "", vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction %d: %v", reservedID, err)
 		}
+		// Update conn timeout.
+		timeout := tp.env.Config().TxTimeoutForWorkload(options.GetWorkload())
+		conn.SetTimeout(timeout)
 	} else {
 		immediateCaller := callerid.ImmediateCallerIDFromContext(ctx)
 		effectiveCaller := callerid.EffectiveCallerIDFromContext(ctx)
@@ -276,12 +278,7 @@ func (tp *TxPool) begin(ctx context.Context, options *querypb.ExecuteOptions, re
 		return "", "", err
 	}
 
-	workload := options.GetWorkload()
-	if workload == querypb.ExecuteOptions_UNSPECIFIED {
-		workload = querypb.ExecuteOptions_OLTP
-	}
-	timeout := tp.env.Config().TxTimeoutForWorkload(workload)
-	conn.txProps = tp.NewTxProps(immediateCaller, effectiveCaller, autocommit, timeout)
+	conn.txProps = tp.NewTxProps(immediateCaller, effectiveCaller, autocommit)
 
 	return beginQueries, sessionStateChanges, nil
 }

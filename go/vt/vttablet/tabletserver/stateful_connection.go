@@ -52,7 +52,7 @@ type StatefulConnection struct {
 	tainted        bool
 	enforceTimeout bool
 	timeout        time.Duration
-	timeUsed       *atomic.Value
+	expiryTime     *atomic.Value
 }
 
 // Properties contains meta information about the connection
@@ -84,12 +84,10 @@ func (sc *StatefulConnection) ElapsedTimeout() bool {
 	if !sc.enforceTimeout {
 		return false
 	}
-	timeout := sc.Timeout()
-	if timeout <= 0 {
+	if sc.timeout <= 0 {
 		return false
 	}
-	now := time.Now()
-	return sc.TimeUsed().Before(now.Add(-sc.timeout))
+	return sc.ExpiryTime().Before(time.Now())
 }
 
 // Exec executes the statement in the dedicated connection
@@ -115,13 +113,6 @@ func (sc *StatefulConnection) Exec(ctx context.Context, query string, maxrows in
 		return nil, err
 	}
 	return r, nil
-}
-
-func (sc *StatefulConnection) Timeout() time.Duration {
-	if sc.txProps != nil {
-		return sc.txProps.Timeout
-	}
-	return sc.timeout
 }
 
 func (sc *StatefulConnection) execWithRetry(ctx context.Context, query string, maxrows int, wantfields bool) (string, error) {
@@ -295,13 +286,22 @@ func (sc *StatefulConnection) LogTransaction(reason tx.ReleaseReason) {
 	tabletenv.TxLogger.Send(sc)
 }
 
-func (sc *StatefulConnection) TimeUsed() time.Time {
-	tu := sc.timeUsed.Load()
+func (sc *StatefulConnection) ExpiryTime() time.Time {
+	tu := sc.expiryTime.Load()
 	if tu == nil {
 		// This is a bug. Better to panic?
-		return time.Now()
+		return time.Unix(1<<63-1, 0)
 	}
 	return tu.(time.Time)
+}
+
+func (sc *StatefulConnection) SetTimeout(timeout time.Duration) {
+	sc.timeout = timeout
+	sc.resetExpiryTime()
+}
+
+func (sc *StatefulConnection) Timeout() time.Duration {
+	return sc.timeout
 }
 
 // logReservedConn logs reserved connection related stats.
@@ -322,4 +322,8 @@ func (sc *StatefulConnection) getUsername() string {
 		return username
 	}
 	return callerid.GetUsername(sc.reservedProps.ImmediateCaller)
+}
+
+func (sc *StatefulConnection) resetExpiryTime() {
+	sc.expiryTime.Store(time.Now().Add(sc.timeout))
 }

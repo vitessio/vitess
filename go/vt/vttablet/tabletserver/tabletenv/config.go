@@ -377,6 +377,7 @@ func (c *TabletConfig) Clone() *TabletConfig {
 	return &tc
 }
 
+// Set transaction timeouts. Used in tests only.
 func (c *TabletConfig) SetTxTimeoutForWorkload(val time.Duration, workload querypb.ExecuteOptions_Workload) {
 	switch workload {
 	case querypb.ExecuteOptions_OLAP:
@@ -384,6 +385,7 @@ func (c *TabletConfig) SetTxTimeoutForWorkload(val time.Duration, workload query
 	case querypb.ExecuteOptions_OLTP:
 		c.Oltp.TxTimeoutSeconds.Set(val)
 	default:
+		panic(fmt.Sprintf("unsupported workload type: %v", workload))
 	}
 }
 
