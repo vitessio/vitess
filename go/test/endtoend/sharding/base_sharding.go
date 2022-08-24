@@ -190,12 +190,9 @@ func checkStreamHealthEqualsBinlogPlayerVars(t *testing.T, vttablet cluster.Vtta
 	// Enforce health check because it's not running by default as
 	// tablets may not be started with it, or may not run it in time.
 	_ = ci.VtctlclientProcess.ExecuteCommand("RunHealthCheck", vttablet.Alias)
-	streamHealth, err := ci.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "--", "--count", "1", vttablet.Alias)
-	require.Nil(t, err)
-
-	var streamHealthResponse querypb.StreamHealthResponse
-	err = json2.Unmarshal([]byte(streamHealth), &streamHealthResponse)
-	require.Nil(t, err, "error should be Nil")
+	shrs, err := ci.StreamTabletHealth(context.Background(), &vttablet, 1)
+	require.NoError(t, err)
+	streamHealthResponse := shrs[0]
 	assert.Equal(t, streamHealthResponse.Serving, false)
 	assert.NotNil(t, streamHealthResponse.RealtimeStats)
 	assert.Equal(t, streamHealthResponse.RealtimeStats.HealthError, "")

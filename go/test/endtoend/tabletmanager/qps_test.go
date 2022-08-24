@@ -17,19 +17,15 @@ package tabletmanager
 
 import (
 	"context"
-	"encoding/json"
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/test/endtoend/utils"
-
-	"github.com/stretchr/testify/require"
-
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
-	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/test/endtoend/utils"
 )
 
 func TestQPS(t *testing.T) {
@@ -53,7 +49,7 @@ func TestQPS(t *testing.T) {
 	utils.Exec(t, vtGateConn, "insert into t1(id, value) values(1,'a'), (2,'b')")
 	checkDataOnReplica(t, replicaConn, `[[VARCHAR("a")] [VARCHAR("b")]]`)
 
-	// Test that VtTabletStreamHealth reports a QPS >0.0.
+	// Test that tablet health stream reports a QPS >0.0.
 	// Therefore, issue several reads first.
 	// NOTE: This may be potentially flaky because we'll observe a QPS >0.0
 	//       exactly "once" for the duration of one sampling interval (5s) and
@@ -71,12 +67,10 @@ func TestQPS(t *testing.T) {
 	var qpsIncreased bool
 	timeout := time.Now().Add(12 * time.Second)
 	for time.Now().Before(timeout) {
-		result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "--", "--count", "1", primaryTablet.Alias)
+		shrs, err := clusterInstance.StreamTabletHealth(ctx, &primaryTablet, 1)
 		require.Nil(t, err)
-		var streamHealthResponse querypb.StreamHealthResponse
 
-		err = json.Unmarshal([]byte(result), &streamHealthResponse)
-		require.Nil(t, err)
+		streamHealthResponse := shrs[0]
 
 		realTimeStats := streamHealthResponse.GetRealtimeStats()
 		qps := realTimeStats.GetQps()
