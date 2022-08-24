@@ -35,8 +35,9 @@ var (
 	keyspaceName    = "ks_union"
 	cell            = "test_union"
 
-	//go:embed vschema.json
+	//go:embed schema.sql
 	schemaSQL string
+
 	//go:embed vschema.json
 	vschema string
 )
