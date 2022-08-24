@@ -47,17 +47,17 @@ func PutInstanceTag(instanceKey *InstanceKey, tag *Tag) (err error) {
 
 func Untag(instanceKey *InstanceKey, tag *Tag) (tagged *InstanceKeyMap, err error) {
 	if tag == nil {
-		errMsg := fmt.Sprintf("Untag: tag is nil")
+		errMsg := "untag: tag is nil"
 		log.Errorf(errMsg)
 		return nil, fmt.Errorf(errMsg)
 	}
 	if tag.Negate {
-		errMsg := fmt.Sprintf("Untag: does not support negation")
+		errMsg := "untag: does not support negation"
 		log.Errorf(errMsg)
 		return nil, fmt.Errorf(errMsg)
 	}
 	if instanceKey == nil && !tag.HasValue {
-		errMsg := fmt.Sprintf("Untag: either indicate an instance or a tag value. Will not delete on-valued tag across instances")
+		errMsg := "untag: either indicate an instance or a tag value. Will not delete on-valued tag across instances"
 		log.Errorf(errMsg)
 		return nil, fmt.Errorf(errMsg)
 	}

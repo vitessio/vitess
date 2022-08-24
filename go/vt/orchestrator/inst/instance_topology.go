@@ -1654,7 +1654,7 @@ func getPriorityMajorVersionForCandidate(replicas [](*Instance)) (priorityMajorV
 // among given instances. This will be used for choosing best candidate for promotion.
 func getPriorityBinlogFormatForCandidate(replicas [](*Instance)) (priorityBinlogFormat string, err error) {
 	if len(replicas) == 0 {
-		errMsg := fmt.Sprintf("empty replicas list in getPriorityBinlogFormatForCandidate")
+		errMsg := "empty replicas list in getPriorityBinlogFormatForCandidate"
 		log.Errorf(errMsg)
 		return "", fmt.Errorf(errMsg)
 	}
@@ -1919,7 +1919,7 @@ func RegroupReplicas(primaryKey *InstanceKey, returnReplicaEvenOnFailureToRegrou
 		movedReplicas, candidateReplica, err := RegroupReplicasBinlogServers(primaryKey, returnReplicaEvenOnFailureToRegroup)
 		return emptyReplicas, emptyReplicas, movedReplicas, cannotReplicateReplicas, candidateReplica, err
 	}
-	errMsg := fmt.Sprintf("No solution path found for RegroupReplicas")
+	errMsg := "No solution path found for RegroupReplicas"
 	log.Errorf(errMsg)
 	return emptyReplicas, emptyReplicas, emptyReplicas, emptyReplicas, instance, fmt.Errorf(errMsg)
 }
@@ -2042,7 +2042,7 @@ func RelocateBelow(instanceKey, otherKey *InstanceKey) (*Instance, error) {
 	}
 	// Disallow setting up a group primary to replicate from a group secondary
 	if instance.IsReplicationGroupPrimary() && other.ReplicationGroupName == instance.ReplicationGroupName {
-		errMsg := fmt.Sprintf("relocate: Setting a group primary to replicate from another member of its group is disallowed")
+		errMsg := "relocate: Setting a group primary to replicate from another member of its group is disallowed"
 		log.Errorf(errMsg)
 		return instance, fmt.Errorf(errMsg)
 	}

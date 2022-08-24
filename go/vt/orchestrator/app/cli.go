@@ -221,7 +221,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			if err != nil {
 				log.Fatal(err)
 			}
-			if promotedReplica == nil {
+			if promotedReplica == nil { //nolint
 				log.Fatalf("Could not regroup replicas of %+v; error: %+v", *instanceKey, err)
 			}
 			fmt.Printf("%s lost: %d, trivial: %d, pseudo-gtid: %d\n",
@@ -341,7 +341,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			if err != nil {
 				log.Fatal(err)
 			}
-			if promotedBinlogServer == nil {
+			if promotedBinlogServer == nil { //nolint
 				log.Fatalf("Could not regroup binlog server replicas of %+v; error: %+v", *instanceKey, err)
 			}
 			fmt.Println(promotedBinlogServer.Key.DisplayString()) //nolint
@@ -391,7 +391,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			if err != nil {
 				log.Fatal(err)
 			}
-			if promotedReplica == nil {
+			if promotedReplica == nil { //nolint
 				log.Fatalf("Could not regroup replicas of %+v; error: %+v", *instanceKey, err)
 			}
 			fmt.Printf("%s lost: %d, moved: %d\n", promotedReplica.Key.DisplayString(), len(lostReplicas), len(movedReplicas)) //nolint
