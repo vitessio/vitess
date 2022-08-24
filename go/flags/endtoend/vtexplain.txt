@@ -252,8 +252,6 @@ Usage of vtexplain:
       --vschema string                                                   Identifies the VTGate routing schema
       --vschema-file string                                              Identifies the VTGate routing schema file
       --vschema_ddl_authorized_users string                              List of users authorized to execute vschema ddl operations, or '%' to allow all users.
-      --vstream_dynamic_packet_size                                      Enable dynamic packet sizing for VReplication. This will adjust the packet size during replication to improve performance. (default true)
-      --vstream_packet_size int                                          Suggested packet size for VReplication streamer. This is used only as a recommendation. The actual packet size may be more or less than this amount. (default 250000)
       --vtgate-config-terse-errors                                       prevent bind vars from escaping in returned errors
       --vtgate_protocol string                                           how to talk to vtgate (default "grpc")
       --warn_memory_rows int                                             Warning threshold for in-memory results. A row count higher than this amount will cause the VtGateWarnings.ResultsExceeded counter to be incremented. (default 30000)
