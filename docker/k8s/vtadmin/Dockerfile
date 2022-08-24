@@ -19,18 +19,8 @@ FROM vitess/k8s:${VT_BASE_VER} AS k8s
 
 FROM node:16-${DEBIAN_VER} as node
 
-# Set up Vitess environment (just enough to run pre-built Go binaries)
-ENV VTROOT /vt
-
 # Prepare directory structure.
-RUN mkdir -p /vt/bin && \
-   mkdir -p /vt/web && mkdir -p /vtdataroot
-
-# Copy binaries
-COPY --from=k8s /vt/bin/vtadmin /vt/bin/
-
-# Copy certs to allow https calls
-COPY --from=k8s /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+RUN mkdir -p /vt/web
 
 # copy web admin files
 COPY --from=k8s /vt/web/vtadmin /vt/web/vtadmin
@@ -39,10 +29,18 @@ COPY --from=k8s /vt/web/vtadmin /vt/web/vtadmin
 RUN npm --prefix /vt/web/vtadmin ci && \
     npm run --prefix /vt/web/vtadmin build
 
-
-FROM nginxinc/nginx-unprivileged:1.22-alpine AS nginx
+FROM nginxinc/nginx-unprivileged:1.22 AS nginx
 
 ENV VTADMIN_WEB_PORT=14201
+
+# Set up Vitess environment (just enough to run pre-built Go binaries)
+ENV VTROOT /vt
+
+# Copy binaries
+COPY --from=k8s /vt/bin/vtadmin /vt/bin/
+
+# Copy certs to allow https calls
+COPY --from=k8s /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 
 COPY --chown=nginx --from=node /vt/web/vtadmin/build /var/www/
 COPY --chown=nginx docker/k8s/vtadmin/default.conf /etc/nginx/templates/default.conf.template
