@@ -35,6 +35,7 @@ type VtctlProcess struct {
 	TopoGlobalRoot     string
 	TopoServerAddress  string
 	TopoRootPath       string
+	VtctlMajorVersion  int
 }
 
 // AddCellInfo executes vtctl command to add cell info
@@ -53,6 +54,7 @@ func (vtctl *VtctlProcess) AddCellInfo(Cell string) (err error) {
 		"--root", vtctl.TopoRootPath+Cell,
 		"--server_address", vtctl.TopoServerAddress,
 		Cell)
+	tmpProcess.Args = filterDoubleDashArgs(tmpProcess.Args, vtctl.VtctlMajorVersion)
 	log.Infof("Adding CellInfo for cell %v with command: %v", Cell, strings.Join(tmpProcess.Args, " "))
 	return tmpProcess.Run()
 }
@@ -79,7 +81,7 @@ func (vtctl *VtctlProcess) ExecuteCommandWithOutput(args ...string) (result stri
 	}
 	tmpProcess := exec.Command(
 		vtctl.Binary,
-		args...,
+		filterDoubleDashArgs(args, vtctl.VtctlMajorVersion)...,
 	)
 	log.Info(fmt.Sprintf("Executing vtctlclient with arguments %v", strings.Join(tmpProcess.Args, " ")))
 	resultByte, err := tmpProcess.CombinedOutput()
@@ -98,7 +100,7 @@ func (vtctl *VtctlProcess) ExecuteCommand(args ...string) (err error) {
 	}
 	tmpProcess := exec.Command(
 		vtctl.Binary,
-		args...,
+		filterDoubleDashArgs(args, vtctl.VtctlMajorVersion)...,
 	)
 	log.Info(fmt.Sprintf("Executing vtctlclient with arguments %v", strings.Join(tmpProcess.Args, " ")))
 	return tmpProcess.Run()
@@ -125,6 +127,11 @@ func VtctlProcessInstance(topoPort int, hostname string) *VtctlProcess {
 		topoRootPath = ""
 	}
 
+	version, err := GetMajorVersion("vtctl")
+	if err != nil {
+		log.Warningf("failed to get major vtctl version; interop with CLI changes for VEP-4 may not work: %s", err)
+	}
+
 	vtctl := &VtctlProcess{
 		Name:               "vtctl",
 		Binary:             "vtctl",
@@ -133,6 +140,7 @@ func VtctlProcessInstance(topoPort int, hostname string) *VtctlProcess {
 		TopoGlobalRoot:     topoGlobalRoot,
 		TopoServerAddress:  fmt.Sprintf("%s:%d", hostname, topoPort),
 		TopoRootPath:       topoRootPath,
+		VtctlMajorVersion:  version,
 	}
 	return vtctl
 }
