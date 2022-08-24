@@ -248,7 +248,7 @@ func (qe *QueryEngine) Open() error {
 
 	qe.conns.Open(qe.env.Config().DB.AppWithDB(), qe.env.Config().DB.DbaWithDB(), qe.env.Config().DB.AppDebugWithDB())
 
-	conn, err := qe.conns.Get(tabletenv.LocalContext())
+	conn, err := qe.conns.Get(tabletenv.LocalContext(), nil)
 	if err != nil {
 		qe.conns.Close()
 		return err

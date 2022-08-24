@@ -1174,6 +1174,11 @@ func (tsv *TabletServer) ReserveBeginStreamExecute(
 
 // ReserveExecute implements the QueryService interface
 func (tsv *TabletServer) ReserveExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (state queryservice.ReservedState, result *sqltypes.Result, err error) {
+	if tsv.config.EnableSettingsPool && transactionID == 0 {
+		result, err = tsv.executeWithSettings(ctx, target, preQueries, sql, bindVariables, 0, options)
+		return state, result, err
+	}
+
 	state.TabletAlias = tsv.alias
 
 	allowOnShutdown := false
@@ -1275,6 +1280,71 @@ func (tsv *TabletServer) Release(ctx context.Context, target *querypb.Target, tr
 			return err
 		},
 	)
+}
+
+func (tsv *TabletServer) executeWithSettings(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (result *sqltypes.Result, err error) {
+	span, ctx := trace.NewSpan(ctx, "TabletServer.ExecuteWithSettings")
+	trace.AnnotateSQL(span, sqlparser.Preview(sql))
+	defer span.Finish()
+
+	allowOnShutdown := false
+	timeout := tsv.QueryTimeout.Get()
+	if transactionID != 0 {
+		allowOnShutdown = true
+		// Use the smaller of the two values (0 means infinity).
+		timeout = smallerTimeout(timeout, tsv.txTimeout.Get())
+	}
+	err = tsv.execRequest(
+		ctx, timeout,
+		"ExecuteWithSettings", sql, bindVariables,
+		target, options, allowOnShutdown,
+		func(ctx context.Context, logStats *tabletenv.LogStats) error {
+			if bindVariables == nil {
+				bindVariables = make(map[string]*querypb.BindVariable)
+			}
+			query, comments := sqlparser.SplitMarginComments(sql)
+			plan, err := tsv.qe.GetPlan(ctx, logStats, query, skipQueryPlanCache(options), 0)
+			if err != nil {
+				return err
+			}
+
+			logStats.TransactionID = transactionID
+			qre := &QueryExecutor{
+				query:          query,
+				marginComments: comments,
+				bindVars:       bindVariables,
+				connID:         transactionID,
+				options:        options,
+				plan:           plan,
+				ctx:            ctx,
+				logStats:       logStats,
+				tsv:            tsv,
+				tabletType:     target.GetTabletType(),
+				settings:       preQueries,
+			}
+			result, err = qre.Execute()
+			if err != nil {
+				return err
+			}
+			result = result.StripMetadata(sqltypes.IncludeFieldsOrDefault(options))
+
+			// Change database name in mysql output to the keyspace name
+			if tsv.sm.target.Keyspace != tsv.config.DB.DBName && sqltypes.IncludeFieldsOrDefault(options) == querypb.ExecuteOptions_ALL {
+				switch qre.plan.PlanID {
+				case planbuilder.PlanSelect, planbuilder.PlanSelectImpossible:
+					dbName := tsv.config.DB.DBName
+					ksName := tsv.sm.target.Keyspace
+					for _, f := range result.Fields {
+						if f.Database == dbName {
+							f.Database = ksName
+						}
+					}
+				}
+			}
+			return nil
+		},
+	)
+	return result, err
 }
 
 // execRequest performs verifications, sets up the necessary environments

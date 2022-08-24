@@ -174,9 +174,9 @@ func (sf *StatefulConnectionPool) NewConn(ctx context.Context, options *querypb.
 	var err error
 
 	if options.GetClientFoundRows() {
-		conn, err = sf.foundRowsPool.Get(ctx)
+		conn, err = sf.foundRowsPool.Get(ctx, nil)
 	} else {
-		conn, err = sf.conns.Get(ctx)
+		conn, err = sf.conns.Get(ctx, nil)
 	}
 	if err != nil {
 		return nil, err

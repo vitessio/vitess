@@ -84,18 +84,23 @@ func NewDBConn(ctx context.Context, cp *Pool, appParams dbconfigs.Connector) (*D
 }
 
 // NewDBConnNoPool creates a new DBConn without a pool.
-func NewDBConnNoPool(ctx context.Context, params dbconfigs.Connector, dbaPool *dbconnpool.ConnectionPool) (*DBConn, error) {
+func NewDBConnNoPool(ctx context.Context, params dbconfigs.Connector, dbaPool *dbconnpool.ConnectionPool, settings []string) (*DBConn, error) {
 	c, err := dbconnpool.NewDBConnection(ctx, params)
 	if err != nil {
 		return nil, err
 	}
-	return &DBConn{
+	dbconn := &DBConn{
 		conn:    c,
 		info:    params,
 		dbaPool: dbaPool,
 		pool:    nil,
 		stats:   tabletenv.NewStats(servenv.NewExporter("Temp", "Tablet")),
-	}, nil
+	}
+	if err = dbconn.ApplySettings(ctx, settings); err != nil {
+		dbconn.Close()
+		return nil, err
+	}
+	return dbconn, nil
 }
 
 // Err returns an error if there was a client initiated error
