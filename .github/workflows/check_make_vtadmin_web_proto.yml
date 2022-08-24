@@ -36,6 +36,7 @@ jobs:
             - 'go/vt/proto/**'
             - 'proto/*.proto'
             - 'web/vtadmin/src/proto/**'
+            - '.github/workflows/check_make_vtadmin_web_proto.yml'
 
     - name: Set up Go
       uses: actions/setup-go@v2

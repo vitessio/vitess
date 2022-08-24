@@ -18,7 +18,7 @@ FROM debian:${DEBIAN_VER}
 
 ENV TAIL_FILEPATH /dev/null
 
-ADD tail.sh /vt/tail.sh
+COPY docker/k8s/logtail/tail.sh /vt/tail.sh
 
 RUN mkdir -p /vt && \
    apt-get update && \

@@ -56,7 +56,12 @@
         },
         "name_user_map": {
           "type": "name_lkp_test",
-          "owner": "user"
+          "owner": "user",
+          "params": {
+            "table": "name_user_vdx",
+            "from": "name",
+            "to": "keyspace_id"
+          }
         },
         "email_user_map": {
           "type": "lookup_test",
@@ -316,6 +321,14 @@
             {
               "column": "name",
               "name": "name_muticoltbl_map"
+            }
+          ]
+        },
+        "name_user_vdx": {
+          "column_vindexes": [
+            {
+              "column": "name",
+              "name": "user_index"
             }
           ]
         }

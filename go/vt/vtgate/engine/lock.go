@@ -36,7 +36,7 @@ import (
 
 var _ Primitive = (*Lock)(nil)
 
-//Lock primitive will execute sql containing lock functions
+// Lock primitive will execute sql containing lock functions
 type Lock struct {
 	// Keyspace specifies the keyspace to send the query to.
 	Keyspace *vindexes.Keyspace

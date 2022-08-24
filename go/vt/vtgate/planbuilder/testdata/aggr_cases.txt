@@ -3838,19 +3838,44 @@ Gen4 plan same as above
             "Aggregates": "random(0) AS 1, sum_count(1) AS count(id)",
             "Inputs": [
               {
-                "OperatorType": "Route",
+                "OperatorType": "VindexLookup",
                 "Variant": "Equal",
                 "Keyspace": {
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select 1, count(id) from `user` where 1 != 1",
-                "Query": "select 1, count(id) from `user` where `name` = 'a'",
-                "Table": "`user`",
                 "Values": [
                   "VARCHAR(\"a\")"
                 ],
-                "Vindex": "name_user_map"
+                "Vindex": "name_user_map",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "IN",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
+                    "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
+                    "Table": "name_user_vdx",
+                    "Values": [
+                      ":name"
+                    ],
+                    "Vindex": "user_index"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "ByDestination",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 1, count(id) from `user` where 1 != 1",
+                    "Query": "select 1, count(id) from `user` where `name` = 'a'",
+                    "Table": "`user`"
+                  }
+                ]
               }
             ]
           }

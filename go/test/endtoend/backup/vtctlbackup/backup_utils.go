@@ -371,12 +371,12 @@ type restoreMethod func(t *testing.T, tablet *cluster.Vttablet)
 //  7. insert more data on the primary
 //  8. take another backup
 //  9. verify that we now have 2 backups
-// 10. do a PRS to make the original primary a replica so that we can do a restore there
-// 11. Delete+teardown the new primary so that we can restore the first backup on the original
+//  10. do a PRS to make the original primary a replica so that we can do a restore there
+//  11. Delete+teardown the new primary so that we can restore the first backup on the original
 //     primary to confirm we don't have the data from #7
-// 12. restore first backup on the original primary tablet using the first backup timstamp
-// 13. verify that don't have the data added after the first backup
-// 14. remove the backups
+//  12. restore first backup on the original primary tablet using the first backup timstamp
+//  13. verify that don't have the data added after the first backup
+//  14. remove the backups
 func primaryBackup(t *testing.T) {
 	verifyInitialReplication(t)
 
@@ -446,10 +446,10 @@ func primaryBackup(t *testing.T) {
 	require.Nil(t, err)
 }
 
-//    Test a primary and replica from the same backup.
+// Test a primary and replica from the same backup.
 //
-//    Check that a replica and primary both restored from the same backup
-//    can replicate successfully.
+// Check that a replica and primary both restored from the same backup
+// can replicate successfully.
 func primaryReplicaSameBackup(t *testing.T) {
 	// insert data on primary, wait for replica to get it
 	verifyInitialReplication(t)
@@ -507,10 +507,10 @@ func primaryReplicaSameBackup(t *testing.T) {
 	restartPrimaryAndReplica(t)
 }
 
-//    Test a primary and replica from the same backup.
+// Test a primary and replica from the same backup.
 //
-//    Check that a replica and primary both restored from the same backup
-//    We change compression alogrithm in between but it should not break any restore functionality
+// Check that a replica and primary both restored from the same backup
+// We change compression alogrithm in between but it should not break any restore functionality
 func primaryReplicaSameBackupModifiedCompressionEngine(t *testing.T) {
 	// insert data on primary, wait for replica to get it
 	verifyInitialReplication(t)
@@ -594,14 +594,13 @@ func restoreOldPrimaryInPlace(t *testing.T) {
 
 // Test that a former primary replicates correctly after being restored.
 //
-//- Take a backup.
+// - Take a backup.
 // - Reparent from old primary to new primary.
 // - Force old primary to restore from a previous backup using restore_method.
 //
-//Args:
-//restore_method: function accepting one parameter of type tablet.Tablet,
-//this function is called to force a restore on the provided tablet
-//
+// Args:
+// restore_method: function accepting one parameter of type tablet.Tablet,
+// this function is called to force a restore on the provided tablet
 func testRestoreOldPrimary(t *testing.T, method restoreMethod) {
 	// insert data on primary, wait for replica to get it
 	verifyInitialReplication(t)
@@ -750,21 +749,19 @@ func terminatedRestore(t *testing.T) {
 	stopAllTablets()
 }
 
-//test_backup will:
+// test_backup will:
 // - create a shard with primary and replica1 only
-//- run InitShardPrimary
-//- bring up tablet_replica2 concurrently, telling it to wait for a backup
-//- insert some data
-//- take a backup
+// - run InitShardPrimary
+// - bring up tablet_replica2 concurrently, telling it to wait for a backup
+// - insert some data
+// - take a backup
 // - insert more data on the primary
-//- wait for tablet_replica2 to become SERVING
-//- check all data is right (before+after backup data)
-//- list the backup, remove it
+// - wait for tablet_replica2 to become SERVING
+// - check all data is right (before+after backup data)
+// - list the backup, remove it
 //
-//Args:
-//tablet_type: 'replica' or 'rdonly'.
-//
-//
+// Args:
+// tablet_type: 'replica' or 'rdonly'.
 func vtctlBackup(t *testing.T, tabletType string) {
 	restoreWaitForBackup(t, tabletType, nil, true)
 	verifyInitialReplication(t)

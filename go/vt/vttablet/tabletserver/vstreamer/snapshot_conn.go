@@ -47,7 +47,14 @@ func snapshotConnect(ctx context.Context, cp dbconfigs.Connector) (*snapshotConn
 // startSnapshot starts a streaming query with a snapshot view of the specified table.
 // It returns the gtid of the time when the snapshot was taken.
 func (conn *snapshotConn) streamWithSnapshot(ctx context.Context, table, query string) (gtid string, err error) {
-	gtid, err = conn.startSnapshot(ctx, table)
+	_, err = conn.ExecuteFetch("set session session_track_gtids = START_GTID", 1, false)
+	if err != nil {
+		// session_track_gtids = START_GTID unsupported or cannot execute. Resort to LOCK-based snapshot
+		gtid, err = conn.startSnapshot(ctx, table)
+	} else {
+		// session_track_gtids = START_GTID supported. Get a transaction with consistent GTID without LOCKing tables.
+		gtid, err = conn.startSnapshotWithConsistentGTID(ctx)
+	}
 	if err != nil {
 		return "", err
 	}
@@ -92,6 +99,29 @@ func (conn *snapshotConn) startSnapshot(ctx context.Context, table string) (gtid
 		return "", err
 	}
 	if _, err := conn.ExecuteFetch("start transaction with consistent snapshot", 1, false); err != nil {
+		return "", err
+	}
+	if _, err := conn.ExecuteFetch("set @@session.time_zone = '+00:00'", 1, false); err != nil {
+		return "", err
+	}
+	return mysql.EncodePosition(mpos), nil
+}
+
+// startSnapshotWithConsistentGTID performs the snapshotting without locking tables. This assumes
+// session_track_gtids = START_GTID, which is a contribution to MySQL and is not in vanilla MySQL at the
+// time of this writing.
+func (conn *snapshotConn) startSnapshotWithConsistentGTID(ctx context.Context) (gtid string, err error) {
+	if _, err := conn.ExecuteFetch("set transaction isolation level repeatable read", 1, false); err != nil {
+		return "", err
+	}
+	result, err := conn.ExecuteFetch("start transaction with consistent snapshot", 1, false)
+	if err != nil {
+		return "", err
+	}
+	// The "session_track_gtids = START_GTID" patch is only applicable to MySQL56 GTID, which is
+	// why we hardcode the position as mysql.Mysql56FlavorID
+	mpos, err := mysql.ParsePosition(mysql.Mysql56FlavorID, result.SessionStateChanges)
+	if err != nil {
 		return "", err
 	}
 	if _, err := conn.ExecuteFetch("set @@session.time_zone = '+00:00'", 1, false); err != nil {

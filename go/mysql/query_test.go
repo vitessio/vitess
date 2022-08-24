@@ -758,7 +758,7 @@ func checkQueryInternal(t *testing.T, query string, sConn, cConn *Conn, result *
 	}
 }
 
-//nolint
+// nolint
 func writeResult(conn *Conn, result *sqltypes.Result) error {
 	if len(result.Fields) == 0 {
 		return conn.writeOKPacket(&PacketOK{

@@ -63,8 +63,8 @@ Usage of vtgate:
       --healthcheck_timeout duration                                     the health check timeout period (default 1m0s)
   -h, --help                                                             display usage and exit
       --jaeger-agent-host string                                         host and port to send spans to. if empty, no tracing will be done
-      --keep_logs duration                                               keep logs for this long (using ctime) (zero to keep forever) (default 0s)
-      --keep_logs_by_mtime duration                                      keep logs for this long (using mtime) (zero to keep forever) (default 0s)
+      --keep_logs duration                                               keep logs for this long (using ctime) (zero to keep forever)
+      --keep_logs_by_mtime duration                                      keep logs for this long (using mtime) (zero to keep forever)
       --keyspaces_to_watch strings                                       Specifies which keyspaces this vtgate should have access to while routing queries or accessing the vschema.
       --lameduck-period duration                                         keep running at least this long after SIGTERM before stopping (default 50ms)
       --legacy_replication_lag_algorithm                                 Use the legacy algorithm when selecting vttablets for serving. (default true)
@@ -189,8 +189,8 @@ Usage of vtgate:
       --topo_zk_tls_key string                                           the key to use to connect to the zk topo server, enables TLS
       --tracer string                                                    tracing service to use (default "noop")
       --tracing-enable-logging                                           whether to enable logging in the tracing service
-      --tracing-sampling-rate OptionalFloat64                            sampling rate for the probabilistic jaeger sampler (default 0.1)
-      --tracing-sampling-type OptionalString                             sampling strategy to use for jaeger. possible values are 'const', 'probabilistic', 'rateLimiting', or 'remote' (default const)
+      --tracing-sampling-rate float                                      sampling rate for the probabilistic jaeger sampler (default 0.1)
+      --tracing-sampling-type string                                     sampling strategy to use for jaeger. possible values are 'const', 'probabilistic', 'rateLimiting', or 'remote' (default "const")
       --transaction_mode string                                          SINGLE: disallow multi-db transactions, MULTI: allow multi-db transactions with best effort commit, TWOPC: allow multi-db transactions with 2pc commit (default "MULTI")
   -v, --v Level                                                          log level for V logs
       --version                                                          print binary version

@@ -187,7 +187,7 @@ func (qre *QueryExecutor) execAutocommit(f func(conn *StatefulConnection) (*sqlt
 	}
 	qre.options.TransactionIsolation = querypb.ExecuteOptions_AUTOCOMMIT
 
-	conn, _, err := qre.tsv.te.txPool.Begin(qre.ctx, qre.options, false, 0, nil)
+	conn, _, _, err := qre.tsv.te.txPool.Begin(qre.ctx, qre.options, false, 0, nil)
 
 	if err != nil {
 		return nil, err
@@ -198,7 +198,7 @@ func (qre *QueryExecutor) execAutocommit(f func(conn *StatefulConnection) (*sqlt
 }
 
 func (qre *QueryExecutor) execAsTransaction(f func(conn *StatefulConnection) (*sqltypes.Result, error)) (*sqltypes.Result, error) {
-	conn, beginSQL, err := qre.tsv.te.txPool.Begin(qre.ctx, qre.options, false, 0, nil)
+	conn, beginSQL, _, err := qre.tsv.te.txPool.Begin(qre.ctx, qre.options, false, 0, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -865,9 +865,9 @@ func (qre *QueryExecutor) execAlterMigration() (*sqltypes.Result, error) {
 	case sqlparser.CompleteAllMigrationType:
 		return qre.tsv.onlineDDLExecutor.CompletePendingMigrations(qre.ctx)
 	case sqlparser.CancelMigrationType:
-		return qre.tsv.onlineDDLExecutor.CancelMigration(qre.ctx, alterMigration.UUID, "CANCEL issued by user")
+		return qre.tsv.onlineDDLExecutor.CancelMigration(qre.ctx, alterMigration.UUID, "CANCEL issued by user", true)
 	case sqlparser.CancelAllMigrationType:
-		return qre.tsv.onlineDDLExecutor.CancelPendingMigrations(qre.ctx, "CANCEL ALL issued by user")
+		return qre.tsv.onlineDDLExecutor.CancelPendingMigrations(qre.ctx, "CANCEL ALL issued by user", true)
 	case sqlparser.ThrottleMigrationType:
 		return qre.tsv.onlineDDLExecutor.ThrottleMigration(qre.ctx, alterMigration.UUID, alterMigration.Expire, alterMigration.Ratio)
 	case sqlparser.ThrottleAllMigrationType:

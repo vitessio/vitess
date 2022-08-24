@@ -38,7 +38,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vttablet/grpctmserver"
-	"vitess.io/vitess/go/vt/vttablet/tabletconn"
+	"vitess.io/vitess/go/vt/vttablet/tabletconntest"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
@@ -268,5 +268,5 @@ func (ft *FakeTablet) Target() *querypb.Target {
 func init() {
 	// enforce we will use the right protocol (gRPC) in all unit tests
 	*tmclient.TabletManagerProtocol = "grpc"
-	tabletconn.TabletProtocol = "grpc"
+	tabletconntest.SetProtocol("go.vt.wrangler.testlib", "grpc")
 }

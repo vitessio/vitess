@@ -93,6 +93,9 @@ func StringListVar(p *[]string, name string, defaultValue []string, usage string
 // StringMapValue is a map[string]string flag. It accepts a
 // comma-separated list of key value pairs, of the form key:value. The
 // keys cannot contain colons.
+//
+// TODO (andrew): Look into whether there's a native pflag Flag type that we can
+// use/transition to instead.
 type StringMapValue map[string]string
 
 // Set sets the value of this flag from parsing the given string.
@@ -125,6 +128,9 @@ func (value StringMapValue) String() string {
 	sort.Strings(parts)
 	return strings.Join(parts, ",")
 }
+
+// Type is part of the pflag.Value interface.
+func (value StringMapValue) Type() string { return "StringMap" }
 
 // DualFormatStringListVar creates a flag which supports both dashes and underscores
 func DualFormatStringListVar(p *[]string, name string, value []string, usage string) {

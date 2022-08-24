@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"runtime"
-	"sort"
 	"strconv"
 	"strings"
 	"testing"
@@ -384,18 +383,9 @@ func TestSetSystemVariables(t *testing.T) {
 
 	wantQueries = []*querypb.BoundQuery{
 		{Sql: "select 1 from dual where @@max_tmp_tables != 1"},
-		{Sql: "set @@sql_mode = 'only_full_group_by'", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
-		{Sql: "set @@sql_safe_updates = '0'", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
-		{Sql: "set @@max_tmp_tables = '1'", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
+		{Sql: "set @@max_tmp_tables = '1', @@sql_mode = 'only_full_group_by', @@sql_safe_updates = '0'", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
 		{Sql: "select :vtg1 from information_schema.`table`", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
 	}
-
-	sort.Slice(wantQueries, func(i, j int) bool {
-		return wantQueries[i].Sql < wantQueries[j].Sql
-	})
-	sort.Slice(lookup.Queries, func(i, j int) bool {
-		return lookup.Queries[i].Sql < lookup.Queries[j].Sql
-	})
 	utils.MustMatch(t, wantQueries, lookup.Queries)
 }
 
@@ -3038,6 +3028,15 @@ func TestSelectScatterFails(t *testing.T) {
 	assert.Contains(t, err.Error(), "scatter")
 
 	_, err = executorExecSession(executor, "select /*vt+ ALLOW_SCATTER */ id from user", nil, sess)
+	require.NoError(t, err)
+
+	_, err = executorExecSession(executor, "begin", nil, sess)
+	require.NoError(t, err)
+
+	_, err = executorExecSession(executor, "commit", nil, sess)
+	require.NoError(t, err)
+
+	_, err = executorExecSession(executor, "savepoint a", nil, sess)
 	require.NoError(t, err)
 }
 

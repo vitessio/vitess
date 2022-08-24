@@ -22,7 +22,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os/exec"
 	"sync"
 
@@ -47,7 +46,7 @@ const (
 var (
 	compressionLevel = flag.Int("compression-level", 1, "what level to pass to the compressor")
 	// switch which compressor/decompressor to use
-	CompressionEngineName = flag.String("compression-engine-name", "pgzip", "compressor engine used for compression.")
+	CompressionEngineName = flag.String("compression-engine-name", "pargzip", "compressor engine used for compression.")
 	// use and external command to decompress the backups
 	ExternalCompressorCmd   = flag.String("external-compressor", "", "command with arguments to use when compressing a backup")
 	ExternalCompressorExt   = flag.String("external-compressor-extension", "", "extension to use when using an external compressor")
@@ -190,9 +189,9 @@ func newBuiltinDecompressor(engine string, reader io.Reader, logger logutil.Logg
 			return nil, err
 		}
 		decompressor = d
-	case Lz4Compressor:
-		decompressor = ioutil.NopCloser(lz4.NewReader(reader))
-	case ZstdCompressor:
+	case "lz4":
+		decompressor = io.NopCloser(lz4.NewReader(reader))
+	case "zstd":
 		d, err := zstd.NewReader(reader)
 		if err != nil {
 			return nil, err

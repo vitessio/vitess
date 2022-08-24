@@ -28,9 +28,9 @@ limitations under the License.
 //
 // For convenience, there are two other built-in policies that also do NOT do
 // any authentication, but allow you to globally disable some roles entirely:
-//   * `deny-all` disallows all roles for everyone. Note that access is still
+//   - `deny-all` disallows all roles for everyone. Note that access is still
 //     allowed to endpoints that are considered "public" (no ACL check at all).
-//   * `read-only` allows anyone to act as DEBUGGING or MONITORING, but no one
+//   - `read-only` allows anyone to act as DEBUGGING or MONITORING, but no one
 //     is allowed to act as ADMIN. It also disallows any other custom roles that
 //     are requested.
 package acl

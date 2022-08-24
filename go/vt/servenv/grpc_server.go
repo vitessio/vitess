@@ -48,11 +48,12 @@ import (
 // Clients register servers, based on service map:
 //
 // servenv.RegisterGRPCFlags()
-// servenv.OnRun(func() {
-//   if servenv.GRPCCheckServiceMap("XXX") {
-//     pb.RegisterXXX(servenv.GRPCServer, XXX)
-//   }
-// }
+//
+//	servenv.OnRun(func() {
+//	  if servenv.GRPCCheckServiceMap("XXX") {
+//	    pb.RegisterXXX(servenv.GRPCServer, XXX)
+//	  }
+//	}
 //
 // Note servenv.GRPCServer can only be used in servenv.OnRun,
 // and not before, as it is initialized right before calling OnRun.
