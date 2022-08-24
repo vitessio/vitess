@@ -458,16 +458,20 @@ func (d Decimal) mod(d2 Decimal) Decimal {
 }
 
 func (d Decimal) Ceil() Decimal {
-	// truncate to 1.0
-	ret := d.rescale(0)
-
-	if d.Cmp(ret) == 0 {
+	if d.isInteger() {
 		return d
-	} else if d.Sign() == 1 {
-		return d.Add(New(1, 0)).truncate(0)
-	} else {
-		return d.truncate(0)
 	}
+
+	exp := big.NewInt(10)
+
+	// NOTE(vadim): must negate after casting to prevent int32 overflow
+	exp.Exp(exp, big.NewInt(-int64(d.exp)), nil)
+
+	z, m := new(big.Int).DivMod(d.value, exp, new(big.Int))
+	if m.Cmp(zeroInt) != 0 {
+		z.Add(z, oneInt)
+	}
+	return Decimal{value: z, exp: 0}
 }
 
 func (d Decimal) truncate(precision int32) Decimal {
