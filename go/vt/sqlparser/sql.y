@@ -7607,6 +7607,7 @@ non_reserved_keyword:
 | LANGUAGE
 | LAST
 | LAST_INSERT_ID
+| LAUNCH
 | LESS
 | LEVEL
 | LINES
