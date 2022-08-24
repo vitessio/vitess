@@ -29,11 +29,12 @@ import (
 // VtctlClientProcess is a generic handle for a running vtctlclient command .
 // It can be spawned manually
 type VtctlClientProcess struct {
-	Name          string
-	Binary        string
-	Server        string
-	TempDirectory string
-	ZoneName      string
+	Name                    string
+	Binary                  string
+	Server                  string
+	TempDirectory           string
+	ZoneName                string
+	VtctlClientMajorVersion int
 }
 
 // VtctlClientParams encapsulated params to provide if non-default
@@ -196,7 +197,7 @@ func (vtctlclient *VtctlClientProcess) ExecuteCommandWithOutput(args ...string) 
 	pArgs = append(pArgs, args...)
 	tmpProcess := exec.Command(
 		vtctlclient.Binary,
-		pArgs...,
+		filterDoubleDashArgs(pArgs, vtctlclient.VtctlClientMajorVersion)...,
 	)
 	log.Infof("Executing vtctlclient with command: %v", strings.Join(tmpProcess.Args, " "))
 	resultByte, err := tmpProcess.CombinedOutput()
@@ -206,11 +207,17 @@ func (vtctlclient *VtctlClientProcess) ExecuteCommandWithOutput(args ...string) 
 // VtctlClientProcessInstance returns a VtctlProcess handle for vtctlclient process
 // configured with the given Config.
 func VtctlClientProcessInstance(hostname string, grpcPort int, tmpDirectory string) *VtctlClientProcess {
+	version, err := GetMajorVersion("vtctl") // `vtctlclient` does not have a --version flag, so we assume both vtctl/vtctlclient have the same version
+	if err != nil {
+		log.Warningf("failed to get major vtctlclient version; interop with CLI changes for VEP-4 may not work: %s", err)
+	}
+
 	vtctlclient := &VtctlClientProcess{
-		Name:          "vtctlclient",
-		Binary:        "vtctlclient",
-		Server:        fmt.Sprintf("%s:%d", hostname, grpcPort),
-		TempDirectory: tmpDirectory,
+		Name:                    "vtctlclient",
+		Binary:                  "vtctlclient",
+		Server:                  fmt.Sprintf("%s:%d", hostname, grpcPort),
+		TempDirectory:           tmpDirectory,
+		VtctlClientMajorVersion: version,
 	}
 	return vtctlclient
 }
