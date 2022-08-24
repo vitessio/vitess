@@ -2469,7 +2469,7 @@ func InstanceIsForgotten(instanceKey *InstanceKey) bool {
 // It may be auto-rediscovered through topology or requested for discovery by multiple means.
 func ForgetInstance(instanceKey *InstanceKey) error {
 	if instanceKey == nil {
-		errMsg := fmt.Sprintf("ForgetInstance(): nil instanceKey")
+		errMsg := "ForgetInstance(): nil instanceKey"
 		log.Errorf(errMsg)
 		return fmt.Errorf(errMsg)
 	}

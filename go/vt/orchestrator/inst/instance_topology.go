@@ -426,7 +426,7 @@ Cleanup:
 	}
 	if len(errs) == len(replicas) {
 		// All returned with error
-		errMsg := fmt.Sprintf("Error on all operations")
+		errMsg := "Error on all operations"
 		log.Error(errMsg)
 		return res, instance, errs, fmt.Errorf(errMsg)
 	}
@@ -1633,7 +1633,7 @@ func IsBannedFromBeingCandidateReplica(replica *Instance) bool {
 // among given instances. This will be used for choosing best candidate for promotion.
 func getPriorityMajorVersionForCandidate(replicas [](*Instance)) (priorityMajorVersion string, err error) {
 	if len(replicas) == 0 {
-		errMsg := fmt.Sprintf("empty replicas list in getPriorityMajorVersionForCandidate")
+		errMsg := "empty replicas list in getPriorityMajorVersionForCandidate"
 		log.Errorf(errMsg)
 		return "", fmt.Errorf(errMsg)
 	}

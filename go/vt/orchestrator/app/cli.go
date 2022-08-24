@@ -218,14 +218,14 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			lostReplicas = append(lostReplicas, cannotReplicateReplicas...)
 
 			postponedFunctionsContainer.Wait()
+			if err != nil {
+				log.Fatal(err)
+			}
 			if promotedReplica == nil {
 				log.Fatalf("Could not regroup replicas of %+v; error: %+v", *instanceKey, err)
 			}
 			fmt.Printf("%s lost: %d, trivial: %d, pseudo-gtid: %d\n",
 				promotedReplica.Key.DisplayString(), len(lostReplicas), len(equalReplicas), len(aheadReplicas)) //nolint
-			if err != nil {
-				log.Fatal(err)
-			}
 		}
 		// General replication commands
 		// move, binlog file:pos
@@ -338,13 +338,13 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			validateInstanceIsFound(instanceKey)
 
 			_, promotedBinlogServer, err := inst.RegroupReplicasBinlogServers(instanceKey, false)
+			if err != nil {
+				log.Fatal(err)
+			}
 			if promotedBinlogServer == nil {
 				log.Fatalf("Could not regroup binlog server replicas of %+v; error: %+v", *instanceKey, err)
 			}
 			fmt.Println(promotedBinlogServer.Key.DisplayString()) //nolint
-			if err != nil {
-				log.Fatal(err)
-			}
 		}
 	// move, GTID
 	case registerCliCommand("move-gtid", "GTID relocation", `Move a replica beneath another instance.`):
@@ -388,13 +388,13 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			lostReplicas, movedReplicas, cannotReplicateReplicas, promotedReplica, err := inst.RegroupReplicasGTID(instanceKey, false, func(candidateReplica *inst.Instance) { fmt.Println(candidateReplica.Key.DisplayString()) }, postponedFunctionsContainer, nil)
 			lostReplicas = append(lostReplicas, cannotReplicateReplicas...)
 
+			if err != nil {
+				log.Fatal(err)
+			}
 			if promotedReplica == nil {
 				log.Fatalf("Could not regroup replicas of %+v; error: %+v", *instanceKey, err)
 			}
 			fmt.Printf("%s lost: %d, moved: %d\n", promotedReplica.Key.DisplayString(), len(lostReplicas), len(movedReplicas)) //nolint
-			if err != nil {
-				log.Fatal(err)
-			}
 		}
 		// General replication commands
 	case registerCliCommand("enable-gtid", "Replication, general", `If possible, turn on GTID replication`):
