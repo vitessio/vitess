@@ -46,7 +46,7 @@ jobs:
             - 'tools/**'
             - 'config/**'
             - 'bootstrap.sh'
-            - '.github/workflows/**'
+            - '.github/workflows/{{.FileName}}'
 
     - name: Set up Go
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
@@ -87,7 +87,7 @@ jobs:
         go mod download
 
         # install JUnit report formatter
-        go install github.com/jstemmer/go-junit-report@latest
+        go install github.com/vitessio/go-junit-report@HEAD
 
         {{if .InstallXtraBackup}}
 

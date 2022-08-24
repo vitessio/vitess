@@ -96,6 +96,10 @@ var (
 func ClusterWrapper(isMulti bool) (int, error) {
 	ClusterInstance = nil
 	ClusterInstance = cluster.NewCluster(cell, hostname)
+	ClusterInstance.VtctldExtraArgs = append(ClusterInstance.VtctldExtraArgs,
+		// hard-code these two soon-to-be deprecated drain values.
+		"--wait_for_drain_sleep_rdonly", "1s",
+		"--wait_for_drain_sleep_replica", "1s")
 
 	// Start topo server
 	if err := ClusterInstance.StartTopo(); err != nil {

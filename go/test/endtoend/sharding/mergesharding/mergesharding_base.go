@@ -104,6 +104,10 @@ var (
 func TestMergesharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	defer cluster.PanicHandler(t)
 	clusterInstance = cluster.NewCluster(cell, hostname)
+	clusterInstance.VtctldExtraArgs = append(clusterInstance.VtctldExtraArgs,
+		// hard-code these two soon-to-be deprecated drain values.
+		"--wait_for_drain_sleep_rdonly", "1s",
+		"--wait_for_drain_sleep_replica", "1s")
 	defer clusterInstance.Teardown()
 
 	// Launch keyspace
@@ -412,15 +416,9 @@ func TestMergesharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	require.NoError(t, err)
 
 	sharding.CheckTabletQueryService(t, *shard3Primary, "NOT_SERVING", false, *clusterInstance)
-	streamHealth, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
-		"VtTabletStreamHealth", "--",
-		"--count", "1", shard3Primary.Alias)
+	shrs, err := clusterInstance.StreamTabletHealth(context.Background(), shard3Primary, 1)
 	require.NoError(t, err)
-	log.Info("Got health: ", streamHealth)
-
-	var streamHealthResponse querypb.StreamHealthResponse
-	err = json.Unmarshal([]byte(streamHealth), &streamHealthResponse)
-	require.NoError(t, err)
+	streamHealthResponse := shrs[0]
 	assert.Equal(t, streamHealthResponse.Serving, false)
 	assert.NotNil(t, streamHealthResponse.RealtimeStats)
 

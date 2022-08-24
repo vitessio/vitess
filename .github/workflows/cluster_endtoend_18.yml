@@ -44,7 +44,7 @@ jobs:
               - 'config/**'
               - '.github/docker/**'
               - 'bootstrap.sh'
-              - '.github/workflows/**'
+              - '.github/workflows/cluster_endtoend_18.yml'
 
       - name: Build Docker Image
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
