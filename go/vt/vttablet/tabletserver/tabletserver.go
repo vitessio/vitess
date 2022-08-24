@@ -1224,6 +1224,10 @@ func (tsv *TabletServer) ReserveStreamExecute(
 	options *querypb.ExecuteOptions,
 	callback func(*sqltypes.Result) error,
 ) (state queryservice.ReservedState, err error) {
+	if tsv.config.EnableSettingsPool && transactionID == 0 {
+		return state, tsv.streamExecuteWithSettings(ctx, target, preQueries, sql, bindVariables, transactionID, options, callback)
+	}
+
 	state.TabletAlias = tsv.alias
 
 	allowOnShutdown := false
@@ -1345,6 +1349,51 @@ func (tsv *TabletServer) executeWithSettings(ctx context.Context, target *queryp
 		},
 	)
 	return result, err
+}
+
+func (tsv *TabletServer) streamExecuteWithSettings(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (err error) {
+	span, ctx := trace.NewSpan(ctx, "TabletServer.StreamExecuteWithSettings")
+	trace.AnnotateSQL(span, sqlparser.Preview(sql))
+	defer span.Finish()
+
+	allowOnShutdown := false
+	var timeout time.Duration
+	if transactionID != 0 {
+		allowOnShutdown = true
+		// Use the transaction timeout.
+		timeout = tsv.txTimeout.Get()
+	}
+
+	return tsv.execRequest(
+		ctx, timeout,
+		"StreamExecute", sql, bindVariables,
+		target, options, allowOnShutdown,
+		func(ctx context.Context, logStats *tabletenv.LogStats) error {
+			if bindVariables == nil {
+				bindVariables = make(map[string]*querypb.BindVariable)
+			}
+			query, comments := sqlparser.SplitMarginComments(sql)
+			// TODO: update the isReservedConn logic when StreamExecute supports reserved connections.
+			plan, err := tsv.qe.GetStreamPlan(query, false /* isReservedConn */)
+			if err != nil {
+				return err
+			}
+
+			qre := &QueryExecutor{
+				query:          query,
+				marginComments: comments,
+				bindVars:       bindVariables,
+				connID:         transactionID,
+				options:        options,
+				plan:           plan,
+				ctx:            ctx,
+				logStats:       logStats,
+				tsv:            tsv,
+				settings:       preQueries,
+			}
+			return qre.Stream(callback)
+		},
+	)
 }
 
 // execRequest performs verifications, sets up the necessary environments
