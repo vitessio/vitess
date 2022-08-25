@@ -423,7 +423,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			if err != nil {
 				log.Fatal(err)
 			}
-			if instance == nil {
+			if instance == nil { //nolint
 				log.Fatalf("Instance not found: %+v", *instanceKey)
 			}
 			fmt.Println(instance.GtidErrant) //nolint
@@ -1025,7 +1025,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 		}
 	case registerCliCommand("forget", "Instance management", `Forget about an instance's existence`):
 		{
-			if rawInstanceKey == nil {
+			if rawInstanceKey == nil { //nolint
 				log.Fatal("Cannot deduce instance:", instance)
 			}
 			instanceKey, _ = inst.FigureInstanceKey(rawInstanceKey, nil)
@@ -1304,7 +1304,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 		}
 	case registerCliCommand("resolve", "Meta", `Resolve given hostname`):
 		{
-			if rawInstanceKey == nil {
+			if rawInstanceKey == nil { //nolint
 				log.Fatal("Cannot deduce instance:", instance)
 			}
 			if conn, err := net.Dial("tcp", rawInstanceKey.DisplayString()); err == nil {
