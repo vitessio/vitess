@@ -266,7 +266,15 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 	if err != nil {
 		return false, vterrors.Wrapf(err, "cannot parse position %v", incrementalBackupToGTID)
 	}
-
+	// It's worthwhile to explain the difference between params.IncrementalFromPos and incrementalBackupFromPosition.
+	// params.IncrementalFromPos is supplied by the user. They want an incremental backup that covers that position.
+	// However, we implement incremental backups by copying complete binlog files. That position could potentially
+	// be somewhere in the middle of some binlog. So we look at the earliest binlog file that covers the user's position.
+	// The backup we take either starts exactly at the user's position or at some prior position, depending where in the
+	// binlog file the user's requested position is found.
+	// incrementalBackupFromGTID is the "previous GTIDs" of the first binlog file we back up.
+	// It is a fact that incrementalBackupFromGTID is earlier or equal to params.IncrementalFromPos.
+	// In the backup manifest file, we document incrementalBackupFromGTID, not the user's requested position.
 	if err := be.backupFiles(ctx, params, bh, incrementalBackupToPosition, incrementalBackupFromPosition, binaryLogsToBackup, serverUUID); err != nil {
 		return false, err
 	}
@@ -502,6 +510,7 @@ func (be *BuiltinBackupEngine) backupFiles(
 			BackupMethod: builtinBackupEngineName,
 			Position:     replicationPosition,
 			FromPosition: fromPosition,
+			Incremental:  !fromPosition.IsZero(),
 			ServerUUID:   serverUUID,
 			TabletAlias:  params.TabletAlias,
 			BackupTime:   params.BackupTime.UTC().Format(time.RFC3339),

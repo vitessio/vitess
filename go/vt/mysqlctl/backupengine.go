@@ -188,6 +188,9 @@ type BackupManifest struct {
 	// which incremental changes are backed up.
 	FromPosition mysql.Position
 
+	// Incremental indicates whether this is an incremental backup
+	Incremental bool
+
 	// BackupTime is when the backup was taken in UTC time (RFC 3339 format)
 	BackupTime string
 
