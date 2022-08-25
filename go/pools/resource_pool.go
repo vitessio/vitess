@@ -417,6 +417,11 @@ func (rp *ResourcePool) SetCapacity(capacity int) error {
 		}
 	}
 
+	// If the required capacity is less than the current capacity,
+	// then we need to wait till the current resources are returned
+	// to the pool and close them from any of the channel.
+	// Otherwise, if the required capacity is more than the current capacity,
+	// then we just add empty resource to the channel.
 	if capacity < oldcap {
 		for i := 0; i < oldcap-capacity; i++ {
 			var wrapper resourceWrapper
