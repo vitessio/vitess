@@ -18,6 +18,7 @@ package pools
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -33,12 +34,16 @@ var lastID, count, closeCount sync2.AtomicInt64
 var waitStarts []time.Time
 
 type TestResource struct {
-	num     int64
-	closed  bool
-	setting []string
+	num       int64
+	closed    bool
+	setting   []string
+	failApply bool
 }
 
 func (tr *TestResource) ApplySettings(_ context.Context, settings []string) error {
+	if tr.failApply {
+		return fmt.Errorf("ApplySettings failed")
+	}
 	tr.setting = settings
 	return nil
 }
@@ -87,6 +92,11 @@ func FailFactory(context.Context) (Resource, error) {
 func SlowFailFactory(context.Context) (Resource, error) {
 	time.Sleep(10 * time.Millisecond)
 	return nil, errors.New("Failed")
+}
+
+func DisallowSettingsFactory(context.Context) (Resource, error) {
+	count.Add(1)
+	return &TestResource{num: lastID.Add(1), failApply: true}, nil
 }
 
 func TestOpen(t *testing.T) {
@@ -777,4 +787,62 @@ func TestMultiSettingsWithClosures(t *testing.T) {
 	assert.EqualValues(t, 0, p.Capacity())
 	assert.EqualValues(t, 0, p.Available())
 	assert.EqualValues(t, 0, count.Get())
+}
+
+func TestApplySettingsFailure(t *testing.T) {
+	ctx := context.Background()
+	var resources []Resource
+	var r Resource
+	var err error
+
+	p := NewResourcePool(PoolFactory, 5, 5, time.Second, logWait, nil, 0)
+	defer p.Close()
+
+	settings := [][]string{nil, {"foo"}, {"bar"}, {"bar"}, {"foo"}}
+	// get the resource and mark for failure
+	for i := 0; i < 5; i++ {
+		r, err = p.Get(ctx, settings[i])
+		require.NoError(t, err)
+		r.(*TestResource).failApply = true
+		resources = append(resources, r)
+	}
+	// put them back
+	for _, r = range resources {
+		p.Put(r)
+	}
+
+	// any new connection created will fail to apply settings
+	p.factory = DisallowSettingsFactory
+
+	// Get the resource with "foo" settings
+	// For an applied connection if the settings are same it will be returned as-is.
+	// Otherwise, will fail to get the resource.
+	var failCount int
+	resources = nil
+	for i := 0; i < 5; i++ {
+		r, err = p.Get(ctx, settings[1])
+		if err != nil {
+			failCount++
+			assert.EqualError(t, err, "ApplySettings failed")
+			continue
+		}
+		resources = append(resources, r)
+	}
+	// put them back
+	for _, r = range resources {
+		p.Put(r)
+	}
+	require.Equal(t, 3, failCount)
+
+	// should be able to get all the resource with no settings
+	resources = nil
+	for i := 0; i < 5; i++ {
+		r, err = p.Get(ctx, nil)
+		require.NoError(t, err)
+		resources = append(resources, r)
+	}
+	// put them back
+	for _, r = range resources {
+		p.Put(r)
+	}
 }
