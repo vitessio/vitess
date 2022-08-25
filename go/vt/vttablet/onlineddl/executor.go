@@ -214,6 +214,10 @@ func NewExecutor(env tabletenv.Env, tabletAlias *topodatapb.TabletAlias, ts *top
 	tabletTypeFunc func() topodatapb.TabletType,
 	toggleBufferTableFunc func(cancelCtx context.Context, tableName string, bufferQueries bool),
 ) *Executor {
+	// sanitize flags
+	if *maxConcurrentOnlineDDLs < 1 {
+		*maxConcurrentOnlineDDLs = 1 // or else nothing will ever run
+	}
 	return &Executor{
 		env:         env,
 		tabletAlias: proto.Clone(tabletAlias).(*topodatapb.TabletAlias),
