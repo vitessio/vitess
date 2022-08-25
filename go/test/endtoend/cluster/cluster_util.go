@@ -208,6 +208,22 @@ func filterResultWhenRunsForCoverage(input string) string {
 	return result
 }
 
+func filterDoubleDashArgs(args []string, version int) (filtered []string) {
+	if version > 13 {
+		return args
+	}
+
+	for _, arg := range args {
+		if arg == "--" {
+			continue
+		}
+
+		filtered = append(filtered, arg)
+	}
+
+	return filtered
+}
+
 // WaitForReplicationPos will wait for replication position to catch-up
 func WaitForReplicationPos(t *testing.T, tabletA *Vttablet, tabletB *Vttablet, hostname string, timeout float64) {
 	replicationPosA, _ := GetPrimaryPosition(t, *tabletA, hostname)
