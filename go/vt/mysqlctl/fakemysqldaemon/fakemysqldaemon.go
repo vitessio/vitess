@@ -335,6 +335,27 @@ func (fmd *FakeMysqlDaemon) GetGTIDMode(ctx context.Context) (gtidMode string, e
 	})
 }
 
+// FlushBinaryLogs is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) FlushBinaryLogs(ctx context.Context) (err error) {
+	return fmd.ExecuteSuperQueryList(ctx, []string{
+		"FAKE FLUSH BINARY LOGS",
+	})
+}
+
+// GetBinaryLogs is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) GetBinaryLogs(ctx context.Context) (binaryLogs []string, err error) {
+	return []string{}, fmd.ExecuteSuperQueryList(ctx, []string{
+		"FAKE SHOW BINARY LOGS",
+	})
+}
+
+// GetPreviousGTIDs is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) GetPreviousGTIDs(ctx context.Context, binlog string) (previousGtids string, err error) {
+	return "", fmd.ExecuteSuperQueryList(ctx, []string{
+		fmt.Sprintf("FAKE SHOW BINLOG EVENTS IN '%s' LIMIT 2", binlog),
+	})
+}
+
 // PrimaryPosition is part of the MysqlDaemon interface
 func (fmd *FakeMysqlDaemon) PrimaryPosition() (mysql.Position, error) {
 	return fmd.CurrentPrimaryPosition, nil
