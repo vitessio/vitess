@@ -425,12 +425,9 @@ func (rp *ResourcePool) SetCapacity(capacity int) error {
 	if capacity < oldcap {
 		for i := 0; i < oldcap-capacity; i++ {
 			var wrapper resourceWrapper
-			for {
-				select {
-				case wrapper = <-rp.resources:
-				case wrapper = <-rp.settingResources:
-				}
-				break
+			select {
+			case wrapper = <-rp.resources:
+			case wrapper = <-rp.settingResources:
 			}
 			if wrapper.resource != nil {
 				wrapper.resource.Close()
