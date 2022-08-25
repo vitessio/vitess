@@ -82,7 +82,10 @@ func TestInvalidDateTimeTimestampVals(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
 
-	mcmp.ExecAllowAndCompareError(`select date'2022'`)
-	mcmp.ExecAllowAndCompareError(`select time'12:34:56:78'`)
-	mcmp.ExecAllowAndCompareError(`select timestamp'2022'`)
+	_, err := mcmp.ExecAllowAndCompareError(`select date'2022'`)
+	require.Error(t, err)
+	_, err = mcmp.ExecAllowAndCompareError(`select time'12:34:56:78'`)
+	require.Error(t, err)
+	_, err = mcmp.ExecAllowAndCompareError(`select timestamp'2022'`)
+	require.Error(t, err)
 }
