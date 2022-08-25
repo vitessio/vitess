@@ -184,6 +184,10 @@ type BackupManifest struct {
 	// Position is the replication position at which the backup was taken.
 	Position mysql.Position
 
+	// FromPosition is only applicable to incremental backups, and stands for the position from
+	// which incremental changes are backed up.
+	FromPosition mysql.Position
+
 	// BackupTime is when the backup was taken in UTC time (RFC 3339 format)
 	BackupTime string
 
@@ -443,5 +447,35 @@ func findFilesToBackup(cnf *Mycnf) ([]FileEntry, int64, error) {
 		}
 	}
 
+	return result, totalSize, nil
+}
+
+// binlogFilesToBackup returns the file entries for given binlog files (identified by file name, no path)
+func binlogFilesToBackup(cnf *Mycnf, binlogFiles []string) (result []FileEntry, totalSize int64, err error) {
+	binlogsDirectory := filepath.Dir(cnf.BinLogPath)
+	entries, err := os.ReadDir(binlogsDirectory)
+	if err != nil {
+		return nil, 0, err
+	}
+	binlogFilesMap := map[string]bool{}
+	for _, b := range binlogFiles {
+		binlogFilesMap[b] = true
+	}
+	for _, entry := range entries {
+		if !binlogFilesMap[entry.Name()] {
+			// not a file we're looking for
+			continue
+		}
+		fi, err := entry.Info()
+		if err != nil {
+			return nil, 0, err
+		}
+
+		result = append(result, FileEntry{
+			Base: backupBinlogDir,
+			Name: fi.Name(),
+		})
+		totalSize = totalSize + fi.Size()
+	}
 	return result, totalSize, nil
 }
