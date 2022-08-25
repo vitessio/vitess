@@ -108,6 +108,7 @@ var ghostOverridePath = flag.String("gh-ost-path", "", "override default gh-ost 
 var ptOSCOverridePath = flag.String("pt-osc-path", "", "override default pt-online-schema-change binary full path")
 var migrationCheckInterval = flag.Duration("migration_check_interval", 1*time.Minute, "Interval between migration checks")
 var retainOnlineDDLTables = flag.Duration("retain_online_ddl_tables", 24*time.Hour, "How long should vttablet keep an old migrated table before purging it")
+var maxConcurrentOnlineDDLs = flag.Int("max_concurrent_online_ddl", 256, "Maximum number of online DDL changes that may run concurrently")
 var migrationNextCheckIntervals = []time.Duration{1 * time.Second, 5 * time.Second, 10 * time.Second, 20 * time.Second}
 var maxConstraintNameLength = 64
 
@@ -124,7 +125,6 @@ const (
 	databasePoolSize                         = 3
 	vreplicationCutOverThreshold             = 5 * time.Second
 	vreplicationTestSuiteWaitSeconds         = 5
-	maxConcurrentMigrations                  = 256
 )
 
 var (
@@ -2959,7 +2959,7 @@ func (e *Executor) runNextMigration(ctx context.Context) error {
 				return nil, err
 			}
 			if !e.isAnyConflictingMigrationRunning(onlineDDL) {
-				if e.countOwnedRunningMigrations() < maxConcurrentMigrations {
+				if e.countOwnedRunningMigrations() < *maxConcurrentOnlineDDLs {
 					// This migration seems good to go
 					return onlineDDL, err
 				}
