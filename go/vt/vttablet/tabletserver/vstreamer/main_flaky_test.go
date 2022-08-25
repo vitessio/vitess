@@ -17,11 +17,11 @@ limitations under the License.
 package vstreamer
 
 import (
+	"flag"
 	"fmt"
 	"os"
 	"testing"
 
-	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
@@ -38,7 +38,7 @@ var (
 )
 
 func TestMain(m *testing.M) {
-	pflag.Parse()
+	flag.Parse()
 	ignoreKeyspaceShardInFieldAndRowEvents = true
 	if testing.Short() {
 		os.Exit(m.Run())
