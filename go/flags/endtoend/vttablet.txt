@@ -541,6 +541,8 @@ Usage of vttablet:
 	log to standard error instead of files
   --master_connect_retry duration
 	Deprecated, use -replication_connect_retry (default 10s)
+  --max_concurrent_online_ddl int
+	Maximum number of online DDL changes that may run concurrently (default 256)
   --mem-profile-rate int
 	deprecated: use '-pprof=mem' instead (default 524288)
   --migration_check_interval duration
