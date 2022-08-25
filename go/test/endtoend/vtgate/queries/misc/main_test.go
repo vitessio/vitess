@@ -17,6 +17,7 @@ limitations under the License.
 package misc
 
 import (
+	_ "embed"
 	"flag"
 	"fmt"
 	"os"
@@ -34,32 +35,12 @@ var (
 	mysqlParams     mysql.ConnParams
 	keyspaceName    = "ks_misc"
 	cell            = "test_misc"
-	schemaSQL       = `create table t1(
-	id1 bigint,
-	id2 bigint,
-	primary key(id1)
-) Engine=InnoDB;
-`
 
-	vschema = `
-{
-  "sharded": true,
-  "vindexes": {
-    "hash": {
-      "type": "hash"
-    }
-  },
-  "tables": {
-    "t1": {
-      "column_vindexes": [
-        {
-          "column": "id1",
-          "name": "hash"
-        }
-      ]
-    }
-  }
-}`
+	//go:embed schema.sql
+	schemaSQL string
+
+	//go:embed vschema.json
+	vschema string
 )
 
 func TestMain(m *testing.M) {
