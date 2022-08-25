@@ -144,7 +144,7 @@ func (cp *ConnectionPool) Get(ctx context.Context) (*PooledDBConnection, error) 
 	if p == nil {
 		return nil, ErrConnPoolClosed
 	}
-	r, err := p.Get(ctx)
+	r, err := p.Get(ctx, nil)
 	if err != nil {
 		return nil, err
 	}

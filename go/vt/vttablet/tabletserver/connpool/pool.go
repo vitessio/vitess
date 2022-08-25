@@ -194,7 +194,7 @@ func (cp *Pool) Get(ctx context.Context) (*DBConn, error) {
 		ctx, cancel = context.WithTimeout(ctx, cp.timeout)
 		defer cancel()
 	}
-	r, err := p.Get(ctx)
+	r, err := p.Get(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
