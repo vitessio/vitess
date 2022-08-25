@@ -142,7 +142,7 @@ func InitVtctld(ts *topo.Server) error {
 
 	http.Handle(appPrefix, staticContentHandler(*enableUI))
 
-	var healthCheck *discovery.HealthCheckImpl
+	var healthCheck discovery.HealthCheck
 	if *enableRealtimeStats {
 		ctx := context.Background()
 		cells, err := ts.GetKnownCells(ctx)
