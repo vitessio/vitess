@@ -63,6 +63,11 @@ func registerVReplicationFlags(fs *pflag.FlagSet) {
 	fs.IntVar(&vreplicationHeartbeatUpdateInterval, "vreplication_heartbeat_update_interval", vreplicationHeartbeatUpdateInterval, "Frequency (in seconds, default 1, max 60) at which the time_updated column of a vreplication stream when idling")
 	fs.Int64Var(&vreplicationExperimentalFlags, "vreplication_experimental_flags", vreplicationExperimentalFlags, "(Bitmask) of experimental features in vreplication to enable")
 	fs.BoolVar(&vreplicationStoreCompressedGTID, "vreplication_store_compressed_gtid", vreplicationStoreCompressedGTID, "Store compressed gtids in the pos column of _vt.vreplication")
+
+	// deprecated flags (7.0), however there are several e2e tests that still depend on them
+	fs.Duration("vreplication_healthcheck_topology_refresh", 30*time.Second, "refresh interval for re-reading the topology")
+	fs.Duration("vreplication_healthcheck_retry_delay", 5*time.Second, "healthcheck retry delay")
+	fs.Duration("vreplication_healthcheck_timeout", 1*time.Minute, "healthcheck retry delay")
 }
 
 func init() {
