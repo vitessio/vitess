@@ -18,7 +18,6 @@ package vreplication
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -27,6 +26,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/spf13/pflag"
 
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
@@ -79,13 +80,13 @@ func init() {
 	tabletconntest.SetProtocol("go.vt.vttablet.tabletmanager.vreplication.framework_test", "test")
 
 	binlogplayer.RegisterClientFactory("test", func() binlogplayer.Client { return globalFBC })
-	flag.Set("binlog_player_protocol", "test")
+	pflag.Set("binlog_player_protocol", "test")
 
 	heartbeatRe = regexp.MustCompile(`update _vt.vreplication set time_updated=\d+ where id=\d+`)
 }
 
 func TestMain(m *testing.M) {
-	flag.Parse() // Do not remove this comment, import into google3 depends on it
+	pflag.Parse() // Do not remove this comment, import into google3 depends on it
 
 	exitCode := func() int {
 		var err error
@@ -96,7 +97,7 @@ func TestMain(m *testing.M) {
 		}
 		defer env.Close()
 
-		*vreplicationExperimentalFlags = 0
+		vreplicationExperimentalFlags = 0
 
 		// engines cannot be initialized in testenv because it introduces
 		// circular dependencies.
