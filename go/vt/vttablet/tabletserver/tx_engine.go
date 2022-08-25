@@ -232,7 +232,7 @@ func (te *TxEngine) Begin(ctx context.Context, preQueries []string, reservedID i
 	}
 
 	defer te.beginRequests.Done()
-	conn, beginSQL, sessionStateChanges, err := te.txPool.Begin(ctx, options, te.state == AcceptingReadOnly, reservedID, preQueries)
+	conn, beginSQL, sessionStateChanges, err := te.txPool.Begin(ctx, options, te.state == AcceptingReadOnly, reservedID, preQueries, nil)
 	if err != nil {
 		return 0, "", "", err
 	}
@@ -389,7 +389,7 @@ outer:
 		if txid > maxid {
 			maxid = txid
 		}
-		conn, _, _, err := te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
+		conn, _, _, err := te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil, nil)
 		if err != nil {
 			allErr.RecordError(err)
 			continue
@@ -561,7 +561,7 @@ func (te *TxEngine) Reserve(ctx context.Context, options *querypb.ExecuteOptions
 
 // Reserve creates a reserved connection and returns the id to it
 func (te *TxEngine) reserve(ctx context.Context, options *querypb.ExecuteOptions, preQueries []string) (*StatefulConnection, error) {
-	conn, err := te.txPool.scp.NewConn(ctx, options)
+	conn, err := te.txPool.scp.NewConn(ctx, options, nil)
 	if err != nil {
 		return nil, err
 	}

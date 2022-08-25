@@ -58,11 +58,11 @@ func TestTxEngineClose(t *testing.T) {
 
 	// Normal close with timeout wait.
 	te.AcceptReadWrite()
-	c, beginSQL, _, err := te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
+	c, beginSQL, _, err := te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil, nil)
 	require.NoError(t, err)
 	require.Equal(t, "begin", beginSQL)
 	c.Unlock()
-	c, beginSQL, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
+	c, beginSQL, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil, nil)
 	require.NoError(t, err)
 	require.Equal(t, "begin", beginSQL)
 	c.Unlock()
@@ -74,7 +74,7 @@ func TestTxEngineClose(t *testing.T) {
 
 	// Immediate close.
 	te.AcceptReadOnly()
-	c, _, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
+	c, _, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,7 +86,7 @@ func TestTxEngineClose(t *testing.T) {
 	// Normal close with short grace period.
 	te.shutdownGracePeriod = 25 * time.Millisecond
 	te.AcceptReadWrite()
-	c, _, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
+	c, _, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil, nil)
 	require.NoError(t, err)
 	c.Unlock()
 	start = time.Now()
@@ -97,7 +97,7 @@ func TestTxEngineClose(t *testing.T) {
 	// Normal close with short grace period, but pool gets empty early.
 	te.shutdownGracePeriod = 25 * time.Millisecond
 	te.AcceptReadWrite()
-	c, _, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
+	c, _, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil, nil)
 	require.NoError(t, err)
 	c.Unlock()
 	go func() {
@@ -113,7 +113,7 @@ func TestTxEngineClose(t *testing.T) {
 
 	// Immediate close, but connection is in use.
 	te.AcceptReadOnly()
-	c, _, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
+	c, _, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil, nil)
 	require.NoError(t, err)
 	go func() {
 		time.Sleep(100 * time.Millisecond)
@@ -204,7 +204,7 @@ func TestTxEngineRenewFails(t *testing.T) {
 	conn.Unlock() // but we keep holding on to it... sneaky....
 
 	// this next bit sets up the scp so our renew will fail
-	conn2, err := te.txPool.scp.NewConn(ctx, options)
+	conn2, err := te.txPool.scp.NewConn(ctx, options, nil)
 	require.NoError(t, err)
 	defer conn2.Release(tx.TxCommit)
 	te.txPool.scp.lastID.Set(conn2.ConnID - 1)

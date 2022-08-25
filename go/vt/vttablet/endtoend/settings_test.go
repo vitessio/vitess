@@ -27,7 +27,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
 )
 
-func TestNoConnectionReservationOnSettings(t *testing.T) {
+func TestSelectNoConnectionReservationOnSettings(t *testing.T) {
 	framework.Server.Config().EnableSettingsPool = true
 	defer func() {
 		framework.Server.Config().EnableSettingsPool = false
@@ -48,4 +48,54 @@ func TestNoConnectionReservationOnSettings(t *testing.T) {
 	require.NoError(t, err)
 	assert.EqualValues(t, 0, client.ReservedID())
 	assert.Equal(t, `[[VARCHAR("")]]`, fmt.Sprintf("%v", qr.Rows))
+}
+
+func TestDDLNoConnectionReservationOnSettings(t *testing.T) {
+	framework.Server.Config().EnableSettingsPool = true
+	defer func() {
+		framework.Server.Config().EnableSettingsPool = false
+	}()
+
+	client := framework.NewClient()
+	defer client.Release()
+
+	query := "create table temp(c_date datetime default '0000-00-00')"
+	setting := "set sql_mode='TRADITIONAL'"
+
+	_, err := client.ReserveExecute(query, []string{setting}, nil)
+	require.Error(t, err, "create table should have failed with TRADITIONAL mode")
+	require.Contains(t, err.Error(), "Invalid default value")
+	assert.EqualValues(t, 0, client.ReservedID())
+}
+
+func TestDMLNoConnectionReservationOnSettings(t *testing.T) {
+	framework.Server.Config().EnableSettingsPool = true
+	defer func() {
+		framework.Server.Config().EnableSettingsPool = false
+	}()
+
+	client := framework.NewClient()
+	defer client.Release()
+
+	_, err := client.Execute("create table temp(c_date datetime)", nil)
+	require.NoError(t, err)
+	defer client.Execute("drop table temp", nil)
+
+	_, err = client.Execute("insert into temp values ('2022-08-25')", nil)
+	require.NoError(t, err)
+
+	setting := "set sql_mode='TRADITIONAL'"
+	queries := []string{
+		"insert into temp values('0000-00-00')",
+		"update temp set c_date = '0000-00-00'",
+	}
+
+	for _, query := range queries {
+		t.Run(query, func(t *testing.T) {
+			_, err = client.ReserveExecute(query, []string{setting}, nil)
+			require.Error(t, err, "query should have failed with TRADITIONAL mode")
+			require.Contains(t, err.Error(), "Incorrect datetime value")
+			assert.EqualValues(t, 0, client.ReservedID())
+		})
+	}
 }
