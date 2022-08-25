@@ -97,8 +97,12 @@ func (r *_rpc) ApplySettings(_ context.Context, _ []string) error {
 	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: _rpc does not support ApplySettings")
 }
 
-func (r *_rpc) SettingHash() uint64 {
-	return 0
+func (r *_rpc) IsSettingsApplied() bool {
+	return false
+}
+
+func (r *_rpc) IsSameSetting(_ []string) bool {
+	return true
 }
 
 // we only ever return the same rpc pointer. it's used as a sentinel and is

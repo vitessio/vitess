@@ -55,7 +55,7 @@ type DBConn struct {
 	dbaPool      *dbconnpool.ConnectionPool
 	stats        *tabletenv.Stats
 	current      sync2.AtomicString
-	settings     string
+	settings     []string
 	settingsHash uint64
 
 	// err will be set if a query is killed through a Kill.
@@ -320,7 +320,6 @@ func (dbc *DBConn) Close() {
 }
 
 func (dbc *DBConn) ApplySettings(ctx context.Context, settings []string) error {
-	var s strings.Builder
 	digest := xxhash.New()
 	for _, q := range settings {
 		if _, err := dbc.execOnce(ctx, q, 1, false); err != nil {
@@ -329,15 +328,30 @@ func (dbc *DBConn) ApplySettings(ctx context.Context, settings []string) error {
 		if _, err := digest.WriteString(q); err != nil {
 			return err
 		}
-		s.WriteString(q)
 	}
-	dbc.settings = s.String()
+	dbc.settings = settings
 	dbc.settingsHash = digest.Sum64()
 	return nil
 }
 
-func (dbc *DBConn) SettingHash() uint64 {
-	return dbc.settingsHash
+func (dbc *DBConn) IsSettingsApplied() bool {
+	return len(dbc.settings) > 0
+}
+
+func (dbc *DBConn) IsSameSetting(settings []string) bool {
+	return compareStringSlice(settings, dbc.settings)
+}
+
+func compareStringSlice(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i, aVal := range a {
+		if aVal != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 var _ pools.Resource = (*DBConn)(nil)

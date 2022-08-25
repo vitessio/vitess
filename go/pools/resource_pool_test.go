@@ -21,8 +21,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cespare/xxhash/v2"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -35,24 +33,34 @@ var lastID, count, closeCount sync2.AtomicInt64
 var waitStarts []time.Time
 
 type TestResource struct {
-	num         int64
-	closed      bool
-	settingHash uint64
+	num     int64
+	closed  bool
+	setting []string
 }
 
-func (tr *TestResource) ApplySettings(ctx context.Context, settings []string) error {
-	digest := xxhash.New()
-	for _, q := range settings {
-		if _, err := digest.WriteString(q); err != nil {
-			return err
-		}
-	}
-	tr.settingHash = digest.Sum64()
+func (tr *TestResource) ApplySettings(_ context.Context, settings []string) error {
+	tr.setting = settings
 	return nil
 }
 
-func (tr *TestResource) SettingHash() uint64 {
-	return tr.settingHash
+func (tr *TestResource) IsSettingsApplied() bool {
+	return len(tr.setting) > 0
+}
+
+func (tr *TestResource) IsSameSetting(settings []string) bool {
+	return compareStringSlice(tr.setting, settings)
+}
+
+func compareStringSlice(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i, aVal := range a {
+		if aVal != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func (tr *TestResource) Close() {
@@ -69,7 +77,7 @@ func logWait(start time.Time) {
 
 func PoolFactory(context.Context) (Resource, error) {
 	count.Add(1)
-	return &TestResource{lastID.Add(1), false, 0}, nil
+	return &TestResource{num: lastID.Add(1)}, nil
 }
 
 func FailFactory(context.Context) (Resource, error) {

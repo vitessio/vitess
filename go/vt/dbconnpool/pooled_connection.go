@@ -29,8 +29,12 @@ func (pc *PooledDBConnection) ApplySettings(ctx context.Context, settings []stri
 	panic("implement me")
 }
 
-func (pc *PooledDBConnection) SettingHash() uint64 {
-	return 0
+func (pc *PooledDBConnection) IsSettingsApplied() bool {
+	return false
+}
+
+func (pc *PooledDBConnection) IsSameSetting(_ []string) bool {
+	return true
 }
 
 // Recycle should be called to return the PooledDBConnection to the pool.

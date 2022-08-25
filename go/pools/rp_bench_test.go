@@ -162,8 +162,8 @@ func BenchmarkApplySettings(b *testing.B) {
 				if err := resource.ApplySettings(ctx, tcase.settings); err != nil {
 					b.Error(err)
 				}
-				if resource.SettingHash() == 0 {
-					b.Error("setting hash is 0")
+				if !resource.IsSettingsApplied() {
+					b.Error("setting should have been applied")
 				}
 			}
 		})

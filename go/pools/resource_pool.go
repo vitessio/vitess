@@ -25,8 +25,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cespare/xxhash/v2"
-
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/log"
@@ -62,7 +60,8 @@ type (
 	Resource interface {
 		Close()
 		ApplySettings(ctx context.Context, settings []string) error
-		SettingHash() uint64
+		IsSettingsApplied() bool
+		IsSameSetting(settings []string) bool
 	}
 
 	// Factory is a function that can be used to create a resource.
@@ -264,7 +263,7 @@ func (rp *ResourcePool) get(ctx context.Context) (resource Resource, err error) 
 	}
 
 	// if the resource has settings applied, we will close it and return a new one
-	if wrapper.resource != nil && wrapper.resource.SettingHash() != 0 {
+	if wrapper.resource != nil && wrapper.resource.IsSettingsApplied() {
 		wrapper.resource.Close()
 		wrapper.resource = nil
 		rp.active.Add(-1)
@@ -289,11 +288,7 @@ func (rp *ResourcePool) get(ctx context.Context) (resource Resource, err error) 
 func (rp *ResourcePool) getWithSettings(ctx context.Context, settings []string) (Resource, error) {
 	var wrapper resourceWrapper
 	var ok bool
-
-	settingHash, err := hash(settings)
-	if err != nil {
-		return nil, err
-	}
+	var err error
 
 	// Fetch
 	select {
@@ -320,7 +315,7 @@ func (rp *ResourcePool) getWithSettings(ctx context.Context, settings []string) 
 	}
 
 	// Checking setting hash id, if it is different, we will close the resource and return a new one later in unwrap
-	if wrapper.resource != nil && wrapper.resource.SettingHash() > 0 && wrapper.resource.SettingHash() != settingHash {
+	if wrapper.resource != nil && wrapper.resource.IsSettingsApplied() && !wrapper.resource.IsSameSetting(settings) {
 		wrapper.resource.Close()
 		wrapper.resource = nil
 		rp.active.Add(-1)
@@ -336,7 +331,7 @@ func (rp *ResourcePool) getWithSettings(ctx context.Context, settings []string) 
 		rp.active.Add(1)
 	}
 
-	if wrapper.resource.SettingHash() == 0 {
+	if !wrapper.resource.IsSettingsApplied() {
 		if err = wrapper.resource.ApplySettings(ctx, settings); err != nil {
 			return nil, err
 		}
@@ -349,17 +344,6 @@ func (rp *ResourcePool) getWithSettings(ctx context.Context, settings []string) 
 	return wrapper.resource, err
 }
 
-func hash(settings []string) (uint64, error) {
-	digest := xxhash.New()
-	for _, setting := range settings {
-		_, err := digest.WriteString(setting)
-		if err != nil {
-			return 0, err
-		}
-	}
-	return digest.Sum64(), nil
-}
-
 // Put will return a resource to the pool. For every successful Get,
 // a corresponding Put is required. If you no longer need a resource,
 // you will need to call Put(nil) instead of returning the closed resource.
@@ -367,18 +351,18 @@ func hash(settings []string) (uint64, error) {
 func (rp *ResourcePool) Put(resource Resource) {
 	var wrapper resourceWrapper
 	var recreated bool
-	var settingHash uint64
+	var hasSettings bool
 	if resource != nil {
 		wrapper = resourceWrapper{
 			resource: resource,
 			timeUsed: time.Now(),
 		}
-		settingHash = resource.SettingHash()
+		hasSettings = resource.IsSettingsApplied()
 	} else {
 		rp.reopenResource(&wrapper)
 		recreated = true
 	}
-	if settingHash == 0 || recreated {
+	if !hasSettings || recreated {
 		select {
 		case rp.resources <- wrapper:
 		default:
