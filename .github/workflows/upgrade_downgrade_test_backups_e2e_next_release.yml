@@ -1,0 +1,193 @@
+name: Upgrade Downgrade Testing - Backups - E2E - Next Release
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: format('{0}-{1}', ${{ github.ref }}, 'Upgrade Downgrade Testing - Backups - E2E - Next Release')
+  cancel-in-progress: true
+
+jobs:
+  get_next_release:
+    if: always()
+    name: Get latest release
+    runs-on: ubuntu-latest
+    outputs:
+      next_release: ${{ steps.output-next-release-ref.outputs.next_release_ref }}
+
+    steps:
+      - name: Check out to HEAD
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - name: Set output with latest release branch
+        id: output-next-release-ref
+        run: |
+          next_release_ref=$(./tools/get_next_release.sh ${{github.base_ref}} ${{github.ref}})
+          echo $next_release_ref
+          echo "::set-output name=next_release_ref::${next_release_ref}"
+
+  upgrade_downgrade_test_e2e:
+    timeout-minutes: 60
+    if: always() && needs.get_next_release.result == 'success'
+    name: Run Upgrade Downgrade Test
+    runs-on: ubuntu-18.04
+    needs:
+      - get_next_release
+
+    steps:
+    - name: Check if workflow needs to be skipped
+      id: skip-workflow
+      run: |
+        skip='false'
+        if [[ "${{github.event.pull_request}}" ==  "" ]] && [[ "${{github.ref}}" != "refs/heads/main" ]] && [[ ! "${{github.ref}}" =~ ^refs/heads/release-[0-9]+\.[0-9]$ ]] && [[ ! "${{github.ref}}" =~ "refs/tags/.*" ]]; then
+          skip='true'
+        fi
+        if [[ "${{needs.get_next_release.outputs.next_release}}" == "" ]]; then
+          skip='true'
+        fi
+        echo Skip ${skip}
+        echo "::set-output name=skip-workflow::${skip}"
+
+    - name: Check out commit's code
+      if: steps.skip-workflow.outputs.skip-workflow == 'false'
+      uses: actions/checkout@v2
+
+    - name: Check for changes in relevant files
+      if: steps.skip-workflow.outputs.skip-workflow == 'false'
+      uses: frouioui/paths-filter@main
+      id: changes
+      with:
+        token: ''
+        filters: |
+          end_to_end:
+            - 'go/**'
+            - 'go/**/*.go'
+            - 'test.go'
+            - 'Makefile'
+            - 'build.env'
+            - 'go.[sumod]'
+            - 'proto/*.proto'
+            - 'tools/**'
+            - 'config/**'
+            - 'bootstrap.sh'
+            - '.github/workflows/upgrade_downgrade_test_backups_e2e_next_release.yml'
+
+    - name: Set up Go
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      uses: actions/setup-go@v2
+      with:
+        go-version: 1.18.4
+
+    - name: Set up python
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      uses: actions/setup-python@v2
+
+    - name: Tune the OS
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      run: |
+        echo '1024 65535' | sudo tee -a /proc/sys/net/ipv4/ip_local_port_range
+
+    - name: Get base dependencies
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd curl git wget eatmydata
+        sudo service mysql stop
+        sudo service etcd stop
+        sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
+        sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
+        go mod download
+
+        # install JUnit report formatter
+        go install github.com/vitessio/go-junit-report@HEAD
+
+        wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
+        sudo apt-get install -y gnupg2
+        sudo dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
+        sudo apt-get update
+        sudo apt-get install percona-xtrabackup-24
+
+    # Checkout to the next release of Vitess
+    - name: Check out other version's code (${{ needs.get_next_release.outputs.next_release }})
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      uses: actions/checkout@v2
+      with:
+        ref: ${{ needs.get_next_release.outputs.next_release }}
+
+    - name: Get dependencies for the next release
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      run: |
+        go mod download
+
+    - name: Building next release's binaries
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      timeout-minutes: 10
+      run: |
+        source build.env
+        make build
+        mkdir -p /tmp/vitess-build-other/
+        cp -R bin /tmp/vitess-build-other/
+        rm -Rf bin/*
+
+    # Checkout to this build's commit
+    - name: Check out commit's code
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      uses: actions/checkout@v2
+
+    - name: Get dependencies for this commit
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      run: |
+        go mod download
+
+    - name: Building the binaries for this commit
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      timeout-minutes: 10
+      run: |
+        source build.env
+        make build
+        mkdir -p /tmp/vitess-build-current/
+        cp -R bin /tmp/vitess-build-current/
+
+    # Swap binaries, use next release's VTTablet
+    - name: Use next release's VTTablet
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      run: |
+        source build.env
+
+        rm -f $PWD/bin/vttablet
+        cp /tmp/vitess-build-other/bin/vttablet $PWD/bin/vttablet
+        vttablet --version
+
+    # Run test with VTTablet at version N+1 and VTBackup at version N
+    - name: Run backups tests (vttablet=N+1, vtbackup=N)
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      run: |
+        rm -rf /tmp/vtdataroot
+        mkdir -p /tmp/vtdataroot
+        set -x
+        source build.env
+        eatmydata -- go run test.go -skip-build -docker=false -print-log -follow -tag upgrade_downgrade_backups
+
+    # Swap binaries again, use current version's VTTablet, and next release's VTBackup
+    - name: Use current version VTTablet, and other version VTBackup
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      run: |
+        source build.env
+
+        rm -f $PWD/bin/vtbackup $PWD/bin/vttablet
+        cp /tmp/vitess-build-current/bin/vtbackup $PWD/bin/vtbackup
+        cp /tmp/vitess-build-other/bin/vttablet $PWD/bin/vttablet
+        vtbackup --version
+        vttablet --version
+
+    # Run test again with VTTablet at version N, and VTBackup at version N+1
+    - name: Run backups tests (vttablet=N, vtbackup=N+1)
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      run: |
+        rm -rf /tmp/vtdataroot
+        mkdir -p /tmp/vtdataroot
+        set -x
+        source build.env
+        eatmydata -- go run test.go -skip-build -keep-data -docker=false -print-log -follow -tag upgrade_downgrade_backups

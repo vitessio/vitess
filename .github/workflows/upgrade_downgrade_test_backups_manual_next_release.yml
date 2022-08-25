@@ -1,37 +1,19 @@
-name: Upgrade Downgrade Testing - Backups - Manual
+name: Upgrade Downgrade Testing - Backups - Manual - Next Release
 on:
   push:
   pull_request:
 
 concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Upgrade Downgrade Testing - Backups - Manual')
+  group: format('{0}-{1}', ${{ github.ref }}, 'Upgrade Downgrade Testing - Backups - Manual - Next Release')
   cancel-in-progress: true
 
 jobs:
-  get_upgrade_downgrade_label:
-    timeout-minutes: 5
-    if: github.repository == 'vitessio/vitess'
-    name: Get the Upgrade Downgrade pull request label
-    runs-on: ubuntu-latest
+  get_next_release:
+    if: always()
+    name: Get a recent LTS release
+    runs-on: ubuntu-20.04
     outputs:
-      hasLabel: ${{ steps.check_label.outputs.hasLabel }}
-
-    steps:
-      - name: Check Label for PR
-        if: github.event_name == 'pull_request'
-        uses: Dreamcodeio/pr-has-label-action@master
-        id: check_label
-        with:
-          label: Skip Upgrade Downgrade
-
-  get_previous_release:
-    if: always() && (github.event_name != 'pull_request' || needs.get_upgrade_downgrade_label.outputs.hasLabel != 'true')
-    name: Get latest release
-    runs-on: ubuntu-latest
-    needs:
-      - get_upgrade_downgrade_label
-    outputs:
-      previous_release: ${{ steps.output-previous-release-ref.outputs.previous_release_ref }}
+      next_release: ${{ steps.output-next-release-ref.outputs.next_release_ref }}
 
     steps:
       - name: Check out to HEAD
@@ -40,21 +22,20 @@ jobs:
           fetch-depth: 0
 
       - name: Set output with latest release branch
-        id: output-previous-release-ref
+        id: output-next-release-ref
         run: |
-          previous_release_ref=$(./tools/get_previous_release.sh ${{github.base_ref}} ${{github.ref}})
-          echo $previous_release_ref
-          echo "::set-output name=previous_release_ref::${previous_release_ref}"
+          next_release_ref=$(./tools/get_next_release.sh ${{github.base_ref}} ${{github.ref}})
+          echo $next_release_ref
+          echo "::set-output name=next_release_ref::${next_release_ref}"
 
   # This job usually execute in ± 20 minutes
   upgrade_downgrade_test_manual:
     timeout-minutes: 40
-    if: always() && (needs.get_previous_release.result == 'success')
-    name: Run Upgrade Downgrade Test Backup Manual
+    if: always() && (needs.get_next_release.result == 'success')
+    name: Run Upgrade Downgrade Test
     runs-on: ubuntu-20.04
     needs:
-      - get_upgrade_downgrade_label
-      - get_previous_release
+      - get_next_release
 
     steps:
     - name: Check if workflow needs to be skipped
@@ -62,6 +43,9 @@ jobs:
       run: |
         skip='false'
         if [[ "${{github.event.pull_request}}" ==  "" ]] && [[ "${{github.ref}}" != "refs/heads/main" ]] && [[ ! "${{github.ref}}" =~ ^refs/heads/release-[0-9]+\.[0-9]$ ]] && [[ ! "${{github.ref}}" =~ "refs/tags/.*" ]]; then
+          skip='true'
+        fi
+        if [[ "${{needs.get_next_release.outputs.next_release}}" == "" ]]; then
           skip='true'
         fi
         echo Skip ${skip}
@@ -90,6 +74,7 @@ jobs:
             - 'tools/**'
             - 'config/**'
             - 'bootstrap.sh'
+            - '.github/workflows/upgrade_downgrade_test_backups_manual_next_release.yml'
 
     - name: Set up Go
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
@@ -117,7 +102,7 @@ jobs:
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
         sudo DEBIAN_FRONTEND="noninteractive" apt-get update
-        # Uninstall any previously installed MySQL first
+        # Uninstall any nextly installed MySQL first
         sudo systemctl stop apparmor
         sudo DEBIAN_FRONTEND="noninteractive" apt-get remove -y --purge mysql-server mysql-client mysql-common
         sudo apt-get -y autoremove
@@ -128,9 +113,16 @@ jobs:
 
         # Install MySQL 8.0
         ####
-        ## Pin the MySQL version at 8.0.29 as Vitess 12.0 does not have the fix to support
-        ## backups of 8.0.30+ and no backport to v12.0 is currently planned.
-        ##   See: https://github.com/vitessio/vitess/pull/10847
+        ## Temporarily pin the MySQL version at 8.0.29 as Vitess 14.0.1 does not have the fix to support
+        ## backups of 8.0.30+. See: https://github.com/vitessio/vitess/pull/10847
+        ## TODO: remove this pin once the above fixes are included in a v14 release (will be in v14.0.2) OR
+        ##       Vitess 16.0.0-SNAPSHOT becomes the dev version on vitessio/main
+        #sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 467B942D3A79BD29
+        #wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.20-1_all.deb
+        #echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0 | sudo debconf-set-selections
+        #sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
+        #sudo apt-get update
+        #sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y mysql-server mysql-client
         ####
         wget -c https://cdn.mysql.com/archives/mysql-8.0/mysql-common_8.0.28-1ubuntu20.04_amd64.deb \
                 https://cdn.mysql.com/archives/mysql-8.0/mysql-community-client-core_8.0.28-1ubuntu20.04_amd64.deb \
@@ -150,7 +142,7 @@ jobs:
         sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld || echo "could not remove mysqld profile"
 
         # install JUnit report formatter
-        go get -u github.com/vitessio/go-junit-report@HEAD
+        go install github.com/vitessio/go-junit-report@HEAD
 
         wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
         sudo apt-get install -y gnupg2
@@ -158,19 +150,19 @@ jobs:
         sudo apt-get update
         sudo apt-get install percona-xtrabackup-24
 
-    # Checkout to the last release of Vitess
-    - name: Checkout to the other version's code (${{ needs.get_previous_release.outputs.previous_release }})
+    # Checkout to the next release of Vitess
+    - name: Checkout to the other version's code (${{ needs.get_next_release.outputs.next_release }})
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       uses: actions/checkout@v2
       with:
-        ref: ${{ needs.get_previous_release.outputs.previous_release }}
+        ref: ${{ needs.get_next_release.outputs.next_release }}
 
-    - name: Get dependencies for the last release
+    - name: Get dependencies for the next release
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
         go mod download
 
-    - name: Building last release's binaries
+    - name: Building next release's binaries
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 5
       run: |
@@ -222,7 +214,7 @@ jobs:
         ./backups/take_backups.sh
 
     # We insert more data in every table after the backup.
-    # When we restore the backup made in the previous step, we do not want to see the rows we are about to insert now.
+    # When we restore the backup made in the next step, we do not want to see the rows we are about to insert now.
     # The initial number of rows for each table is:
     #     - customer: 5
     #     - product:  2
@@ -245,8 +237,8 @@ jobs:
         source build.env ; cd examples/local
         ./backups/stop_tablets.sh
 
-    # We downgrade: we use the version N-1 of vttablet
-    - name: Downgrade - Swap binaries, use VTTablet N-1
+    # We downgrade: we use the version N+1 of vttablet
+    - name: Downgrade - Swap binaries, use VTTablet N+1
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
         source build.env
@@ -311,7 +303,7 @@ jobs:
         cp /tmp/vitess-build-current/bin/vttablet $PWD/bin/vttablet
         vttablet --version
 
-    # Starting the tablets again and restoring the previous backup.
+    # Starting the tablets again and restoring the next backup.
     - name: Start new tablets and restore
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 5
