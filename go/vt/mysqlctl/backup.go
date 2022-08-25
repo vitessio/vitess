@@ -45,6 +45,7 @@ const (
 	// the three bases for files to restore
 	backupInnodbDataHomeDir     = "InnoDBData"
 	backupInnodbLogGroupHomeDir = "InnoDBLog"
+	backupBinlogDir             = "BinLog"
 	backupData                  = "Data"
 
 	// backupManifestFileName is the MANIFEST file name within a backup.
