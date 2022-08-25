@@ -333,6 +333,9 @@ func (rp *ResourcePool) getWithSettings(ctx context.Context, settings []string) 
 
 	if !wrapper.resource.IsSettingsApplied() {
 		if err = wrapper.resource.ApplySettings(ctx, settings); err != nil {
+			// as we are not able to apply settings, we can return this connection to non-settings channel.
+			// TODO: may check the error code to see if it is recoverable or not.
+			rp.resources <- wrapper
 			return nil, err
 		}
 	}
