@@ -18,7 +18,6 @@ package gc
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"math"
 	"math/rand"
@@ -26,6 +25,10 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/spf13/pflag"
+
+	"vitess.io/vitess/go/vt/servenv"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/timer"
@@ -47,14 +50,25 @@ const (
 	throttlerAppName = "tablegc"
 )
 
-// checkInterval marks the interval between looking for tables in mysql server/schema
-var checkInterval = flag.Duration("gc_check_interval", 1*time.Hour, "Interval between garbage collection checks")
+var (
+	checkInterval           = 1 * time.Hour
+	purgeReentranceInterval = 1 * time.Minute
+	gcLifecycle             = "hold,purge,evac,drop"
+)
 
-// purgeReentranceInterval marks the interval between searching tables to purge
-var purgeReentranceInterval = flag.Duration("gc_purge_check_interval", 1*time.Minute, "Interval between purge discovery checks")
+func init() {
+	servenv.OnParseFor("vtcombo", registerGCFlags)
+	servenv.OnParseFor("vttablet", registerGCFlags)
+}
 
-// gcLifecycle is the sequence of steps the table goes through in the process of getting dropped
-var gcLifecycle = flag.String("table_gc_lifecycle", "hold,purge,evac,drop", "States for a DROP TABLE garbage collection cycle. Default is 'hold,purge,evac,drop', use any subset ('drop' implcitly always included)")
+func registerGCFlags(fs *pflag.FlagSet) {
+	// checkInterval marks the interval between looking for tables in mysql server/schema
+	fs.DurationVar(&checkInterval, "gc_check_interval", checkInterval, "Interval between garbage collection checks")
+	// purgeReentranceInterval marks the interval between searching tables to purge
+	fs.DurationVar(&purgeReentranceInterval, "gc_purge_check_interval", purgeReentranceInterval, "Interval between purge discovery checks")
+	// gcLifecycle is the sequence of steps the table goes through in the process of getting dropped
+	fs.StringVar(&gcLifecycle, "table_gc_lifecycle", gcLifecycle, "States for a DROP TABLE garbage collection cycle. Default is 'hold,purge,evac,drop', use any subset ('drop' implcitly always included)")
+}
 
 var (
 	sqlPurgeTable       = `delete from %a limit 50`
@@ -166,7 +180,7 @@ func (collector *TableGC) Open() (err error) {
 		// already open
 		return nil
 	}
-	collector.lifecycleStates, err = schema.ParseGCLifecycle(*gcLifecycle)
+	collector.lifecycleStates, err = schema.ParseGCLifecycle(gcLifecycle)
 	if err != nil {
 		return fmt.Errorf("Error parsing -table_gc_lifecycle flag: %+v", err)
 	}
@@ -233,9 +247,9 @@ func (collector *TableGC) Operate(ctx context.Context) {
 		collector.tickers = append(collector.tickers, t)
 		return t
 	}
-	tableCheckTicker := addTicker(*checkInterval)
+	tableCheckTicker := addTicker(checkInterval)
 	leaderCheckTicker := addTicker(leaderCheckInterval)
-	purgeReentranceTicker := addTicker(*purgeReentranceInterval)
+	purgeReentranceTicker := addTicker(purgeReentranceInterval)
 
 	log.Info("TableGC: operating")
 	for {
