@@ -32,3 +32,5 @@ loose_rpl_semi_sync_master_wait_no_slave = 1
 # closer than the default of 24 hours.  MySQL 8.0 only variable
 information_schema_stats_expiry = 3600
 
+# Only retry connecting to the primary 300 times before giving up
+master_retry_count = 300
