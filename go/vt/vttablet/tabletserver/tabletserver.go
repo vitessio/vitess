@@ -1449,7 +1449,7 @@ func truncateSQLAndBindVars(sql string, bindVariables map[string]*querypb.BindVa
 	}
 	fmt.Fprintf(buf, "}")
 	bv := buf.String()
-	maxLen := *sqlparser.TruncateErrLen
+	maxLen := sqlparser.TruncateErrLen
 	if maxLen != 0 && len(bv) > maxLen {
 		bv = bv[:maxLen-12] + " [TRUNCATED]"
 	}

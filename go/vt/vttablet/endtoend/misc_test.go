@@ -654,7 +654,7 @@ func TestLogTruncation(t *testing.T) {
 	}
 
 	// Test that the data too long error is truncated once the option is set
-	*sqlparser.TruncateErrLen = 30
+	sqlparser.TruncateErrLen = 30
 	_, err = client.Execute(
 		"insert into vitess_test values(123, null, :data, null)",
 		map[string]*querypb.BindVariable{"data": sqltypes.StringBindVariable("THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED")},
@@ -672,7 +672,7 @@ func TestLogTruncation(t *testing.T) {
 	}
 
 	// Test that trailing comments are preserved data too long error is truncated once the option is set
-	*sqlparser.TruncateErrLen = 30
+	sqlparser.TruncateErrLen = 30
 	_, err = client.Execute(
 		"insert into vitess_test values(123, null, :data, null) /* KEEP ME */",
 		map[string]*querypb.BindVariable{"data": sqltypes.StringBindVariable("THIS IS A LONG LONG LONG LONG QUERY STRING THAT SHOULD BE SHORTENED")},
