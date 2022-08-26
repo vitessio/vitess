@@ -232,6 +232,95 @@ func TestVStreamCopyBasic(t *testing.T) {
 	}
 }
 
+func TestVStreamCopyResume(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	gconn, conn, mconn, closeConnections := initialize(ctx, t)
+	defer closeConnections()
+
+	_, err := conn.ExecuteFetch("insert into t1(id1,id2) values(1,1), (2,2), (3,3), (4,4), (5,5), (6,6), (7,7), (8,8)", 1, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	mpos, err := mconn.PrimaryPosition()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = conn.ExecuteFetch("update t1 set id2 = 10 where id1 = 1", 1, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = conn.ExecuteFetch("insert into t1(id1,id2) values(9,9)", 1, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	lastPK := sqltypes.Result{
+		Fields: []*query.Field{{Name: "id1", Type: query.Type_INT32}},
+		Rows:   [][]sqltypes.Value{{sqltypes.NewInt32(4)}},
+	}
+	qr := sqltypes.ResultToProto3(&lastPK)
+	tablePKs := []*binlogdatapb.TableLastPK{{
+		TableName: "t1",
+		Lastpk:    qr,
+	}}
+	var shardGtids []*binlogdatapb.ShardGtid
+	var vgtid = &binlogdatapb.VGtid{}
+	shardGtids = append(shardGtids, &binlogdatapb.ShardGtid{
+		Keyspace: "ks",
+		Shard:    "-80",
+		Gtid:     fmt.Sprintf("%s/%s", mpos.GTIDSet.Flavor(), mpos),
+		TablePKs: tablePKs,
+	})
+	shardGtids = append(shardGtids, &binlogdatapb.ShardGtid{
+		Keyspace: "ks",
+		Shard:    "80-",
+		Gtid:     fmt.Sprintf("%s/%s", mpos.GTIDSet.Flavor(), mpos),
+		TablePKs: tablePKs,
+	})
+	vgtid.ShardGtids = shardGtids
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "t1",
+			Filter: "select * from t1",
+		}},
+	}
+	flags := &vtgatepb.VStreamFlags{}
+	reader, err := gconn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, flags)
+	_, _ = conn, mconn
+	if err != nil {
+		t.Fatal(err)
+	}
+	numExpectedRowEvents := 2 /* catchup events */ + 5 /* copy events */
+	require.NotNil(t, reader)
+	var evs []*binlogdatapb.VEvent
+	for {
+		e, err := reader.Recv()
+		switch err {
+		case nil:
+			for _, ev := range e {
+				if ev.Type == binlogdatapb.VEventType_ROW {
+					evs = append(evs, ev)
+					printEvents(evs) // for debugging ci failures
+				}
+			}
+			if len(evs) == numExpectedRowEvents {
+				t.Logf("TestVStreamCopyResume was successful")
+				return
+			}
+		case io.EOF:
+			log.Infof("stream ended\n")
+			cancel()
+		default:
+			log.Errorf("Returned err %v", err)
+			t.Fatalf("remote error: %v\n", err)
+		}
+	}
+}
+
 func TestVStreamCurrent(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
