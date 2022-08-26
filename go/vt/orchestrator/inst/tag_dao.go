@@ -19,8 +19,9 @@ package inst
 import (
 	"fmt"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/vt/orchestrator/db"
-	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/sqlutils"
 )
 
@@ -46,13 +47,19 @@ func PutInstanceTag(instanceKey *InstanceKey, tag *Tag) (err error) {
 
 func Untag(instanceKey *InstanceKey, tag *Tag) (tagged *InstanceKeyMap, err error) {
 	if tag == nil {
-		return nil, log.Errorf("Untag: tag is nil")
+		errMsg := "untag: tag is nil"
+		log.Errorf(errMsg)
+		return nil, fmt.Errorf(errMsg)
 	}
 	if tag.Negate {
-		return nil, log.Errorf("Untag: does not support negation")
+		errMsg := "untag: does not support negation"
+		log.Errorf(errMsg)
+		return nil, fmt.Errorf(errMsg)
 	}
 	if instanceKey == nil && !tag.HasValue {
-		return nil, log.Errorf("Untag: either indicate an instance or a tag value. Will not delete on-valued tag across instances")
+		errMsg := "untag: either indicate an instance or a tag value. Will not delete on-valued tag across instances"
+		log.Errorf(errMsg)
+		return nil, fmt.Errorf(errMsg)
 	}
 	var clause string
 	args := sqlutils.Args()
@@ -93,9 +100,10 @@ func Untag(instanceKey *InstanceKey, tag *Tag) (tagged *InstanceKeyMap, err erro
 			`, clause,
 	)
 	if _, err = db.ExecOrchestrator(query, args...); err != nil {
-		return tagged, log.Errore(err)
+		log.Error(err)
+		return tagged, err
 	}
-	AuditOperation("delete-instance-tag", instanceKey, tag.String())
+	_ = AuditOperation("delete-instance-tag", instanceKey, tag.String())
 	return tagged, nil
 }
 
@@ -117,11 +125,8 @@ func ReadInstanceTag(instanceKey *InstanceKey, tag *Tag) (tagExists bool, err er
 		return nil
 	})
 
-	return tagExists, log.Errore(err)
-}
-
-func InstanceTagExists(instanceKey *InstanceKey, tag *Tag) (tagExists bool, err error) {
-	return ReadInstanceTag(instanceKey, &Tag{TagName: tag.TagName})
+	log.Error(err)
+	return tagExists, err
 }
 
 func ReadInstanceTags(instanceKey *InstanceKey) (tags [](*Tag), err error) {
@@ -146,12 +151,15 @@ func ReadInstanceTags(instanceKey *InstanceKey) (tags [](*Tag), err error) {
 		return nil
 	})
 
-	return tags, log.Errore(err)
+	log.Error(err)
+	return tags, err
 }
 
 func GetInstanceKeysByTag(tag *Tag) (tagged *InstanceKeyMap, err error) {
 	if tag == nil {
-		return nil, log.Errorf("GetInstanceKeysByTag: tag is nil")
+		errMsg := "GetInstanceKeysByTag: tag is nil"
+		log.Errorf(errMsg)
+		return nil, fmt.Errorf(errMsg)
 	}
 	clause := ``
 	args := sqlutils.Args()
@@ -188,5 +196,6 @@ func GetInstanceKeysByTag(tag *Tag) (tagged *InstanceKeyMap, err error) {
 		tagged.AddKey(*key)
 		return nil
 	})
-	return tagged, log.Errore(err)
+	log.Error(err)
+	return tagged, err
 }

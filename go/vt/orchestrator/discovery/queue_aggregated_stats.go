@@ -19,7 +19,7 @@ package discovery
 import (
 	"github.com/montanaflynn/stats"
 
-	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
+	"vitess.io/vitess/go/vt/log"
 )
 
 // AggregatedQueueMetrics contains aggregate information some part queue metrics
@@ -55,12 +55,12 @@ func (q *Queue) DiscoveryQueueMetrics(period int) []QueueMetric {
 
 	// adjust period in case we ask for something that's too long
 	if period > len(q.metrics) {
-		log.Debugf("DiscoveryQueueMetrics: wanted: %d, adjusting period to %d", period, len(q.metrics))
+		log.Infof("DiscoveryQueueMetrics: wanted: %d, adjusting period to %d", period, len(q.metrics))
 		period = len(q.metrics)
 	}
 
 	a := q.metrics[len(q.metrics)-period:]
-	log.Debugf("DiscoveryQueueMetrics: returning values: %+v", a)
+	log.Infof("DiscoveryQueueMetrics: returning values: %+v", a)
 	return a
 }
 
@@ -90,6 +90,6 @@ func (q *Queue) AggregatedDiscoveryQueueMetrics(period int) *AggregatedQueueMetr
 		QueuedP95Entries:    percentile(intSliceToFloat64Slice(queuedEntries), 95),
 		QueuedMaxEntries:    max(intSliceToFloat64Slice(queuedEntries)),
 	}
-	log.Debugf("AggregatedDiscoveryQueueMetrics: returning values: %+v", a)
+	log.Infof("AggregatedDiscoveryQueueMetrics: returning values: %+v", a)
 	return a
 }

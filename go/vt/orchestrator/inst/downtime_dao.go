@@ -20,10 +20,10 @@ import (
 	"fmt"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/vt/orchestrator/config"
 	"vitess.io/vitess/go/vt/orchestrator/db"
-	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
-	"vitess.io/vitess/go/vt/orchestrator/external/golib/sqlutils"
 )
 
 // BeginDowntime will make mark an instance as downtimed (or override existing downtime period)
@@ -81,9 +81,10 @@ func BeginDowntime(downtime *Downtime) (err error) {
 		)
 	}
 	if err != nil {
-		return log.Errore(err)
+		log.Error(err)
+		return err
 	}
-	AuditOperation("begin-downtime", downtime.Key, fmt.Sprintf("owner: %s, reason: %s", downtime.Owner, downtime.Reason))
+	_ = AuditOperation("begin-downtime", downtime.Key, fmt.Sprintf("owner: %s, reason: %s", downtime.Owner, downtime.Reason))
 
 	return nil
 }
@@ -101,12 +102,13 @@ func EndDowntime(instanceKey *InstanceKey) (wasDowntimed bool, err error) {
 		instanceKey.Port,
 	)
 	if err != nil {
-		return wasDowntimed, log.Errore(err)
+		log.Error(err)
+		return wasDowntimed, err
 	}
 
 	if affected, _ := res.RowsAffected(); affected > 0 {
 		wasDowntimed = true
-		AuditOperation("end-downtime", instanceKey, "")
+		_ = AuditOperation("end-downtime", instanceKey, "")
 	}
 	return wasDowntimed, err
 }
@@ -180,10 +182,12 @@ func expireLostInRecoveryDowntime() error {
 // ExpireDowntime will remove the maintenance flag on old downtimes
 func ExpireDowntime() error {
 	if err := renewLostInRecoveryDowntime(); err != nil {
-		return log.Errore(err)
+		log.Error(err)
+		return err
 	}
 	if err := expireLostInRecoveryDowntime(); err != nil {
-		return log.Errore(err)
+		log.Error(err)
+		return err
 	}
 	{
 		res, err := db.ExecOrchestrator(`
@@ -194,47 +198,13 @@ func ExpireDowntime() error {
 			`,
 		)
 		if err != nil {
-			return log.Errore(err)
+			log.Error(err)
+			return err
 		}
 		if rowsAffected, _ := res.RowsAffected(); rowsAffected > 0 {
-			AuditOperation("expire-downtime", nil, fmt.Sprintf("Expired %d entries", rowsAffected))
+			_ = AuditOperation("expire-downtime", nil, fmt.Sprintf("Expired %d entries", rowsAffected))
 		}
 	}
 
 	return nil
-}
-
-func ReadDowntime() (result []Downtime, err error) {
-	query := `
-		select
-			hostname,
-			port,
-			begin_timestamp,
-			end_timestamp,
-			owner,
-			reason
-		from
-			database_instance_downtime
-		where
-			end_timestamp > now()
-		`
-	err = db.QueryOrchestratorRowsMap(query, func(m sqlutils.RowMap) error {
-		downtime := Downtime{
-			Key: &InstanceKey{},
-		}
-		downtime.Key.Hostname = m.GetString("hostname")
-		downtime.Key.Port = m.GetInt("port")
-		downtime.BeginsAt = m.GetTime("begin_timestamp")
-		downtime.EndsAt = m.GetTime("end_timestamp")
-		downtime.BeginsAtString = m.GetString("begin_timestamp")
-		downtime.EndsAtString = m.GetString("end_timestamp")
-		downtime.Owner = m.GetString("owner")
-		downtime.Reason = m.GetString("reason")
-
-		downtime.Duration = downtime.EndsAt.Sub(downtime.BeginsAt)
-
-		result = append(result, downtime)
-		return nil
-	})
-	return result, log.Errore(err)
 }

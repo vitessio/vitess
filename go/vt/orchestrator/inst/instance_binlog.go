@@ -20,7 +20,7 @@ import (
 	"errors"
 	"regexp"
 
-	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
+	"vitess.io/vitess/go/vt/log"
 )
 
 // Event entries may contains table IDs (can be different for same tables on different servers)
@@ -73,31 +73,13 @@ type BinlogEventCursor struct {
 	nextCoordinates   BinlogCoordinates
 }
 
-// fetchNextEventsFunc expected to return events starting at a given position, and automatically fetch those from next
-// binary log when no more rows are found in current log.
-// It is expected to return empty array with no error upon end of binlogs
-// It is expected to return error upon error...
-func NewBinlogEventCursor(startCoordinates BinlogCoordinates, fetchNextEventsFunc func(BinlogCoordinates) ([]BinlogEvent, error)) BinlogEventCursor {
-	events, _ := fetchNextEventsFunc(startCoordinates)
-	var initialNextCoordinates BinlogCoordinates
-	if len(events) > 0 {
-		initialNextCoordinates = events[0].NextBinlogCoordinates()
-	}
-	return BinlogEventCursor{
-		cachedEvents:      events,
-		currentEventIndex: -1,
-		fetchNextEvents:   fetchNextEventsFunc,
-		nextCoordinates:   initialNextCoordinates,
-	}
-}
-
 // nextEvent will return the next event entry from binary logs; it will automatically skip to next
 // binary log if need be.
 // Internally, it uses the cachedEvents array, so that it does not go to the MySQL server upon each call.
 // Returns nil upon reaching end of binary logs.
 func (binlogEventCursor *BinlogEventCursor) nextEvent(numEmptyEventsEvents int) (*BinlogEvent, error) {
 	if numEmptyEventsEvents > maxEmptyEventsEvents {
-		log.Debugf("End of logs. currentEventIndex: %d, nextCoordinates: %+v", binlogEventCursor.currentEventIndex, binlogEventCursor.nextCoordinates)
+		log.Infof("End of logs. currentEventIndex: %d, nextCoordinates: %+v", binlogEventCursor.currentEventIndex, binlogEventCursor.nextCoordinates)
 		// End of logs
 		return nil, nil
 	}
@@ -107,7 +89,7 @@ func (binlogEventCursor *BinlogEventCursor) nextEvent(numEmptyEventsEvents int) 
 		if err != nil {
 			return nil, err
 		}
-		log.Debugf("zero cached events, next file: %+v", nextFileCoordinates)
+		log.Infof("zero cached events, next file: %+v", nextFileCoordinates)
 		binlogEventCursor.cachedEvents, err = binlogEventCursor.fetchNextEvents(nextFileCoordinates)
 		if err != nil {
 			return nil, err
