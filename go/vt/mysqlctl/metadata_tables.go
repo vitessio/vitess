@@ -18,7 +18,6 @@ package mysqlctl
 
 import (
 	"bytes"
-	"flag"
 	"fmt"
 
 	"context"
@@ -47,7 +46,7 @@ const (
 )
 
 var (
-	InitPopulateMetadata       = flag.Bool("init_populate_metadata", false, "(init parameter) populate metadata tables even if restore_from_backup is disabled. If restore_from_backup is enabled, metadata tables are always populated regardless of this flag.")
+	//InitPopulateMetadata       = flag.Bool("init_populate_metadata", false, "(init parameter) populate metadata tables even if restore_from_backup is disabled. If restore_from_backup is enabled, metadata tables are always populated regardless of this flag.")
 	sqlAlterLocalMetadataTable = []string{
 		`ALTER TABLE _vt.local_metadata ADD COLUMN db_name VARBINARY(255) NOT NULL DEFAULT ''`,
 		`ALTER TABLE _vt.local_metadata DROP PRIMARY KEY, ADD PRIMARY KEY(name, db_name)`,

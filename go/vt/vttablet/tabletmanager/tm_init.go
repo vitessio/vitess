@@ -79,15 +79,15 @@ const denyListQueryList string = "DenyListQueryRules"
 
 var (
 	// The following flags initialize the tablet record.
-	tabletHostname     = flag.String("tablet_hostname", "", "if not empty, this hostname will be assumed instead of trying to resolve it")
-	initKeyspace       = flag.String("init_keyspace", "", "(init parameter) keyspace to use for this tablet")
-	initShard          = flag.String("init_shard", "", "(init parameter) shard to use for this tablet")
-	initTabletType     = flag.String("init_tablet_type", "", "(init parameter) the tablet type to use for this tablet.")
-	initDbNameOverride = flag.String("init_db_name_override", "", "(init parameter) override the name of the db used by vttablet. Without this flag, the db name defaults to vt_<keyspacename>")
-	skipBuildInfoTags  = flag.String("vttablet_skip_buildinfo_tags", "/.*/", "comma-separated list of buildinfo tags to skip from merging with -init_tags. each tag is either an exact match or a regular expression of the form '/regexp/'.")
-	initTags           flagutil.StringMapValue
-
-	initTimeout = flag.Duration("init_timeout", 1*time.Minute, "(init parameter) timeout to use for the init phase.")
+	tabletHostname       = flag.String("tablet_hostname", "", "if not empty, this hostname will be assumed instead of trying to resolve it")
+	initKeyspace         = flag.String("init_keyspace", "", "(init parameter) keyspace to use for this tablet")
+	initShard            = flag.String("init_shard", "", "(init parameter) shard to use for this tablet")
+	initTabletType       = flag.String("init_tablet_type", "", "(init parameter) the tablet type to use for this tablet.")
+	initDbNameOverride   = flag.String("init_db_name_override", "", "(init parameter) override the name of the db used by vttablet. Without this flag, the db name defaults to vt_<keyspacename>")
+	skipBuildInfoTags    = flag.String("vttablet_skip_buildinfo_tags", "/.*/", "comma-separated list of buildinfo tags to skip from merging with -init_tags. each tag is either an exact match or a regular expression of the form '/regexp/'.")
+	initTags             flagutil.StringMapValue
+	initPopulateMetadata = flag.Bool("init_populate_metadata", false, "(init parameter) populate metadata tables even if restore_from_backup is disabled. If restore_from_backup is enabled, metadata tables are always populated regardless of this flag.")
+	initTimeout          = flag.Duration("init_timeout", 1*time.Minute, "(init parameter) timeout to use for the init phase.")
 
 	// statsTabletType is set to expose the current tablet type.
 	statsTabletType *stats.String
@@ -805,7 +805,7 @@ func (tm *TabletManager) handleRestore(ctx context.Context) (bool, error) {
 		return true, nil
 	}
 	// optionally populate metadata records
-	if *mysqlctl.InitPopulateMetadata {
+	if *initPopulateMetadata {
 		localMetadata := tm.getLocalMetadataValues(tablet.Type)
 		if tm.Cnf != nil { // we are managing mysqld
 			// we'll use batchCtx here because we are still initializing and can't proceed unless this succeeds
