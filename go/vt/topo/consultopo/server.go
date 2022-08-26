@@ -48,17 +48,14 @@ var (
 )
 
 func init() {
-	servenv.OnParseFor("topo2topo", registerConsulFlags)
 	servenv.OnParseFor("vtbackup", registerConsulFlags)
 	servenv.OnParseFor("vtcombo", registerConsulFlags)
 	servenv.OnParseFor("vtctl", registerConsulFlags)
 	servenv.OnParseFor("vtctld", registerConsulFlags)
 	servenv.OnParseFor("vtgate", registerConsulFlags)
 	servenv.OnParseFor("vtgr", registerConsulFlags)
-	servenv.OnParseFor("vtorc", registerConsulFlags)
 	servenv.OnParseFor("vttablet", registerConsulFlags)
-	servenv.OnParseFor("vttestserver", registerConsulFlags)
-	servenv.OnParseFor("zk", registerConsulFlags)
+	servenv.OnParseFor("vttablet", registerConsulFlags)
 }
 
 func registerConsulFlags(fs *pflag.FlagSet) {
