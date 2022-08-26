@@ -21,6 +21,8 @@ import (
 	"regexp"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/vt/orchestrator/config"
@@ -34,7 +36,6 @@ import (
 	"github.com/patrickmn/go-cache"
 	"github.com/rcrowley/go-metrics"
 
-	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/sqlutils"
 )
 
@@ -44,8 +45,8 @@ var analysisChangeWriteCounter = metrics.NewCounter()
 var recentInstantAnalysis *cache.Cache
 
 func init() {
-	metrics.Register("analysis.change.write.attempt", analysisChangeWriteAttemptCounter)
-	metrics.Register("analysis.change.write", analysisChangeWriteCounter)
+	_ = metrics.Register("analysis.change.write.attempt", analysisChangeWriteAttemptCounter)
+	_ = metrics.Register("analysis.change.write", analysisChangeWriteCounter)
 
 	go initializeAnalysisDaoPostConfiguration()
 }
@@ -436,7 +437,7 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		a.ClusterDetails.ReadRecoveryInfo()
 
 		a.Replicas = *NewInstanceKeyMap()
-		a.Replicas.ReadCommaDelimitedList(m.GetString("replica_hosts"))
+		_ = a.Replicas.ReadCommaDelimitedList(m.GetString("replica_hosts"))
 
 		countValidOracleGTIDReplicas := m.GetUint("count_valid_oracle_gtid_replicas")
 		a.OracleGTIDImmediateTopology = countValidOracleGTIDReplicas == a.CountValidReplicas && a.CountValidReplicas > 0
@@ -472,7 +473,7 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 				a.ClusterDetails.ClusterName, a.IsPrimary, a.LastCheckValid, a.LastCheckPartialSuccess, a.CountReplicas, a.CountValidReplicas, a.CountValidReplicatingReplicas, a.CountLaggingReplicas, a.CountDelayedReplicas, a.CountReplicasFailingToConnectToPrimary,
 			)
 			if util.ClearToLog("analysis_dao", analysisMessage) {
-				log.Debugf(analysisMessage)
+				log.Infof(analysisMessage)
 			}
 		}
 		if clusters[a.SuggestedClusterAlias] == nil {
@@ -694,10 +695,10 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 	})
 
 	if err != nil {
-		return result, log.Errore(err)
+		log.Error(err)
 	}
 	// TODO: result, err = getConcensusReplicationAnalysis(result)
-	return result, log.Errore(err)
+	return result, err
 }
 
 // auditInstanceAnalysisInChangelog will write down an instance's analysis in the database_instance_analysis_changelog table.
@@ -731,11 +732,13 @@ func auditInstanceAnalysisInChangelog(instanceKey *InstanceKey, analysisCode Ana
 			string(analysisCode), instanceKey.Hostname, instanceKey.Port, string(analysisCode),
 		)
 		if err != nil {
-			return log.Errore(err)
+			log.Error(err)
+			return err
 		}
 		rows, err := sqlResult.RowsAffected()
 		if err != nil {
-			return log.Errore(err)
+			log.Error(err)
+			return err
 		}
 		lastAnalysisChanged = (rows > 0)
 	}
@@ -750,7 +753,8 @@ func auditInstanceAnalysisInChangelog(instanceKey *InstanceKey, analysisCode Ana
 			instanceKey.Hostname, instanceKey.Port, string(analysisCode),
 		)
 		if err != nil {
-			return log.Errore(err)
+			log.Error(err)
+			return err
 		}
 	}
 	recentInstantAnalysis.Set(instanceKey.DisplayString(), analysisCode, cache.DefaultExpiration)
@@ -770,7 +774,8 @@ func auditInstanceAnalysisInChangelog(instanceKey *InstanceKey, analysisCode Ana
 	if err == nil {
 		analysisChangeWriteCounter.Inc(1)
 	}
-	return log.Errore(err)
+	log.Error(err)
+	return err
 }
 
 // ExpireInstanceAnalysisChangelog removes old-enough analysis entries from the changelog
@@ -783,7 +788,8 @@ func ExpireInstanceAnalysisChangelog() error {
 			`,
 		config.Config.UnseenInstanceForgetHours,
 	)
-	return log.Errore(err)
+	log.Error(err)
+	return err
 }
 
 // ReadReplicationAnalysisChangelog
@@ -814,33 +820,7 @@ func ReadReplicationAnalysisChangelog() (res [](*ReplicationAnalysisChangelog), 
 	})
 
 	if err != nil {
-		log.Errore(err)
+		log.Error(err)
 	}
 	return res, err
-}
-
-// ReadPeerAnalysisMap reads raft-peer failure analysis, and returns a PeerAnalysisMap,
-// indicating how many peers see which analysis
-func ReadPeerAnalysisMap() (peerAnalysisMap PeerAnalysisMap, err error) {
-	peerAnalysisMap = make(PeerAnalysisMap)
-	query := `
-		select
-      hostname,
-      port,
-			analysis
-		from
-			database_instance_peer_analysis
-		order by
-			peer, hostname, port
-		`
-	err = db.QueryOrchestratorRowsMap(query, func(m sqlutils.RowMap) error {
-		instanceKey := InstanceKey{Hostname: m.GetString("hostname"), Port: m.GetInt("port")}
-		analysis := m.GetString("analysis")
-		instanceAnalysis := NewInstanceAnalysis(&instanceKey, AnalysisCode(analysis))
-		mapKey := instanceAnalysis.String()
-		peerAnalysisMap[mapKey] = peerAnalysisMap[mapKey] + 1
-
-		return nil
-	})
-	return peerAnalysisMap, log.Errore(err)
 }

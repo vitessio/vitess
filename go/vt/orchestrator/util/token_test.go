@@ -3,6 +3,8 @@ package util
 import (
 	"testing"
 
+	"vitess.io/vitess/go/vt/log"
+
 	test "vitess.io/vitess/go/vt/orchestrator/external/golib/tests"
 )
 
@@ -17,6 +19,7 @@ func TestNewToken(t *testing.T) {
 }
 
 func TestNewTokenRandom(t *testing.T) {
+	log.Infof("test")
 	token1 := NewToken()
 	token2 := NewToken()
 

@@ -20,7 +20,7 @@ import (
 	"os/user"
 	"strings"
 
-	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
+	"vitess.io/vitess/go/vt/log"
 )
 
 // UserInGroups checks if the given username is in the given unix
