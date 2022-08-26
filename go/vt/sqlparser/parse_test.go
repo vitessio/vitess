@@ -398,6 +398,9 @@ var (
 		}, {
 			input: "with recursive t (n) as (select (1) from dual union select n + 1 from t where n < 100) select sum(n) from t",
 		}, {
+			input:  "with recursive a as (select 1 union select 2) select 10 union select 20",
+			output: "with recursive a as (select 1 from dual union select 2 from dual) select 10 from dual union select 20 from dual",
+		}, {
 			input: "with cte1 as (select a from b) update c set d = e",
 		}, {
 			input: "with recursive cte1 as (select a from b) update c set d = e",
