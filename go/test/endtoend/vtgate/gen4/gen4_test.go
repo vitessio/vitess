@@ -430,9 +430,9 @@ func TestOuterJoin(t *testing.T) {
 }
 
 func TestUsingJoin(t *testing.T) {
-	require.NoError(t, utils.WaitForAuthoritative(t, clusterInstance, shardedKs, "t1"))
-	require.NoError(t, utils.WaitForAuthoritative(t, clusterInstance, shardedKs, "t2"))
-	require.NoError(t, utils.WaitForAuthoritative(t, clusterInstance, shardedKs, "t3"))
+	require.NoError(t, utils.WaitForAuthoritative(t, clusterInstance.VtgateProcess, shardedKs, "t1"))
+	require.NoError(t, utils.WaitForAuthoritative(t, clusterInstance.VtgateProcess, shardedKs, "t2"))
+	require.NoError(t, utils.WaitForAuthoritative(t, clusterInstance.VtgateProcess, shardedKs, "t3"))
 
 	mcmp, closer := start(t)
 	defer closer()

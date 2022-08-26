@@ -168,19 +168,44 @@ Gen4 error: unsupported: cross-shard correlated subquery
                 "Table": "orders"
               },
               {
-                "OperatorType": "Route",
+                "OperatorType": "VindexLookup",
                 "Variant": "EqualUnique",
                 "Keyspace": {
                   "Name": "main",
                   "Sharded": true
                 },
-                "FieldQuery": "select 1 from lineitem where 1 != 1",
-                "Query": "select 1 from lineitem where l_commitdate \u003c l_receiptdate and l_orderkey = :o_orderkey",
-                "Table": "lineitem",
                 "Values": [
                   ":o_orderkey"
                 ],
-                "Vindex": "lineitem_map"
+                "Vindex": "lineitem_map",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "IN",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select l_orderkey, l_linenumber from lineitem_map where 1 != 1",
+                    "Query": "select l_orderkey, l_linenumber from lineitem_map where l_orderkey in ::__vals",
+                    "Table": "lineitem_map",
+                    "Values": [
+                      ":l_orderkey"
+                    ],
+                    "Vindex": "md5"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "ByDestination",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 1 from lineitem where 1 != 1",
+                    "Query": "select 1 from lineitem where l_commitdate \u003c l_receiptdate and l_orderkey = :o_orderkey",
+                    "Table": "lineitem"
+                  }
+                ]
               }
             ]
           }
@@ -291,19 +316,44 @@ Gen4 error: unsupported: cross-shard correlated subquery
                             "TableName": "lineitem_supplier",
                             "Inputs": [
                               {
-                                "OperatorType": "Route",
+                                "OperatorType": "VindexLookup",
                                 "Variant": "EqualUnique",
                                 "Keyspace": {
                                   "Name": "main",
                                   "Sharded": true
                                 },
-                                "FieldQuery": "select l_suppkey, sum(l_extendedprice * (1 - l_discount)) as revenue, weight_string(l_suppkey) from lineitem where 1 != 1 group by l_suppkey, weight_string(l_suppkey)",
-                                "Query": "select l_suppkey, sum(l_extendedprice * (1 - l_discount)) as revenue, weight_string(l_suppkey) from lineitem where l_orderkey = :o_orderkey group by l_suppkey, weight_string(l_suppkey)",
-                                "Table": "lineitem",
                                 "Values": [
                                   ":o_orderkey"
                                 ],
-                                "Vindex": "lineitem_map"
+                                "Vindex": "lineitem_map",
+                                "Inputs": [
+                                  {
+                                    "OperatorType": "Route",
+                                    "Variant": "IN",
+                                    "Keyspace": {
+                                      "Name": "main",
+                                      "Sharded": true
+                                    },
+                                    "FieldQuery": "select l_orderkey, l_linenumber from lineitem_map where 1 != 1",
+                                    "Query": "select l_orderkey, l_linenumber from lineitem_map where l_orderkey in ::__vals",
+                                    "Table": "lineitem_map",
+                                    "Values": [
+                                      ":l_orderkey"
+                                    ],
+                                    "Vindex": "md5"
+                                  },
+                                  {
+                                    "OperatorType": "Route",
+                                    "Variant": "ByDestination",
+                                    "Keyspace": {
+                                      "Name": "main",
+                                      "Sharded": true
+                                    },
+                                    "FieldQuery": "select l_suppkey, sum(l_extendedprice * (1 - l_discount)) as revenue, weight_string(l_suppkey) from lineitem where 1 != 1 group by l_suppkey, weight_string(l_suppkey)",
+                                    "Query": "select l_suppkey, sum(l_extendedprice * (1 - l_discount)) as revenue, weight_string(l_suppkey) from lineitem where l_orderkey = :o_orderkey group by l_suppkey, weight_string(l_suppkey)",
+                                    "Table": "lineitem"
+                                  }
+                                ]
                               },
                               {
                                 "OperatorType": "Route",
@@ -709,19 +759,44 @@ Gen4 error: aggregation on columns from different sources not supported yet
                                 "Table": "orders"
                               },
                               {
-                                "OperatorType": "Route",
+                                "OperatorType": "VindexLookup",
                                 "Variant": "EqualUnique",
                                 "Keyspace": {
                                   "Name": "main",
                                   "Sharded": true
                                 },
-                                "FieldQuery": "select 1, sum(l_extendedprice * (1 - l_discount)) as revenue from lineitem where 1 != 1 group by 1",
-                                "Query": "select 1, sum(l_extendedprice * (1 - l_discount)) as revenue from lineitem where l_returnflag = 'R' and l_orderkey = :o_orderkey group by 1",
-                                "Table": "lineitem",
                                 "Values": [
                                   ":o_orderkey"
                                 ],
-                                "Vindex": "lineitem_map"
+                                "Vindex": "lineitem_map",
+                                "Inputs": [
+                                  {
+                                    "OperatorType": "Route",
+                                    "Variant": "IN",
+                                    "Keyspace": {
+                                      "Name": "main",
+                                      "Sharded": true
+                                    },
+                                    "FieldQuery": "select l_orderkey, l_linenumber from lineitem_map where 1 != 1",
+                                    "Query": "select l_orderkey, l_linenumber from lineitem_map where l_orderkey in ::__vals",
+                                    "Table": "lineitem_map",
+                                    "Values": [
+                                      ":l_orderkey"
+                                    ],
+                                    "Vindex": "md5"
+                                  },
+                                  {
+                                    "OperatorType": "Route",
+                                    "Variant": "ByDestination",
+                                    "Keyspace": {
+                                      "Name": "main",
+                                      "Sharded": true
+                                    },
+                                    "FieldQuery": "select 1, sum(l_extendedprice * (1 - l_discount)) as revenue from lineitem where 1 != 1 group by 1",
+                                    "Query": "select 1, sum(l_extendedprice * (1 - l_discount)) as revenue from lineitem where l_returnflag = 'R' and l_orderkey = :o_orderkey group by 1",
+                                    "Table": "lineitem"
+                                  }
+                                ]
                               }
                             ]
                           },
@@ -839,19 +914,44 @@ Gen4 error: unsupported: in scatter query: complex aggregate expression
                     "Table": "orders"
                   },
                   {
-                    "OperatorType": "Route",
+                    "OperatorType": "VindexLookup",
                     "Variant": "EqualUnique",
                     "Keyspace": {
                       "Name": "main",
                       "Sharded": true
                     },
-                    "FieldQuery": "select count(*), l_shipmode, weight_string(l_shipmode) from lineitem where 1 != 1 group by l_shipmode, weight_string(l_shipmode)",
-                    "Query": "select count(*), l_shipmode, weight_string(l_shipmode) from lineitem where l_shipmode in ('MAIL', 'SHIP') and l_commitdate \u003c l_receiptdate and l_shipdate \u003c l_commitdate and l_receiptdate \u003e= date('1994-01-01') and l_receiptdate \u003c date('1994-01-01') + interval '1' year and l_orderkey = :o_orderkey group by l_shipmode, weight_string(l_shipmode)",
-                    "Table": "lineitem",
                     "Values": [
                       ":o_orderkey"
                     ],
-                    "Vindex": "lineitem_map"
+                    "Vindex": "lineitem_map",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "IN",
+                        "Keyspace": {
+                          "Name": "main",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select l_orderkey, l_linenumber from lineitem_map where 1 != 1",
+                        "Query": "select l_orderkey, l_linenumber from lineitem_map where l_orderkey in ::__vals",
+                        "Table": "lineitem_map",
+                        "Values": [
+                          ":l_orderkey"
+                        ],
+                        "Vindex": "md5"
+                      },
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "ByDestination",
+                        "Keyspace": {
+                          "Name": "main",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select count(*), l_shipmode, weight_string(l_shipmode) from lineitem where 1 != 1 group by l_shipmode, weight_string(l_shipmode)",
+                        "Query": "select count(*), l_shipmode, weight_string(l_shipmode) from lineitem where l_shipmode in ('MAIL', 'SHIP') and l_commitdate \u003c l_receiptdate and l_shipdate \u003c l_commitdate and l_receiptdate \u003e= date('1994-01-01') and l_receiptdate \u003c date('1994-01-01') + interval '1' year and l_orderkey = :o_orderkey group by l_shipmode, weight_string(l_shipmode)",
+                        "Table": "lineitem"
+                      }
+                    ]
                   }
                 ]
               }

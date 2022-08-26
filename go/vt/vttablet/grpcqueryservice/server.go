@@ -85,8 +85,9 @@ func (q *query) Begin(ctx context.Context, request *querypb.BeginRequest) (respo
 	}
 
 	return &querypb.BeginResponse{
-		TransactionId: state.TransactionID,
-		TabletAlias:   state.TabletAlias,
+		TransactionId:       state.TransactionID,
+		TabletAlias:         state.TabletAlias,
+		SessionStateChanges: state.SessionStateChanges,
 	}, nil
 }
 
@@ -252,9 +253,10 @@ func (q *query) BeginExecute(ctx context.Context, request *querypb.BeginExecuteR
 		return nil, vterrors.ToGRPC(err)
 	}
 	return &querypb.BeginExecuteResponse{
-		Result:        sqltypes.ResultToProto3(result),
-		TransactionId: state.TransactionID,
-		TabletAlias:   state.TabletAlias,
+		Result:              sqltypes.ResultToProto3(result),
+		TransactionId:       state.TransactionID,
+		TabletAlias:         state.TabletAlias,
+		SessionStateChanges: state.SessionStateChanges,
 	}, nil
 }
 
@@ -271,8 +273,9 @@ func (q *query) BeginStreamExecute(request *querypb.BeginStreamExecuteRequest, s
 		})
 	})
 	errInLastPacket := stream.Send(&querypb.BeginStreamExecuteResponse{
-		TransactionId: state.TransactionID,
-		TabletAlias:   state.TabletAlias,
+		TransactionId:       state.TransactionID,
+		TabletAlias:         state.TabletAlias,
+		SessionStateChanges: state.SessionStateChanges,
 	})
 	if err != nil {
 		return vterrors.ToGRPC(err)
@@ -419,19 +422,21 @@ func (q *query) ReserveBeginExecute(ctx context.Context, request *querypb.Reserv
 		// if we have a valid reservedID, return the error in-band
 		if state.ReservedID != 0 {
 			return &querypb.ReserveBeginExecuteResponse{
-				Error:         vterrors.ToVTRPC(err),
-				TransactionId: state.TransactionID,
-				ReservedId:    state.ReservedID,
-				TabletAlias:   state.TabletAlias,
+				Error:               vterrors.ToVTRPC(err),
+				TransactionId:       state.TransactionID,
+				ReservedId:          state.ReservedID,
+				TabletAlias:         state.TabletAlias,
+				SessionStateChanges: state.SessionStateChanges,
 			}, nil
 		}
 		return nil, vterrors.ToGRPC(err)
 	}
 	return &querypb.ReserveBeginExecuteResponse{
-		Result:        sqltypes.ResultToProto3(result),
-		TransactionId: state.TransactionID,
-		ReservedId:    state.ReservedID,
-		TabletAlias:   state.TabletAlias,
+		Result:              sqltypes.ResultToProto3(result),
+		TransactionId:       state.TransactionID,
+		ReservedId:          state.ReservedID,
+		TabletAlias:         state.TabletAlias,
+		SessionStateChanges: state.SessionStateChanges,
 	}, nil
 }
 
@@ -448,9 +453,10 @@ func (q *query) ReserveBeginStreamExecute(request *querypb.ReserveBeginStreamExe
 		})
 	})
 	errInLastPacket := stream.Send(&querypb.ReserveBeginStreamExecuteResponse{
-		ReservedId:    state.ReservedID,
-		TransactionId: state.TransactionID,
-		TabletAlias:   state.TabletAlias,
+		ReservedId:          state.ReservedID,
+		TransactionId:       state.TransactionID,
+		TabletAlias:         state.TabletAlias,
+		SessionStateChanges: state.SessionStateChanges,
 	})
 	if err != nil {
 		return vterrors.ToGRPC(err)

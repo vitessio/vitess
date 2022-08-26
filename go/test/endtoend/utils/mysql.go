@@ -39,22 +39,24 @@ import (
 // The mysql.ConnParams to connect to the new database is returned, along with a function to
 // teardown the database.
 func NewMySQL(cluster *cluster.LocalProcessCluster, dbName string, schemaSQL ...string) (mysql.ConnParams, func(), error) {
+	return NewMySQLWithDetails(cluster.GetAndReservePort(), cluster.Hostname, dbName, schemaSQL...)
+}
+
+func NewMySQLWithDetails(port int, hostname, dbName string, schemaSQL ...string) (mysql.ConnParams, func(), error) {
 	mysqlDir, err := createMySQLDir()
 	if err != nil {
 		return mysql.ConnParams{}, nil, err
 	}
-
 	initMySQLFile, err := createInitSQLFile(mysqlDir, dbName)
 	if err != nil {
 		return mysql.ConnParams{}, nil, err
 	}
 
-	mysqlPort := cluster.GetAndReservePort()
+	mysqlPort := port
 	mysqld, mycnf, err := mysqlctl.CreateMysqldAndMycnf(0, "", int32(mysqlPort))
 	if err != nil {
 		return mysql.ConnParams{}, nil, err
 	}
-
 	err = initMysqld(mysqld, mycnf, initMySQLFile)
 	if err != nil {
 		return mysql.ConnParams{}, nil, err
@@ -62,18 +64,16 @@ func NewMySQL(cluster *cluster.LocalProcessCluster, dbName string, schemaSQL ...
 
 	params := mysql.ConnParams{
 		UnixSocket: mycnf.SocketFile,
-		Host:       cluster.Hostname,
+		Host:       hostname,
 		Uname:      "root",
 		DbName:     dbName,
 	}
-
 	for _, sql := range schemaSQL {
 		err = prepareMySQLWithSchema(params, sql)
 		if err != nil {
 			return mysql.ConnParams{}, nil, err
 		}
 	}
-
 	return params, func() {
 		ctx := context.Background()
 		_ = mysqld.Teardown(ctx, mycnf, true)

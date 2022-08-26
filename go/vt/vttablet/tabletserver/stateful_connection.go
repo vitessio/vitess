@@ -17,6 +17,7 @@ limitations under the License.
 package tabletserver
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -31,8 +32,6 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
-
-	"context"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -103,14 +102,15 @@ func (sc *StatefulConnection) Exec(ctx context.Context, query string, maxrows in
 	return r, nil
 }
 
-func (sc *StatefulConnection) execWithRetry(ctx context.Context, query string, maxrows int, wantfields bool) error {
+func (sc *StatefulConnection) execWithRetry(ctx context.Context, query string, maxrows int, wantfields bool) (string, error) {
 	if sc.IsClosed() {
-		return vterrors.New(vtrpcpb.Code_CANCELED, "connection is closed")
+		return "", vterrors.New(vtrpcpb.Code_CANCELED, "connection is closed")
 	}
-	if _, err := sc.dbConn.Exec(ctx, query, maxrows, wantfields); err != nil {
-		return err
+	res, err := sc.dbConn.Exec(ctx, query, maxrows, wantfields)
+	if err != nil {
+		return "", err
 	}
-	return nil
+	return res.SessionStateChanges, nil
 }
 
 // FetchNext returns the next result set.

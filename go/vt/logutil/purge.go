@@ -17,20 +17,34 @@ limitations under the License.
 package logutil
 
 import (
-	"flag"
 	"fmt"
 	"os"
 	"path"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/spf13/pflag"
+
+	_flag "vitess.io/vitess/go/internal/flag"
 )
 
 var (
-	keepLogsByCtime   = flag.Duration("keep_logs", 0, "keep logs for this long (using ctime) (zero to keep forever)")
-	keepLogsByMtime   = flag.Duration("keep_logs_by_mtime", 0, "keep logs for this long (using mtime) (zero to keep forever)")
-	purgeLogsInterval = flag.Duration("purge_logs_interval", 1*time.Hour, "how often try to remove old logs")
+	keepLogsByCtime   time.Duration
+	keepLogsByMtime   time.Duration
+	purgeLogsInterval = 1 * time.Hour
 )
+
+// RegisterFlags installs logutil flags on the given FlagSet.
+//
+// `go/cmd/*` entrypoints should either use servenv.ParseFlags(WithArgs)? which
+// calls this function, or call this function directly before parsing
+// command-line arguments.
+func RegisterFlags(fs *pflag.FlagSet) {
+	fs.DurationVar(&keepLogsByCtime, "keep_logs", keepLogsByCtime, "keep logs for this long (using ctime) (zero to keep forever)")
+	fs.DurationVar(&keepLogsByMtime, "keep_logs_by_mtime", keepLogsByMtime, "keep logs for this long (using mtime) (zero to keep forever)")
+	fs.DurationVar(&purgeLogsInterval, "purge_logs_interval", purgeLogsInterval, "how often try to remove old logs")
+}
 
 // parse parses a file name (as used by glog) and returns its process
 // name and timestamp.
@@ -103,17 +117,17 @@ func purgeLogsOnce(now time.Time, dir, program string, ctimeDelta time.Duration,
 // PurgeLogs removes any log files that were started more than
 // keepLogs ago and that aren't the current log.
 func PurgeLogs() {
-	f := flag.Lookup("log_dir")
+	f := _flag.Lookup("log_dir")
 	if f == nil {
 		panic("the logging module doesn't specify a log_dir flag")
 	}
-	if *keepLogsByCtime == 0 && *keepLogsByMtime == 0 {
+	if keepLogsByCtime == 0 && keepLogsByMtime == 0 {
 		return
 	}
 	logDir := f.Value.String()
 	program := filepath.Base(os.Args[0])
-	ticker := time.NewTicker(*purgeLogsInterval)
+	ticker := time.NewTicker(purgeLogsInterval)
 	for range ticker.C {
-		purgeLogsOnce(time.Now(), logDir, program, *keepLogsByCtime, *keepLogsByMtime)
+		purgeLogsOnce(time.Now(), logDir, program, keepLogsByCtime, keepLogsByMtime)
 	}
 }

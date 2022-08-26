@@ -21,6 +21,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
@@ -63,11 +64,11 @@ func (ps *semiJoin) Primitive() engine.Primitive {
 }
 
 // WireupGen4 implements the logicalPlan interface
-func (ps *semiJoin) WireupGen4(semTable *semantics.SemTable) error {
-	if err := ps.lhs.WireupGen4(semTable); err != nil {
+func (ps *semiJoin) WireupGen4(ctx *plancontext.PlanningContext) error {
+	if err := ps.lhs.WireupGen4(ctx); err != nil {
 		return err
 	}
-	return ps.rhs.WireupGen4(semTable)
+	return ps.rhs.WireupGen4(ctx)
 }
 
 // Rewrite implements the logicalPlan interface

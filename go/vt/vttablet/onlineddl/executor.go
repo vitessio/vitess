@@ -108,6 +108,7 @@ var ghostOverridePath = flag.String("gh-ost-path", "", "override default gh-ost 
 var ptOSCOverridePath = flag.String("pt-osc-path", "", "override default pt-online-schema-change binary full path")
 var migrationCheckInterval = flag.Duration("migration_check_interval", 1*time.Minute, "Interval between migration checks")
 var retainOnlineDDLTables = flag.Duration("retain_online_ddl_tables", 24*time.Hour, "How long should vttablet keep an old migrated table before purging it")
+var maxConcurrentOnlineDDLs = flag.Int("max_concurrent_online_ddl", 256, "Maximum number of online DDL changes that may run concurrently")
 var migrationNextCheckIntervals = []time.Duration{1 * time.Second, 5 * time.Second, 10 * time.Second, 20 * time.Second}
 var maxConstraintNameLength = 64
 
@@ -124,7 +125,6 @@ const (
 	databasePoolSize                         = 3
 	vreplicationCutOverThreshold             = 5 * time.Second
 	vreplicationTestSuiteWaitSeconds         = 5
-	maxConcurrentMigrations                  = 256
 )
 
 var (
@@ -213,6 +213,10 @@ func NewExecutor(env tabletenv.Env, tabletAlias *topodatapb.TabletAlias, ts *top
 	tabletTypeFunc func() topodatapb.TabletType,
 	toggleBufferTableFunc func(cancelCtx context.Context, tableName string, bufferQueries bool),
 ) *Executor {
+	// sanitize flags
+	if *maxConcurrentOnlineDDLs < 1 {
+		*maxConcurrentOnlineDDLs = 1 // or else nothing will ever run
+	}
 	return &Executor{
 		env:         env,
 		tabletAlias: proto.Clone(tabletAlias).(*topodatapb.TabletAlias),
@@ -1801,7 +1805,7 @@ func (e *Executor) CancelMigration(ctx context.Context, uuid string, message str
 	}
 
 	switch onlineDDL.Status {
-	case schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed:
+	case schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed, schema.OnlineDDLStatusCancelled:
 		log.Infof("CancelMigration: migration %s is in non-cancellable status: %v", uuid, onlineDDL.Status)
 		return emptyResult, nil
 	}
@@ -1812,7 +1816,9 @@ func (e *Executor) CancelMigration(ctx context.Context, uuid string, message str
 		// If this was not issued by the user, then this is an internal state machine cancellation of the
 		// migration, e.g. because it is stale or has an unrecoverable error. In this case we do not mark
 		// the timestamp, and as result, the state will transition to 'failed'
-		_ = e.updateMigrationTimestamp(ctx, "cancelled_timestamp", uuid)
+		if err := e.updateMigrationTimestamp(ctx, "cancelled_timestamp", uuid); err != nil {
+			return nil, err
+		}
 	}
 	defer e.failMigration(ctx, onlineDDL, errors.New(message))
 	defer e.triggerNextCheckInterval()
@@ -1820,9 +1826,6 @@ func (e *Executor) CancelMigration(ctx context.Context, uuid string, message str
 	switch onlineDDL.Status {
 	case schema.OnlineDDLStatusQueued, schema.OnlineDDLStatusReady:
 		log.Infof("CancelMigration: cancelling %s with status: %v", uuid, onlineDDL.Status)
-		if err := e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusCancelled); err != nil {
-			return nil, err
-		}
 		return &sqltypes.Result{RowsAffected: 1}, nil
 	}
 
@@ -2946,7 +2949,7 @@ func (e *Executor) runNextMigration(ctx context.Context) error {
 				return nil, err
 			}
 			if !e.isAnyConflictingMigrationRunning(onlineDDL) {
-				if e.countOwnedRunningMigrations() < maxConcurrentMigrations {
+				if e.countOwnedRunningMigrations() < *maxConcurrentOnlineDDLs {
 					// This migration seems good to go
 					return onlineDDL, err
 				}

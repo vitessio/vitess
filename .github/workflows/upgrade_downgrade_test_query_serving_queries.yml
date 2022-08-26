@@ -36,7 +36,6 @@ jobs:
     name: Run Upgrade Downgrade Test
     runs-on: ubuntu-latest
     needs:
-      - get_upgrade_downgrade_label
       - get_previous_release
 
     steps:

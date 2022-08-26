@@ -21,7 +21,7 @@ Usage of vtctld:
       --catch-sigpipe                                                    catch and ignore SIGPIPE on stdout and stderr if specified
       --cell string                                                      cell to use
       --ceph_backup_storage_config string                                Path to JSON config file for ceph backup storage. (default "ceph_backup_config.json")
-      --compression-engine-name string                                   compressor engine used for compression. (default "pgzip")
+      --compression-engine-name string                                   compressor engine used for compression. (default "pargzip")
       --compression-level int                                            what level to pass to the compressor (default 1)
       --consolidator-stream-query-size int                               Configure the stream consolidator query size in bytes. Setting to 0 disables the stream consolidator. (default 2097152)
       --consolidator-stream-total-size int                               Configure the stream consolidator total size in bytes. Setting to 0 disables the stream consolidator. (default 134217728)
@@ -103,10 +103,9 @@ Usage of vtctld:
       --hot_row_protection_concurrent_transactions int                   Number of concurrent transactions let through to the txpool/MySQL for the same hot row. Should be > 1 to have enough 'ready' transactions in MySQL and benefit from a pipelining effect. (default 5)
       --hot_row_protection_max_global_queue_size int                     Global queue limit across all row (ranges). Useful to prevent that the queue can grow unbounded. (default 1000)
       --hot_row_protection_max_queue_size int                            Maximum number of BeginExecute RPCs which will be queued for the same row (range). (default 20)
-      --init_populate_metadata                                           (init parameter) populate metadata tables even if restore_from_backup is disabled. If restore_from_backup is enabled, metadata tables are always populated regardless of this flag.
       --jaeger-agent-host string                                         host and port to send spans to. if empty, no tracing will be done
-      --keep_logs duration                                               keep logs for this long (using ctime) (zero to keep forever) (default 0s)
-      --keep_logs_by_mtime duration                                      keep logs for this long (using mtime) (zero to keep forever) (default 0s)
+      --keep_logs duration                                               keep logs for this long (using ctime) (zero to keep forever)
+      --keep_logs_by_mtime duration                                      keep logs for this long (using mtime) (zero to keep forever)
       --keyspaces_to_watch strings                                       Specifies which keyspaces this vtgate should have access to while routing queries or accessing the vschema.
       --lameduck-period duration                                         keep running at least this long after SIGTERM before stopping (default 50ms)
       --log_backtrace_at traceLocation                                   when logging hits line file:N, emit a stack trace (default :0)
@@ -281,7 +280,7 @@ Usage of vtctld:
       --vreplication_healthcheck_timeout duration                        healthcheck retry delay (default 1m0s)
       --vreplication_healthcheck_topology_refresh duration               refresh interval for re-reading the topology (default 30s)
       --vreplication_heartbeat_update_interval int                       Frequency (in seconds, default 1, max 60) at which the time_updated column of a vreplication stream when idling (default 1)
-      --vreplication_max_time_to_retry_on_error duration                 stop automatically retrying when we've had consecutive failures with the same error for this long after the first occurrence (default 15m0s)
+      --vreplication_max_time_to_retry_on_error duration                 stop automatically retrying when we've had consecutive failures with the same error for this long after the first occurrence (default 0s)
       --vreplication_replica_lag_tolerance duration                      Replica lag threshold duration: once lag is below this we switch from copy phase to the replication (streaming) phase (default 1m0s)
       --vreplication_retry_delay duration                                delay before retrying a failed workflow event in the replication phase (default 5s)
       --vreplication_store_compressed_gtid                               Store compressed gtids in the pos column of _vt.vreplication
