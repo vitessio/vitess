@@ -253,9 +253,15 @@ func (uvs *uvstreamer) filterEvents(evs []*binlogdatapb.VEvent) []*binlogdatapb.
 		}
 		if !shouldSend && tableName != "" {
 			shouldSend = true
-			_, ok := uvs.plans[tableName]
+			plan, ok := uvs.plans[tableName]
 			if ok {
-				shouldSend = false
+				// Ideally we should compare the PKs and never send the rows whose PK has already been copied.
+				// For now, we send all the changes by accepting the duplicate events.
+				if plan.tablePK != nil && plan.tablePK.Lastpk != nil {
+					shouldSend = true
+				} else {
+					shouldSend = false
+				}
 			}
 		}
 		if shouldSend {
@@ -351,7 +357,9 @@ func (uvs *uvstreamer) init() error {
 		if err := uvs.setStreamStartPosition(); err != nil {
 			return err
 		}
-	} else if uvs.startPos == "" || len(uvs.inTablePKs) > 0 {
+	}
+
+	if uvs.startPos == "" || len(uvs.inTablePKs) > 0 {
 		if err := uvs.buildTablePlan(); err != nil {
 			return err
 		}
