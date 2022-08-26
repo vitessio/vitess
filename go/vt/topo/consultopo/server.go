@@ -21,12 +21,15 @@ package consultopo
 
 import (
 	"encoding/json"
-	"flag"
 	"fmt"
 	"os"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/spf13/pflag"
+
+	"vitess.io/vitess/go/vt/servenv"
 
 	"github.com/hashicorp/consul/api"
 
@@ -37,12 +40,34 @@ import (
 )
 
 var (
-	consulAuthClientStaticFile = flag.String("consul_auth_static_file", "", "JSON File to read the topos/tokens from.")
-	// serfHealth is the default check from consul
-	consulLockSessionChecks = flag.String("topo_consul_lock_session_checks", "serfHealth", "List of checks for consul session.")
-	consulLockSessionTTL    = flag.String("topo_consul_lock_session_ttl", "", "TTL for consul session.")
-	consulLockDelay         = flag.Duration("topo_consul_lock_delay", 15*time.Second, "LockDelay for consul session.")
+	// flag vars
+	consulAuthClientStaticFile = ""
+	consulLockSessionChecks    = "serfHealth"
+	consulLockSessionTTL       = ""
+	consulLockDelay            = 15 * time.Second
 )
+
+func init() {
+	servenv.OnParseFor("topo2topo", registerConsulFlags)
+	servenv.OnParseFor("vtbackup", registerConsulFlags)
+	servenv.OnParseFor("vtcombo", registerConsulFlags)
+	servenv.OnParseFor("vtctl", registerConsulFlags)
+	servenv.OnParseFor("vtctld", registerConsulFlags)
+	servenv.OnParseFor("vtgate", registerConsulFlags)
+	servenv.OnParseFor("vtgr", registerConsulFlags)
+	servenv.OnParseFor("vtorc", registerConsulFlags)
+	servenv.OnParseFor("vttablet", registerConsulFlags)
+	servenv.OnParseFor("vttestserver", registerConsulFlags)
+	servenv.OnParseFor("zk", registerConsulFlags)
+}
+
+func registerConsulFlags(fs *pflag.FlagSet) {
+	fs.StringVar(&consulAuthClientStaticFile, "consul_auth_static_file", consulAuthClientStaticFile, "JSON File to read the topos/tokens from.")
+	// serfHealth is the default check from consul
+	fs.StringVar(&consulLockSessionChecks, "topo_consul_lock_session_checks", consulLockSessionChecks, "List of checks for consul session.")
+	fs.StringVar(&consulLockSessionTTL, "topo_consul_lock_session_ttl", consulLockSessionTTL, "TTL for consul session.")
+	fs.DurationVar(&consulLockDelay, "topo_consul_lock_delay", consulLockDelay, "LockDelay for consul session.")
+}
 
 // ClientAuthCred credential to use for consul clusters
 type ClientAuthCred struct {
@@ -66,13 +91,13 @@ func (f Factory) Create(cell, serverAddr, root string) (topo.Conn, error) {
 func getClientCreds() (creds map[string]*ClientAuthCred, err error) {
 	creds = make(map[string]*ClientAuthCred)
 
-	if *consulAuthClientStaticFile == "" {
+	if consulAuthClientStaticFile == "" {
 		// Not configured, nothing to do.
 		log.Infof("Consul client auth is not set up. consul_auth_static_file was not provided")
 		return nil, nil
 	}
 
-	data, err := os.ReadFile(*consulAuthClientStaticFile)
+	data, err := os.ReadFile(consulAuthClientStaticFile)
 	if err != nil {
 		err = vterrors.Wrapf(err, "Failed to read consul_auth_static_file file")
 		return creds, err
@@ -140,9 +165,9 @@ func NewServer(cell, serverAddr, root string) (*Server, error) {
 		kv:         client.KV(),
 		root:       root,
 		locks:      make(map[string]*lockInstance),
-		lockChecks: parseConsulLockSessionChecks(*consulLockSessionChecks),
-		lockTTL:    *consulLockSessionTTL,
-		lockDelay:  *consulLockDelay,
+		lockChecks: parseConsulLockSessionChecks(consulLockSessionChecks),
+		lockTTL:    consulLockSessionTTL,
+		lockDelay:  consulLockDelay,
 	}, nil
 }
 
@@ -151,7 +176,7 @@ func parseConsulLockSessionChecks(s string) []string {
 	if len(s) == 0 {
 		return res
 	}
-	return strings.Split(*consulLockSessionChecks, ",")
+	return strings.Split(consulLockSessionChecks, ",")
 }
 
 // Close implements topo.Server.Close.
