@@ -23,7 +23,6 @@ package onlineddl
 import (
 	"context"
 	"errors"
-	"flag"
 	"fmt"
 	"math"
 	"os"
@@ -34,6 +33,8 @@ import (
 	"sync/atomic"
 	"syscall"
 	"time"
+
+	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/withddl"
 
@@ -104,11 +105,27 @@ var vexecInsertTemplates = []string{
 var emptyResult = &sqltypes.Result{}
 var acceptableDropTableIfExistsErrorCodes = []int{mysql.ERCantFindFile, mysql.ERNoSuchTable}
 
-var ghostOverridePath = flag.String("gh-ost-path", "", "override default gh-ost binary full path")
-var ptOSCOverridePath = flag.String("pt-osc-path", "", "override default pt-online-schema-change binary full path")
-var migrationCheckInterval = flag.Duration("migration_check_interval", 1*time.Minute, "Interval between migration checks")
-var retainOnlineDDLTables = flag.Duration("retain_online_ddl_tables", 24*time.Hour, "How long should vttablet keep an old migrated table before purging it")
-var maxConcurrentOnlineDDLs = flag.Int("max_concurrent_online_ddl", 256, "Maximum number of online DDL changes that may run concurrently")
+var (
+	ghostOverridePath       string
+	ptOSCOverridePath       string
+	migrationCheckInterval  = 1 * time.Minute
+	retainOnlineDDLTables   = 24 * time.Hour
+	maxConcurrentOnlineDDLs = 256
+)
+
+func init() {
+	servenv.OnParseFor("vtcombo", registerOnlineDDLFlags)
+	servenv.OnParseFor("vttablet", registerOnlineDDLFlags)
+}
+
+func registerOnlineDDLFlags(fs *pflag.FlagSet) {
+	fs.StringVar(&ghostOverridePath, "gh-ost-path", ghostOverridePath, "override default gh-ost binary full path")
+	fs.StringVar(&ptOSCOverridePath, "pt-osc-path", ptOSCOverridePath, "override default pt-online-schema-change binary full path")
+	fs.DurationVar(&migrationCheckInterval, "migration_check_interval", migrationCheckInterval, "Interval between migration checks")
+	fs.DurationVar(&retainOnlineDDLTables, "retain_online_ddl_tables", retainOnlineDDLTables, "How long should vttablet keep an old migrated table before purging it")
+	fs.IntVar(&maxConcurrentOnlineDDLs, "max_concurrent_online_ddl", maxConcurrentOnlineDDLs, "Maximum number of online DDL changes that may run concurrently")
+}
+
 var migrationNextCheckIntervals = []time.Duration{1 * time.Second, 5 * time.Second, 10 * time.Second, 20 * time.Second}
 var maxConstraintNameLength = 64
 
@@ -188,8 +205,8 @@ func newCancellableMigration(uuid string, message string) *cancellableMigration 
 
 // GhostBinaryFileName returns the full path+name of the gh-ost binary
 func GhostBinaryFileName() (fileName string, isOverride bool) {
-	if *ghostOverridePath != "" {
-		return *ghostOverridePath, true
+	if ghostOverridePath != "" {
+		return ghostOverridePath, true
 	}
 	return path.Join(os.TempDir(), "vt-gh-ost"), false
 }
@@ -197,15 +214,15 @@ func GhostBinaryFileName() (fileName string, isOverride bool) {
 // PTOSCFileName returns the full path+name of the pt-online-schema-change binary
 // Note that vttablet does not include pt-online-schema-change
 func PTOSCFileName() (fileName string, isOverride bool) {
-	if *ptOSCOverridePath != "" {
-		return *ptOSCOverridePath, true
+	if ptOSCOverridePath != "" {
+		return ptOSCOverridePath, true
 	}
 	return "/usr/bin/pt-online-schema-change", false
 }
 
 // newGCTableRetainTime returns the time until which a new GC table is to be retained
 func newGCTableRetainTime() time.Time {
-	return time.Now().UTC().Add(*retainOnlineDDLTables)
+	return time.Now().UTC().Add(retainOnlineDDLTables)
 }
 
 // NewExecutor creates a new gh-ost executor.
@@ -215,8 +232,8 @@ func NewExecutor(env tabletenv.Env, tabletAlias *topodatapb.TabletAlias, ts *top
 	toggleBufferTableFunc func(cancelCtx context.Context, tableName string, bufferQueries bool),
 ) *Executor {
 	// sanitize flags
-	if *maxConcurrentOnlineDDLs < 1 {
-		*maxConcurrentOnlineDDLs = 1 // or else nothing will ever run
+	if maxConcurrentOnlineDDLs < 1 {
+		maxConcurrentOnlineDDLs = 1 // or else nothing will ever run
 	}
 	return &Executor{
 		env:         env,
@@ -230,7 +247,7 @@ func NewExecutor(env tabletenv.Env, tabletAlias *topodatapb.TabletAlias, ts *top
 		ts:                    ts,
 		lagThrottler:          lagThrottler,
 		toggleBufferTableFunc: toggleBufferTableFunc,
-		ticks:                 timer.NewTimer(*migrationCheckInterval),
+		ticks:                 timer.NewTimer(migrationCheckInterval),
 	}
 }
 
@@ -2963,7 +2980,7 @@ func (e *Executor) runNextMigration(ctx context.Context) error {
 				return nil, err
 			}
 			if !e.isAnyConflictingMigrationRunning(onlineDDL) {
-				if e.countOwnedRunningMigrations() < *maxConcurrentOnlineDDLs {
+				if e.countOwnedRunningMigrations() < maxConcurrentOnlineDDLs {
 					// This migration seems good to go
 					return onlineDDL, err
 				}
@@ -3533,7 +3550,7 @@ func (e *Executor) gcArtifacts(ctx context.Context) error {
 		return err
 	}
 	query, err := sqlparser.ParseAndBind(sqlSelectUncollectedArtifacts,
-		sqltypes.Int64BindVariable(int64((*retainOnlineDDLTables).Seconds())),
+		sqltypes.Int64BindVariable(int64((retainOnlineDDLTables).Seconds())),
 	)
 	if err != nil {
 		return err
@@ -4174,7 +4191,7 @@ func (e *Executor) SubmitMigration(
 	log.Infof("SubmitMigration: request to submit migration %s; action=%s, table=%s", onlineDDL.UUID, actionStr, onlineDDL.Table)
 
 	revertedUUID, _ := onlineDDL.GetRevertUUID() // Empty value if the migration is not actually a REVERT. Safe to ignore error.
-	retainArtifactsSeconds := int64((*retainOnlineDDLTables).Seconds())
+	retainArtifactsSeconds := int64((retainOnlineDDLTables).Seconds())
 	_, allowConcurrentMigration := e.allowConcurrentMigration(onlineDDL)
 	query, err := sqlparser.ParseAndBind(sqlInsertMigration,
 		sqltypes.StringBindVariable(onlineDDL.UUID),
