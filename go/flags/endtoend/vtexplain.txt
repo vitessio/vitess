@@ -68,7 +68,6 @@ Usage of vtexplain:
       --gate_query_cache_size int                                        gate server query cache size, maximum number of queries to be cached. vtgate analyzes every incoming query and generate a query plan, these plans are being cached in a cache. This config controls the expected amount of unique entries in the cache. (default 5000)
       --gc_check_interval duration                                       Interval between garbage collection checks (default 1h0m0s)
       --gc_purge_check_interval duration                                 Interval between purge discovery checks (default 1m0s)
-      --gh-ost-path string                                               override default gh-ost binary full path
       --grpc_auth_mode string                                            Which auth plugin implementation to use (eg: static)
       --grpc_auth_mtls_allowed_substrings string                         List of substrings of at least one of the client certificate names (separated by colon).
       --grpc_auth_static_client_creds string                             when using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server
@@ -117,12 +116,10 @@ Usage of vtexplain:
       --log_rotate_max_size uint                                         size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
       --logtostderr                                                      log to standard error instead of files
       --master_connect_retry duration                                    Deprecated, use -replication_connect_retry (default 10s)
-      --max_concurrent_online_ddl int                                    Maximum number of online DDL changes that may run concurrently (default 256)
       --max_memory_rows int                                              Maximum number of rows that will be held in memory for intermediate results as well as the final result. (default 300000)
       --max_payload_size int                                             The threshold for query payloads in bytes. A payload greater than this threshold will result in a failure to handle the query.
       --mem-profile-rate int                                             deprecated: use '-pprof=mem' instead (default 524288)
       --message_stream_grace_period duration                             the amount of time to give for a vttablet to resume if it ends a message stream, usually because of a reparent. (default 30s)
-      --migration_check_interval duration                                Interval between migration checks (default 1m0s)
       --mutex-profile-fraction int                                       deprecated: use '-pprof=mutex' instead
       --mysql_allow_clear_text_without_tls                               If set, the server will allow the use of a clear text password over non-SSL connections.
       --mysql_auth_server_impl string                                    Which auth server implementation to use. Options: none, ldap, clientcert, static, vault. (default "static")
@@ -159,7 +156,6 @@ Usage of vtexplain:
       --pool_hostname_resolve_interval duration                          if set force an update to all hostnames and reconnect if changed, defaults to 0 (disabled) (default 0s)
       --pprof string                                                     enable profiling
       --proxy_protocol                                                   Enable HAProxy PROXY protocol on MySQL listener socket
-      --pt-osc-path string                                               override default pt-online-schema-change binary full path
       --purge_logs_interval duration                                     how often try to remove old logs (default 1h0m0s)
       --query-log-stream-handler string                                  URL handler for streaming queries log (default "/debug/querylog")
       --querylog-buffer-size int                                         Maximum number of buffered query logs before throttling log output (default 10)
@@ -204,7 +200,6 @@ Usage of vtexplain:
       --remote_operation_timeout duration                                time to wait for a remote operation (default 30s)
       --replication-mode string                                          The replication mode to simulate -- must be set to either ROW or STATEMENT (default "ROW")
       --replication_connect_retry duration                               how long to wait in between replica reconnect attempts. Only precise to the second. (default 10s)
-      --retain_online_ddl_tables duration                                How long should vttablet keep an old migrated table before purging it (default 24h0m0s)
       --sanitize_log_messages                                            Remove potentially sensitive information in tablet INFO, WARNING, and ERROR log messages such as query parameters.
       --schema string                                                    The SQL table schema
       --schema-file string                                               Identifies the file that contains the SQL table schema
