@@ -23,20 +23,31 @@ import (
 )
 
 var (
-	// TruncateUILen truncate queries in debug UIs to the given length. 0 means unlimited.
-	TruncateUILen int
+	// truncateUILen truncate queries in debug UIs to the given length. 0 means unlimited.
+	truncateUILen = 512
 
-	// TruncateErrLen truncate queries in error logs to the given length. 0 means unlimited.
-	TruncateErrLen int
+	// truncateErrLen truncate queries in error logs to the given length. 0 means unlimited.
+	truncateErrLen = 0
 )
 
 func registerQueryTruncationFlags(fs *pflag.FlagSet) {
-	fs.IntVar(&TruncateUILen, "sql-max-length-ui", 512, "truncate queries in debug UIs to the given length (default 512)")
-	fs.IntVar(&TruncateErrLen, "sql-max-length-errors", 0, "truncate queries in error logs to the given length (default unlimited)")
+	fs.IntVar(&truncateUILen, "sql-max-length-ui", truncateUILen, "truncate queries in debug UIs to the given length (default 512)")
+	fs.IntVar(&truncateErrLen, "sql-max-length-errors", truncateErrLen, "truncate queries in error logs to the given length (default unlimited)")
 }
 
 func init() {
 	servenv.OnParse(registerQueryTruncationFlags)
+}
+
+// GetTruncateErrLen is a function used to read the value of truncateErrLen
+func GetTruncateErrLen() int {
+	return truncateErrLen
+}
+
+// SetTruncateErrLen is a function used to override the value of truncateErrLen
+// It is only meant to be used from tests and not from production code.
+func SetTruncateErrLen(errLen int) {
+	truncateErrLen = errLen
 }
 
 func truncateQuery(query string, max int) string {
@@ -52,12 +63,12 @@ func truncateQuery(query string, max int) string {
 // TruncateForUI is used when displaying queries on various Vitess status pages
 // to keep the pages small enough to load and render properly
 func TruncateForUI(query string) string {
-	return truncateQuery(query, TruncateUILen)
+	return truncateQuery(query, truncateUILen)
 }
 
 // TruncateForLog is used when displaying queries as part of error logs
 // to avoid overwhelming logging systems with potentially long queries and
 // bind value data.
 func TruncateForLog(query string) string {
-	return truncateQuery(query, TruncateErrLen)
+	return truncateQuery(query, truncateErrLen)
 }
