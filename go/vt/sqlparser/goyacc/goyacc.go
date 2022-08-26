@@ -167,11 +167,11 @@ var prefix string // name prefix for identifiers, default yy
 var allowFastAppend bool
 
 func init() {
-	pflag.StringVar(&oflag, "o", "y.go", "parser output")
-	pflag.StringVar(&prefix, "p", "yy", "name prefix to use in generated code")
-	pflag.StringVar(&vflag, "v", "y.output", "create parsing tables")
-	pflag.BoolVar(&lflag, "l", false, "disable line directives")
-	pflag.BoolVar(&allowFastAppend, "fast-append", false, "enable fast-append optimization")
+	pflag.StringVarP(&oflag, "output", "o", "y.go", "parser output")
+	pflag.StringVarP(&prefix, "prefix", "p", "yy", "name prefix to use in generated code")
+	pflag.StringVarP(&vflag, "verbose-output", "v", "y.output", "create parsing tables")
+	pflag.BoolVarP(&lflag, "disable-line-directives", "l", false, "disable line directives")
+	pflag.BoolVarP(&allowFastAppend, "fast-append", "f", false, "enable fast-append optimization")
 }
 
 var initialstacksize = 16
