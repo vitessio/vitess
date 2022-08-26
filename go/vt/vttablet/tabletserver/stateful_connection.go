@@ -86,7 +86,7 @@ func (sc *StatefulConnection) ElapsedTimeout() bool {
 	if sc.timeout <= 0 {
 		return false
 	}
-	return sc.ExpiryTime().Before(time.Now())
+	return sc.expiryTime.Before(time.Now())
 }
 
 // Exec executes the statement in the dedicated connection
@@ -285,17 +285,9 @@ func (sc *StatefulConnection) LogTransaction(reason tx.ReleaseReason) {
 	tabletenv.TxLogger.Send(sc)
 }
 
-func (sc *StatefulConnection) ExpiryTime() time.Time {
-	return sc.expiryTime
-}
-
 func (sc *StatefulConnection) SetTimeout(timeout time.Duration) {
 	sc.timeout = timeout
 	sc.resetExpiryTime()
-}
-
-func (sc *StatefulConnection) Timeout() time.Duration {
-	return sc.timeout
 }
 
 // logReservedConn logs reserved connection related stats.

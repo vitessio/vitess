@@ -96,7 +96,6 @@ func NewTxPool(env tabletenv.Env, limiter txlimiter.TxLimiter) *TxPool {
 // that will kill long-running transactions.
 func (tp *TxPool) Open(appParams, dbaParams, appDebugParams dbconfigs.Connector) {
 	tp.scp.Open(appParams, dbaParams, appDebugParams)
-	tp.ticks.SetInterval(txKillerTimeoutInterval(tp.env.Config()))
 	if tp.ticks.Interval() > 0 {
 		tp.ticks.Start(func() { tp.transactionKiller() })
 	}
@@ -104,9 +103,7 @@ func (tp *TxPool) Open(appParams, dbaParams, appDebugParams dbconfigs.Connector)
 
 // Close closes the TxPool. A closed pool can be reopened.
 func (tp *TxPool) Close() {
-	if tp.ticks.Running() {
-		tp.ticks.Stop()
-	}
+	tp.ticks.Stop()
 	tp.scp.Close()
 }
 

@@ -350,9 +350,10 @@ func TestTxPoolGetConnRecentlyRemovedTransaction(t *testing.T) {
 
 	assertErrorMatch(id, "transaction committed")
 
-	txPool, _ = newTxPool()
-	txPool.env.Config().SetTxTimeoutForWorkload(1*time.Millisecond, querypb.ExecuteOptions_OLTP)
-	txPool.env.Config().SetTxTimeoutForWorkload(1*time.Millisecond, querypb.ExecuteOptions_OLAP)
+	env := txPool.env
+	env.Config().SetTxTimeoutForWorkload(1*time.Millisecond, querypb.ExecuteOptions_OLTP)
+	env.Config().SetTxTimeoutForWorkload(1*time.Millisecond, querypb.ExecuteOptions_OLAP)
+	txPool, _ = newTxPoolWithEnv(env)
 	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 	defer txPool.Close()
 
