@@ -21,15 +21,15 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/patrickmn/go-cache"
 	"github.com/spf13/pflag"
-
-	"vitess.io/vitess/go/vt/servenv"
 
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/heartbeat"
@@ -37,8 +37,6 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/config"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/mysql"
-
-	"github.com/patrickmn/go-cache"
 )
 
 const (
