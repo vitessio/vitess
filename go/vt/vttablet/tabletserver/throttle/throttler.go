@@ -10,7 +10,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"math"
@@ -22,11 +21,15 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/patrickmn/go-cache"
+	"github.com/spf13/pflag"
+
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/heartbeat"
@@ -34,8 +37,6 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/config"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/mysql"
-
-	"github.com/patrickmn/go-cache"
 )
 
 const (
@@ -62,12 +63,28 @@ const (
 )
 
 var (
-	throttleThreshold         = flag.Duration("throttle_threshold", 1*time.Second, "Replication lag threshold for default lag throttling")
-	throttleTabletTypes       = flag.String("throttle_tablet_types", "replica", "Comma separated VTTablet types to be considered by the throttler. default: 'replica'. example: 'replica,rdonly'. 'replica' aways implicitly included")
-	throttleMetricQuery       = flag.String("throttle_metrics_query", "", "Override default heartbeat/lag metric. Use either `SELECT` (must return single row, single value) or `SHOW GLOBAL ... LIKE ...` queries. Set -throttle_metrics_threshold respectively.")
-	throttleMetricThreshold   = flag.Float64("throttle_metrics_threshold", math.MaxFloat64, "Override default throttle threshold, respective to -throttle_metrics_query")
-	throttlerCheckAsCheckSelf = flag.Bool("throttle_check_as_check_self", false, "Should throttler/check return a throttler/check-self result (changes throttler behavior for writes)")
+	// flag vars
+	throttleThreshold         = 1 * time.Second
+	throttleTabletTypes       = "replica"
+	throttleMetricQuery       string
+	throttleMetricThreshold   = math.MaxFloat64
+	throttlerCheckAsCheckSelf = false
+)
 
+func init() {
+	servenv.OnParseFor("vtcombo", registerThrottlerFlags)
+	servenv.OnParseFor("vttablet", registerThrottlerFlags)
+}
+
+func registerThrottlerFlags(fs *pflag.FlagSet) {
+	fs.DurationVar(&throttleThreshold, "throttle_threshold", throttleThreshold, "Replication lag threshold for default lag throttling")
+	fs.StringVar(&throttleTabletTypes, "throttle_tablet_types", throttleTabletTypes, "Comma separated VTTablet types to be considered by the throttler. default: 'replica'. example: 'replica,rdonly'. 'replica' aways implicitly included")
+	fs.StringVar(&throttleMetricQuery, "throttle_metrics_query", throttleMetricQuery, "Override default heartbeat/lag metric. Use either `SELECT` (must return single row, single value) or `SHOW GLOBAL ... LIKE ...` queries. Set -throttle_metrics_threshold respectively.")
+	fs.Float64Var(&throttleMetricThreshold, "throttle_metrics_threshold", throttleMetricThreshold, "Override default throttle threshold, respective to -throttle_metrics_query")
+	fs.BoolVar(&throttlerCheckAsCheckSelf, "throttle_check_as_check_self", throttlerCheckAsCheckSelf, "Should throttler/check return a throttler/check-self result (changes throttler behavior for writes)")
+}
+
+var (
 	replicationLagQuery = `select unix_timestamp(now(6))-max(ts/1000000000) as replication_lag from _vt.heartbeat`
 
 	ErrThrottlerNotReady = errors.New("throttler not enabled/ready")
@@ -208,7 +225,7 @@ func (throttler *Throttler) CheckIsReady() error {
 func (throttler *Throttler) initThrottleTabletTypes() {
 	throttler.throttleTabletTypesMap = make(map[topodatapb.TabletType]bool)
 
-	tokens := textutil.SplitDelimitedList(*throttleTabletTypes)
+	tokens := textutil.SplitDelimitedList(throttleTabletTypes)
 	for _, token := range tokens {
 		token = strings.ToUpper(token)
 		if value, ok := topodatapb.TabletType_value[token]; ok {
@@ -239,11 +256,11 @@ func (throttler *Throttler) initConfig() {
 			},
 		},
 	}
-	if *throttleMetricQuery != "" {
-		throttler.metricsQuery = *throttleMetricQuery
+	if throttleMetricQuery != "" {
+		throttler.metricsQuery = throttleMetricQuery
 	}
-	if *throttleMetricThreshold != math.MaxFloat64 {
-		throttler.MetricsThreshold = sync2.NewAtomicFloat64(*throttleMetricThreshold)
+	if throttleMetricThreshold != math.MaxFloat64 {
+		throttler.MetricsThreshold = sync2.NewAtomicFloat64(throttleMetricThreshold)
 	}
 	throttler.metricsQueryType = mysql.GetMetricsQueryType(throttler.metricsQuery)
 
@@ -832,7 +849,7 @@ func (throttler *Throttler) CheckByType(ctx context.Context, appName string, rem
 	case ThrottleCheckSelf:
 		return throttler.checkSelf(ctx, appName, remoteAddr, flags)
 	case ThrottleCheckPrimaryWrite:
-		if *throttlerCheckAsCheckSelf {
+		if throttlerCheckAsCheckSelf {
 			return throttler.checkSelf(ctx, appName, remoteAddr, flags)
 		}
 		return throttler.checkShard(ctx, appName, remoteAddr, flags)
