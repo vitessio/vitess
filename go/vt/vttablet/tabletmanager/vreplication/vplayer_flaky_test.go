@@ -27,8 +27,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spf13/pflag"
-
 	"github.com/spyzhov/ajson"
 	"github.com/stretchr/testify/require"
 
@@ -1999,8 +1997,8 @@ func TestPlayerIdleUpdate(t *testing.T) {
 
 func TestPlayerSplitTransaction(t *testing.T) {
 	defer deleteTablet(addTablet(100))
-	pflag.Set("vstream_packet_size", "10")
-	defer pflag.Set("vstream_packet_size", "10000")
+	setFlag("vstream_packet_size", "10")
+	defer setFlag("vstream_packet_size", "10000")
 
 	execStatements(t, []string{
 		"create table t1(id int, val varbinary(128), primary key(id))",

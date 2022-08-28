@@ -45,7 +45,7 @@ func registerVReplicationFlags(fs *pflag.FlagSet) {
 	fs.DurationVar(&retryDelay, "vreplication_retry_delay", retryDelay, "delay before retrying a failed workflow event in the replication phase")
 	fs.DurationVar(&maxTimeToRetryError, "vreplication_max_time_to_retry_on_error", maxTimeToRetryError, "stop automatically retrying when we've had consecutive failures with the same error for this long after the first occurrence")
 
-	// this are the default tablet_types that will be used by the tablet picker to find source tablets for a vreplication stream
+	// these are the default tablet_types that will be used by the tablet picker to find source tablets for a vreplication stream
 	// it can be overridden by passing a different list to the MoveTables or Reshard commands
 	fs.StringVar(&tabletTypesStr, "vreplication_tablet_type", tabletTypesStr, "comma separated list of tablet types used as a source")
 
