@@ -19,18 +19,27 @@ limitations under the License.
 package status
 
 import (
-	"flag"
 	"fmt"
 	"html/template"
 	"net/url"
 	"strings"
 
+	"github.com/spf13/pflag"
+
 	"vitess.io/vitess/go/vt/servenv"
 )
 
-var (
-	vtctldAddr = flag.String("vtctld_addr", "", "address of a vtctld instance")
-)
+var vtctldAddr string
+
+func registerFlags(fs *pflag.FlagSet) {
+	fs.StringVar(&vtctldAddr, "vtctld_addr", vtctldAddr, "address of a vtctld instance")
+}
+
+func init() {
+	servenv.OnParseFor("vtcombo", registerFlags)
+	servenv.OnParseFor("vtgate", registerFlags)
+	servenv.OnParseFor("vttablet", registerFlags)
+}
 
 // MakeVtctldRedirect returns an absolute vtctld url that will
 // redirect to the page for the topology object specified in q.
@@ -47,14 +56,14 @@ func MakeVtctldRedirect(text string, q map[string]string) template.HTML {
 // qualified vtctld url whose path is given as parameter.
 // If no vtctld_addr flag was passed in, we just return the text with no link.
 func VtctldLink(text, urlPath string) template.HTML {
-	if *vtctldAddr == "" {
+	if vtctldAddr == "" {
 		return template.HTML(text)
 	}
 	var fullURL string
-	if strings.HasSuffix(*vtctldAddr, "/") {
-		fullURL = *vtctldAddr + urlPath
+	if strings.HasSuffix(vtctldAddr, "/") {
+		fullURL = vtctldAddr + urlPath
 	} else {
-		fullURL = *vtctldAddr + "/" + urlPath
+		fullURL = vtctldAddr + "/" + urlPath
 	}
 
 	return template.HTML(fmt.Sprintf(`<a href="%v">%v</a>`, fullURL, text))
