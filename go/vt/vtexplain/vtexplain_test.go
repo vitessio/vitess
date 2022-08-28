@@ -25,13 +25,15 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/require"
 
-	querypb "vitess.io/vitess/go/vt/proto/query"
-
+	_flag "vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/vt/key"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
 func defaultTestOpts() *Options {
@@ -131,7 +133,16 @@ func runTestCase(testcase, mode string, opts *Options, topts *testopts, t *testi
 	})
 }
 
+func loadTabletEnvFlags() {
+	_flag.ParseFlagsForTest()
+	fs := pflag.NewFlagSet("TestFlags", pflag.ContinueOnError)
+	tabletenv.RegisterTabletEnvFlags(fs)
+	pflag.Parse()
+}
+
 func TestExplain(t *testing.T) {
+	loadTabletEnvFlags()
+
 	type test struct {
 		name string
 		opts *Options

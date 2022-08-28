@@ -17,8 +17,9 @@ limitations under the License.
 package tabletenv
 
 import (
-	"flag"
 	"time"
+
+	"github.com/spf13/pflag"
 )
 
 // Seconds provides convenience functions for extracting
@@ -26,8 +27,8 @@ import (
 type Seconds float64
 
 // SecondsVar is like a flag.Float64Var, but it works for Seconds.
-func SecondsVar(p *Seconds, name string, value Seconds, usage string) {
-	flag.Float64Var((*float64)(p), name, float64(value), usage)
+func SecondsVar(fs *pflag.FlagSet, p *Seconds, name string, value Seconds, usage string) {
+	fs.Float64Var((*float64)(p), name, float64(value), usage)
 }
 
 // Get converts Seconds to time.Duration

@@ -28,7 +28,7 @@ unset VTROOT # ensure that the examples can run without VTROOT now.
 source ./env.sh # Required so that "mysql" works from alias
 
 ./101_initial_cluster.sh
-
+exit
 sleep 5 # Give vtgate time to really start.
 
 mysql < ../common/insert_commerce_data.sql
@@ -49,7 +49,7 @@ sleep 3 # required for now
 ./203_switch_reads.sh
 
 ./204_switch_writes.sh
-
+exit
 mysql --table < ../common/select_customer0_data.sql
 # Expected to fail!
 mysql --table < ../common/select_commerce_data.sql || echo "DenyList working as expected"
@@ -80,7 +80,7 @@ sleep 3 # TODO: Required for now!
 
 mysql --table < ../common/select_customer-80_data.sql
 mysql --table < ../common/select_customer80-_data.sql
-
+exit
 ./306_down_shard_0.sh
 
 ./401_teardown.sh
