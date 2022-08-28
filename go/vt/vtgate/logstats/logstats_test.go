@@ -65,6 +65,7 @@ func TestLogStatsFormat(t *testing.T) {
 	logStats.Table = "table"
 	logStats.TablesUsed = []string{"ks1.tbl1", "ks2.tbl2"}
 	logStats.TabletType = "PRIMARY"
+	logStats.ActiveKeyspace = "db"
 	params := map[string][]string{"full": {}}
 	intBindVar := map[string]*querypb.BindVariable{"intVal": sqltypes.Int64BindVariable(1)}
 	stringBindVar := map[string]*querypb.BindVariable{"strVal": sqltypes.StringBindVariable("abc")}
@@ -76,45 +77,45 @@ func TestLogStatsFormat(t *testing.T) {
 		expected string
 		bindVars map[string]*querypb.BindVariable
 	}{
-		{ //0
+		{ // 0
 			redact:   false,
 			format:   "text",
-			expected: "test\t\t\t''\t''\t2017-01-01 01:02:03.000000\t2017-01-01 01:02:04.000001\t1.000001\t0.000000\t0.000000\t0.000000\t\t\"sql1\"\tmap[intVal:type:INT64 value:\"1\"]\t0\t0\t\"\"\t\"ks\"\t\"table\"\t\"PRIMARY\"\t\"suuid\"\tfalse\t[\"ks1.tbl1\",\"ks2.tbl2\"]\n",
+			expected: "test\t\t\t''\t''\t2017-01-01 01:02:03.000000\t2017-01-01 01:02:04.000001\t1.000001\t0.000000\t0.000000\t0.000000\t\t\"sql1\"\tmap[intVal:type:INT64 value:\"1\"]\t0\t0\t\"\"\t\"ks\"\t\"table\"\t\"PRIMARY\"\t\"suuid\"\tfalse\t[\"ks1.tbl1\",\"ks2.tbl2\"]\t\"db\"\n",
 			bindVars: intBindVar,
-		}, { //1
+		}, { // 1
 			redact:   true,
 			format:   "text",
-			expected: "test\t\t\t''\t''\t2017-01-01 01:02:03.000000\t2017-01-01 01:02:04.000001\t1.000001\t0.000000\t0.000000\t0.000000\t\t\"sql1\"\t\"[REDACTED]\"\t0\t0\t\"\"\t\"ks\"\t\"table\"\t\"PRIMARY\"\t\"suuid\"\tfalse\t[\"ks1.tbl1\",\"ks2.tbl2\"]\n",
+			expected: "test\t\t\t''\t''\t2017-01-01 01:02:03.000000\t2017-01-01 01:02:04.000001\t1.000001\t0.000000\t0.000000\t0.000000\t\t\"sql1\"\t\"[REDACTED]\"\t0\t0\t\"\"\t\"ks\"\t\"table\"\t\"PRIMARY\"\t\"suuid\"\tfalse\t[\"ks1.tbl1\",\"ks2.tbl2\"]\t\"db\"\n",
 			bindVars: intBindVar,
-		}, { //2
+		}, { // 2
 			redact:   false,
 			format:   "json",
-			expected: "{\n    \"BindVars\": {\n        \"intVal\": {\n            \"type\": \"INT64\",\n            \"value\": 1\n        }\n    },\n    \"Cached Plan\": false,\n    \"CommitTime\": 0,\n    \"Effective Caller\": \"\",\n    \"End\": \"2017-01-01 01:02:04.000001\",\n    \"Error\": \"\",\n    \"ExecuteTime\": 0,\n    \"ImmediateCaller\": \"\",\n    \"Keyspace\": \"ks\",\n    \"Method\": \"test\",\n    \"PlanTime\": 0,\n    \"RemoteAddr\": \"\",\n    \"RowsAffected\": 0,\n    \"SQL\": \"sql1\",\n    \"SessionUUID\": \"suuid\",\n    \"ShardQueries\": 0,\n    \"Start\": \"2017-01-01 01:02:03.000000\",\n    \"StmtType\": \"\",\n    \"Table\": \"table\",\n    \"TablesUsed\": [\n        \"ks1.tbl1\",\n        \"ks2.tbl2\"\n    ],\n    \"TabletType\": \"PRIMARY\",\n    \"TotalTime\": 1.000001,\n    \"Username\": \"\"\n}",
+			expected: "{\"ActiveKeyspace\":\"db\",\"BindVars\":{\"intVal\":{\"type\":\"INT64\",\"value\":1}},\"Cached Plan\":false,\"CommitTime\":0,\"Effective Caller\":\"\",\"End\":\"2017-01-01 01:02:04.000001\",\"Error\":\"\",\"ExecuteTime\":0,\"ImmediateCaller\":\"\",\"Keyspace\":\"ks\",\"Method\":\"test\",\"PlanTime\":0,\"RemoteAddr\":\"\",\"RowsAffected\":0,\"SQL\":\"sql1\",\"SessionUUID\":\"suuid\",\"ShardQueries\":0,\"Start\":\"2017-01-01 01:02:03.000000\",\"StmtType\":\"\",\"Table\":\"table\",\"TablesUsed\":[\"ks1.tbl1\",\"ks2.tbl2\"],\"TabletType\":\"PRIMARY\",\"TotalTime\":1.000001,\"Username\":\"\"}",
 			bindVars: intBindVar,
-		}, { //3
+		}, { // 3
 			redact:   true,
 			format:   "json",
-			expected: "{\n    \"BindVars\": \"[REDACTED]\",\n    \"Cached Plan\": false,\n    \"CommitTime\": 0,\n    \"Effective Caller\": \"\",\n    \"End\": \"2017-01-01 01:02:04.000001\",\n    \"Error\": \"\",\n    \"ExecuteTime\": 0,\n    \"ImmediateCaller\": \"\",\n    \"Keyspace\": \"ks\",\n    \"Method\": \"test\",\n    \"PlanTime\": 0,\n    \"RemoteAddr\": \"\",\n    \"RowsAffected\": 0,\n    \"SQL\": \"sql1\",\n    \"SessionUUID\": \"suuid\",\n    \"ShardQueries\": 0,\n    \"Start\": \"2017-01-01 01:02:03.000000\",\n    \"StmtType\": \"\",\n    \"Table\": \"table\",\n    \"TablesUsed\": [\n        \"ks1.tbl1\",\n        \"ks2.tbl2\"\n    ],\n    \"TabletType\": \"PRIMARY\",\n    \"TotalTime\": 1.000001,\n    \"Username\": \"\"\n}",
+			expected: "{\"ActiveKeyspace\":\"db\",\"BindVars\":\"[REDACTED]\",\"Cached Plan\":false,\"CommitTime\":0,\"Effective Caller\":\"\",\"End\":\"2017-01-01 01:02:04.000001\",\"Error\":\"\",\"ExecuteTime\":0,\"ImmediateCaller\":\"\",\"Keyspace\":\"ks\",\"Method\":\"test\",\"PlanTime\":0,\"RemoteAddr\":\"\",\"RowsAffected\":0,\"SQL\":\"sql1\",\"SessionUUID\":\"suuid\",\"ShardQueries\":0,\"Start\":\"2017-01-01 01:02:03.000000\",\"StmtType\":\"\",\"Table\":\"table\",\"TablesUsed\":[\"ks1.tbl1\",\"ks2.tbl2\"],\"TabletType\":\"PRIMARY\",\"TotalTime\":1.000001,\"Username\":\"\"}",
 			bindVars: intBindVar,
-		}, { //4
+		}, { // 4
 			redact:   false,
 			format:   "text",
-			expected: "test\t\t\t''\t''\t2017-01-01 01:02:03.000000\t2017-01-01 01:02:04.000001\t1.000001\t0.000000\t0.000000\t0.000000\t\t\"sql1\"\tmap[strVal:type:VARCHAR value:\"abc\"]\t0\t0\t\"\"\t\"ks\"\t\"table\"\t\"PRIMARY\"\t\"suuid\"\tfalse\t[\"ks1.tbl1\",\"ks2.tbl2\"]\n",
+			expected: "test\t\t\t''\t''\t2017-01-01 01:02:03.000000\t2017-01-01 01:02:04.000001\t1.000001\t0.000000\t0.000000\t0.000000\t\t\"sql1\"\tmap[strVal:type:VARCHAR value:\"abc\"]\t0\t0\t\"\"\t\"ks\"\t\"table\"\t\"PRIMARY\"\t\"suuid\"\tfalse\t[\"ks1.tbl1\",\"ks2.tbl2\"]\t\"db\"\n",
 			bindVars: stringBindVar,
-		}, { //5
+		}, { // 5
 			redact:   true,
 			format:   "text",
-			expected: "test\t\t\t''\t''\t2017-01-01 01:02:03.000000\t2017-01-01 01:02:04.000001\t1.000001\t0.000000\t0.000000\t0.000000\t\t\"sql1\"\t\"[REDACTED]\"\t0\t0\t\"\"\t\"ks\"\t\"table\"\t\"PRIMARY\"\t\"suuid\"\tfalse\t[\"ks1.tbl1\",\"ks2.tbl2\"]\n",
+			expected: "test\t\t\t''\t''\t2017-01-01 01:02:03.000000\t2017-01-01 01:02:04.000001\t1.000001\t0.000000\t0.000000\t0.000000\t\t\"sql1\"\t\"[REDACTED]\"\t0\t0\t\"\"\t\"ks\"\t\"table\"\t\"PRIMARY\"\t\"suuid\"\tfalse\t[\"ks1.tbl1\",\"ks2.tbl2\"]\t\"db\"\n",
 			bindVars: stringBindVar,
-		}, { //6
+		}, { // 6
 			redact:   false,
 			format:   "json",
-			expected: "{\n    \"BindVars\": {\n        \"strVal\": {\n            \"type\": \"VARCHAR\",\n            \"value\": \"abc\"\n        }\n    },\n    \"Cached Plan\": false,\n    \"CommitTime\": 0,\n    \"Effective Caller\": \"\",\n    \"End\": \"2017-01-01 01:02:04.000001\",\n    \"Error\": \"\",\n    \"ExecuteTime\": 0,\n    \"ImmediateCaller\": \"\",\n    \"Keyspace\": \"ks\",\n    \"Method\": \"test\",\n    \"PlanTime\": 0,\n    \"RemoteAddr\": \"\",\n    \"RowsAffected\": 0,\n    \"SQL\": \"sql1\",\n    \"SessionUUID\": \"suuid\",\n    \"ShardQueries\": 0,\n    \"Start\": \"2017-01-01 01:02:03.000000\",\n    \"StmtType\": \"\",\n    \"Table\": \"table\",\n    \"TablesUsed\": [\n        \"ks1.tbl1\",\n        \"ks2.tbl2\"\n    ],\n    \"TabletType\": \"PRIMARY\",\n    \"TotalTime\": 1.000001,\n    \"Username\": \"\"\n}",
+			expected: "{\"ActiveKeyspace\":\"db\",\"BindVars\":{\"strVal\":{\"type\":\"VARCHAR\",\"value\":\"abc\"}},\"Cached Plan\":false,\"CommitTime\":0,\"Effective Caller\":\"\",\"End\":\"2017-01-01 01:02:04.000001\",\"Error\":\"\",\"ExecuteTime\":0,\"ImmediateCaller\":\"\",\"Keyspace\":\"ks\",\"Method\":\"test\",\"PlanTime\":0,\"RemoteAddr\":\"\",\"RowsAffected\":0,\"SQL\":\"sql1\",\"SessionUUID\":\"suuid\",\"ShardQueries\":0,\"Start\":\"2017-01-01 01:02:03.000000\",\"StmtType\":\"\",\"Table\":\"table\",\"TablesUsed\":[\"ks1.tbl1\",\"ks2.tbl2\"],\"TabletType\":\"PRIMARY\",\"TotalTime\":1.000001,\"Username\":\"\"}",
 			bindVars: stringBindVar,
-		}, { //7
+		}, { // 7
 			redact:   true,
 			format:   "json",
-			expected: "{\n    \"BindVars\": \"[REDACTED]\",\n    \"Cached Plan\": false,\n    \"CommitTime\": 0,\n    \"Effective Caller\": \"\",\n    \"End\": \"2017-01-01 01:02:04.000001\",\n    \"Error\": \"\",\n    \"ExecuteTime\": 0,\n    \"ImmediateCaller\": \"\",\n    \"Keyspace\": \"ks\",\n    \"Method\": \"test\",\n    \"PlanTime\": 0,\n    \"RemoteAddr\": \"\",\n    \"RowsAffected\": 0,\n    \"SQL\": \"sql1\",\n    \"SessionUUID\": \"suuid\",\n    \"ShardQueries\": 0,\n    \"Start\": \"2017-01-01 01:02:03.000000\",\n    \"StmtType\": \"\",\n    \"Table\": \"table\",\n    \"TablesUsed\": [\n        \"ks1.tbl1\",\n        \"ks2.tbl2\"\n    ],\n    \"TabletType\": \"PRIMARY\",\n    \"TotalTime\": 1.000001,\n    \"Username\": \"\"\n}",
+			expected: "{\"ActiveKeyspace\":\"db\",\"BindVars\":\"[REDACTED]\",\"Cached Plan\":false,\"CommitTime\":0,\"Effective Caller\":\"\",\"End\":\"2017-01-01 01:02:04.000001\",\"Error\":\"\",\"ExecuteTime\":0,\"ImmediateCaller\":\"\",\"Keyspace\":\"ks\",\"Method\":\"test\",\"PlanTime\":0,\"RemoteAddr\":\"\",\"RowsAffected\":0,\"SQL\":\"sql1\",\"SessionUUID\":\"suuid\",\"ShardQueries\":0,\"Start\":\"2017-01-01 01:02:03.000000\",\"StmtType\":\"\",\"Table\":\"table\",\"TablesUsed\":[\"ks1.tbl1\",\"ks2.tbl2\"],\"TabletType\":\"PRIMARY\",\"TotalTime\":1.000001,\"Username\":\"\"}",
 			bindVars: stringBindVar,
 		},
 	}
@@ -141,7 +142,7 @@ func TestLogStatsFormat(t *testing.T) {
 			err := json.Unmarshal([]byte(got), &parsed)
 			assert.NoError(t, err)
 			assert.NotNil(t, parsed)
-			formatted, err := json.MarshalIndent(parsed, "", "    ")
+			formatted, err := json.Marshal(parsed)
 			assert.NoError(t, err)
 			assert.Equal(t, test.expected, string(formatted))
 		})
@@ -157,12 +158,12 @@ func TestLogStatsFilter(t *testing.T) {
 	params := map[string][]string{"full": {}}
 
 	got := testFormat(t, logStats, params)
-	want := "test\t\t\t''\t''\t2017-01-01 01:02:03.000000\t2017-01-01 01:02:04.000001\t1.000001\t0.000000\t0.000000\t0.000000\t\t\"sql1 /* LOG_THIS_QUERY */\"\tmap[intVal:type:INT64 value:\"1\"]\t0\t0\t\"\"\t\"\"\t\"\"\t\"\"\t\"\"\tfalse\t[]\n"
+	want := "test\t\t\t''\t''\t2017-01-01 01:02:03.000000\t2017-01-01 01:02:04.000001\t1.000001\t0.000000\t0.000000\t0.000000\t\t\"sql1 /* LOG_THIS_QUERY */\"\tmap[intVal:type:INT64 value:\"1\"]\t0\t0\t\"\"\t\"\"\t\"\"\t\"\"\t\"\"\tfalse\t[]\t\"\"\n"
 	assert.Equal(t, want, got)
 
 	*streamlog.QueryLogFilterTag = "LOG_THIS_QUERY"
 	got = testFormat(t, logStats, params)
-	want = "test\t\t\t''\t''\t2017-01-01 01:02:03.000000\t2017-01-01 01:02:04.000001\t1.000001\t0.000000\t0.000000\t0.000000\t\t\"sql1 /* LOG_THIS_QUERY */\"\tmap[intVal:type:INT64 value:\"1\"]\t0\t0\t\"\"\t\"\"\t\"\"\t\"\"\t\"\"\tfalse\t[]\n"
+	want = "test\t\t\t''\t''\t2017-01-01 01:02:03.000000\t2017-01-01 01:02:04.000001\t1.000001\t0.000000\t0.000000\t0.000000\t\t\"sql1 /* LOG_THIS_QUERY */\"\tmap[intVal:type:INT64 value:\"1\"]\t0\t0\t\"\"\t\"\"\t\"\"\t\"\"\t\"\"\tfalse\t[]\t\"\"\n"
 	assert.Equal(t, want, got)
 
 	*streamlog.QueryLogFilterTag = "NOT_THIS_QUERY"
@@ -180,12 +181,12 @@ func TestLogStatsRowThreshold(t *testing.T) {
 	params := map[string][]string{"full": {}}
 
 	got := testFormat(t, logStats, params)
-	want := "test\t\t\t''\t''\t2017-01-01 01:02:03.000000\t2017-01-01 01:02:04.000001\t1.000001\t0.000000\t0.000000\t0.000000\t\t\"sql1 /* LOG_THIS_QUERY */\"\tmap[intVal:type:INT64 value:\"1\"]\t0\t0\t\"\"\t\"\"\t\"\"\t\"\"\t\"\"\tfalse\t[]\n"
+	want := "test\t\t\t''\t''\t2017-01-01 01:02:03.000000\t2017-01-01 01:02:04.000001\t1.000001\t0.000000\t0.000000\t0.000000\t\t\"sql1 /* LOG_THIS_QUERY */\"\tmap[intVal:type:INT64 value:\"1\"]\t0\t0\t\"\"\t\"\"\t\"\"\t\"\"\t\"\"\tfalse\t[]\t\"\"\n"
 	assert.Equal(t, want, got)
 
 	*streamlog.QueryLogRowThreshold = 0
 	got = testFormat(t, logStats, params)
-	want = "test\t\t\t''\t''\t2017-01-01 01:02:03.000000\t2017-01-01 01:02:04.000001\t1.000001\t0.000000\t0.000000\t0.000000\t\t\"sql1 /* LOG_THIS_QUERY */\"\tmap[intVal:type:INT64 value:\"1\"]\t0\t0\t\"\"\t\"\"\t\"\"\t\"\"\t\"\"\tfalse\t[]\n"
+	want = "test\t\t\t''\t''\t2017-01-01 01:02:03.000000\t2017-01-01 01:02:04.000001\t1.000001\t0.000000\t0.000000\t0.000000\t\t\"sql1 /* LOG_THIS_QUERY */\"\tmap[intVal:type:INT64 value:\"1\"]\t0\t0\t\"\"\t\"\"\t\"\"\t\"\"\t\"\"\tfalse\t[]\t\"\"\n"
 	assert.Equal(t, want, got)
 	*streamlog.QueryLogRowThreshold = 1
 	got = testFormat(t, logStats, params)

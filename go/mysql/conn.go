@@ -1465,9 +1465,14 @@ func (c *Conn) parseOKPacket(in []byte) (*PacketOK, error) {
 	if c.Capabilities&uint32(CapabilityClientSessionTrack) == CapabilityClientSessionTrack {
 		// session tracking
 		if statusFlags&ServerSessionStateChanged == ServerSessionStateChanged {
-			_, ok := data.readLenEncInt()
+			length, ok := data.readLenEncInt()
 			if !ok {
 				return fail("invalid OK packet session state change length: %v", data)
+			}
+			// In case we have a zero length string, there's no additional information so
+			// we can return the packet.
+			if length == 0 {
+				return packetOK, nil
 			}
 			sscType, ok := data.readByte()
 			if !ok {

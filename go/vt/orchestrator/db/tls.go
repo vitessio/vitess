@@ -22,11 +22,12 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"github.com/go-sql-driver/mysql"
 	"github.com/patrickmn/go-cache"
 	"github.com/rcrowley/go-metrics"
 
-	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/sqlutils"
 
 	"vitess.io/vitess/go/vt/orchestrator/config"
@@ -81,7 +82,7 @@ func requiresTLS(host string, port int, uri string) bool {
 					required=values(required)
 				`
 	if _, err := ExecOrchestrator(query, host, port, required); err != nil {
-		log.Errore(err)
+		log.Error(err)
 	}
 	writeInstanceTLSCounter.Inc(1)
 
@@ -100,7 +101,8 @@ func SetupMySQLTopologyTLS(uri string) (string, error) {
 		// Drop to TLS 1.0 for talking to MySQL
 		tlsConfig.MinVersion = tls.VersionTLS10
 		if err != nil {
-			return "", log.Errorf("Can't create TLS configuration for Topology connection %s: %s", uri, err)
+			log.Errorf("Can't create TLS configuration for Topology connection %s: %s", uri, err)
+			return "", err
 		}
 		tlsConfig.InsecureSkipVerify = config.Config.MySQLTopologySSLSkipVerify
 
@@ -108,11 +110,13 @@ func SetupMySQLTopologyTLS(uri string) (string, error) {
 			config.Config.MySQLTopologySSLCertFile != "" &&
 			config.Config.MySQLTopologySSLPrivateKeyFile != "" {
 			if err = ssl.AppendKeyPair(tlsConfig, config.Config.MySQLTopologySSLCertFile, config.Config.MySQLTopologySSLPrivateKeyFile); err != nil {
-				return "", log.Errorf("Can't setup TLS key pairs for %s: %s", uri, err)
+				log.Errorf("Can't setup TLS key pairs for %s: %s", uri, err)
+				return "", err
 			}
 		}
 		if err = mysql.RegisterTLSConfig("topology", tlsConfig); err != nil {
-			return "", log.Errorf("Can't register mysql TLS config for topology: %s", err)
+			log.Errorf("Can't register mysql TLS config for topology: %s", err)
+			return "", err
 		}
 		topologyTLSConfigured = true
 	}
@@ -128,18 +132,21 @@ func SetupMySQLOrchestratorTLS(uri string) (string, error) {
 		// Drop to TLS 1.0 for talking to MySQL
 		tlsConfig.MinVersion = tls.VersionTLS10
 		if err != nil {
-			return "", log.Fatalf("Can't create TLS configuration for Orchestrator connection %s: %s", uri, err)
+			log.Fatalf("Can't create TLS configuration for Orchestrator connection %s: %s", uri, err)
+			return "", err
 		}
 		tlsConfig.InsecureSkipVerify = config.Config.MySQLOrchestratorSSLSkipVerify
 		if (!config.Config.MySQLOrchestratorSSLSkipVerify) &&
 			config.Config.MySQLOrchestratorSSLCertFile != "" &&
 			config.Config.MySQLOrchestratorSSLPrivateKeyFile != "" {
 			if err = ssl.AppendKeyPair(tlsConfig, config.Config.MySQLOrchestratorSSLCertFile, config.Config.MySQLOrchestratorSSLPrivateKeyFile); err != nil {
-				return "", log.Fatalf("Can't setup TLS key pairs for %s: %s", uri, err)
+				log.Fatalf("Can't setup TLS key pairs for %s: %s", uri, err)
+				return "", err
 			}
 		}
 		if err = mysql.RegisterTLSConfig("orchestrator", tlsConfig); err != nil {
-			return "", log.Fatalf("Can't register mysql TLS config for orchestrator: %s", err)
+			log.Fatalf("Can't register mysql TLS config for orchestrator: %s", err)
+			return "", err
 		}
 		orchestratorTLSConfigured = true
 	}

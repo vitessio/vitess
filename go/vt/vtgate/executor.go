@@ -326,6 +326,7 @@ func (e *Executor) StreamExecute(
 		logStats.TablesUsed = plan.TablesUsed
 		logStats.TabletType = vc.TabletType().String()
 		logStats.ExecuteTime = time.Since(execStart)
+		logStats.ActiveKeyspace = vc.keyspace
 
 		e.updateQueryCounts(plan.Instructions.RouteType(), plan.Instructions.GetKeyspaceName(), plan.Instructions.GetTableName(), int64(logStats.ShardQueries))
 

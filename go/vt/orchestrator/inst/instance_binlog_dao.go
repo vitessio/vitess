@@ -19,14 +19,17 @@ package inst
 import (
 	"fmt"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/vt/orchestrator/db"
-	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/sqlutils"
 )
 
 func GetPreviousGTIDs(instanceKey *InstanceKey, binlog string) (previousGTIDs *OracleGtidSet, err error) {
 	if binlog == "" {
-		return nil, log.Errorf("GetPreviousGTIDs: empty binlog file name for %+v", *instanceKey)
+		errMsg := fmt.Sprintf("GetPreviousGTIDs: empty binlog file name for %+v", *instanceKey)
+		log.Errorf(errMsg)
+		return nil, fmt.Errorf(errMsg)
 	}
 	db, err := db.OpenTopology(instanceKey.Hostname, instanceKey.Port)
 	if err != nil {

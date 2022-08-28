@@ -24,6 +24,19 @@ type PooledDBConnection struct {
 	pool *ConnectionPool
 }
 
+func (pc *PooledDBConnection) ApplySettings(ctx context.Context, settings []string) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (pc *PooledDBConnection) IsSettingsApplied() bool {
+	return false
+}
+
+func (pc *PooledDBConnection) IsSameSetting(_ []string) bool {
+	return true
+}
+
 // Recycle should be called to return the PooledDBConnection to the pool.
 func (pc *PooledDBConnection) Recycle() {
 	if pc.IsClosed() {
