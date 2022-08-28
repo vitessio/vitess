@@ -513,6 +513,8 @@ func (be *BuiltinBackupEngine) backupFiles(
 			Incremental:  !fromPosition.IsZero(),
 			ServerUUID:   serverUUID,
 			TabletAlias:  params.TabletAlias,
+			Shard:        params.Shard,
+			Keyspace:     params.Keyspace,
 			BackupTime:   params.BackupTime.UTC().Format(time.RFC3339),
 			FinishedTime: time.Now().UTC().Format(time.RFC3339),
 		},

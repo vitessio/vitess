@@ -202,6 +202,10 @@ type BackupManifest struct {
 	ServerUUID string
 
 	TabletAlias string
+
+	Shard string
+
+	Keyspace string
 }
 
 // FindBackupToRestore returns a selected candidate backup to be restored.

@@ -201,6 +201,8 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, params BackupPara
 			Position:     replicationPosition,
 			ServerUUID:   serverUUID,
 			TabletAlias:  params.TabletAlias,
+			Shard:        params.Shard,
+			Keyspace:     params.Keyspace,
 			BackupTime:   params.BackupTime.UTC().Format(time.RFC3339),
 			FinishedTime: time.Now().UTC().Format(time.RFC3339),
 		},
