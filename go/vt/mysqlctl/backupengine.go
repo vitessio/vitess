@@ -203,9 +203,9 @@ type BackupManifest struct {
 
 	TabletAlias string
 
-	Shard string
-
 	Keyspace string
+
+	Shard string
 }
 
 // FindBackupToRestore returns a selected candidate backup to be restored.
