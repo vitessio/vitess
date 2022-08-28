@@ -21709,6 +21709,9 @@ export namespace tabletmanagerdata {
 
         /** BackupRequest allow_primary */
         allow_primary?: (boolean|null);
+
+        /** BackupRequest incremental_from_pos */
+        incremental_from_pos?: (string|null);
     }
 
     /** Represents a BackupRequest. */
@@ -21725,6 +21728,9 @@ export namespace tabletmanagerdata {
 
         /** BackupRequest allow_primary. */
         public allow_primary: boolean;
+
+        /** BackupRequest incremental_from_pos. */
+        public incremental_from_pos: string;
 
         /**
          * Creates a new BackupRequest instance using the specified properties.
@@ -33861,6 +33867,9 @@ export namespace vtctldata {
 
         /** BackupRequest concurrency */
         concurrency?: (number|Long|null);
+
+        /** BackupRequest incremental_from_pos */
+        incremental_from_pos?: (string|null);
     }
 
     /** Represents a BackupRequest. */
@@ -33880,6 +33889,9 @@ export namespace vtctldata {
 
         /** BackupRequest concurrency. */
         public concurrency: (number|Long);
+
+        /** BackupRequest incremental_from_pos. */
+        public incremental_from_pos: string;
 
         /**
          * Creates a new BackupRequest instance using the specified properties.
