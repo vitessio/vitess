@@ -145,7 +145,7 @@ func InitVtctld(ts *topo.Server) error {
 	// Serve the static files for the vtctld2 web app
 	http.HandleFunc(appPrefix, webAppHandler)
 
-	var healthCheck *discovery.HealthCheckImpl
+	var healthCheck discovery.HealthCheck
 	if *enableRealtimeStats {
 		ctx := context.Background()
 		cells, err := ts.GetKnownCells(ctx)
