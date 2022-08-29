@@ -334,6 +334,7 @@ func (c *Conn) ExecuteFetchMulti(query string, maxrows int, wantfields bool) (re
 // re-enable read-only mode after the query is executed if needed.
 func (c *Conn) ExecuteFetchWithReadOnlyHandling(query string, maxrows int, wantfields bool) (result *sqltypes.Result, err error) {
 	// Note: MariaDB does not have super_read_only but support for it is EOL in v14.0+
+	turnSuperReadOnly := false
 	if !c.IsMariaDB() {
 		if err := c.WriteComQuery("SELECT @@global.super_read_only"); err != nil {
 			return nil, err
@@ -342,8 +343,8 @@ func (c *Conn) ExecuteFetchWithReadOnlyHandling(query string, maxrows int, wantf
 		if err == nil && len(res.Rows) == 1 {
 			sro := res.Rows[0][0].ToString()
 			if sro == "1" || sro == "ON" {
-				defer c.WriteComQuery("SET GLOBAL super_read_only='ON'")
-				if err = c.WriteComQuery("SET GLOBAL super_read_only='OFF'"); err != nil {
+				turnSuperReadOnly = true
+				if _, err = c.ExecuteFetch("SET GLOBAL super_read_only='OFF'", 1, false); err != nil {
 					return nil, err
 				}
 			}
@@ -351,6 +352,11 @@ func (c *Conn) ExecuteFetchWithReadOnlyHandling(query string, maxrows int, wantf
 	}
 
 	result, _, err = c.ExecuteFetchMulti(query, maxrows, wantfields)
+	if turnSuperReadOnly {
+		if _, err := c.ExecuteFetch("SET GLOBAL super_read_only='ON'", 1, false); err != nil {
+			return nil, err
+		}
+	}
 	return result, err
 }
 

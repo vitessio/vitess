@@ -37,7 +37,7 @@ import (
 
 var (
 	vtInsertTest = `
-		create table vt_insert_test (
+		create table if not exists vt_insert_test (
 		id bigint auto_increment,
 		msg varchar(64),
 		primary key (id)
@@ -62,10 +62,17 @@ func TestTabletInitialBackup(t *testing.T) {
 
 	// Initialize the tablets
 	initTablets(t, false, false)
+	time.Sleep(5 * time.Second)
+
+	// insert should not work for any of the replicas and primary
+	_, err := primary.VttabletProcess.QueryTablet(vtInsertTest, keyspaceName, true)
+	require.ErrorContains(t, err, "The MySQL server is running with the --super-read-only option so it cannot execute this statement")
+	_, err = replica1.VttabletProcess.QueryTablet(vtInsertTest, keyspaceName, true)
+	require.ErrorContains(t, err, "The MySQL server is running with the --super-read-only option so it cannot execute this statement")
 
 	// Restore the Tablets
 	restore(t, primary, "replica", "NOT_SERVING", true)
-	err := localCluster.VtctlclientProcess.ExecuteCommand(
+	err = localCluster.VtctlclientProcess.ExecuteCommand(
 		"TabletExternallyReparented", primary.Alias)
 	require.Nil(t, err)
 	restore(t, replica1, "replica", "SERVING", false)
@@ -93,6 +100,14 @@ func TestTabletBackupOnly(t *testing.T) {
 	replica1.VttabletProcess.ServingStatus = "NOT_SERVING"
 
 	initTablets(t, true, true)
+	time.Sleep(5 * time.Second)
+
+	// insert should only work for primary
+	_, err := primary.VttabletProcess.QueryTablet(vtInsertTest, keyspaceName, true)
+	require.Nil(t, err)
+	_, err = replica1.VttabletProcess.QueryTablet(vtInsertTest, keyspaceName, true)
+	require.ErrorContains(t, err, "The MySQL server is running with the --super-read-only option so it cannot execute this statement")
+
 	firstBackupTest(t, "replica")
 
 	tearDown(t, false)
@@ -151,6 +166,10 @@ func firstBackupTest(t *testing.T, tabletType string) {
 	time.Sleep(5 * time.Second)
 	//check the new replica has the data
 	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 2)
+	// insert in replica2 won't work because of super-read-only
+	_, err = replica2.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test2')", keyspaceName, true)
+	require.ErrorContains(t, err, "The MySQL server is running with the --super-read-only option so it cannot execute this statement")
+	cluster.VerifyRowsInTablet(t, replica1, keyspaceName, 2)
 
 	// check that the restored replica has the right local_metadata
 	result, err := replica2.VttabletProcess.QueryTabletWithDB("select * from local_metadata", "_vt")

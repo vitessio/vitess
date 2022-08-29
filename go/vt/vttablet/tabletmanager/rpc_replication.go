@@ -39,7 +39,7 @@ import (
 )
 
 var (
-	SetSuperReadOnly bool
+	SetSuperReadOnly = true
 	reparentQueries  []string
 )
 
