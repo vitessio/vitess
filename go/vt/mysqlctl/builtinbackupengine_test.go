@@ -247,7 +247,7 @@ func TestBinlogsToBackup(t *testing.T) {
 			require.NoError(t, err)
 			binlogsToBackup, fromGTID, toGTID, err := be.BinlogsToBackup(
 				context.Background(),
-				backupPos,
+				backupPos.GTIDSet,
 				binlogs,
 				func(ctx context.Context, binlog string) (gtids string, err error) {
 					gtids, ok := tc.previousGTIDs[binlog]
@@ -265,7 +265,8 @@ func TestBinlogsToBackup(t *testing.T) {
 			require.NotEmpty(t, binlogsToBackup)
 			assert.Equal(t, tc.expectBinlogs, binlogsToBackup)
 			assert.Equal(t, tc.previousGTIDs[binlogsToBackup[0]], fromGTID)
-			assert.Equal(t, tc.previousGTIDs[binlogsToBackup[len(binlogsToBackup)-1]], toGTID)
+			assert.Equal(t, tc.previousGTIDs[binlogs[len(binlogs)-1]], toGTID)
+			assert.NotEqual(t, fromGTID, toGTID)
 		})
 	}
 }

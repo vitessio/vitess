@@ -166,7 +166,7 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 
 func (be *BuiltinBackupEngine) BinlogsToBackup(
 	ctx context.Context,
-	backupPos mysql.Position,
+	backupGTIDSet mysql.GTIDSet,
 	binaryLogs []string,
 	pgtids func(ctx context.Context, binlog string) (gtids string, err error),
 ) (
@@ -185,7 +185,7 @@ func (be *BuiltinBackupEngine) BinlogsToBackup(
 		if err != nil {
 			return nil, "", "", vterrors.Wrapf(err, "cannot decode binlog %s position in incremental backup: %v", binlog, prevPos)
 		}
-		containedInFromPos := backupPos.GTIDSet.Contains(prevPos.GTIDSet)
+		containedInFromPos := backupGTIDSet.Contains(prevPos.GTIDSet)
 		// The binary logs are read in-order. They are build one on top of the other: we know
 		// the PreviousGTIDs of once binary log fully cover the previous binary log's.
 		if containedInFromPos {
@@ -199,8 +199,8 @@ func (be *BuiltinBackupEngine) BinlogsToBackup(
 		if i == 0 {
 			return nil, "", "", vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "the very first binlog file %v has PreviousGTIDs %s that exceed given incremental backup pos. There are GTID entries that are missing and this backup cannot run", binlog, prevPos)
 		}
-		if !prevPos.GTIDSet.Contains(backupPos.GTIDSet) {
-			return nil, "", "", vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "binary log %v neither contains requested GTID %s nor contains it. Backup cannot take place", binlog, backupPos.GTIDSet)
+		if !prevPos.GTIDSet.Contains(backupGTIDSet) {
+			return nil, "", "", vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "binary log %v with previous GTIDS %s neither contains requested GTID %s nor contains it. Backup cannot take place", binlog, prevPos.GTIDSet, backupGTIDSet)
 		}
 		// We begin with the previous binary log, and we ignore the last binary log, because it's still open and being written to.
 		binaryLogsToBackup = binaryLogs[i-1 : len(binaryLogs)-1]
@@ -208,7 +208,9 @@ func (be *BuiltinBackupEngine) BinlogsToBackup(
 		if err != nil {
 			return nil, "", "", vterrors.Wrapf(err, "cannot evaluate incremental backup from pos")
 		}
-		incrementalBackupToGTID, err := pgtids(ctx, binaryLogsToBackup[len(binaryLogsToBackup)-1])
+		// The "previous GTIDs" of the binary logs that _follows_ our binary-logs-to-backup indicates
+		// the backup's position.
+		incrementalBackupToGTID, err := pgtids(ctx, binaryLogs[len(binaryLogs)-1])
 		if err != nil {
 			return nil, "", "", vterrors.Wrapf(err, "cannot evaluate incremental backup to pos")
 		}
@@ -233,6 +235,26 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 	if err != nil {
 		return false, vterrors.Wrap(err, "can't get server uuid")
 	}
+	gtidPurged, err := params.Mysqld.GetGTIDPurged(ctx)
+	if err != nil {
+		return false, vterrors.Wrap(err, "can't get gtid_purged")
+	}
+	rpGTID, ok := rp.GTIDSet.(mysql.Mysql56GTIDSet)
+	if !ok {
+		return false, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot get MySQL GTID value: %v", rpGTID)
+	}
+	purgedGTID, ok := gtidPurged.GTIDSet.(mysql.Mysql56GTIDSet)
+	if !ok {
+		return false, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot get MySQL GTID purged value: %v", rpGTID)
+	}
+	// binlogs may not contain information about prged GTIDs. e.g. some binlog.000003 may have
+	// previous GTIDs like 00021324-1111-1111-1111-111111111111:30-60, ie 1-29 range is missing. This can happen
+	// when a server is restored from backup and set with gtid_purged != "".
+	// This is fine!
+	// Shortly we will compare a binlog's "Previous GTIDs" with the backup's position. For the purpose of comparison, we
+	// ignore the purged GTIDs:
+	binlogCompareGTID := rpGTID.Difference(purgedGTID)
+
 	if err := params.Mysqld.FlushBinaryLogs(ctx); err != nil {
 		return false, vterrors.Wrapf(err, "cannot flush binary logs in incremental backup")
 	}
@@ -254,7 +276,7 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 		previousGTIDs[binlog] = gtids
 		return gtids, nil
 	}
-	binaryLogsToBackup, incrementalBackupFromGTID, incrementalBackupToGTID, err := be.BinlogsToBackup(ctx, rp, binaryLogs, getPreviousGTIDs)
+	binaryLogsToBackup, incrementalBackupFromGTID, incrementalBackupToGTID, err := be.BinlogsToBackup(ctx, binlogCompareGTID, binaryLogs, getPreviousGTIDs)
 	if err != nil {
 		return false, vterrors.Wrapf(err, "cannot get binary logs to backup in incremental backup")
 	}
@@ -266,7 +288,7 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 	if err != nil {
 		return false, vterrors.Wrapf(err, "cannot parse position %v", incrementalBackupToGTID)
 	}
-	// It's worthwhile to explain the difference between params.IncrementalFromPos and incrementalBackupFromPosition.
+	// It's worthwhile we explain the difference between params.IncrementalFromPos and incrementalBackupFromPosition.
 	// params.IncrementalFromPos is supplied by the user. They want an incremental backup that covers that position.
 	// However, we implement incremental backups by copying complete binlog files. That position could potentially
 	// be somewhere in the middle of some binlog. So we look at the earliest binlog file that covers the user's position.
