@@ -170,6 +170,8 @@ func clusterMySQLVersions(clusterName string) mysqlVersions {
 		return allMySQLVersions
 	case clusterName == "schemadiff_vrepl":
 		return allMySQLVersions
+	case clusterName == "backup_pitr":
+		return allMySQLVersions
 	case clusterName == "tabletmanager_tablegc":
 		return allMySQLVersions
 	case clusterName == "mysql80":
