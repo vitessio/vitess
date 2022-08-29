@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"sort"
 	"sync"
 	"testing"
 
@@ -243,43 +244,48 @@ func TestVStreamCopyResume(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Any subsequent GTIDs will be part of the stream
 	mpos, err := mconn.PrimaryPosition()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	_, err = conn.ExecuteFetch("update t1 set id2 = 10 where id1 = 1", 1, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-
+	// This GTID should end up as a no-op because we should have copied the
+	// existing row
 	_, err = conn.ExecuteFetch("insert into t1(id1,id2) values(9,9)", 1, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 
+	// lastPK is id1=4, meaning we should only copy rows for id1 IN(5,6,7,8,9)
 	lastPK := sqltypes.Result{
-		Fields: []*query.Field{{Name: "id1", Type: query.Type_INT32}},
-		Rows:   [][]sqltypes.Value{{sqltypes.NewInt32(4)}},
+		Fields: []*query.Field{{Name: "id1", Type: query.Type_INT64}},
+		Rows:   [][]sqltypes.Value{{sqltypes.NewInt64(4)}},
 	}
-	qr := sqltypes.ResultToProto3(&lastPK)
-	tablePKs := []*binlogdatapb.TableLastPK{{
+	tableLastPK := []*binlogdatapb.TableLastPK{{
 		TableName: "t1",
-		Lastpk:    qr,
+		Lastpk:    sqltypes.ResultToProto3(&lastPK),
 	}}
+
+	// This GTID must have a before and after value
+	_, err = conn.ExecuteFetch("update t1 set id2 = 10 where id1 = 1", 1, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	var shardGtids []*binlogdatapb.ShardGtid
 	var vgtid = &binlogdatapb.VGtid{}
 	shardGtids = append(shardGtids, &binlogdatapb.ShardGtid{
 		Keyspace: "ks",
 		Shard:    "-80",
 		Gtid:     fmt.Sprintf("%s/%s", mpos.GTIDSet.Flavor(), mpos),
-		TablePKs: tablePKs,
+		TablePKs: tableLastPK,
 	})
 	shardGtids = append(shardGtids, &binlogdatapb.ShardGtid{
 		Keyspace: "ks",
 		Shard:    "80-",
 		Gtid:     fmt.Sprintf("%s/%s", mpos.GTIDSet.Flavor(), mpos),
-		TablePKs: tablePKs,
+		TablePKs: tableLastPK,
 	})
 	vgtid.ShardGtids = shardGtids
 	filter := &binlogdatapb.Filter{
@@ -290,12 +296,23 @@ func TestVStreamCopyResume(t *testing.T) {
 	}
 	flags := &vtgatepb.VStreamFlags{}
 	reader, err := gconn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, flags)
-	_, _ = conn, mconn
 	if err != nil {
 		t.Fatal(err)
 	}
-	numExpectedRowEvents := 2 /* catchup events */ + 5 /* copy events */
 	require.NotNil(t, reader)
+
+	expectedRowCopyEvents := 5 // id1 and id2 IN(5,6,7,8,9)
+	expectedCatchupEvents := 2 // id1=9 and id2=9; id2=10 where id1=1
+	rowCopyEvents, replCatchupEvents := 0, 0
+	expectedEvents := []string{
+		`type:ROW timestamp:[0-9]+ row_event:{table_name:"ks.t1" row_changes:{before:{lengths:1 lengths:1 values:"11"} after:{lengths:1 lengths:2 values:"110"}} keyspace:"ks" shard:"-80"} current_time:[0-9]+ keyspace:"ks" shard:"-80"`,
+		`type:ROW row_event:{table_name:"ks.t1" row_changes:{after:{lengths:1 lengths:1 values:"55"}} keyspace:"ks" shard:"-80"} keyspace:"ks" shard:"-80"`,
+		`type:ROW row_event:{table_name:"ks.t1" row_changes:{after:{lengths:1 lengths:1 values:"66"}} keyspace:"ks" shard:"80-"} keyspace:"ks" shard:"80-"`,
+		`type:ROW row_event:{table_name:"ks.t1" row_changes:{after:{lengths:1 lengths:1 values:"77"}} keyspace:"ks" shard:"80-"} keyspace:"ks" shard:"80-"`,
+		`type:ROW row_event:{table_name:"ks.t1" row_changes:{after:{lengths:1 lengths:1 values:"88"}} keyspace:"ks" shard:"80-"} keyspace:"ks" shard:"80-"`,
+		`type:ROW row_event:{table_name:"ks.t1" row_changes:{after:{lengths:1 lengths:1 values:"99"}} keyspace:"ks" shard:"-80"} keyspace:"ks" shard:"-80"`,
+		`type:ROW timestamp:[0-9]+ row_event:{table_name:"ks.t1" row_changes:{after:{lengths:1 lengths:1 values:"99"}} keyspace:"ks" shard:"-80"} current_time:[0-9]+ keyspace:"ks" shard:"-80"`,
+	}
 	var evs []*binlogdatapb.VEvent
 	for {
 		e, err := reader.Recv()
@@ -304,10 +321,19 @@ func TestVStreamCopyResume(t *testing.T) {
 			for _, ev := range e {
 				if ev.Type == binlogdatapb.VEventType_ROW {
 					evs = append(evs, ev)
+					if ev.Timestamp == 0 {
+						rowCopyEvents++
+					} else {
+						replCatchupEvents++
+					}
 					printEvents(evs) // for debugging ci failures
 				}
 			}
-			if len(evs) == numExpectedRowEvents {
+			if expectedCatchupEvents == replCatchupEvents && expectedRowCopyEvents == rowCopyEvents {
+				sort.Sort(VEventSorter(evs))
+				for i, ev := range evs {
+					require.Regexp(t, expectedEvents[i], ev.String())
+				}
 				t.Logf("TestVStreamCopyResume was successful")
 				return
 			}
@@ -484,4 +510,24 @@ func printEvents(evs []*binlogdatapb.VEvent) {
 	}
 	s += "===END===" + "\n"
 	log.Infof("%s", s)
+}
+
+// Sort the VEvents by the first row change's after value bytes primarily, with
+// secondary ordering by timestamp (ASC). Note that row copy events do not have
+// a timestamp and the value will be 0.
+type VEventSorter []*binlogdatapb.VEvent
+
+func (v VEventSorter) Len() int {
+	return len(v)
+}
+func (v VEventSorter) Swap(i, j int) {
+	v[i], v[j] = v[j], v[i]
+}
+func (v VEventSorter) Less(i, j int) bool {
+	valI := string(v[i].GetRowEvent().RowChanges[0].After.Values)
+	valJ := string(v[j].GetRowEvent().RowChanges[0].After.Values)
+	if valI == valJ {
+		return v[i].Timestamp < v[j].Timestamp
+	}
+	return valI < valJ
 }
