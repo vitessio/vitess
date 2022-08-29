@@ -75,6 +75,7 @@ var (
 		"vtgate_general_heavy",
 		"vtbackup_transform",
 		"xb_backup",
+		"backup_pitr",
 		"21",
 		"22",
 		"mysql_server_vault",
