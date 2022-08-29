@@ -38,26 +38,28 @@ import (
 
 // LogStats records the stats for a single vtgate query
 type LogStats struct {
-	Ctx           context.Context
-	Method        string
-	TabletType    string
-	StmtType      string
-	SQL           string
-	RawSQL        string
-	IsNormalized  bool
-	BindVariables map[string]*querypb.BindVariable
-	StartTime     time.Time
-	EndTime       time.Time
-	ShardQueries  uint64
-	RowsAffected  uint64
-	RowsReturned  uint64
-	RowsRead      uint64
-	PlanTime      time.Duration
-	ExecuteTime   time.Duration
-	CommitTime    time.Duration
-	Error         error
-	CachedPlan    bool
-	TablesUsed    []string
+	Ctx            context.Context
+	Method         string
+	TabletType     string
+	StmtType       string
+	SQL            string
+	RawSQL         string
+	IsNormalized   bool
+	BindVariables  map[string]*querypb.BindVariable
+	StartTime      time.Time
+	EndTime        time.Time
+	ShardQueries   uint64
+	RowsAffected   uint64
+	RowsReturned   uint64
+	RowsRead       uint64
+	PlanTime       time.Duration
+	ExecuteTime    time.Duration
+	CommitTime     time.Duration
+	Error          error
+	SessionUUID    string
+	CachedPlan     bool
+	TablesUsed     []string
+	ActiveKeyspace string // ActiveKeyspace is the selected keyspace `use ks`
 
 	// These two fields are deprecated and will be removed in the Vitess V16 release
 	Keyspace string
@@ -163,9 +165,9 @@ func (stats *LogStats) Logf(w io.Writer, params url.Values) error {
 	var fmtString string
 	switch *streamlog.QueryLogFormat {
 	case streamlog.QueryLogFormatText:
-		fmtString = "%v\t%v\t%v\t'%v'\t'%v'\t%v\t%v\t%.6f\t%.6f\t%.6f\t%.6f\t%v\t%q\t%v\t%v\t%v\t%q\t%q\t%q\t%q\t%t\t%v\n"
+		fmtString = "%v\t%v\t%v\t'%v'\t'%v'\t%v\t%v\t%.6f\t%.6f\t%.6f\t%.6f\t%v\t%q\t%v\t%v\t%v\t%q\t%q\t%q\t%q\t%t\t%v\t%q\n"
 	case streamlog.QueryLogFormatJSON:
-		fmtString = "{\"Method\": %q, \"RemoteAddr\": %q, \"Username\": %q, \"ImmediateCaller\": %q, \"Effective Caller\": %q, \"Start\": \"%v\", \"End\": \"%v\", \"TotalTime\": %.6f, \"PlanTime\": %v, \"ExecuteTime\": %v, \"CommitTime\": %v, \"StmtType\": %q, \"SQL\": %q, \"BindVars\": %v, \"ShardQueries\": %v, \"RowsAffected\": %v, \"Error\": %q,  \"Keyspace\": %q, \"Table\": %q, \"TabletType\": %q, \"Cached Plan\": %t, \"TablesUsed\": %v}\n"
+		fmtString = "{\"Method\": %q, \"RemoteAddr\": %q, \"Username\": %q, \"ImmediateCaller\": %q, \"Effective Caller\": %q, \"Start\": \"%v\", \"End\": \"%v\", \"TotalTime\": %.6f, \"PlanTime\": %v, \"ExecuteTime\": %v, \"CommitTime\": %v, \"StmtType\": %q, \"SQL\": %q, \"BindVars\": %v, \"ShardQueries\": %v, \"RowsAffected\": %v, \"Error\": %q,  \"Keyspace\": %q, \"Table\": %q, \"TabletType\": %q, \"Cached Plan\": %t, \"TablesUsed\": %v, \"ActiveKeyspace\": %q}\n"
 	}
 
 	tables := stats.TablesUsed
@@ -201,6 +203,7 @@ func (stats *LogStats) Logf(w io.Writer, params url.Values) error {
 		stats.TabletType,
 		stats.CachedPlan,
 		string(tablesUsed),
+		stats.ActiveKeyspace,
 	)
 
 	return err
