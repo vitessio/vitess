@@ -18,7 +18,6 @@ package vreplication
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -28,6 +27,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
@@ -37,6 +37,7 @@ import (
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/queryservice/fakes"
@@ -69,6 +70,31 @@ type LogExpectation struct {
 
 var heartbeatRe *regexp.Regexp
 
+// setFlag() sets a flag for a test in a non-racy way:
+//	* it registers the flag using a different flagset scope
+//	* clears other flags by passing a dummy os.Args() while parsing this flagset
+//	* sets the specific flag, if it has not already been defined
+//	* resets the os.Args() so that the remaining flagsets can be parsed correctly
+func setFlag(flagName, flagValue string) {
+	flagSetName := "vreplication-unit-test"
+	var tmp []string
+	tmp, os.Args = os.Args[:], []string{flagSetName}
+	defer func() { os.Args = tmp }()
+
+	servenv.OnParseFor(flagSetName, func(fs *pflag.FlagSet) {
+		if fs.Lookup(flagName) != nil {
+			fmt.Printf("found %s: %+v", flagName, fs.Lookup(flagName).Value)
+			return
+		}
+	})
+	servenv.ParseFlags(flagSetName)
+
+	if err := pflag.Set(flagName, flagValue); err != nil {
+		msg := "failed to set flag %q to %q: %v"
+		log.Errorf(msg, flagName, flagValue, err)
+	}
+}
+
 func init() {
 	tabletconn.RegisterDialer("test", func(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
 		return &fakeTabletConn{
@@ -79,14 +105,12 @@ func init() {
 	tabletconntest.SetProtocol("go.vt.vttablet.tabletmanager.vreplication.framework_test", "test")
 
 	binlogplayer.RegisterClientFactory("test", func() binlogplayer.Client { return globalFBC })
-	flag.Set("binlog_player_protocol", "test")
+	setFlag("binlog_player_protocol", "test")
 
 	heartbeatRe = regexp.MustCompile(`update _vt.vreplication set time_updated=\d+ where id=\d+`)
 }
 
 func TestMain(m *testing.M) {
-	flag.Parse() // Do not remove this comment, import into google3 depends on it
-
 	exitCode := func() int {
 		var err error
 		env, err = testenv.Init()
@@ -96,7 +120,7 @@ func TestMain(m *testing.M) {
 		}
 		defer env.Close()
 
-		*vreplicationExperimentalFlags = 0
+		vreplicationExperimentalFlags = 0
 
 		// engines cannot be initialized in testenv because it introduces
 		// circular dependencies.
