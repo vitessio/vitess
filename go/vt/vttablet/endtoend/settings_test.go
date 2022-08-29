@@ -69,10 +69,16 @@ func TestDDLNoConnectionReservationOnSettings(t *testing.T) {
 	query := "create table temp(c_date datetime default '0000-00-00')"
 	setting := "set sql_mode='TRADITIONAL'"
 
-	_, err := client.ReserveExecute(query, []string{setting}, nil)
-	require.Error(t, err, "create table should have failed with TRADITIONAL mode")
-	require.Contains(t, err.Error(), "Invalid default value")
-	assert.EqualValues(t, 0, client.ReservedID())
+	for _, withTx := range []bool{false, true} {
+		if withTx {
+			err := client.Begin(false)
+			require.NoError(t, err)
+		}
+		_, err := client.ReserveExecute(query, []string{setting}, nil)
+		require.Error(t, err, "create table should have failed with TRADITIONAL mode")
+		require.Contains(t, err.Error(), "Invalid default value")
+		assert.EqualValues(t, 0, client.ReservedID())
+	}
 }
 
 func TestDMLNoConnectionReservationOnSettings(t *testing.T) {
@@ -97,9 +103,91 @@ func TestDMLNoConnectionReservationOnSettings(t *testing.T) {
 		"update temp set c_date = '0000-00-00'",
 	}
 
+	for _, withTx := range []bool{false, true} {
+		if withTx {
+			err := client.Begin(false)
+			require.NoError(t, err)
+		}
+		for _, query := range queries {
+			t.Run(query, func(t *testing.T) {
+				_, err = client.ReserveExecute(query, []string{setting}, nil)
+				require.Error(t, err, "query should have failed with TRADITIONAL mode")
+				require.Contains(t, err.Error(), "Incorrect datetime value")
+				assert.EqualValues(t, 0, client.ReservedID())
+			})
+		}
+	}
+}
+
+func TestSelectNoConnectionReservationOnSettingsWithTx(t *testing.T) {
+	framework.Server.Config().EnableSettingsPool = true
+	defer func() {
+		framework.Server.Config().EnableSettingsPool = false
+	}()
+
+	client := framework.NewClient()
+
+	query := "select @@sql_mode"
+	setting := "set @@sql_mode = ''"
+
+	qr, err := client.ReserveBeginExecute(query, []string{setting}, nil, nil)
+	require.NoError(t, err)
+	assert.EqualValues(t, 0, client.ReservedID())
+	assert.Equal(t, `[[VARCHAR("")]]`, fmt.Sprintf("%v", qr.Rows))
+	require.NoError(t,
+		client.Release())
+
+	qr, err = client.ReserveBeginStreamExecute(query, []string{setting}, nil, nil)
+	require.NoError(t, err)
+	assert.EqualValues(t, 0, client.ReservedID())
+	assert.Equal(t, `[[VARCHAR("")]]`, fmt.Sprintf("%v", qr.Rows))
+	require.NoError(t,
+		client.Release())
+}
+
+func TestDDLNoConnectionReservationOnSettingsWithTx(t *testing.T) {
+	framework.Server.Config().EnableSettingsPool = true
+	defer func() {
+		framework.Server.Config().EnableSettingsPool = false
+	}()
+
+	client := framework.NewClient()
+	defer client.Release()
+
+	query := "create table temp(c_date datetime default '0000-00-00')"
+	setting := "set sql_mode='TRADITIONAL'"
+
+	_, err := client.ReserveBeginExecute(query, []string{setting}, nil, nil)
+	require.Error(t, err, "create table should have failed with TRADITIONAL mode")
+	require.Contains(t, err.Error(), "Invalid default value")
+	assert.EqualValues(t, 0, client.ReservedID())
+}
+
+func TestDMLNoConnectionReservationOnSettingsWithTx(t *testing.T) {
+	framework.Server.Config().EnableSettingsPool = true
+	defer func() {
+		framework.Server.Config().EnableSettingsPool = false
+	}()
+
+	client := framework.NewClient()
+	defer client.Release()
+
+	_, err := client.Execute("create table temp(c_date datetime)", nil)
+	require.NoError(t, err)
+	defer client.Execute("drop table temp", nil)
+
+	_, err = client.Execute("insert into temp values ('2022-08-25')", nil)
+	require.NoError(t, err)
+
+	setting := "set sql_mode='TRADITIONAL'"
+	queries := []string{
+		"insert into temp values('0000-00-00')",
+		"update temp set c_date = '0000-00-00'",
+	}
+
 	for _, query := range queries {
 		t.Run(query, func(t *testing.T) {
-			_, err = client.ReserveExecute(query, []string{setting}, nil)
+			_, err = client.ReserveBeginExecute(query, []string{setting}, nil, nil)
 			require.Error(t, err, "query should have failed with TRADITIONAL mode")
 			require.Contains(t, err.Error(), "Incorrect datetime value")
 			assert.EqualValues(t, 0, client.ReservedID())

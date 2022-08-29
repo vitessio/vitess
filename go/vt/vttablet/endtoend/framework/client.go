@@ -343,6 +343,32 @@ func (client *QueryClient) ReserveBeginExecute(query string, preQueries []string
 	return qr, nil
 }
 
+// ReserveBeginStreamExecute performs a ReserveBeginStreamExecute.
+func (client *QueryClient) ReserveBeginStreamExecute(query string, preQueries []string, postBeginQueries []string, bindvars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	if client.reservedID != 0 {
+		return nil, errors.New("already reserved a connection")
+	}
+	if client.transactionID != 0 {
+		return nil, errors.New("already in transaction")
+	}
+	result := &sqltypes.Result{}
+	state, err := client.server.ReserveBeginStreamExecute(client.ctx, client.target, preQueries, postBeginQueries, query, bindvars, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL},
+		func(res *sqltypes.Result) error {
+			if result.Fields == nil {
+				result.Fields = res.Fields
+			}
+			result.Rows = append(result.Rows, res.Rows...)
+			return nil
+		})
+	client.transactionID = state.TransactionID
+	client.reservedID = state.ReservedID
+	client.sessionStateChanges = state.SessionStateChanges
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
 // Release performs a Release.
 func (client *QueryClient) Release() error {
 	err := client.server.Release(client.ctx, client.target, client.transactionID, client.reservedID)
