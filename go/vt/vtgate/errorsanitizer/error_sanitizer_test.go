@@ -81,7 +81,17 @@ func TestErrorNormalization(t *testing.T) {
 		{
 			"truncates very long strings",
 			"Doloribus quo ullam labore nostrum nihil dolore nemo. Ad molestiae ab at dolores et. Iusto adipisci tempora et quia blanditiis et.  Velit alias eos quia et velit. Impedit ipsa itaque facilis repellendus. Quidem fuga sit voluptas minus. Neque amet et necessitatibus voluptatum. Voluptatem eum consequatur et dolor. Nulla deserunt quia cum ea hic architecto.  Eum et sed quo et officia nostrum eos. Nam quisquam et dolor repellat. Ea aperiam iste et.  Sint commodi non ut non occaecati velit. Architecto et fuga alias blanditiis consequatur qui ipsa magnam. Ea velit mollitia sed eligendi dolor et. Commodi et non sint optio asperiores.  Et dolores id corrupti voluptatum quasi voluptatem ipsam voluptatem. Dolorum et natus fugit. Ad id ea laudantium adipisci molestiae ratione eum quisquam.",
-			"Doloribus quo ullam labore nostrum nihil dolore nemo. Ad molestiae ab at dolores et. Iusto adipisci tempora et quia blanditiis et.  Velit alias eos quia et velit. Impedit ipsa itaque facilis repellendus. Quidem fuga sit voluptas minus. Neque amet et necess",
+			"Doloribus quo ullam labore nostrum nihil dolore nemo. Ad molestiae ab at dolores et. Iusto adipisci tempora et quia blanditiis et.  Velit alias eos quia et velit. Impedit ipsa itaque facilis repellendus. Quidem fuga sit voluptas minus. Neque amet et necessitatibus voluptatum. Voluptatem eum consequatur et dolor. Nulla deserunt quia cum ea hic architecto.  Eum et sed quo et officia ",
+		},
+		{
+			"removes 'incorrect' string value literals",
+			"target: targ.-.primary: vttablet: rpc error: code = InvalidArgument desc = Incorrect string value: '\\xC3?A' for column 'name' at row 253 (errno 1366) (sqlstate HY000) (CallerID: planetscale-admin)",
+			"target: targ.-.primary: vttablet: rpc error: code = InvalidArgument desc = Incorrect string value: '<val>' for column 'name' at row 253 (errno 1366) (sqlstate HY000) (CallerID: planetscale-admin)",
+		},
+		{
+			"removes 'incorrect' datetime  value literals",
+			"target: targ.-.primary: vttablet: rpc error: code = InvalidArgument desc = Incorrect datetime value: '1991-09-29 NULL' for column 'startdate' at row 1 (errno 1292) (sqlstate 22007) (CallerID: planetscale-admin)",
+			"target: targ.-.primary: vttablet: rpc error: code = InvalidArgument desc = Incorrect datetime value: '<val>' for column 'startdate' at row 1 (errno 1292) (sqlstate 22007) (CallerID: planetscale-admin)",
 		},
 	}
 	for _, tc := range testCases {
