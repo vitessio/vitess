@@ -28,6 +28,7 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -900,4 +901,74 @@ func terminateRestore(t *testing.T) {
 		}
 	}
 	assert.True(t, found, "Restore message not found")
+}
+
+func vtctlBackupReplicaNoDropTables(t *testing.T, tabletType string) (backups []string, destroy func(t *testing.T)) {
+	restoreWaitForBackup(t, tabletType, nil, true)
+	verifyInitialReplication(t)
+
+	err := localCluster.VtctlclientProcess.ExecuteCommand("Backup", replica1.Alias)
+	require.Nil(t, err)
+
+	backups = localCluster.VerifyBackupCount(t, shardKsName, 1)
+	_, err = primary.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test2')", keyspaceName, true)
+	require.Nil(t, err)
+
+	err = replica2.VttabletProcess.WaitForTabletStatusesForTimeout([]string{"SERVING"}, 25*time.Second)
+	require.Nil(t, err)
+	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 2)
+
+	cluster.VerifyLocalMetadata(t, replica2, keyspaceName, shardName, cell)
+
+	destroy = func(t *testing.T) {
+		verifyAfterRemovingBackupNoBackupShouldBePresent(t, backups)
+
+		err = replica2.VttabletProcess.TearDown()
+		require.Nil(t, err)
+
+		err = localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", replica2.Alias)
+		require.Nil(t, err)
+	}
+	return backups, destroy
+}
+
+func InsertRowOnPrimary(t *testing.T) {
+	// insert more data on replica2 (current primary)
+	_, err := primary.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values (sha1(rand()))", keyspaceName, true)
+	require.NoError(t, err)
+}
+
+func readManifestFile(t *testing.T, backupLocation string) (manifest *mysqlctl.BackupManifest) {
+	// reading manifest
+	data, err := os.ReadFile(backupLocation + "/MANIFEST")
+	require.NoErrorf(t, err, "error while reading MANIFEST %v", err)
+
+	// parsing manifest
+	err = json.Unmarshal(data, &manifest)
+	require.NoErrorf(t, err, "error while parsing MANIFEST %v", err)
+	require.NotNil(t, manifest)
+	return manifest
+}
+
+func TestReplicaFullBackup(t *testing.T) (manifest *mysqlctl.BackupManifest) {
+	backups, destroy := vtctlBackupReplicaNoDropTables(t, "replica")
+	defer destroy(t)
+
+	backupLocation := localCluster.CurrentVTDATAROOT + "/backups/" + shardKsName + "/" + backups[len(backups)-1]
+	return readManifestFile(t, backupLocation)
+}
+
+func TestReplicaIncrementalBackup(t *testing.T, incrementalFromPos mysql.Position, expectError string) (manifest *mysqlctl.BackupManifest) {
+	output, err := localCluster.VtctlclientProcess.ExecuteCommandWithOutput("Backup", "--", "--incremental_from_pos", mysql.EncodePosition(incrementalFromPos), replica1.Alias)
+	if expectError != "" {
+		require.Errorf(t, err, "expected: %v", expectError)
+		require.Contains(t, output, expectError)
+		return nil
+	}
+	require.NoErrorf(t, err, "output: %v", output)
+
+	backups, err := localCluster.ListBackups(shardKsName)
+	require.NoError(t, err)
+	backupLocation := localCluster.CurrentVTDATAROOT + "/backups/" + shardKsName + "/" + backups[len(backups)-1]
+	return readManifestFile(t, backupLocation)
 }
