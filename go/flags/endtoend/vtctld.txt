@@ -217,8 +217,8 @@ Usage of vtctld:
       --tablet_manager_grpc_crl string                                   the server crl to use to validate server certificates when connecting
       --tablet_manager_grpc_key string                                   the key to use to connect
       --tablet_manager_grpc_server_name string                           the server name to use to validate server certificate
-      --tablet_manager_protocol string                                   the protocol to use to talk to vttablet (default "grpc")
-      --tablet_protocol string                                           Protocol to use to talk to vttablets. (default "grpc")
+      --tablet_manager_protocol string                                   Protocol to use to make tabletmanager RPCs to vttablets. (default "grpc")
+      --tablet_protocol string                                           Protocol to use to make queryservice RPCs to vttablets. (default "grpc")
       --tablet_refresh_interval duration                                 Tablet refresh interval. (default 1m0s)
       --tablet_refresh_known_tablets                                     Whether to reload the tablet's address/port map from topo in case they change. (default true)
       --tablet_url_template string                                       Format string describing debug tablet url formatting. See getTabletDebugURL() for how to customize this. (default "http://{{.GetTabletHostPort}}")
