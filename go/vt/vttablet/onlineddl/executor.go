@@ -132,6 +132,7 @@ var (
 	onlineDDLUser            = "vt-online-ddl-internal"
 	onlineDDLGrant           = fmt.Sprintf("'%s'@'%s'", onlineDDLUser, "%")
 	throttlerOnlineDDLApp    = "online-ddl"
+	throttleCheckFlags       = &throttle.CheckFlags{}
 )
 
 type mysqlVariables struct {
@@ -3033,6 +3034,8 @@ func (e *Executor) readVReplStream(ctx context.Context, uuid string, okIfMissing
 		pos:                  row.AsString("pos", ""),
 		timeUpdated:          row.AsInt64("time_updated", 0),
 		timeHeartbeat:        row.AsInt64("time_heartbeat", 0),
+		timeThrottled:        row.AsInt64("time_throttled", 0),
+		componentThrottled:   row.AsString("component_throttled", ""),
 		transactionTimestamp: row.AsInt64("transaction_timestamp", 0),
 		state:                row.AsString("state", ""),
 		message:              row.AsString("message", ""),
@@ -3143,6 +3146,7 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 		}
 	}
 
+	var throttlerOnce sync.Once
 	r, err := e.execQuery(ctx, sqlSelectRunningMigrations)
 	if err != nil {
 		return countRunnning, cancellable, err
@@ -3213,6 +3217,7 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 					_ = e.updateRowsCopied(ctx, uuid, s.rowsCopied)
 					_ = e.updateMigrationProgressByRowsCopied(ctx, uuid, s.rowsCopied)
 					_ = e.updateMigrationETASecondsByProgress(ctx, uuid)
+					_ = e.updateMigrationLastThrottled(ctx, uuid, s.timeThrottled, s.componentThrottled)
 
 					isReady, err := e.isVReplMigrationReadyToCutOver(ctx, s)
 					if err != nil {
@@ -3246,6 +3251,25 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 							return countRunnning, cancellable, err
 						}
 					}
+					go throttlerOnce.Do(func() {
+						if e.lagThrottler.CheckIsReady() != nil {
+							return
+						}
+						// Self healing: in the following scenario:
+						// - a vitess migration
+						// - with on demand heartbeats
+						// - the streamer running on a replica
+						// - the streamer was throttled for long enough
+						// - then vplayer and vcopier are locked, waiting for the streamer to do something
+						// - since they are blocked, they're not running throttler checks
+						// - since streamer runs on replica, it only checks that replica
+						// - therefore no one asking for on-demand heartbeats
+						// - then, if the conditions for the streamer's throttling are done, the streamer then thinks there's replication lag, with nothing to remediate it.
+						// - it's a deadlock.
+						// And so, once per reviewRunningMigrations(), and assuming there _are_ running migrations, we ensure to hit a throttler check. This will kick
+						// on-demand heartbeats, unlocking the deadlock.
+						e.lagThrottler.CheckByType(ctx, throttlerOnlineDDLApp, "", throttleCheckFlags, throttle.ThrottleCheckPrimaryWrite)
+					})
 				}
 			}
 		case schema.DDLStrategyPTOSC:
@@ -3785,6 +3809,19 @@ func (e *Executor) updateMigrationProgressByRowsCopied(ctx context.Context, uuid
 
 func (e *Executor) updateMigrationETASecondsByProgress(ctx context.Context, uuid string) error {
 	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationETASecondsByProgress,
+		sqltypes.StringBindVariable(uuid),
+	)
+	if err != nil {
+		return err
+	}
+	_, err = e.execQuery(ctx, query)
+	return err
+}
+
+func (e *Executor) updateMigrationLastThrottled(ctx context.Context, uuid string, lastThrottledUnixTime int64, throttledCompnent string) error {
+	query, err := sqlparser.ParseAndBind(sqlUpdateLastThrottled,
+		sqltypes.Int64BindVariable(lastThrottledUnixTime),
+		sqltypes.StringBindVariable(throttledCompnent),
 		sqltypes.StringBindVariable(uuid),
 	)
 	if err != nil {

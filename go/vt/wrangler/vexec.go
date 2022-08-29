@@ -415,6 +415,10 @@ type ReplicationStatus struct {
 	TimeUpdated int64
 	// TimeHeartbeat represents the time_heartbeat column from the _vt.vreplication table.
 	TimeHeartbeat int64
+	// TimeThrottled represents the time_throttled column from the _vt.vreplication table.
+	TimeThrottled int64
+	// ComponentThrottled represents the component_throttled column from the _vt.vreplication table.
+	ComponentThrottled string
 	// Message represents the message column from the _vt.vreplication table.
 	Message string
 	// Tags contain the tags specified for this stream
@@ -429,8 +433,8 @@ type ReplicationStatus struct {
 
 func (wr *Wrangler) getReplicationStatusFromRow(ctx context.Context, row sqltypes.RowNamedValues, primary *topo.TabletInfo) (*ReplicationStatus, string, error) {
 	var err error
-	var id, timeUpdated, transactionTimestamp, timeHeartbeat int64
-	var state, dbName, pos, stopPos, message, tags string
+	var id, timeUpdated, transactionTimestamp, timeHeartbeat, timeThrottled int64
+	var state, dbName, pos, stopPos, message, tags, componentThrottled string
 	var bls binlogdatapb.BinlogSource
 	var mpos mysql.Position
 
@@ -482,6 +486,14 @@ func (wr *Wrangler) getReplicationStatusFromRow(ctx context.Context, row sqltype
 	if err != nil {
 		return nil, "", err
 	}
+	timeThrottled, err = row.ToInt64("time_throttled")
+	if err != nil {
+		return nil, "", err
+	}
+	componentThrottled, err = row.ToString("component_throttled")
+	if err != nil {
+		return nil, "", err
+	}
 	message, err = row.ToString("message")
 	if err != nil {
 		return nil, "", err
@@ -502,6 +514,8 @@ func (wr *Wrangler) getReplicationStatusFromRow(ctx context.Context, row sqltype
 		TransactionTimestamp: transactionTimestamp,
 		TimeUpdated:          timeUpdated,
 		TimeHeartbeat:        timeHeartbeat,
+		TimeThrottled:        timeThrottled,
+		ComponentThrottled:   componentThrottled,
 		Message:              message,
 		Tags:                 tags,
 		sourceTimeZone:       bls.SourceTimeZone,
@@ -521,7 +535,22 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (
 	rsr.ShardStatuses = make(map[string]*ShardReplicationStatus)
 	rsr.Workflow = workflow
 	var results map[*topo.TabletInfo]*querypb.QueryResult
-	query := "select id, source, pos, stop_pos, max_replication_lag, state, db_name, time_updated, transaction_timestamp, time_heartbeat, message, tags from _vt.vreplication"
+	query := `select 
+		id,
+		source,
+		pos,
+		stop_pos,
+		max_replication_lag,
+		state,
+		db_name,
+		time_updated,
+		transaction_timestamp,
+		time_heartbeat,
+		time_throttled,
+		component_throttled,
+		message,
+		tags
+	from _vt.vreplication`
 	results, err := wr.runVexec(ctx, workflow, keyspace, query, false)
 	if err != nil {
 		return nil, err

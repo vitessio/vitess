@@ -92,6 +92,17 @@ func CheckRetryMigration(t *testing.T, vtParams *mysql.ConnParams, shards []clus
 	}
 }
 
+// CheckRetryPartialMigration attempts to retry a migration where a subset of shards failed
+func CheckRetryPartialMigration(t *testing.T, vtParams *mysql.ConnParams, uuid string, expectAtLeastRowsAffected uint64) {
+	query, err := sqlparser.ParseAndBind("alter vitess_migration %a retry",
+		sqltypes.StringBindVariable(uuid),
+	)
+	require.NoError(t, err)
+	r := VtgateExecQuery(t, vtParams, query, "")
+
+	assert.GreaterOrEqual(t, expectAtLeastRowsAffected, r.RowsAffected)
+}
+
 // CheckCancelMigration attempts to cancel a migration, and expects success/failure by counting affected rows
 func CheckCancelMigration(t *testing.T, vtParams *mysql.ConnParams, shards []cluster.Shard, uuid string, expectCancelPossible bool) {
 	query, err := sqlparser.ParseAndBind("alter vitess_migration %a cancel",
@@ -269,4 +280,29 @@ func CheckThrottledApps(t *testing.T, vtParams *mysql.ConnParams, appName string
 		}
 	}
 	assert.Equal(t, expectFind, found, "check app %v in throttled apps: %v", appName, found)
+}
+
+// WaitForThrottledTimestamp waits for a migration to have a non-empty last_throttled_timestamp
+func WaitForThrottledTimestamp(t *testing.T, vtParams *mysql.ConnParams, uuid string, timeout time.Duration) (
+	row sqltypes.RowNamedValues,
+	startedTimestamp string,
+	lastThrottledTimestamp string,
+) {
+	startTime := time.Now()
+	for time.Since(startTime) < timeout {
+		rs := ReadMigrations(t, vtParams, uuid)
+		require.NotNil(t, rs)
+		for _, row = range rs.Named().Rows {
+			startedTimestamp = row.AsString("started_timestamp", "")
+			require.NotEmpty(t, startedTimestamp)
+			lastThrottledTimestamp = row.AsString("last_throttled_timestamp", "")
+			if lastThrottledTimestamp != "" {
+				// good. This is what we've been waiting for.
+				return row, startedTimestamp, lastThrottledTimestamp
+			}
+		}
+		time.Sleep(1 * time.Second)
+	}
+	t.Error("timeout waiting for last_throttled_timestamp to have nonempty value")
+	return
 }
