@@ -153,7 +153,7 @@ func TestTxEngineBegin(t *testing.T) {
 
 	for _, exec := range []func() (int64, string, error){
 		func() (int64, string, error) {
-			tx, _, schemaStateChanges, err := te.Begin(ctx, nil, 0, &querypb.ExecuteOptions{})
+			tx, _, schemaStateChanges, err := te.Begin(ctx, nil, 0, nil, &querypb.ExecuteOptions{})
 			return tx, schemaStateChanges, err
 		},
 		func() (int64, string, error) {
@@ -551,7 +551,7 @@ func startTransaction(te *TxEngine, writeTransaction bool) error {
 	} else {
 		options.TransactionIsolation = querypb.ExecuteOptions_CONSISTENT_SNAPSHOT_READ_ONLY
 	}
-	_, _, _, err := te.Begin(context.Background(), nil, 0, options)
+	_, _, _, err := te.Begin(context.Background(), nil, 0, nil, options)
 	return err
 }
 
@@ -583,7 +583,7 @@ func TestTxEngineFailReserve(t *testing.T) {
 	_, err = te.Reserve(ctx, options, nonExistingID, nil)
 	assert.EqualError(t, err, "transaction 42: not found")
 
-	txID, _, _, err := te.Begin(ctx, nil, 0, options)
+	txID, _, _, err := te.Begin(ctx, nil, 0, nil, options)
 	require.NoError(t, err)
 	conn, err := te.txPool.GetAndLock(txID, "for test")
 	require.NoError(t, err)

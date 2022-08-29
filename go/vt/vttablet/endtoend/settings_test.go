@@ -170,7 +170,6 @@ func TestDMLNoConnectionReservationOnSettingsWithTx(t *testing.T) {
 	}()
 
 	client := framework.NewClient()
-	defer client.Release()
 
 	_, err := client.Execute("create table temp(c_date datetime)", nil)
 	require.NoError(t, err)
@@ -191,6 +190,8 @@ func TestDMLNoConnectionReservationOnSettingsWithTx(t *testing.T) {
 			require.Error(t, err, "query should have failed with TRADITIONAL mode")
 			require.Contains(t, err.Error(), "Incorrect datetime value")
 			assert.EqualValues(t, 0, client.ReservedID())
+			require.NoError(t,
+				client.Release())
 		})
 	}
 }

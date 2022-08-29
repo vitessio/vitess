@@ -45,10 +45,6 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
@@ -70,6 +66,11 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/txthrottler"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
 	"vitess.io/vitess/go/vt/vttablet/vexec"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // logPoolFull is for throttling transaction / query pool full messages in the log.
@@ -477,10 +478,10 @@ func (tsv *TabletServer) SchemaEngine() *schema.Engine {
 
 // Begin starts a new transaction. This is allowed only if the state is StateServing.
 func (tsv *TabletServer) Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (state queryservice.TransactionState, err error) {
-	return tsv.begin(ctx, target, nil, 0, options)
+	return tsv.begin(ctx, target, nil, 0, nil, options)
 }
 
-func (tsv *TabletServer) begin(ctx context.Context, target *querypb.Target, preQueries []string, reservedID int64, options *querypb.ExecuteOptions) (state queryservice.TransactionState, err error) {
+func (tsv *TabletServer) begin(ctx context.Context, target *querypb.Target, savepointQueries []string, reservedID int64, settings []string, options *querypb.ExecuteOptions) (state queryservice.TransactionState, err error) {
 	state.TabletAlias = tsv.alias
 	err = tsv.execRequest(
 		ctx, tsv.QueryTimeout.Get(),
@@ -491,7 +492,7 @@ func (tsv *TabletServer) begin(ctx context.Context, target *querypb.Target, preQ
 			if tsv.txThrottler.Throttle() {
 				return vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "Transaction throttled")
 			}
-			transactionID, beginSQL, sessionStateChanges, err := tsv.te.Begin(ctx, preQueries, reservedID, options)
+			transactionID, beginSQL, sessionStateChanges, err := tsv.te.Begin(ctx, savepointQueries, reservedID, settings, options)
 			state.TransactionID = transactionID
 			state.SessionStateChanges = sessionStateChanges
 			logStats.TransactionID = transactionID
@@ -860,7 +861,7 @@ func (tsv *TabletServer) BeginExecute(ctx context.Context, target *querypb.Targe
 		}
 	}
 
-	state, err := tsv.begin(ctx, target, preQueries, reservedID, options)
+	state, err := tsv.begin(ctx, target, preQueries, reservedID, nil, options)
 	if err != nil {
 		return state, nil, err
 	}
@@ -880,7 +881,7 @@ func (tsv *TabletServer) BeginStreamExecute(
 	options *querypb.ExecuteOptions,
 	callback func(*sqltypes.Result) error,
 ) (queryservice.TransactionState, error) {
-	state, err := tsv.begin(ctx, target, preQueries, reservedID, options)
+	state, err := tsv.begin(ctx, target, preQueries, reservedID, nil, options)
 	if err != nil {
 		return state, err
 	}
@@ -1099,6 +1100,9 @@ func (tsv *TabletServer) VStreamResults(ctx context.Context, target *querypb.Tar
 
 // ReserveBeginExecute implements the QueryService interface
 func (tsv *TabletServer) ReserveBeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (state queryservice.ReservedTransactionState, result *sqltypes.Result, err error) {
+	if tsv.config.EnableSettingsPool {
+		return tsv.beginExecuteWithSettings(ctx, target, preQueries, postBeginQueries, sql, bindVariables, options)
+	}
 	var connID int64
 	var sessionStateChanges string
 	state.TabletAlias = tsv.alias
@@ -1141,6 +1145,10 @@ func (tsv *TabletServer) ReserveBeginStreamExecute(
 	options *querypb.ExecuteOptions,
 	callback func(*sqltypes.Result) error,
 ) (state queryservice.ReservedTransactionState, err error) {
+	if tsv.config.EnableSettingsPool {
+		return tsv.beginStreamExecuteWithSettings(ctx, target, preQueries, postBeginQueries, sql, bindVariables, options, callback)
+	}
+
 	var connID int64
 	var sessionStateChanges string
 
@@ -1394,6 +1402,34 @@ func (tsv *TabletServer) streamExecuteWithSettings(ctx context.Context, target *
 			return qre.Stream(callback)
 		},
 	)
+}
+
+func (tsv *TabletServer) beginExecuteWithSettings(ctx context.Context, target *querypb.Target, settings []string, savepointQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (queryservice.ReservedTransactionState, *sqltypes.Result, error) {
+	txState, err := tsv.begin(ctx, target, savepointQueries, 0, settings, options)
+	if err != nil {
+		return txToReserveState(txState), nil, err
+	}
+
+	result, err := tsv.Execute(ctx, target, sql, bindVariables, txState.TransactionID, 0, options)
+	return txToReserveState(txState), result, err
+}
+
+func (tsv *TabletServer) beginStreamExecuteWithSettings(ctx context.Context, target *querypb.Target, settings []string, savepointQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (queryservice.ReservedTransactionState, error) {
+	txState, err := tsv.begin(ctx, target, savepointQueries, 0, settings, options)
+	if err != nil {
+		return txToReserveState(txState), err
+	}
+
+	err = tsv.StreamExecute(ctx, target, sql, bindVariables, txState.TransactionID, 0, options, callback)
+	return txToReserveState(txState), err
+}
+
+func txToReserveState(state queryservice.TransactionState) queryservice.ReservedTransactionState {
+	return queryservice.ReservedTransactionState{
+		TabletAlias:         state.TabletAlias,
+		TransactionID:       state.TransactionID,
+		SessionStateChanges: state.SessionStateChanges,
+	}
 }
 
 // execRequest performs verifications, sets up the necessary environments
