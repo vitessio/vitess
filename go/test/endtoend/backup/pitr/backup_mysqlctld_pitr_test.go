@@ -17,7 +17,6 @@ limitations under the License.
 package mysqlctld
 
 import (
-	"fmt"
 	"testing"
 	"time"
 
@@ -28,8 +27,8 @@ import (
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
-// TestBackupMysqlctld - tests the backup using mysqlctld.
-func TestBackupMysqlctldPITR(t *testing.T) {
+// TestIncrementalBackupMysqlctld - tests incremental backups using myslctld
+func TestIncrementalBackupMysqlctld(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	// setup cluster for the testing
 	code, err := backup.LaunchCluster(backup.Mysqlctld, "xbstream", 0, nil)
@@ -84,9 +83,7 @@ func TestBackupMysqlctldPITR(t *testing.T) {
 			if tc.fromFullPosition {
 				incrementalFromPos = fullBackupPos
 			}
-			fmt.Printf("=============== incremental from pos: %+v\n", incrementalFromPos)
 			manifest := backup.TestReplicaIncrementalBackup(t, incrementalFromPos, tc.expectError)
-			fmt.Printf("=============== %+v\n", manifest)
 			if tc.expectError != "" {
 				return
 			}
