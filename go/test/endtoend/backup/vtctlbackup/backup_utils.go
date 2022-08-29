@@ -29,9 +29,12 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"github.com/stretchr/testify/assert"
@@ -932,9 +935,14 @@ func vtctlBackupReplicaNoDropTables(t *testing.T, tabletType string) (backups []
 	return backups, destroy
 }
 
-func InsertRowOnPrimary(t *testing.T) {
+func InsertRowOnPrimary(t *testing.T, hint string) {
 	// insert more data on replica2 (current primary)
-	_, err := primary.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values (sha1(rand()))", keyspaceName, true)
+	if hint == "" {
+		hint = textutil.RandomHash()
+	}
+	query, err := sqlparser.ParseAndBind("insert into vt_insert_test (msg) values (%a)", sqltypes.StringBindVariable(hint))
+	require.NoError(t, err)
+	_, err = primary.VttabletProcess.QueryTablet(query, keyspaceName, true)
 	require.NoError(t, err)
 }
 

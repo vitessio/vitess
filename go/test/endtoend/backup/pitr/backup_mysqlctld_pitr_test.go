@@ -73,7 +73,7 @@ func TestIncrementalBackupMysqlctld(t *testing.T) {
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			if tc.writeBeforeBackup {
-				backup.InsertRowOnPrimary(t)
+				backup.InsertRowOnPrimary(t, "")
 			}
 			// we wait for 1 second because backups ar ewritten to a directory named after the current timestamp,
 			// in 1 second resolution. We want to aoid two backups that have the same pathname. Realistically this
