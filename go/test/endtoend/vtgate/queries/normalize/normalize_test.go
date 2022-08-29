@@ -46,7 +46,7 @@ func TestNormalizeAllFields(t *testing.T) {
 	assert.Equal(t, 1, len(qr.Rows), "wrong number of table rows, expected 1 but had %d. Results: %v", len(qr.Rows), qr.Rows)
 
 	// Now need to figure out the best way to check the normalized query in the planner cache...
-	results, err := getPlanCache(fmt.Sprintf("%s:%d", clusterInstance.Hostname, clusterInstance.VtgateProcess.Port))
+	results, err := getPlanCache(fmt.Sprintf("%s:%d", vtParams.Host, clusterInstance.VtgateProcess.Port))
 	require.Nil(t, err)
 	found := false
 	for _, record := range results {

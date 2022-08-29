@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/vt/orchestrator/config"
-	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 	test "vitess.io/vitess/go/vt/orchestrator/external/golib/tests"
 )
 
@@ -13,7 +12,6 @@ var testCoordinates = BinlogCoordinates{LogFile: "mysql-bin.000010", LogPos: 108
 func init() {
 	config.Config.HostnameResolveMethod = "none"
 	config.MarkConfigurationLoaded()
-	log.SetLevel(log.ERROR)
 }
 
 func TestDetach(t *testing.T) {

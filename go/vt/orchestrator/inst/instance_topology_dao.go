@@ -23,9 +23,9 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/orchestrator/config"
 	"vitess.io/vitess/go/vt/orchestrator/db"
-	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/sqlutils"
 )
 
@@ -63,16 +63,6 @@ func ExecuteOnTopology(f func()) {
 	f()
 }
 
-// ScanInstanceRow executes a read-a-single-row query on a given MySQL topology instance
-func ScanInstanceRow(instanceKey *InstanceKey, query string, dest ...any) error {
-	db, err := db.OpenTopology(instanceKey.Hostname, instanceKey.Port)
-	if err != nil {
-		return err
-	}
-	err = db.QueryRow(query).Scan(dest...)
-	return err
-}
-
 // EmptyCommitInstance issues an empty COMMIT on a given instance
 func EmptyCommitInstance(instanceKey *InstanceKey) error {
 	db, err := db.OpenTopology(instanceKey.Hostname, instanceKey.Port)
@@ -103,27 +93,6 @@ func RefreshTopologyInstance(instanceKey *InstanceKey) (*Instance, error) {
 	}
 
 	return inst, nil
-}
-
-// RefreshTopologyInstances will do a blocking (though concurrent) refresh of all given instances
-func RefreshTopologyInstances(instances [](*Instance)) {
-	// use concurrency but wait for all to complete
-	barrier := make(chan InstanceKey)
-	for _, instance := range instances {
-		instance := instance
-		go func() {
-			// Signal completed replica
-			defer func() { barrier <- instance.Key }()
-			// Wait your turn to read a replica
-			ExecuteOnTopology(func() {
-				log.Debugf("... reading instance: %+v", instance.Key)
-				ReadTopologyInstance(&instance.Key)
-			})
-		}()
-	}
-	for range instances {
-		<-barrier
-	}
 }
 
 // GetReplicationRestartPreserveStatements returns a sequence of statements that make sure a replica is stopped
@@ -165,12 +134,13 @@ func FlushBinaryLogs(instanceKey *InstanceKey, count int) (*Instance, error) {
 	for i := 0; i < count; i++ {
 		_, err := ExecInstance(instanceKey, `flush binary logs`)
 		if err != nil {
-			return nil, log.Errore(err)
+			log.Error(err)
+			return nil, err
 		}
 	}
 
 	log.Infof("flush-binary-logs count=%+v on %+v", count, *instanceKey)
-	AuditOperation("flush-binary-logs", instanceKey, "success")
+	_ = AuditOperation("flush-binary-logs", instanceKey, "success")
 
 	return ReadTopologyInstance(instanceKey)
 }
@@ -179,12 +149,15 @@ func FlushBinaryLogs(instanceKey *InstanceKey, count int) (*Instance, error) {
 func FlushBinaryLogsTo(instanceKey *InstanceKey, logFile string) (*Instance, error) {
 	instance, err := ReadTopologyInstance(instanceKey)
 	if err != nil {
-		return instance, log.Errore(err)
+		log.Error(err)
+		return instance, err
 	}
 
 	distance := instance.SelfBinlogCoordinates.FileNumberDistance(&BinlogCoordinates{LogFile: logFile})
 	if distance < 0 {
-		return nil, log.Errorf("FlushBinaryLogsTo: target log file %+v is smaller than current log file %+v", logFile, instance.SelfBinlogCoordinates.LogFile)
+		errMsg := fmt.Sprintf("FlushBinaryLogsTo: target log file %+v is smaller than current log file %+v", logFile, instance.SelfBinlogCoordinates.LogFile)
+		log.Errorf(errMsg)
+		return nil, fmt.Errorf(errMsg)
 	}
 	return FlushBinaryLogs(instanceKey, distance)
 }
@@ -197,40 +170,22 @@ func purgeBinaryLogsTo(instanceKey *InstanceKey, logFile string) (*Instance, err
 
 	_, err := ExecInstance(instanceKey, "purge binary logs to ?", logFile)
 	if err != nil {
-		return nil, log.Errore(err)
+		log.Error(err)
+		return nil, err
 	}
 
 	log.Infof("purge-binary-logs to=%+v on %+v", logFile, *instanceKey)
-	AuditOperation("purge-binary-logs", instanceKey, "success")
+	_ = AuditOperation("purge-binary-logs", instanceKey, "success")
 
 	return ReadTopologyInstance(instanceKey)
-}
-
-// TODO(sougou): implement count
-func SetSemiSyncPrimary(instanceKey *InstanceKey, enablePrimary bool) error {
-	if _, err := ExecInstance(instanceKey, `set global rpl_semi_sync_master_enabled = ?, global rpl_semi_sync_slave_enabled = ?`, enablePrimary, false); err != nil {
-		return log.Errore(err)
-	}
-	return nil
-}
-
-// TODO(sougou): This function may be used later for fixing semi-sync
-func SetSemiSyncReplica(instanceKey *InstanceKey, enableReplica bool) error {
-	if _, err := ExecInstance(instanceKey, `set global rpl_semi_sync_master_enabled = ?, global rpl_semi_sync_slave_enabled = ?`, false, enableReplica); err != nil {
-		return log.Errore(err)
-	}
-	// Need to apply change by stopping starting IO thread
-	ExecInstance(instanceKey, "stop slave io_thread")
-	if _, err := ExecInstance(instanceKey, "start slave io_thread"); err != nil {
-		return log.Errore(err)
-	}
-	return nil
 }
 
 func RestartReplicationQuick(instanceKey *InstanceKey) error {
 	for _, cmd := range []string{`stop slave sql_thread`, `stop slave io_thread`, `start slave io_thread`, `start slave sql_thread`} {
 		if _, err := ExecInstance(instanceKey, cmd); err != nil {
-			return log.Errorf("%+v: RestartReplicationQuick: '%q' failed: %+v", *instanceKey, cmd, err)
+			errMsg := fmt.Sprintf("%+v: RestartReplicationQuick: '%q' failed: %+v", *instanceKey, cmd, err)
+			log.Errorf(errMsg)
+			return fmt.Errorf(errMsg)
 		}
 		log.Infof("%s on %+v as part of RestartReplicationQuick", cmd, *instanceKey)
 	}
@@ -243,7 +198,8 @@ func RestartReplicationQuick(instanceKey *InstanceKey) error {
 func StopReplicationNicely(instanceKey *InstanceKey, timeout time.Duration) (*Instance, error) {
 	instance, err := ReadTopologyInstance(instanceKey)
 	if err != nil {
-		return instance, log.Errore(err)
+		log.Error(err)
+		return instance, err
 	}
 
 	if !instance.ReplicationThreadsExist() {
@@ -253,7 +209,9 @@ func StopReplicationNicely(instanceKey *InstanceKey, timeout time.Duration) (*In
 	// stop io_thread, start sql_thread but catch any errors
 	for _, cmd := range []string{`stop slave io_thread`, `start slave sql_thread`} {
 		if _, err := ExecInstance(instanceKey, cmd); err != nil {
-			return nil, log.Errorf("%+v: StopReplicationNicely: '%q' failed: %+v", *instanceKey, cmd, err)
+			errMsg := fmt.Sprintf("%+v: StopReplicationNicely: '%q' failed: %+v", *instanceKey, cmd, err)
+			log.Errorf(errMsg)
+			return nil, fmt.Errorf(errMsg)
 		}
 	}
 
@@ -266,7 +224,8 @@ func StopReplicationNicely(instanceKey *InstanceKey, timeout time.Duration) (*In
 
 	_, err = ExecInstance(instanceKey, `stop slave`)
 	if err != nil {
-		return instance, log.Errore(err)
+		log.Error(err)
+		return instance, err
 	}
 
 	instance, err = ReadTopologyInstance(instanceKey)
@@ -291,7 +250,8 @@ func WaitForSQLThreadUpToDate(instanceKey *InstanceKey, overallTimeout time.Dura
 			return ReadTopologyInstance(instanceKey)
 		})
 		if err != nil {
-			return instance, log.Errore(err)
+			log.Error(err)
+			return instance, err
 		}
 
 		if instance.SQLThreadUpToDate() {
@@ -299,7 +259,9 @@ func WaitForSQLThreadUpToDate(instanceKey *InstanceKey, overallTimeout time.Dura
 			return instance, nil
 		}
 		if instance.SQLDelay != 0 {
-			return instance, log.Errorf("WaitForSQLThreadUpToDate: instance %+v has SQL Delay %+v. Operation is irrelevant", *instanceKey, instance.SQLDelay)
+			errMsg := fmt.Sprintf("WaitForSQLThreadUpToDate: instance %+v has SQL Delay %+v. Operation is irrelevant", *instanceKey, instance.SQLDelay)
+			log.Errorf(errMsg)
+			return instance, fmt.Errorf(errMsg)
 		}
 
 		if !instance.ExecBinlogCoordinates.Equals(&lastExecBinlogCoordinates) {
@@ -314,11 +276,15 @@ func WaitForSQLThreadUpToDate(instanceKey *InstanceKey, overallTimeout time.Dura
 
 		select {
 		case <-generalTimer.C:
-			return instance, log.Errorf("WaitForSQLThreadUpToDate timeout on %+v after duration %+v", *instanceKey, overallTimeout)
+			errMsg := fmt.Sprintf("WaitForSQLThreadUpToDate timeout on %+v after duration %+v", *instanceKey, overallTimeout)
+			log.Errorf(errMsg)
+			return instance, fmt.Errorf(errMsg)
 		case <-staleTimer.C:
-			return instance, log.Errorf("WaitForSQLThreadUpToDate stale coordinates timeout on %+v after duration %+v", *instanceKey, staleCoordinatesTimeout)
+			errMsg := fmt.Sprintf("WaitForSQLThreadUpToDate stale coordinates timeout on %+v after duration %+v", *instanceKey, staleCoordinatesTimeout)
+			log.Errorf(errMsg)
+			return instance, fmt.Errorf(errMsg)
 		default:
-			log.Debugf("WaitForSQLThreadUpToDate waiting on %+v", *instanceKey)
+			log.Infof("WaitForSQLThreadUpToDate waiting on %+v", *instanceKey)
 			time.Sleep(retryInterval)
 		}
 	}
@@ -332,7 +298,7 @@ func StopReplicas(replicas [](*Instance), stopReplicationMethod StopReplicationM
 	}
 	refreshedReplicas := [](*Instance){}
 
-	log.Debugf("Stopping %d replicas via %s", len(replicas), string(stopReplicationMethod))
+	log.Infof("Stopping %d replicas via %s", len(replicas), string(stopReplicationMethod))
 	// use concurrency but wait for all to complete
 	barrier := make(chan *Instance)
 	for _, replica := range replicas {
@@ -357,25 +323,17 @@ func StopReplicas(replicas [](*Instance), stopReplicationMethod StopReplicationM
 	return refreshedReplicas
 }
 
-// StopReplicasNicely will attemt to stop all given replicas nicely, up to timeout
-func StopReplicasNicely(replicas [](*Instance), timeout time.Duration) [](*Instance) {
-	stoppedReplicas := StopReplicas(replicas, StopReplicationNice, timeout)
-	// We remove nil instances because StopReplicas might introduce nils in the array that it returns in case of
-	// failures while reading the tablet from the backend. This could happen when the tablet is forgotten while we are
-	// trying to stop the replication on the tablets.
-	stoppedReplicas = RemoveNilInstances(stoppedReplicas)
-	return stoppedReplicas
-}
-
 // StopReplication stops replication on a given instance
 func StopReplication(instanceKey *InstanceKey) (*Instance, error) {
 	instance, err := ReadTopologyInstance(instanceKey)
 	if err != nil {
-		return instance, log.Errore(err)
+		log.Error(err)
+		return instance, err
 	}
 	_, err = ExecInstance(instanceKey, `stop slave`)
 	if err != nil {
-		return instance, log.Errore(err)
+		log.Error(err)
+		return instance, err
 	}
 	instance, err = ReadTopologyInstance(instanceKey)
 
@@ -410,7 +368,8 @@ func waitForReplicationState(instanceKey *InstanceKey, expectedState Replication
 func StartReplication(instanceKey *InstanceKey) (*Instance, error) {
 	instance, err := ReadTopologyInstance(instanceKey)
 	if err != nil {
-		return instance, log.Errore(err)
+		log.Error(err)
+		return instance, err
 	}
 
 	if !instance.IsReplica() {
@@ -419,7 +378,8 @@ func StartReplication(instanceKey *InstanceKey) (*Instance, error) {
 
 	_, err = ExecInstance(instanceKey, `start slave`)
 	if err != nil {
-		return instance, log.Errore(err)
+		log.Error(err)
+		return instance, err
 	}
 	log.Infof("Started replication on %+v", instanceKey)
 
@@ -427,7 +387,8 @@ func StartReplication(instanceKey *InstanceKey) (*Instance, error) {
 
 	instance, err = ReadTopologyInstance(instanceKey)
 	if err != nil {
-		return instance, log.Errore(err)
+		log.Error(err)
+		return instance, err
 	}
 	if !instance.ReplicaRunning() {
 		return instance, ErrReplicationNotRunning
@@ -439,29 +400,12 @@ func StartReplication(instanceKey *InstanceKey) (*Instance, error) {
 func RestartReplication(instanceKey *InstanceKey) (instance *Instance, err error) {
 	instance, err = StopReplication(instanceKey)
 	if err != nil {
-		return instance, log.Errore(err)
+		log.Error(err)
+		return instance, err
 	}
 	instance, err = StartReplication(instanceKey)
-	return instance, log.Errore(err)
-}
-
-// StartReplicas will do concurrent start-replica
-func StartReplicas(replicas [](*Instance)) {
-	// use concurrency but wait for all to complete
-	log.Debugf("Starting %d replicas", len(replicas))
-	barrier := make(chan InstanceKey)
-	for _, instance := range replicas {
-		instance := instance
-		go func() {
-			// Signal compelted replica
-			defer func() { barrier <- instance.Key }()
-			// Wait your turn to read a replica
-			ExecuteOnTopology(func() { StartReplication(&instance.Key) })
-		}()
-	}
-	for range replicas {
-		<-barrier
-	}
+	log.Error(err)
+	return instance, err
 }
 
 func WaitForExecBinlogCoordinatesToReach(instanceKey *InstanceKey, coordinates *BinlogCoordinates, maxWait time.Duration) (instance *Instance, exactMatch bool, err error) {
@@ -472,7 +416,8 @@ func WaitForExecBinlogCoordinatesToReach(instanceKey *InstanceKey, coordinates *
 		}
 		instance, err = ReadTopologyInstance(instanceKey)
 		if err != nil {
-			return instance, exactMatch, log.Errore(err)
+			log.Error(err)
+			return instance, exactMatch, err
 		}
 
 		switch {
@@ -490,7 +435,8 @@ func WaitForExecBinlogCoordinatesToReach(instanceKey *InstanceKey, coordinates *
 func StartReplicationUntilPrimaryCoordinates(instanceKey *InstanceKey, primaryCoordinates *BinlogCoordinates) (*Instance, error) {
 	instance, err := ReadTopologyInstance(instanceKey)
 	if err != nil {
-		return instance, log.Errore(err)
+		log.Error(err)
+		return instance, err
 	}
 
 	if !instance.IsReplica() {
@@ -508,12 +454,14 @@ func StartReplicationUntilPrimaryCoordinates(instanceKey *InstanceKey, primaryCo
 	_, err = ExecInstance(instanceKey, "start slave until master_log_file=?, master_log_pos=?",
 		primaryCoordinates.LogFile, primaryCoordinates.LogPos)
 	if err != nil {
-		return instance, log.Errore(err)
+		log.Error(err)
+		return instance, err
 	}
 
 	instance, exactMatch, err := WaitForExecBinlogCoordinatesToReach(instanceKey, primaryCoordinates, 0)
 	if err != nil {
-		return instance, log.Errore(err)
+		log.Error(err)
+		return instance, err
 	}
 	if !exactMatch {
 		return instance, fmt.Errorf("Start SLAVE UNTIL is past coordinates: %+v", instanceKey)
@@ -521,7 +469,8 @@ func StartReplicationUntilPrimaryCoordinates(instanceKey *InstanceKey, primaryCo
 
 	instance, err = StopReplication(instanceKey)
 	if err != nil {
-		return instance, log.Errore(err)
+		log.Error(err)
+		return instance, err
 	}
 
 	return instance, err
@@ -531,13 +480,14 @@ func StartReplicationUntilPrimaryCoordinates(instanceKey *InstanceKey, primaryCo
 func EnablePrimarySSL(instanceKey *InstanceKey) (*Instance, error) {
 	instance, err := ReadTopologyInstance(instanceKey)
 	if err != nil {
-		return instance, log.Errore(err)
+		log.Error(err)
+		return instance, err
 	}
 
 	if instance.ReplicationThreadsExist() && !instance.ReplicationThreadsStopped() {
 		return instance, fmt.Errorf("EnablePrimarySSL: Cannot enable SSL replication on %+v because replication threads are not stopped", *instanceKey)
 	}
-	log.Debugf("EnablePrimarySSL: Will attempt enabling SSL replication on %+v", *instanceKey)
+	log.Infof("EnablePrimarySSL: Will attempt enabling SSL replication on %+v", *instanceKey)
 
 	if *config.RuntimeCLIFlags.Noop {
 		return instance, fmt.Errorf("noop: aborting CHANGE MASTER TO MASTER_SSL=1 operation on %+v; signaling error but nothing went wrong", *instanceKey)
@@ -545,7 +495,8 @@ func EnablePrimarySSL(instanceKey *InstanceKey) (*Instance, error) {
 	_, err = ExecInstance(instanceKey, "change master to master_ssl=1")
 
 	if err != nil {
-		return instance, log.Errore(err)
+		log.Error(err)
+		return instance, err
 	}
 
 	log.Infof("EnablePrimarySSL: Enabled SSL replication on %+v", *instanceKey)
@@ -556,7 +507,7 @@ func EnablePrimarySSL(instanceKey *InstanceKey) (*Instance, error) {
 
 // See https://bugs.mysql.com/bug.php?id=83713
 func workaroundBug83713(instanceKey *InstanceKey) {
-	log.Debugf("workaroundBug83713: %+v", *instanceKey)
+	log.Infof("workaroundBug83713: %+v", *instanceKey)
 	queries := []string{
 		`reset slave`,
 		`start slave IO_THREAD`,
@@ -565,7 +516,7 @@ func workaroundBug83713(instanceKey *InstanceKey) {
 	}
 	for _, query := range queries {
 		if _, err := ExecInstance(instanceKey, query); err != nil {
-			log.Debugf("workaroundBug83713: error on %s: %+v", query, err)
+			log.Infof("workaroundBug83713: error on %s: %+v", query, err)
 		}
 	}
 }
@@ -576,22 +527,23 @@ func ChangePrimaryTo(instanceKey *InstanceKey, primaryKey *InstanceKey, primaryB
 	user, password := config.Config.MySQLReplicaUser, config.Config.MySQLReplicaPassword
 	instance, err := ReadTopologyInstance(instanceKey)
 	if err != nil {
-		return instance, log.Errore(err)
+		log.Error(err)
+		return instance, err
 	}
 
 	if instance.ReplicationThreadsExist() && !instance.ReplicationThreadsStopped() {
 		return instance, fmt.Errorf("ChangePrimaryTo: Cannot change primary on: %+v because replication threads are not stopped", *instanceKey)
 	}
-	log.Debugf("ChangePrimaryTo: will attempt changing primary on %+v to %+v, %+v", *instanceKey, *primaryKey, *primaryBinlogCoordinates)
+	log.Infof("ChangePrimaryTo: will attempt changing primary on %+v to %+v, %+v", *instanceKey, *primaryKey, *primaryBinlogCoordinates)
 	changeToPrimaryKey := primaryKey
 	if !skipUnresolve {
 		unresolvedPrimaryKey, nameUnresolved, err := UnresolveHostname(primaryKey)
 		if err != nil {
-			log.Debugf("ChangePrimaryTo: aborting operation on %+v due to resolving error on %+v: %+v", *instanceKey, *primaryKey, err)
+			log.Infof("ChangePrimaryTo: aborting operation on %+v due to resolving error on %+v: %+v", *instanceKey, *primaryKey, err)
 			return instance, err
 		}
 		if nameUnresolved {
-			log.Debugf("ChangePrimaryTo: Unresolved %+v into %+v", *primaryKey, unresolvedPrimaryKey)
+			log.Infof("ChangePrimaryTo: Unresolved %+v into %+v", *primaryKey, unresolvedPrimaryKey)
 		}
 		changeToPrimaryKey = &unresolvedPrimaryKey
 	}
@@ -667,24 +619,27 @@ func ChangePrimaryTo(instanceKey *InstanceKey, primaryKey *InstanceKey, primaryB
 	}
 	err = changePrimaryFunc()
 	if err != nil && instance.UsingOracleGTID && strings.Contains(err.Error(), Error1201CouldnotInitializePrimaryInfoStructure) {
-		log.Debugf("ChangePrimaryTo: got %+v", err)
+		log.Infof("ChangePrimaryTo: got %+v", err)
 		workaroundBug83713(instanceKey)
 		err = changePrimaryFunc()
 	}
 	if err != nil {
-		return instance, log.Errore(err)
+		log.Error(err)
+		return instance, err
 	}
 
 	durability, err := GetDurabilityPolicy(*primaryKey)
 	if err != nil {
-		return instance, log.Errore(err)
+		log.Error(err)
+		return instance, err
 	}
 	semiSync := IsReplicaSemiSync(durability, *primaryKey, *instanceKey)
 	if _, err := ExecInstance(instanceKey, `set global rpl_semi_sync_master_enabled = ?, global rpl_semi_sync_slave_enabled = ?`, false, semiSync); err != nil {
-		return instance, log.Errore(err)
+		log.Error(err)
+		return instance, err
 	}
 
-	ResetInstanceRelaylogCoordinatesHistory(instanceKey)
+	_ = ResetInstanceRelaylogCoordinatesHistory(instanceKey)
 
 	log.Infof("ChangePrimaryTo: Changed primary on %+v to: %+v, %+v. GTID: %+v", *instanceKey, primaryKey, primaryBinlogCoordinates, changedViaGTID)
 
@@ -692,35 +647,12 @@ func ChangePrimaryTo(instanceKey *InstanceKey, primaryKey *InstanceKey, primaryB
 	return instance, err
 }
 
-// SkipToNextBinaryLog changes primary position to beginning of next binlog
-// USE WITH CARE!
-// Use case is binlog servers where the primary was gone & replaced by another.
-func SkipToNextBinaryLog(instanceKey *InstanceKey) (*Instance, error) {
-	instance, err := ReadTopologyInstance(instanceKey)
-	if err != nil {
-		return instance, log.Errore(err)
-	}
-
-	nextFileCoordinates, err := instance.ExecBinlogCoordinates.NextFileCoordinates()
-	if err != nil {
-		return instance, log.Errore(err)
-	}
-	nextFileCoordinates.LogPos = 4
-	log.Debugf("Will skip replication on %+v to next binary log: %+v", instance.Key, nextFileCoordinates.LogFile)
-
-	instance, err = ChangePrimaryTo(&instance.Key, &instance.SourceKey, &nextFileCoordinates, false, GTIDHintNeutral)
-	if err != nil {
-		return instance, log.Errore(err)
-	}
-	AuditOperation("skip-binlog", instanceKey, fmt.Sprintf("Skipped replication to next binary log: %+v", nextFileCoordinates.LogFile))
-	return StartReplication(instanceKey)
-}
-
 // ResetReplication resets a replica, breaking the replication
 func ResetReplication(instanceKey *InstanceKey) (*Instance, error) {
 	instance, err := ReadTopologyInstance(instanceKey)
 	if err != nil {
-		return instance, log.Errore(err)
+		log.Error(err)
+		return instance, err
 	}
 
 	if instance.ReplicationThreadsExist() && !instance.ReplicationThreadsStopped() {
@@ -737,16 +669,18 @@ func ResetReplication(instanceKey *InstanceKey) (*Instance, error) {
 	// RESET SLAVE ALL command solves this, but only as of 5.6.3
 	_, err = ExecInstance(instanceKey, `change master to master_host='_'`)
 	if err != nil {
-		return instance, log.Errore(err)
+		log.Error(err)
+		return instance, err
 	}
 	_, err = ExecInstance(instanceKey, `reset slave /*!50603 all */`)
 	if err != nil && strings.Contains(err.Error(), Error1201CouldnotInitializePrimaryInfoStructure) {
-		log.Debugf("ResetReplication: got %+v", err)
+		log.Infof("ResetReplication: got %+v", err)
 		workaroundBug83713(instanceKey)
 		_, err = ExecInstance(instanceKey, `reset slave /*!50603 all */`)
 	}
 	if err != nil {
-		return instance, log.Errore(err)
+		log.Error(err)
+		return instance, err
 	}
 	log.Infof("Reset replication %+v", instanceKey)
 
@@ -758,7 +692,8 @@ func ResetReplication(instanceKey *InstanceKey) (*Instance, error) {
 func ResetPrimary(instanceKey *InstanceKey) (*Instance, error) {
 	instance, err := ReadTopologyInstance(instanceKey)
 	if err != nil {
-		return instance, log.Errore(err)
+		log.Error(err)
+		return instance, err
 	}
 
 	if instance.ReplicationThreadsExist() && !instance.ReplicationThreadsStopped() {
@@ -771,7 +706,8 @@ func ResetPrimary(instanceKey *InstanceKey) (*Instance, error) {
 
 	_, err = ExecInstance(instanceKey, `reset master`)
 	if err != nil {
-		return instance, log.Errore(err)
+		log.Error(err)
+		return instance, err
 	}
 	log.Infof("Reset primary %+v", instanceKey)
 
@@ -850,7 +786,8 @@ func skipQueryOracleGtid(instance *Instance) error {
 func SkipQuery(instanceKey *InstanceKey) (*Instance, error) {
 	instance, err := ReadTopologyInstance(instanceKey)
 	if err != nil {
-		return instance, log.Errore(err)
+		log.Error(err)
+		return instance, err
 	}
 
 	if !instance.IsReplica() {
@@ -867,18 +804,21 @@ func SkipQuery(instanceKey *InstanceKey) (*Instance, error) {
 		return instance, fmt.Errorf("noop: aborting skip-query operation on %+v; signalling error but nothing went wrong", *instanceKey)
 	}
 
-	log.Debugf("Skipping one query on %+v", instanceKey)
+	log.Infof("Skipping one query on %+v", instanceKey)
 	if instance.UsingOracleGTID {
 		err = skipQueryOracleGtid(instance)
 	} else if instance.UsingMariaDBGTID {
-		return instance, log.Errorf("%+v is replicating with MariaDB GTID. To skip a query first disable GTID, then skip, then enable GTID again", *instanceKey)
+		errMsg := fmt.Sprintf("%+v is replicating with MariaDB GTID. To skip a query first disable GTID, then skip, then enable GTID again", *instanceKey)
+		log.Errorf(errMsg)
+		return instance, fmt.Errorf(errMsg)
 	} else {
 		err = skipQueryClassic(instance)
 	}
 	if err != nil {
-		return instance, log.Errore(err)
+		log.Error(err)
+		return instance, err
 	}
-	AuditOperation("skip-query", instanceKey, "Skipped one query")
+	_ = AuditOperation("skip-query", instanceKey, "Skipped one query")
 	return StartReplication(instanceKey)
 }
 
@@ -886,12 +826,14 @@ func SkipQuery(instanceKey *InstanceKey) (*Instance, error) {
 func PrimaryPosWait(instanceKey *InstanceKey, binlogCoordinates *BinlogCoordinates) (*Instance, error) {
 	instance, err := ReadTopologyInstance(instanceKey)
 	if err != nil {
-		return instance, log.Errore(err)
+		log.Error(err)
+		return instance, err
 	}
 
 	_, err = ExecInstance(instanceKey, `select master_pos_wait(?, ?)`, binlogCoordinates.LogFile, binlogCoordinates.LogPos)
 	if err != nil {
-		return instance, log.Errore(err)
+		log.Error(err)
+		return instance, err
 	}
 	log.Infof("Instance %+v has reached coordinates: %+v", instanceKey, binlogCoordinates)
 
@@ -903,7 +845,8 @@ func PrimaryPosWait(instanceKey *InstanceKey, binlogCoordinates *BinlogCoordinat
 func SetReadOnly(instanceKey *InstanceKey, readOnly bool) (*Instance, error) {
 	instance, err := ReadTopologyInstance(instanceKey)
 	if err != nil {
-		return instance, log.Errore(err)
+		log.Error(err)
+		return instance, err
 	}
 
 	if *config.RuntimeCLIFlags.Noop {
@@ -911,7 +854,8 @@ func SetReadOnly(instanceKey *InstanceKey, readOnly bool) (*Instance, error) {
 	}
 
 	if _, err := ExecInstance(instanceKey, "set global read_only = ?", readOnly); err != nil {
-		return instance, log.Errore(err)
+		log.Error(err)
+		return instance, err
 	}
 	if config.Config.UseSuperReadOnly {
 		if _, err := ExecInstance(instanceKey, "set global super_read_only = ?", readOnly); err != nil {
@@ -919,13 +863,13 @@ func SetReadOnly(instanceKey *InstanceKey, readOnly bool) (*Instance, error) {
 			// MySQL 5.7.8 and Percona Server 5.6.21-70
 			// At this time orchestrator does not verify whether a server supports super_read_only or not.
 			// It makes a best effort to set it.
-			log.Errore(err)
+			log.Error(err)
 		}
 	}
 	instance, err = ReadTopologyInstance(instanceKey)
 
 	log.Infof("instance %+v read_only: %t", instanceKey, readOnly)
-	AuditOperation("read-only", instanceKey, fmt.Sprintf("set as %t", readOnly))
+	_ = AuditOperation("read-only", instanceKey, fmt.Sprintf("set as %t", readOnly))
 
 	return instance, err
 }
@@ -934,7 +878,8 @@ func SetReadOnly(instanceKey *InstanceKey, readOnly bool) (*Instance, error) {
 func KillQuery(instanceKey *InstanceKey, process int64) (*Instance, error) {
 	instance, err := ReadTopologyInstance(instanceKey)
 	if err != nil {
-		return instance, log.Errore(err)
+		log.Error(err)
+		return instance, err
 	}
 
 	if *config.RuntimeCLIFlags.Noop {
@@ -943,16 +888,18 @@ func KillQuery(instanceKey *InstanceKey, process int64) (*Instance, error) {
 
 	_, err = ExecInstance(instanceKey, `kill query ?`, process)
 	if err != nil {
-		return instance, log.Errore(err)
+		log.Error(err)
+		return instance, err
 	}
 
 	instance, err = ReadTopologyInstance(instanceKey)
 	if err != nil {
-		return instance, log.Errore(err)
+		log.Error(err)
+		return instance, err
 	}
 
 	log.Infof("Killed query on %+v", *instanceKey)
-	AuditOperation("kill-query", instanceKey, fmt.Sprintf("Killed query %d", process))
+	_ = AuditOperation("kill-query", instanceKey, fmt.Sprintf("Killed query %d", process))
 	return instance, err
 }
 

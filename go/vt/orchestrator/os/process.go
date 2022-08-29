@@ -23,11 +23,9 @@ import (
 	"strings"
 	"syscall"
 
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/orchestrator/config"
-	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 )
-
-var EmptyEnv []string
 
 // CommandRun executes some text as a command. This is assumed to be
 // text that will be run by a shell so we need to write out the
@@ -40,7 +38,8 @@ func CommandRun(commandText string, env []string, arguments ...string) error {
 	cmd, shellScript, err := generateShellScript(commandText, env, arguments...)
 	defer os.Remove(shellScript)
 	if err != nil {
-		return log.Errore(err)
+		log.Error(err)
+		return err
 	}
 
 	var waitStatus syscall.WaitStatus
@@ -55,7 +54,9 @@ func CommandRun(commandText string, env []string, arguments ...string) error {
 			log.Errorf("CommandRun: failed. exit status %d", waitStatus.ExitStatus())
 		}
 
-		return log.Errore(fmt.Errorf("(%s) %s", err.Error(), cmdOutput))
+		errMsg := fmt.Sprintf("(%s) %s", err.Error(), cmdOutput)
+		log.Error(errMsg)
+		return fmt.Errorf(errMsg)
 	}
 
 	// Command was successful
@@ -75,7 +76,9 @@ func generateShellScript(commandText string, env []string, arguments ...string) 
 	commandBytes := []byte(commandText)
 	tmpFile, err := os.CreateTemp("", "orchestrator-process-cmd-")
 	if err != nil {
-		return nil, "", log.Errorf("generateShellScript() failed to create TempFile: %v", err.Error())
+		errMsg := fmt.Sprintf("generateShellScript() failed to create TempFile: %v", err.Error())
+		log.Errorf(errMsg)
+		return nil, "", fmt.Errorf(errMsg)
 	}
 	// write commandText to temporary file
 	os.WriteFile(tmpFile.Name(), commandBytes, 0640)

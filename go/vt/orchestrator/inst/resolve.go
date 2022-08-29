@@ -27,8 +27,8 @@ import (
 
 	"github.com/patrickmn/go-cache"
 
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/orchestrator/config"
-	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 )
 
 type HostnameResolve struct {
@@ -155,7 +155,7 @@ func ResolveHostname(hostname string) (string, error) {
 	}
 
 	// Unfound: resolve!
-	log.Debugf("Hostname unresolved yet: %s", hostname)
+	log.Infof("Hostname unresolved yet: %s", hostname)
 	resolvedHostname, err := resolveHostname(hostname)
 	if config.Config.RejectHostnameResolvePattern != "" {
 		// Reject, don't even cache
@@ -172,7 +172,7 @@ func ResolveHostname(hostname string) (string, error) {
 		return hostname, err
 	}
 	// Good result! Cache it, also to DB
-	log.Debugf("Cache hostname resolve %s as %s", hostname, resolvedHostname)
+	log.Infof("Cache hostname resolve %s as %s", hostname, resolvedHostname)
 	go UpdateResolvedHostname(hostname, resolvedHostname)
 	return resolvedHostname, nil
 }
@@ -189,7 +189,7 @@ func UpdateResolvedHostname(hostname string, resolvedHostname string) bool {
 	}
 	getHostnameResolvesLightweightCache().Set(hostname, resolvedHostname, 0)
 	if !HostnameResolveMethodIsNone() {
-		WriteResolvedHostname(hostname, resolvedHostname)
+		_ = WriteResolvedHostname(hostname, resolvedHostname)
 	}
 	return true
 }
@@ -221,7 +221,7 @@ func FlushNontrivialResolveCacheToDatabase() error {
 	for hostname := range items {
 		resolvedHostname, found := getHostnameResolvesLightweightCache().Get(hostname)
 		if found && (resolvedHostname.(string) != hostname) {
-			WriteResolvedHostname(hostname, resolvedHostname.(string))
+			_ = WriteResolvedHostname(hostname, resolvedHostname.(string))
 		}
 	}
 	return nil
@@ -244,7 +244,8 @@ func UnresolveHostname(instanceKey *InstanceKey) (InstanceKey, bool, error) {
 	}
 	unresolvedHostname, err := readUnresolvedHostname(instanceKey.Hostname)
 	if err != nil {
-		return *instanceKey, false, log.Errore(err)
+		log.Error(err)
+		return *instanceKey, false, err
 	}
 	if unresolvedHostname == instanceKey.Hostname {
 		// unchanged. Nothing to do
@@ -255,7 +256,8 @@ func UnresolveHostname(instanceKey *InstanceKey) (InstanceKey, bool, error) {
 
 	instance, err := ReadTopologyInstance(unresolvedKey)
 	if err != nil {
-		return *instanceKey, false, log.Errore(err)
+		log.Error(err)
+		return *instanceKey, false, err
 	}
 	if instance.IsBinlogServer() && config.Config.SkipBinlogServerUnresolveCheck {
 		// Do nothing. Everything is assumed to be fine.
@@ -264,7 +266,9 @@ func UnresolveHostname(instanceKey *InstanceKey) (InstanceKey, bool, error) {
 		if *config.RuntimeCLIFlags.SkipUnresolveCheck {
 			return *instanceKey, false, nil
 		}
-		return *instanceKey, false, log.Errorf("Error unresolving; hostname=%s, unresolved=%s, re-resolved=%s; mismatch. Skip/ignore with --skip-unresolve-check", instanceKey.Hostname, unresolvedKey.Hostname, instance.Key.Hostname)
+		errMsg := fmt.Sprintf("Error unresolving; hostname=%s, unresolved=%s, re-resolved=%s; mismatch. Skip/ignore with --skip-unresolve-check", instanceKey.Hostname, unresolvedKey.Hostname, instance.Key.Hostname)
+		log.Errorf(errMsg)
+		return *instanceKey, false, fmt.Errorf(errMsg)
 	}
 	return *unresolvedKey, true, nil
 }
@@ -297,7 +301,8 @@ func getHostnameIPs(hostname string) (ips []net.IP, fromCache bool, err error) {
 	}
 	ips, err = net.LookupIP(hostname)
 	if err != nil {
-		return ips, false, log.Errore(err)
+		log.Error(err)
+		return ips, false, err
 	}
 	hostnameIPsCache.Set(hostname, ips, cache.DefaultExpiration)
 	return ips, false, nil

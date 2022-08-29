@@ -549,7 +549,7 @@ func (n *mysqlCachingSha2AuthMethod) HandleAuthPluginData(c *Conn, user string, 
 			return nil, NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", user)
 		}
 
-		data, pos := c.startEphemeralPacketWithHeader(1)
+		data, pos := c.startEphemeralPacketWithHeader(2)
 		pos = writeByte(data, pos, AuthMoreDataPacket)
 		writeByte(data, pos, CachingSha2FullAuth)
 		c.writeEphemeralPacket()

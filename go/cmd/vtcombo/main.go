@@ -27,6 +27,8 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"github.com/spf13/pflag"
 	"google.golang.org/protobuf/proto"
 
@@ -34,7 +36,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/env"
-	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/servenv"
@@ -207,8 +209,9 @@ func main() {
 	// Tablet configuration and init.
 	// Send mycnf as nil because vtcombo won't do backups and restores.
 	//
-	// Also force the `--tablet_protocol` to be the "internal" protocol that
-	// InitTabletMap registers.
+	// Also force the `--tablet_manager_protocol` and `--tablet_protocol` flags
+	// to be the "internal" protocol that InitTabletMap registers.
+	flags.Set("tablet_manager_protocol", "internal")
 	flags.Set("tablet_protocol", "internal")
 	uid, err := vtcombo.InitTabletMap(ts, &tpb, mysqld, &dbconfigs.GlobalDBConfigs, *schemaDir, *startMysql)
 	if err != nil {

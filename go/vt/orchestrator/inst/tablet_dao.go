@@ -20,13 +20,14 @@ import (
 	"context"
 	"errors"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/orchestrator/db"
-	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/sqlutils"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -82,12 +83,12 @@ func SwitchPrimary(newPrimaryKey, oldPrimaryKey InstanceKey) error {
 	})
 	// Don't proceed if shard record could not be updated.
 	if err != nil {
-		log.Errore(err)
+		log.Error(err)
 		return nil
 	}
 	if _, err := ChangeTabletType(oldPrimaryKey, topodatapb.TabletType_REPLICA, IsReplicaSemiSync(durability, newPrimaryKey, oldPrimaryKey)); err != nil {
 		// This is best effort.
-		log.Errore(err)
+		log.Error(err)
 	}
 	return nil
 }
@@ -111,10 +112,11 @@ func ChangeTabletType(instanceKey InstanceKey, tabletType topodatapb.TabletType,
 	defer tsCancel()
 	ti, err := TopoServ.GetTablet(tsCtx, tablet.Alias)
 	if err != nil {
-		return nil, log.Errore(err)
+		log.Error(err)
+		return nil, err
 	}
 	if err := SaveTablet(ti.Tablet); err != nil {
-		log.Errore(err)
+		log.Error(err)
 	}
 	return ti.Tablet, nil
 }

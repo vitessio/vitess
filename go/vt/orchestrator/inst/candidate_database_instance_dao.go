@@ -17,7 +17,7 @@
 package inst
 
 import (
-	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/sqlutils"
 
 	"vitess.io/vitess/go/vt/orchestrator/config"
@@ -46,7 +46,8 @@ func RegisterCandidateInstance(candidate *CandidateDatabaseInstance) error {
 			`
 	writeFunc := func() error {
 		_, err := db.ExecOrchestrator(query, args...)
-		return log.Errore(err)
+		log.Error(err)
+		return err
 	}
 	return ExecDBWriteFunc(writeFunc)
 }
@@ -59,7 +60,8 @@ func ExpireCandidateInstances() error {
 				where last_suggested < NOW() - INTERVAL ? MINUTE
 				`, config.Config.CandidateInstanceExpireMinutes,
 		)
-		return log.Errore(err)
+		log.Error(err)
+		return err
 	}
 	return ExecDBWriteFunc(writeFunc)
 }
