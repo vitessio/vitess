@@ -22,11 +22,12 @@ import (
 	"os"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"github.com/rcrowley/go-metrics"
 
 	"vitess.io/vitess/go/vt/orchestrator/config"
 	"vitess.io/vitess/go/vt/orchestrator/db"
-	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/sqlutils"
 )
 
@@ -64,13 +65,15 @@ func AuditOperation(auditType string, instanceKey *InstanceKey, message string) 
 		go func() error {
 			f, err := os.OpenFile(config.Config.AuditLogFile, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0640)
 			if err != nil {
-				return log.Errore(err)
+				log.Error(err)
+				return err
 			}
 
 			defer f.Close()
-			text := fmt.Sprintf("%s\t%s\t%s\t%d\t[%s]\t%s\t\n", time.Now().Format(log.TimeFormat), auditType, instanceKey.Hostname, instanceKey.Port, clusterName, message)
+			text := fmt.Sprintf("%s\t%s\t%s\t%d\t[%s]\t%s\t\n", time.Now().Format("2006-01-02 15:04:05"), auditType, instanceKey.Hostname, instanceKey.Port, clusterName, message)
 			if _, err = f.WriteString(text); err != nil {
-				return log.Errore(err)
+				log.Error(err)
+				return err
 			}
 			return nil
 		}()
@@ -91,7 +94,8 @@ func AuditOperation(auditType string, instanceKey *InstanceKey, message string) 
 			message,
 		)
 		if err != nil {
-			return log.Errore(err)
+			log.Error(err)
+			return err
 		}
 	}
 	logMessage := fmt.Sprintf("auditType:%s instance:%s cluster:%s message:%s", auditType, instanceKey.DisplayString(), clusterName, message)
@@ -149,7 +153,7 @@ func ReadRecentAudit(instanceKey *InstanceKey, page int) ([]Audit, error) {
 	})
 
 	if err != nil {
-		log.Errore(err)
+		log.Error(err)
 	}
 	return res, err
 

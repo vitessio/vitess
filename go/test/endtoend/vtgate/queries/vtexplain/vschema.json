@@ -1,0 +1,68 @@
+{
+  "sharded": true,
+  "vindexes": {
+    "hash_index": {
+      "type": "hash"
+    },
+    "md5_index": {
+      "type": "unicode_loose_md5"
+    },
+    "lookup_vdx": {
+      "type": "lookup",
+      "params": {
+        "table": "lookup",
+        "from": "lookup,id",
+        "to": "keyspace_id",
+        "autocommit": "true"
+      },
+      "owner": "user"
+    },
+    "lookup_unique_vdx": {
+      "type": "lookup_unique",
+      "params": {
+        "table": "lookup_unique",
+        "from": "lookup_unique",
+        "to": "keyspace_id",
+        "autocommit": "true"
+      },
+      "owner": "user"
+    }
+  },
+  "tables": {
+    "user": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "hash_index"
+        },
+        {
+          "columns": [
+            "lookup",
+            "id"
+          ],
+          "name": "lookup_vdx"
+        },
+        {
+          "column": "lookup_unique",
+          "name": "lookup_unique_vdx"
+        }
+      ]
+    },
+    "lookup": {
+      "column_vindexes": [
+        {
+          "column": "lookup",
+          "name": "md5_index"
+        }
+      ]
+    },
+    "lookup_unique": {
+      "column_vindexes": [
+        {
+          "column": "lookup_unique",
+          "name": "md5_index"
+        }
+      ]
+    }
+  }
+}

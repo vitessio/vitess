@@ -11,10 +11,22 @@ jobs:
         topo: [etcd]
 
     steps:
+    - name: Check if workflow needs to be skipped
+      id: skip-workflow
+      run: |
+        skip='false'
+        if [[ "${{github.event.pull_request}}" ==  "" ]] && [[ "${{github.ref}}" != "refs/heads/main" ]] && [[ ! "${{github.ref}}" =~ ^refs/heads/release-[0-9]+\.[0-9]$ ]] && [[ ! "${{github.ref}}" =~ "refs/tags/.*" ]]; then
+          skip='true'
+        fi
+        echo Skip ${skip}
+        echo "::set-output name=skip-workflow::${skip}"
+
     - name: Check out code
+      if: steps.skip-workflow.outputs.skip-workflow == 'false'
       uses: actions/checkout@v2
 
     - name: Check for changes in relevant files
+      if: steps.skip-workflow.outputs.skip-workflow == 'false'
       uses: frouioui/paths-filter@main
       id: changes
       with:
@@ -31,20 +43,21 @@ jobs:
             - 'config/**'
             - 'bootstrap.sh'
             - 'examples/**'
+            - '.github/workflows/region_example.yml'
 
     - name: Set up Go
-      if: steps.changes.outputs.examples == 'true'
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.examples == 'true'
       uses: actions/setup-go@v2
       with:
-        go-version: 1.18.3
+        go-version: 1.18.4
 
     - name: Tune the OS
-      if: steps.changes.outputs.examples == 'true'
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.examples == 'true'
       run: |
         echo '1024 65535' | sudo tee -a /proc/sys/net/ipv4/ip_local_port_range
 
     - name: Get dependencies
-      if: steps.changes.outputs.examples == 'true'
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.examples == 'true'
       run: |
         if [ ${{matrix.os}} = "ubuntu-latest" ]; then
           # Setup MySQL 8.0
@@ -66,24 +79,22 @@ jobs:
         go mod download
 
     - name: Run make minimaltools
-      if: steps.changes.outputs.examples == 'true'
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.examples == 'true'
       run: |
         make minimaltools
 
     - name: Build
-      if: steps.changes.outputs.examples == 'true'
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.examples == 'true'
       run: |
         make build
 
     - name: region_example
-      if: steps.changes.outputs.examples == 'true'
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.examples == 'true'
       timeout-minutes: 30
       run: |
         export TOPO=${{matrix.topo}}
         if [ ${{matrix.os}} = "macos-latest" ]; then
           export PATH="/usr/local/opt/mysql@5.7/bin:$PATH"
         fi
-        # Make sure that testing is entirely non-reliant on config
-        mv config config-moved
         sed -i 's/user\/my-vitess/runner\/work\/vitess\/vitess/g' examples/region_sharding/main_vschema_sharded.json #set correct path to countries.json
         eatmydata -- go run test.go -print-log -follow -retry=1 region_example

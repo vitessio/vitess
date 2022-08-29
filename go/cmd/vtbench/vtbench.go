@@ -23,6 +23,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/spf13/pflag"
+
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
@@ -104,7 +106,10 @@ func main() {
 	defer exit.Recover()
 
 	flag.Lookup("logtostderr").Value.Set("true")
-	_flag.Parse()
+	fs := pflag.NewFlagSet("vtbench", pflag.ExitOnError)
+	log.RegisterFlags(fs)
+	logutil.RegisterFlags(fs)
+	_flag.Parse(fs)
 
 	clientProto := vtbench.MySQL
 	switch *protocol {

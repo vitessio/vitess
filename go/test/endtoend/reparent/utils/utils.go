@@ -28,20 +28,15 @@ import (
 	"testing"
 	"time"
 
-	tmc "vitess.io/vitess/go/vt/vttablet/grpctmclient"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/json2"
-	"vitess.io/vitess/go/vt/log"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/vt/log"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 var (
@@ -68,13 +63,13 @@ var (
 //region cluster setup/teardown
 
 // SetupReparentCluster is used to setup the reparent cluster
-func SetupReparentCluster(t *testing.T, enableSemiSync bool) *cluster.LocalProcessCluster {
-	return setupCluster(context.Background(), t, ShardName, []string{cell1, cell2}, []int{3, 1}, enableSemiSync)
+func SetupReparentCluster(t *testing.T, durability string) *cluster.LocalProcessCluster {
+	return setupCluster(context.Background(), t, ShardName, []string{cell1, cell2}, []int{3, 1}, durability)
 }
 
 // SetupRangeBasedCluster sets up the range based cluster
 func SetupRangeBasedCluster(ctx context.Context, t *testing.T) *cluster.LocalProcessCluster {
-	return setupCluster(ctx, t, ShardName, []string{cell1}, []int{2}, true)
+	return setupCluster(ctx, t, ShardName, []string{cell1}, []int{2}, "semi_sync")
 }
 
 // TeardownCluster is used to teardown the reparent cluster
@@ -82,15 +77,13 @@ func TeardownCluster(clusterInstance *cluster.LocalProcessCluster) {
 	clusterInstance.Teardown()
 }
 
-func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []string, numTablets []int, enableSemiSync bool) *cluster.LocalProcessCluster {
+func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []string, numTablets []int, durability string) *cluster.LocalProcessCluster {
 	var tablets []*cluster.Vttablet
 	clusterInstance := cluster.NewCluster(cells[0], Hostname)
 	keyspace := &cluster.Keyspace{Name: KeyspaceName}
 
-	durability := "none"
-	if enableSemiSync {
+	if durability == "semi_sync" {
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--enable_semi_sync")
-		durability = "semi_sync"
 	}
 
 	// Start topo server
@@ -161,8 +154,8 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 		}
 	}
 	if clusterInstance.VtctlMajorVersion >= 14 {
-		vtctldClientProcess := cluster.VtctldClientProcessInstance("localhost", clusterInstance.VtctldProcess.GrpcPort, clusterInstance.TmpDirectory)
-		out, err := vtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", KeyspaceName, fmt.Sprintf("--durability-policy=%s", durability))
+		clusterInstance.VtctldClientProcess = *cluster.VtctldClientProcessInstance("localhost", clusterInstance.VtctldProcess.GrpcPort, clusterInstance.TmpDirectory)
+		out, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", KeyspaceName, fmt.Sprintf("--durability-policy=%s", durability))
 		require.NoError(t, err, out)
 	}
 
@@ -172,6 +165,7 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 
 func setupShard(ctx context.Context, t *testing.T, clusterInstance *cluster.LocalProcessCluster, shardName string, tablets []*cluster.Vttablet) {
 	for _, tablet := range tablets {
+		tablet.VttabletProcess.SupportsBackup = false
 		// Start the tablet
 		err := tablet.VttabletProcess.Setup()
 		require.NoError(t, err)
@@ -197,9 +191,56 @@ func setupShard(ctx context.Context, t *testing.T, clusterInstance *cluster.Loca
 	WaitForReplicationToStart(t, clusterInstance, KeyspaceName, shardName, len(tablets), true)
 }
 
+// StartNewVTTablet starts a new vttablet instance
+func StartNewVTTablet(t *testing.T, clusterInstance *cluster.LocalProcessCluster, uuid int, supportsBackup bool) *cluster.Vttablet {
+	tablet := clusterInstance.NewVttabletInstance("replica", uuid, cell1)
+	keyspace := clusterInstance.Keyspaces[0]
+	shard := keyspace.Shards[0]
+
+	// Setup MysqlctlProcess
+	tablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory)
+	// Setup VttabletProcess
+	tablet.VttabletProcess = cluster.VttabletProcessInstance(
+		tablet.HTTPPort,
+		tablet.GrpcPort,
+		tablet.TabletUID,
+		tablet.Cell,
+		shard.Name,
+		keyspace.Name,
+		clusterInstance.VtctldProcess.Port,
+		tablet.Type,
+		clusterInstance.TopoProcess.Port,
+		clusterInstance.Hostname,
+		clusterInstance.TmpDirectory,
+		[]string{
+			"--lock_tables_timeout", "5s",
+			"--init_populate_metadata",
+			"--track_schema_versions=true",
+			"--queryserver_enable_online_ddl=false",
+		},
+		clusterInstance.EnableSemiSync,
+		clusterInstance.DefaultCharset)
+	tablet.VttabletProcess.SupportsBackup = supportsBackup
+
+	log.Infof("Starting MySql for tablet %v", tablet.Alias)
+	proc, err := tablet.MysqlctlProcess.StartProcess()
+	require.NoError(t, err, "Error starting start mysql")
+	if err := proc.Wait(); err != nil {
+		clusterInstance.PrintMysqlctlLogFiles()
+		require.FailNow(t, "Error starting mysql: %s", err.Error())
+	}
+
+	// The tablet should come up as serving since the primary for the shard already exists
+	tablet.VttabletProcess.ServingStatus = "SERVING"
+	tablet.VttabletProcess.SupportsBackup = false
+	err = tablet.VttabletProcess.Setup()
+	require.NoError(t, err)
+	return tablet
+}
+
 //endregion
 
-//region database queries
+// region database queries
 func getMysqlConnParam(tablet *cluster.Vttablet) mysql.ConnParams {
 	connParams := mysql.ConnParams{
 		Uname:      username,
@@ -349,12 +390,9 @@ func CheckPrimaryTablet(t *testing.T, clusterInstance *cluster.LocalProcessClust
 	assert.Equal(t, topodatapb.TabletType_PRIMARY, tabletInfo.GetType())
 
 	// make sure the health stream is updated
-	result, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "--", "--count", "1", tablet.Alias)
+	shrs, err := clusterInstance.StreamTabletHealth(context.Background(), tablet, 1)
 	require.NoError(t, err)
-	var streamHealthResponse querypb.StreamHealthResponse
-
-	err = json2.Unmarshal([]byte(result), &streamHealthResponse)
-	require.NoError(t, err)
+	streamHealthResponse := shrs[0]
 
 	assert.True(t, streamHealthResponse.GetServing())
 	tabletType := streamHealthResponse.GetTarget().GetTabletType()
@@ -373,12 +411,9 @@ func isHealthyPrimaryTablet(t *testing.T, clusterInstance *cluster.LocalProcessC
 	}
 
 	// make sure the health stream is updated
-	result, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "--", "--count", "1", tablet.Alias)
-	require.Nil(t, err)
-	var streamHealthResponse querypb.StreamHealthResponse
-
-	err = json2.Unmarshal([]byte(result), &streamHealthResponse)
-	require.Nil(t, err)
+	shrs, err := clusterInstance.StreamTabletHealth(context.Background(), tablet, 1)
+	require.NoError(t, err)
+	streamHealthResponse := shrs[0]
 
 	assert.True(t, streamHealthResponse.GetServing())
 	tabletType := streamHealthResponse.GetTarget().GetTabletType()
@@ -389,20 +424,33 @@ func isHealthyPrimaryTablet(t *testing.T, clusterInstance *cluster.LocalProcessC
 func CheckInsertedValues(ctx context.Context, t *testing.T, tablet *cluster.Vttablet, index int) error {
 	query := fmt.Sprintf("select msg from vt_insert_test where id=%d", index)
 	tabletParams := getMysqlConnParam(tablet)
-	conn, err := mysql.Connect(ctx, &tabletParams)
-	require.Nil(t, err)
-	defer conn.Close()
+	var conn *mysql.Conn
 
 	// wait until it gets the data
 	timeout := time.Now().Add(replicationWaitTimeout)
 	i := 0
 	for time.Now().Before(timeout) {
-		// We'll get a mysql.ERNoSuchTable (1146) error if the CREATE TABLE has not replicated yet and
-		// it's possible that we get other ephemeral errors too, so we make the tests more robust by
-		// retrying with the timeout.
-		qr, err := conn.ExecuteFetch(query, 1, true)
-		if err == nil && len(qr.Rows) == 1 {
-			return nil
+		// We start with no connection to MySQL
+		if conn == nil {
+			// Try connecting to MySQL
+			mysqlConn, err := mysql.Connect(ctx, &tabletParams)
+			// This can fail if the database create hasn't been replicated yet.
+			// We ignore this failure and try again later
+			if err == nil {
+				// If we succeed, then we store the connection
+				// and reuse it for checking the rows in the table.
+				conn = mysqlConn
+				defer conn.Close()
+			}
+		}
+		if conn != nil {
+			// We'll get a mysql.ERNoSuchTable (1146) error if the CREATE TABLE has not replicated yet and
+			// it's possible that we get other ephemeral errors too, so we make the tests more robust by
+			// retrying with the timeout.
+			qr, err := conn.ExecuteFetch(query, 1, true)
+			if err == nil && len(qr.Rows) == 1 {
+				return nil
+			}
 		}
 		t := time.Duration(300 * i)
 		time.Sleep(t * time.Millisecond)
@@ -514,10 +562,11 @@ func GetShardReplicationPositions(t *testing.T, clusterInstance *cluster.LocalPr
 }
 
 func WaitForReplicationToStart(t *testing.T, clusterInstance *cluster.LocalProcessCluster, keyspaceName, shardName string, tabletCnt int, doPrint bool) {
-	tck := time.NewTicker(500 * time.Millisecond)
+	tkr := time.NewTicker(500 * time.Millisecond)
+	defer tkr.Stop()
 	for {
 		select {
-		case <-tck.C:
+		case <-tkr.C:
 			strArray := GetShardReplicationPositions(t, clusterInstance, KeyspaceName, shardName, true)
 			if len(strArray) == tabletCnt && strings.Contains(strArray[0], "primary") { // primary first
 				return
@@ -560,14 +609,10 @@ func CheckReparentFromOutside(t *testing.T, clusterInstance *cluster.LocalProces
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RunHealthCheck", tablet.Alias)
 	require.NoError(t, err)
 
-	streamHealth, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
-		"VtTabletStreamHealth", "--",
-		"--count", "1", tablet.Alias)
+	shrs, err := clusterInstance.StreamTabletHealth(context.Background(), tablet, 1)
 	require.NoError(t, err)
+	streamHealthResponse := shrs[0]
 
-	var streamHealthResponse querypb.StreamHealthResponse
-	err = json.Unmarshal([]byte(streamHealth), &streamHealthResponse)
-	require.NoError(t, err)
 	assert.Equal(t, streamHealthResponse.Target.TabletType, topodatapb.TabletType_PRIMARY)
 	assert.True(t, streamHealthResponse.TabletExternallyReparentedTimestamp >= baseTime)
 }
@@ -575,13 +620,13 @@ func CheckReparentFromOutside(t *testing.T, clusterInstance *cluster.LocalProces
 // WaitForReplicationPosition waits for tablet B to catch up to the replication position of tablet A.
 func WaitForReplicationPosition(t *testing.T, tabletA *cluster.Vttablet, tabletB *cluster.Vttablet) error {
 	posA, _ := cluster.GetPrimaryPosition(t, *tabletA, Hostname)
-	timeout := time.Now().Add(5 * time.Second)
+	timeout := time.Now().Add(replicationWaitTimeout)
 	for time.Now().Before(timeout) {
 		posB, _ := cluster.GetPrimaryPosition(t, *tabletB, Hostname)
 		if positionAtLeast(t, tabletB, posA, posB) {
 			return nil
 		}
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(500 * time.Millisecond)
 	}
 	return fmt.Errorf("failed to catch up on replication position")
 }
@@ -654,54 +699,4 @@ func CheckReplicationStatus(ctx context.Context, t *testing.T, tablet *cluster.V
 	} else {
 		require.Equal(t, "No", res.Rows[0][11].ToString())
 	}
-}
-
-// ReplicationThreadsStatus returns the status of the IO and SQL thread. It reads the result of the replication status
-// based on the vtctl major version provided. It also uses the vttabletVersion to assert on the expectation of the new fields
-// being unknown for the old vttablets and that they match for the new vttablets
-func ReplicationThreadsStatus(t *testing.T, status *replicationdatapb.Status, vtctlVersion, vttabletVersion int) (bool, bool) {
-	if vttabletVersion == 13 {
-		// If vttablet is version 13, then the new fields should be unknown
-		require.Equal(t, mysql.ReplicationStateUnknown, mysql.ReplicationState(status.IoState))
-		require.Equal(t, mysql.ReplicationStateUnknown, mysql.ReplicationState(status.SqlState))
-	} else {
-		// For the new vttablet, the new parameters should not be unknown. Moreover, the old parameters should also be provided
-		// and should agree with the new ones
-		require.NotEqual(t, mysql.ReplicationStateUnknown, mysql.ReplicationState(status.IoState))
-		require.NotEqual(t, mysql.ReplicationStateUnknown, mysql.ReplicationState(status.SqlState))
-		require.Equal(t, status.IoThreadRunning, mysql.ReplicationState(status.IoState) == mysql.ReplicationStateRunning)
-		require.Equal(t, status.SqlThreadRunning, mysql.ReplicationState(status.SqlState) == mysql.ReplicationStateRunning)
-	}
-
-	// if vtctlVersion provided is 13, then we should read the old parameters, since that is what old vtctl would do
-	if vtctlVersion == 13 {
-		return status.IoThreadRunning, status.SqlThreadRunning
-	}
-	// If we are at the latest vtctl version, we should read the latest parameters if provided otherwise the old ones
-	ioState := mysql.ReplicationState(status.IoState)
-	ioThread := status.IoThreadRunning
-	if ioState != mysql.ReplicationStateUnknown {
-		ioThread = ioState == mysql.ReplicationStateRunning
-	}
-	sqlState := mysql.ReplicationState(status.SqlState)
-	sqlThread := status.SqlThreadRunning
-	if sqlState != mysql.ReplicationStateUnknown {
-		sqlThread = sqlState == mysql.ReplicationStateRunning
-	}
-	return ioThread, sqlThread
-}
-
-// TmcFullStatus retuns the result of the TabletManagerClient RPC FullStatus
-func TmcFullStatus(ctx context.Context, tablet *cluster.Vttablet) (*replicationdatapb.FullStatus, error) {
-	// create tablet manager client
-	tmClient := tmc.NewClient()
-
-	vttablet := getTablet(tablet.GrpcPort)
-	return tmClient.FullStatus(ctx, vttablet)
-}
-
-func getTablet(tabletGrpcPort int) *topodatapb.Tablet {
-	portMap := make(map[string]int32)
-	portMap["grpc"] = int32(tabletGrpcPort)
-	return &topodatapb.Tablet{Hostname: Hostname, PortMap: portMap}
 }

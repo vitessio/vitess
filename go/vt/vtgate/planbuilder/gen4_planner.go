@@ -32,7 +32,7 @@ import (
 var _ stmtPlanner = gen4Planner("apa", 0)
 
 func gen4Planner(query string, plannerVersion querypb.ExecuteOptions_PlannerVersion) stmtPlanner {
-	return func(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (engine.Primitive, error) {
+	return func(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
 		switch stmt := stmt.(type) {
 		case sqlparser.SelectStatement:
 			return gen4SelectStmtPlanner(query, plannerVersion, stmt, reservedVars, vschema)
@@ -50,7 +50,7 @@ func gen4SelectStmtPlanner(
 	stmt sqlparser.SelectStatement,
 	reservedVars *sqlparser.ReservedVars,
 	vschema plancontext.VSchema,
-) (engine.Primitive, error) {
+) (*planResult, error) {
 	switch node := stmt.(type) {
 	case *sqlparser.Select:
 		if node.With != nil {
@@ -66,8 +66,18 @@ func gen4SelectStmtPlanner(
 	if isSel {
 		// handle dual table for processing at vtgate.
 		p, err := handleDualSelects(sel, vschema)
-		if err != nil || p != nil {
-			return p, err
+		if err != nil {
+			return nil, err
+		}
+		if p != nil {
+			used := "dual"
+			keyspace, ksErr := vschema.DefaultKeyspace()
+			if ksErr == nil {
+				// we are just getting the ks to log the correct table use.
+				// no need to fail this if we can't find the default keyspace
+				used = keyspace.Name + ".dual"
+			}
+			return newPlanResult(p, used), nil
 		}
 
 		if sel.SQLCalcFoundRows && sel.Limit != nil {
@@ -77,38 +87,44 @@ func gen4SelectStmtPlanner(
 		sel.SQLCalcFoundRows = false
 	}
 
-	getPlan := func(selStatement sqlparser.SelectStatement) (logicalPlan, error) {
+	getPlan := func(selStatement sqlparser.SelectStatement) (logicalPlan, *semantics.SemTable, error) {
 		return newBuildSelectPlan(selStatement, reservedVars, vschema, plannerVersion)
 	}
 
-	plan, err := getPlan(stmt)
+	plan, st, err := getPlan(stmt)
 	if err != nil {
 		return nil, err
 	}
 
 	if shouldRetryWithCNFRewriting(plan) {
 		// by transforming the predicates to CNF, the planner will sometimes find better plans
-		primitive := gen4CNFRewrite(stmt, getPlan)
+		primitive, st := gen4CNFRewrite(stmt, getPlan)
 		if primitive != nil {
-			return primitive, nil
+			return newPlanResult(primitive, tablesFromSemantics(st)...), nil
 		}
 	}
 
 	primitive := plan.Primitive()
-	if rb, ok := primitive.(*engine.Route); ok && isSel {
-		// this is done because engine.Route doesn't handle the empty result well
-		// if it doesn't find a shard to send the query to.
-		// All other engine primitives can handle this, so we only need it when
-		// Route is the last (and only) instruction before the user sees a result
-		if isOnlyDual(sel) || (len(sel.GroupBy) == 0 && sel.SelectExprs.AllAggregation()) {
-			rb.NoRoutesSpecialHandling = true
-		}
+	if !isSel {
+		return newPlanResult(primitive, tablesFromSemantics(st)...), nil
 	}
 
-	return primitive, nil
+	// this is done because engine.Route doesn't handle the empty result well
+	// if it doesn't find a shard to send the query to.
+	// All other engine primitives can handle this, so we only need it when
+	// Route is the last (and only) instruction before the user sees a result
+	if isOnlyDual(sel) || (len(sel.GroupBy) == 0 && sel.SelectExprs.AllAggregation()) {
+		switch prim := primitive.(type) {
+		case *engine.Route:
+			prim.NoRoutesSpecialHandling = true
+		case *engine.VindexLookup:
+			prim.SendTo.NoRoutesSpecialHandling = true
+		}
+	}
+	return newPlanResult(primitive, tablesFromSemantics(st)...), nil
 }
 
-func gen4planSQLCalcFoundRows(vschema plancontext.VSchema, sel *sqlparser.Select, query string, reservedVars *sqlparser.ReservedVars) (engine.Primitive, error) {
+func gen4planSQLCalcFoundRows(vschema plancontext.VSchema, sel *sqlparser.Select, query string, reservedVars *sqlparser.ReservedVars) (*planResult, error) {
 	ksName := ""
 	if ks, _ := vschema.DefaultKeyspace(); ks != nil {
 		ksName = ks.Name
@@ -124,33 +140,29 @@ func gen4planSQLCalcFoundRows(vschema plancontext.VSchema, sel *sqlparser.Select
 	if err != nil {
 		return nil, err
 	}
-	err = plan.WireupGen4(semTable)
-	if err != nil {
-		return nil, err
-	}
-	return plan.Primitive(), nil
+	return newPlanResult(plan.Primitive(), tablesFromSemantics(semTable)...), nil
 }
 
 func planSelectGen4(reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, sel *sqlparser.Select) (*jointab, logicalPlan, error) {
-	plan, err := newBuildSelectPlan(sel, reservedVars, vschema, 0)
+	plan, _, err := newBuildSelectPlan(sel, reservedVars, vschema, 0)
 	if err != nil {
 		return nil, nil, err
 	}
 	return nil, plan, nil
 }
 
-func gen4CNFRewrite(stmt sqlparser.Statement, getPlan func(selStatement sqlparser.SelectStatement) (logicalPlan, error)) engine.Primitive {
+func gen4CNFRewrite(stmt sqlparser.Statement, getPlan func(selStatement sqlparser.SelectStatement) (logicalPlan, *semantics.SemTable, error)) (engine.Primitive, *semantics.SemTable) {
 	rewritten, isSel := sqlparser.RewriteToCNF(stmt).(sqlparser.SelectStatement)
 	if !isSel {
 		// Fail-safe code, should never happen
-		return nil
+		return nil, nil
 	}
-	plan2, err := getPlan(rewritten)
+	plan2, st, err := getPlan(rewritten)
 	if err == nil && !shouldRetryWithCNFRewriting(plan2) {
 		// we only use this new plan if it's better than the old one we got
-		return plan2.Primitive()
+		return plan2.Primitive(), st
 	}
-	return nil
+	return nil, nil
 }
 
 func newBuildSelectPlan(
@@ -158,74 +170,76 @@ func newBuildSelectPlan(
 	reservedVars *sqlparser.ReservedVars,
 	vschema plancontext.VSchema,
 	version querypb.ExecuteOptions_PlannerVersion,
-) (logicalPlan, error) {
+) (logicalPlan, *semantics.SemTable, error) {
 	ksName := ""
 	if ks, _ := vschema.DefaultKeyspace(); ks != nil {
 		ksName = ks.Name
 	}
 	semTable, err := semantics.Analyze(selStmt, ksName, vschema)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	// record any warning as planner warning.
 	vschema.PlannerWarning(semTable.Warning)
 
+	ctx := plancontext.NewPlanningContext(reservedVars, semTable, vschema, version)
+
 	if ks, _ := semTable.SingleUnshardedKeyspace(); ks != nil {
-		return unshardedShortcut(selStmt, ks, semTable)
+		plan, err := unshardedShortcut(ctx, selStmt, ks)
+		return plan, semTable, err
 	}
 
 	// From this point on, we know it is not an unsharded query and return the NotUnshardedErr if there is any
 	if semTable.NotUnshardedErr != nil {
-		return nil, semTable.NotUnshardedErr
+		return nil, nil, semTable.NotUnshardedErr
 	}
 
 	err = queryRewrite(semTable, reservedVars, selStmt)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	ctx := plancontext.NewPlanningContext(reservedVars, semTable, vschema, version)
 	logical, err := abstract.CreateLogicalOperatorFromAST(selStmt, semTable)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	err = logical.CheckValid()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	physOp, err := physical.CreatePhysicalOperator(ctx, logical)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	plan, err := transformToLogicalPlan(ctx, physOp, true)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	plan, err = planHorizon(ctx, plan, selStmt, true)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	sel, isSel := selStmt.(*sqlparser.Select)
 	if isSel {
 		if err := setMiscFunc(plan, sel); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 
-	if err := plan.WireupGen4(semTable); err != nil {
-		return nil, err
+	if err := plan.WireupGen4(ctx); err != nil {
+		return nil, nil, err
 	}
 
 	plan, err = pushCommentDirectivesOnPlan(plan, selStmt)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return plan, nil
+	return plan, semTable, nil
 }
 
 func gen4UpdateStmtPlanner(
@@ -233,7 +247,7 @@ func gen4UpdateStmtPlanner(
 	updStmt *sqlparser.Update,
 	reservedVars *sqlparser.ReservedVars,
 	vschema plancontext.VSchema,
-) (engine.Primitive, error) {
+) (*planResult, error) {
 	if updStmt.With != nil {
 		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: with expression in update statement")
 	}
@@ -261,7 +275,7 @@ func gen4UpdateStmtPlanner(
 		edml.Opcode = engine.Unsharded
 		edml.Query = generateQuery(updStmt)
 		upd := &engine.Update{DML: edml}
-		return upd, nil
+		return newPlanResult(upd, tablesFromSemantics(semTable)...), nil
 	}
 
 	if semTable.NotUnshardedErr != nil {
@@ -299,13 +313,13 @@ func gen4UpdateStmtPlanner(
 		return nil, err
 	}
 
-	setLockOnAllSelect(err, plan)
+	setLockOnAllSelect(plan)
 
-	if err := plan.WireupGen4(semTable); err != nil {
+	if err := plan.WireupGen4(ctx); err != nil {
 		return nil, err
 	}
 
-	return plan.Primitive(), nil
+	return newPlanResult(plan.Primitive(), tablesFromSemantics(semTable)...), nil
 }
 
 func rewriteRoutedTables(updStmt *sqlparser.Update, vschema plancontext.VSchema) (err error) {
@@ -340,7 +354,7 @@ func rewriteRoutedTables(updStmt *sqlparser.Update, vschema plancontext.VSchema)
 	return
 }
 
-func setLockOnAllSelect(err error, plan logicalPlan) {
+func setLockOnAllSelect(plan logicalPlan) {
 	_, _ = visit(plan, func(plan logicalPlan) (bool, logicalPlan, error) {
 		switch node := plan.(type) {
 		case *routeGen4:
@@ -433,26 +447,23 @@ func planOrderByOnUnion(ctx *plancontext.PlanningContext, plan logicalPlan, unio
 }
 
 func pushCommentDirectivesOnPlan(plan logicalPlan, stmt sqlparser.Statement) (logicalPlan, error) {
-	var directives sqlparser.CommentDirectives
+	var directives *sqlparser.CommentDirectives
 	cmt, ok := stmt.(sqlparser.Commented)
 	if ok {
 		directives = cmt.GetParsedComments().Directives()
-	} else {
-		directives = make(sqlparser.CommentDirectives)
-	}
+		scatterAsWarns := directives.IsSet(sqlparser.DirectiveScatterErrorsAsWarnings)
+		timeout := queryTimeout(directives)
 
-	scatterAsWarns := directives.IsSet(sqlparser.DirectiveScatterErrorsAsWarnings)
-	queryTimeout := queryTimeout(directives)
-
-	if scatterAsWarns || queryTimeout > 0 {
-		_, _ = visit(plan, func(logicalPlan logicalPlan) (bool, logicalPlan, error) {
-			switch plan := logicalPlan.(type) {
-			case *routeGen4:
-				plan.eroute.ScatterErrorsAsWarnings = scatterAsWarns
-				plan.eroute.QueryTimeout = queryTimeout
-			}
-			return true, logicalPlan, nil
-		})
+		if scatterAsWarns || timeout > 0 {
+			_, _ = visit(plan, func(logicalPlan logicalPlan) (bool, logicalPlan, error) {
+				switch plan := logicalPlan.(type) {
+				case *routeGen4:
+					plan.eroute.ScatterErrorsAsWarnings = scatterAsWarns
+					plan.eroute.QueryTimeout = timeout
+				}
+				return true, logicalPlan, nil
+			})
+		}
 	}
 
 	return plan, nil

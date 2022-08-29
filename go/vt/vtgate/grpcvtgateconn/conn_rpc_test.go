@@ -17,6 +17,7 @@ limitations under the License.
 package grpcvtgateconn
 
 import (
+	"context"
 	"flag"
 	"io"
 	"net"
@@ -24,8 +25,6 @@ import (
 	"testing"
 
 	"google.golang.org/grpc"
-
-	"context"
 
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtgate/grpcvtgateservice"

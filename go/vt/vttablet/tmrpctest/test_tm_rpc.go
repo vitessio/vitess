@@ -17,6 +17,7 @@ limitations under the License.
 package tmrpctest
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"reflect"
@@ -25,12 +26,9 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/mysql"
-
-	"context"
-
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/logutil"
@@ -584,11 +582,11 @@ func tmRPCTestApplySchemaPanic(ctx context.Context, t *testing.T, client tmclien
 
 var testExecuteQueryQuery = []byte("drop table t")
 
-func (fra *fakeRPCTM) ExecuteQuery(ctx context.Context, query []byte, dbName string, maxrows int) (*querypb.QueryResult, error) {
+func (fra *fakeRPCTM) ExecuteQuery(ctx context.Context, req *tabletmanagerdatapb.ExecuteQueryRequest) (*querypb.QueryResult, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
-	compare(fra.t, "ExecuteQuery query", query, testExecuteQueryQuery)
+	compare(fra.t, "ExecuteQuery query", req.Query, testExecuteQueryQuery)
 
 	return testExecuteFetchResult, nil
 }
@@ -621,68 +619,105 @@ var testExecuteFetchResult = &querypb.QueryResult{
 	},
 }
 
-func (fra *fakeRPCTM) ExecuteFetchAsDba(ctx context.Context, query []byte, dbName string, maxrows int, disableBinlogs bool, reloadSchema bool) (*querypb.QueryResult, error) {
+func (fra *fakeRPCTM) ExecuteFetchAsDba(ctx context.Context, req *tabletmanagerdatapb.ExecuteFetchAsDbaRequest) (*querypb.QueryResult, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
-	compare(fra.t, "ExecuteFetchAsDba query", query, testExecuteFetchQuery)
-	compare(fra.t, "ExecuteFetchAsDba maxrows", maxrows, testExecuteFetchMaxRows)
-	compareBool(fra.t, "ExecuteFetchAsDba disableBinlogs", disableBinlogs)
-	compareBool(fra.t, "ExecuteFetchAsDba reloadSchema", reloadSchema)
+	compare(fra.t, "ExecuteFetchAsDba query", req.Query, testExecuteFetchQuery)
+	compare(fra.t, "ExecuteFetchAsDba maxrows", req.MaxRows, testExecuteFetchMaxRows)
+	compareBool(fra.t, "ExecuteFetchAsDba disableBinlogs", req.DisableBinlogs)
+	compareBool(fra.t, "ExecuteFetchAsDba reloadSchema", req.ReloadSchema)
 
 	return testExecuteFetchResult, nil
 }
 
-func (fra *fakeRPCTM) ExecuteFetchAsAllPrivs(ctx context.Context, query []byte, dbName string, maxrows int, reloadSchema bool) (*querypb.QueryResult, error) {
+func (fra *fakeRPCTM) ExecuteFetchAsAllPrivs(ctx context.Context, req *tabletmanagerdatapb.ExecuteFetchAsAllPrivsRequest) (*querypb.QueryResult, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
-	compare(fra.t, "ExecuteFetchAsAllPrivs query", query, testExecuteFetchQuery)
-	compare(fra.t, "ExecuteFetchAsAllPrivs maxrows", maxrows, testExecuteFetchMaxRows)
-	compareBool(fra.t, "ExecuteFetchAsAllPrivs reloadSchema", reloadSchema)
+	compare(fra.t, "ExecuteFetchAsAllPrivs query", req.Query, testExecuteFetchQuery)
+	compare(fra.t, "ExecuteFetchAsAllPrivs maxrows", req.MaxRows, testExecuteFetchMaxRows)
+	compareBool(fra.t, "ExecuteFetchAsAllPrivs reloadSchema", req.ReloadSchema)
 
 	return testExecuteFetchResult, nil
 }
 
-func (fra *fakeRPCTM) ExecuteFetchAsApp(ctx context.Context, query []byte, maxrows int) (*querypb.QueryResult, error) {
+func (fra *fakeRPCTM) ExecuteFetchAsApp(ctx context.Context, req *tabletmanagerdatapb.ExecuteFetchAsAppRequest) (*querypb.QueryResult, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
-	compare(fra.t, "ExecuteFetchAsApp query", query, testExecuteFetchQuery)
-	compare(fra.t, "ExecuteFetchAsApp maxrows", maxrows, testExecuteFetchMaxRows)
+	compare(fra.t, "ExecuteFetchAsApp query", req.Query, testExecuteFetchQuery)
+	compare(fra.t, "ExecuteFetchAsApp maxrows", req.MaxRows, testExecuteFetchMaxRows)
 	return testExecuteFetchResult, nil
 }
 
 func tmRPCTestExecuteFetch(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	// using pool
-	qr, err := client.ExecuteFetchAsDba(ctx, tablet, true, testExecuteFetchQuery, testExecuteFetchMaxRows, true, true)
+	qr, err := client.ExecuteFetchAsDba(ctx, tablet, true, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
+		Query:          testExecuteFetchQuery,
+		MaxRows:        uint64(testExecuteFetchMaxRows),
+		DisableBinlogs: true,
+		ReloadSchema:   true,
+	})
 	compareError(t, "ExecuteFetchAsDba", err, qr, testExecuteFetchResult)
-	qr, err = client.ExecuteFetchAsApp(ctx, tablet, true, testExecuteFetchQuery, testExecuteFetchMaxRows)
+	qr, err = client.ExecuteFetchAsApp(ctx, tablet, true, &tabletmanagerdatapb.ExecuteFetchAsAppRequest{
+		Query:   testExecuteFetchQuery,
+		MaxRows: uint64(testExecuteFetchMaxRows),
+	})
 	compareError(t, "ExecuteFetchAsApp", err, qr, testExecuteFetchResult)
 
 	// not using pool
-	qr, err = client.ExecuteFetchAsDba(ctx, tablet, false, testExecuteFetchQuery, testExecuteFetchMaxRows, true, true)
+	qr, err = client.ExecuteFetchAsDba(ctx, tablet, false, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
+		Query:          testExecuteFetchQuery,
+		MaxRows:        uint64(testExecuteFetchMaxRows),
+		DisableBinlogs: true,
+		ReloadSchema:   true,
+	})
 	compareError(t, "ExecuteFetchAsDba", err, qr, testExecuteFetchResult)
-	qr, err = client.ExecuteFetchAsApp(ctx, tablet, false, testExecuteFetchQuery, testExecuteFetchMaxRows)
+	qr, err = client.ExecuteFetchAsApp(ctx, tablet, false, &tabletmanagerdatapb.ExecuteFetchAsAppRequest{
+		Query:   testExecuteFetchQuery,
+		MaxRows: uint64(testExecuteFetchMaxRows),
+	})
 	compareError(t, "ExecuteFetchAsApp", err, qr, testExecuteFetchResult)
-	qr, err = client.ExecuteFetchAsAllPrivs(ctx, tablet, testExecuteFetchQuery, testExecuteFetchMaxRows, true)
+	qr, err = client.ExecuteFetchAsAllPrivs(ctx, tablet, &tabletmanagerdatapb.ExecuteFetchAsAllPrivsRequest{
+		Query:        testExecuteFetchQuery,
+		MaxRows:      uint64(testExecuteFetchMaxRows),
+		ReloadSchema: true,
+	})
 	compareError(t, "ExecuteFetchAsAllPrivs", err, qr, testExecuteFetchResult)
 
 }
 
 func tmRPCTestExecuteFetchPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	// using pool
-	_, err := client.ExecuteFetchAsDba(ctx, tablet, true, testExecuteFetchQuery, testExecuteFetchMaxRows, true, false)
+	_, err := client.ExecuteFetchAsDba(ctx, tablet, true, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
+		Query:          testExecuteFetchQuery,
+		MaxRows:        uint64(testExecuteFetchMaxRows),
+		DisableBinlogs: true,
+	})
 	expectHandleRPCPanic(t, "ExecuteFetchAsDba", false /*verbose*/, err)
-	_, err = client.ExecuteFetchAsApp(ctx, tablet, true, testExecuteFetchQuery, testExecuteFetchMaxRows)
+	_, err = client.ExecuteFetchAsApp(ctx, tablet, true, &tabletmanagerdatapb.ExecuteFetchAsAppRequest{
+		Query:   testExecuteFetchQuery,
+		MaxRows: uint64(testExecuteFetchMaxRows),
+	})
 	expectHandleRPCPanic(t, "ExecuteFetchAsApp", false /*verbose*/, err)
 
 	// not using pool
-	_, err = client.ExecuteFetchAsDba(ctx, tablet, false, testExecuteFetchQuery, testExecuteFetchMaxRows, true, false)
+	_, err = client.ExecuteFetchAsDba(ctx, tablet, false, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
+		Query:          testExecuteFetchQuery,
+		MaxRows:        uint64(testExecuteFetchMaxRows),
+		DisableBinlogs: true,
+	})
 	expectHandleRPCPanic(t, "ExecuteFetchAsDba", false /*verbose*/, err)
-	_, err = client.ExecuteFetchAsApp(ctx, tablet, false, testExecuteFetchQuery, testExecuteFetchMaxRows)
+	_, err = client.ExecuteFetchAsApp(ctx, tablet, false, &tabletmanagerdatapb.ExecuteFetchAsAppRequest{
+		Query:   testExecuteFetchQuery,
+		MaxRows: uint64(testExecuteFetchMaxRows),
+	})
 	expectHandleRPCPanic(t, "ExecuteFetchAsApp", false /*verbose*/, err)
-	_, err = client.ExecuteFetchAsAllPrivs(ctx, tablet, testExecuteFetchQuery, testExecuteFetchMaxRows, false)
+	_, err = client.ExecuteFetchAsAllPrivs(ctx, tablet, &tabletmanagerdatapb.ExecuteFetchAsAllPrivsRequest{
+		Query:   testExecuteFetchQuery,
+		MaxRows: uint64(testExecuteFetchMaxRows),
+	})
 	expectHandleRPCPanic(t, "ExecuteFetchAsAllPrivs", false /*verbose*/, err)
 }
 
@@ -1191,19 +1226,20 @@ var testBackupAllowPrimary = false
 var testBackupCalled = false
 var testRestoreFromBackupCalled = false
 
-func (fra *fakeRPCTM) Backup(ctx context.Context, concurrency int, logger logutil.Logger, allowPrimary bool) error {
+func (fra *fakeRPCTM) Backup(ctx context.Context, logger logutil.Logger, request *tabletmanagerdatapb.BackupRequest) error {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
-	compare(fra.t, "Backup args", concurrency, testBackupConcurrency)
-	compare(fra.t, "Backup args", allowPrimary, testBackupAllowPrimary)
+	compare(fra.t, "Backup args", request.Concurrency, testBackupConcurrency)
+	compare(fra.t, "Backup args", request.AllowPrimary, testBackupAllowPrimary)
 	logStuff(logger, 10)
 	testBackupCalled = true
 	return nil
 }
 
 func tmRPCTestBackup(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	stream, err := client.Backup(ctx, tablet, testBackupConcurrency, testBackupAllowPrimary)
+	req := &tabletmanagerdatapb.BackupRequest{Concurrency: int64(testBackupConcurrency), AllowPrimary: testBackupAllowPrimary}
+	stream, err := client.Backup(ctx, tablet, req)
 	if err != nil {
 		t.Fatalf("Backup failed: %v", err)
 	}
@@ -1212,7 +1248,8 @@ func tmRPCTestBackup(ctx context.Context, t *testing.T, client tmclient.TabletMa
 }
 
 func tmRPCTestBackupPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	stream, err := client.Backup(ctx, tablet, testBackupConcurrency, testBackupAllowPrimary)
+	req := &tabletmanagerdatapb.BackupRequest{Concurrency: int64(testBackupConcurrency), AllowPrimary: testBackupAllowPrimary}
+	stream, err := client.Backup(ctx, tablet, req)
 	if err != nil {
 		t.Fatalf("Backup failed: %v", err)
 	}

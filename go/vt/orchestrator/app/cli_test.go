@@ -4,19 +4,12 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/vt/orchestrator/config"
-	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 	test "vitess.io/vitess/go/vt/orchestrator/external/golib/tests"
 )
 
 func init() {
 	config.Config.HostnameResolveMethod = "none"
 	config.MarkConfigurationLoaded()
-	log.SetLevel(log.ERROR)
-}
-
-func TestHelp(t *testing.T) {
-	Cli("help", false, "localhost:9999", "localhost:9999", "orc", "no-reason", "1m", ".", "no-alias", "no-pool", "")
-	test.S(t).ExpectTrue(len(knownCommands) > 0)
 }
 
 func TestKnownCommands(t *testing.T) {

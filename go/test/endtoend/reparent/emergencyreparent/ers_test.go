@@ -31,7 +31,7 @@ import (
 
 func TestTrivialERS(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentCluster(t, true)
+	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
@@ -56,7 +56,7 @@ func TestTrivialERS(t *testing.T) {
 
 func TestReparentIgnoreReplicas(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentCluster(t, true)
+	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 	var err error
@@ -98,7 +98,7 @@ func TestReparentIgnoreReplicas(t *testing.T) {
 
 func TestReparentDownPrimary(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentCluster(t, true)
+	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
@@ -134,7 +134,7 @@ func TestReparentDownPrimary(t *testing.T) {
 
 func TestReparentNoChoiceDownPrimary(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentCluster(t, true)
+	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 	var err error
@@ -170,7 +170,7 @@ func TestReparentNoChoiceDownPrimary(t *testing.T) {
 func TestSemiSyncSetupCorrectly(t *testing.T) {
 	t.Run("semi-sync enabled", func(t *testing.T) {
 		defer cluster.PanicHandler(t)
-		clusterInstance := utils.SetupReparentCluster(t, true)
+		clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
 		defer utils.TeardownCluster(clusterInstance)
 		tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
@@ -198,7 +198,7 @@ func TestSemiSyncSetupCorrectly(t *testing.T) {
 
 	t.Run("semi-sync disabled", func(t *testing.T) {
 		defer cluster.PanicHandler(t)
-		clusterInstance := utils.SetupReparentCluster(t, false)
+		clusterInstance := utils.SetupReparentCluster(t, "none")
 		defer utils.TeardownCluster(clusterInstance)
 		tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
@@ -228,7 +228,7 @@ func TestSemiSyncSetupCorrectly(t *testing.T) {
 // TestERSPromoteRdonly tests that we never end up promoting a rdonly instance as the primary
 func TestERSPromoteRdonly(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentCluster(t, true)
+	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 	var err error
@@ -256,7 +256,7 @@ func TestERSPromoteRdonly(t *testing.T) {
 // TestERSPreventCrossCellPromotion tests that we promote a replica in the same cell as the previous primary if prevent cross cell promotion flag is set
 func TestERSPreventCrossCellPromotion(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentCluster(t, true)
+	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 	var err error
@@ -279,7 +279,7 @@ func TestERSPreventCrossCellPromotion(t *testing.T) {
 // caught up to it by pulling transactions from it
 func TestPullFromRdonly(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentCluster(t, true)
+	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 	var err error
@@ -344,7 +344,7 @@ func TestPullFromRdonly(t *testing.T) {
 // is stopped on the primary elect.
 func TestNoReplicationStatusAndIOThreadStopped(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentCluster(t, true)
+	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
@@ -443,7 +443,7 @@ func TestERSForInitialization(t *testing.T) {
 
 func TestRecoverWithMultipleFailures(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentCluster(t, true)
+	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
@@ -471,7 +471,7 @@ func TestRecoverWithMultipleFailures(t *testing.T) {
 // a tablet and hanging while inserting a row in the reparent journal on getting semi-sync ACKs
 func TestERSFailFast(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentCluster(t, true)
+	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
@@ -483,12 +483,20 @@ func TestERSFailFast(t *testing.T) {
 	// Confirm that replication is still working as intended
 	utils.ConfirmReplication(t, tablets[0], tablets[1:])
 
+	// Context to be used in the go-routine to cleanly exit it after the test ends
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	strChan := make(chan string)
 	go func() {
 		// We expect this to fail since we have ignored all replica tablets and only the rdonly is left, which is not capable of sending semi-sync ACKs
 		out, err := utils.ErsIgnoreTablet(clusterInstance, tablets[2], "240s", "90s", []*cluster.Vttablet{tablets[0], tablets[3]}, false)
 		require.Error(t, err)
-		strChan <- out
+		select {
+		case strChan <- out:
+			return
+		case <-ctx.Done():
+			return
+		}
 	}()
 
 	select {
@@ -503,7 +511,7 @@ func TestERSFailFast(t *testing.T) {
 // If there are more than 1, we also fail.
 func TestReplicationStopped(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentCluster(t, true)
+	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})

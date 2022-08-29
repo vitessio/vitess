@@ -19,21 +19,22 @@ limitations under the License.
 package tabletconntest
 
 import (
+	"context"
 	"flag"
 	"io"
 	"os"
 	"strings"
 	"testing"
 
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
-
-	"context"
-
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/grpcclient"
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
@@ -101,21 +102,21 @@ func testBegin(t *testing.T, conn queryservice.QueryService, f *FakeQueryService
 	t.Log("testBegin")
 	ctx := context.Background()
 	ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
-	transactionID, alias, err := conn.Begin(ctx, TestTarget, TestExecuteOptions)
+	state, err := conn.Begin(ctx, TestTarget, TestExecuteOptions)
 	if err != nil {
 		t.Fatalf("Begin failed: %v", err)
 	}
-	if transactionID != beginTransactionID {
-		t.Errorf("Unexpected result from Begin: got %v wanted %v", transactionID, beginTransactionID)
+	if state.TransactionID != beginTransactionID {
+		t.Errorf("Unexpected result from Begin: got %v wanted %v", state.TransactionID, beginTransactionID)
 	}
-	assert.Equal(t, TestAlias, alias, "Unexpected tablet alias from Begin")
+	assert.Equal(t, TestAlias, state.TabletAlias, "Unexpected tablet alias from Begin")
 }
 
 func testBeginError(t *testing.T, conn queryservice.QueryService, f *FakeQueryService) {
 	t.Log("testBeginError")
 	f.HasBeginError = true
 	testErrorHelper(t, f, "Begin", func(ctx context.Context) error {
-		_, _, err := conn.Begin(ctx, TestTarget, nil)
+		_, err := conn.Begin(ctx, TestTarget, nil)
 		return err
 	})
 	f.HasBeginError = false
@@ -124,7 +125,7 @@ func testBeginError(t *testing.T, conn queryservice.QueryService, f *FakeQuerySe
 func testBeginPanics(t *testing.T, conn queryservice.QueryService, f *FakeQueryService) {
 	t.Log("testBeginPanics")
 	testPanicHelper(t, f, "Begin", func(ctx context.Context) error {
-		_, _, err := conn.Begin(ctx, TestTarget, nil)
+		_, err := conn.Begin(ctx, TestTarget, nil)
 		return err
 	})
 }
@@ -435,26 +436,26 @@ func testBeginExecute(t *testing.T, conn queryservice.QueryService, f *FakeQuery
 	f.ExpectedTransactionID = beginTransactionID
 	ctx := context.Background()
 	ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
-	qr, transactionID, alias, err := conn.BeginExecute(ctx, TestTarget, nil, ExecuteQuery, ExecuteBindVars, ReserveConnectionID, TestExecuteOptions)
+	state, qr, err := conn.BeginExecute(ctx, TestTarget, nil, ExecuteQuery, ExecuteBindVars, ReserveConnectionID, TestExecuteOptions)
 	if err != nil {
 		t.Fatalf("BeginExecute failed: %v", err)
 	}
-	if transactionID != beginTransactionID {
-		t.Errorf("Unexpected result from BeginExecute: got %v wanted %v", transactionID, beginTransactionID)
+	if state.TransactionID != beginTransactionID {
+		t.Errorf("Unexpected result from BeginExecute: got %v wanted %v", state.TransactionID, beginTransactionID)
 	}
 	if !qr.Equal(&ExecuteQueryResult) {
 		t.Errorf("Unexpected result from BeginExecute: got %v wanted %v", qr, ExecuteQueryResult)
 	}
-	assert.Equal(t, TestAlias, alias, "Unexpected tablet alias from Begin")
+	assert.Equal(t, TestAlias, state.TabletAlias, "Unexpected tablet alias from Begin")
 }
 
 func testBeginExecuteErrorInBegin(t *testing.T, conn queryservice.QueryService, f *FakeQueryService) {
 	t.Log("testBeginExecuteErrorInBegin")
 	f.HasBeginError = true
 	testErrorHelper(t, f, "BeginExecute.Begin", func(ctx context.Context) error {
-		_, transactionID, _, err := conn.BeginExecute(ctx, TestTarget, nil, ExecuteQuery, ExecuteBindVars, ReserveConnectionID, TestExecuteOptions)
-		if transactionID != 0 {
-			t.Errorf("Unexpected transactionID from BeginExecute: got %v wanted 0", transactionID)
+		state, _, err := conn.BeginExecute(ctx, TestTarget, nil, ExecuteQuery, ExecuteBindVars, ReserveConnectionID, TestExecuteOptions)
+		if state.TransactionID != 0 {
+			t.Errorf("Unexpected transactionID from BeginExecute: got %v wanted 0", state.TransactionID)
 		}
 		return err
 	})
@@ -466,9 +467,9 @@ func testBeginExecuteErrorInExecute(t *testing.T, conn queryservice.QueryService
 	f.HasError = true
 	testErrorHelper(t, f, "BeginExecute.Execute", func(ctx context.Context) error {
 		ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
-		_, transactionID, _, err := conn.BeginExecute(ctx, TestTarget, nil, ExecuteQuery, ExecuteBindVars, ReserveConnectionID, TestExecuteOptions)
-		if transactionID != beginTransactionID {
-			t.Errorf("Unexpected transactionID from BeginExecute: got %v wanted %v", transactionID, beginTransactionID)
+		state, _, err := conn.BeginExecute(ctx, TestTarget, nil, ExecuteQuery, ExecuteBindVars, ReserveConnectionID, TestExecuteOptions)
+		if state.TransactionID != beginTransactionID {
+			t.Errorf("Unexpected transactionID from BeginExecute: got %v wanted %v", state.TransactionID, beginTransactionID)
 		}
 		return err
 	})
@@ -478,7 +479,7 @@ func testBeginExecuteErrorInExecute(t *testing.T, conn queryservice.QueryService
 func testBeginExecutePanics(t *testing.T, conn queryservice.QueryService, f *FakeQueryService) {
 	t.Log("testBeginExecutePanics")
 	testPanicHelper(t, f, "BeginExecute", func(ctx context.Context) error {
-		_, _, _, err := conn.BeginExecute(ctx, TestTarget, nil, ExecuteQuery, ExecuteBindVars, ReserveConnectionID, TestExecuteOptions)
+		_, _, err := conn.BeginExecute(ctx, TestTarget, nil, ExecuteQuery, ExecuteBindVars, ReserveConnectionID, TestExecuteOptions)
 		return err
 	})
 }
@@ -770,7 +771,7 @@ func TestSuite(t *testing.T, protocol string, tablet *topodatapb.Tablet, fake *F
 	}
 
 	// make sure we use the right client
-	*tabletconn.TabletProtocol = protocol
+	SetProtocol(t.Name(), protocol)
 
 	// create a connection
 	if clientCreds != nil {
@@ -789,4 +790,32 @@ func TestSuite(t *testing.T, protocol string, tablet *topodatapb.Tablet, fake *F
 
 	// and we're done
 	conn.Close(context.Background())
+}
+
+const tabletProtocolFlagName = "tablet_protocol"
+
+// SetProtocol is a helper function to set the tabletconn --tablet_protocol flag
+// value for tests.
+//
+// Note that because this variable is bound to a flag, the effects of this
+// function are global, not scoped to the calling test-case. Therefore it should
+// not be used in conjunction with t.Parallel.
+func SetProtocol(name string, protocol string) {
+	var tmp []string
+	tmp, os.Args = os.Args[:], []string{name}
+	defer func() { os.Args = tmp }()
+
+	servenv.OnParseFor(name, func(fs *pflag.FlagSet) {
+		if fs.Lookup(tabletProtocolFlagName) != nil {
+			return
+		}
+
+		tabletconn.RegisterFlags(fs)
+	})
+	servenv.ParseFlags(name)
+
+	if err := pflag.Set(tabletProtocolFlagName, protocol); err != nil {
+		msg := "failed to set flag %q to %q: %v"
+		log.Errorf(msg, tabletProtocolFlagName, protocol, err)
+	}
 }

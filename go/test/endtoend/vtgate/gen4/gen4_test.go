@@ -430,9 +430,9 @@ func TestOuterJoin(t *testing.T) {
 }
 
 func TestUsingJoin(t *testing.T) {
-	require.NoError(t, utils.WaitForAuthoritative(t, clusterInstance, shardedKs, "t1"))
-	require.NoError(t, utils.WaitForAuthoritative(t, clusterInstance, shardedKs, "t2"))
-	require.NoError(t, utils.WaitForAuthoritative(t, clusterInstance, shardedKs, "t3"))
+	require.NoError(t, utils.WaitForAuthoritative(t, clusterInstance.VtgateProcess, shardedKs, "t1"))
+	require.NoError(t, utils.WaitForAuthoritative(t, clusterInstance.VtgateProcess, shardedKs, "t2"))
+	require.NoError(t, utils.WaitForAuthoritative(t, clusterInstance.VtgateProcess, shardedKs, "t3"))
 
 	mcmp, closer := start(t)
 	defer closer()
@@ -472,4 +472,26 @@ func TestGTIDFunctions(t *testing.T) {
 
 	mcmp.AssertMatches(`select gtid_subset('3E11FA47-71CA-11E1-9E33-C80AA9429562:23','3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57')`, `[[INT64(1)]]`)
 	mcmp.AssertMatches(`select gtid_subtract('3E11FA47-71CA-11E1-9E33-C80AA9429562:23-78','3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57')`, `[[VARCHAR("3e11fa47-71ca-11e1-9e33-c80aa9429562:58-78")]]`)
+}
+
+func TestFilterOnLeftOuterJoin(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	// insert some data.
+	mcmp.Exec(`insert into team (id, name) values (11, 'Acme'), (22, 'B'), (33, 'C')`)
+	mcmp.Exec(`insert into team_fact (id, team, fact) values (1, 11, 'A'), (2, 22, 'A'), (3, 33, 'A')`)
+
+	// Gen4 only supported query.
+	query := `select team.id
+				from team_fact
+				  join team on team.id = team_fact.team
+				  left outer join team_member on team_member.team = team.id
+				where (
+				  team_fact.fact = 'A'
+				  and team_member.user is null
+				  and team_fact.team >= 22
+				)`
+
+	mcmp.AssertMatches(query, "[[INT32(22)] [INT32(33)]]")
 }

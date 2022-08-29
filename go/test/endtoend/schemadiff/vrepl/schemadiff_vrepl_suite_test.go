@@ -93,6 +93,7 @@ func TestMain(m *testing.M) {
 			"--heartbeat_interval", "250ms",
 			"--heartbeat_on_demand_duration", "5s",
 			"--migration_check_interval", "5s",
+			"--watch_replication_stream",
 		}
 
 		if err := clusterInstance.StartTopo(); err != nil {
@@ -194,6 +195,11 @@ func testSingle(t *testing.T, testName string) {
 		t.Skip("expect_failure found. Irrelevant to this suite")
 		return
 	}
+	if _, exists := readTestFile(t, testName, "skip_schemadiff"); exists {
+		// irrelevant to this suite.
+		t.Skip("skip_schemadiff found. Irrelevant to this suite")
+		return
+	}
 
 	sqlModeQuery := fmt.Sprintf("set @@global.sql_mode='%s'", defaultSQLMode)
 	_ = mysqlExec(t, sqlModeQuery, "")
@@ -245,7 +251,7 @@ func testSingle(t *testing.T, testName string) {
 			// So for schemadiff_vrepl tests we ignore any AUTO_INCREMENT requirements,
 			// they're just not interesting for this test.
 		default:
-			assert.Contains(t, toCreateTable, content, "expected SHOW CREATE TABLE to contain text in 'expect_table_structure' file")
+			assert.Regexpf(t, content, toCreateTable, "expected SHOW CREATE TABLE to match text in 'expect_table_structure' file")
 		}
 	}
 

@@ -17,31 +17,40 @@ limitations under the License.
 package tabletmanager
 
 import (
-	"flag"
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
 	"time"
 
-	"vitess.io/vitess/go/vt/proto/vtrpc"
-
-	"context"
+	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-var (
-	enableSemiSync   = flag.Bool("enable_semi_sync", false, "Enable semi-sync when configuring replication, on primary and replica tablets only (rdonly tablets will not ack).")
-	setSuperReadOnly = flag.Bool("use_super_read_only", false, "Set super_read_only flag when performing planned failover.")
-)
+var setSuperReadOnly bool
+
+func registerReplicationFlags(fs *pflag.FlagSet) {
+	fs.Bool("enable_semi_sync", false, "")
+	fs.MarkDeprecated("enable_semi_sync", "--enable_semi_sync is deprecated; please set the correct durability policy on the keyspace instead.")
+
+	fs.BoolVar(&setSuperReadOnly, "use_super_read_only", setSuperReadOnly, "Set super_read_only flag when performing planned failover.")
+}
+
+func init() {
+	servenv.OnParseFor("vtcombo", registerReplicationFlags)
+	servenv.OnParseFor("vttablet", registerReplicationFlags)
+}
 
 // ReplicationStatus returns the replication status
 func (tm *TabletManager) ReplicationStatus(ctx context.Context) (*replicationdatapb.Status, error) {
@@ -338,7 +347,7 @@ func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string
 	// Initializing as primary implies undoing any previous "do not replicate".
 	tm.replManager.reset()
 
-	if *setSuperReadOnly {
+	if setSuperReadOnly {
 		// Setting super_read_only off so that we can run the DDL commands
 		if err := tm.MysqlDaemon.SetSuperReadOnly(false); err != nil {
 			if strings.Contains(err.Error(), strconv.Itoa(mysql.ERUnknownSystemVariable)) {
@@ -458,10 +467,10 @@ func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.Tab
 //
 // It attemps to idempotently ensure the following guarantees upon returning
 // successfully:
-//   * No future writes will be accepted.
-//   * No writes are in-flight.
-//   * MySQL is in read-only mode.
-//   * Semi-sync settings are consistent with a REPLICA tablet.
+//   - No future writes will be accepted.
+//   - No writes are in-flight.
+//   - MySQL is in read-only mode.
+//   - Semi-sync settings are consistent with a REPLICA tablet.
 //
 // If necessary, it waits for all in-flight writes to complete or time out.
 //
@@ -532,7 +541,7 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 	// set MySQL to read-only mode. If we are already read-only because of a
 	// previous demotion, or because we are not primary anyway, this should be
 	// idempotent.
-	if *setSuperReadOnly {
+	if setSuperReadOnly {
 		// Setting super_read_only also sets read_only
 		if err := tm.MysqlDaemon.SetSuperReadOnly(true); err != nil {
 			if strings.Contains(err.Error(), strconv.Itoa(mysql.ERUnknownSystemVariable)) {
@@ -763,8 +772,14 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 	}
 	host := parent.Tablet.MysqlHostname
 	port := int(parent.Tablet.MysqlPort)
-	if status.SourceHost != host || status.SourcePort != port {
-		// This handles both changing the address and starting replication.
+	// We want to reset the replication parameters and set replication source again when forceStartReplication is provided
+	// because sometimes MySQL gets stuck due to improper initialization of master info structure or related failures and throws errors like
+	// ERROR 1201 (HY000): Could not initialize master info structure; more error messages can be found in the MySQL error log
+	// These errors can only be resolved by resetting the replication parameters, otherwise START SLAVE fails. So when this RPC
+	// gets called from VTOrc or replication manager to fix the replication in these cases with forceStartReplication, we should also
+	// reset the replication parameters and set the source port information again.
+	if status.SourceHost != host || status.SourcePort != port || forceStartReplication {
+		// This handles reseting the replication parameters, changing the address and then starting the replication.
 		if err := tm.MysqlDaemon.SetReplicationSource(ctx, host, port, wasReplicating, shouldbeReplicating); err != nil {
 			if err := tm.handleRelayLogError(err); err != nil {
 				return err
@@ -985,45 +1000,18 @@ func isPrimaryEligible(tabletType topodatapb.TabletType) bool {
 }
 
 func (tm *TabletManager) fixSemiSync(tabletType topodatapb.TabletType, semiSync SemiSyncAction) error {
-	if !*enableSemiSync {
-		// Semi-sync handling is not enabled.
-		if semiSync == SemiSyncActionSet {
-			log.Error("invalid configuration - semi-sync should be setup according to durability policies, but enable_semi_sync is not set")
-		}
+	switch semiSync {
+	case SemiSyncActionNone:
 		return nil
-	}
-
-	// Only enable if we're eligible for becoming primary (REPLICA type).
-	// Ineligible tablets (RDONLY) shouldn't ACK because we'll never promote them.
-	if !isPrimaryEligible(tabletType) {
-		if semiSync == SemiSyncActionSet {
-			log.Error("invalid configuration - semi-sync should be setup according to durability policies, but the tablet is not primaryEligible")
-		}
+	case SemiSyncActionSet:
+		// Always enable replica-side since it doesn't hurt to keep it on for a primary.
+		// The primary-side needs to be off for a replica, or else it will get stuck.
+		return tm.MysqlDaemon.SetSemiSyncEnabled(tabletType == topodatapb.TabletType_PRIMARY, true)
+	case SemiSyncActionUnset:
 		return tm.MysqlDaemon.SetSemiSyncEnabled(false, false)
+	default:
+		return vterrors.Errorf(vtrpc.Code_INTERNAL, "Unknown SemiSyncAction - %v", semiSync)
 	}
-
-	if semiSync == SemiSyncActionUnset {
-		log.Error("invalid configuration - enabling semi sync even though not specified by durability policies. Possibly in the process of upgrading.")
-	}
-	// Always enable replica-side since it doesn't hurt to keep it on for a primary.
-	// The primary-side needs to be off for a replica, or else it will get stuck.
-	return tm.MysqlDaemon.SetSemiSyncEnabled(tabletType == topodatapb.TabletType_PRIMARY, true)
-
-	// This following code will be uncommented and the above deleted when we are ready to use the
-	// durability policies for setting the semi_sync information
-
-	//switch semiSync {
-	//case SemiSyncActionNone:
-	//	return nil
-	//case SemiSyncActionSet:
-	//	// Always enable replica-side since it doesn't hurt to keep it on for a primary.
-	//	// The primary-side needs to be off for a replica, or else it will get stuck.
-	//	return tm.MysqlDaemon.SetSemiSyncEnabled(tabletType == topodatapb.TabletType_PRIMARY, true)
-	//case SemiSyncActionUnset:
-	//	return tm.MysqlDaemon.SetSemiSyncEnabled(false, false)
-	//default:
-	//	return vterrors.Errorf(vtrpc.Code_INTERNAL, "Unknown SemiSyncAction - %v", semiSync)
-	//}
 }
 
 func (tm *TabletManager) isPrimarySideSemiSyncEnabled() bool {
@@ -1032,14 +1020,10 @@ func (tm *TabletManager) isPrimarySideSemiSyncEnabled() bool {
 }
 
 func (tm *TabletManager) fixSemiSyncAndReplication(tabletType topodatapb.TabletType, semiSync SemiSyncAction) error {
-	if !*enableSemiSync {
-		// Semi-sync handling is not enabled.
+	if semiSync == SemiSyncActionNone {
+		// Semi-sync handling is not required.
 		return nil
 	}
-	//if semiSync == SemiSyncActionNone {
-	//	// Semi-sync handling is not required.
-	//	return nil
-	//}
 
 	if tabletType == topodatapb.TabletType_PRIMARY {
 		// Primary is special. It is always handled at the

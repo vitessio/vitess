@@ -614,7 +614,7 @@ func (cached *Plan) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(128)
+		size += int64(144)
 	}
 	// field Original string
 	size += hack.RuntimeAllocSize(int64(len(cached.Original)))
@@ -629,6 +629,13 @@ func (cached *Plan) CachedSize(alloc bool) int64 {
 		size += hack.RuntimeAllocSize(int64(cap(cached.Warnings)) * int64(8))
 		for _, elem := range cached.Warnings {
 			size += elem.CachedSize(true)
+		}
+	}
+	// field TablesUsed []string
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.TablesUsed)) * int64(16))
+		for _, elem := range cached.TablesUsed {
+			size += hack.RuntimeAllocSize(int64(len(elem)))
 		}
 	}
 	return size
@@ -1170,6 +1177,20 @@ func (cached *VStream) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.TableName)))
 	// field Position string
 	size += hack.RuntimeAllocSize(int64(len(cached.Position)))
+	return size
+}
+func (cached *VTExplain) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(16)
+	}
+	// field Input vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	if cc, ok := cached.Input.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
 	return size
 }
 func (cached *VindexFunc) CachedSize(alloc bool) int64 {

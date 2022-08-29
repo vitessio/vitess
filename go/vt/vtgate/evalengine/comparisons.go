@@ -27,6 +27,13 @@ import (
 )
 
 type (
+	Filter interface {
+		Expr
+		LeftExpr() Expr
+		RightExpr() Expr
+		filterExpr()
+	}
+
 	ComparisonExpr struct {
 		BinaryExpr
 		Op ComparisonOp
@@ -58,6 +65,9 @@ type (
 	compareGE         struct{}
 	compareNullSafeEQ struct{}
 )
+
+func (*ComparisonExpr) filterExpr() {}
+func (*InExpr) filterExpr()         {}
 
 func (compareEQ) String() string { return "=" }
 func (compareEQ) compare(left, right *EvalResult) (boolean, error) {
@@ -200,21 +210,17 @@ func evalCompareAll(lVal, rVal *EvalResult, fulleq bool) (int, bool, error) {
 }
 
 // For more details on comparison expression evaluation and type conversion:
-// 		- https://dev.mysql.com/doc/refman/8.0/en/type-conversion.html
+//   - https://dev.mysql.com/doc/refman/8.0/en/type-conversion.html
 func evalCompare(lVal, rVal *EvalResult) (comp int, err error) {
 	switch {
 	case evalResultsAreStrings(lVal, rVal):
 		return compareStrings(lVal, rVal), nil
-
 	case evalResultsAreSameNumericType(lVal, rVal), needsDecimalHandling(lVal, rVal):
 		return compareNumeric(lVal, rVal)
-
 	case evalResultsAreDates(lVal, rVal):
 		return compareDates(lVal, rVal)
-
 	case evalResultsAreDateAndString(lVal, rVal):
 		return compareDateAndString(lVal, rVal)
-
 	case evalResultsAreDateAndNumeric(lVal, rVal):
 		// TODO: support comparison between a date and a numeric value
 		// 		queries like the ones below should be supported:
@@ -222,10 +228,8 @@ func evalCompare(lVal, rVal *EvalResult) (comp int, err error) {
 		// 			- select 1 where 2021210101 = cast("2021-01-01" as date)
 		// 			- select 1 where 104200 = cast("10:42:00" as time)
 		return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot compare a date with a numeric value")
-
 	case lVal.typeof() == sqltypes.Tuple || rVal.typeof() == sqltypes.Tuple:
-		panic("evalCompare: tuple comparison should be handled early")
-
+		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: evalCompare: tuple comparison should be handled early")
 	default:
 		// Quoting MySQL Docs:
 		//

@@ -5,9 +5,11 @@ metadata:
 spec:
   images:
     vtctld: vitess/lite:latest
+    vtadmin: vitess/vtadmin:latest
     vtgate: vitess/lite:latest
     vttablet: vitess/lite:latest
     vtbackup: vitess/lite:latest
+    vtorc: vitess/lite:latest
     mysqld:
       mysql56Compatible: vitess/lite:latest
     mysqldExporter: prom/mysqld-exporter:v0.11.0
@@ -38,10 +40,43 @@ spec:
       requests:
         cpu: 100m
         memory: 128Mi
+  vtadmin:
+    rbac:
+      name: example-cluster-config
+      key: rbac.yaml
+    cells:
+      - zone1
+    apiAddresses:
+      - http://localhost:14001
+    replicas: 1
+    readOnly: false
+    apiResources:
+      limits:
+        memory: 128Mi
+      requests:
+        cpu: 100m
+        memory: 128Mi
+    webResources:
+      limits:
+        memory: 128Mi
+      requests:
+        cpu: 100m
+        memory: 128Mi
 
   keyspaces:
   - name: commerce
+    durabilityPolicy: none
     turndownPolicy: Immediate
+    vitessOrchestrator:
+      configSecret:
+        name: example-cluster-config
+        key: orc_config.json
+      resources:
+        limits:
+          memory: 128Mi
+        requests:
+          cpu: 100m
+          memory: 128Mi
     partitionings:
     - equal:
         parts: 1
@@ -57,6 +92,7 @@ spec:
             replicas: 2
             vttablet:
               extraFlags:
+                disable_active_reparents: "true"
                 db_charset: utf8mb4
               resources:
                 limits:
@@ -67,16 +103,17 @@ spec:
             mysqld:
               resources:
                 limits:
-                  memory: 256Mi
+                  memory: 512Mi
                 requests:
                   cpu: 100m
-                  memory: 256Mi
+                  memory: 512Mi
             dataVolumeClaimTemplate:
               accessModes: ["ReadWriteOnce"]
               resources:
                 requests:
                   storage: 10Gi
   - name: customer
+    durabilityPolicy: none
     turndownPolicy: Immediate
     partitionings:
     - equal:
@@ -103,10 +140,10 @@ spec:
             mysqld:
               resources:
                 limits:
-                  memory: 256Mi
+                  memory: 512Mi
                 requests:
                   cpu: 100m
-                  memory: 256Mi
+                  memory: 512Mi
             dataVolumeClaimTemplate:
               accessModes: ["ReadWriteOnce"]
               resources:

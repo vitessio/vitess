@@ -22,7 +22,8 @@ import (
 	"strings"
 	"sync"
 
-	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/vt/orchestrator/inst"
 	"vitess.io/vitess/go/vt/topo"
 )
@@ -37,7 +38,7 @@ func RefreshAllKeyspaces() {
 		// Get all the keyspaces
 		keyspaces, err = ts.GetKeyspaces(ctx)
 		if err != nil {
-			log.Errore(err)
+			log.Error(err)
 			return
 		}
 	} else {
@@ -92,12 +93,12 @@ func RefreshKeyspace(keyspaceName string) error {
 func refreshKeyspace(ctx context.Context, keyspaceName string) error {
 	keyspaceInfo, err := ts.GetKeyspace(ctx, keyspaceName)
 	if err != nil {
-		log.Errore(err)
+		log.Error(err)
 		return err
 	}
 	err = inst.SaveKeyspace(keyspaceInfo)
 	if err != nil {
-		log.Errore(err)
+		log.Error(err)
 	}
 	return err
 }

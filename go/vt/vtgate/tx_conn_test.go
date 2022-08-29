@@ -17,14 +17,13 @@ limitations under the License.
 package vtgate
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 
 	"vitess.io/vitess/go/test/utils"
-
-	"context"
 
 	"github.com/stretchr/testify/require"
 
@@ -1190,7 +1189,7 @@ func TestTxConnMultiGoSessions(t *testing.T) {
 			Keyspace: "0",
 		},
 	}}
-	err := txc.runSessions(ctx, input, func(ctx context.Context, s *vtgatepb.Session_ShardSession) error {
+	err := txc.runSessions(ctx, input, nil, func(ctx context.Context, s *vtgatepb.Session_ShardSession, logger *executeLogger) error {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "err %s", s.Target.Keyspace)
 	})
 	want := "err 0"
@@ -1205,7 +1204,7 @@ func TestTxConnMultiGoSessions(t *testing.T) {
 			Keyspace: "1",
 		},
 	}}
-	err = txc.runSessions(ctx, input, func(ctx context.Context, s *vtgatepb.Session_ShardSession) error {
+	err = txc.runSessions(ctx, input, nil, func(ctx context.Context, s *vtgatepb.Session_ShardSession, logger *executeLogger) error {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "err %s", s.Target.Keyspace)
 	})
 	want = "err 0\nerr 1"
@@ -1213,7 +1212,7 @@ func TestTxConnMultiGoSessions(t *testing.T) {
 	wantCode := vtrpcpb.Code_INTERNAL
 	assert.Equal(t, wantCode, vterrors.Code(err), "error code")
 
-	err = txc.runSessions(ctx, input, func(ctx context.Context, s *vtgatepb.Session_ShardSession) error {
+	err = txc.runSessions(ctx, input, nil, func(ctx context.Context, s *vtgatepb.Session_ShardSession, logger *executeLogger) error {
 		return nil
 	})
 	require.NoError(t, err)
@@ -1253,10 +1252,10 @@ func newTestTxConnEnv(t *testing.T, name string) (sc *ScatterConn, sbc0, sbc1 *s
 	t.Helper()
 	createSandbox(name)
 	hc := discovery.NewFakeHealthCheck(nil)
-	sc = newTestScatterConn(hc, new(sandboxTopo), "aa")
+	sc = newTestScatterConn(hc, newSandboxForCells([]string{"aa"}), "aa")
 	sbc0 = hc.AddTestTablet("aa", "0", 1, name, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
 	sbc1 = hc.AddTestTablet("aa", "1", 1, name, "1", topodatapb.TabletType_PRIMARY, true, 1, nil)
-	res := srvtopo.NewResolver(&sandboxTopo{}, sc.gateway, "aa")
+	res := srvtopo.NewResolver(newSandboxForCells([]string{"aa"}), sc.gateway, "aa")
 	var err error
 	rss0, err = res.ResolveDestination(ctx, name, topodatapb.TabletType_PRIMARY, key.DestinationShard("0"))
 	require.NoError(t, err)

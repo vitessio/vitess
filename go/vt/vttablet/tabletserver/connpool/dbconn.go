@@ -23,6 +23,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cespare/xxhash/v2"
+
+	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -46,12 +49,14 @@ import (
 // its own queries and the underlying connection.
 // It will also trigger a CheckMySQL whenever applicable.
 type DBConn struct {
-	conn    *dbconnpool.DBConnection
-	info    dbconfigs.Connector
-	pool    *Pool
-	dbaPool *dbconnpool.ConnectionPool
-	stats   *tabletenv.Stats
-	current sync2.AtomicString
+	conn         *dbconnpool.DBConnection
+	info         dbconfigs.Connector
+	pool         *Pool
+	dbaPool      *dbconnpool.ConnectionPool
+	stats        *tabletenv.Stats
+	current      sync2.AtomicString
+	settings     []string
+	settingsHash uint64
 
 	// err will be set if a query is killed through a Kill.
 	errmu sync.Mutex
@@ -313,6 +318,43 @@ func (dbc *DBConn) VerifyMode(strictTransTables bool) error {
 func (dbc *DBConn) Close() {
 	dbc.conn.Close()
 }
+
+func (dbc *DBConn) ApplySettings(ctx context.Context, settings []string) error {
+	digest := xxhash.New()
+	for _, q := range settings {
+		if _, err := dbc.execOnce(ctx, q, 1, false); err != nil {
+			return err
+		}
+		if _, err := digest.WriteString(q); err != nil {
+			return err
+		}
+	}
+	dbc.settings = settings
+	dbc.settingsHash = digest.Sum64()
+	return nil
+}
+
+func (dbc *DBConn) IsSettingsApplied() bool {
+	return len(dbc.settings) > 0
+}
+
+func (dbc *DBConn) IsSameSetting(settings []string) bool {
+	return compareStringSlice(settings, dbc.settings)
+}
+
+func compareStringSlice(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i, aVal := range a {
+		if aVal != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+var _ pools.Resource = (*DBConn)(nil)
 
 // IsClosed returns true if DBConn is closed.
 func (dbc *DBConn) IsClosed() bool {

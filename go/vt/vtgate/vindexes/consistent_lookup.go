@@ -21,8 +21,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
@@ -36,12 +36,14 @@ import (
 )
 
 var (
-	_ SingleColumn  = (*ConsistentLookupUnique)(nil)
-	_ Lookup        = (*ConsistentLookupUnique)(nil)
-	_ WantOwnerInfo = (*ConsistentLookupUnique)(nil)
-	_ SingleColumn  = (*ConsistentLookup)(nil)
-	_ Lookup        = (*ConsistentLookup)(nil)
-	_ WantOwnerInfo = (*ConsistentLookup)(nil)
+	_ SingleColumn   = (*ConsistentLookupUnique)(nil)
+	_ Lookup         = (*ConsistentLookupUnique)(nil)
+	_ WantOwnerInfo  = (*ConsistentLookupUnique)(nil)
+	_ LookupPlanable = (*ConsistentLookupUnique)(nil)
+	_ SingleColumn   = (*ConsistentLookup)(nil)
+	_ Lookup         = (*ConsistentLookup)(nil)
+	_ WantOwnerInfo  = (*ConsistentLookup)(nil)
+	_ LookupPlanable = (*ConsistentLookup)(nil)
 )
 
 func init() {
@@ -57,9 +59,10 @@ type ConsistentLookup struct {
 
 // NewConsistentLookup creates a ConsistentLookup vindex.
 // The supplied map has the following required fields:
-//   table: name of the backing table. It can be qualified by the keyspace.
-//   from: list of columns in the table that have the 'from' values of the lookup vindex.
-//   to: The 'to' column name of the table.
+//
+//	table: name of the backing table. It can be qualified by the keyspace.
+//	from: list of columns in the table that have the 'from' values of the lookup vindex.
+//	to: The 'to' column name of the table.
 func NewConsistentLookup(name string, m map[string]string) (Vindex, error) {
 	clc, err := newCLCommon(name, m)
 	if err != nil {
@@ -105,6 +108,18 @@ func (lu *ConsistentLookup) Map(ctx context.Context, vcursor VCursor, ids []sqlt
 	if err != nil {
 		return nil, err
 	}
+	return lu.MapResult(ids, results)
+}
+
+// MapResult implements the LookupPlanable interface
+func (lu *ConsistentLookup) MapResult(ids []sqltypes.Value, results []*sqltypes.Result) ([]key.Destination, error) {
+	out := make([]key.Destination, 0, len(ids))
+	if lu.writeOnly {
+		for range ids {
+			out = append(out, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{}})
+		}
+		return out, nil
+	}
 	for _, result := range results {
 		if len(result.Rows) == 0 {
 			out = append(out, key.DestinationNone{})
@@ -123,6 +138,16 @@ func (lu *ConsistentLookup) Map(ctx context.Context, vcursor VCursor, ids []sqlt
 	return out, nil
 }
 
+// Query implements the LookupPlanable interface
+func (lu *ConsistentLookup) Query() (selQuery string, arguments []string) {
+	return lu.lkp.query()
+}
+
+// AllowBatch implements the LookupPlanable interface
+func (lu *ConsistentLookup) AllowBatch() bool {
+	return lu.lkp.BatchLookup
+}
+
 //====================================================================
 
 // ConsistentLookupUnique defines a vindex that uses a lookup table.
@@ -134,9 +159,10 @@ type ConsistentLookupUnique struct {
 
 // NewConsistentLookupUnique creates a ConsistentLookupUnique vindex.
 // The supplied map has the following required fields:
-//   table: name of the backing table. It can be qualified by the keyspace.
-//   from: list of columns in the table that have the 'from' values of the lookup vindex.
-//   to: The 'to' column name of the table.
+//
+//	table: name of the backing table. It can be qualified by the keyspace.
+//	from: list of columns in the table that have the 'from' values of the lookup vindex.
+//	to: The 'to' column name of the table.
 func NewConsistentLookupUnique(name string, m map[string]string) (Vindex, error) {
 	clc, err := newCLCommon(name, m)
 	if err != nil {
@@ -174,6 +200,19 @@ func (lu *ConsistentLookupUnique) Map(ctx context.Context, vcursor VCursor, ids 
 	if err != nil {
 		return nil, err
 	}
+	return lu.MapResult(ids, results)
+}
+
+// MapResult implements the LookupPlanable interface
+func (lu *ConsistentLookupUnique) MapResult(ids []sqltypes.Value, results []*sqltypes.Result) ([]key.Destination, error) {
+	out := make([]key.Destination, 0, len(ids))
+	if lu.writeOnly {
+		for range ids {
+			out = append(out, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{}})
+		}
+		return out, nil
+	}
+
 	for i, result := range results {
 		switch len(result.Rows) {
 		case 0:
@@ -189,6 +228,16 @@ func (lu *ConsistentLookupUnique) Map(ctx context.Context, vcursor VCursor, ids 
 		}
 	}
 	return out, nil
+}
+
+// Query implements the LookupPlanable interface
+func (lu *ConsistentLookupUnique) Query() (selQuery string, arguments []string) {
+	return lu.lkp.query()
+}
+
+// AllowBatch implements the LookupPlanable interface
+func (lu *ConsistentLookupUnique) AllowBatch() bool {
+	return lu.lkp.BatchLookup
 }
 
 //====================================================================
@@ -265,7 +314,11 @@ func (lu *clCommon) Create(ctx context.Context, vcursor VCursor, rowsColValues [
 	if origErr == nil {
 		return nil
 	}
-	if !strings.Contains(origErr.Error(), "Duplicate entry") {
+	// Try and convert the error to a MySQL error
+	sqlErr, isSQLErr := mysql.NewSQLErrorFromError(origErr).(*mysql.SQLError)
+	// If it is a MySQL error and its code is of duplicate entry, then we would like to continue
+	// Otherwise, we return the error
+	if !(isSQLErr && sqlErr != nil && sqlErr.Number() == mysql.ERDupEntry) {
 		return origErr
 	}
 	for i, row := range rowsColValues {
@@ -398,6 +451,11 @@ func (lu *clCommon) addWhere(buf *bytes.Buffer, cols []string) {
 		}
 		buf.WriteString(column + " = :" + lu.lkp.FromColumns[colIdx])
 	}
+}
+
+// GetCommitOrder implements the LookupPlanable interface
+func (lu *clCommon) GetCommitOrder() vtgatepb.CommitOrder {
+	return vtgatepb.CommitOrder_PRE
 }
 
 // IsBackfilling implements the LookupBackfill interface

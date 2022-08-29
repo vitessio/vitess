@@ -46,21 +46,28 @@ const (
 	charset = "charset"
 )
 
-func buildShowPlan(sql string, stmt *sqlparser.Show, _ *sqlparser.ReservedVars, vschema plancontext.VSchema) (engine.Primitive, error) {
+func buildShowPlan(sql string, stmt *sqlparser.Show, _ *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
 	if vschema.Destination() != nil {
 		return buildByPassDDLPlan(sql, vschema)
 	}
 
+	var prim engine.Primitive
+	var err error
 	switch show := stmt.Internal.(type) {
 	case *sqlparser.ShowBasic:
-		return buildShowBasicPlan(show, vschema)
+		prim, err = buildShowBasicPlan(show, vschema)
 	case *sqlparser.ShowCreate:
-		return buildShowCreatePlan(show, vschema)
+		prim, err = buildShowCreatePlan(show, vschema)
 	case *sqlparser.ShowOther:
-		return buildShowOtherPlan(sql, vschema)
+		prim, err = buildShowOtherPlan(sql, vschema)
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: undefined show type: %T", stmt.Internal)
 	}
+	if err != nil {
+		return nil, err
+	}
+
+	return newPlanResult(prim), nil
 }
 
 func buildShowOtherPlan(sql string, vschema plancontext.VSchema) (engine.Primitive, error) {
@@ -112,7 +119,7 @@ func buildShowBasicPlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) 
 	case sqlparser.VitessTarget:
 		return buildShowTargetPlan(vschema)
 	case sqlparser.VschemaTables:
-		return buildVschemaTablesPlan(show, vschema)
+		return buildVschemaTablesPlan(vschema)
 	case sqlparser.VschemaVindexes:
 		return buildVschemaVindexesPlan(show, vschema)
 	}
@@ -222,11 +229,11 @@ func buildDBPlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) (engine
 		filter = regexp.MustCompile(".*")
 	}
 
-	//rows := make([][]sqltypes.Value, 0, len(ks)+4)
+	// rows := make([][]sqltypes.Value, 0, len(ks)+4)
 	var rows [][]sqltypes.Value
 
 	if show.Command == sqlparser.Database {
-		//Hard code default databases
+		// Hard code default databases
 		ks = append(ks, &vindexes.Keyspace{Name: "information_schema"},
 			&vindexes.Keyspace{Name: "mysql"},
 			&vindexes.Keyspace{Name: "sys"},
@@ -638,7 +645,7 @@ func buildEnginesPlan() (engine.Primitive, error) {
 		buildVarCharFields("Engine", "Support", "Comment", "Transactions", "XA", "Savepoints")), nil
 }
 
-func buildVschemaTablesPlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) (engine.Primitive, error) {
+func buildVschemaTablesPlan(vschema plancontext.VSchema) (engine.Primitive, error) {
 	vs := vschema.GetVSchema()
 	ks, err := vschema.DefaultKeyspace()
 	if err != nil {

@@ -56,7 +56,7 @@ import (
 )
 
 func init() {
-	*backupstorage.BackupStorageImplementation = testutil.BackupStorageImplementation
+	backupstorage.BackupStorageImplementation = testutil.BackupStorageImplementation
 
 	// For tests that don't actually care about mocking the tmclient (i.e. they
 	// call NewVtctldServer to initialize the unit under test), this needs to be
@@ -4047,8 +4047,8 @@ func TestGetBackups(t *testing.T) {
 	utils.MustMatch(t, expected, resp)
 
 	t.Run("no backupstorage", func(t *testing.T) {
-		*backupstorage.BackupStorageImplementation = "doesnotexist"
-		defer func() { *backupstorage.BackupStorageImplementation = testutil.BackupStorageImplementation }()
+		backupstorage.BackupStorageImplementation = "doesnotexist"
+		defer func() { backupstorage.BackupStorageImplementation = testutil.BackupStorageImplementation }()
 
 		_, err := vtctld.GetBackups(ctx, &vtctldatapb.GetBackupsRequest{
 			Keyspace: "testkeyspace",
@@ -4239,6 +4239,95 @@ func TestGetCellsAliases(t *testing.T) {
 	topofactory.SetError(assert.AnError)
 	_, err = vtctld.GetCellsAliases(ctx, &vtctldatapb.GetCellsAliasesRequest{})
 	assert.Error(t, err)
+}
+
+func TestGetFullStatus(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		cells      []string
+		tablets    []*topodatapb.Tablet
+		req        *vtctldatapb.GetFullStatusRequest
+		serverUUID string
+		shouldErr  bool
+	}{
+		{
+			name:  "success",
+			cells: []string{"zone1"},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Keyspace: "ks",
+					Shard:    "0",
+					Type:     topodatapb.TabletType_REPLICA,
+				},
+			},
+			req: &vtctldatapb.GetFullStatusRequest{
+				TabletAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			serverUUID: "abcd",
+			shouldErr:  false,
+		},
+		{
+			name:  "tablet not found",
+			cells: []string{"zone1"},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  200,
+					},
+					Keyspace: "ks",
+					Shard:    "0",
+					Type:     topodatapb.TabletType_REPLICA,
+				},
+			},
+			req: &vtctldatapb.GetFullStatusRequest{
+				TabletAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ctx := context.Background()
+			ts := memorytopo.NewServer(tt.cells...)
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, &testutil.TabletManagerClient{
+				TopoServer: ts,
+				FullStatusResult: &replicationdatapb.FullStatus{
+					ServerUuid: tt.serverUUID,
+				},
+			}, func(ts *topo.Server) vtctlservicepb.VtctldServer { return NewVtctldServer(ts) })
+
+			testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{
+				AlsoSetShardPrimary: true,
+			}, tt.tablets...)
+
+			resp, err := vtctld.GetFullStatus(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			assert.NoError(t, err)
+			utils.MustMatch(t, tt.serverUUID, resp.Status.ServerUuid)
+		})
+	}
 }
 
 func TestGetKeyspaces(t *testing.T) {

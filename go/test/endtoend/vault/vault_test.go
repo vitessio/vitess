@@ -214,7 +214,8 @@ func setupVaultServer(t *testing.T, vs *Server) (string, string) {
 }
 
 // Setup cluster object and start topo
-//   We need this before vault, because we re-use the port reservation code
+//
+//	We need this before vault, because we re-use the port reservation code
 func initializeClusterEarly(t *testing.T) {
 	clusterInstance = cluster.NewCluster(cell, hostname)
 
@@ -282,7 +283,6 @@ func initializeClusterLate(t *testing.T) {
 		_, err = tablet.VttabletProcess.QueryTablet(query, keyspace.Name, false)
 		require.NoError(t, err)
 
-		tablet.VttabletProcess.EnableSemiSync = true
 		err = tablet.VttabletProcess.Setup()
 		require.NoError(t, err)
 

@@ -206,9 +206,8 @@ func testfile(t *testing.T, name string, out any) {
 func decompose(num string) (int, int, int) {
 	if dot := strings.IndexByte(num, '.'); dot >= 0 {
 		return len(num) - 1, dot, len(num) - (dot + 1)
-	} else {
-		return len(num), len(num), 0
 	}
+	return len(num), len(num), 0
 }
 
 func TestLargeDecimals(t *testing.T) {

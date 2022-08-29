@@ -106,7 +106,24 @@ func (nz *normalizer) WalkSelect(cursor *Cursor) bool {
 	return nz.err == nil // only continue if we haven't found any errors
 }
 
+func validateLiteral(node *Literal) (err error) {
+	switch node.Type {
+	case DateVal:
+		_, err = ParseDate(node.Val)
+	case TimeVal:
+		_, err = ParseTime(node.Val)
+	case TimestampVal:
+		_, err = ParseDateTime(node.Val)
+	}
+	return err
+}
+
 func (nz *normalizer) convertLiteralDedup(node *Literal, cursor *Cursor) {
+	err := validateLiteral(node)
+	if err != nil {
+		nz.err = err
+	}
+
 	// If value is too long, don't dedup.
 	// Such values are most likely not for vindexes.
 	// We save a lot of CPU because we avoid building
@@ -117,7 +134,7 @@ func (nz *normalizer) convertLiteralDedup(node *Literal, cursor *Cursor) {
 	}
 
 	// Make the bindvar
-	bval := nz.sqlToBindvar(node)
+	bval := SQLToBindvar(node)
 	if bval == nil {
 		return
 	}
@@ -146,7 +163,12 @@ func (nz *normalizer) convertLiteralDedup(node *Literal, cursor *Cursor) {
 
 // convertLiteral converts an Literal without the dedup.
 func (nz *normalizer) convertLiteral(node *Literal, cursor *Cursor) {
-	bval := nz.sqlToBindvar(node)
+	err := validateLiteral(node)
+	if err != nil {
+		nz.err = err
+	}
+
+	bval := SQLToBindvar(node)
 	if bval == nil {
 		return
 	}
@@ -176,7 +198,7 @@ func (nz *normalizer) convertComparison(node *ComparisonExpr) {
 		Type: querypb.Type_TUPLE,
 	}
 	for _, val := range tupleVals {
-		bval := nz.sqlToBindvar(val)
+		bval := SQLToBindvar(val)
 		if bval == nil {
 			return
 		}
@@ -191,7 +213,7 @@ func (nz *normalizer) convertComparison(node *ComparisonExpr) {
 	node.Right = ListArg(bvname)
 }
 
-func (nz *normalizer) sqlToBindvar(node SQLNode) *querypb.BindVariable {
+func SQLToBindvar(node SQLNode) *querypb.BindVariable {
 	if node, ok := node.(*Literal); ok {
 		var v sqltypes.Value
 		var err error
@@ -223,6 +245,15 @@ func (nz *normalizer) sqlToBindvar(node SQLNode) *querypb.BindVariable {
 				return nil
 			}
 			v, err = sqltypes.NewValue(sqltypes.HexNum, []byte(fmt.Sprintf("0x%x", ui)))
+		case DateVal:
+			v, err = sqltypes.NewValue(sqltypes.Date, node.Bytes())
+		case TimeVal:
+			v, err = sqltypes.NewValue(sqltypes.Time, node.Bytes())
+		case TimestampVal:
+			// This is actually a DATETIME MySQL type. The timestamp literal
+			// syntax is part of the SQL standard and MySQL DATETIME matches
+			// the type best.
+			v, err = sqltypes.NewValue(sqltypes.Datetime, node.Bytes())
 		default:
 			return nil
 		}

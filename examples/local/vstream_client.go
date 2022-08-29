@@ -33,8 +33,8 @@ import (
 )
 
 /*
-	This is a sample client for streaming using the vstream API. It is setup to work with the local example and you can
-    either stream from the unsharded commerce keyspace or the customer keyspace after the sharding step.
+		This is a sample client for streaming using the vstream API. It is setup to work with the local example and you can
+	    either stream from the unsharded commerce keyspace or the customer keyspace after the sharding step.
 */
 func main() {
 	ctx := context.Background()

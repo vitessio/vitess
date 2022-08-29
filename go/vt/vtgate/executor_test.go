@@ -28,6 +28,8 @@ import (
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/vt/vtgate/logstats"
+
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/cache"
@@ -1649,8 +1651,8 @@ func assertCacheContains(t *testing.T, e *Executor, want []string) {
 	}
 }
 
-func getPlanCached(t *testing.T, e *Executor, vcursor *vcursorImpl, sql string, comments sqlparser.MarginComments, bindVars map[string]*querypb.BindVariable, skipQueryPlanCache bool) (*engine.Plan, *LogStats) {
-	logStats := NewLogStats(ctx, "Test", "", "", nil)
+func getPlanCached(t *testing.T, e *Executor, vcursor *vcursorImpl, sql string, comments sqlparser.MarginComments, bindVars map[string]*querypb.BindVariable, skipQueryPlanCache bool) (*engine.Plan, *logstats.LogStats) {
+	logStats := logstats.NewLogStats(ctx, "Test", "", "", nil)
 	plan, err := e.getPlan(context.Background(), vcursor, sql, comments, bindVars, &SafeSession{
 		Session: &vtgatepb.Session{Options: &querypb.ExecuteOptions{SkipQueryPlanCache: skipQueryPlanCache}},
 	}, logStats)
@@ -1796,7 +1798,7 @@ func TestGetPlanNormalized(t *testing.T) {
 		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats4.SQL)
 	}
 
-	var logStats5 *LogStats
+	var logStats5 *logstats.LogStats
 	plan3, logStats5 = getPlanCached(t, r, unshardedvc, query1, makeComments(" /* comment 5 */"), map[string]*querypb.BindVariable{}, false)
 	if plan1 == plan3 {
 		t.Errorf("getPlan(query1, ks): plans must not be equal: %p %p", plan1, plan3)
@@ -2499,6 +2501,31 @@ func TestExecutorDescHash(t *testing.T) {
 	ctx := context.Background()
 	_, err := executor.Execute(ctx, "", session, showQuery, nil)
 	require.NoError(t, err)
+}
+
+func TestExecutorVtExplain(t *testing.T) {
+	executor, _, _, sbclookup := createExecutorEnv()
+	session := NewAutocommitSession(&vtgatepb.Session{})
+
+	sbclookup.SetResults([]*sqltypes.Result{
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("name|user_id", "varchar|int64"), "apa|1", "apa|2"),
+	})
+	qr, err := executor.Execute(ctx, "TestExecutorVtExplain", session, "explain format=vtexplain select * from user where name = 'apa'", nil)
+	require.NoError(t, err)
+	txt := fmt.Sprintf("%v\n", qr.Rows)
+	lookupQuery := "select `name`, user_id from name_user_map where `name` in"
+	require.Contains(t, txt, lookupQuery)
+
+	// Test the streaming side as well
+	var results []sqltypes.Row
+	session = NewAutocommitSession(&vtgatepb.Session{})
+	err = executor.StreamExecute(ctx, "TestExecutorVtExplain", session, "explain format=vtexplain select * from user where name = 'apa'", nil, func(result *sqltypes.Result) error {
+		results = append(results, result.Rows...)
+		return nil
+	})
+	require.NoError(t, err)
+	txt = fmt.Sprintf("%v\n", results)
+	require.Contains(t, txt, lookupQuery)
 }
 
 func exec(executor *Executor, session *SafeSession, sql string) (*sqltypes.Result, error) {

@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"github.com/olekukonko/tablewriter"
+	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
@@ -147,7 +148,10 @@ func main() {
 }
 
 func run() (*results, error) {
-	_flag.Parse()
+	fs := pflag.NewFlagSet("vtclient", pflag.ExitOnError)
+	log.RegisterFlags(fs)
+	logutil.RegisterFlags(fs)
+	_flag.Parse(fs)
 	args := _flag.Args()
 
 	if len(args) == 0 {

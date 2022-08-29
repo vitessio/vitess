@@ -41,10 +41,15 @@ import (
 	// register the HTTP handlers for profiling
 	_ "net/http/pprof"
 
+	"github.com/spf13/pflag"
+
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	// register the proper init and shutdown hooks for logging
 	_ "vitess.io/vitess/go/vt/logutil"
@@ -229,17 +234,68 @@ func RunDefault() {
 	Run(*Port)
 }
 
+var (
+	flagHooksM      sync.Mutex
+	globalFlagHooks = []func(*pflag.FlagSet){
+		vterrors.RegisterFlags,
+	}
+	commandFlagHooks = map[string][]func(*pflag.FlagSet){}
+)
+
+// OnParse registers a callback function to register flags on the flagset that
+// used by any caller of servenv.Parse or servenv.ParseWithArgs.
+func OnParse(f func(fs *pflag.FlagSet)) {
+	flagHooksM.Lock()
+	defer flagHooksM.Unlock()
+
+	globalFlagHooks = append(globalFlagHooks, f)
+}
+
+// OnParseFor registers a callback function to register flags on the flagset
+// used by servenv.Parse or servenv.ParseWithArgs. The provided callback will
+// only be called if the `cmd` argument passed to either Parse or ParseWithArgs
+// exactly matches the `cmd` argument passed to OnParseFor.
+//
+// To register for flags for multiple commands, for example if a package's flags
+// should be used for only vtgate and vttablet but no other binaries, call this
+// multiple times with the same callback function. To register flags for all
+// commands globally, use OnParse instead.
+func OnParseFor(cmd string, f func(fs *pflag.FlagSet)) {
+	flagHooksM.Lock()
+	defer flagHooksM.Unlock()
+
+	commandFlagHooks[cmd] = append(commandFlagHooks[cmd], f)
+}
+
+func getFlagHooksFor(cmd string) (hooks []func(fs *pflag.FlagSet)) {
+	flagHooksM.Lock()
+	defer flagHooksM.Unlock()
+
+	hooks = append(hooks, globalFlagHooks...) // done deliberately to copy the slice
+
+	if commandHooks, ok := commandFlagHooks[cmd]; ok {
+		hooks = append(hooks, commandHooks...)
+	}
+
+	return hooks
+}
+
 // ParseFlags initializes flags and handles the common case when no positional
 // arguments are expected.
 func ParseFlags(cmd string) {
-	_flag.Parse()
+	fs := pflag.NewFlagSet(cmd, pflag.ExitOnError)
+	for _, hook := range getFlagHooksFor(cmd) {
+		hook(fs)
+	}
+
+	_flag.Parse(fs)
 
 	if *Version {
 		AppVersion.Print()
 		os.Exit(0)
 	}
 
-	args := _flag.Args()
+	args := fs.Args()
 	if len(args) > 0 {
 		flag.Usage()
 		log.Exitf("%s doesn't take any positional arguments, got '%s'", cmd, strings.Join(args, " "))
@@ -248,17 +304,47 @@ func ParseFlags(cmd string) {
 
 // ParseFlagsWithArgs initializes flags and returns the positional arguments
 func ParseFlagsWithArgs(cmd string) []string {
-	_flag.Parse()
+	fs := pflag.NewFlagSet(cmd, pflag.ExitOnError)
+	for _, hook := range getFlagHooksFor(cmd) {
+		hook(fs)
+	}
+
+	_flag.Parse(fs)
 
 	if *Version {
 		AppVersion.Print()
 		os.Exit(0)
 	}
 
-	args := _flag.Args()
+	args := fs.Args()
 	if len(args) == 0 {
 		log.Exitf("%s expected at least one positional argument", cmd)
 	}
 
 	return args
+}
+
+// Flag installations for packages that servenv imports. We need to register
+// here rather than in those packages (which is what we would normally do)
+// because that would create a dependency cycle.
+func init() {
+	// These are the binaries that call trace.StartTracing.
+	for _, cmd := range []string{
+		"vtadmin",
+		"vtclient",
+		"vtcombo",
+		"vtctl",
+		"vtctlclient",
+		"vtctld",
+		"vtctldclient",
+		"vtgate",
+		"vttablet",
+	} {
+		OnParseFor(cmd, trace.RegisterFlags)
+	}
+
+	// Flags in package log are installed for all binaries.
+	OnParse(log.RegisterFlags)
+	// Flags in package logutil are installed for all binaries.
+	OnParse(logutil.RegisterFlags)
 }

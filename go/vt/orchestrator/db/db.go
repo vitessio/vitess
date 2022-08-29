@@ -23,8 +23,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/orchestrator/config"
-	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/sqlutils"
 )
 
@@ -145,7 +145,7 @@ func OpenOrchestrator() (db *sql.DB, err error) {
 	if IsSQLite() {
 		db, fromCache, err = sqlutils.GetSQLiteDB(config.Config.SQLite3DataFile)
 		if err == nil && !fromCache {
-			log.Debugf("Connected to orchestrator backend: sqlite on %v", config.Config.SQLite3DataFile)
+			log.Infof("Connected to orchestrator backend: sqlite on %v", config.Config.SQLite3DataFile)
 		}
 		if db != nil {
 			db.SetMaxOpenConns(1)
@@ -153,12 +153,14 @@ func OpenOrchestrator() (db *sql.DB, err error) {
 		}
 	} else {
 		if db, fromCache, err := openOrchestratorMySQLGeneric(); err != nil {
-			return db, log.Errore(err)
+			log.Errorf(err.Error())
+			return db, err
 		} else if !fromCache {
 			// first time ever we talk to MySQL
 			query := fmt.Sprintf("create database if not exists %s", config.Config.MySQLOrchestratorDatabase)
 			if _, err := db.Exec(query); err != nil {
-				return db, log.Errore(err)
+				log.Errorf(err.Error())
+				return db, err
 			}
 		}
 		db, fromCache, err = sqlutils.GetDB(getMySQLURI())
@@ -166,9 +168,9 @@ func OpenOrchestrator() (db *sql.DB, err error) {
 			// do not show the password but do show what we connect to.
 			safeMySQLURI := fmt.Sprintf("%s:?@tcp(%s:%d)/%s?timeout=%ds", config.Config.MySQLOrchestratorUser,
 				config.Config.MySQLOrchestratorHost, config.Config.MySQLOrchestratorPort, config.Config.MySQLOrchestratorDatabase, config.Config.MySQLConnectTimeoutSeconds)
-			log.Debugf("Connected to orchestrator backend: %v", safeMySQLURI)
+			log.Infof("Connected to orchestrator backend: %v", safeMySQLURI)
 			if config.Config.MySQLOrchestratorMaxPoolConnections > 0 {
-				log.Debugf("Orchestrator pool SetMaxOpenConns: %d", config.Config.MySQLOrchestratorMaxPoolConnections)
+				log.Infof("Orchestrator pool SetMaxOpenConns: %d", config.Config.MySQLOrchestratorMaxPoolConnections)
 				db.SetMaxOpenConns(config.Config.MySQLOrchestratorMaxPoolConnections)
 			}
 			if config.Config.MySQLConnectionLifetimeSeconds > 0 {
@@ -239,7 +241,7 @@ func registerOrchestratorDeployment(db *sql.DB) error {
 	if _, err := execInternal(db, query, config.RuntimeCLIFlags.ConfiguredVersion); err != nil {
 		log.Fatalf("Unable to write to orchestrator_metadata: %+v", err)
 	}
-	log.Debugf("Migrated database schema to version [%+v]", config.RuntimeCLIFlags.ConfiguredVersion)
+	log.Infof("Migrated database schema to version [%+v]", config.RuntimeCLIFlags.ConfiguredVersion)
 	return nil
 }
 
@@ -248,7 +250,7 @@ func registerOrchestratorDeployment(db *sql.DB) error {
 func deployStatements(db *sql.DB, queries []string) error {
 	tx, err := db.Begin()
 	if err != nil {
-		log.Fatale(err)
+		log.Fatal(err.Error())
 	}
 	// Ugly workaround ahead.
 	// Origin of this workaround is the existence of some "timestamp NOT NULL," column definitions,
@@ -262,23 +264,26 @@ func deployStatements(db *sql.DB, queries []string) error {
 	if config.Config.IsMySQL() {
 		_ = tx.QueryRow(`select @@session.sql_mode`).Scan(&originalSQLMode)
 		if _, err := tx.Exec(`set @@session.sql_mode=REPLACE(@@session.sql_mode, 'NO_ZERO_DATE', '')`); err != nil {
-			log.Fatale(err)
+			log.Fatal(err.Error())
 		}
 		if _, err := tx.Exec(`set @@session.sql_mode=REPLACE(@@session.sql_mode, 'NO_ZERO_IN_DATE', '')`); err != nil {
-			log.Fatale(err)
+			log.Fatal(err.Error())
 		}
 	}
 	for _, query := range queries {
 		query, err := translateStatement(query)
 		if err != nil {
-			return log.Fatalf("Cannot initiate orchestrator: %+v; query=%+v", err, query)
+			log.Fatalf("Cannot initiate orchestrator: %+v; query=%+v", err, query)
+			return err
 		}
 		if _, err := tx.Exec(query); err != nil {
 			if strings.Contains(err.Error(), "syntax error") {
-				return log.Fatalf("Cannot initiate orchestrator: %+v; query=%+v", err, query)
+				log.Fatalf("Cannot initiate orchestrator: %+v; query=%+v", err, query)
+				return err
 			}
 			if !sqlutils.IsAlterTable(query) && !sqlutils.IsCreateIndex(query) && !sqlutils.IsDropIndex(query) {
-				return log.Fatalf("Cannot initiate orchestrator: %+v; query=%+v", err, query)
+				log.Fatalf("Cannot initiate orchestrator: %+v; query=%+v", err, query)
+				return err
 			}
 			if !strings.Contains(err.Error(), "duplicate column name") &&
 				!strings.Contains(err.Error(), "Duplicate column name") &&
@@ -291,11 +296,11 @@ func deployStatements(db *sql.DB, queries []string) error {
 	}
 	if config.Config.IsMySQL() {
 		if _, err := tx.Exec(`set session sql_mode=?`, originalSQLMode); err != nil {
-			log.Fatale(err)
+			log.Fatal(err.Error())
 		}
 	}
 	if err := tx.Commit(); err != nil {
-		log.Fatale(err)
+		log.Fatal(err.Error())
 	}
 	return nil
 }
@@ -303,7 +308,7 @@ func deployStatements(db *sql.DB, queries []string) error {
 // initOrchestratorDB attempts to create/upgrade the orchestrator backend database. It is created once in the
 // application's lifetime.
 func initOrchestratorDB(db *sql.DB) error {
-	log.Debug("Initializing orchestrator")
+	log.Info("Initializing orchestrator")
 
 	versionAlreadyDeployed, err := versionIsDeployed(db)
 	if versionAlreadyDeployed && config.RuntimeCLIFlags.ConfiguredVersion != "" && err == nil {
@@ -313,7 +318,7 @@ func initOrchestratorDB(db *sql.DB) error {
 	if config.Config.PanicIfDifferentDatabaseDeploy && config.RuntimeCLIFlags.ConfiguredVersion != "" && !versionAlreadyDeployed {
 		log.Fatalf("PanicIfDifferentDatabaseDeploy is set. Configured version %s is not the version found in the database", config.RuntimeCLIFlags.ConfiguredVersion)
 	}
-	log.Debugf("Migrating database schema")
+	log.Info("Migrating database schema")
 	deployStatements(db, generateSQLBase)
 	deployStatements(db, generateSQLPatches)
 	registerOrchestratorDeployment(db)
@@ -356,7 +361,8 @@ func ExecOrchestrator(query string, args ...any) (sql.Result, error) {
 func QueryOrchestratorRowsMap(query string, onRow func(sqlutils.RowMap) error) error {
 	query, err := translateStatement(query)
 	if err != nil {
-		return log.Fatalf("Cannot query orchestrator: %+v; query=%+v", err, query)
+		log.Fatalf("Cannot query orchestrator: %+v; query=%+v", err, query)
+		return err
 	}
 	db, err := OpenOrchestrator()
 	if err != nil {
@@ -370,21 +376,27 @@ func QueryOrchestratorRowsMap(query string, onRow func(sqlutils.RowMap) error) e
 func QueryOrchestrator(query string, argsArray []any, onRow func(sqlutils.RowMap) error) error {
 	query, err := translateStatement(query)
 	if err != nil {
-		return log.Fatalf("Cannot query orchestrator: %+v; query=%+v", err, query)
+		log.Fatalf("Cannot query orchestrator: %+v; query=%+v", err, query)
+		return err
 	}
 	db, err := OpenOrchestrator()
 	if err != nil {
 		return err
 	}
 
-	return log.Criticale(sqlutils.QueryRowsMap(db, query, onRow, argsArray...))
+	if err = sqlutils.QueryRowsMap(db, query, onRow, argsArray...); err != nil {
+		log.Warning(err.Error())
+	}
+
+	return err
 }
 
 // QueryOrchestratorRowsMapBuffered
 func QueryOrchestratorRowsMapBuffered(query string, onRow func(sqlutils.RowMap) error) error {
 	query, err := translateStatement(query)
 	if err != nil {
-		return log.Fatalf("Cannot query orchestrator: %+v; query=%+v", err, query)
+		log.Fatalf("Cannot query orchestrator: %+v; query=%+v", err, query)
+		return err
 	}
 	db, err := OpenOrchestrator()
 	if err != nil {
@@ -398,7 +410,8 @@ func QueryOrchestratorRowsMapBuffered(query string, onRow func(sqlutils.RowMap) 
 func QueryOrchestratorBuffered(query string, argsArray []any, onRow func(sqlutils.RowMap) error) error {
 	query, err := translateStatement(query)
 	if err != nil {
-		return log.Fatalf("Cannot query orchestrator: %+v; query=%+v", err, query)
+		log.Fatalf("Cannot query orchestrator: %+v; query=%+v", err, query)
+		return err
 	}
 	db, err := OpenOrchestrator()
 	if err != nil {
@@ -408,7 +421,10 @@ func QueryOrchestratorBuffered(query string, argsArray []any, onRow func(sqlutil
 	if argsArray == nil {
 		argsArray = EmptyArgs
 	}
-	return log.Criticale(sqlutils.QueryRowsMapBuffered(db, query, onRow, argsArray...))
+	if err = sqlutils.QueryRowsMapBuffered(db, query, onRow, argsArray...); err != nil {
+		log.Warning(err.Error())
+	}
+	return err
 }
 
 // ReadTimeNow reads and returns the current timestamp as string. This is an unfortunate workaround

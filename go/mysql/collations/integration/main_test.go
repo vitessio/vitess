@@ -18,12 +18,13 @@ package integration
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"os"
 	"os/signal"
 	"strings"
 	"testing"
+
+	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/vttest"
@@ -35,7 +36,7 @@ var (
 	connParams mysql.ConnParams
 )
 
-var waitmysql = flag.Bool("waitmysql", false, "")
+var waitmysql = pflag.Bool("waitmysql", false, "")
 
 func mysqlconn(t *testing.T) *mysql.Conn {
 	conn, err := mysql.Connect(context.Background(), &connParams)
@@ -55,7 +56,7 @@ func mysqlconn(t *testing.T) *mysql.Conn {
 }
 
 func TestMain(m *testing.M) {
-	flag.Parse()
+	pflag.Parse()
 
 	exitCode := func() int {
 		// Launch MySQL.

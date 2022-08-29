@@ -1363,24 +1363,28 @@ func (c *Conn) execQuery(query string, handler Handler, more bool) execResult {
 // Packet parsing methods, for generic packets.
 //
 
-// isEOFPacket determines whether or not a data packet is a "true" EOF. DO NOT blindly compare the
-// first byte of a packet to EOFPacket as you might do for other packet types, as 0xfe is overloaded
-// as a first byte.
+// isEOFPacket determines whether a data packet is an EOF. In case the client capabilities
+// do not have DEPRECATE_EOF set, DO NOT blindly compare the first byte of a packet to EOFPacket
+// as you might do for other packet types, as 0xfe is overloaded as a first byte.
+
+// In case that DEPRECATE_EOF is set, we have really an OK packet which is always maximum a single
+// packet and not multiple, but otherwise 0xfe definitely indicates it is an EOF.
 //
 // Per https://dev.mysql.com/doc/internals/en/packet-EOF_Packet.html, a packet starting with 0xfe
-// but having length >= 9 (on top of 4 byte header) is not a true EOF but a LengthEncodedInteger
-// (typically preceding a LengthEncodedString). Thus, all EOF checks must validate the payload size
-// before exiting.
-//
-// More specifically, an EOF packet can have 3 different lengths (1, 5, 7) depending on the client
-// flags that are set. 7 comes from server versions of 5.7.5 or greater where ClientDeprecateEOF is
-// set (i.e. uses an OK packet starting with 0xfe instead of 0x00 to signal EOF). Regardless, 8 is
-// an upper bound otherwise it would be ambiguous w.r.t. LengthEncodedIntegers.
+// but having length >= 9 (on top of 4 byte header)  without DEPRECATE_EOF set is not a true EOF but
+// a LengthEncodedInteger (typically preceding a LengthEncodedString). Thus, all EOF checks without
+// DEPRECATE_EOF must validate the payload size before exiting.
 //
 // More docs here:
 // https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_basic_response_packets.html
-func isEOFPacket(data []byte) bool {
-	return data[0] == EOFPacket && len(data) < 9
+func (c *Conn) isEOFPacket(data []byte) bool {
+	if data[0] != EOFPacket {
+		return false
+	}
+	if c.Capabilities&CapabilityClientDeprecateEOF == 0 {
+		return len(data) < 9
+	}
+	return len(data) < MaxPacketSize
 }
 
 // parseEOFPacket returns the warning count and a boolean to indicate if there
@@ -1461,13 +1465,22 @@ func (c *Conn) parseOKPacket(in []byte) (*PacketOK, error) {
 	if c.Capabilities&uint32(CapabilityClientSessionTrack) == CapabilityClientSessionTrack {
 		// session tracking
 		if statusFlags&ServerSessionStateChanged == ServerSessionStateChanged {
-			_, ok := data.readLenEncInt()
+			length, ok := data.readLenEncInt()
 			if !ok {
 				return fail("invalid OK packet session state change length: %v", data)
 			}
+			// In case we have a zero length string, there's no additional information so
+			// we can return the packet.
+			if length == 0 {
+				return packetOK, nil
+			}
 			sscType, ok := data.readByte()
-			if !ok || sscType != SessionTrackGtids {
+			if !ok {
 				return fail("invalid OK packet session state change type: %v", sscType)
+			}
+			// If it's not a GTID, we don't care about it so we can return.
+			if sscType != SessionTrackGtids {
+				return packetOK, nil
 			}
 
 			// Move past the total length of the changed entity: 1 byte

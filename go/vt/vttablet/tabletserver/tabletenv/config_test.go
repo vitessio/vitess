@@ -213,6 +213,8 @@ func TestFlags(t *testing.T) {
 			MaxConcurrency:     5,
 		},
 		StreamBufferSize:                        32768,
+		ConsolidatorStreamTotalSize:             128 * 1024 * 1024,
+		ConsolidatorStreamQuerySize:             2 * 1024 * 1024,
 		QueryCacheSize:                          int(cache.DefaultConfig.MaxEntries),
 		QueryCacheMemory:                        cache.DefaultConfig.MaxMemoryUsage,
 		QueryCacheLFU:                           cache.DefaultConfig.LFU,

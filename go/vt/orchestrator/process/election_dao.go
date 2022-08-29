@@ -17,9 +17,9 @@
 package process
 
 import (
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/orchestrator/config"
 	"vitess.io/vitess/go/vt/orchestrator/db"
-	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/sqlutils"
 	"vitess.io/vitess/go/vt/orchestrator/util"
 )
@@ -37,11 +37,13 @@ func AttemptElection() (bool, error) {
 			ThisHostname, util.ProcessToken.Hash,
 		)
 		if err != nil {
-			return false, log.Errore(err)
+			log.Error(err)
+			return false, err
 		}
 		rows, err := sqlResult.RowsAffected()
 		if err != nil {
-			return false, log.Errore(err)
+			log.Error(err)
+			return false, err
 		}
 		if rows > 0 {
 			// We managed to insert a row
@@ -63,11 +65,13 @@ func AttemptElection() (bool, error) {
 			ThisHostname, util.ProcessToken.Hash, config.ActiveNodeExpireSeconds,
 		)
 		if err != nil {
-			return false, log.Errore(err)
+			log.Error(err)
+			return false, err
 		}
 		rows, err := sqlResult.RowsAffected()
 		if err != nil {
-			return false, log.Errore(err)
+			log.Error(err)
+			return false, err
 		}
 		if rows > 0 {
 			// We managed to update a row: overtaking a previous leader
@@ -87,11 +91,13 @@ func AttemptElection() (bool, error) {
 			ThisHostname, util.ProcessToken.Hash,
 		)
 		if err != nil {
-			return false, log.Errore(err)
+			log.Error(err)
+			return false, err
 		}
 		rows, err := sqlResult.RowsAffected()
 		if err != nil {
-			return false, log.Errore(err)
+			log.Error(err)
+			return false, err
 		}
 		if rows > 0 {
 			// Reaffirmed our own leadership
@@ -112,13 +118,15 @@ func GrabElection() error {
 			`,
 		ThisHostname, util.ProcessToken.Hash,
 	)
-	return log.Errore(err)
+	log.Error(err)
+	return err
 }
 
 // Reelect clears the way for re-elections. Active node is immediately demoted.
 func Reelect() error {
 	_, err := db.ExecOrchestrator(`delete from active_node where anchor = 1`)
-	return log.Errore(err)
+	log.Error(err)
+	return err
 }
 
 // ElectedNode returns the details of the elected node, as well as answering the question "is this process the elected one"?
@@ -145,5 +153,6 @@ func ElectedNode() (node *NodeHealth, isElected bool, err error) {
 	})
 
 	isElected = (node.Hostname == ThisHostname && node.Token == util.ProcessToken.Hash)
-	return node, isElected, log.Errore(err) //nolint copylocks: return copies lock value
+	log.Error(err)
+	return node, isElected, err //nolint copylocks: return copies lock value
 }

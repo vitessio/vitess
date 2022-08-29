@@ -651,13 +651,7 @@ func checkQueryInternal(t *testing.T, query string, sConn, cConn *Conn, result *
 		}
 		got, gotWarnings, err := cConn.ExecuteFetchWithWarningCount(query, maxrows, wantfields)
 		if !allRows && len(result.Rows) > 1 {
-			if err == nil {
-				t.Errorf("ExecuteFetch should have failed but got: %v", got)
-			}
-			sqlErr, ok := err.(*SQLError)
-			if !ok || sqlErr.Number() != ERVitessMaxRowsExceeded {
-				t.Errorf("Expected ERVitessMaxRowsExceeded %v, got %v", ERVitessMaxRowsExceeded, sqlErr.Number())
-			}
+			require.ErrorContains(t, err, "Row count exceeded")
 			return
 		}
 		if err != nil {
@@ -764,7 +758,7 @@ func checkQueryInternal(t *testing.T, query string, sConn, cConn *Conn, result *
 	}
 }
 
-//nolint
+// nolint
 func writeResult(conn *Conn, result *sqltypes.Result) error {
 	if len(result.Fields) == 0 {
 		return conn.writeOKPacket(&PacketOK{

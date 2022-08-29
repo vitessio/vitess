@@ -18,12 +18,12 @@ package vdiff
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
-	"vitess.io/vitess/go/vt/withddl"
-
 	"vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	"google.golang.org/protobuf/encoding/prototext"
 
@@ -32,18 +32,20 @@ import (
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 )
 
 /*
-  vdiff operation states: pending/started/completed/error/unknown
-  vdiff table states: pending/started/completed/error/unknown
+vdiff operation states: pending/started/stopped/completed/error/unknown
+vdiff table states: pending/started/stopped/completed/error/unknown
 */
 type VDiffState string //nolint
 const (
 	PendingState    VDiffState = "pending"
 	StartedState    VDiffState = "started"
+	StoppedState    VDiffState = "stopped"
 	CompletedState  VDiffState = "completed"
 	ErrorState      VDiffState = "error"
 	UnknownState    VDiffState = ""
@@ -78,7 +80,7 @@ func newController(ctx context.Context, row sqltypes.RowNamedValues, dbClientFac
 
 	ct := &controller{
 		id:              id,
-		uuid:            row["vdiff_uuid"].String(),
+		uuid:            row["vdiff_uuid"].ToString(),
 		workflow:        row["workflow"].ToString(),
 		dbClientFactory: dbClientFactory,
 		ts:              ts,
@@ -101,29 +103,20 @@ func (ct *controller) Stop() {
 
 func (ct *controller) run(ctx context.Context) {
 	defer func() {
-		log.Infof("vdiff stopped")
+		log.Infof("Run finished for vdiff %s", ct.uuid)
 		close(ct.done)
 	}()
 
 	dbClient := ct.vde.dbClientFactoryFiltered()
 	if err := dbClient.Connect(); err != nil {
-		log.Errorf("db connect error: %v", err)
+		log.Errorf("Encountered an error connecting to database for vdiff %s: %v", ct.uuid, err)
 		return
 	}
 	defer dbClient.Close()
 
-	ct.vde.vdiffSchemaCreateOnce.Do(func() {
-		_, _ = withDDL.ExecIgnore(ctx, withddl.QueryToTriggerWithDDL, dbClient.ExecuteFetch)
-	})
-
-	query := fmt.Sprintf(sqlGetVDiffByID, ct.id)
-	qr, err := withDDL.Exec(ctx, query, dbClient.ExecuteFetch, dbClient.ExecuteFetch)
+	qr, err := ct.vde.getVDiffByID(ctx, dbClient, ct.id)
 	if err != nil {
-		log.Errorf(fmt.Sprintf("No data for %s", query), err)
-		return
-	}
-	if len(qr.Rows) == 0 {
-		log.Errorf("Missing vdiff row for %s", query)
+		log.Errorf("Encountered an error getting vdiff record for %s: %v", ct.uuid, err)
 		return
 	}
 
@@ -131,19 +124,18 @@ func (ct *controller) run(ctx context.Context) {
 	state := VDiffState(strings.ToLower(row["state"].ToString()))
 	switch state {
 	case PendingState:
-		log.Infof("Starting vdiff")
+		log.Infof("Starting vdiff %s", ct.uuid)
 		if err := ct.start(ctx, dbClient); err != nil {
-			log.Errorf("run() failed: %s", err)
+			log.Errorf("Encountered an error for vdiff %s: %s", ct.uuid, err)
 			insertVDiffLog(ctx, dbClient, ct.id, fmt.Sprintf("Error: %s", err))
-			if err := ct.updateState(dbClient, ErrorState); err != nil {
-				return
+			if err = ct.updateState(dbClient, ErrorState, err); err != nil {
+				log.Errorf("Encountered an error marking vdiff %s as errored: %v", ct.uuid, err)
 			}
 			return
 		}
 	default:
-		log.Infof("run() done, state is %s", state)
+		log.Infof("VDiff %s was not marked as pending, doing nothing", state)
 	}
-	log.Infof("run() has ended")
 }
 
 type migrationSource struct {
@@ -153,15 +145,21 @@ type migrationSource struct {
 	position mysql.Position
 }
 
-func (ct *controller) updateState(dbClient binlogplayer.DBClient, state VDiffState) error {
+func (ct *controller) updateState(dbClient binlogplayer.DBClient, state VDiffState, err error) error {
 	extraCols := ""
-	if state == StartedState {
+	switch state {
+	case StartedState:
 		extraCols = ", started_at = utc_timestamp()"
-	} else if state == CompletedState {
+	case CompletedState:
 		extraCols = ", completed_at = utc_timestamp()"
+	default:
 	}
-	query := fmt.Sprintf(sqlUpdateVDiffState, encodeString(string(state)), extraCols, ct.id)
-	if _, err := withDDL.Exec(ct.vde.ctx, query, dbClient.ExecuteFetch, dbClient.ExecuteFetch); err != nil {
+	if err == nil {
+		// Clear out any previous error for the vdiff on this shard
+		err = errors.New("")
+	}
+	query := fmt.Sprintf(sqlUpdateVDiffState, encodeString(string(state)), encodeString(err.Error()), extraCols, ct.id)
+	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
 		return err
 	}
 	insertVDiffLog(ct.vde.ctx, dbClient, ct.id, fmt.Sprintf("State changed to: %s", state))
@@ -169,14 +167,24 @@ func (ct *controller) updateState(dbClient binlogplayer.DBClient, state VDiffSta
 }
 
 func (ct *controller) start(ctx context.Context, dbClient binlogplayer.DBClient) error {
+	select {
+	case <-ctx.Done():
+		return vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
+	default:
+	}
 	ct.workflowFilter = fmt.Sprintf("where workflow = %s and db_name = %s", encodeString(ct.workflow), encodeString(ct.vde.dbName))
 	query := fmt.Sprintf(sqlGetVReplicationEntry, ct.workflowFilter)
-	qr, err := withDDL.Exec(ct.vde.ctx, query, dbClient.ExecuteFetch, dbClient.ExecuteFetch)
+	qr, err := dbClient.ExecuteFetch(query, -1)
 	if err != nil {
 		return err
 	}
 	log.Infof("Found %d vreplication streams for %s", len(qr.Rows), ct.workflow)
 	for i, row := range qr.Named().Rows {
+		select {
+		case <-ctx.Done():
+			return vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
+		default:
+		}
 		source := newMigrationSource()
 		sourceBytes, err := row["source"].ToBytes()
 		if err != nil {
@@ -184,7 +192,7 @@ func (ct *controller) start(ctx context.Context, dbClient binlogplayer.DBClient)
 		}
 		var bls binlogdatapb.BinlogSource
 		if err := prototext.Unmarshal(sourceBytes, &bls); err != nil {
-			log.Errorf("Failed to unmarshal vdiff binlog source: %v", err)
+			log.Errorf("Encountered an error unmarshalling vdiff binlog source for %s: %v", ct.uuid, err)
 			return err
 		}
 		source.shard = bls.Shard
@@ -205,12 +213,41 @@ func (ct *controller) start(ctx context.Context, dbClient binlogplayer.DBClient)
 	if err != nil {
 		return err
 	}
-	if err := ct.updateState(dbClient, StartedState); err != nil {
+	if err := ct.updateState(dbClient, StartedState, nil); err != nil {
 		return err
 	}
 	if err := wd.diff(ctx); err != nil {
-		log.Infof("wd.diff error %v", err)
+		log.Errorf("Encountered an error performing workflow diff for vdiff %s: %v", ct.uuid, err)
 		return err
+	}
+
+	return nil
+}
+
+// markStoppedByRequest records the fact that this VDiff was stopped via user
+// request and resets the error generated by cancelling the context to stop it:
+//
+//	"vttablet: rpc error: code = Canceled desc = context canceled"
+//
+// This differentiates non-user requested stops that would occur e.g. during
+// PlannedReparentShard or tablet restart, in those cases the error will be saved
+// and will cause the VDiff to be retried ASAP -- which is NOT what we want here.
+func (ct *controller) markStoppedByRequest() error {
+	dbClient := ct.vde.dbClientFactoryFiltered()
+	if err := dbClient.Connect(); err != nil {
+		return fmt.Errorf("encountered an error marking vdiff %s as stopped: %v", ct.uuid, err)
+	}
+	defer dbClient.Close()
+
+	query := fmt.Sprintf(sqlUpdateVDiffStopped, ct.id)
+	var res *sqltypes.Result
+	var err error
+	if res, err = dbClient.ExecuteFetch(query, 1); err != nil {
+		return fmt.Errorf("encountered an error marking vdiff %s as stopped: %v", ct.uuid, err)
+	}
+	// We don't mark it as stopped if it's already completed
+	if res.RowsAffected > 0 {
+		insertVDiffLog(ct.vde.ctx, dbClient, ct.id, fmt.Sprintf("State changed to: %s (by user request)", StoppedState))
 	}
 
 	return nil
@@ -221,6 +258,6 @@ func newMigrationSource() *migrationSource {
 }
 
 func (ct *controller) validate() error {
-	// todo: check if vreplication workflow has errors, what else?
+	// TODO: check if vreplication workflow has errors, what else?
 	return nil
 }
