@@ -1174,8 +1174,8 @@ func (tsv *TabletServer) ReserveBeginStreamExecute(
 
 // ReserveExecute implements the QueryService interface
 func (tsv *TabletServer) ReserveExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (state queryservice.ReservedState, result *sqltypes.Result, err error) {
-	if tsv.config.EnableSettingsPool && transactionID == 0 {
-		result, err = tsv.executeWithSettings(ctx, target, preQueries, sql, bindVariables, 0, options)
+	if tsv.config.EnableSettingsPool {
+		result, err = tsv.executeWithSettings(ctx, target, preQueries, sql, bindVariables, transactionID, options)
 		return state, result, err
 	}
 
@@ -1224,7 +1224,7 @@ func (tsv *TabletServer) ReserveStreamExecute(
 	options *querypb.ExecuteOptions,
 	callback func(*sqltypes.Result) error,
 ) (state queryservice.ReservedState, err error) {
-	if tsv.config.EnableSettingsPool && transactionID == 0 {
+	if tsv.config.EnableSettingsPool {
 		return state, tsv.streamExecuteWithSettings(ctx, target, preQueries, sql, bindVariables, transactionID, options, callback)
 	}
 

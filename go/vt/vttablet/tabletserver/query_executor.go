@@ -127,7 +127,7 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		qre.tsv.Stats().ResultHistogram.Add(int64(len(reply.Rows)))
 	}(time.Now())
 
-	if err := qre.checkPermissions(); err != nil {
+	if err = qre.checkPermissions(); err != nil {
 		return nil, err
 	}
 
@@ -136,12 +136,18 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 	}
 
 	if qre.connID != 0 {
+		var conn *StatefulConnection
 		// Need upfront connection for DMLs and transactions
-		conn, err := qre.tsv.te.txPool.GetAndLock(qre.connID, "for query")
+		conn, err = qre.tsv.te.txPool.GetAndLock(qre.connID, "for query")
 		if err != nil {
 			return nil, err
 		}
 		defer conn.Unlock()
+		if len(qre.settings) > 0 {
+			if err = conn.ApplySettings(qre.ctx, qre.settings); err != nil {
+				return nil, vterrors.Wrap(err, "failed to execute system settings on the connection")
+			}
+		}
 		return qre.txConnExec(conn)
 	}
 
@@ -315,6 +321,11 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 			return err
 		}
 		defer txConn.Unlock()
+		if len(qre.settings) > 0 {
+			if err = txConn.ApplySettings(qre.ctx, qre.settings); err != nil {
+				return vterrors.Wrap(err, "failed to execute system settings on the connection")
+			}
+		}
 		conn = txConn.UnderlyingDBConn()
 	} else {
 		dbConn, err := qre.getStreamConn()

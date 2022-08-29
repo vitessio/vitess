@@ -23,8 +23,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cespare/xxhash/v2"
-
 	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/servenv"
@@ -49,14 +47,13 @@ import (
 // its own queries and the underlying connection.
 // It will also trigger a CheckMySQL whenever applicable.
 type DBConn struct {
-	conn         *dbconnpool.DBConnection
-	info         dbconfigs.Connector
-	pool         *Pool
-	dbaPool      *dbconnpool.ConnectionPool
-	stats        *tabletenv.Stats
-	current      sync2.AtomicString
-	settings     []string
-	settingsHash uint64
+	conn     *dbconnpool.DBConnection
+	info     dbconfigs.Connector
+	pool     *Pool
+	dbaPool  *dbconnpool.ConnectionPool
+	stats    *tabletenv.Stats
+	current  sync2.AtomicString
+	settings []string
 
 	// err will be set if a query is killed through a Kill.
 	errmu sync.Mutex
@@ -95,6 +92,9 @@ func NewDBConnNoPool(ctx context.Context, params dbconfigs.Connector, dbaPool *d
 		dbaPool: dbaPool,
 		pool:    nil,
 		stats:   tabletenv.NewStats(servenv.NewExporter("Temp", "Tablet")),
+	}
+	if len(settings) == 0 {
+		return dbconn, nil
 	}
 	if err = dbconn.ApplySettings(ctx, settings); err != nil {
 		dbconn.Close()
@@ -325,17 +325,12 @@ func (dbc *DBConn) Close() {
 }
 
 func (dbc *DBConn) ApplySettings(ctx context.Context, settings []string) error {
-	digest := xxhash.New()
 	for _, q := range settings {
 		if _, err := dbc.execOnce(ctx, q, 1, false); err != nil {
 			return err
 		}
-		if _, err := digest.WriteString(q); err != nil {
-			return err
-		}
 	}
 	dbc.settings = settings
-	dbc.settingsHash = digest.Sum64()
 	return nil
 }
 

@@ -39,15 +39,22 @@ func TestSelectNoConnectionReservationOnSettings(t *testing.T) {
 	query := "select @@sql_mode"
 	setting := "set @@sql_mode = ''"
 
-	qr, err := client.ReserveExecute(query, []string{setting}, nil)
-	require.NoError(t, err)
-	assert.EqualValues(t, 0, client.ReservedID())
-	assert.Equal(t, `[[VARCHAR("")]]`, fmt.Sprintf("%v", qr.Rows))
+	for _, withTx := range []bool{false, true} {
+		if withTx {
+			err := client.Begin(false)
+			require.NoError(t, err)
+		}
 
-	qr, err = client.ReserveStreamExecute(query, []string{setting}, nil)
-	require.NoError(t, err)
-	assert.EqualValues(t, 0, client.ReservedID())
-	assert.Equal(t, `[[VARCHAR("")]]`, fmt.Sprintf("%v", qr.Rows))
+		qr, err := client.ReserveExecute(query, []string{setting}, nil)
+		require.NoError(t, err)
+		assert.EqualValues(t, 0, client.ReservedID())
+		assert.Equal(t, `[[VARCHAR("")]]`, fmt.Sprintf("%v", qr.Rows))
+
+		qr, err = client.ReserveStreamExecute(query, []string{setting}, nil)
+		require.NoError(t, err)
+		assert.EqualValues(t, 0, client.ReservedID())
+		assert.Equal(t, `[[VARCHAR("")]]`, fmt.Sprintf("%v", qr.Rows))
+	}
 }
 
 func TestDDLNoConnectionReservationOnSettings(t *testing.T) {
