@@ -245,6 +245,7 @@ commit;"
 	}
 
 	numCopyEvents := 3 /*t1,t2,t3*/ * (numInitialRows + 1 /*FieldEvent*/ + 1 /*LastPKEvent*/ + 1 /*TestEvent: Copy Start*/ + 2 /*begin,commit*/ + 3 /* LastPK Completed*/)
+	numCopyEvents += 2                                    /* Repeated no-op events -- 1 field, 1 row -- from t2 row insert in stream before t2 table copy starts */
 	numCopyEvents += 2                                    /* GTID + Test event after all copy is done */
 	numCatchupEvents := 3 * 5                             /*2 t1, 1 t2 : BEGIN+FIELD+ROW+GTID+COMMIT*/
 	numFastForwardEvents := 5                             /*t1:FIELD+ROW*/
@@ -478,6 +479,8 @@ var expectedEvents = []string{
 	"type:BEGIN",
 	"type:FIELD field_event:{table_name:\"t1\" fields:{name:\"id11\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id11\" column_length:11 charset:63 column_type:\"int(11)\"} fields:{name:\"id12\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id12\" column_length:11 charset:63 column_type:\"int(11)\"}}",
 	"type:ROW row_event:{table_name:\"t1\" row_changes:{after:{lengths:2 lengths:3 values:\"11110\"}}}",
+	"type:FIELD field_event:{table_name:\"t2\" fields:{name:\"id21\" type:INT32 table:\"t2\" org_table:\"t2\" database:\"vttest\" org_name:\"id21\" column_length:11 charset:63 column_type:\"int(11)\"} fields:{name:\"id22\" type:INT32 table:\"t2\" org_table:\"t2\" database:\"vttest\" org_name:\"id22\" column_length:11 charset:63 column_type:\"int(11)\"}}",
+	"type:ROW row_event:{table_name:\"t2\" row_changes:{after:{lengths:2 lengths:3 values:\"11220\"}}}",
 	"type:GTID",
 	"type:COMMIT", //insert for t2 done along with t1 does not generate an event since t2 is not yet copied
 	"type:OTHER gtid:\"Copy Start t2\"",

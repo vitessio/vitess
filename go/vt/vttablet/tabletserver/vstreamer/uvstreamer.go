@@ -253,11 +253,15 @@ func (uvs *uvstreamer) filterEvents(evs []*binlogdatapb.VEvent) []*binlogdatapb.
 		}
 		if !shouldSend && tableName != "" {
 			shouldSend = true
-			plan, ok := uvs.plans[tableName]
-			if ok {
-				// Ideally we should compare the PKs and never send the rows whose PK has already been copied.
-				// For now, we send all the changes by accepting the duplicate events.
+			// If the event is on a table we haven't yet fully copied...
+			if plan, ok := uvs.plans[tableName]; ok {
+				// If there's a lastPK value then we're in the middle of a copy phase
 				if plan.tablePK != nil && plan.tablePK.Lastpk != nil {
+					// Ideally we should compare the PKs and never send the rows whose PK has already been copied.
+					// For now, we send all the changes by allowing for any duplicate events -- meaning that we
+					// apply events in the stream for an inserted row, e.g. table:t2 pk:9, even though we will
+					// later copy the t2 table contents and copy that same row event again -- which should become
+					// harmless no-ops.
 					shouldSend = true
 				} else {
 					shouldSend = false
